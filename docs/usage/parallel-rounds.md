@@ -86,7 +86,8 @@ Where it opens depends on where you ran it:
 | In neither, no tmux | in this terminal; workers run as subagents ([solo mode](#solo-mode)) |
 
 `work.dispatch: herdr` needs you inside herdr already: open herdr, then run `rota` in a pane.
-The agent comes from `orchestrator.harness` (`claude` or `codex`). `rota orchestrate --dry-run`
+The agent comes from `orchestrator.harness` (`claude`, `codex`, `hermes` or `opencode`; see
+[orchestrator harnesses](orchestrator-harnesses.md)). `rota orchestrate --dry-run`
 shows what would start.
 
 The orchestrator then does the steps below. To drive a round by hand instead:

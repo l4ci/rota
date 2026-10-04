@@ -138,6 +138,10 @@ func TestSupervisorWrapsTheAgentAndPassesThePromptFirstOnly(t *testing.T) {
 			[]string{"/bin/rota", "keepalive", "run", "--first-prompt", "/rota-orchestrate", "--", "claude", "--model", "fable"}},
 		{"codex", map[string]any{"orchestrator.harness": "codex"},
 			[]string{"/bin/rota", "keepalive", "run", "--first-prompt", "$rota-orchestrate", "--", "codex"}},
+		{"hermes", map[string]any{"orchestrator.harness": "hermes"},
+			[]string{"/bin/rota", "keepalive", "run", "--first-prompt", "You are the orchestrator: run the rota-orchestrate skill.", "--", "hermes", "chat", "-s", "rota-orchestrate", "-q"}},
+		{"opencode", map[string]any{"orchestrator.harness": "opencode"},
+			[]string{"/bin/rota", "keepalive", "run", "--first-prompt", "You are the orchestrator: load the rota-orchestrate skill and follow it.", "--", "opencode", "--prompt"}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -155,7 +159,7 @@ func TestSupervisorWrapsTheAgentAndPassesThePromptFirstOnly(t *testing.T) {
 func TestUnknownHarnessIsAConfigError(t *testing.T) {
 	_, err := newRig(nil).launcher().Resolve("/p", cfgOf(t, map[string]any{"orchestrator.harness": "emacs"}))
 	var oe *Error
-	if !errors.As(err, &oe) || oe.Code != "config" || !strings.Contains(oe.Msg, "claude, codex") {
+	if !errors.As(err, &oe) || oe.Code != "config" || !strings.Contains(oe.Msg, "claude, codex, hermes, opencode") {
 		t.Fatalf("err = %v", err)
 	}
 }
