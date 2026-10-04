@@ -17,11 +17,11 @@ rota knowledge query "Auth & Sessions"
   as if started in `<dir>`, `--repo <name>` scopes a verb to an umbrella
   sub-repo, `-h` prints help for any group or verb.
 - **No prompts.** `rota` never asks anything. A missing decision is exit 2 naming
-  the flag. Skills do the asking.
+  the flag. Skills do the asking. The exception is `rota setup`, which prompts only on a terminal.
 - **Bodies on stdin.** Any flag that takes a file path also accepts `-`
   (`--body-file -`).
 - **Project root.** Verbs walk up from the working directory to the nearest
-  `.rota/`. Only `rota init`, `rota init check`, `rota init umbrella`, `rota version` and
+  `.rota/`. Only `rota init`, `rota init check`, `rota init umbrella`, `rota setup`, `rota projects`, `rota version` and
   `rota update` run without one.
 - **Idempotent writes.** A mutating verb reports `changed: true|false`. A no-op
   is exit 0.
@@ -166,6 +166,7 @@ exit codes and repo scope: [verb contract](../design/contract/README.md).
 | `rota knowledge stats` | bullet count and size per topic |
 | `rota knowledge add --topic <T> --title <S> --body-file <path\|-> [--date YYYY-MM-DD]` | add a bullet under a topic |
 | `rota knowledge amend --topic <T> --fragment <F> --mode append --body-file <path\|->` | append text to an existing bullet |
+| `rota knowledge replace --topic <T> --old <text> --new <text>` | replace text inside the one bullet that contains it |
 | `rota knowledge rename-topic --from <X> --to <Y> [--title <T>]` | rename a topic or move one bullet |
 | `rota knowledge hit --topic <T> --title <S>` | register a consulted bullet |
 | `rota knowledge tier get --topic <T> --title <S>` | show one bullet's tier |
@@ -228,6 +229,7 @@ exit codes and repo scope: [verb contract](../design/contract/README.md).
 | `rota milestone list` | list milestones |
 | `rota milestone show <id>` | print a milestone |
 | `rota milestone put <id> --body-file <path\|->` | replace a milestone's text |
+| `rota milestone overview --body-file <path\|->` | replace the MILESTONES.md overview text |
 | `rota milestone status <id> --to <planned\|active\|shipped\|archived>` | change a milestone's status |
 | `rota milestone active` | IDs of active milestones |
 | `rota milestone index` | regenerate the overview and vision block |
@@ -453,6 +455,8 @@ A gated verb refuses with exit 4 (`blockedBy: "manual gate"`) at every autonomy 
 | Usage | What it does |
 |---|---|
 | `rota init` | create or refresh `.rota/`, the managed blocks and `.gitignore` |
+| `rota projects` | list the projects registered on this machine; `rota init` registers, a missing path is marked, not pruned |
+| `rota setup [--yes] [--set <key>=<value>]... \| --list` | `rota init` plus the main config choices, asked on a terminal; `--yes` takes defaults, `--list` prints the questions |
 | `rota init check` | is `.rota/` initialized (exit 1 when not) |
 | `rota init umbrella (--repos <csv> \| --all \| --list)` | register sub-repos and make this directory an umbrella |
 

@@ -40,6 +40,9 @@ func TestMain(m *testing.M) {
 	for _, k := range []string{"TMUX", "TMUX_PANE", "HERDR_ENV", "HERDR_PANE_ID", "HERDR_WORKSPACE_ID", "HERDR_SOCKET_PATH"} {
 		os.Unsetenv(k)
 	}
+	// `rota init` registers the project in the global registry (#24): no test
+	// may write the developer's real ~/.config/rota.
+	os.Setenv("XDG_CONFIG_HOME", filepath.Join(dir, "xdg"))
 	limitHost = func(string) host.Host { return &limFake{} }
 	// Fixture repos commit and merge: the identity comes from here, not from
 	// the developer's (or CI's missing) global git config. Same identity as gitT,

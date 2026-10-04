@@ -28,6 +28,8 @@ func Tree() *Command {
 			qaCommands(),
 			migrateCommands(),
 			initCommands(),
+			setupCommand(),
+			projectsCommand(),
 			skillsCommands(),
 		},
 	}
