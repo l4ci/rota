@@ -1,6 +1,7 @@
 package backlog
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -58,18 +59,19 @@ func TestOpenSelectsBackend(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(root, ".rota"), 0o755); err != nil {
 		t.Fatal(err)
 	}
+	withTracker := Options{NewTracker: func(context.Context, string) (Tracker, error) { return &fakeTracker{}, nil }}
 	fileCfg, issuesCfg := mustDecode(t, `{}`), mustDecode(t, `{"backlog": {"backend": "issues"}}`)
 
-	if b, err := Open(root, fileCfg, nil); err != nil || b.Name() != "file" {
+	if b, err := Open(context.Background(), root, fileCfg, Options{}); err != nil || b.Name() != "file" {
 		t.Fatalf("file: %v, %v", b, err)
 	}
-	if b, err := Open(root, issuesCfg, &fakeTracker{}); err != nil || b.Name() != "issues" {
+	if b, err := Open(context.Background(), root, issuesCfg, withTracker); err != nil || b.Name() != "issues" {
 		t.Fatalf("issues: %v, %v", b, err)
 	}
-	if _, err := Open(root, issuesCfg, nil); err == nil {
+	if _, err := Open(context.Background(), root, issuesCfg, Options{}); err == nil {
 		t.Fatal("issues without a tracker must be an error")
 	}
-	if _, err := Open(root, mustDecode(t, `{"backlog": {"backend": "git"}}`), nil); err == nil ||
+	if _, err := Open(context.Background(), root, mustDecode(t, `{"backlog": {"backend": "git"}}`), Options{}); err == nil ||
 		err.Error() != "invalid backlog.backend 'git' (expected file|issues)" {
 		t.Fatalf("bad backend: %v", err)
 	}
@@ -82,9 +84,12 @@ func TestOpenSelectsBackend(t *testing.T) {
 		if err := os.WriteFile(repos, []byte(content), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		_, err := Open(root, issuesCfg, &fakeTracker{})
-		if (err != nil) != umbrella {
-			t.Errorf("repos.json %s: err = %v, want umbrella error %v", content, err, umbrella)
+		b, err := Open(context.Background(), root, issuesCfg, withTracker)
+		if err != nil {
+			t.Fatalf("repos.json %s: %v", content, err)
+		}
+		if _, ok := b.(SubRepoScoped); ok != umbrella {
+			t.Errorf("repos.json %s: umbrella = %v, want %v", content, ok, umbrella)
 		}
 	}
 }

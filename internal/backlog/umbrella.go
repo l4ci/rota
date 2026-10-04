@@ -49,6 +49,9 @@ func NewUmbrella(root string, cfg any, newTracker func(dir string) (Tracker, err
 	return &Umbrella{Cfg: cfg, Repos: repos.Load(root), NewTracker: newTracker}
 }
 
+// SubRepo is the sub-repo items resolve in: Scope, else CwdRepo.
+func (u *Umbrella) SubRepo() string { return u.readScope() }
+
 func (u *Umbrella) ctx() context.Context {
 	if u.Ctx != nil {
 		return u.Ctx
