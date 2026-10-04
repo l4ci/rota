@@ -17,9 +17,10 @@ type Backend interface {
 	// List returns the backlog's items with canonical IDs (contract rule 11):
 	// open items first, in BACKLOG order (Bugs, Features, Tasks; issue mode sorts by
 	// number within each type, as Markdown renders them), then, when includeClosed,
-	// the closed ones (file: ## Completed in file order, then ARCHIVE.md; issue: newest
-	// closed first, as Markdown renders them). Each Item is what Get(item.ID)
-	// returns. This is how callers enumerate; they must not parse Markdown.
+	// the closed ones, newest first in every backend by Item.ClosedAt (file: ## Completed
+	// and ARCHIVE.md, where a later line is newer on equal dates; issue: closed_at, then
+	// number). Each Item is what Get(item.ID) returns. This is how callers enumerate; they
+	// must not parse Markdown.
 	List(includeClosed bool) ([]Item, error)
 	// Markdown renders the backlog as BACKLOG.md-shaped text, for renderers
 	// only: its bullets spell IDs differently per backend ("F12" in issue mode

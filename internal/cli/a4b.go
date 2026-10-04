@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
-	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -462,7 +461,7 @@ func a4Summary(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return a4Fail(err)
 		}
-		md, err := be.Markdown(20)
+		items, err := be.List(true)
 		if errors.Is(err, backlog.ErrNotFound) {
 			return Result{}, Resolution("no .rota/BACKLOG.md found").WithHint("run: rota init")
 		}
@@ -470,8 +469,16 @@ func a4Summary(fs *flag.FlagSet) RunFunc {
 			return a4Fail(err)
 		}
 		var lines []string
-		counts := backlog.CountOpen(md)
-		bugs, feats, tasks := counts["Bugs"], counts["Features"], counts["Tasks"]
+		open := map[string]int{}
+		var closed []backlog.Item
+		for _, it := range items {
+			if it.Closed {
+				closed = append(closed, it)
+			} else {
+				open[it.Type]++
+			}
+		}
+		bugs, feats, tasks := open["B"], open["F"], open["T"]
 		lines = append(lines, fmt.Sprintf("Backlog: %s, %s, %s", plural(bugs, "bug"), plural(feats, "feature"), plural(tasks, "task")))
 		data := a4Obj("backlog", a4Obj("bugs", bugs, "features", feats, "tasks", tasks))
 
@@ -504,40 +511,15 @@ func a4Summary(fs *flag.FlagSet) RunFunc {
 
 		recent := []any{}
 		var done []string
-		var ds []backlog.Done
-		for _, raw := range pystr.Splitlines(section.Body(md, "Completed")) {
-			if d, ok := backlog.ParseDone(pystr.Strip(raw)); ok {
-				ds = append(ds, d)
-			}
-		}
-		if be.Name() == "file" {
-			// File mode appends completions, so the file runs oldest to newest:
-			// reverse it (later is newer on equal dates), then stable-sort by date.
-			slices.Reverse(ds)
-			slices.SortStableFunc(ds, func(a, b backlog.Done) int { return strings.Compare(b.Date, a.Date) })
-		}
-		for _, d := range ds[:min(3, len(ds))] {
-			s := "[" + d.ID + "] on " + d.Date
-			if d.Reason != "done" {
-				s += " (" + d.Reason + ")"
+		for _, it := range closed[:min(3, len(closed))] {
+			s := "[" + it.Key() + "] on " + it.ClosedAt
+			if it.Reason != "done" {
+				s += " (" + it.Reason + ")"
 			}
 			done = append(done, s)
-			if d.ID == "" {
-				continue
-			}
-			id := d.ID
-			if be.Name() == "issues" {
-				id = id[1:]
-				if _, ok := be.(*backlog.Umbrella); ok {
-					// The Done line names its sub-repo in the Repos field.
-					if repo := backlog.ParseFields("- " + d.Inner).Get("repos"); repo != "" {
-						id = repo + ":" + id
-					}
-				}
-			}
-			o := a4Obj("id", id, "type", d.ID[:1], "date", d.Date)
-			if d.Reason != "done" {
-				o.Set("reason", d.Reason)
+			o := a4Obj("id", it.ID, "type", it.Type, "date", it.ClosedAt)
+			if it.Reason != "done" {
+				o.Set("reason", it.Reason)
 			}
 			recent = append(recent, o)
 		}

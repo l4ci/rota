@@ -162,6 +162,11 @@ func TestUmbrellaListOrder(t *testing.T) {
 			t.Errorf("%s not closed", it.ID)
 		}
 	}
+	for i := 7; i < len(all); i++ {
+		if all[i].ClosedAt == "" || all[i].ClosedAt > all[i-1].ClosedAt {
+			t.Errorf("%s closed %q after %s closed %q", all[i].ID, all[i].ClosedAt, all[i-1].ID, all[i-1].ClosedAt)
+		}
+	}
 }
 
 func TestUmbrellaClosedTieKeepsRegistryOrder(t *testing.T) {
