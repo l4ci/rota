@@ -34,16 +34,16 @@ data: {"for": string, "kind": string, "verdict": string, "sha": string, "stale":
 exit: 2 when --for is missing or unknown, or at an umbrella root without --repo; 3 when no verdict of the kind --for reads is recorded for the branch (hint: rota verdict add), the branch does not exist, HEAD is detached and no branch is named, or no base branch resolves; 5 when git fails
 old: none (new in B2)
 note: a classifier (rule 7): exit 0 whatever the verdict. `ship-review` and `queue` read the effective review verdict, `ship-second-opinion` the latest `second-opinion` record, `ship-qa` the latest `qa` record.
-note: `next` is the consumer's next step, from the verdict, `autonomy.level`, `qa.gate` and `ship.secondOpinionRunner`. `ask` is the Address / Ship anyway / Stop question (off and auto); `address` sends the findings to `/rota-work` and reruns the caller (loop); `surface` shows the findings and continues; `stop` halts and stops a loop. For `queue`, `ask` is the merge question.
+note: `next` is the consumer's next step, from the verdict, `autonomy.level`, `qa.gate` and `ship.secondOpinionRunner`. `ask` is the Address / Ship anyway / Stop question; `surface` shows the findings and continues; `stop` halts. For `queue`, `ask` is the merge question.
 
 | --for | PASS | CONCERNS | FAIL | INFRA-FAIL (qa only) |
 |---|---|---|---|---|
-| `ship-review` | `continue` | `ask`, or `address` in loop | `stop` | |
-| `ship-second-opinion` | `continue` | `ask`, or `address` in loop | `stop` | |
+| `ship-review` | `continue` | `ask` | `stop` | |
+| `ship-second-opinion` | `continue` | `ask` | `stop` | |
 | `ship-second-opinion`, runner `codex` (advisory) | `continue` | `surface` | `surface` | |
 | `ship-qa`, `qa.gate` `advisory` | `continue` | `surface` | `surface` | `surface` |
-| `ship-qa`, `qa.gate` `blocking` | `continue` | `ask`, or `address` in loop | `stop` | `surface` |
-| `queue` | `ask`, or `merge` in loop | `request-changes` | `request-changes` | |
+| `ship-qa`, `qa.gate` `blocking` | `continue` | `ask` | `stop` | `surface` |
+| `queue` | `ask` | `request-changes` | `request-changes` | |
 
 note: `INFRA-FAIL` surfaces under either gate, as `/rota-ship` already treated it: QA could not run, so the product was not judged and a dev server that happened to be down does not block a ship. `advisory` is true in the two advisory rows. A leftover `ship.secondOpinionRunner: "codex"` runs the subagent in advisory mode (maintainer ruling, #158); `qa.gate` defaults to `advisory`.
 

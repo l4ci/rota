@@ -44,11 +44,6 @@ func a4bCommands() []*Command {
 			{Name: "rm", Summary: "end a work stream and drop its handoff note", Repo: true, Verb: a4StatusRm},
 			{Name: "show", Summary: "which repo a branch's stream is in", Repo: true, Verb: a4StatusShow},
 			{Name: "handoff", Summary: "path of a branch's handoff note", Repo: true, Verb: a4StatusHandoff},
-			{Name: "loop", Summary: "the loop start stamp", Subs: []*Command{
-				{Name: "start", Summary: "stamp the loop start, first write wins", Verb: a4LoopStart},
-				{Name: "clear", Summary: "remove the loop start stamp", Verb: a4LoopClear},
-				{Name: "show", Summary: "print the loop start stamp", Verb: a4LoopShow},
-			}},
 		}},
 		{Name: "refactor", Summary: "refactor cycle bookkeeping", Subs: []*Command{
 			{Name: "age", Summary: "features and bugs completed since the last refactor", Repo: true, Verb: a4RefactorAge},
@@ -749,57 +744,6 @@ func a4StatusHandoff(fs *flag.FlagSet) RunFunc {
 			return Result{}, Usage("%s", err.Error())
 		}
 		return Result{Data: a4Obj("branch", branch, "path", nullStr(p), "exists", exists), Text: p}, nil
-	}
-}
-
-func a4LoopStart(fs *flag.FlagSet) RunFunc {
-	return func(c *Ctx, args []string) (Result, error) {
-		if err := a4Args(c, args, 0, 0, "status loop start takes no arguments"); err != nil {
-			return Result{}, err
-		}
-		root, err := c.Root()
-		if err != nil {
-			return Result{}, err
-		}
-		stamp, changed, err := status.LoopStart(root)
-		if err != nil {
-			return a4Fail(err)
-		}
-		return Result{Data: a4Obj("loopStartedAt", stamp, "changed", changed), Text: stamp}, nil
-	}
-}
-
-func a4LoopClear(fs *flag.FlagSet) RunFunc {
-	return func(c *Ctx, args []string) (Result, error) {
-		if err := a4Args(c, args, 0, 0, "status loop clear takes no arguments"); err != nil {
-			return Result{}, err
-		}
-		root, err := c.Root()
-		if err != nil {
-			return Result{}, err
-		}
-		changed, err := status.LoopClear(root)
-		if err != nil {
-			return a4Fail(err)
-		}
-		return Result{Data: a4Obj("changed", changed), Text: "loop stamp cleared"}, nil
-	}
-}
-
-func a4LoopShow(fs *flag.FlagSet) RunFunc {
-	return func(c *Ctx, args []string) (Result, error) {
-		if err := a4Args(c, args, 0, 0, "status loop show takes no arguments"); err != nil {
-			return Result{}, err
-		}
-		root, err := c.Root()
-		if err != nil {
-			return Result{}, err
-		}
-		stamp, _, err := status.LoopShow(root)
-		if err != nil {
-			return a4Fail(err)
-		}
-		return Result{Data: a4Obj("loopStartedAt", nullStr(stamp)), Text: stamp}, nil
 	}
 }
 

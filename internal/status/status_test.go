@@ -234,54 +234,6 @@ func TestRemoveHandoff(t *testing.T) {
 	}
 }
 
-func TestLoopStamp(t *testing.T) {
-	fixedClock(t, "2026-10-02T12:00:00Z")
-	root := project(t, "")
-	if s, set, _ := LoopShow(root); set || s != "" {
-		t.Errorf("show on a missing file = %q %v", s, set)
-	}
-	s, changed, err := LoopStart(root)
-	if err != nil || !changed || s != "2026-10-02T12:00:00Z" {
-		t.Fatalf("start = %q %v %v", s, changed, err)
-	}
-	want := "{\n  \"active\": [],\n  \"loopStartedAt\": \"2026-10-02T12:00:00Z\"\n}\n"
-	if got := read(t, root); got != want {
-		t.Errorf("file:\n%s", got)
-	}
-	// First write wins.
-	fixedClock(t, "2027-01-01T00:00:00Z")
-	if s, changed, _ := LoopStart(root); changed || s != "2026-10-02T12:00:00Z" {
-		t.Errorf("second start = %q %v", s, changed)
-	}
-	if s, set, _ := LoopShow(root); !set || s != "2026-10-02T12:00:00Z" {
-		t.Errorf("show = %q %v", s, set)
-	}
-	if changed, _ := LoopClear(root); !changed {
-		t.Error("clear reports no change")
-	}
-	if changed, _ := LoopClear(root); changed {
-		t.Error("second clear reports a change")
-	}
-	if got := read(t, root); got != "{\n  \"active\": []\n}\n" {
-		t.Errorf("after clear:\n%s", got)
-	}
-}
-
-func TestLoopStampEmptyAndWrongType(t *testing.T) {
-	fixedClock(t, "2026-10-02T12:00:00Z")
-	root := project(t, `{"active": [], "loopStartedAt": ""}`)
-	if _, changed, _ := LoopStart(root); !changed {
-		t.Error("an empty stamp counts as unset")
-	}
-	root = project(t, `{"active": [], "loopStartedAt": 5}`)
-	if _, _, err := LoopStart(root); err == nil {
-		t.Error("a numeric stamp was accepted")
-	}
-	if _, _, err := LoopShow(root); err == nil {
-		t.Error("show printed a numeric stamp")
-	}
-}
-
 func TestConcurrentAdds(t *testing.T) {
 	root := project(t, "")
 	done := make(chan error, 8)

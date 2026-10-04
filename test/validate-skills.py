@@ -204,24 +204,8 @@ def prose_rules():
     r = []
     sk = lambda n: f"rota-{n}/SKILL.md"
     CALLOUT = "**always manual** — never auto-invoked, regardless of `autonomy.level`"
-    # /rota-plan and /rota-brainstorm --auto-loop (F32, B28)
-    r += [has(sk("plan"), "--auto-loop", "must document the --auto-loop flag"),
-          has(sk("plan"), "Auto-loop mode", "must include the dedicated 'Auto-loop mode' section"),
-          has(sk("brainstorm"), "--auto-loop", "must document the --auto-loop flag"),
-          has(sk("brainstorm"), "## Auto-loop mode", "must include the dedicated 'Auto-loop mode' section"),
-          has(sk("brainstorm"), "auto: true", "must document 'auto: true' frontmatter under --auto-loop"),
-          has(sk("brainstorm"), "AUTO_LOOP", "must parse the --auto-loop flag in Step 1"),
-          has(sk("work"), "Loop-mode auto-dispatch chain", "must title Step 4 'Loop-mode auto-dispatch chain'"),
-          has(sk("work"), "/rota-plan --auto-loop", "must reference /rota-plan --auto-loop"),
-          has(sk("work"), "/rota-brainstorm --auto-loop", "must reference /rota-brainstorm --auto-loop dispatch"),
-          has(sk("work"), "defer to Step 4", "Step 2 must defer Major + Milestone-tagged ambiguity to the Step 4 chain"),
-          has("references/loop-mode-plan-dispatch.md", "Design pre-flight", "must include the Design pre-flight section"),
-          only_in("rota-*/SKILL.md", "rota decisions auto-since", {"rota-brainstorm", "rota-plan"},
-                  "rota decisions auto-since is surfaced in exactly rota-brainstorm and rota-plan"),
-          has(sk("work"), "rota status loop start", "must call rota status loop start"),
-          has(sk("pause"), "rota status loop clear", "must call rota status loop clear"),
-          has(sk("work"), "rota status loop clear", "must call rota status loop clear"),
-          has(sk("work"), "rota status handoff", "must call rota status handoff"),
+    # handoff / feature-branch guard calls
+    r += [has(sk("work"), "rota status handoff", "must call rota status handoff"),
           has(sk("ship"), "rota git guard feature-branch", "must call rota git guard feature-branch"),
           has(sk("pause"), "rota git guard feature-branch", "must call rota git guard feature-branch")]
     # map / backlog touchpoints

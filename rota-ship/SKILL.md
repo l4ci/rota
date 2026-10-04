@@ -23,7 +23,7 @@ Read `.rota/config.json` (`rota config show`):
 - `ship.review` — `true` (default) runs `/rota-review` first; `false` skips it
 - `ship.secondOpinion` — `false` (default); `true` runs a no-prior-context adversarial review after `/rota-review` (Step 3.5). A leftover `ship.secondOpinionRunner: "codex"` runs the subagent in advisory mode: print *"ship.secondOpinionRunner: codex was removed in 5.0; using subagent (run `rota config set ship.secondOpinionRunner subagent` to silence this)"* and carry on.
 - `ship.qa` — `false` (default); `true` runs `/rota-qa run` after the reviews (Step 3.75)
-- `autonomy.level` — `"off"` (default), `"auto"`, `"loop"`: whether Steps 8.5 and 10 nudge or invoke directly
+- `autonomy.level` — `"off"` (default), `"auto"`: whether Step 8.5 nudges or invokes directly
 - `docs.path` (default `"docs"`), `docs.afterWork` (default `false`), `docs.autoCreate` (default `false`)
 
 ## When to Use
@@ -71,14 +71,13 @@ Exit 3 means no verdict was recorded: stop and rerun `/rota-review`; never read 
 | `data.next` | Meaning | Do |
 |---|---|---|
 | `continue` | PASS | Go on silently. |
-| `ask` | CONCERNS, autonomy off or auto | Surface each concern, then `AskUserQuestion` with the options in `references/review-verdict-routing.md`: Address via `/rota-work` (Recommended) / Ship anyway / Stop. |
-| `address` | CONCERNS, loop | Surface each concern, invoke `rota-work` via `Skill` with the concerns as the brief, re-invoke `/rota-ship` after the fixes are committed. |
+| `ask` | CONCERNS | Surface each concern, then `AskUserQuestion` with the options in `references/review-verdict-routing.md`: Address via `/rota-work` (Recommended) / Ship anyway / Stop. |
 | `surface` | Advisory gate (QA under `qa.gate: advisory`, any QA `INFRA-FAIL`, advisory second opinion) | Surface the findings, continue. A missing dev server or credentials never blocks a ship. |
-| `stop` | FAIL | Stop, and stop a loop. Surface the findings; the user fixes via `/rota-work` or `/rota-debug` and reruns `/rota-ship`. |
+| `stop` | FAIL | Stop. Surface the findings; the user fixes via `/rota-work` or `/rota-debug` and reruns `/rota-ship`. |
 
 Label surfaced concerns by producer (carrier labels in `references/review-verdict-routing.md`): "Second-opinion concerns", "QA concerns".
 
-Remember a CONCERNS answer as `REVIEW_CHOICE` (`address`, `ship-anyway`, `stop`). Step 3.5 and 3.75 read it; Step 9 reads it. Loop mode auto-picks `address`, never `ship-anyway`. A review FAIL also makes `rota ship pr` and `rota ship merge` refuse (exit 4, `data.blockedBy: "verdict"`), but stop here rather than relying on that.
+Remember a CONCERNS answer as `REVIEW_CHOICE` (`address`, `ship-anyway`, `stop`). Step 3.5 and 3.75 read it; Step 9 reads it. A review FAIL also makes `rota ship pr` and `rota ship merge` refuse (exit 4, `data.blockedBy: "verdict"`), but stop here rather than relying on that.
 
 ## Step 3.5 — Second-Opinion Gate (opt-in)
 
@@ -148,7 +147,7 @@ Title: from the strongest commit subject, 70 characters at most, no `[ID]` tags 
 printf 'merge: <summary>\n\n- item 1\n- item 2\n' | rota ship merge <branch> --body-file - [--repo <name>]
 ```
 
-The subject must start `merge: ` (undo recognizes cycles by it). Share the hash from `data.sha`. Exit 4: `data.blockedBy: "verdict"` is a recorded FAIL, surface and stop. `"manual gate"` is the `merge-approval` gate (`ship.mergeApproval` requires a human; `data.paths` names the files that triggered it) and nothing changed: ask in an `AskUserQuestion` that loop mode never auto-picks, then rerun with `--confirm --confirm-note "<their answer>"`. A merge conflict (also exit 4) is aborted by the verb; tell the user.
+The subject must start `merge: ` (undo recognizes cycles by it). Share the hash from `data.sha`. Exit 4: `data.blockedBy: "verdict"` is a recorded FAIL, surface and stop. `"manual gate"` is the `merge-approval` gate (`ship.mergeApproval` requires a human; `data.paths` names the files that triggered it) and nothing changed: ask in an `AskUserQuestion`, then rerun with `--confirm --confirm-note "<their answer>"`. A merge conflict (also exit 4) is aborted by the verb; tell the user.
 
 ## Step 6c — Close Upstream Issues (direct-merge path only)
 
@@ -158,7 +157,7 @@ Skip on the PR path (`rota ship body` already emits `Closes #N`) and on the issu
 
 > **Manual gate — closing public upstream issues (`issue-close`).** Closing posts a comment and changes issue state on the remote. This step is **always manual** — never auto-invoked, regardless of `autonomy.level`. The registry marks it skill-enforced only. See `references/manual-gates.md`.
 
-Ask (header `"Close"`, *"Close N upstream issue(s) tied to the shipped items? (`#N, …`)"*): `"Yes, close all"` / `"Pick subset"` / `"No, leave open"`. Stop a loop here. For a subset, a second multiSelect `AskUserQuestion` (header `"Pick issues"`, options `"#N (item <ID>)"`, chunk by 4). Close each selected issue in one parallel batch:
+Ask (header `"Close"`, *"Close N upstream issue(s) tied to the shipped items? (`#N, …`)"*): `"Yes, close all"` / `"Pick subset"` / `"No, leave open"`. For a subset, a second multiSelect `AskUserQuestion` (header `"Pick issues"`, options `"#N (item <ID>)"`, chunk by 4). Close each selected issue in one parallel batch:
 
 ```bash
 rota issues close <N> --commit <merge-sha> --item <ID> [--repo <name>]
@@ -192,14 +191,14 @@ Exit 4 with `blockedBy: proof missing`: the item stays open with no `## Proof` r
 rota proof add <ID> --check "<command that ran>" --result PASS --evidence "<summary line or log path>" --sha <merge-or-last-commit-hash>
 ```
 
-A `/rota-review` or second-opinion PASS is acceptance, not proof: it reads the diff and runs nothing, so it never becomes a row. If no executed check exists, ask: run the project's test command now and record it (Recommended) / close with `--no-proof` (the user's call, named in the Step 9 report) / leave the item open. Loop mode never passes `--no-proof`; the item stays open and Step 9 lists it as unproven.
+A `/rota-review` or second-opinion PASS is acceptance, not proof: it reads the diff and runs nothing, so it never becomes a row. If no executed check exists, ask: run the project's test command now and record it (Recommended) / close with `--no-proof` (the user's call, named in the Step 9 report) / leave the item open. Never pass `--no-proof` without that answer.
 
 ## Step 8.5 — Learn (Nudge or Auto-Invoke)
 
 Integration is a natural capture moment. **Inside a round, skip Steps 8.5 and 8.6 for round workers** (a worker's branch name is `<agent>/<issue>-<slug>`, or the brief says it is a round slot): the orchestrator runs learn and docs once per round, not per PR. Otherwise run `references/post-cycle-trigger-gate.md` with:
 
 - **Nudge (`"off"`):** append to the Step 9 report *"Capture learnings before context fades? Run `/rota-learn` — this cycle has the fresh session context."*
-- **Target (`"auto"`/`"loop"`):** dispatch `rota-learn` via `Skill` immediately, no prompt.
+- **Target (`"auto"`):** dispatch `rota-learn` via `Skill` immediately, no prompt.
 - **Brief:** the resolved IDs and touched files.
 
 ## Step 8.6 — Docs After-Work (inline)
@@ -222,10 +221,6 @@ or `Merged `rota/demo` into main — commit a1b2c3d` plus the `Resolved:` line. 
 
 After a successful ship (PR or merge): `rota release pending --json`. If `shouldNudge` is false or `lastTag` is empty (the first release is the user's call), say nothing. Otherwise append `data.message` to the report as one line after `Resolved:`.
 
-## Step 10 — Loop Continuation
-
-Only when `autonomy.level == "loop"`. After the report, re-enter `/rota-work` with no argument via `Skill` immediately, no prompt. It reconciles, auto-picks the next item and stops itself on an empty backlog, a failed guard or a user interrupt.
-
 ## Undo Mode (--undo)
 
 The inverse of a `/rota-work` cycle: `rota ship undo` resets the most recent `merge: …` commit on the base branch and restores the resolved items to BACKLOG. It previews unless given `--apply`, and refuses PR-mode cycles (the merge happened upstream), post-merge commits without `--allow-post-merge`, a dirty tree, a non-base branch and a non-`merge: ` subject. A different cycle is `rota ship undo --cycle <hash>`, run by the user directly.
@@ -236,9 +231,9 @@ Phases: *Preview*, *Confirm*, *Apply*, *Report*. Track these phases with the hos
 
 **U2 — Confirm.** One `AskUserQuestion` with the plan above it, header `"Apply"`, *"Apply this rollback plan?"*: `"Apply (Recommended)"` (resets the base branch, restores the entries) / `"Cancel"` (print *"No changes."*, stop). Only an explicit yes applies.
 
-> **Manual gate — destructive reset.** The gate always asks and loop mode does not accelerate it. `rota gate list` has no entry for it and the verb enforces nothing beyond the `--apply` preview split, so this confirmation is the only guard before `git reset --hard`, which is unrecoverable past the reflog window.
+> **Manual gate — destructive reset.** The gate always asks. `rota gate list` has no entry for it and the verb enforces nothing beyond the `--apply` preview split, so this confirmation is the only guard before `git reset --hard`, which is unrecoverable past the reflog window.
 
-**U3 — Apply.** `rota ship undo --apply` (exit 5 means the reset happened but restoring an item failed: tell the user which). Print the verb's summary line. Undo is terminal: no `/rota-learn`, no docs, no loop continuation. The user reruns `/rota-work` to see the restored backlog.
+**U3 — Apply.** `rota ship undo --apply` (exit 5 means the reset happened but restoring an item failed: tell the user which). Print the verb's summary line. Undo is terminal: no `/rota-learn`, no docs. The user reruns `/rota-work` to see the restored backlog.
 
 Use undo when a landed cycle proved wrong, a reviewer found a regression and "roll back, redesign" is simplest, or the premise was wrong and the item needs reopening. Not for PR-mode cycles (`gh pr close` for open PRs, `git revert` for merged ones), not for more than one cycle at once (invoke twice), not for edits to what landed (`/rota-capture` then `/rota-work`).
 
@@ -340,7 +335,7 @@ Resolves: #12, #15   (file backend: [B07], [F03])
 
 | Reference | Purpose |
 |-----------|---------|
-| [`authoring-conventions.md`](references/authoring-conventions.md) | Authoring rules shared across SKILL.md files (loop-mode auto-picks, manual gates, verb contract). |
+| [`authoring-conventions.md`](references/authoring-conventions.md) | Authoring rules shared across SKILL.md files (manual gates, verb contract). |
 | [`docs-conventions.md`](references/docs-conventions.md) | Conventions for content under `docs/` (page naming, `.docsignore` seed). Consumed by Docs Mode. |
 | [`humanizing-prose.md`](references/humanizing-prose.md) | Self-audit for the PR body and doc edits. |
 | [`issue-mode.md`](references/issue-mode.md) | Issue-mode PR and item lifecycle. |

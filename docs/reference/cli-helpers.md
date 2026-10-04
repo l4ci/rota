@@ -138,9 +138,6 @@ exit codes and repo scope: [verb contract](../design/contract/README.md).
 | `rota status rm <branch>` | end a work stream and drop its handoff note |
 | `rota status show <branch>` | which repo a branch's stream is in |
 | `rota status handoff <branch> [--canonical]` | path of a branch's handoff note |
-| `rota status loop start` | stamp the loop start, first write wins |
-| `rota status loop clear` | remove the loop start stamp |
-| `rota status loop show` | print the loop start stamp |
 
 ## `rota refactor`
 
@@ -181,8 +178,6 @@ exit codes and repo scope: [verb contract](../design/contract/README.md).
 | Usage | What it does |
 |---|---|
 | `rota decisions query <topic>…` | print topic sections |
-| `rota decisions auto-log --topic <T> --title <rule-title> --why <text> [--plan-key <key>] [--date YYYY-MM-DD]` | log an [Auto:Loop] decision |
-| `rota decisions auto-since` | list this loop session's auto-logged decisions |
 
 ## `rota glossary`
 

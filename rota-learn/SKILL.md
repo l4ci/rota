@@ -146,7 +146,7 @@ Updated the topic index in <AGENTS.md|CLAUDE.md> — /rota-work will consult the
 
   Format KB as `{bytes/1024:.1f}` (e.g. `9.8 KB` for 9876 bytes). Splitting is editorial; the user accepts or declines.
 
-- `"auto"` or `"loop"` — **perform the split immediately — no prompt, no confirmation, no "want me to" question.** Per the `references/authoring-conventions.md` convention for loop-mode routine auto-picks. For each offender topic:
+- `"auto"` — **perform the split immediately — no prompt, no confirmation, no "want me to" question.** For each offender topic:
 
   1. Read the topic's bullets via `rota knowledge query "<topic>"`.
   2. Group bullets into 2 or 3 cohesive facets by semantic theme (e.g. `Helpers` / `Workers & Parallelism`, `Conventions` / `References`). Each facet must hold ≥3 bullets; `Misc` / `Other` / `Etc.` facets are forbidden — every bullet gets a substantive home. If no plausible split axis exists (bullets are byte-equivalent in theme), fall back to the `"off"` nudge for that topic and skip steps 3–7.

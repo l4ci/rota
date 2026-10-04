@@ -28,7 +28,7 @@ Every post-cycle nudge step runs the same sequence. The call site supplies the *
 2. **Trigger** — apply *The condition* above, subject to *When the gate does NOT fire*. When the site names a **trigger override** (e.g. `/rota-work` Step 14's refactor-age counts), apply that instead of the default condition; the don't-repeat exclusion applies to every trigger, override or not. Not triggered → skip silently.
 3. **Branch on `autonomy.level`:**
    - `"off"` → emit the site's **nudge line**, placed where the site says (standalone message, or appended to the cycle's final report).
-   - `"auto"` or `"loop"` → dispatch the site's **target skill** via the `Skill` tool immediately — no prompt, no confirmation, no "want me to" question. Each site restates this imperative inline beside its target, per the inline-at-dispatch-point rule in `references/authoring-conventions.md`. Pass a **brief** naming the cycle's resolved item IDs and touched files (plus anything else the site names) so the dispatched skill has the right context.
+   - `"auto"` → dispatch the site's **target skill** via the `Skill` tool immediately — no prompt, no confirmation, no "want me to" question. Each site restates this imperative inline beside its target, per the inline-at-dispatch-point rule in `references/authoring-conventions.md`. Pass a **brief** naming the cycle's resolved item IDs and touched files (plus anything else the site names) so the dispatched skill has the right context.
 
 ### Inline variant — `/rota-ship` Step 8.6
 
