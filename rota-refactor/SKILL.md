@@ -1,273 +1,152 @@
 ---
 name: rota-refactor
-description: Run a full architectural refactor cycle — explores the codebase for friction, categorizes dependencies, designs competing approaches for structural changes, then fixes everything with parallel subagents. Use when you want to find and fix architectural issues.
+description: Architecture review that files findings as refactor-labelled issues. Finds shallow modules, leaky seams and hard-to-test code, ranks the candidates, and files each as an issue with acceptance criteria, deduped against open and closed issues. Fixing is opt-in with --fix. Use on "review the architecture", "find refactoring opportunities", "deepen modules", or scoped to one area ("/rota-refactor internal/cli").
 ---
 
 # rota-refactor
+
+Surface architectural friction and file each finding as an issue. The default run changes no code. The aim is code that is easier to test and easier for an agent to navigate.
 
 ## Configuration
 
 Read `.rota/config.json`:
 
-- `models.orchestrator` — exploration, design, and verification (default `opus`)
-- `models.worker` — implementation subagents (default `sonnet`)
-- `refactor.confirmBeforeExecute` — pause for user approval before executing fixes (default `true`; `false` for full autonomy)
-- `refactor.verifyCommands` — array of shell commands to run as CI-shape gates during Step 7 verification (default `[]` — read-only verification when empty)
+- `models.orchestrator` — exploration and ranking (default `opus`)
+- `models.worker` — `--fix` implementation subagents (default `sonnet`)
+- `refactor.verifyCommands` — shell commands run as gates in `--fix` verification (default `[]`)
+- `refactor.confirmBeforeExecute` — `--fix` only: pause before fixing (default `true`)
 
 ## Args
 
-- `--here` — skip Step 1.5 (umbrella scope detection); run the single-repo flow in cwd. Used internally by Step 1.5's fanout dispatch — each sub-agent invokes `/rota-refactor --here` after `cd`-ing into its target. Single-repo projects (umbrella.enabled false or unset) ignore the flag — the flow is identical with or without it.
+- `<area>` — a path, directory or subsystem name. Scope the review to it. Several workers can each take one area. Without an area, review the whole repo (see Explore for prioritization).
+- `--fix` — after filing, implement the candidates you pick (Fix path below). Without it the run ends at Step 4.
+- `--designs` — for structural candidates, draft competing interfaces before recommending one (`references/refactor-design-approaches.md`). Off by default; it is the expensive step.
+- `--interactive` — present the ranked candidates and ask which to file instead of filing all of them.
+
+Umbrella projects: `rota refactor targets --json` lists the sub-repos. Run once per sub-repo with the global `--repo <name>` so each finding lands on the tracker that owns the code. Do not fan out sub-agents from here; the orchestrator of a round assigns one area per worker.
+
+## Vocabulary
+
+Use these terms in every finding. Do not drift into "component", "service", "API" or "boundary".
+
+- **Module** — anything with an interface and an implementation: a function, a package, a skill, a command.
+- **Interface** — everything a caller must know to use the module: types, invariants, error modes, ordering, required config. Not just the signature.
+- **Implementation** — the code behind the interface.
+- **Depth** — how much behaviour sits behind how small an interface. **Deep** = a lot behind a little. **Shallow** = the interface is about as complex as the implementation.
+- **Seam** — the place a module's interface lives, where behaviour can change without editing in place.
+- **Adapter** — a concrete thing that satisfies an interface at a seam.
+- **Leverage** — what callers get from depth: one implementation pays back across many call sites and tests.
+- **Locality** — what maintainers get from depth: change, bugs and knowledge concentrate in one place.
+
+## Heuristics
+
+- **Deletion test.** Imagine deleting the module. If the complexity vanishes, it was a pass-through. If it reappears in N callers, the module was earning its keep. A candidate is one where deletion would concentrate complexity, not just move it.
+- **The interface is the test surface.** Callers and tests cross the same seam. A module you have to test past its interface is the wrong shape.
+- **One adapter is a hypothetical seam; two are a real one.** Do not propose a seam unless something actually varies across it.
+- **Extraction that lost locality.** Pure functions pulled out for testability while the bugs live in how they are called.
+- **Leaks across seams.** Tightly coupled modules that reach into each other's internals or share hidden state.
+- **Hard to test through the interface.** Code that needs mocks of its own internals, or has no test at its seam.
+- **Concept sprawl.** Understanding one idea takes bouncing between many small modules.
 
 ## Flow
 
-Explore → Triage → Present *(checkpoint)* → Design competing approaches *(checkpoint)* → Fix in parallel → Verify → Re-fix on failures → Commit → Report
+Orient → Explore → Rank → File → *(opt-in)* Fix
 
-## Dependency Categories
+### Step 1 — Orient
 
-Every friction point gets one category — it drives the fix strategy:
-
-1. **In-process** — pure computation, in-memory state, no I/O. Merge modules, test directly.
-2. **Local-substitutable** — has a local test stand-in (PGLite for Postgres, in-memory FS). Test with the stand-in in the suite.
-3. **Ports & Adapters** — your services across a network boundary (microservices, internal APIs). Define a port at the module boundary; deep module owns logic, transport is injected. Tests use an in-memory adapter; production uses the real one.
-4. **True external** — third-party services (Stripe, Twilio) you don't control. Mock at the boundary; tests provide the mock, production uses the real implementation.
-
-## Step 1 — Task List
-
-The clean-tree guard (`rota git guard clean`) lives in Step 1.5's branches, not here — fanout sub-agents run their own guards against their target trees, so the umbrella-level guard isn't needed (and would falsely fail when the umbrella is not a git repo).
-
-Track these phases with the host's task tool if it has one.
-
-Phases:
-
-1. *Explore* — fanout sub-agents surface friction signals (Steps 1.5–2)
-2. *Categorize* — signals grouped by structural axis (Step 3)
-3. *Design approaches* — competing approaches drafted per category (Step 4)
-4. *User confirm* — approach selection gate (Step 5)
-5. *Execute* — parallel sub-agents apply the chosen design (Step 6)
-6. *Verify & merge* — diffs verified, branch merged or PR opened (Steps 7–8)
-
-## Step 1.5 — Umbrella Scope (skip if `--here` was passed)
-
-Skip this step entirely if EITHER:
-- `--here` was passed to this invocation
-- `umbrella.enabled` is false in `.rota/config.json`
-
-In that case, run the clean-tree guard and proceed to Step 2 (single-repo flow):
+Read what the project already decided before looking at code. Pull only what touches the area:
 
 ```bash
-rota git guard clean --context "/rota-refactor"
+rota glossary read <term>…
+rota knowledge query <topic>…
+rota decisions query <topic>…
 ```
 
-Otherwise, list refactor targets:
+Use the glossary's names for domain concepts ("the claim module", not "the FooHandler"). Do not re-suggest something a recorded decision rules out. If friction is real enough to warrant reopening a decision, file the candidate anyway and name the decision it contradicts in the body.
+
+Run `rota git guard clean --context "/rota-refactor"` only under `--fix`.
+
+### Step 2 — Explore
+
+Dispatch one exploration agent on the **orchestrator** model (a `light` model is enough when the area is small). Scope it to the area. Rule: rank files by inbound imports, then size, then recent change; read the top fifth in full and one hop of callers and importers; sample the rest. Stop at 8–12 candidates, or after 30+ files with no new kind of friction in the last 5. Do not pad.
+
+For each candidate the agent reports: files with line ranges, the friction in vocabulary terms, the deletion-test result, and what is hard to test today. It does not propose interfaces.
+
+### Step 3 — Rank
+
+Assign each candidate a strength:
+
+- **Strong** — deletion test concentrates complexity, a real seam exists, tests would get simpler.
+- **Worth exploring** — plausible depth gain, but a design choice or a missing second adapter is unsettled.
+- **Speculative** — a hunch the code does not yet back.
+
+Mark one **top recommendation** and say why it goes first. Candidates that are only a one-line fix with no design choice are *simple*; file them like the rest, labelled in the body. With `--designs`, run the competing-design step now for the structural ones.
+
+### Step 4 — File
+
+File one issue per candidate. Never file a candidate you cannot state acceptance for.
+
+**Dedup first.** Fetch refactor issues in every state and compare on files and problem, not title:
 
 ```bash
-rota refactor targets --json
+rota tracker call -- issue list --label refactor --state all --limit 200 --json number,title,state,body
 ```
 
-`data` holds:
+- A match that is open: skip, and comment with any new evidence.
+- A match that is closed: skip unless the friction demonstrably came back; then file a new issue that cites it (`Related: #<n>`).
+- A closed match whose reason was "won't do": treat as rejected, do not re-file.
 
-```json
-{
-  "umbrella": {"hasCode": true|false},
-  "subRepos": [{"name": "<name>", "path": "<abs-path>"}, ...]
-}
-```
-
-If `subRepos` is empty (umbrella mode is on but no sub-repos are registered), proceed to Step 2 with the single-repo flow — the umbrella's tree is the only target.
-
-Otherwise, ask the user which scope to refactor via `AskUserQuestion`:
-
-- **Header:** `"Scope"`
-- **Question:** *"Umbrella mode is on with N sub-repo(s): `<comma-separated names>`. Where should this refactor cycle run?"*
-- **Options** (single-select), conditional on `umbrella.hasCode`:
-  - When `hasCode == true`:
-    1. *"All sub-repos + umbrella (Recommended)"* — *"N+1 parallel cycles, one per sub-repo plus one for the umbrella's own tree."*
-    2. *"All sub-repos only"* — *"N parallel cycles. Skip the umbrella's own tree."*
-    3. *"Umbrella only"* — *"Refactor the umbrella's tree only; skip sub-repos."*
-    4. *"Pick a subset"* — *"Multi-select which sub-repos to include."*
-  - When `hasCode == false`:
-    1. *"All sub-repos (Recommended)"* — *"N parallel cycles, one per sub-repo."*
-    2. *"Pick a subset"* — *"Multi-select which sub-repos to include."*
-    3. *"Umbrella only"* — *"Refactor the umbrella's tree only (no code detected — likely no findings)."*
-
-With no answer, take the Recommended option for the relevant `hasCode` state.
-
-**Loop mode:** if `autonomy.level == "loop"`, auto-pick the Recommended scope option without invoking AskUserQuestion. With `hasCode == true`, that's *"All sub-repos + umbrella (Recommended)"* — fan out to N+1 parallel cycles. With `hasCode == false`, that's *"All sub-repos (Recommended)"* — fan out to N parallel cycles. The "Pick a subset" follow-up never fires under loop. Per the authoring convention "routine routing/tagging auto-picks Recommended in loop mode" (see `references/authoring-conventions.md` rule #5).
-
-If the user picks **"Pick a subset"**, follow up with a multiSelect:
-
-- **Header:** `"Sub-repos"`, `multiSelect: true`
-- **Question:** *"Which sub-repos to refactor?"*
-- **Options:** up to 4 sub-repos by name (alphabetical); if more than 4, list top 4 alphabetically and ask the user to name the rest in free text.
-
-### Branch — "Umbrella only"
-
-Run `rota git guard clean --context "/rota-refactor"` against the umbrella's tree if you skipped it earlier. Then proceed to Step 2 (single-repo flow). The umbrella's `.git/` (if it has one) receives the commit; if the umbrella isn't a git repo, the guard exits 3 and this step stops.
-
-### Branch — fanout (any other scope: "All sub-repos", "All + umbrella", "Pick a subset")
-
-The full fanout choreography — context collection, the per-target sub-agent prompt template, the parallel dispatch, the after-returns aggregation + counter reset + report — lives in `references/refactor-umbrella-fanout.md`. Run that flow end-to-end, then EXIT this skill (skip Steps 2–10).
-
-The reference's sub-agent prompt embeds `<orchestrator>` and `<worker>` placeholders — substitute from the umbrella's `.rota/config.json` `models.orchestrator` / `models.worker` (defaults `opus` / `sonnet`) before dispatch.
-
-## Step 2 — Explore with Orchestrator
-
-Dispatch an exploration agent using the configured **orchestrator** model, with a prioritization rule (inbound-import count + LoC + mtime, top 20% read in full), a neighborhood-expansion rule (one hop), and a stop condition (8–12 friction points across the categories, or 30+ files read with no new category in the last 5). Full prompt template + categories list lives in `references/refactor-explore.md`.
-
-## Step 3 — Triage, Categorize & Classify
-
-After the exploration agent returns, process each friction point:
-
-1. **Assign a dependency category** (in-process / local-substitutable / ports & adapters / true external)
-2. **Classify as simple or structural:**
-   - **Simple** — the fix is obvious and self-contained (surface an error, propagate a value, consolidate duplicated logic, add a missing return). No design choices involved.
-   - **Structural** — the fix reshapes a module boundary, merges tightly-coupled modules, changes ownership of a concept, or introduces a new interface. Multiple valid approaches exist.
-3. **Group into independent fix batches:**
-   - **Independent files** → parallel agents
-   - **Same file** → single agent handles all changes to that file
-   - **Sequential dependency** (fix A must land before fix B can reference it) → note the order, run sequentially after the first batch
-
-## Step 4 — Present Candidates
-
-Present a numbered list of all friction points. For each, show:
-
-- **Cluster**: which files/modules are involved
-- **Classification**: simple or structural
-- **Dependency category**: which of the 4 categories applies
-- **Why it matters**: the concrete risk or cost of leaving it
-
-If `confirmBeforeExecute` is `true`, gate with `AskUserQuestion`:
-
-- **Header:** `"Candidates"`
-- **Question:** *"Found N friction points. Which should I fix?"*
-- **Options** (single-select):
-  1. "Fix all N (Recommended)" — *"Proceed with every candidate in parallel."*
-  2. "Pick a subset" — *"Choose which items to include; the rest are skipped."*
-  3. "Stop" — *"No changes; surface the list and exit."*
-
-If the user picks "Pick a subset", follow up with a second `AskUserQuestion`:
-
-- **Header:** `"Subset"`, `multiSelect: true`
-- **Question:** *"Select the items to fix."*
-- **Options:** up to 4 candidates by label (e.g., `"SessionOrchestrator error propagation"`). If more than 4, list top 4 by impact and ask the user to name the rest in free text.
-
-**Loop mode:** if `autonomy.level == "loop"` AND `confirmBeforeExecute == true`, auto-pick *"Fix all N (Recommended)"* without invoking AskUserQuestion — proceed with every candidate in parallel. The "Pick a subset" follow-up never fires under loop. Per the authoring convention "routine routing/tagging auto-picks Recommended in loop mode" (see `references/authoring-conventions.md` rule #5). When `confirmBeforeExecute == false` the gate is already skipped (existing behavior in the next paragraph), so this auto-pick is conditional on the gate firing in the first place.
-
-If `confirmBeforeExecute` is `false`: present the list for visibility, then proceed immediately with all items.
-
-## Step 5 — Design Competing Approaches (Structural Only)
-
-For each **structural** friction point, spawn 3+ sub-agents in parallel using the configured **orchestrator** model. Each gets the same technical brief but a different design constraint (minimal interface, max flexibility, caller-optimized, ports & adapters when remote deps apply). Each returns interface signature, usage example, hidden complexity, dependency strategy, and trade-offs. Orchestrator picks or hybridizes; when `confirmBeforeExecute` is `true`, gate with `AskUserQuestion` (one option per design, side-by-side `preview`). Decisions consult, agent dispatch shape, and gate UX in `references/refactor-design-approaches.md`.
-
-**Simple** friction points skip this step entirely — they go straight to Step 6.
-
-## Step 6 — Fix with Parallel Worker Agents
-
-Dispatch all independent fixes in parallel using the configured **worker** model. Each agent gets:
-- Exact files to read and modify
-- Precise description of the friction and the chosen approach
-- For structural changes: the selected interface design from Step 5
-- Dependency category and how deps should be handled
-- Constraint: read the file first, minimal diff, no unrelated changes
-- Return: short summary of what changed
-
-For each agent brief:
-- Include the relevant code snippet showing the problem
-- Include the replacement code or a precise description of it
-- Name every line number so the agent doesn't have to hunt
-
-Don't announce the dispatch — just do it. After parallel batch completes, dispatch any sequential agents that depended on the first batch.
-
-## Step 7 — Verify with Orchestrator
-
-Read `refactor.verifyCommands` from `.rota/config.json`:
+**Create.** Body in a scratch file, then:
 
 ```bash
-python3 -c "import json,sys; print(json.dumps(json.load(open('.rota/config.json')).get('refactor',{}).get('verifyCommands',[])))"
+rota item create --json --kind tasks --title "<verb-first title>" --desc "<one line>" --body-file <scratch>
+rota issues label <number> --add refactor
 ```
 
-Dispatch a single verification agent using the configured **orchestrator** model. For each fix, it reads the modified file and reports PASS / FAIL / CONCERN as before.
+(File-mode backlogs have no tracker: `rota item create` alone, and the item is the finding.)
 
-**When `verifyCommands` is non-empty**, the agent's brief MUST include the command list and require it to execute every command verbatim, capturing exit code and stderr. Any non-zero exit MUST be reported as a FAIL with the failing command and its stderr inline. The agent reports PASS only when (a) all file reads check out AND (b) every gate command exited zero.
+Body sections:
 
-**When `verifyCommands` is empty** (default), Step 7 runs file-read verification only — behavior unchanged from prior versions. No spurious "no commands configured" messages; silent pass-through is the common case.
+- **Files** — paths and line ranges.
+- **Problem** — the friction, in vocabulary terms, with the deletion-test result.
+- **Solution** — plain description of what would change. No signatures unless `--designs` ran.
+- **Benefits** — locality and leverage, and how the tests improve.
+- **Strength** — Strong / Worth exploring / Speculative, and whether it is the top recommendation.
+- **Conflicts** — the recorded decision it contradicts, if any, and why it is worth reopening.
+- **## Acceptance** — checkable boxes: the interface the callers use afterwards, which duplicated logic is gone, which tests cross the seam. Include "existing tests still pass".
 
-The verification agent must read actual file content (not just trust fix summaries) AND actually run the gate commands (not just report what it would run). Don't relay individual PASS verdicts to the user — only surface FAILs and CONCERNs.
+Report: a table of filed issues (number, title, strength), the skipped duplicates with the issue they matched, and the top recommendation. Zero filed is a valid result.
 
-## Step 8 — Handle Failures
+**Rejections.** If the user rejects a candidate with a reason a later review would need to avoid re-suggesting it, offer `/rota-decide` to record it. Skip ephemeral reasons ("not now") and self-evident ones.
 
-If any fix got **FAIL**:
-- Read the verification finding
-- Dispatch a new worker agent with the corrected brief
-- Re-verify with orchestrator
-- Only mention persistent failures to the user (ones that don't resolve after retry)
+Under `--interactive`, show the ranked list before filing and let the user drop or reorder candidates; the grilling conversation about the shape of a chosen candidate belongs in `/rota-brainstorm`, not here.
 
-If any fix got **CONCERN**:
-- Assess whether it blocks commit
-- Fix if blocking, note if informational — surface informational concerns briefly at the end, not inline during verification
+Without `--fix`, stop here.
 
-## Step 9 — Commit
+## Fix path (`--fix`)
 
-After all fixes pass verification, commit everything:
+Fix only the candidates the user named, or all filed in this run if they said "all". With `refactor.confirmBeforeExecute` true, confirm the list once with `AskUserQuestion` first.
 
-```bash
-# Stage all modified files explicitly (never git add -A)
-git add [file1] [file2] ...
-
-# Commit with a message that lists all fixes
-git commit -m "refactor: [N] architectural improvements
-
-[one line per fix, e.g.:]
-- SessionOrchestrator: surface autosave errors to lastError
-- RingBuffer: write() returns overflow count (@discardableResult)
-- SpeakerReconciler: returned embeddings use EMA values
-..."
-```
-
-If the project uses a build tool to regenerate project files (e.g. `xcodegen generate` for XcodeGen projects), run it before committing if any files were added or deleted.
-
-After the commit lands, zero the refactor-pressure counter so the next cycle starts fresh:
+1. **Group.** Independent files run in parallel; one agent per file when files overlap; order real dependencies.
+2. **Dispatch** workers on the **worker** model. Each brief names the exact files, the problem, the chosen approach (the design from `--designs` for structural items), and the acceptance criteria from the issue. Constraints: read before editing, minimal diff, no unrelated cleanup.
+3. **Verify** with one **orchestrator** agent that reads the changed files, runs every `refactor.verifyCommands` entry verbatim and reports PASS / FAIL / CONCERN per fix. A non-zero exit is a FAIL. With no commands configured, say the tree was not gated. Re-dispatch FAILs once; report what still fails.
+4. **Commit** once: stage explicit paths, subject `refactor: <summary>`, body listing the issues (`Closes #<n>` each). Then zero the pressure counter:
 
 ```bash
 rota refactor reset
 ```
 
-## Step 10 — Report to User
+Report the commit and the issues it closes in a few lines. Do not recap exploration or designs.
 
-After commit, give one compact summary. Example:
+## Key principles
 
-```
-Refactored 4 items — commit d7e8f9a
-
-- SessionOrchestrator: surface autosave errors to lastError
-- RingBuffer: write() returns overflow count
-- SpeakerReconciler: returned embeddings use EMA values
-- TimerManager: consolidated 3 timer sources into one
-```
-
-If any CONCERNs surfaced during verification, append them briefly:
-
-```
-Note: RingBuffer overflow count changes the return type — callers using `_ = write()` are fine, but check any that inspect the return.
-```
-
-Don't recap the exploration findings, the design alternatives, or the verification pass/fail log. The user can read the diff.
-
-## Key Principles
-
-- **No noise.** Don't narrate steps that produced no output or found nothing. Don't echo back what you're about to do before doing it. Report results, not process.
-- **Orchestrator for judgment, worker for execution.** Models are configured in `.rota/config.json` (default: opus/sonnet). Exploration, design, and verification require deep reasoning; implementation is precise execution of a known fix.
-- **Categorize before fixing.** Every friction point gets a dependency category and a simple/structural classification. This prevents over-engineering simple fixes and under-designing structural ones.
-- **Compete on structural changes.** When multiple valid approaches exist, design them in parallel and pick the strongest. Don't commit to the first idea.
-- **Parallel by default.** Independent fixes always run in parallel. Sequential only when there's a real dependency.
-- **Minimal diffs.** Each fix touches only what's necessary. No reformatting, no unrelated cleanup.
-- **Read before edit.** Every agent reads the target file before making changes.
-- **Verify before commit.** Never commit without orchestrator sign-off.
-- **Commit once** per run (not per fix) unless fixes are truly independent milestones.
+- **Findings first.** The default output is issues, not diffs. A review that finds nothing worth filing says so.
+- **Same words every time.** Vocabulary drift makes the findings unsearchable and the dedup unreliable.
+- **Respect recorded decisions.** Reopen one only with real friction, and say so.
+- **Minimal diffs on the fix path.** Each fix touches only what it needs.
+- **Verify before commit.** `--fix` never commits without orchestrator sign-off.
 
 ## References
 
-- [`references/authoring-conventions.md`](references/authoring-conventions.md) — Authoring rules shared across SKILL.md files (loop-mode auto-picks, mirror-step threshold).
-- [`references/refactor-explore.md`](references/refactor-explore.md) — Exploration-agent prompt + categories + stop condition used by `/rota-refactor` single-repo mode.
-- [`references/refactor-design-approaches.md`](references/refactor-design-approaches.md) — Competing-design choreography (decisions consult, agent constraints, output shape, `confirmBeforeExecute` gate) used by `/rota-refactor` Step 5.
-- [`references/refactor-umbrella-fanout.md`](references/refactor-umbrella-fanout.md) — Per-repo fan-out logic for `/rota-refactor` in umbrella mode.
+- [`references/refactor-design-approaches.md`](references/refactor-design-approaches.md) — competing-interface choreography for `--designs`.
+- [`references/knowledge-consult.md`](references/knowledge-consult.md) — the knowledge and decisions query pattern used in Orient.
