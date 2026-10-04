@@ -1,4 +1,4 @@
-echo "orchestrate: launcher dry-run per harness and host, bare rota without a terminal (#19)"
+echo "orchestrate: launcher dry-run per harness and host, bare rota without a terminal (#19, #33)"
 
 # A fixture project and stand-ins for herdr and codex that only answer
 # --version, so doctor passes and the plan can name herdr. Nothing starts: dry-run runs doctor and
@@ -27,22 +27,26 @@ OUT="$(or_dry)" || fail "orchestrate --dry-run failed: $OUT"
 [ "$(jget 'data.dryRun' <<<"$OUT")" = "true" ] || fail "dry-run should say so: $OUT"
 case $OUT in *'/rota-orchestrate'*) ;; *) fail "claude should start /rota-orchestrate: $OUT" ;; esac
 
-# Each harness: its own command and prompt.
-for h in codex; do
+# Each harness: its own command and prompt, the prompt last for the flag-fed ones.
+for h in codex hermes opencode; do
   or_cfg ",\"orchestrator\":{\"harness\":\"$h\"}"
   OUT="$(or_dry)" || fail "orchestrate --dry-run failed for $h: $OUT"
   [ "$(jget 'data.harness' <<<"$OUT")" = "$h" ] || fail "harness $h not planned: $OUT"
   case $h in
     codex) want='$rota-orchestrate' ;;
+    hermes | opencode) want='rota-orchestrate' ;;
   esac
   case $OUT in *"$want"*) ;; *) fail "$h plan should mention $want: $OUT" ;; esac
 done
+
+OUT="$(or_dry)"
+case $OUT in *'"opencode", "--prompt"]'*) ;; *) fail "opencode command should end in --prompt: $OUT" ;; esac
 
 # An unknown harness is a config error that names the choices, before anything starts.
 or_cfg ',"orchestrator":{"harness":"emacs"}'
 RC=0; OUT="$(or_dry)" || RC=$?
 [ "$RC" != 0 ] || fail "an unknown harness should fail"
-case $OUT in *"claude, codex"*) ;; *) fail "unknown harness should list the choices: $OUT" ;; esac
+case $OUT in *"claude, codex, hermes, opencode"*) ;; *) fail "unknown harness should list the choices: $OUT" ;; esac
 
 # Nothing the dry runs did reached herdr beyond --version.
 [ ! -s "$TMP_ORCH/herdr.log" ] || fail "dry-run touched herdr: $(cat "$TMP_ORCH/herdr.log")"
