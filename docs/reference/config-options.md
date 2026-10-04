@@ -65,7 +65,7 @@ Values for list and object keys are JSON (`rota config set work.accounts '[...]'
 | Label | Description |
 |-------|-------------|
 | Review before ship (Recommended) | `/rota-ship` runs `/rota-review` first. FAIL blocks, CONCERNS ask, PASS flows through. |
-| Verify learnings (Recommended) | `/rota-learn` dispatches an Opus verifier for a cold pass on new entries. Knowledge quality compounds. |
+| Verify learnings | `/rota-learn` dispatches an Opus verifier for a cold pass on new entries. Off by default; `--strict` runs it once. |
 | Confirm before refactor (Recommended) | `/rota-refactor --fix` confirms the candidate list before implementing. Off = no pause. The default findings run never edits code. |
 | Competing hypotheses (debug) | `/rota-debug` dispatches 3 parallel hypothesis agents from different angles. Better diversity on hard bugs, ~3× orchestrator cost. |
 
