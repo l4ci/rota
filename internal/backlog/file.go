@@ -1,18 +1,16 @@
 package backlog
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
-	"strconv"
 	"strings"
 	"unicode/utf8"
 
+	"github.com/l4ci/rota/internal/counter"
 	"github.com/l4ci/rota/internal/fsio"
-	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/section"
 )
@@ -157,61 +155,7 @@ func (f *File) Detail(ref string) (string, bool, error) {
 	return text, true, nil
 }
 
-var kindPrefix = map[string]string{"bugs": "B", "features": "F", "tasks": "T", "milestones": "M"}
-
 // NextID bumps the counter for kind (bugs, features, tasks or milestones) in
-// .rota/counters.json and returns the new zero-padded ID such as "B07". The
-// counter never lags the highest ID already in BACKLOG.md or ARCHIVE.md.
-// Existing keys keep their position and a new key is appended, so the file
-// matches what the Python helper writes.
-func (f *File) NextID(kind string) (string, error) {
-	prefix, ok := kindPrefix[kind]
-	if !ok {
-		return "", fmt.Errorf("unknown counter kind %q (want bugs|features|tasks|milestones)", kind)
-	}
-	pat := regexp.MustCompile(`\[` + prefix + `(\p{Nd}+)\]`)
-	highest := 0
-	for _, name := range []string{"BACKLOG.md", "ARCHIVE.md"} {
-		text, err := fsio.ReadText(f.rota(name))
-		if err != nil {
-			continue
-		}
-		for _, m := range pat.FindAllStringSubmatch(text, -1) {
-			n, err := atoi(m[1])
-			if err != nil {
-				return "", err
-			}
-			highest = max(highest, n)
-		}
-	}
-	var next int
-	err := fsio.UpdateJSON(f.rota("counters.json"), jsonx.NewObject(), func(v any) (any, error) {
-		d, ok := v.(*jsonx.Object)
-		if !ok {
-			return nil, errors.New("counters.json is not a JSON object")
-		}
-		cur := 0
-		if raw, ok := d.Get(kind); ok {
-			num, _ := raw.(json.Number)
-			n, err := strconv.Atoi(string(num))
-			if err != nil {
-				// Python's max() lets a fractional counter through when an ID
-				// is higher; otherwise it writes the float and crashes. rota
-				// refuses before writing.
-				fl, ferr := strconv.ParseFloat(string(num), 64)
-				if ferr != nil || fl >= float64(highest) {
-					return nil, fmt.Errorf("counters.json: %s is not an integer", kind)
-				}
-				n = highest
-			}
-			cur = n
-		}
-		next = max(cur, highest) + 1
-		d.Set(kind, json.Number(strconv.Itoa(next)))
-		return d, nil
-	})
-	if err != nil {
-		return "", err
-	}
-	return fmt.Sprintf("%s%02d", prefix, next), nil
-}
+// .rota/counters.json and returns the new zero-padded ID such as "B07"; see
+// counter.Next.
+func (f *File) NextID(kind string) (string, error) { return counter.Next(f.Root, kind) }

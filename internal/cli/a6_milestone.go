@@ -1,15 +1,83 @@
 package cli
 
 import (
+	"errors"
 	"flag"
 	"strings"
 
+	"github.com/l4ci/rota/internal/artifact"
+	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/jsonx"
 	ms "github.com/l4ci/rota/internal/milestone"
 )
 
-// Glue for the milestone group (A6). File mode only; issue mode exits 71
-// until the tracker is wired in.
+// Glue for the milestone group (A6). Every verb works on a milestone.Store
+// opened once by openMilestones: .rota/milestones files, one repo's tracker
+// issues, or an umbrella's.
+
+// openMilestones is the milestone store for the project's backlog backend.
+// Duplicate-tracking-issue notices go to stderr and into the envelope's
+// warnings.
+func openMilestones(c *Ctx) (ms.Store, error) {
+	root, issue, err := modeRoot(c)
+	if err != nil {
+		return nil, err
+	}
+	if !issue {
+		return ms.FileStore{Root: root}, nil
+	}
+	be, err := openIssues(c)
+	if err != nil {
+		return nil, err
+	}
+	warn := func(msg string) { c.Warn("%s", msg) }
+	switch b := be.(type) {
+	case *backlog.Issues:
+		b.Warn = warn
+		return b.MilestoneStore(), nil
+	case *backlog.Umbrella:
+		if home, err := b.HomeSub(); err == nil {
+			home.Warn = warn
+		}
+		return b.MilestoneStore(), nil
+	}
+	return nil, Refused("%s works on the issue backend only", c.Path)
+}
+
+// milestoneFail maps a store error, whichever store raised it, onto the exit
+// table. by names what blocked a refused write ("" for verbs that have none).
+func milestoneFail(err error, by string) (Result, error) {
+	var data any
+	switch {
+	case errors.Is(err, backlog.ErrMilestoneText):
+		return Result{Data: blocked(&artifact.Error{Exit: artifact.ExitRefused}, by)}, Refused("%s", err.Error())
+	case asArtifact(err) != nil:
+		if by != "" {
+			data = blocked(err, by)
+		}
+		return Result{Data: data}, fromArtifact(err)
+	}
+	return a4Fail(err)
+}
+
+// reindex regenerates MILESTONES.md and the vision block from st.
+func reindex(c *Ctx, st ms.Store) (bool, error) {
+	root, err := c.Root()
+	if err != nil {
+		return false, err
+	}
+	return ms.Reindex(root, st)
+}
+
+// openStore opens the milestone store, mapping a failure onto the exit table.
+func openStore(c *Ctx) (ms.Store, error) {
+	st, err := openMilestones(c)
+	if err != nil {
+		_, ferr := milestoneFail(err, "")
+		return nil, ferr
+	}
+	return st, nil
+}
 
 func milestoneCommands() []*Command {
 	return []*Command{
@@ -37,16 +105,13 @@ func milestoneAdd(fs *flag.FlagSet) RunFunc {
 		if *title == "" || *summary == "" {
 			return Result{}, Usage("--title and --summary are required")
 		}
-		root, issue, err := modeRoot(c)
+		st, err := openStore(c)
 		if err != nil {
 			return Result{}, err
 		}
-		if issue {
-			return milestoneAddIssue(c, *title, *summary, *depends)
-		}
-		id, err := ms.Add(root, *title, *summary, *depends)
+		id, err := st.Add(*title, *summary, artifact.SplitCSV(*depends))
 		if err != nil {
-			return Result{}, fromArtifact(err)
+			return milestoneFail(err, "")
 		}
 		d := jsonx.NewObject()
 		d.Set("id", id)
@@ -59,21 +124,18 @@ func runMilestoneList(c *Ctx, args []string) (Result, error) {
 	if err := noArgs(args); err != nil {
 		return Result{}, err
 	}
-	root, issue, err := modeRoot(c)
+	st, err := openStore(c)
 	if err != nil {
 		return Result{}, err
 	}
-	if issue {
-		return milestoneListIssue(c)
-	}
-	list, err := ms.List(root)
+	list, err := st.List()
 	if err != nil {
-		return Result{}, err
+		return milestoneFail(err, "")
 	}
 	return milestoneListResult(list), nil
 }
 
-// milestoneListResult is milestone list's answer for either mode.
+// milestoneListResult is milestone list's answer for either store.
 func milestoneListResult(list []ms.Entry) Result {
 	rows, text := []any{}, ""
 	for _, m := range list {
@@ -100,16 +162,16 @@ func runMilestoneShow(c *Ctx, args []string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	root, issue, err := modeRoot(c)
+	if !ms.ValidID(id) {
+		return Result{}, Usage("milestone ID must match M\\d{2,} (e.g. M01, M03), got %q", id)
+	}
+	st, err := openStore(c)
 	if err != nil {
 		return Result{}, err
 	}
-	if issue {
-		return milestoneShowIssue(c, id)
-	}
-	body, err := ms.Show(root, id)
+	body, err := st.Show(id)
 	if err != nil {
-		return Result{}, fromArtifact(err)
+		return milestoneFail(err, "")
 	}
 	d := jsonx.NewObject()
 	d.Set("id", id)
@@ -127,20 +189,17 @@ func milestonePut(fs *flag.FlagSet) RunFunc {
 		if !ms.ValidID(id) {
 			return Result{}, Usage("milestone ID must match M\\d{2,} (e.g. M01, M03), got %q", id)
 		}
-		root, issue, err := modeRoot(c)
-		if err != nil {
-			return Result{}, err
-		}
-		if issue {
-			return milestonePutIssue(c, id, *file)
-		}
 		text, err := readBody(c, *file)
 		if err != nil {
 			return Result{}, err
 		}
-		changed, err := ms.Put(root, id, text)
+		st, err := openStore(c)
 		if err != nil {
-			return Result{Data: blocked(err, "id mismatch"), Text: ""}, fromArtifact(err)
+			return Result{}, err
+		}
+		changed, err := st.Put(id, text)
+		if err != nil {
+			return milestoneFail(err, "id mismatch")
 		}
 		d := jsonx.NewObject()
 		d.Set("id", id)
@@ -196,16 +255,19 @@ func milestoneStatus(fs *flag.FlagSet) RunFunc {
 		if !ms.ValidStatus(*to) {
 			return Result{}, Usage("--to must be one of: %s", strings.Join(ms.Statuses, ", "))
 		}
-		root, issue, err := modeRoot(c)
+		if !ms.ValidID(id) {
+			return Result{}, Usage("milestone ID must match M\\d{2,} (e.g. M01, M03), got %q", id)
+		}
+		st, err := openStore(c)
 		if err != nil {
 			return Result{}, err
 		}
-		if issue {
-			return milestoneStatusIssue(c, id, *to)
-		}
-		changed, err := ms.SetStatus(root, id, *to)
+		changed, err := st.SetStatus(id, *to)
 		if err != nil {
-			return Result{}, fromArtifact(err)
+			return milestoneFail(err, "")
+		}
+		if _, err := reindex(c, st); err != nil {
+			return milestoneFail(err, "")
 		}
 		d := jsonx.NewObject()
 		d.Set("id", id)
@@ -219,18 +281,15 @@ func runMilestoneActive(c *Ctx, args []string) (Result, error) {
 	if err := noArgs(args); err != nil {
 		return Result{}, err
 	}
-	root, issue, err := modeRoot(c)
+	st, err := openStore(c)
 	if err != nil {
 		return Result{}, err
 	}
-	if issue {
-		return milestoneActiveIssue(c)
-	}
-	ids, err := ms.Active(root)
+	list, err := st.List()
 	if err != nil {
-		return Result{}, err
+		return milestoneFail(err, "")
 	}
-	return milestoneActiveResult(ids), nil
+	return milestoneActiveResult(ms.ActiveIDs(list)), nil
 }
 
 func milestoneActiveResult(ids []string) Result {
@@ -247,16 +306,13 @@ func runMilestoneIndex(c *Ctx, args []string) (Result, error) {
 	if err := noArgs(args); err != nil {
 		return Result{}, err
 	}
-	root, issue, err := modeRoot(c)
+	st, err := openStore(c)
 	if err != nil {
 		return Result{}, err
 	}
-	if issue {
-		return milestoneIndexIssue(c)
-	}
-	changed, err := ms.Index(root)
+	changed, err := reindex(c, st)
 	if err != nil {
-		return Result{}, fromArtifact(err)
+		return milestoneFail(err, "")
 	}
 	d := jsonx.NewObject()
 	d.Set("changed", changed)
