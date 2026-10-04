@@ -120,6 +120,24 @@ func Clear(root, name, verb, target string, c Confirm, paths []string) error {
 	if c.Escalation != "" {
 		rec.Set("escalation", c.Escalation)
 	}
+	return appendAudit(root, rec)
+}
+
+// Autopilot appends an autopilot action to the audit log, one line per assign,
+// merge or repair. These are not human approvals: gate is "autopilot" and the
+// note says what was done.
+func Autopilot(root, verb, target, note string) error {
+	rec := jsonx.NewObject()
+	rec.Set("ts", now().UTC().Format(time.RFC3339))
+	rec.Set("gate", "autopilot")
+	rec.Set("verb", verb)
+	rec.Set("target", target)
+	rec.Set("note", note)
+	return appendAudit(root, rec)
+}
+
+// appendAudit writes one line to the audit log under its lock and syncs it.
+func appendAudit(root string, rec *jsonx.Object) error {
 	line, err := jsonx.MarshalCompact(rec)
 	if err != nil {
 		return err

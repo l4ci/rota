@@ -312,7 +312,8 @@ The orchestrator's verbs for a [parallel round](../usage/parallel-rounds.md). Al
 | `rota round architecture [--check] [--holder-pid <n>]` | show the architecture-review counter; when a review is due, mint one item per area and assign them to idle slots |
 | `rota round assign <ID> [--agent <name>] [--tier <light\|standard\|heavy>] [--tier-reason <text>] [--kind <claude\|codex>] [--body-file <path\|->] [--siblings <ID>[,<ID>…]] [--check-only] [--accept-overlap] [--accept-codex-version] [--holder-pid <n>]` | check an item's readiness and hand it to a slot |
 | `rota round wait [<slot>…] [--timeout <seconds>] [--settle <seconds>] [--lines <n>]` | block until a worker needs attention |
-| `rota round watch [--heartbeat <seconds>] [--poll <seconds>] [--forge-poll <seconds>] [--settle <seconds>] [--lines <n>]` | background watch: exit on a slot, PR or escalation change, or at a heartbeat |
+| `rota round watch [--heartbeat <seconds>] [--poll <seconds>] [--forge-poll <seconds>] [--settle <seconds>] [--lines <n>] [--autopilot [--base <branch>] [--holder-pid <n>]]` | background watch: exit on a slot, PR or escalation change, or at a heartbeat; `--autopilot` runs a tick on every wake |
+| `rota round tick [--base <branch>] [--holder-pid <n>]` | one autopilot pass: repair safe drift, merge finished PRs behind the gate, assign ready items (`round.autopilot`) |
 | `rota round status` | list the round's slots with host, PR and drift |
 | `rota round reconcile [--apply]` | report drift between registry, host, git and forge; `--apply` repairs the safe kinds |
 | `rota round report <slot> --state <done\|blocked\|idle\|dead\|limited> [--evidence <text>] [--pr <url\|number>]` | record a solo worker's result: state and PR |
