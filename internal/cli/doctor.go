@@ -80,6 +80,7 @@ func doctorInput() doctor.Input {
 		}
 	}
 	if root == "" {
+		doctorDiskInput(context.Background(), &in, nil, "")
 		return in
 	}
 	cfg := config.Load(filepath.Join(root, ".rota", "config.json"))
@@ -113,6 +114,7 @@ func doctorInput() doctor.Input {
 		}
 	}
 	in.ProjectRoot = root
+	doctorDiskInput(context.Background(), &in, cfg, root)
 	if on, err := hook.BoolKey(cfg, "orchestrator.switchOnUsage"); err == nil {
 		in.SwitchOnUsage = on
 	}

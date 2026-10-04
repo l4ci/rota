@@ -126,10 +126,26 @@ Example for a Python project using ruff + pytest:
 }
 ```
 
-Commands run from the repo root (or, in umbrella mode, the sub-repo's root). Set via `rota config set` (which parses argv[2] as JSON):
+Commands run from the repo root (or, in umbrella mode, the sub-repo's root), one after the other. To use several cores, put the concurrency in one command: this repo sets the list to `["bash test/gate.sh"]`, which runs validate, `go vet`, `go test -race` and the smoke suite together (smoke split into [`gate.smokeShards`](#gatesmokeshards) shards, about 160 s against 590 s serial). Set via `rota config set` (which parses argv[2] as JSON):
 
 ```bash
 rota config set refactor.verifyCommands '["uv run ruff check .","uv run ruff format --check ."]'
+```
+
+## gate.smokeShards
+
+Number of concurrent shards `bash test/gate.sh` splits the smoke suite into. Integer ≥ 1, default `4`; `ROTA_SMOKE_SHARDS=<N>` overrides it for one run. Each shard is its own `test/runner.sh` run with its own temp root and its own log (the gate prints the log directory, and keeps it on a failure). Shards only help while sections stay independent: `bash test/gate.sh --smoke-only --random` deals the sections out at random, and a scheduled CI job runs it on `main` to catch a section that needs another's state. Only one gate runs per machine at a time; a second waits on `/tmp/rota-gate.lock`.
+
+```bash
+rota config set gate.smokeShards 6
+```
+
+## doctor.minFreeDiskPercent
+
+Free-disk threshold for `rota doctor`, as a percent of the volume holding the project. Integer 0-100, default `10`; `0` turns the check off. Below it doctor adds a `warn disk` line (the run still passes) whose hint names the rota leftovers that would give space back: leaked temp dirs and worktrees whose directory is gone. A parallel round writes worktrees, builds and logs, and a full disk fails it halfway.
+
+```bash
+rota config set doctor.minFreeDiskPercent 5
 ```
 
 ## learn.verify

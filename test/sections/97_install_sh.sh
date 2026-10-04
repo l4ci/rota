@@ -125,11 +125,13 @@ case $OUT in *"Usage: install.sh"*) ;; *) fail "--help should print usage: $OUT"
 mkdir -p "$IS/sigrel/latest/download"
 printf '#!/bin/sh\n' > "$IS/sigrel/latest/download/$ASSET"
 sleepbin="$IS/fakebin"; mkdir -p "$sleepbin"
-printf '#!/bin/sh\nsleep 30\n' > "$sleepbin/curl"; chmod +x "$sleepbin/curl"
-PATH="$sleepbin:$PATH" ROTA_RELEASE_BASE_URL="file://$IS/sigrel" sh "$INSTALL" --prefix "$IS/psig" >/dev/null 2>&1 &
+printf '#!/bin/sh\necho $$ > "$IS_CURL_PID"\nexec sleep 30\n' > "$sleepbin/curl"; chmod +x "$sleepbin/curl"
+IS_CURL_PID="$IS/curl.pid" PATH="$sleepbin:$PATH" ROTA_RELEASE_BASE_URL="file://$IS/sigrel" sh "$INSTALL" --prefix "$IS/psig" >/dev/null 2>&1 &
 SIGPID=$!
 i=0; while [ ! -d "$IS/psig/bin" ] || [ -z "$(ls -A "$IS/psig/bin" 2>/dev/null)" ]; do i=$((i + 1)); [ "$i" -lt 100 ] || break; sleep 0.1; done
-kill -TERM "$SIGPID" 2>/dev/null || true
+# A terminal's ^C reaches the whole foreground group: sh defers its trap until the
+# running curl exits, so stop the fake curl with it instead of waiting out its sleep.
+kill -TERM "$SIGPID" "$(cat "$IS/curl.pid" 2>/dev/null)" 2>/dev/null || true
 wait "$SIGPID" 2>/dev/null || true
 [ -z "$(ls -A "$IS/psig/bin" 2>/dev/null)" ] || fail "a terminated install left temp files: $(ls -A "$IS/psig/bin")"
 

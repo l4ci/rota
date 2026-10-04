@@ -137,6 +137,10 @@ var Keys = []Key{
 	{"limits.fallbackSleepSeconds", json.Number("1800"), false},
 	{"limits.maxResumes", json.Number("3"), false},
 	{"limits.resumePrompt", "The usage limit has reset. Continue where you left off.", false},
+	// #82 gate key: smoke shard count read by test/gate.sh (ROTA_SMOKE_SHARDS overrides).
+	{"gate.smokeShards", json.Number("4"), false},
+	// #85 doctor key: rota doctor warns when the free share of the disk is below this percent; 0 turns it off.
+	{"doctor.minFreeDiskPercent", json.Number("10"), false},
 }
 
 // PythonKeys is how many leading rows of Keys are CONFIG_KEYS.

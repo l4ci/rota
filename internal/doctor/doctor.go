@@ -25,6 +25,9 @@ const (
 	Pass = "pass"
 	Fail = "fail"
 	Skip = "skip"
+	// Warn is a finding that does not fail the report: the round can run, but
+	// the machine is about to make it fail (low disk).
+	Warn = "warn"
 )
 
 // Check is one line of the report.
@@ -50,6 +53,12 @@ func (r Report) OK() bool {
 
 // Account is one entry of work.accounts.
 type Account struct{ Name, ConfigDir string }
+
+// Disk is the space on one volume, in bytes.
+type Disk struct {
+	Path        string
+	Free, Total uint64
+}
 
 // Result is what a finished command left behind.
 type Result struct {
@@ -92,6 +101,15 @@ type Input struct {
 	// those checks: each account's configDir, else the default user dir.
 	ConfigDirs []string
 
+	// Disk is the free space of the volume the round writes to; nil when it
+	// could not be read (no check then). MinFreeDiskPercent is the
+	// doctor.minFreeDiskPercent threshold; 0 turns the check off. Leftovers
+	// names what rota left behind that would give space back (stale scratch
+	// worktrees, leaked temp dirs): lines for the warning, nothing when clean.
+	Disk               *Disk
+	MinFreeDiskPercent int
+	Leftovers          []string
+
 	Exec Exec
 	// Getenv reads the environment for host detection (HERDR_ENV, TMUX); nil
 	// reads as empty.
@@ -105,6 +123,11 @@ func Run(ctx context.Context, in Input) Report {
 	d := &runner{in: in, ctx: ctx}
 	checks := []Check{
 		d.git(), d.host(), d.tracker(), d.accounts(), d.hook(), d.statusline(), d.stopHook(), d.switchCheck(), d.skills(), d.codex(),
+	}
+	if c, ok := d.disk(); ok {
+		// Only a volume below the threshold adds a line: a healthy one stays
+		// out of the report, like the legacy-state line below.
+		checks = append(checks, c)
 	}
 	if in.LegacyDir != "" {
 		// Only a project that still holds the old state folder gets this line.
@@ -602,4 +625,38 @@ func first(l []string) string {
 		return l[0] + ", ..."
 	}
 	return l[0]
+}
+
+// disk warns when the free share of the volume is under the threshold, and
+// names the rota leftovers that would give space back. It reports nothing when
+// the space is fine, unreadable or the check is off.
+func (d *runner) disk() (Check, bool) {
+	disk, min := d.in.Disk, d.in.MinFreeDiskPercent
+	if disk == nil || disk.Total == 0 || min <= 0 {
+		return Check{}, false
+	}
+	pct := float64(disk.Free) / float64(disk.Total) * 100
+	if pct >= float64(min) {
+		return Check{}, false
+	}
+	detail := fmt.Sprintf("%s has %s free (%.0f%%), under the %d%% threshold", disk.Path, HumanBytes(disk.Free), pct, min)
+	hint := "free space before a round; set doctor.minFreeDiskPercent to change the threshold"
+	if len(d.in.Leftovers) > 0 {
+		hint = "reclaimable rota leftovers: " + strings.Join(d.in.Leftovers, "; ")
+	}
+	return Check{Name: "disk", Status: Warn, Detail: detail, Hint: hint}, true
+}
+
+// HumanBytes is a size in the largest unit that keeps it above 1.
+func HumanBytes(n uint64) string {
+	const unit = 1024
+	if n < unit {
+		return fmt.Sprintf("%d B", n)
+	}
+	div, exp := uint64(unit), 0
+	for m := n / unit; m >= unit; m /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %ciB", float64(n)/float64(div), "KMGTPE"[exp])
 }
