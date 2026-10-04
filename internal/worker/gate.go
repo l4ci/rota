@@ -342,70 +342,29 @@ func (e Env) gate(ctx context.Context, root string, o GateOpts, res GateResult, 
 	}
 
 	// 3. Re-verify on the merged tree.
-	cmds := verifyCommands(cfg)
-	if len(cmds) == 0 {
+	vr, err := e.Verify(ctx, root, root)
+	if err != nil {
+		return res, err
+	}
+	if vr.NoCommands {
 		res.Verdict, res.VerifySkipped = GatePass, true
 		res.Notes = append(res.Notes, fmt.Sprintf("NO-VERIFY %s — refactor.verifyCommands is empty; merged tree was NOT gated by a command.", o.Slot),
 			"set refactor.verifyCommands via rota config set to make this gate real")
 		return res, nil
 	}
-	ok, logPath, err := e.runVerify(ctx, root, cmds, &res)
-	if err != nil {
-		return res, err
+	res.Verified = vr.Verified
+	for _, c := range vr.Failed {
+		res.Notes = append(res.Notes, "verify FAILED: "+c)
 	}
-	if !ok {
-		b, _ := os.ReadFile(logPath)
+	if !vr.OK() {
 		res.Verdict = GateVerifyFailed
 		res.Err = fmt.Sprintf("GATE-FAIL %s — merged tree does not pass verification at %s\nlast lines of the verify output (full log: %s):\n%s",
-			o.Slot, res.SHA, logPath, indentTail(string(b), 20))
+			o.Slot, res.SHA, vr.LogPath, indentTail(vr.Log, 20))
 		res.Hint = fmt.Sprintf("fix forward on %s; the owning slot has usually moved on", o.Base)
 		return res, nil
 	}
 	res.Verdict = GatePass
 	return res, nil
-}
-
-// verifyCommands is refactor.verifyCommands: the non-blank entries.
-func verifyCommands(cfg any) []string {
-	var cmds []string
-	if v, ok := config.Lookup(cfg, "refactor.verifyCommands"); ok {
-		if list, ok := v.([]any); ok {
-			for _, c := range list {
-				if t := fmt.Sprint(c); strings.TrimSpace(t) != "" {
-					cmds = append(cmds, t)
-				}
-			}
-		}
-	}
-	return cmds
-}
-
-// runVerify runs every command in dir and records the passing ones in
-// res.Verified and each failure as a note. Output is kept so a failure can be
-// diagnosed: the whole log stays on disk (logPath) when anything failed, and is
-// removed when everything passed. err is the log file failing to open.
-func (e Env) runVerify(ctx context.Context, dir string, cmds []string, res *GateResult) (ok bool, logPath string, err error) {
-	logf, err := os.CreateTemp("", "rota-gate-verify-")
-	if err != nil {
-		return false, "", err
-	}
-	logf.Close()
-	ok = true
-	for _, c := range cmds {
-		out, code := e.Shell(ctx, dir, c)
-		appendFile(logf.Name(), "== "+c+"\n"+out)
-		if code == 0 {
-			res.Verified = append(res.Verified, c)
-		} else {
-			res.Notes = append(res.Notes, "verify FAILED: "+c)
-			ok = false
-		}
-	}
-	if ok {
-		os.Remove(logf.Name())
-		return true, "", nil
-	}
-	return false, logf.Name(), nil
 }
 
 // staleReason says why a branch behind the base must go back to its worker:
