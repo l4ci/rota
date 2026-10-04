@@ -157,7 +157,7 @@ func clearHandle(root, slot string) {
 // recordDispatch writes the handle, state=busy, activeAt (the stall signal of
 // `round reconcile`) and, for a task, the task id (clearing the previous
 // task's PR and relay log).
-func recordDispatch(root, slot, handle, task string, round *int, now string) error {
+func recordDispatch(root, slot, handle, task, kind string, round *int, now string) error {
 	def := jsonx.NewObject()
 	def.Set("slots", []any{})
 	return Update(root, def, func(doc *jsonx.Object) {
@@ -180,6 +180,11 @@ func recordDispatch(root, slot, handle, task string, round *int, now string) err
 				s.Set("task", task)
 				s.Set("pr", nil)
 				s.Set("relays", []any{})
+				// A relay later reads the kind to know whether to sign. Claude
+				// slots keep their registry bytes unless a kind was recorded.
+				if kind == KindCodex || (kind != "" && Str(s, "kind") != "") {
+					s.Set("kind", kind)
+				}
 			}
 		}
 	})
@@ -218,7 +223,14 @@ func roundOf(root string) int {
 // Provenance: every payload, brief or relay, is signed with a first line
 // `--- ORCHESTRATOR (round N) ---`. A relay is also appended to the slot's
 // relays[] as {round, ts, summary}; the gate checks the PR's approvals
-// against it.
+// against it. That header is forgeable text, so a codex payload also ends with
+// a `--- ROTA-SIG <hmac> ---` trailer made with a key in the slot's codex home
+// (rotated on every task dispatch), and the codex launch carries a
+// UserPromptSubmit hook (`rota worker prompt-check`) that blocks any input
+// without a valid trailer, bar a maintainer's `m:` answer. A codex task
+// dispatch is refused (5) when work.codexCommand lacks
+// --dangerously-bypass-hook-trust, without which Codex skips the hook; a
+// codex relay is refused (5) when the key is gone.
 //
 // Exit mapping: 2 unparseable workerCommand; 3 missing pool, slot, worktree,
 // body file or relay session; 4 the slot holds work or workerCommand resumes
@@ -272,6 +284,8 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 		timeout = 60
 	}
 
+	signKind := "" // the harness whose payloads are signed
+	var signKey []byte
 	if !o.Relay {
 		kind := o.Kind
 		if kind == "" {
@@ -284,6 +298,7 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 			return res, fail(ExitUsage, "kind must be claude or codex, got: "+kind)
 		}
 		res.Kind = kind
+		signKind = kind
 		key, launch := "work.workerCommand", ""
 		bad, perr := "", error(nil)
 		what := ""
@@ -316,6 +331,13 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 				return res, fail(ExitUnavailable, fmt.Sprintf("work.dispatch=herdr starts a %s worker, but %s does not run %s: %s", kind, key, kind, launch))
 			}
 		}
+		// Codex skips a command-line hook unless it is trusted, which would
+		// leave unsigned pane text unchecked: refuse before anything is touched.
+		if kind == KindCodex {
+			if _, _, largs, lerr := host.LaunchArgs(launch); lerr != nil || !hasToken(largs, "--dangerously-bypass-hook-trust") {
+				return res, fail(ExitUnavailable, "work.codexCommand lacks --dangerously-bypass-hook-trust: without it Codex skips rota's prompt-check hook, so unsigned pane text would reach the worker: "+launch)
+			}
+		}
 		// A codex worker's home, login and version are checked before the old
 		// session is killed or anything is marked.
 		codexHome := ""
@@ -326,6 +348,17 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 			}
 			codexHome, res.Warnings = setup.Home, setup.Warnings
 			configDir = ""
+			exe, err := e.Executable()
+			if err != nil {
+				return res, fail(ExitUnavailable, "cannot find the rota binary for the prompt-check hook: "+err.Error())
+			}
+			var keyPath string
+			if keyPath, signKey, err = newPromptKey(codexHome); err != nil {
+				return res, fail(ExitUnavailable, "cannot write the prompt key in "+codexHome+": "+err.Error())
+			}
+			if launch, err = withPromptHook(launch, codexHookArgs(exe, keyPath)); err != nil {
+				return res, fail(ExitUnavailable, "cannot add the prompt-check hook to "+key+": "+err.Error())
+			}
 		}
 		// Refuse a slot that still holds work, before its session is killed.
 		if _, err := e.ResetTo(root, o.Slot, o.Task, branchOr(o), true); err != nil {
@@ -352,10 +385,22 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 		}
 	} else if handle == "" {
 		return res, fail(ExitResolution, fmt.Sprintf("slot '%s' has no session to relay into — dispatch a task first", o.Slot))
+	} else if Str(s, "kind") == KindCodex {
+		signKind = KindCodex
+		cd, err := CommonDir(ctx, e.Git, root)
+		if err != nil {
+			return res, err
+		}
+		keyFile := filepath.Join(CodexHome(cd, o.Slot), PromptKeyFile)
+		if signKey, err = loadPromptKey(keyFile); err != nil {
+			x := fail(ExitUnavailable, fmt.Sprintf("slot '%s' is a codex worker but its prompt key is unreadable (%s): %v", o.Slot, keyFile, err))
+			x.Hint = "re-dispatch the task: a fresh session gets a fresh key and hook"
+			return res, x
+		}
 	}
 	res.Handle = handle
 
-	if err := recordDispatch(root, o.Slot, handle, o.Task, o.Round, stamp(e.Now())); err != nil {
+	if err := recordDispatch(root, o.Slot, handle, o.Task, signKind, o.Round, stamp(e.Now())); err != nil {
 		return res, err
 	}
 	round := roundOf(root)
@@ -379,12 +424,16 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 		text = rest
 	}
 	payload.WriteString(text)
+	out := payload.String()
+	if signKind == KindCodex {
+		out = signPrompt(signKey, out)
+	}
 	tmp, err := os.CreateTemp("", "rota-dispatch-*")
 	if err != nil {
 		return res, err
 	}
 	defer os.Remove(tmp.Name())
-	tmp.WriteString(payload.String())
+	tmp.WriteString(out)
 	tmp.Close()
 
 	sendErr := h.Send(ctx, o.Slot, handle, tmp.Name())
@@ -412,6 +461,15 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 	default:
 		return res, fail(ExitRetry, fmt.Sprintf("slot '%s' never picked up the brief — inspect the session before resending", o.Slot))
 	}
+}
+
+func hasToken(toks []string, want string) bool {
+	for _, t := range toks {
+		if t == want {
+			return true
+		}
+	}
+	return false
 }
 
 // resetRefusal maps a reset-guard error onto dispatch's exits: a slot holding

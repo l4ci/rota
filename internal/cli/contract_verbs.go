@@ -193,6 +193,7 @@ var contractVerbs = []string{
 	"worker pool init",
 	"worker pool list",
 	"worker pool reap",
+	"worker prompt-check",
 	"worker reset",
 	"worker session check",
 	"worker session ensure",

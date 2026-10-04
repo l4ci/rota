@@ -201,6 +201,9 @@ type Env struct {
 	// set, an error means it could not run at all. Every codex and herdr call
 	// of the codex preflight goes through it, so tests need no real binary.
 	Run func(ctx context.Context, name string, args, env []string) (host.Result, error)
+	// Executable is the running rota binary, which a codex worker's prompt-check
+	// hook calls back; nil means os.Executable.
+	Executable func() (string, error)
 	// LookPath reports whether a binary is installed; nil means exec.LookPath.
 	LookPath func(string) (string, error)
 }
@@ -238,6 +241,9 @@ func (e Env) withDefaults() Env {
 	}
 	if e.Run == nil {
 		e.Run = execRun
+	}
+	if e.Executable == nil {
+		e.Executable = os.Executable
 	}
 	if e.LookPath == nil {
 		e.LookPath = exec.LookPath
