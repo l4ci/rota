@@ -331,10 +331,30 @@ func TestFileListOrder(t *testing.T) {
 	}
 	all, _ := f.List(true)
 	// B02 is open in the backlog and also on a done line: listed once, first.
-	if got := strings.Join(ids(all), ","); got != "B02,B01,F05,T01,B09,B08,F01" {
+	// The closed ones follow newest first.
+	if got := strings.Join(ids(all), ","); got != "B02,B01,F05,T01,B08,B09,F01" {
 		t.Fatalf("all = %s", got)
 	}
-	if all[5].Reason != "dropped" || all[5].Note != "no" || !all[5].Closed {
-		t.Fatalf("B08 = %+v", all[5])
+	if all[4].Reason != "dropped" || all[4].Note != "no" || !all[4].Closed || all[4].ClosedAt != "2026-01-03" {
+		t.Fatalf("B08 = %+v", all[4])
+	}
+}
+
+// #17: completions that share a date list the later line first, and Completed
+// is newer than ARCHIVE.md on a tie.
+func TestFileListClosedNewestFirst(t *testing.T) {
+	root := t.TempDir()
+	p := project{Root: root,
+		Backlog: "## Bugs\n\n## Features\n\n## Tasks\n\n## Completed\n\n" +
+			"- ~~**[B01] One.**~~ Done 2026-02-01 [`a`]\n- ~~**[B02] Two.**~~ Done 2026-03-01 [`b`]\n" +
+			"- ~~**[B03] Three.**~~ Done 2026-03-01 [`c`]\n- ~~**[B04] Four.**~~ Done 2026-03-01 [`d`]\n",
+		Archive: "- ~~**[B05] Five.**~~ Done 2026-03-01 [`e`]\n- ~~**[B06] Six.**~~ Done 2026-04-01 [`f`]\n"}
+	p.write(t)
+	all, err := (&File{Root: root}).List(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(ids(all), ","); got != "B06,B04,B03,B02,B05,B01" {
+		t.Fatalf("all = %s", got)
 	}
 }

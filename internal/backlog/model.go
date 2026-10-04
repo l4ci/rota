@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strconv"
 	"unicode/utf8"
 
 	"github.com/l4ci/rota/internal/pystr"
@@ -18,10 +19,23 @@ type Item struct {
 	Fields Fields
 	Closed bool
 	Reason string // closed only: done|handed-off|blocked|dropped ("" when open)
-	Note   string // closure note (file backend)
-	Line   string // the bullet: file = origin line as FindOrigin returns it; issue = rendered "- **[F12] ...**" line
-	Number int    // issue mode: the issue number; 0 in file mode
-	URL    string // issue mode
+	// ClosedAt is the close date, YYYY-MM-DD ("" when open): the done line's
+	// date in file mode, the tracker's closed_at in issue mode.
+	ClosedAt string
+	Note     string // closure note (file backend)
+	Line     string // the bullet: file = origin line as FindOrigin returns it; issue = rendered "- **[F12] ...**" line
+	Number   int    // issue mode: the issue number; 0 in file mode
+	URL      string // issue mode
+}
+
+// Key is how an item is spelled inside bullets and Related cells: the type
+// letter plus the number in issue mode ("F12" for issue 12), the ID itself in
+// file mode ("B07").
+func (it Item) Key() string {
+	if it.Number > 0 {
+		return it.Type + strconv.Itoa(it.Number)
+	}
+	return it.ID
 }
 
 // Ref is a parsed item reference.
