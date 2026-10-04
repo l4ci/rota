@@ -68,66 +68,6 @@ func TestProvider(t *testing.T) {
 	}
 }
 
-func TestListGitHub(t *testing.T) {
-	f := &forge{origin: gh, reply: map[string]reply{"issue list": {out: `[{"number": 4, "title": "T", "body": null, "labels": [{"name": "a"}, {"name": "b"}], "url": "u", "author": {"login": "me"}},
-		{"number": 5, "title": "U", "body": "x", "labels": [], "url": "v"}]`}}}
-	got, err := List(context.Background(), f.env(t), "", ListOpts{Mine: true, Label: "bug", Limit: 7})
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := "gh issue list --state open --json number,title,body,labels,url,author --limit 7 --assignee @me --label bug"
-	if !f.did(want) || !f.did("gh auth status") {
-		t.Errorf("calls %q", f.calls)
-	}
-	if len(got) != 2 || got[0].Author != "me" || got[1].Author != nil || got[0].Body != nil || len(got[0].Labels) != 2 {
-		t.Errorf("rows %+v", got)
-	}
-}
-
-func TestListGitLab(t *testing.T) {
-	f := &forge{origin: gl, reply: map[string]reply{"issue list": {out: `[{"iid": 9, "title": "T", "description": "d", "labels": ["x"], "web_url": "u", "author": {"username": "me"}}]`}}}
-	got, err := List(context.Background(), f.env(t), "", ListOpts{Limit: 30})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !f.did("glab issue list --opened --output json --per-page 30") {
-		t.Errorf("calls %q", f.calls)
-	}
-	if len(got) != 1 || got[0].Number.(interface{ String() string }).String() != "9" || got[0].Body != "d" || got[0].Author != "me" || got[0].URL != "u" {
-		t.Errorf("rows %+v", got)
-	}
-}
-
-func TestListFailures(t *testing.T) {
-	ctx := context.Background()
-	// unknown provider: ErrNoProvider, and no forge call
-	f := &forge{}
-	if got, err := List(ctx, f.env(t), "", ListOpts{Limit: 3}); !errors.Is(err, ErrNoProvider) || got != nil || len(f.calls) != 0 {
-		t.Errorf("unknown provider: %v %v %q", got, err, f.calls)
-	}
-	// unauthenticated
-	f = &forge{origin: gh, reply: map[string]reply{"auth status": {code: 1, err: "not logged in"}}}
-	_, err := List(ctx, f.env(t), "", ListOpts{Limit: 3})
-	var te *tracker.Error
-	if !errors.As(err, &te) || te.Kind != tracker.KindUnavailable {
-		t.Errorf("auth failure: %v", err)
-	}
-	// a failing list, and a rate limit
-	f = &forge{origin: gh, reply: map[string]reply{"issue list": {code: 1, err: "boom"}}}
-	if _, err := List(ctx, f.env(t), "", ListOpts{Limit: 3}); !errors.As(err, &te) || te.Kind != tracker.KindFailed || te.Message != "boom" {
-		t.Errorf("failing list: %v", err)
-	}
-	f = &forge{origin: gh, reply: map[string]reply{"issue list": {code: 1, err: "secondary rate limit"}}}
-	if _, err := List(ctx, f.env(t), "", ListOpts{Limit: 3}); !errors.As(err, &te) || te.Kind != tracker.KindRateLimited {
-		t.Errorf("rate limit: %v", err)
-	}
-	// output that is not an array
-	f = &forge{origin: gh, reply: map[string]reply{"issue list": {out: "{}"}}}
-	if _, err := List(ctx, f.env(t), "", ListOpts{Limit: 3}); !errors.Is(err, ErrBadOutput) {
-		t.Errorf("bad output: %v", err)
-	}
-}
-
 func TestLabelGitHub(t *testing.T) {
 	ctx := context.Background()
 	view := reply{out: `{"labels": [{"name": "have"}]}`}

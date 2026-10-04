@@ -10,8 +10,6 @@ flowchart LR
   CAP["/rota-capture"] --> BACKLOG[(BACKLOG.md)]
   CAP -.tag.-> MILES
   CAP -.nudges.-> BRAIN["/rota-brainstorm"]
-  ISSUES["/rota-capture --from-github / --from-gitlab"] -.sync.-> BACKLOG
-  CAP -.hand-off.-> WORK
   BACKLOG --> WORK["/rota-work (no argument)"]
   MILES -.scopes.-> WORK
   WORK -.suggests.-> PREVIEW["/rota-work --preview"]
@@ -67,7 +65,7 @@ Everything Claude reads or mutates lives under `.rota/` in your project. Git is 
 
 ## The six lanes
 
-**Capture.** `/rota-capture` is the brain-dump entry point. It splits, classifies, and routes items to `BACKLOG.md` with auto-incrementing IDs (`B01`, `F01`, `T01`). `/rota-capture` ends with an optional hand-off to `/rota-work`, so a hot-path fix is capture, accept, done. `/rota-capture --from-github` / `--from-gitlab` syncs open upstream issues into the backlog with `GH: #N` / `GL: #N` cross-references, and round-trips closing via `/rota-ship`. `/rota-capture --remove <ID>` is the local inverse: it strips a captured item and cleans up its dependencies behind a dry-run preview and confirmation gate.
+**Capture.** `/rota-capture` is the brain-dump entry point. It splits, classifies, and routes items to `BACKLOG.md` with auto-incrementing IDs (`B01`, `F01`, `T01`). `/rota-capture` prints the new IDs and stops; `/rota-work` picks them up. Import (`--from-github` / `--from-gitlab`) was removed: under `backlog.backend: "issues"` the issues already are the backlog. `/rota-capture --remove <ID>` is the local inverse: it strips a captured item and cleans up its dependencies behind a dry-run preview and confirmation gate.
 
 **Plan.** `/rota-vision` brainstorms milestones with Socratic discovery, web research, and a deliberate critique pass. `/rota-brainstorm` explores design for size-Major features or P0 bugs before planning. `/rota-plan` writes the implementation plan to its own file, keyed by milestone slice or item. `/rota-spike` runs throwaway feasibility experiments on a branch that never merges; only findings come back. `/rota-work --preview <ID>` previews the orchestrator's intended approach without writing anything, a cheap gate before code lands on high-stakes items.
 

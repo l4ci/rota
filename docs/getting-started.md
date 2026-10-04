@@ -32,7 +32,7 @@ To change a setting later, run `rota config set <key> <value>` (`rota config sho
 Two end-to-end walkthroughs carry one concrete project from brief to shipped milestone:
 
 - [Greenfield: from a brief to a shipped milestone](walkthroughs/greenfield-from-brief.md): empty repo plus a one-page brief, walked through `/rota-vision`, `/rota-plan`, `/rota-work`, `/rota-debug`, `/rota-ship`, `/rota-learn`.
-- [Brownfield: dropping rota into an existing project](walkthroughs/brownfield-existing-project.md): established codebase with open GitHub issues and a mental bug list, walked through `rota init`, `/rota-capture --from-github`, `/rota-capture`, then a P0 cycle and a debug cycle.
+- [Brownfield: dropping rota into an existing project](walkthroughs/brownfield-existing-project.md): established codebase with open GitHub issues and a mental bug list, walked through `rota init`, `/rota-capture`, then a P0 cycle and a debug cycle.
 
 Pick whichever matches where your project is today and follow it skill-by-skill.
 

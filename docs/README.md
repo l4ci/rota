@@ -14,7 +14,7 @@ Public user guide for rota, a zero-dependency dev workflow for Claude Code and C
 ### Walkthroughs
 
 - [Greenfield: from a brief to a shipped milestone](walkthroughs/greenfield-from-brief.md). Empty repo plus a one-page brief, taken end-to-end through `/rota-vision`, `/rota-plan`, `/rota-work`, `/rota-debug`, `/rota-ship`, `/rota-learn`.
-- [Brownfield: dropping rota into an existing project](walkthroughs/brownfield-existing-project.md). Established codebase with open issues and a mental bug list, walked through `rota init`, `/rota-capture --from-github`, `/rota-capture`, then a P0 cycle plus a debug cycle.
+- [Brownfield: dropping rota into an existing project](walkthroughs/brownfield-existing-project.md). Established codebase with open issues and a mental bug list, walked through `rota init`, `/rota-capture`, then a P0 cycle plus a debug cycle.
 
 ### Rounds
 
@@ -33,7 +33,7 @@ Public user guide for rota, a zero-dependency dev workflow for Claude Code and C
 
 ### Execution
 
-- [Running work](usage/running-work.md): `/rota-work` parallel cycles, branch vs worktree isolation, the `/rota-capture` hand-off
+- [Running work](usage/running-work.md): `/rota-work` parallel cycles, branch vs worktree isolation, capture then work
 - [Debugging](usage/debugging.md): `/rota-debug` systematic cycle
 - [Pausing and resuming](usage/pausing-and-resuming.md): `/rota-pause`, recovering after `/clear`
 - [Parallel work](usage/parallel-work.md): worktree mode, concurrent `/rota-work` sessions
@@ -65,7 +65,7 @@ Public user guide for rota, a zero-dependency dev workflow for Claude Code and C
 - [The `.rota/` folder](reference/rota-folder.md): files and directories created by `rota init`
 - [`rota` verb reference](reference/cli-helpers.md): every `rota` verb, with conventions and exit codes
 - [Configuration options](reference/config-options.md): every config key and option label, set via `rota config set`
-- [`/rota-capture --from-github` / `--from-gitlab` reference](reference/rota-issues.md): pull GitHub/GitLab issues into `BACKLOG.md`, with round-trip closing
+- [Upstream issues reference](reference/rota-issues.md): GitHub/GitLab issue backend and round-trip closing
 - [Project check](reference/preflight.md): what `rota init check` verifies, plus exit-code meanings
 
 ### Contributing
