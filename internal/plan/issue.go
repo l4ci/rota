@@ -15,11 +15,15 @@ import (
 var (
 	issueAddUnitRe = regexp.MustCompile(`^[BFTS]\d+$`)
 	itemKeyRe      = regexp.MustCompile(`^M\d{2,}-([BFT]\d+)$`)
+	digitsRe       = regexp.MustCompile(`^\d+$`)
 )
 
 // ItemOf splits a plan key into its item ref when it is an item plan
 // (M01-B07 gives "B07"); isItem is false for a slice key (M01-S03).
 func ItemOf(key string) (item string, isItem bool, err error) {
+	if ItemOnlyKey(key) {
+		return strings.ToUpper(strings.TrimPrefix(key, "#")), true, nil
+	}
 	if err := checkKey(key); err != nil {
 		return "", false, err
 	}
@@ -44,7 +48,7 @@ func AddItemNote(root string, n artifact.Notes, o AddOpts) (key string, err erro
 	if err != nil {
 		return "", err
 	}
-	if unit == "" || !issueAddUnitRe.MatchString(unit) || strings.HasPrefix(unit, "S") {
+	if unit == "" || !(issueAddUnitRe.MatchString(unit) || milestone == "" && digitsRe.MatchString(unit)) || strings.HasPrefix(unit, "S") {
 		return "", artifact.Errf(artifact.ExitUsage, "unit must be an item ID like B7/F3/T11 for an item plan, got %q", unit)
 	}
 	if _, ok, err := n.NoteGet(unit, "plan"); err != nil {
@@ -53,6 +57,9 @@ func AddItemNote(root string, n artifact.Notes, o AddOpts) (key string, err erro
 		return "", artifact.Errf(artifact.ExitRefused, "plan note for %s already exists", unit)
 	}
 	key = milestone + "-" + unit
+	if milestone == "" {
+		key = o.Key // milestone-free: the key is the item ref as given
+	}
 	_, err = n.NotePut(unit, "plan", stub(key, milestone, unit, "item", repo, design, o.Title))
 	return key, err
 }

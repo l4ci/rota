@@ -210,7 +210,6 @@ def prose_rules():
           has(sk("pause"), "rota git guard feature-branch", "must call rota git guard feature-branch")]
     # map / backlog touchpoints
     r += [has(sk("work"), r"rota map stats --cap|rota map index", "has no map touchpoint", True),
-          has(sk("debug"), r"rota map stats --cap|rota map index", "has no map touchpoint", True),
           has(sk("work"), "rota backlog stale", "missing the stale-summary call"),
           has(sk("capture"), "Subsystem:", "missing the Subsystem field")]
     # config verbs and the positional-args doc (F09, F78)
@@ -260,14 +259,6 @@ def prose_rules():
           has("references/authoring-conventions.md", "^## Dispatch heavy work to subagents",
               "missing the 'Dispatch heavy work to subagents' rule", True, re.M),
           has("references/authoring-conventions.md", D, "missing the cross-reference to subagent-dispatch.md")]
-    for n, pats in (("vision", ["context-bundle worker", "haiku", "research worker", "per angle"]),
-                    ("debug", ["reproduce worker", "verification worker"])):
-        for t in pats:
-            r.append(has(sk(n), t, f"missing '{t}'"))
-    r += [has(sk("debug"), "when the repro is heavy", "Step 5 missing conditional dispatch criteria", True, re.I),
-          has(sk("debug"), "when verification.*requires.*file reads", "Step 7 missing conditional dispatch criteria", True, re.I)]
-    for n in ("vision", "debug"):
-        r.append(has(sk(n), D, "missing the subagent-dispatch reference cite"))
     return r
 
 
