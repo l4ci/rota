@@ -54,6 +54,12 @@ type Settings struct {
 	// item's PR back to its worker before parking the item as needs-human; 0
 	// turns the cap off.
 	MaxBounces int
+	// ArchitectureEvery is round.architectureEvery: closed non-refactor items
+	// between architecture reviews; 0 turns the automatic review off.
+	// ArchitectureAreas is round.architectureAreas: the areas a review is
+	// split into; empty means the subsystem map, else one whole-repo review.
+	ArchitectureEvery int
+	ArchitectureAreas []string
 }
 
 // ValidTier reports whether s is a tier; ValidKind whether s is a harness kind.
@@ -129,6 +135,12 @@ func Load(root string) (Settings, error) {
 		return s, err
 	}
 	if s.MaxBounces, err = nonNegInt(cfg, "round.maxBounces"); err != nil {
+		return s, err
+	}
+	if s.ArchitectureEvery, err = nonNegInt(cfg, "round.architectureEvery"); err != nil {
+		return s, err
+	}
+	if s.ArchitectureAreas, err = list(cfg, "round.architectureAreas"); err != nil {
 		return s, err
 	}
 	return s, loadTiers(cfg, &s)
