@@ -232,7 +232,7 @@ exit codes and repo scope: [verb contract](../design/contract/README.md).
 
 | Usage | What it does |
 |---|---|
-| `rota plan add <milestone>-<unit> --title <text> [--design <ID>] [--repos a,b]` | create a plan stub |
+| `rota plan add <milestone>-<unit> --title <text> [--design <ID>] [--repos a,b]` | create a plan stub (issue mode: `<#N>` or `<B7>` item key, milestone optional) |
 | `rota plan list [--milestone M01]` | list plans |
 | `rota plan show <key>` | print a plan |
 | `rota plan put <key> --body-file <path\|->` | replace a plan's text |
