@@ -78,15 +78,13 @@ Controls how [`/rota-ship`](review-and-ship.md) integrates completed work.
 
 ## work.dispatch: subagent, tmux or herdr
 
-Controls which backend [`/rota-work`](../reference/slash-commands.md#rota-work) runs its workers on.
+`/rota-work` always runs in-process `Agent` workers that write files while the orchestrator commits, whatever this key says. Standing workers in tmux windows or herdr tabs (each its own Claude Code session in its own worktree, opening a PR behind a merge gate) belong to [`/rota-orchestrate`](parallel-rounds.md); this key only chooses their host.
 
-| Mode | How it works | When to use |
-|------|-------------|-------------|
-| `"subagent"` (default) | In-process `Agent` workers sharing the orchestrator's session. They write files; the orchestrator commits. | Almost everything. No extra dependencies, no setup. |
-| `"tmux"` | One tmux window per worker, each a separate Claude Code session in its own worktree. Workers commit, open a PR against the cycle branch, and report finished. | Long tasks that need their own context window, or work where you want to answer a worker's question directly in its pane. |
-| `"herdr"` | The same workers as `tmux`, each in a herdr tab in the workspace you run `/rota-work` from. herdr reports each worker's state (working, blocked, idle) directly and raises a notification when one needs you. | You already work in herdr. `/rota-work` must run inside a herdr pane. For a round, leave the default; see below. |
-
-For `/rota-work`, `tmux` mode requires a `tmux` binary and a working `claude` on `PATH`; `herdr` mode requires running `/rota-work` from a herdr pane. Neither turns on by itself — set it explicitly:
+| Mode | Effect on a round |
+|------|-------------------|
+| `"subagent"` (default) | `rota round start` detects the host: herdr inside a herdr pane, tmux inside tmux, otherwise solo. |
+| `"tmux"` | One tmux window per worker. Needs a `tmux` binary and a working `claude` on `PATH`. |
+| `"herdr"` | One herdr tab per worker in the orchestrator's workspace; herdr reports each worker's state and notifies when one needs you. The orchestrator must run inside a herdr pane. |
 
 ```bash
 rota config set work.dispatch tmux
@@ -94,7 +92,7 @@ rota config set work.dispatch tmux
 
 **Parallel rounds (`rota round`) pick their host differently, so a round in herdr needs no setting.** With `work.dispatch` unset or `subagent` (the default `rota init` writes), `rota round start` detects one: herdr when it runs inside a herdr pane, tmux when it runs inside tmux, and otherwise **solo mode**, where the orchestrator runs each worker as a Claude `Agent` subagent in the slot's own worktree. An explicit `tmux` or `herdr` is used as set, and fails if unavailable rather than falling back. The round records its host when it starts and keeps it until wind-down. Solo workers share the orchestrator's account, rate window and context, so one usage limit stops them all. Solo mode runs Claude workers only: a Codex subagent cannot be given a working directory. See [Parallel rounds](parallel-rounds.md).
 
-Two things behave differently under `tmux` and `herdr`:
+Two things behave differently under `tmux` and `herdr` than in `/rota-work`:
 
 - **`work.isolation` stops applying.** Every slot has its own worktree, so its own git index, by construction.
 - **Workers commit.** The orchestrator's per-task commit step is skipped; integration happens through the merge gate instead, which re-verifies the *merged* tree. Two workers can each be honestly green and still break the cycle branch together — a signature one widens while another adds a caller, a constant one stops emitting while another starts reading it. Nothing about a clean merge rules that out, which is why the gate runs `refactor.verifyCommands` after every merge rather than trusting the branches.
@@ -249,6 +247,8 @@ Settings for `rota round` (parallel rounds; see [the rounds guide](parallel-roun
 | `round.sharedPaths` | `[]` | Repo-relative globs the file-overlap readiness check ignores, for files every issue touches (a command registry, a contract doc). |
 | `round.stallMinutes` | `30` | Minutes without a commit, an uncommitted edit or a state change before `rota round reconcile` reports a slot that holds an issue and has a live agent as `stalled`. `0` turns the check off. A slot waiting on an escalation is never stalled; a dead agent is `dead`, not stalled. |
 | `round.maxBounces` | `3` | How often `rota worker gate` may send one item's PR back to its worker (a `stale` or `provenance-fail` verdict on a real run, never `--check-only`) before it parks the item: the slot is freed, the issue gets the `needs-human` label and a comment, and the PR stays open. The count is per item and resets on a pass or a park. `0` turns the cap off. |
+| `round.architectureEvery` | `20` | Closed non-refactor items between automatic architecture reviews; `0` turns them off. A review also fires when a slot is idle and nothing is assignable. See `rota round architecture`. |
+| `round.architectureAreas` | `[]` | The areas an architecture review is split into, one review item each. Empty means the subsystem map's names, else one whole-repo review. |
 | `round.tier` | `"standard"` | Default worker tier: `light` (reading, searching), `standard` (code and tests) or `heavy` (hard reasoning). `rota round assign --tier heavy --tier-reason "…"` goes above it; a tier above the default needs the reason, which lands on the slot. |
 | `round.tiers.claude.light` / `.standard` / `.heavy` | `haiku` / `models.worker` / `opus` | The model each tier starts a Claude worker with. `standard` follows `models.worker` (so `/rota-work` and rounds agree) until set explicitly. |
 | `round.tiers.codex.light` / `.standard` / `.heavy` | empty | The same for Codex, and optional: unset, a Codex worker runs on Codex's own default model (the default `work.codexCommand` drops `--model`). A kind with any tier set must set all three. `assign --kind codex --check-only` shows the model it would use. |

@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/shlex"
 )
 
@@ -134,14 +135,12 @@ func LaunchArgs(launch string) (kind string, env, args []string, err error) {
 		env = append(env, toks[i])
 		i++
 	}
-	if i >= len(toks) {
-		return "", nil, nil, fmt.Errorf("not a claude or codex launch")
+	if i < len(toks) {
+		if h, ok := harness.ForBinary(baseName(toks[i])); ok {
+			return h.Kind(), env, toks[i+1:], nil
+		}
 	}
-	switch k := baseName(toks[i]); k {
-	case "claude", "codex":
-		return k, env, toks[i+1:], nil
-	}
-	return "", nil, nil, fmt.Errorf("not a claude or codex launch")
+	return "", nil, nil, fmt.Errorf("not a %s launch", harness.KindList())
 }
 
 var envAssign = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*=`)
@@ -240,7 +239,7 @@ func DialogKeys(pane string) (keys []string, ok bool) {
 func (h *herdr) Spawn(ctx context.Context, o SpawnOpts) (string, error) {
 	kind, env, agentArgs, err := LaunchArgs(o.Launch)
 	if err != nil {
-		return "", fmt.Errorf("work.dispatch=herdr launches claude or codex itself; the launch command must run one of them, got: %s", o.Launch)
+		return "", fmt.Errorf("work.dispatch=herdr launches %s itself; the launch command must run one of them, got: %s", harness.KindList(), o.Launch)
 	}
 	args := []string{"tab", "create", "--workspace", h.d.Getenv("HERDR_WORKSPACE_ID"),
 		"--cwd", o.Cwd, "--label", o.Slot, "--no-focus"}
@@ -248,15 +247,12 @@ func (h *herdr) Spawn(ctx context.Context, o SpawnOpts) (string, error) {
 		args = append(args, "--env", e)
 	}
 	// Account selection must happen at tab creation: agent start runs the
-	// binary directly and ignores shell aliases or wrappers. A codex slot's
-	// account is its CODEX_HOME; the claude config dir is not its business.
-	switch {
-	case kind == "codex":
-		if o.CodexHome != "" {
-			args = append(args, "--env", "CODEX_HOME="+o.CodexHome)
-		}
-	case o.ConfigDir != "":
-		args = append(args, "--env", "CLAUDE_CONFIG_DIR="+o.ConfigDir)
+	// binary directly and ignores shell aliases or wrappers. What selects the
+	// account is the harness's own business: a codex slot's CODEX_HOME, a
+	// claude slot's config dir.
+	hz, _ := harness.Lookup(kind)
+	for _, e := range hz.AccountEnv(harness.Account{ConfigDir: o.ConfigDir, CodexHome: o.CodexHome}) {
+		args = append(args, "--env", e)
 	}
 	r := h.herdr(ctx, args...)
 	if r.ExitCode != 0 {
