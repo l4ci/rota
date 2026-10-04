@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -13,6 +14,7 @@ import (
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/roundcfg"
+	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -663,4 +665,83 @@ func TestWindDownClearsTheTierFields(t *testing.T) {
 			t.Errorf("%s must be cleared on park: %v", k, s)
 		}
 	}
+}
+
+// openPRFixture: issues 12 and 13 carry numbers, and the forge lists open PRs.
+func openPRFixture(t *testing.T, prs ...tracker.PR) *assignFixture {
+	t.Helper()
+	f := newAssignFixture(t)
+	for _, id := range []string{"12", "13", "14"} {
+		n, _ := strconv.Atoi(id)
+		f.be.items[id].Number = n
+	}
+	f.env.Forge = &fakeForge{prs: prs}
+	return f
+}
+
+func TestCandidatesMarkIssuesWithAnOpenPR(t *testing.T) {
+	f := openPRFixture(t,
+		tracker.PR{Number: 104, Branch: "ben/12-add-the-round-assign"},
+		tracker.PR{Number: 109, Branch: "kit/99-other", Body: "Closes #13"},
+		tracker.PR{Number: 95, Branch: "dana/12-duplicate"})
+	cands, err := f.env.Candidates(bg, f.root, f.be, CandidateOpts{Scope: roundcfg.ScopeMilestone})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]int{"12": 95, "13": 109, "14": 0}
+	for _, c := range cands {
+		if c.OpenPR != want[c.ID] {
+			t.Errorf("%s: open PR %d, want %d", c.ID, c.OpenPR, want[c.ID])
+		}
+		if (c.OpenPR != 0) && c.Ready() {
+			t.Errorf("%s has an open PR and must not read ready", c.ID)
+		}
+	}
+}
+
+func TestAssignRefusesAnIssueWithAnOpenPR(t *testing.T) {
+	f := openPRFixture(t, tracker.PR{Number: 104, Branch: "ben/12-add-the-round-assign"})
+	_, err := f.assign("12", "dana", nil)
+	if by := blockedBy(t, err); by != BlockOpenPR || !strings.Contains(err.Error(), "#104") {
+		t.Fatalf("open PR must refuse and name it: %v", err)
+	}
+	if len(f.be.claims) != 0 || f.host.sent != "" {
+		t.Fatal("a refusal must write nothing")
+	}
+	if _, err := f.assign("12", "dana", func(o *AssignOpts) { o.AcceptOpenPR = true }); err != nil {
+		t.Fatalf("--accept-open-pr is a deliberate redo: %v", err)
+	}
+}
+
+func TestAssignResumingASlotIgnoresItsOwnOpenPR(t *testing.T) {
+	f := openPRFixture(t)
+	if _, err := f.assign("12", "ben", nil); err != nil {
+		t.Fatal(err)
+	}
+	f.env.Forge = &fakeForge{prs: []tracker.PR{{Number: 104, Branch: "ben/12-add-the-round-assign"}}}
+	if _, err := f.assign("12", "ben", nil); err != nil {
+		t.Fatalf("the slot that holds the issue owns that PR: %v", err)
+	}
+}
+
+func TestOpenPRsAreListedOncePerCandidatesRun(t *testing.T) {
+	f := openPRFixture(t)
+	cf := &countForge{}
+	f.env.Forge = cf
+	if _, err := f.env.Candidates(bg, f.root, f.be, CandidateOpts{Scope: roundcfg.ScopeMilestone}); err != nil {
+		t.Fatal(err)
+	}
+	if cf.calls != 1 {
+		t.Errorf("OpenPRs called %d times, want 1", cf.calls)
+	}
+}
+
+type countForge struct {
+	fakeForge
+	calls int
+}
+
+func (c *countForge) OpenPRs(ctx context.Context) ([]tracker.PR, error) {
+	c.calls++
+	return c.fakeForge.OpenPRs(ctx)
 }
