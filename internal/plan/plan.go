@@ -29,6 +29,12 @@ var (
 	issueDesignRe = regexp.MustCompile(`^[BFT]?\d+$`)
 )
 
+// itemOnlyRe is a milestone-free item plan key (issue mode): #7, B7, f12.
+var itemOnlyRe = regexp.MustCompile(`(?i)^(?:#(\d+)|[BFT]\d+)$`)
+
+// ItemOnlyKey reports whether key names an item plan without a milestone.
+func ItemOnlyKey(key string) bool { return itemOnlyRe.MatchString(key) }
+
 // ValidKey reports whether key is a plan key: M\d{2,}-(S\d+|[BFT]\d+).
 func ValidKey(key string) bool { return keyRe.MatchString(key) }
 
@@ -66,6 +72,9 @@ func parseAdd(o AddOpts, issue bool) (milestone, unit string, err error) {
 	case o.Key != "" && (o.Slice || o.Milestone != ""):
 		return "", "", artifact.Errf(artifact.ExitUsage, "a key cannot be combined with --slice or --milestone")
 	case o.Key != "":
+		if issue && ItemOnlyKey(o.Key) {
+			return "", strings.ToUpper(strings.TrimPrefix(o.Key, "#")), nil
+		}
 		re := addKeyRe
 		if issue {
 			re = addKeyIssue
@@ -83,7 +92,7 @@ func parseAdd(o AddOpts, issue bool) (milestone, unit string, err error) {
 		}
 		return o.Milestone, "", nil
 	}
-	return "", "", artifact.Errf(artifact.ExitUsage, "give a plan key (M01-B07) or --milestone <M01> --slice")
+	return "", "", artifact.Errf(artifact.ExitUsage, "give a plan key (#7 or M01-B07) or --milestone <M01> --slice")
 }
 
 // extras validates --title, --design and --repos and returns the stub's

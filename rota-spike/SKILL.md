@@ -27,11 +27,11 @@ Track these phases with the host's task tool if it has one.
 Phases:
 
 1. *Question* — Start: yes/no/conditional question sharpened (Step 2)
-2. *Branch* — Start: `spike/<name>` created, scratch file seeded (Steps 2.5–4)
+2. *Branch* — Start: `spike/<name>` created, scratch file seeded (Steps 2.5–4, no confirmation)
 3. *Investigate* — Start: experiment runs to a clear answer (between Start and Finish)
 4. *Findings* — Finish: spike file's findings section written from the branch state (Steps 5–6)
 5. *Decision* — Finish: verdict (yes / no / conditional / inconclusive) recorded (Step 6)
-6. *Promote / cleanup* — Finish: optional `/rota-decide --from-spike`, branch deleted (Steps 6.5–7)
+6. *Promote / cleanup* — Finish: one-line `/rota-decide --from-spike` nudge, branch deleted (Steps 6.5–7)
 
 ## Step 2 (Start mode) — Sharpen the Question
 
@@ -57,18 +57,9 @@ In umbrella mode, the spike branch must land in a specific sub-repo (the umbrell
 
 Carry `<repo>` into Step 4's verb invocation as `--repo <repo>`. The spike file still lands at the umbrella's `.rota/spikes/<name>.md` — only the git branch lives in the sub-repo, per the umbrella-vs-sub-repo `.git/` distinction in `references/umbrella-mode.md`.
 
-## Step 3 (Start mode) — Confirm Before Branching
+## Step 3 (Start mode) — Branch Without Asking
 
-Before mutating git state, confirm with the user via `AskUserQuestion`:
-
-- **Header:** `"Spike"`
-- **Question:** *"Create branch `spike/<name>` and switch to it now?"* (umbrella mode: *"Create branch `spike/<name>` in `<repo>` and switch to it now?"*)
-- **Options:**
-  1. *"Yes, create and switch (Recommended)"* — *"Branches off current HEAD; you'll be on the spike branch immediately."*
-  2. *"Create only, stay on this branch"* — *"Useful when you want to switch on your own time."*
-  3. *"Cancel"* — *"Don't do anything."*
-
-If the working tree is clean, default to "create and switch"; otherwise default to "create only" so dirty changes don't follow.
+No confirmation: the spike branch is throwaway. On a clean tree, create it and switch to it. On a dirty tree, create it but stay on the current branch (so the changes don't follow) and say so in the handoff. Umbrella mode: the branch is created in `<repo>`.
 
 ## Step 4 (Start mode) — Create the Spike
 
@@ -85,7 +76,7 @@ The verb:
 - Writes `.rota/spikes/<name>.md` with frontmatter + question + section stubs
 - Spike file `.rota/spikes/<name>.md` lives at the umbrella root regardless of `--repo`; only the git branch lands in the sub-repo. The frontmatter records `repo: <name>` so `/rota-spike done` and listings know which sub-repo to operate against.
 
-If the user picked "create and switch" in Step 3, run `git checkout "$BRANCH"` — in umbrella mode, `cd` into `<repo>` first (or `git -C <repo-path> checkout "$BRANCH"`).
+On a clean tree, run `git checkout "$BRANCH"` — in umbrella mode, `cd` into `<repo>` first (or `git -C <repo-path> checkout "$BRANCH"`).
 
 Compact handoff:
 
@@ -143,23 +134,9 @@ rota spike finish <name>
 
 The verb sets `status: done` and `finished: <date>` in the spike file (a repeat call is a no-op). The branch is left as-is — historical reference, never merged.
 
-## Step 6.5 (Finish mode) — Promote Finding to Decision (nudge)
+## Step 6.5 (Finish mode) — Promotion Nudge
 
-Read back the `Decision` field Step 6 just wrote. Skip this step entirely — no nudge, no question, no log — when the decision is `inconclusive` or empty. An inconclusive spike doesn't have enough evidence to be a hard boundary.
-
-When the decision is `viable`, `not viable`, or `depends-on-X`, ask via `AskUserQuestion`:
-
-- **Header:** `"Decide"`
-- **Question:** *"This spike concluded `<verdict>`. Promote the finding to a hard-boundary decision in `DECISIONS.md`?"* (substitute the verbatim verdict)
-- **Options:**
-  1. *"Yes, promote (Recommended)"* — *"Invoke `/rota-decide --from-spike <name>`. The spike's question + decision + recommended approach pre-fill the rule and why; you'll articulate the forbids/permits."*
-  2. *"Skip — keep finding in spike file only"* — *"No decision is captured. The finding stays in `.rota/spikes/<name>.md` for reference."*
-
-Anything but an explicit yes skips promotion.
-
-On **Yes**, dispatch `/rota-decide` via the `Skill` tool with `--from-spike <name>` as the argument, then continue to Step 7 once it returns.
-
-On **Skip**, print one line — *"Spike finding stays in `.rota/spikes/<name>.md`. Run `/rota-decide --from-spike <name>` later if you change your mind."* — then continue to Step 7.
+For a `viable`, `not viable` or `depends-on-X` decision, print one line and move on: *"Run `/rota-decide --from-spike <name>` to promote this to a hard boundary."* Say nothing for `inconclusive` or empty. Don't ask, don't dispatch.
 
 ## Step 7 (Finish mode) — Optional Follow-Up
 
