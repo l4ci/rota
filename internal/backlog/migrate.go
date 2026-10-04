@@ -259,7 +259,7 @@ func (m *migrator) state() string {
 }
 
 var opActions = []struct{ prefix, action string }{
-	{"create milestone ", "create-milestone"}, {"create issue ", "create-issue"},
+	{"create milestone ", "create-milestone"}, {"create issue ", "create-issue"}, {"adopt ", "adopt"},
 	{"note ", "note"}, {"rewrite ", "rewrite"}, {"skip ", "skip"}, {"set ", "set"},
 }
 
@@ -541,6 +541,12 @@ func (m *migrator) run() (bool, error) {
 			m.pending++
 			continue
 		}
+		if it.adopt > 0 {
+			if err := m.adopt(it); err != nil {
+				return false, err
+			}
+			continue
+		}
 		fields := []Field{}
 		for _, n := range migOrder {
 			if v := it.fields[n]; v != "" {
@@ -721,6 +727,46 @@ func (m *migrator) run() (bool, error) {
 		}
 	}
 	return true, nil
+}
+
+// adopt maps an item that already has a tracker issue (a `GH: #N` tag from
+// /rota-capture --from-github) onto it instead of creating a duplicate. Only
+// the type and size or priority labels are added; the issue keeps its own
+// title and body, and the notes and Related rewrites of phase 3 run on it.
+func (m *migrator) adopt(it *migItem) error {
+	old, n := it.id, it.adopt
+	labels := m.labelNames(it)
+	desc := fmt.Sprintf("adopt %s → #%d \"%s\" [%s]", old, n, it.title, strings.Join(labels, ", "))
+	err := m.op(desc, func() error {
+		be, err := m.backend()
+		if err != nil {
+			return err
+		}
+		got, err := be.Tracker.Get(m.ctx, n, false)
+		if err != nil {
+			return err
+		}
+		if err := be.Tracker.EnsureLabels(m.ctx, labels, be.autoCreate()); err != nil {
+			return err
+		}
+		if err := be.Tracker.AddLabels(m.ctx, n, labels, be.autoCreate()); err != nil {
+			return err
+		}
+		return m.setEntry(old, old[:1]+strconv.Itoa(n), jn(n), got.URL)
+	})
+	if err != nil {
+		return err
+	}
+	m.created++
+	if !m.apply {
+		e := jsonx.NewObject()
+		e.Set("id", old[:1]+strconv.Itoa(n))
+		e.Set("number", jn(n))
+		e.Set("url", "")
+		e.Set("done", []any{})
+		m.imap.Set(old, e)
+	}
+	return nil
 }
 
 // jn is an int as a JSON number.
