@@ -489,3 +489,43 @@ func TestReviewQueueUmbrella(t *testing.T) {
 		t.Errorf("--repo: exit %d, want 5\n%s%s", o.code, o.stdout, o.stderr)
 	}
 }
+
+// Issue mode: refs come from closing keywords and the branch name, resolved
+// through the tracker; an unknown ref stays listed with no intent.
+func TestReviewScopeIssueMode(t *testing.T) {
+	root := newRepo(t, t.TempDir(), "proj", "main")
+	write(t, filepath.Join(root, ".rota", "config.json"), issuesConfig)
+	write(t, filepath.Join(root, "a.txt"), "a\n")
+	gitT(t, root, "add", "a.txt")
+	gitT(t, root, "commit", "-q", "-m", "base")
+	gitT(t, root, "checkout", "-q", "-b", "kit/7-export")
+	write(t, filepath.Join(root, "a.txt"), "b\n")
+	gitT(t, root, "add", "a.txt")
+	gitT(t, root, "commit", "-q", "-m", "Add export", "-m", "Closes #9, closes #99. Mentions [B01].")
+	withTracker(t, issueFixture())
+
+	o := trRun(t, root, "", "review", "scope", "--json")
+	if o.code != 0 {
+		t.Fatalf("exit %d %s%s", o.code, o.stdout, o.stderr)
+	}
+	d := envelope(t, o.stdout)["data"].(map[string]any)
+	if !reflect.DeepEqual(d["referencedIds"], []any{"#7", "#9", "#99"}) {
+		t.Fatalf("referencedIds %v", d["referencedIds"])
+	}
+	in := d["intents"].([]any)
+	if len(in) != 2 {
+		t.Fatalf("intents %v", in)
+	}
+	i0 := in[0].(map[string]any)
+	if i0["id"] != "#7" || i0["type"] != "F" || i0["title"] != "Add export" || i0["entry"] == "" {
+		t.Errorf("intent #7: %v", i0)
+	}
+	if i1 := in[1].(map[string]any); i1["id"] != "#9" || i1["type"] != "B" {
+		t.Errorf("intent #9: %v", i1)
+	}
+
+	b := trRun(t, root, "", "review", "brief")
+	if b.code != 0 || !strings.Contains(b.stdout, "- #7 Add export — ") || strings.Contains(b.stdout, "[#7]") {
+		t.Errorf("brief: %d\n%s%s", b.code, b.stdout, b.stderr)
+	}
+}

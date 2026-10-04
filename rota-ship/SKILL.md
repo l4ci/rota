@@ -121,7 +121,7 @@ Capture the output (`## Summary`, `## Items resolved`) and append `## Test plan`
 
 ## Step 5 — Pick Strategy
 
-**Issue mode** (`backlog.backend: "issues"`, `references/issue-mode.md`): no question; go to Step 6a, never direct-merge.
+On the issue backend (`references/issue-mode.md`) there is no question: go to Step 6a, never direct-merge.
 
 If `work.mergeStrategy` is `"direct"` or `"pr"` and the user has not said otherwise this session, use it silently. If unset, or the user hinted at the other option, ask (single-select, header `"Strategy"`, *"How should I integrate `<branch>`?"*):
 
@@ -152,7 +152,7 @@ The subject must start `merge: ` (undo recognizes cycles by it). Share the hash 
 
 ## Step 6c — Close Upstream Issues (direct-merge path only)
 
-Skip on the PR path (`rota ship body` already emits `Closes #N`) and in issue mode (the tracker issues close when the PR merges).
+Skip on the PR path (`rota ship body` already emits `Closes #N`) and on the issue backend (the tracker issues close when the PR merges).
 
 `rota issues imported --json --open-only`; keep `data.entries` whose `itemId` is in the shipped IDs from Step 2. None: skip silently.
 
@@ -213,10 +213,10 @@ One compact block.
 ```
 PR opened: https://github.com/.../pull/42
 Title: fix: timer badge and quick-switch overlay
-Resolved: [B01] [F03]
+Resolved: #12 #15   (file backend: [B01] [F03])
 ```
 
-or `Merged `rota/demo` into main — commit a1b2c3d` plus the `Resolved:` line. If `REVIEW_CHOICE == ship-anyway`, append a one-line list of the concerns the user proceeded through. If Step 8 left IDs open for lack of proof, append `Unproven (still open): [<ID>] …`; if the user chose `--no-proof`, append `Closed without proof: [<ID>] …`.
+or `Merged `rota/demo` into main — commit a1b2c3d` plus the `Resolved:` line. If `REVIEW_CHOICE == ship-anyway`, append a one-line list of the concerns the user proceeded through. If Step 8 left IDs open for lack of proof, append `Unproven (still open): <ID> …`; if the user chose `--no-proof`, append `Closed without proof: <ID> …`.
 
 ## Step 9.5 — Release Nudge
 
@@ -318,7 +318,7 @@ docs: <one-line summary>
 
 - <page>: <one-line per-page change>
 
-Resolves: [B07], [F03]
+Resolves: #12, #15   (file backend: [B07], [F03])
 ```
 
 `Resolves:` lists the triggering cycle's IDs from the calling brief; omit it on manual entry.

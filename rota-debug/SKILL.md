@@ -1,11 +1,11 @@
 ---
 name: rota-debug
-description: Systematic root-cause investigation for a bug — reads the TODO entry + detail file, consults KNOWLEDGE.md, reproduces, hypothesizes, verifies, fixes with one atomic commit, and nudges /rota-learn. Use on "debug [B07]", "why is X broken", "investigate the crash", when a bug needs a proper cycle rather than a one-shot fix.
+description: Systematic root-cause investigation for a bug — reads the backlog item, consults KNOWLEDGE.md, reproduces, hypothesizes, verifies, fixes with one atomic commit, and nudges /rota-learn. Use on "debug 42" or "debug [B07]" on the file backend, "why is X broken", "investigate the crash", when a bug needs a proper cycle rather than a one-shot fix.
 ---
 
 # rota-debug — Systematic Bug Cycle
 
-Full reproduce → hypothesize → verify → fix cycle for a single bug. Anchors to a `[B##]` ID so the fix commit closes the backlog entry and the learning gets routed back to `KNOWLEDGE.md`.
+Full reproduce → hypothesize → verify → fix cycle for a single bug. Anchors to a backlog item ID (`#N` on the issue backend, `[B07]` on the file backend) so the fix commit closes the item and the learning gets routed back to `KNOWLEDGE.md`.
 
 ## Configuration
 
@@ -20,7 +20,7 @@ Read `.rota/config.json`:
 
 ## When to Use
 
-- You have a bug ID (`[B07]`) or a reproducer and want a proper cycle
+- You have a bug item ID (`#42` or `[B07]`) or a reproducer and want a proper cycle
 - Previous attempts failed or the symptom isn't obvious
 - The bug looks novel enough to be worth capturing in `KNOWLEDGE.md`
 
@@ -49,20 +49,20 @@ Track these phases with the host's task tool if it has one.
 Phases:
 
 1. *Guard* — clean tree, bug ID resolved (Step 1)
-2. *Read item & knowledge* — TODO entry + KNOWLEDGE.md cross-ref loaded (Steps 2–3)
+2. *Read item & knowledge* — backlog item + KNOWLEDGE.md cross-ref loaded (Steps 2–3)
 3. *Reproduce* — failure triggers reliably from a known input (Step 4)
 4. *Hypothesize & verify* — claim is testable; evidence supports or refutes (Steps 5–6)
-5. *Fix & commit* — minimal diff, atomic commit with `[B##]` footer (Steps 7–9)
+5. *Fix & commit* — minimal diff, atomic commit referencing the item ID (Steps 7–9)
 6. *Iron Law gate* — at 3 failed fixes, hard stop and surface (Step 9.5)
 7. *Smoke / regression* — no untouched-area breakage; existing tests pass (Step 10)
 8. *Learn nudge* — autonomy-aware learn/decide nudges (Steps 11–12.5)
 
 ## Step 2 — Resolve the Bug
 
-If the user named a `[B##]`:
+If the user named an item ID (`#N` or `[B07]`), load it:
 
-- Read that line from `.rota/BACKLOG.md`
-- If `Detail:` points at `.rota/bugs/B##.md`, read the detail file too
+- `rota item field list --json <ID>` for the title, body and fields; `rota item show <ID>` for state, claim and comments (issue backend; see `references/issue-mode.md`, "Resuming an item")
+- File backend: the same fields come from the item's line in `.rota/BACKLOG.md`; if `Detail:` points at `.rota/bugs/<id>.md`, read that file too
 
 If the user described a symptom without an ID, invoke `rota-capture` via the `Skill` tool first so the bug gets logged — then resume here with the new ID.
 
@@ -84,7 +84,7 @@ Carry any matched terms into Step 6's hypothesis brief — canonical definitions
 
 ## Step 4 — Branch or Worktree
 
-Pick a descriptive name (e.g., `rota/fix-B07-timer-badge`).
+Pick a descriptive name (e.g., `rota/fix-42-timer-badge`).
 
 **Branch:**
 
@@ -101,7 +101,7 @@ git worktree add .claude/worktrees/<branch-name> <branch-name>
 rota status add <branch> --items <ID> --worktree .claude/worktrees/<branch-name>
 ```
 
-**Issue mode** (`backlog.backend: "issues"`; `references/issue-mode.md`): claim the bug now with `rota item claim <ID> --as <branch>` (exit 4: someone else holds it, stop; exit 3, 5 or 6: stop and report) and read its comments per the reference's "Resuming an item" before reproducing.
+Claim the bug now with `rota item claim <ID> --as <branch>` (exit 4: someone else holds it, stop; exit 3, 5 or 6: stop and report), then read its comments per `references/issue-mode.md` ("Resuming an item") before reproducing.
 
 Initialize the per-session counter for the Iron Law (Step 9.5):
 
@@ -123,8 +123,8 @@ Reproducing before hypothesizing is non-negotiable. Options:
 
 When the dispatch criterion fires, brief one sonnet worker:
 
-- **Goal:** Reproduce `[B##]` and return a concrete failure signal.
-- **Inputs:** The bug ID, the symptom description from the TODO entry, suspected file paths, the repro path (which option from 1–3 above).
+- **Goal:** Reproduce `<ID>` and return a concrete failure signal.
+- **Inputs:** The bug ID, the symptom description from the item, suspected file paths, the repro path (which option from 1–3 above).
 - **Constraints:** Return a structured verdict; do not propose a fix.
 - **Return shape:** `{reproduced: bool, observed-vs-expected, relevant-log-excerpts (≤30 lines, the load-bearing ones)}`.
 - **Word budget:** ≤200 words plus the log excerpts.
@@ -175,7 +175,7 @@ Fires only when Step 6's cycle-counter check trips (`counter >= 3`, single-hypot
 Dispatch a fix agent with the **worker** model. Brief contains:
 
 ```
-Fix [B##]: <title>.
+Fix <ID>: <title>.
 
 **Root cause (verified):**
 <one-sentence causal claim>
@@ -193,7 +193,7 @@ Fix [B##]: <title>.
 
 **Do NOT run `git add` or `git commit`.** Write the change to files only — orchestrator commits in Step 8.5.
 
-**Suggested commit message:** fix: <short imperative> [B##]
+**Suggested commit message:** fix: <short imperative> <ID>
 
 <optional body with the root cause in 1-2 sentences>
 ```
@@ -206,7 +206,7 @@ Stage exactly the files named in the worker's brief and commit with the suggeste
 
 ```bash
 git add <files-from-brief>
-git commit -m "fix: <short imperative> [B##]"
+git commit -m "fix: <short imperative> <ID>"
 ```
 
 One commit for the bug. Don't `git add -A` — sweep risk if any sibling artifacts crept in. If the toolchain produced legitimate sibling files (e.g. Godot `.gd.uid`), follow the same sweep pattern as `/rota-work` Step 8.5: a separate `chore:` commit, not the same atomic unit as the fix.
@@ -264,16 +264,13 @@ Clear the Iron Law counter for this session:
 rota debug counter clear
 ```
 
-Record the Step 9 reproducer re-run as proof, then mark the item complete:
+Record the Step 9 reproducer re-run as proof:
 
 ```bash
 rota proof add <ID> --check "<reproducer command>" --result PASS --evidence "<output line showing the symptom is gone>" --sha <commit-hash>
-rota item complete <ID> --commit <commit-hash>
 ```
 
-`rota item complete` exits 4 if the proof row is missing. Never pass `--no-proof` here: Step 9 always runs the reproducer, so a missing row means the step was skipped. Go back and run it.
-
-**Issue mode:** `rota proof add` above works unchanged (the row lands in the proof note), but do not call `rota item complete` and do not merge directly. Open a PR instead and hand it to review; the issue closes when the PR merges:
+Then open a PR and hand it to review; never merge directly or call `rota item complete`. The issue closes when the PR merges:
 
 ```bash
 printf '%s' "$BODY" | rota ship pr <branch> --title "<short title>" --body-file - --items <ID>
@@ -281,6 +278,8 @@ rota item state <ID> --to needs-review
 ```
 
 The claim stays (no `rota item release`). Then continue with the status cleanup below.
+
+**File backend:** mark the item complete instead: `rota item complete <ID> --commit <commit-hash>`. It exits 4 if the proof row is missing. Never pass `--no-proof` here: Step 9 always runs the reproducer, so a missing row means the step was skipped. Go back and run it.
 
 **Single-repo:**
 
@@ -301,7 +300,7 @@ Without `--repo`, the verb preserves umbrella-tagged entries (only legacy `repo:
 One compact block:
 
 ```
-Fixed [B07] Timer badge shows stale duration — commit a1b2c3d on `rota/fix-B07-timer-badge`.
+Fixed #42 Timer badge shows stale duration — commit a1b2c3d on `rota/fix-42-timer-badge`.
 
 Root cause: MenuBarManager held an invalidated timer ref after pause; the next tick no-op'd without resetting the badge.
 
@@ -312,7 +311,7 @@ Branch on `autonomy.level`:
 
 - `"off"` (default) — `AskUserQuestion`:
   - **Header:** `"Next"`
-  - **Question:** *"Fix for [B##] is committed. What's next?"*
+  - **Question:** *"Fix for <ID> is committed. What's next?"*
   - **Options** (single-select):
     1. "Ship via `/rota-ship` (Recommended)" — *"Run the review gate and integrate."*
     2. "Keep working on the branch" — *"Stay on the branch to add more fixes."*
@@ -343,7 +342,7 @@ If the fix codified a constraint (e.g., "never use timer-X here", "this surface 
 - **Iron Law: no fix without a hypothesis; hard stop at 3 failed fixes.** The hypothesis is logged with each attempt; three committed fixes that don't hold trigger Step 9.5 — no more attempts, surface to the user.
 - **Hypothesis is a claim, not a description.** "X causes Y because Z" — testable.
 - **One fix, one commit.** Scope creep in debug commits masks the root cause later.
-- **The ID closes the loop.** The commit message carries `[B##]`; `rota item complete` moves the entry.
+- **The ID closes the loop.** The commit message carries the item ID and the PR carries `Closes #N`, so the item closes when the PR merges (file backend: `rota item complete` moves the entry).
 - **Learn the non-obvious.** If this bug surprised you, it'll surprise the next person.
 
 ## References

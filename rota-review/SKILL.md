@@ -16,7 +16,7 @@ Read `.rota/config.json`:
 - Before merging or opening a PR — typically invoked from `/rota-ship`
 - *"Review this branch"*, *"Second-opinion this"*, *"Look over what I've got"*
 - After manual commits to a branch you want validated before integrating
-- Issue mode: `/rota-review --queue` reviews and merges the PRs waiting on `needs-review` items (see Queue mode)
+- `/rota-review --queue` (issue backend) reviews and merges the PRs waiting on `needs-review` items (see Queue mode)
 
 ## When NOT to Use
 
@@ -47,15 +47,15 @@ Phases:
 rota review scope --json <branch>
 ```
 
-**Umbrella mode.** When the branch lives in a sub-repo, pass `--repo <name>` so git ops resolve there: `rota review scope --json --repo <name> <branch>`. Determine `<name>` from `data.repo` of `rota status show <branch> --json` (the active stream's repo), or from `rota repo which` if invoked from inside the sub-repo's worktree. `BACKLOG.md` / `ARCHIVE.md` lookups stay umbrella-flat — `rota review scope` reads them from the umbrella's `.rota/`, so no repo flag is needed for intent matching.
+**Umbrella mode.** When the branch lives in a sub-repo, pass `--repo <name>` so git ops resolve there: `rota review scope --json --repo <name> <branch>`. Determine `<name>` from `data.repo` of `rota status show <branch> --json` (the active stream's repo), or from `rota repo which` if invoked from inside the sub-repo's worktree. Backlog lookups (file backend: `BACKLOG.md` / `ARCHIVE.md`) stay umbrella-flat — `rota review scope` reads them from the umbrella's `.rota/`, so no repo flag is needed for intent matching.
 
 If the user didn't name a branch, default to the current one. `rota review scope` returns, under `data`:
 
 - `branch`, `base`, `commitCount`
 - `commits` — array of `{hash, subject}`
 - `touchedFiles` — paths changed vs base
-- `referencedIds` — `[B##]`/`[F##]`/`[T##]` found in commit messages
-- `intents` — matched TODO entries for each referenced ID
+- `referencedIds` — item IDs found in commit messages (`#N` or bracketed `[B07]`)
+- `intents` — matched backlog item for each referenced ID
 
 If `commitCount` is 0, stop and tell the user.
 
@@ -127,7 +127,7 @@ that's Stage 2's job. Even if you notice issues there, do NOT flag them.
 **Items being resolved (with plans):**
 
 ### [F03] Quick-switch projects
-**Intent (from BACKLOG.md):** "<full intent line>"
+**Intent (from the backlog item):** "<full intent line>"
 
 **Plan outcomes (from .rota/plans/M01-F03.md):**
 <plan content>
@@ -212,8 +212,8 @@ scaffolding, silent failures.
 ...
 
 **Items being resolved:**
-- [B07] Timer badge shows stale duration — "<full intent line from TODO>"
-- [F03] Quick-switch projects — "<full intent line from TODO>"
+- [B07] Timer badge shows stale duration — "<full intent line from the item>"
+- [F03] Quick-switch projects — "<full intent line from the item>"
 
 **Relevant project conventions (from KNOWLEDGE.md):**
 - <bullet 1>
@@ -269,8 +269,8 @@ failures.
 ...
 
 **Items being resolved:**
-- [B07] Timer badge shows stale duration — "<full intent line from TODO>"
-- [F03] Quick-switch projects — "<full intent line from TODO>"
+- [B07] Timer badge shows stale duration — "<full intent line from the item>"
+- [F03] Quick-switch projects — "<full intent line from the item>"
 
 **Relevant project conventions (from KNOWLEDGE.md):**
 - <bullet 1>
@@ -295,7 +295,7 @@ failures.
 
 **Evaluate on the rubric below. For each item, return PASS / CONCERN / FAIL with evidence.**
 
-1. **Intent match** — does the diff deliver what the TODO entries promise? Anything missing, anything scope-creeping?
+1. **Intent match** — does the diff deliver what the backlog items promise? Anything missing, anything scope-creeping?
 2. **Convention compliance** — does the diff respect the bullets from KNOWLEDGE.md? Any regressions on captured gotchas?
 3. **Obvious quality** — dead code, error swallowing, untested new branches, security smells, API contract breaks, performance cliffs. Not a full code review; focus on things the user would regret after merge.
 4. **Stale scaffolding** — for each entry in `**Possible stale scaffolding:**`, judge whether the matched line is a leftover *Task N* / *placeholder* / *not yet wired* / *added later* / *in flight* annotation that should have been removed once the corresponding work landed. Flag as CONCERN with the file:line if it reads like leftover scaffolding; PASS-and-skip if it's legitimate prose (e.g., a markdown placeholder section, a docstring describing user-visible "in flight" semantics, an enum value named `placeholder`, or a `Task <N>` mention in a per-task brief or test name). Many matches will be benign — the helper surfaces candidates, not verdicts.

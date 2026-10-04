@@ -125,7 +125,6 @@ exit codes and repo scope: [verb contract](../design/contract/README.md).
 
 | Usage | What it does |
 |---|---|
-| `rota issues list [--mine] [--label <name>] [--limit <n>]` | open upstream issues |
 | `rota issues label <issue> (--add <name> \| --remove <name>)` | add or remove a label on an upstream issue |
 | `rota issues imported [--for-repo <name>] [--open-only]` | backlog items that point at upstream issues |
 | `rota issues close <issue> --commit <sha> [--item <ID>]` | close an upstream issue naming the shipping commit |

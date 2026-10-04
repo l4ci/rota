@@ -10,9 +10,7 @@ The example project is **Pinpoint**, an internal incident dashboard. Node and Re
 flowchart LR
   REPO[(existing repo<br/>+ open GH issues)] --> INIT["rota init"]
   INIT --> SUBS[(.rota/map/<br/>6 subsystem files,<br/>hand-authored)]
-  INIT --> ISSUES["/rota-capture --from-github"]
   INIT --> CAP["/rota-capture"]
-  ISSUES --> BACKLOG[(BACKLOG.md)]
   CAP --> BACKLOG
   BACKLOG --> NEXT["/rota-work"]
   NEXT --> WORK["/rota-work B05<br/>P0 secrets-in-URL"]
@@ -82,39 +80,9 @@ Rule-based alerting. Reads events, evaluates rules, dedups within a window, and 
 
 Run `rota map index` once after writing the files; it pulls each file's `summary:` into the always-on `## Project Map` block in `CLAUDE.md`. The map isn't exhaustive; just enough for the orchestrator to know where to look. After every `/rota-work` cycle, touched subsystems get their `touched:` date bumped automatically and the always-on block is regenerated. When subsystems drift or duplicate later, edit or retire the relevant `.rota/map/<name>.md` files by hand.
 
-## Step 3: /rota-capture --from-github (optional)
+## Step 3: open issues (optional)
 
-If your project has open GitHub or GitLab issues, sync them into `BACKLOG.md` rather than retyping them by hand. Use `--from-github` for GitHub repos, `--from-gitlab` for GitLab.
-
-```bash
-$ /rota-capture --from-github
-```
-
-`rota issues provider` detects whether your origin points at GitHub or GitLab. `rota issues list` fetches open issues from the right provider. `rota issues imported` checks what's already been pulled, so re-running the skill never double-imports. What's left shows up as a multiSelect picker:
-
-```
-Open issues on yourorg/pinpoint:
-  [ ] #14  alert dedup fires twice on rapid escalation
-  [ ] #21  dashboard date filter ignores timezone
-  [ ] #28  Datadog integration drops events when rate-limited
-  [ ] #33  PagerDuty incident link uses old API endpoint
-  [ ] #41  integration config UI accepts secrets in URL query string
-  ...
-```
-
-You pick the five you care about. The rest stay open upstream, untouched. Each picked issue gets a fresh `B##` or `F##` ID, a `GH: #N` cross-reference in its BACKLOG entry, and a detail file at `.rota/{bugs,features}/<ID>.md` linking the upstream URL. Optionally, with explicit consent, an `in-progress` label is applied upstream so collaborators see the issue is claimed.
-
-```
-[B01] alert dedup fires twice on rapid escalation     Bug, P1, Major, GH: #14
-[B02] dashboard date filter ignores timezone          Bug, P1, Major, GH: #21
-[B03] Datadog drops events under rate-limit           Bug, P1, Major, GH: #28
-[B04] PagerDuty incident link uses old API endpoint   Bug, P2, Minor, GH: #33
-[B05] integration config UI accepts secrets in URL    Bug, P0, Major, GH: #41
-```
-
-`/rota-capture` flagged B05 as P0 because it tagged "secrets in URL" as a security category. P0 always jumps the queue in `/rota-work` (no argument).
-
-Round-trip closing is automatic when `/rota-ship` runs: the PR body gets `Closes #N` lines (GitHub auto-closes on merge), or the direct-push path offers a manual-gated `rota issues close` prompt for each resolved upstream issue.
+If your project has open GitHub or GitLab issues, set `backlog.backend` to `"issues"`: the issues already are the backlog, so there is nothing to import. (`/rota-capture --from-github` / `--from-gitlab` was removed.) On the file backend, create an item by hand with `rota item create`, adding a `GH: #N` tag so `/rota-ship` emits `Closes #N`. Round-trip closing runs through `/rota-ship`: the PR body gets `Closes #N` lines, or the direct-push path offers a manual-gated `rota issues close` prompt.
 
 If your project has no remote tracker, skip this step entirely.
 
@@ -173,16 +141,17 @@ Run /rota-work B05? [y/N]
 
 P0 always wins. You confirm.
 
-## Step 6: a hot-path fix that skips the queue (capture hand-off)
+## Step 6: a hot-path fix that skips the queue
 
 Before you commit to B05, you spot a typo in the contributing guide while scanning another file. Too small to queue.
 
 ```bash
 $ /rota-capture "fix typo in CONTRIBUTING.md line 23, 'depencency' → 'dependency'"
-... Work it now? yes
+[T01]
+$ /rota-work T01
 ```
 
-`/rota-capture` mints `[T01]`; accepting the hand-off runs `/rota-work`, which dispatches a worker, lands one commit on a feature branch, merges back. About thirty seconds. Capture and execute in one pass for things too small to queue.
+`/rota-capture` mints `[T01]` and stops; `/rota-work T01` which dispatches a worker, lands one commit on a feature branch, merges back. About thirty seconds. Capture and execute in one pass for things too small to queue.
 
 ## Step 7: the P0 cycle
 
