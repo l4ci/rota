@@ -89,6 +89,11 @@ the model: one Codex model answered `ROTA-BLOCKED` to an unsigned instruction, t
   ([maintainer answers](parallel-rounds.md#maintainer-answers-typed-into-a-pane)). Anyone who can type in
   the pane can use that prefix; it is the one unsigned path left.
 
+The check is a guard against text typed into the pane, not against local processes. The key is not
+secret from the worker or from other processes of the same user, so anything that can read the slot's
+`CODEX_HOME` can sign. What happens when the hook runs past its 30 s timeout is unknown: Codex's behaviour
+there is untested.
+
 To give a Codex worker anything else, send it through `rota worker dispatch --relay` or the assignment
 brief.
 
@@ -100,6 +105,9 @@ brief.
   switching and [usage-limit handling](unattended-rounds.md#usage-limits) apply to Claude slots.
 - **Version pin.** A Codex update outside 0.159.x blocks `assign` until rota's range moves or you pass
   `--accept-codex-version`.
+- **The prompt check is unverified on an accepted version.** It was verified on 0.159.2. An older Codex may
+  ignore `-c features.hooks=true`, so with `--accept-codex-version` rota warns `prompt check unverified on
+  this Codex` and unsigned pane text may reach the worker.
 
 ## Check it
 
