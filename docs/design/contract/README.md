@@ -80,7 +80,8 @@ Field types use JSON names (`string`, `number`, `bool`, `object`, `[]string`). `
 | doctor | `doctor` (C6; D1 adds `statusline` and `stop-hook` checks) | C6, D1 |
 | statusline | `dump` (D1) | D1 |
 | hook | `stop`, `session-start`, `install`, `uninstall` (D1) | D1 |
-| keepalive | `run`, `status` (D2) | D2 |
+| keepalive | `run`, `status` (D2); `run --first-prompt` (#19) | D2 |
+| orchestrate | `orchestrate` (#19) | C11 |
 | limit | `watch`, `status` (D3) | D3 |
 | reap | `reap` (C6) | C6 |
 

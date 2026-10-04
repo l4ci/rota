@@ -250,7 +250,9 @@ func run(root *Command, args []string, stdin io.Reader, stdout, stderr io.Writer
 	g.register(pre, true, false)
 	cmd := root
 	i := 0
-	for ; i < len(args) && (cmd.Verb == nil || descends(cmd, args[i])); i++ {
+	// The root has a verb of its own (bare rota), yet global flags still come
+	// before the command word.
+	for ; i < len(args) && (cmd.Verb == nil || descends(cmd, args[i]) || (cmd == root && isFlag(args[i]))); i++ {
 		tok := args[i]
 		switch {
 		case tok == "--":
