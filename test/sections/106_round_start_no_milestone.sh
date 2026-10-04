@@ -44,3 +44,10 @@ OUT=$(nm round start --holder-pid "$HOLD" --slots 1 --scope slate --items F01) |
 case "$(echo "$OUT" | jget data.empty.reason)" in *"held"*) ;; *) fail "all-held candidates should say why: $OUT" ;; esac
 case "$(echo "$OUT" | jget data.empty.next)" in *"round status"*) ;; *) fail "all-held candidates should name round status: $OUT" ;; esac
 pass "an all-held candidate list says why"
+
+# --accept-open-pr is a known assign flag (file mode has no PRs, so it changes nothing here):
+# the one slot is busy, so the refusal is the slot's, not a usage error for the flag.
+RC=0; OUT=$(nm round assign F02 --holder-pid "$HOLD" --accept-open-pr) || RC=$?
+[ "$RC" = "4" ] && [ "$(echo "$OUT" | jget data.blockedBy)" = "no free slot" ] \
+  || fail "assign --accept-open-pr should parse and reach the slot check: rc=$RC $OUT"
+pass "assign accepts --accept-open-pr"

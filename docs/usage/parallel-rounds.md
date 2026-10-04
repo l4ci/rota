@@ -195,6 +195,9 @@ issue to read and dispute, the siblings and the decisions from `--body-file`.
   [Codex workers](codex-workers.md).
 - **Overlap.** `--accept-overlap` skips the file-overlap check only. Say which PR merges first in
   the second worker's brief.
+- **Open PR.** An issue an open PR already resolves (head branch `<agent>/<issue>-*` or `Closes #N`)
+  is `not ready: open PR #M` in `round candidates`, and `assign` refuses it. `--accept-open-pr`
+  assigns it again for a deliberate redo.
 - **Failure.** A failure before dispatch undoes the claim and state; one at or after dispatch keeps
   them, and repeating the call resumes.
 

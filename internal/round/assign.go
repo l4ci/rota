@@ -32,6 +32,7 @@ const (
 	BlockNotReady     = "not ready"
 	BlockOverlap      = "overlap"
 	BlockClaimed      = "claimed"
+	BlockOpenPR       = "open PR"
 	BlockSlotBusy     = "slot busy"
 	BlockNoFreeSlot   = "no free slot"
 	BlockBriefMissing = "brief missing"
@@ -58,9 +59,11 @@ type AssignOpts struct {
 	Siblings      []string
 	CheckOnly     bool
 	AcceptOverlap bool
-	HolderPID     int
-	Settings      roundcfg.Settings
-	Getenv        func(string) string
+	// AcceptOpenPR lets a deliberate redo through an issue an open PR resolves.
+	AcceptOpenPR bool
+	HolderPID    int
+	Settings     roundcfg.Settings
+	Getenv       func(string) string
 	// Tier, TierReason and Kind are C9: "" means round.tier, no reason, and
 	// the slot's recorded kind, else claude.
 	Tier, TierReason, Kind string
@@ -369,6 +372,16 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 
 	if q := reg.QueuedIssue(id); q != nil && !resuming {
 		return res, blocked(BlockClaimed, "%s has PR %s in review (from %s): rota round transfer %s --to <slot> picks it up", id, worker.Str(q, "pr"), worker.Str(q, "from"), id)
+	}
+
+	if !resuming && !o.AcceptOpenPR {
+		openPR, err := e.openPRIssues(ctx, be)
+		if err != nil {
+			return res, err
+		}
+		if n := openPR[it.Number]; n != 0 {
+			return res, blocked(BlockOpenPR, "%s has open PR #%d: not ready; --accept-open-pr assigns it again for a deliberate redo", id, n)
+		}
 	}
 
 	// 4. Readiness.
