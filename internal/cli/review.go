@@ -7,10 +7,12 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
 
+	"github.com/l4ci/rota/internal/artifact"
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/git"
@@ -30,7 +32,9 @@ func reviewCommands() *Command {
 
 type reviewCommit struct{ Hash, Subject string }
 
-type reviewIntent struct{ ID, Title, Entry string }
+// reviewIntent is one resolved item; Type is "" when unknown (issue mode
+// with a failed lookup never gets here).
+type reviewIntent struct{ ID, Title, Entry, Type string }
 
 // reviewInfo is what review scope reports about a branch.
 type reviewInfo struct {
@@ -71,8 +75,9 @@ func nonBlankLines(s string) []string {
 
 // reviewScan reads the branch's commits, files and origin entries
 // (hv-review-scope). The caller has checked that the branch is not the base.
-func reviewScan(ctx context.Context, t branchTarget) (reviewInfo, error) {
+func reviewScan(c *Ctx, t branchTarget) (reviewInfo, error) {
 	info := reviewInfo{Branch: t.Branch, Base: t.Base, Commits: []reviewCommit{}, Files: []string{}, IDs: []string{}, Intents: []reviewIntent{}}
+	ctx := c.Context()
 	span := t.Base + ".." + t.Branch
 	logOut, err := reviewGit(ctx, t.Dir, "log", "--no-merges", "--format=%h%x1f%s", span)
 	if err != nil {
@@ -99,16 +104,48 @@ func reviewScan(ctx context.Context, t branchTarget) (reviewInfo, error) {
 	if err != nil {
 		return info, err
 	}
+	if artifact.IssueMode(t.CorpusRoot) {
+		reviewScanIssues(c, t, bodies, &info)
+		return info, nil
+	}
 	if ids := backlog.FindItemIDs(bodies, backlog.ItemLetters); ids != nil {
 		info.IDs = ids
 	}
 	corpus := (&backlog.File{Root: t.CorpusRoot}).Corpus()
 	for _, id := range info.IDs {
 		if line, title, ok := backlog.FindOrigin(corpus, id); ok {
-			info.Intents = append(info.Intents, reviewIntent{id, title, line})
+			info.Intents = append(info.Intents, reviewIntent{id, title, line, id[:1]})
 		}
 	}
 	return info, nil
+}
+
+// reviewScanIssues fills info.IDs and info.Intents from the "#N" refs of the
+// branch name and the commits' closing keywords. A ref the tracker cannot
+// resolve (offline, unknown) stays in IDs without an intent.
+func reviewScanIssues(c *Ctx, t branchTarget, bodies string, info *reviewInfo) {
+	var ids []string
+	if r := backlog.BranchIssueRef(t.Branch); r != "" {
+		ids = append(ids, r)
+	}
+	for _, r := range backlog.FindIssueRefs(bodies) {
+		if !slices.Contains(ids, r) {
+			ids = append(ids, r)
+		}
+	}
+	if ids == nil {
+		return
+	}
+	info.IDs = ids
+	be, err := a4Open(c, t.CorpusRoot, false, "")
+	if err != nil {
+		return
+	}
+	for _, id := range ids {
+		if it, err := be.Get(id); err == nil && it != nil {
+			info.Intents = append(info.Intents, reviewIntent{id, it.Title, it.Line, it.Type})
+		}
+	}
 }
 
 // reviewTarget resolves the branch and refuses the base branch; what is the
@@ -129,7 +166,7 @@ func reviewScope(c *Ctx, args []string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	info, err := reviewScan(c.Context(), t)
+	info, err := reviewScan(c, t)
 	if err != nil {
 		return Result{}, err
 	}
@@ -143,7 +180,11 @@ func reviewScope(c *Ctx, args []string) (Result, error) {
 		if in.Title != "" {
 			title = in.Title
 		}
-		intents = append(intents, gitObj("id", in.ID, "type", in.ID[:1], "title", title, "entry", in.Entry))
+		var typ any
+		if in.Type != "" {
+			typ = in.Type
+		}
+		intents = append(intents, gitObj("id", in.ID, "type", typ, "title", title, "entry", in.Entry))
 	}
 	data := gitObj("branch", info.Branch, "base", info.Base, "commitCount", len(info.Commits), "commits", commits,
 		"touchedFiles", info.Files, "referencedIds", info.IDs, "intents", intents)
@@ -162,7 +203,7 @@ func reviewBrief(c *Ctx, args []string) (Result, error) {
 		return Result{}, err
 	}
 	ctx := c.Context()
-	info, err := reviewScan(ctx, t)
+	info, err := reviewScan(c, t)
 	if err != nil {
 		return Result{}, err
 	}
@@ -188,7 +229,11 @@ func reviewBrief(c *Ctx, args []string) (Result, error) {
 			if title == "" {
 				title = "None" // the old f-string printed the Python None
 			}
-			p(fmt.Sprintf("- [%s] %s — %s", in.ID, title, in.Entry))
+			label := "[" + in.ID + "]"
+			if strings.HasPrefix(in.ID, "#") {
+				label = in.ID
+			}
+			p(fmt.Sprintf("- %s %s — %s", label, title, in.Entry))
 		}
 	} else {
 		p("- (no linked TODO items — judge against commit subjects only)")

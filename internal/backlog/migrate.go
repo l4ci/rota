@@ -729,10 +729,9 @@ func (m *migrator) run() (bool, error) {
 	return true, nil
 }
 
-// adopt maps an item that already has a tracker issue (a `GH: #N` tag from
-// /rota-capture --from-github) onto it instead of creating a duplicate. Only
-// the type and size or priority labels are added; the issue keeps its own
-// title and body, and the notes and Related rewrites of phase 3 run on it.
+// adopt maps an item that already has a tracker issue (a `GH: #N` tag) onto
+// it instead of creating a duplicate. Only the type and size or priority
+// labels are added; the issue keeps its own title and body, and the notes and Related rewrites of phase 3 run on it.
 func (m *migrator) adopt(it *migItem) error {
 	old, n := it.id, it.adopt
 	labels := m.labelNames(it)
