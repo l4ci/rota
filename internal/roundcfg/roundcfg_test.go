@@ -157,3 +157,19 @@ func TestArchitectureKeys(t *testing.T) {
 		}
 	}
 }
+
+func TestAutopilotKeys(t *testing.T) {
+	s, err := Load(project(t, `{}`))
+	if err != nil || s.Autopilot || s.AutopilotCap != 3 {
+		t.Fatalf("defaults: %+v %v", s, err)
+	}
+	s, err = Load(project(t, `{"round":{"autopilot":true,"autopilotCap":1}}`))
+	if err != nil || !s.Autopilot || s.AutopilotCap != 1 {
+		t.Fatalf("overrides: %+v %v", s, err)
+	}
+	for _, bad := range []string{`{"round":{"autopilot":"yes"}}`, `{"round":{"autopilotCap":-1}}`} {
+		if _, err := Load(project(t, bad)); err == nil {
+			t.Errorf("%s should be refused", bad)
+		}
+	}
+}
