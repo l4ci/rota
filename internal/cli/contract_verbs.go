@@ -158,6 +158,7 @@ var contractVerbs = []string{
 	"round return",
 	"round start",
 	"round status",
+	"round tick",
 	"round transfer",
 	"round wait",
 	"round watch",

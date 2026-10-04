@@ -232,6 +232,27 @@ orchestrator go idle while workers are active and no watch is running, and the p
 one-line digest of the round (and a reminder when no watch is armed) to every message you send.
 Neither applies to a solo round, which has no panes to watch.
 
+## Autopilot
+
+Off by default. With `round.autopilot` on, `rota round watch --autopilot` (or one pass of
+`rota round tick`) does the mechanical steps of a round, so you spend judgment on what is left:
+
+1. repair the safe drift (`reconcile --apply`);
+2. gate and merge every finished PR, as one `worker train` when several wait, at most
+   `round.autopilotCap` (default 3) per tick, and only under `ship.mergeApproval: none`;
+3. assign the first ready candidate of the round's scope to each idle slot, at most
+   `round.autopilotCap`, at the default tier and never with `--accept-overlap`.
+
+It never answers a worker, approves a permission, picks a higher tier, reclaims a slot or merges
+without a passing gate. A blocked, limited or dead slot, a failed gate, drift it will not repair and
+any merge a policy sends to a person come back in `needsYou`. The watch wakes you only for an item you
+have not seen, at the heartbeat, or when the autopilot stops (a wind-down or a lost lease). A gate that
+failed for a reason a person must clear is held, not re-run on every tick. Every action is one line in
+`.rota/gate-audit.jsonl` with `"gate": "autopilot"`.
+
+The watch is the autopilot's heartbeat: keep exactly one running, as above. The scope you chose at
+`round start` bounds what it assigns; start a `slate` round to keep it to issues you picked.
+
 ## PRs in review
 
 A worker that opened its PR is finished with its slot. When `assign` (or `transfer --to`) needs a

@@ -9,6 +9,8 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
+	"github.com/l4ci/rota/internal/roundlease"
+	"github.com/l4ci/rota/internal/roundtick"
 )
 
 // The C3 verb `rota round wind-down`; the steps are round.Env.WindDown.
@@ -58,9 +60,26 @@ func roundWindDown(fs *flag.FlagSet) RunFunc {
 		}
 		env := roundEnv(ctx, root)
 		env.Worker = workerEnvCtx(ctx)
+		// An autopilot watch must not assign or merge while the base is being
+		// re-verified; a kept lease lets it resume.
+		var cd string
+		var rnd int
+		if d, err := roundlease.CommonDir(root); err == nil {
+			if l, _, err := watchEnv().Read(d); err == nil {
+				cd, rnd = d, l.Round
+				_ = roundtick.SetStopped(cd, rnd, true)
+			}
+		}
 		res, err := env.WindDown(ctx, root, board, round.WindDownOpts{
 			NoVerify: *noVerify, HolderPID: *pid, Settings: set, Getenv: os.Getenv,
 		})
+		if cd != "" {
+			if err != nil || res.Retained {
+				_ = roundtick.SetStopped(cd, rnd, false)
+			} else {
+				roundtick.ClearState(cd)
+			}
+		}
 		if err != nil {
 			return Result{}, fromWorker(err)
 		}
