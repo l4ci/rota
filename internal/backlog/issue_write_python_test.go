@@ -12,7 +12,7 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/backlog/trackertest"
-	"github.com/l4ci/rota/internal/pytest"
+	"github.com/l4ci/rota/internal/golden"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
@@ -442,7 +442,7 @@ func TestIssueWritesMatchPython(t *testing.T) {
 		scen = append(scen, s)
 	}
 	var want []map[string]any
-	pytest.GoldenJSON(t, scen, &want)
+	golden.GoldenJSON(t, scen, &want)
 
 	steps, bad := 0, 0
 	for i, s := range scen {

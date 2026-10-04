@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/l4ci/rota/internal/pytest"
+	"github.com/l4ci/rota/internal/golden"
 )
 
 type kase struct {
@@ -103,8 +103,8 @@ func TestMatchesPython(t *testing.T) {
 		got[i], inputs[i] = goResult(c), c
 	}
 	var want []any
-	pytest.GoldenJSON(t, cases, &want)
-	n := pytest.Compare(t, "section", inputs, got, want)
+	golden.GoldenJSON(t, cases, &want)
+	n := golden.Compare(t, "section", inputs, got, want)
 	t.Logf("compared %d cases (find, body, replace, append, topics)", n)
 }
 

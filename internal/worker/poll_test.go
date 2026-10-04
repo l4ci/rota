@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/l4ci/rota/internal/pytest"
+	"github.com/l4ci/rota/internal/golden"
 )
 
 // paneFixtures are static pane texts covering every rule of the classifier,
@@ -46,7 +46,7 @@ var paneFixtures = map[string]string{
 func TestClassify(t *testing.T) {
 	statuses := []string{"", "idle", "working", "blocked", "done", "unknown", "gone"}
 	var want map[string][2]string // "<pane>/<status>" -> state, evidence
-	pytest.Golden(t, map[string]any{"panes": paneFixtures, "statuses": statuses, "argv": "--fixture <pane> --slot w1 [--status <status>]"}, &want)
+	golden.Golden(t, map[string]any{"panes": paneFixtures, "statuses": statuses, "argv": "--fixture <pane> --slot w1 [--status <status>]"}, &want)
 	for name, text := range paneFixtures {
 		for _, status := range statuses {
 			t.Run(name+"/"+status, func(t *testing.T) {

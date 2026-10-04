@@ -11,7 +11,7 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/backlog/trackertest"
-	"github.com/l4ci/rota/internal/pytest"
+	"github.com/l4ci/rota/internal/golden"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
@@ -100,7 +100,7 @@ type reviewWant struct {
 func reviewCheck(t *testing.T, plain, umb string, calls []reviewCall) []map[string]any {
 	t.Helper()
 	var want []reviewWant
-	pytest.Golden(t, calls, &want)
+	golden.Golden(t, calls, &want)
 	out := make([]map[string]any, len(calls))
 	for i, c := range calls {
 		dir := plain
@@ -185,7 +185,7 @@ func TestReviewBriefParity(t *testing.T) {
 		{true, []string{"review", "brief", "--repo", "svc", "feat/x"}},
 	}
 	var texts []string
-	pytest.Golden(t, runs, &texts)
+	golden.Golden(t, runs, &texts)
 	for i, c := range runs {
 		dir := plain
 		if c.Umb {
@@ -257,7 +257,7 @@ func TestReviewScaffoldingParity(t *testing.T) {
 
 	// Text mode is the retired helper's stdout.
 	var want string
-	pytest.Golden(t, []string{"review", "scaffolding", "feat/x"}, &want)
+	golden.Golden(t, []string{"review", "scaffolding", "feat/x"}, &want)
 	o := trRun(t, plain, "", "review", "scaffolding", "feat/x")
 	if o.code != 0 || o.stdout != want {
 		t.Errorf("text differs\n--- go\n%q\n--- golden\n%q", o.stdout, want)
