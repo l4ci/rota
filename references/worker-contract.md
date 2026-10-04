@@ -1,10 +1,10 @@
 # Worker contract
 
-Used by `/rota-work` Steps 6 and 7 when `work.dispatch` is `"tmux"` or `"herdr"`. The standing brief every dispatched worker reads, and the provenance rules that keep an approval citable. Host mechanics live in [`tmux-dispatch.md`](tmux-dispatch.md) and [`herdr-dispatch.md`](herdr-dispatch.md); neither repeats this file.
+Used by `/rota-orchestrate` rounds (`rota round assign` hands it over by pointer). The standing brief every dispatched worker reads, and the provenance rules that keep an approval citable. Host mechanics live in [`tmux-dispatch.md`](tmux-dispatch.md) and [`herdr-dispatch.md`](herdr-dispatch.md); neither repeats this file.
 
 ## The standing contract
 
-A worker boots with **none** of the orchestrator's context: no conversation, no loaded KNOWLEDGE, no plan. Everything it needs is in the brief. `rota worker dispatch` signs the brief (see *Provenance*); `/rota-work` Step 6 prepends this contract to the task brief on every dispatch. The brief body itself is identical to the subagent path, same `**Claims to verify**` section and all.
+A worker boots with **none** of the orchestrator's context: no conversation, no loaded KNOWLEDGE, no plan. Everything it needs is in the brief. `rota worker dispatch` signs the brief (see *Provenance*), and a round's assignment points the worker here.
 
 ```
 You are a worker on <task-id>, running in your own worktree as slot <slot>.
@@ -24,7 +24,7 @@ Work only this task, then stop.
 - Stay in your worktree. Confirm `pwd` before editing and use worktree-rooted
   paths — an absolute path under the main checkout silently edits the WRONG tree.
 - Stage explicit paths. Never `git add -A` or `git add .`.
-- Commit your own work, then open a PR against `<cycle-branch>`. Never merge.
+- Commit your own work, then open a PR against `<base-branch>`. Never merge.
 - Run TARGETED verification only — the files you touched. The full suite is the
   orchestrator's gate on the merged tree. Several workers running full suites at
   once starve the CPU and turn time-budgeted tests into false reds, which costs

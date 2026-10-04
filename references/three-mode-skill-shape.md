@@ -9,7 +9,7 @@ The pair shares the **mode skeleton** but diverges on every axis where the artif
 Every three-mode skill in this family has:
 
 1. **First-run mode** — interactive scaffold of the canonical artifact. Skill detects an empty/missing target (`<docs.path>/` absent or empty; `.rota/qa/<target>.md` missing), inspects the project to form a hypothesis, proposes a structure, and writes only after explicit user approval (`AskUserQuestion` with a `(Recommended)` option). Never auto-scaffolds.
-2. **After-work / run mode** — for Docs Mode, auto-invoked from `/rota-work` (and `/rota-ship`) post-cycle when the cycle's diff touches user-facing surface; reads what changed, maps changes to entries in the artifact, and either proposes edits behind an approval gate or writes them directly. For `/rota-qa`, `run` mode executes the strategy declared in `.rota/qa/<target>.md` and emits a verdict; it does not edit the artifact itself.
+2. **After-work / run mode** — for Docs Mode, auto-invoked from `/rota-ship` post-cycle when the cycle's diff touches user-facing surface; reads what changed, maps changes to entries in the artifact, and either proposes edits behind an approval gate or writes them directly. For `/rota-qa`, `run` mode executes the strategy declared in `.rota/qa/<target>.md` and emits a verdict; it does not edit the artifact itself.
 3. **Audit/restructure mode** — interactive on-demand reorganization. Surfaces staleness, duplicates, broken commands, and dead strategies; proposes merges, archives, or fixes; applies only on user confirmation.
 
 Both modes regenerate a managed CLAUDE.md block via an index helper after writing, so read-side skills consult an always-on summary.
@@ -44,6 +44,6 @@ Skills that import / generate / one-shot transform (e.g., `/rota-release` cuts a
 
 ## See also
 
-- `references/post-cycle-trigger-gate.md` — the shared `2+/5+/hard-bug` trigger used by Docs Mode after-work (and by `/rota-work` and `/rota-ship` for the post-cycle `/rota-learn` and `/rota-ship --docs` dispatches).
+- `references/post-cycle-trigger-gate.md` — the shared `2+/5+/hard-bug` trigger used by Docs Mode after-work (and by `/rota-ship` for its post-cycle `/rota-learn` and docs steps; `/rota-work` only nudges).
 - `references/authoring-conventions.md` — the Tier S/C distinction that explains the authoring tier picks above.
 - `references/persistence-skills.md` — the persistence duo (`/rota-learn` for topic bullets and `--term` Glossary entries, plus `/rota-decide`) shares a different spine. Persistence skills capture one entry at a time; three-mode skills curate a body of entries over time. The two families don't overlap.
