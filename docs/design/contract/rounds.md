@@ -25,6 +25,18 @@ note: no `ROTA_TEST_*` hooks. The smoke section drives a fake `herdr` binary plu
 - **Safe repairs** (`reconcile --apply` only, each additive or derived): `dead-tab` clears `handle` and sets `state` to `dead`; `unregistered-worktree` registers the slot; `pr-unrecorded` records `pr`; `label-missing` adds `in-progress`. Never repaired: `unclaimed-tab` (a tab may be a live worker), `branch-no-pr` (opening a PR is the worker's act), `pr-stale` and `label-orphan` (resetting a slot and removing the label are the orchestrator's calls, `worker.md`).
 - **Host snapshot.** herdr: `herdr api snapshot` (pin 0.9.x), reading `agents[]` (`tab_id`, `cwd`, `agent_status`, `name`). tmux: `tmux list-windows` with the pane's current path. Both sit behind a new optional `host.Snapshotter`, in `internal/host/snapshot.go`; the `Host` interface does not change.
 
+### rota round watch
+rota round watch [--heartbeat <seconds>] [--poll <seconds>] [--forge-poll <seconds>] [--settle <seconds>] [--lines <n>]
+repo: none
+data: {"reason": "slot" | "change" | "heartbeat" | "interrupt", "waited": number, "round": number, "slot"?: string, "state"?: string, "evidence"?: string, "source"?: string, "changes": [{"key": string, "from": string, "to": string}], "digest": string}
+exit: 2 when `--heartbeat` or `--poll` is not positive, `--forge-poll` or `--settle` is negative, or a positional argument is given; 4 when another watch is already running for this repo (`rota round watch` keeps exactly one); 5 under a solo round (no panes to watch) or when the host is unavailable
+old: none (new in #81)
+note: `round wait` for a session that must stay free. It is written to run as a background command: the harness wakes the orchestrator when the process exits, and the orchestrator re-arms it. It exits 0 with what happened: `slot` (a watched slot needs attention, the `round wait` verdict, same `seen` bookkeeping), `change` (a registry or forge entry moved, see below), `heartbeat` (nothing happened for `--heartbeat` seconds, default 600) or `interrupt` (SIGINT/SIGTERM). The heartbeat is what keeps an orchestrator from going quiet for good: it wakes however little happened.
+note: `change` entries are the snapshot keys that differ from the start of the watch: `pr/<slot>` (the slot's recorded PR), `escalation/<id>` (the stored status), and, from the forge every `--forge-poll` seconds (default 120, `0` never asks), `pr/state/<slot>` (PR state from `round status`) and `escalation/status/<id>` (derived status after `round escalate check` has stored any answer). A slot's own state is reported through `slot` only, so the orchestrator's `assign` does not wake the watch it just armed. Checks and review status of a PR are not in `round status` and are not watched (follow-up).
+note: one at a time. The process writes `<git-common-dir>/rota/round-watch.json` (`pid`, `start`, `host`, `startedAt`, `heartbeatSeconds`) under a lock and removes it on exit; a marker whose process is gone is replaced. A second `round watch` exits 4. The Stop and prompt hooks read the marker.
+note: with no slot to watch (all idle) the verb still runs: it waits out the interval on the registry and the forge, so an answered escalation wakes an orchestrator whose workers are all parked. Each wait covers one classification (`--poll` plus `--settle` plus 2s), so a heartbeat can run a few seconds past its interval.
+note: no `ROTA_TEST_*` hooks. The smoke section (108) uses `test/fakes/tmux` with a churning pane.
+
 ### rota round status
 rota round status
 repo: none
