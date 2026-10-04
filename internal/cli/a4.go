@@ -49,7 +49,7 @@ var a4ReadOnlyVerbs = map[string]bool{
 	"backlog list": true, "backlog ids": true, "backlog milestones": true, "backlog drift": true,
 	"backlog stale": true, "summary": true,
 	"issues imported": true, "issues provider": true,
-	"status show": true, "status handoff": true, "status loop show": true,
+	"status show": true, "status handoff": true,
 	"refactor age": true, "refactor targets": true,
 }
 

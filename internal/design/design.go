@@ -37,7 +37,7 @@ func notFound(root, id string) *artifact.Error {
 }
 
 // Add creates the design stub; an existing design is exit 4.
-func Add(root, id, title string, opts ...Option) error {
+func Add(root, id, title string) error {
 	if err := check(id); err != nil {
 		return err
 	}
@@ -46,7 +46,7 @@ func Add(root, id, title string, opts ...Option) error {
 		if _, err := os.Stat(p); err == nil {
 			return artifact.Errf(artifact.ExitRefused, ".rota/designs/%s.md already exists", id)
 		}
-		stub := stubText(id, title, time.Now().Format("2006-01-02"), collect(opts))
+		stub := stubText(id, title, time.Now().Format("2006-01-02"))
 		return fsio.WriteFileAtomic(p, []byte(stub))
 	})
 }

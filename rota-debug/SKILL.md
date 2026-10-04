@@ -14,7 +14,7 @@ Read `.rota/config.json`:
 - `models.orchestrator` — model for hypothesis + verification (default `opus`)
 - `models.worker` — model for the fix agent (default `sonnet`)
 - `work.isolation` — `"branch"` (default) or `"worktree"`
-- `autonomy.level` — `"off"` (default), `"auto"`, or `"loop"`. Controls whether Step 11 (Next move) and Step 12 (Learn) ask vs. invoke directly.
+- `autonomy.level` — `"off"` (default) or `"auto"`. Controls whether Step 11 (Next move) and Step 12 (Learn) ask vs. invoke directly.
 - `debug.competingHypotheses` — `false` (default) or `true`. When `true`, Step 6 fans out 3 parallel hypothesis agents from different angles instead of dispatching one.
 - The Iron Law count is per item, in `.rota/verdicts.json` (`rota debug verdict` records each outcome); a new branch or session does not reset it. The attempt log for `rota debug counter summary` persists at `.rota/debug/<session>.json` (session = current branch with `/` → `-`); both survive `/clear` and session resumption.
 
@@ -250,11 +250,7 @@ Then surface — do NOT dispatch a fresh-context worker (Step 7.5's escalation b
 
 Do NOT call `rota status rm` here — the branch and status entry stay so the user can resume. Do NOT call `rota item complete` — the bug is not fixed.
 
-This is a terminal path. Surface any `[Auto:Loop]` decisions before halting:
-
-Surface any `[Auto:Loop]` decisions per `references/terminal-loop-surface.md` (silent when empty).
-
-Loop mode (`autonomy.level == "loop"`): the Iron Law breaks the loop. Do not auto-dispatch `/rota-work` (no argument) or any continuation skill. The loop stops here; the user re-engages by hand.
+This is a terminal path. At any autonomy level, do not auto-dispatch `/rota-work` (no argument) or any continuation skill; the user re-engages by hand.
 
 ## Step 10 — Mark Complete
 
@@ -316,7 +312,7 @@ Branch on `autonomy.level`:
     1. "Ship via `/rota-ship` (Recommended)" — *"Run the review gate and integrate."*
     2. "Keep working on the branch" — *"Stay on the branch to add more fixes."*
     3. "Stop here" — *"Leave the branch; come back later."*
-- `"auto"` or `"loop"` — **dispatch `rota-ship` via `Skill` with the current branch immediately — no prompt, no confirmation.** (`ship.review` still governs the review gate.)
+- `"auto"` — **dispatch `rota-ship` via `Skill` with the current branch immediately — no prompt, no confirmation.** (`ship.review` still governs the review gate.)
 
 ## Step 12 — Learn (Nudge or Auto-Invoke)
 
@@ -325,7 +321,7 @@ Trigger: the root cause was **not obvious from reading the code alone** — requ
 Branch on `autonomy.level`:
 
 - `"off"` — nudge *"Capture this gotcha? Run `/rota-learn` to save the root cause before context fades."*
-- `"auto"` or `"loop"` — **dispatch `rota-learn` via `Skill` immediately — no prompt, no confirmation.** Pass a brief naming the bug ID, root cause, and subsystem so the captured entry lands in the right topic.
+- `"auto"` — **dispatch `rota-learn` via `Skill` immediately — no prompt, no confirmation.** Pass a brief naming the bug ID, root cause, and subsystem so the captured entry lands in the right topic.
 
 
 - **Update project map.** If the fix touched files belonging to a known subsystem (`.rota/map/<name>.md` whose `Key files / dirs` or `Entry points` overlap the changes), bump `touched:` to today in that file's frontmatter and run `rota map index`. Stage with the cycle's final commit. Skip silently when no map entry matches.

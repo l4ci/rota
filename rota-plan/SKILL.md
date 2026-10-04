@@ -7,10 +7,7 @@ description: Write an implementation plan as a first-class artifact before execu
 
 Write a plan to disk that the user signs off on before `/rota-work` runs. The plan is keyed under a milestone and a slice or backlog item — `M01-S01` for a slice, `M01-B07` for a single backlog item that warrants its own plan. On the issue backend a plan is a note on the item's issue (a slice plan, `plan:SNN`, lives on the milestone's tracking issue); on the file backend it is `.rota/plans/<key>.md`.
 
-`/rota-plan` runs in one of two modes:
-
-- **Interactive (default)** — the user redlines via `AskUserQuestion` + free-text iteration. Used in off/auto autonomy.
-- **`--auto-loop`** — invoked exclusively from `/rota-work` Step 4 when `autonomy.level == "loop"` and the dispatch site decides a plan is needed. Suppresses `AskUserQuestion` entirely; runs the auto-resolution pipeline (see `## Auto-loop mode` below); logs each fresh pick into `DECISIONS.md` as an `[Auto:Loop]` entry; surfaces unresolved open questions as `_(Unresolved — surfaced for review)_` placeholders in the written plan. Off and auto autonomy modes never invoke this — they always surface open questions through `AskUserQuestion`.
+The user redlines via `AskUserQuestion` + free-text iteration.
 
 ## Step 1 — Task list
 
@@ -63,8 +60,6 @@ DECISIONS matches are committed boundaries the plan must respect. If the plan wo
 
 ## Step 4 — Propose the Plan
 
-**Under `--auto-loop`**, skip "Propose"/"Iterate" semantics entirely: run the auto-resolution pipeline below for every open question, build the final plan markdown directly, then go to Step 6. No AskUserQuestion call fires anywhere in the run. See `## Auto-loop mode` below for the pipeline.
-
 Output the plan as plain markdown — not yet committed to disk. Required sections:
 
 - **Goal** — one sentence, what shipping this means
@@ -88,8 +83,6 @@ Rules for the plan:
 - **List open questions you'd resolve mid-flight.** If they should be answered before `/rota-work` runs, ask now.
 
 ## Step 5 — Iterate
-
-**Skipped under `--auto-loop`** — the auto-resolution pipeline already produced the final plan. Proceed directly to Step 6.
 
 The user redlines. Common edits:
 
@@ -146,9 +139,6 @@ Read `--json` `data.valid` and `data.mismatches` (`path`, `targetRepo`, `issue`,
   ```
 
   Then proceed to Step 7. The validator is advisory — false positives (e.g. a task earlier in the plan creates the doc home before the doc deliverable lands) are the user's call to dismiss in review.
-
-**Under `--auto-loop`**, warnings ride the standard placeholder pipeline (`## Auto-loop mode` → step 3): the open question lands in the plan literally with `_(Unresolved — surfaced for review)_` appended, so the post-cycle review catches it.
-
 ## Step 7 — Report
 
 Compact summary:
@@ -166,36 +156,6 @@ Next: /rota-work M01-B07 to execute, or /rota-work --preview M01-B07 to peek bef
 Include `Repo: <names>` only when the plan was tagged with a sub-repo (item targets with `Repos:` under umbrella mode). Render multi-repo plans with the joined list — e.g. `Repo: web, api`. Slice and milestone plans omit the line entirely.
 
 If `/rota-work` is the natural next step and the user is ready, offer it as a one-line prompt rather than just printing the hint.
-
-## Auto-loop mode
-
-Activated by the `--auto-loop` flag. Invoked exclusively by `/rota-work` Step 4 in loop mode when no plan exists for a Major + Milestone-tagged item — see `/rota-work`'s Step 4 dispatch directive for the trigger conditions and the inline `Skill`-tool dispatch language. This section describes the run shape once the flag is set; the dispatch decision lives at `/rota-work`'s call site (per the authoring-conventions rule "Imperative rules in autonomy-aware steps must live inline at every dispatch point" convention).
-
-**Orchestrator-model contract.** `--auto-loop` makes design picks autonomously (no `AskUserQuestion`), so it depends on orchestrator-grade design judgment. The contract: this skill is invoked via the `Skill` tool from `/rota-work` Step 4, which loads it inline in `/rota-work`'s session. Since `/rota-work` runs under `models.orchestrator` (per `.rota/config.json`, default `opus`), `--auto-loop` inherits that model. If a future change moves the dispatch to the `Agent` tool, the call site MUST explicitly pass `model: orchestrator` (resolved from `.rota/config.json`) — running `--auto-loop` under the worker model would push design picks onto an execution-tuned model and degrade plan quality. The interactive (default) mode has no such constraint; it can run under any model since the user redlines via `AskUserQuestion`.
-
-### Pipeline
-
-For each open question the orchestrator would normally surface to the user, run three steps in order:
-
-1. **Local-first.** Grep `DECISIONS.md` / `MILESTONES.md` / `KNOWLEDGE.md` via `rota decisions query` / `rota knowledge query` on the question's topic keywords. If a matching commitment exists, the answer is "honor the existing commitment" — do **not** log a new `[Auto:Loop]` entry; the existing commitment IS the record.
-2. **Bounded web (opt-in).** If unmatched AND the question references an external library, API, or protocol (anything outside the F14 rota surface scan: `/rota-(\w+)`, `rota <verb>` calls, `.rota/*` artifacts), AND `loop.webResearch == true` in `.rota/config.json` (default `false`), call `WebSearch` with a budget of **2 queries per question, 6 queries per plan**. Block on results; no async fetch.
-3. **Placeholder fallback.** If still unresolved, retain the question literally in the written plan with `_(Unresolved — surfaced for review)_` after the question text. The auto-write proceeds — never stop the loop.
-
-### Logging
-
-Each fresh pick from steps 1 (when no existing commitment matched and you made a new pick) and 2 produces an `[Auto:Loop]` entry via:
-
-```bash
-rota decisions auto-log --topic "<topic>" --title "<rule-title>" --why "<why-text>" --plan-key "<plan-key>" --date "$(date +%Y-%m-%d)"
-```
-
-The entry follows the standard `DECISIONS.md` template, but **only the rule and `*Why.*` are auto-filled**; `**Forbids.**` and `**Permits.**` stay as `_(Unresolved — user must articulate)_` placeholders the user fills at session end (per the 2026-05-08 source-prefill rule that destination-specific fields stay as placeholders the skill blocks on). A footer comment encodes provenance: `<!-- [Auto:Loop] <plan-key> <date> — review and articulate Forbids/Permits -->`. The verb is idempotent on `(topic, rule-title)` — re-running the same plan key writes each entry exactly once.
-
-After all questions are resolved, write the plan using the same `rota plan add` + `Edit` flow as Step 6, with `--auto-loop` on `rota plan add`: the verb writes the `auto: true` frontmatter key that marks the plan as auto-written, and refuses the flag (exit 2) outside loop mode. The plan's "Open questions" section lists every step-3 placeholder verbatim; "Resolved open questions" lists every step-1/2 outcome with a brief rationale.
-
-### Surfacing
-
-`/rota-plan --auto-loop` itself does not surface auto-decisions to the user — surfacing fires only on terminal paths (`/rota-work` empty-backlog branch, `/rota-work` guard-fail branch, `/rota-pause`) via `rota decisions auto-since`. The user sees the running summary at session end, articulates `Forbids/Permits` in `DECISIONS.md`, and removes the `<!-- [Auto:Loop] -->` footer (signaling the entry is now a normal decision).
 
 ## Key Principles
 

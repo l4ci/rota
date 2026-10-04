@@ -228,3 +228,14 @@ func Check(root string) (status string, missing []string) {
 	}
 	return UpToDate, missing
 }
+
+// Retired lists the config values rota no longer supports, one message each.
+// `config check` fails on them rather than let a skill quietly ignore the
+// value. autonomy.level "loop" went with loop autonomy (#70).
+func Retired(root string) []string {
+	out := []string{}
+	if s, _ := Value(Load(configPath(root)), "autonomy.level"); s == "loop" {
+		out = append(out, `autonomy.level "loop" was removed: set it to "auto" or "off" (rounds and automatic reviews cover unattended work)`)
+	}
+	return out
+}

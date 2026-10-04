@@ -77,7 +77,6 @@ Flow:
    - Header: `"Amend bullet"`
    - Question: *"Enter the text to append to `<topic> :: <title>` (V1: appends to existing body):"*
    - Free-text field (single-line or multi-line).
-   - In loop-mode (`autonomy.level: loop`), this is an error — `--amend` requires explicit body input from the user; print `"Error: --amend requires user-provided body — cannot auto-pick in loop mode."` and exit 1.
 2. Call:
    ```bash
    printf '%s' "<new body suffix>" | rota knowledge amend --topic "<topic>" --fragment "<unique fragment from existing title>" --mode append --body-file -
@@ -112,8 +111,6 @@ For each candidate `{topic, title, correctionText, loggedAt}`, surface via `AskU
   1. *"Demote (Recommended)"* — call `rota knowledge tier set --topic <T> --title <S> --tier deprecated`
   2. *"Keep — false positive"* — leave tier unchanged
   3. *"Defer to next session"* — keep candidate in the queue
-
-**Loop-mode auto-pick:** *"Defer to next session"* — per the manual-gate rule that demotions need user confirmation.
 
 **V1 simplification:** after processing ALL candidates (regardless of per-candidate choice), call:
 

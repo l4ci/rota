@@ -41,13 +41,9 @@ func TestDebugNext(t *testing.T) {
 
 // TestRouteTable is the contract's routing table, row by row.
 func TestRouteTable(t *testing.T) {
-	off := Settings{Autonomy: "off", QAGate: "advisory", Runner: "subagent"}
-	auto := Settings{Autonomy: "auto", QAGate: "advisory", Runner: "subagent"}
-	loop := Settings{Autonomy: "loop", QAGate: "advisory", Runner: "subagent"}
-	codex := Settings{Autonomy: "off", Runner: "codex"}
-	codexLoop := Settings{Autonomy: "loop", Runner: "codex"}
-	blocking := Settings{Autonomy: "off", QAGate: "blocking"}
-	blockingLoop := Settings{Autonomy: "loop", QAGate: "blocking"}
+	off := Settings{QAGate: "advisory", Runner: "subagent"}
+	codex := Settings{Runner: "codex"}
+	blocking := Settings{QAGate: "blocking"}
 	unset := Settings{}
 	cases := []struct {
 		consumer string
@@ -56,35 +52,25 @@ func TestRouteTable(t *testing.T) {
 	}{
 		{"ship-review", off, Pass, NextContinue},
 		{"ship-review", off, Concerns, NextAsk},
-		{"ship-review", auto, Concerns, NextAsk},
-		{"ship-review", loop, Concerns, NextAddress},
 		{"ship-review", off, Fail, NextStop},
-		{"ship-review", loop, Fail, NextStop},
 
 		{"ship-second-opinion", off, Pass, NextContinue},
 		{"ship-second-opinion", off, Concerns, NextAsk},
-		{"ship-second-opinion", loop, Concerns, NextAddress},
-		{"ship-second-opinion", loop, Fail, NextStop},
 		{"ship-second-opinion", codex, Pass, NextContinue},
 		{"ship-second-opinion", codex, Concerns, NextSurface},
-		{"ship-second-opinion", codexLoop, Fail, NextSurface},
+		{"ship-second-opinion", codex, Fail, NextSurface},
 
 		{"ship-qa", off, Pass, NextContinue},
 		{"ship-qa", off, Concerns, NextSurface},
-		{"ship-qa", loop, Fail, NextSurface},
 		{"ship-qa", off, InfraFail, NextSurface},
 		{"ship-qa", unset, Fail, NextSurface}, // qa.gate defaults to advisory
 		{"ship-qa", blocking, Pass, NextContinue},
 		{"ship-qa", blocking, Concerns, NextAsk},
-		{"ship-qa", blockingLoop, Concerns, NextAddress},
 		{"ship-qa", blocking, Fail, NextStop},
 		{"ship-qa", blocking, InfraFail, NextSurface},
-		{"ship-qa", blockingLoop, InfraFail, NextSurface},
 
 		{"queue", off, Pass, NextAsk},
-		{"queue", loop, Pass, NextMerge},
 		{"queue", off, Concerns, NextRequestChanges},
-		{"queue", loop, Fail, NextRequestChanges},
 	}
 	for _, c := range cases {
 		if got := Route(c.consumer, c.v, c.s); got != c.want {

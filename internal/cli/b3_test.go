@@ -234,41 +234,19 @@ func TestDebugReset(t *testing.T) {
 	}
 }
 
-func TestAutoLoopFlag(t *testing.T) {
+// --auto-loop was removed with loop autonomy: cobra rejects it as unknown.
+func TestAutoLoopFlagRemoved(t *testing.T) {
 	dir := gitRepo(t)
-	write(t, filepath.Join(dir, ".rota", "config.json"), `{"backlog":{"backend":"file"},"autonomy":{"level":"auto"}}`)
+	write(t, filepath.Join(dir, ".rota", "config.json"), `{"backlog":{"backend":"file"}}`)
 	for _, args := range [][]string{
 		{"design", "add", "B07", "--title", "T", "--auto-loop"},
 		{"plan", "add", "M01-B07", "--title", "T", "--auto-loop"},
 	} {
-		if code, _, errOut := rotaIn(t, dir, args...); code != 2 || !strings.Contains(errOut, "--auto-loop is loop-mode only; set autonomy.level to loop") {
-			t.Errorf("%v outside loop: exit %d %q", args, code, errOut)
+		if code, _, errOut := rotaIn(t, dir, args...); code != 2 || !strings.Contains(errOut, `unknown flag "--auto-loop"`) {
+			t.Errorf("%v: exit %d %q", args, code, errOut)
 		}
 	}
 	if _, err := os.Stat(filepath.Join(dir, ".rota", "designs", "B07.md")); err == nil {
 		t.Error("a refused design add wrote the file")
-	}
-	// config.local.json over config.json.
-	write(t, filepath.Join(dir, ".rota", "config.local.json"), `{"autonomy":{"level":"loop"}}`)
-	for _, c := range []struct {
-		file string
-		args []string
-	}{
-		{"designs/B07.md", []string{"design", "add", "B07", "--title", "T", "--auto-loop"}},
-		{"plans/M01-B07.md", []string{"plan", "add", "M01-B07", "--title", "T", "--auto-loop"}},
-		{"plans/M01-S01.md", []string{"plan", "add", "--milestone", "M01", "--slice", "--title", "T", "--auto-loop"}},
-	} {
-		if code, out, errOut := rotaIn(t, dir, c.args...); code != 0 {
-			t.Fatalf("%v: exit %d %s%s", c.args, code, out, errOut)
-		}
-		raw, err := os.ReadFile(filepath.Join(dir, ".rota", c.file))
-		if err != nil || !strings.Contains(string(raw), "status: ") || !strings.Contains(string(raw), "\nauto: true\ncreated: ") {
-			t.Errorf("%s: %v\n%s", c.file, err, raw)
-		}
-	}
-	// Without the flag nothing is added.
-	rotaIn(t, dir, "design", "add", "B08", "--title", "T")
-	if raw, _ := os.ReadFile(filepath.Join(dir, ".rota", "designs", "B08.md")); strings.Contains(string(raw), "auto:") {
-		t.Errorf("auto without the flag:\n%s", raw)
 	}
 }

@@ -20,17 +20,17 @@ pass "verdict add rejects malformed bodies and verdicts with exit 2"
 RC=0; ( cd "$VD" && hvj verdict route --for ship-review >/dev/null 2>&1 ) || RC=$?
 [ "$RC" = "3" ] || fail "route with no recorded verdict should exit 3, got $RC"
 
-# Spec CONCERNS then quality PASS combines to CONCERNS; ship asks, loop addresses.
+# Spec CONCERNS then quality PASS combines to CONCERNS; ship asks (the retired loop level routes like off).
 OUT=$( cd "$VD" && hvj verdict add --kind review-spec --verdict CONCERNS )
 [ "$(echo "$OUT" | jget data.next)" = "quality" ] || fail "spec CONCERNS should route to quality: $OUT"
 printf '{"verdict": "PASS", "summary": "ok", "findings": [{"severity": "minor", "title": "nit", "file": "a.go", "line": 2}]}' > "$VD/q.json"
 OUT=$( cd "$VD" && hvj verdict add --kind review-quality --verdict PASS --body-file q.json )
 [ "$(echo "$OUT" | jget data.combined)" = "CONCERNS" ] || fail "combined should be the worse stage: $OUT"
 [ "$( cd "$VD" && hvj verdict route --for ship-review | jget data.next )" = "ask" ] \
-  || fail "CONCERNS outside loop should route to ask"
+  || fail "CONCERNS should route to ask"
 printf '{"autonomy": {"level": "loop"}}\n' > "$VD/.rota/config.json"
-[ "$( cd "$VD" && hvj verdict route --for ship-review | jget data.next )" = "address" ] \
-  || fail "CONCERNS in loop should route to address"
+[ "$( cd "$VD" && hvj verdict route --for ship-review | jget data.next )" = "ask" ] \
+  || fail "CONCERNS under the retired loop level should still route to ask"
 pass "review stages combine worst-of and route by autonomy"
 
 # A spec FAIL short-circuits and stops the ship.

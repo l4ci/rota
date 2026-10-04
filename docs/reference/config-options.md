@@ -79,7 +79,8 @@ Values for list and object keys are JSON (`rota config set work.accounts '[...]'
 |-------|-------------|
 | Off (Recommended) | Skills nudge with a one-line suggestion at decision points. You stay in the driver's seat. |
 | Auto chain | One-hop chaining: `/rota-work` → `/rota-learn`, `/rota-debug` → `/rota-ship`, `/rota-ship` → `/rota-learn`, refactor threshold → `/rota-refactor`. Stops after the chained step. |
-| Full loop | Auto chain + after each cycle, run `/rota-work` with no argument and start the next item. Runs until the backlog drains, a guard fails, or a brief is genuinely ambiguous. |
+
+`autonomy.level: "loop"` was removed; `rota config check` fails on it (rounds and automatic reviews cover unattended work).
 
 ## Mapping table: options to config values
 
@@ -101,7 +102,6 @@ Each Q1–Q5 option maps to a single `key.path: value` in `.rota/config.json`:
 | Q4 includes "Competing hypotheses" | `debug.competingHypotheses: true` (else `false`) |
 | Q5 Off | `autonomy.level: "off"` |
 | Q5 Auto chain | `autonomy.level: "auto"` |
-| Q5 Full loop | `autonomy.level: "loop"` |
 
 ## Additional keys
 
@@ -129,7 +129,7 @@ Free text. Default: `""` (auto-detect). Key `git.baseBranch`.
 
 ## Validation rules
 
-- **Enums.** `models.*` take `opus`, `sonnet` or `haiku`; `work.isolation` takes `branch` or `worktree`; `work.mergeStrategy` takes `direct` or `pr`; `autonomy.level` takes `off`, `auto` or `loop`. Anything else is rejected by `rota config set`.
+- **Enums.** `models.*` take `opus`, `sonnet` or `haiku`; `work.isolation` takes `branch` or `worktree`; `work.mergeStrategy` takes `direct` or `pr`; `autonomy.level` takes `off` or `auto`. Anything else is rejected by `rota config set`; `"loop"` was removed and `rota config check` flags it.
 - **Booleans and integers.** Booleans take `true` or `false`; integer keys state their minimum below. Out-of-range values exit 70 where a verb reads them.
 
 ## Silent-default keys

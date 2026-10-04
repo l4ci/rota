@@ -42,12 +42,9 @@ The user gives a keyword, phrase or longer description, possibly several issues 
 
 Fires only when the input captures *from a milestone spec*: it names an `M<NN>` tag or a `milestones/M<NN>.md` path. Otherwise skip.
 
-Milestone specs drift behind code. Capturing criteria that already shipped under other IDs creates duplicate work and, under `autonomy.level: loop`, dispatches `/rota-work` on finished work (real F27 incident: 11 captures, 10 already shipped). Run `rota item shipped "<title 1>" "<title 2>" …` with the parsed titles. Exit 0 means ship evidence was found (stdout lists hits per title, `--json` has `data.titles[].hits`); exit 1 means none, continue silently.
+Milestone specs drift behind code. Capturing criteria that already shipped under other IDs creates duplicate work and wastes a run on finished work (real F27 incident: 11 captures, 10 already shipped). Run `rota item shipped "<title 1>" "<title 2>" …` with the parsed titles. Exit 0 means ship evidence was found (stdout lists hits per title, `--json` has `data.titles[].hits`); exit 1 means none, continue silently.
 
-On exit 0, print the report verbatim, then by `autonomy.level`:
-
-- **`loop`:** auto-skip every flagged title, one line each: *"Skipped `<title>` — ship evidence in `<top-match-hash>`."* Silently capturing already-shipped work is what loop must not do.
-- **`off` / `auto`:** `AskUserQuestion`, up to 4 flagged titles per call. Header `"Item N"`. Question: *"`<short-title>` looks shipped — `<hash>` `<subject>`. What now?"* Options:
+On exit 0, print the report verbatim, then `AskUserQuestion`, up to 4 flagged titles per call. Header `"Item N"`. Question: *"`<short-title>` looks shipped — `<hash>` `<subject>`. What now?"* Options:
   1. *"Skip this item (Recommended)"* — drop it from this run.
   2. *"Capture anyway"* — the user reviewed the matches and the item is genuinely distinct.
   3. *"Stop the whole capture"* — print *"Capture aborted — reconcile the milestone spec before retrying."* and write nothing.
@@ -80,7 +77,7 @@ Tasks get no priority or size tag.
 
 ## Step 4.5 — Tag Active Milestone (when applicable)
 
-Follow `references/milestone-tagging.md`: the `rota milestone active` gate, the question shapes, loop-mode auto-pick. Carry the chosen milestone as `--milestone` in Step 6. Omit it if the user left the item untagged.
+Follow `references/milestone-tagging.md`: the `rota milestone active` gate, and the question shapes. Carry the chosen milestone as `--milestone` in Step 6. Omit it if the user left the item untagged.
 
 ## Step 4.6 — Tag Sub-Repo (when umbrella mode is on)
 
@@ -95,8 +92,6 @@ Otherwise ask:
 - **Options:** one per `name` in `.rota/repos.json` (mark the likely match `(Recommended)` when the item text names a repo), then *"None / unsure — leave untagged"* last.
 
 Two or more repos make a multi-repo item that `/rota-work` branches in each repo. If *"None / unsure"* comes with concrete names, the names win. An ambiguous reply leaves the item untagged, and `/rota-work` will then refuse it and point back here.
-
-**Loop mode:** auto-pick the `(Recommended)` repo. With none flagged (item is ambiguous), still ask: this is the ambiguity that should surface (`references/authoring-conventions.md` rule #5).
 
 Carry the picks as a comma-separated list of registered sub-repos into `--repos`. Omit the flag if untagged.
 
@@ -128,7 +123,7 @@ Fires when the batch includes a `[Major]` feature or a `[P0]` bug; skip otherwis
 
 > *"Run `/rota-brainstorm [ID]` before `/rota-plan` to negotiate the design."*
 
-**Never invoke `/rota-brainstorm` from here.** Capture is pure intake. Advancement without asking lives in `/rota-work`: with no argument it reconciles and suggests the next item, and in `loop` mode it auto-dispatches `/rota-brainstorm --auto-loop` for Major, milestone-tagged items without a design.
+**Never invoke `/rota-brainstorm` from here.** Capture is pure intake. Advancement lives in `/rota-work`: with no argument it reconciles and suggests the next item.
 
 Print every new ID with its title, then stop. Capture ends here; do not offer to start work.
 
@@ -152,7 +147,7 @@ Run `rota item rm <IDS>` and show stdout verbatim. If an item has `activeBranch`
 
 Legacy file-backend items carry `GH: #N` / `GL: #N` tags. Find upstream links: `rota issues imported --json`, keep `data.entries` whose `itemId` is in the removal set. Read the label from `rota config show --json issues.label` (default `in-progress`). No matches: skip to Step R4.
 
-Otherwise ask, and never auto-pick in loop mode:
+Otherwise ask:
 
 - **Header:** `"De-tag"`; **Question:** *"Remove the `<label>` label on <N> upstream issue(s)? <list of #N>."*
 - **Options:**
@@ -167,7 +162,7 @@ Show the preview, then one `AskUserQuestion`. Header `"Apply"`, question *"Apply
 2. *"Apply + scrub ARCHIVE"* — `rota item rm --apply --scrub-archive <IDS>`; also removes the ARCHIVE entry and its cross-references.
 3. *"Cancel"* — print *"No changes."* and stop.
 
-Anything but an explicit yes cancels. This is a destructive gate: it always asks, and loop mode does not accelerate it (`references/authoring-conventions.md`).
+Anything but an explicit yes cancels. This is a destructive gate: it always asks.
 
 ### Step R5 — Apply
 
@@ -189,7 +184,7 @@ Run the chosen command and pass its per-ID output through verbatim. On exit 4 (`
 
 | Reference | Purpose |
 |-----------|---------|
-| [`authoring-conventions.md`](references/authoring-conventions.md) | Loop-mode auto-picks, destructive and manual gates. |
+| [`authoring-conventions.md`](references/authoring-conventions.md) | Destructive and manual gates. |
 | [`detail-files.md`](references/detail-files.md) | Detail-file template for bulky input. |
 | [`issue-mode.md`](references/issue-mode.md) | Issue-backend umbrella rules (Step 4.6). |
 | [`milestone-tagging.md`](references/milestone-tagging.md) | Milestone-tagging question shapes (Step 4.5). |

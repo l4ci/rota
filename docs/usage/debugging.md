@@ -88,7 +88,7 @@ Suggested next steps from the hard stop:
 - Run [`/rota-pause`](pausing-and-resuming.md) to leave a handoff note and step away. A fresh session reads the persisted counter and can decide whether to wipe it or continue.
 - Or re-open the bug from a different angle. The symptom may be in a subsystem the past three hypotheses haven't touched.
 
-The branch and `status.json` entry stay intact so you can resume. The Iron Law breaks `autonomy.level: "loop"`: the loop stops at the hard stop and the user re-engages by hand. The counter clears on a successful fix so subsequent bugs start at zero.
+The branch and `status.json` entry stay intact so you can resume. The Iron Law is a hard stop at every autonomy level; the user re-engages by hand. The counter clears on a successful fix so subsequent bugs start at zero.
 
 ## Competing hypotheses
 

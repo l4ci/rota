@@ -124,7 +124,7 @@ func TestA4bUsageErrors(t *testing.T) {
 	for _, argv := range [][]string{
 		{"backlog", "ids"}, {"backlog", "milestones"}, {"backlog", "stale"}, {"backlog", "stale", "--kind", "plans"},
 		{"backlog", "archive", "--days", "-1"}, {"status", "add", "b"}, {"status", "add", "b", "--items", "B01", "--repos", ""},
-		{"status", "rm"}, {"status", "show"}, {"status", "handoff"}, {"status", "loop", "start", "--repo", "web"},
+		{"status", "rm"}, {"status", "show"}, {"status", "handoff"},
 		{"refactor", "targets", "--repo", "web"}, {"summary", "extra"},
 	} {
 		if code, env, _ := rotaRun(t, append([]string{"--json", "-C", root}, argv...)...); code != ExitUsage || env["ok"] != false {
@@ -202,30 +202,6 @@ func TestA4bStatusLifecycle(t *testing.T) {
 	}
 	if code, env = run("status", "rm", "feat/x"); code != 0 || get(dataOf(env), "changed") != false {
 		t.Errorf("second rm: %d %v", code, env)
-	}
-}
-
-func TestA4bLoopLifecycle(t *testing.T) {
-	root := a4Project(t, "")
-	run := func(argv ...string) map[string]any {
-		code, env, stderr := rotaRun(t, append([]string{"--json", "-C", root, "status", "loop"}, argv...)...)
-		if code != 0 {
-			t.Fatalf("%v: %d %s", argv, code, stderr)
-		}
-		return env
-	}
-	if v := get(dataOf(run("show")), "loopStartedAt"); v != nil {
-		t.Errorf("show before start = %v", v)
-	}
-	first := get(dataOf(run("start")), "loopStartedAt").(string)
-	if again := dataOf(run("start")); get(again, "loopStartedAt") != first || get(again, "changed") != false {
-		t.Errorf("second start: %v", again)
-	}
-	if v := get(dataOf(run("show")), "loopStartedAt"); v != first {
-		t.Errorf("show = %v", v)
-	}
-	if get(dataOf(run("clear")), "changed") != true || get(dataOf(run("clear")), "changed") != false {
-		t.Error("clear changed flags")
 	}
 }
 

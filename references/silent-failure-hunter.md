@@ -37,7 +37,7 @@ For each `SILENT-FAIL` flag, surface one bullet under a `### Silent failure chec
 ```
 ### Silent failure check
 - test/sections/08_ship.sh:42 — asserts `grep "merged" output` but `rota ship merge` prints "Merged" with a capital M; assertion would pass before the change too.
-- references/foo.md:17 — claims "loop mode exits cleanly on empty backlog" but no smoke section flips autonomy.level to "loop" with an empty backlog.
+- references/foo.md:17 — claims "auto mode stops cleanly on empty backlog" but no smoke section flips autonomy.level to "auto" with an empty backlog.
 ```
 
 `SILENT-FAIL` flags route as `CONCERNS` in the verdict — they don't break the build by themselves, but the user sees them before merging. A diff that gets `PASS` on intent + convention + quality but has `SILENT-FAIL` flags becomes `CONCERNS`. A diff that's already at `FAIL` stays `FAIL` (regression beats silence).

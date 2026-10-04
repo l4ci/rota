@@ -22,7 +22,7 @@ Every persistence skill (and `/rota-learn`'s `--term` mode) follows:
    - `/rota-decide` → `rota block decisions`
 6. **Confirms via a compact block** — *"Captured `<artifact>` into `.rota/<FILE>.md`… Updated CLAUDE.md `<block>` block."* Match the shape; don't recap the plan.
 
-The duo does **not** commit. `.rota/KNOWLEDGE.md`, `.rota/DECISIONS.md`, and `CLAUDE.md` are all tracked under the partial-ignore model, so the duo leaves three working-tree diffs and lets the caller (the user, or a parent `/rota-work` cycle) commit them as one summary. Aligning here matters — the duo is dispatched in sequence under `autonomy.level: loop`, so a per-skill commit would fragment what should be one summary commit.
+The duo does **not** commit. `.rota/KNOWLEDGE.md`, `.rota/DECISIONS.md`, and `CLAUDE.md` are all tracked under the partial-ignore model, so the duo leaves three working-tree diffs and lets the caller (the user, or a parent `/rota-work` cycle) commit them as one summary. Aligning here matters — the duo is dispatched in sequence under `autonomy.level: auto`, so a per-skill commit would fragment what should be one summary commit.
 
 ## Topic-classification rule (rota-learn topic bullets ↔ rota-decide)
 
@@ -41,7 +41,7 @@ The gate strengths are by design. The active/passive distinction lives here:
 
 | Aspect | `/rota-learn --term` | `/rota-learn` (topic bullet) | `/rota-decide` |
 |---|---|---|---|
-| Capture trigger | explicit `--term <name>` (or auto from definitional signals like *"by X I mean..."*) | auto in `auto`/`loop`, nudge in `off` | always manual |
+| Capture trigger | explicit `--term <name>` (or auto from definitional signals like *"by X I mean..."*) | auto in `auto`, nudge in `off` | always manual |
 | Confirmation gate | conditional (only on existing-term conflict — alias collision is the gate; same-name updates are silent) | **none** — Step 4 explicitly auto-writes | **manual gate**, always |
 | Verifier | none | Opus opt-in (`--strict` or `learn.verify`) | none |
 | Source-prefill flags | `--def`, `--alias`, `--not`, `--touch` | none | `--from-learning`, `--from-spike` |

@@ -17,7 +17,7 @@ Read from `.rota/config.json` (all keys optional — defaults apply if absent):
 | `release.tagPrefix` | `v` | Set to `""` for unprefixed tags |
 | `release.draft` | `false` | Pass `--draft` to `gh`/`glab` |
 | `release.requireCleanTree` | `true` | Set `false` to allow dirty releases (testing only) |
-| `release.confirmLargePushCommits` | `10` | Threshold (commits) above which auto/loop autonomy still confirms before pushing unpushed HEAD |
+| `release.confirmLargePushCommits` | `10` | Threshold (commits) above which auto autonomy still confirms before pushing unpushed HEAD |
 
 ## Step 1 — Guard
 
@@ -26,7 +26,7 @@ Run each check; stop with a one-liner on failure.
 1. **Clean tree** — `git status --porcelain`. Non-empty and `release.requireCleanTree` true: stop, show `git status -s`, suggest commit/stash or `release.requireCleanTree: false`.
 2. **On trunk** — branch must be `main`, `master` or `trunk`.
 3. **HEAD pushed** — `git rev-parse HEAD` vs `@{u}`. A release ships the local commits, so unpushed commits are part of it, not an error. Branch on `autonomy.level`:
-   - `"auto"` or `"loop"` — count `git rev-list @{u}..HEAD --count`. Below `release.confirmLargePushCommits`: run `git push origin <current-branch>` silently and continue. At or above it, ask once whatever the autonomy: header `"Large push"`, *"<N> unpushed commits about to be pushed as part of this release. Continue?"*, options `Push and continue (Recommended)` / `Abort`.
+   - `"auto"` — count `git rev-list @{u}..HEAD --count`. Below `release.confirmLargePushCommits`: run `git push origin <current-branch>` silently and continue. At or above it, ask once whatever the autonomy: header `"Large push"`, *"<N> unpushed commits about to be pushed as part of this release. Continue?"*, options `Push and continue (Recommended)` / `Abort`.
    - `"off"` — header `"Unpushed"`, *"HEAD has unpushed commits. Push them as part of this release?"*, options `Push and continue (Recommended)` / `Abort`.
 
 Track these phases with the host's task tool if it has one.
@@ -46,14 +46,14 @@ Track these phases with the host's task tool if it has one.
 
 Per-project release steps (sibling version files, lockfiles, docs version refs, infra rollouts) live in `release.checklistPath`, tracked and shared with the team. The skill hardcodes none of them. Skip in `--dry-run`: print the parsed items and `DRY RUN — checklist walk skipped.`
 
-**File absent.** `autonomy.level` `"auto"`/`"loop"`: skip silently; never interrupt an unattended run to scaffold. `"off"`: header `"Checklist"`, *"No `<release.checklistPath>` found. Scaffold a starter checklist now, or continue without?"*, options `Scaffold starter (Recommended)` (write the template, let the user edit, re-read, walk it) / `Continue without` (summary says *"no project checklist"*) / `Abort`.
+**File absent.** `autonomy.level` `"auto"`: skip silently; never interrupt an unattended run to scaffold. `"off"`: header `"Checklist"`, *"No `<release.checklistPath>` found. Scaffold a starter checklist now, or continue without?"*, options `Scaffold starter (Recommended)` (write the template, let the user edit, re-read, walk it) / `Continue without` (summary says *"no project checklist"*) / `Abort`.
 
 Starter template:
 
 ```markdown
 # Release Checklist
 
-Each `- [ ]` line is a gate `/rota-release` walks before bumping the version. Edit freely — nothing here is hardcoded. Items marked `- [x]` are ignored. Append `(manual)` to any item that must interject even in `autonomy.level: auto`/`loop`.
+Each `- [ ]` line is a gate `/rota-release` walks before bumping the version. Edit freely — nothing here is hardcoded. Items marked `- [x]` are ignored. Append `(manual)` to any item that must interject even in `autonomy.level: auto`.
 
 - [ ] Sibling version-bearing files are in sync (e.g., `.claude-plugin/marketplace.json`, lockfiles, docs version refs)
 - [ ] CI is green on the release branch (the merge gate already ran the full suite on the release commit: confirm it, don't re-run smoke or `go test`)
@@ -66,11 +66,11 @@ Each `- [ ]` line is a gate `/rota-release` walks before bumping the version. Ed
 **File present.** Every line matching `^\s*-\s+\[\s*\]\s+(.+)$` is a gate, in file order; `- [x]` lines are skipped. Zero gates: say *"Checklist has no open items — continuing."* For each gate:
 
 - `"off"` — ask: header `"Checklist"`, *"Checklist item: \<text\>. Done?"*, options `Yes, continue (Recommended)` / `Fix it now and continue` (pause, re-ask the same item) / `Skip this item` (record `skipped: <text>`) / `Abort release` (*"Release aborted at checklist item: \<text\>. Nothing written."*).
-- `"auto"`/`"loop"` — auto-acknowledge items not ending in `(manual)`; ask the `"off"` question for items that do, so sensitive items stay confirmed in unattended runs.
+- `"auto"` — auto-acknowledge items not ending in `(manual)`; ask the `"off"` question for items that do, so sensitive items stay confirmed in unattended runs.
 
 ## Step 3 — Milestone Gate (issue mode)
 
-**Issue mode** (`backlog.backend: "issues"`; `references/issue-mode.md`): pick the milestone. `--milestone MNN` wins; else the single one from `rota milestone active`. Several active: `AskUserQuestion`; under `autonomy.level: "loop"`, stop unless exactly one is active. Then `rota release milestone-check <MNN> --json`.
+**Issue mode** (`backlog.backend: "issues"`; `references/issue-mode.md`): pick the milestone. `--milestone MNN` wins; else the single one from `rota milestone active`. Several active: `AskUserQuestion`. Then `rota release milestone-check <MNN> --json`.
 
 Exit 1 means blocked: show each `data.blocked` entry (open issues labelled `in-progress`, `needs-review` or `changes-requested`) and stop. `data.stillOpen` entries do not block; show them and continue. Other exits (2, 3, 4, 5, 6): stop and report the verb's message.
 
@@ -126,7 +126,7 @@ If `data.to` differs from `new_version`, stop: the file may be partly modified, 
 
 ## Step 10 — Push the Tag
 
-> **Manual gate — pushing the release tag.** The remote tag is public and hard to retract. This step always asks, in every autonomy mode; loop mode does not accelerate it. `rota release push` enforces the `tag-push` gate (exit 4 without `--confirm`). Step 6's answer is the approval. See `references/manual-gates.md`.
+> **Manual gate — pushing the release tag.** The remote tag is public and hard to retract. This step always asks, in every autonomy mode. `rota release push` enforces the `tag-push` gate (exit 4 without `--confirm`). Step 6's answer is the approval. See `references/manual-gates.md`.
 
 ```bash
 rota release push <new_version> --tag-only --json --confirm --confirm-note "$APPROVAL"
@@ -136,7 +136,7 @@ Only the tag goes now (an unflagged push is refused where goreleaser builds the 
 
 ## Step 11 — Publish Remote Release
 
-> **Manual gate — publishing the release.** Same rule: always asks, loop mode does not accelerate it. `rota release publish` enforces the `release-publish` gate and reuses Step 6's answer.
+> **Manual gate — publishing the release.** Same rule: always asks. `rota release publish` enforces the `release-publish` gate and reuses Step 6's answer.
 
 ```bash
 rota release publish <new_version> --json --title "v<new_version> — <one-line summary>" \
@@ -165,7 +165,7 @@ Closes upstream issues that shipped in this release but stayed open: work pushed
 
 `rota issues imported --json --open-only` lists candidates (already-closed or unresolvable ones are dropped). Empty `data.entries`: skip silently.
 
-> **Manual gate — closing public upstream issues.** Closing posts a tracking comment and changes issue state on the remote, visible to others. This step is **always manual** — never auto-invoked, regardless of `autonomy.level`; loop mode stops here and waits for the user. The release already published; this decides whether to close the issues too. See `references/manual-gates.md`.
+> **Manual gate — closing public upstream issues.** Closing posts a tracking comment and changes issue state on the remote, visible to others. This step is **always manual** — never auto-invoked, regardless of `autonomy.level`. The release already published; this decides whether to close the issues too. See `references/manual-gates.md`.
 
 Ask (single-select): header `"Close"`, *"Close N upstream issue(s) released in `v<new_version>`? (`<#N list>`)"*, options `Yes, close all` / `Pick subset` / `No, leave open`.
 
@@ -175,7 +175,7 @@ Ask (single-select): header `"Close"`, *"Close N upstream issue(s) released in `
 
 ## Step 14 — Docs Nudge
 
-Read `docs.afterWork` (default `false`); if false, skip. When on, a release is a natural docs trigger: notes and CHANGELOG often imply README, guide or reference updates. Skip in `--dry-run`; once per session. `"off"`: append to the summary *"Release shipped. Run `/rota-ship --docs` to review and update public docs (after-work mode)."* `"auto"`/`"loop"`: dispatch `rota-ship --docs` via `Skill` immediately, no prompt, with a brief naming the version, bump type and the one-line summary. `/rota-ship` self-skips if the docs path is missing or empty. Users opt in with `rota config set docs.afterWork true` or one manual `/rota-ship --docs`.
+Read `docs.afterWork` (default `false`); if false, skip. When on, a release is a natural docs trigger: notes and CHANGELOG often imply README, guide or reference updates. Skip in `--dry-run`; once per session. `"off"`: append to the summary *"Release shipped. Run `/rota-ship --docs` to review and update public docs (after-work mode)."* `"auto"`: dispatch `rota-ship --docs` via `Skill` immediately, no prompt, with a brief naming the version, bump type and the one-line summary. `/rota-ship` self-skips if the docs path is missing or empty. Users opt in with `rota config set docs.afterWork true` or one manual `/rota-ship --docs`.
 
 ## Step 15 — Summary
 

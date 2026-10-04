@@ -43,7 +43,7 @@ func typedData(id, typ string, changed any) *jsonx.Object {
 
 // ---- design
 
-func designAddIssue(c *Ctx, id, title string, opts ...design.Option) (Result, error) {
+func designAddIssue(c *Ctx, id, title string) (Result, error) {
 	if !design.ValidIssueID(id) {
 		return failAny(design.AddNote(nil, "", id, title))
 	}
@@ -51,7 +51,7 @@ func designAddIssue(c *Ctx, id, title string, opts ...design.Option) (Result, er
 	if err != nil {
 		return a4Fail(err)
 	}
-	if err := design.AddNote(wf, id, id, title, opts...); err != nil {
+	if err := design.AddNote(wf, id, id, title); err != nil {
 		return failAny(err)
 	}
 	return Result{Data: typedData(cid, typ, true), Text: cid}, nil

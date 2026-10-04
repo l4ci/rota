@@ -13,9 +13,9 @@ pass "skills and references pass the doclint"
 PL="$DL_TMP/prose"; mkdir -p "$PL"
 cp -R "$REPO"/rota-* "$REPO/references" "$REPO/docs" "$REPO/README.md" "$REPO/CHANGELOG.md" "$PL/"
 OUT="$(cd "$PL" && python3 "$VALIDATE" 2>&1)" || fail "prose lint fails on a copy of the repo: $OUT"
-sed -i 's/rota status loop start/rota status loop begin/' "$PL/rota-work/$SK"
+sed -i 's/rota status handoff/rota status hand-off/' "$PL/rota-work/$SK"
 RC=0; OUT="$(cd "$PL" && python3 "$VALIDATE" 2>&1)" || RC=$?
-[ "$RC" = 1 ] && grep -qF "rota-work/$SK: must call rota status loop start" <<<"$OUT" \
+[ "$RC" = 1 ] && grep -qF "rota-work/$SK: must call rota status handoff" <<<"$OUT" \
   || fail "prose lint missed a dropped phrase (rc $RC): $OUT"
 rm -f "$PL/references/manual-gates.md"
 RC=0; OUT="$(cd "$PL" && python3 "$VALIDATE" 2>&1)" || RC=$?
