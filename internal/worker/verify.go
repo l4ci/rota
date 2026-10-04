@@ -30,9 +30,15 @@ func (r VerifyResult) OK() bool { return len(r.Failed) == 0 }
 // command goes through Env.Shell, whose default runs it in its own process
 // group and kills the group on cancel. err is the log file failing to open.
 func (e Env) Verify(ctx context.Context, root, dir string) (VerifyResult, error) {
+	return e.RunVerify(ctx, verifyCommandsAt(root), dir)
+}
+
+// RunVerify is Verify with the commands already read. The gate reads them
+// before it merges a branch into root, so the branch's own config cannot
+// change what verifies it.
+func (e Env) RunVerify(ctx context.Context, cmds []string, dir string) (VerifyResult, error) {
 	e = e.withDefaults()
 	var res VerifyResult
-	cmds := verifyCommandsAt(root)
 	if len(cmds) == 0 {
 		res.NoCommands = true
 		return res, nil
