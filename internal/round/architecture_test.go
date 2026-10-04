@@ -67,6 +67,15 @@ func archFixture(t *testing.T, every int, closed []tracker.Issue) (string, Env, 
 	return root, e, &archBacklog{}, set
 }
 
+// seedReview records a past review so closed issues after it count.
+func seedReview(t *testing.T, root string) {
+	t.Helper()
+	err := updateReview(root, func(o *jsonx.Object) { o.Set("at", "2026-09-30T00:00:00Z") })
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 func closedIssue(n int, title, at string, labels ...string) tracker.Issue {
 	return tracker.Issue{Number: n, Title: title, State: "closed", ClosedAt: at, Labels: labels, StateReason: "completed"}
 }
@@ -79,6 +88,7 @@ func TestArchitectureCountSkipsRefactorWork(t *testing.T) {
 		{Number: 4, Title: "dropped", State: "closed", StateReason: "not_planned", ClosedAt: "2026-10-01T00:00:00Z"},
 		closedIssue(5, "another", "2026-10-02T00:00:00Z"),
 	})
+	seedReview(t, root)
 	a, err := e.Architecture(context.Background(), root, be, set, []Candidate{{ID: "9"}})
 	if err != nil {
 		t.Fatal(err)
@@ -95,6 +105,7 @@ func TestArchitectureThresholdMintsPerAreaAndRestartsCount(t *testing.T) {
 	closed := []tracker.Issue{closedIssue(1, "a", "2026-10-01T00:00:00Z"), closedIssue(2, "b", "2026-10-02T00:00:00Z")}
 	root, e, be, set := archFixture(t, 2, closed)
 	ctx := context.Background()
+	seedReview(t, root)
 	a, _ := e.Architecture(ctx, root, be, set, []Candidate{{ID: "9"}})
 	if !a.Due || a.Trigger != TriggerThreshold {
 		t.Fatalf("want a threshold review, got %+v", a)
@@ -119,6 +130,7 @@ func TestArchitectureThresholdMintsPerAreaAndRestartsCount(t *testing.T) {
 	}
 	// Once the review items close, only items closed after it count.
 	be.open = nil
+	e.Now = func() time.Time { return time.Date(2026, 10, 6, 0, 0, 0, 0, time.UTC) } // past the cache
 	e.Forge = archForge{closed: append(closed, closedIssue(3, "c", "2026-10-05T00:00:00Z")), added: map[int][]string{}}
 	a, _ = e.Architecture(ctx, root, be, set, []Candidate{{ID: "9"}})
 	if a.Count != 1 || a.Due {
@@ -129,6 +141,7 @@ func TestArchitectureThresholdMintsPerAreaAndRestartsCount(t *testing.T) {
 func TestArchitectureQueueEmptyNeedsIdleSlotNoReadyCandidateAndNewWork(t *testing.T) {
 	root, e, be, set := archFixture(t, 20, []tracker.Issue{closedIssue(1, "a", "2026-10-01T00:00:00Z")})
 	ctx := context.Background()
+	seedReview(t, root)
 	notReady := []Candidate{{ID: "7", Readiness: Readiness{Checks: []Check{{Name: "criteria", OK: false}}}}}
 	a, _ := e.Architecture(ctx, root, be, set, notReady)
 	if !a.Due || a.Trigger != TriggerQueueEmpty || a.Idle != 1 {
@@ -145,6 +158,7 @@ func TestArchitectureQueueEmptyNeedsIdleSlotNoReadyCandidateAndNewWork(t *testin
 	// Nothing closed since the last review: an empty queue has nothing to review.
 	writeRegistry(t, root, slot(root, "ben", "park/ben", nil))
 	e.Forge = archForge{added: map[int][]string{}}
+	e.Now = func() time.Time { return time.Date(2026, 10, 4, 13, 0, 0, 0, time.UTC) } // past the cache
 	if a, _ = e.Architecture(ctx, root, be, set, nil); a.Due {
 		t.Fatal("an empty queue with no new closed work must not loop reviews")
 	}
@@ -188,5 +202,80 @@ func TestReviewItemsAreInEveryScope(t *testing.T) {
 	got, err = scopeSet(root, items, map[string]bool{}, roundcfg.ScopeSlate, []string{"1"})
 	if err != nil || len(got) != 2 {
 		t.Fatalf("a minted review item should be in every scope: %v %v", got, err)
+	}
+}
+
+// countingForge counts closed-issue fetches.
+type countingForge struct {
+	archForge
+	lists *int
+}
+
+func (f countingForge) List(ctx context.Context, fl tracker.ListFilter) ([]tracker.Issue, error) {
+	*f.lists++
+	return f.archForge.List(ctx, fl)
+}
+
+func TestArchitectureFirstSightSeedsInsteadOfTriggering(t *testing.T) {
+	closed := []tracker.Issue{closedIssue(1, "a", "2026-10-01T00:00:00Z"), closedIssue(2, "b", "2026-10-02T00:00:00Z")}
+	root, e, be, set := archFixture(t, 2, closed)
+	a, err := e.Architecture(context.Background(), root, be, set, []Candidate{{ID: "9"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.Count != 0 || a.Due || a.Until != 2 || a.Since != "2026-10-04T12:00:00Z" {
+		t.Fatalf("the first run should seed, not trigger: %+v", a)
+	}
+	if got := ReviewSince(root); got != a.Since {
+		t.Fatalf("seed not saved: %q", got)
+	}
+	v, _ := worker.LoadRegistry(root).Doc.Get("architectureReview")
+	if seeded, _ := v.(*jsonx.Object).Get("seeded"); seeded != true {
+		t.Fatalf("the seeded timestamp should be marked unratified: %v", seeded)
+	}
+}
+
+func TestArchitectureCachesClosedCount(t *testing.T) {
+	root, e, be, set := archFixture(t, 5, []tracker.Issue{closedIssue(1, "a", "2026-10-01T00:00:00Z")})
+	seedReview(t, root)
+	lists := 0
+	e.Forge = countingForge{archForge{closed: []tracker.Issue{closedIssue(1, "a", "2026-10-01T00:00:00Z")}, added: map[int][]string{}}, &lists}
+	ctx := context.Background()
+	for i := 0; i < 3; i++ {
+		if a, _ := e.Architecture(ctx, root, be, set, []Candidate{{ID: "9"}}); a.Count != 1 {
+			t.Fatalf("count %d", a.Count)
+		}
+	}
+	if lists != 1 {
+		t.Fatalf("closed issues fetched %d times, want 1", lists)
+	}
+	e.Now = func() time.Time { return time.Date(2026, 10, 4, 12, 10, 0, 0, time.UTC) }
+	e.Architecture(ctx, root, be, set, []Candidate{{ID: "9"}})
+	if lists != 2 {
+		t.Fatalf("an expired cache should refetch, fetched %d times", lists)
+	}
+}
+
+// failingLabels fails every AddLabels call.
+type failingLabels struct{ archForge }
+
+func (failingLabels) AddLabels(context.Context, int, []string, bool) error {
+	return fmt.Errorf("label boom")
+}
+
+func TestMintReviewRecordsCreatedItemsOnError(t *testing.T) {
+	root, e, be, set := archFixture(t, 1, []tracker.Issue{closedIssue(1, "a", "2026-10-01T00:00:00Z")})
+	seedReview(t, root)
+	ctx := context.Background()
+	a, _ := e.Architecture(ctx, root, be, set, []Candidate{{ID: "9"}})
+	e.Forge = failingLabels{archForge{added: map[int][]string{}}}
+	if _, err := e.MintReview(ctx, root, be, a, 1); err == nil {
+		t.Fatal("want the label error")
+	}
+	if got := MintedReviews(root); !got["101"] {
+		t.Fatalf("the created item should be recognised after the error: %v", got)
+	}
+	if a, _ = e.Architecture(ctx, root, be, set, nil); len(a.Pending) != 1 || a.Due {
+		t.Fatalf("the created item should show as a review in flight, not be re-minted: %+v", a)
 	}
 }
