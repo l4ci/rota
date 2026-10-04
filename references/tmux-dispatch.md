@@ -79,7 +79,7 @@ Neither author can see it — the conflicting change never existed in their tree
 - `verify-failed`: the merged tree is broken and the merge already landed. Fix forward on the cycle branch; the owning slot has usually moved on, and small orphaned-reference fixes are the orchestrator's to make.
 - `data.verifySkipped: true` means no command gated the merged tree. A project on this backend should set `refactor.verifyCommands`; otherwise the re-verify is a structural diff review and nothing more.
 
-Batching: re-verify per merge is the rule. A group of PRs with genuinely disjoint file sets can be merged and gated once. Gate **individually** when a PR touches a shared module, widens a shared type, or renames a shared symbol.
+Batching: the gate is the one full run, so nothing re-verifies after it. Gate each PR individually by default. A group of PRs with genuinely disjoint file sets can be merged and gated once; never batch when a PR touches a shared module, widens a shared type, or renames a shared symbol.
 
 ## Permissions
 
