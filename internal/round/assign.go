@@ -109,7 +109,8 @@ func BranchName(agent, id, title string) string {
 // briefPath is the standing worker contract the pointer names: round.brief,
 // else references/worker-contract.md in the project (a source checkout), else
 // rota-orchestrate/references/worker-contract.md under the first installed
-// Claude skills root, the project's before the user's (rota skills install).
+// skills root (rota skills install): the project's before the user's, Claude's
+// before Codex's, so a Codex-only install finds it too.
 func briefPath(root string, set roundcfg.Settings, getenv func(string) string) (string, bool) {
 	var cands []string
 	if set.Brief != "" {
@@ -121,11 +122,14 @@ func briefPath(root string, set roundcfg.Settings, getenv func(string) string) (
 	} else {
 		cands = append(cands, filepath.Join(root, "references", "worker-contract.md"))
 		installed := filepath.Join("rota-orchestrate", "references", "worker-contract.md")
-		skillRoots := []string{filepath.Join(root, ".claude", "skills")}
+		skillRoots := []string{filepath.Join(root, ".claude", "skills"), filepath.Join(root, ".agents", "skills")}
 		if d := getenv("CLAUDE_CONFIG_DIR"); d != "" {
 			skillRoots = append(skillRoots, filepath.Join(d, "skills"))
 		} else if home := getenv("HOME"); home != "" {
 			skillRoots = append(skillRoots, filepath.Join(home, ".claude", "skills"))
+		}
+		if home := getenv("HOME"); home != "" {
+			skillRoots = append(skillRoots, filepath.Join(home, ".agents", "skills"))
 		}
 		for _, r := range skillRoots {
 			if _, err := os.Stat(filepath.Join(r, ".rota-manifest.json")); err == nil {
