@@ -67,22 +67,22 @@ func LoadRegistry(root string) Registry {
 }
 
 // Slots lists the slot objects of the registry.
-func (r Registry) Slots() []*jsonx.Object {
+func (r Registry) Slots() []*Slot {
 	raw, _ := r.Doc.Get("slots")
 	list, _ := raw.([]any)
-	var out []*jsonx.Object
+	var out []*Slot
 	for _, e := range list {
 		if o, ok := e.(*jsonx.Object); ok {
-			out = append(out, o)
+			out = append(out, AsSlot(o))
 		}
 	}
 	return out
 }
 
 // Slot finds a slot by name.
-func (r Registry) Slot(name string) *jsonx.Object {
+func (r Registry) Slot(name string) *Slot {
 	for _, s := range r.Slots() {
-		if Str(s, "name") == name {
+		if s.Name() == name {
 			return s
 		}
 	}
@@ -176,9 +176,7 @@ func DropQueued(doc *jsonx.Object, match func(*jsonx.Object) bool) {
 
 // RemoveQueuedPR drops the record for a PR ref, locked.
 func RemoveQueuedPR(root, ref string) error {
-	def := jsonx.NewObject()
-	def.Set("slots", []any{})
-	return Update(root, def, func(doc *jsonx.Object) {
+	return Update(root, slotsDefault(), func(doc *jsonx.Object) {
 		if q := (Registry{Doc: doc}).QueuedPR(ref); q != nil {
 			DropQueued(doc, func(o *jsonx.Object) bool { return o == q })
 		}
@@ -212,23 +210,9 @@ func Update(root string, def *jsonx.Object, mutate func(doc *jsonx.Object)) erro
 	})
 }
 
-// updateSlot edits one slot under the lock, reporting whether it was found.
-func updateSlot(root, name string, mutate func(s *jsonx.Object)) (found bool, err error) {
-	def := jsonx.NewObject()
-	def.Set("slots", []any{})
-	err = Update(root, def, func(doc *jsonx.Object) {
-		for _, s := range (Registry{Doc: doc}).Slots() {
-			if Str(s, "name") == name {
-				mutate(s)
-				found = true
-			}
-		}
-	})
-	return found, err
-}
-
 // SlotData is a slot as `data` shows it: null registry fields are absent.
-func SlotData(s *jsonx.Object) *jsonx.Object {
+func SlotData(sl *Slot) *jsonx.Object {
+	s := sl.Raw()
 	out := jsonx.NewObject()
 	for _, k := range s.Keys() {
 		v, _ := s.Get(k)
@@ -401,9 +385,7 @@ func execShell(ctx context.Context, dir, command string) (string, int) {
 // seen again (a re-gate before the worker pushed anything) is not a new bounce
 // and returns the count unchanged. head "" always counts.
 func RecordBounce(root, issue, head string) (n int, err error) {
-	def := jsonx.NewObject()
-	def.Set("slots", []any{})
-	err = Update(root, def, func(doc *jsonx.Object) {
+	err = Update(root, slotsDefault(), func(doc *jsonx.Object) {
 		b := bouncesOf(doc)
 		heads := bounceHeadsOf(doc)
 		n = bounceCount(b, issue)
@@ -423,9 +405,7 @@ func RecordBounce(root, issue, head string) (n int, err error) {
 
 // ClearBounces forgets an item's count: its PR merged or it was handed over.
 func ClearBounces(root, issue string) error {
-	def := jsonx.NewObject()
-	def.Set("slots", []any{})
-	return Update(root, def, func(doc *jsonx.Object) {
+	return Update(root, slotsDefault(), func(doc *jsonx.Object) {
 		if b := bouncesOf(doc); bounceCount(b, issue) > 0 {
 			b.Delete(issue)
 			doc.Set("bounces", b)

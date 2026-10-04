@@ -227,18 +227,6 @@ func fromTracker(err error) *Error {
 	return &Error{Exit: 70, Message: err.Error()}
 }
 
-func ensureList(doc *jsonx.Object) []any {
-	raw, _ := doc.Get("escalations")
-	list, _ := raw.([]any)
-	return list
-}
-
-func registryDef() *jsonx.Object {
-	d := jsonx.NewObject()
-	d.Set("slots", []any{})
-	return d
-}
-
 // SendOpts are the flags of `rota round escalate send`.
 type SendOpts struct {
 	Number  int
@@ -318,8 +306,8 @@ func Send(ctx context.Context, env Env, root string, o SendOpts) (SendResult, er
 		e.Deadline = Time(now.Add(o.Timeout))
 	}
 	res.Entry = e
-	err = worker.Update(root, registryDef(), func(doc *jsonx.Object) {
-		doc.Set("escalations", append(ensureList(doc), e.Object()))
+	err = worker.UpdateList(root, "escalations", func(list []any) []any {
+		return append(list, e.Object())
 	})
 	if err != nil {
 		d := jsonx.NewObject()
@@ -433,8 +421,7 @@ func Check(ctx context.Context, env Env, root string, ids []string) (CheckResult
 	}
 
 	if len(found) > 0 {
-		err := worker.Update(root, registryDef(), func(doc *jsonx.Object) {
-			stored := ensureList(doc)
+		err := worker.UpdateList(root, "escalations", func(stored []any) []any {
 			for j, v := range stored {
 				o, ok := v.(*jsonx.Object)
 				if !ok {
@@ -448,7 +435,7 @@ func Check(ctx context.Context, env Env, root string, ids []string) (CheckResult
 				o.Set("answer", a.Object())
 				stored[j] = o
 			}
-			doc.Set("escalations", stored)
+			return stored
 		})
 		if err != nil {
 			return res, err

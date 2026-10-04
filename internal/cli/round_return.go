@@ -138,7 +138,7 @@ func inSlot(root, slot string) bool {
 	if s == nil {
 		return false
 	}
-	wt, cwd := worker.Str(s, "worktree"), ""
+	wt, cwd := s.Worktree(), ""
 	if wd, err := os.Getwd(); err == nil {
 		cwd = wd
 	}

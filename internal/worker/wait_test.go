@@ -82,15 +82,13 @@ func newWaitHost(name string) *waitHost {
 
 func withHandles(t *testing.T, dir string, handles map[string]string) {
 	t.Helper()
-	def := jsonx.NewObject()
-	def.Set("slots", []any{})
-	if err := Update(dir, def, func(doc *jsonx.Object) {
+	if err := UpdateDoc(dir, func(doc *jsonx.Object) {
 		for _, s := range (Registry{Doc: doc}).Slots() {
-			if h, ok := handles[Str(s, "name")]; ok {
-				s.Set("handle", h)
-				s.Set("state", "busy")
+			if h, ok := handles[s.Name()]; ok {
+				s.SetHandle(h)
+				s.MarkState("busy", "")
 			} else {
-				s.Set("handle", nil) // a slot never dispatched has no session
+				s.SetHandle("") // a slot never dispatched has no session
 			}
 		}
 	}); err != nil {
@@ -198,10 +196,8 @@ func TestWaitSkipsHandlelessSlotsUnlessNamed(t *testing.T) {
 
 func TestWaitDoesNotWatchSlotsRecordedIdle(t *testing.T) {
 	dir := waitProject(t, 2, map[string]string{"w1": "rota:w1", "w2": "rota:w2"})
-	def := jsonx.NewObject()
-	def.Set("slots", []any{})
-	Update(dir, def, func(doc *jsonx.Object) { // w1 was polled idle, w2 is running
-		(Registry{Doc: doc}).Slot("w1").Set("state", "idle")
+	UpdateDoc(dir, func(doc *jsonx.Object) { // w1 was polled idle, w2 is running
+		(Registry{Doc: doc}).Slot("w1").MarkState("idle", "")
 	})
 	h := newWaitHost("herdr")
 	h.set("w2", "ROTA-DONE w2 x\n", "done")
@@ -345,7 +341,7 @@ func TestWaitAfterTheLastEventRechecksAPaneThatMovedOnce(t *testing.T) {
 }
 
 func seenField(dir, slot, key string) string {
-	return Str(LoadRegistry(dir).Slot(slot), key)
+	return Str(LoadRegistry(dir).Slot(slot).Raw(), key)
 }
 
 func TestWaitRecordsWhatItReturned(t *testing.T) {
@@ -427,7 +423,7 @@ func TestWaitReturnsPromptsAndNewQuestions(t *testing.T) {
 func TestDispatchAndPollClearSeen(t *testing.T) {
 	dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
 	set := func() {
-		updateSlot(dir, "w1", func(s *jsonx.Object) { s.Set("state", "done"); s.Set("seen", seenKey(StateDone, "x")) })
+		UpdateSlot(dir, "w1", func(s *Slot) { s.MarkState("done", ""); s.SetSeen(seenKey(StateDone, "x")) })
 	}
 	set()
 	if err := recordDispatch(dir, "w1", "w9:t1", "", "", nil, "now"); err != nil {

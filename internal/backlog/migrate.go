@@ -240,14 +240,12 @@ func (m *migrator) remapRegistry() error {
 		return "", false
 	}
 	var notes []string
-	def := jsonx.NewObject()
-	def.Set("slots", []any{})
-	err := worker.Update(m.o.Root, def, func(doc *jsonx.Object) {
+	err := worker.UpdateDoc(m.o.Root, func(doc *jsonx.Object) {
 		reg := worker.Registry{Doc: doc}
 		for _, s := range reg.Slots() {
-			if n, ok := to(worker.Str(s, "task")); ok {
-				notes = append(notes, fmt.Sprintf("remap slot %s task %s -> #%s", worker.Str(s, "name"), worker.Str(s, "task"), n))
-				s.Set("task", n)
+			if n, ok := to(s.Task()); ok {
+				notes = append(notes, fmt.Sprintf("remap slot %s task %s -> #%s", s.Name(), s.Task(), n))
+				s.SetTask(n)
 			}
 		}
 		for _, q := range reg.PRs() {

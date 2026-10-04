@@ -149,7 +149,7 @@ func (e Env) Start(ctx context.Context, root string, o StartOpts) (Started, erro
 	res.Changed = pool.Changed || out != roundlease.Renewed
 	res.Warnings = append(res.Warnings, pool.Warnings...)
 
-	if err := worker.Update(root, slotsDefault(), func(doc *jsonx.Object) {
+	if err := worker.UpdateDoc(root, func(doc *jsonx.Object) {
 		if out != roundlease.Renewed { // taken, reclaimed or numbered
 			doc.Set("round", l.Round)
 		}
@@ -177,7 +177,7 @@ func (e Env) Start(ctx context.Context, root string, o StartOpts) (Started, erro
 		want[name] = true
 	}
 	for _, s := range worker.LoadRegistry(root).Slots() {
-		if want[worker.Str(s, "name")] {
+		if want[s.Name()] {
 			res.Slots = append(res.Slots, worker.SlotData(s))
 		}
 	}
