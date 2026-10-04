@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/golden"
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/pytest"
 )
 
 type schemaCase struct {
@@ -138,8 +138,8 @@ func TestSchemaMatchesPython(t *testing.T) {
 		inputs[i], got[i] = c, goSchema(t, c)
 	}
 	var want []any
-	pytest.GoldenJSON(t, cases, &want)
-	n := pytest.Compare(t, "schema", inputs, got, want)
+	golden.GoldenJSON(t, cases, &want)
+	n := golden.Compare(t, "schema", inputs, got, want)
 	t.Logf("compared %d cases (config_value, backlog_backend, tracker_label)", n)
 }
 
@@ -160,7 +160,7 @@ func TestKeysShape(t *testing.T) {
 // default and required flag.
 func TestKeysMatchPython(t *testing.T) {
 	var want [][]any
-	pytest.GoldenJSON(t, nil, &want)
+	golden.GoldenJSON(t, nil, &want)
 	var got [][]any
 	for _, k := range Keys[:PythonKeys] {
 		got = append(got, []any{k.Name, k.Default, k.Required})
@@ -172,7 +172,7 @@ func TestKeysMatchPython(t *testing.T) {
 	for i := range want {
 		wi[i] = want[i]
 	}
-	pytest.Compare(t, "CONFIG_KEYS", gi, gi, wi)
+	golden.Compare(t, "CONFIG_KEYS", gi, gi, wi)
 }
 
 func TestPromptsMatchSchema(t *testing.T) {

@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/golden"
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/pytest"
 )
 
 func counter(v any) int {
@@ -110,7 +110,7 @@ func TestWriteJSONAtomicMatchesPython(t *testing.T) {
 		t.Fatal(err)
 	}
 	var p string
-	pytest.Golden(t, map[string]any{}, &p)
+	golden.Golden(t, map[string]any{}, &p)
 	g, _ := os.ReadFile(goPath)
 	if string(g) != p {
 		t.Fatalf("\n--- go\n%s--- golden\n%s", g, p)

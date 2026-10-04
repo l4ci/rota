@@ -10,8 +10,8 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/backlog/trackertest"
+	"github.com/l4ci/rota/internal/golden"
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/pytest"
 )
 
 // fakeTracker is the in-memory, call-recording Tracker.
@@ -122,7 +122,7 @@ func TestIssuesMatchPython(t *testing.T) {
 	}
 
 	var want []map[string]any
-	pytest.GoldenJSON(t, scen, &want)
+	golden.GoldenJSON(t, scen, &want)
 
 	var inputs, got, w []any
 	items := 0
@@ -183,7 +183,7 @@ func TestIssuesMatchPython(t *testing.T) {
 		w = append(w, want[i])
 		inputs = append(inputs, map[string]any{"scenario": i, "cfg": s.Cfg, "repo": s.Repo, "issues": s.Issues})
 	}
-	n := pytest.Compare(t, "IssueBackend", inputs, got, w)
+	n := golden.Compare(t, "IssueBackend", inputs, got, w)
 	t.Logf("compared %d scenarios (%d items) against IssueBackend.backlog_markdown/fields/_bullet_inner/_done_line/detail_text", n, items)
 	if items < 300 {
 		t.Fatalf("only %d items resolved; test too weak", items)
@@ -204,7 +204,7 @@ func TestFieldsBlockMatchesPython(t *testing.T) {
 		bodies = append(bodies, is.Body)
 	}
 	var want []map[string]any
-	pytest.GoldenJSON(t, bodies, &want)
+	golden.GoldenJSON(t, bodies, &want)
 	var got, w, inputs []any
 	for i, body := range bodies {
 		text, fields, order := ParseFieldsBlock(body)
@@ -217,7 +217,7 @@ func TestFieldsBlockMatchesPython(t *testing.T) {
 		w = append(w, want[i])
 		inputs = append(inputs, body)
 	}
-	n := pytest.Compare(t, "fields block", inputs, got, w)
+	n := golden.Compare(t, "fields block", inputs, got, w)
 	t.Logf("compared %d bodies (parse_fields_block, render_fields_block)", n)
 }
 

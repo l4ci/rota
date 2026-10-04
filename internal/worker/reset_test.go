@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/l4ci/rota/internal/pytest"
+	"github.com/l4ci/rota/internal/golden"
 )
 
 // slotProject builds a project with one initialised slot.
@@ -32,7 +32,7 @@ func commitIn(t *testing.T, dir, file string) {
 func TestResetCleanSlotCutsTaskBranch(t *testing.T) {
 	b := slotProject(t)
 	var want map[string]string
-	pytest.Golden(t, map[string]any{"config": `{}`, "pool": "init --slots 1 --base main", "argv": "reset --slot w1 --task 'T-7/Fix Me'"}, &want)
+	golden.Golden(t, map[string]any{"config": `{}`, "pool": "init --slots 1 --base main", "argv": "reset --slot w1 --task 'T-7/Fix Me'"}, &want)
 	res, err := Env{}.Reset(b, "w1", "T-7/Fix Me", false)
 	if err != nil {
 		t.Fatal(err)
@@ -116,7 +116,7 @@ func TestResetTreatsACherryPickedCommitAsMerged(t *testing.T) {
 func TestResetRetryKeepsTheTasksOwnWork(t *testing.T) {
 	b := slotProject(t)
 	var want map[string]string
-	pytest.Golden(t, map[string]any{"config": `{}`, "pool": "init --slots 1 --base main",
+	golden.Golden(t, map[string]any{"config": `{}`, "pool": "init --slots 1 --base main",
 		"steps": []string{"reset --slot w1 --task T4", "write wip.txt in w1, record task T4 on the slot", "reset --slot w1 --task T4"}}, &want)
 	if _, err := (Env{}).Reset(b, "w1", "T4", false); err != nil {
 		t.Fatal(err)

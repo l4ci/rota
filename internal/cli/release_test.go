@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/l4ci/rota/internal/pytest"
+	"github.com/l4ci/rota/internal/golden"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
@@ -111,7 +111,7 @@ func releaseBumpCases() []releaseBumpCase {
 func TestReleaseBumpParity(t *testing.T) {
 	cases := releaseBumpCases()
 	var want []releaseBumpWant
-	pytest.Golden(t, cases, &want)
+	golden.Golden(t, cases, &want)
 	for i, c := range cases {
 		dir := releaseProject(t, map[string]string{c.File: c.Text})
 		o := trRun(t, dir, "", "release", "bump", "--file", c.File, "--kind", c.Kind, c.Flag, c.Arg, "--json")
@@ -210,7 +210,7 @@ func TestReleaseVersionParity(t *testing.T) {
 		}
 	}
 	var want []releaseVersionWant
-	pytest.Golden(t, cases, &want)
+	golden.Golden(t, cases, &want)
 	for i, c := range cases {
 		dir := releaseProject(t, map[string]string{c.File: c.Text})
 		o := trRun(t, dir, "", "release", "version", "--json")
@@ -244,7 +244,7 @@ type releaseRunWant struct {
 
 func TestReleaseVersionPriorityAndOverride(t *testing.T) {
 	var want []releaseRunWant // the default detection, then one per override
-	pytest.Golden(t, map[string]any{"files": releaseVersionPriorityFiles, "overrides": releaseVersionOverrides}, &want)
+	golden.Golden(t, map[string]any{"files": releaseVersionPriorityFiles, "overrides": releaseVersionOverrides}, &want)
 	dir := releaseProject(t, releaseVersionPriorityFiles)
 	o := trRun(t, dir, "", "release", "version", "--json")
 	d := releaseData(t, o)
@@ -335,7 +335,7 @@ var releaseHostURLs = []string{
 
 func TestReleaseHostParity(t *testing.T) {
 	var want []string // the retired detect-host helper's stdout per URL
-	pytest.Golden(t, releaseHostURLs, &want)
+	golden.Golden(t, releaseHostURLs, &want)
 	for i, url := range releaseHostURLs {
 		dir := t.TempDir()
 		gitT(t, dir, "init", "-q", "-b", "main")
@@ -396,7 +396,7 @@ func releaseMaskHashes(s string) string { return releaseHashes.ReplaceAllString(
 
 func TestReleaseNotesParity(t *testing.T) {
 	var want []string // the retired helper's notes per since, hashes masked, h2 headings as h3
-	pytest.Golden(t, map[string]any{"commits": releaseNotesCommits, "sinces": releaseNotesSinces}, &want)
+	golden.Golden(t, map[string]any{"commits": releaseNotesCommits, "sinces": releaseNotesSinces}, &want)
 	dir := newRepo(t, t.TempDir(), "r", "main")
 	write(t, filepath.Join(dir, ".rota", "config.json"), `{}`)
 	gitT(t, dir, "tag", "v0.1.0")
@@ -521,7 +521,7 @@ func releaseMaskDates(s string) string { return releaseDates.ReplaceAllString(s,
 
 func TestReleaseChangelogParity(t *testing.T) {
 	var want []releaseChangelogWant
-	pytest.Golden(t, map[string]any{"notes": releaseChangelogNotes, "cases": releaseChangelogCases}, &want)
+	golden.Golden(t, map[string]any{"notes": releaseChangelogNotes, "cases": releaseChangelogCases}, &want)
 	for i, c := range releaseChangelogCases {
 		files := map[string]string{"notes.md": releaseChangelogNotes}
 		if c.File != nil {
@@ -556,7 +556,7 @@ func releaseStr(s string) *string { return &s }
 func TestReleaseChangelogOptions(t *testing.T) {
 	files := map[string]string{"notes.md": "- x\n", "docs/CHANGES.md": "# Changes\n\nold\n"}
 	var want releaseChangelogWant // the retired helper with --path docs/CHANGES.md
-	pytest.Golden(t, files, &want)
+	golden.Golden(t, files, &want)
 	dir := releaseProject(t, files)
 	o := trRun(t, dir, "", "release", "changelog", "2.0.0", "--body-file", "notes.md", "--path", "docs/CHANGES.md", "--json")
 	if want.RC != 0 || o.code != 0 || releaseData(t, o)["path"] != want.Out {
@@ -651,7 +651,7 @@ var releasePendingCases = []releasePendingCase{
 
 func TestReleasePendingParity(t *testing.T) {
 	var want []releaseRunWant // the retired helper's rc and text output per case
-	pytest.Golden(t, releasePendingCases, &want)
+	golden.Golden(t, releasePendingCases, &want)
 	for i, c := range releasePendingCases {
 		dir := releaseTagRepo(t, c.Days, c.N)
 		write(t, filepath.Join(dir, ".rota", "config.json"), c.Cfg)
@@ -674,7 +674,7 @@ func TestReleasePendingParity(t *testing.T) {
 
 func TestReleasePendingNoTagAndConfigLocal(t *testing.T) {
 	var want [2]string // the retired helper's JSON: no tag, then config.local.json
-	pytest.Golden(t, "no tag nudgeAfterCommits=3; tag, 3 commits, config 50 over local 3", &want)
+	golden.Golden(t, "no tag nudgeAfterCommits=3; tag, 3 commits, config 50 over local 3", &want)
 	var w1, w2 map[string]any
 	_ = json.Unmarshal([]byte(want[0]), &w1)
 	_ = json.Unmarshal([]byte(want[1]), &w2)

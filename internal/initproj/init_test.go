@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/config"
-	"github.com/l4ci/rota/internal/pytest"
+	"github.com/l4ci/rota/internal/golden"
 )
 
 // fixture is a starting tree: path (relative to the root) to content.
@@ -105,7 +105,7 @@ func readTree(t *testing.T, dir string) map[string]string {
 // line in it (#236), both edited into the golden by hand.
 func TestInitMatchesBootstrapGolden(t *testing.T) {
 	var want map[string]map[string]string
-	pytest.Golden(t, fixtures, &want)
+	golden.Golden(t, fixtures, &want)
 	for _, name := range names() {
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()
