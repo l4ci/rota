@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -254,5 +255,34 @@ func TestA4bSummaryNoBacklogIsResolution(t *testing.T) {
 	os.Remove(filepath.Join(root, ".rota", "BACKLOG.md"))
 	if code, _, stderr := rotaRun(t, "--json", "-C", root, "summary"); code != ExitResolution || !strings.Contains(stderr, "rota init") {
 		t.Errorf("exit %d stderr %s", code, stderr)
+	}
+}
+
+func TestA4bSummaryRecentIsNewestFirstInFileMode(t *testing.T) {
+	root := a4Project(t, "")
+	md := "# TODO\n\n## Completed\n" +
+		"- ~~**[B01] [P1] a.** x~~ Done 2026-10-01 [`aaa1111`]\n" +
+		"- ~~**[B02] [P1] b.** x~~ Done 2026-10-03 [`bbb2222`]\n" +
+		"- ~~**[B03] [P1] c.** x~~ Done 2026-10-01 [`ccc3333`]\n" +
+		"- ~~**[B04] [P1] d.** x~~ Done 2026-10-04 [`ddd4444`]\n" +
+		"- ~~**[B05] [P1] e.** x~~ Done 2026-10-03 [`eee5555`]\n"
+	os.WriteFile(filepath.Join(root, ".rota", "BACKLOG.md"), []byte(md), 0o644)
+	code, env, _ := rotaRun(t, "--json", "-C", root, "summary")
+	if code != 0 {
+		t.Fatalf("exit %d", code)
+	}
+	var got []string
+	for _, r := range get(dataOf(env), "recent").([]any) {
+		got = append(got, get(r, "id").(string))
+	}
+	if strings.Join(got, ",") != "B04,B05,B02" {
+		t.Errorf("recent = %v, want B04,B05,B02", got)
+	}
+	wd, _ := os.Getwd()
+	defer os.Chdir(wd)
+	var out, errb bytes.Buffer
+	Main([]string{"-C", root, "summary"}, strings.NewReader(""), &out, &errb)
+	if !strings.Contains(out.String(), "Recent: [B04] on 2026-10-04, [B05] on 2026-10-03, [B02] on 2026-10-03") {
+		t.Errorf("text output: %s", out.String())
 	}
 }
