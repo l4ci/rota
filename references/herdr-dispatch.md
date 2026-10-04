@@ -55,7 +55,7 @@ Agent names are unique per herdr **server**, not per workspace, so a bare `w1` w
 
 ## Polling
 
-`rota worker poll` reads herdr's native agent state, then runs the same text classifier as tmux on the pane; the mapping and the registry writes (`slot.state`, `slot.pr`) are specified in the contract (`docs/design/5.0-verb-contract.md`, A7 and C1/C2). Read `data.slots[].state`. Sentinels, `Retrying in` and `limited` outrank the native state.
+`rota worker poll` reads herdr's native agent state, then runs the same text classifier as tmux on the pane; the mapping and the registry writes (`slot.state`, `slot.pr`) are specified in the contract (`docs/design/contract/workers.md` and `rounds.md`, A7 and C1/C2). Read `data.slots[].state`. Sentinels, `Retrying in` and `limited` outrank the native state.
 
 **`unknown` is not done.** herdr reports it when an agent is present but it cannot classify the screen. Look at the tab before doing anything, and never route it to the gate. A slot that newly turns `blocked` or `needs-permission` raises a herdr notification with sound, once per transition.
 
