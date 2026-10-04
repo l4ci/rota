@@ -1,3 +1,5 @@
+> Frozen: this backlog moved to the issue tracker on 2026-10-04 (see .rota/issue-map.json). Edit issues, not this file.
+
 # TODO
 
 ## Bugs
@@ -5,6 +7,8 @@
 
 ## Features
 - **[F83] [Major] Codex multi-account worker slots.** Mirror F79 for Codex: map slots to their own `CODEX_HOME` so each authenticates as a separate account, and allow a Codex `workerCommand` (herdr host currently refuses non-claude launches, `hv-host-herdr.sh:128`). Usage balancing needs a Codex-side meter; `hv-worker-account` only reads Anthropic's OAuth usage endpoint, so Codex slots fall back to rotation until one exists. Detail: `.rota/features/F83.md` Related: [F79], [F81], [F80] Since: ba8a3ad
+- **[F85] [Major] rota orchestrate: launch the orchestrator session.** One command opens the multiplexer tab, starts the configured agent under keepalive and passes /rota-orchestrate as its first prompt, as round assign already does for workers. Detail: `.rota/features/F85.md` Related: [F87] Since: ef5db36
+- **[F87] [Minor] Round start friction with no active milestone.** Empty candidates without an active milestone, milestone-only plans and per-change bookkeeping PRs made round 1 take ~15 calls before the first assign. Detail: `.rota/features/F87.md` Related: [F85] Since: ef5db36
 
 ## Tasks
 - **[T113] Fix Codex sandbox on this host.** `codex exec -s read-only` and workspace-write fail with `bwrap: loopback: Failed RTM_NEWADDR: Operation not permitted` (Ubuntu 24.04 `apparmor_restrict_unprivileged_userns=1`, no bwrap binary) while codex exits 0 and emits a bogus FAIL. Needs sudo: install bubblewrap plus an AppArmor profile, or `sysctl kernel.apparmor_restrict_unprivileged_userns=0`. Acceptance: `codex exec -s workspace-write "run ls"` succeeds with no bwrap error; add `hv-codex-verify --doctor` to detect and print the fix. Related: [F80] Since: 4a0787b
@@ -26,3 +30,4 @@
 - ~~**[T121] Remove the v4.0 announcement.** Delete `docs/announcements/v4-0.md` (and the then-empty `docs/announcements/` dir); no active v3 users to read it. Drop its links in README.md (covered by T120) and CHANGELOG.md. Keep the `/hv-migrate` skill: it may be reused for future migrations. Related: [T120] Since: d1eb65e~~ Done 2026-10-03 [`d7a4047`] (dropped: superseded by #73 (F3))
 - ~~**[F84] [Minor] AGENTS.md as the project instructions file.** Move this repo's CLAUDE.md content into AGENTS.md (read by Codex and other agents) and reduce CLAUDE.md to an `@AGENTS.md` import. Teach the helpers that write managed blocks (`hv-managed-block`, `hvlib_knowledge`, the `*-index` helpers, glossary, strip-deprecated) to target AGENTS.md when it exists, else CLAUDE.md, so /hv-learn and /hv-init stop re-adding blocks to CLAUDE.md. Related: [F83] Since: ba8a3ad~~ Done 2026-10-04 [`27d5fa2`]
 - ~~**[T122] Fix stale work.accounts doc.** `docs/reference/config-options.md:161` says `work.accounts` is only meaningful under `work.dispatch: tmux`; herdr (F81) passes `CLAUDE_CONFIG_DIR` per tab too (`hv-host-herdr.sh:140`). Reword to cover both hosts. Related: [F79], [F81] Since: ba8a3ad~~ Done 2026-10-04 [`27d5fa2`]
+- ~~**[B31] [P0] Smoke stops at 38_qa: qa managed block not in CLAUDE.md.** Full smoke on main fails at test/sections/38_qa.sh:90, so no section after 38 runs and every PR's gate is red. Blocks all round merges. Detail: `.rota/bugs/B31.md` Since: ef5db36~~ Done 2026-10-04 [`553d44f`]
