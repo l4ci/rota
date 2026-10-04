@@ -6,11 +6,11 @@ The pair shares the **spine** but diverges on every axis where scope, blast radi
 
 ## Shared spine
 
-1. **Socratic discovery** — multi-choice clarifying questions via `AskUserQuestion` (≤ 4 options per the picker cap) with plain-text fallback per `references/ask-user-question-fallback.md`. Cadence (one-per-round vs batched) and round budget are scope-dependent — see the divergences table.
+1. **Socratic discovery** — multi-choice clarifying questions via `AskUserQuestion` (≤ 4 options per the picker cap). Cadence (one-per-round vs batched) and round budget are scope-dependent — see the divergences table.
 2. **Propose before disk write** — present the proposal inline as plain markdown (not yet committed). At milestone scope, the proposal is the milestone list; at item scope, the proposal is 2 or 3 candidate approaches with Shape / Pros / Cons / Why-this-might-or-might-not-be-the-right-answer plus an *"Ask more questions first"* escape.
 3. **Iterate before commit** — the user redlines; the skill restates; loop until the user explicitly confirms. The gate shape (free-form redline vs structured per-section approval) is scope-dependent — see the divergences table.
 4. **Write artifact via verb** — call the canonical writer verb, then `Edit` placeholder bodies. Frontmatter stays intact. At milestone scope: `rota milestone add` (and a final `rota milestone index` to regenerate the managed CLAUDE.md block). At item scope: `rota design add` (the index is term/topic-keyed and refreshed by separate persistence verbs — not in this skill).
-5. **User-review gate** — present the artifact (or invoke a `* show` verb) and ask approve / revise / stop. Plain-text fallback: `approve` / `revise` / `stop`. Default rule: honor yes/no — silence does not approve.
+5. **User-review gate** — present the artifact (or invoke a `* show` verb) and ask approve / revise / stop. Default rule: honor yes/no — silence does not approve.
 
 ## Per-axis divergences
 
@@ -18,7 +18,7 @@ The pair shares the **spine** but diverges on every axis where scope, blast radi
 |---|---|---|
 | Scope | Project / milestone-level — multiple milestones can be active at once | Single backlog item (`[B##]` / `[F##]` / `[T##]`) |
 | Artifact | `MILESTONES.md` (overview) + `.rota/milestones/<MNN>.md` (per-milestone detail) | `.rota/designs/<ID>.md` (single file per item) |
-| Discovery cadence | Batched — single `AskUserQuestion` call with 2-3 questions in Create mode, single question in Edit mode; no hard round cap | One question per round; 5-round cap; plain-text fallback after the fifth; section gates and the final review excluded from the budget |
+| Discovery cadence | Batched — single `AskUserQuestion` call with 2-3 questions in Create mode, single question in Edit mode; no hard round cap | One question per round; 5-round cap; prose questions after the fifth; section gates and the final review excluded from the budget |
 | Proposal shape | Single milestone list (M01 … MNN) with goal / acceptance / rationale / risks per milestone; no fixed milestone count | 2 or 3 candidate approaches with Shape / Pros / Cons / Why; single-select pick with *"Ask more questions first"* escape |
 | Iterate gate | Free-form redline pass (combine, cut, retire, add, re-prioritize); explicit user confirmation before disk write | Sectioned design (Goal → Design → Approaches → Open questions → Assumptions) with per-section approval — `yes` / `changes` / `approve all remaining` |
 | Web research step | Yes — dedicated phase between discovery and proposal; gathers external context (prior art, pitfalls, patterns) via parallel `WebSearch` / `WebFetch` | No — local-context only; `/rota-spike` handoff when a question needs code-touching evidence |
@@ -47,7 +47,5 @@ Skills that import / generate / one-shot transform (e.g., `/rota-spike` runs a s
 
 ## See also
 
-- `references/ask-user-question-fallback.md` — plain-text fallback shape used by every `AskUserQuestion` call in the spine.
-- `references/banner-preamble.md` — banner-print rule shared by every skill.
 - `references/context-load-protocol.md` — K+D+C parallel-load sequence both skills run before discovery.
 - `references/manual-gates.md` — inventory of always-manual sites; both skills' user-review gate appears there.
