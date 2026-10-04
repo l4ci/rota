@@ -310,6 +310,9 @@ func hookPrompt(c *Ctx, args []string) (res Result, _ error) {
 	if !ok {
 		return Result{}, nil
 	}
+	if worker.RegistryHost(hc.root) == host.Solo {
+		return Result{}, nil
+	}
 	if need, _ := roundwatch.NeedsWatch(hc.root); !need {
 		return Result{}, nil
 	}
