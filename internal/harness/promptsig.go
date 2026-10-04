@@ -1,4 +1,4 @@
-package worker
+package harness
 
 import (
 	"crypto/hmac"
@@ -149,11 +149,11 @@ func shQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
-// codexHookArgs are the codex flags that install the prompt-check hook. The
+// CodexHookArgs are the codex flags that install the prompt-check hook. The
 // wrapper turns every failure of the check (not only its own exit 2) into a
 // block: Codex lets a hook that errors with another code through. The check's
 // own exit 2 already carries its reason, so only other codes get one added.
-func codexHookArgs(rotaBin, keyPath string) []string {
+func CodexHookArgs(rotaBin, keyPath string) []string {
 	cmd := shQuote(rotaBin) + " worker prompt-check --key " + shQuote(keyPath) +
 		"; rc=$?; [ $rc -eq 0 ] && exit 0; [ $rc -eq 2 ] || echo 'rota: the prompt check could not run, so this input was blocked' >&2; exit 2"
 	return []string{"-c", "features.hooks=true",
@@ -178,4 +178,35 @@ func withPromptHook(launch string, extra []string) (string, error) {
 		out[j] = shQuote(t)
 	}
 	return strings.Join(out, " "), nil
+}
+
+// tomlString is s as a TOML basic string: quoted, with backslash, quote and
+// control characters escaped.
+func tomlString(s string) string {
+	var b strings.Builder
+	b.WriteByte('"')
+	for _, r := range s {
+		switch {
+		case r == '"':
+			b.WriteString(`\"`)
+		case r == '\\':
+			b.WriteString(`\\`)
+		case r == '\n':
+			b.WriteString(`\n`)
+		case r == '\t':
+			b.WriteString(`\t`)
+		case r == '\r':
+			b.WriteString(`\r`)
+		case r == '\b':
+			b.WriteString(`\b`)
+		case r == '\f':
+			b.WriteString(`\f`)
+		case r < 0x20 || r == 0x7f:
+			b.WriteString(`\u` + fmt.Sprintf("%04X", r))
+		default:
+			b.WriteRune(r)
+		}
+	}
+	b.WriteByte('"')
+	return b.String()
 }

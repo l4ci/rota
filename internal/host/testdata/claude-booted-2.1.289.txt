@@ -1,0 +1,13 @@
+
+ ▐▛███▛█   Claude Code v2.1.289
+▝▜██████▀  Opus 5.5 · Claude Max
+ ▝▝   ▝▝   ~/Sync/Dev/rota/.worktrees/ben
+
+                                                                                                    ◐ medium · /effort
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ Try "refactor 28_config_set.sh"
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Opus 5.5 on ben/102-tmux-host-claude-workers-time | 0 / 1.0m | 100% remain | thinking: Off
+  current: ○○○○○○○○○○ 6%  | weekly: ●●●○○○○○○○ 36%
+  resets 3:00am           | resets Oct 9, 8:00pm
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← for agents
