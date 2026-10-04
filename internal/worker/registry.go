@@ -6,6 +6,7 @@ package worker
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"os/exec"
@@ -378,4 +379,51 @@ func execShell(ctx context.Context, dir, command string) (string, int) {
 		return err.Error(), 127
 	}
 	return string(out), 0
+}
+
+// RecordBounce counts one gate bounce against an item (`bounces` in the
+// registry maps the issue to how often the gate sent its PR back) and returns
+// the new count. Counts live per item, not per slot, so a transfer to another
+// slot does not reset them.
+func RecordBounce(root, issue string) (n int, err error) {
+	def := jsonx.NewObject()
+	def.Set("slots", []any{})
+	err = Update(root, def, func(doc *jsonx.Object) {
+		b := bouncesOf(doc)
+		n = bounceCount(b, issue) + 1
+		b.Set(issue, json.Number(strconv.Itoa(n)))
+		doc.Set("bounces", b)
+	})
+	return n, err
+}
+
+// ClearBounces forgets an item's count: its PR merged or it was handed over.
+func ClearBounces(root, issue string) error {
+	def := jsonx.NewObject()
+	def.Set("slots", []any{})
+	return Update(root, def, func(doc *jsonx.Object) {
+		if b := bouncesOf(doc); bounceCount(b, issue) > 0 {
+			b.Delete(issue)
+			doc.Set("bounces", b)
+		}
+	})
+}
+
+func bouncesOf(doc *jsonx.Object) *jsonx.Object {
+	if v, _ := doc.Get("bounces"); v != nil {
+		if b, ok := v.(*jsonx.Object); ok {
+			return b
+		}
+	}
+	return jsonx.NewObject()
+}
+
+func bounceCount(b *jsonx.Object, issue string) int {
+	v, _ := b.Get(issue)
+	if n, ok := v.(json.Number); ok {
+		if i, err := strconv.Atoi(n.String()); err == nil {
+			return i
+		}
+	}
+	return 0
 }

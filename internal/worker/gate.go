@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -27,7 +29,10 @@ import (
 //
 //  1. FRESHNESS: is the cycle branch an ancestor of the worker branch? If not,
 //     the worker never merged what landed since it branched and its green is
-//     stale: bounce it. With a recorded PR and an origin remote this is judged
+//     stale. That alone is no refusal (#31): when the merge is clean and the
+//     two sides changed no file in common the gate merges it itself and
+//     verifies the merged tree; a conflict or a shared file bounces it (see
+//     staleReason), and the CLI counts bounces per item. With a recorded PR and an origin remote this is judged
 //     on the PUSHED refs after a fetch (origin/<base> vs origin/<branch>),
 //     because the PR merges what was pushed, not what sits in a local worktree.
 //     The PR's head branch, head SHA and target branch must match the verified
@@ -219,8 +224,15 @@ func (e Env) gate(ctx context.Context, root string, o GateOpts, res GateResult, 
 		if c != 0 {
 			behind = "?"
 		}
-		return g.verdict(GateStale, fmt.Sprintf("STALE %s %s — %s commit(s) landed on %s since it branched", o.Slot, branch, behind, o.Base),
-			fmt.Sprintf("bounce: tell slot %s to `git merge %s` and re-verify, then re-gate", o.Slot, o.Base)), nil
+		why, brokeMsg := g.staleReason(cfg)
+		if brokeMsg != "" {
+			return g.broke(brokeMsg)
+		}
+		if why != "" {
+			return g.verdict(GateStale, fmt.Sprintf("STALE %s %s — %s commit(s) landed on %s since it branched; %s", o.Slot, branch, behind, o.Base, why),
+				fmt.Sprintf("bounce: tell slot %s to `git merge %s`, resolve and re-verify, then re-gate", o.Slot, o.Base)), nil
+		}
+		res.Notes = append(res.Notes, fmt.Sprintf("STALE-MERGE %s — %s commit(s) landed on %s since %s branched; none touch its files and the merge is clean, merging as is", o.Slot, behind, o.Base, branch))
 	default:
 		return g.broke(fmt.Sprintf("git merge-base --is-ancestor %s %s exited %d", g.baseRef, g.headRef, code))
 	}
@@ -364,6 +376,78 @@ func (e Env) gate(ctx context.Context, root string, o GateOpts, res GateResult, 
 	os.Remove(logf.Name())
 	res.Verdict = GatePass
 	return res, nil
+}
+
+// staleReason says why a branch behind the base must go back to its worker:
+// "" when the merge is clean and the two sides changed no file in common, so
+// the gate merges it itself and verifies the merged tree. A conflict needs the
+// worker's context. A shared file changed on both sides can merge textually
+// clean and still break (one side widens a symbol, the other adds a call), and
+// that breakage would land on the base before RE-VERIFY sees it. Files matching
+// round.sharedPaths are ignored, as the readiness overlap check ignores them.
+// brokeMsg is set when a git check itself fails.
+func (g *gate) staleReason(cfg any) (why, brokeMsg string) {
+	e, root := g.e, g.root
+	if _, code := e.git(root, "merge-base", "--is-ancestor", g.headRef, g.baseRef); code == 0 {
+		return fmt.Sprintf("its work is already on %s, nothing to merge", g.o.Base), ""
+	}
+	switch out, code := e.git(root, "merge-tree", "--write-tree", "--no-messages", g.baseRef, g.headRef); code {
+	case 0:
+	case 1:
+		return "the merge conflicts", ""
+	default:
+		return "", fmt.Sprintf("git merge-tree %s %s exited %d: %s", g.baseRef, g.headRef, code, out)
+	}
+	mb, code := e.git(root, "merge-base", g.baseRef, g.headRef)
+	if code != 0 || mb == "" {
+		return "", fmt.Sprintf("git merge-base %s %s exited %d", g.baseRef, g.headRef, code)
+	}
+	changed := func(ref string) (map[string]bool, bool) {
+		out, code := e.git(root, "diff", "--name-only", "--no-renames", mb, ref)
+		if code != 0 {
+			return nil, false
+		}
+		set := map[string]bool{}
+		for _, l := range strings.Split(out, "\n") {
+			if l != "" {
+				set[l] = true
+			}
+		}
+		return set, true
+	}
+	onBase, ok1 := changed(g.baseRef)
+	onHead, ok2 := changed(g.headRef)
+	if !ok1 || !ok2 {
+		return "", fmt.Sprintf("git diff --name-only against %s failed", mb)
+	}
+	var shared []string
+	if v, ok := config.Lookup(cfg, "round.sharedPaths"); ok {
+		if list, ok := v.([]any); ok {
+			for _, p := range list {
+				shared = append(shared, fmt.Sprint(p))
+			}
+		}
+	}
+	var both []string
+	for f := range onHead {
+		if !onBase[f] {
+			continue
+		}
+		skip := false
+		for _, p := range shared {
+			if m, _ := path.Match(p, f); m {
+				skip = true
+			}
+		}
+		if !skip {
+			both = append(both, f)
+		}
+	}
+	if len(both) == 0 {
+		return "", ""
+	}
+	sort.Strings(both)
+	return "both sides changed " + strings.Join(both, ", "), ""
 }
 
 func appendFile(path, text string) {

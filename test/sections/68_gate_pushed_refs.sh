@@ -115,11 +115,13 @@ PYEOF
 }
 
 # (a) freshness is judged on PUSHED refs: the worker's local branch has merged main,
-# but what it pushed has not, so the PR is stale. Local refs would say FRESH.
+# but what it pushed has not, so the PR is stale. Local refs would say FRESH. Main
+# moves on work.txt, which the worker added too, so the merge conflicts and the
+# gate bounces it (a clean, disjoint merge is merged by the gate, see section 104).
 gt_case a "$GH_URL"
-( cd "$GT_WORKER" && git checkout -q main && echo more > more.txt && git add more.txt \
+( cd "$GT_WORKER" && git checkout -q main && echo more > work.txt && git add work.txt \
   && gt_git commit -q -m "main moves" && git push -q origin main ) || fail "gate (a): advancing main failed"
-( cd "$GT_DIR" && git fetch -q origin && git checkout -q -b w1 origin/w1 && gt_git merge -q origin/main -m sync && git checkout -q main ) \
+( cd "$GT_DIR" && git fetch -q origin && git checkout -q -b w1 origin/w1 && gt_git merge -q -X ours origin/main -m sync && git checkout -q main ) \
   || fail "gate (a): local w1 should merge origin/main cleanly"
 ( cd "$GT_DIR" && git merge-base --is-ancestor origin/main w1 ) || fail "gate (a): fixture is vacuous, local w1 is not fresh"
 RC="$(gt_gate "$ROTA_BIN" --json worker gate w1 --base main --check-only)"
