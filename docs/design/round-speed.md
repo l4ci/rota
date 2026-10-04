@@ -103,6 +103,7 @@ The split I can support with data: implement is short (median about 15 min), gat
 ## 5. Not measured
 
 - **Plain agent vs round worker baseline.** Not done. No open issue was small enough to run twice without touching the round's live branches, and a rigged task would not tell us what the contract skips. Round workers skip nothing the gate checks; what the contract adds is reading the thread, the PR body with `## Approvals`, and the sentinels. A fair baseline needs one real small issue assigned to both setups; propose it as a follow-up with the next doc-only issue.
+- Baseline results: see [`round-baseline.md`](round-baseline.md).
 - **Per-PR gate counts from panes.** Panes were not readable from a worker. Needs the orchestrator's logs.
 - **Clean race-vs-no-race pair.** Load differed (see section 2).
 
