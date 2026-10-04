@@ -61,6 +61,7 @@ type ghIssue struct {
 	ClosedAt    string                   `json:"closedAt"`
 	URL         string                   `json:"url"`
 	Assignees   []struct{ Login string } `json:"assignees"`
+	Author      *struct{ Login string }  `json:"author"`
 	Comments    []struct {
 		URL    string                  `json:"url"`
 		Body   string                  `json:"body"`
@@ -88,6 +89,9 @@ func (d ghIssue) norm() Issue {
 	}
 	for _, a := range d.Assignees {
 		is.Assignees = append(is.Assignees, a.Login)
+	}
+	if d.Author != nil {
+		is.Author = d.Author.Login
 	}
 	return is
 }
@@ -245,7 +249,10 @@ func (g *GitHub) List(ctx context.Context, f ListFilter) ([]Issue, error) {
 	}
 	var raw []ghIssue
 	err := g.withIssueFields(func(fields string) error {
-		args := []string{"issue", "list", "--state", state, "--json", fields}
+		args := []string{"issue", "list", "--state", state, "--json", fields + ",author"}
+		if f.Mine {
+			args = append(args, "--assignee", "@me")
+		}
 		for _, l := range f.Labels {
 			args = append(args, "--label", l)
 		}
@@ -261,7 +268,7 @@ func (g *GitHub) List(ctx context.Context, f ListFilter) ([]Issue, error) {
 	for _, d := range raw {
 		out = append(out, d.norm())
 	}
-	return out, nil
+	return firstN(out, f.Limit), nil
 }
 
 func (g *GitHub) Edit(ctx context.Context, number int, e IssueEdit) error {
