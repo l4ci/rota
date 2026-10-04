@@ -149,12 +149,8 @@ func umbrellaCases() []umbrellaCase {
 // line and the warnings.
 func TestUmbrellaMatchesHelperGolden(t *testing.T) {
 	cases := umbrellaCases()
-	var want []umbrellaOutcome
-	golden.Golden(t, cases, &want)
-	if len(want) != len(cases) {
-		t.Fatalf("golden has %d outcomes for %d cases", len(want), len(cases))
-	}
-	for i, tc := range cases {
+	var outcomes []umbrellaOutcome
+	for _, tc := range cases {
 		t.Run(tc.Name, func(t *testing.T) {
 			root := tree(t, tc.Git, tc.Files, tc.Kids...)
 			res, err := Umbrella(root, tc.opts, nil)
@@ -178,11 +174,10 @@ func TestUmbrellaMatchesHelperGolden(t *testing.T) {
 				Summary:   `{"registered":[` + quoteJoin(res.Registered) + `],"umbrellaIsGitRepo":` + map[bool]string{true: "true", false: "false"}[res.IsGitRepo] + "}\n",
 				Warnings:  append([]string{}, res.Warnings...),
 			}
-			if !reflect.DeepEqual(got, want[i]) {
-				t.Errorf("outcome differs\ngo:     %+v\ngolden: %+v", got, want[i])
-			}
+			outcomes = append(outcomes, got)
 		})
 	}
+	golden.Check(t, cases, outcomes)
 }
 
 func quoteJoin(l []string) string {
