@@ -196,7 +196,7 @@ A `/rota-review` or second-opinion PASS is acceptance, not proof: it reads the d
 
 ## Step 8.5 — Learn (Nudge or Auto-Invoke)
 
-Integration is a natural capture moment. Run `references/post-cycle-trigger-gate.md` with:
+Integration is a natural capture moment. **Inside a round, skip Steps 8.5 and 8.6 for round workers** (a worker's branch name is `<agent>/<issue>-<slug>`, or the brief says it is a round slot): the orchestrator runs learn and docs once per round, not per PR. Otherwise run `references/post-cycle-trigger-gate.md` with:
 
 - **Nudge (`"off"`):** append to the Step 9 report *"Capture learnings before context fades? Run `/rota-learn` — this cycle has the fresh session context."*
 - **Target (`"auto"`/`"loop"`):** dispatch `rota-learn` via `Skill` immediately, no prompt.
@@ -204,7 +204,7 @@ Integration is a natural capture moment. Run `references/post-cycle-trigger-gate
 
 ## Step 8.6 — Docs After-Work (inline)
 
-Run `references/post-cycle-trigger-gate.md`, inline variant, with config flag `docs.afterWork` (default `false`; enable with `rota config set docs.afterWork true` or by running `/rota-ship --docs` once). On trigger, run Docs Mode's after-work flow (Steps D-A1 to D-A6) in this session, with the resolved IDs and touched files as context. No `autonomy.level` branch: Step D-A5's approval is the checkpoint. A missing or empty `<docs.path>/` makes the flow skip itself.
+Skipped for round workers (see Step 8.5). Run `references/post-cycle-trigger-gate.md`, inline variant, with config flag `docs.afterWork` (default `false`; enable with `rota config set docs.afterWork true` or by running `/rota-ship --docs` once). On trigger, run Docs Mode's after-work flow (Steps D-A1 to D-A6) in this session, with the resolved IDs and touched files as context. No `autonomy.level` branch: Step D-A5's approval is the checkpoint. A missing or empty `<docs.path>/` makes the flow skip itself.
 
 ## Step 9 — Report to User
 
