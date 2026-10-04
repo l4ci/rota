@@ -25,7 +25,7 @@ func skillsRunCfg(t *testing.T, home, cfg, dir string, args ...string) (int, map
 		t.Fatal(err)
 	}
 	defer os.Chdir(old)
-	code, out, errOut := stubRun(append(args, "--json")...)
+	code, out, errOut := runMain(append(args, "--json")...)
 	var env map[string]any
 	if strings.TrimSpace(out) != "" {
 		if err := json.Unmarshal([]byte(out), &env); err != nil {
@@ -199,14 +199,14 @@ func TestSkillsNoHome(t *testing.T) {
 	os.Chdir(work)
 	defer os.Chdir(old)
 	for _, args := range [][]string{{"skills", "install"}, {"skills", "status"}, {"skills", "install", "--agent", "codex"}} {
-		if code, _, errOut := stubRun(args...); code != ExitResolution || !strings.Contains(errOut, "HOME") {
+		if code, _, errOut := runMain(args...); code != ExitResolution || !strings.Contains(errOut, "HOME") {
 			t.Errorf("%v: %d %s", args, code, errOut)
 		}
 	}
 	// A config dir alone is enough for the Claude root.
 	cfg := t.TempDir()
 	t.Setenv("CLAUDE_CONFIG_DIR", cfg)
-	if code, _, errOut := stubRun("skills", "install", "--agent", "claude"); code != 0 {
+	if code, _, errOut := runMain("skills", "install", "--agent", "claude"); code != 0 {
 		t.Errorf("claude with CLAUDE_CONFIG_DIR only: %d %s", code, errOut)
 	}
 }
