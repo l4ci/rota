@@ -14,11 +14,20 @@ the project-scoped `iid` for milestones, which the API edits by `id` (offset by 
 """
 import json
 import os
-import hashlib
 import re
-import subprocess
 import sys
-from datetime import datetime, timezone
+
+# hashlib, subprocess and datetime load on first use: a fake runs thousands of times per
+# smoke run, and each import costs 5 to 18 ms of interpreter start (#84).
+def _run(*a, **k):
+    import subprocess
+    return subprocess.run(*a, **k)
+
+
+def _sha1(b):
+    import hashlib
+    return hashlib.sha1(b)
+
 
 USER = "fake-user"
 GL_MILESTONE_ID = 1000  # glab milestone `id` = iid + this
@@ -34,7 +43,7 @@ class Fail(Exception):
 def db_path():
     d = os.environ.get("FAKE_TRACKER_DB_DIR")
     if d:
-        r = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True)
+        r = _run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True)
         if r.returncode != 0:
             raise Fail("FAKE_TRACKER_DB_DIR needs a git repo cwd")
         return os.path.join(d, os.path.basename(r.stdout.strip()) + ".json")
@@ -62,6 +71,7 @@ def save(db):
 
 
 def now():
+    from datetime import datetime, timezone
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
@@ -229,17 +239,17 @@ def find_pr(prs, want, mr=False):
 
 def current_branch():
     """Head of a PR opened without --head: the branch checked out in the cwd repo (as gh does)."""
-    r = subprocess.run(["git", "rev-parse", "--abbrev-ref", "HEAD"], capture_output=True, text=True)
+    r = _run(["git", "rev-parse", "--abbrev-ref", "HEAD"], capture_output=True, text=True)
     return r.stdout.strip() if r.returncode == 0 and r.stdout.strip() else "HEAD"
 
 
 def checkout_pr(p):
     """Create/switch a local branch named after the PR head in the cwd repo."""
     head = p["head"]
-    have = subprocess.run(["git", "rev-parse", "--verify", "-q", "refs/heads/" + head],
+    have = _run(["git", "rev-parse", "--verify", "-q", "refs/heads/" + head],
                           capture_output=True).returncode == 0
     cmd = ["git", "checkout", "-q", head] if have else ["git", "checkout", "-q", "-B", head]
-    r = subprocess.run(cmd, capture_output=True, text=True)
+    r = _run(cmd, capture_output=True, text=True)
     if r.returncode != 0:
         raise Fail("checkout failed: " + r.stderr.strip())
 
@@ -250,7 +260,7 @@ def merge_pr(db, p):
     if p["state"] != "open":
         raise Fail("pull request is not open")
     p["state"] = "merged"
-    p["merge_sha"] = hashlib.sha1(("fake-merge-%d" % p["number"]).encode()).hexdigest()
+    p["merge_sha"] = _sha1(("fake-merge-%d" % p["number"]).encode()).hexdigest()
     if p["base"] == "main":
         for m in CLOSING_RE.finditer(p["body"]):
             for i in db["issues"]:

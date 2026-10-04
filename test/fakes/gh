@@ -1,2 +1,4 @@
 #!/usr/bin/env bash
-exec python3 "$(dirname "$0")/fake_tracker.py" gh "$@"
+# Run fake_tracker as an imported module so Python caches its bytecode in
+# __pycache__: compiling its ~800 lines on every call cost about 20 ms (#84).
+exec python3 -S -c 'import sys; sys.path.insert(0, sys.argv[1]); sys.argv = sys.argv[1:]; import fake_tracker; sys.exit(fake_tracker.main())' "$(dirname "$0")" gh "$@"

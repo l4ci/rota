@@ -1046,3 +1046,17 @@ func TestLooksBooted(t *testing.T) {
 		}
 	}
 }
+
+func TestSettleScale(t *testing.T) {
+	for _, tc := range []struct {
+		pct  string
+		want time.Duration
+	}{{"", 3 * time.Second}, {"100", 3 * time.Second}, {"10", 300 * time.Millisecond}, {"0", 0}, {"-5", 3 * time.Second}, {"x", 3 * time.Second}, {"250", 3 * time.Second}} {
+		c := &clock{}
+		d := deps(&fake{}, map[string]string{"ROTA_HOST_SETTLE_PCT": tc.pct}, c)
+		d.settle(3 * time.Second)
+		if c.slept != tc.want {
+			t.Errorf("ROTA_HOST_SETTLE_PCT=%q slept %v, want %v", tc.pct, c.slept, tc.want)
+		}
+	}
+}
