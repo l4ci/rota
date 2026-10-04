@@ -22,7 +22,7 @@ Setup, config, update and migration are `rota` verbs, not skills: `rota init` (a
 | `/rota-qa` | Product-level QA: executes per-target strategy files (`.rota/qa/<target>.md`) with Playwright / smoke / lighthouse / axe / ZAP / contract runners; emits PASS / CONCERNS / FAIL. Modes: first-run / run / restructure |
 | `/rota-ship` | Bundle commits into a PR (or direct merge) with ID-linked body; runs `/rota-review` first by default, plus opt-in second-opinion (`ship.secondOpinion`) and product QA (`ship.qa`) gates. Flags: `--undo` (guided rollback of the last cycle on the base branch) and `--docs` (public-docs maintenance: first-run / after-work / restructure modes; auto-fires inline at ship time when `docs.afterWork: true`) |
 | `/rota-learn` | Extract durable session learnings into `KNOWLEDGE.md`, grouped by topic; Opus verification on by default |
-| `/rota-refactor` | Full architectural refactor cycle with parallel design + implementation subagents |
+| `/rota-refactor` | Architecture review that files findings as refactor issues; `--fix` implements them |
 | `/rota-release` | Cut a release: walk per-project checklist, bump version, generate notes, tag, push, publish to GitHub/GitLab |
 
 ---
@@ -67,7 +67,9 @@ Product-level QA: runs the per-target strategy declared in `.rota/qa/<target>.md
 
 ## /rota-refactor
 
-Runs an architectural refactor cycle: explores the codebase for friction, classifies findings as simple or structural, then fixes everything. For structural changes it spawns parallel design agents with competing constraints, compares the results, and recommends the strongest approach before executing. Pauses for user confirmation before proceeding (configurable).
+Architecture review. Explores the codebase (or one area, `/rota-refactor internal/cli`) for friction using one vocabulary (module, interface, depth, seam, adapter, leverage, locality) and a few heuristics (the deletion test, the interface as the test surface, one adapter is a hypothetical seam). It reads the glossary, knowledge and decisions first, ranks candidates Strong / Worth exploring / Speculative, and files each as a `refactor`-labelled issue with a `## Acceptance` section, deduped against open and closed issues. It changes no code by default.
+
+Flags: `--fix` implements the candidates you pick (parallel workers, verification, one commit; `refactor.confirmBeforeExecute` gates it), `--designs` drafts competing interfaces for structural candidates, `--interactive` lets you choose which to file. Several workers can each review one area in a round.
 
 ## /rota-release
 
