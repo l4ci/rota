@@ -685,7 +685,7 @@ Run the post-cycle choreography in `references/post-cycle-trigger-gate.md` with 
 
 - **Nudge (`"off"`):** *"Capture learnings from this session? Run `/rota-learn` to save durable knowledge before context fades."*
 - **Target (`"auto"`/`"loop"`):** **dispatch `rota-learn` via `Skill` immediately — no prompt, no confirmation, no "want me to" question.**
-- **Brief:** the cycle's resolved IDs and touched files, so the verifier (if `learn.verify: true`) has the right context.
+- **Brief:** the cycle's resolved IDs and touched files, so the verifier (under `--strict` or `learn.verify: true`) has the right context.
 
 ## Step 13.5 — Decide (Nudge Only)
 

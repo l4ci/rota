@@ -41,4 +41,4 @@ Manual invocation of a gated flow (e.g. the user running `/rota-ship --docs` by 
 ## See also
 
 - `references/authoring-conventions.md` — the inline-at-dispatch-point rule: each site keeps the dispatch imperative and target inline; this file owns the shared sequence around it.
-- `references/manual-gates.md` — for the orthogonal *"always manual, never auto-invoked"* gates (`/rota-decide`, `/rota-learn` Step 8.5/8.6, `/rota-ship` Step 6a, `/rota-release` Step 8/9). Those are separate from this trigger — they fire even when the trigger does, and never auto-pick.
+- `references/manual-gates.md` — for the orthogonal *"always manual, never auto-invoked"* gates (`/rota-decide`, `/rota-ship` Step 6a, `/rota-release` Step 8/9). Those are separate from this trigger — they fire even when the trigger does, and never auto-pick.

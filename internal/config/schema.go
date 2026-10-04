@@ -54,7 +54,7 @@ var Keys = []Key{
 	{"work.operatorCommand", "", true},
 	{"refactor.confirmBeforeExecute", true, true},
 	{"refactor.verifyCommands", []any{}, true},
-	{"learn.verify", true, true},
+	{"learn.verify", false, true},
 	{"learn.promoteThreshold", json.Number("3"), true},
 	{"ship.review", true, true},
 	{"ship.secondOpinion", false, true},

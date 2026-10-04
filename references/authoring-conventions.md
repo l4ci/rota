@@ -34,7 +34,7 @@ Routine = the kind of question where the Recommended option is the obvious right
 
 **Forbids.** Auto-picking on:
 - **Design decisions with open questions** — competing approaches, version-bump escalation, novel pattern choice. These belong to F32 (loop-mode auto-planning, with `[Auto:Loop]` decision logging). A `(Recommended)` flag on a design pick is a *suggestion*, not a routine answer; the loop must surface them.
-- **Manual gates that are never auto-invoked regardless of autonomy** — `/rota-decide` approvals, `/rota-learn` Step 8.5 issue filing, `/rota-learn` Step 9 runlog filing, `/rota-ship` Step 5 PR strategy, `/rota-release` push/publish gates. These have explicit `**Manual gate — ...**` callouts in their SKILL.md. Loop mode honors the gate — it does not auto-pick.
+- **Manual gates that are never auto-invoked regardless of autonomy** — `/rota-decide` approvals, `/rota-ship` Step 5 PR strategy, `/rota-release` push/publish gates. These have explicit `**Manual gate — ...**` callouts in their SKILL.md. Loop mode honors the gate — it does not auto-pick.
 - **Config-flip questions** — `/rota-ship --docs` after-work-mode opt-in. These flip user-preference flags; the opt-in-defaults-to-`false` rule (below) requires explicit user approval, not loop-mode synthesis.
 
 **Permits.**
@@ -50,7 +50,7 @@ Codified after F33 caught loop-mode discontinuity from `/rota-capture` milestone
 
 ## User-volition gates enforced at exactly one point
 
-Manual confirmation gates (`/rota-decide`'s manual-only contract, the public-artifact gate in `/rota-learn` Step 8.5, etc.) must be enforced at exactly ONE point in a skill, never propagated across orchestrator + called skill. The gate is architecture-enforced — only the owning skill can ask the question, and no other skill dispatches the gated skill via `Skill`. Putting a confirmation check in a skill that other skills can invoke breaks the contract under autonomy.
+Manual confirmation gates (`/rota-decide`'s manual-only contract, the acceptance-of-risk gate in `/rota-ship` Step 6a, etc.) must be enforced at exactly ONE point in a skill, never propagated across orchestrator + called skill. The gate is architecture-enforced — only the owning skill can ask the question, and no other skill dispatches the gated skill via `Skill`. Putting a confirmation check in a skill that other skills can invoke breaks the contract under autonomy.
 
 ## Stage features across slices using pass-through stubs
 
@@ -68,7 +68,7 @@ When adding a new boolean config flag whose purpose is to enable additional skil
 - **Never silently flip to `true`** anywhere — not on first detection, not on first invocation, not via cwd-inferred heuristics.
 - The owning skill flips the flag to `true` only via explicit user approval: first-run scaffold approval (the user opted in by approving), or `AskUserQuestion` on existing state with default "Leave off".
 - `rota config set` edits the flag explicitly (the flag is never read-only).
-- **Exempt:** standard-on settings with opt-out semantics (e.g. `learn.verify: true`, `ship.review: true`) — these are not opt-in flags. Mode switches inside an already-enabled feature (e.g. `docs.autoCreate: false→true`) are also exempt.
+- **Exempt:** standard-on settings with opt-out semantics (e.g. `ship.review: true`) — these are not opt-in flags. Mode switches inside an already-enabled feature (e.g. `docs.autoCreate: false→true`) are also exempt.
 
 Codified after F15 introduced `docs.afterWork`. Without this rule, opt-in flags drift toward auto-flip-on-first-detect, which makes them on-by-default in practice — defeating the opt-in semantics.
 

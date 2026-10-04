@@ -8,7 +8,7 @@ import json, sys
 gates = json.loads(sys.argv[1])["data"]["gates"]
 enforced = [g["name"] for g in gates if g["enforced"]]
 assert enforced == ["tag-push", "release-publish", "public-filing", "merge-approval", "debug-reset"], enforced
-assert {"issue-close", "issue-label", "pr-open"} <= {g["name"] for g in gates}
+assert {"issue-close", "decision-write", "pr-open"} <= {g["name"] for g in gates}
 PY
 pass "gate list prints the registry with the five enforced gates"
 
