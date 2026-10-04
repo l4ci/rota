@@ -47,7 +47,7 @@ pane "Welcome to Claude Code"
 lm() { ( cd "$PROJ" && env PATH="$FAKES" FAKE_TMUX="$FK/tmux" FAKE_TRACKER_DB="$TMP_LM/db.json" ROTA_ACCOUNT_USAGE_DIR="$FK/usage" \
   ROTA_TEST_NOW="${LMNOW:-$NOW}" ROTA_TEST_HOLDER_PID="$HOLDER" ROTA_HOST_KILL_WAIT=1 TZ=UTC "$@" ); }
 hvlm() { lm "$ROTA_BIN" --json "$@" 2>/dev/null; }
-watch_() { hvlm limit watch --timeout 1 --settle 0.1 "$@"; } # one short watch; exit code is the caller's to check
+watch_() { hvlm limit watch --timeout 0.3 --settle 0.1 "$@"; } # one short watch; exit code is the caller's to check
 usage_fix() { # usage_fix <account> <utilization> <resets_at|null>
   local r="$3"; [ "$r" = null ] || r="\"$r\""
   printf '{"five_hour":{"utilization":%s,"resets_at":%s},"seven_day":{"utilization":10,"resets_at":null}}\n' "$2" "$r" > "$FK/usage/$1.json"
@@ -200,13 +200,13 @@ RESETS_EPOCH="$(python3 -c 'import calendar,time; print(calendar.timegm(time.str
 printf '{"session_id":"orch1","cwd":"%s","rate_limits":{"five_hour":{"used_percentage":100,"resets_at":%s},"seven_day":{"used_percentage":20,"resets_at":%s}}}' "$PROJ" "$RESETS_EPOCH" "$((RESETS_EPOCH + 86400))" \
   | env ROTA_TEST_NOW="$NOW" "$ROTA_BIN" statusline dump || fail "D3: statusline dump failed"
 pane "Welcome to Claude Code"; : > "$FK/tmux/log"
-OUT="$(lm env TMUX_PANE=%9 "$ROTA_BIN" --json limit watch --timeout 1 --settle 0.1 2>/dev/null)" || fail "D3: orchestrator data watch failed: $OUT"
+OUT="$(lm env TMUX_PANE=%9 "$ROTA_BIN" --json limit watch --timeout 0.3 --settle 0.1 2>/dev/null)" || fail "D3: orchestrator data watch failed: $OUT"
 [ "$(jget data.waiting <<<"$OUT")" = "1" ] && [ "$(lim l1 session)" = "orchestrator" ] && [ "$(lim l1 source)" = "data" ] && [ "$(lim l1 window)" = "five_hour" ] || fail "D3: the orchestrator's data entry: $(cat "$REG")"
 [ "$(lim l1 resetsAt)" = "2026-10-03T12:01:30Z" ] && [ "$(lim l1 action)" = "sleep" ] || fail "D3: resetsAt must be the window's resets_at: $(cat "$REG")"
 case "$(lim l1 note)" in *"never switches"*) ;; *) fail "D3: the orchestrator never switches: $(lim l1 note)" ;; esac
 [ "$(sent)" = "0" ] || fail "D3: no prompt before the reset"
 LMNOW="2026-10-03T12:02:31Z"
-OUT="$(lm env TMUX_PANE=%9 "$ROTA_BIN" --json limit watch --timeout 1 --settle 0.1 2>/dev/null)" || fail "D3: orchestrator resume failed: $OUT"
+OUT="$(lm env TMUX_PANE=%9 "$ROTA_BIN" --json limit watch --timeout 0.3 --settle 0.1 2>/dev/null)" || fail "D3: orchestrator resume failed: $OUT"
 [ "$(sent)" = "1" ] && grep -q -F -- "send-keys -t %9 -l -- $PROMPT" "$FK/tmux/log" || fail "D3: one prompt into the orchestrator's pane after reset plus margin: $(grep send-keys "$FK/tmux/log")"
 [ "$(lim l1 status)" = "resumed" ] || fail "D3: orchestrator entry resumed: $(cat "$REG")"
 unset LMNOW
@@ -214,11 +214,11 @@ unset LMNOW
 reset_log
 python3 -c 'import os,sys; os.remove(sys.argv[1])' "$CD/rota/session/orch1.json"
 pane "$LIMIT_MSG"; : > "$FK/tmux/log"
-OUT="$(lm env TMUX_PANE=%9 "$ROTA_BIN" --json limit watch --timeout 1 --settle 0.1 2>/dev/null)" || fail "D3: orchestrator text watch failed: $OUT"
+OUT="$(lm env TMUX_PANE=%9 "$ROTA_BIN" --json limit watch --timeout 0.3 --settle 0.1 2>/dev/null)" || fail "D3: orchestrator text watch failed: $OUT"
 [ "$(lim l1 source)" = "text" ] && [ "$(lim l1 resetsAt)" = "2026-10-03T17:00:00Z" ] && [ "$(lim l1 session)" = "orchestrator" ] || fail "D3: the reset must be parsed from 'reset at 5pm': $(cat "$REG")"
 pane "Welcome to Claude Code" # the session is answering again by the time the reset comes
 LMNOW="2026-10-03T17:01:30Z"
-OUT="$(lm env TMUX_PANE=%9 "$ROTA_BIN" --json limit watch --timeout 1 --settle 0.1 2>/dev/null)" || fail "D3: orchestrator text resume failed: $OUT"
+OUT="$(lm env TMUX_PANE=%9 "$ROTA_BIN" --json limit watch --timeout 0.3 --settle 0.1 2>/dev/null)" || fail "D3: orchestrator text resume failed: $OUT"
 [ "$(sent)" = "1" ] && [ "$(lim l1 status)" = "resumed" ] || fail "D3: the text entry resumes the same way: $(cat "$REG") $(grep send-keys "$FK/tmux/log")"
 unset LMNOW
 pass "D3: the orchestrator sleeps on its session file's rate limits, never switches, and a pane-only message gets a parsed reset and the same resume"
@@ -263,7 +263,7 @@ def serve(c):
             else:
                 out({"id": req["id"], "result": {"type": "subscription_started"}})
             if flag("emit"):
-                time.sleep(0.5)
+                time.sleep(0.2)
                 out({"event": "pane.output_matched", "data": {"pane_id": pane, "matched_line": "Claude usage limit reached.", "read": read(pane, MSG)}})
         elif m == "pane.send_input":
             out({"id": req["id"], "result": {"type": "ok"}})
@@ -299,7 +299,7 @@ hlm() { ( cd "$HP" && env PATH="$FAKES" FAKE_HERDR="$FK/herdr" HERDR_ENV=1 HERDR
   ROTA_TEST_NOW="${LMNOW:-$NOW}" ROTA_TEST_HOLDER_PID="$LMSLEEP" TZ=UTC "$ROTA_BIN" --json "$@" 2>/dev/null ); }
 LMREG="$HREG"
 : > "$FK/herdr/emit"
-RC=0; OUT="$(hlm limit watch --timeout 3 --settle 0.2)" || RC=$?
+RC=0; OUT="$(hlm limit watch --timeout 1.5 --settle 0.2)" || RC=$?
 [ "$RC" = "0" ] && [ "$(jget data.waiting <<<"$OUT")" = "1" ] || fail "D3: herdr event: rc=$RC $OUT $(cat "$HREG" 2>/dev/null)"
 [ "$(lim l1 source)" = "text" ] && [ "$(lim l1 session)" = "orchestrator" ] && [ "$(lim l1 resetsAt)" = "2026-10-03T17:00:00Z" ] || fail "D3: a pane.output_matched event makes a text entry with the parsed reset: $(cat "$HREG")"
 REQ="$FK/herdr/events_subscribe.json"
@@ -316,12 +316,12 @@ SEND="$FK/herdr/pane_send_input.json"
 unset LMNOW
 # the subscribe reply can itself be a match
 reset_log; : > "$FK/herdr/already"; rm -f "$FK/herdr/events_subscribe.json"
-OUT="$(hlm limit watch --timeout 2 --settle 0.2)" || fail "D3: herdr already-matching reply failed: $OUT"
+OUT="$(hlm limit watch --timeout 1 --settle 0.2)" || fail "D3: herdr already-matching reply failed: $OUT"
 [ "$(lim l1 source)" = "text" ] && [ "$(lim l1 status)" = "waiting" ] || fail "D3: an output_matched subscribe reply must count as a match: $(cat "$HREG")"
 rm -f "$FK/herdr/already"
 # a regex herdr refuses: warn and capture the pane instead
 reset_log; : > "$FK/herdr/reject"; printf '%s\n' "$LIMIT_MSG" > "$FK/herdr/pane.txt"
-OUT="$(hlm limit watch --timeout 2 --settle 0.2)" || fail "D3: the poll fallback failed: $OUT"
+OUT="$(hlm limit watch --timeout 1 --settle 0.2)" || fail "D3: the poll fallback failed: $OUT"
 [ "$(lim l1 source)" = "text" ] && [ "$(lim l1 status)" = "waiting" ] || fail "D3: the fallback must find the message by capturing the pane: $(cat "$HREG")"
 case "$OUT" in *"capturing the panes"*) ;; *) fail "D3: the fallback must be named in a warning: $OUT" ;; esac
 rm -f "$FK/herdr/reject" "$FK/herdr/pane.txt"
