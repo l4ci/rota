@@ -111,7 +111,7 @@ func (e Env) Architecture(ctx context.Context, root string, be backlog.Backend, 
 	}
 	a.Areas = reviewAreas(root, set)
 
-	a.Count, a.Unavailable = e.closedSinceReview(ctx, be, a.Since)
+	a.Count, a.Unavailable = e.closedSinceReview(ctx, root, be, &a.Since)
 	if a.Count < 0 || len(a.Pending) > 0 {
 		return a, nil
 	}
@@ -139,7 +139,13 @@ func (e Env) Architecture(ctx context.Context, root string, be backlog.Backend, 
 // closedSinceReview counts the closed non-refactor items since the last
 // review: from the tracker in issue mode, from counters.json in file mode.
 // It returns -1 and why when the source cannot be read.
-func (e Env) closedSinceReview(ctx context.Context, be backlog.Backend, since string) (int, string) {
+//
+// With no review recorded, the first sight of the tracker seeds the timestamp
+// (unratified: nobody chose that moment) and counts from there, so a repo with
+// a long closed history does not trigger a review at once. The forge listing
+// is cached in the registry for closedCacheTTL: status, candidates and start
+// would otherwise each fetch every closed issue.
+func (e Env) closedSinceReview(ctx context.Context, root string, be backlog.Backend, since *string) (int, string) {
 	if age, ok := be.(interface{ RefactorAge() (any, any, error) }); ok {
 		feats, bugs, err := age.RefactorAge()
 		if err != nil {
@@ -150,10 +156,21 @@ func (e Env) closedSinceReview(ctx context.Context, be backlog.Backend, since st
 	if e.Forge == nil {
 		return -1, firstNonEmpty(e.ForgeErr, "no forge")
 	}
-	var floor time.Time
-	if since != "" {
-		floor, _ = time.Parse(time.RFC3339, since)
+	if *since == "" {
+		at := e.now().UTC().Format(time.RFC3339)
+		if err := updateReview(root, func(o *jsonx.Object) {
+			o.Set("at", at)
+			o.Set("seeded", true)
+		}); err != nil {
+			return -1, err.Error()
+		}
+		*since = at
+		return 0, ""
 	}
+	if n, ok := e.cachedClosed(root, *since); ok {
+		return n, ""
+	}
+	floor, _ := time.Parse(time.RFC3339, *since)
 	closed, err := e.Forge.List(ctx, tracker.ListFilter{State: "closed"})
 	if err != nil {
 		return -1, err.Error()
@@ -171,7 +188,77 @@ func (e Env) closedSinceReview(ctx context.Context, be backlog.Backend, since st
 		}
 		n++
 	}
+	checked := e.now().UTC().Format(time.RFC3339)
+	// A failed cache write only costs the next call a refetch.
+	_ = updateReview(root, func(o *jsonx.Object) {
+		c := jsonx.NewObject()
+		c.Set("checked", checked)
+		c.Set("since", *since)
+		c.Set("count", n)
+		o.Set("closed", c)
+	})
 	return n, ""
+}
+
+// closedCacheTTL is how long a closed-item count is reused.
+const closedCacheTTL = 5 * time.Minute
+
+// cachedClosed is the saved closed-item count for the review recorded at since,
+// when it is younger than closedCacheTTL.
+func (e Env) cachedClosed(root, since string) (int, bool) {
+	v, ok := worker.LoadRegistry(root).Doc.Get("architectureReview")
+	if !ok {
+		return 0, false
+	}
+	o, _ := v.(*jsonx.Object)
+	if o == nil {
+		return 0, false
+	}
+	cv, _ := o.Get("closed")
+	c, _ := cv.(*jsonx.Object)
+	if c == nil || worker.Str(c, "since") != since {
+		return 0, false
+	}
+	at, err := time.Parse(time.RFC3339, worker.Str(c, "checked"))
+	if err != nil || e.now().Sub(at) >= closedCacheTTL || e.now().Before(at) {
+		return 0, false
+	}
+	n, _ := c.Get("count")
+	return numOf(n), true
+}
+
+func (e Env) now() time.Time {
+	if e.Now != nil {
+		return e.Now()
+	}
+	return time.Now()
+}
+
+// updateReview is a locked edit of the registry's architectureReview object,
+// created when missing.
+func updateReview(root string, mutate func(o *jsonx.Object)) error {
+	return worker.Update(root, jsonx.NewObject(), func(doc *jsonx.Object) {
+		o, _ := func() (*jsonx.Object, bool) {
+			v, ok := doc.Get("architectureReview")
+			oo, _ := v.(*jsonx.Object)
+			return oo, ok
+		}()
+		if o == nil {
+			o = jsonx.NewObject()
+			doc.Set("architectureReview", o)
+		}
+		mutate(o)
+	})
+}
+
+// recordItems adds ids to the review's cumulative item list.
+func recordItems(o *jsonx.Object, ids []string) {
+	l, _ := o.Get("items")
+	list, _ := l.([]any)
+	for _, id := range ids {
+		list = append(list, id)
+	}
+	o.Set("items", list)
 }
 
 func numOf(v any) int {
@@ -239,11 +326,18 @@ func ReviewSince(root string) string {
 // mode, and records the review so the counter restarts. It returns the new
 // item IDs in area order. Call it only when Architecture says Due.
 func (e Env) MintReview(ctx context.Context, root string, be backlog.Backend, a Architecture, round int) ([]string, error) {
-	now := time.Now
-	if e.Now != nil {
-		now = e.Now
-	}
 	var ids []string
+	// Created items are recorded even when a later step fails: they are then
+	// recognised and show as a review in flight, so the next run neither
+	// re-creates them nor counts them.
+	fail := func(err error) ([]string, error) {
+		if len(ids) > 0 {
+			if uerr := updateReview(root, func(o *jsonx.Object) { recordItems(o, ids) }); uerr != nil {
+				err = fmt.Errorf("%w (and recording %s: %v)", err, strings.Join(ids, ", "), uerr)
+			}
+		}
+		return ids, err
+	}
 	for _, area := range a.Areas {
 		res, err := be.Create(backlog.CreateInput{
 			Kind:    "tasks",
@@ -253,38 +347,34 @@ func (e Env) MintReview(ctx context.Context, root string, be backlog.Backend, a 
 			HasBody: true,
 		})
 		if err != nil {
-			return ids, err
+			return fail(err)
 		}
 		ids = append(ids, res.ID)
 		if n := issueNumber(be, res.ID); n != 0 && e.Forge != nil {
 			if err := e.Forge.AddLabels(ctx, n, []string{RefactorLabel}, true); err != nil {
-				return ids, err
+				return fail(err)
 			}
 		}
 	}
 	if r, ok := be.(interface{ RefactorReset() (bool, error) }); ok {
 		if _, err := r.RefactorReset(); err != nil {
-			return ids, err
+			return fail(err)
 		}
 	}
-	at := now().UTC().Format(time.RFC3339)
+	at := e.now().UTC().Format(time.RFC3339)
 	err := worker.Update(root, jsonx.NewObject(), func(doc *jsonx.Object) {
 		o := jsonx.NewObject()
 		o.Set("at", at)
 		o.Set("round", round)
 		o.Set("trigger", a.Trigger)
 		// Cumulative: a review item still open from an earlier review stays recognised.
-		var list []any
 		if old, ok := doc.Get("architectureReview"); ok {
 			if oo, _ := old.(*jsonx.Object); oo != nil {
 				l, _ := oo.Get("items")
-				list, _ = l.([]any)
+				o.Set("items", l)
 			}
 		}
-		for _, id := range ids {
-			list = append(list, id)
-		}
-		o.Set("items", list)
+		recordItems(o, ids)
 		doc.Set("architectureReview", o)
 	})
 	return ids, err
