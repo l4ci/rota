@@ -79,11 +79,17 @@ func (e Env) trackedFiles(ctx context.Context, root string) []string {
 	return files
 }
 
-// heldIDs are the items the registry's slots hold.
+// heldIDs are the items the registry's slots hold, and those a queued PR holds.
 func heldIDs(root string) map[string]bool {
 	held := map[string]bool{}
-	for _, s := range worker.LoadRegistry(root).Slots() {
+	reg := worker.LoadRegistry(root)
+	for _, s := range reg.Slots() {
 		if id := heldID(worker.Str(s, "task"), worker.Str(s, "branch"), worker.Str(s, "name")); id != "" {
+			held[id] = true
+		}
+	}
+	for _, q := range reg.PRs() {
+		if id := queuedIssue(q); id != "" {
 			held[id] = true
 		}
 	}
