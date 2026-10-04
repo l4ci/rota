@@ -8,8 +8,7 @@ Setup, config, update and migration are `rota` verbs, not skills: `rota init` (a
 |-------|-------------|
 | `/rota-vision` | Brainstorm a project's bigger vision and milestones using Socratic discovery, web research, and a critique pass; writes `MILESTONES.md` plus per-milestone detail files |
 | `/rota-brainstorm` | Per-item design exploration before `/rota-plan`: Socratic discovery, 2-3 approaches with tradeoffs, sectioned design with per-section approval; writes `.rota/designs/<ID>.md` which `/rota-plan` reads as soft input |
-| `/rota-capture` | Capture bugs, features, and tasks: auto-classifies, assigns priority/size, routes to the correct section. On milestone-spec captures, audits the diff for ship-evidence and asks per flagged title before appending. Ends with an optional hand-off to `/rota-work` |
-| `/rota-capture --from-github` / `--from-gitlab` | Pull open GitHub/GitLab issues into BACKLOG.md with round-trip closing |
+| `/rota-capture` | Capture bugs, features, and tasks: auto-classifies, assigns priority/size, routes to the correct section. On milestone-spec captures, audits the diff for ship-evidence and asks per flagged title before appending. Prints the new IDs and stops |
 | `/rota-capture --remove` | Remove a captured backlog item and clean up its dependencies. Dry-run preview by default, asks before applying |
 | `/rota-pause` | Gracefully stop mid-session; writes a handoff note (next step, hypothesis, mid-edit files) for the next session's `/rota-work` (no argument) |
 | `/rota-plan` | Write an implementation plan for a milestone slice or item (`M01-S01`, `M01-B07`): task decomposition with verifiable outcomes, named assumptions, open questions; `/rota-work` consults if present |
@@ -40,10 +39,6 @@ Systematic root-cause cycle for a single `[B##]` bug: reproduce, hypothesize wit
 ## /rota-decide
 
 Captures a hard-boundary decision into `.rota/DECISIONS.md`. Manually confirmed, never auto-invoked. Decisions differ from learnings in `KNOWLEDGE.md` by being commitments with explicit forbids/permits; `/rota-work`, `/rota-debug`, `/rota-refactor`, and [`/rota-review`](../usage/review-and-ship.md) consult them as constraints. Accepts `--from-learning <topic>` to promote a hardened `KNOWLEDGE.md` bullet into a decision (rule/why are pre-filled; you supply the forbids/permits), and `--from-spike <name>` to promote a `.rota/spikes/<name>.md` finding the same way (`inconclusive` spikes are refused). See [decisions](../usage/decisions.md) for the full flow.
-
-## /rota-capture --from-github / --from-gitlab
-
-Pulls open issues from GitHub or GitLab into `BACKLOG.md` via a multiSelect picker (provider chosen by the flag). Lists candidates from the upstream repo(s), subtracts ones already imported, mints IDs for the rest, writes detail files with the upstream URL, and appends entries carrying a `GH: #N` or `GL: #N` cross-reference. An optional manual-gated step applies an `in-progress` label upstream. Round-trip closing is handled separately by `/rota-ship`, which emits `Closes #N` in PR bodies and offers a manual-gated close prompt on direct-push. See [the upstream-issues reference](rota-issues.md) for prerequisites and umbrella-mode semantics.
 
 ## /rota-learn
 

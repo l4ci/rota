@@ -6,13 +6,13 @@ Used by `/rota-work` Step 13 (Learn) + Step 13.6 (Docs After-Work) + Step 14 (Re
 
 A post-cycle nudge or auto-dispatch fires when **at least one** of:
 
-- **2+ items resolved** in the cycle (counted by closed `[B##]`/`[F##]`/`[T##]` IDs across that cycle's commits).
+- **2+ items resolved** in the cycle (counted as distinct closed items across the cycle: bracketed IDs such as `[B07]` in its commit messages, or issue closures, i.e. `Closes #N` / `Fixes #N` / `Resolves #N` in its commits or the PR body; `rota ship body` and `rota ship pr --items` emit the `Closes #N` lines).
 - **≥5 files touched** in the cycle (counted by the cycle's diff against its base — for `/rota-ship`, use the scope JSON's `touchedFiles` field).
 - A **hard bug** that took 2 or more debug cycles to root-cause (signaled by 2+ `/rota-debug` invocations within the same `/rota-work` session, or by the bug carrying a `Detail:` pointer to a `.rota/bugs/<id>.md` file with 2 or more hypothesis entries).
 
 ## When the gate does NOT fire
 
-- Single-item fixes — one `[B##]`/`[F##]`/`[T##]` resolved, fewer than 5 files touched, no debug-cycle escalation.
+- Single-item fixes — one item resolved (one bracketed ID or one `Closes #N`), fewer than 5 files touched, no debug-cycle escalation.
 - Pure mechanical changes — bulk rename, dependency bump, formatting sweep, generated-file refresh. The diff size doesn't capture intent; an author can use judgment to skip the nudge when there's clearly nothing durable to learn or document.
 - The same nudge has already fired in the current session for the current trigger (don't repeat).
 
