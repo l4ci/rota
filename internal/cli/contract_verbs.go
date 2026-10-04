@@ -120,6 +120,7 @@ var contractVerbs = []string{
 	"proof add",
 	"proof show",
 	"qa index",
+	"projects",
 	"qa query",
 	"reap",
 	"refactor age",
