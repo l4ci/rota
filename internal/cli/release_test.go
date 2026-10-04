@@ -110,8 +110,7 @@ func releaseBumpCases() []releaseBumpCase {
 
 func TestReleaseBumpParity(t *testing.T) {
 	cases := releaseBumpCases()
-	var want []releaseBumpWant
-	golden.Golden(t, cases, &want)
+	got := make([]releaseBumpWant, len(cases))
 	for i, c := range cases {
 		dir := releaseProject(t, map[string]string{c.File: c.Text})
 		o := trRun(t, dir, "", "release", "bump", "--file", c.File, "--kind", c.Kind, c.Flag, c.Arg, "--json")
@@ -119,13 +118,13 @@ func TestReleaseBumpParity(t *testing.T) {
 			t.Fatalf("%s %s %s: exit %d\n%s%s", c.Name, c.Flag, c.Arg, o.code, o.stdout, o.stderr)
 		}
 		d := releaseData(t, o)
-		if d["to"] != want[i].To || d["changed"] != true || d["kind"] != c.Kind || d["file"] != c.File {
-			t.Errorf("%s %s %s: data %v, golden printed %q", c.Name, c.Flag, c.Arg, d, want[i].To)
+		if d["changed"] != true || d["kind"] != c.Kind || d["file"] != c.File {
+			t.Errorf("%s %s %s: data %v", c.Name, c.Flag, c.Arg, d)
 		}
-		if got := releaseTree(t, dir)[c.File]; got != want[i].File {
-			t.Errorf("%s %s %s: file differs\ngot  %q\nwant %q", c.Name, c.Flag, c.Arg, got, want[i].File)
-		}
+		to, _ := d["to"].(string)
+		got[i] = releaseBumpWant{To: to, File: releaseTree(t, dir)[c.File]}
 	}
+	golden.Check(t, cases, got)
 }
 
 func TestReleaseBumpDetectsFile(t *testing.T) {
@@ -209,22 +208,24 @@ func TestReleaseVersionParity(t *testing.T) {
 			cases = append(cases, c)
 		}
 	}
-	var want []releaseVersionWant
-	golden.Golden(t, cases, &want)
+	got := make([]releaseVersionWant, len(cases))
 	for i, c := range cases {
 		dir := releaseProject(t, map[string]string{c.File: c.Text})
 		o := trRun(t, dir, "", "release", "version", "--json")
-		if o.code != 0 || !reflect.DeepEqual(releaseData(t, o), want[i].Detect) {
-			t.Errorf("%s: %d %v, golden %v", c.Name, o.code, releaseData(t, o), want[i].Detect)
+		if o.code != 0 {
+			t.Errorf("%s: exit %d %s", c.Name, o.code, o.stdout)
 		}
+		got[i].Detect = releaseData(t, o)
 		o = trRun(t, dir, "", "release", "version", "--level", "minor", "--json")
-		if o.code != 0 || releaseData(t, o)["next"] != want[i].Next {
-			t.Errorf("%s: next %v, golden %q", c.Name, releaseData(t, o), want[i].Next)
+		if o.code != 0 {
+			t.Errorf("%s: next exit %d %s", c.Name, o.code, o.stdout)
 		}
-		if got := releaseTree(t, dir)[c.File]; got != c.Text {
+		got[i].Next, _ = releaseData(t, o)["next"].(string)
+		if tree := releaseTree(t, dir)[c.File]; tree != c.Text {
 			t.Errorf("%s: version --level wrote the file", c.Name)
 		}
 	}
+	golden.Check(t, cases, got)
 }
 
 // releaseVersionOverrides are the versionFile settings tried by
@@ -242,33 +243,48 @@ type releaseRunWant struct {
 	Out string `json:"out"`
 }
 
+// releaseDetectJSON spells the detect data the way the golden records it:
+// file, version, kind, indented by two.
+func releaseDetectJSON(t *testing.T, d map[string]any) string {
+	t.Helper()
+	b, err := json.MarshalIndent(struct {
+		File    any `json:"file"`
+		Version any `json:"version"`
+		Kind    any `json:"kind"`
+	}{d["file"], d["version"], d["kind"]}, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b) + "\n"
+}
+
 func TestReleaseVersionPriorityAndOverride(t *testing.T) {
-	var want []releaseRunWant // the default detection, then one per override
-	golden.Golden(t, map[string]any{"files": releaseVersionPriorityFiles, "overrides": releaseVersionOverrides}, &want)
 	dir := releaseProject(t, releaseVersionPriorityFiles)
 	o := trRun(t, dir, "", "release", "version", "--json")
 	d := releaseData(t, o)
-	if want[0].RC != 0 || d["file"] != ".claude-plugin/plugin.json" || !strings.Contains(want[0].Out, ".claude-plugin/plugin.json") {
-		t.Fatalf("priority: %v golden %q", d, want[0].Out)
+	if o.code != 0 || d["file"] != ".claude-plugin/plugin.json" {
+		t.Fatalf("priority: %d %v", o.code, d)
 	}
-	for i, over := range releaseVersionOverrides {
+	// The default detection, then one run per override; Out is the detect data as the golden spells it.
+	got := []releaseRunWant{{RC: o.code, Out: releaseDetectJSON(t, d)}}
+	for _, over := range releaseVersionOverrides {
 		write(t, filepath.Join(dir, ".rota", "config.json"), `{"release":{"versionFile":"`+over+`"}}`)
 		o := trRun(t, dir, "", "release", "version", "--json")
-		if w := want[i+1]; w.RC == 0 {
-			var wd map[string]any
-			_ = json.Unmarshal([]byte(w.Out), &wd)
-			if o.code != 0 || !reflect.DeepEqual(releaseData(t, o), wd) {
-				t.Errorf("override %s: %d %v, golden %v", over, o.code, releaseData(t, o), wd)
-			}
-		} else if o.code != 3 || !strings.Contains(releaseMsg(t, o), "does not exist") {
-			t.Errorf("override %s: golden rc %d, new %d %s", over, w.RC, o.code, o.stdout)
+		if o.code == 0 {
+			got = append(got, releaseRunWant{Out: releaseDetectJSON(t, releaseData(t, o))})
+			continue
 		}
+		if o.code != 3 || !strings.Contains(releaseMsg(t, o), "does not exist") {
+			t.Errorf("override %s: exit %d %s", over, o.code, o.stdout)
+		}
+		got = append(got, releaseRunWant{RC: 1}) // the helper exited 1 where rota exits 3
 	}
 	// config.local.json wins over config.json.
 	write(t, filepath.Join(dir, ".rota", "config.local.json"), `{"release":{"versionFile":"package.json"}}`)
 	if o := trRun(t, dir, "", "release", "version", "--json"); releaseData(t, o)["file"] != "package.json" {
 		t.Errorf("local override ignored: %s", o.stdout)
 	}
+	golden.Check(t, map[string]any{"files": releaseVersionPriorityFiles, "overrides": releaseVersionOverrides}, got)
 }
 
 func TestReleaseVersionExits(t *testing.T) {
@@ -334,19 +350,21 @@ var releaseHostURLs = []string{
 }
 
 func TestReleaseHostParity(t *testing.T) {
-	var want []string // the retired detect-host helper's stdout per URL
-	golden.Golden(t, releaseHostURLs, &want)
-	for i, url := range releaseHostURLs {
+	var got []string // the host per URL
+	for _, url := range releaseHostURLs {
 		dir := t.TempDir()
 		gitT(t, dir, "init", "-q", "-b", "main")
 		if url != "" {
 			gitT(t, dir, "remote", "add", "origin", url)
 		}
 		o := trRun(t, dir, "", "release", "host", "--json")
-		if o.code != 0 || releaseData(t, o)["host"] != want[i] {
-			t.Errorf("%q: %v, golden %q", url, o.stdout, want[i])
+		if o.code != 0 {
+			t.Errorf("%q: exit %d %v", url, o.code, o.stdout)
 		}
+		host, _ := releaseData(t, o)["host"].(string)
+		got = append(got, host)
 	}
+	golden.Check(t, releaseHostURLs, got)
 	// Not a git repo: no host.
 	plain := t.TempDir()
 	if o := trRun(t, plain, "", "release", "host", "--json"); releaseData(t, o)["host"] != "none" {
@@ -395,26 +413,27 @@ var releaseHashes = regexp.MustCompile("`[0-9a-f]{7,40}`")
 func releaseMaskHashes(s string) string { return releaseHashes.ReplaceAllString(s, "`HASH`") }
 
 func TestReleaseNotesParity(t *testing.T) {
-	var want []string // the retired helper's notes per since, hashes masked, h2 headings as h3
-	golden.Golden(t, map[string]any{"commits": releaseNotesCommits, "sinces": releaseNotesSinces}, &want)
+	var notes []string // the notes per since, hashes masked, h2 headings as h3
 	dir := newRepo(t, t.TempDir(), "r", "main")
 	write(t, filepath.Join(dir, ".rota", "config.json"), `{}`)
 	gitT(t, dir, "tag", "v0.1.0")
 	for _, c := range releaseNotesCommits {
 		releaseCommit(t, dir, c[0], c[1])
 	}
-	for i, since := range releaseNotesSinces {
+	for _, since := range releaseNotesSinces {
 		args := []string{"release", "notes", "--from", "commits", "--json"}
 		if since != "" {
 			args = append(args, "--since", since)
 		}
 		o := trRun(t, dir, "", args...)
 		d := releaseData(t, o)
-		got, _ := d["markdown"].(string)
-		if o.code != 0 || releaseMaskHashes(got) != want[i] || d["from"] != "commits" || d["empty"] != false {
-			t.Errorf("since %q: exit %d\n%q\nwant %q", since, o.code, releaseMaskHashes(got), want[i])
+		md, _ := d["markdown"].(string)
+		if o.code != 0 || d["from"] != "commits" || d["empty"] != false {
+			t.Errorf("since %q: exit %d %v", since, o.code, d)
 		}
+		notes = append(notes, releaseMaskHashes(md))
 	}
+	golden.Check(t, map[string]any{"commits": releaseNotesCommits, "sinces": releaseNotesSinces}, notes)
 	// text mode prints the markdown verbatim
 	o := trRun(t, dir, "", "release", "notes", "--from", "commits", "--since", "HEAD~1")
 	if o.code != 0 || !strings.HasPrefix(o.stdout, "### ") || !strings.HasSuffix(o.stdout, "1 commits.\n") {
@@ -520,8 +539,7 @@ var releaseDates = regexp.MustCompile(`(## v\d+\.\d+\.\d+ — )\d{4}-\d{2}-\d{2}
 func releaseMaskDates(s string) string { return releaseDates.ReplaceAllString(s, "${1}DATE") }
 
 func TestReleaseChangelogParity(t *testing.T) {
-	var want []releaseChangelogWant
-	golden.Golden(t, map[string]any{"notes": releaseChangelogNotes, "cases": releaseChangelogCases}, &want)
+	got := make([]releaseChangelogWant, len(releaseChangelogCases))
 	for i, c := range releaseChangelogCases {
 		files := map[string]string{"notes.md": releaseChangelogNotes}
 		if c.File != nil {
@@ -529,42 +547,40 @@ func TestReleaseChangelogParity(t *testing.T) {
 		}
 		dir := releaseProject(t, files)
 		o := trRun(t, dir, "", "release", "changelog", "1.1.0", "--body-file", "notes.md", "--json")
-		got := releaseMaskDates(releaseTree(t, dir)["CHANGELOG.md"])
+		changelog := releaseMaskDates(releaseTree(t, dir)["CHANGELOG.md"])
 		if c.Name == "h1 only no newline" {
-			// the old helper crashed here; the port appends the section instead
-			if want[i].RC == 0 || o.code != 0 || !strings.HasPrefix(got, "# Changelog\n\n## v1.1.0 — ") {
-				t.Errorf("%s: golden rc %d, new %d %q", c.Name, want[i].RC, o.code, got)
+			// the old helper crashed here and left the file as it was; the port appends the section instead
+			if o.code != 0 || !strings.HasPrefix(changelog, "# Changelog\n\n## v1.1.0 — ") {
+				t.Errorf("%s: exit %d %q", c.Name, o.code, changelog)
 			}
+			got[i] = releaseChangelogWant{RC: 1, Changelog: *c.File}
 			continue
 		}
-		if want[i].RC != 0 || o.code != 0 {
-			t.Errorf("%s: golden rc %d new %d %s", c.Name, want[i].RC, o.code, o.stdout)
+		if o.code != 0 {
+			t.Errorf("%s: exit %d %s", c.Name, o.code, o.stdout)
 			continue
 		}
 		d := releaseData(t, o)
-		if d["path"] != want[i].Out || d["version"] != "1.1.0" || d["changed"] != true {
-			t.Errorf("%s: data %v golden %q", c.Name, d, want[i].Out)
+		if d["version"] != "1.1.0" || d["changed"] != true {
+			t.Errorf("%s: data %v", c.Name, d)
 		}
-		if got != want[i].Changelog {
-			t.Errorf("%s: file differs\ngot  %q\nwant %q", c.Name, got, want[i].Changelog)
-		}
+		path, _ := d["path"].(string)
+		got[i] = releaseChangelogWant{Out: path, Changelog: changelog}
 	}
+	golden.Check(t, map[string]any{"notes": releaseChangelogNotes, "cases": releaseChangelogCases}, got)
 }
 
 func releaseStr(s string) *string { return &s }
 
 func TestReleaseChangelogOptions(t *testing.T) {
 	files := map[string]string{"notes.md": "- x\n", "docs/CHANGES.md": "# Changes\n\nold\n"}
-	var want releaseChangelogWant // the retired helper with --path docs/CHANGES.md
-	golden.Golden(t, files, &want)
 	dir := releaseProject(t, files)
 	o := trRun(t, dir, "", "release", "changelog", "2.0.0", "--body-file", "notes.md", "--path", "docs/CHANGES.md", "--json")
-	if want.RC != 0 || o.code != 0 || releaseData(t, o)["path"] != want.Out {
-		t.Fatalf("path: %d %d %s", want.RC, o.code, o.stdout)
+	if o.code != 0 {
+		t.Fatalf("path: %d %s", o.code, o.stdout)
 	}
-	if got := releaseMaskDates(releaseTree(t, dir)["docs/CHANGES.md"]); got != want.Changelog {
-		t.Errorf("--path file differs\ngot  %q\nwant %q", got, want.Changelog)
-	}
+	path, _ := releaseData(t, o)["path"].(string)
+	golden.Check(t, files, releaseChangelogWant{Out: path, Changelog: releaseMaskDates(releaseTree(t, dir)["docs/CHANGES.md"])})
 	// stdin
 	stdinDir := t.TempDir()
 	write(t, filepath.Join(stdinDir, ".rota", "config.json"), `{}`)
@@ -650,47 +666,39 @@ var releasePendingCases = []releasePendingCase{
 }
 
 func TestReleasePendingParity(t *testing.T) {
-	var want []releaseRunWant // the retired helper's rc and text output per case
-	golden.Golden(t, releasePendingCases, &want)
+	got := make([]releaseRunWant, len(releasePendingCases)) // exit code and text output per case
 	for i, c := range releasePendingCases {
 		dir := releaseTagRepo(t, c.Days, c.N)
 		write(t, filepath.Join(dir, ".rota", "config.json"), c.Cfg)
-		var wd map[string]any
-		if want[i].RC != 0 || json.Unmarshal([]byte(want[i].Out), &wd) != nil {
-			if c.Name == "release not an object" {
-				continue // the old helper crashed on a non-object release
-			}
-			t.Fatalf("%s: golden rc %d %q", c.Name, want[i].RC, want[i].Out)
-		}
 		o := trRun(t, dir, "", "release", "pending", "--json")
-		if o.code != 0 || !reflect.DeepEqual(releaseData(t, o), wd) {
-			t.Errorf("%s: %d\n%v\ngolden %v", c.Name, o.code, releaseData(t, o), wd)
+		if o.code != 0 {
+			t.Errorf("%s: exit %d %s", c.Name, o.code, o.stdout)
 		}
-		if tx := trRun(t, dir, "", "release", "pending"); tx.stdout != want[i].Out {
-			t.Errorf("%s: text %q, golden %q", c.Name, tx.stdout, want[i].Out)
+		tx := trRun(t, dir, "", "release", "pending")
+		got[i] = releaseRunWant{RC: tx.code, Out: tx.stdout}
+		if c.Name == "release not an object" {
+			got[i] = releaseRunWant{RC: 1} // the old helper crashed on a non-object release; rota ignores it
 		}
 	}
+	golden.Check(t, releasePendingCases, got)
 }
 
 func TestReleasePendingNoTagAndConfigLocal(t *testing.T) {
-	var want [2]string // the retired helper's JSON: no tag, then config.local.json
-	golden.Golden(t, "no tag nudgeAfterCommits=3; tag, 3 commits, config 50 over local 3", &want)
-	var w1, w2 map[string]any
-	_ = json.Unmarshal([]byte(want[0]), &w1)
-	_ = json.Unmarshal([]byte(want[1]), &w2)
 	dir := newRepo(t, t.TempDir(), "r", "main")
 	write(t, filepath.Join(dir, ".rota", "config.json"), `{"release":{"nudgeAfterCommits":3}}`)
-	o := trRun(t, dir, "", "release", "pending", "--json")
-	if o.code != 0 || !reflect.DeepEqual(releaseData(t, o), w1) || w1["reason"] != "no-tag" || w1["thresholdCommits"] != 10.0 {
-		t.Errorf("no tag: %v vs %v", releaseData(t, o), w1)
+	o := trRun(t, dir, "", "release", "pending")
+	if d := releaseData(t, trRun(t, dir, "", "release", "pending", "--json")); o.code != 0 || d["reason"] != "no-tag" || d["thresholdCommits"] != 10.0 {
+		t.Errorf("no tag: %d %v", o.code, d)
 	}
 	// config.local.json overrides, as load_config merges it
 	d2 := releaseTagRepo(t, 1, 3)
 	write(t, filepath.Join(d2, ".rota", "config.json"), `{"release":{"nudgeAfterCommits":50}}`)
 	write(t, filepath.Join(d2, ".rota", "config.local.json"), `{"release":{"nudgeAfterCommits":3}}`)
-	if o := trRun(t, d2, "", "release", "pending", "--json"); !reflect.DeepEqual(releaseData(t, o), w2) || w2["shouldNudge"] != true {
-		t.Errorf("local: %v vs %v", releaseData(t, o), w2)
+	o2 := trRun(t, d2, "", "release", "pending")
+	if d := releaseData(t, trRun(t, d2, "", "release", "pending", "--json")); d["shouldNudge"] != true {
+		t.Errorf("local: %v", d)
 	}
+	golden.Check(t, "no tag nudgeAfterCommits=3; tag, 3 commits, config 50 over local 3", [2]string{o.stdout, o2.stdout})
 }
 
 func TestReleasePendingGitFails(t *testing.T) {
