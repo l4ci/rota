@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/l4ci/rota/internal/pytest"
+	"github.com/l4ci/rota/internal/golden"
 )
 
 // project is one generated .rota/ tree.
@@ -92,7 +92,7 @@ func TestFileMatchesPython(t *testing.T) {
 	for i := range recorded {
 		recorded[i].Root = ""
 	}
-	pytest.Golden(t, map[string]any{"input": recorded}, &want)
+	golden.Golden(t, map[string]any{"input": recorded}, &want)
 
 	var got, inputs []any
 	items := 0
@@ -146,7 +146,7 @@ func TestFileMatchesPython(t *testing.T) {
 	for i := range want {
 		w[i] = want[i]
 	}
-	n := pytest.Compare(t, "FileBackend", inputs, got, w)
+	n := golden.Compare(t, "FileBackend", inputs, got, w)
 	t.Logf("compared %d projects (%d items found) against FileBackend.fields/detail_text/backlog_markdown and load_backlog_corpus", n, items)
 	if items < 100 {
 		t.Fatalf("generator found only %d items; the test is too weak", items)
@@ -206,7 +206,7 @@ func TestNextIDMatchesPython(t *testing.T) {
 		{"- **[B100] a.**", "", str(`{"bugs": 1}`), []string{"bugs"}},
 	}
 	var want []map[string]any
-	pytest.GoldenJSON(t, scen, &want)
+	golden.GoldenJSON(t, scen, &want)
 
 	var inputs, got, w []any
 	ids := 0
@@ -240,7 +240,7 @@ func TestNextIDMatchesPython(t *testing.T) {
 		w = append(w, want[i])
 		inputs = append(inputs, s)
 	}
-	n := pytest.Compare(t, "next_id", inputs, got, w)
+	n := golden.Compare(t, "next_id", inputs, got, w)
 	t.Logf("compared %d counter scenarios (%d IDs minted), counters.json byte for byte", n, ids)
 }
 
