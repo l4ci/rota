@@ -119,7 +119,7 @@ func MigrateIssues(o MigrateOptions) (*MigrateResult, error) {
 		}
 		return nil, err
 	}
-	if len(repos.Load(o.Root)) > 0 {
+	if repos.Umbrella(o.Root) {
 		return nil, ErrUmbrellaMigrate
 	}
 	m := &migrator{o: o, ctx: migrateCtx(o.Ctx), apply: o.Apply, msCache: map[string]bool{},

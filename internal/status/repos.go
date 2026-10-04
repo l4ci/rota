@@ -9,22 +9,6 @@ import (
 	"github.com/l4ci/rota/internal/repos"
 )
 
-// Repo is one registered sub-repo: its name and absolute, symlink-resolved path.
-type Repo struct{ Name, Path string }
-
-// LoadRepos reads <base>/.rota/repos.json through internal/repos, the one
-// parser of that file (hvlib_repos.load_repos semantics).
-func LoadRepos(base string) []Repo {
-	var out []Repo
-	for _, r := range repos.Load(base) {
-		out = append(out, Repo{Name: r.Name, Path: r.Path})
-	}
-	return out
-}
-
-// Realpath is os.path.realpath (repos.Realpath).
-func Realpath(p string) string { return repos.Realpath(p) }
-
 // ParseReposCSV is parse_repos_csv: comma-separated names, stripped, empties
 // dropped, duplicates kept in order.
 func ParseReposCSV(csv string) []string {
@@ -37,10 +21,10 @@ func ParseReposCSV(csv string) []string {
 	return out
 }
 
-// Missing returns the names in names that repos does not register.
-func Missing(repos []Repo, names []string) []string {
+// Missing returns the names in names that registry does not register.
+func Missing(registry []repos.Repo, names []string) []string {
 	have := map[string]bool{}
-	for _, r := range repos {
+	for _, r := range registry {
 		have[r.Name] = true
 	}
 	var out []string
@@ -54,10 +38,10 @@ func Missing(repos []Repo, names []string) []string {
 
 // HasCode is whether dir holds anything besides the umbrella's own files and
 // the top-level directories of the given sub-repos (hv-refactor-targets).
-func HasCode(dir string, repos []Repo) bool {
-	real := Realpath(dir)
+func HasCode(dir string, registry []repos.Repo) bool {
+	real := repos.Realpath(dir)
 	sub := map[string]bool{}
-	for _, r := range repos {
+	for _, r := range registry {
 		rel, err := filepath.Rel(real, r.Path)
 		if err != nil || rel == "" || strings.HasPrefix(rel, "..") {
 			continue
