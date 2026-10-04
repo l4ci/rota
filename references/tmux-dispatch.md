@@ -1,55 +1,24 @@
 # tmux worker dispatch
 
-Used by `/rota-work` Steps 5, 6, 7, and 7.5 when `work.dispatch: "tmux"`. Under the default `work.dispatch: "subagent"` none of this applies — the skill dispatches in-process `Agent` workers and this file is inert.
+Host mechanics for the `rota worker` verbs under tmux, and the judgment they do not enforce. Used by `/rota-orchestrate` rounds; `rota round start` picks the host and `rota round wait` / `assign` / `wind-down` drive the verbs, so a round rarely calls them by hand. `/rota-work` does not use this file: it dispatches in-process subagents.
 
-The tmux backend runs each worker as **its own Claude Code session**, in its own `git worktree`, on its own branch, opening a PR against the cycle branch. That buys a real per-worker context window and a channel a human can talk into. It costs the failure modes below, every one of which was paid for by a real round in the runbook this backend is modelled on.
+Each worker is **its own Claude Code session**, in its own `git worktree`, on its own branch, opening a PR. That buys a per-worker context window and a channel a human can talk into, and costs the failure modes below, each paid for by a real round.
 
 Verbs: `rota worker pool`, `rota worker dispatch`, `rota worker poll`, `rota worker gate`. They drive tmux through the `rota` binary's tmux host.
 
-`work.dispatch: "herdr"` runs the same workers in herdr tabs instead; see [`herdr-dispatch.md`](herdr-dispatch.md). These sections apply to both hosts: *The worker contract*, *Polling*, *Escalating and relaying*, *The merge gate*, *Permissions*, *Accounts*.
-
-## What changes versus the subagent backend
-
-| | `subagent` (default) | `tmux` |
-|---|---|---|
-| Worker context | shares the orchestrator's session | independent session, own context window |
-| Worker writes | files only, never stages | stages, commits, opens a PR |
-| Commits | orchestrator, one per task (Step 7.5) | the worker; Step 7.5 is skipped |
-| `work.isolation` | honored | **does not apply** — every slot has its own worktree, so its own index |
-| Integration | task commits land on the cycle branch directly | `rota worker gate` per slot: freshness → merge → re-verify |
-| A worker can ask a question | no | yes — it idles, the orchestrator relays |
+herdr runs the same workers in tabs; see [`herdr-dispatch.md`](herdr-dispatch.md), which covers only what herdr changes. The sections below apply to both hosts.
 
 ## Being inside tmux is a precondition
 
-The backend earns its cost through one property: a worker can idle on a question and a human can answer it in that worker's pane. Launched from a terminal that is not already inside tmux, the worker windows are created in a **detached session nobody is attached to** — every escalation goes unanswered, workers stall, and the backend degrades into a slower subagent mode with extra moving parts. Nothing about that failure is loud.
-
-So `/rota-work` Step 5 checks first:
-
-```bash
-rota worker session check     # exit 0 inside, exit 1 outside
-```
-
-Detection is `$TMUX`, which is set for any process started inside a pane. `tmux has-session` is the wrong test — it answers whether a session *exists*, not whether *we are in it*, and conflating the two produces exactly the detached-pane failure above.
-
-**Outside → hand the cycle over, then stop.**
-
-```bash
-rota worker session ensure --body-file <path>
-```
-
-This creates the session, spawns an `operator` window, and runs `work.operatorCommand` there — `claude --continue --model <orchestrator>` by default. `--continue` resumes the most recent conversation for the directory, so the operator inherits the plan, the briefs, and the wave layout instead of restarting cold. The instruction file is pasted once the session is up, using the same confirm-pickup path as a worker dispatch.
-
-The caller **must stop after a successful `ensure`.** Two orchestrators driving one pool dispatch the same task twice and race on the same slots. There is no "continue anyway in case the handoff failed" — either it worked and the operator owns the cycle, or `ensure` exited non-zero and the user attaches by hand.
-
-`ensure` is idempotent on the operator window: a second call after an interrupted run replaces it rather than stacking a duplicate.
+A worker's value is that it can idle on a question and a human can answer in its pane. From a terminal outside tmux the windows land in a **detached session nobody is attached to**, every escalation goes unanswered, and the host degrades into a slower subagent mode. Detection is `$TMUX` (`rota worker session check`: exit 0 inside, 1 outside); `tmux has-session` is the wrong test, since it says whether a session *exists*, not whether *we are in it*. Outside tmux, `rota worker session ensure --body-file <path>` creates the session and an `operator` window running `work.operatorCommand` (`claude --continue --model <orchestrator>` by default). The caller **must stop after a successful `ensure`**: two orchestrators on one pool dispatch the same task twice. It is idempotent on the operator window.
 
 ## The worker contract
 
-Shared by both hosts and kept in [`worker-contract.md`](worker-contract.md): the standing brief `/rota-work` Step 6 prepends to every task, the `ROTA-BLOCKED` / `ROTA-DONE` sentinels the poll below routes on, and the provenance rules. Read it before dispatching.
+Shared by both hosts and kept in [`worker-contract.md`](worker-contract.md): the standing brief every worker reads, the `ROTA-BLOCKED` / `ROTA-DONE` sentinels the poll below routes on, and the provenance rules. Read it before dispatching.
 
 ## Polling
 
-`rota worker poll` classifies each slot; read `data.slots[].state` (`blocked`, `done`, `busy`, `needs-permission`, `limited`, `dead`, `idle`, `unknown`) and `evidence`. Sentinels outrank movement and `rota round wait` blocks on the same classification. The state-to-action routing lives in `rota-work/SKILL.md` Step 7 (backend branch); the verb is specified in the contract (A7). Two judgment rules the verb cannot make:
+`rota worker poll` classifies each slot; read `data.slots[].state` (`blocked`, `done`, `busy`, `needs-permission`, `limited`, `dead`, `idle`, `unknown`) and `evidence`. Sentinels outrank movement and `rota round wait` blocks on the same classification. The state-to-action routing lives in `rota-orchestrate/SKILL.md` (sections 3 and 4); the verb is specified in the contract (A7). Two judgment rules the verb cannot make:
 
 **A bare `API Error … Overloaded` on a static pane is a headstone, not a pulse.** The session took its dispatch, retried to exhaustion, and died, often without reading the task. Only `Retrying in` proves a retry is in flight. A watcher that treats them alike waits forever on a dead worker; that cost one round 45 minutes with a second worker blocked behind a PR that was never coming.
 
@@ -72,11 +41,11 @@ Worker-owned branches make integration git-native and bring back the failure cla
 
 Neither author can see it — the conflicting change never existed in their tree. Git's mergeability answer is about text, not meaning.
 
-`rota worker gate <n> --base <cycle-branch>` runs freshness, merge and re-verify on the merged tree (`refactor.verifyCommands`); read `data.verdict` under `--json`. `approval-required` (exit 4) means `ship.mergeApproval` wants a human: ask, then re-gate with `--confirm --confirm-note "<answer>"`. Judgment the verdicts do not make:
+`rota worker gate <n> --base <branch>` runs freshness, merge and re-verify on the merged tree (`refactor.verifyCommands`); read `data.verdict` under `--json`. `approval-required` (exit 4) means `ship.mergeApproval` wants a human: ask, then re-gate with `--confirm --confirm-note "<answer>"`. Judgment the verdicts do not make:
 
 - `stale`: bounce it to the slot with a summary of what landed, **once**. With several slots in flight the owner often goes stale again while re-syncing, and a bounce loop is worse than resolving it yourself in the worker's worktree and documenting that on the PR.
 - `merge-failed` (a conflict): route to the slot that owns the branch context; never resolve a cross-worker semantic conflict blind.
-- `verify-failed`: the merged tree is broken and the merge already landed. Fix forward on the cycle branch; the owning slot has usually moved on, and small orphaned-reference fixes are the orchestrator's to make.
+- `verify-failed`: the merged tree is broken and the merge already landed. Fix forward on the base branch; the owning slot has usually moved on, and small orphaned-reference fixes are the orchestrator's to make.
 - `data.verifySkipped: true` means no command gated the merged tree. A project on this backend should set `refactor.verifyCommands`; otherwise the re-verify is a structural diff review and nothing more.
 
 Batching: the gate is the one full run, so nothing re-verifies after it. Gate each PR individually by default. A group of PRs with genuinely disjoint file sets can be merged and gated once; never batch when a PR touches a shared module, widens a shared type, or renames a shared symbol.
@@ -92,7 +61,7 @@ The two roles run at different trust levels, on purpose:
 
 **Why workers skip the gate.** A narrower mode does not make a worker safer, it makes it stop. `acceptEdits` auto-approves file edits only, so a worker briefed by the contract writes its files and then blocks on its first `git add` — forever, because the prompt is addressed to a human who may not be attached. An unattended session that halts halfway through a task with a dirty worktree is not a safer outcome than one that finishes.
 
-**What bounds a worker is scope, not gating.** Each runs on a throwaway branch in its own worktree; nothing it produces reaches the cycle branch until `rota worker gate` has checked freshness, merged, and re-verified the merged tree. The branch is disposable and `rota worker pool reap` deletes it. That containment is worth stating precisely, because it has a real hole: worktree confinement is a **contract, not a sandbox**. The worker contract says stay in your worktree and use worktree-rooted paths, and an absolute path under the repo root still reaches the main checkout. Skipped permissions mean nothing stops that but the instruction.
+**What bounds a worker is scope, not gating.** Each runs on a throwaway branch in its own worktree; nothing it produces reaches the base branch until `rota worker gate` has checked freshness, merged, and re-verified the merged tree. The branch is disposable and `rota worker pool reap` deletes it. That containment is worth stating precisely, because it has a real hole: worktree confinement is a **contract, not a sandbox**. The worker contract says stay in your worktree and use worktree-rooted paths, and an absolute path under the repo root still reaches the main checkout. Skipped permissions mean nothing stops that but the instruction.
 
 **The operator keeps `auto`** because its blast radius is different: it merges into the branch the cycle ships from, and a human is watching that window, so a prompt there gets answered rather than stranding the run.
 
@@ -121,5 +90,4 @@ The two roles run at different trust levels, on purpose:
 
 ## See also
 
-- [`references/isolation-patterns.md`](isolation-patterns.md) — worktree patterns for the `subagent` backend; the tmux pool is managed by `rota worker pool` instead.
 - [`references/subagent-dispatch.md`](subagent-dispatch.md) — when to dispatch at all, and the brief shape both backends share.
