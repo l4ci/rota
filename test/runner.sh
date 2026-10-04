@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # Smoke test for the rota binary. Builds a throwaway .rota/ in a tmpdir, then
 # sources every section under test/sections/ in alphabetical order. Each
-# section runs in the shared $TMP cwd and may rely on cumulative state from
-# earlier sections — order is load-bearing.
-# Usage: bash test/runner.sh
+# section runs in the shared $TMP cwd and may rely on state from earlier
+# sections in the same run, but not from sections in another shard: test/gate.sh
+# splits the suite into concurrent SECTION_LIST runs (#82), each with its own
+# temp root, and its --random mode checks that no section needs a neighbour.
+# Usage: bash test/runner.sh   (the full gate: bash test/gate.sh)
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
