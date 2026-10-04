@@ -69,3 +69,22 @@ func Split(s string) ([]string, error) {
 	}
 	return words, nil
 }
+
+// Join is the inverse of Split: it quotes each word so a POSIX shell reads the
+// line back as the same words. A word of only safe characters stays bare.
+func Join(words []string) string {
+	out := make([]string, len(words))
+	for i, w := range words {
+		out[i] = quote(w)
+	}
+	return strings.Join(out, " ")
+}
+
+func quote(w string) string {
+	if w != "" && strings.IndexFunc(w, func(r rune) bool {
+		return !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || strings.ContainsRune("@%+=:,./-_", r))
+	}) < 0 {
+		return w
+	}
+	return "'" + strings.ReplaceAll(w, "'", `'\''`) + "'"
+}
