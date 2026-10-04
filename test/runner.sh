@@ -57,6 +57,10 @@ fi
 # per-site cleanup cannot be relied on: TMPDIR rooting lets the runner remove
 # everything in one rm -rf. Go and Python callers inherit it too.
 RUN_TMP="$(cd "$(mktemp -d)" && pwd -P)"
+
+# Fixture repos commit and merge. The identity comes from here so the run does
+# not depend on the developer's (or CI's missing) global git config.
+export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
 export TMPDIR="$RUN_TMP"
 TMP="$(cd "$(mktemp -d)" && pwd -P)"
 
