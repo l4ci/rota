@@ -266,9 +266,9 @@ When several PRs wait in review, `rota worker train <slot|PR>... --base <branch>
 pays for the verify once instead of once per PR. It checks each member the way `gate --check-only` does,
 merges them in the order given onto the base in a scratch worktree, runs `refactor.verifyCommands` on that
 tree, and on a pass lands every member through the gate in order. If the base or a member's head moved
-while it verified, nothing lands (`base-moved`).
+while it verified, nothing lands (`base-moved`); the same verdict stops the train mid-way if the base changes between landings. Members must be all PRs or all slots without one.
 
-A red train bisects: it verifies growing prefixes of the order and names the first member whose merge
+A red train bisects (up to ceil(log2 n) extra verifies, on the assumption that the base is green; a red base is reported as such): it verifies growing prefixes of the order and names the first member whose merge
 breaks the tree as `culprit`. That can be an interaction with the members before it, not that PR alone.
 Nothing lands unless you pass `--land-green`, which lands the verified members before the culprit. A
 member that conflicts with the base plus the ones before it is `merge-failed` with that member named.

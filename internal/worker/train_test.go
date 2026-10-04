@@ -157,3 +157,58 @@ func TestTrainUsage(t *testing.T) {
 		t.Error("a repeated member is refused")
 	}
 }
+
+// hook installs a git hook in the gate checkout.
+func (w *world) hook(t *testing.T, name, body string) {
+	t.Helper()
+	p := filepath.Join(w.dir, ".git", "hooks", name)
+	if err := os.WriteFile(p, []byte("#!/bin/sh\n"+body+"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestTrainSecondLandingFails(t *testing.T) {
+	w := trainWorld(t, "true", "b1", "b2", "b3")
+	// hooks are shared with the train's scratch worktree: act in the checkout only
+	w.hook(t, "pre-merge-commit", `[ "$(git rev-parse --show-toplevel)" = `+w.dir+` ] && [ -f b2.txt ] && [ ! -f b3.txt ] && exit 1; exit 0`)
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3"}})
+	if err != nil || res.Verdict != GateMergeFailed || res.Culprit != "b2" || strings.Join(res.Landed, ",") != "b1" || !res.Changed {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if !strings.Contains(res.Hint, "landed 1 of 3") {
+		t.Errorf("hint: %s", res.Hint)
+	}
+	if !res.Members[0].Landed || res.Members[1].Landed || res.Members[2].Landed || !w.onMain("b1.txt") || w.onMain("b3.txt") {
+		t.Errorf("members: %+v", res.Members)
+	}
+}
+
+func TestTrainForeignCommitBetweenLandings(t *testing.T) {
+	w := trainWorld(t, "true", "b1", "b2", "b3")
+	// a foreign commit lands on main right after the first landing
+	w.hook(t, "post-merge", `[ "$(git rev-parse --show-toplevel)" = `+w.dir+` ] && [ ! -f foreign.txt ] && { echo x > foreign.txt && git add foreign.txt && git -c user.name=t -c user.email=t@t commit -q -m foreign; }; exit 0`)
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3"}})
+	if err != nil || res.Verdict != GateBaseMoved || strings.Join(res.Landed, ",") != "b1" || res.Culprit != "b2" {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if !strings.Contains(res.Hint, "landed 1 of 3") || w.onMain("b2.txt") {
+		t.Errorf("hint %q, b2 on main %v", res.Hint, w.onMain("b2.txt"))
+	}
+}
+
+func TestTrainRedBase(t *testing.T) {
+	// the base itself fails verification: no member is to blame
+	w := trainWorld(t, "false", "b1", "b2")
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}})
+	if err != nil || res.Verdict != GateVerifyFailed || res.Culprit != "" || !strings.Contains(res.Err, "fails verification on its own") {
+		t.Fatalf("%+v %v", res, err)
+	}
+}
+
+func TestTrainRefusesMixedMembers(t *testing.T) {
+	w := trainWorld(t, "true", "b1", "b2")
+	os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"), []byte(`{"slots":[{"name":"b1","branch":"b1"},{"name":"b2","branch":"b2","pr":"https://example.test/o/r/pull/7"}]}`), 0o644)
+	if _, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}}); err == nil || !strings.Contains(err.Error(), "all PRs or all slots") {
+		t.Fatalf("a mixed train is refused: %v", err)
+	}
+}
