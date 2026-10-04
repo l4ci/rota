@@ -300,6 +300,7 @@ exit codes and repo scope: [verb contract](../design/contract/README.md).
 | `rota worker dispatch <slot> --body-file <path\|-> [--task <id>] [--relay] [--round <n>] [--boot-timeout <s>] [--kind <claude\|codex>] [--accept-codex-version]` | send a brief into a slot's session |
 | `rota worker poll [<slot>] [--settle <seconds>] [--lines <n>]` | classify slot states from their panes |
 | `rota worker gate <slot> --base <branch> [--check-only] [--no-verify] [--confirm --confirm-note <answer> \| --approval <escalation> \| --escalate]` | merge gate for one slot's branch or PR; exit 4 when `ship.mergeApproval` needs a human, `--escalate` asks on the thread, `--approval` cites the answer |
+| `rota worker train <slot\|PR>... --base <branch> [--land-green] [--confirm --confirm-note <answer> \| --approval <escalation> \| --escalate]` | merge several PRs in order in a scratch tree, verify once, land them all on a pass; a red train bisects to the first member that breaks it |
 | `rota worker session check [--session <name>]` | inside a managed host session? (exit 1 when outside) |
 | `rota worker session ensure [--session <name>] [--body-file <path\|->] [--boot-timeout <s>]` | hand the orchestrator off into a host session |
 | `rota worker account list` | list accounts with their usage verdict |
@@ -314,9 +315,11 @@ The orchestrator's verbs for a [parallel round](../usage/parallel-rounds.md). Al
 |---|---|
 | `rota round start [--scope <slate\|milestone\|next>] [--items <ID>[,<ID>…]] [--slots <n>] [--base <branch>] [--holder-pid <n>]` | take the orchestrator lease, provision the roster, list candidates |
 | `rota round candidates [--scope <slate\|milestone\|next>]` | list the items the round's scope allows, with readiness |
+| `rota round architecture [--check] [--holder-pid <n>]` | show the architecture-review counter; when a review is due, mint one item per area and assign them to idle slots |
 | `rota round assign <ID> [--agent <name>] [--tier <light\|standard\|heavy>] [--tier-reason <text>] [--kind <claude\|codex>] [--body-file <path\|->] [--siblings <ID>[,<ID>…]] [--check-only] [--accept-overlap] [--accept-codex-version] [--holder-pid <n>]` | check an item's readiness and hand it to a slot |
 | `rota round wait [<slot>…] [--timeout <seconds>] [--settle <seconds>] [--lines <n>]` | block until a worker needs attention |
-| `rota round watch [--heartbeat <seconds>] [--poll <seconds>] [--forge-poll <seconds>] [--settle <seconds>] [--lines <n>]` | background watch: exit on a slot, PR or escalation change, or at a heartbeat |
+| `rota round watch [--heartbeat <seconds>] [--poll <seconds>] [--forge-poll <seconds>] [--settle <seconds>] [--lines <n>] [--autopilot [--base <branch>] [--holder-pid <n>]]` | background watch: exit on a slot, PR or escalation change, or at a heartbeat; `--autopilot` runs a tick on every wake |
+| `rota round tick [--base <branch>] [--holder-pid <n>]` | one autopilot pass: repair safe drift, merge finished PRs behind the gate, assign ready items (`round.autopilot`) |
 | `rota round status` | list the round's slots with host, PR and drift |
 | `rota round reconcile [--apply]` | report drift between registry, host, git and forge; `--apply` repairs the safe kinds |
 | `rota round report <slot> --state <done\|blocked\|idle\|dead\|limited> [--evidence <text>] [--pr <url\|number>]` | record a solo worker's result: state and PR |

@@ -116,6 +116,7 @@ slot `wait` named, or gate a PR in review by number (`rota worker gate 61 --base
 | Check | `rota doctor` | git, host, tracker auth, accounts, herdr hooks, `rota` version, Codex; each failure carries its fix |
 | Start | `rota round start` | takes the repo's orchestrator lease, provisions slots, lists ready candidates |
 | Pick | `rota round candidates` | the open items that pass the criteria, dependency and overlap checks |
+| Review | `rota round architecture` | after `round.architectureEvery` closed non-refactor items, or when a slot is idle and nothing is assignable, mints one architecture-review item per area and assigns them to idle slots |
 | Assign | `rota round assign <ID>` | claims the item, marks it in progress, cuts `<agent>/<issue>-<slug>`, starts the worker with a signed pointer brief |
 | Wait | `rota round wait` | blocks until one slot needs the orchestrator, then returns it; never poll |
 | Watch | `rota round watch` | the background form of `wait`: run it as a background command and it exits when a slot, PR or escalation changes, or at a heartbeat |
@@ -231,6 +232,27 @@ orchestrator go idle while workers are active and no watch is running, and the p
 one-line digest of the round (and a reminder when no watch is armed) to every message you send.
 Neither applies to a solo round, which has no panes to watch.
 
+## Autopilot
+
+Off by default. With `round.autopilot` on, `rota round watch --autopilot` (or one pass of
+`rota round tick`) does the mechanical steps of a round, so you spend judgment on what is left:
+
+1. repair the safe drift (`reconcile --apply`);
+2. gate and merge every finished PR, as one `worker train` when several wait, at most
+   `round.autopilotCap` (default 3) per tick, and only under `ship.mergeApproval: none`;
+3. assign the first ready candidate of the round's scope to each idle slot, at most
+   `round.autopilotCap`, at the default tier and never with `--accept-overlap`.
+
+It never answers a worker, approves a permission, picks a higher tier, reclaims a slot or merges
+without a passing gate. A blocked, limited or dead slot, a failed gate, drift it will not repair and
+any merge a policy sends to a person come back in `needsYou`. The watch wakes you only for an item you
+have not seen, at the heartbeat, or when the autopilot stops (a wind-down or a lost lease). A gate that
+failed for a reason a person must clear is held, not re-run on every tick. Every action is one line in
+`.rota/gate-audit.jsonl` with `"gate": "autopilot"`.
+
+The watch is the autopilot's heartbeat: keep exactly one running, as above. The scope you chose at
+`round start` bounds what it assigns; start a `slate` round to keep it to issues you picked.
+
 ## PRs in review
 
 A worker that opened its PR is finished with its slot. When `assign` (or `transfer --to`) needs a
@@ -274,6 +296,20 @@ A branch that is only behind the base is merged as is when the merge is clean an
 change any file the branch changed (`round.sharedPaths` aside). A conflict, or a file changed on both
 sides, sends it back as `stale`. Each such bounce is counted per item; at `round.maxBounces` (default
 3) the gate parks the item `needs-human` with a comment instead of sending it back again.
+
+### Merge train
+
+When several PRs wait in review, `rota worker train <slot|PR>... --base <branch>` gates them together and
+pays for the verify once instead of once per PR. It checks each member the way `gate --check-only` does,
+merges them in the order given onto the base in a scratch worktree, runs `refactor.verifyCommands` on that
+tree, and on a pass lands every member through the gate in order. If the base or a member's head moved
+while it verified, nothing lands (`base-moved`); the same verdict stops the train mid-way if the base changes between landings. Members must be all PRs or all slots without one.
+
+A red train bisects (up to ceil(log2 n) extra verifies, on the assumption that the base is green; a red base is reported as such): it verifies growing prefixes of the order and names the first member whose merge
+breaks the tree as `culprit`. That can be an interaction with the members before it, not that PR alone.
+Nothing lands unless you pass `--land-green`, which lands the verified members before the culprit. A
+member that conflicts with the base plus the ones before it is `merge-failed` with that member named.
+One merge approval covers the whole train. Bounces are not counted.
 
 Whether a human also has to say yes is `ship.mergeApproval`:
 
