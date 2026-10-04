@@ -18,6 +18,7 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundlease"
+	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -346,6 +347,15 @@ type Reclaimed struct {
 	Salvaged, Released        bool
 	Parked                    bool
 	Changed                   bool
+	Warnings                  []string
+}
+
+// unresolvable says whether err is the tracker not knowing the issue: a slot
+// whose task was minted in file mode (`B31`) and never mapped has no issue to
+// comment on or release a claim from.
+func unresolvable(err error) bool {
+	var te *tracker.Error
+	return errors.Is(err, backlog.ErrNotFound) || (errors.As(err, &te) && te.Kind == tracker.KindNotFound)
 }
 
 // Reclaim is the orchestrator's verb for a slot that is dead or stalled: it
@@ -404,13 +414,22 @@ func (e Env) Reclaim(ctx context.Context, root string, be Board, o ReclaimOpts) 
 	res.Branch, res.Head, res.Salvaged, res.Parked = p.Branch, p.Head, p.Salvaged, p.Moved
 	rnd := registryRound(root)
 	hf := handoff{verb: "reclaim", from: o.Slot, round: rnd, branch: p.Branch, head: p.Head, salvaged: p.Salvaged, reason: "reclaimed, " + reason, note: o.Note}
-	if _, _, err := hf.post(be, h.Issue); err != nil {
+	// An issue the tracker no longer resolves must not strand the slot busy:
+	// warn and keep freeing.
+	tolerate := func(step string, err error) error {
+		if err == nil || !unresolvable(err) {
+			return err
+		}
+		res.Warnings = append(res.Warnings, fmt.Sprintf("%s on %s skipped, the tracker does not resolve it: %v", step, h.Issue, err))
+		return nil
+	}
+	if _, _, err := hf.post(be, h.Issue); tolerate("handoff comment", err) != nil {
 		return res, wrap(err)
 	}
-	if res.Released, err = releaseClaims(be, h.Issue, o.Slot, worker.Str(s, "claimId"), true); err != nil {
+	if res.Released, err = releaseClaims(be, h.Issue, o.Slot, worker.Str(s, "claimId"), true); tolerate("claim release", err) != nil {
 		return res, wrap(err)
 	}
-	if _, err := be.SetState(h.Issue, "none"); err != nil {
+	if _, err := be.SetState(h.Issue, "none"); tolerate("state reset", err) != nil {
 		return res, wrap(err)
 	}
 	if err := freeSlot(root, o.Slot, true); err != nil {
