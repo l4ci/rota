@@ -1,11 +1,12 @@
 package backlog
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	gitx "github.com/l4ci/rota/internal/git"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -140,10 +141,8 @@ func (f *File) requireBacklog() error {
 
 // git runs git in the project root and returns trimmed stdout.
 func (f *File) git(args ...string) (string, bool) {
-	cmd := exec.Command("git", args...)
-	cmd.Dir = f.Root
-	out, err := cmd.Output()
-	return pystr.Strip(string(out)), err == nil
+	res, err := gitx.Repo{Dir: f.Root}.Run(context.Background(), args...)
+	return pystr.Strip(res.Stdout), err == nil && res.Code == 0
 }
 
 // Append adds line at the end of a section ("## Bugs" or "Bugs") of

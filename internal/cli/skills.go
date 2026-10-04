@@ -1,14 +1,15 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
 
 	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/skills"
 	"github.com/l4ci/rota/internal/version"
 )
@@ -88,11 +89,8 @@ func skillsEnv(a skillsArgs) (set *skills.Set, roots []skills.Root, err error) {
 // gitToplevel is the toplevel of the git work tree around the working
 // directory, "" outside one.
 func gitToplevel() string {
-	out, err := exec.Command("git", "rev-parse", "--show-toplevel").Output()
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(out))
+	top, _, _ := git.Repo{}.Toplevel(context.Background())
+	return strings.TrimSpace(top)
 }
 
 // skillsErr maps a skills package failure: a busy lock is exit 6, anything

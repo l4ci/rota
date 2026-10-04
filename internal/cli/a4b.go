@@ -1,11 +1,11 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
 	"os"
-	"os/exec"
 	"regexp"
 	"slices"
 	"sort"
@@ -15,6 +15,7 @@ import (
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/frontmatter"
 	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/section"
@@ -272,11 +273,8 @@ func a4Backfill(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return a4Fail(err)
 		}
-		cmd := exec.Command("git", "rev-parse", "--short", "HEAD")
-		cmd.Dir = root
-		out, gerr := cmd.Output()
-		head := pystr.Strip(string(out))
-		if gerr != nil || head == "" {
+		head, ok, gerr := git.Repo{Dir: root}.ShortHead(context.Background())
+		if gerr != nil || !ok || head == "" {
 			return Result{}, Unavailable("not in a git repo with a HEAD commit: cannot backfill Since:")
 		}
 		n, err := be.(*backlog.File).BackfillSince(head)

@@ -4,9 +4,10 @@
 package plan
 
 import (
+	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/git"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -346,11 +347,9 @@ func RenameCheck(dir, old string, pathspecs []string) []string {
 		args = append(args, "--")
 		args = append(args, pathspecs...)
 	}
-	cmd := exec.Command("git", args...)
-	cmd.Dir = dir
-	out, _ := cmd.Output()
+	res, _ := git.Repo{Dir: dir}.Run(context.Background(), args...)
 	files := []string{}
-	for _, l := range strings.Split(string(out), "\n") {
+	for _, l := range strings.Split(res.Stdout, "\n") {
 		if l != "" {
 			files = append(files, l)
 		}

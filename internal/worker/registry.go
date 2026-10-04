@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/tracker"
@@ -247,27 +248,11 @@ func SlotData(s *jsonx.Object) *jsonx.Object {
 // non-nil error means git could not run at all.
 type GitFunc func(ctx context.Context, dir string, args ...string) (stdout, stderr string, code int, err error)
 
-// gitTimeout bounds one git call.
-const gitTimeout = 2 * time.Minute
-
 // ExecGit is the production GitFunc. git is safe to run for real in tests that
 // use their own temp repositories; herdr and tmux never go through here.
 func ExecGit(ctx context.Context, dir string, args ...string) (string, string, int, error) {
-	ctx, cancel := context.WithTimeout(ctx, gitTimeout)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "git", args...)
-	cmd.Dir = dir
-	// git translates its messages ("CONFLICT (content)" among them) in some
-	// locales; the gate matches on them, so ask for the C locale.
-	cmd.Env = append(os.Environ(), "LC_ALL=C", "LANGUAGE=C")
-	var out, errb strings.Builder
-	cmd.Stdout, cmd.Stderr = &out, &errb
-	err := cmd.Run()
-	var ee *exec.ExitError
-	if errors.As(err, &ee) {
-		return out.String(), errb.String(), ee.ExitCode(), nil
-	}
-	return out.String(), errb.String(), 0, err
+	res, err := git.Repo{Dir: dir}.Run(ctx, args...)
+	return res.Stdout, res.Stderr, res.Code, err
 }
 
 // git runs git and trims one trailing newline from stdout, like $(...).

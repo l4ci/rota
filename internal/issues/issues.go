@@ -9,11 +9,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
 
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/marker"
 	"github.com/l4ci/rota/internal/pystr"
@@ -292,17 +292,14 @@ func shortSHA(dir, commit string) (string, error) {
 	if strings.HasPrefix(commit, "-") {
 		return "", notFound
 	}
-	git, err := exec.LookPath("git")
-	if err != nil {
+	res, err := git.Repo{Dir: dir}.Run(context.Background(), "rev-parse", "--short", commit)
+	if errors.Is(err, git.ErrNoGit) {
 		return "", unavailable("git is not installed")
 	}
-	cmd := exec.Command(git, "rev-parse", "--short", commit)
-	cmd.Dir = dir
-	out, err := cmd.Output()
-	if err != nil {
+	if err != nil || res.Code != 0 {
 		return "", notFound
 	}
-	return pystr.Strip(string(out)), nil
+	return pystr.Strip(res.Stdout), nil
 }
 
 // ---- imported, open-only ----------------------------------------------------------

@@ -6,11 +6,11 @@
 package roundlease
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/git"
 )
 
 // FileName is the lease under <git-common-dir>/rota/.
@@ -106,18 +107,15 @@ func procAlive(pid int) bool {
 
 // CommonDir is the resolved git common dir of dir.
 func CommonDir(dir string) (string, error) {
-	cmd := exec.Command("git", "rev-parse", "--git-common-dir")
-	cmd.Dir = dir
-	out, err := cmd.Output()
+	p, ok, err := git.Repo{Dir: dir}.CommonDir(context.Background())
+	if err == nil && !ok {
+		err = errors.New("not a git repository")
+	}
 	if err != nil {
 		return "", fmt.Errorf("git rev-parse --git-common-dir in %s: %w", dir, err)
 	}
-	p := strings.TrimSpace(string(out))
-	if !filepath.IsAbs(p) {
-		p = filepath.Join(dir, p)
-	}
-	if r, err := filepath.EvalSymlinks(p); err == nil {
-		p = r
+	if real, err := filepath.EvalSymlinks(p); err == nil {
+		p = real
 	}
 	return filepath.Clean(p), nil
 }
