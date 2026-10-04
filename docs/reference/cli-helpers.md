@@ -315,6 +315,7 @@ The orchestrator's verbs for a [parallel round](../usage/parallel-rounds.md). Al
 |---|---|
 | `rota round start [--scope <slate\|milestone\|next>] [--items <ID>[,<ID>…]] [--slots <n>] [--base <branch>] [--holder-pid <n>]` | take the orchestrator lease, provision the roster, list candidates |
 | `rota round candidates [--scope <slate\|milestone\|next>]` | list the items the round's scope allows, with readiness |
+| `rota round architecture [--check] [--holder-pid <n>]` | show the architecture-review counter; when a review is due, mint one item per area and assign them to idle slots |
 | `rota round assign <ID> [--agent <name>] [--tier <light\|standard\|heavy>] [--tier-reason <text>] [--kind <claude\|codex>] [--body-file <path\|->] [--siblings <ID>[,<ID>…]] [--check-only] [--accept-overlap] [--accept-codex-version] [--holder-pid <n>]` | check an item's readiness and hand it to a slot |
 | `rota round wait [<slot>…] [--timeout <seconds>] [--settle <seconds>] [--lines <n>]` | block until a worker needs attention |
 | `rota round watch [--heartbeat <seconds>] [--poll <seconds>] [--forge-poll <seconds>] [--settle <seconds>] [--lines <n>]` | background watch: exit on a slot, PR or escalation change, or at a heartbeat |
