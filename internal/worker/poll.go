@@ -275,18 +275,7 @@ func (e Env) Poll(ctx context.Context, root string, o PollOpts) (PollResult, err
 		if !ok {
 			return
 		}
-		// A state change is the registry's only record of activity that is not a
-		// commit or an edit: `round reconcile` reads it as the stall clock.
-		if next := strings.ToLower(r.State); Str(s, "state") != next {
-			s.Set("activeAt", stamp(e.Now()))
-		}
-		s.Set("state", strings.ToLower(r.State))
-		// Only a URL-shaped ROTA-DONE argument becomes slot.pr. The contract
-		// allows a bare branch name there, and handing a branch to `gh pr
-		// merge` fails where the gate's local merge would have worked.
-		if r.State == StateDone && rePRURL.MatchString(r.Evidence) {
-			s.Set("pr", r.Evidence)
-		}
+		recordRow(s, r, e.Now())
 	}); err != nil {
 		return PollResult{}, err
 	}
@@ -294,20 +283,42 @@ func (e Env) Poll(ctx context.Context, root string, o PollOpts) (PollResult, err
 	return PollResult{Slots: rows, Changed: string(before) != string(after)}, nil
 }
 
-// pollTarget is one slot to classify: its name, host handle and the state the
-// registry last recorded for it.
-type pollTarget struct{ name, handle, prev string }
+// recordRow writes one classified row into its slot, the way every writer of
+// a pane's state does (Poll, Wait). A recorded state different from `seen`
+// drops it: the slot moved on, so its next arrival is news again.
+func recordRow(s *jsonx.Object, r PollRow, now time.Time) {
+	next := strings.ToLower(r.State)
+	// A state change is the registry's only record of activity that is not a
+	// commit or an edit: `round reconcile` reads it as the stall clock.
+	if Str(s, "state") != next {
+		s.Set("activeAt", stamp(now))
+	}
+	s.Set("state", next)
+	if Str(s, "seen") != next {
+		s.Delete("seen")
+	}
+	// Only a URL-shaped ROTA-DONE argument becomes slot.pr. The contract
+	// allows a bare branch name there, and handing a branch to `gh pr
+	// merge` fails where the gate's local merge would have worked.
+	if r.State == StateDone && rePRURL.MatchString(r.Evidence) {
+		s.Set("pr", r.Evidence)
+	}
+}
+
+// pollTarget is one slot to classify: its name, host handle, the state the
+// registry last recorded for it and the state `round wait` last returned for it.
+type pollTarget struct{ name, handle, prev, seen string }
 
 func slotTarget(s *jsonx.Object) pollTarget {
 	handle := Str(s, "handle")
 	if handle == "" {
 		handle = Str(s, "window") // pre-handle field name
 	}
-	return pollTarget{Str(s, "name"), handle, Str(s, "state")}
+	return pollTarget{Str(s, "name"), handle, Str(s, "state"), Str(s, "seen")}
 }
 
 // classify reads each target's pane twice, settle apart, and classifies it.
-// It touches no file: Poll records the result, `round wait` only reads it.
+// It touches no file: Poll and Wait record the result.
 // First capture for every slot, then settle once, then the second capture, so
 // N slots cost one settle interval, not N.
 //
