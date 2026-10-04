@@ -12,6 +12,7 @@ func roundCommands() *Command {
 		roundEscalate(),
 		{Name: "start", Summary: "take the orchestrator lease, provision the roster, list candidates", Verb: roundStart},
 		{Name: "candidates", Summary: "list the items the round's scope allows, with readiness", Verb: roundCandidates},
+		{Name: "architecture", Summary: "show the architecture-review counter; mint and assign the review when due", Verb: roundArchitecture},
 		{Name: "assign", Summary: "check an item's readiness and hand it to a slot", Verb: roundAssign},
 		{Name: "wind-down", Summary: "re-verify the base, park every slot, release the lease", Verb: roundWindDown},
 		{Name: "return", Summary: "a worker hands its issue back: park, comment, release", Verb: roundReturn},

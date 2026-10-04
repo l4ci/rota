@@ -15,6 +15,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/hook"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/skills"
@@ -319,7 +320,7 @@ func (d *runner) hook() Check {
 			parts = append(parts, a.Name+": herdr integration status failed")
 			continue
 		}
-		state := ParseIntegration(r.Stdout, "claude")
+		state := harness.ParseIntegration(r.Stdout, "claude")
 		if state != "current" {
 			failed = true
 		}
@@ -329,35 +330,6 @@ func (d *runner) hook() Check {
 		return fail("hook", strings.Join(parts, "; "), hookHint)
 	}
 	return pass("hook", strings.Join(parts, "; "))
-}
-
-// ParseIntegration reads the line for agent from `herdr integration status`
-// (`claude: current (v10) (/path)`, `codex: not installed (/path)`) and
-// returns "current", "not installed", the raw remainder for any other state
-// (an outdated install), or "no status" when there is no such line. The
-// format is herdr's own, so this stays tolerant: case, spacing and trailing
-// version or path detail are ignored.
-func ParseIntegration(out, agent string) string {
-	for _, line := range strings.Split(out, "\n") {
-		name, rest, ok := strings.Cut(strings.TrimSpace(line), ":")
-		if !ok || !strings.EqualFold(strings.TrimSpace(name), agent) {
-			continue
-		}
-		rest = strings.ToLower(strings.TrimSpace(rest))
-		switch {
-		case strings.HasPrefix(rest, "not installed"), strings.HasPrefix(rest, "missing"):
-			return "not installed"
-		case strings.HasPrefix(rest, "current"), strings.HasPrefix(rest, "up to date"), strings.HasPrefix(rest, "installed"):
-			return "current"
-		case rest == "":
-			return "no status"
-		}
-		if i := strings.Index(rest, " ("); i > 0 {
-			rest = rest[:i]
-		}
-		return rest
-	}
-	return "no status"
 }
 
 const (

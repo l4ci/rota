@@ -3,6 +3,7 @@ package host
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -70,13 +71,24 @@ func (t *tmux) waitReady(ctx context.Context, window string, timeout int) bool {
 	return false
 }
 
-// looksBooted mirrors the shell case patterns: `*"?"*"for shortcuts"*`,
-// the welcome banner, or a box-drawing frame.
+// bootPatterns is the one place that says what a booted agent pane looks
+// like; any match counts. Each entry is tied to the UI it was seen on. A
+// dialog (folder trust) must match none of them, so no bare prompt glyph.
+var bootPatterns = []*regexp.Regexp{
+	regexp.MustCompile(`(?s)\?.*for shortcuts`),    // Claude Code, older hint line
+	regexp.MustCompile(`Welcome to Claude Code`),   // Claude Code, older banner
+	regexp.MustCompile(`╭─`),                       // older box-drawn frame (Claude Code, Codex)
+	regexp.MustCompile(`Claude Code v\d+\.\d+`),    // Claude Code 2.1.289 banner
+	regexp.MustCompile(`Ask Codex to do anything`), // Codex 0.159.2 prompt placeholder
+}
+
 func looksBooted(p string) bool {
-	if i := strings.Index(p, "?"); i >= 0 && strings.Contains(p[i+1:], "for shortcuts") {
-		return true
+	for _, re := range bootPatterns {
+		if re.MatchString(p) {
+			return true
+		}
 	}
-	return strings.Contains(p, "Welcome to Claude Code") || strings.Contains(p, "╭─")
+	return false
 }
 
 func (t *tmux) Spawn(ctx context.Context, o SpawnOpts) (string, error) {
