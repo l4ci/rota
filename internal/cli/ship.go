@@ -64,7 +64,7 @@ func shipBlocked(by, format string, a ...any) (Result, error) {
 // lives in and root the project holding the verdict store.
 func shipVerdictBlock(c *Ctx, dir, root, branch string) (*jsonx.Object, error) {
 	repo := c.Repo
-	if repo == "" && len(repos.Load(root)) > 0 {
+	if repo == "" && repos.Umbrella(root) {
 		if r, err := repos.Which(dir); err == nil {
 			repo = r.Name
 		}
