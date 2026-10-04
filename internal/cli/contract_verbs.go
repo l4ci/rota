@@ -109,6 +109,7 @@ var contractVerbs = []string{
 	"milestone put",
 	"milestone show",
 	"milestone status",
+	"orchestrate",
 	"plan add",
 	"plan list",
 	"plan put",

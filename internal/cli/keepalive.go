@@ -123,6 +123,7 @@ func keepaliveRun(fs *flag.FlagSet) RunFunc {
 	backoff := fs.String("backoff", "", "seconds to wait before a restart (default orchestrator.keepaliveBackoffSeconds)")
 	noLimits := fs.Bool("no-limits", false, "do not run the usage-limit watcher (rota limit watch) beside the command")
 	prompt := fs.String("prompt", "", "restart prompt, appended as the last argument on restarts (default orchestrator.restartPrompt)")
+	first := fs.String("first-prompt", "", "prompt appended as the last argument of the first start only (default none)")
 	return func(c *Ctx, args []string) (Result, error) {
 		if c.dashAt != 0 {
 			return Result{}, Usage("usage: rota keepalive run [flags] -- <command> [<arg>...]").
@@ -197,7 +198,7 @@ func keepaliveRun(fs *flag.FlagSet) RunFunc {
 		opts := keepalive.Options{
 			Command: args, Root: root, CommonDir: cd, HandoffPath: handoffFile(root, cfg),
 			HandoffMaxAge: set.HandoffMaxAge, MaxRestarts: set.MaxRestarts, Breaker: set.Breaker,
-			Backoff: set.Backoff, Prompt: set.Prompt, EscalateIssue: set.EscalateIssue,
+			Backoff: set.Backoff, Prompt: set.Prompt, FirstPrompt: *first, EscalateIssue: set.EscalateIssue,
 		}
 		if set.SwitchOnUsage {
 			opts.SwitchOnUsage, opts.UsageThreshold, opts.HoldFallback = true, set.UsageThreshold, set.HoldFallback

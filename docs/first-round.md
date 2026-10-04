@@ -129,10 +129,10 @@ Fix every `fail`; each one prints the command or edit that fixes it. Run it insi
 In the pane, at the project root:
 
 ```bash
-claude
+rota orchestrate
 ```
 
-(If you did step 10, run `rota keepalive run -- claude` instead.) Then type `/rota-orchestrate` and say what you want, for example "run a round on issues 12 and 13".
+It runs `rota doctor`, then opens a focused orchestrator tab that runs the agent under `rota keepalive run` and has already started `/rota-orchestrate`. In an initialized project, `rota` alone does the same. Tell the orchestrator what you want, for example "run a round on issues 12 and 13". `orchestrator.harness` picks the agent (`claude` or `codex`). See [your first round](usage/parallel-rounds.md#your-first-round) for what happens outside herdr.
 
 The skill runs `rota doctor` again, then `rota round start`. That takes the orchestrator lease, creates the worker slots and lists the ready issues, and it detects herdr from the pane it runs in. It starts no worker yet. The orchestrator then picks the slate and assigns each issue with `rota round assign`, which cuts a branch and starts a worker in a new tab.
 
