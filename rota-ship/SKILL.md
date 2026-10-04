@@ -294,7 +294,7 @@ Next:
 
 ### Docs After-Work Sub-Flow
 
-Entered from Step 8.6, from `/rota-work` Step 13.6 (dispatching `/rota-ship --docs`), or manually per Step D1.
+Entered from Step 8.6 or manually per Step D1.
 
 **D-A1 — Trigger gate.** For post-cycle entries apply `references/post-cycle-trigger-gate.md`. Manual entry bypasses the gate (Step D1). If `<docs.path>/` is missing or empty, print *"`/rota-ship --docs` not yet initialized — run `/rota-ship --docs` to scaffold."* and exit; never scaffold mid-cycle.
 
