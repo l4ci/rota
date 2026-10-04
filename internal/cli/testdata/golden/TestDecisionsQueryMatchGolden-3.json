@@ -1,0 +1,18 @@
+{
+  "inputs": {
+    "argv": [
+      "decisions",
+      "query",
+      "nothing"
+    ],
+    "fixture": "0772198d32c2034b6dcba440d3b187e0e4638021e5efb6784a294627a01ec8fe",
+    "stdin": ""
+  },
+  "outputs": {
+    "stdout": "",
+    "stderr": "",
+    "rc": 0,
+    "changed": {},
+    "removed": []
+  }
+}

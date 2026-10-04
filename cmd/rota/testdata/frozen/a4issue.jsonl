@@ -1,0 +1,196 @@
+{"utc":"2026-10-03","local":"2026-10-03"}
+{"name":"claim/already-holder","steps":[{"exit":0,"env":{"data":{"changed":true,"claimId":"me","id":"7","type":"T"},"ok":true},"db":"65a31659890ddc93"}]}
+{"name":"claim/arrow-as","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"--as must be a claim ID: non-empty, no whitespace, no -->"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"claim/bad-as","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"--as must be a claim ID: non-empty, no whitespace, no -->"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"claim/closed","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"[4] is closed"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"claim/empty-as","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"--as must be a claim ID: non-empty, no whitespace, no -->"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"claim/forge-unavailable","steps":[{"exit":5,"env":{"error":{"code":"unavailable","exit":5,"message":"cannot determine provider (set issues.provider)"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"claim/gitlab-win/github","steps":[{"exit":0,"env":{"data":{"changed":true,"claimId":"me","id":"2","type":"B"},"ok":true},"db":"cf420f47a3328ff7"}]}
+{"name":"claim/gitlab-win/gitlab","steps":[{"exit":0,"env":{"data":{"changed":true,"claimId":"me","id":"2","type":"B"},"ok":true},"db":"cf420f47a3328ff7"}]}
+{"name":"claim/held-by-other","steps":[{"exit":4,"env":{"data":{"blockedBy":"claimed","changed":true},"error":{"code":"refused","exit":4,"message":"6 is claimed by other"},"ok":false},"db":"1adb41c785be1408"}]}
+{"name":"claim/rate-limit","steps":[{"exit":6,"env":{"error":{"code":"retry","exit":6,"message":"github secondary rate limit — stopped; wait several minutes before retrying"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"claim/tracker-issue","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"item not found: 3"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"claim/unknown","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"item not found: 99"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"claim/win","steps":[{"exit":0,"env":{"data":{"changed":true,"claimId":"me","id":"2","type":"B"},"ok":true},"db":"cf420f47a3328ff7"}]}
+{"name":"claim/wrong-letter","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"item not found: F2"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"comment-add/bad-kind","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"--kind must be question|answer|decision|feedback"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"comment-add/empty","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"empty comment body"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"comment-add/milestone-tracker","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"item not found: 3"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"comment-add/question","steps":[{"exit":0,"env":{"data":{"changed":true,"commentId":"20","id":"2","kind":"question","type":"B"},"ok":true},"db":"2d8e9c21159572c7"}]}
+{"name":"comment-add/question/github","steps":[{"exit":0,"env":{"data":{"changed":true,"commentId":"20","id":"2","kind":"question","type":"B"},"ok":true},"db":"e6236e5632eb5c02"}]}
+{"name":"comment-add/question/gitlab","steps":[{"exit":0,"env":{"data":{"changed":true,"commentId":"20","id":"2","kind":"question","type":"B"},"ok":true},"db":"e6236e5632eb5c02"}]}
+{"name":"comment-add/unicode","steps":[{"exit":0,"env":{"data":{"changed":true,"commentId":"20","id":"5","kind":"decision","type":"B"},"ok":true},"db":"f601467258669e01"}]}
+{"name":"comment-add/unknown","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"item not found: 99"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"comment-list/all","steps":[{"exit":0,"env":{"data":{"comments":[{"kind":"question","text":"Why?\nmore","who":"fake-user"}],"id":"5","type":"B"},"ok":true},"text":"- fake-user · question · Why?\n  more\n","db":"396d7faf5419e420"}]}
+{"name":"comment-list/bad-kind","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"--kind must be question|answer|decision|feedback"},"ok":false},"text":"","db":"396d7faf5419e420"}]}
+{"name":"comment-list/kind","steps":[{"exit":0,"env":{"data":{"comments":[{"kind":"question","text":"Why?\nmore","who":"fake-user"}],"id":"5","type":"B"},"ok":true},"text":"- fake-user · question · Why?\n  more\n","db":"396d7faf5419e420"}]}
+{"name":"comment-list/kind-empty","steps":[{"exit":0,"env":{"data":{"comments":[],"id":"5","type":"B"},"ok":true},"text":"","db":"396d7faf5419e420"}]}
+{"name":"comment-list/none","steps":[{"exit":0,"env":{"data":{"comments":[],"id":"2","type":"B"},"ok":true},"text":"","db":"396d7faf5419e420"}]}
+{"name":"commentlist/forge-unavailable","steps":[{"exit":5,"env":{"error":{"code":"unavailable","exit":5,"message":"cannot determine provider (set issues.provider)"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"commentlist/rate-limit","steps":[{"exit":6,"env":{"error":{"code":"retry","exit":6,"message":"github secondary rate limit — stopped; wait several minutes before retrying"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"commentlist/tracker-issue","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"item not found: 3"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"commentlist/unknown","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"item not found: 99"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"commentlist/wrong-letter","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"item not found: F2"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"complete/already-closed","steps":[{"exit":0,"env":{"data":{"changed":false,"commit":"abc1234","id":"4","reason":"done","type":"T"},"ok":true},"db":"396d7faf5419e420"}]}
+{"name":"complete/bad-reason","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"--reason must be done|handed-off|blocked|dropped"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"complete/blocked","steps":[{"exit":0,"env":{"data":{"changed":true,"commit":"abc1234","id":"2","reason":"blocked","type":"B"},"ok":true},"db":"f55903dae727f0c7"}]}
+{"name":"complete/blocked-already","steps":[{"exit":0,"env":{"data":{"changed":false,"commit":"abc1234","id":"8","reason":"blocked","type":"B"},"ok":true},"db":"396d7faf5419e420"}]}
+{"name":"complete/done-clears-state-labels","steps":[{"exit":0,"env":{"data":{"changed":true,"commit":"abc1234","id":"7","reason":"done","type":"T"},"ok":true},"db":"386c0f6d7df4466d"}]}
+{"name":"complete/done-no-proof","steps":[{"exit":0,"env":{"data":{"changed":true,"commit":"abc1234","id":"2","reason":"done","type":"B"},"ok":true},"db":"daec798bf2cc1980"}]}
+{"name":"complete/done-note","steps":[{"exit":0,"env":{"data":{"changed":true,"commit":"abc1234","id":"2","reason":"done","type":"B"},"ok":true},"db":"1e90d8385d920827"}]}
+{"name":"complete/done-proof-missing","steps":[{"exit":4,"env":{"data":{"blockedBy":"proof missing","changed":false},"error":{"code":"refused","exit":4,"hint":"record proof with `rota proof add`, or pass --no-proof","message":"[B2] no proof recorded, pass --no-proof to override"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"complete/done-with-proof","steps":[{"exit":0,"env":{"data":{"changed":true,"commit":"abc1234","id":"5","reason":"done","type":"B"},"ok":true},"db":"a06d8201ee96076a"}]}
+{"name":"complete/dropped","steps":[{"exit":0,"env":{"data":{"changed":true,"commit":"abc1234","id":"2","reason":"dropped","type":"B"},"ok":true},"db":"ef03b03d57db5563"}]}
+{"name":"complete/forge-unavailable","steps":[{"exit":5,"env":{"error":{"code":"unavailable","exit":5,"message":"cannot determine provider (set issues.provider)"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"complete/gitlab-done-proof/github","steps":[{"exit":0,"env":{"data":{"changed":true,"commit":"abc1234","id":"5","reason":"done","type":"B"},"ok":true},"db":"a06d8201ee96076a"}]}
+{"name":"complete/gitlab-done-proof/gitlab","steps":[{"exit":0,"env":{"data":{"changed":true,"commit":"abc1234","id":"5","reason":"done","type":"B"},"ok":true},"db":"f43c5a6d8e67d36c"}]}
+{"name":"complete/gitlab-dropped/github","steps":[{"exit":0,"env":{"data":{"changed":true,"commit":"abc1234","id":"6","reason":"dropped","type":"F"},"ok":true},"db":"01f47c081083b14a"}]}
+{"name":"complete/gitlab-dropped/gitlab","steps":[{"exit":0,"env":{"data":{"changed":true,"commit":"abc1234","id":"6","reason":"dropped","type":"F"},"ok":true},"db":"422d8084062193d1"}]}
+{"name":"complete/handed-off","steps":[{"exit":0,"env":{"data":{"changed":true,"commit":"abc1234","id":"6","reason":"handed-off","type":"F"},"ok":true},"db":"865ec3d4c04cd3d1"}]}
+{"name":"complete/rate-limit","steps":[{"exit":6,"env":{"error":{"code":"retry","exit":6,"message":"github secondary rate limit — stopped; wait several minutes before retrying"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"complete/tracker-issue","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"item not found: 3"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"complete/unknown","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"item not found: 99"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"complete/wrong-letter","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"item not found: F2"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"create/bad-tag","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"invalid tag 'Major' for bugs (expected P0/P1/P2/P3)"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"create/bug-tag","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"12","kind":"bugs","type":"B"},"ok":true},"db":"6edbe52f236e80f4"}]}
+{"name":"create/custom-labels","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"12","kind":"bugs","type":"B"},"ok":true},"db":"6727c939e9fba81f"}]}
+{"name":"create/feature-full","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"12","kind":"features","type":"F"},"ok":true},"db":"643c718616aa7684"}]}
+{"name":"create/forge-unavailable","steps":[{"exit":5,"env":{"error":{"code":"unavailable","exit":5,"message":"cannot determine provider (set issues.provider)"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"create/gitlab-feature/github","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"12","kind":"features","type":"F"},"ok":true},"db":"3a4869ab2960edb5"}]}
+{"name":"create/gitlab-feature/gitlab","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"12","kind":"features","type":"F"},"ok":true},"db":"3a4869ab2960edb5"}]}
+{"name":"create/id-placeholder-body","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"12","kind":"tasks","type":"T"},"ok":true},"db":"10790c8f0ee64b2e"}]}
+{"name":"create/milestone-bad-format","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"issue mode takes one milestone ID like M07, got 'next'"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"create/milestone-missing","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"milestone M99 not found on the tracker — create it with /rota-vision (M07-S05)"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"create/no-title","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"--title is required"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"create/rate-limit","steps":[{"exit":6,"env":{"error":{"code":"retry","exit":6,"message":"github secondary rate limit — stopped; wait several minutes before retrying"},"ok":false},"db":"503099116efd58ba"}]}
+{"name":"create/task-plain","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"12","kind":"tasks","type":"T"},"ok":true},"db":"76db7a0b6bfed16e"}]}
+{"name":"fieldget/closed-reason","steps":[{"exit":0,"env":{"data":{"field":"reason","id":"9","type":"B","value":"dropped"},"ok":true},"db":"396d7faf5419e420"}]}
+{"name":"fieldget/forge-unavailable","steps":[{"exit":5,"env":{"error":{"code":"unavailable","exit":5,"message":"cannot determine provider (set issues.provider)"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"fieldget/milestone","steps":[{"exit":0,"env":{"data":{"field":"milestone","id":"1","type":"F","value":"M07"},"ok":true},"db":"396d7faf5419e420"}]}
+{"name":"fieldget/rate-limit","steps":[{"exit":6,"env":{"error":{"code":"retry","exit":6,"message":"github secondary rate limit — stopped; wait several minutes before retrying"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"fieldget/related-bracketed","steps":[{"exit":0,"env":{"data":{"field":"related","id":"1","type":"F","value":"[B2]"},"ok":true},"db":"396d7faf5419e420"}]}
+{"name":"fieldget/title","steps":[{"exit":0,"env":{"data":{"field":"title","id":"1","type":"F","value":"Add export"},"ok":true},"db":"396d7faf5419e420"}]}
+{"name":"fieldget/tracker-issue","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"item not found: 3"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"fieldget/unknown","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"item not found: 99"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"fieldget/wrong-letter","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"item not found: F2"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"fieldlist/closed","steps":[{"exit":0,"env":{"data":{"fields":{"detail":"https://github.com/fake/repo/issues/4","milestone":"","note":"","reason":"done","related":"","repos":"","since":"","subsystem":"","title":"Old task"},"id":"4","type":"T"},"ok":true},"db":"396d7faf5419e420"}]}
+{"name":"fieldlist/open","steps":[{"exit":0,"env":{"data":{"fields":{"detail":"https://github.com/fake/repo/issues/1","milestone":"M07","note":"","reason":"","related":"[B2]","repos":"","since":"","subsystem":"","title":"Add export"},"id":"1","type":"F"},"ok":true},"db":"396d7faf5419e420"}]}
+{"name":"fieldset/bad-field","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"unknown or read-only field title; pick one of milestone, related, repos, subsystem, detail"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"fieldset/closed","steps":[{"exit":4,"env":{"data":{"blockedBy":"closed item","changed":false},"error":{"code":"refused","exit":4,"message":"[4] is closed on the issue tracker"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"fieldset/detail-refused","steps":[{"exit":4,"env":{"data":{"blockedBy":"backend","changed":false},"error":{"code":"refused","exit":4,"hint":"--name detail points at a file; issues have a body instead","message":"not available with backlog.backend \"issues\""},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"fieldset/forge-unavailable","steps":[{"exit":5,"env":{"error":{"code":"unavailable","exit":5,"message":"cannot determine provider (set issues.provider)"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"fieldset/gitlab-milestone/github","steps":[{"exit":0,"env":{"data":{"changed":true,"field":"milestone","id":"2","type":"B","value":"M07"},"ok":true},"db":"19a7cb722ff13e56"}]}
+{"name":"fieldset/gitlab-milestone/gitlab","steps":[{"exit":0,"env":{"data":{"changed":true,"field":"milestone","id":"2","type":"B","value":"M07"},"ok":true},"db":"19a7cb722ff13e56"}]}
+{"name":"fieldset/milestone","steps":[{"exit":0,"env":{"data":{"changed":true,"field":"milestone","id":"2","type":"B","value":"M07"},"ok":true},"db":"19a7cb722ff13e56"}]}
+{"name":"fieldset/milestone-bad-format","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"issue mode takes one milestone ID like M07, got 'later'"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"fieldset/milestone-clear","steps":[{"exit":0,"env":{"data":{"changed":true,"field":"milestone","id":"1","type":"F","value":""},"ok":true},"db":"c325c3df19dba40d"}]}
+{"name":"fieldset/milestone-clear-none","steps":[{"exit":0,"env":{"data":{"changed":false,"field":"milestone","id":"2","type":"B","value":""},"ok":true},"db":"396d7faf5419e420"}]}
+{"name":"fieldset/milestone-missing","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"milestone M99 not found on the tracker — create it with /rota-vision (M07-S05)"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"fieldset/milestone-same","steps":[{"exit":0,"env":{"data":{"changed":false,"field":"milestone","id":"1","type":"F","value":"M07"},"ok":true},"db":"396d7faf5419e420"}]}
+{"name":"fieldset/rate-limit","steps":[{"exit":6,"env":{"error":{"code":"retry","exit":6,"message":"github secondary rate limit — stopped; wait several minutes before retrying"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"fieldset/related","steps":[{"exit":0,"env":{"data":{"changed":true,"field":"related","id":"2","type":"B","value":"B1"},"ok":true},"db":"c8702f5b0e2dfa9c"}]}
+{"name":"fieldset/related-clear","steps":[{"exit":0,"env":{"data":{"changed":true,"field":"related","id":"1","type":"F","value":""},"ok":true},"db":"a230fe7fc4ea9bf9"}]}
+{"name":"fieldset/related-same","steps":[{"exit":0,"env":{"data":{"changed":false,"field":"related","id":"1","type":"F","value":"B2"},"ok":true},"db":"396d7faf5419e420"}]}
+{"name":"fieldset/repos","steps":[{"exit":0,"env":{"data":{"changed":true,"field":"repos","id":"2","type":"B","value":"web, api"},"ok":true},"db":"7e3cccc86e8c4352"}]}
+{"name":"fieldset/tracker-issue","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"item not found: 3"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"fieldset/unknown","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"item not found: 99"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"fieldset/wrong-letter","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"item not found: F2"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"file/claim","steps":[{"exit":0,"env":{"data":{"changed":false,"claimId":"me","id":"B01","type":"B"},"ok":true},"db":"396d7faf5419e420"}]}
+{"name":"file/claim-unknown","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"item not found: B99"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"file/release","steps":[{"exit":0,"env":{"data":{"changed":false,"claimId":"me","id":"B01","type":"B"},"ok":true},"db":"396d7faf5419e420"}]}
+{"name":"file/state","steps":[{"exit":0,"env":{"data":{"changed":false,"id":"B01","state":"in-progress","type":"B"},"ok":true},"db":"396d7faf5419e420"}]}
+{"name":"file/state-unknown","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"item not found: B99"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"note-add/bad-kind","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"--kind must be proof|design|plan"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"note-add/edit-design","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"5","kind":"design","type":"B"},"ok":true},"db":"d757205369ed0d7b"}]}
+{"name":"note-add/empty-body","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"empty note body"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"note-add/file-backend","steps":[{"exit":4,"env":{"data":{"blockedBy":"backend","changed":false},"error":{"code":"refused","exit":4,"hint":"rota design or rota plan","message":"item note add is not available with backlog.backend \"file\""},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"note-add/grow-parts","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"5","kind":"design","type":"B"},"ok":true},"db":"7d2ce0a473b7ce3a"}]}
+{"name":"note-add/identical","steps":[{"exit":0,"env":{"data":{"changed":false,"id":"5","kind":"design","type":"B"},"ok":true},"db":"396d7faf5419e420"}]}
+{"name":"note-add/long-line","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"2","kind":"design","type":"B"},"ok":true},"db":"b7e0258616197b78"}]}
+{"name":"note-add/new-proof","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"2","kind":"proof","type":"B"},"ok":true},"db":"35863dbc304723ac"}]}
+{"name":"note-add/new-proof/github","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"2","kind":"proof","type":"B"},"ok":true},"db":"35863dbc304723ac"}]}
+{"name":"note-add/new-proof/gitlab","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"2","kind":"proof","type":"B"},"ok":true},"db":"35863dbc304723ac"}]}
+{"name":"note-add/shrink-parts","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"11","kind":"plan","type":"T"},"ok":true},"db":"4f46ddb2dba73f1d"}]}
+{"name":"note-add/split","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"2","kind":"plan","type":"B"},"ok":true},"db":"bf2f689589451ac8"}]}
+{"name":"note-add/unicode","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"2","kind":"plan","type":"B"},"ok":true},"db":"324885f26b88af07"}]}
+{"name":"note-add/unknown","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"item not found: 99"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"note-rm/absent","steps":[{"exit":0,"env":{"data":{"changed":false,"id":"2","kind":"plan","type":"B"},"ok":true},"db":"396d7faf5419e420"}]}
+{"name":"note-rm/bad-kind","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"--kind must be proof|design|plan"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"note-rm/design","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"5","kind":"design","type":"B"},"ok":true},"db":"56c1c3eda372dad3"}]}
+{"name":"note-rm/design/github","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"5","kind":"design","type":"B"},"ok":true},"db":"56c1c3eda372dad3"}]}
+{"name":"note-rm/design/gitlab","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"5","kind":"design","type":"B"},"ok":true},"db":"56c1c3eda372dad3"}]}
+{"name":"note-rm/multipart","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"11","kind":"plan","type":"T"},"ok":true},"db":"1a090220d855010c"}]}
+{"name":"note-rm/unknown","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"item not found: 99"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"note-show/absent","steps":[{"exit":0,"env":{"data":{"body":"","exists":false,"id":"2","kind":"plan","type":"B"},"ok":true},"text":"","db":"396d7faf5419e420"}]}
+{"name":"note-show/bad-kind","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"--kind must be proof|design|plan"},"ok":false},"text":"","db":"396d7faf5419e420"}]}
+{"name":"note-show/design","steps":[{"exit":0,"env":{"data":{"body":"the design","exists":true,"id":"5","kind":"design","type":"B"},"ok":true},"text":"the design\n","db":"396d7faf5419e420"}]}
+{"name":"note-show/file-backend","steps":[{"exit":1,"env":{"data":{"blockedBy":"backend","changed":false},"error":{"code":"failed","exit":1,"hint":"rota design or rota plan","message":"item note show is not available with backlog.backend \"file\""},"ok":false},"text":"","db":"396d7faf5419e420"}]}
+{"name":"note-show/multipart-plan","steps":[{"exit":0,"env":{"data":{"body":"line1\nline2\nline3","exists":true,"id":"11","kind":"plan","type":"T"},"ok":true},"text":"line1\nline2\nline3\n","db":"396d7faf5419e420"}]}
+{"name":"note-show/proof","steps":[{"exit":0,"env":{"data":{"body":"## Proof\n- build · PASS · ok","exists":true,"id":"5","kind":"proof","type":"B"},"ok":true},"text":"## Proof\n- build · PASS · ok\n","db":"396d7faf5419e420"}]}
+{"name":"note-show/proof/github","steps":[{"exit":0,"env":{"data":{"body":"## Proof\n- build · PASS · ok","exists":true,"id":"5","kind":"proof","type":"B"},"ok":true},"text":"## Proof\n- build · PASS · ok\n","db":"396d7faf5419e420"}]}
+{"name":"note-show/proof/gitlab","steps":[{"exit":0,"env":{"data":{"body":"## Proof\n- build · PASS · ok","exists":true,"id":"5","kind":"proof","type":"B"},"ok":true},"text":"## Proof\n- build · PASS · ok\n","db":"396d7faf5419e420"}]}
+{"name":"note-show/wrong-letter","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"item not found: F2"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"ready/criteria","steps":[{"exit":0,"env":{"data":{"id":"1","ready":true,"reasons":[],"type":"F"},"ok":true},"db":"396d7faf5419e420"}]}
+{"name":"ready/criteria/github","steps":[{"exit":0,"env":{"data":{"id":"1","ready":true,"reasons":[],"type":"F"},"ok":true},"db":"396d7faf5419e420"}]}
+{"name":"ready/criteria/gitlab","steps":[{"exit":0,"env":{"data":{"id":"1","ready":true,"reasons":[],"type":"F"},"ok":true},"db":"396d7faf5419e420"}]}
+{"name":"ready/design-note","steps":[{"exit":0,"env":{"data":{"id":"5","ready":true,"reasons":[],"type":"B"},"ok":true},"db":"396d7faf5419e420"}]}
+{"name":"ready/forge-unavailable","steps":[{"exit":5,"env":{"error":{"code":"unavailable","exit":5,"message":"cannot determine provider (set issues.provider)"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"ready/not-ready","steps":[{"exit":1,"env":{"data":{"id":"10","ready":false,"reasons":["no acceptance criteria in the issue body","no design or plan note"],"type":"T"},"error":{"code":"failed","exit":1,"message":"10 is not ready: no acceptance criteria in the issue body; no design or plan note"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"ready/not-ready-bug","steps":[{"exit":1,"env":{"data":{"id":"2","ready":false,"reasons":["no acceptance criteria in the issue body","no design or plan note"],"type":"B"},"error":{"code":"failed","exit":1,"message":"2 is not ready: no acceptance criteria in the issue body; no design or plan note"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"ready/rate-limit","steps":[{"exit":6,"env":{"error":{"code":"retry","exit":6,"message":"github secondary rate limit — stopped; wait several minutes before retrying"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"ready/tracker-issue","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"item not found: 3"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"ready/unknown","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"item not found: 99"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"ready/wrong-letter","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"item not found: F2"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"release/bad-as","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"--as must be a claim ID: non-empty, no whitespace, no -->"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"release/closed-item","steps":[{"exit":0,"env":{"data":{"changed":false,"claimId":"me","id":"4","type":"T"},"ok":true},"db":"396d7faf5419e420"}]}
+{"name":"release/forge-unavailable","steps":[{"exit":5,"env":{"error":{"code":"unavailable","exit":5,"message":"cannot determine provider (set issues.provider)"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"release/gitlab-match/github","steps":[{"exit":0,"env":{"data":{"changed":true,"claimId":"other","id":"6","type":"F"},"ok":true},"db":"727c3920460917c2"}]}
+{"name":"release/gitlab-match/gitlab","steps":[{"exit":0,"env":{"data":{"changed":true,"claimId":"other","id":"6","type":"F"},"ok":true},"db":"727c3920460917c2"}]}
+{"name":"release/match-keeps-state","steps":[{"exit":0,"env":{"data":{"changed":true,"claimId":"me","id":"7","type":"T"},"ok":true},"db":"b36ef9f30ec7d4ad"}]}
+{"name":"release/match-last-claim","steps":[{"exit":0,"env":{"data":{"changed":true,"claimId":"other","id":"6","type":"F"},"ok":true},"db":"727c3920460917c2"}]}
+{"name":"release/no-match","steps":[{"exit":0,"env":{"data":{"changed":false,"claimId":"zzz","id":"6","type":"F"},"ok":true},"db":"396d7faf5419e420"}]}
+{"name":"release/rate-limit","steps":[{"exit":6,"env":{"error":{"code":"retry","exit":6,"message":"github secondary rate limit — stopped; wait several minutes before retrying"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"release/tracker-issue","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"item not found: 3"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"release/unknown","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"item not found: 99"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"release/wrong-letter","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"item not found: F2"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"reopen/closed","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"4","type":"T"},"ok":true},"db":"ce25dd1c81050658"}]}
+{"name":"reopen/dropped","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"9","type":"B"},"ok":true},"db":"3f8844ad5222df56"}]}
+{"name":"reopen/forge-unavailable","steps":[{"exit":5,"env":{"error":{"code":"unavailable","exit":5,"message":"cannot determine provider (set issues.provider)"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"reopen/gitlab/github","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"9","type":"B"},"ok":true},"db":"3f8844ad5222df56"}]}
+{"name":"reopen/gitlab/gitlab","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"9","type":"B"},"ok":true},"db":"3f8844ad5222df56"}]}
+{"name":"reopen/open-noop","steps":[{"exit":0,"env":{"data":{"changed":false,"id":"2","type":"B"},"ok":true},"db":"396d7faf5419e420"}]}
+{"name":"reopen/rate-limit","steps":[{"exit":6,"env":{"error":{"code":"retry","exit":6,"message":"github secondary rate limit — stopped; wait several minutes before retrying"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"reopen/tracker-issue","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"item not found: 3"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"reopen/unblock","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"8","type":"B"},"ok":true},"db":"24cdb8b6116d54bc"}]}
+{"name":"reopen/unknown","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"item not found: 99"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"reopen/wrong-letter","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"item not found: F2"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"show/claimed","steps":[{"exit":0,"env":{"data":{"assignees":["fake-user"],"claimedBy":"other","comments":[],"id":"6","milestone":null,"notes":[],"state":"in-progress","status":"open","title":"Parallel work","type":"F"},"ok":true},"text":"[F6] Parallel work\ntype: feature\nstatus: open\nstate: in-progress\nclaimed by: other\nassignee: fake-user\nmilestone: none\nnotes: none\ncomments: 0\n","db":"396d7faf5419e420"}]}
+{"name":"show/closed","steps":[{"exit":0,"env":{"data":{"assignees":[],"claimedBy":null,"comments":[],"id":"9","milestone":null,"notes":[],"state":null,"status":"closed","title":"Dropped bug","type":"B"},"ok":true},"text":"[B9] Dropped bug\ntype: bug\nstatus: closed\nstate: none\nclaimed by: none\nassignee: none\nmilestone: none\nnotes: none\ncomments: 0\n","db":"396d7faf5419e420"}]}
+{"name":"show/file-backend","steps":[{"exit":1,"env":{"data":{"blockedBy":"backend","changed":false},"error":{"code":"failed","exit":1,"hint":"see BACKLOG.md, status.json and the detail file","message":"item show is not available with backlog.backend \"file\""},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"show/forge-unavailable","steps":[{"exit":5,"env":{"error":{"code":"unavailable","exit":5,"message":"cannot determine provider (set issues.provider)"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"show/milestone","steps":[{"exit":0,"env":{"data":{"assignees":[],"claimedBy":null,"comments":[],"id":"1","milestone":"M07","notes":[],"state":null,"status":"open","title":"Add export","type":"F"},"ok":true},"text":"[F1] Add export\ntype: feature\nstatus: open\nstate: none\nclaimed by: none\nassignee: none\nmilestone: M07\nnotes: none\ncomments: 0\n","db":"396d7faf5419e420"}]}
+{"name":"show/noted","steps":[{"exit":0,"env":{"data":{"assignees":[],"claimedBy":null,"comments":[{"kind":"question","text":"Why?\nmore","who":"fake-user"}],"id":"5","milestone":null,"notes":["proof","design"],"state":null,"status":"open","title":"Noted bug","type":"B"},"ok":true},"text":"[B5] Noted bug\ntype: bug\nstatus: open\nstate: none\nclaimed by: none\nassignee: none\nmilestone: none\nnotes: proof, design\ncomments: 1\n- fake-user · question · Why?\n  more\n","db":"396d7faf5419e420"}]}
+{"name":"show/noted/github","steps":[{"exit":0,"env":{"data":{"assignees":[],"claimedBy":null,"comments":[{"kind":"question","text":"Why?\nmore","who":"fake-user"}],"id":"5","milestone":null,"notes":["proof","design"],"state":null,"status":"open","title":"Noted bug","type":"B"},"ok":true},"text":"[B5] Noted bug\ntype: bug\nstatus: open\nstate: none\nclaimed by: none\nassignee: none\nmilestone: none\nnotes: proof, design\ncomments: 1\n- fake-user · question · Why?\n  more\n","db":"396d7faf5419e420"}]}
+{"name":"show/noted/gitlab","steps":[{"exit":0,"env":{"data":{"assignees":[],"claimedBy":null,"comments":[{"kind":"question","text":"Why?\nmore","who":"fake-user"}],"id":"5","milestone":null,"notes":["proof","design"],"state":null,"status":"open","title":"Noted bug","type":"B"},"ok":true},"text":"[B5] Noted bug\ntype: bug\nstatus: open\nstate: none\nclaimed by: none\nassignee: none\nmilestone: none\nnotes: proof, design\ncomments: 1\n- fake-user · question · Why?\n  more\n","db":"396d7faf5419e420"}]}
+{"name":"show/rate-limit","steps":[{"exit":6,"env":{"error":{"code":"retry","exit":6,"message":"github secondary rate limit — stopped; wait several minutes before retrying"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"show/ref-#2","steps":[{"exit":0,"env":{"data":{"assignees":[],"claimedBy":null,"comments":[],"id":"2","milestone":null,"notes":[],"state":null,"status":"open","title":"Crash on start","type":"B"},"ok":true},"db":"396d7faf5419e420"}]}
+{"name":"show/ref-2","steps":[{"exit":0,"env":{"data":{"assignees":[],"claimedBy":null,"comments":[],"id":"2","milestone":null,"notes":[],"state":null,"status":"open","title":"Crash on start","type":"B"},"ok":true},"db":"396d7faf5419e420"}]}
+{"name":"show/ref-B2","steps":[{"exit":0,"env":{"data":{"assignees":[],"claimedBy":null,"comments":[],"id":"2","milestone":null,"notes":[],"state":null,"status":"open","title":"Crash on start","type":"B"},"ok":true},"db":"396d7faf5419e420"}]}
+{"name":"show/ref-b2","steps":[{"exit":0,"env":{"data":{"assignees":[],"claimedBy":null,"comments":[],"id":"2","milestone":null,"notes":[],"state":null,"status":"open","title":"Crash on start","type":"B"},"ok":true},"db":"396d7faf5419e420"}]}
+{"name":"show/tracker-issue","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"item not found: 3"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"show/unknown","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"item not found: 99"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"show/wrong-letter","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"item not found: F2"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"state/bad-to","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"--to must be in-progress|needs-review|changes-requested|none"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"state/changes","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"7","state":"changes-requested","type":"T"},"ok":true},"db":"d9606423aab79f26"}]}
+{"name":"state/gitlab-in-progress/github","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"2","state":"in-progress","type":"B"},"ok":true},"db":"b77024ca41e9e5be"}]}
+{"name":"state/gitlab-in-progress/gitlab","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"2","state":"in-progress","type":"B"},"ok":true},"db":"b77024ca41e9e5be"}]}
+{"name":"state/in-progress","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"2","state":"in-progress","type":"B"},"ok":true},"db":"b77024ca41e9e5be"}]}
+{"name":"state/none","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"7","state":null,"type":"T"},"ok":true},"db":"21afc4251ca0cc07"}]}
+{"name":"state/none-noop","steps":[{"exit":0,"env":{"data":{"changed":false,"id":"2","state":null,"type":"B"},"ok":true},"db":"396d7faf5419e420"}]}
+{"name":"state/noop","steps":[{"exit":0,"env":{"data":{"changed":false,"id":"7","state":"needs-review","type":"T"},"ok":true},"db":"396d7faf5419e420"}]}
+{"name":"state/swap","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"6","state":"needs-review","type":"F"},"ok":true},"db":"f89d033cb30c9851"}]}
+{"name":"statev/forge-unavailable","steps":[{"exit":5,"env":{"error":{"code":"unavailable","exit":5,"message":"cannot determine provider (set issues.provider)"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"statev/rate-limit","steps":[{"exit":6,"env":{"error":{"code":"retry","exit":6,"message":"github secondary rate limit — stopped; wait several minutes before retrying"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"statev/tracker-issue","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"item not found: 3"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"statev/unknown","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"item not found: 99"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"statev/wrong-letter","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"item not found: F2"},"ok":false},"db":"396d7faf5419e420"}]}

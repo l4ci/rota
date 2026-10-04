@@ -1,0 +1,17 @@
+{
+  "inputs": {
+    "argv": [
+      "instructions",
+      "init"
+    ],
+    "fixture": "82ffed36c1b95dfa2b66c1a292c3e9af102de1f41e6b0661395a26e8a99573e4",
+    "stdin": ""
+  },
+  "outputs": {
+    "stdout": "",
+    "stderr": "",
+    "rc": 0,
+    "changed": {},
+    "removed": []
+  }
+}

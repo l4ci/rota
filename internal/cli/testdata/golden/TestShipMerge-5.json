@@ -1,0 +1,1 @@
+{"inputs":{"Name":"conflict","Args":["ship","merge","rota/clash","--body-file","-"],"Stdin":"merge: x","Code":4},"outputs":{"blockedBy":"conflict","changed":false}}

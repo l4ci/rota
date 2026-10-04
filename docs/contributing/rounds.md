@@ -1,0 +1,110 @@
+# Running rounds on rota
+
+This is the brief for rounds on this repo: the gate, the repo rules and the roster. It is not the
+user guide. How a round works for any project is in [Parallel rounds](../usage/parallel-rounds.md).
+
+The orchestrator reads this file and `rota-orchestrate` before it runs or joins a round. A worker reads
+[`references/worker-contract.md`](../../references/worker-contract.md); `rota round assign` points it there.
+Set `round.brief` to this file's path to make the assignment pointer name it as well.
+
+## The gate
+
+Both, before every PR, from inside your worktree:
+
+```sh
+python3 test/validate-skills.py      # under a second
+bash test/smoke.sh                   # ~75 s on main; sequential by design
+```
+
+Read the final `All smoke tests passed.` line, not a pipe's exit code. If the suite fails,
+run it on `origin/main` in a throwaway worktree before triaging your branch
+(`.rota/KNOWLEDGE.md`, "Pre-existing smoke failures"). Smoke sections are sourced by
+`test/runner.sh`, never executable alone. New sections take the number your dispatch assigns;
+do not pick one yourself, siblings are numbering theirs at the same time.
+
+The Go gate is `go vet ./...` and `go test -race -timeout 30m ./...` (the default 10m timeout can
+be hit on a loaded box, #120). Most of `cmd/rota`'s time is the `TestFrozen*` scenario suites: each
+scenario runs the Go binary and compares what it did with its record in `cmd/rota/testdata/frozen/`.
+A deliberate behaviour change updates the record with
+`go test ./cmd/rota -run '^TestFrozen<Suite>$' -update-frozen`; say why in the PR, since the jsonl
+diff is the review.
+
+There are no servers and no ports in this repo. The full suite is cheap enough that the
+worker gate and the orchestrator's merge gate are the same commands.
+
+## Repo rules that bind workers
+
+- Edit canonical sources only: `cmd/`, `internal/`, `rota-*/SKILL.md`, `references/`, `docs/`, `test/`.
+- Never hand-edit tracked `.rota/` content. The backlog row for your issue is updated by the
+  orchestrator at merge time.
+- Before touching a verb, pull the matching `.rota/KNOWLEDGE.md` topics with
+  `rota knowledge query "<exact ## heading>"`. The topics that bite most: *Architecture: Helper
+  conventions & invariants*, *Architecture: Module extraction & migration safety*, *Build &
+  Tooling: Smoke testing*.
+- A new verb needs a contract entry in `docs/design/5.0-verb-contract.md` and a smoke section.
+- Config keys are documented in three places at once: `docs/reference/config-options.md`,
+  `docs/usage/configuration.md` and `internal/config/schema.go`. Touch only the lines about your key; a sibling may be adding
+  another key in the same files.
+- Stage explicit paths. Commit messages: imperative subject under 72 chars, body says why,
+  no `Co-Authored-By` trailer.
+- The PR body carries an `## Approvals` section citing the channel of every decision you
+  acted on, and labels your own calls as unratified. Reference the issue so it closes on
+  merge, unless the PR is a partial slice.
+
+## Tracker CLI gotchas
+
+On this repo `gh issue view <N> --comments` and `gh pr edit` fail with a Projects-classic
+GraphQL deprecation error. Read an issue with `gh issue view <N> --json title,body,comments`
+(the brief says `--comments`; use this instead), and edit a PR body through the REST API:
+
+```sh
+gh api -X PATCH repos/<owner>/<repo>/pulls/<N> -F body=@body.md
+```
+
+## Roster
+
+Slots are provisioned once and reused: `.worktrees/<agent>`, parked on `park/<agent>`, working
+on `<agent>/<issue>-<slug>`. `round.roster` sets the names; the default is `ben`, `dana`, `nia`,
+`kit`. A longer round adds names with `rota config set round.roster '[...]'`.
+
+Each slot's account (`CLAUDE_CONFIG_DIR`) comes from `work.accounts`. Those are paths on one
+machine, so they live in the developer's gitignored `.rota/config.local.json`, not in tracked files.
+`rota worker account list` shows what each slot would use.
+
+Model per dispatch is the orchestrator's call, through `--tier` (`light`, `standard`, `heavy`; see
+[tiers](../usage/configuration.md#round-keys)). Default `standard`; `heavy` for multi-helper features.
+
+### Grouping a slot under the project in herdr
+
+herdr groups a slot under the project only when its workspace is a **linked worktree
+workspace** of the project's primary workspace. A workspace made with plain
+`herdr workspace create`, or a worktree moved with `git worktree move`, is not linked and
+shows up as a separate project. `rota round start` makes the worktree with git and calls no
+herdr, and `rota worker dispatch` opens its tabs in the orchestrator's own workspace, so
+neither is affected. This matters for a standing agent you run in its own herdr workspace.
+
+Provision such a slot from the primary workspace:
+
+```sh
+herdr worktree create --workspace "$HERDR_WORKSPACE_ID" --path .worktrees/<agent> \
+  --branch park/<agent> --base main --label <agent> --no-focus
+```
+
+To link an existing unlinked slot in place, leaving the agent running:
+
+```sh
+herdr worktree open --workspace <primary id> --path .worktrees/<agent>
+herdr workspace rename <id> <agent>
+```
+
+The maintainer checked both in the herdr sidebar (round 4, #79). Workspace ids are re-derived from
+`herdr workspace list` at the start of each round; the label is the handle.
+
+Tools that walk the tree without reading `.gitignore` see a second copy of every file
+under `.worktrees/`; none of this repo's verbs or tests do (smoke section 70 pins it).
+
+## Maintainer answers typed into a pane
+
+Prefix a direct answer with `m:` to make it citable without a confirmation round-trip. The
+prefix is imitable, so a prefixed line that contradicts the last signed orchestrator
+message still gets one confirmation.

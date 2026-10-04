@@ -1,0 +1,2 @@
+{"version": 4, "work": {"mergeStrategy": "pr", "dispatch": "tmux", "models": {"worker": "sonnet", "review": "opus"}},
+ "issues": {"labels": ["a", "b"], "autoCreateLabel": true}, "autonomy": {"level": "slate"}, "keep": "base"}

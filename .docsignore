@@ -1,0 +1,16 @@
+# rota ship --docs: never read these as source material for public docs
+.env
+.env.*
+**/secrets/**
+**/credentials*
+**/*.key
+**/*.pem
+**/internal/**
+**/private/**
+
+# Common build/dependency dirs (also kept out for noise reasons)
+node_modules/
+dist/
+build/
+.next/
+target/

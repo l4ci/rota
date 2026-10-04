@@ -1,0 +1,1 @@
+{"inputs":{"args":["ship","pr","feat/x","--title","My title","--body-file","-","--items","F1,2"],"provider":"gitlab","stdin":"Summary line","url":"https://gitlab.com/fake/repo/-/merge_requests/1"},"outputs":{"branch":"feat/x","changed":true,"items":["F1","2"],"number":1,"provider":"gitlab","url":"https://gitlab.com/fake/repo/-/merge_requests/1"}}

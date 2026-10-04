@@ -1,0 +1,24 @@
+{
+  "inputs": {
+    "argv": [
+      "knowledge",
+      "hit",
+      "--topic",
+      "Architecture",
+      "--title",
+      "Beta rule"
+    ],
+    "fixture": "8c3df462def663b0dc89ef56f10e8fef7df5d13cedbd7e2934bfaebc54e9793f",
+    "stdin": ""
+  },
+  "outputs": {
+    "stdout": "",
+    "stderr": "",
+    "rc": 0,
+    "changed": {
+      "knowledge-tier.json": "{\n  \"version\": 1,\n  \"entries\": {\n    \"Architecture::Alpha rule\": {\n      \"tier\": \"confirmed\",\n      \"hits\": 4,\n      \"lastSeen\": \"2026-03-01\"\n    },\n    \"Architecture::Beta rule\": {\n      \"tier\": \"provisional\",\n      \"hits\": 2,\n      \"lastSeen\": \"2026-10-03\"\n    },\n    \"Architecture::Old rule\": {\n      \"tier\": \"deprecated\",\n      \"hits\": 0,\n      \"lastSeen\": \"2026-03-03\"\n    }\n  }\n}\n",
+      "knowledge-tier.json.lock": ""
+    },
+    "removed": []
+  }
+}

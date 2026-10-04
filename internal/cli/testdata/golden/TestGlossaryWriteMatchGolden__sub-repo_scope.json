@@ -1,0 +1,25 @@
+{
+  "inputs": {
+    "argv": [
+      "glossary",
+      "write",
+      "Page",
+      "--def",
+      "a view",
+      "--repo",
+      "web"
+    ],
+    "fixture": "6733ff6ba4f8b66ec856da8663fdbd8756f55d2ad6a9cdadc70de1baae772163",
+    "stdin": ""
+  },
+  "outputs": {
+    "stdout": "",
+    "stderr": "wrote: Glossary/Page\n",
+    "rc": 0,
+    "changed": {
+      "../web/CLAUDE.md": "# Web\n\n\u003c!-- rota-knowledge-start --\u003e\n## Project Knowledge\n\nDurable learnings live in `.rota/KNOWLEDGE.md`. Consult it when work touches these topics:\n\n- Architecture\n- Glossary\n\n\u003c!-- rota-knowledge-end --\u003e\n",
+      "knowledge/web/KNOWLEDGE.md": "# Web\n\n## Architecture\n\n- **Web rule** — UI. \u003c!-- 2026-04-01 --\u003e\n\n## Glossary\n\n- **Page** — a view\n  - **Aliases:** _none_\n  \u003c!-- 2026-10-03 --\u003e\n"
+    },
+    "removed": []
+  }
+}

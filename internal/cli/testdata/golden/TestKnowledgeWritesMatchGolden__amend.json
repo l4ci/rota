@@ -1,0 +1,27 @@
+{
+  "inputs": {
+    "argv": [
+      "knowledge",
+      "amend",
+      "--topic",
+      "Architecture",
+      "--fragment",
+      "Beta",
+      "--mode",
+      "append",
+      "--body-file",
+      "-"
+    ],
+    "fixture": "8c3df462def663b0dc89ef56f10e8fef7df5d13cedbd7e2934bfaebc54e9793f",
+    "stdin": "(see #12)\n"
+  },
+  "outputs": {
+    "stdout": "",
+    "stderr": "",
+    "rc": 0,
+    "changed": {
+      "KNOWLEDGE.md": "# Knowledge\n\n## Architecture\n\n- **Alpha rule** — Keep modules small. \u003c!-- 2026-01-01 --\u003e\n- **Beta rule** — Prefer files. \u003c!-- 2026-01-02 --\u003e (see #12)\n- **Old rule** — Retired. \u003c!-- 2026-01-03 --\u003e\n\n## Build\n\n- **Gamma tip** — Run the gate. \u003c!-- 2026-02-01 --\u003e\n\n## Glossary\n\n- **Term** — a definition\n"
+    },
+    "removed": []
+  }
+}

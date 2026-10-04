@@ -1,0 +1,1 @@
+{"inputs":{"Name":"--repo","Args":["ship","body","feat/x","--repo","svc"],"Stdin":"","Code":0},"outputs":{"body":"## Summary\n\n- feat: x [B01]\n\n## Items resolved\n\n- [B01]\n\n","branch":"feat/x"}}

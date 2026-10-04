@@ -1,0 +1,28 @@
+[
+  {
+    "id": "M01",
+    "title": "First: thing & \u00e9",
+    "status": "shipped",
+    "depends": [],
+    "ready": true
+  },
+  {
+    "id": "M02",
+    "title": "Second",
+    "status": "active",
+    "depends": [
+      "M01"
+    ],
+    "ready": true
+  },
+  {
+    "id": "M03",
+    "title": "Third",
+    "status": "active",
+    "depends": [
+      "M01",
+      "M02"
+    ],
+    "ready": false
+  }
+]

@@ -1,0 +1,27 @@
+{
+  "inputs": {
+    "argv": [
+      "knowledge",
+      "contradiction",
+      "add",
+      "--topic",
+      "Architecture",
+      "--title",
+      "Beta rule",
+      "--text",
+      "no, use dirs"
+    ],
+    "fixture": "8c3df462def663b0dc89ef56f10e8fef7df5d13cedbd7e2934bfaebc54e9793f",
+    "stdin": ""
+  },
+  "outputs": {
+    "stdout": "",
+    "stderr": "",
+    "rc": 0,
+    "changed": {
+      "knowledge-contradictions.json": "{\n  \"version\": 1,\n  \"pending\": [\n    {\n      \"topic\": \"Architecture\",\n      \"title\": \"Beta rule\",\n      \"correctionText\": \"no, use dirs\",\n      \"loggedAt\": \"TS\"\n    }\n  ]\n}\n",
+      "knowledge-contradictions.json.lock": ""
+    },
+    "removed": []
+  }
+}

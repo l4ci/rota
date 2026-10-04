@@ -1,0 +1,17 @@
+{
+  "inputs": {
+    "argv": [
+      "block",
+      "nope"
+    ],
+    "fixture": "bc5f38691e04e2475ee4bb289a3dd5a116a44dcda25b68e0243c7d502a306312",
+    "stdin": ""
+  },
+  "outputs": {
+    "stdout": "",
+    "stderr": "error: unknown key 'nope' (known: knowledge, decisions)\n",
+    "rc": 1,
+    "changed": {},
+    "removed": []
+  }
+}

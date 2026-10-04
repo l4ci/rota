@@ -1,0 +1,29 @@
+{
+  "inputs": {
+    "argv": [
+      "knowledge",
+      "amend",
+      "--repo",
+      "web",
+      "--topic",
+      "Architecture",
+      "--fragment",
+      "Web rule",
+      "--mode",
+      "append",
+      "--body-file",
+      "-"
+    ],
+    "fixture": "774094f41c0005c07eb34558a34ae8166565115d75beb15d23fa737dc61d7a4b",
+    "stdin": "extra"
+  },
+  "outputs": {
+    "stdout": "",
+    "stderr": "",
+    "rc": 0,
+    "changed": {
+      "knowledge/web/KNOWLEDGE.md": "# Web\n\n## Architecture\n\n- **Web rule** — Own the UI. \u003c!-- 2026-04-01 --\u003e extra\n\n## Glossary\n\n- **Page** — a view\n"
+    },
+    "removed": []
+  }
+}

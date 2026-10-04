@@ -1,0 +1,1 @@
+{"inputs":{"Name":"umbrella root","Args":["ship","merge","feat/x","--body-file","-"],"Stdin":"merge: x","Code":2},"outputs":null}

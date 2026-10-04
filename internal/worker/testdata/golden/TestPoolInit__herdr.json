@@ -1,0 +1,13 @@
+{
+  "inputs": {
+    "config": "{\"work\":{\"dispatch\":\"herdr\"}}",
+    "steps": [
+      "init --slots 3 --base main --session s1",
+      "init --slots 4 --base main --session s1"
+    ]
+  },
+  "outputs": {
+    "after grow": "{\n  \"session\": \"s1\",\n  \"slots\": [\n    {\n      \"name\": \"w1\",\n      \"branch\": \"rota-worker/w1\",\n      \"worktree\": \"ROOT/.worktrees/w1\",\n      \"base\": \"main\",\n      \"handle\": null,\n      \"state\": \"idle\",\n      \"task\": null,\n      \"pr\": null,\n      \"relays\": [],\n      \"configDir\": null\n    },\n    {\n      \"name\": \"w2\",\n      \"branch\": \"rota-worker/w2\",\n      \"worktree\": \"ROOT/.worktrees/w2\",\n      \"base\": \"main\",\n      \"handle\": null,\n      \"state\": \"idle\",\n      \"task\": null,\n      \"pr\": null,\n      \"relays\": [],\n      \"configDir\": null\n    },\n    {\n      \"name\": \"w3\",\n      \"branch\": \"rota-worker/w3\",\n      \"worktree\": \"ROOT/.worktrees/w3\",\n      \"base\": \"main\",\n      \"handle\": null,\n      \"state\": \"idle\",\n      \"task\": null,\n      \"pr\": null,\n      \"relays\": [],\n      \"configDir\": null\n    },\n    {\n      \"name\": \"w4\",\n      \"branch\": \"rota-worker/w4\",\n      \"worktree\": \"ROOT/.worktrees/w4\",\n      \"base\": \"main\",\n      \"handle\": null,\n      \"state\": \"idle\",\n      \"task\": null,\n      \"pr\": null,\n      \"relays\": [],\n      \"configDir\": null\n    }\n  ]\n}\n",
+    "after init": "{\n  \"session\": \"s1\",\n  \"slots\": [\n    {\n      \"name\": \"w1\",\n      \"branch\": \"rota-worker/w1\",\n      \"worktree\": \"ROOT/.worktrees/w1\",\n      \"base\": \"main\",\n      \"handle\": null,\n      \"state\": \"idle\",\n      \"task\": null,\n      \"pr\": null,\n      \"relays\": [],\n      \"configDir\": null\n    },\n    {\n      \"name\": \"w2\",\n      \"branch\": \"rota-worker/w2\",\n      \"worktree\": \"ROOT/.worktrees/w2\",\n      \"base\": \"main\",\n      \"handle\": null,\n      \"state\": \"idle\",\n      \"task\": null,\n      \"pr\": null,\n      \"relays\": [],\n      \"configDir\": null\n    },\n    {\n      \"name\": \"w3\",\n      \"branch\": \"rota-worker/w3\",\n      \"worktree\": \"ROOT/.worktrees/w3\",\n      \"base\": \"main\",\n      \"handle\": null,\n      \"state\": \"idle\",\n      \"task\": null,\n      \"pr\": null,\n      \"relays\": [],\n      \"configDir\": null\n    }\n  ]\n}\n"
+  }
+}

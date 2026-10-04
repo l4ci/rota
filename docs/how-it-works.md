@@ -1,0 +1,84 @@
+# How rota works
+
+rota is a CLI plus a set of skills (slash commands in Claude Code). Together they form a loop: capture, plan, execute with atomic commits, ship behind a review gate, persist the lessons. The diagram below shows how every skill connects to the artifacts it reads or writes, and which skills nudge or consult each other.
+
+```mermaid
+flowchart LR
+  VISION["/rota-vision"] --> MILES[(MILESTONES.md)]
+  VISION -.optional.-> SPIKE["/rota-spike"]
+  VISION -.routes.-> PLAN["/rota-plan"]
+  CAP["/rota-capture"] --> BACKLOG[(BACKLOG.md)]
+  CAP -.tag.-> MILES
+  CAP -.nudges.-> BRAIN["/rota-brainstorm"]
+  ISSUES["/rota-capture --from-github / --from-gitlab"] -.sync.-> BACKLOG
+  CAP -.hand-off.-> WORK
+  BACKLOG --> WORK["/rota-work (no argument)"]
+  MILES -.scopes.-> WORK
+  WORK -.suggests.-> PREVIEW["/rota-work --preview"]
+  WORK -.suggests.-> PLAN
+  WORK -.nudges.-> BRAIN
+  BRAIN --> DESIGNS[(.rota/designs/)]
+  DESIGNS -.soft input.-> PLAN
+  PLAN --> PLANS[(.rota/plans/)]
+  PLANS -.consults.-> WORK
+  PREVIEW -.reads.-> PLANS
+  PREVIEW -.peeks.-> WORK
+  SPIKE --> SPIKES[(.rota/spikes/)]
+  WORK -.pause.-> PAUSE["/rota-pause"]
+  DEBUG -.pause.-> PAUSE
+  PAUSE --> HANDOFF[(.rota/handoff/)]
+  WORK --> COMMIT[(atomic commits)]
+  DEBUG["/rota-debug"] --> COMMIT
+  REFACTOR["/rota-refactor"] --> COMMIT
+  COMMIT -.review.-> REVIEW["/rota-review"]
+  REVIEW -.gate.-> SHIP["/rota-ship"]
+  SHIP -.ship.qa.-> QA["/rota-qa"]
+  QA -.strategy.-> QASTRAT[(.rota/qa/)]
+  SHIP --> PR[(PR / merge)]
+  SHIP -.rollback.-> UNDO["/rota-ship --undo"]
+  UNDO -.restores.-> BACKLOG
+  WORK --> LEARN["/rota-learn"]
+  DEBUG -.nudge/auto.-> LEARN
+  SHIP -.loop.-> WORK
+  LEARN --> KNOW[(KNOWLEDGE.md)]
+  KNOW -.consults.-> WORK
+  KNOW -.consults.-> DEBUG
+  KNOW -.consults.-> REVIEW
+  DECIDE["/rota-decide"] --> DECISIONS[(.rota/DECISIONS.md)]
+  DECISIONS -.consults.-> WORK
+  DECISIONS -.consults.-> DEBUG
+  DECISIONS -.consults.-> REVIEW
+  WORK -.bumps.-> MAPS[(.rota/map/)]
+  DEBUG -.bumps.-> MAPS
+  WORK -.post-cycle.-> DOCS["/rota-ship --docs"]
+  SHIP -.post-cycle.-> DOCS
+  DOCS --> USERDOCS[(docs/)]
+  SHIP -.cut.-> RELEASE["/rota-release"]
+  RELEASE --> RELEASES[(GitHub releases)]
+  ORCH["/rota-orchestrate"] --> ROUND["rota round"]
+  ROUND --> WORKERS["workers in worktrees"]
+  WORKERS --> PR
+  ROUND -.gate.-> PR
+  ROUND -.checks.-> DOCTOR["rota doctor / rota reap"]
+  ORCH -.unattended.-> KEEP["rota hook / keepalive / limit"]
+```
+
+Everything Claude reads or mutates lives under `.rota/` in your project. Git is the source of truth; `status.json` is just a cache, and `/rota-work` with no argument reconciles drift between the two.
+
+## The six lanes
+
+**Capture.** `/rota-capture` is the brain-dump entry point. It splits, classifies, and routes items to `BACKLOG.md` with auto-incrementing IDs (`B01`, `F01`, `T01`). `/rota-capture` ends with an optional hand-off to `/rota-work`, so a hot-path fix is capture, accept, done. `/rota-capture --from-github` / `--from-gitlab` syncs open upstream issues into the backlog with `GH: #N` / `GL: #N` cross-references, and round-trips closing via `/rota-ship`. `/rota-capture --remove <ID>` is the local inverse: it strips a captured item and cleans up its dependencies behind a dry-run preview and confirmation gate.
+
+**Plan.** `/rota-vision` brainstorms milestones with Socratic discovery, web research, and a deliberate critique pass. `/rota-brainstorm` explores design for size-Major features or P0 bugs before planning. `/rota-plan` writes the implementation plan to its own file, keyed by milestone slice or item. `/rota-spike` runs throwaway feasibility experiments on a branch that never merges; only findings come back. `/rota-work --preview <ID>` previews the orchestrator's intended approach without writing anything, a cheap gate before code lands on high-stakes items.
+
+**Execute.** `/rota-work` is the orchestrator. It reads the plan (or decomposes ad-hoc if none exists), dispatches worker subagents in parallel, commits one verifiable task at a time. `/rota-debug` runs a systematic reproduce → hypothesize → verify → fix cycle for bugs. `/rota-refactor` does the same shape for architectural friction. `/rota-pause` writes a handoff note when the context window is filling, so a fresh `/rota-work` (no argument) session picks up cleanly.
+
+**Ship.** `/rota-review` runs a two-stage pass over the branch. Stage 1 checks the diff against `PLAN.md` (spec compliance). Stage 2 checks code-quality plus a silent-failure-hunter rubric and `DECISIONS.md` violations. It returns `PASS` / `CONCERNS` / `FAIL`. `/rota-qa` answers the orthogonal question, *"does the product actually work?"*, by running per-target strategies (`.rota/qa/<target>.md`) with Playwright / smoke / lighthouse / axe / ZAP / contract runners. `/rota-ship` builds an ID-linked PR body or direct-merges based on configured strategy, with two opt-in gates layered after `/rota-review`: a fresh-eyes second-opinion review (`ship.secondOpinion`) and a product QA run (`ship.qa`). `/rota-ship --undo` rolls back the last direct-merge cycle in one operation, restoring TODO entries.
+
+**Persist.** `/rota-learn` writes durable session learnings to `KNOWLEDGE.md`, verified before they land. That includes domain terms via the `--term <name>` flag, which lands the term as a nested-bullet entry under the pinned `## Glossary` topic of the same file. `/rota-decide` captures hard-boundary commitments to `DECISIONS.md` with explicit forbids and permits. The project map (`.rota/map/<name>.md` files describing subsystems) is hand-authored; cycle skills (`/rota-work`, `/rota-debug`) bump `touched:` post-cycle on matched subsystems and regenerate the always-on `## Project Map` block via `rota map index`. `/rota-ship --docs` keeps the public docs in sync with the code (inline at ship time or via the manual `--docs` flag).
+
+**Rounds.** `/rota-orchestrate` runs a parallel round. The `rota round` verbs do the mechanics: take the orchestrator lease, assign issues, wait for workers, wind down. Each worker is an agent in its own git worktree (`rota worker` manages slots, hosts and accounts) that implements one issue and opens a PR; the orchestrator runs the gate and merges. `rota doctor` checks the machine first and `rota reap` clears leftovers. For unattended runs, `rota hook`, `rota statusline`, `rota keepalive` and `rota limit` hand the orchestrator off before its context fills, restart it and wait out usage limits. See [parallel rounds](usage/parallel-rounds.md) and [unattended rounds](usage/unattended-rounds.md).
+
+**Maintenance.** `rota init` sets up `.rota/` once at the project root. `rota config set` edits config (never hand-edit JSON). `rota update` checks for newer rota releases and prints the exact upgrade command. `rota skills` installs and refreshes the skills from the binary. `rota doctor` checks git, the forge, accounts and installed skills. `/rota-release` cuts your project's own releases: version bump, categorized notes, tag, push, GitHub/GitLab release.
+
+For the alphabetical reference of every skill see [the slash commands page](reference/slash-commands.md). For two worked examples that carry one concrete project end-to-end, see the [walkthroughs](walkthroughs/).

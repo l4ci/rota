@@ -1,0 +1,39 @@
+# ── rota backlog ──
+# Track .rota/ content (knowledge, decisions, backlog, milestones, designs,
+# plans, spikes, per-item detail). Only ignore the parts that are
+# machine-specific, regenerated, or per-developer local overrides.
+
+# Stale mirror from an older release; `rota init` deletes it. Kept for one release (removable)
+.rota/bin/
+# Active-work tracking (per-developer, branch-aware)
+.rota/status.json
+# Umbrella sub-repo registry (absolute paths, machine-specific)
+.rota/repos.json
+# Per-developer config overrides — deep-merged on top of config.json by load_config()
+.rota/config.local.json
+# Advisory lockfiles guarding sidecar read-modify-write (written by rota)
+.rota/**/*.lock
+
+# Python bytecode (test tooling: validator, fakes)
+__pycache__/
+*.pyc
+
+# Claude Code harness state (scheduled tasks, etc.)
+.claude/
+
+# ── rota ──
+.rota/bin/
+.rota/status.json
+.rota/repos.json
+.rota/workers.json
+.rota/config.local.json
+.rota/handoff/
+.rota/qa-runs/
+.rota/verdicts.json
+.rota/migrate-backup/
+
+# Worker worktrees (rota worker pool, parallel rounds): nested checkouts
+.worktrees/
+
+# rota release builds (goreleaser)
+dist/

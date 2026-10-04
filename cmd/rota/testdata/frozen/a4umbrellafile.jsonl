@@ -1,0 +1,81 @@
+{"utc":"2026-10-03","local":"2026-10-03"}
+{"name":"comment-add/api","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"B01","kind":"question","type":"B"},"ok":true},"tree":{".rota/bugs/B01.md":"a195994f00e478e0"}}]}
+{"name":"comment-add/root","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"B01","kind":"question","type":"B"},"ok":true},"tree":{".rota/bugs/B01.md":"a195994f00e478e0"}}]}
+{"name":"comment-add/web","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"B01","kind":"question","type":"B"},"ok":true},"tree":{".rota/bugs/B01.md":"a195994f00e478e0"}}]}
+{"name":"comment-add/web_src","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"B01","kind":"question","type":"B"},"ok":true},"tree":{".rota/bugs/B01.md":"a195994f00e478e0"}}]}
+{"name":"complete-no-proof-refused/api","steps":[{"exit":4,"env":{"data":{"blockedBy":"proof missing","changed":false},"error":{"code":"refused","exit":4,"hint":"record proof with `rota proof add`, or pass --no-proof","message":"[B02] no proof recorded, pass --no-proof to override"},"ok":false}}]}
+{"name":"complete-no-proof-refused/root","steps":[{"exit":4,"env":{"data":{"blockedBy":"proof missing","changed":false},"error":{"code":"refused","exit":4,"hint":"record proof with `rota proof add`, or pass --no-proof","message":"[B02] no proof recorded, pass --no-proof to override"},"ok":false}}]}
+{"name":"complete-no-proof-refused/web","steps":[{"exit":4,"env":{"data":{"blockedBy":"proof missing","changed":false},"error":{"code":"refused","exit":4,"hint":"record proof with `rota proof add`, or pass --no-proof","message":"[B02] no proof recorded, pass --no-proof to override"},"ok":false}}]}
+{"name":"complete-no-proof-refused/web_src","steps":[{"exit":4,"env":{"data":{"blockedBy":"proof missing","changed":false},"error":{"code":"refused","exit":4,"hint":"record proof with `rota proof add`, or pass --no-proof","message":"[B02] no proof recorded, pass --no-proof to override"},"ok":false}}]}
+{"name":"complete-unknown/api","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"[B99] not found"},"ok":false}}]}
+{"name":"complete-unknown/root","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"[B99] not found"},"ok":false}}]}
+{"name":"complete-unknown/web","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"[B99] not found"},"ok":false}}]}
+{"name":"complete-unknown/web_src","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"[B99] not found"},"ok":false}}]}
+{"name":"complete/api","steps":[{"exit":0,"env":{"data":{"changed":true,"commit":"ffd4cc6","id":"B01","reason":"done","type":"B"},"ok":true},"tree":{".rota/BACKLOG.md":"9cfe0d6257cd315b",".rota/counters.json":"aab9151adc86dac3"}}]}
+{"name":"complete/root","steps":[{"exit":0,"env":{"data":{"changed":true,"commit":"ffd4cc6","id":"B01","reason":"done","type":"B"},"ok":true},"tree":{".rota/BACKLOG.md":"9cfe0d6257cd315b",".rota/counters.json":"aab9151adc86dac3"}}]}
+{"name":"complete/web","steps":[{"exit":0,"env":{"data":{"changed":true,"commit":"ffd4cc6","id":"B01","reason":"done","type":"B"},"ok":true},"tree":{".rota/BACKLOG.md":"9cfe0d6257cd315b",".rota/counters.json":"aab9151adc86dac3"}}]}
+{"name":"complete/web_src","steps":[{"exit":0,"env":{"data":{"changed":true,"commit":"ffd4cc6","id":"B01","reason":"done","type":"B"},"ok":true},"tree":{".rota/BACKLOG.md":"9cfe0d6257cd315b",".rota/counters.json":"aab9151adc86dac3"}}]}
+{"name":"create-multi-repos/api","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"B10","kind":"bugs","type":"B"},"ok":true},"tree":{".rota/BACKLOG.md":"fe7b9046fd6741ff",".rota/counters.json":"5b2a427c0abe8a49"}}]}
+{"name":"create-multi-repos/root","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"B10","kind":"bugs","type":"B"},"ok":true},"tree":{".rota/BACKLOG.md":"fe7b9046fd6741ff",".rota/counters.json":"5b2a427c0abe8a49"}}]}
+{"name":"create-multi-repos/web","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"B10","kind":"bugs","type":"B"},"ok":true},"tree":{".rota/BACKLOG.md":"fe7b9046fd6741ff",".rota/counters.json":"5b2a427c0abe8a49"}}]}
+{"name":"create-multi-repos/web_src","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"B10","kind":"bugs","type":"B"},"ok":true},"tree":{".rota/BACKLOG.md":"fe7b9046fd6741ff",".rota/counters.json":"5b2a427c0abe8a49"}}]}
+{"name":"create-no-repos/api","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"F09","kind":"features","type":"F"},"ok":true},"tree":{".rota/BACKLOG.md":"ac75cd0bc71c0306",".rota/counters.json":"070b09c96c5e9185"}}]}
+{"name":"create-no-repos/root","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"F09","kind":"features","type":"F"},"ok":true},"tree":{".rota/BACKLOG.md":"ac75cd0bc71c0306",".rota/counters.json":"070b09c96c5e9185"}}]}
+{"name":"create-no-repos/web","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"F09","kind":"features","type":"F"},"ok":true},"tree":{".rota/BACKLOG.md":"ac75cd0bc71c0306",".rota/counters.json":"070b09c96c5e9185"}}]}
+{"name":"create-no-repos/web_src","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"F09","kind":"features","type":"F"},"ok":true},"tree":{".rota/BACKLOG.md":"ac75cd0bc71c0306",".rota/counters.json":"070b09c96c5e9185"}}]}
+{"name":"create-repos/api","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"T09","kind":"tasks","type":"T"},"ok":true},"tree":{".rota/BACKLOG.md":"2bf97cd9414336c3",".rota/counters.json":"613a8d288a3c80ad"}}]}
+{"name":"create-repos/root","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"T09","kind":"tasks","type":"T"},"ok":true},"tree":{".rota/BACKLOG.md":"2bf97cd9414336c3",".rota/counters.json":"613a8d288a3c80ad"}}]}
+{"name":"create-repos/web","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"T09","kind":"tasks","type":"T"},"ok":true},"tree":{".rota/BACKLOG.md":"2bf97cd9414336c3",".rota/counters.json":"613a8d288a3c80ad"}}]}
+{"name":"create-repos/web_src","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"T09","kind":"tasks","type":"T"},"ok":true},"tree":{".rota/BACKLOG.md":"2bf97cd9414336c3",".rota/counters.json":"613a8d288a3c80ad"}}]}
+{"name":"create/repos-names-are-not-validated","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"T09","kind":"tasks","type":"T"},"ok":true},"tree":{".rota/BACKLOG.md":"0dd687f3fc460f32",".rota/counters.json":"613a8d288a3c80ad"}}]}
+{"name":"fieldget-repos/root","steps":[{"exit":0,"env":{"data":{"field":"repos","id":"B03","type":"B","value":"web"},"ok":true}}]}
+{"name":"fieldlist/root","steps":[{"exit":0,"env":{"data":{"fields":{"detail":"","milestone":"M02","note":"","reason":"","related":"","repos":"web","since":"ffd4cc6","subsystem":"capture","title":"Third bug"},"id":"B03","type":"B"},"ok":true}}]}
+{"name":"fieldset-repos/root","steps":[{"exit":0,"env":{"data":{"changed":true,"field":"repos","id":"B03","type":"B","value":"web, api"},"ok":true},"tree":{".rota/BACKLOG.md":"fd2f45ca3a7d348f"}}]}
+{"name":"idnext/api","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"B10","kind":"bugs"},"ok":true},"tree":{".rota/counters.json":"5b2a427c0abe8a49"}}]}
+{"name":"idnext/root","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"B10","kind":"bugs"},"ok":true},"tree":{".rota/counters.json":"5b2a427c0abe8a49"}}]}
+{"name":"idnext/web","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"B10","kind":"bugs"},"ok":true},"tree":{".rota/counters.json":"5b2a427c0abe8a49"}}]}
+{"name":"idnext/web_src","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"B10","kind":"bugs"},"ok":true},"tree":{".rota/counters.json":"5b2a427c0abe8a49"}}]}
+{"name":"raw-file/api","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"B77","kind":"bugs","type":"B"},"ok":true},"tree":{".rota/BACKLOG.md":"87373176d383d3a0"}}]}
+{"name":"raw-file/root","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"B77","kind":"bugs","type":"B"},"ok":true},"tree":{".rota/BACKLOG.md":"87373176d383d3a0"}}]}
+{"name":"raw-file/web","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"B77","kind":"bugs","type":"B"},"ok":true},"tree":{".rota/BACKLOG.md":"87373176d383d3a0"}}]}
+{"name":"raw-file/web_src","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"B77","kind":"bugs","type":"B"},"ok":true},"tree":{".rota/BACKLOG.md":"87373176d383d3a0"}}]}
+{"name":"ready/api","steps":[{"exit":0,"env":{"data":{"id":"B01","ready":true,"reasons":[],"type":"B"},"ok":true}}]}
+{"name":"ready/root","steps":[{"exit":0,"env":{"data":{"id":"B01","ready":true,"reasons":[],"type":"B"},"ok":true}}]}
+{"name":"ready/web","steps":[{"exit":0,"env":{"data":{"id":"B01","ready":true,"reasons":[],"type":"B"},"ok":true}}]}
+{"name":"ready/web_src","steps":[{"exit":0,"env":{"data":{"id":"B01","ready":true,"reasons":[],"type":"B"},"ok":true}}]}
+{"name":"reopen/api","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"B08","type":"B"},"ok":true},"tree":{".rota/BACKLOG.md":"b10849d196579680",".rota/counters.json":"025a8a42bd10c7d5"}}]}
+{"name":"reopen/root","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"B08","type":"B"},"ok":true},"tree":{".rota/BACKLOG.md":"b10849d196579680",".rota/counters.json":"025a8a42bd10c7d5"}}]}
+{"name":"reopen/web","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"B08","type":"B"},"ok":true},"tree":{".rota/BACKLOG.md":"b10849d196579680",".rota/counters.json":"025a8a42bd10c7d5"}}]}
+{"name":"reopen/web_src","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"B08","type":"B"},"ok":true},"tree":{".rota/BACKLOG.md":"b10849d196579680",".rota/counters.json":"025a8a42bd10c7d5"}}]}
+{"name":"repoflag-registered/complete","steps":[{"exit":0,"env":{"data":{"changed":true,"commit":"ffd4cc6","id":"B01","reason":"done","type":"B"},"ok":true},"tree":{".rota/BACKLOG.md":"9cfe0d6257cd315b",".rota/counters.json":"aab9151adc86dac3"}}]}
+{"name":"repoflag-registered/create","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"T09","kind":"tasks","type":"T"},"ok":true},"tree":{".rota/BACKLOG.md":"0a88f4ca58665594",".rota/counters.json":"613a8d288a3c80ad"}}]}
+{"name":"repoflag-registered/fieldget","steps":[{"exit":0,"env":{"data":{"field":"repos","id":"B03","type":"B","value":"web"},"ok":true}}]}
+{"name":"repoflag-registered/fieldset","steps":[{"exit":0,"env":{"data":{"changed":false,"field":"milestone","id":"B03","type":"B","value":"M02"},"ok":true}}]}
+{"name":"repoflag-registered/idnext","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"T09","kind":"tasks"},"ok":true},"tree":{".rota/counters.json":"613a8d288a3c80ad"}}]}
+{"name":"repoflag-registered/ready","steps":[{"exit":0,"env":{"data":{"id":"B01","ready":true,"reasons":[],"type":"B"},"ok":true}}]}
+{"name":"repoflag-registered/reopen","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"B08","type":"B"},"ok":true},"tree":{".rota/BACKLOG.md":"b10849d196579680",".rota/counters.json":"025a8a42bd10c7d5"}}]}
+{"name":"repoflag-registered/rm-apply","steps":[{"exit":0,"env":{"data":{"applied":true,"changed":true,"items":[{"archive":false,"crossRefs":0,"id":"B03","planFiles":[],"todoEntry":true,"type":"B"}]},"ok":true},"tree":{".rota/BACKLOG.md":"b50ed410ca741c8a"}}]}
+{"name":"repoflag-then-verb-error/bad-reason","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"--reason must be done|handed-off|blocked|dropped"},"ok":false}}]}
+{"name":"repoflag-then-verb-error/missing-title","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"--title is required"},"ok":false}}]}
+{"name":"repoflag-then-verb-error/unknown-id","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"[B99] not found"},"ok":false}}]}
+{"name":"repoflag-unregistered-first/bad-flag-value","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"--repo nope is not registered in .rota/repos.json"},"ok":false}}]}
+{"name":"repoflag-unregistered/complete","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"--repo nope is not registered in .rota/repos.json"},"ok":false}}]}
+{"name":"repoflag-unregistered/create","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"--repo nope is not registered in .rota/repos.json"},"ok":false}}]}
+{"name":"repoflag-unregistered/fieldget","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"--repo nope is not registered in .rota/repos.json"},"ok":false}}]}
+{"name":"repoflag-unregistered/fieldset","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"--repo nope is not registered in .rota/repos.json"},"ok":false}}]}
+{"name":"repoflag-unregistered/idnext","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"--repo nope is not registered in .rota/repos.json"},"ok":false}}]}
+{"name":"repoflag-unregistered/ready","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"--repo nope is not registered in .rota/repos.json"},"ok":false}}]}
+{"name":"repoflag-unregistered/reopen","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"--repo nope is not registered in .rota/repos.json"},"ok":false}}]}
+{"name":"repoflag-unregistered/rm-apply","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"--repo nope is not registered in .rota/repos.json"},"ok":false}}]}
+{"name":"rm-apply/api","steps":[{"exit":0,"env":{"data":{"applied":true,"changed":true,"items":[{"archive":false,"crossRefs":0,"id":"B03","planFiles":[],"todoEntry":true,"type":"B"}]},"ok":true},"tree":{".rota/BACKLOG.md":"b50ed410ca741c8a"}}]}
+{"name":"rm-apply/root","steps":[{"exit":0,"env":{"data":{"applied":true,"changed":true,"items":[{"archive":false,"crossRefs":0,"id":"B03","planFiles":[],"todoEntry":true,"type":"B"}]},"ok":true},"tree":{".rota/BACKLOG.md":"b50ed410ca741c8a"}}]}
+{"name":"rm-apply/web","steps":[{"exit":0,"env":{"data":{"applied":true,"changed":true,"items":[{"archive":false,"crossRefs":0,"id":"B03","planFiles":[],"todoEntry":true,"type":"B"}]},"ok":true},"tree":{".rota/BACKLOG.md":"b50ed410ca741c8a"}}]}
+{"name":"rm-apply/web_src","steps":[{"exit":0,"env":{"data":{"applied":true,"changed":true,"items":[{"archive":false,"crossRefs":0,"id":"B03","planFiles":[],"todoEntry":true,"type":"B"}]},"ok":true},"tree":{".rota/BACKLOG.md":"b50ed410ca741c8a"}}]}
+{"name":"rm-preview/api","steps":[{"exit":0,"env":{"data":{"applied":false,"changed":false,"items":[{"archive":false,"crossRefs":0,"id":"B03","planFiles":[],"todoEntry":true,"type":"B"}]},"ok":true,"warnings":["preview only; pass --apply"]}}]}
+{"name":"rm-preview/root","steps":[{"exit":0,"env":{"data":{"applied":false,"changed":false,"items":[{"archive":false,"crossRefs":0,"id":"B03","planFiles":[],"todoEntry":true,"type":"B"}]},"ok":true,"warnings":["preview only; pass --apply"]}}]}
+{"name":"rm-preview/web","steps":[{"exit":0,"env":{"data":{"applied":false,"changed":false,"items":[{"archive":false,"crossRefs":0,"id":"B03","planFiles":[],"todoEntry":true,"type":"B"}]},"ok":true,"warnings":["preview only; pass --apply"]}}]}
+{"name":"rm-preview/web_src","steps":[{"exit":0,"env":{"data":{"applied":false,"changed":false,"items":[{"archive":false,"crossRefs":0,"id":"B03","planFiles":[],"todoEntry":true,"type":"B"}]},"ok":true,"warnings":["preview only; pass --apply"]}}]}
+{"name":"shipped/api","steps":[{"exit":1,"env":{"data":{"found":false,"titles":[{"hits":[],"title":"parser-core lexer-v2"}]},"error":{"code":"failed","exit":1,"message":"no ship evidence found"},"ok":false}}]}
+{"name":"shipped/root","steps":[{"exit":0,"env":{"data":{"found":true,"titles":[{"hits":[{"hash":"8525b03","level":"strong","subject":"feat: add `parser-core` lexer-v2 support","tokens":["parser-core","lexer-v2"]}],"title":"parser-core lexer-v2"}]},"ok":true}}]}
+{"name":"shipped/web","steps":[{"exit":1,"env":{"data":{"found":false,"titles":[{"hits":[],"title":"parser-core lexer-v2"}]},"error":{"code":"failed","exit":1,"message":"no ship evidence found"},"ok":false}}]}
+{"name":"shipped/web_src","steps":[{"exit":1,"env":{"data":{"found":false,"titles":[{"hits":[],"title":"parser-core lexer-v2"}]},"error":{"code":"failed","exit":1,"message":"no ship evidence found"},"ok":false}}]}

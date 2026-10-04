@@ -1,0 +1,714 @@
+{
+  "inputs": {
+    "argv": "--fixture <pane> --slot w1 [--status <status>]",
+    "panes": {
+      "api error": "doing things\nAPI Error: 529 Overloaded\n",
+      "blank": "",
+      "blocked": "ROTA-BLOCKED w1: which of A or B?\n",
+      "blocked + done": "ROTA-DONE w1 x\nROTA-BLOCKED w1: still a question\n",
+      "blocked indent": "   ROTA-BLOCKED   w1 :   spaced out  \n",
+      "crashed": "Resume this session with: claude --resume abc\n",
+      "crlf": "ROTA-BLOCKED w1: windows\r\nline\r\n",
+      "done bare": "ROTA-DONE w1\nnext line\n",
+      "done branch": "ROTA-DONE w1 rota-worker/w1-t1\n",
+      "done multiline": "ROTA-DONE w1\nsomething after\n",
+      "done url": "work\nROTA-DONE w1 https://github.com/o/r/pull/12\n",
+      "idle": "  claude ready\n> \n",
+      "limit": "You've hit your usage limit. resets at 5pm\n",
+      "limit approaching": "Approaching usage limit\n",
+      "limit funds": "You've hit your limit\nAdd funds to continue\n",
+      "limit prose": "I read the rate limit code in limiter.go\n",
+      "limit reset": "limit will reset at 3am\n",
+      "long limit line": "usage limit reached xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n",
+      "permission": "Do you want to proceed?\n 1. Yes\n 2. No, and tell Claude what to do differently\n",
+      "permission allow": "Allow Bash(git push) to run?\n",
+      "permission dont": "Yes, and don't ask again for this\n",
+      "retry": "API Error: Overloaded\nRetrying in 4 seconds\n",
+      "sentinel over limit": "reached your usage limit\nROTA-DONE w1 https://gitlab.com/o/r/-/merge_requests/3\n",
+      "unicode": "héllo wörld — ünïcode ✓\n❯ \n"
+    },
+    "statuses": [
+      "",
+      "idle",
+      "working",
+      "blocked",
+      "done",
+      "unknown",
+      "gone"
+    ]
+  },
+  "outputs": {
+    "api error/": [
+      "DEAD",
+      "API Error: 529 Overloaded"
+    ],
+    "api error/blocked": [
+      "NEEDS-PERMISSION",
+      "herdr: agent blocked on a dialog — answer it in the slot's tab, or widen work.workerCommand"
+    ],
+    "api error/done": [
+      "DEAD",
+      "API Error: 529 Overloaded"
+    ],
+    "api error/gone": [
+      "DEAD",
+      "herdr: no agent in the slot's tab — the session exited"
+    ],
+    "api error/idle": [
+      "DEAD",
+      "API Error: 529 Overloaded"
+    ],
+    "api error/unknown": [
+      "DEAD",
+      "API Error: 529 Overloaded"
+    ],
+    "api error/working": [
+      "BUSY",
+      "herdr: agent working"
+    ],
+    "blank/": [
+      "IDLE",
+      "static pane, no sentinel"
+    ],
+    "blank/blocked": [
+      "NEEDS-PERMISSION",
+      "herdr: agent blocked on a dialog — answer it in the slot's tab, or widen work.workerCommand"
+    ],
+    "blank/done": [
+      "IDLE",
+      "static pane, no sentinel"
+    ],
+    "blank/gone": [
+      "DEAD",
+      "herdr: no agent in the slot's tab — the session exited"
+    ],
+    "blank/idle": [
+      "IDLE",
+      "static pane, no sentinel"
+    ],
+    "blank/unknown": [
+      "UNKNOWN",
+      "herdr cannot classify the agent — inspect the tab; not proof it finished"
+    ],
+    "blank/working": [
+      "BUSY",
+      "herdr: agent working"
+    ],
+    "blocked + done/": [
+      "BLOCKED",
+      "still a question"
+    ],
+    "blocked + done/blocked": [
+      "BLOCKED",
+      "still a question"
+    ],
+    "blocked + done/done": [
+      "BLOCKED",
+      "still a question"
+    ],
+    "blocked + done/gone": [
+      "BLOCKED",
+      "still a question"
+    ],
+    "blocked + done/idle": [
+      "BLOCKED",
+      "still a question"
+    ],
+    "blocked + done/unknown": [
+      "BLOCKED",
+      "still a question"
+    ],
+    "blocked + done/working": [
+      "BLOCKED",
+      "still a question"
+    ],
+    "blocked indent/": [
+      "BLOCKED",
+      "spaced out"
+    ],
+    "blocked indent/blocked": [
+      "BLOCKED",
+      "spaced out"
+    ],
+    "blocked indent/done": [
+      "BLOCKED",
+      "spaced out"
+    ],
+    "blocked indent/gone": [
+      "BLOCKED",
+      "spaced out"
+    ],
+    "blocked indent/idle": [
+      "BLOCKED",
+      "spaced out"
+    ],
+    "blocked indent/unknown": [
+      "BLOCKED",
+      "spaced out"
+    ],
+    "blocked indent/working": [
+      "BLOCKED",
+      "spaced out"
+    ],
+    "blocked/": [
+      "BLOCKED",
+      "which of A or B?"
+    ],
+    "blocked/blocked": [
+      "BLOCKED",
+      "which of A or B?"
+    ],
+    "blocked/done": [
+      "BLOCKED",
+      "which of A or B?"
+    ],
+    "blocked/gone": [
+      "BLOCKED",
+      "which of A or B?"
+    ],
+    "blocked/idle": [
+      "BLOCKED",
+      "which of A or B?"
+    ],
+    "blocked/unknown": [
+      "BLOCKED",
+      "which of A or B?"
+    ],
+    "blocked/working": [
+      "BLOCKED",
+      "which of A or B?"
+    ],
+    "crashed/": [
+      "DEAD",
+      "crashed session offering resume"
+    ],
+    "crashed/blocked": [
+      "NEEDS-PERMISSION",
+      "herdr: agent blocked on a dialog — answer it in the slot's tab, or widen work.workerCommand"
+    ],
+    "crashed/done": [
+      "DEAD",
+      "crashed session offering resume"
+    ],
+    "crashed/gone": [
+      "DEAD",
+      "herdr: no agent in the slot's tab — the session exited"
+    ],
+    "crashed/idle": [
+      "DEAD",
+      "crashed session offering resume"
+    ],
+    "crashed/unknown": [
+      "DEAD",
+      "crashed session offering resume"
+    ],
+    "crashed/working": [
+      "BUSY",
+      "herdr: agent working"
+    ],
+    "crlf/": [
+      "BLOCKED",
+      "windows"
+    ],
+    "crlf/blocked": [
+      "BLOCKED",
+      "windows"
+    ],
+    "crlf/done": [
+      "BLOCKED",
+      "windows"
+    ],
+    "crlf/gone": [
+      "BLOCKED",
+      "windows"
+    ],
+    "crlf/idle": [
+      "BLOCKED",
+      "windows"
+    ],
+    "crlf/unknown": [
+      "BLOCKED",
+      "windows"
+    ],
+    "crlf/working": [
+      "BLOCKED",
+      "windows"
+    ],
+    "done bare/": [
+      "DONE",
+      "next line"
+    ],
+    "done bare/blocked": [
+      "DONE",
+      "next line"
+    ],
+    "done bare/done": [
+      "DONE",
+      "next line"
+    ],
+    "done bare/gone": [
+      "DONE",
+      "next line"
+    ],
+    "done bare/idle": [
+      "DONE",
+      "next line"
+    ],
+    "done bare/unknown": [
+      "DONE",
+      "next line"
+    ],
+    "done bare/working": [
+      "DONE",
+      "next line"
+    ],
+    "done branch/": [
+      "DONE",
+      "rota-worker/w1-t1"
+    ],
+    "done branch/blocked": [
+      "DONE",
+      "rota-worker/w1-t1"
+    ],
+    "done branch/done": [
+      "DONE",
+      "rota-worker/w1-t1"
+    ],
+    "done branch/gone": [
+      "DONE",
+      "rota-worker/w1-t1"
+    ],
+    "done branch/idle": [
+      "DONE",
+      "rota-worker/w1-t1"
+    ],
+    "done branch/unknown": [
+      "DONE",
+      "rota-worker/w1-t1"
+    ],
+    "done branch/working": [
+      "DONE",
+      "rota-worker/w1-t1"
+    ],
+    "done multiline/": [
+      "DONE",
+      "something after"
+    ],
+    "done multiline/blocked": [
+      "DONE",
+      "something after"
+    ],
+    "done multiline/done": [
+      "DONE",
+      "something after"
+    ],
+    "done multiline/gone": [
+      "DONE",
+      "something after"
+    ],
+    "done multiline/idle": [
+      "DONE",
+      "something after"
+    ],
+    "done multiline/unknown": [
+      "DONE",
+      "something after"
+    ],
+    "done multiline/working": [
+      "DONE",
+      "something after"
+    ],
+    "done url/": [
+      "DONE",
+      "https://github.com/o/r/pull/12"
+    ],
+    "done url/blocked": [
+      "DONE",
+      "https://github.com/o/r/pull/12"
+    ],
+    "done url/done": [
+      "DONE",
+      "https://github.com/o/r/pull/12"
+    ],
+    "done url/gone": [
+      "DONE",
+      "https://github.com/o/r/pull/12"
+    ],
+    "done url/idle": [
+      "DONE",
+      "https://github.com/o/r/pull/12"
+    ],
+    "done url/unknown": [
+      "DONE",
+      "https://github.com/o/r/pull/12"
+    ],
+    "done url/working": [
+      "DONE",
+      "https://github.com/o/r/pull/12"
+    ],
+    "idle/": [
+      "IDLE",
+      "static pane, no sentinel"
+    ],
+    "idle/blocked": [
+      "NEEDS-PERMISSION",
+      "herdr: agent blocked on a dialog — answer it in the slot's tab, or widen work.workerCommand"
+    ],
+    "idle/done": [
+      "IDLE",
+      "static pane, no sentinel"
+    ],
+    "idle/gone": [
+      "DEAD",
+      "herdr: no agent in the slot's tab — the session exited"
+    ],
+    "idle/idle": [
+      "IDLE",
+      "static pane, no sentinel"
+    ],
+    "idle/unknown": [
+      "UNKNOWN",
+      "herdr cannot classify the agent — inspect the tab; not proof it finished"
+    ],
+    "idle/working": [
+      "BUSY",
+      "herdr: agent working"
+    ],
+    "limit approaching/": [
+      "LIMITED",
+      "Approaching usage limit"
+    ],
+    "limit approaching/blocked": [
+      "LIMITED",
+      "Approaching usage limit"
+    ],
+    "limit approaching/done": [
+      "LIMITED",
+      "Approaching usage limit"
+    ],
+    "limit approaching/gone": [
+      "LIMITED",
+      "Approaching usage limit"
+    ],
+    "limit approaching/idle": [
+      "LIMITED",
+      "Approaching usage limit"
+    ],
+    "limit approaching/unknown": [
+      "LIMITED",
+      "Approaching usage limit"
+    ],
+    "limit approaching/working": [
+      "LIMITED",
+      "Approaching usage limit"
+    ],
+    "limit funds/": [
+      "LIMITED",
+      "usage limit reached; pane offers 'Add funds' — needs a human, do NOT answer"
+    ],
+    "limit funds/blocked": [
+      "LIMITED",
+      "usage limit reached; pane offers 'Add funds' — needs a human, do NOT answer"
+    ],
+    "limit funds/done": [
+      "LIMITED",
+      "usage limit reached; pane offers 'Add funds' — needs a human, do NOT answer"
+    ],
+    "limit funds/gone": [
+      "LIMITED",
+      "usage limit reached; pane offers 'Add funds' — needs a human, do NOT answer"
+    ],
+    "limit funds/idle": [
+      "LIMITED",
+      "usage limit reached; pane offers 'Add funds' — needs a human, do NOT answer"
+    ],
+    "limit funds/unknown": [
+      "LIMITED",
+      "usage limit reached; pane offers 'Add funds' — needs a human, do NOT answer"
+    ],
+    "limit funds/working": [
+      "LIMITED",
+      "usage limit reached; pane offers 'Add funds' — needs a human, do NOT answer"
+    ],
+    "limit prose/": [
+      "IDLE",
+      "static pane, no sentinel"
+    ],
+    "limit prose/blocked": [
+      "NEEDS-PERMISSION",
+      "herdr: agent blocked on a dialog — answer it in the slot's tab, or widen work.workerCommand"
+    ],
+    "limit prose/done": [
+      "IDLE",
+      "static pane, no sentinel"
+    ],
+    "limit prose/gone": [
+      "DEAD",
+      "herdr: no agent in the slot's tab — the session exited"
+    ],
+    "limit prose/idle": [
+      "IDLE",
+      "static pane, no sentinel"
+    ],
+    "limit prose/unknown": [
+      "UNKNOWN",
+      "herdr cannot classify the agent — inspect the tab; not proof it finished"
+    ],
+    "limit prose/working": [
+      "BUSY",
+      "herdr: agent working"
+    ],
+    "limit reset/": [
+      "LIMITED",
+      "limit will reset at"
+    ],
+    "limit reset/blocked": [
+      "LIMITED",
+      "limit will reset at"
+    ],
+    "limit reset/done": [
+      "LIMITED",
+      "limit will reset at"
+    ],
+    "limit reset/gone": [
+      "LIMITED",
+      "limit will reset at"
+    ],
+    "limit reset/idle": [
+      "LIMITED",
+      "limit will reset at"
+    ],
+    "limit reset/unknown": [
+      "LIMITED",
+      "limit will reset at"
+    ],
+    "limit reset/working": [
+      "LIMITED",
+      "limit will reset at"
+    ],
+    "limit/": [
+      "LIMITED",
+      "You've hit your usage limit"
+    ],
+    "limit/blocked": [
+      "LIMITED",
+      "You've hit your usage limit"
+    ],
+    "limit/done": [
+      "LIMITED",
+      "You've hit your usage limit"
+    ],
+    "limit/gone": [
+      "LIMITED",
+      "You've hit your usage limit"
+    ],
+    "limit/idle": [
+      "LIMITED",
+      "You've hit your usage limit"
+    ],
+    "limit/unknown": [
+      "LIMITED",
+      "You've hit your usage limit"
+    ],
+    "limit/working": [
+      "LIMITED",
+      "You've hit your usage limit"
+    ],
+    "long limit line/": [
+      "LIMITED",
+      "usage limit reached"
+    ],
+    "long limit line/blocked": [
+      "LIMITED",
+      "usage limit reached"
+    ],
+    "long limit line/done": [
+      "LIMITED",
+      "usage limit reached"
+    ],
+    "long limit line/gone": [
+      "LIMITED",
+      "usage limit reached"
+    ],
+    "long limit line/idle": [
+      "LIMITED",
+      "usage limit reached"
+    ],
+    "long limit line/unknown": [
+      "LIMITED",
+      "usage limit reached"
+    ],
+    "long limit line/working": [
+      "LIMITED",
+      "usage limit reached"
+    ],
+    "permission allow/": [
+      "NEEDS-PERMISSION",
+      "stopped at a permission prompt — approve in the pane, or widen work.workerCommand"
+    ],
+    "permission allow/blocked": [
+      "NEEDS-PERMISSION",
+      "herdr: agent blocked on a dialog — answer it in the slot's tab, or widen work.workerCommand"
+    ],
+    "permission allow/done": [
+      "NEEDS-PERMISSION",
+      "stopped at a permission prompt — approve in the pane, or widen work.workerCommand"
+    ],
+    "permission allow/gone": [
+      "DEAD",
+      "herdr: no agent in the slot's tab — the session exited"
+    ],
+    "permission allow/idle": [
+      "NEEDS-PERMISSION",
+      "stopped at a permission prompt — approve in the pane, or widen work.workerCommand"
+    ],
+    "permission allow/unknown": [
+      "NEEDS-PERMISSION",
+      "stopped at a permission prompt — approve in the pane, or widen work.workerCommand"
+    ],
+    "permission allow/working": [
+      "BUSY",
+      "herdr: agent working"
+    ],
+    "permission dont/": [
+      "NEEDS-PERMISSION",
+      "stopped at a permission prompt — approve in the pane, or widen work.workerCommand"
+    ],
+    "permission dont/blocked": [
+      "NEEDS-PERMISSION",
+      "herdr: agent blocked on a dialog — answer it in the slot's tab, or widen work.workerCommand"
+    ],
+    "permission dont/done": [
+      "NEEDS-PERMISSION",
+      "stopped at a permission prompt — approve in the pane, or widen work.workerCommand"
+    ],
+    "permission dont/gone": [
+      "DEAD",
+      "herdr: no agent in the slot's tab — the session exited"
+    ],
+    "permission dont/idle": [
+      "NEEDS-PERMISSION",
+      "stopped at a permission prompt — approve in the pane, or widen work.workerCommand"
+    ],
+    "permission dont/unknown": [
+      "NEEDS-PERMISSION",
+      "stopped at a permission prompt — approve in the pane, or widen work.workerCommand"
+    ],
+    "permission dont/working": [
+      "BUSY",
+      "herdr: agent working"
+    ],
+    "permission/": [
+      "NEEDS-PERMISSION",
+      "stopped at a permission prompt — approve in the pane, or widen work.workerCommand"
+    ],
+    "permission/blocked": [
+      "NEEDS-PERMISSION",
+      "herdr: agent blocked on a dialog — answer it in the slot's tab, or widen work.workerCommand"
+    ],
+    "permission/done": [
+      "NEEDS-PERMISSION",
+      "stopped at a permission prompt — approve in the pane, or widen work.workerCommand"
+    ],
+    "permission/gone": [
+      "DEAD",
+      "herdr: no agent in the slot's tab — the session exited"
+    ],
+    "permission/idle": [
+      "NEEDS-PERMISSION",
+      "stopped at a permission prompt — approve in the pane, or widen work.workerCommand"
+    ],
+    "permission/unknown": [
+      "NEEDS-PERMISSION",
+      "stopped at a permission prompt — approve in the pane, or widen work.workerCommand"
+    ],
+    "permission/working": [
+      "BUSY",
+      "herdr: agent working"
+    ],
+    "retry/": [
+      "BUSY",
+      "retry in flight"
+    ],
+    "retry/blocked": [
+      "BUSY",
+      "retry in flight"
+    ],
+    "retry/done": [
+      "BUSY",
+      "retry in flight"
+    ],
+    "retry/gone": [
+      "BUSY",
+      "retry in flight"
+    ],
+    "retry/idle": [
+      "BUSY",
+      "retry in flight"
+    ],
+    "retry/unknown": [
+      "BUSY",
+      "retry in flight"
+    ],
+    "retry/working": [
+      "BUSY",
+      "retry in flight"
+    ],
+    "sentinel over limit/": [
+      "DONE",
+      "https://gitlab.com/o/r/-/merge_requests/3"
+    ],
+    "sentinel over limit/blocked": [
+      "DONE",
+      "https://gitlab.com/o/r/-/merge_requests/3"
+    ],
+    "sentinel over limit/done": [
+      "DONE",
+      "https://gitlab.com/o/r/-/merge_requests/3"
+    ],
+    "sentinel over limit/gone": [
+      "DONE",
+      "https://gitlab.com/o/r/-/merge_requests/3"
+    ],
+    "sentinel over limit/idle": [
+      "DONE",
+      "https://gitlab.com/o/r/-/merge_requests/3"
+    ],
+    "sentinel over limit/unknown": [
+      "DONE",
+      "https://gitlab.com/o/r/-/merge_requests/3"
+    ],
+    "sentinel over limit/working": [
+      "DONE",
+      "https://gitlab.com/o/r/-/merge_requests/3"
+    ],
+    "unicode/": [
+      "IDLE",
+      "static pane, no sentinel"
+    ],
+    "unicode/blocked": [
+      "NEEDS-PERMISSION",
+      "herdr: agent blocked on a dialog — answer it in the slot's tab, or widen work.workerCommand"
+    ],
+    "unicode/done": [
+      "IDLE",
+      "static pane, no sentinel"
+    ],
+    "unicode/gone": [
+      "DEAD",
+      "herdr: no agent in the slot's tab — the session exited"
+    ],
+    "unicode/idle": [
+      "IDLE",
+      "static pane, no sentinel"
+    ],
+    "unicode/unknown": [
+      "UNKNOWN",
+      "herdr cannot classify the agent — inspect the tab; not proof it finished"
+    ],
+    "unicode/working": [
+      "BUSY",
+      "herdr: agent working"
+    ]
+  }
+}

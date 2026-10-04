@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# Fake tmux for tests. SAFE BY CONSTRUCTION: it only appends to a log and
+# keeps a few state files, so it can stand in for the real binary inside a
+# round that itself runs in tmux. Never put the real tmux on a test's PATH.
+#
+# State lives in the directory $FAKE_TMUX (required): `log` gets one argv line
+# per call. Files steering the answers:
+#   session      the session exists (has-session succeeds)
+#   windows      one `<name> <pid>` line per window
+#   pane         pane text; capture-pane appends a counter bumped by every
+#                `send-keys ... C-m`, so a pasted prompt reads as picked up
+#   frozen       capture-pane stops changing (a brief that never submits)
+#   name         session name for display-message (default hvfake)
+# $FAKE_TMUX_SNAPSHOT, when set, names a file of `session:window<TAB>path` lines
+# that `list-windows -a -F ...pane_current_path...` prints (the host snapshot).
+[ -n "${FAKE_TMUX:-}" ] || { echo "fake tmux: FAKE_TMUX is not set" >&2; exit 98; }
+F="$FAKE_TMUX"
+printf '%s\n' "$*" >>"$F/log"
+case "$1" in
+  has-session) [ -f "$F/session" ] ;;
+  new-session) : >"$F/session" ;;
+  new-window)
+    name=""
+    while [ $# -gt 0 ]; do [ "$1" = "-n" ] && name="$2"; shift; done
+    echo "$name ${FAKE_TMUX_PID:-4194001}" >>"$F/windows" ;;
+  list-windows)
+    fmt=""
+    while [ $# -gt 0 ]; do [ "$1" = "-F" ] && fmt="$2"; shift; done
+    case "$fmt" in
+      *pane_pid*) cat "$F/windows" 2>/dev/null ;;
+      *pane_current_path*) if [ -n "${FAKE_TMUX_SNAPSHOT:-}" ]; then cat "$FAKE_TMUX_SNAPSHOT" 2>/dev/null; fi; true ;;
+      *) awk '{print $1}' "$F/windows" 2>/dev/null ;;
+    esac ;;
+  kill-window)
+    target="$3"; name="${target#*:}"
+    [ -f "$F/windows" ] && grep -v "^$name " "$F/windows" >"$F/windows.new"
+    mv "$F/windows.new" "$F/windows" 2>/dev/null; exit 0 ;;
+  capture-pane)
+    cat "$F/pane" 2>/dev/null
+    [ -f "$F/frozen" ] || cat "$F/n" 2>/dev/null ;;
+  send-keys)
+    for last; do :; done
+    if [ "$last" = "C-m" ]; then echo $(( $(cat "$F/n" 2>/dev/null || echo 0) + 1 )) >"$F/n"; fi ;;
+  load-buffer) for last; do :; done; cp "$last" "$F/payload" 2>/dev/null; : ;;
+  paste-buffer|delete-buffer) : ;;
+  display-message) cat "$F/name" 2>/dev/null || echo hvfake ;;
+  *) echo "fake tmux: unsupported: $*" >&2; exit 1 ;;
+esac

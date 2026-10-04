@@ -1,0 +1,248 @@
+{
+  "inputs": {
+    "cases": [
+      {
+        "body": "just a body",
+        "broken": false,
+        "changed": false,
+        "checkOnly": true,
+        "files": null,
+        "mode": "",
+        "name": "no section, no relays",
+        "noFiles": null,
+        "noVerify": false,
+        "pr": "https://github.com/o/r/pull/7",
+        "relays": "[]",
+        "verdict": "fresh"
+      },
+      {
+        "body": "just a body",
+        "broken": false,
+        "changed": false,
+        "checkOnly": true,
+        "files": null,
+        "mode": "",
+        "name": "no section while relays exist",
+        "noFiles": null,
+        "noVerify": false,
+        "pr": "https://github.com/o/r/pull/7",
+        "relays": "[{\"round\":2,\"ts\":\"2026-10-02T10:00:00Z\",\"summary\":\"use the shared cache for the lookup\"}]",
+        "verdict": "provenance-fail"
+      },
+      {
+        "body": "## Approvals\n- x: orchestrator relay round 2\n",
+        "broken": false,
+        "changed": false,
+        "checkOnly": true,
+        "files": null,
+        "mode": "",
+        "name": "relay cited and logged",
+        "noFiles": null,
+        "noVerify": false,
+        "pr": "https://github.com/o/r/pull/7",
+        "relays": "[{\"round\":2,\"ts\":\"2026-10-02T10:00:00Z\",\"summary\":\"use the shared cache for the lookup\"}]",
+        "verdict": "fresh"
+      },
+      {
+        "body": "## Approvals\n- x: orchestrator relay round 5\n",
+        "broken": false,
+        "changed": false,
+        "checkOnly": true,
+        "files": null,
+        "mode": "",
+        "name": "relay round never sent",
+        "noFiles": null,
+        "noVerify": false,
+        "pr": "https://github.com/o/r/pull/7",
+        "relays": "[{\"round\":2,\"ts\":\"2026-10-02T10:00:00Z\",\"summary\":\"use the shared cache for the lookup\"}]",
+        "verdict": "provenance-fail"
+      },
+      {
+        "body": "## Approvals\n- orchestrator relay said so\n",
+        "broken": false,
+        "changed": false,
+        "checkOnly": true,
+        "files": null,
+        "mode": "",
+        "name": "relay cited with no number but none logged",
+        "noFiles": null,
+        "noVerify": false,
+        "pr": "https://github.com/o/r/pull/7",
+        "relays": "[]",
+        "verdict": "provenance-fail"
+      },
+      {
+        "body": "## Approvals\n- orchestrator relay said so\n",
+        "broken": false,
+        "changed": false,
+        "checkOnly": true,
+        "files": null,
+        "mode": "",
+        "name": "relay cited with no number, one logged",
+        "noFiles": null,
+        "noVerify": false,
+        "pr": "https://github.com/o/r/pull/7",
+        "relays": "[{\"round\":2,\"ts\":\"2026-10-02T10:00:00Z\",\"summary\":\"use the shared cache for the lookup\"}]",
+        "verdict": "fresh"
+      },
+      {
+        "body": "## Approvals\n- the maintainer: use the shared cache for the lookup\n",
+        "broken": false,
+        "changed": false,
+        "checkOnly": true,
+        "files": null,
+        "mode": "",
+        "name": "relayed text cited as the maintainer",
+        "noFiles": null,
+        "noVerify": false,
+        "pr": "https://github.com/o/r/pull/7",
+        "relays": "[{\"round\":2,\"ts\":\"2026-10-02T10:00:00Z\",\"summary\":\"use the shared cache for the lookup\"}]",
+        "verdict": "provenance-fail"
+      },
+      {
+        "body": "## Approvals\n- the maintainer approved the naming in my pane\n",
+        "broken": false,
+        "changed": false,
+        "checkOnly": true,
+        "files": null,
+        "mode": "",
+        "name": "maintainer line with different text",
+        "noFiles": null,
+        "noVerify": false,
+        "pr": "https://github.com/o/r/pull/7",
+        "relays": "[{\"round\":2,\"ts\":\"2026-10-02T10:00:00Z\",\"summary\":\"use the shared cache for the lookup\"}]",
+        "verdict": "fresh"
+      },
+      {
+        "body": "## Approvals\n- the maintainer: ok\n",
+        "broken": false,
+        "changed": false,
+        "checkOnly": true,
+        "files": null,
+        "mode": "",
+        "name": "short summary is not matched",
+        "noFiles": null,
+        "noVerify": false,
+        "pr": "https://github.com/o/r/pull/7",
+        "relays": "[{\"round\":1,\"summary\":\"ok\"}]",
+        "verdict": "fresh"
+      },
+      {
+        "body": "## Approvals\n- orchestrator relay round 2\n## Notes\n- the maintainer: use the shared cache for the lookup\n",
+        "broken": false,
+        "changed": false,
+        "checkOnly": true,
+        "files": null,
+        "mode": "",
+        "name": "section ends at the next heading",
+        "noFiles": null,
+        "noVerify": false,
+        "pr": "https://github.com/o/r/pull/7",
+        "relays": "[{\"round\":2,\"ts\":\"2026-10-02T10:00:00Z\",\"summary\":\"use the shared cache for the lookup\"}]",
+        "verdict": "fresh"
+      },
+      {
+        "body": "## approvals\n- x: orchestrator relay round 9\n",
+        "broken": false,
+        "changed": false,
+        "checkOnly": true,
+        "files": null,
+        "mode": "",
+        "name": "heading is case-insensitive",
+        "noFiles": null,
+        "noVerify": false,
+        "pr": "https://github.com/o/r/pull/7",
+        "relays": "[{\"round\":2,\"ts\":\"2026-10-02T10:00:00Z\",\"summary\":\"use the shared cache for the lookup\"}]",
+        "verdict": "provenance-fail"
+      },
+      {
+        "body": "## Approvals\n### detail\n- orchestrator relay round 9\n",
+        "broken": false,
+        "changed": false,
+        "checkOnly": true,
+        "files": null,
+        "mode": "",
+        "name": "only one section counts: ### is not a new heading",
+        "noFiles": null,
+        "noVerify": false,
+        "pr": "https://github.com/o/r/pull/7",
+        "relays": "[{\"round\":2,\"ts\":\"2026-10-02T10:00:00Z\",\"summary\":\"use the shared cache for the lookup\"}]",
+        "verdict": "provenance-fail"
+      }
+    ]
+  },
+  "outputs": {
+    "heading is case-insensitive": {
+      "Exit": 4,
+      "Origin": "seed",
+      "Local": "seed",
+      "Forge": "gh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\ngh pr view https://github.com/o/r/pull/7 --json body -q .body\n"
+    },
+    "maintainer line with different text": {
+      "Exit": 0,
+      "Origin": "seed",
+      "Local": "seed",
+      "Forge": "gh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\ngh pr view https://github.com/o/r/pull/7 --json body -q .body\n"
+    },
+    "no section while relays exist": {
+      "Exit": 4,
+      "Origin": "seed",
+      "Local": "seed",
+      "Forge": "gh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\ngh pr view https://github.com/o/r/pull/7 --json body -q .body\n"
+    },
+    "no section, no relays": {
+      "Exit": 0,
+      "Origin": "seed",
+      "Local": "seed",
+      "Forge": "gh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\ngh pr view https://github.com/o/r/pull/7 --json body -q .body\n"
+    },
+    "only one section counts: ### is not a new heading": {
+      "Exit": 4,
+      "Origin": "seed",
+      "Local": "seed",
+      "Forge": "gh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\ngh pr view https://github.com/o/r/pull/7 --json body -q .body\n"
+    },
+    "relay cited and logged": {
+      "Exit": 0,
+      "Origin": "seed",
+      "Local": "seed",
+      "Forge": "gh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\ngh pr view https://github.com/o/r/pull/7 --json body -q .body\n"
+    },
+    "relay cited with no number but none logged": {
+      "Exit": 4,
+      "Origin": "seed",
+      "Local": "seed",
+      "Forge": "gh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\ngh pr view https://github.com/o/r/pull/7 --json body -q .body\n"
+    },
+    "relay cited with no number, one logged": {
+      "Exit": 0,
+      "Origin": "seed",
+      "Local": "seed",
+      "Forge": "gh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\ngh pr view https://github.com/o/r/pull/7 --json body -q .body\n"
+    },
+    "relay round never sent": {
+      "Exit": 4,
+      "Origin": "seed",
+      "Local": "seed",
+      "Forge": "gh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\ngh pr view https://github.com/o/r/pull/7 --json body -q .body\n"
+    },
+    "relayed text cited as the maintainer": {
+      "Exit": 4,
+      "Origin": "seed",
+      "Local": "seed",
+      "Forge": "gh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\ngh pr view https://github.com/o/r/pull/7 --json body -q .body\n"
+    },
+    "section ends at the next heading": {
+      "Exit": 0,
+      "Origin": "seed",
+      "Local": "seed",
+      "Forge": "gh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\ngh pr view https://github.com/o/r/pull/7 --json body -q .body\n"
+    },
+    "short summary is not matched": {
+      "Exit": 0,
+      "Origin": "seed",
+      "Local": "seed",
+      "Forge": "gh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\ngh pr view https://github.com/o/r/pull/7 --json body -q .body\n"
+    }
+  }
+}

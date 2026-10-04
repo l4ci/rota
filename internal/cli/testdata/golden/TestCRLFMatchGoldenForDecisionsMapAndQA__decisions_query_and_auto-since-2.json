@@ -1,0 +1,17 @@
+{
+  "inputs": {
+    "argv": [
+      "decisions",
+      "auto-since"
+    ],
+    "fixture": "c0afeb16bf3601e21459bbe0780cba14417de641faa781c3ac3afbee99a94291",
+    "stdin": ""
+  },
+  "outputs": {
+    "stdout": "### Auto:Loop decisions this session\n\n- **Build · Gate first** — 2026-10-02 · [Partially articulated]\n- **Build · Never skip** — 2026-10-03 · [Forbids/Permits unresolved]\n",
+    "stderr": "",
+    "rc": 0,
+    "changed": {},
+    "removed": []
+  }
+}

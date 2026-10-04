@@ -1,0 +1,45 @@
+# Builds the rota binaries for a version tag and attaches them to a DRAFT GitHub
+# release (see .goreleaser.yaml). Publishing is the gated `rota release publish`
+# step in /rota-release, which finishes this draft instead of creating a second
+# release. Push the tag first (`rota release push --tag-only`), wait for this
+# job, then publish, then push the branch.
+#
+# The tag builds the binary (its version comes from the tag through ldflags);
+# VERSION is what `rota release bump` edits. The first step refuses a tag that
+# does not match VERSION, so the two cannot drift.
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  goreleaser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Tag matches VERSION
+        run: |
+          want="v$(tr -d '[:space:]' < VERSION)"
+          if [ "$GITHUB_REF_NAME" != "$want" ]; then
+            echo "tag $GITHUB_REF_NAME does not match VERSION ($want)" >&2
+            exit 1
+          fi
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Write access to l4ci/homebrew-tap; see .rota/RELEASE.md.
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}

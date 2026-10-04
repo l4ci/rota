@@ -1,0 +1,19 @@
+{
+  "inputs": {
+    "argv": [
+      "qa",
+      "index"
+    ],
+    "fixture": "0254e1e830e6017779655b47bb1ea6c56ea37a3a3899eaeb29ccf4fc62cc136c",
+    "stdin": ""
+  },
+  "outputs": {
+    "stdout": "appended\n",
+    "stderr": "",
+    "rc": 0,
+    "changed": {
+      "../AGENTS.md": "# Agents\n\n\u003c!-- rota-qa-start --\u003e\n## Project QA\n\nQA strategies live in `.rota/QA.md` (detail in `.rota/qa/\u003ctarget\u003e.md`). Pull with `rota qa query \u003ctarget\u003e`. `/rota-qa run` consumes these; the skill never hardcodes runners.\n\n- _(no QA strategy yet — run `/rota-qa first-run` to scaffold)_\n\u003c!-- rota-qa-end --\u003e\n"
+    },
+    "removed": []
+  }
+}

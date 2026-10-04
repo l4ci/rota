@@ -1,0 +1,21 @@
+{
+  "inputs": {
+    "argv": [
+      "block",
+      "knowledge",
+      "--repo",
+      "web"
+    ],
+    "fixture": "34c377f08e80b08404ca0232b067f90f52b1f3b1ce7a21275ab740b5ce31a5d7",
+    "stdin": ""
+  },
+  "outputs": {
+    "stdout": "appended\n",
+    "stderr": "",
+    "rc": 0,
+    "changed": {
+      "../web/CLAUDE.md": "# Web\n\n\u003c!-- rota-knowledge-start --\u003e\n## Project Knowledge\n\nDurable learnings live in `.rota/KNOWLEDGE.md`. Consult it when work touches these topics:\n\n- Architecture\n- Glossary\n\n\u003c!-- rota-knowledge-end --\u003e\n"
+    },
+    "removed": []
+  }
+}

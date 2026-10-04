@@ -1,0 +1,27 @@
+{
+  "inputs": {
+    "argv": [
+      "knowledge",
+      "rename-topic",
+      "--from",
+      "Architecture",
+      "--to",
+      "Build",
+      "--title",
+      "Beta rule"
+    ],
+    "fixture": "ccd87e02cc8789b39f6af5525710f63c5da67ef7f5d93e4e6d7708e3665b1187",
+    "stdin": ""
+  },
+  "outputs": {
+    "stdout": "",
+    "stderr": "",
+    "rc": 0,
+    "changed": {
+      "KNOWLEDGE.md": "# Knowledge\n\n## Architecture\n\n- **Alpha rule** — Keep modules small. \u003c!-- 2026-01-01 --\u003e\n- **Old rule** — Retired. \u003c!-- 2026-01-03 --\u003e\n\n## Build\n\n- **Beta rule** — Prefer files. \u003c!-- 2026-01-02 --\u003e\n\n- **Gamma tip** — Run the gate. \u003c!-- 2026-02-01 --\u003e\n\n## Glossary\n\n- **Term** — a definition\n",
+      "knowledge-tier.json": "{\n  \"version\": 1,\n  \"entries\": {\n    \"Architecture::Alpha rule\": {\n      \"tier\": \"confirmed\",\n      \"hits\": 4,\n      \"lastSeen\": \"2026-03-01\"\n    },\n    \"Architecture::Old rule\": {\n      \"tier\": \"deprecated\",\n      \"hits\": 0,\n      \"lastSeen\": \"2026-03-03\"\n    },\n    \"Build::Beta rule\": {\n      \"tier\": \"provisional\",\n      \"hits\": 1,\n      \"lastSeen\": \"2026-03-02\"\n    }\n  }\n}\n",
+      "knowledge-tier.json.lock": ""
+    },
+    "removed": []
+  }
+}

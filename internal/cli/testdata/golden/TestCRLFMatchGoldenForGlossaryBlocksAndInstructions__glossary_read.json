@@ -1,0 +1,18 @@
+{
+  "inputs": {
+    "argv": [
+      "glossary",
+      "read",
+      "worker"
+    ],
+    "fixture": "0d44386decbaba2e838771308fb7afd0f5b9d32ed710508816c58a5ccf36152a",
+    "stdin": ""
+  },
+  "outputs": {
+    "stdout": "\u003e from: .rota/KNOWLEDGE.md (## Glossary)\n- **Worker** — an agent in a round\n  - **Aliases:** agent, slot\n  - **Not:** orchestrator\n  \u003c!-- 2026-02-02 --\u003e\n",
+    "stderr": "",
+    "rc": 0,
+    "changed": {},
+    "removed": []
+  }
+}

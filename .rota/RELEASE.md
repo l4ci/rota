@@ -1,0 +1,15 @@
+# Release Checklist
+
+Each `- [ ]` line is a gate `/rota-release` walks before bumping the version. Edit freely — nothing here is hardcoded. Items marked `- [x]` are ignored. Append `(manual)` to any item that must interject even in `autonomy.level: auto`/`loop`.
+
+- [ ] `VERSION` holds the new version and the CHANGELOG heading matches it (the tag, `v<VERSION>`, is what builds the binary; `release.yml` refuses a mismatch)
+- [ ] `python3 test/validate-skills.py` passes
+- [ ] `goreleaser release --snapshot --clean` builds `rota_<os>_<arch>` for linux and darwin on amd64 and arm64, plus `checksums.txt` and the `rota` formula (asset names are the contract with `install.sh`)
+- [ ] The Homebrew tap `l4ci/homebrew-tap` exists and the secret `HOMEBREW_TAP_TOKEN` on `l4ci/rota` can push to it (manual)
+- [ ] GitHub Actions is enabled on `l4ci/rota`, so the `v*` tag runs `.github/workflows/release.yml` (manual)
+- [ ] After the workflow finishes (`gh run watch`), run `rota release publish` right away: the formula points at assets that only resolve once the draft is published (manual)
+- [ ] CLAUDE.md template managed blocks reflect any new query helpers or topic indexes
+- [ ] `bash test/smoke.sh` is green on this branch
+- [ ] CHANGELOG.md entry for the version is human-readable — bullets compressed, themes named, no raw commit dumps
+
+(Add release-cycle-specific items below as they come up; trim entries that stop being load-bearing.)

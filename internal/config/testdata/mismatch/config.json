@@ -1,0 +1,1 @@
+{"scalarToObj": 1, "objToScalar": {"x": 1, "y": {"z": 2}}, "objToList": {"a": 1}, "listToObj": [1, 2], "nullToObj": null, "deep": {"k": {"objToScalar": {"q": 1}}}}

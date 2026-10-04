@@ -1,0 +1,24 @@
+➜  lr1 git:(lr1/f01-add-a-hello-line-to) claude --model
+ haiku --dangerously-skip-permissions
+
+───────────────────────────────────────────────────────
+ Accessing workspace:
+
+ /tmp/claude-1001/-home-vo-Sync-Dev-hv-skills--worktre
+ es-dana/b9980a37-2d62-4aa5-b2e7-e09d4b24e131/scratchp
+ ad/live.4MTP/repo/.worktrees/lr1
+
+ Quick safety check: Is this a project you created or
+ one you trust? (Like your own code, a well-known open
+ source project, or work from your team). If not,
+ take a moment to review what's in this folder first.
+
+ Claude Code'll be able to read, edit, and execute
+ files here.
+
+ Security guide
+
+ ❯ No, exit
+   Yes, I trust this folder
+
+ Enter to confirm · Esc to cancel

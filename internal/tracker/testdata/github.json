@@ -1,0 +1,2271 @@
+{
+ "provider": "github",
+ "steps": [
+  {
+   "op": "create_milestone",
+   "args": {
+    "title": "M07 Tracker",
+    "description": "tracker port"
+   },
+   "result": 1,
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "api",
+      "-X",
+      "POST",
+      "repos/{owner}/{repo}/milestones",
+      "-f",
+      "title=M07 Tracker",
+      "-f",
+      "description=tracker port"
+     ],
+     "stdin": "",
+     "stdout": "{\"number\": 1, \"title\": \"M07 Tracker\", \"description\": \"tracker port\", \"state\": \"open\"}\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "create_milestone",
+   "args": {
+    "title": "M08",
+    "description": ""
+   },
+   "result": 2,
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "api",
+      "-X",
+      "POST",
+      "repos/{owner}/{repo}/milestones",
+      "-f",
+      "title=M08",
+      "-f",
+      "description="
+     ],
+     "stdin": "",
+     "stdout": "{\"number\": 2, \"title\": \"M08\", \"description\": \"\", \"state\": \"open\"}\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "milestones",
+   "args": {},
+   "result": [
+    {
+     "number": 1,
+     "title": "M07 Tracker",
+     "description": "tracker port",
+     "state": "open"
+    },
+    {
+     "number": 2,
+     "title": "M08",
+     "description": "",
+     "state": "open"
+    }
+   ],
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "api",
+      "repos/{owner}/{repo}/milestones?state=all&per_page=100",
+      "--paginate"
+     ],
+     "stdin": "",
+     "stdout": "[{\"number\": 1, \"title\": \"M07 Tracker\", \"description\": \"tracker port\", \"state\": \"open\"}, {\"number\": 2, \"title\": \"M08\", \"description\": \"\", \"state\": \"open\"}]\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "edit_milestone",
+   "args": {
+    "number": 2,
+    "state": "closed"
+   },
+   "result": null,
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "api",
+      "-X",
+      "PATCH",
+      "repos/{owner}/{repo}/milestones/2",
+      "-f",
+      "state=closed"
+     ],
+     "stdin": "",
+     "stdout": "{\"number\": 2, \"title\": \"M08\", \"description\": \"\", \"state\": \"closed\"}\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "edit_milestone",
+   "args": {
+    "number": 1,
+    "title": "M07 Tracker",
+    "description": "renamed"
+   },
+   "result": null,
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "api",
+      "-X",
+      "PATCH",
+      "repos/{owner}/{repo}/milestones/1",
+      "-f",
+      "title=M07 Tracker",
+      "-f",
+      "description=renamed"
+     ],
+     "stdin": "",
+     "stdout": "{\"number\": 1, \"title\": \"M07 Tracker\", \"description\": \"renamed\", \"state\": \"open\"}\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "milestones",
+   "args": {
+    "state": "open"
+   },
+   "result": [
+    {
+     "number": 1,
+     "title": "M07 Tracker",
+     "description": "renamed",
+     "state": "open"
+    },
+    {
+     "number": 2,
+     "title": "M08",
+     "description": "",
+     "state": "closed"
+    }
+   ],
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "api",
+      "repos/{owner}/{repo}/milestones?state=open&per_page=100",
+      "--paginate"
+     ],
+     "stdin": "",
+     "stdout": "[{\"number\": 1, \"title\": \"M07 Tracker\", \"description\": \"renamed\", \"state\": \"open\"}, {\"number\": 2, \"title\": \"M08\", \"description\": \"\", \"state\": \"closed\"}]\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "milestones",
+   "args": {
+    "state": "closed"
+   },
+   "result": [
+    {
+     "number": 1,
+     "title": "M07 Tracker",
+     "description": "renamed",
+     "state": "open"
+    },
+    {
+     "number": 2,
+     "title": "M08",
+     "description": "",
+     "state": "closed"
+    }
+   ],
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "api",
+      "repos/{owner}/{repo}/milestones?state=closed&per_page=100",
+      "--paginate"
+     ],
+     "stdin": "",
+     "stdout": "[{\"number\": 1, \"title\": \"M07 Tracker\", \"description\": \"renamed\", \"state\": \"open\"}, {\"number\": 2, \"title\": \"M08\", \"description\": \"\", \"state\": \"closed\"}]\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "find_milestone",
+   "args": {
+    "hv_id": "M07"
+   },
+   "result": "M07 Tracker",
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "api",
+      "repos/{owner}/{repo}/milestones?state=all&per_page=100",
+      "--paginate"
+     ],
+     "stdin": "",
+     "stdout": "[{\"number\": 1, \"title\": \"M07 Tracker\", \"description\": \"renamed\", \"state\": \"open\"}, {\"number\": 2, \"title\": \"M08\", \"description\": \"\", \"state\": \"closed\"}]\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "find_milestone",
+   "args": {
+    "hv_id": "M0"
+   },
+   "result": null,
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "api",
+      "repos/{owner}/{repo}/milestones?state=all&per_page=100",
+      "--paginate"
+     ],
+     "stdin": "",
+     "stdout": "[{\"number\": 1, \"title\": \"M07 Tracker\", \"description\": \"renamed\", \"state\": \"open\"}, {\"number\": 2, \"title\": \"M08\", \"description\": \"\", \"state\": \"closed\"}]\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "find_milestone",
+   "args": {
+    "hv_id": "M08"
+   },
+   "result": "M08",
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "api",
+      "repos/{owner}/{repo}/milestones?state=all&per_page=100",
+      "--paginate"
+     ],
+     "stdin": "",
+     "stdout": "[{\"number\": 1, \"title\": \"M07 Tracker\", \"description\": \"renamed\", \"state\": \"open\"}, {\"number\": 2, \"title\": \"M08\", \"description\": \"\", \"state\": \"closed\"}]\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "ensure_labels",
+   "args": {
+    "names": [
+     "bug",
+     "p1",
+     "bug",
+     ""
+    ]
+   },
+   "result": null,
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "label",
+      "list",
+      "--json",
+      "name",
+      "--limit",
+      "1000"
+     ],
+     "stdin": "",
+     "stdout": "[]\n",
+     "stderr": "",
+     "code": 0
+    },
+    {
+     "name": "gh",
+     "argv": [
+      "label",
+      "create",
+      "bug",
+      "--force"
+     ],
+     "stdin": "",
+     "stdout": "",
+     "stderr": "",
+     "code": 0
+    },
+    {
+     "name": "gh",
+     "argv": [
+      "label",
+      "create",
+      "p1",
+      "--force"
+     ],
+     "stdin": "",
+     "stdout": "",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "ensure_labels",
+   "args": {
+    "names": [
+     "bug"
+    ]
+   },
+   "result": null,
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "label",
+      "list",
+      "--json",
+      "name",
+      "--limit",
+      "1000"
+     ],
+     "stdin": "",
+     "stdout": "[{\"name\": \"bug\"}, {\"name\": \"p1\"}]\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "ensure_labels",
+   "args": {
+    "names": [
+     "nope"
+    ],
+    "auto_create": false
+   },
+   "error": {
+    "code": 1,
+    "message": "label 'nope' does not exist (issues.autoCreateLabel is off)"
+   },
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "label",
+      "list",
+      "--json",
+      "name",
+      "--limit",
+      "1000"
+     ],
+     "stdin": "",
+     "stdout": "[{\"name\": \"bug\"}, {\"name\": \"p1\"}]\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "create",
+   "args": {
+    "title": "First",
+    "body": "line1\nline2 with `ticks` and $vars",
+    "labels": [
+     "bug",
+     "p1"
+    ],
+    "milestone": "M07 Tracker"
+   },
+   "result": 1,
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "issue",
+      "create",
+      "--title",
+      "First",
+      "--body-file",
+      "-",
+      "--label",
+      "bug",
+      "--label",
+      "p1",
+      "--milestone",
+      "M07 Tracker"
+     ],
+     "stdin": "line1\nline2 with `ticks` and $vars",
+     "stdout": "https://github.com/fake/repo/issues/1\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "create",
+   "args": {
+    "title": "Second",
+    "body": "b2"
+   },
+   "result": 2,
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "issue",
+      "create",
+      "--title",
+      "Second",
+      "--body-file",
+      "-"
+     ],
+     "stdin": "b2",
+     "stdout": "https://github.com/fake/repo/issues/2\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "get",
+   "args": {
+    "number": 1
+   },
+   "result": {
+    "number": 1,
+    "title": "First",
+    "body": "line1\nline2 with `ticks` and $vars",
+    "labels": [
+     "bug",
+     "p1"
+    ],
+    "milestone": "M07 Tracker",
+    "state": "open",
+    "state_reason": null,
+    "closed_at": null,
+    "url": "https://github.com/fake/repo/issues/1",
+    "assignees": []
+   },
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "issue",
+      "view",
+      "1",
+      "--json",
+      "number,title,body,labels,milestone,state,stateReason,closedAt,url,assignees"
+     ],
+     "stdin": "",
+     "stdout": "{\"number\": 1, \"title\": \"First\", \"body\": \"line1\\nline2 with `ticks` and $vars\", \"labels\": [{\"name\": \"bug\"}, {\"name\": \"p1\"}], \"milestone\": {\"title\": \"M07 Tracker\", \"number\": 1}, \"state\": \"OPEN\", \"stateReason\": null, \"closedAt\": null, \"url\": \"https://github.com/fake/repo/issues/1\", \"assignees\": []}\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "list",
+   "args": {},
+   "result": [
+    {
+     "number": 2,
+     "title": "Second",
+     "body": "b2",
+     "labels": [],
+     "milestone": null,
+     "state": "open",
+     "state_reason": null,
+     "closed_at": null,
+     "url": "https://github.com/fake/repo/issues/2",
+     "assignees": []
+    },
+    {
+     "number": 1,
+     "title": "First",
+     "body": "line1\nline2 with `ticks` and $vars",
+     "labels": [
+      "bug",
+      "p1"
+     ],
+     "milestone": "M07 Tracker",
+     "state": "open",
+     "state_reason": null,
+     "closed_at": null,
+     "url": "https://github.com/fake/repo/issues/1",
+     "assignees": []
+    }
+   ],
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "issue",
+      "list",
+      "--state",
+      "open",
+      "--json",
+      "number,title,body,labels,milestone,state,stateReason,closedAt,url,assignees",
+      "--limit",
+      "1000"
+     ],
+     "stdin": "",
+     "stdout": "[{\"number\": 2, \"title\": \"Second\", \"body\": \"b2\", \"labels\": [], \"milestone\": null, \"state\": \"OPEN\", \"stateReason\": null, \"closedAt\": null, \"url\": \"https://github.com/fake/repo/issues/2\", \"assignees\": []}, {\"number\": 1, \"title\": \"First\", \"body\": \"line1\\nline2 with `ticks` and $vars\", \"labels\": [{\"name\": \"bug\"}, {\"name\": \"p1\"}], \"milestone\": {\"title\": \"M07 Tracker\", \"number\": 1}, \"state\": \"OPEN\", \"stateReason\": null, \"closedAt\": null, \"url\": \"https://github.com/fake/repo/issues/1\", \"assignees\": []}]\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "list",
+   "args": {
+    "labels": [
+     "p1"
+    ]
+   },
+   "result": [
+    {
+     "number": 1,
+     "title": "First",
+     "body": "line1\nline2 with `ticks` and $vars",
+     "labels": [
+      "bug",
+      "p1"
+     ],
+     "milestone": "M07 Tracker",
+     "state": "open",
+     "state_reason": null,
+     "closed_at": null,
+     "url": "https://github.com/fake/repo/issues/1",
+     "assignees": []
+    }
+   ],
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "issue",
+      "list",
+      "--state",
+      "open",
+      "--json",
+      "number,title,body,labels,milestone,state,stateReason,closedAt,url,assignees",
+      "--label",
+      "p1",
+      "--limit",
+      "1000"
+     ],
+     "stdin": "",
+     "stdout": "[{\"number\": 1, \"title\": \"First\", \"body\": \"line1\\nline2 with `ticks` and $vars\", \"labels\": [{\"name\": \"bug\"}, {\"name\": \"p1\"}], \"milestone\": {\"title\": \"M07 Tracker\", \"number\": 1}, \"state\": \"OPEN\", \"stateReason\": null, \"closedAt\": null, \"url\": \"https://github.com/fake/repo/issues/1\", \"assignees\": []}]\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "list",
+   "args": {
+    "milestone": "M07 Tracker"
+   },
+   "result": [
+    {
+     "number": 1,
+     "title": "First",
+     "body": "line1\nline2 with `ticks` and $vars",
+     "labels": [
+      "bug",
+      "p1"
+     ],
+     "milestone": "M07 Tracker",
+     "state": "open",
+     "state_reason": null,
+     "closed_at": null,
+     "url": "https://github.com/fake/repo/issues/1",
+     "assignees": []
+    }
+   ],
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "issue",
+      "list",
+      "--state",
+      "open",
+      "--json",
+      "number,title,body,labels,milestone,state,stateReason,closedAt,url,assignees",
+      "--milestone",
+      "M07 Tracker",
+      "--limit",
+      "1000"
+     ],
+     "stdin": "",
+     "stdout": "[{\"number\": 1, \"title\": \"First\", \"body\": \"line1\\nline2 with `ticks` and $vars\", \"labels\": [{\"name\": \"bug\"}, {\"name\": \"p1\"}], \"milestone\": {\"title\": \"M07 Tracker\", \"number\": 1}, \"state\": \"OPEN\", \"stateReason\": null, \"closedAt\": null, \"url\": \"https://github.com/fake/repo/issues/1\", \"assignees\": []}]\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "list",
+   "args": {
+    "state": "closed"
+   },
+   "result": [],
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "issue",
+      "list",
+      "--state",
+      "closed",
+      "--json",
+      "number,title,body,labels,milestone,state,stateReason,closedAt,url,assignees",
+      "--limit",
+      "1000"
+     ],
+     "stdin": "",
+     "stdout": "[]\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "edit",
+   "args": {
+    "number": 1,
+    "title": "First!",
+    "body": "new body\nmore",
+    "remove_labels": [
+     "p1"
+    ]
+   },
+   "result": null,
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "issue",
+      "edit",
+      "1",
+      "--title",
+      "First!",
+      "--body-file",
+      "-",
+      "--remove-label",
+      "p1"
+     ],
+     "stdin": "new body\nmore",
+     "stdout": "https://github.com/fake/repo/issues/1\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "add_labels",
+   "args": {
+    "number": 1,
+    "labels": [
+     "extra",
+     "extra",
+     ""
+    ]
+   },
+   "result": null,
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "label",
+      "list",
+      "--json",
+      "name",
+      "--limit",
+      "1000"
+     ],
+     "stdin": "",
+     "stdout": "[{\"name\": \"bug\"}, {\"name\": \"p1\"}]\n",
+     "stderr": "",
+     "code": 0
+    },
+    {
+     "name": "gh",
+     "argv": [
+      "label",
+      "create",
+      "extra",
+      "--force"
+     ],
+     "stdin": "",
+     "stdout": "",
+     "stderr": "",
+     "code": 0
+    },
+    {
+     "name": "gh",
+     "argv": [
+      "issue",
+      "edit",
+      "1",
+      "--add-label",
+      "extra"
+     ],
+     "stdin": "",
+     "stdout": "https://github.com/fake/repo/issues/1\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "get",
+   "args": {
+    "number": 1
+   },
+   "result": {
+    "number": 1,
+    "title": "First!",
+    "body": "new body\nmore",
+    "labels": [
+     "bug",
+     "extra"
+    ],
+    "milestone": "M07 Tracker",
+    "state": "open",
+    "state_reason": null,
+    "closed_at": null,
+    "url": "https://github.com/fake/repo/issues/1",
+    "assignees": []
+   },
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "issue",
+      "view",
+      "1",
+      "--json",
+      "number,title,body,labels,milestone,state,stateReason,closedAt,url,assignees"
+     ],
+     "stdin": "",
+     "stdout": "{\"number\": 1, \"title\": \"First!\", \"body\": \"new body\\nmore\", \"labels\": [{\"name\": \"bug\"}, {\"name\": \"extra\"}], \"milestone\": {\"title\": \"M07 Tracker\", \"number\": 1}, \"state\": \"OPEN\", \"stateReason\": null, \"closedAt\": null, \"url\": \"https://github.com/fake/repo/issues/1\", \"assignees\": []}\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "remove_labels",
+   "args": {
+    "number": 1,
+    "labels": [
+     "extra"
+    ]
+   },
+   "result": null,
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "issue",
+      "edit",
+      "1",
+      "--remove-label",
+      "extra"
+     ],
+     "stdin": "",
+     "stdout": "https://github.com/fake/repo/issues/1\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "remove_labels",
+   "args": {
+    "number": 1,
+    "labels": []
+   },
+   "result": null,
+   "calls": []
+  },
+  {
+   "op": "edit",
+   "args": {
+    "number": 1,
+    "remove_milestone": true
+   },
+   "result": null,
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "issue",
+      "edit",
+      "1",
+      "--remove-milestone"
+     ],
+     "stdin": "",
+     "stdout": "https://github.com/fake/repo/issues/1\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "get",
+   "args": {
+    "number": 1
+   },
+   "result": {
+    "number": 1,
+    "title": "First!",
+    "body": "new body\nmore",
+    "labels": [
+     "bug"
+    ],
+    "milestone": null,
+    "state": "open",
+    "state_reason": null,
+    "closed_at": null,
+    "url": "https://github.com/fake/repo/issues/1",
+    "assignees": []
+   },
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "issue",
+      "view",
+      "1",
+      "--json",
+      "number,title,body,labels,milestone,state,stateReason,closedAt,url,assignees"
+     ],
+     "stdin": "",
+     "stdout": "{\"number\": 1, \"title\": \"First!\", \"body\": \"new body\\nmore\", \"labels\": [{\"name\": \"bug\"}], \"milestone\": null, \"state\": \"OPEN\", \"stateReason\": null, \"closedAt\": null, \"url\": \"https://github.com/fake/repo/issues/1\", \"assignees\": []}\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "edit",
+   "args": {
+    "number": 1,
+    "milestone": "M07 Tracker"
+   },
+   "result": null,
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "issue",
+      "edit",
+      "1",
+      "--milestone",
+      "M07 Tracker"
+     ],
+     "stdin": "",
+     "stdout": "https://github.com/fake/repo/issues/1\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "issues_in_milestone",
+   "args": {
+    "title": "M07 Tracker"
+   },
+   "result": [
+    {
+     "number": 1,
+     "title": "First!",
+     "body": "new body\nmore",
+     "labels": [
+      "bug"
+     ],
+     "milestone": "M07 Tracker",
+     "state": "open",
+     "state_reason": null,
+     "closed_at": null,
+     "url": "https://github.com/fake/repo/issues/1",
+     "assignees": []
+    }
+   ],
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "issue",
+      "list",
+      "--state",
+      "all",
+      "--json",
+      "number,title,body,labels,milestone,state,stateReason,closedAt,url,assignees",
+      "--milestone",
+      "M07 Tracker",
+      "--limit",
+      "1000"
+     ],
+     "stdin": "",
+     "stdout": "[{\"number\": 1, \"title\": \"First!\", \"body\": \"new body\\nmore\", \"labels\": [{\"name\": \"bug\"}], \"milestone\": {\"title\": \"M07 Tracker\", \"number\": 1}, \"state\": \"OPEN\", \"stateReason\": null, \"closedAt\": null, \"url\": \"https://github.com/fake/repo/issues/1\", \"assignees\": []}]\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "add_comment",
+   "args": {
+    "number": 1,
+    "body": "hello"
+   },
+   "result": 1,
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "api",
+      "-X",
+      "POST",
+      "repos/{owner}/{repo}/issues/1/comments",
+      "-f",
+      "body=hello"
+     ],
+     "stdin": "",
+     "stdout": "{\"id\": 1, \"body\": \"hello\", \"user\": {\"login\": \"fake-user\"}}\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "add_comment",
+   "args": {
+    "number": 1,
+    "body": "second\nline"
+   },
+   "result": 2,
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "api",
+      "-X",
+      "POST",
+      "repos/{owner}/{repo}/issues/1/comments",
+      "-f",
+      "body=second\nline"
+     ],
+     "stdin": "",
+     "stdout": "{\"id\": 2, \"body\": \"second\\nline\", \"user\": {\"login\": \"fake-user\"}}\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "comments",
+   "args": {
+    "number": 1
+   },
+   "result": [
+    {
+     "id": 1,
+     "body": "hello",
+     "author": "fake-user"
+    },
+    {
+     "id": 2,
+     "body": "second\nline",
+     "author": "fake-user"
+    }
+   ],
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "api",
+      "repos/{owner}/{repo}/issues/1/comments",
+      "--paginate"
+     ],
+     "stdin": "",
+     "stdout": "[{\"id\": 1, \"body\": \"hello\", \"user\": {\"login\": \"fake-user\"}}, {\"id\": 2, \"body\": \"second\\nline\", \"user\": {\"login\": \"fake-user\"}}]\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "edit_comment",
+   "args": {
+    "number": 1,
+    "comment_id": 1,
+    "body": "edited"
+   },
+   "result": null,
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "api",
+      "-X",
+      "PATCH",
+      "repos/{owner}/{repo}/issues/comments/1",
+      "-f",
+      "body=edited"
+     ],
+     "stdin": "",
+     "stdout": "{\"id\": 1, \"body\": \"edited\", \"user\": {\"login\": \"fake-user\"}}\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "delete_comment",
+   "args": {
+    "number": 1,
+    "comment_id": 2
+   },
+   "result": null,
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "api",
+      "-X",
+      "DELETE",
+      "repos/{owner}/{repo}/issues/comments/2"
+     ],
+     "stdin": "",
+     "stdout": "",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "comments",
+   "args": {
+    "number": 1
+   },
+   "result": [
+    {
+     "id": 1,
+     "body": "edited",
+     "author": "fake-user"
+    }
+   ],
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "api",
+      "repos/{owner}/{repo}/issues/1/comments",
+      "--paginate"
+     ],
+     "stdin": "",
+     "stdout": "[{\"id\": 1, \"body\": \"edited\", \"user\": {\"login\": \"fake-user\"}}]\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "get",
+   "args": {
+    "number": 1,
+    "comments": true
+   },
+   "result": {
+    "number": 1,
+    "title": "First!",
+    "body": "new body\nmore",
+    "labels": [
+     "bug"
+    ],
+    "milestone": "M07 Tracker",
+    "state": "open",
+    "state_reason": null,
+    "closed_at": null,
+    "url": "https://github.com/fake/repo/issues/1",
+    "assignees": [],
+    "comments": [
+     {
+      "id": "IC_fake1",
+      "body": "edited",
+      "author": "fake-user"
+     }
+    ]
+   },
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "issue",
+      "view",
+      "1",
+      "--json",
+      "number,title,body,labels,milestone,state,stateReason,closedAt,url,assignees,comments"
+     ],
+     "stdin": "",
+     "stdout": "{\"number\": 1, \"title\": \"First!\", \"body\": \"new body\\nmore\", \"labels\": [{\"name\": \"bug\"}], \"milestone\": {\"title\": \"M07 Tracker\", \"number\": 1}, \"state\": \"OPEN\", \"stateReason\": null, \"closedAt\": null, \"url\": \"https://github.com/fake/repo/issues/1\", \"assignees\": [], \"comments\": [{\"id\": \"IC_fake1\", \"body\": \"edited\", \"url\": \"https://github.com/fake/repo/issues/1#issuecomment-1\", \"author\": {\"login\": \"fake-user\"}}]}\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "get",
+   "args": {
+    "number": 99
+   },
+   "error": {
+    "code": 1,
+    "message": "issue #99 not found"
+   },
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "issue",
+      "view",
+      "99",
+      "--json",
+      "number,title,body,labels,milestone,state,stateReason,closedAt,url,assignees"
+     ],
+     "stdin": "",
+     "stdout": "",
+     "stderr": "issue #99 not found\n",
+     "code": 1
+    }
+   ]
+  },
+  {
+   "op": "edit_comment",
+   "args": {
+    "number": 1,
+    "comment_id": 99,
+    "body": "gone"
+   },
+   "error": {
+    "code": 1,
+    "message": "404 Not Found"
+   },
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "api",
+      "-X",
+      "PATCH",
+      "repos/{owner}/{repo}/issues/comments/99",
+      "-f",
+      "body=gone"
+     ],
+     "stdin": "",
+     "stdout": "",
+     "stderr": "404 Not Found\n",
+     "code": 1
+    }
+   ]
+  },
+  {
+   "op": "assign_self",
+   "args": {
+    "number": 1
+   },
+   "result": null,
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "issue",
+      "edit",
+      "1",
+      "--add-assignee",
+      "@me"
+     ],
+     "stdin": "",
+     "stdout": "https://github.com/fake/repo/issues/1\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "assign_self",
+   "args": {
+    "number": 2
+   },
+   "result": null,
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "issue",
+      "edit",
+      "2",
+      "--add-assignee",
+      "@me"
+     ],
+     "stdin": "",
+     "stdout": "https://github.com/fake/repo/issues/2\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "get",
+   "args": {
+    "number": 1
+   },
+   "result": {
+    "number": 1,
+    "title": "First!",
+    "body": "new body\nmore",
+    "labels": [
+     "bug"
+    ],
+    "milestone": "M07 Tracker",
+    "state": "open",
+    "state_reason": null,
+    "closed_at": null,
+    "url": "https://github.com/fake/repo/issues/1",
+    "assignees": [
+     "fake-user"
+    ]
+   },
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "issue",
+      "view",
+      "1",
+      "--json",
+      "number,title,body,labels,milestone,state,stateReason,closedAt,url,assignees"
+     ],
+     "stdin": "",
+     "stdout": "{\"number\": 1, \"title\": \"First!\", \"body\": \"new body\\nmore\", \"labels\": [{\"name\": \"bug\"}], \"milestone\": {\"title\": \"M07 Tracker\", \"number\": 1}, \"state\": \"OPEN\", \"stateReason\": null, \"closedAt\": null, \"url\": \"https://github.com/fake/repo/issues/1\", \"assignees\": [{\"login\": \"fake-user\"}]}\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "close",
+   "args": {
+    "number": 2,
+    "reason": "not_planned",
+    "comment": "duplicate"
+   },
+   "result": null,
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "issue",
+      "close",
+      "2",
+      "--reason",
+      "not planned",
+      "--comment",
+      "duplicate"
+     ],
+     "stdin": "",
+     "stdout": "",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "get",
+   "args": {
+    "number": 2
+   },
+   "result": {
+    "number": 2,
+    "title": "Second",
+    "body": "b2",
+    "labels": [],
+    "milestone": null,
+    "state": "closed",
+    "state_reason": "not_planned",
+    "closed_at": "2026-10-02T12:33:49Z",
+    "url": "https://github.com/fake/repo/issues/2",
+    "assignees": [
+     "fake-user"
+    ]
+   },
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "issue",
+      "view",
+      "2",
+      "--json",
+      "number,title,body,labels,milestone,state,stateReason,closedAt,url,assignees"
+     ],
+     "stdin": "",
+     "stdout": "{\"number\": 2, \"title\": \"Second\", \"body\": \"b2\", \"labels\": [], \"milestone\": null, \"state\": \"CLOSED\", \"stateReason\": \"NOT_PLANNED\", \"closedAt\": \"2026-10-02T12:33:49Z\", \"url\": \"https://github.com/fake/repo/issues/2\", \"assignees\": [{\"login\": \"fake-user\"}]}\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "reopen",
+   "args": {
+    "number": 2
+   },
+   "result": null,
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "issue",
+      "reopen",
+      "2"
+     ],
+     "stdin": "",
+     "stdout": "",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "get",
+   "args": {
+    "number": 2
+   },
+   "result": {
+    "number": 2,
+    "title": "Second",
+    "body": "b2",
+    "labels": [],
+    "milestone": null,
+    "state": "open",
+    "state_reason": null,
+    "closed_at": null,
+    "url": "https://github.com/fake/repo/issues/2",
+    "assignees": [
+     "fake-user"
+    ]
+   },
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "issue",
+      "view",
+      "2",
+      "--json",
+      "number,title,body,labels,milestone,state,stateReason,closedAt,url,assignees"
+     ],
+     "stdin": "",
+     "stdout": "{\"number\": 2, \"title\": \"Second\", \"body\": \"b2\", \"labels\": [], \"milestone\": null, \"state\": \"OPEN\", \"stateReason\": null, \"closedAt\": null, \"url\": \"https://github.com/fake/repo/issues/2\", \"assignees\": [{\"login\": \"fake-user\"}]}\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "close",
+   "args": {
+    "number": 2
+   },
+   "result": null,
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "issue",
+      "close",
+      "2",
+      "--reason",
+      "completed"
+     ],
+     "stdin": "",
+     "stdout": "",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "list",
+   "args": {
+    "state": "closed"
+   },
+   "result": [
+    {
+     "number": 2,
+     "title": "Second",
+     "body": "b2",
+     "labels": [],
+     "milestone": null,
+     "state": "closed",
+     "state_reason": "completed",
+     "closed_at": "2026-10-02T12:33:50Z",
+     "url": "https://github.com/fake/repo/issues/2",
+     "assignees": [
+      "fake-user"
+     ]
+    }
+   ],
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "issue",
+      "list",
+      "--state",
+      "closed",
+      "--json",
+      "number,title,body,labels,milestone,state,stateReason,closedAt,url,assignees",
+      "--limit",
+      "1000"
+     ],
+     "stdin": "",
+     "stdout": "[{\"number\": 2, \"title\": \"Second\", \"body\": \"b2\", \"labels\": [], \"milestone\": null, \"state\": \"CLOSED\", \"stateReason\": \"COMPLETED\", \"closedAt\": \"2026-10-02T12:33:50Z\", \"url\": \"https://github.com/fake/repo/issues/2\", \"assignees\": [{\"login\": \"fake-user\"}]}]\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "list",
+   "args": {
+    "state": "all"
+   },
+   "result": [
+    {
+     "number": 2,
+     "title": "Second",
+     "body": "b2",
+     "labels": [],
+     "milestone": null,
+     "state": "closed",
+     "state_reason": "completed",
+     "closed_at": "2026-10-02T12:33:50Z",
+     "url": "https://github.com/fake/repo/issues/2",
+     "assignees": [
+      "fake-user"
+     ]
+    },
+    {
+     "number": 1,
+     "title": "First!",
+     "body": "new body\nmore",
+     "labels": [
+      "bug"
+     ],
+     "milestone": "M07 Tracker",
+     "state": "open",
+     "state_reason": null,
+     "closed_at": null,
+     "url": "https://github.com/fake/repo/issues/1",
+     "assignees": [
+      "fake-user"
+     ]
+    }
+   ],
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "issue",
+      "list",
+      "--state",
+      "all",
+      "--json",
+      "number,title,body,labels,milestone,state,stateReason,closedAt,url,assignees",
+      "--limit",
+      "1000"
+     ],
+     "stdin": "",
+     "stdout": "[{\"number\": 2, \"title\": \"Second\", \"body\": \"b2\", \"labels\": [], \"milestone\": null, \"state\": \"CLOSED\", \"stateReason\": \"COMPLETED\", \"closedAt\": \"2026-10-02T12:33:50Z\", \"url\": \"https://github.com/fake/repo/issues/2\", \"assignees\": [{\"login\": \"fake-user\"}]}, {\"number\": 1, \"title\": \"First!\", \"body\": \"new body\\nmore\", \"labels\": [{\"name\": \"bug\"}], \"milestone\": {\"title\": \"M07 Tracker\", \"number\": 1}, \"state\": \"OPEN\", \"stateReason\": null, \"closedAt\": null, \"url\": \"https://github.com/fake/repo/issues/1\", \"assignees\": [{\"login\": \"fake-user\"}]}]\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "call",
+   "args": {
+    "args": [
+     "pr",
+     "create",
+     "--title",
+     "Fix it",
+     "--body",
+     "Closes #1, fixes: #2",
+     "--head",
+     "feat-1"
+    ]
+   },
+   "result": {
+    "stdout": "https://github.com/fake/repo/pull/3\n",
+    "stderr": "",
+    "code": 0
+   },
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "pr",
+      "create",
+      "--title",
+      "Fix it",
+      "--body",
+      "Closes #1, fixes: #2",
+      "--head",
+      "feat-1"
+     ],
+     "stdin": "",
+     "stdout": "https://github.com/fake/repo/pull/3\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "call",
+   "args": {
+    "args": [
+     "pr",
+     "create",
+     "--title",
+     "Other",
+     "--body",
+     "nothing here",
+     "--head",
+     "feat-2"
+    ]
+   },
+   "result": {
+    "stdout": "https://github.com/fake/repo/pull/4\n",
+    "stderr": "",
+    "code": 0
+   },
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "pr",
+      "create",
+      "--title",
+      "Other",
+      "--body",
+      "nothing here",
+      "--head",
+      "feat-2"
+     ],
+     "stdin": "",
+     "stdout": "https://github.com/fake/repo/pull/4\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "call",
+   "args": {
+    "args": [
+     "issue",
+     "comment",
+     "1",
+     "--body-file",
+     "-"
+    ],
+    "stdin": "via call\nwith stdin"
+   },
+   "result": {
+    "stdout": "https://github.com/fake/repo/issues/1#issuecomment-1\n",
+    "stderr": "",
+    "code": 0
+   },
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "issue",
+      "comment",
+      "1",
+      "--body-file",
+      "-"
+     ],
+     "stdin": "via call\nwith stdin",
+     "stdout": "https://github.com/fake/repo/issues/1#issuecomment-1\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "call",
+   "args": {
+    "args": [
+     "issue",
+     "list",
+     "--json",
+     "number",
+     "--state",
+     "all"
+    ]
+   },
+   "result": {
+    "stdout": "[{\"number\": 2}, {\"number\": 1}]\n",
+    "stderr": "",
+    "code": 0
+   },
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "issue",
+      "list",
+      "--json",
+      "number",
+      "--state",
+      "all",
+      "--limit",
+      "1000"
+     ],
+     "stdin": "",
+     "stdout": "[{\"number\": 2}, {\"number\": 1}]\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "call",
+   "args": {
+    "args": [
+     "issue",
+     "view",
+     "99"
+    ]
+   },
+   "result": {
+    "stdout": "",
+    "stderr": "issue #99 not found\n",
+    "code": 1
+   },
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "issue",
+      "view",
+      "99"
+     ],
+     "stdin": "",
+     "stdout": "",
+     "stderr": "issue #99 not found\n",
+     "code": 1
+    }
+   ]
+  },
+  {
+   "op": "open_prs",
+   "args": {},
+   "result": [
+    {
+     "number": 4,
+     "title": "Other",
+     "branch": "feat-2",
+     "url": "https://github.com/fake/repo/pull/4",
+     "body": "nothing here"
+    },
+    {
+     "number": 3,
+     "title": "Fix it",
+     "branch": "feat-1",
+     "url": "https://github.com/fake/repo/pull/3",
+     "body": "Closes #1, fixes: #2"
+    }
+   ],
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "pr",
+      "list",
+      "--state",
+      "open",
+      "--json",
+      "number,title,body,headRefName,url",
+      "--limit",
+      "1000"
+     ],
+     "stdin": "",
+     "stdout": "[{\"number\": 4, \"title\": \"Other\", \"body\": \"nothing here\", \"headRefName\": \"feat-2\", \"url\": \"https://github.com/fake/repo/pull/4\"}, {\"number\": 3, \"title\": \"Fix it\", \"body\": \"Closes #1, fixes: #2\", \"headRefName\": \"feat-1\", \"url\": \"https://github.com/fake/repo/pull/3\"}]\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "prs_closing",
+   "args": {
+    "number": 1
+   },
+   "result": [
+    {
+     "number": 3,
+     "title": "Fix it",
+     "branch": "feat-1",
+     "url": "https://github.com/fake/repo/pull/3",
+     "body": "Closes #1, fixes: #2"
+    }
+   ],
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "pr",
+      "list",
+      "--state",
+      "open",
+      "--json",
+      "number,title,body,headRefName,url",
+      "--limit",
+      "1000"
+     ],
+     "stdin": "",
+     "stdout": "[{\"number\": 4, \"title\": \"Other\", \"body\": \"nothing here\", \"headRefName\": \"feat-2\", \"url\": \"https://github.com/fake/repo/pull/4\"}, {\"number\": 3, \"title\": \"Fix it\", \"body\": \"Closes #1, fixes: #2\", \"headRefName\": \"feat-1\", \"url\": \"https://github.com/fake/repo/pull/3\"}]\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "prs_closing",
+   "args": {
+    "number": 2
+   },
+   "result": [
+    {
+     "number": 3,
+     "title": "Fix it",
+     "branch": "feat-1",
+     "url": "https://github.com/fake/repo/pull/3",
+     "body": "Closes #1, fixes: #2"
+    }
+   ],
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "pr",
+      "list",
+      "--state",
+      "open",
+      "--json",
+      "number,title,body,headRefName,url",
+      "--limit",
+      "1000"
+     ],
+     "stdin": "",
+     "stdout": "[{\"number\": 4, \"title\": \"Other\", \"body\": \"nothing here\", \"headRefName\": \"feat-2\", \"url\": \"https://github.com/fake/repo/pull/4\"}, {\"number\": 3, \"title\": \"Fix it\", \"body\": \"Closes #1, fixes: #2\", \"headRefName\": \"feat-1\", \"url\": \"https://github.com/fake/repo/pull/3\"}]\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "prs_closing",
+   "args": {
+    "number": 9
+   },
+   "result": [],
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "pr",
+      "list",
+      "--state",
+      "open",
+      "--json",
+      "number,title,body,headRefName,url",
+      "--limit",
+      "1000"
+     ],
+     "stdin": "",
+     "stdout": "[{\"number\": 4, \"title\": \"Other\", \"body\": \"nothing here\", \"headRefName\": \"feat-2\", \"url\": \"https://github.com/fake/repo/pull/4\"}, {\"number\": 3, \"title\": \"Fix it\", \"body\": \"Closes #1, fixes: #2\", \"headRefName\": \"feat-1\", \"url\": \"https://github.com/fake/repo/pull/3\"}]\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "pr_comment",
+   "args": {
+    "pr": 3,
+    "body": "lgtm\nmulti-line"
+   },
+   "result": null,
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "pr",
+      "comment",
+      "3",
+      "--body-file",
+      "-"
+     ],
+     "stdin": "lgtm\nmulti-line",
+     "stdout": "",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "pr_state",
+   "args": {
+    "pr": 3
+   },
+   "result": "open",
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "pr",
+      "view",
+      "3",
+      "--json",
+      "state"
+     ],
+     "stdin": "",
+     "stdout": "{\"state\": \"OPEN\"}\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "pr_checkout",
+   "args": {
+    "pr": 4
+   },
+   "result": null,
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "pr",
+      "checkout",
+      "4"
+     ],
+     "stdin": "",
+     "stdout": "",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "pr_merge",
+   "args": {
+    "pr": 3
+   },
+   "result": "7284bae46d6f7b49eafb8d9ca02d411ea3623742",
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "pr",
+      "merge",
+      "3",
+      "--merge",
+      "--delete-branch"
+     ],
+     "stdin": "",
+     "stdout": "",
+     "stderr": "",
+     "code": 0
+    },
+    {
+     "name": "gh",
+     "argv": [
+      "pr",
+      "view",
+      "3",
+      "--json",
+      "mergeCommit"
+     ],
+     "stdin": "",
+     "stdout": "{\"mergeCommit\": {\"oid\": \"7284bae46d6f7b49eafb8d9ca02d411ea3623742\"}}\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "pr_state",
+   "args": {
+    "pr": 3
+   },
+   "result": "merged",
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "pr",
+      "view",
+      "3",
+      "--json",
+      "state"
+     ],
+     "stdin": "",
+     "stdout": "{\"state\": \"MERGED\"}\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "get",
+   "args": {
+    "number": 1
+   },
+   "result": {
+    "number": 1,
+    "title": "First!",
+    "body": "new body\nmore",
+    "labels": [
+     "bug"
+    ],
+    "milestone": "M07 Tracker",
+    "state": "closed",
+    "state_reason": "completed",
+    "closed_at": "2026-10-02T12:33:52Z",
+    "url": "https://github.com/fake/repo/issues/1",
+    "assignees": [
+     "fake-user"
+    ]
+   },
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "issue",
+      "view",
+      "1",
+      "--json",
+      "number,title,body,labels,milestone,state,stateReason,closedAt,url,assignees"
+     ],
+     "stdin": "",
+     "stdout": "{\"number\": 1, \"title\": \"First!\", \"body\": \"new body\\nmore\", \"labels\": [{\"name\": \"bug\"}], \"milestone\": {\"title\": \"M07 Tracker\", \"number\": 1}, \"state\": \"CLOSED\", \"stateReason\": \"COMPLETED\", \"closedAt\": \"2026-10-02T12:33:52Z\", \"url\": \"https://github.com/fake/repo/issues/1\", \"assignees\": [{\"login\": \"fake-user\"}]}\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "pr_merge",
+   "args": {
+    "pr": 3
+   },
+   "error": {
+    "code": 1,
+    "message": "pull request is not open"
+   },
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "pr",
+      "merge",
+      "3",
+      "--merge",
+      "--delete-branch"
+     ],
+     "stdin": "",
+     "stdout": "",
+     "stderr": "pull request is not open\n",
+     "code": 1
+    }
+   ]
+  },
+  {
+   "op": "get",
+   "args": {
+    "number": 1
+   },
+   "env": {
+    "FAKE_TRACKER_FAIL": "view"
+   },
+   "error": {
+    "code": 1,
+    "message": "fake gh: simulated failure for: issue view 1 --json number,title,body,labels,milestone,state,stateReason,closedAt,url,assignees"
+   },
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "issue",
+      "view",
+      "1",
+      "--json",
+      "number,title,body,labels,milestone,state,stateReason,closedAt,url,assignees"
+     ],
+     "stdin": "",
+     "stdout": "",
+     "stderr": "fake gh: simulated failure for: issue view 1 --json number,title,body,labels,milestone,state,stateReason,closedAt,url,assignees \n",
+     "code": 1
+    }
+   ]
+  },
+  {
+   "op": "get",
+   "args": {
+    "number": 1
+   },
+   "env": {
+    "FAKE_TRACKER_FAIL": "view",
+    "FAKE_TRACKER_FAIL_MSG": "secondary rate limit"
+   },
+   "error": {
+    "code": 4,
+    "message": "error: rota tracker call: github secondary rate limit — stopped; wait several minutes before retrying"
+   },
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "issue",
+      "view",
+      "1",
+      "--json",
+      "number,title,body,labels,milestone,state,stateReason,closedAt,url,assignees"
+     ],
+     "stdin": "",
+     "stdout": "",
+     "stderr": "fake gh: simulated failure for: issue view 1 --json number,title,body,labels,milestone,state,stateReason,closedAt,url,assignees secondary rate limit\n",
+     "code": 1
+    }
+   ]
+  },
+  {
+   "op": "list",
+   "args": {},
+   "env": {
+    "FAKE_TRACKER_FAIL": "list",
+    "FAKE_TRACKER_FAIL_MSG": "API rate limit exceeded"
+   },
+   "error": {
+    "code": 4,
+    "message": "error: rota tracker call: github rate limit — stopped after one retry"
+   },
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "issue",
+      "list",
+      "--state",
+      "open",
+      "--json",
+      "number,title,body,labels,milestone,state,stateReason,closedAt,url,assignees",
+      "--limit",
+      "1000"
+     ],
+     "stdin": "",
+     "stdout": "",
+     "stderr": "fake gh: simulated failure for: issue list --state open --json number,title,body,labels,milestone,state,stateReason,closedAt,url,assignees --limit 1000 API rate limit exceeded\n",
+     "code": 1
+    },
+    {
+     "name": "gh",
+     "argv": [
+      "issue",
+      "list",
+      "--state",
+      "open",
+      "--json",
+      "number,title,body,labels,milestone,state,stateReason,closedAt,url,assignees",
+      "--limit",
+      "1000"
+     ],
+     "stdin": "",
+     "stdout": "",
+     "stderr": "fake gh: simulated failure for: issue list --state open --json number,title,body,labels,milestone,state,stateReason,closedAt,url,assignees --limit 1000 API rate limit exceeded\n",
+     "code": 1
+    }
+   ]
+  },
+  {
+   "op": "get",
+   "args": {
+    "number": 1
+   },
+   "env": {
+    "FAKE_TRACKER_FAIL": "view",
+    "FAKE_TRACKER_FAIL_MSG": "run gh auth login"
+   },
+   "error": {
+    "code": 3,
+    "message": "error: rota tracker call: gh is not authenticated; run 'gh auth login'"
+   },
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "issue",
+      "view",
+      "1",
+      "--json",
+      "number,title,body,labels,milestone,state,stateReason,closedAt,url,assignees"
+     ],
+     "stdin": "",
+     "stdout": "",
+     "stderr": "fake gh: simulated failure for: issue view 1 --json number,title,body,labels,milestone,state,stateReason,closedAt,url,assignees run gh auth login\n",
+     "code": 1
+    }
+   ]
+  },
+  {
+   "op": "close",
+   "args": {
+    "number": 1,
+    "comment": "bye"
+   },
+   "env": {
+    "FAKE_TRACKER_FAIL": "close"
+   },
+   "error": {
+    "code": 1,
+    "message": "fake gh: simulated failure for: issue close 1 --reason completed --comment bye"
+   },
+   "calls": [
+    {
+     "name": "gh",
+     "argv": [
+      "issue",
+      "close",
+      "1",
+      "--reason",
+      "completed",
+      "--comment",
+      "bye"
+     ],
+     "stdin": "",
+     "stdout": "",
+     "stderr": "fake gh: simulated failure for: issue close 1 --reason completed --comment bye \n",
+     "code": 1
+    }
+   ]
+  },
+  {
+   "op": "closed_numbers",
+   "args": {
+    "body": "Closes #1"
+   },
+   "result": [
+    1
+   ],
+   "calls": []
+  },
+  {
+   "op": "closed_numbers",
+   "args": {
+    "body": "fixes: #2, resolves  #3 and closed #1"
+   },
+   "result": [
+    2,
+    3,
+    1
+   ],
+   "calls": []
+  },
+  {
+   "op": "closed_numbers",
+   "args": {
+    "body": "prefixcloses #4 xfixes #5"
+   },
+   "result": [],
+   "calls": []
+  },
+  {
+   "op": "closed_numbers",
+   "args": {
+    "body": "CLOSED #6 Fixed\t#7 resolve #8"
+   },
+   "result": [
+    6,
+    7,
+    8
+   ],
+   "calls": []
+  },
+  {
+   "op": "closed_numbers",
+   "args": {
+    "body": "resolves#9 close # 10 close #11abc"
+   },
+   "result": [
+    11
+   ],
+   "calls": []
+  },
+  {
+   "op": "closed_numbers",
+   "args": {
+    "body": "implements #12, implemented: #13"
+   },
+   "result": [],
+   "calls": []
+  },
+  {
+   "op": "closed_numbers",
+   "args": {
+    "body": "éfixes #14 fixes #15 closes　#16"
+   },
+   "result": [
+    15,
+    16
+   ],
+   "calls": []
+  },
+  {
+   "op": "closed_numbers",
+   "args": {
+    "body": ""
+   },
+   "result": [],
+   "calls": []
+  }
+ ]
+}

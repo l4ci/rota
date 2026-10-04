@@ -1,0 +1,27 @@
+{
+  "inputs": {
+    "argv": [
+      "knowledge",
+      "contradiction",
+      "add",
+      "--topic",
+      "Build",
+      "--title",
+      "Gamma tip",
+      "--text",
+      "c"
+    ],
+    "fixture": "3ce2cb1d8e740117a605a4f4dd4a39293ce3fbb9ce0c8de9a2c2e1f1d73e123d",
+    "stdin": ""
+  },
+  "outputs": {
+    "stdout": "",
+    "stderr": "",
+    "rc": 0,
+    "changed": {
+      "knowledge-contradictions.json": "{\n  \"version\": 1,\n  \"pending\": [\n    {\n      \"topic\": \"Build\",\n      \"title\": \"Gamma tip\",\n      \"correctionText\": \"c\",\n      \"loggedAt\": \"TS\"\n    }\n  ]\n}\n",
+      "knowledge-contradictions.json.lock": ""
+    },
+    "removed": []
+  }
+}

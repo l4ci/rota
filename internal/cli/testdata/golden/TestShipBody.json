@@ -1,0 +1,1 @@
+{"inputs":{"Name":"items and closes","Args":["ship","body","rota/ship-demo"],"Stdin":"","Code":0},"outputs":{"body":"## Summary\n\n- chore: plain\n- feat: overlay [F70]\n- fix: badge invalidation [B70]\n\n## Items resolved\n\n- [F70] Ship demo feature\n- [B70] Ship demo bug\n- [F99]\n\nCloses #43\nCloses #42\n\n","branch":"rota/ship-demo"}}

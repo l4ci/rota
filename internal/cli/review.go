@@ -1,0 +1,432 @@
+package cli
+
+import (
+	"context"
+	"flag"
+	"fmt"
+	"os"
+	"path/filepath"
+	"regexp"
+	"sort"
+	"strconv"
+	"strings"
+
+	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/pystr"
+	"github.com/l4ci/rota/internal/repos"
+)
+
+// reviewCommands is the `rota review` group (A8, #52).
+func reviewCommands() *Command {
+	return &Command{Name: "review", Summary: "scope a review, build the second-opinion brief, scan for scaffolding", Subs: []*Command{
+		{Name: "scope", Summary: "commits, files, item IDs and origin entries of a branch", Repo: true, Verb: noFlags(reviewScope)},
+		{Name: "brief", Summary: "fresh-eyes second-opinion brief for a branch", Repo: true, Verb: noFlags(reviewBrief)},
+		{Name: "scaffolding", Summary: "added diff lines that look like leftover task scaffolding", Repo: true, Verb: reviewScaffolding},
+		{Name: "queue", Summary: "open issues waiting for review", Repo: true, Verb: noFlags(reviewQueue)},
+	}}
+}
+
+type reviewCommit struct{ Hash, Subject string }
+
+type reviewIntent struct{ ID, Title, Entry string }
+
+// reviewInfo is what review scope reports about a branch.
+type reviewInfo struct {
+	Branch, Base string
+	Commits      []reviewCommit
+	Files        []string
+	IDs          []string
+	Intents      []reviewIntent
+}
+
+// reviewGit runs git in dir; a failed call is exit 5.
+func reviewGit(ctx context.Context, dir string, args ...string) (string, error) {
+	res, err := git.Repo{Dir: dir}.Run(ctx, args...)
+	if err != nil {
+		return "", gitErr(err)
+	}
+	if res.Code != 0 {
+		msg := strings.TrimSpace(res.Stderr)
+		if msg == "" {
+			msg = fmt.Sprintf("exit %d", res.Code)
+		}
+		return "", Unavailable("git %s failed: %s", args[0], msg)
+	}
+	return res.Stdout, nil
+}
+
+// nonBlankLines is the old helpers' `[l for l in text.splitlines() if l.strip()]`
+// on a shell-captured value (trailing newlines already gone).
+func nonBlankLines(s string) []string {
+	var out []string
+	for _, l := range pystr.Splitlines(s) {
+		if pystr.Strip(l) != "" {
+			out = append(out, l)
+		}
+	}
+	return out
+}
+
+// reviewScan reads the branch's commits, files and origin entries
+// (hv-review-scope). The caller has checked that the branch is not the base.
+func reviewScan(ctx context.Context, t branchTarget) (reviewInfo, error) {
+	info := reviewInfo{Branch: t.Branch, Base: t.Base, Commits: []reviewCommit{}, Files: []string{}, IDs: []string{}, Intents: []reviewIntent{}}
+	span := t.Base + ".." + t.Branch
+	logOut, err := reviewGit(ctx, t.Dir, "log", "--no-merges", "--format=%h%x1f%s", span)
+	if err != nil {
+		return info, err
+	}
+	for _, l := range nonBlankLines(logOut) {
+		if h, s, ok := strings.Cut(l, "\x1f"); ok {
+			info.Commits = append(info.Commits, reviewCommit{h, s})
+		}
+	}
+	filesOut, err := reviewGit(ctx, t.Dir, "diff", "--name-only", t.Base+"..."+t.Branch)
+	if err != nil {
+		return info, err
+	}
+	set := map[string]bool{}
+	for _, f := range nonBlankLines(filesOut) {
+		set[f] = true
+	}
+	for f := range set {
+		info.Files = append(info.Files, f)
+	}
+	sort.Strings(info.Files)
+	bodies, err := reviewGit(ctx, t.Dir, "log", "--no-merges", "--format=%B", span)
+	if err != nil {
+		return info, err
+	}
+	if ids := backlog.FindItemIDs(bodies, backlog.ItemLetters); ids != nil {
+		info.IDs = ids
+	}
+	corpus := (&backlog.File{Root: t.CorpusRoot}).Corpus()
+	for _, id := range info.IDs {
+		if line, title, ok := backlog.FindOrigin(corpus, id); ok {
+			info.Intents = append(info.Intents, reviewIntent{id, title, line})
+		}
+	}
+	return info, nil
+}
+
+// reviewTarget resolves the branch and refuses the base branch; what is the
+// verb's name for the message.
+func reviewTarget(c *Ctx, args []string, what string) (branchTarget, error) {
+	t, err := resolveBranch(c, args)
+	if err != nil {
+		return t, err
+	}
+	if t.Branch == t.Base {
+		return t, Failed("cannot %s base branch '%s' against itself", what, t.Base)
+	}
+	return t, nil
+}
+
+func reviewScope(c *Ctx, args []string) (Result, error) {
+	t, err := reviewTarget(c, args, "review")
+	if err != nil {
+		return Result{}, err
+	}
+	info, err := reviewScan(c.Context(), t)
+	if err != nil {
+		return Result{}, err
+	}
+	commits, intents := []any{}, []any{}
+	for _, cm := range info.Commits {
+		commits = append(commits, gitObj("hash", cm.Hash, "subject", cm.Subject))
+	}
+	for _, in := range info.Intents {
+		// The old helper emitted null for a bullet without a "Title." part.
+		var title any
+		if in.Title != "" {
+			title = in.Title
+		}
+		intents = append(intents, gitObj("id", in.ID, "type", in.ID[:1], "title", title, "entry", in.Entry))
+	}
+	data := gitObj("branch", info.Branch, "base", info.Base, "commitCount", len(info.Commits), "commits", commits,
+		"touchedFiles", info.Files, "referencedIds", info.IDs, "intents", intents)
+	text := fmt.Sprintf("%s vs %s: %d commits, %d files, %d items", info.Branch, info.Base, len(info.Commits), len(info.Files), len(info.IDs))
+	return Result{Data: data, Text: text}, nil
+}
+
+// pyUniversalNewlines is what subprocess.run(text=True) does to captured output.
+func pyUniversalNewlines(s string) string {
+	return strings.ReplaceAll(strings.ReplaceAll(s, "\r\n", "\n"), "\r", "\n")
+}
+
+func reviewBrief(c *Ctx, args []string) (Result, error) {
+	t, err := reviewTarget(c, args, "second-opinion")
+	if err != nil {
+		return Result{}, err
+	}
+	ctx := c.Context()
+	info, err := reviewScan(ctx, t)
+	if err != nil {
+		return Result{}, err
+	}
+	if len(info.Commits) == 0 {
+		return Result{}, Failed("branch '%s' has no commits beyond '%s'", t.Branch, t.Base)
+	}
+	var b strings.Builder
+	p := func(s string) { b.WriteString(s + "\n") }
+	p("You are reviewing a feature branch with NO prior conversation context.")
+	p("You receive only the goal and the diff. Your job: find what's wrong.")
+	p("")
+	p("A staff-engineer reviewer with full project context already evaluated this branch.")
+	p("Your value is the blind spot — the issue the contextualized reviewer naturalized")
+	p("because it knew \"why.\" Reason from the diff alone, as if you'd never seen this")
+	p("project before.")
+	p("")
+	p(fmt.Sprintf("**Branch:** `%s` (%d commits vs `%s`)", info.Branch, len(info.Commits), info.Base))
+	p("")
+	p("**Goal (what the diff claims to accomplish):**")
+	if len(info.Intents) > 0 {
+		for _, in := range info.Intents {
+			title := in.Title
+			if title == "" {
+				title = "None" // the old f-string printed the Python None
+			}
+			p(fmt.Sprintf("- [%s] %s — %s", in.ID, title, in.Entry))
+		}
+	} else {
+		p("- (no linked TODO items — judge against commit subjects only)")
+	}
+	p("")
+	p("**Commits:**")
+	for _, cm := range info.Commits {
+		p(fmt.Sprintf("- `%s` %s", cm.Hash, cm.Subject))
+	}
+	p("")
+	p("**Diff:**")
+	p("")
+	for _, path := range info.Files {
+		// A failing per-file diff printed as empty, as subprocess.run(check=False) did.
+		res, err := git.Repo{Dir: t.Dir}.Run(ctx, "diff", t.Base+"..."+t.Branch, "--", path)
+		if err != nil {
+			return Result{}, gitErr(err)
+		}
+		diff := res.Stdout
+		if res.Code != 0 {
+			diff = ""
+		}
+		p(fmt.Sprintf("### `%s`", path))
+		p("")
+		p("```diff")
+		p(strings.TrimRight(pyUniversalNewlines(diff), "\n"))
+		p("```")
+		p("")
+	}
+	for _, l := range []string{
+		"## Evaluate",
+		"",
+		"Return PASS / CONCERN / FAIL with file:line evidence for each issue.",
+		"",
+		"1. **Goal match** — does the diff deliver the stated goal? Missing pieces,",
+		"   scope creep, off-target work? Compare commit subjects to goal text.",
+		"2. **Obvious quality** — dead code, error swallowing, untested new branches,",
+		"   security smells, API contract breaks, performance cliffs, leaky abstractions,",
+		"   off-by-one errors, missing edge cases visible in the diff.",
+		"3. **Fresh-eyes inconsistencies** — what would surprise a reader who has no",
+		"   project context? Names that don't match what they do, comments that",
+		"   contradict the code, dead-flag-style stubs, suspicious silence on a code",
+		"   path the rest of the diff treats as load-bearing.",
+		"",
+		"Be specific: file:line for every concern. Rank by severity. If unsure, say so",
+		"— a fresh reviewer flagging an honest uncertainty is more useful than a",
+		"confident hand-wave.",
+		"",
+		"**Verdict block.** End the report with one fenced `json` block and nothing after it:",
+		"",
+		"```json",
+		`{"verdict": "PASS", "summary": "<one line>", "findings": [{"severity": "blocker|major|minor|info", "title": "<what>", "file": "<path>", "line": 42, "detail": "<evidence>"}]}`,
+		"```",
+		"",
+		"`verdict` is one of:",
+		"- PASS — nothing worth surfacing",
+		"- CONCERNS — works, but flag before merge",
+		"- FAIL — merge would regress behavior, break the goal, or violate sane practice",
+	} {
+		p(l)
+	}
+	brief := b.String()
+	return Result{Data: gitObj("branch", info.Branch, "base", info.Base, "commitCount", len(info.Commits), "brief", brief), Text: brief}, nil
+}
+
+// scaffoldRe is the old helper's pattern with Python's Unicode \b and \s: a
+// match must start after, and end before, a non-word rune (Go's \b is ASCII
+// only, so a letter like "é" next to "Task 1" would differ).
+var scaffoldRe = func() *regexp.Regexp {
+	const nw = `[^\p{L}\p{N}_]`
+	sp := "[" + pystr.SpaceClass + "]"
+	return regexp.MustCompile(`(?i)(?:^|` + nw + `)(?:Task` + sp + `+[0-9]+|in flight|placeholder|added later|not yet wired)(?:$|` + nw + `)`)
+}()
+
+var scaffoldHunkRe = regexp.MustCompile(`^@@ -[0-9]+(?:,[0-9]+)? \+([0-9]+)(?:,[0-9]+)? @@`)
+
+type scaffoldFinding struct {
+	File string
+	Line int
+	Text string
+}
+
+// scaffoldScan walks a unified diff and returns added lines that match.
+func scaffoldScan(diff string) []scaffoldFinding {
+	out := []scaffoldFinding{}
+	file, newLine := "None", 0 // the old helper printed Python's None before any "+++ b/"
+	for _, line := range strings.Split(diff, "\n") {
+		switch {
+		case strings.HasPrefix(line, "+++ b/"):
+			file, newLine = line[6:], 0
+			continue
+		case strings.HasPrefix(line, "+++") || strings.HasPrefix(line, "---"):
+			continue
+		}
+		if m := scaffoldHunkRe.FindStringSubmatch(line); m != nil {
+			newLine, _ = strconv.Atoi(m[1])
+			continue
+		}
+		switch {
+		case strings.HasPrefix(line, "+"):
+			if text := line[1:]; scaffoldRe.MatchString(text) {
+				out = append(out, scaffoldFinding{file, newLine, text})
+			}
+			newLine++
+		case strings.HasPrefix(line, " "):
+			newLine++
+		}
+	}
+	return out
+}
+
+func reviewScaffolding(fs *flag.FlagSet) RunFunc {
+	baseFlag := fs.String("base", "", "base branch to diff against (default: the resolved base, else main)")
+	return func(c *Ctx, args []string) (Result, error) {
+		if len(args) > 1 {
+			return Result{}, Usage("unexpected argument %q", args[1])
+		}
+		dir, err := gitDir(c)
+		if err != nil {
+			return Result{}, err
+		}
+		ctx := c.Context()
+		r := git.Repo{Dir: dir}
+		base := *baseFlag
+		if base == "" {
+			b, ok, err := resolveBase(ctx, dir)
+			if err != nil {
+				return Result{}, err
+			}
+			if base = b; !ok {
+				base = "main"
+			}
+		}
+		var branch string
+		if len(args) == 1 && args[0] != "" {
+			branch = args[0]
+		} else {
+			if branch, err = r.CurrentBranch(ctx); err != nil {
+				return Result{}, gitErr(err)
+			}
+			if branch == "" {
+				return Result{}, Resolution("no branch given and HEAD is not on a branch")
+			}
+		}
+		for _, ref := range []string{base, branch} {
+			found, err := r.Verify(ctx, ref+"^{commit}")
+			if err != nil {
+				return Result{}, gitErr(err)
+			}
+			if !found {
+				return Result{}, Resolution("%s: no such branch", ref)
+			}
+		}
+		diff, err := reviewGit(ctx, dir, "diff", base+"..."+branch)
+		if err != nil {
+			return Result{}, err
+		}
+		findings := []any{}
+		var lines []string
+		// Data drops the CR of a CRLF line (the shim's line splitting did); text keeps it, as the old helper did.
+		for _, f := range scaffoldScan(diff) {
+			findings = append(findings, gitObj("file", f.File, "line", f.Line, "text", strings.TrimSuffix(f.Text, "\r")))
+			lines = append(lines, fmt.Sprintf("%s:%d:%s", f.File, f.Line, f.Text))
+		}
+		return Result{Data: gitObj("findings", findings), Text: strings.Join(lines, "\n")}, nil
+	}
+}
+
+// a8Backend is what the issue-only verbs need of the issue backend; the
+// single-repo *backlog.Issues and the *backlog.Umbrella both have it.
+type a8Backend interface {
+	ReviewQueue() ([]backlog.QueueEntry, error)
+	MergePRGated(pr int, items []string, approve backlog.MergeApprover) (backlog.MergeResult, error)
+	ReleaseGate(mid string) ([]backlog.Blocker, []backlog.Issue, error)
+	ReleaseNotes(mid string) ([]backlog.NoteSection, error)
+	ReleaseClose(mid, tag string) (int, bool, error)
+}
+
+// a8Issues opens the issue backend for an issue-only verb. An unknown --repo
+// is exit 3 and the file backend is refused (RefusedError, backend; map it
+// with a4Fail, or a4FailRead for a read-only verb). At an umbrella root a verb
+// that acts on one sub-repo (perRepo) needs --repo (exit 2).
+func a8Issues(c *Ctx, hint string, perRepo bool) (a8Backend, error) {
+	root, err := c.Root()
+	if err != nil {
+		return nil, err
+	}
+	if _, err := c.RepoPath(); err != nil {
+		return nil, err
+	}
+	cfg := config.Load(filepath.Join(root, ".rota", "config.json"))
+	if name, err := config.Backend(cfg); err == nil && name == "file" {
+		return nil, &backlog.RefusedError{BlockedBy: "backend", Hint: hint, Err: backlog.ErrWrongBackend,
+			Msg: c.Path + ` is not available with backlog.backend "file"`}
+	}
+	if perRepo && c.Repo == "" && backlog.IsUmbrella(root) {
+		// Scope S: inside a sub-repo the verb acts on it; only the umbrella
+		// root itself needs --repo.
+		if cwd, err := os.Getwd(); err != nil || backlog.CwdSubRepo(cwd, repos.Load(root)) == "" {
+			return nil, Usage("%s from the umbrella root needs --repo <name>", c.Path)
+		}
+	}
+	be, err := a4Open(c, root, false, hint)
+	if err != nil {
+		return nil, err
+	}
+	ab, ok := be.(a8Backend)
+	if !ok {
+		return nil, &Error{Exit: ExitInternal, Message: fmt.Sprintf("%s: backend %T has no issue verbs", c.Path, be)}
+	}
+	return ab, nil
+}
+
+func reviewQueue(c *Ctx, args []string) (Result, error) {
+	if len(args) > 0 {
+		return Result{}, Usage("usage: rota review queue")
+	}
+	be, err := a8Issues(c, "", false)
+	if err != nil {
+		return a4FailRead(err)
+	}
+	rows, err := be.ReviewQueue()
+	if err != nil {
+		return a4FailRead(err)
+	}
+	items, lines := []any{}, []string{}
+	for _, r := range rows {
+		prs := []any{}
+		for _, p := range r.PRs {
+			prs = append(prs, a4Obj("number", p.Number, "title", p.Title, "branch", p.Branch, "url", p.URL, "body", p.Body))
+		}
+		row := a4Obj("id", r.ID, "type", r.Type, "number", r.Number, "title", r.Title)
+		if r.Repo != "" {
+			row.Set("repo", r.Repo)
+		}
+		row.Set("prs", prs)
+		items = append(items, row)
+		lines = append(lines, r.Type+strconv.Itoa(r.Number)+" "+r.Title)
+	}
+	return Result{Data: a4Obj("items", items), Text: strings.Join(lines, "\n")}, nil
+}

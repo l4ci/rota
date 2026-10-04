@@ -1,0 +1,21 @@
+{
+  "inputs": {
+    "argv": [
+      "block",
+      "vision",
+      "--body-file",
+      "-"
+    ],
+    "fixture": "bc5f38691e04e2475ee4bb289a3dd5a116a44dcda25b68e0243c7d502a306312",
+    "stdin": "## Vision\n\nbody\n"
+  },
+  "outputs": {
+    "stdout": "appended\n",
+    "stderr": "",
+    "rc": 0,
+    "changed": {
+      "../AGENTS.md": "# Agents\n\n\u003c!-- rota-vision-start --\u003e\n## Vision\n\nbody\n\u003c!-- rota-vision-end --\u003e\n"
+    },
+    "removed": []
+  }
+}

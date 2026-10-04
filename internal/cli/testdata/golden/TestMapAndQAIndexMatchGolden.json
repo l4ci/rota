@@ -1,0 +1,19 @@
+{
+  "inputs": {
+    "argv": [
+      "map",
+      "index"
+    ],
+    "fixture": "dae4a9e12257bcf52589546c75477599ed654d43ddf10e676fdb92ba486985bc",
+    "stdin": ""
+  },
+  "outputs": {
+    "stdout": "appended\n",
+    "stderr": "",
+    "rc": 0,
+    "changed": {
+      "../AGENTS.md": "# Agents\n\n\u003c!-- rota-map-start --\u003e\n## Project Map\n\nSubsystems live in `.rota/MAP.md` (detail in `.rota/map/\u003cname\u003e.md`). Pull with `rota map query \u003cname\u003e`.\n\n- **alpha** — (no summary)\n- **cli** — The command line\n\u003c!-- rota-map-end --\u003e\n"
+    },
+    "removed": []
+  }
+}

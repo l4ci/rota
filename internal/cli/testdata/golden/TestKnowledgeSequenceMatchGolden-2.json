@@ -1,0 +1,23 @@
+{
+  "inputs": {
+    "argv": [
+      "knowledge",
+      "hit",
+      "--topic",
+      "Architecture",
+      "--title",
+      "Beta rule"
+    ],
+    "fixture": "1ade425067f25ce633837137436ed16e02d388cd6feeaa1102f6a8be5c6c3e32",
+    "stdin": ""
+  },
+  "outputs": {
+    "stdout": "",
+    "stderr": "auto-promoted: Architecture :: Beta rule (hits=3, threshold=3)\n",
+    "rc": 0,
+    "changed": {
+      "knowledge-tier.json": "{\n  \"version\": 1,\n  \"entries\": {\n    \"Architecture::Alpha rule\": {\n      \"tier\": \"confirmed\",\n      \"hits\": 4,\n      \"lastSeen\": \"2026-03-01\"\n    },\n    \"Architecture::Beta rule\": {\n      \"tier\": \"confirmed\",\n      \"hits\": 3,\n      \"lastSeen\": \"2026-10-03\"\n    },\n    \"Architecture::Old rule\": {\n      \"tier\": \"deprecated\",\n      \"hits\": 0,\n      \"lastSeen\": \"2026-03-03\"\n    }\n  }\n}\n"
+    },
+    "removed": []
+  }
+}

@@ -1,0 +1,2 @@
+- DATE · unit tests · PASS · abc1234 · go test ./... ok
+- DATE · smoke · FAIL · - · a · b · c

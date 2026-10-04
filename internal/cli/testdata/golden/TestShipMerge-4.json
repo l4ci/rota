@@ -1,0 +1,1 @@
+{"inputs":{"Name":"base branch","Args":["ship","merge","main","--body-file","-"],"Stdin":"merge: x","Code":4},"outputs":{"blockedBy":"base branch","changed":false}}

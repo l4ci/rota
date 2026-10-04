@@ -1,0 +1,2207 @@
+{
+ "provider": "gitlab",
+ "steps": [
+  {
+   "op": "create_milestone",
+   "args": {
+    "title": "M07 Tracker",
+    "description": "tracker port"
+   },
+   "result": 1001,
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "api",
+      "-X",
+      "POST",
+      "projects/:id/milestones",
+      "-f",
+      "title=M07 Tracker",
+      "-f",
+      "description=tracker port"
+     ],
+     "stdin": "",
+     "stdout": "{\"id\": 1001, \"iid\": 1, \"title\": \"M07 Tracker\", \"description\": \"tracker port\", \"state\": \"active\"}\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "create_milestone",
+   "args": {
+    "title": "M08",
+    "description": ""
+   },
+   "result": 1002,
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "api",
+      "-X",
+      "POST",
+      "projects/:id/milestones",
+      "-f",
+      "title=M08",
+      "-f",
+      "description="
+     ],
+     "stdin": "",
+     "stdout": "{\"id\": 1002, \"iid\": 2, \"title\": \"M08\", \"description\": \"\", \"state\": \"active\"}\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "milestones",
+   "args": {},
+   "result": [
+    {
+     "number": 1001,
+     "title": "M07 Tracker",
+     "description": "tracker port",
+     "state": "open"
+    },
+    {
+     "number": 1002,
+     "title": "M08",
+     "description": "",
+     "state": "open"
+    }
+   ],
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "api",
+      "projects/:id/milestones?per_page=100",
+      "--paginate"
+     ],
+     "stdin": "",
+     "stdout": "[{\"id\": 1001, \"iid\": 1, \"title\": \"M07 Tracker\", \"description\": \"tracker port\", \"state\": \"active\"}, {\"id\": 1002, \"iid\": 2, \"title\": \"M08\", \"description\": \"\", \"state\": \"active\"}]\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "edit_milestone",
+   "args": {
+    "number": 1002,
+    "state": "closed"
+   },
+   "result": null,
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "api",
+      "-X",
+      "PUT",
+      "projects/:id/milestones/1002",
+      "-f",
+      "state_event=close"
+     ],
+     "stdin": "",
+     "stdout": "{\"id\": 1002, \"iid\": 2, \"title\": \"M08\", \"description\": \"\", \"state\": \"closed\"}\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "edit_milestone",
+   "args": {
+    "number": 1001,
+    "title": "M07 Tracker",
+    "description": "renamed"
+   },
+   "result": null,
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "api",
+      "-X",
+      "PUT",
+      "projects/:id/milestones/1001",
+      "-f",
+      "title=M07 Tracker",
+      "-f",
+      "description=renamed"
+     ],
+     "stdin": "",
+     "stdout": "{\"id\": 1001, \"iid\": 1, \"title\": \"M07 Tracker\", \"description\": \"renamed\", \"state\": \"active\"}\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "milestones",
+   "args": {
+    "state": "open"
+   },
+   "result": [
+    {
+     "number": 1001,
+     "title": "M07 Tracker",
+     "description": "renamed",
+     "state": "open"
+    },
+    {
+     "number": 1002,
+     "title": "M08",
+     "description": "",
+     "state": "closed"
+    }
+   ],
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "api",
+      "projects/:id/milestones?per_page=100&state=active",
+      "--paginate"
+     ],
+     "stdin": "",
+     "stdout": "[{\"id\": 1001, \"iid\": 1, \"title\": \"M07 Tracker\", \"description\": \"renamed\", \"state\": \"active\"}, {\"id\": 1002, \"iid\": 2, \"title\": \"M08\", \"description\": \"\", \"state\": \"closed\"}]\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "milestones",
+   "args": {
+    "state": "closed"
+   },
+   "result": [
+    {
+     "number": 1001,
+     "title": "M07 Tracker",
+     "description": "renamed",
+     "state": "open"
+    },
+    {
+     "number": 1002,
+     "title": "M08",
+     "description": "",
+     "state": "closed"
+    }
+   ],
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "api",
+      "projects/:id/milestones?per_page=100&state=closed",
+      "--paginate"
+     ],
+     "stdin": "",
+     "stdout": "[{\"id\": 1001, \"iid\": 1, \"title\": \"M07 Tracker\", \"description\": \"renamed\", \"state\": \"active\"}, {\"id\": 1002, \"iid\": 2, \"title\": \"M08\", \"description\": \"\", \"state\": \"closed\"}]\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "find_milestone",
+   "args": {
+    "hv_id": "M07"
+   },
+   "result": "M07 Tracker",
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "api",
+      "projects/:id/milestones?per_page=100",
+      "--paginate"
+     ],
+     "stdin": "",
+     "stdout": "[{\"id\": 1001, \"iid\": 1, \"title\": \"M07 Tracker\", \"description\": \"renamed\", \"state\": \"active\"}, {\"id\": 1002, \"iid\": 2, \"title\": \"M08\", \"description\": \"\", \"state\": \"closed\"}]\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "find_milestone",
+   "args": {
+    "hv_id": "M0"
+   },
+   "result": null,
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "api",
+      "projects/:id/milestones?per_page=100",
+      "--paginate"
+     ],
+     "stdin": "",
+     "stdout": "[{\"id\": 1001, \"iid\": 1, \"title\": \"M07 Tracker\", \"description\": \"renamed\", \"state\": \"active\"}, {\"id\": 1002, \"iid\": 2, \"title\": \"M08\", \"description\": \"\", \"state\": \"closed\"}]\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "find_milestone",
+   "args": {
+    "hv_id": "M08"
+   },
+   "result": "M08",
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "api",
+      "projects/:id/milestones?per_page=100",
+      "--paginate"
+     ],
+     "stdin": "",
+     "stdout": "[{\"id\": 1001, \"iid\": 1, \"title\": \"M07 Tracker\", \"description\": \"renamed\", \"state\": \"active\"}, {\"id\": 1002, \"iid\": 2, \"title\": \"M08\", \"description\": \"\", \"state\": \"closed\"}]\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "ensure_labels",
+   "args": {
+    "names": [
+     "bug",
+     "p1",
+     "bug",
+     ""
+    ]
+   },
+   "result": null,
+   "calls": []
+  },
+  {
+   "op": "ensure_labels",
+   "args": {
+    "names": [
+     "bug"
+    ]
+   },
+   "result": null,
+   "calls": []
+  },
+  {
+   "op": "ensure_labels",
+   "args": {
+    "names": [
+     "nope"
+    ],
+    "auto_create": false
+   },
+   "result": null,
+   "calls": []
+  },
+  {
+   "op": "create",
+   "args": {
+    "title": "First",
+    "body": "line1\nline2 with `ticks` and $vars",
+    "labels": [
+     "bug",
+     "p1"
+    ],
+    "milestone": "M07 Tracker"
+   },
+   "result": 1,
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "issue",
+      "create",
+      "--title",
+      "First",
+      "--description",
+      "line1\nline2 with `ticks` and $vars",
+      "--label",
+      "bug,p1",
+      "--milestone",
+      "M07 Tracker",
+      "-y"
+     ],
+     "stdin": "",
+     "stdout": "https://gitlab.com/fake/repo/-/issues/1\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "create",
+   "args": {
+    "title": "Second",
+    "body": "b2"
+   },
+   "result": 2,
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "issue",
+      "create",
+      "--title",
+      "Second",
+      "--description",
+      "b2",
+      "-y"
+     ],
+     "stdin": "",
+     "stdout": "https://gitlab.com/fake/repo/-/issues/2\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "get",
+   "args": {
+    "number": 1
+   },
+   "result": {
+    "number": 1,
+    "title": "First",
+    "body": "line1\nline2 with `ticks` and $vars",
+    "labels": [
+     "bug",
+     "p1"
+    ],
+    "milestone": "M07 Tracker",
+    "state": "open",
+    "state_reason": null,
+    "closed_at": null,
+    "url": "https://gitlab.com/fake/repo/-/issues/1",
+    "assignees": []
+   },
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "issue",
+      "view",
+      "1",
+      "--output",
+      "json"
+     ],
+     "stdin": "",
+     "stdout": "{\"iid\": 1, \"title\": \"First\", \"description\": \"line1\\nline2 with `ticks` and $vars\", \"labels\": [\"bug\", \"p1\"], \"milestone\": {\"title\": \"M07 Tracker\", \"iid\": 1}, \"state\": \"opened\", \"web_url\": \"https://gitlab.com/fake/repo/-/issues/1\", \"closed_at\": null, \"assignees\": []}\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "list",
+   "args": {},
+   "result": [
+    {
+     "number": 2,
+     "title": "Second",
+     "body": "b2",
+     "labels": [],
+     "milestone": null,
+     "state": "open",
+     "state_reason": null,
+     "closed_at": null,
+     "url": "https://gitlab.com/fake/repo/-/issues/2",
+     "assignees": []
+    },
+    {
+     "number": 1,
+     "title": "First",
+     "body": "line1\nline2 with `ticks` and $vars",
+     "labels": [
+      "bug",
+      "p1"
+     ],
+     "milestone": "M07 Tracker",
+     "state": "open",
+     "state_reason": null,
+     "closed_at": null,
+     "url": "https://gitlab.com/fake/repo/-/issues/1",
+     "assignees": []
+    }
+   ],
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "issue",
+      "list",
+      "--output",
+      "json",
+      "--per-page",
+      "100"
+     ],
+     "stdin": "",
+     "stdout": "[{\"iid\": 2, \"title\": \"Second\", \"description\": \"b2\", \"labels\": [], \"milestone\": null, \"state\": \"opened\", \"web_url\": \"https://gitlab.com/fake/repo/-/issues/2\", \"closed_at\": null, \"assignees\": []}, {\"iid\": 1, \"title\": \"First\", \"description\": \"line1\\nline2 with `ticks` and $vars\", \"labels\": [\"bug\", \"p1\"], \"milestone\": {\"title\": \"M07 Tracker\", \"iid\": 1}, \"state\": \"opened\", \"web_url\": \"https://gitlab.com/fake/repo/-/issues/1\", \"closed_at\": null, \"assignees\": []}]\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "list",
+   "args": {
+    "labels": [
+     "p1"
+    ]
+   },
+   "result": [
+    {
+     "number": 1,
+     "title": "First",
+     "body": "line1\nline2 with `ticks` and $vars",
+     "labels": [
+      "bug",
+      "p1"
+     ],
+     "milestone": "M07 Tracker",
+     "state": "open",
+     "state_reason": null,
+     "closed_at": null,
+     "url": "https://gitlab.com/fake/repo/-/issues/1",
+     "assignees": []
+    }
+   ],
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "issue",
+      "list",
+      "--output",
+      "json",
+      "--label",
+      "p1",
+      "--per-page",
+      "100"
+     ],
+     "stdin": "",
+     "stdout": "[{\"iid\": 1, \"title\": \"First\", \"description\": \"line1\\nline2 with `ticks` and $vars\", \"labels\": [\"bug\", \"p1\"], \"milestone\": {\"title\": \"M07 Tracker\", \"iid\": 1}, \"state\": \"opened\", \"web_url\": \"https://gitlab.com/fake/repo/-/issues/1\", \"closed_at\": null, \"assignees\": []}]\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "list",
+   "args": {
+    "milestone": "M07 Tracker"
+   },
+   "result": [
+    {
+     "number": 1,
+     "title": "First",
+     "body": "line1\nline2 with `ticks` and $vars",
+     "labels": [
+      "bug",
+      "p1"
+     ],
+     "milestone": "M07 Tracker",
+     "state": "open",
+     "state_reason": null,
+     "closed_at": null,
+     "url": "https://gitlab.com/fake/repo/-/issues/1",
+     "assignees": []
+    }
+   ],
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "issue",
+      "list",
+      "--output",
+      "json",
+      "--milestone",
+      "M07 Tracker",
+      "--per-page",
+      "100"
+     ],
+     "stdin": "",
+     "stdout": "[{\"iid\": 1, \"title\": \"First\", \"description\": \"line1\\nline2 with `ticks` and $vars\", \"labels\": [\"bug\", \"p1\"], \"milestone\": {\"title\": \"M07 Tracker\", \"iid\": 1}, \"state\": \"opened\", \"web_url\": \"https://gitlab.com/fake/repo/-/issues/1\", \"closed_at\": null, \"assignees\": []}]\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "list",
+   "args": {
+    "state": "closed"
+   },
+   "result": [],
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "issue",
+      "list",
+      "--output",
+      "json",
+      "--closed",
+      "--per-page",
+      "100"
+     ],
+     "stdin": "",
+     "stdout": "[]\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "edit",
+   "args": {
+    "number": 1,
+    "title": "First!",
+    "body": "new body\nmore",
+    "remove_labels": [
+     "p1"
+    ]
+   },
+   "result": null,
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "issue",
+      "update",
+      "1",
+      "--title",
+      "First!",
+      "--description",
+      "new body\nmore",
+      "--unlabel",
+      "p1"
+     ],
+     "stdin": "",
+     "stdout": "https://gitlab.com/fake/repo/-/issues/1\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "add_labels",
+   "args": {
+    "number": 1,
+    "labels": [
+     "extra",
+     "extra",
+     ""
+    ]
+   },
+   "result": null,
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "issue",
+      "update",
+      "1",
+      "--label",
+      "extra"
+     ],
+     "stdin": "",
+     "stdout": "https://gitlab.com/fake/repo/-/issues/1\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "get",
+   "args": {
+    "number": 1
+   },
+   "result": {
+    "number": 1,
+    "title": "First!",
+    "body": "new body\nmore",
+    "labels": [
+     "bug",
+     "extra"
+    ],
+    "milestone": "M07 Tracker",
+    "state": "open",
+    "state_reason": null,
+    "closed_at": null,
+    "url": "https://gitlab.com/fake/repo/-/issues/1",
+    "assignees": []
+   },
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "issue",
+      "view",
+      "1",
+      "--output",
+      "json"
+     ],
+     "stdin": "",
+     "stdout": "{\"iid\": 1, \"title\": \"First!\", \"description\": \"new body\\nmore\", \"labels\": [\"bug\", \"extra\"], \"milestone\": {\"title\": \"M07 Tracker\", \"iid\": 1}, \"state\": \"opened\", \"web_url\": \"https://gitlab.com/fake/repo/-/issues/1\", \"closed_at\": null, \"assignees\": []}\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "remove_labels",
+   "args": {
+    "number": 1,
+    "labels": [
+     "extra"
+    ]
+   },
+   "result": null,
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "issue",
+      "update",
+      "1",
+      "--unlabel",
+      "extra"
+     ],
+     "stdin": "",
+     "stdout": "https://gitlab.com/fake/repo/-/issues/1\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "remove_labels",
+   "args": {
+    "number": 1,
+    "labels": []
+   },
+   "result": null,
+   "calls": []
+  },
+  {
+   "op": "edit",
+   "args": {
+    "number": 1,
+    "remove_milestone": true
+   },
+   "result": null,
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "issue",
+      "update",
+      "1",
+      "--milestone",
+      ""
+     ],
+     "stdin": "",
+     "stdout": "https://gitlab.com/fake/repo/-/issues/1\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "get",
+   "args": {
+    "number": 1
+   },
+   "result": {
+    "number": 1,
+    "title": "First!",
+    "body": "new body\nmore",
+    "labels": [
+     "bug"
+    ],
+    "milestone": null,
+    "state": "open",
+    "state_reason": null,
+    "closed_at": null,
+    "url": "https://gitlab.com/fake/repo/-/issues/1",
+    "assignees": []
+   },
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "issue",
+      "view",
+      "1",
+      "--output",
+      "json"
+     ],
+     "stdin": "",
+     "stdout": "{\"iid\": 1, \"title\": \"First!\", \"description\": \"new body\\nmore\", \"labels\": [\"bug\"], \"milestone\": null, \"state\": \"opened\", \"web_url\": \"https://gitlab.com/fake/repo/-/issues/1\", \"closed_at\": null, \"assignees\": []}\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "edit",
+   "args": {
+    "number": 1,
+    "milestone": "M07 Tracker"
+   },
+   "result": null,
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "issue",
+      "update",
+      "1",
+      "--milestone",
+      "M07 Tracker"
+     ],
+     "stdin": "",
+     "stdout": "https://gitlab.com/fake/repo/-/issues/1\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "issues_in_milestone",
+   "args": {
+    "title": "M07 Tracker"
+   },
+   "result": [
+    {
+     "number": 1,
+     "title": "First!",
+     "body": "new body\nmore",
+     "labels": [
+      "bug"
+     ],
+     "milestone": "M07 Tracker",
+     "state": "open",
+     "state_reason": null,
+     "closed_at": null,
+     "url": "https://gitlab.com/fake/repo/-/issues/1",
+     "assignees": []
+    }
+   ],
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "issue",
+      "list",
+      "--output",
+      "json",
+      "--all",
+      "--milestone",
+      "M07 Tracker",
+      "--per-page",
+      "100"
+     ],
+     "stdin": "",
+     "stdout": "[{\"iid\": 1, \"title\": \"First!\", \"description\": \"new body\\nmore\", \"labels\": [\"bug\"], \"milestone\": {\"title\": \"M07 Tracker\", \"iid\": 1}, \"state\": \"opened\", \"web_url\": \"https://gitlab.com/fake/repo/-/issues/1\", \"closed_at\": null, \"assignees\": []}]\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "add_comment",
+   "args": {
+    "number": 1,
+    "body": "hello"
+   },
+   "result": 1,
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "api",
+      "-X",
+      "POST",
+      "projects/:id/issues/1/notes",
+      "-f",
+      "body=hello"
+     ],
+     "stdin": "",
+     "stdout": "{\"id\": 1, \"body\": \"hello\", \"author\": {\"username\": \"fake-user\"}, \"system\": false}\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "add_comment",
+   "args": {
+    "number": 1,
+    "body": "second\nline"
+   },
+   "result": 2,
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "api",
+      "-X",
+      "POST",
+      "projects/:id/issues/1/notes",
+      "-f",
+      "body=second\nline"
+     ],
+     "stdin": "",
+     "stdout": "{\"id\": 2, \"body\": \"second\\nline\", \"author\": {\"username\": \"fake-user\"}, \"system\": false}\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "comments",
+   "args": {
+    "number": 1
+   },
+   "result": [
+    {
+     "id": 1,
+     "body": "hello",
+     "author": "fake-user"
+    },
+    {
+     "id": 2,
+     "body": "second\nline",
+     "author": "fake-user"
+    }
+   ],
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "api",
+      "projects/:id/issues/1/notes?sort=asc&order_by=created_at",
+      "--paginate"
+     ],
+     "stdin": "",
+     "stdout": "[{\"id\": 1, \"body\": \"hello\", \"author\": {\"username\": \"fake-user\"}, \"system\": false}, {\"id\": 2, \"body\": \"second\\nline\", \"author\": {\"username\": \"fake-user\"}, \"system\": false}]\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "edit_comment",
+   "args": {
+    "number": 1,
+    "comment_id": 1,
+    "body": "edited"
+   },
+   "result": null,
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "api",
+      "-X",
+      "PUT",
+      "projects/:id/issues/1/notes/1",
+      "-f",
+      "body=edited"
+     ],
+     "stdin": "",
+     "stdout": "{\"id\": 1, \"body\": \"edited\", \"author\": {\"username\": \"fake-user\"}}\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "delete_comment",
+   "args": {
+    "number": 1,
+    "comment_id": 2
+   },
+   "result": null,
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "api",
+      "-X",
+      "DELETE",
+      "projects/:id/issues/1/notes/2"
+     ],
+     "stdin": "",
+     "stdout": "",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "comments",
+   "args": {
+    "number": 1
+   },
+   "result": [
+    {
+     "id": 1,
+     "body": "edited",
+     "author": "fake-user"
+    }
+   ],
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "api",
+      "projects/:id/issues/1/notes?sort=asc&order_by=created_at",
+      "--paginate"
+     ],
+     "stdin": "",
+     "stdout": "[{\"id\": 1, \"body\": \"edited\", \"author\": {\"username\": \"fake-user\"}, \"system\": false}]\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "get",
+   "args": {
+    "number": 1,
+    "comments": true
+   },
+   "result": {
+    "number": 1,
+    "title": "First!",
+    "body": "new body\nmore",
+    "labels": [
+     "bug"
+    ],
+    "milestone": "M07 Tracker",
+    "state": "open",
+    "state_reason": null,
+    "closed_at": null,
+    "url": "https://gitlab.com/fake/repo/-/issues/1",
+    "assignees": [],
+    "comments": [
+     {
+      "id": 1,
+      "body": "edited",
+      "author": "fake-user"
+     }
+    ]
+   },
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "issue",
+      "view",
+      "1",
+      "--output",
+      "json",
+      "--comments"
+     ],
+     "stdin": "",
+     "stdout": "{\"iid\": 1, \"title\": \"First!\", \"description\": \"new body\\nmore\", \"labels\": [\"bug\"], \"milestone\": {\"title\": \"M07 Tracker\", \"iid\": 1}, \"state\": \"opened\", \"web_url\": \"https://gitlab.com/fake/repo/-/issues/1\", \"closed_at\": null, \"assignees\": [], \"notes\": [{\"id\": 1, \"body\": \"edited\", \"author\": {\"username\": \"fake-user\"}}]}\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "get",
+   "args": {
+    "number": 99
+   },
+   "error": {
+    "code": 1,
+    "message": "issue #99 not found"
+   },
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "issue",
+      "view",
+      "99",
+      "--output",
+      "json"
+     ],
+     "stdin": "",
+     "stdout": "",
+     "stderr": "issue #99 not found\n",
+     "code": 1
+    }
+   ]
+  },
+  {
+   "op": "edit_comment",
+   "args": {
+    "number": 1,
+    "comment_id": 99,
+    "body": "gone"
+   },
+   "error": {
+    "code": 1,
+    "message": "404 Not found"
+   },
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "api",
+      "-X",
+      "PUT",
+      "projects/:id/issues/1/notes/99",
+      "-f",
+      "body=gone"
+     ],
+     "stdin": "",
+     "stdout": "",
+     "stderr": "404 Not found\n",
+     "code": 1
+    }
+   ]
+  },
+  {
+   "op": "assign_self",
+   "args": {
+    "number": 1
+   },
+   "result": null,
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "api",
+      "user",
+      "--paginate"
+     ],
+     "stdin": "",
+     "stdout": "{\"id\": 1, \"username\": \"fake-user\"}\n",
+     "stderr": "",
+     "code": 0
+    },
+    {
+     "name": "glab",
+     "argv": [
+      "issue",
+      "update",
+      "1",
+      "--assignee",
+      "+fake-user"
+     ],
+     "stdin": "",
+     "stdout": "https://gitlab.com/fake/repo/-/issues/1\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "assign_self",
+   "args": {
+    "number": 2
+   },
+   "result": null,
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "issue",
+      "update",
+      "2",
+      "--assignee",
+      "+fake-user"
+     ],
+     "stdin": "",
+     "stdout": "https://gitlab.com/fake/repo/-/issues/2\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "get",
+   "args": {
+    "number": 1
+   },
+   "result": {
+    "number": 1,
+    "title": "First!",
+    "body": "new body\nmore",
+    "labels": [
+     "bug"
+    ],
+    "milestone": "M07 Tracker",
+    "state": "open",
+    "state_reason": null,
+    "closed_at": null,
+    "url": "https://gitlab.com/fake/repo/-/issues/1",
+    "assignees": [
+     "fake-user"
+    ]
+   },
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "issue",
+      "view",
+      "1",
+      "--output",
+      "json"
+     ],
+     "stdin": "",
+     "stdout": "{\"iid\": 1, \"title\": \"First!\", \"description\": \"new body\\nmore\", \"labels\": [\"bug\"], \"milestone\": {\"title\": \"M07 Tracker\", \"iid\": 1}, \"state\": \"opened\", \"web_url\": \"https://gitlab.com/fake/repo/-/issues/1\", \"closed_at\": null, \"assignees\": [{\"username\": \"fake-user\"}]}\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "close",
+   "args": {
+    "number": 2,
+    "reason": "not_planned",
+    "comment": "duplicate"
+   },
+   "result": null,
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "issue",
+      "note",
+      "2",
+      "-m",
+      "duplicate"
+     ],
+     "stdin": "",
+     "stdout": "",
+     "stderr": "",
+     "code": 0
+    },
+    {
+     "name": "glab",
+     "argv": [
+      "issue",
+      "update",
+      "2",
+      "--label",
+      "not-planned"
+     ],
+     "stdin": "",
+     "stdout": "https://gitlab.com/fake/repo/-/issues/2\n",
+     "stderr": "",
+     "code": 0
+    },
+    {
+     "name": "glab",
+     "argv": [
+      "issue",
+      "close",
+      "2"
+     ],
+     "stdin": "",
+     "stdout": "",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "get",
+   "args": {
+    "number": 2
+   },
+   "result": {
+    "number": 2,
+    "title": "Second",
+    "body": "b2",
+    "labels": [
+     "not-planned"
+    ],
+    "milestone": null,
+    "state": "closed",
+    "state_reason": "not_planned",
+    "closed_at": "2026-10-02T12:34:00Z",
+    "url": "https://gitlab.com/fake/repo/-/issues/2",
+    "assignees": [
+     "fake-user"
+    ]
+   },
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "issue",
+      "view",
+      "2",
+      "--output",
+      "json"
+     ],
+     "stdin": "",
+     "stdout": "{\"iid\": 2, \"title\": \"Second\", \"description\": \"b2\", \"labels\": [\"not-planned\"], \"milestone\": null, \"state\": \"closed\", \"web_url\": \"https://gitlab.com/fake/repo/-/issues/2\", \"closed_at\": \"2026-10-02T12:34:00Z\", \"assignees\": [{\"username\": \"fake-user\"}]}\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "reopen",
+   "args": {
+    "number": 2
+   },
+   "result": null,
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "issue",
+      "reopen",
+      "2"
+     ],
+     "stdin": "",
+     "stdout": "",
+     "stderr": "",
+     "code": 0
+    },
+    {
+     "name": "glab",
+     "argv": [
+      "issue",
+      "update",
+      "2",
+      "--unlabel",
+      "not-planned"
+     ],
+     "stdin": "",
+     "stdout": "https://gitlab.com/fake/repo/-/issues/2\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "get",
+   "args": {
+    "number": 2
+   },
+   "result": {
+    "number": 2,
+    "title": "Second",
+    "body": "b2",
+    "labels": [],
+    "milestone": null,
+    "state": "open",
+    "state_reason": null,
+    "closed_at": null,
+    "url": "https://gitlab.com/fake/repo/-/issues/2",
+    "assignees": [
+     "fake-user"
+    ]
+   },
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "issue",
+      "view",
+      "2",
+      "--output",
+      "json"
+     ],
+     "stdin": "",
+     "stdout": "{\"iid\": 2, \"title\": \"Second\", \"description\": \"b2\", \"labels\": [], \"milestone\": null, \"state\": \"opened\", \"web_url\": \"https://gitlab.com/fake/repo/-/issues/2\", \"closed_at\": null, \"assignees\": [{\"username\": \"fake-user\"}]}\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "close",
+   "args": {
+    "number": 2
+   },
+   "result": null,
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "issue",
+      "close",
+      "2"
+     ],
+     "stdin": "",
+     "stdout": "",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "list",
+   "args": {
+    "state": "closed"
+   },
+   "result": [
+    {
+     "number": 2,
+     "title": "Second",
+     "body": "b2",
+     "labels": [],
+     "milestone": null,
+     "state": "closed",
+     "state_reason": "completed",
+     "closed_at": "2026-10-02T12:34:01Z",
+     "url": "https://gitlab.com/fake/repo/-/issues/2",
+     "assignees": [
+      "fake-user"
+     ]
+    }
+   ],
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "issue",
+      "list",
+      "--output",
+      "json",
+      "--closed",
+      "--per-page",
+      "100"
+     ],
+     "stdin": "",
+     "stdout": "[{\"iid\": 2, \"title\": \"Second\", \"description\": \"b2\", \"labels\": [], \"milestone\": null, \"state\": \"closed\", \"web_url\": \"https://gitlab.com/fake/repo/-/issues/2\", \"closed_at\": \"2026-10-02T12:34:01Z\", \"assignees\": [{\"username\": \"fake-user\"}]}]\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "list",
+   "args": {
+    "state": "all"
+   },
+   "result": [
+    {
+     "number": 2,
+     "title": "Second",
+     "body": "b2",
+     "labels": [],
+     "milestone": null,
+     "state": "closed",
+     "state_reason": "completed",
+     "closed_at": "2026-10-02T12:34:01Z",
+     "url": "https://gitlab.com/fake/repo/-/issues/2",
+     "assignees": [
+      "fake-user"
+     ]
+    },
+    {
+     "number": 1,
+     "title": "First!",
+     "body": "new body\nmore",
+     "labels": [
+      "bug"
+     ],
+     "milestone": "M07 Tracker",
+     "state": "open",
+     "state_reason": null,
+     "closed_at": null,
+     "url": "https://gitlab.com/fake/repo/-/issues/1",
+     "assignees": [
+      "fake-user"
+     ]
+    }
+   ],
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "issue",
+      "list",
+      "--output",
+      "json",
+      "--all",
+      "--per-page",
+      "100"
+     ],
+     "stdin": "",
+     "stdout": "[{\"iid\": 2, \"title\": \"Second\", \"description\": \"b2\", \"labels\": [], \"milestone\": null, \"state\": \"closed\", \"web_url\": \"https://gitlab.com/fake/repo/-/issues/2\", \"closed_at\": \"2026-10-02T12:34:01Z\", \"assignees\": [{\"username\": \"fake-user\"}]}, {\"iid\": 1, \"title\": \"First!\", \"description\": \"new body\\nmore\", \"labels\": [\"bug\"], \"milestone\": {\"title\": \"M07 Tracker\", \"iid\": 1}, \"state\": \"opened\", \"web_url\": \"https://gitlab.com/fake/repo/-/issues/1\", \"closed_at\": null, \"assignees\": [{\"username\": \"fake-user\"}]}]\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "call",
+   "args": {
+    "args": [
+     "mr",
+     "create",
+     "--title",
+     "Fix it",
+     "--description",
+     "Implements #1, fixes: #2",
+     "--source-branch",
+     "feat-1"
+    ]
+   },
+   "result": {
+    "stdout": "https://gitlab.com/fake/repo/-/merge_requests/1\n",
+    "stderr": "",
+    "code": 0
+   },
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "mr",
+      "create",
+      "--title",
+      "Fix it",
+      "--description",
+      "Implements #1, fixes: #2",
+      "--source-branch",
+      "feat-1"
+     ],
+     "stdin": "",
+     "stdout": "https://gitlab.com/fake/repo/-/merge_requests/1\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "call",
+   "args": {
+    "args": [
+     "mr",
+     "create",
+     "--title",
+     "Other",
+     "--description",
+     "nothing here",
+     "--source-branch",
+     "feat-2"
+    ]
+   },
+   "result": {
+    "stdout": "https://gitlab.com/fake/repo/-/merge_requests/2\n",
+    "stderr": "",
+    "code": 0
+   },
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "mr",
+      "create",
+      "--title",
+      "Other",
+      "--description",
+      "nothing here",
+      "--source-branch",
+      "feat-2"
+     ],
+     "stdin": "",
+     "stdout": "https://gitlab.com/fake/repo/-/merge_requests/2\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "call",
+   "args": {
+    "args": [
+     "issue",
+     "note",
+     "1",
+     "--message",
+     "via call"
+    ],
+    "stdin": "via call\nwith stdin"
+   },
+   "result": {
+    "stdout": "",
+    "stderr": "",
+    "code": 0
+   },
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "issue",
+      "note",
+      "1",
+      "--message",
+      "via call"
+     ],
+     "stdin": "",
+     "stdout": "",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "call",
+   "args": {
+    "args": [
+     "issue",
+     "list",
+     "--output",
+     "json",
+     "--all"
+    ]
+   },
+   "result": {
+    "stdout": "[{\"iid\": 2, \"title\": \"Second\", \"description\": \"b2\", \"labels\": [], \"milestone\": null, \"state\": \"closed\", \"web_url\": \"https://gitlab.com/fake/repo/-/issues/2\", \"closed_at\": \"2026-10-02T12:34:01Z\", \"assignees\": [{\"username\": \"fake-user\"}]}, {\"iid\": 1, \"title\": \"First!\", \"description\": \"new body\\nmore\", \"labels\": [\"bug\"], \"milestone\": {\"title\": \"M07 Tracker\", \"iid\": 1}, \"state\": \"opened\", \"web_url\": \"https://gitlab.com/fake/repo/-/issues/1\", \"closed_at\": null, \"assignees\": [{\"username\": \"fake-user\"}]}]\n",
+    "stderr": "",
+    "code": 0
+   },
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "issue",
+      "list",
+      "--output",
+      "json",
+      "--all",
+      "--per-page",
+      "100"
+     ],
+     "stdin": "",
+     "stdout": "[{\"iid\": 2, \"title\": \"Second\", \"description\": \"b2\", \"labels\": [], \"milestone\": null, \"state\": \"closed\", \"web_url\": \"https://gitlab.com/fake/repo/-/issues/2\", \"closed_at\": \"2026-10-02T12:34:01Z\", \"assignees\": [{\"username\": \"fake-user\"}]}, {\"iid\": 1, \"title\": \"First!\", \"description\": \"new body\\nmore\", \"labels\": [\"bug\"], \"milestone\": {\"title\": \"M07 Tracker\", \"iid\": 1}, \"state\": \"opened\", \"web_url\": \"https://gitlab.com/fake/repo/-/issues/1\", \"closed_at\": null, \"assignees\": [{\"username\": \"fake-user\"}]}]\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "call",
+   "args": {
+    "args": [
+     "issue",
+     "view",
+     "99"
+    ]
+   },
+   "result": {
+    "stdout": "",
+    "stderr": "issue #99 not found\n",
+    "code": 1
+   },
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "issue",
+      "view",
+      "99"
+     ],
+     "stdin": "",
+     "stdout": "",
+     "stderr": "issue #99 not found\n",
+     "code": 1
+    }
+   ]
+  },
+  {
+   "op": "open_prs",
+   "args": {},
+   "result": [
+    {
+     "number": 2,
+     "title": "Other",
+     "branch": "feat-2",
+     "url": "https://gitlab.com/fake/repo/-/merge_requests/2",
+     "body": "nothing here"
+    },
+    {
+     "number": 1,
+     "title": "Fix it",
+     "branch": "feat-1",
+     "url": "https://gitlab.com/fake/repo/-/merge_requests/1",
+     "body": "Implements #1, fixes: #2"
+    }
+   ],
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "mr",
+      "list",
+      "--output",
+      "json",
+      "--per-page",
+      "100"
+     ],
+     "stdin": "",
+     "stdout": "[{\"iid\": 2, \"title\": \"Other\", \"description\": \"nothing here\", \"source_branch\": \"feat-2\", \"target_branch\": \"main\", \"state\": \"opened\", \"web_url\": \"https://gitlab.com/fake/repo/-/merge_requests/2\"}, {\"iid\": 1, \"title\": \"Fix it\", \"description\": \"Implements #1, fixes: #2\", \"source_branch\": \"feat-1\", \"target_branch\": \"main\", \"state\": \"opened\", \"web_url\": \"https://gitlab.com/fake/repo/-/merge_requests/1\"}]\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "prs_closing",
+   "args": {
+    "number": 1
+   },
+   "result": [
+    {
+     "number": 1,
+     "title": "Fix it",
+     "branch": "feat-1",
+     "url": "https://gitlab.com/fake/repo/-/merge_requests/1",
+     "body": "Implements #1, fixes: #2"
+    }
+   ],
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "mr",
+      "list",
+      "--output",
+      "json",
+      "--per-page",
+      "100"
+     ],
+     "stdin": "",
+     "stdout": "[{\"iid\": 2, \"title\": \"Other\", \"description\": \"nothing here\", \"source_branch\": \"feat-2\", \"target_branch\": \"main\", \"state\": \"opened\", \"web_url\": \"https://gitlab.com/fake/repo/-/merge_requests/2\"}, {\"iid\": 1, \"title\": \"Fix it\", \"description\": \"Implements #1, fixes: #2\", \"source_branch\": \"feat-1\", \"target_branch\": \"main\", \"state\": \"opened\", \"web_url\": \"https://gitlab.com/fake/repo/-/merge_requests/1\"}]\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "prs_closing",
+   "args": {
+    "number": 2
+   },
+   "result": [
+    {
+     "number": 1,
+     "title": "Fix it",
+     "branch": "feat-1",
+     "url": "https://gitlab.com/fake/repo/-/merge_requests/1",
+     "body": "Implements #1, fixes: #2"
+    }
+   ],
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "mr",
+      "list",
+      "--output",
+      "json",
+      "--per-page",
+      "100"
+     ],
+     "stdin": "",
+     "stdout": "[{\"iid\": 2, \"title\": \"Other\", \"description\": \"nothing here\", \"source_branch\": \"feat-2\", \"target_branch\": \"main\", \"state\": \"opened\", \"web_url\": \"https://gitlab.com/fake/repo/-/merge_requests/2\"}, {\"iid\": 1, \"title\": \"Fix it\", \"description\": \"Implements #1, fixes: #2\", \"source_branch\": \"feat-1\", \"target_branch\": \"main\", \"state\": \"opened\", \"web_url\": \"https://gitlab.com/fake/repo/-/merge_requests/1\"}]\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "prs_closing",
+   "args": {
+    "number": 9
+   },
+   "result": [],
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "mr",
+      "list",
+      "--output",
+      "json",
+      "--per-page",
+      "100"
+     ],
+     "stdin": "",
+     "stdout": "[{\"iid\": 2, \"title\": \"Other\", \"description\": \"nothing here\", \"source_branch\": \"feat-2\", \"target_branch\": \"main\", \"state\": \"opened\", \"web_url\": \"https://gitlab.com/fake/repo/-/merge_requests/2\"}, {\"iid\": 1, \"title\": \"Fix it\", \"description\": \"Implements #1, fixes: #2\", \"source_branch\": \"feat-1\", \"target_branch\": \"main\", \"state\": \"opened\", \"web_url\": \"https://gitlab.com/fake/repo/-/merge_requests/1\"}]\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "pr_comment",
+   "args": {
+    "pr": 1,
+    "body": "lgtm\nmulti-line"
+   },
+   "result": null,
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "mr",
+      "note",
+      "1",
+      "--message",
+      "lgtm\nmulti-line"
+     ],
+     "stdin": "",
+     "stdout": "",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "pr_state",
+   "args": {
+    "pr": 1
+   },
+   "result": "open",
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "mr",
+      "view",
+      "1",
+      "--output",
+      "json"
+     ],
+     "stdin": "",
+     "stdout": "{\"iid\": 1, \"title\": \"Fix it\", \"description\": \"Implements #1, fixes: #2\", \"source_branch\": \"feat-1\", \"target_branch\": \"main\", \"state\": \"opened\", \"web_url\": \"https://gitlab.com/fake/repo/-/merge_requests/1\"}\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "pr_checkout",
+   "args": {
+    "pr": 2
+   },
+   "result": null,
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "mr",
+      "checkout",
+      "2"
+     ],
+     "stdin": "",
+     "stdout": "",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "pr_merge",
+   "args": {
+    "pr": 1
+   },
+   "result": "e1e993f27c91c738ad983b760bd6c82a583300af",
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "mr",
+      "merge",
+      "1",
+      "--yes",
+      "--remove-source-branch"
+     ],
+     "stdin": "",
+     "stdout": "",
+     "stderr": "",
+     "code": 0
+    },
+    {
+     "name": "glab",
+     "argv": [
+      "mr",
+      "view",
+      "1",
+      "--output",
+      "json"
+     ],
+     "stdin": "",
+     "stdout": "{\"iid\": 1, \"title\": \"Fix it\", \"description\": \"Implements #1, fixes: #2\", \"source_branch\": \"feat-1\", \"target_branch\": \"main\", \"state\": \"merged\", \"web_url\": \"https://gitlab.com/fake/repo/-/merge_requests/1\", \"merge_commit_sha\": \"e1e993f27c91c738ad983b760bd6c82a583300af\"}\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "pr_state",
+   "args": {
+    "pr": 1
+   },
+   "result": "merged",
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "mr",
+      "view",
+      "1",
+      "--output",
+      "json"
+     ],
+     "stdin": "",
+     "stdout": "{\"iid\": 1, \"title\": \"Fix it\", \"description\": \"Implements #1, fixes: #2\", \"source_branch\": \"feat-1\", \"target_branch\": \"main\", \"state\": \"merged\", \"web_url\": \"https://gitlab.com/fake/repo/-/merge_requests/1\", \"merge_commit_sha\": \"e1e993f27c91c738ad983b760bd6c82a583300af\"}\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "get",
+   "args": {
+    "number": 1
+   },
+   "result": {
+    "number": 1,
+    "title": "First!",
+    "body": "new body\nmore",
+    "labels": [
+     "bug"
+    ],
+    "milestone": "M07 Tracker",
+    "state": "closed",
+    "state_reason": "completed",
+    "closed_at": "2026-10-02T12:34:03Z",
+    "url": "https://gitlab.com/fake/repo/-/issues/1",
+    "assignees": [
+     "fake-user"
+    ]
+   },
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "issue",
+      "view",
+      "1",
+      "--output",
+      "json"
+     ],
+     "stdin": "",
+     "stdout": "{\"iid\": 1, \"title\": \"First!\", \"description\": \"new body\\nmore\", \"labels\": [\"bug\"], \"milestone\": {\"title\": \"M07 Tracker\", \"iid\": 1}, \"state\": \"closed\", \"web_url\": \"https://gitlab.com/fake/repo/-/issues/1\", \"closed_at\": \"2026-10-02T12:34:03Z\", \"assignees\": [{\"username\": \"fake-user\"}]}\n",
+     "stderr": "",
+     "code": 0
+    }
+   ]
+  },
+  {
+   "op": "pr_merge",
+   "args": {
+    "pr": 1
+   },
+   "error": {
+    "code": 1,
+    "message": "pull request is not open"
+   },
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "mr",
+      "merge",
+      "1",
+      "--yes",
+      "--remove-source-branch"
+     ],
+     "stdin": "",
+     "stdout": "",
+     "stderr": "pull request is not open\n",
+     "code": 1
+    }
+   ]
+  },
+  {
+   "op": "get",
+   "args": {
+    "number": 1
+   },
+   "env": {
+    "FAKE_TRACKER_FAIL": "view"
+   },
+   "error": {
+    "code": 1,
+    "message": "fake glab: simulated failure for: issue view 1 --output json"
+   },
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "issue",
+      "view",
+      "1",
+      "--output",
+      "json"
+     ],
+     "stdin": "",
+     "stdout": "",
+     "stderr": "fake glab: simulated failure for: issue view 1 --output json \n",
+     "code": 1
+    }
+   ]
+  },
+  {
+   "op": "get",
+   "args": {
+    "number": 1
+   },
+   "env": {
+    "FAKE_TRACKER_FAIL": "view",
+    "FAKE_TRACKER_FAIL_MSG": "secondary rate limit"
+   },
+   "error": {
+    "code": 4,
+    "message": "error: rota tracker call: gitlab secondary rate limit — stopped; wait several minutes before retrying"
+   },
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "issue",
+      "view",
+      "1",
+      "--output",
+      "json"
+     ],
+     "stdin": "",
+     "stdout": "",
+     "stderr": "fake glab: simulated failure for: issue view 1 --output json secondary rate limit\n",
+     "code": 1
+    }
+   ]
+  },
+  {
+   "op": "list",
+   "args": {},
+   "env": {
+    "FAKE_TRACKER_FAIL": "list",
+    "FAKE_TRACKER_FAIL_MSG": "API rate limit exceeded"
+   },
+   "error": {
+    "code": 4,
+    "message": "error: rota tracker call: gitlab rate limit — stopped after one retry"
+   },
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "issue",
+      "list",
+      "--output",
+      "json",
+      "--per-page",
+      "100"
+     ],
+     "stdin": "",
+     "stdout": "",
+     "stderr": "fake glab: simulated failure for: issue list --output json --per-page 100 API rate limit exceeded\n",
+     "code": 1
+    },
+    {
+     "name": "glab",
+     "argv": [
+      "issue",
+      "list",
+      "--output",
+      "json",
+      "--per-page",
+      "100"
+     ],
+     "stdin": "",
+     "stdout": "",
+     "stderr": "fake glab: simulated failure for: issue list --output json --per-page 100 API rate limit exceeded\n",
+     "code": 1
+    }
+   ]
+  },
+  {
+   "op": "get",
+   "args": {
+    "number": 1
+   },
+   "env": {
+    "FAKE_TRACKER_FAIL": "view",
+    "FAKE_TRACKER_FAIL_MSG": "run glab auth login"
+   },
+   "error": {
+    "code": 3,
+    "message": "error: rota tracker call: glab is not authenticated; run 'glab auth login'"
+   },
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "issue",
+      "view",
+      "1",
+      "--output",
+      "json"
+     ],
+     "stdin": "",
+     "stdout": "",
+     "stderr": "fake glab: simulated failure for: issue view 1 --output json run glab auth login\n",
+     "code": 1
+    }
+   ]
+  },
+  {
+   "op": "close",
+   "args": {
+    "number": 1,
+    "comment": "bye"
+   },
+   "env": {
+    "FAKE_TRACKER_FAIL": "close"
+   },
+   "error": {
+    "code": 1,
+    "message": "fake glab: simulated failure for: issue close 1"
+   },
+   "calls": [
+    {
+     "name": "glab",
+     "argv": [
+      "issue",
+      "note",
+      "1",
+      "-m",
+      "bye"
+     ],
+     "stdin": "",
+     "stdout": "",
+     "stderr": "",
+     "code": 0
+    },
+    {
+     "name": "glab",
+     "argv": [
+      "issue",
+      "close",
+      "1"
+     ],
+     "stdin": "",
+     "stdout": "",
+     "stderr": "fake glab: simulated failure for: issue close 1 \n",
+     "code": 1
+    }
+   ]
+  },
+  {
+   "op": "closed_numbers",
+   "args": {
+    "body": "Closes #1"
+   },
+   "result": [
+    1
+   ],
+   "calls": []
+  },
+  {
+   "op": "closed_numbers",
+   "args": {
+    "body": "fixes: #2, resolves  #3 and closed #1"
+   },
+   "result": [
+    2,
+    3,
+    1
+   ],
+   "calls": []
+  },
+  {
+   "op": "closed_numbers",
+   "args": {
+    "body": "prefixcloses #4 xfixes #5"
+   },
+   "result": [],
+   "calls": []
+  },
+  {
+   "op": "closed_numbers",
+   "args": {
+    "body": "CLOSED #6 Fixed\t#7 resolve #8"
+   },
+   "result": [
+    6,
+    7,
+    8
+   ],
+   "calls": []
+  },
+  {
+   "op": "closed_numbers",
+   "args": {
+    "body": "resolves#9 close # 10 close #11abc"
+   },
+   "result": [
+    11
+   ],
+   "calls": []
+  },
+  {
+   "op": "closed_numbers",
+   "args": {
+    "body": "implements #12, implemented: #13"
+   },
+   "result": [
+    12,
+    13
+   ],
+   "calls": []
+  },
+  {
+   "op": "closed_numbers",
+   "args": {
+    "body": "éfixes #14 fixes #15 closes　#16"
+   },
+   "result": [
+    15,
+    16
+   ],
+   "calls": []
+  },
+  {
+   "op": "closed_numbers",
+   "args": {
+    "body": ""
+   },
+   "result": [],
+   "calls": []
+  }
+ ]
+}

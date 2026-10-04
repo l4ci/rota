@@ -1,0 +1,1 @@
+{"inputs":{"files":{"config.json":"{\"work\": {\"dispatch\": \"tmux\"}, \"a\": [1]}\n"}},"outputs":"{\n  \"work\": {\n    \"dispatch\": \"tmux\"\n  },\n  \"a\": [\n    1\n  ]\n}"}

@@ -1,0 +1,1 @@
+{"inputs":{"args":["ship","pr","feat/x","--title","My title","--body-file","-","--items","F1,2"],"provider":"github","stdin":"Summary line","url":"https://github.com/fake/repo/pull/1"},"outputs":{"branch":"feat/x","changed":true,"items":["F1","2"],"number":1,"provider":"github","url":"https://github.com/fake/repo/pull/1"}}

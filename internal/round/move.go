@@ -1,0 +1,702 @@
+package round
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/escalation"
+	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/host"
+	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/roundcfg"
+	"github.com/l4ci/rota/internal/roundlease"
+	"github.com/l4ci/rota/internal/worker"
+)
+
+// C10 (#76): moving an issue that is already assigned. The tracker changes
+// first and the registry second, so a crash between them leaves a
+// claim-mismatch that reconcile reports; every step is skipped when already
+// done, so a repeated call finishes the rest.
+
+// Blocked reasons of return, transfer and reclaim (exit 4, `blockedBy`).
+const (
+	BlockNotYourSlot = "not your slot"
+	BlockSameSlot    = "same slot"
+	BlockHealthy     = "healthy"
+	BlockLiveAgent   = "live agent"
+)
+
+// Slot health, as reclaim reports it.
+const (
+	HealthDead    = "dead"
+	HealthStalled = "stalled"
+	HealthHealthy = "healthy"
+	HealthIdle    = "idle"
+)
+
+// HumanTarget is the `--to` value that hands an issue to the human.
+const HumanTarget = "human"
+
+// wrap maps what a step failed with onto the exit table: a missing item is 3,
+// a busy registry lock is 6, git, the host and the tracker are 5.
+func wrap(err error) error {
+	if err == nil {
+		return nil
+	}
+	var we *worker.Error
+	var blk *BlockedError
+	switch {
+	case errors.As(err, &we), errors.As(err, &blk):
+		return err
+	case errors.Is(err, backlog.ErrNotFound):
+		return &worker.Error{Exit: worker.ExitResolution, Message: err.Error()}
+	case errors.Is(err, fsio.ErrLockTimeout):
+		return &worker.Error{Exit: worker.ExitRetry, Message: err.Error()}
+	}
+	return &worker.Error{Exit: worker.ExitUnavailable, Message: err.Error()}
+}
+
+func registryRound(root string) int {
+	if v, ok := worker.LoadRegistry(root).Doc.Get("round"); ok {
+		return intOf(v)
+	}
+	return 0
+}
+
+// holdsLease: this process is the orchestrator the lease names.
+func (e Env) holdsLease(ctx context.Context, root string, pid int, getenv func(string) string) (bool, error) {
+	cd, err := e.commonDir(ctx, root)
+	if err != nil {
+		return false, err
+	}
+	le := e.leaseEnv()
+	lease, st, err := le.Read(cd)
+	if err != nil {
+		return false, err
+	}
+	holder := le.Discover(pid, getenv)
+	return (st == roundlease.Live || st == roundlease.Foreign) && holder.SameAs(lease, le.Host), nil
+}
+
+// slotIssue is the issue a slot holds, in the backend's spelling.
+func slotIssue(s *jsonx.Object) string {
+	return heldID(worker.Str(s, "task"), worker.Str(s, "branch"), worker.Str(s, "name"))
+}
+
+// freeSlot records a slot as idle and parked: no issue, no claim, no PR.
+func freeSlot(root, name string, clearHandle bool) error {
+	return mutateSlot(root, name, func(s *jsonx.Object) {
+		s.Set("task", nil)
+		s.Set("pr", nil)
+		s.Delete("claimId")
+		s.Set("state", "idle")
+		s.Set("branch", "park/"+name)
+		if clearHandle {
+			s.Set("handle", nil)
+		}
+	})
+}
+
+// handoff is the stand-in for D1's note: one comment on the issue, ending with
+// a marker C4's answer rule never reads as an answer.
+type handoff struct {
+	verb, from string
+	round      int
+	branch     string
+	head       string
+	salvaged   bool
+	reason     string
+	note       string
+}
+
+func (h handoff) marker() string { return fmt.Sprintf("<!-- rota:handoff %s@%d -->", h.from, h.round) }
+
+func (h handoff) body() string {
+	state := "committed"
+	if h.salvaged {
+		state += ", salvage commit"
+	}
+	head := h.head
+	if head == "" {
+		head = "(none)"
+	}
+	note := strings.TrimSpace(h.note)
+	if note == "" {
+		note = "(no note)"
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "**rota handoff** (%s, from %s)\n\n", h.verb, h.from)
+	fmt.Fprintf(&b, "Branch: `%s`\nHead: %s\nState: %s\nReason: %s\n\n", h.branch, head, state, strings.TrimSpace(h.reason))
+	fmt.Fprintf(&b, "Done and next:\n%s\n\n%s", note, h.marker())
+	return b.String()
+}
+
+// post adds the handoff comment unless the same one is already there. Comments
+// are posted as kind `feedback`, the kind assign uses for its own notes.
+func (h handoff) post(be Board, id string) (commentID string, posted bool, err error) {
+	body := h.body()
+	if cs, err := be.Comments(id, "feedback"); err == nil {
+		for _, c := range cs {
+			if strings.TrimSpace(c.Text) == strings.TrimSpace(body) {
+				return "", false, nil
+			}
+		}
+	}
+	commentID, err = be.AddComment(id, "feedback", body)
+	return commentID, err == nil, err
+}
+
+var reHandoffBranch = regexp.MustCompile("(?m)^Branch: `([^`]+)`$")
+
+// latestHandoffBranch is the branch named by the newest rota:handoff (or legacy
+// hv:handoff) comment on the issue, "" when there is none.
+func latestHandoffBranch(be Board, id string) string {
+	cs, err := be.Comments(id, "feedback")
+	if err != nil {
+		return ""
+	}
+	for i := len(cs) - 1; i >= 0; i-- {
+		if t := cs[i].Text; strings.Contains(t, "<!-- rota:handoff ") || strings.Contains(t, "<!-- hv:handoff ") {
+			if m := reHandoffBranch.FindStringSubmatch(cs[i].Text); m != nil {
+				return m[1]
+			}
+			return ""
+		}
+	}
+	return ""
+}
+
+// releaseClaims gives the slot's claim back: the registry's claimId when
+// known, and with sweep every open claim whose id starts `<slot>@` (the
+// registry may have lost it). A claim already gone is not an error.
+func releaseClaims(be Board, id, slot, claimID string, sweep bool) (bool, error) {
+	released := false
+	if claimID != "" {
+		ok, err := be.Release(id, claimID)
+		if err != nil {
+			return released, err
+		}
+		released = ok
+	}
+	for i := 0; sweep && i < 20; i++ {
+		c := openClaimWith(be, id, slot+"@")
+		if c == "" {
+			break
+		}
+		ok, err := be.Release(id, c)
+		if err != nil || !ok {
+			return released, err
+		}
+		released = true
+	}
+	return released, nil
+}
+
+// ---- return -----------------------------------------------------------------
+
+// ReturnOpts are the flags of `rota round return`.
+type ReturnOpts struct {
+	Slot, Reason string
+	Note         string // the text of --note-file
+	// InSlot: the caller's working directory is inside the slot's worktree, so
+	// the caller is the slot's own worker. Otherwise it must hold the lease.
+	InSlot    bool
+	HolderPID int
+	Getenv    func(string) string
+}
+
+// Returned is what Return did.
+type Returned struct {
+	Slot, Issue, Branch, Head string
+	Salvaged, Released        bool
+	CommentID                 string
+	Changed                   bool
+}
+
+// Return is the worker's verb: it parks the slot (the branch is pushed and the
+// worktree switched off it), posts the handoff comment, releases the claim,
+// clears the in-progress state and frees the slot. The branch stays and no PR
+// is closed.
+func (e Env) Return(ctx context.Context, root string, be Board, o ReturnOpts) (res Returned, err error) {
+	if strings.TrimSpace(o.Reason) == "" {
+		return res, usage("--reason is required")
+	}
+	s := worker.LoadRegistry(root).Slot(o.Slot)
+	if s == nil {
+		return res, &worker.Error{Exit: worker.ExitResolution, Message: fmt.Sprintf("slot %s is not in the pool", o.Slot)}
+	}
+	id := slotIssue(s)
+	if id == "" {
+		return res, &worker.Error{Exit: worker.ExitResolution, Message: fmt.Sprintf("slot %s holds no issue", o.Slot)}
+	}
+	res.Slot = o.Slot
+	if !o.InSlot {
+		ok, err := e.holdsLease(ctx, root, o.HolderPID, o.Getenv)
+		if err != nil {
+			return res, wrap(err)
+		}
+		if !ok {
+			return res, blocked(BlockNotYourSlot, "rota round return must run inside slot %s's worktree or hold the round lease", o.Slot)
+		}
+	}
+	it, err := be.Get(id)
+	if err != nil {
+		return res, wrap(err)
+	}
+	res.Issue = it.ID
+
+	p, err := e.Park(ctx, root, o.Slot, "return")
+	if err != nil {
+		return res, wrap(err)
+	}
+	res.Branch, res.Head, res.Salvaged = p.Branch, p.Head, p.Salvaged
+	rnd := registryRound(root)
+	h := handoff{verb: "return", from: o.Slot, round: rnd, branch: p.Branch, head: p.Head, salvaged: p.Salvaged, reason: o.Reason, note: o.Note}
+	cid, _, err := h.post(be, id)
+	if err != nil {
+		return res, wrap(err)
+	}
+	res.CommentID = cid
+
+	claimID := firstNonEmpty(worker.Str(s, "claimId"), o.Slot+"@"+strconv.Itoa(rnd))
+	if res.Released, err = releaseClaims(be, id, o.Slot, claimID, false); err != nil {
+		return res, wrap(err)
+	}
+	if _, err := be.SetState(id, "none"); err != nil {
+		return res, wrap(err)
+	}
+	if err := freeSlot(root, o.Slot, false); err != nil {
+		return res, wrap(err)
+	}
+	res.Changed = true
+	return res, nil
+}
+
+// ---- reclaim ----------------------------------------------------------------
+
+// SlotHealth is the fresh health of one slot.
+type SlotHealth struct {
+	Health string
+	Issue  string
+	// Alive: the host shows a live agent for the slot. Known is false when the
+	// host could not be asked, so liveness is unknown and read as alive.
+	Alive, Known bool
+	Stall        Stall
+}
+
+// Health computes a slot's health the way reconcile does, from the host's live
+// agents, the slot's activity and its escalations. idle: the slot holds no
+// issue. dead: the host agent is gone (a recorded handle with no agent, or
+// state dead). stalled: alive and nothing moved for StallMinutes. healthy: the
+// rest, including a slot waiting on an escalation.
+func (e Env) Health(ctx context.Context, root string, s *jsonx.Object, now time.Time) SlotHealth {
+	h := SlotHealth{Issue: slotIssue(s), Health: HealthIdle}
+	if h.Issue == "" {
+		return h
+	}
+	name, wt, tab := worker.Str(s, "name"), worker.Str(s, "worktree"), worker.Str(s, "handle")
+	if e.Snapshot != nil {
+		if agents, err := e.Snapshot(ctx); err == nil {
+			h.Known = true
+			h.Alive = matchAgent(agents, tab, wt) >= 0
+		}
+	}
+	if worker.Str(s, "state") == "dead" || (h.Known && !h.Alive && tab != "") {
+		h.Health = HealthDead
+		return h
+	}
+	waiting := false
+	for _, x := range escalation.Load(root) {
+		if x.Status == escalation.StatusPending && x.Slot == name {
+			waiting = true
+		}
+	}
+	h.Stall = e.Stalled(ctx, StallInput{
+		Worktree: wt, Base: firstNonEmpty(worker.Str(s, "base"), e.Base), Holds: true,
+		Alive: h.Alive || !h.Known, Escalated: waiting, ActiveAt: worker.Str(s, "activeAt"), Minutes: e.StallMinutes,
+	}, now)
+	h.Health = HealthHealthy
+	if h.Stall.Stalled {
+		h.Health = HealthStalled
+	}
+	return h
+}
+
+// ReclaimOpts are the flags of `rota round reclaim`.
+type ReclaimOpts struct {
+	Slot      string
+	Force     bool
+	Note      string
+	HolderPID int
+	Getenv    func(string) string
+}
+
+// Reclaimed is what Reclaim did.
+type Reclaimed struct {
+	Slot, Issue, Branch, Head string
+	Health                    string
+	Salvaged, Released        bool
+	Parked                    bool
+	Changed                   bool
+}
+
+// Reclaim is the orchestrator's verb for a slot that is dead or stalled: it
+// kills a live pane, parks the worktree, posts the handoff comment, releases
+// every claim of the slot, clears the issue's state and frees the slot with its
+// handle. It does not reassign.
+func (e Env) Reclaim(ctx context.Context, root string, be Board, o ReclaimOpts) (res Reclaimed, err error) {
+	s := worker.LoadRegistry(root).Slot(o.Slot)
+	if s == nil {
+		return res, &worker.Error{Exit: worker.ExitResolution, Message: fmt.Sprintf("slot %s is not in the pool", o.Slot)}
+	}
+	res.Slot = o.Slot
+	ok, err := e.holdsLease(ctx, root, o.HolderPID, o.Getenv)
+	if err != nil {
+		return res, wrap(err)
+	}
+	if !ok {
+		return res, blocked(BlockNoRound, "this process holds no round lease: run rota round start first")
+	}
+	now := time.Now
+	if e.Now != nil {
+		now = e.Now
+	}
+	h := e.Health(ctx, root, s, now())
+	res.Health, res.Issue = h.Health, h.Issue
+	if h.Health == HealthIdle {
+		return res, nil
+	}
+	if h.Health == HealthHealthy && !o.Force {
+		return res, blocked(BlockHealthy, "slot %s is healthy (an agent is working on #%s); --force reclaims it anyway", o.Slot, h.Issue)
+	}
+	reason := "forced"
+	switch h.Health {
+	case HealthDead:
+		reason = "dead"
+	case HealthStalled:
+		reason = fmt.Sprintf("stalled %d min", int(h.Stall.Idle.Minutes()))
+	}
+	// A live pane must be gone before its worktree moves under it.
+	if h.Health != HealthDead {
+		switch {
+		case e.HostName == host.Solo: // a subagent has no pane to close
+		case h.Known && !h.Alive: // provably gone
+		case !h.Known:
+			return res, blocked(BlockLiveAgent, "the host cannot be asked, so slot %s's agent cannot be proved gone; start the host or close its pane", o.Slot)
+		default:
+			if err := e.workerEnv().KillSlot(ctx, root, o.Slot); err != nil {
+				return res, wrap(err)
+			}
+		}
+	}
+	p, err := e.Park(ctx, root, o.Slot, "reclaim")
+	if err != nil {
+		return res, wrap(err)
+	}
+	res.Branch, res.Head, res.Salvaged, res.Parked = p.Branch, p.Head, p.Salvaged, p.Moved
+	rnd := registryRound(root)
+	hf := handoff{verb: "reclaim", from: o.Slot, round: rnd, branch: p.Branch, head: p.Head, salvaged: p.Salvaged, reason: "reclaimed, " + reason, note: o.Note}
+	if _, _, err := hf.post(be, h.Issue); err != nil {
+		return res, wrap(err)
+	}
+	if res.Released, err = releaseClaims(be, h.Issue, o.Slot, worker.Str(s, "claimId"), true); err != nil {
+		return res, wrap(err)
+	}
+	if _, err := be.SetState(h.Issue, "none"); err != nil {
+		return res, wrap(err)
+	}
+	if err := freeSlot(root, o.Slot, true); err != nil {
+		return res, wrap(err)
+	}
+	res.Changed = true
+	return res, nil
+}
+
+// ---- transfer ---------------------------------------------------------------
+
+// TransferOpts are the flags of `rota round transfer`.
+type TransferOpts struct {
+	Issue, To     string
+	Note          string // the text of --note-file
+	BodyFile      string // decisions already settled, passed verbatim; "" for none
+	AcceptOverlap bool
+	HolderPID     int
+	Settings      roundcfg.Settings
+	Getenv        func(string) string
+}
+
+// Transferred is what Transfer did.
+type Transferred struct {
+	Issue, From, To, Branch, Head string
+	Salvaged                      bool
+	ClaimID                       string
+	Dispatched, Changed           bool
+	// Host, Brief and Worktree are set under solo (C8) in place of a dispatch.
+	Host, Brief, Worktree string
+}
+
+// Transfer is the orchestrator's verb to move an issue from the slot holding it
+// to another slot, or to the human. To a slot: the sender is parked, the
+// handoff comment posted, the old claim released and a new one taken, the
+// pushed branch is checked out in the receiver's worktree and the receiver is
+// dispatched. To the human: no claim and nothing dispatched, the needs-human
+// label goes on. If the dispatch fails the claim and branch stay with the
+// receiver and the same call resumes it.
+func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts) (res Transferred, err error) {
+	set := o.Settings
+	toHuman := o.To == HumanTarget
+	if o.To == "" || (!toHuman && !contains(set.Roster, o.To)) {
+		return res, usage("--to must be %s or a roster slot (%s)", HumanTarget, strings.Join(set.Roster, ", "))
+	}
+	if o.BodyFile != "" {
+		if _, err := os.Stat(o.BodyFile); err != nil {
+			return res, usage("--body-file %s: %v", o.BodyFile, err)
+		}
+	}
+	it, err := be.Get(o.Issue)
+	if err != nil {
+		return res, wrap(err)
+	}
+	if it.Closed {
+		return res, &worker.Error{Exit: worker.ExitResolution, Message: fmt.Sprintf("%s is closed", o.Issue)}
+	}
+	id := it.ID
+	res.Issue, res.To = id, o.To
+	ok, err := e.holdsLease(ctx, root, o.HolderPID, o.Getenv)
+	if err != nil {
+		return res, wrap(err)
+	}
+	if !ok {
+		return res, blocked(BlockNoRound, "this process holds no round lease: run rota round start first")
+	}
+	rnd := registryRound(root)
+
+	// Who holds it. A receiver that already holds it and was never dispatched
+	// (idle, its new claim recorded) is a transfer left half done: resume it.
+	reg := worker.LoadRegistry(root)
+	var sender, receiver *jsonx.Object
+	for _, s := range reg.Slots() {
+		if slotIssue(s) != strings.ToUpper(id) {
+			continue
+		}
+		if worker.Str(s, "name") == o.To {
+			receiver = s
+		} else if sender == nil {
+			sender = s
+		}
+	}
+	resuming := receiver != nil && sender == nil && worker.Str(receiver, "state") == "idle" &&
+		worker.Str(receiver, "claimId") == o.To+"@"+strconv.Itoa(rnd)
+	switch {
+	case resuming:
+	case receiver != nil && sender == nil:
+		return res, blocked(BlockSameSlot, "slot %s already holds %s", o.To, id)
+	case sender == nil:
+		return res, &worker.Error{Exit: worker.ExitResolution, Message: fmt.Sprintf("no slot holds %s", id)}
+	}
+	if sender != nil {
+		res.From = worker.Str(sender, "name")
+	} else {
+		res.From = o.To
+	}
+
+	var to *jsonx.Object
+	if !toHuman {
+		if to = reg.Slot(o.To); to == nil {
+			return res, &worker.Error{Exit: worker.ExitResolution, Message: fmt.Sprintf("slot %s is not provisioned: run rota round start", o.To)}
+		}
+		if !resuming {
+			if h := slotIssue(to); h != "" {
+				return res, blocked(BlockSlotBusy, "slot %s holds %s", o.To, h)
+			}
+		}
+	} else if e.Forge == nil || it.Number == 0 {
+		return res, unavailable("handing %s to the human needs the issue tracker (the %s label); this project has none", id, firstNonEmpty(e.NeedsHuman, DefaultNeedsHuman))
+	}
+
+	// Checks before anything moves: the brief, the overlap, the receiver's guard.
+	var brief string
+	if !toHuman {
+		if brief, ok = briefPath(root, set, o.Getenv); !ok {
+			return res, blocked(BlockBriefMissing, "the worker contract (references/worker-contract.md) was not found; set round.brief")
+		}
+		if !resuming {
+			tracked := e.trackedFiles(ctx, root)
+			r, err := Assess(be, id, tracked, set.SharedPaths, e.InFlightItems(ctx, root, be, tracked, set.SharedPaths), o.AcceptOverlap)
+			if err != nil {
+				return res, wrap(err)
+			}
+			if ov := overlapCheck(r); ov != nil && !ov.OK {
+				blk := blocked(BlockOverlap, "%s overlaps work in flight: %s", id, ov.Name+" ("+strings.Join(ov.Detail, "; ")+")")
+				blk.Readiness = &r
+				return res, blk
+			}
+			if _, err := e.workerEnv().ResetTo(root, o.To, id, BranchName(o.To, id, it.Title), true); err != nil {
+				var we *worker.Error
+				if errors.As(err, &we) && we.Data != nil { // the reset guard's refusal
+					return res, blocked(BlockSlotBusy, "%s", we.Message)
+				}
+				return res, wrap(err)
+			}
+		}
+	}
+
+	var branch string
+	if resuming {
+		branch = worker.Str(receiver, "branch")
+		res.Branch = branch
+		res.Head = e.headLine(ctx, worker.Str(receiver, "worktree"), "HEAD")
+	} else {
+		from := res.From
+		p, err := e.Park(ctx, root, from, "transfer")
+		if err != nil {
+			return res, wrap(err)
+		}
+		res.Branch, res.Head, res.Salvaged = p.Branch, p.Head, p.Salvaged
+		branch = p.Branch
+		h := handoff{verb: "transfer", from: from, round: rnd, branch: p.Branch, head: p.Head, salvaged: p.Salvaged,
+			reason: "transferred to " + o.To, note: o.Note}
+		if _, _, err := h.post(be, id); err != nil {
+			return res, wrap(err)
+		}
+		oldClaim := firstNonEmpty(worker.Str(sender, "claimId"), from+"@"+strconv.Itoa(rnd))
+		if _, err := releaseClaims(be, id, from, oldClaim, false); err != nil {
+			return res, wrap(err)
+		}
+		if toHuman {
+			if _, err := be.SetState(id, "none"); err != nil {
+				return res, wrap(err)
+			}
+			if err := e.Forge.AddLabels(ctx, it.Number, []string{firstNonEmpty(e.NeedsHuman, DefaultNeedsHuman)}, true); err != nil {
+				return res, wrap(err)
+			}
+			if err := freeSlot(root, from, false); err != nil {
+				return res, wrap(err)
+			}
+			res.Changed = true
+			return res, nil
+		}
+		claimID := o.To + "@" + strconv.Itoa(rnd)
+		won, holder, err := be.Claim(id, claimID)
+		if err != nil {
+			return res, wrap(err)
+		}
+		if !won {
+			return res, blocked(BlockClaimed, "%s is claimed by %s", id, holder)
+		}
+		res.ClaimID = claimID
+		if err := freeSlot(root, from, false); err != nil {
+			return res, wrap(err)
+		}
+		if err := e.checkout(ctx, root, to, id, it.Title, &branch); err != nil {
+			return res, wrap(err)
+		}
+		res.Branch = branch
+		if err := mutateSlot(root, o.To, func(s *jsonx.Object) {
+			s.Set("task", id)
+			s.Set("branch", branch)
+			s.Set("claimId", claimID)
+		}); err != nil {
+			return res, wrap(err)
+		}
+		res.Changed = true
+	}
+	if resuming {
+		res.ClaimID = worker.Str(receiver, "claimId")
+	}
+
+	solo := isSolo(root)
+	if !solo && e.Accounts != nil && len(worker.Configured(root)) > 0 {
+		if _, err := e.pickAccount(ctx, root, o.To); err != nil {
+			return res, wrap(err)
+		}
+	}
+	decisions := ""
+	if o.BodyFile != "" {
+		b, _ := os.ReadFile(o.BodyFile)
+		decisions = string(b)
+	}
+	// A transferred worker starts on the default tier; a higher one is assign's.
+	kind, tier := roundcfg.KindClaude, o.Settings.Tier
+	model := o.Settings.Model(kind, tier)
+	text := pointerBrief(o.To, id, branch, brief, nil, decisions, tierBrief{Kind: kind, Tier: tier, Model: model, Default: tier, Table: o.Settings.Models[kind]})
+	text += fmt.Sprintf("\nThis issue was handed to you by %s. Read its latest rota:handoff comment first (it ends with a `<!-- rota:handoff %s@%d -->` marker), then continue from the pushed work on %s, already checked out in your worktree.\n",
+		res.From, res.From, rnd, branch)
+	if solo {
+		// No pane: mark the receiver busy and hand the brief back.
+		b, wt, err := e.soloHandOff(root, o.To, text, rnd)
+		if err != nil {
+			return res, wrap(err)
+		}
+		res.Host, res.Brief, res.Worktree = host.Solo, b, wt
+		res.Changed = true
+		return res, nil
+	}
+	tmp, err := os.CreateTemp("", "rota-round-brief-")
+	if err != nil {
+		return res, wrap(err)
+	}
+	defer os.Remove(tmp.Name())
+	tmp.WriteString(text)
+	tmp.Close()
+	if _, err := e.workerEnv().Dispatch(ctx, root, worker.DispatchOpts{Slot: o.To, BodyFile: tmp.Name(), Task: id, Round: &rnd, Branch: branch, Model: model}); err != nil {
+		// The claim and branch stay with the receiver; idle marks the transfer
+		// as not delivered, so the same call resumes it.
+		mutateSlot(root, o.To, func(s *jsonx.Object) { s.Set("state", "idle") })
+		return res, err
+	}
+	res.Dispatched, res.Changed = true, true
+	return res, nil
+}
+
+func overlapCheck(r Readiness) *Check {
+	for i := range r.Checks {
+		if r.Checks[i].Name == CheckOverlap {
+			return &r.Checks[i]
+		}
+	}
+	return nil
+}
+
+func (e Env) headLine(ctx context.Context, wt, ref string) string {
+	out, _, code := e.gitOut(ctx, wt, "log", "-1", "--abbrev=7", "--format=%h %s", ref, "--")
+	if code != 0 {
+		return ""
+	}
+	return out
+}
+
+// checkout puts the pushed work branch into the receiver's worktree: after the
+// reset guard's clean check, `git switch -C <branch> origin/<branch>`. With no
+// work branch to continue (the sender was parked already) it cuts the issue's
+// usual branch from the base instead.
+func (e Env) checkout(ctx context.Context, root string, to *jsonx.Object, id, title string, branch *string) error {
+	name, wt := worker.Str(to, "name"), worker.Str(to, "worktree")
+	if *branch == "" || strings.HasPrefix(*branch, "park/") || *branch == worker.Str(to, "base") {
+		*branch = BranchName(name, id, title)
+		_, err := e.workerEnv().ResetTo(root, name, id, *branch, false)
+		return err
+	}
+	if _, err := e.workerEnv().ResetTo(root, name, id, *branch, true); err != nil {
+		return err
+	}
+	if cur, _, _ := e.gitOut(ctx, wt, "symbolic-ref", "--short", "-q", "HEAD"); cur == *branch {
+		return nil
+	}
+	start := "origin/" + *branch
+	if _, _, code := e.gitOut(ctx, wt, "rev-parse", "--verify", "-q", "refs/remotes/"+start); code != 0 {
+		start = *branch
+	}
+	if _, errOut, code := e.gitOut(ctx, wt, "switch", "-q", "-C", *branch, start); code != 0 {
+		return unavailable("could not check out %s in %s: %s", *branch, filepath.Base(wt), errOut)
+	}
+	return nil
+}

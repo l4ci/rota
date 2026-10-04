@@ -1,0 +1,78 @@
+{
+  "inputs": {
+    "argv": [
+      "list",
+      "--json"
+    ],
+    "config": "{\"work\":{\"accounts\":[\n {\"name\":\"alpha\",\"configDir\":\"/acct/alpha\"},\n {\"name\":\"beta\",\"configDir\":\"/acct/beta\"},\n {\"name\":\"gamma\",\"configDir\":\"/acct/gamma\"},\n {\"name\":\"delta\",\"configDir\":\"/acct/delta\"},\n {\"name\":\"epsilon\",\"configDir\":\"/acct/epsilon\"},\n {\"name\":\"zeta\",\"configDir\":\"/acct/zeta\"}]}}",
+    "usage": {
+      "alpha": "{\"five_hour\":{\"utilization\":30,\"resets_at\":null},\"seven_day\":{\"utilization\":10.5,\"resets_at\":null}}",
+      "beta": "{\"five_hour\":{\"utilization\":100,\"resets_at\":\"2099-01-01T00:00:00.000000+00:00\"},\"seven_day\":{\"utilization\":5,\"resets_at\":null}}",
+      "delta": "{\"five_hour\":{\"utilization\":1,\"resets_at\":null},\"seven_day\":{\"utilization\":100,\"resets_at\":\"2099-01-01T00:00:00.000000+00:00\"},\"extra_usage\":{\"is_enabled\":true,\"spend_limit_reached\":true}}",
+      "epsilon": "{\"five_hour\":{\"utilization\":100,\"resets_at\":null},\"seven_day\":{\"utilization\":57.45,\"resets_at\":null}}",
+      "gamma": "{\"five_hour\":{\"utilization\":20,\"resets_at\":null},\"seven_day\":{\"utilization\":100,\"resets_at\":\"2099-01-01T00:00:00.000000+00:00\"},\"extra_usage\":{\"is_enabled\":true,\"spend_limit_reached\":false}}"
+    }
+  },
+  "outputs": [
+    {
+      "configDir": "/acct/alpha",
+      "fiveHour": 30,
+      "headroom": 70,
+      "name": "alpha",
+      "reason": "",
+      "resetsAt": null,
+      "sevenDay": 10.5,
+      "verdict": "free"
+    },
+    {
+      "configDir": "/acct/beta",
+      "fiveHour": 100,
+      "headroom": 0,
+      "name": "beta",
+      "reason": "",
+      "resetsAt": "2099-01-01T00:00:00+00:00",
+      "sevenDay": 5,
+      "verdict": "cooling"
+    },
+    {
+      "configDir": "/acct/gamma",
+      "fiveHour": 20,
+      "headroom": 80,
+      "name": "gamma",
+      "reason": "",
+      "resetsAt": null,
+      "sevenDay": 100,
+      "verdict": "free"
+    },
+    {
+      "configDir": "/acct/delta",
+      "fiveHour": 1,
+      "headroom": 0,
+      "name": "delta",
+      "reason": "",
+      "resetsAt": "2099-01-01T00:00:00+00:00",
+      "sevenDay": 100,
+      "verdict": "cooling"
+    },
+    {
+      "configDir": "/acct/epsilon",
+      "fiveHour": 100,
+      "headroom": 0,
+      "name": "epsilon",
+      "reason": "",
+      "resetsAt": null,
+      "sevenDay": 57.45,
+      "verdict": "free"
+    },
+    {
+      "configDir": "/acct/zeta",
+      "fiveHour": null,
+      "headroom": null,
+      "name": "zeta",
+      "reason": "no fixture",
+      "resetsAt": null,
+      "sevenDay": null,
+      "verdict": "unknown"
+    }
+  ]
+}

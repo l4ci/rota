@@ -1,0 +1,20 @@
+{
+  "inputs": {
+    "argv": [
+      "instructions",
+      "init"
+    ],
+    "fixture": "8c3df462def663b0dc89ef56f10e8fef7df5d13cedbd7e2934bfaebc54e9793f",
+    "stdin": ""
+  },
+  "outputs": {
+    "stdout": "created: AGENTS.md\ncreated: CLAUDE.md\n",
+    "stderr": "",
+    "rc": 0,
+    "changed": {
+      "../AGENTS.md": "# AGENTS.md\n",
+      "../CLAUDE.md": "# CLAUDE.md\n\nProject instructions live in AGENTS.md.\n\n@AGENTS.md\n"
+    },
+    "removed": []
+  }
+}

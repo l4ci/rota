@@ -1,0 +1,58 @@
+  You are lr2. Read /tmp/live211/src-fix/references/
+  worker-contract.md in full before anything else:
+  it is your standing contract.
+
+  Then read issue F01 and its whole thread yourself.
+  Dispute the ticket before implementing if it is
+  wrong, already decided or contradicts the code: say
+  so instead of building it.
+
+  Your branch is lr2/f01-add-a-hello-line-to; your
+  worktree is already on it.
+
+  Your tier is light (haiku).
+  Model tiers for your own subagents (claude): light =
+  haiku, standard = sonnet, heavy = opus. Follow the
+  tier rule in the contract.
+  Put Worker tier: light (haiku) in your PR body.
+
+  Decisions already settled (verbatim):
+
+  This is a live check of the round tooling in a
+  throwaway repo. Keep it minimal:
+  - Append the line hello from the 211 check to
+  NOTES.md and commit it on your branch.
+  - Do not push, do not run gh or glab, do not open a
+  PR (there is no forge), do not start subagents.
+  - Then reply with exactly one line: ROTA-DONE lr2
+  lr2/f01-add-a-hello-line-to
+
+● Reading the worker contract first.
+
+  Read 1 file
+
+● Now I need to read issue F01. Let me check the
+  hv-skills directory structure to find it.
+
+  Searched for 1 pattern, read 2 files, ran 1 shell
+  command
+
+● Update(NOTES.md)
+  ⎿  Added 2 lines
+      1  # Notes
+      2 +
+      3 +hello from the 211 check
+
+  Committed 30be308
+
+● ROTA-DONE lr2 lr2/f01-add-a-hello-line-to
+
+✻ Baked for 22s · done 3:52 PM
+
+───────────────────────────────────────────────────────
+❯
+───────────────────────────────────────────────────────
+  Haiku 4.5 on lr2/f01-add-a-hello-line-to | 44k / 2…
+  current: ○○○○○○○○○○ 7%  | weekly: ●●○○○○○○○○ 20%
+  resets 8:20pm           | resets Oct 9, 8:00pm
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← …

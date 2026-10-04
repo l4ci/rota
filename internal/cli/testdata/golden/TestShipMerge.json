@@ -1,0 +1,1 @@
+{"inputs":{"Name":"merge with worktree","Args":["ship","merge","rota/wt","--body-file","-"],"Stdin":"merge: wt branch\n\nbody\n","Code":0},"outputs":{"base":"main","branch":"rota/wt","changed":true,"sha":"f1ec259"}}

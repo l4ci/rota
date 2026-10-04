@@ -1,0 +1,20 @@
+{
+  "inputs": {
+    "argv": [
+      "instructions",
+      "init"
+    ],
+    "fixture": "9ea2ceb9b2eda53f068f3ea2cb85b09acf1e9637ef775da1f34890a0f686d4f5",
+    "stdin": ""
+  },
+  "outputs": {
+    "stdout": "created: AGENTS.md\nmoved: knowledge, decisions → AGENTS.md\nlinked: CLAUDE.md → @AGENTS.md\n",
+    "stderr": "",
+    "rc": 0,
+    "changed": {
+      "../AGENTS.md": "\u003c!-- rota-knowledge-start --\u003e\nK\n\u003c!-- rota-knowledge-end --\u003e\n\n\u003c!-- rota-decisions-start --\u003e\nD\n\u003c!-- rota-decisions-end --\u003e\n",
+      "../CLAUDE.md": "# Mine\n\nafter\n\n@AGENTS.md\n"
+    },
+    "removed": []
+  }
+}

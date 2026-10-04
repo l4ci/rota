@@ -1,0 +1,20 @@
+{
+  "inputs": {
+    "argv": [
+      "instructions",
+      "init"
+    ],
+    "fixture": "718059cde900cba51d7ebb71aa1a3d001a08dcbb0b3fcc77bb1229b3be236e7b",
+    "stdin": ""
+  },
+  "outputs": {
+    "stdout": "created: AGENTS.md\nlinked: CLAUDE.md → @AGENTS.md\n",
+    "stderr": "",
+    "rc": 0,
+    "changed": {
+      "../AGENTS.md": "# AGENTS.md\n",
+      "../CLAUDE.md": "# Mine\n\nhello\n\n@AGENTS.md\n"
+    },
+    "removed": []
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "inputs": {
+    "argv": [
+      "knowledge",
+      "contradiction",
+      "clear"
+    ],
+    "fixture": "8c3df462def663b0dc89ef56f10e8fef7df5d13cedbd7e2934bfaebc54e9793f",
+    "stdin": ""
+  },
+  "outputs": {
+    "stdout": "",
+    "stderr": "",
+    "rc": 0,
+    "changed": {
+      "knowledge-contradictions.json": "{\n  \"version\": 1,\n  \"pending\": []\n}\n",
+      "knowledge-contradictions.json.lock": ""
+    },
+    "removed": []
+  }
+}

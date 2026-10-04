@@ -1,0 +1,32 @@
+9 doc-deliverable mismatch(es) in .rota/plans/M03-B01.md:
+
+  - docs/api/auth.md
+      target repo: web
+      expected doc home ROOT/web/docs does not exist
+      suggested alternative: sibling sub-repo 'web-docs' exists at ROOT/web-docs
+  - docs/api/auth.md
+      target repo: api
+      expected doc home ROOT/api/docs does not exist
+  - docs/api/auth.md
+      target repo: ghost
+      sub-repo 'ghost' is not registered in .rota/repos.json
+  - web/docs/guide.md
+      target repo: web
+      expected doc home ROOT/web/docs does not exist
+      suggested alternative: sibling sub-repo 'web-docs' exists at ROOT/web-docs
+  - web/docs/guide.md
+      target repo: api
+      expected doc home ROOT/api/docs does not exist
+  - web/docs/guide.md
+      target repo: ghost
+      sub-repo 'ghost' is not registered in .rota/repos.json
+  - docs/ref.md
+      target repo: web
+      expected doc home ROOT/web/docs does not exist
+      suggested alternative: sibling sub-repo 'web-docs' exists at ROOT/web-docs
+  - docs/ref.md
+      target repo: api
+      expected doc home ROOT/api/docs does not exist
+  - docs/ref.md
+      target repo: ghost
+      sub-repo 'ghost' is not registered in .rota/repos.json

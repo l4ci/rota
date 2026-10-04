@@ -1,0 +1,19 @@
+{
+  "inputs": {
+    "argv": [
+      "glossary",
+      "import",
+      "--body-file",
+      "-"
+    ],
+    "fixture": "d98044fa4789553424872f374b0db31734a0e620e109f50e5e1f7461ac218e86",
+    "stdin": "A\t\t\t\n"
+  },
+  "outputs": {
+    "stdout": "",
+    "stderr": "error: manifest line 1: term and def are required (got term='A', def='')\n",
+    "rc": 2,
+    "changed": {},
+    "removed": []
+  }
+}

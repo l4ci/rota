@@ -1,0 +1,1 @@
+{"inputs":{"Name":"plain merge","Args":["ship","merge","rota/ok","--body-file","-"],"Stdin":"merge: ok","Code":0},"outputs":{"base":"main","branch":"rota/ok","changed":true,"sha":"11f19ee"}}

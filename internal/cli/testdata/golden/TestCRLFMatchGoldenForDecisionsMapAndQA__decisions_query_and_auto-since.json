@@ -1,0 +1,18 @@
+{
+  "inputs": {
+    "argv": [
+      "decisions",
+      "query",
+      "build"
+    ],
+    "fixture": "c0afeb16bf3601e21459bbe0780cba14417de641faa781c3ac3afbee99a94291",
+    "stdin": ""
+  },
+  "outputs": {
+    "stdout": "## Build\n\n\n### Gate first\n\n*Why.* Cheap.\n\n**Forbids.**\n- _(Unresolved — user must articulate)_\n\n**Permits.**\n- tests\n\n\u003c!-- [Auto:Loop] plan-2 2026-10-02 — review and articulate Forbids/Permits --\u003e\n\n### Never skip\n\n*Why.* Safety.\n\n**Forbids.**\n- _(Unresolved — user must articulate)_\n\n**Permits.**\n- _(Unresolved — user must articulate)_\n\n\u003c!-- [Auto:Loop] plan-3 2026-10-03 — review and articulate Forbids/Permits --\u003e\n",
+    "stderr": "",
+    "rc": 0,
+    "changed": {},
+    "removed": []
+  }
+}

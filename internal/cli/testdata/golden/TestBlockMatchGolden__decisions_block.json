@@ -1,0 +1,19 @@
+{
+  "inputs": {
+    "argv": [
+      "block",
+      "decisions"
+    ],
+    "fixture": "bc5f38691e04e2475ee4bb289a3dd5a116a44dcda25b68e0243c7d502a306312",
+    "stdin": ""
+  },
+  "outputs": {
+    "stdout": "appended\n",
+    "stderr": "",
+    "rc": 0,
+    "changed": {
+      "../AGENTS.md": "# Agents\n\n\u003c!-- rota-decisions-start --\u003e\n## Project Decisions\n\nHard boundaries live in `.rota/DECISIONS.md`. Consult them before acting on work that touches these topics:\n\n- Architecture\n\n\u003c!-- rota-decisions-end --\u003e\n"
+    },
+    "removed": []
+  }
+}

@@ -1,0 +1,492 @@
+{
+  "inputs": {
+    "cases": [
+      {
+        "body": "",
+        "broken": false,
+        "changed": false,
+        "checkOnly": true,
+        "files": null,
+        "mode": "",
+        "name": "a: stale on pushed refs even though local w1 merged main",
+        "noFiles": null,
+        "noVerify": false,
+        "pr": "https://github.com/o/r/pull/7",
+        "relays": "",
+        "verdict": "stale"
+      },
+      {
+        "body": "",
+        "broken": true,
+        "changed": false,
+        "checkOnly": true,
+        "files": null,
+        "mode": "",
+        "name": "b: a merge-base that dies is check-broke, not stale",
+        "noFiles": null,
+        "noVerify": false,
+        "pr": "https://github.com/o/r/pull/7",
+        "relays": "",
+        "verdict": "check-broke"
+      },
+      {
+        "body": "",
+        "broken": false,
+        "changed": false,
+        "checkOnly": true,
+        "files": null,
+        "mode": "",
+        "name": "b2: a failed fetch is check-broke",
+        "noFiles": null,
+        "noVerify": false,
+        "pr": "https://github.com/o/r/pull/7",
+        "relays": "",
+        "verdict": "check-broke"
+      },
+      {
+        "body": "",
+        "broken": false,
+        "changed": false,
+        "checkOnly": true,
+        "files": null,
+        "mode": "",
+        "name": "c: matching PR is fresh",
+        "noFiles": null,
+        "noVerify": false,
+        "pr": "https://github.com/o/r/pull/7",
+        "relays": "",
+        "verdict": "fresh"
+      },
+      {
+        "body": "",
+        "broken": false,
+        "changed": false,
+        "checkOnly": true,
+        "files": null,
+        "mode": "",
+        "name": "c: head sha moved",
+        "noFiles": null,
+        "noVerify": false,
+        "pr": "https://github.com/o/r/pull/7",
+        "relays": "",
+        "verdict": "pr-mismatch"
+      },
+      {
+        "body": "",
+        "broken": false,
+        "changed": false,
+        "checkOnly": true,
+        "files": null,
+        "mode": "",
+        "name": "c: stacked PR",
+        "noFiles": null,
+        "noVerify": false,
+        "pr": "https://github.com/o/r/pull/7",
+        "relays": "",
+        "verdict": "pr-mismatch"
+      },
+      {
+        "body": "",
+        "broken": false,
+        "changed": false,
+        "checkOnly": true,
+        "files": null,
+        "mode": "",
+        "name": "c: wrong head branch",
+        "noFiles": null,
+        "noVerify": false,
+        "pr": "https://github.com/o/r/pull/7",
+        "relays": "",
+        "verdict": "pr-mismatch"
+      },
+      {
+        "body": "",
+        "broken": false,
+        "changed": false,
+        "checkOnly": true,
+        "files": null,
+        "mode": "",
+        "name": "c: PR not open",
+        "noFiles": null,
+        "noVerify": false,
+        "pr": "https://github.com/o/r/pull/7",
+        "relays": "",
+        "verdict": "pr-mismatch"
+      },
+      {
+        "body": "",
+        "broken": false,
+        "changed": true,
+        "checkOnly": false,
+        "files": [
+          "work.txt"
+        ],
+        "mode": "",
+        "name": "d: github merge, verified on the merged tree",
+        "noFiles": null,
+        "noVerify": false,
+        "pr": "https://github.com/o/r/pull/7",
+        "relays": "",
+        "verdict": "pass"
+      },
+      {
+        "body": "",
+        "broken": false,
+        "changed": true,
+        "checkOnly": false,
+        "files": [
+          "work.txt"
+        ],
+        "mode": "",
+        "name": "d: no verify commands",
+        "noFiles": null,
+        "noVerify": false,
+        "pr": "https://github.com/o/r/pull/7",
+        "relays": "",
+        "verdict": "pass"
+      },
+      {
+        "body": "",
+        "broken": false,
+        "changed": true,
+        "checkOnly": false,
+        "files": [
+          "work.txt"
+        ],
+        "mode": "",
+        "name": "d: --no-verify",
+        "noFiles": null,
+        "noVerify": true,
+        "pr": "https://github.com/o/r/pull/7",
+        "relays": "",
+        "verdict": "pass"
+      },
+      {
+        "body": "",
+        "broken": false,
+        "changed": true,
+        "checkOnly": false,
+        "files": [
+          "work.txt"
+        ],
+        "mode": "",
+        "name": "d: verify fails after the merge landed",
+        "noFiles": null,
+        "noVerify": false,
+        "pr": "https://github.com/o/r/pull/7",
+        "relays": "",
+        "verdict": "verify-failed"
+      },
+      {
+        "body": "",
+        "broken": false,
+        "changed": false,
+        "checkOnly": false,
+        "files": null,
+        "mode": "noop",
+        "name": "e: merge that merged nothing",
+        "noFiles": [
+          "work.txt"
+        ],
+        "noVerify": false,
+        "pr": "https://gitlab.com/o/r/-/merge_requests/7",
+        "relays": "",
+        "verdict": "not-merged"
+      },
+      {
+        "body": "",
+        "broken": false,
+        "changed": false,
+        "checkOnly": false,
+        "files": null,
+        "mode": "elsewhere",
+        "name": "e: merge into another branch",
+        "noFiles": [
+          "work.txt"
+        ],
+        "noVerify": false,
+        "pr": "https://github.com/o/r/pull/7",
+        "relays": "",
+        "verdict": "not-on-base"
+      },
+      {
+        "body": "",
+        "broken": false,
+        "changed": false,
+        "checkOnly": false,
+        "files": null,
+        "mode": "fail",
+        "name": "e: refused merge shows the CLI output",
+        "noFiles": [
+          "work.txt"
+        ],
+        "noVerify": false,
+        "pr": "https://github.com/o/r/pull/7",
+        "relays": "",
+        "verdict": "merge-failed"
+      },
+      {
+        "body": "",
+        "broken": false,
+        "changed": false,
+        "checkOnly": false,
+        "files": null,
+        "mode": "race",
+        "name": "e: a push after the check is refused by the pin",
+        "noFiles": [
+          "work.txt"
+        ],
+        "noVerify": false,
+        "pr": "https://github.com/o/r/pull/7",
+        "relays": "",
+        "verdict": "merge-failed"
+      },
+      {
+        "body": "",
+        "broken": false,
+        "changed": true,
+        "checkOnly": false,
+        "files": [
+          "work.txt"
+        ],
+        "mode": "squash",
+        "name": "f: gitlab squash falls back to squash_commit_sha",
+        "noFiles": null,
+        "noVerify": false,
+        "pr": "https://gitlab.com/o/r/-/merge_requests/7",
+        "relays": "",
+        "verdict": "pass"
+      },
+      {
+        "body": "",
+        "broken": false,
+        "changed": true,
+        "checkOnly": false,
+        "files": [
+          "work.txt"
+        ],
+        "mode": "ff",
+        "name": "f: gitlab fast-forward merge has no merge commit",
+        "noFiles": null,
+        "noVerify": false,
+        "pr": "https://gitlab.com/o/r/-/merge_requests/7",
+        "relays": "",
+        "verdict": "pass"
+      },
+      {
+        "body": "",
+        "broken": false,
+        "changed": false,
+        "checkOnly": true,
+        "files": null,
+        "mode": "",
+        "name": "f2: gitlab provenance reads the MR description",
+        "noFiles": null,
+        "noVerify": false,
+        "pr": "https://gitlab.com/o/r/-/merge_requests/7",
+        "relays": "",
+        "verdict": "provenance-fail"
+      },
+      {
+        "body": "",
+        "broken": false,
+        "changed": false,
+        "checkOnly": false,
+        "files": null,
+        "mode": "",
+        "name": "g: PR without an origin remote is refused, never merged locally",
+        "noFiles": [
+          "work.txt"
+        ],
+        "noVerify": false,
+        "pr": "https://github.com/o/r/pull/7",
+        "relays": "",
+        "verdict": "check-broke"
+      },
+      {
+        "body": "",
+        "broken": false,
+        "changed": true,
+        "checkOnly": false,
+        "files": [
+          "work.txt"
+        ],
+        "mode": "",
+        "name": "h: local merge without a PR",
+        "noFiles": null,
+        "noVerify": false,
+        "pr": "",
+        "relays": "",
+        "verdict": "pass"
+      },
+      {
+        "body": "",
+        "broken": false,
+        "changed": false,
+        "checkOnly": true,
+        "files": null,
+        "mode": "",
+        "name": "h: no PR means no provenance to read",
+        "noFiles": null,
+        "noVerify": false,
+        "pr": "",
+        "relays": "",
+        "verdict": "fresh"
+      },
+      {
+        "body": "",
+        "broken": false,
+        "changed": true,
+        "checkOnly": false,
+        "files": null,
+        "mode": "",
+        "name": "i: merged on origin but local base diverged",
+        "noFiles": null,
+        "noVerify": false,
+        "pr": "https://github.com/o/r/pull/7",
+        "relays": "",
+        "verdict": "merged-remotely"
+      }
+    ]
+  },
+  "outputs": {
+    "a: stale on pushed refs even though local w1 merged main": {
+      "Exit": 3,
+      "Origin": "main moves\nseed",
+      "Local": "seed",
+      "Forge": ""
+    },
+    "b2: a failed fetch is check-broke": {
+      "Exit": 5,
+      "Origin": "seed",
+      "Local": "seed",
+      "Forge": ""
+    },
+    "b: a merge-base that dies is check-broke, not stale": {
+      "Exit": 5,
+      "Origin": "seed",
+      "Local": "seed",
+      "Forge": ""
+    },
+    "c: PR not open": {
+      "Exit": 3,
+      "Origin": "seed",
+      "Local": "seed",
+      "Forge": "gh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\n"
+    },
+    "c: head sha moved": {
+      "Exit": 3,
+      "Origin": "seed",
+      "Local": "seed",
+      "Forge": "gh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\n"
+    },
+    "c: matching PR is fresh": {
+      "Exit": 0,
+      "Origin": "seed",
+      "Local": "seed",
+      "Forge": "gh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\ngh pr view https://github.com/o/r/pull/7 --json body -q .body\n"
+    },
+    "c: stacked PR": {
+      "Exit": 3,
+      "Origin": "seed",
+      "Local": "seed",
+      "Forge": "gh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\n"
+    },
+    "c: wrong head branch": {
+      "Exit": 3,
+      "Origin": "seed",
+      "Local": "seed",
+      "Forge": "gh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\n"
+    },
+    "d: --no-verify": {
+      "Exit": 0,
+      "Origin": "merge pr\nseed\nwork",
+      "Local": "merge pr\nseed\nwork",
+      "Forge": "gh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\ngh pr view https://github.com/o/r/pull/7 --json body -q .body\ngh pr merge 7 --merge --match-head-commit SHA\ngh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\n"
+    },
+    "d: github merge, verified on the merged tree": {
+      "Exit": 0,
+      "Origin": "merge pr\nseed\nwork",
+      "Local": "merge pr\nseed\nwork",
+      "Forge": "gh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\ngh pr view https://github.com/o/r/pull/7 --json body -q .body\ngh pr merge 7 --merge --match-head-commit SHA\ngh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\n"
+    },
+    "d: no verify commands": {
+      "Exit": 0,
+      "Origin": "merge pr\nseed\nwork",
+      "Local": "merge pr\nseed\nwork",
+      "Forge": "gh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\ngh pr view https://github.com/o/r/pull/7 --json body -q .body\ngh pr merge 7 --merge --match-head-commit SHA\ngh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\n"
+    },
+    "d: verify fails after the merge landed": {
+      "Exit": 4,
+      "Origin": "merge pr\nseed\nwork",
+      "Local": "merge pr\nseed\nwork",
+      "Forge": "gh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\ngh pr view https://github.com/o/r/pull/7 --json body -q .body\ngh pr merge 7 --merge --match-head-commit SHA\ngh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\n"
+    },
+    "e: a push after the check is refused by the pin": {
+      "Exit": 3,
+      "Origin": "seed",
+      "Local": "seed",
+      "Forge": "gh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\ngh pr view https://github.com/o/r/pull/7 --json body -q .body\ngh pr merge 7 --merge --match-head-commit SHA\n"
+    },
+    "e: merge into another branch": {
+      "Exit": 4,
+      "Origin": "seed",
+      "Local": "seed",
+      "Forge": "gh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\ngh pr view https://github.com/o/r/pull/7 --json body -q .body\ngh pr merge 7 --merge --match-head-commit SHA\ngh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\n"
+    },
+    "e: merge that merged nothing": {
+      "Exit": 4,
+      "Origin": "seed",
+      "Local": "seed",
+      "Forge": "glab api projects/:fullpath/merge_requests/7 --paginate\nglab api projects/:fullpath/merge_requests/7 --paginate\nglab mr merge 7 -y --auto-merge=false --sha SHA\nglab api projects/:fullpath/merge_requests/7 --paginate\nglab api projects/:fullpath/merge_requests/7 --paginate\nglab api projects/:fullpath/merge_requests/7 --paginate\nglab api projects/:fullpath/merge_requests/7 --paginate\nglab api projects/:fullpath/merge_requests/7 --paginate\n"
+    },
+    "e: refused merge shows the CLI output": {
+      "Exit": 3,
+      "Origin": "seed",
+      "Local": "seed",
+      "Forge": "gh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\ngh pr view https://github.com/o/r/pull/7 --json body -q .body\ngh pr merge 7 --merge --match-head-commit SHA\n"
+    },
+    "f2: gitlab provenance reads the MR description": {
+      "Exit": 4,
+      "Origin": "seed",
+      "Local": "seed",
+      "Forge": "glab api projects/:fullpath/merge_requests/7 --paginate\nglab api projects/:fullpath/merge_requests/7 --paginate\n"
+    },
+    "f: gitlab fast-forward merge has no merge commit": {
+      "Exit": 0,
+      "Origin": "seed\nwork",
+      "Local": "seed\nwork",
+      "Forge": "glab api projects/:fullpath/merge_requests/7 --paginate\nglab api projects/:fullpath/merge_requests/7 --paginate\nglab mr merge 7 -y --auto-merge=false --sha SHA\nglab api projects/:fullpath/merge_requests/7 --paginate\nglab api projects/:fullpath/merge_requests/7 --paginate\nglab api projects/:fullpath/merge_requests/7 --paginate\nglab api projects/:fullpath/merge_requests/7 --paginate\nglab api projects/:fullpath/merge_requests/7 --paginate\n"
+    },
+    "f: gitlab squash falls back to squash_commit_sha": {
+      "Exit": 0,
+      "Origin": "merge pr\nseed\nwork",
+      "Local": "merge pr\nseed\nwork",
+      "Forge": "glab api projects/:fullpath/merge_requests/7 --paginate\nglab api projects/:fullpath/merge_requests/7 --paginate\nglab mr merge 7 -y --auto-merge=false --sha SHA\nglab api projects/:fullpath/merge_requests/7 --paginate\n"
+    },
+    "g: PR without an origin remote is refused, never merged locally": {
+      "Exit": 5,
+      "Origin": "seed",
+      "Local": "seed",
+      "Forge": ""
+    },
+    "h: local merge without a PR": {
+      "Exit": 0,
+      "Origin": "seed",
+      "Local": "merge: w1 into main\nseed\nwork",
+      "Forge": ""
+    },
+    "h: no PR means no provenance to read": {
+      "Exit": 0,
+      "Origin": "seed",
+      "Local": "seed",
+      "Forge": ""
+    },
+    "i: merged on origin but local base diverged": {
+      "Exit": 6,
+      "Origin": "merge pr\nseed\nwork",
+      "Local": "local only commit\nseed",
+      "Forge": "gh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\ngh pr view https://github.com/o/r/pull/7 --json body -q .body\ngh pr merge 7 --merge --match-head-commit SHA\ngh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\n"
+    }
+  }
+}

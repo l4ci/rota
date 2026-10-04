@@ -1,0 +1,19 @@
+{
+  "inputs": {
+    "argv": [
+      "knowledge",
+      "query",
+      "--include-deprecated",
+      "Architecture"
+    ],
+    "fixture": "8c3df462def663b0dc89ef56f10e8fef7df5d13cedbd7e2934bfaebc54e9793f",
+    "stdin": ""
+  },
+  "outputs": {
+    "stdout": "## Architecture\n\n\n- **Alpha rule** — Keep modules small. \u003c!-- 2026-01-01 --\u003e\n- **Beta rule** — Prefer files. (provisional) \u003c!-- 2026-01-02 --\u003e\n- **Old rule** — Retired. \u003c!-- 2026-01-03 --\u003e\n",
+    "stderr": "",
+    "rc": 0,
+    "changed": {},
+    "removed": []
+  }
+}

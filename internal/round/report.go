@@ -1,0 +1,79 @@
+package round
+
+import (
+	"fmt"
+	"regexp"
+	"strings"
+
+	"github.com/l4ci/rota/internal/host"
+	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/worker"
+)
+
+// ReportStates are the states `round report` accepts (C8). busy is not one:
+// only assign sets it, when it hands the slot a brief.
+var ReportStates = []string{"done", "blocked", "idle", "dead", "limited"}
+
+var rePRNumberArg = regexp.MustCompile(`^#?\d+$`)
+
+// ReportOpts are the flags of `rota round report`.
+type ReportOpts struct {
+	Slot, State, Evidence, PR string
+}
+
+// Reported is what ReportSlot did. Evidence is echoed, never stored.
+type Reported struct {
+	Slot, State, Previous, PR, Evidence string
+	Changed                             bool
+}
+
+// ReportSlot records what a solo worker's result said, writing the two fields
+// a pane poll writes: state (lowercase) and pr. A second writer beside a
+// host's poll would race it, so any other host refuses. Re-reporting the same
+// state and PR changes nothing.
+func ReportSlot(root string, o ReportOpts) (Reported, error) {
+	res := Reported{Slot: o.Slot, Evidence: o.Evidence}
+	state := strings.ToLower(strings.TrimSpace(o.State))
+	if !contains(ReportStates, state) {
+		return res, usage("--state must be one of %s", strings.Join(ReportStates, ", "))
+	}
+	res.State = state
+	pr := strings.TrimSpace(o.PR)
+	if pr != "" && !worker.IsPRURL(pr) && !rePRNumberArg.MatchString(pr) {
+		return res, usage("--pr must be a PR or MR URL or a number, got %q", o.PR)
+	}
+	res.PR = pr
+	switch h := worker.RegistryHost(root); h {
+	case host.Solo:
+	case "":
+		return res, &worker.Error{Exit: worker.ExitUsage, Message: "no round host is recorded: run rota round start first",
+			Hint: "round report is for solo rounds; under herdr or tmux, rota worker poll records the state"}
+	default:
+		return res, &worker.Error{Exit: worker.ExitUsage, Message: fmt.Sprintf("the round host is %s, not solo: the pane is the truth", h),
+			Hint: "rota worker poll records a pane's state; round report would race it"}
+	}
+	found := false
+	err := worker.Update(root, slotsDefault(), func(doc *jsonx.Object) {
+		s := (worker.Registry{Doc: doc}).Slot(o.Slot)
+		if s == nil {
+			return
+		}
+		found = true
+		res.Previous = worker.Str(s, "state")
+		if res.Previous != state {
+			s.Set("state", state)
+			res.Changed = true
+		}
+		if pr != "" && worker.Str(s, "pr") != pr {
+			s.Set("pr", pr)
+			res.Changed = true
+		}
+	})
+	if err != nil {
+		return res, err
+	}
+	if !found {
+		return res, &worker.Error{Exit: worker.ExitResolution, Message: fmt.Sprintf("slot '%s' is not in the pool", o.Slot)}
+	}
+	return res, nil
+}

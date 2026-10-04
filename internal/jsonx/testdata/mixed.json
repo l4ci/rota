@@ -1,0 +1,4 @@
+{"zeta": 1, "alpha": {"nested": [1, 2.5, -0.0, 1e16, 1e15, 0.0001, 0.00001, 1.50, 123456789012345678901234567890],
+ "empty_obj": {}, "empty_arr": [], "null": null, "t": true, "f": false},
+ "text": "café ✓ 😀 \"q\" \\ / <&> \u0001 \t\n\r\b\f \u007f",
+ "dup": "first", "list": [{"b": 1, "a": 2}, [], [[]]], "dup": "last", "neg": -12, "zero": -0}

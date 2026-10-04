@@ -1,0 +1,19 @@
+{
+  "inputs": {
+    "argv": [
+      "glossary",
+      "import",
+      "--body-file",
+      "-"
+    ],
+    "fixture": "d98044fa4789553424872f374b0db31734a0e620e109f50e5e1f7461ac218e86",
+    "stdin": "A\td\tx\t\nB\td\tX\t\n"
+  },
+  "outputs": {
+    "stdout": "",
+    "stderr": "error: batch alias collisions — refusing entire batch:\n  line 2: alias 'X' on 'B' collides with 'A' on line 1 (intra-batch)\n",
+    "rc": 3,
+    "changed": {},
+    "removed": []
+  }
+}

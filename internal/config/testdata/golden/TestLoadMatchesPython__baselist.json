@@ -1,0 +1,1 @@
+{"inputs":{"files":{"config.json":"[1, 2]\n","config.local.json":"{\"a\": 1}\n"}},"outputs":"{\n  \"a\": 1\n}"}

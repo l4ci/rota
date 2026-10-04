@@ -1,0 +1,22 @@
+{
+  "inputs": {
+    "argv": [
+      "glossary",
+      "write",
+      "Newbie",
+      "--def",
+      "d",
+      "--alias",
+      "agent"
+    ],
+    "fixture": "d98044fa4789553424872f374b0db31734a0e620e109f50e5e1f7461ac218e86",
+    "stdin": ""
+  },
+  "outputs": {
+    "stdout": "",
+    "stderr": "error: alias 'agent' is already an alias of term 'Worker' — refuse to write\n",
+    "rc": 3,
+    "changed": {},
+    "removed": []
+  }
+}

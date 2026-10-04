@@ -1,0 +1,1 @@
+{"inputs":{"files":{"config.local.json":"{\"work\": {\"dispatch\": \"herdr\"}}\n"}},"outputs":"{\n  \"work\": {\n    \"dispatch\": \"herdr\"\n  }\n}"}

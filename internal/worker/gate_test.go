@@ -1,0 +1,615 @@
+package worker
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"regexp"
+	"sort"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/l4ci/rota/internal/pytest"
+	"github.com/l4ci/rota/internal/tracker"
+)
+
+// The gate tests rebuild smoke section 68's world: a bare origin, a gate
+// checkout on main, a worker clone with a pushed branch w1, and a fake forge
+// (test/fakes/fake_forge.py) that can lie the ways a real one does. Each case
+// runs the Go port and compares the outcome with what the retired shell gate
+// produced, frozen under testdata/golden. The fake forge only talks to the
+// local bare origin.
+
+const (
+	ghURL = "https://github.com/o/r/pull/7"
+	glURL = "https://gitlab.com/o/r/-/merge_requests/7"
+)
+
+var shaRe = regexp.MustCompile(`[0-9a-f]{40}`)
+
+type world struct {
+	t       *testing.T
+	dir     string // the gate checkout
+	origin  string
+	worker  string
+	forgeDB string
+	log     string
+	mode    string
+}
+
+func gitq(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	return sh(t, dir, "git", append([]string{"-c", "user.name=t", "-c", "user.email=t@t"}, args...)...)
+}
+
+// newWorld is gt_case: pr is the recorded PR (URL), "" for none.
+func newWorld(t *testing.T, pr string) *world {
+	t.Helper()
+	base, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := &world{t: t, dir: filepath.Join(base, "gate"), origin: filepath.Join(base, "origin.git"), worker: filepath.Join(base, "worker"),
+		forgeDB: filepath.Join(base, "forge.json"), log: filepath.Join(base, "forge.log"), mode: "ok"}
+	sh(t, base, "git", "init", "-q", "--bare", "-b", "main", w.origin)
+	sh(t, base, "git", "clone", "-q", w.origin, w.dir)
+	gitq(t, w.dir, "checkout", "-q", "-B", "main")
+	os.WriteFile(filepath.Join(w.dir, "seed.txt"), []byte("seed\n"), 0o644)
+	gitq(t, w.dir, "add", "seed.txt")
+	gitq(t, w.dir, "commit", "-q", "-m", "seed")
+	gitq(t, w.dir, "push", "-q", "origin", "main")
+	sh(t, base, "git", "clone", "-q", w.origin, w.worker)
+	gitq(t, w.worker, "checkout", "-q", "-b", "w1")
+	os.WriteFile(filepath.Join(w.worker, "work.txt"), []byte("work\n"), 0o644)
+	gitq(t, w.worker, "add", "work.txt")
+	gitq(t, w.worker, "commit", "-q", "-m", "work")
+	gitq(t, w.worker, "push", "-q", "origin", "w1")
+	os.MkdirAll(filepath.Join(w.dir, ".rota"), 0o755)
+	w.setConfig(`{"refactor":{"verifyCommands":[]}}`)
+	w.setSlot(pr, "")
+	os.WriteFile(w.log, nil, 0o644)
+	w.forge("origin", w.origin)
+	w.forge("head", "w1")
+	w.forge("sha", gitq(t, w.worker, "rev-parse", "HEAD"))
+	w.forge("base", "main")
+	w.forge("state", "OPEN")
+	w.forge("merge", "")
+	w.forge("body", "")
+	return w
+}
+
+func (w *world) setConfig(cfg string) {
+	os.WriteFile(filepath.Join(w.dir, ".rota", "config.json"), []byte(cfg), 0o644)
+}
+
+// setSlot writes workers.json with slot w1 on branch w1 and the given PR and
+// relays (a JSON array, "" for none).
+func (w *world) setSlot(pr, relays string) {
+	slot := fmt.Sprintf(`{"name":"w1","branch":"w1","pr":%q`, pr)
+	if pr == "" {
+		slot = `{"name":"w1","branch":"w1"`
+	}
+	if relays != "" {
+		slot += `,"relays":` + relays
+	}
+	os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"), []byte(`{"slots":[`+slot+`}]}`), 0o644)
+}
+
+// forge sets one key of the fake forge's state (a string value; "merge" and
+// "body" may be empty).
+func (w *world) forge(key, val string) {
+	st := map[string]any{}
+	if b, err := os.ReadFile(w.forgeDB); err == nil {
+		jsonUnmarshal(b, &st)
+	}
+	st[key] = val
+	b, _ := jsonMarshal(st)
+	os.WriteFile(w.forgeDB, b, 0o644)
+}
+
+func (w *world) forgeWord(key string) string {
+	st := map[string]any{}
+	b, _ := os.ReadFile(w.forgeDB)
+	jsonUnmarshal(b, &st)
+	s, _ := st[key].(string)
+	return s
+}
+
+func fakeForgeScript(t *testing.T) string {
+	p, err := filepath.Abs("../../test/fakes/fake_forge.py")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+// pathWith returns a PATH whose first entry holds gh and glab wrappers around
+// the fake forge, plus an optional git shim.
+func (w *world) pathWith(brokenMergeBase bool) string {
+	dir := w.t.TempDir()
+	for _, tool := range []string{"gh", "glab"} {
+		script := fmt.Sprintf("#!/usr/bin/env bash\nFORGE_TOOL=%s exec python3 %q \"$@\"\n", tool, fakeForgeScript(w.t))
+		os.WriteFile(filepath.Join(dir, tool), []byte(script), 0o755)
+	}
+	if brokenMergeBase {
+		realGit, _ := exec.LookPath("git")
+		os.WriteFile(filepath.Join(dir, "git"), []byte(fmt.Sprintf("#!/usr/bin/env bash\n[ \"$1\" = merge-base ] && exit 128\nexec %q \"$@\"\n", realGit)), 0o755)
+	}
+	return dir + string(os.PathListSeparator) + os.Getenv("PATH")
+}
+
+// env builds the Go Env: forge calls run the same fake script through
+// tracker.CLI's Exec, never a real gh or glab.
+func (w *world) env(brokenMergeBase bool) Env {
+	script := fakeForgeScript(w.t)
+	return Env{
+		Sleep:  func(time.Duration) {},
+		Getenv: func(k string) string { return map[string]string{"ROTA_GATE_SHA_WAIT": "0"}[k] },
+	}.withForge(func(provider, dir string) *tracker.CLI {
+		tool := "gh"
+		if provider == "gitlab" {
+			tool = "glab"
+		}
+		return &tracker.CLI{Provider: provider, Dir: dir,
+			LookPath: func(n string) (string, error) { return "/fake/" + n, nil },
+			Exec: func(ctx context.Context, d, name string, args []string, stdin []byte) ([]byte, []byte, int, error) {
+				if name != tool {
+					w.t.Fatalf("forge exec of %q, want only %q", name, tool)
+				}
+				cmd := exec.CommandContext(ctx, "python3", append([]string{script}, args...)...)
+				cmd.Dir = d
+				cmd.Env = append(os.Environ(), "FORGE_TOOL="+tool, "FORGE_DB="+w.forgeDB, "FORGE_LOG="+w.log, "FORGE_MODE="+w.mode)
+				var out, errb strings.Builder
+				cmd.Stdout, cmd.Stderr = &out, &errb
+				err := cmd.Run()
+				if ee, ok := err.(*exec.ExitError); ok {
+					return []byte(out.String()), []byte(errb.String()), ee.ExitCode(), nil
+				}
+				return []byte(out.String()), []byte(errb.String()), 0, err
+			}}
+	}, brokenMergeBase)
+}
+
+func (w *world) gate(brokenMergeBase bool, o GateOpts) (GateResult, error) {
+	o.Slot = "w1"
+	if o.Base == "" {
+		o.Base = "main"
+	}
+	return w.env(brokenMergeBase).Gate(bg, w.dir, o)
+}
+
+// oldExitVerdicts maps the retired gate's exit code to the verdict(s) the Go
+// port may report: contract rule, old 3 is split by message, old 4, 5 and 6 are
+// verdicts.
+var oldExitVerdicts = map[int][]string{
+	0: {GateFresh, GatePass},
+	3: {GateStale, GatePRMismatch, GateMergeFailed},
+	4: {GateProvenanceFail, GateNotMerged, GateNotOnBase, GateVerifyFailed},
+	5: {GateCheckBroke},
+	6: {GateMergedRemotely},
+}
+
+func inList(v string, l []string) bool {
+	for _, x := range l {
+		if x == v {
+			return true
+		}
+	}
+	return false
+}
+
+// gateCase is one gate scenario; the Go verdict must be the one expected and
+// the retired gate's recorded exit code must map onto it.
+type gateCase struct {
+	name    string
+	pr      string
+	setup   func(w *world)
+	opts    GateOpts
+	mode    string
+	broken  bool
+	verdict string
+	changed bool
+	files   []string // files the gate checkout must hold afterwards
+	noFiles []string
+	body    string // forge PR body (provenance cases)
+	relays  string // relays recorded on the slot (provenance cases)
+}
+
+// gateOutcome is what the retired gate left behind for a case: its exit code,
+// the sorted commit subjects on origin/main and on the local base, and the
+// forge calls it made (shas normalised).
+type gateOutcome struct {
+	Exit                 int
+	Origin, Local, Forge string
+}
+
+// gateGolden loads the recorded outcomes of cases, keyed by case name. The
+// golden's inputs describe every case, so a changed case fails loudly.
+func gateGolden(t *testing.T, cases []gateCase) map[string]gateOutcome {
+	t.Helper()
+	var descs []map[string]any
+	for _, c := range cases {
+		descs = append(descs, map[string]any{"name": c.name, "pr": c.pr, "mode": c.mode, "broken": c.broken,
+			"checkOnly": c.opts.CheckOnly, "noVerify": c.opts.NoVerify, "verdict": c.verdict, "changed": c.changed,
+			"files": c.files, "noFiles": c.noFiles, "body": c.body, "relays": c.relays})
+	}
+	var want map[string]gateOutcome
+	pytest.Golden(t, map[string]any{"cases": descs}, &want)
+	return want
+}
+
+func runGateCase(t *testing.T, c gateCase, want gateOutcome) {
+	t.Helper()
+	w := newWorld(t, c.pr)
+	w.mode = c.mode
+	if c.mode == "" {
+		w.mode = "ok"
+	}
+	if c.setup != nil {
+		c.setup(w)
+	}
+	res, err := w.gate(c.broken, c.opts)
+	if err != nil {
+		t.Fatalf("go: %v", err)
+	}
+	if res.Verdict != c.verdict {
+		t.Errorf("go verdict = %s (%s), want %s", res.Verdict, res.Err, c.verdict)
+	}
+	if !inList(res.Verdict, oldExitVerdicts[want.Exit]) {
+		t.Errorf("the retired gate exited %d which allows %v, go said %s", want.Exit, oldExitVerdicts[want.Exit], res.Verdict)
+	}
+	if res.Changed != c.changed {
+		t.Errorf("changed = %v, want %v", res.Changed, c.changed)
+	}
+	for _, f := range c.files {
+		if _, err := os.Stat(filepath.Join(w.dir, f)); err != nil {
+			t.Errorf("%s: %s missing after the gate", w.dir, f)
+		}
+	}
+	for _, f := range c.noFiles {
+		if _, err := os.Stat(filepath.Join(w.dir, f)); err == nil {
+			t.Errorf("%s: %s must not exist", w.dir, f)
+		}
+	}
+	// the same commits end up on origin/main and on the local base (the order
+	// of equal-second commits is not stable, so compare sorted subjects)
+	subjects := func(dir string) string {
+		l := strings.Split(gitq(t, dir, "log", "--format=%s", "main"), "\n")
+		sort.Strings(l)
+		return strings.Join(l, "\n")
+	}
+	mustEqual(t, "origin main", want.Origin, subjects(w.origin))
+	mustEqual(t, "local main", want.Local, subjects(w.dir))
+	// forge calls are the same, argument for argument (shas differ per world)
+	gl, _ := os.ReadFile(w.log)
+	mustEqual(t, "forge calls", want.Forge, shaRe.ReplaceAllString(string(gl), "SHA"))
+}
+
+func TestGate(t *testing.T) {
+	advanceMain := func(w *world) {
+		gitq(t, w.worker, "checkout", "-q", "main")
+		os.WriteFile(filepath.Join(w.worker, "more.txt"), []byte("more\n"), 0o644)
+		gitq(t, w.worker, "add", "more.txt")
+		gitq(t, w.worker, "commit", "-q", "-m", "main moves")
+		gitq(t, w.worker, "push", "-q", "origin", "main")
+	}
+	cases := []gateCase{
+		{name: "a: stale on pushed refs even though local w1 merged main", pr: ghURL, opts: GateOpts{CheckOnly: true}, verdict: GateStale,
+			setup: func(w *world) {
+				advanceMain(w)
+				gitq(t, w.dir, "fetch", "-q", "origin")
+				gitq(t, w.dir, "checkout", "-q", "-b", "w1", "origin/w1")
+				gitq(t, w.dir, "merge", "-q", "origin/main", "-m", "sync")
+				gitq(t, w.dir, "checkout", "-q", "main")
+			}},
+		{name: "b: a merge-base that dies is check-broke, not stale", pr: ghURL, opts: GateOpts{CheckOnly: true}, broken: true, verdict: GateCheckBroke},
+		{name: "b2: a failed fetch is check-broke", pr: ghURL, opts: GateOpts{CheckOnly: true}, verdict: GateCheckBroke,
+			setup: func(w *world) {
+				gitq(t, w.dir, "remote", "set-url", "origin", filepath.Join(filepath.Dir(w.dir), "nope.git"))
+			}},
+		{name: "c: matching PR is fresh", pr: ghURL, opts: GateOpts{CheckOnly: true}, verdict: GateFresh},
+		{name: "c: head sha moved", pr: ghURL, opts: GateOpts{CheckOnly: true}, verdict: GatePRMismatch,
+			setup: func(w *world) { w.forge("sha", strings.Repeat("0", 40)) }},
+		{name: "c: stacked PR", pr: ghURL, opts: GateOpts{CheckOnly: true}, verdict: GatePRMismatch,
+			setup: func(w *world) { w.forge("base", "stack") }},
+		{name: "c: wrong head branch", pr: ghURL, opts: GateOpts{CheckOnly: true}, verdict: GatePRMismatch,
+			setup: func(w *world) { w.forge("head", "other") }},
+		{name: "c: PR not open", pr: ghURL, opts: GateOpts{CheckOnly: true}, verdict: GatePRMismatch,
+			setup: func(w *world) { w.forge("state", "MERGED") }},
+		{name: "d: github merge, verified on the merged tree", pr: ghURL, verdict: GatePass, changed: true, files: []string{"work.txt"},
+			setup: func(w *world) { w.setConfig(`{"refactor":{"verifyCommands":["test -f work.txt"]}}`) }},
+		{name: "d: no verify commands", pr: ghURL, verdict: GatePass, changed: true, files: []string{"work.txt"}},
+		{name: "d: --no-verify", pr: ghURL, opts: GateOpts{NoVerify: true}, verdict: GatePass, changed: true, files: []string{"work.txt"},
+			setup: func(w *world) { w.setConfig(`{"refactor":{"verifyCommands":["false"]}}`) }},
+		{name: "d: verify fails after the merge landed", pr: ghURL, verdict: GateVerifyFailed, changed: true, files: []string{"work.txt"},
+			setup: func(w *world) { w.setConfig(`{"refactor":{"verifyCommands":["true","false"]}}`) }},
+		{name: "e: merge that merged nothing", pr: glURL, mode: "noop", verdict: GateNotMerged, noFiles: []string{"work.txt"}},
+		{name: "e: merge into another branch", pr: ghURL, mode: "elsewhere", verdict: GateNotOnBase, noFiles: []string{"work.txt"}},
+		{name: "e: refused merge shows the CLI output", pr: ghURL, mode: "fail", verdict: GateMergeFailed, noFiles: []string{"work.txt"}},
+		{name: "e: a push after the check is refused by the pin", pr: ghURL, mode: "race", verdict: GateMergeFailed, noFiles: []string{"work.txt"}},
+		{name: "f: gitlab squash falls back to squash_commit_sha", pr: glURL, mode: "squash", verdict: GatePass, changed: true, files: []string{"work.txt"}},
+		{name: "f: gitlab fast-forward merge has no merge commit", pr: glURL, mode: "ff", verdict: GatePass, changed: true, files: []string{"work.txt"}},
+		{name: "f2: gitlab provenance reads the MR description", pr: glURL, opts: GateOpts{CheckOnly: true}, verdict: GateProvenanceFail,
+			setup: func(w *world) {
+				w.forge("body", "## Approvals\n- x: orchestrator relay round 2\n")
+				w.setSlot(glURL, "[]")
+			}},
+		{name: "g: PR without an origin remote is refused, never merged locally", pr: ghURL, verdict: GateCheckBroke, noFiles: []string{"work.txt"},
+			setup: func(w *world) { gitq(t, w.dir, "remote", "remove", "origin") }},
+		{name: "h: local merge without a PR", pr: "", verdict: GatePass, changed: true, files: []string{"work.txt"},
+			setup: func(w *world) { gitq(t, w.dir, "fetch", "-q", "origin", "w1:w1") }},
+		{name: "h: no PR means no provenance to read", pr: "", opts: GateOpts{CheckOnly: true}, verdict: GateFresh,
+			setup: func(w *world) { gitq(t, w.dir, "fetch", "-q", "origin", "w1:w1") }},
+		{name: "i: merged on origin but local base diverged", pr: ghURL, verdict: GateMergedRemotely, changed: true,
+			setup: func(w *world) {
+				os.WriteFile(filepath.Join(w.dir, "local.txt"), []byte("local only\n"), 0o644)
+				gitq(t, w.dir, "add", "local.txt")
+				gitq(t, w.dir, "commit", "-q", "-m", "local only commit")
+			}},
+	}
+	want := gateGolden(t, cases)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) { runGateCase(t, c, want[c.name]) })
+	}
+}
+
+func TestGateProvenance(t *testing.T) {
+	relay := `[{"round":2,"ts":"2026-10-02T10:00:00Z","summary":"use the shared cache for the lookup"}]`
+	var cases []gateCase
+	for _, c := range []struct {
+		name, body, relays string
+		verdict            string
+	}{
+		{"no section, no relays", "just a body", "[]", GateFresh},
+		{"no section while relays exist", "just a body", relay, GateProvenanceFail},
+		{"relay cited and logged", "## Approvals\n- x: orchestrator relay round 2\n", relay, GateFresh},
+		{"relay round never sent", "## Approvals\n- x: orchestrator relay round 5\n", relay, GateProvenanceFail},
+		{"relay cited with no number but none logged", "## Approvals\n- orchestrator relay said so\n", "[]", GateProvenanceFail},
+		{"relay cited with no number, one logged", "## Approvals\n- orchestrator relay said so\n", relay, GateFresh},
+		{"relayed text cited as the maintainer", "## Approvals\n- the maintainer: use the shared cache for the lookup\n", relay, GateProvenanceFail},
+		{"maintainer line with different text", "## Approvals\n- the maintainer approved the naming in my pane\n", relay, GateFresh},
+		{"short summary is not matched", "## Approvals\n- the maintainer: ok\n", `[{"round":1,"summary":"ok"}]`, GateFresh},
+		{"section ends at the next heading", "## Approvals\n- orchestrator relay round 2\n## Notes\n- the maintainer: use the shared cache for the lookup\n", relay, GateFresh},
+		{"heading is case-insensitive", "## approvals\n- x: orchestrator relay round 9\n", relay, GateProvenanceFail},
+		{"only one section counts: ### is not a new heading", "## Approvals\n### detail\n- orchestrator relay round 9\n", relay, GateProvenanceFail},
+	} {
+		c := c
+		cases = append(cases, gateCase{name: c.name, pr: ghURL, opts: GateOpts{CheckOnly: true}, verdict: c.verdict, body: c.body, relays: c.relays,
+			setup: func(w *world) {
+				w.forge("body", c.body)
+				w.setSlot(ghURL, c.relays)
+			}})
+	}
+	want := gateGolden(t, cases)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) { runGateCase(t, c, want[c.name]) })
+	}
+}
+
+func TestGateResolutionFailures(t *testing.T) {
+	w := newWorld(t, ghURL)
+	exit := func(err error) int { return exitOf(err) }
+	if _, err := w.gate(false, GateOpts{Base: "nope"}); exit(err) != ExitResolution || !strings.Contains(err.Error(), "base branch 'nope' does not exist") {
+		t.Errorf("missing base: %v", err)
+	}
+	// the worker branch is only looked up locally when there is no PR
+	w.setSlot("", "")
+	w.setSlot("", "")
+	if _, err := w.gate(false, GateOpts{}); exit(err) != ExitResolution || !strings.Contains(err.Error(), "worker branch 'w1' does not exist") {
+		t.Errorf("missing worker branch: %v", err)
+	}
+	os.Remove(RegistryPath(w.dir))
+	if _, err := w.gate(false, GateOpts{}); exit(err) != ExitResolution || !strings.Contains(err.Error(), "no worker pool") {
+		t.Errorf("no registry: %v", err)
+	}
+	w.setSlot(ghURL, "")
+	e := w.env(false)
+	if _, err := e.Gate(bg, w.dir, GateOpts{Slot: "w9", Base: "main"}); exit(err) != ExitResolution || !strings.Contains(err.Error(), "slot 'w9' is not in the pool") {
+		t.Errorf("unknown slot: %v", err)
+	}
+	// merging needs the base checked out
+	gitq(t, w.dir, "checkout", "-q", "-b", "elsewhere")
+	if _, err := w.gate(false, GateOpts{}); exit(err) != ExitResolution || !strings.Contains(err.Error(), "gate must run with main checked out (currently on elsewhere)") {
+		t.Errorf("wrong checkout: %v", err)
+	}
+	// --check-only does not need it
+	if res, err := w.gate(false, GateOpts{CheckOnly: true}); err != nil || res.Verdict != GateFresh {
+		t.Errorf("check-only off-base: %+v %v", res, err)
+	}
+}
+
+func TestGateResultShape(t *testing.T) {
+	w := newWorld(t, ghURL)
+	w.setConfig(`{"refactor":{"verifyCommands":["true"," ","echo hi"]}}`)
+	res, err := w.gate(false, GateOpts{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Verdict != GatePass || strings.Join(res.Verified, "|") != "true|echo hi" || res.VerifySkipped || !res.Changed ||
+		res.PR != ghURL || res.Branch != "w1" || res.Base != "main" || len(res.SHA) < 7 {
+		t.Errorf("%+v", res)
+	}
+	if want := gitq(t, w.dir, "rev-parse", "--short", "HEAD"); res.SHA != want {
+		t.Errorf("sha = %s, want %s", res.SHA, want)
+	}
+}
+
+func TestApprovalsSection(t *testing.T) {
+	for in, want := range map[string]string{
+		"## Approvals\na\nb\n## X\nc": "a\nb",
+		"intro\n##  Approvals  \na":   "a",
+		"## Approvalsx\na":            "",
+		"## Approvals\n##\nc":         "",
+		"## Approvals\n### Sub\nc":    "### Sub\nc",
+		"no heading":                  "",
+	} {
+		got, found := approvalsSection(in)
+		if strings.TrimRight(got, "\n") != want || (want != "" && !found) {
+			t.Errorf("approvalsSection(%q) = %q, %v; want %q", in, got, found, want)
+		}
+	}
+}
+
+func (e Env) withForge(f func(provider, dir string) *tracker.CLI, brokenMergeBase bool) Env {
+	e.Forge = func(provider, dir string, _ time.Duration) *tracker.CLI { return f(provider, dir) }
+	if brokenMergeBase {
+		realGit := e.Git
+		if realGit == nil {
+			realGit = ExecGit
+		}
+		e.Git = func(ctx context.Context, dir string, args ...string) (string, string, int, error) {
+			if len(args) > 0 && args[0] == "merge-base" {
+				return "", "", 128, nil
+			}
+			return realGit(ctx, dir, args...)
+		}
+	}
+	return e
+}
+
+func jsonUnmarshal(b []byte, v any) error { return json.Unmarshal(b, v) }
+func jsonMarshal(v any) ([]byte, error)   { return json.Marshal(v) }
+
+// A local merge that conflicts is aborted and reported, not left half done.
+// (A fresh branch cannot conflict through the CLI, so the failure is injected.)
+func TestGateLocalMergeFailureIsAbortedAndReported(t *testing.T) {
+	w := newWorld(t, "")
+	gitq(t, w.dir, "fetch", "-q", "origin", "w1:w1")
+	var seen []string
+	e := w.env(false)
+	inner := e.Git
+	if inner == nil {
+		inner = ExecGit
+	}
+	e.Git = func(ctx context.Context, dir string, args ...string) (string, string, int, error) {
+		seen = append(seen, strings.Join(args, " "))
+		if len(args) > 0 && args[0] == "merge" && args[1] == "--no-ff" {
+			return "CONFLICT (content): Merge conflict in work.txt", "", 1, nil
+		}
+		return inner(ctx, dir, args...)
+	}
+	res, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main"})
+	if err != nil || res.Verdict != GateMergeFailed || !strings.Contains(res.Err, "merge of w1 into main conflicted") || res.Changed {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if !strings.Contains(strings.Join(seen, "\n"), "merge --abort") {
+		t.Errorf("the half-done merge was not aborted: %v", seen)
+	}
+}
+
+// The Python gate read an unreadable PR body as PROVENANCE-SKIP and merged
+// anyway (fail open). Only a missing forge CLI may skip now; any other read
+// error is check-broke and nothing merges.
+func TestGateProvenanceFailsClosedWhenTheBodyCannotBeRead(t *testing.T) {
+	for name, tc := range map[string]struct {
+		verdict string
+		wrap    func(c *tracker.CLI, w *world)
+	}{
+		"body read exits non-zero": {GateCheckBroke, func(c *tracker.CLI, w *world) {
+			inner := c.Exec
+			c.Exec = func(ctx context.Context, d, n string, a []string, in []byte) ([]byte, []byte, int, error) {
+				if strings.Contains(strings.Join(a, " "), "--json body") {
+					return nil, []byte("HTTP 502"), 1, nil
+				}
+				return inner(ctx, d, n, a, in)
+			}
+		}},
+		"not authenticated": {GateCheckBroke, func(c *tracker.CLI, w *world) {
+			inner := c.Exec
+			c.Exec = func(ctx context.Context, d, n string, a []string, in []byte) ([]byte, []byte, int, error) {
+				if strings.Contains(strings.Join(a, " "), "--json body") {
+					return nil, []byte("gh auth login"), 1, nil
+				}
+				return inner(ctx, d, n, a, in)
+			}
+		}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			w := newWorld(t, ghURL)
+			e := w.env(false)
+			forge := e.Forge
+			e.Forge = func(p, d string, r time.Duration) *tracker.CLI { c := forge(p, d, r); tc.wrap(c, w); return c }
+			res, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main"})
+			if err != nil || res.Verdict != tc.verdict || res.Changed {
+				t.Fatalf("%+v %v", res, err)
+			}
+			if _, err := os.Stat(filepath.Join(w.dir, "work.txt")); err == nil {
+				t.Error("the gate merged without reading the approvals")
+			}
+			if strings.Contains(strings.Join(res.Notes, "\n"), "PROVENANCE-SKIP") {
+				t.Errorf("must not skip: %v", res.Notes)
+			}
+		})
+	}
+	// a missing CLI still skips (the retired helper's one legitimate skip) and then
+	// the PR read fails, so the gate stops there instead
+	w := newWorld(t, ghURL)
+	e := w.env(false)
+	forge := e.Forge
+	e.Forge = func(p, d string, r time.Duration) *tracker.CLI {
+		c := forge(p, d, r)
+		c.LookPath = func(string) (string, error) { return "", os.ErrNotExist }
+		return c
+	}
+	res, _ := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main", CheckOnly: true})
+	if res.Verdict != GateCheckBroke {
+		t.Errorf("PR info needs the CLI too: %+v", res)
+	}
+}
+
+func TestGateRevParseFailureIsCheckBroke(t *testing.T) {
+	w := newWorld(t, ghURL)
+	e := w.env(false)
+	e.Git = func(ctx context.Context, dir string, args ...string) (string, string, int, error) {
+		if len(args) == 2 && args[0] == "rev-parse" && args[1] == "origin/w1" {
+			return "", "fatal", 128, nil
+		}
+		return ExecGit(ctx, dir, args...)
+	}
+	res, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main", CheckOnly: true})
+	if err != nil || res.Verdict != GateCheckBroke || !strings.Contains(res.Err, "git rev-parse origin/w1 failed") {
+		t.Errorf("%+v %v", res, err)
+	}
+	if strings.Contains(w.logText(), "pr merge") {
+		t.Error("nothing may be merged")
+	}
+}
+
+func (w *world) logText() string { b, _ := os.ReadFile(w.log); return string(b) }
+
+func TestGateShellRunsUnderTheContext(t *testing.T) {
+	w := newWorld(t, "")
+	gitq(t, w.dir, "fetch", "-q", "origin", "w1:w1")
+	w.setConfig(`{"refactor":{"verifyCommands":["sleep 30"]}}`)
+	ctx, cancel := context.WithTimeout(bg, 300*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	res, err := w.env(false).Gate(ctx, w.dir, GateOpts{Slot: "w1", Base: "main"})
+	if err != nil || res.Verdict != GateVerifyFailed || time.Since(start) > 10*time.Second {
+		t.Errorf("a cancelled context must stop the verify command: %+v %v after %v", res, err, time.Since(start))
+	}
+}
+
+// A merge that fails for a reason other than a conflict (no committer identity
+// was the CI case) is reported with git's own stderr, not called a conflict.
+func TestGateLocalMergeNonConflictFailureShowsGitsWords(t *testing.T) {
+	w := newWorld(t, "")
+	gitq(t, w.dir, "fetch", "-q", "origin", "w1:w1")
+	e := w.env(false)
+	inner := ExecGit
+	e.Git = func(ctx context.Context, dir string, args ...string) (string, string, int, error) {
+		if len(args) > 1 && args[0] == "merge" && args[1] == "--no-ff" {
+			return "", "fatal: unable to auto-detect email address", 128, nil
+		}
+		return inner(ctx, dir, args...)
+	}
+	res, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main"})
+	if err != nil || res.Verdict != GateMergeFailed || strings.Contains(res.Err, "conflicted") ||
+		!strings.Contains(res.Err, "failed (exit 128): fatal: unable to auto-detect email address") {
+		t.Errorf("%+v %v", res, err)
+	}
+}

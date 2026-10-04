@@ -1,0 +1,237 @@
+package cli
+
+import (
+	"flag"
+	"strings"
+
+	"github.com/l4ci/rota/internal/jsonx"
+	ms "github.com/l4ci/rota/internal/milestone"
+)
+
+// Glue for the milestone group (A6). File mode only; issue mode exits 71
+// until the tracker is wired in.
+
+func milestoneCommands() []*Command {
+	return []*Command{
+		{Name: "milestone", Summary: "vision milestones", Subs: []*Command{
+			{Name: "add", Summary: "mint a milestone", Verb: milestoneAdd},
+			{Name: "list", Summary: "list milestones", Verb: noFlags(runMilestoneList)},
+			{Name: "show", Summary: "print a milestone", Verb: noFlags(runMilestoneShow)},
+			{Name: "put", Summary: "replace a milestone's text", Verb: milestonePut},
+			{Name: "status", Summary: "change a milestone's status", Verb: milestoneStatus},
+			{Name: "active", Summary: "IDs of active milestones", Verb: noFlags(runMilestoneActive)},
+			{Name: "index", Summary: "regenerate the overview and vision block", Verb: noFlags(runMilestoneIndex)},
+		}},
+	}
+}
+
+func milestoneAdd(fs *flag.FlagSet) RunFunc {
+	title := fs.String("title", "", "milestone title")
+	summary := fs.String("summary", "", "one-paragraph summary")
+	depends := fs.String("depends", "", "comma list of milestone IDs this depends on")
+	return func(c *Ctx, args []string) (Result, error) {
+		if err := noArgs(args); err != nil {
+			return Result{}, err
+		}
+		if *title == "" || *summary == "" {
+			return Result{}, Usage("--title and --summary are required")
+		}
+		root, issue, err := modeRoot(c)
+		if err != nil {
+			return Result{}, err
+		}
+		if issue {
+			return milestoneAddIssue(c, *title, *summary, *depends)
+		}
+		id, err := ms.Add(root, *title, *summary, *depends)
+		if err != nil {
+			return Result{}, fromArtifact(err)
+		}
+		d := jsonx.NewObject()
+		d.Set("id", id)
+		d.Set("changed", true)
+		return Result{Data: d, Text: id}, nil
+	}
+}
+
+func runMilestoneList(c *Ctx, args []string) (Result, error) {
+	if err := noArgs(args); err != nil {
+		return Result{}, err
+	}
+	root, issue, err := modeRoot(c)
+	if err != nil {
+		return Result{}, err
+	}
+	if issue {
+		return milestoneListIssue(c)
+	}
+	list, err := ms.List(root)
+	if err != nil {
+		return Result{}, err
+	}
+	return milestoneListResult(list), nil
+}
+
+// milestoneListResult is milestone list's answer for either mode.
+func milestoneListResult(list []ms.Entry) Result {
+	rows, text := []any{}, ""
+	for _, m := range list {
+		o := jsonx.NewObject()
+		o.Set("id", m.ID)
+		o.Set("title", m.Title)
+		o.Set("status", m.Status)
+		deps := make([]any, len(m.Depends))
+		for i, d := range m.Depends {
+			deps[i] = d
+		}
+		o.Set("depends", deps)
+		o.Set("ready", m.Ready)
+		rows = append(rows, o)
+		text += m.ID + "\t" + m.Status + "\t" + m.Title + "\n"
+	}
+	d := jsonx.NewObject()
+	d.Set("milestones", rows)
+	return Result{Data: d, Text: text}
+}
+
+func runMilestoneShow(c *Ctx, args []string) (Result, error) {
+	id, err := oneArg(args, "milestone ID")
+	if err != nil {
+		return Result{}, err
+	}
+	root, issue, err := modeRoot(c)
+	if err != nil {
+		return Result{}, err
+	}
+	if issue {
+		return milestoneShowIssue(c, id)
+	}
+	body, err := ms.Show(root, id)
+	if err != nil {
+		return Result{}, fromArtifact(err)
+	}
+	d := jsonx.NewObject()
+	d.Set("id", id)
+	d.Set("body", body)
+	return Result{Data: d, Text: body}, nil
+}
+
+func milestonePut(fs *flag.FlagSet) RunFunc {
+	file := bodyFlag(fs)
+	return func(c *Ctx, args []string) (Result, error) {
+		id, err := oneArg(args, "milestone ID")
+		if err != nil {
+			return Result{}, err
+		}
+		if !ms.ValidID(id) {
+			return Result{}, Usage("milestone ID must match M\\d{2,} (e.g. M01, M03), got %q", id)
+		}
+		root, issue, err := modeRoot(c)
+		if err != nil {
+			return Result{}, err
+		}
+		if issue {
+			return milestonePutIssue(c, id, *file)
+		}
+		text, err := readBody(c, *file)
+		if err != nil {
+			return Result{}, err
+		}
+		changed, err := ms.Put(root, id, text)
+		if err != nil {
+			return Result{Data: blocked(err, "id mismatch"), Text: ""}, fromArtifact(err)
+		}
+		d := jsonx.NewObject()
+		d.Set("id", id)
+		d.Set("changed", changed)
+		return Result{Data: d, Text: id}, nil
+	}
+}
+
+// blocked is the exit-4 failure data for a refusal that is not "exists".
+func blocked(err error, by string) any {
+	if ae := asArtifact(err); ae != nil && ae.Exit == 4 {
+		d := jsonx.NewObject()
+		d.Set("blockedBy", by)
+		d.Set("changed", false)
+		return d
+	}
+	return nil
+}
+
+func milestoneStatus(fs *flag.FlagSet) RunFunc {
+	to := fs.String("to", "", "planned, active, shipped or archived")
+	return func(c *Ctx, args []string) (Result, error) {
+		id, err := oneArg(args, "milestone ID")
+		if err != nil {
+			return Result{}, err
+		}
+		if !ms.ValidStatus(*to) {
+			return Result{}, Usage("--to must be one of: %s", strings.Join(ms.Statuses, ", "))
+		}
+		root, issue, err := modeRoot(c)
+		if err != nil {
+			return Result{}, err
+		}
+		if issue {
+			return milestoneStatusIssue(c, id, *to)
+		}
+		changed, err := ms.SetStatus(root, id, *to)
+		if err != nil {
+			return Result{}, fromArtifact(err)
+		}
+		d := jsonx.NewObject()
+		d.Set("id", id)
+		d.Set("status", *to)
+		d.Set("changed", changed)
+		return Result{Data: d, Text: id + " " + *to}, nil
+	}
+}
+
+func runMilestoneActive(c *Ctx, args []string) (Result, error) {
+	if err := noArgs(args); err != nil {
+		return Result{}, err
+	}
+	root, issue, err := modeRoot(c)
+	if err != nil {
+		return Result{}, err
+	}
+	if issue {
+		return milestoneActiveIssue(c)
+	}
+	ids, err := ms.Active(root)
+	if err != nil {
+		return Result{}, err
+	}
+	return milestoneActiveResult(ids), nil
+}
+
+func milestoneActiveResult(ids []string) Result {
+	rows := make([]any, len(ids))
+	for i, id := range ids {
+		rows[i] = id
+	}
+	d := jsonx.NewObject()
+	d.Set("ids", rows)
+	return Result{Data: d, Text: strings.Join(ids, "\n")}
+}
+
+func runMilestoneIndex(c *Ctx, args []string) (Result, error) {
+	if err := noArgs(args); err != nil {
+		return Result{}, err
+	}
+	root, issue, err := modeRoot(c)
+	if err != nil {
+		return Result{}, err
+	}
+	if issue {
+		return milestoneIndexIssue(c)
+	}
+	changed, err := ms.Index(root)
+	if err != nil {
+		return Result{}, fromArtifact(err)
+	}
+	d := jsonx.NewObject()
+	d.Set("changed", changed)
+	return Result{Data: d}, nil
+}

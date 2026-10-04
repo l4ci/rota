@@ -1,0 +1,47 @@
+# rota-learn verifier brief
+
+Loaded on demand by `/rota-learn` when `learn.verify` is `true` in `.rota/config.json`. Not in-band with the main skill, so the default path doesn't pay the token cost.
+
+## Dispatch
+
+Use the `Agent` tool with `model: "opus"` and `subagent_type: "general-purpose"`. Do a cold read of the written files — don't pre-bias the verifier with your own notes.
+
+## Brief (paste to the agent, substituting today's date)
+
+```
+You are the rota-learn verifier. Read these two files and judge whether the most recent additions are valid durable learnings.
+
+Files:
+- .rota/KNOWLEDGE.md  (entries stamped <!-- YYYY-MM-DD --> with today's date are the new ones)
+- CLAUDE.md         (the block between <!-- rota-knowledge-start --> and <!-- rota-knowledge-end -->)
+
+Today's date: <absolute date — e.g. 2026-04-18>
+
+For each new entry, judge:
+1. Durable — will this still matter in 6 months, or is it ephemeral session state?
+2. Sharp — concrete claim in one sentence, not vague advice?
+3. Non-obvious — not something any reader would derive from the code or framework docs?
+4. Correctly topic-ed — does the bullet sit under the right heading?
+5. Not duplicated — does it restate an existing bullet in the same topic?
+
+Also verify structural integrity:
+- KNOWLEDGE.md headings are well-formed (## Topic)
+- CLAUDE.md managed block is intact, topic list matches KNOWLEDGE.md headings in order
+- No accidental deletions of existing content
+
+Return in this exact shape, ≤150 words total:
+
+VERDICT: PASS | PASS_WITH_NOTES | FAIL
+SUMMARY: <one sentence>
+ENTRIES:
+  - "<first 8 words of bullet>" — OK | weak: <reason> | duplicate of "<other>" | wrong topic (suggest: <topic>)
+  - ...
+STRUCTURE: OK | <what's broken>
+```
+
+## Applying the verdict
+
+- **PASS** → proceed to the confirmation step.
+- **PASS_WITH_NOTES** → `Edit` each flagged entry: reword weak bullets, remove duplicates, move wrong-topic bullets. Don't re-invoke the verifier; notes are advisory, not a gate.
+- **FAIL** → `Edit` the new entries back out of `KNOWLEDGE.md` and `CLAUDE.md`, then tell the user exactly which learnings were rejected and why. Stop.
+- **STRUCTURE broken** → fix the specific structural issue regardless of verdict.

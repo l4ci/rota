@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+# Fake herdr for tests. SAFE BY CONSTRUCTION: it only appends to a log and
+# prints canned JSON, so it can stand in for the real binary inside a round
+# that itself runs in herdr. Never put the real herdr on a test's PATH.
+# Shapes follow real herdr 0.9.3 (checked read-only against a live server, #196):
+# every command answers a JSON envelope except `agent read`, which prints text.
+#
+# State lives in the directory $FAKE_HERDR (required): `log` gets one argv line
+# per call; the optional files below steer the answers:
+#   tabs               last tab number (default 6, so the first tab is w9:t7)
+#   start_not_ready    `agent start` fails with agent_not_ready
+#   gone               `agent get`/`agent read` fail with agent_not_found
+#   status             agent_status for `agent get` (default idle)
+#   wait_status        agent_status for `agent wait` (default idle)
+#   pane.txt           text `agent read` prints (plain text, as herdr 0.9.3 does)
+#   prompt_error       error code `agent prompt` fails with (except /exit)
+#   tab_stays          `tab get` keeps succeeding after `tab close`
+# `integration status` reports the codex line from $CODEX_HOME/.fake-herdr-codex
+# (present: current, absent: not installed); `integration install codex` writes
+# that file. Both need CODEX_HOME, so a stray call can never touch ~/.codex.
+[ -n "${FAKE_HERDR:-}" ] || { echo "fake herdr: FAKE_HERDR is not set" >&2; exit 98; }
+F="$FAKE_HERDR"
+printf '%s\n' "$*" >>"$F/log"
+err() { printf '{"error":{"code":"%s","message":"fake"},"id":"cli"}\n' "$1" >&2; exit 1; }
+agent_json() {
+  printf '{"id":"cli","result":{"type":"%s","agent":{"agent":"claude","agent_status":"%s","pane_id":"w9:p11","tab_id":"w9:t7","focused":false}}}\n' "$1" "$2"
+}
+# herdr 0.9.3 accepts only these agent names; tab ids come from --workspace.
+case "$1 $2" in
+  "agent start"|"agent get"|"agent read"|"agent send-keys"|"agent wait"|"agent prompt")
+    [[ "$3" =~ ^[a-z][a-z0-9_-]{0,31}$ ]] || err invalid_agent_name ;;
+esac
+case "$1 $2" in
+  "tab create")
+    ws=w9; prev=""; for a in "$@"; do [ "$prev" = "--workspace" ] && ws="$a"; prev="$a"; done
+    n=$(( $(cat "$F/tabs" 2>/dev/null || echo 6) + 1 )); echo "$n" >"$F/tabs"
+    printf '{"id":"cli","result":{"type":"tab_created","tab":{"tab_id":"%s:t%s","workspace_id":"%s","label":"x","number":%s,"focused":false,"pane_count":1,"agent_status":"unknown"},"root_pane":{"pane_id":"%s:p1%s","tab_id":"%s:t%s","workspace_id":"%s"}}}\n' "$ws" "$n" "$ws" "$n" "$ws" "$n" "$ws" "$n" "$ws" ;;
+  "tab close") : >"$F/closed"; echo '{"id":"cli","result":{"type":"ok"}}' ;;
+  "tab get")
+    if [ -f "$F/closed" ] && [ ! -f "$F/tab_stays" ]; then err tab_not_found; fi
+    echo '{"id":"cli","result":{"tab":{"agent_status":"unknown","focused":false,"label":"x","number":7,"pane_count":1,"tab_id":"w9:t7","workspace_id":"w9"},"type":"tab_info"}}' ;;
+  "agent start")
+    [ -f "$F/start_not_ready" ] && err agent_not_ready
+    agent_json agent_started idle ;;
+  "agent get")
+    [ -f "$F/gone" ] && err agent_not_found
+    agent_json agent_info "$(cat "$F/status" 2>/dev/null || echo idle)" ;;
+  "agent wait") agent_json agent_info "$(cat "$F/wait_status" 2>/dev/null || echo idle)" ;;
+  "agent read")
+    [ -f "$F/gone" ] && err agent_not_found
+    cat "$F/pane.txt" 2>/dev/null ;;  # herdr 0.9.3 prints pane text as is, no JSON envelope
+  "agent send-keys") echo '{"id":"cli","result":{"type":"ok"}}' ;;
+  "agent prompt")
+    printf '%s' "$4" >"$F/last_prompt"
+    [ -f "$F/prompt_error" ] && [ "$4" != "/exit" ] && err "$(cat "$F/prompt_error")"
+    agent_json agent_prompted working ;;
+  "pane process-info") echo '{"id":"cli","result":{"process_info":{"foreground_process_group_id":0,"foreground_processes":[],"pane_id":"w9:p11","shell_pid":0},"type":"process_info"}}' ;;
+  "integration status")
+    [ -n "${CODEX_HOME:-}" ] || err codex_home_unset
+    echo "claude: current (v10) (/x/hook.sh)"
+    if [ -f "$CODEX_HOME/.fake-herdr-codex" ]; then echo "codex: current (v8) (/x/codex.sh)"; else echo "codex: not installed (/x/codex.sh)"; fi ;;
+  "integration install")
+    [ -n "${CODEX_HOME:-}" ] || err codex_home_unset
+    [ "$3" = "codex" ] || err unknown_method
+    : >"$CODEX_HOME/.fake-herdr-codex"; echo '{"id":"cli","result":{"type":"ok"}}' ;;
+  "notification show") echo '{"id":"cli","result":{"type":"notification_show","shown":true,"reason":"shown"}}' ;;
+  *) err unknown_method ;;
+esac

@@ -1,0 +1,19 @@
+{
+  "inputs": {
+    "argv": [
+      "block",
+      "knowledge"
+    ],
+    "fixture": "bc5f38691e04e2475ee4bb289a3dd5a116a44dcda25b68e0243c7d502a306312",
+    "stdin": ""
+  },
+  "outputs": {
+    "stdout": "appended\n",
+    "stderr": "",
+    "rc": 0,
+    "changed": {
+      "../AGENTS.md": "# Agents\n\n\u003c!-- rota-knowledge-start --\u003e\n## Project Knowledge\n\nDurable learnings live in `.rota/KNOWLEDGE.md`. Consult it when work touches these topics:\n\n- Architecture\n- Glossary\n\n\u003c!-- rota-knowledge-end --\u003e\n"
+    },
+    "removed": []
+  }
+}

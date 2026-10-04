@@ -1,0 +1,18 @@
+{
+  "inputs": {
+    "argv": [
+      "map",
+      "stats",
+      "--cap"
+    ],
+    "fixture": "4e3d53a854bc5ee535db036f804b619632e42edabad88bb88a85621a0b39c68e",
+    "stdin": ""
+  },
+  "outputs": {
+    "stdout": "",
+    "stderr": "note: project map has 2 subsystems (cap 2); consider merging or retiring stale .rota/map/\u003cname\u003e.md entries\n",
+    "rc": 0,
+    "changed": {},
+    "removed": []
+  }
+}

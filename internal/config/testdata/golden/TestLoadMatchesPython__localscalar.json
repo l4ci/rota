@@ -1,0 +1,1 @@
+{"inputs":{"files":{"config.json":"{\"work\": {\"dispatch\": \"tmux\"}}\n","config.local.json":"\"herdr\"\n"}},"outputs":"\"herdr\""}

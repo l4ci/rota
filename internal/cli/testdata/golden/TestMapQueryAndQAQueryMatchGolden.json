@@ -1,0 +1,21 @@
+{
+  "inputs": {
+    "argv": [
+      "map",
+      "query",
+      "cli",
+      "ghost",
+      "alpha",
+      "web"
+    ],
+    "fixture": "6004b32cdff9e286f965149654c36dcafb5a93673b0ad07a6034047a873723e8",
+    "stdin": ""
+  },
+  "outputs": {
+    "stdout": "# CLI\n\ntext\n\n## Entry points\n\n- cmd/main.go:2\n- cmd/main.go:99\n- gone/file.go:1\n\n# Alpha\n",
+    "stderr": "",
+    "rc": 0,
+    "changed": {},
+    "removed": []
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "inputs": {
+    "argv": [
+      "glossary",
+      "write",
+      "Worker",
+      "--def",
+      "an agent",
+      "--alias",
+      "agent, slot",
+      "--not",
+      "orchestrator"
+    ],
+    "fixture": "faddabde38b7534adeeb7a9bbaeb9d3f60baf068cfd6c13433c82954bcc4faa7",
+    "stdin": ""
+  },
+  "outputs": {
+    "stdout": "",
+    "stderr": "wrote: Glossary/Worker\n",
+    "rc": 0,
+    "changed": {
+      "../AGENTS.md": "# Agents\n\nintro\n\n\u003c!-- rota-knowledge-start --\u003e\n## Project Knowledge\n\nDurable learnings live in `.rota/KNOWLEDGE.md`. Consult it when work touches these topics:\n\n- Architecture\n- Glossary\n\n\u003c!-- rota-knowledge-end --\u003e\n",
+      "KNOWLEDGE.md": "# Knowledge\n\n## Architecture\n\n- **Alpha rule** — Keep modules small. \u003c!-- 2026-01-01 --\u003e\n\n## Glossary\n\n- **Worker** — an agent\n  - **Aliases:** agent, slot\n  - **Not:** orchestrator\n  \u003c!-- 2026-10-03 --\u003e\n"
+    },
+    "removed": []
+  }
+}
