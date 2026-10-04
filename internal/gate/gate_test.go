@@ -49,7 +49,7 @@ func TestRegistry(t *testing.T) {
 	seen := map[string]bool{}
 	var enforced []string
 	for _, g := range Registry {
-		if seen[g.Name] || g.Name == "" || g.Creates == "" || len(g.Skills) == 0 {
+		if seen[g.Name] || g.Name == "" || g.Creates == "" || (len(g.Skills) == 0 && !g.Enforced()) {
 			t.Errorf("bad row %+v", g)
 		}
 		seen[g.Name] = true
@@ -62,7 +62,7 @@ func TestRegistry(t *testing.T) {
 	if want := []string{TagPush, ReleasePublish, PublicFiling, MergeApproval, DebugReset}; !reflect.DeepEqual(enforced, want) {
 		t.Errorf("enforced %v, want %v", enforced, want)
 	}
-	for _, name := range []string{"issue-close", "issue-label"} {
+	for _, name := range []string{"issue-close", "pr-open", "decision-write"} {
 		if !seen[name] {
 			t.Errorf("skill-only gate %s missing from the registry", name)
 		}

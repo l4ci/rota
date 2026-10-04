@@ -17,7 +17,7 @@ Phases:
 2. *Identify candidate* — boundary articulated; three-gate check passes (Step 2)
 3. *Compose four parts* — rule, *Why*, **Forbids**, **Permits** drafted (Step 3)
 4. *Confirmation gate* — manual user approval (never auto-invoked, Step 5)
-5. *Merge & index update* — append to `DECISIONS.md`, regenerate CLAUDE.md index (Steps 6–7)
+5. *Merge & index update* — append to `DECISIONS.md`, regenerate the decisions index (Steps 6–7)
 
 ## Step 1.5 — Mode (default vs source-prefill)
 
@@ -100,17 +100,11 @@ Present the assembled entry to the user via `AskUserQuestion`:
 - **Header:** `"Decide"`
 - **Question:** *"Lock in this decision?"*
 - **Options** (single-select):
-  1. *"Write it (Recommended)"* — *"Append to `.rota/DECISIONS.md` under `<topic>` and update CLAUDE.md decisions index."*
+  1. *"Write it (Recommended)"* — *"Append to `.rota/DECISIONS.md` under `<topic>` and update the decisions index."*
   2. *"Edit first"* — *"Show the draft inline so you can rewrite any of the four parts before writing."*
   3. *"Cancel"* — *"Skip — nothing is written."*
 
-Show the full draft entry (rule, why, forbids, permits) above the question. **Never write without explicit "Write it" confirmation.** This is the active/passive distinction made operational.
-
-If the user picks **Edit first**, present the draft as inline text, accept revisions, and re-prompt with the same three options.
-
-If the user picks **Cancel**, stop with one line: *"Decision not captured."*
-
-Write only if the user answers `yes` or `write`. Anything else is a cancel.
+Show the full draft entry (rule, why, forbids, permits) above the question. Write only on an explicit "Write it"; anything else is a cancel. **Edit first** shows the draft inline, takes revisions and re-asks. **Cancel** stops with *"Decision not captured."*
 
 ## Step 6 — Merge into DECISIONS.md
 
@@ -145,13 +139,13 @@ Hard boundaries for this project. Each entry is a commitment, not a preference �
 
 Use `Edit` for surgical updates, not `Write`.
 
-## Step 7 — Update CLAUDE.md Decisions Index
+## Step 7 — Update the Decisions Index
 
 ```bash
 rota block decisions
 ```
 
-Reads `.rota/DECISIONS.md`, extracts `## Topic` headings in order, and updates the managed `<!-- rota-decisions-start -->` block in `CLAUDE.md` (or `AGENTS.md` when present). Creates or appends as needed; never touches other content. The read-site skills (`/rota-work`, `/rota-debug`, `/rota-plan`, `/rota-refactor`, `/rota-review`, `/rota-vision`) read this block to know when to consult `DECISIONS.md`.
+Reads `.rota/DECISIONS.md`, extracts `## Topic` headings in order, and updates the managed `<!-- rota-decisions-start -->` block in the project instructions file: `AGENTS.md` when it exists, else `CLAUDE.md`. The verb resolves the file; never hardcode one. Creates or appends as needed; never touches other content. The read-site skills (`/rota-work`, `/rota-debug`, `/rota-plan`, `/rota-refactor`, `/rota-review`, `/rota-vision`) read this block to know when to consult `DECISIONS.md`.
 
 ## Step 8 — Confirm
 
@@ -161,20 +155,19 @@ Tell the user, in one compact block, what was captured:
 Captured 1 decision into .rota/DECISIONS.md:
   Architecture — "Background jobs run in-process, never via external queue"
 
-Updated CLAUDE.md decisions index — /rota-work, /rota-debug, /rota-plan, /rota-refactor, /rota-review, /rota-vision will consult it.
+Updated the decisions index in <AGENTS.md|CLAUDE.md> — /rota-work, /rota-debug, /rota-plan, /rota-refactor, /rota-review, /rota-vision will consult it.
 ```
 
 If the entry created a new topic, prepend a line: *"New topic: `<topic>`."*
 
 ## Key Principles
 
-- **Never auto-invoked.** Regardless of `autonomy.level` — the active/passive distinction depends on this.
+- **Never auto-invoked.** Regardless of `autonomy.level`, and Step 5's confirmation is the only gate. Manual confirmation is the verification: no verifier runs.
 - **Forbids and permits are required.** If you can't articulate both, it's a learning — redirect to `/rota-learn`.
 - **One sentence rule, one paragraph why.** If a decision needs more, link to a plan or knowledge entry.
-- **No verifier.** Manual confirmation is the verification.
 - **`--from-learning <topic>` and `--from-spike <name>` only seed the rule and why from the source artifact.** The forbids/permits are still user-articulated — that's what makes a decision a decision.
 - **`inconclusive` spikes can't be promoted.** Promotion requires a verdict the project is committing to.
-- **Sibling persistence skills.** `/rota-learn` and `/rota-decide` share one contract (persist + index `CLAUDE.md` + confirm) and intentionally diverge on gate strength — see `references/persistence-skills.md`. `/rota-learn` carries two modes: passive topic-bullet learnings and `--term <name>` for Glossary entries.
+- **Sibling persistence skills.** `/rota-learn` and `/rota-decide` share one contract (persist + index the instructions file + confirm) and intentionally diverge on gate strength — see `references/persistence-skills.md`. `/rota-learn` carries two modes: passive topic-bullet learnings and `--term <name>` for Glossary entries.
 
 ## References
 
