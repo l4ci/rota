@@ -372,9 +372,10 @@ func TestWorkerGateVerb(t *testing.T) {
 		t.Fatalf("check-only: %d %v", code, d)
 	}
 
-	// main moves: the slot is stale, a verdict on exit 1 with the answer in data
-	os.WriteFile(filepath.Join(dir, "main.txt"), []byte("m"), 0o644)
-	git(dir, "add", "main.txt")
+	// main moves on a file the slot also added: the merge conflicts, so the slot
+	// is stale, a verdict on exit 1 with the answer in data
+	os.WriteFile(filepath.Join(dir, "feature.txt"), []byte("m"), 0o644)
+	git(dir, "add", "feature.txt")
 	git(dir, "commit", "-q", "-m", "main moves")
 	code, out, errOut := rotaIn(t, dir, "worker", "gate", "w1", "--base", "main", "--json")
 	if d = data(t, out); code != 1 || d["verdict"] != "stale" || d["changed"] != false || !strings.Contains(errOut, "STALE w1") {
@@ -384,7 +385,7 @@ func TestWorkerGateVerb(t *testing.T) {
 		t.Errorf("unknown base: %d", code)
 	}
 
-	git(wt, "merge", "-q", "main", "-m", "sync")
+	git(wt, "merge", "-q", "-X", "ours", "main", "-m", "sync")
 	code, out, _ = rotaIn(t, dir, "worker", "gate", "w1", "--base", "main", "--json")
 	d = data(t, out)
 	if code != 0 || d["verdict"] != "pass" || d["changed"] != true || d["verified"].([]any)[0] != "test -f feature.txt" || d["verifySkipped"] != false || d["sha"] == nil {
