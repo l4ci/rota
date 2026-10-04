@@ -11,8 +11,8 @@ import (
 	"github.com/l4ci/rota/internal/plan"
 )
 
-// Glue for the design and plan groups (A6). File mode only: issue mode
-// needs internal/tracker and the item model, so those calls exit 71.
+// Glue for the design and plan groups (A6). Both backends: issue mode keeps
+// the text in item notes (a6_issue.go).
 
 func docsCommands() []*Command {
 	return []*Command{
@@ -46,7 +46,11 @@ func fileRoot(c *Ctx, readOnly bool) (string, Result, error) {
 	if err != nil {
 		return "", Result{}, err
 	}
-	if !artifact.IssueMode(root) {
+	issue, err := issueBackend(root)
+	if err != nil {
+		return "", Result{}, err
+	}
+	if !issue {
 		return root, Result{}, nil
 	}
 	d := jsonx.NewObject()
