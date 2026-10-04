@@ -316,7 +316,7 @@ func TestWrapRoundTripIsByteExact(t *testing.T) {
 	if dump(t, again) != original {
 		t.Errorf("not restored:\n%s", dump(t, again))
 	}
-	if len(rm) != 3 {
+	if len(rm) != 4 {
 		t.Errorf("removed %v", rm)
 	}
 	if rm2 := Uninstall(again); len(rm2) != 0 {
@@ -330,7 +330,7 @@ func TestInstallFreshAndUninstall(t *testing.T) {
 	if err != nil || out.Statusline != SLInstalled || !out.Changed || out.Blocked {
 		t.Fatalf("%+v %v", out, err)
 	}
-	if e := MarkedEvents(o); len(e) != 2 {
+	if e := MarkedEvents(o); len(e) != 3 {
 		t.Errorf("events %v", e)
 	}
 	Uninstall(o)

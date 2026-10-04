@@ -118,6 +118,7 @@ slot `wait` named, or gate a PR in review by number (`rota worker gate 61 --base
 | Pick | `rota round candidates` | the open items that pass the criteria, dependency and overlap checks |
 | Assign | `rota round assign <ID>` | claims the item, marks it in progress, cuts `<agent>/<issue>-<slug>`, starts the worker with a signed pointer brief |
 | Wait | `rota round wait` | blocks until one slot needs the orchestrator, then returns it; never poll |
+| Watch | `rota round watch` | the background form of `wait`: run it as a background command and it exits when a slot, PR or escalation changes, or at a heartbeat |
 | Look | `rota round status`, `rota round reconcile` | the round's rows and drift; `reconcile --apply` repairs what is safe |
 | Ask | `rota round escalate send`, `rota round escalate check` | puts a question to the maintainer on the issue or PR thread and reads the answer |
 | Merge | `rota worker gate <slot\|#PR> --base <branch>` | verifies on the merged tree, merges on a pass; a [merge approval](#merge-approval) policy can require a human first |
@@ -215,6 +216,20 @@ With no slot named it watches every slot that has a session and whose recorded s
 - **Timeout** exits 1 with `data.timedOut: true` and every slot's state; it is an answer,
   not a fault. `--timeout` defaults to 0, which waits indefinitely.
 - **Long waits in Claude Code** hit the Bash tool's timeout; see [internals](#internals).
+
+## Staying reachable while you talk
+
+`rota round wait` blocks the orchestrator's own session, so it cannot run while the orchestrator is
+answering you. Run `rota round watch` as a background command instead: it exits with JSON when a
+slot needs attention, a PR or an escalation changes, or after `--heartbeat` seconds (default 600) with
+nothing to report, and the harness wakes the orchestrator when it exits. Keep exactly one running and
+re-arm it after every wake; a second one is refused (exit 4). The registry is read every `--poll`
+seconds and the forge every `--forge-poll`; `reason` in the result says which woke it.
+
+With `rota hook install` the orchestrator is held to this. The Stop hook refuses to let a lease-holding
+orchestrator go idle while workers are active and no watch is running, and the prompt hook adds a
+one-line digest of the round (and a reminder when no watch is armed) to every message you send.
+Neither applies to a solo round, which has no panes to watch.
 
 ## PRs in review
 
