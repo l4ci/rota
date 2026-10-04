@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -69,17 +70,19 @@ func itemFromCorpus(corpus, ref string) (*Item, bool) {
 	// The closure reason lives on the done marker, which FindOrigin strips.
 	doneLine := regexp.MustCompile(`(?m)^- ~~\*\*\[` + regexp.QuoteMeta(ref) + `\].*$`).FindString(corpus)
 	if d, ok := ParseDone(doneLine); ok {
-		it.Closed, it.Reason, it.Note = true, d.Reason, d.Note
+		it.Closed, it.Reason, it.Note, it.ClosedAt = true, d.Reason, d.Note, d.Date
 	}
 	return it, true
 }
 
 // List returns the open items in BACKLOG.md order, then, with includeClosed,
-// the done lines of its ## Completed section and of ARCHIVE.md. An ID that
-// occurs more than once is listed once, at its first position. A bullet whose
-// origin line Get cannot find (an indented bullet) is left out, so that
-// List()[i] always equals Get(List()[i].ID). A missing BACKLOG.md wraps
-// ErrNotFound; a missing ARCHIVE.md is empty.
+// the done lines of its ## Completed section and of ARCHIVE.md, newest first.
+// Both files append, so a later line is newer: the order is by close date,
+// and completions that share a date list the later line first, Completed
+// before ARCHIVE.md. An ID that occurs more than once is listed once, at its
+// newest position. A bullet whose origin line Get cannot find (an indented
+// bullet) is left out, so that List()[i] always equals Get(List()[i].ID). A
+// missing BACKLOG.md wraps ErrNotFound; a missing ARCHIVE.md is empty.
 func (f *File) List(includeClosed bool) ([]Item, error) {
 	md, err := f.Markdown(0)
 	if err != nil {
@@ -88,24 +91,32 @@ func (f *File) List(includeClosed bool) ([]Item, error) {
 	archive, _ := fsio.ReadText(f.rota("ARCHIVE.md"))
 	corpus := strings.TrimRight(md, "\n") + "\n" + archive
 
-	var ids []string
-	for _, e := range OpenBullets(md) {
-		ids = append(ids, e.ID)
-	}
-	if includeClosed {
-		ids = append(ids, doneIDs(sectionBody(md, "Completed"))...)
-		ids = append(ids, doneIDs(archive)...)
-	}
 	var out []Item
 	seen := map[string]bool{}
-	for _, id := range ids {
-		if seen[id] {
-			continue
+	add := func(ids []string) {
+		for _, id := range ids {
+			if seen[id] {
+				continue
+			}
+			seen[id] = true
+			if it, ok := itemFromCorpus(corpus, id); ok {
+				out = append(out, *it)
+			}
 		}
-		seen[id] = true
-		if it, ok := itemFromCorpus(corpus, id); ok {
-			out = append(out, *it)
-		}
+	}
+	var open []string
+	for _, e := range OpenBullets(md) {
+		open = append(open, e.ID)
+	}
+	add(open)
+	if includeClosed {
+		// Oldest to newest, then reversed: the archive holds what left
+		// Completed earlier.
+		done := append(doneIDs(archive), doneIDs(sectionBody(md, "Completed"))...)
+		slices.Reverse(done)
+		n := len(out)
+		add(done)
+		slices.SortStableFunc(out[n:], func(a, b Item) int { return strings.Compare(b.ClosedAt, a.ClosedAt) })
 	}
 	return out, nil
 }
