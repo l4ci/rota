@@ -140,6 +140,14 @@ Number of concurrent shards `bash test/gate.sh` splits the smoke suite into. Int
 rota config set gate.smokeShards 6
 ```
 
+## doctor.minFreeDiskPercent
+
+Free-disk threshold for `rota doctor`, as a percent of the volume holding the project. Integer 0-100, default `10`; `0` turns the check off. Below it doctor adds a `warn disk` line (the run still passes) whose hint names the rota leftovers that would give space back: leaked temp dirs and worktrees whose directory is gone. A parallel round writes worktrees, builds and logs, and a full disk fails it halfway.
+
+```bash
+rota config set doctor.minFreeDiskPercent 5
+```
+
 ## learn.verify
 
 Controls whether [`/rota-learn`](learning.md) runs a second-opinion pass on what it just wrote. The verifier is a fresh Opus sub-agent with no session context that reads only the updated `KNOWLEDGE.md` diff. It judges each new bullet on four criteria: durable (not ephemeral), sharp (concrete claim, not vague), correctly topic'd, and non-duplicate. It can demote weak entries, sharpen vague wording, re-file wrong-topic bullets, or delete restatements of existing knowledge.
