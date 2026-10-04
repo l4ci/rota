@@ -278,7 +278,7 @@ func run(root *Command, args []string, stdin io.Reader, stdout, stderr io.Writer
 	// A stub verb answers before any argument parsing: its flags are not known,
 	// so none can be unknown. -h and --help still reach the help below.
 	if cmd.Stub && !hasHelp(args[i:]) {
-		return fail(c, stdout, NotImplemented(c.Path).WithHint("not ported to the Go binary yet; see docs/design/5.0-verb-contract.md"))
+		return fail(c, stdout, NotImplemented(c.Path).WithHint("not ported to the Go binary yet; see docs/design/contract/"))
 	}
 
 	// After the verb: verb and global flags, mixed with positional args.
