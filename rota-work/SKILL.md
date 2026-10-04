@@ -545,7 +545,7 @@ Loop until no slot is `busy`, routing each state as it appears. Each poll also w
   | `check-broke` | the gate could not decide (bad ref, failed fetch, unreadable PR, a recorded PR but no `origin` remote) | fix the environment and re-run; do not read it as `stale`. A PR is never merged locally |
   | `merged-remotely` | the PR is on `origin/<base>` but the local base could not fast-forward | do **not** re-merge; reconcile the local base by hand, then re-verify |
 
-  `verify-failed` is the case this gate exists for: two workers with disjoint file sets, each honestly green, merging cleanly into a broken tree. Per-task verification cannot see it — the conflicting change was never in either worker's tree. Do not skip the gate because both diffs looked fine; that is exactly the condition under which it fires.
+  `verify-failed` is the case this gate exists for: two workers with disjoint file sets, each honestly green, merging cleanly into a broken tree. Per-task verification cannot see it — the conflicting change was never in either worker's tree. Do not skip the gate because both diffs looked fine; that is exactly the condition under which it fires. The gate is the only full run: don't re-run the suite after a pass, and re-verify only after `verify-failed` once the fix lands.
 
 `data.verifySkipped: true` means `refactor.verifyCommands` is empty and the merged tree was **not** gated by any command. Report that honestly in Step 12 rather than describing the cycle as verified.
 
