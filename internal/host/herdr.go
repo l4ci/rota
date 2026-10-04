@@ -341,7 +341,7 @@ func (h *herdr) SubmitPending(ctx context.Context, slot, handle, file string) (b
 		return false, nil
 	}
 	name := AgentName(slot, handle)
-	if h.Status(ctx, slot, handle) == "working" || !h.briefOnPrompt(ctx, name, strings.TrimRight(text, "\n")) {
+	if h.Status(ctx, slot, handle) != "idle" || !h.briefOnPrompt(ctx, name, strings.TrimRight(text, "\n")) {
 		return false, nil
 	}
 	return true, h.submitTyped(ctx, name)
@@ -377,6 +377,17 @@ func squeeze(s string) string {
 // submitRetries times, until the agent is working or blocked.
 func (h *herdr) submitTyped(ctx context.Context, name string) error {
 	for i := 0; i < submitRetries; i++ {
+		// Enter only into an idle prompt: on a dialog it would answer the
+		// dialog, which nobody approved.
+		switch h.statusOf(ctx, name) {
+		case "working":
+			return nil
+		case "blocked":
+			return ErrDialogOpen
+		case "idle":
+		default:
+			return ErrNotSubmitted
+		}
 		h.herdr(ctx, "agent", "send-keys", name, "enter")
 		w := h.herdr(ctx, "agent", "wait", name, "--until", "working", "--until", "blocked", "--timeout", "10000")
 		switch jget(w.Stdout, "result.agent.agent_status") {
@@ -416,7 +427,11 @@ func (h *herdr) Status(ctx context.Context, slot, handle string) string {
 	if handle == "" {
 		return ""
 	}
-	r := h.herdr(ctx, "agent", "get", AgentName(slot, handle))
+	return h.statusOf(ctx, AgentName(slot, handle))
+}
+
+func (h *herdr) statusOf(ctx context.Context, name string) string {
+	r := h.herdr(ctx, "agent", "get", name)
 	if r.ExitCode != 0 {
 		return "gone"
 	}
