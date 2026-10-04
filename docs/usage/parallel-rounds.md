@@ -78,8 +78,10 @@ rota round wind-down                         # re-verify main, park the slots, r
 rota reap --apply                            # delete the merged branches and leftovers
 ```
 
-`rota round wait` returns the slot that needs you, so loop `wait` and `gate` (and `assign` for the next
-issue) until the queue is empty. Replace `ben` with the slot `wait` named. Preview `rota reap` without
+`rota round wait` returns the slot that needs you, so loop `wait`, `assign` and `gate` until no work is
+left. After every `wait`, give each free slot its next issue before you review: a slot whose worker
+reported done with a PR is free, and `assign` moves its PR to the round's review list. Replace `ben` with the
+slot `wait` named, or gate a PR in review by number (`rota worker gate 61 --base main`). Preview `rota reap` without
 `--apply` first. The sections below cover each step.
 
 ## The round flow
@@ -93,7 +95,7 @@ issue) until the queue is empty. Replace `ben` with the slot `wait` named. Previ
 | Wait | `rota round wait` | blocks until one slot needs the orchestrator, then returns it; never poll |
 | Look | `rota round status`, `rota round reconcile` | the round's rows and drift; `reconcile --apply` repairs what is safe |
 | Ask | `rota round escalate send`, `rota round escalate check` | puts a question to the maintainer on the issue or PR thread and reads the answer |
-| Merge | `rota worker gate <slot> --base <branch>` | verifies on the merged tree, merges on a pass; a [merge approval](#merge-approval) policy can require a human first |
+| Merge | `rota worker gate <slot\|#PR> --base <branch>` | verifies on the merged tree, merges on a pass; a [merge approval](#merge-approval) policy can require a human first |
 | Clean | `rota reap` | lists, then with `--apply` removes, what no live slot owns; never kills a running agent |
 | End | `rota round wind-down` | re-verifies the base, parks every slot, releases the lease |
 
@@ -108,6 +110,7 @@ candidates; it starts no agent.
 ```sh
 rota round start --slots 3                    # scope from round.scope (default milestone)
 rota round start --scope slate --items 12,13  # only these issues
+rota round start --scope open                 # every open issue, as it becomes ready
 rota round candidates                         # re-read the board with readiness checks
 ```
 
@@ -119,9 +122,11 @@ rota round candidates                         # re-read the board with readiness
   existing slot is left alone. The worktrees live in the project root under `.worktrees/`, which
   `rota init` adds to `.gitignore`.
 - **Scope** is which issues the round may take: `slate` (only `--items`), `milestone` (the open
-  items of the active milestones) or `next` (the same, then the next planned milestone whose
-  dependencies shipped). Assign refuses anything outside it. See
-  [round keys](configuration.md#round-keys).
+  items of the active milestones), `next` (the same, then the next planned milestone whose
+  dependencies shipped) or `open` (every open item; readiness and overlap decide the order, so a
+  round takes newly ready issues without a restart). Assign refuses anything outside it. Running
+  `start` again in the same round keeps the recorded scope and slate unless you pass `--scope`;
+  `--scope slate --items …` replaces the slate. See [round keys](configuration.md#round-keys).
 
 ### Picking issues
 
@@ -144,7 +149,8 @@ rota round assign 59 --check-only             # readiness only; exit 1 when not 
 rota round assign 59 --agent ben --body-file decisions.md --siblings 58,60,62
 ```
 
-Without `--agent` the first idle roster slot takes it. Assign refuses (exit 4, `blockedBy`)
+Without `--agent` the first idle roster slot takes it, else the first slot whose worker is done with
+a PR (see [PRs in review](#prs-in-review)). Assign refuses (exit 4, `blockedBy`)
 with `no round`, `out of scope`, `not ready`, `overlap`, `claimed`, `slot busy`,
 `no free slot` or `brief missing`, and marks nothing in those cases. When it goes through it
 claims the item (`<agent>@<round>`), sets it in progress with a comment, cuts the slot's
@@ -168,8 +174,11 @@ issue to read and dispute, the siblings and the decisions from `--body-file`.
 `rota round wait [<slot>...] [--timeout <s>]` blocks until a worker needs attention and prints
 the slot and its state as JSON, so the orchestrator never polls in its own context. It
 classifies with the same rules as `rota worker poll` (sentinels, `limited`, `dead`, then the
-host's status) and writes nothing. With no slot named it watches every slot that has a
-session and whose recorded state is not `idle`; `rota worker dispatch` arms a slot.
+host's status). It records the slot it returns as `rota worker poll` would (its state, and the PR
+from `ROTA-DONE`) and marks it seen: the next `wait` skips that slot until its state changes, so a
+done slot whose PR you are holding does not come back on every call. A dispatch or relay re-arms it.
+With no slot named it watches every slot that has a session and whose recorded state is not `idle`;
+`rota worker dispatch` arms a slot.
 
 - **herdr**: pinned to **0.9.x** (built against 0.9.3, socket protocol 22); another minor
   exits 5. One `events.subscribe` over `HERDR_SOCKET_PATH` carries a
@@ -180,6 +189,23 @@ session and whose recorded state is not `idle`; `rota worker dispatch` arms a sl
 - **Timeout** exits 1 with `data.timedOut: true` and every slot's state; it is an answer,
   not a fault. `--timeout` defaults to 0, which waits indefinitely.
 - **Long waits in Claude Code** hit the Bash tool's timeout; see [internals](#internals).
+
+## PRs in review
+
+A worker that opened its PR is finished with its slot. When `assign` (or `transfer --to`) needs a
+slot and one holds a PR whose worker reported `done` (or went idle) with a clean worktree, it pushes
+the branch, parks the slot and keeps the PR on the round's review list (`prs` in `.rota/workers.json`).
+The issue keeps its claim and in-progress label: it is still taken, just not by a slot. A slot
+whose worker is busy, blocked or has uncommitted files is never taken.
+
+- **See it**: `rota round status` lists each PR in review (`review` in JSON).
+- **Merge it**: `rota worker gate <PR number> --base <branch>` (or `'#<N>'`, or the PR URL). A pass drops it from the list.
+  `rota worker gate <slot>` on a slot whose PR moved to review is refused with the PR to gate, so a
+  habitual slot gate never merges the slot's next branch.
+- **Bounce it**: `rota round transfer <issue> --to <free slot> --body-file <gap>` checks the
+  branch out in that slot, moves the PR back onto it and dispatches the follow-up.
+- A PR in review still counts as in flight: its issue is not a candidate, and its changes take part
+  in the overlap check.
 
 ## Asking the maintainer
 

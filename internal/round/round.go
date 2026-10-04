@@ -344,7 +344,7 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 			case err != nil:
 				rep.Warnings = append(rep.Warnings, fmt.Sprintf("PR #%d state: %v", n, err))
 			case st == "merged" || st == "closed":
-				rep.add(Finding{Kind: PRStale, Issue: worker.Str(q, "issue"), Detail: fmt.Sprintf("queued PR #%d is %s", n, st), Repair: "drop the queued record"})
+				rep.add(Finding{Kind: PRStale, Issue: worker.Str(q, "issue"), Detail: fmt.Sprintf("PR #%d in review is %s", n, st), Repair: "drop it from review"})
 			}
 		}
 	}

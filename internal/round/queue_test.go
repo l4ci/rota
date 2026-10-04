@@ -201,7 +201,7 @@ func TestStatusReportsQueuedPRs(t *testing.T) {
 	}
 	found := false
 	for _, fd := range out.Repaired {
-		if fd.Kind == PRStale && fd.Issue == "12" && strings.Contains(fd.Detail, "queued PR #7 is merged") {
+		if fd.Kind == PRStale && fd.Issue == "12" && strings.Contains(fd.Detail, "PR #7 in review is merged") {
 			found = true
 		}
 	}
