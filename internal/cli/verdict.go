@@ -48,7 +48,7 @@ func resolveVerdictBranch(c *Ctx, args []string) (verdictBranch, error) {
 		return verdictBranch{}, Resolution("no .rota/ directory here or in any parent").WithHint("run: rota init")
 	}
 	v := verdictBranch{root: root, repo: c.Repo, branch: t.Branch}
-	if v.repo == "" && len(repos.Load(root)) > 0 {
+	if v.repo == "" && repos.Umbrella(root) {
 		if r, err := repos.Which(t.Dir); err == nil {
 			v.repo = r.Name
 		}
