@@ -94,6 +94,12 @@ for cli in gh glab herdr tmux codex; do
   chmod +x "$ROTA_POISON_BIN/$cli"
 done
 export PATH="$ROTA_POISON_BIN:$PATH"
+# Nor may a section see the developer's installed skills: round assign finds the
+# worker contract under $CLAUDE_CONFIG_DIR/skills (else $HOME/.claude/skills), so
+# an installed rota would make "contract missing" fixtures pass on one machine
+# and fail on another. Point it at an empty dir.
+export CLAUDE_CONFIG_DIR="$RUN_TMP/claude-config"
+mkdir -p "$CLAUDE_CONFIG_DIR"
 # Nor may a section inherit this shell's live host identity (pane, tab,
 # socket): sections that need one set fake values themselves.
 for v in $(compgen -e | grep -E '^(HERDR_|TMUX)'); do unset "$v"; done
