@@ -81,7 +81,10 @@ func Lookup(name string) (Harness, error) {
 const (
 	ModeTab     = "tab"     // a new tab or window in the host the caller is inside
 	ModeSession = "session" // exec a new tmux session; the caller's terminal becomes it
-	ModeInPlace = "inplace" // exec the supervisor in this terminal: no multiplexer
+	// ModeHerdrSession starts a named herdr session with the orchestrator in it,
+	// then execs an attach: the caller's terminal becomes it.
+	ModeHerdrSession = "herdr-session"
+	ModeInPlace      = "inplace" // exec the supervisor in this terminal: no multiplexer
 )
 
 // Plan is what Launch will do.
@@ -90,7 +93,7 @@ type Plan struct {
 	Host    string `json:"host"` // herdr, tmux or solo
 	Mode    string `json:"mode"`
 	Cwd     string `json:"cwd"`
-	Session string `json:"session,omitempty"` // ModeSession: the tmux session
+	Session string `json:"session,omitempty"` // ModeSession, ModeHerdrSession: the session name
 	// Supervisor is the whole process: rota keepalive run, then the agent.
 	Supervisor []string `json:"command"`
 }
@@ -134,18 +137,21 @@ func (e Env) Resolve(root string, cfg any) (Plan, error) {
 	p := Plan{Harness: h.Name, Cwd: root, Supervisor: sup}
 
 	herdr, tmux := e.Host("herdr"), e.Host("tmux")
-	switch dispatch := str(cfg, "work.dispatch"); {
+	// Outside any multiplexer herdr is preferred: it is what rounds use, so the
+	// orchestrator's workers open beside it. The session is rota's own, never
+	// the user's default one.
+	dispatch := str(cfg, "work.dispatch")
+	switch {
 	case herdr.InSession() && herdr.Require() == nil:
 		p.Host, p.Mode = "herdr", ModeTab
 	case tmux.InSession():
 		p.Host, p.Mode = "tmux", ModeTab
-	case dispatch == "herdr":
-		// herdr has no startup command to exec into, and its own guide forbids
-		// driving its server from outside a managed pane.
-		return p, &Error{Code: "refused", Msg: "work.dispatch=herdr needs rota to run inside a herdr pane",
-			Hint: fmt.Sprintf("open herdr, then run rota in a pane at %s; the orchestrator tab opens beside it", root)}
+	case dispatch == "herdr" && herdr.Require() != nil:
+		return p, &Error{Code: "unavailable", Msg: "work.dispatch=herdr but herdr is not installed"}
 	case dispatch == "tmux" && tmux.Require() != nil:
 		return p, &Error{Code: "unavailable", Msg: "work.dispatch=tmux but tmux is not installed"}
+	case dispatch != "tmux" && herdr.Require() == nil:
+		p.Host, p.Mode, p.Session = "herdr", ModeHerdrSession, "rota-"+sessionName(root)
 	case tmux.Require() == nil:
 		p.Host, p.Mode, p.Session = "tmux", ModeSession, "rota-"+sessionName(root)
 	default:
@@ -184,6 +190,19 @@ func (e Env) Launch(ctx context.Context, p Plan) (Launched, error) {
 			return Launched{}, &Error{Code: "unavailable", Msg: err.Error()}
 		}
 		return Launched{Handle: tab}, nil
+	case ModeHerdrSession:
+		st, ok := e.Host("herdr").(host.SessionStarter)
+		if !ok {
+			return Launched{}, &Error{Code: "unavailable", Msg: "herdr host cannot start a session"}
+		}
+		if _, err := st.StartSession(ctx, p.Session, host.TabOpts{Label: Label, Cwd: p.Cwd, Command: line}); err != nil {
+			return Launched{}, &Error{Code: "unavailable", Msg: err.Error()}
+		}
+		herdr, err := e.LookPath("herdr")
+		if err != nil {
+			return Launched{}, &Error{Code: "unavailable", Msg: "herdr is not installed"}
+		}
+		return Launched{}, e.exec(herdr, []string{"herdr", "session", "attach", p.Session})
 	case ModeSession:
 		tmux, err := e.LookPath("tmux")
 		if err != nil {
