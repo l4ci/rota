@@ -125,6 +125,8 @@ var Keys = []Key{
 	{"orchestrator.keepaliveBackoffSeconds", json.Number("5"), false},
 	{"orchestrator.restartPrompt", "Continue as orchestrator: read the handoff injected at session start, run rota round status, and resume the round.", false},
 	{"orchestrator.escalateIssue", json.Number("0"), false},
+	// #19 launcher key: read by `rota orchestrate` and bare `rota`.
+	{"orchestrator.harness", "claude", false},
 	// D4 usage-switch keys: silent defaults, read by the Stop hook and `rota keepalive run`.
 	{"orchestrator.switchOnUsage", false, false},
 	{"orchestrator.usageThreshold", json.Number("90"), false},
