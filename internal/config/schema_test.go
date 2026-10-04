@@ -164,3 +164,19 @@ func TestKeysMatchPython(t *testing.T) {
 	}
 	pytest.Compare(t, "CONFIG_KEYS", gi, gi, wi)
 }
+
+func TestPromptsMatchSchema(t *testing.T) {
+	for _, p := range Prompts {
+		if !IsSchemaKey(p.Key) {
+			t.Errorf("prompt key %q is not in the schema", p.Key)
+		}
+		if !p.Valid(p.DefaultChoice()) {
+			t.Errorf("%s: schema default %q is not among the choices", p.Key, p.DefaultChoice())
+		}
+		if p.IfKey != "" {
+			if q := PromptFor(p.IfKey); q == nil || !q.Valid(p.IfValue) {
+				t.Errorf("%s: condition %s=%s does not name a prompt choice", p.Key, p.IfKey, p.IfValue)
+			}
+		}
+	}
+}
