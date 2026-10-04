@@ -17,11 +17,11 @@ rota knowledge query "Auth & Sessions"
   as if started in `<dir>`, `--repo <name>` scopes a verb to an umbrella
   sub-repo, `-h` prints help for any group or verb.
 - **No prompts.** `rota` never asks anything. A missing decision is exit 2 naming
-  the flag. Skills do the asking.
+  the flag. Skills do the asking. The exception is `rota setup`, which prompts only on a terminal.
 - **Bodies on stdin.** Any flag that takes a file path also accepts `-`
   (`--body-file -`).
 - **Project root.** Verbs walk up from the working directory to the nearest
-  `.rota/`. Only `rota init`, `rota init check`, `rota init umbrella`, `rota version` and
+  `.rota/`. Only `rota init`, `rota init check`, `rota init umbrella`, `rota setup`, `rota version` and
   `rota update` run without one.
 - **Idempotent writes.** A mutating verb reports `changed: true|false`. A no-op
   is exit 0.
@@ -453,6 +453,7 @@ A gated verb refuses with exit 4 (`blockedBy: "manual gate"`) at every autonomy 
 | Usage | What it does |
 |---|---|
 | `rota init` | create or refresh `.rota/`, the managed blocks and `.gitignore` |
+| `rota setup [--yes] [--set <key>=<value>]... \| --list` | `rota init` plus the main config choices, asked on a terminal; `--yes` takes defaults, `--list` prints the questions |
 | `rota init check` | is `.rota/` initialized (exit 1 when not) |
 | `rota init umbrella (--repos <csv> \| --all \| --list)` | register sub-repos and make this directory an umbrella |
 
