@@ -37,6 +37,15 @@ old: hv-knowledge-amend [--repo <name>] --topic <T> --fragment <F> --append <tex
 shim: reads the body file (or stdin for `-`) into the text argument. The old helper prints nothing, so `changed` is computed by comparing the target KNOWLEDGE.md before and after the call.
 note: `--append TEXT` becomes `--mode append` plus `--body-file`, per rule 3, as for `design amend`; `append` is the only mode, so a later mode can be added. Without `--repo`, a single match across umbrella and the resolved sub-repo is amended, as before. A multi-file match was exit 1 and is now exit 2 (a missing decision, per the conventions).
 
+### rota knowledge replace
+rota knowledge replace --topic <T> --old <text> --new <text>
+repo: scoped (scope S); edits S's KNOWLEDGE.md only, with no umbrella/sub-repo fallback search
+data: {"topic": string, "changed": bool}; on exit 4 `{"blockedBy": "ambiguous", "changed": false}`
+exit: 2 when `--topic`, `--old` or `--new` is missing (`--new ""` is allowed and deletes the text); 3 when the topic is not found or `<old>` is in no bullet of it; 4 when `<old>` is in more than one bullet of it (hint: use a longer fragment)
+old: none (new in T4)
+note: `--old` is a case-sensitive exact substring. A bullet runs from its `- ` line to the next sibling bullet, so a wrapped bullet matches as a whole. Every occurrence inside the one matched bullet is replaced. `changed` is false when `--old` equals `--new`. When the edit changes the bullet's bold title, the tier entry is re-keyed to the new title (hits and tier kept). The Glossary topic has no tier entries, so nothing is re-keyed there.
+note: `amend` only appends and `rename-topic` only renames or moves; this is the verb that corrects a stale bullet. Unlike `amend`, ambiguity is exit 4 (the file is intact and the caller can retry with a longer fragment), not 2. The ticket asked for exit 4 on zero matches too; zero matches stays exit 3, as for `amend` and `rename-topic`, because the bullet could not be resolved (unratified).
+
 ### rota knowledge rename-topic
 rota knowledge rename-topic --from <X> --to <Y> [--title <T>]
 repo: scoped (scope S). The old helper applied `--repo` to the tier sidecar only and always edited the umbrella `.rota/KNOWLEDGE.md`. The contract requires both the heading edit and the sidecar re-key to use S.
