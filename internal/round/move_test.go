@@ -999,6 +999,38 @@ func TestReclaimFreesASlotWhoseIssueNoLongerResolves(t *testing.T) {
 	}
 }
 
+// Return and transfer free the slot the same way when the tracker no longer
+// resolves the issue's comments, claims and state (#27).
+func TestReturnFreesASlotWhoseIssueNoLongerResolves(t *testing.T) {
+	f := newMoveFx(t)
+	f.be.gone = map[string]bool{"12": true}
+	res, err := f.ret("ben", "gone", nil)
+	if err != nil {
+		t.Fatalf("return must not fail on an unresolvable issue: %v", err)
+	}
+	if !res.Changed || len(res.Warnings) != 3 {
+		t.Fatalf("%+v", res)
+	}
+	if s := f.slot("ben"); worker.Str(s, "task") != "" || worker.Str(s, "state") != "idle" {
+		t.Errorf("slot not freed: %v", s)
+	}
+}
+
+func TestTransferToHumanFreesASenderWhoseIssueNoLongerResolves(t *testing.T) {
+	f := newMoveFx(t)
+	f.be.gone = map[string]bool{"12": true}
+	res, err := f.transfer("12", HumanTarget, nil)
+	if err != nil {
+		t.Fatalf("transfer must not fail on an unresolvable issue: %v", err)
+	}
+	if !res.Changed || len(res.Warnings) != 3 {
+		t.Fatalf("%+v", res)
+	}
+	if s := f.slot("ben"); worker.Str(s, "task") != "" || worker.Str(s, "state") != "idle" {
+		t.Errorf("sender not freed: %v", s)
+	}
+}
+
 // A handoff comment hv posted before the rename (#236) still names the branch
 // the next worker continues from.
 func TestLatestHandoffBranchReadsLegacyMarker(t *testing.T) {
