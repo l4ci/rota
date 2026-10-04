@@ -124,6 +124,14 @@ type SpawnOpts struct {
 	BootTimeout int // seconds
 }
 
+// Resubmitter is implemented by a host that can tell a brief left unsent on
+// the prompt line, so a resend submits it instead of typing it again.
+type Resubmitter interface {
+	// SubmitPending submits the file's text if it is already on the prompt
+	// line. handled=false: nothing pending, the caller sends as usual.
+	SubmitPending(ctx context.Context, slot, handle, file string) (handled bool, err error)
+}
+
 // Host is one terminal backend.
 type Host interface {
 	// Name is "tmux" or "herdr".

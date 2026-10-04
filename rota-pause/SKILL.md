@@ -3,15 +3,6 @@ name: rota-pause
 description: Gracefully pause mid-session — writes a handoff note (current hypothesis, next planned step, mid-edit files, uncommitted work strategy) to .rota/handoff/<branch>.md so `/rota-work` with no argument in a fresh session can pick up with full context, not just git state. Use when the session is approaching a context limit, you need to hand off, or you want to stop a long /rota-work cycle cleanly.
 ---
 
-**Print the banner below verbatim before any other action — skip if dispatched as a subagent.** See `references/banner-preamble.md`.
-
-```
-════════════════════════════════════════════════════════════════════════
-  💤  rota-pause  ·  write handoff note for clean pause
-  triggers: "pause", "hand off"  ·  pairs: rota-work, rota-learn
-════════════════════════════════════════════════════════════════════════
-```
-
 # rota-pause — Graceful Session Pause
 
 `/rota-work` with no argument reads the handoff note on the next session; the note goes away when that stream is resumed or abandoned (`rota status rm` deletes it).
@@ -30,7 +21,7 @@ description: Gracefully pause mid-session — writes a handoff note (current hyp
 
 ## Step 1 — Task List
 
-**Initialize task list.** Follow `references/task-list-init.md` (load `TaskCreate(…)` via `ToolSearch select:TaskCreate,TaskUpdate` if needed), one task per phase:
+Track these phases with the host's task tool if it has one.
 
 1. *Resolve pause set* — which `(branch, repo)` entries (Step 2)
 2. *Handle uncommitted work* — user picks a strategy (Step 3)
@@ -50,7 +41,7 @@ The pause set is the `(branch, repo)` entries to pause: one for a single-repo cy
 
 Check each entry's tree with `git -C <path> status --porcelain` (path from `rota repo resolve <repo> --json`, `data.repos[0].path`; cwd when `repo` is null).
 
-All clean: record `clean tree` and continue. Any dirty: ask once via `AskUserQuestion`, following `references/ask-user-question-fallback.md`:
+All clean: record `clean tree` and continue. Any dirty: ask once via `AskUserQuestion`:
 
 - **Header:** `"Uncommitted"`
 - **Question:** *"N uncommitted files on `<branch>`. How should I handle them?"* For a wave, name the dirty repos instead of N.
@@ -122,8 +113,5 @@ Stage, Next and Hypothesis are shared across the wave; Uncommitted is per repo.
 
 ## References
 
-- [`references/banner-preamble.md`](references/banner-preamble.md) — Banner-print rule shared by every skill.
-- [`references/task-list-init.md`](references/task-list-init.md) — Task-list init pattern.
-- [`references/ask-user-question-fallback.md`](references/ask-user-question-fallback.md) — Plain-text fallback for the strategy question.
 - [`references/handoff-template.md`](references/handoff-template.md) — Handoff-note template written by `/rota-pause`, read by `/rota-work`.
 - [`references/terminal-loop-surface.md`](references/terminal-loop-surface.md) — `[Auto:Loop]` surface and loop-marker clear.

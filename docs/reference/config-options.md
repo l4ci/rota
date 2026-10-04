@@ -66,7 +66,7 @@ Values for list and object keys are JSON (`rota config set work.accounts '[...]'
 |-------|-------------|
 | Review before ship (Recommended) | `/rota-ship` runs `/rota-review` first. FAIL blocks, CONCERNS ask, PASS flows through. |
 | Verify learnings (Recommended) | `/rota-learn` dispatches an Opus verifier for a cold pass on new entries. Knowledge quality compounds. |
-| Confirm before refactor (Recommended) | `/rota-refactor` pauses for approval after finding friction and after selecting a design. Off = full autonomy. |
+| Confirm before refactor (Recommended) | `/rota-refactor --fix` confirms the candidate list before implementing. Off = no pause. The default findings run never edits code. |
 | Competing hypotheses (debug) | `/rota-debug` dispatches 3 parallel hypothesis agents from different angles. Better diversity on hard bugs, ~3× orchestrator cost. |
 
 ## Q5: Autonomy
@@ -137,7 +137,7 @@ Free text. Default: `""` (auto-detect). Key `git.baseBranch`.
 `rota init` fills these with the silent default; set them only when you want something else:
 
 - `rota.version`: stamp of the rota release that wrote the config. Auto-managed by `rota init` and `rota update`; do not set it by hand. The stamp a project got before the rename to rota is read as a fallback and moved here by `rota init` / `rota config fill`.
-- `refactor.verifyCommands`: array of shell commands run as CI-shape gates by /rota-refactor Step 7. Silent default `[]` (read-only verification). Set via `rota config set refactor.verifyCommands '[...]'`.
+- `refactor.verifyCommands`: array of shell commands run as CI-shape gates by `/rota-refactor --fix` verification. Silent default `[]` (read-only verification). Set via `rota config set refactor.verifyCommands '[...]'`.
 - `ship.secondOpinion`: opt-in fresh-eyes adversarial gate in /rota-ship Step 3.5. Silent default `false` (Rule 9). Set via `rota config set ship.secondOpinion true`.
 - `ship.secondOpinionRunner`: who runs the /rota-ship Step 3.5 gate when `ship.secondOpinion` is `true`. Enum `subagent` (silent default). The `codex` value was removed in 5.0: /rota-ship prints a one-line note and runs the subagent in advisory mode (FAIL is surfaced, never blocks), as the Codex runner did. See [`usage/configuration.md`](../usage/configuration.md#shipsecondopinionrunner).
 - `ship.qa`: opt-in product-QA gate in /rota-ship Step 3.75. Silent default `false` (Rule 9). When `true`, /rota-ship invokes [`/rota-qa run`](../usage/qa.md) after /rota-review (and second-opinion if on) and before merge / PR. Set via `rota config set ship.qa true`. See [`usage/configuration.md`](../usage/configuration.md#shipqa).

@@ -3,15 +3,6 @@ name: rota-work
 description: Orchestrator-driven parallel implementation — plans tasks, dispatches workers, verifies, commits atomically per task. Workers run as in-process subagents (default) or, under work.dispatch=tmux or herdr, as separate Claude Code sessions in their own worktrees that open PRs behind a merge gate. Supports branch or worktree isolation and direct merge or PR. Use when items already exist in BACKLOG.md and need implementation ("implement [B07]", "build these"); with no argument it reconciles active work and suggests the next item; for an item not yet captured use /rota-capture, which can hand off here.
 ---
 
-**Print the banner below verbatim before any other action — skip if dispatched as a subagent.** See `references/banner-preamble.md`.
-
-```
-════════════════════════════════════════════════════════════════════════
-  🔨  rota-work  ·  orchestrator-driven parallel implementation
-  triggers: "implement", "build these"  ·  pairs: rota-ship, rota-review
-════════════════════════════════════════════════════════════════════════
-```
-
 # rota-work
 
 Orchestrator-driven parallel implementation with per-task verification and commits.
@@ -47,7 +38,7 @@ Guard → Clarify (if needed) → Status → Plan → Isolate → Dispatch → V
 
 `/rota-work` with no item, ID or brief reconciles what is in flight, shows the backlog, suggests one item and then continues into Step 1 with it. Rounds do not use this path; the orchestrator runs `/rota-orchestrate`.
 
-**1. Reconcile active streams.** `rota status show` lists them. Git is the source of truth over `status.json`. For each stream: a branch that no longer exists is dropped with `rota status rm <branch> [--repo <repo>]`; otherwise note whether it has commits past the base (`rota git base`) and whether `rota status handoff <branch> [--repo <repo>]` returns a `/rota-pause` note (read its Stage, Next planned step and Current hypothesis). Resolve each stream with `AskUserQuestion` (plain-text fallback), Recommended first:
+**1. Reconcile active streams.** `rota status show` lists them. Git is the source of truth over `status.json`. For each stream: a branch that no longer exists is dropped with `rota status rm <branch> [--repo <repo>]`; otherwise note whether it has commits past the base (`rota git base`) and whether `rota status handoff <branch> [--repo <repo>]` returns a `/rota-pause` note (read its Stage, Next planned step and Current hypothesis). Resolve each stream with `AskUserQuestion`, Recommended first:
 
 - handoff present: resume with the note as the brief (Recommended); leave it for later; abandon.
 - commits, no handoff: ship via `/rota-ship` (Recommended); resume; leave as-is.
@@ -173,7 +164,7 @@ After surfacing, clear the loop timestamp so the next loop session starts fresh:
 rota status loop clear   # no-op when loopStartedAt is already unset
 ```
 
-**Initialize task list.** Follow the canonical pattern in `references/task-list-init.md` — load `TaskCreate(…)` via `ToolSearch select:TaskCreate,TaskUpdate` if needed, then create one task per phase below.
+Track these phases with the host's task tool if it has one.
 
 Phases:
 
@@ -208,7 +199,7 @@ When asking, use a single `AskUserQuestion` call with 1-3 questions. Each questi
 - Options map to concrete plans. Mark the most likely intent `(Recommended)`.
 - For conflicting items, use `multiSelect: true` and ask which subset to include in this run.
 
-Plain-text fallback: ask once; on ambiguity, default to Recommended and state it explicitly in the dispatch brief. See `references/ask-user-question-fallback.md`.
+On ambiguity, default to Recommended and state it explicitly in the dispatch brief.
 
 **Loop mode exception:** if `autonomy.level == "loop"` and the brief is genuinely ambiguous (you'd otherwise ask Step 2), the routing depends on the item's shape:
 
@@ -554,7 +545,7 @@ Loop until no slot is `busy`, routing each state as it appears. Each poll also w
   | `check-broke` | the gate could not decide (bad ref, failed fetch, unreadable PR, a recorded PR but no `origin` remote) | fix the environment and re-run; do not read it as `stale`. A PR is never merged locally |
   | `merged-remotely` | the PR is on `origin/<base>` but the local base could not fast-forward | do **not** re-merge; reconcile the local base by hand, then re-verify |
 
-  `verify-failed` is the case this gate exists for: two workers with disjoint file sets, each honestly green, merging cleanly into a broken tree. Per-task verification cannot see it — the conflicting change was never in either worker's tree. Do not skip the gate because both diffs looked fine; that is exactly the condition under which it fires.
+  `verify-failed` is the case this gate exists for: two workers with disjoint file sets, each honestly green, merging cleanly into a broken tree. Per-task verification cannot see it — the conflicting change was never in either worker's tree. Do not skip the gate because both diffs looked fine; that is exactly the condition under which it fires. The gate is the only full run: don't re-run the suite after a pass, and re-verify only after `verify-failed` once the fix lands.
 
 `data.verifySkipped: true` means `refactor.verifyCommands` is empty and the merged tree was **not** gated by any command. Report that honestly in Step 12 rather than describing the cycle as verified.
 
@@ -731,7 +722,7 @@ Run the post-cycle choreography in `references/post-cycle-trigger-gate.md` with 
 
 - **Trigger override:** `features >= 5` OR `bugs >= 10` (replaces the gate's default condition; don't-repeat still applies).
 - **Nudge (`"off"`):** *"You've shipped [N] features / [M] bug fixes since the last refactor. Might be a good time to run `/rota-refactor` to clean up accumulated friction."*
-- **Target (`"auto"`/`"loop"`):** **dispatch `rota-refactor` via `Skill` immediately — no prompt, no confirmation.** No brief needed; `refactor.confirmBeforeExecute` still governs the internal checkpoints.
+- **Target (`"auto"`/`"loop"`):** **dispatch `rota-refactor` via `Skill` immediately — no prompt, no confirmation.** No brief needed; the run files findings as issues and edits no code (`--fix` is never passed from here).
 
 ## Step 15 — Loop Continuation
 
@@ -754,8 +745,6 @@ Loop stops naturally when:
 
 | Reference | Purpose |
 |-----------|---------|
-| [`ask-user-question-fallback.md`](references/ask-user-question-fallback.md) | Plain-text fallback shape for AskUserQuestion-less hosts. |
-| [`banner-preamble.md`](references/banner-preamble.md) | Banner-print rule shared by every skill. |
 | [`issue-mode.md`](references/issue-mode.md) | Issue-mode helper map, state labels, PR flow, resuming an item, exit codes (`backlog.backend: "issues"`). |
 | [`isolation-patterns.md`](references/isolation-patterns.md) | Branch / worktree creation patterns per work.isolation + umbrella mode. |
 | [`knowledge-consult.md`](references/knowledge-consult.md) | Canonical K+D query pattern (`rota knowledge query` + `rota decisions query`) used by every cycle-starting skill. |

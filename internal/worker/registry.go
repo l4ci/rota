@@ -191,6 +191,13 @@ func Str(o *jsonx.Object, key string) string {
 	return s
 }
 
+// Bool reads a bool field, false when absent, null or not a bool.
+func Bool(o *jsonx.Object, key string) bool {
+	v, _ := o.Get(key)
+	b, _ := v.(bool)
+	return b
+}
+
 // Update is a locked read-modify-write of the registry. def is used when the
 // file is missing or corrupt, mutate edits the document in place.
 func Update(root string, def *jsonx.Object, mutate func(doc *jsonx.Object)) error {
