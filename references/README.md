@@ -20,8 +20,9 @@ See KNOWLEDGE.md "Skill Authoring: Prose & References" for the conventions that 
 | [`isolation-guard.md`](isolation-guard.md) | Why the parallel-waves-require-worktree-isolation guard fires, with the M02-S01 incident rationale and **Forbids / Permits** block for `/rota-work` Step 5. | `/rota-work` |
 | [`isolation-patterns.md`](isolation-patterns.md) | Branch / worktree creation patterns per work.isolation + umbrella mode. | `/rota-work` |
 | [`knowledge-consult.md`](knowledge-consult.md) | Canonical K+D query pattern (`rota knowledge query` + `rota decisions query`) used by every cycle-starting skill. | `/rota-debug`, `/rota-review`, `/rota-work` |
+| [`learn-rare-modes.md`](learn-rare-modes.md) | `/rota-learn` manual flags (`--term`, `--promote`, `--deprecate`, `--amend`) and the contradiction queue. | `/rota-learn` |
 | [`loop-mode-plan-dispatch.md`](loop-mode-plan-dispatch.md) | Loop-mode auto-plan dispatch (uncertainty pre-flight, orchestrator-model contract) plus rename + link-sweep collision detection for `/rota-work` Step 4. | `/rota-work` |
-| [`manual-gates.md`](manual-gates.md) | The manual-gate registry (`rota gate list`): gates the verbs enforce with `--confirm`, and the skill-only callouts. | `/rota-capture` (`--remove`, `--from-*`), `/rota-learn`, `/rota-release`, `/rota-ship` |
+| [`manual-gates.md`](manual-gates.md) | The manual-gate registry (`rota gate list`): gates the verbs enforce with `--confirm`, and the skill-only callouts. | `/rota-release`, `/rota-ship` |
 | [`milestone-tagging.md`](milestone-tagging.md) | Milestone-tagging UX pattern used by capture/go skills. | `/rota-capture` |
 | [`persistence-skills.md`](persistence-skills.md) | Shared spine and divergence axes for the persistence duo (`/rota-learn`, `/rota-decide`), plus umbrella scoping (hybrid KNOWLEDGE, umbrella-only DECISIONS). | `/rota-decide`, `/rota-learn` |
 | [`post-cycle-trigger-gate.md`](post-cycle-trigger-gate.md) | Trigger condition + nudge-or-dispatch choreography for post-cycle skills. | `/rota-qa`, `/rota-ship`, `/rota-work` |

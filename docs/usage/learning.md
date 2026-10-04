@@ -97,8 +97,8 @@ higher levels the skill runs automatically at the end of a work cycle.
 
 ## Verification
 
-`learn.verify` in `.rota/config.json` controls a second-opinion pass. When set to
-`true`, `/rota-learn` dispatches a fresh Opus subagent that reads only the updated
+`learn.verify` in `.rota/config.json` controls a second-opinion pass, off by
+default. Set it to `true`, or pass `--strict` for one run, and `/rota-learn` dispatches a fresh Opus subagent that reads only the updated
 `KNOWLEDGE.md` diff (no session context) and judges each new bullet on four
 criteria: durable (not ephemeral), sharp (concrete claim, not vague), correctly
 topic'd, and non-duplicate. The verifier can demote weak entries, sharpen vague
@@ -107,26 +107,18 @@ knowledge.
 
 | Value | Behavior |
 |-------|----------|
-| `true` | After writing, run the verifier. Catches weak, duplicate, or wrong-topic entries before they accrete. Adds one Opus roundtrip per `/rota-learn` call. |
-| `false` | Skip the verifier. `/rota-learn` writes and reports immediately. Faster and cheaper. |
+| `true` or `--strict` | After writing, run the verifier. Catches weak, duplicate, or wrong-topic entries before they accrete. Adds one Opus roundtrip per `/rota-learn` call. |
+| `false` (default) | Skip the verifier. `/rota-learn` writes and reports immediately. Faster and cheaper. |
 
 See [configuration](configuration.md) for the full `learn.verify` setting.
 
 ## CLAUDE.md integration
 
-`/rota-learn` keeps the managed `rota-knowledge` block in `CLAUDE.md` in sync with
+`/rota-learn` keeps the managed `rota-knowledge` block in the project instructions file (`AGENTS.md` when present, else `CLAUDE.md`) in sync with
 the topic headings in `KNOWLEDGE.md`. Each time `/rota-learn` runs it rewrites
 that block to reflect the current topic list. `/rota-work` reads this index at the
 start of a task to decide whether the task at hand warrants consulting
 `KNOWLEDGE.md` before planning begins.
-
-## Cross-skill: external dependencies feed runlog
-
-When a captured bullet is about an external dependency (a third-party API quirk, a library bug, or a protocol gotcha), `/rota-learn` asks once whether to also contribute the finding to [runlog.org](https://runlog.org) via `/runlog-author`. Trigger heuristic: the bullet's topic begins with `Third-Party`, `Networking`, `Auth`, `Persistence`, or `Deployment`, OR the body mentions a recognizable protocol (OAuth, JWT, WebSocket, gRPC, REST, S3, ...), an external HTTP status (401, 403, 429, 500-504), or a brand/library name (anthropic, openai, redis, postgres, kafka, stripe, aws, cloudflare, ...). If nothing matches, the step is silent.
-
-The nudge is always manual. `/rota-learn` never auto-files to runlog regardless of [autonomy](autonomy.md) level, since the contribution is a public artifact. Pick "Run /runlog-author" and the runlog skill drives its local Ed25519-signed verifier loop and submission; pick "Skip" and the bullet stays local. If the runlog plugin isn't installed, `/rota-learn` surfaces a one-line note and moves on without blocking.
-
-This is independent of the `rota` upstream-issue suggestion (which fires for *internal* tool quirks). A bullet can match neither, one, or both. When it matches both, `/rota-learn` asks them in sequence, since they route to different upstreams.
 
 ## Knowledge vs decisions
 

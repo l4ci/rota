@@ -134,14 +134,14 @@ rota config set refactor.verifyCommands '["uv run ruff check .","uv run ruff for
 
 ## learn.verify
 
-Controls whether [`/rota-learn`](learning.md) runs a second-opinion pass on what it just wrote. The verifier is a fresh Opus sub-agent with no session context that reads only the updated `KNOWLEDGE.md` diff. It judges each new bullet on four criteria: durable (not ephemeral), sharp (concrete claim, not vague), correctly topic'd, and non-duplicate. It can demote weak entries, sharpen vague wording, re-file wrong-topic bullets, or delete restatements of existing knowledge.
+Controls whether [`/rota-learn`](learning.md) always runs a second-opinion pass on what it just wrote. The verifier is a fresh Opus sub-agent with no session context that reads only the updated `KNOWLEDGE.md` diff. It judges each new bullet on four criteria: durable (not ephemeral), sharp (concrete claim, not vague), correctly topic'd, and non-duplicate. It can demote weak entries, sharpen vague wording, re-file wrong-topic bullets, or delete restatements of existing knowledge.
 
 | Value | Behavior |
 |-------|----------|
-| `true` (default) | After writing, dispatches the verifier. Catches weak, duplicate, or wrong-topic entries before they accrete in `KNOWLEDGE.md`. Adds one Opus roundtrip per `/rota-learn` call. |
-| `false` | Skip the verifier. `/rota-learn` writes and reports. Fast and cheap. Use when you're iterating rapidly and the occasional weak entry is acceptable. |
+| `true` | After writing, dispatches the verifier. Catches weak, duplicate, or wrong-topic entries before they accrete in `KNOWLEDGE.md`. Adds one Opus roundtrip per `/rota-learn` call. |
+| `false` (default) | Skip the verifier. `/rota-learn` writes and reports. Fast and cheap. Pass `--strict` to `/rota-learn` to run the verifier for one call anyway. |
 
-A weak bullet consulted by 20 future `/rota-work` runs is worse than one extra Opus call now, so the default favors quality. Flip to `false` only when the noise doesn't matter.
+A weak bullet consulted by 20 future `/rota-work` runs costs more than one extra Opus call. Set `true` if you want every capture checked, or use `--strict` when a capture matters.
 
 See [learning](learning.md) for the full `/rota-learn` workflow.
 

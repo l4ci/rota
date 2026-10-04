@@ -158,9 +158,9 @@ Split the argument on commas and pass the IDs as positionals. Exit 3 means an ID
 
 Run `rota item rm <IDS>` and show stdout verbatim. If an item has `activeBranch` (`--json`: `data.items[].activeBranch`), tell the user: *"The item is active on `<branch>`. Apply refuses it until the stream is dropped with `rota status rm <branch>`."* and continue.
 
-### Step R3 — De-tag Upstream Issues (manual gate)
+### Step R3 — De-tag Upstream Issues
 
-> **Manual gate — removing the upstream label.** Removing the `in-progress` label upstream is externally visible: collaborators see the issue no longer claimed. This step is **always manual** — never auto-invoked, regardless of `autonomy.level`. The item delete proceeds either way; this decides only whether the label is cleaned up too. See `references/manual-gates.md`.
+> Removing the `in-progress` label upstream is externally visible: collaborators see the issue no longer claimed. The item delete proceeds either way; this decides only whether the label is cleaned up too.
 
 Find upstream links: `rota issues imported --json`, keep `data.entries` whose `itemId` is in the removal set. Read the label from `rota config show --json issues.label` (default `in-progress`). No matches: skip to Step R4.
 
@@ -231,9 +231,9 @@ Keep the `GH: #N` / `GL: #N` tag exactly: it is the signal `rota ship body` uses
 
 ### Step I6 — Apply the `in-progress` Label Upstream
 
-> **Manual gate — labeling upstream issues.** Applying the `in-progress` label (or the configured `issues.label`) upstream is externally visible: collaborators see the issues marked as claimed. This step is **always manual** — never auto-invoked, regardless of `autonomy.level`. The orchestrator may stage which issues to label, but the user confirms before any label is written. See `references/manual-gates.md`.
+> Applying the `in-progress` label (or the configured `issues.label`) upstream is externally visible: collaborators see the issues marked as claimed. The orchestrator may stage which issues to label, but the user confirms before any label is written.
 
-No verb enforces this gate (registry: `issue-label`, skill only), so this paragraph is the only guard. Ask with `AskUserQuestion`, header `"Label upstream"`, question *"Apply `<label>` to these <N> issues upstream?"* plus a list of picked titles and numbers:
+Ask with `AskUserQuestion`, header `"Label upstream"`, question *"Apply `<label>` to these <N> issues upstream?"* plus a list of picked titles and numbers:
 
 1. *"Yes — apply `<label>` to all (Recommended)"* — `rota issues label <N> --add <label> [--repo <name>]` per issue, in parallel. A failure is printed inline; continue with the rest.
 2. *"No — skip labeling"* — print *"Labeling skipped. Issues are captured in BACKLOG.md but not marked upstream."*
@@ -267,6 +267,5 @@ Use `→ not labeled` when labeling was skipped. Append a `Skipped repos:` list 
 | [`authoring-conventions.md`](references/authoring-conventions.md) | Loop-mode auto-picks, destructive and manual gates. |
 | [`detail-files.md`](references/detail-files.md) | Detail-file template for bulky input. |
 | [`issue-mode.md`](references/issue-mode.md) | Issue-backend umbrella rules (Step 4.6). |
-| [`manual-gates.md`](references/manual-gates.md) | Manual-gate callout shape (Step R3 de-tag, Step I6 label upstream). |
 | [`milestone-tagging.md`](references/milestone-tagging.md) | Milestone-tagging question shapes (Step 4.5). |
 | [`umbrella-mode.md`](references/umbrella-mode.md) | Umbrella-mode verbs, registry shape, `Repos:` semantics. |
