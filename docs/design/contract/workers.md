@@ -82,6 +82,17 @@ note: `merged-remotely` must never be retried (the PR is on origin but the local
 note: `merge-failed` covers both a forge CLI merge that fails and a local `git merge` that conflicts when no PR is recorded.
 note: `sha` is always 7 characters, whatever `core.abbrev` says. It is present on `fresh` (the tip of the checked worker branch, `origin/<branch>` when a PR is recorded), on `pass` and `verify-failed` (the merge commit), and on `merged-remotely` (the merge commit on `origin/<base>`, or the verified head for a fast-forward merge).
 
+### rota worker train
+rota worker train <slot|PR>... --base <branch> [--land-green] [--confirm --confirm-note <answer> | --approval <escalation> | --escalate]
+repo: none
+data: {"base": string, "verdict": string, "members": [{"target": string, "branch": string, "pr"?: string, "landed": bool, "culprit": bool}], "culprit"?: string, "landed": []string, "verified": []string, "changed": bool, "sha"?: string}; on the B1 refusal the same object with `verdict` `approval-required` plus `blockedBy`, `gate` and `paths`, and with `--escalate` an `escalation`
+exit: 0 only when every member landed (`verdict` `pass`); 1 for every other verdict: a member's own check verdict (`stale`, `pr-mismatch`, `provenance-fail`, `check-broke`), `merge-failed`, `verify-failed`, `not-merged`, `not-on-base`, `merged-remotely`, `base-moved`; 3 when the pool, a target or the base branch is missing, or the base is not checked out; 2 when no target is given, a target repeats, or the confirmation flags conflict; 4 when `ship.mergeApproval` covers the train and the `merge-approval` gate is not cleared
+old: none (new in #83; the orchestrator ran trains by hand in round 1)
+note: targets are slot names or PRs as `rota worker gate` takes them, merged in the order given. Each is first checked as `gate --check-only` does (freshness, PR identity, provenance); the first refusal ends the train with that member's verdict and `culprit` set, nothing merged.
+note: the members are merged in order onto the base (`origin/<base>` when any has a PR) in a scratch worktree, and `refactor.verifyCommands` run on that tree once. On a pass each member lands through the gate in order (forge merge pinned to its head, no second verify; a branch behind the base only because an earlier member landed is not `stale`). Before the first landing the base and every head must be what the scratch tree was built from, else `base-moved` and nothing lands. A `TRAIN-TREE` line on stderr says the landed tree differs from the verified one.
+note: a member that conflicts in the scratch tree is `merge-failed` with `culprit` set. When verification fails the train bisects prefixes of the order and names the first member whose merge breaks the tree as `culprit` (`verify-failed`); it may break only with the members before it. Nothing lands unless `--land-green`, which lands the verified prefix before the culprit (`landed` lists them, `changed` is true, the exit is still 1).
+note: one approval covers the train: `ship.mergeApproval` is judged over the union of the files the members change, before the scratch merge. `--approval` and `--escalate` use the first target's thread. Bounces are not counted; a landed member forgets its count.
+
 ### rota worker session check
 rota worker session check [--session <name>]
 repo: none

@@ -1,0 +1,159 @@
+package worker
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+// trainWorld is a gate checkout on main with local branches b1..bN, each adding
+// its own file, and a slot per branch: no PRs, so the train merges locally.
+func trainWorld(t *testing.T, verify string, branches ...string) *world {
+	t.Helper()
+	w := newWorld(t, "")
+	var slots []string
+	for _, b := range branches {
+		gitq(t, w.dir, "checkout", "-q", "-b", b, "main")
+		trainWrite(t, w, b+".txt", b)
+		gitq(t, w.dir, "checkout", "-q", "main")
+		slots = append(slots, fmt.Sprintf(`{"name":"%s","branch":"%s"}`, b, b))
+	}
+	os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"), []byte(`{"slots":[`+strings.Join(slots, ",")+`]}`), 0o644)
+	w.setConfig(fmt.Sprintf(`{"refactor":{"verifyCommands":[%q]}}`, verify))
+	return w
+}
+
+// trainWrite commits file=body on the checked-out branch.
+func trainWrite(t *testing.T, w *world, file, body string) {
+	t.Helper()
+	os.WriteFile(filepath.Join(w.dir, file), []byte(body+"\n"), 0o644)
+	gitq(t, w.dir, "add", file)
+	gitq(t, w.dir, "commit", "-q", "-m", "add "+file)
+}
+
+func (w *world) onMain(file string) bool {
+	_, err := os.Stat(filepath.Join(w.dir, file))
+	return err == nil
+}
+
+func (w *world) train(o TrainOpts) (TrainResult, error) {
+	o.Base = "main"
+	return w.env(false).Train(bg, w.dir, o)
+}
+
+func TestTrainLandsAll(t *testing.T) {
+	w := trainWorld(t, "test -f b1.txt && test -f b2.txt && test -f b3.txt", "b1", "b2", "b3")
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3"}})
+	if err != nil || res.Verdict != GatePass || strings.Join(res.Landed, ",") != "b1,b2,b3" || !res.Changed {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if len(res.Verified) != 1 {
+		t.Errorf("verified once, got %v", res.Verified)
+	}
+	for _, f := range []string{"b1.txt", "b2.txt", "b3.txt"} {
+		if !w.onMain(f) {
+			t.Errorf("%s is not on main", f)
+		}
+	}
+	if out := gitq(t, w.dir, "worktree", "list"); strings.Count(out, "\n") != 0 {
+		t.Errorf("scratch worktree left behind:\n%s", out)
+	}
+}
+
+func TestTrainBisectsToTheCulprit(t *testing.T) {
+	w := trainWorld(t, "test ! -f b2.txt", "b1", "b2", "b3", "b4")
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3", "b4"}})
+	if err != nil || res.Verdict != GateVerifyFailed || res.Culprit != "b2" || res.Changed || len(res.Landed) != 0 {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if !strings.Contains(res.Err, "the first 1 member(s) pass") {
+		t.Errorf("message: %s", res.Err)
+	}
+	if w.onMain("b1.txt") {
+		t.Error("nothing lands on a red train")
+	}
+	if !res.Members[1].Culprit || res.Members[0].Culprit {
+		t.Errorf("members: %+v", res.Members)
+	}
+}
+
+func TestTrainNamesTheInteraction(t *testing.T) {
+	// b1 and b3 are each fine; together they break the tree.
+	w := trainWorld(t, "! (test -f b1.txt && test -f b3.txt)", "b1", "b2", "b3")
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3"}})
+	if err != nil || res.Verdict != GateVerifyFailed || res.Culprit != "b3" {
+		t.Fatalf("%+v %v", res, err)
+	}
+}
+
+func TestTrainLandGreen(t *testing.T) {
+	w := trainWorld(t, "test ! -f b3.txt", "b1", "b2", "b3")
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3"}, LandGreen: true})
+	if err != nil || res.Verdict != GateVerifyFailed || res.Culprit != "b3" || strings.Join(res.Landed, ",") != "b1,b2" || !res.Changed {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if !w.onMain("b1.txt") || !w.onMain("b2.txt") || w.onMain("b3.txt") {
+		t.Error("main should hold the verified prefix only")
+	}
+}
+
+func TestTrainConflict(t *testing.T) {
+	w := trainWorld(t, "true", "b1", "b2")
+	for _, b := range []string{"b1", "b2"} { // both rewrite the same new file differently
+		gitq(t, w.dir, "checkout", "-q", b)
+		trainWrite(t, w, "clash.txt", b)
+		gitq(t, w.dir, "checkout", "-q", "main")
+	}
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}})
+	if err != nil || res.Verdict != GateMergeFailed || res.Culprit != "b2" || w.onMain("b1.txt") {
+		t.Fatalf("%+v %v", res, err)
+	}
+}
+
+func TestTrainRefusesBeforeMerging(t *testing.T) {
+	w := trainWorld(t, "true", "b1", "b2")
+	trainWrite(t, w, "b2.txt", "main") // b2 and main both add b2.txt: the branch is stale on a conflict
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}})
+	if err != nil || res.Verdict != GateStale || res.Culprit != "b2" || w.onMain("b1.txt") {
+		t.Fatalf("%+v %v", res, err)
+	}
+}
+
+func TestTrainBaseMoved(t *testing.T) {
+	// the base moves while the train verifies: the verified tree is not what would land
+	cmd := fmt.Sprintf("git -c user.name=t -c user.email=t@t -C %s commit -q --allow-empty -m moved", "WDIR")
+	w := trainWorld(t, "true", "b1", "b2")
+	w.setConfig(fmt.Sprintf(`{"refactor":{"verifyCommands":[%q]}}`, strings.Replace(cmd, "WDIR", w.dir, 1)))
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}})
+	if err != nil || res.Verdict != GateBaseMoved || len(res.Landed) != 0 || w.onMain("b1.txt") {
+		t.Fatalf("%+v %v", res, err)
+	}
+}
+
+func TestTrainApprovalFailsBeforeVerify(t *testing.T) {
+	w := trainWorld(t, "touch ran-verify", "b1", "b2")
+	want := fmt.Errorf("needs a human")
+	var files []string
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}, Approve: func(f func() ([]string, error)) error {
+		files, _ = f()
+		return want
+	}})
+	if err != want || res.Verdict != GateApprovalRequired || strings.Join(files, ",") != "b1.txt,b2.txt" {
+		t.Fatalf("%+v %v files=%v", res, err, files)
+	}
+	if w.onMain("b1.txt") {
+		t.Error("an unapproved train merges nothing")
+	}
+}
+
+func TestTrainUsage(t *testing.T) {
+	w := trainWorld(t, "true", "b1")
+	if _, err := w.train(TrainOpts{}); err == nil {
+		t.Error("an empty train is refused")
+	}
+	if _, err := w.train(TrainOpts{Targets: []string{"b1", "b1"}}); err == nil {
+		t.Error("a repeated member is refused")
+	}
+}
