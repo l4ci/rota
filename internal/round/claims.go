@@ -83,10 +83,10 @@ func (e Env) claimFindings(ctx context.Context, rep *Report, rows []*Row, slotOb
 		case st.Claim == want:
 		case st.Claim == "":
 			rep.add(Finding{Kind: ClaimMismatch, Issue: id,
-				Detail: fmt.Sprintf("queued PR records claim %s on #%s, which has no open claim", want, id)})
+				Detail: fmt.Sprintf("PR in review records claim %s on #%s, which has no open claim", want, id)})
 		default:
 			rep.add(Finding{Kind: ClaimMismatch, Issue: id,
-				Detail: fmt.Sprintf("queued PR records claim %s on #%s, which %s holds", want, id, st.Claim)})
+				Detail: fmt.Sprintf("PR in review records claim %s on #%s, which %s holds", want, id, st.Claim)})
 		}
 	}
 	if !labelsOK {

@@ -116,14 +116,14 @@ func roundStatus(*flag.FlagSet) RunFunc {
 		d.Set("escalations", esc)
 		lim, limLines := limitStatusRows(rep.Limits)
 		d.Set("limits", lim)
-		d.Set("queued", queuedRows(rep.Queued))
+		d.Set("review", queuedRows(rep.Queued))
 		var lines []string
 		for _, r := range rep.Rows {
 			lines = append(lines, strings.Join([]string{
 				r.Name, dash(r.Issue), dash(r.Branch), dash(r.PR), dash(r.HostState), dash(strings.Join(r.Drift, ","))}, "\t"))
 		}
 		for _, q := range rep.Queued {
-			lines = append(lines, fmt.Sprintf("queued\t#%s\t%s\t%s\tfrom %s", q.Issue, dash(q.PR), dash(q.Branch), dash(q.From)))
+			lines = append(lines, fmt.Sprintf("review\t#%s\t%s\t%s\tfrom %s", q.Issue, dash(q.PR), dash(q.Branch), dash(q.From)))
 		}
 		for _, l := range escLines {
 			lines = append(lines, "escalation\t"+l)

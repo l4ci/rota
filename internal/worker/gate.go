@@ -117,8 +117,8 @@ func (r Registry) GateTarget(arg string) (s *jsonx.Object, queued bool, err erro
 			for _, q := range r.PRs() {
 				if Str(q, "from") == arg {
 					return nil, false, &Error{Exit: ExitUsage,
-						Message: fmt.Sprintf("slot %s records no PR, but its PR %s (%s) is queued", arg, Str(q, "pr"), Str(q, "branch")),
-						Hint:    fmt.Sprintf("gate the queued PR with `rota worker gate #%s`", trailingNumber(Str(q, "pr")))}
+						Message: fmt.Sprintf("slot %s records no PR, but its PR %s (%s) waits in review", arg, Str(q, "pr"), Str(q, "branch")),
+						Hint:    fmt.Sprintf("gate the PR in review with `rota worker gate %s`", trailingNumber(Str(q, "pr")))}
 				}
 			}
 		}
@@ -133,7 +133,7 @@ func (r Registry) GateTarget(arg string) (s *jsonx.Object, queued bool, err erro
 				return sl, false, nil
 			}
 		}
-		return nil, false, fail(ExitResolution, fmt.Sprintf("no queued PR or slot records PR #%d", n))
+		return nil, false, fail(ExitResolution, fmt.Sprintf("no PR in review or slot records PR #%d", n))
 	}
 	return nil, false, fail(ExitResolution, fmt.Sprintf("slot '%s' is not in the pool", arg))
 }

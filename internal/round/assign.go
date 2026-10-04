@@ -368,7 +368,7 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 	}
 
 	if q := reg.QueuedIssue(id); q != nil && !resuming {
-		return res, blocked(BlockClaimed, "%s has a queued PR %s from %s: rota round transfer %s --to <slot> picks it up", id, worker.Str(q, "pr"), worker.Str(q, "from"), id)
+		return res, blocked(BlockClaimed, "%s has PR %s in review (from %s): rota round transfer %s --to <slot> picks it up", id, worker.Str(q, "pr"), worker.Str(q, "from"), id)
 	}
 
 	// 4. Readiness.

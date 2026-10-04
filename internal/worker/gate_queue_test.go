@@ -45,7 +45,7 @@ func TestGateQueuedPR(t *testing.T) {
 	w.setQueued()
 	_, err := gateAs(w, "w2", GateOpts{CheckOnly: true})
 	var we *Error
-	if !errors.As(err, &we) || we.Exit != ExitUsage || !strings.Contains(we.Hint, "rota worker gate #7") {
+	if !errors.As(err, &we) || we.Exit != ExitUsage || !strings.Contains(we.Hint, "rota worker gate 7`") {
 		t.Errorf("a slot whose PR is queued is refused with a hint: %v", err)
 	}
 	if _, err := gateAs(w, "#99", GateOpts{CheckOnly: true}); exitOf(err) != ExitResolution {
