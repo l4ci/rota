@@ -90,7 +90,7 @@ func leaseData(l round.Lease, st round.LeaseState) *jsonx.Object {
 }
 
 func roundStart(fs *flag.FlagSet) RunFunc {
-	scope := fs.String("scope", "", "which issues the round may take: slate, milestone or next (default round.scope)")
+	scope := fs.String("scope", "", "which issues the round may take: slate, milestone, next or open (default round.scope; a re-run keeps the round's)")
 	items := fs.String("items", "", "the approved slate, for scope slate")
 	slots := fs.Int("slots", 0, "roster slots to provision (default work.workerSlots)")
 	base := fs.String("base", "", "base branch (default git.baseBranch, else the current branch)")
@@ -107,11 +107,9 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
 		}
-		sc := set.Scope
-		if *scope != "" {
-			sc = *scope
-		}
-		if !roundcfg.ValidScope(sc) {
+		// Empty when --scope was not given: Start keeps a renewed round's scope.
+		sc := *scope
+		if sc != "" && !roundcfg.ValidScope(sc) {
 			return Result{}, Usage("--scope must be one of %s", strings.Join(roundcfg.Scopes, ", "))
 		}
 		if *slots < 0 {
@@ -157,7 +155,7 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return a4Fail(err)
 		}
-		cands, err := env.Candidates(ctx, root, be, round.CandidateOpts{Scope: sc, Slate: st.Slate, Shared: set.SharedPaths})
+		cands, err := env.Candidates(ctx, root, be, round.CandidateOpts{Scope: st.Scope, Slate: st.Slate, Shared: set.SharedPaths})
 		if err != nil {
 			return a4Fail(err)
 		}
@@ -191,7 +189,7 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 }
 
 func roundCandidates(fs *flag.FlagSet) RunFunc {
-	scope := fs.String("scope", "", "slate, milestone or next (default the round's scope, then round.scope)")
+	scope := fs.String("scope", "", "slate, milestone, next or open (default the round's scope, then round.scope)")
 	return func(c *Ctx, args []string) (Result, error) {
 		if err := noArgs(args); err != nil {
 			return Result{}, err

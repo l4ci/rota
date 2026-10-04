@@ -64,6 +64,7 @@ func ReportSlot(root string, o ReportOpts) (Reported, error) {
 			s.Set("state", state)
 			res.Changed = true
 		}
+		s.Delete("seen") // a report is news to `round wait`, even of the same state
 		if pr != "" && worker.Str(s, "pr") != pr {
 			s.Set("pr", pr)
 			res.Changed = true

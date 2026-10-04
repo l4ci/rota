@@ -24,7 +24,7 @@ var reClaimID = regexp.MustCompile(`^([a-z][a-z0-9-]*)@\d+$`)
 // hold that issue. Only a claim that is gone has a repair (clear the claimId);
 // the tracker is the source of truth and is never edited. Needs the Board and,
 // for the second shape, the labelled issues; file mode has no claims to read.
-func (e Env) claimFindings(ctx context.Context, rep *Report, rows []*Row, slotObj map[string]*jsonx.Object, labelled map[int]bool, labelsOK bool) {
+func (e Env) claimFindings(ctx context.Context, rep *Report, rows []*Row, slotObj map[string]*jsonx.Object, queued []*jsonx.Object, labelled map[int]bool, labelsOK bool) {
 	if e.Board == nil {
 		return
 	}
@@ -61,6 +61,32 @@ func (e Env) claimFindings(ctx context.Context, rep *Report, rows []*Row, slotOb
 		default:
 			rep.add(Finding{Kind: ClaimMismatch, Slot: r.Name, Issue: r.Issue,
 				Detail: fmt.Sprintf("slot records claim %s on #%s, which %s holds", want, r.Issue, st.Claim)})
+		}
+	}
+	// A queued PR holds its issue and its claim like a slot, but names no slot
+	// to repair: the slot it came from has moved on.
+	for _, q := range queued {
+		id := queuedIssue(q)
+		if id == "" {
+			continue
+		}
+		held[id] = true
+		want := worker.Str(q, "claimId")
+		if want == "" {
+			continue
+		}
+		st, ok := status(id)
+		if !ok {
+			continue
+		}
+		switch {
+		case st.Claim == want:
+		case st.Claim == "":
+			rep.add(Finding{Kind: ClaimMismatch, Issue: id,
+				Detail: fmt.Sprintf("PR in review records claim %s on #%s, which has no open claim", want, id)})
+		default:
+			rep.add(Finding{Kind: ClaimMismatch, Issue: id,
+				Detail: fmt.Sprintf("PR in review records claim %s on #%s, which %s holds", want, id, st.Claim)})
 		}
 	}
 	if !labelsOK {

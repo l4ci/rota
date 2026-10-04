@@ -495,27 +495,41 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 	}
 	resuming := receiver != nil && sender == nil && worker.Str(receiver, "state") == "idle" &&
 		worker.Str(receiver, "claimId") == o.To+"@"+strconv.Itoa(rnd)
+	// rec: no slot holds the issue but a queued PR does (its slot moved on, or
+	// a transfer from it was left half done).
+	var rec *jsonx.Object
+	if sender == nil {
+		rec = reg.QueuedIssue(id)
+	}
 	switch {
 	case resuming:
 	case receiver != nil && sender == nil:
 		return res, blocked(BlockSameSlot, "slot %s already holds %s", o.To, id)
-	case sender == nil:
+	case sender == nil && rec == nil:
 		return res, &worker.Error{Exit: worker.ExitResolution, Message: fmt.Sprintf("no slot holds %s", id)}
 	}
-	if sender != nil {
+	switch {
+	case sender != nil:
 		res.From = worker.Str(sender, "name")
-	} else {
+	case rec != nil:
+		res.From = worker.Str(rec, "from")
+	default:
 		res.From = o.To
 	}
 
 	var to *jsonx.Object
+	queueTo := false // the receiver holds a PR that can wait in the queue
 	if !toHuman {
 		if to = reg.Slot(o.To); to == nil {
 			return res, &worker.Error{Exit: worker.ExitResolution, Message: fmt.Sprintf("slot %s is not provisioned: run rota round start", o.To)}
 		}
 		if !resuming {
 			if h := slotIssue(to); h != "" {
-				return res, blocked(BlockSlotBusy, "slot %s holds %s", o.To, h)
+				ok, why := e.parkable(ctx, to)
+				if !ok {
+					return res, blocked(BlockSlotBusy, "%s", busyMsg(o.To, h, why))
+				}
+				queueTo = true
 			}
 		}
 	} else if e.Forge == nil || it.Number == 0 {
@@ -539,13 +553,22 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 				blk.Readiness = &r
 				return res, blk
 			}
-			if _, err := e.workerEnv().ResetTo(root, o.To, id, BranchName(o.To, id, it.Title), true); err != nil {
-				var we *worker.Error
-				if errors.As(err, &we) && we.Data != nil { // the reset guard's refusal
-					return res, blocked(BlockSlotBusy, "%s", we.Message)
+			// A receiver about to be queued holds unmerged work the guard would
+			// refuse; parking it clears that.
+			if !queueTo {
+				if _, err := e.workerEnv().ResetTo(root, o.To, id, BranchName(o.To, id, it.Title), true); err != nil {
+					var we *worker.Error
+					if errors.As(err, &we) && we.Data != nil { // the reset guard's refusal
+						return res, blocked(BlockSlotBusy, "%s", we.Message)
+					}
+					return res, wrap(err)
 				}
-				return res, wrap(err)
 			}
+		}
+	}
+	if queueTo {
+		if err := e.queuePR(ctx, root, o.To); err != nil {
+			return res, wrap(err)
 		}
 	}
 
@@ -556,9 +579,17 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 		res.Head = e.headLine(ctx, worker.Str(receiver, "worktree"), "HEAD")
 	} else {
 		from := res.From
-		p, err := e.Park(ctx, root, from, "transfer")
-		if err != nil {
-			return res, wrap(err)
+		var p Parked
+		oldClaim := from + "@" + strconv.Itoa(rnd)
+		if sender != nil {
+			if p, err = e.Park(ctx, root, from, "transfer"); err != nil {
+				return res, wrap(err)
+			}
+			oldClaim = firstNonEmpty(worker.Str(sender, "claimId"), oldClaim)
+		} else { // a queued PR: already pushed, nothing to park
+			p.Branch = worker.Str(rec, "branch")
+			p.Head = e.queuedHead(ctx, root, p.Branch)
+			oldClaim = firstNonEmpty(worker.Str(rec, "claimId"), oldClaim)
 		}
 		res.Branch, res.Head, res.Salvaged = p.Branch, p.Head, p.Salvaged
 		branch = p.Branch
@@ -567,7 +598,6 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 		if _, _, err := h.post(be, id); err != nil {
 			return res, wrap(err)
 		}
-		oldClaim := firstNonEmpty(worker.Str(sender, "claimId"), from+"@"+strconv.Itoa(rnd))
 		if _, err := releaseClaims(be, id, from, oldClaim, false); err != nil {
 			return res, wrap(err)
 		}
@@ -578,7 +608,11 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 			if err := e.Forge.AddLabels(ctx, it.Number, []string{firstNonEmpty(e.NeedsHuman, DefaultNeedsHuman)}, true); err != nil {
 				return res, wrap(err)
 			}
-			if err := freeSlot(root, from, false); err != nil {
+			if sender != nil {
+				if err := freeSlot(root, from, false); err != nil {
+					return res, wrap(err)
+				}
+			} else if err := worker.RemoveQueuedPR(root, worker.Str(rec, "pr")); err != nil {
 				return res, wrap(err)
 			}
 			res.Changed = true
@@ -593,8 +627,10 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 			return res, blocked(BlockClaimed, "%s is claimed by %s", id, holder)
 		}
 		res.ClaimID = claimID
-		if err := freeSlot(root, from, false); err != nil {
-			return res, wrap(err)
+		if sender != nil {
+			if err := freeSlot(root, from, false); err != nil {
+				return res, wrap(err)
+			}
 		}
 		if err := e.checkout(ctx, root, to, id, it.Title, &branch); err != nil {
 			return res, wrap(err)
@@ -611,6 +647,30 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 	}
 	if resuming {
 		res.ClaimID = worker.Str(receiver, "claimId")
+	}
+
+	// A queued PR is still the issue's PR: the receiver takes it and its relay
+	// log over once dispatched (dispatch resets both for a new task), and the
+	// record goes. Until then it stays, so a failed dispatch resumes with it.
+	adopt := func() error {
+		if rec == nil {
+			return nil
+		}
+		pr, relays := worker.Str(rec, "pr"), []any{}
+		if v, _ := rec.Get("relays"); v != nil {
+			if l, ok := v.([]any); ok {
+				relays = append(relays, l...)
+			}
+		}
+		if err := mutateSlot(root, o.To, func(s *jsonx.Object) {
+			s.Set("pr", pr)
+			v, _ := s.Get("relays")
+			l, _ := v.([]any)
+			s.Set("relays", append(l, relays...))
+		}); err != nil {
+			return err
+		}
+		return worker.RemoveQueuedPR(root, pr)
 	}
 
 	solo := isSolo(root)
@@ -630,6 +690,9 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 	text := pointerBrief(o.To, id, branch, brief, nil, decisions, tierBrief{Kind: kind, Tier: tier, Model: model, Default: tier, Table: o.Settings.Models[kind]})
 	text += fmt.Sprintf("\nThis issue was handed to you by %s. Read its latest rota:handoff comment first (it ends with a `<!-- rota:handoff %s@%d -->` marker), then continue from the pushed work on %s, already checked out in your worktree.\n",
 		res.From, res.From, rnd, branch)
+	if rec != nil {
+		text += fmt.Sprintf("Its PR %s is already open: push to the branch to update it instead of opening another.\n", worker.Str(rec, "pr"))
+	}
 	if solo {
 		// No pane: mark the receiver busy and hand the brief back.
 		b, wt, err := e.soloHandOff(root, o.To, text, rnd)
@@ -638,7 +701,7 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 		}
 		res.Host, res.Brief, res.Worktree = host.Solo, b, wt
 		res.Changed = true
-		return res, nil
+		return res, wrap(adopt())
 	}
 	tmp, err := os.CreateTemp("", "rota-round-brief-")
 	if err != nil {
@@ -654,7 +717,15 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 		return res, err
 	}
 	res.Dispatched, res.Changed = true, true
-	return res, nil
+	return res, wrap(adopt())
+}
+
+// queuedHead is the tip of a queued PR's branch: origin's, else the local one.
+func (e Env) queuedHead(ctx context.Context, root, branch string) string {
+	if h := e.headLine(ctx, root, "origin/"+branch); h != "" {
+		return h
+	}
+	return e.headLine(ctx, root, branch)
 }
 
 func overlapCheck(r Readiness) *Check {
