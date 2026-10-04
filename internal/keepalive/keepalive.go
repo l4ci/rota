@@ -95,6 +95,9 @@ type Options struct {
 	Breaker       int
 	Backoff       time.Duration
 	Prompt        string
+	// FirstPrompt is appended to Command on the first start only, where
+	// Prompt is appended on restarts. Empty: the first start is Command alone.
+	FirstPrompt   string
 	EscalateIssue int
 
 	// D4: the switch and the account the child starts under. ConfigDir is the
@@ -284,6 +287,9 @@ func Run(env Env, o Options) (Result, error) {
 	}
 
 	argv := append([]string{}, o.Command...)
+	if o.FirstPrompt != "" {
+		argv = append(argv, o.FirstPrompt)
+	}
 	pidEnv := []string{roundlease.HolderPIDEnv + "=" + strconv.Itoa(env.Holder.PID)}
 	setGap := func(on bool) {
 		if env.Gap != nil {
