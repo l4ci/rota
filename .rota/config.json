@@ -10,10 +10,7 @@
   "refactor": {
     "confirmBeforeExecute": true,
     "verifyCommands": [
-      "python3 test/validate-skills.py",
-      "go vet ./...",
-      "go test -race -timeout 30m ./...",
-      "out=$(bash test/smoke.sh 2>&1); rc=$?; printf '%s\\n' \"$out\" | tail -n 40; [ $rc -eq 0 ] && printf '%s' \"$out\" | grep -q 'All smoke tests passed.'"
+      "bash test/gate.sh"
     ]
   },
   "learn": {

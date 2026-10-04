@@ -1,0 +1,26 @@
+# Shard-safety guard (#82): test/gate.sh runs smoke in concurrent shards, which is
+# only sound while no section needs state from another. This deals the sections
+# out at random on main; a section with a hidden dependency fails here.
+name: Smoke shards
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+jobs:
+  random-partition:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: bash test/gate.sh --smoke-only --random
+        env:
+          ROTA_GATE_LOGS: ${{ runner.temp }}/gate-logs
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: gate-logs
+          path: ${{ runner.temp }}/gate-logs

@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # Smoke test for the rota binary. Builds a throwaway .rota/ in a tmpdir, then
 # sources every section under test/sections/ in alphabetical order. Each
-# section runs in the shared $TMP cwd and may rely on cumulative state from
-# earlier sections — order is load-bearing.
-# Usage: bash test/runner.sh
+# section runs in the shared $TMP cwd and may rely on state from earlier
+# sections in the same run, but not from sections in another shard: test/gate.sh
+# splits the suite into concurrent SECTION_LIST runs (#82), each with its own
+# temp root, and its --random mode checks that no section needs a neighbour.
+# Usage: bash test/runner.sh   (the full gate: bash test/gate.sh)
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
@@ -56,13 +58,20 @@ fi
 # the helpers all call mktemp, and sections replace the EXIT trap (F38), so
 # per-site cleanup cannot be relied on: TMPDIR rooting lets the runner remove
 # everything in one rm -rf. Go and Python callers inherit it too.
-RUN_TMP="$(cd "$(mktemp -d)" && pwd -P)"
+# A failed mktemp must stop the run: "cd ''" would stay in the cwd, and the EXIT
+# trap below would then delete it. The rota-smoke. prefix lets doctor tell
+# these dirs from other programs' tmp.* ones (#85).
+d="$(mktemp -d -t rota-smoke.XXXXXX)" || exit 1
+RUN_TMP="$(cd "$d" && pwd -P)" || exit 1
+# Removed on any exit from here on, early failures included (#85).
+trap 'rm -rf "$RUN_TMP"' EXIT
 
 # Fixture repos commit and merge. The identity comes from here so the run does
 # not depend on the developer's (or CI's missing) global git config.
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
 export TMPDIR="$RUN_TMP"
-TMP="$(cd "$(mktemp -d)" && pwd -P)"
+d="$(mktemp -d)" || exit 1
+TMP="$(cd "$d" && pwd -P)" || exit 1
 
 # Black-box target (#46): sections call "$ROTA_BIN <group> <verb>". It defaults
 # to the Go binary built once from this checkout, stamped with the VERSION
@@ -70,7 +79,7 @@ TMP="$(cd "$(mktemp -d)" && pwd -P)"
 # other `rota` binary (absolute path: sections cd) to run the suite against it.
 # The binary and the scratch dir for the poison stand-ins below live under
 # $RUN_TMP, so the EXIT trap removes them with everything else.
-ROTA_STAGE="$(mktemp -d)"
+ROTA_STAGE="$(mktemp -d)" || exit 1
 if [ -z "${ROTA_BIN:-}" ]; then
   ROTA_VERSION="$(tr -d '[:space:]' < "$REPO/VERSION")"
   (cd "$REPO" && go build -ldflags "-X github.com/l4ci/rota/internal/version.Version=$ROTA_VERSION" \
@@ -78,7 +87,6 @@ if [ -z "${ROTA_BIN:-}" ]; then
   ROTA_BIN="$ROTA_STAGE/rota"
 fi
 export ROTA_BIN
-trap 'rm -rf "$RUN_TMP"' EXIT
 
 # Forge and host guard: no section may reach a real gh, glab, herdr or tmux.
 # The round runs inside herdr, so a real herdr or tmux call could close live
@@ -86,6 +94,9 @@ trap 'rm -rf "$RUN_TMP"' EXIT
 # section that wants a fake puts it in front of them, as it already does. A poison call logs itself
 # and exits 99, and any logged call fails the run after the leak guard. A
 # section that resets PATH must start it with "$ROTA_POISON_BIN".
+# The fake tmux reacts at once, so the 1 to 3 s pauses rota leaves after a paste
+# (for Claude Code to take it) only cost time here: scale them down (#84).
+export ROTA_HOST_SETTLE_PCT=5
 export ROTA_POISON_BIN="$ROTA_STAGE/poison"  # sections that reset PATH keep this first
 ROTA_POISON_LOG="$ROTA_STAGE/poison.log"
 mkdir -p "$ROTA_POISON_BIN" && : > "$ROTA_POISON_LOG"
@@ -112,6 +123,10 @@ mkdir -p "$HOME"
 # that is set, so a developer's XDG_CONFIG_HOME would bypass the HOME override.
 export XDG_CONFIG_HOME="$RUN_TMP/xdg"
 mkdir -p "$XDG_CONFIG_HOME"
+# doctor's disk check reads the real volume. Pin a healthy one so a full
+# developer disk does not add a line to every doctor section (#85); section 112
+# sets its own.
+export ROTA_TEST_DOCTOR_DISK="50:100"
 # Nor may a section inherit this shell's live host identity (pane, tab,
 # socket): sections that need one set fake values themselves.
 for v in $(compgen -e | grep -E '^(HERDR_|TMUX)'); do unset "$v"; done
@@ -126,20 +141,20 @@ for v in $(compgen -e | grep -E '^(HERDR_|TMUX)'); do unset "$v"; done
 REPO_CLAUDE="$REPO/CLAUDE.md"
 REPO_CLAUDE_SNAP=""
 if [ -f "$REPO_CLAUDE" ]; then
-  REPO_CLAUDE_SNAP="$(mktemp)"
+  REPO_CLAUDE_SNAP="$(mktemp)" || exit 1
   cp "$REPO_CLAUDE" "$REPO_CLAUDE_SNAP"
 fi
 REPO_AGENTS="$REPO/AGENTS.md"
 REPO_AGENTS_SNAP=""
 if [ -f "$REPO_AGENTS" ]; then
-  REPO_AGENTS_SNAP="$(mktemp)"
+  REPO_AGENTS_SNAP="$(mktemp)" || exit 1
   cp "$REPO_AGENTS" "$REPO_AGENTS_SNAP"
 fi
 # Snapshot dev tree's tracked .rota/ content. We snap the whole subtree
 # (excluding gitignored paths) so any leak surfaces as a diff at the end.
 REPO_ROTA_SNAP=""
 if [ -d "$REPO/.rota" ]; then
-  REPO_ROTA_SNAP="$(mktemp -d)"
+  REPO_ROTA_SNAP="$(mktemp -d)" || exit 1
   # Use git ls-files to capture exactly what git tracks, preserving paths.
   (cd "$REPO" && git ls-files .rota/) | while IFS= read -r f; do
     mkdir -p "$REPO_ROTA_SNAP/$(dirname "$f")"
@@ -249,7 +264,7 @@ fi
 # Temp-dir guard (#110): everything the run made is under $RUN_TMP. Entries
 # other than the runner's own were left behind by sections or helpers; report
 # the count so growth shows up, then the EXIT trap removes it all.
-RUN_LEFT="$(find "$RUN_TMP" -mindepth 1 -maxdepth 1 ! -path "$TMP" ! -path "$ROTA_STAGE" 2>/dev/null | wc -l | tr -d ' ')"
+RUN_LEFT="$(find "$RUN_TMP" -mindepth 1 -maxdepth 1 ! -path "$TMP" ! -path "$ROTA_STAGE" ! -path "$CLAUDE_CONFIG_DIR" ! -path "$HOME" ! -path "$XDG_CONFIG_HOME" 2>/dev/null | wc -l | tr -d ' ')"
 [ "$RUN_LEFT" -eq 0 ] || printf 'note: %s temp entries left under %s by sections; removing them\n' "$RUN_LEFT" "$RUN_TMP" >&2
 if [ "$RUN_LEFT" -gt "${ROTA_SMOKE_TMP_MAX:-150}" ]; then
   printf '\n\033[31merror: %s temp entries left under %s (limit %s); a section or helper is leaking\033[0m\n' "$RUN_LEFT" "$RUN_TMP" "${ROTA_SMOKE_TMP_MAX:-150}" >&2
