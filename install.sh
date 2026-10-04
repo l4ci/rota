@@ -3,11 +3,12 @@
 #
 #   curl -fsSL https://raw.githubusercontent.com/l4ci/rota/main/install.sh | sh
 #
-# Downloads rota_<os>_<arch> and checksums.txt from the release, refuses a binary
-# whose sha256 does not match (fail closed: nothing is installed), then copies
-# it to <prefix>/bin/rota. The checksum is an integrity check, not authenticity:
-# checksums.txt comes from the same release as the binary. Signatures are a
-# later follow-up.
+# Downloads rota_<os>_<arch>, its .minisig signature and checksums.txt from the
+# release. It refuses a binary whose minisign signature does not verify against
+# the release key embedded below, or whose sha256 does not match (fail closed:
+# nothing is installed), then copies it to <prefix>/bin/rota. The signature is
+# the authenticity check and needs the `minisign` tool; the checksum only
+# catches a corrupt download, since checksums.txt comes from the same release.
 #
 # Options (flag wins over env), see --help:
 #   --version X.Y.Z   ROTA_VERSION   release to install (default: latest)
@@ -28,6 +29,10 @@
 # No sudo, no shell-profile edits: it prints the PATH line if it is needed.
 set -eu
 
+# Release signing key (minisign, key id 2153154F7AA18B5D). Rotation: see
+# .rota/RELEASE.md.
+ROTA_MINISIGN_PUBKEY=RWRdi6F6TxVTIW92f3/QsWBl5VHdXm1FABgexyAla0z3A5WT4JzG6/SP
+
 main() {
   die() {
     printf 'install.sh: %s\n' "$1" >&2
@@ -39,7 +44,8 @@ main() {
     cat <<'EOF'
 Usage: install.sh [--version X.Y.Z] [--prefix DIR]
 
-Installs the rota binary from a GitHub release, after checking its sha256.
+Installs the rota binary from a GitHub release, after verifying its minisign
+signature and sha256. Needs the minisign tool (https://jedisct1.github.io/minisign/).
 
   --version X.Y.Z   release to install (env ROTA_VERSION; default: latest)
   --prefix DIR      install to DIR/bin (env ROTA_PREFIX; default: $HOME/.local)
@@ -118,7 +124,12 @@ EOF
 
   printf 'Downloading %s from %s\n' "$asset" "$label"
   fetch "$base/$asset" "$work/$asset" || die "download failed: $base/$asset" "check the version exists and is published"
+  fetch "$base/$asset.minisig" "$work/$asset.minisig" || die "download failed: $base/$asset.minisig" "this release carries no signature; nothing installed"
   fetch "$base/checksums.txt" "$work/checksums.txt" || die "download failed: $base/checksums.txt"
+
+  command -v minisign >/dev/null 2>&1 || die "need minisign to verify the download" "install it (brew install minisign, apt install minisign) and rerun"
+  minisign -V -q -P "$ROTA_MINISIGN_PUBKEY" -m "$work/$asset" -x "$work/$asset.minisig" >/dev/null 2>&1 \
+    || die "signature check failed for $asset; nothing installed" "the binary was not signed by the rota release key"
 
   want=$(awk -v a="$asset" '$2 == a || $2 == "*" a { print $1 }' "$work/checksums.txt")
   [ -n "$want" ] || die "checksums.txt has no entry for $asset"
