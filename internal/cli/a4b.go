@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -508,6 +509,12 @@ func a4Summary(fs *flag.FlagSet) RunFunc {
 			if d, ok := backlog.ParseDone(pystr.Strip(raw)); ok {
 				ds = append(ds, d)
 			}
+		}
+		if be.Name() == "file" {
+			// File mode appends completions, so the file runs oldest to newest:
+			// reverse it (later is newer on equal dates), then stable-sort by date.
+			slices.Reverse(ds)
+			slices.SortStableFunc(ds, func(a, b backlog.Done) int { return strings.Compare(b.Date, a.Date) })
 		}
 		for _, d := range ds[:min(3, len(ds))] {
 			s := "[" + d.ID + "] on " + d.Date
