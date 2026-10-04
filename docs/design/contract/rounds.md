@@ -26,7 +26,7 @@ note: no `ROTA_TEST_*` hooks. The smoke section drives a fake `herdr` binary plu
 - **Host snapshot.** herdr: `herdr api snapshot` (pin 0.9.x), reading `agents[]` (`tab_id`, `cwd`, `agent_status`, `name`). tmux: `tmux list-windows` with the pane's current path. Both sit behind a new optional `host.Snapshotter`, in `internal/host/snapshot.go`; the `Host` interface does not change.
 
 ### rota round watch
-rota round watch [--heartbeat <seconds>] [--poll <seconds>] [--forge-poll <seconds>] [--settle <seconds>] [--lines <n>]
+rota round watch [--heartbeat <seconds>] [--poll <seconds>] [--forge-poll <seconds>] [--settle <seconds>] [--lines <n>] [--autopilot [--base <branch>] [--holder-pid <n>]]
 repo: none
 data: {"reason": "slot" | "change" | "heartbeat" | "interrupt", "waited": number, "round": number, "slot"?: string, "state"?: string, "evidence"?: string, "source"?: string, "changes": [{"key": string, "from": string, "to": string}], "digest": string}
 exit: 2 when `--heartbeat` or `--poll` is not positive, `--forge-poll` or `--settle` is negative, or a positional argument is given; 4 when another watch is already running for this repo (`rota round watch` keeps exactly one); 5 under a solo round (no panes to watch) or when the host is unavailable
@@ -36,6 +36,19 @@ note: `change` entries are the snapshot keys that differ from the start of the w
 note: one at a time. The process writes `<git-common-dir>/rota/round-watch.json` (`pid`, `start`, `host`, `startedAt`, `heartbeatSeconds`) under a lock and removes it on exit; a marker whose process is gone is replaced. A second `round watch` exits 4. The Stop and prompt hooks read the marker.
 note: with no slot to watch (all idle) the verb still runs: it waits out the interval on the registry and the forge, so an answered escalation wakes an orchestrator whose workers are all parked. Each wait covers one classification (`--poll` plus `--settle` plus 2s), so a heartbeat can run a few seconds past its interval.
 note: no `ROTA_TEST_*` hooks. The smoke section (108) uses `test/fakes/tmux` with a churning pane.
+note: (#93) `--autopilot` makes the watch the autopilot's heartbeat: it runs `round tick` first, then waits, and ticks again on every wake. It returns only for a `needsYou` item no earlier tick reported (`reason` `change`), the heartbeat, an interrupt, or a stop (`reason` `stopped`, `autopilotStopped` says why, exit 0). The result gains `autopilot` (the tick's `{did, needsYou, new}`) and, on a stop, `autopilotStopped`. Exit 4 when `round.autopilot` is off. A round running it still has its watch armed, so the Stop hook is satisfied.
+
+### rota round tick
+rota round tick [--base <branch>] [--holder-pid <n>]
+repo: none
+data: {"did": [{"action": "reconcile" | "merge" | "assign", "target": string, "detail"?: string}], "needsYou": [{"kind": string, "target": string, "why": string}], "new": [{"kind": string, "target": string, "why": string}], "changed": boolean} (on a stop: {"stopped": true, "changed": false})
+exit: 2 on a positional argument; 4 when `round.autopilot` is off, or this process holds no live round lease, or a wind-down has stopped the round's autopilot (`stopped: true`); 3 when there is no project root
+old: none (new in #93)
+note: one pass of the round autopilot, in order: (1) `reconcile --apply` (the safe repair kinds; drift it does not repair goes to `needsYou`); (2) merge: every slot that is `done` with a recorded PR, and every queued PR, goes through `worker gate` (one target) or `worker train` (several, grouped by the base each merges into), at most `round.autopilotCap` per tick; (3) assign: the first ready candidate of the round's scope to each idle slot, at most `round.autopilotCap`, with the default tier and kind and never `--accept-overlap`. The merge runs before the assign so the next assignment branches from the gated base.
+note: the autopilot never answers a worker, approves a permission, picks a tier above the default, accepts overlap, reclaims a stalled slot or merges without a passing gate. A slot that is `blocked`, `needs-permission`, `limited`, `dead` or `unknown`, drift it does not repair, a gate that did not pass and a `ship.mergeApproval` other than `none` (the autopilot then merges nothing) all come back in `needsYou`. A gate that failed for a reason only a person can clear (anything but a `stale` or `provenance-fail` bounce, which the gate sends back to the worker and which returns when the worker does) is held: the next tick lists it but does not re-run the checks, until the slot leaves `done`.
+note: `new` is the `needsYou` items no earlier tick reported. State lives in `<git-common-dir>/rota/round-autopilot.json` (`round`, `held`, `reported`, `stopped`), per round. `round wind-down` sets `stopped` before it re-verifies, so no tick assigns or merges meanwhile, clears it when the lease is kept and removes the file when the round ends.
+note: every action is appended to `.rota/gate-audit.jsonl` as `{"gate": "autopilot", "verb": "round tick <action>", "target", "note"}`. These are not human approvals.
+note: no `ROTA_TEST_*` hooks. The smoke section (114) uses the gh and tmux fakes of section 104.
 
 ### rota round status
 rota round status

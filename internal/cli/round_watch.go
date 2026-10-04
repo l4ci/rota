@@ -12,7 +12,9 @@ import (
 	"github.com/l4ci/rota/internal/escalation"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundlease"
+	"github.com/l4ci/rota/internal/roundtick"
 	"github.com/l4ci/rota/internal/roundwatch"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -29,6 +31,9 @@ func roundWatch(fs *flag.FlagSet) RunFunc {
 	forgePoll := fs.Float64("forge-poll", 120, "seconds between forge checks (escalation answers, PR states); 0 never asks the forge")
 	settle := fs.Float64("settle", 5, "seconds between the two pane captures of one classification")
 	lines := fs.Int("lines", 60, "pane lines to classify")
+	autopilot := fs.Bool("autopilot", false, "run a round tick on every wake and wake the orchestrator only for something new (needs round.autopilot)")
+	base := fs.String("base", "", "with --autopilot: the cycle branch PRs merge into (default each PR's recorded base)")
+	pid := fs.Int("holder-pid", 0, "with --autopilot: orchestrator pid for the lease, when its ancestry cannot be read")
 	return func(c *Ctx, args []string) (Result, error) {
 		if err := noArgs(args); err != nil {
 			return Result{}, err
@@ -46,6 +51,13 @@ func roundWatch(fs *flag.FlagSet) RunFunc {
 		if worker.RegistryHost(root) == host.Solo {
 			return Result{}, &Error{Exit: ExitUnavailable, Message: "a solo round has no panes to watch",
 				Hint: "solo workers report through rota round report; call rota round wait"}
+		}
+		set, err := roundcfg.Load(root)
+		if err != nil {
+			return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
+		}
+		if *autopilot && !set.Autopilot {
+			return Result{}, Refused("round.autopilot is off").WithHint("rota config set round.autopilot true")
 		}
 		cd, err := roundlease.CommonDir(root)
 		if err != nil {
@@ -92,11 +104,15 @@ func roundWatch(fs *flag.FlagSet) RunFunc {
 			Local: func() map[string]string { return roundwatch.LocalSnapshot(root) },
 			Forge: func(ctx context.Context) map[string]string { return watchForge(ctx, root) },
 		}
-		res, err := roundwatch.Run(ctx, env, roundwatch.Opts{Heartbeat: secs(*heartbeat), Poll: secs(*poll), ForgeEvery: secs(*forgePoll)})
-		if err != nil {
-			return Result{}, err
+		opts := roundwatch.Opts{Heartbeat: secs(*heartbeat), Poll: secs(*poll), ForgeEvery: secs(*forgePoll)}
+		if !*autopilot {
+			res, err := roundwatch.Run(ctx, env, opts)
+			if err != nil {
+				return Result{}, err
+			}
+			return watchResult(root, cd, lenv, res, nil, ""), nil
 		}
-		return watchResult(root, cd, lenv, res), nil
+		return autopilotWatch(c, ctx, env, opts, set, root, cd, lenv, *base, *pid, secs(*poll))
 	}
 }
 
@@ -127,7 +143,7 @@ func watchForge(ctx context.Context, root string) map[string]string {
 	return out
 }
 
-func watchResult(root, cd string, lenv roundlease.Env, res roundwatch.Result) Result {
+func watchResult(root, cd string, lenv roundlease.Env, res roundwatch.Result, tick *roundtick.Result, stopped string) Result {
 	round := 0
 	if l, _, err := lenv.Read(cd); err == nil {
 		round = l.Round
@@ -156,8 +172,62 @@ func watchResult(root, cd string, lenv roundlease.Env, res roundwatch.Result) Re
 	d.Set("changes", changes)
 	digest := roundwatch.Digest(root, round, false)
 	d.Set("digest", digest)
+	if tick != nil {
+		d.Set("autopilot", tickData(*tick))
+		if l := tickLines(*tick); l != "nothing to do" {
+			text = append(text, l)
+		}
+	}
+	if stopped != "" {
+		d.Set("autopilotStopped", stopped)
+		text = append(text, "autopilot\tstopped\t"+stopped)
+	}
 	if len(text) == 0 {
 		text = append(text, res.Reason+"\t"+digest)
 	}
 	return Result{Data: d, Text: strings.Join(text, "\n")}
+}
+
+// autopilotWatch is `round watch --autopilot`: tick first, then wait, tick on
+// every wake, and return only for something the orchestrator has not seen, a
+// stop (wind-down or a lost lease), or the heartbeat. The watch is the
+// autopilot's heartbeat, so a round running it still has its watch armed.
+func autopilotWatch(c *Ctx, ctx context.Context, env roundwatch.Env, opts roundwatch.Opts, set roundcfg.Settings, root, cd string, lenv roundlease.Env, base string, pid int, poll time.Duration) (Result, error) {
+	c.ctx = ctx
+	deadline := lenv.Now().Add(opts.Heartbeat)
+	for {
+		tr, terr := autopilotTick(c, root, set, base, pid)
+		left := deadline.Sub(lenv.Now())
+		var tp *roundtick.Result
+		if terr == nil {
+			tp = &tr
+		}
+		switch {
+		case errors.Is(terr, errAutopilotStopped):
+			return watchResult(root, cd, lenv, roundwatch.Result{Reason: "stopped"}, nil, "no round lease: the round wound down or the lease was lost"), nil
+		case terr != nil:
+			return watchResult(root, cd, lenv, roundwatch.Result{Reason: roundwatch.ReasonChange}, nil, "tick failed: "+terr.Error()), nil
+		case ctx.Err() != nil:
+			return watchResult(root, cd, lenv, roundwatch.Result{Reason: roundwatch.ReasonInterrupt}, tp, ""), nil
+		case len(tr.New) > 0:
+			return watchResult(root, cd, lenv, roundwatch.Result{Reason: roundwatch.ReasonChange}, tp, ""), nil
+		case left <= 0:
+			return watchResult(root, cd, lenv, roundwatch.Result{Reason: roundwatch.ReasonHeartbeat}, tp, ""), nil
+		}
+		o := opts
+		o.Heartbeat = left
+		res, err := roundwatch.Run(ctx, env, o)
+		if err != nil {
+			return Result{}, err
+		}
+		if res.Reason == roundwatch.ReasonHeartbeat || res.Reason == roundwatch.ReasonInterrupt {
+			if t2, err := autopilotTick(c, root, set, base, pid); err == nil {
+				tp = &t2
+			}
+			return watchResult(root, cd, lenv, res, tp, ""), nil
+		}
+		// A slot the orchestrator already knows about wakes Run at once: the
+		// pause keeps the loop from spinning on it.
+		env.Sleep(ctx, poll)
+	}
 }
