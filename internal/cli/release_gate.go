@@ -1,12 +1,9 @@
 package cli
 
 import (
-	"context"
-	"encoding/json"
 	"flag"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/l4ci/rota/internal/gate"
@@ -115,16 +112,16 @@ func releasePush(fs *flag.FlagSet) RunFunc {
 			if err != nil {
 				return Result{}, err
 			}
-			if h := release.Host(url); h == "github" || h == "github-enterprise" {
-				cl, err := tracker.NewCLI(c.Context(), tracker.SettingsFromConfig(releaseConfig(dir)), "github", dir, trackerOptions...)
+			if p := releaseProvider(release.Host(url)); p != "" {
+				cl, err := tracker.New(c.Context(), tracker.SettingsFromConfig(releaseConfig(dir)), p, dir, trackerOptions...)
 				if err != nil {
 					return Result{}, trackerErr(err)
 				}
-				rel, err := releaseView(c.Context(), cl, tag)
+				rel, checked, err := cl.ReleaseView(c.Context(), tag)
 				if err != nil {
-					return Result{}, err
+					return Result{}, trackerErr(err)
 				}
-				if !rel.Found || rel.IsDraft {
+				if checked && (!rel.Found || rel.IsDraft) {
 					return Result{}, Resolution("the release for %s is not published", tag).
 						WithHint("finish it first: rota release publish " + strings.TrimPrefix(tag, "v"))
 				}
@@ -185,18 +182,18 @@ func releasePublish(fs *flag.FlagSet) RunFunc {
 		data := func(url string, changed bool) any {
 			return gitObj("tag", tag, "host", host, "url", url, "draft", *draft, "changed", changed)
 		}
-		provider := ""
-		switch host {
-		case "github", "github-enterprise":
-			provider = "github"
-		case "gitlab", "gitlab-self-hosted":
-			provider = "gitlab"
-			if *draft {
-				return Result{}, Usage("--draft: GitLab has no draft releases")
-			}
-		default:
+		provider := releaseProvider(host)
+		if provider == "" {
 			c.Warn("no recognized remote; nothing published")
 			return Result{Data: data("", false)}, nil
+		}
+		ctx := c.Context()
+		cl, err := tracker.New(ctx, tracker.SettingsFromConfig(releaseConfig(dir)), provider, dir, trackerOptions...)
+		if err != nil {
+			return Result{}, trackerErr(err)
+		}
+		if *draft && !cl.ReleaseDrafts() {
+			return Result{}, Usage("--draft: GitLab has no draft releases")
 		}
 		remote, ok, err := releaseGitOK(c, dir, "ls-remote", "--tags", "origin", "refs/tags/"+tag)
 		if err != nil {
@@ -210,17 +207,10 @@ func releasePublish(fs *flag.FlagSet) RunFunc {
 		}
 		// Look before the gate, so a wait for the workflow (exit 3) does not
 		// spend the maintainer's approval.
-		ctx := c.Context()
-		cl, err := tracker.NewCLI(ctx, tracker.SettingsFromConfig(releaseConfig(dir)), provider, dir, trackerOptions...)
-		if err != nil {
-			return Result{}, trackerErr(err)
-		}
 		existing := false
-		if provider == "github" {
-			rel, err := releaseView(ctx, cl, tag)
-			if err != nil {
-				return Result{}, err
-			}
+		if rel, checked, err := cl.ReleaseView(ctx, tag); err != nil {
+			return Result{}, trackerErr(err)
+		} else if checked {
 			if existing, err = releaseUsable(rel, dir, tag); err != nil {
 				return Result{}, err
 			}
@@ -240,27 +230,16 @@ func releasePublish(fs *flag.FlagSet) RunFunc {
 		if werr != nil {
 			return Result{}, werr
 		}
-		cliArgs := []string{"release", "create", tag, "--title", *title, "--notes-file", notes.Name()}
-		verb := "create"
-		if provider == "gitlab" {
-			cliArgs = []string{"release", "create", tag, "--name", *title, "--notes-file", notes.Name()}
-		} else if *draft {
-			cliArgs = append(cliArgs, "--draft")
-		}
+		spec := tracker.ReleaseSpec{Tag: tag, Title: *title, Notes: notes.Name(), Draft: *draft}
+		publish := cl.ReleaseCreate
 		if existing {
 			// The workflow already made the draft: finish it, never make a second.
-			verb = "edit"
-			cliArgs = []string{"release", "edit", tag, "--title", *title, "--notes-file", notes.Name(), "--draft=" + strconv.FormatBool(*draft)}
+			publish = cl.ReleaseEdit
 		}
-		r, err := cl.Run(ctx, cliArgs, nil)
+		link, err := publish(ctx, spec)
 		if err != nil {
 			return Result{}, trackerErr(err)
 		}
-		if r.ExitCode != 0 {
-			return Result{}, Unavailable("%s release %s failed: %s", cliName(provider), verb, strings.TrimSpace(string(r.Stderr)))
-		}
-		lines := strings.Split(strings.TrimSpace(string(r.Stdout)), "\n")
-		link := strings.TrimSpace(lines[len(lines)-1])
 		return Result{Data: data(link, true), Text: link}, nil
 	}
 }
@@ -282,42 +261,6 @@ func releaseGoreleaser(dir string) string {
 		}
 	}
 	return ""
-}
-
-// releaseInfo is what `gh release view` says about a tag.
-type releaseInfo struct {
-	Found   bool
-	IsDraft bool
-	Assets  []string
-}
-
-// releaseView asks GitHub about the release for tag. gh 2.45 finds drafts
-// too (a GraphQL lookup by pending tag), so "release not found" means none.
-func releaseView(ctx context.Context, cl *tracker.CLI, tag string) (releaseInfo, error) {
-	r, err := cl.Run(ctx, []string{"release", "view", tag, "--json", "isDraft,assets"}, nil)
-	if err != nil {
-		return releaseInfo{}, trackerErr(err)
-	}
-	if r.ExitCode != 0 {
-		if strings.Contains(strings.ToLower(string(r.Stderr)), "release not found") {
-			return releaseInfo{}, nil
-		}
-		return releaseInfo{}, Unavailable("gh release view failed: %s", strings.TrimSpace(string(r.Stderr)))
-	}
-	var out struct {
-		IsDraft bool `json:"isDraft"`
-		Assets  []struct {
-			Name string `json:"name"`
-		} `json:"assets"`
-	}
-	if err := json.Unmarshal(r.Stdout, &out); err != nil {
-		return releaseInfo{}, Unavailable("gh release view: unreadable output: %v", err)
-	}
-	info := releaseInfo{Found: true, IsDraft: out.IsDraft}
-	for _, a := range out.Assets {
-		info.Assets = append(info.Assets, a.Name)
-	}
-	return info, nil
 }
 
 // releaseMissing lists what a draft still lacks: each required asset, then the
@@ -357,7 +300,7 @@ func releaseMissing(assets []string) []string {
 // before it is finished; and where goreleaser builds the repo, no release at
 // all means the workflow has not run, so creating one here would put the plugin
 // version ahead of its binaries.
-func releaseUsable(rel releaseInfo, dir, tag string) (bool, error) {
+func releaseUsable(rel tracker.Release, dir, tag string) (bool, error) {
 	if !rel.Found {
 		if cfg := releaseGoreleaser(dir); cfg != "" {
 			return false, Resolution("no release for %s yet, and %s builds releases", tag, cfg).
@@ -375,9 +318,13 @@ func releaseUsable(rel releaseInfo, dir, tag string) (bool, error) {
 	return true, nil
 }
 
-func cliName(provider string) string {
-	if provider == "gitlab" {
-		return "glab"
+// releaseProvider is the forge a remote host runs ("" for none we publish to).
+func releaseProvider(host string) string {
+	switch host {
+	case "github", "github-enterprise":
+		return "github"
+	case "gitlab", "gitlab-self-hosted":
+		return "gitlab"
 	}
-	return "gh"
+	return ""
 }

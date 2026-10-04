@@ -298,10 +298,10 @@ func shipPR(fs *flag.FlagSet) RunFunc {
 
 		// The provider and the Closes lines come before the push, so a bad
 		// --items ID fails with nothing pushed.
-		cl, err := tracker.NewCLI(ctx, tracker.SettingsFromConfig(cfg), "", dir, trackerOptions...)
+		cl, err := tracker.New(ctx, tracker.SettingsFromConfig(cfg), "", dir, trackerOptions...)
 		if err != nil {
 			// An origin that is neither GitHub nor GitLab falls back to github.
-			if cl, err = tracker.NewCLI(ctx, tracker.SettingsFromConfig(cfg), "github", dir, trackerOptions...); err != nil {
+			if cl, err = tracker.New(ctx, tracker.SettingsFromConfig(cfg), "github", dir, trackerOptions...); err != nil {
 				return Result{}, trackerErr(err)
 			}
 		}
@@ -321,7 +321,7 @@ func shipPR(fs *flag.FlagSet) RunFunc {
 		}
 
 		var base string
-		if cl.Provider == "gitlab" {
+		if cl.PRNeedsBase() {
 			var ok bool
 			if base, ok, err = resolveBase(ctx, dir); err != nil {
 				return Result{}, err
@@ -339,33 +339,11 @@ func shipPR(fs *flag.FlagSet) RunFunc {
 		if push.Code != 0 {
 			return Result{}, Unavailable("git push -u origin %s failed: %s", branch, shipFirstLine(push.Stderr))
 		}
-		var cli string
-		var cargs []string
-		var stdin io.Reader
-		if cl.Provider == "gitlab" {
-			cli = "glab"
-			cargs = []string{"mr", "create", "--title", *title, "--description", body,
-				"--source-branch", branch, "--target-branch", base, "--yes"}
-		} else {
-			cli = "gh"
-			cargs = []string{"pr", "create", "--title", *title, "--body-file", "-"}
-			stdin = strings.NewReader(body)
-		}
-		res, err := cl.Run(ctx, cargs, stdin)
+		url, err := cl.PRCreate(ctx, tracker.PRSpec{Title: *title, Body: body, Head: branch, Base: base})
 		if err != nil {
 			return Result{}, trackerErr(err)
 		}
-		if res.ExitCode != 0 {
-			msg := shipFirstLine(string(res.Stderr))
-			return Result{}, Unavailable("%s %s exited %d: %s", cli, cargs[0]+" "+cargs[1], res.ExitCode, msg)
-		}
-		url := ""
-		for _, l := range pystr.Splitlines(string(res.Stdout)) {
-			if pystr.Strip(l) != "" {
-				url = pystr.Strip(l)
-			}
-		}
-		data := gitObj("branch", branch, "url", url, "provider", cl.Provider)
+		data := gitObj("branch", branch, "url", url, "provider", cl.Provider())
 		if m := shipNumberRe.FindStringSubmatch(url); m != nil {
 			if n, err := strconv.Atoi(m[1]); err == nil {
 				data.Set("number", n)
