@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"path/filepath"
 
@@ -95,25 +96,25 @@ func (e Env) SessionEnsure(ctx context.Context, root string, o SessionOpts) (Ses
 	}
 	h := e.NewHost(hostKind(root))
 	if err := h.Require(); err != nil {
-		return SessionState{}, fail(ExitUnavailable, err.Error())
+		return SessionState{}, fail(exitcode.ExitUnavailable, err.Error())
 	}
 	if h.InSession() {
 		return SessionState{Inside: true, Where: h.Where()}, nil
 	}
 	if h.Name() == "herdr" {
 		cwd, _ := os.Getwd()
-		err := fail(ExitRefused, "work.dispatch=herdr needs /rota-work to run inside a herdr pane")
+		err := fail(exitcode.ExitRefused, "work.dispatch=herdr needs /rota-work to run inside a herdr pane")
 		err.Data = BlockData{BlockedBy: "outside herdr"}
 		err.Hint = fmt.Sprintf("open herdr, start Claude Code in a pane at %s, and run /rota-work there; worker tabs then open in that workspace, beside the orchestrator", cwd)
 		return SessionState{}, err
 	}
 	op, ok := h.(host.Operator)
 	if !ok {
-		return SessionState{}, fail(ExitUnavailable, h.Name()+" host cannot open an operator window")
+		return SessionState{}, fail(exitcode.ExitUnavailable, h.Name()+" host cannot open an operator window")
 	}
 	if o.BodyFile != "" {
 		if _, err := os.Stat(o.BodyFile); err != nil {
-			return SessionState{}, fail(ExitResolution, "instruction file not found: "+o.BodyFile)
+			return SessionState{}, fail(exitcode.ExitResolution, "instruction file not found: "+o.BodyFile)
 		}
 	}
 	abs, err := filepath.EvalSymlinks(root)
@@ -123,7 +124,7 @@ func (e Env) SessionEnsure(ctx context.Context, root string, o SessionOpts) (Ses
 	err = op.EnsureOperator(ctx, host.OperatorOpts{Session: o.Session, Root: abs,
 		Command: operatorCommand(root), Instruction: o.BodyFile, BootTimeout: o.BootTimeout})
 	if err != nil {
-		w := fail(ExitUnavailable, err.Error())
+		w := fail(exitcode.ExitUnavailable, err.Error())
 		switch {
 		case errors.Is(err, host.ErrOperatorBoot):
 			w.Message = fmt.Sprintf("the operator session did not come up within %ds", o.BootTimeout)

@@ -3,6 +3,7 @@ package round
 import (
 	"context"
 	"errors"
+	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -168,13 +169,13 @@ func TestWindDownRefusesWhileASlotHoldsWork(t *testing.T) {
 
 func TestWindDownNeedsTheLeaseAndTheBase(t *testing.T) {
 	f := newAssignFixture(t)
-	var we *worker.Error
-	if _, err := f.windDown(func(o *WindDownOpts) { o.HolderPID = 999 }); !errors.As(err, &we) || we.Exit != worker.ExitResolution {
+	var we *exitcode.Error
+	if _, err := f.windDown(func(o *WindDownOpts) { o.HolderPID = 999 }); !errors.As(err, &we) || we.Exit != exitcode.ExitResolution {
 		t.Fatalf("a process without the lease: %v", err)
 	}
 	f.verifyWith(t, `["true"]`)
 	sh(t, f.root, "checkout", "-q", "-b", "side")
-	if _, err := f.windDown(nil); !errors.As(err, &we) || we.Exit != worker.ExitResolution {
+	if _, err := f.windDown(nil); !errors.As(err, &we) || we.Exit != exitcode.ExitResolution {
 		t.Fatalf("the root must be on the base: %v", err)
 	}
 	if _, st, _ := f.env.ReadLease(bg, f.root); st != roundlease.Live {

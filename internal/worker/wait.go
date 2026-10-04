@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/exitcode"
 	"strings"
 	"time"
 
@@ -64,7 +65,7 @@ func (e Env) Wait(ctx context.Context, root string, o WaitOpts) (WaitResult, err
 	}
 	h := e.NewHost(hostKind(root))
 	if err := h.Require(); err != nil {
-		return WaitResult{}, fail(ExitUnavailable, err.Error())
+		return WaitResult{}, fail(exitcode.ExitUnavailable, err.Error())
 	}
 	reg := LoadRegistry(root)
 	var targets []pollTarget
@@ -72,11 +73,11 @@ func (e Env) Wait(ctx context.Context, root string, o WaitOpts) (WaitResult, err
 		for _, name := range o.Slots {
 			s := reg.Slot(name)
 			if s == nil {
-				return WaitResult{}, fail(ExitResolution, fmt.Sprintf("slot '%s' is not in the pool", name))
+				return WaitResult{}, fail(exitcode.ExitResolution, fmt.Sprintf("slot '%s' is not in the pool", name))
 			}
 			t := slotTarget(s)
 			if t.handle == "" {
-				return WaitResult{}, fail(ExitResolution, fmt.Sprintf("slot '%s' has no session to watch", name))
+				return WaitResult{}, fail(exitcode.ExitResolution, fmt.Sprintf("slot '%s' has no session to watch", name))
 			}
 			targets = append(targets, t)
 		}
@@ -93,7 +94,7 @@ func (e Env) Wait(ctx context.Context, root string, o WaitOpts) (WaitResult, err
 		}
 	}
 	if len(targets) == 0 {
-		return WaitResult{}, fail(ExitResolution, "no slot with a session to watch")
+		return WaitResult{}, fail(exitcode.ExitResolution, "no slot with a session to watch")
 	}
 
 	if o.Timeout > 0 {
@@ -110,7 +111,7 @@ func (e Env) Wait(ctx context.Context, root string, o WaitOpts) (WaitResult, err
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			return WaitResult{TimedOut: true, Waited: e.Now().Sub(start), Slots: last}, nil
 		}
-		return WaitResult{}, fail(ExitFailed, "interrupted")
+		return WaitResult{}, fail(exitcode.ExitFailed, "interrupted")
 	}
 	var w host.Watch
 	if wh, ok := h.(host.Watcher); ok {
@@ -123,7 +124,7 @@ func (e Env) Wait(ctx context.Context, root string, o WaitOpts) (WaitResult, err
 			if ctx.Err() != nil {
 				return stop()
 			}
-			return WaitResult{}, fail(ExitUnavailable, err.Error())
+			return WaitResult{}, fail(exitcode.ExitUnavailable, err.Error())
 		}
 		defer w.Close()
 	}
@@ -178,7 +179,7 @@ func (e Env) Wait(ctx context.Context, root string, o WaitOpts) (WaitResult, err
 			if ctx.Err() != nil {
 				return stop()
 			}
-			return WaitResult{}, fail(ExitUnavailable, strings.TrimSpace(err.Error()))
+			return WaitResult{}, fail(exitcode.ExitUnavailable, strings.TrimSpace(err.Error()))
 		}
 	}
 }
@@ -195,7 +196,7 @@ func soloWait(root string, o WaitOpts) (WaitResult, error) {
 		for _, name := range o.Slots {
 			s := reg.Slot(name)
 			if s == nil {
-				return WaitResult{}, fail(ExitResolution, fmt.Sprintf("slot '%s' is not in the pool", name))
+				return WaitResult{}, fail(exitcode.ExitResolution, fmt.Sprintf("slot '%s' is not in the pool", name))
 			}
 			watched = append(watched, s)
 		}
@@ -207,7 +208,7 @@ func soloWait(root string, o WaitOpts) (WaitResult, error) {
 		}
 	}
 	if len(watched) == 0 {
-		return WaitResult{}, fail(ExitResolution, "no slot to watch: every slot is idle")
+		return WaitResult{}, fail(exitcode.ExitResolution, "no slot to watch: every slot is idle")
 	}
 	var rows []PollRow
 	for _, s := range watched {

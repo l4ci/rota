@@ -6,6 +6,7 @@ package milestone
 import (
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/exitcode"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -41,7 +42,7 @@ func ValidID(id string) bool { return idRe.MatchString(id) }
 
 func checkID(id string) error {
 	if !ValidID(id) {
-		return artifact.Errf(artifact.ExitUsage, "milestone ID must match M\\d{2,} (e.g. M01, M03), got %q", id)
+		return exitcode.Errf(exitcode.ExitUsage, "milestone ID must match M\\d{2,} (e.g. M01, M03), got %q", id)
 	}
 	return nil
 }
@@ -59,8 +60,8 @@ func ValidStatus(s string) bool {
 func detailPath(root, id string) string { return filepath.Join(root, ".rota", "milestones", id+".md") }
 func overviewPath(root string) string   { return filepath.Join(root, ".rota", "MILESTONES.md") }
 
-func notFound(id string) *artifact.Error {
-	return artifact.Errf(artifact.ExitResolution, "milestone %s not found (.rota/milestones/%s.md)", id, id)
+func notFound(id string) *exitcode.Error {
+	return exitcode.Errf(exitcode.ExitResolution, "milestone %s not found (.rota/milestones/%s.md)", id, id)
 }
 
 // Stub is the starter text of a milestone detail file (milestone_stub); the
@@ -93,7 +94,7 @@ func Add(root, title, summary, depends string) (string, error) {
 	err = fsio.Locked(ms, fsio.LockTimeout, func() error {
 		content, rerr := fsio.ReadText(ms)
 		if rerr != nil && !errors.Is(rerr, fs.ErrNotExist) {
-			return artifact.Errf(artifact.ExitInternal, "cannot read %s: %v", ms, rerr)
+			return exitcode.Errf(exitcode.ExitInternal, "cannot read %s: %v", ms, rerr)
 		}
 		content = section.Append(content, "Milestones", entry)
 		if !strings.HasSuffix(content, "\n") {
@@ -196,7 +197,7 @@ func Put(root, id, text string) (changed bool, err error) {
 		}
 	}
 	if got != id {
-		return false, artifact.Errf(artifact.ExitRefused, "milestone text needs frontmatter with 'id: %s'", id)
+		return false, exitcode.Errf(exitcode.ExitRefused, "milestone text needs frontmatter with 'id: %s'", id)
 	}
 	err = fsio.Locked(p, fsio.LockTimeout, func() error {
 		old, rerr := os.ReadFile(p)
@@ -222,19 +223,19 @@ var h2Re = regexp.MustCompile(`(?m)^## `)
 func SetOverview(root, text string) (changed bool, err error) {
 	p := overviewPath(root)
 	if _, serr := os.Stat(p); serr != nil {
-		return false, artifact.Errf(artifact.ExitResolution, "%s not found", p).WithHint("rota milestone add --title <text> --summary <text>")
+		return false, exitcode.Errf(exitcode.ExitResolution, "%s not found", p).WithHint("rota milestone add --title <text> --summary <text>")
 	}
 	text = strings.Trim(text, "\n")
 	if strings.TrimSpace(text) == "" {
-		return false, artifact.Errf(artifact.ExitUsage, "overview text is empty")
+		return false, exitcode.Errf(exitcode.ExitUsage, "overview text is empty")
 	}
 	if h2Re.MatchString(text) || strings.HasPrefix(text, "# ") || strings.Contains(text, "\n# ") {
-		return false, artifact.Errf(artifact.ExitRefused, "overview text must not contain headings")
+		return false, exitcode.Errf(exitcode.ExitRefused, "overview text must not contain headings")
 	}
 	err = fsio.Locked(p, fsio.LockTimeout, func() error {
 		old, rerr := fsio.ReadText(p)
 		if rerr != nil {
-			return artifact.Errf(artifact.ExitInternal, "cannot read %s: %v", p, rerr)
+			return exitcode.Errf(exitcode.ExitInternal, "cannot read %s: %v", p, rerr)
 		}
 		head, rest := "", old
 		if nl := strings.Index(old, "\n"); strings.HasPrefix(old, "# ") && nl >= 0 {
@@ -266,7 +267,7 @@ func SetStatus(root, id, status string) (changed bool, err error) {
 		return
 	}
 	if !ValidStatus(status) {
-		return false, artifact.Errf(artifact.ExitUsage, "--to must be one of: %s", strings.Join(Statuses, ", "))
+		return false, exitcode.Errf(exitcode.ExitUsage, "--to must be one of: %s", strings.Join(Statuses, ", "))
 	}
 	p := detailPath(root, id)
 	if _, serr := os.Stat(p); serr != nil {
@@ -279,7 +280,7 @@ func SetStatus(root, id, status string) (changed bool, err error) {
 		}
 		updated, found := frontmatter.UpdateField(content, "status", status)
 		if !found {
-			return artifact.Errf(artifact.ExitInternal, "status field not found in .rota/milestones/%s.md", id)
+			return exitcode.Errf(exitcode.ExitInternal, "status field not found in .rota/milestones/%s.md", id)
 		}
 		if updated == content {
 			return nil
@@ -357,7 +358,7 @@ func IndexFrom(root string, items []Entry, issue bool) (changed bool, err error)
 		err = fsio.Locked(ms, fsio.LockTimeout, func() error {
 			original, rerr := fsio.ReadText(ms)
 			if rerr != nil {
-				return artifact.Errf(artifact.ExitInternal, "cannot read %s: %v", ms, rerr)
+				return exitcode.Errf(exitcode.ExitInternal, "cannot read %s: %v", ms, rerr)
 			}
 			text := original
 			if !issue {

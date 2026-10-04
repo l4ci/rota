@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"strings"
 	"testing"
@@ -45,8 +46,8 @@ func TestSessionEnsureHerdrOutsideIsRefusedNotHandedOff(t *testing.T) {
 	dir := newProject(t, `{"work":{"dispatch":"herdr"}}`)
 	f := &fakeHost{name: "herdr"}
 	_, err := envWith(f).SessionEnsure(bg, dir, SessionOpts{})
-	we, ok := err.(*Error)
-	if !ok || we.Exit != ExitRefused || !strings.Contains(we.Message, "needs /rota-work to run inside a herdr pane") || !strings.Contains(we.Hint, "open herdr") {
+	we, ok := err.(*exitcode.Error)
+	if !ok || we.Exit != exitcode.ExitRefused || !strings.Contains(we.Message, "needs /rota-work to run inside a herdr pane") || !strings.Contains(we.Hint, "open herdr") {
 		t.Errorf("err = %v", err)
 	}
 	if len(f.calls) != 0 {
@@ -80,7 +81,7 @@ func TestSessionEnsureFailures(t *testing.T) {
 	oh := &operatorHost{fakeHost: &fakeHost{name: "tmux"}}
 	e := Env{NewHost: func(string) host.Host { return oh }}
 	_, err := e.SessionEnsure(bg, dir, SessionOpts{BodyFile: "/no/such"})
-	if exitOf(err) != ExitResolution || !strings.Contains(err.Error(), "instruction file not found") {
+	if exitOf(err) != exitcode.ExitResolution || !strings.Contains(err.Error(), "instruction file not found") {
 		t.Errorf("missing body: %v", err)
 	}
 	for _, tc := range []struct {
@@ -95,13 +96,13 @@ func TestSessionEnsureFailures(t *testing.T) {
 	} {
 		oh.err = tc.err
 		_, err := e.SessionEnsure(bg, dir, SessionOpts{})
-		we, ok := err.(*Error)
-		if !ok || we.Exit != ExitUnavailable || !strings.Contains(we.Message, tc.msg) || !strings.Contains(we.Hint, tc.hint) {
+		we, ok := err.(*exitcode.Error)
+		if !ok || we.Exit != exitcode.ExitUnavailable || !strings.Contains(we.Message, tc.msg) || !strings.Contains(we.Hint, tc.hint) {
 			t.Errorf("%v: err = %#v", tc.err, err)
 		}
 	}
 	oh.fakeHost.requireErr = os.ErrNotExist
-	if _, err := e.SessionEnsure(bg, dir, SessionOpts{}); exitOf(err) != ExitUnavailable {
+	if _, err := e.SessionEnsure(bg, dir, SessionOpts{}); exitOf(err) != exitcode.ExitUnavailable {
 		t.Errorf("host missing: %v", err)
 	}
 }

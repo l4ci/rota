@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -23,28 +24,7 @@ import (
 	"github.com/l4ci/rota/internal/tracker"
 )
 
-// Error is a verb failure with its exit code from the exit table. Data is the
-// failure data a verb may attach on exit 1 and 4.
-type Error struct {
-	Exit    int
-	Message string
-	Hint    string
-	Data    any
-}
-
-func (e *Error) Error() string { return e.Message }
-
-func fail(exit int, msg string) *Error { return &Error{Exit: exit, Message: msg} }
-
-// Exit codes, mirrored from internal/cli so this package does not import it.
-const (
-	ExitFailed      = 1
-	ExitUsage       = 2
-	ExitResolution  = 3
-	ExitRefused     = 4
-	ExitUnavailable = 5
-	ExitRetry       = 6
-)
+func fail(exit int, msg string) *exitcode.Error { return &exitcode.Error{Exit: exit, Message: msg} }
 
 // RegistryPath is the registry file under the project root.
 func RegistryPath(root string) string { return filepath.Join(root, ".rota", "workers.json") }

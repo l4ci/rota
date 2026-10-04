@@ -7,6 +7,7 @@ package debugctr
 
 import (
 	"encoding/json"
+	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,7 +16,6 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/l4ci/rota/internal/artifact"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
 )
@@ -33,11 +33,11 @@ func Open(root string) (*Counter, error) {
 	cmd.Dir = root
 	out, err := cmd.Output()
 	if err != nil {
-		return nil, artifact.Errf(artifact.ExitUnavailable, "not in a git repository (a debug session is keyed by the current branch)")
+		return nil, exitcode.Errf(exitcode.ExitUnavailable, "not in a git repository (a debug session is keyed by the current branch)")
 	}
 	branch := strings.TrimSpace(string(out))
 	if branch == "" {
-		return nil, artifact.Errf(artifact.ExitUnavailable, "could not determine current git branch")
+		return nil, exitcode.Errf(exitcode.ExitUnavailable, "could not determine current git branch")
 	}
 	session := strings.ReplaceAll(branch, "/", "-")
 	return &Counter{Session: session, Path: filepath.Join(root, ".rota", "debug", session+".json")}, nil
@@ -69,7 +69,7 @@ func (c *Counter) exists() bool {
 
 func (c *Counter) require() error {
 	if !c.exists() {
-		return artifact.Errf(artifact.ExitResolution, "no debug session file at .rota/debug/%s.json", c.Session).
+		return exitcode.Errf(exitcode.ExitResolution, "no debug session file at .rota/debug/%s.json", c.Session).
 			WithHint("run: rota debug counter init <bugId>")
 	}
 	return nil
@@ -158,12 +158,12 @@ func (c *Counter) closeLast(outcome string, mutate func(o *jsonx.Object)) (attem
 	err = c.update(func(o *jsonx.Object) error {
 		list := attemptsOf(o)
 		if len(list) == 0 {
-			return artifact.Errf(artifact.ExitRefused, "no attempts recorded yet")
+			return exitcode.Errf(exitcode.ExitRefused, "no attempts recorded yet")
 		}
 		last := asObj(list[len(list)-1])
 		if v, _ := last.Get("outcome"); v != "pending" {
 			s, _ := v.(string)
-			return artifact.Errf(artifact.ExitRefused, "last attempt outcome is '%s', not 'pending'", s)
+			return exitcode.Errf(exitcode.ExitRefused, "last attempt outcome is '%s', not 'pending'", s)
 		}
 		last.Set("outcome", outcome)
 		last.Set("ended_at", nowISO())

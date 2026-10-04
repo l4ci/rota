@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -211,7 +212,7 @@ func blocked(by, format string, a ...any) *BlockedError {
 }
 
 func usage(format string, a ...any) error {
-	return &worker.Error{Exit: worker.ExitUsage, Message: fmt.Sprintf(format, a...)}
+	return &exitcode.Error{Exit: exitcode.ExitUsage, Message: fmt.Sprintf(format, a...)}
 }
 
 func (e Env) workerEnv() worker.Env {
@@ -287,7 +288,7 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 	if o.Agent != "" {
 		slot = reg.Slot(o.Agent)
 		if slot == nil {
-			return res, &worker.Error{Exit: worker.ExitResolution, Message: fmt.Sprintf("slot %s is not provisioned: run rota round start", o.Agent)}
+			return res, &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("slot %s is not provisioned: run rota round start", o.Agent)}
 		}
 	} else {
 		for _, name := range set.Roster {
@@ -411,8 +412,8 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 	if kind == roundcfg.KindCodex {
 		setup, err := e.workerEnv().CodexPreflight(ctx, root, agent, o.AcceptCodexVersion)
 		if err != nil {
-			var we *worker.Error
-			if errors.As(err, &we) && we.Exit == worker.ExitRefused {
+			var we *exitcode.Error
+			if errors.As(err, &we) && we.Exit == exitcode.ExitRefused {
 				if bd, ok := we.Data.(worker.BlockData); ok {
 					return res, blocked(bd.BlockedBy, "%s", we.Message)
 				}
@@ -473,8 +474,8 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 	w := e.workerEnv()
 	if _, err := w.ResetTo(root, agent, id, res.Branch, false); err != nil {
 		undo()
-		var we *worker.Error
-		if errors.As(err, &we) && we.Exit == worker.ExitRefused {
+		var we *exitcode.Error
+		if errors.As(err, &we) && we.Exit == exitcode.ExitRefused {
 			return res, blocked(BlockSlotBusy, "%s", we.Message)
 		}
 		return res, err
@@ -556,7 +557,7 @@ func (e Env) pickAccount(ctx context.Context, root, agent string) (string, error
 	}
 	name, ok := e.Accounts.Pick(ctx, root, nil)
 	if !ok {
-		return "", &worker.Error{Exit: worker.ExitUnavailable, Message: "no work.accounts account has headroom: every configured account is cooling down"}
+		return "", &exitcode.Error{Exit: exitcode.ExitUnavailable, Message: "no work.accounts account has headroom: every configured account is cooling down"}
 	}
 	if _, _, err := e.Accounts.Assign(ctx, root, agent, name); err != nil {
 		return "", err

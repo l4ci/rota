@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -108,7 +109,7 @@ func SoloRefusal(root, equiv string) error {
 	if RegistryHost(root) != host.Solo {
 		return nil
 	}
-	return &Error{Exit: ExitUsage, Message: "solo round: workers are subagents, there are no panes", Hint: equiv}
+	return &exitcode.Error{Exit: exitcode.ExitUsage, Message: "solo round: workers are subagents, there are no panes", Hint: equiv}
 }
 
 var shortResume = regexp.MustCompile(`^-[A-Za-z]*[cr][A-Za-z]*$`)
@@ -246,25 +247,25 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 	}
 	brief, err := os.ReadFile(o.BodyFile)
 	if err != nil {
-		return res, fail(ExitResolution, "body file not found: "+o.BodyFile)
+		return res, fail(exitcode.ExitResolution, "body file not found: "+o.BodyFile)
 	}
 	h := e.NewHost(hostKind(root))
 	if err := h.Require(); err != nil {
-		return res, fail(ExitUnavailable, err.Error())
+		return res, fail(exitcode.ExitUnavailable, err.Error())
 	}
 	// herdr tabs are created in the caller's own workspace. Outside herdr there
 	// is none, and driving the server anyway lands tabs wherever a human is
 	// focused.
 	if h.Name() == "herdr" && !h.InSession() {
-		return res, fail(ExitUnavailable, "work.dispatch=herdr must run from inside a herdr pane (HERDR_ENV=1)")
+		return res, fail(exitcode.ExitUnavailable, "work.dispatch=herdr must run from inside a herdr pane (HERDR_ENV=1)")
 	}
 	reg := LoadRegistry(root)
 	if !reg.Exists {
-		return res, fail(ExitResolution, "no worker pool — run rota worker pool init first")
+		return res, fail(exitcode.ExitResolution, "no worker pool — run rota worker pool init first")
 	}
 	s := reg.Slot(o.Slot)
 	if s == nil {
-		return res, fail(ExitResolution, fmt.Sprintf("slot '%s' is not in the pool", o.Slot))
+		return res, fail(exitcode.ExitResolution, fmt.Sprintf("slot '%s' is not in the pool", o.Slot))
 	}
 	worktree := Str(s, "worktree")
 	// `window` is the pre-handle field name; read it so an unmigrated registry
@@ -279,7 +280,7 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 	}
 	configDir := Str(s, "configDir")
 	if !isDir(worktree) {
-		return res, fail(ExitResolution, fmt.Sprintf("slot '%s' worktree missing: %s", o.Slot, worktree))
+		return res, fail(exitcode.ExitResolution, fmt.Sprintf("slot '%s' worktree missing: %s", o.Slot, worktree))
 	}
 	timeout := o.BootTimeout
 	if timeout <= 0 {
@@ -297,7 +298,7 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 			kind = KindClaude
 		}
 		if kind != KindClaude && kind != KindCodex {
-			return res, fail(ExitUsage, "kind must be claude or codex, got: "+kind)
+			return res, fail(exitcode.ExitUsage, "kind must be claude or codex, got: "+kind)
 		}
 		res.Kind = kind
 		signKind = kind
@@ -315,14 +316,14 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 			bad, perr = ResumeFlag(launch)
 		}
 		if perr != nil {
-			var we *Error
+			var we *exitcode.Error
 			if errors.As(perr, &we) {
 				return res, perr
 			}
-			return res, fail(ExitUsage, key+" cannot be parsed (unbalanced quote?): "+launch)
+			return res, fail(exitcode.ExitUsage, key+" cannot be parsed (unbalanced quote?): "+launch)
 		}
 		if bad != "" {
-			e := fail(ExitRefused, fmt.Sprintf("%s contains %s'%s', which reopens the previous conversation; a task dispatch must start a fresh session. Remove it.", key, what, bad))
+			e := fail(exitcode.ExitRefused, fmt.Sprintf("%s contains %s'%s', which reopens the previous conversation; a task dispatch must start a fresh session. Remove it.", key, what, bad))
 			e.Data = BlockData{BlockedBy: "resume flag"}
 			return res, e
 		}
@@ -330,14 +331,14 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 		// must be the kind's own: refuse before anything is killed.
 		if h.Name() == "herdr" {
 			if lk, _, _, lerr := host.LaunchArgs(launch); lerr != nil || lk != kind {
-				return res, fail(ExitUnavailable, fmt.Sprintf("work.dispatch=herdr starts a %s worker, but %s does not run %s: %s", kind, key, kind, launch))
+				return res, fail(exitcode.ExitUnavailable, fmt.Sprintf("work.dispatch=herdr starts a %s worker, but %s does not run %s: %s", kind, key, kind, launch))
 			}
 		}
 		// Codex skips a command-line hook unless it is trusted, which would
 		// leave unsigned pane text unchecked: refuse before anything is touched.
 		if kind == KindCodex {
 			if _, _, largs, lerr := host.LaunchArgs(launch); lerr != nil || !hasToken(largs, "--dangerously-bypass-hook-trust") {
-				return res, fail(ExitUnavailable, "work.codexCommand lacks --dangerously-bypass-hook-trust: without it Codex skips rota's prompt-check hook, so unsigned pane text would reach the worker: "+launch)
+				return res, fail(exitcode.ExitUnavailable, "work.codexCommand lacks --dangerously-bypass-hook-trust: without it Codex skips rota's prompt-check hook, so unsigned pane text would reach the worker: "+launch)
 			}
 		}
 		// A codex worker's home, login and version are checked before the old
@@ -352,14 +353,14 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 			configDir = ""
 			exe, err := e.Executable()
 			if err != nil {
-				return res, fail(ExitUnavailable, "cannot find the rota binary for the prompt-check hook: "+err.Error())
+				return res, fail(exitcode.ExitUnavailable, "cannot find the rota binary for the prompt-check hook: "+err.Error())
 			}
 			var keyPath string
 			if keyPath, signKey, err = newPromptKey(codexHome); err != nil {
-				return res, fail(ExitUnavailable, "cannot write the prompt key in "+codexHome+": "+err.Error())
+				return res, fail(exitcode.ExitUnavailable, "cannot write the prompt key in "+codexHome+": "+err.Error())
 			}
 			if launch, err = withPromptHook(launch, codexHookArgs(exe, keyPath)); err != nil {
-				return res, fail(ExitUnavailable, "cannot add the prompt-check hook to "+key+": "+err.Error())
+				return res, fail(exitcode.ExitUnavailable, "cannot add the prompt-check hook to "+key+": "+err.Error())
 			}
 		}
 		// Refuse a slot that still holds work, before its session is killed.
@@ -369,7 +370,7 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 		// Fresh session every task dispatch. The kill must be provable: a
 		// window that survives it would run beside the new one.
 		if err := h.Kill(ctx, o.Slot, handle); err != nil {
-			return res, fail(ExitUnavailable, err.Error())
+			return res, fail(exitcode.ExitUnavailable, err.Error())
 		}
 		// Re-check: the old session may have written between the check and its
 		// exit. The old session is dead from here on, so a failure must not
@@ -383,10 +384,10 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 			ConfigDir: configDir, CodexHome: codexHome, Launch: launch, BootTimeout: timeout})
 		if err != nil {
 			clearHandle(root, o.Slot)
-			return res, fail(ExitUnavailable, err.Error())
+			return res, fail(exitcode.ExitUnavailable, err.Error())
 		}
 	} else if handle == "" {
-		return res, fail(ExitResolution, fmt.Sprintf("slot '%s' has no session to relay into — dispatch a task first", o.Slot))
+		return res, fail(exitcode.ExitResolution, fmt.Sprintf("slot '%s' has no session to relay into — dispatch a task first", o.Slot))
 	} else if Str(s, "kind") == KindCodex {
 		signKind = KindCodex
 		cd, err := CommonDir(ctx, e.Git, root)
@@ -395,7 +396,7 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 		}
 		keyFile := filepath.Join(CodexHome(cd, o.Slot), PromptKeyFile)
 		if signKey, err = loadPromptKey(keyFile); err != nil {
-			x := fail(ExitUnavailable, fmt.Sprintf("slot '%s' is a codex worker but its prompt key is unreadable (%s): %v", o.Slot, keyFile, err))
+			x := fail(exitcode.ExitUnavailable, fmt.Sprintf("slot '%s' is a codex worker but its prompt key is unreadable (%s): %v", o.Slot, keyFile, err))
 			x.Hint = "re-dispatch the task: a fresh session gets a fresh key and hook"
 			return res, x
 		}
@@ -480,9 +481,9 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 	case sendErr == nil:
 		return res, nil
 	case errors.Is(sendErr, host.ErrDialogOpen):
-		return res, fail(ExitUnavailable, fmt.Sprintf("slot '%s' has a dialog open and refused input — inspect it before resending", o.Slot))
+		return res, fail(exitcode.ExitUnavailable, fmt.Sprintf("slot '%s' has a dialog open and refused input — inspect it before resending", o.Slot))
 	default:
-		return res, fail(ExitRetry, fmt.Sprintf("slot '%s' never picked up the brief — inspect the session before resending", o.Slot))
+		return res, fail(exitcode.ExitRetry, fmt.Sprintf("slot '%s' never picked up the brief — inspect the session before resending", o.Slot))
 	}
 }
 
@@ -498,9 +499,9 @@ func hasToken(toks []string, want string) bool {
 // resetRefusal maps a reset-guard error onto dispatch's exits: a slot holding
 // work is a refusal (4), anything else keeps its own exit.
 func resetRefusal(err error, changed bool) error {
-	var we *Error
+	var we *exitcode.Error
 	if errors.As(err, &we) && we.Data != nil {
-		return &Error{Exit: ExitRefused, Message: we.Message, Data: BlockData{BlockedBy: "reset guard", Changed: changed}}
+		return &exitcode.Error{Exit: exitcode.ExitRefused, Message: we.Message, Data: BlockData{BlockedBy: "reset guard", Changed: changed}}
 	}
 	return err
 }
@@ -592,7 +593,7 @@ func (e Env) KillSlot(ctx context.Context, root, slot string) error {
 	e = e.withDefaults()
 	s := LoadRegistry(root).Slot(slot)
 	if s == nil {
-		return fail(ExitResolution, fmt.Sprintf("slot '%s' is not in the pool", slot))
+		return fail(exitcode.ExitResolution, fmt.Sprintf("slot '%s' is not in the pool", slot))
 	}
 	if RegistryHost(root) == host.Solo {
 		return nil // a subagent has no pane to close
@@ -603,10 +604,10 @@ func (e Env) KillSlot(ctx context.Context, root, slot string) error {
 	}
 	h := e.NewHost(hostKind(root))
 	if err := h.Require(); err != nil {
-		return fail(ExitUnavailable, err.Error())
+		return fail(exitcode.ExitUnavailable, err.Error())
 	}
 	if err := h.Kill(ctx, slot, handle); err != nil {
-		return fail(ExitUnavailable, err.Error())
+		return fail(exitcode.ExitUnavailable, err.Error())
 	}
 	return nil
 }

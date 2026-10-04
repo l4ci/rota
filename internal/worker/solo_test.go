@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"github.com/l4ci/rota/internal/exitcode"
 	"strings"
 	"testing"
 
@@ -46,8 +47,8 @@ func soloProject(t *testing.T) string {
 
 func requireSoloRefusal(t *testing.T, what string, err error, hint string) {
 	t.Helper()
-	we, ok := err.(*Error)
-	if !ok || we.Exit != ExitUsage || we.Message != "solo round: workers are subagents, there are no panes" {
+	we, ok := err.(*exitcode.Error)
+	if !ok || we.Exit != exitcode.ExitUsage || we.Message != "solo round: workers are subagents, there are no panes" {
 		t.Fatalf("%s: err = %v, want exit 2 with the solo message", what, err)
 	}
 	if !strings.Contains(we.Hint, hint) {
@@ -112,7 +113,7 @@ func TestWaitUnderSoloNeverBlocks(t *testing.T) {
 	e := soloEnv(t)
 
 	// Every slot idle: nothing is watched.
-	if _, err := e.Wait(bg, dir, WaitOpts{}); exitOf(err) != ExitResolution {
+	if _, err := e.Wait(bg, dir, WaitOpts{}); exitOf(err) != exitcode.ExitResolution {
 		t.Errorf("all idle: %v", err)
 	}
 	// A busy slot has no handle and is still watched; it has not reported.
@@ -128,7 +129,7 @@ func TestWaitUnderSoloNeverBlocks(t *testing.T) {
 		t.Fatalf("done: %+v %v", res, err)
 	}
 	// Named slots: unknown is 3; an idle named slot is returned, not skipped.
-	if _, err := e.Wait(bg, dir, WaitOpts{Slots: []string{"nope"}}); exitOf(err) != ExitResolution {
+	if _, err := e.Wait(bg, dir, WaitOpts{Slots: []string{"nope"}}); exitOf(err) != exitcode.ExitResolution {
 		t.Errorf("unknown slot: %v", err)
 	}
 	res, err = e.Wait(bg, dir, WaitOpts{Slots: []string{"w2"}})

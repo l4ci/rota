@@ -20,6 +20,7 @@ package reap
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -209,7 +210,7 @@ func newState(ctx context.Context, in Input) (*state, error) {
 	}
 	out, errOut, code, err := in.Git(ctx, s.root, "worktree", "list", "--porcelain")
 	if err != nil || code != 0 {
-		return nil, &worker.Error{Exit: worker.ExitUnavailable, Message: "git worktree list failed: " + strings.TrimSpace(errOut)}
+		return nil, &exitcode.Error{Exit: exitcode.ExitUnavailable, Message: "git worktree list failed: " + strings.TrimSpace(errOut)}
 	}
 	var cur *checkout
 	flush := func() {
@@ -373,7 +374,7 @@ func findWorktrees(ctx context.Context, s *state) ([]Candidate, error) {
 func findBranches(ctx context.Context, s *state) ([]Candidate, error) {
 	list, _, err := s.git(ctx, s.root, "for-each-ref", "--format=%(refname:short)", "refs/heads/")
 	if err != nil {
-		return nil, &worker.Error{Exit: worker.ExitUnavailable, Message: err.Error()}
+		return nil, &exitcode.Error{Exit: exitcode.ExitUnavailable, Message: err.Error()}
 	}
 	var out []Candidate
 	for _, b := range strings.Fields(list) {

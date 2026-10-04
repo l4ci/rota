@@ -6,6 +6,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/exitcode"
 	"io"
 	"os"
 	"os/signal"
@@ -65,15 +66,6 @@ func workerCommands() *Command {
 	}}
 }
 
-// fromWorker maps a worker.Error onto the exit table.
-func fromWorker(err error) error {
-	var we *worker.Error
-	if errors.As(err, &we) {
-		return &Error{Exit: we.Exit, Message: we.Message, Hint: we.Hint}
-	}
-	return err
-}
-
 func slotList(slots []*jsonx.Object) []any {
 	out := make([]any, 0, len(slots))
 	for _, s := range slots {
@@ -107,7 +99,7 @@ func poolInit(fs *flag.FlagSet) RunFunc {
 		res, err := workerEnvCtx(ctx).PoolInit(ctx, root,
 			worker.InitOpts{Slots: n, Base: *base, Session: *session}, workerAccounts())
 		if err != nil {
-			return Result{}, fromWorker(err)
+			return Result{}, err
 		}
 		for _, w := range res.Warnings {
 			c.Warn("%s", w)
@@ -163,7 +155,7 @@ func poolReap(fs *flag.FlagSet) RunFunc {
 		defer stop()
 		reaped, err := workerEnvCtx(ctx).Reap(root, args, *all)
 		if err != nil {
-			return Result{}, fromWorker(err)
+			return Result{}, err
 		}
 		d := jsonx.NewObject()
 		list := make([]any, 0, len(reaped))
@@ -225,14 +217,14 @@ func workerReset(fs *flag.FlagSet) RunFunc {
 		r, err := workerEnvCtx(ctx).Reset(root, slot, *task, *check)
 		res := Result{Data: resetData(r)}
 		if err != nil {
-			var we *worker.Error
+			var we *exitcode.Error
 			if errors.As(err, &we) && we.Data != nil {
 				if we.Exit == ExitRefused { // exit 4 failure data names what blocked it
 					res.Data.(*jsonx.Object).Set("blockedBy", "slot holds work")
 				}
-				return res, fromWorker(err)
+				return res, err
 			}
-			return Result{}, fromWorker(err)
+			return Result{}, err
 		}
 		switch {
 		case r.Retained:
@@ -322,7 +314,7 @@ func accountPick(fs *flag.FlagSet) RunFunc {
 			}
 		}
 		if err := worker.SoloRefusal(root, "every solo subagent runs on the orchestrator's own account"); err != nil {
-			return Result{}, fromWorker(err)
+			return Result{}, err
 		}
 		ctx, stop := workerContext()
 		defer stop()
@@ -349,13 +341,13 @@ func accountAssign(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		if err := worker.SoloRefusal(root, "every solo subagent runs on the orchestrator's own account"); err != nil {
-			return Result{}, fromWorker(err)
+			return Result{}, err
 		}
 		ctx, stop := workerContext()
 		defer stop()
 		name, changed, err := workerAccounts().Assign(ctx, root, slot, *account)
 		if err != nil {
-			return Result{}, fromWorker(err)
+			return Result{}, err
 		}
 		d := jsonx.NewObject()
 		d.Set("slot", slot)
@@ -428,13 +420,13 @@ func workerDispatch(fs *flag.FlagSet) RunFunc {
 			c.Warn("%s", w)
 		}
 		if err != nil {
-			var we *worker.Error
+			var we *exitcode.Error
 			if errors.As(err, &we) {
 				if bd, ok := we.Data.(worker.BlockData); ok && we.Exit == ExitRefused {
-					return Result{Data: knObj("blockedBy", bd.BlockedBy, "changed", bd.Changed)}, fromWorker(err)
+					return Result{Data: knObj("blockedBy", bd.BlockedBy, "changed", bd.Changed)}, err
 				}
 			}
-			return Result{}, fromWorker(err)
+			return Result{}, err
 		}
 		d := jsonx.NewObject()
 		d.Set("slot", res.Slot)
@@ -515,7 +507,7 @@ func workerPoll(fs *flag.FlagSet) RunFunc {
 				Slot: slot, Settle: time.Duration(*settle * float64(time.Second)), Lines: *lines})
 		}
 		if err != nil {
-			return Result{}, fromWorker(err)
+			return Result{}, err
 		}
 		rows := make([]any, 0, len(res.Slots))
 		var text []string
@@ -554,7 +546,7 @@ func sessionCheck(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		if err := worker.SoloRefusal(root, "a solo round has no host session; there is nothing to check"); err != nil {
-			return Result{}, fromWorker(err)
+			return Result{}, err
 		}
 		ctx, stop := workerContext()
 		defer stop()
@@ -591,13 +583,13 @@ func sessionEnsure(fs *flag.FlagSet) RunFunc {
 		defer stop()
 		st, err := workerEnvCtx(ctx).SessionEnsure(ctx, root, opts)
 		if err != nil {
-			var we *worker.Error
+			var we *exitcode.Error
 			if errors.As(err, &we) {
 				if bd, ok := we.Data.(worker.BlockData); ok && we.Exit == ExitRefused {
-					return Result{Data: knObj("blockedBy", bd.BlockedBy, "changed", bd.Changed)}, fromWorker(err)
+					return Result{Data: knObj("blockedBy", bd.BlockedBy, "changed", bd.Changed)}, err
 				}
 			}
-			return Result{}, fromWorker(err)
+			return Result{}, err
 		}
 		d := sessionData(st)
 		d.Set("handedOff", st.HandedOff)
@@ -688,7 +680,7 @@ func workerGate(fs *flag.FlagSet) RunFunc {
 			return Result{Data: d}, gateErr
 		}
 		if err != nil {
-			return Result{}, fromWorker(err)
+			return Result{}, err
 		}
 		for _, n := range r.Notes {
 			fmt.Fprintln(c.Stderr, n)
@@ -728,11 +720,11 @@ func workerGate(fs *flag.FlagSet) RunFunc {
 func slotApprovalThread(root, slot string) (approvalThread, error) {
 	s, queued, err := worker.LoadRegistry(root).GateTarget(slot)
 	if err != nil {
-		var we *worker.Error
-		if errors.As(err, &we) && we.Exit == worker.ExitResolution {
+		var we *exitcode.Error
+		if errors.As(err, &we) && we.Exit == exitcode.ExitResolution {
 			return approvalThread{}, Resolution("%s", we.Message)
 		}
-		return approvalThread{}, fromWorker(err)
+		return approvalThread{}, err
 	}
 	// The arg may have been a PR ref. A queued record's slot has moved on, so
 	// its thread names none.

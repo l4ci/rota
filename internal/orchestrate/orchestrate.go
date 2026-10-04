@@ -39,7 +39,9 @@ var Harnesses = []Harness{
 	// project skill loads only after `hermes skills trust`); opencode loads
 	// skills through a model-side tool, so its prompt names the skill in words.
 	{Name: "hermes", Prompt: "You are the orchestrator: run the rota-orchestrate skill.",
-		Command: func(string, any) ([]string, error) { return []string{"hermes", "chat", "-s", "rota-orchestrate", "-q"}, nil }},
+		Command: func(string, any) ([]string, error) {
+			return []string{"hermes", "chat", "-s", "rota-orchestrate", "-q"}, nil
+		}},
 	{Name: "opencode", Prompt: "You are the orchestrator: load the rota-orchestrate skill and follow it.",
 		Command: func(string, any) ([]string, error) { return []string{"opencode", "--prompt"}, nil }},
 }

@@ -1,6 +1,7 @@
 package proof
 
 import (
+	"github.com/l4ci/rota/internal/exitcode"
 	"strings"
 	"time"
 
@@ -14,10 +15,10 @@ import (
 func validate(o AddOpts) (check, evidence, sha string, err error) {
 	check, evidence = one(o.Check), one(o.Evidence)
 	if check == "" || evidence == "" {
-		return "", "", "", artifact.Errf(artifact.ExitUsage, "--check and --evidence must not be empty")
+		return "", "", "", exitcode.Errf(exitcode.ExitUsage, "--check and --evidence must not be empty")
 	}
 	if o.Result != "PASS" && o.Result != "FAIL" {
-		return "", "", "", artifact.Errf(artifact.ExitUsage, "--result must be PASS or FAIL")
+		return "", "", "", exitcode.Errf(exitcode.ExitUsage, "--result must be PASS or FAIL")
 	}
 	return check, evidence, one(o.Sha), nil
 }

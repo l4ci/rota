@@ -62,7 +62,7 @@ func roundWindDown(fs *flag.FlagSet) RunFunc {
 			NoVerify: *noVerify, HolderPID: *pid, Settings: set, Getenv: os.Getenv,
 		})
 		if err != nil {
-			return Result{}, fromWorker(err)
+			return Result{}, err
 		}
 		for _, w := range res.Warnings {
 			c.Warn("%s", w)

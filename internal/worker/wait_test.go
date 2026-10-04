@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"strings"
 	"sync"
@@ -190,7 +191,7 @@ func TestWaitSkipsHandlelessSlotsUnlessNamed(t *testing.T) {
 	}
 	for _, name := range []string{"w1", "nope"} {
 		_, err := envWith(watcherHost{h}).Wait(bg, dir, WaitOpts{Slots: []string{name}})
-		if exitOf(err) != ExitResolution {
+		if exitOf(err) != exitcode.ExitResolution {
 			t.Errorf("named %s: %v, want exit 3", name, err)
 		}
 	}
@@ -219,7 +220,7 @@ func TestWaitDoesNotWatchSlotsRecordedIdle(t *testing.T) {
 func TestWaitWithNothingToWatchIsAResolutionError(t *testing.T) {
 	dir := waitProject(t, 1, nil)
 	_, err := envWith(newWaitHost("tmux")).Wait(bg, dir, WaitOpts{})
-	if exitOf(err) != ExitResolution {
+	if exitOf(err) != exitcode.ExitResolution {
 		t.Errorf("%v, want exit 3", err)
 	}
 }
@@ -228,18 +229,18 @@ func TestWaitHostFailuresAreUnavailable(t *testing.T) {
 	dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
 	h := newWaitHost("herdr")
 	h.watchOK = host.ErrUnsupportedHerdr
-	if _, err := envWith(watcherHost{h}).Wait(bg, dir, WaitOpts{}); exitOf(err) != ExitUnavailable {
+	if _, err := envWith(watcherHost{h}).Wait(bg, dir, WaitOpts{}); exitOf(err) != exitcode.ExitUnavailable {
 		t.Errorf("watch failure: %v, want exit 5", err)
 	}
 	h = newWaitHost("herdr")
 	h.set("w1", "working\n", "working")
 	close(h.events) // herdr went away mid-wait
-	if _, err := envWith(watcherHost{h}).Wait(bg, dir, WaitOpts{}); exitOf(err) != ExitUnavailable {
+	if _, err := envWith(watcherHost{h}).Wait(bg, dir, WaitOpts{}); exitOf(err) != exitcode.ExitUnavailable {
 		t.Errorf("stream closed: %v, want exit 5", err)
 	}
 	h = newWaitHost("herdr")
 	h.requireErr = errors.New("herdr is not installed")
-	if _, err := envWith(watcherHost{h}).Wait(bg, dir, WaitOpts{}); exitOf(err) != ExitUnavailable {
+	if _, err := envWith(watcherHost{h}).Wait(bg, dir, WaitOpts{}); exitOf(err) != exitcode.ExitUnavailable {
 		t.Errorf("not installed: %v, want exit 5", err)
 	}
 }
@@ -251,7 +252,7 @@ func TestWaitCancelIsNotATimeout(t *testing.T) {
 	ctx, cancel := context.WithCancel(bg)
 	go func() { time.Sleep(20 * time.Millisecond); cancel() }()
 	res, err := envWith(watcherHost{h}).Wait(ctx, dir, WaitOpts{})
-	if exitOf(err) != ExitFailed || res.TimedOut {
+	if exitOf(err) != exitcode.ExitFailed || res.TimedOut {
 		t.Errorf("%+v %v", res, err)
 	}
 }

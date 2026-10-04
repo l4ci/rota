@@ -3,12 +3,12 @@ package cli
 import (
 	"errors"
 	"flag"
+	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 
-	"github.com/l4ci/rota/internal/artifact"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/debugctr"
 	"github.com/l4ci/rota/internal/gate"
@@ -72,7 +72,7 @@ func verdictBody(c *Ctx, file string) (verdict.Body, error) {
 		return verdict.Body{}, err
 	}
 	b, err := verdict.ParseBody(text)
-	return b, fromArtifact(err)
+	return b, err
 }
 
 // sameVerdict is exit 2 when the body names a verdict other than --verdict.
@@ -300,11 +300,11 @@ func closeCounterAttempt(ctr *debugctr.Counter, v string) (int, error) {
 // ignoreRefused drops a counter refusal: another call closed the attempt
 // between the read and the write.
 func ignoreRefused(err error) error {
-	var ae *artifact.Error
-	if errors.As(err, &ae) && ae.Exit == artifact.ExitRefused {
+	var ae *exitcode.Error
+	if errors.As(err, &ae) && ae.Exit == exitcode.ExitRefused {
 		return nil
 	}
-	return fromArtifact(err)
+	return err
 }
 
 // ---- debug reset

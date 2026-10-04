@@ -2,6 +2,7 @@ package worker
 
 import (
 	"errors"
+	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"path/filepath"
 	"strings"
@@ -44,11 +45,11 @@ func TestGateQueuedPR(t *testing.T) {
 	w := newWorld(t, "")
 	w.setQueued()
 	_, err := gateAs(w, "w2", GateOpts{CheckOnly: true})
-	var we *Error
-	if !errors.As(err, &we) || we.Exit != ExitUsage || !strings.Contains(we.Hint, "rota worker gate 7`") {
+	var we *exitcode.Error
+	if !errors.As(err, &we) || we.Exit != exitcode.ExitUsage || !strings.Contains(we.Hint, "rota worker gate 7`") {
 		t.Errorf("a slot whose PR is queued is refused with a hint: %v", err)
 	}
-	if _, err := gateAs(w, "#99", GateOpts{CheckOnly: true}); exitOf(err) != ExitResolution {
+	if _, err := gateAs(w, "#99", GateOpts{CheckOnly: true}); exitOf(err) != exitcode.ExitResolution {
 		t.Errorf("unknown PR: %v", err)
 	}
 	// A slot recording the PR is found by its number when nothing is queued.
