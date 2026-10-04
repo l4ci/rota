@@ -13,7 +13,7 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/backlog/trackertest"
-	"github.com/l4ci/rota/internal/pytest"
+	"github.com/l4ci/rota/internal/golden"
 	"github.com/l4ci/rota/internal/repos"
 	"github.com/l4ci/rota/internal/tracker"
 )
@@ -377,7 +377,7 @@ func rrRun(t *testing.T, s rrSeed) map[string]any {
 func TestIssuesReleaseReviewMatchPython(t *testing.T) {
 	scen := rrScenarios()
 	var want []map[string]any
-	pytest.GoldenJSON(t, scen, &want)
+	golden.GoldenJSON(t, scen, &want)
 	steps, bad := 0, 0
 	for i, s := range scen {
 		got := norm(t, rrRun(t, s)).(map[string]any)

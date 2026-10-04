@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/golden"
 	"github.com/l4ci/rota/internal/host"
-	"github.com/l4ci/rota/internal/pytest"
 )
 
 // These tests run the Go port against the fake herdr/tmux scripts
@@ -114,7 +114,7 @@ func TestDispatchHostTraffic(t *testing.T) {
 				inputs = append(inputs, map[string]string{"step": st.name, "brief": string(text), "argv": st.argv})
 			}
 			var want []dispatchTraffic
-			pytest.Golden(t, map[string]any{"kind": kind, "pool": "init --slots 1 --base main", "steps": inputs}, &want)
+			golden.Golden(t, map[string]any{"kind": kind, "pool": "init --slots 1 --base main", "steps": inputs}, &want)
 			if len(want) != len(steps) {
 				t.Fatalf("golden has %d steps, test has %d", len(want), len(steps))
 			}
@@ -136,7 +136,7 @@ func TestSessionEnsureTmuxHostTraffic(t *testing.T) {
 	goR := newRig(t, "tmux")
 	instr := writeBrief(t, "take over\n")
 	var want map[string]string
-	pytest.Golden(t, map[string]any{"kind": "tmux", "session": "ops", "instruction": "take over\n"}, &want)
+	golden.Golden(t, map[string]any{"kind": "tmux", "session": "ops", "instruction": "take over\n"}, &want)
 	st, err := goR.goEnv.SessionEnsure(bg, goR.root, SessionOpts{Session: "ops", BodyFile: instr})
 	if err != nil || !st.HandedOff || st.Session != "ops" {
 		t.Fatalf("go: %+v %v", st, err)
