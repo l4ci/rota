@@ -227,22 +227,34 @@ type gateOutcome struct {
 	Origin, Local, Forge string
 }
 
-// gateGolden loads the recorded outcomes of cases, keyed by case name. The
-// golden's inputs describe every case, so a changed case fails loudly.
-func gateGolden(t *testing.T, cases []gateCase) map[string]gateOutcome {
+// gateExit is the retired gate's exit code for a verdict, the inverse of
+// oldExitVerdicts.
+func gateExit(verdict string) int {
+	for exit, vs := range oldExitVerdicts {
+		if inList(verdict, vs) {
+			return exit
+		}
+	}
+	return -1
+}
+
+// runGateCases runs every case and checks the collected outcomes, keyed by
+// case name, against the golden. The golden's inputs describe every case, so a
+// changed case fails loudly.
+func runGateCases(t *testing.T, cases []gateCase) {
 	t.Helper()
 	var descs []map[string]any
+	got := map[string]gateOutcome{}
 	for _, c := range cases {
 		descs = append(descs, map[string]any{"name": c.name, "pr": c.pr, "mode": c.mode, "broken": c.broken,
 			"checkOnly": c.opts.CheckOnly, "noVerify": c.opts.NoVerify, "verdict": c.verdict, "changed": c.changed,
 			"files": c.files, "noFiles": c.noFiles, "body": c.body, "relays": c.relays})
+		t.Run(c.name, func(t *testing.T) { got[c.name] = runGateCase(t, c) })
 	}
-	var want map[string]gateOutcome
-	golden.Golden(t, map[string]any{"cases": descs}, &want)
-	return want
+	golden.Check(t, map[string]any{"cases": descs}, got)
 }
 
-func runGateCase(t *testing.T, c gateCase, want gateOutcome) {
+func runGateCase(t *testing.T, c gateCase) gateOutcome {
 	t.Helper()
 	w := newWorld(t, c.pr)
 	w.mode = c.mode
@@ -258,9 +270,6 @@ func runGateCase(t *testing.T, c gateCase, want gateOutcome) {
 	}
 	if res.Verdict != c.verdict {
 		t.Errorf("go verdict = %s (%s), want %s", res.Verdict, res.Err, c.verdict)
-	}
-	if !inList(res.Verdict, oldExitVerdicts[want.Exit]) {
-		t.Errorf("the retired gate exited %d which allows %v, go said %s", want.Exit, oldExitVerdicts[want.Exit], res.Verdict)
 	}
 	if res.Changed != c.changed {
 		t.Errorf("changed = %v, want %v", res.Changed, c.changed)
@@ -282,11 +291,10 @@ func runGateCase(t *testing.T, c gateCase, want gateOutcome) {
 		sort.Strings(l)
 		return strings.Join(l, "\n")
 	}
-	mustEqual(t, "origin main", want.Origin, subjects(w.origin))
-	mustEqual(t, "local main", want.Local, subjects(w.dir))
-	// forge calls are the same, argument for argument (shas differ per world)
+	// forge calls are recorded argument for argument (shas differ per world)
 	gl, _ := os.ReadFile(w.log)
-	mustEqual(t, "forge calls", want.Forge, shaRe.ReplaceAllString(string(gl), "SHA"))
+	return gateOutcome{Exit: gateExit(res.Verdict), Origin: subjects(w.origin), Local: subjects(w.dir),
+		Forge: shaRe.ReplaceAllString(string(gl), "SHA")}
 }
 
 // advanceMainOn lands a commit on origin/main that writes file.
@@ -353,10 +361,7 @@ func TestGate(t *testing.T) {
 				gitq(t, w.dir, "commit", "-q", "-m", "local only commit")
 			}},
 	}
-	want := gateGolden(t, cases)
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) { runGateCase(t, c, want[c.name]) })
-	}
+	runGateCases(t, cases)
 }
 
 func TestGateProvenance(t *testing.T) {
@@ -386,10 +391,7 @@ func TestGateProvenance(t *testing.T) {
 				w.setSlot(ghURL, c.relays)
 			}})
 	}
-	want := gateGolden(t, cases)
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) { runGateCase(t, c, want[c.name]) })
-	}
+	runGateCases(t, cases)
 }
 
 func TestGateResolutionFailures(t *testing.T) {

@@ -45,22 +45,14 @@ var paneFixtures = map[string]string{
 // state and evidence the retired shell classifier gave.
 func TestClassify(t *testing.T) {
 	statuses := []string{"", "idle", "working", "blocked", "done", "unknown", "gone"}
-	var want map[string][2]string // "<pane>/<status>" -> state, evidence
-	golden.Golden(t, map[string]any{"panes": paneFixtures, "statuses": statuses, "argv": "--fixture <pane> --slot w1 [--status <status>]"}, &want)
+	got := map[string][2]string{} // "<pane>/<status>" -> state, evidence
 	for name, text := range paneFixtures {
 		for _, status := range statuses {
-			t.Run(name+"/"+status, func(t *testing.T) {
-				old, ok := want[name+"/"+status]
-				if !ok {
-					t.Fatal("no recorded result")
-				}
-				state, evidence := Classify(text, false, 60, status)
-				if state != old[0] || evidence != old[1] {
-					t.Errorf("go %s %q, golden %s %q", state, evidence, old[0], old[1])
-				}
-			})
+			state, evidence := Classify(text, false, 60, status)
+			got[name+"/"+status] = [2]string{state, evidence}
 		}
 	}
+	golden.Check(t, map[string]any{"panes": paneFixtures, "statuses": statuses, "argv": "--fixture <pane> --slot w1 [--status <status>]"}, got)
 }
 
 func TestClassifyMovementAndTailWindow(t *testing.T) {

@@ -31,13 +31,11 @@ func commitIn(t *testing.T, dir, file string) {
 
 func TestResetCleanSlotCutsTaskBranch(t *testing.T) {
 	b := slotProject(t)
-	var want map[string]string
-	golden.Golden(t, map[string]any{"config": `{}`, "pool": "init --slots 1 --base main", "argv": "reset --slot w1 --task 'T-7/Fix Me'"}, &want)
 	res, err := Env{}.Reset(b, "w1", "T-7/Fix Me", false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	mustEqual(t, "workers.json", want["workers.json"], registry(t, b))
+	golden.Check(t, map[string]any{"config": `{}`, "pool": "init --slots 1 --base main", "argv": "reset --slot w1 --task 'T-7/Fix Me'"}, map[string]string{"workers.json": registry(t, b)})
 	if res.Branch != "rota-worker/w1-t-7-fix-me" || !res.Changed || !res.Clean || res.Retained {
 		t.Errorf("%+v", res)
 	}
@@ -115,9 +113,6 @@ func TestResetTreatsACherryPickedCommitAsMerged(t *testing.T) {
 
 func TestResetRetryKeepsTheTasksOwnWork(t *testing.T) {
 	b := slotProject(t)
-	var want map[string]string
-	golden.Golden(t, map[string]any{"config": `{}`, "pool": "init --slots 1 --base main",
-		"steps": []string{"reset --slot w1 --task T4", "write wip.txt in w1, record task T4 on the slot", "reset --slot w1 --task T4"}}, &want)
 	if _, err := (Env{}).Reset(b, "w1", "T4", false); err != nil {
 		t.Fatal(err)
 	}
@@ -131,7 +126,8 @@ func TestResetRetryKeepsTheTasksOwnWork(t *testing.T) {
 		t.Fatalf("%+v %v", res, err)
 	}
 	mustEqual(t, "registry", before, registry(t, b))
-	mustEqual(t, "registry vs golden", want["workers.json"], registry(t, b))
+	golden.Check(t, map[string]any{"config": `{}`, "pool": "init --slots 1 --base main",
+		"steps": []string{"reset --slot w1 --task T4", "write wip.txt in w1, record task T4 on the slot", "reset --slot w1 --task T4"}}, map[string]string{"workers.json": registry(t, b)})
 	if _, err := os.Stat(filepath.Join(wt(b), "wip.txt")); err != nil {
 		t.Error("the WIP was dropped")
 	}
