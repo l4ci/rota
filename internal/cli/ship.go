@@ -403,11 +403,8 @@ func shipClosesLines(c *Ctx, root string, cfg any, ids []string) (string, error)
 	// In an umbrella the PR opens in one sub-repo, so its items resolve there:
 	// --repo, else the sub-repo the working directory is in.
 	sub := ""
-	if u, ok := b.(*backlog.Umbrella); ok {
-		if sub = u.Scope; sub == "" {
-			sub = u.CwdRepo
-		}
-		if sub == "" {
+	if u, ok := b.(backlog.SubRepoScoped); ok {
+		if sub = u.SubRepo(); sub == "" {
 			return "", Usage("umbrella issue mode needs --repo <name> with --items")
 		}
 	}
