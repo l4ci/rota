@@ -311,7 +311,9 @@ type Prompt struct {
 	IfKey, IfValue string
 }
 
-// Prompts is the setup's questions, in the order they are asked.
+// Prompts is the setup's questions, in the order they are asked. Choice values
+// are hand-listed here, not derived from the schema; TestPromptsMatchSchema
+// catches a value the schema rejects.
 var Prompts = []Prompt{
 	{Key: "backlog.backend", Title: "Where does the backlog live?", Choices: []Choice{
 		{"file", "BACKLOG.md in the repo"},
