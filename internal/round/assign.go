@@ -11,8 +11,8 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
-	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/worker"
@@ -37,7 +37,7 @@ const (
 	BlockNoTierMap    = "no tier map"
 	// BlockCodexVersion: the installed Codex CLI is outside the supported
 	// range and --accept-codex-version is not given (E1, #68).
-	BlockCodexVersion = worker.BlockCodexVersion
+	BlockCodexVersion = harness.BlockCodexVersion
 )
 
 // BlockedError is an assignment refused before anything was marked or sent.
@@ -199,13 +199,6 @@ func (t tierBrief) text() string {
 	return b.String()
 }
 
-func workerCommandKey(kind string) string {
-	if kind == roundcfg.KindCodex {
-		return "work.codexCommand"
-	}
-	return "work.workerCommand"
-}
-
 func blocked(by, format string, a ...any) *BlockedError {
 	return &BlockedError{By: by, Msg: fmt.Sprintf(format, a...)}
 }
@@ -245,8 +238,8 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 	if o.Tier != "" && !roundcfg.ValidTier(o.Tier) {
 		return res, usage("--tier must be one of %s", strings.Join(roundcfg.Tiers, ", "))
 	}
-	if o.Kind != "" && !roundcfg.ValidKind(o.Kind) {
-		return res, usage("--kind must be one of %s", strings.Join(roundcfg.Kinds, ", "))
+	if o.Kind != "" && !harness.Valid(o.Kind) {
+		return res, usage("--kind must be one of %s", strings.Join(harness.Kinds, ", "))
 	}
 	tier := o.Tier
 	if tier == "" {
@@ -282,7 +275,7 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 	// issue but is done with a PR: it is parked right before the claim, so a
 	// refusal on the way moves nothing.
 	reg := worker.LoadRegistry(root)
-	var slot *jsonx.Object
+	var slot *worker.Slot
 	resuming, queue := false, false
 	if o.Agent != "" {
 		slot = reg.Slot(o.Agent)
@@ -292,7 +285,7 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 	} else {
 		for _, name := range set.Roster {
 			s := reg.Slot(name)
-			if s != nil && heldID(worker.Str(s, "task"), worker.Str(s, "branch"), name) == strings.ToUpper(id) {
+			if s != nil && heldID(s.Task(), s.Branch(), name) == strings.ToUpper(id) {
 				slot, resuming = s, true
 				break
 			}
@@ -301,7 +294,7 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 			if slot != nil {
 				break
 			}
-			if s := reg.Slot(name); s != nil && heldID(worker.Str(s, "task"), worker.Str(s, "branch"), name) == "" {
+			if s := reg.Slot(name); s != nil && heldID(s.Task(), s.Branch(), name) == "" {
 				slot = s
 			}
 		}
@@ -319,9 +312,9 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 			return res, blocked(BlockNoFreeSlot, "every roster slot is busy")
 		}
 	}
-	agent := worker.Str(slot, "name")
+	agent := slot.Name()
 	res.Agent = agent
-	if h := heldID(worker.Str(slot, "task"), worker.Str(slot, "branch"), agent); h != "" {
+	if h := heldID(slot.Task(), slot.Branch(), agent); h != "" {
 		if h != strings.ToUpper(id) {
 			ok, why := e.parkable(ctx, slot)
 			if !ok {
@@ -337,23 +330,25 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 	// Kind, tier and model (C9): the model is the tier's entry for the kind.
 	kind := o.Kind
 	if kind == "" {
-		kind = worker.Str(slot, "kind")
+		kind = slot.Kind()
 	}
-	if kind == "" {
-		kind = roundcfg.KindClaude
+	hz, err := worker.Harness(kind)
+	if err != nil {
+		return res, err
 	}
+	kind = hz.Kind()
 	// An unset codex tier map is allowed: the default codex command drops
 	// --model and Codex picks its own. A custom work.codexCommand holding
 	// {model} would fail at dispatch, after the claim, so it is refused here.
 	model := set.Model(kind, tier)
-	if model == "" && (kind != roundcfg.KindCodex || worker.CodexNeedsModel(root)) {
+	if model == "" && worker.NeedsModel(root, kind) {
 		return res, blocked(BlockNoTierMap, "round.tiers.%s has no model for the %s tier: set round.tiers.%s.*", kind, tier, kind)
 	}
 	res.Kind, res.Tier, res.TierReason = kind, tier, reason
 	res.Model = model
 	if !worker.ModelAppliesTo(root, kind) {
 		res.Model = ""
-		res.Warnings = append(res.Warnings, "tier model not applied: "+workerCommandKey(kind)+" has no {model} placeholder")
+		res.Warnings = append(res.Warnings, "tier model not applied: "+hz.CommandKey()+" has no {model} placeholder")
 	}
 
 	// 3. The scope allows it.
@@ -401,26 +396,24 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 		return res, blk
 	}
 
-	// Solo runs Claude subagents only: a Codex subagent cannot be given a
-	// working directory (E3, #70), so it would edit the orchestrator's checkout.
-	if kind == roundcfg.KindCodex && isSolo(root) {
-		return res, usage("solo round: workers are Claude subagents; a Codex subagent cannot be given the slot's worktree")
+	// Solo runs Claude subagents only (E3, #70): a harness that cannot be
+	// given a working directory would edit the orchestrator's checkout.
+	if why := hz.SoloRefusal(); why != "" && isSolo(root) {
+		return res, usage("%s", why)
 	}
-	// A codex worker that cannot start (version, host, login) is refused
-	// before anything is marked. dispatch runs the same preflight again.
-	if kind == roundcfg.KindCodex {
-		setup, err := e.workerEnv().CodexPreflight(ctx, root, agent, o.AcceptCodexVersion)
-		if err != nil {
-			var we *worker.Error
-			if errors.As(err, &we) && we.Exit == worker.ExitRefused {
-				if bd, ok := we.Data.(worker.BlockData); ok {
-					return res, blocked(bd.BlockedBy, "%s", we.Message)
-				}
+	// A worker that cannot start (version, host, login) is refused before
+	// anything is marked. dispatch runs the same preflight again.
+	setup, err := e.workerEnv().Preflight(ctx, root, kind, agent, o.AcceptCodexVersion)
+	if err != nil {
+		var we *worker.Error
+		if errors.As(err, &we) && we.Exit == worker.ExitRefused {
+			if bd, ok := we.Data.(worker.BlockData); ok {
+				return res, blocked(bd.BlockedBy, "%s", we.Message)
 			}
-			return res, err
 		}
-		res.Warnings = append(res.Warnings, setup.Warnings...)
+		return res, err
 	}
+	res.Warnings = append(res.Warnings, setup.Warnings...)
 
 	// 5. The brief exists before anything is marked.
 	brief, ok := briefPath(root, set, o.Getenv)
@@ -450,11 +443,7 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 		res.Changed = false
 		be.SetState(id, "none")
 		be.Release(id, claimID)
-		mutateSlot(root, agent, func(s *jsonx.Object) {
-			for _, k := range []string{"task", "claimId", "kind", "tier", "model", "tierReason"} {
-				s.Set(k, nil)
-			}
-		})
+		editSlot(root, agent, func(s *worker.Slot) error { s.Unbind(); return nil })
 	}
 	changed, err := be.SetState(id, "in-progress")
 	if err != nil {
@@ -479,13 +468,9 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 		}
 		return res, err
 	}
-	if err := mutateSlot(root, agent, func(s *jsonx.Object) {
-		s.Set("task", id)
-		s.Set("claimId", claimID)
-		s.Set("kind", kind)
-		s.Set("tier", tier)
-		s.Set("model", nilIfEmpty(res.Model))
-		s.Set("tierReason", nilIfEmpty(reason))
+	if err := editSlot(root, agent, func(s *worker.Slot) error {
+		s.Bind(worker.Binding{Task: id, ClaimID: claimID, Kind: kind, Tier: tier, Model: res.Model, TierReason: reason})
+		return nil
 	}); err != nil {
 		undo()
 		return res, err
@@ -496,7 +481,7 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 	// work.accounts is Anthropic's: a codex slot's CODEX_HOME is its account.
 	// Under solo every subagent runs on the orchestrator's own account.
 	solo := isSolo(root)
-	if !solo && kind != roundcfg.KindCodex && e.Accounts != nil && len(worker.Configured(root)) > 0 {
+	if !solo && hz.WorkAccounts() && e.Accounts != nil && len(worker.Configured(root)) > 0 {
 		name, err := e.pickAccount(ctx, root, agent)
 		if err != nil {
 			undo()
@@ -545,7 +530,7 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 func (e Env) pickAccount(ctx context.Context, root, agent string) (string, error) {
 	cur := ""
 	if s := worker.LoadRegistry(root).Slot(agent); s != nil {
-		cur = worker.Str(s, "account")
+		cur = s.Account()
 	}
 	if cur != "" {
 		for _, m := range e.Accounts.Meters(ctx, root) {

@@ -113,7 +113,7 @@ var Keys = []Key{
 	{"round.stallMinutes", json.Number("30"), false},
 	{"round.maxBounces", json.Number("3"), false},
 	{"issues.labels.needsHuman", "needs-human", false},
-	{"work.codexCommand", "", false}, // empty: DefaultCodexCommand in internal/worker
+	{"work.codexCommand", "", false}, // empty: DefaultCodexCommand in internal/harness
 
 	{"orchestrator.handoffThreshold", json.Number("75"), false},
 	{"orchestrator.stateMaxAgeSeconds", json.Number("120"), false},

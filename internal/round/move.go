@@ -14,6 +14,7 @@ import (
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/escalation"
 	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/roundcfg"
@@ -88,22 +89,13 @@ func (e Env) holdsLease(ctx context.Context, root string, pid int, getenv func(s
 }
 
 // slotIssue is the issue a slot holds, in the backend's spelling.
-func slotIssue(s *jsonx.Object) string {
-	return heldID(worker.Str(s, "task"), worker.Str(s, "branch"), worker.Str(s, "name"))
+func slotIssue(s *worker.Slot) string {
+	return heldID(s.Task(), s.Branch(), s.Name())
 }
 
 // freeSlot records a slot as idle and parked: no issue, no claim, no PR.
 func freeSlot(root, name string, clearHandle bool) error {
-	return mutateSlot(root, name, func(s *jsonx.Object) {
-		s.Set("task", nil)
-		s.Set("pr", nil)
-		s.Delete("claimId")
-		s.Set("state", "idle")
-		s.Set("branch", "park/"+name)
-		if clearHandle {
-			s.Set("handle", nil)
-		}
-	})
+	return editSlot(root, name, func(s *worker.Slot) error { s.Park(clearHandle); return nil })
 }
 
 // handoff is the stand-in for D1's note: one comment on the issue, ending with
@@ -270,7 +262,7 @@ func (e Env) Return(ctx context.Context, root string, be Board, o ReturnOpts) (r
 	}
 	res.CommentID = cid
 
-	claimID := firstNonEmpty(worker.Str(s, "claimId"), o.Slot+"@"+strconv.Itoa(rnd))
+	claimID := firstNonEmpty(s.ClaimID(), o.Slot+"@"+strconv.Itoa(rnd))
 	if res.Released, err = releaseClaims(be, id, o.Slot, claimID, false); tolerate("claim release", err) != nil {
 		return res, wrap(err)
 	}
@@ -301,19 +293,19 @@ type SlotHealth struct {
 // issue. dead: the host agent is gone (a recorded handle with no agent, or
 // state dead). stalled: alive and nothing moved for StallMinutes. healthy: the
 // rest, including a slot waiting on an escalation.
-func (e Env) Health(ctx context.Context, root string, s *jsonx.Object, now time.Time) SlotHealth {
+func (e Env) Health(ctx context.Context, root string, s *worker.Slot, now time.Time) SlotHealth {
 	h := SlotHealth{Issue: slotIssue(s), Health: HealthIdle}
 	if h.Issue == "" {
 		return h
 	}
-	name, wt, tab := worker.Str(s, "name"), worker.Str(s, "worktree"), worker.Str(s, "handle")
+	name, wt, tab := s.Name(), s.Worktree(), s.Handle()
 	if e.Snapshot != nil {
 		if agents, err := e.Snapshot(ctx); err == nil {
 			h.Known = true
 			h.Alive = matchAgent(agents, tab, wt) >= 0
 		}
 	}
-	if worker.Str(s, "state") == "dead" || (h.Known && !h.Alive && tab != "") {
+	if s.State() == "dead" || (h.Known && !h.Alive && tab != "") {
 		h.Health = HealthDead
 		return h
 	}
@@ -324,8 +316,8 @@ func (e Env) Health(ctx context.Context, root string, s *jsonx.Object, now time.
 		}
 	}
 	h.Stall = e.Stalled(ctx, StallInput{
-		Worktree: wt, Base: firstNonEmpty(worker.Str(s, "base"), e.Base), Holds: true,
-		Alive: h.Alive || !h.Known, Escalated: waiting, ActiveAt: worker.Str(s, "activeAt"), Minutes: e.StallMinutes,
+		Worktree: wt, Base: firstNonEmpty(s.Base(), e.Base), Holds: true,
+		Alive: h.Alive || !h.Known, Escalated: waiting, ActiveAt: s.ActiveAt(), Minutes: e.StallMinutes,
 	}, now)
 	h.Health = HealthHealthy
 	if h.Stall.Stalled {
@@ -434,7 +426,7 @@ func (e Env) Reclaim(ctx context.Context, root string, be Board, o ReclaimOpts) 
 	if _, _, err := hf.post(be, h.Issue); tolerate("handoff comment", err) != nil {
 		return res, wrap(err)
 	}
-	if res.Released, err = releaseClaims(be, h.Issue, o.Slot, worker.Str(s, "claimId"), true); tolerate("claim release", err) != nil {
+	if res.Released, err = releaseClaims(be, h.Issue, o.Slot, s.ClaimID(), true); tolerate("claim release", err) != nil {
 		return res, wrap(err)
 	}
 	if _, err := be.SetState(h.Issue, "none"); tolerate("state reset", err) != nil {
@@ -510,19 +502,19 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 	// Who holds it. A receiver that already holds it and was never dispatched
 	// (idle, its new claim recorded) is a transfer left half done: resume it.
 	reg := worker.LoadRegistry(root)
-	var sender, receiver *jsonx.Object
+	var sender, receiver *worker.Slot
 	for _, s := range reg.Slots() {
 		if slotIssue(s) != strings.ToUpper(id) {
 			continue
 		}
-		if worker.Str(s, "name") == o.To {
+		if s.Name() == o.To {
 			receiver = s
 		} else if sender == nil {
 			sender = s
 		}
 	}
-	resuming := receiver != nil && sender == nil && worker.Str(receiver, "state") == "idle" &&
-		worker.Str(receiver, "claimId") == o.To+"@"+strconv.Itoa(rnd)
+	resuming := receiver != nil && sender == nil && receiver.State() == "idle" &&
+		receiver.ClaimID() == o.To+"@"+strconv.Itoa(rnd)
 	// rec: no slot holds the issue but a queued PR does (its slot moved on, or
 	// a transfer from it was left half done).
 	var rec *jsonx.Object
@@ -538,14 +530,14 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 	}
 	switch {
 	case sender != nil:
-		res.From = worker.Str(sender, "name")
+		res.From = sender.Name()
 	case rec != nil:
 		res.From = worker.Str(rec, "from")
 	default:
 		res.From = o.To
 	}
 
-	var to *jsonx.Object
+	var to *worker.Slot
 	queueTo := false // the receiver holds a PR that can wait in the queue
 	if !toHuman {
 		if to = reg.Slot(o.To); to == nil {
@@ -607,9 +599,9 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 
 	var branch string
 	if resuming {
-		branch = worker.Str(receiver, "branch")
+		branch = receiver.Branch()
 		res.Branch = branch
-		res.Head = e.headLine(ctx, worker.Str(receiver, "worktree"), "HEAD")
+		res.Head = e.headLine(ctx, receiver.Worktree(), "HEAD")
 	} else {
 		from := res.From
 		var p Parked
@@ -618,7 +610,7 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 			if p, err = e.Park(ctx, root, from, "transfer"); err != nil {
 				return res, wrap(err)
 			}
-			oldClaim = firstNonEmpty(worker.Str(sender, "claimId"), oldClaim)
+			oldClaim = firstNonEmpty(sender.ClaimID(), oldClaim)
 		} else { // a queued PR: already pushed, nothing to park
 			p.Branch = worker.Str(rec, "branch")
 			p.Head = e.queuedHead(ctx, root, p.Branch)
@@ -670,17 +662,18 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 			return res, wrap(err)
 		}
 		res.Branch = branch
-		if err := mutateSlot(root, o.To, func(s *jsonx.Object) {
-			s.Set("task", id)
-			s.Set("branch", branch)
-			s.Set("claimId", claimID)
+		if err := editSlot(root, o.To, func(s *worker.Slot) error {
+			s.SetTask(id)
+			s.SetBranch(branch)
+			s.SetClaimID(claimID)
+			return nil
 		}); err != nil {
 			return res, wrap(err)
 		}
 		res.Changed = true
 	}
 	if resuming {
-		res.ClaimID = worker.Str(receiver, "claimId")
+		res.ClaimID = receiver.ClaimID()
 	}
 
 	// A queued PR is still the issue's PR: the receiver takes it and its relay
@@ -696,11 +689,10 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 				relays = append(relays, l...)
 			}
 		}
-		if err := mutateSlot(root, o.To, func(s *jsonx.Object) {
-			s.Set("pr", pr)
-			v, _ := s.Get("relays")
-			l, _ := v.([]any)
-			s.Set("relays", append(l, relays...))
+		if err := editSlot(root, o.To, func(s *worker.Slot) error {
+			s.SetPR(pr)
+			s.AppendRelays(relays)
+			return nil
 		}); err != nil {
 			return err
 		}
@@ -719,7 +711,7 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 		decisions = string(b)
 	}
 	// A transferred worker starts on the default tier; a higher one is assign's.
-	kind, tier := roundcfg.KindClaude, o.Settings.Tier
+	kind, tier := harness.Claude, o.Settings.Tier
 	model := o.Settings.Model(kind, tier)
 	text := pointerBrief(o.To, id, branch, brief, nil, decisions, tierBrief{Kind: kind, Tier: tier, Model: model, Default: tier, Table: o.Settings.Models[kind]})
 	text += fmt.Sprintf("\nThis issue was handed to you by %s. Read its latest rota:handoff comment first (it ends with a `<!-- rota:handoff %s@%d -->` marker), then continue from the pushed work on %s, already checked out in your worktree.\n",
@@ -747,7 +739,7 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 	if _, err := e.workerEnv().Dispatch(ctx, root, worker.DispatchOpts{Slot: o.To, BodyFile: tmp.Name(), Task: id, Round: &rnd, Branch: branch, Model: model}); err != nil {
 		// The claim and branch stay with the receiver; idle marks the transfer
 		// as not delivered, so the same call resumes it.
-		mutateSlot(root, o.To, func(s *jsonx.Object) { s.Set("state", "idle") })
+		editSlot(root, o.To, func(s *worker.Slot) error { return s.MarkState("idle", "") })
 		return res, err
 	}
 	res.Dispatched, res.Changed = true, true
@@ -783,9 +775,9 @@ func (e Env) headLine(ctx context.Context, wt, ref string) string {
 // reset guard's clean check, `git switch -C <branch> origin/<branch>`. With no
 // work branch to continue (the sender was parked already) it cuts the issue's
 // usual branch from the base instead.
-func (e Env) checkout(ctx context.Context, root string, to *jsonx.Object, id, title string, branch *string) error {
-	name, wt := worker.Str(to, "name"), worker.Str(to, "worktree")
-	if *branch == "" || strings.HasPrefix(*branch, "park/") || *branch == worker.Str(to, "base") {
+func (e Env) checkout(ctx context.Context, root string, to *worker.Slot, id, title string, branch *string) error {
+	name, wt := to.Name(), to.Worktree()
+	if *branch == "" || strings.HasPrefix(*branch, "park/") || *branch == to.Base() {
 		*branch = BranchName(name, id, title)
 		_, err := e.workerEnv().ResetTo(root, name, id, *branch, false)
 		return err

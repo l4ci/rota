@@ -294,15 +294,15 @@ func (e Env) InFlightItems(ctx context.Context, root string, be backlog.Backend,
 	var out []InFlight
 	reg := worker.LoadRegistry(root)
 	for _, s := range reg.Slots() {
-		name := worker.Str(s, "name")
-		branch := worker.Str(s, "branch")
-		id := heldID(worker.Str(s, "task"), branch, name)
+		name := s.Name()
+		branch := s.Branch()
+		id := heldID(s.Task(), branch, name)
 		if id == "" {
 			continue
 		}
 		paths := Footprint(itemText(be, id), tracked, shared)
-		if wt := worker.Str(s, "worktree"); wt != "" {
-			base := worker.Str(s, "base")
+		if wt := s.Worktree(); wt != "" {
+			base := s.Base()
 			if base == "" {
 				base = e.Base
 			}

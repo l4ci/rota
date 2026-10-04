@@ -71,14 +71,14 @@ func (e Env) Park(ctx context.Context, root, name, verb string) (Parked, error) 
 	if s == nil {
 		return p, &worker.Error{Exit: worker.ExitResolution, Message: fmt.Sprintf("slot %s is not in the pool", name)}
 	}
-	wt := worker.Str(s, "worktree")
+	wt := s.Worktree()
 	if fi, err := os.Stat(wt); wt == "" || err != nil || !fi.IsDir() {
 		return p, &worker.Error{Exit: worker.ExitResolution, Message: fmt.Sprintf("slot %s worktree missing: %s", name, wt)}
 	}
-	base := firstNonEmpty(worker.Str(s, "base"), e.Base)
+	base := firstNonEmpty(s.Base(), e.Base)
 	parkBr := "park/" + name
 	cur, _, _ := e.gitOut(ctx, wt, "symbolic-ref", "--short", "-q", "HEAD")
-	branch := firstNonEmpty(worker.Str(s, "branch"), cur)
+	branch := firstNonEmpty(s.Branch(), cur)
 	p.Branch = branch
 	headOf := func(ref string) string {
 		out, _, code := e.gitOut(ctx, wt, "log", "-1", "--abbrev=7", "--format=%h %s", ref, "--")
