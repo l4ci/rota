@@ -41,7 +41,8 @@ worker gate and the orchestrator's merge gate are the same commands.
   `rota knowledge query "<exact ## heading>"`. The topics that bite most: *Architecture: Helper
   conventions & invariants*, *Architecture: Module extraction & migration safety*, *Build &
   Tooling: Smoke testing*.
-- A new verb needs a contract entry in `docs/design/5.0-verb-contract.md` and a smoke section.
+- A new verb needs a contract entry and a smoke section. The entry goes in the group file under `docs/design/contract/`
+  that holds its siblings (`docs/design/contract/README.md` maps groups to files); add the verb to the README index too.
 - Config keys are documented in three places at once: `docs/reference/config-options.md`,
   `docs/usage/configuration.md` and `internal/config/schema.go`. Touch only the lines about your key; a sibling may be adding
   another key in the same files.

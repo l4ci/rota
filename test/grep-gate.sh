@@ -60,7 +60,7 @@ HV_SCOPE=(
   ':(exclude)CHANGELOG.md'
   ':(exclude)docs/design/5.0-helper-triage.md'
   ':(exclude)docs/design/5.0-smoke-whitebox.md'
-  ':(exclude)docs/design/5.0-verb-contract.md'
+  ':(exclude)docs/design/contract/'
   ':(exclude).rota/'
   ':(exclude)AGENTS.md'
   ':(exclude)CLAUDE.md'

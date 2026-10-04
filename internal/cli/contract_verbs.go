@@ -1,7 +1,7 @@
 package cli
 
 // contractVerbs is every verb path the verb contract
-// (docs/design/5.0-verb-contract.md) defines, one "### rota <path>" heading
+// (docs/design/contract/) defines, one "### rota <path>" heading
 // each, with argument and flag words dropped. TestContractVerbsMatchTheContract
 // parses the contract and fails when this list drifts from it; the failure
 // prints the list to paste here.

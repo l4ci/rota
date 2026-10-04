@@ -24,7 +24,7 @@ import (
 
 // The A4 backlog views and maintenance verbs, `rota summary`, `rota status` and
 // `rota refactor`. Shapes, flags and exits are the verb contract's
-// (docs/design/5.0-verb-contract.md); the old helpers named on each verb are
+// (docs/design/contract/); the old helpers named on each verb are
 // the behaviour to match.
 
 func a4bCommands() []*Command {
