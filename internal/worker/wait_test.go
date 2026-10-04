@@ -111,7 +111,6 @@ func TestWaitReturnsASlotThatAlreadyNeedsAttention(t *testing.T) {
 	h := newWaitHost("herdr")
 	h.set("w1", "working...\n", "working")
 	h.set("w2", "ROTA-BLOCKED w2: A or B?\n", "idle")
-	before, _ := os.ReadFile(RegistryPath(dir))
 	res, err := envWith(watcherHost{h}).Wait(bg, dir, WaitOpts{})
 	if err != nil {
 		t.Fatal(err)
@@ -121,9 +120,6 @@ func TestWaitReturnsASlotThatAlreadyNeedsAttention(t *testing.T) {
 	}
 	if len(h.watched) != 2 {
 		t.Errorf("watched = %v, want both slots", h.watched)
-	}
-	if after, _ := os.ReadFile(RegistryPath(dir)); string(after) != string(before) {
-		t.Error("wait wrote the registry")
 	}
 }
 
@@ -345,5 +341,135 @@ func TestWaitAfterTheLastEventRechecksAPaneThatMovedOnce(t *testing.T) {
 				t.Fatalf("want %s via %s, got %+v", c.state, c.source, res)
 			}
 		})
+	}
+}
+
+func seenField(dir, slot, key string) string {
+	return Str(LoadRegistry(dir).Slot(slot), key)
+}
+
+func TestWaitRecordsWhatItReturned(t *testing.T) {
+	dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
+	h := newWaitHost("herdr")
+	url := "https://github.com/o/r/pull/7"
+	h.set("w1", "ROTA-DONE w1 "+url+"\n", "done")
+	if _, err := envWith(watcherHost{h}).Wait(bg, dir, WaitOpts{}); err != nil {
+		t.Fatal(err)
+	}
+	if got := seenField(dir, "w1", "state"); got != "done" {
+		t.Errorf("state = %q", got)
+	}
+	if got := seenField(dir, "w1", "pr"); got != url {
+		t.Errorf("pr = %q", got)
+	}
+	if got := seenField(dir, "w1", "seen"); got != seenKey(StateDone, url) {
+		t.Errorf("seen = %q", got)
+	}
+}
+
+func TestWaitDoesNotReturnTheSameArrivalTwice(t *testing.T) {
+	dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
+	h := newWaitHost("herdr")
+	h.set("w1", "ROTA-DONE w1 x\n", "done")
+	e := envWith(watcherHost{h})
+	if res, err := e.Wait(bg, dir, WaitOpts{}); err != nil || res.State != StateDone {
+		t.Fatalf("first: %+v %v", res, err)
+	}
+	res, err := e.Wait(bg, dir, WaitOpts{Timeout: 30 * time.Millisecond})
+	if err != nil || !res.TimedOut {
+		t.Fatalf("second: %+v %v, want a timeout", res, err)
+	}
+	// The slot goes busy, then finishes again: it is news.
+	h.set("w1", "working...\n", "working")
+	if res, err = e.Wait(bg, dir, WaitOpts{Timeout: 30 * time.Millisecond}); err != nil || !res.TimedOut {
+		t.Fatalf("busy: %+v %v", res, err)
+	}
+	if got := seenField(dir, "w1", "seen"); got != "" {
+		t.Errorf("seen = %q after the slot was observed busy", got)
+	}
+	h.set("w1", "ROTA-DONE w1 x\n", "done")
+	if res, err = e.Wait(bg, dir, WaitOpts{}); err != nil || res.State != StateDone {
+		t.Fatalf("third: %+v %v", res, err)
+	}
+}
+
+// A prompt answered by typing in the pane re-arms nothing, so a second one
+// that wait never saw go busy in between must still come back (#29 review).
+func TestWaitReturnsPromptsAndNewQuestions(t *testing.T) {
+	dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
+	h := newWaitHost("herdr")
+	e := envWith(watcherHost{h})
+	h.set("w1", "Do you want to proceed?\n", "idle")
+	if res, err := e.Wait(bg, dir, WaitOpts{}); err != nil || res.State != StateNeedsPermission {
+		t.Fatalf("first prompt: %+v %v", res, err)
+	}
+	h.set("w1", "Allow bash to run go test?\n", "idle")
+	if res, err := e.Wait(bg, dir, WaitOpts{Timeout: time.Second}); err != nil || res.State != StateNeedsPermission {
+		t.Fatalf("second prompt, no busy between: %+v %v", res, err)
+	}
+	if got := seenField(dir, "w1", "seen"); got != "" {
+		t.Errorf("a permission prompt is never remembered: seen = %q", got)
+	}
+	// A blocked worker comes back once per question.
+	h.set("w1", "ROTA-BLOCKED w1: keep the old flag?\n", "idle")
+	if res, err := e.Wait(bg, dir, WaitOpts{}); err != nil || res.State != StateBlocked {
+		t.Fatalf("first question: %+v %v", res, err)
+	}
+	if res, err := e.Wait(bg, dir, WaitOpts{Timeout: 30 * time.Millisecond}); err != nil || !res.TimedOut {
+		t.Fatalf("same question again: %+v %v, want a timeout", res, err)
+	}
+	h.set("w1", "ROTA-BLOCKED w1: which default?\n", "idle")
+	if res, err := e.Wait(bg, dir, WaitOpts{Timeout: time.Second}); err != nil || res.State != StateBlocked || res.Evidence != "which default?" {
+		t.Fatalf("new question, no busy between: %+v %v", res, err)
+	}
+}
+
+func TestDispatchAndPollClearSeen(t *testing.T) {
+	dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
+	set := func() {
+		updateSlot(dir, "w1", func(s *jsonx.Object) { s.Set("state", "done"); s.Set("seen", seenKey(StateDone, "x")) })
+	}
+	set()
+	if err := recordDispatch(dir, "w1", "w9:t1", "", nil, "now"); err != nil {
+		t.Fatal(err)
+	}
+	if got := seenField(dir, "w1", "seen"); got != "" {
+		t.Errorf("relay kept seen = %q", got)
+	}
+	set()
+	if err := recordDispatch(dir, "w1", "w9:t1", "#5", nil, "now"); err != nil {
+		t.Fatal(err)
+	}
+	if got := seenField(dir, "w1", "seen"); got != "" {
+		t.Errorf("dispatch kept seen = %q", got)
+	}
+	// Poll recording a different state drops it; the same state keeps it.
+	set()
+	h := newWaitHost("herdr")
+	h.set("w1", "ROTA-DONE w1 x\n", "done")
+	if _, err := envWith(h).Poll(bg, dir, PollOpts{}); err != nil {
+		t.Fatal(err)
+	}
+	if got := seenField(dir, "w1", "seen"); got != seenKey(StateDone, "x") {
+		t.Errorf("poll of the same state dropped seen: %q", got)
+	}
+	h.set("w1", "working...\n", "working")
+	if _, err := envWith(h).Poll(bg, dir, PollOpts{}); err != nil {
+		t.Fatal(err)
+	}
+	if got := seenField(dir, "w1", "seen"); got != "" {
+		t.Errorf("poll of a new state kept seen = %q", got)
+	}
+}
+
+func TestSoloWaitReturnsAnArrivalOnce(t *testing.T) {
+	dir := soloProject(t)
+	setState(t, dir, "w1", "done")
+	res, err := soloWait(dir, WaitOpts{Slots: []string{"w1"}})
+	if err != nil || res.Slot != "w1" || res.State != "done" {
+		t.Fatalf("first: %+v %v", res, err)
+	}
+	if res, err = soloWait(dir, WaitOpts{Slots: []string{"w1"}}); err != nil || !res.TimedOut {
+		t.Fatalf("second: %+v %v, want timed out", res, err)
 	}
 }
