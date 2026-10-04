@@ -74,7 +74,6 @@ slots() { # slots <handle> <state>: a registry with w1 running, w2 parked
     "$TMP_RW" "$1" "$2" "$TMP_RW" > "$TMP_RW/repo/.rota/workers.json"
 }
 rw() { ( cd "$TMP_RW/repo" && PATH="$FK/bin:$PATH" FAKE_HERDR="$FK" FAKE_TMUX="$FK/tmux" HERDR_SOCKET_PATH="$FK/herdr.sock" "$@" ); }
-snap() { sha256sum "$TMP_RW/repo/.rota/workers.json"; }
 
 # ── herdr: wait for the socket event ────────────────────────────────────────
 cfg herdr
@@ -84,25 +83,30 @@ SRV=$!
 for _ in $(seq 50); do [ -S "$FK/herdr.sock" ] && break; sleep 0.1; done
 [ -S "$FK/herdr.sock" ] || fail "fake herdr socket never came up"
 
-BEFORE="$(snap)"
 RC=0; OUT="$(rw hvj round wait --settle 0 --timeout 30 2>/dev/null)" || RC=$?
 [ "$RC" = "0" ] || fail "herdr: wait must exit 0 once the slot finishes, got $RC: $OUT"
 [ "$(jget data.slot <<<"$OUT")" = "w1" ] || fail "herdr: expected slot w1: $OUT"
 [ "$(jget data.state <<<"$OUT")" = "done" ] || fail "herdr: expected state done: $OUT"
 [ "$(jget data.source <<<"$OUT")" = "herdr-event" ] || fail "herdr: the slot must come back through the event, not the first snapshot: $OUT"
 case "$(jget data.evidence <<<"$OUT")" in *"/pull/7") ;; *) fail "herdr: evidence must carry the ROTA-DONE argument: $OUT" ;; esac
-[ "$(jget data.changed <<<"$OUT" 2>/dev/null || true)" = "" ] || fail "herdr: round wait is read-only, data must not report changed: $OUT"
-[ "$(snap)" = "$BEFORE" ] || fail "herdr: round wait wrote .rota/workers.json"
+[ "$(jget data.changed <<<"$OUT" 2>/dev/null || true)" = "" ] || fail "herdr: round wait data must not report changed: $OUT"
+# #29: wait records the slot it returns as poll would, and marks it seen.
+W1="$(python3 -c 'import json,sys; s=json.load(open(sys.argv[1]))["slots"][0]; print(s["state"], s.get("seen"), s.get("pr"))' "$TMP_RW/repo/.rota/workers.json")"
+case "$W1" in "done done "*"/pull/7") ;; *) fail "herdr: round wait should record w1 as done, seen, with its PR: $W1" ;; esac
 [ "$(jget method < "$FK/request.json")" = "events.subscribe" ] || fail "herdr: expected an events.subscribe request: $(cat "$FK/request.json")"
 [ "$(jget 'params.subscriptions[0].type' < "$FK/request.json")" = "pane.agent_status_changed" ] || fail "herdr: wrong subscription: $(cat "$FK/request.json")"
 [ "$(jget 'params.subscriptions[0].pane_id' < "$FK/request.json")" = "w9:p11" ] || fail "herdr: must subscribe to the slot's pane: $(cat "$FK/request.json")"
 [ "$(python3 -c 'import json,sys; print(len(json.load(open(sys.argv[1]))["params"]["subscriptions"]))' "$FK/request.json")" = "1" ] || fail "herdr: the parked idle slot must not be watched"
-pass "round wait returns the slot that finished, through one herdr event subscription, writing nothing"
+pass "round wait returns the slot that finished, through one herdr event subscription, and records it"
 
-# A slot that already needs attention comes back at once from the snapshot.
+# A slot already returned is not returned again while it has not changed (#29).
+RC=0; OUT="$(rw hvj round wait --settle 0 --timeout 1 2>/dev/null)" || RC=$?
+[ "$RC" = "1" ] && [ "$(jget data.timedOut <<<"$OUT")" = "true" ] || fail "herdr: a done slot already returned must not come back, rc=$RC: $OUT"
+# A slot that needs attention and was never returned comes back at once from the snapshot.
+slots w9:t7 busy
 RC=0; OUT="$(rw hvj round wait --settle 0 --timeout 30 2>/dev/null)" || RC=$?
 [ "$RC" = "0" ] && [ "$(jget data.source <<<"$OUT")" = "snapshot" ] || fail "herdr: a finished slot must return from the snapshot, rc=$RC: $OUT"
-pass "a slot that needs attention before the call returns immediately (snapshot)"
+pass "a slot comes back once per change; one that needs attention before the call returns immediately (snapshot)"
 
 # ── herdr: timeout is an answer, other herdr versions are refused ───────────
 rm "$FK/fired"; : >"$FK/quiet"
