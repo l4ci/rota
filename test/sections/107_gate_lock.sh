@@ -11,7 +11,7 @@ ln -s "$DEAD" "$GL/stale.lock"
 OUT=$(timeout 20 bash -c '. "$1"; gate_lock_acquire "$2" 0.1; readlink "$2"; echo "$$"' _ "$LIB" "$GL/stale.lock") \
   || fail "gate lock: a lock held by a dead pid was not taken over"
 [ "$(echo "$OUT" | sed -n 1p)" = "$(echo "$OUT" | sed -n 2p)" ] || fail "gate lock: takeover did not record the new owner: $OUT"
-if ls "$GL" | grep -q 'stale.lock.stale'; then fail "gate lock: takeover left a .stale.* file behind"; fi
+if grep -q 'stale.lock.stale' <<<"$(ls "$GL")"; then fail "gate lock: takeover left a .stale.* file behind"; fi
 pass "a lock held by a dead pid is taken over and the stale file removed"
 
 # The lock records its owner at creation: there is no pid-less state to be stranded in.
