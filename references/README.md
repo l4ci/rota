@@ -10,8 +10,6 @@ See KNOWLEDGE.md "Skill Authoring: Prose & References" for the conventions that 
 |-----------|---------|----------|
 | [`authoring-conventions.md`](authoring-conventions.md) | Authoring rules shared across SKILL.md files (inline autonomy directives, mirror-step threshold). | `/rota-capture`, `/rota-refactor`, `/rota-ship` |
 | [`context-load-protocol.md`](context-load-protocol.md) | K+D context loading sequence shared by every cycle-starting skill. | `/rota-plan`, `/rota-vision`, `/rota-work` (including `--preview`) |
-| [`debug-hypothesize.md`](debug-hypothesize.md) | Both-modes hypothesize choreography (brief template, single vs competing, per-axis divergence) for `/rota-debug` Step 6. | `/rota-debug` |
-| [`debug-escalate.md`](debug-escalate.md) | Fresh-context handoff brief template + dispatch mechanics + user-surfacing fallback for `/rota-debug` Step 7.5. | `/rota-debug` |
 | [`design-exploration.md`](design-exploration.md) | Shared five-step spine for skills that negotiate what to build before downstream skills capture how. | `/rota-brainstorm`, `/rota-vision` |
 | [`detail-files.md`](detail-files.md) | Detail-file template used when an item's input exceeds 3 sentences. | `/rota-capture` |
 | [`docs-conventions.md`](docs-conventions.md) | Conventions for content under `docs/` (registration sites, audience split). | `/rota-ship` (Docs Mode) |

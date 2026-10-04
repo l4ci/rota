@@ -145,6 +145,31 @@ func TestIssueModePlan(t *testing.T) {
 	}
 }
 
+func TestIssueModePlanWithoutMilestone(t *testing.T) {
+	root := a4Project(t, issuesConfig)
+	withTracker(t, issueFixture())
+	code, env, stderr := issueRun(t, root, "plan", "add", "#7", "--title", "Export plan")
+	if d := ddata(t, env); code != 0 || d["key"] != "#7" || d["unitKind"] != "item" {
+		t.Fatalf("add: %d %v %s", code, env, stderr)
+	}
+	if code, _, _ := issueRun(t, root, "plan", "add", "F7", "--title", "again"); code != 4 {
+		t.Errorf("duplicate under another spelling: %d", code)
+	}
+	if code, _, _ := issueRun(t, root, "plan", "add", "#99", "--title", "x"); code != 3 {
+		t.Errorf("unknown item: %d", code)
+	}
+	_, env, _ = issueRun(t, root, "plan", "show", "#7")
+	if body, _ := ddata(t, env)["body"].(string); !strings.Contains(body, "unitKind: item") {
+		t.Errorf("show body: %q", body)
+	}
+	if code, _, _ := issueRun(t, root, "plan", "put", "#7", "--body-file", bodyFile(t, "# replaced\n")); code != 0 {
+		t.Errorf("put: %d", code)
+	}
+	if code, _, _ := issueRun(t, root, "plan", "rm", "#7"); code != 0 {
+		t.Errorf("rm: %d", code)
+	}
+}
+
 func TestIssueModeProofAndUncertain(t *testing.T) {
 	root := a4Project(t, issuesConfig)
 	withTracker(t, issueFixture())
