@@ -150,4 +150,4 @@ rc=0; VERDICT=$( cd "$CFG_F78" && hvj config check 2>/dev/null ) || rc=$?
   || fail "F78: an unparseable config should be corrupt (exit 1), got $rc: $VERDICT"
 trap 'rm -rf "$TMP"' EXIT
 rm -rf "$CFG_F78"
-pass "F78: pre-F78 configs report stale so `rota init` backfills the new keys"
+pass 'F78: pre-F78 configs report stale so `rota init` backfills the new keys'

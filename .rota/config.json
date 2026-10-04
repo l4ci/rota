@@ -45,9 +45,13 @@
     "providers": {
       "github": true,
       "gitlab": true
-    }
+    },
+    "provider": "github"
   },
   "rota": {
     "version": "0.9.0"
+  },
+  "backlog": {
+    "backend": "issues"
   }
 }
