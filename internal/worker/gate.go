@@ -174,6 +174,9 @@ func (e Env) gate(ctx context.Context, root string, o GateOpts, res GateResult, 
 	res.Branch, res.PR = branch, pr
 	cfg := config.Load(filepath.Join(root, ".rota", "config.json"))
 	settings := tracker.SettingsFromConfig(cfg)
+	// Read before the merge: the branch lands in root and may carry its own
+	// .rota/config.json, which must not decide how it is verified.
+	verifyCmds := verifyCommandsAt(root)
 
 	g := &gate{e: e, ctx: ctx, root: root, res: &res, o: o, slot: s, reg: reg, branch: branch, pr: pr}
 	g.provider = e.detectProvider(root, pr)
@@ -342,7 +345,7 @@ func (e Env) gate(ctx context.Context, root string, o GateOpts, res GateResult, 
 	}
 
 	// 3. Re-verify on the merged tree.
-	vr, err := e.Verify(ctx, root, root)
+	vr, err := e.RunVerify(ctx, verifyCmds, root)
 	if err != nil {
 		return res, err
 	}
