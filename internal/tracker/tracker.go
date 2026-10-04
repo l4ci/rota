@@ -221,6 +221,22 @@ type Adapter interface {
 	PRComment(ctx context.Context, pr int, body string) error
 	// PRState is "open", "merged" or "closed".
 	PRState(ctx context.Context, pr int) (string, error)
+
+	// PRNeedsBase reports whether PRCreate needs PRSpec.Base (GitLab does).
+	PRNeedsBase() bool
+	// PRCreate opens a PR/MR from s.Head and returns its URL.
+	PRCreate(ctx context.Context, s PRSpec) (string, error)
+
+	// ReleaseDrafts reports whether the forge has draft releases.
+	ReleaseDrafts() bool
+	// ReleaseView reads the release for tag; checked is false when the forge
+	// is not asked (GitLab), and the tag then counts as unreleased.
+	ReleaseView(ctx context.Context, tag string) (rel Release, checked bool, err error)
+	// ReleaseCreate makes a release and returns its URL.
+	ReleaseCreate(ctx context.Context, s ReleaseSpec) (string, error)
+	// ReleaseEdit finishes an existing release (a draft the release workflow
+	// made) and returns its URL.
+	ReleaseEdit(ctx context.Context, s ReleaseSpec) (string, error)
 }
 
 // Settings are the issues.* config values the tracker reads.
