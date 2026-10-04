@@ -141,8 +141,10 @@ func scopeSet(root string, items []backlog.Item, held map[string]bool, scope str
 				}
 			}
 		}
+	case roundcfg.ScopeOpen:
+		chosen = pick(func(backlog.Item) bool { return true })
 	default:
-		return nil, &worker.Error{Exit: worker.ExitUsage, Message: "scope must be slate, milestone or next"}
+		return nil, &worker.Error{Exit: worker.ExitUsage, Message: "scope must be slate, milestone, next or open"}
 	}
 	return chosen, nil
 }

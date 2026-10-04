@@ -15,10 +15,11 @@ const (
 	ScopeSlate     = "slate"
 	ScopeMilestone = "milestone"
 	ScopeNext      = "next"
+	ScopeOpen      = "open"
 )
 
 // Scopes lists the valid scope values.
-var Scopes = []string{ScopeSlate, ScopeMilestone, ScopeNext}
+var Scopes = []string{ScopeSlate, ScopeMilestone, ScopeNext, ScopeOpen}
 
 // Tiers, light to heavy, and the harness kinds a tier maps a model for.
 const (
