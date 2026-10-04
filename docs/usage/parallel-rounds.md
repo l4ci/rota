@@ -241,8 +241,12 @@ Off by default. With `round.autopilot` on, `rota round watch --autopilot` (or on
 1. repair the safe drift (`reconcile --apply`);
 2. gate and merge every finished PR, as one `worker train` when several wait, at most
    `round.autopilotCap` (default 3) per tick, and only under `ship.mergeApproval: none`;
-3. assign the first ready candidate of the round's scope to each idle slot, at most
-   `round.autopilotCap`, at the default tier and never with `--accept-overlap`.
+3. run the architecture-review trigger (`rota round architecture`): when the
+   threshold is reached, or a slot is idle with nothing assignable, mint the review items
+   (`round.architectureEvery` 0 never mints), one audit line per mint;
+4. assign the first ready candidate of the round's scope to each idle slot, at most
+   `round.autopilotCap`, at the default tier and never with `--accept-overlap`. Review items
+   minted in the same tick go first, and count against the same cap.
 
 It never answers a worker, approves a permission, picks a higher tier, reclaims a slot or merges
 without a passing gate. A blocked, limited or dead slot, a failed gate, drift it will not repair and
