@@ -45,7 +45,7 @@ func doctorDisk(dir string) *doctor.Disk {
 func doctorLeftovers(ctx context.Context, root string) []string {
 	var out []string
 	if n, size := leakedTempDirs(os.TempDir(), time.Now().Add(-leakAge)); n > 0 {
-		out = append(out, fmt.Sprintf("%d leaked temp dirs under %s (%s); safe to delete once no run is active", n, os.TempDir(), humanSize(size)))
+		out = append(out, fmt.Sprintf("%d leaked temp dirs under %s (%s); safe to delete once no run is active", n, os.TempDir(), doctor.HumanBytes(uint64(size))))
 	}
 	if root != "" {
 		if n := prunableWorktrees(ctx, root); n > 0 {
@@ -55,7 +55,7 @@ func doctorLeftovers(ctx context.Context, root string) []string {
 	return out
 }
 
-// leakedTempDirs counts the mktemp-style dirs (tmp.*) and gate log dirs
+// leakedTempDirs counts the smoke run dirs (rota-smoke.*) and gate log dirs
 // (rota-gate-logs-*) in dir last modified before cutoff, and their total size.
 func leakedTempDirs(dir string, cutoff time.Time) (n int, size int64) {
 	entries, err := os.ReadDir(dir)
@@ -64,7 +64,7 @@ func leakedTempDirs(dir string, cutoff time.Time) (n int, size int64) {
 	}
 	for _, e := range entries {
 		name := e.Name()
-		if !e.IsDir() || !(strings.HasPrefix(name, "tmp.") || strings.HasPrefix(name, "rota-gate-logs-")) {
+		if !e.IsDir() || !(strings.HasPrefix(name, "rota-smoke.") || strings.HasPrefix(name, "rota-gate-logs-")) {
 			continue
 		}
 		if fi, err := e.Info(); err != nil || !fi.ModTime().Before(cutoff) {
@@ -96,19 +96,6 @@ func prunableWorktrees(ctx context.Context, root string) int {
 		}
 	}
 	return n
-}
-
-func humanSize(n int64) string {
-	const unit = 1024
-	if n < unit {
-		return fmt.Sprintf("%d B", n)
-	}
-	div, exp := int64(unit), 0
-	for m := n / unit; m >= unit; m /= unit {
-		div *= unit
-		exp++
-	}
-	return fmt.Sprintf("%.1f %ciB", float64(n)/float64(div), "KMGTPE"[exp])
 }
 
 // doctorDiskInput fills the disk fields of in: the threshold from config

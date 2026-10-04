@@ -58,8 +58,7 @@ LOGS="${ROTA_GATE_LOGS:-$(mktemp -d "${TMPDIR:-/tmp}/rota-gate-logs-XXXXXX")}"
 mkdir -p "$LOGS"
 # Every check makes its temp files under one gate-owned root, so a leak is
 # countable: the root must be empty once the checks have exited (#85).
-GATE_TMP="$LOGS/tmp"
-mkdir -p "$GATE_TMP"
+GATE_TMP="$(mktemp -d "$LOGS/tmp.XXXXXX")" || exit 1  # fresh: LOGS may be shared, and GATE_TMP is rm -rf'd
 export TMPDIR="$GATE_TMP"
 PIDS=()
 cleanup() { gate_lock_release "$LOCK"; rm -rf "$GATE_TMP"; }

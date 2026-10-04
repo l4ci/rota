@@ -58,7 +58,11 @@ fi
 # the helpers all call mktemp, and sections replace the EXIT trap (F38), so
 # per-site cleanup cannot be relied on: TMPDIR rooting lets the runner remove
 # everything in one rm -rf. Go and Python callers inherit it too.
-RUN_TMP="$(cd "$(mktemp -d)" && pwd -P)"
+# A failed mktemp must stop the run: "cd ''" would stay in the cwd, and the EXIT
+# trap below would then delete it. The rota-smoke. prefix lets doctor tell
+# these dirs from other programs' tmp.* ones (#85).
+d="$(mktemp -d -t rota-smoke.XXXXXX)" || exit 1
+RUN_TMP="$(cd "$d" && pwd -P)" || exit 1
 # Removed on any exit from here on, early failures included (#85).
 trap 'rm -rf "$RUN_TMP"' EXIT
 
@@ -66,7 +70,8 @@ trap 'rm -rf "$RUN_TMP"' EXIT
 # not depend on the developer's (or CI's missing) global git config.
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
 export TMPDIR="$RUN_TMP"
-TMP="$(cd "$(mktemp -d)" && pwd -P)"
+d="$(mktemp -d)" || exit 1
+TMP="$(cd "$d" && pwd -P)" || exit 1
 
 # Black-box target (#46): sections call "$ROTA_BIN <group> <verb>". It defaults
 # to the Go binary built once from this checkout, stamped with the VERSION
@@ -74,7 +79,7 @@ TMP="$(cd "$(mktemp -d)" && pwd -P)"
 # other `rota` binary (absolute path: sections cd) to run the suite against it.
 # The binary and the scratch dir for the poison stand-ins below live under
 # $RUN_TMP, so the EXIT trap removes them with everything else.
-ROTA_STAGE="$(mktemp -d)"
+ROTA_STAGE="$(mktemp -d)" || exit 1
 if [ -z "${ROTA_BIN:-}" ]; then
   ROTA_VERSION="$(tr -d '[:space:]' < "$REPO/VERSION")"
   (cd "$REPO" && go build -ldflags "-X github.com/l4ci/rota/internal/version.Version=$ROTA_VERSION" \
@@ -133,20 +138,20 @@ for v in $(compgen -e | grep -E '^(HERDR_|TMUX)'); do unset "$v"; done
 REPO_CLAUDE="$REPO/CLAUDE.md"
 REPO_CLAUDE_SNAP=""
 if [ -f "$REPO_CLAUDE" ]; then
-  REPO_CLAUDE_SNAP="$(mktemp)"
+  REPO_CLAUDE_SNAP="$(mktemp)" || exit 1
   cp "$REPO_CLAUDE" "$REPO_CLAUDE_SNAP"
 fi
 REPO_AGENTS="$REPO/AGENTS.md"
 REPO_AGENTS_SNAP=""
 if [ -f "$REPO_AGENTS" ]; then
-  REPO_AGENTS_SNAP="$(mktemp)"
+  REPO_AGENTS_SNAP="$(mktemp)" || exit 1
   cp "$REPO_AGENTS" "$REPO_AGENTS_SNAP"
 fi
 # Snapshot dev tree's tracked .rota/ content. We snap the whole subtree
 # (excluding gitignored paths) so any leak surfaces as a diff at the end.
 REPO_ROTA_SNAP=""
 if [ -d "$REPO/.rota" ]; then
-  REPO_ROTA_SNAP="$(mktemp -d)"
+  REPO_ROTA_SNAP="$(mktemp -d)" || exit 1
   # Use git ls-files to capture exactly what git tracks, preserving paths.
   (cd "$REPO" && git ls-files .rota/) | while IFS= read -r f; do
     mkdir -p "$REPO_ROTA_SNAP/$(dirname "$f")"
