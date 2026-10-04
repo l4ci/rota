@@ -189,6 +189,9 @@ func (e Env) CodexPreflight(ctx context.Context, root, slot string, accept bool)
 		}
 		set.Version = shown
 		set.Warnings = append(set.Warnings, fmt.Sprintf("codex %s is outside the supported range %s", shown, doctor.CodexRange))
+		// An older Codex may ignore -c features.hooks=true, which would leave
+		// unsigned pane text unchecked (#3).
+		set.Warnings = append(set.Warnings, "prompt check unverified on this Codex: an older version may ignore -c features.hooks=true, so unsigned pane text could reach the worker")
 	}
 
 	if err := e.ensureCodexHome(root, slot, home); err != nil {
