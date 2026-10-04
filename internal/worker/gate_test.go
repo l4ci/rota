@@ -718,3 +718,25 @@ func TestBounceSameHeadCountsOnce(t *testing.T) {
 		t.Errorf("new head counts, got %d", n)
 	}
 }
+
+// The branch lands in the gate checkout before it is verified; a branch that
+// empties refactor.verifyCommands in its own .rota/config.json must not
+// switch its own verification off.
+func TestGateVerifyCommandsComeFromBeforeTheMerge(t *testing.T) {
+	w := newWorld(t, "")
+	w.setConfig(`{"refactor":{"verifyCommands":["false"]}}`)
+	gitq(t, w.dir, "add", "-f", ".rota/config.json")
+	gitq(t, w.dir, "commit", "-q", "-m", "config")
+	gitq(t, w.dir, "push", "-q", "origin", "main")
+	gitq(t, w.worker, "pull", "-q", "--no-rebase", "origin", "main")
+	if err := os.WriteFile(filepath.Join(w.worker, ".rota", "config.json"), []byte(`{"refactor":{"verifyCommands":[]}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitq(t, w.worker, "commit", "-q", "-am", "disable verify")
+	gitq(t, w.worker, "push", "-q", "origin", "w1")
+	gitq(t, w.dir, "fetch", "-q", "origin", "w1:w1")
+	res, err := w.env(false).Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main"})
+	if err != nil || res.Verdict != GateVerifyFailed {
+		t.Errorf("verify must use the base's commands, got %+v %v", res, err)
+	}
+}
