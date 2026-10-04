@@ -132,3 +132,27 @@ Considered and not proposed:
 - **Race only on changed packages.** Race costs about 1.2 to 1.4x here, and `cmd/rota` and `internal/cli` import most of the tree, so a change anywhere re-races the slowest package anyway. Not worth the quality risk.
 - **GOCACHE sharing.** Already shared (section 2).
 - **Worker-side targeted gate vs full gate at merge.** Settled by #47: full gate once, at merge. Item 1 and 2 make that one gate cheap, which is what lets it stay the only one.
+
+## 8. Results of #84 (smoke hot spots and the frozen suites)
+
+Measured 2026-10-04, same box, `go 1.22`. The machine was shared with other workers and the load average swung from 5 to 29 during these runs, so wall times alone mislead. CPU seconds (user + system, children included) do not move with load, and are the column to trust. "Before" is the tree with #82 and #85 merged and nothing else (`dc53724`); "after" is this branch. Each row is one `SECTION_LIST` run of the section.
+
+| Section | Before wall (load) | Before CPU | After wall (load) | After CPU |
+|---|---|---|---|---|
+| 92_limits | 52.3 s (16.9) | 15.6 s | 20.9 s (11.8) | 11.3 s |
+| 55_backend | 74.6 s (22.5) | 46.1 s | 27.7 s (8.5) | 29.4 s |
+| 61_milestones | 117.8 s (29.0) | 43.7 s | 20.1 s (7.0) | 22.8 s |
+| 87_round_return | 47.6 s (22.1) | 22.5 s | 13.5 s (6.3) | 13.5 s |
+| 97_install_sh | 32.0 s (15.3) | 2.5 s | 2.1 s (6.4) | 2.4 s |
+
+What changed, by cause:
+
+- **Fake `gh`/`glab`: 80 ms to 45 ms a call.** `fake_tracker.py` ran as a script, so Python recompiled its 788 lines on every call, and it imported `hashlib`, `subprocess` and `datetime` that most calls never use. The wrappers now import it as a module (bytecode cached in `test/fakes/__pycache__`, gitignored), run `python3 -S`, and load those three on first use. This is the CPU drop in 55, 61 and 87, and in every other section that calls a fake, and it also speeds the Go scenario suites, which shell out to the same fakes.
+- **tmux settle pause.** After pasting a brief, rota waits 1 s, sends Enter, then waits 2 s, for Claude Code to take the paste. The fake tmux reacts at once, so every dispatch in smoke paid 3 s. `ROTA_HOST_SETTLE_PCT` scales those pauses (default 100, so rota itself is unchanged); the runner sets 5. The scaling is covered by `TestSettleScale`.
+- **97_install_sh: 30 s to 2 s.** The signal test killed the installer while a fake `curl` slept 30 s. `sh` defers a trap until its foreground child exits, so the test waited out the sleep. The fake curl now gets the signal too, as a terminal's ^C would deliver it. The assertion (no temp files left after a TERM) is unchanged.
+- **92_limits.** Twelve `limit watch --timeout 1` runs now use `--timeout 0.3` (the watch still takes its first pass at once), and the fake herdr's emit delay and three herdr watch timeouts were cut. About 8 s of what remains is real waiting: one herdr event watch, the 1 s no-loop check, and the watches' own timeouts. No assertion was loosened.
+- **Not changed:** `55_backend`'s `sleep 1` between two closes (the fake store stamps closes by the second), and 92's `sleep 1` that checks `--no-limits` starts no loop (shortening it would shorten the check).
+
+Go: `go test -race -count=1 -run TestFrozen ./cmd/rota` went from 95.0 s wall (load 5.5 to 11.9, 462 CPU s) to 60.5 s (load 8.4 to 21.3, 338 CPU s). The record of the running suite was one package variable, so the seven suites ran one after another and each left cores idle at its tail. It is now keyed by suite and each `TestFrozen*` calls `t.Parallel()`. Per suite wall (before, run alone in sequence, then after, all seven sharing the pool): A4 4.5/22.8, A4B 6.6/31.8, A4C 0.8/2.0, A4D 47.1/57.3, A4Issue 9.9/23.2, A4Umbrella 13.5/33.5, A4UmbrellaFile 3.0/11.8. The "after" per-suite figures are longer because they run concurrently; the saving is the total. `TestFrozenA4D` is 305 scenarios of 1 to 5 s each, so it is bound by total CPU, not by one slow scenario; the fake speedup is what shortens it.
+
+Not done: rota calls the tracker 22 times in one `round assign` (about 1 s of fake time). Cutting those calls changes rota, not the tests; it is a candidate follow-up.
