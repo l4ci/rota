@@ -5,7 +5,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
 
@@ -69,22 +68,13 @@ func TestA4dProvider(t *testing.T) {
 	}
 }
 
-func TestA4dListLabelClose(t *testing.T) {
+func TestA4dLabelClose(t *testing.T) {
 	origin := "https://github.com/o/r.git"
 	root := a4dRepo(t, origin)
 	calls := a4dForge(t, origin, map[string]string{
-		"issue list": `[{"number": 3, "title": "T", "body": "b", "labels": [{"name": "x"}], "url": "u", "author": {"login": "me"}}]`,
 		"issue view": `{"labels": [{"name": "x"}]}`,
 	})
-	code, env, _ := rotaRun(t, "--json", "-C", root, "issues", "list", "--label", "x", "--limit", "5")
-	rows, _ := get(dataOf(env), "issues").([]any)
-	if code != 0 || len(rows) != 1 || get(rows[0], "author") != "me" || get(rows[0], "title") != "T" {
-		t.Fatalf("list: %d %v", code, env)
-	}
-	if !slices.Contains(*calls, "gh issue list --state open --json number,title,body,labels,url,author --limit 5 --label x") {
-		t.Errorf("calls %q", *calls)
-	}
-	code, env, _ = rotaRun(t, "--json", "-C", root, "issues", "label", "3", "--add", "x")
+	code, env, _ := rotaRun(t, "--json", "-C", root, "issues", "label", "3", "--add", "x")
 	if code != 0 || get(dataOf(env), "changed") != false || get(dataOf(env), "action") != "add" {
 		t.Errorf("label no-op: %d %v", code, env)
 	}
@@ -250,10 +240,10 @@ func TestA4dScopeFollowsWorkingDirectory(t *testing.T) {
 }
 
 func TestA4dNoProviderAndMissingIssue(t *testing.T) {
-	// no origin, no issues.provider: list and label exit 3 instead of an empty list
+	// no origin, no issues.provider: label exits 3 instead of an empty list
 	root := a4dRepo(t, "")
 	a4dForge(t, "", nil)
-	for _, argv := range [][]string{{"issues", "list"}, {"issues", "label", "3", "--add", "x"}} {
+	for _, argv := range [][]string{{"issues", "label", "3", "--add", "x"}} {
 		code, env, _ := rotaRun(t, append([]string{"--json", "-C", root}, argv...)...)
 		if msg, _ := get(env, "error", "message").(string); code != ExitResolution || !strings.Contains(msg, "issues.provider") {
 			t.Errorf("%v: %d %v", argv, code, env)
@@ -262,9 +252,9 @@ func TestA4dNoProviderAndMissingIssue(t *testing.T) {
 	// issues.provider stands in for a missing origin
 	root = a4dRepo(t, "")
 	os.WriteFile(filepath.Join(root, ".rota", "config.json"), []byte(`{"issues": {"provider": "github"}}`), 0o644)
-	calls := a4dForge(t, "", map[string]string{"issue list": "[]"})
-	if code, env, _ := rotaRun(t, "--json", "-C", root, "issues", "list"); code != 0 || !slices.Contains(*calls, "gh issue list --state open --json number,title,body,labels,url,author --limit 30") {
-		t.Errorf("config fallback: %d %v %q", code, env, *calls)
+	a4dForge(t, "", nil)
+	if code, env, _ := rotaRun(t, "--json", "-C", root, "issues", "provider"); code != 0 || get(dataOf(env), "provider") != "github" {
+		t.Errorf("config fallback: %d %v", code, env)
 	}
 	// a missing issue is exit 3; another forge failure stays exit 5
 	root = a4dRepo(t, "https://github.com/o/r.git")

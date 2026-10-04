@@ -1,10 +1,10 @@
-# Issue mode
+# Issue backend
 
-Applies when `backlog.backend` is `"issues"` in `.rota/config.json` (check: `rota config show backlog.backend`; every verb already branches on it). The tracker (GitHub or GitLab) is the backlog; `.rota/BACKLOG.md` and `.rota/<kind>/` detail files are not used. File mode is unchanged and every skill keeps its file-mode steps. This page lists only where issue mode differs.
+The issue backend (`backlog.backend` is `"issues"` in `.rota/config.json`; check with `rota config show backlog.backend`) is the primary backlog: the tracker (GitHub or GitLab) holds the items, and every verb already branches on the backend. `.rota/BACKLOG.md` and `.rota/<kind>/` detail files belong to the legacy file backend, where skills keep their file-backend steps. Item IDs read `#N` (or a bare `N`) here and `[B07]` in file mode; this page covers the issue-backend mechanics, and notes where the file backend differs.
 
 ## IDs
 
-An ID is the type letter plus the issue number: `#42` is `F42` (feature), `B42` (bug) or `T42` (task); verbs also take `42`. The letter must match the issue's type label. In `--json` output `id` is the bare number (`"42"`) and `type` carries the letter.
+An item ID is `#42` or a bare `42`; the legacy `F42` / `B42` / `T42` forms (type letter plus issue number) are also accepted, and the letter must match the issue's type label. In `--json` output `id` is the bare number (`"42"`) and `type` carries the letter.
 
 ## Verb map
 
