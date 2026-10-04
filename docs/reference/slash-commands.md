@@ -47,7 +47,7 @@ Pulls open issues from GitHub or GitLab into `BACKLOG.md` via a multiSelect pick
 
 ## /rota-learn
 
-Writes durable knowledge from the current session into `.rota/KNOWLEDGE.md`, grouped by topic. Captures gotchas, project conventions, constraints, debugging insights, and decisions with rationale. Skips anything already obvious from reading the code. After writing, asks once whether to file an `rota` upstream issue (when a bullet describes rota behavior) and once whether to contribute to [runlog.org](https://runlog.org) via `/runlog-author` (when a bullet is about an external dependency: third-party API, library, protocol). Both follow-ups are always manual, never auto-fired. In umbrella mode the write (and `--term` Glossary entries) routes to the cwd/`--repo`-resolved scope: repo-local vs the umbrella-shared `.rota/KNOWLEDGE.md`. See [learning](../usage/learning.md) and [umbrella mode](../usage/umbrella-mode.md) for the full flow.
+Writes durable knowledge from the current session into `.rota/KNOWLEDGE.md`, grouped by topic. Captures gotchas, project conventions, constraints, debugging insights, and decisions with rationale. Skips anything already obvious from reading the code. `--strict` adds a verifier pass over the new bullets (off by default). In umbrella mode the write (and `--term` Glossary entries) routes to the cwd/`--repo`-resolved scope: repo-local vs the umbrella-shared `.rota/KNOWLEDGE.md`. See [learning](../usage/learning.md) and [umbrella mode](../usage/umbrella-mode.md) for the full flow.
 
 ## /rota-orchestrate
 
