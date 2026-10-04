@@ -51,6 +51,9 @@ func candidateList(cs []round.Candidate) []any {
 		o.Set("title", c.Title)
 		setIf(o, "milestone", c.Milestone)
 		o.Set("ready", c.Ready())
+		if c.OpenPR != 0 {
+			o.Set("openPr", c.OpenPR)
+		}
 		o.Set("checks", checkList(c.Checks))
 		out = append(out, o)
 	}
@@ -61,7 +64,9 @@ func candidateLines(cs []round.Candidate) []string {
 	var lines []string
 	for _, c := range cs {
 		state := "ready"
-		if !c.Ready() {
+		if c.OpenPR != 0 {
+			state = fmt.Sprintf("not ready: open PR #%d", c.OpenPR)
+		} else if !c.Ready() {
 			var bad []string
 			for _, ch := range c.Checks {
 				if !ch.OK {

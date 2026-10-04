@@ -18,8 +18,14 @@ import (
 // Candidate is an item a round could assign, with its readiness.
 type Candidate struct {
 	ID, Title, Milestone string
+	// OpenPR is the open PR that already resolves the item, 0 for none: the
+	// item is not ready while one is open.
+	OpenPR int
 	Readiness
 }
+
+// Ready is true when every readiness check holds and no open PR resolves the item.
+func (c Candidate) Ready() bool { return c.OpenPR == 0 && c.Readiness.Ready() }
 
 // CandidateOpts selects the set.
 type CandidateOpts struct {
@@ -54,6 +60,10 @@ func (e Env) Candidates(ctx context.Context, root string, be backlog.Backend, o 
 			return nil, err
 		}
 	}
+	openPR, err := e.openPRIssues(ctx, be)
+	if err != nil {
+		return nil, err
+	}
 	tracked := e.trackedFiles(ctx, root)
 	inFlight := e.InFlightItems(ctx, root, be, tracked, o.Shared)
 	var out []Candidate
@@ -69,7 +79,7 @@ func (e Env) Candidates(ctx context.Context, root string, be backlog.Backend, o 
 			return nil, err
 		}
 		ms := backlog.ParseMilestones(it.Fields.Get("milestone"))
-		c := Candidate{ID: it.ID, Title: it.Title, Readiness: r}
+		c := Candidate{ID: it.ID, Title: it.Title, OpenPR: openPR[it.Number], Readiness: r}
 		if len(ms) > 0 {
 			c.Milestone = strings.Join(ms, ",")
 		}

@@ -61,6 +61,7 @@ const DefaultNeedsHuman = "needs-human"
 type Forge interface {
 	OpenPRs(ctx context.Context) ([]tracker.PR, error)
 	PRState(ctx context.Context, pr int) (string, error)
+	ClosedNumbers(body string) []int
 	List(ctx context.Context, f tracker.ListFilter) ([]tracker.Issue, error)
 	AddLabels(ctx context.Context, number int, labels []string, autoCreate bool) error
 }
