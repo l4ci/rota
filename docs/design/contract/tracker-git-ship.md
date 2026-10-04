@@ -65,7 +65,8 @@ shim: `path` is the stdout line, `<umbrella>/.claude/worktrees/<repo>/<branch>`.
 ### rota review scope
 rota review scope [<branch>]
 repo: scoped
-data: {"branch": string, "base": string, "commitCount": number, "commits": [{"hash": string, "subject": string}], "touchedFiles": []string, "referencedIds": []string, "intents": [{"id": string, "type": "B"|"F"|"T", "title": string, "entry": string}]}
+data: {"branch": string, "base": string, "commitCount": number, "commits": [{"hash": string, "subject": string}], "touchedFiles": []string, "referencedIds": []string, "intents": [{"id": string, "type": "B"|"F"|"T"|null, "title": string, "entry": string}]}
+issue mode: under backlog.backend "issues", `referencedIds` are issue refs (`"#12"`): the number in a `<agent>/<N>-slug` branch name plus the `#N` after a closing keyword (Closes/Fixes/Resolves and -s/-d/-ed, any case, comma lists) in commit messages. Each resolves through the backend's get into an intent; a ref that does not resolve (offline, unknown) stays in `referencedIds` with no intent. File mode is unchanged (bracketed IDs, BACKLOG/ARCHIVE corpus).
 exit: 2 at an umbrella root without --repo; 3 when the branch does not exist; 1 when the branch is the base branch; 5 when git fails Exit 1 carries no `data`: there is no answer to give.
 old: hv-review-scope [--repo <repo>] [<branch>]
 shim: the old JSON is passed through as `data` (already camelCase). Old exit 1 is split by message (`umbrella` becomes 2, unknown branch becomes 3, branch equals base becomes 1, other git errors become 5). `branch` defaults to the current branch.
