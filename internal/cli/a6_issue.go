@@ -136,35 +136,6 @@ func issuesBackend(c *Ctx) (*backlog.Issues, error) {
 	return nil, Refused("%s works on the issue backend only", c.Path)
 }
 
-// milestoneBackend is what the milestone verbs need of either issue backend:
-// one repo, or an umbrella that mints IDs and aggregates status over every
-// sub-repo's native milestones.
-type milestoneBackend interface {
-	MilestoneAdd(mid, title, summary string, depends []string, today string) (string, error)
-	MilestoneList() ([]backlog.MilestoneRow, error)
-	MilestoneShow(mid string) (string, error)
-	MilestonePut(mid, text string) error
-	MilestoneStatus(mid, status string) error
-}
-
-func milestonesBackend(c *Ctx) (milestoneBackend, error) {
-	be, err := openIssues(c)
-	if err != nil {
-		return nil, err
-	}
-	switch b := be.(type) {
-	case *backlog.Issues:
-		b.Warn = func(msg string) { c.Warn("%s", msg) }
-		return b, nil
-	case *backlog.Umbrella:
-		if home, err := b.HomeSub(); err == nil {
-			home.Warn = func(msg string) { c.Warn("%s", msg) }
-		}
-		return b, nil
-	}
-	return nil, Refused("%s works on the issue backend only", c.Path)
-}
-
 // openIssues opens the backlog backend for a verb that addresses a milestone
 // rather than an item.
 func openIssues(c *Ctx) (backlog.Backend, error) {
