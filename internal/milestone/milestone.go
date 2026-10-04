@@ -212,6 +212,52 @@ func Put(root, id, text string) (changed bool, err error) {
 	return
 }
 
+// h2Re matches a level-2 heading line.
+var h2Re = regexp.MustCompile(`(?m)^## `)
+
+// SetOverview replaces the overview text of MILESTONES.md: everything between
+// the optional "# " title line and the first "## " heading. The rest of the file is
+// untouched. A body that carries a heading of its own is refused (exit 4). A missing MILESTONES.md is
+// exit 3. changed is false when the text is already in place.
+func SetOverview(root, text string) (changed bool, err error) {
+	p := overviewPath(root)
+	if _, serr := os.Stat(p); serr != nil {
+		return false, artifact.Errf(artifact.ExitResolution, "%s not found", p).WithHint("rota milestone add --title <text> --summary <text>")
+	}
+	text = strings.Trim(text, "\n")
+	if strings.TrimSpace(text) == "" {
+		return false, artifact.Errf(artifact.ExitUsage, "overview text is empty")
+	}
+	if h2Re.MatchString(text) || strings.HasPrefix(text, "# ") || strings.Contains(text, "\n# ") {
+		return false, artifact.Errf(artifact.ExitRefused, "overview text must not contain headings")
+	}
+	err = fsio.Locked(p, fsio.LockTimeout, func() error {
+		old, rerr := fsio.ReadText(p)
+		if rerr != nil {
+			return artifact.Errf(artifact.ExitInternal, "cannot read %s: %v", p, rerr)
+		}
+		head, rest := "", old
+		if nl := strings.Index(old, "\n"); strings.HasPrefix(old, "# ") && nl >= 0 {
+			head, rest = old[:nl+1]+"\n", old[nl+1:]
+		}
+		if m := h2Re.FindStringIndex(rest); m != nil {
+			rest = rest[m[0]:]
+		} else {
+			rest = ""
+		}
+		next := head + text + "\n"
+		if rest != "" {
+			next += "\n" + rest
+		}
+		if next == old {
+			return nil
+		}
+		changed = true
+		return fsio.WriteFileAtomic(p, []byte(next))
+	})
+	return
+}
+
 // SetStatus changes a milestone's frontmatter status, then regenerates the
 // overview and the vision block (Index), as hv-vision-status did on every
 // call. changed reports the status line only.
