@@ -6,7 +6,7 @@ package artifact
 
 import (
 	"errors"
-	"fmt"
+	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/repos"
 	"io"
 	"os"
@@ -20,34 +20,6 @@ import (
 	"github.com/l4ci/rota/internal/section"
 )
 
-// Exit codes an Error may carry; same numbers as docs/design/5.0-cli-conventions.md.
-const (
-	ExitFailed         = 1
-	ExitUsage          = 2
-	ExitResolution     = 3
-	ExitRefused        = 4
-	ExitUnavailable    = 5
-	ExitInternal       = 70
-	ExitNotImplemented = 71
-)
-
-// Error is a verb failure: its exit code, message and optional hint.
-type Error struct {
-	Exit    int
-	Message string
-	Hint    string
-}
-
-func (e *Error) Error() string { return e.Message }
-
-// Errf builds an Error.
-func Errf(exit int, format string, a ...any) *Error {
-	return &Error{Exit: exit, Message: fmt.Sprintf(format, a...)}
-}
-
-// WithHint returns e with a hint line.
-func (e *Error) WithHint(h string) *Error { e.Hint = h; return e }
-
 // IssueMode reports whether backlog.backend is "issues". An unreadable
 // config or an unknown value counts as file mode, as the old helpers did.
 func IssueMode(root string) bool {
@@ -58,8 +30,8 @@ func IssueMode(root string) bool {
 
 // ErrIssueMode is what a file-only port returns under backlog.backend
 // "issues" until internal/tracker (A8) is wired in: exit 71, not a guess.
-func ErrIssueMode(verb string) *Error {
-	return Errf(ExitNotImplemented, "%s: issue mode (backlog.backend \"issues\") is not ported yet", verb).
+func ErrIssueMode(verb string) *exitcode.Error {
+	return exitcode.Errf(exitcode.ExitNotImplemented, "%s: issue mode (backlog.backend \"issues\") is not ported yet", verb).
 		WithHint("needs internal/tracker (A8)")
 }
 
@@ -75,7 +47,7 @@ func ReadBody(stdin io.Reader, path string) (string, error) {
 		b, err = os.ReadFile(path)
 	}
 	if err != nil {
-		return "", Errf(ExitUsage, "cannot read --body-file %s: %v", path, unwrap(err))
+		return "", exitcode.Errf(exitcode.ExitUsage, "cannot read --body-file %s: %v", path, unwrap(err))
 	}
 	return string([]rune(string(b))), nil
 }

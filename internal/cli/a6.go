@@ -3,10 +3,10 @@ package cli
 import (
 	"errors"
 	"flag"
+	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"strconv"
 
-	"github.com/l4ci/rota/internal/artifact"
 	"github.com/l4ci/rota/internal/debugctr"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/spike"
@@ -14,7 +14,7 @@ import (
 )
 
 // The A6 verbs (milestone, plan, design, spike, proof, debug) live in
-// domain packages that return *artifact.Error; this file is their glue.
+// domain packages that return *exitcode.Error; this file is their glue.
 // The packages cannot register themselves because cli imports them.
 
 func a6Commands() []*Command {
@@ -42,21 +42,12 @@ func a6Commands() []*Command {
 	}...)
 }
 
-func asArtifact(err error) *artifact.Error {
-	var ae *artifact.Error
+func asArtifact(err error) *exitcode.Error {
+	var ae *exitcode.Error
 	if errors.As(err, &ae) {
 		return ae
 	}
 	return nil
-}
-
-// fromArtifact maps a domain error onto the exit table.
-func fromArtifact(err error) error {
-	var ae *artifact.Error
-	if errors.As(err, &ae) {
-		return &Error{Exit: ae.Exit, Message: ae.Message, Hint: ae.Hint}
-	}
-	return err
 }
 
 func oneArg(args []string, what string) (string, error) {
@@ -84,7 +75,7 @@ func openCounter(c *Ctx) (*debugctr.Counter, error) {
 		return nil, err
 	}
 	ctr, err := debugctr.Open(root)
-	return ctr, fromArtifact(err)
+	return ctr, err
 }
 
 // ironLaw refuses (exit 4) when bug has 3 or more failed fixes since its
@@ -122,7 +113,7 @@ func runCounterInit(c *Ctx, args []string) (Result, error) {
 	}
 	changed, err := ctr.Init(bug)
 	if err != nil {
-		return Result{}, fromArtifact(err)
+		return Result{}, err
 	}
 	d := jsonx.NewObject()
 	d.Set("session", ctr.Session)
@@ -147,7 +138,7 @@ func counterRecordAttempt(fs *flag.FlagSet) RunFunc {
 		}
 		st, err := ctr.State() // exit 3 without a session file
 		if err != nil {
-			return Result{}, fromArtifact(err)
+			return Result{}, err
 		}
 		bug, _ := st.Get("bug_id")
 		if id, _ := bug.(string); id != "" {
@@ -157,7 +148,7 @@ func counterRecordAttempt(fs *flag.FlagSet) RunFunc {
 		}
 		n, err := ctr.RecordAttempt(*hyp, *commit)
 		if err != nil {
-			return Result{}, fromArtifact(err)
+			return Result{}, err
 		}
 		d := jsonx.NewObject()
 		d.Set("attempt", n)
@@ -169,14 +160,14 @@ func counterRecordAttempt(fs *flag.FlagSet) RunFunc {
 // counterRefusal maps a close-attempt error. A refusal (no attempt, or the
 // last one is not pending) carries {"blockedBy": "attempt", "changed": false}.
 func counterRefusal(err error) (Result, error) {
-	var ae *artifact.Error
-	if errors.As(err, &ae) && ae.Exit == artifact.ExitRefused {
+	var ae *exitcode.Error
+	if errors.As(err, &ae) && ae.Exit == exitcode.ExitRefused {
 		d := jsonx.NewObject()
 		d.Set("blockedBy", "attempt")
 		d.Set("changed", false)
-		return Result{Data: d}, fromArtifact(err)
+		return Result{Data: d}, err
 	}
-	return Result{}, fromArtifact(err)
+	return Result{}, err
 }
 
 func runCounterFail(c *Ctx, args []string) (Result, error) {
@@ -225,7 +216,7 @@ func runCounterIncCycle(c *Ctx, args []string) (Result, error) {
 	}
 	n, err := ctr.IncCycle()
 	if err != nil {
-		return Result{}, fromArtifact(err)
+		return Result{}, err
 	}
 	d := jsonx.NewObject()
 	d.Set("hypothesisCycles", n)
@@ -266,7 +257,7 @@ func runCounterShow(c *Ctx, args []string) (Result, error) {
 	}
 	raw, err := ctr.Raw()
 	if err != nil {
-		return Result{}, fromArtifact(err)
+		return Result{}, err
 	}
 	st, _ := ctr.State()
 	d := jsonx.NewObject()
@@ -306,7 +297,7 @@ func runCounterSummary(c *Ctx, args []string) (Result, error) {
 	}
 	st, err := ctr.State()
 	if err != nil {
-		return Result{}, fromArtifact(err)
+		return Result{}, err
 	}
 	md, bug, failed := ctr.Summary(st)
 	d := jsonx.NewObject()
@@ -347,7 +338,7 @@ func spikeAdd(fs *flag.FlagSet) RunFunc {
 		}
 		branch, err := spike.Add(root, gitDir, name, *question, c.Repo)
 		if err != nil {
-			return Result{Data: refusal(err)}, fromArtifact(err)
+			return Result{Data: refusal(err)}, err
 		}
 		d := jsonx.NewObject()
 		d.Set("name", name)
@@ -368,7 +359,7 @@ func runSpikeFinish(c *Ctx, args []string) (Result, error) {
 	}
 	changed, err := spike.Finish(root, name)
 	if err != nil {
-		return Result{}, fromArtifact(err)
+		return Result{}, err
 	}
 	d := jsonx.NewObject()
 	d.Set("name", name)
@@ -388,7 +379,7 @@ func runSpikeShow(c *Ctx, args []string) (Result, error) {
 	}
 	body, err := spike.Show(root, name)
 	if err != nil {
-		return Result{}, fromArtifact(err)
+		return Result{}, err
 	}
 	d := jsonx.NewObject()
 	d.Set("name", name)

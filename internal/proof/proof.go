@@ -6,6 +6,7 @@ package proof
 import (
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/exitcode"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -30,7 +31,7 @@ type Row struct{ Date, Check, Result, Sha, Evidence string }
 // kindOf is the detail directory for a valid file-mode ID.
 func kindOf(id string) (kind string, err error) {
 	if !idRe.MatchString(id) {
-		return "", artifact.Errf(artifact.ExitUsage, "ID must look like B07, F12 or T03, got %q", id)
+		return "", exitcode.Errf(exitcode.ExitUsage, "ID must look like B07, F12 or T03, got %q", id)
 	}
 	t, _ := backlog.TypeByLetter(id[:1])
 	return t.Kind, nil
@@ -53,15 +54,15 @@ func Add(root, id string, o AddOpts) (row Row, changed bool, err error) {
 	}
 	check, evidence := one(o.Check), one(o.Evidence)
 	if check == "" || evidence == "" {
-		return row, false, artifact.Errf(artifact.ExitUsage, "--check and --evidence must not be empty")
+		return row, false, exitcode.Errf(exitcode.ExitUsage, "--check and --evidence must not be empty")
 	}
 	if o.Result != "PASS" && o.Result != "FAIL" {
-		return row, false, artifact.Errf(artifact.ExitUsage, "--result must be PASS or FAIL")
+		return row, false, exitcode.Errf(exitcode.ExitUsage, "--result must be PASS or FAIL")
 	}
 	f := &backlog.File{Root: root}
 	_, title, found := backlog.FindOrigin(f.Corpus(), id)
 	if !found {
-		return row, false, artifact.Errf(artifact.ExitResolution, "[%s] not found in BACKLOG.md or ARCHIVE.md", id)
+		return row, false, exitcode.Errf(exitcode.ExitResolution, "[%s] not found in BACKLOG.md or ARCHIVE.md", id)
 	}
 	if title == "" {
 		title = id
@@ -78,7 +79,7 @@ func Add(root, id string, o AddOpts) (row Row, changed bool, err error) {
 	err = fsio.Locked(path, fsio.LockTimeout, func() error {
 		content, rerr := fsio.ReadText(path)
 		if rerr != nil && !errors.Is(rerr, fs.ErrNotExist) {
-			return artifact.Errf(artifact.ExitInternal, "cannot read %s: %v", path, rerr)
+			return exitcode.Errf(exitcode.ExitInternal, "cannot read %s: %v", path, rerr)
 		}
 		if rerr != nil { // missing: start the detail file
 			content = fmt.Sprintf("# %s: %s\n\n> Related TODO entry: `[%s]` in `.rota/BACKLOG.md`\n", id, title, id)
@@ -116,7 +117,7 @@ func Show(root, id string) (rows []Row, lines []string, err error) {
 		return
 	}
 	if rerr != nil {
-		return nil, nil, artifact.Errf(artifact.ExitInternal, "cannot read %s: %v", detailPath(root, kind, id), rerr)
+		return nil, nil, exitcode.Errf(exitcode.ExitInternal, "cannot read %s: %v", detailPath(root, kind, id), rerr)
 	}
 	return parseRows(content)
 }

@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"path/filepath"
 	"strings"
@@ -179,21 +180,21 @@ func TestAccountAssign(t *testing.T) {
 	mustEqual(t, "workers.json after pick", want["after w2 pick"], registry(t, b))
 
 	exitOf := func(err error) int {
-		if we, ok := err.(*Error); ok {
+		if we, ok := err.(*exitcode.Error); ok {
 			return we.Exit
 		}
 		return -1
 	}
 	_, _, err = acc.Assign(bg, b, "w1", "nope")
-	if exitOf(err) != ExitResolution || !strings.Contains(err.Error(), "account 'nope' is not in work.accounts") {
+	if exitOf(err) != exitcode.ExitResolution || !strings.Contains(err.Error(), "account 'nope' is not in work.accounts") {
 		t.Errorf("unknown account: %v", err)
 	}
 	_, _, err = acc.Assign(bg, b, "w9", "alpha")
-	if exitOf(err) != ExitResolution || !strings.Contains(err.Error(), "slot 'w9' is not in the pool") {
+	if exitOf(err) != exitcode.ExitResolution || !strings.Contains(err.Error(), "slot 'w9' is not in the pool") {
 		t.Errorf("unknown slot: %v", err)
 	}
 	_, _, err = acc.Assign(bg, newProject(t, acctConfig), "w1", "alpha")
-	if exitOf(err) != ExitResolution || !strings.Contains(err.Error(), "no worker pool") {
+	if exitOf(err) != exitcode.ExitResolution || !strings.Contains(err.Error(), "no worker pool") {
 		t.Errorf("no registry: %v", err)
 	}
 }
@@ -209,7 +210,7 @@ func TestAccountAssignWithEveryAccountCoolingIsRefused(t *testing.T) {
 		return ""
 	}}
 	_, _, err := acc.Assign(bg, dir, "w1", "")
-	if we, ok := err.(*Error); !ok || we.Exit != ExitRefused {
+	if we, ok := err.(*exitcode.Error); !ok || we.Exit != exitcode.ExitRefused {
 		t.Errorf("err = %v, want exit 4", err)
 	}
 }

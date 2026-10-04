@@ -12,6 +12,7 @@ package round
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -494,7 +495,7 @@ func firstNonEmpty(a, b string) string {
 func (e Env) worktrees(ctx context.Context, root string) ([]worktree, error) {
 	out, errOut, code, err := e.Git(ctx, root, "worktree", "list", "--porcelain")
 	if err != nil || code != 0 {
-		return nil, &worker.Error{Exit: worker.ExitUnavailable, Message: "git worktree list failed: " + strings.TrimSpace(errOut)}
+		return nil, &exitcode.Error{Exit: exitcode.ExitUnavailable, Message: "git worktree list failed: " + strings.TrimSpace(errOut)}
 	}
 	dir := filepath.Join(root, ".worktrees")
 	var wts []worktree

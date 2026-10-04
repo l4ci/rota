@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"strings"
 	"time"
@@ -77,12 +78,12 @@ func roundWatch(fs *flag.FlagSet) RunFunc {
 				// The timeout covers one whole classification (its settle gap),
 				// or a wait that ends mid-capture would never see a slot.
 				res, err := wenv.Wait(ctx, root, worker.WaitOpts{Timeout: d + secs(*settle) + 2*time.Second, Settle: secs(*settle), Lines: *lines})
-				var we *worker.Error
-				if errors.As(err, &we) && we.Exit == worker.ExitResolution {
+				var we *exitcode.Error
+				if errors.As(err, &we) && we.Exit == exitcode.ExitResolution {
 					return nil, roundwatch.ErrNothingToWatch
 				}
 				if err != nil {
-					return nil, fromWorker(err)
+					return nil, err
 				}
 				if res.TimedOut {
 					return nil, nil

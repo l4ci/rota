@@ -3,6 +3,7 @@ package round
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/exitcode"
 	"path/filepath"
 	"strings"
 
@@ -172,7 +173,7 @@ func scopeSet(root string, items []backlog.Item, held map[string]bool, scope str
 	case roundcfg.ScopeOpen:
 		chosen = pick(func(backlog.Item) bool { return true })
 	default:
-		return nil, &worker.Error{Exit: worker.ExitUsage, Message: "scope must be slate, milestone, next or open"}
+		return nil, &exitcode.Error{Exit: exitcode.ExitUsage, Message: "scope must be slate, milestone, next or open"}
 	}
 	return chosen, nil
 }

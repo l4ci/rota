@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"strings"
 
@@ -14,7 +15,6 @@ import (
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundlease"
-	"github.com/l4ci/rota/internal/worker"
 	"path/filepath"
 )
 
@@ -160,8 +160,8 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 			c.Warn("%s", w)
 		}
 		if err != nil {
-			var we *worker.Error
-			if errors.As(err, &we) && we.Exit == worker.ExitRefused {
+			var we *exitcode.Error
+			if errors.As(err, &we) && we.Exit == exitcode.ExitRefused {
 				if held, ok := we.Data.(*roundlease.HeldError); ok {
 					d := jsonx.NewObject()
 					d.Set("blockedBy", "lease held")
@@ -170,7 +170,7 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 					return Result{Data: d}, &Error{Exit: ExitRefused, Message: we.Message}
 				}
 			}
-			return Result{}, fromWorker(err)
+			return Result{}, err
 		}
 		// Start has just recorded the round's host (C8): rebuild the env so the
 		// drift count asks that host, not the guess made before it existed.

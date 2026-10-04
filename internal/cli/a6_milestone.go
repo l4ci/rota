@@ -46,7 +46,7 @@ func milestoneAdd(fs *flag.FlagSet) RunFunc {
 		}
 		id, err := ms.Add(root, *title, *summary, *depends)
 		if err != nil {
-			return Result{}, fromArtifact(err)
+			return Result{}, err
 		}
 		d := jsonx.NewObject()
 		d.Set("id", id)
@@ -109,7 +109,7 @@ func runMilestoneShow(c *Ctx, args []string) (Result, error) {
 	}
 	body, err := ms.Show(root, id)
 	if err != nil {
-		return Result{}, fromArtifact(err)
+		return Result{}, err
 	}
 	d := jsonx.NewObject()
 	d.Set("id", id)
@@ -140,7 +140,7 @@ func milestonePut(fs *flag.FlagSet) RunFunc {
 		}
 		changed, err := ms.Put(root, id, text)
 		if err != nil {
-			return Result{Data: blocked(err, "id mismatch"), Text: ""}, fromArtifact(err)
+			return Result{Data: blocked(err, "id mismatch"), Text: ""}, err
 		}
 		d := jsonx.NewObject()
 		d.Set("id", id)
@@ -167,7 +167,7 @@ func milestoneOverview(fs *flag.FlagSet) RunFunc {
 		}
 		changed, err := ms.SetOverview(root, text)
 		if err != nil {
-			return Result{Data: blocked(err, "heading in body"), Text: ""}, fromArtifact(err)
+			return Result{Data: blocked(err, "heading in body"), Text: ""}, err
 		}
 		d := jsonx.NewObject()
 		d.Set("changed", changed)
@@ -205,7 +205,7 @@ func milestoneStatus(fs *flag.FlagSet) RunFunc {
 		}
 		changed, err := ms.SetStatus(root, id, *to)
 		if err != nil {
-			return Result{}, fromArtifact(err)
+			return Result{}, err
 		}
 		d := jsonx.NewObject()
 		d.Set("id", id)
@@ -256,7 +256,7 @@ func runMilestoneIndex(c *Ctx, args []string) (Result, error) {
 	}
 	changed, err := ms.Index(root)
 	if err != nil {
-		return Result{}, fromArtifact(err)
+		return Result{}, err
 	}
 	d := jsonx.NewObject()
 	d.Set("changed", changed)

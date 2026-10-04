@@ -3,6 +3,7 @@ package round
 import (
 	"context"
 	"errors"
+	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"path/filepath"
 	"strings"
@@ -205,8 +206,8 @@ func TestAssignRefusals(t *testing.T) {
 	if _, err := f.assign("12", "ben", func(o *AssignOpts) { o.Settings.Roster = []string{"zed"} }); err == nil {
 		t.Error("an agent outside the roster must be refused")
 	}
-	var we *worker.Error
-	if _, err := f.assign("12", "zed", nil); !errors.As(err, &we) || we.Exit != worker.ExitUsage {
+	var we *exitcode.Error
+	if _, err := f.assign("12", "zed", nil); !errors.As(err, &we) || we.Exit != exitcode.ExitUsage {
 		t.Errorf("--agent outside the roster is usage: %v", err)
 	}
 
@@ -405,8 +406,8 @@ func TestAssignStandardTierFollowsModelsWorker(t *testing.T) {
 
 func TestAssignAboveDefaultNeedsAReasonAndRecordsIt(t *testing.T) {
 	f := newAssignFixture(t)
-	var we *worker.Error
-	if _, err := f.assign("12", "ben", func(o *AssignOpts) { o.Tier = "heavy" }); !errors.As(err, &we) || we.Exit != worker.ExitUsage {
+	var we *exitcode.Error
+	if _, err := f.assign("12", "ben", func(o *AssignOpts) { o.Tier = "heavy" }); !errors.As(err, &we) || we.Exit != exitcode.ExitUsage {
 		t.Fatalf("heavy above standard needs a reason: %v", err)
 	}
 	if len(f.be.claims) != 0 {
@@ -434,12 +435,12 @@ func TestAssignBelowDefaultNeedsNoReason(t *testing.T) {
 
 func TestAssignRejectsUnknownTierAndKind(t *testing.T) {
 	f := newAssignFixture(t)
-	var we *worker.Error
+	var we *exitcode.Error
 	for name, mod := range map[string]func(*AssignOpts){
 		"tier": func(o *AssignOpts) { o.Tier = "ultra" },
 		"kind": func(o *AssignOpts) { o.Kind = "gemini" },
 	} {
-		if _, err := f.assign("12", "ben", mod); !errors.As(err, &we) || we.Exit != worker.ExitUsage {
+		if _, err := f.assign("12", "ben", mod); !errors.As(err, &we) || we.Exit != exitcode.ExitUsage {
 			t.Errorf("%s: %v", name, err)
 		}
 	}
@@ -513,8 +514,8 @@ func TestAssignCodexResolvesAndStarts(t *testing.T) {
 	worker.Update(g.root, slotsDefault(), func(doc *jsonx.Object) {
 		(worker.Registry{Doc: doc}).Slot("ben").Set("kind", "codex")
 	})
-	var we *worker.Error
-	if _, err := g.assign("12", "ben", nil); !errors.As(err, &we) || we.Exit != worker.ExitUnavailable || !strings.Contains(we.Hint, "codex login") {
+	var we *exitcode.Error
+	if _, err := g.assign("12", "ben", nil); !errors.As(err, &we) || we.Exit != exitcode.ExitUnavailable || !strings.Contains(we.Hint, "codex login") {
 		t.Fatalf("the recorded kind is the default, and an unlogged slot is exit 5: %v", err)
 	}
 }
@@ -559,12 +560,12 @@ func TestAssignCodexPreflightRefusesBeforeMarking(t *testing.T) {
 		by     string
 		hint   string
 	}{
-		"no codex":      {rig: codexRig{noCodex: true}, exit: worker.ExitUnavailable},
+		"no codex":      {rig: codexRig{noCodex: true}, exit: exitcode.ExitUnavailable},
 		"old codex":     {rig: codexRig{version: "codex-cli 0.158.9\n", loggedIn: true}, by: BlockCodexVersion},
 		"new codex":     {rig: codexRig{version: "codex-cli 0.160.0\n", loggedIn: true}, by: BlockCodexVersion},
 		"unreadable":    {rig: codexRig{version: "something else\n", loggedIn: true}, by: BlockCodexVersion},
-		"not logged in": {rig: codexRig{version: "codex-cli 0.159.2\n"}, exit: worker.ExitUnavailable, hint: "codex login"},
-		"tmux":          {rig: codexRig{version: "codex-cli 0.159.2\n", loggedIn: true}, cfg: `{"round":{"tiers":{"codex":{"light":"a","standard":"b","heavy":"c"}}}}`, exit: worker.ExitUnavailable},
+		"not logged in": {rig: codexRig{version: "codex-cli 0.159.2\n"}, exit: exitcode.ExitUnavailable, hint: "codex login"},
+		"tmux":          {rig: codexRig{version: "codex-cli 0.159.2\n", loggedIn: true}, cfg: `{"round":{"tiers":{"codex":{"light":"a","standard":"b","heavy":"c"}}}}`, exit: exitcode.ExitUnavailable},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -575,7 +576,7 @@ func TestAssignCodexPreflightRefusesBeforeMarking(t *testing.T) {
 			f.config(t, c.cfg)
 			c.rig.install(f)
 			_, err := f.assign("12", "ben", func(o *AssignOpts) { o.Kind = "codex"; o.AcceptCodexVersion = c.accept })
-			var we *worker.Error
+			var we *exitcode.Error
 			switch {
 			case c.by != "":
 				if blockedBy(t, err) != c.by {

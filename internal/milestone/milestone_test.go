@@ -2,6 +2,7 @@ package milestone
 
 import (
 	"errors"
+	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -9,12 +10,10 @@ import (
 	"strings"
 	"sync"
 	"testing"
-
-	"github.com/l4ci/rota/internal/artifact"
 )
 
 func exitOf(err error) int {
-	var ae *artifact.Error
+	var ae *exitcode.Error
 	if errors.As(err, &ae) {
 		return ae.Exit
 	}

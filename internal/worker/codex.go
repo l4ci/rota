@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"path/filepath"
 	"strings"
@@ -52,7 +53,7 @@ func codexCommand(root, model string) (string, error) {
 	if model == "" {
 		if custom {
 			if strings.Contains(cmd, ModelPlaceholder) {
-				return "", fail(ExitUsage, "work.codexCommand holds {model} but no model was chosen: pass a tier model (round assign) or drop the placeholder")
+				return "", fail(exitcode.ExitUsage, "work.codexCommand holds {model} but no model was chosen: pass a tier model (round assign) or drop the placeholder")
 			}
 			return cmd, nil
 		}
@@ -109,7 +110,7 @@ func CodexResume(cmd string) (string, error) {
 func CommonDir(ctx context.Context, git GitFunc, root string) (string, error) {
 	out, errOut, code, err := git(ctx, root, "rev-parse", "--git-common-dir")
 	if err != nil || code != 0 {
-		return "", fail(ExitUnavailable, "git rev-parse --git-common-dir failed: "+strings.TrimSpace(errOut))
+		return "", fail(exitcode.ExitUnavailable, "git rev-parse --git-common-dir failed: "+strings.TrimSpace(errOut))
 	}
 	p := strings.TrimSpace(out)
 	if !filepath.IsAbs(p) {
@@ -135,8 +136,8 @@ type CodexSetup struct {
 	Warnings []string
 }
 
-func codexRefusal(by, msg string) *Error {
-	e := fail(ExitRefused, msg)
+func codexRefusal(by, msg string) *exitcode.Error {
+	e := fail(exitcode.ExitRefused, msg)
 	e.Data = BlockData{BlockedBy: by}
 	return e
 }
@@ -152,14 +153,14 @@ func (e Env) CodexPreflight(ctx context.Context, root, slot string, accept bool)
 	var set CodexSetup
 	bin, err := e.LookPath("codex")
 	if err != nil {
-		return set, fail(ExitUnavailable, "codex is not installed (codex workers need codex-cli "+doctor.CodexRange+")")
+		return set, fail(exitcode.ExitUnavailable, "codex is not installed (codex workers need codex-cli "+doctor.CodexRange+")")
 	}
 	if dispatchKind(root) != "herdr" {
-		return set, fail(ExitUnavailable, "codex workers need work.dispatch=herdr")
+		return set, fail(exitcode.ExitUnavailable, "codex workers need work.dispatch=herdr")
 	}
 	herdr, err := e.LookPath("herdr")
 	if err != nil {
-		return set, fail(ExitUnavailable, "herdr is not installed")
+		return set, fail(exitcode.ExitUnavailable, "herdr is not installed")
 	}
 
 	cd, err := CommonDir(ctx, e.Git, root)
@@ -172,7 +173,7 @@ func (e Env) CodexPreflight(ctx context.Context, root, slot string, accept bool)
 	// The home exists before the first codex call, so even --version runs
 	// under it and never under ~/.codex.
 	if err := os.MkdirAll(home, 0o700); err != nil {
-		return set, fail(ExitUnavailable, "cannot create the codex home "+home+": "+err.Error())
+		return set, fail(exitcode.ExitUnavailable, "cannot create the codex home "+home+": "+err.Error())
 	}
 	r, err := e.Run(ctx, bin, []string{"--version"}, []string{"CODEX_HOME=" + home})
 	v, ok := doctor.ParseCodexVersion(r.Stdout + "\n" + r.Stderr)
@@ -200,7 +201,7 @@ func (e Env) CodexPreflight(ctx context.Context, root, slot string, accept bool)
 	henv := []string{"CODEX_HOME=" + home}
 	st, err := e.Run(ctx, herdr, []string{"integration", "status"}, henv)
 	if err != nil {
-		return set, fail(ExitUnavailable, "herdr integration status could not run: "+err.Error())
+		return set, fail(exitcode.ExitUnavailable, "herdr integration status could not run: "+err.Error())
 	}
 	if st.ExitCode != 0 || doctor.ParseIntegration(st.Stdout, "codex") != "current" {
 		in, err := e.Run(ctx, herdr, []string{"integration", "install", "codex"}, henv)
@@ -209,7 +210,7 @@ func (e Env) CodexPreflight(ctx context.Context, root, slot string, accept bool)
 			if err != nil {
 				msg = err.Error()
 			}
-			x := fail(ExitUnavailable, "herdr integration install codex failed for slot '"+slot+"': "+msg)
+			x := fail(exitcode.ExitUnavailable, "herdr integration install codex failed for slot '"+slot+"': "+msg)
 			x.Hint = "CODEX_HOME=" + home + " herdr integration install codex"
 			return set, x
 		}
@@ -217,7 +218,7 @@ func (e Env) CodexPreflight(ctx context.Context, root, slot string, accept bool)
 
 	lg, err := e.Run(ctx, bin, []string{"login", "status"}, henv)
 	if err != nil || lg.ExitCode != 0 {
-		x := fail(ExitUnavailable, fmt.Sprintf("slot '%s' is not logged in to Codex (CODEX_HOME=%s)", slot, home))
+		x := fail(exitcode.ExitUnavailable, fmt.Sprintf("slot '%s' is not logged in to Codex (CODEX_HOME=%s)", slot, home))
 		x.Hint = "CODEX_HOME=" + home + " codex login"
 		return set, x
 	}
@@ -229,27 +230,27 @@ func (e Env) CodexPreflight(ctx context.Context, root, slot string, accept bool)
 // and the slot's worktree trusted. An existing config.toml is never touched.
 func (e Env) ensureCodexHome(root, slot, home string) error {
 	if err := os.MkdirAll(home, 0o700); err != nil {
-		return fail(ExitUnavailable, "cannot create the codex home "+home+": "+err.Error())
+		return fail(exitcode.ExitUnavailable, "cannot create the codex home "+home+": "+err.Error())
 	}
 	cfgPath := filepath.Join(home, "config.toml")
 	if _, err := os.Stat(cfgPath); err == nil {
 		return nil
 	} else if !os.IsNotExist(err) {
-		return fail(ExitUnavailable, "cannot read "+cfgPath+": "+err.Error())
+		return fail(exitcode.ExitUnavailable, "cannot read "+cfgPath+": "+err.Error())
 	}
 	wt := ""
 	if s := LoadRegistry(root).Slot(slot); s != nil {
 		wt = Str(s, "worktree")
 	}
 	if wt == "" {
-		return fail(ExitResolution, fmt.Sprintf("slot '%s' has no worktree to trust", slot))
+		return fail(exitcode.ExitResolution, fmt.Sprintf("slot '%s' has no worktree to trust", slot))
 	}
 	if abs, err := filepath.Abs(wt); err == nil {
 		wt = abs
 	}
 	body := "check_for_update_on_startup = false\n\n[projects." + tomlString(wt) + "]\ntrust_level = \"trusted\"\n"
 	if err := os.WriteFile(cfgPath, []byte(body), 0o600); err != nil {
-		return fail(ExitUnavailable, "cannot write "+cfgPath+": "+err.Error())
+		return fail(exitcode.ExitUnavailable, "cannot write "+cfgPath+": "+err.Error())
 	}
 	return nil
 }

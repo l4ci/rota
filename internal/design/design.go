@@ -3,6 +3,7 @@
 package design
 
 import (
+	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -25,15 +26,15 @@ func Type(id string) string { return id[:1] }
 
 func check(id string) error {
 	if !ValidID(id) {
-		return artifact.Errf(artifact.ExitUsage, "ID must match [BFT]\\d{2,} (e.g. B07, F03, T11); designs are per-item, not per-slice or per-milestone, got %q", id)
+		return exitcode.Errf(exitcode.ExitUsage, "ID must match [BFT]\\d{2,} (e.g. B07, F03, T11); designs are per-item, not per-slice or per-milestone, got %q", id)
 	}
 	return nil
 }
 
 func path(root, id string) string { return filepath.Join(root, ".rota", "designs", id+".md") }
 
-func notFound(root, id string) *artifact.Error {
-	return artifact.Errf(artifact.ExitResolution, "design %s not found (.rota/designs/%s.md)", id, id)
+func notFound(root, id string) *exitcode.Error {
+	return exitcode.Errf(exitcode.ExitResolution, "design %s not found (.rota/designs/%s.md)", id, id)
 }
 
 // Add creates the design stub; an existing design is exit 4.
@@ -44,7 +45,7 @@ func Add(root, id, title string) error {
 	p := path(root, id)
 	return fsio.Locked(p, fsio.LockTimeout, func() error {
 		if _, err := os.Stat(p); err == nil {
-			return artifact.Errf(artifact.ExitRefused, ".rota/designs/%s.md already exists", id)
+			return exitcode.Errf(exitcode.ExitRefused, ".rota/designs/%s.md already exists", id)
 		}
 		stub := stubText(id, title, time.Now().Format("2006-01-02"))
 		return fsio.WriteFileAtomic(p, []byte(stub))
@@ -138,7 +139,7 @@ func Amend(root, id, heading, mode, text string) (changed bool, err error) {
 		return
 	}
 	if mode != "append" && mode != "replace" {
-		return false, artifact.Errf(artifact.ExitUsage, "mode must be 'append' or 'replace', got %q", mode)
+		return false, exitcode.Errf(exitcode.ExitUsage, "mode must be 'append' or 'replace', got %q", mode)
 	}
 	p := path(root, id)
 	if _, serr := os.Stat(p); serr != nil {
@@ -152,7 +153,7 @@ func Amend(root, id, heading, mode, text string) (changed bool, err error) {
 		}
 		_, _, ok := section.Find(content, heading)
 		if !ok {
-			return artifact.Errf(artifact.ExitResolution, "section '## %s' not found in .rota/designs/%s.md", heading, id)
+			return exitcode.Errf(exitcode.ExitResolution, "section '## %s' not found in .rota/designs/%s.md", heading, id)
 		}
 		var updated string
 		if mode == "replace" {

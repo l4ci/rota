@@ -3,6 +3,7 @@ package round
 import (
 	"context"
 	"errors"
+	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -244,7 +245,7 @@ func hasKind(l []string, k string) bool {
 }
 
 func exitOf(err error) int {
-	var we *worker.Error
+	var we *exitcode.Error
 	if errors.As(err, &we) {
 		return we.Exit
 	}
@@ -296,7 +297,7 @@ func TestParkFailedPushLeavesTheSlotAsFound(t *testing.T) {
 	sh(t, f.root, "remote", "set-url", "origin", filepath.Join(t.TempDir(), "gone.git"))
 
 	_, err := f.env.Park(bg, f.root, "ben", "return")
-	if exitOf(err) != worker.ExitUnavailable {
+	if exitOf(err) != exitcode.ExitUnavailable {
 		t.Fatalf("a failed push is exit 5: %v", err)
 	}
 	if cur := gitIn(t, f.wt("ben"), "symbolic-ref", "--short", "HEAD"); cur != branch {
@@ -319,7 +320,7 @@ func TestParkRejectedSalvageCommitLeavesTheSlotAsFound(t *testing.T) {
 	os.WriteFile(filepath.Join(f.wt("ben"), "dirty.txt"), []byte("wip"), 0o644)
 
 	_, err := f.env.Park(bg, f.root, "ben", "return")
-	if exitOf(err) != worker.ExitUnavailable {
+	if exitOf(err) != exitcode.ExitUnavailable {
 		t.Fatalf("a rejected commit is exit 5: %v", err)
 	}
 	if cur := gitIn(t, f.wt("ben"), "symbolic-ref", "--short", "HEAD"); cur != branch {
@@ -612,13 +613,13 @@ func TestReturnThenAssignPicksTheItemUpAgain(t *testing.T) {
 
 func TestReturnRefusals(t *testing.T) {
 	f := newMoveFx(t)
-	if _, err := f.ret("ben", "  ", nil); exitOf(err) != worker.ExitUsage {
+	if _, err := f.ret("ben", "  ", nil); exitOf(err) != exitcode.ExitUsage {
 		t.Errorf("empty reason is usage: %v", err)
 	}
-	if _, err := f.ret("zed", "x", nil); exitOf(err) != worker.ExitResolution {
+	if _, err := f.ret("zed", "x", nil); exitOf(err) != exitcode.ExitResolution {
 		t.Errorf("unknown slot: %v", err)
 	}
-	if _, err := f.ret("dana", "x", nil); exitOf(err) != worker.ExitResolution {
+	if _, err := f.ret("dana", "x", nil); exitOf(err) != exitcode.ExitResolution {
 		t.Errorf("a slot holding no issue: %v", err)
 	}
 	_, err := f.ret("ben", "x", func(o *ReturnOpts) { o.InSlot, o.HolderPID = false, 999 })
@@ -637,7 +638,7 @@ func TestReturnRefusals(t *testing.T) {
 func TestReturnRepeatsAfterAFailureAndDoesNotCommentTwice(t *testing.T) {
 	f := newMoveFx(t)
 	f.be.failState = errors.New("tracker down")
-	if _, err := f.ret("ben", "stuck", nil); exitOf(err) != worker.ExitUnavailable {
+	if _, err := f.ret("ben", "stuck", nil); exitOf(err) != exitcode.ExitUnavailable {
 		t.Fatalf("a tracker failure is exit 5: %v", err)
 	}
 	if s := f.slot("ben"); worker.Str(s, "task") != "12" {
@@ -663,7 +664,7 @@ func TestReturnRepeatsAfterAFailureAndDoesNotCommentTwice(t *testing.T) {
 func TestReturnFailedPushLeavesEverythingAsFound(t *testing.T) {
 	f := newMoveFx(t)
 	sh(t, f.root, "remote", "set-url", "origin", filepath.Join(t.TempDir(), "gone.git"))
-	if _, err := f.ret("ben", "x", nil); exitOf(err) != worker.ExitUnavailable {
+	if _, err := f.ret("ben", "x", nil); exitOf(err) != exitcode.ExitUnavailable {
 		t.Fatalf("%v", err)
 	}
 	if f.be.claims["12"] != "ben@1" || len(f.be.comments["12"]) != 1 { // only assign's own note
@@ -719,16 +720,16 @@ func TestTransferToASlotChecksOutTheExistingBranch(t *testing.T) {
 
 func TestTransferRefusals(t *testing.T) {
 	f := newMoveFx(t)
-	if _, err := f.transfer("12", "", nil); exitOf(err) != worker.ExitUsage {
+	if _, err := f.transfer("12", "", nil); exitOf(err) != exitcode.ExitUsage {
 		t.Errorf("empty --to: %v", err)
 	}
-	if _, err := f.transfer("12", "zed", nil); exitOf(err) != worker.ExitUsage {
+	if _, err := f.transfer("12", "zed", nil); exitOf(err) != exitcode.ExitUsage {
 		t.Errorf("--to outside the roster: %v", err)
 	}
-	if _, err := f.transfer("99", "dana", nil); exitOf(err) != worker.ExitResolution {
+	if _, err := f.transfer("99", "dana", nil); exitOf(err) != exitcode.ExitResolution {
 		t.Errorf("unknown issue: %v", err)
 	}
-	if _, err := f.transfer("13", "dana", nil); exitOf(err) != worker.ExitResolution {
+	if _, err := f.transfer("13", "dana", nil); exitOf(err) != exitcode.ExitResolution {
 		t.Errorf("no slot holds 13: %v", err)
 	}
 	if _, err := f.transfer("12", "dana", func(o *TransferOpts) { o.HolderPID = 999 }); blockedBy(t, err) != BlockNoRound {
@@ -941,7 +942,7 @@ func TestReclaimIdleSlotIsANoOp(t *testing.T) {
 
 func TestReclaimRefusals(t *testing.T) {
 	f := newMoveFx(t)
-	if _, err := f.reclaim("zed", nil); exitOf(err) != worker.ExitResolution {
+	if _, err := f.reclaim("zed", nil); exitOf(err) != exitcode.ExitResolution {
 		t.Errorf("unknown slot: %v", err)
 	}
 	if _, err := f.reclaim("ben", func(o *ReclaimOpts) { o.HolderPID = 999 }); blockedBy(t, err) != BlockNoRound {

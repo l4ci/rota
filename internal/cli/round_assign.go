@@ -105,7 +105,7 @@ func roundAssign(fs *flag.FlagSet) RunFunc {
 			f.Set("changed", false)
 			return Result{Data: f}, &Error{Exit: ExitRefused, Message: blk.Msg}
 		case err != nil:
-			_, ferr := a4Fail(fromWorker(err))
+			_, ferr := a4Fail(err)
 			f := jsonx.NewObject()
 			f.Set("changed", res.Changed)
 			return Result{Data: f}, ferr

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"errors"
+	"github.com/l4ci/rota/internal/exitcode"
 	"time"
 
 	"github.com/l4ci/rota/internal/artifact"
@@ -86,7 +87,7 @@ func milestonePutIssue(c *Ctx, id, file string) (Result, error) {
 	}
 	if err := be.MilestonePut(id, text); err != nil {
 		if errors.Is(err, backlog.ErrMilestoneText) {
-			return Result{Data: blocked(&artifact.Error{Exit: artifact.ExitRefused}, "id mismatch")}, Refused("%s", err.Error())
+			return Result{Data: blocked(&exitcode.Error{Exit: exitcode.ExitRefused}, "id mismatch")}, Refused("%s", err.Error())
 		}
 		return a4Fail(err)
 	}
@@ -160,7 +161,7 @@ func indexIssue(c *Ctx, be milestoneBackend) (bool, error) {
 		return false, err
 	}
 	changed, err := ms.IndexFrom(root, entriesOf(rows), true)
-	return changed, fromArtifact(err)
+	return changed, err
 }
 
 func milestoneIndexIssue(c *Ctx) (Result, error) {

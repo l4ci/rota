@@ -3,6 +3,7 @@ package round
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/exitcode"
 	"strings"
 
 	"github.com/l4ci/rota/internal/jsonx"
@@ -56,7 +57,7 @@ func (e Env) queuePR(ctx context.Context, root, name string) error {
 	reg := worker.LoadRegistry(root)
 	s := reg.Slot(name)
 	if s == nil {
-		return &worker.Error{Exit: worker.ExitResolution, Message: fmt.Sprintf("slot %s is not in the pool", name)}
+		return &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("slot %s is not in the pool", name)}
 	}
 	if ok, why := e.parkable(ctx, s); !ok {
 		return blocked(BlockSlotBusy, "%s", busyMsg(name, slotIssue(s), why))

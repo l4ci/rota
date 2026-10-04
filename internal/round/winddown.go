@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/exitcode"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -73,7 +74,7 @@ func (e Env) WindDown(ctx context.Context, root string, be Board, o WindDownOpts
 	}
 	holder := le.Discover(o.HolderPID, o.Getenv)
 	if (st != roundlease.Live && st != roundlease.Foreign) || !holder.SameAs(lease, le.Host) {
-		return res, &worker.Error{Exit: worker.ExitResolution, Message: "this process holds no round lease: nothing to wind down", Hint: "run it from the orchestrator that ran rota round start"}
+		return res, &exitcode.Error{Exit: exitcode.ExitResolution, Message: "this process holds no round lease: nothing to wind down", Hint: "run it from the orchestrator that ran rota round start"}
 	}
 	res.Round = lease.Round
 
@@ -157,9 +158,9 @@ func (e Env) WindDown(ctx context.Context, root string, be Board, o WindDownOpts
 			}
 		}
 		rr, rerr := w.ResetTo(root, name, "", park, false)
-		var we *worker.Error
+		var we *exitcode.Error
 		switch {
-		case errors.As(rerr, &we) && we.Exit == worker.ExitRefused:
+		case errors.As(rerr, &we) && we.Exit == exitcode.ExitRefused:
 			so.Outcome, so.Dirty, so.Unmerged = OutcomeRetained, rr.Dirty, rr.Unmerged
 			res.Retained = true
 		case rerr != nil:
@@ -245,18 +246,18 @@ func verifyCommands(root string) []string {
 func (e Env) requireBase(ctx context.Context, root string) error {
 	cur, _, code, err := e.Git(ctx, root, "rev-parse", "--abbrev-ref", "HEAD")
 	if err != nil || code != 0 {
-		return &worker.Error{Exit: worker.ExitUnavailable, Message: "git rev-parse failed in " + root}
+		return &exitcode.Error{Exit: exitcode.ExitUnavailable, Message: "git rev-parse failed in " + root}
 	}
 	if strings.TrimSpace(cur) != e.Base {
-		return &worker.Error{Exit: worker.ExitResolution, Message: fmt.Sprintf("the project root is on %s, not the base %s", strings.TrimSpace(cur), e.Base),
+		return &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("the project root is on %s, not the base %s", strings.TrimSpace(cur), e.Base),
 			Hint: "wind-down verifies the base: check it out in the project root first"}
 	}
 	out, _, code, err := e.Git(ctx, root, "status", "--porcelain", "--untracked-files=no")
 	if err != nil || code != 0 {
-		return &worker.Error{Exit: worker.ExitUnavailable, Message: "git status failed in " + root}
+		return &exitcode.Error{Exit: exitcode.ExitUnavailable, Message: "git status failed in " + root}
 	}
 	if strings.TrimSpace(out) != "" {
-		return &worker.Error{Exit: worker.ExitResolution, Message: "the project root has uncommitted changes to tracked files", Hint: "commit or stash them: wind-down verifies the base as it is"}
+		return &exitcode.Error{Exit: exitcode.ExitResolution, Message: "the project root has uncommitted changes to tracked files", Hint: "commit or stash them: wind-down verifies the base as it is"}
 	}
 	return nil
 }
