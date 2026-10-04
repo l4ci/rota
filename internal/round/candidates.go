@@ -110,7 +110,8 @@ func scopeSet(root string, items []backlog.Item, held map[string]bool, scope str
 	pick := func(in func(backlog.Item) bool) []backlog.Item {
 		var out []backlog.Item
 		for _, it := range items {
-			if !it.Closed && !held[it.ID] && in(it) {
+			// A review item is the round's own work: every scope offers it.
+			if !it.Closed && !held[it.ID] && (in(it) || IsReviewTitle(it.Title)) {
 				out = append(out, it)
 			}
 		}

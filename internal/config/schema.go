@@ -112,6 +112,8 @@ var Keys = []Key{
 	{"round.tiers.codex.standard", "", false},
 	{"round.tiers.codex.heavy", "", false},
 	{"round.stallMinutes", json.Number("30"), false},
+	{"round.architectureEvery", json.Number("20"), false},
+	{"round.architectureAreas", []any{}, false},
 	{"issues.labels.needsHuman", "needs-human", false},
 	{"work.codexCommand", "", false}, // empty: DefaultCodexCommand in internal/worker
 

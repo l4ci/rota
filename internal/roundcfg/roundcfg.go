@@ -50,6 +50,12 @@ type Settings struct {
 	// StallMinutes is round.stallMinutes: how long a slot may make no progress
 	// before `round reconcile` calls it stalled; 0 turns the check off.
 	StallMinutes int
+	// ArchitectureEvery is round.architectureEvery: closed non-refactor items
+	// between architecture reviews; 0 turns the automatic review off.
+	// ArchitectureAreas is round.architectureAreas: the areas a review is
+	// split into; empty means the subsystem map, else one whole-repo review.
+	ArchitectureEvery int
+	ArchitectureAreas []string
 }
 
 // ValidTier reports whether s is a tier; ValidKind whether s is a harness kind.
@@ -134,6 +140,22 @@ func Load(root string) (Settings, error) {
 		return s, fmt.Errorf("round.stallMinutes must be a non-negative integer (got %v)", v)
 	}
 	s.StallMinutes = int(i)
+	v, err = config.Value(cfg, "round.architectureEvery")
+	if err != nil {
+		return s, err
+	}
+	n, ok = v.(interface{ Int64() (int64, error) })
+	if !ok {
+		return s, fmt.Errorf("round.architectureEvery must be a non-negative integer (got %v)", v)
+	}
+	i, err = n.Int64()
+	if err != nil || i < 0 {
+		return s, fmt.Errorf("round.architectureEvery must be a non-negative integer (got %v)", v)
+	}
+	s.ArchitectureEvery = int(i)
+	if s.ArchitectureAreas, err = list(cfg, "round.architectureAreas"); err != nil {
+		return s, err
+	}
 	return s, loadTiers(cfg, &s)
 }
 
