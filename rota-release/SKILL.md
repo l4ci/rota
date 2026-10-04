@@ -3,15 +3,6 @@ name: rota-release
 description: Cut a release — walk the project's per-project release checklist (`.rota/RELEASE.md`) as a pre-release gate, bump version (major/minor/patch), generate categorized release notes from commits since the last tag, prepend a section to CHANGELOG.md, create an annotated git tag, push, publish a release on GitHub or GitLab if origin is set, and offer to close any upstream issues still open for shipped items. Use on "release", "cut a release", "tag a release", "ship X.Y.Z".
 ---
 
-**Print the banner below verbatim before any other action — skip if dispatched as a subagent.** See `references/banner-preamble.md`.
-
-```
-════════════════════════════════════════════════════════════════════════
-  🏷️  rota-release  ·  bump version, tag, notes, CHANGELOG, publish
-  triggers: "release", "cut release", "ship X.Y.Z"  ·  pairs: rota-ship
-════════════════════════════════════════════════════════════════════════
-```
-
 # rota-release — Cut a Release
 
 ## Configuration
@@ -37,9 +28,8 @@ Run each check; stop with a one-liner on failure.
 3. **HEAD pushed** — `git rev-parse HEAD` vs `@{u}`. A release ships the local commits, so unpushed commits are part of it, not an error. Branch on `autonomy.level`:
    - `"auto"` or `"loop"` — count `git rev-list @{u}..HEAD --count`. Below `release.confirmLargePushCommits`: run `git push origin <current-branch>` silently and continue. At or above it, ask once whatever the autonomy: header `"Large push"`, *"<N> unpushed commits about to be pushed as part of this release. Continue?"*, options `Push and continue (Recommended)` / `Abort`.
    - `"off"` — header `"Unpushed"`, *"HEAD has unpushed commits. Push them as part of this release?"*, options `Push and continue (Recommended)` / `Abort`.
-   - Plain-text fallback: *"Push and continue, or abort?"*
 
-**Initialize task list.** Follow `references/task-list-init.md` — load `TaskCreate(…)` via `ToolSearch select:TaskCreate,TaskUpdate` if needed, then create one task per phase:
+Track these phases with the host's task tool if it has one.
 
 1. *Guard* — clean tree, on trunk, HEAD pushed (Step 1)
 2. *Project checklist* — walk `.rota/RELEASE.md` items as gates (Step 2)
@@ -56,7 +46,7 @@ Run each check; stop with a one-liner on failure.
 
 Per-project release steps (sibling version files, lockfiles, docs version refs, infra rollouts) live in `release.checklistPath`, tracked and shared with the team. The skill hardcodes none of them. Skip in `--dry-run`: print the parsed items and `DRY RUN — checklist walk skipped.`
 
-**File absent.** `autonomy.level` `"auto"`/`"loop"`: skip silently; never interrupt an unattended run to scaffold. `"off"`: header `"Checklist"`, *"No `<release.checklistPath>` found. Scaffold a starter checklist now, or continue without?"*, options `Scaffold starter (Recommended)` (write the template, let the user edit, re-read, walk it) / `Continue without` (summary says *"no project checklist"*) / `Abort`. Plain-text fallback: *"Scaffold checklist, continue without, or abort?"*
+**File absent.** `autonomy.level` `"auto"`/`"loop"`: skip silently; never interrupt an unattended run to scaffold. `"off"`: header `"Checklist"`, *"No `<release.checklistPath>` found. Scaffold a starter checklist now, or continue without?"*, options `Scaffold starter (Recommended)` (write the template, let the user edit, re-read, walk it) / `Continue without` (summary says *"no project checklist"*) / `Abort`.
 
 Starter template:
 
@@ -75,12 +65,12 @@ Each `- [ ]` line is a gate `/rota-release` walks before bumping the version. Ed
 
 **File present.** Every line matching `^\s*-\s+\[\s*\]\s+(.+)$` is a gate, in file order; `- [x]` lines are skipped. Zero gates: say *"Checklist has no open items — continuing."* For each gate:
 
-- `"off"` — ask: header `"Checklist"`, *"Checklist item: \<text\>. Done?"*, options `Yes, continue (Recommended)` / `Fix it now and continue` (pause, re-ask the same item) / `Skip this item` (record `skipped: <text>`) / `Abort release` (*"Release aborted at checklist item: \<text\>. Nothing written."*). Plain-text fallback: *"Done, fix now, skip, or abort?"*
+- `"off"` — ask: header `"Checklist"`, *"Checklist item: \<text\>. Done?"*, options `Yes, continue (Recommended)` / `Fix it now and continue` (pause, re-ask the same item) / `Skip this item` (record `skipped: <text>`) / `Abort release` (*"Release aborted at checklist item: \<text\>. Nothing written."*).
 - `"auto"`/`"loop"` — auto-acknowledge items not ending in `(manual)`; ask the `"off"` question for items that do, so sensitive items stay confirmed in unattended runs.
 
 ## Step 3 — Milestone Gate (issue mode)
 
-**Issue mode** (`backlog.backend: "issues"`; `references/issue-mode.md`): pick the milestone. `--milestone MNN` wins; else the single one from `rota milestone active`. Several active: `AskUserQuestion` (plain-text fallback: list the IDs); under `autonomy.level: "loop"`, stop unless exactly one is active. Then `rota release milestone-check <MNN> --json`.
+**Issue mode** (`backlog.backend: "issues"`; `references/issue-mode.md`): pick the milestone. `--milestone MNN` wins; else the single one from `rota milestone active`. Several active: `AskUserQuestion`; under `autonomy.level: "loop"`, stop unless exactly one is active. Then `rota release milestone-check <MNN> --json`.
 
 Exit 1 means blocked: show each `data.blocked` entry (open issues labelled `in-progress`, `needs-review` or `changes-requested`) and stop. `data.stillOpen` entries do not block; show them and continue. Other exits (2, 3, 4, 5, 6): stop and report the verb's message.
 
@@ -92,11 +82,11 @@ Exit 1 means blocked: show each `data.blocked` entry (open issues labelled `in-p
 
 Accept a bump arg if given: `major`, `minor`, `patch` or an explicit `X.Y.Z`.
 
-With no arg, get the previous tag (`git describe --tags --abbrev=0 2>/dev/null || true`; empty means full history, note it in the summary), run `rota release notes --from commits [--since <prev-tag>]` and read the bucket headings: `Breaking` recommends `major`, `New` recommends `minor`, otherwise `patch`. Ask: header `"Bump type"`, *"Current version: `<current>`. What bump type?"*, options `patch — <current> → <X.Y.Z+1>` / `minor — … → <X.Y+1.0>` / `major — … → <X+1.0.0>` (mark the recommended one) / `Explicit version` (exact string via Other) / `Abort`. Plain-text fallback: *"Bump type? (major / minor / patch / X.Y.Z / abort)"*
+With no arg, get the previous tag (`git describe --tags --abbrev=0 2>/dev/null || true`; empty means full history, note it in the summary), run `rota release notes --from commits [--since <prev-tag>]` and read the bucket headings: `Breaking` recommends `major`, `New` recommends `minor`, otherwise `patch`. Ask: header `"Bump type"`, *"Current version: `<current>`. What bump type?"*, options `patch — <current> → <X.Y.Z+1>` / `minor — … → <X.Y+1.0>` / `major — … → <X+1.0.0>` (mark the recommended one) / `Explicit version` (exact string via Other) / `Abort`.
 
 Compute the new version read-only: `rota release version --json --level <patch|minor|major>` (or `--to <X.Y.Z>`); `data.next` is `new_version`. An invalid or not-greater `--to` exits 1: surface it and stop.
 
-If `Breaking` commits were found but the user chose `patch` or `minor`, ask before continuing: header `"Escalate"`, *"Commits contain `BREAKING CHANGE:` footers but bump type is `<chosen>`. Escalate to major?"*, options `Escalate to major (Recommended)` / `Keep <chosen>` / `Abort`. Plain-text fallback names the Recommended default on ambiguity (`references/ask-user-question-fallback.md`).
+If `Breaking` commits were found but the user chose `patch` or `minor`, ask before continuing: header `"Escalate"`, *"Commits contain `BREAKING CHANGE:` footers but bump type is `<chosen>`. Escalate to major?"*, options `Escalate to major (Recommended)` / `Keep <chosen>` / `Abort`.
 
 ## Step 5 — Generate Release Notes
 
@@ -111,7 +101,7 @@ Notes ship to GitHub/GitLab and live in CHANGELOG.md. Before showing the draft, 
 
 ## Step 6 — Review Notes
 
-Show the full draft, then ask: header `"Notes"`, *"Release `v<new_version>` — notes look good? Yes pushes the tag and publishes the release."*, options `Looks good (Recommended)` / `Edit` (replacement text via Other replaces the draft verbatim; re-display it, one edit pass, no second prompt) / `Abort release` (*"Release aborted. Nothing written."*). Plain-text fallback: *"Proceed, edit, or abort?"*
+Show the full draft, then ask: header `"Notes"`, *"Release `v<new_version>` — notes look good? Yes pushes the tag and publishes the release."*, options `Looks good (Recommended)` / `Edit` (replacement text via Other replaces the draft verbatim; re-display it, one edit pass, no second prompt) / `Abort release` (*"Release aborted. Nothing written."*).
 
 This answer is the human approval for Steps 10 and 11. Keep it verbatim as `$APPROVAL` (the option label, or the replacement text's first line after Edit) for `--confirm-note`. Never auto-pick this question in any autonomy mode.
 
@@ -217,9 +207,6 @@ List skipped checklist items under `Skipped checklist items:` so the release rec
 
 ## References
 
-- [`references/banner-preamble.md`](references/banner-preamble.md) — Banner-print rule shared by every skill.
 - [`references/manual-gates.md`](references/manual-gates.md) — The manual-gate registry (`rota gate list`): gates the verbs enforce with `--confirm`, and the skill-only callouts.
-- [`references/task-list-init.md`](references/task-list-init.md) — Task-list init pattern.
 - [`references/issue-mode.md`](references/issue-mode.md) — Issue-mode milestones and release.
-- [`references/ask-user-question-fallback.md`](references/ask-user-question-fallback.md) — Plain-text fallback rule.
 - [`references/humanizing-prose.md`](references/humanizing-prose.md) — Self-audit for model-written notes.

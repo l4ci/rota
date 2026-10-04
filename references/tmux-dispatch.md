@@ -123,4 +123,3 @@ The two roles run at different trust levels, on purpose:
 
 - [`references/isolation-patterns.md`](isolation-patterns.md) — worktree patterns for the `subagent` backend; the tmux pool is managed by `rota worker pool` instead.
 - [`references/subagent-dispatch.md`](subagent-dispatch.md) — when to dispatch at all, and the brief shape both backends share.
-- [`references/ask-user-question-fallback.md`](ask-user-question-fallback.md) — mechanics for the escalation prompt in the relay flow.

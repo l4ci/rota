@@ -45,6 +45,4 @@ If `confirmBeforeExecute` is `true`, gate with `AskUserQuestion` per structural 
 
 Use the `preview` field on each option to show the interface signature + usage example — this is exactly the case that's worth a side-by-side comparison.
 
-Plain-text fallback: *"Which approach for `<friction point>`? (design 1 / 2 / 3 / 4)"*
-
 If `confirmBeforeExecute` is `false`: use the recommended approach and proceed.
