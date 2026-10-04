@@ -1,12 +1,14 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
 	"os"
 	"strings"
 
+	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/round"
@@ -71,6 +73,28 @@ func candidateLines(cs []round.Candidate) []string {
 		lines = append(lines, fmt.Sprintf("%s\t%s\t%s", c.ID, state, c.Title))
 	}
 	return lines
+}
+
+// emptyNote adds the reason and next command to d and to lines when the scope
+// offers no candidates, and says when a milestone scope fell back to every
+// open item. An empty list is never silent.
+func emptyNote(ctx context.Context, d *jsonx.Object, lines []string, env round.Env, root string, be backlog.Backend, scope string, slate []string, cands []round.Candidate) []string {
+	if round.FellBack(root, scope) {
+		d.Set("fellBack", true)
+		lines = append(lines, fmt.Sprintf("note\tno unfinished milestone: scope %s offers every open item", scope))
+	}
+	if len(cands) > 0 {
+		return lines
+	}
+	why, err := env.WhyEmpty(ctx, root, be, scope, slate)
+	if err != nil {
+		return lines
+	}
+	e := jsonx.NewObject()
+	e.Set("reason", why.Reason)
+	e.Set("next", why.Next)
+	d.Set("empty", e)
+	return append(lines, fmt.Sprintf("no candidates: %s\tnext: %s", why.Reason, why.Next))
 }
 
 func leaseData(l round.Lease, st round.LeaseState) *jsonx.Object {
@@ -184,6 +208,7 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 			lines = append(lines, slotLine(s))
 		}
 		lines = append(lines, candidateLines(cands)...)
+		lines = emptyNote(ctx, d, lines, env, root, be, st.Scope, st.Slate, cands)
 		return Result{Data: d, Text: strings.Join(lines, "\n")}, nil
 	}
 }
@@ -218,13 +243,15 @@ func roundCandidates(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return a4Fail(err)
 		}
-		cands, err := roundEnv(ctx, root).Candidates(ctx, root, be, round.CandidateOpts{Scope: sc, Slate: slate, Shared: set.SharedPaths})
+		env := roundEnv(ctx, root)
+		cands, err := env.Candidates(ctx, root, be, round.CandidateOpts{Scope: sc, Slate: slate, Shared: set.SharedPaths})
 		if err != nil {
 			return a4Fail(err)
 		}
 		d := jsonx.NewObject()
 		d.Set("scope", sc)
 		d.Set("candidates", candidateList(cands))
-		return Result{Data: d, Text: strings.Join(candidateLines(cands), "\n")}, nil
+		lines := emptyNote(ctx, d, candidateLines(cands), env, root, be, sc, slate, cands)
+		return Result{Data: d, Text: strings.Join(lines, "\n")}, nil
 	}
 }
