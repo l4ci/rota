@@ -313,3 +313,33 @@ func TestReclaimUnderSoloParksAStalledSlotWithoutAKill(t *testing.T) {
 		t.Errorf("lease: %v", st)
 	}
 }
+
+func TestReportRearmsWaitForASoloSlot(t *testing.T) {
+	f := soloAssign(t)
+	if _, err := f.assign("12", "ben", nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ReportSlot(f.root, ReportOpts{Slot: "ben", State: "done"}); err != nil {
+		t.Fatal(err)
+	}
+	var e worker.Env
+	wait := func() worker.WaitResult {
+		res, err := e.Wait(context.Background(), f.root, worker.WaitOpts{Slots: []string{"ben"}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return res
+	}
+	if res := wait(); res.Slot != "ben" || res.State != "done" {
+		t.Fatalf("first: %+v", res)
+	}
+	if res := wait(); !res.TimedOut {
+		t.Fatalf("second: %+v, want timed out", res)
+	}
+	if _, err := ReportSlot(f.root, ReportOpts{Slot: "ben", State: "done"}); err != nil {
+		t.Fatal(err)
+	}
+	if res := wait(); res.Slot != "ben" {
+		t.Fatalf("after report: %+v", res)
+	}
+}

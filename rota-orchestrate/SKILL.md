@@ -27,7 +27,7 @@ The workers' standing brief is [references/worker-contract.md](references/worker
 
 ## 1. Start
 
-Run `rota doctor`. Fix every `fail` with its hint before anything else; a round that starts on a broken host fails late and obscurely. Then `rota round start`, and read `data.drift` and `data.candidates`. A non-zero `drift` is the previous round's mess: `rota round reconcile` shows it, `rota reap` clears the leftovers once you've read the list.
+Run `rota doctor`. Fix every `fail` with its hint before anything else; a round that starts on a broken host fails late and obscurely. Then `rota round start`, and read `data.drift` and `data.candidates`. For a round that keeps going as issues become ready, start it with `--scope open`: every open issue is a candidate and overlap and dependencies decide the order. Re-running `start` keeps the recorded scope unless you pass `--scope`; re-running it with `--scope slate --items …` replaces the slate without ending the round. A non-zero `drift` is the previous round's mess: `rota round reconcile` shows it, `rota reap` clears the leftovers once you've read the list.
 
 One orchestrator per repo. If `start` exits 4 on the lease, someone else holds it. Do not clear their lease; ask.
 
@@ -45,13 +45,15 @@ Assign with `rota round assign <ID>`. The verb marks the item in progress, cuts 
 
 ## 3. The loop
 
-Call `rota round wait`. It blocks until a slot needs you, then returns that slot with the state and the evidence. Never poll in your own context: no sleep loops, no repeated `status`, no tailing panes. When `wait` returns, act, then call it again. If your shell cuts commands short, loop on a finite `--timeout`.
+Call `rota round wait`. It blocks until a slot needs you, then returns that slot with the state and the evidence, and records what it returned. A slot comes back once per change: the next `wait` skips it until its worker moves again (a relay, a dispatch, a new state). Never poll in your own context: no sleep loops, no repeated `status`, no tailing panes. When `wait` returns, act, then call it again. If your shell cuts commands short, loop on a finite `--timeout`.
+
+**Keep every slot fed.** After every `wait`, before you review anything, fill every free slot from `rota round candidates`. A slot whose worker reported `done` with a PR is free: `assign` parks it, keeps the PR on the round's review list (`rota round status` lists it under `review`) and gives the slot its next issue. Hold a slot back only for a real ordering constraint: a dependency, an overlap you have decided to serialize, or the maintainer's stated order. "One worker is still busy" is never a reason.
 
 What each state asks of you:
 
 | State | Do |
 |---|---|
-| `done` / `idle` with a PR | review, gate, merge (section 6) |
+| `done` / `idle` with a PR | assign the slot its next issue, then review, gate, merge the PR (section 6) |
 | `idle`, no PR | read the pane once. A worker that stopped without a PR or a question is stuck, not finished |
 | `blocked` | read the question. Answer, or escalate (section 5) |
 | `needs-permission` | decide from the request in the pane. Never approve what you would not run yourself |
@@ -59,7 +61,7 @@ What each state asks of you:
 | `dead` | see section 4 |
 | `unknown` | see section 4 |
 
-Between waits, use free slots: re-read `rota round candidates` and assign the next issue before you review the current PR.
+A wait that times out with every slot busy is fine. A free slot with candidates left is not.
 
 ## 4. Reading failures
 
@@ -95,7 +97,7 @@ All three push the branch before moving the slot off it, so no work is lost. `ro
 
 ## 6. Merge
 
-Workers never merge. After `done`, read the PR: does it do what the issue says, and does it stay inside the files the issue named? Then `rota worker gate <slot> --base <branch>`, which runs the checks on the merged tree and merges on a pass. Read its verdict; don't re-derive the rules it enforces.
+Workers never merge. After `done`, read the PR: does it do what the issue says, and does it stay inside the files the issue named? Then `rota worker gate <slot> --base <branch>`, or `rota worker gate <PR number> --base <branch>` once the slot has moved on and the PR waits in review. The gate runs the checks on the merged tree, merges on a pass and drops the PR from the review list. Read its verdict; don't re-derive the rules it enforces.
 
 Merge policy comes from config (`ship.mergeApproval`). With the default, the gate merges a passing PR. When policy requires approval (all PRs, or PRs touching listed paths), unattended runs pass `--escalate` to `worker gate`, or to `ship pr-merge` for a PR you merge by number. The verb refuses with exit 4 and posts the approval request on the PR thread, once however often you re-gate. Keep working other slots. `rota round escalate check` says when the maintainer has answered; re-run with `--approval <id>`, and the audit line quotes the answer. An answer that doesn't read as approval (`approve`, `approved`, `yes`, `lgtm`, `ship it`) holds the merge: `approval declined` means the slot is held, never retried, and you tell the maintainer. Interactive sessions ask with `AskUserQuestion` and pass `--confirm --confirm-note` with the answer verbatim. Never write a note the human didn't say.
 
@@ -103,7 +105,7 @@ After each merge, re-verify the base before assigning from it. The next assignme
 
 ## 7. Bounce or fix
 
-Send the PR back when the work is wrong in a way the worker can learn from: it misread the issue, skipped a stated criterion, built the wrong thing. State the gap in one signed message citing the issue's own words.
+Send the PR back when the work is wrong in a way the worker can learn from: it misread the issue, skipped a stated criterion, built the wrong thing. State the gap in one signed message citing the issue's own words. If its slot still holds the PR, relay to that worker. If the PR waits in review with no slot, `rota round transfer <issue> --to <free slot> --body-file <gap>` puts the branch in that slot and dispatches the follow-up; any free worker can do it.
 
 Fix it yourself when the gap is small and mechanical: a stale doc line, a missing test for a case the worker covered in code, a merge conflict with a PR you just merged. Push the fix as a separate commit so the PR shows what you changed. A worker rerunning a full cycle for a one-line fix wastes a slot.
 

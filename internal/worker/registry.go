@@ -10,6 +10,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -84,6 +86,102 @@ func (r Registry) Slot(name string) *jsonx.Object {
 		}
 	}
 	return nil
+}
+
+// PRs lists the queued PR records: open PRs whose slot moved on to another
+// issue (`prs` in the registry). A record is {issue, branch, pr, base, from,
+// claimId, round, relays}; the issue and its claim stay taken while it waits.
+func (r Registry) PRs() []*jsonx.Object { return queuedOf(r.Doc) }
+
+func queuedOf(doc *jsonx.Object) []*jsonx.Object {
+	raw, _ := doc.Get("prs")
+	list, _ := raw.([]any)
+	var out []*jsonx.Object
+	for _, e := range list {
+		if o, ok := e.(*jsonx.Object); ok {
+			out = append(out, o)
+		}
+	}
+	return out
+}
+
+var rePRRef = regexp.MustCompile(`^(?:#|.*/(?:pull|merge_requests)/)?(\d+)/?$`)
+
+// PRRefNumber reads the PR number from `#N`, `N` or a PR URL.
+func PRRefNumber(ref string) (int, bool) {
+	m := rePRRef.FindStringSubmatch(strings.TrimSpace(ref))
+	if m == nil {
+		return 0, false
+	}
+	n, err := strconv.Atoi(m[1])
+	return n, err == nil
+}
+
+// QueuedPR finds a queued record by PR ref (`#N`, `N` or a PR URL), matching
+// on the PR number.
+func (r Registry) QueuedPR(ref string) *jsonx.Object {
+	n, ok := PRRefNumber(ref)
+	if !ok {
+		return nil
+	}
+	for _, q := range r.PRs() {
+		if m, ok := PRRefNumber(Str(q, "pr")); ok && m == n {
+			return q
+		}
+	}
+	return nil
+}
+
+// QueuedIssue finds the queued record holding an issue (backend spelling,
+// compared case-insensitively, `#` ignored).
+func (r Registry) QueuedIssue(id string) *jsonx.Object {
+	want := strings.ToUpper(strings.TrimPrefix(strings.TrimSpace(id), "#"))
+	for _, q := range r.PRs() {
+		if want != "" && strings.ToUpper(strings.TrimPrefix(Str(q, "issue"), "#")) == want {
+			return q
+		}
+	}
+	return nil
+}
+
+// QueuePR appends a record to doc under an Update, replacing one for the same
+// issue so a repeated call does not duplicate it.
+func QueuePR(doc *jsonx.Object, rec *jsonx.Object) {
+	DropQueued(doc, func(q *jsonx.Object) bool { return Str(q, "issue") == Str(rec, "issue") })
+	raw, _ := doc.Get("prs")
+	l, _ := raw.([]any)
+	doc.Set("prs", append(l, rec))
+}
+
+// DropQueued removes the records match accepts from doc under an Update.
+func DropQueued(doc *jsonx.Object, match func(*jsonx.Object) bool) {
+	raw, ok := doc.Get("prs")
+	list, _ := raw.([]any)
+	if !ok || len(list) == 0 {
+		return
+	}
+	var keep []any
+	for _, e := range list {
+		if o, ok := e.(*jsonx.Object); ok && match(o) {
+			continue
+		}
+		keep = append(keep, e)
+	}
+	if keep == nil {
+		keep = []any{}
+	}
+	doc.Set("prs", keep)
+}
+
+// RemoveQueuedPR drops the record for a PR ref, locked.
+func RemoveQueuedPR(root, ref string) error {
+	def := jsonx.NewObject()
+	def.Set("slots", []any{})
+	return Update(root, def, func(doc *jsonx.Object) {
+		if q := (Registry{Doc: doc}).QueuedPR(ref); q != nil {
+			DropQueued(doc, func(o *jsonx.Object) bool { return o == q })
+		}
+	})
 }
 
 // Str reads a string field, "" when absent, null or not a string.

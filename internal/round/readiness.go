@@ -11,6 +11,7 @@ import (
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/gate"
+	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -280,7 +281,8 @@ func nonNil(s []string) []string {
 // touches: the item's own footprint plus the slot's real changes.
 func (e Env) InFlightItems(ctx context.Context, root string, be backlog.Backend, tracked, shared []string) []InFlight {
 	var out []InFlight
-	for _, s := range worker.LoadRegistry(root).Slots() {
+	reg := worker.LoadRegistry(root)
+	for _, s := range reg.Slots() {
 		name := worker.Str(s, "name")
 		branch := worker.Str(s, "branch")
 		id := heldID(worker.Str(s, "task"), branch, name)
@@ -298,7 +300,52 @@ func (e Env) InFlightItems(ctx context.Context, root string, be backlog.Backend,
 		sort.Strings(paths)
 		out = append(out, InFlight{Slot: name, Issue: id, Paths: paths})
 	}
+	for _, q := range reg.PRs() {
+		id := queuedIssue(q)
+		if id == "" {
+			continue
+		}
+		paths := Footprint(itemText(be, id), tracked, shared)
+		paths = append(paths, e.queuedChanged(ctx, root, q, shared)...)
+		sort.Strings(paths)
+		out = append(out, InFlight{Slot: "queue:" + worker.Str(q, "from"), Issue: id, Paths: paths})
+	}
 	return out
+}
+
+// queuedChanged lists the paths a queued PR's branch changes against its base,
+// read from the pushed branch in root (the local one when origin lacks it).
+func (e Env) queuedChanged(ctx context.Context, root string, q *jsonx.Object, shared []string) []string {
+	branch := worker.Str(q, "branch")
+	base := firstNonEmpty(worker.Str(q, "base"), e.Base)
+	if branch == "" || base == "" {
+		return nil
+	}
+	head := branch
+	if _, _, code, err := e.Git(ctx, root, "rev-parse", "--verify", "-q", "refs/remotes/origin/"+branch); err == nil && code == 0 {
+		head = "origin/" + branch
+	}
+	ref := base
+	if _, _, code, err := e.Git(ctx, root, "rev-parse", "--verify", "-q", "origin/"+base); err == nil && code == 0 {
+		ref = "origin/" + base
+	}
+	out, _, code, err := e.Git(ctx, root, "diff", "--name-only", ref+"..."+head)
+	if err != nil || code != 0 {
+		return nil
+	}
+	var paths []string
+next:
+	for _, l := range strings.Split(out, "\n") {
+		if l = strings.TrimSpace(l); l != "" {
+			for _, g := range shared {
+				if gate.MatchPath(g, l) {
+					continue next
+				}
+			}
+			paths = append(paths, l)
+		}
+	}
+	return paths
 }
 
 // changed lists the paths a worktree changed against the base: commits on its
