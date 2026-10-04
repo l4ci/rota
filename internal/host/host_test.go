@@ -957,3 +957,19 @@ func TestAgentNameIsWhatHerdrAccepts(t *testing.T) {
 		t.Error("workspace ids that differ only in case must not share an agent name")
 	}
 }
+
+// An Enter into a dialog would answer it: a blocked agent gets no keypress.
+func TestHerdrSubmitPendingNeverEntersADialog(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "p.md")
+	os.WriteFile(file, []byte("sig\nthe last line of the brief\n"), 0o644)
+	f := &fake{handler: func(_ string, a []string) Result {
+		if a[1] == "get" {
+			return Result{Stdout: agentJSON("blocked")}
+		}
+		return Result{Stdout: "the last line of the brief"}
+	}}
+	handled, _ := New("herdr", deps(f, herdrEnv, &clock{})).(Resubmitter).SubmitPending(bg, "w1", "w9:t7", file)
+	if handled || f.count("herdr agent send-keys") != 0 {
+		t.Errorf("handled=%v\n%s", handled, f.log())
+	}
+}
