@@ -71,6 +71,7 @@ Public user guide for rota, a zero-dependency dev workflow for Claude Code and C
 ### Contributing
 
 - [Rounds on rota itself](contributing/rounds.md): the gate, repo rules and roster for contributors
+- [Release signing](contributing/release-signing.md): generating or rotating the minisign key, the Actions secret, verifying by hand
 
 ### Other
 
