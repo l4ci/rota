@@ -100,6 +100,14 @@ export PATH="$ROTA_POISON_BIN:$PATH"
 # and fail on another. Point it at an empty dir.
 export CLAUDE_CONFIG_DIR="$RUN_TMP/claude-config"
 mkdir -p "$CLAUDE_CONFIG_DIR"
+# Same for the Codex user root, $HOME/.agents/skills: doctor's skills check
+# hashes it against the tree under test, so an install matching main made a
+# skill-editing branch fail "dry round: doctor" (#26). HOME is safe to point
+# at an empty dir for the sections: the go build above already ran with the
+# real one, git identity comes from GIT_* above, and gh/glab/herdr/tmux/codex
+# are poisoned. A section that needs a home sets HOME itself, as 83/94/98 do.
+export HOME="$RUN_TMP/home"
+mkdir -p "$HOME"
 # Nor may a section inherit this shell's live host identity (pane, tab,
 # socket): sections that need one set fake values themselves.
 for v in $(compgen -e | grep -E '^(HERDR_|TMUX)'); do unset "$v"; done
