@@ -116,10 +116,14 @@ func roundStatus(*flag.FlagSet) RunFunc {
 		d.Set("escalations", esc)
 		lim, limLines := limitStatusRows(rep.Limits)
 		d.Set("limits", lim)
+		d.Set("queued", queuedRows(rep.Queued))
 		var lines []string
 		for _, r := range rep.Rows {
 			lines = append(lines, strings.Join([]string{
 				r.Name, dash(r.Issue), dash(r.Branch), dash(r.PR), dash(r.HostState), dash(strings.Join(r.Drift, ","))}, "\t"))
+		}
+		for _, q := range rep.Queued {
+			lines = append(lines, fmt.Sprintf("queued\t#%s\t%s\t%s\tfrom %s", q.Issue, dash(q.PR), dash(q.Branch), dash(q.From)))
 		}
 		for _, l := range escLines {
 			lines = append(lines, "escalation\t"+l)
@@ -129,6 +133,19 @@ func roundStatus(*flag.FlagSet) RunFunc {
 		}
 		return Result{Data: d, Text: strings.Join(lines, "\n")}, nil
 	}
+}
+
+func queuedRows(qs []round.QueuedPR) []any {
+	out := make([]any, 0, len(qs))
+	for _, q := range qs {
+		o := jsonx.NewObject()
+		o.Set("issue", q.Issue)
+		setIf(o, "pr", q.PR)
+		setIf(o, "branch", q.Branch)
+		setIf(o, "from", q.From)
+		out = append(out, o)
+	}
+	return out
 }
 
 func roundReconcile(fs *flag.FlagSet) RunFunc {
