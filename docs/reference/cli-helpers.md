@@ -40,7 +40,7 @@ rota knowledge query "Auth & Sessions"
 Not a stable API across major versions, but `--json` shapes only change
 additively within one. Full rules:
 [CLI conventions](../design/5.0-cli-conventions.md). Per-verb `data` shapes,
-exit codes and repo scope: [verb contract](../design/5.0-verb-contract.md).
+exit codes and repo scope: [verb contract](../design/contract/README.md).
 `rota <group> --help` lists a group's verbs, `rota <group> <verb> --help` its flags.
 
 ## Verbs
@@ -459,6 +459,6 @@ A gated verb refuses with exit 4 (`blockedBy: "manual gate"`) at every autonomy 
 ## Keeping this page current
 
 The tables are generated from the usage lines in the
-[verb contract](../design/5.0-verb-contract.md) and the summaries from
+[verb contract](../design/contract/README.md) and the summaries from
 `rota <group> <verb> --help --json`. When a verb changes, regenerate the row
 rather than editing prose around it.

@@ -17,7 +17,7 @@ import (
 
 // The A4 `rota update`, `rota config show|set|check` and `rota repo which|resolve|
 // umbrella` verbs. Shapes, flags and exits are the verb contract's
-// (docs/design/5.0-verb-contract.md, "A3 and A4"); the old helpers named in
+// (docs/design/contract/, "A3 and A4"); the old helpers named in
 // each `old:` line are the behaviour to match.
 
 func a4cCommands() []*Command {

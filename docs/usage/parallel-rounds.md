@@ -97,7 +97,7 @@ issue) until the queue is empty. Replace `ben` with the slot `wait` named. Previ
 | Clean | `rota reap` | lists, then with `--apply` removes, what no live slot owns; never kills a running agent |
 | End | `rota round wind-down` | re-verifies the base, parks every slot, releases the lease |
 
-Each verb's arguments, data and exit codes are in `docs/design/5.0-verb-contract.md`. Every verb
+Each verb's arguments, data and exit codes are in `docs/design/contract/`. Every verb
 takes `--json` for a machine-readable envelope.
 
 ## Starting a round
