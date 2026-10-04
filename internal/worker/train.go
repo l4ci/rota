@@ -96,6 +96,7 @@ func (e Env) Train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 		return res, fail(ExitResolution, fmt.Sprintf("a train must run with %s checked out (currently on %s)", o.Base, cur))
 	}
 	seen := map[string]bool{}
+	withPR := 0
 	for _, t := range o.Targets {
 		s, _, err := reg.GateTarget(t)
 		if err != nil {
@@ -106,6 +107,12 @@ func (e Env) Train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 			return res, fail(ExitUsage, fmt.Sprintf("%s names a PR already in the train", t))
 		}
 		seen[key] = true
+		if Str(s, "pr") != "" {
+			withPR++
+		}
+	}
+	if withPR != 0 && withPR != len(o.Targets) {
+		return res, fail(ExitUsage, fmt.Sprintf("a train is all PRs or all slots without one, not a mix: PRs merge onto origin/%s and slots onto the local %s", o.Base, o.Base))
 	}
 
 	// 1. Check every member.
@@ -246,6 +253,26 @@ func (e Env) Train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 					failLog, hi = plog, mid
 				}
 			}
+			if lo == 0 { // bisect assumes a green base; the first member only looks guilty on a red one
+				if _, code := e.git(scratch, "checkout", "-q", "--detach", tips[0]); code != 0 {
+					return e.trainBroke(res, "git checkout "+tips[0]+" failed in the scratch tree")
+				}
+				var br GateResult
+				bok, blog, err := e.runVerify(ctx, scratch, cmds, &br)
+				if err != nil {
+					return res, err
+				}
+				if !bok {
+					os.Remove(failLog)
+					b, _ := os.ReadFile(blog)
+					res.Verdict = GateVerifyFailed
+					res.Err = fmt.Sprintf("TRAIN-FAIL base — %s fails verification on its own, so no member can be blamed\nlast lines of the verify output (full log: %s):\n%s",
+						baseRef, blog, indentTail(string(b), 20))
+					res.Hint = fmt.Sprintf("fix %s, then re-run the train", baseRef)
+					return res, nil
+				}
+				os.Remove(blog)
+			}
 			c := res.Members[hi-1]
 			res.Members[hi-1].Culprit = true
 			res.Culprit, res.Verdict = c.Target, GateVerifyFailed
@@ -278,6 +305,17 @@ func (e Env) Train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 	}
 	for i := 0; i < passing; i++ {
 		m := res.Members[i]
+		if i > 0 { // each landing must start from exactly the tree the scratch merge had at that point
+			if remote {
+				if _, code := e.git(root, "fetch", "origin", "-q"); code != 0 {
+					return e.trainBroke(res, "git fetch origin failed between landings")
+				}
+			}
+			got, _ := e.git(root, "rev-parse", baseRef+"^{tree}")
+			if want, _ := e.git(root, "rev-parse", tips[i]+"^{tree}"); got != want {
+				return e.trainMoved(res, m.Target, fmt.Sprintf("%s changed outside the train after %d landing(s) (tree %s, verified %s)", baseRef, i, short(got), short(want)))
+			}
+		}
 		gr, err := e.Gate(ctx, root, GateOpts{Slot: m.Target, Base: o.Base, NoVerify: true, Train: true})
 		res.Notes = append(res.Notes, gr.Notes...)
 		res.Changed = res.Changed || gr.Changed
@@ -299,7 +337,7 @@ func (e Env) Train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 	res.SHA, _ = e.git(root, "rev-parse", "--short=7", "HEAD")
 	if tree, _ := e.git(root, "rev-parse", "HEAD^{tree}"); tree != "" {
 		if want, _ := e.git(root, "rev-parse", tips[passing]+"^{tree}"); want != tree {
-			res.Notes = append(res.Notes, fmt.Sprintf("TRAIN-TREE %s differs from the verified scratch tree %s; the forge merged differently than git did", short(tree), short(want)))
+			return e.trainMoved(res, "", fmt.Sprintf("the landed tree %s differs from the verified scratch tree %s; the forge merged differently than git did", short(tree), short(want)))
 		}
 	}
 	res.Verdict, res.Culprit = verdict, culprit
@@ -323,7 +361,12 @@ func (e Env) trainBroke(res TrainResult, msg string) (TrainResult, error) {
 
 func (e Env) trainMoved(res TrainResult, culprit, msg string) (TrainResult, error) {
 	res.Verdict, res.Culprit = GateBaseMoved, culprit
-	res.Err = "BASE-MOVED train — " + msg + "; nothing landed"
-	res.Hint = "re-run the train on the new base"
+	if len(res.Landed) == 0 {
+		res.Err = "BASE-MOVED train — " + msg + "; nothing landed"
+		res.Hint = "re-run the train on the new base"
+		return res, nil
+	}
+	res.Err = fmt.Sprintf("BASE-MOVED train — %s; landed %d of %d member(s): %s", msg, len(res.Landed), len(res.Members), strings.Join(res.Landed, ", "))
+	res.Hint = fmt.Sprintf("landed %d of %d member(s); re-run the train for the rest on the new base", len(res.Landed), len(res.Members))
 	return res, nil
 }
