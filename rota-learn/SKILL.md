@@ -104,7 +104,7 @@ Then exit (skip remaining steps).
 
 Rewrites the body of one bullet while preserving its tier and hits in the sidecar.
 
-**V1 limitation:** the current `rota knowledge amend` verb APPENDS to the bullet body rather than replacing it in-place. Full rewrite-in-place is a follow-up (tracked as a known V1 gap). For V1, the user should craft a body suffix that reads well when appended.
+`rota knowledge amend` only APPENDS to the bullet body. To correct stale wording in place, use `rota knowledge replace --topic "<topic>" --old "<text>" --new "<text>"`: it swaps an exact substring inside the one bullet that contains it, refuses (exit 4) when the text sits in several bullets, and re-keys the tier entry if the bold title changes. This flow stays append-only.
 
 Flow:
 1. Prompt the user via `AskUserQuestion` for the new body suffix:
