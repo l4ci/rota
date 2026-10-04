@@ -99,7 +99,8 @@ func releaseWrites(f *forge) []string {
 	return w
 }
 
-const releaseAllAssets = `[{"name":"rota_linux_amd64"},{"name":"rota_linux_arm64"},{"name":"rota_darwin_amd64"},{"name":"rota_darwin_arm64"},{"name":"checksums.txt"}]`
+const releaseAllAssets = `[{"name":"rota_linux_amd64"},{"name":"rota_linux_arm64"},{"name":"rota_darwin_amd64"},{"name":"rota_darwin_arm64"},{"name":"checksums.txt"},` +
+	`{"name":"rota_linux_amd64.minisig"},{"name":"rota_linux_arm64.minisig"},{"name":"rota_darwin_amd64.minisig"},{"name":"rota_darwin_arm64.minisig"},{"name":"checksums.txt.minisig"}]`
 
 var releaseNone = [3]any{"", "release not found", 1}
 
@@ -347,6 +348,11 @@ func TestReleasePublishFinishesTheDraft(t *testing.T) {
 		"no assets":     draft(`[]`),
 		"no checksum":   draft(`[{"name":"rota_linux_amd64"},{"name":"rota_linux_arm64"},{"name":"rota_darwin_amd64"},{"name":"rota_darwin_arm64"}]`),
 		"3 of 4":        draft(`[{"name":"rota_linux_amd64"},{"name":"rota_linux_arm64"},{"name":"rota_darwin_amd64"},{"name":"checksums.txt"}]`),
+		"no signatures": draft(`[{"name":"rota_linux_amd64"},{"name":"rota_linux_arm64"},{"name":"rota_darwin_amd64"},{"name":"rota_darwin_arm64"},{"name":"checksums.txt"}]`),
+		"no checksums sig": draft(`[{"name":"rota_linux_amd64"},{"name":"rota_linux_arm64"},{"name":"rota_darwin_amd64"},{"name":"rota_darwin_arm64"},{"name":"checksums.txt"},` +
+			`{"name":"rota_linux_amd64.minisig"},{"name":"rota_linux_arm64.minisig"},{"name":"rota_darwin_amd64.minisig"},{"name":"rota_darwin_arm64.minisig"}]`),
+		"unsigned tarball": draft(`[{"name":"rota_linux_amd64"},{"name":"rota_linux_arm64"},{"name":"rota_darwin_amd64"},{"name":"rota_darwin_arm64"},{"name":"checksums.txt"},` +
+			`{"name":"rota_linux_amd64.minisig"},{"name":"rota_linux_arm64.minisig"},{"name":"rota_darwin_amd64.minisig"},{"name":"rota_darwin_arm64.minisig"},{"name":"checksums.txt.minisig"},{"name":"rota_1.0.0_linux_amd64.tar.gz"}]`),
 		"tarballs only": draft(`[{"name":"rota_1.0.0_linux_amd64.tar.gz"},{"name":"rota_1.0.0_linux_arm64.tar.gz"},{"name":"rota_1.0.0_darwin_amd64.tar.gz"},{"name":"rota_1.0.0_darwin_arm64.tar.gz"},{"name":"checksums.txt"}]`),
 	} {
 		o, f, work := publish(t, true, view)

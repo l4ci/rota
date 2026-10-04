@@ -115,6 +115,9 @@ func roundReturn(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return moveFailure(err, res.Changed)
 		}
+		for _, w := range res.Warnings {
+			c.Warn("%s", w)
+		}
 		d := jsonx.NewObject()
 		d.Set("slot", res.Slot)
 		d.Set("issue", res.Issue)

@@ -374,7 +374,12 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 	// 4. Readiness.
 	tracked := e.trackedFiles(ctx, root)
 	inFlight := e.InFlightItems(ctx, root, be, tracked, set.SharedPaths)
-	r, err := Assess(be, id, tracked, set.SharedPaths, inFlight, o.AcceptOverlap)
+	var settled string
+	if o.BodyFile != "" {
+		b, _ := os.ReadFile(o.BodyFile)
+		settled = string(b)
+	}
+	r, err := AssessBrief(be, id, tracked, set.SharedPaths, inFlight, o.AcceptOverlap, settled)
 	if err != nil {
 		return res, err
 	}
