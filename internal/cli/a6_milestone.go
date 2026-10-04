@@ -8,8 +8,8 @@ import (
 	ms "github.com/l4ci/rota/internal/milestone"
 )
 
-// Glue for the milestone group (A6). File mode only; issue mode exits 71
-// until the tracker is wired in.
+// Glue for the milestone group (A6). Both backends: issue mode keeps
+// milestones in the tracker (a6_milestone_issue.go).
 
 func milestoneCommands() []*Command {
 	return []*Command{

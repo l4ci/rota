@@ -14,7 +14,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/frontmatter"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/section"
@@ -47,21 +46,6 @@ func Errf(exit int, format string, a ...any) *Error {
 
 // WithHint returns e with a hint line.
 func (e *Error) WithHint(h string) *Error { e.Hint = h; return e }
-
-// IssueMode reports whether backlog.backend is "issues". An unreadable
-// config or an unknown value counts as file mode, as the old helpers did.
-func IssueMode(root string) bool {
-	v, ok := config.Lookup(config.Load(filepath.Join(root, ".rota", "config.json")), "backlog.backend")
-	s, _ := v.(string)
-	return ok && s == "issues"
-}
-
-// ErrIssueMode is what a file-only port returns under backlog.backend
-// "issues" until internal/tracker (A8) is wired in: exit 71, not a guess.
-func ErrIssueMode(verb string) *Error {
-	return Errf(ExitNotImplemented, "%s: issue mode (backlog.backend \"issues\") is not ported yet", verb).
-		WithHint("needs internal/tracker (A8)")
-}
 
 // ReadBody reads a --body-file ("-" is stdin) the way the old put helpers
 // did: raw bytes, each invalid UTF-8 byte replaced by U+FFFD, no newline

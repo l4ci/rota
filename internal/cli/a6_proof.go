@@ -5,14 +5,13 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/plan"
 	"github.com/l4ci/rota/internal/proof"
 )
 
 // Glue for the proof group and plan uncertain, which read items through
-// internal/backlog. File mode only for now; issue mode exits 71.
+// internal/backlog. Both backends.
 
 func proofCommands() []*Command {
 	return []*Command{
@@ -21,21 +20,6 @@ func proofCommands() []*Command {
 			{Name: "show", Summary: "list an item's proof rows", Verb: proofShow},
 		}},
 	}
-}
-
-// backlogMode is the project root and whether backlog.backend is "issues".
-// An invalid backlog.backend is an internal error (exit 70, as the old
-// helpers exited 1 on it).
-func backlogMode(c *Ctx) (root string, issue bool, err error) {
-	root, err = c.Root()
-	if err != nil {
-		return "", false, err
-	}
-	name, err := config.Backend(config.Load(root + "/.rota/config.json"))
-	if err != nil {
-		return "", false, &Error{Exit: ExitInternal, Message: err.Error()}
-	}
-	return root, name == "issues", nil
 }
 
 func proofData(id string, changed any) *jsonx.Object {
@@ -64,7 +48,7 @@ func proofAdd(fs *flag.FlagSet) RunFunc {
 		if *result != "PASS" && *result != "FAIL" {
 			return Result{}, Usage("--result must be exactly PASS or FAIL")
 		}
-		root, issue, err := backlogMode(c)
+		root, issue, err := modeRoot(c)
 		if err != nil {
 			return Result{}, err
 		}
@@ -92,7 +76,7 @@ func proofShow(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		root, issue, err := backlogMode(c)
+		root, issue, err := modeRoot(c)
 		if err != nil {
 			return Result{}, err
 		}
@@ -135,7 +119,7 @@ func runPlanUncertain(c *Ctx, args []string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	root, issue, err := backlogMode(c)
+	root, issue, err := modeRoot(c)
 	if err != nil {
 		return Result{}, err
 	}
