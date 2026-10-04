@@ -143,20 +143,22 @@ func (e Env) Wait(ctx context.Context, root string, o WaitOpts) (WaitResult, err
 		}
 		last = rows
 		for _, r := range rows {
-			st := strings.ToLower(r.State)
-			if seen[r.Name] != "" && seen[r.Name] != st {
+			key := seenKey(r.State, r.Evidence)
+			if seen[r.Name] != "" && seen[r.Name] != key {
 				// The slot moved on: re-arm it.
 				delete(seen, r.Name)
 				if _, err := updateSlot(root, r.Name, func(s *jsonx.Object) { s.Delete("seen") }); err != nil {
 					return WaitResult{}, err
 				}
 			}
-			// A state already returned once is treated like busy until the
-			// slot shows a different one.
-			if r.State != StateBusy && seen[r.Name] != st {
+			// A row already returned once is treated like busy until the slot
+			// shows a different state or evidence; alwaysNews states never are.
+			if r.State != StateBusy && (seen[r.Name] != key || alwaysNews(r.State)) {
 				if _, err := updateSlot(root, r.Name, func(s *jsonx.Object) {
 					recordRow(s, r, e.Now())
-					s.Set("seen", st)
+					if !alwaysNews(r.State) {
+						s.Set("seen", key)
+					}
 				}); err != nil {
 					return WaitResult{}, err
 				}
@@ -210,9 +212,14 @@ func soloWait(root string, o WaitOpts) (WaitResult, error) {
 	var rows []PollRow
 	for _, s := range watched {
 		st := strings.ToLower(Str(s, "state"))
-		if st != "busy" && st != Str(s, "seen") {
+		key := seenKey(st, "")
+		if news := alwaysNews(strings.ToUpper(st)); st != "busy" && (news || key != Str(s, "seen")) {
 			name := Str(s, "name")
-			if _, err := updateSlot(root, name, func(s *jsonx.Object) { s.Set("seen", st) }); err != nil {
+			if _, err := updateSlot(root, name, func(s *jsonx.Object) {
+				if !news {
+					s.Set("seen", key)
+				}
+			}); err != nil {
 				return WaitResult{}, err
 			}
 			return WaitResult{Slot: name, State: st, Source: SourceRegistry}, nil

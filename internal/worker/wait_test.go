@@ -362,7 +362,7 @@ func TestWaitRecordsWhatItReturned(t *testing.T) {
 	if got := seenField(dir, "w1", "pr"); got != url {
 		t.Errorf("pr = %q", got)
 	}
-	if got := seenField(dir, "w1", "seen"); got != "done" {
+	if got := seenField(dir, "w1", "seen"); got != seenKey(StateDone, url) {
 		t.Errorf("seen = %q", got)
 	}
 }
@@ -393,10 +393,41 @@ func TestWaitDoesNotReturnTheSameArrivalTwice(t *testing.T) {
 	}
 }
 
+// A prompt answered by typing in the pane re-arms nothing, so a second one
+// that wait never saw go busy in between must still come back (#29 review).
+func TestWaitReturnsPromptsAndNewQuestions(t *testing.T) {
+	dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
+	h := newWaitHost("herdr")
+	e := envWith(watcherHost{h})
+	h.set("w1", "Do you want to proceed?\n", "idle")
+	if res, err := e.Wait(bg, dir, WaitOpts{}); err != nil || res.State != StateNeedsPermission {
+		t.Fatalf("first prompt: %+v %v", res, err)
+	}
+	h.set("w1", "Allow bash to run go test?\n", "idle")
+	if res, err := e.Wait(bg, dir, WaitOpts{Timeout: time.Second}); err != nil || res.State != StateNeedsPermission {
+		t.Fatalf("second prompt, no busy between: %+v %v", res, err)
+	}
+	if got := seenField(dir, "w1", "seen"); got != "" {
+		t.Errorf("a permission prompt is never remembered: seen = %q", got)
+	}
+	// A blocked worker comes back once per question.
+	h.set("w1", "ROTA-BLOCKED w1: keep the old flag?\n", "idle")
+	if res, err := e.Wait(bg, dir, WaitOpts{}); err != nil || res.State != StateBlocked {
+		t.Fatalf("first question: %+v %v", res, err)
+	}
+	if res, err := e.Wait(bg, dir, WaitOpts{Timeout: 30 * time.Millisecond}); err != nil || !res.TimedOut {
+		t.Fatalf("same question again: %+v %v, want a timeout", res, err)
+	}
+	h.set("w1", "ROTA-BLOCKED w1: which default?\n", "idle")
+	if res, err := e.Wait(bg, dir, WaitOpts{Timeout: time.Second}); err != nil || res.State != StateBlocked || res.Evidence != "which default?" {
+		t.Fatalf("new question, no busy between: %+v %v", res, err)
+	}
+}
+
 func TestDispatchAndPollClearSeen(t *testing.T) {
 	dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
 	set := func() {
-		updateSlot(dir, "w1", func(s *jsonx.Object) { s.Set("state", "done"); s.Set("seen", "done") })
+		updateSlot(dir, "w1", func(s *jsonx.Object) { s.Set("state", "done"); s.Set("seen", seenKey(StateDone, "x")) })
 	}
 	set()
 	if err := recordDispatch(dir, "w1", "w9:t1", "", nil, "now"); err != nil {
@@ -419,7 +450,7 @@ func TestDispatchAndPollClearSeen(t *testing.T) {
 	if _, err := envWith(h).Poll(bg, dir, PollOpts{}); err != nil {
 		t.Fatal(err)
 	}
-	if got := seenField(dir, "w1", "seen"); got != "done" {
+	if got := seenField(dir, "w1", "seen"); got != seenKey(StateDone, "x") {
 		t.Errorf("poll of the same state dropped seen: %q", got)
 	}
 	h.set("w1", "working...\n", "working")

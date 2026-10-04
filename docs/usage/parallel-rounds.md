@@ -123,7 +123,8 @@ rota round candidates                         # re-read the board with readiness
   `rota init` adds to `.gitignore`.
 - **Scope** is which issues the round may take: `slate` (only `--items`), `milestone` (the open
   items of the active milestones), `next` (the same, then the next planned milestone whose
-  dependencies shipped) or `open` (every open item; readiness and overlap decide the order, so a
+  dependencies shipped) or `open` (every open item nobody outside the round has claimed or labelled in progress; readiness and
+  overlap decide the order, so a
   round takes newly ready issues without a restart). Assign refuses anything outside it. Running
   `start` again in the same round keeps the recorded scope and slate unless you pass `--scope`;
   `--scope slate --items …` replaces the slate. See [round keys](configuration.md#round-keys).

@@ -966,3 +966,28 @@ func TestLatestHandoffBranchReadsLegacyMarker(t *testing.T) {
 		t.Errorf("branch %q", got)
 	}
 }
+
+// Scope open offers every open item, so one taken outside the round (the
+// in-progress label or an open claim, no slot holding it) is not offered (#29
+// review). Other scopes keep their behaviour.
+func TestOpenScopeSkipsItemsTakenOutsideTheRound(t *testing.T) {
+	f := newMoveFx(t)
+	f.forge.labels = map[int][]string{12: {"in-progress"}, 13: {"in-progress"}}
+	f.be.claims["14"] = "kit@9"
+	cands, err := f.env.Candidates(bg, f.root, f.be, CandidateOpts{Scope: roundcfg.ScopeOpen})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cands) != 0 {
+		t.Fatalf("labelled 13 and claimed 14 are taken outside the round: %v", ids(cands))
+	}
+	if cands, _ = f.env.Candidates(bg, f.root, f.be, CandidateOpts{Scope: roundcfg.ScopeMilestone}); len(cands) != 2 {
+		t.Errorf("milestone scope is unchanged: %v", ids(cands))
+	}
+	f.forge.labels[13] = nil
+	delete(f.be.claims, "14")
+	cands, _ = f.env.Candidates(bg, f.root, f.be, CandidateOpts{Scope: roundcfg.ScopeOpen})
+	if got := ids(cands); len(got) != 2 {
+		t.Errorf("released items are offered again: %v", got)
+	}
+}
