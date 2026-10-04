@@ -855,3 +855,35 @@ func TestAgentNameIsWhatHerdrAccepts(t *testing.T) {
 		t.Error("workspace ids that differ only in case must not share an agent name")
 	}
 }
+
+// TestLooksBooted pins the tmux boot check against pane text captured from
+// the real UIs (#102): Claude Code 2.1.289 dropped the "? for shortcuts" line
+// and the box frame, so only its banner marks a boot. Dialogs must not match.
+func TestLooksBooted(t *testing.T) {
+	read := func(name string) string {
+		b, err := os.ReadFile("testdata/" + name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(b)
+	}
+	cases := []struct {
+		name string
+		pane string
+		want bool
+	}{
+		{"claude 2.1.289", read("claude-booted-2.1.289.txt"), true},
+		{"codex 0.159.2", read("codex-booted-0.159.2.txt"), true},
+		{"claude older hint", "? for shortcuts", true},
+		{"claude older banner", "Welcome to Claude Code", true},
+		{"older box frame", "╭──────╮", true},
+		{"claude trust dialog", read("trust-dialog-2.1.288.txt"), false},
+		{"shell", "$ claude --version\n2.1.289 (Claude Code)\n", false},
+		{"empty", "", false},
+	}
+	for _, c := range cases {
+		if got := looksBooted(c.pane); got != c.want {
+			t.Errorf("%s: looksBooted = %v, want %v", c.name, got, c.want)
+		}
+	}
+}
