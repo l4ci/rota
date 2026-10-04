@@ -184,7 +184,7 @@ Codified after F19's release-pending nudge: fires from `/rota-work` no-argument 
 
 ## The verb contract is the contract — SKILL.md prose paraphrasing drifts
 
-When a SKILL.md cites an `rota` verb, the verb's entry in `docs/design/5.0-verb-contract.md` (and `rota <verb> --help`) IS the contract; prose paraphrases drift. Before authoring prose ABOUT a verb, read its entry — if the SKILL.md disagrees with the contract, the SKILL.md is wrong.
+When a SKILL.md cites an `rota` verb, the verb's entry in `docs/design/contract/` (index in `README.md`) (and `rota <verb> --help`) IS the contract; prose paraphrases drift. Before authoring prose ABOUT a verb, read its entry — if the SKILL.md disagrees with the contract, the SKILL.md is wrong.
 
 **Forbids.**
 - Paraphrasing a verb's behavior in SKILL.md prose without reading its contract entry first.

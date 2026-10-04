@@ -12,15 +12,16 @@ import (
 // The read-only set is the contract's: an A3/A4 verb whose data line has no
 // "changed" (rota version is A3's and not in a4Commands).
 func TestA4ReadOnlySetMatchesContract(t *testing.T) {
-	raw, err := os.ReadFile(filepath.Join("..", "..", "docs", "design", "5.0-verb-contract.md"))
-	if err != nil {
-		t.Fatal(err)
+	// The A3/A4 section is two group files: version/config/repo and backlog.
+	var doc string
+	for _, f := range []string{"version-config-repo.md", "backlog.md"} {
+		raw, err := os.ReadFile(filepath.Join("..", "..", "docs", "design", "contract", f))
+		if err != nil {
+			t.Fatal(err)
+		}
+		doc += "\n" + string(raw)
 	}
-	doc := string(raw)
-	start, end := strings.Index(doc, "\n## A3 and A4"), strings.Index(doc, "\n## A5")
-	if start < 0 || end < start {
-		t.Fatal("contract A3/A4 section not found")
-	}
+	start, end := 0, len(doc)
 	entry := regexp.MustCompile(`(?m)^### rota ([a-z -]+)\n(?:.*\n)*?data: (.*)$`)
 	want := map[string]bool{}
 	for _, m := range entry.FindAllStringSubmatch(doc[start:end], -1) {

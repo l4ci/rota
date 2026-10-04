@@ -15,9 +15,17 @@ import (
 // dropped.
 func contractPaths(t *testing.T) []string {
 	t.Helper()
-	b, err := os.ReadFile(filepath.Join("..", "..", "docs", "design", "5.0-verb-contract.md"))
-	if err != nil {
-		t.Fatal(err)
+	files, err := filepath.Glob(filepath.Join("..", "..", "docs", "design", "contract", "*.md"))
+	if err != nil || len(files) == 0 {
+		t.Fatalf("no contract files: %v", err)
+	}
+	var b []byte
+	for _, f := range files {
+		part, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		b = append(b, part...)
 	}
 	re := regexp.MustCompile(`(?m)^### rota (.*)$`)
 	seen := map[string]bool{}
