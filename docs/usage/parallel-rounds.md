@@ -82,10 +82,12 @@ Where it opens depends on where you ran it:
 |---|---|
 | In a herdr pane | a new focused tab in that workspace |
 | In tmux | a new window in that session |
-| In neither, tmux installed | a tmux session `rota-<dir>` (your terminal becomes it) |
-| In neither, no tmux | in this terminal; workers run as subagents ([solo mode](#solo-mode)) |
+| In neither, herdr installed | a herdr session `rota-<dir>` with the orchestrator in its first workspace (your terminal attaches to it) |
+| In neither, only tmux installed | a tmux session `rota-<dir>` (your terminal becomes it) |
+| In neither, no herdr or tmux | in this terminal; workers run as subagents ([solo mode](#solo-mode)) |
 
-`work.dispatch: herdr` needs you inside herdr already: open herdr, then run `rota` in a pane.
+`work.dispatch: tmux` skips the herdr-session row and uses tmux. The herdr session is rota's own,
+started with `herdr --session rota-<dir> server`; your default herdr session is never driven.
 The agent comes from `orchestrator.harness` (`claude`, `codex`, `hermes` or `opencode`; see
 [orchestrator harnesses](orchestrator-harnesses.md)). `rota orchestrate --dry-run`
 shows what would start.

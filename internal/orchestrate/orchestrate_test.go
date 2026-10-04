@@ -19,6 +19,7 @@ type rig struct {
 	calls     []string
 	execs     [][]string
 	execErr   error
+	serverUp  bool // a named herdr session's server answers `status server`
 }
 
 func newRig(env map[string]string, installed ...string) *rig {
@@ -33,6 +34,14 @@ func (r *rig) launcher() Env {
 	run := func(_ context.Context, name string, args []string) (host.Result, error) {
 		r.calls = append(r.calls, name+" "+strings.Join(args, " "))
 		switch {
+		case name == "sh":
+			r.serverUp = true
+		case name == "herdr" && len(args) > 3 && args[2] == "status":
+			if !r.serverUp {
+				return host.Result{ExitCode: 1}, nil
+			}
+		case name == "herdr" && len(args) > 3 && args[2] == "workspace":
+			return host.Result{Stdout: `{"result":{"root_pane":{"pane_id":"w1:p1"}}}`}, nil
 		case name == "herdr" && args[0] == "tab":
 			return host.Result{Stdout: `{"result":{"tab":{"tab_id":"w1:t2"},"root_pane":{"pane_id":"w1:p2"}}}`}, nil
 		case name == "tmux" && args[0] == "new-window":
@@ -92,10 +101,14 @@ func TestResolveByWhereTheCallerIs(t *testing.T) {
 	}{
 		{"inside herdr", herdrIn, []string{"herdr", "tmux"}, nil, "herdr", ModeTab, ""},
 		{"inside tmux", map[string]string{"TMUX": "/tmp/t,1,0"}, []string{"tmux"}, nil, "tmux", ModeTab, ""},
-		{"outside, tmux installed", nil, []string{"tmux", "herdr"}, nil, "tmux", ModeSession, ""},
+		{"outside, herdr and tmux installed", nil, []string{"tmux", "herdr"}, nil, "herdr", ModeHerdrSession, ""},
+		{"outside, only herdr", nil, []string{"herdr"}, nil, "herdr", ModeHerdrSession, ""},
+		{"outside, only tmux", nil, []string{"tmux"}, nil, "tmux", ModeSession, ""},
+		{"outside, dispatch tmux beats herdr", nil, []string{"tmux", "herdr"}, map[string]any{"work.dispatch": "tmux"}, "tmux", ModeSession, ""},
 		{"outside, no multiplexer", nil, nil, nil, "solo", ModeInPlace, ""},
 		{"outside, dispatch tmux without tmux", nil, nil, map[string]any{"work.dispatch": "tmux"}, "", "", "unavailable"},
-		{"outside, dispatch herdr", nil, []string{"herdr", "tmux"}, map[string]any{"work.dispatch": "herdr"}, "", "", "refused"},
+		{"outside, dispatch herdr", nil, []string{"herdr", "tmux"}, map[string]any{"work.dispatch": "herdr"}, "herdr", ModeHerdrSession, ""},
+		{"outside, dispatch herdr without herdr", nil, []string{"tmux"}, map[string]any{"work.dispatch": "herdr"}, "", "", "unavailable"},
 		{"inside herdr beats dispatch tmux", herdrIn, []string{"herdr", "tmux"}, map[string]any{"work.dispatch": "tmux"}, "herdr", ModeTab, ""},
 	}
 	for _, tt := range tests {
@@ -112,14 +125,6 @@ func TestResolveByWhereTheCallerIs(t *testing.T) {
 				t.Errorf("host/mode = %s/%s, want %s/%s", p.Host, p.Mode, tt.host, tt.mode)
 			}
 		})
-	}
-}
-
-func TestResolveRefusalExplainsHerdrOutside(t *testing.T) {
-	_, err := newRig(nil, "herdr").launcher().Resolve("/work/proj", cfgOf(t, map[string]any{"work.dispatch": "herdr"}))
-	var oe *Error
-	if !errors.As(err, &oe) || !strings.Contains(oe.Hint, "/work/proj") {
-		t.Fatalf("hint should say where to run rota: %v", err)
 	}
 }
 
@@ -234,5 +239,40 @@ func TestLaunchExecFailureIsUnavailable(t *testing.T) {
 	var oe *Error
 	if !errors.As(err, &oe) || oe.Code != "unavailable" {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestLaunchHerdrSessionStartsServerRunsSupervisorThenAttaches(t *testing.T) {
+	r := newRig(nil, "herdr")
+	l := r.launcher()
+	p, _ := l.Resolve("/work/my.proj", cfgOf(t, nil))
+	if _, err := l.Launch(context.Background(), p); err != nil {
+		t.Fatal(err)
+	}
+	log := strings.Join(r.calls, "\n")
+	for _, want := range []string{
+		"sh -c nohup herdr --session rota-my-proj server >/dev/null 2>&1 &",
+		"herdr --session rota-my-proj workspace create --cwd /work/my.proj --label orchestrator --focus",
+		"herdr --session rota-my-proj pane run w1:p1 /bin/rota keepalive run --first-prompt /rota-orchestrate -- claude",
+	} {
+		if !strings.Contains(log, want) {
+			t.Errorf("missing call %q in:\n%s", want, log)
+		}
+	}
+	if len(r.execs) != 1 || !reflect.DeepEqual(r.execs[0], []string{"/fake/herdr", "herdr", "session", "attach", "rota-my-proj"}) {
+		t.Errorf("execs = %q", r.execs)
+	}
+}
+
+func TestLaunchHerdrSessionAlreadyRunningOnlyAttaches(t *testing.T) {
+	r := newRig(nil, "herdr")
+	r.serverUp = true
+	l := r.launcher()
+	p, _ := l.Resolve("/p", cfgOf(t, nil))
+	if _, err := l.Launch(context.Background(), p); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(strings.Join(r.calls, "\n"), "workspace create") || len(r.execs) != 1 {
+		t.Errorf("an existing session must be attached, not restarted:\n%s\n%q", strings.Join(r.calls, "\n"), r.execs)
 	}
 }
