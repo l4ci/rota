@@ -335,32 +335,6 @@ func TestDispatchResolutionFailures(t *testing.T) {
 	}
 }
 
-func TestResumeFlag(t *testing.T) {
-	for cmd, want := range map[string]string{
-		"claude --model sonnet":                 "",
-		"claude -c":                             "-c",
-		"claude --continue":                     "--continue",
-		"claude --resume=abc":                   "--resume=abc",
-		"claude --resume":                       "--resume",
-		"claude -cr":                            "-cr",
-		"claude --model x -r abc":               "-r",
-		"FOO=1 /usr/bin/claude -p hi -c":        "-c",
-		`sh -c "claude -c"`:                     "-c",
-		`sh -c "claude --model sonnet"`:         "",
-		"wrapper -c claude --model sonnet":      "", // a wrapper's own -c is not ours to judge
-		"claude --model sonnet --verbose":       "",
-		"claude --dangerously-skip-permissions": "",
-	} {
-		got, err := ResumeFlag(cmd)
-		if err != nil || got != want {
-			t.Errorf("ResumeFlag(%q) = %q, %v; want %q", cmd, got, err, want)
-		}
-	}
-	if _, err := ResumeFlag(`claude "oops`); err == nil {
-		t.Error("an unbalanced quote must be an error")
-	}
-}
-
 func TestDispatchRejectsResumeAndUnparseableWorkerCommands(t *testing.T) {
 	for cfg, tc := range map[string]struct {
 		exit int

@@ -15,9 +15,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/round"
-	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -391,8 +391,8 @@ func workerDispatch(fs *flag.FlagSet) RunFunc {
 		if *body == "" {
 			return Result{}, Usage("--body-file is required")
 		}
-		if *kind != "" && !roundcfg.ValidKind(*kind) {
-			return Result{}, Usage("--kind must be one of %s", strings.Join(roundcfg.Kinds, ", "))
+		if *kind != "" && !harness.Valid(*kind) {
+			return Result{}, Usage("--kind must be one of %s", strings.Join(harness.Kinds, ", "))
 		}
 		opts := worker.DispatchOpts{Slot: slot, Task: *task, Relay: *relay, BootTimeout: *boot,
 			Kind: *kind, AcceptCodexVersion: *acceptCodex}
@@ -462,7 +462,7 @@ func workerPromptCheck(fs *flag.FlagSet) RunFunc {
 		if *keyPath == "" {
 			return Result{}, Usage("blocked: --key is required")
 		}
-		key, err := worker.LoadPromptKey(*keyPath)
+		key, err := harness.LoadPromptKey(*keyPath)
 		if err != nil {
 			return Result{}, Usage("blocked: cannot read the prompt key: %v", err)
 		}
@@ -472,7 +472,7 @@ func workerPromptCheck(fs *flag.FlagSet) RunFunc {
 		if err := json.Unmarshal(readInput(c), &in); err != nil || in.Prompt == nil {
 			return Result{}, Usage("blocked: the hook input is not JSON with a prompt field")
 		}
-		if ok, why := worker.CheckPrompt(key, *in.Prompt); !ok {
+		if ok, why := harness.CheckPrompt(key, *in.Prompt); !ok {
 			return Result{}, Usage("%s", strings.TrimPrefix(why, "rota: "))
 		}
 		return Result{}, nil

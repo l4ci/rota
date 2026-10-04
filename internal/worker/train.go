@@ -8,8 +8,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-
-	"github.com/l4ci/rota/internal/config"
 )
 
 // Merge train (#83): verify several queued PRs together once, then land them.
@@ -222,19 +220,20 @@ func (e Env) Train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 	// 4. Verify once.
 	n := len(res.Members)
 	passing := n
-	cmds := verifyCommands(config.Load(filepath.Join(root, ".rota", "config.json")))
-	if len(cmds) == 0 {
+	vr, err := e.Verify(ctx, root, scratch)
+	if err != nil {
+		return res, err
+	}
+	if vr.NoCommands {
 		res.Notes = append(res.Notes, "NO-VERIFY train — refactor.verifyCommands is empty; the merged tree was NOT gated by a command.",
 			"set refactor.verifyCommands via rota config set to make this gate real")
 	} else {
-		var vr GateResult
-		ok, failLog, err := e.runVerify(ctx, scratch, cmds, &vr)
-		if err != nil {
-			return res, err
-		}
+		failLog := vr.LogPath
 		res.Verified = vr.Verified
-		res.Notes = append(res.Notes, vr.Notes...)
-		if !ok {
+		for _, c := range vr.Failed {
+			res.Notes = append(res.Notes, "verify FAILED: "+c)
+		}
+		if !vr.OK() {
 			// 6. Bisect: the first prefix that fails ends in the culprit.
 			lo, hi := 0, n
 			for hi-lo > 1 {
@@ -242,37 +241,33 @@ func (e Env) Train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 				if _, code := e.git(scratch, "checkout", "-q", "--detach", tips[mid]); code != 0 {
 					return e.trainBroke(res, "git checkout "+tips[mid]+" failed in the scratch tree")
 				}
-				var br GateResult
-				pok, plog, err := e.runVerify(ctx, scratch, cmds, &br)
+				pr, err := e.Verify(ctx, root, scratch)
 				if err != nil {
 					return res, err
 				}
-				if pok {
+				if pr.OK() {
 					lo = mid
 				} else {
 					os.Remove(failLog)
-					failLog, hi = plog, mid
+					failLog, hi = pr.LogPath, mid
 				}
 			}
 			if lo == 0 { // bisect assumes a green base; the first member only looks guilty on a red one
 				if _, code := e.git(scratch, "checkout", "-q", "--detach", tips[0]); code != 0 {
 					return e.trainBroke(res, "git checkout "+tips[0]+" failed in the scratch tree")
 				}
-				var br GateResult
-				bok, blog, err := e.runVerify(ctx, scratch, cmds, &br)
+				br, err := e.Verify(ctx, root, scratch)
 				if err != nil {
 					return res, err
 				}
-				if !bok {
+				if !br.OK() {
 					os.Remove(failLog)
-					b, _ := os.ReadFile(blog)
 					res.Verdict = GateVerifyFailed
 					res.Err = fmt.Sprintf("TRAIN-FAIL base — %s fails verification on its own, so no member can be blamed\nlast lines of the verify output (full log: %s):\n%s",
-						baseRef, blog, indentTail(string(b), 20))
+						baseRef, br.LogPath, indentTail(br.Log, 20))
 					res.Hint = fmt.Sprintf("fix %s, then re-run the train", baseRef)
 					return res, nil
 				}
-				os.Remove(blog)
 			}
 			c := res.Members[hi-1]
 			res.Members[hi-1].Culprit = true
