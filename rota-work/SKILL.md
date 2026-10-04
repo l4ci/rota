@@ -722,7 +722,7 @@ Run the post-cycle choreography in `references/post-cycle-trigger-gate.md` with 
 
 - **Trigger override:** `features >= 5` OR `bugs >= 10` (replaces the gate's default condition; don't-repeat still applies).
 - **Nudge (`"off"`):** *"You've shipped [N] features / [M] bug fixes since the last refactor. Might be a good time to run `/rota-refactor` to clean up accumulated friction."*
-- **Target (`"auto"`/`"loop"`):** **dispatch `rota-refactor` via `Skill` immediately — no prompt, no confirmation.** No brief needed; `refactor.confirmBeforeExecute` still governs the internal checkpoints.
+- **Target (`"auto"`/`"loop"`):** **dispatch `rota-refactor` via `Skill` immediately — no prompt, no confirmation.** No brief needed; the run files findings as issues and edits no code (`--fix` is never passed from here).
 
 ## Step 15 — Loop Continuation
 
