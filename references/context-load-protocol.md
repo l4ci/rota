@@ -1,6 +1,6 @@
 # Context-load protocol
 
-Used by `/rota-work` (Step 4 for the normal flow, Preview Mode Step 2 for the peek), `/rota-plan` Step 3, and `/rota-vision` Step 2 — the silent context load that runs before the skill proposes anything to the user. The goal: read everything that informs the planned action in parallel, form a picture, then act.
+Used by `/rota-work` (Step 4 for the normal flow, `references/work-preview.md` for the peek), `/rota-plan` Step 3, and `/rota-vision` Step 2 — the silent context load that runs before the skill proposes anything to the user. The goal: read everything that informs the planned action in parallel, form a picture, then act.
 
 ## The canonical reads
 
@@ -44,7 +44,7 @@ A recent path-encoding helper audit confirmed why: when load steps drift between
 Each calling skill adds its own reads inline. The protocol lists only the common subset. Concretely:
 
 - `/rota-vision` Step 2 adds `.rota/MILESTONES.md`, every `.rota/milestones/M*.md`, glossary terms from `.rota/KNOWLEDGE.md` `## Glossary` (via `rota glossary read`), and stack files (`README.md`, `package.json`, `Cargo.toml`, `pyproject.toml`, etc.) — domain-shape reads that other skills don't need.
-- `/rota-work` Preview Mode Step 2 adds Repos: parsing for umbrella items (resolves via `rota repo resolve` when umbrella mode is on).
+- `/rota-work` preview (`references/work-preview.md`) adds Repos: parsing for umbrella items (resolves via `rota repo resolve` when umbrella mode is on).
 - `/rota-plan` Step 3 adds `rota plan list --milestone <MID>` to see existing plans under the milestone.
 
 ## What to do with the loaded context

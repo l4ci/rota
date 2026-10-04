@@ -1,22 +1,20 @@
 # herdr worker dispatch
 
-Used by `/rota-work` Steps 5, 6, 7, and 7.5 when `work.dispatch: "herdr"`. Under the default `work.dispatch: "subagent"` none of this applies.
+What herdr changes versus tmux, for `/rota-orchestrate` rounds. Each worker is its own Claude Code session in its own `git worktree`, as under tmux; the difference is where the session lives: a **herdr tab** in the orchestrator's own workspace instead of a tmux window. herdr recognises the agent in each tab and reports its state natively, which removes most of the guesswork tmux needs.
 
-The herdr backend is the tmux backend on a different host. Each worker is its own Claude Code session in its own `git worktree`, on its own branch, opening a PR against the cycle branch. The difference is where the session lives: a **herdr tab** in the orchestrator's own workspace instead of a tmux window. herdr recognises the agent running in each tab and reports its state natively, which removes most of the guesswork tmux needs.
+Everything about the *workers* rather than the *host* lives in [`worker-contract.md`](worker-contract.md) (standing contract and [provenance](worker-contract.md#provenance)) and [`tmux-dispatch.md`](tmux-dispatch.md): [polling](tmux-dispatch.md#polling), [escalating and relaying](tmux-dispatch.md#escalating-and-relaying), [the merge gate](tmux-dispatch.md#the-merge-gate), [permissions](tmux-dispatch.md#permissions) and [accounts](tmux-dispatch.md#accounts). This file does not repeat them.
 
-Everything that is about the *workers* rather than the *host* is shared with tmux and lives in [`worker-contract.md`](worker-contract.md) (the standing contract and [provenance](worker-contract.md#provenance)) and [`tmux-dispatch.md`](tmux-dispatch.md): [polling](tmux-dispatch.md#polling), [escalating and relaying](tmux-dispatch.md#escalating-and-relaying), [the merge gate](tmux-dispatch.md#the-merge-gate), [permissions](tmux-dispatch.md#permissions) and [accounts](tmux-dispatch.md#accounts). This file covers only what herdr changes.
-
-Verbs: the same four (`rota worker pool`, `rota worker dispatch`, `rota worker poll`, `rota worker gate`) plus `rota worker session`. `rota` picks the herdr host instead of the tmux one from `work.dispatch`.
+Verbs: the same four (`rota worker pool`, `rota worker dispatch`, `rota worker poll`, `rota worker gate`) plus `rota worker session`. `rota` picks the host (herdr or tmux) from `work.dispatch` and the surrounding environment.
 
 ## Being inside herdr is a precondition
 
-`/rota-work` must run in a herdr-managed pane. herdr injects `HERDR_ENV=1` and `HERDR_WORKSPACE_ID` into every pane it manages, and worker tabs open in that workspace, next to the orchestrator, where a human already is.
+The orchestrator must run in a herdr-managed pane. herdr injects `HERDR_ENV=1` and `HERDR_WORKSPACE_ID` into every pane it manages, and worker tabs open in that workspace, next to the orchestrator, where a human already is.
 
 ```bash
 rota worker session check     # exit 0 inside herdr, exit 1 outside
 ```
 
-**Outside herdr there is no handoff.** Under tmux, `ensure` creates a session and moves the cycle into it. Under herdr it refuses with exit 4 and tells the user to start `/rota-work` from a herdr pane. Outside herdr there is no workspace to open an operator tab in, and driving a herdr server from outside a managed pane is what herdr's own guide forbids: commands then land wherever a human happens to have focus.
+**Outside herdr there is no handoff.** Under tmux, `ensure` creates a session and moves the cycle into it. Under herdr it refuses with exit 4 and tells the user to start Claude Code from a herdr pane. Outside herdr there is no workspace to open an operator tab in, and driving a herdr server from outside a managed pane is what herdr's own guide forbids: commands then land wherever a human happens to have focus.
 
 ## Slots are tabs
 
@@ -55,9 +53,7 @@ Agent names are unique per herdr **server**, not per workspace, so a bare `w1` w
 
 ## Polling
 
-`rota worker poll` reads herdr's native agent state, then runs the same text classifier as tmux on the pane; the mapping and the registry writes (`slot.state`, `slot.pr`) are specified in the contract (`docs/design/contract/workers.md` and `rounds.md`, A7 and C1/C2). Read `data.slots[].state`. Sentinels, `Retrying in` and `limited` outrank the native state.
-
-**`unknown` is not done.** herdr reports it when an agent is present but it cannot classify the screen. Look at the tab before doing anything, and never route it to the gate. A slot that newly turns `blocked` or `needs-permission` raises a herdr notification with sound, once per transition.
+`rota worker poll` reads herdr's native agent state, then runs the tmux text classifier on the pane (mapping and registry writes: `docs/design/contract/workers.md` and `rounds.md`, A7 and C1/C2). Sentinels, `Retrying in` and `limited` outrank the native state. **`unknown` is not done**: herdr cannot classify the screen, so look at the tab and never route it to the gate. A slot that newly turns `blocked` or `needs-permission` raises a herdr notification, once per transition.
 
 ## Worker contract additions
 
