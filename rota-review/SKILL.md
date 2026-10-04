@@ -3,15 +3,6 @@ name: rota-review
 description: Staff-engineer review of a feature branch before merge or PR — reads commits, diff, referenced item IDs, and matching KNOWLEDGE.md topics; dispatches an Opus reviewer that checks intent match, convention compliance, and quality. Returns PASS / CONCERNS / FAIL. Use on "review this", "check before I ship", "look over the branch", or implicitly from /rota-ship.
 ---
 
-**Print the banner below verbatim before any other action — skip if dispatched as a subagent.** See `references/banner-preamble.md`.
-
-```
-════════════════════════════════════════════════════════════════════════
-  🔍  rota-review  ·  staff-engineer review of a branch
-  triggers: "review this", "check before ship"  ·  pairs: rota-ship
-════════════════════════════════════════════════════════════════════════
-```
-
 # rota-review — Pre-Merge Review
 
 ## Configuration
@@ -36,7 +27,7 @@ Read `.rota/config.json`:
 
 ## Step 1 — Task List
 
-**Initialize task list.** Follow the canonical pattern in `references/task-list-init.md` — load `TaskCreate(…)` via `ToolSearch select:TaskCreate,TaskUpdate` if needed, then create one task per phase below.
+Track these phases with the host's task tool if it has one.
 
 Phases:
 
@@ -419,7 +410,7 @@ rota review queue --json
 
 1. **PRs.** None: report *"<ID> is `needs-review` but has no PR with a closing keyword"* and skip. Several: review each.
 2. **Checkout.** `git status --short` must be clean, else stop. Check the PR out through the adapter: `rota tracker call -- pr checkout <n>` (GitHub) or `-- mr checkout <n>` (GitLab).
-3. **Review.** Run Steps 2-9 on the checked-out branch, scoped to `<base>...HEAD` (`<base>` from `rota git base`). The reviewer is read-only; so is the loop, apart from the verbs below.
+3. **Review.** Skip this stage when `rota proof show <ID> --json` already holds a PASS at the PR's current head sha (`git rev-parse HEAD`): the merge gate that follows is the only full run, so don't repeat verification here, and go to Route as a PASS. Otherwise run Steps 2-9 on the checked-out branch, scoped to `<base>...HEAD` (`<base>` from `rota git base`). The reviewer is read-only (it runs no suite); so is the loop, apart from the verbs below.
 4. **Route** on `rota verdict route <branch> --for queue --json`, field `data.next`:
    - **`ask` / `merge`** (PASS) — `ask`: `AskUserQuestion` (Header `"Merge"`, *"Merge PR <n> for <ID>?"*, options *Merge (Recommended)* / *Skip* / *Stop*); `merge` (loop mode): merge without asking. Merge with `rota ship pr-merge <n>` (in an umbrella `--repo <name>` is required; queue entries carry `repo` and qualified IDs): it merges and closes the linked items the host left open; `data.sha` and `data.closed` report the result. For `ask`, pass the Merge answer along: `--confirm --confirm-note "<answer>"` (ignored unless `ship.mergeApproval` covers the PR). Exit 4 with `data.unproven` means nothing was merged because an item has no proof: it is now `changes-requested`; report it and move on. Exit 4 with `data.blockedBy: "verdict"` means the PR's branch has a recorded review or second-opinion FAIL: nothing changed; report it and move on. Exit 4 with `data.blockedBy: "manual gate"` is the `merge-approval` gate (`ship.mergeApproval` requires a human for this merge; `data.paths` names the files that put it there): nothing changed. Ask the user in an `AskUserQuestion` that loop mode never auto-picks, then re-run with `--confirm --confirm-note "<their answer>"`. In loop mode, merge with `--escalate` instead and move on to the next PR; re-run with `--approval <data.escalation.id>` once `rota round escalate check` reports it answered (`references/manual-gates.md`, "Merge approval in an unattended round"). Then post the verdict on each linked item (`rota item comment add <ID> --kind feedback --body-file -`) and on the PR (`rota tracker call -- pr comment <n> --body-file -` on GitHub, `-- mr note <n> --message "<verdict>"` on GitLab).
    - **`request-changes`** (CONCERNS / FAIL) — post the findings as a `feedback` comment on each linked item and on the PR (same commands), then `rota item state <ID> --to changes-requested`. The author's next `/rota-work` claim reads the feedback. No merge, under any autonomy level.
@@ -438,6 +429,5 @@ Exit 5 or 6 (tracker unavailable or rate-limited) from any verb stops the queue 
 
 ## References
 
-- [`references/banner-preamble.md`](references/banner-preamble.md) — Banner-print rule shared by every skill.
 - [`references/knowledge-consult.md`](references/knowledge-consult.md) — Canonical K+D query pattern (`rota knowledge query` + `rota decisions query`) used by every cycle-starting skill.
 - [`references/review-verdict-routing.md`](references/review-verdict-routing.md) — PASS / CONCERNS / FAIL routing for `/rota-review` consumers.
