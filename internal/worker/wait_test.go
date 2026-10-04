@@ -430,14 +430,14 @@ func TestDispatchAndPollClearSeen(t *testing.T) {
 		updateSlot(dir, "w1", func(s *jsonx.Object) { s.Set("state", "done"); s.Set("seen", seenKey(StateDone, "x")) })
 	}
 	set()
-	if err := recordDispatch(dir, "w1", "w9:t1", "", nil, "now"); err != nil {
+	if err := recordDispatch(dir, "w1", "w9:t1", "", "", nil, "now"); err != nil {
 		t.Fatal(err)
 	}
 	if got := seenField(dir, "w1", "seen"); got != "" {
 		t.Errorf("relay kept seen = %q", got)
 	}
 	set()
-	if err := recordDispatch(dir, "w1", "w9:t1", "#5", nil, "now"); err != nil {
+	if err := recordDispatch(dir, "w1", "w9:t1", "#5", "", nil, "now"); err != nil {
 		t.Fatal(err)
 	}
 	if got := seenField(dir, "w1", "seen"); got != "" {
