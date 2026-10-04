@@ -104,10 +104,14 @@ func TestRewriteSettingsMatchesHookInstall(t *testing.T) {
 	if rewriteSettings(o) {
 		t.Error("second rewrite changed the settings")
 	}
-	// What rota hook install does next is a noop.
-	out, err := hook.Install(hook.InstallIn{Scope: hook.ScopeUser, Files: map[hook.Scope]*jsonx.Object{hook.ScopeUser: o}})
-	if err != nil || out.Changed || out.Blocked || out.Statusline != hook.SLKept {
+	// What rota hook install does next only adds the prompt hook, which hv never had.
+	files := map[hook.Scope]*jsonx.Object{hook.ScopeUser: o}
+	out, err := hook.Install(hook.InstallIn{Scope: hook.ScopeUser, Files: files})
+	if err != nil || !out.Changed || out.Blocked || out.Statusline != hook.SLKept {
 		t.Errorf("install after migrate: %+v %v", out, err)
+	}
+	if out, err = hook.Install(hook.InstallIn{Scope: hook.ScopeUser, Files: files}); err != nil || out.Changed {
+		t.Errorf("second install: %+v %v", out, err)
 	}
 }
 
@@ -283,11 +287,15 @@ func TestRunHvApplyIsCompleteAndIdempotent(t *testing.T) {
 	if len(rep.Skills) != 1 || rep.Skills[0].Removed != 1 || len(rep.Skills[0].Kept) != 1 || !rep.Skills[0].Reinstalled {
 		t.Errorf("skills: %+v", rep.Skills)
 	}
-	// Settings: rota hook install is a noop afterwards.
+	// Settings: rota hook install only adds the prompt hook, which hv never had.
 	v, _ := jsonx.Decode([]byte(read(t, filepath.Join(home, ".claude", "settings.json"))))
-	out, err := hook.Install(hook.InstallIn{Scope: hook.ScopeUser, Files: map[hook.Scope]*jsonx.Object{hook.ScopeUser: v.(*jsonx.Object)}})
-	if err != nil || out.Changed {
+	files := map[hook.Scope]*jsonx.Object{hook.ScopeUser: v.(*jsonx.Object)}
+	out, err := hook.Install(hook.InstallIn{Scope: hook.ScopeUser, Files: files})
+	if err != nil || !out.Changed {
 		t.Errorf("hook install after migrate: %+v %v", out, err)
+	}
+	if out, err = hook.Install(hook.InstallIn{Scope: hook.ScopeUser, Files: files}); err != nil || out.Changed {
+		t.Errorf("second hook install: %+v %v", out, err)
 	}
 
 	// A second run is a noop and writes nothing, committed or not.

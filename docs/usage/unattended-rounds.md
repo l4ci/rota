@@ -39,6 +39,7 @@ rota hook install --wrap-statusline    # when you already have a statusLine
 
 - a `Stop` hook (`rota hook stop`),
 - a `SessionStart` hook (`rota hook session-start`),
+- a `UserPromptSubmit` hook (`rota hook prompt`): a one-line round digest on every message you send the orchestrator,
 - a statusline (`rota statusline dump`).
 
 Hook entries end in `# rota-hook`, so a second run updates them instead of stacking copies.

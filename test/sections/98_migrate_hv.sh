@@ -160,8 +160,11 @@ done
 SET="$(cat "$MHV_H/.claude/settings.json")"
 case "$SET" in *"rota hook stop # rota-hook"*"rota hook session-start # rota-hook"*"rota statusline dump --then"*"rotaWrapped"*) ;; *) fail "settings not rewritten: $SET" ;; esac
 case "$SET" in *"hv "*|*"hv-hook"*|*hvWrapped*) fail "an hv entry is left in settings: $SET" ;; esac
+# hv had no prompt hook, so the first install adds exactly that one (#81); the next is a noop.
 RC=0; HOUT="$(mh "$MHV_D" "$MHV_H" hook install --scope user 2>/dev/null)" || RC=$?
-[ $RC -eq 0 ] && [ "$(jget data.changed <<<"$HOUT")" = "false" ] || fail "rota hook install after the migration is not a noop: $HOUT"
+[ $RC -eq 0 ] && [ "$(jget data.changed <<<"$HOUT")" = "true" ] || fail "rota hook install after the migration should add the prompt hook: $HOUT"
+RC=0; HOUT="$(mh "$MHV_D" "$MHV_H" hook install --scope user 2>/dev/null)" || RC=$?
+[ $RC -eq 0 ] && [ "$(jget data.changed <<<"$HOUT")" = "false" ] || fail "a second rota hook install is not a noop: $HOUT"
 
 echo "  a second apply is a noop"
 BEFORE="$(mhv_snapshot "$MHV_D" "$MHV_H")"
