@@ -120,6 +120,7 @@ var contractVerbs = []string{
 	"plan show",
 	"plan uncertain",
 	"plan validate-docs",
+	"projects",
 	"proof add",
 	"proof show",
 	"qa index",
