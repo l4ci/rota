@@ -10,7 +10,8 @@ Set `round.brief` to this file's path to make the assignment pointer name it as 
 ## The gate
 
 The full gate runs once, at merge: `rota worker gate` runs `refactor.verifyCommands` on the merged
-tree through `bash test/gate.sh`: validate-skills, `go vet ./...`, `go test -race -timeout 30m ./...`
+tree through `bash test/gate.sh`: validate-skills, the doc lints (`bash test/doclint.sh`: prose pins, the
+`.worktrees/` decoy check, and that every `rota` verb the docs name exists), `go vet ./...`, `go test -race -timeout 30m ./...`
 and the smoke suite in `gate.smokeShards` (default 4) shards, all at once. About 160 s on an idle
 8-core box, against 590 s in series. It takes a machine-wide lock, so two gates never overlap, and
 keeps one log per check. Every check makes its temp files under one gate-owned root, and the gate fails if
@@ -18,7 +19,7 @@ any entry is left in it afterwards, so a run that leaks shows up as a red gate, 
 Workers do not run it.
 
 Before a PR, a worker runs targeted checks only, as the [worker contract](../../references/worker-contract.md)
-says: `python3 test/validate-skills.py` (under a second), `go vet` and `go test` for the packages it
+says: `python3 test/validate-skills.py` (under a second), `bash test/doclint.sh` when it touched a skill or doc, `go vet` and `go test` for the packages it
 touched, and only the smoke sections its change adds or touches, sourced through `test/runner.sh`
 in a sandbox (sections are never executable alone). Several workers running full suites at once
 starve the CPU and turn time-budgeted tests into false reds. A stale branch does not need a re-run

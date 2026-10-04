@@ -1,10 +1,10 @@
-echo "dry round: rota-orchestrate's verbs in the skill's order on a fixture repo, plus a verb-existence lint (#63)"
+echo "dry round: rota-orchestrate's verbs in the skill's order on a fixture repo (#63)"
 # #63 acceptance: "a dry round on a fixture repo runs end to end using only the
-# new skill and rota". A shell script cannot be the skill, so this section (a) runs
+# new skill and rota". A shell script cannot be the skill, so this section runs
 # the verbs in the order rota-orchestrate/SKILL.md describes (doctor, start,
 # candidates, assign, wait, status/reconcile, gate with an escalated approval,
-# wind-down, reap) and (b) lints that every `rota <group> <verb>` the skill and
-# docs/usage/parallel-rounds.md name exists. Everything runs against FAKES: herdr
+# wind-down, reap). The lint that every `rota <group> <verb>` the skill and
+# docs/usage/parallel-rounds.md name exists is test/doclint.sh. Everything runs against FAKES: herdr
 # is test/fakes/herdr (behind a wrapper that adds --version and `api snapshot`),
 # gh is test/fakes/gh (issue and PR threads) with `pr view|merge` routed to
 # test/fakes/fake_forge.py (one PR over a real bare origin). Nothing reaches a
@@ -61,9 +61,7 @@ echo '{}' > "$TMP_DY/acct/.credentials.json"
 # ── fixture repo: bare origin, project clone, one milestone, one item ──────
 # The standing brief `round assign` hands over by pointer: assign refuses
 # ("brief missing") without it, so the fixture carries the real one.
-# white-box-begin: A9 #53 doclint
 WORKER_CONTRACT="$REPO/references/worker-contract.md"
-# white-box-end
 ORIGIN="$TMP_DY/origin.git"
 DY="$TMP_DY/proj"
 git init -q --bare -b main "$ORIGIN"
@@ -266,96 +264,6 @@ KINDS="$(python3 -c 'import json,sys; print(",".join(c["id"] for c in json.load(
 case ",$KINDS," in *,tab:*|*,process:*|*,worktree:*) fail "dry round: reap lists a live or parked thing: $KINDS" ;; esac
 [ -d "$DY/.worktrees/ben" ] || fail "dry round: a reap preview removed the slot"
 pass "reap preview: lists no tab, process or worktree, removes nothing (candidates: ${KINDS:-none})"
-
-# ── 9. lint: every `rota <group> <verb>` the skill and the docs name exists ───
-# A verb resolves when `rota <words> --help` descends the tree: each group's help
-# lists its Commands and the next word must be one of them; a leaf ends the walk
-# (later words are positional arguments). Extracted words are the run of
-# lowercase [a-z-] tokens after `rota` in an inline code span or a fenced line;
-# flags, placeholders, quotes and `rota-*` skill names end or never match.
-LINT="$TMP_DY/lint.py"
-cat > "$LINT" <<'PY'
-import re, subprocess, sys
-rota = sys.argv[1]
-docs = sys.argv[2:]
-
-def commands(path):
-    out = subprocess.run([rota] + path + ["--help"], capture_output=True, text=True)
-    if out.returncode != 0:
-        return None
-    names, on = [], False
-    for line in out.stdout.splitlines():
-        if line.startswith("Commands:"):
-            on = True
-        elif on and line.strip():
-            names.append(line.split()[0])
-        elif on:
-            break
-    return names
-
-found = {}
-for doc in docs:
-    fence = False
-    for n, line in enumerate(open(doc), 1):
-        if line.lstrip().startswith("```"):
-            fence = not fence
-            continue
-        for span in ([line.strip()] if fence else re.findall(r"`([^`]+)`", line)):
-            toks = span.split()
-            if not toks or toks[0] != "rota":
-                continue
-            words = []
-            for t in toks[1:]:
-                if not re.fullmatch(r"[a-z][a-z-]*", t):
-                    break
-                words.append(t)
-            if words:
-                found.setdefault(tuple(words), "%s:%d" % (doc, n))
-
-bad, ok = [], 0
-for words, where in sorted(found.items()):
-    path = []
-    verdict = "ok"
-    for w in words:
-        cmds = commands(path)
-        if cmds is None:
-            verdict = "no help for rota %s" % " ".join(path)
-            break
-        if not cmds:          # a leaf: the rest are arguments
-            break
-        if w not in cmds:
-            verdict = "rota %s has no command %r" % (" ".join(path) or "<root>", w)
-            break
-        path.append(w)
-    if verdict == "ok" and not path:
-        verdict = "names no verb"
-    verb = " ".join(path) if verdict == "ok" else " ".join(words[:2])
-    if verdict != "ok":
-        bad.append("%s: rota %s: %s" % (where, " ".join(words), verdict))
-    else:
-        ok += 1
-for b in bad:
-    print("MISSING " + b)
-print("RESOLVED %d" % ok)
-sys.exit(1 if bad else 0)
-PY
-# white-box-begin: A9 #53 doclint
-rc=0; OUT="$(python3 "$LINT" "$ROTA_BIN" "$REPO/rota-orchestrate/SKILL.md" "$REPO/docs/usage/parallel-rounds.md" 2>&1)" || rc=$?
-[ "$rc" = "0" ] || fail "dry round: verbs named in the skill or docs that do not exist: $OUT"
-case "$OUT" in *"RESOLVED "*) ;; *) fail "dry round: the verb lint resolved nothing: $OUT" ;; esac
-# The lint must be able to fail: a doc naming a verb that is not there is caught.
-printf 'Run `rota round waitt` and `rota worker gate <slot>`.\n' > "$TMP_DY/bad.md"
-rc=0; BAD="$(python3 "$LINT" "$ROTA_BIN" "$TMP_DY/bad.md" 2>&1)" || rc=$?
-[ "$rc" = "1" ] && grep -q 'MISSING .*rota round waitt' <<<"$BAD" || fail "dry round: the lint should reject a made-up verb: rc=$rc $BAD"
-# The C10 verbs resolve for real now, and a made-up neighbour is still caught.
-printf 'Run `rota round reclaim ben`, `rota round return ben` and `rota round transfer 5 --to dana`.\n' > "$TMP_DY/c10.md"
-rc=0; GOOD="$(python3 "$LINT" "$ROTA_BIN" "$TMP_DY/c10.md" 2>&1)" || rc=$?
-[ "$rc" = "0" ] && grep -q 'RESOLVED 3' <<<"$GOOD" || fail "dry round: the C10 verbs should resolve: rc=$rc $GOOD"
-printf 'Run `rota round reclaim ben` and `rota round bounce`.\n' > "$TMP_DY/c10b.md"
-rc=0; BAD="$(python3 "$LINT" "$ROTA_BIN" "$TMP_DY/c10b.md" 2>&1)" || rc=$?
-[ "$rc" = "1" ] && grep -q 'MISSING .*rota round bounce' <<<"$BAD" || fail "dry round: a made-up round verb should fail: rc=$rc $BAD"
-pass "lint: every rota verb in rota-orchestrate/SKILL.md and docs/usage/parallel-rounds.md resolves ($(grep -o 'RESOLVED [0-9]*' <<<"$OUT"))"
-# white-box-end
 
 trap 'rm -rf "$TMP"' EXIT
 rm -rf "${TMP_DY:?}"
