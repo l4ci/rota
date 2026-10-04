@@ -32,15 +32,6 @@ rota milestone active --json
   2. *"None / unrelated — leave untagged"*
   3. *"Different milestone"* (free text — accepts any existing `M\d+`)
 
-## Loop mode
-
-When `autonomy.level == "loop"`:
-
-- With one active milestone: auto-pick *"Yes — tag all (Recommended)"* without invoking AskUserQuestion.
-- With multiple active milestones: auto-pick the first-listed milestone (the option marked `(Recommended)`).
-
-Honors the authoring convention "routine routing/tagging auto-picks Recommended in loop mode" (`references/authoring-conventions.md` rule #5).
-
 ## Ambiguous reply
 
 If the reply is ambiguous, default to leaving the items untagged. Under-tagging is recoverable; mis-tagging clutters the milestone view.

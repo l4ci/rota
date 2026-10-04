@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/l4ci/rota/internal/jsonx"
@@ -268,5 +269,17 @@ func TestCheckIgnoresLocalFile(t *testing.T) {
 	root := project(t, "{}", `{"models": {"orchestrator": "x"}}`)
 	if st, m := Check(root); st != Stale || m[0] != "models.orchestrator" {
 		t.Errorf("%s %v", st, m)
+	}
+}
+
+func TestRetired(t *testing.T) {
+	for _, cfg := range []string{"", "{}", `{"autonomy": {"level": "auto"}}`, `{"autonomy": {"level": "off"}}`} {
+		if got := Retired(project(t, cfg, "")); len(got) != 0 || got == nil {
+			t.Errorf("%q: %v", cfg, got)
+		}
+	}
+	got := Retired(project(t, `{"autonomy": {"level": "loop"}}`, ""))
+	if len(got) != 1 || !strings.Contains(got[0], `autonomy.level "loop" was removed`) {
+		t.Errorf("loop: %v", got)
 	}
 }

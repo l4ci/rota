@@ -88,7 +88,17 @@ func TestSchemaMatchesPython(t *testing.T) {
 		raw, _ := json.Marshal(tree)
 		cases = append(cases, schemaCase{string(raw), key})
 	}
-	py := Keys[:PythonKeys] // the goldens were recorded over CONFIG_KEYS
+	// The goldens were recorded over CONFIG_KEYS, which still had
+	// loop.webResearch (removed in #70). Generate the same random cases from
+	// the old table so the recorded inputs line up, and skip that key.
+	py := append(append(append([]Key{}, Keys[:29]...), Key{Name: "loop.webResearch"}), Keys[29:PythonKeys]...)
+	add = func(add func(map[string]any, string)) func(map[string]any, string) {
+		return func(tree map[string]any, key string) {
+			if key != "loop.webResearch" {
+				add(tree, key)
+			}
+		}
+	}(add)
 	for _, k := range py {
 		add(map[string]any{}, k.Name)
 	}

@@ -72,7 +72,6 @@ var Keys = []Key{
 	{"issues.providers.github", true, true},
 	{"issues.providers.gitlab", true, true},
 	{VersionKey, "", true},
-	{"loop.webResearch", false, false},
 	{"issues.label", "in-progress", false},
 	{"backlog.backend", "file", false},
 	{"issues.provider", "auto", false},
@@ -140,7 +139,7 @@ var Keys = []Key{
 }
 
 // PythonKeys is how many leading rows of Keys are CONFIG_KEYS.
-const PythonKeys = 54
+const PythonKeys = 53
 
 // backlogBackends are the accepted values of backlog.backend.
 var backlogBackends = []string{"file", "issues"}
@@ -342,7 +341,6 @@ var Prompts = []Prompt{
 	{Key: "autonomy.level", Title: "How much may rota chain on its own?", Choices: []Choice{
 		{"off", "skills only suggest the next step"},
 		{"auto", "chain one hop, then stop"},
-		{"loop", "keep taking backlog items until it drains"},
 	}},
 	{Key: "ship.review", Title: "Review the branch before shipping?", Choices: []Choice{
 		{"true", "yes, run /rota-review"},

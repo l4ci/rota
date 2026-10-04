@@ -65,7 +65,7 @@ Close GitHub issues upstream manually. `/rota-capture --remove` has no knowledge
 
 ## Safety semantics
 
-`/rota-capture --remove` refuses to apply until you confirm. The confirmation gate runs even when [`autonomy.level`](autonomy.md) is set to `loop`; removal is always a manual step.
+`/rota-capture --remove` refuses to apply until you confirm. The confirmation gate runs even when [`autonomy.level`](autonomy.md) is set to `auto`; removal is always a manual step.
 
 Active items (items present in any `status.json` `items` array) are refused by default:
 

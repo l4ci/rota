@@ -71,7 +71,7 @@ Links are optional. [`/rota-work` (no argument)](picking-work.md) infers the rev
 
 ## Milestone-spec audit
 
-When you capture from a milestone spec (the text references an `M<NN>` tag or a `milestones/M<NN>.md` path), `/rota-capture` runs a ship-evidence audit before writing anything. Old specs drift behind code. Acceptance criteria written months ago often ship under different IDs, and capturing them again creates duplicate work or, under `autonomy.level: loop`, silently dispatches `/rota-work` on already-done work.
+When you capture from a milestone spec (the text references an `M<NN>` tag or a `milestones/M<NN>.md` path), `/rota-capture` runs a ship-evidence audit before writing anything. Old specs drift behind code. Acceptance criteria written months ago often ship under different IDs, and capturing them again creates duplicate work.
 
 The audit runs [`rota item shipped`](../reference/cli-helpers.md) against every parsed title and groups matches into three confidence tiers: `[STRONG]` (commit subject + title overlap), `[MEDIUM]` (subject hint only), `[PATH]` (file path hint). For each flagged title you get three options:
 
@@ -79,7 +79,7 @@ The audit runs [`rota item shipped`](../reference/cli-helpers.md) against every 
 - **Capture anyway.** You've reviewed the matches and confirmed the item is genuinely distinct (prior commit was an incomplete first pass, etc.).
 - **Stop the whole capture.** Abort and reconcile the milestone spec via [/rota-vision](vision-and-plans.md) or by hand before retrying.
 
-Under `autonomy.level: loop`, flagged titles auto-skip with one line per skipped title naming the matching commit. Ordinary brain-dump captures (no `M<NN>` reference) skip the audit entirely.
+Ordinary brain-dump captures (no `M<NN>` reference) skip the audit entirely.
 
 ## What /rota-capture is not
 

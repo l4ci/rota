@@ -47,7 +47,7 @@ func prMergeProject(t *testing.T, ship map[string]any) (string, *a8Forge, *fakeT
 	t.Helper()
 	f := a8Fixture()
 	root := a8Project(t, f)
-	write(t, filepath.Join(root, ".rota", "config.json"), gateConfig(t, prAllCfg, "loop", ship))
+	write(t, filepath.Join(root, ".rota", "config.json"), gateConfig(t, prAllCfg, "auto", ship))
 	th := &fakeThread{}
 	useThread(t, th)
 	clock := time.Date(2026, 10, 3, 10, 0, 0, 0, time.UTC)
@@ -201,7 +201,7 @@ func TestSlotApprovalThread(t *testing.T) {
 }
 
 func TestWorkerGateApprovalOnIssueThread(t *testing.T) {
-	dir := workerProject(t, gateConfig(t, `{"refactor":{"verifyCommands":["test -f feature.txt"]},"issues":{"provider":"github"}}`, "loop", map[string]any{"mergeApproval": "all"}))
+	dir := workerProject(t, gateConfig(t, `{"refactor":{"verifyCommands":["test -f feature.txt"]},"issues":{"provider":"github"}}`, "auto", map[string]any{"mergeApproval": "all"}))
 	rotaIn(t, dir, "worker", "pool", "init", "--slots", "1", "--base", "main")
 	wt := filepath.Join(dir, ".worktrees", "w1")
 	write(t, filepath.Join(wt, "feature.txt"), "f")

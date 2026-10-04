@@ -8,7 +8,7 @@ See KNOWLEDGE.md "Skill Authoring: Prose & References" for the conventions that 
 
 | Reference | Purpose | Cited by |
 |-----------|---------|----------|
-| [`authoring-conventions.md`](authoring-conventions.md) | Authoring rules shared across SKILL.md files (loop-mode auto-picks, mirror-step threshold). | `/rota-capture`, `/rota-refactor`, `/rota-ship` |
+| [`authoring-conventions.md`](authoring-conventions.md) | Authoring rules shared across SKILL.md files (inline autonomy directives, mirror-step threshold). | `/rota-capture`, `/rota-refactor`, `/rota-ship` |
 | [`context-load-protocol.md`](context-load-protocol.md) | K+D context loading sequence shared by every cycle-starting skill. | `/rota-plan`, `/rota-vision`, `/rota-work` (including `--preview`) |
 | [`debug-hypothesize.md`](debug-hypothesize.md) | Both-modes hypothesize choreography (brief template, single vs competing, per-axis divergence) for `/rota-debug` Step 6. | `/rota-debug` |
 | [`debug-escalate.md`](debug-escalate.md) | Fresh-context handoff brief template + dispatch mechanics + user-surfacing fallback for `/rota-debug` Step 7.5. | `/rota-debug` |
@@ -21,7 +21,6 @@ See KNOWLEDGE.md "Skill Authoring: Prose & References" for the conventions that 
 | [`isolation-patterns.md`](isolation-patterns.md) | Branch / worktree creation patterns per work.isolation + umbrella mode. | `/rota-work` |
 | [`knowledge-consult.md`](knowledge-consult.md) | Canonical K+D query pattern (`rota knowledge query` + `rota decisions query`) used by every cycle-starting skill. | `/rota-debug`, `/rota-review`, `/rota-work` |
 | [`learn-rare-modes.md`](learn-rare-modes.md) | `/rota-learn` manual flags (`--term`, `--promote`, `--deprecate`, `--amend`) and the contradiction queue. | `/rota-learn` |
-| [`loop-mode-plan-dispatch.md`](loop-mode-plan-dispatch.md) | Loop-mode auto-plan dispatch (uncertainty pre-flight, orchestrator-model contract) plus rename + link-sweep collision detection for `/rota-work` Step 4. | `/rota-work` |
 | [`manual-gates.md`](manual-gates.md) | The manual-gate registry (`rota gate list`): gates the verbs enforce with `--confirm`, and the skill-only callouts. | `/rota-release`, `/rota-ship` |
 | [`milestone-tagging.md`](milestone-tagging.md) | Milestone-tagging UX pattern used by capture/go skills. | `/rota-capture` |
 | [`persistence-skills.md`](persistence-skills.md) | Shared spine and divergence axes for the persistence duo (`/rota-learn`, `/rota-decide`), plus umbrella scoping (hybrid KNOWLEDGE, umbrella-only DECISIONS). | `/rota-decide`, `/rota-learn` |
@@ -31,7 +30,6 @@ See KNOWLEDGE.md "Skill Authoring: Prose & References" for the conventions that 
 | [`silent-failure-hunter.md`](silent-failure-hunter.md) | Rubric for detecting work that reports complete but didn't move the system, used in review passes. | `/rota-review`, `/rota-ship` |
 | [`source-prefill.md`](source-prefill.md) | Source-prefill / promote-between-artifacts semantics for `/rota-decide`. | `/rota-decide` |
 | [`subagent-dispatch.md`](subagent-dispatch.md) | Cross-skill rulebook for when and how skills push work into subagents instead of the orchestrator thread. | `/rota-debug`, `/rota-qa`, `/rota-vision` |
-| [`terminal-loop-surface.md`](terminal-loop-surface.md) | Canonical bash block for surfacing `[Auto:Loop]` decisions from terminal-path skills before halting. | `/rota-debug`, `/rota-pause`, `/rota-work` |
 | [`worker-contract.md`](worker-contract.md) | Standing worker contract and approval provenance for `work.dispatch: "tmux"` / `"herdr"`. | `/rota-work` |
 | [`herdr-dispatch.md`](herdr-dispatch.md) | What herdr changes versus tmux: tabs as slots, startup dialogs, worker-contract additions. | `/rota-work` |
 | [`tmux-dispatch.md`](tmux-dispatch.md) | Judgment `rota worker` verbs do not enforce for `work.dispatch: "tmux"`: permissions, relay provenance, merge-gate lore, failure modes. | `/rota-work` |
