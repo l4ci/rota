@@ -62,7 +62,7 @@ func TestAddMatchesOldHelper(t *testing.T) {
 		{AddOpts{Milestone: "M02", Slice: true, Title: "After S05"}, "M02-S06", "slice"},
 	}
 	for _, s := range steps {
-		key, kind, err := Add(root, s.o)
+		key, kind, err := Add(root, Files(root), s.o)
 		if err != nil || key != s.key || kind != s.knd {
 			t.Fatalf("Add(%+v) = %q %q %v", s.o, key, kind, err)
 		}
@@ -95,25 +95,25 @@ func TestAddArgumentExits(t *testing.T) {
 		{"repos unregistered", AddOpts{Key: "M01-B07", Title: "t", Repos: "web,ghost"}, 3},
 	}
 	for _, c := range cases {
-		if _, _, err := Add(root, c.o); exitOf(err) != c.exit {
+		if _, _, err := Add(root, Files(root), c.o); exitOf(err) != c.exit {
 			t.Errorf("%s: %v, want exit %d", c.name, err, c.exit)
 		}
 	}
 	if _, err := os.Stat(filepath.Join(root, ".rota/plans")); err == nil {
 		t.Error("a failed add created .rota/plans")
 	}
-	Add(root, AddOpts{Key: "M01-B07", Title: "t"})
-	if _, _, err := Add(root, AddOpts{Key: "M01-B07", Title: "t"}); exitOf(err) != 4 {
+	Add(root, Files(root), AddOpts{Key: "M01-B07", Title: "t"})
+	if _, _, err := Add(root, Files(root), AddOpts{Key: "M01-B07", Title: "t"}); exitOf(err) != 4 {
 		t.Errorf("duplicate: %v", err)
 	}
 }
 
 func TestSliceMintingIgnoresOtherMilestonesAndItems(t *testing.T) {
 	root := project(t)
-	Add(root, AddOpts{Key: "M01-S09", Title: "t"})
-	Add(root, AddOpts{Key: "M02-S30", Title: "t"})
-	Add(root, AddOpts{Key: "M01-B50", Title: "t"})
-	key, _, _ := Add(root, AddOpts{Milestone: "M01", Slice: true, Title: "t"})
+	Add(root, Files(root), AddOpts{Key: "M01-S09", Title: "t"})
+	Add(root, Files(root), AddOpts{Key: "M02-S30", Title: "t"})
+	Add(root, Files(root), AddOpts{Key: "M01-B50", Title: "t"})
+	key, _, _ := Add(root, Files(root), AddOpts{Milestone: "M01", Slice: true, Title: "t"})
 	if key != "M01-S10" {
 		t.Fatalf("key = %s", key)
 	}
@@ -128,7 +128,7 @@ func TestSliceMintingConcurrent(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			key, _, err := Add(root, AddOpts{Milestone: "M01", Slice: true, Title: "t"})
+			key, _, err := Add(root, Files(root), AddOpts{Milestone: "M01", Slice: true, Title: "t"})
 			if err != nil {
 				t.Error(err)
 				return
@@ -152,7 +152,7 @@ func TestAddConcurrentExplicitKey(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			switch _, _, err := Add(root, AddOpts{Key: "M01-B07", Title: "t"}); {
+			switch _, _, err := Add(root, Files(root), AddOpts{Key: "M01-B07", Title: "t"}); {
 			case err == nil:
 				ok.Add(1)
 			case exitOf(err) == 4:
@@ -170,38 +170,38 @@ func TestAddConcurrentExplicitKey(t *testing.T) {
 
 func TestListShowPutRm(t *testing.T) {
 	root := project(t)
-	Add(root, AddOpts{Milestone: "M01", Slice: true, Title: "One"})
-	Add(root, AddOpts{Key: "M02-B07", Title: "Two", Repos: "web,api"})
+	Add(root, Files(root), AddOpts{Milestone: "M01", Slice: true, Title: "One"})
+	Add(root, Files(root), AddOpts{Key: "M02-B07", Title: "Two", Repos: "web,api"})
 	os.WriteFile(path(root, "M01-S99"), []byte("# no frontmatter\n"), 0o644)
-	all, _ := List(root, "")
+	all, _ := List(Files(root), "")
 	if len(all) != 2 || all[0].Key != "M01-S01" || all[0].UnitKind != "slice" || !reflect.DeepEqual(all[0].Repos, []string{}) ||
 		all[1].Key != "M02-B07" || all[1].UnitKind != "item" || !reflect.DeepEqual(all[1].Repos, []string{"web", "api"}) {
 		t.Fatalf("list = %+v", all)
 	}
-	if one, _ := List(root, "M02"); len(one) != 1 || one[0].Key != "M02-B07" {
+	if one, _ := List(Files(root), "M02"); len(one) != 1 || one[0].Key != "M02-B07" {
 		t.Fatalf("filtered = %+v", one)
 	}
 	for _, k := range []string{"M1-B07", "M01-b07", "M01-X1", "B07"} {
-		if _, err := Show(root, k); exitOf(err) != 2 {
+		if _, err := Show(Files(root), k); exitOf(err) != 2 {
 			t.Errorf("Show(%q) = %v, want exit 2", k, err)
 		}
 	}
-	if _, err := Show(root, "M09-B01"); exitOf(err) != 3 {
+	if _, err := Show(Files(root), "M09-B01"); exitOf(err) != 3 {
 		t.Errorf("show missing: %v", err)
 	}
-	if changed, err := Put(root, "M01-S01", "x\r\n"); err != nil || !changed {
+	if changed, err := Put(Files(root), "M01-S01", "x\r\n"); err != nil || !changed {
 		t.Fatalf("put: %v %v", changed, err)
 	}
-	if changed, _ := Put(root, "M01-S01", "x\r\n"); changed {
+	if changed, _ := Put(Files(root), "M01-S01", "x\r\n"); changed {
 		t.Error("identical put reported changed")
 	}
-	if _, err := Put(root, "M09-B01", "x"); exitOf(err) != 3 {
+	if _, err := Put(Files(root), "M09-B01", "x"); exitOf(err) != 3 {
 		t.Errorf("put missing: %v", err)
 	}
-	if err := Rm(root, "M01-S01"); err != nil {
+	if err := Rm(Files(root), "M01-S01"); err != nil {
 		t.Fatal(err)
 	}
-	if err := Rm(root, "M01-S01"); exitOf(err) != 3 {
+	if err := Rm(Files(root), "M01-S01"); exitOf(err) != 3 {
 		t.Errorf("second rm: %v", err)
 	}
 }
@@ -288,14 +288,14 @@ func TestRenameCheck(t *testing.T) {
 func TestExplicitAndMintedSliceRace(t *testing.T) {
 	for round := 0; round < 20; round++ {
 		root := project(t)
-		Add(root, AddOpts{Key: "M01-S01", Title: "seed"}) // so minting targets S02
+		Add(root, Files(root), AddOpts{Key: "M01-S01", Title: "seed"}) // so minting targets S02
 		var wg sync.WaitGroup
 		var okExplicit, okMint atomic.Int32
 		var mintedKey atomic.Value
 		wg.Add(2)
 		go func() {
 			defer wg.Done()
-			if _, _, err := Add(root, AddOpts{Key: "M01-S02", Title: "explicit"}); err == nil {
+			if _, _, err := Add(root, Files(root), AddOpts{Key: "M01-S02", Title: "explicit"}); err == nil {
 				okExplicit.Add(1)
 			} else if exitOf(err) != 4 {
 				t.Error(err)
@@ -303,7 +303,7 @@ func TestExplicitAndMintedSliceRace(t *testing.T) {
 		}()
 		go func() {
 			defer wg.Done()
-			key, _, err := Add(root, AddOpts{Milestone: "M01", Slice: true, Title: "minted"})
+			key, _, err := Add(root, Files(root), AddOpts{Milestone: "M01", Slice: true, Title: "minted"})
 			if err != nil {
 				t.Error(err)
 				return
@@ -341,14 +341,14 @@ func TestUncertainMatchesOldHelper(t *testing.T) {
 		return os.WriteFile(filepath.Join(rota, rel), b, 0o644)
 	})
 	// The recorded run did uncertain after its proof adds, so B07 has the detail file they create.
-	if _, _, err := proof.Add(root, "B07", proof.AddOpts{Check: "unit  tests", Result: "PASS", Evidence: "go test ./... ok", Sha: "abc1234"}); err != nil {
+	if _, _, err := proof.Add(proof.Files(root), root, "B07", proof.AddOpts{Check: "unit  tests", Result: "PASS", Evidence: "go test ./... ok", Sha: "abc1234"}); err != nil {
 		t.Fatal(err)
 	}
 	gold := filepath.Join("..", "proof", "testdata", "golden")
 	for _, id := range []string{"B07", "B08", "B09", "F12", "F13", "T03"} {
 		rc, _ := os.ReadFile(filepath.Join(gold, "uncertain-"+id+".rc"))
 		txt, _ := os.ReadFile(filepath.Join(gold, "uncertain-"+id+".txt"))
-		typ, reasons, err := Uncertain(root, id)
+		typ, reasons, err := uncertain(root, id)
 		if err != nil {
 			t.Fatalf("%s: %v", id, err)
 		}
@@ -360,10 +360,10 @@ func TestUncertainMatchesOldHelper(t *testing.T) {
 			t.Errorf("%s: reasons %q, old stdout %q", id, got, txt)
 		}
 	}
-	if _, _, err := Uncertain(root, "B99"); exitOf(err) != 3 {
+	if _, _, err := uncertain(root, "B99"); exitOf(err) != 3 {
 		t.Errorf("missing item: %v", err)
 	}
-	if _, _, err := Uncertain(t.TempDir(), "B07"); exitOf(err) != 3 {
+	if _, _, err := uncertain(t.TempDir(), "B07"); exitOf(err) != 3 {
 		t.Errorf("missing BACKLOG.md: %v", err)
 	}
 }
@@ -372,14 +372,22 @@ func TestUncertainHonoursOpenSections(t *testing.T) {
 	root := t.TempDir()
 	os.MkdirAll(filepath.Join(root, ".rota"), 0o777)
 	os.WriteFile(filepath.Join(root, ".rota/BACKLOG.md"), []byte("## Bugs\n\n- **[B07] [Major] Vague.** unclear? TBD?\n\n## Features\n\n- **[F01] [Major] Vague.** unclear? TBD?\n"), 0o644)
-	if _, r, err := Uncertain(root, "F01"); err != nil || len(r) == 0 {
+	if _, r, err := uncertain(root, "F01"); err != nil || len(r) == 0 {
 		t.Fatalf("default sections: %v %v", r, err)
 	}
 	t.Setenv("ROTA_OPEN_SECTIONS", "Bugs")
-	if _, _, err := Uncertain(root, "F01"); exitOf(err) != 3 {
+	if _, _, err := uncertain(root, "F01"); exitOf(err) != 3 {
 		t.Errorf("F01 outside ROTA_OPEN_SECTIONS: %v", err)
 	}
-	if _, r, err := Uncertain(root, "B07"); err != nil || len(r) == 0 {
+	if _, r, err := uncertain(root, "B07"); err != nil || len(r) == 0 {
 		t.Errorf("B07 inside: %v %v", r, err)
 	}
 }
+
+// uncertain is Uncertain on the file backlog without the item's ID.
+func uncertain(root, id string) (string, []string, error) {
+	_, typ, reasons, err := Uncertain(FileItems(root), id)
+	return typ, reasons, err
+}
+
+func asErr(err error, ae **artifact.Error) bool { return errors.As(err, ae) }
