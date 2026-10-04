@@ -41,5 +41,6 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Write access to l4ci/homebrew-tap; see .rota/RELEASE.md.
-          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          # SSH deploy key with write access to l4ci/homebrew-tap (key contents,
+          # not a path); see .rota/RELEASE.md.
+          HOMEBREW_TAP_DEPLOY_KEY: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}

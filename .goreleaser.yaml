@@ -1,6 +1,6 @@
 # Release build for the rota CLI. Asset names are a contract with install.sh: it
 # downloads rota_<os>_<arch> and checks it against checksums.txt. Run
-# `goreleaser release --snapshot --clean` to build locally.
+# `HOMEBREW_TAP_DEPLOY_KEY=x goreleaser release --snapshot --clean` to build locally.
 version: 2
 project_name: rota
 
@@ -43,8 +43,11 @@ release:
 changelog:
   disable: true
 
-# Homebrew formula, pushed to the tap on release. The tap repo and the token
-# are the maintainer's one-time setup (HOMEBREW_TAP_TOKEN, see .rota/RELEASE.md).
+# Homebrew formula, pushed to the tap on release over git with a deploy key. The
+# tap repo and the key are the maintainer's one-time setup (HOMEBREW_TAP_DEPLOY_KEY,
+# see .rota/RELEASE.md). private_key takes the key contents or a path; the key
+# must not be password-protected. A snapshot run never pushes but still renders the template, so set the
+# variable to any value for it: HOMEBREW_TAP_DEPLOY_KEY=x goreleaser release --snapshot --clean.
 # skip_upload: auto keeps a prerelease tag out of the tap. The formula installs
 # from the tarballs above; goreleaser fills in their URLs and sha256 sums.
 # Note: the formula is built when the draft is made, so it points at assets
@@ -56,7 +59,9 @@ brews:
     repository:
       owner: l4ci
       name: homebrew-tap
-      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+      git:
+        url: git@github.com:l4ci/homebrew-tap.git
+        private_key: "{{ .Env.HOMEBREW_TAP_DEPLOY_KEY }}"
     homepage: https://github.com/l4ci/rota
     description: Plan, ship and run parallel rounds with AI coding agents
     license: MIT

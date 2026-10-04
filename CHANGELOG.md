@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.9.0 — DATE TBD
+## v0.9.0 — 2026-10-04
 
 rota was hv-skills. The CLI moved to a new repo with a fresh history, and what would have been hv-skills 5.0 is rota 0.9.0. Older history stays in hv-skills.
 
