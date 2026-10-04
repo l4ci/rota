@@ -112,7 +112,7 @@ When the slate is done or the maintainer calls the round: `rota round wind-down`
 
 ## Solo mode
 
-`rota round start` picks the host once per round. With `work.dispatch` unset or `subagent` it uses herdr inside a herdr pane, tmux inside tmux, and otherwise solo; `rota round status` shows which. Under solo each worker is a Claude `Agent` subagent you launch, working in its slot's worktree.
+`rota round start` picks the host once per round. With `work.dispatch` unset or `subagent` it uses herdr inside a herdr pane, tmux inside tmux, and otherwise solo; `rota round status` shows which. Under solo each worker is a subagent you launch, working in its slot's worktree. That needs a harness whose subagent can be pinned to a directory: only Claude Code (its `Agent` tool) qualifies today, and everything below says `Agent` for that. In Codex, Hermes or opencode, if `rota round status` reports solo, don't start workers: tell the maintainer to run the round in tmux or herdr (`rota config set work.dispatch tmux`, then relaunch `rota orchestrate`).
 
 - **Launch.** `rota round assign` starts nothing: it returns `data.brief` and `data.worktree`. Launch one `Agent` per assignment, in the background so the workers run at once, with the brief as the prompt and an opening line telling it to work only in that worktree. A worker that edits your checkout instead has broken the round; reset its work before assigning again.
 - **Collect.** When an `Agent` returns, record what it said: `rota round report <slot> --state done --pr <url>`, or `blocked`, `dead`, `limited`, with `--evidence` quoting its last line. `rota round wait` doesn't block under solo; the `Agent` completion is your wait. Then review and gate as usual.

@@ -86,9 +86,10 @@ Where it opens depends on where you ran it:
 | In neither, only tmux installed | a tmux session `rota-<dir>` (your terminal becomes it) |
 | In neither, no herdr or tmux | in this terminal; workers run as subagents ([solo mode](#solo-mode)) |
 
-`work.dispatch: tmux` makes the last two rows tmux first. The herdr session is rota's own, started
-with `herdr --session rota-<dir> server`; your default herdr session is never driven.
-The agent comes from `orchestrator.harness` (`claude` or `codex`). `rota orchestrate --dry-run`
+`work.dispatch: tmux` skips the herdr-session row and uses tmux. The herdr session is rota's own,
+started with `herdr --session rota-<dir> server`; your default herdr session is never driven.
+The agent comes from `orchestrator.harness` (`claude`, `codex`, `hermes` or `opencode`; see
+[orchestrator harnesses](orchestrator-harnesses.md)). `rota orchestrate --dry-run`
 shows what would start.
 
 The orchestrator then does the steps below. To drive a round by hand instead:

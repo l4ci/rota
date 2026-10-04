@@ -33,6 +33,15 @@ type Harness struct {
 var Harnesses = []Harness{
 	{Name: "claude", Prompt: "/rota-orchestrate", Command: claudeCommand},
 	{Name: "codex", Prompt: "$rota-orchestrate", Command: func(string, any) ([]string, error) { return []string{"codex"}, nil }},
+	// Hermes and opencode take no positional prompt, so Command ends in the
+	// flag that does: the supervisor appends the prompt as the last argument,
+	// first start and restarts alike. `-s` preloads the skill in Hermes (a
+	// project skill loads only after `hermes skills trust`); opencode loads
+	// skills through a model-side tool, so its prompt names the skill in words.
+	{Name: "hermes", Prompt: "You are the orchestrator: run the rota-orchestrate skill.",
+		Command: func(string, any) ([]string, error) { return []string{"hermes", "chat", "-s", "rota-orchestrate", "-q"}, nil }},
+	{Name: "opencode", Prompt: "You are the orchestrator: load the rota-orchestrate skill and follow it.",
+		Command: func(string, any) ([]string, error) { return []string{"opencode", "--prompt"}, nil }},
 }
 
 // DefaultHarness is the value of orchestrator.harness when unset.
