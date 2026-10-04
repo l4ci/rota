@@ -79,6 +79,10 @@ type GateOpts struct {
 	Base      string
 	CheckOnly bool
 	NoVerify  bool
+	// Train marks a landing step of a merge train (see Train): the PRs were
+	// merged together and verified once, so a branch behind the base only
+	// because an earlier train member landed is not refused as stale.
+	Train bool
 	// Approve is the merge-approval gate (B1), run after provenance and right
 	// before the merge, never under CheckOnly. files lists the paths the merge
 	// changes. A non-nil error stops the gate with verdict approval-required
@@ -224,7 +228,10 @@ func (e Env) gate(ctx context.Context, root string, o GateOpts, res GateResult, 
 		if c != 0 {
 			behind = "?"
 		}
-		why, brokeMsg := g.staleReason(cfg)
+		var why, brokeMsg string
+		if !o.Train { // a train already merged every PR cleanly, in order, in its scratch tree
+			why, brokeMsg = g.staleReason(cfg)
+		}
 		if brokeMsg != "" {
 			return g.broke(brokeMsg)
 		}
@@ -233,7 +240,9 @@ func (e Env) gate(ctx context.Context, root string, o GateOpts, res GateResult, 
 			return g.verdict(GateStale, fmt.Sprintf("STALE %s %s — %s commit(s) landed on %s since it branched; %s", o.Slot, branch, behind, o.Base, why),
 				fmt.Sprintf("bounce: tell slot %s to `git merge %s`, resolve and re-verify, then re-gate", o.Slot, o.Base)), nil
 		}
-		res.Notes = append(res.Notes, fmt.Sprintf("STALE-MERGE %s — %s commit(s) landed on %s since %s branched; none touch its files and the merge is clean, merging as is", o.Slot, behind, o.Base, branch))
+		if !o.Train {
+			res.Notes = append(res.Notes, fmt.Sprintf("STALE-MERGE %s — %s commit(s) landed on %s since %s branched; none touch its files and the merge is clean, merging as is", o.Slot, behind, o.Base, branch))
+		}
 	default:
 		return g.broke(fmt.Sprintf("git merge-base --is-ancestor %s %s exited %d", g.baseRef, g.headRef, code))
 	}
@@ -333,6 +342,31 @@ func (e Env) gate(ctx context.Context, root string, o GateOpts, res GateResult, 
 	}
 
 	// 3. Re-verify on the merged tree.
+	cmds := verifyCommands(cfg)
+	if len(cmds) == 0 {
+		res.Verdict, res.VerifySkipped = GatePass, true
+		res.Notes = append(res.Notes, fmt.Sprintf("NO-VERIFY %s — refactor.verifyCommands is empty; merged tree was NOT gated by a command.", o.Slot),
+			"set refactor.verifyCommands via rota config set to make this gate real")
+		return res, nil
+	}
+	ok, logPath, err := e.runVerify(ctx, root, cmds, &res)
+	if err != nil {
+		return res, err
+	}
+	if !ok {
+		b, _ := os.ReadFile(logPath)
+		res.Verdict = GateVerifyFailed
+		res.Err = fmt.Sprintf("GATE-FAIL %s — merged tree does not pass verification at %s\nlast lines of the verify output (full log: %s):\n%s",
+			o.Slot, res.SHA, logPath, indentTail(string(b), 20))
+		res.Hint = fmt.Sprintf("fix forward on %s; the owning slot has usually moved on", o.Base)
+		return res, nil
+	}
+	res.Verdict = GatePass
+	return res, nil
+}
+
+// verifyCommands is refactor.verifyCommands: the non-blank entries.
+func verifyCommands(cfg any) []string {
 	var cmds []string
 	if v, ok := config.Lookup(cfg, "refactor.verifyCommands"); ok {
 		if list, ok := v.([]any); ok {
@@ -343,41 +377,35 @@ func (e Env) gate(ctx context.Context, root string, o GateOpts, res GateResult, 
 			}
 		}
 	}
-	if len(cmds) == 0 {
-		res.Verdict, res.VerifySkipped = GatePass, true
-		res.Notes = append(res.Notes, fmt.Sprintf("NO-VERIFY %s — refactor.verifyCommands is empty; merged tree was NOT gated by a command.", o.Slot),
-			"set refactor.verifyCommands via rota config set to make this gate real")
-		return res, nil
-	}
-	// Output is kept so a failure can be diagnosed: the tail goes to the
-	// message, the whole log stays on disk when anything failed.
+	return cmds
+}
+
+// runVerify runs every command in dir and records the passing ones in
+// res.Verified and each failure as a note. Output is kept so a failure can be
+// diagnosed: the whole log stays on disk (logPath) when anything failed, and is
+// removed when everything passed. err is the log file failing to open.
+func (e Env) runVerify(ctx context.Context, dir string, cmds []string, res *GateResult) (ok bool, logPath string, err error) {
 	logf, err := os.CreateTemp("", "rota-gate-verify-")
 	if err != nil {
-		return res, err
+		return false, "", err
 	}
 	logf.Close()
-	failed := false
+	ok = true
 	for _, c := range cmds {
-		out, code := e.Shell(ctx, root, c)
+		out, code := e.Shell(ctx, dir, c)
 		appendFile(logf.Name(), "== "+c+"\n"+out)
 		if code == 0 {
 			res.Verified = append(res.Verified, c)
 		} else {
 			res.Notes = append(res.Notes, "verify FAILED: "+c)
-			failed = true
+			ok = false
 		}
 	}
-	if failed {
-		b, _ := os.ReadFile(logf.Name())
-		res.Verdict = GateVerifyFailed
-		res.Err = fmt.Sprintf("GATE-FAIL %s — merged tree does not pass verification at %s\nlast lines of the verify output (full log: %s):\n%s",
-			o.Slot, res.SHA, logf.Name(), indentTail(string(b), 20))
-		res.Hint = fmt.Sprintf("fix forward on %s; the owning slot has usually moved on", o.Base)
-		return res, nil
+	if ok {
+		os.Remove(logf.Name())
+		return true, "", nil
 	}
-	os.Remove(logf.Name())
-	res.Verdict = GatePass
-	return res, nil
+	return false, logf.Name(), nil
 }
 
 // staleReason says why a branch behind the base must go back to its worker:

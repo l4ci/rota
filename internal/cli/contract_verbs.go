@@ -147,6 +147,7 @@ var contractVerbs = []string{
 	"review queue",
 	"review scaffolding",
 	"review scope",
+	"round architecture",
 	"round assign",
 	"round candidates",
 	"round escalate check",
@@ -157,6 +158,7 @@ var contractVerbs = []string{
 	"round return",
 	"round start",
 	"round status",
+	"round tick",
 	"round transfer",
 	"round wait",
 	"round watch",
@@ -204,4 +206,5 @@ var contractVerbs = []string{
 	"worker reset",
 	"worker session check",
 	"worker session ensure",
+	"worker train",
 }

@@ -40,6 +40,8 @@ Assign with `rota round assign <ID>`. The verb marks the item in progress, cuts 
 
 `rota round wait` is the blocking form for when you have nothing else to do. It blocks until a slot needs you, then returns that slot with the state and the evidence, and records what it returned. A slot comes back once per change: the next `wait` skips it until its worker moves again (a relay, a dispatch, a new state). Never poll in your own context: no sleep loops, no repeated `status`, no tailing panes. When `wait` returns, act, then call it again. If your shell cuts commands short, loop on a finite `--timeout`.
 
+**Autopilot.** With `round.autopilot` on, run `rota round watch --autopilot` in place of the plain watch. Each wake it ticks: it repairs safe drift, gates and merges finished PRs (never where `ship.mergeApproval` asks for a person, never without a pass), and assigns ready candidates to idle slots at the default tier. It returns only for `autopilot.needsYou` items you have not seen: a blocked, limited or dead slot, a failed gate, drift it won't repair, a merge a policy leaves to you. Those stay yours: answer, escalate, bounce or fix as usual. It never answers a `ROTA-BLOCKED`, so don't read a quiet watch as "no questions". It is still the one watch the Stop hook wants, and a wind-down stops it. `rota round tick` runs one pass by hand.
+
 **Keep every slot fed.** After every `wait`, before you review anything, fill every free slot from `rota round candidates`. A slot whose worker reported `done` with a PR is free: `assign` parks it, keeps the PR on the round's review list (`rota round status` lists it under `review`) and gives the slot its next issue. Hold a slot back only for a real ordering constraint: a dependency, an overlap you have decided to serialize, or the maintainer's stated order. "One worker is still busy" is never a reason.
 
 What each state asks of you:
@@ -55,6 +57,8 @@ What each state asks of you:
 | `unknown` | see section 4 |
 
 A wait that times out with every slot busy is fine. A free slot with candidates left is not.
+
+**Architecture review.** `rota round status`, `candidates` and `start` carry an `architecture` line: `architecture review in N issues`. After every `wait`, run `rota round architecture`. It does nothing until a review is due: `round.architectureEvery` closed non-refactor items (default 20, `0` is off), or an idle slot with no ready candidate. When due it mints one `arch(<area>): architecture review` item per area (`round.architectureAreas`, else the subsystem map, else the whole repo), assigns them to idle slots and restarts the count; you don't ask first. Leftover review items are ordinary candidates in every scope. Each runs `/rota-refactor <area>` in findings-only mode and files `refactor`-labelled issues, which don't count toward the next review and follow the normal candidate rules. `rota round architecture --check` only reads. Under solo it returns each `brief` and `worktree` to launch like an `assign`.
 
 ## 4. Reading failures
 
@@ -91,6 +95,8 @@ All three push the branch before moving the slot off it, so no work is lost. `ro
 ## 6. Merge
 
 Workers never merge. After `done`, read the PR: does it do what the issue says, and does it stay inside the files the issue named? Then `rota worker gate <slot> --base <branch>`, or `rota worker gate <PR number> --base <branch>` once the slot has moved on and the PR waits in review. The gate runs the checks on the merged tree, merges on a pass and drops the PR from the review list. Read its verdict; don't re-derive the rules it enforces.
+
+With several PRs waiting, merge them as one train: `rota worker train <slot|PR>... --base <branch>` in the order you want them to land. One verify covers all of them. On a red train it names the `culprit`: send that PR back, then re-run the train without it, or pass `--land-green` to land the members that verified before it. `base-moved` means nothing landed; re-run.
 
 Merge policy comes from config (`ship.mergeApproval`). With the default, the gate merges a passing PR. When policy requires approval (all PRs, or PRs touching listed paths), unattended runs pass `--escalate` to `worker gate`, or to `ship pr-merge` for a PR you merge by number. The verb refuses with exit 4 and posts the approval request on the PR thread, once however often you re-gate. Keep working other slots. `rota round escalate check` says when the maintainer has answered; re-run with `--approval <id>`, and the audit line quotes the answer. An answer that doesn't read as approval (`approve`, `approved`, `yes`, `lgtm`, `ship it`) holds the merge: `approval declined` means the slot is held, never retried, and you tell the maintainer. Interactive sessions ask the maintainer in prose (no blocking picker, see section 3) and pass `--confirm --confirm-note` with the answer verbatim. Never write a note the human didn't say.
 
