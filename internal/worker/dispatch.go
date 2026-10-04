@@ -181,6 +181,7 @@ func recordDispatch(root, slot, handle, task, kind string, round *int, now strin
 				s.Set("task", task)
 				s.Set("pr", nil)
 				s.Set("relays", []any{})
+				s.Delete("unsent") // a fresh task starts a fresh session
 				// A relay later reads the kind to know whether to sign. Claude
 				// slots keep their registry bytes unless a kind was recorded.
 				if kind == KindCodex || (kind != "" && Str(s, "kind") != "") {
@@ -437,7 +438,28 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 	tmp.WriteString(out)
 	tmp.Close()
 
-	sendErr := h.Send(ctx, o.Slot, handle, tmp.Name())
+	// A relay reuses the session, so a brief an earlier send left unsent on the
+	// prompt line is still there: submit it rather than type a second copy. A
+	// task dispatch starts a fresh session and has nothing pending.
+	var sendErr error
+	handled := false
+	if rs, ok := h.(host.Resubmitter); ok && o.Relay && Bool(s, "unsent") {
+		handled, sendErr = rs.SubmitPending(ctx, o.Slot, handle, tmp.Name())
+	}
+	if !handled {
+		sendErr = h.Send(ctx, o.Slot, handle, tmp.Name())
+	}
+	// Remember a stall so the next relay checks the prompt line first. Written
+	// only on a change: a clean send leaves the registry untouched.
+	if unsent := errors.Is(sendErr, host.ErrNotSubmitted); unsent != Bool(s, "unsent") {
+		updateSlot(root, o.Slot, func(s *jsonx.Object) {
+			if unsent {
+				s.Set("unsent", true)
+			} else {
+				s.Delete("unsent")
+			}
+		})
+	}
 	// Log the relay once it was (or may have been) sent. A stall does not prove
 	// the text was lost, and the gate must not call a delivered relay unlogged;
 	// only a refused dialog is certain nothing went out.

@@ -103,6 +103,6 @@ The confirmation step is asked every time, including when [`autonomy.level`](aut
 
 If only one task in a multi-task cycle is wrong, prefer `git revert <task-commit>`. It preserves the rest of the cycle's history and leaves the TODO entries archived.
 
-## Plain-text fallback
+## Hosts without a picker
 
-On hosts where `AskUserQuestion` is unavailable, `/rota-ship --undo` falls back to a plain-text prompt: `Apply rollback? (yes/no)`. The semantics are identical: nothing writes until you answer `yes`. The preview block above the prompt is the same structured plan rendered for the picker, so the decision surface stays the same regardless of host.
+On hosts where `AskUserQuestion` is unavailable, `/rota-ship --undo` asks in prose: `Apply rollback? (yes/no)`. The semantics are identical: nothing writes until you answer `yes`. The preview block above the prompt is the same structured plan rendered for the picker, so the decision surface stays the same regardless of host.

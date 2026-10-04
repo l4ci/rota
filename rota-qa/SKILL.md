@@ -3,15 +3,6 @@ name: rota-qa
 description: QA the built product — not the diff. Use on "/rota-qa", "run QA", "test the feature", "validate the build", before ship as a gate, or on first cycle to scaffold a per-repo strategy. Detects testing surfaces per repo (web, API, CLI, mobile, lib), picks runners (Playwright, smoke, contract, lighthouse, ZAP, axe), and produces a scored report with executable pass/fail results plus audit-style usability findings. Strategy is per-repo in .rota/qa/<repo>.md so the skill never hardcodes "browser". Modes — first-run (probe + propose strategy), run (execute strategy, emit verdict), restructure (audit strategy files). Opt-in gate via ship.qa.
 ---
 
-**Print the banner below verbatim before any other action — skip if dispatched as a subagent.** See `references/banner-preamble.md`.
-
-```
-════════════════════════════════════════════════════════════════════════
-  🧪  rota-qa  ·  QA the built product (not the diff)
-  triggers: "qa this", "kick the tires"  ·  pairs: rota-review, rota-ship
-════════════════════════════════════════════════════════════════════════
-```
-
 # rota-qa — Product Quality Assurance
 
 `/rota-qa` and `/rota-review` are deliberately separate:
@@ -53,7 +44,7 @@ Read `.rota/config.json`:
 | Mode-3 name | `restructure` (re-probe surfaces, retire dead strategies, fix broken commands) |
 | After-work approval gate | opt-in via `qa.afterWork: true`; default off — QA runs are slow and may need infra |
 | After-work trigger gate | `qa.afterWork: true` AND touched files match a target's `Watch globs` |
-| Authoring tier | Tier S for `run` (banner, `TaskCreate`, integer Step headers); Tier C for `first-run` / `restructure` (mode-numbered lists) |
+| Authoring tier | Tier S for `run` (integer Step headers); Tier C for `first-run` / `restructure` (mode-numbered lists) |
 | Commit ownership | `run` does not commit (read-only verdict, recorded with `rota verdict add`); `first-run` / `restructure` own a `chore(qa):` commit |
 
 ### Mode: first-run
@@ -82,9 +73,7 @@ Run when `.rota/qa/` is empty for the active scope (umbrella: per-repo; single-r
 
 ### Mode: run
 
-Tier S — banner already printed above.
-
-**Initialize task list.** Follow the canonical pattern in `references/task-list-init.md` — load `TaskCreate` via `ToolSearch select:TaskCreate,TaskUpdate` if needed, then create one task per phase below.
+Track these phases with the host's task tool if it has one.
 
 Phases:
 
@@ -132,6 +121,8 @@ Dispatch one subagent per check group (per pillar per target) in parallel via th
 - Returns a structured result: `{ name, command, exitCode, passCriterion, met, evidence }`.
 
 The orchestrator does not run the checks itself — parallel dispatch is the point. Aggregate the results.
+
+**Reuse proof; the merge gate is the only full run.** The merge gate already ran the full suite (`refactor.verifyCommands`, e.g. smoke plus `go test`) on the merged tree. Before dispatching, `rota proof show <ID> --json` for each item: a PASS row for the same check at the current `git rev-parse HEAD` (its `sha`) is reused, not re-run. Where a strategy's executable check is the gate's own command, treat the gate's PASS at that sha as the QA run. Dispatch runners only for checks with no PASS at this sha (browser, lighthouse, audit and other surface checks the gate does not cover). Record reused rows as such in the report.
 
 **Record proof.** For every item on the branch (`rota review scope --json` `data.referencedIds`), write each executable-check result as a proof row: `rota proof add <ID> --check "<check name>" --result PASS|FAIL --evidence "<artifact path under .rota/qa-runs/ or one-line output>"`. Rows are facts; the QA verdict (Step 7) is still the judgement.
 
@@ -225,7 +216,6 @@ Run on demand when strategy files have drifted from the project (new surfaces, r
 
 ## References
 
-- [`references/banner-preamble.md`](references/banner-preamble.md) — Banner-print rule.
 - [`references/three-mode-skill-shape.md`](references/three-mode-skill-shape.md) — Shared skeleton with `/rota-ship` Docs Mode.
 - [`references/subagent-dispatch.md`](references/subagent-dispatch.md) — Parallel runner pattern.
 - [`references/review-verdict-routing.md`](references/review-verdict-routing.md) — PASS / CONCERNS / FAIL contract; QA reuses it.
