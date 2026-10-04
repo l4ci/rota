@@ -15,7 +15,7 @@ This page is about calling the skills from Codex. To run Codex as a worker in a 
 
 In Codex, type `$rota-pause` where Claude Code uses `/rota-pause`. It is the same skill.
 
-Not covered: skill bodies still name Claude Code tools (`AskUserQuestion`, `TaskCreate`, `Agent`), so a skill may not run end to end in Codex. `rota` also has to be on `PATH` (install rota: see [install](../install.md)).
+Not covered: skill bodies still name Claude Code tools (`AskUserQuestion`, `Agent`), so a skill may not run end to end in Codex. `rota` also has to be on `PATH` (install rota: see [install](../install.md)).
 
 ## Checking discovery
 

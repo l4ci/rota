@@ -19,7 +19,7 @@ Cost/benefit rule, not a vibe.
 
 - ≤2 small reads
 - Work depends on context the orchestrator has already loaded
-- Step is interactive (`AskUserQuestion`, plain-text fallback, Socratic discovery)
+- Step is interactive (`AskUserQuestion`, Socratic discovery)
 - The brief itself would cost more tokens than the work
 
 ## Small-brief template
@@ -57,7 +57,7 @@ Read-only workers (research, summary, query relays) are exempt from the worktree
 ## What stays on the orchestrator
 
 - **Decisions** — which approach, which file, which next step.
-- **User interaction** — `AskUserQuestion`, plain-text fallback, Socratic flows.
+- **User interaction** — `AskUserQuestion`, Socratic flows.
 - **Atomic disk writes** — when ordering or all-or-nothing matters.
 - **Verification of subagent output** — confirm the return shape, sanity-check claims, reconcile contradictions.
 
