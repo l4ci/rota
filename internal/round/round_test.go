@@ -7,7 +7,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -94,6 +96,14 @@ type fakeForge struct {
 }
 
 func (f *fakeForge) OpenPRs(context.Context) ([]tracker.PR, error) { return f.prs, f.prsErr }
+func (f *fakeForge) ClosedNumbers(body string) []int {
+	var out []int
+	for _, m := range regexp.MustCompile(`(?i)closes #(\d+)`).FindAllStringSubmatch(body, -1) {
+		n, _ := strconv.Atoi(m[1])
+		out = append(out, n)
+	}
+	return out
+}
 func (f *fakeForge) PRState(_ context.Context, n int) (string, error) {
 	return f.states[n], nil
 }
