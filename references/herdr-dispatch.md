@@ -51,7 +51,7 @@ Agent names are unique per herdr **server**, not per workspace, so a bare `w1` w
 | 3 | pool, slot, worktree or body file missing, or `--relay` found no running session |
 | 4 | the reset guard found the slot holding work, or `work.workerCommand` carries a resume flag |
 | 5 | host failure, including outside herdr, a wrapper command and an unrecognised startup dialog; also `agent_blocked`: a dialog was already up, nothing was sent |
-| 6 | `agent_prompt_stalled` or timeout: no activity after the prompt. Inspect the tab before resending; a stall does not prove the text was lost |
+| 6 | `agent_prompt_stalled` or timeout: no activity after the prompt. Dispatch already pressed Enter up to 3 times if the brief was visible on the prompt line. A `--relay` resend then submits that pending text instead of typing it again (the slot is marked `unsent` in `workers.json`); a task dispatch starts a fresh session. Inspect the tab before resending; a stall does not prove the text was lost |
 
 ## Polling
 
