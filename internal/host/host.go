@@ -107,6 +107,16 @@ func (d *Deps) fill() {
 	}
 }
 
+// settle waits d for a terminal UI to react to input (a paste landing, Claude
+// Code booting). ROTA_HOST_SETTLE_PCT scales it, 100 by default: the smoke
+// suite drives a fake tmux that reacts at once, and sets it low (#84).
+func (d *Deps) settle(dur time.Duration) {
+	if pct, err := strconv.Atoi(d.Getenv("ROTA_HOST_SETTLE_PCT")); err == nil && pct >= 0 && pct < 100 {
+		dur = dur * time.Duration(pct) / 100
+	}
+	d.Sleep(dur)
+}
+
 // Sentinel failures of Send, so callers can map them to exit codes.
 var (
 	// ErrNotSubmitted: nothing showed the brief was picked up. Safe to resend.

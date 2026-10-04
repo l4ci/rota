@@ -65,7 +65,7 @@ func (t *tmux) waitReady(ctx context.Context, window string, timeout int) bool {
 		if looksBooted(p) {
 			return true
 		}
-		t.d.Sleep(2 * time.Second)
+		t.d.settle(2 * time.Second)
 	}
 	return false
 }
@@ -114,9 +114,9 @@ func (t *tmux) sendFile(ctx context.Context, handle, file, buf string) error {
 	}
 	t.tmux(ctx, "delete-buffer", "-b", buf)
 	for tries := 0; tries < 4; tries++ {
-		t.d.Sleep(time.Second)
+		t.d.settle(time.Second)
 		t.tmux(ctx, "send-keys", "-t", handle, "C-m")
-		t.d.Sleep(2 * time.Second)
+		t.d.settle(2 * time.Second)
 		if t.pane(ctx, handle) != before {
 			return nil
 		}

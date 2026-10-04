@@ -94,6 +94,9 @@ export ROTA_BIN
 # section that wants a fake puts it in front of them, as it already does. A poison call logs itself
 # and exits 99, and any logged call fails the run after the leak guard. A
 # section that resets PATH must start it with "$ROTA_POISON_BIN".
+# The fake tmux reacts at once, so the 1 to 3 s pauses rota leaves after a paste
+# (for Claude Code to take it) only cost time here: scale them down (#84).
+export ROTA_HOST_SETTLE_PCT=5
 export ROTA_POISON_BIN="$ROTA_STAGE/poison"  # sections that reset PATH keep this first
 ROTA_POISON_LOG="$ROTA_STAGE/poison.log"
 mkdir -p "$ROTA_POISON_BIN" && : > "$ROTA_POISON_LOG"
