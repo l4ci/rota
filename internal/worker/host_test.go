@@ -87,7 +87,7 @@ func slotField(t *testing.T, dir, slot, key string) string {
 	if s == nil {
 		t.Fatalf("no slot %s", slot)
 	}
-	v, _ := s.Get(key)
+	v, _ := s.Raw().Get(key)
 	if v == nil {
 		return "<null>"
 	}
@@ -201,7 +201,7 @@ func TestDispatchRelayGoesIntoTheRunningSession(t *testing.T) {
 		!strings.Contains(f.sent, "attribute it as 'orchestrator relay round 2'") || !strings.HasSuffix(f.sent, "sign-off in your session.]\n\n\n  the maintainer says use B  \nmore\n") {
 		t.Errorf("payload = %q", f.sent)
 	}
-	relays, _ := LoadRegistry(dir).Slot("w1").Get("relays")
+	relays, _ := LoadRegistry(dir).Slot("w1").Raw().Get("relays")
 	if len(relays.([]any)) != 1 {
 		t.Fatalf("relays = %v", relays)
 	}
@@ -241,7 +241,7 @@ func TestDispatchRelayLoggingFollowsWhatMayHaveBeenSent(t *testing.T) {
 			if exitOf(err) != tc.exit {
 				t.Fatalf("err = %v, want exit %d", err, tc.exit)
 			}
-			relays, _ := LoadRegistry(dir).Slot("w1").Get("relays")
+			relays, _ := LoadRegistry(dir).Slot("w1").Raw().Get("relays")
 			if len(relays.([]any)) != tc.logged {
 				t.Errorf("relays logged = %d, want %d", len(relays.([]any)), tc.logged)
 			}

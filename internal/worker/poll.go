@@ -10,7 +10,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/l4ci/rota/internal/host"
-	"github.com/l4ci/rota/internal/jsonx"
 )
 
 // Worker slot classification: the port of bin/hv-worker-poll.
@@ -247,7 +246,7 @@ func (e Env) Poll(ctx context.Context, root string, o PollOpts) (PollResult, err
 	}
 	var targets []pollTarget
 	for _, s := range reg.Slots() {
-		if o.Slot != "" && Str(s, "name") != o.Slot {
+		if o.Slot != "" && s.Name() != o.Slot {
 			continue
 		}
 		targets = append(targets, slotTarget(s))
@@ -270,14 +269,20 @@ func (e Env) Poll(ctx context.Context, root string, o PollOpts) (PollResult, err
 	for _, r := range rows {
 		byName[r.Name] = r
 	}
-	if _, err := updateSlotsAll(root, func(s *jsonx.Object) {
-		r, ok := byName[Str(s, "name")]
+	var rowErr error
+	if err := UpdateSlots(root, func(s *Slot) {
+		r, ok := byName[s.Name()]
 		if !ok {
 			return
 		}
-		recordRow(s, r, e.Now())
+		if err := recordRow(s, r, e.Now()); err != nil && rowErr == nil {
+			rowErr = err
+		}
 	}); err != nil {
 		return PollResult{}, err
+	}
+	if rowErr != nil {
+		return PollResult{}, rowErr
 	}
 	after, _ := os.ReadFile(RegistryPath(root))
 	return PollResult{Slots: rows, Changed: string(before) != string(after)}, nil
@@ -300,35 +305,30 @@ func alwaysNews(state string) bool {
 // recordRow writes one classified row into its slot, the way every writer of
 // a pane's state does (Poll, Wait). A row different from `seen` drops it: the
 // slot moved on, so its next arrival is news again.
-func recordRow(s *jsonx.Object, r PollRow, now time.Time) {
-	next := strings.ToLower(r.State)
+func recordRow(s *Slot, r PollRow, now time.Time) error {
 	// A state change is the registry's only record of activity that is not a
 	// commit or an edit: `round reconcile` reads it as the stall clock.
-	if Str(s, "state") != next {
-		s.Set("activeAt", stamp(now))
+	if err := s.MarkState(r.State, stamp(now)); err != nil {
+		return err
 	}
-	s.Set("state", next)
-	if Str(s, "seen") != seenKey(r.State, r.Evidence) {
-		s.Delete("seen")
+	if s.Seen() != seenKey(r.State, r.Evidence) {
+		s.ClearSeen()
 	}
 	// Only a URL-shaped ROTA-DONE argument becomes slot.pr. The contract
 	// allows a bare branch name there, and handing a branch to `gh pr
 	// merge` fails where the gate's local merge would have worked.
 	if r.State == StateDone && rePRURL.MatchString(r.Evidence) {
-		s.Set("pr", r.Evidence)
+		s.SetPR(r.Evidence)
 	}
+	return nil
 }
 
 // pollTarget is one slot to classify: its name, host handle, the state the
 // registry last recorded for it and the state `round wait` last returned for it.
 type pollTarget struct{ name, handle, prev, seen string }
 
-func slotTarget(s *jsonx.Object) pollTarget {
-	handle := Str(s, "handle")
-	if handle == "" {
-		handle = Str(s, "window") // pre-handle field name
-	}
-	return pollTarget{Str(s, "name"), handle, Str(s, "state"), Str(s, "seen")}
+func slotTarget(s *Slot) pollTarget {
+	return pollTarget{s.Name(), s.PaneHandle(), s.State(), s.Seen()}
 }
 
 // classify reads each target's pane twice, settle apart, and classifies it.
@@ -358,18 +358,6 @@ func (e Env) classify(ctx context.Context, h host.Host, targets []pollTarget, se
 		rows = append(rows, PollRow{t.name, st, ev})
 	}
 	return rows, settling
-}
-
-// updateSlotsAll edits every slot under the registry lock.
-func updateSlotsAll(root string, mutate func(s *jsonx.Object)) (bool, error) {
-	def := jsonx.NewObject()
-	def.Set("slots", []any{})
-	err := Update(root, def, func(doc *jsonx.Object) {
-		for _, s := range (Registry{Doc: doc}).Slots() {
-			mutate(s)
-		}
-	})
-	return err == nil, err
 }
 
 // IsPRURL reports whether s is a PR or MR URL, the shape `worker poll` stores

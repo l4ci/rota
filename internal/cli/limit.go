@@ -173,7 +173,7 @@ func buildLimits(ctx context.Context, c *Ctx, root string, cfg any, set limits.S
 			out = append(out, limits.Target{Session: limits.Orchestrator, Pane: orchPane, Orchestrator: true})
 		}
 		for _, s := range worker.LoadRegistry(root).Slots() {
-			name, handle := worker.Str(s, "name"), worker.Str(s, "handle")
+			name, handle := s.Name(), s.Handle()
 			if name == "" || handle == "" {
 				continue
 			}
@@ -190,8 +190,8 @@ func buildLimits(ctx context.Context, c *Ctx, root string, cfg any, set limits.S
 				panes[key] = pane
 				mu.Unlock()
 			}
-			out = append(out, limits.Target{Session: name, Pane: pane, Account: worker.Str(s, "account"),
-				Issue: round.SlotIssue(worker.Str(s, "task"), worker.Str(s, "branch"), name)})
+			out = append(out, limits.Target{Session: name, Pane: pane, Account: s.Account(),
+				Issue: round.SlotIssue(s.Task(), s.Branch(), name)})
 		}
 		return out
 	}
@@ -234,11 +234,11 @@ func buildLimits(ctx context.Context, c *Ctx, root string, cfg any, set limits.S
 				return "", false
 			}
 			for _, s := range worker.LoadRegistry(root).Slots() {
-				name := worker.Str(s, "name")
-				if worker.Str(s, "account") != account || !inList(rc.Roster, name) {
+				name := s.Name()
+				if s.Account() != account || !inList(rc.Roster, name) {
 					continue
 				}
-				if round.SlotIssue(worker.Str(s, "task"), worker.Str(s, "branch"), name) == "" && worker.Str(s, "state") != "busy" {
+				if round.SlotIssue(s.Task(), s.Branch(), name) == "" && s.State() != "busy" {
 					return name, true
 				}
 			}

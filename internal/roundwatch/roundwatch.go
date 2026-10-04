@@ -258,8 +258,8 @@ func Diff(prev, cur map[string]string) []Change {
 func LocalSnapshot(root string) map[string]string {
 	out := map[string]string{}
 	for _, s := range worker.LoadRegistry(root).Slots() {
-		if pr := worker.Str(s, "pr"); pr != "" {
-			out[changeKeySlotPR+worker.Str(s, "name")] = pr
+		if pr := s.PR(); pr != "" {
+			out[changeKeySlotPR+s.Name()] = pr
 		}
 	}
 	for _, e := range escalation.Load(root) {
@@ -282,15 +282,15 @@ var attention = map[string]bool{"done": true, "blocked": true, "needs-permission
 func Digest(root string, round int, armed bool) string {
 	var parts []string
 	for _, s := range worker.LoadRegistry(root).Slots() {
-		st := strings.ToLower(worker.Str(s, "state"))
+		st := strings.ToLower(s.State())
 		if st == "" || st == "idle" {
 			continue
 		}
-		p := worker.Str(s, "name") + " " + st
-		if is := worker.Str(s, "issue"); is != "" {
+		p := s.Name() + " " + st
+		if is := s.Issue(); is != "" {
 			p += " #" + strings.TrimPrefix(is, "#")
 		}
-		if pr := worker.Str(s, "pr"); pr != "" {
+		if pr := s.PR(); pr != "" {
 			p += " " + pr
 		}
 		if attention[st] {
@@ -330,13 +330,13 @@ func NeedsWatch(root string) (bool, []string) {
 	var attn []string
 	need := false
 	for _, s := range worker.LoadRegistry(root).Slots() {
-		st := strings.ToLower(worker.Str(s, "state"))
+		st := strings.ToLower(s.State())
 		if st == "" || st == "idle" {
 			continue
 		}
 		need = true
 		if attention[st] {
-			attn = append(attn, worker.Str(s, "name")+" "+st)
+			attn = append(attn, s.Name()+" "+st)
 		}
 	}
 	for _, e := range escalation.Load(root) {

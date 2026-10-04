@@ -117,8 +117,8 @@ type prInfo struct{ head, sha, base, state, merge string }
 // A slot that records no PR while a record queued from it exists is refused:
 // the habitual `gate <slot>` would otherwise merge the slot's NEW branch.
 func (r Registry) GateTarget(arg string) (s *jsonx.Object, queued bool, err error) {
-	if s = r.Slot(arg); s != nil {
-		if Str(s, "pr") == "" {
+	if sl := r.Slot(arg); sl != nil {
+		if sl.PR() == "" {
 			for _, q := range r.PRs() {
 				if Str(q, "from") == arg {
 					return nil, false, &Error{Exit: ExitUsage,
@@ -127,15 +127,15 @@ func (r Registry) GateTarget(arg string) (s *jsonx.Object, queued bool, err erro
 				}
 			}
 		}
-		return s, false, nil
+		return sl.Raw(), false, nil
 	}
 	if n, ok := PRRefNumber(arg); ok {
 		if q := r.QueuedPR(arg); q != nil {
 			return q, true, nil
 		}
 		for _, sl := range r.Slots() {
-			if m, ok := PRRefNumber(Str(sl, "pr")); ok && m == n {
-				return sl, false, nil
+			if m, ok := PRRefNumber(sl.PR()); ok && m == n {
+				return sl.Raw(), false, nil
 			}
 		}
 		return nil, false, fail(ExitResolution, fmt.Sprintf("no PR in review or slot records PR #%d", n))
