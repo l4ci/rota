@@ -100,7 +100,7 @@ func (e Env) Preflight(ctx context.Context, root, kind, slot string, accept bool
 	}
 	wt := ""
 	if s := LoadRegistry(root).Slot(slot); s != nil {
-		wt = Str(s, "worktree")
+		wt = s.Worktree()
 	}
 	set, err := h.Preflight(ctx, e.probe(), harness.PreflightOpts{
 		Slot: slot, Accept: accept, Herdr: dispatchKind(root) == "herdr", Worktree: wt,

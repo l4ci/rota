@@ -102,9 +102,9 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 		var out []roundtick.Slot
 		for _, s := range worker.LoadRegistry(root).Slots() {
 			out = append(out, roundtick.Slot{
-				Name: worker.Str(s, "name"), State: strings.ToLower(worker.Str(s, "state")),
-				Issue: round.SlotIssue(worker.Str(s, "task"), worker.Str(s, "branch"), worker.Str(s, "name")),
-				PR:    worker.Str(s, "pr"),
+				Name: s.Name(), State: strings.ToLower(s.State()),
+				Issue: round.SlotIssue(s.Task(), s.Branch(), s.Name()),
+				PR:    s.PR(),
 			})
 		}
 		return out

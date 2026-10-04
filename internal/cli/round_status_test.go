@@ -79,7 +79,7 @@ func TestRoundStatusAndReconcile(t *testing.T) {
 	if code != 0 || d["changed"] != true || len(d["repaired"].([]any)) != 2 || len(d["drift"].([]any)) != 0 {
 		t.Fatalf("reconcile --apply = %d %v", code, d)
 	}
-	if s := worker.LoadRegistry(root).Slot("dana"); s == nil || worker.Str(s, "task") != "58" {
+	if s := worker.LoadRegistry(root).Slot("dana"); s == nil || s.Task() != "58" {
 		t.Errorf("registry = %v", s)
 	}
 

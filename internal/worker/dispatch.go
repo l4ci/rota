@@ -81,45 +81,20 @@ func SoloRefusal(root, equiv string) error {
 
 // clearHandle: the slot's session is gone, so drop its handle and mark it idle.
 func clearHandle(root, slot string) {
-	updateSlot(root, slot, func(s *jsonx.Object) {
-		s.Set("handle", nil)
-		s.Set("state", "idle")
-	})
+	UpdateSlot(root, slot, func(s *Slot) { s.Release() })
 }
 
 // recordDispatch writes the handle, state=busy, activeAt (the stall signal of
 // `round reconcile`) and, for a task, the task id (clearing the previous
 // task's PR and relay log).
 func recordDispatch(root, slot, handle, task, kind string, round *int, now string) error {
-	def := jsonx.NewObject()
-	def.Set("slots", []any{})
-	return Update(root, def, func(doc *jsonx.Object) {
+	return Update(root, slotsDefault(), func(doc *jsonx.Object) {
 		if round != nil {
 			doc.Set("round", *round)
 		}
 		for _, s := range (Registry{Doc: doc}).Slots() {
-			if Str(s, "name") != slot {
-				continue
-			}
-			s.Delete("window")
-			var h any
-			if handle != "" {
-				h = handle
-			}
-			s.Set("handle", h)
-			s.Set("state", "busy")
-			s.Set("activeAt", now)
-			s.Delete("seen") // a dispatch or relay re-arms `round wait`
-			if task != "" {
-				s.Set("task", task)
-				s.Set("pr", nil)
-				s.Set("relays", []any{})
-				s.Delete("unsent") // a fresh task starts a fresh session
-				// A relay later reads the kind to know whether to sign. Claude
-				// slots keep their registry bytes unless a kind was recorded.
-				if (kind != "" && kind != harness.Default) || (kind != "" && Str(s, "kind") != "") {
-					s.Set("kind", kind)
-				}
+			if s.Name() == slot {
+				s.Dispatch(handle, task, kind, now)
 			}
 		}
 	})
@@ -199,18 +174,13 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 	if s == nil {
 		return res, fail(ExitResolution, fmt.Sprintf("slot '%s' is not in the pool", o.Slot))
 	}
-	worktree := Str(s, "worktree")
-	// `window` is the pre-handle field name; read it so an unmigrated registry
-	// still dispatches.
-	handle := Str(s, "handle")
-	if handle == "" {
-		handle = Str(s, "window")
-	}
+	worktree := s.Worktree()
+	handle := s.PaneHandle()
 	session := Str(reg.Doc, "session")
 	if session == "" {
 		session = "rota"
 	}
-	configDir := Str(s, "configDir")
+	configDir := s.ConfigDir()
 	if !isDir(worktree) {
 		return res, fail(ExitResolution, fmt.Sprintf("slot '%s' worktree missing: %s", o.Slot, worktree))
 	}
@@ -225,7 +195,7 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 	if !o.Relay {
 		kind := o.Kind
 		if kind == "" {
-			kind = Str(s, "kind")
+			kind = s.Kind()
 		}
 		var err error
 		if hz, err = Harness(kind); err != nil {
@@ -298,7 +268,7 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 		// A relay is signed by the key of the session it goes into.
 		var err error
 		var ok bool
-		if hz, ok = harness.Lookup(Str(s, "kind")); !ok {
+		if hz, ok = harness.Lookup(s.Kind()); !ok {
 			hz, _ = harness.Lookup("")
 		}
 		if signKey, err = hz.RelayKey(func() (string, error) { return CommonDir(ctx, e.Git, root) }, o.Slot); err != nil {
@@ -346,7 +316,7 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 	// task dispatch starts a fresh session and has nothing pending.
 	var sendErr error
 	handled := false
-	if rs, ok := h.(host.Resubmitter); ok && o.Relay && Bool(s, "unsent") {
+	if rs, ok := h.(host.Resubmitter); ok && o.Relay && s.Unsent() {
 		handled, sendErr = rs.SubmitPending(ctx, o.Slot, handle, tmp.Name())
 	}
 	if !handled {
@@ -354,14 +324,8 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 	}
 	// Remember a stall so the next relay checks the prompt line first. Written
 	// only on a change: a clean send leaves the registry untouched.
-	if unsent := errors.Is(sendErr, host.ErrNotSubmitted); unsent != Bool(s, "unsent") {
-		updateSlot(root, o.Slot, func(s *jsonx.Object) {
-			if unsent {
-				s.Set("unsent", true)
-			} else {
-				s.Delete("unsent")
-			}
-		})
+	if unsent := errors.Is(sendErr, host.ErrNotSubmitted); unsent != s.Unsent() {
+		UpdateSlot(root, o.Slot, func(s *Slot) { s.SetUnsent(unsent) })
 	}
 	// Log the relay once it was (or may have been) sent. A stall does not prove
 	// the text was lost, and the gate must not call a delivered relay unlogged;
@@ -371,11 +335,7 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 		entry.Set("round", round)
 		entry.Set("ts", e.Now().UTC().Format("2006-01-02T15:04:05Z"))
 		entry.Set("summary", relaySummary(string(brief)))
-		if _, err := updateSlot(root, o.Slot, func(s *jsonx.Object) {
-			v, _ := s.Get("relays")
-			l, _ := v.([]any)
-			s.Set("relays", append(l, entry))
-		}); err != nil {
+		if _, err := UpdateSlot(root, o.Slot, func(s *Slot) { s.AppendRelay(entry) }); err != nil {
 			return res, err
 		}
 	}
@@ -467,10 +427,7 @@ func (e Env) KillSlot(ctx context.Context, root, slot string) error {
 	if RegistryHost(root) == host.Solo {
 		return nil // a subagent has no pane to close
 	}
-	handle := Str(s, "handle")
-	if handle == "" {
-		handle = Str(s, "window")
-	}
+	handle := s.PaneHandle()
 	h := e.NewHost(hostKind(root))
 	if err := h.Require(); err != nil {
 		return fail(ExitUnavailable, err.Error())

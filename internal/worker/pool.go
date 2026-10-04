@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/jsonx"
@@ -100,7 +99,7 @@ func (e Env) PoolInit(ctx context.Context, root string, o InitOpts, acc *Account
 		reg := LoadRegistry(root)
 		regWT := ""
 		if s := reg.Slot(name); s != nil {
-			regWT = Str(s, "worktree")
+			regWT = s.Worktree()
 		}
 		if regWT != "" && regWT != realPath(rel) {
 			if _, code := e.git(regWT, "rev-parse", "--git-dir"); code == 0 {
@@ -141,8 +140,8 @@ func (e Env) PoolInit(ctx context.Context, root string, o InitOpts, acc *Account
 		// already holds for the slot, else the init-time name.
 		if cur, code := e.git(abs, "symbolic-ref", "--short", "-q", "HEAD"); code == 0 && cur != "" {
 			branch = cur
-		} else if s := LoadRegistry(root).Slot(name); s != nil && Str(s, "branch") != "" {
-			branch = Str(s, "branch")
+		} else if s := LoadRegistry(root).Slot(name); s != nil && s.Branch() != "" {
+			branch = s.Branch()
 		}
 		handle := session + ":" + name
 		// A round slot has no session until its first dispatch, whatever the
@@ -219,44 +218,12 @@ func registerSlot(root, name, branch, worktree, base, session, handle string) er
 		if _, ok := doc.Get("slots"); !ok {
 			doc.Set("slots", []any{})
 		}
-		reg := Registry{Doc: doc}
-		var rota any
-		if handle != "" {
-			rota = handle
-		}
-		if existing := reg.Slot(name); existing == nil {
-			s := NewSlot(name, branch, worktree, base, rota)
-			list, _ := doc.Get("slots")
-			l, _ := list.([]any)
-			doc.Set("slots", append(l, s))
+		if existing := (Registry{Doc: doc}).Slot(name); existing == nil {
+			AppendSlot(doc, NewSlot(name, branch, worktree, base, handle))
 		} else {
-			// Migrate the pre-herdr field name. An empty handle (herdr) never
-			// clobbers a live tab id that dispatch recorded.
-			legacy, _ := existing.Get("window")
-			existing.Delete("window")
-			existing.Set("branch", branch)
-			existing.Set("worktree", worktree)
-			existing.Set("base", base)
-			cur, _ := existing.Get("handle")
-			switch {
-			case handle != "":
-			case cur != nil && cur != "":
-				rota = cur
-			default:
-				rota = legacy
-				if legacy == "" {
-					rota = nil
-				}
-			}
-			existing.Set("handle", rota)
+			existing.Reregister(branch, worktree, base, handle)
 		}
-		list, _ := doc.Get("slots")
-		l, _ := list.([]any)
-		sort.SliceStable(l, func(i, j int) bool {
-			a, _ := l[i].(*jsonx.Object)
-			b, _ := l[j].(*jsonx.Object)
-			return a != nil && b != nil && Str(a, "name") < Str(b, "name")
-		})
+		SortSlots(doc)
 	})
 }
 
@@ -286,15 +253,15 @@ func (e Env) Reap(root string, names []string, all bool) (reaped []string, err e
 		want[n] = true
 	}
 	for _, s := range reg.Slots() {
-		name := Str(s, "name")
+		name := s.Name()
 		if !all && !want[name] {
 			continue
 		}
 		reaped = append(reaped, name)
-		if wt := Str(s, "worktree"); wt != "" {
+		if wt := s.Worktree(); wt != "" {
 			e.git(root, "worktree", "remove", "--force", wt)
 		}
-		if br := Str(s, "branch"); br != "" {
+		if br := s.Branch(); br != "" {
 			e.git(root, "branch", "-D", br)
 		}
 	}
@@ -303,17 +270,15 @@ func (e Env) Reap(root string, names []string, all bool) (reaped []string, err e
 			return reaped, fail(ExitUnavailable, "git worktree prune failed")
 		}
 	}
-	def := jsonx.NewObject()
-	def.Set("slots", []any{})
 	gone := map[string]bool{}
 	for _, n := range reaped {
 		gone[n] = true
 	}
-	err = Update(root, def, func(doc *jsonx.Object) {
+	err = Update(root, slotsDefault(), func(doc *jsonx.Object) {
 		var keep []any
 		for _, s := range (Registry{Doc: doc}).Slots() {
-			if !gone[Str(s, "name")] {
-				keep = append(keep, s)
+			if !gone[s.Name()] {
+				keep = append(keep, s.Raw())
 			}
 		}
 		if keep == nil {
@@ -322,24 +287,4 @@ func (e Env) Reap(root string, names []string, all bool) (reaped []string, err e
 		doc.Set("slots", keep)
 	})
 	return reaped, err
-}
-
-// NewSlot is a fresh registry entry. Slots are seeded as already-reported idle
-// so a parked slot never fires a spurious "it finished" on the first poll.
-// Only a slot that has gone BUSY re-arms that report.
-func NewSlot(name, branch, worktree, base string, handle any) *jsonx.Object {
-	s := jsonx.NewObject()
-	s.Set("name", name)
-	s.Set("branch", branch)
-	s.Set("worktree", worktree)
-	s.Set("base", base)
-	s.Set("handle", handle)
-	s.Set("state", "idle")
-	s.Set("task", nil)
-	s.Set("pr", nil)
-	// Orchestrator relays sent to this slot, for the gate's
-	// approval-provenance check; dispatch --relay appends.
-	s.Set("relays", []any{})
-	s.Set("configDir", nil)
-	return s
 }

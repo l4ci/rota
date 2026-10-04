@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-
-	"github.com/l4ci/rota/internal/jsonx"
 )
 
 // ResetResult is the outcome of the slot reset guard.
@@ -74,7 +72,7 @@ func (e Env) ResetTo(root, slot, task, newBranch string, checkOnly bool) (ResetR
 	if s == nil {
 		return res, fail(ExitResolution, fmt.Sprintf("slot '%s' is not in the pool", slot))
 	}
-	worktree, base, oldBranch, oldTask := Str(s, "worktree"), Str(s, "base"), Str(s, "branch"), Str(s, "task")
+	worktree, base, oldBranch, oldTask := s.Worktree(), s.Base(), s.Branch(), s.Task()
 	if !isDir(worktree) {
 		return res, fail(ExitResolution, fmt.Sprintf("slot '%s' worktree missing: %s", slot, worktree))
 	}
@@ -147,7 +145,7 @@ func (e Env) ResetTo(root, slot, task, newBranch string, checkOnly bool) (ResetR
 	if strings.HasPrefix(oldBranch, "rota-worker/") && oldBranch != newBranch {
 		e.git(root, "branch", "-D", oldBranch)
 	}
-	if _, err := updateSlot(root, slot, func(s *jsonx.Object) { s.Set("branch", newBranch) }); err != nil {
+	if _, err := UpdateSlot(root, slot, func(s *Slot) { s.SetBranch(newBranch) }); err != nil {
 		return res, err
 	}
 	res.Branch, res.Changed = newBranch, true

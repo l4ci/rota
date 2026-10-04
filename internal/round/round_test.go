@@ -66,7 +66,7 @@ func newRepo(t *testing.T, branches map[string]string, ahead ...string) string {
 
 func writeRegistry(t *testing.T, root string, slots ...*jsonx.Object) {
 	t.Helper()
-	err := worker.Update(root, slotsDefault(), func(doc *jsonx.Object) {
+	err := worker.UpdateDoc(root, func(doc *jsonx.Object) {
 		var l []any
 		for _, s := range slots {
 			l = append(l, s)
@@ -79,7 +79,7 @@ func writeRegistry(t *testing.T, root string, slots ...*jsonx.Object) {
 }
 
 func slot(root, name, branch string, mod func(*jsonx.Object)) *jsonx.Object {
-	s := worker.NewSlot(name, branch, filepath.Join(root, ".worktrees", name), "main", nil)
+	s := worker.NewSlot(name, branch, filepath.Join(root, ".worktrees", name), "main", "").Raw()
 	if mod != nil {
 		mod(s)
 	}
@@ -292,14 +292,14 @@ func TestReconcileApplyRepairsOnlyTheSafeKinds(t *testing.T) {
 		t.Errorf("labels added = %v", forge.added)
 	}
 	reg := worker.LoadRegistry(root)
-	if b := reg.Slot("ben"); worker.Str(b, "state") != "dead" || worker.Str(b, "handle") != "" {
+	if b := reg.Slot("ben"); b.State() != "dead" || b.Handle() != "" {
 		t.Errorf("ben = %v", b)
 	}
-	if k := reg.Slot("kit"); worker.Str(k, "pr") != "https://github.com/o/r/pull/12" {
-		t.Errorf("kit pr = %q", worker.Str(k, "pr"))
+	if k := reg.Slot("kit"); k.PR() != "https://github.com/o/r/pull/12" {
+		t.Errorf("kit pr = %q", k.PR())
 	}
 	d := reg.Slot("dana")
-	if d == nil || worker.Str(d, "task") != "58" || worker.Str(d, "branch") != "dana/58-foo" || worker.Str(d, "handle") != "w2:t1" {
+	if d == nil || d.Task() != "58" || d.Branch() != "dana/58-foo" || d.Handle() != "w2:t1" {
 		t.Errorf("dana = %v", d)
 	}
 	// A second pass finds the repaired kinds gone.
@@ -411,4 +411,10 @@ func TestParkedSlotAgentsAreAllUnclaimed(t *testing.T) {
 	if got := kinds(rep.Findings); !reflect.DeepEqual(got, want) {
 		t.Errorf("findings\n got %v\nwant %v", got, want)
 	}
+}
+
+// rawSlot edits one slot's record as JSON, for tests that stage a state the
+// verbs would not write.
+func rawSlot(root, name string, fn func(o *jsonx.Object)) error {
+	return editSlot(root, name, func(s *worker.Slot) error { fn(s.Raw()); return nil })
 }
