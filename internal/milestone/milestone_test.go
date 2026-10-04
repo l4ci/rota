@@ -224,3 +224,38 @@ func TestAddWithoutOverviewAndConcurrent(t *testing.T) {
 		t.Errorf("%d overview entries, want 6", n)
 	}
 }
+
+func TestFileStoreRoundTrip(t *testing.T) {
+	root := t.TempDir()
+	var st Store = FileStore{Root: root}
+	if st.OnTracker() {
+		t.Fatal("file store reports OnTracker")
+	}
+	id, err := st.Add("Title", "Summary.", []string{"M09"})
+	if err != nil || id != "M01" {
+		t.Fatalf("add = %q %v", id, err)
+	}
+	if changed, err := st.SetStatus(id, "active"); err != nil || !changed {
+		t.Fatalf("set status = %v %v", changed, err)
+	}
+	list, err := st.List()
+	if err != nil || len(list) != 1 || !reflect.DeepEqual(ActiveIDs(list), []string{id}) || list[0].Ready {
+		t.Fatalf("list = %+v %v", list, err)
+	}
+	text, err := st.Show(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changed, err := st.Put(id, text); err != nil || changed {
+		t.Fatalf("put same text = %v %v", changed, err)
+	}
+	if _, err := st.Put(id, "no frontmatter"); exitOf(err) != artifact.ExitRefused {
+		t.Fatalf("put without id: %v", err)
+	}
+	if _, err := Reindex(root, st); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(read(t, filepath.Join(root, ".rota", "MILESTONES.md")), "- M01 — Title") {
+		t.Error("Reindex did not list the active milestone")
+	}
+}
