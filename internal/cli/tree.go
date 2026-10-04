@@ -16,6 +16,7 @@ func Tree() *Command {
 	root := &Command{
 		Name:    "rota",
 		Summary: "rota command line",
+		Verb:    bareRota,
 		Subs: []*Command{
 			{Name: "version", Summary: "print the rota version", Verb: versionVerb},
 			knowledgeCommands(),
@@ -38,7 +39,7 @@ func Tree() *Command {
 	root.Subs = append(root.Subs, trackerCommands(), gitCommands())
 	root.Subs = append(root.Subs, reviewCommands(), shipCommands(), releaseCommands())
 	root.Subs = append(root.Subs, verdictCommands(), gateCommands())
-	root.Subs = append(root.Subs, doctorCommand(), reapCommand())
+	root.Subs = append(root.Subs, doctorCommand(), orchestrateCommand(), reapCommand())
 	root.Subs = append(root.Subs, statuslineCommands(), hookCommands(), keepaliveCommands(), limitCommands())
 	addStubs(root)
 	return root

@@ -177,6 +177,29 @@ func TestRestartsOnFreshHandoffWithPromptLastOnRestartsOnly(t *testing.T) {
 	}
 }
 
+func TestFirstPromptIsAppendedToTheFirstStartOnly(t *testing.T) {
+	r := newRig(t)
+	r.script = func(n int, r *rig) Exit {
+		if n == 1 {
+			r.write("a")
+		} else {
+			r.clear()
+		}
+		return Exit{}
+	}
+	o := r.opts()
+	o.FirstPrompt = "/rota-orchestrate"
+	if _, err := Run(r.env(nil), o); err != nil || len(r.starts) != 2 {
+		t.Fatalf("%v %v", err, r.starts)
+	}
+	if got := strings.Join(r.starts[0], " "); got != "claude --x /rota-orchestrate" {
+		t.Errorf("first start: %q", got)
+	}
+	if got := strings.Join(r.starts[1], " "); got != "claude --x go on" {
+		t.Errorf("a restart carries the restart prompt, not the first one: %q", got)
+	}
+}
+
 func TestNoHandoffOrStaleHandoffDoesNotRestart(t *testing.T) {
 	for name, setup := range map[string]func(r *rig){
 		"none": func(r *rig) {},
