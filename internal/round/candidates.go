@@ -3,9 +3,12 @@ package round
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/milestone"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/tracker"
@@ -90,18 +93,33 @@ func (e Env) trackedFiles(ctx context.Context, root string) []string {
 }
 
 // heldIDs are the items the registry's slots hold, and those a queued PR holds.
+// An ID a mid-round `migrate issues` left in file spelling (`B31`) also holds
+// the issue the map gives it.
 func heldIDs(root string) map[string]bool {
 	held := map[string]bool{}
-	reg := worker.LoadRegistry(root)
-	for _, s := range reg.Slots() {
-		if id := heldID(worker.Str(s, "task"), worker.Str(s, "branch"), worker.Str(s, "name")); id != "" {
-			held[id] = true
+	imap, _ := fsio.LoadJSON(filepath.Join(root, ".rota", "issue-map.json"), nil).(*jsonx.Object)
+	hold := func(id string) {
+		if id == "" {
+			return
+		}
+		held[id] = true
+		if imap == nil {
+			return
+		}
+		if e, ok := imap.Get(id); ok {
+			if eo, ok := e.(*jsonx.Object); ok {
+				if n, ok := eo.Get("number"); ok && n != nil {
+					held[fmt.Sprint(n)] = true
+				}
+			}
 		}
 	}
+	reg := worker.LoadRegistry(root)
+	for _, s := range reg.Slots() {
+		hold(heldID(worker.Str(s, "task"), worker.Str(s, "branch"), worker.Str(s, "name")))
+	}
 	for _, q := range reg.PRs() {
-		if id := queuedIssue(q); id != "" {
-			held[id] = true
-		}
+		hold(queuedIssue(q))
 	}
 	return held
 }
