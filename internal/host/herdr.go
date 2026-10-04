@@ -299,24 +299,92 @@ func (h *herdr) Spawn(ctx context.Context, o SpawnOpts) (string, error) {
 	}
 }
 
+// submitRetries bounds the Enters pressed on a brief that sits unsent.
+const submitRetries = 3
+
 // Send submits the file and confirms pickup: it returns once the agent is
 // observed working (or blocked on a dialog), NOT when the task finishes,
 // since a plain --wait would hold until the whole task settled. ErrNotSubmitted
 // means no activity followed the submission; ErrDialogOpen means a dialog was
 // already up and nothing was sent.
+//
+// herdr can type the brief and lose the Enter (#89). A brief left on the
+// prompt line is submitted with bounded Enter retries instead of failing.
 func (h *herdr) Send(ctx context.Context, slot, handle, file string) error {
 	text, err := readFile(file)
 	if err != nil {
 		return ErrNotSubmitted
 	}
 	text = strings.TrimRight(text, "\n") // the shell host read it with $(cat)
-	r := h.herdr(ctx, "agent", "prompt", AgentName(slot, handle), text,
+	name := AgentName(slot, handle)
+	r := h.herdr(ctx, "agent", "prompt", name, text,
 		"--wait", "--until", "working", "--until", "blocked", "--timeout", "60000")
 	if r.ExitCode == 0 {
 		return nil
 	}
 	if jget(r.Stderr, "error.code") == "agent_blocked" {
 		return ErrDialogOpen
+	}
+	if h.briefOnPrompt(ctx, name, text) {
+		return h.submitTyped(ctx, name)
+	}
+	return ErrNotSubmitted
+}
+
+// SubmitPending is the resend path: when the file's text is already on the
+// prompt line (a prior Send typed it and its Enters were lost), it submits that
+// text and reports handled, so the resend never types a second copy on top.
+// Not handled means the prompt line holds no such brief and Send applies.
+func (h *herdr) SubmitPending(ctx context.Context, slot, handle, file string) (bool, error) {
+	text, err := readFile(file)
+	if err != nil {
+		return false, nil
+	}
+	name := AgentName(slot, handle)
+	if h.Status(ctx, slot, handle) == "working" || !h.briefOnPrompt(ctx, name, strings.TrimRight(text, "\n")) {
+		return false, nil
+	}
+	return true, h.submitTyped(ctx, name)
+}
+
+// briefOnPrompt reports whether the tail of text is visible in the pane. The
+// tail is the brief's last line: it is typed last, so it is there only when the
+// whole brief is. Whitespace is dropped on both sides so soft wraps do not
+// matter.
+func (h *herdr) briefOnPrompt(ctx context.Context, name, text string) bool {
+	tail := ""
+	for _, l := range strings.Split(text, "\n") {
+		if t := squeeze(l); t != "" {
+			tail = t
+		}
+	}
+	if len(tail) > 80 {
+		tail = tail[len(tail)-80:]
+	}
+	if tail == "" {
+		return false
+	}
+	pane := paneText(h.herdr(ctx, "agent", "read", name, "--source", "recent-unwrapped",
+		"--lines", "60", "--format", "text"))
+	return strings.Contains(squeeze(pane), tail)
+}
+
+func squeeze(s string) string {
+	return strings.Join(strings.Fields(s), "")
+}
+
+// submitTyped presses Enter on a brief already on the prompt line, up to
+// submitRetries times, until the agent is working or blocked.
+func (h *herdr) submitTyped(ctx context.Context, name string) error {
+	for i := 0; i < submitRetries; i++ {
+		h.herdr(ctx, "agent", "send-keys", name, "enter")
+		w := h.herdr(ctx, "agent", "wait", name, "--until", "working", "--until", "blocked", "--timeout", "10000")
+		switch jget(w.Stdout, "result.agent.agent_status") {
+		case "working":
+			return nil
+		case "blocked":
+			return ErrDialogOpen
+		}
 	}
 	return ErrNotSubmitted
 }
