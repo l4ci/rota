@@ -21,10 +21,11 @@ func TestLeakedTempDirs(t *testing.T) {
 		os.WriteFile(filepath.Join(p, "f"), make([]byte, 2048), 0o644)
 		os.Chtimes(p, age, age)
 	}
-	mk("tmp.old", old)
+	mk("rota-smoke.old", old)
+	mk("tmp.other", old) // another program's mktemp dir is not ours
 	mk("rota-gate-logs-old", old)
-	mk("tmp.fresh", time.Now()) // a live run's dir is not leaked
-	mk("other", old)            // not ours
+	mk("rota-smoke.fresh", time.Now()) // a live run's dir is not leaked
+	mk("other", old)                   // not ours
 	n, size := leakedTempDirs(dir, time.Now().Add(-leakAge))
 	if n != 2 || size != 4096 {
 		t.Errorf("leakedTempDirs = %d, %d; want 2, 4096", n, size)
@@ -41,7 +42,9 @@ func TestDoctorDiskInput(t *testing.T) {
 		t.Fatalf("default threshold / disk not read: %+v", in)
 	}
 	rep := doctor.Run(context.Background(), doctor.Input{Disk: in.Disk, MinFreeDiskPercent: in.MinFreeDiskPercent,
-		Exec: func(context.Context, string, []string, []string, string) (doctor.Result, error) { return doctor.Result{}, nil },
+		Exec: func(context.Context, string, []string, []string, string) (doctor.Result, error) {
+			return doctor.Result{}, nil
+		},
 		Look: func(string) (string, bool) { return "", false }})
 	found := false
 	for _, c := range rep.Checks {

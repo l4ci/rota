@@ -639,7 +639,7 @@ func (d *runner) disk() (Check, bool) {
 	if pct >= float64(min) {
 		return Check{}, false
 	}
-	detail := fmt.Sprintf("%s has %s free (%.0f%%), under the %d%% threshold", disk.Path, humanBytes(disk.Free), pct, min)
+	detail := fmt.Sprintf("%s has %s free (%.0f%%), under the %d%% threshold", disk.Path, HumanBytes(disk.Free), pct, min)
 	hint := "free space before a round; set doctor.minFreeDiskPercent to change the threshold"
 	if len(d.in.Leftovers) > 0 {
 		hint = "reclaimable rota leftovers: " + strings.Join(d.in.Leftovers, "; ")
@@ -647,8 +647,8 @@ func (d *runner) disk() (Check, bool) {
 	return Check{Name: "disk", Status: Warn, Detail: detail, Hint: hint}, true
 }
 
-// humanBytes is a size in the largest unit that keeps it above 1.
-func humanBytes(n uint64) string {
+// HumanBytes is a size in the largest unit that keeps it above 1.
+func HumanBytes(n uint64) string {
 	const unit = 1024
 	if n < unit {
 		return fmt.Sprintf("%d B", n)
