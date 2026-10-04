@@ -22,7 +22,6 @@
       1. *"Address via `/rota-work` (Recommended)"* — *"Route the concerns to `/rota-work` as a fix list; rerun the calling skill after."*
       2. *"Ship anyway"* — *"Proceed with the integration despite the concerns."*
       3. *"Stop"* — *"Leave the branch as-is; no integration now."*
-    - Plain-text fallback: *"Address first, ship anyway, or stop?"* (see `references/ask-user-question-fallback.md`).
 - **`address`** (CONCERNS, loop) — surface each concern, then invoke `/rota-work` via the `Skill` tool with the concerns as the brief, and re-invoke the calling skill once the fixes are committed. This is the *"Address via `/rota-work` (Recommended)"* answer, auto-picked per the authoring convention *"routine routing/tagging auto-picks Recommended in loop mode"* (`references/authoring-conventions.md` rule #5).
 - **`surface`** (an advisory gate: QA under `qa.gate: "advisory"`, any QA `INFRA-FAIL`, or a second opinion from the retired `codex` runner) — surface the findings and continue. `data.advisory` is true.
 - **`stop`** (FAIL) — stop unconditionally. Surface the findings; do not auto-route to ship/merge. A `FAIL` stops loop mode as a guard failure regardless of autonomy.
@@ -63,6 +62,5 @@ Convention: prefix surfaced concern lines with the producer's name and a dash, e
 
 ## See also
 
-- `references/ask-user-question-fallback.md` — canonical plain-text fallback mechanic.
 - `references/authoring-conventions.md` rule #5 — *"routine routing/tagging auto-picks Recommended in loop mode"*.
 - `references/manual-gates.md`: *"Ship anyway"* as a user-volition gate alongside the other manual gates.

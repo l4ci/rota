@@ -3,15 +3,6 @@ name: rota-ship
 description: Bundle completed work on a feature branch into a PR (or direct merge) — extracts commits, resolved item IDs with titles, optionally runs /rota-review, and calls `rota ship pr` or `rota ship merge`. Use on "ship it", "open the PR", "finish this branch", when work is done and you want to integrate. Also supports --undo (guided rollback of the last cycle on the base branch) and --docs (public-docs maintenance). Use --undo on "roll back the last cycle", "revert that merge". Use --docs on "update docs"; auto-invoked post-cycle when docs/ exists.
 ---
 
-**Print the banner below verbatim before any other action — skip if dispatched as a subagent.** See `references/banner-preamble.md`.
-
-```
-════════════════════════════════════════════════════════════════════════
-  🚀  rota-ship  ·  bundle work into a PR or merge
-  triggers: "ship it", "open the PR"  ·  pairs: rota-review
-════════════════════════════════════════════════════════════════════════
-```
-
 ## Step 0 — Mode Dispatch
 
 Read `$ARGUMENTS`. Route on the first flag present:
@@ -48,7 +39,7 @@ rota git guard feature-branch
 
 Exit 1 (`data.reason` `base` or `detached`): pass the message through and stop.
 
-**Initialize task list.** Follow `references/task-list-init.md` (`TaskCreate(…)` via `ToolSearch select:TaskCreate,TaskUpdate` if needed), one task per phase:
+Track these phases with the host's task tool if it has one.
 
 1. *Branch check* (Step 1)
 2. *Extract commits & items* (Step 2)
@@ -137,7 +128,7 @@ If `work.mergeStrategy` is `"direct"` or `"pr"` and the user has not said otherw
 - `"Direct merge"` — *"Merge into the base with `--no-ff` and delete the branch."*
 - `"PR"` — *"Push and open a PR with the body."*
 
-Mark the configured strategy `(Recommended)`; unset defaults to Direct merge. Plain-text fallback: *"Ship `<branch>` as a PR or direct merge?"* (`references/ask-user-question-fallback.md`).
+Mark the configured strategy `(Recommended)`; unset defaults to Direct merge.
 
 ## Step 6a — Open a PR
 
@@ -239,11 +230,11 @@ Only when `autonomy.level == "loop"`. After the report, re-enter `/rota-work` wi
 
 The inverse of a `/rota-work` cycle: `rota ship undo` resets the most recent `merge: …` commit on the base branch and restores the resolved items to BACKLOG. It previews unless given `--apply`, and refuses PR-mode cycles (the merge happened upstream), post-merge commits without `--allow-post-merge`, a dirty tree, a non-base branch and a non-`merge: ` subject. A different cycle is `rota ship undo --cycle <hash>`, run by the user directly.
 
-**Initialize task list** (`references/task-list-init.md`): *Preview*, *Confirm*, *Apply*, *Report*.
+Phases: *Preview*, *Confirm*, *Apply*, *Report*. Track these phases with the host's task tool if it has one.
 
 **U1 — Preview.** `rota ship undo`, then show the plan verbatim. Exit 3: no cycle, say so and stop. Exit 4: surface the verb's message verbatim and stop. A dirty tree gets *"Working tree is dirty — commit, stash, or discard before /rota-ship --undo can run."* If post-merge commits block it, name `--allow-post-merge` (discards them) but do not pass it unasked.
 
-**U2 — Confirm.** One `AskUserQuestion` with the plan above it, header `"Apply"`, *"Apply this rollback plan?"*: `"Apply (Recommended)"` (resets the base branch, restores the entries) / `"Cancel"` (print *"No changes."*, stop). Plain-text fallback: *"Apply rollback? (yes/no)"*, only `yes` applies.
+**U2 — Confirm.** One `AskUserQuestion` with the plan above it, header `"Apply"`, *"Apply this rollback plan?"*: `"Apply (Recommended)"` (resets the base branch, restores the entries) / `"Cancel"` (print *"No changes."*, stop). Only an explicit yes applies.
 
 > **Manual gate — destructive reset.** The gate always asks and loop mode does not accelerate it. `rota gate list` has no entry for it and the verb enforces nothing beyond the `--apply` preview split, so this confirmation is the only guard before `git reset --hard`, which is unrecoverable past the reflog window.
 
@@ -271,9 +262,9 @@ Docs Mode and `/rota-qa` share a three-mode skeleton and diverge on artifact roo
 Read `docs.path` (default `"docs"`). Missing or empty `<docs.path>/` means first-run (D2–D6). Otherwise branch on `docs.afterWork`:
 
 - **`true`**: Route to the After-work sub-flow as manual mode. Print *"After-work mode is on. Checking docs against changes since the last `docs:` commit."* then start at D-A1. The user running `/rota-ship --docs` by hand is the trigger, so the trigger gate is bypassed and D-A6 omits `Resolves:`.
-- **`false`**: ask (header `"After-work"`, *"`<docs.path>/` is initialized but `docs.afterWork` is off. Enable after-work mode? `/rota-work` and `/rota-ship` will then propose doc updates after each cycle."*): `"Enable (Recommended)"` runs `rota config set docs.afterWork true`, prints *"After-work mode enabled."* and exits; `"Leave off"` exits. Ambiguous plain-text answers mean Leave off: never flip a flag the user did not ask for.
+- **`false`**: ask (header `"After-work"`, *"`<docs.path>/` is initialized but `docs.afterWork` is off. Enable after-work mode? `/rota-work` and `/rota-ship` will then propose doc updates after each cycle."*): `"Enable (Recommended)"` runs `rota config set docs.afterWork true`, prints *"After-work mode enabled."* and exits; `"Leave off"` exits. Ambiguous answers mean Leave off: never flip a flag the user did not ask for.
 
-**Initialize task list** (`references/task-list-init.md`): *Mode select* (D1), *Inspect docs/* (D2), *Discover topics* (D3), *Propose plan* (D4), *Write/update* (D5), *Cross-link* (D6), *Report*.
+Phases: *Mode select* (D1), *Inspect docs/* (D2), *Discover topics* (D3), *Propose plan* (D4), *Write/update* (D5), *Cross-link* (D6), *Report*. Track these phases with the host's task tool if it has one.
 
 ### Step D2 — Read Project Signals
 
@@ -285,7 +276,7 @@ Classify the project: CLI tool (`bin/*`, flag examples), library (public API, no
 
 ### Step D4 — Propose Tailored Tree
 
-Show a plain-markdown tree under `<docs.path>/` with a one-line purpose per file, tailored to the type and surface (spine + usage + reference layout, `references/docs-conventions.md` page-naming section). If the tailored tree departs from that layout, say so in one line (*"This project ships only reference material; no `usage/` pages proposed."*). Ask (header `"Scaffold"`, *"Approve this docs structure?"*): `"Approve as proposed (Recommended)"` / `"Edit"` (free text; revise and re-ask) / `"Minimal — README.md + getting-started.md only"` / `"Cancel"` (print *"Scaffold cancelled. Run `/rota-ship --docs` again whenever you're ready."* and exit). Fallback: `references/ask-user-question-fallback.md`, defaulting to Recommended by name.
+Show a plain-markdown tree under `<docs.path>/` with a one-line purpose per file, tailored to the type and surface (spine + usage + reference layout, `references/docs-conventions.md` page-naming section). If the tailored tree departs from that layout, say so in one line (*"This project ships only reference material; no `usage/` pages proposed."*). Ask (header `"Scaffold"`, *"Approve this docs structure?"*): `"Approve as proposed (Recommended)"` / `"Edit"` (free text; revise and re-ask) / `"Minimal — README.md + getting-started.md only"` / `"Cancel"` (print *"Scaffold cancelled. Run `/rota-ship --docs` again whenever you're ready."* and exit). On ambiguity, default to Recommended, naming it.
 
 ### Step D5 — Scaffold on Approval
 
@@ -349,9 +340,7 @@ Resolves: [B07], [F03]
 
 | Reference | Purpose |
 |-----------|---------|
-| [`ask-user-question-fallback.md`](references/ask-user-question-fallback.md) | Plain-text fallback shape for AskUserQuestion-less hosts. |
 | [`authoring-conventions.md`](references/authoring-conventions.md) | Authoring rules shared across SKILL.md files (loop-mode auto-picks, manual gates, verb contract). |
-| [`banner-preamble.md`](references/banner-preamble.md) | Banner-print rule shared by every skill. |
 | [`docs-conventions.md`](references/docs-conventions.md) | Conventions for content under `docs/` (page naming, `.docsignore` seed). Consumed by Docs Mode. |
 | [`humanizing-prose.md`](references/humanizing-prose.md) | Self-audit for the PR body and doc edits. |
 | [`issue-mode.md`](references/issue-mode.md) | Issue-mode PR and item lifecycle. |
@@ -359,5 +348,4 @@ Resolves: [B07], [F03]
 | [`post-cycle-trigger-gate.md`](references/post-cycle-trigger-gate.md) | Trigger condition and nudge-or-dispatch choreography for Steps 8.5, 8.6 and D-A1. |
 | [`review-verdict-routing.md`](references/review-verdict-routing.md) | Verdict meaning, the CONCERNS question text and carrier labels. |
 | [`silent-failure-hunter.md`](references/silent-failure-hunter.md) | Silent-failure rubric carried in the review brief. |
-| [`task-list-init.md`](references/task-list-init.md) | Task-list initialization pattern. |
 | [`three-mode-skill-shape.md`](references/three-mode-skill-shape.md) | Three-mode shape (first-run / after-work / restructure) shared with `/rota-qa`. |

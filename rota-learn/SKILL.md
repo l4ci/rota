@@ -3,20 +3,11 @@ name: rota-learn
 description: Extract durable session learnings (gotchas, conventions, constraints) into .rota/KNOWLEDGE.md grouped by topic, and update the CLAUDE.md topic index. Use at end of a session that surfaced reusable knowledge, after a correction-rich debugging arc, or on "save what we learned", "capture this learning", "/rota-learn". Opus verification is on by default via learn.verify in config.json; set to false for fast/cheap mode.
 ---
 
-**Print the banner below verbatim before any other action — skip if dispatched as a subagent.** See `references/banner-preamble.md`.
-
-```
-════════════════════════════════════════════════════════════════════════
-  🧠  rota-learn  ·  extract session learnings to KNOWLEDGE.md
-  triggers: "learn this", "save gotcha"  ·  pairs: rota-debug, rota-pause
-════════════════════════════════════════════════════════════════════════
-```
-
 # rota-learn — Capture Session Learnings
 
 ## Step 1 — Task list
 
-**Initialize task list.** Follow the canonical pattern in `references/task-list-init.md` — load `TaskCreate(…)` via `ToolSearch select:TaskCreate,TaskUpdate` if needed, then create one task per phase below.
+Track these phases with the host's task tool if it has one.
 
 Phases:
 
@@ -281,8 +272,6 @@ If no bullet matches any of those, skip the step silently.
   1. `"File a rota issue (Recommended)"` — *"Pre-fill title + body and run `rota tracker suggest-upstream` to open the issue."*
   2. `"Skip"` — *"No upstream issue; the local KNOWLEDGE bullet stands on its own."*
 
-Plain-text fallback: *"File a rota issue?"* — honor yes/no.
-
 **File the issue.** When the user picks "File":
 
 1. Compose title from the matching bullet's first sentence (truncate at the first period or 80 chars).
@@ -340,8 +329,6 @@ If no bullet matches any signal, skip the step silently. Match the union, not th
 - Options (single-select):
   1. `"Run /runlog-author (Recommended)"` — *"Hand the matching bullet(s) to the runlog skill — drives the local Ed25519 verifier loop, then `runlog_submit`."*
   2. `"Skip"` — *"No upstream contribution; the local KNOWLEDGE bullet stands on its own."*
-
-Plain-text fallback: *"Author a runlog entry?"* — honor yes/no.
 
 **Route the answer.**
 
@@ -401,6 +388,5 @@ Cleared N contradictions: <demoted-count> demoted, <skipped-count> skipped
 
 ## References
 
-- [`references/banner-preamble.md`](references/banner-preamble.md) — Banner-print rule shared by every skill.
 - [`references/manual-gates.md`](references/manual-gates.md) — The manual-gate registry (`rota gate list`): gates the verbs enforce with `--confirm`, and the skill-only callouts.
 - [`references/persistence-skills.md`](references/persistence-skills.md) — Shared spine and divergence axes for the persistence duo (`/rota-learn`, `/rota-decide`) — including `/rota-learn --term` for Glossary entries.

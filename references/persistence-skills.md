@@ -10,7 +10,7 @@ The two skills share one **contract** but different **gate strengths**. New pers
 
 Every persistence skill (and `/rota-learn`'s `--term` mode) follows:
 
-1. **Initializes a TaskCreate phase list** at the start (Step 1; see `references/authoring-conventions.md` rule *"Surface multi-step skill progress with TaskCreate"*). Phase count and names are skill-specific; the boilerplate shell is shared.
+1. **Lists its phases** at the start (Step 1), tracked with the host's task tool if it has one. Phase count and names are skill-specific.
 2. **Identifies a candidate** (learning / term / decision) from arguments, conversation context, or a source artifact. The shape of this step is intentionally skill-local.
 3. **Classifies into a section heading** — by topic for both `/rota-learn` topic bullets and `/rota-decide`; by term name for `/rota-learn --term` (the term entry lands under the fixed `## Glossary` topic). Topic-keyed branches share the alphabetical-with-pinning rule below.
 4. **Merges via a writer verb** that owns insertion, deduplication, and the date stamp:
@@ -56,7 +56,6 @@ If a new persistence skill needs a different gate, choose deliberately from {non
 
 - **The user-facing distinction.** `docs/usage/learning.md` and `docs/usage/decisions.md` explain the duo to users — terminology + gotchas vs. boundaries. This reference is for skill authors.
 - **Manual gates inventory.** The list of always-manual sites across all skills (not just this duo) lives in `references/manual-gates.md`.
-- **TaskCreate phase boilerplate.** The cross-cutting authoring rule lives in `references/authoring-conventions.md` rule *"Surface multi-step skill progress with TaskCreate"*.
 - **Knowledge & decisions consult.** The read-side pattern (verbs, carrier semantics, parallelism) lives in `references/knowledge-consult.md`.
 - **Umbrella-mode scoping.** The model is in *Umbrella scoping* below.
 

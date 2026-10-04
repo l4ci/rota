@@ -4,7 +4,7 @@ These conventions constrain how new rota skills (or new behavior in existing ski
 
 ## Skills are self-contained — no shared contract file
 
-Each skill owns its rules inline. A "shared contract" reference file (an old `GUIDE.md` was one) is a smell when every rule has a single owner. Audit the cross-refs before retaining a shared file: if each rule is already mirrored inline at the call site (plain-text fallback, autonomy off/auto/loop dispatch, learn trigger thresholds, etc.), the central file is vestigial pointer-chasing. Build a shared file only when N≥3 callers need the same long rule verbatim.
+Each skill owns its rules inline. A "shared contract" reference file (an old `GUIDE.md` was one) is a smell when every rule has a single owner. Audit the cross-refs before retaining a shared file: if each rule is already mirrored inline at the call site (autonomy off/auto/loop dispatch, learn trigger thresholds, etc.), the central file is vestigial pointer-chasing. Build a shared file only when N≥3 callers need the same long rule verbatim.
 
 ## Imperative rules in autonomy-aware steps must live inline at every dispatch point
 
@@ -16,46 +16,13 @@ Before a skill calls `AskUserQuestion`, check whether the answer is derivable fr
 
 Codified from grill-with-docs (2026-05-10): *"If a question can be answered by exploring the codebase, explore the codebase instead."* Companion to the *AskUserQuestion option list capped at 4* rule (`KNOWLEDGE.md`, 2026-05-08) — that one constrains the option list when asking is the right move; this one constrains whether to ask at all.
 
-## Surface multi-step skill progress with TaskCreate
+## No ceremony: banners, mandatory task lists, per-site ask fallbacks
 
-Skills with three or more distinct phases must declare a visible task list at the end of Step 1 via `TaskCreate`, then mark each phase `in_progress` when starting it and `completed` when its observable outcome lands. The user sees a checklist instead of unannotated bash output; the agent stays oriented across long cycles. Without this, every multi-step run looks identical in the transcript to a single-step nudge — progress is invisible until the final report.
+Skills print no banner, and none requires a task-list tool. A multi-phase skill may list its phases and say *"Track these phases with the host's task tool if it has one."* That is the whole rule: no `ToolSearch` load, no per-phase `TaskCreate` boilerplate. Subagent dispatches never create tasks; the orchestrator owns the list.
 
-The block lives at the end of Step 1's body, never as a new `Step 1.5`. The decimal-step rule (`KNOWLEDGE.md` / `DECISIONS.md`, 2026-05-08) reserves `.5/.6/.7` slots for sequential additions; this convention is content within Step 1, not a new step. On hosts where `TaskCreate` is not loaded (non-Claude-Code platforms), the boilerplate self-skips silently — loading is conditional on `ToolSearch select:TaskCreate,TaskUpdate`.
+When a skill asks the user a question, ask in prose with the options listed and a recommended default when the host has no option picker. `AskUserQuestion` is the Claude Code example of such a picker; a skill names it only to describe the question shape. A free-text reply to a picker is mapped to the nearest option. Ask once, and on an ambiguous reply take the site's stated default and say which one landed. Destructive operations and opt-in flags default to the safe side (cancel, `false`). Skills do not carry per-site "Plain-text fallback" lines.
 
-Per-site shape (adapt phase list per skill):
-
-> **Initialize task list.** When `TaskCreate` is loaded (load via `ToolSearch select:TaskCreate,TaskUpdate` if not), create one task per phase below — e.g. `TaskCreate(subject="<phase 1 name>", description="<phase 1 outcome>")`. Mark each `in_progress` when starting and `completed` when its observable outcome lands; short-circuited phases get `completed` with the no-op reason in the description.
->
-> Phases:
->
-> 1. *<phase title>* — *<one-line outcome>*
-> 2. *<phase title>* — *<one-line outcome>*
-> *(skill-specific list — 3 to 7+ phases)*
-
-**Observable outcome** is the detection predicate that says a phase is done. It must be mechanically verifiable, not subjective. Verifiable shapes:
-
-- A file exists at a named path — `[ -f .rota/plans/M01-S01.md ]`.
-- A command exits 0 — a verb returns success, a test passes, `rota knowledge add` writes successfully.
-- A managed-block marker is present in a tracked file — `grep -q '<!-- rota-knowledge-end -->' CLAUDE.md`.
-- A status entry was added or removed — `.rota/status.json` lists / no longer lists the branch.
-- A commit landed — `git log --oneline -1 | grep -q <ID>`.
-- A user picked a recorded answer in `AskUserQuestion` — the chosen label is the outcome marker (e.g. *"user picked 'Write it' on the confirmation gate"*).
-
-Subjective phrases — *"looks good"*, *"feels done"*, *"is satisfied"*, *"the situation is clear"* — don't qualify. When a phase genuinely produces a subjective state (a UX flow approval, a design pick), name the user action or recorded decision that captures the approval rather than the inner state. Skill authors picking a phase outcome should ask: *"what would I `grep` or `[ ]` test for, from the next session, to know this phase finished?"* If the answer is "nothing concrete", the phase is too vague to track.
-
-**Forbids.**
-- Adding the block to single-phase or trivial skills (Tier C) — the checklist UX is overhead when there's nothing to tick off.
-- Placing it as a new `Step 1.5` — the decimal-step rule reserves those slots; this is content within Step 1.
-- Cross-skill alignment of phase names — each skill's phase list reflects its own structure; phrasing is local to the SKILL.md.
-- Calling `TaskCreate` from inside subagent dispatches — the orchestrator owns the task list; workers focus on their assigned tasks and report back.
-
-**Permits.**
-- Per-site phase counts from 3 to 7+ — the rule fires at "multi-step", not a fixed number. Use phase boundaries that match the skill's natural structure, not the integer step count.
-- Per-site boilerplate prose variations — this is a cross-cutting autonomy-shaped rule; per the 2026-05-09 `KNOWLEDGE.md` entry on cross-cutting prose, byte-equivalent repetition of the shell across 18 sites is acceptable when phase lists dominate.
-- Phases that absorb decimal sub-steps (e.g. `/rota-work` 13.5/13.7 fold into one "post-cycle nudges" phase) — phase boundaries are coarser than step boundaries by design.
-- Tracking spawned waves as nested tasks via `addBlocks`/`addBlockedBy` when a skill orchestrates parallel work — `/rota-work` may use this for its dispatched waves.
-
-Codified from F37 (2026-05-10): rolled out across Tier S/A/B SKILL.md files (17 skills). Tier C skills stay untouched. Companion to the *AskUserQuestion option list capped at 4* rule (`KNOWLEDGE.md`, 2026-05-08): both make the host's UI primitives load-bearing for skill UX.
+Phase outcomes, where a skill names them, stay mechanically verifiable (a file exists, a command exits 0, a commit landed, a recorded user answer), not subjective states.
 
 ## Routine routing/tagging auto-picks Recommended in loop mode
 
@@ -139,7 +106,7 @@ Codified during the T52 sweep across `rota-debug`, `rota-release`, `rota-review`
 
 ## `AskUserQuestion` option list capped at 4
 
-`AskUserQuestion`'s option list is hard-capped at 4. Any SKILL.md picklist with N>4 silently degrades to plain-text fallback (the user has to type names back), defeating the native UX promised in the skill description.
+`AskUserQuestion`'s option list is hard-capped at 4. Any SKILL.md picklist with N>4 silently degrades to prose (the user has to type names back), defeating the native UX promised in the skill description.
 
 **Forbids.**
 - Designing a question with 5+ options on the assumption the host will scroll — the host won't; the array is rejected and the skill falls back to free text.
@@ -173,8 +140,8 @@ Codified from a read of klufft's `swarm.md` (rota#20, 2026-07-31), whose orchest
 When a nudge or check could fire from multiple skills that converge on the same end-state (e.g., `/rota-work` → `/rota-ship` → `/rota-work` via loop continuation), place the nudge on the *terminal/idle paths* — where the user is about to leave the session — NOT on dispatch paths that hand off to another skill. Multiple skills firing the same nudge from convergent flows drowns the signal.
 
 **Forbids.**
-- Firing the same nudge from a skill's tail when that skill auto-dispatches the next skill (the user never sees the message — it's overwritten by the dispatched skill's banner).
-- Firing the nudge from a dispatch path on the assumption *"users will see it eventually"* — they see the loudest, latest banner; intermediate nudges are noise.
+- Firing the same nudge from a skill's tail when that skill auto-dispatches the next skill (the user never sees the message — it's overwritten by the dispatched skill's output).
+- Firing the nudge from a dispatch path on the assumption *"users will see it eventually"* — they see the loudest, latest message; intermediate nudges are noise.
 
 **Permits.**
 - Firing the nudge from the terminal branch of a routing skill (e.g. `/rota-work` no-argument mode "Stop here" / empty-backlog) where the user is about to step away.
@@ -215,7 +182,7 @@ Codified on T39: a SKILL.md grew a 9-row inventory table beside its `references/
 Claude Code's TUI HTML-escapes task titles for rendering but never decodes — strings containing `&` show up as the literal entity `&amp;` in the task list view. Workaround until the upstream renderer is fixed: in any `TaskCreate(subject=…)`, `TaskCreate(activeForm=…)`, `TaskUpdate(...)`, or `TodoWrite(...)` payload (in examples in skill prose or in actual calls), use `and` or `+` instead of `&`. The substitution is purely cosmetic; both renderings parse identically.
 
 **Forbids.**
-- Ampersand in any `subject`, `description`, or `activeForm` string in `TaskCreate`/`TodoWrite`/`TaskUpdate` payloads — including the example strings embedded in skill prose under the *Surface multi-step skill progress with TaskCreate* convention.
+- Ampersand in any `subject`, `description`, or `activeForm` string in `TaskCreate`/`TodoWrite`/`TaskUpdate` payloads — including example strings embedded in skill prose.
 - Workarounds using `&amp;` or `&` in payloads to "pre-encode" — the bug isn't in encoding; the renderer escapes whatever it sees, so pre-encoded forms double-escape.
 
 **Permits.**
