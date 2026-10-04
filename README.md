@@ -1,7 +1,5 @@
 <div align="center">
 
-<img src="docs/rota_logo.png" alt="rota logo" width="80" />
-
 # rota
 
 **Autonomous rounds for coding agents: an orchestrator hands issues to parallel workers, merges what passes the gate, and keeps going. Persistent knowledge, decisions and handoffs make that reliable.**
