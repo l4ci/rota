@@ -6,6 +6,7 @@ package worker
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"os/exec"
@@ -384,4 +385,75 @@ func execShell(ctx context.Context, dir, command string) (string, int) {
 		return err.Error(), 127
 	}
 	return string(out), 0
+}
+
+// RecordBounce counts one gate bounce against an item (`bounces` in the
+// registry maps the issue to how often the gate sent its PR back) and returns
+// the new count. Counts live per item, not per slot, so a transfer to another
+// slot does not reset them. head is the PR head the gate refused: the same head
+// seen again (a re-gate before the worker pushed anything) is not a new bounce
+// and returns the count unchanged. head "" always counts.
+func RecordBounce(root, issue, head string) (n int, err error) {
+	def := jsonx.NewObject()
+	def.Set("slots", []any{})
+	err = Update(root, def, func(doc *jsonx.Object) {
+		b := bouncesOf(doc)
+		heads := bounceHeadsOf(doc)
+		n = bounceCount(b, issue)
+		if last, _ := heads.Get(issue); head != "" && last == any(head) && n > 0 {
+			return
+		}
+		n++
+		b.Set(issue, json.Number(strconv.Itoa(n)))
+		doc.Set("bounces", b)
+		if head != "" {
+			heads.Set(issue, head)
+			doc.Set("bounceHeads", heads)
+		}
+	})
+	return n, err
+}
+
+// ClearBounces forgets an item's count: its PR merged or it was handed over.
+func ClearBounces(root, issue string) error {
+	def := jsonx.NewObject()
+	def.Set("slots", []any{})
+	return Update(root, def, func(doc *jsonx.Object) {
+		if b := bouncesOf(doc); bounceCount(b, issue) > 0 {
+			b.Delete(issue)
+			doc.Set("bounces", b)
+			heads := bounceHeadsOf(doc)
+			heads.Delete(issue)
+			doc.Set("bounceHeads", heads)
+		}
+	})
+}
+
+// bounceHeadsOf is the issue -> PR head SHA of the last counted bounce.
+func bounceHeadsOf(doc *jsonx.Object) *jsonx.Object {
+	if v, _ := doc.Get("bounceHeads"); v != nil {
+		if b, ok := v.(*jsonx.Object); ok {
+			return b
+		}
+	}
+	return jsonx.NewObject()
+}
+
+func bouncesOf(doc *jsonx.Object) *jsonx.Object {
+	if v, _ := doc.Get("bounces"); v != nil {
+		if b, ok := v.(*jsonx.Object); ok {
+			return b
+		}
+	}
+	return jsonx.NewObject()
+}
+
+func bounceCount(b *jsonx.Object, issue string) int {
+	v, _ := b.Get(issue)
+	if n, ok := v.(json.Number); ok {
+		if i, err := strconv.Atoi(n.String()); err == nil {
+			return i
+		}
+	}
+	return 0
 }

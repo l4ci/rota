@@ -49,6 +49,8 @@ func TestInvalid(t *testing.T) {
 		`{"round":{"sharedPaths":[1]}}`:  "list of strings",
 		`{"round":{"stallMinutes":-1}}`:  "stallMinutes",
 		`{"round":{"stallMinutes":"x"}}`: "stallMinutes",
+		`{"round":{"maxBounces":-1}}`:    "maxBounces",
+		`{"round":{"maxBounces":"x"}}`:   "maxBounces",
 	} {
 		_, err := Load(project(t, cfg))
 		if err == nil || !strings.Contains(err.Error(), want) {
@@ -122,6 +124,18 @@ func TestStallMinutes(t *testing.T) {
 		t.Fatalf("0 turns it off: %v %+v", err, s)
 	}
 	if s, err := Load(project(t, `{"round":{"stallMinutes":5}}`)); err != nil || s.StallMinutes != 5 {
+		t.Fatalf("%v %+v", err, s)
+	}
+}
+
+func TestMaxBounces(t *testing.T) {
+	if s, err := Load(project(t, "")); err != nil || s.MaxBounces != 3 {
+		t.Fatalf("default is 3: %v %+v", err, s)
+	}
+	if s, err := Load(project(t, `{"round":{"maxBounces":0}}`)); err != nil || s.MaxBounces != 0 {
+		t.Fatalf("0 turns the cap off: %v %+v", err, s)
+	}
+	if s, err := Load(project(t, `{"round":{"maxBounces":5}}`)); err != nil || s.MaxBounces != 5 {
 		t.Fatalf("%v %+v", err, s)
 	}
 }
