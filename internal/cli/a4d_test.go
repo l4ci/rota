@@ -75,13 +75,14 @@ func TestA4dListLabelClose(t *testing.T) {
 	calls := a4dForge(t, origin, map[string]string{
 		"issue list": `[{"number": 3, "title": "T", "body": "b", "labels": [{"name": "x"}], "url": "u", "author": {"login": "me"}}]`,
 		"issue view": `{"labels": [{"name": "x"}]}`,
+		"label list": `[{"name": "x"}]`,
 	})
 	code, env, _ := rotaRun(t, "--json", "-C", root, "issues", "list", "--label", "x", "--limit", "5")
 	rows, _ := get(dataOf(env), "issues").([]any)
 	if code != 0 || len(rows) != 1 || get(rows[0], "author") != "me" || get(rows[0], "title") != "T" {
 		t.Fatalf("list: %d %v", code, env)
 	}
-	if !slices.Contains(*calls, "gh issue list --state open --json number,title,body,labels,url,author --limit 5 --label x") {
+	if !slices.Contains(*calls, "gh issue list --state open --json number,title,body,labels,milestone,state,stateReason,closedAt,url,assignees,author --label x --limit 1000") {
 		t.Errorf("calls %q", *calls)
 	}
 	code, env, _ = rotaRun(t, "--json", "-C", root, "issues", "label", "3", "--add", "x")
@@ -263,7 +264,7 @@ func TestA4dNoProviderAndMissingIssue(t *testing.T) {
 	root = a4dRepo(t, "")
 	os.WriteFile(filepath.Join(root, ".rota", "config.json"), []byte(`{"issues": {"provider": "github"}}`), 0o644)
 	calls := a4dForge(t, "", map[string]string{"issue list": "[]"})
-	if code, env, _ := rotaRun(t, "--json", "-C", root, "issues", "list"); code != 0 || !slices.Contains(*calls, "gh issue list --state open --json number,title,body,labels,url,author --limit 30") {
+	if code, env, _ := rotaRun(t, "--json", "-C", root, "issues", "list"); code != 0 || !slices.Contains(*calls, "gh issue list --state open --json number,title,body,labels,milestone,state,stateReason,closedAt,url,assignees,author --limit 1000") {
 		t.Errorf("config fallback: %d %v %q", code, env, *calls)
 	}
 	// a missing issue is exit 3; another forge failure stays exit 5
