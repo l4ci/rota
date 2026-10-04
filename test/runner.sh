@@ -108,6 +108,10 @@ mkdir -p "$CLAUDE_CONFIG_DIR"
 # are poisoned. A section that needs a home sets HOME itself, as 83/94/98 do.
 export HOME="$RUN_TMP/home"
 mkdir -p "$HOME"
+# The global project registry (#24) lives under $XDG_CONFIG_HOME/rota when
+# that is set, so a developer's XDG_CONFIG_HOME would bypass the HOME override.
+export XDG_CONFIG_HOME="$RUN_TMP/xdg"
+mkdir -p "$XDG_CONFIG_HOME"
 # Nor may a section inherit this shell's live host identity (pane, tab,
 # socket): sections that need one set fake values themselves.
 for v in $(compgen -e | grep -E '^(HERDR_|TMUX)'); do unset "$v"; done

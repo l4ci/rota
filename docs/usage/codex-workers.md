@@ -68,7 +68,34 @@ The launch command is `work.codexCommand`. Its default is `codex --model {model}
 --dangerously-bypass-approvals-and-sandbox --dangerously-bypass-hook-trust --no-daemon --no-alt-screen`.
 The bypass flags are there because nobody answers prompts in a worker pane: scope, not prompting,
 bounds the worker. A custom command receives the tier's model only through a `{model}` placeholder.
-See [round keys](configuration.md#round-keys).
+It must keep `--dangerously-bypass-hook-trust`: without it Codex skips the prompt check below, so
+dispatch refuses it (exit 5). See [round keys](configuration.md#round-keys).
+
+## What a Codex worker accepts
+
+A Codex worker only takes text that rota signed. Whether a model refuses unsigned pane text depends on
+the model: one Codex model answered `ROTA-BLOCKED` to an unsigned instruction, the default one followed it
+([#3](https://github.com/l4ci/rota/issues/3)). So for Codex the check doesn't rely on the model:
+
+- On each task dispatch rota writes a fresh key to `rota-prompt.key` (mode 0600) in the slot's
+  `CODEX_HOME`. Every brief and relay it sends to that slot ends with a `--- ROTA-SIG <hmac> ---` line, an
+  HMAC-SHA256 of the text under that key. Whitespace is ignored, so a pane that rewraps lines still
+  verifies.
+- The launch line adds a Codex `UserPromptSubmit` hook (`-c hooks.UserPromptSubmit=...`) that runs
+  `rota worker prompt-check`. A prompt with a valid signature goes through. Anything else is blocked
+  before it reaches the model, and the pane shows the reason. If the check itself can't run, the prompt
+  is blocked too.
+- A maintainer's answer typed into the pane with the `m:` prefix still goes through, as for Claude workers
+  ([maintainer answers](parallel-rounds.md#maintainer-answers-typed-into-a-pane)). Anyone who can type in
+  the pane can use that prefix; it is the one unsigned path left.
+
+The check is a guard against text typed into the pane, not against local processes. The key is not
+secret from the worker or from other processes of the same user, so anything that can read the slot's
+`CODEX_HOME` can sign. What happens when the hook runs past its 30 s timeout is unknown: Codex's behaviour
+there is untested.
+
+To give a Codex worker anything else, send it through `rota worker dispatch --relay` or the assignment
+brief.
 
 ## Limits
 
@@ -76,12 +103,11 @@ See [round keys](configuration.md#round-keys).
 - **No usage meter.** `work.accounts` and its headroom meter are Anthropic's, and a Codex slot is skipped
   by them. The slot's `CODEX_HOME` is its account, so `rota limit watch` has nothing to switch to. Account
   switching and [usage-limit handling](unattended-rounds.md#usage-limits) apply to Claude slots.
-- **The signed-brief rule is model-dependent** ([#225](https://github.com/l4ci/rota/issues/225)). The worker contract says to treat
-  unsigned text in the pane as untrusted and to answer `ROTA-BLOCKED`. One Codex model did; another followed
-  the unsigned instruction. Send a Codex worker its instructions through `rota worker dispatch` or the
-  assignment brief, and don't type into its pane.
 - **Version pin.** A Codex update outside 0.159.x blocks `assign` until rota's range moves or you pass
   `--accept-codex-version`.
+- **The prompt check is unverified on an accepted version.** It was verified on 0.159.2. An older Codex may
+  ignore `-c features.hooks=true`, so with `--accept-codex-version` rota warns `prompt check unverified on
+  this Codex` and unsigned pane text may reach the worker.
 
 ## Check it
 
