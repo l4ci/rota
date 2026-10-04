@@ -82,6 +82,7 @@ func runMain(m *testing.M) int {
 	baseEnv = []string{
 		"PATH=" + os.Getenv("PATH"),
 		"HOME=" + harnessTmp,
+		"ROTA_TEST_DOCTOR_DISK=50:100", // a healthy disk: the real one must not change the goldens (#85)
 		"FAKE_TRACKER_DB=" + filepath.Join(harnessTmp, "tracker.json"),
 		"LC_ALL=C.UTF-8",
 	}

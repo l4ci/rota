@@ -229,6 +229,47 @@ func TestOrderAndOK(t *testing.T) {
 	}
 }
 
+func TestDiskCheck(t *testing.T) {
+	const gib = 1 << 30
+	left := []string{"3 leaked temp dirs under /tmp (1.2 GiB)"}
+	for _, tc := range []struct {
+		name   string
+		in     Input
+		status string // "" = no disk line
+		detail string
+		hint   string
+	}{
+		{"low free space warns", Input{Disk: &Disk{Path: "/tmp", Free: 3 * gib, Total: 75 * gib}, MinFreeDiskPercent: 10, Leftovers: left}, Warn, "3.0 GiB free (4%), under the 10% threshold", "3 leaked temp dirs"},
+		{"low space with nothing to reclaim still warns", Input{Disk: &Disk{Path: "/tmp", Free: 3 * gib, Total: 75 * gib}, MinFreeDiskPercent: 10}, Warn, "/tmp has", "doctor.minFreeDiskPercent"},
+		{"enough space is silent", Input{Disk: &Disk{Path: "/tmp", Free: 30 * gib, Total: 75 * gib}, MinFreeDiskPercent: 10, Leftovers: left}, "", "", ""},
+		{"threshold 0 turns it off", Input{Disk: &Disk{Path: "/tmp", Free: 1, Total: 75 * gib}}, "", "", ""},
+		{"unreadable disk is silent", Input{MinFreeDiskPercent: 10}, "", "", ""},
+	} {
+		in := tc.in
+		f := &fake{have: map[string]bool{}, reply: map[string]Result{}}
+		in.Exec, in.Look = f.exec, f.look
+		var got *Check
+		rep := Run(context.Background(), in)
+		for i := range rep.Checks {
+			if rep.Checks[i].Name == "disk" {
+				got = &rep.Checks[i]
+			}
+		}
+		if tc.status == "" {
+			if got != nil {
+				t.Errorf("%s: unexpected disk check %+v", tc.name, *got)
+			}
+			continue
+		}
+		if got == nil || got.Status != tc.status || !strings.Contains(got.Detail, tc.detail) || !strings.Contains(got.Hint, tc.hint) {
+			t.Errorf("%s: got %+v", tc.name, got)
+		}
+	}
+	if !(Report{Checks: []Check{{Status: Warn}}}).OK() {
+		t.Error("a warning does not fail the report")
+	}
+}
+
 func TestSkillsCheck(t *testing.T) {
 	const bin = "aaaaaaaaaaaaaaaa"
 	root := func(mod func(*skills.RootStatus)) skills.RootStatus {

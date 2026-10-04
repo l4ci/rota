@@ -43,6 +43,9 @@ func TestMain(m *testing.M) {
 	// `rota init` registers the project in the global registry (#24): no test
 	// may write the developer's real ~/.config/rota.
 	os.Setenv("XDG_CONFIG_HOME", filepath.Join(dir, "xdg"))
+	// doctor's disk check reads the real volume: pin a healthy one so a full
+	// developer disk does not add a line to every doctor golden (#85).
+	os.Setenv("ROTA_TEST_DOCTOR_DISK", "50:100")
 	limitHost = func(string) host.Host { return &limFake{} }
 	// Fixture repos commit and merge: the identity comes from here, not from
 	// the developer's (or CI's missing) global git config. Same identity as gitT,
