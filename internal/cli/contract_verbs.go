@@ -204,4 +204,5 @@ var contractVerbs = []string{
 	"worker reset",
 	"worker session check",
 	"worker session ensure",
+	"worker train",
 }
