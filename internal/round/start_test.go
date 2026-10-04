@@ -230,6 +230,9 @@ func TestCandidatesPerScope(t *testing.T) {
 	if got := get(CandidateOpts{Scope: roundcfg.ScopeMilestone}); len(got) != 0 {
 		t.Errorf("milestone never rolls over: %v", got)
 	}
+	if got := get(CandidateOpts{Scope: roundcfg.ScopeOpen}); !reflect.DeepEqual(got, []string{"12", "13", "14"}) {
+		t.Errorf("open is every open item no slot holds: %v", got)
+	}
 	if _, err := e.Candidates(bg, root, be, CandidateOpts{Scope: "all"}); err == nil {
 		t.Error("an unknown scope must fail")
 	}
@@ -407,6 +410,57 @@ func TestStartRecordsSlateAndValidatesFlags(t *testing.T) {
 	}
 	if scope, slate := SlateOf(root); scope != "milestone" || slate != nil {
 		t.Errorf("a milestone round drops the slate: %q %v", scope, slate)
+	}
+}
+
+func TestStartRenewKeepsRecordedScope(t *testing.T) {
+	root := newRepo(t, nil)
+	e := Env{Git: worker.ExecGit, Base: "main", Lease: fakeLease("h", 100)}
+	// --items without --scope is a slate.
+	st, err := e.Start(bg, root, startOpts("", 100, "12", "13"))
+	if err != nil || st.Scope != roundcfg.ScopeSlate || !reflect.DeepEqual(st.Slate, []string{"12", "13"}) {
+		t.Fatalf("items alone make a slate: %v %+v", err, st)
+	}
+	// A renewal without --scope keeps scope and slate.
+	st, err = e.Start(bg, root, startOpts("", 100))
+	if err != nil || st.Scope != roundcfg.ScopeSlate || !reflect.DeepEqual(st.Slate, []string{"12", "13"}) {
+		t.Fatalf("renew must keep the slate: %v %+v", err, st)
+	}
+	if scope, slate := SlateOf(root); scope != "slate" || !reflect.DeepEqual(slate, []string{"12", "13"}) {
+		t.Errorf("recorded %q %v", scope, slate)
+	}
+	// --scope slate --items replaces the slate while holding the lease.
+	if st, err = e.Start(bg, root, startOpts(roundcfg.ScopeSlate, 100, "14")); err != nil || !reflect.DeepEqual(st.Slate, []string{"14"}) {
+		t.Fatalf("new slate: %v %+v", err, st)
+	}
+	// An explicit --scope changes it.
+	if st, err = e.Start(bg, root, startOpts(roundcfg.ScopeOpen, 100)); err != nil || st.Scope != roundcfg.ScopeOpen {
+		t.Fatalf("explicit scope: %v %+v", err, st)
+	}
+	if scope, slate := SlateOf(root); scope != "open" || slate != nil {
+		t.Errorf("recorded %q %v", scope, slate)
+	}
+	// A renewal now keeps open.
+	if st, err = e.Start(bg, root, startOpts("", 100)); err != nil || st.Scope != roundcfg.ScopeOpen {
+		t.Fatalf("renew keeps open: %v %+v", err, st)
+	}
+}
+
+func TestStartFreshWithoutScopeUsesConfig(t *testing.T) {
+	root := newRepo(t, nil)
+	e := Env{Git: worker.ExecGit, Base: "main", Lease: fakeLease("h", 100)}
+	o := startOpts("", 100)
+	o.Settings.Scope = roundcfg.ScopeNext
+	st, err := e.Start(bg, root, o)
+	if err != nil || st.Scope != roundcfg.ScopeNext {
+		t.Fatalf("fresh round uses round.scope: %v %+v", err, st)
+	}
+	// round.scope slate without items is refused, before the lease is taken.
+	root = newRepo(t, nil)
+	o.Settings.Scope = roundcfg.ScopeSlate
+	var we *worker.Error
+	if _, err := e.Start(bg, root, o); !errors.As(err, &we) || we.Exit != worker.ExitUsage {
+		t.Fatalf("want usage error: %v", err)
 	}
 }
 
