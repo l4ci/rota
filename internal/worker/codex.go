@@ -13,7 +13,7 @@ import (
 )
 
 // Codex workers (E1, #68). The contract is "E: Codex workers" in
-// docs/design/5.0-verb-contract.md.
+// docs/design/contract/.
 
 // Harness kinds of a worker.
 const (

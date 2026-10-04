@@ -1,7 +1,7 @@
 // Package verdict is the typed verdict store behind review, qa, ship and
 // debug (B2, #55). Skills record each verdict through a verb instead of
 // parsing a report's last line; the routing from verdict to next step lives
-// here as plain functions. The schema is docs/design/5.0-verb-contract.md,
+// here as plain functions. The schema is docs/design/contract/,
 // "B2: verdicts".
 package verdict
 
