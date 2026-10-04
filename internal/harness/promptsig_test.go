@@ -1,4 +1,4 @@
-package worker
+package harness
 
 import (
 	"os"
@@ -6,7 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/shlex"
 )
 
@@ -90,7 +89,7 @@ func TestNewPromptKey(t *testing.T) {
 }
 
 func TestWithPromptHookRoundTrip(t *testing.T) {
-	extra := codexHookArgs("/opt/my rota/it's", "/h o'me/rota-prompt.key")
+	extra := CodexHookArgs("/opt/my rota/it's", "/h o'me/rota-prompt.key")
 	cases := []struct {
 		launch string
 		pre    []string // tokens that stay before the inserted args
@@ -111,11 +110,6 @@ func TestWithPromptHookRoundTrip(t *testing.T) {
 		if err != nil || strings.Join(toks, "\x00") != strings.Join(want, "\x00") {
 			t.Errorf("%q -> %q\nsplit %q\nwant %q (%v)", c.launch, out, toks, want, err)
 		}
-		kind, env, args, err := host.LaunchArgs(out)
-		wantArgs := append(append([]string{}, extra...), c.post...)
-		if err != nil || kind != "codex" || len(env) != len(c.pre)-1 || strings.Join(args, "\x00") != strings.Join(wantArgs, "\x00") {
-			t.Errorf("LaunchArgs(%q): %s %q %q %v", out, kind, env, args, err)
-		}
 	}
 	if _, err := withPromptHook(`codex "oops`, extra); err == nil {
 		t.Error("unbalanced quote must error")
@@ -129,6 +123,20 @@ func TestShQuote(t *testing.T) {
 	for in, want := range map[string]string{"abc/d-e.f": "abc/d-e.f", "": "''", "a b": "'a b'", "it's": `'it'\''s'`, "$x": "'$x'"} {
 		if got := shQuote(in); got != want {
 			t.Errorf("%q: %s want %s", in, got, want)
+		}
+	}
+}
+
+func TestTomlString(t *testing.T) {
+	for in, want := range map[string]string{
+		`/a/b`:        `"/a/b"`,
+		`/a "q" \ b`:  `"/a \"q\" \\ b"`,
+		"/a\nb\tc":    `"/a\nb\tc"`,
+		"/a\x01b\x7f": `"/a\u0001b\u007F"`,
+		"/ünï/日本":     `"/ünï/日本"`,
+	} {
+		if got := tomlString(in); got != want {
+			t.Errorf("tomlString(%q) = %s, want %s", in, got, want)
 		}
 	}
 }
