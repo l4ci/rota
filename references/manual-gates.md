@@ -10,7 +10,7 @@ The registry lives in code. `rota gate list` prints every gate, whether a verb e
 |------|------|------------|
 | `tag-push` | `rota release push` | `/rota-release` Steps 10 and 11b |
 | `release-publish` | `rota release publish` | `/rota-release` Step 11 |
-| `public-filing` | `rota tracker suggest-upstream` | `/rota-learn` Step 8.5 |
+| `public-filing` | `rota tracker suggest-upstream` | none (no skill files upstream issues) |
 | `merge-approval` | `rota ship merge`, `rota ship pr-merge`, `rota worker gate`, when `ship.mergeApproval` covers the merge (`all`, or `paths` matching `ship.mergeApprovalPaths`) | `/rota-ship` Step 6b, `/rota-review --queue`, `/rota-work` gate step |
 | `debug-reset` | `rota debug reset <ID> --reason <why>` (starts an item's failed-fix count again after the Iron Law halted it) | `/rota-debug` Step 9.5 |
 
@@ -30,7 +30,7 @@ Call sites show the flags and the exit-4 handling; they don't restate the rule, 
 
 ## Skill-only gates: the callout holds the line
 
-Closing and labelling upstream issues stay out of code (maintainer ruling, B1), and some gates have no verb to put the check in. These keep the inline callout immediately before the action, per the authoring convention *"Imperative rules in autonomy-aware steps must live inline at every dispatch point"* (see `references/authoring-conventions.md`, autonomy-rule-must-stay-inline). A reference cite cannot replace it.
+Closing upstream issues stays out of code (maintainer ruling, B1), and some gates have no verb to put the check in. These keep the inline callout immediately before the action, per the authoring convention *"Imperative rules in autonomy-aware steps must live inline at every dispatch point"* (see `references/authoring-conventions.md`, autonomy-rule-must-stay-inline). A reference cite cannot replace it.
 
 The canonical callout shape (block-quote) is:
 
@@ -43,10 +43,7 @@ Sites with multi-paragraph prose may use the *inline* form, a `**always manual**
 | Gate | Skill | Step | Externally-visible state |
 |------|-------|------|--------------------------|
 | `decision-write` | `/rota-decide` | Step 5 (Confirmation) | Commits a hard boundary to `.rota/DECISIONS.md`; future implementation choices are constrained until the entry is amended. |
-| `runlog-entry` | `/rota-learn` | Step 8.6 | Publishes signed content to the public runlog registry. |
 | `pr-open` | `/rota-ship` | Step 6a | Pushes the branch and creates a public PR or MR. |
-| `issue-label` | `/rota-capture --from-github` / `--from-gitlab` | Step I6 (Apply label upstream) | Applies the `in-progress` label to upstream issues; collaborators see them claimed. |
-| `issue-label` | `/rota-capture --remove` | Step R3 (De-tag upstream) | Removes the `in-progress` label upstream when a captured item is removed. |
 | `issue-close` | `/rota-ship` | Step 6c (Direct-push close) | Posts a tracking comment and closes upstream issues after a direct merge. |
 | `issue-close` | `/rota-release` | Step 13 | Closes upstream issues still open for shipped items. |
 
