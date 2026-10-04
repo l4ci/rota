@@ -267,7 +267,9 @@ func releasePublish(fs *flag.FlagSet) RunFunc {
 
 // releaseAssets is what the release workflow must attach before a draft is
 // finished: one bare binary per platform (the names bin/rota downloads) and the
-// checksums. The tarballs are not part of that contract.
+// checksums. The tarballs are not part of that contract, but every asset that
+// is attached, tarballs included, must carry a minisign signature (see
+// releaseMissing).
 var releaseAssets = []string{
 	"rota_linux_amd64", "rota_linux_arm64", "rota_darwin_amd64", "rota_darwin_arm64", "checksums.txt",
 }
@@ -318,11 +320,43 @@ func releaseView(ctx context.Context, cl *tracker.CLI, tag string) (releaseInfo,
 	return info, nil
 }
 
+// releaseMissing lists what a draft still lacks: each required asset, then the
+// <name>.minisig of every required or attached asset. install.sh refuses an
+// unsigned binary, so a release without its signatures breaks every install.
+func releaseMissing(assets []string) []string {
+	have := map[string]bool{}
+	for _, a := range assets {
+		have[a] = true
+	}
+	const sig = ".minisig"
+	var signed []string
+	signed = append(signed, releaseAssets...)
+	for _, a := range assets {
+		if !strings.HasSuffix(a, sig) {
+			signed = append(signed, a)
+		}
+	}
+	var missing []string
+	seen := map[string]bool{}
+	for _, want := range releaseAssets {
+		if !have[want] {
+			missing = append(missing, want)
+		}
+	}
+	for _, a := range signed {
+		if !seen[a] && !have[a+sig] {
+			missing = append(missing, a+sig)
+		}
+		seen[a] = true
+	}
+	return missing
+}
+
 // releaseUsable reports whether publish should edit an existing release. A
-// draft must carry every binary and the checksums before it is finished; and
-// where goreleaser builds the repo, no release at all means the workflow has
-// not run, so creating one here would put the plugin version ahead of its
-// binaries.
+// draft must carry every binary, the checksums and a signature for each asset
+// before it is finished; and where goreleaser builds the repo, no release at
+// all means the workflow has not run, so creating one here would put the plugin
+// version ahead of its binaries.
 func releaseUsable(rel releaseInfo, dir, tag string) (bool, error) {
 	if !rel.Found {
 		if cfg := releaseGoreleaser(dir); cfg != "" {
@@ -332,16 +366,7 @@ func releaseUsable(rel releaseInfo, dir, tag string) (bool, error) {
 		return false, nil
 	}
 	if rel.IsDraft {
-		have := map[string]bool{}
-		for _, a := range rel.Assets {
-			have[a] = true
-		}
-		var missing []string
-		for _, want := range releaseAssets {
-			if !have[want] {
-				missing = append(missing, want)
-			}
-		}
+		missing := releaseMissing(rel.Assets)
 		if len(missing) > 0 {
 			return false, Resolution("the draft release for %s lacks %s", tag, strings.Join(missing, ", ")).
 				WithHint("wait for the release workflow to attach them")
