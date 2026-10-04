@@ -3,7 +3,7 @@
 What each `/rota-*` skill does, one line each. For details: [`reference/slash-commands.md`](reference/slash-commands.md).
 
 ## Capture & pick
-- **`/rota-capture`**: add bugs, features, tasks to the backlog. No code yet. Ends with an optional hand-off to `/rota-work`. Flags: `--from-github`, `--from-gitlab`, `--remove`.
+- **`/rota-capture`**: add bugs, features, tasks to the backlog. No code yet. Prints the new IDs and stops. Flag: `--remove`.
 - **`/rota-pause`**: stop cleanly; leave a handoff note for the next session.
 
 ## Plan & build

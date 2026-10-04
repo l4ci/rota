@@ -260,7 +260,7 @@ def prose_rules():
     r += [has(sk("work"), "reset guard", "does not describe the slot reset guard"),
           paired("rota-*/SKILL.md", "rota item complete", "rota proof add",
                  "calls rota item complete without a rota proof add path"),
-          has(sk("capture"), "Step I6", "missing Step I6 (Import Mode label gate)"),
+          lacks(sk("capture"), "Import Mode", "Import Mode was removed"),
           has(sk("capture"), "Step R3", "missing Step R3 (Remove Mode de-tag gate)"),
           has(sk("ship"), "Step 6c", "missing Step 6c (direct-push close gate)"),
           has(sk("ship"), CALLOUT, "missing the manual-gate callout (Step 6c)"),
