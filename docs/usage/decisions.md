@@ -8,7 +8,7 @@
 |---|---|---|
 | Voice | "remember this if relevant" | "this is committed, do not violate" |
 | Structure | one-liner per bullet | rule + *why* + **forbids** + **permits** |
-| Capture | auto in `auto`/`loop` mode | always manual, always confirmation-gated |
+| Capture | auto in `auto` mode | always manual, always confirmation-gated |
 | Reaction at consult | advisory; informs the approach | hard constraint; violations FAIL |
 | When to use | "we discovered that the API returns 200 on auth failure" | "we will never store session tokens client-side" |
 
@@ -16,7 +16,7 @@ When unsure, try articulating **forbids** and **permits**. If you can't, it's a 
 
 ## Capturing a decision
 
-Run `/rota-decide` when you've reached a commitment. The skill drafts a four-part entry (rule, why, forbids, permits) from conversation context, classifies it by topic, and asks for confirmation before writing. Nothing is written without your "Write it" answer, even in `autonomy.level: loop`.
+Run `/rota-decide` when you've reached a commitment. The skill drafts a four-part entry (rule, why, forbids, permits) from conversation context, classifies it by topic, and asks for confirmation before writing. Nothing is written without your "Write it" answer, even in `autonomy.level: auto`.
 
 If you can't articulate forbids or permits, the skill suggests [`/rota-learn`](learning.md) instead and stops. It does not auto-invoke `/rota-learn`; you re-run it yourself.
 

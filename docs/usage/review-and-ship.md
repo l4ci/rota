@@ -116,7 +116,7 @@ See [configuration](configuration.md) for the full `work` block.
 | `true` (default) | `/rota-review` runs first. `FAIL` blocks, `CONCERNS` surface but you can proceed, `PASS` flows through. |
 | `false` | Skips the review pass. Integration runs immediately. Use when you have already reviewed manually and want to skip the second pass. |
 
-The review gate is independent of the autonomy level. Under `autonomy: "loop"`, a `FAIL` verdict still halts the chain until you fix the branch.
+The review gate is independent of the autonomy level. A `FAIL` verdict still halts the chain until you fix the branch.
 
 See [configuration](configuration.md) for the full `ship` block.
 
@@ -143,8 +143,8 @@ The nudge fires when EITHER `release.nudgeAfterCommits` (default 10) OR `release
 - [ ] Push staging migration (manual)
 ```
 
-For each gate the skill asks: *Yes, continue* / *Fix now and continue* / *Skip this item* / *Abort release*. Skipped items show up in the post-release summary so the release record stays honest. Items ending in `(manual)` always interject even under `autonomy.level: auto` or `loop`, useful for sensitive gates that should not auto-acknowledge.
+For each gate the skill asks: *Yes, continue* / *Fix now and continue* / *Skip this item* / *Abort release*. Skipped items show up in the post-release summary so the release record stays honest. Items ending in `(manual)` always interject even under `autonomy.level: auto`, useful for sensitive gates that should not auto-acknowledge.
 
-When the file is absent, the skill offers to scaffold a starter under `autonomy.level: off`, or silently skips the gate under `auto`/`loop` (don't interrupt unattended runs). See [`release.checklistPath`](configuration.md#releasechecklistpath) to override the path.
+When the file is absent, the skill offers to scaffold a starter under `autonomy.level: off`, or silently skips the gate under `auto` (don't interrupt unattended runs). See [`release.checklistPath`](configuration.md#releasechecklistpath) to override the path.
 
 The file is tracked by default, so the release checklist is shared with the team like any other source file. To keep it per-contributor instead, add `.rota/RELEASE.md` to `.gitignore`.

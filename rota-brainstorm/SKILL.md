@@ -9,19 +9,6 @@ description: Per-item design exploration before /rota-plan — Socratic discover
 
 ## Step 1 — Setup
 
-**Autonomy gate.** Read `autonomy.level` and parse the `--auto-loop` flag:
-
-```bash
-LEVEL=$(jq -r '.autonomy.level // "off"' .rota/config.json)
-```
-
-Also parse `AUTO_LOOP`: scan `$ARGUMENTS` (the skill `args` value) for the literal string `--auto-loop`; set `AUTO_LOOP=true` if present, `AUTO_LOOP=false` otherwise. Then branch:
-
-- **`LEVEL == "loop"` AND `AUTO_LOOP=false`** — print *"Note: /rota-brainstorm is skipped under loop autonomy (throughput mode). Re-run after `rota config set` to off or auto if you want to brainstorm."* and exit 0. Per the 2026-05-09 KNOWLEDGE inline-autonomy-directives convention, the check lives at every dispatch point including this one.
-- **`LEVEL == "loop"` AND `AUTO_LOOP=true`** — enter auto-loop mode: proceed to Step 2 without exiting. All `AskUserQuestion` calls are suppressed for the rest of the run; the auto-resolution pipeline (see `## Auto-loop mode`) drives every pick.
-- **`LEVEL != "loop"` (off/auto) AND `AUTO_LOOP=true`** — stop: `--auto-loop` is loop-mode only (`rota design add --auto-loop` refuses it with exit 2 anyway; this check just stops before the run).
-- **`LEVEL != "loop"` AND `AUTO_LOOP=false`** — normal interactive flow (today's path); proceed to Step 2.
-
 Track these phases with the host's task tool if it has one.
 
 Phases:
@@ -47,9 +34,7 @@ rota item field get <ID> --name title
 
 Exit 3 means the ID is not in the backlog. Refuse with: *"Error: <ID> not found in the backlog. Run /rota-capture first to add it."*
 
-**Re-run check.** Under `--auto-loop`, if `rota design show <ID>` finds a design, exit silently with a one-line note **`Design already exists — no auto-action.`** Loop calls are idempotent; replacing a design requires manual `/rota-brainstorm <ID>` invocation.
-
-If a design already exists (interactive mode), ask via `AskUserQuestion` (single-select, 3 options):
+If a design already exists, ask via `AskUserQuestion` (single-select, 3 options):
 
 - **View** — print the existing design and exit
 - **Edit** — enter brainstorm with existing design loaded as starting context
@@ -77,8 +62,6 @@ DECISIONS matches are hard boundaries. If the brainstorm would violate any, surf
 
 ## Step 4 — Frame & Discover
 
-**Skipped under `--auto-loop`** — the auto-resolution pipeline runs in lieu of clarifying rounds. See `## Auto-loop mode` below.
-
 Socratic clarifying questions via `AskUserQuestion`, one per round, multi-choice preferred (≤ 4 options per the picker cap). **Cap: 5 clarifying rounds**; after the fifth, switch to plain-text prose. Section gates (Step 6) and the final review (Step 9) are check-ins, not exploratory questions, and do **not** count against the budget.
 
 `/rota-vision` is the project-scope sibling and uses batched discovery — see `references/design-exploration.md` for the family spine and divergence rationale.
@@ -98,8 +81,6 @@ Don't guess at the answer to keep the brainstorm moving.
 
 ## Step 5 — Propose 2-3 Approaches
 
-**Under `--auto-loop`**, the orchestrator picks the most consistent approach via the auto-resolution pipeline (no `AskUserQuestion`). Filters: any candidate that violates a DECISIONS entry is auto-rejected; remaining candidates ranked by KNOWLEDGE pattern match and architectural consistency with adjacent skills. The pick is logged via `rota decisions auto-log` under the rule title `Brainstorm approach pick for <ID>`.
-
 Present 2 or 3 candidate approaches inline as plain markdown — not yet committed to disk. Each approach gets:
 
 - **Shape** — one paragraph naming the moving parts and where they live
@@ -112,8 +93,6 @@ Frame each candidate around the item's detail file and the K+D+C findings from S
 The picked approach is the design. Carry it into Step 6.
 
 ## Step 6 — Sectioned Design with Per-Section Approval
-
-**Under `--auto-loop`**, write each section directly from the Step 4/5 auto-resolution outputs — no per-section `AskUserQuestion` approval gates.
 
 Draft the design one section at a time in this order: Goal → Design → Approaches considered → Open questions → Assumptions. See `references/design-exploration.md` for the shared approval shape (yes / changes / approve all remaining).
 
@@ -135,15 +114,11 @@ rota design add <ID> --title "<title>"
 
 The verb creates the design with frontmatter (`id`, `title`, `status: draft`, `created`) and the five placeholder section headers. On the issue backend it is a note on the item's issue (`references/issue-mode.md`): draft the approved sections from Step 6 in a scratch file and publish with `rota design put <ID> --body-file <scratch-file>`. On the file backend it is `.rota/designs/<ID>.md`: use the `Edit` tool to overwrite each placeholder section body, keeping the frontmatter intact. Read it back with `rota design show <ID>`. Post each answer that changed the design's direction with `rota item comment add <ID> --kind decision --body-file -`.
 
-Under `--auto-loop`, mint the stub with `rota design add <ID> --title "<title>" --auto-loop`: the verb writes `auto: true` into the frontmatter, marking the artifact as auto-written.
-
 ## Step 8 — Self-Review
 
 Scan per the shared shape — see `references/design-exploration.md` (placeholders, internal contradictions, scope creep, ambiguous adjectives). Item-specific check: every claim ties back to the item ID; nothing leaks into a sibling item or future milestone. Internal-contradiction check: Step 5's chosen approach matches the Design section; Open questions don't conflict with Assumptions.
 
 ## Step 9 — User Review Gate
-
-**Skipped under `--auto-loop`** — the design is final on write; users review via terminal-path surfacing (`/rota-work` empty-backlog, `/rota-work` guard-fail, `/rota-pause`) where `rota decisions auto-since` prints the logged decisions.
 
 Print the final artifact (or invoke `rota design show <ID>`) and ask via `AskUserQuestion` per the shared review-gate shape (see `references/design-exploration.md`). Item-specific routes:
 
@@ -169,36 +144,6 @@ If the user approved-and-hand-off:
 - Untagged item → *"Run `/rota-plan` next (it will prompt for milestone)."*
 
 If the user picked *Stop here* → exit without a `/rota-plan` nudge.
-
-## Auto-loop mode
-
-Activated by the `--auto-loop` flag. Invoked exclusively by `/rota-work` Step 4 in loop mode when no design exists for a Major + Milestone-tagged item — see `/rota-work`'s Step 4 dispatch directive for the trigger conditions and the inline `Skill`-tool dispatch language. This section describes the run shape once the flag is set; the dispatch decision lives at `/rota-work`'s call site (per the authoring-conventions rule "Imperative rules in autonomy-aware steps must live inline at every dispatch point" convention).
-
-**Orchestrator-model contract.** `--auto-loop` makes design picks autonomously (no `AskUserQuestion`), so it depends on orchestrator-grade design judgment. The contract: this skill is invoked via the `Skill` tool from `/rota-work` Step 4, which loads it inline in `/rota-work`'s session. Since `/rota-work` runs under `models.orchestrator` (per `.rota/config.json`, default `opus`), `--auto-loop` inherits that model. If a future change moves the dispatch to the `Agent` tool, the call site MUST explicitly pass `model: orchestrator` (resolved from `.rota/config.json`) — running `--auto-loop` under the worker model would push design picks onto an execution-tuned model and degrade design quality. The interactive (default) mode has no such constraint; it can run under any model since the user redlines via `AskUserQuestion`.
-
-### Pipeline
-
-For each clarifying question that Step 4 would normally surface to the user, and for each Step 5 approach pick, run three steps in order:
-
-1. **Local-first.** Grep `DECISIONS.md` / `MILESTONES.md` / `KNOWLEDGE.md` via `rota decisions query` / `rota knowledge query`, and `rota glossary read` for any domain terms, on the question's topic keywords. If a matching commitment exists, the answer is "honor the existing commitment" — do **not** log a new `[Auto:Loop]` entry; the existing commitment IS the record.
-2. **Bounded web (opt-in).** If unmatched AND the question references an external library, API, or protocol (anything outside the F14 rota surface scan: `/rota-(\w+)`, `rota <verb>` calls, `.rota/*` artifacts), AND `loop.webResearch == true` in `.rota/config.json` (default `false`), call `WebSearch` with a budget of **2 queries per question, 6 queries per design**. Block on results; no async fetch.
-3. **Placeholder fallback.** If still unresolved, retain the question literally in the written design's "Open questions" section with `_(Unresolved — surfaced for review)_` after the question text. The auto-write proceeds — never stop the loop.
-
-### Logging
-
-Each fresh pick from step 1 (when no existing commitment matched and you made a new pick) and step 2 produces an `[Auto:Loop]` entry via:
-
-```bash
-rota decisions auto-log --topic "<topic>" --title "<rule-title>" --why "<why-text>" --plan-key "<design-key>" --date "$(date +%Y-%m-%d)"
-```
-
-Where `<design-key>` is `<milestone>-<itemId>` when the item has a `Milestone:` tag, else just `<itemId>`. The entry follows the standard `DECISIONS.md` template, but **only the rule and `*Why.*` are auto-filled**; `**Forbids.**` and `**Permits.**` stay as `_(Unresolved — user must articulate)_` placeholders. A footer comment encodes provenance: `<!-- [Auto:Loop] <design-key> <date> — review and articulate Forbids/Permits -->`. The verb is idempotent on `(topic, rule-title)`.
-
-After all questions and the approach pick are resolved, write the design via `rota design add --auto-loop` + `Edit` (per Step 7). The design's "Open questions" section lists every step-3 placeholder verbatim.
-
-### Surfacing
-
-`/rota-brainstorm --auto-loop` itself does not surface auto-decisions to the user — surfacing fires only on terminal paths (`/rota-work` empty-backlog branch, `/rota-work` guard-fail branch, `/rota-pause`) via `rota decisions auto-since`. The user sees the running summary at session end, articulates `Forbids/Permits` in `DECISIONS.md`, and removes the `<!-- [Auto:Loop] -->` footer.
 
 ## Anti-pattern guard
 

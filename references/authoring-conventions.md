@@ -4,11 +4,11 @@ These conventions constrain how new rota skills (or new behavior in existing ski
 
 ## Skills are self-contained — no shared contract file
 
-Each skill owns its rules inline. A "shared contract" reference file (an old `GUIDE.md` was one) is a smell when every rule has a single owner. Audit the cross-refs before retaining a shared file: if each rule is already mirrored inline at the call site (autonomy off/auto/loop dispatch, learn trigger thresholds, etc.), the central file is vestigial pointer-chasing. Build a shared file only when N≥3 callers need the same long rule verbatim.
+Each skill owns its rules inline. A "shared contract" reference file (an old `GUIDE.md` was one) is a smell when every rule has a single owner. Audit the cross-refs before retaining a shared file: if each rule is already mirrored inline at the call site (autonomy off/auto dispatch, learn trigger thresholds, etc.), the central file is vestigial pointer-chasing. Build a shared file only when N≥3 callers need the same long rule verbatim.
 
 ## Imperative rules in autonomy-aware steps must live inline at every dispatch point
 
-Steps that branch on `autonomy.level` (off/auto/loop) and dispatch the next skill via `Skill` ("no prompt, no confirmation, no 'want me to' question") must repeat the directive verbatim alongside each `Skill`-tool invocation. Readers don't chase cross-refs to a single source of truth, and the harness drifts toward asking when only the rule's name is at the dispatch site. Redundancy is cheaper than scattered authority.
+Steps that branch on `autonomy.level` (off/auto) and dispatch the next skill via `Skill` ("no prompt, no confirmation, no 'want me to' question") must repeat the directive verbatim alongside each `Skill`-tool invocation. Readers don't chase cross-refs to a single source of truth, and the harness drifts toward asking when only the rule's name is at the dispatch site. Redundancy is cheaper than scattered authority.
 
 ## Don't ask what the code can answer
 
@@ -23,30 +23,6 @@ Skills print no banner, and none requires a task-list tool. A multi-phase skill 
 When a skill asks the user a question, ask in prose with the options listed and a recommended default when the host has no option picker. `AskUserQuestion` is the Claude Code example of such a picker; a skill names it only to describe the question shape. A free-text reply to a picker is mapped to the nearest option. Ask once, and on an ambiguous reply take the site's stated default and say which one landed. Destructive operations and opt-in flags default to the safe side (cancel, `false`). Skills do not carry per-site "Plain-text fallback" lines.
 
 Phase outcomes, where a skill names them, stay mechanically verifiable (a file exists, a command exits 0, a commit landed, a recorded user answer), not subjective states.
-
-## Routine routing/tagging auto-picks Recommended in loop mode
-
-When `autonomy.level == "loop"`, AskUserQuestion calls that present a single clear `(Recommended)` option for **routine routing or tagging** must silently auto-pick the Recommended option without invoking AskUserQuestion. The host's question UI never fires; the skill proceeds as if the user picked the Recommended answer.
-
-This is what makes loop mode actually loop — a single "Tag with M01?" or "Resume vs ship?" prompt mid-queue stalls every subsequent item until the user types an answer. Loop mode's contract is "drain the queue until empty / guard / interrupt"; intermediate routine prompts violate it.
-
-Routine = the kind of question where the Recommended option is the obvious right answer, not a design pick. Examples: milestone tagging (`/rota-capture` Step 4.5), sub-repo tagging (`/rota-capture` Step 4.6), reconcile resolution (`/rota-work` no-argument mode, step 1 — resume / ship / leave), CONCERNS routing (`/rota-ship` Step 3 — "Address via /rota-work"), refactor scope and candidate gates.
-
-**Forbids.** Auto-picking on:
-- **Design decisions with open questions** — competing approaches, version-bump escalation, novel pattern choice. These belong to F32 (loop-mode auto-planning, with `[Auto:Loop]` decision logging). A `(Recommended)` flag on a design pick is a *suggestion*, not a routine answer; the loop must surface them.
-- **Manual gates that are never auto-invoked regardless of autonomy** — `/rota-decide` approvals, `/rota-ship` Step 5 PR strategy, `/rota-release` push/publish gates. These have explicit `**Manual gate — ...**` callouts in their SKILL.md. Loop mode honors the gate — it does not auto-pick.
-- **Config-flip questions** — `/rota-ship --docs` after-work-mode opt-in. These flip user-preference flags; the opt-in-defaults-to-`false` rule (below) requires explicit user approval, not loop-mode synthesis.
-
-**Permits.**
-- Routine routing/tagging with one clear Recommended option (the use cases listed above and any future analogue).
-- Sites that already implement the pattern explicitly (`/rota-work` no-argument mode, step 4 confirm-the-suggested-item; `/rota-capture` Step 8 work-it-now hand-off) — same shape, already inline; new sites follow their lead.
-- Per-site phrasing variations — each site's loop branch states the auto-pick locally because the autonomy-rule-must-live-inline convention (above) forbids cross-refs to a single source of truth.
-
-The dispatch site should add a short loop branch alongside the existing `"off"` AskUserQuestion arm. Pattern (adapt phrasing per site):
-
-> **Loop mode:** when `autonomy.level == "loop"`, silently auto-pick the Recommended option without invoking AskUserQuestion — `<one-line summary of what gets dispatched>`.
-
-Codified after F33 caught loop-mode discontinuity from `/rota-capture` milestone tagging and `/rota-work` no-argument reconcile gates breaking the `/rota-work` → `/rota-learn` → `/rota-work` chain.
 
 ## User-volition gates enforced at exactly one point
 
@@ -137,7 +113,7 @@ Codified from a read of klufft's `swarm.md` (rota#20, 2026-07-31), whose orchest
 
 ## Nudges on terminal/idle paths only
 
-When a nudge or check could fire from multiple skills that converge on the same end-state (e.g., `/rota-work` → `/rota-ship` → `/rota-work` via loop continuation), place the nudge on the *terminal/idle paths* — where the user is about to leave the session — NOT on dispatch paths that hand off to another skill. Multiple skills firing the same nudge from convergent flows drowns the signal.
+When a nudge or check could fire from multiple skills that converge on the same end-state (e.g., `/rota-work` → `/rota-ship` → `/rota-learn` handoffs), place the nudge on the *terminal/idle paths* — where the user is about to leave the session — NOT on dispatch paths that hand off to another skill. Multiple skills firing the same nudge from convergent flows drowns the signal.
 
 **Forbids.**
 - Firing the same nudge from a skill's tail when that skill auto-dispatches the next skill (the user never sees the message — it's overwritten by the dispatched skill's output).

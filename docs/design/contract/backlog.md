@@ -310,30 +310,6 @@ old: hv-resolve-handoff [--repo <r>] [--write] <branch>
 shim: read mode: stdout path or empty (null, `exists` false); `--canonical`: the path is returned without probing, `exists` is whether the file is there. Paths are relative to the project root, branches with `/` stay literal, and `--repo` gives `<branch>@<repo>.md`, falling back to `<branch>.md` in read mode.
 note: `--write` becomes `--canonical`, because the verb never writes anything.
 
-### rota status loop start
-rota status loop start
-repo: none
-data: {"loopStartedAt": string, "changed": bool}
-exit: implied only
-old: hv-loop-stamp start
-shim: `changed` is true when `loopStartedAt` was unset before the call (read it first with `hv-loop-stamp read`); the value is first-write-wins, so an existing stamp is returned unchanged.
-
-### rota status loop clear
-rota status loop clear
-repo: none
-data: {"changed": bool}
-exit: implied only
-old: hv-loop-stamp clear
-shim: `changed` is true when `hv-loop-stamp read` returned a value before the call.
-
-### rota status loop show
-rota status loop show
-repo: none
-data: {"loopStartedAt": string|null}
-exit: implied only
-old: hv-loop-stamp read
-shim: empty stdout becomes null. Old subcommand `read` is renamed `show`.
-
 ### rota refactor age
 rota refactor age
 repo: scoped

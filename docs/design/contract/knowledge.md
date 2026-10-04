@@ -137,24 +137,6 @@ old: hv-decisions-query <topic>…    (same positionals)
 shim: stdout is `text`; `missing` is omitted.
 note: unlike `knowledge query`, an unmatched topic emits no warning, as old, and only the port fills `missing`. Zero topics moves from exit 1 to 2.
 
-### rota decisions auto-log
-rota decisions auto-log --topic <T> --title <rule-title> --why <text> [--plan-key <key>] [--date YYYY-MM-DD]
-repo: none
-data: {"topic": string, "title": string, "changed": bool}
-exit: 2 when `--topic`, `--title` or `--why` is missing
-old: hv-auto-decision-log <T> <rule-title> <why> [<plan-key>] [<date>]    (`--plan-key` is old positional 4, `--date` is positional 5; when only `--date` is given the shim passes `""` for positional 4)
-shim: `changed` is computed by comparing DECISIONS.md before and after (the old helper prints nothing).
-note: the five positionals became flags (rule 1: nothing here is the single thing the verb acts on). `--date` defaults to today. It is idempotent on the exact `### <title>` heading within the topic, and the repeat call returns `changed: false`. The topic heading is created at the end of the file when missing.
-
-### rota decisions auto-since
-rota decisions auto-since
-repo: none
-data: {"since"?: string, "decisions": [{"topic": string, "title": string, "date": string, "status": "unresolved"|"partial"|"articulated"}]}
-exit: implied only. No loop, no file or no match gives `decisions: []`.
-old: hv-auto-decisions-since
-shim: parses each stdout line `- **<Topic> · <Title>** — <date> · [<tag>]`; the tags `Forbids/Permits unresolved`, `Partially articulated` and `Articulated` become `unresolved`, `partial` and `articulated`; `since` is `loopStartedAt` read from `.rota/status.json` (absent when there is no loop).
-note: text mode prints the old markdown block. Extra arguments are rejected with exit 2 (the old helper ignored them).
-
 ### rota glossary read
 rota glossary read <term>…
 repo: scoped (scope S). A sub-repo scope reads umbrella first, then the sub-repo, as before.

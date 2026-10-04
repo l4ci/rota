@@ -60,5 +60,4 @@ Reads in this list are lookups. A missing plan (`rota plan show` exits 3), an em
 ## What this reference does NOT cover
 
 - **K+D query mechanics** — those live in `references/knowledge-consult.md`. This reference cites that one for the K+D portion; it does not redefine the query pattern.
-- **`--auto-loop` pipeline grep'ing** — used by `/rota-plan --auto-loop` to resolve open questions against existing commitments. That's a separate auto-resolution pattern, not part of the silent pre-planning load.
 - **`/rota-debug`, `/rota-refactor`, `/rota-review` context loads** — those consume only `references/knowledge-consult.md`, not the full protocol. Their inputs are different (a bug ID, a diff range, a feature branch), so they don't load TODO entries / plans / milestones the same way.

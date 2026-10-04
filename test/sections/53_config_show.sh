@@ -4,7 +4,7 @@ CS="$(mktemp -d)"
 trap 'rm -rf "$CS"' EXIT
 mkdir -p "$CS/.rota"
 printf '{"work":{"dispatch":"tmux"},"autonomy":{"level":"auto"}}\n' > "$CS/.rota/config.json"
-printf '{"autonomy":{"level":"loop"}}\n' > "$CS/.rota/config.local.json"
+printf '{"autonomy":{"level":"off"}}\n' > "$CS/.rota/config.local.json"
 
 # show [<key>…]: run in the fixture project and print the envelope.
 show() { ( cd "$CS" && hvj config show "$@" ); }
@@ -15,7 +15,7 @@ OUT=$(show work.dispatch)
 [ "$(echo "$OUT" | jget 'data.entries[0].source')" = "project" ] \
   || fail "T118: project value not reported as source project: $OUT"
 OUT=$(show autonomy.level)
-[ "$(echo "$OUT" | jget 'data.entries[0].value')" = "loop" ] \
+[ "$(echo "$OUT" | jget 'data.entries[0].value')" = "off" ] \
   || fail "T118: config.local.json should win: $OUT"
 [ "$(echo "$OUT" | jget 'data.entries[0].source')" = "local" ] \
   || fail "T118: config.local.json should report source local: $OUT"

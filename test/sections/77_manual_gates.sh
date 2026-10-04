@@ -22,7 +22,7 @@ mg_project() { # mg_project <dir> <autonomy level> [<ship json>]
     && git remote add origin ../"$(basename "$1")-origin.git" && git tag -a v1.0.0 -m v1.0.0 )
 }
 
-for LEVEL in off auto loop; do
+for LEVEL in off auto; do
   P="$MGT/push-$LEVEL"
   mg_project "$P" "$LEVEL"
   RC=0; OUT=$(cd "$P" && hvj release push 1.0.0 2>/dev/null) || RC=$?
@@ -43,7 +43,7 @@ assert (a["gate"], a["verb"], a["target"], a["note"], a["autonomy"]) == ("tag-pu
 PY
   [ -z "$(git -C "$P" status --porcelain)" ] || fail "the audit log dirtied the tree under $LEVEL"
 done
-pass "release push refuses at off, auto and loop, and a confirmed push is audited"
+pass "release push refuses at off and auto, and a confirmed push is audited"
 
 RC=0; ( cd "$MGT/push-off" && hvj release push 1.0.0 --confirm >/dev/null 2>&1 ) || RC=$?
 [ "$RC" = 2 ] || fail "--confirm without --confirm-note should exit 2, got $RC"
@@ -51,7 +51,7 @@ pass "--confirm needs --confirm-note"
 
 # ship.mergeApproval paths: only a merge touching a listed path is gated.
 P="$MGT/merge"
-mg_project "$P" loop '{"mergeApproval":"paths","mergeApprovalPaths":["migrations"]}'
+mg_project "$P" auto '{"mergeApproval":"paths","mergeApprovalPaths":["migrations"]}'
 ( cd "$P" && git checkout -q -b rota/code && echo c > code.txt && git add code.txt && git commit -q -m code \
   && git checkout -q main && git checkout -q -b rota/mig && mkdir migrations && echo m > migrations/001.sql \
   && git add migrations && git commit -q -m mig && git checkout -q main )

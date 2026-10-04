@@ -48,8 +48,8 @@ assert d['learn']['verify'] is True, d
   python3 -c "import json; d=json.load(open('.rota/config.json')); assert d['work']['accounts'] == ['a','b'], d" || { echo "FAIL: array parsing"; exit 1; }
 
   # --- Bare identifier falls back to string ---
-  hvj config set autonomy.level loop >/dev/null || { echo "FAIL: string fallback"; exit 1; }
-  python3 -c "import json; d=json.load(open('.rota/config.json')); assert d['autonomy']['level'] == 'loop'" || { echo "FAIL: string-loop"; exit 1; }
+  hvj config set autonomy.level auto >/dev/null || { echo "FAIL: string fallback"; exit 1; }
+  python3 -c "import json; d=json.load(open('.rota/config.json')); assert d['autonomy']['level'] == 'auto'" || { echo "FAIL: string-auto"; exit 1; }
 
   # --- A string that looks like JSON needs shell quoting to stay a string ---
   hvj config set work.workerCommand '"true"' >/dev/null || { echo "FAIL: quoted string"; exit 1; }
@@ -80,12 +80,12 @@ assert d['learn']['verify'] is True, d
 
   # --- Missing config.json: verb creates it ---
   rm -f .rota/config.json
-  hvj config set autonomy.level loop >/dev/null || { echo "FAIL: missing file"; exit 1; }
-  python3 -c "import json; d=json.load(open('.rota/config.json')); assert d == {'autonomy':{'level':'loop'}}" || { echo "FAIL: missing file content"; exit 1; }
+  hvj config set autonomy.level auto >/dev/null || { echo "FAIL: missing file"; exit 1; }
+  python3 -c "import json; d=json.load(open('.rota/config.json')); assert d == {'autonomy':{'level':'auto'}}" || { echo "FAIL: missing file content"; exit 1; }
 
   # --- A config that is not a JSON object is an internal error (70), file untouched ---
   echo '[1]' > .rota/config.json
-  rc=0; "$ROTA_BIN" config set autonomy.level loop >/dev/null 2>&1 || rc=$?
+  rc=0; "$ROTA_BIN" config set autonomy.level auto >/dev/null 2>&1 || rc=$?
   [ "$rc" = 70 ] || { echo "FAIL: non-object config should exit 70, got $rc"; exit 1; }
   [ "$(cat .rota/config.json)" = "[1]" ] || { echo "FAIL: non-object config was rewritten"; exit 1; }
 ) || fail "config set assertions"

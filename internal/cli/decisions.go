@@ -5,16 +5,13 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/l4ci/rota/internal/knowledge"
 	"github.com/l4ci/rota/internal/mapqa"
 )
 
 // decisionsCommands is the `rota decisions` group (A5, #49).
 func decisionsCommands() *Command {
-	return &Command{Name: "decisions", Summary: "read and log .rota/DECISIONS.md", Subs: []*Command{
+	return &Command{Name: "decisions", Summary: "read .rota/DECISIONS.md", Subs: []*Command{
 		{Name: "query", Summary: "print topic sections", Verb: noFlags(decQuery)},
-		{Name: "auto-log", Summary: "log an [Auto:Loop] decision", Verb: decAutoLog},
-		{Name: "auto-since", Summary: "list this loop session's auto-logged decisions", Verb: noFlags(decAutoSince)},
 	}}
 }
 
@@ -31,59 +28,6 @@ func decQuery(c *Ctx, args []string) (Result, error) {
 		return knFail(err)
 	}
 	return Result{Data: knObj("text", text, "missing", strSlice(missing)), Text: text}, nil
-}
-
-func decAutoLog(fs *flag.FlagSet) RunFunc {
-	topic := fs.String("topic", "", "the `topic` heading")
-	title := fs.String("title", "", "the rule `title`")
-	why := fs.String("why", "", "why the loop chose this, one line")
-	planKey := fs.String("plan-key", "", "the plan `key` the decision came from")
-	date := fs.String("date", "", "entry `date` (YYYY-MM-DD), default today")
-	return func(c *Ctx, args []string) (Result, error) {
-		if err := knNoArgs(args); err != nil {
-			return Result{}, err
-		}
-		if err := knRequire(map[string]string{"topic": *topic, "title": *title, "why": *why}, "topic", "title", "why"); err != nil {
-			return Result{}, err
-		}
-		st, _, err := knStore(c)
-		if err != nil {
-			return Result{}, err
-		}
-		changed, err := st.AutoLog(*topic, *title, *why, *planKey, *date)
-		if err != nil {
-			return knFail(err)
-		}
-		text := fmt.Sprintf("logged: %s :: %s", *topic, *title)
-		if !changed {
-			text = fmt.Sprintf("unchanged: %s :: %s", *topic, *title)
-		}
-		return Result{Data: knObj("topic", *topic, "title", *title, "changed", changed), Text: text}, nil
-	}
-}
-
-func decAutoSince(c *Ctx, args []string) (Result, error) {
-	if err := knNoArgs(args); err != nil {
-		return Result{}, err
-	}
-	st, _, err := knStore(c)
-	if err != nil {
-		return Result{}, err
-	}
-	since, ds, err := st.AutoSince()
-	if err != nil {
-		return knFail(err)
-	}
-	list := []any{}
-	for _, d := range ds {
-		list = append(list, knObj("topic", d.Topic, "title", d.Title, "date", d.Date, "status", d.Status))
-	}
-	data := knObj()
-	if since != "" {
-		data.Set("since", since)
-	}
-	data.Set("decisions", list)
-	return Result{Data: data, Text: knowledge.DecisionsText(ds)}, nil
 }
 
 // mapCommands is the `rota map` group.

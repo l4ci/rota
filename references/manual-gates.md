@@ -1,6 +1,6 @@
 # Manual gates
 
-Certain operations are **manual gates**: no `autonomy.level` (`"off"`, `"auto"` or `"loop"`) may pass them on its own. They produce externally-visible state or commit the project to a hard boundary. Loop mode auto-picks routing answers (drain the queue toward done) but never acceptance-of-risk answers (commit on the user's authority).
+Certain operations are **manual gates**: no `autonomy.level` (`"off"` or `"auto"`) may pass them on its own. They produce externally-visible state or commit the project to a hard boundary. Auto mode chains routing steps (one hop toward done) but never answers an acceptance-of-risk question (commit on the user's authority).
 
 The registry lives in code. `rota gate list` prints every gate, whether a verb enforces it, the verbs and skills involved, and the state it creates. There are two kinds.
 
@@ -18,13 +18,13 @@ The verb exits 4 with `data.blockedBy: "manual gate"` and `data.gate` unless it 
 
 The skill's side:
 
-- **Ask first, in an `AskUserQuestion` loop mode never auto-picks.** An earlier question counts when it names the action: `/rota-release` Step 6 asks about the notes *and* says yes pushes and publishes, so Steps 10 and 11 reuse its answer.
+- **Ask first, in an `AskUserQuestion` that is never auto-picked.** An earlier question counts when it names the action: `/rota-release` Step 6 asks about the notes *and* says yes pushes and publishes, so Steps 10 and 11 reuse its answer.
 - **Pass the answer verbatim** in `--confirm-note`. Never invent one, and never pass `--confirm` without a human answer behind it.
 - **On exit 4 with `blockedBy: "manual gate"`, ask and re-run.** Nothing changed on the refusal, so the re-run is safe.
 
 ### Merge approval in an unattended round
 
-When nobody is at the prompt (`autonomy.level` `loop`, or an orchestrator driving herdr workers), `merge-approval` goes through the escalation channel instead of `AskUserQuestion`. `rota worker gate` and `rota ship pr-merge` take `--escalate`: on the refusal they post the approval request on the PR thread (or the slot's issue) with `rota round escalate send`, and `data.escalation.id` names it; a pending request on that thread is reused, never posted twice. Note the id against the slot, keep working other slots, and poll with `rota round escalate check`. Once it reports `answered`, re-run with `--approval <id>`. The verb itself decides whether the reply approves (first word `approve`, `approved`, `yes`, `lgtm`, or `ship it`) and audits the reply verbatim. Exit 4 `approval declined` means the human held the merge: surface `data.answer` and hold the slot, never retry. Exit 4 `approval pending` means `check` has not seen an answer yet. `rota ship merge` has no thread and keeps the `--confirm` path.
+When nobody is at the prompt (an orchestrator driving herdr workers), `merge-approval` goes through the escalation channel instead of `AskUserQuestion`. `rota worker gate` and `rota ship pr-merge` take `--escalate`: on the refusal they post the approval request on the PR thread (or the slot's issue) with `rota round escalate send`, and `data.escalation.id` names it; a pending request on that thread is reused, never posted twice. Note the id against the slot, keep working other slots, and poll with `rota round escalate check`. Once it reports `answered`, re-run with `--approval <id>`. The verb itself decides whether the reply approves (first word `approve`, `approved`, `yes`, `lgtm`, or `ship it`) and audits the reply verbatim. Exit 4 `approval declined` means the human held the merge: surface `data.answer` and hold the slot, never retry. Exit 4 `approval pending` means `check` has not seen an answer yet. `rota ship merge` has no thread and keeps the `--confirm` path.
 
 Call sites show the flags and the exit-4 handling; they don't restate the rule, which the verb now enforces.
 
@@ -47,16 +47,15 @@ Sites with multi-paragraph prose may use the *inline* form, a `**always manual**
 | `issue-close` | `/rota-ship` | Step 6c (Direct-push close) | Posts a tracking comment and closes upstream issues after a direct merge. |
 | `issue-close` | `/rota-release` | Step 13 | Closes upstream issues still open for shipped items. |
 
-`/rota-ship` Step 3's *"Ship anyway"* option (in the CONCERNS-routing AskUserQuestion) is manual-shaped too; see `references/review-verdict-routing.md` for why loop mode auto-picks *"Address via /rota-work"* but never *"Ship anyway"*. Acceptance of risk is the user's choice; routing toward safe is not.
+`/rota-ship` Step 3's *"Ship anyway"* option (in the CONCERNS-routing AskUserQuestion) is manual-shaped too; see `references/review-verdict-routing.md` for why it is never auto-picked. Acceptance of risk is the user's choice.
 
 ## Why not auto-invoke?
 
-Loop mode's contract is *"drain the queue toward done"*: it auto-picks routing answers because those move the work forward without committing to anything irreversible. A manual gate IS the irreversible commit: a public PR, a release tag, a `DECISIONS.md` entry that constrains future code. Auto-picking these would replace the user with the loop on questions that need human judgment about reputation, external coordination, or long-term project shape.
+Auto mode only chains routing steps that move the work forward without committing to anything irreversible. A manual gate IS the irreversible commit: a public PR, a release tag, a `DECISIONS.md` entry that constrains future code. Auto-picking these would replace the user on questions that need human judgment about reputation, external coordination, or long-term project shape.
 
-The skip-route is configuration, not loop-mode cleverness. If a project wants concerns ignored on every ship, set `ship.review` to `false`; if it wants no human on merges, leave `ship.mergeApproval` at `none`.
+The skip-route is configuration. If a project wants concerns ignored on every ship, set `ship.review` to `false`; if it wants no human on merges, leave `ship.mergeApproval` at `none`.
 
 ## See also
 
 - `references/authoring-conventions.md` rule *"Imperative rules in autonomy-aware steps must live inline at every dispatch point"*: why a skill-only callout cannot be replaced by a reference cite.
-- `references/authoring-conventions.md` rule #5, *"routine routing/tagging auto-picks Recommended in loop mode"*: the complementary rule for routing-shaped questions.
-- `references/review-verdict-routing.md`: *"Ship anyway"* is a manual-shaped option inside the CONCERNS-routing question; loop never auto-picks it.
+- `references/review-verdict-routing.md`: *"Ship anyway"* is a manual-shaped option inside the CONCERNS-routing question; it is never auto-picked.

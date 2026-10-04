@@ -169,7 +169,7 @@ func gateCases() []gateCase {
 // verb exits 4 without --confirm at every autonomy level, changes nothing and
 // audits nothing; with --confirm it acts and audits the quoted answer.
 func TestGatedVerbsAtEveryAutonomyLevel(t *testing.T) {
-	for _, level := range []string{"off", "auto", "loop"} {
+	for _, level := range []string{"off", "auto"} {
 		for _, c := range gateCases() {
 			t.Run(level+"/"+c.verb, func(t *testing.T) {
 				root, args, stdin, untouched := c.setup(t, level)
@@ -213,7 +213,7 @@ func TestGatedVerbsRejectHalfAConfirmation(t *testing.T) {
 
 func TestMergeApprovalPaths(t *testing.T) {
 	work := newRepo(t, t.TempDir(), "proj", "main")
-	write(t, filepath.Join(work, ".rota", "config.json"), gateConfig(t, `{"backlog":{"backend":"file"}}`, "loop",
+	write(t, filepath.Join(work, ".rota", "config.json"), gateConfig(t, `{"backlog":{"backend":"file"}}`, "auto",
 		map[string]any{"mergeApproval": "paths", "mergeApprovalPaths": []any{"rota-release", "*.md"}}))
 	shipBranchOf(t, work, "rota/code", [3]string{"main.go", "feat: code", ""})
 	shipBranchOf(t, work, "rota/skill", [3]string{"rota-release/SKILL.md", "docs: skill", ""})
@@ -235,7 +235,7 @@ func TestMergeApprovalPaths(t *testing.T) {
 	f := a8Fixture()
 	f.files = map[int][]string{10: {"src/a.go"}, 11: {"README.md"}}
 	root := a8Project(t, f)
-	write(t, filepath.Join(root, ".rota", "config.json"), gateConfig(t, issuesConfig, "loop",
+	write(t, filepath.Join(root, ".rota", "config.json"), gateConfig(t, issuesConfig, "auto",
 		map[string]any{"mergeApproval": "paths", "mergeApprovalPaths": []any{"*.md"}}))
 	if code, _, msg := a8Run(t, root, "ship", "pr-merge", "10"); code != 0 {
 		t.Fatalf("pr 10: %d %s", code, msg)

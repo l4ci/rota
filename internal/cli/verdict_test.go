@@ -82,17 +82,17 @@ func TestVerdictReviewFlow(t *testing.T) {
 	if d := data(t, out); code != 0 || d["verdict"] != "CONCERNS" || d["next"] != "ask" || d["stale"] != false || d["kind"] != "review-quality" {
 		t.Fatalf("route: %d %v", code, d)
 	}
-	// Loop mode addresses the concerns instead of asking.
+	// The retired loop level routes like off: ask, never address.
 	if err := os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(`{"autonomy": {"level": "loop"}}`), 0o666); err != nil {
 		t.Fatal(err)
 	}
-	if _, out, _ = rotaIn(t, dir, "verdict", "route", "--for", "ship-review", "--json"); data(t, out)["next"] != "address" {
+	if _, out, _ = rotaIn(t, dir, "verdict", "route", "--for", "ship-review", "--json"); data(t, out)["next"] != "ask" {
 		t.Errorf("loop route: %v", data(t, out))
 	}
 	// A new commit makes the verdict stale without changing the route.
 	gitIn(t, dir, "commit", "-q", "--allow-empty", "-m", "more")
 	_, out, _ = rotaIn(t, dir, "verdict", "route", "--for", "ship-review", "--json")
-	if d := data(t, out); d["stale"] != true || d["next"] != "address" {
+	if d := data(t, out); d["stale"] != true || d["next"] != "ask" {
 		t.Errorf("stale route: %v", d)
 	}
 	_, out, _ = rotaIn(t, dir, "verdict", "show", "--json")
