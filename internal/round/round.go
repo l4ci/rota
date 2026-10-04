@@ -132,11 +132,18 @@ type Report struct {
 	// Escalations are the open ones (pending or timed-out), read from the
 	// registry without a forge call; `rota round escalate check` looks for answers.
 	Escalations []escalation.Report
+	// Queued are the PRs waiting for review or merge whose slot moved on.
+	Queued []QueuedPR
 	// Limits are the usage-limit entries still waiting (D3), read from the
 	// registry like escalations.
 	Limits []limits.Entry
 
 	views map[string]*view
+}
+
+// QueuedPR is one record of the registry's PR queue.
+type QueuedPR struct {
+	Issue, PR, Branch, From string
 }
 
 // view is a row plus what repairs need.
@@ -326,6 +333,21 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 			}
 		}
 	}
+	for _, q := range reg.PRs() {
+		rep.Queued = append(rep.Queued, QueuedPR{Issue: worker.Str(q, "issue"), PR: worker.Str(q, "pr"), Branch: worker.Str(q, "branch"), From: worker.Str(q, "from")})
+		if id := queuedIssue(q); id != "" {
+			held[id] = true
+		}
+		if n, ok := prNumber(worker.Str(q, "pr")); ok && forgeOK {
+			st, err := e.Forge.PRState(ctx, n)
+			switch {
+			case err != nil:
+				rep.Warnings = append(rep.Warnings, fmt.Sprintf("PR #%d state: %v", n, err))
+			case st == "merged" || st == "closed":
+				rep.add(Finding{Kind: PRStale, Issue: worker.Str(q, "issue"), Detail: fmt.Sprintf("PR #%d in review is %s", n, st), Repair: "drop it from review"})
+			}
+		}
+	}
 	if labelsOK {
 		var orphans []int
 		for n := range labelled {
@@ -367,7 +389,7 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 			}
 		}
 	}
-	e.claimFindings(ctx, rep, rows, slotObj, labelled, labelsOK)
+	e.claimFindings(ctx, rep, rows, slotObj, reg.PRs(), labelled, labelsOK)
 
 	e.leaseFinding(ctx, root, rep)
 

@@ -227,7 +227,7 @@ Settings for `rota round` (parallel rounds; see [the rounds guide](parallel-roun
 
 | Key | Default | Meaning |
 |-----|---------|---------|
-| `round.scope` | `"milestone"` | Which issues `rota round assign` accepts. `"slate"`: only the issues given to `rota round start --items`. `"milestone"`: the open items of the active milestones. `"next"`: the same, then the first planned milestone whose dependencies are shipped once none is left. Assign refuses anything outside the scope. |
+| `round.scope` | `"milestone"` | Which issues `rota round assign` accepts. `"slate"`: only the issues given to `rota round start --items`. `"milestone"`: the open items of the active milestones. `"next"`: the same, then the first planned milestone whose dependencies are shipped once none is left. `"open"`: every open item no slot holds. Assign refuses anything outside the scope. |
 | `round.roster` | `["ben","dana","nia","kit"]` | Agent names, one slot each (`.worktrees/<agent>`, parked on `park/<agent>`, working on `<agent>/<issue>-<slug>`). Lowercase letters, digits and `-`; no duplicates. |
 | `round.brief` | `""` | Path of the standing worker contract the assignment pointer names. Empty means `references/worker-contract.md` from the plugin or project. |
 | `round.sharedPaths` | `[]` | Repo-relative globs the file-overlap readiness check ignores, for files every issue touches (a command registry, a contract doc). |
