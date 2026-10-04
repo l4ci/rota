@@ -14,7 +14,7 @@ func initRun(t *testing.T, dir string, args ...string) (int, *jsonx.Object, stri
 	t.Helper()
 	wd, _ := os.Getwd() // -C changes the process directory; put it back
 	t.Cleanup(func() { os.Chdir(wd) })
-	code, out, errOut := stubRun(append([]string{"-C", dir}, append(args, "--json")...)...)
+	code, out, errOut := runMain(append([]string{"-C", dir}, append(args, "--json")...)...)
 	v, err := jsonx.Decode([]byte(out))
 	if err != nil {
 		t.Fatalf("%v: %v\n%s", args, err, out)
@@ -139,7 +139,7 @@ func initCode(t *testing.T, args ...string) int {
 	t.Helper()
 	wd, _ := os.Getwd()
 	t.Cleanup(func() { os.Chdir(wd) })
-	code, _, _ := stubRun(args...)
+	code, _, _ := runMain(args...)
 	return code
 }
 
