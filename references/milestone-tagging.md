@@ -41,9 +41,9 @@ When `autonomy.level == "loop"`:
 
 Honors the authoring convention "routine routing/tagging auto-picks Recommended in loop mode" (`references/authoring-conventions.md` rule #5).
 
-## Plain-text fallback
+## Ambiguous reply
 
-Ask *"Tag with M01?"* once. If the reply is ambiguous, default to leaving the items untagged. Under-tagging is recoverable; mis-tagging clutters the milestone view.
+If the reply is ambiguous, default to leaving the items untagged. Under-tagging is recoverable; mis-tagging clutters the milestone view.
 
 ## Outcome
 

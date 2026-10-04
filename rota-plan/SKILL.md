@@ -3,15 +3,6 @@ name: rota-plan
 description: Write an implementation plan as a first-class artifact before execution — keyed by milestone and slice or item (M01-S01.md, M01-B07.md). Captures goal, approach, task decomposition with verifiable outcomes, open questions, and named assumptions. /rota-work consults the plan if present. Use when an item or slice is too big to one-shot, or when alignment matters before code lands.
 ---
 
-**Print the banner below verbatim before any other action — skip if dispatched as a subagent.** See `references/banner-preamble.md`.
-
-```
-════════════════════════════════════════════════════════════════════════
-  📋  rota-plan  ·  write implementation plan before execution
-  triggers: "plan M01-S01", "plan B07"  ·  pairs: rota-vision, rota-work
-════════════════════════════════════════════════════════════════════════
-```
-
 # rota-plan — Implementation Plan as Artifact
 
 Write a plan to disk that the user signs off on before `/rota-work` runs. The plan is keyed under a milestone and a slice or backlog item — `.rota/plans/M01-S01.md` for a slice, `.rota/plans/M01-B07.md` for a single backlog item that warrants its own plan.
@@ -23,7 +14,7 @@ Write a plan to disk that the user signs off on before `/rota-work` runs. The pl
 
 ## Step 1 — Task list
 
-**Initialize task list.** Follow the canonical pattern in `references/task-list-init.md` — load `TaskCreate(…)` via `ToolSearch select:TaskCreate,TaskUpdate` if needed, then create one task per phase below.
+Track these phases with the host's task tool if it has one.
 
 Phases:
 
@@ -216,5 +207,4 @@ After all questions are resolved, write the plan to `.rota/plans/<key>.md` using
 
 ## References
 
-- [`references/banner-preamble.md`](references/banner-preamble.md) — Banner-print rule shared by every skill.
 - [`references/context-load-protocol.md`](references/context-load-protocol.md) — K+D context loading sequence shared by every cycle-starting skill.
