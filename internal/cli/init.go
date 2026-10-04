@@ -11,6 +11,7 @@ import (
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/initproj"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/projects"
 )
 
 // The `rota init` group (A9): `init` seeds .rota/, `init check` is the preflight.
@@ -96,6 +97,13 @@ func runInit(c *Ctx, noBlocks bool) (Result, error) {
 		data.Set("blocks", entries)
 		data.Set("instructions", initInstructionsData(b))
 	}
+	// The machine-wide registry is not the project's state: a failure to write
+	// it warns, and neither it nor a first registration counts as `changed`.
+	added, err := projects.Register(dir)
+	if err != nil {
+		warnings = append(warnings, "could not register the project in the global registry: "+err.Error())
+	}
+	data.Set("projectRegistered", added)
 	for _, w := range warnings {
 		c.Warn("%s", w)
 	}
