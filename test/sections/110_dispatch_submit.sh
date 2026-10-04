@@ -38,7 +38,7 @@ su hvj worker dispatch w1 --body-file "$TMP_SU/brief.md" --task T1 >/dev/null 2>
 # (a) first Enter lost: the prompt stalls, the brief is visible, the Enter lands.
 echo agent_prompt_stalled > "$SF/prompt_error"
 echo working > "$SF/wait_status"
-printf '> first line\nthe last line of the brief\n' > "$SF/pane.txt"
+printf '❯ first line\nthe last line of the brief\n' > "$SF/pane.txt"
 : >"$SF/log"
 RC=0; su hvj worker dispatch w1 --body-file "$TMP_SU/brief.md" --relay >/dev/null 2>&1 || RC=$?
 [ "$RC" = "0" ] || fail "a dropped Enter must be retried to success, got exit $RC"
