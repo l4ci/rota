@@ -8,9 +8,7 @@ See KNOWLEDGE.md "Skill Authoring: Prose & References" for the conventions that 
 
 | Reference | Purpose | Cited by |
 |-----------|---------|----------|
-| [`ask-user-question-fallback.md`](ask-user-question-fallback.md) | Plain-text fallback shape for AskUserQuestion-less hosts. | `/rota-brainstorm`, `/rota-capture` (`--from-*`), `/rota-release`, `/rota-ship`, `/rota-vision`, `/rota-work` |
 | [`authoring-conventions.md`](authoring-conventions.md) | Authoring rules shared across SKILL.md files (loop-mode auto-picks, mirror-step threshold). | `/rota-capture`, `/rota-refactor`, `/rota-ship` |
-| [`banner-preamble.md`](banner-preamble.md) | Banner-print rule shared by every skill. | `/rota-brainstorm`, `/rota-capture`, `/rota-debug`, `/rota-decide`, `/rota-learn`, `/rota-pause`, `/rota-plan`, `/rota-qa`, `/rota-refactor`, `/rota-release`, `/rota-review`, `/rota-ship`, `/rota-spike`, `/rota-vision`, `/rota-work` |
 | [`context-load-protocol.md`](context-load-protocol.md) | K+D context loading sequence shared by every cycle-starting skill. | `/rota-plan`, `/rota-vision`, `/rota-work` (including `--preview`) |
 | [`debug-hypothesize.md`](debug-hypothesize.md) | Both-modes hypothesize choreography (brief template, single vs competing, per-axis divergence) for `/rota-debug` Step 6. | `/rota-debug` |
 | [`debug-escalate.md`](debug-escalate.md) | Fresh-context handoff brief template + dispatch mechanics + user-surfacing fallback for `/rota-debug` Step 7.5. | `/rota-debug` |
@@ -27,14 +25,11 @@ See KNOWLEDGE.md "Skill Authoring: Prose & References" for the conventions that 
 | [`milestone-tagging.md`](milestone-tagging.md) | Milestone-tagging UX pattern used by capture/go skills. | `/rota-capture` |
 | [`persistence-skills.md`](persistence-skills.md) | Shared spine and divergence axes for the persistence duo (`/rota-learn`, `/rota-decide`), plus umbrella scoping (hybrid KNOWLEDGE, umbrella-only DECISIONS). | `/rota-decide`, `/rota-learn` |
 | [`post-cycle-trigger-gate.md`](post-cycle-trigger-gate.md) | Trigger condition + nudge-or-dispatch choreography for post-cycle skills. | `/rota-qa`, `/rota-ship`, `/rota-work` |
-| [`refactor-explore.md`](refactor-explore.md) | Exploration-agent prompt + categories + stop condition for `/rota-refactor` single-repo mode. | `/rota-refactor` |
-| [`refactor-design-approaches.md`](refactor-design-approaches.md) | Competing-design choreography (decisions consult, agent constraints, output shape) for `/rota-refactor` Step 5. | `/rota-refactor` |
-| [`refactor-umbrella-fanout.md`](refactor-umbrella-fanout.md) | Per-repo fan-out logic for `/rota-refactor` in umbrella mode. | `/rota-refactor` |
-| [`review-verdict-routing.md`](review-verdict-routing.md) | Verdict semantics, `AskUserQuestion` shapes and plain-text fallback for `/rota-review` consumers. | `/rota-qa`, `/rota-review`, `/rota-ship` |
+| [`refactor-design-approaches.md`](refactor-design-approaches.md) | Competing-design choreography (decisions consult, agent constraints, output shape) for `/rota-refactor --designs`. | `/rota-refactor` |
+| [`review-verdict-routing.md`](review-verdict-routing.md) | Verdict semantics, `AskUserQuestion` shapes for `/rota-review` consumers. | `/rota-qa`, `/rota-review`, `/rota-ship` |
 | [`silent-failure-hunter.md`](silent-failure-hunter.md) | Rubric for detecting work that reports complete but didn't move the system, used in review passes. | `/rota-review`, `/rota-ship` |
 | [`source-prefill.md`](source-prefill.md) | Source-prefill / promote-between-artifacts semantics for `/rota-decide`. | `/rota-decide` |
 | [`subagent-dispatch.md`](subagent-dispatch.md) | Cross-skill rulebook for when and how skills push work into subagents instead of the orchestrator thread. | `/rota-debug`, `/rota-qa`, `/rota-vision` |
-| [`task-list-init.md`](task-list-init.md) | Canonical task-list initialization block cited by every skill with three or more phases. | `/rota-brainstorm`, `/rota-capture`, `/rota-debug`, `/rota-decide`, `/rota-learn`, `/rota-pause`, `/rota-plan`, `/rota-qa`, `/rota-refactor`, `/rota-release`, `/rota-review`, `/rota-ship`, `/rota-spike`, `/rota-vision`, `/rota-work` |
 | [`terminal-loop-surface.md`](terminal-loop-surface.md) | Canonical bash block for surfacing `[Auto:Loop]` decisions from terminal-path skills before halting. | `/rota-debug`, `/rota-pause`, `/rota-work` |
 | [`worker-contract.md`](worker-contract.md) | Standing worker contract and approval provenance for `work.dispatch: "tmux"` / `"herdr"`. | `/rota-work` |
 | [`herdr-dispatch.md`](herdr-dispatch.md) | What herdr changes versus tmux: tabs as slots, startup dialogs, worker-contract additions. | `/rota-work` |

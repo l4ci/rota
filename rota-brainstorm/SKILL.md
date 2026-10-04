@@ -3,15 +3,6 @@ name: rota-brainstorm
 description: Per-item design exploration before /rota-plan — Socratic discovery, 2-3 approaches with tradeoffs, sectioned design with per-section approval, writes .rota/designs/<ID>.md, hands off to /rota-plan. Use when a Major feature or P0 bug needs design negotiation before implementation planning.
 ---
 
-**Print the banner below verbatim before any other action — skip if dispatched as a subagent.** See `references/banner-preamble.md`.
-
-```
-════════════════════════════════════════════════════════════════════════
-  💡  rota-brainstorm  ·  per-item design exploration before /rota-plan
-  triggers: "brainstorm F03", "design B07"  ·  pairs: rota-plan, rota-vision
-════════════════════════════════════════════════════════════════════════
-```
-
 # rota-brainstorm — Per-item Design Exploration
 
 `/rota-brainstorm` fills the gap between `/rota-capture` (records what to build) and `/rota-plan` (decomposes how to build it) by negotiating *whether this is the right thing and what its shape should be*. Scope is a single backlog item (`[B##]` or `[F##]` or `[T##]`); project-level exploration stays with `/rota-vision`. The artifact lands at `.rota/designs/<ID>.md` and feeds `/rota-plan` as soft input — never required.
@@ -31,7 +22,7 @@ Also parse `AUTO_LOOP`: scan `$ARGUMENTS` (the skill `args` value) for the liter
 - **`LEVEL != "loop"` (off/auto) AND `AUTO_LOOP=true`** — stop: `--auto-loop` is loop-mode only (`rota design add --auto-loop` refuses it with exit 2 anyway; this check just stops before the run).
 - **`LEVEL != "loop"` AND `AUTO_LOOP=false`** — normal interactive flow (today's path); proceed to Step 2.
 
-**Initialize task list.** Follow the canonical pattern in `references/task-list-init.md` — load `TaskCreate` via `ToolSearch select:TaskCreate,TaskUpdate` if needed, then create one task per phase below.
+Track these phases with the host's task tool if it has one.
 
 Phases:
 
@@ -64,7 +55,7 @@ If `.rota/designs/<ID>.md` already exists (interactive mode), ask via `AskUserQu
 - **Edit** — enter brainstorm with existing design loaded as starting context
 - **Replace** — discard the existing design and re-run discovery from scratch
 
-Plain-text fallback per `references/ask-user-question-fallback.md`; default rule: opt-in-off / cancel (replace is destructive). Routing:
+Default: opt-in-off / cancel (replace is destructive). Routing:
 
 - **View** → invoke `rota design show <ID>` and exit 0.
 - **Edit** → load the existing design content; the first Step 4 clarifying question is *"What would you change about the existing design?"*
@@ -88,7 +79,7 @@ DECISIONS matches are hard boundaries. If the brainstorm would violate any, surf
 
 **Skipped under `--auto-loop`** — the auto-resolution pipeline runs in lieu of clarifying rounds. See `## Auto-loop mode` below.
 
-Socratic clarifying questions via `AskUserQuestion`, one per round, multi-choice preferred (≤ 4 options per the picker cap). **Cap: 5 clarifying rounds**; after the fifth, switch to plain-text prose. Section gates (Step 6) and the final review (Step 9) are check-ins, not exploratory questions, and do **not** count against the budget. Plain-text fallback per `references/ask-user-question-fallback.md` — honor yes/no for binary cases, default to Recommended for routing cases.
+Socratic clarifying questions via `AskUserQuestion`, one per round, multi-choice preferred (≤ 4 options per the picker cap). **Cap: 5 clarifying rounds**; after the fifth, switch to plain-text prose. Section gates (Step 6) and the final review (Step 9) are check-ins, not exploratory questions, and do **not** count against the budget.
 
 `/rota-vision` is the project-scope sibling and uses batched discovery — see `references/design-exploration.md` for the family spine and divergence rationale.
 
@@ -224,6 +215,4 @@ After all questions and the approach pick are resolved, write the design via `ro
 
 ## References
 
-- [`references/banner-preamble.md`](references/banner-preamble.md) — Banner-print rule shared by every skill.
-- [`references/ask-user-question-fallback.md`](references/ask-user-question-fallback.md) — Plain-text fallback shape for AskUserQuestion-less hosts.
 - [`references/design-exploration.md`](references/design-exploration.md) — Shared spine (Socratic discovery, 2-3 approaches, sectioned design with per-section approval, self-review, user-review gate) used by `/rota-vision` and `/rota-brainstorm`.

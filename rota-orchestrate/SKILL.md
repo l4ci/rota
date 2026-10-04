@@ -4,15 +4,6 @@ description: >-
   Run a parallel round as the orchestrator: choose the slate, read what workers are doing, answer or escalate their questions, merge their PRs, wind the round down. Judgment only: the `rota round` verbs do the sequencing and enforce the rules. Use on "you are the orchestrator", "run a round", "orchestrate", "assign the next issues to the workers", "what are my workers doing".
 ---
 
-**Print the banner below verbatim before any other action — skip if dispatched as a subagent.** See `references/banner-preamble.md`.
-
-```
-══════════════════════════════════════════════════════════════════
-  🎛  rota-orchestrate  ·  run a parallel round
-  triggers: "you are the orchestrator", "run a round"  ·  pairs: rota-work, rota-ship, rota-review
-══════════════════════════════════════════════════════════════════
-```
-
 # rota-orchestrate: Run a Round
 
 A round is one orchestrator (you) and up to five standing workers, each in its own worktree and host tab, each holding one issue. Workers build and open PRs. You choose, route, answer and merge. The mechanics are `rota round` verbs; this skill holds the calls a verb cannot make. If a verb refuses, the refusal is the rule: read `data.blockedBy` and `error.hint`, don't route around it.
@@ -99,9 +90,11 @@ All three push the branch before moving the slot off it, so no work is lost. `ro
 
 Workers never merge. After `done`, read the PR: does it do what the issue says, and does it stay inside the files the issue named? Then `rota worker gate <slot> --base <branch>`, or `rota worker gate <PR number> --base <branch>` once the slot has moved on and the PR waits in review. The gate runs the checks on the merged tree, merges on a pass and drops the PR from the review list. Read its verdict; don't re-derive the rules it enforces.
 
+With several PRs waiting, merge them as one train: `rota worker train <slot|PR>... --base <branch>` in the order you want them to land. One verify covers all of them. On a red train it names the `culprit`: send that PR back, then re-run the train without it, or pass `--land-green` to land the members that verified before it. `base-moved` means nothing landed; re-run.
+
 Merge policy comes from config (`ship.mergeApproval`). With the default, the gate merges a passing PR. When policy requires approval (all PRs, or PRs touching listed paths), unattended runs pass `--escalate` to `worker gate`, or to `ship pr-merge` for a PR you merge by number. The verb refuses with exit 4 and posts the approval request on the PR thread, once however often you re-gate. Keep working other slots. `rota round escalate check` says when the maintainer has answered; re-run with `--approval <id>`, and the audit line quotes the answer. An answer that doesn't read as approval (`approve`, `approved`, `yes`, `lgtm`, `ship it`) holds the merge: `approval declined` means the slot is held, never retried, and you tell the maintainer. Interactive sessions ask with `AskUserQuestion` and pass `--confirm --confirm-note` with the answer verbatim. Never write a note the human didn't say.
 
-After each merge, re-verify the base before assigning from it. The next assignment branches from a base you have just proved.
+The merge gate is the only full run: it verified the merged tree, so don't re-run the suite after each merge or before assigning. The next assignment branches from the gated base. Re-verify only after a `verify-failed` verdict, once the fix lands. `rota round wind-down` re-verifies once at the end.
 
 ## 7. Bounce or fix
 
@@ -113,7 +106,7 @@ Bounce when in doubt about who is right. The ticket may be the wrong one.
 
 ## 8. Wind down
 
-When the slate is done or the maintainer calls the round: `rota round wind-down`. It re-verifies the base, parks every slot and releases the lease. If a slot still holds work it exits 4 and parks the rest; read which slot and why before deciding. Then run `rota round reconcile` and `rota reap` for what is left, and give the maintainer a short summary: what merged, what bounced, what is open, what drift remains.
+When the slate is done or the maintainer calls the round: `rota round wind-down`. It re-verifies the base, parks every slot and releases the lease. If a slot still holds work it exits 4 and parks the rest; read which slot and why before deciding. Then run `rota round reconcile` and `rota reap` for what is left, and run `/rota-learn` and `/rota-ship --docs` once for the whole round (workers skip them per PR), then give the maintainer a short summary: what merged, what bounced, what is open, what drift remains.
 
 ## Solo mode
 

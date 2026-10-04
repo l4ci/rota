@@ -3,15 +3,6 @@ name: rota-spike
 description: Throwaway feasibility experiment on a dedicated git branch — answers a specific question without polluting main or the backlog. Creates spike/<name> branch and .rota/spikes/<name>.md for question + findings + decision. Branch is never merged; only findings come back. Use when you need to try X before committing to it ("can we use SSE?", "does this library handle our scale?").
 ---
 
-**Print the banner below verbatim before any other action — skip if dispatched as a subagent.** See `references/banner-preamble.md`.
-
-```
-════════════════════════════════════════════════════════════════════════
-  🧪  rota-spike  ·  throwaway feasibility experiment on a branch
-  triggers: "spike X", "feasibility"  ·  pairs: rota-vision, rota-plan
-════════════════════════════════════════════════════════════════════════
-```
-
 # rota-spike — Throwaway Feasibility Experiment
 
 **Code on the spike branch is reference, not product.**
@@ -31,7 +22,7 @@ Determine the mode silently:
 
 In Finish mode, list existing open spikes via `rota spike list` (`data.spikes`, `status` not `done`) and ask which one if not specified.
 
-**Initialize task list.** Follow the canonical pattern in `references/task-list-init.md` — load `TaskCreate(…)` via `ToolSearch select:TaskCreate,TaskUpdate` if needed, then create one task per phase below.
+Track these phases with the host's task tool if it has one.
 
 Phases:
 
@@ -77,7 +68,7 @@ Before mutating git state, confirm with the user via `AskUserQuestion`:
   2. *"Create only, stay on this branch"* — *"Useful when you want to switch on your own time."*
   3. *"Cancel"* — *"Don't do anything."*
 
-Plain-text fallback: if the working tree is clean, default to "create and switch"; otherwise default to "create only" so dirty changes don't follow.
+If the working tree is clean, default to "create and switch"; otherwise default to "create only" so dirty changes don't follow.
 
 ## Step 4 (Start mode) — Create the Spike
 
@@ -164,7 +155,7 @@ When the decision is `viable`, `not viable`, or `depends-on-X`, ask via `AskUser
   1. *"Yes, promote (Recommended)"* — *"Invoke `/rota-decide --from-spike <name>`. The spike's question + decision + recommended approach pre-fill the rule and why; you'll articulate the forbids/permits."*
   2. *"Skip — keep finding in spike file only"* — *"No decision is captured. The finding stays in `.rota/spikes/<name>.md` for reference."*
 
-Plain-text fallback: *"Promote to a decision?"* — yes / no.
+Anything but an explicit yes skips promotion.
 
 On **Yes**, dispatch `/rota-decide` via the `Skill` tool with `--from-spike <name>` as the argument, then continue to Step 7 once it returns.
 
@@ -191,5 +182,4 @@ If not viable or inconclusive, the spike is its own conclusion. Don't push to ca
 
 ## References
 
-- [`references/banner-preamble.md`](references/banner-preamble.md) — Banner-print rule shared by every skill.
 - [`references/umbrella-mode.md`](references/umbrella-mode.md) — Umbrella-mode verbs, registry shape, and `Repos:` field semantics.

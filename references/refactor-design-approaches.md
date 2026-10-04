@@ -1,6 +1,6 @@
 # `/rota-refactor` competing design approaches
 
-Loaded by `/rota-refactor` Step 5 when a friction point is classified **structural** in Step 3. Simple friction points skip Step 5 and go straight to Step 6 — that decision stays in the SKILL.md.
+Loaded by `/rota-refactor` when `--designs` is passed, for candidates that are **structural** (they reshape an interface or move ownership of a concept). Simple candidates skip it. Without `--designs` no competing designs run.
 
 ## Consult decisions before designing
 
@@ -14,7 +14,7 @@ Any approach that violates a decision is disqualified before the design phase. I
 
 ## Agent dispatch
 
-For each **structural** friction point, spawn 3+ sub-agents in parallel using the configured **orchestrator** model. Each agent gets the same technical brief (file paths, coupling details, dependency category, what's being hidden) but a different design constraint:
+For each structural candidate, spawn 3+ sub-agents in parallel using the configured **orchestrator** model. Each agent gets the same technical brief (file paths, coupling details, which seam, what the module would hide) but a different design constraint:
 
 - **Agent 1**: "Minimize the interface — aim for 1-3 entry points max"
 - **Agent 2**: "Maximize flexibility — support many use cases and extension"
@@ -28,23 +28,13 @@ Each sub-agent outputs:
 1. Interface signature (types, methods, params)
 2. Usage example showing how callers use it
 3. What complexity it hides internally
-4. Dependency strategy (how deps are handled per the category)
+4. Adapters at the seam (one is hypothetical, two is real)
 5. Trade-offs
 
 ## Presentation
 
 Present designs sequentially, then compare them in prose. Give an opinionated recommendation: which design is strongest and why. If elements from different designs combine well, propose a hybrid.
 
-## confirmBeforeExecute gate
+## Where the result goes
 
-If `confirmBeforeExecute` is `true`, gate with `AskUserQuestion` per structural friction point (batch up to 4 in one call):
-
-- **Header:** short name of the friction point (≤12 chars, e.g., `"Ring buffer"`)
-- **Question:** *"Which design should I use for `<friction point>`?"*
-- **Options** (single-select, up to 4): one per competing design. Mark your recommended design `(Recommended)`. Label each with the design's constraint (e.g., `"Minimal interface (Recommended)"`, `"Max flexibility"`, `"Caller-optimized"`, `"Ports & adapters"`).
-
-Use the `preview` field on each option to show the interface signature + usage example — this is exactly the case that's worth a side-by-side comparison.
-
-Plain-text fallback: *"Which approach for `<friction point>`? (design 1 / 2 / 3 / 4)"*
-
-If `confirmBeforeExecute` is `false`: use the recommended approach and proceed.
+In a findings run, put the recommended interface and the rejected alternatives in the filed issue's **Solution** section. On the `--fix` path, hand the chosen design to the worker brief. With `--interactive` or `refactor.confirmBeforeExecute` true, gate with `AskUserQuestion` per candidate (batch up to 4): one option per design, recommended first, `preview` showing the signature and usage example.

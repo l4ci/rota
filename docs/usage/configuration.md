@@ -105,13 +105,13 @@ Related keys: `work.workerSlots` (pool size, default `3`), `work.workerCommand` 
 
 ## refactor.confirmBeforeExecute
 
-When `true` (default), [`/rota-refactor`](../reference/slash-commands.md#rota-refactor) pauses for your approval after presenting its findings and again after you select a design. You review the proposed changes before anything is written. Set to `false` for full autonomy: `/rota-refactor` proceeds end-to-end without checkpoints.
+Applies to `/rota-refactor --fix` only; the default findings run files issues and writes no code. When `true` (default), `--fix` confirms the list of candidates before implementing them. Set to `false` to fix without that pause.
 
 ## refactor.verifyCommands
 
-Array of shell commands that [`/rota-refactor`](../reference/slash-commands.md#rota-refactor) Step 7 runs as CI-shape gates before committing. Default: `[]` (read-only verification, behavior unchanged).
+Array of shell commands that [`/rota-refactor`](../reference/slash-commands.md#rota-refactor) runs in `--fix` verification as CI-shape gates before committing. Default: `[]` (read-only verification, behavior unchanged).
 
-When non-empty, the Step 7 verifier executes each command in order and refuses to PASS unless every command exits zero. This catches formatter drift, import-sort failures, and type errors locally instead of on push. See [rota #9](https://github.com/l4ci/rota/issues/9) for the motivating incident.
+When non-empty, the `--fix` verifier executes each command in order and refuses to PASS unless every command exits zero. This catches formatter drift, import-sort failures, and type errors locally instead of on push. See [rota #9](https://github.com/l4ci/rota/issues/9) for the motivating incident.
 
 Example for a Python project using ruff + pytest:
 
