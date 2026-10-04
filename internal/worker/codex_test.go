@@ -232,7 +232,7 @@ func TestCodexPreflightRefusals(t *testing.T) {
 			dir, home := codexProject(t)
 			set, err := c.rig.env(tmuxFake()).CodexPreflight(bg, dir, "w1", c.accept)
 			if c.exit == 0 {
-				if err != nil || (c.warn != "" && (len(set.Warnings) != 1 || set.Warnings[0] != c.warn)) || (c.warn == "" && len(set.Warnings) != 0) {
+				if err != nil || (c.warn != "" && (len(set.Warnings) != 2 || set.Warnings[0] != c.warn || !strings.Contains(set.Warnings[1], "prompt check unverified"))) || (c.warn == "" && len(set.Warnings) != 0) {
 					t.Fatalf("%+v %v", set, err)
 				}
 				return
@@ -361,7 +361,7 @@ func TestDispatchCodexAcceptVersionPasses(t *testing.T) {
 	dir, _ := codexProject(t)
 	rig := &codexRig{version: "codex-cli 0.200.0\n", loggedIn: true}
 	res, err := rig.env(herdrFake()).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "go\n"), Task: "T1", Kind: "codex", AcceptCodexVersion: true})
-	if err != nil || len(res.Warnings) != 1 || !strings.Contains(res.Warnings[0], "codex 0.200.0 is outside the supported range") {
+	if err != nil || len(res.Warnings) != 2 || !strings.Contains(res.Warnings[0], "codex 0.200.0 is outside the supported range") || !strings.Contains(res.Warnings[1], "prompt check unverified") {
 		t.Fatalf("%+v %v", res, err)
 	}
 }
