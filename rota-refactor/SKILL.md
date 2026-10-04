@@ -5,6 +5,8 @@ description: Architecture review that files findings as refactor-labelled issues
 
 # rota-refactor
 
+> The architecture vocabulary, heuristics and candidate format below are adapted from `improve-codebase-architecture` in [mattpocock/skills](https://github.com/mattpocock/skills) (MIT); see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+
 Surface architectural friction and file each finding as an issue. The default run changes no code. The aim is code that is easier to test and easier for an agent to navigate.
 
 ## Configuration
