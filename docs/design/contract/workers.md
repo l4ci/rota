@@ -48,6 +48,15 @@ note: `<slot>` replaces the old `--slot`. Fresh-session dispatch is the default;
 note: "never submitted" (safe to resend) and "dialog open" (inspect first) get distinct `error.code` values. The conventions fix `error.code` to the exit-table name, so per-verb codes are not allowed, and the verb uses two exits instead: `retry` (6) for a brief that was never submitted, `unavailable` (5) for an open dialog. The message and hint still say which.
 note: `--kind` (E1, #68) defaults to the slot's recorded `kind`, else `claude`; a relay ignores it. A codex dispatch is specified under "E: Codex workers". hv-codex-verify is not absorbed: #158 retired it.
 
+### rota worker prompt-check
+rota worker prompt-check --key <path>
+repo: none
+data: none; the verb speaks Codex's hook protocol, not the envelope, and `--json` is refused
+exit: 0 and no output when the prompt on stdin (Codex's hook JSON, field `prompt`) is signed with the key or starts with `m:`; 2 with the reason on stderr for everything else, including a missing `--key`, an unreadable key, input that is not JSON, and `--json` (fail closed)
+old: none (new in #3)
+note: `rota worker dispatch` starts a codex worker with this verb as its `UserPromptSubmit` hook and signs every payload it sends with a trailing `--- ROTA-SIG <hmac> ---` line. The key lives in the slot's Codex home (`rota-prompt.key`) and rotates on every task dispatch. The MAC ignores white space, so a pane that rewraps text still verifies.
+note: a codex task dispatch exits 5 when `work.codexCommand` lacks `--dangerously-bypass-hook-trust` (Codex skips the hook without it); a codex relay exits 5 when the key file is gone.
+
 ### rota worker poll
 rota worker poll [<slot>] [--settle <seconds>] [--lines <n>]
 repo: none

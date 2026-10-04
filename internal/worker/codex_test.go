@@ -102,6 +102,7 @@ type codexRig struct {
 
 func (r *codexRig) env(h host.Host) Env {
 	e := envWith(h)
+	e.Executable = func() (string, error) { return "/opt/rota", nil }
 	e.LookPath = func(n string) (string, error) {
 		if r.missing[n] {
 			return "", errors.New("not found")
@@ -282,9 +283,14 @@ func TestDispatchCodexSpawnsWithItsHome(t *testing.T) {
 	if err != nil || res.Kind != "codex" {
 		t.Fatalf("%+v %v", res, err)
 	}
-	if f.spawnOpts.CodexHome != home || f.spawnOpts.ConfigDir != "" ||
-		f.spawnOpts.Launch != "codex --model gpt-x --dangerously-bypass-approvals-and-sandbox --dangerously-bypass-hook-trust --no-daemon --no-alt-screen" {
-		t.Errorf("spawn opts = %+v", f.spawnOpts)
+	keyPath := filepath.Join(home, PromptKeyFile)
+	_, _, largs, lerr := host.LaunchArgs(f.spawnOpts.Launch)
+	want := append(codexHookArgs("/opt/rota", keyPath), "--model", "gpt-x", "--dangerously-bypass-approvals-and-sandbox", "--dangerously-bypass-hook-trust", "--no-daemon", "--no-alt-screen")
+	if f.spawnOpts.CodexHome != home || f.spawnOpts.ConfigDir != "" || lerr != nil || strings.Join(largs, "\x00") != strings.Join(want, "\x00") {
+		t.Errorf("spawn opts = %+v (args %q, want %q)", f.spawnOpts, largs, want)
+	}
+	if !strings.Contains(largs[3], "/opt/rota worker prompt-check --key "+keyPath) {
+		t.Errorf("hook = %s", largs[3])
 	}
 }
 
@@ -373,5 +379,108 @@ func TestDispatchRelayIgnoresKind(t *testing.T) {
 	res, err := e.Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "q"), Relay: true, Kind: "codex"})
 	if err != nil || res.Kind != "" || len(rig.calls) != 0 {
 		t.Fatalf("%+v %v %v", res, err, rig.calls)
+	}
+}
+
+// ── prompt signing (#3) ─────────────────────────────────────────────────────
+
+func keyOf(t *testing.T, home string) []byte {
+	t.Helper()
+	k, err := loadPromptKey(filepath.Join(home, PromptKeyFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return k
+}
+
+func TestDispatchCodexSignsItsBriefAndRotatesTheKey(t *testing.T) {
+	dir, home := codexProject(t)
+	rig := &codexRig{loggedIn: true}
+	f := herdrFake()
+	e := rig.env(f)
+	if _, err := e.Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "do it\n"), Task: "T1", Kind: "codex"}); err != nil {
+		t.Fatal(err)
+	}
+	if fi, err := os.Stat(filepath.Join(home, PromptKeyFile)); err != nil || fi.Mode().Perm() != 0o600 {
+		t.Fatalf("key file: %v %v", fi, err)
+	}
+	k1 := keyOf(t, home)
+	if ok, why := CheckPrompt(k1, f.sent); !ok {
+		t.Fatalf("sent payload does not verify: %s\n%s", why, f.sent)
+	}
+	if !strings.HasPrefix(f.sent, "--- ORCHESTRATOR (round 1) ---\n") {
+		t.Errorf("header lost: %q", f.sent)
+	}
+	if slotField(t, dir, "w1", "kind") != "codex" {
+		t.Errorf("kind not recorded")
+	}
+	// A second task rotates the key.
+	if _, err := e.Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "again\n"), Task: "T2", Kind: "codex"}); err != nil {
+		t.Fatal(err)
+	}
+	k2 := keyOf(t, home)
+	if string(k1) == string(k2) {
+		t.Error("the key did not rotate")
+	}
+	if ok, _ := CheckPrompt(k1, f.sent); ok {
+		t.Error("the old key still verifies the new brief")
+	}
+	// A relay is signed with the current key.
+	if _, err := e.Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "answer\n"), Relay: true}); err != nil {
+		t.Fatal(err)
+	}
+	if ok, why := CheckPrompt(k2, f.sent); !ok || !strings.Contains(f.sent, "ORCHESTRATOR RELAY") {
+		t.Fatalf("relay: %v %s\n%s", ok, why, f.sent)
+	}
+}
+
+func TestDispatchCodexRelayWithoutKeyFailsBeforeSending(t *testing.T) {
+	dir, home := codexProject(t)
+	rig := &codexRig{loggedIn: true}
+	f := herdrFake()
+	e := rig.env(f)
+	if _, err := e.Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "go\n"), Task: "T1", Kind: "codex"}); err != nil {
+		t.Fatal(err)
+	}
+	os.Remove(filepath.Join(home, PromptKeyFile))
+	f.calls, f.sent = nil, ""
+	_, err := e.Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "q\n"), Relay: true})
+	if exitOf(err) != ExitUnavailable || !strings.Contains(err.(*Error).Hint, "re-dispatch") {
+		t.Fatalf("%v", err)
+	}
+	if len(f.calls) != 0 || f.sent != "" {
+		t.Errorf("something was sent: %v %q", f.calls, f.sent)
+	}
+	if v := slotField(t, dir, "w1", "relays"); v != "[]" && v != "<null>" {
+		t.Errorf("relay was logged: %s", v)
+	}
+}
+
+func TestDispatchCodexNeedsTheHookTrustFlag(t *testing.T) {
+	dir := newProject(t, `{"work":{"dispatch":"herdr","codexCommand":"codex --yolo"}}`)
+	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
+	rig := &codexRig{loggedIn: true}
+	f := herdrFake()
+	_, err := rig.env(f).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "t"), Task: "T1", Kind: "codex"})
+	if exitOf(err) != ExitUnavailable || !strings.Contains(err.Error(), "--dangerously-bypass-hook-trust") {
+		t.Fatalf("%v", err)
+	}
+	if len(f.calls) != 0 || len(rig.calls) != 0 || slotField(t, dir, "w1", "task") != "<null>" {
+		t.Errorf("state touched: %v %v", f.calls, rig.calls)
+	}
+}
+
+func TestDispatchClaudePayloadIsNotSigned(t *testing.T) {
+	dir, home := codexProject(t)
+	rig := &codexRig{loggedIn: true}
+	f := herdrFake()
+	if _, err := rig.env(f).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "go\n"), Task: "T1", Kind: "claude"}); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(f.sent, "ROTA-SIG") || strings.Contains(f.spawnOpts.Launch, "prompt-check") {
+		t.Errorf("claude path changed: %q / %q", f.sent, f.spawnOpts.Launch)
+	}
+	if _, err := os.Stat(filepath.Join(home, PromptKeyFile)); err == nil {
+		t.Error("a claude dispatch wrote a key")
 	}
 }
