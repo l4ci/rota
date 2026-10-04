@@ -30,6 +30,9 @@ type migItem struct {
 	design    *string
 	plan      *string
 	unmapped  []string
+	// adopt is the number of the tracker issue a `GH: #N` / `GL: #N` tag on
+	// the bullet names; 0 when the item has none and needs a new issue.
+	adopt int
 }
 
 type migSlice struct{ unit, text string }
@@ -84,6 +87,11 @@ func planItems(root, backlogText string, warn func(string)) []*migItem {
 		}
 		it := &migItem{id: e.ID, kind: kind, tag: tag, desc: pystr.Strip(desc), fields: map[string]string{}}
 		it.title = pystr.Strip(strings.TrimRight(pystr.Strip(m[3]), "."))
+		for _, re := range []*regexp.Regexp{ghRefRe, glRefRe} {
+			if r := re.FindStringSubmatch(rest); r != nil && it.adopt == 0 {
+				it.adopt, _ = atoi(r[1])
+			}
+		}
 		for _, name := range migOrder {
 			v := pystr.Strip(strings.TrimRight(pystr.Strip(e.Fields.Get(strings.ToLower(name))), "."))
 			if v != "" {
