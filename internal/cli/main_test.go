@@ -41,6 +41,12 @@ func TestMain(m *testing.M) {
 		os.Unsetenv(k)
 	}
 	limitHost = func(string) host.Host { return &limFake{} }
+	// Fixture repos commit and merge: the identity comes from here, not from
+	// the developer's (or CI's missing) global git config. Same identity as gitT,
+	// so commit hashes in the goldens do not move.
+	for k, v := range map[string]string{"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@x", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@x"} {
+		os.Setenv(k, v)
+	}
 	code := m.Run()
 	if b, err := os.ReadFile(hit); err == nil {
 		fmt.Fprintf(os.Stderr, "FAIL: tests exec'd the forge CLI from PATH:\n%s", b)
