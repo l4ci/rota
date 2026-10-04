@@ -82,3 +82,27 @@ func TestBriefPathOrder(t *testing.T) {
 		t.Error("round.brief set but missing must not fall back")
 	}
 }
+
+// A Codex-only install (.agents/skills) carries the contract too.
+func TestBriefPathCodexRoots(t *testing.T) {
+	root, home := t.TempDir(), t.TempDir()
+	env := func(k string) string {
+		if k == "HOME" {
+			return home
+		}
+		return ""
+	}
+	rel := filepath.Join("rota-orchestrate", "references", "worker-contract.md")
+	userRoot := filepath.Join(home, ".agents", "skills")
+	writeAt(t, filepath.Join(userRoot, ".rota-manifest.json"), "{}")
+	writeAt(t, filepath.Join(userRoot, rel), "user")
+	if p, ok := briefPath(root, roundcfg.Settings{}, env); !ok || p != filepath.Join(userRoot, rel) {
+		t.Errorf("user codex root: %q %v", p, ok)
+	}
+	projRoot := filepath.Join(root, ".agents", "skills")
+	writeAt(t, filepath.Join(projRoot, ".rota-manifest.json"), "{}")
+	writeAt(t, filepath.Join(projRoot, rel), "project")
+	if p, _ := briefPath(root, roundcfg.Settings{}, env); p != filepath.Join(projRoot, rel) {
+		t.Errorf("project codex root before user: %q", p)
+	}
+}

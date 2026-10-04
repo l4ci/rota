@@ -14,6 +14,7 @@ import (
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/escalation"
 	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/roundcfg"
@@ -719,7 +720,7 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 		decisions = string(b)
 	}
 	// A transferred worker starts on the default tier; a higher one is assign's.
-	kind, tier := roundcfg.KindClaude, o.Settings.Tier
+	kind, tier := harness.Claude, o.Settings.Tier
 	model := o.Settings.Model(kind, tier)
 	text := pointerBrief(o.To, id, branch, brief, nil, decisions, tierBrief{Kind: kind, Tier: tier, Model: model, Default: tier, Table: o.Settings.Models[kind]})
 	text += fmt.Sprintf("\nThis issue was handed to you by %s. Read its latest rota:handoff comment first (it ends with a `<!-- rota:handoff %s@%d -->` marker), then continue from the pushed work on %s, already checked out in your worktree.\n",

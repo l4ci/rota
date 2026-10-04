@@ -334,32 +334,6 @@ func TestDispatchResolutionFailures(t *testing.T) {
 	}
 }
 
-func TestResumeFlag(t *testing.T) {
-	for cmd, want := range map[string]string{
-		"claude --model sonnet":                 "",
-		"claude -c":                             "-c",
-		"claude --continue":                     "--continue",
-		"claude --resume=abc":                   "--resume=abc",
-		"claude --resume":                       "--resume",
-		"claude -cr":                            "-cr",
-		"claude --model x -r abc":               "-r",
-		"FOO=1 /usr/bin/claude -p hi -c":        "-c",
-		`sh -c "claude -c"`:                     "-c",
-		`sh -c "claude --model sonnet"`:         "",
-		"wrapper -c claude --model sonnet":      "", // a wrapper's own -c is not ours to judge
-		"claude --model sonnet --verbose":       "",
-		"claude --dangerously-skip-permissions": "",
-	} {
-		got, err := ResumeFlag(cmd)
-		if err != nil || got != want {
-			t.Errorf("ResumeFlag(%q) = %q, %v; want %q", cmd, got, err, want)
-		}
-	}
-	if _, err := ResumeFlag(`claude "oops`); err == nil {
-		t.Error("an unbalanced quote must be an error")
-	}
-}
-
 func TestDispatchRejectsResumeAndUnparseableWorkerCommands(t *testing.T) {
 	for cfg, tc := range map[string]struct {
 		exit int
@@ -535,5 +509,64 @@ func TestDispatchRefusalsCarryFailureData(t *testing.T) {
 	_, err = envWith(tmuxFake()).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "t"), Task: "T2"})
 	if bd := data(err); bd != (BlockData{BlockedBy: "reset guard"}) {
 		t.Errorf("slot holds work: %+v", bd)
+	}
+}
+
+// resubHost is a fakeHost that can submit a brief an earlier send left unsent.
+type resubHost struct {
+	*fakeHost
+	pending bool
+}
+
+func (r *resubHost) SubmitPending(_ context.Context, slot, _, _ string) (bool, error) {
+	r.calls = append(r.calls, "submit-pending "+slot)
+	if !r.pending {
+		return false, nil
+	}
+	r.pending = false
+	return true, nil
+}
+
+// A stalled send marks the slot; the relay that resends submits what is on the
+// prompt line instead of typing the brief again (#89).
+func TestDispatchRelayResendSubmitsUnsentBrief(t *testing.T) {
+	dir := newProject(t, `{}`)
+	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
+	f := &resubHost{fakeHost: tmuxFake(), pending: true}
+	e := envWith(f)
+	if _, err := e.Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "t"), Task: "T1"}); err != nil {
+		t.Fatal(err)
+	}
+	if slotField(t, dir, "w1", "unsent") != "<null>" {
+		t.Error("a clean send must not mark the slot")
+	}
+	f.sendErr = host.ErrNotSubmitted
+	relay := DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "q"), Relay: true}
+	if _, err := e.Dispatch(bg, dir, relay); exitOf(err) != ExitRetry {
+		t.Fatalf("stalled relay err = %v", err)
+	}
+	if slotField(t, dir, "w1", "unsent") != "true" {
+		t.Fatal("a stalled send must mark the slot unsent")
+	}
+	f.calls, f.sendErr = nil, nil
+	if _, err := e.Dispatch(bg, dir, relay); err != nil {
+		t.Fatalf("resend: %v", err)
+	}
+	if strings.Join(f.calls, ",") != "submit-pending w1" {
+		t.Errorf("resend calls = %v, want only submit-pending (no second typing)", f.calls)
+	}
+	if slotField(t, dir, "w1", "unsent") != "<null>" {
+		t.Error("a submitted brief must clear the mark")
+	}
+	// Nothing pending: the relay sends as usual.
+	f.calls = nil
+	f.sendErr = host.ErrNotSubmitted
+	e.Dispatch(bg, dir, relay)
+	f.sendErr, f.calls = nil, nil
+	if _, err := e.Dispatch(bg, dir, relay); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(f.calls, ",") != "submit-pending w1,send w1 w9:t7" {
+		t.Errorf("calls = %v", f.calls)
 	}
 }
