@@ -44,7 +44,7 @@ For each `SILENT-FAIL` flag, surface one bullet under a `### Silent failure chec
 
 ## Invocation contract
 
-`/rota-review` Step 7 carries the rubric as the silent-failure check item ("Silent failure check — apply the four-question rubric from `references/silent-failure-hunter.md` to every verification claim in the diff"). The reviewer prompt links to this file so the full text is one Read away when needed. Variant A of the Stage 2 brief (used when Stage 1 ran) places it as rubric item #4; Variant B (no-plan fallback / `--stage quality`) places it as rubric item #5 after the legacy intent-match item.
+`/rota-review` Step 7 carries the rubric as the silent-failure check item ("Silent failure check — apply the four-question rubric from `references/silent-failure-hunter.md` to every verification claim in the diff"). The reviewer prompt links to this file so the full text is one Read away when needed. It is item 5 of the reviewer rubric.
 
 `/rota-ship` Step 3 inherits the check automatically through `/rota-review` — no separate dispatch. The point of bundling is that the reviewer already has the diff and the intent loaded; running a second adversarial pass for silent-failure-only would double the cost without changing the verdict shape.
 
