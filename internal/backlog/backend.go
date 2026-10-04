@@ -69,7 +69,7 @@ func Open(root string, cfg any, tr Tracker) (Backend, error) {
 	if name == "file" {
 		return &File{Root: root}, nil
 	}
-	if hasRepos(root) {
+	if repos.Umbrella(root) {
 		return nil, errors.New("umbrella issue mode opens through NewUmbrella")
 	}
 	if tr == nil {
@@ -77,12 +77,6 @@ func Open(root string, cfg any, tr Tracker) (Backend, error) {
 	}
 	return &Issues{Cfg: cfg, Tracker: tr}, nil
 }
-
-// IsUmbrella is whether root registers sub-repos in .rota/repos.json.
-func IsUmbrella(root string) bool { return hasRepos(root) }
-
-// hasRepos is whether .rota/repos.json registers at least one sub-repo.
-func hasRepos(root string) bool { return len(repos.Load(root)) > 0 }
 
 var (
 	_ Backend = (*File)(nil)

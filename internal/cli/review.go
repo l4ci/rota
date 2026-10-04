@@ -429,7 +429,7 @@ func a8Issues(c *Ctx, hint string, perRepo bool) (a8Backend, error) {
 		return nil, &backlog.RefusedError{BlockedBy: "backend", Hint: hint, Err: backlog.ErrWrongBackend,
 			Msg: c.Path + ` is not available with backlog.backend "file"`}
 	}
-	if perRepo && c.Repo == "" && backlog.IsUmbrella(root) {
+	if perRepo && c.Repo == "" && repos.Umbrella(root) {
 		// Scope S: inside a sub-repo the verb acts on it; only the umbrella
 		// root itself needs --repo.
 		if cwd, err := os.Getwd(); err != nil || backlog.CwdSubRepo(cwd, repos.Load(root)) == "" {

@@ -16,6 +16,7 @@ import (
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/pystr"
+	"github.com/l4ci/rota/internal/repos"
 	"github.com/l4ci/rota/internal/section"
 	"github.com/l4ci/rota/internal/stale"
 	"github.com/l4ci/rota/internal/status"
@@ -227,8 +228,8 @@ func a4Drift(fs *flag.FlagSet) RunFunc {
 			return a4FailRead(err)
 		}
 		var targets []backlog.Target
-		if repos := status.LoadRepos(root); len(repos) > 0 {
-			for _, r := range repos {
+		if registry := repos.Load(root); len(registry) > 0 {
+			for _, r := range registry {
 				if c.Repo == "" || r.Name == c.Repo {
 					targets = append(targets, backlog.Target{Name: r.Name, Dir: r.Path})
 				}
@@ -585,7 +586,7 @@ func splitItems(csv string) []string {
 func a4StatusAdd(fs *flag.FlagSet) RunFunc {
 	items := fs.String("items", "", "item IDs, comma-separated")
 	worktree := fs.String("worktree", "", "worktree path (one repo)")
-	repos := fs.String("repos", "", "sub-repo names, comma-separated")
+	reposCSV := fs.String("repos", "", "sub-repo names, comma-separated")
 	worktrees := fs.String("worktrees", "", "worktree paths, comma-separated, one per --repos name")
 	ifAbsent := fs.Bool("if-absent", false, "leave an existing entry alone")
 	return func(c *Ctx, args []string) (Result, error) {
@@ -615,7 +616,7 @@ func a4StatusAdd(fs *flag.FlagSet) RunFunc {
 		scope := []string{c.Repo}
 		changed := false
 		if multi {
-			names := status.ParseReposCSV(*repos)
+			names := status.ParseReposCSV(*reposCSV)
 			if len(names) == 0 {
 				return Result{}, Usage("--repos needs at least one name")
 			}
@@ -626,7 +627,7 @@ func a4StatusAdd(fs *flag.FlagSet) RunFunc {
 					return Result{}, Usage("--worktrees must list one path per --repos name")
 				}
 			}
-			if missing := status.Missing(status.LoadRepos(root), names); len(missing) > 0 {
+			if missing := status.Missing(repos.Load(root), names); len(missing) > 0 {
 				return Result{}, Resolution("unregistered sub-repo(s): %s", strings.Join(missing, ", "))
 			}
 			scope = names
@@ -780,18 +781,18 @@ func a4RefactorTargets(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		repos := status.LoadRepos(cwd)
-		if len(repos) == 0 {
+		registry := repos.Load(cwd)
+		if len(registry) == 0 {
 			return Result{Data: a4Obj("umbrella", nil, "subRepos", []any{}), Text: "single repo"}, nil
 		}
-		sort.Slice(repos, func(i, j int) bool { return repos[i].Name < repos[j].Name })
+		sort.Slice(registry, func(i, j int) bool { return registry[i].Name < registry[j].Name })
 		subs := []any{}
 		var lines []string
-		for _, r := range repos {
+		for _, r := range registry {
 			subs = append(subs, a4Obj("name", r.Name, "path", r.Path))
 			lines = append(lines, r.Name+" "+r.Path)
 		}
-		return Result{Data: a4Obj("umbrella", a4Obj("hasCode", status.HasCode(cwd, repos)), "subRepos", subs),
+		return Result{Data: a4Obj("umbrella", a4Obj("hasCode", status.HasCode(cwd, registry)), "subRepos", subs),
 			Text: strings.Join(lines, "\n")}, nil
 	}
 }

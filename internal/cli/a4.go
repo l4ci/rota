@@ -17,6 +17,7 @@ import (
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/pystr"
+	"github.com/l4ci/rota/internal/repos"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
@@ -160,7 +161,7 @@ func a4Open(c *Ctx, root string, fileOnly bool, hint string) (backlog.Backend, e
 		return nil, &backlog.RefusedError{BlockedBy: "backend", Hint: hint, Err: backlog.ErrWrongBackend,
 			Msg: `not available with backlog.backend "issues"`}
 	}
-	if name != "file" && backlog.IsUmbrella(root) {
+	if name != "file" && repos.Umbrella(root) {
 		ctx := c.Context()
 		u := backlog.NewUmbrella(root, cfg, func(dir string) (backlog.Tracker, error) { return newTracker(ctx, dir, cfg) })
 		u.Ctx = ctx
