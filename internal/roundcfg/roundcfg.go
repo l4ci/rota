@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/harness"
 )
 
 // Scope values of round.scope: which issues a round may take.
@@ -21,21 +22,15 @@ const (
 // Scopes lists the valid scope values.
 var Scopes = []string{ScopeSlate, ScopeMilestone, ScopeNext, ScopeOpen}
 
-// Tiers, light to heavy, and the harness kinds a tier maps a model for.
+// Tiers, light to heavy: the strengths a tier maps a model for, per harness kind.
 const (
 	TierLight    = "light"
 	TierStandard = "standard"
 	TierHeavy    = "heavy"
-
-	KindClaude = "claude"
-	KindCodex  = "codex"
 )
 
-// Tiers lists the tiers in order; Kinds the harness kinds.
-var (
-	Tiers = []string{TierLight, TierStandard, TierHeavy}
-	Kinds = []string{KindClaude, KindCodex}
-)
+// Tiers lists the tiers in order.
+var Tiers = []string{TierLight, TierStandard, TierHeavy}
 
 // Settings are the round.* keys.
 type Settings struct {
@@ -54,11 +49,16 @@ type Settings struct {
 	// item's PR back to its worker before parking the item as needs-human; 0
 	// turns the cap off.
 	MaxBounces int
+	// ArchitectureEvery is round.architectureEvery: closed non-refactor items
+	// between architecture reviews; 0 turns the automatic review off.
+	// ArchitectureAreas is round.architectureAreas: the areas a review is
+	// split into; empty means the subsystem map, else one whole-repo review.
+	ArchitectureEvery int
+	ArchitectureAreas []string
 }
 
-// ValidTier reports whether s is a tier; ValidKind whether s is a harness kind.
+// ValidTier reports whether s is a tier.
 func ValidTier(s string) bool { return indexOf(Tiers, s) >= 0 }
-func ValidKind(s string) bool { return indexOf(Kinds, s) >= 0 }
 
 // TierRank orders tiers: light 0, standard 1, heavy 2; -1 for a non-tier.
 func TierRank(s string) int { return indexOf(Tiers, s) }
@@ -131,6 +131,12 @@ func Load(root string) (Settings, error) {
 	if s.MaxBounces, err = nonNegInt(cfg, "round.maxBounces"); err != nil {
 		return s, err
 	}
+	if s.ArchitectureEvery, err = nonNegInt(cfg, "round.architectureEvery"); err != nil {
+		return s, err
+	}
+	if s.ArchitectureAreas, err = list(cfg, "round.architectureAreas"); err != nil {
+		return s, err
+	}
 	return s, loadTiers(cfg, &s)
 }
 
@@ -164,7 +170,7 @@ func loadTiers(cfg any, s *Settings) error {
 		return fmt.Errorf("round.tier must be %s (got %v)", strings.Join(Tiers, ", "), v)
 	}
 	s.Models = map[string]map[string]string{}
-	for _, kind := range Kinds {
+	for _, kind := range harness.Kinds {
 		m := map[string]string{}
 		for _, tier := range Tiers {
 			key := "round.tiers." + kind + "." + tier
@@ -174,7 +180,7 @@ func loadTiers(cfg any, s *Settings) error {
 			}
 			name, _ := v.(string)
 			name = strings.TrimSpace(name)
-			if name == "" && kind == KindClaude && tier == TierStandard {
+			if name == "" && kind == harness.Claude && tier == TierStandard {
 				w, err := config.Value(cfg, "models.worker")
 				if err != nil {
 					return err
@@ -191,7 +197,7 @@ func loadTiers(cfg any, s *Settings) error {
 			}
 		}
 		switch {
-		case set == 0 && kind == KindClaude:
+		case set == 0 && kind == harness.Claude:
 			return fmt.Errorf("round.tiers.claude is not configured: set light, standard and heavy")
 		case set == 0:
 			continue

@@ -248,8 +248,8 @@ func planShowIssue(c *Ctx, key string) (Result, error) {
 }
 
 func validKey(key string) error {
-	if !plan.ValidKey(key) {
-		return Usage("key must look like M01-B07 or M01-S02, got %q", key)
+	if !plan.ValidKey(key) && !plan.ItemOnlyKey(key) {
+		return Usage("key must look like #7, B7, M01-B07 or M01-S02, got %q", key)
 	}
 	return nil
 }

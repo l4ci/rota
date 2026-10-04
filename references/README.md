@@ -10,15 +10,15 @@ See KNOWLEDGE.md "Skill Authoring: Prose & References" for the conventions that 
 |-----------|---------|----------|
 | [`authoring-conventions.md`](authoring-conventions.md) | Authoring rules shared across SKILL.md files (inline autonomy directives, mirror-step threshold). | `/rota-capture`, `/rota-refactor`, `/rota-ship` |
 | [`context-load-protocol.md`](context-load-protocol.md) | K+D context loading sequence shared by every cycle-starting skill. | `/rota-plan`, `/rota-vision`, `/rota-work` (including `--preview`) |
-| [`debug-hypothesize.md`](debug-hypothesize.md) | Both-modes hypothesize choreography (brief template, single vs competing, per-axis divergence) for `/rota-debug` Step 6. | `/rota-debug` |
-| [`debug-escalate.md`](debug-escalate.md) | Fresh-context handoff brief template + dispatch mechanics + user-surfacing fallback for `/rota-debug` Step 7.5. | `/rota-debug` |
 | [`design-exploration.md`](design-exploration.md) | Shared five-step spine for skills that negotiate what to build before downstream skills capture how. | `/rota-brainstorm`, `/rota-vision` |
 | [`detail-files.md`](detail-files.md) | Detail-file template used when an item's input exceeds 3 sentences. | `/rota-capture` |
 | [`docs-conventions.md`](docs-conventions.md) | Conventions for content under `docs/` (registration sites, audience split). | `/rota-ship` (Docs Mode) |
 | [`handoff-template.md`](handoff-template.md) | Handoff-note template written by `/rota-pause` and read by `/rota-work` (no argument). | `/rota-pause` |
 | [`humanizing-prose.md`](humanizing-prose.md) | Rule sheet + silent self-audit pass applied to user-facing prose (release notes, PR body, doc-page edits) before the draft is shown to the user. | `/rota-release`, `/rota-ship` |
-| [`isolation-guard.md`](isolation-guard.md) | Why the parallel-waves-require-worktree-isolation guard fires, with the M02-S01 incident rationale and **Forbids / Permits** block for `/rota-work` Step 5. | `/rota-work` |
 | [`isolation-patterns.md`](isolation-patterns.md) | Branch / worktree creation patterns per work.isolation + umbrella mode. | `/rota-work` |
+| [`work-preview.md`](work-preview.md) | `/rota-work --preview` procedure and peek template. | `/rota-work` |
+| [`work-toolchain-siblings.md`](work-toolchain-siblings.md) | Tool-generated sibling patterns and the sweep commit. | `/rota-work` |
+| [`work-wave-planning.md`](work-wave-planning.md) | File and shared-symbol collisions, brief rules, verifying a completion. | `/rota-work` |
 | [`knowledge-consult.md`](knowledge-consult.md) | Canonical K+D query pattern (`rota knowledge query` + `rota decisions query`) used by every cycle-starting skill. | `/rota-debug`, `/rota-review`, `/rota-work` |
 | [`learn-rare-modes.md`](learn-rare-modes.md) | `/rota-learn` manual flags (`--term`, `--promote`, `--deprecate`, `--amend`) and the contradiction queue. | `/rota-learn` |
 | [`manual-gates.md`](manual-gates.md) | The manual-gate registry (`rota gate list`): gates the verbs enforce with `--confirm`, and the skill-only callouts. | `/rota-release`, `/rota-ship` |
@@ -30,9 +30,9 @@ See KNOWLEDGE.md "Skill Authoring: Prose & References" for the conventions that 
 | [`silent-failure-hunter.md`](silent-failure-hunter.md) | Rubric for detecting work that reports complete but didn't move the system, used in review passes. | `/rota-review`, `/rota-ship` |
 | [`source-prefill.md`](source-prefill.md) | Source-prefill / promote-between-artifacts semantics for `/rota-decide`. | `/rota-decide` |
 | [`subagent-dispatch.md`](subagent-dispatch.md) | Cross-skill rulebook for when and how skills push work into subagents instead of the orchestrator thread. | `/rota-debug`, `/rota-qa`, `/rota-vision` |
-| [`worker-contract.md`](worker-contract.md) | Standing worker contract and approval provenance for `work.dispatch: "tmux"` / `"herdr"`. | `/rota-work` |
-| [`herdr-dispatch.md`](herdr-dispatch.md) | What herdr changes versus tmux: tabs as slots, startup dialogs, worker-contract additions. | `/rota-work` |
-| [`tmux-dispatch.md`](tmux-dispatch.md) | Judgment `rota worker` verbs do not enforce for `work.dispatch: "tmux"`: permissions, relay provenance, merge-gate lore, failure modes. | `/rota-work` |
+| [`worker-contract.md`](worker-contract.md) | Standing worker contract and approval provenance for round workers. | `/rota-orchestrate` |
+| [`herdr-dispatch.md`](herdr-dispatch.md) | What herdr changes versus tmux: tabs as slots, startup dialogs, worker-contract additions. | `/rota-orchestrate` |
+| [`tmux-dispatch.md`](tmux-dispatch.md) | Judgment `rota worker` verbs do not enforce: permissions, relay provenance, merge-gate lore, failure modes (both hosts). | `/rota-orchestrate` |
 | [`three-mode-skill-shape.md`](three-mode-skill-shape.md) | Three-mode skill shape (first-run / after-work / restructure) used by `/rota-ship` (Docs Mode) and `/rota-qa`. | `/rota-qa`, `/rota-ship` |
 | [`umbrella-mode.md`](umbrella-mode.md) | Umbrella-mode helpers, registry shape, and `Repos:` field semantics. | `/rota-capture`, `/rota-qa`, `/rota-spike`, `/rota-work` |
 

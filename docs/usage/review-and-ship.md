@@ -4,56 +4,30 @@
 
 ## /rota-review
 
-`/rota-review` is a staff-engineer-level read of a feature branch before it leaves your machine. It is **read-only**: no commits, no mutations. The skill scopes the branch (commits, touched files, referenced item IDs), pulls relevant topics from [`KNOWLEDGE.md`](learning.md), and runs a two-stage review with short-circuit gating.
+`/rota-review` is a staff-engineer-level read of a feature branch before it leaves your machine. It is **read-only**: no commits, no mutations. The skill scopes the branch (commits, touched files, referenced item IDs), pulls relevant topics from [`KNOWLEDGE.md`](learning.md) and `DECISIONS.md`, resolves what each item promised, and dispatches one reviewer with the diff.
 
-### Stage 1: spec compliance
+### What counts as the spec
 
-Stage 1 answers exactly one question: *"does the diff fulfill the outcomes promised by the plan?"* The reviewer reads only the diff plus the resolved `.rota/plans/<key>.md` content for each referenced item (no `KNOWLEDGE.md`, no `DECISIONS.md`, no convention checks). Tighter brief, faster verdict.
+In issue mode the issue body is the spec, plus any `decision` comments on it. A plan note, when one exists, adds detail. In file mode it is the item's intent line plus its plan, when it has one. An item with nothing but a title is reviewed against the title, and the reviewer says when a spec is too thin to check.
 
-Stage 1 verdicts:
+### What the reviewer checks
 
-| Verdict | Meaning |
-|---------|---------|
-| `PASS` | Diff fulfills the plan's promised outcomes. |
-| `CONCERNS` | Partial fulfillment or scope drift, not blocking. |
-| `FAIL` | Diff doesn't deliver what was promised. Stage 2 short-circuits: no point quality-reviewing work that doesn't meet spec. |
-
-Stage 1 also runs a **refocus check**: each change is traced from plan task to backlog item to milestone intent (when the item has a milestone tag). Locally sensible steps that drift from the parent intent surface as `CONCERNS` naming the drift path; drift alone never fails the review.
-
-**No-plan fallback.** If no referenced item has a plan file (common when a one-shot capture hand-off was used), Stage 1 can't run as a meaningful spec check. The skill prints one informational line and proceeds directly to Stage 2, which then absorbs intent-match as its first rubric item.
-
-### Stage 2: code quality
-
-Stage 2 owns conventions, edge cases, security smells, performance cliffs, stale scaffolding, decision violations, and silent-failure detection. Stage 1's verdict is provided as context but is NOT re-evaluated here. Stage 2 explicitly skips intent matching when Stage 1 ran.
-
-Rubric items:
-
+- **Intent match:** does the diff deliver every outcome in the spec? A partly met outcome is `CONCERNS`; a missing outcome or edits the spec doesn't imply is `FAIL`. Locally sensible steps nobody asked for surface as `CONCERNS` naming the drift; drift alone never fails the review.
 - **Convention compliance** against captured `KNOWLEDGE.md` topics.
 - **Decision violations:** any forbidden pattern from `DECISIONS.md` present in the diff = `FAIL`.
+- **Obvious quality:** dead code, swallowed errors, untested branches, security smells, API breaks, performance cliffs.
 - **Stale scaffolding:** leftover *Task N* / *placeholder* / *in-flight* annotations that should have been removed once the corresponding work landed.
 - **Silent-failure hunter:** for every verification claim in the diff (new test, smoke section, assertion, helper-output check), apply a four-question rubric: *(a)* what does this verify concretely? *(b)* is the asserted-on shape the same shape the real consumer reads? *(c)* was the new code path actually exercised? *(d)* if you deleted the new code, would the assertion still pass? If any answer is *no* or *unclear*, the claim is flagged `SILENT-FAIL` with file:line. Flags surface as CONCERNS; they don't break the build alone, but you see them before merging.
 
-Stage 2 returns its own `PASS`, `CONCERNS` or `FAIL`.
+### Verdict
 
-### Combined verdict
-
-The report ends with the combined verdict (`PASS` / `CONCERNS` / `FAIL`) with file:line evidence where applicable: the worse of the two stages, or the one stage's verdict when only one ran (no-plan fallback or stage opt-out). Each stage's verdict is recorded with `rota verdict add` in the gitignored `.rota/verdicts.json`, and `/rota-ship` routes on the recorded verdict with `rota verdict route`, not on the report text.
+The report ends with one verdict (`PASS` / `CONCERNS` / `FAIL`) with file:line evidence where applicable. It is recorded with `rota verdict add` in the gitignored `.rota/verdicts.json`, and `/rota-ship` routes on the recorded verdict with `rota verdict route`, not on the report text.
 
 | Verdict | Meaning |
 |---------|---------|
-| `PASS` | Both stages clean. |
+| `PASS` | Clean. |
 | `CONCERNS` | Issues found, but not blocking. You can proceed or fix first. |
-| `FAIL` | Either stage produced a `FAIL`; integration is blocked. |
-
-### Stage opt-out
-
-To run only one stage:
-
-```
-/rota-review --stage spec      # only Stage 1
-/rota-review --stage quality   # only Stage 2, legacy single-pass behavior
-/rota-review                   # both stages with short-circuit gating (default)
-```
+| `FAIL` | Integration is blocked. |
 
 You can run `/rota-review` at any time on a branch, not only before shipping.
 

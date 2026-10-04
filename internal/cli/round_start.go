@@ -199,6 +199,11 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 			d.Set("slate", strs(st.Slate))
 		}
 		d.Set("candidates", candidateList(cands))
+		var archLine string
+		if a, err := env.Architecture(ctx, root, be, set, cands); err == nil {
+			d.Set("architecture", architectureData(a))
+			archLine = a.Line()
+		}
 		d.Set("drift", drift)
 		d.Set("lease", leaseData(st.Lease, st.LeaseState))
 		d.Set("reclaimed", st.Outcome == roundlease.Reclaimed)
@@ -209,6 +214,9 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 		}
 		lines = append(lines, candidateLines(cands)...)
 		lines = emptyNote(ctx, d, lines, env, root, be, st.Scope, st.Slate, cands)
+		if archLine != "" {
+			lines = append(lines, "architecture\t"+archLine)
+		}
 		return Result{Data: d, Text: strings.Join(lines, "\n")}, nil
 	}
 }
@@ -252,6 +260,12 @@ func roundCandidates(fs *flag.FlagSet) RunFunc {
 		d.Set("scope", sc)
 		d.Set("candidates", candidateList(cands))
 		lines := emptyNote(ctx, d, candidateLines(cands), env, root, be, sc, slate, cands)
+		if a, err := env.Architecture(ctx, root, be, set, cands); err == nil {
+			d.Set("architecture", architectureData(a))
+			if l := a.Line(); l != "" {
+				lines = append(lines, "architecture\t"+l)
+			}
+		}
 		return Result{Data: d, Text: strings.Join(lines, "\n")}, nil
 	}
 }

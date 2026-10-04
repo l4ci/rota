@@ -127,10 +127,12 @@ func heldIDs(root string) map[string]bool {
 
 // scopeSet is the open items of the scope that held does not name.
 func scopeSet(root string, items []backlog.Item, held map[string]bool, scope string, slate []string) ([]backlog.Item, error) {
+	reviews := MintedReviews(root)
 	pick := func(in func(backlog.Item) bool) []backlog.Item {
 		var out []backlog.Item
 		for _, it := range items {
-			if !it.Closed && !held[it.ID] && in(it) {
+			// A review item is the round's own work: every scope offers it.
+			if !it.Closed && !held[it.ID] && (in(it) || reviews[strings.ToUpper(it.ID)] && IsReviewTitle(it.Title)) {
 				out = append(out, it)
 			}
 		}

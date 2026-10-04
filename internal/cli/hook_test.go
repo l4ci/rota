@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/roundlease"
-	"github.com/l4ci/rota/internal/worker"
 )
 
 // orchProject is a git project with .rota/ where this test process holds the
@@ -298,7 +298,7 @@ func TestWorkerPromptCheck(t *testing.T) {
 	dir := t.TempDir()
 	key := filepath.Join(dir, "rota-prompt.key")
 	os.WriteFile(key, []byte(strings.Repeat("ab", 32)+"\n"), 0o600)
-	k, err := worker.LoadPromptKey(key)
+	k, err := harness.LoadPromptKey(key)
 	if err != nil {
 		t.Fatal(err)
 	}

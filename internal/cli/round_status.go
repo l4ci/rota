@@ -118,6 +118,14 @@ func roundStatus(*flag.FlagSet) RunFunc {
 		d.Set("limits", lim)
 		d.Set("review", queuedRows(rep.Queued))
 		var lines []string
+		if set, err := roundcfg.Load(root); err == nil {
+			if a, err := architectureFor(c, root, set); err == nil {
+				d.Set("architecture", architectureData(a))
+				if l := a.Line(); l != "" {
+					lines = append(lines, "architecture\t"+l)
+				}
+			}
+		}
 		for _, r := range rep.Rows {
 			lines = append(lines, strings.Join([]string{
 				r.Name, dash(r.Issue), dash(r.Branch), dash(r.PR), dash(r.HostState), dash(strings.Join(r.Drift, ","))}, "\t"))
