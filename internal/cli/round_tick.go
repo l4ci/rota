@@ -159,6 +159,13 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 		}
 		return out, nil
 	}
+	e.Review = func(ctx context.Context) ([]string, error) {
+		a, err := architectureFor(c, root, set)
+		if err != nil || !a.Due {
+			return nil, err
+		}
+		return renv.MintReview(ctx, root, board, a, round.Current(root))
+	}
 	// Assign takes no tier, no kind and never accepts overlap: the round's
 	// defaults, and only a candidate that is ready as it stands.
 	e.Assign = func(ctx context.Context, id string) (string, error) {

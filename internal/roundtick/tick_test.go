@@ -216,3 +216,71 @@ func TestReconcileRepairsAreAudited(t *testing.T) {
 		t.Fatalf("%+v %v", r.Did, f.audit)
 	}
 }
+
+// The #53 trigger runs inside the tick. The hook stands in for both triggers
+// (threshold and idle-with-nothing-assignable): the tick's part is to audit the
+// mint and assign what it minted ahead of the backlog, within the cap.
+func TestReviewMintsAreAuditedAndAssignedFirst(t *testing.T) {
+	for _, trigger := range []string{"threshold", "queue-empty"} {
+		t.Run(trigger, func(t *testing.T) {
+			f := &fake{
+				slots: []Slot{{Name: "ben", State: "idle"}, {Name: "dana", State: "idle"}, {Name: "nia", State: "idle"}},
+				cands: []Candidate{{"#1", true}, {"#9", true}},
+			}
+			if trigger == "queue-empty" {
+				f.cands = nil
+			}
+			e := f.env()
+			e.Cap = 2
+			e.Review = func(context.Context) ([]string, error) { return []string{"#9", "#10", "#11"}, nil }
+			r, err := Run(context.Background(), e)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if want := []string{"#9", "#10"}; !reflect.DeepEqual(f.assigned, want) {
+				t.Fatalf("assigned %v, want %v (minted first, cap 2)", f.assigned, want)
+			}
+			want := []string{"mint #9", "mint #10", "mint #11", "assign #9", "assign #10"}
+			if !reflect.DeepEqual(f.audit, want) || len(r.Did) != len(want) {
+				t.Fatalf("audit %v, want %v", f.audit, want)
+			}
+		})
+	}
+}
+
+func TestNoReviewHookOrNothingDueMintsNothing(t *testing.T) {
+	f := &fake{slots: []Slot{{Name: "ben", State: "idle"}}, cands: []Candidate{{"#1", true}}}
+	e := f.env()
+	if _, err := Run(context.Background(), e); err != nil || !reflect.DeepEqual(f.audit, []string{"assign #1"}) {
+		t.Fatalf("no hook: %v %v", f.audit, err)
+	}
+	f.audit, f.assigned = nil, nil
+	e.Review = func(context.Context) ([]string, error) { return nil, nil }
+	if _, err := Run(context.Background(), e); err != nil || !reflect.DeepEqual(f.audit, []string{"assign #1"}) {
+		t.Fatalf("nothing due: %v %v", f.audit, err)
+	}
+}
+
+func TestReviewFailureIsEscalatedAndTickGoesOn(t *testing.T) {
+	f := &fake{slots: []Slot{{Name: "ben", State: "idle"}}, cands: []Candidate{{"#1", true}}}
+	e := f.env()
+	e.Review = func(context.Context) ([]string, error) { return nil, errors.New("tracker down\nmore") }
+	r, err := Run(context.Background(), e)
+	if err != nil || !reflect.DeepEqual(f.assigned, []string{"#1"}) {
+		t.Fatalf("tick should go on: %v %v", f.assigned, err)
+	}
+	if len(r.NeedsYou) != 1 || r.NeedsYou[0].Kind != "architecture-review" || r.NeedsYou[0].Why != "tracker down" {
+		t.Fatalf("needsYou %+v", r.NeedsYou)
+	}
+}
+
+func TestReviewMintRefusedStaysForLaterTick(t *testing.T) {
+	f := &fake{slots: []Slot{{Name: "ben", State: "idle"}}}
+	f.assignFn = func(id string) (string, error) { return "", &Refusal{Why: "no"} }
+	e := f.env()
+	e.Review = func(context.Context) ([]string, error) { return []string{"#9"}, nil }
+	r, err := Run(context.Background(), e)
+	if err != nil || len(r.Did) != 1 || r.Did[0].Action != "mint" {
+		t.Fatalf("%+v %v", r, err)
+	}
+}
