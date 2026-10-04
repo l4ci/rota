@@ -230,6 +230,11 @@ only channel, because there is no host to notify.
 fresh, the PR is the worker's and provenance holds, then re-runs
 `refactor.verifyCommands` on the merged tree and merges on a pass.
 
+A branch that is only behind the base is merged as is when the merge is clean and the base did not
+change any file the branch changed (`round.sharedPaths` aside). A conflict, or a file changed on both
+sides, sends it back as `stale`. Each such bounce is counted per item; at `round.maxBounces` (default
+3) the gate parks the item `needs-human` with a comment instead of sending it back again.
+
 Whether a human also has to say yes is `ship.mergeApproval`:
 
 | Value | Behavior |

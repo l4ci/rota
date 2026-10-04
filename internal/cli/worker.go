@@ -628,6 +628,7 @@ func workerGate(fs *flag.FlagSet) RunFunc {
 		}
 		ctx, stop := workerContext()
 		defer stop()
+		issue := gateIssue(root, slot)
 		r, err := workerEnvCtx(ctx).Gate(ctx, root, worker.GateOpts{Slot: slot, Base: *base, CheckOnly: *check, NoVerify: *noVerify, Approve: approve})
 		if gateErr != nil {
 			var e *Error
@@ -655,6 +656,20 @@ func workerGate(fs *flag.FlagSet) RunFunc {
 			fmt.Fprintln(c.Stderr, n)
 		}
 		res := Result{Data: gateData(r)}
+		if !*check {
+			n, parked, berr := gateBounce(c, root, issue, r)
+			if berr != nil {
+				fmt.Fprintln(c.Stderr, "BOUNCE-COUNT "+slot+" — "+berr.Error())
+			}
+			if n > 0 {
+				d := res.Data.(*jsonx.Object)
+				d.Set("bounces", n)
+				d.Set("parked", parked)
+			}
+			if parked {
+				r.Hint = fmt.Sprintf("parked: %s bounced %d times, labelled needs-human; do not re-dispatch it until a human clears the label", issue, n)
+			}
+		}
 		if r.OK() {
 			if r.Verdict == worker.GateFresh {
 				res.Text = fmt.Sprintf("fresh: %s %s", slot, r.Branch)
