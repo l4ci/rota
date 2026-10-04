@@ -150,7 +150,7 @@ rota round candidates                         # re-read the board with readiness
   items of the active milestones), `next` (the same, then the next planned milestone whose
   dependencies shipped) or `open` (every open item nobody outside the round has claimed or labelled in progress; readiness and
   overlap decide the order, so a
-  round takes newly ready issues without a restart). Assign refuses anything outside it. Running
+  round takes newly ready issues without a restart). With no unfinished milestone, `milestone` and `next` offer every open item too. An empty list says why and which command to run. Assign refuses anything outside it. Running
   `start` again in the same round keeps the recorded scope and slate unless you pass `--scope`;
   `--scope slate --items …` replaces the slate. See [round keys](configuration.md#round-keys).
 

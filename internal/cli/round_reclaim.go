@@ -35,6 +35,9 @@ func roundReclaim(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return moveFailure(err, res.Changed)
 		}
+		for _, w := range res.Warnings {
+			c.Warn("%s", w)
+		}
 		d := jsonx.NewObject()
 		d.Set("slot", res.Slot)
 		setIf(d, "issue", res.Issue)
