@@ -1,6 +1,6 @@
 # Implementing
 
-Items captured in [`BACKLOG.md`](../reference/rota-folder.md) reach "merged" through `/rota-work`, an orchestrator that plans, dispatches parallel workers, and lands one atomic commit per task. For a single ad-hoc fix, `/rota-capture` ends with an optional hand-off to `/rota-work`.
+Items captured in [`BACKLOG.md`](../reference/rota-folder.md) reach "merged" through `/rota-work`, an orchestrator that plans, dispatches parallel workers, and lands one atomic commit per task. For a single ad-hoc fix, run `/rota-capture`, then `/rota-work <ID>`.
 
 ## /rota-work
 
@@ -67,18 +67,18 @@ With `"branch"`, your main worktree switches to the feature branch for the durat
 
 To run multiple `/rota-work` sessions at the same time on different item batches, pick `"worktree"`. See [parallel-work](parallel-work.md) for the multi-session pattern.
 
-## Capture, then work it now
+## Capture, then work
 
-For a single ad-hoc fix, run `/rota-capture` and accept the hand-off at the end: it offers to work the new item now and routes to `/rota-work`.
+For a single ad-hoc fix, run `/rota-capture` and then `/rota-work` on the printed ID.
 
 ```
 /rota-capture "fix the off-by-one in RingBuffer"
 /rota-capture "add a Cmd+K shortcut to the project picker"
 ```
 
-The item gets a real ID in `BACKLOG.md` (counters increment, history is preserved). Decline the hand-off and it stays queued. If you're still exploring or the scope is fuzzy, decline and refine the entry first.
+The item gets a real ID (`#N` on the issue backend, `[B07]` on the file backend). Capture prints the ID and stops; it never starts work. If the scope is fuzzy, refine the item before running `/rota-work <ID>`.
 
-**Flow:** `/rota-capture` files the item, then (on accept) `/rota-work` implements it. All `/rota-capture` rules (classification, detail-file overflow, ID assignment) and all `/rota-work` rules (clean-tree guard, branch/worktree isolation, parallel workers, per-task commits) apply.
+**Flow:** `/rota-capture` files the item, `/rota-work <ID>` implements it. All `/rota-capture` rules (classification, detail-file overflow, ID assignment) and all `/rota-work` rules (clean-tree guard, branch/worktree isolation, parallel workers, per-task commits) apply.
 
 ## Capture vs. Work: picking the right entry
 
@@ -86,19 +86,19 @@ Pick by **intent**, not by the verb typed:
 
 | The user wants to… | Use | Why |
 |---------------------|-----|-----|
-| Brain-dump items into the backlog without acting now | `/rota-capture` (decline the hand-off) | Records only; no execution, no clean-tree guard |
-| Get one specific thing done right now (not yet captured) | `/rota-capture`, accept the hand-off | Captures, then runs `/rota-work` on the new item |
-| Implement an item that's already in `BACKLOG.md` | `/rota-work <ID>` | Plans, dispatches workers, verifies, commits per task |
+| Brain-dump items into the backlog without acting now | `/rota-capture` | Records only; no execution, no clean-tree guard |
+| Get one specific thing done right now (not yet captured) | `/rota-capture`, then `/rota-work <ID>` | Capture records only; work is a separate step |
+| Implement an item that's already in the backlog | `/rota-work <ID>` | Plans, dispatches workers, verifies, commits per task |
 | Pick the next thing from the backlog and execute | `/rota-work` (no argument) | Reconciles, suggests, then works the pick |
 
 **Rules of thumb:**
 
-- *"fix X"* / *"add Y"* / *"do Z"*: clear single thing, not yet captured: `/rota-capture`, then accept the hand-off.
-- A list of things, no immediate action, *"capture this"* / *"add to backlog"*: `/rota-capture`, decline the hand-off.
+- *"fix X"* / *"add Y"* / *"do Z"*: clear single thing, not yet captured: `/rota-capture`, then `/rota-work <ID>`.
+- A list of things, no immediate action, *"capture this"* / *"add to backlog"*: `/rota-capture`.
 - Reference to an existing `[B##]`/`[F##]`/`[T##]` plus *"implement"* / *"build"* / *"do this one"*: `/rota-work <ID>`.
 - *"what's next?"* / *"pick something"* / *"what should I work on?"*: `/rota-work` with no argument.
 
-When intent is ambiguous, `/rota-capture` is the cheapest path: the hand-off is optional, so you can still decline.
+When intent is ambiguous, `/rota-capture` is the cheapest path: it only records, so nothing runs until you say so.
 
 See [capturing work](capturing-work.md) for capture details and [picking work](picking-work.md) for how the no-argument `/rota-work` selects and prioritizes.
 

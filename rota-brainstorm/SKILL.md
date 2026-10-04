@@ -1,11 +1,11 @@
 ---
 name: rota-brainstorm
-description: Per-item design exploration before /rota-plan — Socratic discovery, 2-3 approaches with tradeoffs, sectioned design with per-section approval, writes .rota/designs/<ID>.md, hands off to /rota-plan. Use when a Major feature or P0 bug needs design negotiation before implementation planning.
+description: Per-item design exploration before /rota-plan — Socratic discovery, 2-3 approaches with tradeoffs, sectioned design with per-section approval, writes the item's design (a note on its issue, or .rota/designs/<ID>.md on the file backend), hands off to /rota-plan. Use when a Major feature or P0 bug needs design negotiation before implementation planning.
 ---
 
 # rota-brainstorm — Per-item Design Exploration
 
-`/rota-brainstorm` fills the gap between `/rota-capture` (records what to build) and `/rota-plan` (decomposes how to build it) by negotiating *whether this is the right thing and what its shape should be*. Scope is a single backlog item (`[B##]` or `[F##]` or `[T##]`); project-level exploration stays with `/rota-vision`. The artifact lands at `.rota/designs/<ID>.md` and feeds `/rota-plan` as soft input — never required.
+`/rota-brainstorm` fills the gap between `/rota-capture` (records what to build) and `/rota-plan` (decomposes how to build it) by negotiating *whether this is the right thing and what its shape should be*. Scope is a single backlog item (`#N`, or `[B07]`/`[F03]`/`[T05]` on the file backend); project-level exploration stays with `/rota-vision`. The artifact is the item's design (`rota design show <ID>`) and feeds `/rota-plan` as soft input — never required.
 
 ## Step 1 — Setup
 
@@ -27,29 +27,29 @@ Track these phases with the host's task tool if it has one.
 Phases:
 
 1. *Resolve target* — item ID parsed, existence verified, re-run mode picked (Step 2)
-2. *Load context* — TODO entry, detail file, K+D+C queries gathered in parallel (Step 3)
+2. *Load context* — backlog item, detail, K+D+C queries gathered in parallel (Step 3)
 3. *Discover* — Socratic clarifying rounds, capped at 5 (Step 4)
 4. *Propose approaches* — 2-3 candidates with tradeoffs, user picks one (Step 5)
 5. *Section drafts* — Goal → Design → Approaches → Open questions → Assumptions with per-section approval (Step 6)
-6. *Write* — artifact persisted to `.rota/designs/<ID>.md` (Step 7)
+6. *Write* — design persisted via `rota design` (Step 7)
 7. *Self-review* — placeholder/contradiction/scope/ambiguity scan (Step 8)
 8. *User review* — final approval gate (Step 9)
 
 ## Step 2 — Resolve Target
 
-Parse the item ID from the invocation. It must match `[BFT]\d{2,}`. Reject milestone IDs (`M01`) and slice IDs (`S01`) with: *"Error: /rota-brainstorm operates on a single backlog item. For project-level exploration use /rota-vision; for slice planning use /rota-plan."*
+Parse the item ID from the invocation. It must be `#N` or a bare number (issue backend), or match `[BFT]\d{2,}` (file backend). Reject milestone IDs (`M01`) and slice IDs (`S01`) with: *"Error: /rota-brainstorm operates on a single backlog item. For project-level exploration use /rota-vision; for slice planning use /rota-plan."*
 
-Verify the item exists in `.rota/BACKLOG.md`:
+Verify the item exists in the backlog:
 
 ```bash
 rota item field get <ID> --name title
 ```
 
-Exit 3 means the ID is not in the backlog. Refuse with: *"Error: [<ID>] not found in BACKLOG.md. Run /rota-capture first to add it."*
+Exit 3 means the ID is not in the backlog. Refuse with: *"Error: <ID> not found in the backlog. Run /rota-capture first to add it."*
 
-**Re-run check.** Under `--auto-loop`, if `.rota/designs/<ID>.md` already exists, exit silently with a one-line note **`Design already exists — no auto-action.`** Loop calls are idempotent; replacing a design requires manual `/rota-brainstorm <ID>` invocation.
+**Re-run check.** Under `--auto-loop`, if `rota design show <ID>` finds a design, exit silently with a one-line note **`Design already exists — no auto-action.`** Loop calls are idempotent; replacing a design requires manual `/rota-brainstorm <ID>` invocation.
 
-If `.rota/designs/<ID>.md` already exists (interactive mode), ask via `AskUserQuestion` (single-select, 3 options):
+If a design already exists (interactive mode), ask via `AskUserQuestion` (single-select, 3 options):
 
 - **View** — print the existing design and exit
 - **Edit** — enter brainstorm with existing design loaded as starting context
@@ -65,9 +65,9 @@ Default: opt-in-off / cancel (replace is destructive). Routing:
 
 Pull the picture in parallel — these reads are independent and latency-bound:
 
-- `rota item field list --json <ID>` — `data.fields` with `title`, `milestone`, `related`, `detail`, `repos`, `subsystem`, `since` (single corpus load; avoids re-parsing BACKLOG.md per field)
-- Detail file: `.rota/bugs/<ID>.md`, `.rota/features/<ID>.md`, or `.rota/tasks/<ID>.md` (read whichever exists)
-- `rota knowledge query <topic>` for topics inferred from the TODO entry and detail file
+- `rota item field list --json <ID>` — `data.fields` with `title`, `milestone`, `related`, `detail`, `repos`, `subsystem`, `since` (single corpus load; avoids re-reading the backlog per field)
+- Issue backend: `rota item show <ID>` for state and comments (`decision` comments are binding; `references/issue-mode.md`, "Resuming an item"). File backend: the detail file `.rota/bugs/<ID>.md`, `.rota/features/<ID>.md`, or `.rota/tasks/<ID>.md` (read whichever exists)
+- `rota knowledge query <topic>` for topics inferred from the item and its detail
 - `rota decisions query <topic>` for the same topics — committed boundaries the design must respect
 - `rota glossary read <term>` for any domain terms the item references
 
@@ -133,9 +133,7 @@ Mint the design stub:
 rota design add <ID> --title "<title>"
 ```
 
-The verb creates `.rota/designs/<ID>.md` with frontmatter (`id`, `title`, `status: draft`, `created`) and the five placeholder section headers. Use the `Edit` tool to overwrite each placeholder section body with the approved content from Step 6. Keep the frontmatter intact.
-
-**Issue mode** (`backlog.backend: "issues"`; `references/issue-mode.md`): the design is a note on the item's issue, not a file. `rota design add` still creates it; draft the approved sections in a scratch file (not under `.rota/designs/`) and publish with `rota design put <ID> --body-file <scratch-file>` instead of `Edit`. Read it back with `rota design show <ID>`. Post each answer that changed the design's direction with `rota item comment add <ID> --kind decision --body-file -`.
+The verb creates the design with frontmatter (`id`, `title`, `status: draft`, `created`) and the five placeholder section headers. On the issue backend it is a note on the item's issue (`references/issue-mode.md`): draft the approved sections from Step 6 in a scratch file and publish with `rota design put <ID> --body-file <scratch-file>`. On the file backend it is `.rota/designs/<ID>.md`: use the `Edit` tool to overwrite each placeholder section body, keeping the frontmatter intact. Read it back with `rota design show <ID>`. Post each answer that changed the design's direction with `rota item comment add <ID> --kind decision --body-file -`.
 
 Under `--auto-loop`, mint the stub with `rota design add <ID> --title "<title>" --auto-loop`: the verb writes `auto: true` into the frontmatter, marking the artifact as auto-written.
 
@@ -158,8 +156,8 @@ Print the final artifact (or invoke `rota design show <ID>`) and ask via `AskUse
 One compact summary:
 
 ```
-Design written: F58 — <title>
-  Artifact: .rota/designs/F58.md
+Design written: #58 — <title>
+  Artifact: design note on #58 (file backend: .rota/designs/F58.md)
   Approaches considered: 3
   Open questions: 2
   Status: draft

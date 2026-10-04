@@ -1,6 +1,6 @@
 package main
 
-// Scenarios for `rota issues list|label|imported|close|provider` and `rota
+// Scenarios for `rota issues label|imported|close|provider` and `rota
 // migrate issues` (#48). Each scenario builds a git project whose origin
 // resolves to github or gitlab, seeds the stateful fake forge
 // (test/fakes/fake_tracker.py), runs the Go binary and compares the exit
@@ -16,9 +16,7 @@ package main
 //  1. data.changed reports whether the forge changed; the old helpers said
 //     true for every label and close that exited 0 (drun.changed).
 //  2. A forge CLI that exits with a code other than 1, 3 or 4 is exit 5 (the
-//     CLI failed). The fake gh exits 2 for the flags it does not implement
-//     (--assignee on `issue list`), so github `issues list --mine` fails
-//     there; internal/issues covers it.
+//     CLI failed).
 //  3. issues.autoCreateLabel false means no label creation (the old helper
 //     read it with jq's `// true` and created the label anyway).
 //  4. A .rota/issue-map.json that is a JSON array is a corrupt state file, exit
@@ -206,32 +204,6 @@ func suiteA4D(t *testing.T) {
 		dsc{name: "provider/extra-arg", runs: []drun{dr(2, "issues", "provider", "x")}},
 	)
 
-	// ---- issues list ----
-	listBoth(&all, "list/default", dseed, "issues", "list")
-	listBoth(&all, "list/limit-2", dseed, "issues", "list", "--limit", "2")
-	listBoth(&all, "list/limit-1", dseed, "issues", "list", "--limit=1")
-	listBoth(&all, "list/label", dseed, "issues", "list", "--label", "existing")
-	listBoth(&all, "list/label-none", dseed, "issues", "list", "--label", "nosuch")
-	listBoth(&all, "list/label-limit", dseed, "issues", "list", "--label", "existing", "--limit", "1")
-	listBoth(&all, "list/empty-forge", dempty, "issues", "list")
-	listBoth(&all, "list/mine", dseed, "issues", "list", "--mine")
-	add(one("list/unknown-provider", dr(3, "issues", "list").msg("issues.provider")).on("none"))
-	dboth(&all, one("list/limit-0", dr(2, "issues", "list", "--limit", "0")))
-	dboth(&all, one("list/limit-abc", dr(2, "issues", "list", "--limit", "abc")))
-	dboth(&all, one("list/limit-neg", dr(2, "issues", "list", "--limit", "-3")))
-	dboth(&all, one("list/label-empty", dr(2, "issues", "list", "--label", "")))
-	dboth(&all, one("list/unknown-flag", dr(2, "issues", "list", "--bogus")))
-	dboth(&all, one("list/positional", dr(2, "issues", "list", "7")))
-	dboth(&all, one("list/forge-fails", dr(5, "issues", "list").env1("FAKE_TRACKER_FAIL=issue list")))
-	dboth(&all, one("list/auth-fails", dr(5, "issues", "list").env1("FAKE_TRACKER_FAIL=auth status")))
-	dboth(&all, one("list/rate-limited", dr(6, "issues", "list").env1(append([]string{"FAKE_TRACKER_FAIL=issue list"}, rate...)...)))
-	add(dsc{name: "list/umbrella-web", remote: "none", fx: umbrella(fx{}), db: dseed, runs: []drun{dr(0, "issues", "list", "--repo", "web")}},
-		dsc{name: "list/umbrella-api", remote: "none", fx: umbrella(fx{}), db: dseed, runs: []drun{dr(0, "issues", "list", "--repo", "api", "--limit", "3")}},
-		dsc{name: "list/umbrella-root-unknown", remote: "none", fx: umbrella(fx{}), db: dseed, runs: []drun{dr(3, "issues", "list")}},
-		dsc{name: "list/repo-unknown", remote: "none", fx: umbrella(fx{}), db: dseed, runs: []drun{dr(3, "issues", "list", "--repo", "nope")}},
-		dsc{name: "list/no-hv", remote: "none", fx: fx{noHV: true}, runs: []drun{dr(3, "issues", "list")}},
-	)
-
 	// ---- issues label ----
 	dboth(&all, one("label/add-existing", dr(0, "issues", "label", "1", "--add", "bug").ch(false)))
 	dboth(&all, one("label/add-new-label", dr(0, "issues", "label", "1", "--add", "brand-new").ch(true)))
@@ -351,18 +323,6 @@ func suiteA4D(t *testing.T) {
 		t.Run(s.name, s.exec)
 	}
 	t.Logf("%d scenarios", len(all))
-}
-
-// listBoth is a successful `issues list` on github and gitlab. The fake gh
-// rejects --assignee, so --mine fails on github with 5 (divergence 2).
-func listBoth(all *[]dsc, name string, db func() map[string]any, argv ...string) {
-	gh, gl := dr(0, argv...), dr(0, argv...)
-	for _, a := range argv {
-		if a == "--mine" {
-			gh = dr(5, argv...)
-		}
-	}
-	*all = append(*all, dsc{name: name + "/github", db: db, runs: []drun{gh}}, dsc{name: name + "/gitlab", remote: "gitlab", db: db, runs: []drun{gl}})
 }
 
 func (s dsc) withDB(f func() map[string]any) dsc { s.db = f; return s }
