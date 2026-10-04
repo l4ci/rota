@@ -2,9 +2,13 @@ package round
 
 import (
 	"context"
+	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/milestone"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/tracker"
@@ -89,18 +93,33 @@ func (e Env) trackedFiles(ctx context.Context, root string) []string {
 }
 
 // heldIDs are the items the registry's slots hold, and those a queued PR holds.
+// An ID a mid-round `migrate issues` left in file spelling (`B31`) also holds
+// the issue the map gives it.
 func heldIDs(root string) map[string]bool {
 	held := map[string]bool{}
-	reg := worker.LoadRegistry(root)
-	for _, s := range reg.Slots() {
-		if id := heldID(worker.Str(s, "task"), worker.Str(s, "branch"), worker.Str(s, "name")); id != "" {
-			held[id] = true
+	imap, _ := fsio.LoadJSON(filepath.Join(root, ".rota", "issue-map.json"), nil).(*jsonx.Object)
+	hold := func(id string) {
+		if id == "" {
+			return
+		}
+		held[id] = true
+		if imap == nil {
+			return
+		}
+		if e, ok := imap.Get(id); ok {
+			if eo, ok := e.(*jsonx.Object); ok {
+				if n, ok := eo.Get("number"); ok && n != nil {
+					held[fmt.Sprint(n)] = true
+				}
+			}
 		}
 	}
+	reg := worker.LoadRegistry(root)
+	for _, s := range reg.Slots() {
+		hold(heldID(worker.Str(s, "task"), worker.Str(s, "branch"), worker.Str(s, "name")))
+	}
 	for _, q := range reg.PRs() {
-		if id := queuedIssue(q); id != "" {
-			held[id] = true
-		}
+		hold(queuedIssue(q))
 	}
 	return held
 }
@@ -141,22 +160,16 @@ func scopeSet(root string, items []backlog.Item, held map[string]bool, scope str
 		}
 		chosen = pick(func(it backlog.Item) bool { return in[strings.ToUpper(it.ID)] })
 	case roundcfg.ScopeMilestone, roundcfg.ScopeNext:
-		active, err := milestone.Active(root)
+		active, planned, fellBack, err := milestoneScope(root, scope)
 		if err != nil {
 			return nil, err
 		}
 		chosen = pick(inMilestones(active))
-		if len(chosen) == 0 && scope == roundcfg.ScopeNext {
-			all, err := milestone.List(root)
-			if err != nil {
-				return nil, err
-			}
-			for _, m := range all {
-				if m.Status == "planned" && m.Ready {
-					chosen = pick(inMilestones([]string{m.ID}))
-					break
-				}
-			}
+		if len(chosen) == 0 && len(planned) > 0 {
+			chosen = pick(inMilestones(planned))
+		}
+		if fellBack {
+			chosen = pick(func(backlog.Item) bool { return true })
 		}
 	case roundcfg.ScopeOpen:
 		chosen = pick(func(backlog.Item) bool { return true })
@@ -164,6 +177,80 @@ func scopeSet(root string, items []backlog.Item, held map[string]bool, scope str
 		return nil, &worker.Error{Exit: worker.ExitUsage, Message: "scope must be slate, milestone, next or open"}
 	}
 	return chosen, nil
+}
+
+// milestoneScope is where scope milestone or next draws from: the active
+// milestones and, for next, the first ready planned one. fellBack is true when
+// the project has no unfinished milestone at all (none written, or all shipped
+// or archived): the round then offers every open item, as scope open does,
+// instead of an empty list. A project that still has a planned milestone keeps
+// the strict scope, so milestone never rolls over. It reads milestone state
+// alone, so candidates and assign agree.
+func milestoneScope(root, scope string) (active, planned []string, fellBack bool, err error) {
+	if active, err = milestone.Active(root); err != nil {
+		return nil, nil, false, err
+	}
+	all, err := milestone.List(root)
+	if err != nil {
+		return nil, nil, false, err
+	}
+	pending := len(active) > 0
+	for _, m := range all {
+		if m.Status == "planned" || m.Status == "active" {
+			pending = true
+		}
+		if scope == roundcfg.ScopeNext && planned == nil && m.Status == "planned" && m.Ready {
+			planned = []string{m.ID}
+		}
+	}
+	return active, planned, !pending, nil
+}
+
+// FellBack reports whether scope milestone or next has no unfinished
+// milestone to draw from, so the round offers every open item.
+func FellBack(root, scope string) bool {
+	if scope != roundcfg.ScopeMilestone && scope != roundcfg.ScopeNext {
+		return false
+	}
+	_, _, fb, err := milestoneScope(root, scope)
+	return err == nil && fb
+}
+
+// Empty says why a scope offers nothing and what to run next.
+type Empty struct {
+	Reason, Next string
+}
+
+// WhyEmpty explains an empty candidate list: the backlog has no open items,
+// the scope selects none, or everything the scope selects is held, in review,
+// taken or handed to a human. Next is the command that moves the round on.
+func (e Env) WhyEmpty(ctx context.Context, root string, be backlog.Backend, scope string, slate []string) (Empty, error) {
+	items, err := be.List(false)
+	if err != nil {
+		return Empty{}, err
+	}
+	open := 0
+	for _, it := range items {
+		if !it.Closed {
+			open++
+		}
+	}
+	if open == 0 {
+		return Empty{"the backlog has no open items", "capture work with /rota-capture, then run rota round candidates"}, nil
+	}
+	inScope, err := scopeSet(root, items, nil, scope, slate)
+	if err != nil {
+		return Empty{}, err
+	}
+	if len(inScope) == 0 {
+		switch scope {
+		case roundcfg.ScopeSlate:
+			return Empty{"none of the slate items is open", "rota round start --scope slate --items <ID>[,<ID>…], or --scope open"}, nil
+		default:
+			return Empty{fmt.Sprintf("scope %s has no open items (%d open in the backlog)", scope, open), "rota round start --scope open"}, nil
+		}
+	}
+	return Empty{fmt.Sprintf("all %d open items in scope %s are held by a slot, in review, taken or handed to a human", len(inScope), scope), "rota round status"}, nil
 }
 
 // InScope reports whether the scope allows assigning id: it is a candidate

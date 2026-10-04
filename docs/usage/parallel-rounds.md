@@ -4,7 +4,7 @@ A round is one orchestrator session plus two to five workers. Each worker is a s
 its own git worktree and terminal tab (herdr or tmux), or an in-harness subagent when there is no
 terminal host ([solo mode](#solo-mode)). Each holds one GitHub issue at a time. Workers implement,
 verify and open a PR; they never merge. The orchestrator assigns issues, relays decisions, merges
-PRs and re-verifies the base branch after every merge.
+PRs; the merge gate is the only full verification run.
 
 The orchestrator runs the `rota-orchestrate` skill, which holds the judgment: which issues, how to
 read a stuck worker, what to escalate, when to merge. The mechanics are `rota round` verbs, so a round
@@ -151,7 +151,7 @@ rota round candidates                         # re-read the board with readiness
   items of the active milestones), `next` (the same, then the next planned milestone whose
   dependencies shipped) or `open` (every open item nobody outside the round has claimed or labelled in progress; readiness and
   overlap decide the order, so a
-  round takes newly ready issues without a restart). Assign refuses anything outside it. Running
+  round takes newly ready issues without a restart). With no unfinished milestone, `milestone` and `next` offer every open item too. An empty list says why and which command to run. Assign refuses anything outside it. Running
   `start` again in the same round keeps the recorded scope and slate unless you pass `--scope`;
   `--scope slate --items …` replaces the slate. See [round keys](configuration.md#round-keys).
 

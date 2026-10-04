@@ -24,6 +24,10 @@ func hasCriteria(text string) bool {
 	return acceptHeadingRe.MatchString(text) || checkboxRe.MatchString(text)
 }
 
+// HasCriteria is hasCriteria for callers outside the package, which read
+// criteria from text that is not an item body (an assign brief).
+func HasCriteria(text string) bool { return hasCriteria(text) }
+
 // readyReasons is _ready_reasons: ready when there are criteria or a note.
 // The wording says "issue body" in file mode too, where the criteria live in
 // the detail file: the old helper printed exactly this in both backends, and
