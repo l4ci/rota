@@ -25,7 +25,7 @@ What each `/rota-*` skill does, one line each. For details: [`reference/slash-co
 
 ## Vision & shape
 - **`/rota-vision`**: brainstorm milestones and the project roadmap.
-- **`/rota-refactor`**: full architectural refactor cycle.
+- **`/rota-refactor`**: architecture review; files findings as refactor issues (`--fix` to implement).
 
 ## Maintenance
 - **`/rota-release`**: cut a release.
