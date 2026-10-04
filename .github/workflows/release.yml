@@ -1,5 +1,5 @@
-# Builds the rota binaries for a version tag and attaches them to a DRAFT GitHub
-# release (see .goreleaser.yaml). Publishing is the gated `rota release publish`
+# Builds the rota binaries for a version tag, signs them with minisign and attaches
+# them to a DRAFT GitHub release (see .goreleaser.yaml). Publishing is the gated `rota release publish`
 # step in /rota-release, which finishes this draft instead of creating a second
 # release. Push the tag first (`rota release push --tag-only`), wait for this
 # job, then publish, then push the branch.
@@ -34,6 +34,22 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      # Signs the release assets (signs: in .goreleaser.yaml). Same implementation
+      # that generated the key; the version is pinned. The unencrypted secret key
+      # goes to a file only this job can read and is removed at the end.
+      - name: Set up minisign
+        env:
+          MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
+        run: |
+          if [ -z "$MINISIGN_SECRET_KEY" ]; then
+            echo "secret MINISIGN_SECRET_KEY is not set; see .rota/RELEASE.md" >&2
+            exit 1
+          fi
+          go install aead.dev/minisign/cmd/minisign@v0.3.0
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+          umask 077
+          printf '%s\n' "$MINISIGN_SECRET_KEY" > "$RUNNER_TEMP/minisign.key"
+          echo "MINISIGN_KEY_FILE=$RUNNER_TEMP/minisign.key" >> "$GITHUB_ENV"
       - uses: goreleaser/goreleaser-action@v6
         with:
           distribution: goreleaser
@@ -44,3 +60,6 @@ jobs:
           # SSH deploy key with write access to l4ci/homebrew-tap (key contents,
           # not a path); see .rota/RELEASE.md.
           HOMEBREW_TAP_DEPLOY_KEY: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
+      - name: Remove signing key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/minisign.key"
