@@ -43,6 +43,9 @@ release:
 changelog:
   disable: true
 
+# brews is deprecated in favour of homebrew_casks, but casks are macOS-only and
+# live in Casks/; a formula is the only way to serve Linux, so brews stays until
+# goreleaser offers a replacement that does (#8).
 # Homebrew formula, pushed to the tap on release over git with a deploy key. The
 # tap repo and the key are the maintainer's one-time setup (HOMEBREW_TAP_DEPLOY_KEY,
 # see .rota/RELEASE.md). private_key takes the key contents or a path; the key
@@ -62,6 +65,9 @@ brews:
       git:
         url: git@github.com:l4ci/homebrew-tap.git
         private_key: "{{ .Env.HOMEBREW_TAP_DEPLOY_KEY }}"
+    # Without this the formula lands in the tap root (0.9.0 did, #8); brew
+    # reads formulas from Formula/.
+    directory: Formula
     homepage: https://github.com/l4ci/rota
     description: Plan, ship and run parallel rounds with AI coding agents
     license: MIT
