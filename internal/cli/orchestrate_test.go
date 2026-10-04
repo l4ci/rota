@@ -119,16 +119,17 @@ func TestOrchestrateStopsOnADoctorFailureBeforeAnySession(t *testing.T) {
 	}
 }
 
-func TestOrchestrateOutsideHerdrIsRefusedWhenConfigNamesHerdr(t *testing.T) {
+func TestOrchestrateOutsideAMultiplexerAttachesARotaHerdrSession(t *testing.T) {
 	doctorFakes(t, map[string]string{"git": `case "$1" in remote) exit 2;; esac; exit 0`, "herdr": `echo "herdr 0.9.3"`})
 	r := useLaunchRig(t, nil, "herdr", "tmux")
 	dir := a4Project(t, `{"work":{"dispatch":"herdr"}}`)
-	code, out, errs := rotaIn(t, dir, "orchestrate")
-	if code != ExitRefused || !strings.Contains(errs, "inside a herdr pane") || !strings.Contains(errs, "hint:") {
+	// The fake herdr answers `status server`, so the session counts as running
+	// and only the attach replaces this process.
+	if code, out, errs := rotaIn(t, dir, "orchestrate"); code != 0 {
 		t.Fatalf("exit %d: %s | %s", code, out, errs)
 	}
-	if len(r.runs)+len(r.execs) != 0 {
-		t.Errorf("nothing may start: %v %v", r.runs, r.execs)
+	if len(r.execs) != 1 || r.execs[0][1] != "herdr" || r.execs[0][2] != "session" || r.execs[0][3] != "attach" {
+		t.Errorf("execs = %q", r.execs)
 	}
 }
 
