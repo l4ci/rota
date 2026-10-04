@@ -973,3 +973,44 @@ func TestHerdrSubmitPendingNeverEntersADialog(t *testing.T) {
 		t.Errorf("handled=%v\n%s", handled, f.log())
 	}
 }
+
+// A brief already sent stays in scrollback above an empty prompt: no Enter,
+// which could submit Claude Code's ghost suggestion.
+func TestHerdrSubmitPendingIgnoresSentBriefInScrollback(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "p.md")
+	os.WriteFile(file, []byte("sig\nthe last line of the brief\n"), 0o644)
+	f := &fake{handler: func(_ string, a []string) Result {
+		if a[1] == "get" {
+			return Result{Stdout: agentJSON("idle")}
+		}
+		return Result{Stdout: "❯ sig\nthe last line of the brief\n⏺ working on it\n❯ \n"}
+	}}
+	handled, err := New("herdr", deps(f, herdrEnv, &clock{})).(Resubmitter).SubmitPending(bg, "w1", "w9:t7", file)
+	if handled || err != nil || f.count("herdr agent send-keys") != 0 {
+		t.Errorf("handled=%v err=%v\n%s", handled, err, f.log())
+	}
+}
+
+// Claude Code collapses a long paste to a placeholder, so the text never shows.
+func TestHerdrSubmitPendingSeesPastePlaceholder(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "p.md")
+	os.WriteFile(file, []byte("sig\nthe last line of the brief\n"), 0o644)
+	working := false
+	f := &fake{handler: func(_ string, a []string) Result {
+		switch a[1] {
+		case "get", "wait":
+			if working {
+				return Result{Stdout: agentJSON("working")}
+			}
+			return Result{Stdout: agentJSON("idle")}
+		case "send-keys":
+			working = true
+			return Result{}
+		}
+		return Result{Stdout: "❯ [Pasted text #1 +16 lines]\n"}
+	}}
+	handled, err := New("herdr", deps(f, herdrEnv, &clock{})).(Resubmitter).SubmitPending(bg, "w1", "w9:t7", file)
+	if !handled || err != nil || f.count("herdr agent send-keys rota-w1-w9-t7 enter") != 1 {
+		t.Errorf("handled=%v err=%v\n%s", handled, err, f.log())
+	}
+}

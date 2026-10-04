@@ -347,10 +347,15 @@ func (h *herdr) SubmitPending(ctx context.Context, slot, handle, file string) (b
 	return true, h.submitTyped(ctx, name)
 }
 
-// briefOnPrompt reports whether the tail of text is visible in the pane. The
-// tail is the brief's last line: it is typed last, so it is there only when the
-// whole brief is. Whitespace is dropped on both sides so soft wraps do not
-// matter.
+// pastePlaceholder is how Claude Code shows a long paste on the prompt line.
+var pastePlaceholder = regexp.MustCompile(`\[Pasted text #\d+( \+\d+ lines)?\]`)
+
+// briefOnPrompt reports whether the brief sits unsent on the prompt line: the
+// text after the pane's last prompt marker holds either the tail of text or a
+// paste placeholder. The tail is the brief's last line: it is typed last, so it
+// is there only when the whole brief is. Scrollback above the marker is a brief
+// already sent and never counts. Whitespace is dropped on both sides so soft
+// wraps do not matter.
 func (h *herdr) briefOnPrompt(ctx context.Context, name, text string) bool {
 	tail := ""
 	for _, l := range strings.Split(text, "\n") {
@@ -361,13 +366,20 @@ func (h *herdr) briefOnPrompt(ctx context.Context, name, text string) bool {
 	if len(tail) > 80 {
 		tail = tail[len(tail)-80:]
 	}
-	if tail == "" {
-		return false
-	}
 	pane := paneText(h.herdr(ctx, "agent", "read", name, "--source", "recent-unwrapped",
 		"--lines", "60", "--format", "text"))
-	return strings.Contains(squeeze(pane), tail)
+	i := strings.LastIndex(pane, promptMarker)
+	if i < 0 {
+		return false
+	}
+	prompt := pane[i+len(promptMarker):]
+	if pastePlaceholder.MatchString(prompt) {
+		return true
+	}
+	return tail != "" && strings.Contains(squeeze(prompt), tail)
 }
+
+const promptMarker = "\u276f"
 
 func squeeze(s string) string {
 	return strings.Join(strings.Fields(s), "")
