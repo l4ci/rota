@@ -176,6 +176,7 @@ func recordDispatch(root, slot, handle, task, kind string, round *int, now strin
 			s.Set("handle", h)
 			s.Set("state", "busy")
 			s.Set("activeAt", now)
+			s.Delete("seen") // a dispatch or relay re-arms `round wait`
 			if task != "" {
 				s.Set("task", task)
 				s.Set("pr", nil)

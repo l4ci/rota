@@ -103,6 +103,43 @@ func (r GateResult) OK() bool { return r.Verdict == GateFresh || r.Verdict == Ga
 
 type prInfo struct{ head, sha, base, state, merge string }
 
+// GateTarget resolves the argument of `rota worker gate`: a slot name, or a PR
+// (`#N`, `N` or its URL) resolving to the queued record of a PR whose slot
+// moved on, else to a slot recording that PR. A queued record stands in for
+// the slot: it carries the branch, pr and relays the gate reads. queued says
+// which one it is.
+//
+// A slot that records no PR while a record queued from it exists is refused:
+// the habitual `gate <slot>` would otherwise merge the slot's NEW branch.
+func (r Registry) GateTarget(arg string) (s *jsonx.Object, queued bool, err error) {
+	if s = r.Slot(arg); s != nil {
+		if Str(s, "pr") == "" {
+			for _, q := range r.PRs() {
+				if Str(q, "from") == arg {
+					return nil, false, &Error{Exit: ExitUsage,
+						Message: fmt.Sprintf("slot %s records no PR, but its PR %s (%s) waits in review", arg, Str(q, "pr"), Str(q, "branch")),
+						Hint:    fmt.Sprintf("gate the PR in review with `rota worker gate %s`", trailingNumber(Str(q, "pr")))}
+				}
+			}
+		}
+		return s, false, nil
+	}
+	if n, ok := PRRefNumber(arg); ok {
+		if q := r.QueuedPR(arg); q != nil {
+			return q, true, nil
+		}
+		for _, sl := range r.Slots() {
+			if m, ok := PRRefNumber(Str(sl, "pr")); ok && m == n {
+				return sl, false, nil
+			}
+		}
+		return nil, false, fail(ExitResolution, fmt.Sprintf("no PR in review or slot records PR #%d", n))
+	}
+	return nil, false, fail(ExitResolution, fmt.Sprintf("slot '%s' is not in the pool", arg))
+}
+
+// Gate runs the merge gate for a slot or a queued PR (see GateTarget). A
+// passing gate of a queued PR drops its record.
 func (e Env) Gate(ctx context.Context, root string, o GateOpts) (GateResult, error) {
 	e = e.withDefaults()
 	res := GateResult{Slot: o.Slot, Base: o.Base}
@@ -110,10 +147,20 @@ func (e Env) Gate(ctx context.Context, root string, o GateOpts) (GateResult, err
 	if !reg.Exists {
 		return res, fail(ExitResolution, "no worker pool — run rota worker pool init first")
 	}
-	s := reg.Slot(o.Slot)
-	if s == nil {
-		return res, fail(ExitResolution, fmt.Sprintf("slot '%s' is not in the pool", o.Slot))
+	s, queued, err := reg.GateTarget(o.Slot)
+	if err != nil {
+		return res, err
 	}
+	res, err = e.gate(ctx, root, o, res, reg, s)
+	if err == nil && queued && res.Verdict == GatePass {
+		if err := RemoveQueuedPR(root, Str(s, "pr")); err != nil {
+			return res, err
+		}
+	}
+	return res, err
+}
+
+func (e Env) gate(ctx context.Context, root string, o GateOpts, res GateResult, reg Registry, s *jsonx.Object) (GateResult, error) {
 	branch, pr := Str(s, "branch"), Str(s, "pr")
 	res.Branch, res.PR = branch, pr
 	cfg := config.Load(filepath.Join(root, ".rota", "config.json"))

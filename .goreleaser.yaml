@@ -1,6 +1,7 @@
 # Release build for the rota CLI. Asset names are a contract with install.sh: it
-# downloads rota_<os>_<arch> and checks it against checksums.txt. Run
-# `HOMEBREW_TAP_DEPLOY_KEY=x goreleaser release --snapshot --clean` to build locally.
+# downloads rota_<os>_<arch>, verifies its .minisig and checks it against
+# checksums.txt. Run `HOMEBREW_TAP_DEPLOY_KEY=x goreleaser release --snapshot --clean --skip=sign`
+# to build locally.
 version: 2
 project_name: rota
 
@@ -31,6 +32,25 @@ archives:
 
 checksum:
   name_template: checksums.txt
+
+# Every uploaded file (binaries, tarballs, checksums.txt) gets a detached
+# minisign signature, <file>.minisig. install.sh verifies rota_<os>_<arch> against
+# the public key embedded in it. The workflow writes the secret key to the file
+# MINISIGN_KEY_FILE names; the key is unencrypted, so there is no password prompt.
+# A local snapshot run has no key: pass --skip=sign.
+signs:
+  - id: minisign
+    cmd: minisign
+    args:
+      - -S
+      - -s
+      - "{{ .Env.MINISIGN_KEY_FILE }}"
+      - -m
+      - "${artifact}"
+      - -x
+      - "${signature}"
+    signature: "${artifact}.minisig"
+    artifacts: all
 
 # One GitHub release per version. The release workflow (on a v* tag) makes it
 # as a draft carrying the binaries; `rota release publish` then fills in the

@@ -45,6 +45,7 @@ func (e Env) soloHandOff(root, agent, text string, round int) (brief, worktree s
 	err = mutateSlot(root, agent, func(s *jsonx.Object) {
 		s.Set("state", "busy")
 		s.Set("activeAt", stamp)
+		s.Delete("seen")
 		s.Set("pr", nil)
 		s.Set("relays", []any{})
 	})
