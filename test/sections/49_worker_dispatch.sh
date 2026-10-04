@@ -349,25 +349,15 @@ GATE_OUT=$( cd "$TMP_WD" && "$ROTA_BIN" --json worker gate w1 --base main 2>/dev
 [ "$(jget data.verdict <<<"$GATE_OUT")" = "pass" ] || fail "worker gate should pass w1, got: $GATE_OUT"
 pass "worker gate merges a fresh slot and passes post-merge verification"
 
-# main has moved; w2 branched before that, so its green is stale.
-# `RC=$?` on its own line would never be reached — set -e aborts the section on
-# the non-zero exit first. Capture through `|| RC=$?` so the failure is tested,
-# not fatal (same trap as the inverted-grep rule in KNOWLEDGE.md).
-RC=0
-GATE_OUT=$( cd "$TMP_WD" && "$ROTA_BIN" --json worker gate w2 --base main --check-only 2>/dev/null ) || RC=$?
-[ "$RC" = "1" ] || fail "worker gate should exit 1 for a slot behind base, got $RC"
-[ "$(jget data.verdict <<<"$GATE_OUT")" = "stale" ] || fail "worker gate should answer verdict=stale for a slot behind base, got: $GATE_OUT"
-pass "worker gate bounces a stale slot (exit 1, verdict stale) instead of merging it"
-
-# w2 syncs. git reports no conflict — the file sets never overlapped.
-( cd "$W2" && git merge -q main -m sync ) >/dev/null 2>&1 \
-  || fail "w2 sync conflicted; the fixture is supposed to merge cleanly"
+# main has moved; w2 branched before that, so its green is stale. The merge is
+# clean and the two sides share no file, so the gate merges w2 itself rather than
+# bouncing it (#31): a check reports fresh, with the checked branch tip as sha.
 GATE_OUT=$( cd "$TMP_WD" && "$ROTA_BIN" --json worker gate w2 --base main --check-only 2>/dev/null ) \
-  || fail "worker gate should report fresh after w2 merged main: $GATE_OUT"
-[ "$(jget data.verdict <<<"$GATE_OUT")" = "fresh" ] || fail "worker gate should answer verdict=fresh after w2 merged main, got: $GATE_OUT"
+  || fail "worker gate should not refuse a behind-the-base slot whose merge is clean and disjoint: $GATE_OUT"
+[ "$(jget data.verdict <<<"$GATE_OUT")" = "fresh" ] || fail "worker gate should answer verdict=fresh for a clean, disjoint stale slot, got: $GATE_OUT"
 [ "$(jget data.sha <<<"$GATE_OUT")" = "$(git -C "$W2" rev-parse --short=7 HEAD)" ] \
   || fail "worker gate fresh should report the checked branch tip as data.sha, got: $GATE_OUT"
-pass "worker gate reports FRESH once the slot has merged its base"
+pass "worker gate does not bounce a stale slot whose merge is clean and shares no file"
 
 # The payoff: clean merge, both branches were green, merged tree is broken.
 RC=0
