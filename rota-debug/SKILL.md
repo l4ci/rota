@@ -3,15 +3,6 @@ name: rota-debug
 description: Systematic root-cause investigation for a bug — reads the TODO entry + detail file, consults KNOWLEDGE.md, reproduces, hypothesizes, verifies, fixes with one atomic commit, and nudges /rota-learn. Use on "debug [B07]", "why is X broken", "investigate the crash", when a bug needs a proper cycle rather than a one-shot fix.
 ---
 
-**Print the banner below verbatim before any other action — skip if dispatched as a subagent.** See `references/banner-preamble.md`.
-
-```
-════════════════════════════════════════════════════════════════════════
-  🐛  rota-debug  ·  systematic root-cause investigation
-  triggers: "debug [B07]", "why is X broken"  ·  pairs: rota-learn
-════════════════════════════════════════════════════════════════════════
-```
-
 # rota-debug — Systematic Bug Cycle
 
 Full reproduce → hypothesize → verify → fix cycle for a single bug. Anchors to a `[B##]` ID so the fix commit closes the backlog entry and the learning gets routed back to `KNOWLEDGE.md`.
@@ -53,7 +44,7 @@ rota git guard clean --context "/rota-debug"
 
 Non-zero = stop (exit 1 dirty tree, exit 3 not a git repo).
 
-**Initialize task list.** Follow the canonical pattern in `references/task-list-init.md` — load `TaskCreate(…)` via `ToolSearch select:TaskCreate,TaskUpdate` if needed, then create one task per phase below.
+Track these phases with the host's task tool if it has one.
 
 Phases:
 
@@ -326,7 +317,6 @@ Branch on `autonomy.level`:
     1. "Ship via `/rota-ship` (Recommended)" — *"Run the review gate and integrate."*
     2. "Keep working on the branch" — *"Stay on the branch to add more fixes."*
     3. "Stop here" — *"Leave the branch; come back later."*
-  - Plain-text fallback: *"Merge now with `/rota-ship`, or keep it on the branch for more work?"*
 - `"auto"` or `"loop"` — **dispatch `rota-ship` via `Skill` with the current branch immediately — no prompt, no confirmation.** (`ship.review` still governs the review gate.)
 
 ## Step 12 — Learn (Nudge or Auto-Invoke)
@@ -359,6 +349,5 @@ If the fix codified a constraint (e.g., "never use timer-X here", "this surface 
 
 ## References
 
-- [`references/banner-preamble.md`](references/banner-preamble.md) — Banner-print rule shared by every skill.
 - [`references/debug-hypothesize.md`](references/debug-hypothesize.md) — Both-modes hypothesize choreography (brief template, single vs competing dispatch, per-axis divergence table) for `/rota-debug` Step 6.
 - [`references/knowledge-consult.md`](references/knowledge-consult.md) — Canonical K+D query pattern (`rota knowledge query` + `rota decisions query`) used by every cycle-starting skill.

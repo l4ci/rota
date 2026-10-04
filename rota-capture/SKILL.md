@@ -4,22 +4,13 @@ description: >-
   Capture bugs, features, and tasks into BACKLOG.md without executing them. Classifies each item, assigns priority/size, mints zero-padded IDs ([B01], [F01], [T01]). Also supports `--remove <ID>[,<ID>...]` to delete captured items and clean up cross-references (dry-run + confirmation gate), and `--from-github` / `--from-gitlab` to pull open upstream issues into the backlog with `GH: #N` / `GL: #N` cross-refs and round-trip closing via `/rota-ship`. Use when the user brain-dumps work, says "capture", "add to backlog", "note this bug", "/rota-capture", "remove [B07]", "delete this entry", "drop this item", "import issues", "pull open issues from GitHub", "list issues", or describes a problem without asking for an immediate fix. Records, then offers to work a single captured item now via /rota-work; items already in BACKLOG go straight to /rota-work.
 ---
 
-**Print the banner below verbatim before any other action — skip if dispatched as a subagent.** See `references/banner-preamble.md`.
-
-```
-════════════════════════════════════════════════════════════════════════
-  📥  rota-capture  ·  capture work items into .rota/BACKLOG.md
-  triggers: "capture", "log bug"  ·  pairs: rota-work, rota-brainstorm
-════════════════════════════════════════════════════════════════════════
-```
-
 # rota-capture — Capture & Manage Work Items
 
 Quick-capture bugs, features, and tasks into `.rota/BACKLOG.md` with just enough context to act on them later. Handles multiple items and mixed types in one pass. `--remove <ID>` strips an item (the local inverse of capture); `--from-github` / `--from-gitlab` pull open upstream issues in with `GH: #N` / `GL: #N` cross-references (closing happens via `/rota-ship`).
 
 ## Step 1 — Task list
 
-**Initialize task list.** Follow `references/task-list-init.md` — load `TaskCreate(…)` via `ToolSearch select:TaskCreate,TaskUpdate` if needed, then create one task per phase of the mode below.
+Track these phases with the host's task tool if it has one.
 
 - **Capture:** mode / dispatch, audit code state (milestone specs only), classify, dedupe, append, report, offer to work it.
 - **Remove (`--remove`):** resolve IDs, preview, de-tag upstream issues, confirm, apply.
@@ -61,7 +52,7 @@ On exit 0, print the report verbatim, then by `autonomy.level`:
   2. *"Capture anyway"* — the user reviewed the matches and the item is genuinely distinct.
   3. *"Stop the whole capture"* — print *"Capture aborted — reconcile the milestone spec before retrying."* and write nothing.
 
-Plain-text fallback: *"Skip, capture anyway, or stop?"* Filtered titles never reach the backlog.
+Filtered titles never reach the backlog.
 
 ## Step 3 — Gather Context
 
@@ -89,7 +80,7 @@ Tasks get no priority or size tag.
 
 ## Step 4.5 — Tag Active Milestone (when applicable)
 
-Follow `references/milestone-tagging.md`: the `rota milestone active` gate, the question shapes, loop-mode auto-pick, plain-text fallback. Carry the chosen milestone as `--milestone` in Step 6. Omit it if the user left the item untagged.
+Follow `references/milestone-tagging.md`: the `rota milestone active` gate, the question shapes, loop-mode auto-pick. Carry the chosen milestone as `--milestone` in Step 6. Omit it if the user left the item untagged.
 
 ## Step 4.6 — Tag Sub-Repo (when umbrella mode is on)
 
@@ -103,7 +94,7 @@ Otherwise ask:
 - **multiSelect:** true
 - **Options:** one per `name` in `.rota/repos.json` (mark the likely match `(Recommended)` when the item text names a repo), then *"None / unsure — leave untagged"* last.
 
-Two or more repos make a multi-repo item that `/rota-work` branches in each repo. If *"None / unsure"* comes with concrete names, the names win. Plain-text fallback: ask once; an ambiguous reply leaves the item untagged, and `/rota-work` will then refuse it and point back here.
+Two or more repos make a multi-repo item that `/rota-work` branches in each repo. If *"None / unsure"* comes with concrete names, the names win. An ambiguous reply leaves the item untagged, and `/rota-work` will then refuse it and point back here.
 
 **Loop mode:** auto-pick the `(Recommended)` repo. With none flagged (item is ambiguous), still ask: this is the ambiguity that should surface (`references/authoring-conventions.md` rule #5).
 
@@ -151,7 +142,7 @@ Runs at the end of a normal capture only, never after `--remove` or import.
   1. *"Work it now"*, marked `(Recommended)` only when the item is neither a `[Major]` feature nor a `[P0]` bug without a design (those want `/rota-brainstorm` first, per Step 7).
   2. *"Not now"*.
 
-On yes, invoke `/rota-work` through the Skill tool with a brief: the captured ID, title, short description and detail-file path (if any). Plain-text fallback: *"Work it now? (yes/no)"*; anything but yes is no.
+On yes, invoke `/rota-work` through the Skill tool with a brief: the captured ID, title, short description and detail-file path (if any). Anything but yes is no.
 
 ---
 
@@ -188,7 +179,7 @@ Show the preview, then one `AskUserQuestion`. Header `"Apply"`, question *"Apply
 2. *"Apply + scrub ARCHIVE"* — `rota item rm --apply --scrub-archive <IDS>`; also removes the ARCHIVE entry and its cross-references.
 3. *"Cancel"* — print *"No changes."* and stop.
 
-Plain-text fallback: *"Apply changes? (yes/no/scrub-archive)"*; anything else cancels. This is a destructive gate: it always asks, and loop mode does not accelerate it (`references/authoring-conventions.md`).
+Anything but an explicit yes cancels. This is a destructive gate: it always asks, and loop mode does not accelerate it (`references/authoring-conventions.md`).
 
 ### Step R5 — Apply
 
@@ -210,7 +201,7 @@ If `rota config show issues.providers.<github|gitlab>` resolves to `false` for t
 
 **Single-repo mode** (`rota repo umbrella` exits 1 or the registry has no sub-repos): target is cwd's repo. If `rota issues provider` names the other provider, stop: *"Provider mismatch: --from-<flag> requires a <flag> remote; cwd resolves to <other>."*
 
-**Umbrella mode:** from `.rota/repos.json`, keep the repos whose `rota issues provider --repo <name>` matches the flag (drop the rest silently). Ask which to scan: `AskUserQuestion`, multiSelect, header `"Repos"`, question *"Which sub-repos to pull issues from?"*, chunks of at most 4 options: *"All repos"* first and `(Recommended)`, one option per repo, *"None / cancel"* last. **Loop mode:** auto-pick all repos. Plain-text fallback: *"Which repos? (all / <name> / none)"*; ambiguous means all. If no repos resolve, fall back to single-repo mode.
+**Umbrella mode:** from `.rota/repos.json`, keep the repos whose `rota issues provider --repo <name>` matches the flag (drop the rest silently). Ask which to scan: `AskUserQuestion`, multiSelect, header `"Repos"`, question *"Which sub-repos to pull issues from?"*, chunks of at most 4 options: *"All repos"* first and `(Recommended)`, one option per repo, *"None / cancel"* last. **Loop mode:** auto-pick all repos. An ambiguous answer means all. If no repos resolve, fall back to single-repo mode.
 
 ### Step I2 — Discover Candidates
 
@@ -222,7 +213,7 @@ An issue is imported when its `(provider, repo, number)` matches an `imported` e
 
 ### Step I4 — Pick
 
-`AskUserQuestion`, multiSelect, header `"Issues"`, chunks of at most 4 candidates, question *"Which issues to capture? (<range> of <total>)"* (drop the range for one chunk). Option label `"#<N>: <title, 60 chars>"`, description `"<labels> · by @<author> · <url>"`. Plain-text fallback: comma-separated numbers or `none`. **Loop mode:** auto-pick every remaining candidate; Step I6 still asks.
+`AskUserQuestion`, multiSelect, header `"Issues"`, chunks of at most 4 candidates, question *"Which issues to capture? (<range> of <total>)"* (drop the range for one chunk). Option label `"#<N>: <title, 60 chars>"`, description `"<labels> · by @<author> · <url>"`. **Loop mode:** auto-pick every remaining candidate; Step I6 still asks.
 
 ### Step I5 — Classify and Capture Each Pick
 
@@ -247,7 +238,7 @@ No verb enforces this gate (registry: `issue-label`, skill only), so this paragr
 1. *"Yes — apply `<label>` to all (Recommended)"* — `rota issues label <N> --add <label> [--repo <name>]` per issue, in parallel. A failure is printed inline; continue with the rest.
 2. *"No — skip labeling"* — print *"Labeling skipped. Issues are captured in BACKLOG.md but not marked upstream."*
 
-Plain-text fallback: *"Apply `<label>` to these issues upstream? (yes/no)"*; default is skip, since silence is not consent. **Loop mode:** auto-picking Yes is forbidden. Surface the question and pause the loop until the user answers, as `/rota-ship` Step 6a does for acceptance-of-risk answers.
+Default is skip, since silence is not consent. **Loop mode:** auto-picking Yes is forbidden. Surface the question and pause the loop until the user answers, as `/rota-ship` Step 6a does for acceptance-of-risk answers.
 
 ### Step I7 — Compact Report
 
@@ -274,10 +265,8 @@ Use `→ not labeled` when labeling was skipped. Append a `Skipped repos:` list 
 | Reference | Purpose |
 |-----------|---------|
 | [`authoring-conventions.md`](references/authoring-conventions.md) | Loop-mode auto-picks, destructive and manual gates. |
-| [`banner-preamble.md`](references/banner-preamble.md) | Banner-print rule shared by every skill. |
 | [`detail-files.md`](references/detail-files.md) | Detail-file template for bulky input. |
 | [`issue-mode.md`](references/issue-mode.md) | Issue-backend umbrella rules (Step 4.6). |
 | [`manual-gates.md`](references/manual-gates.md) | Manual-gate callout shape (Step R3 de-tag, Step I6 label upstream). |
 | [`milestone-tagging.md`](references/milestone-tagging.md) | Milestone-tagging question shapes (Step 4.5). |
-| [`task-list-init.md`](references/task-list-init.md) | Task-list init pattern (Step 1). |
 | [`umbrella-mode.md`](references/umbrella-mode.md) | Umbrella-mode verbs, registry shape, `Repos:` semantics. |
