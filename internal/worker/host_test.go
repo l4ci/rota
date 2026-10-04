@@ -87,7 +87,7 @@ func slotField(t *testing.T, dir, slot, key string) string {
 	if s == nil {
 		t.Fatalf("no slot %s", slot)
 	}
-	v, _ := s.Get(key)
+	v, _ := s.Raw().Get(key)
 	if v == nil {
 		return "<null>"
 	}
@@ -201,7 +201,7 @@ func TestDispatchRelayGoesIntoTheRunningSession(t *testing.T) {
 		!strings.Contains(f.sent, "attribute it as 'orchestrator relay round 2'") || !strings.HasSuffix(f.sent, "sign-off in your session.]\n\n\n  the maintainer says use B  \nmore\n") {
 		t.Errorf("payload = %q", f.sent)
 	}
-	relays, _ := LoadRegistry(dir).Slot("w1").Get("relays")
+	relays, _ := LoadRegistry(dir).Slot("w1").Raw().Get("relays")
 	if len(relays.([]any)) != 1 {
 		t.Fatalf("relays = %v", relays)
 	}
@@ -241,7 +241,7 @@ func TestDispatchRelayLoggingFollowsWhatMayHaveBeenSent(t *testing.T) {
 			if exitOf(err) != tc.exit {
 				t.Fatalf("err = %v, want exit %d", err, tc.exit)
 			}
-			relays, _ := LoadRegistry(dir).Slot("w1").Get("relays")
+			relays, _ := LoadRegistry(dir).Slot("w1").Raw().Get("relays")
 			if len(relays.([]any)) != tc.logged {
 				t.Errorf("relays logged = %d, want %d", len(relays.([]any)), tc.logged)
 			}
@@ -331,32 +331,6 @@ func TestDispatchResolutionFailures(t *testing.T) {
 	check("missing worktree", err, "worktree missing")
 	if len(f.calls) != 0 {
 		t.Errorf("host touched before resolution succeeded: %v", f.calls)
-	}
-}
-
-func TestResumeFlag(t *testing.T) {
-	for cmd, want := range map[string]string{
-		"claude --model sonnet":                 "",
-		"claude -c":                             "-c",
-		"claude --continue":                     "--continue",
-		"claude --resume=abc":                   "--resume=abc",
-		"claude --resume":                       "--resume",
-		"claude -cr":                            "-cr",
-		"claude --model x -r abc":               "-r",
-		"FOO=1 /usr/bin/claude -p hi -c":        "-c",
-		`sh -c "claude -c"`:                     "-c",
-		`sh -c "claude --model sonnet"`:         "",
-		"wrapper -c claude --model sonnet":      "", // a wrapper's own -c is not ours to judge
-		"claude --model sonnet --verbose":       "",
-		"claude --dangerously-skip-permissions": "",
-	} {
-		got, err := ResumeFlag(cmd)
-		if err != nil || got != want {
-			t.Errorf("ResumeFlag(%q) = %q, %v; want %q", cmd, got, err, want)
-		}
-	}
-	if _, err := ResumeFlag(`claude "oops`); err == nil {
-		t.Error("an unbalanced quote must be an error")
 	}
 }
 

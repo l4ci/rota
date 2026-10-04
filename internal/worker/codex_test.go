@@ -8,84 +8,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
 )
-
-func TestCodexCommand(t *testing.T) {
-	cases := []struct {
-		cfg, model, want string
-		exit             int
-	}{
-		{``, "gpt-x", "codex --model gpt-x --dangerously-bypass-approvals-and-sandbox --dangerously-bypass-hook-trust --no-daemon --no-alt-screen", 0},
-		{``, "", "codex --dangerously-bypass-approvals-and-sandbox --dangerously-bypass-hook-trust --no-daemon --no-alt-screen", 0},
-		{`{"work":{"codexCommand":"wrap codex -m {model}"}}`, "gpt-x", "wrap codex -m gpt-x", 0},
-		{`{"work":{"codexCommand":"wrap codex -m {model}"}}`, "", "", ExitUsage},
-		{`{"work":{"codexCommand":"codex --yolo"}}`, "gpt-x", "codex --yolo", 0},
-		{`{"work":{"codexCommand":"codex --yolo"}}`, "", "codex --yolo", 0},
-		{`{"work":{"workerCommand":"claude -x"}}`, "gpt-x", "codex --model gpt-x --dangerously-bypass-approvals-and-sandbox --dangerously-bypass-hook-trust --no-daemon --no-alt-screen", 0},
-	}
-	for _, c := range cases {
-		got, err := codexCommand(launchRoot(t, c.cfg), c.model)
-		if c.exit != 0 {
-			if exitOf(err) != c.exit {
-				t.Errorf("%s + %q: err = %v, want exit %d", c.cfg, c.model, err, c.exit)
-			}
-			continue
-		}
-		if err != nil || got != c.want {
-			t.Errorf("%s + %q: %q, %v; want %q", c.cfg, c.model, got, err, c.want)
-		}
-	}
-	if !strings.Contains(DefaultCodexCommand, "--model {model} ") {
-		t.Errorf("the default must carry the droppable --model {model} pair: %s", DefaultCodexCommand)
-	}
-}
-
-func TestModelAppliesToCodex(t *testing.T) {
-	for cfg, want := range map[string]bool{``: true, `{"work":{"codexCommand":"codex -x"}}`: false, `{"work":{"codexCommand":"codex -m {model}"}}`: true, `{"work":{"workerCommand":"claude -x"}}`: true} {
-		if got := ModelAppliesTo(launchRoot(t, cfg), KindCodex); got != want {
-			t.Errorf("%s: %v want %v", cfg, got, want)
-		}
-	}
-}
-
-func TestCodexResume(t *testing.T) {
-	for cmd, want := range map[string]string{
-		"codex --model x --dangerously-bypass-approvals-and-sandbox": "",
-		"codex resume --last":                   "resume",
-		"codex fork abc":                        "fork",
-		"codex --model x resume":                "resume",
-		"A=1 /opt/bin/codex -c key=v resume":    "resume",
-		`sh -c "codex resume"`:                  "resume",
-		"codex -c model=x -r":                   "", // claude's resume flags mean nothing to codex
-		"resume codex --yolo":                   "", // before the binary is not ours to judge
-		"codex --model resumed --no-daemon":     "",
-		"wrap --kind fork -- codex --no-daemon": "",
-	} {
-		got, err := CodexResume(cmd)
-		if err != nil || got != want {
-			t.Errorf("%q: %q, %v; want %q", cmd, got, err, want)
-		}
-	}
-	if _, err := CodexResume(`codex "oops`); err == nil {
-		t.Error("an unbalanced quote must be an error")
-	}
-}
-
-func TestTomlString(t *testing.T) {
-	for in, want := range map[string]string{
-		`/a/b`:        `"/a/b"`,
-		`/a "q" \ b`:  `"/a \"q\" \\ b"`,
-		"/a\nb\tc":    `"/a\nb\tc"`,
-		"/a\x01b\x7f": `"/a\u0001b\u007F"`,
-		"/ünï/日本":     `"/ünï/日本"`,
-	} {
-		if got := tomlString(in); got != want {
-			t.Errorf("tomlString(%q) = %s, want %s", in, got, want)
-		}
-	}
-}
 
 // ── preflight ───────────────────────────────────────────────────────────────
 
@@ -158,7 +84,7 @@ func codexProject(t *testing.T) (dir, home string) {
 func TestCodexPreflightHappyPathSeedsAndInstalls(t *testing.T) {
 	dir, home := codexProject(t)
 	rig := &codexRig{loggedIn: true}
-	set, err := rig.env(tmuxFake()).CodexPreflight(bg, dir, "w1", false)
+	set, err := rig.env(tmuxFake()).Preflight(bg, dir, harness.Codex, "w1", false)
 	if err != nil || set.Home != home || set.Version != "0.159.2" || len(set.Warnings) != 0 {
 		t.Fatalf("%+v %v", set, err)
 	}
@@ -190,7 +116,7 @@ func TestCodexPreflightKeepsAnExistingConfigAndInstalledIntegration(t *testing.T
 	os.MkdirAll(home, 0o700)
 	os.WriteFile(filepath.Join(home, "config.toml"), []byte("# mine\n"), 0o600)
 	rig := &codexRig{loggedIn: true, installed: true}
-	if _, err := rig.env(tmuxFake()).CodexPreflight(bg, dir, "w1", false); err != nil {
+	if _, err := rig.env(tmuxFake()).Preflight(bg, dir, harness.Codex, "w1", false); err != nil {
 		t.Fatal(err)
 	}
 	if b, _ := os.ReadFile(filepath.Join(home, "config.toml")); string(b) != "# mine\n" {
@@ -230,7 +156,7 @@ func TestCodexPreflightRefusals(t *testing.T) {
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
 			dir, home := codexProject(t)
-			set, err := c.rig.env(tmuxFake()).CodexPreflight(bg, dir, "w1", c.accept)
+			set, err := c.rig.env(tmuxFake()).Preflight(bg, dir, harness.Codex, "w1", c.accept)
 			if c.exit == 0 {
 				if err != nil || (c.warn != "" && (len(set.Warnings) != 2 || set.Warnings[0] != c.warn || !strings.Contains(set.Warnings[1], "prompt check unverified"))) || (c.warn == "" && len(set.Warnings) != 0) {
 					t.Fatalf("%+v %v", set, err)
@@ -258,7 +184,7 @@ func TestCodexPreflightNeedsHerdr(t *testing.T) {
 	dir := newProject(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	rig := &codexRig{loggedIn: true}
-	_, err := rig.env(tmuxFake()).CodexPreflight(bg, dir, "w1", false)
+	_, err := rig.env(tmuxFake()).Preflight(bg, dir, harness.Codex, "w1", false)
 	if exitOf(err) != ExitUnavailable || !strings.Contains(err.Error(), "codex workers need work.dispatch=herdr") {
 		t.Fatalf("%v", err)
 	}
@@ -276,16 +202,16 @@ func herdrFake() *fakeHost {
 func TestDispatchCodexSpawnsWithItsHome(t *testing.T) {
 	dir, home := codexProject(t)
 	// An account on the slot must not leak into a codex pane.
-	Update(dir, nil, func(doc *jsonx.Object) { (Registry{Doc: doc}).Slot("w1").Set("configDir", "/acct") })
+	Update(dir, nil, func(doc *jsonx.Object) { (Registry{Doc: doc}).Slot("w1").Raw().Set("configDir", "/acct") })
 	rig := &codexRig{loggedIn: true}
 	f := herdrFake()
 	res, err := rig.env(f).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "go\n"), Task: "T1", Kind: "codex", Model: "gpt-x"})
 	if err != nil || res.Kind != "codex" {
 		t.Fatalf("%+v %v", res, err)
 	}
-	keyPath := filepath.Join(home, PromptKeyFile)
+	keyPath := filepath.Join(home, harness.PromptKeyFile)
 	_, _, largs, lerr := host.LaunchArgs(f.spawnOpts.Launch)
-	want := append(codexHookArgs("/opt/rota", keyPath), "--model", "gpt-x", "--dangerously-bypass-approvals-and-sandbox", "--dangerously-bypass-hook-trust", "--no-daemon", "--no-alt-screen")
+	want := append(harness.CodexHookArgs("/opt/rota", keyPath), "--model", "gpt-x", "--dangerously-bypass-approvals-and-sandbox", "--dangerously-bypass-hook-trust", "--no-daemon", "--no-alt-screen")
 	if f.spawnOpts.CodexHome != home || f.spawnOpts.ConfigDir != "" || lerr != nil || strings.Join(largs, "\x00") != strings.Join(want, "\x00") {
 		t.Errorf("spawn opts = %+v (args %q, want %q)", f.spawnOpts, largs, want)
 	}
@@ -296,7 +222,7 @@ func TestDispatchCodexSpawnsWithItsHome(t *testing.T) {
 
 func TestDispatchKindDefaultsToTheSlotsRecordedKind(t *testing.T) {
 	dir, home := codexProject(t)
-	Update(dir, nil, func(doc *jsonx.Object) { (Registry{Doc: doc}).Slot("w1").Set("kind", "codex") })
+	Update(dir, nil, func(doc *jsonx.Object) { (Registry{Doc: doc}).Slot("w1").Raw().Set("kind", "codex") })
 	rig := &codexRig{loggedIn: true}
 	f := herdrFake()
 	res, err := rig.env(f).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "go\n"), Task: "T1"})
@@ -386,7 +312,7 @@ func TestDispatchRelayIgnoresKind(t *testing.T) {
 
 func keyOf(t *testing.T, home string) []byte {
 	t.Helper()
-	k, err := loadPromptKey(filepath.Join(home, PromptKeyFile))
+	k, err := harness.LoadPromptKey(filepath.Join(home, harness.PromptKeyFile))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -401,11 +327,11 @@ func TestDispatchCodexSignsItsBriefAndRotatesTheKey(t *testing.T) {
 	if _, err := e.Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "do it\n"), Task: "T1", Kind: "codex"}); err != nil {
 		t.Fatal(err)
 	}
-	if fi, err := os.Stat(filepath.Join(home, PromptKeyFile)); err != nil || fi.Mode().Perm() != 0o600 {
+	if fi, err := os.Stat(filepath.Join(home, harness.PromptKeyFile)); err != nil || fi.Mode().Perm() != 0o600 {
 		t.Fatalf("key file: %v %v", fi, err)
 	}
 	k1 := keyOf(t, home)
-	if ok, why := CheckPrompt(k1, f.sent); !ok {
+	if ok, why := harness.CheckPrompt(k1, f.sent); !ok {
 		t.Fatalf("sent payload does not verify: %s\n%s", why, f.sent)
 	}
 	if !strings.HasPrefix(f.sent, "--- ORCHESTRATOR (round 1) ---\n") {
@@ -422,14 +348,14 @@ func TestDispatchCodexSignsItsBriefAndRotatesTheKey(t *testing.T) {
 	if string(k1) == string(k2) {
 		t.Error("the key did not rotate")
 	}
-	if ok, _ := CheckPrompt(k1, f.sent); ok {
+	if ok, _ := harness.CheckPrompt(k1, f.sent); ok {
 		t.Error("the old key still verifies the new brief")
 	}
 	// A relay is signed with the current key.
 	if _, err := e.Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "answer\n"), Relay: true}); err != nil {
 		t.Fatal(err)
 	}
-	if ok, why := CheckPrompt(k2, f.sent); !ok || !strings.Contains(f.sent, "ORCHESTRATOR RELAY") {
+	if ok, why := harness.CheckPrompt(k2, f.sent); !ok || !strings.Contains(f.sent, "ORCHESTRATOR RELAY") {
 		t.Fatalf("relay: %v %s\n%s", ok, why, f.sent)
 	}
 }
@@ -442,7 +368,7 @@ func TestDispatchCodexRelayWithoutKeyFailsBeforeSending(t *testing.T) {
 	if _, err := e.Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "go\n"), Task: "T1", Kind: "codex"}); err != nil {
 		t.Fatal(err)
 	}
-	os.Remove(filepath.Join(home, PromptKeyFile))
+	os.Remove(filepath.Join(home, harness.PromptKeyFile))
 	f.calls, f.sent = nil, ""
 	_, err := e.Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "q\n"), Relay: true})
 	if exitOf(err) != ExitUnavailable || !strings.Contains(err.(*Error).Hint, "re-dispatch") {
@@ -480,7 +406,7 @@ func TestDispatchClaudePayloadIsNotSigned(t *testing.T) {
 	if strings.Contains(f.sent, "ROTA-SIG") || strings.Contains(f.spawnOpts.Launch, "prompt-check") {
 		t.Errorf("claude path changed: %q / %q", f.sent, f.spawnOpts.Launch)
 	}
-	if _, err := os.Stat(filepath.Join(home, PromptKeyFile)); err == nil {
+	if _, err := os.Stat(filepath.Join(home, harness.PromptKeyFile)); err == nil {
 		t.Error("a claude dispatch wrote a key")
 	}
 }

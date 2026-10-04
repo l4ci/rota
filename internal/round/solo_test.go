@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -33,7 +33,7 @@ func noHost(t *testing.T, e *Env) {
 
 func setHost(t *testing.T, root, h string) {
 	t.Helper()
-	if err := worker.Update(root, slotsDefault(), func(doc *jsonx.Object) { doc.Set("host", h) }); err != nil {
+	if err := worker.UpdateDoc(root, func(doc *jsonx.Object) { doc.Set("host", h) }); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -123,15 +123,15 @@ func TestAssignUnderSoloReturnsTheBriefAndDispatchesNothing(t *testing.T) {
 		t.Errorf("worktree = %q, want %q", res.Worktree, wt)
 	}
 	s := worker.LoadRegistry(f.root).Slot("ben")
-	if worker.Str(s, "state") != "busy" || worker.Str(s, "task") != "12" || worker.Str(s, "claimId") != "ben@1" {
+	if s.State() != "busy" || s.Task() != "12" || s.ClaimID() != "ben@1" {
 		t.Errorf("slot: %v", s)
 	}
 	for _, k := range []string{"handle", "session", "window", "configDir", "account"} {
-		if v, ok := s.Get(k); ok && v != nil {
+		if v, ok := s.Raw().Get(k); ok && v != nil {
 			t.Errorf("a solo slot carries no %s: %v", k, v)
 		}
 	}
-	if worker.Str(s, "activeAt") == "" {
+	if s.ActiveAt() == "" {
 		t.Error("busy arms the stall clock like a dispatch does")
 	}
 	if f.be.claims["12"] != "ben@1" {
@@ -146,8 +146,8 @@ func TestAssignUnderSoloReturnsTheBriefAndDispatchesNothing(t *testing.T) {
 
 func TestAssignUnderSoloRefusesACodexWorker(t *testing.T) {
 	f := soloAssign(t)
-	f.set.Models = map[string]map[string]string{roundcfg.KindCodex: {"light": "c-l", "standard": "c-s", "heavy": "c-h"}}
-	_, err := f.assign("12", "ben", func(o *AssignOpts) { o.Kind = roundcfg.KindCodex })
+	f.set.Models = map[string]map[string]string{harness.Codex: {"light": "c-l", "standard": "c-s", "heavy": "c-h"}}
+	_, err := f.assign("12", "ben", func(o *AssignOpts) { o.Kind = harness.Codex })
 	var we *worker.Error
 	if !errors.As(err, &we) || we.Exit != worker.ExitUsage || !strings.Contains(we.Message, "Claude subagents") {
 		t.Fatalf("a codex worker under solo is a usage error: %v", err)
@@ -164,7 +164,7 @@ func TestAssignUnderSoloSkipsTheAccountPick(t *testing.T) {
 	if _, err := f.assign("12", "ben", nil); err != nil {
 		t.Fatalf("no account is picked under solo: %v", err)
 	}
-	if v := worker.Str(worker.LoadRegistry(f.root).Slot("ben"), "account"); v != "" {
+	if v := worker.LoadRegistry(f.root).Slot("ben").Account(); v != "" {
 		t.Errorf("account = %q", v)
 	}
 }
@@ -183,10 +183,10 @@ func TestReportRecordsStateAndPRAndIsIdempotent(t *testing.T) {
 		t.Fatalf("%+v", r)
 	}
 	s := worker.LoadRegistry(f.root).Slot("ben")
-	if worker.Str(s, "state") != "done" || worker.Str(s, "pr") != url {
+	if s.State() != "done" || s.PR() != url {
 		t.Errorf("slot: %v", s)
 	}
-	if v, ok := s.Get("evidence"); ok {
+	if v, ok := s.Raw().Get("evidence"); ok {
 		t.Errorf("evidence is echoed, never stored: %v", v)
 	}
 	r, err = ReportSlot(f.root, ReportOpts{Slot: "ben", State: "done", PR: url})
@@ -200,7 +200,7 @@ func TestReportRecordsStateAndPRAndIsIdempotent(t *testing.T) {
 	if _, err = ReportSlot(f.root, ReportOpts{Slot: "ben", State: "idle"}); err != nil {
 		t.Fatal(err)
 	}
-	if got := worker.Str(worker.LoadRegistry(f.root).Slot("ben"), "pr"); got != "#9" {
+	if got := worker.LoadRegistry(f.root).Slot("ben").PR(); got != "#9" {
 		t.Errorf("pr = %q", got)
 	}
 }
@@ -223,7 +223,7 @@ func TestReportRefusals(t *testing.T) {
 			t.Errorf("%s: %v, want exit %d", c.name, err, c.want)
 		}
 	}
-	if got := worker.Str(worker.LoadRegistry(f.root).Slot("ben"), "state"); got != "idle" {
+	if got := worker.LoadRegistry(f.root).Slot("ben").State(); got != "idle" {
 		t.Errorf("a refusal writes nothing, state = %q", got)
 	}
 	for _, h := range []string{"tmux", "herdr", ""} {
@@ -284,7 +284,7 @@ func TestReturnTransferReclaimUnderSoloNeverTouchTheHost(t *testing.T) {
 	if tr.Dispatched || tr.Host != host.Solo || !strings.Contains(tr.Brief, "handed to you by ben") || tr.Worktree != f.wt("dana") {
 		t.Fatalf("%+v", tr)
 	}
-	if got := worker.Str(f.slot("dana"), "state"); got != "busy" {
+	if got := f.slot("dana").State(); got != "busy" {
 		t.Errorf("receiver state = %q", got)
 	}
 

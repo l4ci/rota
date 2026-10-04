@@ -6,15 +6,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 	"unicode/utf8"
 
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/shlex"
 )
 
 // DispatchOpts are the flags of `rota worker dispatch`.
@@ -51,37 +50,6 @@ type DispatchResult struct {
 	Warnings []string
 }
 
-// workerCommand is work.workerCommand, else the default launch line. Workers
-// run with permissions skipped: the contract asks them to git add, git commit,
-// gh pr create and run tests, every one of which prompts under a narrower mode
-// with nobody in the pane to answer. Scope, not gating, bounds a worker: it
-// owns a throwaway branch in its own worktree, and the gate re-verifies the
-// merged tree before anything reaches the cycle branch. Override via
-// work.workerCommand to narrow it; NEEDS-PERMISSION stays in the classifier
-// for exactly that case, so a narrowed mode stalls loudly.
-//
-// A model chosen for the dispatch (a round's tier, C9) replaces models.worker
-// in the default command and fills the {model} placeholder of a custom one; a
-// custom command without the placeholder runs as written (ModelApplies).
-func workerCommand(root, chosen string) string {
-	cfg := config.Load(filepath.Join(root, ".rota", "config.json"))
-	model := "sonnet"
-	if v, ok := config.Lookup(cfg, "models.worker"); ok {
-		if s, _ := v.(string); s != "" {
-			model = s
-		}
-	}
-	if chosen != "" {
-		model = chosen
-	}
-	if v, ok := config.Lookup(cfg, "work.workerCommand"); ok {
-		if s, _ := v.(string); s != "" {
-			return strings.ReplaceAll(s, ModelPlaceholder, model)
-		}
-	}
-	return "claude --model " + model + " --dangerously-skip-permissions"
-}
-
 func dispatchKind(root string) string {
 	v, _ := config.Lookup(config.Load(filepath.Join(root, ".rota", "config.json")), "work.dispatch")
 	s, _ := v.(string)
@@ -111,82 +79,22 @@ func SoloRefusal(root, equiv string) error {
 	return &Error{Exit: ExitUsage, Message: "solo round: workers are subagents, there are no panes", Hint: equiv}
 }
 
-var shortResume = regexp.MustCompile(`^-[A-Za-z]*[cr][A-Za-z]*$`)
-
-// ResumeFlag returns the first token after the claude binary that reopens the
-// previous conversation in the "fresh" session, which would undo the reset. A
-// wrapper's own `-c` is not ours to judge: only tokens after the binary count.
-// Quoted arguments are scanned too (`sh -c "claude -c"`), as are `--resume=x`
-// and short clusters (`-cr`). An error means the command cannot be parsed.
-func ResumeFlag(cmd string) (string, error) {
-	toks, err := shlex.Split(cmd)
-	if err != nil {
-		return "", err
-	}
-	seen := false
-	for _, t := range toks {
-		switch {
-		case seen:
-			if t == "--continue" || t == "--resume" || strings.HasPrefix(t, "--continue=") ||
-				strings.HasPrefix(t, "--resume=") || shortResume.MatchString(t) {
-				return t, nil
-			}
-		case filepath.Base(t) == "claude":
-			seen = true
-		case strings.ContainsAny(t, " \t\n\r\f\v"):
-			hit, err := ResumeFlag(t)
-			if err != nil {
-				return "", err
-			}
-			if hit != "" {
-				return hit, nil
-			}
-		}
-	}
-	return "", nil
-}
-
 // clearHandle: the slot's session is gone, so drop its handle and mark it idle.
 func clearHandle(root, slot string) {
-	updateSlot(root, slot, func(s *jsonx.Object) {
-		s.Set("handle", nil)
-		s.Set("state", "idle")
-	})
+	UpdateSlot(root, slot, func(s *Slot) { s.Release() })
 }
 
 // recordDispatch writes the handle, state=busy, activeAt (the stall signal of
 // `round reconcile`) and, for a task, the task id (clearing the previous
 // task's PR and relay log).
 func recordDispatch(root, slot, handle, task, kind string, round *int, now string) error {
-	def := jsonx.NewObject()
-	def.Set("slots", []any{})
-	return Update(root, def, func(doc *jsonx.Object) {
+	return Update(root, slotsDefault(), func(doc *jsonx.Object) {
 		if round != nil {
 			doc.Set("round", *round)
 		}
 		for _, s := range (Registry{Doc: doc}).Slots() {
-			if Str(s, "name") != slot {
-				continue
-			}
-			s.Delete("window")
-			var h any
-			if handle != "" {
-				h = handle
-			}
-			s.Set("handle", h)
-			s.Set("state", "busy")
-			s.Set("activeAt", now)
-			s.Delete("seen") // a dispatch or relay re-arms `round wait`
-			if task != "" {
-				s.Set("task", task)
-				s.Set("pr", nil)
-				s.Set("relays", []any{})
-				s.Delete("unsent") // a fresh task starts a fresh session
-				// A relay later reads the kind to know whether to sign. Claude
-				// slots keep their registry bytes unless a kind was recorded.
-				if kind == KindCodex || (kind != "" && Str(s, "kind") != "") {
-					s.Set("kind", kind)
-				}
+			if s.Name() == slot {
+				s.Dispatch(handle, task, kind, now)
 			}
 		}
 	})
@@ -266,18 +174,13 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 	if s == nil {
 		return res, fail(ExitResolution, fmt.Sprintf("slot '%s' is not in the pool", o.Slot))
 	}
-	worktree := Str(s, "worktree")
-	// `window` is the pre-handle field name; read it so an unmigrated registry
-	// still dispatches.
-	handle := Str(s, "handle")
-	if handle == "" {
-		handle = Str(s, "window")
-	}
+	worktree := s.Worktree()
+	handle := s.PaneHandle()
 	session := Str(reg.Doc, "session")
 	if session == "" {
 		session = "rota"
 	}
-	configDir := Str(s, "configDir")
+	configDir := s.ConfigDir()
 	if !isDir(worktree) {
 		return res, fail(ExitResolution, fmt.Sprintf("slot '%s' worktree missing: %s", o.Slot, worktree))
 	}
@@ -286,43 +189,28 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 		timeout = 60
 	}
 
-	signKind := "" // the harness whose payloads are signed
-	var signKey []byte
+	var signKey []byte           // the key that signs the session's payloads; nil signs nothing
+	recKind, codexHome := "", "" // the harness a task dispatch records; the slot's account home
+	var hz harness.Harness
 	if !o.Relay {
 		kind := o.Kind
 		if kind == "" {
-			kind = Str(s, "kind")
+			kind = s.Kind()
 		}
-		if kind == "" {
-			kind = KindClaude
+		var err error
+		if hz, err = Harness(kind); err != nil {
+			return res, err
 		}
-		if kind != KindClaude && kind != KindCodex {
-			return res, fail(ExitUsage, "kind must be claude or codex, got: "+kind)
-		}
+		kind = hz.Kind()
 		res.Kind = kind
-		signKind = kind
-		key, launch := "work.workerCommand", ""
-		bad, perr := "", error(nil)
-		what := ""
-		if kind == KindCodex {
-			key = "work.codexCommand"
-			if launch, perr = codexCommand(root, o.Model); perr == nil {
-				bad, perr = CodexResume(launch)
-				what = "the subcommand "
-			}
-		} else {
-			launch = workerCommand(root, o.Model)
-			bad, perr = ResumeFlag(launch)
+		recKind = kind
+		key := hz.CommandKey()
+		launch, hit, err := launchLine(root, hz, o.Model)
+		if err != nil {
+			return res, err
 		}
-		if perr != nil {
-			var we *Error
-			if errors.As(perr, &we) {
-				return res, perr
-			}
-			return res, fail(ExitUsage, key+" cannot be parsed (unbalanced quote?): "+launch)
-		}
-		if bad != "" {
-			e := fail(ExitRefused, fmt.Sprintf("%s contains %s'%s', which reopens the previous conversation; a task dispatch must start a fresh session. Remove it.", key, what, bad))
+		if hit.Token != "" {
+			e := fail(ExitRefused, fmt.Sprintf("%s contains %s'%s', which reopens the previous conversation; a task dispatch must start a fresh session. Remove it.", key, hit.Noun, hit.Token))
 			e.Data = BlockData{BlockedBy: "resume flag"}
 			return res, e
 		}
@@ -333,34 +221,23 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 				return res, fail(ExitUnavailable, fmt.Sprintf("work.dispatch=herdr starts a %s worker, but %s does not run %s: %s", kind, key, kind, launch))
 			}
 		}
-		// Codex skips a command-line hook unless it is trusted, which would
-		// leave unsigned pane text unchecked: refuse before anything is touched.
-		if kind == KindCodex {
-			if _, _, largs, lerr := host.LaunchArgs(launch); lerr != nil || !hasToken(largs, "--dangerously-bypass-hook-trust") {
-				return res, fail(ExitUnavailable, "work.codexCommand lacks --dangerously-bypass-hook-trust: without it Codex skips rota's prompt-check hook, so unsigned pane text would reach the worker: "+launch)
-			}
+		// A launch the harness cannot run safely is refused before anything is
+		// touched.
+		if err := hz.CheckLaunch(launch); err != nil {
+			return res, asError(err)
 		}
-		// A codex worker's home, login and version are checked before the old
+		// The slot's account, version and login are checked before the old
 		// session is killed or anything is marked.
-		codexHome := ""
-		if kind == KindCodex {
-			setup, err := e.CodexPreflight(ctx, root, o.Slot, o.AcceptCodexVersion)
-			if err != nil {
-				return res, err
-			}
-			codexHome, res.Warnings = setup.Home, setup.Warnings
-			configDir = ""
-			exe, err := e.Executable()
-			if err != nil {
-				return res, fail(ExitUnavailable, "cannot find the rota binary for the prompt-check hook: "+err.Error())
-			}
-			var keyPath string
-			if keyPath, signKey, err = newPromptKey(codexHome); err != nil {
-				return res, fail(ExitUnavailable, "cannot write the prompt key in "+codexHome+": "+err.Error())
-			}
-			if launch, err = withPromptHook(launch, codexHookArgs(exe, keyPath)); err != nil {
-				return res, fail(ExitUnavailable, "cannot add the prompt-check hook to "+key+": "+err.Error())
-			}
+		setup, err := e.Preflight(ctx, root, kind, o.Slot, o.AcceptCodexVersion)
+		if err != nil {
+			return res, err
+		}
+		res.Warnings = setup.Warnings
+		if codexHome = setup.Home; codexHome != "" {
+			configDir = "" // the slot's account is its home, not a claude config dir
+		}
+		if launch, signKey, err = hz.Prepare(launch, e.Executable, setup); err != nil {
+			return res, asError(err)
 		}
 		// Refuse a slot that still holds work, before its session is killed.
 		if _, err := e.ResetTo(root, o.Slot, o.Task, branchOr(o), true); err != nil {
@@ -387,22 +264,20 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 		}
 	} else if handle == "" {
 		return res, fail(ExitResolution, fmt.Sprintf("slot '%s' has no session to relay into — dispatch a task first", o.Slot))
-	} else if Str(s, "kind") == KindCodex {
-		signKind = KindCodex
-		cd, err := CommonDir(ctx, e.Git, root)
-		if err != nil {
-			return res, err
+	} else {
+		// A relay is signed by the key of the session it goes into.
+		var err error
+		var ok bool
+		if hz, ok = harness.Lookup(s.Kind()); !ok {
+			hz, _ = harness.Lookup("")
 		}
-		keyFile := filepath.Join(CodexHome(cd, o.Slot), PromptKeyFile)
-		if signKey, err = loadPromptKey(keyFile); err != nil {
-			x := fail(ExitUnavailable, fmt.Sprintf("slot '%s' is a codex worker but its prompt key is unreadable (%s): %v", o.Slot, keyFile, err))
-			x.Hint = "re-dispatch the task: a fresh session gets a fresh key and hook"
-			return res, x
+		if signKey, err = hz.RelayKey(func() (string, error) { return CommonDir(ctx, e.Git, root) }, o.Slot); err != nil {
+			return res, asError(err)
 		}
 	}
 	res.Handle = handle
 
-	if err := recordDispatch(root, o.Slot, handle, o.Task, signKind, o.Round, stamp(e.Now())); err != nil {
+	if err := recordDispatch(root, o.Slot, handle, o.Task, recKind, o.Round, stamp(e.Now())); err != nil {
 		return res, err
 	}
 	round := roundOf(root)
@@ -427,9 +302,7 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 	}
 	payload.WriteString(text)
 	out := payload.String()
-	if signKind == KindCodex {
-		out = signPrompt(signKey, out)
-	}
+	out = hz.Sign(signKey, out)
 	tmp, err := os.CreateTemp("", "rota-dispatch-*")
 	if err != nil {
 		return res, err
@@ -443,7 +316,7 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 	// task dispatch starts a fresh session and has nothing pending.
 	var sendErr error
 	handled := false
-	if rs, ok := h.(host.Resubmitter); ok && o.Relay && Bool(s, "unsent") {
+	if rs, ok := h.(host.Resubmitter); ok && o.Relay && s.Unsent() {
 		handled, sendErr = rs.SubmitPending(ctx, o.Slot, handle, tmp.Name())
 	}
 	if !handled {
@@ -451,14 +324,8 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 	}
 	// Remember a stall so the next relay checks the prompt line first. Written
 	// only on a change: a clean send leaves the registry untouched.
-	if unsent := errors.Is(sendErr, host.ErrNotSubmitted); unsent != Bool(s, "unsent") {
-		updateSlot(root, o.Slot, func(s *jsonx.Object) {
-			if unsent {
-				s.Set("unsent", true)
-			} else {
-				s.Delete("unsent")
-			}
-		})
+	if unsent := errors.Is(sendErr, host.ErrNotSubmitted); unsent != s.Unsent() {
+		UpdateSlot(root, o.Slot, func(s *Slot) { s.SetUnsent(unsent) })
 	}
 	// Log the relay once it was (or may have been) sent. A stall does not prove
 	// the text was lost, and the gate must not call a delivered relay unlogged;
@@ -468,11 +335,7 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 		entry.Set("round", round)
 		entry.Set("ts", e.Now().UTC().Format("2006-01-02T15:04:05Z"))
 		entry.Set("summary", relaySummary(string(brief)))
-		if _, err := updateSlot(root, o.Slot, func(s *jsonx.Object) {
-			v, _ := s.Get("relays")
-			l, _ := v.([]any)
-			s.Set("relays", append(l, entry))
-		}); err != nil {
+		if _, err := UpdateSlot(root, o.Slot, func(s *Slot) { s.AppendRelay(entry) }); err != nil {
 			return res, err
 		}
 	}
@@ -484,15 +347,6 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 	default:
 		return res, fail(ExitRetry, fmt.Sprintf("slot '%s' never picked up the brief — inspect the session before resending", o.Slot))
 	}
-}
-
-func hasToken(toks []string, want string) bool {
-	for _, t := range toks {
-		if t == want {
-			return true
-		}
-	}
-	return false
 }
 
 // resetRefusal maps a reset-guard error onto dispatch's exits: a slot holding
@@ -558,30 +412,6 @@ func branchOr(o DispatchOpts) string {
 	return BranchFor(o.Slot, o.Task)
 }
 
-// ModelPlaceholder marks where a custom work.workerCommand takes the model.
-const ModelPlaceholder = "{model}"
-
-// ModelApplies reports whether a chosen model reaches the launch command: the
-// default command always takes it, a custom work.workerCommand only through
-// the {model} placeholder.
-func ModelApplies(root string) bool { return ModelAppliesTo(root, KindClaude) }
-
-// ModelAppliesTo is ModelApplies for a harness kind: a codex worker's command
-// is work.codexCommand, whose default always takes the model.
-func ModelAppliesTo(root, kind string) bool {
-	key := "work.workerCommand"
-	if kind == KindCodex {
-		key = "work.codexCommand"
-	}
-	cfg := config.Load(filepath.Join(root, ".rota", "config.json"))
-	if v, ok := config.Lookup(cfg, key); ok {
-		if s, _ := v.(string); s != "" {
-			return strings.Contains(s, ModelPlaceholder)
-		}
-	}
-	return true
-}
-
 // stamp is the registry's activeAt format: RFC 3339, UTC.
 func stamp(t time.Time) string { return t.UTC().Format("2006-01-02T15:04:05Z") }
 
@@ -597,10 +427,7 @@ func (e Env) KillSlot(ctx context.Context, root, slot string) error {
 	if RegistryHost(root) == host.Solo {
 		return nil // a subagent has no pane to close
 	}
-	handle := Str(s, "handle")
-	if handle == "" {
-		handle = Str(s, "window")
-	}
+	handle := s.PaneHandle()
 	h := e.NewHost(hostKind(root))
 	if err := h.Require(); err != nil {
 		return fail(ExitUnavailable, err.Error())
