@@ -148,7 +148,14 @@ func suiteOf(t *testing.T) (suite, name string) {
 
 // ---- the frozen run --------------------------------------------------------------
 
-var frozenOn *frozenFile
+// frozenOn holds each running suite's record, keyed by its top-level test name,
+// so the suites can run side by side (#84).
+var frozenOn sync.Map
+
+func topName(t *testing.T) string {
+	top, _, _ := strings.Cut(t.Name(), "/")
+	return top
+}
 
 // filtered reports whether -run selects single scenarios rather than whole
 // suites.
@@ -175,9 +182,10 @@ func runFrozen(t *testing.T, suite func(*testing.T)) {
 		reexec(t, f.frozenHeader)
 		return
 	}
-	frozenOn = f
+	top := topName(t)
+	frozenOn.Store(top, f)
 	t.Cleanup(func() {
-		frozenOn = nil
+		frozenOn.Delete(top)
 		if t.Failed() || filtered() {
 			return
 		}
@@ -210,9 +218,10 @@ func updateRecords(t *testing.T, name string, old *frozenFile, loadErr error, su
 		}
 		f.recs = old.recs
 	}
-	frozenOn = f
+	top := topName(t)
+	frozenOn.Store(top, f)
 	t.Cleanup(func() {
-		frozenOn = nil
+		frozenOn.Delete(top)
 		if t.Failed() {
 			t.Logf("%s: not written, the run failed", frozenPath(name))
 			return
@@ -249,7 +258,11 @@ func reexec(t *testing.T, day frozenHeader) {
 func frozenCheck(t *testing.T, got frozenRec) {
 	t.Helper()
 	_, name := suiteOf(t)
-	f := frozenOn
+	v, ok := frozenOn.Load(topName(t))
+	if !ok {
+		t.Fatalf("no frozen record is loaded for %s", topName(t))
+	}
+	f := v.(*frozenFile)
 	if *updateFrozen {
 		if t.Failed() {
 			return
@@ -424,10 +437,10 @@ func withoutJSON(argv []string) []string {
 	return out
 }
 
-func TestFrozenA4(t *testing.T)             { runFrozen(t, suiteA4) }
-func TestFrozenA4B(t *testing.T)            { runFrozen(t, suiteA4B) }
-func TestFrozenA4C(t *testing.T)            { runFrozen(t, suiteA4C) }
-func TestFrozenA4D(t *testing.T)            { runFrozen(t, suiteA4D) }
-func TestFrozenA4Issue(t *testing.T)        { runFrozen(t, suiteA4Issue) }
-func TestFrozenA4Umbrella(t *testing.T)     { runFrozen(t, suiteA4Umbrella) }
-func TestFrozenA4UmbrellaFile(t *testing.T) { runFrozen(t, suiteA4UmbrellaFile) }
+func TestFrozenA4(t *testing.T)             { t.Parallel(); runFrozen(t, suiteA4) }
+func TestFrozenA4B(t *testing.T)            { t.Parallel(); runFrozen(t, suiteA4B) }
+func TestFrozenA4C(t *testing.T)            { t.Parallel(); runFrozen(t, suiteA4C) }
+func TestFrozenA4D(t *testing.T)            { t.Parallel(); runFrozen(t, suiteA4D) }
+func TestFrozenA4Issue(t *testing.T)        { t.Parallel(); runFrozen(t, suiteA4Issue) }
+func TestFrozenA4Umbrella(t *testing.T)     { t.Parallel(); runFrozen(t, suiteA4Umbrella) }
+func TestFrozenA4UmbrellaFile(t *testing.T) { t.Parallel(); runFrozen(t, suiteA4UmbrellaFile) }
