@@ -10,7 +10,7 @@ Available from 0.9.0. `rota` is a single binary that carries the skills; there i
 curl -fsSL https://raw.githubusercontent.com/l4ci/rota/main/install.sh | sh
 ```
 
-It installs to `~/.local/bin/rota`. It needs no sudo and does not edit your shell profile; if the directory is not on your `PATH` it prints the line to add. It needs `curl`, or `wget` as a fallback.
+It installs to `~/.local/bin/rota`. It needs no sudo and does not edit your shell profile; if the directory is not on your `PATH` it prints the line to add. It needs `curl` (or `wget` as a fallback) and [`minisign`](https://jedisct1.github.io/minisign/) (`brew install minisign`, `apt install minisign`); without minisign it stops rather than install an unverified binary.
 
 | Option | Env var | Meaning |
 |---|---|---|
@@ -25,11 +25,18 @@ brew install l4ci/tap/rota
 
 ### Release binaries by hand
 
-Download `rota_<os>_<arch>` from the [releases](https://github.com/l4ci/rota/releases) page (linux and macOS, amd64 and arm64), make it executable, and put it on your `PATH`. Compare its sha256 with the line for that file in `checksums.txt` from the same release.
+Download `rota_<os>_<arch>` from the [releases](https://github.com/l4ci/rota/releases) page (linux and macOS, amd64 and arm64), make it executable, and put it on your `PATH`. Download `rota_<os>_<arch>.minisig` too and verify it (below), then compare the sha256 with the line for that file in `checksums.txt`.
 
-### Integrity, not authenticity
+### Verifying a release
 
-`install.sh` verifies the download against `checksums.txt` and refuses a mismatch. The checksums come from the same release as the binary, so this catches a corrupted or swapped download. It does not prove who built the release. Signing is planned.
+Every release asset has a detached [minisign](https://jedisct1.github.io/minisign/) signature, `<asset>.minisig`, made in the release workflow. `install.sh` verifies the binary against the public key embedded in the script, then against `checksums.txt`, and installs nothing if either check fails. The signature proves the file was signed with the release key (id `2153154F7AA18B5D`); the checksum alone only shows the download is intact, because `checksums.txt` comes from the same release. To check by hand:
+
+```bash
+minisign -V -P RWRdi6F6TxVTIW92f3/QsWBl5VHdXm1FABgexyAla0z3A5WT4JzG6/SP \
+  -m rota_linux_amd64 -x rota_linux_amd64.minisig
+```
+
+The Homebrew formula is checked against the tarball sha256 only. Maintainers: [release signing](contributing/release-signing.md).
 
 Check the result with `rota version`. `rota doctor` checks the machine, including whether the installed skills match the binary.
 

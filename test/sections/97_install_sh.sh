@@ -1,17 +1,26 @@
-echo "install.sh: checksum-verified install from a local fake release (F6b, #230)"
+echo "install.sh: signature- and checksum-verified install from a local fake release (F6b, #230, #2)"
+command -v minisign >/dev/null 2>&1 || fail "section 97 needs minisign on PATH to sign the fake releases"
 # No network: ROTA_RELEASE_BASE_URL points at file:// trees built here.
 IS="$(mktemp -d)"
 trap 'rm -rf "${IS:?}"' EXIT
-INSTALL="$REPO/install.sh"
+# A throwaway key signs the fake releases; the script under test is a copy with
+# that key swapped in for the embedded release key (there is no env override).
+minisign -G -W -p "$IS/t.pub" -s "$IS/t.key" >/dev/null 2>&1 || fail "could not generate a test minisign key"
+minisign -G -W -p "$IS/o.pub" -s "$IS/o.key" >/dev/null 2>&1 || fail "could not generate a second test key"
+TESTPUB=$(tail -n1 "$IS/t.pub")
+grep -q '^ROTA_MINISIGN_PUBKEY=' "$REPO/install.sh" || fail "install.sh has no embedded ROTA_MINISIGN_PUBKEY"
+sed "s|^ROTA_MINISIGN_PUBKEY=.*|ROTA_MINISIGN_PUBKEY=$TESTPUB|" "$REPO/install.sh" > "$IS/install.sh"
+INSTALL="$IS/install.sh"
 case $(uname -s) in Linux) ios=linux ;; *) ios=darwin ;; esac
 case $(uname -m) in x86_64 | amd64) iarch=amd64 ;; *) iarch=arm64 ;; esac
 ASSET="rota_${ios}_${iarch}"
 sha() { if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -d' ' -f1; else shasum -a 256 "$1" | cut -d' ' -f1; fi; }
 
-# mkrel DIR LABEL: a release dir holding a fake rota plus a matching checksums.txt.
+# mkrel DIR LABEL: a release dir holding a fake rota, its signature and a matching checksums.txt.
 mkrel() {
   mkdir -p "$1"
   printf '#!/bin/sh\necho "rota fake %s"\n' "$2" > "$1/$ASSET"
+  minisign -S -s "$IS/t.key" -m "$1/$ASSET" -x "$1/$ASSET.minisig" >/dev/null 2>&1
   printf '%s  %s\n%s  rota_other_arch\n' "$(sha "$1/$ASSET")" "$ASSET" "0000" > "$1/checksums.txt"
 }
 mkrel "$IS/rel/latest/download" latest
@@ -31,9 +40,42 @@ OUT=$(PATH="$IS/p2/bin:$PATH" ROTA_PREFIX="$IS/p2" ROTA_VERSION=v1.2.3 sh "$INST
 [ "$("$IS/p2/bin/rota")" = "rota fake 1.2.3" ] || fail "pinned install is not v1.2.3"
 case $OUT in *"is not on your PATH"*) fail "install.sh warned about PATH though bin is on it" ;; esac
 
+# Signature failures: tampered binary, wrong key, missing .minisig, no minisign. All fail
+# closed before anything is installed, and an existing rota is untouched.
+sigfail() { # sigfail NAME WANT-TEXT [env VAR=val ...]: install from $IS/NAME must fail with WANT-TEXT
+  name=$1; want=$2; shift 2
+  mkdir -p "$IS/q-$name/bin"; printf 'old\n' > "$IS/q-$name/bin/rota"
+  RC=0; OUT=$(env "$@" ROTA_RELEASE_BASE_URL="file://$IS/$name" sh "$INSTALL" --prefix "$IS/q-$name" --version 7.7.7 2>&1) || RC=$?
+  [ "$RC" != 0 ] || fail "$name: install should fail"
+  case $OUT in *"$want"*) ;; *) fail "$name: should say '$want': $OUT" ;; esac
+  [ "$(cat "$IS/q-$name/bin/rota")" = "old" ] || fail "$name: a failed install replaced the existing rota"
+  [ -z "$(ls -A "$IS/q-$name/bin" | grep -v '^rota$' || true)" ] || fail "$name: a failed install left temp files"
+}
+# Tampered after signing, with checksums.txt rewritten to match (the attack sha256 alone cannot see).
+mkrel "$IS/sigtamper/download/v7.7.7" 7.7.7
+printf 'tampered\n' >> "$IS/sigtamper/download/v7.7.7/$ASSET"
+printf '%s  %s\n' "$(sha "$IS/sigtamper/download/v7.7.7/$ASSET")" "$ASSET" > "$IS/sigtamper/download/v7.7.7/checksums.txt"
+sigfail sigtamper "signature check failed" PATH="$PATH"
+# Validly signed, but by a key that is not the release key.
+mkrel "$IS/sigother/download/v7.7.7" 7.7.7
+minisign -S -s "$IS/o.key" -m "$IS/sigother/download/v7.7.7/$ASSET" -x "$IS/sigother/download/v7.7.7/$ASSET.minisig" >/dev/null 2>&1
+sigfail sigother "signature check failed" PATH="$PATH"
+# No .minisig published.
+mkrel "$IS/signone/download/v7.7.7" 7.7.7
+rm -f "$IS/signone/download/v7.7.7/$ASSET.minisig"
+sigfail signone "download failed" PATH="$PATH"
+# minisign not installed: cannot verify, so refuse (PATH holds only the basics, no minisign).
+mkrel "$IS/sigtool/download/v7.7.7" 7.7.7
+mkdir -p "$IS/nomini"
+for t in sh awk cut mkdir mktemp rm mv chmod cat uname curl sha256sum shasum dirname printf; do
+  tp=$(command -v "$t" 2>/dev/null || true); [ -z "$tp" ] || [ "${tp#/}" = "$tp" ] || ln -sf "$tp" "$IS/nomini/$t"
+done
+sigfail sigtool "need minisign" PATH="$IS/nomini"
+
 # Checksum mismatch: fails closed, nothing installed, an existing rota is untouched.
 mkrel "$IS/bad/download/v9.9.9" 9.9.9
 printf 'tampered\n' >> "$IS/bad/download/v9.9.9/$ASSET"
+minisign -S -s "$IS/t.key" -m "$IS/bad/download/v9.9.9/$ASSET" -x "$IS/bad/download/v9.9.9/$ASSET.minisig" >/dev/null 2>&1  # signed, so only the sha256 check can object
 mkdir -p "$IS/p3/bin"; printf 'old\n' > "$IS/p3/bin/rota"
 RC=0; OUT=$(ROTA_RELEASE_BASE_URL="file://$IS/bad" sh "$INSTALL" --prefix "$IS/p3" --version 9.9.9 2>&1) || RC=$?
 [ "$RC" != 0 ] || fail "a checksum mismatch should fail"
@@ -107,5 +149,5 @@ case $CL in *https*) fail "a file:// base should not allow https: $CL" ;; esac
 # Bad flags and versions.
 RC=0; sh "$INSTALL" --bogus >/dev/null 2>&1 || RC=$?; [ "$RC" != 0 ] || fail "unknown flag should fail"
 RC=0; sh "$INSTALL" --version '1;rm' --prefix "$IS/p7" >/dev/null 2>&1 || RC=$?; [ "$RC" != 0 ] || fail "odd version should fail"
-pass "install.sh verifies sha256, fails closed, guards the URL"
+pass "install.sh verifies signature and sha256, fails closed, guards the URL"
 unset ROTA_RELEASE_BASE_URL
