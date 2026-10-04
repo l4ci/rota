@@ -2,6 +2,7 @@ package backlog
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -377,5 +378,71 @@ func TestScanImported(t *testing.T) {
 	}
 	if got := ScanImported(t.TempDir(), ""); len(got) != 0 {
 		t.Errorf("empty project: %+v", got)
+	}
+}
+
+const adoptBacklog = `# TODO
+
+## Bugs
+- **[B01] [P1] New bug.** Fresh. Related: [T01]
+
+## Tasks
+- **[T01] Imported task.** From the tracker. GH: #1 Related: [B01] Since: abc1234
+`
+
+func TestMigrateAdoptsTrackerImports(t *testing.T) {
+	files := map[string]string{".rota/BACKLOG.md": adoptBacklog, ".rota/designs/T01.md": "design of B01\n"}
+	// preview: adopt, not create; the would-be map points at the issue
+	root := migProject(t, files)
+	o, _, _ := newMig(t, root, false, nil)
+	res, err := MigrateIssues(o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, op := range res.Ops {
+		got = append(got, op.Action+": "+op.Text)
+	}
+	for _, w := range []string{`adopt: T01 → #1 "Imported task" [type:task]`, `create-issue: B01 → bug "New bug" [type:bug, p1]`} {
+		if !slices.Contains(got, w) {
+			t.Errorf("preview ops %q lack %q", got, w)
+		}
+	}
+	if e, _ := res.Map.Get("T01"); e == nil {
+		t.Error("no map entry for T01")
+	} else if n, _ := e.(*jsonx.Object).Get("number"); fmt.Sprint(n) != "1" {
+		t.Errorf("would-be number %v", n)
+	}
+
+	// apply: no second issue for T01, labels added, design and Related still run
+	root = migProject(t, files)
+	f := &trackertest.MS{Fake: &trackertest.Fake{Issues: []tracker.Issue{{Number: 1, State: "open", Title: "Imported task", Body: "orig", URL: "u1"}}}}
+	o, _, _ = newMig(t, root, true, f)
+	res, err = MigrateIssues(o)
+	if err != nil || !res.Done || res.Migrated != 2 {
+		t.Fatalf("apply: %v done %v migrated %d", err, res != nil && res.Done, res.Migrated)
+	}
+	if len(f.Issues) != 3 { // adopted #1, the milestone tracker M01, the new bug
+		t.Fatalf("%d issues: %+v", len(f.Issues), f.Issues)
+	}
+	adopted := f.Issues[0]
+	if !slices.Contains(adopted.Labels, "type:task") || !strings.HasPrefix(adopted.Body, "orig") || adopted.Title != "Imported task" {
+		t.Errorf("adopted issue %+v", adopted)
+	}
+	if len(adopted.Comments) != 1 || !strings.Contains(adopted.Comments[0].Body, "design") {
+		t.Errorf("design note %+v", adopted.Comments)
+	}
+	if !strings.Contains(adopted.Body, "Related: ") {
+		t.Errorf("Related not set on the adopted issue: %q", adopted.Body)
+	}
+	if e, _ := res.Map.Get("T01"); e == nil {
+		t.Fatal("no map entry")
+	} else if id, _ := e.(*jsonx.Object).Get("id"); id != "T1" {
+		t.Errorf("map id %v", id)
+	}
+	// a re-run adopts nothing twice
+	calls := len(f.Calls)
+	if res, err = MigrateIssues(o); err != nil || res.Changed || len(f.Calls) != calls {
+		t.Errorf("rerun: %v changed %v, %d new calls", err, res.Changed, len(f.Calls)-calls)
 	}
 }
