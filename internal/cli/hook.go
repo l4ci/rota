@@ -18,10 +18,13 @@ import (
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/hook"
+	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/keepalive"
 	"github.com/l4ci/rota/internal/roundlease"
+	"github.com/l4ci/rota/internal/roundwatch"
 	"github.com/l4ci/rota/internal/status"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 // D1 (#65): `rota statusline dump` and the `rota hook` verbs. The logic is
@@ -36,7 +39,8 @@ func statuslineCommands() *Command {
 
 func hookCommands() *Command {
 	return &Command{Name: "hook", Summary: "Claude Code hooks that hand the orchestrator off before its context runs out", Subs: []*Command{
-		{Name: "stop", Summary: "Stop hook: block above the context threshold until a handoff is written", Verb: noFlags(hookStop)},
+		{Name: "stop", Summary: "Stop hook: block above the context threshold until a handoff is written, or while workers run with no watch armed", Verb: noFlags(hookStop)},
+		{Name: "prompt", Summary: "UserPromptSubmit hook: one-line round digest and a missing-watch reminder", Verb: noFlags(hookPrompt)},
 		{Name: "session-start", Summary: "SessionStart hook: inject and consume the handoff", Verb: noFlags(hookSessionStart)},
 		{Name: "install", Summary: "merge the hooks and the statusline into a Claude Code settings file", Verb: hookInstall},
 		{Name: "uninstall", Summary: "remove what install wrote and restore a wrapped statusline", Verb: hookUninstall},
@@ -225,20 +229,35 @@ func hookStop(c *Ctx, args []string) (res Result, _ error) {
 	}
 	sid, _ := hc.payload["session_id"].(string)
 	active, _ := hc.payload["stop_hook_active"].(bool)
+	if d, ok := stopHandoff(hc, sid, active); ok && d.Block {
+		return hookPrint(hook.StopOutput(d.Reason)), nil
+	}
+	// A second stop in the same turn passes, so a refused watch cannot loop.
+	if !active {
+		if reason, block := watchBlock(hc); block {
+			return hookPrint(hook.StopOutput(reason)), nil
+		}
+	}
+	return Result{}, nil
+}
+
+// stopHandoff is the context-threshold decision (D1, D4). ok is false when the
+// session has no readable state, so there is no decision to take.
+func stopHandoff(hc hookContext, sid string, active bool) (d hook.StopDecision, ok bool) {
 	path, err := hook.StatePath(hc.commonDir, sid)
 	if err != nil {
-		return Result{}, nil
+		return d, false
 	}
 	st, found, err := hook.ReadState(path)
 	if err != nil || !found {
-		return Result{}, nil
+		return d, false
 	}
 	now := hookNow()
 	in := hook.StopIn{StopHookActive: active}
 	if hc.set.SwitchOnUsage {
 		in.Supervised, in.HoldUntil = supervisedHold(hc.commonDir, hookNow())
 	}
-	d := hook.DecideStop(in, st, hc.set, hook.StatHandoff(hc.handoff), hc.handoff, now)
+	d = hook.DecideStop(in, st, hc.set, hook.StatHandoff(hc.handoff), hc.handoff, now)
 	if d.Persist {
 		// Only the counters: a statusline refresh may have landed meanwhile.
 		_ = hook.UpdateState(path, func(cur hook.State, found bool) hook.State {
@@ -250,10 +269,56 @@ func hookStop(c *Ctx, args []string) (res Result, _ error) {
 			return cur
 		})
 	}
-	if !d.Block {
+	return d, true
+}
+
+// watchBlock is the #81 rule: an orchestrator that holds the lease, has
+// workers to wait for and no `rota round watch` running must not go idle,
+// because nothing would wake it when a worker finishes. A solo round has no
+// panes to watch.
+func watchBlock(hc hookContext) (reason string, block bool) {
+	if worker.RegistryHost(hc.root) == host.Solo {
+		return "", false
+	}
+	need, attn := roundwatch.NeedsWatch(hc.root)
+	if !need {
+		return "", false
+	}
+	if _, armed := roundwatch.Armed(roundlease.DefaultEnv(), hc.commonDir); armed {
+		return "", false
+	}
+	reason = "No `rota round watch` is running, and workers are active: nothing would wake you when one finishes. " +
+		"Start `rota round watch` as a background command now (one at a time; it exits with JSON when a slot, PR or escalation changes, or at its heartbeat), then stop."
+	if len(attn) > 0 {
+		reason += " Waiting on you already: " + strings.Join(attn, ", ") + "."
+	}
+	return reason, true
+}
+
+// hookPrompt is the UserPromptSubmit hook: a one-line round digest on every
+// maintainer message, so an answer always comes with the slot state and a
+// reminder when no watch is armed. Silent for anyone but the orchestrator and
+// when nothing is active.
+func hookPrompt(c *Ctx, args []string) (res Result, _ error) {
+	c.JSON = false
+	defer func() {
+		if r := recover(); r != nil {
+			res = Result{}
+		}
+	}()
+	hc, ok := hookSetup(c, false)
+	if !ok {
 		return Result{}, nil
 	}
-	return hookPrint(hook.StopOutput(d.Reason)), nil
+	if need, _ := roundwatch.NeedsWatch(hc.root); !need {
+		return Result{}, nil
+	}
+	_, armed := roundwatch.Armed(roundlease.DefaultEnv(), hc.commonDir)
+	out := map[string]any{"hookSpecificOutput": map[string]any{
+		"hookEventName":     "UserPromptSubmit",
+		"additionalContext": roundwatch.Digest(hc.root, hc.who.Lease.Round, armed),
+	}}
+	return hookPrint(out), nil
 }
 
 // supervisedHold reads keepalive.json the way `rota keepalive status` does: a

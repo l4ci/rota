@@ -121,6 +121,7 @@ const (
 	StopCommand      = "rota hook stop " + Marker
 	StartCommand     = "rota hook session-start " + Marker
 	StartMatcher     = "^(startup|clear)$"
+	PromptCommand    = "rota hook prompt " + Marker
 	StatuslineCmd    = "rota statusline dump"
 	keyWrapped       = "rotaWrapped"
 	keyWrappedScope  = "rotaWrappedFrom"
@@ -128,6 +129,7 @@ const (
 	hooksKey         = "hooks"
 	eventStop        = "Stop"
 	eventSessionBeg  = "SessionStart"
+	eventPrompt      = "UserPromptSubmit"
 	hookEntryType    = "command"
 	statusLineType   = "command"
 	statusLinePadKey = "padding"
@@ -200,7 +202,7 @@ func MarkedEvents(o *jsonx.Object) map[string]string {
 	if hooks == nil {
 		return out
 	}
-	for _, ev := range []string{eventStop, eventSessionBeg} {
+	for _, ev := range []string{eventStop, eventSessionBeg, eventPrompt} {
 		arr, _ := getAny(hooks, ev).([]any)
 		for _, g := range arr {
 			for _, h := range groupHooks(g) {
@@ -265,7 +267,7 @@ type InstallOut struct {
 // Install merges the hooks and the statusline into Files[Scope]. It never
 // removes or replaces an entry rota did not write.
 func Install(in InstallIn) (InstallOut, error) {
-	out := InstallOut{Hooks: []string{eventStop, eventSessionBeg}}
+	out := InstallOut{Hooks: []string{eventStop, eventSessionBeg, eventPrompt}}
 	target := in.Files[in.Scope]
 	if target == nil {
 		return out, errors.New("no target settings object")
@@ -344,7 +346,11 @@ func Install(in InstallIn) (InstallOut, error) {
 	if err != nil {
 		return out, err
 	}
-	out.Changed = c1 || c2
+	c3, err := ensureHook(hooks, eventPrompt, "", PromptCommand)
+	if err != nil {
+		return out, err
+	}
+	out.Changed = c1 || c2 || c3
 	if apply != nil {
 		apply()
 		out.Changed = true
@@ -419,7 +425,7 @@ func Uninstall(o *jsonx.Object) []string {
 	}
 	if rota, ok := o.Get(hooksKey); ok {
 		if hooks, isObj := rota.(*jsonx.Object); isObj {
-			for _, ev := range []string{eventStop, eventSessionBeg} {
+			for _, ev := range []string{eventStop, eventSessionBeg, eventPrompt} {
 				arr, isArr := getAny(hooks, ev).([]any)
 				if !isArr {
 					continue
