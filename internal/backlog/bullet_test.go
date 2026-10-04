@@ -65,30 +65,13 @@ func TestBulletParityWithPython(t *testing.T) {
 		in.Docs = append(in.Docs, b.String())
 	}
 
-	var want struct {
-		Fields  []any `json:"fields"`
-		Open    []any `json:"open"`
-		Done    []any `json:"done"`
-		Set     []any `json:"set"`
-		Format  []any `json:"format"`
-		Origin  []any `json:"origin"`
-		IDs     []any `json:"ids"`
-		Docs    []any `json:"docs"`
-		Skipped any   `json:"-"`
-	}
-	golden.GoldenJSON(t, in, &want)
-
-	total := 0
-	check := func(name string, inputs []any, got []any, want []any) {
-		total += golden.Compare(t, name, inputs, got, want)
-	}
-	lineIn := toAny(lines)
+	out := map[string]any{}
 	var got []any
 
 	for _, l := range lines {
 		got = append(got, fieldsMap(ParseFields(l)))
 	}
-	check("parse_todo_fields", lineIn, got, want.Fields)
+	out["fields"] = got
 
 	got = nil
 	for _, l := range lines {
@@ -98,7 +81,7 @@ func TestBulletParityWithPython(t *testing.T) {
 			got = append(got, nil)
 		}
 	}
-	check("parse_open_bullet", lineIn, got, want.Open)
+	out["open"] = got
 
 	got = nil
 	for _, l := range lines {
@@ -108,7 +91,7 @@ func TestBulletParityWithPython(t *testing.T) {
 			got = append(got, nil)
 		}
 	}
-	check("parse_done_line", lineIn, got, want.Done)
+	out["done"] = got
 
 	got = nil
 	for _, s := range in.Sets {
@@ -118,7 +101,7 @@ func TestBulletParityWithPython(t *testing.T) {
 			got = append(got, r)
 		}
 	}
-	check("set_todo_field", toAny(in.Sets), got, want.Set)
+	out["set"] = got
 
 	got = nil
 	for _, d := range in.Dones {
@@ -128,7 +111,7 @@ func TestBulletParityWithPython(t *testing.T) {
 			got = append(got, r)
 		}
 	}
-	check("format_done_line", toAny(in.Dones), got, want.Format)
+	out["format"] = got
 
 	got = nil
 	for _, o := range in.Origins {
@@ -138,7 +121,7 @@ func TestBulletParityWithPython(t *testing.T) {
 			got = append(got, nil)
 		}
 	}
-	check("find_origin_bullet", toAny(in.Origins), got, want.Origin)
+	out["origin"] = got
 
 	got = nil
 	for _, x := range in.IDs {
@@ -148,7 +131,7 @@ func TestBulletParityWithPython(t *testing.T) {
 		}
 		got = append(got, ids)
 	}
-	check("find_item_ids", toAny(in.IDs), got, want.IDs)
+	out["ids"] = got
 
 	got = nil
 	for _, d := range in.Docs {
@@ -158,16 +141,8 @@ func TestBulletParityWithPython(t *testing.T) {
 		}
 		got = append(got, entries)
 	}
-	check("iter_open_bullets", toAny(in.Docs), got, want.Docs)
-	t.Logf("compared %d cases across 8 Python functions", total)
-}
-
-func toAny[T any](xs []T) []any {
-	out := make([]any, len(xs))
-	for i, x := range xs {
-		out[i] = x
-	}
-	return out
+	out["docs"] = got
+	golden.Check(t, map[string]any{"input": in}, out)
 }
 
 func TestFieldsGetAndSettableErrors(t *testing.T) {
