@@ -21,7 +21,7 @@ Read `.rota/config.json` (`rota config show`):
 
 - `work.mergeStrategy` — `"pr"` or `"direct"`; unset means ask (Step 5)
 - `ship.review` — `true` (default) runs `/rota-review` first; `false` skips it
-- `ship.secondOpinion` — `false` (default); `true` runs a no-prior-context adversarial review after `/rota-review` (Step 3.5). A leftover `ship.secondOpinionRunner: "codex"` runs the subagent in advisory mode: print *"ship.secondOpinionRunner: codex was removed in 5.0; using subagent (run `rota config set ship.secondOpinionRunner subagent` to silence this)"* and carry on.
+- `ship.secondOpinion` — `false` (default); `true` runs a no-prior-context adversarial review after `/rota-review` (Step 3.5), except for round PRs, which never get one. A leftover `ship.secondOpinionRunner: "codex"` runs the subagent in advisory mode: print *"ship.secondOpinionRunner: codex was removed in 5.0; using subagent (run `rota config set ship.secondOpinionRunner subagent` to silence this)"* and carry on.
 - `ship.qa` — `false` (default); `true` runs `/rota-qa run` after the reviews (Step 3.75)
 - `autonomy.level` — `"off"` (default), `"auto"`: whether Step 8.5 nudges or invokes directly
 - `docs.path` (default `"docs"`), `docs.afterWork` (default `false`), `docs.autoCreate` (default `false`)
@@ -81,7 +81,7 @@ Remember a CONCERNS answer as `REVIEW_CHOICE` (`address`, `ship-anyway`, `stop`)
 
 ## Step 3.5 — Second-Opinion Gate (opt-in)
 
-Skipped when `ship.secondOpinion` is `false`, when Step 3 was skipped and the user has not asked for a second opinion this session, or when `REVIEW_CHOICE == ship-anyway` (a second adversarial pass would re-litigate the accepted risk).
+Skipped for a round worker's PR (the branch is `<agent>/<issue>-<slug>`, or the brief says it is a round slot): the orchestrator's merge gate is the second check, and a fourth model pass per PR costs more than it catches (`docs/contributing/rounds.md`). Also skipped when `ship.secondOpinion` is `false`, when Step 3 was skipped and the user has not asked for a second opinion this session, or when `REVIEW_CHOICE == ship-anyway` (a second adversarial pass would re-litigate the accepted risk).
 
 The `/rota-review` reviewer shares context with the work it produced and normalizes its blind spots. This gate gives a fresh subagent only the diff and the goal:
 
@@ -120,7 +120,7 @@ Capture the output (`## Summary`, `## Items resolved`) and append `## Test plan`
 
 ## Step 5 — Pick Strategy
 
-On the issue backend (`references/issue-mode.md`) there is no question: go to Step 6a, never direct-merge.
+On the issue backend (`references/issue-mode.md`) there is no question: go to Step 6a, never direct-merge. If `work.mergeStrategy` is `"direct"`, say so in one line (*"`work.mergeStrategy` is `direct` but the issue backend always opens a PR; ignoring it."*) so the mismatch is visible, then go on.
 
 If `work.mergeStrategy` is `"direct"` or `"pr"` and the user has not said otherwise this session, use it silently. If unset, or the user hinted at the other option, ask (single-select, header `"Strategy"`, *"How should I integrate `<branch>`?"*):
 
@@ -139,7 +139,7 @@ printf '%s' "$BODY" | rota ship pr <branch> --title "<short title>" --body-file 
 
 Title: from the strongest commit subject, 70 characters at most, no `[ID]` tags (the body carries the linkage). Share the PR URL. Exit 4 with `data.blockedBy: "verdict"` is a recorded FAIL: surface it and stop.
 
-**Issue mode:** add `--items <ID1>,<ID2>` (qualified `<repo>:<ID>` in an umbrella) so the PR closes them, then `rota item state <ID> --to needs-review` per item. Do not call `rota item release`: the claim stays until the PR merges. `/rota-review --queue` merges later; skip Steps 6b, 6c and 8.
+**Issue mode:** add `--items <ID1>,<ID2>` (qualified `<repo>:<ID>` in an umbrella) so the PR closes them, then `rota item state <ID> --to needs-review` per item. Do not call `rota item release`: the claim stays until the PR merges. Shipping never merges here. The merge owner is the orchestrator in a round (`rota worker gate`), otherwise whoever runs `/rota-review --queue`. Skip Steps 6b, 6c and 8.
 
 ## Step 6b — Direct Merge
 
@@ -175,7 +175,9 @@ Umbrella waves must pass `--repo`; without it only legacy `repo: null` entries a
 
 ## Step 8 — Mark Unfinished Items Complete
 
-**Issue mode:** skip. Closing happens at the review merge (`rota ship pr-merge`). Use `rota item complete` only with `--reason handed-off|blocked|dropped`.
+**Issue mode:** skip. Closing happens at the merge (`rota worker gate` in a round, `rota ship pr-merge` from the queue). Use `rota item complete` only with `--reason handed-off|blocked|dropped`.
+
+**File mode:** the merger completes items. Outside a round that is this step; a round worker skips it (workers never edit tracked `.rota/`) and the orchestrator completes the items when it merges the PR.
 
 `/rota-work` completes most IDs already; this catches manual commits that referenced IDs without closing them. For each ID in `referencedIds`:
 

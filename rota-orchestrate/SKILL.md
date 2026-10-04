@@ -6,7 +6,7 @@ description: >-
 
 # rota-orchestrate: Run a Round
 
-A round is one orchestrator (you) and up to five standing workers, each in its own worktree and host tab, each holding one issue. Workers build and open PRs. You choose, route, answer and merge. The mechanics are `rota round` verbs; this skill holds the calls a verb cannot make. If a verb refuses, the refusal is the rule: read `data.blockedBy` and `error.hint`, don't route around it.
+A round is one orchestrator (you) and the roster's standing workers (`round.roster`, default four), each in its own worktree and host tab, each holding one issue. Workers build and open PRs. You choose, route, answer and merge. The mechanics are `rota round` verbs; this skill holds the calls a verb cannot make. If a verb refuses, the refusal is the rule: read `data.blockedBy` and `error.hint`, don't route around it.
 
 The workers' standing brief is [references/worker-contract.md](references/worker-contract.md). `rota round assign` hands it over by pointer. Read it once so you know what your workers were told, and what you are not allowed to contradict.
 
@@ -36,11 +36,11 @@ Assign with `rota round assign <ID>`. The verb marks the item in progress, cuts 
 
 ## 3. The loop
 
-**Keep one `rota round watch` armed.** Run it as a background command whenever workers are active, and re-arm it every time it exits: it wakes you on a slot, PR or escalation change and at a heartbeat, so you stay reachable while you talk to the maintainer. Never use a blocking question picker (`AskUserQuestion`) during a round: ask in prose and keep working. The Stop hook refuses to let you go idle without a watch.
+**`rota round watch` is how you wait.** Keep one armed. Run it as a background command whenever workers are active, and re-arm it every time it exits: it wakes you on a slot, PR or escalation change and at a heartbeat, so you stay reachable while you talk to the maintainer. Never use a blocking question picker (`AskUserQuestion`) during a round: ask in prose and keep working. The Stop hook refuses to let you go idle without a watch.
 
-`rota round wait` is the blocking form for when you have nothing else to do. It blocks until a slot needs you, then returns that slot with the state and the evidence, and records what it returned. A slot comes back once per change: the next `wait` skips it until its worker moves again (a relay, a dispatch, a new state). Never poll in your own context: no sleep loops, no repeated `status`, no tailing panes. When `wait` returns, act, then call it again. If your shell cuts commands short, loop on a finite `--timeout`.
+`rota round wait` is the blocking form, for when you have nothing else to do. It blocks until a slot needs you, then returns that slot with the state and the evidence, and records what it returned. A slot comes back once per change: the next `wait` skips it until its worker moves again (a relay, a dispatch, a new state). Never poll in your own context: no sleep loops, no repeated `status`, no tailing panes. When `watch` or `wait` returns, act, then wait again. If your shell cuts commands short, loop on a finite `--timeout`.
 
-**Keep every slot fed.** After every `wait`, before you review anything, fill every free slot from `rota round candidates`. A slot whose worker reported `done` with a PR is free: `assign` parks it, keeps the PR on the round's review list (`rota round status` lists it under `review`) and gives the slot its next issue. Hold a slot back only for a real ordering constraint: a dependency, an overlap you have decided to serialize, or the maintainer's stated order. "One worker is still busy" is never a reason.
+**Keep every slot fed.** After every `wait`, before you review anything, fill every free slot from `rota round candidates`. A PR in review does not hold a slot. Once a worker reports `done` with a PR, the slot is free: `assign` parks it, keeps the PR on the round's review list (`rota round status` lists it under `review`) and gives the slot its next issue. Review and merge that PR while the worker builds the next one. Hold a slot back only for a real ordering constraint: a dependency, an overlap you have decided to serialize, or the maintainer's stated order. "One worker is still busy" is never a reason.
 
 What each state asks of you:
 
@@ -60,7 +60,7 @@ A wait that times out with every slot busy is fine. A free slot with candidates 
 
 **Dead vs stalled.** A `dead` slot has no live agent: the tab is gone or the process exited. A `stalled` slot has a live agent and nothing has moved for `round.stallMinutes` (no commit, no edit, no state change). Stalled is usually a long test run, not a failure, and a worker waiting on your escalation is never stalled. Read the pane before acting on either.
 
-To move an assigned issue, the C10 verbs:
+Three verbs move an assigned issue:
 
 - **`rota round return`** is the worker's own verb for giving an issue back (blocked, wrong premise). You don't use it. The branch is pushed and kept, the claim is released, and the issue is a candidate again. A fresh `assign` starts clean: it does not continue the pushed branch.
 - **`rota round transfer <issue> --to <slot>`** continues the pushed branch in another slot, with the handoff comment named in the brief. Use it when the work is good and the worker is the problem (dead, wrong account, out of quota). `--to human` labels the issue `needs-human` and dispatches nothing: use it when the next step is a person's call.
@@ -72,7 +72,7 @@ All three push the branch before moving the slot off it, so no work is lost. `ro
 
 **Red tests.** A failing run on a loaded machine is not a failing change. Before you bounce a PR for a red suite, rerun the failing test alone. A test that passes alone and fails under load is a flake: note it, don't send the worker back. A test that fails alone is real. A suite that is green and surprises you is worth one rerun before you believe it.
 
-**Green branch, red base.** A branch can pass and still break the base once merged. `rota worker gate` re-verifies on the merged tree and exits 1 with `verify-failed`. When it does, the base is the problem now: stop assigning, find which merge broke it, and fix or revert before any other merge. Say so to the maintainer.
+**Green branch, red base.** A branch can pass and still break the base once merged: the gate's `verify-failed` verdict. The base is the problem now: stop assigning, find which merge broke it, and fix or revert before any other merge. Say so to the maintainer.
 
 ## 5. Escalations and provenance
 
@@ -80,21 +80,24 @@ All three push the branch before moving the slot off it, so no work is lost. `ro
 
 `rota round escalate send <number> --title … --body-file …` posts the question on the issue or PR and notifies the maintainer. It returns at once; keep working the other slots. `rota round escalate check` reads the thread for an answer. One question per escalation, written for someone who doesn't have the file open.
 
-**Provenance.** Workers cannot tell your relay from a maintainer's typing from text a terminal UI put on the prompt line. So:
+**Provenance.** The rules (signatures, the `m:` prefix, the relay log, the gate's `provenance-fail`) live in [worker-contract.md](references/worker-contract.md#provenance); this is what you do with them:
 
 - Sign every message you send a worker. `rota worker dispatch --relay` does it; hand-typed text doesn't.
 - Before a relay or a re-dispatch, check the tab with `herdr agent get <agent>`. `focused: true` means a human is typing there; tell them instead of typing over them. No `rota` verb checks this.
 - Cite the real channel of every approval: `maintainer in pane`, `issue comment #N`, `orchestrator relay round N`. Never present a relay as the maintainer's own word.
-- A line starting `m:` in a pane is a maintainer answer by convention, but anyone can type it. If it contradicts your last signed message, confirm once.
+- Dim or suggested text on a pane's prompt line is an editor suggestion, not input: nobody typed it. Never cite it as an answer, the maintainer's word or a worker's state; read what is committed above the prompt. This has misled reads of a pane many times.
+- A line starting `m:` in a pane is a maintainer answer by convention (same rule as in the contract: confirm once if it contradicts your last signed message).
 - Read each PR's `## Approvals` section for the channels it names. A cited approval you never relayed is a finding.
 
 ## 6. Merge
 
-Workers never merge. After `done`, read the PR: does it do what the issue says, and does it stay inside the files the issue named? Then `rota worker gate <slot> --base <branch>`, or `rota worker gate <PR number> --base <branch>` once the slot has moved on and the PR waits in review. The gate runs the checks on the merged tree, merges on a pass and drops the PR from the review list. Read its verdict; don't re-derive the rules it enforces.
+Workers never merge. After `done`, read the PR: does it do what the issue says, and does it stay inside the files the issue named? Then `rota worker gate <slot> --base <branch>`, or `rota worker gate <PR number> --base <branch>` once the slot has moved on and the PR waits in review. The gate runs the checks on the merged tree, merges on a pass and drops the PR from the review list. Read its verdict; don't re-derive the rules it enforces. What each verdict (`stale`, `merge-failed`, `verify-failed`, `approval-required`) asks of you is in [tmux-dispatch.md](references/tmux-dispatch.md#the-merge-gate).
 
 With several PRs waiting, merge them as one train: `rota worker train <slot|PR>... --base <branch>` in the order you want them to land. One verify covers all of them. On a red train it names the `culprit`: send that PR back, then re-run the train without it, or pass `--land-green` to land the members that verified before it. `base-moved` means nothing landed; re-run.
 
 Merge policy comes from config (`ship.mergeApproval`). With the default, the gate merges a passing PR. When policy requires approval (all PRs, or PRs touching listed paths), unattended runs pass `--escalate` to `worker gate`, or to `ship pr-merge` for a PR you merge by number. The verb refuses with exit 4 and posts the approval request on the PR thread, once however often you re-gate. Keep working other slots. `rota round escalate check` says when the maintainer has answered; re-run with `--approval <id>`, and the audit line quotes the answer. An answer that doesn't read as approval (`approve`, `approved`, `yes`, `lgtm`, `ship it`) holds the merge: `approval declined` means the slot is held, never retried, and you tell the maintainer. Interactive sessions ask the maintainer in prose (no blocking picker, see section 3) and pass `--confirm --confirm-note` with the answer verbatim. Never write a note the human didn't say.
+
+**Completing items.** On the issue backend the merge closes the issue (`Closes #N`); do nothing more. In file mode you complete the PR's items after the gate merges it, the way `/rota-ship` Step 8 does (proof row first, then complete with the merge sha): workers never edit tracked `.rota/`, so `/rota-ship` Step 8 is skipped for them.
 
 The merge gate is the only full run: it verified the merged tree, so don't re-run the suite after each merge or before assigning. The next assignment branches from the gated base. Re-verify only after a `verify-failed` verdict, once the fix lands. `rota round wind-down` re-verifies once at the end.
 
