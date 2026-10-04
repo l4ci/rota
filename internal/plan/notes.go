@@ -47,6 +47,8 @@ func NewNotes(item func(string) (artifact.Notes, error), slices func() (SliceSto
 
 func (notes) Digits() int { return 1 }
 
+func (notes) ItemOnly() bool { return true }
+
 // DesignRef: an item plan points at the item's own design note, a slice plan
 // at the note of the item it names.
 func (notes) DesignRef(slice bool, design string) (string, error) {
@@ -69,6 +71,9 @@ func sliceOf(key string) (milestone, unit string, isSlice bool) {
 
 // itemOf is the item of an item plan key (M01-B07 gives "B07").
 func itemOf(key string) string {
+	if ItemOnlyKey(key) {
+		return strings.ToUpper(strings.TrimPrefix(key, "#"))
+	}
 	if m := itemKeyRe.FindStringSubmatch(key); m != nil {
 		return m[1]
 	}

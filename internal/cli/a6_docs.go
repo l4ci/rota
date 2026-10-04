@@ -364,8 +364,8 @@ func planPut(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		if !plan.ValidKey(key) {
-			return failAny(plan.Rm(st, key)) // reports the bad key
+		if err := plan.CheckKey(st, key); err != nil {
+			return failAny(err)
 		}
 		text, err := readBody(c, *file)
 		if err != nil {

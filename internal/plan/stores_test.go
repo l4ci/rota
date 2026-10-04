@@ -113,7 +113,7 @@ func TestStoresShareTheVerbs(t *testing.T) {
 					t.Errorf("identical put %s: %v %v", key, changed, err)
 				}
 			}
-			if _, err := Show(st, "B07"); exitOf(err) != 2 {
+			if _, err := Show(st, "nope"); exitOf(err) != 2 {
 				t.Errorf("malformed key: %v, want exit 2", err)
 			}
 			for _, key := range []string{"M01-B07", "M01-S01", "M01-S02"} {

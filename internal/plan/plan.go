@@ -22,6 +22,9 @@ type Store interface {
 	// Digits is the fewest digits a unit may carry when a plan is added:
 	// file plans are minted as B07 (2), issue numbers have any count (1).
 	Digits() int
+	// ItemOnly is whether an item plan may go without a milestone (#7, B7):
+	// on the issue backend an item has one plan, whatever its milestone.
+	ItemOnly() bool
 	// DesignRef checks --design and returns the pointer the stub carries.
 	// slice tells a slice plan from an item plan.
 	DesignRef(slice bool, design string) (string, error)
@@ -39,17 +42,27 @@ var (
 	milestoneRe = regexp.MustCompile(`^M\d{2,}$`)
 )
 
+// itemOnlyRe is a milestone-free item plan key (issue mode): #7, B7, f12.
+var itemOnlyRe = regexp.MustCompile(`(?i)^(?:#(\d+)|[BFT]\d+)$`)
+
+// ItemOnlyKey reports whether key names an item plan without a milestone.
+func ItemOnlyKey(key string) bool { return itemOnlyRe.MatchString(key) }
+
 // ValidKey reports whether key is a plan key: M\d{2,}-(S\d+|[BFT]\d+).
 func ValidKey(key string) bool { return keyRe.MatchString(key) }
 
 // ValidMilestone reports whether s is M\d{2,}.
 func ValidMilestone(s string) bool { return milestoneRe.MatchString(s) }
 
-func checkKey(key string) error {
-	if !ValidKey(key) {
-		return artifact.Errf(artifact.ExitUsage, "key must look like M01-B07 or M01-S02, got %q", key)
+// CheckKey is the key rule every verb applies before it touches the store.
+func CheckKey(s Store, key string) error {
+	switch {
+	case ValidKey(key), s.ItemOnly() && ItemOnlyKey(key):
+		return nil
+	case s.ItemOnly():
+		return artifact.Errf(artifact.ExitUsage, "key must look like #7, B7, M01-B07 or M01-S02, got %q", key)
 	}
-	return nil
+	return artifact.Errf(artifact.ExitUsage, "key must look like M01-B07 or M01-S02, got %q", key)
 }
 
 // AddOpts are the arguments of Add. Exactly one of Key or (Milestone with
@@ -65,12 +78,15 @@ type AddOpts struct {
 
 // parseAdd settles which plan AddOpts names: its milestone, and its unit
 // ("" for a slice that still has to be minted).
-func parseAdd(o AddOpts, digits int) (milestone, unit string, err error) {
+func parseAdd(o AddOpts, s Store) (milestone, unit string, err error) {
 	switch {
 	case o.Key != "" && (o.Slice || o.Milestone != ""):
 		return "", "", artifact.Errf(artifact.ExitUsage, "a key cannot be combined with --slice or --milestone")
 	case o.Key != "":
-		re := regexp.MustCompile(fmt.Sprintf(`^(M\d{2,})-([BFTS]\d{%d,})$`, digits))
+		if s.ItemOnly() && ItemOnlyKey(o.Key) {
+			return "", strings.ToUpper(strings.TrimPrefix(o.Key, "#")), nil
+		}
+		re := regexp.MustCompile(fmt.Sprintf(`^(M\d{2,})-([BFTS]\d{%d,})$`, s.Digits()))
 		m := re.FindStringSubmatch(o.Key)
 		if m == nil {
 			return "", "", artifact.Errf(artifact.ExitUsage, "key must look like M01-B07 or M01-S02, got %q", o.Key)
@@ -84,7 +100,7 @@ func parseAdd(o AddOpts, digits int) (milestone, unit string, err error) {
 		}
 		return o.Milestone, "", nil
 	}
-	return "", "", artifact.Errf(artifact.ExitUsage, "give a plan key (M01-B07) or --milestone <M01> --slice")
+	return "", "", artifact.Errf(artifact.ExitUsage, "give a plan key (#7 or M01-B07) or --milestone <M01> --slice")
 }
 
 // extras validates --title, --design and --repos and returns the stub's
@@ -174,7 +190,7 @@ func kindOfUnit(unit string) string {
 // Add creates a plan and returns its key and kind ("slice"|"item"). root is
 // where --repos names are looked up.
 func Add(root string, s Store, o AddOpts) (key, unitKind string, err error) {
-	milestone, unit, err := parseAdd(o, s.Digits())
+	milestone, unit, err := parseAdd(o, s)
 	if err != nil {
 		return "", "", err
 	}
@@ -187,6 +203,9 @@ func Add(root string, s Store, o AddOpts) (key, unitKind string, err error) {
 	})
 	if err != nil {
 		return "", "", err
+	}
+	if milestone == "" { // milestone-free: the key is the item ref as given
+		return o.Key, "item", nil
 	}
 	return key, kindOfUnit(strings.TrimPrefix(key, milestone+"-")), nil
 }
@@ -209,7 +228,7 @@ func orDefault(v, d string) string {
 
 // Show is the stored plan.
 func Show(s Store, key string) (string, error) {
-	if err := checkKey(key); err != nil {
+	if err := CheckKey(s, key); err != nil {
 		return "", err
 	}
 	return s.Read(key)
@@ -217,7 +236,7 @@ func Show(s Store, key string) (string, error) {
 
 // Put replaces an existing plan's text; changed is false when identical.
 func Put(s Store, key, text string) (bool, error) {
-	if err := checkKey(key); err != nil {
+	if err := CheckKey(s, key); err != nil {
 		return false, err
 	}
 	changed, err := s.Replace(key, text)
@@ -230,7 +249,7 @@ func Put(s Store, key, text string) (bool, error) {
 
 // Rm deletes a plan; a missing one is exit 3, never a no-op.
 func Rm(s Store, key string) error {
-	if err := checkKey(key); err != nil {
+	if err := CheckKey(s, key); err != nil {
 		return err
 	}
 	return s.Remove(key)
