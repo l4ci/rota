@@ -220,6 +220,7 @@ type Returned struct {
 	Salvaged, Released        bool
 	CommentID                 string
 	Changed                   bool
+	Warnings                  []string
 }
 
 // Return is the worker's verb: it parks the slot (the branch is pushed and the
@@ -248,11 +249,13 @@ func (e Env) Return(ctx context.Context, root string, be Board, o ReturnOpts) (r
 			return res, blocked(BlockNotYourSlot, "rota round return must run inside slot %s's worktree or hold the round lease", o.Slot)
 		}
 	}
-	it, err := be.Get(id)
-	if err != nil {
+	tolerate := tolerateMissing(&res.Warnings, id)
+	res.Issue = id
+	if it, err := be.Get(id); tolerate("lookup", err) != nil {
 		return res, wrap(err)
+	} else if err == nil {
+		res.Issue = it.ID
 	}
-	res.Issue = it.ID
 
 	p, err := e.Park(ctx, root, o.Slot, "return")
 	if err != nil {
@@ -262,16 +265,16 @@ func (e Env) Return(ctx context.Context, root string, be Board, o ReturnOpts) (r
 	rnd := registryRound(root)
 	h := handoff{verb: "return", from: o.Slot, round: rnd, branch: p.Branch, head: p.Head, salvaged: p.Salvaged, reason: o.Reason, note: o.Note}
 	cid, _, err := h.post(be, id)
-	if err != nil {
+	if tolerate("handoff comment", err) != nil {
 		return res, wrap(err)
 	}
 	res.CommentID = cid
 
 	claimID := firstNonEmpty(worker.Str(s, "claimId"), o.Slot+"@"+strconv.Itoa(rnd))
-	if res.Released, err = releaseClaims(be, id, o.Slot, claimID, false); err != nil {
+	if res.Released, err = releaseClaims(be, id, o.Slot, claimID, false); tolerate("claim release", err) != nil {
 		return res, wrap(err)
 	}
-	if _, err := be.SetState(id, "none"); err != nil {
+	if _, err := be.SetState(id, "none"); tolerate("state reset", err) != nil {
 		return res, wrap(err)
 	}
 	if err := freeSlot(root, o.Slot, false); err != nil {
@@ -358,6 +361,19 @@ func unresolvable(err error) bool {
 	return errors.Is(err, backlog.ErrNotFound) || (errors.As(err, &te) && te.Kind == tracker.KindNotFound)
 }
 
+// tolerateMissing returns a func that swallows an unresolvable-issue error from
+// a tracker step on issue, recording a warning instead, so a slot is never
+// stranded busy by an issue the tracker no longer knows. Any other error passes.
+func tolerateMissing(warnings *[]string, issue string) func(step string, err error) error {
+	return func(step string, err error) error {
+		if err == nil || !unresolvable(err) {
+			return err
+		}
+		*warnings = append(*warnings, fmt.Sprintf("%s on %s skipped, the tracker does not resolve it: %v", step, issue, err))
+		return nil
+	}
+}
+
 // Reclaim is the orchestrator's verb for a slot that is dead or stalled: it
 // kills a live pane, parks the worktree, posts the handoff comment, releases
 // every claim of the slot, clears the issue's state and frees the slot with its
@@ -414,15 +430,7 @@ func (e Env) Reclaim(ctx context.Context, root string, be Board, o ReclaimOpts) 
 	res.Branch, res.Head, res.Salvaged, res.Parked = p.Branch, p.Head, p.Salvaged, p.Moved
 	rnd := registryRound(root)
 	hf := handoff{verb: "reclaim", from: o.Slot, round: rnd, branch: p.Branch, head: p.Head, salvaged: p.Salvaged, reason: "reclaimed, " + reason, note: o.Note}
-	// An issue the tracker no longer resolves must not strand the slot busy:
-	// warn and keep freeing.
-	tolerate := func(step string, err error) error {
-		if err == nil || !unresolvable(err) {
-			return err
-		}
-		res.Warnings = append(res.Warnings, fmt.Sprintf("%s on %s skipped, the tracker does not resolve it: %v", step, h.Issue, err))
-		return nil
-	}
+	tolerate := tolerateMissing(&res.Warnings, h.Issue)
 	if _, _, err := hf.post(be, h.Issue); tolerate("handoff comment", err) != nil {
 		return res, wrap(err)
 	}
@@ -458,6 +466,7 @@ type Transferred struct {
 	Salvaged                      bool
 	ClaimID                       string
 	Dispatched, Changed           bool
+	Warnings                      []string
 	// Host, Brief and Worktree are set under solo (C8) in place of a dispatch.
 	Host, Brief, Worktree string
 }
@@ -614,14 +623,15 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 		branch = p.Branch
 		h := handoff{verb: "transfer", from: from, round: rnd, branch: p.Branch, head: p.Head, salvaged: p.Salvaged,
 			reason: "transferred to " + o.To, note: o.Note}
-		if _, _, err := h.post(be, id); err != nil {
+		tolerate := tolerateMissing(&res.Warnings, id)
+		if _, _, err := h.post(be, id); tolerate("handoff comment", err) != nil {
 			return res, wrap(err)
 		}
-		if _, err := releaseClaims(be, id, from, oldClaim, false); err != nil {
+		if _, err := releaseClaims(be, id, from, oldClaim, false); tolerate("claim release", err) != nil {
 			return res, wrap(err)
 		}
 		if toHuman {
-			if _, err := be.SetState(id, "none"); err != nil {
+			if _, err := be.SetState(id, "none"); tolerate("state reset", err) != nil {
 				return res, wrap(err)
 			}
 			if err := e.Forge.AddLabels(ctx, it.Number, []string{firstNonEmpty(e.NeedsHuman, DefaultNeedsHuman)}, true); err != nil {
