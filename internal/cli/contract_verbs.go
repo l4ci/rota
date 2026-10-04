@@ -155,6 +155,7 @@ var contractVerbs = []string{
 	"round transfer",
 	"round wait",
 	"round wind-down",
+	"setup",
 	"ship body",
 	"ship merge",
 	"ship pr",

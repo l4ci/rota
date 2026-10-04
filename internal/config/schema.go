@@ -291,3 +291,94 @@ func pyQuote(s string) string {
 	b.WriteByte(q)
 	return b.String()
 }
+
+// Choice is one answer to a Prompt: Value is what config set stores (JSON, so
+// "true" is a boolean), Desc is the line shown beside it.
+type Choice struct {
+	Value string
+	Desc  string
+}
+
+// Prompt is one question of the interactive setup (rota setup). The choices,
+// the help and the default (the schema default of Key) live here and in Keys,
+// so the setup never drifts from the schema; TestPromptsMatchSchema pins that.
+type Prompt struct {
+	Key     string
+	Title   string
+	Choices []Choice
+	// IfKey, when set, makes the question conditional: it is asked only when
+	// the answer (or default) for IfKey equals IfValue.
+	IfKey, IfValue string
+}
+
+// Prompts is the setup's questions, in the order they are asked. Choice values
+// are hand-listed here, not derived from the schema; TestPromptsMatchSchema
+// catches a value the schema rejects.
+var Prompts = []Prompt{
+	{Key: "backlog.backend", Title: "Where does the backlog live?", Choices: []Choice{
+		{"file", "BACKLOG.md in the repo"},
+		{"issues", "GitHub or GitLab issues"},
+	}},
+	{Key: "issues.provider", Title: "Which tracker holds the issues?", IfKey: "backlog.backend", IfValue: "issues", Choices: []Choice{
+		{"auto", "detect from the git remote"},
+		{"github", "GitHub (gh)"},
+		{"gitlab", "GitLab (glab)"},
+	}},
+	{Key: "work.isolation", Title: "How is each piece of work isolated?", Choices: []Choice{
+		{"branch", "a feature branch in this checkout"},
+		{"worktree", "a separate git worktree per item"},
+	}},
+	{Key: "work.mergeStrategy", Title: "How does finished work land?", Choices: []Choice{
+		{"direct", "merge straight into the base branch"},
+		{"pr", "open a pull request"},
+	}},
+	{Key: "work.dispatch", Title: "Where do workers run?", Choices: []Choice{
+		{"subagent", "in-process subagents (rounds detect herdr or tmux)"},
+		{"tmux", "separate Claude Code sessions in tmux"},
+		{"herdr", "separate Claude Code sessions in herdr"},
+	}},
+	{Key: "autonomy.level", Title: "How much may rota chain on its own?", Choices: []Choice{
+		{"off", "skills only suggest the next step"},
+		{"auto", "chain one hop, then stop"},
+		{"loop", "keep taking backlog items until it drains"},
+	}},
+	{Key: "ship.review", Title: "Review the branch before shipping?", Choices: []Choice{
+		{"true", "yes, run /rota-review"},
+		{"false", "no"},
+	}},
+	{Key: "ship.qa", Title: "Run QA before shipping?", Choices: []Choice{
+		{"false", "no"},
+		{"true", "yes, run /rota-qa"},
+	}},
+}
+
+// DefaultChoice is the default of p's key as a Choice value: strings as they
+// are, booleans as "true" or "false".
+func (p Prompt) DefaultChoice() string {
+	for _, k := range Keys {
+		if k.Name == p.Key {
+			return fmt.Sprint(k.Default)
+		}
+	}
+	return ""
+}
+
+// Valid is whether v is one of p's choice values.
+func (p Prompt) Valid(v string) bool {
+	for _, c := range p.Choices {
+		if c.Value == v {
+			return true
+		}
+	}
+	return false
+}
+
+// PromptFor is the prompt for key, or nil.
+func PromptFor(key string) *Prompt {
+	for i := range Prompts {
+		if Prompts[i].Key == key {
+			return &Prompts[i]
+		}
+	}
+	return nil
+}

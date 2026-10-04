@@ -27,6 +27,7 @@ func Tree() *Command {
 			qaCommands(),
 			migrateCommands(),
 			initCommands(),
+			setupCommand(),
 			skillsCommands(),
 		},
 	}
