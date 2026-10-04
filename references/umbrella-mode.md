@@ -1,6 +1,6 @@
 # Umbrella mode
 
-Used by `/rota-work` Step 4.5, `/rota-capture` Step 4.6, `/rota-spike` Step 2.5, `/rota-refactor` Step 1.5 umbrella fanout, and indirectly by every skill that branches on umbrella mode. The reference covers the canonical mechanics; skill-local carriers (per-step routing, `--repo` plumbing into specific verbs, dispatch shape) stay inline at each call site.
+Used by `/rota-work` Step 4.5, `/rota-capture` Step 4.6, `/rota-spike` Step 2.5, `/rota-refactor` (per-sub-repo runs), and indirectly by every skill that branches on umbrella mode. The reference covers the canonical mechanics; skill-local carriers (per-step routing, `--repo` plumbing into specific verbs, dispatch shape) stay inline at each call site.
 
 An umbrella project hosts shared `.rota/` coordinator state at its root, while git history and code live in registered sub-repos under it. The umbrella root has no `.git/` of its own; each sub-repo has its own.
 

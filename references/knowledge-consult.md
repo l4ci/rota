@@ -1,6 +1,6 @@
 # Knowledge & decisions consult
 
-Used by `/rota-debug` Step 3+3.5, `/rota-refactor` (umbrella-fanout context-collect step), `/rota-review` Step 3, and indirectly by `references/context-load-protocol.md` (which composes this pattern into a wider load list for `/rota-plan`, `/rota-vision`, `/rota-work` — including `/rota-work --preview`).
+Used by `/rota-debug` Step 3+3.5, `/rota-refactor` (Orient step), `/rota-review` Step 3, and indirectly by `references/context-load-protocol.md` (which composes this pattern into a wider load list for `/rota-plan`, `/rota-vision`, `/rota-work` — including `/rota-work --preview`).
 
 The pattern is one pair of `rota` calls plus carrier semantics. Skills point here so the call-site logic lives in one place.
 

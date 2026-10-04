@@ -55,6 +55,7 @@ func workerCommands() *Command {
 			{Name: "ensure", Summary: "hand the orchestrator off into a host session", Verb: sessionEnsure},
 		}},
 		{Name: "gate", Summary: "merge gate for one slot's branch or PR", Verb: workerGate},
+		{Name: "train", Summary: "verify several PRs merged together once, then land them", Verb: workerTrain},
 		{Name: "reset", Summary: "refuse a slot that holds work, else cut a fresh task branch", Verb: workerReset},
 		{Name: "account", Summary: "per-account usage headroom and slot assignment", Subs: []*Command{
 			{Name: "list", Summary: "list accounts with their usage verdict", Verb: noFlags(runAccountList)},
