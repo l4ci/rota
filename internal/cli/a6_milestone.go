@@ -18,6 +18,7 @@ func milestoneCommands() []*Command {
 			{Name: "list", Summary: "list milestones", Verb: noFlags(runMilestoneList)},
 			{Name: "show", Summary: "print a milestone", Verb: noFlags(runMilestoneShow)},
 			{Name: "put", Summary: "replace a milestone's text", Verb: milestonePut},
+			{Name: "overview", Summary: "replace the MILESTONES.md overview text", Verb: milestoneOverview},
 			{Name: "status", Summary: "change a milestone's status", Verb: milestoneStatus},
 			{Name: "active", Summary: "IDs of active milestones", Verb: noFlags(runMilestoneActive)},
 			{Name: "index", Summary: "regenerate the overview and vision block", Verb: noFlags(runMilestoneIndex)},
@@ -145,6 +146,32 @@ func milestonePut(fs *flag.FlagSet) RunFunc {
 		d.Set("id", id)
 		d.Set("changed", changed)
 		return Result{Data: d, Text: id}, nil
+	}
+}
+
+// milestoneOverview replaces the overview text above the first "## " heading
+// of MILESTONES.md, in file and issue mode alike: the file is tracked in both.
+func milestoneOverview(fs *flag.FlagSet) RunFunc {
+	file := bodyFlag(fs)
+	return func(c *Ctx, args []string) (Result, error) {
+		if err := noArgs(args); err != nil {
+			return Result{}, err
+		}
+		root, err := c.Root()
+		if err != nil {
+			return Result{}, err
+		}
+		text, err := readBody(c, *file)
+		if err != nil {
+			return Result{}, err
+		}
+		changed, err := ms.SetOverview(root, text)
+		if err != nil {
+			return Result{Data: blocked(err, "heading in body"), Text: ""}, fromArtifact(err)
+		}
+		d := jsonx.NewObject()
+		d.Set("changed", changed)
+		return Result{Data: d, Text: "overview"}, nil
 	}
 }
 
