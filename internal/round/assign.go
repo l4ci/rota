@@ -273,10 +273,13 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 		return res, blocked(BlockNoRound, "this process holds no round lease: run rota round start first")
 	}
 
-	// 2. The slot: the named one, else the first idle roster slot.
+	// 2. The slot: the named one, else the first idle roster slot, else the
+	// first whose PR can be queued. queue marks a slot that holds another
+	// issue but is done with a PR: it is parked right before the claim, so a
+	// refusal on the way moves nothing.
 	reg := worker.LoadRegistry(root)
 	var slot *jsonx.Object
-	resuming := false
+	resuming, queue := false, false
 	if o.Agent != "" {
 		slot = reg.Slot(o.Agent)
 		if slot == nil {
@@ -298,6 +301,16 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 				slot = s
 			}
 		}
+		for _, name := range set.Roster {
+			if slot != nil {
+				break
+			}
+			if s := reg.Slot(name); s != nil {
+				if ok, _ := e.parkable(ctx, s); ok {
+					slot = s
+				}
+			}
+		}
 		if slot == nil {
 			return res, blocked(BlockNoFreeSlot, "every roster slot is busy")
 		}
@@ -306,9 +319,14 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 	res.Agent = agent
 	if h := heldID(worker.Str(slot, "task"), worker.Str(slot, "branch"), agent); h != "" {
 		if h != strings.ToUpper(id) {
-			return res, blocked(BlockSlotBusy, "slot %s holds %s", agent, h)
+			ok, why := e.parkable(ctx, slot)
+			if !ok {
+				return res, blocked(BlockSlotBusy, "%s", busyMsg(agent, h, why))
+			}
+			queue = true
+		} else {
+			resuming = true
 		}
-		resuming = true
 	}
 	res.Branch = BranchName(agent, id, it.Title)
 
@@ -347,6 +365,10 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 		if !ok {
 			return res, blocked(BlockOutOfScope, "%s is outside the round's scope (%s)", id, scope)
 		}
+	}
+
+	if q := reg.QueuedIssue(id); q != nil && !resuming {
+		return res, blocked(BlockClaimed, "%s has a queued PR %s from %s: rota round transfer %s --to <slot> picks it up", id, worker.Str(q, "pr"), worker.Str(q, "from"), id)
 	}
 
 	// 4. Readiness.
@@ -403,6 +425,11 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 		rnd = intOf(v)
 	}
 	claimID := agent + "@" + strconv.Itoa(rnd)
+	if queue {
+		if err := e.queuePR(ctx, root, agent); err != nil {
+			return res, wrap(err)
+		}
+	}
 	won, holderID, err := be.Claim(id, claimID)
 	if err != nil {
 		return res, err

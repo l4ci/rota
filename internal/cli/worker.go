@@ -670,11 +670,22 @@ func workerGate(fs *flag.FlagSet) RunFunc {
 }
 
 // slotApprovalThread is the approval thread of a worker gate (C5): the slot's
-// recorded PR, else the slot's issue. Neither is exit 2.
+// recorded PR, else the slot's issue. The argument may also be a PR ref, which
+// resolves to a queued PR record. Neither is exit 2.
 func slotApprovalThread(root, slot string) (approvalThread, error) {
-	s := worker.LoadRegistry(root).Slot(slot)
-	if s == nil {
-		return approvalThread{}, Resolution("slot '%s' is not in the pool", slot)
+	s, queued, err := worker.LoadRegistry(root).GateTarget(slot)
+	if err != nil {
+		var we *worker.Error
+		if errors.As(err, &we) && we.Exit == worker.ExitResolution {
+			return approvalThread{}, Resolution("%s", we.Message)
+		}
+		return approvalThread{}, fromWorker(err)
+	}
+	// The arg may have been a PR ref. A queued record's slot has moved on, so
+	// its thread names none.
+	slot = worker.Str(s, "name")
+	if queued {
+		slot = ""
 	}
 	branch := worker.Str(s, "branch")
 	if n, ok := round.PRNumber(worker.Str(s, "pr")); ok {
