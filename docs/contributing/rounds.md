@@ -13,7 +13,9 @@ The full gate runs once, at merge: `rota worker gate` runs `refactor.verifyComma
 tree through `bash test/gate.sh`: validate-skills, `go vet ./...`, `go test -race -timeout 30m ./...`
 and the smoke suite in `gate.smokeShards` (default 4) shards, all at once. About 160 s on an idle
 8-core box, against 590 s in series. It takes a machine-wide lock, so two gates never overlap, and
-keeps one log per check. Workers do not run it.
+keeps one log per check. Every check makes its temp files under one gate-owned root, and the gate fails if
+any entry is left in it afterwards, so a run that leaks shows up as a red gate, not as a full `/tmp`.
+Workers do not run it.
 
 Before a PR, a worker runs targeted checks only, as the [worker contract](../../references/worker-contract.md)
 says: `python3 test/validate-skills.py` (under a second), `go vet` and `go test` for the packages it
