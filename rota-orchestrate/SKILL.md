@@ -56,6 +56,8 @@ What each state asks of you:
 
 A wait that times out with every slot busy is fine. A free slot with candidates left is not.
 
+**Architecture review.** `rota round status`, `candidates` and `start` carry an `architecture` line: `architecture review in N issues`. After every `wait`, run `rota round architecture`. It does nothing until a review is due: `round.architectureEvery` closed non-refactor items (default 20, `0` is off), or an idle slot with no ready candidate. When due it mints one `arch(<area>): architecture review` item per area (`round.architectureAreas`, else the subsystem map, else the whole repo), assigns them to idle slots and restarts the count; you don't ask first. Leftover review items are ordinary candidates in every scope. Each runs `/rota-refactor <area>` in findings-only mode and files `refactor`-labelled issues, which don't count toward the next review and follow the normal candidate rules. `rota round architecture --check` only reads. Under solo it returns each `brief` and `worktree` to launch like an `assign`.
+
 ## 4. Reading failures
 
 **Dead vs stalled.** A `dead` slot has no live agent: the tab is gone or the process exited. A `stalled` slot has a live agent and nothing has moved for `round.stallMinutes` (no commit, no edit, no state change). Stalled is usually a long test run, not a failure, and a worker waiting on your escalation is never stalled. Read the pane before acting on either.
