@@ -29,6 +29,7 @@ func Tree() *Command {
 			migrateCommands(),
 			initCommands(),
 			setupCommand(),
+			projectsCommand(),
 			skillsCommands(),
 		},
 	}
