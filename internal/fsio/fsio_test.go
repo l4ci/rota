@@ -109,12 +109,8 @@ func TestWriteJSONAtomicMatchesPython(t *testing.T) {
 	if err := WriteJSONAtomic(goPath, v); err != nil {
 		t.Fatal(err)
 	}
-	var p string
-	golden.Golden(t, map[string]any{}, &p)
 	g, _ := os.ReadFile(goPath)
-	if string(g) != p {
-		t.Fatalf("\n--- go\n%s--- golden\n%s", g, p)
-	}
+	golden.Check(t, map[string]any{}, string(g))
 }
 
 func TestLoadJSONDefaults(t *testing.T) {
