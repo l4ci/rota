@@ -85,7 +85,7 @@ Step I6 is a manual gate (see `references/manual-gates.md`). The user sees
 which issues will be labeled and confirms before any label is written
 upstream. Loop mode never auto-picks this step: the label change is
 externally visible, and collaborators see the issues marked as claimed.
-Silence is not consent: the default when a plain-text fallback is used is
+Silence is not consent: the default when asked in prose is
 **skip** (opt-in-off).
 
 ## Round-trip closing

@@ -20,7 +20,7 @@ This works well for small teams. For larger ones a real issue tracker is usually
 
 ## What if I'm not using Claude Code?
 
-Codex is supported. `rota skills install` writes the skills to `~/.agents/skills` as well as the Claude Code directory, and Codex can also run as a worker in a round. See [using the skills in Codex](usage/codex-skills.md) and [Codex workers](usage/codex-workers.md). One caveat: skill bodies still name Claude Code tools (`AskUserQuestion`, `TaskCreate`, `Agent`), so a skill may not run end to end in Codex.
+Codex is supported. `rota skills install` writes the skills to `~/.agents/skills` as well as the Claude Code directory, and Codex can also run as a worker in a round. See [using the skills in Codex](usage/codex-skills.md) and [Codex workers](usage/codex-workers.md). One caveat: skill bodies still name Claude Code tools (`AskUserQuestion`, `Agent`), so a skill may not run end to end in Codex.
 
 The `.rota/` folder, the `BACKLOG.md` format and the `rota` binary are agent-agnostic; you can call `rota` from any shell. Other harnesses are untested.
 

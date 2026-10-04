@@ -3,15 +3,6 @@ name: rota-review
 description: Staff-engineer review of a feature branch before merge or PR — reads commits, diff, referenced item IDs, and matching KNOWLEDGE.md topics; dispatches an Opus reviewer that checks intent match, convention compliance, and quality. Returns PASS / CONCERNS / FAIL. Use on "review this", "check before I ship", "look over the branch", or implicitly from /rota-ship.
 ---
 
-**Print the banner below verbatim before any other action — skip if dispatched as a subagent.** See `references/banner-preamble.md`.
-
-```
-════════════════════════════════════════════════════════════════════════
-  🔍  rota-review  ·  staff-engineer review of a branch
-  triggers: "review this", "check before ship"  ·  pairs: rota-ship
-════════════════════════════════════════════════════════════════════════
-```
-
 # rota-review — Pre-Merge Review
 
 ## Configuration
@@ -36,7 +27,7 @@ Read `.rota/config.json`:
 
 ## Step 1 — Task List
 
-**Initialize task list.** Follow the canonical pattern in `references/task-list-init.md` — load `TaskCreate(…)` via `ToolSearch select:TaskCreate,TaskUpdate` if needed, then create one task per phase below.
+Track these phases with the host's task tool if it has one.
 
 Phases:
 
@@ -438,6 +429,5 @@ Exit 5 or 6 (tracker unavailable or rate-limited) from any verb stops the queue 
 
 ## References
 
-- [`references/banner-preamble.md`](references/banner-preamble.md) — Banner-print rule shared by every skill.
 - [`references/knowledge-consult.md`](references/knowledge-consult.md) — Canonical K+D query pattern (`rota knowledge query` + `rota decisions query`) used by every cycle-starting skill.
 - [`references/review-verdict-routing.md`](references/review-verdict-routing.md) — PASS / CONCERNS / FAIL routing for `/rota-review` consumers.

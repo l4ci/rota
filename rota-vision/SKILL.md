@@ -3,15 +3,6 @@ name: rota-vision
 description: Brainstorm a project's vision and break it into milestones — Socratic discovery, web research, deliberate challenge, then write MILESTONES.md and per-milestone detail files. Handles fresh vision and editing/extending an existing one. Use on "let's plan", "what's the bigger picture", "create a roadmap", "brainstorm milestones".
 ---
 
-**Print the banner below verbatim before any other action — skip if dispatched as a subagent.** See `references/banner-preamble.md`.
-
-```
-════════════════════════════════════════════════════════════════════════
-  🔭  rota-vision  ·  brainstorm milestones with research
-  triggers: "vision", "brainstorm milestones"  ·  pairs: rota-work
-════════════════════════════════════════════════════════════════════════
-```
-
 # rota-vision — Brainstorm Project Vision & Milestones
 
 Multiple milestones can be active at once when they don't depend on each other.
@@ -22,7 +13,7 @@ Multiple milestones can be active at once when they don't depend on each other.
 
 Determine the mode silently via `rota milestone list --json`: `data.milestones` empty → **Create mode** (build vision from scratch); non-empty → **Edit mode** (extend, refine, retire, re-prioritize). Don't announce — it shapes your questions, not the user's view.
 
-**Initialize task list.** Follow the canonical pattern in `references/task-list-init.md` — load `TaskCreate(…)` via `ToolSearch select:TaskCreate,TaskUpdate` if needed, then create one task per phase below.
+Track these phases with the host's task tool if it has one.
 
 Phases:
 
@@ -60,7 +51,7 @@ The orchestrator uses the snapshot to ground the Step 3 framing paragraph. Defin
 
 ## Step 3 — Frame & Discover
 
-`/rota-vision` is the project-scope half of the design-exploration family — see `references/design-exploration.md` for the shared spine (Socratic discovery, propose before disk write, iterate before commit, write via verb, user-review gate) and the per-axis divergences. Vision's discovery is batched (single `AskUserQuestion` call with 2–3 questions in Create mode); brainstorm's is one-per-round. Both honor the same plain-text fallback rule.
+`/rota-vision` is the project-scope half of the design-exploration family — see `references/design-exploration.md` for the shared spine (Socratic discovery, propose before disk write, iterate before commit, write via verb, user-review gate) and the per-axis divergences. Vision's discovery is batched (single `AskUserQuestion` call with 2–3 questions in Create mode); brainstorm's is one-per-round.
 
 Open with one short paragraph (3–4 sentences max) summarizing what you see — the project's apparent shape, the existing milestones if any, the obvious gaps. This grounds the conversation; it's not a status report.
 
@@ -85,7 +76,7 @@ Then ask discovery questions via `AskUserQuestion`. Tailor them to the mode:
   - Re-prioritize the active set
   - Explore a new direction the project should consider
 
-Plain-text fallback: ask the same question in prose; default to Recommended on ambiguity, naming it explicitly. See `references/ask-user-question-fallback.md`.
+On ambiguity, default to Recommended, naming it explicitly.
 
 ## Step 4 — Web Research
 
@@ -222,7 +213,7 @@ Use `AskUserQuestion` with header `"Seed M01"` and three options:
 - `"Write first slice plan"` — write `M01-S01.md` as a durable plan before any items land
 - `"Skip for now"` — leave M01 empty; the user will populate later
 
-Plain-text fallback: ask once in prose; default to Recommended (Capture items) on ambiguity, naming it explicitly. See `references/ask-user-question-fallback.md`.
+On ambiguity, default to Recommended (Capture items), naming it explicitly.
 
 **Capture items** — invoke `/rota-capture` via the `Skill` tool:
 
@@ -264,7 +255,5 @@ Otherwise the run is done. Don't recap discovery, research, or the challenge rou
 
 ## References
 
-- [`references/ask-user-question-fallback.md`](references/ask-user-question-fallback.md) — Plain-text fallback shape for AskUserQuestion-less hosts.
-- [`references/banner-preamble.md`](references/banner-preamble.md) — Banner-print rule shared by every skill.
 - [`references/context-load-protocol.md`](references/context-load-protocol.md) — K+D context loading sequence shared by every cycle-starting skill.
 - [`references/design-exploration.md`](references/design-exploration.md) — Shared spine (Socratic discovery, propose, iterate, write, user-review) and per-axis divergences with `/rota-brainstorm`.

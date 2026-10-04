@@ -4,15 +4,6 @@ description: >-
   Run a parallel round as the orchestrator: choose the slate, read what workers are doing, answer or escalate their questions, merge their PRs, wind the round down. Judgment only: the `rota round` verbs do the sequencing and enforce the rules. Use on "you are the orchestrator", "run a round", "orchestrate", "assign the next issues to the workers", "what are my workers doing".
 ---
 
-**Print the banner below verbatim before any other action — skip if dispatched as a subagent.** See `references/banner-preamble.md`.
-
-```
-══════════════════════════════════════════════════════════════════
-  🎛  rota-orchestrate  ·  run a parallel round
-  triggers: "you are the orchestrator", "run a round"  ·  pairs: rota-work, rota-ship, rota-review
-══════════════════════════════════════════════════════════════════
-```
-
 # rota-orchestrate: Run a Round
 
 A round is one orchestrator (you) and up to five standing workers, each in its own worktree and host tab, each holding one issue. Workers build and open PRs. You choose, route, answer and merge. The mechanics are `rota round` verbs; this skill holds the calls a verb cannot make. If a verb refuses, the refusal is the rule: read `data.blockedBy` and `error.hint`, don't route around it.
