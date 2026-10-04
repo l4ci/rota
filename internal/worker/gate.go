@@ -229,6 +229,7 @@ func (e Env) gate(ctx context.Context, root string, o GateOpts, res GateResult, 
 			return g.broke(brokeMsg)
 		}
 		if why != "" {
+			g.res.SHA, _ = e.git(root, "rev-parse", "--short=7", g.headRef) // bounce accounting keys on the head
 			return g.verdict(GateStale, fmt.Sprintf("STALE %s %s — %s commit(s) landed on %s since it branched; %s", o.Slot, branch, behind, o.Base, why),
 				fmt.Sprintf("bounce: tell slot %s to `git merge %s`, resolve and re-verify, then re-gate", o.Slot, o.Base)), nil
 		}
@@ -269,6 +270,7 @@ func (e Env) gate(ctx context.Context, root string, o GateOpts, res GateResult, 
 		return g.broke(brokeMsg)
 	}
 	if failMsg != "" {
+		g.res.SHA, _ = e.git(root, "rev-parse", "--short=7", g.headRef)
 		return g.verdict(GateProvenanceFail, failMsg, ""), nil
 	}
 	if o.CheckOnly {

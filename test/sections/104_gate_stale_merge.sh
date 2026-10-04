@@ -54,11 +54,17 @@ pass "a stale branch with a clean merge and no shared file is merged by the gate
 gswork clash.txt
 gsmain clash.txt
 for N in 1 2; do
+  [ "$N" = "2" ] && gswork "again$N.txt"   # a new head between bounces: it counts
   RC=0; OUT=$(gs worker gate ben --base main) || RC=$?
   [ "$RC" = "1" ] && [ "$(echo "$OUT" | jget data.verdict)" = "stale" ] && [ "$(echo "$OUT" | jget data.bounces)" = "$N" ] \
     || fail "bounce $N should be a counted stale refusal: rc=$RC $OUT"
   [ "$(echo "$OUT" | jget data.parked)" = "false" ] || fail "bounce $N is under the cap: $OUT"
 done
+# Re-gating an unchanged head is not a new bounce.
+RC=0; OUT=$(gs worker gate ben --base main) || RC=$?
+[ "$RC" = "1" ] && [ "$(echo "$OUT" | jget data.verdict)" = "stale" ] && [ "$(echo "$OUT" | jget data.bounces)" = "2" ] \
+  || fail "re-gating an unchanged head must not count: rc=$RC $OUT"
+gswork again3.txt
 [ "$(gsslot task)" = "1" ] || fail "the slot still holds the issue under the cap"
 RC=0; OUT=$(gs worker gate ben --base main --check-only) || RC=$?
 [ "$RC" = "1" ] && [ -z "$(echo "$OUT" | jget data.bounces 2>/dev/null || true)" ] || fail "--check-only must not count a bounce: rc=$RC $OUT"
