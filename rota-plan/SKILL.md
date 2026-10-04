@@ -1,11 +1,11 @@
 ---
 name: rota-plan
-description: Write an implementation plan as a first-class artifact before execution — keyed by milestone and slice or item (M01-S01.md, M01-B07.md). Captures goal, approach, task decomposition with verifiable outcomes, open questions, and named assumptions. /rota-work consults the plan if present. Use when an item or slice is too big to one-shot, or when alignment matters before code lands.
+description: Write an implementation plan as a first-class artifact before execution — keyed by milestone and slice or item (M01-S01, M01-B07). Captures goal, approach, task decomposition with verifiable outcomes, open questions, and named assumptions. /rota-work consults the plan if present. Use when an item or slice is too big to one-shot, or when alignment matters before code lands.
 ---
 
 # rota-plan — Implementation Plan as Artifact
 
-Write a plan to disk that the user signs off on before `/rota-work` runs. The plan is keyed under a milestone and a slice or backlog item — `.rota/plans/M01-S01.md` for a slice, `.rota/plans/M01-B07.md` for a single backlog item that warrants its own plan.
+Write a plan to disk that the user signs off on before `/rota-work` runs. The plan is keyed under a milestone and a slice or backlog item — `M01-S01` for a slice, `M01-B07` for a single backlog item that warrants its own plan. On the issue backend a plan is a note on the item's issue (a slice plan, `plan:SNN`, lives on the milestone's tracking issue); on the file backend it is `.rota/plans/<key>.md`.
 
 `/rota-plan` runs in one of two modes:
 
@@ -19,37 +19,37 @@ Track these phases with the host's task tool if it has one.
 Phases:
 
 1. *Resolve target* — milestone-and-unit key extracted from args / cwd (Step 2)
-2. *Load context* — TODO entry, detail file, codebase greps gathered (Step 3)
+2. *Load context* — backlog item, its detail, codebase greps gathered (Step 3)
 3. *Propose* — goal, approach, task decomposition drafted for the user (Step 4)
 4. *Iterate* — feedback rounds until alignment (Step 5)
-5. *Write* — plan persisted to `.rota/plans/<key>.md` (Step 6)
+5. *Write* — plan persisted via `rota plan` (Step 6)
 
 ## Step 2 — Resolve Target
 
 The user's input may be:
 
 - **A milestone ID** (`M01`) — slice mode; mint the next slice number
-- **A backlog item ID** (`B07`, `F03`, `T11`) — item mode; the plan key is `<milestone>-<itemId>`
+- **A backlog item ID** (`#42`; file backend `B07`, `F03`, `T11`) — item mode; the plan key is `<milestone>-<itemId>`
 - **Free-form** (*"plan the auth foundation"*, *"for the OAuth work"*) — ask which milestone
 
-For an item target, read its `BACKLOG.md` entry and overflow file (`.rota/<bugs|features|tasks>/<id>.md` if it exists) and look for a `Milestone:` field. That's the parent. If the item lacks a milestone tag, ask the user to either:
+For an item target, read it with `rota item field list --json <ID>` (file backend: its `BACKLOG.md` entry and overflow file `.rota/<bugs|features|tasks>/<id>.md`) and look for the `milestone` field. That's the parent. If the item lacks a milestone tag, ask the user to either:
 
-- Tag the item under an active milestone — write the tag via `rota item field set <ID> --name milestone --value <MID>` (never hand-edit `.rota/BACKLOG.md`; the verb mutates the open bullet in place and is idempotent), then proceed
+- Tag the item under an active milestone — write the tag via `rota item field set <ID> --name milestone --value <MID>` (never hand-edit `.rota/BACKLOG.md` on the file backend; the verb is idempotent), then proceed
 - Skip planning and capture with `/rota-capture` and accept the hand-off to `/rota-work`
 
 When the item carries a `Repos:` field, capture that value as the plan's target sub-repo(s) so `/rota-work` can resolve dispatch from the plan alone. The plan key shape (`<milestone>-<itemId>`) does not change — repo is frontmatter, not key. Multi-repo items pass the full comma-list through (`--repos web,api`); the frontmatter key stays singular `repo:` and just carries the joined string. Slice and milestone targets do not carry a repo (umbrella-flat per M02 acceptance).
 
 For a slice target, read `.rota/milestones/<MID>.md` for goal/acceptance/risks context (issue mode: `rota milestone show <MID>`).
 
-If the same key already exists at `.rota/plans/<key>.md`, ask whether to view (`rota plan show <key>`), edit (skip to Step 4 with current content as the starting point), or replace (`rota plan rm <key>` first, then re-create).
+If a plan with the same key already exists (`rota plan show <key>`), ask whether to view (`rota plan show <key>`), edit (skip to Step 4 with current content as the starting point), or replace (`rota plan rm <key>` first, then re-create).
 
 ## Step 3 — Load Context Silently
 
-Apply the canonical pre-planning context-load protocol (`references/context-load-protocol.md`) — it lists the common reads (TODO entry, plan, milestone, milestone-scoped items via `rota backlog ids --milestone <MID>`, K+D queries, recent git history) and cites the K+D query mechanics. For this skill, the reads also include:
+Apply the canonical pre-planning context-load protocol (`references/context-load-protocol.md`) — it lists the common reads (backlog item, plan, milestone, milestone-scoped items via `rota backlog ids --milestone <MID>`, K+D queries, recent git history) and cites the K+D query mechanics. For this skill, the reads also include:
 
 - Existing plans for this milestone: `rota plan list --milestone <MID>`
 - For item targets carrying a `Repos:` field: resolve it to an absolute sub-repo path via `.rota/repos.json` (`load_repos()`). Skipped for slice / milestone targets and when umbrella mode is off.
-- For item targets whose ID matches `[BFT]\d{2,}`: `[ -f .rota/designs/<ID>.md ] && cat .rota/designs/<ID>.md` to load any design artifact from `/rota-brainstorm`. Skipped for slice targets. When a design artifact exists, it carries the negotiated Goal/Design/Approaches-considered — Step 4's proposal mirrors the design's chosen approach rather than re-exploring.
+- For item targets (`#N` or `[BFT]\d{2,}`): `rota design show <ID>` to load any design artifact from `/rota-brainstorm`. Skipped for slice targets. When a design artifact exists, it carries the negotiated Goal/Design/Approaches-considered — Step 4's proposal mirrors the design's chosen approach rather than re-exploring.
 - **Doc-home awareness (F76).** Note whether the target repo has a doc home — i.e. `<repo-root>/<docs.path>/` (default `<repo-root>/docs/`). In umbrella mode also peek at siblings: if `<repo>-docs` is registered in `.rota/repos.json`, the project's docs likely live there, not in `<repo>/docs/`. The deterministic post-write check `rota plan validate-docs` re-checks this at Step 6.5, but the proposal in Step 4 should already route doc deliverables correctly rather than leave a mismatch for the post-write check to catch.
 
 DECISIONS matches are committed boundaries the plan must respect. If the plan would violate any, **redesign before writing**, or surface the conflict and ask the user whether to update the decision first.
@@ -122,11 +122,11 @@ KEY=$(rota plan add --json <MID>-<itemId> --title "<title>" --repos web,api | jq
 
 Pass `--repos` only for item-mode targets that carry a `Repos:` value. Slice mode never sets `--repos`. Multi-repo items keep all names in one comma-separated `--repos` value; `rota plan add` validates each name against `.rota/repos.json` before writing the plan.
 
-When a design exists for the plan's item (`.rota/designs/<ID>.md`), pass `--design <ID>` to `rota plan add`. The plan's frontmatter records `design: .rota/designs/<ID>.md` as a traceability pointer.
+When a design exists for the plan's item, pass `--design <ID>` to `rota plan add`. The plan's frontmatter records `design: .rota/designs/<ID>.md` (issue backend, on a slice: `design: note:<ID>:design`) as a traceability pointer.
 
-**Issue mode** (`backlog.backend: "issues"`; `references/issue-mode.md`): plans are notes, not files: an item plan on the item's issue, a slice plan (`plan:SNN`) on the milestone's tracking issue. `rota plan add` still creates the plan (`rota plan add --milestone <M> --slice --title "<title>"` mints `SNN`); draft the confirmed sections in a scratch file and publish with `rota plan put <key> --body-file <scratch-file>|-` instead of `Edit` (slice keys look like `M07-S05`). Read it back with `rota plan show <key>`, list with `rota plan list [--milestone <M>]`, remove with `rota plan rm <key>`. `--design <ID>` on a slice records `design: note:<ID>:design`. Record plan-shaping answers with `rota item comment add <ID> --kind decision --body-file -`.
+On the issue backend (`references/issue-mode.md`), `rota plan add` still creates the plan (`rota plan add --milestone <M> --slice --title "<title>"` mints `SNN`), but draft the confirmed sections in a scratch file and publish with `rota plan put <key> --body-file <scratch-file>|-` instead of `Edit` (slice keys look like `M07-S05`). List with `rota plan list [--milestone <M>]`, remove with `rota plan rm <key>`. Record plan-shaping answers with `rota item comment add <ID> --kind decision --body-file -`.
 
-The verb creates `.rota/plans/<key>.md` with frontmatter and stub sections. Use the `Edit` tool to fill in Goal, Approach, Tasks, Open questions, and Assumptions — replacing the placeholder sections with confirmed content. Keep the frontmatter intact.
+On the file backend the verb creates `.rota/plans/<key>.md` with frontmatter and stub sections. Use the `Edit` tool to fill in Goal, Approach, Tasks, Open questions, and Assumptions — replacing the placeholder sections with confirmed content. Keep the frontmatter intact.
 
 ## Step 6.5 — Validate Doc-by-Path Deliverables (F76)
 
@@ -191,7 +191,7 @@ rota decisions auto-log --topic "<topic>" --title "<rule-title>" --why "<why-tex
 
 The entry follows the standard `DECISIONS.md` template, but **only the rule and `*Why.*` are auto-filled**; `**Forbids.**` and `**Permits.**` stay as `_(Unresolved — user must articulate)_` placeholders the user fills at session end (per the 2026-05-08 source-prefill rule that destination-specific fields stay as placeholders the skill blocks on). A footer comment encodes provenance: `<!-- [Auto:Loop] <plan-key> <date> — review and articulate Forbids/Permits -->`. The verb is idempotent on `(topic, rule-title)` — re-running the same plan key writes each entry exactly once.
 
-After all questions are resolved, write the plan to `.rota/plans/<key>.md` using the same `rota plan add` + `Edit` flow as Step 6, with `--auto-loop` on `rota plan add`: the verb writes the `auto: true` frontmatter key that marks the plan as auto-written, and refuses the flag (exit 2) outside loop mode. The plan's "Open questions" section lists every step-3 placeholder verbatim; "Resolved open questions" lists every step-1/2 outcome with a brief rationale.
+After all questions are resolved, write the plan using the same `rota plan add` + `Edit` flow as Step 6, with `--auto-loop` on `rota plan add`: the verb writes the `auto: true` frontmatter key that marks the plan as auto-written, and refuses the flag (exit 2) outside loop mode. The plan's "Open questions" section lists every step-3 placeholder verbatim; "Resolved open questions" lists every step-1/2 outcome with a brief rationale.
 
 ### Surfacing
 
