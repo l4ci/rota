@@ -53,7 +53,7 @@ func AddItemNote(root string, n artifact.Notes, o AddOpts) (key string, err erro
 		return "", artifact.Errf(artifact.ExitRefused, "plan note for %s already exists", unit)
 	}
 	key = milestone + "-" + unit
-	_, err = n.NotePut(unit, "plan", stub(key, milestone, unit, "item", repo, design, o.Title, o.Auto))
+	_, err = n.NotePut(unit, "plan", stub(key, milestone, unit, "item", repo, design, o.Title))
 	return key, err
 }
 

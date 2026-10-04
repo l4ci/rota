@@ -1,4 +1,4 @@
-echo "iron law: ship refuses after FAIL, debug refuses a 4th attempt, --auto-loop is loop-only (B3, #56)"
+echo "iron law: ship refuses after FAIL, debug refuses a 4th attempt, --auto-loop is refused (B3, #56)"
 
 IL="$(mktemp -d "$TMP/ironlaw.XXXXXX")"
 (
@@ -46,11 +46,8 @@ grep -q '"gate": "debug-reset"' "$IL/.rota/gate-audit.jsonl" || fail "the reset 
 ( cd "$IL" && hvj debug counter init B07 >/dev/null ) || fail "init should work again after a reset"
 pass "debug reset is gated and audited, and starts the count again"
 
-# --auto-loop writes auto: true in loop mode and is a usage error outside it.
+# --auto-loop was removed with loop autonomy: an unknown flag, exit 2, nothing written.
 RC=0; ( cd "$IL" && hvj design add F01 --title "Auto" --auto-loop >/dev/null 2>&1 ) || RC=$?
-[ "$RC" = "2" ] || fail "design add --auto-loop outside loop should exit 2, got $RC"
+[ "$RC" = "2" ] || fail "design add --auto-loop should exit 2 (unknown flag), got $RC"
 [ ! -e "$IL/.rota/designs/F01.md" ] || fail "a refused --auto-loop wrote the design"
-printf '{"autonomy": {"level": "loop"}}\n' > "$IL/.rota/config.json"
-( cd "$IL" && hvj design add F01 --title "Auto" --auto-loop >/dev/null ) || fail "design add --auto-loop in loop failed"
-grep -qx 'auto: true' "$IL/.rota/designs/F01.md" || fail "the loop design should carry auto: true"
-pass "--auto-loop is loop-only and marks the artifact"
+pass "--auto-loop is gone and refused as an unknown flag"

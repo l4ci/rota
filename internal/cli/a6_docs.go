@@ -3,11 +3,9 @@ package cli
 import (
 	"flag"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/l4ci/rota/internal/artifact"
-	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/design"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/plan"
@@ -92,27 +90,8 @@ func idOr(id string) string {
 
 // ---- design
 
-// autoLoopFlag registers --auto-loop on design add and plan add.
-func autoLoopFlag(fs *flag.FlagSet) *bool {
-	return fs.Bool("auto-loop", false, "mark the artifact as written by a loop run (autonomy.level loop only)")
-}
-
-// checkAutoLoop is exit 2 when --auto-loop is given while autonomy.level is
-// not loop (B3). It runs before anything is written.
-func checkAutoLoop(c *Ctx, root string, auto bool) error {
-	if !auto {
-		return nil
-	}
-	cfg := config.Load(filepath.Join(root, ".rota", "config.json"))
-	if configString(cfg, "autonomy.level") != "loop" {
-		return Usage("--auto-loop is loop-mode only; set autonomy.level to loop")
-	}
-	return nil
-}
-
 func designAdd(fs *flag.FlagSet) RunFunc {
 	title := fs.String("title", "", "design title")
-	auto := autoLoopFlag(fs)
 	return func(c *Ctx, args []string) (Result, error) {
 		id, err := oneArg(args, "item ID")
 		if err != nil {
@@ -125,20 +104,13 @@ func designAdd(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		if err := checkAutoLoop(c, root, *auto); err != nil {
-			return Result{}, err
-		}
-		var opts []design.Option
-		if *auto {
-			opts = append(opts, design.Auto())
-		}
 		if issue {
-			return designAddIssue(c, id, *title, opts...)
+			return designAddIssue(c, id, *title)
 		}
 		if !design.ValidID(id) {
 			return Result{}, fromArtifact(design.Add("", id, *title)) // reports the bad ID
 		}
-		if err := design.Add(root, id, *title, opts...); err != nil {
+		if err := design.Add(root, id, *title); err != nil {
 			return Result{Data: refusal(err)}, fromArtifact(err)
 		}
 		return Result{Data: idData(id, true), Text: id}, nil
@@ -299,20 +271,16 @@ func planAdd(fs *flag.FlagSet) RunFunc {
 	repos := fs.String("repos", "", "comma list of sub-repos")
 	milestone := fs.String("milestone", "", "milestone for a minted slice key")
 	slice := fs.Bool("slice", false, "mint the next S<NN> key for --milestone")
-	auto := autoLoopFlag(fs)
 	return func(c *Ctx, args []string) (Result, error) {
 		if len(args) > 1 {
 			return Result{}, Usage("expected one plan key, got %d arguments", len(args))
 		}
-		o := plan.AddOpts{Milestone: *milestone, Slice: *slice, Title: *title, Design: *designID, Repos: *repos, Auto: *auto}
+		o := plan.AddOpts{Milestone: *milestone, Slice: *slice, Title: *title, Design: *designID, Repos: *repos}
 		if len(args) == 1 {
 			o.Key = args[0]
 		}
 		root, issue, err := modeRoot(c)
 		if err != nil {
-			return Result{}, err
-		}
-		if err := checkAutoLoop(c, root, *auto); err != nil {
 			return Result{}, err
 		}
 		if issue {

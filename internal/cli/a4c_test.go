@@ -132,3 +132,20 @@ func TestA4cRepoVerbs(t *testing.T) {
 		t.Errorf("no root umbrella: %d %v", code, env)
 	}
 }
+
+// autonomy.level "loop" was removed (#70): config check fails and names it.
+func TestA4cConfigCheckFailsOnRetiredLoop(t *testing.T) {
+	root := a4Project(t, `{"autonomy": {"level": "loop"}}`+"\n")
+	code, env, _ := rotaRun(t, "--json", "-C", root, "config", "check")
+	retired, _ := get(dataOf(env), "retired").([]any)
+	if code != ExitFailed || len(retired) != 1 || !strings.Contains(retired[0].(string), `"loop" was removed`) {
+		t.Errorf("check: %d %v", code, env)
+	}
+	if code, out, _ := rotaIn(t, root, "config", "check"); code != ExitFailed || !strings.HasPrefix(out, "RETIRED: ") {
+		t.Errorf("text mode: %d %q", code, out)
+	}
+	root = a4Project(t, `{"autonomy": {"level": "auto"}}`+"\n")
+	if _, env, _ := rotaRun(t, "--json", "-C", root, "config", "check"); get(dataOf(env), "retired") != nil {
+		t.Errorf("auto flagged: %v", env)
+	}
+}

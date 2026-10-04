@@ -111,4 +111,4 @@ Each operates within the sub-repo's `.git/`. At the umbrella root without `--rep
 
 - **Isolation patterns** (branch vs worktree, the decision table, the isolation guard) — see `references/isolation-patterns.md`.
 - **Multi-repo parallelism safety** — `references/isolation-patterns.md` covers the rule (cross-repo parallel workers are safe by construction because each sub-repo has its own `.git/index`).
-- **`rota-capture`'s `Repos:` tagging interaction** — how items acquire their `Repos:` field at capture time (cwd inference, AskUserQuestion shape, loop-mode auto-pick) is per-skill carrier semantics; see `/rota-capture` Step 4.6 inline.
+- **`rota-capture`'s `Repos:` tagging interaction** — how items acquire their `Repos:` field at capture time (cwd inference, AskUserQuestion shape) is per-skill carrier semantics; see `/rota-capture` Step 4.6 inline.

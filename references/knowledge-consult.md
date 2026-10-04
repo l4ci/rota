@@ -69,4 +69,3 @@ A caller MAY add carrier-specific failure semantics on top — for example, "if 
 
 - **Full pre-planning context load.** This is the K+D *query* pattern only. The composed load (TODO entry, plan, milestone, git history, plus K+D) lives in `references/context-load-protocol.md`, which cites this file for the K+D subset.
 - **`.rota/KNOWLEDGE.md` `## Glossary` vocabulary lookup.** That's `rota glossary read`, a term-keyed reader against the Glossary topic. Glossary entries are stored alongside other topics in KNOWLEDGE.md but the reader returns nested-bullet entries (term + definition + aliases + not) rather than topic bodies.
-- **MILESTONES.md grep'ing.** Patterns like `rota-plan`'s `--auto-loop` milestone-resolution grep are planning shortcuts, not context-consults, and are out of scope here.

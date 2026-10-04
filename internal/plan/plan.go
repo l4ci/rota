@@ -57,7 +57,6 @@ type AddOpts struct {
 	Title     string
 	Design    string // design ID, "" for none
 	Repos     string // comma list, "" for none
-	Auto      bool   // written by a loop run: adds `auto: true` after status
 }
 
 // parseAdd settles which plan AddOpts names: its milestone, and its unit
@@ -133,11 +132,8 @@ func extras(root string, o AddOpts, issue bool) (design, repo string, err error)
 }
 
 // stub is the starter text of a plan.
-func stub(key, milestone, unit, unitKind, repo, design, title string, auto bool) string {
-	repoLine, designLine, autoLine := "", "", ""
-	if auto {
-		autoLine = "auto: true\n"
-	}
+func stub(key, milestone, unit, unitKind, repo, design, title string) string {
+	repoLine, designLine := "", ""
 	if repo != "" {
 		repoLine = "repo: " + repo + "\n"
 	}
@@ -151,7 +147,7 @@ unit: %[3]s
 unitKind: %[4]s
 %[5]s%[6]stitle: %[7]s
 status: planned
-%[9]screated: %[8]s
+created: %[8]s
 ---
 
 # %[1]s — %[7]s
@@ -177,7 +173,7 @@ _(3–6 sentences — the shape of the implementation, the design choice, why th
 ## Assumptions
 
 - _(named assumptions made implicit by the approach)_
-`, key, milestone, unit, unitKind, repoLine, designLine, title, time.Now().Format("2006-01-02"), autoLine)
+`, key, milestone, unit, unitKind, repoLine, designLine, title, time.Now().Format("2006-01-02"))
 }
 
 func kindOfUnit(unit string) string {
@@ -217,7 +213,7 @@ func Add(root string, o AddOpts) (key, unitKind string, err error) {
 		if err := os.MkdirAll(dir, 0o777); err != nil {
 			return err
 		}
-		return fsio.WriteFileAtomic(p, []byte(stub(key, milestone, unit, unitKind, repo, design, o.Title, o.Auto)))
+		return fsio.WriteFileAtomic(p, []byte(stub(key, milestone, unit, unitKind, repo, design, o.Title)))
 	})
 	if err != nil {
 		return "", "", err
