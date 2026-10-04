@@ -123,7 +123,7 @@ Create each item in one command; it prints the new ID:
 ID=$(rota item create --json --kind bugs --title "Short title" --tag P1 --desc "Description." --related "[F02]" | jq -r .data.id)
 ```
 
-Flags: `--kind bugs|features|tasks`, `--tag` (`P0`-`P3` for bugs, `Major`/`Minor`/`Cosmetic` for features, none for tasks), `--desc`, `--related`, `--milestone`, `--repos`, `--subsystem`, `--body-file`. See `rota item create --help` and `docs/design/5.0-verb-contract.md` (*rota item create*) for ID minting, field order, the `Since:` stamp, detail-file placement and the issue-backend mapping; none of that is the skill's job.
+Flags: `--kind bugs|features|tasks`, `--tag` (`P0`-`P3` for bugs, `Major`/`Minor`/`Cosmetic` for features, none for tasks), `--desc`, `--related`, `--milestone`, `--repos`, `--subsystem`, `--body-file`. See `rota item create --help` and `docs/design/contract/backlog.md` (*rota item create*) for ID minting, field order, the `Since:` stamp, detail-file placement and the issue-backend mapping; none of that is the skill's job.
 
 Judgment the skill does own:
 
@@ -157,7 +157,7 @@ On yes, invoke `/rota-work` through the Skill tool with a brief: the captured ID
 
 ## Remove Mode
 
-The inverse of capture. `rota item rm` owns the mechanics: BACKLOG entry, `Related:` cross-references, the detail file and any plan keyed to the item. It previews by default and only `--apply` writes. ARCHIVE entries stay unless `--scrub-archive`, the only audit trail a removed item has left. Counters never decrement. Contract: `docs/design/5.0-verb-contract.md` (*rota item rm*).
+The inverse of capture. `rota item rm` owns the mechanics: BACKLOG entry, `Related:` cross-references, the detail file and any plan keyed to the item. It previews by default and only `--apply` writes. ARCHIVE entries stay unless `--scrub-archive`, the only audit trail a removed item has left. Counters never decrement. Contract: `docs/design/contract/backlog.md` (*rota item rm*).
 
 ### Step R1 — Resolve IDs
 
@@ -202,7 +202,7 @@ Run the chosen command and pass its per-ID output through verbatim. On exit 4 (`
 
 Under `backlog.backend: "issues"` the open issues already are the backlog: skip this mode and tell the user. The rest applies to the file backend.
 
-Fetch open issues from upstream, subtract those already in the backlog, let the user pick, capture the picks, and label them upstream behind a manual gate. The provider is fixed by the flag. The verbs live under `rota issues` (`docs/design/5.0-verb-contract.md`, *rota issues*).
+Fetch open issues from upstream, subtract those already in the backlog, let the user pick, capture the picks, and label them upstream behind a manual gate. The provider is fixed by the flag. The verbs live under `rota issues` (`docs/design/contract/backlog.md`, *rota issues*).
 
 ### Step I1 — Resolve Target Repo Set
 
