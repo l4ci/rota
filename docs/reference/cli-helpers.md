@@ -166,6 +166,7 @@ exit codes and repo scope: [verb contract](../design/contract/README.md).
 | `rota knowledge stats` | bullet count and size per topic |
 | `rota knowledge add --topic <T> --title <S> --body-file <path\|-> [--date YYYY-MM-DD]` | add a bullet under a topic |
 | `rota knowledge amend --topic <T> --fragment <F> --mode append --body-file <path\|->` | append text to an existing bullet |
+| `rota knowledge replace --topic <T> --old <text> --new <text>` | replace text inside the one bullet that contains it |
 | `rota knowledge rename-topic --from <X> --to <Y> [--title <T>]` | rename a topic or move one bullet |
 | `rota knowledge hit --topic <T> --title <S>` | register a consulted bullet |
 | `rota knowledge tier get --topic <T> --title <S>` | show one bullet's tier |
@@ -228,6 +229,7 @@ exit codes and repo scope: [verb contract](../design/contract/README.md).
 | `rota milestone list` | list milestones |
 | `rota milestone show <id>` | print a milestone |
 | `rota milestone put <id> --body-file <path\|->` | replace a milestone's text |
+| `rota milestone overview --body-file <path\|->` | replace the MILESTONES.md overview text |
 | `rota milestone status <id> --to <planned\|active\|shipped\|archived>` | change a milestone's status |
 | `rota milestone active` | IDs of active milestones |
 | `rota milestone index` | regenerate the overview and vision block |

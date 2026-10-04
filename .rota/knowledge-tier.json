@@ -171,16 +171,6 @@
       "hits": 2,
       "lastSeen": "2026-10-01"
     },
-    "Build & Tooling: Git & isolation::bg-isolation guard blocks main-thread Edits under /hv-work branch isolation": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-05-18"
-    },
-    "Build & Tooling: Git & isolation::Worktree .hv/ is gitignored \u2014 run state helpers from main repo path": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-05-18"
-    },
     "Build & Tooling: Git & isolation::EnterWorktree branches from origin/main; rebase onto local main before editing": {
       "tier": "provisional",
       "hits": 0,
@@ -291,11 +281,6 @@
       "hits": 0,
       "lastSeen": "2026-05-18"
     },
-    "Build & Tooling: Git & isolation::/hv-brainstorm and /hv-plan write tracked artifacts \u2014 commit before /hv-work": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-05-18"
-    },
     "Architecture: Helper conventions & invariants::Field writers co-locate with the read-grammar SoT; order-agnostic parse allows append-at-end": {
       "tier": "provisional",
       "hits": 0,
@@ -390,6 +375,21 @@
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-04"
+    },
+    "Build & Tooling: Git & isolation::/rota-brainstorm and /rota-plan write tracked artifacts \u2014 commit before /rota-work": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-05-18"
+    },
+    "Build & Tooling: Git & isolation::bg-isolation guard blocks main-thread Edits under /rota-work branch isolation": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-05-18"
+    },
+    "Build & Tooling: Git & isolation::Worktree .rota/ runtime is gitignored \u2014 run state helpers from main repo path": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-05-18"
     }
   }
 }

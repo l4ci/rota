@@ -247,6 +247,23 @@ func (s *Sidecar) Rekey(oldTopic, oldTitle, newTopic string) bool {
 	return true
 }
 
+// Retitle moves the entry of a retitled bullet within one topic. A missing
+// entry and the Glossary topic are left alone. It reports whether anything
+// moved.
+func (s *Sidecar) Retitle(topic, oldTitle, newTitle string) bool {
+	if topic == GlossaryTopic {
+		return false
+	}
+	ok := key(topic, oldTitle)
+	r := s.rec(ok)
+	if r == nil {
+		return false
+	}
+	s.ents.Delete(ok)
+	s.ents.Set(key(topic, newTitle), r)
+	return true
+}
+
 // RekeyTopic moves every "<old>::*" entry to "<new>::*" and reports how many
 // moved. Moved entries land after the existing ones, as in the Python helper.
 func (s *Sidecar) RekeyTopic(oldTopic, newTopic string) int {
