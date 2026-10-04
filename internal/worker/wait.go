@@ -128,6 +128,13 @@ func (e Env) Wait(ctx context.Context, root string, o WaitOpts) (WaitResult, err
 		defer w.Close()
 	}
 
+	// seen is one snapshot of the registry; clears are kept in memory.
+	seen := map[string]string{}
+	for _, t := range targets {
+		if t.seen != "" {
+			seen[t.name] = t.seen
+		}
+	}
 	source := SourceSnapshot
 	for {
 		rows, settling := e.classify(ctx, h, targets, o.Settle, o.Lines)
@@ -136,7 +143,23 @@ func (e Env) Wait(ctx context.Context, root string, o WaitOpts) (WaitResult, err
 		}
 		last = rows
 		for _, r := range rows {
-			if r.State != StateBusy {
+			st := strings.ToLower(r.State)
+			if seen[r.Name] != "" && seen[r.Name] != st {
+				// The slot moved on: re-arm it.
+				delete(seen, r.Name)
+				if _, err := updateSlot(root, r.Name, func(s *jsonx.Object) { s.Delete("seen") }); err != nil {
+					return WaitResult{}, err
+				}
+			}
+			// A state already returned once is treated like busy until the
+			// slot shows a different one.
+			if r.State != StateBusy && seen[r.Name] != st {
+				if _, err := updateSlot(root, r.Name, func(s *jsonx.Object) {
+					recordRow(s, r, e.Now())
+					s.Set("seen", st)
+				}); err != nil {
+					return WaitResult{}, err
+				}
 				return WaitResult{Slot: r.Name, State: r.State, Evidence: r.Evidence,
 					Source: source, Waited: e.Now().Sub(start)}, nil
 			}
@@ -160,7 +183,7 @@ func (e Env) Wait(ctx context.Context, root string, o WaitOpts) (WaitResult, err
 
 // soloWait is Wait for a solo round. Nothing but `round report` changes a solo
 // slot's state, so waiting would never end: it answers at once with the first
-// watched slot whose recorded state is not busy, else timed out. Watched slots
+// watched slot whose recorded state is not busy and not already returned (`seen`), else timed out. Watched slots
 // are the named ones, or every registered slot that is not idle; a solo slot
 // has no handle to require.
 func soloWait(root string, o WaitOpts) (WaitResult, error) {
@@ -187,8 +210,12 @@ func soloWait(root string, o WaitOpts) (WaitResult, error) {
 	var rows []PollRow
 	for _, s := range watched {
 		st := strings.ToLower(Str(s, "state"))
-		if st != "busy" {
-			return WaitResult{Slot: Str(s, "name"), State: st, Source: SourceRegistry}, nil
+		if st != "busy" && st != Str(s, "seen") {
+			name := Str(s, "name")
+			if _, err := updateSlot(root, name, func(s *jsonx.Object) { s.Set("seen", st) }); err != nil {
+				return WaitResult{}, err
+			}
+			return WaitResult{Slot: name, State: st, Source: SourceRegistry}, nil
 		}
 		rows = append(rows, PollRow{Str(s, "name"), st, ""})
 	}
