@@ -7,7 +7,7 @@
 | Value | Behavior |
 |-------|----------|
 | `"off"` (default) | Skills surface a one-line suggestion at each decision point and stop. The user picks. Same hand-on-the-wheel feel as 1.5.x. |
-| `"auto"` | One-hop chaining. After `/rota-work` finishes a cycle, `/rota-learn` is invoked automatically (when its threshold trips), and `/rota-refactor` is invoked when the refactor-age threshold trips. After `/rota-debug` commits a fix, `/rota-ship` is invoked automatically. After `/rota-ship` integrates, `/rota-learn` is invoked. After `rota update` reports `behind`, Step 4 asks once via `AskUserQuestion` and dispatches `rota init` on confirm so drift clears in one step. The chain stops after the chained step; the user picks the next item themselves. |
+| `"auto"` | One-hop chaining. `/rota-work` ends with a one-line `/rota-learn` nudge at either level and never chains. After `/rota-debug` commits a fix, `/rota-ship` is invoked automatically. After `/rota-ship` integrates, `/rota-learn` is invoked. After `rota update` reports `behind`, Step 4 asks once via `AskUserQuestion` and dispatches `rota init` on confirm so drift clears in one step. The chain stops after the chained step; the user picks the next item themselves. |
 
 ## Autonomy and rounds
 

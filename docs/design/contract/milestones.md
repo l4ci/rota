@@ -71,6 +71,7 @@ shim: `changed` compares a hash of `.rota/MILESTONES.md` and CLAUDE.md before an
 
 ### rota plan add
 rota plan add <milestone>-<unit> --title <text> [--design <ID>] [--repos a,b]
+rota plan add <#N|B7> --title <text> [--design <ID>] [--repos a,b]    (issue mode only: no milestone)
 rota plan add --milestone <M01> --slice --title <text> [--design <ID>] [--repos a,b]
 repo: none
 data: {"key": string, "unitKind": "slice"|"item", "changed": true}
@@ -82,6 +83,7 @@ note: the first form names the key, like `show`, `put` and `rm`. `plan add --mil
 note: slice plans (`--slice`, an `S<NN>` key) live on the milestone tracking issue, so at an umbrella root in issue mode `plan add|show|put|rm|list` for a slice act on the home sub-repo. Item plans resolve through the item as usual.
 note: the old `--repo` free-text tag list is renamed `--repos`, because `--repo` is global. It is a comma list (rule 2); the shim joins it with `, `.
 note: `--design` takes a design ID instead of a `.rota/designs/…` path, and the shim builds the path.
+note: in issue mode an item key may omit the milestone (`#7`, `F7`; a `#` needs quoting in a shell). `data.key` echoes the key as given, and `show`, `put` and `rm` accept the same forms. File mode still needs `M01-B07`.
 note: in issue mode an item plan is a note on the item's issue, so its milestone is never validated; only a slice plan needs the milestone's tracker issue.
 
 ### rota plan list
@@ -108,7 +110,7 @@ data: {"key": string, "changed": bool}
 exit: 2 when <key> is malformed, --body-file is missing or unreadable; 3 when the plan doesn't exist (hint: rota plan add); tracker
 old: hv-plan-put <key> --body-file <path|->
 shim: `changed` compares `hv-plan-show <key>` before and after.
-note: every plan verb takes the key shape `M\d{2,}-(S\d+|[BFT]\d+)`, tighter than the `[A-Z]\d+` old `put` and `rm` accepted.
+note: every plan verb takes the key shape `M\d{2,}-(S\d+|[BFT]\d+)` (issue mode also `#N` and `[BFT]\d+` for item plans), tighter than the `[A-Z]\d+` old `put` and `rm` accepted.
 
 ### rota plan rm
 rota plan rm <key>
