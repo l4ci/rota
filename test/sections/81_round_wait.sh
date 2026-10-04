@@ -91,7 +91,7 @@ RC=0; OUT="$(rw hvj round wait --settle 0 --timeout 30 2>/dev/null)" || RC=$?
 case "$(jget data.evidence <<<"$OUT")" in *"/pull/7") ;; *) fail "herdr: evidence must carry the ROTA-DONE argument: $OUT" ;; esac
 [ "$(jget data.changed <<<"$OUT" 2>/dev/null || true)" = "" ] || fail "herdr: round wait data must not report changed: $OUT"
 # #29: wait records the slot it returns as poll would, and marks it seen.
-W1="$(python3 -c 'import json,sys; s=json.load(open(sys.argv[1]))["slots"][0]; print(s["state"], s.get("seen"), s.get("pr"))' "$TMP_RW/repo/.rota/workers.json")"
+W1="$(python3 -c 'import json,sys; s=json.load(open(sys.argv[1]))["slots"][0]; print(s["state"], (s.get("seen") or "").split("\t")[0], s.get("pr"))' "$TMP_RW/repo/.rota/workers.json")"
 case "$W1" in "done done "*"/pull/7") ;; *) fail "herdr: round wait should record w1 as done, seen, with its PR: $W1" ;; esac
 [ "$(jget method < "$FK/request.json")" = "events.subscribe" ] || fail "herdr: expected an events.subscribe request: $(cat "$FK/request.json")"
 [ "$(jget 'params.subscriptions[0].type' < "$FK/request.json")" = "pane.agent_status_changed" ] || fail "herdr: wrong subscription: $(cat "$FK/request.json")"

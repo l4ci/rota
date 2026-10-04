@@ -283,9 +283,23 @@ func (e Env) Poll(ctx context.Context, root string, o PollOpts) (PollResult, err
 	return PollResult{Slots: rows, Changed: string(before) != string(after)}, nil
 }
 
+// seenKey is what `round wait` remembers of a slot it returned: the state and
+// its evidence, so a new ROTA-BLOCKED question or limit line is news again.
+func seenKey(state, evidence string) string {
+	return strings.ToLower(state) + "\t" + evidence
+}
+
+// alwaysNews are the states `round wait` returns every time it sees them. The
+// orchestrator answers them in the pane at once (a permission prompt) or
+// reclaims the slot (dead); an answer typed in the pane re-arms nothing, and
+// the generic evidence of a permission prompt cannot tell two prompts apart.
+func alwaysNews(state string) bool {
+	return state == StateNeedsPermission || state == StateDead
+}
+
 // recordRow writes one classified row into its slot, the way every writer of
-// a pane's state does (Poll, Wait). A recorded state different from `seen`
-// drops it: the slot moved on, so its next arrival is news again.
+// a pane's state does (Poll, Wait). A row different from `seen` drops it: the
+// slot moved on, so its next arrival is news again.
 func recordRow(s *jsonx.Object, r PollRow, now time.Time) {
 	next := strings.ToLower(r.State)
 	// A state change is the registry's only record of activity that is not a
@@ -294,7 +308,7 @@ func recordRow(s *jsonx.Object, r PollRow, now time.Time) {
 		s.Set("activeAt", stamp(now))
 	}
 	s.Set("state", next)
-	if Str(s, "seen") != next {
+	if Str(s, "seen") != seenKey(r.State, r.Evidence) {
 		s.Delete("seen")
 	}
 	// Only a URL-shaped ROTA-DONE argument becomes slot.pr. The contract

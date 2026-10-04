@@ -190,7 +190,7 @@ rc=0; OUT="$(dyj round wait --settle 0 --timeout 20)" || rc=$?
 [ "$rc" = "0" ] || fail "dry round: wait exit $rc: $OUT"
 [ "$(jget data.slot <<<"$OUT")" = "ben" ] && [ "$(jget data.state <<<"$OUT")" = "done" ] || fail "dry round: wait should return ben done: $OUT"
 case "$(jget data.evidence <<<"$OUT")" in *"/pull/$PRN") ;; *) fail "dry round: wait evidence should carry the PR: $OUT" ;; esac
-[ "$(python3 -c 'import json,sys; s=[s for s in json.load(open(sys.argv[1]))["slots"] if s["name"]=="ben"][0]; print(s["state"], s.get("seen"), s.get("pr"))' "$DY/.rota/workers.json")" = "done done $PRURL" ] \
+[ "$(python3 -c 'import json,sys; s=[s for s in json.load(open(sys.argv[1]))["slots"] if s["name"]=="ben"][0]; print(s["state"], (s.get("seen") or "").split("\t")[0], s.get("pr"))' "$DY/.rota/workers.json")" = "done done $PRURL" ] \
   || fail "dry round: wait should record ben done, seen, with the PR (#29): $(cat "$DY/.rota/workers.json")"
 [ "$(jget data.source <<<"$OUT")" = "herdr-event" ] || fail "dry round: ben should come back through the event: $OUT"
 pass "wait: returns ben as done through the herdr event with the PR as evidence, and records it"
