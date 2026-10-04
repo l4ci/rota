@@ -11,16 +11,14 @@ import (
 // recordHost marks the project's registry as a round on the given host.
 func recordHost(t *testing.T, dir, h string) {
 	t.Helper()
-	def := jsonx.NewObject()
-	def.Set("slots", []any{})
-	if err := Update(dir, def, func(doc *jsonx.Object) { doc.Set("host", h) }); err != nil {
+	if err := UpdateDoc(dir, func(doc *jsonx.Object) { doc.Set("host", h) }); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func setState(t *testing.T, dir, slot, state string) {
 	t.Helper()
-	if _, err := updateSlot(dir, slot, func(s *jsonx.Object) { s.Set("state", state) }); err != nil {
+	if _, err := UpdateSlot(dir, slot, func(s *Slot) { s.Raw().Set("state", state) }); err != nil {
 		t.Fatal(err)
 	}
 }

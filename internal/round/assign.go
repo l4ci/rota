@@ -13,7 +13,6 @@ import (
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
-	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/worker"
@@ -279,7 +278,7 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 	// issue but is done with a PR: it is parked right before the claim, so a
 	// refusal on the way moves nothing.
 	reg := worker.LoadRegistry(root)
-	var slot *jsonx.Object
+	var slot *worker.Slot
 	resuming, queue := false, false
 	if o.Agent != "" {
 		slot = reg.Slot(o.Agent)
@@ -289,7 +288,7 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 	} else {
 		for _, name := range set.Roster {
 			s := reg.Slot(name)
-			if s != nil && heldID(worker.Str(s, "task"), worker.Str(s, "branch"), name) == strings.ToUpper(id) {
+			if s != nil && heldID(s.Task(), s.Branch(), name) == strings.ToUpper(id) {
 				slot, resuming = s, true
 				break
 			}
@@ -298,7 +297,7 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 			if slot != nil {
 				break
 			}
-			if s := reg.Slot(name); s != nil && heldID(worker.Str(s, "task"), worker.Str(s, "branch"), name) == "" {
+			if s := reg.Slot(name); s != nil && heldID(s.Task(), s.Branch(), name) == "" {
 				slot = s
 			}
 		}
@@ -316,9 +315,9 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 			return res, blocked(BlockNoFreeSlot, "every roster slot is busy")
 		}
 	}
-	agent := worker.Str(slot, "name")
+	agent := slot.Name()
 	res.Agent = agent
-	if h := heldID(worker.Str(slot, "task"), worker.Str(slot, "branch"), agent); h != "" {
+	if h := heldID(slot.Task(), slot.Branch(), agent); h != "" {
 		if h != strings.ToUpper(id) {
 			ok, why := e.parkable(ctx, slot)
 			if !ok {
@@ -334,7 +333,7 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 	// Kind, tier and model (C9): the model is the tier's entry for the kind.
 	kind := o.Kind
 	if kind == "" {
-		kind = worker.Str(slot, "kind")
+		kind = slot.Kind()
 	}
 	hz, err := worker.Harness(kind)
 	if err != nil {
@@ -457,11 +456,7 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 		res.Changed = false
 		be.SetState(id, "none")
 		be.Release(id, claimID)
-		mutateSlot(root, agent, func(s *jsonx.Object) {
-			for _, k := range []string{"task", "claimId", "kind", "tier", "model", "tierReason"} {
-				s.Set(k, nil)
-			}
-		})
+		editSlot(root, agent, func(s *worker.Slot) error { s.Unbind(); return nil })
 	}
 	changed, err := be.SetState(id, "in-progress")
 	if err != nil {
@@ -486,13 +481,9 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 		}
 		return res, err
 	}
-	if err := mutateSlot(root, agent, func(s *jsonx.Object) {
-		s.Set("task", id)
-		s.Set("claimId", claimID)
-		s.Set("kind", kind)
-		s.Set("tier", tier)
-		s.Set("model", nilIfEmpty(res.Model))
-		s.Set("tierReason", nilIfEmpty(reason))
+	if err := editSlot(root, agent, func(s *worker.Slot) error {
+		s.Bind(worker.Binding{Task: id, ClaimID: claimID, Kind: kind, Tier: tier, Model: res.Model, TierReason: reason})
+		return nil
 	}); err != nil {
 		undo()
 		return res, err
@@ -552,7 +543,7 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 func (e Env) pickAccount(ctx context.Context, root, agent string) (string, error) {
 	cur := ""
 	if s := worker.LoadRegistry(root).Slot(agent); s != nil {
-		cur = worker.Str(s, "account")
+		cur = s.Account()
 	}
 	if cur != "" {
 		for _, m := range e.Accounts.Meters(ctx, root) {

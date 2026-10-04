@@ -202,7 +202,7 @@ func herdrFake() *fakeHost {
 func TestDispatchCodexSpawnsWithItsHome(t *testing.T) {
 	dir, home := codexProject(t)
 	// An account on the slot must not leak into a codex pane.
-	Update(dir, nil, func(doc *jsonx.Object) { (Registry{Doc: doc}).Slot("w1").Set("configDir", "/acct") })
+	Update(dir, nil, func(doc *jsonx.Object) { (Registry{Doc: doc}).Slot("w1").Raw().Set("configDir", "/acct") })
 	rig := &codexRig{loggedIn: true}
 	f := herdrFake()
 	res, err := rig.env(f).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "go\n"), Task: "T1", Kind: "codex", Model: "gpt-x"})
@@ -222,7 +222,7 @@ func TestDispatchCodexSpawnsWithItsHome(t *testing.T) {
 
 func TestDispatchKindDefaultsToTheSlotsRecordedKind(t *testing.T) {
 	dir, home := codexProject(t)
-	Update(dir, nil, func(doc *jsonx.Object) { (Registry{Doc: doc}).Slot("w1").Set("kind", "codex") })
+	Update(dir, nil, func(doc *jsonx.Object) { (Registry{Doc: doc}).Slot("w1").Raw().Set("kind", "codex") })
 	rig := &codexRig{loggedIn: true}
 	f := herdrFake()
 	res, err := rig.env(f).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "go\n"), Task: "T1"})

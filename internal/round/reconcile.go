@@ -53,15 +53,15 @@ func (e Env) repair(ctx context.Context, root string, rep *Report, f Finding) er
 	v := rep.views[f.Slot]
 	switch f.Kind {
 	case DeadTab:
-		return mutateSlot(root, f.Slot, func(s *jsonx.Object) {
-			s.Set("handle", nil)
-			s.Set("state", "dead")
+		return editSlot(root, f.Slot, func(s *worker.Slot) error {
+			s.SetHandle("")
+			return s.MarkState("dead", "")
 		})
 	case PRUnrecorded:
 		if v == nil || v.openPR == nil {
 			return fmt.Errorf("no open PR to record")
 		}
-		return mutateSlot(root, f.Slot, func(s *jsonx.Object) { s.Set("pr", v.openPR.URL) })
+		return editSlot(root, f.Slot, func(s *worker.Slot) error { s.SetPR(v.openPR.URL); return nil })
 	case UnregisteredWorktree:
 		var row Row
 		for _, r := range rep.Rows {
@@ -71,11 +71,11 @@ func (e Env) repair(ctx context.Context, root string, rep *Report, f Finding) er
 		}
 		return registerSlot(root, row, v)
 	case PRStale: // only a queued record carries a repair
-		return worker.Update(root, slotsDefault(), func(doc *jsonx.Object) {
+		return worker.UpdateDoc(root, func(doc *jsonx.Object) {
 			worker.DropQueued(doc, func(q *jsonx.Object) bool { return worker.Str(q, "issue") == f.Issue })
 		})
 	case ClaimMismatch:
-		return mutateSlot(root, f.Slot, func(s *jsonx.Object) { s.Delete("claimId") })
+		return editSlot(root, f.Slot, func(s *worker.Slot) error { s.SetClaimID(""); return nil })
 	case LabelMissing:
 		n, err := strconv.Atoi(f.Issue)
 		if err != nil {
@@ -86,22 +86,16 @@ func (e Env) repair(ctx context.Context, root string, rep *Report, f Finding) er
 	return fmt.Errorf("%s has no safe repair", f.Kind)
 }
 
-func slotsDefault() *jsonx.Object {
-	def := jsonx.NewObject()
-	def.Set("slots", []any{})
-	return def
-}
-
-func mutateSlot(root, name string, mutate func(*jsonx.Object)) error {
-	found := false
-	err := worker.Update(root, slotsDefault(), func(doc *jsonx.Object) {
-		if s := (worker.Registry{Doc: doc}).Slot(name); s != nil {
-			mutate(s)
-			found = true
-		}
-	})
+// editSlot edits one slot under the registry lock. A slot that is not there is
+// an error, and so is whatever the edit returns.
+func editSlot(root, name string, edit func(*worker.Slot) error) error {
+	var editErr error
+	found, err := worker.UpdateSlot(root, name, func(s *worker.Slot) { editErr = edit(s) })
 	if err == nil && !found {
 		err = fmt.Errorf("slot %s is not in the registry", name)
+	}
+	if err == nil {
+		err = editErr
 	}
 	return err
 }
@@ -109,27 +103,18 @@ func mutateSlot(root, name string, mutate func(*jsonx.Object)) error {
 // registerSlot adds the worktree's slot, parked or holding its issue. It
 // leaves the registry's session and round alone.
 func registerSlot(root string, row Row, v *view) error {
-	return worker.Update(root, slotsDefault(), func(doc *jsonx.Object) {
+	return worker.UpdateDoc(root, func(doc *jsonx.Object) {
 		reg := worker.Registry{Doc: doc}
 		if reg.Slot(row.Name) != nil {
 			return
 		}
-		s := worker.NewSlot(row.Name, row.Branch, v.worktree, v.base, nilIfEmpty(row.Tab))
+		s := worker.NewSlot(row.Name, row.Branch, v.worktree, v.base, row.Tab)
 		if row.Issue != "" {
-			s.Set("task", row.Issue)
+			s.SetTask(row.Issue)
 		}
 		if v.openPR != nil {
-			s.Set("pr", v.openPR.URL)
+			s.SetPR(v.openPR.URL)
 		}
-		list, _ := doc.Get("slots")
-		l, _ := list.([]any)
-		doc.Set("slots", append(l, s))
+		worker.AppendSlot(doc, s)
 	})
-}
-
-func nilIfEmpty(s string) any {
-	if s == "" {
-		return nil
-	}
-	return s
 }

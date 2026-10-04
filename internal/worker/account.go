@@ -444,16 +444,11 @@ func (a *Accounts) Assign(ctx context.Context, root, slot, account string) (name
 	if match == nil {
 		return "", false, fail(ExitResolution, fmt.Sprintf("account '%s' is not in work.accounts", account))
 	}
-	found, err := updateSlot(root, slot, func(s *jsonx.Object) {
-		var cfgDir any
-		if match.configDir != "" {
-			cfgDir = match.configDir
-		}
-		if Str(s, "account") != account || Str(s, "configDir") != match.configDir {
+	found, err := UpdateSlot(root, slot, func(s *Slot) {
+		if s.Account() != account || s.ConfigDir() != match.configDir {
 			changed = true
 		}
-		s.Set("configDir", cfgDir)
-		s.Set("account", account)
+		s.SetAccount(account, match.configDir)
 	})
 	if err != nil {
 		return "", false, err

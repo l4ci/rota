@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/host"
-	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -37,17 +36,20 @@ func (e Env) soloHandOff(root, agent, text string, round int) (brief, worktree s
 	}
 	stamp := now().UTC().Format("2006-01-02T15:04:05Z")
 	if s := worker.LoadRegistry(root).Slot(agent); s != nil {
-		worktree = worker.Str(s, "worktree")
+		worktree = s.Worktree()
 	}
 	if worktree != "" && !filepath.IsAbs(worktree) {
 		worktree = filepath.Join(root, worktree)
 	}
-	err = mutateSlot(root, agent, func(s *jsonx.Object) {
-		s.Set("state", "busy")
-		s.Set("activeAt", stamp)
-		s.Delete("seen")
-		s.Set("pr", nil)
-		s.Set("relays", []any{})
+	err = editSlot(root, agent, func(s *worker.Slot) error {
+		if err := s.MarkState("busy", stamp); err != nil {
+			return err
+		}
+		s.Touch(stamp)
+		s.ClearSeen()
+		s.SetPR("")
+		s.ResetRelays()
+		return nil
 	})
 	return soloBrief(text, round), worktree, err
 }

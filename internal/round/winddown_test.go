@@ -65,7 +65,7 @@ func TestWindDownParksReleasesAndSummarises(t *testing.T) {
 		t.Errorf("ben must be parked, on %q", got)
 	}
 	s := worker.LoadRegistry(f.root).Slot("ben")
-	if worker.Str(s, "task") != "" || worker.Str(s, "claimId") != "" || worker.Str(s, "state") != "idle" {
+	if s.Task() != "" || s.ClaimID() != "" || s.State() != "idle" {
 		t.Errorf("a parked slot holds nothing: %v", s)
 	}
 	if _, held := f.be.claims["12"]; held {
@@ -81,14 +81,14 @@ func TestWindDownClearsHandleSoReconcileSeesNoDeadTab(t *testing.T) {
 	if _, err := f.assign("12", "ben", nil); err != nil {
 		t.Fatal(err)
 	}
-	if worker.Str(worker.LoadRegistry(f.root).Slot("ben"), "handle") == "" {
+	if worker.LoadRegistry(f.root).Slot("ben").Handle() == "" {
 		t.Fatal("the fixture must dispatch ben into a tab")
 	}
 	f.verifyWith(t, `["true"]`)
 	if _, err := f.windDown(nil); err != nil {
 		t.Fatal(err)
 	}
-	if h := worker.Str(worker.LoadRegistry(f.root).Slot("ben"), "handle"); h != "" {
+	if h := worker.LoadRegistry(f.root).Slot("ben").Handle(); h != "" {
 		t.Errorf("a parked slot keeps no handle, got %q", h)
 	}
 	// The worker's tab closes after the round.
@@ -138,7 +138,7 @@ func TestWindDownRefusesWhileASlotHoldsWork(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(killed) != 0 || worker.Str(worker.LoadRegistry(f.root).Slot("ben"), "handle") == "" {
+	if len(killed) != 0 || worker.LoadRegistry(f.root).Slot("ben").Handle() == "" {
 		t.Errorf("a retained slot keeps its session and handle: killed %v", killed)
 	}
 	if res.Verdict != VerdictHoldsWork || !res.Retained || res.Lease == nil {
@@ -153,7 +153,7 @@ func TestWindDownRefusesWhileASlotHoldsWork(t *testing.T) {
 			t.Errorf("the dirty file is reported: %+v", s)
 		}
 	}
-	if s := worker.LoadRegistry(f.root).Slot("ben"); worker.Str(s, "task") != "12" {
+	if s := worker.LoadRegistry(f.root).Slot("ben"); s.Task() != "12" {
 		t.Errorf("a retained slot keeps its task: %v", s)
 	}
 	if _, held := f.be.claims["12"]; !held {
@@ -231,7 +231,7 @@ func TestWindDownKeepsHandleWhenTheKillIsNotProved(t *testing.T) {
 	if err != nil || res.Verdict != VerdictClean || outcomes(res)["ben"] != OutcomeParked {
 		t.Fatalf("still parks: %v %+v", err, res)
 	}
-	if worker.Str(worker.LoadRegistry(f.root).Slot("ben"), "handle") == "" {
+	if worker.LoadRegistry(f.root).Slot("ben").Handle() == "" {
 		t.Error("an unproved kill keeps the handle")
 	}
 	found := false

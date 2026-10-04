@@ -53,25 +53,31 @@ func ReportSlot(root string, o ReportOpts) (Reported, error) {
 			Hint: "rota worker poll records a pane's state; round report would race it"}
 	}
 	found := false
-	err := worker.Update(root, slotsDefault(), func(doc *jsonx.Object) {
+	var stateErr error
+	err := worker.UpdateDoc(root, func(doc *jsonx.Object) {
 		s := (worker.Registry{Doc: doc}).Slot(o.Slot)
 		if s == nil {
 			return
 		}
 		found = true
-		res.Previous = worker.Str(s, "state")
+		res.Previous = s.State()
 		if res.Previous != state {
-			s.Set("state", state)
+			if stateErr = s.MarkState(state, ""); stateErr != nil {
+				return
+			}
 			res.Changed = true
 		}
-		s.Delete("seen") // a report is news to `round wait`, even of the same state
-		if pr != "" && worker.Str(s, "pr") != pr {
-			s.Set("pr", pr)
+		s.ClearSeen() // a report is news to `round wait`, even of the same state
+		if pr != "" && s.PR() != pr {
+			s.SetPR(pr)
 			res.Changed = true
 		}
 	})
 	if err != nil {
 		return res, err
+	}
+	if stateErr != nil {
+		return res, stateErr
 	}
 	if !found {
 		return res, &worker.Error{Exit: worker.ExitResolution, Message: fmt.Sprintf("slot '%s' is not in the pool", o.Slot)}

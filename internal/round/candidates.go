@@ -126,7 +126,7 @@ func heldIDs(root string) map[string]bool {
 	}
 	reg := worker.LoadRegistry(root)
 	for _, s := range reg.Slots() {
-		hold(heldID(worker.Str(s, "task"), worker.Str(s, "branch"), worker.Str(s, "name")))
+		hold(heldID(s.Task(), s.Branch(), s.Name()))
 	}
 	for _, q := range reg.PRs() {
 		hold(queuedIssue(q))
