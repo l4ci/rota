@@ -33,6 +33,19 @@ diff is the review. The 30m timeout is for a loaded box (#120).
 
 There are no servers and no ports in this repo.
 
+## Review, merge and completion
+
+- **One merge owner: the orchestrator.** Workers open PRs and stop. The orchestrator merges each
+  through `rota worker gate`, which reviews the merged tree. `/rota-ship` never merges in issue mode
+  and `/rota-review --queue` is for a session outside a round, not for round PRs.
+- **Completion follows the merge.** On the issue backend the merge closes the issue. In file mode the
+  orchestrator completes the PR's items at merge time; a worker skips `/rota-ship` Step 8.
+- **No second opinion on round PRs.** `ship.secondOpinion` is skipped for a round worker's PR even
+  when set: the worker's own review plus the merge gate are the two checks, and a further model pass
+  per PR costs more than it catches.
+- **`work.mergeStrategy: direct` is ignored in issue mode.** `/rota-ship` always opens a PR there and
+  says so; a round never direct-merges.
+
 ## Repo rules that bind workers
 
 - Edit canonical sources only: `cmd/`, `internal/`, `rota-*/SKILL.md`, `references/`, `docs/`, `test/`.
