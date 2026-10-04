@@ -36,6 +36,14 @@ shim: `changed` compares `hv-vision-show <id>` before and after.
 note: there is no `milestone rm`, because milestones end as `archived` via `milestone status`.
 note: in issue mode the label stays authoritative for status, so a body whose `status:` differs from the label is accepted.
 
+### rota milestone overview
+rota milestone overview --body-file <path|->
+repo: none
+data: {"changed": bool}; on exit 4 `{"blockedBy": "heading in body", "changed": false}`
+exit: 2 when --body-file is missing, unreadable or the text is blank; 3 when `.rota/MILESTONES.md` doesn't exist (hint: rota milestone add); 4 when the text contains a heading line (`# ` or `## `)
+old: none (new in T4)
+note: replaces only the overview text of MILESTONES.md: everything between the optional `# ` title line and the first `## ` heading. The title, the `## Active milestones` list and the milestone entries are untouched, and `milestone index` keeps the new text. The file is tracked in file and issue mode alike, so the verb needs no tracker and does not branch on mode. `changed` is false when the text is already in place. Surrounding blank lines in the body are trimmed.
+
 ### rota milestone status
 rota milestone status <id> --to <planned|active|shipped|archived>
 repo: none

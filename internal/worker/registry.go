@@ -300,6 +300,9 @@ type Env struct {
 	// set, an error means it could not run at all. Every codex and herdr call
 	// of the codex preflight goes through it, so tests need no real binary.
 	Run func(ctx context.Context, name string, args, env []string) (host.Result, error)
+	// Executable is the running rota binary, which a codex worker's prompt-check
+	// hook calls back; nil means os.Executable.
+	Executable func() (string, error)
 	// LookPath reports whether a binary is installed; nil means exec.LookPath.
 	LookPath func(string) (string, error)
 }
@@ -337,6 +340,9 @@ func (e Env) withDefaults() Env {
 	}
 	if e.Run == nil {
 		e.Run = execRun
+	}
+	if e.Executable == nil {
+		e.Executable = os.Executable
 	}
 	if e.LookPath == nil {
 		e.LookPath = exec.LookPath
@@ -384,15 +390,26 @@ func execShell(ctx context.Context, dir, command string) (string, int) {
 // RecordBounce counts one gate bounce against an item (`bounces` in the
 // registry maps the issue to how often the gate sent its PR back) and returns
 // the new count. Counts live per item, not per slot, so a transfer to another
-// slot does not reset them.
-func RecordBounce(root, issue string) (n int, err error) {
+// slot does not reset them. head is the PR head the gate refused: the same head
+// seen again (a re-gate before the worker pushed anything) is not a new bounce
+// and returns the count unchanged. head "" always counts.
+func RecordBounce(root, issue, head string) (n int, err error) {
 	def := jsonx.NewObject()
 	def.Set("slots", []any{})
 	err = Update(root, def, func(doc *jsonx.Object) {
 		b := bouncesOf(doc)
-		n = bounceCount(b, issue) + 1
+		heads := bounceHeadsOf(doc)
+		n = bounceCount(b, issue)
+		if last, _ := heads.Get(issue); head != "" && last == any(head) && n > 0 {
+			return
+		}
+		n++
 		b.Set(issue, json.Number(strconv.Itoa(n)))
 		doc.Set("bounces", b)
+		if head != "" {
+			heads.Set(issue, head)
+			doc.Set("bounceHeads", heads)
+		}
 	})
 	return n, err
 }
@@ -405,8 +422,21 @@ func ClearBounces(root, issue string) error {
 		if b := bouncesOf(doc); bounceCount(b, issue) > 0 {
 			b.Delete(issue)
 			doc.Set("bounces", b)
+			heads := bounceHeadsOf(doc)
+			heads.Delete(issue)
+			doc.Set("bounceHeads", heads)
 		}
 	})
+}
+
+// bounceHeadsOf is the issue -> PR head SHA of the last counted bounce.
+func bounceHeadsOf(doc *jsonx.Object) *jsonx.Object {
+	if v, _ := doc.Get("bounceHeads"); v != nil {
+		if b, ok := v.(*jsonx.Object); ok {
+			return b
+		}
+	}
+	return jsonx.NewObject()
 }
 
 func bouncesOf(doc *jsonx.Object) *jsonx.Object {

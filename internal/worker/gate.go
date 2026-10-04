@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -14,6 +13,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/config"
+	gatepath "github.com/l4ci/rota/internal/gate"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/tracker"
 )
@@ -435,7 +435,7 @@ func (g *gate) staleReason(cfg any) (why, brokeMsg string) {
 		}
 		skip := false
 		for _, p := range shared {
-			if m, _ := path.Match(p, f); m {
+			if gatepath.MatchPath(p, f) {
 				skip = true
 			}
 		}

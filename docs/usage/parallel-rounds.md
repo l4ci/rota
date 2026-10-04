@@ -69,6 +69,31 @@ hooks and run the orchestrator under `rota keepalive run`:
 ## Your first round
 
 ```sh
+rota orchestrate        # in an initialized project, `rota` alone does the same
+```
+
+That runs `rota doctor`, stops if a check fails, then opens an orchestrator session that has already
+started `/rota-orchestrate`. Nothing is typed into a pane. The session runs under
+`rota keepalive run`, so it restarts from a handoff when its context fills.
+
+Where it opens depends on where you ran it:
+
+| You are | The orchestrator opens |
+|---|---|
+| In a herdr pane | a new focused tab in that workspace |
+| In tmux | a new window in that session |
+| In neither, herdr installed | a herdr session `rota-<dir>` with the orchestrator in its first workspace (your terminal attaches to it) |
+| In neither, only tmux installed | a tmux session `rota-<dir>` (your terminal becomes it) |
+| In neither, no herdr or tmux | in this terminal; workers run as subagents ([solo mode](#solo-mode)) |
+
+`work.dispatch: tmux` makes the last two rows tmux first. The herdr session is rota's own, started
+with `herdr --session rota-<dir> server`; your default herdr session is never driven.
+The agent comes from `orchestrator.harness` (`claude` or `codex`). `rota orchestrate --dry-run`
+shows what would start.
+
+The orchestrator then does the steps below. To drive a round by hand instead:
+
+```sh
 rota doctor                                  # fix every fail it reports
 rota round start --slots 2                   # take the lease, make two slots, list candidates
 rota round assign 59 --body-file notes.md    # first idle slot takes issue 59; repeat for a second issue
