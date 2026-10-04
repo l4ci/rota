@@ -13,10 +13,8 @@ const (
 const (
 	NextContinue       = "continue"
 	NextAsk            = "ask"     // off/auto: ask the user
-	NextAddress        = "address" // loop: send the findings to /rota-work
 	NextSurface        = "surface" // show the findings and continue
 	NextStop           = "stop"
-	NextMerge          = "merge"
 	NextRequestChanges = "request-changes"
 )
 
@@ -58,9 +56,8 @@ func DebugNext(v string, failed int) string {
 
 // Settings are the config values consumer routing reads.
 type Settings struct {
-	Autonomy string // autonomy.level
-	QAGate   string // qa.gate
-	Runner   string // ship.secondOpinionRunner
+	QAGate string // qa.gate
+	Runner string // ship.secondOpinionRunner
 }
 
 // Advisory reports whether a consumer never blocks under s: a second
@@ -79,13 +76,9 @@ func Advisory(consumer string, s Settings) bool {
 // Route is the consumer's next step for verdict v. consumer must be one
 // of Consumers.
 func Route(consumer, v string, s Settings) string {
-	loop := s.Autonomy == "loop"
 	if consumer == "queue" {
-		switch {
-		case v != Pass:
+		if v != Pass {
 			return NextRequestChanges
-		case loop:
-			return NextMerge
 		}
 		return NextAsk
 	}
@@ -98,8 +91,6 @@ func Route(consumer, v string, s Settings) string {
 		return NextSurface
 	case v != Concerns:
 		return NextStop
-	case loop:
-		return NextAddress
 	}
 	return NextAsk
 }

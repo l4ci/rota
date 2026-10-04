@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -700,53 +699,6 @@ func suiteA4B(t *testing.T) {
 		scn{name: "status-handoff/no-branch", goOnly: true, want: 2, argv: j("status", "handoff")},
 		scn{name: "status-handoff/branch-escaping-the-dir", goOnly: true, want: 2, argv: j("status", "handoff", "../../x")},
 		scn{name: "status-handoff/unknown-flag", goOnly: true, want: 2, argv: j("status", "handoff", "b", "--write")},
-	)
-
-	// ---- status loop
-	stampRe := regexp.MustCompile(`^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$`)
-	loop := func(sub, name string, f fx, wantChanged any, wantStamp string) scn {
-		return scn{name: "status-loop/" + name, fx: f, argv: j("status", "loop", sub), want: 0,
-			check: func(t *testing.T, e envl) {
-				t.Helper()
-				if wantChanged != nil {
-					eq(t, e, "data.changed", wantChanged)
-				}
-				if wantStamp != "" {
-					eq(t, e, "data.loopStartedAt", wantStamp)
-				} else if sub == "start" {
-					if v, _ := at(e, "data.loopStartedAt").(string); !stampRe.MatchString(v) {
-						t.Errorf("loopStartedAt = %q", v)
-					}
-				}
-			}}
-	}
-	add(
-		loop("start", "start-new", fx{}, true, ""),
-		loop("start", "start-existing-first-write-wins", st(stTwo), false, "2026-09-03T08:00:00Z"),
-		loop("start", "start-keeps-active-entries", st(stFile), true, ""),
-		loop("start", "start-adds-missing-active-key", st(`{"x": 1}`), true, ""),
-		loop("start", "start-overwrites-empty-stamp", st(`{"active": [], "loopStartedAt": ""}`), true, ""),
-		loop("start", "start-overwrites-null-stamp", st(`{"active": [], "loopStartedAt": null}`), true, ""),
-		loop("start", "start-corrupt-file", st("{broken"), true, ""),
-		loop("start", "start-preserves-unknown-keys-order", st(`{"b": [1, 2], "active": [], "a": {"k": "\u00e9"}}`), true, ""),
-		loop("clear", "clear-existing", st(stTwo), true, ""),
-		loop("clear", "clear-absent", st(stFile), false, ""),
-		loop("clear", "clear-no-status-file", fx{}, false, ""),
-		loop("clear", "clear-empty-stamp", st(`{"active": [], "loopStartedAt": ""}`), false, ""),
-		scn{name: "status-loop/show-set", fx: st(stTwo), argv: j("status", "loop", "show"), want: 0,
-			check: eqCheck("data.loopStartedAt", "2026-09-03T08:00:00Z")},
-		scn{name: "status-loop/show-unset", fx: st(stFile), argv: j("status", "loop", "show"), want: 0,
-			check: eqCheck("data.loopStartedAt", nil)},
-		scn{name: "status-loop/show-no-file", argv: j("status", "loop", "show"), want: 0, check: eqCheck("data.loopStartedAt", nil)},
-		scn{name: "status-loop/show-empty-stamp-is-null", fx: st(`{"active": [], "loopStartedAt": ""}`), argv: j("status", "loop", "show"), want: 0,
-			check: eqCheck("data.loopStartedAt", nil)},
-		scn{name: "status-loop/show-leaves-the-file-alone", fx: st("{\"active\":[],\"loopStartedAt\":\"2026-09-03T08:00:00Z\"}"), argv: j("status", "loop", "show"), want: 0},
-		scn{name: "status-loop/start-then-show-roundtrip", goOnly: true, want: 0, argv: j("status", "loop", "start"), check: eqCheck("data.changed", true)},
-		scn{name: "status-loop/repo-is-not-a-flag", goOnly: true, want: 2, fx: umbFx, argv: j("status", "loop", "start", "--repo", "web")},
-		scn{name: "status-loop/show-repo-is-not-a-flag", goOnly: true, want: 2, fx: umbFx, argv: j("status", "loop", "show", "--repo", "web")},
-		scn{name: "status-loop/no-hv", goOnly: true, want: 3, fx: fx{noHV: true}, argv: j("status", "loop", "start")},
-		scn{name: "status-loop/positional", goOnly: true, want: 2, argv: j("status", "loop", "clear", "x")},
-		scn{name: "status-loop/unknown-sub", goOnly: true, want: 2, argv: j("status", "loop", "read")},
 	)
 
 	// ---- refactor age / reset / targets

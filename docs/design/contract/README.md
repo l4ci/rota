@@ -50,11 +50,11 @@ Field types use JSON names (`string`, `number`, `bool`, `object`, `[]string`). `
 | backlog | `list`, `ids`, `milestones`, `drift`, `backfill`, `archive`, `stale` | A4 |
 | summary | `summary` | A4 |
 | issues | `list`, `label`, `imported`, `close`, `provider` | A4 |
-| status | `add`, `rm`, `show`, `handoff`, `loop start`, `loop clear`, `loop show` | A4 |
+| status | `add`, `rm`, `show`, `handoff` | A4 |
 | refactor | `age`, `reset`, `targets` | A4 |
 | migrate | `issues` (A4), `hv` (#236) | A4 |
 | knowledge | `query`, `stats`, `add`, `amend`, `rename-topic`, `hit`, `tier get`, `tier set`, `tier list`, `contradiction add`, `contradiction list`, `contradiction clear`, `contradiction has` | A5 |
-| decisions | `query`, `auto-log`, `auto-since` | A5 |
+| decisions | `query` | A5 |
 | glossary | `read`, `write`, `import` | A5 |
 | block | `<key>`, `skills` | A5 |
 | instructions | `init` | A5 |

@@ -91,7 +91,7 @@ func TestConfirmValidate(t *testing.T) {
 func TestClearAtEveryAutonomyLevel(t *testing.T) {
 	now = func() time.Time { return time.Date(2026, 10, 3, 12, 0, 0, 0, time.FixedZone("x", 7200)) }
 	t.Cleanup(func() { now = time.Now })
-	for _, level := range []string{"off", "auto", "loop"} {
+	for _, level := range []string{"off", "auto"} {
 		for _, g := range Registry {
 			if !g.Enforced() {
 				continue

@@ -26,7 +26,7 @@ Track these phases with the host's task tool if it has one.
 1. *Resolve pause set* — which `(branch, repo)` entries (Step 2)
 2. *Handle uncommitted work* — user picks a strategy (Step 3)
 3. *Write handoff* — one note per entry, status pinned (Steps 4-5)
-4. *Report* — surface `[Auto:Loop]` decisions, confirm (Steps 6-7)
+4. *Report* — confirm (Step 6)
 
 ## Step 2 — Resolve the Pause Set
 
@@ -60,17 +60,13 @@ Write one note per `(branch, repo)` entry. Get the path from `rota status handof
 
 In a wave, entries share Items, Milestone, Stage, Next planned step and Current hypothesis; only `Repo:` and the Uncommitted artifact differ. Keep separate files so one repo can be abandoned while the others resume.
 
-Gotchas and dead ends belong in `/rota-learn` (Step 7), not the note.
+Gotchas and dead ends belong in `/rota-learn` (Step 6), not the note.
 
 ## Step 5 — Pin Status
 
 For each entry run `rota status add <branch> --items <ids> [--worktree <path>] [--repo <repo>] --if-absent` so the resume flow finds it. `--if-absent` keeps the original `startedAt`, so time in flight stays accurate; the note carries the pause time.
 
-## Step 6 — Surface Auto:Loop Decisions
-
-`/rota-pause` is a terminal path: the user is about to leave. Surface any `[Auto:Loop]` decisions per `references/terminal-loop-surface.md` (silent when empty), printed verbatim above the confirm block. Then run `rota status loop clear` (a no-op when unset) so the next loop session starts fresh.
-
-## Step 7 — Confirm
+## Step 6 — Confirm
 
 One compact block. Single entry:
 
@@ -114,4 +110,3 @@ Stage, Next and Hypothesis are shared across the wave; Uncommitted is per repo.
 ## References
 
 - [`references/handoff-template.md`](references/handoff-template.md) — Handoff-note template written by `/rota-pause`, read by `/rota-work`.
-- [`references/terminal-loop-surface.md`](references/terminal-loop-surface.md) — `[Auto:Loop]` surface and loop-marker clear.

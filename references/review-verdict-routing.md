@@ -7,7 +7,7 @@
 | Verdict | Meaning | Caller should |
 |---------|---------|---------------|
 | `PASS` | No concerns worth surfacing. The diff matches intent and respects conventions. | Continue silently. The reviewed work is integration-ready. |
-| `CONCERNS` | The diff works, but surfaces should be flagged before merge — convention drifts, suboptimal patterns, or stale scaffolding. Not a regression. | Surface each concern, then route per `autonomy.level` (see Consumer routing below). |
+| `CONCERNS` | The diff works, but surfaces should be flagged before merge — convention drifts, suboptimal patterns, or stale scaffolding. Not a regression. | Surface each concern, then ask how to proceed (see Consumer routing below). |
 | `FAIL` | Merging would regress behavior, break intent, or violate a hard-boundary `DECISIONS.md` entry. | Stop. Surface findings. The ship verbs refuse the branch until a newer verdict replaces the FAIL. The user fixes via `/rota-work` or `/rota-debug` and reruns the review. |
 
 ## Consumer routing
@@ -15,20 +15,19 @@
 `data.next` from `rota verdict route` says what to do:
 
 - **`continue`** (PASS) — proceed to the next step silently. No surfacing needed.
-- **`ask`** (CONCERNS, `autonomy.level` off or auto) — surface each concern inline, then use `AskUserQuestion`:
+- **`ask`** (CONCERNS) — surface each concern inline, then use `AskUserQuestion`:
     - **Header:** `"Concerns"`
     - **Question:** *"Review surfaced N concerns on `<branch>`. How should I proceed?"*
     - **Options** (single-select):
       1. *"Address via `/rota-work` (Recommended)"* — *"Route the concerns to `/rota-work` as a fix list; rerun the calling skill after."*
       2. *"Ship anyway"* — *"Proceed with the integration despite the concerns."*
       3. *"Stop"* — *"Leave the branch as-is; no integration now."*
-- **`address`** (CONCERNS, loop) — surface each concern, then invoke `/rota-work` via the `Skill` tool with the concerns as the brief, and re-invoke the calling skill once the fixes are committed. This is the *"Address via `/rota-work` (Recommended)"* answer, auto-picked per the authoring convention *"routine routing/tagging auto-picks Recommended in loop mode"* (`references/authoring-conventions.md` rule #5).
 - **`surface`** (an advisory gate: QA under `qa.gate: "advisory"`, any QA `INFRA-FAIL`, or a second opinion from the retired `codex` runner) — surface the findings and continue. `data.advisory` is true.
-- **`stop`** (FAIL) — stop unconditionally. Surface the findings; do not auto-route to ship/merge. A `FAIL` stops loop mode as a guard failure regardless of autonomy.
+- **`stop`** (FAIL) — stop unconditionally. Surface the findings; do not auto-route to ship/merge.
 
-## Why "Ship anyway" never auto-picks under loop
+## Why "Ship anyway" never auto-picks
 
-*"Address via /rota-work"* is the safe routing — it loops back through review on the next ship attempt and surfaces repeat concerns to the user. *"Ship anyway"* is a user-volition gate: it overrides surfaced concerns and produces a public artifact (merge or PR) on the user's authority. Loop mode auto-picks only the **routing** answer (drain the queue toward integration-ready state), not the **acceptance-of-risk** answer. If a project genuinely wants concerns ignored, set `ship.review` to `false` — don't try to teach the loop to ship-anyway.
+*"Address via /rota-work"* is the safe routing — it goes back through review on the next ship attempt and surfaces repeat concerns to the user. *"Ship anyway"* is a user-volition gate: it overrides surfaced concerns and produces a public artifact (merge or PR) on the user's authority. It is an **acceptance-of-risk** answer, never auto-picked at any autonomy level. If a project genuinely wants concerns ignored, set `ship.review` to `false`.
 
 ## Queue routing (`/rota-review --queue`, issue mode)
 
@@ -36,9 +35,8 @@ The queue loop is the consumer (`rota verdict route --for queue`). It routes per
 
 | `data.next` | Verdict | Action |
 |---------|---------|--------|
-| `ask` | `PASS`, interactive | `AskUserQuestion` merge / skip / stop; merge runs `rota ship pr-merge <pr> --confirm --confirm-note "<answer>"` (exit 4 = not merged) |
-| `merge` | `PASS`, loop | merge, no question; if the verb refuses on a manual gate, ask and re-run with `--confirm` |
-| `request-changes` | `CONCERNS` or `FAIL` | findings as feedback, `rota item state <ID> --to changes-requested`; no merge. A `FAIL` still stops the surrounding loop as a guard failure |
+| `ask` | `PASS` | `AskUserQuestion` merge / skip / stop; merge runs `rota ship pr-merge <pr> --confirm --confirm-note "<answer>"` (exit 4 = not merged) |
+| `request-changes` | `CONCERNS` or `FAIL` | findings as feedback, `rota item state <ID> --to changes-requested`; no merge |
 
 Exit 3 / 4 from any verb stops the queue. Label lifecycle: `references/issue-mode.md`.
 
@@ -62,5 +60,4 @@ Convention: prefix surfaced concern lines with the producer's name and a dash, e
 
 ## See also
 
-- `references/authoring-conventions.md` rule #5 — *"routine routing/tagging auto-picks Recommended in loop mode"*.
 - `references/manual-gates.md`: *"Ship anyway"* as a user-volition gate alongside the other manual gates.

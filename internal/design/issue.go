@@ -26,28 +26,9 @@ func noteMissing(id string) *artifact.Error {
 	return artifact.Errf(artifact.ExitResolution, "design note for %s not found", id)
 }
 
-// Option changes what Add and AddNote write.
-type Option func(*options)
-
-type options struct{ auto bool }
-
-// Auto marks the design as written by a loop run: `auto: true` after status.
-func Auto() Option { return func(o *options) { o.auto = true } }
-
-func collect(opts []Option) (o options) {
-	for _, f := range opts {
-		f(&o)
-	}
-	return
-}
-
 // stubText is the starter text of a design (the same in both modes).
-func stubText(id, title, date string, o options) string {
-	auto := ""
-	if o.auto {
-		auto = "auto: true\n"
-	}
-	return "---\nid: " + id + "\ntitle: " + title + "\nstatus: draft\n" + auto + "created: " + date + "\n---\n\n# " + id + " — " + title + `
+func stubText(id, title, date string) string {
+	return "---\nid: " + id + "\ntitle: " + title + "\nstatus: draft\ncreated: " + date + "\n---\n\n# " + id + " — " + title + `
 
 ## Goal
 
@@ -73,7 +54,7 @@ _(named assumptions made implicit by the chosen design)_
 
 // AddNote creates the design note on the item's issue; an existing one is
 // exit 4. ref is the item as the tracker resolves it, id as the caller typed it.
-func AddNote(n artifact.Notes, ref, id, title string, opts ...Option) error {
+func AddNote(n artifact.Notes, ref, id, title string) error {
 	if err := checkIssue(id); err != nil {
 		return err
 	}
@@ -82,7 +63,7 @@ func AddNote(n artifact.Notes, ref, id, title string, opts ...Option) error {
 	} else if ok {
 		return artifact.Errf(artifact.ExitRefused, "design note for %s already exists", id)
 	}
-	_, err := n.NotePut(ref, "design", stubText(id, title, time.Now().Format("2006-01-02"), collect(opts)))
+	_, err := n.NotePut(ref, "design", stubText(id, title, time.Now().Format("2006-01-02")))
 	return err
 }
 

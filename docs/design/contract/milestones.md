@@ -70,11 +70,11 @@ old: hv-vision-index
 shim: `changed` compares a hash of `.rota/MILESTONES.md` and CLAUDE.md before and after. The old helper's stdout (managed-block output) is dropped.
 
 ### rota plan add
-rota plan add <milestone>-<unit> --title <text> [--design <ID>] [--repos a,b] [--auto-loop]
-rota plan add --milestone <M01> --slice --title <text> [--design <ID>] [--repos a,b] [--auto-loop]
+rota plan add <milestone>-<unit> --title <text> [--design <ID>] [--repos a,b]
+rota plan add --milestone <M01> --slice --title <text> [--design <ID>] [--repos a,b]
 repo: none
 data: {"key": string, "unitKind": "slice"|"item", "changed": true}
-exit: 2 when the key is malformed, --title is missing, --auto-loop is given while `autonomy.level` is not `loop` (B3), <ID> is not `[BFT]\d{2,}`, a key is given together with `--slice` or `--milestone`, or `--slice` has no `--milestone`; 3 when the --design document doesn't exist (file mode), a --repos name isn't registered in repos.json (the message names it), or (issue mode) a slice plan's milestone has no tracker; 4 when the key already exists; tracker
+exit: 2 when the key is malformed, --title is missing, <ID> is not `[BFT]\d{2,}`, a key is given together with `--slice` or `--milestone`, or `--slice` has no `--milestone`; 3 when the --design document doesn't exist (file mode), a --repos name isn't registered in repos.json (the message names it), or (issue mode) a slice plan's milestone has no tracker; 4 when the key already exists; tracker
 old: hv-plan-add [--repo <repos, joined ", ">] [--design .rota/designs/<ID>.md] <milestone> <unit|slice> "<title>"    (the key splits on its first `-`; `--slice` becomes the literal unit `slice`; flags go before the positionals)
 shim: prints the minted key (`M01-S03`) as `key`; `unitKind` is `slice` when the old unit was `slice` or `S\d+`, else `item`.
 note: `--design` takes `[BFT]\d{2,}` in file mode. In issue mode it takes an issue number (`3`) or the lettered form with any digit count (`F3`), matching issue-mode IDs (a number string, the letter in the type). Maintainer ruling, relayed by the orchestrator, round 3.
@@ -145,10 +145,10 @@ shim: maps old rc 0 → 0, 1 → 1, 2 → 3 (or 5 when stderr says backend unava
 note: `uncertain` is the passing answer (exit 0), because it is the case callers branch on, so rota-work keeps `if rota plan uncertain`.
 
 ### rota design add
-rota design add <ID> --title <text> [--auto-loop]
+rota design add <ID> --title <text>
 repo: none
 data: {"id": string, "type": "B"|"F"|"T", "changed": true}
-exit: 2 when <ID> isn't `[BFT]\d{2,}` (issue mode `[BFT]\d+`; S01 and M01 are rejected) or --title is missing, or --auto-loop is given while `autonomy.level` is not `loop` (B3); 3 when (issue mode) the item doesn't exist; 4 when the design already exists; tracker
+exit: 2 when <ID> isn't `[BFT]\d{2,}` (issue mode `[BFT]\d+`; S01 and M01 are rejected) or --title is missing,; 3 when (issue mode) the item doesn't exist; 4 when the design already exists; tracker
 old: hv-design-add <ID> "<title>"
 shim: stdout (the ID) becomes `id`.
 

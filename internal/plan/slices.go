@@ -71,7 +71,7 @@ func AddSliceNote(root string, s SliceStore, o AddOpts) (key string, err error) 
 	} else if ok {
 		return "", artifact.Errf(artifact.ExitRefused, "plan note for %s already exists", key)
 	}
-	_, err = s.SlicePut(milestone, unit, stub(key, milestone, unit, "slice", repo, design, o.Title, o.Auto))
+	_, err = s.SlicePut(milestone, unit, stub(key, milestone, unit, "slice", repo, design, o.Title))
 	return key, err
 }
 

@@ -81,83 +81,6 @@ func TestDecisionsQueryMatchGolden(t *testing.T) {
 	}
 }
 
-func TestDecisionsAutoLogMatchGolden(t *testing.T) {
-	cases := []struct {
-		name         string
-		decisions    string
-		newArgs      []string
-		wantMarker   string
-		wantUnchange bool
-	}{
-		{"new entry in existing topic", decFixture,
-			[]string{"decisions", "auto-log", "--topic", "Build", "--title", "Fresh rule", "--why", "because", "--plan-key", "plan-9", "--date", "2026-10-05"}, "### Fresh rule", false},
-		{"new topic", decFixture,
-			[]string{"decisions", "auto-log", "--topic", "Release", "--title", "Tag first", "--why", "why not", "--date", "2026-10-05"}, "## Release", false},
-		{"repeat is a no-op", decFixture,
-			[]string{"decisions", "auto-log", "--topic", "Build", "--title", "Gate first", "--why", "again", "--date", "2026-10-05"}, "", true},
-		{"file does not exist yet", "",
-			[]string{"decisions", "auto-log", "--topic", "Build", "--title", "First", "--why", "w", "--date", "2026-10-05"}, "### First", false},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			dir := decProject(t, c.decisions, "")
-			want, got := knFrozen(t, dir, "", c.newArgs...)
-			if want.RC != 0 || got.RC != 0 {
-				t.Fatalf("rc frozen=%d new=%d %s %s", want.RC, got.RC, want.Stderr, got.Stderr)
-			}
-			knSameDelta(t, want, got)
-			j := knNew(t, dir, "", append(c.newArgs, "--json")...)
-			if !strings.Contains(j.stdout, `"changed": false`) {
-				t.Errorf("second call not idempotent: %s", j.stdout)
-			}
-		})
-	}
-	dir := decProject(t, decFixture, "")
-	if got := knNew(t, dir, "", "decisions", "auto-log", "--topic", "Build", "--title", "t"); got.rc != 2 {
-		t.Errorf("missing --why: rc=%d", got.rc)
-	}
-}
-
-func TestDecisionsAutoSince(t *testing.T) {
-	status := `{"loopStartedAt": "2026-10-01T09:00:00Z"}`
-	dir := decProject(t, decFixture, status)
-	n := knNew(t, dir, "", "decisions", "auto-since", "--json")
-	want := `"since": "2026-10-01T09:00:00Z", "decisions": [` +
-		`{"topic": "Build", "title": "Gate first", "date": "2026-10-02", "status": "partial"}, ` +
-		`{"topic": "Build", "title": "Never skip", "date": "2026-10-03", "status": "unresolved"}]`
-	if !strings.Contains(n.stdout, want) {
-		t.Errorf("got %s\nwant to contain %s", n.stdout, want)
-	}
-	// Text output and the old helper agree on the entries it can see.
-	frozen, text := knFrozen(t, dir, "", "decisions", "auto-since")
-	if frozen.Stdout != text.Stdout {
-		t.Errorf("text differs\nfrozen: %q\nnew: %q", frozen.Stdout, text.Stdout)
-	}
-	// No loop, no file: empty.
-	for _, d := range []string{decProject(t, decFixture, ""), decProject(t, "", status)} {
-		j := knNew(t, d, "", "decisions", "auto-since", "--json")
-		if !strings.Contains(j.stdout, `"decisions": []`) || j.rc != 0 {
-			t.Errorf("expected none: rc=%d %s", j.rc, j.stdout)
-		}
-	}
-}
-
-// An auto-logged entry with no plan key has a footer the old helper's
-// auto-since pattern (and so this port) does not match.
-func TestDecisionsAutoSinceIgnoresFootersWithoutPlanKey(t *testing.T) {
-	dir := decProject(t, "", `{"loopStartedAt": "2026-10-01T00:00:00Z"}`)
-	knNew(t, dir, "", "decisions", "auto-log", "--topic", "T", "--title", "No key", "--why", "w", "--date", "2026-10-02")
-	knNew(t, dir, "", "decisions", "auto-log", "--topic", "T", "--title", "With key", "--why", "w", "--plan-key", "p", "--date", "2026-10-02")
-	n := knNew(t, dir, "", "decisions", "auto-since")
-	if !strings.Contains(n.stdout, "With key") || strings.Contains(n.stdout, "No key") {
-		t.Errorf("got %q", n.stdout)
-	}
-	// The frozen helper run on the same tree printed the same.
-	if want, _ := knFrozen(t, dir, "", "decisions", "auto-since"); want.Stdout != n.stdout {
-		t.Errorf("frozen=%q new=%q", want.Stdout, n.stdout)
-	}
-}
-
 const mapFileA = "---\nsubsystem: cli\nsummary: The command line\ntouched: 2026-09-01\n---\n\n# CLI\n\ntext\n\n## Entry points\n\n- cmd/main.go:2\n- cmd/main.go:99\n- gone/file.go:1\n"
 const mapFileB = "---\nsubsystem: alpha\n---\n\n# Alpha\n"
 
@@ -255,21 +178,10 @@ func TestMapStatsCap(t *testing.T) {
 
 func TestCRLFMatchGoldenForDecisionsMapAndQA(t *testing.T) {
 	crlf := func(s string) string { return strings.ReplaceAll(s, "\n", "\r\n") }
-	t.Run("auto-log rewrites as LF", func(t *testing.T) {
+	t.Run("decisions query", func(t *testing.T) {
 		dir := decProject(t, crlf(decFixture), "")
-		want, got := knFrozen(t, dir, "", "decisions", "auto-log", "--topic", "Build", "--title", "New rule", "--why", "why", "--date", "2026-10-05")
-		knSameDelta(t, want, got)
-		if strings.Contains(knTree(t, dir)["DECISIONS.md"], "\r") {
-			t.Error("CR survived")
-		}
-	})
-	t.Run("decisions query and auto-since", func(t *testing.T) {
-		dir := decProject(t, crlf(decFixture), `{"loopStartedAt": "2026-10-01T09:00:00Z"}`)
 		if want, got := knFrozen(t, dir, "", "decisions", "query", "build"); want.Stdout != got.Stdout {
 			t.Errorf("query frozen %q new %q", want.Stdout, got.Stdout)
-		}
-		if want, got := knFrozen(t, dir, "", "decisions", "auto-since"); want.Stdout != got.Stdout {
-			t.Errorf("since frozen %q new %q", want.Stdout, got.Stdout)
 		}
 	})
 	t.Run("map query, stats and index", func(t *testing.T) {

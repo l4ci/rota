@@ -380,7 +380,7 @@ func suiteA4C(t *testing.T) {
 	add(
 		chk("up-to-date", fx{config: fullConfig()}, 0, "upToDate"),
 		chk("up-to-date-extra-keys", fx{config: strings.Replace(fullConfig(), "{\n", "{\n  \"extra\": [1],\n", 1)}, 0, "upToDate"),
-		chk("up-to-date-null-in-optional-key", fx{config: strings.Replace(fullConfig(), "{\n", "{\n  \"loop\": {\"webResearch\": null},\n", 1)}, 0, "upToDate"),
+		chk("up-to-date-null-in-optional-key", fx{config: strings.Replace(fullConfig(), "{\n", "{\n  \"issues\": {\"label\": null},\n", 1)}, 0, "upToDate"),
 		chk("fresh", withFx(stdFx, func(f *fx) { f.after = noConfigFile }), 1, "fresh"),
 		chk("stale-std-config", stdFx, 1, "stale", allReq...),
 		chk("stale-empty-object", fx{config: "{}"}, 1, "stale", allReq...),

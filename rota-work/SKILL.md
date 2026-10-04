@@ -20,7 +20,7 @@ Read `.rota/config.json`:
 - `work.workerCommand` — string, default `""`. Launch command for a tmux worker session (must not resume a conversation: no `-c`, `-r`, `--continue`, `--resume`); empty builds `claude --model <models.worker> --dangerously-skip-permissions` (workers commit, open PRs and run tests unattended).
 - `work.accounts` — array of `{name, configDir}`, default `[]`. Maps tmux slots to independent `CLAUDE_CONFIG_DIR`s so each authenticates as its own account. Empty means every slot inherits the ambient config dir.
 - `work.operatorCommand` — string, default `""`. Used to relaunch the orchestrator inside tmux when the cycle starts outside one; empty builds `claude --continue --model <models.orchestrator> --permission-mode auto`.
-- `autonomy.level` — `"off"` (default), `"auto"`, or `"loop"`. Controls whether Step 13 (Learn), Step 14 (Refactor), and Step 15 (Loop continuation) nudge or invoke the next skill directly.
+- `autonomy.level` — `"off"` (default) or `"auto"`. Controls whether Step 13 (Learn), Step 14 (Refactor) and the docs step nudge or invoke the next skill directly.
 
 ## When to Use
 
@@ -44,15 +44,15 @@ Guard → Clarify (if needed) → Status → Plan → Isolate → Dispatch → V
 - commits, no handoff: ship via `/rota-ship` (Recommended); resume; leave as-is.
 - no commits, no handoff: resume (Recommended); abandon; leave as-is.
 
-Resume continues on the existing branch. Abandon is `git branch -D <branch>` plus `rota status rm`, and removes that stream's handoff note. A handoff note is deleted only when its stream is resumed or abandoned. Under `autonomy.level == "loop"`, auto-pick Recommended; the downstream skills keep their own manual gates.
+Resume continues on the existing branch. Abandon is `git branch -D <branch>` plus `rota status rm`, and removes that stream's handoff note. A handoff note is deleted only when its stream is resumed or abandoned.
 
 **2. Orient.** Run `rota backlog archive --days 5` (silent), `rota milestone active` and one `rota backlog ids --milestone <MID>` per active milestone, then `rota backlog list`. Print the list in full, every row and section: the table is the point of the mode, and is exempt from length limits. Prefix it with `Active milestones: <ids and titles>` when there are any. Advisories, never blocking: for each ID in `rota backlog drift --json` print `<ID> looks shipped on <hash> but still open`, and suggest `rota proof add` then `rota item complete <ID> --commit <hash>` (or `--no-proof`), never auto-complete. Print `stale: map=N, knowledge=M, todo=K` from `rota backlog stale` (zero kinds dropped) and `empty-active: <MID>` for an active milestone with no open items. `rota backlog drift` is file-backend only (it refuses on the issue backend); skip it there.
 
 **3. Suggest one item.** Order: P0 bugs; clusters holding a blocking bug; quick wins (Cosmetic, P2); the highest-impact P1; blocking tasks (`Related:`); Minor features; Major features only when nothing else is pending or the user asks. Milestone bias at every level except P0: items tagged to an active milestone first, then untagged, then non-active milestones. Items labelled `changes-requested` (issue backend) rank right after P0. Skip items already active. An active milestone with no items: say so and point at `/rota-capture`. Print `Suggested next: <ID> Title (tag)` and one sentence why.
 
-Brainstorm nudge, only for a `[Major]` feature or `[P0]` bug with no design (`rota design show <ID>`): `off` prints *"consider `/rota-brainstorm <ID>` before this"*; `auto` dispatches `rota-brainstorm` with the ID, then re-suggests; `loop` skips it (Step 4 handles design under loop).
+Brainstorm nudge, only for a `[Major]` feature or `[P0]` bug with no design (`rota design show <ID>`): `off` prints *"consider `/rota-brainstorm <ID>` before this"*; `auto` dispatches `rota-brainstorm` with the ID, then re-suggests.
 
-**4. Confirm.** Under `loop`: run `rota status loop start`, print `Loop: starting <ID> Title.` and go straight to Step 1. If nothing is suggestable, print `Loop: backlog empty — stopping.`, surface any `[Auto:Loop]` decisions per `references/terminal-loop-surface.md`, and stop. Otherwise `AskUserQuestion`: Start (Recommended); Peek approach first (`--preview`, offered for Major, P0/P1 or a batch); Write a plan first (`/rota-plan`, offered for a Major item tagged to a milestone with no plan (`rota plan show`)); Pick different items; Stop here. "Other" text is the item spec.
+**4. Confirm.** `AskUserQuestion`: Start (Recommended); Peek approach first (`--preview`, offered for Major, P0/P1 or a batch); Write a plan first (`/rota-plan`, offered for a Major item tagged to a milestone with no plan (`rota plan show`)); Pick different items; Stop here. "Other" text is the item spec.
 
 On a terminal path (Stop here, or an empty backlog) run `rota release pending --json` and, when `shouldNudge` is true, print its `message` as one line. Skip it when work continues, and when there is no tag yet. Pass the item's text into Step 1 so it is not re-read.
 
@@ -120,8 +120,6 @@ The target may be a backlog item (`#42`, or `B07`/`F03`/`T11` on the file backen
 - **Stop after the peek.** No auto-continuation; the user's pushback is the point.
 - **Plan beats peek for high-stakes work.** Offer `/rota-plan` if the user wants something durable rather than ephemeral.
 
-**Orchestrator-model contract (F35, loop mode).** When `/rota-work` Step 4's F34 uncertainty pre-flight needs a peek, it runs this Preview Mode procedure **inline** (not via recursive `Skill` dispatch) — the peek inherits the orchestrator model since the cycle is already running under it. The Step 4 chain reads the peek output from chat context and proceeds to `/rota-plan --auto-loop`. Manual invocations from the no-argument mode or the user's prompt (`/rota-work --preview <ID>`) are unconstrained — the user is in the loop and can correct any peek that under-performs.
-
 ## Step 1 — Guard
 
 ```bash
@@ -153,16 +151,6 @@ If **any** path is a user change, stop with the original guard message — the u
 **Greenfield variant.** On a fresh `git init`'d repo (no commits yet), `rota git guard clean` emits a tailored message pointing at the `chore: import initial files` baseline commit. Run it and re-invoke — the guard then sees a clean tree.
 
 Don't narrate the sweep unless it happened; silent pass-through is the common case.
-
-**On any Step 1 guard failure that stops `/rota-work` (exit 3 not-a-repo, or exit 1 user-change dirty tree)** — this is a terminal path; the user is about to step away from the loop to resolve. Per the F19 terminal-path-only convention (mirrored in the no-argument empty-backlog path and `/rota-pause`), surface any `[Auto:Loop]` decisions logged during this loop session before printing the guard message:
-
-Surface any `[Auto:Loop]` decisions per `references/terminal-loop-surface.md` (silent when empty). Print the surface verbatim above the guard message.
-
-After surfacing, clear the loop timestamp so the next loop session starts fresh:
-
-```bash
-rota status loop clear   # no-op when loopStartedAt is already unset
-```
 
 Track these phases with the host's task tool if it has one.
 
@@ -200,11 +188,6 @@ When asking, use a single `AskUserQuestion` call with 1-3 questions. Each questi
 - For conflicting items, use `multiSelect: true` and ask which subset to include in this run.
 
 On ambiguity, default to Recommended and state it explicitly in the dispatch brief.
-
-**Loop mode exception:** if `autonomy.level == "loop"` and the brief is genuinely ambiguous (you'd otherwise ask Step 2), the routing depends on the item's shape:
-
-- **Major + Milestone-tagged item** — defer to Step 4's auto-dispatch chain. The chain auto-resolves design via `/rota-brainstorm --auto-loop` (writes a design artifact with `[Auto:Loop]` decisions for fresh picks), then runs the uncertainty pre-flight + plan dispatch (`/rota-plan --auto-loop`). Step 2 does not stop in this case — the chain owns design resolution under loop.
-- **Non-Major or untagged item** — **stop the loop** and surface the question for the user to resolve. Do not silently pick a default — invisible decisions across N looped items defeat the point of the loop. The user resolves and re-invokes `/rota-work` to continue the queue.
 
 ## Step 2.5 — Detect Knowledge-vs-Correction Contradictions (F03 lifecycle)
 
@@ -266,16 +249,6 @@ rota plan show <milestone>-<unit> 2>/dev/null
 
 If a plan exists, **use it as the orchestrator's plan** — its task decomposition, files, verify steps, and assumptions become the dispatch briefs in Step 6 instead of decomposing ad-hoc. Restate any user redlines from the conversation, but don't silently re-derive what the user already signed off on. If the conversation contradicts the plan, ask the user whether to update the plan first (`/rota-plan` again) or proceed and ignore it.
 
-**Loop-mode auto-dispatch chain (B28 / F32 / F34 / F35).** In loop mode with a Major + Milestone-tagged item but no plan, `/rota-work` runs the full research → plan chain in three steps, all via the `Skill` tool so the dispatched skills inherit the orchestrator model:
-
-1. **Design pre-flight (B28).** If `.rota/designs/<itemId>.md` is absent, dispatch `/rota-brainstorm --auto-loop <itemId>`. The dispatched skill auto-resolves design questions (Local-first → Bounded web → Placeholder), logs `[Auto:Loop]` decisions for fresh picks, and writes `.rota/designs/<itemId>.md` with `auto: true` frontmatter. When a design already exists, this step is a no-op.
-2. **Uncertainty pre-flight (F34).** Run `rota plan uncertain <itemId>`. Exit 0 (uncertain, reasons on stdout) → run the **Preview Mode** procedure (above) inline with `<itemId>` as the target; the peek prints to chat and lands in the orchestrator's session context. Exit 1 (certain) → skip the peek.
-3. **Plan dispatch (F32 / F35).** Dispatch `/rota-plan --auto-loop <milestone>-<itemId>`. `/rota-plan` Step 3 reads the design artifact as soft input (already wired), and the auto-resolution pipeline writes the plan with all picks honored.
-
-After the chain returns, re-run the plan-as-artifact check at the top of this step — the plan now exists; use it as the orchestrator's plan. Off and auto modes skip this chain entirely and fall through to manual decomposition. See [`references/loop-mode-plan-dispatch.md`](references/loop-mode-plan-dispatch.md) for the full choreography.
-
-If no plan exists and the loop-mode dispatch above did not fire (off/auto, or Minor/untagged item), proceed with the steps below.
-
 From the conversation context:
 
 1. **Consult knowledge + decisions.** Apply the canonical K+D query pattern (`references/knowledge-consult.md`) with topics inferred from the planned work areas. Also run `rota glossary read <terms appearing in the item or task plan>…` for any domain term used in the item (terms live in `.rota/KNOWLEDGE.md`'s `## Glossary` topic), and surface inline conflict-call-outs (synonym or drift) when the user's wording deviates from the canonical term during the cycle. Carry matches into Step 6 briefs as `**Known gotchas:**` (relevant knowledge bullets only) and `**Hard boundaries:**` (full decision entries — rule + *Why* + **Forbids** + **Permits**). Workers must treat boundaries as constraints, not hints. If a planned task would violate a decision, **stop and surface to the user** before dispatching.
@@ -285,7 +258,7 @@ From the conversation context:
    > **REQUIRED — Register hits on consumed bullets (F03 lifecycle).** After writing the Step 6 briefs, apply the hit-register pattern from `references/knowledge-consult.md` *Hit-register after consumption*: for each bullet that landed in a brief's `**Known gotchas:**` section, call `rota knowledge hit --topic "<T>" --title "<first-line-of-bullet>"` once, issuing all calls as a single parallel batch — the verb serializes its sidecar writes behind a per-file lock, so concurrent calls don't lose hits. Bullets returned but pruned before the briefs don't earn credit. Silent on success. Provisional bullets auto-promote to confirmed once `hits >= learn.promoteThreshold` (default 3).
 
 2. Identify discrete tasks — files to create/modify, what changes, acceptance criteria.
-3. **Absorb wave-internal file collisions.** Before grouping into waves, scan task pairs for **any two tasks whose modified-file sets intersect** — not just rename / link-sweep. Under `work.isolation: "branch"` two write-only workers editing the same file race on disk (the second worker's `Edit` reads sibling-mutated content), so a same-file pair would otherwise force serialization across waves. The orchestrator's standing recourse is **absorption**: fold one task's same-file portion into the other task's Step 6 brief at dispatch time, leaving the absorbed task touching only files no other task writes. Both then run as parallel write-only workers. This is a reproducible orchestrator-side technique, not per-orchestrator improvisation — resolve every intersecting pair by absorption (preferred), clean split-ownership, or serialize-across-waves before grouping. Rename + link-sweep is the canonical instance; use `rota plan rename-check <old-name> [-- <scope>...]` as ground truth for it (re-run at Step 7 to catch enumeration gaps). See [`references/loop-mode-plan-dispatch.md`](references/loop-mode-plan-dispatch.md) *Absorb wave-internal file collisions* for the absorption choreography, the M02-S02 worked example, and the rename + link-sweep resolution table.
+3. **Absorb wave-internal file collisions.** Before grouping into waves, scan task pairs for **any two tasks whose modified-file sets intersect** — not just rename / link-sweep. Under `work.isolation: "branch"` two write-only workers editing the same file race on disk (the second worker's `Edit` reads sibling-mutated content), so a same-file pair would otherwise force serialization across waves. The orchestrator's standing recourse is **absorption**: fold one task's same-file portion into the other task's Step 6 brief at dispatch time, leaving the absorbed task touching only files no other task writes. Both then run as parallel write-only workers. This is a reproducible orchestrator-side technique, not per-orchestrator improvisation — resolve every intersecting pair by absorption (preferred), clean split-ownership, or serialize-across-waves before grouping. Rename + link-sweep is the canonical instance; use `rota plan rename-check <old-name> [-- <scope>...]` as ground truth for it (re-run at Step 7 to catch enumeration gaps).
 
    **Disjoint file sets are not proof of independence — scan for shared-symbol collisions too.** Two tasks can hold non-intersecting file sets and still break the merged tree, because the break exists in neither worker's diff. Two shapes: a task that **widens, narrows, or re-types a shared symbol's signature** while a sibling adds a fresh call to it, and a task that **stops emitting a constant, key, or output field** while a sibling starts depending on it. Each worker's own output is internally consistent and Step 7's per-task diff review passes both — the defect is only visible in the union, and only to something that resolves symbols across the whole tree. Rename is the one instance of this class the rules above already catch (`rota plan rename-check`); signature changes and dropped emissions are not renames and no grep for the old name finds them. When a task's brief changes a symbol's *shape* rather than its *name*, either serialize it ahead of every task that references the symbol, or absorb the call-site updates into it. When the project has a whole-tree resolution check available (typecheck, compile, `rota-qa` executable check), run it once after Step 7.5 commits the wave rather than per task — per-task verification structurally cannot catch this class.
 4. Group into dependency waves:
@@ -330,7 +303,7 @@ The verb reads `work.dispatch` itself: under tmux it keys on `$TMUX`, under herd
 
 The backend is worth its cost for exactly one reason: a worker that needs a decision can idle and a human can answer *in that worker's pane*. Launched from a terminal that isn't already inside tmux, the worker windows land in a **detached session nobody is looking at** — every escalation goes unanswered and the backend silently degrades into a worse subagent mode. Don't proceed on the assumption someone will attach later.
 
-**herdr, exit 1 — stop.** There is no handoff under herdr: `ensure` exits 4 because there is no workspace to open an operator tab in from outside herdr. Tell the user to start Claude Code in a herdr pane at the repo root and re-run `/rota-work` there, then end the run. Surface any `[Auto:Loop]` decisions per `references/terminal-loop-surface.md` first.
+**herdr, exit 1 — stop.** There is no handoff under herdr: `ensure` exits 4 because there is no workspace to open an operator tab in from outside herdr. Tell the user to start Claude Code in a herdr pane at the repo root and re-run `/rota-work` there, then end the run.
 
 **tmux, exit 1 (outside tmux) — hand the cycle over and stop.** Write a short instruction file telling the operator what it is resuming (the cycle target, the wave layout so far, and that it should continue from Step 5), then:
 
@@ -340,7 +313,7 @@ rota worker session ensure --body-file <path>
 
 That creates the session, spawns an `operator` window running `claude --continue` (which resumes *this* conversation, so the plan and briefs survive), pastes the instruction, and prints the attach command.
 
-**Then stop this cycle immediately.** Print the verb's attach block verbatim and end the run. Do **not** continue to the pool, do not dispatch, do not "keep going in case the handoff failed" — two orchestrators driving one pool dispatch the same task twice and race on the same slots. The handoff either worked (the operator is running it) or the verb exited non-zero (report that and let the user attach by hand). This is a terminal path, so surface any `[Auto:Loop]` decisions per `references/terminal-loop-surface.md` before printing the block.
+**Then stop this cycle immediately.** Print the verb's attach block verbatim and end the run. Do **not** continue to the pool, do not dispatch, do not "keep going in case the handoff failed" — two orchestrators driving one pool dispatch the same task twice and race on the same slots. The handoff either worked (the operator is running it) or the verb exited non-zero (report that and let the user attach by hand).
 
 **Exit 0 (inside the host) — continue.** After creating the cycle branch, stand up the worker pool:
 
@@ -375,7 +348,7 @@ rota status add <branch> --items <ID>[,<ID>...]
 
 For umbrella-mode branch creation (single sub-repo, multi-repo, Layout B worktree), see `references/umbrella-mode.md` *Branch creation* — that reference owns the canonical umbrella ceremony.
 
-**Issue mode** (`backlog.backend: "issues"`; see `references/issue-mode.md`). Once the branch exists, per item: run `rota item ready <ID>`. Exit 1 prints what is missing: warn the user interactively; under `autonomy.level: "loop"` refuse the item. Then claim it with `rota item claim <ID> --as <branch>`. Exit 4 means another worker holds it: drop that item from the wave and continue with the rest (or stop when none remain). Exit 3 or 5: stop and report. Load each item's context as the reference's "Resuming an item" describes (start with `rota item show <ID>`) before planning tasks.
+**Issue mode** (`backlog.backend: "issues"`; see `references/issue-mode.md`). Once the branch exists, per item: run `rota item ready <ID>`. Exit 1 prints what is missing: warn the user. Then claim it with `rota item claim <ID> --as <branch>`. Exit 4 means another worker holds it: drop that item from the wave and continue with the rest (or stop when none remain). Exit 3 or 5: stop and report. Load each item's context as the reference's "Resuming an item" describes (start with `rota item show <ID>`) before planning tasks.
 
 Orchestrator stays at the repo root (or umbrella root in umbrella mode); workers `cd` into their assigned directory before any file operation, and use absolute paths in their briefs.
 
@@ -486,7 +459,7 @@ Trust the diff, not the worker's narrative — when a worker re-enters files in 
 
 **PASS** → move on silently. **FAIL** → dispatch a fix agent, re-verify. Surface failures only if they persist.
 
-**Record proof (subagent path).** For each task that PASSes, append one row per item it resolves: `rota proof add <ID> --check "<verify command or grep>" --result PASS --evidence "<output line or path>" [--sha <task-commit>]`. A FAIL that persists is recorded with `--result FAIL`. Proof rows are facts about what ran, not acceptance: `rota item complete` (Step 9) is the acceptance write and exits 4 when an item has no proof. Loop mode never passes `--no-proof` on its own; an unproven item stays open and is surfaced. In issue mode `rota proof add` works unchanged: the rows go into the item's proof note on the issue.
+**Record proof (subagent path).** For each task that PASSes, append one row per item it resolves: `rota proof add <ID> --check "<verify command or grep>" --result PASS --evidence "<output line or path>" [--sha <task-commit>]`. A FAIL that persists is recorded with `--result FAIL`. Proof rows are facts about what ran, not acceptance: `rota item complete` (Step 9) is the acceptance write and exits 4 when an item has no proof. `--no-proof` is never passed on its own; an unproven item stays open and is surfaced. In issue mode `rota proof add` works unchanged: the rows go into the item's proof note on the issue.
 
 ### Backend branch — `work.dispatch` is `"tmux"` or `"herdr"`
 
@@ -532,7 +505,7 @@ Loop until no slot is `busy`, routing each state as it appears. Each poll also w
   rota worker gate <wN> --base <cycle-branch> --json
   ```
 
-  Exit 0 (`data.verdict: pass`) means merged and the merged tree verified (or skipped, `data.verifySkipped: true`): continue. Exit 4 (`data.verdict: approval-required`) is the `merge-approval` manual gate: nothing merged; ask the user (never auto-picked; name `data.paths`), then re-gate with `--confirm --confirm-note "<their answer>"`. Unattended (loop mode, or herdr workers), gate with `--escalate` instead, keep working other slots, and re-gate with `--approval <data.escalation.id>` once `rota round escalate check` reports it answered (`references/manual-gates.md`, "Merge approval in an unattended round"). Every other verdict exits 1; route on `data.verdict`. Exit 3 means the pool, slot, base or worker branch is missing, or the base branch is not checked out.
+  Exit 0 (`data.verdict: pass`) means merged and the merged tree verified (or skipped, `data.verifySkipped: true`): continue. Exit 4 (`data.verdict: approval-required`) is the `merge-approval` manual gate: nothing merged; ask the user (never auto-picked; name `data.paths`), then re-gate with `--confirm --confirm-note "<their answer>"`. Unattended (herdr workers), gate with `--escalate` instead, keep working other slots, and re-gate with `--approval <data.escalation.id>` once `rota round escalate check` reports it answered (`references/manual-gates.md`, "Merge approval in an unattended round"). Every other verdict exits 1; route on `data.verdict`. Exit 3 means the pool, slot, base or worker branch is missing, or the base branch is not checked out.
 
   | `data.verdict` | Meaning | Action |
   |---|---|---|
@@ -686,7 +659,7 @@ Don't recap the plan, list verification results, or describe intermediate steps.
 Run the post-cycle choreography in `references/post-cycle-trigger-gate.md` with these parameters:
 
 - **Nudge (`"off"`):** *"Capture learnings from this session? Run `/rota-learn` to save durable knowledge before context fades."*
-- **Target (`"auto"`/`"loop"`):** **dispatch `rota-learn` via `Skill` immediately — no prompt, no confirmation, no "want me to" question.**
+- **Target (`"auto"`):** **dispatch `rota-learn` via `Skill` immediately — no prompt, no confirmation, no "want me to" question.**
 - **Brief:** the cycle's resolved IDs and touched files, so the verifier (under `--strict` or `learn.verify: true`) has the right context.
 
 ## Step 13.5 — Decide (Nudge Only)
@@ -703,7 +676,7 @@ Run the post-cycle choreography in `references/post-cycle-trigger-gate.md` with 
 
 - **Config flag:** `docs.afterWork` (default `false`). Users opt in via `rota config set docs.afterWork true` or by running `/rota-ship --docs` manually once.
 - **Nudge (`"off"`):** *"User-facing changes shipped. Run `/rota-ship --docs` to review and update public docs (after-work mode)."*
-- **Target (`"auto"`/`"loop"`):** **dispatch `rota-ship --docs` via `Skill` immediately — no prompt, no confirmation, no "want me to" question.** (Skill dispatch, not inline — the inline variant belongs to `/rota-ship` Step 8.6.)
+- **Target (`"auto"`):** **dispatch `rota-ship --docs` via `Skill` immediately — no prompt, no confirmation, no "want me to" question.** (Skill dispatch, not inline — the inline variant belongs to `/rota-ship` Step 8.6.)
 - **Brief:** the cycle's resolved IDs and touched files, so the after-work flow has the right context.
 
 If `<docs.path>/` doesn't exist or is empty, `/rota-ship`'s Docs Mode after-work flow self-skips (printing a one-line "not yet initialized" notice) — no extra check needed here.
@@ -724,16 +697,7 @@ Run the post-cycle choreography in `references/post-cycle-trigger-gate.md` with 
 
 - **Trigger override:** `features >= 5` OR `bugs >= 10` (replaces the gate's default condition; don't-repeat still applies).
 - **Nudge (`"off"`):** *"You've shipped [N] features / [M] bug fixes since the last refactor. Might be a good time to run `/rota-refactor` to clean up accumulated friction."*
-- **Target (`"auto"`/`"loop"`):** **dispatch `rota-refactor` via `Skill` immediately — no prompt, no confirmation.** No brief needed; the run files findings as issues and edits no code (`--fix` is never passed from here).
-
-## Step 15 — Loop Continuation
-
-Only when `autonomy.level == "loop"`. **Re-enter `/rota-work` with no argument immediately — no prompt, no confirmation.** No-Argument Mode reads autonomy, auto-picks and starts the next item, sustaining the loop.
-
-Loop stops naturally when:
-- No-Argument Mode reports an empty backlog (or the active milestone has no items and the general backlog is also empty)
-- A guard fails downstream (dirty tree, `/rota-review` FAIL, ambiguous brief in Step 2)
-- The user interrupts
+- **Target (`"auto"`):** **dispatch `rota-refactor` via `Skill` immediately — no prompt, no confirmation.** No brief needed; the run files findings as issues and edits no code (`--fix` is never passed from here).
 
 ## Key Principles
 

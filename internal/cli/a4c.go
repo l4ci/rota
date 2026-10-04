@@ -140,6 +140,13 @@ func a4ConfigCheck(fs *flag.FlagSet) RunFunc {
 			token = "STALE:" + strings.Join(missing, ",")
 		}
 		res := Result{Data: data, Text: token}
+		if status == config.UpToDate || status == config.Stale {
+			if retired := config.Retired(root); len(retired) > 0 {
+				data.Set("retired", a4Strings(retired))
+				res.Text = "RETIRED: " + strings.Join(retired, "; ")
+				return res, Failed("%s", retired[0])
+			}
+		}
 		switch status {
 		case config.UpToDate:
 			return res, nil

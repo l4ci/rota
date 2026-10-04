@@ -283,7 +283,7 @@ Controls how `/rota-ship` routes a `/rota-qa run` verdict when `ship.qa: true`. 
 | Value | Behavior |
 |-------|----------|
 | `"advisory"` (default) | All verdicts surface findings (PASS silently, CONCERNS / FAIL with the `QA concerns:` carrier label) and continue to merge / PR. Advisory means advisory: the ship is never blocked on QA. |
-| `"blocking"` | PASS continues silently. CONCERNS branches on `autonomy.level` (off / auto: `AskUserQuestion` Address / Ship anyway / Stop; loop: auto-pick Address). FAIL stops the ship; user fixes via `/rota-work` or `/rota-debug` and reruns `/rota-ship`. Loop mode treats FAIL as a guard failure (loop stops). |
+| `"blocking"` | PASS continues silently. CONCERNS branches on `autonomy.level` (`AskUserQuestion` Address / Ship anyway / Stop). FAIL stops the ship; user fixes via `/rota-work` or `/rota-debug` and reruns `/rota-ship`. |
 
 `INFRA-FAIL` (dev server / creds / binary missing) is always treated as advisory regardless of `qa.gate`. Missing infrastructure isn't a quality signal; ship shouldn't break because the dev server happened to be down. The missing requirements surface as a note and the ship continues.
 
@@ -311,7 +311,7 @@ Flip on when you have a class of bugs that consistently take multiple cycles to 
 
 ## autonomy.level
 
-Controls whether skills nudge or invoke the next skill directly. Three levels: `"off"` (default), `"auto"`, `"loop"`. See [autonomy levels](autonomy.md) for the full breakdown: when each level fires, what gates still apply, stop conditions in loop mode, and how to pick.
+Controls whether skills nudge or invoke the next skill directly. Two levels: `"off"` (default), `"auto"`. `"loop"` was removed; `rota config check` flags it. See [autonomy levels](autonomy.md) for the full breakdown: when each level fires, what gates still apply, and how to pick.
 
 ## docs.path
 
@@ -341,7 +341,7 @@ Controls whether `/rota-ship --docs` after-work mode automatically writes propos
 - **Type:** boolean
 - **Default:** `false`
 
-Gate for the after-work docs flow. When `true`, the skills [`/rota-work`](running-work.md), `/rota-ship`, and [`/rota-release`](../reference/slash-commands.md#rota-release) trigger the docs after-work flow after their primary action completes. `/rota-work` and `/rota-ship` only fire on cycles that resolve 2+ items or touch 5+ files (small fixes don't trigger); `/rota-release` fires on every successful release (release notes are inherently user-facing). Under `autonomy.level: off`, the trigger is a one-line nudge in the terminal report; under `auto` or `loop`, the skill auto-dispatches `/rota-ship --docs` directly (or runs the after-work flow inline if called from `/rota-ship` itself).
+Gate for the after-work docs flow. When `true`, the skills [`/rota-work`](running-work.md), `/rota-ship`, and [`/rota-release`](../reference/slash-commands.md#rota-release) trigger the docs after-work flow after their primary action completes. `/rota-work` and `/rota-ship` only fire on cycles that resolve 2+ items or touch 5+ files (small fixes don't trigger); `/rota-release` fires on every successful release (release notes are inherently user-facing). Under `autonomy.level: off`, the trigger is a one-line nudge in the terminal report; under `auto`, the skill auto-dispatches `/rota-ship --docs` directly (or runs the after-work flow inline if called from `/rota-ship` itself).
 
 ```json
 { "docs": { "afterWork": true } }
@@ -354,9 +354,9 @@ Leave `false` while you're shaping docs by hand. Flip on once your docs structur
 - **Type:** string
 - **Default:** `.rota/RELEASE.md`
 
-Path to the project's release checklist: a flat markdown file with `- [ ]` items that `/rota-release` walks as gates before bumping the version (Step 1.5). Each open checkbox becomes an `AskUserQuestion` interjection: *Yes, continue* / *Fix now and continue* / *Skip* / *Abort*. Items marked `- [x]` are ignored. Items whose text ends with `(manual)` always interject even under `autonomy.level: auto` or `loop`. Use this for sensitive gates (staging migrations, infra rollouts) that need attention regardless of autonomy.
+Path to the project's release checklist: a flat markdown file with `- [ ]` items that `/rota-release` walks as gates before bumping the version (Step 1.5). Each open checkbox becomes an `AskUserQuestion` interjection: *Yes, continue* / *Fix now and continue* / *Skip* / *Abort*. Items marked `- [x]` are ignored. Items whose text ends with `(manual)` always interject even under `autonomy.level: auto`. Use this for sensitive gates (staging migrations, infra rollouts) that need attention regardless of autonomy.
 
-The file is per-project and tracked by default, so the checklist is shared with the team. When absent under `autonomy.level: off`, the skill offers to scaffold a starter template; under `auto` or `loop`, the skill silently skips the gate rather than interrupt an unattended run. To keep the checklist per-contributor instead, add it to `.gitignore`.
+The file is per-project and tracked by default, so the checklist is shared with the team. When absent under `autonomy.level: off`, the skill offers to scaffold a starter template; under `auto`, the skill silently skips the gate rather than interrupt an unattended run. To keep the checklist per-contributor instead, add it to `.gitignore`.
 
 The skill itself stays generic: no release step is hardcoded. Drift like a forgotten sibling-version-file bump (e.g. the marketplace.json that went stale by two majors) gets caught by adding an item, not by patching the skill.
 
@@ -371,7 +371,7 @@ Override the path if your project prefers a different location. By default the c
 - **Type:** integer
 - **Default:** `10`
 
-Threshold for the number of unpushed commits above which `/rota-release` will interject one confirmation prompt before pushing, even under `autonomy.level: auto` or `loop`. Below the threshold, auto/loop autonomy silently pushes the unpushed range as part of the release (the existing speed-contract behavior). Above it, the skill always asks. Releases that push 10+ commits are not the common case and the user usually wants a beat to confirm.
+Threshold for the number of unpushed commits above which `/rota-release` will interject one confirmation prompt before pushing, even under `autonomy.level: auto`. Below the threshold, auto autonomy silently pushes the unpushed range as part of the release (the existing speed-contract behavior). Above it, the skill always asks. Releases that push 10+ commits are not the common case and the user usually wants a beat to confirm.
 
 ```json
 { "release": { "confirmLargePushCommits": 25 } }
