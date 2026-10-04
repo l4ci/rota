@@ -40,7 +40,7 @@ Public user guide for rota, a zero-dependency dev workflow for Claude Code and C
 
 ### Shipping
 
-- [Review and ship](usage/review-and-ship.md): `/rota-review` two-stage pass and `/rota-ship` gates (second-opinion, QA)
+- [Review and ship](usage/review-and-ship.md): `/rota-review` single-pass review and `/rota-ship` gates (second-opinion, QA)
 - [Product QA](usage/qa.md): `/rota-qa` per-target strategy files and the `ship.qa` gate
 - [Rolling back a cycle](usage/undo.md): `/rota-ship --undo` guided rollback, dry-run preview, manual confirmation
 - [Learning](usage/learning.md): `/rota-learn` and `KNOWLEDGE.md`, including `--term <name>` for the project Glossary

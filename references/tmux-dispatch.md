@@ -26,11 +26,9 @@ Shared by both hosts and kept in [`worker-contract.md`](worker-contract.md): the
 
 ## Escalating and relaying
 
-A `blocked` slot carries the worker's question in `evidence`. Ask the user with `AskUserQuestion` in the worker's words, then relay with `rota worker dispatch <n> --body-file <answer> --relay`.
+A `blocked` slot carries the worker's question in `evidence`. Answer it or escalate it per `rota-orchestrate/SKILL.md` section 5 (in prose, never a blocking picker), then relay with `rota worker dispatch <n> --body-file <answer> --relay`.
 
-`--relay` signs the injected text `--- ORCHESTRATOR (round N) ---` and logs it in the slot's `relays[]`. This is the fix for a permanent failure: the worker writes its own PR body, and a relay arrives through the *same channel* a human answer would. Unsigned, an orchestrator's mid-task correction gets cited in a merged PR as *"the maintainer confirmed in my pane"* while the maintainer was asleep. The worker cannot tell the difference, and once merged it is permanent.
-
-So: **read every PR body for the channel named, not merely for whether a citation exists.** `rota worker gate` cross-checks the `## Approvals` section against the relay log and fails with verdict `provenance-fail` (exit 1) on a mismatch ([provenance](worker-contract.md#provenance)); that catches the obvious cases, not a paraphrase.
+`--relay` signs the text and logs it in the slot's `relays[]`; why, and what the gate cross-checks, is in [provenance](worker-contract.md#provenance). Read every PR body for the channel named, not merely for whether a citation exists.
 
 ## The merge gate
 
