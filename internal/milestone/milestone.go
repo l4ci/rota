@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/artifact"
-	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/counter"
 	"github.com/l4ci/rota/internal/frontmatter"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/knowledge"
@@ -64,16 +64,27 @@ func notFound(id string) *artifact.Error {
 }
 
 // Stub is the starter text of a milestone detail file (milestone_stub); the
-// issue-mode tracking issue body shares it.
+// issue-mode tracking issue body shares it. It is dated today.
 func Stub(id, title, summary string, depends []string) string {
-	return backlog.MilestoneStub(id, title, summary, depends, time.Now().Format("2006-01-02"))
+	return StubOn(id, title, summary, depends, time.Now().Format("2006-01-02"))
+}
+
+// StubOn is Stub with an explicit created date.
+func StubOn(id, title, summary string, depends []string, today string) string {
+	return "---\nid: " + id + "\ntitle: " + title + "\nstatus: planned\ndepends: [" + strings.Join(depends, ", ") + "]\ncreated: " + today + "\n---\n\n" +
+		"# " + id + " — " + title + "\n\n## Goal\n\n" + summary + "\n\n## Acceptance criteria\n\n- _(define what shipped looks like)_\n\n" +
+		"## Rationale\n\n_(why this milestone, why now)_\n\n## Open risks\n\n_(unknowns, technical risks, dependencies that could shift)_\n\n" +
+		"## Research findings\n\n_(prior art, references, lessons from /rota-vision web search)_\n\n## Notes\n\n_(free-form brainstorm)_\n"
 }
 
 // Add mints the next milestone ID, writes its detail file and appends its
 // entry to MILESTONES.md. depends is a comma list; its IDs are not validated.
 func Add(root, title, summary, depends string) (string, error) {
-	deps := artifact.SplitCSV(depends)
-	id, err := (&backlog.File{Root: root}).NextID("milestones")
+	return addFile(root, title, summary, artifact.SplitCSV(depends))
+}
+
+func addFile(root, title, summary string, deps []string) (string, error) {
+	id, err := counter.Next(root, "milestones")
 	if err != nil {
 		return "", err
 	}
@@ -157,13 +168,7 @@ func Active(root string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	ids := []string{}
-	for _, e := range list {
-		if e.Status == "active" {
-			ids = append(ids, e.ID)
-		}
-	}
-	return ids, nil
+	return ActiveIDs(list), nil
 }
 
 // Show is the stored milestone file, verbatim.
@@ -262,6 +267,15 @@ func SetOverview(root, text string) (changed bool, err error) {
 // overview and the vision block (Index), as hv-vision-status did on every
 // call. changed reports the status line only.
 func SetStatus(root, id, status string) (changed bool, err error) {
+	if changed, err = setStatus(root, id, status); err != nil {
+		return false, err
+	}
+	_, err = Index(root)
+	return changed, err
+}
+
+// setStatus is SetStatus without the Index pass.
+func setStatus(root, id, status string) (changed bool, err error) {
 	if err = checkID(id); err != nil {
 		return
 	}
@@ -287,10 +301,6 @@ func SetStatus(root, id, status string) (changed bool, err error) {
 		changed = true
 		return fsio.WriteFileAtomic(p, []byte(updated))
 	})
-	if err != nil {
-		return false, err
-	}
-	_, err = Index(root)
 	return changed, err
 }
 
