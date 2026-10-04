@@ -1,6 +1,6 @@
 ---
 name: rota-work
-description: Orchestrator-driven parallel implementation — plans tasks, dispatches workers, verifies, commits atomically per task. Workers run as in-process subagents (default) or, under work.dispatch=tmux or herdr, as separate Claude Code sessions in their own worktrees that open PRs behind a merge gate. Supports branch or worktree isolation and direct merge or PR. Use when items already exist in BACKLOG.md and need implementation ("implement [B07]", "build these"); with no argument it reconciles active work and suggests the next item; for an item not yet captured use /rota-capture, which can hand off here.
+description: Orchestrator-driven parallel implementation — plans tasks, dispatches workers, verifies, commits atomically per task. Workers run as in-process subagents (default) or, under work.dispatch=tmux or herdr, as separate Claude Code sessions in their own worktrees that open PRs behind a merge gate. Supports branch or worktree isolation and direct merge or PR. Use when backlog items already exist and need implementation ("implement 42", "build these", or "implement [B07]" on the file backend); with no argument it reconciles active work and suggests the next item; for an item not yet captured use /rota-capture, which can hand off here.
 ---
 
 # rota-work
@@ -31,7 +31,7 @@ Read `.rota/config.json`:
 ## Flow
 
 ```
-Guard → Clarify (if needed) → Status → Plan → Isolate → Dispatch → Verify → Commit → TODO → Merge/PR → Status
+Guard → Clarify (if needed) → Status → Plan → Isolate → Dispatch → Verify → Commit → Close → Merge/PR → Status
 ```
 
 ## No-Argument Mode (reconcile, suggest, then work)
@@ -46,25 +46,25 @@ Guard → Clarify (if needed) → Status → Plan → Isolate → Dispatch → V
 
 Resume continues on the existing branch. Abandon is `git branch -D <branch>` plus `rota status rm`, and removes that stream's handoff note. A handoff note is deleted only when its stream is resumed or abandoned. Under `autonomy.level == "loop"`, auto-pick Recommended; the downstream skills keep their own manual gates.
 
-**2. Orient.** Run `rota backlog archive --days 5` (silent), `rota milestone active` and one `rota backlog ids --milestone <MID>` per active milestone, then `rota backlog list`. Print the list in full, every row and section: the table is the point of the mode, and is exempt from length limits. Prefix it with `Active milestones: <ids and titles>` when there are any. Advisories, never blocking: for each ID in `rota backlog drift --json` print `[ID] looks shipped on <hash> but still open`, and suggest `rota proof add` then `rota item complete <ID> --commit <hash>` (or `--no-proof`), never auto-complete. Print `stale: map=N, knowledge=M, todo=K` from `rota backlog stale` (zero kinds dropped) and `empty-active: <MID>` for an active milestone with no open items. `rota backlog drift` refuses in issue mode; skip it there.
+**2. Orient.** Run `rota backlog archive --days 5` (silent), `rota milestone active` and one `rota backlog ids --milestone <MID>` per active milestone, then `rota backlog list`. Print the list in full, every row and section: the table is the point of the mode, and is exempt from length limits. Prefix it with `Active milestones: <ids and titles>` when there are any. Advisories, never blocking: for each ID in `rota backlog drift --json` print `<ID> looks shipped on <hash> but still open`, and suggest `rota proof add` then `rota item complete <ID> --commit <hash>` (or `--no-proof`), never auto-complete. Print `stale: map=N, knowledge=M, todo=K` from `rota backlog stale` (zero kinds dropped) and `empty-active: <MID>` for an active milestone with no open items. `rota backlog drift` is file-backend only (it refuses on the issue backend); skip it there.
 
-**3. Suggest one item.** Order: P0 bugs; clusters holding a blocking bug; quick wins (Cosmetic, P2); the highest-impact P1; blocking tasks (`Related:`); Minor features; Major features only when nothing else is pending or the user asks. Milestone bias at every level except P0: items tagged to an active milestone first, then untagged, then non-active milestones. In issue mode, items labelled `changes-requested` rank right after P0. Skip items already active. An active milestone with no items: say so and point at `/rota-capture`. Print `Suggested next: [ID] Title (tag)` and one sentence why.
+**3. Suggest one item.** Order: P0 bugs; clusters holding a blocking bug; quick wins (Cosmetic, P2); the highest-impact P1; blocking tasks (`Related:`); Minor features; Major features only when nothing else is pending or the user asks. Milestone bias at every level except P0: items tagged to an active milestone first, then untagged, then non-active milestones. Items labelled `changes-requested` (issue backend) rank right after P0. Skip items already active. An active milestone with no items: say so and point at `/rota-capture`. Print `Suggested next: <ID> Title (tag)` and one sentence why.
 
-Brainstorm nudge, only for a `[Major]` feature or `[P0]` bug with no `.rota/designs/<ID>.md`: `off` prints *"consider `/rota-brainstorm [ID]` before this"*; `auto` dispatches `rota-brainstorm` with the ID, then re-suggests; `loop` skips it (Step 4 handles design under loop).
+Brainstorm nudge, only for a `[Major]` feature or `[P0]` bug with no design (`rota design show <ID>`): `off` prints *"consider `/rota-brainstorm <ID>` before this"*; `auto` dispatches `rota-brainstorm` with the ID, then re-suggests; `loop` skips it (Step 4 handles design under loop).
 
-**4. Confirm.** Under `loop`: run `rota status loop start`, print `Loop: starting [ID] Title.` and go straight to Step 1. If nothing is suggestable, print `Loop: backlog empty — stopping.`, surface any `[Auto:Loop]` decisions per `references/terminal-loop-surface.md`, and stop. Otherwise `AskUserQuestion`: Start (Recommended); Peek approach first (`--preview`, offered for Major, P0/P1 or a batch); Write a plan first (`/rota-plan`, offered for a Major item tagged to a milestone with no plan at `.rota/plans/`); Pick different items; Stop here. "Other" text is the item spec.
+**4. Confirm.** Under `loop`: run `rota status loop start`, print `Loop: starting <ID> Title.` and go straight to Step 1. If nothing is suggestable, print `Loop: backlog empty — stopping.`, surface any `[Auto:Loop]` decisions per `references/terminal-loop-surface.md`, and stop. Otherwise `AskUserQuestion`: Start (Recommended); Peek approach first (`--preview`, offered for Major, P0/P1 or a batch); Write a plan first (`/rota-plan`, offered for a Major item tagged to a milestone with no plan (`rota plan show`)); Pick different items; Stop here. "Other" text is the item spec.
 
-On a terminal path (Stop here, or an empty backlog) run `rota release pending --json` and, when `shouldNudge` is true, print its `message` as one line. Skip it when work continues, and when there is no tag yet. Pass the item's BACKLOG text into Step 1 so it is not re-read.
+On a terminal path (Stop here, or an empty backlog) run `rota release pending --json` and, when `shouldNudge` is true, print its `message` as one line. Skip it when work continues, and when there is no tag yet. Pass the item's text into Step 1 so it is not re-read.
 
 ## Preview Mode (`--preview`)
 
 When invoked as `/rota-work --preview <target>` (or with `--preview` anywhere in the args), the skill enters **read-only preview mode** — it produces an approach peek, then stops. No writes, no commits, no `rota` calls beyond reads. Steps 1–15 are bypassed.
 
-The target may be a backlog item (`B07`, `F03`, `T11`), a plan key (`M01-S01`, `M01-B07`), or a milestone (`M01`). Ambiguous → ask once; do not auto-pick.
+The target may be a backlog item (`#42`, or `B07`/`F03`/`T11` on the file backend), a plan key (`M01-S01`, `M01-B07`), or a milestone (`M01`). Ambiguous → ask once; do not auto-pick.
 
 **Procedure:**
 
-1. **Load context silently** per [`references/context-load-protocol.md`](references/context-load-protocol.md). Issue all reads in parallel. For backlog-item targets under umbrella mode: parse the entry's `Repos:` field (`rota item field get <ID> --name repos`); when umbrella mode is on (`rota repo umbrella` exits 0) and the item carries a `Repos:` value, resolve to absolute sub-repo path(s) via `rota repo resolve <name>… --json`. Multi-repo items resolve to a list — keep all entries for the render. Skip repo resolution for slice / milestone targets (umbrella-flat per M02 acceptance). If `rota decisions query` returns matches, surface them in the peek's "Hard boundaries to respect" section (between "Files I'd create" and "Tests I'd add") — one line each: `- <decision title> — <one-line summary>`. The user's job during review is to spot conflicts before code lands. No guard, no status registration.
+1. **Load context silently** per [`references/context-load-protocol.md`](references/context-load-protocol.md). Issue all reads in parallel. For backlog-item targets under umbrella mode: parse the item's `Repos:` field (`rota item field get <ID> --name repos`); when umbrella mode is on (`rota repo umbrella` exits 0) and the item carries a `Repos:` value, resolve to absolute sub-repo path(s) via `rota repo resolve <name>… --json`. Multi-repo items resolve to a list — keep all entries for the render. Skip repo resolution for slice / milestone targets (umbrella-flat per M02 acceptance). If `rota decisions query` returns matches, surface them in the peek's "Hard boundaries to respect" section (between "Files I'd create" and "Tests I'd add") — one line each: `- <decision title> — <one-line summary>`. The user's job during review is to spot conflicts before code lands. No guard, no status registration.
 2. **Produce the peek.** Print this structure to chat. **Nothing else** — no preamble, no recap of what context you read:
 
    ```
@@ -173,7 +173,7 @@ Phases:
 3. *Plan tasks* — wave layout + briefs ready (Step 4)
 4. *Branch / worktree* — isolation set up per `work.isolation` (Step 5)
 5. *Dispatch & verify per wave* — workers run, orchestrator verifies each completion (Steps 6–8)
-6. *Commit + TODO + sweep* — per-task commits, TODO entries marked complete, item plans tombstoned, tool siblings swept (Steps 7.5, 8.5, 9, 9.5)
+6. *Commit + close + sweep* — per-task commits, items closed (file backend; issues close with the PR), item plans tombstoned, tool siblings swept (Steps 7.5, 8.5, 9, 9.5)
 7. *Merge/PR & report* — integration + status removal + summary + post-cycle nudges (Steps 10–15)
 8. *Knowledge lifecycle* — hit-tracking and contradiction logging (Steps 2.5, 4)
 
@@ -232,7 +232,7 @@ After picking the branch name:
 rota status add <branch> --items <ID1>,<ID2>[,...] [--worktree <path>]
 ```
 
-**Umbrella mode** (when `umbrella.enabled` is true and items carry `Repos:`): parse the `Repos:` field from each item's TODO entry. The value is a comma-separated CSV — single-repo items have one name (`Repos: web`), multi-repo items have two or more (`Repos: web, api`). All items in a wave must share the *same* set of repos.
+**Umbrella mode** (when `umbrella.enabled` is true and items carry `Repos:`): parse the `Repos:` field from each item. The value is a comma-separated CSV — single-repo items have one name (`Repos: web`), multi-repo items have two or more (`Repos: web, api`). All items in a wave must share the *same* set of repos.
 
 Single-repo wave: pass the one name via `--repo`:
 
@@ -278,7 +278,7 @@ If no plan exists and the loop-mode dispatch above did not fire (off/auto, or Mi
 
 From the conversation context:
 
-1. **Consult knowledge + decisions.** Apply the canonical K+D query pattern (`references/knowledge-consult.md`) with topics inferred from the planned work areas. Also run `rota glossary read <terms appearing in the TODO entry or task plan>…` for any domain term used in the TODO entry (terms live in `.rota/KNOWLEDGE.md`'s `## Glossary` topic), and surface inline conflict-call-outs (synonym or drift) when the user's wording deviates from the canonical term during the cycle. Carry matches into Step 6 briefs as `**Known gotchas:**` (relevant knowledge bullets only) and `**Hard boundaries:**` (full decision entries — rule + *Why* + **Forbids** + **Permits**). Workers must treat boundaries as constraints, not hints. If a planned task would violate a decision, **stop and surface to the user** before dispatching.
+1. **Consult knowledge + decisions.** Apply the canonical K+D query pattern (`references/knowledge-consult.md`) with topics inferred from the planned work areas. Also run `rota glossary read <terms appearing in the item or task plan>…` for any domain term used in the item (terms live in `.rota/KNOWLEDGE.md`'s `## Glossary` topic), and surface inline conflict-call-outs (synonym or drift) when the user's wording deviates from the canonical term during the cycle. Carry matches into Step 6 briefs as `**Known gotchas:**` (relevant knowledge bullets only) and `**Hard boundaries:**` (full decision entries — rule + *Why* + **Forbids** + **Permits**). Workers must treat boundaries as constraints, not hints. If a planned task would violate a decision, **stop and surface to the user** before dispatching.
 
    - **Soft-cap check.** Run `rota map stats --cap` — prints a one-line nudge (a warning on stderr) when the subsystem count is at or above the configured soft cap, and nothing below it. Never blocks.
 
@@ -406,7 +406,7 @@ You are implementing Task N of [total].
 [Relevant entries from rota decisions query — full rule + forbids/permits, not just the rule. Workers MUST respect these; the orchestrator's verification step (Step 7) checks the diff for violations.]
 
 **Canonical terms:**
-[Relevant terms from rota glossary read — definition + aliases. Workers MUST use these canonical names in code/comments/commit messages where they apply; aliases are listed so divergent user phrasing in the TODO entry maps back to the right term.]
+[Relevant terms from rota glossary read — definition + aliases. Workers MUST use these canonical names in code/comments/commit messages where they apply; aliases are listed so divergent user phrasing in the item maps back to the right term.]
 
 **Critical constraints:**
 [Behavior preservation, patterns to follow, things NOT to touch]
@@ -591,22 +591,24 @@ Non-sibling dirt → surface it; a worker produced unexpected changes and the or
 
 If a tool regenerates siblings only when the editor loads (e.g., Godot `class_name` → `.gd.uid`), force generation once in headless mode before the sweep (e.g., `godot --headless --editor --quit`). Capture project-specific commands in `KNOWLEDGE.md`.
 
-## Step 9 — Update BACKLOG.md
+## Step 9 — Close the Items
 
-**Issue mode:** skip this step and Step 9.5. Do not call `rota item complete`: the issue closes when its PR merges (`Closes #<n>`, Step 10).
+**Issue backend:** skip this step and Step 9.5. Do not call `rota item complete`: the issue closes when its PR merges (`Closes #<n>`, Step 10).
+
+**File backend:**
 
 ```bash
 rota item complete <ID> --commit <commit-hash>
 ```
 
-Run per resolved item. Match by keyword overlap between task description and TODO entry title. If unsure whether an item was addressed, leave it — don't move items you didn't work on.
+Run per resolved item. Match by keyword overlap between task description and item title. If unsure whether an item was addressed, leave it — don't move items you didn't work on.
 
 ## Step 9.5 — Tombstone Consumed Item Plans
 
 For each item ID that `rota item complete` just resolved, remove its corresponding item plan if one was written:
 
 ```bash
-# For each <ID> the cycle resolved (B07/F03/T11/…):
+# For each <ID> the cycle resolved:
 MILESTONE=$(rota item field get <ID> --name milestone)
 if [ -n "$MILESTONE" ] && [ -f ".rota/plans/${MILESTONE}-<ID>.md" ]; then
   rota plan rm "${MILESTONE}-<ID>"
@@ -617,12 +619,12 @@ Item plans (`.rota/plans/M01-B07.md`) describe how to ship one specific item. On
 
 Skip silently when:
 
-- The item carries no `Milestone:` tag — no plan key exists for it.
+- The item carries no milestone tag — no plan key exists for it.
 - No plan file is at the resolved key — the `[ -f … ]` guard handles this (untagged items, items that one-shot through `/rota-work` without a written plan).
 
 **Slice plans (`M01-S01.md`) stay.** A slice covers multiple items; completing one item does not consume the slice plan. Slice cleanup is currently manual via `rota plan rm <key>` once the user is done with the slice.
 
-**Commit the close-the-loop changes before merge/PR.** `.rota/BACKLOG.md` (updated by `rota item complete` in Step 9) and `.rota/plans/<key>.md` removals (above) are tracked under the partial-ignore model, so they leave a dirty tree. Step 10's merge/PR refuses on a dirty tree (or silently loses the diffs across the checkout), so stage and commit them here as one "close the loop" commit:
+**Commit the close-the-loop changes before merge/PR.** On the file backend, `.rota/BACKLOG.md` (updated by `rota item complete` in Step 9) and `.rota/plans/<key>.md` removals (above) are tracked under the partial-ignore model, so they leave a dirty tree. Step 10's merge/PR refuses on a dirty tree (or silently loses the diffs across the checkout), so stage and commit them here as one "close the loop" commit:
 
 ```bash
 if ! git diff --quiet -- .rota/ 2>/dev/null || [ -n "$(git ls-files --others --exclude-standard .rota/)" ]; then
@@ -639,7 +641,7 @@ Use `work.mergeStrategy` from `.rota/config.json` to pick `rota ship merge` (dir
 
 When `work.mergeStrategy == "direct"` (or unset — the default), use `rota ship merge`. When `work.mergeStrategy == "pr"`, use `rota ship pr`. The orchestrator never asks at this point in the cycle — the user set the policy via `rota config set`; respect it silently.
 
-**Issue mode forces the PR path**, whatever `work.mergeStrategy` says, and never merges:
+**The issue backend forces the PR path**, whatever `work.mergeStrategy` says, and never merges:
 
 ```bash
 printf '%s' "$BODY" | rota ship pr <branch> --title "<short title>" --body-file - --items <ID1>,<ID2>
@@ -671,7 +673,7 @@ One compact summary:
 ```
 Done — merged `rota/fix-timer-badge` into main.
 
-- [B01] Timer badge shows stale duration — fixed invalidation in MenuBarManager
+- #12 Timer badge shows stale duration — fixed invalidation in MenuBarManager
 - [F03] Quick-switch projects — added Cmd+Tab overlay to project picker
 
 Commit: a1b2c3d
@@ -737,7 +739,7 @@ Loop stops naturally when:
 
 - **No noise.** Report results, not process. Don't narrate steps that produced nothing.
 - **Orchestrator plans and verifies; worker executes.** Never dispatch without a clear brief. Never trust completion without reading the result.
-- **Orchestrator owns `.rota/` state.** Only the orchestrator touches `status.json` and `BACKLOG.md`. Workers focus on implementation.
+- **Orchestrator owns `.rota/` state.** Only the orchestrator touches `status.json` and the backlog (`rota item` verbs). Workers focus on implementation.
 - **Isolation protects main.** Branch or worktree — never work directly on main.
 - **One commit per task, owned by the orchestrator.** Workers write files; the orchestrator commits per task. Clean history, easy revert granularity, no `.git/index` races.
 

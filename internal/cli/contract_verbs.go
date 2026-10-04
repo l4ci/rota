@@ -61,7 +61,6 @@ var contractVerbs = []string{
 	"issues close",
 	"issues imported",
 	"issues label",
-	"issues list",
 	"issues provider",
 	"item claim",
 	"item comment add",

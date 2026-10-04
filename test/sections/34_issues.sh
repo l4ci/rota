@@ -169,8 +169,8 @@ rc=0; (cd "$TMP_OO" && "$ROTA_BIN" issues imported --repo nonexistent >/dev/null
 trap 'rm -rf "$TMP"' EXIT
 pass "issues imported --open-only filters by upstream state, no-ops gracefully without gh/glab"
 
-# === issues list / label / close ===
-echo "Section 32: issues list, label and close against the fake forges"
+# === issues label / close ===
+echo "Section 32: issues label and close against the fake forges"
 TMP_IV="$(mktemp -d)"
 trap 'rm -rf "$TMP_IV"; trap '"'"'rm -rf "$TMP"'"'"' EXIT' EXIT
 
@@ -180,7 +180,7 @@ for prov in github gitlab; do
   (
     cd "$P"
     git init -q && git config user.email t@t && git config user.name t && git commit -q --allow-empty -m seed
-    # issues list/label/close detect the provider from origin, not from issues.provider
+    # issues label/close detect the provider from origin, not from issues.provider
     git remote add origin "https://$prov.com/o/r.git"
     SHA=$(git rev-parse HEAD)
     export PATH="$TESTDIR/fakes:$PATH" FAKE_TRACKER_DB="$P/db.json" FAKE_TRACKER_LOG="$P/log"
@@ -198,20 +198,6 @@ print({"labels": ",".join(sorted(i["labels"])), "state": i["state"].lower(),
     else
       glab issue create -t "first" -d "body one" -l bug >/dev/null && glab issue create -t "second" -d "body two" >/dev/null
     fi
-
-    # list: both open issues, newest first, normalised shape
-    OUT=$(hvj issues list) || fail "$prov issues list failed: $OUT"
-    eq "list count" 2 "$(echo "$OUT" | jq '.data.issues | length')"
-    eq "list numbers" "2,1" "$(echo "$OUT" | jq -r '[.data.issues[].number] | join(",")')"
-    eq "list first title" "first" "$(echo "$OUT" | jq -r '.data.issues[] | select(.number == 1) | .title')"
-    eq "list first labels" "bug" "$(echo "$OUT" | jq -r '.data.issues[] | select(.number == 1) | .labels | join(",")')"
-    eq "list first body" "body one" "$(echo "$OUT" | jq -r '.data.issues[] | select(.number == 1) | .body')"
-    echo "$OUT" | jq -e '.data.issues[0] | has("url") and has("author")' >/dev/null || fail "$prov issues list entry misses url/author: $OUT"
-    OUT=$(hvj issues list --label bug) || fail "$prov issues list --label failed"
-    eq "list --label" "1" "$(echo "$OUT" | jq -r '[.data.issues[].number] | join(",")')"
-    OUT=$(hvj issues list --limit 1) || fail "$prov issues list --limit failed"
-    eq "list --limit" "1" "$(echo "$OUT" | jq '.data.issues | length')"
-    eq "list --limit 0 is usage" 2 "$(rcof "$ROTA_BIN" --json issues list --limit 0)"
 
     # label: add, remove, usage and a missing issue
     OUT=$(hvj issues label 2 --add triage) || fail "$prov issues label --add failed: $OUT"
@@ -232,18 +218,16 @@ print({"labels": ",".join(sorted(i["labels"])), "state": i["state"].lower(),
     eq "other issue untouched" open "$(DBQ state 1)"
     hvj issues close 2 --commit "$SHA" >/dev/null || fail "$prov repeat close should exit 0"
     eq "repeat close adds no comment" 1 "$(DBQ comments 2)"
-    OUT=$(hvj issues list) || fail "$prov issues list after close failed"
-    eq "list drops closed" "1" "$(echo "$OUT" | jq -r '[.data.issues[].number] | join(",")')"
     eq "close unknown commit" 3 "$(rcof "$ROTA_BIN" --json issues close 1 --commit deadbeef0000)"
     eq "close missing issue" 3 "$(rcof "$ROTA_BIN" --json issues close 99 --commit "$SHA")"
     eq "close without --commit" 2 "$(rcof "$ROTA_BIN" --json issues close 1)"
     eq "close non-numeric issue" 2 "$(rcof "$ROTA_BIN" --json issues close abc --commit "$SHA")"
-  ) || fail "issues list/label/close on $prov failed (see subshell output above)"
+  ) || fail "issues label/close on $prov failed (see subshell output above)"
 done
 
 trap 'rm -rf "$TMP"' EXIT
 rm -rf "$TMP_IV"
-pass "issues list, label and close behave on github and gitlab (data, store state, exit codes)"
+pass "issues label and close behave on github and gitlab (data, store state, exit codes)"
 
 # === issues label/close exits: missing issue, no provider (#48) ===
 echo "Section 32: issues label/close exit 3 for a missing issue and no provider"
@@ -279,7 +263,7 @@ done
 # No origin and no issues.provider: exit 3 with a message, never a silent [].
 P="$TMP_EX/none"
 mkexit "$P" "" '{"issues":{"retryWaitSeconds":0}}'
-for argv in "issues list" "issues label 1 --add bug" "issues close 1 --commit HEAD"; do
+for argv in "issues label 1 --add bug" "issues close 1 --commit HEAD"; do
   rc=$(rcv "$P" $argv)
   [ "$rc" = "3" ] || fail "no provider: rota $argv should exit 3, got $rc: $(cat "$TMP_EX/out")"
   grep -q "issues.provider" "$TMP_EX/out" || fail "no provider: rota $argv message should name issues.provider: $(cat "$TMP_EX/out")"
@@ -288,9 +272,6 @@ done
 # issues.provider stands in when origin names no forge; an origin that does wins.
 P="$TMP_EX/fallback"
 mkexit "$P" "" '{"issues":{"provider":"github","retryWaitSeconds":0}}'
-rc=$(rcv "$P" issues list)
-[ "$rc" = "0" ] || fail "issues list with issues.provider and no origin should exit 0, got $rc: $(cat "$TMP_EX/out")"
-[ "$(jq -r .data.issues <"$TMP_EX/out")" = "[]" ] || fail "issues list fallback expected an empty list from the fake forge: $(cat "$TMP_EX/out")"
 [ "$(cd "$P" && "$ROTA_BIN" --json issues provider | jget data.provider)" = "github" ] || fail "issues provider should answer from issues.provider with no origin"
 git -C "$P" remote add origin "https://gitlab.com/o/r.git"
 [ "$(cd "$P" && "$ROTA_BIN" --json issues provider | jget data.provider)" = "gitlab" ] || fail "an origin naming a forge should beat issues.provider"

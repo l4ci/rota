@@ -18,7 +18,7 @@ import (
 	"github.com/l4ci/rota/internal/tracker"
 )
 
-// The A4 `rota issues list|label|imported|close|provider` and `rota migrate
+// The A4 `rota issues label|imported|close|provider` and `rota migrate
 // issues` verbs. Shapes, flags and exits are the verb contract's
 // (docs/design/contract/); the old helpers named in each `old:`
 // line are the behaviour to match. These verbs exec gh or glab, always
@@ -27,7 +27,6 @@ import (
 func a4dCommands() []*Command {
 	return []*Command{
 		{Name: "issues", Summary: "upstream issues on GitHub or GitLab", Subs: []*Command{
-			{Name: "list", Summary: "open upstream issues", Repo: true, Verb: a4dList},
 			{Name: "label", Summary: "add or remove a label on an upstream issue", Repo: true, Verb: a4dLabel},
 			{Name: "imported", Summary: "backlog items that point at upstream issues", Verb: a4dImported},
 			{Name: "close", Summary: "close an upstream issue naming the shipping commit", Repo: true, Verb: a4dClose},
@@ -108,51 +107,6 @@ func a4dProvider(fs *flag.FlagSet) RunFunc {
 		}
 		p := issues.Provider(c.Context(), env, dir)
 		return Result{Data: a4Obj("provider", p), Text: p}, nil
-	}
-}
-
-// ---- list -------------------------------------------------------------------
-
-func a4dList(fs *flag.FlagSet) RunFunc {
-	mine := fs.Bool("mine", false, "only issues assigned to you")
-	label := fs.String("label", "", "only issues with this label")
-	limit := fs.String("limit", "30", "most issues to fetch")
-	return func(c *Ctx, args []string) (Result, error) {
-		if err := a4Args(c, args, 0, 0, "issues list takes no positional arguments"); err != nil {
-			return Result{}, err
-		}
-		given := a4Given(fs)
-		if given["label"] && *label == "" {
-			return Result{}, Usage("%s: --label needs a name", c.Path)
-		}
-		n, err := strconv.Atoi(*limit)
-		if err != nil || n < 1 || strings.HasPrefix(*limit, "+") {
-			return Result{}, Usage("%s: --limit must be a positive number", c.Path)
-		}
-		_, dir, env, err := a4dScope(c)
-		if err != nil {
-			return Result{}, err
-		}
-		list, err := issues.List(c.Context(), env, dir, issues.ListOpts{Mine: *mine, Label: *label, Limit: n})
-		if err != nil {
-			return Result{}, a4dErr(err)
-		}
-		rows := []any{}
-		var lines []string
-		for _, is := range list {
-			rows = append(rows, a4Obj("number", is.Number, "title", is.Title, "body", is.Body,
-				"labels", is.Labels, "url", is.URL, "author", is.Author))
-			line := fmt.Sprintf("#%v %v", is.Number, is.Title)
-			if len(is.Labels) > 0 {
-				var ls []string
-				for _, l := range is.Labels {
-					ls = append(ls, fmt.Sprint(l))
-				}
-				line += " [" + strings.Join(ls, ", ") + "]"
-			}
-			lines = append(lines, line)
-		}
-		return Result{Data: a4Obj("issues", rows), Text: strings.Join(lines, "\n")}, nil
 	}
 }
 
