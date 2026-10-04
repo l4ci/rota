@@ -289,21 +289,23 @@ func runGateCase(t *testing.T, c gateCase, want gateOutcome) {
 	mustEqual(t, "forge calls", want.Forge, shaRe.ReplaceAllString(string(gl), "SHA"))
 }
 
+// advanceMainOn lands a commit on origin/main that writes file.
+func advanceMainOn(w *world, file string) {
+	gitq(w.t, w.worker, "checkout", "-q", "main")
+	os.WriteFile(filepath.Join(w.worker, file), []byte("main\n"), 0o644)
+	gitq(w.t, w.worker, "add", file)
+	gitq(w.t, w.worker, "commit", "-q", "-m", "main moves")
+	gitq(w.t, w.worker, "push", "-q", "origin", "main")
+}
+
 func TestGate(t *testing.T) {
-	advanceMain := func(w *world) {
-		gitq(t, w.worker, "checkout", "-q", "main")
-		os.WriteFile(filepath.Join(w.worker, "more.txt"), []byte("more\n"), 0o644)
-		gitq(t, w.worker, "add", "more.txt")
-		gitq(t, w.worker, "commit", "-q", "-m", "main moves")
-		gitq(t, w.worker, "push", "-q", "origin", "main")
-	}
 	cases := []gateCase{
 		{name: "a: stale on pushed refs even though local w1 merged main", pr: ghURL, opts: GateOpts{CheckOnly: true}, verdict: GateStale,
 			setup: func(w *world) {
-				advanceMain(w)
+				advanceMainOn(w, "work.txt") // conflicts with w1's work.txt, so it is bounced
 				gitq(t, w.dir, "fetch", "-q", "origin")
 				gitq(t, w.dir, "checkout", "-q", "-b", "w1", "origin/w1")
-				gitq(t, w.dir, "merge", "-q", "origin/main", "-m", "sync")
+				gitq(t, w.dir, "merge", "-q", "-X", "ours", "origin/main", "-m", "sync")
 				gitq(t, w.dir, "checkout", "-q", "main")
 			}},
 		{name: "b: a merge-base that dies is check-broke, not stale", pr: ghURL, opts: GateOpts{CheckOnly: true}, broken: true, verdict: GateCheckBroke},
@@ -611,5 +613,108 @@ func TestGateLocalMergeNonConflictFailureShowsGitsWords(t *testing.T) {
 	if err != nil || res.Verdict != GateMergeFailed || strings.Contains(res.Err, "conflicted") ||
 		!strings.Contains(res.Err, "failed (exit 128): fatal: unable to auto-detect email address") {
 		t.Errorf("%+v %v", res, err)
+	}
+}
+
+// A branch behind the base is merged by the gate itself when the merge is
+// clean and the two sides share no changed file; a conflict or a shared file
+// goes back to the worker.
+func TestGateStaleMerge(t *testing.T) {
+	for _, c := range []struct {
+		name    string
+		setup   func(w *world)
+		cfg     string
+		opts    GateOpts
+		verdict string
+		changed bool
+		errHas  string
+		note    bool
+	}{
+		{name: "disjoint files merge clean", setup: func(w *world) { advanceMainOn(w, "more.txt") }, verdict: GatePass, changed: true, note: true},
+		{name: "disjoint files are fresh under --check-only", setup: func(w *world) { advanceMainOn(w, "more.txt") }, opts: GateOpts{CheckOnly: true}, verdict: GateFresh, note: true},
+		{name: "the merged tree is still verified", setup: func(w *world) { advanceMainOn(w, "more.txt") }, cfg: `{"refactor":{"verifyCommands":["test -f more.txt && test -f work.txt"]}}`, verdict: GatePass, changed: true, note: true},
+		{name: "a shared file goes back", setup: func(w *world) { sharedFile(t, w) }, verdict: GateStale, errHas: "both sides changed seed.txt"},
+		{name: "a shared path under round.sharedPaths is ignored", setup: func(w *world) { sharedFile(t, w) }, cfg: `{"round":{"sharedPaths":["seed.txt"]}}`, verdict: GatePass, changed: true, note: true},
+		{name: "a conflict goes back", setup: func(w *world) { advanceMainOn(w, "work.txt") }, verdict: GateStale, errHas: "the merge conflicts"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			w := newWorld(t, ghURL)
+			c.setup(w)
+			if c.cfg != "" {
+				w.setConfig(c.cfg)
+			}
+			res, err := w.gate(false, c.opts)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if res.Verdict != c.verdict || res.Changed != c.changed {
+				t.Fatalf("verdict %s changed %v (%s), want %s %v", res.Verdict, res.Changed, res.Err, c.verdict, c.changed)
+			}
+			if c.errHas != "" && !strings.Contains(res.Err, c.errHas) {
+				t.Errorf("err %q lacks %q", res.Err, c.errHas)
+			}
+			noted := false
+			for _, n := range res.Notes {
+				noted = noted || strings.HasPrefix(n, "STALE-MERGE")
+			}
+			if noted != c.note {
+				t.Errorf("STALE-MERGE note = %v, want %v: %v", noted, c.note, res.Notes)
+			}
+		})
+	}
+}
+
+// sharedFile leaves w1 behind main with both having changed seed.txt, in
+// different places, so the merge is textually clean: main grows seed.txt, w1
+// merges that and edits the first line, then main edits the last. The forge is
+// told w1's new head.
+func sharedFile(t *testing.T, w *world) {
+	t.Helper()
+	lines := "a\n" + strings.Repeat("-\n", 19) + "z\n"
+	gitq(t, w.worker, "checkout", "-q", "main")
+	os.WriteFile(filepath.Join(w.worker, "seed.txt"), []byte(lines), 0o644)
+	gitq(t, w.worker, "commit", "-q", "-am", "seed grows")
+	gitq(t, w.worker, "push", "-q", "origin", "main")
+	gitq(t, w.worker, "checkout", "-q", "w1")
+	gitq(t, w.worker, "merge", "-q", "origin/main", "-m", "sync")
+	os.WriteFile(filepath.Join(w.worker, "seed.txt"), []byte("A\n"+lines[2:]), 0o644)
+	gitq(t, w.worker, "commit", "-q", "-am", "w1 edits the top")
+	gitq(t, w.worker, "push", "-q", "origin", "w1")
+	w.forge("sha", gitq(t, w.worker, "rev-parse", "HEAD"))
+	gitq(t, w.worker, "checkout", "-q", "main")
+	os.WriteFile(filepath.Join(w.worker, "seed.txt"), []byte(lines[:len(lines)-2]+"Z\n"), 0o644)
+	gitq(t, w.worker, "commit", "-q", "-am", "main edits the bottom")
+	gitq(t, w.worker, "push", "-q", "origin", "main")
+}
+
+func TestBounceCount(t *testing.T) {
+	root := t.TempDir()
+	os.MkdirAll(filepath.Join(root, ".rota"), 0o755)
+	for want := 1; want <= 3; want++ {
+		if n, err := RecordBounce(root, "31", ""); err != nil || n != want {
+			t.Fatalf("bounce %d: got %d, %v", want, n, err)
+		}
+	}
+	if n, _ := RecordBounce(root, "32", ""); n != 1 {
+		t.Errorf("counts are per item, got %d for another", n)
+	}
+	if err := ClearBounces(root, "31"); err != nil {
+		t.Fatal(err)
+	}
+	if n, _ := RecordBounce(root, "31", ""); n != 1 {
+		t.Errorf("cleared count restarts, got %d", n)
+	}
+}
+
+func TestBounceSameHeadCountsOnce(t *testing.T) {
+	root := t.TempDir()
+	os.MkdirAll(filepath.Join(root, ".rota"), 0o755)
+	for i := 0; i < 3; i++ {
+		if n, _ := RecordBounce(root, "31", "aaa"); n != 1 {
+			t.Fatalf("same head re-gated: got %d, want 1", n)
+		}
+	}
+	if n, _ := RecordBounce(root, "31", "bbb"); n != 2 {
+		t.Errorf("new head counts, got %d", n)
 	}
 }
