@@ -56,7 +56,7 @@ Starter template:
 Each `- [ ]` line is a gate `/rota-release` walks before bumping the version. Edit freely — nothing here is hardcoded. Items marked `- [x]` are ignored. Append `(manual)` to any item that must interject even in `autonomy.level: auto`/`loop`.
 
 - [ ] Sibling version-bearing files are in sync (e.g., `.claude-plugin/marketplace.json`, lockfiles, docs version refs)
-- [ ] CI is green on the release branch
+- [ ] CI is green on the release branch (the merge gate already ran the full suite on the release commit: confirm it, don't re-run smoke or `go test`)
 - [ ] Migration notes for users on the prior version are written
 
 (Add project-specific items below.)

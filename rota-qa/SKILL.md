@@ -122,6 +122,8 @@ Dispatch one subagent per check group (per pillar per target) in parallel via th
 
 The orchestrator does not run the checks itself — parallel dispatch is the point. Aggregate the results.
 
+**Reuse proof; the merge gate is the only full run.** The merge gate already ran the full suite (`refactor.verifyCommands`, e.g. smoke plus `go test`) on the merged tree. Before dispatching, `rota proof show <ID> --json` for each item: a PASS row for the same check at the current `git rev-parse HEAD` (its `sha`) is reused, not re-run. Where a strategy's executable check is the gate's own command, treat the gate's PASS at that sha as the QA run. Dispatch runners only for checks with no PASS at this sha (browser, lighthouse, audit and other surface checks the gate does not cover). Record reused rows as such in the report.
+
 **Record proof.** For every item on the branch (`rota review scope --json` `data.referencedIds`), write each executable-check result as a proof row: `rota proof add <ID> --check "<check name>" --result PASS|FAIL --evidence "<artifact path under .rota/qa-runs/ or one-line output>"`. Rows are facts; the QA verdict (Step 7) is still the judgement.
 
 **Re-run a failed check alone before recording it.** Parallel runners contend for one box, and every check with a fixed time budget starts failing on elapsed time rather than on truth once the machine is loaded. Before writing `met: false` for any check that timed out, blew a duration budget, or failed on a connection error, re-run that one check with nothing else in flight and record `uptime` alongside both runs. Three consequences worth stating separately:
