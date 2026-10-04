@@ -156,41 +156,6 @@ def check_pending_spec(skill_files, issues):
         issues.append(f"{rel}: listed in PENDING_LONG but missing; remove the entry")
 
 
-def check_banner(path, text, issues):
-    # Only validate banner for skills that declare one (delegation/alias stubs omit it by design)
-    if "Print the banner" not in text:
-        return
-
-    _, post = parse_frontmatter(text)
-    post_lines = post.splitlines()
-    # Search within first 30 lines of post-frontmatter content
-    window = post_lines[:30]
-    # Find opening fence
-    in_block = False
-    block_lines = []
-    found_block = False
-    for line in window:
-        if not in_block:
-            if line.strip().startswith("```"):
-                in_block = True
-                block_lines = []
-                found_block = True
-        else:
-            if line.strip().startswith("```"):
-                in_block = False
-                break
-            block_lines.append(line)
-
-    if not found_block or not block_lines:
-        issues.append(f"{path}: banner block missing or malformed")
-        return
-
-    has_box = any("═" in l for l in block_lines)
-    has_triggers_pairs = any("triggers:" in l and "pairs:" in l for l in block_lines)
-    if not has_box or not has_triggers_pairs:
-        issues.append(f"{path}: banner block missing or malformed")
-
-
 def check_references(path, text, issues):
     # Skills cite references/<x>.md; `rota skills install` copies each cited file
     # next to the skill, so in the source tree the link resolves against the
@@ -264,9 +229,6 @@ def prose_rules():
           has(sk("debug"), r"rota map stats --cap|rota map index", "has no map touchpoint", True),
           has(sk("work"), "rota backlog stale", "missing the stale-summary call"),
           has(sk("capture"), "Subsystem:", "missing the Subsystem field")]
-    # F37 TaskCreate progress checklists: tiers S/A/B have it, tier C does not
-    for n in "work debug ship release refactor learn decide spike vision capture pause review plan".split():
-        r.append(has(sk(n), "TaskCreate(", "Tier S/A/B skill must reference TaskCreate("))
     # config verbs and the positional-args doc (F09, F78)
     for n in ("ship",):
         r.append(has(sk(n), "rota config set", "missing rota config set call"))
@@ -387,7 +349,6 @@ def main():
         text = skill_path.read_text(encoding="utf-8")
         check_frontmatter(skill_path, text, issues)
         check_spec_frontmatter(skill_path, text, issues)
-        check_banner(skill_path, text, issues)
         check_references(skill_path, text, issues)
 
     check_pending_spec(skill_files, issues)

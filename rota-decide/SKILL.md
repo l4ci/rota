@@ -3,22 +3,13 @@ name: rota-decide
 description: Capture a hard-boundary decision into .rota/DECISIONS.md — manually confirmed, never auto-invoked. Decisions differ from learnings in KNOWLEDGE.md by being active commitments with explicit forbids/permits. Use on "decide on X", "we're committing to X", "lock in the boundary that Y", or when a session has produced a constraint future work must respect. Accepts `--from-learning <topic>` to promote a hardened KNOWLEDGE.md learning into a decision, and `--from-spike <name>` to promote a `.rota/spikes/<name>.md` finding.
 ---
 
-**Print the banner below verbatim before any other action — skip if dispatched as a subagent.** See `references/banner-preamble.md`.
-
-```
-════════════════════════════════════════════════════════════════════════
-  ⚖️   rota-decide  ·  capture hard-boundary decisions to DECISIONS.md
-  triggers: "decide on X", "lock in Y"  ·  pairs: rota-learn (passive)
-════════════════════════════════════════════════════════════════════════
-```
-
 # rota-decide — Capture Hard-Boundary Decisions
 
 Distill an active commitment from the current session into `.rota/DECISIONS.md`, organized by topic, so future work consults it as a hard constraint. Decisions are *active* (committed boundaries with forbids/permits) — distinct from `/rota-learn` which captures *passive* knowledge (gotchas, conventions, constraints to remember).
 
 ## Step 1 — Task list
 
-**Initialize task list.** Follow the canonical pattern in `references/task-list-init.md` — load `TaskCreate(…)` via `ToolSearch select:TaskCreate,TaskUpdate` if needed, then create one task per phase below.
+Track these phases with the host's task tool if it has one.
 
 Phases:
 
@@ -119,7 +110,7 @@ If the user picks **Edit first**, present the draft as inline text, accept revis
 
 If the user picks **Cancel**, stop with one line: *"Decision not captured."*
 
-Plain-text fallback: write only if the user types `yes` or `write`. Anything else is a cancel.
+Write only if the user answers `yes` or `write`. Anything else is a cancel.
 
 ## Step 6 — Merge into DECISIONS.md
 
@@ -187,6 +178,5 @@ If the entry created a new topic, prepend a line: *"New topic: `<topic>`."*
 
 ## References
 
-- [`references/banner-preamble.md`](references/banner-preamble.md) — Banner-print rule shared by every skill.
 - [`references/persistence-skills.md`](references/persistence-skills.md) — Shared spine and divergence axes for the persistence duo (`/rota-learn`, `/rota-decide`) — including `/rota-learn --term` for Glossary entries.
 - [`references/source-prefill.md`](references/source-prefill.md) — Source-prefill / promote-between-artifacts semantics for `/rota-decide`.
