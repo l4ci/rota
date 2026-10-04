@@ -14,6 +14,7 @@ import (
 	"github.com/l4ci/rota/internal/backlog/trackertest"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/tracker"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 const migBacklog = `# TODO
@@ -444,5 +445,37 @@ func TestMigrateAdoptsTrackerImports(t *testing.T) {
 	calls := len(f.Calls)
 	if res, err = MigrateIssues(o); err != nil || res.Changed || len(f.Calls) != calls {
 		t.Errorf("rerun: %v changed %v, %d new calls", err, res.Changed, len(f.Calls)-calls)
+	}
+}
+
+// A slot and a queued PR that still hold file-mode IDs when the migration
+// finishes are rewritten to the issue numbers (#27).
+func TestMigrateRemapsRegistryIDs(t *testing.T) {
+	root := migProject(t, map[string]string{".rota/workers.json": `{"slots":[` +
+		`{"name":"ben","task":"B01","claimId":"ben@1","state":"busy"},` +
+		`{"name":"dana","task":null,"state":"idle"}],` +
+		`"prs":[{"issue":"#F01","pr":"#9"}]}`})
+	f := &trackertest.MS{Fake: &trackertest.Fake{}}
+	o, _, _ := newMig(t, root, true, f)
+	res, err := MigrateIssues(o)
+	if err != nil || !res.Done {
+		t.Fatalf("%v %+v", err, res)
+	}
+	reg := worker.LoadRegistry(root)
+	if got := worker.Str(reg.Slot("ben"), "task"); got != "2" {
+		t.Errorf("task %q", got)
+	}
+	if got := worker.Str(reg.Slot("ben"), "claimId"); got != "ben@1" {
+		t.Errorf("claimId %q", got)
+	}
+	if got := worker.Str(reg.PRs()[0], "issue"); got != "4" {
+		t.Errorf("queued issue %q", got)
+	}
+	// rerunning leaves the rewritten IDs alone
+	if _, err := MigrateIssues(o); err != nil {
+		t.Fatal(err)
+	}
+	if got := worker.Str(worker.LoadRegistry(root).Slot("ben"), "task"); got != "2" {
+		t.Errorf("rerun task %q", got)
 	}
 }

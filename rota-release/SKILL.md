@@ -56,8 +56,9 @@ Starter template:
 Each `- [ ]` line is a gate `/rota-release` walks before bumping the version. Edit freely — nothing here is hardcoded. Items marked `- [x]` are ignored. Append `(manual)` to any item that must interject even in `autonomy.level: auto`/`loop`.
 
 - [ ] Sibling version-bearing files are in sync (e.g., `.claude-plugin/marketplace.json`, lockfiles, docs version refs)
-- [ ] CI is green on the release branch
+- [ ] CI is green on the release branch (the merge gate already ran the full suite on the release commit: confirm it, don't re-run smoke or `go test`)
 - [ ] Migration notes for users on the prior version are written
+- [ ] Where releases are signed (`signs:` in `.goreleaser.yaml`): the Actions secret `MINISIGN_SECRET_KEY` is set and every release asset gets a `.minisig` (key setup: `docs/contributing/release-signing.md`) (manual)
 
 (Add project-specific items below.)
 ```
@@ -142,7 +143,7 @@ rota release publish <new_version> --json --title "v<new_version> — <one-line 
   --body-file "$NOTES_FILE" [--draft] --confirm --confirm-note "$APPROVAL"
 ```
 
-Add `--draft` when `release.draft` is true and the host is GitHub (GitLab refuses it). There is one release per version: where the workflow already made a draft, the verb finishes it (notes, title, un-draft) and never creates a second. It exits 3 while that draft lacks any of the four `rota_<os>_<arch>` binaries or `checksums.txt`, or while no release exists and the repo builds with goreleaser, so wait for the workflow (`gh run watch`) and re-run. Origin on neither host: the verb publishes nothing (`changed: false`) and the summary says `skipped`. `data.url` goes in the summary. Exit 5 (`gh`/`glab` missing): print the error and continue; the tag is already public. Skipped in `--dry-run`; print the command.
+Add `--draft` when `release.draft` is true and the host is GitHub (GitLab refuses it). There is one release per version: where the workflow already made a draft, the verb finishes it (notes, title, un-draft) and never creates a second. It exits 3 while that draft lacks any of the four `rota_<os>_<arch>` binaries or `checksums.txt`, lacks the `.minisig` of any attached asset (binaries, tarballs, `checksums.txt.minisig`; `install.sh` refuses an unsigned binary, see `docs/contributing/release-signing.md`), or while no release exists and the repo builds with goreleaser, so wait for the workflow (`gh run watch`) and re-run. Origin on neither host: the verb publishes nothing (`changed: false`) and the summary says `skipped`. `data.url` goes in the summary. Exit 5 (`gh`/`glab` missing): print the error and continue; the tag is already public. Skipped in `--dry-run`; print the command.
 
 ## Step 11b — Push the Branch
 
