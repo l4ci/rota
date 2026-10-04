@@ -71,6 +71,11 @@ type Env struct {
 	// Assign hands an item to the first idle slot and returns its name. A
 	// refusal (not ready after all, no slot) is a *Refusal, not a failure.
 	Assign func(ctx context.Context, id string) (agent string, err error)
+	// Review mints the architecture-review items (#53) when a review is due,
+	// at the round.architectureEvery threshold or because a slot is idle with
+	// nothing assignable, and returns their ids. nil means the round has no
+	// review. The minted items are assigned first, within the same cap.
+	Review func(ctx context.Context) (minted []string, err error)
 	// Audit records one action in the audit log.
 	Audit func(Action)
 	// Held is the targets a previous tick's merge failed on and a person has
@@ -119,7 +124,7 @@ func (e Env) audit(r *Result, a Action) {
 	}
 }
 
-// Run does one tick: reconcile, merge, assign.
+// Run does one tick: reconcile, merge, review, assign.
 //
 // The merge comes before the assign so the next assignment branches from the
 // gated base (rota-orchestrate, section 6), not from before the merge.
@@ -158,7 +163,11 @@ func Run(ctx context.Context, e Env) (Result, error) {
 	if err := e.merge(ctx, &r, targets); err != nil {
 		return r, err
 	}
-	if err := e.assign(ctx, &r); err != nil {
+	minted, err := e.review(ctx, &r)
+	if err != nil {
+		return r, err
+	}
+	if err := e.assign(ctx, &r, minted); err != nil {
 		return r, err
 	}
 
@@ -221,7 +230,28 @@ func (e Env) merge(ctx context.Context, r *Result, targets []string) error {
 	return nil
 }
 
-func (e Env) assign(ctx context.Context, r *Result) error {
+// review mints the due architecture reviews. A failed mint is the
+// orchestrator's to look at, not a reason to stop the tick's other steps.
+func (e Env) review(ctx context.Context, r *Result) ([]string, error) {
+	if e.Review == nil {
+		return nil, nil
+	}
+	ids, err := e.Review(ctx)
+	if err != nil {
+		r.NeedsYou = append(r.NeedsYou, Item{"architecture-review", "mint", firstNonEmpty(firstLine(err.Error()), "the review could not be minted")})
+	}
+	for _, id := range ids {
+		e.audit(r, Action{"mint", id, "architecture review"})
+	}
+	return ids, nil
+}
+
+func firstLine(s string) string {
+	l, _, _ := strings.Cut(s, "\n")
+	return l
+}
+
+func (e Env) assign(ctx context.Context, r *Result, minted []string) error {
 	idle := 0
 	for _, s := range e.Slots() {
 		if s.State == "idle" || s.State == "" {
@@ -237,11 +267,22 @@ func (e Env) assign(ctx context.Context, r *Result) error {
 	if n == 0 {
 		return nil
 	}
+	// The minted reviews go first: they are the reason the tick minted them.
+	// One that is refused stays a candidate for a later tick.
+	queue := make([]Candidate, 0, len(minted))
+	for _, id := range minted {
+		queue = append(queue, Candidate{ID: id, Ready: true})
+	}
 	cands, err := e.Candidates(ctx)
 	if err != nil {
 		return err
 	}
 	for _, c := range cands {
+		if !contains(minted, c.ID) {
+			queue = append(queue, c)
+		}
+	}
+	for _, c := range queue {
 		if n == 0 {
 			break
 		}
@@ -261,6 +302,15 @@ func (e Env) assign(ctx context.Context, r *Result) error {
 		}
 	}
 	return nil
+}
+
+func contains(l []string, s string) bool {
+	for _, x := range l {
+		if x == s {
+			return true
+		}
+	}
+	return false
 }
 
 func asRefusal(err error, out **Refusal) bool {
