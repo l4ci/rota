@@ -119,6 +119,15 @@ printf '{"host":"solo","slots":[]}\n' > "$RWP/.rota/workers.json"
 RC=0; rwr "$ROTA_BIN" round watch --heartbeat 5 >/dev/null 2>&1 || RC=$?
 [ "$RC" = "5" ] || fail "a solo round has nothing to watch (exit 5), got $RC"
 pass "round watch returns on a recorded PR; bad flags exit 2; solo exits 5"
+# a solo registry with a busy-looking slot still has nothing to watch: no digest, no Stop block
+rwslots busy
+python3 - "$RWP/.rota/workers.json" <<'PY'
+import json,sys
+d=json.load(open(sys.argv[1])); d["host"]="solo"; json.dump(d,open(sys.argv[1],"w"))
+PY
+OUT="$(rw_prompt)"; [ -z "$OUT" ] || fail "a solo round must not get the NO WATCH ARMED digest: $OUT"
+OUT="$(rw_stop false)"; [ -z "$OUT" ] || fail "a solo round must not be blocked by Stop: $OUT"
+pass "prompt and Stop hooks stay silent under a solo registry with slots"
 
 # ── install registers the prompt hook ──────────────────────────────────────
 OUT="$(rwr "$ROTA_BIN" --json hook install --scope project-local)" || fail "hook install failed: $OUT"
