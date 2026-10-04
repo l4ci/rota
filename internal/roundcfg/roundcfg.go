@@ -50,6 +50,10 @@ type Settings struct {
 	// StallMinutes is round.stallMinutes: how long a slot may make no progress
 	// before `round reconcile` calls it stalled; 0 turns the check off.
 	StallMinutes int
+	// MaxBounces is round.maxBounces: how often `rota worker gate` may send one
+	// item's PR back to its worker before parking the item as needs-human; 0
+	// turns the cap off.
+	MaxBounces int
 }
 
 // ValidTier reports whether s is a tier; ValidKind whether s is a harness kind.
@@ -121,20 +125,30 @@ func Load(root string) (Settings, error) {
 	if s.SharedPaths, err = list(cfg, "round.sharedPaths"); err != nil {
 		return s, err
 	}
-	v, err = config.Value(cfg, "round.stallMinutes")
-	if err != nil {
+	if s.StallMinutes, err = nonNegInt(cfg, "round.stallMinutes"); err != nil {
 		return s, err
+	}
+	if s.MaxBounces, err = nonNegInt(cfg, "round.maxBounces"); err != nil {
+		return s, err
+	}
+	return s, loadTiers(cfg, &s)
+}
+
+// nonNegInt reads a key that must be an integer of 0 or more.
+func nonNegInt(cfg any, key string) (int, error) {
+	v, err := config.Value(cfg, key)
+	if err != nil {
+		return 0, err
 	}
 	n, ok := v.(interface{ Int64() (int64, error) })
 	if !ok {
-		return s, fmt.Errorf("round.stallMinutes must be a non-negative integer (got %v)", v)
+		return 0, fmt.Errorf("%s must be a non-negative integer (got %v)", key, v)
 	}
 	i, err := n.Int64()
 	if err != nil || i < 0 {
-		return s, fmt.Errorf("round.stallMinutes must be a non-negative integer (got %v)", v)
+		return 0, fmt.Errorf("%s must be a non-negative integer (got %v)", key, v)
 	}
-	s.StallMinutes = int(i)
-	return s, loadTiers(cfg, &s)
+	return int(i), nil
 }
 
 // loadTiers reads round.tier and round.tiers.<kind>.<tier>. The claude standard
