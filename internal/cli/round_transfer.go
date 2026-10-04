@@ -67,6 +67,9 @@ func roundTransfer(fs *flag.FlagSet) RunFunc {
 			}
 			return r, ferr
 		}
+		for _, w := range res.Warnings {
+			c.Warn("%s", w)
+		}
 		return Result{Data: transferData(res), Text: fmt.Sprintf("transferred %s from %s to %s on %s", res.Issue, res.From, res.To, res.Branch)}, nil
 	}
 }

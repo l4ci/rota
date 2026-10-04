@@ -24,9 +24,26 @@ type moveBoard struct {
 	*boardFake
 	comments  map[string][]string
 	failState error
+	gone      map[string]bool // issues the tracker answers 404 for
+}
+
+func (b *moveBoard) notFound(ref string) error {
+	if b.gone[ref] {
+		return &tracker.Error{Kind: tracker.KindNotFound, Message: "gh: Not Found (HTTP 404)"}
+	}
+	return nil
+}
+func (b *moveBoard) Release(ref, claim string) (bool, error) {
+	if err := b.notFound(ref); err != nil {
+		return false, err
+	}
+	return b.boardFake.Release(ref, claim)
 }
 
 func (b *moveBoard) AddComment(ref, kind, text string) (string, error) {
+	if err := b.notFound(ref); err != nil {
+		return "", err
+	}
 	b.comments[ref] = append(b.comments[ref], text)
 	return strconv.Itoa(len(b.comments[ref])), nil
 }
@@ -41,6 +58,9 @@ func (b *moveBoard) Status(ref string) (*backlog.Status, error) {
 	return &backlog.Status{ID: ref, Claim: b.claims[ref], State: b.states[ref]}, nil
 }
 func (b *moveBoard) SetState(ref, state string) (bool, error) {
+	if err := b.notFound(ref); err != nil {
+		return false, err
+	}
 	if err := b.failState; err != nil {
 		b.failState = nil
 		return false, err
@@ -953,6 +973,61 @@ func TestReclaimReleasesEveryClaimOfTheSlotEvenWhenTheRegistryLostIt(t *testing.
 	}
 	if f.be.claims["12"] != "" {
 		t.Errorf("claims by ben@… are swept: %v", f.be.claims)
+	}
+}
+
+// A slot left on a file-mode ID by a mid-round `migrate issues` has no issue
+// to comment on or release: reclaim warns and still frees the slot (#27).
+func TestReclaimFreesASlotWhoseIssueNoLongerResolves(t *testing.T) {
+	f := newMoveFx(t)
+	f.agents()
+	mutateSlot(f.root, "ben", func(s *jsonx.Object) { s.Set("handle", "w1:ben"); s.Set("task", "B31") })
+	f.be.gone = map[string]bool{"B31": true}
+	res, err := f.reclaim("ben", nil)
+	if err != nil {
+		t.Fatalf("reclaim must not fail on an unresolvable issue: %v", err)
+	}
+	if !res.Changed || len(res.Warnings) != 3 || !strings.Contains(res.Warnings[0], "B31") {
+		t.Fatalf("%+v", res)
+	}
+	s := f.slot("ben")
+	if worker.Str(s, "task") != "" || worker.Str(s, "state") != "idle" || worker.Str(s, "claimId") != "" {
+		t.Errorf("slot not freed: %v", s)
+	}
+	if _, err := f.assign("12", "ben"); err != nil {
+		t.Errorf("the slot must take work again: %v", err)
+	}
+}
+
+// Return and transfer free the slot the same way when the tracker no longer
+// resolves the issue's comments, claims and state (#27).
+func TestReturnFreesASlotWhoseIssueNoLongerResolves(t *testing.T) {
+	f := newMoveFx(t)
+	f.be.gone = map[string]bool{"12": true}
+	res, err := f.ret("ben", "gone", nil)
+	if err != nil {
+		t.Fatalf("return must not fail on an unresolvable issue: %v", err)
+	}
+	if !res.Changed || len(res.Warnings) != 3 {
+		t.Fatalf("%+v", res)
+	}
+	if s := f.slot("ben"); worker.Str(s, "task") != "" || worker.Str(s, "state") != "idle" {
+		t.Errorf("slot not freed: %v", s)
+	}
+}
+
+func TestTransferToHumanFreesASenderWhoseIssueNoLongerResolves(t *testing.T) {
+	f := newMoveFx(t)
+	f.be.gone = map[string]bool{"12": true}
+	res, err := f.transfer("12", HumanTarget, nil)
+	if err != nil {
+		t.Fatalf("transfer must not fail on an unresolvable issue: %v", err)
+	}
+	if !res.Changed || len(res.Warnings) != 3 {
+		t.Fatalf("%+v", res)
+	}
+	if s := f.slot("ben"); worker.Str(s, "task") != "" || worker.Str(s, "state") != "idle" {
+		t.Errorf("sender not freed: %v", s)
 	}
 }
 

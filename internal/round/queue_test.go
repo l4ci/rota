@@ -68,6 +68,21 @@ func TestAssignOntoDoneSlotQueuesItsPR(t *testing.T) {
 	}
 }
 
+// After a mid-round `migrate issues` a slot may still hold `B30`; its mapped
+// issue number counts as held, so candidates does not offer it (#27).
+func TestHeldIDsCountAMappedFileModeID(t *testing.T) {
+	f := newMoveFx(t)
+	mutateSlot(f.root, "ben", func(s *jsonx.Object) { s.Set("task", "B30") })
+	if held := heldIDs(f.root); held["17"] {
+		t.Fatalf("no map yet: %v", held)
+	}
+	os.WriteFile(filepath.Join(f.root, ".rota", "issue-map.json"),
+		[]byte(`{"B30":{"id":"B17","number":17,"url":"u","done":[]}}`), 0o644)
+	if held := heldIDs(f.root); !held["B30"] || !held["17"] {
+		t.Errorf("held: %v", held)
+	}
+}
+
 func TestAssignRefusesBusyOrDirtySlot(t *testing.T) {
 	f := newMoveFx(t)
 	mutateSlot(f.root, "ben", func(s *jsonx.Object) { s.Set("pr", pr7) }) // state still busy
