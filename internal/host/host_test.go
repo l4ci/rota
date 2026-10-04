@@ -578,15 +578,117 @@ func TestHerdrSend(t *testing.T) {
 		{"garbage error", Result{ExitCode: 1, Stderr: "x"}, ErrNotSubmitted},
 	}
 	for _, c := range cases {
-		f := &fake{handler: func(string, []string) Result { return c.res }}
+		f := &fake{handler: func(_ string, a []string) Result {
+			if a[0] == "agent" && a[1] == "get" {
+				return Result{Stdout: agentJSON("idle")}
+			}
+			if a[0] == "agent" && a[1] == "read" {
+				return Result{} // nothing on the prompt line
+			}
+			return c.res
+		}}
 		err := New("herdr", deps(f, herdrEnv, &clock{})).Send(bg, "w1", "w9:t7", file)
 		if err != c.want {
 			t.Errorf("%s: Send = %v, want %v", c.name, err, c.want)
 		}
 		want := "herdr agent prompt rota-w1-w9-t7 do the task --wait --until working --until blocked --timeout 60000"
-		if f.log() != want {
-			t.Errorf("%s: call = %q, want %q", c.name, f.log(), want)
+		if f.count(want) != 1 || f.count("herdr agent send-keys") != 0 || f.count("herdr agent get") != 0 {
+			t.Errorf("%s: calls =\n%s", c.name, f.log())
 		}
+	}
+}
+
+// promptHost is a fake herdr session whose Enter can be lost: `agent prompt`
+// types the text and submits it, `send-keys enter` submits whatever is on the
+// prompt line. The first dropEnters Enters (prompt's own included) do nothing.
+type promptHost struct {
+	dropEnters int
+	typed      string // text on the prompt line
+	working    bool
+	typedTimes int
+}
+
+func (p *promptHost) handle(_ string, a []string) Result {
+	switch a[1] {
+	case "get":
+		if p.working {
+			return Result{Stdout: agentJSON("working")}
+		}
+		return Result{Stdout: agentJSON("idle")}
+	case "read":
+		return Result{Stdout: "\u276f " + p.typed + "\n"}
+	case "prompt":
+		p.typed += a[3]
+		p.typedTimes++
+		return p.enter(Result{ExitCode: 1, Stderr: herdrErr("agent_prompt_stalled")})
+	case "send-keys":
+		p.enter(Result{})
+		return Result{}
+	case "wait":
+		if p.working {
+			return Result{Stdout: agentJSON("working")}
+		}
+		return Result{Stdout: agentJSON("idle")}
+	}
+	return Result{}
+}
+
+func (p *promptHost) enter(lost Result) Result {
+	if p.dropEnters > 0 {
+		p.dropEnters--
+		return lost
+	}
+	p.working, p.typed = true, ""
+	return Result{Stdout: agentJSON("working")}
+}
+
+func TestHerdrSendSubmitsBriefWhenEnterDropped(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "p.md")
+	os.WriteFile(file, []byte("--- ORCHESTRATOR (round 1) ---\nline one that wraps\nthe last line of the brief\n"), 0o644)
+	p := &promptHost{dropEnters: 1}
+	f := &fake{handler: p.handle}
+	if err := New("herdr", deps(f, herdrEnv, &clock{})).Send(bg, "w1", "w9:t7", file); err != nil {
+		t.Fatalf("Send = %v, want nil after Enter retry\n%s", err, f.log())
+	}
+	if p.typedTimes != 1 || !p.working {
+		t.Errorf("typed %d times, working=%v\n%s", p.typedTimes, p.working, f.log())
+	}
+	if n := f.count("herdr agent send-keys rota-w1-w9-t7 enter"); n != 1 {
+		t.Errorf("enter presses = %d, want 1\n%s", n, f.log())
+	}
+}
+
+func TestHerdrSubmitPendingNeverTypesAgain(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "p.md")
+	os.WriteFile(file, []byte("sig\nthe last line of the brief\n"), 0o644)
+	p := &promptHost{dropEnters: 5} // every Enter of the first call is lost
+	f := &fake{handler: p.handle}
+	h := New("herdr", deps(f, herdrEnv, &clock{}))
+	if err := h.Send(bg, "w1", "w9:t7", file); err != ErrNotSubmitted {
+		t.Fatalf("first Send = %v, want ErrNotSubmitted", err)
+	}
+	if n := f.count("herdr agent send-keys"); n != submitRetries {
+		t.Errorf("enter presses = %d, want bounded at %d", n, submitRetries)
+	}
+	// The resend finds the brief on the prompt line and only submits it.
+	p.dropEnters = 1
+	handled, err := h.(Resubmitter).SubmitPending(bg, "w1", "w9:t7", file)
+	if !handled || err != nil {
+		t.Fatalf("SubmitPending = %v, %v", handled, err)
+	}
+	if p.typedTimes != 1 || !p.working {
+		t.Errorf("typed %d times, working=%v\n%s", p.typedTimes, p.working, f.log())
+	}
+}
+
+func TestHerdrSubmitPendingNothingPending(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "p.md")
+	os.WriteFile(file, []byte("sig\nthe last line of the brief\n"), 0o644)
+	p := &promptHost{} // empty prompt line
+	f := &fake{handler: p.handle}
+	handled, err := New("herdr", deps(f, herdrEnv, &clock{})).(Resubmitter).SubmitPending(bg, "w1", "w9:t7", file)
+	if handled || err != nil || f.count("herdr agent send-keys") != 0 {
+		t.Errorf("handled=%v err=%v\n%s", handled, err, f.log())
 	}
 }
 
@@ -853,5 +955,62 @@ func TestAgentNameIsWhatHerdrAccepts(t *testing.T) {
 	}
 	if AgentName("lr1", "w1W:t4") == AgentName("lr1", "w1w:t4") {
 		t.Error("workspace ids that differ only in case must not share an agent name")
+	}
+}
+
+// An Enter into a dialog would answer it: a blocked agent gets no keypress.
+func TestHerdrSubmitPendingNeverEntersADialog(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "p.md")
+	os.WriteFile(file, []byte("sig\nthe last line of the brief\n"), 0o644)
+	f := &fake{handler: func(_ string, a []string) Result {
+		if a[1] == "get" {
+			return Result{Stdout: agentJSON("blocked")}
+		}
+		return Result{Stdout: "the last line of the brief"}
+	}}
+	handled, _ := New("herdr", deps(f, herdrEnv, &clock{})).(Resubmitter).SubmitPending(bg, "w1", "w9:t7", file)
+	if handled || f.count("herdr agent send-keys") != 0 {
+		t.Errorf("handled=%v\n%s", handled, f.log())
+	}
+}
+
+// A brief already sent stays in scrollback above an empty prompt: no Enter,
+// which could submit Claude Code's ghost suggestion.
+func TestHerdrSubmitPendingIgnoresSentBriefInScrollback(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "p.md")
+	os.WriteFile(file, []byte("sig\nthe last line of the brief\n"), 0o644)
+	f := &fake{handler: func(_ string, a []string) Result {
+		if a[1] == "get" {
+			return Result{Stdout: agentJSON("idle")}
+		}
+		return Result{Stdout: "❯ sig\nthe last line of the brief\n⏺ working on it\n❯ \n"}
+	}}
+	handled, err := New("herdr", deps(f, herdrEnv, &clock{})).(Resubmitter).SubmitPending(bg, "w1", "w9:t7", file)
+	if handled || err != nil || f.count("herdr agent send-keys") != 0 {
+		t.Errorf("handled=%v err=%v\n%s", handled, err, f.log())
+	}
+}
+
+// Claude Code collapses a long paste to a placeholder, so the text never shows.
+func TestHerdrSubmitPendingSeesPastePlaceholder(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "p.md")
+	os.WriteFile(file, []byte("sig\nthe last line of the brief\n"), 0o644)
+	working := false
+	f := &fake{handler: func(_ string, a []string) Result {
+		switch a[1] {
+		case "get", "wait":
+			if working {
+				return Result{Stdout: agentJSON("working")}
+			}
+			return Result{Stdout: agentJSON("idle")}
+		case "send-keys":
+			working = true
+			return Result{}
+		}
+		return Result{Stdout: "❯ [Pasted text #1 +16 lines]\n"}
+	}}
+	handled, err := New("herdr", deps(f, herdrEnv, &clock{})).(Resubmitter).SubmitPending(bg, "w1", "w9:t7", file)
+	if !handled || err != nil || f.count("herdr agent send-keys rota-w1-w9-t7 enter") != 1 {
+		t.Errorf("handled=%v err=%v\n%s", handled, err, f.log())
 	}
 }
