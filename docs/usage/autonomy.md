@@ -25,7 +25,7 @@ Autonomy decides whether to invoke the next skill; the destination skill's own g
 
 - `learn.verify: true`: `/rota-learn` still runs the Opus verifier even when invoked under autonomy.
 - `ship.review: true`: `/rota-ship` still runs `/rota-review` and blocks on FAIL.
-- `refactor.confirmBeforeExecute: true`: `/rota-refactor` still pauses for approval at its own checkpoints.
+- `refactor.confirmBeforeExecute: true`: `/rota-refactor --fix` still confirms its candidate list.
 
 ## Stop conditions in loop mode
 

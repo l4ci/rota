@@ -25,9 +25,7 @@ See KNOWLEDGE.md "Skill Authoring: Prose & References" for the conventions that 
 | [`milestone-tagging.md`](milestone-tagging.md) | Milestone-tagging UX pattern used by capture/go skills. | `/rota-capture` |
 | [`persistence-skills.md`](persistence-skills.md) | Shared spine and divergence axes for the persistence duo (`/rota-learn`, `/rota-decide`), plus umbrella scoping (hybrid KNOWLEDGE, umbrella-only DECISIONS). | `/rota-decide`, `/rota-learn` |
 | [`post-cycle-trigger-gate.md`](post-cycle-trigger-gate.md) | Trigger condition + nudge-or-dispatch choreography for post-cycle skills. | `/rota-qa`, `/rota-ship`, `/rota-work` |
-| [`refactor-explore.md`](refactor-explore.md) | Exploration-agent prompt + categories + stop condition for `/rota-refactor` single-repo mode. | `/rota-refactor` |
-| [`refactor-design-approaches.md`](refactor-design-approaches.md) | Competing-design choreography (decisions consult, agent constraints, output shape) for `/rota-refactor` Step 5. | `/rota-refactor` |
-| [`refactor-umbrella-fanout.md`](refactor-umbrella-fanout.md) | Per-repo fan-out logic for `/rota-refactor` in umbrella mode. | `/rota-refactor` |
+| [`refactor-design-approaches.md`](refactor-design-approaches.md) | Competing-design choreography (decisions consult, agent constraints, output shape) for `/rota-refactor --designs`. | `/rota-refactor` |
 | [`review-verdict-routing.md`](review-verdict-routing.md) | Verdict semantics, `AskUserQuestion` shapes for `/rota-review` consumers. | `/rota-qa`, `/rota-review`, `/rota-ship` |
 | [`silent-failure-hunter.md`](silent-failure-hunter.md) | Rubric for detecting work that reports complete but didn't move the system, used in review passes. | `/rota-review`, `/rota-ship` |
 | [`source-prefill.md`](source-prefill.md) | Source-prefill / promote-between-artifacts semantics for `/rota-decide`. | `/rota-decide` |
