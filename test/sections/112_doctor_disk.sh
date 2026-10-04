@@ -6,9 +6,9 @@ mkdir -p "$TMP_DD/bin" "$TMP_DD/proj/.rota" "$TMP_DD/tmpdir"
 ln -s "$(command -v git)" "$TMP_DD/bin/git"
 printf '{"doctor":{"minFreeDiskPercent":10}}\n' > "$TMP_DD/proj/.rota/config.json"
 # A temp dir a run left behind long ago, in the temp root doctor scans.
-mkdir -p "$TMP_DD/tmpdir/tmp.leaked" && head -c 4096 /dev/zero > "$TMP_DD/tmpdir/tmp.leaked/blob"
-touch -d '3 hours ago' "$TMP_DD/tmpdir/tmp.leaked"
-mkdir -p "$TMP_DD/tmpdir/tmp.fresh"
+mkdir -p "$TMP_DD/tmpdir/rota-smoke.leaked" && head -c 4096 /dev/zero > "$TMP_DD/tmpdir/rota-smoke.leaked/blob"
+touch -d '3 hours ago' "$TMP_DD/tmpdir/rota-smoke.leaked"
+mkdir -p "$TMP_DD/tmpdir/rota-smoke.fresh"
 
 dd_doctor() { # dd_doctor <free:total>: doctor text in the fixture; the exit code does not matter here
   ( cd "$TMP_DD/proj" && TMPDIR="$TMP_DD/tmpdir" ROTA_TEST_DOCTOR_PATH="$TMP_DD/bin" ROTA_TEST_DOCTOR_DISK="$1" "$ROTA_BIN" doctor 2>&1 ) || true
