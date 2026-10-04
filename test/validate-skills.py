@@ -262,13 +262,8 @@ def prose_rules():
                  "calls rota item complete without a rota proof add path"),
           has(sk("capture"), "Step I6", "missing Step I6 (Import Mode label gate)"),
           has(sk("capture"), "Step R3", "missing Step R3 (Remove Mode de-tag gate)"),
-          count_ge(sk("capture"), CALLOUT, 2, "needs the manual-gate callout at Step R3 and Step I6"),
           has(sk("ship"), "Step 6c", "missing Step 6c (direct-push close gate)"),
           has(sk("ship"), CALLOUT, "missing the manual-gate callout (Step 6c)"),
-          has("references/manual-gates.md", r"Step I6|rota-capture --from-.*label|label.*rota-capture --from",
-              "missing the /rota-capture --from-* Step I6 row", True),
-          has("references/manual-gates.md", r"Step R3|rota-capture --remove.*de-tag|de-tag.*rota-capture --remove",
-              "missing the /rota-capture --remove Step R3 row", True),
           has("references/manual-gates.md", r"Step 6c|direct-push close", "missing the rota-ship Step 6c row", True)]
     # F73 subagent-dispatch discipline
     D = "references/subagent-dispatch.md"

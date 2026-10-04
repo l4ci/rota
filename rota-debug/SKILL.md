@@ -328,7 +328,6 @@ Branch on `autonomy.level`:
 - `"off"` — nudge *"Capture this gotcha? Run `/rota-learn` to save the root cause before context fades."*
 - `"auto"` or `"loop"` — **dispatch `rota-learn` via `Skill` immediately — no prompt, no confirmation.** Pass a brief naming the bug ID, root cause, and subsystem so the captured entry lands in the right topic.
 
-If the bug was rooted in rota behavior (touched the `rota` binary, `rota-*/SKILL.md`, or `.rota/`), `/rota-learn`'s Step 8.5 will offer to file an upstream issue against `l4ci/rota`.
 
 - **Update project map.** If the fix touched files belonging to a known subsystem (`.rota/map/<name>.md` whose `Key files / dirs` or `Entry points` overlap the changes), bump `touched:` to today in that file's frontmatter and run `rota map index`. Stage with the cycle's final commit. Skip silently when no map entry matches.
 

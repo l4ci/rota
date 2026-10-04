@@ -17,7 +17,7 @@ Every persistence skill (and `/rota-learn`'s `--term` mode) follows:
    - `/rota-learn` (topic bullets) → `rota knowledge add`
    - `/rota-learn --term` → `rota glossary write`
    - `/rota-decide` → `Edit` directly on `.rota/DECISIONS.md` (no verb today)
-5. **Regenerates the managed CLAUDE.md block** (in `AGENTS.md` when that file exists) via `rota block`. The block is the always-on signal to read-side skills:
+5. **Regenerates the managed index block** in the instructions file (`AGENTS.md` when it exists, else `CLAUDE.md`; the verb resolves it) via `rota block`. The block is the always-on signal to read-side skills:
    - `/rota-learn` (both modes) → `rota block knowledge` (`--term` runs it internally via `rota glossary write`; Glossary surfaces as a topic name in the Knowledge index automatically)
    - `/rota-decide` → `rota block decisions`
 6. **Confirms via a compact block** — *"Captured `<artifact>` into `.rota/<FILE>.md`… Updated CLAUDE.md `<block>` block."* Match the shape; don't recap the plan.
@@ -43,9 +43,8 @@ The gate strengths are by design. The active/passive distinction lives here:
 |---|---|---|---|
 | Capture trigger | explicit `--term <name>` (or auto from definitional signals like *"by X I mean..."*) | auto in `auto`/`loop`, nudge in `off` | always manual |
 | Confirmation gate | conditional (only on existing-term conflict — alias collision is the gate; same-name updates are silent) | **none** — Step 4 explicitly auto-writes | **manual gate**, always |
-| Verifier | none | Opus on by default (`learn.verify`) | none |
+| Verifier | none | Opus opt-in (`--strict` or `learn.verify`) | none |
 | Source-prefill flags | `--def`, `--alias`, `--not`, `--touch` | none | `--from-learning`, `--from-spike` |
-| Public-artifact follow-ups | none | Step 8.5 (rota issue), Step 8.6 (runlog) | none |
 | Active vs passive | vocabulary (low-risk additive) | passive ("remember if relevant") | active commitment (forbids + permits) |
 
 A future skill author looking at this table should read it as: **these are not bugs to file**. The gate-strength column encodes the project's policy on what costs the user *must* approve. `/rota-decide` always asks because writing a forbids/permits constrains future work; `/rota-learn` topic bullets never ask because passive content is cheap to amend; `/rota-learn --term` only asks on alias collision because adding a fresh term is additive.
