@@ -19,6 +19,8 @@ var (
 	ErrExists = errors.New("already exists")
 	// ErrAmbiguous: a fragment matches in more than one file.
 	ErrAmbiguous = errors.New("ambiguous")
+	// ErrMultiMatch: a replace fragment matches more than one bullet.
+	ErrMultiMatch = errors.New("matches several bullets")
 )
 
 func fileExists(p string) bool {
@@ -280,4 +282,84 @@ func (s Store) RenameTopic(scope, from, to, title string) (RenameResult, error) 
 		return RenameResult{}, err
 	}
 	return RenameResult{Mode: mode, Changed: true}, nil
+}
+
+// ReplaceResult reports Replace.
+type ReplaceResult struct {
+	File    string
+	Changed bool
+}
+
+// Replace swaps every occurrence of old for new inside the one bullet under
+// "## topic" in scope's KNOWLEDGE.md that contains old (case-sensitive). A
+// bullet runs from its "- " line to the next sibling bullet, so wrapped
+// bullets match as a whole. It refuses with ErrMultiMatch when old sits in more
+// than one bullet and returns ErrNotFound when it sits in none. When the edit
+// changes the bullet's bold title, the tier entry is re-keyed to the new one.
+// old == new is a no-op.
+func (s Store) Replace(scope, topic, old, new string) (ReplaceResult, error) {
+	km, err := s.KnowledgePath(scope)
+	if err != nil {
+		return ReplaceResult{}, err
+	}
+	content, err := ReadFile(km)
+	if err != nil {
+		return ReplaceResult{}, err
+	}
+	st, en, ok := section.Find(content, topic)
+	if !ok {
+		return ReplaceResult{}, notFound("topic '%s' not found in %s", topic, km)
+	}
+	res := ReplaceResult{File: km}
+	if old == new {
+		return res, nil
+	}
+	body := content[st:en]
+	starts := siblingStart.FindAllStringIndex(body, -1)
+	type span struct{ a, b int }
+	var hits []span
+	for i, m := range starts {
+		b := len(body)
+		if i+1 < len(starts) {
+			b = starts[i+1][0]
+		}
+		if strings.Contains(body[m[0]:b], old) {
+			hits = append(hits, span{m[0], b})
+		}
+	}
+	switch {
+	case len(hits) == 0:
+		return res, notFound("no bullet under '%s' contains '%s' in %s", topic, old, km)
+	case len(hits) > 1:
+		return res, fmt.Errorf("%w: '%s' matches %d bullets under '%s'; use a longer fragment", ErrMultiMatch, old, len(hits), topic)
+	}
+	h := hits[0]
+	block := body[h.a:h.b]
+	edited := strings.ReplaceAll(block, old, new)
+	next := content[:st] + body[:h.a] + edited + body[h.b:] + content[en:]
+	if err := writeText(km, next, fsio.WriteFileAtomic); err != nil {
+		return res, err
+	}
+	res.Changed = true
+
+	oldTitle, newTitle := bulletTitle(block), bulletTitle(edited)
+	if oldTitle != "" && newTitle != "" && oldTitle != newTitle {
+		sidecar, err := s.TierPath(scope)
+		if err != nil {
+			return res, err
+		}
+		if fileExists(sidecar) {
+			err = Update(sidecar, func(sc *Sidecar) (bool, error) { return sc.Retitle(topic, oldTitle, newTitle), nil })
+		}
+		return res, err
+	}
+	return res, nil
+}
+
+// bulletTitle is the bold title opening a bullet block, or "".
+func bulletTitle(block string) string {
+	if m := bulletStart.FindStringSubmatch(block); m != nil {
+		return m[1]
+	}
+	return ""
 }

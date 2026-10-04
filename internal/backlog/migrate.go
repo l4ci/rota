@@ -18,6 +18,7 @@ import (
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/repos"
 	"github.com/l4ci/rota/internal/tracker"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 // `rota migrate issues` (bin/hv-migrate-issues): move a file-backend project's
@@ -209,9 +210,57 @@ func MigrateIssues(o MigrateOptions) (*MigrateResult, error) {
 		}
 		m.say("froze .rota/BACKLOG.md")
 	}
+	if err := m.remapRegistry(); err != nil {
+		return m.finish(), err
+	}
 	m.say("Next: rota config set backlog.backend issues")
 	m.res.Done = true
 	return m.finish(), nil
+}
+
+// remapRegistry rewrites the file-mode IDs a mid-round registry still holds to
+// the issue numbers the map gives them: a slot's task and a queued PR's issue.
+// Without it the slot keeps `B31`, which no tracker call resolves, and the
+// round cannot release or reassign it. A claimId is `<agent>@<round>`, not an
+// item ID, so it stays. It runs only once every item exists, since until then
+// the backlog is still the file backend and the old IDs still resolve.
+func (m *migrator) remapRegistry() error {
+	if _, err := os.Stat(worker.RegistryPath(m.o.Root)); err != nil {
+		return nil
+	}
+	to := func(raw string) (string, bool) {
+		old := strings.ToUpper(strings.TrimPrefix(strings.TrimSpace(raw), "#"))
+		e := m.entry(old)
+		if e == nil || !migItemKey.MatchString(old) {
+			return "", false
+		}
+		if n, ok := e.Get("number"); ok && truthy(n) {
+			return fmt.Sprint(n), true
+		}
+		return "", false
+	}
+	var notes []string
+	def := jsonx.NewObject()
+	def.Set("slots", []any{})
+	err := worker.Update(m.o.Root, def, func(doc *jsonx.Object) {
+		reg := worker.Registry{Doc: doc}
+		for _, s := range reg.Slots() {
+			if n, ok := to(worker.Str(s, "task")); ok {
+				notes = append(notes, fmt.Sprintf("remap slot %s task %s -> #%s", worker.Str(s, "name"), worker.Str(s, "task"), n))
+				s.Set("task", n)
+			}
+		}
+		for _, q := range reg.PRs() {
+			if n, ok := to(worker.Str(q, "issue")); ok {
+				notes = append(notes, fmt.Sprintf("remap queued PR %s issue %s -> #%s", worker.Str(q, "pr"), worker.Str(q, "issue"), n))
+				q.Set("issue", n)
+			}
+		}
+	})
+	for _, n := range notes {
+		m.say(n)
+	}
+	return err
 }
 
 // finish loads the map as it is on disk and counts what it holds.

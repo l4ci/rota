@@ -73,7 +73,7 @@ Field types use JSON names (`string`, `number`, `bool`, `object`, `[]string`). `
 | review | `scope`, `brief`, `scaffolding`, `queue` | A8 |
 | ship | `body`, `pr`, `merge`, `pr-merge`, `undo` (B1 gates `merge` and `pr-merge`) | A8, B1 |
 | release | `version`, `bump`, `host`, `notes`, `changelog`, `pending`, `milestone-check`, `close-milestone` (A8), `push`, `publish` (B1) | A8, B1 |
-| init | `init`, `init check`, `init umbrella` | A9 |
+| init | `init`, `init check`, `init umbrella`, `projects` (#24) | A9 |
 | skills | `install`, `update`, `uninstall`, `status` (F6a) | F6a |
 | gate | `list` | B1 |
 | round | `wait` (C1), `status`, `reconcile` (C2), `start`, `candidates`, `assign`, `wind-down` (C3), `escalate send`, `escalate check` (C4), `return`, `transfer`, `reclaim` (C10), `report` (C8) | C1, C2, C3, C4, C10, C8 |

@@ -41,10 +41,9 @@ var orchestrateEnv = func() orchestrate.Env {
 }
 
 // bareSetup is what bare `rota` runs in a directory with no .rota/: the
-// interactive setup of #25. That verb is built beside this one; until it
-// lands this points at `rota init`.
-var bareSetup RunFunc = func(c *Ctx, _ []string) (Result, error) {
-	return Result{}, Resolution("no .rota/ directory here or in any parent").WithHint("run: rota init")
+// interactive setup of #25 (`rota setup`) with its defaults.
+var bareSetup RunFunc = func(c *Ctx, args []string) (Result, error) {
+	return setupVerb(flag.NewFlagSet("setup", flag.ContinueOnError))(c, args)
 }
 
 // isTerminal: bare `rota` opens an interactive session, so it needs a person.

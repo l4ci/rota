@@ -11,6 +11,7 @@ import (
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/initproj"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/projects"
 )
 
 // The `rota init` group (A9): `init` seeds .rota/, `init check` is the preflight.
@@ -55,51 +56,65 @@ func initVerb(fs *flag.FlagSet) RunFunc {
 		if *codex || *skillsDir != "" {
 			return Result{}, Usage("--codex and --skills-dir were removed").WithHint("run: rota skills install --scope project --agent codex")
 		}
-		dir, err := initDir()
-		if err != nil {
-			return Result{}, err
-		}
-		res, err := initproj.Init(dir)
-		if err != nil {
-			return Result{}, initErr(err)
-		}
-		var warnings []string
-		changed := res.Changed()
-		data := knObj("root", dir, "created", strSlice(res.Created))
-		var lines []string
-		for _, p := range res.Created {
-			lines = append(lines, "created: "+p)
-		}
-		cfg, err := initConfig(dir)
-		if err != nil {
-			return Result{}, err
-		}
-		changed = changed || cfg.changed()
-		cfg.report(data, &lines)
-		if !*noBlocks {
-			b := initproj.Blocks(dir, func() (bool, error) { return initMilestoneIndex(c) })
-			changed = changed || b.Changed()
-			warnings = append(warnings, b.Warnings...)
-			entries := []any{}
-			for _, e := range b.Blocks {
-				entries = append(entries, knObj("key", e.Key, "status", e.Status, "changed", e.Changed))
-				lines = append(lines, fmt.Sprintf("block %s: %s", e.Key, e.Status))
-			}
-			data.Set("blocks", entries)
-			data.Set("instructions", initInstructionsData(b))
-		}
-		for _, w := range warnings {
-			c.Warn("%s", w)
-		}
-		if len(warnings) > 0 {
-			data.Set("warnings", strSlice(warnings))
-		}
-		data.Set("changed", changed)
-		if !changed {
-			lines = append(lines, "noop: already initialized")
-		}
-		return Result{Data: data, Text: strings.Join(lines, "\n")}, nil
+		return runInit(c, *noBlocks)
 	}
+}
+
+// runInit is `rota init` on the working directory: seed, fill and stamp the
+// config, run the managed blocks. `rota setup` runs it too, so whatever init
+// gains (the project registry, #24) reaches both.
+func runInit(c *Ctx, noBlocks bool) (Result, error) {
+	dir, err := initDir()
+	if err != nil {
+		return Result{}, err
+	}
+	res, err := initproj.Init(dir)
+	if err != nil {
+		return Result{}, initErr(err)
+	}
+	var warnings []string
+	changed := res.Changed()
+	data := knObj("root", dir, "created", strSlice(res.Created))
+	var lines []string
+	for _, p := range res.Created {
+		lines = append(lines, "created: "+p)
+	}
+	cfg, err := initConfig(dir)
+	if err != nil {
+		return Result{}, err
+	}
+	changed = changed || cfg.changed()
+	cfg.report(data, &lines)
+	if !noBlocks {
+		b := initproj.Blocks(dir, func() (bool, error) { return initMilestoneIndex(c) })
+		changed = changed || b.Changed()
+		warnings = append(warnings, b.Warnings...)
+		entries := []any{}
+		for _, e := range b.Blocks {
+			entries = append(entries, knObj("key", e.Key, "status", e.Status, "changed", e.Changed))
+			lines = append(lines, fmt.Sprintf("block %s: %s", e.Key, e.Status))
+		}
+		data.Set("blocks", entries)
+		data.Set("instructions", initInstructionsData(b))
+	}
+	// The machine-wide registry is not the project's state: a failure to write
+	// it warns, and neither it nor a first registration counts as `changed`.
+	added, err := projects.Register(dir)
+	if err != nil {
+		warnings = append(warnings, "could not register the project in the global registry: "+err.Error())
+	}
+	data.Set("projectRegistered", added)
+	for _, w := range warnings {
+		c.Warn("%s", w)
+	}
+	if len(warnings) > 0 {
+		data.Set("warnings", strSlice(warnings))
+	}
+	data.Set("changed", changed)
+	if !changed {
+		lines = append(lines, "noop: already initialized")
+	}
+	return Result{Data: data, Text: strings.Join(lines, "\n")}, nil
 }
 
 // initConfigResult is what init's config step did: the required keys it
