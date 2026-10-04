@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/roundcfg"
@@ -37,7 +38,7 @@ const (
 	BlockNoTierMap    = "no tier map"
 	// BlockCodexVersion: the installed Codex CLI is outside the supported
 	// range and --accept-codex-version is not given (E1, #68).
-	BlockCodexVersion = worker.BlockCodexVersion
+	BlockCodexVersion = harness.BlockCodexVersion
 )
 
 // BlockedError is an assignment refused before anything was marked or sent.
@@ -109,7 +110,8 @@ func BranchName(agent, id, title string) string {
 // briefPath is the standing worker contract the pointer names: round.brief,
 // else references/worker-contract.md in the project (a source checkout), else
 // rota-orchestrate/references/worker-contract.md under the first installed
-// Claude skills root, the project's before the user's (rota skills install).
+// skills root (rota skills install): the project's before the user's, Claude's
+// before Codex's, so a Codex-only install finds it too.
 func briefPath(root string, set roundcfg.Settings, getenv func(string) string) (string, bool) {
 	var cands []string
 	if set.Brief != "" {
@@ -121,11 +123,14 @@ func briefPath(root string, set roundcfg.Settings, getenv func(string) string) (
 	} else {
 		cands = append(cands, filepath.Join(root, "references", "worker-contract.md"))
 		installed := filepath.Join("rota-orchestrate", "references", "worker-contract.md")
-		skillRoots := []string{filepath.Join(root, ".claude", "skills")}
+		skillRoots := []string{filepath.Join(root, ".claude", "skills"), filepath.Join(root, ".agents", "skills")}
 		if d := getenv("CLAUDE_CONFIG_DIR"); d != "" {
 			skillRoots = append(skillRoots, filepath.Join(d, "skills"))
 		} else if home := getenv("HOME"); home != "" {
 			skillRoots = append(skillRoots, filepath.Join(home, ".claude", "skills"))
+		}
+		if home := getenv("HOME"); home != "" {
+			skillRoots = append(skillRoots, filepath.Join(home, ".agents", "skills"))
 		}
 		for _, r := range skillRoots {
 			if _, err := os.Stat(filepath.Join(r, ".rota-manifest.json")); err == nil {
@@ -195,13 +200,6 @@ func (t tierBrief) text() string {
 	return b.String()
 }
 
-func workerCommandKey(kind string) string {
-	if kind == roundcfg.KindCodex {
-		return "work.codexCommand"
-	}
-	return "work.workerCommand"
-}
-
 func blocked(by, format string, a ...any) *BlockedError {
 	return &BlockedError{By: by, Msg: fmt.Sprintf(format, a...)}
 }
@@ -241,8 +239,8 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 	if o.Tier != "" && !roundcfg.ValidTier(o.Tier) {
 		return res, usage("--tier must be one of %s", strings.Join(roundcfg.Tiers, ", "))
 	}
-	if o.Kind != "" && !roundcfg.ValidKind(o.Kind) {
-		return res, usage("--kind must be one of %s", strings.Join(roundcfg.Kinds, ", "))
+	if o.Kind != "" && !harness.Valid(o.Kind) {
+		return res, usage("--kind must be one of %s", strings.Join(harness.Kinds, ", "))
 	}
 	tier := o.Tier
 	if tier == "" {
@@ -335,21 +333,23 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 	if kind == "" {
 		kind = worker.Str(slot, "kind")
 	}
-	if kind == "" {
-		kind = roundcfg.KindClaude
+	hz, err := worker.Harness(kind)
+	if err != nil {
+		return res, err
 	}
+	kind = hz.Kind()
 	// An unset codex tier map is allowed: the default codex command drops
 	// --model and Codex picks its own. A custom work.codexCommand holding
 	// {model} would fail at dispatch, after the claim, so it is refused here.
 	model := set.Model(kind, tier)
-	if model == "" && (kind != roundcfg.KindCodex || worker.CodexNeedsModel(root)) {
+	if model == "" && worker.NeedsModel(root, kind) {
 		return res, blocked(BlockNoTierMap, "round.tiers.%s has no model for the %s tier: set round.tiers.%s.*", kind, tier, kind)
 	}
 	res.Kind, res.Tier, res.TierReason = kind, tier, reason
 	res.Model = model
 	if !worker.ModelAppliesTo(root, kind) {
 		res.Model = ""
-		res.Warnings = append(res.Warnings, "tier model not applied: "+workerCommandKey(kind)+" has no {model} placeholder")
+		res.Warnings = append(res.Warnings, "tier model not applied: "+hz.CommandKey()+" has no {model} placeholder")
 	}
 
 	// 3. The scope allows it.
@@ -397,26 +397,24 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 		return res, blk
 	}
 
-	// Solo runs Claude subagents only: a Codex subagent cannot be given a
-	// working directory (E3, #70), so it would edit the orchestrator's checkout.
-	if kind == roundcfg.KindCodex && isSolo(root) {
-		return res, usage("solo round: workers are Claude subagents; a Codex subagent cannot be given the slot's worktree")
+	// Solo runs Claude subagents only (E3, #70): a harness that cannot be
+	// given a working directory would edit the orchestrator's checkout.
+	if why := hz.SoloRefusal(); why != "" && isSolo(root) {
+		return res, usage("%s", why)
 	}
-	// A codex worker that cannot start (version, host, login) is refused
-	// before anything is marked. dispatch runs the same preflight again.
-	if kind == roundcfg.KindCodex {
-		setup, err := e.workerEnv().CodexPreflight(ctx, root, agent, o.AcceptCodexVersion)
-		if err != nil {
-			var we *worker.Error
-			if errors.As(err, &we) && we.Exit == worker.ExitRefused {
-				if bd, ok := we.Data.(worker.BlockData); ok {
-					return res, blocked(bd.BlockedBy, "%s", we.Message)
-				}
+	// A worker that cannot start (version, host, login) is refused before
+	// anything is marked. dispatch runs the same preflight again.
+	setup, err := e.workerEnv().Preflight(ctx, root, kind, agent, o.AcceptCodexVersion)
+	if err != nil {
+		var we *worker.Error
+		if errors.As(err, &we) && we.Exit == worker.ExitRefused {
+			if bd, ok := we.Data.(worker.BlockData); ok {
+				return res, blocked(bd.BlockedBy, "%s", we.Message)
 			}
-			return res, err
 		}
-		res.Warnings = append(res.Warnings, setup.Warnings...)
+		return res, err
 	}
+	res.Warnings = append(res.Warnings, setup.Warnings...)
 
 	// 5. The brief exists before anything is marked.
 	brief, ok := briefPath(root, set, o.Getenv)
@@ -492,7 +490,7 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 	// work.accounts is Anthropic's: a codex slot's CODEX_HOME is its account.
 	// Under solo every subagent runs on the orchestrator's own account.
 	solo := isSolo(root)
-	if !solo && kind != roundcfg.KindCodex && e.Accounts != nil && len(worker.Configured(root)) > 0 {
+	if !solo && hz.WorkAccounts() && e.Accounts != nil && len(worker.Configured(root)) > 0 {
 		name, err := e.pickAccount(ctx, root, agent)
 		if err != nil {
 			undo()

@@ -10,6 +10,7 @@ import (
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/doctor"
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/hook"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/migrate"
@@ -192,14 +193,14 @@ func codexHomes(root string) []doctor.CodexHome {
 	if err != nil {
 		return nil
 	}
-	entries, err := os.ReadDir(worker.CodexHomesDir(cd))
+	entries, err := os.ReadDir(harness.CodexHomesDir(cd))
 	if err != nil {
 		return nil
 	}
 	var homes []doctor.CodexHome
 	for _, e := range entries {
 		if e.IsDir() {
-			homes = append(homes, doctor.CodexHome{Slot: e.Name(), Dir: filepath.Join(worker.CodexHomesDir(cd), e.Name())})
+			homes = append(homes, doctor.CodexHome{Slot: e.Name(), Dir: filepath.Join(harness.CodexHomesDir(cd), e.Name())})
 		}
 	}
 	return homes

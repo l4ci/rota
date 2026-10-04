@@ -14,25 +14,24 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/shlex"
 )
 
-// Harness is one agent the orchestrator can run in. The table below is the
-// whole list of what rota knows how to start: #33 adds rows, nothing else.
-type Harness struct {
-	Name string
-	// Command is the argv that starts the agent, without its first prompt.
-	Command func(root string, cfg any) ([]string, error)
-	// Prompt starts the orchestrate skill in the harness's own invocation
-	// syntax: Claude Code takes a slash command, Codex a `$skill` mention.
-	Prompt string
-}
-
-// Harnesses is the launch table, in the order the error message lists it.
-var Harnesses = []Harness{
-	{Name: "claude", Prompt: "/rota-orchestrate", Command: claudeCommand},
-	{Name: "codex", Prompt: "$rota-orchestrate", Command: func(string, any) ([]string, error) { return []string{"codex"}, nil }},
+// Lookup finds the orchestrator harness by its orchestrator.harness name. The
+// table is internal/harness's: the orchestrator set (claude, codex, hermes,
+// opencode) is wider than the worker set, and each adapter owns its launch
+// line and how it is told to start the skill.
+func Lookup(name string) (harness.Orchestrator, error) {
+	var names []string
+	for _, h := range harness.Orchestrators() {
+		if h.Name() == name {
+			return h, nil
+		}
+		names = append(names, h.Name())
+	}
+	return nil, fmt.Errorf("orchestrator.harness %q is not one of: %s", name, strings.Join(names, ", "))
 }
 
 // DefaultHarness is the value of orchestrator.harness when unset.
@@ -41,40 +40,10 @@ const DefaultHarness = "claude"
 // Label names the orchestrator's tab or window.
 const Label = "orchestrator"
 
-// claudeCommand is work.operatorCommand when set, else a fresh session on
-// models.orchestrator in `auto` mode (the orchestrator merges and talks to the
-// user, so it keeps a gate the workers do not).
-func claudeCommand(_ string, cfg any) ([]string, error) {
-	if s := str(cfg, "work.operatorCommand"); s != "" {
-		argv, err := shlex.Split(s)
-		if err != nil || len(argv) == 0 {
-			return nil, fmt.Errorf("work.operatorCommand is not a command line: %q", s)
-		}
-		return argv, nil
-	}
-	model := str(cfg, "models.orchestrator")
-	if model == "" {
-		model = "opus"
-	}
-	return []string{"claude", "--model", model, "--permission-mode", "auto"}, nil
-}
-
 func str(cfg any, key string) string {
 	v, _ := config.Lookup(cfg, key)
 	s, _ := v.(string)
 	return s
-}
-
-// Lookup finds a harness by its orchestrator.harness name.
-func Lookup(name string) (Harness, error) {
-	var names []string
-	for _, h := range Harnesses {
-		if h.Name == name {
-			return h, nil
-		}
-		names = append(names, h.Name)
-	}
-	return Harness{}, fmt.Errorf("orchestrator.harness %q is not one of: %s", name, strings.Join(names, ", "))
 }
 
 // Modes of a launch.
@@ -129,12 +98,12 @@ func (e Env) Resolve(root string, cfg any) (Plan, error) {
 	if err != nil {
 		return Plan{}, &Error{Code: "config", Msg: err.Error(), Hint: "fix it with: rota config set orchestrator.harness claude"}
 	}
-	agent, err := h.Command(root, cfg)
+	agent, err := h.Command(cfg)
 	if err != nil {
 		return Plan{}, &Error{Code: "config", Msg: err.Error()}
 	}
-	sup := append([]string{e.Self, "keepalive", "run", "--first-prompt", h.Prompt, "--"}, agent...)
-	p := Plan{Harness: h.Name, Cwd: root, Supervisor: sup}
+	sup := append([]string{e.Self, "keepalive", "run", "--first-prompt", h.Prompt(), "--"}, agent...)
+	p := Plan{Harness: h.Name(), Cwd: root, Supervisor: sup}
 
 	herdr, tmux := e.Host("herdr"), e.Host("tmux")
 	// Outside any multiplexer herdr is preferred: it is what rounds use, so the

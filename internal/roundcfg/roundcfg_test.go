@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/l4ci/rota/internal/harness"
 )
 
 func project(t *testing.T, cfg string) string {
@@ -68,28 +70,28 @@ func TestTierDefaults(t *testing.T) {
 		t.Errorf("default tier %q", s.Tier)
 	}
 	want := map[string]string{"light": "haiku", "standard": "sonnet", "heavy": "opus"}
-	if !reflect.DeepEqual(s.Models[KindClaude], want) {
-		t.Errorf("claude map %v", s.Models[KindClaude])
+	if !reflect.DeepEqual(s.Models[harness.Claude], want) {
+		t.Errorf("claude map %v", s.Models[harness.Claude])
 	}
-	if _, ok := s.Models[KindCodex]; ok || s.Model(KindCodex, TierLight) != "" {
+	if _, ok := s.Models[harness.Codex]; ok || s.Model(harness.Codex, TierLight) != "" {
 		t.Errorf("codex is unconfigured by default: %v", s.Models)
 	}
 }
 
 func TestStandardTierFollowsModelsWorkerUnlessExplicit(t *testing.T) {
 	s, err := Load(project(t, `{"models":{"worker":"opus"}}`))
-	if err != nil || s.Model(KindClaude, TierStandard) != "opus" {
+	if err != nil || s.Model(harness.Claude, TierStandard) != "opus" {
 		t.Fatalf("one knob: %v %v", err, s.Models)
 	}
 	s, err = Load(project(t, `{"models":{"worker":"opus"},"round":{"tiers":{"claude":{"standard":"sonnet"}}}}`))
-	if err != nil || s.Model(KindClaude, TierStandard) != "sonnet" {
+	if err != nil || s.Model(harness.Claude, TierStandard) != "sonnet" {
 		t.Fatalf("explicit wins: %v %v", err, s.Models)
 	}
 }
 
 func TestCodexMapNeedsEveryTier(t *testing.T) {
 	s, err := Load(project(t, `{"round":{"tiers":{"codex":{"light":"a","standard":"b","heavy":"c"}}}}`))
-	if err != nil || s.Model(KindCodex, TierHeavy) != "c" {
+	if err != nil || s.Model(harness.Codex, TierHeavy) != "c" {
 		t.Fatalf("a full codex map: %v %v", err, s.Models)
 	}
 	_, err = Load(project(t, `{"round":{"tiers":{"codex":{"light":"a","heavy":"c"}}}}`))

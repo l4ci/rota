@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -146,8 +146,8 @@ func TestAssignUnderSoloReturnsTheBriefAndDispatchesNothing(t *testing.T) {
 
 func TestAssignUnderSoloRefusesACodexWorker(t *testing.T) {
 	f := soloAssign(t)
-	f.set.Models = map[string]map[string]string{roundcfg.KindCodex: {"light": "c-l", "standard": "c-s", "heavy": "c-h"}}
-	_, err := f.assign("12", "ben", func(o *AssignOpts) { o.Kind = roundcfg.KindCodex })
+	f.set.Models = map[string]map[string]string{harness.Codex: {"light": "c-l", "standard": "c-s", "heavy": "c-h"}}
+	_, err := f.assign("12", "ben", func(o *AssignOpts) { o.Kind = harness.Codex })
 	var we *worker.Error
 	if !errors.As(err, &we) || we.Exit != worker.ExitUsage || !strings.Contains(we.Message, "Claude subagents") {
 		t.Fatalf("a codex worker under solo is a usage error: %v", err)
