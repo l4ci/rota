@@ -9,8 +9,10 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/tracker"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 type archForge struct {
@@ -172,7 +174,19 @@ func TestReviewItemsAreInEveryScope(t *testing.T) {
 	root := t.TempDir()
 	items := []backlog.Item{{ID: "1", Title: "plain"}, {ID: "2", Title: ReviewTitle("cli")}}
 	got, err := scopeSet(root, items, map[string]bool{}, roundcfg.ScopeSlate, []string{"1"})
+	if err != nil || len(got) != 1 {
+		t.Fatalf("a title alone must not bypass the scope: %v %v", got, err)
+	}
+	writeRegistry(t, root)
+	if err := worker.Update(root, jsonx.NewObject(), func(d *jsonx.Object) {
+		o := jsonx.NewObject()
+		o.Set("items", []any{"2"})
+		d.Set("architectureReview", o)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	got, err = scopeSet(root, items, map[string]bool{}, roundcfg.ScopeSlate, []string{"1"})
 	if err != nil || len(got) != 2 {
-		t.Fatalf("slate scope should still offer the review item: %v %v", got, err)
+		t.Fatalf("a minted review item should be in every scope: %v %v", got, err)
 	}
 }

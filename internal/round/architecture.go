@@ -97,8 +97,9 @@ func (e Env) Architecture(ctx context.Context, root string, be backlog.Backend, 
 	if err != nil {
 		return a, err
 	}
+	minted := MintedReviews(root)
 	for _, it := range items {
-		if IsReviewTitle(it.Title) {
+		if IsReviewTitle(it.Title) && minted[strings.ToUpper(it.ID)] {
 			a.Pending = append(a.Pending, it.ID)
 		}
 	}
@@ -202,6 +203,25 @@ func reviewAreas(root string, set roundcfg.Settings) []string {
 	return out
 }
 
+// MintedReviews are the review items this round minted, from the registry.
+// Only these bypass the scope: a title alone is not trusted, since anyone who
+// can file an issue could name one.
+func MintedReviews(root string) map[string]bool {
+	out := map[string]bool{}
+	if v, ok := worker.LoadRegistry(root).Doc.Get("architectureReview"); ok {
+		if o, _ := v.(*jsonx.Object); o != nil {
+			l, _ := o.Get("items")
+			list, _ := l.([]any)
+			for _, e := range list {
+				if id, ok := e.(string); ok {
+					out[strings.ToUpper(id)] = true
+				}
+			}
+		}
+	}
+	return out
+}
+
 // ReviewSince is the time the last review was minted, "" when none was.
 func ReviewSince(root string) string {
 	v, ok := worker.LoadRegistry(root).Doc.Get("architectureReview")
@@ -253,9 +273,16 @@ func (e Env) MintReview(ctx context.Context, root string, be backlog.Backend, a 
 		o.Set("at", at)
 		o.Set("round", round)
 		o.Set("trigger", a.Trigger)
-		list := make([]any, len(ids))
-		for i, id := range ids {
-			list[i] = id
+		// Cumulative: a review item still open from an earlier review stays recognised.
+		var list []any
+		if old, ok := doc.Get("architectureReview"); ok {
+			if oo, _ := old.(*jsonx.Object); oo != nil {
+				l, _ := oo.Get("items")
+				list, _ = l.([]any)
+			}
+		}
+		for _, id := range ids {
+			list = append(list, id)
 		}
 		o.Set("items", list)
 		doc.Set("architectureReview", o)
