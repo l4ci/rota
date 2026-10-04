@@ -4,6 +4,8 @@ Used by `/rota-pause` (writes the note) and `/rota-work` with no argument (reads
 
 Fill each section from the current session — omit sections that don't apply, but don't manufacture content. The four sections below are exactly what `/rota-work` consumes (Stage, Next planned step and Current hypothesis are what its no-argument mode reads); anything else (commit log, files mid-edit, gotchas, dead ends) belongs elsewhere (`git log`, `git status`, `/rota-learn`).
 
+An orchestrator mid-round writes a different note, to `.rota/handoff/<base>.md` with first line `<!-- rota-handoff: orchestrator -->`; its sections are listed in `/rota-pause` *Pausing an orchestrator*.
+
 ## Template
 
 ```markdown
