@@ -58,17 +58,36 @@ func (e Env) Start(ctx context.Context, root string, o StartOpts) (Started, erro
 		return res, &worker.Error{Exit: worker.ExitUsage,
 			Message: fmt.Sprintf("%d slots asked for but round.roster names %d agents; extend round.roster or lower --slots", n, len(set.Roster))}
 	}
-	if o.Scope == roundcfg.ScopeSlate && len(o.Items) == 0 {
-		return res, &worker.Error{Exit: worker.ExitUsage, Message: "scope slate needs --items <ID>[,<ID>…]"}
+	// An empty Scope means --scope was not given. Items alone make a slate; a
+	// round that is not yet known to renew is checked before it takes the lease.
+	scope := o.Scope
+	if scope == "" && len(o.Items) > 0 {
+		scope = roundcfg.ScopeSlate
 	}
-	if o.Scope != roundcfg.ScopeSlate && len(o.Items) > 0 {
-		return res, &worker.Error{Exit: worker.ExitUsage, Message: "--items only applies to scope slate"}
+	checkScope := func(scope string) error {
+		if scope == roundcfg.ScopeSlate && len(o.Items) == 0 {
+			return &worker.Error{Exit: worker.ExitUsage, Message: "scope slate needs --items <ID>[,<ID>…]"}
+		}
+		if scope != roundcfg.ScopeSlate && len(o.Items) > 0 {
+			return &worker.Error{Exit: worker.ExitUsage, Message: "--items only applies to scope slate"}
+		}
+		return nil
+	}
+	recScope, recSlate := SlateOf(root)
+	if scope != "" {
+		if err := checkScope(scope); err != nil {
+			return res, err
+		}
+	} else if recScope == "" {
+		if err := checkScope(set.Scope); err != nil {
+			return res, err
+		}
 	}
 	base := o.Base
 	if base == "" {
 		base = e.Base
 	}
-	res.Scope, res.Base = o.Scope, base
+	res.Base = base
 
 	cd, err := e.commonDir(ctx, root)
 	if err != nil {
@@ -103,6 +122,24 @@ func (e Env) Start(ctx context.Context, root string, o StartOpts) (Started, erro
 		res.Warnings = append(res.Warnings, "reclaimed stale lease held by "+who)
 	}
 
+	// A renewed start without --scope keeps the recorded scope and slate; a new
+	// round falls back to round.scope.
+	keep := scope == "" && out == roundlease.Renewed && recScope != ""
+	var slate []string
+	switch {
+	case keep:
+		scope, slate = recScope, recSlate
+	default:
+		if scope == "" {
+			scope = set.Scope
+		}
+		if err := checkScope(scope); err != nil {
+			return res, err
+		}
+		slate = normaliseSlate(o.Items)
+	}
+	res.Scope = scope
+
 	pool, err := worker.Env{Git: e.Git}.PoolInit(ctx, root, worker.InitOpts{
 		Base: base, Session: "rota", Names: set.Roster[:n], BranchPrefix: "park/",
 	}, nil)
@@ -112,7 +149,6 @@ func (e Env) Start(ctx context.Context, root string, o StartOpts) (Started, erro
 	res.Changed = pool.Changed || out != roundlease.Renewed
 	res.Warnings = append(res.Warnings, pool.Warnings...)
 
-	slate := normaliseSlate(o.Items)
 	if err := worker.Update(root, slotsDefault(), func(doc *jsonx.Object) {
 		if out != roundlease.Renewed { // taken, reclaimed or numbered
 			doc.Set("round", l.Round)
@@ -125,8 +161,8 @@ func (e Env) Start(ctx context.Context, root string, o StartOpts) (Started, erro
 			res.Host = host.ResolveRound(o.Dispatch, o.Getenv, o.LookPath)
 			doc.Set("host", res.Host)
 		}
-		doc.Set("scope", o.Scope)
-		if o.Scope == roundcfg.ScopeSlate {
+		doc.Set("scope", scope)
+		if scope == roundcfg.ScopeSlate {
 			doc.Set("slate", strs2any(slate))
 		} else {
 			doc.Delete("slate")
