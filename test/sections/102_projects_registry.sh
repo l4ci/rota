@@ -3,6 +3,7 @@ echo "global project registry: init registers, projects lists and marks missing 
 # XDG_CONFIG_HOME points at a temp dir, so the real ~/.config/rota is never
 # touched. No network, no forge.
 GP="$(mktemp -d "$TMP/gproj.XXXXXX")"
+OLD_XDG=$XDG_CONFIG_HOME
 export XDG_CONFIG_HOME="$GP/xdg"
 mkdir -p "$GP/alpha" "$GP/beta"
 gpv() { ( cd "$1" && shift && "$ROTA_BIN" --json "$@" 2>/dev/null ); }
@@ -29,4 +30,4 @@ OUT=$(gpv "$GP" projects) || fail "projects after removal failed: $OUT"
 case "$(cd "$GP" && "$ROTA_BIN" projects 2>/dev/null)" in *"beta"*"(missing)"*) ;; *) fail "text mode should mark the missing path" ;; esac
 [ "$(echo "$OUT" | python3 -c 'import json,sys; print(sorted((p["name"],p["missing"]) for p in json.load(sys.stdin)["data"]["projects"]))')" = "[('alpha', False), ('beta', True)]" ] \
   || fail "beta should be flagged missing and kept: $OUT"
-unset XDG_CONFIG_HOME
+export XDG_CONFIG_HOME="$OLD_XDG"
