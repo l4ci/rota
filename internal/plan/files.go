@@ -23,6 +23,8 @@ func Files(root string) Store { return files{root} }
 
 func (files) Digits() int { return 2 }
 
+func (files) ItemOnly() bool { return false }
+
 func path(root, key string) string { return filepath.Join(root, ".rota", "plans", key+".md") }
 
 func notFound(key string) *artifact.Error {

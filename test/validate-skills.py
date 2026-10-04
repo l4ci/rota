@@ -210,7 +210,6 @@ def prose_rules():
           has(sk("pause"), "rota git guard feature-branch", "must call rota git guard feature-branch")]
     # map / backlog touchpoints
     r += [has(sk("work"), r"rota map stats --cap|rota map index", "has no map touchpoint", True),
-          has(sk("debug"), r"rota map stats --cap|rota map index", "has no map touchpoint", True),
           has(sk("work"), "rota backlog stale", "missing the stale-summary call"),
           has(sk("capture"), "Subsystem:", "missing the Subsystem field")]
     # config verbs and the positional-args doc (F09, F78)
@@ -234,14 +233,15 @@ def prose_rules():
           has(sk("capture"), "comma-separated list of registered sub-repos", "field-order line must say 'comma-separated list of registered sub-repos'"),
           lacks(sk("capture"), "single name in V1", "must no longer carry the 'single name in V1' qualifier"),
           has(sk("plan"), "multi-repo items pass the full comma-list", "must explain the multi-repo --repo flow"),
-          has(sk("work"), "one line per repo for multi-repo items", "Preview Mode peek must show one Repo line per sub-repo"),
+          has("references/work-preview.md", "one line per repo for multi-repo items", "Preview Mode peek must show one Repo line per sub-repo"),
           has(sk("work"), "rota git branch", "must reference rota git branch for multi-repo branch creation"),
           has(sk("work"), r"rota status add .*--repos", "must reference rota status add --repos for multi-repo status entries", True),
           has(sk("work"), "rota repo resolve", "must reference rota repo resolve for multi-repo validation"),
           lacks(sk("work"), "M03 (deferred)", "must no longer say 'M03 (deferred)'"),
           lacks(sk("work"), "wait for M03 multi-repo support", "must no longer say 'wait for M03 multi-repo support'")]
     # worker reset guard, proof path, manual gates
-    r += [has(sk("work"), "reset guard", "does not describe the slot reset guard"),
+    r += [lacks(sk("work"), r"work\.dispatch.*(tmux|herdr).*(pool|slot)|rota worker (pool|dispatch|poll)", "legacy tmux/herdr dispatch path was removed; rounds own it", True),
+          lacks(sk("work"), r"git add (-A|\.)( |$|\n)", "must not stage directory-wide", True, re.M),
           paired("rota-*/SKILL.md", "rota item complete", "rota proof add",
                  "calls rota item complete without a rota proof add path"),
           lacks(sk("capture"), "Import Mode", "Import Mode was removed"),
@@ -259,14 +259,6 @@ def prose_rules():
           has("references/authoring-conventions.md", "^## Dispatch heavy work to subagents",
               "missing the 'Dispatch heavy work to subagents' rule", True, re.M),
           has("references/authoring-conventions.md", D, "missing the cross-reference to subagent-dispatch.md")]
-    for n, pats in (("vision", ["context-bundle worker", "haiku", "research worker", "per angle"]),
-                    ("debug", ["reproduce worker", "verification worker"])):
-        for t in pats:
-            r.append(has(sk(n), t, f"missing '{t}'"))
-    r += [has(sk("debug"), "when the repro is heavy", "Step 5 missing conditional dispatch criteria", True, re.I),
-          has(sk("debug"), "when verification.*requires.*file reads", "Step 7 missing conditional dispatch criteria", True, re.I)]
-    for n in ("vision", "debug"):
-        r.append(has(sk(n), D, "missing the subagent-dispatch reference cite"))
     return r
 
 

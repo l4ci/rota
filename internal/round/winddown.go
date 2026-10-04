@@ -4,11 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os/exec"
-	"path/filepath"
+	"os"
 	"strings"
 
-	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundlease"
@@ -97,26 +95,28 @@ func (e Env) WindDown(ctx context.Context, root string, be Board, o WindDownOpts
 
 	// 1. Re-verify the base in the project root.
 	if !o.NoVerify {
-		cmds := verifyCommands(root)
-		if len(cmds) == 0 {
+		if !worker.HasVerifyCommands(root) {
 			res.VerifySkipped = true
 			res.Warnings = append(res.Warnings, "NO-VERIFY: refactor.verifyCommands is empty; the base was NOT checked by a command")
 		} else {
 			if err := e.requireBase(ctx, root); err != nil {
 				return res, err
 			}
-			var log strings.Builder
-			for _, c := range cmds {
-				out, code := e.shell(ctx, root, c)
-				log.WriteString("== " + c + "\n" + out)
-				if code != 0 {
-					res.Warnings = append(res.Warnings, "verify FAILED: "+c)
-					res.Verdict = VerdictVerifyFailed
-					continue
-				}
-				res.Verified = append(res.Verified, c)
+			vr, err := e.workerEnv().Verify(ctx, root, root)
+			if err != nil {
+				return res, err
 			}
-			res.VerifyLog = tail(log.String(), 20)
+			if vr.LogPath != "" {
+				os.Remove(vr.LogPath)
+			}
+			for _, c := range vr.Failed {
+				res.Warnings = append(res.Warnings, "verify FAILED: "+c)
+			}
+			if !vr.OK() {
+				res.Verdict = VerdictVerifyFailed
+			}
+			res.Verified = vr.Verified
+			res.VerifyLog = tail(vr.Log, 20)
 		}
 	} else {
 		res.VerifySkipped = true
@@ -212,22 +212,6 @@ func (e Env) WindDown(ctx context.Context, root string, be Board, o WindDownOpts
 	return res, nil
 }
 
-func verifyCommands(root string) []string {
-	cfg := config.Load(filepath.Join(root, ".rota", "config.json"))
-	v, ok := config.Lookup(cfg, "refactor.verifyCommands")
-	if !ok {
-		return nil
-	}
-	list, _ := v.([]any)
-	var out []string
-	for _, c := range list {
-		if t := strings.TrimSpace(fmt.Sprint(c)); t != "" {
-			out = append(out, t)
-		}
-	}
-	return out
-}
-
 // requireBase refuses unless the project root is on the base with no tracked
 // changes: the verify must read the base, not a half-edited tree.
 func (e Env) requireBase(ctx context.Context, root string) error {
@@ -247,24 +231,6 @@ func (e Env) requireBase(ctx context.Context, root string) error {
 		return &worker.Error{Exit: worker.ExitResolution, Message: "the project root has uncommitted changes to tracked files", Hint: "commit or stash them: wind-down verifies the base as it is"}
 	}
 	return nil
-}
-
-func (e Env) shell(ctx context.Context, dir, command string) (string, int) {
-	if e.Worker.Shell != nil {
-		return e.Worker.Shell(ctx, dir, command)
-	}
-	cmd := exec.CommandContext(ctx, "sh", "-c", command)
-	cmd.Dir = dir
-	out, err := cmd.CombinedOutput()
-	code := 0
-	if err != nil {
-		code = 1
-		var ee *exec.ExitError
-		if errors.As(err, &ee) {
-			code = ee.ExitCode()
-		}
-	}
-	return string(out), code
 }
 
 func tail(text string, n int) string {

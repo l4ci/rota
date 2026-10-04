@@ -15,7 +15,7 @@ What each `/rota-*` skill does, one line each. For details: [`reference/slash-co
 - **`/rota-orchestrate`**: run a parallel round: choose the slate, route workers, merge. The `rota round` verbs do the mechanics.
 
 ## Review & ship
-- **`/rota-review`**: two-stage review (spec match, then code quality).
+- **`/rota-review`**: one review pass (spec match and code quality).
 - **`/rota-qa`**: product-level QA. Playwright, smoke, lighthouse, axe, ZAP.
 - **`/rota-ship`**: open a PR or direct merge. `--undo` rolls back; `--docs` syncs public docs.
 

@@ -29,17 +29,12 @@ Read `.rota/config.json`:
 
 Track these phases with the host's task tool if it has one.
 
-Phases:
-
 1. *Read commits and items* — branch range walked, referenced item IDs collected (Step 2)
-2. *Resolve plans* — milestone-keyed `.rota/plans/<milestone>-<ID>.md` located for each referenced item (Step 3)
-3. *Capture context* — diff, KNOWLEDGE / DECISIONS topics, scaffolding pre-scan (Steps 4, 5, 6)
-4. *Stage 1 — Spec compliance* — diff evaluated against `PLAN.md` outcomes; short-circuit on FAIL (Step 7)
-5. *Stage 2 — Code quality* — staff-engineer review, gated on Stage 1 PASS or CONCERNS (Step 8)
-6. *Verdict* — combined PASS / CONCERNS / FAIL with structured findings (Step 9)
-7. *Knowledge lifecycle* — register hits on consumed bullets via `rota knowledge hit` (Step 4)
-
-**Stage opt-out (power users).** When invoked with `--stage spec`, run only Stage 1 (Steps 2, 3, 5, 7) and skip Step 8. When invoked with `--stage quality`, skip Steps 3 and 7 and run only Stage 2 — the legacy single-pass behavior. No `--stage` arg = run both stages with short-circuit gating (the default).
+2. *Resolve the spec* — what each referenced item promised (Step 3)
+3. *Capture context* — KNOWLEDGE / DECISIONS topics, diff, scaffolding pre-scan (Steps 4, 5, 6)
+4. *Review* — one reviewer, one brief (Step 7)
+5. *Verdict* — PASS / CONCERNS / FAIL with structured findings (Step 8)
+6. *Knowledge lifecycle* — register hits on consumed bullets via `rota knowledge hit` (Step 4)
 
 ## Step 2 — Scope the Review
 
@@ -47,7 +42,7 @@ Phases:
 rota review scope --json <branch>
 ```
 
-**Umbrella mode.** When the branch lives in a sub-repo, pass `--repo <name>` so git ops resolve there: `rota review scope --json --repo <name> <branch>`. Determine `<name>` from `data.repo` of `rota status show <branch> --json` (the active stream's repo), or from `rota repo which` if invoked from inside the sub-repo's worktree. Backlog lookups (file backend: `BACKLOG.md` / `ARCHIVE.md`) stay umbrella-flat — `rota review scope` reads them from the umbrella's `.rota/`, so no repo flag is needed for intent matching.
+**Umbrella mode.** When the branch lives in a sub-repo, pass `--repo <name>` so git ops resolve there: `rota review scope --json --repo <name> <branch>`. Determine `<name>` from `data.repo` of `rota status show <branch> --json` (the active stream's repo), or from `rota repo which` if invoked from inside the sub-repo's worktree. Backlog lookups stay umbrella-flat: `rota review scope` reads them from the umbrella's `.rota/`, so no repo flag is needed for intent matching.
 
 If the user didn't name a branch, default to the current one. `rota review scope` returns, under `data`:
 
@@ -59,21 +54,14 @@ If the user didn't name a branch, default to the current one. `rota review scope
 
 If `commitCount` is 0, stop and tell the user.
 
-## Step 3 — Resolve Plans for Referenced Items
+## Step 3 — Resolve the Spec
 
-For each `intent` in the scope JSON's `intents` array, resolve its milestone-keyed plan if one exists. The plan content is Stage 1's input alongside the diff.
+The spec is what each referenced item promised. Collect one entry per `referencedId`, in parallel:
 
-```bash
-# For each <ID> in referencedIds:
-rota item field get <ID> --name milestone     # data.value; empty = untagged
-rota plan show "<MNN>-<ID>"                    # only when tagged; exit 3 = no plan file
-```
+- **Issue mode** (`backlog.backend: "issues"`): the issue body is the spec. `rota item field list <ID>` returns it; add `rota item comment list <ID> --kind decision`, because a decision recorded as a comment changes the body's promise. A plan note (`rota item note show <ID> --kind plan`, `exists: false` when absent) is extra detail, not a requirement.
+- **File mode**: the item's `Intent` line from `intents`, plus its plan when it has a milestone (`rota item field get <ID> --name milestone`, then `rota plan show "<MNN>-<ID>"`; exit 3 means no plan file).
 
-Issue the `rota item field get` and `rota plan show` calls in parallel — one pair per `referencedId` — and collect a `plans` map: `{ID -> plan-content-or-empty}`. Untagged items (no `Milestone:` field) and items with no plan file produce empty entries — those items don't contribute to Stage 1.
-
-**No-plan fallback.** If every entry in `plans` is empty (no referenced item has a plan file), Stage 1 cannot run as a meaningful spec check. Print one informational line — *"No plans found for referenced items; skipping Stage 1 (spec compliance). Running Stage 2 only."* — and proceed directly to Step 4 (effectively `--stage quality` behavior). The user may have skipped `/rota-plan` for this branch (e.g. a one-shot `/rota-capture` hand-off); that's legitimate, not an error.
-
-When `--stage quality` is set, skip this step entirely — Stage 1 won't run.
+An item with no body and no plan contributes only its title. That is fine: the reviewer judges intent match from what exists, and says so when a spec is too thin to check against.
 
 ## Step 4 — Consult KNOWLEDGE & DECISIONS
 
@@ -101,306 +89,111 @@ Multi-task feature branches sometimes ship comments that referenced earlier task
 rota review scaffolding [--repo <name>] --base <base> <branch>
 ```
 
-Empty stdout (no `data.findings`) → no candidates, skip ahead to Step 7. Otherwise carry the matches forward as `**Possible stale scaffolding:**` evidence in the Stage 2 reviewer brief (Step 8). Do not auto-FAIL — the reviewer judges each match as real scaffolding or legitimate prose. The verb surfaces; the reviewer decides.
+Empty stdout (no `data.findings`) → no candidates. Otherwise carry the matches into the brief as `**Possible stale scaffolding:**` evidence. Do not auto-FAIL — the reviewer judges each match as real scaffolding or legitimate prose. The verb surfaces; the reviewer decides.
 
-## Step 7 — Stage 1: Dispatch Spec-Compliance Reviewer
+## Step 7 — Dispatch the Reviewer
 
-Skip this step entirely when `--stage quality` is set, OR when Step 3's `plans` map is empty (no-plan fallback already printed).
-
-Dispatch a focused spec-compliance reviewer using the **orchestrator** model. Stage 1 has a narrow input: the diff + the resolved `PLAN.md` content per referenced item. KNOWLEDGE / DECISIONS / scaffolding stay out of this brief — Stage 1 answers *"does the diff fulfill what the plan promised?"* and nothing else. Shorter brief, smaller token budget, faster verdict.
-
-Brief template:
+Dispatch one reviewer using the **orchestrator** model, with this brief. Fill the bracketed parts from Steps 2-6 and drop any section that has nothing in it.
 
 ```
-Stage 1 / 2 — spec compliance review of `<branch>` against base `<base>`.
-
-You evaluate ONE question: does the diff fulfill the outcomes promised by the plan(s)?
-
-You do NOT evaluate code quality, style, conventions, security, or scaffolding —
-that's Stage 2's job. Even if you notice issues there, do NOT flag them.
+Review `<branch>` against base `<base>`: does the diff deliver what the items
+promised, and is it good enough to merge?
 
 **Commits:**
 <hash> <subject>
-<hash> <subject>
 ...
 
-**Items being resolved (with plans):**
+**Items being resolved, with their spec:**
 
 ### [F03] Quick-switch projects
-**Intent (from the backlog item):** "<full intent line>"
-
-**Plan outcomes (from .rota/plans/M01-F03.md):**
-<plan content>
+<issue body, decision comments and plan from Step 3, or the intent line>
 
 ### [B07] Timer badge shows stale duration
-**Intent:** "<full intent line>"
-
-**Plan outcomes (from .rota/plans/M01-B07.md):**
-<plan content>
-
-(Omit a plan section for items without plans — note them as "no plan; skipped from spec check.")
+<same>
 
 **Recorded proof:**
 <rows from `rota proof show <ID>` per item, or "none recorded">
 Rows are verification already run (check, result, sha, evidence). Do NOT re-run a check that has a PASS row at the current sha; spot-check one row. A FAIL row or a row at a stale sha is a gap to cite.
 
+**Relevant project conventions (from KNOWLEDGE.md):**
+- <bullet>
+
+**Hard boundaries (from DECISIONS.md):**
+<entries from `rota decisions query`, full rule + forbids/permits>
+
+**Possible stale scaffolding (deterministic pre-flight grep):**
+<file:line>: <matched line text>
+
 **Diff by file:**
 <file>
 ```diff
 <diff content>
 ```
-...
 
-**Evaluate per item:**
-For each item with a plan, return PASS / CONCERN / FAIL with evidence:
-- **PASS** — every outcome in the plan is fulfilled by the diff. Cite the diff line(s) for each.
-- **CONCERN** — most outcomes fulfilled, but one or more partially met (stub, incomplete coverage, missing test for a named outcome). Cite the gap.
-- **FAIL** — at least one plan outcome is missing entirely OR the diff went off-target (touched files not implied by the plan, scope creep into unrelated areas). Cite the missed outcome AND the off-target evidence.
+**Evaluate on the rubric below. For each item, return PASS / CONCERN / FAIL with evidence.**
 
-**Refocus check (per item, after the PASS/CONCERN/FAIL call):**
-1. Trace each change back up the chain: plan task → backlog item intent → milestone intent (only where the item carries a `Milestone:` tag; otherwise stop at the item). Use only the intent text already in this brief.
-2. Flag scope inflation: steps that are sensible on their own but drift from the parent intent (extra options, generalised helpers, adjacent cleanups no level of the chain asks for). Report it as CONCERN, naming the drift path (e.g. `task 3 → [F03] → M01: adds a project-sync mode neither asks for`).
-3. Drift alone is never a Stage 1 FAIL. Off-target edits to files the plan doesn't imply stay under FAIL above.
+1. **Intent match** — does the diff deliver every outcome in the item's spec? PASS cites the diff line for each outcome. A partially met outcome (stub, missing test for a named outcome) is a CONCERN. A missing outcome, or edits to files the spec does not imply, is a FAIL. Then trace each change back to the item's intent and flag drift: sensible steps nobody asked for (extra options, generalised helpers, adjacent cleanups) are a CONCERN naming the drift path, never a FAIL on their own. If an item's spec is too thin to check, say so rather than inventing one.
+2. **Convention compliance** — does the diff respect the KNOWLEDGE.md bullets? Any regression on a captured gotcha?
+3. **Obvious quality** — dead code, error swallowing, untested new branches, security smells, API contract breaks, performance cliffs. Not a full code review; focus on what the user would regret after merge.
+4. **Stale scaffolding** — judge each `**Possible stale scaffolding:**` match: a leftover *Task N* / *placeholder* / *not yet wired* / *added later* / *in flight* annotation that should have gone once the work landed is a CONCERN with file:line; legitimate prose (a markdown placeholder section, a docstring describing user-visible "in flight" semantics, an enum value named `placeholder`, a `Task <N>` in a per-task brief or test name) is a PASS. Many matches are benign.
+5. **Silent failure check** — for every verification claim in the diff (new test, smoke section, assertion, helper-output check), apply the four-question rubric: (a) what does this verify concretely? (b) is the asserted-on shape the same shape the real consumer reads? (c) was the new code path actually exercised? (d) if you deleted the new code, would the assertion still pass? Any *no* or *unclear* is a `SILENT-FAIL` with file:line and a one-sentence explanation; treat it as a CONCERN. Full rubric: `references/silent-failure-hunter.md`.
+6. **Decision violations** — compare the diff against `**Hard boundaries:**`. Any forbidden pattern present = FAIL.
 
-**Verdict block.** End the report with one fenced `json` block and nothing after it. Stage verdict is `PASS`, `CONCERNS` or `FAIL`:
+Be specific: file:line for every concern, ranked by severity.
+
+**Verdict block.** End the report with one fenced `json` block and nothing after it:
 {"verdict": "PASS", "summary": "<one line>", "findings": [{"severity": "blocker|major|minor|info", "title": "<what>", "file": "<path>", "line": 42, "detail": "<evidence>"}], "items": [{"id": "<ID>", "verdict": "PASS"}]}
-- PASS — every plan-bearing item delivered what its plan promised
-- CONCERNS — works, but plan-vs-diff gaps surfaced
-- FAIL — at least one plan outcome went un-fulfilled or the diff went off-target
-```
-
-**Record the verdict.** Save the reviewer's JSON block to a temp file and record it (umbrella: add `--repo <name>`):
-
-```bash
-rota verdict add <branch> --kind review-spec --verdict <PASS|CONCERNS|FAIL> --body-file "$VERDICT" --json
-```
-
-Exit 2 means the block is malformed or its `verdict` differs from `--verdict`: the message names the field. Ask the reviewer to resend the block; never guess a verdict. Route on `data.next`:
-
-| `data.next` | Route |
-|---------|-------|
-| `quality` | Continue to Step 8 (Stage 2). Carry the per-item evidence forward into the final report. Stage 1 concerns alone don't decide the merge. |
-| `report` | **Short-circuit** (Stage 1 FAIL). Skip Step 8 and jump to Step 9 to emit a Stage-1-only verdict block. No point burning a deeper review on a diff that doesn't match intent. |
-
-When `--stage spec` is set, always jump to Step 9 after Stage 1 (no Stage 2 regardless of verdict).
-
-## Step 8 — Stage 2: Dispatch Code-Quality Reviewer
-
-Skip this step entirely when `--stage spec` is set, OR when Stage 1 routed to `report` (FAIL short-circuit in Step 7).
-
-Dispatch a single code-quality reviewer using the **orchestrator** model. Stage 2 owns code quality, conventions, stale scaffolding, and silent-failure detection. Intent / spec compliance lives in Stage 1 and is NOT re-evaluated here — the brief tells the reviewer to skip it.
-
-**Use Variant A when Stage 1 ran (PASS or CONCERNS). Use Variant B when Stage 1 was skipped (no-plan fallback or `--stage quality`).**
-
-### Variant A — Stage 2 with Stage 1 (Stage 1 ran with PASS or CONCERNS)
-
-```
-Stage 2 / 2 — code-quality review of `<branch>` against base `<base>`.
-
-Stage 1 (spec compliance) already evaluated whether the diff fulfills the
-promised plan outcomes — DO NOT re-evaluate intent here. Stage 1's verdict
-is provided for context but is not your concern. Focus on quality:
-conventions, edge cases, security smells, performance cliffs, stale
-scaffolding, silent failures.
-
-**Stage 1 verdict (context — do not re-evaluate):**
-<PASS or CONCERNS — paste the Stage 1 evidence block verbatim>
-
-**Commits:**
-<hash> <subject>
-<hash> <subject>
-...
-
-**Items being resolved:**
-- [B07] Timer badge shows stale duration — "<full intent line from the item>"
-- [F03] Quick-switch projects — "<full intent line from the item>"
-
-**Relevant project conventions (from KNOWLEDGE.md):**
-- <bullet 1>
-- <bullet 2>
-
-**Hard boundaries (from DECISIONS.md):**
-<entries from `rota decisions query`, if any — full rule + forbids/permits>
-
-**Possible stale scaffolding (deterministic pre-flight grep):**
-<file:line>: <matched line text>
-<file:line>: <matched line text>
-...
-
-(Omit this section entirely when Step 6 produced no matches.)
-
-**Diff by file:**
-<file>
-```diff
-<diff content>
-```
-...
-
-**Evaluate on the rubric below. For each item, return PASS / CONCERN / FAIL with evidence.**
-
-1. **Convention compliance** — does the diff respect the bullets from KNOWLEDGE.md? Any regressions on captured gotchas?
-2. **Obvious quality** — dead code, error swallowing, untested new branches, security smells, API contract breaks, performance cliffs. Not a full code review; focus on things the user would regret after merge.
-3. **Stale scaffolding** — for each entry in `**Possible stale scaffolding:**`, judge whether the matched line is a leftover *Task N* / *placeholder* / *not yet wired* / *added later* / *in flight* annotation that should have been removed once the corresponding work landed. Flag as CONCERN with the file:line if it reads like leftover scaffolding; PASS-and-skip if it's legitimate prose (e.g., a markdown placeholder section, a docstring describing user-visible "in flight" semantics, an enum value named `placeholder`, or a `Task <N>` mention in a per-task brief or test name). Many matches will be benign — the helper surfaces candidates, not verdicts.
-4. **Silent failure check** — for every verification claim in the diff (new test, smoke section, assertion, helper-output check), apply the four-question rubric: (a) what does this verify concretely? (b) is the asserted-on shape the same shape the real consumer reads? (c) was the new code path actually exercised? (d) if you deleted the new code, would the assertion still pass? If any answer is *no* or *unclear*, flag the claim as `SILENT-FAIL` with file:line and a one-sentence explanation. Treat `SILENT-FAIL` flags as CONCERNS in the verdict — they don't break the build alone, but the user sees them before merging. Full rubric and patterns in `references/silent-failure-hunter.md`.
-- **Decision violations.** Compare the diff against the `**Hard boundaries:**` block above. Any forbidden pattern present in the diff = FAIL.
-
-Return verdict as labeled sections. Be specific: file:line for every concern. Rank concerns by severity.
-
-**Verdict block.** End the report with one fenced `json` block and nothing after it. Stage verdict is `PASS`, `CONCERNS` or `FAIL`:
-{"verdict": "PASS", "summary": "<one line>", "findings": [{"severity": "blocker|major|minor|info", "title": "<what>", "file": "<path>", "line": 42, "detail": "<evidence>"}]}
 - PASS — no concerns worth surfacing
 - CONCERNS — works, but surfaces should be flagged before merge
-- FAIL — merge would regress behavior, violate a hard boundary, or break a convention
+- FAIL — merge would regress behavior, miss a spec outcome, violate a hard boundary, or break a convention
 ```
 
-### Variant B — Stage 2 standalone (Stage 1 was skipped via no-plan fallback or `--stage quality`)
+## Step 8 — Record and Relay the Verdict
 
-```
-Stage 2 / 2 — code-quality review of `<branch>` against base `<base>`.
-
-Stage 1 (spec compliance) was skipped for this review. Evaluate intent
-match as the first rubric item, then assess quality: conventions, edge
-cases, security smells, performance cliffs, stale scaffolding, silent
-failures.
-
-**Commits:**
-<hash> <subject>
-<hash> <subject>
-...
-
-**Items being resolved:**
-- [B07] Timer badge shows stale duration — "<full intent line from the item>"
-- [F03] Quick-switch projects — "<full intent line from the item>"
-
-**Relevant project conventions (from KNOWLEDGE.md):**
-- <bullet 1>
-- <bullet 2>
-
-**Hard boundaries (from DECISIONS.md):**
-<entries from `rota decisions query`, if any — full rule + forbids/permits>
-
-**Possible stale scaffolding (deterministic pre-flight grep):**
-<file:line>: <matched line text>
-<file:line>: <matched line text>
-...
-
-(Omit this section entirely when Step 6 produced no matches.)
-
-**Diff by file:**
-<file>
-```diff
-<diff content>
-```
-...
-
-**Evaluate on the rubric below. For each item, return PASS / CONCERN / FAIL with evidence.**
-
-1. **Intent match** — does the diff deliver what the backlog items promise? Anything missing, anything scope-creeping?
-2. **Convention compliance** — does the diff respect the bullets from KNOWLEDGE.md? Any regressions on captured gotchas?
-3. **Obvious quality** — dead code, error swallowing, untested new branches, security smells, API contract breaks, performance cliffs. Not a full code review; focus on things the user would regret after merge.
-4. **Stale scaffolding** — for each entry in `**Possible stale scaffolding:**`, judge whether the matched line is a leftover *Task N* / *placeholder* / *not yet wired* / *added later* / *in flight* annotation that should have been removed once the corresponding work landed. Flag as CONCERN with the file:line if it reads like leftover scaffolding; PASS-and-skip if it's legitimate prose (e.g., a markdown placeholder section, a docstring describing user-visible "in flight" semantics, an enum value named `placeholder`, or a `Task <N>` mention in a per-task brief or test name). Many matches will be benign — the helper surfaces candidates, not verdicts.
-5. **Silent failure check** — for every verification claim in the diff (new test, smoke section, assertion, helper-output check), apply the four-question rubric: (a) what does this verify concretely? (b) is the asserted-on shape the same shape the real consumer reads? (c) was the new code path actually exercised? (d) if you deleted the new code, would the assertion still pass? If any answer is *no* or *unclear*, flag the claim as `SILENT-FAIL` with file:line and a one-sentence explanation. Treat `SILENT-FAIL` flags as CONCERNS in the verdict — they don't break the build alone, but the user sees them before merging. Full rubric and patterns in `references/silent-failure-hunter.md`.
-- **Decision violations.** Compare the diff against the `**Hard boundaries:**` block above. Any forbidden pattern present in the diff = FAIL.
-
-Return verdict as labeled sections. Be specific: file:line for every concern. Rank concerns by severity.
-
-**Verdict block.** End the report with one fenced `json` block and nothing after it. Stage verdict is `PASS`, `CONCERNS` or `FAIL`:
-{"verdict": "PASS", "summary": "<one line>", "findings": [{"severity": "blocker|major|minor|info", "title": "<what>", "file": "<path>", "line": 42, "detail": "<evidence>"}]}
-- PASS — no concerns worth surfacing
-- CONCERNS — works, but surfaces should be flagged before merge
-- FAIL — merge would regress behavior, violate a hard boundary, or break a convention
-```
-
-## Step 9 — Combine Verdicts and Relay
-
-When Stage 2 ran, record its block the same way as Step 7:
+Save the reviewer's JSON block to a temp file and record it (umbrella: add `--repo <name>`):
 
 ```bash
 rota verdict add <branch> --kind review-quality --verdict <PASS|CONCERNS|FAIL> --body-file "$VERDICT" --json
 ```
 
-The combined verdict is `data.combined`: the verb takes the worst of the two stages (FAIL beats CONCERNS beats PASS) when Stage 1 ran at the same commit, else Stage 2's own. When only Stage 1 ran (FAIL short-circuit or `--stage spec`), the Step 7 verdict is the combined one. Never work the combination out by hand.
+Exit 2 means the block is malformed or its `verdict` differs from `--verdict`: the message names the field. Ask the reviewer to resend the block; never guess a verdict. `data.combined` is the branch's review verdict.
 
-Present both stages' outputs **verbatim** (or nearly so — trim only restatements). Stage 1 first, then Stage 2, then the combined verdict. Don't summarize away the evidence; specifics are the point. When Stage 2 was short-circuited, mark it `Skipped (Stage 1 returned FAIL)` in the output block.
-
-Structure:
+Present the reviewer's report **verbatim** (trim only restatements): specifics are the point. Structure:
 
 ```
 Review: `rota/foo` → main (3 commits, 5 files)
 
-## Stage 1 — Spec Compliance — PASS
-
 ### [F03] Quick-switch projects — PASS
-<evidence: each plan outcome ↔ diff line(s)>
+<evidence: each spec outcome ↔ diff line(s)>
 
-### [B07] Timer badge — PASS
+### [B07] Timer badge — CONCERN
 <evidence>
 
-## Stage 2 — Code Quality — CONCERNS
-
-### 1. Convention compliance — CONCERN
+## Rubric
+### 2. Convention compliance — CONCERN
 - src/Foo.swift:42 — uses raw URLSession; KNOWLEDGE says all network calls go through NetworkClient
-- ...
 
-### 2. Obvious quality — PASS
-<evidence>
-
-### 3. Stale scaffolding — PASS
-<evidence>
-
-### 4. Silent failure check — PASS
-<evidence>
+### 3. Obvious quality — PASS
+...
 
 Verdict: CONCERNS
 ```
 
-Short-circuit variant (Stage 1 returned FAIL):
-
-```
-Review: `rota/foo` → main (3 commits, 5 files)
-
-## Stage 1 — Spec Compliance — FAIL
-
-### [F03] Quick-switch projects — FAIL
-- .rota/plans/M01-F03.md outcome "Cmd+Tab overlay on the project picker" was not fulfilled — diff adds the overlay but doesn't wire the Cmd+Tab keybinding.
-- diff went off-target into src/Settings.swift (not implied by the plan).
-
-## Stage 2 — Code Quality — Skipped (Stage 1 returned FAIL)
-
-Verdict: FAIL
-```
-
-Single-stage variant (Stage 1 skipped via no-plan fallback or `--stage quality`):
-
-```
-Review: `rota/foo` → main (3 commits, 5 files)
-
-## Stage 1 — Spec Compliance — Skipped (no plans found for referenced items)
-
-## Stage 2 — Code Quality — PASS
-
-### 0. Intent match — PASS
-<evidence (legacy fallback when Stage 1 didn't run)>
-
-### 1. Convention compliance — PASS
-...
-
-Verdict: PASS
-```
-
-## Step 10 — Route Based on Verdict
+## Step 9 — Route Based on Verdict
 
 The verdict is the entire product — return it and stop. Never ask a follow-up; the caller (the user, or `/rota-ship` when invoked) owns what happens next.
 
 When invoked from `/rota-ship`, return the verdict; the parent routes on the recorded verdict with `rota verdict route --for ship-review` (`references/review-verdict-routing.md`). When invoked standalone, relay the verdict to the user using the *Producer-side relay* table in the reference — short summary:
 
 - **PASS** — *"Ready to ship. Run `/rota-ship`."*
-- **CONCERNS** — print the concerns inline (already done in Step 6), then suggest *"Address via `/rota-work` and rerun `/rota-review`, or accept and ship via `/rota-ship`."*
+- **CONCERNS** — the concerns are already printed; suggest *"Address via `/rota-work` and rerun `/rota-review`, or accept and ship via `/rota-ship`."*
 - **FAIL** — tell the user the merge would regress. Suggest fixing via `/rota-work` or `/rota-debug`. Don't route to `/rota-ship`.
 
 ## Queue mode (`--queue`, issue mode)
 
 Works through every `needs-review` item's open PR / MR. Issue mode only (`backlog.backend: "issues"`; see `references/issue-mode.md` for the label lifecycle). In file mode say *"`--queue` needs the issue backend; use `/rota-ship` and `rota ship merge` here"* and stop.
+
+**Who merges.** Whoever runs the queue owns the merge: you, outside a round. Inside a round the orchestrator merges through `rota worker gate` (rota-orchestrate section 6) and workers never run `--queue`, so don't run it against round PRs.
 
 ```bash
 rota review queue --json
@@ -410,7 +203,7 @@ rota review queue --json
 
 1. **PRs.** None: report *"<ID> is `needs-review` but has no PR with a closing keyword"* and skip. Several: review each.
 2. **Checkout.** `git status --short` must be clean, else stop. Check the PR out through the adapter: `rota tracker call -- pr checkout <n>` (GitHub) or `-- mr checkout <n>` (GitLab).
-3. **Review.** Skip this stage when `rota proof show <ID> --json` already holds a PASS at the PR's current head sha (`git rev-parse HEAD`): the merge gate that follows is the only full run, so don't repeat verification here, and go to Route as a PASS. Otherwise run Steps 2-9 on the checked-out branch, scoped to `<base>...HEAD` (`<base>` from `rota git base`). The reviewer is read-only (it runs no suite); so is the queue, apart from the verbs below.
+3. **Review.** Skip this stage when `rota proof show <ID> --json` already holds a PASS at the PR's current head sha (`git rev-parse HEAD`): the merge gate that follows is the only full run, so don't repeat verification here, and go to Route as a PASS. Otherwise run Steps 2-8 on the checked-out branch, scoped to `<base>...HEAD` (`<base>` from `rota git base`). The reviewer is read-only (it runs no suite); so is the queue, apart from the verbs below.
 4. **Route** on `rota verdict route <branch> --for queue --json`, field `data.next`:
    - **`ask`** (PASS) — `AskUserQuestion` (Header `"Merge"`, *"Merge PR <n> for <ID>?"*, options *Merge (Recommended)* / *Skip* / *Stop*). Merge with `rota ship pr-merge <n>` (in an umbrella `--repo <name>` is required; queue entries carry `repo` and qualified IDs): it merges and closes the linked items the host left open; `data.sha` and `data.closed` report the result. Pass the Merge answer along: `--confirm --confirm-note "<answer>"` (ignored unless `ship.mergeApproval` covers the PR). Exit 4 with `data.unproven` means nothing was merged because an item has no proof: it is now `changes-requested`; report it and move on. Exit 4 with `data.blockedBy: "verdict"` means the PR's branch has a recorded review or second-opinion FAIL: nothing changed; report it and move on. Exit 4 with `data.blockedBy: "manual gate"` is the `merge-approval` gate (`ship.mergeApproval` requires a human for this merge; `data.paths` names the files that put it there): nothing changed. Ask the user in an `AskUserQuestion`, then re-run with `--confirm --confirm-note "<their answer>"`. Then post the verdict on each linked item (`rota item comment add <ID> --kind feedback --body-file -`) and on the PR (`rota tracker call -- pr comment <n> --body-file -` on GitHub, `-- mr note <n> --message "<verdict>"` on GitLab).
    - **`request-changes`** (CONCERNS / FAIL) — post the findings as a `feedback` comment on each linked item and on the PR (same commands), then `rota item state <ID> --to changes-requested`. The author's next `/rota-work` claim reads the feedback. No merge, under any autonomy level.
@@ -424,8 +217,7 @@ Exit 5 or 6 (tracker unavailable or rate-limited) from any verb stops the queue 
 - **Evidence over opinion.** Every concern must cite file:line or commit hash.
 - **Scope is bounded.** Only the diff against the base is reviewed — don't wander into unchanged code.
 - **Call it honestly.** If conventions were violated but the user has a good reason, the reviewer still reports CONCERN — the user decides what to do.
-- **Don't re-run on a passed branch.** If `rota verdict show <branch> --json` has a review record with `verdict` PASS and `stale: false`, skip Steps 7 and 8 and report that verdict.
-- **Stage gating lives in the verb.** A Stage 1 FAIL routes to `report` and skips Stage 2; otherwise both stages run and `data.combined` is the worst of the two.
+- **Don't re-run on a passed branch.** If `rota verdict show <branch> --json` has a review record with `verdict` PASS and `stale: false`, skip Step 7 and report that verdict.
 
 ## References
 

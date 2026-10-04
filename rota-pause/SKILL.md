@@ -1,6 +1,6 @@
 ---
 name: rota-pause
-description: Gracefully pause mid-session — writes a handoff note (current hypothesis, next planned step, mid-edit files, uncommitted work strategy) to .rota/handoff/<branch>.md so `/rota-work` with no argument in a fresh session can pick up with full context, not just git state. Use when the session is approaching a context limit, you need to hand off, or you want to stop a long /rota-work cycle cleanly.
+description: Gracefully pause mid-session — writes a handoff note (current hypothesis, next planned step, mid-edit files, uncommitted work strategy) to .rota/handoff/<branch>.md so `/rota-work` with no argument in a fresh session can pick up with full context, not just git state. Also covers an orchestrator mid-round, recording the round (lease, slots, PRs awaiting review) without winding it down. Use when the session is approaching a context limit, you need to hand off, or you want to stop a long /rota-work cycle cleanly.
 ---
 
 # rota-pause — Graceful Session Pause
@@ -10,23 +10,19 @@ description: Gracefully pause mid-session — writes a handoff note (current hyp
 ## When to Use
 
 - Context window is filling up and you want to stop cleanly
-- You have to step away mid-`/rota-work` or mid-`/rota-debug` cycle
+- You have to step away mid-`/rota-work` or mid-`/rota-debug` cycle, or mid-round as the orchestrator
 - Work will continue in a new session; git commits alone won't carry the intent
 
 ## When NOT to Use
 
 - Work is actually complete → `/rota-ship`
 - You can finish in this session → just finish
-- No active branch / no `/rota-work` running → nothing to hand off
+- No active branch, no `/rota-work` running and no round → nothing to hand off
+- The round is finished → `rota round wind-down`, not a pause
 
-## Step 1 — Task List
+## Step 1 — Is a Round Running?
 
-Track these phases with the host's task tool if it has one.
-
-1. *Resolve pause set* — which `(branch, repo)` entries (Step 2)
-2. *Handle uncommitted work* — user picks a strategy (Step 3)
-3. *Write handoff* — one note per entry, status pinned (Steps 4-5)
-4. *Report* — confirm (Step 6)
+Run `rota round status --json`. A round is in flight when a row in `data.slots` holds an issue or `data.review` is non-empty; slots parked on `park/<agent>` with nothing queued are not a round. If so, follow *Pausing an orchestrator* below; the feature-branch steps do not apply, because the orchestrator sits on the base branch. Otherwise continue with Step 2.
 
 ## Step 2 — Resolve the Pause Set
 
@@ -46,7 +42,7 @@ All clean: record `clean tree` and continue. Any dirty: ask once via `AskUserQue
 - **Header:** `"Uncommitted"`
 - **Question:** *"N uncommitted files on `<branch>`. How should I handle them?"* For a wave, name the dirty repos instead of N.
 - **Options** (single-select):
-  1. "WIP commit (Recommended)" — *"`git add -A && git commit -m 'wip: pause before context cutoff'` — keeps changes on the branch."*
+  1. "WIP commit (Recommended)" — *"Stage the dirty paths by name (`git add -- <paths from git status --porcelain>`), then `git commit -m 'wip: pause before context cutoff'`. Keeps changes on the branch."*
   2. "Stash" — *"`git stash push -u -m 'rota-pause <branch>'` — keeps changes out of history."*
   3. "Leave in place" — *"No action; the handoff will note that the tree is dirty."*
 
@@ -65,6 +61,16 @@ Gotchas and dead ends belong in `/rota-learn` (Step 6), not the note.
 ## Step 5 — Pin Status
 
 For each entry run `rota status add <branch> --items <ids> [--worktree <path>] [--repo <repo>] --if-absent` so the resume flow finds it. `--if-absent` keeps the original `startedAt`, so time in flight stays accurate; the note carries the pause time.
+
+## Pausing an orchestrator
+
+A round outlives the session that runs it: workers keep working in their own worktrees and tabs. A pause records the round and leaves it running; it never winds the round down (`rota round wind-down` re-verifies, parks every slot and releases the lease, which is the end of a round, not a pause) and never merges, reclaims or reassigns anything.
+
+1. Read `rota round status --json`: the host, each slot's issue, state and PR, the `review` list (PRs waiting for gate and merge), open `escalations`, `limits` and the `drift` count. Add `rota round candidates` only if the slate is part of what the next session must decide.
+2. Write the note to `.rota/handoff/<base>.md` (`<base>` from `rota git base`), first line `<!-- rota-handoff: orchestrator -->`, the marker the SessionStart hook injects without a lease. Sections: **Round** (host from `rota round status`; the round number from `.rota/workers.json`; the lease holder from `rota keepalive status` when a supervisor runs), **Slots** (one line each: agent, issue, state, PR), **Review queue** (PR numbers in merge order, and why that order), **Waiting on** (escalation ids and what each blocks, slots out of quota with reset time), **Next** (the one concrete call: usually `rota round wait`). Record decisions the maintainer settled that a worker brief does not already carry; leave out anything `rota round status` reproduces.
+3. Leave the lease alone. A gone holder makes it stale, and the next `rota round start` reclaims it and keeps the round. Don't pin `rota status add`; the round's registry is `.rota/workers.json`.
+4. Uncommitted work on the base branch: report it and leave it in place; don't WIP-commit onto the base.
+5. Confirm in one block: round number, slots busy and free, PRs in review, what the next session does first. Resume is `rota round start` (it keeps the recorded scope) and then the note, with `/rota-orchestrate` for the judgment calls. Add the `/rota-learn` line below when it applies.
 
 ## Step 6 — Confirm
 
@@ -104,7 +110,8 @@ Stage, Next and Hypothesis are shared across the wave; Uncommitted is per repo.
 - **One note per `(branch, repo)`.** Overwrite on re-pause.
 - **A multi-repo wave is one logical pause.** Scope to one sub-repo by `cd`-ing into it first.
 - **Never commit `.rota/handoff/`.** It is per-developer scratch and gitignored by `rota init`.
-- **Do not delete the note here.** Resuming or abandoning the stream removes it.
+- **Do not delete the note here.** Resuming or abandoning the stream removes it; the orchestrator note is consumed by the next session's hook.
+- **A paused round is not a finished round.** Never wind down, merge or reclaim from a pause.
 - **No mutation beyond the note, status pin and the chosen wip commit or stash.** Capture, not integration.
 
 ## References

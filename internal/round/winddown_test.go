@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/roundlease"
@@ -239,5 +240,22 @@ func TestWindDownKeepsHandleWhenTheKillIsNotProved(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("warnings: %v", res.Warnings)
+	}
+}
+
+// Wind-down shares the gate's runner: a cancelled verify returns while a
+// grandchild still holds the output pipe.
+func TestWindDownVerifyCancelReturnsWhileGrandchildHoldsPipe(t *testing.T) {
+	f := newAssignFixture(t)
+	f.verifyWith(t, `["sleep 30; sleep 30"]`)
+	ctx, cancel := context.WithTimeout(bg, 300*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	res, err := f.env.WindDown(ctx, f.root, f.be, WindDownOpts{HolderPID: 100, Settings: f.set, Getenv: func(string) string { return "" }})
+	if time.Since(start) > 10*time.Second {
+		t.Fatalf("a cancelled wind-down verify hung for %v", time.Since(start))
+	}
+	if err == nil && res.Verdict != VerdictVerifyFailed {
+		t.Errorf("verdict = %q, want %q", res.Verdict, VerdictVerifyFailed)
 	}
 }

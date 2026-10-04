@@ -32,7 +32,7 @@ var (
 // against each target repo's docs home, as hv-plan-validate-docs did. Text is
 // the old helper's stdout ("" when clean).
 func ValidateDocs(root, key string) (mismatches []Mismatch, text string, err error) {
-	if err = checkKey(key); err != nil {
+	if err = CheckKey(Files(root), key); err != nil {
 		return
 	}
 	planPath := filepath.Join(".rota", "plans", key+".md")
