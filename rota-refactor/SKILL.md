@@ -3,15 +3,6 @@ name: rota-refactor
 description: Run a full architectural refactor cycle — explores the codebase for friction, categorizes dependencies, designs competing approaches for structural changes, then fixes everything with parallel subagents. Use when you want to find and fix architectural issues.
 ---
 
-**Print the banner below verbatim before any other action — skip if dispatched as a subagent.** See `references/banner-preamble.md`.
-
-```
-════════════════════════════════════════════════════════════════════════
-  🧱  rota-refactor  ·  full architectural refactor cycle
-  triggers: "refactor", "clean architecture"  ·  pairs: rota-work
-════════════════════════════════════════════════════════════════════════
-```
-
 # rota-refactor
 
 ## Configuration
@@ -44,7 +35,7 @@ Every friction point gets one category — it drives the fix strategy:
 
 The clean-tree guard (`rota git guard clean`) lives in Step 1.5's branches, not here — fanout sub-agents run their own guards against their target trees, so the umbrella-level guard isn't needed (and would falsely fail when the umbrella is not a git repo).
 
-**Initialize task list.** Follow the canonical pattern in `references/task-list-init.md` — load `TaskCreate(…)` via `ToolSearch select:TaskCreate,TaskUpdate` if needed, then create one task per phase below.
+Track these phases with the host's task tool if it has one.
 
 Phases:
 
@@ -99,7 +90,7 @@ Otherwise, ask the user which scope to refactor via `AskUserQuestion`:
     2. *"Pick a subset"* — *"Multi-select which sub-repos to include."*
     3. *"Umbrella only"* — *"Refactor the umbrella's tree only (no code detected — likely no findings)."*
 
-Plain-text fallback: pick the Recommended option for the relevant `hasCode` state.
+With no answer, take the Recommended option for the relevant `hasCode` state.
 
 **Loop mode:** if `autonomy.level == "loop"`, auto-pick the Recommended scope option without invoking AskUserQuestion. With `hasCode == true`, that's *"All sub-repos + umbrella (Recommended)"* — fan out to N+1 parallel cycles. With `hasCode == false`, that's *"All sub-repos (Recommended)"* — fan out to N parallel cycles. The "Pick a subset" follow-up never fires under loop. Per the authoring convention "routine routing/tagging auto-picks Recommended in loop mode" (see `references/authoring-conventions.md` rule #5).
 
@@ -159,8 +150,6 @@ If the user picks "Pick a subset", follow up with a second `AskUserQuestion`:
 - **Header:** `"Subset"`, `multiSelect: true`
 - **Question:** *"Select the items to fix."*
 - **Options:** up to 4 candidates by label (e.g., `"SessionOrchestrator error propagation"`). If more than 4, list top 4 by impact and ask the user to name the rest in free text.
-
-Plain-text fallback: *"Proceed with all, a subset, or none?"*
 
 **Loop mode:** if `autonomy.level == "loop"` AND `confirmBeforeExecute == true`, auto-pick *"Fix all N (Recommended)"* without invoking AskUserQuestion — proceed with every candidate in parallel. The "Pick a subset" follow-up never fires under loop. Per the authoring convention "routine routing/tagging auto-picks Recommended in loop mode" (see `references/authoring-conventions.md` rule #5). When `confirmBeforeExecute == false` the gate is already skipped (existing behavior in the next paragraph), so this auto-pick is conditional on the gate firing in the first place.
 
@@ -279,7 +268,6 @@ Don't recap the exploration findings, the design alternatives, or the verificati
 ## References
 
 - [`references/authoring-conventions.md`](references/authoring-conventions.md) — Authoring rules shared across SKILL.md files (loop-mode auto-picks, mirror-step threshold).
-- [`references/banner-preamble.md`](references/banner-preamble.md) — Banner-print rule shared by every skill.
 - [`references/refactor-explore.md`](references/refactor-explore.md) — Exploration-agent prompt + categories + stop condition used by `/rota-refactor` single-repo mode.
 - [`references/refactor-design-approaches.md`](references/refactor-design-approaches.md) — Competing-design choreography (decisions consult, agent constraints, output shape, `confirmBeforeExecute` gate) used by `/rota-refactor` Step 5.
 - [`references/refactor-umbrella-fanout.md`](references/refactor-umbrella-fanout.md) — Per-repo fan-out logic for `/rota-refactor` in umbrella mode.
