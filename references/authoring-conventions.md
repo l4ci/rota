@@ -50,7 +50,7 @@ Codified after F33 caught loop-mode discontinuity from `/rota-capture` milestone
 
 ## User-volition gates enforced at exactly one point
 
-Manual confirmation gates (`/rota-decide`'s manual-only contract, the public-artifact gate in `/rota-learn` Step 8.5, etc.) must be enforced at exactly ONE point in a skill, never propagated across orchestrator + called skill. The gate is architecture-enforced — only the owning skill can ask the question, and no other skill dispatches the gated skill via `Skill`. Putting a confirmation check in a skill that other skills can invoke breaks the contract under autonomy.
+Manual confirmation gates (`/rota-decide`'s manual-only contract, the acceptance-of-risk gate in `/rota-ship` Step 6a, etc.) must be enforced at exactly ONE point in a skill, never propagated across orchestrator + called skill. The gate is architecture-enforced — only the owning skill can ask the question, and no other skill dispatches the gated skill via `Skill`. Putting a confirmation check in a skill that other skills can invoke breaks the contract under autonomy.
 
 ## Stage features across slices using pass-through stubs
 
