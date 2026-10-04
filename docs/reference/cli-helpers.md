@@ -317,6 +317,7 @@ The orchestrator's verbs for a [parallel round](../usage/parallel-rounds.md). Al
 | `rota round candidates [--scope <slate\|milestone\|next>]` | list the items the round's scope allows, with readiness |
 | `rota round assign <ID> [--agent <name>] [--tier <light\|standard\|heavy>] [--tier-reason <text>] [--kind <claude\|codex>] [--body-file <path\|->] [--siblings <ID>[,<ID>…]] [--check-only] [--accept-overlap] [--accept-codex-version] [--holder-pid <n>]` | check an item's readiness and hand it to a slot |
 | `rota round wait [<slot>…] [--timeout <seconds>] [--settle <seconds>] [--lines <n>]` | block until a worker needs attention |
+| `rota round watch [--heartbeat <seconds>] [--poll <seconds>] [--forge-poll <seconds>] [--settle <seconds>] [--lines <n>]` | background watch: exit on a slot, PR or escalation change, or at a heartbeat |
 | `rota round status` | list the round's slots with host, PR and drift |
 | `rota round reconcile [--apply]` | report drift between registry, host, git and forge; `--apply` repairs the safe kinds |
 | `rota round report <slot> --state <done\|blocked\|idle\|dead\|limited> [--evidence <text>] [--pr <url\|number>]` | record a solo worker's result: state and PR |
@@ -351,10 +352,11 @@ Previews by default. It never kills a running agent and never deletes work: a ca
 |---|---|
 | `rota hook install [--scope <project-local\|project\|user>] [--wrap-statusline]` | merge the hooks and the statusline into a Claude Code settings file |
 | `rota hook uninstall [--scope <project-local\|project\|user>]` | remove what install wrote and restore a wrapped statusline |
-| `rota hook stop` | Stop hook: block above the context threshold until a handoff is written |
+| `rota hook stop` | Stop hook: block above the context threshold until a handoff is written, or while workers run with no watch armed |
+| `rota hook prompt` | UserPromptSubmit hook: one-line round digest and a missing-watch reminder |
 | `rota hook session-start` | SessionStart hook: inject and consume the handoff |
 
-`install` and `uninstall` are the ones you run; `stop` and `session-start` are what Claude Code calls. Default scope is `project-local` (`.claude/settings.local.json`). `install` exits 4 rather than replace a statusline you already have unless you pass `--wrap-statusline`. The two hooks always exit 0.
+`install` and `uninstall` are the ones you run; `stop`, `prompt` and `session-start` are what Claude Code calls. Default scope is `project-local` (`.claude/settings.local.json`). `install` exits 4 rather than replace a statusline you already have unless you pass `--wrap-statusline`. The three hooks always exit 0.
 
 ## `rota statusline`
 
