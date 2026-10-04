@@ -10,7 +10,7 @@
 #   --shards N    shard count; default ROTA_SMOKE_SHARDS, else config
 #                 gate.smokeShards, else 4
 # Env: ROTA_GATE_LOGS=<dir> keeps the per-check logs there (else a tmp dir that
-#      is kept only when a check fails); ROTA_GATE_LOCK=<dir> moves the lock.
+#      is kept only when a check fails); ROTA_GATE_LOCK=<path> moves the lock.
 #
 # Only one gate runs per machine: a second one waits for the first. Two gates at
 # once starve the Go tests of CPU and produce time-budget false reds.
@@ -31,35 +31,33 @@ done
 if [ -z "$SHARDS" ]; then
   SHARDS="$(python3 - "$REPO" <<'PY' 2>/dev/null
 import json, sys
-try:
-    v = json.load(open(sys.argv[1] + "/.rota/config.json"))["gate"]["smokeShards"]
-    print(v if isinstance(v, int) and v >= 1 else 4)
-except Exception:
-    print(4)
+def merge(a, b):
+    for k, v in b.items():
+        a[k] = merge(a[k], v) if isinstance(v, dict) and isinstance(a.get(k), dict) else v
+    return a
+cfg = {}
+for name in ("config.json", "config.local.json"):  # local overrides, as rota resolves them
+    try:
+        merge(cfg, json.load(open(sys.argv[1] + "/.rota/" + name)))
+    except Exception:
+        pass
+v = cfg.get("gate", {}).get("smokeShards")
+print(v if isinstance(v, int) and not isinstance(v, bool) and v >= 1 else 4)
 PY
 )"
   SHARDS="${SHARDS:-4}"
 fi
 case "$SHARDS" in ''|*[!0-9]*|0) echo "gate: shard count must be an integer >= 1, got: $SHARDS" >&2; exit 2 ;; esac
 
-# Machine-wide lock: mkdir is atomic everywhere (macOS has no flock). The owner
-# pid is recorded so a lock left by a killed gate is taken over.
+# Machine-wide lock (test/lib/gate-lock.sh): a stale lock from a killed gate is taken over.
+. "$REPO/test/lib/gate-lock.sh"
 LOCK="${ROTA_GATE_LOCK:-/tmp/rota-gate.lock}"
-waited=0
-until mkdir "$LOCK" 2>/dev/null; do
-  owner="$(cat "$LOCK/pid" 2>/dev/null || true)"
-  if [ -n "$owner" ] && ! kill -0 "$owner" 2>/dev/null; then
-    rm -rf "$LOCK"; continue
-  fi
-  [ "$waited" -gt 0 ] || echo "gate: another gate holds $LOCK (pid ${owner:-?}); waiting" >&2
-  waited=1; sleep 2
-done
-echo $$ > "$LOCK/pid"
+gate_lock_acquire "$LOCK"
 
 LOGS="${ROTA_GATE_LOGS:-$(mktemp -d "${TMPDIR:-/tmp}/rota-gate-logs-XXXXXX")}"
 mkdir -p "$LOGS"
 PIDS=()
-cleanup() { rm -rf "$LOCK"; }
+cleanup() { gate_lock_release "$LOCK"; }
 trap 'cleanup' EXIT
 # On INT/TERM stop the checks too, with their children (the shard runners and go).
 stop_checks() { for p in "${PIDS[@]}"; do pkill -P "$p" 2>/dev/null; kill "$p" 2>/dev/null; done; }
