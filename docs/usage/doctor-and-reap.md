@@ -11,10 +11,10 @@ rota doctor --json     # {"ok": bool, "checks": [...]}
 ```
 
 It is read-only. It never writes, never calls a usage endpoint (so it spends no quota) and runs
-without `.rota/`, falling back to default config. Each line is `pass`, `fail` or `skip`. Every `fail`
+without `.rota/`, falling back to default config. Each line is `pass`, `fail`, `skip` or `warn`. Every `fail`
 carries a hint: the one command or edit that fixes it.
 
-**Exit codes.** `0` when every check passes or skips. `1` when any check fails; `--json` still prints
+**Exit codes.** `0` when every check passes, skips or warns. `1` when any check fails; `--json` still prints
 the full result, so a caller reads `ok`. A missing tool is a failed check, not an error, so doctor
 never exits 5.
 
@@ -30,6 +30,8 @@ never exits 5.
 | `switch` | with `orchestrator.switchOnUsage` on: the Stop hook and two accounts with a `configDir` | the key is off |
 | `skills` | every installed skills root (user and project, Claude and Codex) matches the binary's skill set, and has no missing or edited files | no root has a `.rota-manifest.json` (run `rota skills install`) |
 | `codex` | `codex` version in the supported range, each slot home logged in, herdr integration per home | `codex` is not on `PATH` and no slot has a home |
+
+`disk` is the one line that appears only when something is wrong. When the free share of the volume holding the project (else the working directory) is under `doctor.minFreeDiskPercent` (default 10; `0` turns it off), doctor prints `warn disk`, which never fails the run, and its hint names what rota left behind that would give space back: temp dirs a smoke or gate run leaked (`tmp.*`, `rota-gate-logs-*`, older than an hour, in the temp root) and git worktrees whose directory is gone. `rota reap` lists the rest of the stale scratch worktrees. See [`doctor.minFreeDiskPercent`](configuration.md#doctorminfreediskpercent).
 
 The hooks are opt-in, so `statusline` and `stop-hook` skip until `rota hook install` has written
 something, and fail only on a partial or broken install. `skills` is opt-in the same way: it skips until `rota skills install` has written a manifest. `switch` cannot tell whether the orchestrator

@@ -56,8 +56,13 @@ gate_lock_acquire "$LOCK"
 
 LOGS="${ROTA_GATE_LOGS:-$(mktemp -d "${TMPDIR:-/tmp}/rota-gate-logs-XXXXXX")}"
 mkdir -p "$LOGS"
+# Every check makes its temp files under one gate-owned root, so a leak is
+# countable: the root must be empty once the checks have exited (#85).
+GATE_TMP="$LOGS/tmp"
+mkdir -p "$GATE_TMP"
+export TMPDIR="$GATE_TMP"
 PIDS=()
-cleanup() { gate_lock_release "$LOCK"; }
+cleanup() { gate_lock_release "$LOCK"; rm -rf "$GATE_TMP"; }
 trap 'cleanup' EXIT
 # On INT/TERM stop the checks too, with their children (the shard runners and go).
 stop_checks() { for p in "${PIDS[@]}"; do pkill -P "$p" 2>/dev/null; kill "$p" 2>/dev/null; done; }
@@ -129,6 +134,11 @@ for idx in "${!PIDS[@]}"; do
   fi
 done
 echo "gate: $((SECONDS - START)) s"
+# No-leak check (#85): a check that exited cleanly removed what it created.
+if [ -n "$(ls -A "$GATE_TMP" 2>/dev/null)" ]; then
+  echo "FAIL leak: checks left temp entries under $GATE_TMP:"; ls -A "$GATE_TMP" | head -20 | sed 's/^/     /'
+  fail=1
+fi
 if [ "$fail" = 0 ]; then
   [ -n "${ROTA_GATE_LOGS:-}" ] || rm -rf "$LOGS"
   echo "All smoke tests passed."
