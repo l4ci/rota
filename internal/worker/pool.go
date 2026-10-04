@@ -8,6 +8,7 @@ import (
 	"sort"
 
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
 )
 
@@ -192,10 +193,7 @@ func (e Env) commonDir(dir string) string {
 	if code != 0 || out == "" {
 		return ""
 	}
-	if !filepath.IsAbs(out) {
-		out = filepath.Join(dir, out)
-	}
-	return realPath(out)
+	return realPath(git.AbsCommonDir(dir, out))
 }
 
 func realPath(p string) string {

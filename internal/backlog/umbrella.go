@@ -3,7 +3,7 @@ package backlog
 import (
 	"context"
 	"fmt"
-	"os/exec"
+	gitx "github.com/l4ci/rota/internal/git"
 	"path/filepath"
 	"slices"
 	"sort"
@@ -320,15 +320,9 @@ func (u *Umbrella) Detail(ref string) (string, bool, error) {
 // CwdSubRepo is _cwd_repo: the registered sub-repo that cwd is inside (a
 // Layout B worktree counts, through git's common dir), "" when none.
 func CwdSubRepo(cwd string, list []repos.Repo) string {
-	cmd := exec.Command("git", "rev-parse", "--git-common-dir")
-	cmd.Dir = cwd
-	out, err := cmd.Output()
-	if err != nil {
+	common, ok, err := gitx.Repo{Dir: cwd}.CommonDir(context.Background())
+	if err != nil || !ok {
 		return ""
-	}
-	common := strings.TrimRight(string(out), "\n")
-	if !filepath.IsAbs(common) {
-		common = filepath.Join(cwd, common)
 	}
 	root := repos.Realpath(filepath.Dir(common))
 	for _, r := range list {

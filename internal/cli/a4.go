@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -15,6 +14,7 @@ import (
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/tracker"
@@ -544,8 +544,8 @@ func a4Complete(fs *flag.FlagSet) RunFunc {
 		}
 		hash := *commit
 		if hash == "" {
-			out, gerr := exec.Command("git", "log", "-1", "--format=%h").Output()
-			if hash = pystr.Strip(string(out)); gerr != nil || hash == "" {
+			h, ok, gerr := git.Repo{}.ShortHead(context.Background())
+			if hash = h; gerr != nil || !ok || hash == "" {
 				return Result{}, Unavailable("git has no HEAD to default --commit").WithHint("pass --commit <hash>")
 			}
 		}

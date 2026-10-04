@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/harness"
 )
 
@@ -74,15 +75,12 @@ func NeedsModel(root, kind string) bool {
 
 // CommonDir is the git common dir of root, absolute and symlink-resolved: the
 // directory beside which the round lease and the codex homes live.
-func CommonDir(ctx context.Context, git GitFunc, root string) (string, error) {
-	out, errOut, code, err := git(ctx, root, "rev-parse", "--git-common-dir")
+func CommonDir(ctx context.Context, run GitFunc, root string) (string, error) {
+	out, errOut, code, err := run(ctx, root, "rev-parse", "--git-common-dir")
 	if err != nil || code != 0 {
 		return "", fail(ExitUnavailable, "git rev-parse --git-common-dir failed: "+strings.TrimSpace(errOut))
 	}
-	p := strings.TrimSpace(out)
-	if !filepath.IsAbs(p) {
-		p = filepath.Join(root, p)
-	}
+	p := git.AbsCommonDir(root, out)
 	if r, err := filepath.EvalSymlinks(p); err == nil {
 		p = r
 	}

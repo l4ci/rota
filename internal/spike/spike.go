@@ -3,9 +3,10 @@
 package spike
 
 import (
+	"context"
 	"fmt"
+	gitx "github.com/l4ci/rota/internal/git"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -32,9 +33,14 @@ func checkName(name string) error {
 func file(root, name string) string { return filepath.Join(root, ".rota", "spikes", name+".md") }
 
 func git(dir string, args ...string) error {
-	cmd := exec.Command("git", args...)
-	cmd.Dir = dir
-	return cmd.Run()
+	res, err := gitx.Repo{Dir: dir}.Run(context.Background(), args...)
+	if err != nil {
+		return err
+	}
+	if res.Code != 0 {
+		return fmt.Errorf("exit status %d", res.Code)
+	}
+	return nil
 }
 
 // Add (under the spike file's lock) creates branch spike/<name> in gitDir (the sub-repo named by repo, or
@@ -176,17 +182,13 @@ type Entry struct {
 }
 
 func spikeBranches(dir string) map[string]bool {
-	cmd := exec.Command("git", "for-each-ref", "--format=%(refname:short)", "refs/heads/spike/")
-	cmd.Dir = dir
-	out, err := cmd.Output()
+	refs, ok, err := gitx.Repo{Dir: dir}.ForEachRef(context.Background(), "refs/heads/spike/")
 	set := map[string]bool{}
-	if err != nil {
+	if err != nil || !ok {
 		return set
 	}
-	for _, l := range strings.Split(string(out), "\n") {
-		if l = strings.TrimSpace(l); l != "" {
-			set[l] = true
-		}
+	for _, l := range refs {
+		set[l] = true
 	}
 	return set
 }
