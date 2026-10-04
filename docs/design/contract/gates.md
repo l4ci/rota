@@ -13,9 +13,7 @@ B1 (#54) moves the manual gates out of skill prose and into the verbs. Orchestra
 | `debug-reset` | `debug reset` (B3) | a fresh failed-fix count for an item the Iron Law halted |
 | `pr-open` | skill only (`/rota-ship`) | a public PR or MR |
 | `issue-close` | skill only (`/rota-ship`, `/rota-release`); ruled out of code | closed upstream issues |
-| `issue-label` | skill only (`/rota-capture` import and `--remove`); ruled out of code | upstream label added or removed |
 | `decision-write` | skill only (`/rota-decide`) | a hard boundary in `DECISIONS.md` |
-| `runlog-entry` | skill only (`/rota-learn`) | a signed entry in the public runlog registry |
 
 - **Confirmation flags.** Every enforced verb takes `--confirm` and `--confirm-note <answer>`. `--confirm-note` holds the human's answer, quoted as given. `--confirm` without a non-empty `--confirm-note`, or `--confirm-note` without `--confirm`, is exit 2. `autonomy.level` is never read to clear a gate: `off`, `auto` and `loop` all refuse alike.
 - **Refusal.** A gated verb that would cross its gate without `--confirm` exits 4 before it changes anything, with failure data `{"blockedBy": "manual gate", "gate": string, "changed": false}`; `merge-approval` adds `"paths": []string`, the changed paths that matched `ship.mergeApprovalPaths` (empty under `all`). The hint names the flags to pass after asking. The check runs after usage and resolution checks, so a bad call still exits 2 or 3 and a refused one tells the caller exactly what needs approval.

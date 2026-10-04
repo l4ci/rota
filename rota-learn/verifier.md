@@ -1,6 +1,6 @@
 # rota-learn verifier brief
 
-Loaded on demand by `/rota-learn` when `learn.verify` is `true` in `.rota/config.json`. Not in-band with the main skill, so the default path doesn't pay the token cost.
+Loaded on demand by `/rota-learn` under `--strict` or when `learn.verify` is `true` in `.rota/config.json`. Not in-band with the main skill, so the default path doesn't pay the token cost.
 
 ## Dispatch
 
@@ -13,7 +13,7 @@ You are the rota-learn verifier. Read these two files and judge whether the most
 
 Files:
 - .rota/KNOWLEDGE.md  (entries stamped <!-- YYYY-MM-DD --> with today's date are the new ones)
-- CLAUDE.md         (the block between <!-- rota-knowledge-start --> and <!-- rota-knowledge-end -->)
+- AGENTS.md or CLAUDE.md, whichever holds the block (the block between <!-- rota-knowledge-start --> and <!-- rota-knowledge-end -->)
 
 Today's date: <absolute date — e.g. 2026-04-18>
 
@@ -26,7 +26,7 @@ For each new entry, judge:
 
 Also verify structural integrity:
 - KNOWLEDGE.md headings are well-formed (## Topic)
-- CLAUDE.md managed block is intact, topic list matches KNOWLEDGE.md headings in order
+- The managed block in the instructions file is intact, topic list matches KNOWLEDGE.md headings in order
 - No accidental deletions of existing content
 
 Return in this exact shape, ≤150 words total:
@@ -43,5 +43,5 @@ STRUCTURE: OK | <what's broken>
 
 - **PASS** → proceed to the confirmation step.
 - **PASS_WITH_NOTES** → `Edit` each flagged entry: reword weak bullets, remove duplicates, move wrong-topic bullets. Don't re-invoke the verifier; notes are advisory, not a gate.
-- **FAIL** → `Edit` the new entries back out of `KNOWLEDGE.md` and `CLAUDE.md`, then tell the user exactly which learnings were rejected and why. Stop.
+- **FAIL** → `Edit` the new entries back out of `KNOWLEDGE.md` and the index block, then tell the user exactly which learnings were rejected and why. Stop.
 - **STRUCTURE broken** → fix the specific structural issue regardless of verdict.
