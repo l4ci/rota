@@ -544,7 +544,12 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 		}
 		if !resuming {
 			tracked := e.trackedFiles(ctx, root)
-			r, err := Assess(be, id, tracked, set.SharedPaths, e.InFlightItems(ctx, root, be, tracked, set.SharedPaths), o.AcceptOverlap)
+			settled := ""
+			if o.BodyFile != "" {
+				b, _ := os.ReadFile(o.BodyFile)
+				settled = string(b)
+			}
+			r, err := AssessBrief(be, id, tracked, set.SharedPaths, e.InFlightItems(ctx, root, be, tracked, set.SharedPaths), o.AcceptOverlap, settled)
 			if err != nil {
 				return res, wrap(err)
 			}
