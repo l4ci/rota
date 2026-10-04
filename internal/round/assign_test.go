@@ -495,7 +495,7 @@ func TestAssignCodexResolvesAndStarts(t *testing.T) {
 	if err != nil || !res.Dispatched || res.Kind != "codex" || res.Model != "c-s" {
 		t.Fatalf("%v %+v", err, res)
 	}
-	if !strings.HasPrefix(f.host.launch, "codex --model c-s ") || strings.Contains(f.host.launch, "{model}") {
+	if !strings.HasPrefix(f.host.launch, "codex -c features.hooks=true ") || !strings.Contains(f.host.launch, " --model c-s ") || strings.Contains(f.host.launch, "{model}") {
 		t.Errorf("launch = %q", f.host.launch)
 	}
 	home := filepath.Join(f.root, ".git", "rota", "codex", "ben")
@@ -532,7 +532,7 @@ func TestAssignCodexWithoutTierMap(t *testing.T) {
 	if err != nil || !res.Dispatched || res.Model != "" {
 		t.Fatalf("an unset codex map dispatches with no model: %v %+v", err, res)
 	}
-	if !strings.HasPrefix(f.host.launch, "codex --dangerously-bypass-approvals-and-sandbox ") || strings.Contains(f.host.launch, "--model") {
+	if !strings.HasPrefix(f.host.launch, "codex -c features.hooks=true ") || !strings.Contains(f.host.launch, "hooks.UserPromptSubmit=") || !strings.Contains(f.host.launch, " --dangerously-bypass-approvals-and-sandbox ") || strings.Contains(f.host.launch, "--model") {
 		t.Errorf("launch = %q", f.host.launch)
 	}
 
@@ -605,7 +605,7 @@ func TestAssignCodexAcceptVersionWarns(t *testing.T) {
 		t.Fatalf("%v %+v", err, res)
 	}
 	want := "codex 0.160.1 is outside the supported range >=0.159.0 <0.160.0"
-	if len(res.Warnings) != 1 || res.Warnings[0] != want {
+	if len(res.Warnings) != 2 || res.Warnings[0] != want || !strings.Contains(res.Warnings[1], "prompt check unverified") {
 		t.Errorf("warnings = %q", res.Warnings)
 	}
 }

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -47,6 +48,7 @@ func workerCommands() *Command {
 			{Name: "reap", Summary: "remove slots, their worktrees and branches", Verb: poolReap},
 		}},
 		{Name: "dispatch", Summary: "send a brief into a slot's session", Verb: workerDispatch},
+		{Name: "prompt-check", Summary: "Codex UserPromptSubmit hook: pass only signed or maintainer input", Verb: workerPromptCheck},
 		{Name: "poll", Summary: "classify slot states from their panes", Verb: workerPoll},
 		{Name: "session", Summary: "attachable host session guarantee", Subs: []*Command{
 			{Name: "check", Summary: "inside a managed host session? (exit 1 when outside)", Verb: sessionCheck},
@@ -446,6 +448,41 @@ func workerDispatch(fs *flag.FlagSet) RunFunc {
 		setIf(d, "kind", res.Kind)
 		d.Set("changed", true)
 		return Result{Data: d, Text: fmt.Sprintf("dispatched: %s (%s)", res.Slot, res.Handle)}, nil
+	}
+}
+
+// workerPromptCheck is the Codex UserPromptSubmit hook of a codex worker (#3).
+// It speaks Codex's hook protocol, not rota's envelope: a pass is exit 0 with
+// nothing written, a block is exit 2 with the reason on stderr. It fails
+// closed: every error, a --json flag included, is exit 2.
+func workerPromptCheck(fs *flag.FlagSet) RunFunc {
+	keyPath := fs.String("key", "", "file holding the slot's prompt key")
+	return func(c *Ctx, args []string) (Result, error) {
+		asked := c.JSON
+		c.JSON = false // stdout belongs to Codex: no envelope, not even for an error
+		if asked {
+			return Result{}, Usage("blocked: prompt-check does not take --json: stdout belongs to Codex")
+		}
+		if len(args) > 0 {
+			return Result{}, Usage("blocked: prompt-check takes no arguments")
+		}
+		if *keyPath == "" {
+			return Result{}, Usage("blocked: --key is required")
+		}
+		key, err := worker.LoadPromptKey(*keyPath)
+		if err != nil {
+			return Result{}, Usage("blocked: cannot read the prompt key: %v", err)
+		}
+		var in struct {
+			Prompt *string `json:"prompt"`
+		}
+		if err := json.Unmarshal(readInput(c), &in); err != nil || in.Prompt == nil {
+			return Result{}, Usage("blocked: the hook input is not JSON with a prompt field")
+		}
+		if ok, why := worker.CheckPrompt(key, *in.Prompt); !ok {
+			return Result{}, Usage("%s", strings.TrimPrefix(why, "rota: "))
+		}
+		return Result{}, nil
 	}
 }
 
