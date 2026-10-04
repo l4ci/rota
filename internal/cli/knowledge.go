@@ -19,6 +19,7 @@ func knowledgeCommands() *Command {
 		{Name: "stats", Summary: "bullet count and size per topic", Verb: noFlags(knStats)},
 		{Name: "add", Summary: "add a bullet under a topic", Repo: true, Verb: knAdd},
 		{Name: "amend", Summary: "append text to an existing bullet", Repo: true, Verb: knAmend},
+		{Name: "replace", Summary: "replace text inside one bullet", Repo: true, Verb: knReplace},
 		{Name: "rename-topic", Summary: "rename a topic or move one bullet", Repo: true, Verb: knRename},
 		{Name: "hit", Summary: "register a consulted bullet", Repo: true, Verb: knHit},
 		{Name: "tier", Summary: "read and write bullet tiers", Subs: []*Command{
@@ -73,7 +74,7 @@ func knErr(err error) error {
 		return nil
 	case errors.Is(err, knowledge.ErrScope), errors.Is(err, knowledge.ErrNotFound):
 		return Resolution("%s", trimSentinel(err))
-	case errors.Is(err, knowledge.ErrExists), errors.Is(err, knowledge.ErrAliasCollision):
+	case errors.Is(err, knowledge.ErrExists), errors.Is(err, knowledge.ErrAliasCollision), errors.Is(err, knowledge.ErrMultiMatch):
 		return Refused("%s", trimSentinel(err))
 	case errors.Is(err, knowledge.ErrAmbiguous), errors.Is(err, knowledge.ErrManifest):
 		return Usage("%s", trimSentinel(err))
@@ -83,7 +84,7 @@ func knErr(err error) error {
 
 // trimSentinel drops the "sentinel: " prefix wrapping adds to a message.
 func trimSentinel(err error) string {
-	for _, s := range []error{knowledge.ErrScope, knowledge.ErrNotFound, knowledge.ErrExists, knowledge.ErrAmbiguous, knowledge.ErrAliasCollision, knowledge.ErrManifest} {
+	for _, s := range []error{knowledge.ErrScope, knowledge.ErrNotFound, knowledge.ErrExists, knowledge.ErrAmbiguous, knowledge.ErrAliasCollision, knowledge.ErrMultiMatch, knowledge.ErrManifest} {
 		if errors.Is(err, s) {
 			return strings.TrimPrefix(err.Error(), s.Error()+": ")
 		}
@@ -237,6 +238,34 @@ func knAmend(fs *flag.FlagSet) RunFunc {
 			return knFail(err)
 		}
 		return Result{Data: knObj("topic", *topic, "changed", changed), Text: "amended: " + file}, nil
+	}
+}
+
+func knReplace(fs *flag.FlagSet) RunFunc {
+	topic := fs.String("topic", "", "the `topic` heading")
+	old := fs.String("old", "", "`text` to replace; must sit in exactly one bullet (case-sensitive)")
+	repl := fs.String("new", "", "the replacement `text`")
+	return func(c *Ctx, args []string) (Result, error) {
+		if err := knNoArgs(args); err != nil {
+			return Result{}, err
+		}
+		if err := knRequire(map[string]string{"topic": *topic, "old": *old}, "topic", "old"); err != nil {
+			return Result{}, err
+		}
+		given := false
+		fs.Visit(func(f *flag.Flag) { given = given || f.Name == "new" })
+		if !given {
+			return Result{}, Usage("--new is required (it may be empty to delete text)")
+		}
+		st, scope, err := knStore(c)
+		if err != nil {
+			return Result{}, err
+		}
+		r, err := st.Replace(scope, *topic, *old, *repl)
+		if err != nil {
+			return knFail(err)
+		}
+		return Result{Data: knObj("topic", *topic, "changed", r.Changed), Text: "replaced: " + r.File}, nil
 	}
 }
 
@@ -489,6 +518,8 @@ func knFail(err error) (Result, error) {
 		return Result{Data: knObj("blockedBy", "alias-collision", "changed", false)}, e
 	case errors.Is(err, knowledge.ErrExists):
 		return Result{Data: knObj("blockedBy", "exists", "changed", false)}, e
+	case errors.Is(err, knowledge.ErrMultiMatch):
+		return Result{Data: knObj("blockedBy", "ambiguous", "changed", false)}, e
 	}
 	return Result{}, e
 }
