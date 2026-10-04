@@ -9,28 +9,29 @@ Set `round.brief` to this file's path to make the assignment pointer name it as 
 
 ## The gate
 
-Both, before every PR, from inside your worktree:
+The full gate runs once, at merge: `rota worker gate` runs `refactor.verifyCommands` on the merged
+tree (validate-skills, `go vet ./...`, `go test -race -timeout 30m ./...`, full smoke ending in
+`All smoke tests passed.`). Workers do not run it.
 
-```sh
-python3 test/validate-skills.py      # under a second
-bash test/smoke.sh                   # ~75 s on main; sequential by design
-```
+Before a PR, a worker runs targeted checks only, as the [worker contract](../../references/worker-contract.md)
+says: `python3 test/validate-skills.py` (under a second), `go vet` and `go test` for the packages it
+touched, and only the smoke sections its change adds or touches, sourced through `test/runner.sh`
+in a sandbox (sections are never executable alone). Several workers running full suites at once
+starve the CPU and turn time-budgeted tests into false reds. A stale branch does not need a re-run
+either: the merge gate verifies the merged tree.
 
-Read the final `All smoke tests passed.` line, not a pipe's exit code. If the suite fails,
-run it on `origin/main` in a throwaway worktree before triaging your branch
-(`.rota/KNOWLEDGE.md`, "Pre-existing smoke failures"). Smoke sections are sourced by
-`test/runner.sh`, never executable alone. New sections take the number your dispatch assigns;
-do not pick one yourself, siblings are numbering theirs at the same time.
+If the merge gate fails, the orchestrator first runs it on `origin/main` in a throwaway worktree
+(`.rota/KNOWLEDGE.md`, "Pre-existing smoke failures"), then bounces the PR with the failing check.
+New smoke sections take the number your dispatch assigns; do not pick one yourself, siblings are
+numbering theirs at the same time.
 
-The Go gate is `go vet ./...` and `go test -race -timeout 30m ./...` (the default 10m timeout can
-be hit on a loaded box, #120). Most of `cmd/rota`'s time is the `TestFrozen*` scenario suites: each
-scenario runs the Go binary and compares what it did with its record in `cmd/rota/testdata/frozen/`.
-A deliberate behaviour change updates the record with
+Most of `cmd/rota`'s test time is the `TestFrozen*` scenario suites: each scenario runs the Go
+binary and compares what it did with its record in `cmd/rota/testdata/frozen/`. A deliberate
+behaviour change updates the record with
 `go test ./cmd/rota -run '^TestFrozen<Suite>$' -update-frozen`; say why in the PR, since the jsonl
-diff is the review.
+diff is the review. The 30m timeout is for a loaded box (#120).
 
-There are no servers and no ports in this repo. The full suite is cheap enough that the
-worker gate and the orchestrator's merge gate are the same commands.
+There are no servers and no ports in this repo.
 
 ## Repo rules that bind workers
 
