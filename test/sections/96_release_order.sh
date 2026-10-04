@@ -14,8 +14,8 @@ if [ "$1 $2" = "release view" ]; then
     partial) echo '{"isDraft":true,"assets":[{"name":"rota_linux_amd64"}]}' ;;
     three) echo '{"isDraft":true,"assets":[{"name":"rota_linux_amd64"},{"name":"rota_linux_arm64"},{"name":"rota_darwin_amd64"},{"name":"checksums.txt"}]}' ;;
     tarballs) echo '{"isDraft":true,"assets":[{"name":"rota_1.0.0_linux_amd64.tar.gz"},{"name":"rota_1.0.0_linux_arm64.tar.gz"},{"name":"rota_1.0.0_darwin_amd64.tar.gz"},{"name":"rota_1.0.0_darwin_arm64.tar.gz"},{"name":"checksums.txt"}]}' ;;
-    ready) echo '{"isDraft":true,"assets":[{"name":"rota_linux_amd64"},{"name":"rota_linux_arm64"},{"name":"rota_darwin_amd64"},{"name":"rota_darwin_arm64"},{"name":"checksums.txt"}]}' ;;
-    published) echo '{"isDraft":false,"assets":[{"name":"rota_linux_amd64"},{"name":"rota_linux_arm64"},{"name":"rota_darwin_amd64"},{"name":"rota_darwin_arm64"},{"name":"checksums.txt"}]}' ;;
+    ready) echo '{"isDraft":true,"assets":[{"name":"rota_linux_amd64"},{"name":"rota_linux_amd64.minisig"},{"name":"rota_linux_arm64"},{"name":"rota_linux_arm64.minisig"},{"name":"rota_darwin_amd64"},{"name":"rota_darwin_amd64.minisig"},{"name":"rota_darwin_arm64"},{"name":"rota_darwin_arm64.minisig"},{"name":"checksums.txt"},{"name":"checksums.txt.minisig"}]}' ;;
+    published) echo '{"isDraft":false,"assets":[{"name":"rota_linux_amd64"},{"name":"rota_linux_amd64.minisig"},{"name":"rota_linux_arm64"},{"name":"rota_linux_arm64.minisig"},{"name":"rota_darwin_amd64"},{"name":"rota_darwin_amd64.minisig"},{"name":"rota_darwin_arm64"},{"name":"rota_darwin_arm64.minisig"},{"name":"checksums.txt"},{"name":"checksums.txt.minisig"}]}' ;;
   esac
   exit 0
 fi
