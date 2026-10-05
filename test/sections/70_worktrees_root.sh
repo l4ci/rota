@@ -1,10 +1,8 @@
 echo ".worktrees/ — one gitignored worktree root; nothing walks into it"
 # Covers #79. (a) rota init adds `.worktrees/` to .gitignore once;
 # (b) rota worker pool init creates slots under .worktrees/ and leaves a slot that is
-# registered at the old .claude/worktrees/rota-worker path where it is;
-# (c) a decoy SKILL.md / CLAUDE.md under .worktrees/ is invisible to
-# validate-skills; (d) census: no helper or validator walks the
-# project tree recursively, which is what would find a nested checkout.
+# registered at the old .claude/worktrees/rota-worker path where it is.
+# The decoy and no-recursive-walk checks on validate-skills live in test/doclint.sh.
 
 TMP_WR="$(mktemp -d)"
 trap 'rm -rf "$TMP_WR"' EXIT
@@ -101,42 +99,6 @@ RC=0; OUT="$(pool_init)" || RC=$?
 jget 'warnings[0]' <<<"$OUT" >/dev/null || fail "init must warn when .worktrees/ is not ignored, got: $OUT"
 [ ! -s "$TMP_WR/repo/.gitignore" ] || fail "init must not edit .gitignore itself"
 pass "worker pool init: slots go under .worktrees/; legacy slots keep their path; unignored root warns"
-
-# ── (c) decoys under .worktrees/ are not picked up ──────────────────────────
-# white-box-begin: A9 #53 doclint
-VS="$TMP_WR/vs"
-mkdir -p "$VS"
-cp -R "$REPO"/rota-* "$REPO/references" "$REPO/docs" "$REPO/README.md" "$REPO/CHANGELOG.md" "$VS/"
-mkdir -p "$VS/test"; cp "$REPO/test/validate-skills.py" "$VS/test/"
-BASE_OUT="$(cd "$VS" && python3 test/validate-skills.py 2>&1)" || fail "validate-skills fixture does not pass on its own: $BASE_OUT"
-# A decoy skill that would fail every check, and a duplicate of a real one.
-mkdir -p "$VS/.worktrees/x/rota-decoy" "$VS/.worktrees/x/rota-plan"
-printf 'no frontmatter, banner or references\n' > "$VS/.worktrees/x/rota-decoy/SKILL.md"
-cp "$VS/rota-plan/SKILL.md" "$VS/.worktrees/x/rota-plan/SKILL.md"
-DECOY_OUT="$(cd "$VS" && python3 test/validate-skills.py 2>&1)" || fail "validate-skills picked up .worktrees/: $DECOY_OUT"
-[ "$BASE_OUT" = "$DECOY_OUT" ] || fail "validate-skills output changed with a decoy: '$BASE_OUT' vs '$DECOY_OUT'"
-
-pass "a decoy SKILL.md/CLAUDE.md under .worktrees/ is invisible to validate-skills"
-# white-box-end
-
-# ── (d) census: nothing walks the project tree recursively ──────────────────
-# validate-skills globs `rota-*/SKILL.md` (one level) and the helpers read fixed
-# .rota/ paths or one-level globs. A recursive walk of the project root would
-# find nested checkouts; fail on one. No exemptions.
-# white-box-begin: A9 #53 doclint
-WALK='rglob\(|os\.walk\(|os\.scandir\(|recursive ?= ?True|glob\([^)]*\*\*|find +(\.|\./|"\$PWD"|\$PWD|"\$\(pwd\)"|\$\(pwd\))( |$)'
-# The pattern must bite: each of these walks has to trip it.
-for SAMPLE in 'Path(".").rglob("SKILL.md")' 'os.walk(".")' 'os.scandir(root)' 'glob.glob("**/SKILL.md", recursive=True)' \
-              'glob.glob(f"{d}/**/x")' 'find . -name SKILL.md' 'find "$PWD" -type f' 'find $PWD -type f'; do
-  grep -qE "$WALK" <<<"$SAMPLE" || fail "census pattern does not catch: $SAMPLE"
-done
-for SAMPLE in 'find "$root/cmd" -newer "$bin"' 'sorted(Path(".").glob("rota-*/SKILL.md"))'; do
-  if grep -qE "$WALK" <<<"$SAMPLE"; then fail "census pattern flags an anchored lookup: $SAMPLE"; fi
-done
-HITS="$(cd "$REPO" && grep -nE "$WALK" test/validate-skills.py 2>/dev/null || true)"
-[ -z "$HITS" ] || fail "recursive tree walk found — it would pick up .worktrees/ checkouts; prune them or anchor the walk: $HITS"
-pass "the validator does not walk the project tree recursively"
-# white-box-end
 
 trap 'rm -rf "$TMP"' EXIT
 pass "worktrees-root contract"

@@ -1015,6 +1015,20 @@ func TestHerdrSubmitPendingSeesPastePlaceholder(t *testing.T) {
 	}
 }
 
+func TestSettleScale(t *testing.T) {
+	for _, tc := range []struct {
+		pct  string
+		want time.Duration
+	}{{"", 3 * time.Second}, {"100", 3 * time.Second}, {"10", 300 * time.Millisecond}, {"0", 0}, {"-5", 3 * time.Second}, {"x", 3 * time.Second}, {"250", 3 * time.Second}} {
+		c := &clock{}
+		d := deps(&fake{}, map[string]string{"ROTA_HOST_SETTLE_PCT": tc.pct}, c)
+		d.settle(3 * time.Second)
+		if c.slept != tc.want {
+			t.Errorf("ROTA_HOST_SETTLE_PCT=%q slept %v, want %v", tc.pct, c.slept, tc.want)
+		}
+	}
+}
+
 // TestLooksBooted pins the tmux boot check against pane text captured from
 // the real UIs (#102): Claude Code 2.1.289 dropped the "? for shortcuts" line
 // and the box frame, so only its banner marks a boot. Dialogs must not match.
@@ -1043,20 +1057,6 @@ func TestLooksBooted(t *testing.T) {
 	for _, c := range cases {
 		if got := looksBooted(c.pane); got != c.want {
 			t.Errorf("%s: looksBooted = %v, want %v", c.name, got, c.want)
-		}
-	}
-}
-
-func TestSettleScale(t *testing.T) {
-	for _, tc := range []struct {
-		pct  string
-		want time.Duration
-	}{{"", 3 * time.Second}, {"100", 3 * time.Second}, {"10", 300 * time.Millisecond}, {"0", 0}, {"-5", 3 * time.Second}, {"x", 3 * time.Second}, {"250", 3 * time.Second}} {
-		c := &clock{}
-		d := deps(&fake{}, map[string]string{"ROTA_HOST_SETTLE_PCT": tc.pct}, c)
-		d.settle(3 * time.Second)
-		if c.slept != tc.want {
-			t.Errorf("ROTA_HOST_SETTLE_PCT=%q slept %v, want %v", tc.pct, c.slept, tc.want)
 		}
 	}
 }
