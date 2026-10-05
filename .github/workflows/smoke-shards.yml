@@ -10,16 +10,17 @@ on:
 
 jobs:
   random-partition:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
       - run: bash test/gate.sh --smoke-only --random
         env:
           ROTA_GATE_LOGS: ${{ runner.temp }}/gate-logs
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         if: failure()
         with:
           name: gate-logs

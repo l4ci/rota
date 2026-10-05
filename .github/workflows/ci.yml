@@ -1,0 +1,40 @@
+# One workflow, one cold setup per run. Runs on main and on PRs that are ready for
+# review, not on every push to an open PR: rounds run the full gate locally on the
+# merged tree (docs/contributing/rounds.md), so CI here is the backstop.
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    # A draft PR opens without CI; marking it ready triggers the run.
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          # No go.sum (no dependencies), so setup-go finds nothing to key the
+          # module/build cache on by default; key it on go.mod instead.
+          cache-dependency-path: go.mod
+      - run: python3 test/validate-skills.py
+      - run: bash test/doclint.sh
+      - run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+      - run: go vet ./...
+      # python3 is on the runner: the fake gh/glab in test/fakes are Python, and internal/worker still runs the legacy bin/ helpers.
+      - run: go test ./...
