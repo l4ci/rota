@@ -31,9 +31,9 @@ func msFixture() *trackertest.MS {
 func TestIssueModeMilestones(t *testing.T) {
 	root := trackerProject(t, issuesConfig)
 	fake := msFixture()
-	withTracker(t, fake)
+	deps := withTracker(t, fake)
 
-	code, env, stderr := issueRun(t, root, "milestone", "list")
+	code, env, stderr := issueRunWith(t, deps, root, "milestone", "list")
 	if code != 0 {
 		t.Fatalf("list: %d %s", code, stderr)
 	}
@@ -46,7 +46,7 @@ func TestIssueModeMilestones(t *testing.T) {
 		t.Errorf("list row M02: %v", rows[1])
 	}
 
-	_, env, _ = issueRun(t, root, "milestone", "add", "--title", "Third", "--summary", "S3.", "--depends", "M02")
+	_, env, _ = issueRunWith(t, deps, root, "milestone", "add", "--title", "Third", "--summary", "S3.", "--depends", "M02")
 	if d := ddata(t, env); d["id"] != "M03" || d["changed"] != true {
 		t.Fatalf("add: %v", env)
 	}
@@ -61,22 +61,22 @@ func TestIssueModeMilestones(t *testing.T) {
 		t.Fatalf("created issue %+v, native %+v", created, fake.Native)
 	}
 
-	_, env, _ = issueRun(t, root, "milestone", "show", "M02")
+	_, env, _ = issueRunWith(t, deps, root, "milestone", "show", "M02")
 	if body, _ := ddata(t, env)["body"].(string); !strings.HasPrefix(body, "---\nid: M02\n") || strings.Contains(body, "rota:fields") || !strings.HasSuffix(body, "\n") {
 		t.Errorf("show: %q", body)
 	}
-	if code, _, _ := issueRun(t, root, "milestone", "show", "M09"); code != 3 {
+	if code, _, _ := issueRunWith(t, deps, root, "milestone", "show", "M09"); code != 3 {
 		t.Errorf("show unknown: %d", code)
 	}
-	if code, _, _ := issueRun(t, root, "milestone", "show", "x"); code != 2 {
+	if code, _, _ := issueRunWith(t, deps, root, "milestone", "show", "x"); code != 2 {
 		t.Errorf("show malformed: %d", code)
 	}
 
-	code, env, _ = issueRun(t, root, "milestone", "put", "M02", "--body-file", bodyFile(t, "---\nid: M05\n---\nx\n"))
+	code, env, _ = issueRunWith(t, deps, root, "milestone", "put", "M02", "--body-file", bodyFile(t, "---\nid: M05\n---\nx\n"))
 	if code != 4 {
 		t.Errorf("put wrong id: %d, want 4", code)
 	}
-	_, env, _ = issueRun(t, root, "milestone", "put", "M02", "--body-file", bodyFile(t, "---\nid: M02\nstatus: shipped\ndepends: [M01, M09]\n---\n\n# M02\n"))
+	_, env, _ = issueRunWith(t, deps, root, "milestone", "put", "M02", "--body-file", bodyFile(t, "---\nid: M02\nstatus: shipped\ndepends: [M01, M09]\n---\n\n# M02\n"))
 	if ddata(t, env)["changed"] != true {
 		t.Errorf("put: %v", env)
 	}
@@ -84,30 +84,30 @@ func TestIssueModeMilestones(t *testing.T) {
 		t.Errorf("status must follow the label, depends the frontmatter: %q", is.Body)
 	}
 
-	_, env, _ = issueRun(t, root, "milestone", "status", "M02", "--to", "active")
+	_, env, _ = issueRunWith(t, deps, root, "milestone", "status", "M02", "--to", "active")
 	if d := ddata(t, env); d["status"] != "active" || d["changed"] != true {
 		t.Fatalf("status: %v", env)
 	}
 	if is := issueByNumber(fake, 3); !contains(is.Labels, "status:active") || contains(is.Labels, "status:planned") || !strings.Contains(is.Body, "status: active") {
 		t.Errorf("labels/body after status: %v %q", is.Labels, is.Body)
 	}
-	_, env, _ = issueRun(t, root, "milestone", "status", "M02", "--to", "active")
+	_, env, _ = issueRunWith(t, deps, root, "milestone", "status", "M02", "--to", "active")
 	if ddata(t, env)["changed"] != false {
 		t.Errorf("repeat status: %v", env)
 	}
-	issueRun(t, root, "milestone", "status", "M02", "--to", "shipped")
+	issueRunWith(t, deps, root, "milestone", "status", "M02", "--to", "shipped")
 	if is := issueByNumber(fake, 3); is.State != "closed" || is.StateReason != "completed" || fake.Native[1].State != "closed" {
 		t.Errorf("shipped: state %s/%s, native %s", is.State, is.StateReason, fake.Native[1].State)
 	}
-	issueRun(t, root, "milestone", "status", "M02", "--to", "active")
+	issueRunWith(t, deps, root, "milestone", "status", "M02", "--to", "active")
 	if is := issueByNumber(fake, 3); is.State != "open" || fake.Native[1].State != "open" {
 		t.Errorf("reopened: state %s, native %s", is.State, fake.Native[1].State)
 	}
-	if code, _, _ := issueRun(t, root, "milestone", "status", "M09", "--to", "active"); code != 3 {
+	if code, _, _ := issueRunWith(t, deps, root, "milestone", "status", "M09", "--to", "active"); code != 3 {
 		t.Errorf("status unknown: %d", code)
 	}
 
-	_, env, _ = issueRun(t, root, "milestone", "active")
+	_, env, _ = issueRunWith(t, deps, root, "milestone", "active")
 	if ids, _ := ddata(t, env)["ids"].([]any); len(ids) != 1 || ids[0] != "M02" {
 		t.Errorf("active: %v", env)
 	}
@@ -120,7 +120,7 @@ func TestIssueModeMilestones(t *testing.T) {
 	if !strings.Contains(string(block), "the tracking issues (`rota milestone show MNN`)") || !strings.Contains(string(block), "- **M02** — Sharing (depends: M01, M09) ⚠ blocked") {
 		t.Errorf("vision block:\n%s", block)
 	}
-	if _, env, _ = issueRun(t, root, "milestone", "index"); ddata(t, env)["changed"] != false {
+	if _, env, _ = issueRunWith(t, deps, root, "milestone", "index"); ddata(t, env)["changed"] != false {
 		t.Errorf("index of an up-to-date tree: %v", env)
 	}
 }
@@ -146,46 +146,46 @@ func contains(l []string, s string) bool {
 func TestIssueModeSlicePlans(t *testing.T) {
 	root := trackerProject(t, issuesConfig)
 	fake := msFixture()
-	withTracker(t, fake)
+	deps := withTracker(t, fake)
 
-	_, env, stderr := issueRun(t, root, "plan", "add", "--milestone", "M02", "--slice", "--title", "First", "--design", "F07", "--repos", "")
+	_, env, stderr := issueRunWith(t, deps, root, "plan", "add", "--milestone", "M02", "--slice", "--title", "First", "--design", "F07", "--repos", "")
 	_ = stderr
 	if d := ddata(t, env); d["key"] != "M02-S01" || d["unitKind"] != "slice" {
 		t.Fatalf("mint: %v", env)
 	}
-	_, env, _ = issueRun(t, root, "plan", "add", "--milestone", "M02", "--slice", "--title", "Second")
+	_, env, _ = issueRunWith(t, deps, root, "plan", "add", "--milestone", "M02", "--slice", "--title", "Second")
 	if ddata(t, env)["key"] != "M02-S02" {
 		t.Errorf("second mint: %v", env)
 	}
-	if code, _, _ := issueRun(t, root, "plan", "add", "M02-S01", "--title", "dup"); code != 4 {
+	if code, _, _ := issueRunWith(t, deps, root, "plan", "add", "M02-S01", "--title", "dup"); code != 4 {
 		t.Errorf("duplicate explicit key: %d", code)
 	}
-	_, env, _ = issueRun(t, root, "plan", "add", "M02-S09", "--title", "Explicit")
+	_, env, _ = issueRunWith(t, deps, root, "plan", "add", "M02-S09", "--title", "Explicit")
 	if ddata(t, env)["key"] != "M02-S09" {
 		t.Errorf("explicit: %v", env)
 	}
-	_, env, _ = issueRun(t, root, "plan", "add", "--milestone", "M02", "--slice", "--title", "After nine")
+	_, env, _ = issueRunWith(t, deps, root, "plan", "add", "--milestone", "M02", "--slice", "--title", "After nine")
 	if ddata(t, env)["key"] != "M02-S10" {
 		t.Errorf("mint after S09: %v", env)
 	}
-	if code, _, _ := issueRun(t, root, "plan", "add", "--milestone", "M07", "--slice", "--title", "x"); code != 3 {
+	if code, _, _ := issueRunWith(t, deps, root, "plan", "add", "--milestone", "M07", "--slice", "--title", "x"); code != 3 {
 		t.Errorf("milestone without tracker: %d, want 3", code)
 	}
 
-	_, env, _ = issueRun(t, root, "plan", "show", "M02-S01")
+	_, env, _ = issueRunWith(t, deps, root, "plan", "show", "M02-S01")
 	body, _ := ddata(t, env)["body"].(string)
 	if !strings.Contains(body, "unit: S01\nunitKind: slice\ndesign: note:F07:design\ntitle: First\n") {
 		t.Errorf("show: %q", body)
 	}
-	_, env, _ = issueRun(t, root, "plan", "put", "M02-S01", "--body-file", bodyFile(t, "# replaced\n"))
+	_, env, _ = issueRunWith(t, deps, root, "plan", "put", "M02-S01", "--body-file", bodyFile(t, "# replaced\n"))
 	if ddata(t, env)["changed"] != true {
 		t.Errorf("put: %v", env)
 	}
-	if code, _, _ := issueRun(t, root, "plan", "put", "M02-S77", "--body-file", bodyFile(t, "x")); code != 3 {
+	if code, _, _ := issueRunWith(t, deps, root, "plan", "put", "M02-S77", "--body-file", bodyFile(t, "x")); code != 3 {
 		t.Errorf("put missing: %d", code)
 	}
 
-	code, env, _ := issueRun(t, root, "plan", "list", "--milestone", "M02")
+	code, env, _ := issueRunWith(t, deps, root, "plan", "list", "--milestone", "M02")
 	plans, _ := ddata(t, env)["plans"].([]any)
 	if code != 0 || len(plans) != 4 {
 		t.Fatalf("list: %d %v", code, env)
@@ -193,10 +193,10 @@ func TestIssueModeSlicePlans(t *testing.T) {
 	if warns, _ := env["warnings"].([]any); len(warns) != 1 || !strings.Contains(warns[0].(string), "item plans live on their issues") {
 		t.Errorf("warnings: %v", env["warnings"])
 	}
-	if code, _, _ := issueRun(t, root, "plan", "rm", "M02-S09"); code != 0 {
+	if code, _, _ := issueRunWith(t, deps, root, "plan", "rm", "M02-S09"); code != 0 {
 		t.Errorf("rm: %d", code)
 	}
-	if code, _, _ := issueRun(t, root, "plan", "rm", "M02-S09"); code != 3 {
+	if code, _, _ := issueRunWith(t, deps, root, "plan", "rm", "M02-S09"); code != 3 {
 		t.Errorf("second rm: %d", code)
 	}
 }

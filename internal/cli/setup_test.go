@@ -18,11 +18,10 @@ func setupRun(t *testing.T, dir, stdin string, tty bool, args ...string) (int, s
 	t.Helper()
 	wd, _ := os.Getwd()
 	t.Cleanup(func() { os.Chdir(wd) })
-	saved := setupIsTTY
-	setupIsTTY = func(io.Reader) bool { return tty }
-	t.Cleanup(func() { setupIsTTY = saved })
+	d := testDeps()
+	d.SetupIsTTY = func(io.Reader) bool { return tty }
 	var so, se bytes.Buffer
-	code := Main(append([]string{"-C", dir, "setup"}, args...), strings.NewReader(stdin), &so, &se)
+	code := mainWith(d, append([]string{"-C", dir, "setup"}, args...), strings.NewReader(stdin), &so, &se)
 	return code, so.String(), se.String()
 }
 
@@ -207,7 +206,7 @@ func TestSetupIsTTYRejectsNullAndPipes(t *testing.T) {
 	defer r.Close()
 	defer w.Close()
 	for name, in := range map[string]io.Reader{"/dev/null": null, "pipe": r, "reader": strings.NewReader("")} {
-		if setupIsTTY(in) {
+		if testDeps().SetupIsTTY(in) {
 			t.Errorf("%s counted as a terminal", name)
 		}
 	}

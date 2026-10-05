@@ -14,15 +14,14 @@ import (
 	"github.com/l4ci/rota/internal/round"
 )
 
-// reapEnv builds the round environment reap reads its live set from and the
-// host it may close tabs on. Tests swap it for fakes.
-var reapEnv = defaultReapEnv
+// Deps.ReapEnv builds the round environment reap reads its live set from and
+// the host it may close tabs on. Tests swap it for fakes.
 
 // defaultReapEnv is the round's environment with the forge dropped (reap
 // proves "merged" from git alone and never asks a forge). ROTA_TEST_REAP_HOST
 // replaces the host entirely with a fixture file (a test hook, not part of
 // the CLI); an unreadable fixture is an unavailable host.
-func defaultReapEnv(ctx context.Context, root string) (round.Env, reap.HostOps) {
+func defaultReapEnv(ctx context.Context, root string, roundEnv func(context.Context, string) round.Env) (round.Env, reap.HostOps) {
 	if path := os.Getenv("ROTA_TEST_REAP_HOST"); path != "" {
 		e := roundEnv(ctx, root)
 		e.Forge, e.ForgeErr = nil, "not used by reap"
@@ -147,7 +146,7 @@ func reapVerb(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		ctx := c.Context()
-		env, ops := reapEnv(ctx, root)
+		env, ops := c.deps().ReapEnv(ctx, root)
 		var agents []host.Agent
 		if snap := env.Snapshot; snap != nil {
 			env.Snapshot = func(ctx context.Context) ([]host.Agent, error) {

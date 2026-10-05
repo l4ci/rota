@@ -377,12 +377,26 @@ func a8Run(t *testing.T, root string, args ...string) (int, map[string]any, stri
 }
 
 // a8Project is an issue-mode project served by f, with a git repo for --since.
-func a8Project(t *testing.T, f *a8Forge) string {
+// It returns the deps carrying f as the tracker.
+func a8Project(t *testing.T, f *a8Forge) (string, *Deps) {
 	t.Helper()
 	root := newRepo(t, t.TempDir(), "proj", "main")
 	write(t, filepath.Join(root, ".rota", "config.json"), issuesConfig)
-	withTracker(t, f)
-	return root
+	return root, withTracker(t, f)
+}
+
+// a8RunIn runs a8Run against a fresh a8Project served by f.
+func a8RunIn(t *testing.T, f *a8Forge, args ...string) (int, map[string]any, string) {
+	t.Helper()
+	root, deps := a8Project(t, f)
+	return a8RunWith(t, deps, root, args...)
+}
+
+// trRunIn runs trRun against a fresh a8Project served by f.
+func trRunIn(t *testing.T, f *a8Forge, stdin string, args ...string) trOut {
+	t.Helper()
+	root, deps := a8Project(t, f)
+	return trRunWith(t, deps, root, stdin, args...)
 }
 
 func a8FileProject(t *testing.T) string {
@@ -394,8 +408,8 @@ func a8FileProject(t *testing.T) string {
 
 func TestReviewQueue(t *testing.T) {
 	f := a8Fixture()
-	root := a8Project(t, f)
-	code, data, msg := a8Run(t, root, "review", "queue")
+	root, deps := a8Project(t, f)
+	code, data, msg := a8RunWith(t, deps, root, "review", "queue")
 	if code != 0 {
 		t.Fatalf("exit %d: %s", code, msg)
 	}
@@ -417,12 +431,12 @@ func TestReviewQueue(t *testing.T) {
 		t.Fatalf("first %v", first)
 	}
 	// Key order is the contract's.
-	o := trRun(t, root, "", "--json", "review", "queue")
+	o := trRunWith(t, deps, root, "", "--json", "review", "queue")
 	if !strings.Contains(o.stdout, `"items": [{"id": "1", "type": "F", "number": 1, "title": "One", "prs": [{"number": 10, "title": "PR ten", "branch": "feat/ten"`) {
 		t.Fatalf("key order: %s", o.stdout)
 	}
 	// Text mode: one line per item.
-	if o := trRun(t, root, "", "review", "queue"); o.code != 0 || o.stdout != "F1 One\nB2 Two\n" {
+	if o := trRunWith(t, deps, root, "", "review", "queue"); o.code != 0 || o.stdout != "F1 One\nB2 Two\n" {
 		t.Fatalf("text %+v", o)
 	}
 	// One issue list and one PR list.
@@ -434,8 +448,8 @@ func TestReviewQueue(t *testing.T) {
 func TestReviewQueueEmpty(t *testing.T) {
 	f := a8Fixture()
 	f.Fake.Issues = f.Fake.Issues[2:]
-	root := a8Project(t, f)
-	code, data, _ := a8Run(t, root, "review", "queue")
+	root, deps := a8Project(t, f)
+	code, data, _ := a8RunWith(t, deps, root, "review", "queue")
 	if items, ok := data["items"].([]any); code != 0 || !ok || len(items) != 0 {
 		t.Fatalf("exit %d data %v", code, data)
 	}
@@ -451,16 +465,16 @@ func TestReviewQueueExits(t *testing.T) {
 	for kind, want := range map[tracker.Kind]int{tracker.KindUnavailable: 5, tracker.KindFailed: 5, tracker.KindRateLimited: 6} {
 		f := a8Fixture()
 		f.Fake.Fail = map[string]error{"list": &tracker.Error{Kind: kind, Code: 3, Message: "boom"}}
-		if code, _, _ := a8Run(t, a8Project(t, f), "review", "queue"); code != want {
+		if code, _, _ := a8RunIn(t, f, "review", "queue"); code != want {
 			t.Errorf("list failure %v: exit %d, want %d", kind, code, want)
 		}
 	}
 	f := a8Fixture()
 	f.Fake.Fail = map[string]error{"open_prs": &tracker.Error{Kind: tracker.KindUnavailable, Code: 3, Message: "boom"}}
-	if code, _, _ := a8Run(t, a8Project(t, f), "review", "queue"); code != 5 {
+	if code, _, _ := a8RunIn(t, f, "review", "queue"); code != 5 {
 		t.Errorf("PR list failure: exit %d", code)
 	}
-	if code, _, _ := a8Run(t, a8Project(t, a8Fixture()), "review", "queue", "extra"); code != 2 {
+	if code, _, _ := a8RunIn(t, a8Fixture(), "review", "queue", "extra"); code != 2 {
 		t.Errorf("extra argument: exit %d", code)
 	}
 }
@@ -497,9 +511,9 @@ func TestReviewScopeIssueMode(t *testing.T) {
 	write(t, filepath.Join(root, "a.txt"), "b\n")
 	gitT(t, root, "add", "a.txt")
 	gitT(t, root, "commit", "-q", "-m", "Add export", "-m", "Closes #9, closes #99. Mentions [B01].")
-	withTracker(t, issueFixture())
+	deps := withTracker(t, issueFixture())
 
-	o := trRun(t, root, "", "review", "scope", "--json")
+	o := trRunWith(t, deps, root, "", "review", "scope", "--json")
 	if o.code != 0 {
 		t.Fatalf("exit %d %s%s", o.code, o.stdout, o.stderr)
 	}
@@ -519,7 +533,7 @@ func TestReviewScopeIssueMode(t *testing.T) {
 		t.Errorf("intent #9: %v", i1)
 	}
 
-	b := trRun(t, root, "", "review", "brief")
+	b := trRunWith(t, deps, root, "", "review", "brief")
 	if b.code != 0 || !strings.Contains(b.stdout, "- #7 Add export — ") || strings.Contains(b.stdout, "[#7]") {
 		t.Errorf("brief: %d\n%s%s", b.code, b.stdout, b.stderr)
 	}

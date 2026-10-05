@@ -43,13 +43,11 @@ func (f *limFake) SendPane(_ context.Context, pane, text string) error {
 	return nil
 }
 
-func useLimFake(t *testing.T) *limFake {
-	t.Helper()
+func limDeps() (*Deps, *limFake) {
 	f := &limFake{panes: map[string]string{}}
-	saved := limitHost
-	t.Cleanup(func() { limitHost = saved })
-	limitHost = func(string) host.Host { return f }
-	return f
+	d := testDeps()
+	d.LimitHost = func(string) host.Host { return f }
+	return d, f
 }
 
 func limProject(t *testing.T) string {
@@ -110,17 +108,17 @@ func TestLimitStatusReadsTheLogBack(t *testing.T) {
 
 func TestLimitWatchRefusals(t *testing.T) {
 	dir := limProject(t)
-	useLimFake(t)
+	deps := testDeps()
 	for _, argv := range [][]string{{"limit", "watch", "x"}, {"limit", "watch", "--timeout", "-1"}, {"limit", "watch", "--settle", "0"}} {
-		if code, _, _ := rotaIn(t, dir, argv...); code != 2 {
+		if code, _, _ := rotaInWith(t, deps, dir, argv...); code != 2 {
 			t.Errorf("%v: exit %d, want 2", argv, code)
 		}
 	}
-	if code, _, _ := rotaIn(t, t.TempDir(), "limit", "watch"); code != 3 {
+	if code, _, _ := rotaInWith(t, deps, t.TempDir(), "limit", "watch"); code != 3 {
 		t.Errorf("outside a project: exit %d, want 3", code)
 	}
 	// no lease: this process holds nothing
-	code, out, _ := rotaIn(t, dir, "limit", "watch", "--json")
+	code, out, _ := rotaInWith(t, deps, dir, "limit", "watch", "--json")
 	if d := data(t, out); code != 4 || d["blockedBy"] != "no round" || d["changed"] != false {
 		t.Fatalf("no lease: %d %v", code, d)
 	}
@@ -130,7 +128,7 @@ func TestLimitWatchRefusals(t *testing.T) {
 	if _, _, _, err := env.Acquire(cd, dir, roundlease.Holder{PID: 1, Start: mustStart(env, 1)}, 2); err != nil {
 		t.Fatal(err)
 	}
-	if code, out, _ = rotaIn(t, dir, "limit", "watch", "--json"); code != 4 || data(t, out)["blockedBy"] != "no round" {
+	if code, out, _ = rotaInWith(t, deps, dir, "limit", "watch", "--json"); code != 4 || data(t, out)["blockedBy"] != "no round" {
 		t.Fatalf("foreign lease: %d %s", code, out)
 	}
 	// a live supervisor holds it
@@ -140,26 +138,26 @@ func TestLimitWatchRefusals(t *testing.T) {
 		t.Fatal(err)
 	}
 	keepalive.WriteState(keepalive.StatePath(cd), keepalive.State{PID: os.Getpid(), Status: keepalive.StatusRunning, StartedAt: "x", RunStartedAt: "x"})
-	if code, out, _ = rotaIn(t, dir, "limit", "watch", "--json"); code != 4 || data(t, out)["blockedBy"] != "supervised" {
+	if code, out, _ = rotaInWith(t, deps, dir, "limit", "watch", "--json"); code != 4 || data(t, out)["blockedBy"] != "supervised" {
 		t.Fatalf("supervised: %d %s", code, out)
 	}
 	// the supervisor is gone: the holder may watch, once
 	keepalive.WriteState(keepalive.StatePath(cd), keepalive.State{PID: 1 << 30, Status: keepalive.StatusRunning, StartedAt: "x", RunStartedAt: "x"})
 	limits.WriteWatching(cd, limits.Watching{PID: 1, StartedAt: "x", Mode: limits.ModeWatch})
 	t.Setenv("ROTA_TEST_HOLDER_PID", strconv.Itoa(os.Getpid()))
-	if code, out, _ = rotaIn(t, dir, "limit", "watch", "--json"); code != 4 || data(t, out)["blockedBy"] != "watching" {
+	if code, out, _ = rotaInWith(t, deps, dir, "limit", "watch", "--json"); code != 4 || data(t, out)["blockedBy"] != "watching" {
 		t.Fatalf("watching: %d %s", code, out)
 	}
 	// a bad key is exit 70
 	os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(`{"limits":{"mode":"wait"}}`), 0o644)
-	if code, _, _ = rotaIn(t, dir, "limit", "watch"); code != 70 {
+	if code, _, _ = rotaInWith(t, deps, dir, "limit", "watch"); code != 70 {
 		t.Errorf("bad limits.mode: exit %d, want 70", code)
 	}
 }
 
 func TestLimitWatchResumesAnEntryWhoseResetPassed(t *testing.T) {
 	dir := limProject(t)
-	f := useLimFake(t)
+	deps, f := limDeps()
 	t.Setenv("TMUX_PANE", "%9")
 	t.Setenv("ROTA_TEST_HOLDER_PID", strconv.Itoa(os.Getpid()))
 	t.Setenv("ROTA_TEST_NOW", "2026-10-03T16:00:00Z")
@@ -170,7 +168,7 @@ func TestLimitWatchResumesAnEntryWhoseResetPassed(t *testing.T) {
 	}
 	addLimit(t, dir, waitingEntry(time.Date(2026, 10, 3, 15, 0, 0, 0, time.UTC)))
 
-	code, out, errOut := rotaIn(t, dir, "limit", "watch", "--timeout", "1", "--settle", "0.05", "--json")
+	code, out, errOut := rotaInWith(t, deps, dir, "limit", "watch", "--timeout", "1", "--settle", "0.05", "--json")
 	if code != 0 {
 		t.Fatalf("exit %d: %s %s", code, out, errOut)
 	}
@@ -191,7 +189,7 @@ func TestLimitWatchResumesAnEntryWhoseResetPassed(t *testing.T) {
 
 func TestLimitWatchTextOnTheOrchestratorPane(t *testing.T) {
 	dir := limProject(t)
-	f := useLimFake(t)
+	deps, f := limDeps()
 	f.panes["%9"] = "work\nClaude usage limit reached. Your limit will reset at 5pm.\n"
 	t.Setenv("TMUX_PANE", "%9")
 	t.Setenv("ROTA_TEST_HOLDER_PID", strconv.Itoa(os.Getpid()))
@@ -201,7 +199,7 @@ func TestLimitWatchTextOnTheOrchestratorPane(t *testing.T) {
 	env := roundlease.DefaultEnv()
 	env.Acquire(cd, dir, env.Discover(os.Getpid(), os.Getenv), 1)
 
-	code, out, _ := rotaIn(t, dir, "limit", "watch", "--timeout", "0.5", "--settle", "0.05", "--json")
+	code, out, _ := rotaInWith(t, deps, dir, "limit", "watch", "--timeout", "0.5", "--settle", "0.05", "--json")
 	d := data(t, out)
 	if code != 0 || d["waiting"] != float64(1) {
 		t.Fatalf("exit %d: %v", code, d)

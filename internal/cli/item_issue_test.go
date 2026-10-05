@@ -1,9 +1,11 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/l4ci/rota/internal/backlog"
@@ -11,12 +13,36 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 )
 
-// withTracker swaps newTracker for one serving tr, for the test's duration.
-func withTracker(t *testing.T, tr backlog.Tracker) {
+// withTracker returns deps whose NewTracker serves tr.
+func withTracker(t *testing.T, tr backlog.Tracker) *Deps {
 	t.Helper()
-	old := newTracker
-	newTracker = func(context.Context, string, any) (backlog.Tracker, error) { return tr, nil }
-	t.Cleanup(func() { newTracker = old })
+	deps := testDeps()
+	deps.NewTracker = func(context.Context, string, any) (backlog.Tracker, error) { return tr, nil }
+	return deps
+}
+
+// rotaRunWith is rotaRun with the given deps.
+func rotaRunWith(t *testing.T, deps *Deps, args ...string) (int, map[string]any, string) {
+	t.Helper()
+	wd, _ := os.Getwd()
+	defer os.Chdir(wd)
+	var out, errb bytes.Buffer
+	code := mainWith(deps, args, strings.NewReader(""), &out, &errb)
+	var env map[string]any
+	if out.Len() > 0 {
+		v, err := jsonx.Decode(out.Bytes())
+		if err != nil {
+			t.Fatalf("stdout %q: %v", out.String(), err)
+		}
+		m := map[string]any{}
+		if o, ok := v.(*jsonx.Object); ok {
+			for _, k := range o.Keys() {
+				m[k], _ = o.Get(k)
+			}
+		}
+		env = m
+	}
+	return code, env, errb.String()
 }
 
 const issuesConfig = `{"backlog": {"backend": "issues"}}`
@@ -47,9 +73,9 @@ func issueGet(o *jsonx.Object, k string) any { v, _ := o.Get(k); return v }
 // id (the number) with the type letter beside it (contract rule 11).
 func TestIssueFieldGetCanonicalID(t *testing.T) {
 	root := trackerProject(t, issuesConfig)
-	withTracker(t, issueFixture())
+	deps := withTracker(t, issueFixture())
 	for _, ref := range []string{"7", "#7", "F7", "f7"} {
-		code, env, stderr := rotaRun(t, "--json", "-C", root, "item", "field", "get", ref, "--name", "title")
+		code, env, stderr := rotaRunWith(t, deps, "--json", "-C", root, "item", "field", "get", ref, "--name", "title")
 		if code != 0 {
 			t.Fatalf("%s: exit %d: %s", ref, code, stderr)
 		}
@@ -58,7 +84,7 @@ func TestIssueFieldGetCanonicalID(t *testing.T) {
 			t.Fatalf("%s: data %v", ref, d)
 		}
 	}
-	code, env, _ := rotaRun(t, "--json", "-C", root, "item", "field", "get", "7", "--name", "milestone")
+	code, env, _ := rotaRunWith(t, deps, "--json", "-C", root, "item", "field", "get", "7", "--name", "milestone")
 	if d := issueData(t, env); code != 0 || issueGet(d, "value") != "M02" {
 		t.Fatalf("milestone: exit %d, %v", code, d)
 	}
@@ -66,8 +92,8 @@ func TestIssueFieldGetCanonicalID(t *testing.T) {
 
 func TestIssueFieldListClosedItem(t *testing.T) {
 	root := trackerProject(t, issuesConfig)
-	withTracker(t, issueFixture())
-	code, env, stderr := rotaRun(t, "--json", "-C", root, "item", "field", "list", "#9")
+	deps := withTracker(t, issueFixture())
+	code, env, stderr := rotaRunWith(t, deps, "--json", "-C", root, "item", "field", "list", "#9")
 	if code != 0 {
 		t.Fatalf("exit %d: %s", code, stderr)
 	}
@@ -83,9 +109,9 @@ func TestIssueFieldListClosedItem(t *testing.T) {
 // not items: exit 3.
 func TestIssueRefsThatDoNotResolve(t *testing.T) {
 	root := trackerProject(t, issuesConfig)
-	withTracker(t, issueFixture())
+	deps := withTracker(t, issueFixture())
 	for _, ref := range []string{"99", "B7", "#3", "x7"} {
-		if code, _, _ := rotaRun(t, "--json", "-C", root, "item", "field", "get", ref, "--name", "title"); code != ExitResolution {
+		if code, _, _ := rotaRunWith(t, deps, "--json", "-C", root, "item", "field", "get", ref, "--name", "title"); code != ExitResolution {
 			t.Fatalf("%s: exit %d, want %d", ref, code, ExitResolution)
 		}
 	}
@@ -94,7 +120,7 @@ func TestIssueRefsThatDoNotResolve(t *testing.T) {
 // File-only verbs are refused under issues (4, backend) before the tracker is built.
 func TestIssueModeFileOnly(t *testing.T) {
 	root := trackerProject(t, issuesConfig)
-	withTracker(t, issueFixture())
+	deps := withTracker(t, issueFixture())
 	raw := filepath.Join(t.TempDir(), "bullet.md")
 	if err := os.WriteFile(raw, []byte("- **[B05] [P1] Raw.** x\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -105,13 +131,13 @@ func TestIssueModeFileOnly(t *testing.T) {
 		{"item", "create", "--kind", "bugs", "--raw-file", raw},
 		{"item", "field", "set", "7", "--name", "detail", "--value", "x"},
 	} {
-		code, env, _ := rotaRun(t, append([]string{"--json", "-C", root}, argv...)...)
+		code, env, _ := rotaRunWith(t, deps, append([]string{"--json", "-C", root}, argv...)...)
 		if code != ExitRefused {
 			t.Fatalf("%v: exit %d, want %d (%v)", argv, code, ExitRefused, env)
 		}
 	}
 	// the milestones counter is refused too, and the refusal names the backend
-	code, env, _ := rotaRun(t, "--json", "-C", root, "id", "next", "--kind", "milestones")
+	code, env, _ := rotaRunWith(t, deps, "--json", "-C", root, "id", "next", "--kind", "milestones")
 	if d := ddata(t, env); code != ExitRefused || d["blockedBy"] != "backend" {
 		t.Fatalf("id next --kind milestones: exit %d data %v", code, d)
 	}

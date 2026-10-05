@@ -52,6 +52,7 @@ type Ctx struct {
 	Stdin  io.Reader
 	Stdout io.Writer // for passthrough verbs only; others return Text
 	Stderr io.Writer
+	Deps   *Deps // what the verbs reach outside the process; nil means the real ones
 
 	ctx      context.Context // set by run: cancelled on SIGINT and SIGTERM
 	warnings []string
@@ -224,13 +225,13 @@ func Main(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		}
 		return ExitOK
 	}
-	return run(Tree(), args, stdin, stdout, stderr)
+	return run(Tree(), defaultDeps(), args, stdin, stdout, stderr)
 }
 
-func run(root *Command, args []string, stdin io.Reader, stdout, stderr io.Writer) (code int) {
+func run(root *Command, deps *Deps, args []string, stdin io.Reader, stdout, stderr io.Writer) (code int) {
 	// Until the arguments parse, an error answers in JSON if any token
 	// before "--" is exactly --json.
-	c := &Ctx{Path: "rota", Stdin: stdin, Stdout: stdout, Stderr: stderr, JSON: containsJSON(args), dashAt: -1}
+	c := &Ctx{Path: "rota", Stdin: stdin, Stdout: stdout, Stderr: stderr, Deps: deps, JSON: containsJSON(args), dashAt: -1}
 	sigCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	c.ctx = sigCtx

@@ -154,7 +154,7 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 				}
 			}
 		}
-		env := roundEnv(ctx, root)
+		env := c.deps().RoundEnv(ctx, root)
 		dispatch, _ := config.Lookup(cfg, "work.dispatch")
 		dispatchStr, _ := dispatch.(string)
 		st, err := env.Start(ctx, root, round.StartOpts{
@@ -179,7 +179,7 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 		}
 		// Start has just recorded the round's host (C8): rebuild the env so the
 		// drift count asks that host, not the guess made before it existed.
-		env = roundEnv(ctx, root)
+		env = c.deps().RoundEnv(ctx, root)
 		be, err := openBacklog(c, root, false, "")
 		if err != nil {
 			return backlogFail(err)
@@ -256,7 +256,7 @@ func roundCandidates(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return backlogFail(err)
 		}
-		env := roundEnv(ctx, root)
+		env := c.deps().RoundEnv(ctx, root)
 		cands, err := env.Candidates(ctx, root, be, round.CandidateOpts{Scope: sc, Slate: slate, Shared: set.SharedPaths})
 		if err != nil {
 			return backlogFail(err)
