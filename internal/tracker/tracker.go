@@ -315,6 +315,23 @@ func New(ctx context.Context, s Settings, provider, dir string, opts ...Option) 
 	return &GitLab{base: base{cli: c, closing: closingGL}, NotPlannedLabel: s.NotPlannedLabel}, nil
 }
 
+// NewFromConfig is New with the settings read from cfg (SettingsFromConfig),
+// the recipe every verb that holds a loaded config repeats.
+func NewFromConfig(ctx context.Context, cfg any, provider, dir string, opts ...Option) (Adapter, error) {
+	return New(ctx, SettingsFromConfig(cfg), provider, dir, opts...)
+}
+
+// NewFromConfigOrGitHub is NewFromConfig that falls back to github when the
+// provider cannot be resolved, e.g. an origin that is neither GitHub nor
+// GitLab. A fresh clone with no recognizable remote still opens a PR that way.
+func NewFromConfigOrGitHub(ctx context.Context, cfg any, provider, dir string, opts ...Option) (Adapter, error) {
+	a, err := NewFromConfig(ctx, cfg, provider, dir, opts...)
+	if err != nil {
+		return NewFromConfig(ctx, cfg, "github", dir, opts...)
+	}
+	return a, nil
+}
+
 // NewCLI returns the forge CLI runner for provider, resolved as in New.
 func NewCLI(ctx context.Context, s Settings, provider, dir string, opts ...Option) (*CLI, error) {
 	c := &CLI{Dir: dir, RetryWait: s.RetryWait}

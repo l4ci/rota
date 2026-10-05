@@ -67,12 +67,12 @@ func defaultDeps() *Deps {
 		BareSetup:        defaultBareSetup,
 	}
 	d.NewTracker = func(ctx context.Context, root string, cfg any) (backlog.Tracker, error) {
-		return tracker.New(ctx, tracker.SettingsFromConfig(cfg), "", root)
+		return d.forge(ctx, cfg, "", root)
 	}
 	d.MigrateTracker = func(ctx context.Context, root string, cfg any) (backlog.MigrateTracker, error) {
-		return tracker.New(ctx, tracker.SettingsFromConfig(cfg), "", root, d.TrackerOptions...)
+		return d.forge(ctx, cfg, "", root)
 	}
-	d.RoundEnv = func(ctx context.Context, root string) round.Env { return defaultRoundEnv(ctx, root, d.TrackerOptions) }
+	d.RoundEnv = func(ctx context.Context, root string) round.Env { return defaultRoundEnv(ctx, root, d) }
 	d.ReapEnv = func(ctx context.Context, root string) (round.Env, reap.HostOps) {
 		return defaultReapEnv(ctx, root, d.RoundEnv)
 	}
@@ -81,6 +81,17 @@ func defaultDeps() *Deps {
 
 // deps is the invocation's dependencies. A Ctx built by hand, without run,
 // gets the real ones.
+// forge is the one place a verb builds its forge adapter: settings from cfg,
+// provider resolution and the TrackerOptions a test swaps the executor through.
+func (d *Deps) forge(ctx context.Context, cfg any, provider, dir string) (tracker.Adapter, error) {
+	return tracker.NewFromConfig(ctx, cfg, provider, dir, d.TrackerOptions...)
+}
+
+// forgeOrGitHub is forge falling back to github for an unrecognized origin.
+func (d *Deps) forgeOrGitHub(ctx context.Context, cfg any, provider, dir string) (tracker.Adapter, error) {
+	return tracker.NewFromConfigOrGitHub(ctx, cfg, provider, dir, d.TrackerOptions...)
+}
+
 func (c *Ctx) deps() *Deps {
 	if c.Deps == nil {
 		c.Deps = defaultDeps()
