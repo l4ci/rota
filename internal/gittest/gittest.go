@@ -61,13 +61,29 @@ func TempDir(t testing.TB) string {
 	return dir
 }
 
-// Init creates dir if needed and runs `git init` there on branch.
+// Init creates dir if needed and runs `git init` there on branch, with
+// background housekeeping off (see Quiet).
 func Init(t testing.TB, dir, branch string) {
 	t.Helper()
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	Run(t, dir, "init", "-q", "-b", branch)
+	Quiet(t, dir)
+}
+
+// Quiet turns off the housekeeping git detaches after a commit or push
+// (gc --auto, maintenance --auto, receive's auto gc). That child outlives the
+// git call and can still be writing into .git when t.TempDir cleanup runs
+// ("unlinkat .git: directory not empty"). It is repo config, so it also covers
+// the git calls the code under test makes, and every worktree of the repo. Call
+// it on a bare repo made outside Init too.
+func Quiet(t testing.TB, dir string) {
+	t.Helper()
+	Run(t, dir, "config", "gc.auto", "0")
+	Run(t, dir, "config", "gc.autoDetach", "false")
+	Run(t, dir, "config", "maintenance.auto", "false")
+	Run(t, dir, "config", "receive.autogc", "false")
 }
 
 // Write writes content to rel under root, creating parent directories.
