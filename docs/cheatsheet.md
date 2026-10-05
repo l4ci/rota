@@ -42,6 +42,7 @@ What each `/rota-*` skill does, one line each. For details: [`reference/slash-co
 - **`rota worker`**: slot registry, worktrees, dispatch, polling and the merge gate (`rota worker gate`).
 - **`rota doctor`**: preflight for git, host, forge, accounts, hooks, skills and Codex.
 - **`rota reap`**: preview leftovers a round left behind; `--apply` removes those holding no work.
+- **`rota layout split` / `tabs`**: fold a round's herdr panes into one split view for a wide screen, or back into tabs for a narrow one; bare `rota layout` shows which.
 - **`rota keepalive run`**: restart the orchestrator in its pane when it exits with a fresh handoff.
 - **`rota limit watch`**: sleep until a usage limit resets, or switch accounts.
 - **`rota hook` / `rota statusline`**: Claude Code hooks and the statusline command that hand the orchestrator off before its context fills.

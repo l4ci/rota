@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -68,6 +69,7 @@ func TestMain(m *testing.M) {
 func testDeps() *Deps {
 	d := defaultDeps()
 	d.LimitHost = func(string) host.Host { return &limFake{} }
+	d.LayoutHost = func() (host.Layouter, error) { return nil, errors.New("herdr is not installed") }
 	return d
 }
 
