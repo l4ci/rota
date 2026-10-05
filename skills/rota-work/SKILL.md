@@ -36,7 +36,7 @@ Use it when the user describes a task, feature or list of improvements with enou
 - commits, no handoff: ship via `/rota-ship` (Recommended); resume; leave as-is.
 - no commits, no handoff: resume (Recommended); abandon; leave as-is.
 
-Resume continues on the existing branch. Abandon is `git branch -D <branch>` plus `rota status rm`, and removes that stream's handoff note. A note is deleted only when its stream is resumed or abandoned.
+Resume continues on the existing branch. For a stream with commits, read the task ledger (`references/task-ledger.md`) and carry only the unfinished tasks into Step 4; a handoff note's *Next planned step* never re-dispatches a task the ledger shows finished. Abandon is `git branch -D <branch>` plus `rota status rm`, and removes that stream's handoff note. A note is deleted only when its stream is resumed or abandoned.
 
 **2. Orient.** Run `rota backlog archive --days 5` (silent), `rota milestone active` and one `rota backlog ids --milestone <MID>` per active milestone, then `rota backlog list`. Print the list in full, every row and section: the table is the point of the mode and is exempt from length limits. Prefix it with `Active milestones: <ids and titles>` when there are any. Advisories, never blocking: for each ID in `rota backlog drift --json` print `<ID> looks shipped on <hash> but still open`, and suggest `rota proof add` then `rota item complete <ID> --commit <hash>` (or `--no-proof`), never auto-complete. Print `stale: map=N, knowledge=M, todo=K` from `rota backlog stale` (zero kinds dropped) and `empty-active: <MID>` for an active milestone with no open items. `rota backlog drift` is file-backend only; skip it on the issue backend.
 
@@ -94,9 +94,10 @@ rota status add <branch> --items <ID1>,<ID2>[,...] [--worktree <path>]
 
    > **REQUIRED — Register hits on consumed bullets.** After writing the briefs, apply *Hit-register after consumption* in `references/knowledge-consult.md`: one `rota knowledge hit --topic "<T>" --title "<first-line-of-bullet>"` per bullet that landed in a brief's `**Known gotchas:**`, all in one parallel batch. Bullets pruned before the briefs earn no credit. Silent on success.
 
-2. Identify discrete tasks: files to create or modify, what changes, acceptance criteria.
-3. **Absorb file collisions** before grouping: any two tasks whose modified-file sets intersect, and shared-symbol changes that disjoint file sets hide. Rules and the rename check in [`references/work-wave-planning.md`](references/work-wave-planning.md).
-4. Group into dependency waves: wave 1 is independent files (parallel); wave 2+ depends on earlier output.
+2. **Resuming** (a branch with commits past the base): apply the resume rule in [`references/task-ledger.md`](references/task-ledger.md) after decomposing, and plan only the unfinished tasks.
+3. Identify discrete tasks: files to create or modify, what changes, acceptance criteria.
+4. **Absorb file collisions** before grouping: any two tasks whose modified-file sets intersect, and shared-symbol changes that disjoint file sets hide. Rules and the rename check in [`references/work-wave-planning.md`](references/work-wave-planning.md).
+5. Group into dependency waves: wave 1 is independent files (parallel); wave 2+ depends on earlier output.
 
 ## Step 4.5 — Umbrella Pre-Flight
 
@@ -190,9 +191,10 @@ One commit per task, sequential, in dispatch order, staging only that task's fil
 
 ```bash
 git add <task-N-files>
-git commit -m "<suggested-message-from-task-N-brief>"
+git commit -m "<suggested-message-from-task-N-brief>" -m "Task: <key>/<N>"
 ```
 
+- Every task commit ends with the `Task: <key>/<N>` trailer (the task ledger, [`references/task-ledger.md`](references/task-ledger.md)); a resumed session reads these to skip finished tasks.
 - Stage exactly the files named in the task's brief. Never `git add -A` or `git add .`: sweeping in another worker's changes breaks atomicity.
 - Use the brief's suggested message verbatim, adjusted only if a FAIL→re-dispatch loop changed what landed.
 - **Same-file carve-out.** Two parallel workers editing different ranges of one file get ONE commit naming both task IDs; granularity lives in the message.
@@ -287,6 +289,7 @@ One line, only when `references/post-cycle-trigger-gate.md` fires: *"Run `/rota-
 
 | Reference | Purpose |
 |-----------|---------|
+| [`task-ledger.md`](references/task-ledger.md) | `Task:` commit trailer and the resume rule that skips finished tasks. |
 | [`work-preview.md`](references/work-preview.md) | `--preview` procedure and peek template. |
 | [`work-wave-planning.md`](references/work-wave-planning.md) | File and shared-symbol collisions, brief rules, verifying a completion. |
 | [`work-toolchain-siblings.md`](references/work-toolchain-siblings.md) | Tool-generated sibling patterns and the sweep commit. |
