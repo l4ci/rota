@@ -191,7 +191,7 @@ func keepaliveRun(fs *flag.FlagSet) RunFunc {
 			Holder:   le.Discover(os.Getpid(), os.Getenv),
 			Handoff:  func() keepalive.HandoffRead { return readHandoff(handoffFile(root, cfg)) },
 			Escalate: escalateFunc(ctx, c, root),
-			Notify:   func(title, body string) { keepaliveNotify(context.WithoutCancel(ctx), c, cfg, title, body) },
+			Notify:   func(title, body string) { keepaliveNotify(context.WithoutCancel(ctx), c, root, title, body) },
 		}
 		gap := keepaliveGap(set.SwitchOnUsage)
 		env.Gap = gap
@@ -323,10 +323,10 @@ func usageRecord(root string, now func() time.Time) func(keepalive.Decision) err
 	}
 }
 
-// keepaliveNotify raises the herdr notification alone, when the host is
-// herdr: work.dispatch is herdr or the process runs inside herdr.
-func keepaliveNotify(ctx context.Context, c *Ctx, cfg any, title, body string) {
-	if config.Dispatch(cfg) != "herdr" && os.Getenv("HERDR_ENV") != "1" {
+// keepaliveNotify raises the herdr notification alone, when the round's host
+// is herdr.
+func keepaliveNotify(ctx context.Context, c *Ctx, root string, title, body string) {
+	if worker.ResolveHost(root, nil, nil) != "herdr" {
 		return
 	}
 	var h host.Host

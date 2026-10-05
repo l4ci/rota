@@ -159,7 +159,7 @@ func (e Env) Start(ctx context.Context, root string, o StartOpts) (Started, erro
 		if rec := worker.Str(doc, "host"); rec != "" && out == roundlease.Renewed {
 			res.Host = rec
 		} else {
-			res.Host = host.ResolveRound(o.Dispatch, o.Getenv, o.LookPath)
+			res.Host = host.Resolve("", o.Dispatch, o.Getenv, o.LookPath)
 			doc.Set("host", res.Host)
 		}
 		doc.Set("scope", scope)
