@@ -19,6 +19,7 @@ import (
 
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/repos"
+	"github.com/l4ci/rota/internal/rotatree"
 )
 
 // Command is a group (Subs) or a verb (Verb) in the rota tree.
@@ -86,7 +87,7 @@ func (c *Ctx) Root() (string, error) {
 		return "", err
 	}
 	for {
-		if fi, err := os.Stat(filepath.Join(dir, ".rota")); err == nil && fi.IsDir() {
+		if rotatree.Exists(dir) {
 			return dir, nil
 		}
 		parent := filepath.Dir(dir)

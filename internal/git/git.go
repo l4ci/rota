@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/proc"
+	"github.com/l4ci/rota/internal/rotatree"
 )
 
 // Timeout bounds one git call.
@@ -240,7 +241,7 @@ func AtUmbrellaRoot(dir string, registered func() bool) bool {
 	if fi, err := os.Stat(filepath.Join(dir, ".git")); err == nil && fi.IsDir() {
 		return false
 	}
-	if fi, err := os.Stat(filepath.Join(dir, ".rota")); err != nil || !fi.IsDir() {
+	if !rotatree.Exists(dir) {
 		return false
 	}
 	return registered()
@@ -264,7 +265,7 @@ func FindRoot(start string, registered func(root string) []string) (string, erro
 	}
 	var cands []string
 	for {
-		if fi, err := os.Stat(filepath.Join(dir, ".rota")); err == nil && fi.IsDir() {
+		if rotatree.Exists(dir) {
 			cands = append(cands, dir)
 		}
 		parent := filepath.Dir(dir)

@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 
@@ -13,6 +12,7 @@ import (
 	"github.com/l4ci/rota/internal/initproj"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/projects"
+	"github.com/l4ci/rota/internal/rotatree"
 )
 
 // The `rota init` group (A9): `init` seeds .rota/, `init check` is the preflight.
@@ -175,7 +175,7 @@ func initConfig(c *Ctx, root string, freshConfig bool) (initConfigResult, error)
 	}
 	r.filled = filled
 	if v := c.deps().InstalledVersion(); v != "" {
-		if config.StampedVersion(config.Load(filepath.Join(root, ".rota", "config.json"))) != v {
+		if config.StampedVersion(config.Load(rotatree.Config(root))) != v {
 			if _, err := config.Set(root, config.VersionKey, v); err != nil {
 				return r, err
 			}

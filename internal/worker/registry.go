@@ -8,9 +8,9 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/rotatree"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
@@ -28,7 +28,7 @@ import (
 func fail(exit int, msg string) *exitcode.Error { return &exitcode.Error{Exit: exit, Message: msg} }
 
 // RegistryPath is the registry file under the project root.
-func RegistryPath(root string) string { return filepath.Join(root, ".rota", "workers.json") }
+func RegistryPath(root string) string { return rotatree.Workers(root) }
 
 // Registry is a loaded .rota/workers.json. The document stays private: callers
 // read it through the accessors and write it through a Doc under Update.

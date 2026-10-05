@@ -7,13 +7,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"regexp"
 	"strconv"
 
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/pystr"
+	"github.com/l4ci/rota/internal/rotatree"
 )
 
 var prefixes = map[string]string{"bugs": "B", "features": "F", "tasks": "T", "milestones": "M"}
@@ -28,7 +28,7 @@ func Next(root, kind string) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("unknown counter kind %q (want bugs|features|tasks|milestones)", kind)
 	}
-	rota := func(name string) string { return filepath.Join(root, ".rota", name) }
+	rota := func(name string) string { return rotatree.File(root, name) }
 	pat := regexp.MustCompile(`\[` + prefix + `(\p{Nd}+)\]`)
 	highest := 0
 	for _, name := range []string{"BACKLOG.md", "ARCHIVE.md"} {
