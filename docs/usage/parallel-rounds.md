@@ -288,8 +288,10 @@ was, so it is safe in the middle of a round.
 - **herdr only.** A round on tmux or solo is skipped with `host is tmux: layout needs herdr`.
 
 A worker's recorded tab id is the tab it started in, and after a move that tab may be gone. `rota round
-status` matches the agent by its worktree and the worker verbs address it by agent name, so both keep
-working. Ending a worker that sits in the split view stops its agent but leaves its pane open as a shell.
+reconcile` and `rota round status` still find the live agent: they match it by the recorded tab, then by its
+herdr agent name (stable across moves), then by its worktree, so a moved worker is not reported as a
+`dead-tab`. The worker verbs address it by agent name. Ending a worker that sits in the split view stops its
+agent but leaves its pane open as a shell.
 
 ## Autopilot
 

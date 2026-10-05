@@ -300,7 +300,7 @@ func (e Env) Health(ctx context.Context, root string, s *worker.Slot, now time.T
 	if e.Snapshot != nil {
 		if agents, err := e.Snapshot(ctx); err == nil {
 			h.Known = true
-			h.Alive = matchAgent(agents, tab, wt) >= 0
+			h.Alive = matchAgent(agents, name, tab, wt) >= 0
 		}
 	}
 	if s.State() == "dead" || (h.Known && !h.Alive && tab != "") {

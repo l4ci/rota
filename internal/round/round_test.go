@@ -404,3 +404,18 @@ func TestParkedSlotAgentsAreAllUnclaimed(t *testing.T) {
 func rawSlot(root, name string, fn func(o *jsonx.Object)) error {
 	return editSlot(root, name, func(s *worker.Slot) error { fn(s.Raw()); return nil })
 }
+
+// A pane `rota layout` moved lives in another tab and may be in another cwd
+// view; its recorded tab is gone but the agent name is stable.
+func TestMatchAgentFindsAMovedPaneByAgentName(t *testing.T) {
+	agents := []host.Agent{
+		{Tab: "w2:t1", Name: "rota-kit-w2-t3q", Cwd: "/elsewhere"},
+		{Tab: "w2:t1", Name: "rota-dana-w2-t3n", Cwd: "/elsewhere"},
+	}
+	if i := matchAgent(agents, "kit", "w2:t3q", "/no/such/wt"); i != 0 {
+		t.Errorf("kit's agent is found by name after its tab closed: %d", i)
+	}
+	if i := matchAgent(agents, "nia", "w2:t3r", "/no/such/wt"); i != -1 {
+		t.Errorf("a slot with no agent stays dead: %d", i)
+	}
+}
