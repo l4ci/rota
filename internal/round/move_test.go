@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/gittest"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -159,6 +160,7 @@ func newMoveFx(t *testing.T) *moveFx {
 	sh(t, f.root, "commit", "-q", "-m", "files")
 	f.origin = filepath.Join(t.TempDir(), "origin.git")
 	sh(t, f.root, "init", "-q", "--bare", f.origin)
+	gittest.Quiet(t, f.origin)
 	sh(t, f.root, "remote", "add", "origin", f.origin)
 	sh(t, f.root, "push", "-q", "origin", "main")
 	milestoneDoc(t, f.root, "M01", "active")
