@@ -88,7 +88,7 @@ exit codes and repo scope: [verb contract](../design/contract/README.md).
 
 | Usage | What it does |
 |---|---|
-| `rota item create --kind <bugs\|features\|tasks> --title <text> [--tag <tag>] [--desc <text>] [--body-file <path\|->] [--related <text>] [--milestone <text>] [--repos <csv>] [--subsystem <text>] [--captured <YYYY-MM-DD>] \| --kind <kind> --raw-file <path\|->` | capture one item |
+| `rota item create --kind <bugs\|features\|tasks> --title <text> [--tag <tag>] [--desc <text>] [--body-file <path\|->] [--depends-on <refs>] [--related <text>] [--milestone <text>] [--repos <csv>] [--subsystem <text>] [--captured <YYYY-MM-DD>] \| --kind <kind> --raw-file <path\|->` | capture one item |
 | `rota item show <ID>` | status block of an issue-mode item |
 | `rota item claim <ID> --as <claim-id>` | take an item so two agents never work it at once |
 | `rota item release <ID> --as <claim-id>` | give a claimed item back |
