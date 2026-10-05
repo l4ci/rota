@@ -3,20 +3,18 @@ package design
 import (
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"github.com/l4ci/rota/internal/artifact"
+	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/frontmatter"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/section"
 )
 
-var fileIDRe = regexp.MustCompile(`^[BFT]\d{2,}$`)
-
-// ValidID reports whether id is a file-mode design ID: [BFT]\d{2,}.
-func ValidID(id string) bool { return fileIDRe.MatchString(id) }
+// ValidID reports whether id is a file-mode design ID.
+func ValidID(id string) bool { return backlog.ValidID(id, backlog.FileIDDigits) }
 
 // files keeps each design in .rota/designs/<ID>.md under root.
 type files struct{ root string }
@@ -24,7 +22,7 @@ type files struct{ root string }
 // Files is the file-mode store.
 func Files(root string) Store { return files{root} }
 
-func (files) Digits() int { return 2 }
+func (files) Digits() int { return backlog.FileIDDigits }
 
 func path(root, id string) string { return filepath.Join(root, ".rota", "designs", id+".md") }
 

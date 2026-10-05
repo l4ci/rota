@@ -6,14 +6,11 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"regexp"
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/fsio"
 )
-
-var idRe = regexp.MustCompile(`^[BFT]\d+$`)
 
 // files keeps the rows in the item's detail file,
 // .rota/<bugs|features|tasks>/<ID>.md under root.
@@ -22,19 +19,16 @@ type files struct{ root string }
 // Files is the file-mode store.
 func Files(root string) Store { return files{root} }
 
-// kindOf is the detail directory for a valid file-mode ID.
-func kindOf(id string) (kind string, err error) {
-	if !idRe.MatchString(id) {
+// detailFile is the detail file of a valid file-mode ID.
+func detailFile(root, id string) (string, error) {
+	if !backlog.ValidID(id, backlog.FileIDDigits) {
 		return "", exitcode.Errf(exitcode.ExitUsage, "ID must look like B07, F12 or T03, got %q", id)
 	}
-	t, _ := backlog.TypeByLetter(id[:1])
-	return t.Kind, nil
+	return backlog.DetailPath(root, id), nil
 }
 
-func detailPath(root, kind, id string) string { return filepath.Join(root, ".rota", kind, id+".md") }
-
 func (s files) Update(id string, fn func(string) (string, bool, error)) error {
-	kind, err := kindOf(id)
+	path, err := detailFile(s.root, id)
 	if err != nil {
 		return err
 	}
@@ -47,7 +41,6 @@ func (s files) Update(id string, fn func(string) (string, bool, error)) error {
 	if title == "" {
 		title = id
 	}
-	path := detailPath(s.root, kind, id)
 	return fsio.Locked(path, fsio.LockTimeout, func() error {
 		content, rerr := fsio.ReadText(path)
 		if rerr != nil && !errors.Is(rerr, fs.ErrNotExist) {
@@ -69,11 +62,10 @@ func (s files) Update(id string, fn func(string) (string, bool, error)) error {
 
 // Read: a missing detail file is no text, as in the old helper.
 func (s files) Read(id string) (string, bool, error) {
-	kind, err := kindOf(id)
+	path, err := detailFile(s.root, id)
 	if err != nil {
 		return "", false, err
 	}
-	path := detailPath(s.root, kind, id)
 	content, rerr := fsio.ReadText(path)
 	if errors.Is(rerr, fs.ErrNotExist) {
 		return "", false, nil

@@ -91,7 +91,7 @@ type migrator struct {
 }
 
 var (
-	migItemKey = regexp.MustCompile(`\A[` + backlog.ItemLetters + `]\p{Nd}+\z`)
+	migItemKey = regexp.MustCompile(`\A` + backlog.IDPattern(1) + `\z`)
 )
 
 // frozenPrefix starts the banner a finished migration puts on BACKLOG.md.

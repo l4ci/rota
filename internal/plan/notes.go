@@ -23,11 +23,11 @@ type SliceStore interface {
 }
 
 var (
-	sliceKeyRe = regexp.MustCompile(`^(M\d{2,})-(S\d+)$`)
-	itemKeyRe  = regexp.MustCompile(`^M\d{2,}-([BFT]\d+)$`)
+	sliceKeyRe = regexp.MustCompile(`^(` + backlog.MilestonePattern + `)-(` + backlog.SlicePattern + `)$`)
+	itemKeyRe  = regexp.MustCompile(`^` + backlog.MilestonePattern + `-(` + backlog.IDPattern(1) + `)$`)
 	// issueDesignRe is --design in issue mode: an issue number ("3") or the
 	// lettered form with any digit count ("F3").
-	issueDesignRe = regexp.MustCompile(`^[BFT]?\d+$`)
+	issueDesignRe = regexp.MustCompile(`^[` + backlog.ItemLetters + `]?\p{Nd}+$`)
 )
 
 // notes keeps item plans as the `plan` note of the item's issue (the

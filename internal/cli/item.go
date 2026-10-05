@@ -177,20 +177,13 @@ func backlogFailRead(err error) (Result, error) {
 // before anything is written, and "F7" or "#7" both answer "7" and "F".
 func resolveItem(be backlog.Backend, ref string) (id, typ string, err error) {
 	if be.Name() != "issues" {
-		return ref, itemType(ref), nil
+		return ref, backlog.ItemType(ref), nil
 	}
 	it, err := be.Get(ref)
 	if err != nil {
 		return "", "", err
 	}
 	return it.ID, it.Type, nil
-}
-
-func itemType(id string) string {
-	if id != "" && strings.Contains(backlog.ItemLetters, id[:1]) {
-		return id[:1]
-	}
-	return ""
 }
 
 func todayDate() string { return time.Now().Format("2006-01-02") }
@@ -258,7 +251,7 @@ func hasString(xs []string, x string) bool {
 var (
 	itemKinds    = []string{"bugs", "features", "tasks"}
 	itemSections = map[string]string{"bugs": "## Bugs", "features": "## Features", "tasks": "## Tasks"}
-	bulletID     = regexp.MustCompile(`\*\*\[([A-Z]\p{Nd}+)\]`)
+	bulletID     = regexp.MustCompile(`\*\*\[(` + backlog.IDPattern(1) + `)\]`)
 )
 
 func itemCreate(fs *flag.FlagSet) RunFunc {

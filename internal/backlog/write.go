@@ -88,11 +88,11 @@ func (f *File) proofRows(id string) (int, error) {
 	if f.CountProof == nil {
 		return 0, errors.New("backlog: no proof counter injected")
 	}
-	dir := detailDir(id)
-	if dir == "" {
+	path := DetailPath(f.Root, id)
+	if path == "" {
 		return 0, nil
 	}
-	content, err := fsio.ReadText(filepath.Join(f.Root, ".rota", dir, id+".md"))
+	content, err := fsio.ReadText(path)
 	if err != nil || content == "" {
 		return 0, nil
 	}
