@@ -609,7 +609,7 @@ func shipPlan(short, subject, base string, postCount int, ids []string, apply bo
 	fmt.Fprintf(&b, "Branch:   deleted by rota ship merge; rerun `git branch <name> %s^2` to keep the work\n", short)
 	b.WriteString("Status:   no active entry to clear (cycle already removed it)\n")
 	b.WriteString("Handoff:  gitignored — not restorable\n")
-	b.WriteString("Plans:    gitignored — not restorable\n")
+	b.WriteString("Plans:    removed on ship for milestone items — not restored\n")
 	if !apply {
 		b.WriteString("\nRe-run with --apply to apply.\n")
 	}
