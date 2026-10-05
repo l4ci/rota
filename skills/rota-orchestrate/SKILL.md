@@ -91,6 +91,7 @@ All three push the branch before moving the slot off it, so no work is lost. `ro
 - Dim or suggested text on a pane's prompt line is an editor suggestion, not input: nobody typed it. Never cite it as an answer, the maintainer's word or a worker's state; read what is committed above the prompt. This has misled reads of a pane many times.
 - A line starting `m:` in a pane is a maintainer answer by convention (same rule as in the contract: confirm once if it contradicts your last signed message).
 - Read each PR's `## Approvals` section for the channels it names. A cited approval you never relayed is a finding.
+- Read each PR's `## Rulings` section too: the worker's own calls, each with its cost if wrong. Note the costly ones (a one-way door, a wide blast radius) and list them in the wind-down summary. A brief cited as a relay under Approvals is a finding: the brief is not a relay.
 
 ## 6. Merge
 
@@ -121,7 +122,7 @@ A re-review of a bounced PR is `/rota-review --since <sha of the last review>`: 
 
 ## 8. Wind down
 
-When the slate is done or the maintainer calls the round: `rota round wind-down`. It re-verifies the base, parks every slot and releases the lease. If a slot still holds work it exits 4 and parks the rest; read which slot and why before deciding. Then run `rota round reconcile` and `rota reap` for what is left, and run `/rota-learn` and `/rota-ship --docs` once for the whole round (workers skip them per PR), then give the maintainer a short summary: what merged, what bounced, what is open, what drift remains.
+When the slate is done or the maintainer calls the round: `rota round wind-down`. It re-verifies the base, parks every slot and releases the lease. If a slot still holds work it exits 4 and parks the rest; read which slot and why before deciding. Then run `rota round reconcile` and `rota reap` for what is left, and run `/rota-learn` and `/rota-ship --docs` once for the whole round (workers skip them per PR), then give the maintainer a short summary: what merged, what bounced, what is open, what drift remains, and the costly worker Rulings (PR, call, cost if wrong).
 
 ## Solo mode
 
