@@ -267,6 +267,10 @@ Done — merged `rota/fix-timer-badge` into main.
 Commit: a1b2c3d
 ```
 
+## Step 12 — After-Work QA
+
+Read `rota config show qa.afterWork` (default `false`). `false` → skip silently. `true` → check the touched files against the `Watch globs` of the `.rota/qa/*.md` strategies (umbrella: `.rota/qa/<REPO>.md`); on a match, invoke `Skill(skill="rota-qa", args="run")` for the item just finished (umbrella: `args="run --repo $REPO"`). No strategy or no match → skip silently. The verdict is advisory here; route nothing on it. Skip this step in a round worker: the worker contract (`references/worker-contract.md`) limits workers to targeted verification and a PR, and QA is the orchestrator's or `/rota-ship`'s call (`ship.qa`).
+
 ## Step 13 — After the Cycle
 
 One line, only when `references/post-cycle-trigger-gate.md` fires: *"Run `/rota-learn` to save what this cycle taught; `/rota-decide`, `/rota-ship --docs` and `/rota-refactor` are there when you want them."* Never auto-invoke any of them. If the cycle touched files in a `.rota/map/<name>.md` entry's `Key files / dirs`, bump its `touched:` and run `rota map index`.
