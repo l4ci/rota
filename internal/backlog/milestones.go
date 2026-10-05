@@ -12,6 +12,7 @@ import (
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/frontmatter"
+	"github.com/l4ci/rota/internal/marker"
 	ms "github.com/l4ci/rota/internal/milestone"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/tracker"
@@ -417,22 +418,21 @@ func (b *Issues) slicePartsOf(n int) (map[string][]slicePart, error) {
 	}
 	parts := map[string][]slicePart{}
 	for _, c := range comments {
-		body := strings.ReplaceAll(c.Body, "\r\n", "\n")
-		m := markerRe.FindStringSubmatchIndex(body)
-		if m == nil {
+		nt, ok := marker.ParseNote(c.Body)
+		if !ok {
 			continue
 		}
-		sm := sliceUnitRe.FindStringSubmatch(body[m[2]:m[3]])
+		sm := sliceUnitRe.FindStringSubmatch(nt.Kind)
 		if sm == nil {
 			continue
 		}
 		idx := 1
-		if m[4] >= 0 {
-			if idx, err = Atoi(body[m[4]:m[5]]); err != nil {
+		if nt.Part != "" {
+			if idx, err = Atoi(nt.Part); err != nil {
 				return nil, err
 			}
 		}
-		parts[sm[1]] = append(parts[sm[1]], slicePart{idx, c.ID, body[m[1]:]})
+		parts[sm[1]] = append(parts[sm[1]], slicePart{idx, c.ID, nt.Rest})
 	}
 	return parts, nil
 }

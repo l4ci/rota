@@ -15,7 +15,6 @@ import (
 	"github.com/l4ci/rota/internal/config"
 	gatepath "github.com/l4ci/rota/internal/gate"
 	"github.com/l4ci/rota/internal/git"
-	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
@@ -554,17 +553,6 @@ func (g *gate) prBody() (string, error) {
 	return info.Body, err
 }
 
-var (
-	reApprovalsHead = regexp.MustCompile(`(?i)^##\s+Approvals\s*$`)
-	reH2            = regexp.MustCompile(`^##(\s|$)`)
-	reSpaces        = regexp.MustCompile(`\s+`)
-	reRelayCite     = regexp.MustCompile(`orchestrator relay(?:\s+round\s+(\d+))?`)
-)
-
-func norm(s string) string {
-	return strings.TrimSpace(reSpaces.ReplaceAllString(strings.ToLower(s), " "))
-}
-
 // checkProvenance cross-checks the PR body's approvals against the slot's
 // relay log. It returns the PROVENANCE-FAIL message, or a check-broke message
 // when the PR body cannot be read; both "" for pass or skip.
@@ -586,76 +574,10 @@ func (g *gate) checkProvenance() (failMsg, brokeMsg string) {
 		}
 		return "", fmt.Sprintf("could not read the body of %s to check its approvals: %v", g.pr, err)
 	}
-	var relays []*jsonx.Object
-	for _, r := range g.target.relays {
-		if o, ok := r.(*jsonx.Object); ok {
-			relays = append(relays, o)
-		}
-	}
-	section, found := approvalsSection(body)
-	if !found {
-		if len(relays) > 0 {
-			return fmt.Sprintf("PROVENANCE-FAIL %s: %d relay(s) logged but the PR body has no ## Approvals section", g.o.Slot, len(relays)), ""
-		}
-		return "", ""
-	}
-	rounds := map[int]bool{}
-	for _, r := range relays {
-		rv, _ := r.Get("round")
-		if i, ok := intOf(rv); ok {
-			rounds[i] = true
-		}
-	}
-	var problems []string
-	for _, line := range splitLines(section) {
-		if strings.TrimSpace(line) == "" {
-			continue
-		}
-		low := norm(line)
-		if m := reRelayCite.FindStringSubmatch(low); m != nil {
-			if n := m[1]; n != "" {
-				i, _ := strconv.Atoi(n)
-				if !rounds[i] {
-					problems = append(problems, fmt.Sprintf("cites an orchestrator relay for round %s but none is logged: %s", n, strings.TrimSpace(line)))
-				}
-			} else if len(relays) == 0 {
-				problems = append(problems, fmt.Sprintf("cites an orchestrator relay but none is logged: %s", strings.TrimSpace(line)))
-			}
-		} else if strings.Contains(low, "maintainer") {
-			for _, r := range relays {
-				summary := norm(jsonx.Str(r, "summary"))
-				if len([]rune(summary)) >= 12 && (strings.Contains(low, summary) || strings.Contains(summary, low)) {
-					rv, _ := r.Get("round")
-					problems = append(problems, fmt.Sprintf("cites the maintainer for text the orchestrator relayed (round %v): %s", rv, strings.TrimSpace(line)))
-					break
-				}
-			}
-		}
-	}
-	if len(problems) > 0 {
-		return fmt.Sprintf("PROVENANCE-FAIL %s: %s", g.o.Slot, strings.Join(problems, "; ")), ""
+	if msg := checkApprovals(body, g.target.relays); msg != "" {
+		return fmt.Sprintf("PROVENANCE-FAIL %s: %s", g.o.Slot, msg), ""
 	}
 	return "", ""
-}
-
-// approvalsSection is the body of the `## Approvals` section: the lines after
-// the heading up to the next `## ` heading.
-func approvalsSection(body string) (string, bool) {
-	lines := strings.Split(body, "\n")
-	for i, l := range lines {
-		if !reApprovalsHead.MatchString(l) {
-			continue
-		}
-		end := len(lines)
-		for j := i + 1; j < len(lines); j++ {
-			if reH2.MatchString(lines[j]) {
-				end = j
-				break
-			}
-		}
-		return strings.Join(lines[i+1:end], "\n"), true
-	}
-	return "", false
 }
 
 // mergeRemote merges through the forge and confirms it landed. done is true

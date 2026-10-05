@@ -13,6 +13,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/marker"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/tracker"
 )
@@ -496,12 +497,8 @@ func (b *Issues) Detail(ref string) (string, bool, error) {
 }
 
 var (
-	fieldsBlockRe = regexp.MustCompile(`(?s)\n*<!-- (?:rota|hv):fields\n(.*?)\n?-->[ \t]*\n*\z`)
-	fieldLineRe   = regexp.MustCompile(`\A([A-Za-z]+):[ \t]*(.*?)[ \t]*\z`)
+	fieldLineRe = regexp.MustCompile(`\A([A-Za-z]+):[ \t]*(.*?)[ \t]*\z`)
 )
-
-// fieldsOpen opens the trailing fields comment of an issue body.
-const fieldsOpen = "<!-- rota:fields"
 
 // ParseFieldsBlock splits an issue body into its text and the trailing
 // "<!-- rota:fields ... -->" comment (or the legacy hv:fields one), one
@@ -512,11 +509,11 @@ const fieldsOpen = "<!-- rota:fields"
 func ParseFieldsBlock(body string) (text string, fields map[string]string, order []string) {
 	body = strings.ReplaceAll(body, "\r\n", "\n")
 	fields = map[string]string{}
-	loc := fieldsBlockRe.FindStringSubmatchIndex(body)
-	if loc == nil {
+	text, block, ok := marker.SplitFields(body)
+	if !ok {
 		return body, fields, nil
 	}
-	for _, line := range strings.Split(body[loc[2]:loc[3]], "\n") {
+	for _, line := range strings.Split(block, "\n") {
 		m := fieldLineRe.FindStringSubmatch(line)
 		if m == nil || m[2] == "" {
 			continue
@@ -526,7 +523,7 @@ func ParseFieldsBlock(body string) (text string, fields map[string]string, order
 		}
 		fields[m[1]] = m[2]
 	}
-	return body[:loc[0]], fields, order
+	return text, fields, order
 }
 
 // RenderFieldsBlock is the inverse of ParseFieldsBlock: it appends the block
@@ -545,7 +542,7 @@ func RenderFieldsBlock(text string, names []string, values map[string]string) st
 	if len(lines) == 0 {
 		return text
 	}
-	block := fieldsOpen + "\n" + strings.Join(lines, "\n") + "\n-->"
+	block := marker.FieldsBlock(lines)
 	if text == "" {
 		return block
 	}

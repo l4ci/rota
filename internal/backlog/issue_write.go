@@ -42,13 +42,8 @@ var NoteKinds = []string{"proof", "design", "plan"}
 const noteLimitDefault = 60000
 
 var (
-	markerRe    = regexp.MustCompile(`\A<!-- (?:rota|hv):(proof|design|plan(?::S\p{Nd}+)?)(?: (\p{Nd}+)/(\p{Nd}+))? -->(?:\n|\z)`)
 	sliceKindRe = regexp.MustCompile(`\Aplan:S\p{Nd}+\z`)
-	commentRe   = regexp.MustCompile(`\A<!-- (?:rota|hv):comment (` + wordClass + `+) -->(?:\n|\z)`)
-	claimRe     = regexp.MustCompile(`\A<!-- (?:rota|hv):(claim|release) ([^` + pystr.SpaceClass + `]+) -->`)
 )
-
-const wordClass = `[\p{L}\p{N}_]`
 
 func (b *Issues) tracker() (Tracker, error) {
 	if b.Tracker == nil {
@@ -461,11 +456,11 @@ func keepLines(s string) []string {
 func noteParts(kind, text string) []string {
 	text = noteNorm(text)
 	limit := noteLimit()
-	single := "<!-- rota:" + kind + " -->\n"
+	single := marker.NoteHeader(kind, 1, 1)
 	if runes(single)+runes(text) <= limit {
 		return []string{single + text}
 	}
-	budget := limit - runes("<!-- rota:"+kind+" 99/99 -->\n")
+	budget := limit - runes(marker.NoteHeader(kind, 99, 99))
 	var chunks []string
 	cur := ""
 	for _, line := range keepLines(text) {
@@ -487,7 +482,7 @@ func noteParts(kind, text string) []string {
 	chunks = append(chunks, cur)
 	out := make([]string, len(chunks))
 	for i, c := range chunks {
-		out[i] = "<!-- rota:" + kind + " " + strconv.Itoa(i+1) + "/" + strconv.Itoa(len(chunks)) + " -->\n" + c
+		out[i] = marker.NoteHeader(kind, i+1, len(chunks)) + c
 	}
 	return out
 }
@@ -507,18 +502,17 @@ func (b *Issues) noteComments(n int, kind string) ([]notePart, error) {
 	}
 	var found []notePart
 	for _, c := range comments {
-		body := strings.ReplaceAll(c.Body, "\r\n", "\n")
-		m := markerRe.FindStringSubmatchIndex(body)
-		if m == nil || body[m[2]:m[3]] != kind {
+		nt, ok := marker.ParseNote(c.Body)
+		if !ok || nt.Kind != kind {
 			continue
 		}
 		idx := 1
-		if m[4] >= 0 {
-			if idx, err = Atoi(body[m[4]:m[5]]); err != nil {
+		if nt.Part != "" {
+			if idx, err = Atoi(nt.Part); err != nil {
 				return nil, err
 			}
 		}
-		found = append(found, notePart{idx, c, body[m[1]:]})
+		found = append(found, notePart{idx, c, nt.Rest})
 	}
 	sort.SliceStable(found, func(i, j int) bool {
 		if found[i].idx != found[j].idx {
@@ -659,7 +653,7 @@ func (b *Issues) AddComment(ref, kind, text string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return tr.AddComment(b.ctx(), n, "<!-- rota:comment "+kind+" -->\n"+noteNorm(text))
+	return tr.AddComment(b.ctx(), n, marker.CommentHeader(kind)+noteNorm(text))
 }
 
 // Comments lists the context comments oldest first, optionally only kind.
@@ -681,14 +675,12 @@ func (b *Issues) Comments(ref, kind string) ([]Comment, error) {
 func commentRows(comments []tracker.Comment, kind string) []Comment {
 	rows := []Comment{}
 	for _, c := range comments {
-		body := strings.ReplaceAll(c.Body, "\r\n", "\n")
-		m := commentRe.FindStringSubmatchIndex(body)
-		if m == nil {
+		k, rest, ok := marker.ParseComment(c.Body)
+		if !ok {
 			continue
 		}
-		k := body[m[2]:m[3]]
 		if kind == "" || kind == k {
-			rows = append(rows, Comment{Who: c.Author, Kind: k, Text: strings.Trim(body[m[1]:], "\n")})
+			rows = append(rows, Comment{Who: c.Author, Kind: k, Text: strings.Trim(rest, "\n")})
 		}
 	}
 	return rows
@@ -701,15 +693,15 @@ func commentRows(comments []tracker.Comment, kind string) []Comment {
 func openClaims(comments []tracker.Comment) []string {
 	var held []string
 	for _, c := range comments {
-		m := claimRe.FindStringSubmatch(strings.ReplaceAll(c.Body, "\r\n", "\n"))
-		if m == nil {
+		verb, id, ok := marker.ParseClaim(c.Body)
+		if !ok {
 			continue
 		}
-		if m[1] == "claim" {
-			if !has(held, m[2]) {
-				held = append(held, m[2])
+		if verb == marker.KindClaim {
+			if !has(held, id) {
+				held = append(held, id)
 			}
-		} else if i := indexOf(held, m[2]); i >= 0 {
+		} else if i := indexOf(held, id); i >= 0 {
 			held = append(held[:i], held[i+1:]...)
 		}
 	}
@@ -775,7 +767,7 @@ func (b *Issues) Claim(ref, claimID string) (won bool, holder string, err error)
 		return false, "", err
 	}
 	if !(len(held) > 0 && held[0] == claimID) {
-		if _, err := tr.AddComment(b.ctx(), n, "<!-- rota:claim "+claimID+" -->\nClaimed by "+claimID); err != nil {
+		if _, err := tr.AddComment(b.ctx(), n, marker.Claim(claimID)+"\nClaimed by "+claimID); err != nil {
 			return false, "", err
 		}
 		if held, err = b.heldClaims(n); err != nil {
@@ -785,7 +777,7 @@ func (b *Issues) Claim(ref, claimID string) (won bool, holder string, err error)
 			return false, "", errors.New("claim comment not visible after posting")
 		}
 		if held[0] != claimID {
-			if _, err := tr.AddComment(b.ctx(), n, "<!-- rota:release "+claimID+" -->"); err != nil {
+			if _, err := tr.AddComment(b.ctx(), n, marker.Release(claimID)); err != nil {
 				return false, "", err
 			}
 			return false, held[0], nil
@@ -830,7 +822,7 @@ func (b *Issues) Release(ref, claimID string) (bool, error) {
 	if !has(held, claimID) {
 		return false, nil
 	}
-	if _, err := tr.AddComment(b.ctx(), is.Number, "<!-- rota:release "+claimID+" -->"); err != nil {
+	if _, err := tr.AddComment(b.ctx(), is.Number, marker.Release(claimID)); err != nil {
 		return false, err
 	}
 	if len(held) == 1 {
@@ -897,9 +889,9 @@ func (b *Issues) Status(ref string) (*Status, error) {
 	held := openClaims(comments)
 	notes := []string{}
 	for _, c := range comments {
-		m := markerRe.FindStringSubmatch(strings.ReplaceAll(c.Body, "\r\n", "\n"))
-		if m != nil && !has(notes, m[1]) {
-			notes = append(notes, m[1])
+		nt, ok := marker.ParseNote(c.Body)
+		if ok && !has(notes, nt.Kind) {
+			notes = append(notes, nt.Kind)
 		}
 	}
 	title := oneLine(strings.ReplaceAll(is.Title, "*", ""))
