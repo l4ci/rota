@@ -136,7 +136,7 @@ slot `wait` named, or gate a PR in review by number (`rota worker gate 61 --base
 | Look | `rota round status`, `rota round reconcile` | the round's rows and drift; `reconcile --apply` repairs what is safe |
 | Ask | `rota round escalate send`, `rota round escalate check` | puts a question to the maintainer on the issue or PR thread and reads the answer |
 | Merge | `rota worker gate <slot\|#PR> --base <branch>` | verifies on the merged tree, merges on a pass; a [merge approval](#merge-approval) policy can require a human first |
-| View | `rota layout split`, `rota layout tabs` | folds the workers' herdr panes into the orchestrator's tab, or back into tabs; see [layout](#layout) |
+| View | `rota layout split`, `rota layout tabs` | folds the workers' herdr panes and the orchestrator into one `rota` tab, or back into tabs; see [layout](#layout) |
 | Clean | `rota reap` | lists, then with `--apply` removes, what no live slot owns; never kills a running agent |
 | End | `rota round wind-down` | re-verifies the base, parks every slot, releases the lease |
 
@@ -281,9 +281,10 @@ n=3 (run from the CLI pane C)      n=4, CLI pane unknown
 +-----+---+---+                    +-----+---+---+
 ```
 
-Run `rota layout split` from the pane that launched the round and the split lives in that pane's tab;
-rota remembers the pane for later spawns. Run from the orchestrator, it uses the pane remembered, and
-without one the orchestrator keeps the left column to itself. `rota layout tabs` puts the orchestrator
+`rota orchestrate` run from a plain herdr pane remembers that pane as the CLI, so a later
+`rota layout split` from any pane, the orchestrator's included, puts it on top of the left column and
+the split lives in its tab. Running `rota layout split` from a plain pane of the project records that
+pane instead. With no pane known the orchestrator keeps the left column to itself. `rota layout tabs` puts the orchestrator
 and the workers back in tabs of their own and leaves the CLI pane where it is.
 
 The verb only moves panes. No process restarts, nothing is typed into a pane, and focus stays where it
