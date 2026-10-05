@@ -4,12 +4,13 @@
 package proof
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/git"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -124,10 +125,8 @@ func Show(root, id string) (rows []Row, lines []string, err error) {
 
 // headSha is the abbreviated HEAD of the repository at dir, "-" when there is none.
 func headSha(dir string) string {
-	cmd := exec.Command("git", "log", "-1", "--format=%h")
-	cmd.Dir = dir
-	out, _ := cmd.Output()
-	if sha := one(string(out)); sha != "" {
+	res, _ := git.Repo{Dir: dir}.Run(context.Background(), "log", "-1", "--format=%h")
+	if sha := one(res.Stdout); sha != "" {
 		return sha
 	}
 	return "-"

@@ -1,14 +1,15 @@
 package repos
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
 	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
 )
 
@@ -98,19 +99,12 @@ func within(path, dir string) bool {
 // through git's common dir. The registry is the one of the umbrella that
 // FindUmbrella resolves from cwd.
 func Which(cwd string) (Repo, error) {
-	git, err := exec.LookPath("git")
-	if err != nil {
+	common, ok, err := git.Repo{Dir: cwd}.CommonDir(context.Background())
+	if errors.Is(err, git.ErrNoGit) {
 		return Repo{}, ErrGitMissing
 	}
-	cmd := exec.Command(git, "rev-parse", "--git-common-dir")
-	cmd.Dir = cwd
-	out, err := cmd.Output()
-	if err != nil {
+	if err != nil || !ok {
 		return Repo{}, ErrNotGit
-	}
-	common := strings.TrimRight(string(out), "\n")
-	if !filepath.IsAbs(common) {
-		common = filepath.Join(cwd, common)
 	}
 	sub := Realpath(filepath.Dir(common))
 	umb, err := FindUmbrella(cwd)

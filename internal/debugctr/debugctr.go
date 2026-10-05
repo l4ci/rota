@@ -6,10 +6,11 @@
 package debugctr
 
 import (
+	"context"
 	"encoding/json"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/git"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -29,13 +30,11 @@ type Counter struct {
 // Open derives the session from the current branch of the git repository
 // at root and returns its Counter. Not being in a git repository is exit 5.
 func Open(root string) (*Counter, error) {
-	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
-	cmd.Dir = root
-	out, err := cmd.Output()
-	if err != nil {
+	res, err := git.Repo{Dir: root}.Run(context.Background(), "rev-parse", "--abbrev-ref", "HEAD")
+	if err != nil || res.Code != 0 {
 		return nil, exitcode.Errf(exitcode.ExitUnavailable, "not in a git repository (a debug session is keyed by the current branch)")
 	}
-	branch := strings.TrimSpace(string(out))
+	branch := strings.TrimSpace(res.Stdout)
 	if branch == "" {
 		return nil, exitcode.Errf(exitcode.ExitUnavailable, "could not determine current git branch")
 	}
