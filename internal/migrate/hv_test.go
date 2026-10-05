@@ -186,10 +186,8 @@ func hvOpts(t *testing.T, dir, home string) HvOptions {
 	if err != nil {
 		t.Fatal(err)
 	}
-	InstalledVersion = func() string { return "5.0.0" }
-	t.Cleanup(func() { InstalledVersion = func() string { return "" } })
 	t.Setenv("CLAUDE_CONFIG_DIR", "")
-	return HvOptions{Cwd: dir, Home: home, ClaudeDir: filepath.Join(home, ".claude"), Version: "5.0.0", Skills: set}
+	return HvOptions{Cwd: dir, Home: home, ClaudeDir: filepath.Join(home, ".claude"), Version: "5.0.0", InstalledVersion: func() string { return "5.0.0" }, Skills: set}
 }
 
 func snapshot(t *testing.T, dir string) map[string]string {

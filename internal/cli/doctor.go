@@ -84,7 +84,7 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 	}
 	in.Skills = doctorSkills(in.Home, root)
 	if root == "" {
-		doctorDiskInput(ctx, &in, nil, "", d.Git)
+		doctorDiskInput(ctx, &in, nil, "", d.Git, d.Now())
 		return in
 	}
 	cfg := config.Load(rotatree.Config(root))
@@ -106,7 +106,7 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 		}
 	}
 	in.ProjectRoot = root
-	doctorDiskInput(ctx, &in, cfg, root, d.Git)
+	doctorDiskInput(ctx, &in, cfg, root, d.Git, d.Now())
 	if on, err := hook.BoolKey(cfg, "orchestrator.switchOnUsage"); err == nil {
 		in.SwitchOnUsage = on
 	}
