@@ -50,9 +50,10 @@ type Issues struct {
 	Cfg     any             // loaded config, for the label names
 	Tracker Tracker         // where the issues come from
 	Ctx     context.Context // for every tracker call; nil is context.Background()
-	// ProofCount counts the proof rows of an item ("F12"). nil reads the
-	// item's proof note through Tracker (hv-proof-show --count in issue mode).
-	ProofCount func(itemID string) (int, error)
+	// CountProof counts the proof rows in an item's proof note, read through
+	// Tracker. The row format belongs to the proof package, which imports
+	// backlog, so Open injects it.
+	CountProof func(text string) int
 	Warn       func(string) // notices (duplicate tracking issues); nil drops them
 	Repo       string       // umbrella sub-repo name, rendered as Repos:; "" otherwise. IDs stay plain numbers: the umbrella backend qualifies them ("repo:12") and resolves qualified refs, as in Python.
 	// OnMissingMilestone is the umbrella hook (on_missing_milestone): called

@@ -20,6 +20,10 @@ import (
 // .rota/ARCHIVE.md (FileBackend in hvlib_backend.py).
 type File struct {
 	Root string // project root, the directory that holds .rota/
+	// CountProof counts the proof rows in an item's detail text. The row format
+	// belongs to the proof package, which imports backlog, so it is injected;
+	// Open wires it. Completing an item as done needs it.
+	CountProof func(text string) int
 }
 
 // Name is "file".

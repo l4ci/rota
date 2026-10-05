@@ -8,6 +8,7 @@ import (
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/proof"
 	"github.com/l4ci/rota/internal/repos"
 )
 
@@ -90,8 +91,9 @@ func openBacklog(c *Ctx, root string, fileOnly bool, hint string) (backlog.Backe
 	}
 	cwd, _ := os.Getwd()
 	return backlog.Open(c.Context(), root, cfg, backlog.Options{
-		Scope: c.Repo,
-		Cwd:   cwd,
+		Scope:      c.Repo,
+		Cwd:        cwd,
+		CountProof: proof.CountRows,
 		NewTracker: func(ctx context.Context, dir string) (backlog.Tracker, error) {
 			return c.deps().NewTracker(ctx, dir, cfg)
 		},

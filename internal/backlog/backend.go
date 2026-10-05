@@ -86,6 +86,10 @@ type Options struct {
 	// NewTracker builds the tracker for the project root (issues) or one
 	// sub-repo directory (umbrella). It is not called in file mode.
 	NewTracker func(ctx context.Context, dir string) (Tracker, error)
+	// CountProof counts the proof rows in an item's text. The row format
+	// belongs to the proof package, which imports backlog, so the caller
+	// injects it; a backend without it refuses to complete an item as done.
+	CountProof func(text string) int
 }
 
 // Open returns the backend selected by backlog.backend in cfg, the loaded
@@ -99,7 +103,7 @@ func Open(ctx context.Context, root string, cfg any, opts Options) (Backend, err
 		return nil, err
 	}
 	if name == "file" {
-		return &File{Root: root}, nil
+		return &File{Root: root, CountProof: opts.CountProof}, nil
 	}
 	if opts.NewTracker == nil {
 		return nil, errors.New("backlog.backend \"issues\" needs a tracker")
@@ -107,6 +111,7 @@ func Open(ctx context.Context, root string, cfg any, opts Options) (Backend, err
 	if repos.Umbrella(root) {
 		u := NewUmbrella(root, cfg, func(dir string) (Tracker, error) { return opts.NewTracker(ctx, dir) })
 		u.Ctx = ctx
+		u.CountProof = opts.CountProof
 		u.Scope = opts.Scope
 		if opts.Cwd != "" {
 			u.CwdRepo = CwdSubRepo(opts.Cwd, u.Repos)
@@ -117,7 +122,7 @@ func Open(ctx context.Context, root string, cfg any, opts Options) (Backend, err
 	if err != nil {
 		return nil, err
 	}
-	return &Issues{Cfg: cfg, Tracker: tr, Ctx: ctx}, nil
+	return &Issues{Cfg: cfg, Tracker: tr, Ctx: ctx, CountProof: opts.CountProof}, nil
 }
 
 var (

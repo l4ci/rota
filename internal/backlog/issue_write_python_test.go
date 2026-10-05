@@ -208,7 +208,7 @@ func goRunScenario(t *testing.T, s wScenario) map[string]any {
 		}
 	}
 	f.Calls = nil
-	b := &Issues{Cfg: mustDecode(t, s.Cfg), Tracker: f}
+	b := &Issues{Cfg: mustDecode(t, s.Cfg), Tracker: f, CountProof: stubCountProof}
 	var steps []any
 	for _, st := range s.Steps {
 		f.Calls = nil

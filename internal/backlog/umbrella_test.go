@@ -22,7 +22,7 @@ func newUmbrella(t *testing.T, cfg string, subs map[string][]Issue, order ...str
 		fakes[name] = &fakeTracker{Issues: subs[name], Milestones: []string{"M07 — Title"}}
 		list = append(list, repos.Repo{Name: name, Rel: name, Path: "/umb/" + name})
 	}
-	u := &Umbrella{Cfg: mustDecode(t, cfg), Repos: list,
+	u := &Umbrella{Cfg: mustDecode(t, cfg), CountProof: stubCountProof, Repos: list,
 		NewTracker: func(dir string) (Tracker, error) {
 			name := strings.TrimPrefix(dir, "/umb/")
 			built[name]++

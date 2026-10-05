@@ -12,7 +12,6 @@ import (
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/marker"
 	"github.com/l4ci/rota/internal/pystr"
-	"github.com/l4ci/rota/internal/section"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
@@ -377,17 +376,17 @@ func (b *Issues) Reopen(ref string) (bool, error) {
 	return true, nil
 }
 
-// proofCount is the number of proof rows an item has: the `- ` lines of the
-// "## Proof" section of its proof note (hv-proof-show --count).
+// proofCount is the number of proof rows an item has, counted by the injected
+// CountProof over its proof note.
 func (b *Issues) proofCount(itemID string) (int, error) {
-	if b.ProofCount != nil {
-		return b.ProofCount(itemID)
+	if b.CountProof == nil {
+		return 0, errors.New("backlog: no proof counter injected")
 	}
 	text, ok, err := b.NoteGet(itemID, "proof")
 	if err != nil || !ok {
 		return 0, err
 	}
-	return countProofRows(text), nil
+	return b.CountProof(text), nil
 }
 
 // ---- ready -----------------------------------------------------------------
@@ -642,21 +641,6 @@ func (b *Issues) NoteRm(ref, kind string) (bool, error) {
 		}
 	}
 	return len(parts) > 0, nil
-}
-
-// countProofRows counts the `- ` rows of the "## Proof" section of a note.
-func countProofRows(content string) int {
-	s, e, ok := section.Find(content, "Proof")
-	if !ok {
-		return 0
-	}
-	n := 0
-	for _, l := range pystr.Splitlines(content[s:e]) {
-		if strings.HasPrefix(l, "- ") {
-			n++
-		}
-	}
-	return n
 }
 
 // ---- comments --------------------------------------------------------------

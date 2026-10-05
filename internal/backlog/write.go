@@ -82,30 +82,21 @@ var (
 	refactorSubject = regexp.MustCompile(`\Arefactor(\(.+?\))?!?:`)
 )
 
-// ProofCount is the number of proof rows recorded for an item. It is a
-// stand-in until A6's proof package lands: it counts the "- " rows of the
-// "## Proof" section of the item's detail file, as hv-proof-show --count does
-// in file mode. Tests replace it.
-var ProofCount = func(root, id string) (int, error) {
+// proofRows is the number of proof rows recorded for an item: the rows of the
+// "## Proof" section of its detail file, counted by the injected CountProof.
+func (f *File) proofRows(id string) (int, error) {
+	if f.CountProof == nil {
+		return 0, errors.New("backlog: no proof counter injected")
+	}
 	dir := detailDir(id)
 	if dir == "" {
 		return 0, nil
 	}
-	content, err := fsio.ReadText(filepath.Join(root, ".rota", dir, id+".md"))
+	content, err := fsio.ReadText(filepath.Join(f.Root, ".rota", dir, id+".md"))
 	if err != nil || content == "" {
 		return 0, nil
 	}
-	s, e, ok := section.Find(content, "Proof")
-	if !ok {
-		return 0, nil
-	}
-	n := 0
-	for _, l := range pystr.Splitlines(content[s:e]) {
-		if strings.HasPrefix(l, "- ") {
-			n++
-		}
-	}
-	return n, nil
+	return f.CountProof(content), nil
 }
 
 // detailDir is detail_dir_for_id: the detail directory of an ID's prefix
@@ -362,7 +353,7 @@ func (f *File) Complete(ref string, in CompleteInput) (bool, error) {
 			return errf(ErrNotFound, "[%s] not found", ref)
 		}
 		if in.Reason == "done" && !in.NoProof {
-			n, err := ProofCount(f.Root, ref)
+			n, err := f.proofRows(ref)
 			if err != nil {
 				return err
 			}
