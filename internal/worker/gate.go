@@ -265,7 +265,9 @@ func (e Env) gate(ctx context.Context, root string, o GateOpts, res GateResult, 
 		}
 	} else {
 		g.headRef, g.baseRef = branch, o.Base
-		if _, code := e.git(root, "rev-parse", "--verify", "--quiet", branch); code != 0 {
+		var code int
+		// The commit the gates below judge is the commit that lands.
+		if g.verified, code = e.git(root, "rev-parse", "--verify", "--quiet", branch); code != 0 || g.verified == "" {
 			return res, fail(exitcode.ExitResolution, fmt.Sprintf("worker branch '%s' does not exist", branch))
 		}
 	}
@@ -370,12 +372,8 @@ func (e Env) gate(ctx context.Context, root string, o GateOpts, res GateResult, 
 			return r, nil
 		}
 	} else {
-		head, code := e.git(root, "rev-parse", g.headRef)
-		if code != 0 || head == "" {
-			return g.broke(fmt.Sprintf("git rev-parse %s failed (exit %d)", g.headRef, code))
-		}
 		run := func(args ...string) (git.Result, error) { return e.Git(e.context(), root, args...) }
-		if err := land.MergeLocal(run, head, fmt.Sprintf("merge: %s into %s", branch, o.Base)); err != nil {
+		if err := land.MergeLocal(run, g.verified, fmt.Sprintf("merge: %s into %s", branch, o.Base)); err != nil {
 			// Only a real conflict is called one. Anything else (no committer
 			// identity, a hook, a locked index) is reported with git's own words,
 			// so it is not mistaken for work to resolve with the slot.
