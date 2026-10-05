@@ -29,12 +29,17 @@ var slotStates = map[string]bool{
 // ValidState reports whether MarkState accepts next.
 func ValidState(next string) bool { return slotStates[next] }
 
-func (s *Slot) Name() string       { return jsonx.Str(s.o, "name") }
-func (s *Slot) Branch() string     { return jsonx.Str(s.o, "branch") }
-func (s *Slot) Worktree() string   { return jsonx.Str(s.o, "worktree") }
-func (s *Slot) Base() string       { return jsonx.Str(s.o, "base") }
-func (s *Slot) Handle() string     { return jsonx.Str(s.o, "handle") }
-func (s *Slot) State() string      { return jsonx.Str(s.o, "state") }
+func (s *Slot) Name() string     { return jsonx.Str(s.o, "name") }
+func (s *Slot) Branch() string   { return jsonx.Str(s.o, "branch") }
+func (s *Slot) Worktree() string { return jsonx.Str(s.o, "worktree") }
+func (s *Slot) Base() string     { return jsonx.Str(s.o, "base") }
+func (s *Slot) Handle() string   { return jsonx.Str(s.o, "handle") }
+func (s *Slot) State() string    { return jsonx.Str(s.o, "state") }
+
+// Issue is the issue number recorded on the slot ("" when none). The prompt
+// digest shows it before falling back to HeldID.
+func (s *Slot) Issue() string { return jsonx.Str(s.o, "issue") }
+
 func (s *Slot) Task() string       { return jsonx.Str(s.o, "task") }
 func (s *Slot) ClaimID() string    { return jsonx.Str(s.o, "claimId") }
 func (s *Slot) Kind() string       { return jsonx.Str(s.o, "kind") }
@@ -47,9 +52,6 @@ func (s *Slot) ConfigDir() string  { return jsonx.Str(s.o, "configDir") }
 func (s *Slot) ActiveAt() string   { return jsonx.Str(s.o, "activeAt") }
 func (s *Slot) Seen() string       { return jsonx.Str(s.o, "seen") }
 func (s *Slot) Unsent() bool       { return jsonx.Bool(s.o, "unsent") }
-
-// Issue is the legacy issue field some registries still carry.
-func (s *Slot) Issue() string { return jsonx.Str(s.o, "issue") }
 
 // Relays is the relay log the gate reads for approval provenance.
 func (s *Slot) Relays() []any {

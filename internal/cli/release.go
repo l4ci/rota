@@ -12,7 +12,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/config"
@@ -331,7 +330,7 @@ func releaseChangelog(fs *flag.FlagSet) RunFunc {
 		if rerr != nil && !errors.Is(rerr, os.ErrNotExist) {
 			return Result{}, Resolution("%s: %v", *path, rerr)
 		}
-		out, err := release.UpdateChangelog(existing, rerr == nil, version, time.Now().Format("2006-01-02"), notes)
+		out, err := release.UpdateChangelog(existing, rerr == nil, version, c.deps().Today().Format("2006-01-02"), notes)
 		if errors.Is(err, release.ErrSectionExists) {
 			return Result{Data: gitObj("blockedBy", "exists", "changed", false)},
 				Refused("%s already has a section for v%s", *path, version)
@@ -383,7 +382,7 @@ func releasePending(c *Ctx, args []string) (Result, error) {
 		}
 		commits, tagTS = int(n), ts
 	}
-	data := release.Pending(releaseConfig(dir), tag, commits, tagTS, time.Now().Unix())
+	data := release.Pending(releaseConfig(dir), tag, commits, tagTS, c.deps().Now().Unix())
 	text, err := jsonx.MarshalCompact(data)
 	if err != nil {
 		return Result{}, err

@@ -164,5 +164,6 @@ If the entry created a new topic, prepend a line: *"New topic: `<topic>`."*
 ## References
 
 - [`references/grilling.md`](references/grilling.md) — Frontier-round questioning for forbids/permits.
+- [`references/subagent-dispatch.md`](references/subagent-dispatch.md) — the `light` subagent that grilling sends for broad reads.
 - [`references/persistence-skills.md`](references/persistence-skills.md) — Shared spine and divergence axes for the persistence duo (`/rota-learn`, `/rota-decide`) — including `/rota-learn --term` for Glossary entries.
 - [`references/source-prefill.md`](references/source-prefill.md) — Source-prefill / promote-between-artifacts semantics for `/rota-decide`.

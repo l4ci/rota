@@ -11,10 +11,8 @@ An umbrella project hosts shared `.rota/` coordinator state at its root, while g
 - The `Repos:` field on backlog items
 - Resolution verbs
 - Walk-up convenience
-- Branch creation
 - Status registration
 - Merge / PR with `--repo`
-- Issue mode in an umbrella
 - What this reference does NOT cover
 
 ## When umbrella mode is on
@@ -64,39 +62,6 @@ When `/rota-work` is invoked from a cwd that resolves via `rota repo which`, the
 
 Multi-repo items always need the captured `Repos:` field. There is no cwd default for them, because cwd resolves to at most one sub-repo.
 
-## Branch creation
-
-Three patterns, all driven from the umbrella root (the orchestrator stays there so it can read/write `.rota/`); workers `cd` into the sub-repo path before any git operation.
-
-**Single sub-repo (branch isolation):**
-
-```bash
-(cd <repo> && git checkout -b <branch>)
-rota status add <branch> --items <ID>[,<ID>...] --repo <repo>
-```
-
-**Multiple sub-repos (branch isolation):**
-
-```bash
-rota git branch <branch> --repos <csv>
-rota status add <branch> --items <ID>[,<ID>...] --repos <csv>
-```
-
-`rota git branch` is atomic: a precheck refuses (exit 4) for ALL repos if the branch exists in ANY one, before any branch is written. Its `--repos` takes no spaces after commas, so drop them from the `Repos:` value first.
-
-**Single sub-repo with worktree (Layout B):**
-
-```bash
-(cd <repo> && git branch <branch>)
-WT=$(rota git worktree-path <branch> --repo <repo>)
-git -C <repo> worktree add "$WT" <branch>
-rota status add <branch> --items <ID>[,<ID>...] --worktree "$WT" --repo <repo>
-```
-
-`rota git worktree-path` produces the canonical Layout B path `<umbrella>/.claude/worktrees/<repo>/<branch>` — use it for both `worktree add` and `rota status add`. `rota ship merge` and `rota ship pr` remove that worktree themselves before they integrate the branch.
-
-For the broader picture of when to use branch vs worktree isolation, see `references/isolation-patterns.md`.
-
 ## Status registration
 
 - `rota status add <branch> --items <ids-csv> [--worktree <path>] [--repo <name>] [--if-absent]` — uniqueness key becomes `(branch, repo)` when `--repo` is set. An unregistered `--repo` exits 3.
@@ -112,16 +77,6 @@ echo "<body>"          | rota ship pr    <branch> --title "<title>" --body-file 
 
 Each operates within the sub-repo's `.git/`. At the umbrella root without `--repo`, both exit 2 — there's no `.git/` at the umbrella root to merge into.
 
-## Issue mode in an umbrella
-
-**Issue mode** (`backlog.backend: "issues"`; `references/issue-mode.md`, *Umbrella*) puts each sub-repo's items on that sub-repo's own tracker, so `.rota/BACKLOG.md` and `Repos:` tagging by `/rota-capture` Step 4.6 change shape:
-
-- **One repo per item.** Capture needs a target: `--repos <name>` or a cwd inside a sub-repo. A multi-repo item is refused; capture one item per repo and link them with `Related:` (qualified refs allowed). `Repos` cannot be changed on an existing item.
-- **Qualified IDs.** `<repo>#<n>` and `<repo>:<ID>` always resolve; a bare `F42` / `#42` resolves only when exactly one sub-repo has it, else exit 2 listing the candidates. Created IDs come back qualified; `rota backlog list` shows them as `<repo>:<ID>`.
-- **`--repo` plumbing.** `rota ship pr ... --items ... --repo <repo>` (falls back to the cwd's sub-repo), `rota ship pr-merge <pr> --repo <repo>` (required at the umbrella root), and `rota release milestone-check|notes --from issues|close-milestone ... --repo <repo>` (required at the umbrella root, exit 2 without).
-
 ## What this reference does NOT cover
 
-- **Isolation patterns** (branch vs worktree, the decision table) — see `references/isolation-patterns.md`.
-- **Multi-repo parallelism safety** — `references/isolation-patterns.md` covers the rule (cross-repo parallel workers are safe by construction because each sub-repo has its own `.git/index`).
 - **`rota-capture`'s `Repos:` tagging interaction** — how items acquire their `Repos:` field at capture time (cwd inference, AskUserQuestion shape) is per-skill carrier semantics; see `/rota-capture` Step 4.6 inline.

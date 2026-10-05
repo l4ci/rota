@@ -169,7 +169,7 @@ func writeRegistry(t *testing.T, root, body string) {
 
 func TestNeedsWatchAndDigest(t *testing.T) {
 	root := t.TempDir()
-	writeRegistry(t, root, `{"slots":[{"name":"ben","state":"idle"},{"name":"dana","state":"busy","issue":"31"}]}`)
+	writeRegistry(t, root, `{"slots":[{"name":"ben","state":"idle"},{"name":"dana","state":"busy","task":"31"}]}`)
 	need, attn := NeedsWatch(root)
 	if !need || len(attn) != 0 {
 		t.Fatalf("busy slot needs a watch, nothing waits on the orchestrator: %v %v", need, attn)

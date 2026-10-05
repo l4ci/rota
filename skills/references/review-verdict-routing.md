@@ -38,7 +38,7 @@ The queue loop is the consumer (`rota verdict route --for queue`). It routes per
 | `ask` | `PASS` | `AskUserQuestion` merge / skip / stop; merge runs `rota ship pr-merge <pr> --confirm --confirm-note "<answer>"` (exit 4 = not merged) |
 | `request-changes` | `CONCERNS` or `FAIL` | findings as feedback, `rota item state <ID> --to changes-requested`; no merge |
 
-Exit 3 / 4 from any verb stops the queue. Label lifecycle: `references/issue-mode.md`.
+Exit 3 / 4 from any verb stops the queue. Label lifecycle: see also `references/issue-mode.md` (`/rota-review` cites it directly).
 
 ## Producer-side relay (standalone `/rota-review` runs)
 

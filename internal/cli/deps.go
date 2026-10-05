@@ -3,6 +3,8 @@ package cli
 import (
 	"context"
 	"io"
+	"os"
+	"strconv"
 	"time"
 
 	"github.com/l4ci/rota/internal/backlog"
@@ -16,6 +18,7 @@ import (
 	"github.com/l4ci/rota/internal/reap"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundlease"
+	"github.com/l4ci/rota/internal/stale"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/update"
 	"github.com/l4ci/rota/internal/version"
@@ -32,6 +35,16 @@ type Deps struct {
 	// other binary. A test swaps in a fake instead of reaching the machine.
 	Git  git.Runner
 	Proc proc.Runner
+
+	// Now is the one clock. Today is the day date-stamped output and age
+	// checks use; it is Now unless a test pins the day alone. HolderPID names
+	// the process that holds a round lease, 0 meaning find it from the process
+	// table. defaultDeps reads the ROTA_TEST_* overrides once into these three;
+	// ClockErr is a malformed override, raised by the verbs that read Today.
+	Now       func() time.Time
+	Today     func() time.Time
+	HolderPID func() int
+	ClockErr  error
 
 	// TrackerOptions apply to every forge CLI the verbs build; a test swaps
 	// in a fake executor here.
@@ -71,7 +84,6 @@ func defaultDeps() *Deps {
 		Git:              git.Exec,
 		Proc:             proc.Run,
 		WorkerEnv:        func() worker.Env { return worker.Env{} },
-		WorkerAccounts:   func() *worker.Accounts { return &worker.Accounts{Now: hookNow} }, // ROTA_TEST_NOW fixes the meters' clock too
 		EscalationEnv:    func() escalation.Env { return escalation.Env{} },
 		WatchEnv:         func() roundlease.Env { return roundlease.DefaultEnv() },
 		OrchestrateEnv:   defaultOrchestrateEnv,
@@ -84,6 +96,8 @@ func defaultDeps() *Deps {
 		BareSetup:        defaultBareSetup,
 		Palette:          palette.RunTerminal,
 	}
+	d.Now, d.Today, d.HolderPID, d.ClockErr = envClock(os.Getenv)
+	d.WorkerAccounts = func() *worker.Accounts { return &worker.Accounts{Now: d.Now} }
 	d.NewTracker = func(ctx context.Context, root string, cfg any) (backlog.Tracker, error) {
 		return d.forge(ctx, cfg, "", root)
 	}
@@ -122,6 +136,9 @@ func (d *Deps) escalationEnv() escalation.Env {
 	if e.Host == nil {
 		e.Host = func() host.Host { return d.Host("herdr") }
 	}
+	if e.Now == nil {
+		e.Now = d.Now
+	}
 	return e
 }
 
@@ -143,4 +160,28 @@ func (d *Deps) forge(ctx context.Context, cfg any, provider, dir string) (tracke
 // forgeOrGitHub is forge falling back to github for an unrecognized origin.
 func (d *Deps) forgeOrGitHub(ctx context.Context, cfg any, provider, dir string) (tracker.Adapter, error) {
 	return tracker.NewFromConfigOrGitHub(ctx, cfg, provider, dir, d.TrackerOptions...)
+}
+
+// envClock reads the test overrides of the clock once, at the edge:
+// ROTA_TEST_NOW (RFC 3339) fixes Now, ROTA_TEST_TODAY (YYYY-MM-DD) fixes the
+// day alone and wins over Now there, ROTA_TEST_HOLDER_PID stands in for the
+// nearest non-shell ancestor, which a smoke test cannot arrange. Not part of
+// the CLI.
+func envClock(getenv func(string) string) (now, today func() time.Time, holder func() int, err error) {
+	now = time.Now
+	if v := getenv("ROTA_TEST_NOW"); v != "" {
+		if t, perr := time.Parse(time.RFC3339, v); perr == nil {
+			now = func() time.Time { return t }
+		}
+	}
+	today = now
+	if v := getenv("ROTA_TEST_TODAY"); v != "" {
+		if t, ok := stale.ParseDate(v); ok {
+			today = func() time.Time { return t }
+		} else {
+			err = Usage("ROTA_TEST_TODAY must be YYYY-MM-DD, got %q", v)
+		}
+	}
+	pid, _ := strconv.Atoi(getenv("ROTA_TEST_HOLDER_PID"))
+	return now, today, func() int { return pid }, err
 }

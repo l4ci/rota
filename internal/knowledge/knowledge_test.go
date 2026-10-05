@@ -58,7 +58,11 @@ func TestSidecarKeepsUnknownFieldsAndOrder(t *testing.T) {
   }
 }
 `), 0o666)
-	err := Update(p, func(s *Sidecar) (bool, error) { s.Bump("B", "z"); s.Init("A", "a"); return true, nil })
+	err := Update(p, func(s *Sidecar) (bool, error) {
+		s.Bump("B", "z", "2026-01-01")
+		s.Init("A", "a", "2026-01-01")
+		return true, nil
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,9 +79,9 @@ func TestSidecarKeepsUnknownFieldsAndOrder(t *testing.T) {
 func TestRekeyTopicMovesEveryEntry(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "t.json")
 	err := Update(p, func(s *Sidecar) (bool, error) {
-		s.Init("X", "one")
-		s.Init("Y", "keep")
-		s.Init("X", "two")
+		s.Init("X", "one", "2026-01-01")
+		s.Init("Y", "keep", "2026-01-01")
+		s.Init("X", "two", "2026-01-01")
 		return true, nil
 	})
 	if err != nil {

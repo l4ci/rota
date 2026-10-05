@@ -11,7 +11,6 @@ import (
 	"github.com/l4ci/rota/internal/rotatree"
 	"os"
 	"os/exec"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -77,20 +76,7 @@ func (r Registry) Slot(name string) *Slot {
 // start. It is the one decode of the `round` field.
 func (r Registry) Round() (int, bool) {
 	v, _ := r.doc.Get("round")
-	return intOf(v)
-}
-
-func intOf(v any) (int, bool) {
-	switch t := v.(type) {
-	case int:
-		return t, true
-	case float64:
-		return int(t), true
-	case json.Number:
-		f, err := t.Float64()
-		return int(f), err == nil
-	}
-	return 0, false
+	return jsonx.Int(v)
 }
 
 // Host is the round host `round start` recorded, "" when none.
@@ -146,7 +132,7 @@ type QueuedPR struct {
 
 func queuedFrom(o *jsonx.Object) QueuedPR {
 	rv, _ := o.Get("round")
-	round, _ := intOf(rv)
+	round, _ := jsonx.Int(rv)
 	relays, _ := o.Get("relays")
 	l, _ := relays.([]any)
 	return QueuedPR{
@@ -192,18 +178,6 @@ func (r Registry) queued() []*jsonx.Object {
 		}
 	}
 	return out
-}
-
-var rePRRef = regexp.MustCompile(`^(?:#|.*/(?:pull|merge_requests)/)?(\d+)/?$`)
-
-// PRRefNumber reads the PR number from `#N`, `N` or a PR URL.
-func PRRefNumber(ref string) (int, bool) {
-	m := rePRRef.FindStringSubmatch(strings.TrimSpace(ref))
-	if m == nil {
-		return 0, false
-	}
-	n, err := strconv.Atoi(m[1])
-	return n, err == nil
 }
 
 // QueuedPR finds a queued record by PR ref (`#N`, `N` or a PR URL), matching
