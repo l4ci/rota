@@ -30,14 +30,14 @@ Advisory findings come back as `warnings`, never as a failure: an umbrella flag 
 
 ## `rota doctor`
 
-`rota init check` asks whether the project is set up. `rota doctor` asks whether the machine can run a round: git, the terminal host, the tracker login, accounts, the orchestrator hooks, `rota` itself and Codex.
+`rota init check` asks whether the project is set up. `rota doctor` asks whether the machine can run a round: git, the terminal host, the tracker login, accounts, the orchestrator hooks, the installed skills and Codex.
 
 ```bash
 rota doctor
 rota doctor --json
 ```
 
-It is read-only, spends no usage quota, and runs without `.rota/` (it falls back to default config). Each check reports `pass`, `fail` or `skip`. A `fail` carries a `hint` with the one command or edit that fixes it, and `detail` says what was found (`herdr 0.8.2, need 0.9.x`).
+It is read-only, spends no usage quota, and runs without `.rota/` (it falls back to default config). Each check reports `pass`, `fail` or `skip`; a `disk` line (`warn`) appears only when free disk space is low and never fails the run. A `fail` carries a `hint` with the one command or edit that fixes it, and `detail` says what was found (`herdr 0.8.2, need 0.9.x`).
 
 | Exit | Meaning | What to do |
 |------|---------|------------|

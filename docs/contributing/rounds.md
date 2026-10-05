@@ -58,8 +58,7 @@ There are no servers and no ports in this repo.
 ## Repo rules that bind workers
 
 - Edit canonical sources only: `cmd/`, `internal/`, `skills/` (`rota-*/SKILL.md`, `references/`), `docs/`, `test/`.
-- Never hand-edit tracked `.rota/` content. The backlog row for your issue is updated by the
-  orchestrator at merge time.
+- Never hand-edit tracked `.rota/` content. This repo uses the issue backend ([issue backend](../usage/issue-backend.md)), so the merge closes your issue and there is no backlog row to update.
 - Before touching a verb, pull the matching `.rota/KNOWLEDGE.md` topics with
   `rota knowledge query "<exact ## heading>"`. The topics that bite most: *Architecture: Helper
   conventions & invariants*, *Architecture: Module extraction & migration safety*, *Build &

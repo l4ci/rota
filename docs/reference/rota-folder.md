@@ -6,20 +6,21 @@
 
 | File | Purpose |
 |------|---------|
-| `BACKLOG.md` | Active backlog: bugs, features, tasks, and recent completions |
+| `BACKLOG.md` | File-backend backlog: bugs, features, tasks, and recent completions. Under `backlog.backend: "issues"` the tracker holds the backlog instead and this file is unused ([issue backend](../usage/issue-backend.md)) |
 | `KNOWLEDGE.md` | Durable learnings grouped by topic: gotchas, conventions, constraints |
 | `DECISIONS.md` | Hard-boundary decisions with explicit forbids/permits. Active commitments future work must respect |
 | `MILESTONES.md` | Milestone overview: one short section per milestone, with a vision intro paragraph and an active list |
 | `MAP.md` + `map/<subsystem>.md` | Project map: AI-facing narratives describing one coherent area each. Source-of-truth for the `## Project Map` block in `CLAUDE.md`. Hand-authored; `touched:` auto-bumped by cycle skills (`/rota-work`, `/rota-debug`). |
 | `counters.json` | Auto-incrementing IDs for each item type |
 | `config.json` | Model selection, isolation mode, merge strategy, ship/learn/refactor gates, autonomy level (team-shared defaults) |
-| `config.local.json` | _(gitignored)_ Per-developer config overrides, deep-merged on top of `config.json` by `load_config()`. Use for `autonomy.level`, model preferences, or any setting that varies per machine. |
+| `config.local.json` | _(gitignored)_ Per-developer config overrides, deep-merged on top of `config.json` by `rota`. Use for `autonomy.level`, model preferences, or any setting that varies per machine. |
 | `status.json` | _(gitignored)_ Active work streams: which items are being worked on, on which branch/worktree (per-developer) |
 | `repos.json` | _(gitignored, umbrella mode only)_ Sub-repo registry with absolute paths (machine-specific) |
-| `bugs/` | Overflow detail files for large bug reports |
+| `bugs/` | Overflow detail files for large bug reports (file backend) |
 | `features/` | Overflow detail files for large feature specs |
 | `tasks/` | Overflow detail files for large task descriptions |
 | `milestones/` | One detail file per milestone (`M01.md`, `M02.md`, …) with full plan: goal, acceptance, rationale, risks, research findings, notes |
+| `designs/` | `/rota-brainstorm` designs, one `<ID>.md` per item (file backend; under the issue backend a note on the issue) |
 | `plans/` | Implementation plans keyed by `<milestone>-<unit>.md` (slices: `M01-S01.md`; items: `M01-B07.md`) |
 | `spikes/` | Spike findings: one Markdown file per spike. The experimental code lives on the `spike/<name>` git branch and is never merged |
 | `handoff/` | _(gitignored)_ `/rota-pause` notes: one file per branch capturing hypothesis, next step, mid-edit files; consumed by `/rota-work` (no argument). `handoff/<base>.md` is also where a round's orchestrator writes its handoff before a restart. Per-developer scratch. |
@@ -32,7 +33,7 @@
 
 ## BACKLOG.md: active backlog
 
-`BACKLOG.md` is the single source of truth for everything in flight. It holds open bugs, features, and tasks organised by type, plus a "recently completed" section at the bottom. [`/rota-capture`](../usage/capturing-work.md) appends new items, and [`/rota-work` (no argument)](../usage/picking-work.md) reads it to suggest what to work on next.
+On the file backend (`backlog.backend: "file"`, the default) `BACKLOG.md` is the source of truth for everything in flight. It holds open bugs, features, and tasks organised by type, plus a "recently completed" section at the bottom. [`/rota-capture`](../usage/capturing-work.md) appends new items, and [`/rota-work` (no argument)](../usage/picking-work.md) reads it to suggest what to work on next. With `backlog.backend: "issues"` the open issues on GitHub or GitLab are the backlog and `BACKLOG.md` stays unused; see [issue backend](../usage/issue-backend.md).
 
 A typical entry looks like:
 
@@ -79,7 +80,7 @@ A managed `## Project Map` block in `CLAUDE.md` surfaces the thin summary so the
 `counters.json` tracks the highest ID assigned for each item type so that IDs never collide across sessions.
 
 ```json
-{ "bug": 3, "feature": 7, "task": 12, "milestone": 2, "spike": 1 }
+{ "bugs": 3, "features": 7, "tasks": 12, "milestones": 2, "since_refactor": { "features": 1, "bugs": 0 } }
 ```
 
 You should not need to edit this by hand. If you ever manually delete items from `BACKLOG.md`, the counters are safe to leave as-is; IDs are never reused.
@@ -92,7 +93,7 @@ See [../usage/configuration.md](../usage/configuration.md) for the full list of 
 
 ## status.json: active work streams
 
-`status.json` records which items are currently being worked on and which git branch or worktree each one lives in. It is written when work starts and cleared when work completes or is paused.
+`status.json` records which items are currently being worked on and which git branch or worktree each one lives in. It is written when work starts and cleared when work completes.
 
 See [../usage/picking-work.md](../usage/picking-work.md) for how `/rota-work` (no argument) uses this file to orient the model after a context clear.
 
@@ -120,7 +121,7 @@ See [../usage/vision-and-plans.md](../usage/vision-and-plans.md) for the full pl
 
 When you run `/rota-pause`, the current state of the session (active hypothesis, next planned step, files mid-edit, gotchas just discovered, uncommitted-work strategy) is written to `handoff/<branch>.md`. `/rota-work` (no argument) reads any matching note for an active branch and uses it to restore intent that pure git state can't carry across `/clear` or a fresh session.
 
-Notes are scoped per branch and overwritten by subsequent `/rota-pause` runs on the same branch. They are not auto-cleaned, so delete them by hand once the branch is shipped.
+Notes are scoped per branch and overwritten by subsequent `/rota-pause` runs on the same branch. `rota status rm <branch>` deletes the note when the stream ends.
 
 See [../usage/pausing-and-resuming.md](../usage/pausing-and-resuming.md) for the pause/resume flow.
 
@@ -164,7 +165,7 @@ The backlog is shared by default: state travels with the repo so collaborators s
 | `.rota/workers.json` | Per-developer worker slot registry (tab handles, account config dirs, claims); machine-specific |
 | `.rota/**/*.lock` | Transient advisory lockfiles guarding sidecar read-modify-write |
 
-`rota init` writes these under a `# ── rota ──` header in your project's `.gitignore`. It also adds `.worktrees/` once: worker worktrees (`/rota-work` slots and parallel rounds) live in `<project>/.worktrees/<name>`, and a nested checkout must stay out of `git status`.
+`rota init` writes these under a `# ── rota ──` header in your project's `.gitignore`. It also adds `.worktrees/` once: worker worktrees (worker-pool slots and parallel rounds) live in `<project>/.worktrees/<name>`, and a nested checkout must stay out of `git status`.
 
 ### `config.local.json`: per-developer overrides
 

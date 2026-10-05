@@ -1,12 +1,12 @@
 # Architecture
 
-Everything Claude reads or mutates lives under `.rota/` in your project. Git is the source of truth; `status.json` is just a cache, and `/rota-work` (no argument) reconciles drift between the two whenever it runs.
+Everything Claude reads or mutates lives under `.rota/` in your project. Git is the source of truth; `status.json` is just a cache, and `/rota-work` (no argument) reconciles drift between the two whenever it runs. The layout below is the file backend (`backlog.backend: "file"`, the default). Under `"issues"` the backlog, milestones and item designs and plans live on GitHub or GitLab instead; see [issue backend](../usage/issue-backend.md).
 
 ## `.rota/` layout
 
 ```
 .rota/
-├── BACKLOG.md        # bugs, features, tasks, recent completions
+├── BACKLOG.md        # file backend: bugs, features, tasks, recent completions
 ├── KNOWLEDGE.md      # durable learnings, grouped by topic
 ├── DECISIONS.md      # hard-boundary decisions with explicit forbids/permits
 ├── MILESTONES.md     # milestone overview (vision paragraph as intro)
@@ -17,7 +17,8 @@ Everything Claude reads or mutates lives under `.rota/` in your project. Git is 
 ├── repos.json        # umbrella mode only — registered sub-repos
 ├── workers.json      # round state: slots, escalations, usage-limit log (gitignored)
 ├── verdicts.json     # recorded review, second-opinion and QA verdicts (gitignored)
-├── bugs/ features/ tasks/   # overflow detail files
+├── bugs/ features/ tasks/   # overflow detail files (file backend)
+├── designs/          # /rota-brainstorm output (<ID>.md, file backend)
 ├── milestones/       # one detail file per milestone (M01.md, M02.md, ...)
 ├── plans/            # /rota-plan output (M01-S01.md slice plans, M01-B07.md item plans)
 ├── spikes/           # /rota-spike findings — one file per spike, branch lives in git

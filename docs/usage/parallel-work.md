@@ -25,7 +25,7 @@ current worktree. The main worktree stays on `main` throughout.
 
 ## Two terminals, two streams
 
-Start each stream in its own terminal. [`/rota-work` (no argument)](picking-work.md) picks items that aren't
+The IDs below are file-backend IDs; on the issues backend they are `#N` ([issue backend](issue-backend.md)). Start each stream in its own terminal. [`/rota-work` (no argument)](picking-work.md) picks items that aren't
 already in progress, so the two sessions claim different work.
 
 **Terminal 1** picks `[B02]` and `[F01]`:

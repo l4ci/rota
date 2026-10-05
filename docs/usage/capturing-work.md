@@ -1,6 +1,8 @@
 # Capturing work
 
-`/rota-capture` records bugs, features, and tasks into `BACKLOG.md` with auto-classification and auto-assigned IDs. Paste a raw description, structured notes, or a mixed list; it sorts the rest out.
+`/rota-capture` records bugs, features, and tasks into the backlog with auto-classification and auto-assigned IDs. Where they land depends on `backlog.backend`: on the default `"file"` backend, in `.rota/BACKLOG.md`; on the `"issues"` backend, as GitHub or GitLab issues. See [Issue backend](issue-backend.md). Paste a raw description, structured notes, or a mixed list; it sorts the rest out.
+
+The examples below show the file backend. On the issue backend the same classification becomes labels (`type:bug`, `p1`, `size:Major`), and the ID is the issue number (`#42`).
 
 ## /rota-capture
 
@@ -14,7 +16,7 @@ That single line logs a bug entry:
 - **[B03] [P2] Sidebar flickers on hover.** ...
 ```
 
-Each item gets a zero-padded, auto-incrementing ID (`[B##]` for bugs, `[F##]` for features, `[T##]` for tasks). The skill asks a few quick questions for context, then assigns:
+On the file backend each item gets a zero-padded, auto-incrementing ID (`[B##]` for bugs, `[F##]` for features, `[T##]` for tasks). The skill asks a few quick questions for context, then assigns:
 
 - **Bugs**: priority `[P0]`, `[P1]`, or `[P2]`
 - **Features**: size `[Major]`, `[Minor]`, or `[Cosmetic]`
@@ -41,7 +43,7 @@ Each item gets its own ID type, section, and classification, regardless of how t
 
 ## Detail files for large input
 
-When an item's input is too large for a TODO entry (crash dumps, specs, logs, long checklists), `/rota-capture` creates a detail file and links to it from the main entry:
+When an item's input is too large for a TODO entry (crash dumps, specs, logs, long checklists), `/rota-capture` creates a detail file and links to it from the main entry (on the issue backend the text goes into the issue body instead):
 
 ```markdown
 - **[B07] [P0] App crashes on launch after iOS 18.2 update.** EXC_BAD_ACCESS in CoreData stack during migration. Detail: `.rota/bugs/B07.md` Related: [F12]
@@ -67,7 +69,7 @@ Any item can carry a `Related:` suffix linking it to other items:
 
 Links are optional. [`/rota-work` (no argument)](picking-work.md) infers the reverse link automatically, so you don't need to add it to both sides. When linked items form clusters, `/rota-work` (no argument) suggests tackling them together (see [picking work](picking-work.md)).
 
-`/rota-capture` scans both [`BACKLOG.md`](../reference/rota-folder.md) and `ARCHIVE.md` for connections, so a new bug can link back to a completed feature.
+`/rota-capture` scans the open items for connections (on the file backend also [`ARCHIVE.md`](../reference/rota-folder.md)), so a new bug can link back to a completed feature.
 
 ## Milestone-spec audit
 
@@ -83,4 +85,4 @@ Ordinary brain-dump captures (no `M<NN>` reference) skip the audit entirely.
 
 ## What /rota-capture is not
 
-`/rota-capture` is a pure recording tool. It classifies and files. It does not act, validate the item, or deduplicate against existing entries. To implement something immediately after capturing it, accept the hand-off at the end of the capture (it routes to [/rota-work](running-work.md)). To pick up an already-filed item and implement it, use [/rota-work](running-work.md). To remove a captured item that turned out to be a duplicate or wrong-premise, use [`/rota-capture --remove`](removing-work.md).
+`/rota-capture` is a pure recording tool. It classifies and files. It does not act, validate the item, or deduplicate against existing entries. It prints the new IDs and stops; it never starts work. To implement an item, run [/rota-work](running-work.md) on its ID. To remove a captured item that turned out to be a duplicate or wrong-premise, use [`/rota-capture --remove`](removing-work.md).

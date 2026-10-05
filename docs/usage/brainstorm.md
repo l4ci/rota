@@ -1,13 +1,13 @@
 # Brainstorming a design
 
-`/rota-brainstorm` fills the gap between [`/rota-capture`](capturing-work.md) (records what to build) and [`/rota-plan`](vision-and-plans.md) (decomposes how to build it). It negotiates *whether this is the right thing and what shape it should take* for a single backlog item. The artifact lands at `.rota/designs/<ID>.md` and feeds `/rota-plan` as soft input: read when present, never required.
+`/rota-brainstorm` fills the gap between [`/rota-capture`](capturing-work.md) (records what to build) and [`/rota-plan`](vision-and-plans.md) (decomposes how to build it). It negotiates *whether this is the right thing and what shape it should take* for a single backlog item. The artifact is stored as the item's design: a note on its issue on the [issue backend](issue-backend.md), `.rota/designs/<ID>.md` on the file backend. It feeds `/rota-plan` as soft input: read when present, never required.
 
 ## When to run it
 
 - Right after capturing a `[Major]` feature or a `[P0]` bug, when its design is unclear.
 - When two reasonable approaches need negotiation before you commit to one.
 - When the item's TODO entry is one sentence but the implementation isn't obvious.
-- When `/rota-capture` or `/rota-work` (no argument) nudges you toward it (the nudge fires on `[Major]` and `[P0]` items that don't yet have a design artifact).
+- When `/rota-capture` or `/rota-work` (no argument) nudges you toward it (`/rota-capture` nudges on a new `[Major]` feature or `[P0]` bug; `/rota-work` on one that doesn't yet have a design).
 
 Skip it when the item is `[Minor]`, `[Cosmetic]`, or a plain task with an obvious shape. Skip it when you already know what you want to build; go straight to [`/rota-plan`](vision-and-plans.md) or [`/rota-work`](running-work.md).
 
@@ -30,21 +30,21 @@ You take the nudge:
 /rota-brainstorm F12
 ```
 
-The skill resolves `F12`, reads its TODO entry, queries relevant `KNOWLEDGE.md` and `DECISIONS.md` topics, and asks 2-3 clarifying questions:
+The skill resolves `F12`, reads its TODO entry, and queries relevant `KNOWLEDGE.md` and `DECISIONS.md` topics. It asks nothing unless something is truly ambiguous or conflicts with a decision, and then it asks the one question that unblocks it:
 
-> What signals "resolved"? `## Completed` only, or also `ARCHIVE.md`? Should the 90-day threshold be a flag, a config key, or both?
+> What signals "resolved"? `## Completed` only, or also `ARCHIVE.md`?
 
-Once context is anchored, the skill proposes three approaches:
+Then the skill drafts the whole design in one pass, including three approaches:
 
 1. **In-place TODO mutation.** `rota-archive` rewrites `BACKLOG.md` directly. Simple, but conflicts with parallel `/rota-work` sessions.
 2. **Append-only journal.** Move resolved bullets into a dated section in `ARCHIVE.md`, leave `BACKLOG.md` `## Completed` empty. Survives merge conflicts at the cost of some recency info.
 3. **Two-phase: mark + sweep.** First pass tags bullets with `archived:` frontmatter, second pass moves them on a separate command. More steps, but reversible.
 
-You pick approach 2. The skill then drafts the design section by section (Goal, Design, Approaches considered, Open questions, Assumptions), each approved before moving on. When the artifact is complete, it lands at `.rota/designs/F12.md`.
+The draft covers Goal, Design, Approaches considered, Acceptance, Open questions and Assumptions, with your pick marked. You approve it once (or ask for revisions). It is then stored, here at `.rota/designs/F12.md`.
 
 ## The artifact
 
-`.rota/designs/F12.md` is a small markdown file with frontmatter and five sections:
+`.rota/designs/F12.md` is a small markdown file with frontmatter and these sections (Acceptance is skipped when the issue body already has one):
 
 ```markdown
 ---
@@ -69,6 +69,10 @@ Append-only journal pattern. ...
 1. **In-place mutation**: ...
 2. **Append-only journal (chosen)**: ...
 3. **Two-phase mark + sweep**: ...
+
+## Acceptance
+
+- [ ] Items resolved more than 90 days ago move to `ARCHIVE.md`.
 
 ## Open questions
 
@@ -100,16 +104,16 @@ The design is soft input: `/rota-plan` doesn't require it, and a plan can overri
 If `.rota/designs/<ID>.md` already exists, `/rota-brainstorm` asks how to proceed:
 
 - **View**: print the artifact and exit.
-- **Edit**: open targeted sections and revise them in place.
-- **Replace**: start from scratch; the previous artifact is overwritten only after explicit confirm.
+- **Edit**: load it as the starting draft and revise it.
+- **Replace**: delete it and start from scratch.
 
 ## What it does not do
 
 - Project-level design stays with [`/rota-vision`](vision-and-plans.md): milestones, multi-feature arcs, vision rewrites.
 - Code-touching feasibility experiments stay with [`/rota-spike`](spikes.md): a throwaway branch that proves a thing works before the design hardens.
 - Implementation plan with task decomposition stays with [`/rota-plan`](vision-and-plans.md).
-- The `/rota-capture` hand-off to [`/rota-work`](running-work.md) skips the brainstorm step; use it for items with an obvious shape.
+- Items with an obvious shape can skip the brainstorm: capture them and go straight to [`/rota-work`](running-work.md).
 
 ## Autonomy interaction
 
-Under `autonomy.level: "off"` (default), `/rota-capture` and `/rota-work` (no argument) print a one-line nudge for `[Major]` features and `[P0]` bugs without a design artifact. Under `"auto"`, the nudge auto-invokes `/rota-brainstorm` before routing to `/rota-plan`. See [Autonomy levels](autonomy.md) for the full chaining rules.
+`/rota-capture` and `/rota-work` (no argument) only print the nudge, at every [autonomy level](autonomy.md). `/rota-capture` never invokes `/rota-brainstorm`.

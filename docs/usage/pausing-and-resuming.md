@@ -18,14 +18,12 @@ The note's shape:
 
 ```
 ## Working on
-## What's done
 ## Next planned step
-## Current hypothesis
-## Files mid-edit
+## Current hypothesis (if debugging)
 ## Uncommitted work
-## Gotchas discovered
-## Do not
 ```
+
+Sections that don't apply are omitted. `Working on` holds the items, milestone and stage. Gotchas and dead ends belong in [`/rota-learn`](learning.md), not the note.
 
 You don't need to manage this file directly. `/rota-work` (no argument) reads and deletes it on resolve.
 
@@ -50,7 +48,7 @@ If a handoff is present, `/rota-work` (no argument)'s per-stream question offers
 
 A typical recovery looks like this:
 
-1. You're mid-investigation on branch `rota/my-feature`, context is filling. You run `/rota-pause`, which writes `.rota/handoff/rota-my-feature.md` with your current hypothesis and the next step you were about to try.
+1. You're mid-investigation on branch `rota/my-feature`, context is filling. You run `/rota-pause`, which writes `.rota/handoff/rota/my-feature.md` with your current hypothesis and the next step you were about to try.
 2. You run `/clear`. All conversation context is gone.
 3. In the new session, you run `/rota-work` (no argument).
 4. The skill reads `status.json`, validates active streams against git, finds the handoff note for `rota/my-feature`, and surfaces something like:
@@ -73,6 +71,8 @@ Handoff note found:
 A clean commit is enough when the work sits at a natural stopping point: a passing test, a completed subtask, a checkpoint that git state alone can describe. `/rota-pause` is for the messy middle. The live hypothesis, the half-written test, the "I was about to try X": none of that survives a `/clear` from git state alone. If you'd have to re-read diffs and reconstruct your reasoning to figure out what to do next, pause first.
 
 ## Orchestrator handoff
+
+`/rota-pause` also works for an orchestrator mid-round. It records the round (slots, PRs awaiting review) in `.rota/handoff/<base>.md` and leaves the round running; it never winds it down.
 
 A round's orchestrator hands off before its context fills, through a `Stop` and a `SessionStart` hook
 that `rota hook install` writes. That moved to [unattended rounds](unattended-rounds.md#orchestrator-handoff).

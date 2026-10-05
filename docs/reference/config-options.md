@@ -2,8 +2,9 @@
 
 This page lists every config key with its allowed values. The options below are the five core settings (Q1-Q5) with their labels. For a concept-first walk through each key, see [`usage/configuration.md`](../usage/configuration.md).
 
-There is no interactive config UI. Two verbs cover it:
+There is no config UI beyond the terminal prompts of `rota setup`. Three verbs cover it:
 
+- **`rota setup`** runs `rota init`, then asks the main choices on a terminal (backlog backend, tracker, isolation, merge strategy, dispatch, autonomy, review, QA). `--yes` takes the defaults; `--list` prints the questions.
 - **`rota init`** writes `.rota/config.json` on first setup, fills any missing keys with the Recommended defaults on later runs, and stamps `rota.version`. It never overwrites a value you set.
 - **`rota config show`** and **`rota config set`** read and change keys later.
 
@@ -17,9 +18,9 @@ The "(Recommended)" tag on each option marks the default `rota init` writes.
 |-------|----------|
 | `rota config show` | Prints every key, value and source layer: `local`, `project` or `default`. |
 | `rota config show <key>` | Prints one key. |
-| `rota config set <key> <value>` | Validates the value, writes `.rota/config.json` (never `.rota/config.local.json`), prints the one-line diff. |
+| `rota config set <key> <value>` | Writes `.rota/config.json` (never `.rota/config.local.json`) and prints `key = value`. |
 
-Values for list and object keys are JSON (`rota config set work.accounts '[...]'`). An unknown key or an invalid value exits non-zero with the allowed values; nothing is written.
+Values for list and object keys are JSON (`rota config set work.accounts '[...]'`). A key outside the schema exits 2 and nothing is written. The value is not checked against the allowed values on write; `rota config check` only flags retired values such as `autonomy.level: "loop"`.
 
 ## Q1: Models
 
@@ -54,7 +55,7 @@ Values for list and object keys are JSON (`rota config set work.accounts '[...]'
 | Label | Description |
 |-------|-------------|
 | Direct merge (Recommended) | Merge into main with `--no-ff` and delete the branch. Fast solo iteration. |
-| GitHub PR | Push the branch and open a PR with `gh pr create`. Required for team review. |
+| Pull request | Push the branch and open a PR (GitHub) or MR (GitLab). Required for team review. |
 
 ## Q4: Quality gates
 
@@ -78,7 +79,7 @@ Values for list and object keys are JSON (`rota config set work.accounts '[...]'
 | Label | Description |
 |-------|-------------|
 | Off (Recommended) | Skills nudge with a one-line suggestion at decision points. You stay in the driver's seat. |
-| Auto chain | One-hop chaining: `/rota-debug` → `/rota-ship`, `/rota-ship` → `/rota-learn`, refactor threshold → `/rota-refactor`. Stops after the chained step. |
+| Auto chain | One-hop chaining: `/rota-ship` → `/rota-learn` when the cycle is big enough to warrant it. Stops after the chained step. |
 
 `autonomy.level: "loop"` was removed; `rota config check` fails on it (rounds and automatic reviews cover unattended work).
 
@@ -95,7 +96,7 @@ Each Q1–Q5 option maps to a single `key.path: value` in `.rota/config.json`:
 | Q2 Branch | `work.isolation: "branch"` |
 | Q2 Worktree | `work.isolation: "worktree"` |
 | Q3 Direct merge | `work.mergeStrategy: "direct"` |
-| Q3 GitHub PR | `work.mergeStrategy: "pr"` |
+| Q3 Pull request | `work.mergeStrategy: "pr"` |
 | Q4 includes "Review before ship" | `ship.review: true` (else `false`) |
 | Q4 includes "Verify learnings" | `learn.verify: true` (else `false`) |
 | Q4 includes "Confirm before refactor" | `refactor.confirmBeforeExecute: true` (else `false`) |
@@ -129,7 +130,7 @@ Free text. Default: `""` (auto-detect). Key `git.baseBranch`.
 
 ## Validation rules
 
-- **Enums.** `models.*` take `opus`, `sonnet` or `haiku`; `work.isolation` takes `branch` or `worktree`; `work.mergeStrategy` takes `direct` or `pr`; `autonomy.level` takes `off` or `auto`. Anything else is rejected by `rota config set`; `"loop"` was removed and `rota config check` flags it.
+- **Enums.** `models.*` take `opus`, `sonnet` or `haiku`; `work.isolation` takes `branch` or `worktree`; `work.mergeStrategy` takes `direct` or `pr`; `autonomy.level` takes `off` or `auto`. `rota config set` does not enforce them; `"loop"` was removed and `rota config check` flags it.
 - **Booleans and integers.** Booleans take `true` or `false`; integer keys state their minimum below. Out-of-range values exit 70 where a verb reads them.
 
 ## Silent-default keys
@@ -157,7 +158,7 @@ Free text. Default: `""` (auto-detect). Key `git.baseBranch`.
 - `work.dispatch`: where workers run. Enum `subagent` (default, written by `rota init`), `tmux` or `herdr`. `/rota-work` ignores it and always uses in-process workers. For `rota round`, `subagent` means detect: herdr inside a herdr pane, tmux inside tmux, else solo (in-harness Claude subagents), so a round needs no setting. An explicit `tmux` or `herdr` is used as set (`tmux` needs a `tmux` binary and a working `claude` on `PATH`; `herdr` needs the orchestrator inside a herdr pane). Set via `rota config set work.dispatch tmux`. See [`usage/configuration.md`](../usage/configuration.md#workdispatch-subagent-tmux-or-herdr).
 - `work.workerSlots`: number of worker slots. Integer ≥ 1; silent default `3`. `rota round start` provisions this many slots (`--slots` overrides it for one round). Set via `rota config set work.workerSlots <N>`.
 - `work.accounts`: array of `{name, configDir}` mapping worker slots to independent `CLAUDE_CONFIG_DIR`s, so each slot authenticates as its own account. Silent default `[]` (every slot inherits the ambient config dir). Used by rounds in herdr or tmux (`rota round assign` balances slots across accounts); solo rounds ignore it. The paths are machine-specific, so put the array in the gitignored `.rota/config.local.json` by hand rather than with `rota config set`, which writes the tracked file. `rota worker account list` shows each account's usage verdict. See [`usage/parallel-rounds.md`](../usage/parallel-rounds.md#setup).
-- `work.operatorCommand`: command used by `rota worker session ensure` to relaunch an orchestrator inside tmux from a non-tmux terminal. Rounds don't use it: you start a round's orchestrator yourself, and `rota keepalive run` restarts it (see [`usage/unattended-rounds.md`](../usage/unattended-rounds.md)). Silent default `""`, which builds `claude --continue --model <models.orchestrator> --permission-mode auto` — `--continue` resumes the current conversation so the cycle keeps its context, and the operator keeps a permission gate the workers do not. Set it when your orchestrator needs a wrapper.
+- `work.operatorCommand`: command that starts the orchestrator. Two verbs read it: `rota worker session ensure` (relaunches an orchestrator inside tmux from a non-tmux terminal) and `rota orchestrate` / bare `rota` with `orchestrator.harness: "claude"`; `rota keepalive run` then restarts it (see [`usage/unattended-rounds.md`](../usage/unattended-rounds.md)). Silent default `""`, which builds `claude --continue --model <models.orchestrator> --permission-mode auto` for `session ensure` (`--continue` resumes the current conversation) and `claude --model <models.orchestrator> --permission-mode auto` for the launcher. The orchestrator keeps a permission gate the workers do not. Set it when your orchestrator needs a wrapper.
 - `work.codexCommand`: command used to launch a Codex worker session (`--kind codex`, herdr only). Free text; silent default `""`, which builds `codex --model <tier model> --dangerously-bypass-approvals-and-sandbox --dangerously-bypass-hook-trust --no-daemon --no-alt-screen` and drops `--model` when no model is chosen (a bare `rota worker dispatch`, or `round.tiers.codex` unset). A custom command receives the tier's model through a `{model}` placeholder; one that still holds `{model}` with no model chosen is a usage error. It must not carry codex's `resume` or `fork` subcommands.
 - `work.workerCommand`: command used to launch a worker session in its tmux window. Free text; silent default `""`, which builds `claude --model <models.worker> --dangerously-skip-permissions`. Workers commit, open PRs and run tests with nobody in the pane to answer a prompt, so a narrower mode stalls them. Set it to narrow the grant or to add a wrapper; a worker that then stops on a prompt reports `NEEDS-PERMISSION` instead of hanging.
 - `backlog.backend`: where the backlog lives. `"file"` (silent default) or `"issues"`. Switch to issues mode via `rota migrate issues`. Set via `rota config set backlog.backend issues`. See [`usage/configuration.md`](../usage/configuration.md#issues-backend-keys).

@@ -8,21 +8,21 @@ That's how every workflow starts, and how most of them stay. The places it tends
 
 ## Is `.rota/` tracked by default?
 
-Yes. Backlog, knowledge, decisions, plans, designs, milestones, and per-item detail files all travel with the repo so team members share context from the first clone. These paths stay gitignored: `.rota/status.json` (per-developer active work), `.rota/repos.json` (umbrella registry with absolute paths), `.rota/config.local.json` (per-developer config overrides, deep-merged on top of `.rota/config.json`), `.rota/handoff/` (per-developer scratch notes from `/rota-pause`), `.rota/qa-runs/` (bulky timestamped artifacts from `/rota-qa`), `.rota/gate-audit.jsonl` (the log of manual-gate approvals), `.rota/workers.json` (the worker slot registry), and `.rota/**/*.lock` (transient sidecar lockfiles).
+Yes. Backlog (with the default `file` backend; under `issues` it lives on the tracker), knowledge, decisions, plans, designs, milestones, and per-item detail files all travel with the repo so team members share context from the first clone. These paths stay gitignored: `.rota/status.json` (per-developer active work), `.rota/repos.json` (umbrella registry with absolute paths), `.rota/config.local.json` (per-developer config overrides, deep-merged on top of `.rota/config.json`), `.rota/handoff/` (per-developer scratch notes from `/rota-pause`), `.rota/qa-runs/` (bulky timestamped artifacts from `/rota-qa`), `.rota/gate-audit.jsonl` (the log of manual-gate approvals), `.rota/workers.json` (the worker slot registry), and `.rota/**/*.lock` (transient sidecar lockfiles).
 
 If you'd rather keep the whole backlog private (solo development, or experimentation that isn't ready to share), add a blanket `.rota/` line to `.gitignore` before your first commit. The default assumes you want context to travel.
 
 ## Can I share `.rota/` with my team?
 
-You already are; sharing is the default. A few things to know: item ID counters in `counters.json` are shared, so coordinating ID numbering matters; `KNOWLEDGE.md` accumulates team learnings; `DECISIONS.md` becomes a team contract. Per-developer settings (autonomy level, model preferences) go in the gitignored `.rota/config.local.json` to avoid stepping on each other.
+You already are; sharing is the default. A few things to know: on the file backend, item ID counters in `counters.json` are shared, so coordinating ID numbering matters; `KNOWLEDGE.md` accumulates team learnings; `DECISIONS.md` becomes a team contract. Per-developer settings (autonomy level, model preferences) go in the gitignored `.rota/config.local.json` to avoid stepping on each other.
 
-This works well for small teams. For larger ones a real issue tracker is usually a better fit, since the file-based format lacks the conflict-resolution and permissions model that scales.
+This works well for small teams. For larger ones, set `backlog.backend` to `issues` so GitHub or GitLab issues hold the backlog and get the tracker's conflict resolution and permissions; see the [issue backend](usage/issue-backend.md).
 
 ## What if I'm not using Claude Code?
 
 Codex is supported. `rota skills install` writes the skills to `~/.agents/skills` as well as the Claude Code directory, and Codex can also run as a worker in a round. See [using the skills in Codex](usage/codex-skills.md) and [Codex workers](usage/codex-workers.md). One caveat: skill bodies still name Claude Code tools (`AskUserQuestion`, `Agent`), so a skill may not run end to end in Codex.
 
-The `.rota/` folder, the `BACKLOG.md` format and the `rota` binary are agent-agnostic; you can call `rota` from any shell. Other harnesses are untested.
+The `.rota/` folder, the backlog formats and the `rota` binary are agent-agnostic; you can call `rota` from any shell. Other harnesses are untested.
 
 ## Do I need herdr or tmux?
 

@@ -7,7 +7,7 @@
 
 `/rota-learn` scans the current session, extracts non-obvious knowledge, groups
 the entries by topic, and writes them to [`.rota/KNOWLEDGE.md`](../reference/rota-folder.md). After writing, it
-updates the managed `rota-knowledge` block in `CLAUDE.md` so the topic list stays
+updates the managed `rota-knowledge` block in the project instructions file (`AGENTS.md`) so the topic list stays
 in sync. [`/rota-work`](running-work.md) reads that index to decide when the current task should
 consult `KNOWLEDGE.md`.
 
@@ -71,8 +71,9 @@ When `/rota-work` or `/rota-review` consumes a `confirmed` bullet and observes b
 
 1. *Demote (Recommended)*: flips the bullet to `deprecated`.
 2. *Keep, false positive*: leaves the tier unchanged.
+3. *Defer to next session*: leaves the tier unchanged.
 
-Either choice clears the entry from the queue.
+After the last entry is handled, the whole queue is cleared, deferred entries included.
 
 ### Manual lifecycle flags
 
@@ -92,18 +93,18 @@ whose root cause wasn't obvious. Skip it for single-item fixes and mechanical
 changes where nothing worth re-using was learned.
 
 Skills nudge or auto-invoke `/rota-learn` depending on your
-[autonomy](autonomy.md) level. At lower autonomy levels you get a prompt; at
-higher levels the skill runs automatically at the end of a work cycle.
+[autonomy](autonomy.md) level. With `off` you get a one-line nudge; with `auto`,
+`/rota-ship` runs it after integrating. `/rota-work` only nudges.
 
 ## Verification
 
 `learn.verify` in `.rota/config.json` controls a second-opinion pass, off by
-default. Set it to `true`, or pass `--strict` for one run, and `/rota-learn` dispatches a fresh Opus subagent that reads only the updated
-`KNOWLEDGE.md` diff (no session context) and judges each new bullet on four
-criteria: durable (not ephemeral), sharp (concrete claim, not vague), correctly
-topic'd, and non-duplicate. The verifier can demote weak entries, sharpen vague
-wording, re-file wrong-topic bullets, or delete restatements of existing
-knowledge.
+default. Set it to `true`, or pass `--strict` for one run, and `/rota-learn` dispatches a fresh Opus subagent that cold-reads `KNOWLEDGE.md` and the
+managed index block (no session context) and judges each new bullet on five
+criteria: durable (not ephemeral), sharp (concrete claim, not vague),
+non-obvious, correctly topic'd, and non-duplicate. On `PASS_WITH_NOTES` the
+skill rewords weak bullets, removes duplicates and moves wrong-topic bullets;
+on `FAIL` it removes the new entries and reports why.
 
 | Value | Behavior |
 |-------|----------|

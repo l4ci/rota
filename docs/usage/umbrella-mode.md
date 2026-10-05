@@ -21,20 +21,20 @@ Turn on umbrella mode when you maintain a handful of related repositories (say `
 | `.rota/` location | Repo root | Umbrella root (one level up from sub-repos) |
 | Where `rota` runs git ops | The repo | The sub-repo for the current item (resolved via `Repos:` tag or `--repo` flag) |
 | Worktree path | `<repo>/.claude/worktrees/<branch>` | `<umbrella>/.claude/worktrees/<repo>/<branch>` (Layout B) |
-| `BACKLOG.md`, `ARCHIVE.md`, `DECISIONS.md`, `MILESTONES.md` | Per-repo | Shared at the umbrella |
+| `BACKLOG.md`, `ARCHIVE.md`, `DECISIONS.md`, `MILESTONES.md` | Per-repo | Shared at the umbrella. With `backlog.backend: issues` there is no `BACKLOG.md`: each sub-repo's items live on that sub-repo's own tracker ([issue backend](issue-backend.md)) |
 | `KNOWLEDGE.md` (+ Glossary, tier sidecar) | Per-repo | Hybrid: umbrella `.rota/KNOWLEDGE.md` for cross-repo learnings/terms **plus** per-sub-repo `.rota/knowledge/<name>/KNOWLEDGE.md` for repo-local ones |
 | `status.json` entries | Keyed by `branch` | Keyed by `(branch, repo)` |
 | `.rota/handoff/<branch>.md` | One per branch | `.rota/handoff/<branch>@<repo>.md` (one per branch+repo) |
 | Sub-repo git histories | n/a | Independent. No submodules, no version pinning |
 
-Single-repo behavior is unchanged. Umbrella-aware verbs gate on `umbrella.enabled === true` in `.rota/config.json`. Without that flag, every skill behaves exactly as before.
+Single-repo behavior is unchanged. Umbrella mode is in effect when `.rota/repos.json` registers at least one sub-repo; `umbrella.enabled` in `.rota/config.json` is informational. Without registered sub-repos, every skill behaves exactly as before.
 
 ## Enabling it
 
 1. `cd` to the umbrella folder, the parent that contains your sub-repos as immediate children.
-2. Run `rota init`.
-3. When `rota init` detects two or more immediate git children, it offers umbrella mode via `AskUserQuestion`, listing the children it found (`rota init umbrella --list`).
-4. Accept. `rota init` calls `rota init umbrella`, which writes `.rota/repos.json` with the repos you chose and sets `umbrella.enabled: true` in `.rota/config.json`. If the umbrella is itself a git repo, `.gitignore` gains a `# ── rota umbrella ──` block listing `.claude/`, `.rota/`, and each registered sub-repo.
+2. Run `rota init umbrella --list` to see the immediate git children it would register.
+3. Run `rota init umbrella --repos web,api,shared` (or `--all` for every child). It seeds `.rota/` like `rota init`, writes `.rota/repos.json` with the repos you chose and sets `umbrella.enabled: true` in `.rota/config.json`.
+4. If the umbrella is itself a git repo, `.gitignore` gains a `# ── rota umbrella ──` block listing `.claude/`, `.rota/`, and each registered sub-repo.
 
 The result looks like:
 
@@ -71,11 +71,11 @@ The registry is one JSON file at the umbrella's `.rota/repos.json`:
 - Entries are sorted alphabetically for stable diffs.
 - No SHAs, no version pins. Sub-repos are independent git repositories. See `.rota/DECISIONS.md` (Architecture, "Umbrella mode does not use git submodules") for the rationale.
 
-To edit the registry today, re-run `rota init` from the umbrella. `rota init umbrella` is idempotent: a second run with the same selection is a no-op; a run with new names adds them; names you omit but were previously registered are kept (with a warning).
+To edit the registry today, re-run `rota init umbrella` from the umbrella. `rota init umbrella` is idempotent: a second run with the same selection is a no-op; a run with new names adds them; names you omit but were previously registered are kept (with a warning).
 
 ### KNOWLEDGE.md and Glossary in umbrella mode
 
-KNOWLEDGE.md is **hybrid** in umbrella projects (shipped in F21):
+KNOWLEDGE.md is **hybrid** in umbrella projects:
 
 - `.rota/KNOWLEDGE.md`: umbrella file. Cross-repo learnings and umbrella Glossary terms.
 - `.rota/knowledge/<name>/KNOWLEDGE.md`: per-sub-repo file. Repo-local learnings and per-sub-repo Glossary terms. Created on first write (and pre-seeded by `rota init` umbrella setup).
@@ -134,18 +134,18 @@ The `--repo <name>` flag is also exposed on the underlying verbs when you call t
 
 ## What's not yet in umbrella mode
 
-- **Multi-repo items.** One TODO item that fans out to commits in N sub-repos at once (with linked PRs) is on the M03 roadmap. Today, `Repos:` resolves to a single sub-repo per item.
+- **Multi-repo items on the issue backend.** An item lives on one sub-repo's tracker, so `rota item create` refuses several repos: capture one item per repo and link them with `Related:`. On the file backend `Repos:` takes a comma-separated list and `/rota-work` branches in each repo.
 - **Registry editor.** Add/remove repos without re-running `rota init umbrella`. Planned.
 
 ## Footguns
 
 - **Don't create `.rota/` inside a registered sub-repo.** It masks the umbrella. `rota repo which` detects this and exits 3 with a message naming the stray `.rota/`.
 - **Never add a sub-repo as a git submodule of the umbrella.** Sub-repos must remain independent. See `.rota/DECISIONS.md` (Architecture).
-- **Symlinked sub-repo paths work,** because walk-up uses `pwd -P`. The path written into `.rota/repos.json` is the canonical (physical) one, not the user-given symlink.
+- **Symlinked sub-repo paths work,** because `rota` resolves each registry entry with `realpath` at lookup time.
 
 ## See also
 
 - `.rota/DECISIONS.md` (Architecture, "Umbrella mode does not use git submodules")
 - [The `.rota/` folder](../reference/rota-folder.md): what `rota init` writes
-- [Vision and plans](vision-and-plans.md): how M02 fits the milestone roadmap
+- [Vision and plans](vision-and-plans.md): milestones and plans
 - [Parallel rounds](parallel-rounds.md): the `rota round` verbs are not repo-scoped (no `--repo`)

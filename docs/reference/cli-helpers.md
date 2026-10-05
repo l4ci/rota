@@ -21,8 +21,8 @@ rota knowledge query "Auth & Sessions"
 - **Bodies on stdin.** Any flag that takes a file path also accepts `-`
   (`--body-file -`).
 - **Project root.** Verbs walk up from the working directory to the nearest
-  `.rota/`. Only `rota init`, `rota init check`, `rota init umbrella`, `rota setup`, `rota projects`, `rota version` and
-  `rota update` run without one.
+  `.rota/`. Verbs such as `rota init` (with `check` and `umbrella`), `rota setup`, `rota projects`, `rota version`,
+  `rota update`, `rota doctor` and `rota skills` run without one.
 - **Idempotent writes.** A mutating verb reports `changed: true|false`. A no-op
   is exit 0.
 
@@ -295,11 +295,29 @@ exit codes and repo scope: [verb contract](../design/contract/README.md).
 | `rota worker poll [<slot>] [--settle <seconds>] [--lines <n>]` | classify slot states from their panes |
 | `rota worker gate <slot> --base <branch> [--check-only] [--no-verify] [--confirm --confirm-note <answer> \| --approval <escalation> \| --escalate]` | merge gate for one slot's branch or PR; exit 4 when `ship.mergeApproval` needs a human, `--escalate` asks on the thread, `--approval` cites the answer |
 | `rota worker train <slot\|PR>... --base <branch> [--land-green] [--confirm --confirm-note <answer> \| --approval <escalation> \| --escalate]` | merge several PRs in order in a scratch tree, verify once, land them all on a pass; a red train bisects to the first member that breaks it |
+| `rota worker prompt-check [--key <file>]` | Codex UserPromptSubmit hook: pass only signed or maintainer input |
 | `rota worker session check [--session <name>]` | inside a managed host session? (exit 1 when outside) |
 | `rota worker session ensure [--session <name>] [--body-file <path\|->] [--boot-timeout <s>]` | hand the orchestrator off into a host session |
 | `rota worker account list` | list accounts with their usage verdict |
 | `rota worker account pick [--exclude <name>[,<name>...]]` | name the account with the most headroom |
 | `rota worker account assign <slot> [--account <name>]` | put an account's config dir on a slot |
+
+## `rota orchestrate`
+
+| Usage | What it does |
+|---|---|
+| `rota orchestrate [--dry-run]` | launch the orchestrator: an agent under `rota keepalive run` that starts `/rota-orchestrate`; `--dry-run` runs `rota doctor` and prints what would start |
+
+Bare `rota` with no verb does the same in an initialized project and runs `rota setup` in one that is not. The agent comes from `orchestrator.harness`.
+
+## `rota skills`
+
+| Usage | What it does |
+|---|---|
+| `rota skills install [--scope <user\|project>] [--agent <claude\|codex\|all>] [--overwrite]` | write the skills into the agent skill directories |
+| `rota skills status [--scope <user\|project>] [--agent <claude\|codex\|all>]` | compare the installed skills with this binary |
+| `rota skills update [--scope <user\|project>] [--agent <claude\|codex\|all>] [--overwrite]` | refresh the skill directories that already have a manifest |
+| `rota skills uninstall [--scope <user\|project>] [--agent <claude\|codex\|all>] [--overwrite]` | remove what rota installed |
 
 ## `rota round`
 
@@ -307,8 +325,8 @@ The orchestrator's verbs for a [parallel round](../usage/parallel-rounds.md). Al
 
 | Usage | What it does |
 |---|---|
-| `rota round start [--scope <slate\|milestone\|next>] [--items <ID>[,<ID>…]] [--slots <n>] [--base <branch>] [--holder-pid <n>]` | take the orchestrator lease, provision the roster, list candidates |
-| `rota round candidates [--scope <slate\|milestone\|next>]` | list the items the round's scope allows, with readiness |
+| `rota round start [--scope <slate\|milestone\|next\|open>] [--items <ID>[,<ID>…]] [--slots <n>] [--base <branch>] [--holder-pid <n>]` | take the orchestrator lease, provision the roster, list candidates |
+| `rota round candidates [--scope <slate\|milestone\|next\|open>]` | list the items the round's scope allows, with readiness |
 | `rota round architecture [--check] [--holder-pid <n>]` | show the architecture-review counter; when a review is due, mint one item per area and assign them to idle slots |
 | `rota round assign <ID> [--agent <name>] [--tier <light\|standard\|heavy>] [--tier-reason <text>] [--kind <claude\|codex>] [--body-file <path\|->] [--siblings <ID>[,<ID>…]] [--check-only] [--accept-overlap] [--accept-open-pr] [--accept-codex-version] [--holder-pid <n>]` | check an item's readiness and hand it to a slot |
 | `rota round wait [<slot>…] [--timeout <seconds>] [--settle <seconds>] [--lines <n>]` | block until a worker needs attention |
@@ -330,7 +348,7 @@ A second `round start` is refused (exit 4) while another orchestrator holds the 
 
 | Usage | What it does |
 |---|---|
-| `rota doctor` | preflight: git, host, forge, accounts, herdr hook, orchestrator hooks, rota, codex |
+| `rota doctor` | preflight: git, host, forge, accounts, herdr hook, orchestrator hooks, skills, codex |
 
 Read-only, runs without `.rota/`. Exit 1 when any check fails; every failure carries a `hint` with the fix. See [preflight](preflight.md#rota-doctor).
 
