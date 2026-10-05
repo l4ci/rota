@@ -21,7 +21,7 @@ Read `.rota/config.json`:
 ## Flow
 
 ```
-Guard → Clarify (if needed) → Status → Plan → Isolate → Dispatch → Verify → Commit → Close → Merge/PR → Status
+Guard → Clarify (if needed) → Name → Plan → Isolate + Register → Dispatch → Verify → Commit → Close → Merge/PR → Unregister
 ```
 
 
@@ -75,15 +75,11 @@ rota knowledge contradiction add --topic <T> --title <S> --text "<first 200 char
 
 `/rota-learn` Step 9 surfaces these at session end and asks per bullet whether to demote. Skip silently when Step 2 didn't run.
 
-## Step 3 — Register in Status
+## Step 3 — Name the Branch
 
-After picking the branch name, single-repo:
+Choose a descriptive branch name (`rota/quick-switch`, `rota/fix-timer-badge`). Nothing is registered yet: Step 5 creates the branch and registers it in status once.
 
-```bash
-rota status add <branch> --items <ID1>,<ID2>[,...] [--worktree <path>]
-```
-
-**Umbrella mode** (items carry `Repos:`, a comma-separated list; read it with `rota item field get <ID> --name repos`). All items in a wave must share the same repo set. One repo: add `--repo <repo-name>`. Several repos register one entry per `(branch, repo)`: `rota status add <branch> --items <ids> --repos <repos-csv> [--worktrees <csv>]`. Validate the names with `rota repo resolve <name>…`; exit 3 names the missing ones: surface them and stop. The call is idempotent on `(branch, repo)`, so call it again with worktree paths once Step 5 creates them.
+**Umbrella mode** (items carry `Repos:`, a comma-separated list; read it with `rota item field get <ID> --name repos`). All items in a wave must share the same repo set. Validate the names with `rota repo resolve <name>…`; exit 3 names the missing ones: surface them and stop.
 
 ## Step 4 — Plan Tasks
 
@@ -113,12 +109,16 @@ Carry the resolved set into Step 5 and Step 10.
 
 ## Step 5 — Create Branch or Worktree
 
-Choose a descriptive name (`rota/quick-switch`, `rota/fix-timer-badge`). The pattern depends on `work.isolation` and umbrella mode; `references/isolation-patterns.md` has the table. The common case, single-repo with branch isolation:
+Use the Step 3 name. The pattern depends on `work.isolation` and umbrella mode; `references/isolation-patterns.md` has the table. The common case, single-repo with branch isolation:
 
 ```bash
 git checkout -b <branch>
 rota status add <branch> --items <ID>[,<ID>...]
 ```
+
+This is the only `rota status add` of the cycle: create the branch or worktree first, then register it once (with `--worktree <path>` for a worktree). The call is idempotent on `(branch, repo)`.
+
+**Umbrella registration.** One repo: add `--repo <repo-name>`. Several repos register one entry per `(branch, repo)`: `rota status add <branch> --items <ids> --repos <repos-csv> [--worktrees <csv>]`.
 
 For umbrella branches (single sub-repo, multi-repo via `rota git branch <name> --repos <csv>`, Layout B worktree) see `references/umbrella-mode.md` *Branch creation*.
 
@@ -184,7 +184,14 @@ Verify internally; don't narrate. Trust the diff, not the worker's narrative.
 
 **PASS** → move on silently. **FAIL** → dispatch a fix agent and re-verify; surface failures only if they persist.
 
-**Record proof.** For each task that PASSes, append one row per item it resolves: `rota proof add <ID> --check "<verify command or grep>" --result PASS --evidence "<output line or path>" [--sha <task-commit>]`. A FAIL that persists is recorded with `--result FAIL`. For a behavior task, first record the worker's reported RED run: `rota proof add <ID> --check "<test command>" --result FAIL --evidence "<failing line>" --sha <sha before the change>`, then the PASS row after. A docs or skill-only task has no RED: put `no test seam: docs/skill change` in the PASS row's `--check`. A worker that reports no RED for a behavior change gets a fix dispatch (Step 7 FAIL). Proof rows are facts about what ran, not acceptance: `rota item complete` (Step 9) is the acceptance write and exits 4 when an item has no proof. `--no-proof` is never passed on its own; an unproven item stays open and is surfaced. Issue mode records the rows in the item's proof note.
+**Record proof.** Proof rows are facts about what ran, not acceptance. Per task:
+
+- **PASS:** one row per item the task resolves: `rota proof add <ID> --check "<verify command or grep>" --result PASS --evidence "<output line or path>" [--sha <task-commit>]`.
+- **Persistent FAIL:** record it with `--result FAIL`.
+- **Behavior task:** first record the worker's reported RED run: `rota proof add <ID> --check "<test command>" --result FAIL --evidence "<failing line>" --sha <sha before the change>`, then the PASS row after. A worker that reports no RED gets a fix dispatch (a FAIL above).
+- **Docs or skill-only task:** no RED. Put `no test seam: docs/skill change` in the PASS row's `--check`.
+- **Acceptance:** `rota item complete` (Step 9) writes it and exits 4 when an item has no proof. Never pass `--no-proof` on your own; an unproven item stays open and is surfaced.
+- **Issue mode:** the rows go in the item's proof note.
 
 ## Step 7.5 — Commit per Task (orchestrator)
 
@@ -211,33 +218,35 @@ After the task commits, sweep untracked toolchain siblings into their own `chore
 
 ## Step 9 — Close the Items
 
-**Issue backend:** skip this step and Step 9.5. Don't call `rota item complete`: the issue closes when its PR merges (`Closes #<n>`, Step 10).
+**Issue backend:** skip this step. Don't call `rota item complete`: the issue closes when its PR merges (`Closes #<n>`, Step 10).
 
-**File backend**, per resolved item (match by keyword overlap between task and item title; leave items you didn't work on):
+**File backend**, per resolved item (match by keyword overlap between task and item title; leave items you didn't work on), in this order:
 
-```bash
-rota item complete <ID> --commit <commit-hash>
-```
+1. **Tombstone the item's plan.** Skip when the item has no milestone tag or no plan file:
 
-`rota item complete` is the only write to the backlog; never edit `.rota/` by hand. It leaves `.rota/BACKLOG.md` modified, and Step 9.5 may remove a plan file. Commit those paths by name, with no directory-wide `git add .rota/`:
+   ```bash
+   MILESTONE=$(rota item field get <ID> --name milestone)
+   if [ -n "$MILESTONE" ] && [ -f ".rota/plans/${MILESTONE}-<ID>.md" ]; then
+     rota plan rm "${MILESTONE}-<ID>"
+   fi
+   ```
 
-```bash
-git add .rota/BACKLOG.md [.rota/plans/<key>.md …]
-git commit -m "chore: close <IDs>"
-```
+   The plan's decomposition is stale once the item ships; truth lives in code and commits. **Slice plans (`M01-S01.md`) stay**: a slice covers several items, and cleanup is manual via `rota plan rm <key>`.
 
-## Step 9.5 — Tombstone Consumed Item Plans
+2. **Complete the item:**
 
-For each item `rota item complete` resolved, remove its item plan if one exists. Skip when the item has no milestone tag or no plan file:
+   ```bash
+   rota item complete <ID> --commit <commit-hash>
+   ```
 
-```bash
-MILESTONE=$(rota item field get <ID> --name milestone)
-if [ -n "$MILESTONE" ] && [ -f ".rota/plans/${MILESTONE}-<ID>.md" ]; then
-  rota plan rm "${MILESTONE}-<ID>"
-fi
-```
+   `rota item complete` is the only write to the backlog; never edit `.rota/` by hand.
 
-The plan's decomposition is stale once the item ships; truth lives in code and commits. **Slice plans (`M01-S01.md`) stay**: a slice covers several items, and cleanup is manual via `rota plan rm <key>`. Run this before the Step 9 commit so the removals ride along.
+3. **Commit by name.** Step 1 may have removed a plan file and step 2 leaves `.rota/BACKLOG.md` modified. No directory-wide `git add .rota/`:
+
+   ```bash
+   git add .rota/BACKLOG.md [.rota/plans/<key>.md …]
+   git commit -m "chore: close <IDs>"
+   ```
 
 ## Step 10 — Merge or PR
 
