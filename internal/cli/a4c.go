@@ -9,7 +9,7 @@ import (
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/jsonx"
-	hvrepos "github.com/l4ci/rota/internal/repos"
+	"github.com/l4ci/rota/internal/repos"
 	"github.com/l4ci/rota/internal/status"
 	"github.com/l4ci/rota/internal/update"
 	"github.com/l4ci/rota/internal/version"
@@ -196,18 +196,18 @@ func a4RepoWhich(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		r, err := hvrepos.Which(cwd)
-		var masked *hvrepos.MaskedError
+		r, err := repos.Which(cwd)
+		var masked *repos.MaskedError
 		switch {
 		case err == nil:
 			return Result{Data: a4Obj("name", r.Name, "path", r.Path), Text: r.Name}, nil
-		case errors.Is(err, hvrepos.ErrGitMissing):
+		case errors.Is(err, repos.ErrGitMissing):
 			return Result{}, Unavailable("git is not installed")
 		case errors.As(err, &masked):
 			return Result{}, Resolution("%s", masked.Error()).WithHint("remove " + masked.Stray + " or run from the umbrella root")
-		case errors.Is(err, hvrepos.ErrNotGit):
+		case errors.Is(err, repos.ErrNotGit):
 			return Result{}, Resolution("not inside a git repo")
-		case errors.Is(err, hvrepos.ErrNoUmbrella):
+		case errors.Is(err, repos.ErrNoUmbrella):
 			return Result{}, Resolution("no umbrella: no .rota/ here or in any parent")
 		}
 		return Result{}, Resolution("not inside a registered sub-repo")
@@ -224,7 +224,7 @@ func a4RepoResolve(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		registry := status.LoadRepos(root)
+		registry := repos.Load(root)
 		if missing := status.Missing(registry, names); len(missing) > 0 {
 			e := Resolution("unregistered sub-repo(s): %s", strings.Join(missing, ", "))
 			if len(registry) == 0 {
@@ -253,7 +253,7 @@ func a4RepoUmbrella(fs *flag.FlagSet) RunFunc {
 		}
 		on := false
 		if root, err := c.Root(); err == nil {
-			on = hvrepos.Umbrella(root)
+			on = repos.Umbrella(root)
 		}
 		if on {
 			return Result{Data: a4Obj("umbrella", true), Text: "yes"}, nil

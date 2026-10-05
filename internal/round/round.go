@@ -12,6 +12,7 @@ package round
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -22,7 +23,6 @@ import (
 
 	"github.com/l4ci/rota/internal/escalation"
 	"github.com/l4ci/rota/internal/host"
-	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/limits"
 	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/tracker"
@@ -61,6 +61,7 @@ const DefaultNeedsHuman = "needs-human"
 type Forge interface {
 	OpenPRs(ctx context.Context) ([]tracker.PR, error)
 	PRState(ctx context.Context, pr int) (string, error)
+	ClosedNumbers(body string) []int
 	List(ctx context.Context, f tracker.ListFilter) ([]tracker.Issue, error)
 	AddLabels(ctx context.Context, number int, labels []string, autoCreate bool) error
 }
@@ -189,21 +190,21 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 		rep.views[r.Name] = v
 		seen[r.Name] = true
 	}
-	var slotObj = map[string]*jsonx.Object{}
+	var slotObj = map[string]*worker.Slot{}
 	for _, s := range reg.Slots() {
-		name := worker.Str(s, "name")
+		name := s.Name()
 		if name == "" || seen[name] {
 			continue
 		}
 		slotObj[name] = s
-		branch, wt := worker.Str(s, "branch"), worker.Str(s, "worktree")
+		branch, wt := s.Branch(), s.Worktree()
 		if w, ok := byWT[name]; ok { // the checkout is the truth about the branch
 			branch, wt = w.branch, w.path
 		}
-		r := &Row{Name: name, Branch: branch, PR: worker.Str(s, "pr"), Tab: worker.Str(s, "handle"), Registered: true}
-		r.Issue = issueOf(worker.Str(s, "task"), branch, name)
-		r.Kind, r.Tier, r.Model, r.TierReason = worker.Str(s, "kind"), worker.Str(s, "tier"), worker.Str(s, "model"), worker.Str(s, "tierReason")
-		add(r, &view{worktree: wt, base: firstNonEmpty(worker.Str(s, "base"), e.Base)})
+		r := &Row{Name: name, Branch: branch, PR: s.PR(), Tab: s.Handle(), Registered: true}
+		r.Issue = issueOf(s.Task(), branch, name)
+		r.Kind, r.Tier, r.Model, r.TierReason = s.Kind(), s.Tier(), s.Model(), s.TierReason()
+		add(r, &view{worktree: wt, base: firstNonEmpty(s.Base(), e.Base)})
 	}
 	sort.Slice(wts, func(i, j int) bool { return wts[i].name < wts[j].name })
 	for _, w := range wts {
@@ -381,7 +382,7 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 			v := rep.views[r.Name]
 			st := e.Stalled(ctx, StallInput{
 				Worktree: v.worktree, Base: v.base, Holds: true, Alive: true,
-				Escalated: waiting[r.Name], ActiveAt: worker.Str(s, "activeAt"), Minutes: e.StallMinutes,
+				Escalated: waiting[r.Name], ActiveAt: s.ActiveAt(), Minutes: e.StallMinutes,
 			}, now())
 			if st.Stalled {
 				rep.add(Finding{Kind: StalledSlot, Slot: r.Name, Issue: r.Issue,
@@ -494,7 +495,7 @@ func firstNonEmpty(a, b string) string {
 func (e Env) worktrees(ctx context.Context, root string) ([]worktree, error) {
 	out, errOut, code, err := e.Git(ctx, root, "worktree", "list", "--porcelain")
 	if err != nil || code != 0 {
-		return nil, &worker.Error{Exit: worker.ExitUnavailable, Message: "git worktree list failed: " + strings.TrimSpace(errOut)}
+		return nil, &exitcode.Error{Exit: exitcode.ExitUnavailable, Message: "git worktree list failed: " + strings.TrimSpace(errOut)}
 	}
 	dir := filepath.Join(root, ".worktrees")
 	var wts []worktree

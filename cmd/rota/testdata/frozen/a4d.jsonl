@@ -9,7 +9,7 @@
 {"name":"close/commit-unknown/gitlab","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"commit 'deadbeef' not found in current repository"},"ok":false},"db":"c7ec7d64d1f5c1d8"}]}
 {"name":"close/empty-item/github","steps":[{"exit":0,"env":{"data":{"changed":true,"commit":"1a6cd05","issue":1},"ok":true},"db":"2c16f96520134968"}]}
 {"name":"close/empty-item/gitlab","steps":[{"exit":0,"env":{"data":{"changed":true,"commit":"1a6cd05","issue":1},"ok":true},"db":"0256be862e1548a7"}]}
-{"name":"close/forge-fails/github","steps":[{"exit":5,"env":{"error":{"code":"unavailable","exit":5,"message":"fake gh: simulated failure for: issue close 1 --comment Closed by rota: shipped in 1a6cd05\n\n<!-- rota:shipped -->"},"ok":false},"db":"c7ec7d64d1f5c1d8"}]}
+{"name":"close/forge-fails/github","steps":[{"exit":5,"env":{"error":{"code":"unavailable","exit":5,"message":"fake gh: simulated failure for: issue close 1 --reason completed --comment Closed by rota: shipped in 1a6cd05\n\n<!-- rota:shipped -->"},"ok":false},"db":"c7ec7d64d1f5c1d8"}]}
 {"name":"close/forge-fails/gitlab","steps":[{"exit":5,"env":{"error":{"code":"unavailable","exit":5,"message":"fake glab: simulated failure for: issue close 1"},"ok":false},"db":"d6ff799898bc5378"}]}
 {"name":"close/item-with-space/github","steps":[{"exit":0,"env":{"data":{"changed":true,"commit":"1a6cd05","issue":1},"ok":true},"db":"c3b20bf9baf9fb06"}]}
 {"name":"close/item-with-space/gitlab","steps":[{"exit":0,"env":{"data":{"changed":true,"commit":"1a6cd05","issue":1},"ok":true},"db":"bfaffb1abcd55ee0"}]}
@@ -68,7 +68,7 @@
 {"name":"label/autocreate-explicit-on/gitlab","steps":[{"exit":0,"env":{"data":{"action":"add","changed":true,"issue":2,"label":"newer"},"ok":true},"db":"e607ba8252a0af10"}]}
 {"name":"label/autocreate-off-existing/github","steps":[{"exit":0,"env":{"data":{"action":"add","changed":true,"issue":1,"label":"existing"},"ok":true},"db":"a3d27d276c77c3b5"}]}
 {"name":"label/autocreate-off-existing/gitlab","steps":[{"exit":0,"env":{"data":{"action":"add","changed":true,"issue":1,"label":"existing"},"ok":true},"db":"a3d27d276c77c3b5"}]}
-{"name":"label/autocreate-off/github","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"could not add label: 'brand-new' not found"},"ok":false},"db":"c7ec7d64d1f5c1d8"}]}
+{"name":"label/autocreate-off/github","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"label 'brand-new' does not exist (issues.autoCreateLabel is off)"},"ok":false},"db":"c7ec7d64d1f5c1d8"}]}
 {"name":"label/autocreate-off/gitlab","steps":[{"exit":0,"env":{"data":{"action":"add","changed":true,"issue":1,"label":"brand-new"},"ok":true},"db":"2afe56d1eb4a0d15"}]}
 {"name":"label/bad-number/github","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"rota issues label: issue must be a number, got \"abc\""},"ok":false},"db":"c7ec7d64d1f5c1d8"}]}
 {"name":"label/bad-number/gitlab","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"rota issues label: issue must be a number, got \"abc\""},"ok":false},"db":"c7ec7d64d1f5c1d8"}]}
@@ -88,7 +88,7 @@
 {"name":"label/no-number/gitlab","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"issues label takes one issue number"},"ok":false},"db":"c7ec7d64d1f5c1d8"}]}
 {"name":"label/rate-limited-remove/github","steps":[{"exit":6,"env":{"error":{"code":"retry","exit":6,"message":"github secondary rate limit — stopped; wait several minutes before retrying"},"ok":false},"db":"c7ec7d64d1f5c1d8"}]}
 {"name":"label/rate-limited-remove/gitlab","steps":[{"exit":6,"env":{"error":{"code":"retry","exit":6,"message":"gitlab secondary rate limit — stopped; wait several minutes before retrying"},"ok":false},"db":"c7ec7d64d1f5c1d8"}]}
-{"name":"label/rate-limited/github","steps":[{"exit":5,"env":{"error":{"code":"unavailable","exit":5,"message":"github secondary rate limit — stopped; wait several minutes before retrying"},"ok":false},"db":"c7ec7d64d1f5c1d8"}]}
+{"name":"label/rate-limited/github","steps":[{"exit":6,"env":{"error":{"code":"retry","exit":6,"message":"github secondary rate limit — stopped; wait several minutes before retrying"},"ok":false},"db":"c7ec7d64d1f5c1d8"}]}
 {"name":"label/rate-limited/gitlab","steps":[{"exit":6,"env":{"error":{"code":"retry","exit":6,"message":"gitlab secondary rate limit — stopped; wait several minutes before retrying"},"ok":false},"db":"c7ec7d64d1f5c1d8"}]}
 {"name":"label/remove-absent/github","steps":[{"exit":0,"env":{"data":{"action":"remove","changed":false,"issue":1,"label":"existing"},"ok":true},"db":"c7ec7d64d1f5c1d8"}]}
 {"name":"label/remove-absent/gitlab","steps":[{"exit":0,"env":{"data":{"action":"remove","changed":false,"issue":1,"label":"existing"},"ok":true},"db":"c7ec7d64d1f5c1d8"}]}

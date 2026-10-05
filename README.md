@@ -49,7 +49,7 @@ Skills hold judgment; `rota` verbs enforce the rules. Settings live in `.rota/co
 
 ## Contributing
 
-Issues and PRs welcome. Run `python3 test/validate-skills.py` and `bash test/smoke.sh` before a PR; add a smoke assertion when you touch a verb. Running a round on rota itself: [contributing: rounds](docs/contributing/rounds.md).
+Issues and PRs welcome. Run `python3 test/validate-skills.py`, `bash test/doclint.sh` and `bash test/smoke.sh` before a PR; add a smoke assertion when you touch a verb. Running a round on rota itself: [contributing: rounds](docs/contributing/rounds.md).
 
 ## License
 

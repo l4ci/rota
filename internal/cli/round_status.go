@@ -100,7 +100,7 @@ func roundStatus(*flag.FlagSet) RunFunc {
 		ctx := c.Context()
 		rep, err := withBoard(c, root, roundEnv(ctx, root)).Status(ctx, root)
 		if err != nil {
-			return Result{}, fromWorker(err)
+			return Result{}, err
 		}
 		for _, w := range rep.Warnings {
 			c.Warn("%s", w)
@@ -169,7 +169,7 @@ func roundReconcile(fs *flag.FlagSet) RunFunc {
 		ctx := c.Context()
 		out, err := withBoard(c, root, roundEnv(ctx, root)).Reconcile(ctx, root, *apply)
 		if err != nil {
-			return Result{}, fromWorker(err)
+			return Result{}, err
 		}
 		for _, w := range out.Report.Warnings {
 			c.Warn("%s", w)

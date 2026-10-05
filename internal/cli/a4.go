@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -15,6 +14,7 @@ import (
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/tracker"
@@ -160,27 +160,28 @@ func a4Open(c *Ctx, root string, fileOnly bool, hint string) (backlog.Backend, e
 		return nil, &backlog.RefusedError{BlockedBy: "backend", Hint: hint, Err: backlog.ErrWrongBackend,
 			Msg: `not available with backlog.backend "issues"`}
 	}
-	if name != "file" && backlog.IsUmbrella(root) {
-		ctx := c.Context()
-		u := backlog.NewUmbrella(root, cfg, func(dir string) (backlog.Tracker, error) { return newTracker(ctx, dir, cfg) })
-		u.Ctx = ctx
-		u.Scope = c.Repo
-		if cwd, err := os.Getwd(); err == nil {
-			u.CwdRepo = backlog.CwdSubRepo(cwd, u.Repos)
-		}
-		return u, nil
+	cwd, _ := os.Getwd()
+	return backlog.Open(c.Context(), root, cfg, backlog.Options{
+		Scope: c.Repo,
+		Cwd:   cwd,
+		NewTracker: func(ctx context.Context, dir string) (backlog.Tracker, error) {
+			return newTracker(ctx, dir, cfg)
+		},
+	})
+}
+
+// a4OpenFile opens the backlog for a file-only verb: a refusal (exit 4,
+// backend) under issues, else the file backend's FileOps.
+func a4OpenFile(c *Ctx, root, hint string) (backlog.FileOps, error) {
+	be, err := a4Open(c, root, true, hint)
+	if err != nil {
+		return nil, err
 	}
-	var tr backlog.Tracker
-	if name != "file" {
-		if tr, err = newTracker(c.Context(), root, cfg); err != nil {
-			return nil, err
-		}
+	ops, ok := be.(backlog.FileOps)
+	if !ok {
+		return nil, &Error{Exit: ExitInternal, Message: "backlog backend " + be.Name() + " has no file operations"}
 	}
-	be, err := backlog.Open(root, cfg, tr)
-	if is, ok := be.(*backlog.Issues); ok {
-		is.Ctx = c.Context()
-	}
-	return be, err
+	return ops, nil
 }
 
 // a4Fail maps a backlog error to a verb failure and, for a refusal, its
@@ -288,11 +289,11 @@ func a4IDNext(fs *flag.FlagSet) RunFunc {
 		if !a4In(a4Counters, *kind) {
 			return Result{}, Usage("--kind must be bugs|features|tasks|milestones")
 		}
-		be, err := a4Open(c, root, true, "IDs are issue numbers; capture creates the issue")
+		ops, err := a4OpenFile(c, root, "IDs are issue numbers; capture creates the issue")
 		if err != nil {
 			return a4Fail(err)
 		}
-		id, err := be.(*backlog.File).NextID(*kind)
+		id, err := ops.NextID(*kind)
 		if err != nil {
 			return a4Fail(err)
 		}
@@ -355,11 +356,11 @@ func a4Create(fs *flag.FlagSet) RunFunc {
 			if m == nil {
 				return Result{}, Usage("--raw-file bullet needs a **[ID]")
 			}
-			be, err := a4Open(c, root, true, "--raw-file appends to BACKLOG.md; use item create --title")
+			ops, err := a4OpenFile(c, root, "--raw-file appends to BACKLOG.md; use item create --title")
 			if err != nil {
 				return a4Fail(err)
 			}
-			if err := be.(*backlog.File).Append(a4Sections[*kind], entry); err != nil {
+			if err := ops.Append(a4Sections[*kind], entry); err != nil {
 				return a4Fail(err)
 			}
 			typ, _ := backlog.TypeByKind(*kind)
@@ -544,8 +545,8 @@ func a4Complete(fs *flag.FlagSet) RunFunc {
 		}
 		hash := *commit
 		if hash == "" {
-			out, gerr := exec.Command("git", "log", "-1", "--format=%h").Output()
-			if hash = pystr.Strip(string(out)); gerr != nil || hash == "" {
+			h, ok, gerr := git.Repo{}.ShortHead(context.Background())
+			if hash = h; gerr != nil || !ok || hash == "" {
 				return Result{}, Unavailable("git has no HEAD to default --commit").WithHint("pass --commit <hash>")
 			}
 		}
@@ -625,11 +626,11 @@ func a4Rm(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		be, err := a4Open(c, root, true, "rota item complete <ID> --reason dropped")
+		ops, err := a4OpenFile(c, root, "rota item complete <ID> --reason dropped")
 		if err != nil {
 			return a4Fail(err)
 		}
-		res, err := be.(*backlog.File).Remove(ids, *scrub, *apply)
+		res, err := ops.Remove(ids, *scrub, *apply)
 		if err != nil {
 			return a4Fail(err)
 		}

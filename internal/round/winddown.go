@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"strings"
 
@@ -71,7 +72,7 @@ func (e Env) WindDown(ctx context.Context, root string, be Board, o WindDownOpts
 	}
 	holder := le.Discover(o.HolderPID, o.Getenv)
 	if (st != roundlease.Live && st != roundlease.Foreign) || !holder.SameAs(lease, le.Host) {
-		return res, &worker.Error{Exit: worker.ExitResolution, Message: "this process holds no round lease: nothing to wind down", Hint: "run it from the orchestrator that ran rota round start"}
+		return res, &exitcode.Error{Exit: exitcode.ExitResolution, Message: "this process holds no round lease: nothing to wind down", Hint: "run it from the orchestrator that ran rota round start"}
 	}
 	res.Round = lease.Round
 
@@ -129,16 +130,16 @@ func (e Env) WindDown(ctx context.Context, root string, be Board, o WindDownOpts
 		want[n] = true
 	}
 	for _, s := range worker.LoadRegistry(root).Slots() {
-		name := worker.Str(s, "name")
+		name := s.Name()
 		if !want[name] {
 			continue
 		}
 		so := before[name]
 		so.Name = name
 		park := "park/" + name
-		wasParked := worker.Str(s, "branch") == park && worker.Str(s, "task") == ""
-		claim := worker.Str(s, "claimId")
-		issue := heldID(worker.Str(s, "task"), worker.Str(s, "branch"), name)
+		wasParked := s.Branch() == park && s.Task() == ""
+		claim := s.ClaimID()
+		issue := heldID(s.Task(), s.Branch(), name)
 		if !wasParked {
 			so.Issue = firstNonEmpty(so.Issue, issue)
 		} else {
@@ -146,7 +147,7 @@ func (e Env) WindDown(ctx context.Context, root string, be Board, o WindDownOpts
 		}
 		// End the session before the checkout moves under it, but only for a
 		// slot that will park: a slot holding work keeps its session.
-		handle := worker.Str(s, "handle")
+		handle := s.Handle()
 		sessionKept := false
 		if handle != "" {
 			if _, cerr := w.ResetTo(root, name, "", park, true); cerr == nil {
@@ -157,9 +158,9 @@ func (e Env) WindDown(ctx context.Context, root string, be Board, o WindDownOpts
 			}
 		}
 		rr, rerr := w.ResetTo(root, name, "", park, false)
-		var we *worker.Error
+		var we *exitcode.Error
 		switch {
-		case errors.As(rerr, &we) && we.Exit == worker.ExitRefused:
+		case errors.As(rerr, &we) && we.Exit == exitcode.ExitRefused:
 			so.Outcome, so.Dirty, so.Unmerged = OutcomeRetained, rr.Dirty, rr.Unmerged
 			res.Retained = true
 		case rerr != nil:
@@ -171,22 +172,10 @@ func (e Env) WindDown(ctx context.Context, root string, be Board, o WindDownOpts
 			} else {
 				res.Changed = true
 			}
-			if err := mutateSlot(root, name, func(s *jsonx.Object) {
-				s.Set("task", nil)
-				s.Set("claimId", nil)
-				s.Set("kind", nil)
-				s.Set("tier", nil)
-				s.Set("model", nil)
-				s.Set("tierReason", nil)
-				s.Set("pr", nil)
-				s.Set("state", "idle")
-				// A parked slot has no pane: a handle left behind reads as a
-				// dead-tab to reconcile once the tab closes (as reclaim does).
-				// A session that could not be killed keeps its handle.
-				if !sessionKept {
-					s.Set("handle", nil)
-				}
-			}); err != nil {
+			// A parked slot has no pane: a handle left behind reads as a
+			// dead-tab to reconcile once the tab closes (as reclaim does).
+			// A session that could not be killed keeps its handle.
+			if err := editSlot(root, name, func(s *worker.Slot) error { s.Park(!sessionKept); return nil }); err != nil {
 				return res, err
 			}
 			if claim != "" && issue != "" && be != nil {
@@ -210,7 +199,7 @@ func (e Env) WindDown(ctx context.Context, root string, be Board, o WindDownOpts
 		}
 		// The round is over, so its host goes with the lease: the worker verbs
 		// read work.dispatch again.
-		if err := worker.Update(root, slotsDefault(), func(doc *jsonx.Object) { doc.Delete("host") }); err != nil {
+		if err := worker.UpdateDoc(root, func(doc *jsonx.Object) { doc.Delete("host") }); err != nil {
 			return res, err
 		}
 		res.Changed = true
@@ -229,18 +218,18 @@ func (e Env) WindDown(ctx context.Context, root string, be Board, o WindDownOpts
 func (e Env) requireBase(ctx context.Context, root string) error {
 	cur, _, code, err := e.Git(ctx, root, "rev-parse", "--abbrev-ref", "HEAD")
 	if err != nil || code != 0 {
-		return &worker.Error{Exit: worker.ExitUnavailable, Message: "git rev-parse failed in " + root}
+		return &exitcode.Error{Exit: exitcode.ExitUnavailable, Message: "git rev-parse failed in " + root}
 	}
 	if strings.TrimSpace(cur) != e.Base {
-		return &worker.Error{Exit: worker.ExitResolution, Message: fmt.Sprintf("the project root is on %s, not the base %s", strings.TrimSpace(cur), e.Base),
+		return &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("the project root is on %s, not the base %s", strings.TrimSpace(cur), e.Base),
 			Hint: "wind-down verifies the base: check it out in the project root first"}
 	}
 	out, _, code, err := e.Git(ctx, root, "status", "--porcelain", "--untracked-files=no")
 	if err != nil || code != 0 {
-		return &worker.Error{Exit: worker.ExitUnavailable, Message: "git status failed in " + root}
+		return &exitcode.Error{Exit: exitcode.ExitUnavailable, Message: "git status failed in " + root}
 	}
 	if strings.TrimSpace(out) != "" {
-		return &worker.Error{Exit: worker.ExitResolution, Message: "the project root has uncommitted changes to tracked files", Hint: "commit or stash them: wind-down verifies the base as it is"}
+		return &exitcode.Error{Exit: exitcode.ExitResolution, Message: "the project root has uncommitted changes to tracked files", Hint: "commit or stash them: wind-down verifies the base as it is"}
 	}
 	return nil
 }

@@ -1,10 +1,10 @@
 package backlog
 
 import (
-	"bytes"
+	"context"
 	"errors"
+	gitx "github.com/l4ci/rota/internal/git"
 	"os"
-	"os/exec"
 	"regexp"
 	"sort"
 	"strings"
@@ -37,19 +37,11 @@ type SymbolDrift struct {
 
 // git runs git in dir. code is git's exit status, -1 when it did not run.
 func git(dir string, args ...string) (stdout string, code int) {
-	cmd := exec.Command("git", args...)
-	cmd.Dir = dir
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	err := cmd.Run()
-	if err == nil {
-		return out.String(), 0
+	res, err := gitx.Repo{Dir: dir}.Run(context.Background(), args...)
+	if err != nil {
+		return "", -1
 	}
-	var ee *exec.ExitError
-	if errors.As(err, &ee) {
-		return out.String(), ee.ExitCode()
-	}
-	return "", -1
+	return res.Stdout, res.Code
 }
 
 // reachable is the set of commits in <since>..HEAD of dir, or nil when since

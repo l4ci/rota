@@ -2,6 +2,7 @@ package worker
 
 import (
 	"fmt"
+	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -9,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/l4ci/rota/internal/pytest"
+	"github.com/l4ci/rota/internal/golden"
 )
 
 // paneFixtures are static pane texts covering every rule of the classifier,
@@ -45,22 +46,14 @@ var paneFixtures = map[string]string{
 // state and evidence the retired shell classifier gave.
 func TestClassify(t *testing.T) {
 	statuses := []string{"", "idle", "working", "blocked", "done", "unknown", "gone"}
-	var want map[string][2]string // "<pane>/<status>" -> state, evidence
-	pytest.Golden(t, map[string]any{"panes": paneFixtures, "statuses": statuses, "argv": "--fixture <pane> --slot w1 [--status <status>]"}, &want)
+	got := map[string][2]string{} // "<pane>/<status>" -> state, evidence
 	for name, text := range paneFixtures {
 		for _, status := range statuses {
-			t.Run(name+"/"+status, func(t *testing.T) {
-				old, ok := want[name+"/"+status]
-				if !ok {
-					t.Fatal("no recorded result")
-				}
-				state, evidence := Classify(text, false, 60, status)
-				if state != old[0] || evidence != old[1] {
-					t.Errorf("go %s %q, golden %s %q", state, evidence, old[0], old[1])
-				}
-			})
+			state, evidence := Classify(text, false, 60, status)
+			got[name+"/"+status] = [2]string{state, evidence}
 		}
 	}
+	golden.Check(t, map[string]any{"panes": paneFixtures, "statuses": statuses, "argv": "--fixture <pane> --slot w1 [--status <status>]"}, got)
 }
 
 func TestClassifyMovementAndTailWindow(t *testing.T) {
@@ -95,7 +88,7 @@ func TestPollFixtureMode(t *testing.T) {
 	if res, _ = PollFixture(fx, "w3", "", 0); res.Slots[0].Name != "w3" {
 		t.Errorf("name = %s", res.Slots[0].Name)
 	}
-	if _, err = PollFixture("/no/such/file", "", "", 0); exitOf(err) != ExitUsage {
+	if _, err = PollFixture("/no/such/file", "", "", 0); exitOf(err) != exitcode.ExitUsage {
 		t.Errorf("missing fixture: %v", err)
 	}
 }
@@ -170,7 +163,7 @@ func TestPollNamedSlotAndSettle(t *testing.T) {
 			t.Errorf("polled an unnamed slot: %v", f.calls)
 		}
 	}
-	if _, err = envWith(f).Poll(bg, dir, PollOpts{Slot: "w9"}); exitOf(err) != ExitResolution {
+	if _, err = envWith(f).Poll(bg, dir, PollOpts{Slot: "w9"}); exitOf(err) != exitcode.ExitResolution {
 		t.Errorf("unknown slot: %v", err)
 	}
 }
@@ -209,7 +202,7 @@ func TestPollHostFailureAndNoRegistry(t *testing.T) {
 		t.Errorf("no registry: %+v %v", res, err)
 	}
 	f.requireErr = fmt.Errorf("tmux is not installed")
-	if _, err = envWith(f).Poll(bg, dir, PollOpts{}); exitOf(err) != ExitUnavailable {
+	if _, err = envWith(f).Poll(bg, dir, PollOpts{}); exitOf(err) != exitcode.ExitUnavailable {
 		t.Errorf("host missing: %v", err)
 	}
 }

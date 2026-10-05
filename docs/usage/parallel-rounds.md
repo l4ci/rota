@@ -195,6 +195,9 @@ issue to read and dispute, the siblings and the decisions from `--body-file`.
   [Codex workers](codex-workers.md).
 - **Overlap.** `--accept-overlap` skips the file-overlap check only. Say which PR merges first in
   the second worker's brief.
+- **Open PR.** An issue an open PR already resolves (head branch `<agent>/<issue>-*` or `Closes #N`)
+  is `not ready: open PR #M` in `round candidates`, and `assign` refuses it. `--accept-open-pr`
+  assigns it again for a deliberate redo.
 - **Failure.** A failure before dispatch undoes the claim and state; one at or after dispatch keeps
   them, and repeating the call resumes.
 
@@ -232,6 +235,31 @@ With `rota hook install` the orchestrator is held to this. The Stop hook refuses
 orchestrator go idle while workers are active and no watch is running, and the prompt hook adds a
 one-line digest of the round (and a reminder when no watch is armed) to every message you send.
 Neither applies to a solo round, which has no panes to watch.
+
+## Autopilot
+
+Off by default. With `round.autopilot` on, `rota round watch --autopilot` (or one pass of
+`rota round tick`) does the mechanical steps of a round, so you spend judgment on what is left:
+
+1. repair the safe drift (`reconcile --apply`);
+2. gate and merge every finished PR, as one `worker train` when several wait, at most
+   `round.autopilotCap` (default 3) per tick, and only under `ship.mergeApproval: none`;
+3. run the architecture-review trigger (`rota round architecture`): when the
+   threshold is reached, or a slot is idle with nothing assignable, mint the review items
+   (`round.architectureEvery` 0 never mints), one audit line per mint;
+4. assign the first ready candidate of the round's scope to each idle slot, at most
+   `round.autopilotCap`, at the default tier and never with `--accept-overlap`. Review items
+   minted in the same tick go first, and count against the same cap.
+
+It never answers a worker, approves a permission, picks a higher tier, reclaims a slot or merges
+without a passing gate. A blocked, limited or dead slot, a failed gate, drift it will not repair and
+any merge a policy sends to a person come back in `needsYou`. The watch wakes you only for an item you
+have not seen, at the heartbeat, or when the autopilot stops (a wind-down or a lost lease). A gate that
+failed for a reason a person must clear is held, not re-run on every tick. Every action is one line in
+`.rota/gate-audit.jsonl` with `"gate": "autopilot"`.
+
+The watch is the autopilot's heartbeat: keep exactly one running, as above. The scope you chose at
+`round start` bounds what it assigns; start a `slate` round to keep it to issues you picked.
 
 ## PRs in review
 

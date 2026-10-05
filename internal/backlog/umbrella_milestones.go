@@ -6,6 +6,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	ms "github.com/l4ci/rota/internal/milestone"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/tracker"
 )
@@ -107,7 +108,7 @@ func (u *Umbrella) MilestoneAdd(mid, title, summary string, depends []string, to
 // MilestoneList is the home sub-repo's list, except that a shipped milestone
 // is active while any sub-repo's native milestone is still open; ready
 // follows the adjusted statuses.
-func (u *Umbrella) MilestoneList() ([]MilestoneRow, error) {
+func (u *Umbrella) MilestoneList() ([]ms.Entry, error) {
 	home, err := u.homeSub()
 	if err != nil {
 		return nil, err

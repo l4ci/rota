@@ -3,45 +3,30 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/exitcode"
 
 	"github.com/l4ci/rota/internal/fsio"
 )
 
-// Exit codes; see docs/design/5.0-cli-conventions.md, Exit codes.
+// Exit codes and the error type live in internal/exitcode so artifact and
+// worker return the same type; these aliases keep the cli spelling.
 const (
-	ExitOK             = 0
-	ExitFailed         = 1
-	ExitUsage          = 2
-	ExitResolution     = 3
-	ExitRefused        = 4
-	ExitUnavailable    = 5
-	ExitRetry          = 6
-	ExitInternal       = 70
-	ExitNotImplemented = 71
+	ExitOK             = exitcode.ExitOK
+	ExitFailed         = exitcode.ExitFailed
+	ExitUsage          = exitcode.ExitUsage
+	ExitResolution     = exitcode.ExitResolution
+	ExitRefused        = exitcode.ExitRefused
+	ExitUnavailable    = exitcode.ExitUnavailable
+	ExitRetry          = exitcode.ExitRetry
+	ExitInternal       = exitcode.ExitInternal
+	ExitNotImplemented = exitcode.ExitNotImplemented
 )
 
-var codeNames = map[int]string{
-	ExitFailed:         "failed",
-	ExitUsage:          "usage",
-	ExitResolution:     "resolution",
-	ExitRefused:        "refused",
-	ExitUnavailable:    "unavailable",
-	ExitRetry:          "retry",
-	ExitInternal:       "internal",
-	ExitNotImplemented: "not_implemented",
-}
-
 // CodeName is the error.code string for an exit code.
-func CodeName(exit int) string { return codeNames[exit] }
+func CodeName(exit int) string { return exitcode.CodeName(exit) }
 
 // Error is a verb failure with its exit code and an optional hint line.
-type Error struct {
-	Exit    int
-	Message string
-	Hint    string
-}
-
-func (e *Error) Error() string { return e.Message }
+type Error = exitcode.Error
 
 func newErr(exit int, hint, format string, a ...any) *Error {
 	return &Error{Exit: exit, Message: fmt.Sprintf(format, a...), Hint: hint}
@@ -69,9 +54,6 @@ func Retry(format string, a ...any) *Error { return newErr(ExitRetry, "", format
 func NotImplemented(path string) *Error {
 	return newErr(ExitNotImplemented, "", "%s is not ported yet", path)
 }
-
-// WithHint returns e with a hint line added.
-func (e *Error) WithHint(hint string) *Error { e.Hint = hint; return e }
 
 // asError maps any error to an *Error: lock timeouts become retry, and
 // anything unclassified is an internal error.

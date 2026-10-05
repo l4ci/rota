@@ -12,7 +12,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/l4ci/rota/internal/artifact"
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/git"
@@ -104,7 +103,11 @@ func reviewScan(c *Ctx, t branchTarget) (reviewInfo, error) {
 	if err != nil {
 		return info, err
 	}
-	if artifact.IssueMode(t.CorpusRoot) {
+	issue, err := issueBackend(t.CorpusRoot)
+	if err != nil {
+		return info, err
+	}
+	if issue {
 		reviewScanIssues(c, t, bodies, &info)
 		return info, nil
 	}
@@ -429,7 +432,7 @@ func a8Issues(c *Ctx, hint string, perRepo bool) (a8Backend, error) {
 		return nil, &backlog.RefusedError{BlockedBy: "backend", Hint: hint, Err: backlog.ErrWrongBackend,
 			Msg: c.Path + ` is not available with backlog.backend "file"`}
 	}
-	if perRepo && c.Repo == "" && backlog.IsUmbrella(root) {
+	if perRepo && c.Repo == "" && repos.Umbrella(root) {
 		// Scope S: inside a sub-repo the verb acts on it; only the umbrella
 		// root itself needs --repo.
 		if cwd, err := os.Getwd(); err != nil || backlog.CwdSubRepo(cwd, repos.Load(root)) == "" {

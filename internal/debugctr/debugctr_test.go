@@ -2,6 +2,7 @@ package debugctr
 
 import (
 	"errors"
+	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -9,8 +10,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
-
-	"github.com/l4ci/rota/internal/artifact"
 )
 
 func repo(t *testing.T) string {
@@ -28,7 +27,7 @@ func repo(t *testing.T) string {
 }
 
 func exitOf(err error) int {
-	var ae *artifact.Error
+	var ae *exitcode.Error
 	if errors.As(err, &ae) {
 		return ae.Exit
 	}

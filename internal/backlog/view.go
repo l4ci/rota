@@ -55,7 +55,7 @@ func OpenRows(be Backend) (rows []Row, md string, ok bool, err error) {
 	}
 	_, umbrella := be.(*Umbrella)
 	for _, it := range items {
-		r := Row{ID: it.ID, Key: it.Type + strconv.Itoa(it.Number), Number: it.Number, Type: it.Type, Tag: it.Tag,
+		r := Row{ID: it.ID, Key: it.Key(), Number: it.Number, Type: it.Type, Tag: it.Tag,
 			Title: it.Title, Section: sectionOfType[it.Type], Raw: it.Line, Fields: it.Fields}
 		if umbrella {
 			r.Repo = it.Fields.Get("repos")

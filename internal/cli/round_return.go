@@ -80,7 +80,7 @@ func moveFailure(err error, changed bool) (Result, error) {
 		f.Set("changed", false)
 		return Result{Data: f}, &Error{Exit: ExitRefused, Message: blk.Msg}
 	}
-	_, ferr := a4Fail(fromWorker(err))
+	_, ferr := a4Fail(err)
 	f := jsonx.NewObject()
 	f.Set("changed", changed)
 	return Result{Data: f}, ferr
@@ -138,7 +138,7 @@ func inSlot(root, slot string) bool {
 	if s == nil {
 		return false
 	}
-	wt, cwd := worker.Str(s, "worktree"), ""
+	wt, cwd := s.Worktree(), ""
 	if wd, err := os.Getwd(); err == nil {
 		cwd = wd
 	}

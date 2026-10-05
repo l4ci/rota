@@ -2,17 +2,15 @@ package backlog
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math/rand"
-	"reflect"
 	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/l4ci/rota/internal/backlog/trackertest"
-	"github.com/l4ci/rota/internal/pytest"
+	"github.com/l4ci/rota/internal/golden"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
@@ -233,19 +231,6 @@ func goRunScenario(t *testing.T, s wScenario) map[string]any {
 	return map[string]any{"steps": steps, "final": final}
 }
 
-func norm(t *testing.T, v any) any {
-	t.Helper()
-	raw, err := json.Marshal(v)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var out any
-	if err := json.Unmarshal(raw, &out); err != nil {
-		t.Fatal(err)
-	}
-	return out
-}
-
 func seedIssues() []wSeedIssue {
 	return []wSeedIssue{
 		{1, "Add export", "Export it.\n\n## Acceptance\n- [ ] works\n\n<!-- rota:fields\nRelated: B9\n-->", []string{"type:feature", "size:Major"}, "M07 — Seven", "open", "", nil},
@@ -441,38 +426,9 @@ func TestIssueWritesMatchPython(t *testing.T) {
 		}
 		scen = append(scen, s)
 	}
-	var want []map[string]any
-	pytest.GoldenJSON(t, scen, &want)
-
-	steps, bad := 0, 0
-	for i, s := range scen {
-		got := norm(t, goRunScenario(t, s)).(map[string]any)
-		w := norm(t, want[i]).(map[string]any)
-		gs, ws := got["steps"].([]any), w["steps"].([]any)
-		for j := range s.Steps {
-			steps++
-			if !reflect.DeepEqual(gs[j], ws[j]) {
-				bad++
-				if bad <= 8 {
-					st, _ := json.Marshal(s.Steps[j])
-					g, _ := json.Marshal(gs[j])
-					p, _ := json.Marshal(ws[j])
-					t.Errorf("scenario %d step %d %s\n go:     %s\n python: %s", i, j, st, g, p)
-				}
-			}
-		}
-		if !reflect.DeepEqual(got["final"], w["final"]) {
-			bad++
-			g, _ := json.Marshal(got["final"])
-			p, _ := json.Marshal(w["final"])
-			t.Errorf("scenario %d final state differs\n go:     %.1500s\n python: %.1500s", i, g, p)
-		}
+	var got []any
+	for _, s := range scen {
+		got = append(got, goRunScenario(t, s))
 	}
-	if bad > 0 {
-		t.Fatalf("%d mismatches in %d steps", bad, steps)
-	}
-	if steps < 150 {
-		t.Fatalf("only %d steps", steps)
-	}
-	t.Logf("compared %d steps in %d scenarios (call sequences, results, final state)", steps, len(scen))
+	golden.Check(t, map[string]any{"input": scen}, got)
 }

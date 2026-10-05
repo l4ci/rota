@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/config"
-	"github.com/l4ci/rota/internal/pytest"
+	"github.com/l4ci/rota/internal/golden"
 )
 
 // fixture is a starting tree: path (relative to the root) to content.
@@ -98,45 +98,20 @@ func readTree(t *testing.T, dir string) map[string]string {
 	return out
 }
 
-// TestInitMatchesBootstrapGolden checks that Init leaves the tree the old
-// hv-bootstrap left on every fixture, as recorded in testdata/golden. The
-// deliberate differences are the ones in the A9 rulings: no `.rota/bin` directory, the G4 MAP.md text and the G7 config.json key order, plus B2's
-// `.rota/verdicts.json` line in the .gitignore block (#55) and no `.rota/bin/`
-// line in it (#236), both edited into the golden by hand.
+// TestInitMatchesBootstrapGolden pins the tree Init leaves on every fixture,
+// recorded in testdata/golden. The record began as the old hv-bootstrap output
+// and was re-recorded from Go once Python retired.
 func TestInitMatchesBootstrapGolden(t *testing.T) {
-	var want map[string]map[string]string
-	pytest.Golden(t, fixtures, &want)
+	got := map[string]map[string]string{}
 	for _, name := range names() {
-		t.Run(name, func(t *testing.T) {
-			dir := t.TempDir()
-			writeFixture(t, dir, fixtures[name])
-			if _, err := Init(dir); err != nil {
-				t.Fatal(err)
-			}
-			got, exp := readTree(t, dir), want[name]
-			delete(exp, ".rota/bin")
-			for _, tree := range []map[string]string{got, exp} {
-				if _, mine := fixtures[name][".rota/MAP.md"]; !mine {
-					delete(tree, ".rota/MAP.md")
-				}
-				if _, mine := fixtures[name][".rota/config.json"]; !mine {
-					delete(tree, ".rota/config.json")
-				}
-			}
-			if !reflect.DeepEqual(got, exp) {
-				for p := range exp {
-					if got[p] != exp[p] {
-						t.Errorf("%s differs\n got: %q\nwant: %q", p, got[p], exp[p])
-					}
-				}
-				for p := range got {
-					if _, ok := exp[p]; !ok {
-						t.Errorf("extra path %s", p)
-					}
-				}
-			}
-		})
+		dir := t.TempDir()
+		writeFixture(t, dir, fixtures[name])
+		if _, err := Init(dir); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		got[name] = readTree(t, dir)
 	}
+	golden.Check(t, fixtures, got)
 }
 
 func TestInitIsIdempotent(t *testing.T) {

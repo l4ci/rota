@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/exitcode"
 	"strings"
 	"time"
 
 	"github.com/l4ci/rota/internal/host"
-	"github.com/l4ci/rota/internal/jsonx"
 )
 
 // WaitOpts are the flags of `rota round wait`.
@@ -64,7 +64,7 @@ func (e Env) Wait(ctx context.Context, root string, o WaitOpts) (WaitResult, err
 	}
 	h := e.NewHost(hostKind(root))
 	if err := h.Require(); err != nil {
-		return WaitResult{}, fail(ExitUnavailable, err.Error())
+		return WaitResult{}, fail(exitcode.ExitUnavailable, err.Error())
 	}
 	reg := LoadRegistry(root)
 	var targets []pollTarget
@@ -72,11 +72,11 @@ func (e Env) Wait(ctx context.Context, root string, o WaitOpts) (WaitResult, err
 		for _, name := range o.Slots {
 			s := reg.Slot(name)
 			if s == nil {
-				return WaitResult{}, fail(ExitResolution, fmt.Sprintf("slot '%s' is not in the pool", name))
+				return WaitResult{}, fail(exitcode.ExitResolution, fmt.Sprintf("slot '%s' is not in the pool", name))
 			}
 			t := slotTarget(s)
 			if t.handle == "" {
-				return WaitResult{}, fail(ExitResolution, fmt.Sprintf("slot '%s' has no session to watch", name))
+				return WaitResult{}, fail(exitcode.ExitResolution, fmt.Sprintf("slot '%s' has no session to watch", name))
 			}
 			targets = append(targets, t)
 		}
@@ -93,7 +93,7 @@ func (e Env) Wait(ctx context.Context, root string, o WaitOpts) (WaitResult, err
 		}
 	}
 	if len(targets) == 0 {
-		return WaitResult{}, fail(ExitResolution, "no slot with a session to watch")
+		return WaitResult{}, fail(exitcode.ExitResolution, "no slot with a session to watch")
 	}
 
 	if o.Timeout > 0 {
@@ -110,7 +110,7 @@ func (e Env) Wait(ctx context.Context, root string, o WaitOpts) (WaitResult, err
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			return WaitResult{TimedOut: true, Waited: e.Now().Sub(start), Slots: last}, nil
 		}
-		return WaitResult{}, fail(ExitFailed, "interrupted")
+		return WaitResult{}, fail(exitcode.ExitFailed, "interrupted")
 	}
 	var w host.Watch
 	if wh, ok := h.(host.Watcher); ok {
@@ -123,7 +123,7 @@ func (e Env) Wait(ctx context.Context, root string, o WaitOpts) (WaitResult, err
 			if ctx.Err() != nil {
 				return stop()
 			}
-			return WaitResult{}, fail(ExitUnavailable, err.Error())
+			return WaitResult{}, fail(exitcode.ExitUnavailable, err.Error())
 		}
 		defer w.Close()
 	}
@@ -147,20 +147,23 @@ func (e Env) Wait(ctx context.Context, root string, o WaitOpts) (WaitResult, err
 			if seen[r.Name] != "" && seen[r.Name] != key {
 				// The slot moved on: re-arm it.
 				delete(seen, r.Name)
-				if _, err := updateSlot(root, r.Name, func(s *jsonx.Object) { s.Delete("seen") }); err != nil {
+				if _, err := UpdateSlot(root, r.Name, func(s *Slot) { s.ClearSeen() }); err != nil {
 					return WaitResult{}, err
 				}
 			}
 			// A row already returned once is treated like busy until the slot
 			// shows a different state or evidence; alwaysNews states never are.
 			if r.State != StateBusy && (seen[r.Name] != key || alwaysNews(r.State)) {
-				if _, err := updateSlot(root, r.Name, func(s *jsonx.Object) {
-					recordRow(s, r, e.Now())
-					if !alwaysNews(r.State) {
-						s.Set("seen", key)
+				var rowErr error
+				if _, err := UpdateSlot(root, r.Name, func(s *Slot) {
+					if rowErr = recordRow(s, r, e.Now()); rowErr == nil && !alwaysNews(r.State) {
+						s.SetSeen(key)
 					}
 				}); err != nil {
 					return WaitResult{}, err
+				}
+				if rowErr != nil {
+					return WaitResult{}, rowErr
 				}
 				return WaitResult{Slot: r.Name, State: r.State, Evidence: r.Evidence,
 					Source: source, Waited: e.Now().Sub(start)}, nil
@@ -178,7 +181,7 @@ func (e Env) Wait(ctx context.Context, root string, o WaitOpts) (WaitResult, err
 			if ctx.Err() != nil {
 				return stop()
 			}
-			return WaitResult{}, fail(ExitUnavailable, strings.TrimSpace(err.Error()))
+			return WaitResult{}, fail(exitcode.ExitUnavailable, strings.TrimSpace(err.Error()))
 		}
 	}
 }
@@ -190,41 +193,41 @@ func (e Env) Wait(ctx context.Context, root string, o WaitOpts) (WaitResult, err
 // has no handle to require.
 func soloWait(root string, o WaitOpts) (WaitResult, error) {
 	reg := LoadRegistry(root)
-	var watched []*jsonx.Object
+	var watched []*Slot
 	if len(o.Slots) > 0 {
 		for _, name := range o.Slots {
 			s := reg.Slot(name)
 			if s == nil {
-				return WaitResult{}, fail(ExitResolution, fmt.Sprintf("slot '%s' is not in the pool", name))
+				return WaitResult{}, fail(exitcode.ExitResolution, fmt.Sprintf("slot '%s' is not in the pool", name))
 			}
 			watched = append(watched, s)
 		}
 	} else {
 		for _, s := range reg.Slots() {
-			if strings.ToLower(Str(s, "state")) != "idle" {
+			if strings.ToLower(s.State()) != "idle" {
 				watched = append(watched, s)
 			}
 		}
 	}
 	if len(watched) == 0 {
-		return WaitResult{}, fail(ExitResolution, "no slot to watch: every slot is idle")
+		return WaitResult{}, fail(exitcode.ExitResolution, "no slot to watch: every slot is idle")
 	}
 	var rows []PollRow
 	for _, s := range watched {
-		st := strings.ToLower(Str(s, "state"))
+		st := strings.ToLower(s.State())
 		key := seenKey(st, "")
-		if news := alwaysNews(strings.ToUpper(st)); st != "busy" && (news || key != Str(s, "seen")) {
-			name := Str(s, "name")
-			if _, err := updateSlot(root, name, func(s *jsonx.Object) {
+		if news := alwaysNews(strings.ToUpper(st)); st != "busy" && (news || key != s.Seen()) {
+			name := s.Name()
+			if _, err := UpdateSlot(root, name, func(s *Slot) {
 				if !news {
-					s.Set("seen", key)
+					s.SetSeen(key)
 				}
 			}); err != nil {
 				return WaitResult{}, err
 			}
 			return WaitResult{Slot: name, State: st, Source: SourceRegistry}, nil
 		}
-		rows = append(rows, PollRow{Str(s, "name"), st, ""})
+		rows = append(rows, PollRow{s.Name(), st, ""})
 	}
 	return WaitResult{TimedOut: true, Slots: rows}, nil
 }

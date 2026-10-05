@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"github.com/l4ci/rota/internal/exitcode"
 	"strings"
 	"testing"
 
@@ -11,16 +12,14 @@ import (
 // recordHost marks the project's registry as a round on the given host.
 func recordHost(t *testing.T, dir, h string) {
 	t.Helper()
-	def := jsonx.NewObject()
-	def.Set("slots", []any{})
-	if err := Update(dir, def, func(doc *jsonx.Object) { doc.Set("host", h) }); err != nil {
+	if err := UpdateDoc(dir, func(doc *jsonx.Object) { doc.Set("host", h) }); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func setState(t *testing.T, dir, slot, state string) {
 	t.Helper()
-	if _, err := updateSlot(dir, slot, func(s *jsonx.Object) { s.Set("state", state) }); err != nil {
+	if _, err := UpdateSlot(dir, slot, func(s *Slot) { s.Raw().Set("state", state) }); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -46,8 +45,8 @@ func soloProject(t *testing.T) string {
 
 func requireSoloRefusal(t *testing.T, what string, err error, hint string) {
 	t.Helper()
-	we, ok := err.(*Error)
-	if !ok || we.Exit != ExitUsage || we.Message != "solo round: workers are subagents, there are no panes" {
+	we, ok := err.(*exitcode.Error)
+	if !ok || we.Exit != exitcode.ExitUsage || we.Message != "solo round: workers are subagents, there are no panes" {
 		t.Fatalf("%s: err = %v, want exit 2 with the solo message", what, err)
 	}
 	if !strings.Contains(we.Hint, hint) {
@@ -112,7 +111,7 @@ func TestWaitUnderSoloNeverBlocks(t *testing.T) {
 	e := soloEnv(t)
 
 	// Every slot idle: nothing is watched.
-	if _, err := e.Wait(bg, dir, WaitOpts{}); exitOf(err) != ExitResolution {
+	if _, err := e.Wait(bg, dir, WaitOpts{}); exitOf(err) != exitcode.ExitResolution {
 		t.Errorf("all idle: %v", err)
 	}
 	// A busy slot has no handle and is still watched; it has not reported.
@@ -128,7 +127,7 @@ func TestWaitUnderSoloNeverBlocks(t *testing.T) {
 		t.Fatalf("done: %+v %v", res, err)
 	}
 	// Named slots: unknown is 3; an idle named slot is returned, not skipped.
-	if _, err := e.Wait(bg, dir, WaitOpts{Slots: []string{"nope"}}); exitOf(err) != ExitResolution {
+	if _, err := e.Wait(bg, dir, WaitOpts{Slots: []string{"nope"}}); exitOf(err) != exitcode.ExitResolution {
 		t.Errorf("unknown slot: %v", err)
 	}
 	res, err = e.Wait(bg, dir, WaitOpts{Slots: []string{"w2"}})

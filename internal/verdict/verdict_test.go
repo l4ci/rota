@@ -1,12 +1,11 @@
 package verdict
 
 import (
+	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/l4ci/rota/internal/artifact"
 )
 
 func TestParseBodyAccepts(t *testing.T) {
@@ -48,8 +47,8 @@ func TestParseBodyRejects(t *testing.T) {
 	}
 	for in, want := range cases {
 		_, err := ParseBody(in)
-		ae, ok := err.(*artifact.Error)
-		if !ok || ae.Exit != artifact.ExitUsage || !strings.Contains(ae.Message, want) {
+		ae, ok := err.(*exitcode.Error)
+		if !ok || ae.Exit != exitcode.ExitUsage || !strings.Contains(ae.Message, want) {
 			t.Errorf("%q: got %v, want exit 2 containing %q", in, err, want)
 		}
 	}

@@ -2,6 +2,7 @@ package spike
 
 import (
 	"errors"
+	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -10,8 +11,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
-
-	"github.com/l4ci/rota/internal/artifact"
 )
 
 func run(t *testing.T, dir string, args ...string) {
@@ -33,7 +32,7 @@ func repo(t *testing.T) string {
 }
 
 func exitOf(err error) int {
-	var ae *artifact.Error
+	var ae *exitcode.Error
 	if errors.As(err, &ae) {
 		return ae.Exit
 	}
@@ -156,7 +155,7 @@ func TestAddUmbrellaRepo(t *testing.T) {
 	root, sub := umbrella(t)
 	// From the umbrella root (not a git repo) with no repo: usage, naming the repos.
 	_, err := Add(root, root, "sse", "q", "")
-	var ae *artifact.Error
+	var ae *exitcode.Error
 	if !errors.As(err, &ae) || ae.Exit != 2 || !strings.Contains(ae.Hint, "web") {
 		t.Fatalf("no --repo: %v", err)
 	}

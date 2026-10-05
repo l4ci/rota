@@ -4,9 +4,9 @@ package mapqa
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -16,6 +16,7 @@ import (
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/frontmatter"
 	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/section"
 )
 
@@ -189,13 +190,8 @@ func gitDate(root, path string) string {
 	if err != nil {
 		rel = path
 	}
-	cmd := exec.Command("git", "log", "-1", "--format=%cs", "--", rel)
-	cmd.Dir = root
-	out, err := cmd.Output()
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(out))
+	d, _, _ := git.Repo{Dir: root}.LastCommitDate(context.Background(), rel)
+	return d
 }
 
 // DefaultCap is the subsystem count at which the map nudge fires.

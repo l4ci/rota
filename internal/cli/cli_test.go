@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/design"
+	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
 )
@@ -73,6 +75,11 @@ func testTree() *Command {
 				o := jsonx.NewObject()
 				o.Set("changed", true)
 				return Result{Data: o}, Refused("item has no proof")
+			case "domain":
+				// A domain package's error, returned with no converter.
+				return Result{}, design.CheckID(design.Files(""), "bad")
+			case "wrapped":
+				return Result{}, fmt.Errorf("saving: %w", &exitcode.Error{Exit: exitcode.ExitUnavailable, Message: "gone away", Hint: "retry later"})
 			case "leak":
 				return Result{Data: jsonx.NewObject(), Text: "x"}, Resolution("gone")
 			}
@@ -152,6 +159,9 @@ func TestExitCodesAndEnvelope(t *testing.T) {
 		{[]string{"fail", "recorded", "--json"}, 4, `{"ok": false, "error": {"code": "refused", "exit": 4, "message": "item has no proof"}, "data": {"changed": true}}` + "\n", ""},
 		{[]string{"fail", "leak", "--json"}, 3, `{"ok": false, "error": {"code": "resolution", "exit": 3, "message": "gone"}}` + "\n", ""},
 		{[]string{"fail", "leak"}, 3, "", "rota fail: gone\n"},
+		// A domain error keeps its exit code and hint with no cli-side conversion.
+		{[]string{"fail", "domain"}, 2, "", "rota fail: ID must match"},
+		{[]string{"fail", "wrapped", "--json"}, 5, `{"ok": false, "error": {"code": "unavailable", "exit": 5, "message": "gone away", "hint": "retry later"}}` + "\n", ""},
 		{[]string{"fail", "lock"}, 6, "", "rota fail: saving: lock timeout\n"},
 		{[]string{"fail", "plain"}, 70, "", "rota fail: boom\nhint: this is a bug in rota"},
 		{[]string{"fail", "panic"}, 70, "", "rota fail: panic: kaboom"},

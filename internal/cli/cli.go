@@ -31,10 +31,6 @@ type Command struct {
 	// runs with the parsed values. Nil for a group.
 	Verb func(fs *flag.FlagSet) RunFunc
 	Subs []*Command
-	// Stub marks a contract verb the Go binary does not implement yet: any call
-	// exits 71 (not_implemented). Stubs never appear in VerbPaths, so
-	// `rota __verbs` still lists only what really works.
-	Stub bool
 }
 
 // RunFunc runs a verb with its positional args.
@@ -277,12 +273,6 @@ func run(root *Command, args []string, stdin io.Reader, stdout, stderr io.Writer
 		c.Path = "rota version"
 	}
 
-	// A stub verb answers before any argument parsing: its flags are not known,
-	// so none can be unknown. -h and --help still reach the help below.
-	if cmd.Stub && !hasHelp(args[i:]) {
-		return fail(c, stdout, NotImplemented(c.Path).WithHint("not ported to the Go binary yet; see docs/design/contract/"))
-	}
-
 	// After the verb: verb and global flags, mixed with positional args.
 	var runVerb RunFunc
 	var verbFlags *flag.FlagSet
@@ -509,7 +499,7 @@ func VerbPaths(root *Command) []string {
 	walk = func(c *Command, prefix string) {
 		for _, s := range c.Subs {
 			p := strings.TrimSpace(prefix + " " + s.Name)
-			if s.Verb != nil && !s.Stub {
+			if s.Verb != nil {
 				out = append(out, p)
 			}
 			walk(s, p)
@@ -521,8 +511,7 @@ func VerbPaths(root *Command) []string {
 }
 
 // descends: a verb with sub-verbs (`init` and `init check`) keeps the
-// command-word scan going when the next word names one. A stub does the same
-// for its stub sub-verbs. Such a verb takes no positional argument that could
+// command-word scan going when the next word names one. Such a verb takes no positional argument that could
 // collide with a sub-verb name.
 func descends(cmd *Command, tok string) bool {
 	return !isFlag(tok) && cmd.sub(tok) != nil

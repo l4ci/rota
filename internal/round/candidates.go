@@ -3,6 +3,7 @@ package round
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/exitcode"
 	"path/filepath"
 	"strings"
 
@@ -18,8 +19,14 @@ import (
 // Candidate is an item a round could assign, with its readiness.
 type Candidate struct {
 	ID, Title, Milestone string
+	// OpenPR is the open PR that already resolves the item, 0 for none: the
+	// item is not ready while one is open.
+	OpenPR int
 	Readiness
 }
+
+// Ready is true when every readiness check holds and no open PR resolves the item.
+func (c Candidate) Ready() bool { return c.OpenPR == 0 && c.Readiness.Ready() }
 
 // CandidateOpts selects the set.
 type CandidateOpts struct {
@@ -54,6 +61,10 @@ func (e Env) Candidates(ctx context.Context, root string, be backlog.Backend, o 
 			return nil, err
 		}
 	}
+	openPR, err := e.openPRIssues(ctx, be)
+	if err != nil {
+		return nil, err
+	}
 	tracked := e.trackedFiles(ctx, root)
 	inFlight := e.InFlightItems(ctx, root, be, tracked, o.Shared)
 	var out []Candidate
@@ -69,7 +80,7 @@ func (e Env) Candidates(ctx context.Context, root string, be backlog.Backend, o 
 			return nil, err
 		}
 		ms := backlog.ParseMilestones(it.Fields.Get("milestone"))
-		c := Candidate{ID: it.ID, Title: it.Title, Readiness: r}
+		c := Candidate{ID: it.ID, Title: it.Title, OpenPR: openPR[it.Number], Readiness: r}
 		if len(ms) > 0 {
 			c.Milestone = strings.Join(ms, ",")
 		}
@@ -116,7 +127,7 @@ func heldIDs(root string) map[string]bool {
 	}
 	reg := worker.LoadRegistry(root)
 	for _, s := range reg.Slots() {
-		hold(heldID(worker.Str(s, "task"), worker.Str(s, "branch"), worker.Str(s, "name")))
+		hold(heldID(s.Task(), s.Branch(), s.Name()))
 	}
 	for _, q := range reg.PRs() {
 		hold(queuedIssue(q))
@@ -174,7 +185,7 @@ func scopeSet(root string, items []backlog.Item, held map[string]bool, scope str
 	case roundcfg.ScopeOpen:
 		chosen = pick(func(backlog.Item) bool { return true })
 	default:
-		return nil, &worker.Error{Exit: worker.ExitUsage, Message: "scope must be slate, milestone, next or open"}
+		return nil, &exitcode.Error{Exit: exitcode.ExitUsage, Message: "scope must be slate, milestone, next or open"}
 	}
 	return chosen, nil
 }

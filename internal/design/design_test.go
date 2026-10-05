@@ -2,18 +2,17 @@ package design
 
 import (
 	"errors"
+	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"path/filepath"
 	"regexp"
 	"sync"
 	"sync/atomic"
 	"testing"
-
-	"github.com/l4ci/rota/internal/artifact"
 )
 
 func exitOf(err error) int {
-	var ae *artifact.Error
+	var ae *exitcode.Error
 	if errors.As(err, &ae) {
 		return ae.Exit
 	}
@@ -34,7 +33,7 @@ func project(t *testing.T) string {
 func TestAddMatchesOldHelper(t *testing.T) {
 	root := project(t)
 	for id, title := range map[string]string{"B07": "Title: with colon & é", "F12": "Second"} {
-		if err := Add(root, id, title); err != nil {
+		if err := Add(Files(root), id, title); err != nil {
 			t.Fatal(err)
 		}
 		got, _ := os.ReadFile(path(root, id))
@@ -48,33 +47,33 @@ func TestAddMatchesOldHelper(t *testing.T) {
 func TestLifecycleAndExits(t *testing.T) {
 	root := project(t)
 	for _, id := range []string{"S01", "M01", "B7", "b07", "../x"} {
-		if err := Add(root, id, "t"); exitOf(err) != 2 {
+		if err := Add(Files(root), id, "t"); exitOf(err) != 2 {
 			t.Errorf("Add(%q) = %v, want exit 2", id, err)
 		}
 	}
-	Add(root, "B07", "t")
-	if err := Add(root, "B07", "again"); exitOf(err) != 4 {
+	Add(Files(root), "B07", "t")
+	if err := Add(Files(root), "B07", "again"); exitOf(err) != 4 {
 		t.Errorf("duplicate add: %v", err)
 	}
-	if _, err := Show(root, "F99"); exitOf(err) != 3 {
+	if _, err := Show(Files(root), "F99"); exitOf(err) != 3 {
 		t.Errorf("show missing: %v", err)
 	}
-	if _, err := Put(root, "F99", "x"); exitOf(err) != 3 {
+	if _, err := Put(Files(root), "F99", "x"); exitOf(err) != 3 {
 		t.Errorf("put missing: %v", err)
 	}
-	if changed, err := Put(root, "B07", "new text\r\nCRLF kept\r\n"); err != nil || !changed {
+	if changed, err := Put(Files(root), "B07", "new text\r\nCRLF kept\r\n"); err != nil || !changed {
 		t.Fatalf("put: %v %v", changed, err)
 	}
-	if changed, _ := Put(root, "B07", "new text\r\nCRLF kept\r\n"); changed {
+	if changed, _ := Put(Files(root), "B07", "new text\r\nCRLF kept\r\n"); changed {
 		t.Error("identical put reported changed")
 	}
-	if got, _ := Show(root, "B07"); got != "new text\r\nCRLF kept\r\n" {
+	if got, _ := Show(Files(root), "B07"); got != "new text\r\nCRLF kept\r\n" {
 		t.Errorf("show = %q", got)
 	}
-	if err := Rm(root, "B07"); err != nil {
+	if err := Rm(Files(root), "B07"); err != nil {
 		t.Fatal(err)
 	}
-	if err := Rm(root, "B07"); exitOf(err) != 3 {
+	if err := Rm(Files(root), "B07"); exitOf(err) != 3 {
 		t.Errorf("second rm: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(root, ".rota/designs/F99.md.lock")); err == nil {
@@ -103,7 +102,7 @@ func TestAddConcurrent(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			switch err := Add(root, "B07", "t"); {
+			switch err := Add(Files(root), "B07", "t"); {
 			case err == nil:
 				ok.Add(1)
 			case exitOf(err) == 4:
@@ -122,7 +121,7 @@ func TestAddConcurrent(t *testing.T) {
 // Three amend calls against the frozen output of the retired helper.
 func TestAmendMatchesOldHelper(t *testing.T) {
 	root := project(t)
-	Add(root, "B07", "Title: with colon & é")
+	Add(Files(root), "B07", "Title: with colon & é")
 	steps := []struct{ heading, mode, text, golden string }{
 		{"Goal", "append", "first line\nsecond line\n\n", ""},
 		{"Open questions", "append", "- one more", "B07.amend-append.md"},
@@ -155,7 +154,7 @@ func TestAmendExits(t *testing.T) {
 	if _, err := Amend(root, "B07", "Goal", "append", "x"); exitOf(err) != 3 {
 		t.Errorf("missing design: %v", err)
 	}
-	Add(root, "B07", "t")
+	Add(Files(root), "B07", "t")
 	if _, err := Amend(root, "B07", "No such", "append", "x"); exitOf(err) != 3 {
 		t.Errorf("missing section: %v", err)
 	}

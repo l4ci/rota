@@ -3,6 +3,7 @@ package round
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/exitcode"
 	"strings"
 
 	"github.com/l4ci/rota/internal/host"
@@ -55,7 +56,7 @@ func (e Env) Start(ctx context.Context, root string, o StartOpts) (Started, erro
 		n = o.DefaultNum
 	}
 	if n <= 0 || n > len(set.Roster) {
-		return res, &worker.Error{Exit: worker.ExitUsage,
+		return res, &exitcode.Error{Exit: exitcode.ExitUsage,
 			Message: fmt.Sprintf("%d slots asked for but round.roster names %d agents; extend round.roster or lower --slots", n, len(set.Roster))}
 	}
 	// An empty Scope means --scope was not given. Items alone make a slate; a
@@ -66,10 +67,10 @@ func (e Env) Start(ctx context.Context, root string, o StartOpts) (Started, erro
 	}
 	checkScope := func(scope string) error {
 		if scope == roundcfg.ScopeSlate && len(o.Items) == 0 {
-			return &worker.Error{Exit: worker.ExitUsage, Message: "scope slate needs --items <ID>[,<ID>…]"}
+			return &exitcode.Error{Exit: exitcode.ExitUsage, Message: "scope slate needs --items <ID>[,<ID>…]"}
 		}
 		if scope != roundcfg.ScopeSlate && len(o.Items) > 0 {
-			return &worker.Error{Exit: worker.ExitUsage, Message: "--items only applies to scope slate"}
+			return &exitcode.Error{Exit: exitcode.ExitUsage, Message: "--items only applies to scope slate"}
 		}
 		return nil
 	}
@@ -108,9 +109,9 @@ func (e Env) Start(ctx context.Context, root string, o StartOpts) (Started, erro
 	l, out, stale, err := le.Acquire(cd, root, holder, prev+1)
 	if err != nil {
 		if held, ok := err.(*roundlease.HeldError); ok {
-			return res, &worker.Error{Exit: worker.ExitRefused, Message: held.Error(), Data: held}
+			return res, &exitcode.Error{Exit: exitcode.ExitRefused, Message: held.Error(), Data: held}
 		}
-		return res, &worker.Error{Exit: worker.ExitUnavailable, Message: err.Error()}
+		return res, &exitcode.Error{Exit: exitcode.ExitUnavailable, Message: err.Error()}
 	}
 	res.Lease, res.Outcome, res.LeaseState = l, out, roundlease.Live
 	if out == roundlease.Reclaimed {
@@ -149,7 +150,7 @@ func (e Env) Start(ctx context.Context, root string, o StartOpts) (Started, erro
 	res.Changed = pool.Changed || out != roundlease.Renewed
 	res.Warnings = append(res.Warnings, pool.Warnings...)
 
-	if err := worker.Update(root, slotsDefault(), func(doc *jsonx.Object) {
+	if err := worker.UpdateDoc(root, func(doc *jsonx.Object) {
 		if out != roundlease.Renewed { // taken, reclaimed or numbered
 			doc.Set("round", l.Round)
 		}
@@ -177,7 +178,7 @@ func (e Env) Start(ctx context.Context, root string, o StartOpts) (Started, erro
 		want[name] = true
 	}
 	for _, s := range worker.LoadRegistry(root).Slots() {
-		if want[worker.Str(s, "name")] {
+		if want[s.Name()] {
 			res.Slots = append(res.Slots, worker.SlotData(s))
 		}
 	}

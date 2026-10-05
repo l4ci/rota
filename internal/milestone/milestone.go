@@ -6,6 +6,7 @@ package milestone
 import (
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/exitcode"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -14,7 +15,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/artifact"
-	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/counter"
 	"github.com/l4ci/rota/internal/frontmatter"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/knowledge"
@@ -41,7 +42,7 @@ func ValidID(id string) bool { return idRe.MatchString(id) }
 
 func checkID(id string) error {
 	if !ValidID(id) {
-		return artifact.Errf(artifact.ExitUsage, "milestone ID must match M\\d{2,} (e.g. M01, M03), got %q", id)
+		return exitcode.Errf(exitcode.ExitUsage, "milestone ID must match M\\d{2,} (e.g. M01, M03), got %q", id)
 	}
 	return nil
 }
@@ -59,21 +60,32 @@ func ValidStatus(s string) bool {
 func detailPath(root, id string) string { return filepath.Join(root, ".rota", "milestones", id+".md") }
 func overviewPath(root string) string   { return filepath.Join(root, ".rota", "MILESTONES.md") }
 
-func notFound(id string) *artifact.Error {
-	return artifact.Errf(artifact.ExitResolution, "milestone %s not found (.rota/milestones/%s.md)", id, id)
+func notFound(id string) *exitcode.Error {
+	return exitcode.Errf(exitcode.ExitResolution, "milestone %s not found (.rota/milestones/%s.md)", id, id)
 }
 
 // Stub is the starter text of a milestone detail file (milestone_stub); the
-// issue-mode tracking issue body shares it.
+// issue-mode tracking issue body shares it. It is dated today.
 func Stub(id, title, summary string, depends []string) string {
-	return backlog.MilestoneStub(id, title, summary, depends, time.Now().Format("2006-01-02"))
+	return StubOn(id, title, summary, depends, time.Now().Format("2006-01-02"))
+}
+
+// StubOn is Stub with an explicit created date.
+func StubOn(id, title, summary string, depends []string, today string) string {
+	return "---\nid: " + id + "\ntitle: " + title + "\nstatus: planned\ndepends: [" + strings.Join(depends, ", ") + "]\ncreated: " + today + "\n---\n\n" +
+		"# " + id + " — " + title + "\n\n## Goal\n\n" + summary + "\n\n## Acceptance criteria\n\n- _(define what shipped looks like)_\n\n" +
+		"## Rationale\n\n_(why this milestone, why now)_\n\n## Open risks\n\n_(unknowns, technical risks, dependencies that could shift)_\n\n" +
+		"## Research findings\n\n_(prior art, references, lessons from /rota-vision web search)_\n\n## Notes\n\n_(free-form brainstorm)_\n"
 }
 
 // Add mints the next milestone ID, writes its detail file and appends its
 // entry to MILESTONES.md. depends is a comma list; its IDs are not validated.
 func Add(root, title, summary, depends string) (string, error) {
-	deps := artifact.SplitCSV(depends)
-	id, err := (&backlog.File{Root: root}).NextID("milestones")
+	return addFile(root, title, summary, artifact.SplitCSV(depends))
+}
+
+func addFile(root, title, summary string, deps []string) (string, error) {
+	id, err := counter.Next(root, "milestones")
 	if err != nil {
 		return "", err
 	}
@@ -93,7 +105,7 @@ func Add(root, title, summary, depends string) (string, error) {
 	err = fsio.Locked(ms, fsio.LockTimeout, func() error {
 		content, rerr := fsio.ReadText(ms)
 		if rerr != nil && !errors.Is(rerr, fs.ErrNotExist) {
-			return artifact.Errf(artifact.ExitInternal, "cannot read %s: %v", ms, rerr)
+			return exitcode.Errf(exitcode.ExitInternal, "cannot read %s: %v", ms, rerr)
 		}
 		content = section.Append(content, "Milestones", entry)
 		if !strings.HasSuffix(content, "\n") {
@@ -157,13 +169,7 @@ func Active(root string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	ids := []string{}
-	for _, e := range list {
-		if e.Status == "active" {
-			ids = append(ids, e.ID)
-		}
-	}
-	return ids, nil
+	return ActiveIDs(list), nil
 }
 
 // Show is the stored milestone file, verbatim.
@@ -196,7 +202,7 @@ func Put(root, id, text string) (changed bool, err error) {
 		}
 	}
 	if got != id {
-		return false, artifact.Errf(artifact.ExitRefused, "milestone text needs frontmatter with 'id: %s'", id)
+		return false, exitcode.Errf(exitcode.ExitRefused, "milestone text needs frontmatter with 'id: %s'", id)
 	}
 	err = fsio.Locked(p, fsio.LockTimeout, func() error {
 		old, rerr := os.ReadFile(p)
@@ -222,19 +228,19 @@ var h2Re = regexp.MustCompile(`(?m)^## `)
 func SetOverview(root, text string) (changed bool, err error) {
 	p := overviewPath(root)
 	if _, serr := os.Stat(p); serr != nil {
-		return false, artifact.Errf(artifact.ExitResolution, "%s not found", p).WithHint("rota milestone add --title <text> --summary <text>")
+		return false, exitcode.Errf(exitcode.ExitResolution, "%s not found", p).WithHint("rota milestone add --title <text> --summary <text>")
 	}
 	text = strings.Trim(text, "\n")
 	if strings.TrimSpace(text) == "" {
-		return false, artifact.Errf(artifact.ExitUsage, "overview text is empty")
+		return false, exitcode.Errf(exitcode.ExitUsage, "overview text is empty")
 	}
 	if h2Re.MatchString(text) || strings.HasPrefix(text, "# ") || strings.Contains(text, "\n# ") {
-		return false, artifact.Errf(artifact.ExitRefused, "overview text must not contain headings")
+		return false, exitcode.Errf(exitcode.ExitRefused, "overview text must not contain headings")
 	}
 	err = fsio.Locked(p, fsio.LockTimeout, func() error {
 		old, rerr := fsio.ReadText(p)
 		if rerr != nil {
-			return artifact.Errf(artifact.ExitInternal, "cannot read %s: %v", p, rerr)
+			return exitcode.Errf(exitcode.ExitInternal, "cannot read %s: %v", p, rerr)
 		}
 		head, rest := "", old
 		if nl := strings.Index(old, "\n"); strings.HasPrefix(old, "# ") && nl >= 0 {
@@ -262,11 +268,20 @@ func SetOverview(root, text string) (changed bool, err error) {
 // overview and the vision block (Index), as hv-vision-status did on every
 // call. changed reports the status line only.
 func SetStatus(root, id, status string) (changed bool, err error) {
+	if changed, err = setStatus(root, id, status); err != nil {
+		return false, err
+	}
+	_, err = Index(root)
+	return changed, err
+}
+
+// setStatus is SetStatus without the Index pass.
+func setStatus(root, id, status string) (changed bool, err error) {
 	if err = checkID(id); err != nil {
 		return
 	}
 	if !ValidStatus(status) {
-		return false, artifact.Errf(artifact.ExitUsage, "--to must be one of: %s", strings.Join(Statuses, ", "))
+		return false, exitcode.Errf(exitcode.ExitUsage, "--to must be one of: %s", strings.Join(Statuses, ", "))
 	}
 	p := detailPath(root, id)
 	if _, serr := os.Stat(p); serr != nil {
@@ -279,7 +294,7 @@ func SetStatus(root, id, status string) (changed bool, err error) {
 		}
 		updated, found := frontmatter.UpdateField(content, "status", status)
 		if !found {
-			return artifact.Errf(artifact.ExitInternal, "status field not found in .rota/milestones/%s.md", id)
+			return exitcode.Errf(exitcode.ExitInternal, "status field not found in .rota/milestones/%s.md", id)
 		}
 		if updated == content {
 			return nil
@@ -287,10 +302,6 @@ func SetStatus(root, id, status string) (changed bool, err error) {
 		changed = true
 		return fsio.WriteFileAtomic(p, []byte(updated))
 	})
-	if err != nil {
-		return false, err
-	}
-	_, err = Index(root)
 	return changed, err
 }
 
@@ -357,7 +368,7 @@ func IndexFrom(root string, items []Entry, issue bool) (changed bool, err error)
 		err = fsio.Locked(ms, fsio.LockTimeout, func() error {
 			original, rerr := fsio.ReadText(ms)
 			if rerr != nil {
-				return artifact.Errf(artifact.ExitInternal, "cannot read %s: %v", ms, rerr)
+				return exitcode.Errf(exitcode.ExitInternal, "cannot read %s: %v", ms, rerr)
 			}
 			text := original
 			if !issue {

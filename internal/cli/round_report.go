@@ -25,7 +25,7 @@ func roundReport(fs *flag.FlagSet) RunFunc {
 		}
 		res, err := round.ReportSlot(root, round.ReportOpts{Slot: slot, State: *state, Evidence: *evidence, PR: *pr})
 		if err != nil {
-			return Result{}, fromWorker(err)
+			return Result{}, err
 		}
 		d := jsonx.NewObject()
 		d.Set("slot", res.Slot)

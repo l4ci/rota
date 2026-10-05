@@ -16,7 +16,7 @@ const pr7 = "https://github.com/o/r/pull/7"
 // finish records a slot as done with an open PR, the state `round wait` leaves.
 func (f *moveFx) finish(t *testing.T, slot, pr string) {
 	t.Helper()
-	if err := mutateSlot(f.root, slot, func(s *jsonx.Object) {
+	if err := rawSlot(f.root, slot, func(s *jsonx.Object) {
 		s.Set("state", "done")
 		s.Set("pr", pr)
 	}); err != nil {
@@ -28,8 +28,8 @@ func (f *moveFx) queued() []*jsonx.Object { return worker.LoadRegistry(f.root).P
 
 func TestAssignOntoDoneSlotQueuesItsPR(t *testing.T) {
 	f := newMoveFx(t)
-	branch := worker.Str(f.slot("ben"), "branch")
-	mutateSlot(f.root, "ben", func(s *jsonx.Object) {
+	branch := f.slot("ben").Branch()
+	rawSlot(f.root, "ben", func(s *jsonx.Object) {
 		s.Set("relays", []any{map[string]any{"round": 1}})
 	})
 	f.finish(t, "ben", pr7)
@@ -51,7 +51,7 @@ func TestAssignOntoDoneSlotQueuesItsPR(t *testing.T) {
 		t.Errorf("relays are copied: %v", r)
 	}
 	s := f.slot("ben")
-	if worker.Str(s, "task") != "13" || worker.Str(s, "claimId") != "ben@1" || worker.Str(s, "pr") != "" || worker.Str(s, "state") != "busy" {
+	if s.Task() != "13" || s.ClaimID() != "ben@1" || s.PR() != "" || s.State() != "busy" {
 		t.Errorf("slot: %v", s)
 	}
 	if f.be.claims["12"] != "ben@1" || f.be.states["12"] != "in-progress" {
@@ -72,7 +72,7 @@ func TestAssignOntoDoneSlotQueuesItsPR(t *testing.T) {
 // issue number counts as held, so candidates does not offer it (#27).
 func TestHeldIDsCountAMappedFileModeID(t *testing.T) {
 	f := newMoveFx(t)
-	mutateSlot(f.root, "ben", func(s *jsonx.Object) { s.Set("task", "B30") })
+	rawSlot(f.root, "ben", func(s *jsonx.Object) { s.Set("task", "B30") })
 	if held := heldIDs(f.root); held["17"] {
 		t.Fatalf("no map yet: %v", held)
 	}
@@ -85,7 +85,7 @@ func TestHeldIDsCountAMappedFileModeID(t *testing.T) {
 
 func TestAssignRefusesBusyOrDirtySlot(t *testing.T) {
 	f := newMoveFx(t)
-	mutateSlot(f.root, "ben", func(s *jsonx.Object) { s.Set("pr", pr7) }) // state still busy
+	rawSlot(f.root, "ben", func(s *jsonx.Object) { s.Set("pr", pr7) }) // state still busy
 	_, err := f.assign("13", "ben")
 	if by := blockedBy(t, err); by != BlockSlotBusy || !strings.Contains(err.Error(), "slot ben holds 12 (busy") {
 		t.Errorf("busy: %v", err)
@@ -99,7 +99,7 @@ func TestAssignRefusesBusyOrDirtySlot(t *testing.T) {
 	if _, err := f.assign("13", "ben"); blockedBy(t, err) != BlockSlotBusy || !strings.Contains(err.Error(), "uncommitted") {
 		t.Errorf("dirty: %v", err)
 	}
-	if len(f.queued()) != 0 || worker.Str(f.slot("ben"), "task") != "12" {
+	if len(f.queued()) != 0 || f.slot("ben").Task() != "12" {
 		t.Errorf("a refusal moves nothing: %v %v", f.queued(), f.slot("ben"))
 	}
 }
@@ -111,7 +111,7 @@ func TestAssignRefusalMovesNothingBeforeTheClaim(t *testing.T) {
 	if _, err := f.assign("13", "ben"); blockedBy(t, err) != BlockBriefMissing {
 		t.Fatalf("%v", err)
 	}
-	if len(f.queued()) != 0 || worker.Str(f.slot("ben"), "task") != "12" {
+	if len(f.queued()) != 0 || f.slot("ben").Task() != "12" {
 		t.Errorf("a refused assign parks nothing: %v", f.queued())
 	}
 	// CheckOnly never parks either.
@@ -119,7 +119,7 @@ func TestAssignRefusalMovesNothingBeforeTheClaim(t *testing.T) {
 	if _, err := f.env.Assign(bg, f.root, f.be, AssignOpts{ID: "13", Agent: "ben", HolderPID: 100, Settings: f.set, CheckOnly: true, Getenv: func(string) string { return "" }}); err != nil {
 		t.Fatal(err)
 	}
-	if len(f.queued()) != 0 || worker.Str(f.slot("ben"), "task") != "12" {
+	if len(f.queued()) != 0 || f.slot("ben").Task() != "12" {
 		t.Errorf("check-only parks nothing: %v", f.queued())
 	}
 }
@@ -153,7 +153,7 @@ func TestAssignMergedPRLeavesNoRecord(t *testing.T) {
 	if len(f.queued()) != 0 {
 		t.Errorf("merged work is in: %v", f.queued())
 	}
-	if worker.Str(f.slot("ben"), "task") != "13" {
+	if f.slot("ben").Task() != "13" {
 		t.Errorf("slot: %v", f.slot("ben"))
 	}
 }
@@ -270,15 +270,15 @@ func TestTransferToParkableReceiverQueuesIt(t *testing.T) {
 	if len(q) != 1 || worker.Str(q[0], "issue") != "13" || worker.Str(q[0], "from") != "dana" {
 		t.Errorf("dana's PR is queued: %v", q)
 	}
-	if worker.Str(f.slot("dana"), "task") != "12" || worker.Str(f.slot("ben"), "task") != "" {
+	if f.slot("dana").Task() != "12" || f.slot("ben").Task() != "" {
 		t.Errorf("slots: %v %v", f.slot("dana"), f.slot("ben"))
 	}
 }
 
 func TestTransferFromAQueuedRecord(t *testing.T) {
 	f := newMoveFx(t)
-	branch := worker.Str(f.slot("ben"), "branch")
-	mutateSlot(f.root, "ben", func(s *jsonx.Object) {
+	branch := f.slot("ben").Branch()
+	rawSlot(f.root, "ben", func(s *jsonx.Object) {
 		s.Set("relays", []any{map[string]any{"round": 1, "summary": "use the lease"}})
 	})
 	f.finish(t, "ben", pr7)
@@ -298,10 +298,10 @@ func TestTransferFromAQueuedRecord(t *testing.T) {
 		t.Errorf("the record is consumed: %v", f.queued())
 	}
 	s := f.slot("dana")
-	if worker.Str(s, "task") != "12" || worker.Str(s, "pr") != pr7 || worker.Str(s, "branch") != branch || worker.Str(s, "claimId") != "dana@1" {
+	if s.Task() != "12" || s.PR() != pr7 || s.Branch() != branch || s.ClaimID() != "dana@1" {
 		t.Errorf("dana: %v", s)
 	}
-	if v, _ := s.Get("relays"); len(v.([]any)) != 1 {
+	if v, _ := s.Raw().Get("relays"); len(v.([]any)) != 1 {
 		t.Errorf("relays carry over: %v", s)
 	}
 	if cur := gitIn(t, f.wt("dana"), "symbolic-ref", "--short", "HEAD"); cur != branch {
@@ -311,7 +311,7 @@ func TestTransferFromAQueuedRecord(t *testing.T) {
 		t.Errorf("claim: %v", f.be.claims)
 	}
 	// ben is untouched: it holds 13.
-	if worker.Str(f.slot("ben"), "task") != "13" {
+	if f.slot("ben").Task() != "13" {
 		t.Errorf("ben: %v", f.slot("ben"))
 	}
 	if got := f.be.comments["12"]; len(got) != 2 || !strings.Contains(got[1], "from ben") || !strings.Contains(got[1], head) {
@@ -334,7 +334,7 @@ func TestTransferFromAQueuedRecordToHuman(t *testing.T) {
 	if got := f.forge.labels[12]; len(got) != 1 || got[0] != DefaultNeedsHuman {
 		t.Errorf("labels: %v", f.forge.labels)
 	}
-	if worker.Str(f.slot("ben"), "task") != "13" {
+	if f.slot("ben").Task() != "13" {
 		t.Errorf("ben must keep its new issue: %v", f.slot("ben"))
 	}
 }

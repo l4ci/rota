@@ -12,6 +12,7 @@ import (
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/frontmatter"
+	ms "github.com/l4ci/rota/internal/milestone"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/tracker"
 )
@@ -153,15 +154,6 @@ func (b *Issues) TrackerIssue(mid string) (Issue, error) {
 	return is, nil
 }
 
-// MilestoneStub is the starter text of a milestone (milestone_stub); in issue
-// mode it is also the tracking issue's body text.
-func MilestoneStub(mid, title, summary string, depends []string, today string) string {
-	return "---\nid: " + mid + "\ntitle: " + title + "\nstatus: planned\ndepends: [" + strings.Join(depends, ", ") + "]\ncreated: " + today + "\n---\n\n" +
-		"# " + mid + " — " + title + "\n\n## Goal\n\n" + summary + "\n\n## Acceptance criteria\n\n- _(define what shipped looks like)_\n\n" +
-		"## Rationale\n\n_(why this milestone, why now)_\n\n## Open risks\n\n_(unknowns, technical risks, dependencies that could shift)_\n\n" +
-		"## Research findings\n\n_(prior art, references, lessons from /rota-vision web search)_\n\n## Notes\n\n_(free-form brainstorm)_\n"
-}
-
 // NextMilestoneID is MNN with NN one above the highest M<digits> title prefix
 // over every native milestone.
 func (b *Issues) NextMilestoneID() (string, error) {
@@ -204,7 +196,7 @@ func (b *Issues) MilestoneAdd(mid, title, summary string, depends []string, toda
 	if _, err := mt.CreateMilestone(b.ctx(), native, oneLine(summary)); err != nil {
 		return "", err
 	}
-	body := RenderFieldsBlock(MilestoneStub(mid, title, summary, depends, today),
+	body := RenderFieldsBlock(ms.StubOn(mid, title, summary, depends, today),
 		[]string{"Depends"}, map[string]string{"Depends": strings.Join(depends, ", ")})
 	if _, err := mt.Create(b.ctx(), native, body, labels, native); err != nil {
 		return "", err
@@ -227,16 +219,9 @@ func msStatusOf(is Issue) string {
 	return "planned"
 }
 
-// MilestoneRow is one milestone as MilestoneList reports it.
-type MilestoneRow struct {
-	ID, Title, Status string
-	Depends           []string
-	Ready             bool
-}
-
 // MilestoneList is every milestone in ID order. ready is true when each
 // dependency is shipped.
-func (b *Issues) MilestoneList() ([]MilestoneRow, error) {
+func (b *Issues) MilestoneList() ([]ms.Entry, error) {
 	all, err := b.trackingIssues()
 	if err != nil {
 		return nil, err
@@ -246,7 +231,7 @@ func (b *Issues) MilestoneList() ([]MilestoneRow, error) {
 		ids = append(ids, id)
 	}
 	sort.Strings(ids)
-	rows := []MilestoneRow{}
+	rows := []ms.Entry{}
 	shipped := map[string]bool{}
 	for _, id := range ids {
 		is := all[id]
@@ -256,7 +241,7 @@ func (b *Issues) MilestoneList() ([]MilestoneRow, error) {
 		if title == "" {
 			title = is.Title
 		}
-		r := MilestoneRow{ID: id, Title: pystr.Strip(title), Status: msStatusOf(is), Depends: msAllRe.FindAllString(block["Depends"], -1)}
+		r := ms.Entry{ID: id, Title: pystr.Strip(title), Status: msStatusOf(is), Depends: msAllRe.FindAllString(block["Depends"], -1)}
 		if r.Depends == nil {
 			r.Depends = []string{}
 		}
