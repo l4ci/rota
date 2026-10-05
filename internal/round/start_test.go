@@ -339,7 +339,7 @@ func TestStartReclaimsStaleLeaseAndBumpsRound(t *testing.T) {
 	if _, err := first.Start(bg, root, startOpts(roundcfg.ScopeMilestone, 100)); err != nil {
 		t.Fatal(err)
 	}
-	if err := worker.Update(root, func(d *worker.Doc) { d.SetLayout("split") }); err != nil {
+	if err := worker.Update(root, func(d *worker.Doc) { d.SetLayout("split"); d.SetCLIPane("pc") }); err != nil {
 		t.Fatal(err)
 	}
 	second := Env{Git: git.Exec, Base: "main", Lease: fakeLease("h", 300)} // pid 100 is gone
@@ -370,6 +370,9 @@ func TestStartReclaimsStaleLeaseAndBumpsRound(t *testing.T) {
 	}
 	if l := worker.LoadRegistry(root).Layout(); l != "" {
 		t.Errorf("a new round starts in tabs, layout = %q (#205)", l)
+	}
+	if p := worker.LoadRegistry(root).CLIPane(); p != "pc" {
+		t.Errorf("round start must keep the pane rota orchestrate recorded, cliPane = %q (#223)", p)
 	}
 }
 
