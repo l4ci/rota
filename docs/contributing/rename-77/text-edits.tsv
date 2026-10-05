@@ -13,8 +13,8 @@ internal/cli/backlog.go	in the tracker (A6/A8)	in the tracker	phase label
 internal/cli/issues.go	The A4 `rota issues	The `rota issues	phase label
 internal/cli/config.go	The A4 `rota update`	The `rota update`	phase label
 internal/cli/config.go	(docs/design/contract/, "A3 and A4")	(docs/design/contract/version-config-repo.md)	name the contract file, not a phase
-internal/cli/design_plan.go	groups (A6). File mode only	groups. File mode only	phase label
-internal/cli/milestone.go	milestone group (A6). File mode only	milestone group. File mode only	phase label
+internal/cli/design_plan.go	groups (A6). Add, show	groups. Add, show	phase label
+internal/cli/milestone.go	milestone group (A6). Every verb	milestone group. Every verb	phase label
 internal/cli/verdict.go	debug group (a6.go)	debug group (debug.go)	file renamed
 internal/cli/cwd_test.go	(A4 acceptance, section 15)	(acceptance, section 15)	phase label
 internal/artifact/artifact.go	what the A6 file-mode verbs	what the file-mode verbs	phase label
@@ -27,3 +27,9 @@ cmd/rota/scenarios_item_test.go	Scenarios for the A4 item verbs	Scenarios for th
 cmd/rota/scenarios_item_issue_test.go	for the A4 item verbs in issue mode	for the item verbs in issue mode	phase label
 cmd/rota/scenarios_backlog_test.go	for the A4 backlog views	for the backlog views	phase label
 cmd/rota/scenarios_config_test.go	testdata/frozen/a4c.jsonl	testdata/frozen/config.jsonl	record renamed
+internal/cli/design_plan.go	(a6_stores.go)	(artifact_stores.go)	file renamed
+internal/cli/ship.go	(A8, #52)	(#52)	phase label
+internal/cli/release.go	(A8, #52)	(#52)	phase label
+internal/cli/git.go	(A8, #52)	(#52)	phase label
+internal/cli/tracker.go	(A8, #52)	(#52)	phase label
+internal/cli/review.go	(A8, #52)	(#52)	phase label
