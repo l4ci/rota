@@ -103,13 +103,14 @@ The orchestrator runs many `rota`, git and forge commands. Allow them in `.claud
     "allow": [
       "Bash(rota *)",
       "Bash(git *)",
-      "Bash(gh *)"
+      "Bash(gh *)",
+      "Bash(glab *)"
     ]
   }
 }
 ```
 
-Use `Bash(glab *)` instead of `gh` on GitLab. `Bash(rota *)` allows `rota` with any arguments; the older `Bash(rota:*)` form means the same. See Claude Code's [permission rules](https://code.claude.com/docs/en/permissions#wildcard-patterns). Running with `--dangerously-skip-permissions` is your call; rota doesn't do it for you. Workers are different: they launch with permissions skipped by default (`work.workerCommand`), because nobody is in their pane to answer a prompt. See [configuration](usage/configuration.md#workdispatch-subagent-tmux-or-herdr).
+`gh` covers GitHub and `glab` GitLab; a rule for a CLI you don't use never matches. `Bash(rota *)` allows `rota` with any arguments; the older `Bash(rota:*)` form means the same. See Claude Code's [permission rules](https://code.claude.com/docs/en/permissions#wildcard-patterns). Running with `--dangerously-skip-permissions` is your call; rota doesn't do it for you. Workers are different: they launch with permissions skipped by default (`work.workerCommand`), because nobody is in their pane to answer a prompt. See [configuration](usage/configuration.md#workdispatch-subagent-tmux-or-herdr).
 
 ## 10. Unattended hooks (skip for now)
 
