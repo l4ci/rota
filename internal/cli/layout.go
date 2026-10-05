@@ -96,7 +96,8 @@ func runLayout(c *Ctx, mode, project string) (Result, error) {
 			o.skipped = herr.Error()
 		default:
 			workers := worker.LiveWorkers(ctx, h, reg)
-			st, ok := layout.Find(panes, root, layout.Label, workers)
+			cli := cliPane(c, root, reg, panes)
+			st, ok := layout.Find(panes, root, layout.Label, cli, workers)
 			if !ok {
 				if !explicit {
 					continue
@@ -119,13 +120,18 @@ func runLayout(c *Ctx, mode, project string) (Result, error) {
 				return Result{}, Unavailable("%s: %v", o.name, err).WithHint("some panes may have moved; rota layout shows where each is")
 			}
 			o.after, o.moves = r.After, r.Moves
-			if err := worker.Update(root, func(d *worker.Doc) { d.SetLayout(mode) }); err != nil {
+			if err := worker.Update(root, func(d *worker.Doc) {
+				d.SetLayout(mode)
+				if mode == layout.Split && st.CLI != nil {
+					d.SetCLIPane(st.CLI.ID)
+				}
+			}); err != nil {
 				c.Warn("%s: could not remember the layout: %v", o.name, err)
 			}
 			if r.Moves > 0 {
 				// Report where the panes are now, not where they were.
 				if now, err := h.LayoutPanes(ctx); err == nil {
-					if st, ok := layout.Find(now, root, layout.Label, workers); ok {
+					if st, ok := layout.Find(now, root, layout.Label, cli, workers); ok {
 						o.st = st
 					}
 				}
@@ -134,6 +140,22 @@ func runLayout(c *Ctx, mode, project string) (Result, error) {
 		outs = append(outs, o)
 	}
 	return layoutResult(c, mode, outs)
+}
+
+// cliPane is the pane that launched root's round: the one `rota layout` runs
+// from when that is a plain shell (no agent) of this project, else the one a
+// split recorded earlier. "" when neither is known.
+func cliPane(c *Ctx, root string, reg worker.Registry, panes []host.LayoutPane) string {
+	if me := os.Getenv("HERDR_PANE_ID"); me != "" {
+		if mine, err := c.Root(); err == nil && repos.Realpath(mine) == root {
+			for _, p := range panes {
+				if p.ID == me && p.Agent == "" {
+					return me
+				}
+			}
+		}
+	}
+	return reg.CLIPane()
 }
 
 // layoutRoots are the projects to look at: the one named by --project, else
@@ -203,6 +225,9 @@ func layoutResult(c *Ctx, mode string, outs []layoutOut) (Result, error) {
 			row.Set("changed", o.moves > 0)
 		}
 		row.Set("orchestrator", knObj("pane", o.st.Orch.ID, "tab", o.st.Orch.Tab))
+		if o.st.CLI != nil {
+			row.Set("cli", knObj("pane", o.st.CLI.ID, "tab", o.st.CLI.Tab))
+		}
 		ws := []any{}
 		for _, w := range o.st.Workers {
 			ws = append(ws, knObj("slot", w.Slot, "pane", w.Pane, "tab", w.Tab))
@@ -220,7 +245,11 @@ func layoutResult(c *Ctx, mode string, outs []layoutOut) (Result, error) {
 		if mode != "" {
 			head = o.name + "\t" + layout.Result{After: o.after, Moves: o.moves}.Describe()
 		}
-		lines = append(lines, head, "  orchestrator\t"+o.st.Orch.ID+"\t"+o.st.Orch.Tab)
+		lines = append(lines, head)
+		if o.st.CLI != nil {
+			lines = append(lines, "  cli\t"+o.st.CLI.ID+"\t"+o.st.CLI.Tab)
+		}
+		lines = append(lines, "  orchestrator\t"+o.st.Orch.ID+"\t"+o.st.Orch.Tab)
 		for _, w := range o.st.Workers {
 			lines = append(lines, "  "+w.Slot+"\t"+w.Pane+"\t"+w.Tab)
 		}

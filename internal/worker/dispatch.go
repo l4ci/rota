@@ -470,7 +470,7 @@ func arrangeNew(ctx context.Context, h host.Host, root string) string {
 	if !ok || reg.Layout() != layout.Split {
 		return ""
 	}
-	_, _, found, err := layout.Arrange(ctx, l, root, layout.Split, LiveWorkers(ctx, l, reg))
+	_, _, found, err := layout.Arrange(ctx, l, root, layout.Split, reg.CLIPane(), LiveWorkers(ctx, l, reg))
 	switch {
 	case err != nil:
 		return "layout split: " + err.Error() + "; run rota layout split to retry"

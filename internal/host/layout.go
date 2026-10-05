@@ -35,6 +35,9 @@ type Layouter interface {
 	SplitInto(ctx context.Context, pane, tab, target, dir string, keep float64) error
 	// ToNewTab moves pane out into a new tab at the end, named label.
 	ToNewTab(ctx context.Context, pane, label string) error
+	// RenameTab labels a tab, RenamePane names a pane.
+	RenameTab(ctx context.Context, tab, label string) error
+	RenamePane(ctx context.Context, pane, label string) error
 }
 
 // LayoutPanes joins `pane list` with the tab and workspace labels.
@@ -154,6 +157,24 @@ func (h *herdr) ToNewTab(ctx context.Context, pane, label string) error {
 	r := h.herdr(ctx, "pane", "move", pane, "--new-tab", "--label", label, "--no-focus")
 	if r.ExitCode != 0 {
 		return fmt.Errorf("herdr pane move %s failed: %s", pane, strings.TrimSpace(r.Stderr))
+	}
+	return nil
+}
+
+// RenameTab: `herdr tab rename <tab> <label>`.
+func (h *herdr) RenameTab(ctx context.Context, tab, label string) error {
+	r := h.herdr(ctx, "tab", "rename", tab, label)
+	if r.ExitCode != 0 {
+		return fmt.Errorf("herdr tab rename %s failed: %s", tab, strings.TrimSpace(r.Stderr))
+	}
+	return nil
+}
+
+// RenamePane: `herdr pane rename <pane> <label>`.
+func (h *herdr) RenamePane(ctx context.Context, pane, label string) error {
+	r := h.herdr(ctx, "pane", "rename", pane, label)
+	if r.ExitCode != 0 {
+		return fmt.Errorf("herdr pane rename %s failed: %s", pane, strings.TrimSpace(r.Stderr))
 	}
 	return nil
 }

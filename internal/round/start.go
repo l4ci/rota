@@ -145,6 +145,7 @@ func (e Env) Start(ctx context.Context, root string, o StartOpts) (Started, erro
 		if out != roundlease.Renewed { // taken, reclaimed or numbered
 			doc.SetRound(l.Round)
 			doc.SetLayout("") // the layout belongs to one round
+			doc.SetCLIPane("")
 		}
 		// The host is chosen once per round: a restarted start keeps it, a new
 		// round (a newly taken lease) resolves again.
