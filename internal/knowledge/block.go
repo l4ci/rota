@@ -101,14 +101,12 @@ func (s Store) RegenerateBlock(key, scope string) (string, error) {
 		}
 		body = strings.Join(lines, "\n")
 	}
-	block := fmt.Sprintf("<!-- rota-%s-start -->\n%s\n\n%s\n\n%s\n\n<!-- rota-%s-end -->", key, cfg.heading, cfg.intro, body, key)
-	return section.UpsertBlock(target, key, block)
+	return section.UpsertBlock(target, key, section.Wrap(key, fmt.Sprintf("%s\n\n%s\n\n%s\n", cfg.heading, cfg.intro, body)))
 }
 
 // WriteCustomBlock wraps body in the key's markers and upserts it into the
 // project's instructions file.
 func (s Store) WriteCustomBlock(key, body string) (string, error) {
 	body = strings.TrimRight(body, "\n")
-	block := fmt.Sprintf("<!-- rota-%s-start -->\n%s\n<!-- rota-%s-end -->", key, body, key)
-	return section.UpsertBlock(section.InstructionsFile(s.Root), key, block)
+	return section.UpsertManaged(s.Root, key, body)
 }
