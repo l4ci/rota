@@ -31,14 +31,42 @@ var Statuses = []string{"planned", "active", "shipped", "archived"}
 // frontmatter parser keeps the last of a repeated key and trims values, so it
 // could accept a text the old helper refused; it is not used here.
 var (
-	idRe        = regexp.MustCompile(`^M\d{2,}$`)
-	milestoneID = regexp.MustCompile(`M\d+`)
+	idRe        = regexp.MustCompile(`\A` + Pattern + `\z`)
+	milestoneID = regexp.MustCompile(TokenPattern)
+	leadingID   = regexp.MustCompile(`\A` + TokenPattern)
 	fmBlock     = regexp.MustCompile(`(?s)\A---\r?\n(.*?)\r?\n---[ \t]*(?:\r?\n|\z)`)
 	fmID        = regexp.MustCompile(`(?m)^id:[ \t]*(\S+)`)
 )
 
-// ValidID reports whether id is M\d{2,}.
+// The milestone ID grammar lives here; every other package consumes it.
+// Digits are Unicode decimal digits (\p{Nd}), like the item-ID grammar.
+const (
+	// Pattern is a well-formed ID (M01): M plus at least two digits. Unanchored.
+	Pattern = `M\p{Nd}{2,}`
+	// TokenPattern is the looser form that scanning free text accepts (M1, M01).
+	TokenPattern = `M\p{Nd}+`
+)
+
+// ValidID reports whether id is exactly one well-formed ID (M\p{Nd}{2,}).
 func ValidID(id string) bool { return idRe.MatchString(id) }
+
+// IDs lists every ID token in text, in order, duplicates kept.
+func IDs(text string) []string { return milestoneID.FindAllString(text, -1) }
+
+// LeadingID is the ID token text starts with, or "".
+func LeadingID(text string) string { return leadingID.FindString(text) }
+
+// DependsOf reads a parsed frontmatter `depends` value: an inline list is
+// taken as written, a bare string is scanned for ID tokens.
+func DependsOf(fm map[string]any) []string {
+	switch v := fm["depends"].(type) {
+	case []string:
+		return v
+	case string:
+		return IDs(v)
+	}
+	return nil
+}
 
 func checkID(id string) error {
 	if !ValidID(id) {
@@ -141,12 +169,7 @@ func List(root string) ([]Entry, error) {
 		if e.Status == "" {
 			e.Status = "planned"
 		}
-		switch v := d.FM["depends"].(type) {
-		case []string:
-			e.Depends = append(e.Depends, v...)
-		case string:
-			e.Depends = append(e.Depends, milestoneID.FindAllString(v, -1)...)
-		}
+		e.Depends = append(e.Depends, DependsOf(d.FM)...)
 		if e.Status == "shipped" {
 			shipped[e.ID] = true
 		}
