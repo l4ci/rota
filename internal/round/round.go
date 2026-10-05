@@ -64,6 +64,7 @@ type Forge interface {
 	PRState(ctx context.Context, pr int) (string, error)
 	ClosedNumbers(body string) []int
 	List(ctx context.Context, f tracker.ListFilter) ([]tracker.Issue, error)
+	Get(ctx context.Context, number int, withComments bool) (tracker.Issue, error)
 	AddLabels(ctx context.Context, number int, labels []string, autoCreate bool) error
 }
 
@@ -330,7 +331,7 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 			}
 		}
 		if labelsOK && !parked && r.Issue != "" && r.PRState != "merged" && r.PRState != "closed" {
-			if n, _ := strconv.Atoi(r.Issue); !labelled[n] {
+			if n, _ := strconv.Atoi(r.Issue); !labelled[n] && !e.issueClosed(ctx, rep, n) {
 				rep.add(Finding{Kind: LabelMissing, Slot: r.Name, Issue: r.Issue, Detail: fmt.Sprintf("slot holds #%s, which lacks %s", r.Issue, e.Label), Repair: "add " + e.Label})
 			}
 		}
@@ -547,4 +548,17 @@ func (e Env) ahead(ctx context.Context, root, base, branch string) int {
 	}
 	n, _ := strconv.Atoi(strings.TrimSpace(out))
 	return n
+}
+
+// issueClosed reports whether the slot's issue is closed. A closed issue is
+// finished work, so it is neither missing its label nor worth relabelling. A
+// lookup that fails counts as open and leaves a warning: the drift stays
+// visible rather than hiding behind a flaky forge.
+func (e Env) issueClosed(ctx context.Context, rep *Report, n int) bool {
+	is, err := e.Forge.Get(ctx, n, false)
+	if err != nil {
+		rep.Warnings = append(rep.Warnings, fmt.Sprintf("issue #%d state: %v", n, err))
+		return false
+	}
+	return is.State == "closed"
 }
