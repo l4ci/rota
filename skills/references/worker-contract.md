@@ -15,6 +15,10 @@ Work only this task, then stop.
   invisible in the body. Then dispute it before building: if the ticket is wrong,
   already decided or contradicted by the code, say so (`ROTA-BLOCKED`, or in your PR
   if you built a narrower thing) instead of implementing it as written.
+- Stay inside the item's `## Out of scope` section, which the brief repeats when the
+  item has one. Never drop part of the ticket as out of scope on your own, and never
+  widen into the listed items: if the boundary looks wrong, dispute it (`ROTA-BLOCKED`,
+  or say so in your PR) rather than decide it yourself.
 - Size your own subagents by tier, not by model name. Delegate reading, searching
   and discovery to a `light` subagent, writing code and tests to a `standard` one,
   and keep `heavy` for genuinely hard reasoning (design, a tricky debugging

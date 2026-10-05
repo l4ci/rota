@@ -198,7 +198,7 @@ with `no round`, `out of scope`, `not ready`, `overlap`, `claimed`, `open PR`, `
 claims the item (`<agent>@<round>`), sets it in progress with a comment, cuts the slot's
 branch `<agent>/<issue>-<slug>`, picks the account and dispatches a short signed brief: a
 pointer to the standing contract (`round.brief`, else `skills/references/worker-contract.md`), the
-issue to read and dispute, the siblings and the decisions from `--body-file`.
+issue to read and dispute, the item's `## Out of scope` section when it has one, the siblings and the decisions from `--body-file`.
 
 - **Tier.** `--tier light|standard|heavy` picks the worker's model tier (default `round.tier`); a
   tier above the default needs `--tier-reason`. The tier and its model are recorded on the slot,
