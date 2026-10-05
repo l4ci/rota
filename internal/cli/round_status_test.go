@@ -83,6 +83,21 @@ func TestRoundStatusAndReconcile(t *testing.T) {
 		t.Errorf("registry = %v", s)
 	}
 
+	// A slot's bounce count shows on its row, and only on its row.
+	worker.RecordBounce(root, "58", "")
+	worker.RecordBounce(root, "58", "")
+	_, out, _ = rotaInWith(t, deps, root, "--json", "round", "status")
+	for _, r := range data(t, out)["slots"].([]any) {
+		row := r.(map[string]any)
+		want := 0.0
+		if row["name"] == "dana" {
+			want = 2
+		}
+		if row["bounces"] != want {
+			t.Errorf("%v bounces = %v, want %v", row["name"], row["bounces"], want)
+		}
+	}
+
 	// An open escalation shows in both verbs and on its slot's row.
 	if err := worker.UpdateEscalations(root, func([]any) []any {
 		e := jsonx.NewObject()

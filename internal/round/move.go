@@ -451,8 +451,11 @@ type TransferOpts struct {
 	BodyFile      string // decisions already settled, passed verbatim; "" for none
 	AcceptOverlap bool
 	HolderPID     int
-	Settings      roundcfg.Settings
-	Getenv        func(string) string
+	// Tier and TierReason are the receiver's tier ("" is round.tier); one above
+	// the default needs a reason, as in assign. Unused when To is the human.
+	Tier, TierReason string
+	Settings         roundcfg.Settings
+	Getenv           func(string) string
 }
 
 // Transferred is what Transfer did.
@@ -478,6 +481,13 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 	toHuman := o.To == HumanTarget
 	if o.To == "" || (!toHuman && !slices.Contains(set.Roster, o.To)) {
 		return res, usage("--to must be %s or a roster slot (%s)", HumanTarget, strings.Join(set.Roster, ", "))
+	}
+	if o.Tier != "" && !roundcfg.ValidTier(o.Tier) {
+		return res, usage("--tier must be one of %s", strings.Join(roundcfg.Tiers, ", "))
+	}
+	reason := strings.TrimSpace(o.TierReason)
+	if !toHuman && roundcfg.TierRank(o.Tier) > roundcfg.TierRank(set.Tier) && reason == "" {
+		return res, usage("--tier %s is above the default tier %s: say why with --tier-reason", o.Tier, set.Tier)
 	}
 	if o.BodyFile != "" {
 		if _, err := os.Stat(o.BodyFile); err != nil {
@@ -683,8 +693,8 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 	}
 
 	solo := isSolo(root)
-	// A transferred worker starts on the default tier; a higher one is assign's.
-	kind, tier := harness.Claude, o.Settings.Tier
+	// A transferred worker starts on the default tier unless --tier says higher.
+	kind, tier := harness.Claude, firstNonEmpty(o.Tier, o.Settings.Tier)
 	model := o.Settings.Model(kind, tier)
 	steps = append(steps,
 		step{name: "claim", skip: moved, do: func() error {
@@ -711,9 +721,8 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 		}},
 		step{name: "bind the receiver", skip: moved, do: func() error {
 			err := editSlot(root, o.To, func(s *worker.Slot) error {
-				s.SetTask(id)
+				s.Bind(worker.Binding{Task: id, ClaimID: res.ClaimID, Kind: kind, Tier: tier, Model: model, TierReason: reason})
 				s.SetBranch(branch)
-				s.SetClaimID(res.ClaimID)
 				return nil
 			})
 			if err == nil {
@@ -731,7 +740,7 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 				b, _ := os.ReadFile(o.BodyFile)
 				decisions = string(b)
 			}
-			text = pointerBrief(o.To, id, branch, brief, nil, decisions, outOfScope(be, id), tierBrief{Kind: kind, Tier: tier, Model: model, Default: tier, Table: o.Settings.Models[kind]})
+			text = pointerBrief(o.To, id, branch, brief, nil, decisions, outOfScope(be, id), tierBrief{Kind: kind, Tier: tier, Model: model, Default: o.Settings.Tier, Reason: reason, Table: o.Settings.Models[kind]})
 			text += fmt.Sprintf("\nThis issue was handed to you by %s. Read its latest rota:handoff comment first (it ends with a `%s` marker), then continue from the pushed work on %s, already checked out in your worktree.\n",
 				res.From, marker.Handoff(res.From, rnd), branch)
 			if rec != nil {

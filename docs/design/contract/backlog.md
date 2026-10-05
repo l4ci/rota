@@ -10,7 +10,7 @@ shim: `id` is the printed ID, `changed` is always true (the counter is written).
 note: `--kind` is a flag, as in `item create` (rule 1). Exception to rule 11: `id` is a fresh counter ID and `kind` already gives the type, so there is no `type` field.
 
 ### rota item create
-rota item create --kind <bugs|features|tasks> --title <text> [--tag <tag>] [--desc <text>] [--body-file <path|->] [--related <text>] [--milestone <text>] [--repos <csv>] [--subsystem <text>] [--captured <YYYY-MM-DD>] | --kind <kind> --raw-file <path|->
+rota item create --kind <bugs|features|tasks> --title <text> [--tag <tag>] [--desc <text>] [--body-file <path|->] [--depends-on <refs>] [--related <text>] [--milestone <text>] [--repos <csv>] [--subsystem <text>] [--captured <YYYY-MM-DD>] | --kind <kind> --raw-file <path|->
 repo: scoped
 data: {"id": string, "type": "B"|"F"|"T", "kind": string, "detail"?: string, "changed": bool}
 exit: 3 when BACKLOG.md or its section is missing, `--body-file` or `--raw-file` cannot be read, the milestone is absent on the tracker, or the umbrella repo is unknown or ambiguous; backend (`--raw-file` is file-only); tracker
@@ -18,6 +18,7 @@ old: hv-item-create <kind> --title <text> [--tag T] [--desc D] [--body-file F] [
 shim: the helper prints one ID line. File mode: `id` is that line (for `--raw-file`, the ID parsed from the bullet). Issue mode: the line is `B12`, so `id` is `12` (letter dropped, rule 11). `type` is the dropped or leading letter; `detail` is `.rota/<kind>/<ID>.md` when `--body-file` was given; `kind` and `changed:true` are set by the shim.
 note: `--kind` is a flag, not the old first positional, because the verb creates an item rather than acting on one (rule 1).
 note: the repeated `--field Name=Value` becomes one flag per field (`Name` lowercased, values keep their commas), because Go `flag` does not repeat.
+note: `--depends-on` takes `#N` or file IDs (comma or space separated) and appends a `## Depends on` bullet list to the body, the section `rota round` readiness reads; on the file backend that makes a detail file even without `--body-file`. A `## Depends on` already in `--body-file` is a usage error. `--raw-file` excludes it.
 note: `--raw-file` absorbs hv-append: it appends one preformatted bullet (ID already in it) verbatim except for the `Since: <HEAD>` drift baseline it stamps, as hv-append did, excludes `--title`, and stays because smoke fixtures depend on it. The verb already takes `--body-file` for the detail body, so rule 3 lets this second file input take a name after its content.
 note: `--tag` is P0..P3 for bugs and Major|Minor|Cosmetic for features; tasks take none (2).
 note: a field flag given with an empty value (`--related ""`) exits 2, as old did; `--milestone` takes exactly one milestone (a list exits 2); a label the tracker lacks while `autoCreateLabel` is off exits 3. The bullet's fields keep the old helper's order (Related, Milestone, Repos, Subsystem, Captured).

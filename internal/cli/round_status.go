@@ -118,8 +118,11 @@ func roundStatus(*flag.FlagSet) RunFunc {
 			}
 		}
 		for _, r := range rep.Rows {
-			lines = append(lines, strings.Join([]string{
-				r.Name, dash(r.Issue), dash(r.Branch), dash(r.PR), dash(r.HostState), dash(strings.Join(r.Drift, ","))}, "\t"))
+			cols := []string{r.Name, dash(r.Issue), dash(r.Branch), dash(r.PR), dash(r.HostState), dash(strings.Join(r.Drift, ","))}
+			if r.Bounces > 0 {
+				cols = append(cols, fmt.Sprintf("bounces %d", r.Bounces))
+			}
+			lines = append(lines, strings.Join(cols, "\t"))
 		}
 		for _, q := range rep.Queued {
 			lines = append(lines, fmt.Sprintf("review\t#%s\t%s\t%s\tfrom %s", q.Issue, dash(q.PR), dash(q.Branch), dash(q.From)))
@@ -211,6 +214,7 @@ func rowList(rows []round.Row) []any {
 		setIf(o, "tier", r.Tier)
 		setIf(o, "model", r.Model)
 		setIf(o, "tierReason", r.TierReason)
+		o.Set("bounces", r.Bounces)
 		out = append(out, o)
 	}
 	return out
