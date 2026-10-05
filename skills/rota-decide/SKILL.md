@@ -159,11 +159,7 @@ If the entry created a new topic, prepend a line: *"New topic: `<topic>`."*
 ## Key Principles
 
 - **Never auto-invoked.** Regardless of `autonomy.level`, and Step 5's confirmation is the only gate. Manual confirmation is the verification: no verifier runs.
-- **Forbids and permits are required.** If you can't articulate both, it's a learning — redirect to `/rota-learn`.
 - **One sentence rule, one paragraph why.** If a decision needs more, link to a plan or knowledge entry.
-- **`--from-learning <topic>` and `--from-spike <name>` only seed the rule and why from the source artifact.** The forbids/permits are still user-articulated — that's what makes a decision a decision.
-- **`inconclusive` spikes can't be promoted.** Promotion requires a verdict the project is committing to.
-- **Sibling persistence skills.** `/rota-learn` and `/rota-decide` share one contract (persist + index the instructions file + confirm) and intentionally diverge on gate strength — see `references/persistence-skills.md`. `/rota-learn` carries two modes: passive topic-bullet learnings and `--term <name>` for Glossary entries.
 
 ## References
 

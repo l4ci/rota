@@ -22,17 +22,6 @@ Determine the mode silently:
 
 In Finish mode, list existing open spikes via `rota spike list` (`data.spikes`, `status` not `done`) and ask which one if not specified.
 
-Track these phases with the host's task tool if it has one.
-
-Phases:
-
-1. *Question* — Start: yes/no/conditional question sharpened (Step 2)
-2. *Branch* — Start: `spike/<name>` created, scratch file seeded (Steps 2–4, no confirmation)
-3. *Investigate* — Start: experiment runs to a clear answer (between Start and Finish)
-4. *Findings* — Finish: spike file's findings section written from the branch state (Steps 5–6)
-5. *Decision* — Finish: verdict (yes / no / conditional / inconclusive) recorded (Step 6)
-6. *Promote / cleanup* — Finish: one-line `/rota-decide --from-spike` nudge, branch deleted (Steps 6–7)
-
 ## Step 2 (Start mode) — Sharpen the Question and Resolve the Repo
 
 A spike answers a *yes/no/conditional* question. Push back if the question is vague:
@@ -53,7 +42,7 @@ In umbrella mode, the spike branch must land in a specific sub-repo (the umbrell
    - **Question:** *"Which sub-repo should `spike/<name>` live in?"*
    - **Options:** one per registered sub-repo (read names from `.rota/repos.json`, or `rota repo resolve --json`), single-select.
 
-Carry `<repo>` into Step 4's verb invocation as `--repo <repo>`. The spike file still lands at the umbrella's `.rota/spikes/<name>.md` — only the git branch lives in the sub-repo, per the umbrella-vs-sub-repo `.git/` distinction in `references/umbrella-mode.md`.
+Carry `<repo>` into Step 4's verb invocation as `--repo <repo>`.
 
 ## Step 3 (Start mode) — Branch Without Asking
 
@@ -103,7 +92,7 @@ git -C <sub-repo path> log spike/<name> --oneline
 git -C <sub-repo path> diff main...spike/<name> --stat
 ```
 
-Read `.rota/spikes/<name>.md` for the original question and any notes the user already wrote (the file always lives at the umbrella root, regardless of `repo:`).
+Read `.rota/spikes/<name>.md` for the original question and any notes the user already wrote.
 
 Ask the user for the verbal summary if they haven't already given one — what they learned, viable or not, and why.
 
@@ -146,12 +135,7 @@ If not viable or inconclusive, the spike is its own conclusion. Don't push to ca
 ## Key Principles
 
 - **One question per spike.** Multiple questions → multiple spikes.
-- **The branch never merges.** Findings come back as a markdown file; code stays on the branch as reference.
-- **Honest reporting beats salvage.** A "not viable" conclusion is just as valuable as "viable".
-- **No stubs or partial work back to main.** Anything on main is real implementation.
 - **Spikes are scoped, not open-ended.** A spike open >2 weeks without a decision is stale — close it `inconclusive` and recapture if needed.
-- **Spikes feed decisions, not the other way around.** A `viable` / `not viable` / `depends-on-X` finish is a natural moment to ask whether the conclusion is a commitment future work must respect; an `inconclusive` finish is not.
-- **Umbrella spikes are per-repo.** A spike's branch lives in the sub-repo named in its frontmatter `repo:` field; the spike file itself stays at the umbrella root.
 
 ## References
 

@@ -66,7 +66,7 @@ For each entry run `rota status add <branch> --items <ids> [--worktree <path>] [
 
 ## Step 6 — Confirm
 
-One compact block. Single entry:
+One compact block. Wave: name every repo, count the handoffs, list Uncommitted per repo.
 
 ```
 Paused `rota/fix-B07-timer-badge` (web) — handoff saved.
@@ -78,21 +78,7 @@ Uncommitted: wip commit a1b2c3d
 Resume with `/rota-work` in a fresh session.
 ```
 
-Show the `(web)` suffix only when `repo` is non-null. For a wave:
-
-```
-Paused `rota/api-refactor` across web, api — 2 handoffs saved.
-
-Stage: implementing wave 2 of 3
-Next: thread the new repo arg through rota status add --repos
-Uncommitted:
-  - web: wip commit a1b2c3d
-  - api: clean tree
-
-Resume with `/rota-work` in a fresh session.
-```
-
-Stage, Next and Hypothesis are shared across the wave; Uncommitted is per repo.
+Show the `(web)` suffix only when `repo` is non-null. Stage, Next and Hypothesis are shared across a wave; Uncommitted is per repo.
 
 **Learn nudge (conditional).** Pausing loses context. If the session hit a durable gotcha (a hypothesis that contradicted assumptions, a non-obvious root cause, a tool quirk), add one line: *"Run `/rota-learn` now to preserve session insights durably — handoff captures intent, not learnings."* Skip if nothing non-obvious surfaced or `/rota-learn` already ran. Advisory only.
 
