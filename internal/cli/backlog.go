@@ -5,7 +5,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/l4ci/rota/internal/milestone"
 	"os"
 	"regexp"
 	"slices"
@@ -14,12 +13,10 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/backlog"
-	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/repos"
-	"github.com/l4ci/rota/internal/section"
 	"github.com/l4ci/rota/internal/stale"
 	"github.com/l4ci/rota/internal/status"
 )
@@ -373,24 +370,6 @@ func plural(n int, word string) string {
 	return fmt.Sprintf("%d %ss", n, word)
 }
 
-// topicsLine is the "N topics (a, b, c, d, ...)" line of hv-summary and the
-// topic names it shows, for a file of ## sections; ok is false for a missing
-// file or one with no topics.
-func topicsLine(path string) (count int, shown []string, ok bool) {
-	text, err := fsio.ReadText(path)
-	if err != nil {
-		return 0, nil, false
-	}
-	var names []string
-	for _, t := range section.Topics(text) {
-		names = append(names, t.Name)
-	}
-	if len(names) == 0 {
-		return 0, nil, false
-	}
-	return len(names), names[:min(4, len(names))], true
-}
-
 func topicsText(count int, shown []string) string {
 	suffix := ""
 	if count > len(shown) {
@@ -419,27 +398,16 @@ func summaryVerb(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return backlogFail(err)
 		}
-		var lines []string
-		open := map[string]int{}
-		var closed []backlog.Item
-		for _, it := range items {
-			if it.Closed {
-				closed = append(closed, it)
-			} else {
-				open[it.Type]++
-			}
-		}
-		bugs, feats, tasks := open["B"], open["F"], open["T"]
-		lines = append(lines, fmt.Sprintf("Backlog: %s, %s, %s", plural(bugs, "bug"), plural(feats, "feature"), plural(tasks, "task")))
-		data := jsonObj("backlog", jsonObj("bugs", bugs, "features", feats, "tasks", tasks))
+		sm := backlog.BuildSummary(root, items, be.Name() == "file")
+		lines := []string{fmt.Sprintf("Backlog: %s, %s, %s", plural(sm.Bugs, "bug"), plural(sm.Features, "feature"), plural(sm.Tasks, "task"))}
+		data := jsonObj("backlog", jsonObj("bugs", sm.Bugs, "features", sm.Features, "tasks", sm.Tasks))
 
 		active := []any{}
-		for _, e := range status.Entries(root) {
+		for _, e := range sm.Active {
 			ids := strings.Join(e.Items, ", ")
 			if ids == "" {
 				ids = "?"
 			}
-			started := first10(e.StartedAt)
 			loc, repoStr := "", ""
 			if e.Worktree != "" {
 				loc = " in " + e.Worktree
@@ -447,7 +415,7 @@ func summaryVerb(fs *flag.FlagSet) RunFunc {
 			if e.Repo != "" {
 				repoStr = " (repo: " + e.Repo + ")"
 			}
-			lines = append(lines, fmt.Sprintf("Active: %s on %s%s%s (since %s)", ids, e.Branch, loc, repoStr, started))
+			lines = append(lines, fmt.Sprintf("Active: %s on %s%s%s (since %s)", ids, e.Branch, loc, repoStr, e.Since))
 			o := jsonObj("items", e.Items, "branch", e.Branch)
 			if e.Worktree != "" {
 				o.Set("worktree", e.Worktree)
@@ -455,14 +423,14 @@ func summaryVerb(fs *flag.FlagSet) RunFunc {
 			if e.Repo != "" {
 				o.Set("repo", e.Repo)
 			}
-			o.Set("since", started)
+			o.Set("since", e.Since)
 			active = append(active, o)
 		}
 		data.Set("active", active)
 
 		recent := []any{}
 		var done []string
-		for _, it := range closed[:min(3, len(closed))] {
+		for _, it := range sm.Recent {
 			s := "[" + it.Key() + "] on " + it.ClosedAt
 			if it.Reason != "done" {
 				s += " (" + it.Reason + ")"
@@ -481,53 +449,29 @@ func summaryVerb(fs *flag.FlagSet) RunFunc {
 
 		ms := []any{}
 		var msText []string
-		if be.Name() == "file" { // issue mode keeps milestones in the tracker
-			list, _ := milestone.List(root)
-			for _, m := range list {
-				if m.Status != "active" {
-					continue
-				}
-				ms = append(ms, jsonObj("id", m.ID, "title", m.Title))
-				msText = append(msText, pystr.Strip(m.ID+" "+m.Title))
-			}
+		for _, m := range sm.Milestones {
+			ms = append(ms, jsonObj("id", m.ID, "title", m.Title))
+			msText = append(msText, pystr.Strip(m.ID+" "+m.Title))
 		}
 		if len(msText) > 0 {
 			lines = append(lines, "Active milestones: "+strings.Join(msText, ", "))
 		}
 		data.Set("milestones", ms)
 
-		for _, k := range []struct{ label, file, key string }{{"Knowledge", "KNOWLEDGE.md", "knowledge"}, {"Decisions", "DECISIONS.md", "decisions"}} {
-			if n, shown, ok := topicsLine(root + "/.rota/" + k.file); ok {
-				lines = append(lines, k.label+": "+topicsText(n, shown))
-				data.Set(k.key, jsonObj("count", n, "topics", shown))
-			}
+		for _, t := range sm.Topics {
+			lines = append(lines, t.Label+": "+topicsText(t.Count, t.Shown))
+			data.Set(t.Key, jsonObj("count", t.Count, "topics", t.Shown))
 		}
-		if text, err := fsio.ReadText(root + "/.rota/ARCHIVE.md"); err == nil {
-			n := 0
-			for _, l := range pystr.Splitlines(text) {
-				if strings.HasPrefix(l, "- ~~") {
-					n++
-				}
+		if sm.Archive > 0 {
+			s := "s"
+			if sm.Archive == 1 {
+				s = ""
 			}
-			if n > 0 {
-				s := "s"
-				if n == 1 {
-					s = ""
-				}
-				lines = append(lines, fmt.Sprintf("Archive: %d older item%s", n, s))
-				data.Set("archive", n)
-			}
+			lines = append(lines, fmt.Sprintf("Archive: %d older item%s", sm.Archive, s))
+			data.Set("archive", sm.Archive)
 		}
 		return Result{Data: data, Text: strings.Join(lines, "\n")}, nil
 	}
-}
-
-func first10(s string) string {
-	r := []rune(s)
-	if len(r) > 10 {
-		r = r[:10]
-	}
-	return string(r)
 }
 
 // ---- status ----------------------------------------------------------------------
@@ -690,6 +634,8 @@ func refactorAge(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
+		// File-only by design: the counters live in counters.json, which only the
+		// file backend's item completion maintains; issue mode counts from the tracker.
 		feats, bugs, err := fileBackend(root).RefactorAge()
 		if err != nil {
 			return backlogFail(err)
@@ -713,6 +659,7 @@ func refactorReset(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
+		// File-only by design: see refactorAge.
 		changed, err := fileBackend(root).RefactorReset()
 		if err != nil {
 			return backlogFail(err)

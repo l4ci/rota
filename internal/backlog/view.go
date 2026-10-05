@@ -8,8 +8,10 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/section"
+	"github.com/l4ci/rota/internal/status"
 )
 
 // Row is one open item as the listing views (hv-backlog, hv-todo-by-milestone,
@@ -361,6 +363,100 @@ func (l *Listing) cluster(rows []Row, match func(Row) bool) {
 
 // Text is hv-backlog's Markdown, byte for byte.
 func (l *Listing) Text() string { return l.text }
+
+// Summary is the data behind `rota summary`: counts, active work, recent
+// closures, milestones, topic indexes and the archive size. cli renders it.
+type Summary struct {
+	Bugs, Features, Tasks int
+	Active                []SummaryActive
+	Recent                []Item // the last closed items, at most 3
+	Milestones            []SummaryMilestone
+	Topics                []SummaryTopics // Knowledge, then Decisions; absent when the file has no topics
+	Archive               int             // older items in ARCHIVE.md; 0 when none
+}
+
+// SummaryActive is one in-flight entry of status.json.
+type SummaryActive struct {
+	Items            []string
+	Branch, Worktree string
+	Repo             string
+	Since            string // the start date, YYYY-MM-DD
+}
+
+// SummaryMilestone is an active milestone.
+type SummaryMilestone struct{ ID, Title string }
+
+// SummaryTopics is the topic index of a KNOWLEDGE.md or DECISIONS.md.
+type SummaryTopics struct {
+	Key, Label string
+	Count      int
+	Shown      []string // the first few topic names
+}
+
+// BuildSummary assembles the summary of the project at root from its items
+// (open and closed). Milestones are read only in file mode; issue mode keeps
+// them in the tracker.
+func BuildSummary(root string, items []Item, fileMode bool) Summary {
+	var sm Summary
+	var closed []Item
+	for _, it := range items {
+		if it.Closed {
+			closed = append(closed, it)
+			continue
+		}
+		switch it.Type {
+		case "B":
+			sm.Bugs++
+		case "F":
+			sm.Features++
+		case "T":
+			sm.Tasks++
+		}
+	}
+	for _, e := range status.Entries(root) {
+		sm.Active = append(sm.Active, SummaryActive{Items: e.Items, Branch: e.Branch, Worktree: e.Worktree, Repo: e.Repo, Since: first10(e.StartedAt)})
+	}
+	sm.Recent = closed[:min(3, len(closed))]
+	if fileMode {
+		list, _ := ms.List(root)
+		for _, m := range list {
+			if m.Status == "active" {
+				sm.Milestones = append(sm.Milestones, SummaryMilestone{m.ID, m.Title})
+			}
+		}
+	}
+	for _, k := range []struct{ label, file, key string }{{"Knowledge", "KNOWLEDGE.md", "knowledge"}, {"Decisions", "DECISIONS.md", "decisions"}} {
+		if t, ok := summaryTopics(root + "/.rota/" + k.file); ok {
+			t.Key, t.Label = k.key, k.label
+			sm.Topics = append(sm.Topics, t)
+		}
+	}
+	if text, err := fsio.ReadText(root + "/.rota/ARCHIVE.md"); err == nil {
+		for _, l := range pystr.Splitlines(text) {
+			if strings.HasPrefix(l, "- ~~") {
+				sm.Archive++
+			}
+		}
+	}
+	return sm
+}
+
+// summaryTopics reads the ## sections of path; ok is false for a missing file
+// or one with no topics.
+func summaryTopics(path string) (SummaryTopics, bool) {
+	text, err := fsio.ReadText(path)
+	if err != nil {
+		return SummaryTopics{}, false
+	}
+	var names []string
+	for _, t := range section.Topics(text) {
+		names = append(names, t.Name)
+	}
+	if len(names) == 0 {
+		return SummaryTopics{}, false
+	}
+	return SummaryTopics{Count: len(names), Shown: names[:min(4, len(names))]}, true
+}
 
 func first10(s string) string {
 	r := []rune(s)
