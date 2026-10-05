@@ -589,11 +589,9 @@ func (u *Umbrella) createSubMilestone(sub *Issues, mid string) (string, bool, er
 		return "", false, nil
 	}
 	native := pystr.Strip(best.Title)
-	mk, ok := sub.Tracker.(interface {
-		CreateMilestone(ctx context.Context, title, description string) (int, error)
-	})
-	if !ok {
-		return "", false, fmt.Errorf("the tracker of %s cannot create milestones", sub.Repo)
+	mk, err := capability[MilestoneCreator](sub, fmt.Sprintf("the tracker of %s cannot create milestones", sub.Repo))
+	if err != nil {
+		return "", false, err
 	}
 	if _, err := mk.CreateMilestone(u.ctx(), native, ""); err != nil {
 		return "", false, err

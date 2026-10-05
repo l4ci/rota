@@ -37,17 +37,7 @@ type ReleaseTracker interface {
 	IssuesInMilestone(ctx context.Context, title, state string) ([]tracker.Issue, error)
 }
 
-func (b *Issues) prTracker() (PRTracker, error) {
-	tr, err := b.tracker()
-	if err != nil {
-		return nil, err
-	}
-	pt, ok := tr.(PRTracker)
-	if !ok {
-		return nil, errors.New("this tracker has no pull request support")
-	}
-	return pt, nil
-}
+func (b *Issues) prTracker() (PRTracker, error) { return capability[PRTracker](b, noPRSupport) }
 
 // ---- review queue ----------------------------------------------------------
 
@@ -276,13 +266,9 @@ func (b *Issues) releaseIssues(mid string) ([]Issue, error) { return b.releaseIs
 // releaseIssuesOpt is releaseIssues; with optional (an umbrella sub-repo
 // other than home) the tracking issue may be absent.
 func (b *Issues) releaseIssuesOpt(mid string, optional bool) ([]Issue, error) {
-	tr, err := b.tracker()
+	rt, err := capability[ReleaseTracker](b, noMilestoneSupport)
 	if err != nil {
 		return nil, err
-	}
-	rt, ok := tr.(ReleaseTracker)
-	if !ok {
-		return nil, errors.New("this tracker has no native milestone support")
 	}
 	var tracking Issue
 	if optional {
@@ -463,13 +449,9 @@ func (b *Issues) ReleaseClose(mid, tag string) (issues int, changed bool, err er
 
 // counting is a copy of b whose tracker counts the writes made through it.
 func (b *Issues) counting() (*Issues, *writeCounter, error) {
-	tr, err := b.tracker()
+	rt, err := capability[ReleaseTracker](b, noMilestoneSupport)
 	if err != nil {
 		return nil, nil, err
-	}
-	rt, ok := tr.(ReleaseTracker)
-	if !ok {
-		return nil, nil, errors.New("this tracker has no native milestone support")
 	}
 	wc := &writeCounter{MilestoneTracker: rt}
 	cp := *b
