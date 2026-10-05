@@ -74,6 +74,12 @@ func (b *Issues) ctx() context.Context {
 // Name is "issues".
 func (b *Issues) Name() string { return "issues" }
 
+// Capabilities: tracker issues.
+func (b *Issues) Capabilities() Capabilities { return Capabilities{Tracker: true} }
+
+// Rows lists the open issues.
+func (b *Issues) Rows() ([]Row, error) { return issueRows(b, false) }
+
 // Letter is the item type of an issue: the letter of the first type label it
 // carries, else "T" (_letter).
 func (b *Issues) Letter(is Issue) string {

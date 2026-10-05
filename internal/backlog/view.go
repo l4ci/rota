@@ -31,32 +31,14 @@ type Row struct {
 
 var sectionOfType = map[string]string{"B": "Bugs", "F": "Features", "T": "Tasks"}
 
-// OpenRows lists the open items of be in section order, with the Markdown the
-// bullets came from (what hv-backlog's title lookup searches). ok is false when
-// there is no backlog to read: no BACKLOG.md in file mode. The file backend
-// reads every open bullet, indented ones too, as the helpers do; the issue
-// backend lists its open issues.
-func OpenRows(be Backend) (rows []Row, md string, ok bool, err error) {
-	md, err = be.Markdown(0)
-	if errors.Is(err, ErrNotFound) {
-		return nil, "", false, nil
-	}
-	if err != nil {
-		return nil, "", false, err
-	}
-	if be.Name() == "file" {
-		for _, e := range OpenBullets(md) {
-			b, _ := ParseOpen(e.Line)
-			rows = append(rows, Row{ID: e.ID, Key: e.ID, Type: e.ID[:1], Tag: b.Tag, Title: b.Title,
-				Section: e.Section, Raw: e.Line, Fields: e.Fields})
-		}
-		return rows, md, true, nil
-	}
+// issueRows is Rows for the tracker backends: the open issues of be, each
+// naming its sub-repo when umbrella.
+func issueRows(be Backend, umbrella bool) ([]Row, error) {
 	items, err := be.List(false)
 	if err != nil {
-		return nil, "", false, err
+		return nil, err
 	}
-	_, umbrella := be.(*Umbrella)
+	var rows []Row
 	for _, it := range items {
 		r := Row{ID: it.ID, Key: it.Key(), Number: it.Number, Type: it.Type, Tag: it.Tag,
 			Title: it.Title, Section: sectionOfType[it.Type], Raw: it.Line, Fields: it.Fields}
@@ -64,6 +46,23 @@ func OpenRows(be Backend) (rows []Row, md string, ok bool, err error) {
 			r.Repo = it.Fields.Get("repos")
 		}
 		rows = append(rows, r)
+	}
+	return rows, nil
+}
+
+// OpenRows lists the open items of be in section order, with the Markdown the
+// listing renders its titles from. ok is false when there is no backlog to
+// read: no BACKLOG.md in file mode.
+func OpenRows(be Backend) (rows []Row, md string, ok bool, err error) {
+	rows, err = be.Rows()
+	if errors.Is(err, ErrNotFound) {
+		return nil, "", false, nil
+	}
+	if err != nil {
+		return nil, "", false, err
+	}
+	if md, err = be.Markdown(0); err != nil {
+		return nil, "", false, err
 	}
 	return rows, md, true, nil
 }
@@ -147,25 +146,6 @@ func MilestonesFor(rows []Row, match func(Row) bool) []string {
 		}
 		return out[i] < out[j]
 	})
-	return out
-}
-
-// CountOpen counts the bullets of each open section the way hv-summary does:
-// a line that starts "- **[" after stripping, whether or not it parses as an
-// open bullet. Missing sections count 0.
-func CountOpen(md string) map[string]int {
-	out := map[string]int{}
-	for _, name := range OpenSections {
-		s, e, ok := section.Find(md, name)
-		if !ok {
-			continue
-		}
-		for _, line := range pystr.Splitlines(md[s:e]) {
-			if strings.HasPrefix(pystr.Strip(line), "- **[") {
-				out[name]++
-			}
-		}
-	}
 	return out
 }
 

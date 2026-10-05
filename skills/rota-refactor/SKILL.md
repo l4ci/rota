@@ -5,7 +5,7 @@ description: Use on "review the architecture", "find refactoring opportunities",
 
 # rota-refactor
 
-> The architecture vocabulary, heuristics and candidate format below are adapted from `improve-codebase-architecture` in [mattpocock/skills](https://github.com/mattpocock/skills) (MIT); see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+> The architecture vocabulary, heuristics and finding format below are adapted from `improve-codebase-architecture` in [mattpocock/skills](https://github.com/mattpocock/skills) (MIT); see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
 Surface architectural friction and file each finding as an issue. The default run changes no code. The aim is code that is easier to test and easier for an agent to navigate.
 
@@ -13,17 +13,17 @@ Surface architectural friction and file each finding as an issue. The default ru
 
 Read `.rota/config.json`:
 
-- `models.orchestrator` — exploration and ranking (default `opus`)
-- `models.worker` — `--fix` implementation subagents (default `sonnet`)
+- `models.orchestrator` — main session model: exploration and ranking (default `opus`)
+- `models.worker` — the `standard` tier: `--fix` implementation subagents (default `sonnet`)
 - `refactor.verifyCommands` — shell commands run as gates in `--fix` verification (default `[]`)
 - `refactor.confirmBeforeExecute` — `--fix` only: pause before fixing (default `true`)
 
 ## Args
 
-- `<area>` — a path, directory or subsystem name. Scope the review to it. Several workers can each take one area. Without an area, review the whole repo (see Explore for prioritization).
-- `--fix` — after filing, implement the candidates you pick (Fix path below). Without it the run ends at Step 4.
-- `--designs` — for structural candidates, draft competing interfaces before recommending one (`references/refactor-design-approaches.md`). Off by default; it is the expensive step.
-- `--interactive` — present the ranked candidates and ask which to file instead of filing all of them.
+- `<area>` — a path, directory or subsystem name. Scope the review to it. Several sessions can each take one area. Without an area, review the whole repo (see Explore for prioritization).
+- `--fix` — after filing, implement the findings you pick (Fix path below). Without it the run ends at Step 4.
+- `--designs` — for structural findings, draft competing interfaces before recommending one (`references/refactor-design-approaches.md`). Off by default; it is the expensive step.
+- `--interactive` — present the ranked findings and ask which to file instead of filing all of them.
 
 Umbrella projects: `rota refactor targets --json` lists the sub-repos. Run once per sub-repo with the global `--repo <name>` so each finding lands on the tracker that owns the code. Do not fan out sub-agents from here; the orchestrator of a round assigns one area per worker.
 
@@ -42,7 +42,7 @@ Use these terms in every finding. Do not drift into "component", "service", "API
 
 ## Heuristics
 
-- **Deletion test.** Imagine deleting the module. If the complexity vanishes, it was a pass-through. If it reappears in N callers, the module was earning its keep. A candidate is one where deletion would concentrate complexity, not just move it.
+- **Deletion test.** Imagine deleting the module. If the complexity vanishes, it was a pass-through. If it reappears in N callers, the module was earning its keep. A finding is one where deletion would concentrate complexity, not just move it.
 - **The interface is the test surface.** Callers and tests cross the same seam. A module you have to test past its interface is the wrong shape.
 - **One adapter is a hypothetical seam; two are a real one.** Do not propose a seam unless something actually varies across it.
 - **Extraction that lost locality.** Pure functions pulled out for testability while the bugs live in how they are called.
@@ -64,29 +64,29 @@ rota knowledge query <topic>…
 rota decisions query <topic>…
 ```
 
-Use the glossary's names for domain concepts ("the claim module", not "the FooHandler"). Do not re-suggest something a recorded decision rules out. If friction is real enough to warrant reopening a decision, file the candidate anyway and name the decision it contradicts in the body.
+Use the glossary's names for domain concepts ("the claim module", not "the FooHandler"). Do not re-suggest something a recorded decision rules out. If friction is real enough to warrant reopening a decision, file the finding anyway and name the decision it contradicts in the body.
 
 Run `rota git guard clean --context "/rota-refactor"` only under `--fix`.
 
 ### Step 2 — Explore
 
-Dispatch one exploration agent on the **orchestrator** model (a `light` model is enough when the area is small). Scope it to the area. Rule: rank files by inbound imports, then size, then recent change; read the top fifth in full and one hop of callers and importers; sample the rest. Stop at 8–12 candidates, or after 30+ files with no new kind of friction in the last 5. Do not pad.
+Dispatch one exploration subagent on the main session's model (`models.orchestrator`); a `light` subagent is enough when the area is small. Scope it to the area. Rule: rank files by inbound imports, then size, then recent change; read the top fifth in full and one hop of callers and importers; sample the rest. Stop at 8–12 findings, or after 30+ files with no new kind of friction in the last 5. Do not pad.
 
-For each candidate the agent reports: files with line ranges, the friction in vocabulary terms, the deletion-test result, and what is hard to test today. It does not propose interfaces.
+For each finding the agent reports: files with line ranges, the friction in vocabulary terms, the deletion-test result, and what is hard to test today. It does not propose interfaces.
 
 ### Step 3 — Rank
 
-Assign each candidate a strength:
+Assign each finding a strength:
 
 - **Strong** — deletion test concentrates complexity, a real seam exists, tests would get simpler.
 - **Worth exploring** — plausible depth gain, but a design choice or a missing second adapter is unsettled.
 - **Speculative** — a hunch the code does not yet back.
 
-Mark one **top recommendation** and say why it goes first. Candidates that are only a one-line fix with no design choice are *simple*; file them like the rest, labelled in the body. With `--designs`, run the competing-design step now for the structural ones.
+Mark one **top recommendation** and say why it goes first. Findings that are only a one-line fix with no design choice are *simple*; file them like the rest, labelled in the body. With `--designs`, run the competing-design step now for the structural ones.
 
 ### Step 4 — File
 
-File one issue per candidate. Never file a candidate you cannot state acceptance for.
+File one issue per finding. Never file a finding you cannot state acceptance for.
 
 **Dedup first.** Fetch refactor issues in every state and compare on files and problem, not title:
 
@@ -122,19 +122,19 @@ Body sections:
 
 Report: a table of filed issues (number, title, strength), the skipped duplicates with the issue they matched, and the top recommendation. Zero filed is a valid result.
 
-**Rejections.** If the user rejects a candidate with a reason a later review would need to avoid re-suggesting it, offer `/rota-decide` to record it. Skip ephemeral reasons ("not now") and self-evident ones.
+**Rejections.** If the user rejects a finding with a reason a later review would need to avoid re-suggesting it, offer `/rota-decide` to record it. Skip ephemeral reasons ("not now") and self-evident ones.
 
-Under `--interactive`, show the ranked list before filing and let the user drop or reorder candidates; the grilling conversation about the shape of a chosen candidate belongs in `/rota-brainstorm`, not here.
+Under `--interactive`, show the ranked list before filing and let the user drop or reorder findings; the grilling conversation about the shape of a chosen finding belongs in `/rota-brainstorm`, not here.
 
 Without `--fix`, stop here.
 
 ## Fix path (`--fix`)
 
-Fix only the candidates the user named, or all filed in this run if they said "all". With `refactor.confirmBeforeExecute` true, confirm the list once with `AskUserQuestion` first.
+Fix only the findings the user named, or all filed in this run if they said "all". With `refactor.confirmBeforeExecute` true, confirm the list once with `AskUserQuestion` first.
 
 1. **Group.** Independent files run in parallel; one agent per file when files overlap; order real dependencies.
-2. **Dispatch** workers on the **worker** model. Each brief names the exact files, the problem, the chosen approach (the design from `--designs` for structural items), and the acceptance criteria from the issue. Constraints: read before editing, minimal diff, no unrelated cleanup.
-3. **Verify** with one **orchestrator** agent that reads the changed files, runs every `refactor.verifyCommands` entry verbatim and reports PASS / FAIL / CONCERN per fix. A non-zero exit is a FAIL. With no commands configured, say the tree was not gated. Re-dispatch FAILs once; report what still fails.
+2. **Dispatch** `standard` subagents. Each brief names the exact files, the problem, the chosen approach (the design from `--designs` for structural items), and the acceptance criteria from the issue. Constraints: read before editing, minimal diff, no unrelated cleanup.
+3. **Verify** with one subagent on the main session's model (`models.orchestrator`) that reads the changed files, runs every `refactor.verifyCommands` entry verbatim and reports PASS / FAIL / CONCERN per fix. A non-zero exit is a FAIL. With no commands configured, say the tree was not gated. Re-dispatch FAILs once; report what still fails.
 4. **Commit** once: stage explicit paths, subject `refactor: <summary>`, body listing the issues (`Closes #<n>` each). Then zero the pressure counter:
 
 ```bash
@@ -149,7 +149,7 @@ Report the commit and the issues it closes in a few lines. Do not recap explorat
 - **Same words every time.** Vocabulary drift makes the findings unsearchable and the dedup unreliable.
 - **Respect recorded decisions.** Reopen one only with real friction, and say so.
 - **Minimal diffs on the fix path.** Each fix touches only what it needs.
-- **Verify before commit.** `--fix` never commits without orchestrator sign-off.
+- **Verify before commit.** `--fix` never commits without the verify subagent's sign-off.
 
 ## References
 

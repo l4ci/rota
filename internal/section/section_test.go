@@ -136,3 +136,29 @@ func TestUpsertBlockNormalizesCRLF(t *testing.T) {
 		t.Errorf("mixed endings: %q", raw)
 	}
 }
+
+func TestManagedBlockRoundTrip(t *testing.T) {
+	root := t.TempDir()
+	st, err := UpsertManaged(root, "demo", "## Demo\n\nbody")
+	if err != nil || st != Created {
+		t.Fatalf("first = %q, %v", st, err)
+	}
+	b, _ := os.ReadFile(InstructionsFile(root))
+	content := string(b)
+	m := BlockKeyRe.FindStringSubmatch(content)
+	if m == nil || m[1] != "demo" {
+		t.Fatalf("BlockKeyRe on %q = %v", content, m)
+	}
+	if got := BlockRegex("demo", false).FindString(content); got != Wrap("demo", "## Demo\n\nbody") {
+		t.Errorf("BlockRegex matched %q", got)
+	}
+	if g := AnyBlockRe.FindStringSubmatch(content); g == nil || g[1] != "demo" || g[2] != "demo" {
+		t.Errorf("AnyBlockRe = %v", g)
+	}
+	if st, _ := UpsertManaged(root, "demo", "## Demo\n\nbody"); st != Unchanged {
+		t.Errorf("identical rewrite = %q", st)
+	}
+	if st, _ := UpsertManaged(root, "demo", "## Demo\n\nnew"); st != Updated {
+		t.Errorf("changed rewrite = %q", st)
+	}
+}

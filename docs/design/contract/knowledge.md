@@ -113,12 +113,13 @@ old: hv-knowledge-contradiction --list
 shim: stdout JSON array becomes `items` (keys already camelCase).
 
 ### rota knowledge contradiction clear
-rota knowledge contradiction clear
+rota knowledge contradiction clear [--topic <T> --title <S>]
 repo: none
 data: {"cleared": number, "changed": bool}
 exit: implied only
 old: hv-knowledge-contradiction --clear
 shim: `cleared` is the length of a `--list` made before the `--clear`; `changed` is `cleared > 0`.
+note: addition. With `--topic` and `--title` (given together, else usage exit 2) only entries for that pair are dropped and `cleared` counts them; the rest of the queue stays. Bare `clear` still empties the queue. `/rota-learn` uses the pair form so a deferred candidate survives.
 
 ### rota knowledge contradiction has
 rota knowledge contradiction has --topic <T> --title <S>

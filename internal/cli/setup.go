@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/projects"
+	"github.com/l4ci/rota/internal/rotatree"
 )
 
 // `rota setup` is rota init with the main config choices asked up front. It is
@@ -72,7 +72,7 @@ func setupVerb(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		if fi, err := os.Stat(filepath.Join(dir, ".rota")); err == nil && fi.IsDir() {
+		if rotatree.Exists(dir) {
 			return Result{}, Refused("%s is already initialized", dir).WithHint("run: rota config set <key> <value>")
 		}
 		given := map[string]string{}

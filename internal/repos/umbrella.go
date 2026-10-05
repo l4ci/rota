@@ -4,13 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/rotatree"
 )
 
 // Umbrella is hv-umbrella-on: true iff <base>/.rota/repos.json registers at
@@ -48,7 +48,7 @@ func FindUmbrella(start string) (string, error) {
 	var cands []string
 	dir := Realpath(start)
 	for dir != "/" && dir != filepath.Dir(dir) {
-		if fi, err := os.Stat(filepath.Join(dir, ".rota")); err == nil && fi.IsDir() {
+		if rotatree.Exists(dir) {
 			cands = append(cands, dir)
 		}
 		dir = filepath.Dir(dir)
@@ -59,7 +59,7 @@ func FindUmbrella(start string) (string, error) {
 	first := cands[0]
 	firstReal := Realpath(first)
 	for _, parent := range cands[1:] {
-		reg, _ := fsio.LoadJSON(filepath.Join(parent, ".rota", "repos.json"), nil).(*jsonx.Object)
+		reg, _ := fsio.LoadJSON(rotatree.Repos(parent), nil).(*jsonx.Object)
 		if reg == nil {
 			continue
 		}
@@ -78,7 +78,7 @@ func FindUmbrella(start string) (string, error) {
 				rel = filepath.Join(parent, rel)
 			}
 			if within(firstReal, Realpath(rel)) {
-				return "", &MaskedError{Name: str(o, "name"), Stray: filepath.Join(first, ".rota")}
+				return "", &MaskedError{Name: str(o, "name"), Stray: rotatree.Dir(first)}
 			}
 		}
 	}

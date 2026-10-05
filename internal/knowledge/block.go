@@ -2,9 +2,9 @@ package knowledge
 
 import (
 	"fmt"
-	"path/filepath"
 	"strings"
 
+	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/section"
 )
 
@@ -54,7 +54,7 @@ func (s Store) BlockInputs(key, scope string) (topics []string, target string, e
 	}
 	switch key {
 	case "decisions":
-		return topicsOf(filepath.Join(s.Root, ".rota", "DECISIONS.md")), section.InstructionsFile(s.Root), nil
+		return topicsOf(rotatree.Decisions(s.Root)), section.InstructionsFile(s.Root), nil
 	case "knowledge":
 		up, _ := s.KnowledgePath(Umbrella)
 		if scope == "" || scope == Umbrella {
@@ -101,14 +101,12 @@ func (s Store) RegenerateBlock(key, scope string) (string, error) {
 		}
 		body = strings.Join(lines, "\n")
 	}
-	block := fmt.Sprintf("<!-- rota-%s-start -->\n%s\n\n%s\n\n%s\n\n<!-- rota-%s-end -->", key, cfg.heading, cfg.intro, body, key)
-	return section.UpsertBlock(target, key, block)
+	return section.UpsertBlock(target, key, section.Wrap(key, fmt.Sprintf("%s\n\n%s\n\n%s\n", cfg.heading, cfg.intro, body)))
 }
 
 // WriteCustomBlock wraps body in the key's markers and upserts it into the
 // project's instructions file.
 func (s Store) WriteCustomBlock(key, body string) (string, error) {
 	body = strings.TrimRight(body, "\n")
-	block := fmt.Sprintf("<!-- rota-%s-start -->\n%s\n<!-- rota-%s-end -->", key, body, key)
-	return section.UpsertBlock(section.InstructionsFile(s.Root), key, block)
+	return section.UpsertManaged(s.Root, key, body)
 }

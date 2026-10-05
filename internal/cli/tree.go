@@ -3,10 +3,10 @@ package cli
 import (
 	"flag"
 	"fmt"
-	"path/filepath"
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/version"
 )
 
@@ -90,7 +90,7 @@ func runVersionDrift(c *Ctx) (Result, error) {
 // the pre-rename stamp) of root's merged config with the running binary. Either
 // side empty is "unknown".
 func versionDrift(c *Ctx, root string) (stamped, installed, status string) {
-	cfg := config.Load(filepath.Join(root, ".rota", "config.json"))
+	cfg := config.Load(rotatree.Config(root))
 	stamped = config.StampedVersion(cfg)
 	installed = c.deps().InstalledVersion()
 	status = "unknown"

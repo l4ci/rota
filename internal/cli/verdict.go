@@ -4,8 +4,8 @@ import (
 	"errors"
 	"flag"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/rotatree"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -183,7 +183,7 @@ func verdictRoute(fs *flag.FlagSet) RunFunc {
 			return Result{}, Resolution("no verdict recorded for %s that %s reads", t.branch, *consumer).
 				WithHint("record one with: rota verdict add")
 		}
-		cfg := config.Load(filepath.Join(t.root, ".rota", "config.json"))
+		cfg := config.Load(rotatree.Config(t.root))
 		s := verdict.Settings{
 			QAGate: configString(cfg, "qa.gate"),
 			Runner: configString(cfg, "ship.secondOpinionRunner"),

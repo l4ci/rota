@@ -113,15 +113,15 @@ func TestIDsByMilestoneAndMilestonesFor(t *testing.T) {
 	}
 }
 
-func TestCountOpen(t *testing.T) {
-	c := CountOpen(viewBacklog)
-	if c["Bugs"] != 4 || c["Features"] != 2 || c["Tasks"] != 1 {
-		t.Errorf("counts = %v", c)
+func TestCapabilities(t *testing.T) {
+	if c := (&File{}).Capabilities(); c.Tracker || c.Umbrella {
+		t.Errorf("file = %+v", c)
 	}
-	// Any line that starts "- **[" counts, parsed or not.
-	c = CountOpen("## Bugs\n- **[X1] t.** a\n   - **[B1] nested.**\n- plain\n")
-	if c["Bugs"] != 2 {
-		t.Errorf("loose counts = %v", c)
+	if c := (&Issues{}).Capabilities(); !c.Tracker || c.Umbrella {
+		t.Errorf("issues = %+v", c)
+	}
+	if c := (&Umbrella{}).Capabilities(); !c.Tracker || !c.Umbrella {
+		t.Errorf("umbrella = %+v", c)
 	}
 }
 

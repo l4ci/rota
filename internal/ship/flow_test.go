@@ -322,7 +322,9 @@ type fakeReopener struct {
 	opened  []string
 }
 
-func (f *fakeReopener) Name() string { return f.name }
+func (f *fakeReopener) Capabilities() backlog.Capabilities {
+	return backlog.Capabilities{Tracker: f.name != "file"}
+}
 func (f *fakeReopener) Reopen(id string) (bool, error) {
 	f.opened = append(f.opened, id)
 	return f.changed, nil

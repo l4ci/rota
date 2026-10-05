@@ -150,7 +150,7 @@ func approvalFlags(fs *flag.FlagSet) func() (gate.Confirm, approvalReq, error) {
 
 // approvalNow is the clock for the derived escalation status.
 func approvalNow(c *Ctx) time.Time {
-	if env := c.deps().EscalationEnv(); env.Now != nil {
+	if env := c.deps().escalationEnv(); env.Now != nil {
 		return env.Now()
 	}
 	return time.Now()
@@ -242,7 +242,7 @@ func approvalEscalate(c *Ctx, p gate.MergePolicy, hit []string, th approvalThrea
 	if e, ok := escalation.PendingOn(escalation.Load(root), th.Kind, th.Number); ok {
 		return e.Object()
 	}
-	env := c.deps().EscalationEnv()
+	env := c.deps().escalationEnv()
 	if env.Forge == nil {
 		env.Forge = escalationForge(c)
 	}

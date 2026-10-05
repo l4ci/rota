@@ -41,8 +41,9 @@ type archBacklog struct {
 	made []backlog.CreateInput
 }
 
-func (b *archBacklog) Name() string                      { return "issues" }
-func (b *archBacklog) List(bool) ([]backlog.Item, error) { return b.open, nil }
+func (b *archBacklog) Name() string                       { return "issues" }
+func (b *archBacklog) Capabilities() backlog.Capabilities { return backlog.Capabilities{Tracker: true} }
+func (b *archBacklog) List(bool) ([]backlog.Item, error)  { return b.open, nil }
 func (b *archBacklog) Get(ref string) (*backlog.Item, error) {
 	for i := range b.open {
 		if b.open[i].ID == ref {

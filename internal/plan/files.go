@@ -13,6 +13,7 @@ import (
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/frontmatter"
 	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/rotatree"
 )
 
 // files keeps each plan in .rota/plans/<key>.md under root.
@@ -25,7 +26,7 @@ func (files) Digits() int { return backlog.FileIDDigits }
 
 func (files) ItemOnly() bool { return false }
 
-func path(root, key string) string { return filepath.Join(root, ".rota", "plans", key+".md") }
+func path(root, key string) string { return rotatree.Doc(root, rotatree.PlansDir, key) }
 
 func notFound(key string) *exitcode.Error {
 	return exitcode.Errf(exitcode.ExitResolution, "plan %s not found (.rota/plans/%s.md)", key, key)
@@ -44,7 +45,7 @@ func (s files) DesignRef(_ bool, design string) (string, error) {
 }
 
 func (s files) Create(milestone, unit string, render func(unit string) string) (key string, err error) {
-	dir := filepath.Join(s.root, ".rota", "plans")
+	dir := rotatree.File(s.root, rotatree.PlansDir)
 	// One lock per milestone for every S-unit, minted or explicit, so the
 	// existence check and the minted number cannot race; an item plan locks
 	// its own key.
@@ -127,7 +128,7 @@ func (s files) Remove(key string) error {
 
 // List reads .rota/plans/*.md in name order, optionally only one milestone's.
 func (s files) List(milestone string) ([]Entry, error) {
-	docs, err := artifact.ListDocs(filepath.Join(s.root, ".rota", "plans"))
+	docs, err := artifact.ListDocs(rotatree.File(s.root, rotatree.PlansDir))
 	if err != nil {
 		return nil, err
 	}

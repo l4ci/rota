@@ -4,13 +4,13 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"path/filepath"
 	"strings"
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/worker"
@@ -26,8 +26,9 @@ import (
 // A host or forge that cannot be built or reached is left nil: the verbs
 // report it as unavailable instead of failing.
 func defaultRoundEnv(ctx context.Context, root string, d *Deps) round.Env {
-	cfg := config.Load(filepath.Join(root, ".rota", "config.json"))
+	cfg := config.Load(rotatree.Config(root))
 	e := round.Env{Git: d.Git, Base: "main"}
+	e.Worker.NewHost = func(kind string) host.Host { return d.Host(kind) }
 	if b, ok, err := (git.Repo{Dir: root}).Base(ctx, ""); err == nil && ok {
 		e.Base = b
 	}
@@ -37,7 +38,7 @@ func defaultRoundEnv(ctx context.Context, root string, d *Deps) round.Env {
 	if hostKind == host.Solo {
 		e.HostName = host.Solo // no panes to snapshot, and not an unavailable host
 	} else {
-		h := host.New(hostKind, host.Deps{})
+		h := d.Host(hostKind)
 		if err := h.Require(); err != nil {
 			e.HostErr = err.Error()
 		} else if s, ok := h.(host.Snapshotter); ok {
