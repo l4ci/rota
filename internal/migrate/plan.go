@@ -1,6 +1,7 @@
 package migrate
 
 import (
+	"github.com/l4ci/rota/internal/milestone"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -49,10 +50,9 @@ var (
 	migSectionKind = map[string]string{"Bugs": "bugs", "Features": "features", "Tasks": "tasks"}
 	migKindTags    = map[string][]string{"bugs": {"P0", "P1", "P2", "P3"}, "features": {"Major", "Minor", "Cosmetic"}, "tasks": nil}
 	migFieldCut    = regexp.MustCompile(`[` + pystr.SpaceClass + `](?:Detail|Related|Milestone|Repos|Subsystem|Captured|Since):`)
-	migMilestoneID = regexp.MustCompile(`\AM\p{Nd}+`)
+	migMilestoneID = regexp.MustCompile(`\A` + milestone.TokenPattern)
 	migGoalRe      = regexp.MustCompile(`(?ms)^## Goal[` + pystr.SpaceClass + `]*\n+(.+?)(?:\n[` + pystr.SpaceClass + `]*\n|\z)`)
-	migHeadingRe   = regexp.MustCompile(`(?m)^# M\p{Nd}+[` + pystr.SpaceClass + `]*[\x{2014}\x{2013}-][` + pystr.SpaceClass + `]*(.+)$`)
-	migMSAllRe     = regexp.MustCompile(`M\p{Nd}+`)
+	migHeadingRe   = regexp.MustCompile(`(?m)^# ` + milestone.TokenPattern + `[` + pystr.SpaceClass + `]*[\x{2014}\x{2013}-][` + pystr.SpaceClass + `]*(.+)$`)
 )
 
 var migOrder = []string{"Related", "Repos", "Subsystem", "Captured"}
@@ -125,7 +125,7 @@ func planItems(root, backlogText string, warn func(string)) []*migItem {
 			names = append(names, p.Name())
 		}
 		sort.Strings(names)
-		planRe := regexp.MustCompile(`\AM\p{Nd}+-` + regexp.QuoteMeta(e.ID) + `\.md\z`)
+		planRe := regexp.MustCompile(`\A` + milestone.TokenPattern + `-` + regexp.QuoteMeta(e.ID) + `\.md\z`)
 		for _, n := range names {
 			if planRe.MatchString(n) {
 				it.plan = readOpt(filepath.Join(rota, "plans", n))
@@ -224,9 +224,9 @@ func planMilestones(root string) []*migMilestone {
 		ms := &migMilestone{id: mid, title: title, summary: summary, status: status, text: text}
 		switch d := fm["depends"].(type) {
 		case string:
-			ms.depends = migMSAllRe.FindAllString(d, -1)
+			ms.depends = milestone.IDs(d)
 		case []string:
-			ms.depends = migMSAllRe.FindAllString(strings.Join(d, ", "), -1)
+			ms.depends = milestone.IDs(strings.Join(d, ", "))
 		}
 		plans, _ := os.ReadDir(filepath.Join(rota, "plans"))
 		var pn []string

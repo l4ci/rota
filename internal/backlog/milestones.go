@@ -44,13 +44,9 @@ var MilestoneStatuses = []string{"planned", "active", "shipped", "archived"}
 const msStatusPrefix = "status:"
 
 var (
-	msTitleRe    = regexp.MustCompile(`\A(M\p{Nd}+)`)
-	frontmatterM = regexp.MustCompile(`(?s)\A---\n(.*?)\n---[ \t]*(?:\n|\z)`)
-	fmIDRe       = regexp.MustCompile(`(?m)^id:[ \t]*(\S+)`)
-	fmDependsRe  = regexp.MustCompile(`(?m)^depends:[ \t]*(.*)$`)
-	msAllRe      = regexp.MustCompile(`M\p{Nd}+`)
-	msRestRe     = regexp.MustCompile(`\A[` + pystr.SpaceClass + `]*[\x{2014}\x{2013}-][` + pystr.SpaceClass + `]*(.*)`)
-	sliceUnitRe  = regexp.MustCompile(`\Aplan:(S\p{Nd}+)\z`)
+	msTitleRe   = regexp.MustCompile(`\A(` + ms.TokenPattern + `)`)
+	msRestRe    = regexp.MustCompile(`\A[` + pystr.SpaceClass + `]*[\x{2014}\x{2013}-][` + pystr.SpaceClass + `]*(.*)`)
+	sliceUnitRe = regexp.MustCompile(`\Aplan:(S\p{Nd}+)\z`)
 )
 
 func (b *Issues) warn(msg string) {
@@ -234,7 +230,7 @@ func (b *Issues) MilestoneList() ([]ms.Entry, error) {
 		if title == "" {
 			title = is.Title
 		}
-		r := ms.Entry{ID: id, Title: pystr.Strip(title), Status: msStatusOf(is), Depends: msAllRe.FindAllString(block["Depends"], -1)}
+		r := ms.Entry{ID: id, Title: pystr.Strip(title), Status: msStatusOf(is), Depends: ms.IDs(block["Depends"])}
 		if r.Depends == nil {
 			r.Depends = []string{}
 		}
@@ -370,12 +366,8 @@ func (b *Issues) nativeMilestone(mt MilestoneTracker, mid string, is Issue) (*tr
 // Depends field.
 func (b *Issues) MilestonePut(mid, text string) error {
 	text = strings.ReplaceAll(text, "\r\n", "\n")
-	fm := frontmatterM.FindStringSubmatch(text)
-	var idm []string
-	if fm != nil {
-		idm = fmIDRe.FindStringSubmatch(fm[1])
-	}
-	if idm == nil || idm[1] != mid {
+	fm, _, _ := frontmatter.Parse(text)
+	if frontmatter.Str(fm, "id") != mid {
 		return errf(ErrMilestoneText, "milestone text needs frontmatter with 'id: %s'", mid)
 	}
 	is, err := b.TrackerIssue(mid)
@@ -387,11 +379,11 @@ func (b *Issues) MilestonePut(mid, text string) error {
 		return err
 	}
 	_, block, order := ParseFieldsBlock(is.Body)
-	if dm := fmDependsRe.FindStringSubmatch(fm[1]); dm != nil {
+	if _, has := fm["depends"]; has {
 		if _, ok := block["Depends"]; !ok {
 			order = append(order, "Depends")
 		}
-		block["Depends"] = strings.Join(msAllRe.FindAllString(dm[1], -1), ", ")
+		block["Depends"] = strings.Join(ms.DependsOf(fm), ", ")
 	}
 	text, _ = frontmatter.UpdateField(text, "status", msStatusOf(is))
 	body := RenderFieldsBlock(text, order, block)
