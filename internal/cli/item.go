@@ -10,7 +10,6 @@ import (
 	"regexp"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/git"
@@ -188,7 +187,7 @@ func resolveItem(be backlog.Backend, ref string) (id, typ string, err error) {
 	return it.ID, it.Type, nil
 }
 
-func todayDate() string { return time.Now().Format("2006-01-02") }
+func todayDate(c *Ctx) string { return c.deps().Today().Format("2006-01-02") }
 
 // givenFlags is the set of flags the parser saw, by name.
 func givenFlags(fs *flag.FlagSet) map[string]bool {
@@ -520,7 +519,7 @@ func itemComplete(fs *flag.FlagSet) RunFunc {
 			return backlogFail(err)
 		}
 		changed, err := be.Complete(args[0], backlog.CompleteInput{
-			Commit: hash, Date: todayDate(), Reason: *reason,
+			Commit: hash, Date: todayDate(c), Reason: *reason,
 			Note: strings.ReplaceAll(*note, "\n", " "), NoProof: *noProof,
 		})
 		if err != nil {

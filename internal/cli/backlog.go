@@ -300,7 +300,7 @@ func backlogArchive(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return backlogFail(err)
 		}
-		today, err := ageToday()
+		today, err := ageToday(c)
 		if err != nil {
 			return Result{}, err
 		}
@@ -312,18 +312,13 @@ func backlogArchive(fs *flag.FlagSet) RunFunc {
 	}
 }
 
-// ageToday is the day archive and stale measure age against: today, or the
-// ROTA_TEST_TODAY override the tests pin it with.
-func ageToday() (time.Time, error) {
-	v := os.Getenv("ROTA_TEST_TODAY")
-	if v == "" {
-		return time.Now(), nil
+// ageToday is the day archive and stale measure age against.
+func ageToday(c *Ctx) (time.Time, error) {
+	d := c.deps()
+	if d.ClockErr != nil {
+		return time.Time{}, d.ClockErr
 	}
-	t, ok := stale.ParseDate(v)
-	if !ok {
-		return time.Time{}, Usage("ROTA_TEST_TODAY must be YYYY-MM-DD, got %q", v)
-	}
-	return t, nil
+	return d.Today(), nil
 }
 
 // ---- backlog stale ---------------------------------------------------------------
@@ -342,7 +337,7 @@ func backlogStale(fs *flag.FlagSet) RunFunc {
 		if !slices.Contains(stale.Kinds, *kind) {
 			return Result{}, Usage("--kind must be map|knowledge|todo")
 		}
-		today, err := ageToday()
+		today, err := ageToday(c)
 		if err != nil {
 			return Result{}, err
 		}

@@ -35,12 +35,6 @@ func refuse(blocked, format string, a ...any) error {
 	return &Refusal{blocked, fmt.Sprintf(format, a...)}
 }
 
-// InstalledVersion is the version stamped into rota.version; "" skips the
-
-// InstalledVersion is the version stamped into rota.version; "" skips the
-// stamp. It is the running binary's version, and tests replace it.
-var InstalledVersion = func() string { return "" }
-
 func getObj(o *jsonx.Object, k string) (*jsonx.Object, bool) {
 	v, _ := o.Get(k)
 	r, ok := v.(*jsonx.Object)
