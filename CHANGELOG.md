@@ -1,5 +1,27 @@
 # Changelog
 
+## v0.10.1 — 2026-10-05
+
+The orchestrator now starts under a configured account; skills moved under skills/.
+
+### Fixed
+
+- `rota orchestrate` (and bare `rota`) started Claude under the default `~/.claude` and ignored `work.accounts`. It now starts under your `CLAUDE_CONFIG_DIR` if set, else the `work.accounts` entry with the most headroom, else the first one listed. `rota keepalive run` takes `--config-dir`, and `rota orchestrate --dry-run` names the account. (#178)
+
+### Docs
+
+- The first-round guide covers tmux next to herdr, and its permission example allows `glab` as well as `gh`.
+
+### Internal
+
+- Skill folders and `references/` moved under `skills/`. The installed skill layout is unchanged. (#177)
+- `.rota/gate-audit.jsonl` is gitignored in this repo.
+
+### Stats
+6 commits, 81 files changed, +255 −97 lines
+
+**Full changelog:** https://github.com/l4ci/rota/compare/v0.10.0...v0.10.1
+
 ## v0.10.0 — 2026-10-05
 
 Continuous rounds with a sharded merge gate, an easier start, and a large internal cleanup.
