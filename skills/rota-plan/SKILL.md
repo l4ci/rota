@@ -39,6 +39,7 @@ Show the plan as plain markdown, not yet saved:
 Rules:
 
 - **Verify is non-negotiable.** No verify step, no task.
+- **Behavior tasks name the RED.** A task that changes behavior states in Verify the failure its new test shows before the change (`RED: <command> fails with <expected message>`), so a test that passes both before and after cannot stand in for proof. A docs or skill-text task with no test seam writes `no test seam: docs/skill change` instead.
 - **Interfaces** is `Consumes:` (types, functions, files the task relies on) and `Produces:` (what it creates for later tasks). Write `none` rather than omit a line.
 - **Review Focus** entries are each pinned by a test in the owning task's Verify. An edge with no test goes in Open questions instead.
 - Tasks fit one execution window; too big means two tasks.
@@ -79,7 +80,7 @@ Offer `/rota-work` as a one-line prompt if the user is ready.
 ## Key principles
 
 - **Plans are committed alignment, not rough notes.** If the user wouldn't sign off, don't write it.
-- **Verify is non-negotiable.**
+- **Verify is non-negotiable.** A behavior task's Verify also names the failure expected before the change.
 - **Open questions beat hidden assumptions.**
 - **Tasks fit one execution.**
 

@@ -36,6 +36,12 @@ Work only this task, then stop.
   orchestrator's gate on the merged tree. Several workers running full suites at
   once starve the CPU and turn time-budgeted tests into false reds, which costs
   everyone a re-measurement to disprove.
+- Show a failing test first. For a behavior change, run the new test before the
+  production change and see it fail, then record it: `rota proof add <ID> --check
+  "<test command>" --result FAIL --evidence "<failing line>"` (at the sha the test ran
+  against), and the PASS row after the change. A test that passes before the change
+  proves nothing: fix the test. Docs and skill-only changes have no RED: say
+  `no test seam: docs/skill change` in the proof row's check.
 - Before opening a PR, regenerate the frozen and golden records your change touches
   (`go test ./<pkg> -run '^TestX$' -update-frozen` / `-update-golden`) and run the
   affected package tests. A stale record is the top cause of red PR runs.
