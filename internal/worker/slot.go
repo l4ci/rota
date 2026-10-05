@@ -29,12 +29,17 @@ var slotStates = map[string]bool{
 // ValidState reports whether MarkState accepts next.
 func ValidState(next string) bool { return slotStates[next] }
 
-func (s *Slot) Name() string       { return jsonx.Str(s.o, "name") }
-func (s *Slot) Branch() string     { return jsonx.Str(s.o, "branch") }
-func (s *Slot) Worktree() string   { return jsonx.Str(s.o, "worktree") }
-func (s *Slot) Base() string       { return jsonx.Str(s.o, "base") }
-func (s *Slot) Handle() string     { return jsonx.Str(s.o, "handle") }
-func (s *Slot) State() string      { return jsonx.Str(s.o, "state") }
+func (s *Slot) Name() string     { return jsonx.Str(s.o, "name") }
+func (s *Slot) Branch() string   { return jsonx.Str(s.o, "branch") }
+func (s *Slot) Worktree() string { return jsonx.Str(s.o, "worktree") }
+func (s *Slot) Base() string     { return jsonx.Str(s.o, "base") }
+func (s *Slot) Handle() string   { return jsonx.Str(s.o, "handle") }
+func (s *Slot) State() string    { return jsonx.Str(s.o, "state") }
+
+// Issue is the issue number recorded on the slot ("" when none). The prompt
+// digest shows it before falling back to HeldID.
+func (s *Slot) Issue() string { return jsonx.Str(s.o, "issue") }
+
 func (s *Slot) Task() string       { return jsonx.Str(s.o, "task") }
 func (s *Slot) ClaimID() string    { return jsonx.Str(s.o, "claimId") }
 func (s *Slot) Kind() string       { return jsonx.Str(s.o, "kind") }
