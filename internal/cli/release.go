@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	ms "github.com/l4ci/rota/internal/milestone"
+	"github.com/l4ci/rota/internal/rotatree"
 	"io"
 	"os"
 	"path/filepath"
@@ -50,7 +51,7 @@ func releaseDir(c *Ctx) (string, error) {
 }
 
 func releaseConfig(dir string) any {
-	return config.Load(filepath.Join(dir, ".rota", "config.json"))
+	return config.Load(rotatree.Config(dir))
 }
 
 // releaseFlagGiven reports whether the user passed --name, even with an empty value.

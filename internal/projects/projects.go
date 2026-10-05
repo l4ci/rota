@@ -19,6 +19,7 @@ import (
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/repos"
+	"github.com/l4ci/rota/internal/rotatree"
 )
 
 // Project is one registered project: Path absolute and realpath-resolved, Name
@@ -152,7 +153,7 @@ func Cleanup() ([]Project, error) {
 			if o, ok := it.(*jsonx.Object); ok {
 				p, _ := o.Get("path")
 				if ps, _ := p.(string); ps != "" {
-					if _, err := os.Stat(filepath.Join(ps, ".rota")); err != nil {
+					if _, err := os.Stat(rotatree.Dir(ps)); err != nil {
 						n, _ := o.Get("name")
 						s, _ := o.Get("lastSeen")
 						ns, _ := n.(string)

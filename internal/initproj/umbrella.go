@@ -13,6 +13,7 @@ import (
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/pystr"
+	"github.com/l4ci/rota/internal/rotatree"
 )
 
 // ErrNoCandidates: the directory has no immediate child with a .git entry
@@ -93,7 +94,7 @@ func Umbrella(root string, opts UmbrellaOptions, seed func() error) (UmbrellaRes
 		return UmbrellaResult{}, ErrNoCandidates
 	}
 	before := snapshot(root)
-	reposPath := filepath.Join(root, ".rota", "repos.json")
+	reposPath := rotatree.Repos(root)
 	oldRegistry, _ := os.ReadFile(reposPath)
 
 	if seed != nil {
@@ -141,14 +142,14 @@ func Umbrella(root string, opts UmbrellaOptions, seed func() error) (UmbrellaRes
 	}
 
 	names := sortedUnion(requested, kept)
-	if err := os.MkdirAll(filepath.Join(root, ".rota"), 0o755); err != nil {
+	if err := os.MkdirAll(rotatree.Dir(root), 0o755); err != nil {
 		return UmbrellaResult{}, err
 	}
 	if err := fsio.WriteJSONAtomic(reposPath, registry(names)); err != nil {
 		return UmbrellaResult{}, err
 	}
 	for _, n := range names {
-		if err := os.MkdirAll(filepath.Join(root, ".rota", "knowledge", n), 0o755); err != nil {
+		if err := os.MkdirAll(rotatree.File(root, rotatree.KnowledgeDir, n), 0o755); err != nil {
 			return UmbrellaResult{}, err
 		}
 	}
@@ -272,7 +273,7 @@ func ignoreBlock(root string, names []string) (bool, error) {
 // relative to root.
 func snapshot(root string) map[string]bool {
 	out := map[string]bool{}
-	for _, top := range []string{".rota", ".gitignore"} {
+	for _, top := range []string{rotatree.DirName, ".gitignore"} {
 		base := filepath.Join(root, top)
 		_ = filepath.WalkDir(base, func(p string, _ fs.DirEntry, err error) error {
 			if err != nil {
@@ -297,7 +298,7 @@ func exists(p string) bool {
 // for its directory (rel, below root) when root is itself a git repo. It
 // reports whether it wrote the .gitignore.
 func Seed(root, name, rel string) (bool, error) {
-	if err := os.MkdirAll(filepath.Join(root, ".rota", "knowledge", name), 0o755); err != nil {
+	if err := os.MkdirAll(rotatree.File(root, rotatree.KnowledgeDir, name), 0o755); err != nil {
 		return false, err
 	}
 	if !exists(filepath.Join(root, ".git")) {

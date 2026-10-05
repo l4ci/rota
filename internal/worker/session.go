@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/rotatree"
 	"os"
 	"path/filepath"
 
@@ -65,7 +66,7 @@ type SessionOpts struct {
 // process that merges into the cycle branch and talks to the user, and the one
 // window a human is actually watching, so it keeps a gate the workers do not.
 func operatorCommand(root string) string {
-	cfg := config.Load(filepath.Join(root, ".rota", "config.json"))
+	cfg := config.Load(rotatree.Config(root))
 	if v, ok := config.Lookup(cfg, "work.operatorCommand"); ok {
 		if s, _ := v.(string); s != "" {
 			return s

@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/rotatree"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -52,7 +52,7 @@ type DispatchResult struct {
 
 // dispatchSetting is work.dispatch from the project config, "" when unset.
 func dispatchSetting(root string) string {
-	v, _ := config.Lookup(config.Load(filepath.Join(root, ".rota", "config.json")), "work.dispatch")
+	v, _ := config.Lookup(config.Load(rotatree.Config(root)), "work.dispatch")
 	s, _ := v.(string)
 	return s
 }

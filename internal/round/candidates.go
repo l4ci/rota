@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
-	"path/filepath"
+	"github.com/l4ci/rota/internal/rotatree"
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
@@ -109,7 +109,7 @@ func (e Env) trackedFiles(ctx context.Context, root string) []string {
 // the issue the map gives it.
 func heldIDs(root string) map[string]bool {
 	held := map[string]bool{}
-	imap, _ := fsio.LoadJSON(filepath.Join(root, ".rota", "issue-map.json"), nil).(*jsonx.Object)
+	imap, _ := fsio.LoadJSON(rotatree.IssueMap(root), nil).(*jsonx.Object)
 	hold := func(id string) {
 		if id == "" {
 			return

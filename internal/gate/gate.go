@@ -15,6 +15,7 @@ import (
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/overlap"
+	"github.com/l4ci/rota/internal/rotatree"
 )
 
 // Gate names.
@@ -105,7 +106,7 @@ func Clear(root, name, verb, target string, c Confirm, paths []string) error {
 		return &Refused{Gate: name, Paths: paths}
 	}
 	autonomy := "off"
-	if v, err := config.Value(config.Load(filepath.Join(root, ".rota", "config.json")), "autonomy.level"); err == nil {
+	if v, err := config.Value(config.Load(rotatree.Config(root)), "autonomy.level"); err == nil {
 		if s, ok := v.(string); ok {
 			autonomy = s
 		}
@@ -178,7 +179,7 @@ var ErrBadMergeMode = errors.New("ship.mergeApproval must be none, all or paths"
 
 // LoadMergePolicy reads the merge policy from the project config.
 func LoadMergePolicy(root string) (MergePolicy, error) {
-	cfg := config.Load(filepath.Join(root, ".rota", "config.json"))
+	cfg := config.Load(rotatree.Config(root))
 	var p MergePolicy
 	v, err := config.Value(cfg, "ship.mergeApproval")
 	if err != nil {

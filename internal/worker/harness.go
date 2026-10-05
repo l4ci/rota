@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
-	"path/filepath"
+	"github.com/l4ci/rota/internal/rotatree"
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/git"
@@ -17,7 +17,7 @@ import (
 // pick a harness adapter once and call it, and what an adapter refuses with is
 // mapped onto the verbs' exit codes here.
 
-func loadConfig(root string) any { return config.Load(filepath.Join(root, ".rota", "config.json")) }
+func loadConfig(root string) any { return config.Load(rotatree.Config(root)) }
 
 // Harness is the adapter for kind ("" is the default), or a usage error when
 // the kind is not a worker harness.
