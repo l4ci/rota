@@ -135,7 +135,7 @@ The `--repo <name>` flag is also exposed on the underlying verbs when you call t
 ## What's not yet in umbrella mode
 
 - **Multi-repo items on the issue backend.** An item lives on one sub-repo's tracker, so `rota item create` refuses several repos: capture one item per repo and link them with `Related:`. On the file backend `Repos:` takes a comma-separated list and `/rota-work` branches in each repo.
-- **Registry editor.** Add/remove repos without re-running `rota init umbrella`. Planned.
+- **Registry editor.** Add/remove repos without re-running `rota init umbrella`. Planned: [#182](https://github.com/l4ci/rota/issues/182).
 
 ## Footguns
 

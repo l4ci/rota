@@ -8,14 +8,14 @@ The example project is **Pinpoint**, an internal incident dashboard. Node and Re
 
 ```mermaid
 flowchart LR
-  REPO[(existing repo<br/>+ open GH issues)] --> INIT["rota init"]
+  REPO[(existing repo)] --> INIT["rota init"]
   INIT --> SUBS[(.rota/map/<br/>6 subsystem files,<br/>hand-authored)]
   INIT --> CAP["/rota-capture"]
   CAP --> BACKLOG
   BACKLOG --> NEXT["/rota-work"]
   NEXT --> WORK["/rota-work B05<br/>P0 secrets-in-URL"]
   NEXT --> DEBUGCYCLE["/rota-debug B01<br/>severity casing"]
-  WORK --> SHIP["/rota-ship<br/>Closes #41"]
+  WORK --> SHIP["/rota-ship"]
   DEBUGCYCLE --> LEARN["/rota-learn"]
   LEARN --> KNOW[(KNOWLEDGE.md<br/>Alerts)]
   SUBS -.consults.-> WORK
@@ -82,9 +82,9 @@ Run `rota map index` once after writing the files; it pulls each file's `summary
 
 ## Step 3: open issues (optional)
 
-If your project has open GitHub or GitLab issues, set `backlog.backend` to `"issues"`: the issues already are the backlog, so there is nothing to import. (`/rota-capture --from-github` / `--from-gitlab` was removed.) On the file backend, create an item by hand with `rota item create`, adding a `GH: #N` tag so `/rota-ship` emits `Closes #N`. Round-trip closing runs through `/rota-ship`: the PR body gets `Closes #N` lines, or the direct-push path offers a manual-gated `rota issues close` prompt.
+If your project already tracks work in GitHub or GitLab issues, use the issue backend: `rota config set backlog.backend issues`. The open issues already are the backlog, so there is nothing to import. See [issue backend](../usage/issue-backend.md). If you have no tracker, or want the backlog in the repo, stay on the file backend and capture what you care about with `/rota-capture` (Step 4).
 
-If your project has no remote tracker, skip this step entirely.
+Pinpoint stays on the file backend for this walkthrough, so the IDs read `[B01]` instead of `#N`. The five issues worth tracking went in with one `/rota-capture` call, the way Step 4 does it; they became `B01` to `B05`.
 
 ## Step 4: /rota-capture for the mental backlog
 
@@ -123,13 +123,13 @@ It reconciles `status.json` against git (nothing active yet, clean state), archi
 In Progress: (none)
 
 Bugs (sorted P0 → P2):
-  [B05] integration config UI accepts secrets in URL   P0 Major  GH: #41
-  [B01] alert dedup fires twice on rapid escalation    P1 Major  GH: #14
-  [B02] dashboard date filter ignores timezone         P1 Major  GH: #21
-  [B03] Datadog drops events under rate-limit          P1 Major  GH: #28
+  [B05] integration config UI accepts secrets in URL   P0 Major
+  [B01] alert dedup fires twice on rapid escalation    P1 Major
+  [B02] dashboard date filter ignores timezone         P1 Major
+  [B03] Datadog drops events under rate-limit          P1 Major
   [B06] alert rule editor crash on empty title        P1 Major
   [B07] DST off-by-one on dashboard 24h filter         P1 Major
-  [B04] PagerDuty incident link uses old API           P2 Minor  GH: #33
+  [B04] PagerDuty incident link uses old API           P2 Minor
 
 Features (sorted Major → Cosmetic):
   [F02] per-rule dedup window                          Major     design: .rota/designs/F02.md
@@ -224,15 +224,15 @@ When the branch is ready:
 $ /rota-ship
 ```
 
-`/rota-review` reads commits, resolved IDs, and any `KNOWLEDGE.md` topics matching touched files. For the B01 fix it returns `PASS`. `/rota-ship` builds a PR body from the commit subjects and the `GH: #14` cross-reference on B01, opens the PR via `gh`, and prints the URL. On merge, GitHub auto-closes #14 because the body includes `Closes #14`. B01 was already moved to `## Completed` in `BACKLOG.md` when `/rota-debug` closed it on the file backend, stamped with the fix commit's hash; the merge changes nothing in the backlog.
+`/rota-review` reads commits, resolved IDs, and any `KNOWLEDGE.md` topics matching touched files. For the B01 fix it returns `PASS`. `/rota-ship` builds a PR body from the commit subjects and resolved IDs, opens the PR via `gh`, and prints the URL. B01 was already moved to `## Completed` in `BACKLOG.md` when `/rota-debug` closed it on the file backend, stamped with the fix commit's hash; the merge changes nothing in the backlog.
 
-If you'd configured `work.mergeStrategy = direct` instead, `/rota-ship` would have merged into `main` directly and prompted the optional `rota issues close` step to close #14 upstream with a tracking comment naming the commit.
+If you'd configured `work.mergeStrategy = direct` instead, `/rota-ship` would have merged into `main` directly. On the issue backend, the PR body would carry `Closes #N` and GitHub would close the issue on merge.
 
 ## Step 10: over the next week
 
 After a week of dropping rota into Pinpoint:
 
-- `BACKLOG.md` has 11 items from the issue-linked items and the brain-dump; six are shipped, two in flight, the rest queued
+- `BACKLOG.md` has 11 items from the captured bugs and the brain-dump; six are shipped, two in flight, the rest queued
 - `KNOWLEDGE.md` has four to six bullets across `Alerts`, `Storage`, `Integrations`, and `Security`. Surprises worth keeping, not a fix log
 - `.rota/map/` has six subsystems, three of them `touched: 2026-05-19` (this week) and three older
 - `DECISIONS.md` has one hard boundary you committed to mid-cycle: *"Secrets are never accepted via URL query params on any integration endpoint. Forbids: query-string POST bodies. Permits: form bodies with `type=password` inputs."* Future workers must respect it; the orchestrator surfaces it during planning if a touched file is in scope.
