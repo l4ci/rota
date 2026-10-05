@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -236,7 +237,7 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 	}
 	id := it.ID
 	res.ID, res.Type = id, it.Type
-	if o.Agent != "" && !contains(set.Roster, o.Agent) {
+	if o.Agent != "" && !slices.Contains(set.Roster, o.Agent) {
 		return res, usage("--agent %s is not in round.roster (%s)", o.Agent, strings.Join(set.Roster, ", "))
 	}
 	if o.Tier != "" && !roundcfg.ValidTier(o.Tier) {
@@ -601,15 +602,6 @@ func failedChecks(r Readiness) string {
 		}
 	}
 	return strings.Join(out, ", ")
-}
-
-func contains(l []string, s string) bool {
-	for _, v := range l {
-		if v == s {
-			return true
-		}
-	}
-	return false
 }
 
 func intOf(v any) int {

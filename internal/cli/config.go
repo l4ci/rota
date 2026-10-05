@@ -14,7 +14,7 @@ import (
 	"github.com/l4ci/rota/internal/update"
 )
 
-// The `rota update`, `rota config show|set|check` and `rota repo which|resolve|
+// The `rota update`, `rota config show|set|edit|check` and `rota repo which|resolve|
 // umbrella` verbs. Shapes, flags and exits are the verb contract's
 // (docs/design/contract/version-config-repo.md); the old helpers named in
 // each `old:` line are the behaviour to match.
@@ -24,6 +24,7 @@ func configCommands() []*Command {
 		{Name: "update", Summary: "check for a newer rota release", Verb: updateVerb},
 		{Name: "config", Summary: "read and write .rota/config.json", Subs: []*Command{
 			{Name: "show", Summary: "effective value and source of config keys", Repo: true, Verb: configShow},
+			{Name: "edit", Summary: "change keys interactively (needs a terminal)", Repo: true, Verb: configEdit},
 			{Name: "set", Summary: "set one key in .rota/config.json", Repo: true, Verb: configSet},
 			{Name: "check", Summary: "compare .rota/config.json with the schema", Repo: true, Verb: configCheck},
 			{Name: "fill", Summary: "write the default of every missing required key", Repo: true, Verb: configFill},

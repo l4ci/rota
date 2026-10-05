@@ -12,6 +12,7 @@ import (
 	"github.com/l4ci/rota/internal/exitcode"
 	"io"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -69,7 +70,7 @@ func KnownKind(kind string) bool { _, ok := kindVerdicts[kind]; return ok }
 // Takes reports whether kind accepts verdict v, and lists what it accepts.
 func Takes(kind, v string) (bool, []string) {
 	allowed := kindVerdicts[kind]
-	return contains(allowed, v), allowed
+	return slices.Contains(allowed, v), allowed
 }
 
 // Worst is the worse of two verdicts.
@@ -78,15 +79,6 @@ func Worst(a, b string) string {
 		return b
 	}
 	return a
-}
-
-func contains(list []string, s string) bool {
-	for _, x := range list {
-		if x == s {
-			return true
-		}
-	}
-	return false
 }
 
 // Finding is one surfaced problem.
@@ -153,7 +145,7 @@ func ParseBody(text string) (Body, error) {
 		return b, usage("invalid verdict body: text after the JSON object")
 	}
 	if raw.Verdict != nil {
-		if !contains([]string{Pass, Concerns, Fail, InfraFail}, *raw.Verdict) {
+		if !slices.Contains([]string{Pass, Concerns, Fail, InfraFail}, *raw.Verdict) {
 			return b, usage("invalid verdict body: verdict must be PASS, CONCERNS, FAIL or INFRA-FAIL")
 		}
 		b.Verdict = *raw.Verdict
@@ -163,7 +155,7 @@ func ParseBody(text string) (Body, error) {
 	}
 	for i, f := range raw.Findings {
 		at := fmt.Sprintf("findings[%d]", i)
-		if f.Severity == nil || !contains(severities, *f.Severity) {
+		if f.Severity == nil || !slices.Contains(severities, *f.Severity) {
 			return b, usage("invalid verdict body: %s.severity must be one of %s", at, strings.Join(severities, ", "))
 		}
 		if f.Title == nil || strings.TrimSpace(*f.Title) == "" {
@@ -189,7 +181,7 @@ func ParseBody(text string) (Body, error) {
 		if it.ID == nil || strings.TrimSpace(*it.ID) == "" {
 			return b, usage("invalid verdict body: %s.id is required", at)
 		}
-		if it.Verdict == nil || !contains([]string{Pass, Concerns, Fail}, *it.Verdict) {
+		if it.Verdict == nil || !slices.Contains([]string{Pass, Concerns, Fail}, *it.Verdict) {
 			return b, usage("invalid verdict body: %s.verdict must be PASS, CONCERNS or FAIL", at)
 		}
 		b.Items = append(b.Items, ItemVerdict{ID: strings.TrimSpace(*it.ID), Verdict: *it.Verdict})

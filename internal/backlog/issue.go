@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	ms "github.com/l4ci/rota/internal/milestone"
 	"regexp"
 	"slices"
 	"sort"
@@ -139,15 +140,13 @@ var blockFields = []string{"Related", "Repos", "Subsystem", "Captured", "Since"}
 // "M07 — Title"), the whole title when it has none, else the body block's.
 func milestone(is Issue, block map[string]string) string {
 	if title := oneLine(is.Milestone); title != "" {
-		if m := milestoneRe.FindString(title); m != "" {
+		if m := ms.LeadingID(title); m != "" {
 			return m
 		}
 		return title
 	}
 	return block["Milestone"]
 }
-
-var milestoneRe = regexp.MustCompile(`\AM\p{Nd}+`)
 
 // fields renders the field values in canonical order, Milestone first (_fields).
 func (b *Issues) fields(is Issue, block map[string]string) []kv {
