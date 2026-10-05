@@ -223,7 +223,7 @@ func a4Drift(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		be, err := a4Open(c, root, true, `PRs carry "Closes #N", so the tracker closes shipped issues`)
+		ops, err := a4OpenFile(c, root, `PRs carry "Closes #N", so the tracker closes shipped issues`)
 		if err != nil {
 			return a4FailRead(err)
 		}
@@ -237,7 +237,7 @@ func a4Drift(fs *flag.FlagSet) RunFunc {
 		} else {
 			targets = []backlog.Target{{Dir: root}}
 		}
-		drift, syms, err := be.(*backlog.File).Drift(targets)
+		drift, syms, err := ops.Drift(targets)
 		if err != nil {
 			return a4Fail(err)
 		}
@@ -268,7 +268,7 @@ func a4Backfill(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		be, err := a4Open(c, root, true, "Since: anchors exist only in the file backend")
+		ops, err := a4OpenFile(c, root, "Since: anchors exist only in the file backend")
 		if err != nil {
 			return a4Fail(err)
 		}
@@ -279,7 +279,7 @@ func a4Backfill(fs *flag.FlagSet) RunFunc {
 		if gerr != nil || head == "" {
 			return Result{}, Unavailable("not in a git repo with a HEAD commit: cannot backfill Since:")
 		}
-		n, err := be.(*backlog.File).BackfillSince(head)
+		n, err := ops.BackfillSince(head)
 		if err != nil {
 			return a4Fail(err)
 		}
@@ -300,7 +300,7 @@ func a4Archive(fs *flag.FlagSet) RunFunc {
 		if *days < 0 {
 			return Result{}, Usage("--days must be a number")
 		}
-		be, err := a4Open(c, root, true, "closed issues are the archive")
+		ops, err := a4OpenFile(c, root, "closed issues are the archive")
 		if err != nil {
 			return a4Fail(err)
 		}
@@ -308,7 +308,7 @@ func a4Archive(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		moved, err := be.(*backlog.File).Archive(*days, today)
+		moved, err := ops.Archive(*days, today)
 		if err != nil {
 			return a4Fail(err)
 		}
