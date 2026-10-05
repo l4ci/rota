@@ -18,6 +18,11 @@ keeps one log per check. Every check makes its temp files under one gate-owned r
 any entry is left in it afterwards, so a run that leaks shows up as a red gate, not as a full `/tmp`.
 Workers do not run it.
 
+GitHub CI (`.github/workflows/ci.yml`: gofmt, `go vet`, `go test`, validate-skills, doclint) is a backstop, not
+the merge gate. It runs on pushes to `main`, on PRs once they are ready for review (opened non-draft,
+reopened, or marked ready; drafts are skipped) and on manual dispatch, not on every push to an open PR. A
+newer run on the same ref cancels the older one. The local gate above decides whether a PR merges.
+
 Before a PR, a worker runs targeted checks only, as the [worker contract](../../skills/references/worker-contract.md)
 says: `python3 test/validate-skills.py` (under a second), `bash test/doclint.sh` when it touched a skill or doc, `go vet` and `go test` for the packages it
 touched, and only the smoke sections its change adds or touches, sourced through `test/runner.sh`
