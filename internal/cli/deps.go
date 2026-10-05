@@ -49,6 +49,8 @@ type Deps struct {
 	WorkerEnv      func() worker.Env
 	WorkerAccounts func() *worker.Accounts
 	LimitHost      func(kind string) host.Host
+	// LayoutHost is the herdr that `rota layout` rearranges.
+	LayoutHost func() (host.Layouter, error)
 
 	UpdateEnv        func() update.Env
 	InstalledVersion func() string
@@ -69,6 +71,7 @@ func defaultDeps() *Deps {
 		WatchEnv:         func() roundlease.Env { return roundlease.DefaultEnv() },
 		OrchestrateEnv:   defaultOrchestrateEnv,
 		LimitHost:        func(kind string) host.Host { return host.New(kind, host.Deps{}) },
+		LayoutHost:       defaultLayoutHost,
 		UpdateEnv:        func() update.Env { return update.DefaultEnv(version.Get().Version) },
 		InstalledVersion: installedVersion,
 		SeedBase:         seedProject,

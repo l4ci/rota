@@ -128,6 +128,7 @@ slot `wait` named, or gate a PR in review by number (`rota worker gate 61 --base
 | Look | `rota round status`, `rota round reconcile` | the round's rows and drift; `reconcile --apply` repairs what is safe |
 | Ask | `rota round escalate send`, `rota round escalate check` | puts a question to the maintainer on the issue or PR thread and reads the answer |
 | Merge | `rota worker gate <slot\|#PR> --base <branch>` | verifies on the merged tree, merges on a pass; a [merge approval](#merge-approval) policy can require a human first |
+| View | `rota layout split`, `rota layout tabs` | folds the workers' herdr panes into the orchestrator's tab, or back into tabs; see [layout](#layout) |
 | Clean | `rota reap` | lists, then with `--apply` removes, what no live slot owns; never kills a running agent |
 | End | `rota round wind-down` | re-verifies the base, parks every slot, releases the lease |
 
@@ -239,6 +240,48 @@ With `rota hook install` the orchestrator is held to this. The Stop hook refuses
 orchestrator go idle while workers are active and no watch is running, and the prompt hook adds a
 one-line digest of the round (and a reminder when no watch is armed) to every message you send.
 Neither applies to a solo round, which has no panes to watch.
+
+## Layout
+
+On herdr, `round assign` opens each worker as a tab. That suits a phone or a narrow window; on a wide
+screen you want the orchestrator and the workers side by side. `rota layout` switches between the two
+without touching what runs in the panes:
+
+```
+rota layout split     # the desktop view: workers join the orchestrator's tab
+rota layout tabs      # the mobile view (the default): one tab per worker
+rota layout           # which one each project is in: split, tabs or mixed
+```
+
+In the split view the orchestrator is the left column at full height. Workers fill columns two panes
+high in slot order (`rota round status` order), column by column. An odd count leaves the last column
+as one tall pane. Every column, the orchestrator's included, gets the same width.
+
+```
+n=1        n=2        n=3            n=4
++---+---+  +---+---+  +---+---+---+  +---+---+---+
+|   |   |  |   | 1 |  |   | 1 |   |  |   | 1 | 3 |
+| O | 1 |  | O +---+  | O +---+ 3 |  | O +---+---+
+|   |   |  |   | 2 |  |   | 2 |   |  |   | 2 | 4 |
++---+---+  +---+---+  +---+---+---+  +---+---+---+
+```
+
+The verb only moves panes. No process restarts, nothing is typed into a pane, and focus stays where it
+was, so it is safe in the middle of a round.
+
+- **All projects by default.** It arranges every rota project that has an orchestrator open in the herdr
+  you run it from. `--project <dir>` narrows it to one.
+- **Run `split` again to fold in a new worker.** A worker assigned later opens as a tab. `split` on a
+  grid that is already right does nothing; otherwise it rebuilds the grid with the new worker in it.
+- **`tabs` puts workers back** in slot order, each tab labelled with the slot name, after the
+  orchestrator's tab.
+- **Only rota's panes move.** A shell you opened in the orchestrator's tab stays where it is and is
+  named in a warning. Parked and dead slots are skipped.
+- **herdr only.** A round on tmux or solo is skipped with `host is tmux: layout needs herdr`.
+
+A worker's recorded tab id is the tab it started in, and after a move that tab may be gone. `rota round
+status` matches the agent by its worktree and the worker verbs address it by agent name, so both keep
+working. Ending a worker that sits in the split view stops its agent but leaves its pane open as a shell.
 
 ## Autopilot
 

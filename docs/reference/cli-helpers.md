@@ -342,6 +342,16 @@ Read-only, runs without `.rota/`. Exit 1 when any check fails; every failure car
 
 Previews by default. It never kills a running agent and never deletes work: a candidate that holds uncommitted changes or unmerged commits is listed with `held` and left alone. Exit 1 under `--apply` when a deletion failed.
 
+## `rota layout`
+
+| Usage | What it does |
+|---|---|
+| `rota layout [--project <dir>]` | show each project's panes as `split`, `tabs` or `mixed` |
+| `rota layout split [--project <dir>]` | fold the live workers into the orchestrator's tab as one grid (wide screen) |
+| `rota layout tabs [--project <dir>]` | give every worker a tab of its own again, labelled with its slot (narrow screen) |
+
+herdr only; a tmux or solo round is skipped. Moves live panes without restarting or typing into them, and never steals focus. See [parallel rounds](../usage/parallel-rounds.md#layout).
+
 ## `rota hook`
 
 | Usage | What it does |
