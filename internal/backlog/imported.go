@@ -22,8 +22,8 @@ type Imported struct {
 }
 
 var (
-	ghRefRe  = regexp.MustCompile(`GH:[` + pystr.SpaceClass + `]*#(\p{Nd}+)`)
-	glRefRe  = regexp.MustCompile(`GL:[` + pystr.SpaceClass + `]*#(\p{Nd}+)`)
+	GHRefRe  = regexp.MustCompile(`GH:[` + pystr.SpaceClass + `]*#(\p{Nd}+)`)
+	GLRefRe  = regexp.MustCompile(`GL:[` + pystr.SpaceClass + `]*#(\p{Nd}+)`)
 	reposRe  = regexp.MustCompile(`Repos:[` + pystr.SpaceClass + `]*([^\n]+?)(?:[` + pystr.SpaceClass + `]+(?:Detail|Related|Milestone):|$)`)
 	bulletID = regexp.MustCompile(`\[([` + ItemLetters + `]\p{Nd}+)\]`)
 )
@@ -63,14 +63,14 @@ func ScanImported(root, forRepo string) []Imported {
 	}
 	scanLine := func(line, item, status string) {
 		repos := importedRepos(line)
-		for _, m := range ghRefRe.FindAllStringSubmatch(line, -1) {
-			n, err := atoi(m[1])
+		for _, m := range GHRefRe.FindAllStringSubmatch(line, -1) {
+			n, err := Atoi(m[1])
 			if err == nil {
 				register("github", n, item, repos, status)
 			}
 		}
-		for _, m := range glRefRe.FindAllStringSubmatch(line, -1) {
-			n, err := atoi(m[1])
+		for _, m := range GLRefRe.FindAllStringSubmatch(line, -1) {
+			n, err := Atoi(m[1])
 			if err == nil {
 				register("gitlab", n, item, repos, status)
 			}

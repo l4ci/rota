@@ -1,13 +1,15 @@
-package backlog
+package migrate
 
 import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"unicode/utf8"
 
+	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/frontmatter"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/pystr"
@@ -69,14 +71,14 @@ func readOpt(path string) *string {
 func planItems(root, backlogText string, warn func(string)) []*migItem {
 	rota := filepath.Join(root, ".rota")
 	var items []*migItem
-	for _, e := range OpenBullets(backlogText) {
+	for _, e := range backlog.OpenBullets(backlogText) {
 		kind := migSectionKind[e.Section]
-		m := openRe.FindStringSubmatch(e.Line)
+		m := backlog.OpenRe.FindStringSubmatch(e.Line)
 		if kind == "" || m == nil {
 			continue
 		}
 		tag := m[2]
-		if tag != "" && !has(migKindTags[kind], tag) {
+		if tag != "" && !slices.Contains(migKindTags[kind], tag) {
 			warn(e.ID + ": tag [" + tag + "] is not valid for " + kind + "; dropped")
 			tag = ""
 		}
@@ -87,9 +89,9 @@ func planItems(root, backlogText string, warn func(string)) []*migItem {
 		}
 		it := &migItem{id: e.ID, kind: kind, tag: tag, desc: pystr.Strip(desc), fields: map[string]string{}}
 		it.title = pystr.Strip(strings.TrimRight(pystr.Strip(m[3]), "."))
-		for _, re := range []*regexp.Regexp{ghRefRe, glRefRe} {
+		for _, re := range []*regexp.Regexp{backlog.GHRefRe, backlog.GLRefRe} {
 			if r := re.FindStringSubmatch(rest); r != nil && it.adopt == 0 {
-				it.adopt, _ = atoi(r[1])
+				it.adopt, _ = backlog.Atoi(r[1])
 			}
 		}
 		for _, name := range migOrder {
@@ -100,7 +102,7 @@ func planItems(root, backlogText string, warn func(string)) []*migItem {
 		}
 		it.milestone = migMilestoneID.FindString(pystr.Strip(e.Fields.Milestone))
 		it.since = pystr.Strip(e.Fields.Since)
-		if t, ok := TypeByLetter(e.ID[:1]); ok {
+		if t, ok := backlog.TypeByLetter(e.ID[:1]); ok {
 			if d := readOpt(filepath.Join(rota, t.Kind, e.ID+".md")); d != nil {
 				detail := *d
 				if s, end, ok := section.Find(detail, "Proof"); ok {
@@ -261,7 +263,7 @@ func tokenMatches(s string) []tokenMatch {
 	var out []tokenMatch
 	for i := 0; i < len(s); {
 		r, n := utf8.DecodeRuneInString(s[i:])
-		if n == 1 && strings.IndexByte(ItemLetters, s[i]) >= 0 {
+		if n == 1 && strings.IndexByte(backlog.ItemLetters, s[i]) >= 0 {
 			prev, _ := utf8.DecodeLastRuneInString(s[:i])
 			if i == 0 || !(pystr.IsWord(prev) || prev == '/' || prev == '-') {
 				j := i + 1
@@ -288,4 +290,4 @@ func tokenMatches(s string) []tokenMatch {
 	return out
 }
 
-var bracketedRe = regexp.MustCompile(`\[([` + ItemLetters + `]\p{Nd}+)\]`)
+var bracketedRe = regexp.MustCompile(`\[([` + backlog.ItemLetters + `]\p{Nd}+)\]`)

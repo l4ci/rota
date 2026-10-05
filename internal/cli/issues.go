@@ -12,6 +12,7 @@ import (
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/issues"
+	"github.com/l4ci/rota/internal/migrate"
 	"github.com/l4ci/rota/internal/repos"
 	"github.com/l4ci/rota/internal/tracker"
 )
@@ -248,10 +249,10 @@ func migrateIssues(fs *flag.FlagSet) RunFunc {
 		// Notices are kept until the run's outcome is known: a failure answers
 		// with its error alone, so they go to stderr only.
 		var notices []string
-		opts := backlog.MigrateOptions{Root: root, Apply: *apply, Limit: lim, Cfg: cfg, Ctx: c.Context(),
+		opts := migrate.Options{Root: root, Apply: *apply, Limit: lim, Cfg: cfg, Ctx: c.Context(),
 			Sleep: c.deps().MigrateSleep, Warn: func(s string) { notices = append(notices, s) },
-			Tracker: func() (backlog.MigrateTracker, error) { return c.deps().MigrateTracker(c.Context(), root, cfg) }}
-		res, err := backlog.MigrateIssues(opts)
+			Tracker: func() (migrate.Tracker, error) { return c.deps().MigrateTracker(c.Context(), root, cfg) }}
+		res, err := migrate.Run(opts)
 		if err != nil {
 			for _, n := range notices {
 				fmt.Fprintf(c.Stderr, "%s: warning: %s\n", c.Path, n)
@@ -277,15 +278,15 @@ func migrateIssues(fs *flag.FlagSet) RunFunc {
 // migrateIssuesFail maps a stopped migration onto the exit table. A tracker
 // failure carries no failure data, so its message ends with the progress the
 // map kept.
-func migrateIssuesFail(res *backlog.MigrateResult, err error) (Result, error) {
+func migrateIssuesFail(res *migrate.Result, err error) (Result, error) {
 	var te *tracker.Error
 	switch {
-	case errors.Is(err, backlog.ErrNothingToMigrate):
-		return Result{}, Resolution("%s", strings.TrimPrefix(err.Error(), backlog.ErrNothingToMigrate.Error()+": ")+" (nothing to migrate)")
-	case errors.Is(err, backlog.ErrUmbrellaMigrate):
+	case errors.Is(err, migrate.ErrNothingToMigrate):
+		return Result{}, Resolution("%s", strings.TrimPrefix(err.Error(), migrate.ErrNothingToMigrate.Error()+": ")+" (nothing to migrate)")
+	case errors.Is(err, migrate.ErrUmbrellaMigrate):
 		return Result{Data: jsonObj("blockedBy", "umbrella", "changed", false)},
 			Refused("%s", err.Error()).WithHint("run rota migrate issues inside each sub-repo")
-	case errors.Is(err, backlog.ErrBadMap):
+	case errors.Is(err, migrate.ErrBadMap):
 		return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
 	case errors.As(err, &te):
 		progress := fmt.Sprintf("%d of %d migrated", res.Migrated, res.Total)
