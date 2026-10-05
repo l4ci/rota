@@ -135,19 +135,19 @@ type closedEntry struct {
 // (closed_at, number) descending, ties keeping registry order.
 func (u *Umbrella) closed() ([]closedEntry, error) {
 	var out []closedEntry
-	for _, name := range u.scoped() {
-		s, err := u.sub(name)
-		if err != nil {
-			return nil, err
-		}
+	err := u.eachScoped(func(name string, s *Issues) error {
 		closed, err := s.closedIssues()
 		if err != nil {
-			return nil, err
+			return err
 		}
 		for _, is := range closed {
 			it := s.item(is)
 			out = append(out, closedEntry{is.ClosedAt, is.Number, u.qualify(name, *it), it.Line})
 		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 	sort.SliceStable(out, func(i, j int) bool {
 		if out[i].closedAt != out[j].closedAt {
@@ -168,18 +168,18 @@ func (u *Umbrella) qualify(name string, it Item) Item {
 // across all of them (all when negative, none when 0).
 func (u *Umbrella) Markdown(closedLimit int) (string, error) {
 	sections := map[string][]string{}
-	for _, name := range u.scoped() {
-		s, err := u.sub(name)
-		if err != nil {
-			return "", err
-		}
+	err := u.eachScoped(func(_ string, s *Issues) error {
 		open, err := s.openByLetter()
 		if err != nil {
-			return "", err
+			return err
 		}
 		for _, l := range ItemLetters {
 			sections[string(l)] = append(sections[string(l)], open[string(l)]...)
 		}
+		return nil
+	})
+	if err != nil {
+		return "", err
 	}
 	var done []string
 	if closedLimit != 0 {
@@ -202,16 +202,13 @@ func (u *Umbrella) Markdown(closedLimit int) (string, error) {
 // IDs are "<repo>:<number>".
 func (u *Umbrella) List(includeClosed bool) ([]Item, error) {
 	perRepo := map[string][]Item{}
-	for _, name := range u.scoped() {
-		s, err := u.sub(name)
-		if err != nil {
-			return nil, err
-		}
+	err := u.eachScoped(func(name string, s *Issues) error {
 		items, err := s.List(false)
-		if err != nil {
-			return nil, err
-		}
 		perRepo[name] = items
+		return err
+	})
+	if err != nil {
+		return nil, err
 	}
 	var out []Item
 	for _, l := range ItemLetters {
