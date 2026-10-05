@@ -21,7 +21,7 @@ func (o Outcome) Clean() bool { return len(o.Drift) == 0 && len(o.Repaired) == 0
 
 // Reconcile assembles the round and, with apply, makes the safe repairs: it
 // clears the handle of a dead tab, registers an unregistered worktree,
-// records an unrecorded PR, adds a missing in-progress label and clears a
+// records an unrecorded PR, adds a missing in-progress label, removes it from a closed issue and clears a
 // claimId whose claim is gone from the tracker (never the tracker's side) and
 // drops a queued PR record whose PR is merged or closed. Every other
 // kind is only reported (a tab may be a live worker; opening a PR is the
@@ -81,6 +81,12 @@ func (e Env) repair(ctx context.Context, root string, rep *Report, f Finding) er
 			return err
 		}
 		return e.Forge.AddLabels(ctx, n, []string{e.Label}, false)
+	case LabelStale:
+		n, err := strconv.Atoi(f.Issue)
+		if err != nil {
+			return err
+		}
+		return e.Forge.RemoveLabels(ctx, n, []string{e.Label})
 	}
 	return fmt.Errorf("%s has no safe repair", f.Kind)
 }

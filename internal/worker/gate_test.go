@@ -732,3 +732,41 @@ func TestGateWithoutARecordedPRIsCheckBrokeWhenThePRsCannotBeListed(t *testing.T
 		t.Error("the branch was merged locally")
 	}
 }
+
+// A merged PR releases the claim label on the closed issues it names, and only
+// there: an issue the forge left open keeps its claim.
+func TestGateReleasesTheClaimLabelOfClosedIssues(t *testing.T) {
+	cases := []struct {
+		name, state, remErr, getErr string
+		removed                     bool
+		note                        string
+	}{
+		{name: "closed", state: "closed", removed: true},
+		{name: "still open", state: "open"},
+		{name: "remove fails", state: "closed", remErr: "boom", note: "cannot remove in-progress from #5"},
+		{name: "read fails", state: "closed", getErr: "boom", note: "cannot read #5"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			w := newWorld(t, ghURL)
+			w.forge("body", "Closes #5\n")
+			w.forge("issueState", c.state)
+			w.forge("issueLabels", "in-progress,type:bug")
+			w.forge("removeErr", c.remErr)
+			w.forge("issueErr", c.getErr)
+			res, err := w.gate(false, GateOpts{})
+			if err != nil || res.Verdict != GatePass {
+				t.Fatalf("a failed release must not fail the merged gate: %+v %v", res, err)
+			}
+			if got := strings.Contains(w.logText(), "RemoveLabels 5 in-progress"); got != c.removed && c.remErr == "" {
+				t.Errorf("label removed = %v, want %v\n%s", got, c.removed, w.logText())
+			}
+			if c.removed && w.forgeWord("issueLabels") != "type:bug" {
+				t.Errorf("labels = %q", w.forgeWord("issueLabels"))
+			}
+			if c.note != "" && !strings.Contains(strings.Join(res.Notes, "\n"), c.note) {
+				t.Errorf("notes = %v, want %q", res.Notes, c.note)
+			}
+		})
+	}
+}

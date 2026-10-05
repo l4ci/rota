@@ -40,6 +40,7 @@ const (
 	PRStale              = "pr-stale"
 	LabelMissing         = "label-missing"
 	LabelOrphan          = "label-orphan"
+	LabelStale           = "label-stale"
 	StalledSlot          = "stalled"
 	ClaimMismatch        = "claim-mismatch"
 	// LeaseStale is declared in lease.go.
@@ -66,6 +67,7 @@ type Forge interface {
 	List(ctx context.Context, f tracker.ListFilter) ([]tracker.Issue, error)
 	Get(ctx context.Context, number int, withComments bool) (tracker.Issue, error)
 	AddLabels(ctx context.Context, number int, labels []string, autoCreate bool) error
+	RemoveLabels(ctx context.Context, number int, labels []string) error
 }
 
 // Env is what a round touches outside its own memory. A nil Snapshot or Forge
@@ -282,6 +284,7 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 		}
 	}
 	labelsOK := false
+	var stale []int // closed issues still carrying the label
 	if forgeOK {
 		if issues, err := e.Forge.List(ctx, tracker.ListFilter{State: "open", Labels: []string{e.Label}}); err != nil {
 			rep.unavailable(SourceForge, err.Error())
@@ -289,6 +292,15 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 			labelsOK = true
 			for _, is := range issues {
 				labelled[is.Number] = true
+			}
+			if closed, err := e.Forge.List(ctx, tracker.ListFilter{State: "closed", Labels: []string{e.Label}}); err != nil {
+				rep.unavailable(SourceForge, err.Error())
+			} else {
+				for _, is := range closed {
+					if is.State == "closed" {
+						stale = append(stale, is.Number)
+					}
+				}
 			}
 		}
 	}
@@ -350,6 +362,10 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 				rep.add(Finding{Kind: PRStale, Issue: q.Issue, Detail: fmt.Sprintf("PR #%d in review is %s", n, st), Repair: "drop it from review"})
 			}
 		}
+	}
+	sort.Ints(stale)
+	for _, n := range stale {
+		rep.add(Finding{Kind: LabelStale, Issue: strconv.Itoa(n), Detail: fmt.Sprintf("#%d is closed and still has %s", n, e.Label), Repair: "remove " + e.Label})
 	}
 	if labelsOK {
 		var orphans []int

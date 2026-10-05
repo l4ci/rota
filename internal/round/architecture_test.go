@@ -33,6 +33,8 @@ func (f archForge) AddLabels(_ context.Context, n int, l []string, _ bool) error
 	return nil
 }
 
+func (archForge) RemoveLabels(context.Context, int, []string) error { return nil }
+
 type archBacklog struct {
 	backlog.Backend
 	open []backlog.Item

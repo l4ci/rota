@@ -80,6 +80,11 @@ type fakeForge struct {
 	prsErr   error
 	added    []int
 	addErr   error
+	// closedLabelled are closed issues still carrying the label; removed and
+	// removeErr record and fail RemoveLabels.
+	closedLabelled []int
+	removed        []int
+	removeErr      error
 }
 
 func (f *fakeForge) OpenPRs(context.Context) ([]tracker.PR, error) { return f.prs, f.prsErr }
@@ -94,8 +99,14 @@ func (f *fakeForge) ClosedNumbers(body string) []int {
 func (f *fakeForge) PRState(_ context.Context, n int) (string, error) {
 	return f.states[n], nil
 }
-func (f *fakeForge) List(context.Context, tracker.ListFilter) ([]tracker.Issue, error) {
+func (f *fakeForge) List(_ context.Context, fl tracker.ListFilter) ([]tracker.Issue, error) {
 	var out []tracker.Issue
+	if fl.State == "closed" {
+		for _, n := range f.closedLabelled {
+			out = append(out, tracker.Issue{Number: n, State: "closed"})
+		}
+		return out, nil
+	}
 	for _, n := range f.labelled {
 		out = append(out, tracker.Issue{Number: n})
 	}
@@ -110,6 +121,11 @@ func (f *fakeForge) Get(_ context.Context, n int, _ bool) (tracker.Issue, error)
 func (f *fakeForge) AddLabels(_ context.Context, n int, _ []string, _ bool) error {
 	f.added = append(f.added, n)
 	return f.addErr
+}
+
+func (f *fakeForge) RemoveLabels(_ context.Context, n int, _ []string) error {
+	f.removed = append(f.removed, n)
+	return f.removeErr
 }
 
 func env(agents []host.Agent, forge Forge) Env {
@@ -441,5 +457,49 @@ func TestMatchAgentFindsAMovedPaneByAgentName(t *testing.T) {
 	}
 	if i := matchAgent(agents, "nia", "w2:t3r", "/no/such/wt"); i != -1 {
 		t.Errorf("a slot with no agent stays dead: %d", i)
+	}
+}
+
+func TestReconcileClearsTheLabelOfClosedIssues(t *testing.T) {
+	root, e, forge := fixture(t)
+	forge.closedLabelled = []int{211, 5}
+
+	out, err := e.Reconcile(bg, root, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var stale []string
+	for _, f := range out.Drift {
+		if f.Kind == LabelStale {
+			stale = append(stale, f.Issue)
+		}
+	}
+	if !reflect.DeepEqual(stale, []string{"5", "211"}) || len(forge.removed) != 0 {
+		t.Errorf("read-only: stale = %v, removed = %v", stale, forge.removed)
+	}
+
+	if out, err = e.Reconcile(bg, root, true); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(forge.removed, []int{5, 211}) {
+		t.Errorf("removed = %v", forge.removed)
+	}
+	for _, f := range out.Drift {
+		if f.Kind == LabelStale {
+			t.Errorf("label-stale left in drift: %+v", f)
+		}
+	}
+	// An open issue still holding the label is never touched, and a failed
+	// removal stays in drift.
+	forge.removed, forge.removeErr = nil, errors.New("boom")
+	out, _ = e.Reconcile(bg, root, true)
+	n := 0
+	for _, f := range out.Drift {
+		if f.Kind == LabelStale {
+			n++
+		}
+	}
+	if n != 2 {
+		t.Errorf("failed removals left %d label-stale in drift, want 2", n)
 	}
 }
