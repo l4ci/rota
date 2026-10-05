@@ -17,7 +17,7 @@ OUT=$( cd "$CF" && hvj config fill )
 python3 - "$CF/.rota/config.json" <<'PY' || fail "filled seed is not in schema order"
 import json, sys
 cfg = json.load(open(sys.argv[1]))
-want = ["models", "work", "refactor", "learn", "ship", "qa", "autonomy", "debug", "docs", "git", "umbrella", "issues", "rota"]
+want = ["models", "work", "refactor", "learn", "ship", "qa", "autonomy", "docs", "git", "umbrella", "issues", "rota"]
 assert list(cfg) == want, list(cfg)
 assert list(cfg["issues"]) == ["providers", "label", "autoCreateLabel", "filterMineOnly"], list(cfg["issues"])
 assert cfg["work"]["isolation"] == "branch" and cfg["work"]["accounts"] == [], cfg["work"]
