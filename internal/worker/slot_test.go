@@ -81,7 +81,7 @@ func TestSlotBindUnbindLeavesNothingOfLastIssue(t *testing.T) {
 
 func TestSlotFileUnchangedOnDisk(t *testing.T) {
 	root := t.TempDir()
-	if err := UpdateDoc(root, func(doc *jsonx.Object) { AppendSlot(doc, NewSlot("ben", "park/ben", "/wt", "main", "")) }); err != nil {
+	if err := Update(root, func(d *Doc) { d.AppendSlot(NewSlot("ben", "park/ben", "/wt", "main", "")) }); err != nil {
 		t.Fatal(err)
 	}
 	found, err := UpdateSlot(root, "ben", func(s *Slot) { s.Bind(Binding{Task: "#1", ClaimID: "ben@1"}); _ = s.MarkState("busy", "") })

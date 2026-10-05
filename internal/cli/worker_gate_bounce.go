@@ -13,14 +13,14 @@ import (
 // gateIssue is the issue a `worker gate` target stands for: the queued
 // record's, else the one the slot holds. "" when it cannot be told.
 func gateIssue(root, target string) string {
-	s, queued, err := worker.LoadRegistry(root).GateTarget(target)
+	t, err := worker.LoadRegistry(root).GateTarget(target)
 	if err != nil {
 		return ""
 	}
-	if queued {
-		return worker.Str(s, "issue")
+	if t.Queued {
+		return t.Issue
 	}
-	return round.SlotIssue(worker.Str(s, "task"), worker.Str(s, "branch"), worker.Str(s, "name"))
+	return round.SlotIssue(t.Task, t.Branch, t.Name)
 }
 
 // gateBounce does the per-item bounce accounting after a real gate run (never

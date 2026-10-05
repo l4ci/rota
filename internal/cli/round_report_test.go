@@ -5,15 +5,12 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/worker"
 )
 
 func recordRoundHost(t *testing.T, dir, h string) {
 	t.Helper()
-	def := jsonx.NewObject()
-	def.Set("slots", []any{})
-	if err := worker.Update(dir, def, func(doc *jsonx.Object) { doc.Set("host", h) }); err != nil {
+	if err := worker.Update(dir, func(d *worker.Doc) { d.SetHost(h) }); err != nil {
 		t.Fatal(err)
 	}
 }

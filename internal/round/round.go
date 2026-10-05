@@ -335,17 +335,17 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 		}
 	}
 	for _, q := range reg.PRs() {
-		rep.Queued = append(rep.Queued, QueuedPR{Issue: worker.Str(q, "issue"), PR: worker.Str(q, "pr"), Branch: worker.Str(q, "branch"), From: worker.Str(q, "from")})
+		rep.Queued = append(rep.Queued, QueuedPR{Issue: q.Issue, PR: q.PR, Branch: q.Branch, From: q.From})
 		if id := queuedIssue(q); id != "" {
 			held[id] = true
 		}
-		if n, ok := prNumber(worker.Str(q, "pr")); ok && forgeOK {
+		if n, ok := prNumber(q.PR); ok && forgeOK {
 			st, err := e.Forge.PRState(ctx, n)
 			switch {
 			case err != nil:
 				rep.Warnings = append(rep.Warnings, fmt.Sprintf("PR #%d state: %v", n, err))
 			case st == "merged" || st == "closed":
-				rep.add(Finding{Kind: PRStale, Issue: worker.Str(q, "issue"), Detail: fmt.Sprintf("PR #%d in review is %s", n, st), Repair: "drop it from review"})
+				rep.add(Finding{Kind: PRStale, Issue: q.Issue, Detail: fmt.Sprintf("PR #%d in review is %s", n, st), Repair: "drop it from review"})
 			}
 		}
 	}

@@ -2,7 +2,6 @@ package worker
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 
 	"github.com/l4ci/rota/internal/harness"
@@ -30,27 +29,27 @@ var slotStates = map[string]bool{
 // ValidState reports whether MarkState accepts next.
 func ValidState(next string) bool { return slotStates[next] }
 
-func (s *Slot) Name() string       { return Str(s.o, "name") }
-func (s *Slot) Branch() string     { return Str(s.o, "branch") }
-func (s *Slot) Worktree() string   { return Str(s.o, "worktree") }
-func (s *Slot) Base() string       { return Str(s.o, "base") }
-func (s *Slot) Handle() string     { return Str(s.o, "handle") }
-func (s *Slot) State() string      { return Str(s.o, "state") }
-func (s *Slot) Task() string       { return Str(s.o, "task") }
-func (s *Slot) ClaimID() string    { return Str(s.o, "claimId") }
-func (s *Slot) Kind() string       { return Str(s.o, "kind") }
-func (s *Slot) Tier() string       { return Str(s.o, "tier") }
-func (s *Slot) Model() string      { return Str(s.o, "model") }
-func (s *Slot) TierReason() string { return Str(s.o, "tierReason") }
-func (s *Slot) PR() string         { return Str(s.o, "pr") }
-func (s *Slot) Account() string    { return Str(s.o, "account") }
-func (s *Slot) ConfigDir() string  { return Str(s.o, "configDir") }
-func (s *Slot) ActiveAt() string   { return Str(s.o, "activeAt") }
-func (s *Slot) Seen() string       { return Str(s.o, "seen") }
-func (s *Slot) Unsent() bool       { return Bool(s.o, "unsent") }
+func (s *Slot) Name() string       { return jsonx.Str(s.o, "name") }
+func (s *Slot) Branch() string     { return jsonx.Str(s.o, "branch") }
+func (s *Slot) Worktree() string   { return jsonx.Str(s.o, "worktree") }
+func (s *Slot) Base() string       { return jsonx.Str(s.o, "base") }
+func (s *Slot) Handle() string     { return jsonx.Str(s.o, "handle") }
+func (s *Slot) State() string      { return jsonx.Str(s.o, "state") }
+func (s *Slot) Task() string       { return jsonx.Str(s.o, "task") }
+func (s *Slot) ClaimID() string    { return jsonx.Str(s.o, "claimId") }
+func (s *Slot) Kind() string       { return jsonx.Str(s.o, "kind") }
+func (s *Slot) Tier() string       { return jsonx.Str(s.o, "tier") }
+func (s *Slot) Model() string      { return jsonx.Str(s.o, "model") }
+func (s *Slot) TierReason() string { return jsonx.Str(s.o, "tierReason") }
+func (s *Slot) PR() string         { return jsonx.Str(s.o, "pr") }
+func (s *Slot) Account() string    { return jsonx.Str(s.o, "account") }
+func (s *Slot) ConfigDir() string  { return jsonx.Str(s.o, "configDir") }
+func (s *Slot) ActiveAt() string   { return jsonx.Str(s.o, "activeAt") }
+func (s *Slot) Seen() string       { return jsonx.Str(s.o, "seen") }
+func (s *Slot) Unsent() bool       { return jsonx.Bool(s.o, "unsent") }
 
 // Issue is the legacy issue field some registries still carry.
-func (s *Slot) Issue() string { return Str(s.o, "issue") }
+func (s *Slot) Issue() string { return jsonx.Str(s.o, "issue") }
 
 // Relays is the relay log the gate reads for approval provenance.
 func (s *Slot) Relays() []any {
@@ -78,7 +77,7 @@ func (s *Slot) SetClaimID(id string) {
 func (s *Slot) SetTask(t string) { s.o.Set("task", t) }
 
 // Window is the pre-handle field name for the pane handle.
-func (s *Slot) Window() string { return Str(s.o, "window") }
+func (s *Slot) Window() string { return jsonx.Str(s.o, "window") }
 
 // PaneHandle is the handle of the slot's session, falling back to the
 // pre-handle `window` field so an unmigrated registry still dispatches.
@@ -109,24 +108,6 @@ func NewSlot(name, branch, worktree, base, handle string) *Slot {
 	o.Set("relays", []any{})
 	o.Set("configDir", nil)
 	return s
-}
-
-// AppendSlot adds s to the document's slot list.
-func AppendSlot(doc *jsonx.Object, s *Slot) {
-	list, _ := doc.Get("slots")
-	l, _ := list.([]any)
-	doc.Set("slots", append(l, s.o))
-}
-
-// SortSlots orders the document's slot list by name.
-func SortSlots(doc *jsonx.Object) {
-	list, _ := doc.Get("slots")
-	l, _ := list.([]any)
-	sort.SliceStable(l, func(i, j int) bool {
-		a, _ := l[i].(*jsonx.Object)
-		b, _ := l[j].(*jsonx.Object)
-		return a != nil && b != nil && Str(a, "name") < Str(b, "name")
-	})
 }
 
 // Reregister refreshes an existing slot from `pool init`: it migrates the
@@ -323,8 +304,8 @@ func (s *Slot) Touch(now string) { s.o.Set("activeAt", now) }
 // UpdateSlot edits one slot under the registry lock, reporting whether it was
 // found. It is the one locked per-slot write.
 func UpdateSlot(root, name string, mutate func(s *Slot)) (found bool, err error) {
-	err = Update(root, slotsDefault(), func(doc *jsonx.Object) {
-		if s := (Registry{Doc: doc}).Slot(name); s != nil {
+	err = Update(root, func(d *Doc) {
+		if s := d.Slot(name); s != nil {
 			mutate(s)
 			found = true
 		}
@@ -334,17 +315,11 @@ func UpdateSlot(root, name string, mutate func(s *Slot)) (found bool, err error)
 
 // UpdateSlots edits every slot under the registry lock.
 func UpdateSlots(root string, mutate func(s *Slot)) error {
-	return Update(root, slotsDefault(), func(doc *jsonx.Object) {
-		for _, s := range (Registry{Doc: doc}).Slots() {
+	return Update(root, func(d *Doc) {
+		for _, s := range d.Slots() {
 			mutate(s)
 		}
 	})
-}
-
-// UpdateDoc is Update with the empty-registry default: a locked edit of the
-// whole document.
-func UpdateDoc(root string, mutate func(doc *jsonx.Object)) error {
-	return Update(root, slotsDefault(), mutate)
 }
 
 func slotsDefault() *jsonx.Object {
@@ -353,12 +328,21 @@ func slotsDefault() *jsonx.Object {
 	return def
 }
 
-// UpdateList edits one document-level list (`escalations`, `limits`) under the
-// registry lock: mutate gets the list as it is and returns the new one.
-func UpdateList(root, key string, mutate func(list []any) []any) error {
-	return Update(root, slotsDefault(), func(doc *jsonx.Object) {
-		raw, _ := doc.Get(key)
+// UpdateEscalations edits the escalation list under the registry lock: mutate
+// gets the list as it is and returns the new one.
+func UpdateEscalations(root string, mutate func(list []any) []any) error {
+	return updateList(root, "escalations", mutate)
+}
+
+// UpdateLimits is UpdateEscalations for the limit list.
+func UpdateLimits(root string, mutate func(list []any) []any) error {
+	return updateList(root, "limits", mutate)
+}
+
+func updateList(root, key string, mutate func(list []any) []any) error {
+	return Update(root, func(d *Doc) {
+		raw, _ := d.doc.Get(key)
 		list, _ := raw.([]any)
-		doc.Set(key, mutate(list))
+		d.doc.Set(key, mutate(list))
 	})
 }

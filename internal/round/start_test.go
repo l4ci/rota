@@ -294,9 +294,10 @@ func TestStartProvisionsRosterAndTakesLease(t *testing.T) {
 	}
 	var names []string
 	for _, s := range st.Slots {
-		names = append(names, worker.Str(s, "name"))
-		wt := filepath.Join(root, ".worktrees", worker.Str(s, "name"))
-		if worker.Str(s, "worktree") != wt || worker.Str(s, "branch") != "park/"+worker.Str(s, "name") {
+		sl := worker.AsSlot(s)
+		names = append(names, sl.Name())
+		wt := filepath.Join(root, ".worktrees", sl.Name())
+		if sl.Worktree() != wt || sl.Branch() != "park/"+sl.Name() {
 			t.Errorf("slot %v must be .worktrees/<agent> on park/<agent>", s)
 		}
 		if _, err := os.Stat(wt); err != nil {
@@ -492,7 +493,7 @@ func TestStartNumbersALeaseTakenUnnumberedByTheSameHolder(t *testing.T) {
 	if l, _, _ := e.ReadLease(bg, root); l.Round != 1 {
 		t.Fatalf("lease must carry the number: %+v", l)
 	}
-	if r, _ := worker.LoadRegistry(root).Doc.Get("round"); fmt.Sprint(r) != "1" {
+	if r, _ := worker.LoadRegistry(root).Round(); r != 1 {
 		t.Fatalf("registry round: %v", r)
 	}
 	// A restart of the orchestrator renews: the number survives.

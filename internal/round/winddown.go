@@ -8,7 +8,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/worker"
@@ -199,7 +198,7 @@ func (e Env) WindDown(ctx context.Context, root string, be Board, o WindDownOpts
 		}
 		// The round is over, so its host goes with the lease: the worker verbs
 		// read work.dispatch again.
-		if err := worker.UpdateDoc(root, func(doc *jsonx.Object) { doc.Delete("host") }); err != nil {
+		if err := worker.Update(root, func(doc *worker.Doc) { doc.ClearHost() }); err != nil {
 			return res, err
 		}
 		res.Changed = true

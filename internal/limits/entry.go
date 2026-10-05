@@ -116,22 +116,18 @@ func fromObject(o *jsonx.Object) Entry {
 	n, _ := o.Get("cycles")
 	cycles, _ := strconv.Atoi(fmt.Sprint(n))
 	return Entry{
-		ID: worker.Str(o, "id"), Session: worker.Str(o, "session"), Window: worker.Str(o, "window"),
-		Source: worker.Str(o, "source"), DetectedAt: worker.Str(o, "detectedAt"), ResetsAt: worker.Str(o, "resetsAt"),
-		Action: worker.Str(o, "action"), Account: worker.Str(o, "account"), To: worker.Str(o, "to"),
-		Status: worker.Str(o, "status"), Cycles: cycles, ResolvedAt: worker.Str(o, "resolvedAt"), Note: worker.Str(o, "note"),
+		ID: jsonx.Str(o, "id"), Session: jsonx.Str(o, "session"), Window: jsonx.Str(o, "window"),
+		Source: jsonx.Str(o, "source"), DetectedAt: jsonx.Str(o, "detectedAt"), ResetsAt: jsonx.Str(o, "resetsAt"),
+		Action: jsonx.Str(o, "action"), Account: jsonx.Str(o, "account"), To: jsonx.Str(o, "to"),
+		Status: jsonx.Str(o, "status"), Cycles: cycles, ResolvedAt: jsonx.Str(o, "resolvedAt"), Note: jsonx.Str(o, "note"),
 	}
 }
 
 // Load reads the limits list; a missing or malformed list reads as empty.
 func Load(root string) []Entry {
-	raw, _ := worker.LoadRegistry(root).Doc.Get("limits")
-	list, _ := raw.([]any)
 	var out []Entry
-	for _, v := range list {
-		if o, ok := v.(*jsonx.Object); ok {
-			out = append(out, fromObject(o))
-		}
+	for _, o := range worker.LoadRegistry(root).Limits() {
+		out = append(out, fromObject(o))
 	}
 	return out
 }
@@ -161,7 +157,7 @@ func NextID(list []Entry) string {
 // Append adds the entry under the registry lock, numbering it from the list
 // as it is at that moment, and returns it with its id.
 func Append(root string, e Entry) (Entry, error) {
-	err := worker.UpdateList(root, "limits", func(list []any) []any {
+	err := worker.UpdateLimits(root, func(list []any) []any {
 		var cur []Entry
 		for _, v := range list {
 			if o, ok := v.(*jsonx.Object); ok {
@@ -176,9 +172,9 @@ func Append(root string, e Entry) (Entry, error) {
 
 // Save rewrites the entry with the same id under the registry lock.
 func Save(root string, e Entry) error {
-	return worker.UpdateList(root, "limits", func(list []any) []any {
+	return worker.UpdateLimits(root, func(list []any) []any {
 		for i, v := range list {
-			if o, ok := v.(*jsonx.Object); ok && worker.Str(o, "id") == e.ID {
+			if o, ok := v.(*jsonx.Object); ok && jsonx.Str(o, "id") == e.ID {
 				list[i] = e.Object()
 			}
 		}
