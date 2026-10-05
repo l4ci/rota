@@ -12,8 +12,8 @@ Set `round.brief` to this file's path to make the assignment pointer name it as 
 The full gate runs once, at merge: `rota worker gate` runs `refactor.verifyCommands` on the merged
 tree through `bash test/gate.sh`: validate-skills, the doc lints (`bash test/doclint.sh`: prose pins, the
 `.worktrees/` decoy check, and that every `rota` verb the docs name exists), `go vet ./...`, `go test -race -timeout 30m ./...`
-and the smoke suite in `gate.smokeShards` (default 4) shards, all at once. About 160 s on an idle
-8-core box, against 590 s in series. It takes a machine-wide lock, so two gates never overlap, and
+and the smoke suite in `gate.smokeShards` (default 4) shards, all at once. The sharded gate takes about 2–3 minutes;
+running the smoke suite in series is several times slower. It takes a machine-wide lock, so two gates never overlap, and
 keeps one log per check. Every check makes its temp files under one gate-owned root, and the gate fails if
 any entry is left in it afterwards, so a run that leaks shows up as a red gate, not as a full `/tmp`.
 Workers do not run it.
