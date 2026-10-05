@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/host"
-	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -99,13 +98,9 @@ func TestRoundStatusAndReconcile(t *testing.T) {
 	}
 
 	// An open escalation shows in both verbs and on its slot's row.
-	if err := worker.UpdateEscalations(root, func([]any) []any {
-		e := jsonx.NewObject()
-		for _, kv := range [][2]any{{"id", "e1"}, {"kind", "pr"}, {"number", 3}, {"slot", "dana"}, {"title", "Which option?"},
-			{"commentId", "1"}, {"sentAt", "2026-10-03T10:00:00Z"}, {"notified", false}, {"status", "pending"}} {
-			e.Set(kv[0].(string), kv[1])
-		}
-		return []any{e}
+	if err := worker.UpdateEscalations(root, func([]worker.Escalation) []worker.Escalation {
+		return []worker.Escalation{{ID: "e1", Kind: "pr", Number: 3, Slot: "dana", Title: "Which option?",
+			CommentID: "1", SentAt: "2026-10-03T10:00:00Z", Status: "pending"}}
 	}); err != nil {
 		t.Fatal(err)
 	}
