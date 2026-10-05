@@ -5,6 +5,7 @@
 package section
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -165,6 +166,29 @@ func InstructionsFile(root string) string {
 	return filepath.Join(root, "CLAUDE.md")
 }
 
+// Managed-block markers. Every writer and matcher of a block goes through
+// this file, so the format is spelled once. hv-<key> is the pre-rename (#236)
+// spelling, still matched so old blocks upgrade in place.
+const (
+	blockStartFmt = "<!-- rota-%s-start -->"
+	blockEndFmt   = "<!-- rota-%s-end -->"
+)
+
+var (
+	// BlockKeyRe finds the start marker of any managed block; group 1 is the key.
+	BlockKeyRe = regexp.MustCompile(`<!-- (?:rota|hv)-([\w-]+)-start -->`)
+	// AnyBlockRe matches any canonical (rota-) managed block; groups 1 and 2
+	// are the start and end keys, which the caller compares (RE2 has no
+	// backreferences).
+	AnyBlockRe = regexp.MustCompile(`(?s)<!-- rota-([\w-]+)-start -->.*?<!-- rota-([\w-]+)-end -->`)
+)
+
+// Wrap puts body between the key's start and end markers. body is used as
+// given: it carries its own trailing blank line if the block wants one.
+func Wrap(key, body string) string {
+	return fmt.Sprintf(blockStartFmt+"\n%s\n"+blockEndFmt, key, body, key)
+}
+
 // BlockRegex matches a managed block: the canonical
 // "<!-- rota-<key>-start -->…<!-- rota-<key>-end -->" and the same block hv
 // wrote before the rename (#236) as "<!-- hv-<key>-start -->…".
@@ -213,6 +237,12 @@ func UpsertBlock(path, key, block string) (string, error) {
 		return Unchanged, nil
 	}
 	return status, fsio.WriteFileAtomic(path, []byte(next))
+}
+
+// UpsertManaged wraps body in the key's markers and upserts it into the
+// project's instructions file under root.
+func UpsertManaged(root, key, body string) (string, error) {
+	return UpsertBlock(InstructionsFile(root), key, Wrap(key, body))
 }
 
 // Lines splits s like Python's str.splitlines: at \n, \r, \r\n, \v, \f,
