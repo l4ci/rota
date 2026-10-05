@@ -1,6 +1,7 @@
 package backlog
 
 import (
+	ms "github.com/l4ci/rota/internal/milestone"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -35,7 +36,7 @@ const AnyTypeIDPattern = `[` + ItemLetters + `S]\p{Nd}+`
 // MilestonePattern and SlicePattern are the regexp sources of a milestone ID
 // (M01) and of the slice part of a plan key (S1), unanchored like IDPattern.
 const (
-	MilestonePattern = `M\p{Nd}{2,}`
+	MilestonePattern = ms.Pattern
 	SlicePattern     = `S\p{Nd}+`
 )
 

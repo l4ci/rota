@@ -258,3 +258,32 @@ func TestFileStoreRoundTrip(t *testing.T) {
 		t.Error("Reindex did not list the active milestone")
 	}
 }
+
+// TestIDGrammarUnicodeDigits pins the one grammar every package consumes:
+// digits are \p{Nd}, so Arabic-Indic digits count like ASCII ones.
+func TestIDGrammarUnicodeDigits(t *testing.T) {
+	cases := []struct {
+		in      string
+		valid   bool
+		leading string
+		ids     []string
+	}{
+		{"M01", true, "M01", []string{"M01"}},
+		{"M١٢", true, "M١٢", []string{"M١٢"}},
+		{"M1", false, "M1", []string{"M1"}},
+		{"M", false, "", nil},
+		{"Mx1", false, "", nil},
+		{"M01 and M٣", false, "M01", []string{"M01", "M٣"}},
+	}
+	for _, c := range cases {
+		if got := ValidID(c.in); got != c.valid {
+			t.Errorf("ValidID(%q) = %v, want %v", c.in, got, c.valid)
+		}
+		if got := LeadingID(c.in); got != c.leading {
+			t.Errorf("LeadingID(%q) = %q, want %q", c.in, got, c.leading)
+		}
+		if got := IDs(c.in); !reflect.DeepEqual(got, c.ids) {
+			t.Errorf("IDs(%q) = %v, want %v", c.in, got, c.ids)
+		}
+	}
+}

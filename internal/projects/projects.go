@@ -4,8 +4,9 @@
 // `rota projects` lists them. It is not .rota/repos.json, the per-project
 // umbrella sub-repo registry (internal/repos).
 //
-// A path that no longer exists is kept and flagged on read, never pruned: a
-// project on an unmounted drive comes back when the drive does.
+// A path that no longer exists is kept and flagged on read, never pruned by
+// List or Register: a project on an unmounted drive comes back when the drive
+// does. Only Cleanup, the explicit `rota projects cleanup`, drops them.
 package projects
 
 import (
@@ -125,4 +126,52 @@ func List() ([]Project, error) {
 		return out[i].Path < out[j].Path
 	})
 	return out, nil
+}
+
+// Cleanup drops every entry whose directory is gone or no longer holds .rota/,
+// under the registry lock, and returns what it removed (in registry order). An
+// absent registry removes nothing and is not created.
+func Cleanup() ([]Project, error) {
+	path, err := file()
+	if err != nil {
+		return nil, err
+	}
+	if _, err := os.Stat(path); err != nil {
+		return nil, nil
+	}
+	var removed []Project
+	err = fsio.UpdateJSON(path, jsonx.NewObject(), func(v any) (any, error) {
+		doc, ok := v.(*jsonx.Object)
+		if !ok {
+			return v, nil
+		}
+		raw, _ := doc.Get("projects")
+		items, _ := raw.([]any)
+		kept := make([]any, 0, len(items))
+		for _, it := range items {
+			if o, ok := it.(*jsonx.Object); ok {
+				p, _ := o.Get("path")
+				if ps, _ := p.(string); ps != "" {
+					if _, err := os.Stat(filepath.Join(ps, ".rota")); err != nil {
+						n, _ := o.Get("name")
+						s, _ := o.Get("lastSeen")
+						ns, _ := n.(string)
+						ls, _ := s.(string)
+						removed = append(removed, Project{Path: ps, Name: ns, LastSeen: ls, Missing: true})
+						continue
+					}
+				}
+			}
+			kept = append(kept, it)
+		}
+		if len(removed) == 0 {
+			return doc, nil
+		}
+		doc.Set("projects", kept)
+		return doc, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return removed, nil
 }
