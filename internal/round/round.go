@@ -119,6 +119,9 @@ type Row struct {
 	Escalations []string
 	// Kind, Tier, Model and TierReason are the slot's C9 fields.
 	Kind, Tier, Model, TierReason string
+	// Bounces is how often the slot's issue has been sent back (round.maxBounces
+	// caps it); 0 when never.
+	Bounces int
 }
 
 // Finding is one drift. Repair names what Reconcile(apply) would do and is
@@ -208,6 +211,9 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 		r := &Row{Name: name, Branch: branch, PR: s.PR(), Tab: s.Handle(), Registered: true}
 		r.Issue = issueOf(s.Task(), branch, name)
 		r.Kind, r.Tier, r.Model, r.TierReason = s.Kind(), s.Tier(), s.Model(), s.TierReason()
+		if r.Issue != "" {
+			r.Bounces = reg.Bounces(r.Issue)
+		}
 		add(r, &view{worktree: wt, base: firstNonEmpty(s.Base(), e.Base)})
 	}
 	sort.Slice(wts, func(i, j int) bool { return wts[i].name < wts[j].name })
