@@ -32,7 +32,7 @@ Every post-cycle nudge step runs the same sequence. The call site supplies the *
 
 ### Inline variant — `/rota-ship` Step 8.6
 
-One site deliberately diverges from step 3 above: `/rota-ship` Step 8.6 does not branch on `autonomy.level` and does not dispatch a skill. When its flag (`docs.afterWork`) is on and the trigger fires, it inline-runs Docs Mode's after-work flow (Steps D-A1 through D-A6 in `rota-ship/SKILL.md`), passing the resolved item IDs and touched files from the cycle's scope JSON as context; the after-work flow's own approval gate (Step D-A5) supplies the user checkpoint the nudge arm would otherwise provide. `/rota-work` Step 13 only nudges and never dispatches.
+One site deliberately diverges from step 3 above: `/rota-ship` Step 8.6 does not branch on `autonomy.level` and does not dispatch a skill. When its flag (`docs.afterWork`) is on and the trigger fires, it inline-runs Docs Mode's after-work flow (Steps D-A1 through D-A6 in `rota-ship/docs-mode.md`), passing the resolved item IDs and touched files from the cycle's scope JSON as context; the after-work flow's own approval gate (Step D-A5) supplies the user checkpoint the nudge arm would otherwise provide. `/rota-work` Step 13 only nudges and never dispatches.
 
 ### Manual entry
 
