@@ -35,6 +35,7 @@ OLD_SCOPE=(
   ':(exclude)internal/knowledge/knowledge_test.go'
   ':(exclude)internal/initproj/init_test.go'
   ':(exclude)test/sections/04_skills.sh'
+  ':(exclude)test/sections/99_knowledge_replace.sh'
   # Scrollback captured from real panes, where the checkout path shows.
   ':(exclude)internal/host/testdata/'
   ':(exclude)internal/worker/testdata/'
@@ -85,6 +86,8 @@ HV_SCOPE=(
   ':(exclude)internal/cli/glossary_test.go'
   ':(exclude)internal/cli/testdata/golden/TestInstructionsInitMatchGolden__*'
   ':(exclude)test/sections/02_knowledge.sh'
+  # Legacy /hv-work and .hv/ text that `knowledge replace` rewrites, and an hv-skills milestone line.
+  ':(exclude)test/sections/99_knowledge_replace.sh'
   ':(exclude)test/sections/13_helpers.sh'
   ':(exclude)test/sections/66_agents_md.sh'
   ':(exclude)internal/migrate/'
