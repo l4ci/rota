@@ -10,6 +10,8 @@
 #   pane         pane text; capture-pane appends a counter bumped by every
 #                `send-keys ... C-m`, so a pasted prompt reads as picked up
 #   frozen       capture-pane stops changing (a brief that never submits)
+#   tick         capture-pane appends a fresh timestamp, so the pane reads as
+#                busy without a background writer a loaded host can starve
 #   name         session name for display-message (default hvfake)
 # $FAKE_TMUX_SNAPSHOT, when set, names a file of `session:window<TAB>path` lines
 # that `list-windows -a -F ...pane_current_path...` prints (the host snapshot).
@@ -37,7 +39,8 @@ case "$1" in
     mv "$F/windows.new" "$F/windows" 2>/dev/null; exit 0 ;;
   capture-pane)
     cat "$F/pane" 2>/dev/null
-    [ -f "$F/frozen" ] || cat "$F/n" 2>/dev/null ;;
+    [ -f "$F/frozen" ] || cat "$F/n" 2>/dev/null
+    if [ -f "$F/tick" ]; then date +%s%N; fi ;;
   send-keys)
     for last; do :; done
     if [ "$last" = "C-m" ]; then echo $(( $(cat "$F/n" 2>/dev/null || echo 0) + 1 )) >"$F/n"; fi ;;
