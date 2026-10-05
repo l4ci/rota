@@ -485,6 +485,7 @@ A gated verb refuses with exit 4 (`blockedBy: "manual gate"`) at every autonomy 
 |---|---|
 | `rota init` | create or refresh `.rota/`, the managed blocks and `.gitignore` |
 | `rota projects` | list the projects registered on this machine; `rota init` registers, a missing path is marked, not pruned |
+| `rota projects cleanup` | delete every entry whose directory is gone or has no `.rota/`, printing each; no preview |
 | `rota setup [--yes] [--set <key>=<value>]... \| --list` | `rota init` plus the main config choices, asked on a terminal; `--yes` takes defaults, `--list` prints the questions |
 | `rota init check` | is `.rota/` initialized (exit 1 when not) |
 | `rota init umbrella (--repos <csv> \| --all \| --list)` | register sub-repos and make this directory an umbrella |
