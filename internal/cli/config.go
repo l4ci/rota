@@ -9,6 +9,7 @@ import (
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/repos"
 	"github.com/l4ci/rota/internal/status"
 	"github.com/l4ci/rota/internal/update"
@@ -28,6 +29,7 @@ func configCommands() []*Command {
 			{Name: "set", Summary: "set one key in .rota/config.json", Repo: true, Verb: configSet},
 			{Name: "check", Summary: "compare .rota/config.json with the schema", Repo: true, Verb: configCheck},
 			{Name: "fill", Summary: "write the default of every missing required key", Repo: true, Verb: configFill},
+			{Name: "save-global", Summary: "save .rota/config.json as the machine-wide defaults for new projects", Repo: true, Verb: configSaveGlobal},
 		}},
 		{Name: "repo", Summary: "umbrella sub-repo registry", Subs: []*Command{
 			{Name: "which", Summary: "the registered sub-repo the working directory is in", Verb: repoWhich},
@@ -91,6 +93,36 @@ func configShow(fs *flag.FlagSet) RunFunc {
 			lines = append(lines, e.Line())
 		}
 		return Result{Data: jsonObj("entries", rows), Text: strings.Join(lines, "\n")}, nil
+	}
+}
+
+// configSaveGlobal copies the project's config.json keys (not config.local.json)
+// to the global config, which only seeds `rota init` and `rota setup`.
+func configSaveGlobal(fs *flag.FlagSet) RunFunc {
+	return func(c *Ctx, args []string) (Result, error) {
+		if err := argCount(c, args, 0, 0, "config save-global takes no arguments"); err != nil {
+			return Result{}, err
+		}
+		root, err := backlogScope(c)
+		if err != nil {
+			return Result{}, err
+		}
+		dir, err := projects.Dir()
+		if err != nil {
+			return Result{}, Resolution("%v", err)
+		}
+		saved, err := config.SaveGlobal(root, dir)
+		if errors.Is(err, config.ErrCorrupt) {
+			return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
+		}
+		if err != nil {
+			return Result{}, err
+		}
+		path := config.GlobalPath(dir)
+		return Result{
+			Data: jsonObj("path", path, "saved", strSlice(saved)),
+			Text: fmt.Sprintf("saved %d keys to %s", len(saved), path),
+		}, nil
 	}
 }
 
