@@ -4,7 +4,7 @@ Loaded on demand by `/rota-learn` under `--strict` or when `learn.verify` is `tr
 
 ## Dispatch
 
-Use the `Agent` tool with `model: "opus"` and `subagent_type: "general-purpose"`. Do a cold read of the written files — don't pre-bias the verifier with your own notes.
+Use the `Agent` tool with a `heavy` subagent (`model: "opus"`, the default `round.tiers.claude.heavy`) and `subagent_type: "general-purpose"`. Do a cold read of the written files — don't pre-bias the verifier with your own notes.
 
 ## Brief (paste to the agent, substituting today's date)
 

@@ -15,6 +15,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/hook"
 	"github.com/l4ci/rota/internal/host"
@@ -54,9 +55,6 @@ func (r Report) OK() bool {
 	return true
 }
 
-// Account is one entry of work.accounts.
-type Account struct{ Name, ConfigDir string }
-
 // Disk is the space on one volume, in bytes.
 type Disk struct {
 	Path        string
@@ -79,7 +77,7 @@ type Input struct {
 	// From the project config when .rota/ exists; zero values otherwise.
 	Dispatch       string // work.dispatch
 	IssuesProvider string // issues.provider
-	Accounts       []Account
+	Accounts       []config.Account
 	SwitchOnUsage  bool // orchestrator.switchOnUsage (D4)
 	// CodexHomes are the existing slot homes under <git-common-dir>/rota/codex/.
 	CodexHomes []CodexHome

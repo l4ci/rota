@@ -114,7 +114,7 @@ func shipVerdict(c *Ctx, dir, root string) ship.VerdictCheck {
 		Git:      shipGitRunner{c, dir},
 		Store:    verdict.Load(root),
 		Repo:     repo,
-		Settings: verdict.Settings{Runner: configString(cfg, "ship.secondOpinionRunner")},
+		Settings: verdict.Settings{Runner: config.String(cfg, "ship.secondOpinionRunner")},
 	}
 }
 
