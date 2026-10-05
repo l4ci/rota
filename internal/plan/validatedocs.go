@@ -3,6 +3,7 @@ package plan
 import (
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/rotatree"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -36,7 +37,7 @@ func ValidateDocs(root, key string) (mismatches []Mismatch, text string, err err
 	if err = CheckKey(Files(root), key); err != nil {
 		return
 	}
-	planPath := filepath.Join(".rota", "plans", key+".md")
+	planPath := filepath.Join(rotatree.DirName, rotatree.PlansDir, key+".md")
 	content, rerr := fsio.ReadText(filepath.Join(root, planPath))
 	if rerr != nil {
 		return nil, "", exitcode.Errf(exitcode.ExitResolution, "plan not found: %s", planPath)
@@ -47,7 +48,7 @@ func ValidateDocs(root, key string) (mismatches []Mismatch, text string, err err
 	}
 
 	docsSegment := "docs"
-	if cfg, ok := fsio.LoadJSON(filepath.Join(root, ".rota", "config.json"), nil).(*jsonx.Object); ok {
+	if cfg, ok := fsio.LoadJSON(rotatree.Config(root), nil).(*jsonx.Object); ok {
 		if dv, ok := cfg.Get("docs"); ok {
 			if d, ok := dv.(*jsonx.Object); ok {
 				if pv, ok := d.Get("path"); ok {

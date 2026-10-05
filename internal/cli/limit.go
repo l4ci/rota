@@ -21,6 +21,7 @@ import (
 	"github.com/l4ci/rota/internal/keepalive"
 	"github.com/l4ci/rota/internal/limits"
 	"github.com/l4ci/rota/internal/rotastate"
+	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundlease"
@@ -42,7 +43,7 @@ func limitCommands() *Command {
 // escalateFunc posts on an issue thread through C4's library entry.
 func escalateFunc(ctx context.Context, c *Ctx, root string) func(issue int, title, body string) (string, []string, error) {
 	return func(issue int, title, body string) (string, []string, error) {
-		ee := c.deps().EscalationEnv()
+		ee := c.deps().escalationEnv()
 		if ee.Forge == nil {
 			ee.Forge = escalationForge(c)
 		}
@@ -123,7 +124,7 @@ func buildLimits(ctx context.Context, c *Ctx, root string, cfg any, set limits.S
 	if kind == host.Solo {
 		kind = "tmux" // New maps solo to tmux; say so for the error text
 	}
-	h := c.deps().LimitHost(kind)
+	h := c.deps().Host(kind)
 	if err := h.Require(); err != nil {
 		return nil, &Error{Exit: ExitUnavailable, Message: err.Error()}
 	}
@@ -323,7 +324,7 @@ func limitWatch(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		cfg := config.Load(filepath.Join(root, ".rota", "config.json"))
+		cfg := config.Load(rotatree.Config(root))
 		set, err := limits.LoadSettings(cfg)
 		if err != nil {
 			return Result{}, &Error{Exit: ExitInternal, Message: err.Error(), Hint: "fix the limits.* key with: rota config set"}

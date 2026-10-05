@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	gitx "github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/rotatree"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -31,7 +32,7 @@ func checkName(name string) error {
 	return nil
 }
 
-func file(root, name string) string { return filepath.Join(root, ".rota", "spikes", name+".md") }
+func file(root, name string) string { return rotatree.Doc(root, rotatree.SpikesDir, name) }
 
 func git(dir string, args ...string) error {
 	res, err := gitx.Repo{Dir: dir}.Run(context.Background(), args...)
@@ -198,7 +199,7 @@ func spikeBranches(dir string) map[string]bool {
 // skipped. branchExists is checked in the spike's own sub-repo, or in dir
 // (the working directory) for a spike with no repo.
 func List(root, dir string) ([]Entry, error) {
-	files, _ := filepath.Glob(filepath.Join(root, ".rota", "spikes", "*.md"))
+	files, _ := filepath.Glob(rotatree.File(root, rotatree.SpikesDir, "*.md"))
 	sort.Strings(files)
 	var regs map[string]string
 	cache := map[string]map[string]bool{}

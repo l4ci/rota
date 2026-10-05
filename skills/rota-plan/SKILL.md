@@ -80,9 +80,6 @@ Offer `/rota-work` as a one-line prompt if the user is ready.
 ## Key principles
 
 - **Plans are committed alignment, not rough notes.** If the user wouldn't sign off, don't write it.
-- **Verify is non-negotiable.** A behavior task's Verify also names the failure expected before the change.
-- **Open questions beat hidden assumptions.**
-- **Tasks fit one execution.**
 
 ## References
 

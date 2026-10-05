@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/rotatree"
 	"io"
 	"math"
 	"net/http"
@@ -92,7 +93,7 @@ type acct struct{ name, configDir string }
 
 // Configured returns work.accounts of the project config.
 func Configured(root string) []acct {
-	cfg := config.Load(filepath.Join(root, ".rota", "config.json"))
+	cfg := config.Load(rotatree.Config(root))
 	var out []acct
 	for _, a := range config.Accounts(cfg) {
 		out = append(out, acct{a.Name, a.ConfigDir})

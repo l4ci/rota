@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
-	"path/filepath"
+	"github.com/l4ci/rota/internal/rotatree"
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
@@ -109,7 +109,7 @@ func (e Env) trackedFiles(ctx context.Context, root string) []string {
 // the issue the map gives it.
 func heldIDs(root string) map[string]bool {
 	held := map[string]bool{}
-	imap, _ := fsio.LoadJSON(filepath.Join(root, ".rota", "issue-map.json"), nil).(*jsonx.Object)
+	imap, _ := fsio.LoadJSON(rotatree.IssueMap(root), nil).(*jsonx.Object)
 	hold := func(id string) {
 		if id == "" {
 			return
@@ -292,7 +292,7 @@ func InScope(root string, be backlog.Backend, scope string, slate []string, id s
 // open item, so without this a hand-worked issue reads as ready and assign
 // refuses it as claimed. File mode has neither labels nor claims.
 func (e Env) takenOutside(ctx context.Context, be backlog.Backend) (func(backlog.Item) bool, error) {
-	if e.Forge == nil || be.Name() != "issues" {
+	if e.Forge == nil || !be.Capabilities().Tracker {
 		return nil, nil
 	}
 	issues, err := e.Forge.List(ctx, tracker.ListFilter{State: "open", Labels: []string{firstNonEmpty(e.Label, DefaultLabel)}})
@@ -321,7 +321,7 @@ func (e Env) takenOutside(ctx context.Context, be backlog.Backend) (func(backlog
 // handedToHuman is the open issues carrying the needs-human label (C10): the
 // human holds them, so a round does not offer them. File mode has no labels.
 func (e Env) handedToHuman(ctx context.Context, be backlog.Backend) (map[int]bool, error) {
-	if e.Forge == nil || be.Name() != "issues" {
+	if e.Forge == nil || !be.Capabilities().Tracker {
 		return nil, nil
 	}
 	issues, err := e.Forge.List(ctx, tracker.ListFilter{State: "open", Labels: []string{firstNonEmpty(e.NeedsHuman, DefaultNeedsHuman)}})

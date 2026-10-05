@@ -16,6 +16,7 @@ import (
 // layoutRig is a herdr with one project: the orchestrator's pane p0 in tab T,
 // and one pane per live slot in a tab of its own. Moves are logged.
 type layoutRig struct {
+	cliHost
 	panes []host.LayoutPane
 	agent map[string]string // slot -> pane
 	log   []string
@@ -76,7 +77,7 @@ func layoutProject(t *testing.T, regHost string, slots []string, live ...string)
 	if err := os.WriteFile(filepath.Join(root, ".rota", "workers.json"), []byte(doc), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	rig := &layoutRig{agent: map[string]string{}}
+	rig := &layoutRig{cliHost: cliHost{herdr: true}, agent: map[string]string{}}
 	rig.panes = []host.LayoutPane{{ID: "p0", Tab: "T", TabLabel: "orchestrator", Cwd: root, Agent: "claude"}}
 	for _, s := range live {
 		id := "p-" + s
@@ -84,7 +85,7 @@ func layoutProject(t *testing.T, regHost string, slots []string, live ...string)
 		rig.panes = append(rig.panes, host.LayoutPane{ID: id, Tab: "t-" + s, TabLabel: s, Cwd: filepath.Join(root, ".worktrees", s), Agent: "claude"})
 	}
 	deps := testDeps()
-	deps.LayoutHost = func() (host.Layouter, error) { return rig, nil }
+	deps.Host = func(string) host.Host { return rig }
 	return root, rig, deps
 }
 
@@ -233,7 +234,8 @@ func TestLayoutAllProjectsDefaultsToTheOnesOpenInHerdr(t *testing.T) {
 	// A project with no orchestrator pane in herdr is not listed, and with
 	// nothing arranged the verb says so.
 	other, _, deps2 := layoutProject(t, "herdr", []string{"ben"}, "ben")
-	deps2.LayoutHost = func() (host.Layouter, error) { return &layoutRig{agent: map[string]string{}}, nil }
+	empty := &layoutRig{cliHost: cliHost{herdr: true}, agent: map[string]string{}}
+	deps2.Host = func(string) host.Host { return empty }
 	code, _, errs = rotaRunWith(t, deps2, "--json", "-C", other, "layout", "split")
 	if code != ExitResolution || !strings.Contains(errs, "no rota project has a round open in herdr") {
 		t.Errorf("exit %d, stderr %q", code, errs)

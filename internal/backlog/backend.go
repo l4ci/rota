@@ -12,8 +12,12 @@ import (
 
 // Backend is the read side of a backlog, whichever store holds it.
 type Backend interface {
-	// Name is "file" or "issues".
+	// Name is "file" or "issues". For display and config only: callers branch on
+	// Capabilities, never on the name.
 	Name() string
+	// Capabilities says what the backend can do, so callers need not ask which
+	// backend they hold.
+	Capabilities() Capabilities
 	// Get returns an item, open or closed/archived. The error wraps
 	// ErrNotFound when the reference is unknown.
 	Get(ref string) (*Item, error)
@@ -25,6 +29,10 @@ type Backend interface {
 	// number). Each Item is what Get(item.ID) returns. This is how callers enumerate; they
 	// must not parse Markdown.
 	List(includeClosed bool) ([]Item, error)
+	// Rows lists the open items as the listing views read them, in section
+	// order. A missing BACKLOG.md is an error wrapping ErrNotFound. This is how
+	// views enumerate; they must not parse Markdown.
+	Rows() ([]Row, error)
 	// Markdown renders the backlog as BACKLOG.md-shaped text, for renderers
 	// only: its bullets spell IDs differently per backend ("F12" in issue mode
 	// where Item.ID is "12"), so enumerate with List. The file backend
@@ -58,6 +66,16 @@ type Backend interface {
 	// AddComment appends a comment. id is the tracker's comment ID, "" in
 	// file mode.
 	AddComment(ref, kind, text string) (id string, err error)
+}
+
+// Capabilities are the differences between backends that callers act on.
+type Capabilities struct {
+	// Tracker: items are tracker issues, so they carry labels, claims and open
+	// PRs, and IDs are canonical issue numbers. False: items are BACKLOG.md
+	// bullets, with none of those.
+	Tracker bool
+	// Umbrella: items span several sub-repos, each Row names its owner.
+	Umbrella bool
 }
 
 // FileOps are the verbs only the file backend has. Callers reach them with
