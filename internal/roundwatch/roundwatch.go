@@ -285,7 +285,11 @@ func Digest(root string, round int, armed bool) string {
 			continue
 		}
 		p := s.Name() + " " + st
-		if is := s.HeldID(); is != "" {
+		is := s.Issue()
+		if is == "" {
+			is = s.HeldID()
+		}
+		if is != "" {
 			p += " #" + strings.TrimPrefix(is, "#")
 		}
 		if pr := s.PR(); pr != "" {
