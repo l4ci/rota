@@ -339,6 +339,9 @@ func TestStartReclaimsStaleLeaseAndBumpsRound(t *testing.T) {
 	if _, err := first.Start(bg, root, startOpts(roundcfg.ScopeMilestone, 100)); err != nil {
 		t.Fatal(err)
 	}
+	if err := worker.Update(root, func(d *worker.Doc) { d.SetLayout("split") }); err != nil {
+		t.Fatal(err)
+	}
 	second := Env{Git: git.Exec, Base: "main", Lease: fakeLease("h", 300)} // pid 100 is gone
 	_, st, _ := second.ReadLease(bg, root)
 	if st != roundlease.Stale {
@@ -364,6 +367,9 @@ func TestStartReclaimsStaleLeaseAndBumpsRound(t *testing.T) {
 	got, err := second.Start(bg, root, startOpts(roundcfg.ScopeMilestone, 300))
 	if err != nil || got.Outcome != roundlease.Reclaimed || got.Round != 2 || got.Reclaimed.PID != 100 || len(got.Warnings) == 0 {
 		t.Fatalf("reclaim: %v %+v", err, got)
+	}
+	if l := worker.LoadRegistry(root).Layout(); l != "" {
+		t.Errorf("a new round starts in tabs, layout = %q (#205)", l)
 	}
 }
 

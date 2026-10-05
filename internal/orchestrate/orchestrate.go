@@ -16,6 +16,7 @@ import (
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
+	"github.com/l4ci/rota/internal/layout"
 	"github.com/l4ci/rota/internal/shlex"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -39,7 +40,7 @@ func Lookup(name string) (harness.Orchestrator, error) {
 const DefaultHarness = "claude"
 
 // Label names the orchestrator's tab or window.
-const Label = "orchestrator"
+const Label = layout.Label
 
 func str(cfg any, key string) string {
 	v, _ := config.Lookup(cfg, key)
