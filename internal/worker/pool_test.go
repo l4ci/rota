@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/golden"
 )
 
@@ -62,7 +63,7 @@ func TestPoolInitErrors(t *testing.T) {
 	if we, ok := err.(*exitcode.Error); !ok || we.Exit != exitcode.ExitResolution || !strings.Contains(we.Message, "base branch 'nope' does not exist") {
 		t.Errorf("missing base: %v", err)
 	}
-	sh(t, dir, "git", "checkout", "-q", "--detach")
+	gittest.Run(t, dir, "checkout", "-q", "--detach")
 	_, err = goInit(t, dir, InitOpts{Slots: 1})
 	if we, ok := err.(*exitcode.Error); !ok || we.Exit != exitcode.ExitResolution || !strings.Contains(we.Message, "cannot resolve base branch") {
 		t.Errorf("detached HEAD without --base: %v", err)
@@ -88,7 +89,7 @@ func TestPoolInitMigratesWindowToHandleAndKeepsLiveTab(t *testing.T) {
 func TestPoolInitRegistersTheBranchActuallyCheckedOut(t *testing.T) {
 	b := newProject(t, `{}`)
 	goInit(t, b, InitOpts{Slots: 1, Base: "main"})
-	sh(t, filepath.Join(b, ".worktrees", "w1"), "git", "switch", "-q", "-c", "rota-worker/w1-t9")
+	gittest.Run(t, filepath.Join(b, ".worktrees", "w1"), "switch", "-q", "-c", "rota-worker/w1-t9")
 	goInit(t, b, InitOpts{Slots: 1, Base: "main"})
 	golden.Check(t, map[string]any{"config": `{}`, "steps": []string{"init --slots 1 --base main", "git switch -c rota-worker/w1-t9 in w1", "init --slots 1 --base main"}}, map[string]string{"workers.json": registry(t, b)})
 	if !strings.Contains(registry(t, b), `"branch": "rota-worker/w1-t9"`) {
@@ -100,7 +101,7 @@ func TestPoolInitRegistersTheBranchActuallyCheckedOut(t *testing.T) {
 func TestPoolInitLegacySlotStays(t *testing.T) {
 	b := newProject(t, `{}`)
 	legacy := filepath.Join(b, ".claude", "worktrees", "rota-worker", "w1")
-	sh(t, b, "git", "worktree", "add", "-q", "-b", "rota-worker/w1", legacy, "main")
+	gittest.Run(t, b, "worktree", "add", "-q", "-b", "rota-worker/w1", legacy, "main")
 	reg := `{"session":"rota","slots":[{"name":"w1","branch":"rota-worker/w1","worktree":"` + legacy + `","base":"main","handle":"rota:w1","state":"idle","task":null,"pr":null,"relays":[],"configDir":null}]}`
 	os.WriteFile(RegistryPath(b), []byte(reg), 0o644)
 	res, err := goInit(t, b, InitOpts{Slots: 1, Base: "main"})
@@ -168,7 +169,7 @@ func TestPoolReap(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(b, ".worktrees", "w2")); err == nil {
 		t.Error("worktree survived the reap")
 	}
-	if out := sh(t, b, "git", "branch", "--list", "rota-worker/w2"); out != "" {
+	if out := gittest.Run(t, b, "branch", "--list", "rota-worker/w2"); out != "" {
 		t.Errorf("branch survived: %s", out)
 	}
 
