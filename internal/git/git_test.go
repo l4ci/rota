@@ -132,3 +132,16 @@ func TestQueriesOutsideRepo(t *testing.T) {
 		t.Fatalf("ShortHead ok=%v err=%v", ok, err)
 	}
 }
+
+func TestIsMergeConflict(t *testing.T) {
+	for out, want := range map[string]bool{
+		"CONFLICT (content): Merge conflict in work.txt": true,
+		"Automatic merge failed; fix conflicts":          true,
+		"fatal: unable to auto-detect email address":     false,
+		"": false,
+	} {
+		if got := IsMergeConflict(out); got != want {
+			t.Errorf("IsMergeConflict(%q) = %v", out, got)
+		}
+	}
+}

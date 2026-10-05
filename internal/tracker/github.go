@@ -401,8 +401,44 @@ func (g *GitHub) PRCheckout(ctx context.Context, pr int) error {
 	return err
 }
 
-func (g *GitHub) PRMerge(ctx context.Context, pr int) (string, error) {
-	if _, err := g.run(ctx, []string{"pr", "merge", strconv.Itoa(pr), "--merge", "--delete-branch"}, ""); err != nil {
+func (g *GitHub) PRView(ctx context.Context, pr int) (PRInfo, error) {
+	var d struct {
+		HeadRefName string `json:"headRefName"`
+		HeadRefOid  string `json:"headRefOid"`
+		BaseRefName string `json:"baseRefName"`
+		State       string `json:"state"`
+		Body        string `json:"body"`
+		MergeCommit *struct {
+			Oid string `json:"oid"`
+		} `json:"mergeCommit"`
+	}
+	if err := g.json(ctx, []string{"pr", "view", strconv.Itoa(pr), "--json", "headRefName,headRefOid,baseRefName,state,mergeCommit,body"}, &d); err != nil {
+		return PRInfo{}, err
+	}
+	if d.HeadRefName == "" {
+		return PRInfo{}, failed("cannot read PR %d", pr)
+	}
+	info := PRInfo{Head: d.HeadRefName, HeadSHA: d.HeadRefOid, Base: d.BaseRefName, State: d.State, Body: d.Body}
+	if d.MergeCommit != nil {
+		info.MergeSHA = d.MergeCommit.Oid
+	}
+	return info, nil
+}
+
+func (g *GitHub) PRRequestMerge(ctx context.Context, pr int, o MergeOpts) error {
+	args := []string{"pr", "merge", strconv.Itoa(pr), "--merge"}
+	if o.DeleteBranch {
+		args = append(args, "--delete-branch")
+	}
+	if o.HeadSHA != "" {
+		args = append(args, "--match-head-commit", o.HeadSHA)
+	}
+	_, err := g.run(ctx, args, "")
+	return err
+}
+
+func (g *GitHub) PRMerge(ctx context.Context, pr int, o MergeOpts) (string, error) {
+	if err := g.PRRequestMerge(ctx, pr, o); err != nil {
 		return "", err
 	}
 	var d struct {

@@ -19,7 +19,7 @@ type PRTracker interface {
 	Tracker
 	OpenPRs(ctx context.Context) ([]tracker.PR, error)
 	ClosedNumbers(body string) []int
-	PRMerge(ctx context.Context, pr int) (string, error)
+	PRMerge(ctx context.Context, pr int, o tracker.MergeOpts) (string, error)
 	PRFiles(ctx context.Context, pr int) ([]string, error)
 }
 
@@ -225,7 +225,11 @@ func (b *Issues) MergePRGated(pr int, items []string, approve MergeApprover) (Me
 		}
 		return MergeResult{Unproven: itemRefs(unproven)}, nil
 	}
-	sha, err := pt.PRMerge(b.ctx(), pr)
+	// Unpinned: nothing here verified a head sha. The proof, verdict and
+	// approval checks above key on the PR and its branch, not on a commit, so
+	// there is no sha to pin to. The gate (internal/worker), which does verify
+	// one, pins it.
+	sha, err := pt.PRMerge(b.ctx(), pr, tracker.MergeOpts{DeleteBranch: true})
 	if err != nil {
 		var te *tracker.Error
 		if errors.As(err, &te) && te.Kind == tracker.KindFailed && !strings.HasPrefix(te.Message, "cannot read the merge commit") {

@@ -144,6 +144,27 @@ type PR struct {
 	Body   string
 }
 
+// PRInfo is one PR/MR as the merge gate reads it. State is OPEN, MERGED or
+// CLOSED on both forges. MergeSHA is the merge commit, the squash commit on a
+// GitLab squash merge, and "" when the forge has none (a fast-forward or
+// rebase merge, or not merged yet).
+type PRInfo struct {
+	Head     string // source branch
+	HeadSHA  string
+	Base     string // target branch
+	State    string
+	MergeSHA string
+	Body     string
+}
+
+// MergeOpts shapes a PR merge. HeadSHA pins the merge: the forge refuses it
+// when the PR head is no longer that commit, so a push after the check cannot
+// land unreviewed. "" merges whatever the head is.
+type MergeOpts struct {
+	HeadSHA      string
+	DeleteBranch bool
+}
+
 // ListFilter selects issues. An empty State means "open". Mine keeps the
 // issues assigned to the authenticated user; a Limit above zero keeps the
 // first Limit of the result.
@@ -220,9 +241,16 @@ type Adapter interface {
 	OpenPRs(ctx context.Context) ([]PR, error)
 	PRsClosing(ctx context.Context, number int) ([]PR, error)
 	PRCheckout(ctx context.Context, pr int) error
-	// PRMerge merges with a merge commit, deletes the source branch and
-	// returns the merge commit sha.
-	PRMerge(ctx context.Context, pr int) (string, error)
+	// PRView reads PR pr: branches, head sha, state, merge sha and body.
+	PRView(ctx context.Context, pr int) (PRInfo, error)
+	// PRRequestMerge asks the forge to merge PR pr with a merge commit and
+	// returns once it answers; it does not confirm the merge landed (the gate
+	// does that itself). Auto-merge is off on GitLab, which would otherwise
+	// schedule a merge, report success and merge nothing.
+	PRRequestMerge(ctx context.Context, pr int, o MergeOpts) error
+	// PRMerge is PRRequestMerge plus the confirmation: it returns the merge
+	// commit sha, or fails when nothing landed.
+	PRMerge(ctx context.Context, pr int, o MergeOpts) (string, error)
 	// PRFiles lists the repo-relative paths a PR changes, for the
 	// merge-approval gate (B1).
 	PRFiles(ctx context.Context, pr int) ([]string, error)
