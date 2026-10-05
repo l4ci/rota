@@ -29,6 +29,24 @@ type File struct {
 // Name is "file".
 func (f *File) Name() string { return "file" }
 
+// Capabilities: BACKLOG.md bullets, no tracker.
+func (f *File) Capabilities() Capabilities { return Capabilities{} }
+
+// Rows reads every open bullet, indented ones too, as the helpers do.
+func (f *File) Rows() ([]Row, error) {
+	md, err := f.Markdown(0)
+	if err != nil {
+		return nil, err
+	}
+	var rows []Row
+	for _, e := range OpenBullets(md) {
+		b, _ := ParseOpen(e.Line)
+		rows = append(rows, Row{ID: e.ID, Key: e.ID, Type: e.ID[:1], Tag: b.Tag, Title: b.Title,
+			Section: e.Section, Raw: e.Line, Fields: e.Fields})
+	}
+	return rows, nil
+}
+
 func (f *File) rota(parts ...string) string {
 	return filepath.Join(append([]string{f.Root, ".rota"}, parts...)...)
 }
