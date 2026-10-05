@@ -46,7 +46,13 @@ Work only this task, then stop.
   round N`, `maintainer in pane`, `issue comment #<n>`). Never cite a relay as
   the maintainer. Label your own calls `unratified`.
 - When your PR is open, print `ROTA-DONE <slot> <pr-url>` and stop.
+- An architecture-review item (`arch(<area>): architecture review`) produces issues,
+  not code, so it has no PR. When every finding is filed, print
+  `ROTA-DONE <slot> issues:#a,#b` (the issue numbers, comma-separated) and stop.
+  Do not open a PR for it.
 ```
+
+`rota worker poll` and `rota round wait` read `issues:#a,#b` as done with the issue list as evidence and record it on the slot instead of a PR. `rota round assign` (or `transfer`) onto that slot then closes the review item with a note listing the issues, releases its claim and frees the slot. Only a review item the round minted closes this way: a worker that reports issues on any other item is refused until it has a PR. Solo rounds record the same with `rota round report <slot> --state done --issues "#a,#b"`.
 
 The two sentinels are the contract's load-bearing half. We own the worker's instructions, so state is *declared* rather than inferred from prose — which is what makes `rota worker poll` reliable where pattern-matching a TUI is not.
 

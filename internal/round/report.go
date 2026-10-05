@@ -20,11 +20,14 @@ var rePRNumberArg = regexp.MustCompile(`^#?\d+$`)
 // ReportOpts are the flags of `rota round report`.
 type ReportOpts struct {
 	Slot, State, Evidence, PR string
+	// Issues is a review item's done evidence in place of a PR: `#139,#140`.
+	Issues string
 }
 
 // Reported is what ReportSlot did. Evidence is echoed, never stored.
 type Reported struct {
 	Slot, State, Previous, PR, Evidence string
+	Issues                              []string
 	Changed                             bool
 }
 
@@ -44,6 +47,16 @@ func ReportSlot(root string, o ReportOpts) (Reported, error) {
 		return res, usage("--pr must be a PR or MR URL or a number, got %q", o.PR)
 	}
 	res.PR = pr
+	if iss := strings.TrimSpace(o.Issues); iss != "" {
+		if pr != "" {
+			return res, usage("--issues and --pr are exclusive: a review item reports issues, any other item a PR")
+		}
+		refs, ok := worker.ParseIssuesDone("issues:" + iss)
+		if !ok {
+			return res, usage("--issues must be issue numbers like #139,#140, got %q", o.Issues)
+		}
+		res.Issues = refs
+	}
 	switch h := worker.RegistryHost(root); h {
 	case host.Solo:
 	case "":
@@ -71,6 +84,10 @@ func ReportSlot(root string, o ReportOpts) (Reported, error) {
 		s.ClearSeen() // a report is news to `round wait`, even of the same state
 		if pr != "" && s.PR() != pr {
 			s.SetPR(pr)
+			res.Changed = true
+		}
+		if len(res.Issues) > 0 && strings.Join(s.Issues(), ",") != strings.Join(res.Issues, ",") {
+			s.SetIssues(res.Issues)
 			res.Changed = true
 		}
 	})

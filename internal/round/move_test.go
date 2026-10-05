@@ -41,6 +41,17 @@ func (b *moveBoard) Release(ref, claim string) (bool, error) {
 	return b.boardFake.Release(ref, claim)
 }
 
+// Complete closes the item and keeps the note, the way a tracker's close comment does.
+func (b *moveBoard) Complete(ref string, in backlog.CompleteInput) (bool, error) {
+	it, err := b.Get(ref)
+	if err != nil || it.Closed {
+		return false, err
+	}
+	it.Closed = true
+	b.comments[ref] = append(b.comments[ref], "closed: "+in.Note)
+	return true, nil
+}
+
 func (b *moveBoard) AddComment(ref, kind, text string) (string, error) {
 	if err := b.notFound(ref); err != nil {
 		return "", err
