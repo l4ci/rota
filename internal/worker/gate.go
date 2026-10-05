@@ -462,14 +462,16 @@ func trailingNumber(s string) string {
 // assumed.
 func (e Env) detectProvider(root, pr string) string {
 	switch {
-	case strings.Contains(pr, "gitlab") || strings.Contains(pr, "/-/merge_requests/"):
+	case strings.Contains(pr, "/-/merge_requests/"):
 		return "gitlab"
-	case strings.Contains(pr, "github") || strings.Contains(pr, "/pull/"):
+	case strings.Contains(pr, "/pull/"):
 		return "github"
 	}
 	url, _ := e.git(root, "remote", "get-url", "origin")
-	if tracker.ProviderFromURL(url) == "gitlab" {
-		return "gitlab"
+	for _, u := range []string{pr, url} {
+		if p := tracker.ProviderFromURL(u); p != tracker.ProviderUnknown {
+			return p
+		}
 	}
 	return "github"
 }
