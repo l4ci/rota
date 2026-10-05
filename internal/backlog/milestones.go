@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -14,6 +15,7 @@ import (
 	"github.com/l4ci/rota/internal/frontmatter"
 	"github.com/l4ci/rota/internal/marker"
 	ms "github.com/l4ci/rota/internal/milestone"
+	"github.com/l4ci/rota/internal/notechunk"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/tracker"
 )
@@ -199,7 +201,7 @@ func (b *Issues) MilestoneAdd(mid, title, summary string, depends []string, toda
 
 func msStatusOf(is Issue) string {
 	for _, l := range is.Labels {
-		if strings.HasPrefix(l, msStatusPrefix) && has(MilestoneStatuses, l[len(msStatusPrefix):]) {
+		if strings.HasPrefix(l, msStatusPrefix) && slices.Contains(MilestoneStatuses, l[len(msStatusPrefix):]) {
 			return l[len(msStatusPrefix):]
 		}
 	}
@@ -270,7 +272,7 @@ func (b *Issues) MilestoneShow(mid string) (string, error) {
 // (shipped: completed, archived: not planned) or reopens the tracking issue,
 // and does the same to the native milestone.
 func (b *Issues) MilestoneStatus(mid, status string) error {
-	if !has(MilestoneStatuses, status) {
+	if !slices.Contains(MilestoneStatuses, status) {
 		return errf(ErrInvalid, "status must be one of: %s", strings.Join(MilestoneStatuses, " "))
 	}
 	mt, err := b.milestoneTracker()
@@ -289,7 +291,7 @@ func (b *Issues) MilestoneStatus(mid, status string) error {
 			stale = append(stale, l)
 		}
 	}
-	if !has(is.Labels, label) {
+	if !slices.Contains(is.Labels, label) {
 		if err := mt.AddLabels(b.ctx(), n, []string{label}, b.AutoCreate()); err != nil {
 			return err
 		}
@@ -516,7 +518,7 @@ func (b *Issues) SlicePlans(mid string) ([]SlicePlan, error) {
 			for _, p := range ps {
 				text.WriteString(p.rest)
 			}
-			out = append(out, SlicePlan{m, u, noteNorm(text.String())})
+			out = append(out, SlicePlan{m, u, notechunk.Norm(text.String())})
 		}
 	}
 	return out, nil
