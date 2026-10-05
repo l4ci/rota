@@ -1,0 +1,212 @@
+{
+  "cases": [
+    {
+      "id": "rota-brainstorm-loads",
+      "skill": "rota-brainstorm",
+      "request": "Brainstorm 42 with me. It's a Major feature and I want to negotiate the design before anyone builds it.",
+      "expect": "load"
+    },
+    {
+      "id": "rota-brainstorm-skips",
+      "skill": "rota-brainstorm",
+      "request": "Write the implementation plan for 42, task by task, with verify steps.",
+      "expect": "skip",
+      "better": "rota-plan"
+    },
+    {
+      "id": "rota-capture-loads",
+      "skill": "rota-capture",
+      "request": "Note this bug: the timer badge goes stale after sleep. Also add dark mode to the backlog.",
+      "expect": "load"
+    },
+    {
+      "id": "rota-capture-skips",
+      "skill": "rota-capture",
+      "request": "Implement item 42.",
+      "expect": "skip",
+      "better": "rota-work"
+    },
+    {
+      "id": "rota-debug-loads",
+      "skill": "rota-debug",
+      "request": "Debug 42: the app crashes on startup and I don't know why. Investigate the root cause.",
+      "expect": "load"
+    },
+    {
+      "id": "rota-debug-skips",
+      "skill": "rota-debug",
+      "request": "Implement item 42.",
+      "expect": "skip",
+      "better": "rota-work"
+    },
+    {
+      "id": "rota-decide-loads",
+      "skill": "rota-decide",
+      "request": "Lock in the boundary that workers never edit .rota/ by hand, as a rule future work must respect.",
+      "expect": "load"
+    },
+    {
+      "id": "rota-decide-skips",
+      "skill": "rota-decide",
+      "request": "Save what we learned about the flaky smoke test so we remember next time.",
+      "expect": "skip",
+      "better": "rota-learn"
+    },
+    {
+      "id": "rota-learn-loads",
+      "skill": "rota-learn",
+      "request": "We just finished a long debugging arc. Save what we learned from it.",
+      "expect": "load"
+    },
+    {
+      "id": "rota-learn-skips",
+      "skill": "rota-learn",
+      "request": "We're committing to never using sqlite in this project. Lock it in as a hard rule.",
+      "expect": "skip",
+      "better": "rota-decide"
+    },
+    {
+      "id": "rota-orchestrate-loads",
+      "skill": "rota-orchestrate",
+      "request": "You are the orchestrator. Run a round and assign the next issues to the workers.",
+      "expect": "load"
+    },
+    {
+      "id": "rota-orchestrate-skips",
+      "skill": "rota-orchestrate",
+      "request": "Implement item 42.",
+      "expect": "skip",
+      "better": "rota-work"
+    },
+    {
+      "id": "rota-pause-loads",
+      "skill": "rota-pause",
+      "request": "Context is nearly full. Pause cleanly and write a handoff so a fresh session can continue.",
+      "expect": "load"
+    },
+    {
+      "id": "rota-pause-skips",
+      "skill": "rota-pause",
+      "request": "Ship it, open the PR.",
+      "expect": "skip",
+      "better": "rota-ship"
+    },
+    {
+      "id": "rota-plan-loads",
+      "skill": "rota-plan",
+      "request": "Plan 42 for me. It's too big to one-shot and I want alignment before code lands.",
+      "expect": "load"
+    },
+    {
+      "id": "rota-plan-skips",
+      "skill": "rota-plan",
+      "request": "Brainstorm design options for 42 before we plan anything.",
+      "expect": "skip",
+      "better": "rota-brainstorm"
+    },
+    {
+      "id": "rota-qa-loads",
+      "skill": "rota-qa",
+      "request": "Run QA on the built product before we ship it.",
+      "expect": "load"
+    },
+    {
+      "id": "rota-qa-skips",
+      "skill": "rota-qa",
+      "request": "Review this branch before merge.",
+      "expect": "skip",
+      "better": "rota-review"
+    },
+    {
+      "id": "rota-refactor-loads",
+      "skill": "rota-refactor",
+      "request": "Review the architecture of internal/cli and find refactoring opportunities.",
+      "expect": "load"
+    },
+    {
+      "id": "rota-refactor-skips",
+      "skill": "rota-refactor",
+      "request": "Rename the variable foo to bar in main.go.",
+      "expect": "skip",
+      "better": null
+    },
+    {
+      "id": "rota-release-loads",
+      "skill": "rota-release",
+      "request": "Cut a release: tag 1.4.0 and write the changelog.",
+      "expect": "load"
+    },
+    {
+      "id": "rota-release-skips",
+      "skill": "rota-release",
+      "request": "Ship it, open the PR for this branch.",
+      "expect": "skip",
+      "better": "rota-ship"
+    },
+    {
+      "id": "rota-review-loads",
+      "skill": "rota-review",
+      "request": "Look over this branch and review it before I ship.",
+      "expect": "load"
+    },
+    {
+      "id": "rota-review-skips",
+      "skill": "rota-review",
+      "request": "Run QA against the built product.",
+      "expect": "skip",
+      "better": "rota-qa"
+    },
+    {
+      "id": "rota-ship-loads",
+      "skill": "rota-ship",
+      "request": "Ship it. The work on this branch is done.",
+      "expect": "load"
+    },
+    {
+      "id": "rota-ship-skips",
+      "skill": "rota-ship",
+      "request": "Cut a release and tag 1.4.0.",
+      "expect": "skip",
+      "better": "rota-release"
+    },
+    {
+      "id": "rota-spike-loads",
+      "skill": "rota-spike",
+      "request": "Can we use SSE for this? Try it on a throwaway branch before we commit to it.",
+      "expect": "load"
+    },
+    {
+      "id": "rota-spike-skips",
+      "skill": "rota-spike",
+      "request": "Write the plan for migrating to SSE.",
+      "expect": "skip",
+      "better": "rota-plan"
+    },
+    {
+      "id": "rota-vision-loads",
+      "skill": "rota-vision",
+      "request": "Let's plan the bigger picture: create a roadmap with milestones.",
+      "expect": "load"
+    },
+    {
+      "id": "rota-vision-skips",
+      "skill": "rota-vision",
+      "request": "Plan item 42.",
+      "expect": "skip",
+      "better": "rota-plan"
+    },
+    {
+      "id": "rota-work-loads",
+      "skill": "rota-work",
+      "request": "Implement 42.",
+      "expect": "load"
+    },
+    {
+      "id": "rota-work-skips",
+      "skill": "rota-work",
+      "request": "Run a parallel round with the standing workers on the next five issues.",
+      "expect": "skip",
+      "better": "rota-orchestrate"
+    }
+  ]
+}

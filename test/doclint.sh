@@ -22,6 +22,11 @@ echo "doclint: skills and references pass the validator; the prose lint catches 
 OUT="$(cd "$REPO" && python3 "$TESTDIR/validate-skills.py" 2>&1)" || fail "validate-skills fails on the repo: $OUT"
 pass "skills and references pass the doclint"
 
+# ── the behavioural eval case files are well-formed (#279) ──────────────────
+# Offline only: no model call. Live runs are `python3 test/evals/run.py triggers|scenarios`.
+OUT="$(python3 "$TESTDIR/evals/run.py" --check 2>&1)" || fail "eval case files are malformed: $OUT"
+pass "eval case files cover every skill's triggers and 3+ scenarios for work, ship and capture"
+
 # ── the prose lint can fail ─────────────────────────────────────────────────
 # Drop a pinned phrase from a copy of the real skills and the validator names
 # the file; a deleted target file is reported, not skipped.
