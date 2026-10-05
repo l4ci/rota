@@ -450,3 +450,27 @@ func TestKnowledgeAmendRejectsEmptyBody(t *testing.T) {
 		t.Errorf("%s", ok.stdout)
 	}
 }
+
+// A deferred candidate must outlive the resolved ones: `clear --topic --title`
+// drops that pair only, and the other entries stay listed.
+func TestKnowledgeContradictionClearOnePair(t *testing.T) {
+	dir := knProject(t, false)
+	for _, title := range []string{"Alpha rule", "Beta rule"} {
+		knNew(t, dir, "", "knowledge", "contradiction", "add", "--topic", "Architecture", "--title", title, "--text", "c")
+	}
+	got := knNew(t, dir, "", "knowledge", "contradiction", "clear", "--topic", "Architecture", "--title", "Alpha rule", "--json")
+	if got.rc != 0 || !strings.Contains(got.stdout, `"cleared": 1`) {
+		t.Fatalf("clear one: rc %d, stdout %s, stderr %s", got.rc, got.stdout, got.stderr)
+	}
+	list := knNew(t, dir, "", "knowledge", "contradiction", "list").stdout
+	if strings.Contains(list, "Alpha rule") || !strings.Contains(list, "Beta rule") {
+		t.Errorf("list after clearing Alpha only = %q, want Beta rule alone", list)
+	}
+	if got := knNew(t, dir, "", "knowledge", "contradiction", "clear", "--topic", "Architecture"); got.rc != 2 {
+		t.Errorf("--topic without --title: rc %d, want 2", got.rc)
+	}
+	knNew(t, dir, "", "knowledge", "contradiction", "clear")
+	if list := knNew(t, dir, "", "knowledge", "contradiction", "list").stdout; strings.TrimSpace(list) != "" {
+		t.Errorf("bare clear left %q", list)
+	}
+}

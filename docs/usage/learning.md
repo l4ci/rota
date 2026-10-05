@@ -71,9 +71,9 @@ When `/rota-work` or `/rota-review` consumes a `confirmed` bullet and observes b
 
 1. *Demote (Recommended)*: flips the bullet to `deprecated`.
 2. *Keep, false positive*: leaves the tier unchanged.
-3. *Defer to next session*: leaves the tier unchanged.
+3. *Defer to next session*: leaves the tier unchanged and keeps the entry queued.
 
-After the last entry is handled, the whole queue is cleared, deferred entries included.
+Each demoted or kept entry is cleared from the queue as it is handled. Deferred entries stay, so the next session asks again.
 
 ### Manual lifecycle flags
 
