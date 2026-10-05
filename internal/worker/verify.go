@@ -37,7 +37,11 @@ func (e Env) Verify(ctx context.Context, root, dir string) (VerifyResult, error)
 // before it merges a branch into root, so the branch's own config cannot
 // change what verifies it.
 func (e Env) RunVerify(ctx context.Context, cmds []string, dir string) (VerifyResult, error) {
-	e = e.withDefaults()
+	return runVerifyCmds(ctx, e.withDefaults().Shell, cmds, dir)
+}
+
+// runVerifyCmds runs cmds through shell, one after another, in dir.
+func runVerifyCmds(ctx context.Context, shell func(ctx context.Context, dir, command string) (string, int), cmds []string, dir string) (VerifyResult, error) {
 	var res VerifyResult
 	if len(cmds) == 0 {
 		res.NoCommands = true
@@ -50,7 +54,7 @@ func (e Env) RunVerify(ctx context.Context, cmds []string, dir string) (VerifyRe
 	logf.Close()
 	var log strings.Builder
 	for _, c := range cmds {
-		out, code := e.Shell(ctx, dir, c)
+		out, code := shell(ctx, dir, c)
 		section := "== " + c + "\n" + out
 		log.WriteString(section)
 		appendFile(logf.Name(), section)
