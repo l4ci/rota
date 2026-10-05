@@ -127,6 +127,14 @@ func (c *CLI) detect(ctx context.Context) string {
 	return ProviderFromURL(strings.TrimRight(string(out), "\n"))
 }
 
+// CLIName is the forge CLI binary for provider: glab for "gitlab", gh otherwise.
+func CLIName(provider string) string {
+	if provider == "gitlab" {
+		return "glab"
+	}
+	return "gh"
+}
+
 // ProviderFromURL is the hv-issues-provider classification of a remote URL.
 func ProviderFromURL(url string) string {
 	if url == "" {
@@ -153,10 +161,7 @@ func ProviderFromURL(url string) string {
 // stdin is read once, and only when an argument takes it (`-`, or ending in
 // `=-` or `@-`).
 func (c *CLI) Run(ctx context.Context, args []string, stdin io.Reader) (Result, error) {
-	cli := "gh"
-	if c.Provider == "gitlab" {
-		cli = "glab"
-	}
+	cli := CLIName(c.Provider)
 	if _, err := c.lookPath(cli); err != nil {
 		return Result{}, unavailable("%s is not installed", cli)
 	}
