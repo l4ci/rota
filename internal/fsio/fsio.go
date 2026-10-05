@@ -141,7 +141,13 @@ func Locked(path string, timeout time.Duration, fn func() error) error {
 // UpdateJSON is a locked read-modify-write: it loads path (def when missing
 // or corrupt), lets mutate return the new value, and writes it atomically.
 func UpdateJSON(path string, def any, mutate func(any) (any, error)) error {
-	return Locked(path, LockTimeout, func() error {
+	return updateJSON(path, def, LockTimeout, mutate)
+}
+
+// updateJSON is UpdateJSON with an explicit lock budget, so a test can give a
+// heavily contended lock more time than production allows.
+func updateJSON(path string, def any, timeout time.Duration, mutate func(any) (any, error)) error {
+	return Locked(path, timeout, func() error {
 		v, err := mutate(LoadJSON(path, def))
 		if err != nil {
 			return err
