@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -15,6 +14,7 @@ import (
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/overlap"
 )
 
 // Gate names.
@@ -217,7 +217,7 @@ func (p MergePolicy) Covers(changed []string) (bool, []string) {
 		hit := []string{}
 		for _, f := range changed {
 			for _, e := range p.Paths {
-				if MatchPath(e, f) {
+				if overlap.MatchPath(e, f) {
 					hit = append(hit, f)
 					break
 				}
@@ -226,19 +226,4 @@ func (p MergePolicy) Covers(changed []string) (bool, []string) {
 		return len(hit) > 0, hit
 	}
 	return false, nil
-}
-
-// MatchPath reports whether the repo-relative file matches a listed entry:
-// equal to it, under it as a directory, or matching it as a path.Match glob
-// against the whole path.
-func MatchPath(entry, file string) bool {
-	entry = strings.TrimPrefix(strings.TrimSuffix(entry, "/"), "./")
-	if entry == "" {
-		return false
-	}
-	if file == entry || strings.HasPrefix(file, entry+"/") {
-		return true
-	}
-	ok, err := path.Match(entry, file)
-	return err == nil && ok
 }
