@@ -158,7 +158,7 @@ func itemClaim(fs *flag.FlagSet) RunFunc {
 			return Result{Data: jsonObj("blockedBy", "claimed", "changed", true)},
 				Refused("%s is claimed by %s", id, holder)
 		}
-		issue := be.Name() == "issues"
+		issue := be.Capabilities().Tracker
 		res := Result{Data: jsonObj("id", id, "type", typ, "claimId", *as, "changed", issue)}
 		if issue {
 			res.Text = fmt.Sprintf("claimed %s as %s", id, *as)

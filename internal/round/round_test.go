@@ -368,24 +368,12 @@ func TestIssueOfAndPRNumber(t *testing.T) {
 
 func TestOpenEscalationsAreReported(t *testing.T) {
 	root, e, _ := fixture(t)
-	esc := func(id, slot, status, deadline string) *jsonx.Object {
-		o := jsonx.NewObject()
-		o.Set("id", id)
-		o.Set("kind", "issue")
-		o.Set("number", 56)
-		o.Set("slot", slot)
-		o.Set("title", "q "+id)
-		o.Set("commentId", "1")
-		o.Set("sentAt", "2026-10-03T10:00:00Z")
-		if deadline != "" {
-			o.Set("deadline", deadline)
-		}
-		o.Set("notified", true)
-		o.Set("status", status)
-		return o
+	esc := func(id, slot, status, deadline string) worker.Escalation {
+		return worker.Escalation{ID: id, Kind: "issue", Number: 56, Slot: slot, Title: "q " + id, CommentID: "1",
+			SentAt: "2026-10-03T10:00:00Z", Deadline: deadline, Notified: true, Status: status}
 	}
-	if err := worker.UpdateEscalations(root, func([]any) []any {
-		return []any{
+	if err := worker.UpdateEscalations(root, func([]worker.Escalation) []worker.Escalation {
+		return []worker.Escalation{
 			esc("e1", "kit", "answered", ""),
 			esc("e2", "kit", "pending", "2026-10-03T11:00:00Z"),
 			esc("e3", "", "pending", ""),

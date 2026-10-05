@@ -10,6 +10,7 @@ import (
 
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/rotatree"
 )
 
 var (
@@ -97,7 +98,7 @@ func Remove(root, name string) (Repo, error) {
 // A registry that exists but is not a JSON object is an error rather than
 // something to overwrite.
 func edit(root string, fn func([]any) []any) error {
-	path := filepath.Join(root, ".rota", "repos.json")
+	path := rotatree.Repos(root)
 	reg := jsonx.NewObject()
 	if _, err := os.Stat(path); err == nil {
 		o, ok := fsio.LoadJSON(path, nil).(*jsonx.Object)

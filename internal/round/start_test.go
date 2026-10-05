@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/itembody"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -39,6 +40,9 @@ func (f *fakeBacklog) add(id, title, milestone string, closed bool, detail strin
 	f.details[id] = detail
 }
 func (f *fakeBacklog) Name() string { return "issues" }
+func (f *fakeBacklog) Capabilities() backlog.Capabilities {
+	return backlog.Capabilities{Tracker: true}
+}
 func (f *fakeBacklog) Get(ref string) (*backlog.Item, error) {
 	if it, ok := f.items[strings.ToUpper(strings.TrimPrefix(ref, "#"))]; ok {
 		return it, nil
@@ -516,5 +520,24 @@ func TestStartNumbersALeaseTakenUnnumberedByTheSameHolder(t *testing.T) {
 	var we *exitcode.Error
 	if !errors.As(err, &we) || we.Exit != exitcode.ExitRefused {
 		t.Fatalf("a non-descendant must be refused: %v", err)
+	}
+}
+
+// TestItemBodyRoundTrip pins the grammar the writer (itembody) and the
+// readiness reader share: what rota item create writes, round reads back.
+func TestItemBodyRoundTrip(t *testing.T) {
+	body := []byte("## Goal\nx\n\n### Depends on is not a dependency here\n")
+	body = itembody.AppendDependsOn(body, []string{"#57", "B07"})
+	body = itembody.AppendFiles(body, []string{"internal/cli/item.go", "internal/new/*.go"})
+	refs, bad := Dependencies(string(body))
+	if !reflect.DeepEqual(refs, []string{"57", "B07"}) || bad != nil {
+		t.Errorf("depends read back %v %v", refs, bad)
+	}
+	if !itembody.HasDependsOn(body) {
+		t.Error("HasDependsOn misses the written heading")
+	}
+	got := Footprint(string(body), tracked, nil)
+	if !reflect.DeepEqual(got, []string{"internal/cli/item.go", "internal/new/*.go"}) {
+		t.Errorf("files read back %v", got)
 	}
 }

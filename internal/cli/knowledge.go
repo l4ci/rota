@@ -30,7 +30,7 @@ func knowledgeCommands() *Command {
 		{Name: "contradiction", Summary: "pending-contradiction queue", Subs: []*Command{
 			{Name: "add", Summary: "queue a contradiction candidate", Verb: knContraAdd},
 			{Name: "list", Summary: "list the queue", Verb: noFlags(knContraList)},
-			{Name: "clear", Summary: "empty the queue", Verb: noFlags(knContraClear)},
+			{Name: "clear", Summary: "empty the queue, or drop one pair", Verb: knContraClear},
 			{Name: "has", Summary: "exit 0 when the pair is queued", Verb: knContraHas},
 		}},
 	}}
@@ -468,19 +468,31 @@ func knContraList(c *Ctx, args []string) (Result, error) {
 	return Result{Data: knObj("items", items), Text: strings.Join(lines, "\n")}, nil
 }
 
-func knContraClear(c *Ctx, args []string) (Result, error) {
-	if err := knNoArgs(args); err != nil {
-		return Result{}, err
+func knContraClear(fs *flag.FlagSet) RunFunc {
+	topic := fs.String("topic", "", "clear only this `topic` (with --title)")
+	title := fs.String("title", "", "clear only this bullet `title` (with --topic)")
+	return func(c *Ctx, args []string) (Result, error) {
+		if err := knNoArgs(args); err != nil {
+			return Result{}, err
+		}
+		if (*topic == "") != (*title == "") {
+			return Result{}, Usage("--topic and --title go together")
+		}
+		st, _, err := knStore(c)
+		if err != nil {
+			return Result{}, err
+		}
+		var n int
+		if *topic == "" {
+			n, err = st.ClearContradictions()
+		} else {
+			n, err = st.ClearContradiction(*topic, *title)
+		}
+		if err != nil {
+			return knFail(err)
+		}
+		return Result{Data: knObj("cleared", n, "changed", n > 0), Text: fmt.Sprintf("cleared %d", n)}, nil
 	}
-	st, _, err := knStore(c)
-	if err != nil {
-		return Result{}, err
-	}
-	n, err := st.ClearContradictions()
-	if err != nil {
-		return knFail(err)
-	}
-	return Result{Data: knObj("cleared", n, "changed", n > 0), Text: fmt.Sprintf("cleared %d", n)}, nil
 }
 
 func knContraHas(fs *flag.FlagSet) RunFunc {

@@ -14,6 +14,7 @@ import (
 	"github.com/l4ci/rota/internal/issues"
 	"github.com/l4ci/rota/internal/migrate"
 	"github.com/l4ci/rota/internal/repos"
+	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
@@ -56,7 +57,7 @@ func issuesScope(c *Ctx) (root, dir string, env issues.Env, err error) {
 			}
 		}
 	}
-	env = issues.Env{Config: config.Load(filepath.Join(root, ".rota", "config.json")), Opts: c.deps().TrackerOptions}
+	env = issues.Env{Config: config.Load(rotatree.Config(root)), Opts: c.deps().TrackerOptions}
 	return
 }
 
@@ -137,7 +138,7 @@ func issuesLabel(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		auto, _ := config.Value(config.Load(filepath.Join(root, ".rota", "config.json")), "issues.autoCreateLabel")
+		auto, _ := config.Value(config.Load(rotatree.Config(root)), "issues.autoCreateLabel")
 		changed, err := issues.Label(c.Context(), env, dir, number, name, action == "add", auto != false && auto != nil)
 		if err != nil {
 			return Result{}, issuesErr(err)
@@ -163,7 +164,7 @@ func issuesImported(fs *flag.FlagSet) RunFunc {
 		entries := backlog.ScanImported(root, *forRepo)
 		if *openOnly {
 			ctx := c.Context()
-			env := issues.Env{Config: config.Load(filepath.Join(root, ".rota", "config.json")), Opts: c.deps().TrackerOptions}
+			env := issues.Env{Config: config.Load(rotatree.Config(root)), Opts: c.deps().TrackerOptions}
 			paths := repos.Paths(root)
 			var kept []backlog.Imported
 			for _, e := range entries {
@@ -245,7 +246,7 @@ func migrateIssues(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		cfg := config.Load(filepath.Join(root, ".rota", "config.json"))
+		cfg := config.Load(rotatree.Config(root))
 		// Notices are kept until the run's outcome is known: a failure answers
 		// with its error alone, so they go to stderr only.
 		var notices []string

@@ -9,10 +9,7 @@ Quick-capture bugs, features, and tasks with just enough context to act on them 
 
 ## Step 1 — Task list
 
-Track these phases with the host's task tool if it has one.
-
-- **Capture:** mode / dispatch, audit code state (milestone specs only), classify, dedupe, create, report.
-- **Remove (`--remove`):** resolve IDs, preview, de-tag upstream issues, confirm, apply.
+Track the steps below with the host's task tool if it has one.
 
 ## Step 1.5 — Mode Dispatch
 
