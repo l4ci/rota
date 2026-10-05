@@ -91,6 +91,15 @@ old: hv-review-scaffolding [--repo <repo>] <base> <branch>
 shim: passes `--base`, else `hv-base-branch` (else `main`), and `<branch>`, else the current branch, as the old two positionals. Each stdout line `<file>:<line>:<text>` becomes one finding; empty output gives `{"findings": []}`.
 note: findings are added diff lines matching `Task N`, `in flight`, `placeholder`, `added later` or `not yet wired`. Finding nothing is exit 0, as before.
 
+### rota review package
+rota review package [<branch>] [--base <ref>] [--since <sha>]
+repo: scoped
+data: {"path": string, "files": number, "bytes": number}
+exit: 2 at an umbrella root without --repo; 3 when the branch, base or `--since` commit does not exist, when the range is empty, when `--since` is not an ancestor of the branch, or when the branch and base share no history; 1 when the branch is the resolved base; 5 when git fails
+old: none (new verb)
+note: writes `<project root>/.rota/review/<branch>.md` (gitignored; `/` in the branch becomes `-`) with the commits, `git diff --stat` and `git diff -U10`, and prints the absolute path. The file is rewritten on every call.
+note: the base need not be an ancestor of the branch tip: the diff is `base...branch`, so a base that moved on since the fork is fine. Only unrelated histories fail. `--since` is a point on the branch and must be an ancestor; the range is then `since..branch`.
+
 ### rota review queue
 rota review queue
 repo: scoped

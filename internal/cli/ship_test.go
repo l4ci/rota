@@ -167,6 +167,13 @@ func TestShipBody(t *testing.T) {
 			t.Errorf("body lacks %q:\n%s", want, body)
 		}
 	}
+	if o := trRun(t, work, "", "proof", "add", "B70", "--check", "unit", "--result", "PASS", "--evidence", "ok", "--sha", "abc"); o.code != 0 {
+		t.Fatalf("proof add: %d %s", o.code, o.stderr)
+	}
+	pb := trRun(t, work, "", "ship", "body", "rota/ship-demo")
+	if want := "## Evidence\n\n**[B70]**\n\n| Check | Result | Evidence |\n| --- | --- | --- |\n| unit | PASS | ok |\n"; !strings.Contains(pb.stdout, want) {
+		t.Errorf("evidence:\n%s", pb.stdout)
+	}
 	shipSame(t, "no items", work, "", 0, "ship", "body", "rota/plain")
 	gitT(t, work, "checkout", "-q", "rota/plain")
 	shipSame(t, "current branch", work, "", 0, "ship", "body")

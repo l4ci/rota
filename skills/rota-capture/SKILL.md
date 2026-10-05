@@ -53,11 +53,17 @@ Filtered titles never reach the backlog.
 
 ## Step 3 — Gather Context
 
-Gather **just enough context** to make each item actionable later. Ask 2 to 4 quick questions total across all items, not per item. Skip anything the user already answered; a detailed input may need none. Pick from:
+Gather **just enough context** to make each item actionable later. Answer from the code first, then ask what it can't settle.
+
+**Code first.** Before asking anything, resolve what the code can answer: grep the filenames, commands and skill names the user mentioned, and run `rota map query <name>` for a matching subsystem. That settles the component or area, current behavior, and the error path or message text. Pre-fill those facts into the item; never ask the user for them. Read only enough to answer; capture is not an investigation.
+
+**Then ask**, 2 to 4 quick questions total across all items, not per item, only for what the code can't settle (intent, expected behavior, trigger, urgency). Skip anything the user already answered; a detailed input may need none. Every question carries a recommended answer: mark one option `(Recommended)` or state the default in the question, so the user only confirms or redirects. Pick from:
 
 - **Bugs:** expected vs. actual, trigger steps, every time or intermittent, which view/component, error output.
 - **Features:** user-facing behavior, which part of the app, existing workaround, what triggers the need.
 - **Tasks:** goal, area of the codebase, deadline or dependency, relevant context (error output, PR link).
+
+The cap stays at 4. Code reads supply the recommended answers and never add questions.
 
 ## Step 4 — Assign Priority / Size
 
@@ -101,7 +107,7 @@ When an item's input would bloat the entry beyond about 3 sentences (stack trace
 
 ## Step 6 — Create All Items
 
-**Consult the Glossary.** Scan the `## Glossary` topic of `.rota/KNOWLEDGE.md` (`rota glossary read <term>`). If the user's phrasing maps to a canonical term or alias, use the canonical name. If the capture introduces a new domain concept the user names, suggest `/rota-learn --term <name>` afterwards; never auto-invoke.
+**Consult the Glossary.** Scan the `## Glossary` topic of `.rota/KNOWLEDGE.md` (`rota glossary read <term>`). If the user's phrasing maps to a canonical term or alias, write the canonical name silently (no question) and add one line to the report: `Used canonical term "<term>" for "<phrasing>".` Spend a question only when one phrase maps to two glossary entries; ask which, with the likelier entry `(Recommended)`, and count it against the Step 3 cap. If the capture introduces a new domain concept the user names, suggest `/rota-learn --term <name>` afterwards; never auto-invoke.
 
 Create each item in one command; it prints the new ID:
 

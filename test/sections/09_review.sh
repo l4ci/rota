@@ -43,5 +43,23 @@ EOF
   [ $rc -eq 3 ] || fail "scaffolding on an unknown branch should exit 3, got $rc"
 
   pass "review scaffolding flags scaffolding + handles empty diff"
+
+  # review package: diff goes to a file, not the caller's context
+  git checkout -q feat
+  OUT=$(hvj review package feat --base main)
+  PKG=$(echo "$OUT" | jget data.path)
+  [ -f "$PKG" ] || fail "review package wrote no file: $OUT"
+  [ "$(echo "$OUT" | jget data.files)" = "$(git diff --name-only main...feat | wc -l | tr -d ' ')" ] || fail "review package file count differs from git: $OUT"
+  [ "$(echo "$OUT" | jget data.bytes)" = "$(wc -c < "$PKG" | tr -d ' ')" ] || fail "review package bytes differ from the file: $OUT"
+  grep -q "Task 7" "$PKG" && grep -q "feat: add b.sh" "$PKG" || fail "review package lacks the diff or the commit: $(cat "$PKG")"
+  rc=0; hvj review package feat --base feat >/dev/null 2>&1 || rc=$?
+  [ $rc -eq 3 ] || fail "package against itself (empty range) should exit 3, got $rc"
+  git branch -q empty main
+  rc=0; hvj review package empty --base main >/dev/null 2>&1 || rc=$?
+  [ $rc -eq 3 ] || fail "package of an empty range should exit 3, got $rc"
+  rc=0; hvj review package feat --base main --since feat >/dev/null 2>&1 || rc=$?
+  [ $rc -eq 3 ] || fail "package --since the tip (empty range) should exit 3, got $rc"
+  [ "$(hvj review package feat --base main --since main | jget data.files)" = "$(git diff --name-only main...feat | wc -l | tr -d ' ')" ] || fail "package --since main should cover the whole branch"
+  pass "review package writes commits, stat and diff to a file; empty range exits 3"
 )
 trap 'rm -rf "$TMP"' EXIT

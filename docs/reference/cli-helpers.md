@@ -448,13 +448,14 @@ Verdicts are `PASS`, `CONCERNS` or `FAIL` (`qa` also takes `INFRA-FAIL`). They l
 | `rota review scope [<branch>]` | commits, files, item IDs and origin entries of a branch |
 | `rota review brief [<branch>]` | fresh-eyes second-opinion brief for a branch |
 | `rota review scaffolding [<branch>] [--base <branch>]` | added diff lines that look like leftover task scaffolding |
+| `rota review package [<branch>] [--base <ref>] [--since <sha>]` | write a branch's commits, `--stat` and full diff (`-U10`) to `.rota/review/<branch>.md` and print the path; `--since` packages only the commits after a sha |
 | `rota review queue` | open issues waiting for review |
 
 ## `rota ship`
 
 | Usage | What it does |
 |---|---|
-| `rota ship body [<branch>]` | build a PR body from a branch's commits |
+| `rota ship body [<branch>]` | build a PR body from a branch's commits: summary, items resolved, and an evidence table from the items' proof rows |
 | `rota ship pr <branch> --title <text> --body-file <path\|-> [--items <ID>[,<ID>…]]` | push a branch and open a PR or MR |
 | `rota ship merge <branch> --body-file <path\|-> [--confirm --confirm-note <answer>]` | merge a branch into the base branch with --no-ff; exit 4 when `ship.mergeApproval` needs a human |
 | `rota ship pr-merge <pr> [--items <ID>[,<ID>…]] [--confirm --confirm-note <answer>]` | merge a PR in issue mode; exit 4 when `ship.mergeApproval` needs a human |

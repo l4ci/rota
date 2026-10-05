@@ -73,13 +73,13 @@ Carry KNOWLEDGE bullets into the reviewer brief. Pass DECISIONS entries under a 
 
 ## Step 5 — Capture the Diff
 
-The reviewer needs concrete diff content, not just file names. For each touched file (up to 8; with 9 or more, ask the user which to focus on):
+The reviewer needs concrete diff content, not just file names. Write it to a file rather than into your own context:
 
 ```bash
-git diff <base>...<branch> -- <file>
+rota review package <branch> --base <base> [--since <sha>] --json
 ```
 
-**Issue all the per-file `git diff` calls in parallel** — they're independent and serial calls add up fast on bigger branches. Keep a per-file diff map in memory for the reviewer brief.
+`data.path` is the file (commits, `--stat` and the full `-U10` diff); `data.files` and `data.bytes` size it. There is no file cap: the reviewer reads the file, you don't. Pass `--since <sha>` on a re-review to package only the commits after the sha the last review covered. Exit 3 means an empty range or a `--since` that is not on the branch: report it and stop.
 
 ## Step 6 — Pre-flight Scaffolding Scan
 
@@ -124,11 +124,7 @@ Rows are verification already run (check, result, sha, evidence). Do NOT re-run 
 **Possible stale scaffolding (deterministic pre-flight grep):**
 <file:line>: <matched line text>
 
-**Diff by file:**
-<file>
-```diff
-<diff content>
-```
+**Diff:** read `<data.path from Step 5>` (commits, `--stat`, full diff with context). Do not ask for the diff to be pasted.
 
 **Evaluate on the rubric below. For each item, return PASS / CONCERN / FAIL with evidence.**
 
