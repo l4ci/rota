@@ -3,6 +3,7 @@ package issues
 import (
 	"context"
 	"errors"
+	"github.com/l4ci/rota/internal/jsonx"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -44,7 +45,7 @@ func (f *forge) env(t *testing.T) Env {
 		return nil, nil, 0, nil
 	}
 	look := func(n string) (string, error) { return "/fake/" + n, nil }
-	return Env{Settings: tracker.SettingsFromConfig(nil), Opts: []tracker.Option{tracker.WithExec(exe, look)}}
+	return Env{Opts: []tracker.Option{tracker.WithExec(exe, look)}}
 }
 
 func (f *forge) did(prefix string) bool {
@@ -158,7 +159,11 @@ func TestProviderFallsBackToConfig(t *testing.T) {
 	} {
 		f := &forge{origin: c.origin}
 		env := f.env(t)
-		env.Settings.Provider = c.cfg
+		iss := jsonx.NewObject()
+		iss.Set("provider", c.cfg)
+		root := jsonx.NewObject()
+		root.Set("issues", iss)
+		env.Config = root
 		if got := Provider(ctx, env, ""); got != c.want {
 			t.Errorf("origin %q config %q: %s, want %s", c.origin, c.cfg, got, c.want)
 		}
