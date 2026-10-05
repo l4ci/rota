@@ -13,7 +13,6 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
-	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -26,7 +25,7 @@ import (
 // worktree create`, whatever the config says), else tmux.
 // A host or forge that cannot be built or reached is left nil: the verbs
 // report it as unavailable instead of failing.
-func defaultRoundEnv(ctx context.Context, root string, opts []tracker.Option) round.Env {
+func defaultRoundEnv(ctx context.Context, root string, d *Deps) round.Env {
 	cfg := config.Load(filepath.Join(root, ".rota", "config.json"))
 	e := round.Env{Git: worker.ExecGit, Base: "main"}
 	if b, ok, err := (git.Repo{Dir: root}).Base(ctx, ""); err == nil && ok {
@@ -49,7 +48,7 @@ func defaultRoundEnv(ctx context.Context, root string, opts []tracker.Option) ro
 	if set, err := roundcfg.Load(root); err == nil {
 		e.StallMinutes = set.StallMinutes
 	}
-	f, err := tracker.New(ctx, tracker.SettingsFromConfig(cfg), "", root, opts...)
+	f, err := d.forge(ctx, cfg, "", root)
 	if err != nil {
 		e.ForgeErr = err.Error()
 	} else {

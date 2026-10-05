@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
@@ -291,5 +292,33 @@ func TestTrackerSuggestUpstream(t *testing.T) {
 		if o.code != c.code || !strings.Contains(o.stderr, c.has) {
 			t.Errorf("%s: exit %d, stderr %q; want %d with %q", c.name, o.code, o.stderr, c.code, c.has)
 		}
+	}
+}
+
+// Deps.NewTracker and MigrateTracker build through the same recipe, so a fake
+// executor in TrackerOptions reaches both.
+func TestDepsTrackersUseTrackerOptions(t *testing.T) {
+	var calls int
+	x := func(context.Context, string, string, []string, []byte) ([]byte, []byte, int, error) {
+		calls++
+		return []byte("[]"), nil, 0, nil
+	}
+	d := defaultDeps()
+	d.TrackerOptions = []tracker.Option{tracker.WithExec(x, func(n string) (string, error) { return "/fake/" + n, nil })}
+	cfg, _ := jsonx.Decode([]byte(`{"issues":{"provider":"github"}}`))
+	tr, err := d.NewTracker(context.Background(), t.TempDir(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tr.List(context.Background(), tracker.ListFilter{}); err != nil || calls == 0 {
+		t.Fatalf("NewTracker ignored TrackerOptions: calls=%d err=%v", calls, err)
+	}
+	calls = 0
+	mt, err := d.MigrateTracker(context.Background(), t.TempDir(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := mt.List(context.Background(), tracker.ListFilter{}); err != nil || calls == 0 {
+		t.Fatalf("MigrateTracker ignored TrackerOptions: calls=%d err=%v", calls, err)
 	}
 }
