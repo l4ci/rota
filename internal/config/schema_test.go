@@ -89,12 +89,18 @@ func TestSchemaMatchesPython(t *testing.T) {
 		cases = append(cases, schemaCase{string(raw), key})
 	}
 	// The goldens were recorded over CONFIG_KEYS, which still had
-	// loop.webResearch (removed in #70). Generate the same random cases from
-	// the old table so the recorded inputs line up, and skip that key.
-	py := append(append(append([]Key{}, Keys[:29]...), Key{Name: "loop.webResearch"}), Keys[29:PythonKeys]...)
+	// debug.competingHypotheses (removed) and loop.webResearch (removed
+	// in #70). Generate the same random cases from the old table so the
+	// recorded inputs line up, and skip those keys.
+	var py []Key
+	py = append(py, Keys[:20]...)
+	py = append(py, Key{Name: "debug.competingHypotheses"})
+	py = append(py, Keys[20:28]...)
+	py = append(py, Key{Name: "loop.webResearch"})
+	py = append(py, Keys[28:PythonKeys]...)
 	add = func(add func(map[string]any, string)) func(map[string]any, string) {
 		return func(tree map[string]any, key string) {
-			if key != "loop.webResearch" {
+			if key != "loop.webResearch" && key != "debug.competingHypotheses" {
 				add(tree, key)
 			}
 		}

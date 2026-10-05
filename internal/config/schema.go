@@ -63,7 +63,6 @@ var Keys = []Key{
 	{"qa.gate", "advisory", true},
 	{"qa.afterWork", false, true},
 	{"autonomy.level", "off", true},
-	{"debug.competingHypotheses", false, true},
 	{"docs.path", "docs", true},
 	{"docs.autoCreate", false, true},
 	{"docs.afterWork", false, true},
@@ -148,7 +147,7 @@ var Keys = []Key{
 }
 
 // PythonKeys is how many leading rows of Keys are CONFIG_KEYS.
-const PythonKeys = 53
+const PythonKeys = 52
 
 // backlogBackends are the accepted values of backlog.backend.
 var backlogBackends = []string{"file", "issues"}

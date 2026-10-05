@@ -28,9 +28,6 @@ Default config:
   "autonomy": {
     "level": "off"
   },
-  "debug": {
-    "competingHypotheses": false
-  },
   "docs": {
     "path": "docs",
     "autoCreate": false
@@ -126,7 +123,7 @@ Example for a Python project using ruff + pytest:
 }
 ```
 
-Commands run from the repo root (or, in umbrella mode, the sub-repo's root), one after the other. To use several cores, put the concurrency in one command: this repo sets the list to `["bash test/gate.sh"]`, which runs validate, `go vet`, `go test -race` and the smoke suite together (smoke split into [`gate.smokeShards`](#gatesmokeshards) shards, about 160 s against 590 s serial). Set via `rota config set` (which parses argv[2] as JSON):
+Commands run from the repo root (or, in umbrella mode, the sub-repo's root), one after the other. To use several cores, put the concurrency in one command: this repo sets the list to `["bash test/gate.sh"]`, which runs validate, `go vet`, `go test -race` and the smoke suite together (smoke split into [`gate.smokeShards`](#gatesmokeshards) shards, the sharded gate takes about 2–3 minutes, serial smoke is several times slower). Set via `rota config set` (which parses argv[2] as JSON):
 
 ```bash
 rota config set refactor.verifyCommands '["uv run ruff check .","uv run ruff format --check ."]'
@@ -317,17 +314,6 @@ Controls whether `/rota-work` invokes `/rota-qa run` post-cycle when touched fil
 | `true` | After `/rota-work` finishes a cycle, if any touched file matches a `Watch globs` entry in a `.rota/qa/<target>.md` strategy, `/rota-qa run` fires scoped to that target. Verdict is advisory at this stage (the cycle is already complete) but findings surface for the next session. |
 
 Skip turning this on until you have stable strategies and want continuous coverage on every cycle. Otherwise the noise of running runners on every commit outweighs the value.
-
-## debug.competingHypotheses
-
-Controls whether [`/rota-debug`](debugging.md) Step 6 dispatches a single hypothesis agent or fans out three parallel agents from different angles (recent-changes, data-shape, concurrency-lifecycle). The orchestrator deduplicates the ranked outputs and picks the strongest hypothesis regardless of which agent surfaced it.
-
-| Value | Behavior |
-|-------|----------|
-| `false` (default) | Single hypothesis agent. Cheaper and faster; fine for most bugs where one angle is obviously primary. |
-| `true` | Three parallel hypothesis agents in one tool-call batch. Better diversity on hard bugs where the right framing isn't obvious upfront, at ~3× orchestrator cost on every `/rota-debug` run. Step 6 latency stays roughly the same since the agents run concurrently. |
-
-Flip on when you have a class of bugs that consistently take multiple cycles to land. The diversity of framings makes the difference. Keep off when most bugs are single-cause and you're paying for cycles you don't need.
 
 ## autonomy.level
 

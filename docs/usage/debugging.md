@@ -84,8 +84,3 @@ Suggested next steps from the hard stop:
 
 Further attempts are refused until a human runs `rota debug reset <ID> --reason "<why>"`, a manual gate that asks first. The branch and `status.json` entry stay intact so you can resume. The Iron Law is a hard stop at every autonomy level; the user re-engages by hand. A successful fix clears the attempt log.
 
-## Competing hypotheses
-
-`debug.competingHypotheses` (default `false`) is still an accepted config key, but the current `/rota-debug` skill does not read it. It always works one hypothesis at a time.
-
-See [configuration](configuration.md) for how to set this option.

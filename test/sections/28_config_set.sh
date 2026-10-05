@@ -108,7 +108,6 @@ json.dump({
     "ship": {"review": True, "secondOpinion": False, "qa": False},
     "qa": {"gate": "advisory", "afterWork": False},
     "autonomy": {"level": "off"},
-    "debug": {"competingHypotheses": False},
     "docs": {"path": "docs", "autoCreate": False, "afterWork": False},
     "git": {"baseBranch": ""},
     "umbrella": {"enabled": False},
