@@ -174,7 +174,7 @@ exit codes and repo scope: [verb contract](../design/contract/README.md).
 | `rota knowledge tier list [--tier provisional\|confirmed\|deprecated]` | list tracked bullets |
 | `rota knowledge contradiction add --topic <T> --title <S> --text <text>` | queue a contradiction candidate |
 | `rota knowledge contradiction list` | list the queue |
-| `rota knowledge contradiction clear` | empty the queue |
+| `rota knowledge contradiction clear [--topic <T> --title <S>]` | empty the queue, or drop one pair |
 | `rota knowledge contradiction has --topic <T> --title <S>` | exit 0 when the pair is queued |
 
 ## `rota decisions`
