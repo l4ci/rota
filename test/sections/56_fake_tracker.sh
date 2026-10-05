@@ -147,7 +147,7 @@ py() { printf '%s' "$1" | python3 -c "import json,sys; d=json.load(sys.stdin); s
   [ "$(glab mr create --title "MR one" --description D --source-branch feat/y --target-branch main --yes)" = "https://gitlab.com/fake/repo/-/merge_requests/1" ] \
     || fail "glab mr create should print the URL with its own counter"
   py "$(glab mr list --output json)" \
-    "d==[{'iid':1,'title':'MR one','description':'D','source_branch':'feat/y','target_branch':'main','state':'opened','web_url':'https://gitlab.com/fake/repo/-/merge_requests/1'}]" \
+    "d==[{'iid':1,'title':'MR one','description':'D','source_branch':'feat/y','target_branch':'main','sha':'58821b0ea283839e92c7ca4034e6e41f9ae1e942','state':'opened','web_url':'https://gitlab.com/fake/repo/-/merge_requests/1'}]" \
     || fail "glab mr list shape"
   py "$(glab mr view 1 --output json)" "d['source_branch']=='feat/y'" || fail "glab mr view"
   pass "fake gh pr / glab mr: create, list, view"
