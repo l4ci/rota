@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# The full merge gate, run concurrently: validate-skills, go vet, go test -race
-# and the smoke suite split into N shards, all at once (#82). One serial gate
+# The full merge gate, run concurrently: validate-skills, the doc lints
+# (test/doclint.sh), go vet, go test -race and the smoke suite split into N shards, all at once (#82). One serial gate
 # is ~589 s; this is ~160 s on 8 cores (docs/design/round-speed.md).
 #
 # Usage: bash test/gate.sh [--smoke-only] [--random] [--shards N]
-#   --smoke-only  run only the sharded smoke suite (the CI shard guard)
+#   --smoke-only  run only the sharded smoke suite (the CI shard guard); skips
+#                 the doc lints too: they run in the Skill Format workflow
 #   --random      deal the sections to shards at random, so a section
 #                 that quietly needs another's state fails (shard-safety guard)
 #   --shards N    shard count; default ROTA_SMOKE_SHARDS, else config
@@ -113,6 +114,7 @@ PY
 START=$SECONDS
 if [ "$SMOKE_ONLY" = 0 ]; then
   launch validate python3 test/validate-skills.py
+  launch doclint bash test/doclint.sh
   launch vet go vet ./...
   launch gotest go test -race -timeout 30m ./...
 fi
