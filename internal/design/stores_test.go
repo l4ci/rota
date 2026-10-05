@@ -76,10 +76,38 @@ func TestIDDigitsByStore(t *testing.T) {
 	}{
 		{"files", "B7", 2}, {"files", "B07", 0}, {"files", "B1234", 0},
 		{"notes", "B7", 0}, {"notes", "B07", 0},
-		{"files", "S01", 2}, {"notes", "S01", 2}, {"files", "7", 2}, {"notes", "7", 2}, {"notes", "../x", 2},
+		{"files", "S01", 2}, {"notes", "S01", 2}, {"files", "7", 2}, {"files", "#7", 2}, {"files", "#B07", 2},
+		{"notes", "7", 0}, {"notes", "#233", 0}, {"notes", "#", 2}, {"notes", "#B7", 2}, {"notes", "../x", 2},
 	} {
 		if exit := exitOf(CheckID(st[c.store].st, c.id)); exit != c.exit {
 			t.Errorf("%s %q: exit %d, want %d", c.store, c.id, exit, c.exit)
 		}
+	}
+}
+
+// The issue backend takes the number as N or #N; the stub never carries the
+// "#", which would turn the front-matter id into a YAML comment.
+func TestNotesAcceptIssueNumbers(t *testing.T) {
+	for _, id := range []string{"233", "#233"} {
+		notes := artifacttest.NewNotes()
+		st := NewNotes(func() (artifact.Notes, error) { return notes, nil })
+		if err := Add(st, id, "T"); err != nil {
+			t.Fatalf("add %s: %v", id, err)
+		}
+		got, err := Show(st, id)
+		if err != nil || !strings.HasPrefix(got, "---\nid: 233\ntitle: T\n") {
+			t.Errorf("show %s: %q %v", id, got, err)
+		}
+	}
+}
+
+// A wrong ID names the shape the configured backend expects.
+func TestCheckIDErrorNamesBackendForm(t *testing.T) {
+	st := stores(t)
+	if err := CheckID(st["files"].st, "233x"); err == nil || !strings.Contains(err.Error(), `\d{2,}`) {
+		t.Errorf("files error: %v", err)
+	}
+	if err := CheckID(st["notes"].st, "233x"); err == nil || !strings.Contains(err.Error(), "#N") {
+		t.Errorf("notes error: %v", err)
 	}
 }
