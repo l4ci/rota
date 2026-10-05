@@ -10,6 +10,7 @@ import (
 
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 // layoutRig is a herdr with one project: the orchestrator's pane p0 in tab T,
@@ -205,5 +206,26 @@ func TestLayoutRefusesADirectoryWithoutRota(t *testing.T) {
 	code, _, _ := rotaRunWith(t, deps, "--json", "layout", "--project", t.TempDir())
 	if code != ExitResolution {
 		t.Errorf("exit %d", code)
+	}
+}
+
+// #205: split and tabs are remembered on the round, so workers assigned later
+// join the grid; the bare report does not change it.
+func TestLayoutSplitAndTabsRecordOnTheRound(t *testing.T) {
+	root, _, deps := layoutProject(t, "herdr", []string{"ben"}, "ben")
+	if got := worker.LoadRegistry(root).Layout(); got != "" {
+		t.Fatalf("fresh round layout = %q", got)
+	}
+	rotaRunWith(t, deps, "--json", "layout", "split", "--project", root)
+	if got := worker.LoadRegistry(root).Layout(); got != "split" {
+		t.Errorf("after split: %q", got)
+	}
+	rotaRunWith(t, deps, "--json", "layout", "--project", root)
+	if got := worker.LoadRegistry(root).Layout(); got != "split" {
+		t.Errorf("report changed it: %q", got)
+	}
+	rotaRunWith(t, deps, "--json", "layout", "tabs", "--project", root)
+	if got := worker.LoadRegistry(root).Layout(); got != "" {
+		t.Errorf("after tabs: %q", got)
 	}
 }

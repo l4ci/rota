@@ -372,6 +372,8 @@ Previews by default. It never kills a running agent and never deletes work: a ca
 | `rota layout split [--project <dir>]` | fold the live workers into the orchestrator's tab as one grid (wide screen) |
 | `rota layout tabs [--project <dir>]` | give every worker a tab of its own again, labelled with its slot (narrow screen) |
 
+`split` and `tabs` are remembered for the round (`layout` in `.rota/workers.json`): later spawns join the grid while it is `split`. A new round starts in tabs.
+
 herdr only; a tmux or solo round is skipped. Moves live panes without restarting or typing into them, and never steals focus. See [parallel rounds](../usage/parallel-rounds.md#layout).
 
 ## `rota hook`

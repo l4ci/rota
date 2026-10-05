@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -11,7 +10,6 @@ import (
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/layout"
-	"github.com/l4ci/rota/internal/orchestrate"
 	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/repos"
 	"github.com/l4ci/rota/internal/worker"
@@ -97,8 +95,8 @@ func runLayout(c *Ctx, mode, project string) (Result, error) {
 			}
 			o.skipped = herr.Error()
 		default:
-			workers := liveWorkers(ctx, h, reg)
-			st, ok := layout.Find(panes, root, orchestrate.Label, workers)
+			workers := worker.LiveWorkers(ctx, h, reg)
+			st, ok := layout.Find(panes, root, layout.Label, workers)
 			if !ok {
 				if !explicit {
 					continue
@@ -121,10 +119,13 @@ func runLayout(c *Ctx, mode, project string) (Result, error) {
 				return Result{}, Unavailable("%s: %v", o.name, err).WithHint("some panes may have moved; rota layout shows where each is")
 			}
 			o.after, o.moves = r.After, r.Moves
+			if err := worker.Update(root, func(d *worker.Doc) { d.SetLayout(mode) }); err != nil {
+				c.Warn("%s: could not remember the layout: %v", o.name, err)
+			}
 			if r.Moves > 0 {
 				// Report where the panes are now, not where they were.
 				if now, err := h.LayoutPanes(ctx); err == nil {
-					if st, ok := layout.Find(now, root, orchestrate.Label, workers); ok {
+					if st, ok := layout.Find(now, root, layout.Label, workers); ok {
 						o.st = st
 					}
 				}
@@ -178,22 +179,6 @@ func hasHandle(reg worker.Registry) bool {
 		}
 	}
 	return false
-}
-
-// liveWorkers are the slots whose agent has a pane, in registry order. A
-// parked slot has no handle and a dead one no agent, so both are left out.
-func liveWorkers(ctx context.Context, h host.Layouter, reg worker.Registry) []layout.Worker {
-	var out []layout.Worker
-	for _, s := range reg.Slots() {
-		handle := s.PaneHandle()
-		if handle == "" {
-			continue
-		}
-		if pane := h.PaneOf(ctx, s.Name(), handle); pane != "" {
-			out = append(out, layout.Worker{Slot: s.Name(), Pane: pane})
-		}
-	}
-	return out
 }
 
 func layoutResult(c *Ctx, mode string, outs []layoutOut) (Result, error) {
