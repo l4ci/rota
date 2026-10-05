@@ -1,36 +1,19 @@
 package release
 
-import (
-	"regexp"
-	"strings"
-)
-
-var hostRe = regexp.MustCompile(`(?i)^(https?://|ssh://)?(git@)?([^:/]+)[:/].*`)
+import "github.com/l4ci/rota/internal/tracker"
 
 // Host is hv-release-detect-host: the hosting kind of an origin URL
-// (github, github-enterprise, gitlab, gitlab-self-hosted or none).
+// (github, github-enterprise, gitlab, gitlab-self-hosted or none). The forge
+// comes from tracker; only the canonical-host split is release's own.
 func Host(url string) string {
-	if url == "" {
-		return "none"
-	}
-	host := url
-	if m := hostRe.FindStringSubmatch(url); m != nil {
-		host = m[3]
-	}
-	host = strings.Map(func(r rune) rune {
-		if r >= 'A' && r <= 'Z' {
-			return r + 'a' - 'A'
-		}
-		return r
-	}, host)
-	switch {
-	case host == "github.com":
+	switch p := tracker.ProviderFromURL(url); {
+	case p == "github" && tracker.RemoteHost(url) == "github.com":
 		return "github"
-	case host == "gitlab.com":
-		return "gitlab"
-	case strings.Contains(host, "github"):
+	case p == "github":
 		return "github-enterprise"
-	case strings.Contains(host, "gitlab"):
+	case p == "gitlab" && tracker.RemoteHost(url) == "gitlab.com":
+		return "gitlab"
+	case p == "gitlab":
 		return "gitlab-self-hosted"
 	}
 	return "none"

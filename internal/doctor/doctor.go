@@ -20,6 +20,7 @@ import (
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/skills"
+	"github.com/l4ci/rota/internal/tracker"
 )
 
 // Check statuses.
@@ -219,19 +220,16 @@ func (d *runner) host() Check {
 	}
 }
 
-var forgeHost = regexp.MustCompile(`(?i)github|gitlab`)
-
 // provider is "github", "gitlab" or "": the origin host decides, and
 // issues.provider is only the fallback (as in `rota issues provider`).
 func (d *runner) provider() string {
+	origin := ""
 	if bin, ok := d.in.Look("git"); ok {
 		if r, ran := d.run(bin, []string{"remote", "get-url", "origin"}, nil); ran && r.ExitCode == 0 {
-			if m := forgeHost.FindString(r.Stdout); m != "" {
-				return strings.ToLower(m)
-			}
+			origin = strings.TrimRight(r.Stdout, "\n")
 		}
 	}
-	if p := d.in.IssuesProvider; p == "github" || p == "gitlab" {
+	if p := tracker.ProviderFromOrigin(origin, d.in.IssuesProvider); p != tracker.ProviderUnknown {
 		return p
 	}
 	return ""

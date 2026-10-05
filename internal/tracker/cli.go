@@ -89,7 +89,7 @@ func (c *CLI) resolve(ctx context.Context, want, configured string) (string, err
 		p = configured
 	}
 	if p != "github" && p != "gitlab" {
-		p = c.detect(ctx)
+		p = ProviderFromURL(c.originURL(ctx))
 	}
 	if p != "github" && p != "gitlab" {
 		return "", unavailable("cannot determine provider (set issues.provider)")
@@ -97,19 +97,50 @@ func (c *CLI) resolve(ctx context.Context, want, configured string) (string, err
 	return p, nil
 }
 
+// ProviderUnknown is the one answer for a remote naming no forge. Callers
+// pick their own policy for it: skip (doctor), fall back to github (the gate),
+// or report it (rota issues provider).
+const ProviderUnknown = "unknown"
+
 // reHost takes the hostname out of an SSH shorthand, SSH or HTTPS remote URL.
 var reHost = regexp.MustCompile(`(?i)^(https?://|ssh://)?(git@)?([^:/\n]+)[:/].*`)
 
-// detect classifies dir's origin URL as hv-issues-provider did: "github" or
-// "gitlab" when the host contains that word, else "unknown".
-func (c *CLI) detect(ctx context.Context) string {
+// RemoteHost is the lowercased hostname of a remote URL ("" for an empty one).
+func RemoteHost(url string) string {
+	host := url
+	if m := reHost.FindStringSubmatch(url); m != nil {
+		host = m[3]
+	}
+	return strings.ToLower(host)
+}
+
+// OriginURL is dir's origin remote URL, "" when git fails or has no origin.
+func OriginURL(ctx context.Context, dir string, x Exec) string {
+	c := &CLI{Dir: dir, Exec: x}
+	return c.originURL(ctx)
+}
+
+func (c *CLI) originURL(ctx context.Context) string {
 	ctx, cancel := context.WithTimeout(ctx, c.timeout())
 	defer cancel()
 	out, _, code, err := c.exec()(ctx, c.Dir, "git", []string{"remote", "get-url", "origin"}, nil)
 	if err != nil || code != 0 {
-		return "unknown"
+		return ""
 	}
-	return ProviderFromURL(strings.TrimRight(string(out), "\n"))
+	return strings.TrimRight(string(out), "\n")
+}
+
+// ProviderFromOrigin classifies origin and falls back to configured
+// (issues.provider) when origin is empty or names no forge. The origin host
+// decides, as in hv-issues-provider. ProviderUnknown when neither resolves.
+func ProviderFromOrigin(origin, configured string) string {
+	if p := ProviderFromURL(origin); p != ProviderUnknown {
+		return p
+	}
+	if configured == "github" || configured == "gitlab" {
+		return configured
+	}
+	return ProviderUnknown
 }
 
 // CLIName is the forge CLI binary for provider: glab for "gitlab", gh otherwise.
@@ -120,23 +151,17 @@ func CLIName(provider string) string {
 	return "gh"
 }
 
-// ProviderFromURL is the hv-issues-provider classification of a remote URL.
+// ProviderFromURL classifies a remote URL as hv-issues-provider did: "github"
+// or "gitlab" when the host contains that word, else ProviderUnknown.
 func ProviderFromURL(url string) string {
-	if url == "" {
-		return "unknown"
-	}
-	host := url
-	if m := reHost.FindStringSubmatch(url); m != nil {
-		host = m[3]
-	}
-	host = strings.ToLower(host)
+	host := RemoteHost(url)
 	switch {
 	case strings.Contains(host, "github"):
 		return "github"
 	case strings.Contains(host, "gitlab"):
 		return "gitlab"
 	}
-	return "unknown"
+	return ProviderUnknown
 }
 
 // Run makes one forge CLI call. A non-zero CLI exit is not an error: it comes

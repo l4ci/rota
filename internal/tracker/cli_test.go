@@ -310,6 +310,25 @@ func TestProviderFromURL(t *testing.T) {
 	}
 }
 
+// TestProviderFromOrigin pins the one resolver: origin decides, configured is
+// only the fallback, and ProviderUnknown is the single unknown answer.
+func TestProviderFromOrigin(t *testing.T) {
+	for _, c := range []struct{ origin, configured, want string }{
+		{"git@github.com:o/r.git", "", "github"},
+		{"https://gitlab.com/o/r", "github", "gitlab"},
+		{"https://gitlab.corp.example/o/r", "", "gitlab"},
+		{"https://github.example.com/o/r", "", "github"},
+		{"https://git.example.com/o/r", "gitlab", "gitlab"},
+		{"", "github", "github"},
+		{"https://git.example.com/o/r", "bogus", "unknown"},
+		{"", "", "unknown"},
+	} {
+		if got := ProviderFromOrigin(c.origin, c.configured); got != c.want {
+			t.Errorf("ProviderFromOrigin(%q, %q) = %q, want %q", c.origin, c.configured, got, c.want)
+		}
+	}
+}
+
 func TestSettingsFromConfig(t *testing.T) {
 	parse := func(s string) any {
 		v, err := jsonx.Decode([]byte(s))
