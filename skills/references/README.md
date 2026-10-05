@@ -13,6 +13,7 @@ See KNOWLEDGE.md "Skill Authoring: Prose & References" for the conventions that 
 | [`design-exploration.md`](design-exploration.md) | Shared five-step spine for skills that negotiate what to build before downstream skills capture how. | `/rota-brainstorm`, `/rota-vision` |
 | [`detail-files.md`](detail-files.md) | Detail-file template used when an item's input exceeds 3 sentences. | `/rota-capture` |
 | [`docs-conventions.md`](docs-conventions.md) | Conventions for content under `docs/` (registration sites, audience split). | `/rota-ship` (Docs Mode) |
+| [`grilling.md`](grilling.md) | Frontier-round questioning with a recommended answer per question, code before user, edge-case scenarios, glossary conflicts, explicit stop condition. | `/rota-brainstorm`, `/rota-decide`, `/rota-vision` |
 | [`handoff-template.md`](handoff-template.md) | Handoff-note template written by `/rota-pause` and read by `/rota-work` (no argument). | `/rota-pause` |
 | [`humanizing-prose.md`](humanizing-prose.md) | Rule sheet + silent self-audit pass applied to user-facing prose (release notes, PR body, doc-page edits) before the draft is shown to the user. | `/rota-release`, `/rota-ship` |
 | [`isolation-patterns.md`](isolation-patterns.md) | Branch / worktree creation patterns per work.isolation + umbrella mode. | `/rota-work` |
