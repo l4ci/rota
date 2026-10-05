@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/rotastate"
 )
 
 // WatchFileName is the record of a running watcher under <git-common-dir>/rota/,
@@ -31,7 +32,7 @@ const (
 )
 
 // WatchPath is the file of a repo, by its git common dir.
-func WatchPath(commonDir string) string { return filepath.Join(commonDir, "rota", WatchFileName) }
+func WatchPath(commonDir string) string { return rotastate.File(commonDir, WatchFileName) }
 
 // ReadWatching loads the record; found is false when there is none or it does
 // not parse.

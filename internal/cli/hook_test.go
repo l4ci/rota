@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/harness"
+	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/roundlease"
 )
 
@@ -26,7 +27,7 @@ func orchProject(t *testing.T, lease bool) string {
 	t.Setenv("ROTA_TEST_HOLDER_PID", strconv.Itoa(os.Getpid()))
 	t.Setenv("ROTA_TEST_NOW", "2026-10-03T12:00:00Z")
 	if lease {
-		cd, err := roundlease.CommonDir(dir)
+		cd, err := rotastate.CommonDir(dir)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -57,7 +58,7 @@ func TestStatuslineDumpThenPassesInputThrough(t *testing.T) {
 	if code != 0 || out != in+" tail\n" {
 		t.Fatalf("code %d out %q", code, out)
 	}
-	cd, _ := roundlease.CommonDir(dir)
+	cd, _ := rotastate.CommonDir(dir)
 	if _, err := os.Stat(filepath.Join(cd, "rota", "session", "s1.json")); err != nil {
 		t.Errorf("no state file: %v", err)
 	}
@@ -148,7 +149,7 @@ func TestHookStopLoopPrevention(t *testing.T) {
 	if _, out, _ := rotaStdin(t, dir, stopPayload(dir, true), "hook", "stop"); out != "" {
 		t.Errorf("past the cap should pass: %q", out)
 	}
-	cd, _ := roundlease.CommonDir(dir)
+	cd, _ := rotastate.CommonDir(dir)
 	b, _ := os.ReadFile(filepath.Join(cd, "rota", "session", "s1.json"))
 	if !strings.Contains(string(b), `"handoffFailed": true`) {
 		t.Errorf("state: %s", b)

@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	"path/filepath"
-	"strings"
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/harness"
+	"github.com/l4ci/rota/internal/rotastate"
 )
 
 // The glue between the worker verbs and internal/harness: dispatch and assign
@@ -77,15 +77,11 @@ func NeedsModel(root, kind string) bool {
 // CommonDir is the git common dir of root, absolute and symlink-resolved: the
 // directory beside which the round lease and the codex homes live.
 func CommonDir(ctx context.Context, run git.Runner, root string) (string, error) {
-	res, err := run(ctx, root, "rev-parse", "--git-common-dir")
-	if err != nil || res.ExitCode != 0 {
-		return "", fail(exitcode.ExitUnavailable, "git rev-parse --git-common-dir failed: "+strings.TrimSpace(res.Stderr))
+	cd, err := rotastate.CommonDirVia(ctx, run, root)
+	if err != nil {
+		return "", fail(exitcode.ExitUnavailable, err.Error())
 	}
-	p := git.AbsCommonDir(root, res.Stdout)
-	if r, err := filepath.EvalSymlinks(p); err == nil {
-		p = r
-	}
-	return filepath.Clean(p), nil
+	return cd, nil
 }
 
 // Preflight is the harness's check of a slot before anything is marked or
