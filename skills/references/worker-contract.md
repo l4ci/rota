@@ -62,6 +62,16 @@ Work only this task, then stop.
 
 The two sentinels are the contract's load-bearing half. We own the worker's instructions, so state is *declared* rather than inferred from prose — which is what makes `rota worker poll` reliable where pattern-matching a TUI is not.
 
+## Handling review feedback
+
+Applies to a bounced worker and to `/rota-work` on a `changes-requested` item, where `feedback` comments are the to-do list.
+
+1. Read every item before changing anything. If any is unclear, ask first (`ROTA-BLOCKED`, one question); implementing the clear ones now and guessing the rest builds on a misread.
+2. Verify each finding against the code before acting. A finding is a claim, not an order.
+3. Disagree with evidence. If a finding is wrong, already handled or breaks something, answer it on the PR with the file, line or test output that shows it. Never implement it silently and never drop it silently.
+4. Work in order: blocking first, then simple fixes, then complex ones. Test each fix on its own.
+5. Answer in facts: "Fixed in `<sha>`: <what changed>", or the evidence from 3. No "You're absolutely right!", no thanks, no agreement you have not checked.
+
 ## Provenance
 
 The worker writes its own PR body, and an orchestrator relay, a maintainer typing in the pane and stray text all arrive through the same channel. Without a signature the worker genuinely cannot tell them apart, and what it cites is permanent once merged.
