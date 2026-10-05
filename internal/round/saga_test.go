@@ -97,3 +97,28 @@ func TestStateStepUndoClearsStateAndChanged(t *testing.T) {
 		t.Errorf("undo must clear the state and Changed: %v %v", be.states, changed)
 	}
 }
+
+// failingStateBoard writes the state, then reports the write as failed: a
+// partial label update.
+type failingStateBoard struct {
+	*boardFake
+}
+
+func (b *failingStateBoard) SetState(ref, state string) (bool, error) {
+	b.boardFake.SetState(ref, state)
+	if state == "in-progress" {
+		return false, errors.New("label write failed")
+	}
+	return true, nil
+}
+
+func TestStateStepFailureClearsItsOwnPartialWrite(t *testing.T) {
+	be := &failingStateBoard{&boardFake{fakeBacklog: &fakeBacklog{}}}
+	changed := false
+	if err := runSteps([]step{stateStep(be, "12", false, &changed)}); err == nil {
+		t.Fatal("want the failure")
+	}
+	if len(be.states) != 0 || changed {
+		t.Errorf("a failed state step must clear its partial write: %v %v", be.states, changed)
+	}
+}

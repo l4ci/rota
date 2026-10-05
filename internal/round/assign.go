@@ -558,6 +558,9 @@ func stateStep(be Board, id string, resuming bool, changed *bool) step {
 	return step{name: "in-progress", do: func() error {
 		c, err := be.SetState(id, "in-progress")
 		if err != nil {
+			// The write may have landed partly (a label added, the old one
+			// not removed): clear it, since a failed step is not undone.
+			be.SetState(id, "none")
 			return err
 		}
 		*changed = c || !resuming
