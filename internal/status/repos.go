@@ -7,6 +7,7 @@ import (
 
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/repos"
+	"github.com/l4ci/rota/internal/rotatree"
 )
 
 // ParseReposCSV is parse_repos_csv: comma-separated names, stripped, empties
@@ -48,7 +49,7 @@ func HasCode(dir string, registry []repos.Repo) bool {
 		}
 		sub[strings.SplitN(rel, string(filepath.Separator), 2)[0]] = true
 	}
-	ignore := map[string]bool{".git": true, ".rota": true, ".claude": true, ".claude-plugin": true,
+	ignore := map[string]bool{".git": true, rotatree.DirName: true, ".claude": true, ".claude-plugin": true,
 		".gitignore": true, ".docsignore": true, ".stow-local-ignore": true, ".DS_Store": true}
 	entries, err := os.ReadDir(dir)
 	if err != nil {

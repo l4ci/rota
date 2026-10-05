@@ -10,6 +10,7 @@ import (
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/rotatree"
 )
 
 // DefaultPromoteThreshold is used when learn.promoteThreshold is unset or
@@ -26,7 +27,7 @@ type HitResult struct {
 
 // PromoteThreshold reads learn.promoteThreshold from the project config.
 func (s Store) PromoteThreshold() int {
-	cfg := config.Load(filepath.Join(s.Root, ".rota", "config.json"))
+	cfg := config.Load(rotatree.Config(s.Root))
 	if v, ok := config.Lookup(cfg, "learn.promoteThreshold"); ok {
 		if n, isNum := v.(json.Number); isNum {
 			if i, err := n.Int64(); err == nil && i > 0 {
@@ -77,7 +78,7 @@ func (s Store) Hit(scope, topic, title string) (HitResult, error) {
 type Contradiction struct{ Topic, Title, Text, LoggedAt string }
 
 func (s Store) queuePath() string {
-	return filepath.Join(s.Root, ".rota", "knowledge-contradictions.json")
+	return rotatree.File(s.Root, "knowledge-contradictions.json")
 }
 
 // loadQueue reads the queue; a missing file is an empty queue, a version

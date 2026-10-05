@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/rotatree"
 	"os"
-	"path/filepath"
 	"regexp"
 	"slices"
 	"strconv"
@@ -202,7 +202,7 @@ func (e Env) Gate(ctx context.Context, root string, o GateOpts) (GateResult, err
 func (e Env) gate(ctx context.Context, root string, o GateOpts, res GateResult, reg Registry, t GateTarget) (GateResult, error) {
 	branch, pr := t.Branch, t.PR
 	res.Branch, res.PR = branch, pr
-	cfg := config.Load(filepath.Join(root, ".rota", "config.json"))
+	cfg := config.Load(rotatree.Config(root))
 	// Read before the merge: the branch lands in root and may carry its own
 	// .rota/config.json, which must not decide how it is verified.
 	verifyCmds := verifyCommandsAt(root)
