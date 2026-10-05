@@ -57,8 +57,9 @@ func defaultIsTerminal(f any) bool {
 	return err == nil && fi.Mode()&os.ModeCharDevice != 0
 }
 
-// bareRota is the root's own verb. With no .rota/ it runs the setup; in an
-// initialized project it launches the orchestrator. Anything that cannot
+// bareRota is the root's own verb: it opens the palette (#181). Enter on the
+// preselected entry runs the setup with no .rota/ and launches the
+// orchestrator in an initialized project. Anything that cannot
 // drive a terminal (--json, a pipe) gets the usage error it always had, never
 // a session nobody sees.
 func bareRota(*flag.FlagSet) RunFunc {
@@ -69,10 +70,8 @@ func bareRota(*flag.FlagSet) RunFunc {
 		if c.JSON || !c.deps().IsTerminal(c.Stdin) || !c.deps().IsTerminal(c.Stdout) {
 			return Result{}, Usage("missing command").WithHint("run: rota --help")
 		}
-		if _, err := c.Root(); err != nil {
-			return c.deps().BareSetup(c, nil)
-		}
-		return runOrchestrate(c, false)
+		_, err := c.Root()
+		return runPalette(c, err == nil)
 	}
 }
 

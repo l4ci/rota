@@ -69,8 +69,16 @@ hooks and run the orchestrator under `rota keepalive run`:
 ## Your first round
 
 ```sh
-rota orchestrate        # in an initialized project, `rota` alone does the same
+rota orchestrate
 ```
+
+Bare `rota` in a terminal opens a palette with Orchestrate preselected, so `rota` then Enter does the
+same. Arrow keys or `j`/`k` move, a digit runs that entry, typing filters by name, `Esc` clears the
+filter or quits, and `q` or Ctrl-C quits. The other entries are round status, doctor, skills update,
+projects and config; their output prints, then any key returns to the palette. Outside an initialized
+project Setup is preselected and the project entries are hidden. A pipe, `--json` or any argument skips the
+palette, so scripts and agents see no extra output. `NO_COLOR` and `TERM=dumb` are honored; a dumb
+terminal gets a numbered `choice:` prompt.
 
 That runs `rota doctor`, stops if a check fails, then opens an orchestrator session that has already
 started `/rota-orchestrate`. Nothing is typed into a pane. The session runs under
