@@ -71,7 +71,7 @@ func nullStr(s string) any {
 
 // ---- backlog list ----------------------------------------------------------------
 
-var relatedIDRe = regexp.MustCompile(`[A-Z]\p{Nd}+`)
+var relatedIDRe = regexp.MustCompile(backlog.IDPattern(1))
 
 func backlogList(fs *flag.FlagSet) RunFunc {
 	grep := fs.String("grep", "", "keep rows whose bullet contains this, case-insensitively")

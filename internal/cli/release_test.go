@@ -935,3 +935,16 @@ func TestReleaseCloseMilestoneExits(t *testing.T) {
 func releaseNow() int64 { return time.Now().Unix() }
 
 func releaseItoa(n int64) string { return strconv.FormatInt(n, 10) }
+
+func TestReleaseTaggedMatchesEveryItemForm(t *testing.T) {
+	for _, s := range []string{"fix [B07] thing", "slice [M01-S2]", "milestone [M01]", "closes #12"} {
+		if !releaseTagged.MatchString(s) {
+			t.Errorf("%q should count as tagged", s)
+		}
+	}
+	for _, s := range []string{"plain subject", "[X] nope", "see M01"} {
+		if releaseTagged.MatchString(s) {
+			t.Errorf("%q should not count as tagged", s)
+		}
+	}
+}

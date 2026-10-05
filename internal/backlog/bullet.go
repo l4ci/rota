@@ -317,7 +317,7 @@ const sp = "[" + pystr.SpaceClass + "]"
 
 // OpenRe is open_bullet_re(): `- **[B07] [P1] Title.** rest`, anchored at the
 // start. \d is \p{Nd} to match Python's Unicode digits.
-var OpenRe = regexp.MustCompile(`(?m)\A- \*\*\[([` + ItemLetters + `]\p{Nd}+)\](?:` + sp + `+\[([^\]]+)\])?` + sp + `+([^*]+?)\*\*(.*)$`)
+var OpenRe = regexp.MustCompile(`(?m)\A- \*\*\[(` + IDPattern(1) + `)\](?:` + sp + `+\[([^\]]+)\])?` + sp + `+([^*]+?)\*\*(.*)$`)
 
 // Bullet is one parsed open bullet line.
 type Bullet struct {
@@ -356,7 +356,7 @@ type Done struct {
 var doneRe = regexp.MustCompile("(?m)\\A- ~~(.+?)~~ Done (\\p{Nd}{4}-\\p{Nd}{2}-\\p{Nd}{2}) \\[`([^`]+)`\\]" +
 	`(?: \((handed-off|blocked|dropped)(?:: (.*))?\))?` + sp + `*$`)
 
-var doneIDRe = regexp.MustCompile(`\A\*\*\[([A-Z]\p{Nd}+)\]`)
+var doneIDRe = regexp.MustCompile(`\A\*\*\[(` + AnyTypeIDPattern + `)\]`)
 
 // ParseDone parses a done line, `- ~~**[B07] ...**~~ Done DATE [`hash`]`
 // with an optional "(reason)" or "(reason: note)" suffix.

@@ -6,10 +6,9 @@ package design
 
 import (
 	"errors"
-	"fmt"
-	"regexp"
 	"time"
 
+	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/exitcode"
 )
 
@@ -25,22 +24,15 @@ type Store interface {
 	Remove(id string) error
 }
 
-// Type is the item type letter of a valid ID.
-func Type(id string) string { return id[:1] }
-
-func idRe(digits int) *regexp.Regexp {
-	return regexp.MustCompile(fmt.Sprintf(`^[BFT]\d{%d,}$`, digits))
-}
-
 // CheckID is the ID rule every verb applies before it touches the store.
 func CheckID(s Store, id string) error {
-	if idRe(s.Digits()).MatchString(id) {
+	if backlog.ValidID(id, s.Digits()) {
 		return nil
 	}
 	if s.Digits() <= 1 {
-		return exitcode.Errf(exitcode.ExitUsage, "ID must match [BFT]\\d+ (e.g. B7, F3, T11); designs are per-item, not per-slice or per-milestone, got %q", id)
+		return exitcode.Errf(exitcode.ExitUsage, "ID must match [%s]\\d+ (e.g. B7, F3, T11); designs are per-item, not per-slice or per-milestone, got %q", backlog.ItemLetters, id)
 	}
-	return exitcode.Errf(exitcode.ExitUsage, "ID must match [BFT]\\d{%d,} (e.g. B07, F03, T11); designs are per-item, not per-slice or per-milestone, got %q", s.Digits(), id)
+	return exitcode.Errf(exitcode.ExitUsage, "ID must match [%s]\\d{%d,} (e.g. B07, F03, T11); designs are per-item, not per-slice or per-milestone, got %q", backlog.ItemLetters, s.Digits(), id)
 }
 
 // Add creates the design stub; an existing design is exit 4.
