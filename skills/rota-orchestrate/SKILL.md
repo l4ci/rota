@@ -114,6 +114,13 @@ Fix it yourself when the gap is small and mechanical: a stale doc line, a missin
 
 Bounce when in doubt about who is right. The ticket may be the wrong one.
 
+**Cap.** A bounce you send by hand counts: run `rota round bounce <issue> --head <pr-head-sha>` before the relay or transfer, and send it only on exit 0. `rota round status` shows each slot's count. The gate counts its own stale and provenance bounces on the same counter. At `round.maxBounces` (default 3, 0 turns the cap off) the verb exits 4: never a further bounce. Pick one of:
+
+- a stronger worker: `rota round transfer <issue> --to <free slot> --tier <heavy|standard> --tier-reason "<why>" --body-file <gap>`. The count stays with the item, so a second failure at the higher tier goes to the human.
+- the human: `rota round transfer <issue> --to human --note-file <what is left>`. The gate parks an item the same way when it hits the cap itself.
+
+A re-review of a bounced PR is `/rota-review --since <sha of the last review>`: the fix alone, each earlier finding ADDRESSED or NOT ADDRESSED.
+
 ## 8. Wind down
 
 When the slate is done or the maintainer calls the round: `rota round wind-down`. It re-verifies the base, parks every slot and releases the lease. If a slot still holds work it exits 4 and parks the rest; read which slot and why before deciding. Then run `rota round reconcile` and `rota reap` for what is left, and run `/rota-learn` and `/rota-ship --docs` once for the whole round (workers skip them per PR), then give the maintainer a short summary: what merged, what bounced, what is open, what drift remains, and the costly worker Rulings (PR, call, cost if wrong).
