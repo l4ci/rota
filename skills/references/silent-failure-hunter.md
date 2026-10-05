@@ -2,11 +2,11 @@
 
 Shared rubric invoked by `/rota-review` Step 7 (the reviewer brief) and bundled into the `/rota-ship` Step 3 review pass. Detects when work reports *complete* but didn't actually move the system — the most insidious failure mode because everything looks fine from the outside.
 
-Inspired by the silent-failure-hunter archetype in the ECC agents catalog. Not a separate dispatch step or helper — it lives entirely as an additional rubric item that the existing reviewer evaluates alongside intent match, convention compliance, obvious quality, and stale scaffolding.
+Not a separate dispatch step or helper — it lives entirely as an additional rubric item that the existing reviewer evaluates alongside intent match, convention compliance, obvious quality, and stale scaffolding.
 
 ## What "silent failure" means
 
-A silent failure leaves no surface error. The build is green, the test reports `OK`, the smoke section prints `PASS` — but the change didn't actually do the thing it claimed to do. The seven recurring shapes:
+A silent failure leaves no surface error. The build is green, the test reports `OK`, the smoke section prints `PASS` — but the change didn't actually do the thing it claimed to do. The recurring shapes:
 
 - **Tests pass but feature broken.** The new assertion targets the wrong path, or doesn't exercise the changed branch. Adding `assert True` would also pass.
 - **Build succeeds but artifact missing.** Compiler exits 0; the binary, generated file, or deployable bundle isn't where downstream expects to find it.

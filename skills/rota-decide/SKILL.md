@@ -53,8 +53,6 @@ If **any** gate fails, do **not** write to `DECISIONS.md`. Surface to the user:
 
 Substitute the failing gate's letter for `(X)`. Suggest the redirect (`/rota-learn` if there's still a useful learning to capture, "leave inline" if it's just code-level) and stop. **Do not auto-invoke `/rota-learn`** — same manual-gate policy as the no-forbids/no-permits redirect below.
 
-Codified from grill-with-docs's ADR triggers — prevents `/rota-decide` bloat from preference choices that aren't actually hard boundaries.
-
 **Default mode.**
 
 If the user invoked `/rota-decide` with a clear candidate from the conversation, surface it. If not, ask:

@@ -2,6 +2,16 @@
 
 Loaded by `/rota-learn` only when the args carry one of the manual flags below, or at session end when the contradiction queue is non-empty. The default capture flow never needs this file.
 
+## Contents
+
+- Manual flags
+  - `--retro`
+  - `--term <name>`
+  - `--promote <topic> "<title>"`
+  - `--deprecate <topic> "<title>"`
+  - `--amend <topic> "<title>"`
+- Process contradiction candidates
+
 ## Manual flags
 
 Each flag skips discovery (Steps 2 to 7 of the skill) and exits after its one report line.
@@ -63,7 +73,7 @@ rota glossary write "<name>" --def "<text>" [--alias "a,b"] [--not "x,y"] [--tou
 
 Reads the existing Glossary topic, performs cross-term alias-collision uniqueness check, inserts (alphabetically) or updates the entry, regenerates the managed `<!-- rota-knowledge-start -->` block in the instructions file. Exit 4 on alias collision (`blockedBy: alias-collision`: an alias matches one already attached to a different term in Glossary); on collision, surface the error and stop without writing.
 
-Definitional-signal autowrite — when the user phrases something like *"by X I mean Y"*, *"let's call this X"*, or *"X means Y"* during a normal session (not via the explicit `--term` flag), the orchestrator may run this same verb inline without going through `/rota-learn`. The flag form is the user-facing entry point; the inline form keeps the trio's old conversational-write behavior alive.
+Definitional-signal autowrite — when the user phrases something like *"by X I mean Y"*, *"let's call this X"*, or *"X means Y"* during a normal session (not via the explicit `--term` flag), the orchestrator may run this same verb inline without going through `/rota-learn`. The flag form is the user-facing entry point; the inline form covers conversational writes.
 
 Report one line:
 
@@ -118,7 +128,7 @@ Rewrites the body of one bullet while preserving its tier and hits in the sideca
 Flow:
 1. Prompt the user via `AskUserQuestion` for the new body suffix:
    - Header: `"Amend bullet"`
-   - Question: *"Enter the text to append to `<topic> :: <title>` (V1: appends to existing body):"*
+   - Question: *"Enter the text to append to `<topic> :: <title>` (appended to the existing body):"*
    - Free-text field (single-line or multi-line).
 2. Call:
    ```bash
@@ -155,13 +165,13 @@ For each candidate `{topic, title, correctionText, loggedAt}`, surface via `AskU
   2. *"Keep — false positive"* — leave tier unchanged
   3. *"Defer to next session"* — keep candidate in the queue
 
-**V1 simplification:** after processing ALL candidates (regardless of per-candidate choice), call:
+After processing ALL candidates (regardless of per-candidate choice), call:
 
 ```bash
 rota knowledge contradiction clear
 ```
 
-This clears the entire queue. Fine-grained deferral (keeping only deferred items) is a V2 polish.
+This clears the entire queue, deferred candidates included.
 
 Track results in the confirm output as:
 

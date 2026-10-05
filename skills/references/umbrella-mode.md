@@ -4,6 +4,19 @@ Used by `/rota-work` Step 4.5, `/rota-capture` Step 4.6, `/rota-spike` Step 2.5,
 
 An umbrella project hosts shared `.rota/` coordinator state at its root, while git history and code live in registered sub-repos under it. The umbrella root has no `.git/` of its own; each sub-repo has its own.
 
+## Contents
+
+- When umbrella mode is on
+- The registry — `.rota/repos.json`
+- The `Repos:` field on backlog items
+- Resolution verbs
+- Walk-up convenience
+- Branch creation
+- Status registration
+- Merge / PR with `--repo`
+- Issue mode in an umbrella
+- What this reference does NOT cover
+
 ## When umbrella mode is on
 
 Umbrella mode is in effect when `.rota/repos.json` registers ≥1 sub-repo. The config flag `umbrella.enabled` in `.rota/config.json` is informational — data is the truth.
@@ -17,7 +30,7 @@ rota repo umbrella -C <dir>    # callers that already know the directory (e.g. c
 
 Each entry has a `name` and a `path` (relative to the umbrella root). Read it through `rota repo resolve` (below) rather than re-parsing the JSON.
 
-## The `Repos:` field on TODO items
+## The `Repos:` field on backlog items
 
 Captured items carry the affected sub-repo(s) so `/rota-work` can route the wave correctly. Single-repo items use one name; multi-repo items use a comma-separated list:
 

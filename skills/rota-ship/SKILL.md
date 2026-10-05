@@ -1,6 +1,6 @@
 ---
 name: rota-ship
-description: Use on "ship it", "open the PR", "finish this branch", when work is done and you want to integrate. Use --undo on "roll back the last cycle", "revert that merge". Use --docs on "update docs".
+description: Use on "ship it", "open the PR", "finish this branch", or when work is done and ready to integrate. Use --undo on "roll back the last cycle", "revert that merge". Use --docs on "update docs".
 ---
 
 ## Step 0 — Mode Dispatch
@@ -96,7 +96,7 @@ rota verdict add <branch> --kind second-opinion --verdict <PASS|CONCERNS|FAIL> -
 rota verdict route <branch> --for ship-second-opinion --json
 ```
 
-Exit 2 from `add` names the malformed field: ask the agent to resend; never guess a verdict. Route per the Step 3 table. The gate runs after Step 3 so no round trip is spent on a diff that already failed, and before Step 4 because concerns may change the PR body's framing.
+Exit 2 from `add` names the malformed field: ask the agent to resend; never guess a verdict. Route per the Step 3 table.
 
 ## Step 3.75 — QA Gate (opt-in)
 

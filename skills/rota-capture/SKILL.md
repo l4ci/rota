@@ -41,7 +41,7 @@ The user gives a keyword, phrase or longer description, possibly several issues 
 
 Fires only when the input captures *from a milestone spec*: it names an `M<NN>` tag or a `milestones/M<NN>.md` path. Otherwise skip.
 
-Milestone specs drift behind code. Capturing criteria that already shipped under other IDs creates duplicate work and wastes a run on finished work (real F27 incident: 11 captures, 10 already shipped). Run `rota item shipped "<title 1>" "<title 2>" …` with the parsed titles. Exit 0 means ship evidence was found (stdout lists hits per title, `--json` has `data.titles[].hits`); exit 1 means none, continue silently.
+Milestone specs drift behind code. Capturing criteria that already shipped under other IDs creates duplicate work and wastes a run on finished work. Run `rota item shipped "<title 1>" "<title 2>" …` with the parsed titles. Exit 0 means ship evidence was found (stdout lists hits per title, `--json` has `data.titles[].hits`); exit 1 means none, continue silently.
 
 On exit 0, print the report verbatim, then `AskUserQuestion`, up to 4 flagged titles per call. Header `"Item N"`. Question: *"`<short-title>` looks shipped — `<hash>` `<subject>`. What now?"* Options:
   1. *"Skip this item (Recommended)"* — drop it from this run.

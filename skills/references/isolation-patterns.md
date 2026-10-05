@@ -52,7 +52,7 @@ Each sub-repo has its own `.git/index`, so multi-repo waves (one branch, N sub-r
 
 ## Umbrella mechanics
 
-This reference covers only the isolation-and-worktree-creation aspects of umbrella mode. The broader umbrella concept — the registry (`.rota/repos.json`), resolution verbs (`rota repo which`, `rota repo resolve`), the `Repos:` field on TODO items, walk-up convenience, merge/PR `--repo` plumbing — lives in `references/umbrella-mode.md`. Cite it from call sites that need both halves.
+This reference covers only the isolation-and-worktree-creation aspects of umbrella mode. The broader umbrella concept — the registry (`.rota/repos.json`), resolution verbs (`rota repo which`, `rota repo resolve`), the `Repos:` field on backlog items, walk-up convenience, merge/PR `--repo` plumbing — lives in `references/umbrella-mode.md`. Cite it from call sites that need both halves.
 
 ## Not covered here
 

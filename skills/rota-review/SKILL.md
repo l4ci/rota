@@ -71,7 +71,7 @@ Apply the canonical K+D query pattern (`references/knowledge-consult.md`) with t
 
 Carry KNOWLEDGE bullets into the reviewer brief. Pass DECISIONS entries under a `**Hard boundaries:**` section — the reviewer must **FAIL** if the diff violates any boundary, even if the change looks otherwise good.
 
-> **REQUIRED — Register hits on consumed bullets (F03 lifecycle).** After building the reviewer brief, apply the hit-register pattern from `references/knowledge-consult.md` *Hit-register after consumption*: for each bullet that landed in the brief's `**Relevant project conventions (from KNOWLEDGE.md):**` section, call `rota knowledge hit --topic "<T>" --title "<first-line-of-bullet>"` once, issuing all calls as a single parallel batch. Bullets returned but pruned before the brief don't earn credit. Silent on success. Provisional bullets auto-promote to confirmed once `hits >= learn.promoteThreshold` (default 3).
+> **REQUIRED — Register hits on consumed bullets.** After building the reviewer brief, apply the hit-register pattern from `references/knowledge-consult.md` *Hit-register after consumption*: for each bullet that landed in the brief's `**Relevant project conventions (from KNOWLEDGE.md):**` section, call `rota knowledge hit --topic "<T>" --title "<first-line-of-bullet>"` once, issuing all calls as a single parallel batch. Bullets returned but pruned before the brief don't earn credit. Silent on success. Provisional bullets auto-promote to confirmed once `hits >= learn.promoteThreshold` (default 3).
 
 ## Step 5 — Capture the Diff
 
@@ -96,7 +96,7 @@ After a bounce the worker pushes a fix. Review that fix, not the whole branch ag
 
 ## Step 6 — Pre-flight Scaffolding Scan
 
-Multi-task feature branches sometimes ship comments that referenced earlier task numbers ("Umbrella behavior is added in Task 7 — for now --repo is parsed but ignored") even after the referenced task completed. Before dispatching the reviewer, run a deterministic diff scan:
+Before dispatching the reviewer, run a deterministic diff scan for comments that reference task numbers ("added in Task 7"):
 
 ```bash
 rota review scaffolding [--repo <name>] --base <base> <branch>

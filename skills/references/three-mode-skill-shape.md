@@ -27,10 +27,9 @@ The two current implementations diverge by design on every operational axis:
 | After-work approval gate | propose-mode by default (`docs.autoCreate: false`); auto-write opt-in | not applicable — `run` reads strategy, executes, scores; no artifact edits |
 | Trigger gate | post-cycle trigger condition — see `references/post-cycle-trigger-gate.md` | gated by `ship.qa: true` from `/rota-ship`; also runs on demand from the user |
 | First-run opt-in for downstream automation | flips `docs.afterWork: true` on scaffold approval | opt-in via `ship.qa: true` and `qa.afterWork: true` |
-| Authoring tier | Tier S (integer Step headers) | Tier S (mode-bracketed step structure) |
 | Commit ownership | Docs Mode: own commit (`docs:` prefix) when run inline from `/rota-ship` Step 8.6 or manually via `/rota-ship --docs` | no commits — `/rota-qa` is read-only on the codebase |
 
-These divergences are **not bugs to file**. The artifact's audience determines the gate strength (public docs need user approval per batch; QA strategy files are AI-runner-facing); the artifact's lifecycle determines whether mode 2 edits or executes; the authoring tier is a deliberate Tier S call codified in `references/authoring-conventions.md`.
+These divergences are **not bugs to file**. The artifact's audience determines the gate strength (public docs need user approval per batch; QA strategy files are AI-runner-facing); the artifact's lifecycle determines whether mode 2 edits or executes.
 
 ## When the skeleton applies (and when it doesn't)
 
@@ -45,5 +44,4 @@ Skills that import / generate / one-shot transform (e.g., `/rota-release` cuts a
 ## See also
 
 - `references/post-cycle-trigger-gate.md` — the shared `2+/5+/hard-bug` trigger used by Docs Mode after-work (and by `/rota-ship` for its post-cycle `/rota-learn` and docs steps; `/rota-work` only nudges).
-- `references/authoring-conventions.md` — the Tier S/C distinction that explains the authoring tier picks above.
 - `references/persistence-skills.md` — the persistence duo (`/rota-learn` for topic bullets and `--term` Glossary entries, plus `/rota-decide`) shares a different spine. Persistence skills capture one entry at a time; three-mode skills curate a body of entries over time. The two families don't overlap.
