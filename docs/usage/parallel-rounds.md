@@ -266,18 +266,25 @@ The choice is remembered for the round: after `rota layout split`, every worker 
 `rota layout tabs`. A new round starts in tabs again. A reclaimed worker's pane closes with its
 session, and the next spawn re-lays the grid.
 
-In the split view the orchestrator is the left column at full height. Workers fill columns two panes
-high in slot order (`rota round status` order), column by column. An odd count leaves the last column
-as one tall pane. Every column, the orchestrator's included, gets the same width.
+In the split view the tab is called `rota` and the orchestrator's pane `orchestrator`. The left
+column takes 40% of the width: the orchestrator, under the pane that launched the round when rota
+knows it (a clean CLI, a quarter of the column's height). Workers fill the other 60%, in columns two
+panes high in slot order (`rota round status` order), column by column, all the same width. An odd
+count leaves the last column as one tall pane.
 
 ```
-n=1        n=2        n=3            n=4
-+---+---+  +---+---+  +---+---+---+  +---+---+---+
-|   |   |  |   | 1 |  |   | 1 |   |  |   | 1 | 3 |
-| O | 1 |  | O +---+  | O +---+ 3 |  | O +---+---+
-|   |   |  |   | 2 |  |   | 2 |   |  |   | 2 | 4 |
-+---+---+  +---+---+  +---+---+---+  +---+---+---+
+n=3 (run from the CLI pane C)      n=4, CLI pane unknown
++-----+---+---+                    +-----+---+---+
+|  C  | 1 |   |                    |     | 1 | 3 |
++-----+---+ 3 |                    |  O  +---+---+
+|  O  | 2 |   |                    |     | 2 | 4 |
++-----+---+---+                    +-----+---+---+
 ```
+
+Run `rota layout split` from the pane that launched the round and the split lives in that pane's tab;
+rota remembers the pane for later spawns. Run from the orchestrator, it uses the pane remembered, and
+without one the orchestrator keeps the left column to itself. `rota layout tabs` puts the orchestrator
+and the workers back in tabs of their own and leaves the CLI pane where it is.
 
 The verb only moves panes. No process restarts, nothing is typed into a pane, and focus stays where it
 was, so it is safe in the middle of a round.

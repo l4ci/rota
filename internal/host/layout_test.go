@@ -57,8 +57,16 @@ func TestHerdrPaneMoveCommands(t *testing.T) {
 	if err := l.ToNewTab(bg, "w1:p2", "ben"); err != nil {
 		t.Fatal(err)
 	}
+	if err := l.RenameTab(bg, "w1:t1", "rota"); err != nil {
+		t.Fatal(err)
+	}
+	if err := l.RenamePane(bg, "w1:p1", "orchestrator"); err != nil {
+		t.Fatal(err)
+	}
 	want := "herdr pane move w1:p2 --tab w1:t1 --split right --target-pane w1:p1 --ratio 0.3333 --no-focus\n" +
-		"herdr pane move w1:p2 --new-tab --label ben --no-focus"
+		"herdr pane move w1:p2 --new-tab --label ben --no-focus\n" +
+		"herdr tab rename w1:t1 rota\n" +
+		"herdr pane rename w1:p1 orchestrator"
 	if f.log() != want {
 		t.Errorf("commands:\n%s", f.log())
 	}
