@@ -24,6 +24,30 @@ func TestParseBodyAccepts(t *testing.T) {
 	}
 }
 
+func TestParseBodyDeclined(t *testing.T) {
+	b, err := ParseBody(`{"declined": [{"title": " t ", "file": "a.go", "line": 3, "detail": "needs a run"}]}`)
+	if err != nil || len(b.Declined) != 1 || b.Declined[0] != (Declined{"t", "a.go", 3, "needs a run"}) {
+		t.Errorf("got %+v %v", b, err)
+	}
+	for in, want := range map[string]string{
+		`{"declined": [{"detail": "d"}]}`:                    "declined[0].title is required",
+		`{"declined": [{"title": "t", "line": 0}]}`:          "declined[0].line must be 1 or more",
+		`{"declined": [{"title": "t", "x": 1}]}`:             `unknown field "x"`,
+		`{"declined": [{"title": "t", "severity": "info"}]}`: `unknown field "severity"`,
+	} {
+		if _, err := ParseBody(in); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: err %v, want %q", in, err, want)
+		}
+	}
+	r := NewRecord(ReviewQuality, Pass, "s", b)
+	if len(r.Declined) != 1 {
+		t.Errorf("record dropped declined: %+v", r)
+	}
+	if o, _ := NewRecord(ReviewQuality, Pass, "s", Body{}).Object().Get("declined"); o != nil {
+		t.Errorf("empty declined should be omitted, got %v", o)
+	}
+}
+
 func TestParseBodyRejects(t *testing.T) {
 	cases := map[string]string{
 		"":                               "not a JSON object",

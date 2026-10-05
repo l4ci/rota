@@ -90,6 +90,15 @@ type Finding struct {
 	Detail   string `json:"detail,omitempty"`
 }
 
+// Declined is something the reviewer could not judge from the diff. It
+// carries no severity and never feeds a verdict or a route.
+type Declined struct {
+	Title  string `json:"title"`
+	File   string `json:"file,omitempty"`
+	Line   int    `json:"line,omitempty"`
+	Detail string `json:"detail,omitempty"`
+}
+
 // ItemVerdict is a per-item verdict inside a review.
 type ItemVerdict struct {
 	ID      string `json:"id"`
@@ -103,6 +112,7 @@ type Body struct {
 	Summary  string        `json:"summary,omitempty"`
 	Findings []Finding     `json:"findings"`
 	Items    []ItemVerdict `json:"items,omitempty"`
+	Declined []Declined    `json:"declined,omitempty"`
 }
 
 // rawBody mirrors Body with pointers, so validation can tell a missing
@@ -121,6 +131,12 @@ type rawBody struct {
 		ID      *string `json:"id"`
 		Verdict *string `json:"verdict"`
 	} `json:"items"`
+	Declined []struct {
+		Title  *string `json:"title"`
+		File   *string `json:"file"`
+		Line   *int    `json:"line"`
+		Detail *string `json:"detail"`
+	} `json:"declined"`
 }
 
 func usage(format string, a ...any) error {
@@ -186,6 +202,26 @@ func ParseBody(text string) (Body, error) {
 		}
 		b.Items = append(b.Items, ItemVerdict{ID: strings.TrimSpace(*it.ID), Verdict: *it.Verdict})
 	}
+	for i, d := range raw.Declined {
+		at := fmt.Sprintf("declined[%d]", i)
+		if d.Title == nil || strings.TrimSpace(*d.Title) == "" {
+			return b, usage("invalid verdict body: %s.title is required", at)
+		}
+		out := Declined{Title: strings.TrimSpace(*d.Title)}
+		if d.File != nil {
+			out.File = *d.File
+		}
+		if d.Line != nil {
+			if *d.Line < 1 {
+				return b, usage("invalid verdict body: %s.line must be 1 or more", at)
+			}
+			out.Line = *d.Line
+		}
+		if d.Detail != nil {
+			out.Detail = *d.Detail
+		}
+		b.Declined = append(b.Declined, out)
+	}
 	return b, nil
 }
 
@@ -228,6 +264,7 @@ type Record struct {
 	Summary    string        `json:"summary,omitempty"`
 	Findings   []Finding     `json:"findings"`
 	Items      []ItemVerdict `json:"items,omitempty"`
+	Declined   []Declined    `json:"declined,omitempty"`
 }
 
 // NewRecord stamps a record with the current UTC time.
@@ -239,7 +276,7 @@ func NewRecord(kind, v, sha string, body Body) Record {
 	return Record{
 		Kind: kind, Verdict: v, Sha: sha,
 		RecordedAt: time.Now().UTC().Format("2006-01-02T15:04:05Z"),
-		Summary:    body.Summary, Findings: findings, Items: body.Items,
+		Summary:    body.Summary, Findings: findings, Items: body.Items, Declined: body.Declined,
 	}
 }
 
