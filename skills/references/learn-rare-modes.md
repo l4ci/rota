@@ -6,6 +6,49 @@ Loaded by `/rota-learn` only when the args carry one of the manual flags below, 
 
 Each flag skips discovery (Steps 2 to 7 of the skill) and exits after its one report line.
 
+### `--retro`
+
+Turns the session's mistakes into the right artifact instead of a knowledge bullet by default. Mechanical mistakes become deterministic checks; judgement calls become written standards.
+
+**1. Collect mistakes.** Scan the transcript and recent commits for: user corrections, reverted or redone work, failed gates or tests that a check would have caught, wrong-file or wrong-tree edits, and wasted tool calls. One line per mistake: what went wrong, what would have prevented it. No mistakes, say so and stop.
+
+**2. Classify each mistake** into exactly one class:
+
+| Class | Fits when | Destination |
+|---|---|---|
+| Guardrail | A machine can detect it (lint, test, hook, CI or smoke check) | A new item (below). Never implemented inline. |
+| Written standard | Needs judgement; no mechanical check exists | `rota knowledge add` (Step 5 of the skill), or `/rota-decide` when it is a hard boundary |
+| Navigation pointer | The agent looked in the wrong place or missed a file | A `rota map` entry or a line in `AGENTS.md`/`CLAUDE.md` |
+| Tool-economy fix | A tool or command was used wastefully (full suite per task, broad search, repeated reads) | A skill or brief edit, or a config default; file an item when it spans files |
+
+When a mistake is both mechanical and judgement-heavy, prefer the guardrail: a check cannot be forgotten.
+
+**3. File guardrails.** One item per guardrail candidate:
+
+```bash
+printf '%s' "$BODY" | rota item create --kind tasks --title "<check> guards against <mistake>" --desc "<one line>" --body-file -
+```
+
+The body names the mistake, the check that would catch it, and where it would run (lint, test, hook, CI). Dedup against open items first (`rota backlog list`). Do not write the check in this run.
+
+**4. Write the rest.** Written standards, navigation pointers and tool-economy fixes that need no new item go through their normal verbs. Apply the skill's *Skip* list from Step 2: no restating code, no transient state.
+
+**5. Flag no-op bullets.** Run `rota knowledge tier list --json` and read `data.entries`. Candidates: entries with `hits: 0` and a `lastSeen` older than 30 days, and bullets whose body only restates code or docs (read the bullet via `rota knowledge query "<topic>"` to judge). List them as removal candidates with the reason. **Never delete, deprecate or edit them**: removal is the user's call (`/rota-learn --deprecate` once they agree).
+
+**6. Report** one compact block:
+
+```
+Retro: 5 mistakes
+  Guardrail (2): filed #301, #302
+  Standard (1): Build & Tooling :: <title>
+  Navigation (1): AGENTS.md line added
+  Tool economy (1): filed #303
+No-op bullet candidates (not touched): 2
+  <topic> :: <title> — 0 hits since <date>
+```
+
+Then exit (skip remaining steps).
+
 ### `--term <name>`
 
 Captures a domain term into the pinned `## Glossary` topic of `.rota/KNOWLEDGE.md`.
