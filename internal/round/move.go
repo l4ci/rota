@@ -589,89 +589,74 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 			}
 		}
 	}
-	if queueTo {
-		if err := e.queuePR(ctx, root, be, o.To); err != nil {
-			return res, wrap(err)
-		}
-	}
-
-	var branch string
+	// The moves run as steps (saga.go). Transfer only goes forward: once the
+	// sender is parked and its claim released there is nothing to give back, so
+	// no step but a failed dispatch compensates, and a repeated call resumes.
+	var (
+		branch, oldClaim string
+		p                Parked
+		tmpName, text    string
+	)
+	from := res.From
 	if resuming {
 		branch = receiver.Branch()
 		res.Branch = branch
 		res.Head = e.headLine(ctx, receiver.Worktree(), "HEAD")
-	} else {
-		from := res.From
-		var p Parked
-		oldClaim := from + "@" + strconv.Itoa(rnd)
-		if sender != nil {
-			if p, err = e.Park(ctx, root, from, "transfer"); err != nil {
-				return res, wrap(err)
-			}
-			oldClaim = firstNonEmpty(sender.ClaimID(), oldClaim)
-		} else { // a queued PR: already pushed, nothing to park
-			p.Branch = rec.Branch
-			p.Head = e.queuedHead(ctx, root, p.Branch)
-			oldClaim = firstNonEmpty(rec.ClaimID, oldClaim)
-		}
-		res.Branch, res.Head, res.Salvaged = p.Branch, p.Head, p.Salvaged
-		branch = p.Branch
-		h := handoff{verb: "transfer", from: from, round: rnd, branch: p.Branch, head: p.Head, salvaged: p.Salvaged,
-			reason: "transferred to " + o.To, note: o.Note}
-		tolerate := tolerateMissing(&res.Warnings, id)
-		if _, _, err := h.post(be, id); tolerate("handoff comment", err) != nil {
-			return res, wrap(err)
-		}
-		if _, err := releaseClaims(be, id, from, oldClaim, false); tolerate("claim release", err) != nil {
-			return res, wrap(err)
-		}
-		if toHuman {
-			if _, err := be.SetState(id, "none"); tolerate("state reset", err) != nil {
-				return res, wrap(err)
-			}
-			if err := e.Forge.AddLabels(ctx, it.Number, []string{firstNonEmpty(e.NeedsHuman, DefaultNeedsHuman)}, true); err != nil {
-				return res, wrap(err)
-			}
+		res.ClaimID = receiver.ClaimID()
+	}
+	tolerate := tolerateMissing(&res.Warnings, id)
+	moved := func() bool { return resuming }
+	steps := []step{
+		{name: "queue the receiver's PR", skip: func() bool { return !queueTo }, do: func() error {
+			return wrap(e.queuePR(ctx, root, be, o.To))
+		}},
+		{name: "park the sender", skip: moved, do: func() (err error) {
+			oldClaim = from + "@" + strconv.Itoa(rnd)
 			if sender != nil {
-				if err := freeSlot(root, from, false); err != nil {
-					return res, wrap(err)
+				if p, err = e.Park(ctx, root, from, "transfer"); err != nil {
+					return wrap(err)
 				}
-			} else if err := worker.RemoveQueuedPR(root, rec.PR); err != nil {
-				return res, wrap(err)
+				oldClaim = firstNonEmpty(sender.ClaimID(), oldClaim)
+			} else { // a queued PR: already pushed, nothing to park
+				p.Branch = rec.Branch
+				p.Head = e.queuedHead(ctx, root, p.Branch)
+				oldClaim = firstNonEmpty(rec.ClaimID, oldClaim)
 			}
-			res.Changed = true
-			return res, nil
-		}
-		claimID := o.To + "@" + strconv.Itoa(rnd)
-		won, holder, err := be.Claim(id, claimID)
-		if err != nil {
-			return res, wrap(err)
-		}
-		if !won {
-			return res, blocked(BlockClaimed, "%s is claimed by %s", id, holder)
-		}
-		res.ClaimID = claimID
-		if sender != nil {
-			if err := freeSlot(root, from, false); err != nil {
-				return res, wrap(err)
-			}
-		}
-		if err := e.checkout(ctx, root, to, id, it.Title, &branch); err != nil {
-			return res, wrap(err)
-		}
-		res.Branch = branch
-		if err := editSlot(root, o.To, func(s *worker.Slot) error {
-			s.SetTask(id)
-			s.SetBranch(branch)
-			s.SetClaimID(claimID)
+			res.Branch, res.Head, res.Salvaged = p.Branch, p.Head, p.Salvaged
+			branch = p.Branch
 			return nil
-		}); err != nil {
-			return res, wrap(err)
+		}},
+		{name: "handoff comment", skip: moved, do: func() error {
+			h := handoff{verb: "transfer", from: from, round: rnd, branch: p.Branch, head: p.Head, salvaged: p.Salvaged,
+				reason: "transferred to " + o.To, note: o.Note}
+			_, _, err := h.post(be, id)
+			return wrap(tolerate("handoff comment", err))
+		}},
+		{name: "release the old claim", skip: moved, do: func() error {
+			_, err := releaseClaims(be, id, from, oldClaim, false)
+			return wrap(tolerate("claim release", err))
+		}},
+	}
+	if toHuman {
+		steps = append(steps,
+			step{name: "reset the state", do: func() error {
+				_, err := be.SetState(id, "none")
+				return wrap(tolerate("state reset", err))
+			}},
+			step{name: "needs-human label", do: func() error {
+				return wrap(e.Forge.AddLabels(ctx, it.Number, []string{firstNonEmpty(e.NeedsHuman, DefaultNeedsHuman)}, true))
+			}},
+			step{name: "free the sender", do: func() error {
+				if sender != nil {
+					return wrap(freeSlot(root, from, false))
+				}
+				return wrap(worker.RemoveQueuedPR(root, rec.PR))
+			}})
+		if err := runSteps(steps); err != nil {
+			return res, err
 		}
 		res.Changed = true
-	}
-	if resuming {
-		res.ClaimID = receiver.ClaimID()
+		return res, nil
 	}
 
 	// A queued PR is still the issue's PR: the receiver takes it and its relay
@@ -693,50 +678,100 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 	}
 
 	solo := isSolo(root)
-	if !solo && e.Accounts != nil && len(worker.Configured(root)) > 0 {
-		if _, err := e.pickAccount(ctx, root, o.To); err != nil {
-			return res, wrap(err)
-		}
-	}
-	decisions := ""
-	if o.BodyFile != "" {
-		b, _ := os.ReadFile(o.BodyFile)
-		decisions = string(b)
-	}
 	// A transferred worker starts on the default tier; a higher one is assign's.
 	kind, tier := harness.Claude, o.Settings.Tier
 	model := o.Settings.Model(kind, tier)
-	text := pointerBrief(o.To, id, branch, brief, nil, decisions, tierBrief{Kind: kind, Tier: tier, Model: model, Default: tier, Table: o.Settings.Models[kind]})
-	text += fmt.Sprintf("\nThis issue was handed to you by %s. Read its latest rota:handoff comment first (it ends with a `<!-- rota:handoff %s@%d -->` marker), then continue from the pushed work on %s, already checked out in your worktree.\n",
-		res.From, res.From, rnd, branch)
-	if rec != nil {
-		text += fmt.Sprintf("Its PR %s is already open: push to the branch to update it instead of opening another.\n", rec.PR)
-	}
+	steps = append(steps,
+		step{name: "claim", skip: moved, do: func() error {
+			claimID := o.To + "@" + strconv.Itoa(rnd)
+			won, holder, err := be.Claim(id, claimID)
+			if err != nil {
+				return wrap(err)
+			}
+			if !won {
+				return blocked(BlockClaimed, "%s is claimed by %s", id, holder)
+			}
+			res.ClaimID = claimID
+			return nil
+		}},
+		step{name: "free the sender", skip: func() bool { return resuming || sender == nil }, do: func() error {
+			return wrap(freeSlot(root, from, false))
+		}},
+		step{name: "check out the branch", skip: moved, do: func() error {
+			if err := e.checkout(ctx, root, to, id, it.Title, &branch); err != nil {
+				return wrap(err)
+			}
+			res.Branch = branch
+			return nil
+		}},
+		step{name: "bind the receiver", skip: moved, do: func() error {
+			err := editSlot(root, o.To, func(s *worker.Slot) error {
+				s.SetTask(id)
+				s.SetBranch(branch)
+				s.SetClaimID(res.ClaimID)
+				return nil
+			})
+			if err == nil {
+				res.Changed = true
+			}
+			return wrap(err)
+		}},
+		step{name: "account", skip: func() bool { return solo || e.Accounts == nil || len(worker.Configured(root)) == 0 }, do: func() error {
+			_, err := e.pickAccount(ctx, root, o.To)
+			return wrap(err)
+		}},
+		step{name: "write the brief", do: func() error {
+			decisions := ""
+			if o.BodyFile != "" {
+				b, _ := os.ReadFile(o.BodyFile)
+				decisions = string(b)
+			}
+			text = pointerBrief(o.To, id, branch, brief, nil, decisions, tierBrief{Kind: kind, Tier: tier, Model: model, Default: tier, Table: o.Settings.Models[kind]})
+			text += fmt.Sprintf("\nThis issue was handed to you by %s. Read its latest rota:handoff comment first (it ends with a `<!-- rota:handoff %s@%d -->` marker), then continue from the pushed work on %s, already checked out in your worktree.\n",
+				res.From, res.From, rnd, branch)
+			if rec != nil {
+				text += fmt.Sprintf("Its PR %s is already open: push to the branch to update it instead of opening another.\n", rec.PR)
+			}
+			if solo {
+				return nil
+			}
+			tmp, err := os.CreateTemp("", "rota-round-brief-")
+			if err != nil {
+				return wrap(err)
+			}
+			tmpName = tmp.Name()
+			tmp.WriteString(text)
+			return wrap(tmp.Close())
+		}})
 	if solo {
 		// No pane: mark the receiver busy and hand the brief back.
-		b, wt, err := e.soloHandOff(root, o.To, text, rnd)
-		if err != nil {
-			return res, wrap(err)
-		}
-		res.Host, res.Brief, res.Worktree = host.Solo, b, wt
-		res.Changed = true
-		return res, wrap(adopt())
+		steps = append(steps, step{name: "solo hand-off", do: func() error {
+			b, wt, err := e.soloHandOff(root, o.To, text, rnd)
+			if err != nil {
+				return wrap(err)
+			}
+			res.Host, res.Brief, res.Worktree = host.Solo, b, wt
+			res.Changed = true
+			return nil
+		}})
+	} else {
+		steps = append(steps, step{name: "dispatch", keep: true, do: func() error {
+			if _, err := e.workerEnv().Dispatch(ctx, root, worker.DispatchOpts{Slot: o.To, BodyFile: tmpName, Task: id, Round: &rnd, Branch: branch, Model: model}); err != nil {
+				// The claim and branch stay with the receiver; idle marks the
+				// transfer as not delivered, so the same call resumes it.
+				editSlot(root, o.To, func(s *worker.Slot) error { return s.MarkState("idle", "") })
+				return err
+			}
+			res.Dispatched, res.Changed = true, true
+			return nil
+		}})
 	}
-	tmp, err := os.CreateTemp("", "rota-round-brief-")
-	if err != nil {
-		return res, wrap(err)
+	steps = append(steps, step{name: "adopt the queued PR", do: func() error { return wrap(adopt()) }})
+	err = runSteps(steps)
+	if tmpName != "" {
+		os.Remove(tmpName)
 	}
-	defer os.Remove(tmp.Name())
-	tmp.WriteString(text)
-	tmp.Close()
-	if _, err := e.workerEnv().Dispatch(ctx, root, worker.DispatchOpts{Slot: o.To, BodyFile: tmp.Name(), Task: id, Round: &rnd, Branch: branch, Model: model}); err != nil {
-		// The claim and branch stay with the receiver; idle marks the transfer
-		// as not delivered, so the same call resumes it.
-		editSlot(root, o.To, func(s *worker.Slot) error { return s.MarkState("idle", "") })
-		return res, err
-	}
-	res.Dispatched, res.Changed = true, true
-	return res, wrap(adopt())
+	return res, err
 }
 
 // queuedHead is the tip of a queued PR's branch: origin's, else the local one.
