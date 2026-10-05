@@ -34,7 +34,7 @@ func CycleIDs(root string, hashes map[string]bool) []string {
 
 // Reopener is the part of the backlog Restore writes through.
 type Reopener interface {
-	Name() string
+	Capabilities() backlog.Capabilities
 	Reopen(ref string) (changed bool, err error)
 }
 
@@ -44,7 +44,7 @@ type Reopener interface {
 func Restore(b Reopener, root string, ids []string, warn io.Writer) error {
 	for _, id := range ids {
 		changed := false
-		if b.Name() != "file" || !active(root, id) {
+		if b.Capabilities().Tracker || !active(root, id) {
 			var err error
 			if changed, err = b.Reopen(id); err != nil {
 				return err
