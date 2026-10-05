@@ -78,7 +78,11 @@ Tasks get no priority or size tag.
 
 ## Step 4.5 — Tag Active Milestone (when applicable)
 
-Follow `references/milestone-tagging.md`: the `rota milestone active` gate, and the question shapes. Carry the chosen milestone as `--milestone` in Step 6. Omit it if the user left the item untagged.
+Tagging is optional: an untagged item is fully workable, plannable and shippable.
+
+Tag only when the user named a milestone (`--milestone M01`, *"for M02"*), or when exactly one milestone is active (`rota milestone active --json`, `data.ids`) and the items plainly belong to it. In that case ask one question, `AskUserQuestion`, single-select: *"Tag these with `<MID> — <title>`?"* — *"Yes — tag all"* / *"No — leave untagged (Recommended)"*. With no active milestone, or several and none named, skip the step and leave the items untagged. An ambiguous reply means untagged; under-tagging is recoverable, mis-tagging clutters the milestone view.
+
+Carry the choice (`"M01"` or `"M01, M03"`) as `--milestone` into Step 6. Omit it when untagged.
 
 ## Step 4.6 — Tag Sub-Repo (when umbrella mode is on)
 
@@ -192,5 +196,4 @@ Run the chosen command and pass its per-ID output through verbatim. On exit 4 (`
 | [`dependent-items.md`](references/dependent-items.md) | When to declare `--depends-on` and in what order to create. |
 | [`detail-files.md`](references/detail-files.md) | Detail-file template for bulky input. |
 | [`issue-mode.md`](references/issue-mode.md) | Issue-backend umbrella rules (Step 4.6). |
-| [`milestone-tagging.md`](references/milestone-tagging.md) | Milestone-tagging question shapes (Step 4.5). |
 | [`umbrella-mode.md`](references/umbrella-mode.md) | Umbrella-mode verbs, registry shape, `Repos:` semantics. |
