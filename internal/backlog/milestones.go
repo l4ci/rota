@@ -59,15 +59,7 @@ func (b *Issues) warn(msg string) {
 }
 
 func (b *Issues) milestoneTracker() (MilestoneTracker, error) {
-	tr, err := b.tracker()
-	if err != nil {
-		return nil, err
-	}
-	mt, ok := tr.(MilestoneTracker)
-	if !ok {
-		return nil, errors.New("this tracker has no native milestone support")
-	}
-	return mt, nil
+	return capability[MilestoneTracker](b, noMilestoneSupport)
 }
 
 // parseMSTitle splits "M02 — Sharing" into "M02" and "Sharing". The ID must
