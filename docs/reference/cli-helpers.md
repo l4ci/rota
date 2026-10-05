@@ -66,6 +66,7 @@ exit codes and repo scope: [verb contract](../design/contract/README.md).
 | `rota config set <key> <value>` | set one key in .rota/config.json |
 | `rota config check` | compare .rota/config.json with the schema |
 | `rota config fill` | write the schema default for every missing key |
+| `rota config save-global` | save `.rota/config.json` as the machine-wide defaults new projects start from |
 
 ## `rota repo`
 
