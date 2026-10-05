@@ -313,7 +313,7 @@ func TestGitLabPRMerge(t *testing.T) {
 			}
 			return "", "unexpected " + name + " " + line, 2
 		}}
-		sha, err := newAdapter(t, "gitlab", s).PRMerge(ctx, 4)
+		sha, err := newAdapter(t, "gitlab", s).PRMerge(ctx, 4, MergeOpts{DeleteBranch: true})
 		calledGit := false
 		for _, l := range s.calls {
 			calledGit = calledGit || strings.HasPrefix(l, "git merge-base")
@@ -373,7 +373,7 @@ func TestGitLabMergeGitCallsTimeOut(t *testing.T) {
 		t.Fatal(err)
 	}
 	done := make(chan error, 1)
-	go func() { _, err := a.PRMerge(context.Background(), 4); done <- err }()
+	go func() { _, err := a.PRMerge(context.Background(), 4, MergeOpts{DeleteBranch: true}); done <- err }()
 	select {
 	case err := <-done:
 		if !IsKind(err, KindFailed) || !strings.Contains(err.Error(), "git fetch origin failed") {

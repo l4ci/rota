@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/git"
 	"os"
 	"path/filepath"
 	"sort"
@@ -204,7 +205,7 @@ func (e Env) Train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 			res.Culprit = m.Target
 			res.Members[i].Culprit = true
 			res.Verdict = GateMergeFailed
-			if strings.Contains(out+errb, "CONFLICT") {
+			if git.IsMergeConflict(out + errb) {
 				res.Err = fmt.Sprintf("TRAIN-FAIL %s — %s does not merge onto %s with the %d member(s) before it: conflict", m.Target, m.Branch, o.Base, i)
 				res.Hint = fmt.Sprintf("send %s back to merge %s, or run the train without it", m.Target, o.Base)
 			} else {

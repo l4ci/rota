@@ -43,9 +43,9 @@ def merge():
     db["state"] = "MERGED"; save()
 
 if tool == "gh" and args[:2] == ["pr", "view"]:
-    if "body" in args: print(db["body"])
-    else: print(json.dumps({"headRefName": db["head"], "headRefOid": db["sha"], "baseRefName": db["base"],
-                            "state": db["state"], "mergeCommit": {"oid": db["merge"]} if db["merge"] else None}))
+    print(json.dumps({"headRefName": db["head"], "headRefOid": db["sha"], "baseRefName": db["base"],
+                      "state": db["state"], "body": db["body"],
+                      "mergeCommit": {"oid": db["merge"]} if db["merge"] else None}))
 elif tool == "gh" and args[:2] == ["pr", "merge"]:
     merge()
 elif tool == "glab" and args[:1] == ["api"]:

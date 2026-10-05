@@ -230,7 +230,7 @@ func dispatch(ctx context.Context, a Adapter, op string, args map[string]json.Ra
 	case "pr_checkout":
 		return nil, a.PRCheckout(ctx, in("pr"))
 	case "pr_merge":
-		return a.PRMerge(ctx, in("pr"))
+		return a.PRMerge(ctx, in("pr"), MergeOpts{DeleteBranch: true})
 	case "pr_comment":
 		return nil, a.PRComment(ctx, in("pr"), s("body"))
 	case "pr_state":

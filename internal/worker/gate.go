@@ -2,7 +2,6 @@ package worker
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	"os"
@@ -15,6 +14,7 @@ import (
 
 	"github.com/l4ci/rota/internal/config"
 	gatepath "github.com/l4ci/rota/internal/gate"
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/tracker"
 )
@@ -111,8 +111,6 @@ type GateResult struct {
 // OK reports a successful verdict.
 func (r GateResult) OK() bool { return r.Verdict == GateFresh || r.Verdict == GatePass }
 
-type prInfo struct{ head, sha, base, state, merge string }
-
 // GateTarget is what a gate argument resolves to: a slot, or the queued record
 // of a PR whose slot moved on. Both carry the branch, PR, base and relay log the
 // gate reads; Name and Task belong to a slot, Issue to a queued record.
@@ -163,6 +161,14 @@ func (r Registry) GateTarget(arg string) (GateTarget, error) {
 	return GateTarget{}, fail(exitcode.ExitResolution, fmt.Sprintf("slot '%s' is not in the pool", arg))
 }
 
+// Forge is the part of tracker.Adapter the gate merges through: read the PR,
+// then ask the forge to merge it pinned to the verified head. Provider
+// differences (argv, JSON shape, auto-merge) live behind it in internal/tracker.
+type Forge interface {
+	PRView(ctx context.Context, pr int) (tracker.PRInfo, error)
+	PRRequestMerge(ctx context.Context, pr int, o tracker.MergeOpts) error
+}
+
 // Gate runs the merge gate for a slot or a queued PR (see GateTarget). A
 // passing gate of a queued PR drops its record.
 func (e Env) Gate(ctx context.Context, root string, o GateOpts) (GateResult, error) {
@@ -196,10 +202,10 @@ func (e Env) gate(ctx context.Context, root string, o GateOpts, res GateResult, 
 
 	g := &gate{e: e, ctx: ctx, root: root, res: &res, o: o, target: t, reg: reg, branch: branch, pr: pr}
 	g.provider = e.detectProvider(root, pr)
-	g.cli = e.Forge(g.provider, root, settings.RetryWait)
-	g.cliName = "gh"
-	if g.provider == "gitlab" {
-		g.cliName = "glab"
+	g.cliName = tracker.CLIName(g.provider)
+	var ferr error
+	if g.forge, ferr = e.Forge(g.provider, root, settings.RetryWait); ferr != nil {
+		return g.broke(fmt.Sprintf("cannot reach the %s forge: %v", g.provider, ferr))
 	}
 
 	// A PR merges what was PUSHED, so with a PR and an origin remote the gate
@@ -278,18 +284,19 @@ func (e Env) gate(ctx context.Context, root string, o GateOpts, res GateResult, 
 		if !ok {
 			return g.broke(fmt.Sprintf("could not read PR %s from %s", g.prNum, g.provider))
 		}
+		// OPEN, MERGED or CLOSED on both forges.
 		mismatch := func(msg string) (GateResult, error) {
 			return g.verdict(GatePRMismatch, "error: "+msg, ""), nil
 		}
 		switch {
-		case info.state != "OPEN":
-			return mismatch(fmt.Sprintf("PR %s is %s, not open", g.prNum, info.state))
-		case info.base != o.Base:
-			return mismatch(fmt.Sprintf("PR %s targets '%s', the gate's base is '%s' — stacked PR?", g.prNum, info.base, o.Base))
-		case info.head != branch:
-			return mismatch(fmt.Sprintf("PR %s is headed by '%s', slot %s verified '%s'", g.prNum, info.head, o.Slot, branch))
-		case info.sha != g.verified:
-			return mismatch(fmt.Sprintf("PR %s head is %s, the verified %s is %s — pushed since?", g.prNum, info.sha, g.headRef, g.verified))
+		case info.State != "OPEN":
+			return mismatch(fmt.Sprintf("PR %s is %s, not open", g.prNum, info.State))
+		case info.Base != o.Base:
+			return mismatch(fmt.Sprintf("PR %s targets '%s', the gate's base is '%s' — stacked PR?", g.prNum, info.Base, o.Base))
+		case info.Head != branch:
+			return mismatch(fmt.Sprintf("PR %s is headed by '%s', slot %s verified '%s'", g.prNum, info.Head, o.Slot, branch))
+		case info.HeadSHA != g.verified:
+			return mismatch(fmt.Sprintf("PR %s head is %s, the verified %s is %s — pushed since?", g.prNum, info.HeadSHA, g.headRef, g.verified))
 		}
 	}
 
@@ -346,7 +353,7 @@ func (e Env) gate(ctx context.Context, root string, o GateOpts, res GateResult, 
 			// Only a real conflict is called one. Anything else (no committer
 			// identity, a hook, a locked index) is reported with git's own words,
 			// so it is not mistaken for work to resolve with the slot.
-			if strings.Contains(out+errb, "CONFLICT") {
+			if git.IsMergeConflict(out + errb) {
 				return g.verdict(GateMergeFailed, fmt.Sprintf("error: merge of %s into %s conflicted — resolve with the slot that owns the context", branch, o.Base), ""), nil
 			}
 			return g.verdict(GateMergeFailed, fmt.Sprintf("error: merge of %s into %s failed (exit %d): %s", branch, o.Base, code, strings.TrimSpace(errb+" "+out)), ""), nil
@@ -509,7 +516,7 @@ type gate struct {
 	pr       string
 	prNum    string
 	provider string
-	cli      *tracker.CLI
+	forge    Forge
 	cliName  string
 	remote   bool
 	headRef  string
@@ -527,93 +534,24 @@ func (g *gate) broke(msg string) (GateResult, error) {
 	return g.verdict(GateCheckBroke, fmt.Sprintf("CHECK-BROKE %s — %s", g.o.Slot, msg), ""), nil
 }
 
-// call makes one forge CLI call with an empty stdin.
-func (g *gate) call(args ...string) (tracker.Result, error) {
-	return g.cli.Run(g.ctx, args, nil)
-}
-
-func (g *gate) prInfo() (prInfo, bool) {
-	if g.provider == "gitlab" {
-		r, err := g.call("api", "projects/:fullpath/merge_requests/"+g.prNum)
-		if err != nil || r.ExitCode != 0 {
-			return prInfo{}, false
-		}
-		var d struct {
-			Source, Sha, Target, State, Merge, Squash string
-		}
-		var raw map[string]any
-		if json.Unmarshal(r.Stdout, &raw) != nil {
-			return prInfo{}, false
-		}
-		str := func(k string) string { s, _ := raw[k].(string); return s }
-		d.Source, d.Sha, d.Target = str("source_branch"), str("sha"), str("target_branch")
-		d.State, d.Merge, d.Squash = str("state"), str("merge_commit_sha"), str("squash_commit_sha")
-		if d.Source == "" && d.Sha == "" {
-			return prInfo{}, false
-		}
-		st := "CLOSED"
-		switch d.State {
-		case "opened":
-			st = "OPEN"
-		case "merged":
-			st = "MERGED"
-		}
-		m := d.Merge
-		if m == "" {
-			m = d.Squash
-		}
-		return prInfo{d.Source, d.Sha, d.Target, st, m}, true
+// prInfo reads the PR; ok is false when the forge could not be read.
+func (g *gate) prInfo() (tracker.PRInfo, bool) {
+	n, err := strconv.Atoi(g.prNum)
+	if err != nil {
+		return tracker.PRInfo{}, false
 	}
-	r, err := g.call("pr", "view", g.prNum, "--json", "headRefName,headRefOid,baseRefName,state,mergeCommit")
-	if err != nil || r.ExitCode != 0 {
-		return prInfo{}, false
-	}
-	var d struct {
-		HeadRefName string `json:"headRefName"`
-		HeadRefOid  string `json:"headRefOid"`
-		BaseRefName string `json:"baseRefName"`
-		State       string `json:"state"`
-		MergeCommit *struct {
-			Oid string `json:"oid"`
-		} `json:"mergeCommit"`
-	}
-	if json.Unmarshal(r.Stdout, &d) != nil || d.HeadRefName == "" {
-		return prInfo{}, false
-	}
-	m := ""
-	if d.MergeCommit != nil {
-		m = d.MergeCommit.Oid
-	}
-	return prInfo{d.HeadRefName, d.HeadRefOid, d.BaseRefName, d.State, m}, true
+	info, err := g.forge.PRView(g.ctx, n)
+	return info, err == nil
 }
 
 // prBody is the PR/MR description. An error means it could not be read.
 func (g *gate) prBody() (string, error) {
-	if g.provider == "gitlab" {
-		r, err := g.call("api", "projects/:fullpath/merge_requests/"+g.prNum)
-		if err != nil {
-			return "", err
-		}
-		if r.ExitCode != 0 {
-			return "", fmt.Errorf("%s exited %d", g.cliName, r.ExitCode)
-		}
-		var d struct {
-			Description string `json:"description"`
-		}
-		if err := json.Unmarshal(r.Stdout, &d); err != nil {
-			return "", err
-		}
-		return d.Description, nil
-	}
-	r, err := g.call("pr", "view", g.pr, "--json", "body", "-q", ".body")
+	n, err := strconv.Atoi(trailingNumber(g.pr))
 	if err != nil {
 		return "", err
 	}
-	if r.ExitCode != 0 {
-		return "", fmt.Errorf("%s exited %d", g.cliName, r.ExitCode)
-	}
-	// gh prints the jq result followed by a newline; only that one goes.
-	return strings.TrimSuffix(string(r.Stdout), "\n"), nil
+	info, err := g.forge.PRView(g.ctx, n)
+	return info.Body, err
 }
 
 var (
@@ -724,25 +662,12 @@ func approvalsSection(body string) (string, bool) {
 // when it ends the gate with a verdict.
 func (g *gate) mergeRemote() (GateResult, bool) {
 	e, o := g.e, g.o
-	// Pinned to the verified SHA so a push after the check is refused. glab
-	// schedules an auto-merge while a pipeline runs unless told not to, and a
-	// scheduled merge reports success and merges nothing.
-	var args []string
-	if g.provider == "gitlab" {
-		args = []string{"mr", "merge", g.prNum, "-y", "--auto-merge=false", "--sha", g.verified}
-	} else {
-		args = []string{"pr", "merge", g.prNum, "--merge", "--match-head-commit", g.verified}
-	}
-	r, err := g.call(args...)
-	if err != nil || r.ExitCode != 0 {
-		out := ""
-		code := 0
-		if err != nil {
-			out, code = err.Error(), 1
-		} else {
-			out, code = string(r.Stdout)+string(r.Stderr), r.ExitCode
-		}
-		return g.verdict(GateMergeFailed, fmt.Sprintf("error: %s merge failed for %s (exit %d):\n%s", g.cliName, g.pr, code, tailLines(out, 20)), ""), true
+	// Pinned to the verified SHA so a push after the check is refused. The
+	// adapter turns auto-merge off where the forge would otherwise schedule a
+	// merge that reports success and merges nothing.
+	n, _ := strconv.Atoi(g.prNum)
+	if err := g.forge.PRRequestMerge(g.ctx, n, tracker.MergeOpts{HeadSHA: g.verified}); err != nil {
+		return g.verdict(GateMergeFailed, fmt.Sprintf("error: %s merge failed for %s:\n%s", g.cliName, g.pr, tailLines(err.Error(), 20)), ""), true
 	}
 
 	// Confirm it landed: the tracker's word is not enough. The merge commit can
@@ -763,7 +688,7 @@ func (g *gate) mergeRemote() (GateResult, bool) {
 			res, _ := g.broke(fmt.Sprintf("could not re-read PR %s after merging", g.prNum))
 			return res, true
 		}
-		state, sha = info.state, info.merge
+		state, sha = info.State, info.MergeSHA
 		if state == "MERGED" && sha != "" {
 			break
 		}

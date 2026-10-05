@@ -58,7 +58,7 @@ func (f *rrFake) ClosedNumbers(body string) []int {
 // gate, so it records nothing.
 func (f *rrFake) PRFiles(context.Context, int) ([]string, error) { return nil, nil }
 
-func (f *rrFake) PRMerge(_ context.Context, pr int) (string, error) {
+func (f *rrFake) PRMerge(_ context.Context, pr int, _ tracker.MergeOpts) (string, error) {
 	if err := f.rec("pr_merge", pr); err != nil {
 		return "", err
 	}

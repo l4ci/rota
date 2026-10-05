@@ -372,97 +372,97 @@
       "Exit": 3,
       "Origin": "seed",
       "Local": "seed",
-      "Forge": "gh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\n"
+      "Forge": "github PRView 7\n"
     },
     "c: head sha moved": {
       "Exit": 3,
       "Origin": "seed",
       "Local": "seed",
-      "Forge": "gh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\n"
+      "Forge": "github PRView 7\n"
     },
     "c: matching PR is fresh": {
       "Exit": 0,
       "Origin": "seed",
       "Local": "seed",
-      "Forge": "gh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\ngh pr view https://github.com/o/r/pull/7 --json body -q .body\n"
+      "Forge": "github PRView 7\ngithub PRView 7\n"
     },
     "c: stacked PR": {
       "Exit": 3,
       "Origin": "seed",
       "Local": "seed",
-      "Forge": "gh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\n"
+      "Forge": "github PRView 7\n"
     },
     "c: wrong head branch": {
       "Exit": 3,
       "Origin": "seed",
       "Local": "seed",
-      "Forge": "gh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\n"
+      "Forge": "github PRView 7\n"
     },
     "d: --no-verify": {
       "Exit": 0,
       "Origin": "merge pr\nseed\nwork",
       "Local": "merge pr\nseed\nwork",
-      "Forge": "gh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\ngh pr view https://github.com/o/r/pull/7 --json body -q .body\ngh pr merge 7 --merge --match-head-commit SHA\ngh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\n"
+      "Forge": "github PRView 7\ngithub PRView 7\ngithub PRRequestMerge 7 pin=SHA deleteBranch=false\ngithub PRView 7\n"
     },
     "d: github merge, verified on the merged tree": {
       "Exit": 0,
       "Origin": "merge pr\nseed\nwork",
       "Local": "merge pr\nseed\nwork",
-      "Forge": "gh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\ngh pr view https://github.com/o/r/pull/7 --json body -q .body\ngh pr merge 7 --merge --match-head-commit SHA\ngh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\n"
+      "Forge": "github PRView 7\ngithub PRView 7\ngithub PRRequestMerge 7 pin=SHA deleteBranch=false\ngithub PRView 7\n"
     },
     "d: no verify commands": {
       "Exit": 0,
       "Origin": "merge pr\nseed\nwork",
       "Local": "merge pr\nseed\nwork",
-      "Forge": "gh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\ngh pr view https://github.com/o/r/pull/7 --json body -q .body\ngh pr merge 7 --merge --match-head-commit SHA\ngh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\n"
+      "Forge": "github PRView 7\ngithub PRView 7\ngithub PRRequestMerge 7 pin=SHA deleteBranch=false\ngithub PRView 7\n"
     },
     "d: verify fails after the merge landed": {
       "Exit": 4,
       "Origin": "merge pr\nseed\nwork",
       "Local": "merge pr\nseed\nwork",
-      "Forge": "gh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\ngh pr view https://github.com/o/r/pull/7 --json body -q .body\ngh pr merge 7 --merge --match-head-commit SHA\ngh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\n"
+      "Forge": "github PRView 7\ngithub PRView 7\ngithub PRRequestMerge 7 pin=SHA deleteBranch=false\ngithub PRView 7\n"
     },
     "e: a push after the check is refused by the pin": {
       "Exit": 3,
       "Origin": "seed",
       "Local": "seed",
-      "Forge": "gh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\ngh pr view https://github.com/o/r/pull/7 --json body -q .body\ngh pr merge 7 --merge --match-head-commit SHA\n"
+      "Forge": "github PRView 7\ngithub PRView 7\ngithub PRRequestMerge 7 pin=SHA deleteBranch=false\n"
     },
     "e: merge into another branch": {
       "Exit": 4,
       "Origin": "seed",
       "Local": "seed",
-      "Forge": "gh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\ngh pr view https://github.com/o/r/pull/7 --json body -q .body\ngh pr merge 7 --merge --match-head-commit SHA\ngh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\n"
+      "Forge": "github PRView 7\ngithub PRView 7\ngithub PRRequestMerge 7 pin=SHA deleteBranch=false\ngithub PRView 7\n"
     },
     "e: merge that merged nothing": {
       "Exit": 4,
       "Origin": "seed",
       "Local": "seed",
-      "Forge": "glab api projects/:fullpath/merge_requests/7 --paginate\nglab api projects/:fullpath/merge_requests/7 --paginate\nglab mr merge 7 -y --auto-merge=false --sha SHA\nglab api projects/:fullpath/merge_requests/7 --paginate\nglab api projects/:fullpath/merge_requests/7 --paginate\nglab api projects/:fullpath/merge_requests/7 --paginate\nglab api projects/:fullpath/merge_requests/7 --paginate\nglab api projects/:fullpath/merge_requests/7 --paginate\n"
+      "Forge": "gitlab PRView 7\ngitlab PRView 7\ngitlab PRRequestMerge 7 pin=SHA deleteBranch=false\ngitlab PRView 7\ngitlab PRView 7\ngitlab PRView 7\ngitlab PRView 7\ngitlab PRView 7\n"
     },
     "e: refused merge shows the CLI output": {
       "Exit": 3,
       "Origin": "seed",
       "Local": "seed",
-      "Forge": "gh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\ngh pr view https://github.com/o/r/pull/7 --json body -q .body\ngh pr merge 7 --merge --match-head-commit SHA\n"
+      "Forge": "github PRView 7\ngithub PRView 7\ngithub PRRequestMerge 7 pin=SHA deleteBranch=false\n"
     },
     "f2: gitlab provenance reads the MR description": {
       "Exit": 4,
       "Origin": "seed",
       "Local": "seed",
-      "Forge": "glab api projects/:fullpath/merge_requests/7 --paginate\nglab api projects/:fullpath/merge_requests/7 --paginate\n"
+      "Forge": "gitlab PRView 7\ngitlab PRView 7\n"
     },
     "f: gitlab fast-forward merge has no merge commit": {
       "Exit": 0,
       "Origin": "seed\nwork",
       "Local": "seed\nwork",
-      "Forge": "glab api projects/:fullpath/merge_requests/7 --paginate\nglab api projects/:fullpath/merge_requests/7 --paginate\nglab mr merge 7 -y --auto-merge=false --sha SHA\nglab api projects/:fullpath/merge_requests/7 --paginate\nglab api projects/:fullpath/merge_requests/7 --paginate\nglab api projects/:fullpath/merge_requests/7 --paginate\nglab api projects/:fullpath/merge_requests/7 --paginate\nglab api projects/:fullpath/merge_requests/7 --paginate\n"
+      "Forge": "gitlab PRView 7\ngitlab PRView 7\ngitlab PRRequestMerge 7 pin=SHA deleteBranch=false\ngitlab PRView 7\ngitlab PRView 7\ngitlab PRView 7\ngitlab PRView 7\ngitlab PRView 7\n"
     },
     "f: gitlab squash falls back to squash_commit_sha": {
       "Exit": 0,
       "Origin": "merge pr\nseed\nwork",
       "Local": "merge pr\nseed\nwork",
-      "Forge": "glab api projects/:fullpath/merge_requests/7 --paginate\nglab api projects/:fullpath/merge_requests/7 --paginate\nglab mr merge 7 -y --auto-merge=false --sha SHA\nglab api projects/:fullpath/merge_requests/7 --paginate\n"
+      "Forge": "gitlab PRView 7\ngitlab PRView 7\ngitlab PRRequestMerge 7 pin=SHA deleteBranch=false\ngitlab PRView 7\n"
     },
     "g: PR without an origin remote is refused, never merged locally": {
       "Exit": 5,
@@ -486,7 +486,7 @@
       "Exit": 6,
       "Origin": "merge pr\nseed\nwork",
       "Local": "local only commit\nseed",
-      "Forge": "gh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\ngh pr view https://github.com/o/r/pull/7 --json body -q .body\ngh pr merge 7 --merge --match-head-commit SHA\ngh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\n"
+      "Forge": "github PRView 7\ngithub PRView 7\ngithub PRRequestMerge 7 pin=SHA deleteBranch=false\ngithub PRView 7\n"
     }
   }
 }

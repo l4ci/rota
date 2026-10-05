@@ -22,6 +22,14 @@ const Timeout = 2 * time.Minute
 // ErrNoGit is returned when the git binary cannot be run.
 var ErrNoGit = errors.New("git is not installed")
 
+// IsMergeConflict reports whether the output of a failed `git merge` says the
+// merge conflicted, as opposed to failing for another reason (no committer
+// identity, a hook, a locked index). It matches git's C-locale words, which
+// Run asks for.
+func IsMergeConflict(out string) bool {
+	return strings.Contains(out, "CONFLICT") || strings.Contains(out, "Automatic merge failed")
+}
+
 // Repo runs git in Dir ("" is the process cwd).
 type Repo struct{ Dir string }
 
