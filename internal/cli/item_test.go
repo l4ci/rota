@@ -14,9 +14,9 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 )
 
-// a4Project is a project with a backlog and no git: enough for the verbs
+// trackerProject is a project with a backlog and no git: enough for the verbs
 // that do not look at git.
-func a4Project(t *testing.T, config string) string {
+func trackerProject(t *testing.T, config string) string {
 	t.Helper()
 	root := t.TempDir()
 	rota := filepath.Join(root, ".rota")
@@ -61,8 +61,8 @@ func rotaRun(t *testing.T, args ...string) (int, map[string]any, string) {
 	return code, env, errb.String()
 }
 
-func TestA4IssueModeNeedsTracker(t *testing.T) {
-	root := a4Project(t, `{"backlog": {"backend": "issues"}}`)
+func TestItemIssueModeNeedsTracker(t *testing.T) {
+	root := trackerProject(t, `{"backlog": {"backend": "issues"}}`)
 	code, env, stderr := rotaRun(t, "--json", "-C", root, "item", "complete", "12", "--commit", "abc")
 	if code != ExitUnavailable || env["ok"] != false || !strings.Contains(stderr, "cannot determine provider") {
 		t.Fatalf("code=%d env=%v stderr=%s", code, env, stderr)
@@ -86,8 +86,8 @@ func TestA4IssueModeNeedsTracker(t *testing.T) {
 
 // With a tracker that knows no issue 12, every item verb answers 3, and
 // nothing is written.
-func TestA4IssueModeUnknownItem(t *testing.T) {
-	root := a4Project(t, `{"backlog": {"backend": "issues"}}`)
+func TestItemIssueModeUnknownItem(t *testing.T) {
+	root := trackerProject(t, `{"backlog": {"backend": "issues"}}`)
 	fake := &trackertest.Fake{}
 	withTracker(t, fake)
 	for _, argv := range [][]string{
@@ -113,8 +113,8 @@ func TestA4IssueModeUnknownItem(t *testing.T) {
 	}
 }
 
-func TestA4Scope(t *testing.T) {
-	root := a4Project(t, "")
+func TestItemScope(t *testing.T) {
+	root := trackerProject(t, "")
 	if code, _, _ := rotaRun(t, "--json", "-C", root, "item", "reopen", "B01", "--repo", "web"); code != ExitResolution {
 		t.Errorf("--repo outside umbrella: exit %d, want 3", code)
 	}
@@ -138,7 +138,7 @@ type exitErr struct{ code int }
 func (e exitErr) Error() string { return "tracker said no" }
 func (e exitErr) Exit() int     { return e.code }
 
-func TestA4FailMapping(t *testing.T) {
+func TestItemFailMapping(t *testing.T) {
 	cases := []struct {
 		name string
 		err  error
@@ -156,7 +156,7 @@ func TestA4FailMapping(t *testing.T) {
 		{"cli error passes through", Unavailable("x"), ExitUnavailable, ""},
 	}
 	for _, c := range cases {
-		res, err := a4Fail(c.err)
+		res, err := backlogFail(c.err)
 		var e *Error
 		if !errors.As(err, &e) || e.Exit != c.exit {
 			t.Errorf("%s: err = %#v, want exit %d", c.name, err, c.exit)
@@ -175,7 +175,7 @@ func TestA4FailMapping(t *testing.T) {
 			}
 		}
 	}
-	if _, err := a4Fail(errors.New("boom")); asError(err).Exit != ExitInternal {
+	if _, err := backlogFail(errors.New("boom")); asError(err).Exit != ExitInternal {
 		t.Errorf("unclassified error should be internal, got %v", err)
 	}
 }

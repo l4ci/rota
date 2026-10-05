@@ -22,7 +22,7 @@ type who struct{ ID, Type string }
 // itemNotes resolves id to its issue's notes. An unknown item is exit 3.
 func itemNotes(c *Ctx, id string, w *who) func() (artifact.Notes, error) {
 	return func() (artifact.Notes, error) {
-		_, wf, cid, typ, err := a4Flow(c, id)
+		_, wf, cid, typ, err := itemFlow(c, id)
 		if err != nil {
 			return nil, err
 		}
@@ -37,7 +37,7 @@ func openDesign(c *Ctx, id string) (design.Store, *who, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	w := &who{ID: id, Type: a4Type(id)}
+	w := &who{ID: id, Type: itemType(id)}
 	if issue {
 		return design.NewNotes(itemNotes(c, id, w)), w, nil
 	}
@@ -50,7 +50,7 @@ func openProof(c *Ctx, id string) (root string, st proof.Store, w *who, err erro
 	if err != nil {
 		return "", nil, nil, err
 	}
-	w = &who{ID: id, Type: a4Type(id)}
+	w = &who{ID: id, Type: itemType(id)}
 	if issue {
 		return root, proof.NewNotes(itemNotes(c, id, w)), w, nil
 	}
@@ -90,7 +90,7 @@ func openItems(c *Ctx, id string) (plan.Items, error) {
 		return plan.FileItems(root), nil
 	}
 	return plan.NewIssueItems(func() (backlog.Backend, error) {
-		be, _, _, _, err := a4Flow(c, id)
+		be, _, _, _, err := itemFlow(c, id)
 		return be, err
 	}), nil
 }

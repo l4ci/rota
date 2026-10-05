@@ -12,11 +12,11 @@ import (
 	"github.com/l4ci/rota/internal/plan"
 )
 
-// Glue for the design and plan groups (A6). Add, show, put and rm run on
-// whichever store the backend gives them (a6_stores.go); list, amend and the
+// Glue for the design and plan groups. Add, show, put and rm run on
+// whichever store the backend gives them (artifact_stores.go); list, amend and the
 // plan checks work on the files and refuse under backlog.backend "issues".
 
-func docsCommands() []*Command {
+func designPlanCommands() []*Command {
 	return []*Command{
 		{Name: "design", Summary: "per-item design documents", Subs: []*Command{
 			{Name: "add", Summary: "create a design stub", Verb: designAdd},

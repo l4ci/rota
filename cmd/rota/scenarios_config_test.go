@@ -3,7 +3,7 @@ package main
 // Go-only scenarios for rota update, rota config show|set|check and rota repo
 // which|resolve|umbrella (#48), on the harness of harness_test.go. Each runs
 // the Go binary and is checked against its frozen record in
-// testdata/frozen/a4c.jsonl (regenerate with -update-frozen).
+// testdata/frozen/config.jsonl (regenerate with -update-frozen).
 //
 // Behaviour worth knowing: config show reads keys outside the schema; config
 // check exits 1 unless up to date; repo umbrella and repo resolve walk up to
@@ -199,7 +199,7 @@ func updScn(name, latest string, installType, status string) scn {
 
 // ---- the scenarios -----------------------------------------------------------------
 
-func suiteA4C(t *testing.T) {
+func suiteConfig(t *testing.T) {
 	updFixtures(t)
 	var all []scn
 	add := func(s ...scn) { all = append(all, s...) }

@@ -9,9 +9,9 @@ package main
 // database. The records were taken while the old helpers still existed and
 // Go matched them, so they stand in for the retired oracle.
 //
-// The suites: scenarios_a4 (item verbs), a4b (backlog, summary, status,
-// refactor), a4c (config, repo, update), a4d (issue sync and migrate),
-// a4_issue (item verbs in issue mode) and a4u (umbrella projects).
+// The suites: scenarios_item (item verbs), backlog (backlog, summary, status,
+// refactor), config (config, repo, update), issues (issue sync and migrate),
+// item_issue (item verbs in issue mode) and umbrella (umbrella projects).
 //
 // Safety: TestMain puts test/fakes first on PATH and checks that gh resolves
 // there; the binary never reaches the real gh or glab. Fixtures live in temp

@@ -32,7 +32,7 @@ func runOK(t *testing.T, root string, want int, argv ...string) *jsonx.Object {
 }
 
 func TestItemStateClaimReleaseShow(t *testing.T) {
-	root := a4Project(t, issuesConfig)
+	root := trackerProject(t, issuesConfig)
 	fake := flowFixture()
 	withTracker(t, fake)
 
@@ -90,7 +90,7 @@ func TestItemStateClaimReleaseShow(t *testing.T) {
 }
 
 func TestItemNotes(t *testing.T) {
-	root := a4Project(t, issuesConfig)
+	root := trackerProject(t, issuesConfig)
 	withTracker(t, flowFixture())
 	body := filepath.Join(t.TempDir(), "note.md")
 	os.WriteFile(body, []byte("# Plan\n\nstep one\n"), 0o644)
@@ -132,7 +132,7 @@ func TestItemNotes(t *testing.T) {
 // File mode: claim, release and state are no-ops (changed false) for an item
 // that exists; show and the notes are refused as issue-only.
 func TestWorkflowVerbsFileMode(t *testing.T) {
-	root := a4Project(t, "")
+	root := trackerProject(t, "")
 	body := filepath.Join(t.TempDir(), "n.md")
 	os.WriteFile(body, []byte("x"), 0o644)
 	for _, argv := range [][]string{
@@ -169,7 +169,7 @@ func TestWorkflowVerbsFileMode(t *testing.T) {
 // Tracker failures exit through their kind: rate limit 6, forge unavailable 5,
 // a missing object 3, anything the CLI cannot start 70; the message is kept.
 func TestTrackerErrorsMapToExits(t *testing.T) {
-	root := a4Project(t, issuesConfig)
+	root := trackerProject(t, issuesConfig)
 	for _, c := range []struct {
 		kind tracker.Kind
 		exit int

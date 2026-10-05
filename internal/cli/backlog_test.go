@@ -35,8 +35,8 @@ func dataOf(env map[string]any) *jsonx.Object {
 
 // Issue mode with no resolvable forge (no origin, no issues.provider) is the
 // tracker's unavailable: exit 5, before any read.
-func TestA4bIssueModeWithoutProviderExits5(t *testing.T) {
-	root := a4Project(t, `{"backlog": {"backend": "issues"}}`)
+func TestBacklogIssueModeWithoutProviderExits5(t *testing.T) {
+	root := trackerProject(t, `{"backlog": {"backend": "issues"}}`)
 	for _, argv := range [][]string{{"backlog", "list"}, {"backlog", "ids", "--milestone", "M01"}, {"backlog", "milestones", "12"}, {"summary"}} {
 		code, env, stderr := rotaRun(t, append([]string{"--json", "-C", root}, argv...)...)
 		if code != ExitUnavailable || env["ok"] != false || !strings.Contains(stderr, "provider") {
@@ -45,8 +45,8 @@ func TestA4bIssueModeWithoutProviderExits5(t *testing.T) {
 	}
 }
 
-func TestA4bFileOnlyVerbsAreRefusedUnderIssues(t *testing.T) {
-	root := a4Project(t, `{"backlog": {"backend": "issues"}}`)
+func TestBacklogFileOnlyVerbsAreRefusedUnderIssues(t *testing.T) {
+	root := trackerProject(t, `{"backlog": {"backend": "issues"}}`)
 	// drift is read-only, so its refusal is exit 1 (contract: backend).
 	for _, c := range []struct {
 		argv []string
@@ -61,8 +61,8 @@ func TestA4bFileOnlyVerbsAreRefusedUnderIssues(t *testing.T) {
 	}
 }
 
-func TestA4bBacklogViewsInIssueMode(t *testing.T) {
-	root := a4Project(t, `{"backlog": {"backend": "issues"}}`)
+func TestBacklogViewsInIssueMode(t *testing.T) {
+	root := trackerProject(t, `{"backlog": {"backend": "issues"}}`)
 	withTracker(t, &trackertest.Fake{Issues: []backlog.Issue{
 		{Number: 12, Title: "Crash on save", State: "open", Labels: []string{"type:bug"}, Milestone: "M02 — Next",
 			Body: "<!-- rota:fields\nRelated: F3\n-->"},
@@ -103,8 +103,8 @@ func TestA4bBacklogViewsInIssueMode(t *testing.T) {
 	}
 }
 
-func TestA4bUmbrellaFileModeScopes(t *testing.T) {
-	root := a4Project(t, "")
+func TestBacklogUmbrellaFileModeScopes(t *testing.T) {
+	root := trackerProject(t, "")
 	os.WriteFile(filepath.Join(root, ".rota", "repos.json"), []byte(`{"repos": [{"name": "web", "path": "web"}]}`), 0o644)
 	for _, argv := range [][]string{{"backlog", "list"}, {"summary"}, {"backlog", "ids", "--milestone", "M01"}} {
 		if code, _, stderr := rotaRun(t, append([]string{"--json", "-C", root}, argv...)...); code != 0 {
@@ -119,8 +119,8 @@ func TestA4bUmbrellaFileModeScopes(t *testing.T) {
 	}
 }
 
-func TestA4bUsageErrors(t *testing.T) {
-	root := a4Project(t, "")
+func TestBacklogUsageErrors(t *testing.T) {
+	root := trackerProject(t, "")
 	for _, argv := range [][]string{
 		{"backlog", "ids"}, {"backlog", "milestones"}, {"backlog", "stale"}, {"backlog", "stale", "--kind", "plans"},
 		{"backlog", "archive", "--days", "-1"}, {"status", "add", "b"}, {"status", "add", "b", "--items", "B01", "--repos", ""},
@@ -133,8 +133,8 @@ func TestA4bUsageErrors(t *testing.T) {
 	}
 }
 
-func TestA4bStaleBadTodayEnv(t *testing.T) {
-	root := a4Project(t, "")
+func TestBacklogStaleBadTodayEnv(t *testing.T) {
+	root := trackerProject(t, "")
 	t.Setenv("ROTA_TEST_TODAY", "tomorrow")
 	if code, _, stderr := rotaRun(t, "--json", "-C", root, "backlog", "stale", "--kind", "todo"); code != ExitUsage || !strings.Contains(stderr, "ROTA_TEST_TODAY") {
 		t.Errorf("exit %d, stderr %s", code, stderr)
@@ -148,8 +148,8 @@ func TestA4bStaleBadTodayEnv(t *testing.T) {
 	}
 }
 
-func TestA4bArchiveHonoursTestToday(t *testing.T) {
-	root := a4Project(t, "")
+func TestBacklogArchiveHonoursTestToday(t *testing.T) {
+	root := trackerProject(t, "")
 	os.WriteFile(filepath.Join(root, ".rota", "BACKLOG.md"), []byte("# TODO\n\n## Completed\n- ~~**[B01] [P1] a.** x~~ Done 2026-01-10 [`abc1234`]\n"), 0o644)
 	t.Setenv("ROTA_TEST_TODAY", "2026-01-12")
 	if code, env, _ := rotaRun(t, "--json", "-C", root, "backlog", "archive"); code != 0 || fmt.Sprint(get(dataOf(env), "moved")) != "0" {
@@ -165,8 +165,8 @@ func TestA4bArchiveHonoursTestToday(t *testing.T) {
 	}
 }
 
-func TestA4bStatusLifecycle(t *testing.T) {
-	root := a4Project(t, "")
+func TestBacklogStatusLifecycle(t *testing.T) {
+	root := trackerProject(t, "")
 	run := func(argv ...string) (int, map[string]any) {
 		code, env, _ := rotaRun(t, append([]string{"--json", "-C", root}, argv...)...)
 		return code, env
@@ -205,7 +205,7 @@ func TestA4bStatusLifecycle(t *testing.T) {
 	}
 }
 
-func TestA4bRefactorTargetsNeedsNoProject(t *testing.T) {
+func TestBacklogRefactorTargetsNeedsNoProject(t *testing.T) {
 	dir := t.TempDir()
 	code, env, _ := rotaRun(t, "--json", "-C", dir, "refactor", "targets")
 	d := dataOf(env)
@@ -226,16 +226,16 @@ func TestA4bRefactorTargetsNeedsNoProject(t *testing.T) {
 	}
 }
 
-func TestA4bSummaryNoBacklogIsResolution(t *testing.T) {
-	root := a4Project(t, "")
+func TestBacklogSummaryNoBacklogIsResolution(t *testing.T) {
+	root := trackerProject(t, "")
 	os.Remove(filepath.Join(root, ".rota", "BACKLOG.md"))
 	if code, _, stderr := rotaRun(t, "--json", "-C", root, "summary"); code != ExitResolution || !strings.Contains(stderr, "rota init") {
 		t.Errorf("exit %d stderr %s", code, stderr)
 	}
 }
 
-func TestA4bSummaryRecentIsNewestFirstInFileMode(t *testing.T) {
-	root := a4Project(t, "")
+func TestBacklogSummaryRecentIsNewestFirstInFileMode(t *testing.T) {
+	root := trackerProject(t, "")
 	md := "# TODO\n\n## Completed\n" +
 		"- ~~**[B01] [P1] a.** x~~ Done 2026-10-01 [`aaa1111`]\n" +
 		"- ~~**[B02] [P1] b.** x~~ Done 2026-10-03 [`bbb2222`]\n" +

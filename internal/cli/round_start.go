@@ -180,13 +180,13 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 		// Start has just recorded the round's host (C8): rebuild the env so the
 		// drift count asks that host, not the guess made before it existed.
 		env = roundEnv(ctx, root)
-		be, err := a4Open(c, root, false, "")
+		be, err := openBacklog(c, root, false, "")
 		if err != nil {
-			return a4Fail(err)
+			return backlogFail(err)
 		}
 		cands, err := env.Candidates(ctx, root, be, round.CandidateOpts{Scope: st.Scope, Slate: st.Slate, Shared: set.SharedPaths})
 		if err != nil {
-			return a4Fail(err)
+			return backlogFail(err)
 		}
 		drift := 0
 		if b, ok := be.(round.Board); ok && be.Name() == "issues" {
@@ -252,14 +252,14 @@ func roundCandidates(fs *flag.FlagSet) RunFunc {
 			return Result{}, Usage("--scope must be one of %s", strings.Join(roundcfg.Scopes, ", "))
 		}
 		ctx := c.Context()
-		be, err := a4Open(c, root, false, "")
+		be, err := openBacklog(c, root, false, "")
 		if err != nil {
-			return a4Fail(err)
+			return backlogFail(err)
 		}
 		env := roundEnv(ctx, root)
 		cands, err := env.Candidates(ctx, root, be, round.CandidateOpts{Scope: sc, Slate: slate, Shared: set.SharedPaths})
 		if err != nil {
-			return a4Fail(err)
+			return backlogFail(err)
 		}
 		d := jsonx.NewObject()
 		d.Set("scope", sc)

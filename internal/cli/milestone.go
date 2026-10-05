@@ -12,7 +12,7 @@ import (
 	ms "github.com/l4ci/rota/internal/milestone"
 )
 
-// Glue for the milestone group (A6). Every verb works on a milestone.Store
+// Glue for the milestone group. Every verb works on a milestone.Store
 // opened once by openMilestones: .rota/milestones files, one repo's tracker
 // issues, or an umbrella's.
 
@@ -58,7 +58,7 @@ func milestoneFail(err error, by string) (Result, error) {
 		}
 		return Result{Data: data}, err
 	}
-	return a4Fail(err)
+	return backlogFail(err)
 }
 
 // reindex regenerates MILESTONES.md and the vision block from st.

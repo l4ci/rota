@@ -103,7 +103,7 @@ func TestInitUmbrellaExits(t *testing.T) {
 }
 
 func TestVersionDrift(t *testing.T) {
-	root := a4Project(t, `{"rota": {"version": "4.9.0"}}`)
+	root := trackerProject(t, `{"rota": {"version": "4.9.0"}}`)
 	old := installedVersionFn
 	t.Cleanup(func() { installedVersionFn = old })
 
@@ -137,7 +137,7 @@ func TestVersionDrift(t *testing.T) {
 	installedVersionFn = func() string { return "5.0.0" }
 
 	// no stamp is unknown; config.local.json overrides the stamp
-	bare := a4Project(t, "")
+	bare := trackerProject(t, "")
 	installedVersionFn = func() string { return "5.0.0" }
 	if _, env, _ := rotaRun(t, "--json", "-C", bare, "version", "--drift"); umbData(env)["status"] != "unknown" {
 		t.Fatalf("env=%v", env)
@@ -170,7 +170,7 @@ func umbData(env map[string]any) map[string]any {
 // A project that still carries the pre-rename hv.version reports drift from
 // it, and rota init moves it to rota.version stamped with the binary version.
 func TestVersionDriftReadsLegacyKeyAndInitMigratesIt(t *testing.T) {
-	root := a4Project(t, `{"hv": {"version": "4.9.0"}}`)
+	root := trackerProject(t, `{"hv": {"version": "4.9.0"}}`)
 	old := installedVersionFn
 	t.Cleanup(func() { installedVersionFn = old })
 	installedVersionFn = func() string { return "5.0.0" }

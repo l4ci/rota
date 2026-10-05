@@ -32,7 +32,7 @@ func ddata(t *testing.T, env map[string]any) map[string]any {
 }
 
 func TestIssueModeDesign(t *testing.T) {
-	root := a4Project(t, issuesConfig)
+	root := trackerProject(t, issuesConfig)
 	withTracker(t, issueFixture())
 	code, env, stderr := issueRun(t, root, "design", "add", "F7", "--title", "Export design")
 	if d := ddata(t, env); code != 0 || d["id"] != "7" || d["type"] != "F" || d["changed"] != true {
@@ -103,7 +103,7 @@ func keysOf(m map[string]any) []string {
 }
 
 func TestIssueModePlan(t *testing.T) {
-	root := a4Project(t, issuesConfig)
+	root := trackerProject(t, issuesConfig)
 	withTracker(t, issueFixture())
 	code, env, stderr := issueRun(t, root, "plan", "add", "M02-F7", "--title", "Export plan", "--design", "F07")
 	if code != 0 {
@@ -146,7 +146,7 @@ func TestIssueModePlan(t *testing.T) {
 }
 
 func TestIssueModePlanWithoutMilestone(t *testing.T) {
-	root := a4Project(t, issuesConfig)
+	root := trackerProject(t, issuesConfig)
 	withTracker(t, issueFixture())
 	code, env, stderr := issueRun(t, root, "plan", "add", "#7", "--title", "Export plan")
 	if d := ddata(t, env); code != 0 || d["key"] != "#7" || d["unitKind"] != "item" {
@@ -171,7 +171,7 @@ func TestIssueModePlanWithoutMilestone(t *testing.T) {
 }
 
 func TestIssueModeProofAndUncertain(t *testing.T) {
-	root := a4Project(t, issuesConfig)
+	root := trackerProject(t, issuesConfig)
 	withTracker(t, issueFixture())
 	code, env, stderr := issueRun(t, root, "proof", "add", "7", "--check", "unit tests", "--result", "PASS", "--evidence", "ok", "--sha", "abc")
 	if d := ddata(t, env); code != 0 || d["id"] != "7" || d["type"] != "F" || d["changed"] != true || d["sha"] != "abc" {
@@ -211,7 +211,7 @@ func TestIssueModeProofAndUncertain(t *testing.T) {
 // An invalid backlog.backend is a corrupt config for every verb: design and
 // milestone verbs exit 70 rather than quietly running in file mode.
 func TestInvalidBackendExits70(t *testing.T) {
-	root := a4Project(t, `{"backlog": {"backend": "isssues"}}`)
+	root := trackerProject(t, `{"backlog": {"backend": "isssues"}}`)
 	for _, argv := range [][]string{
 		{"design", "add", "B01", "--title", "T"},
 		{"milestone", "list"},

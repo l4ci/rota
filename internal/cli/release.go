@@ -20,7 +20,7 @@ import (
 	"github.com/l4ci/rota/internal/release"
 )
 
-// releaseCommands is the `rota release` group (A8, #52).
+// releaseCommands is the `rota release` group (#52).
 func releaseCommands() *Command {
 	return &Command{Name: "release", Summary: "version, notes, changelog and release nudge", Subs: []*Command{
 		{Name: "version", Summary: "print the version file, and the next version with --level or --to", Repo: true, Verb: releaseVersion},
@@ -417,22 +417,22 @@ func releaseMilestoneCheck(c *Ctx, args []string) (Result, error) {
 	}
 	be, err := a8Issues(c, "", true)
 	if err != nil {
-		return a4FailRead(err)
+		return backlogFailRead(err)
 	}
 	blocked, warn, err := be.ReleaseGate(args[0])
 	if err != nil {
-		return a4FailRead(err)
+		return backlogFailRead(err)
 	}
 	bl, still, lines := []any{}, []any{}, []string{}
 	for _, b := range blocked {
-		bl = append(bl, a4Obj("number", b.Issue.Number, "title", b.Issue.Title, "label", b.Label))
+		bl = append(bl, jsonObj("number", b.Issue.Number, "title", b.Issue.Title, "label", b.Label))
 		lines = append(lines, "blocked: #"+strconv.Itoa(b.Issue.Number)+" "+b.Issue.Title+" ["+b.Label+"]")
 	}
 	for _, is := range warn {
-		still = append(still, a4Obj("number", is.Number, "title", is.Title))
+		still = append(still, jsonObj("number", is.Number, "title", is.Title))
 		lines = append(lines, "warning: #"+strconv.Itoa(is.Number)+" "+is.Title+" (still open)")
 	}
-	res := Result{Data: a4Obj("clear", len(blocked) == 0, "blocked", bl, "stillOpen", still), Text: strings.Join(lines, "\n")}
+	res := Result{Data: jsonObj("clear", len(blocked) == 0, "blocked", bl, "stillOpen", still), Text: strings.Join(lines, "\n")}
 	if len(blocked) > 0 {
 		return res, Failed("%s is blocked by %d open issue(s)", args[0], len(blocked))
 	}
@@ -453,14 +453,14 @@ func releaseCloseMilestone(fs *flag.FlagSet) RunFunc {
 		}
 		be, err := a8Issues(c, "", true)
 		if err != nil {
-			return a4Fail(err)
+			return backlogFail(err)
 		}
 		tag := "v" + *rel
 		n, changed, err := be.ReleaseClose(args[0], tag)
 		if err != nil {
-			return a4Fail(err)
+			return backlogFail(err)
 		}
-		return Result{Data: a4Obj("milestone", args[0], "release", *rel, "tag", tag, "issues", n, "changed", changed),
+		return Result{Data: jsonObj("milestone", args[0], "release", *rel, "tag", tag, "issues", n, "changed", changed),
 			Text: "closed-out " + args[0] + " " + tag + ": " + strconv.Itoa(n) + " issues"}, nil
 	}
 }
@@ -473,11 +473,11 @@ var releaseTagged = regexp.MustCompile(`\[[A-Z]\p{Nd}+(?:-S\p{Nd}+)?\]|#\p{Nd}+`
 func releaseNotesIssues(c *Ctx, mid, since string) (Result, error) {
 	be, err := a8Issues(c, "", true)
 	if err != nil {
-		return a4FailRead(err)
+		return backlogFailRead(err)
 	}
 	sections, err := be.ReleaseNotes(mid)
 	if err != nil {
-		return a4FailRead(err)
+		return backlogFailRead(err)
 	}
 	var other []string
 	if since != "" {

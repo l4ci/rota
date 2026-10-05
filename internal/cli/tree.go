@@ -11,7 +11,7 @@ import (
 )
 
 // Tree is the rota command tree. Groups and verbs are added here as they are
-// ported (A4-A8); their flags and --json shapes come from the verb contract (#46).
+// ported; their flags and --json shapes come from the verb contract (#46).
 func Tree() *Command {
 	root := &Command{
 		Name:    "rota",
@@ -33,8 +33,12 @@ func Tree() *Command {
 			skillsCommands(),
 		},
 	}
-	root.Subs = append(root.Subs, a6Commands()...)
-	root.Subs = append(root.Subs, a4Commands()...)
+	root.Subs = append(root.Subs, designPlanCommands()...)
+	root.Subs = append(root.Subs, proofCommands()...)
+	root.Subs = append(root.Subs, milestoneCommands()...)
+	root.Subs = append(root.Subs, debugCommands()...)
+	root.Subs = append(root.Subs, spikeCommands()...)
+	root.Subs = append(root.Subs, withReadOnly(itemCommands(), backlogCommands(), configCommands(), issuesCommands())...)
 	root.Subs = append(root.Subs, workerCommands())
 	root.Subs = append(root.Subs, roundCommands())
 	root.Subs = append(root.Subs, trackerCommands(), gitCommands())

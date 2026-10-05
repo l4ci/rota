@@ -1,12 +1,12 @@
 package main
 
-// Go-only scenarios for the A4 verbs in an umbrella (#48, last slice). The
+// Go-only scenarios for the tracker verbs in an umbrella (#48, last slice). The
 // issue-backend scenarios build an umbrella project whose sub-repos have github
 // or gitlab origins, seed one stateful fake forge store per sub-repo
 // (FAKE_TRACKER_DB_DIR, keyed by the sub-repo's git toplevel basename), run the
 // Go binary and check its exit code, envelope, .rota/ tree and every sub-repo's
 // final forge store against the frozen record. The file-backend scenarios reuse
-// the A4 harness (scn).
+// the shared harness (scn).
 //
 // Safety: the shared TestMain refuses to run unless gh resolves to test/fakes
 // (TestUbFakesFirst checks glab too); every run has its own store directory
@@ -257,7 +257,7 @@ func ubHas(labels any, want string) bool {
 
 var ubQualRe = regexp.MustCompile(`^[a-z]+:`)
 
-func suiteA4Umbrella(t *testing.T) {
+func suiteUmbrella(t *testing.T) {
 	var all []ubcase
 	add := func(s ...ubcase) { all = append(all, s...) }
 	cwds := []string{"", "web", "web/src/deep", "api", "docs/deep"}
@@ -851,11 +851,11 @@ func withCwdCase(c ubcase, cw string) ubcase {
 	return c
 }
 
-// suiteA4UmbrellaFile runs the item verbs in a file-backend umbrella: one
+// suiteUmbrellaFile runs the item verbs in a file-backend umbrella: one
 // BACKLOG.md at the umbrella root, sub-repos registered in .rota/repos.json, the
 // verbs run from the root, a sub-repo or a deep directory, with --repo valid
 // and unregistered. Field verbs run below the root are marked goOnly.
-func suiteA4UmbrellaFile(t *testing.T) {
+func suiteUmbrellaFile(t *testing.T) {
 	var all []scn
 	add := func(s ...scn) { all = append(all, s...) }
 	umb := umbFx
