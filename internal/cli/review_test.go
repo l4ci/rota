@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -536,5 +537,59 @@ func TestReviewScopeIssueMode(t *testing.T) {
 	b := trRunWith(t, deps, root, "", "review", "brief")
 	if b.code != 0 || !strings.Contains(b.stdout, "- #7 Add export — ") || strings.Contains(b.stdout, "[#7]") {
 		t.Errorf("brief: %d\n%s%s", b.code, b.stdout, b.stderr)
+	}
+}
+
+func TestReviewPackage(t *testing.T) {
+	plain, umb := reviewProject(t)
+	o := trRun(t, plain, "", "review", "package", "feat/x", "--json")
+	if o.code != 0 {
+		t.Fatalf("package: exit %d %s", o.code, o.stderr)
+	}
+	data := envelope(t, o.stdout)["data"].(map[string]any)
+	path := data["path"].(string)
+	if want := filepath.Join(plain, ".rota", "review", "feat-x.md"); path != want {
+		t.Errorf("path %q, want %q", path, want)
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if int(data["bytes"].(float64)) != len(body) || data["files"].(float64) != 5 {
+		t.Errorf("data %v for %d bytes", data, len(body))
+	}
+	for _, want := range []string{"Do work [B01] and [F02]", "## Stat", "a.txt", "Task 12 is in flight", "line a"} {
+		if !strings.Contains(string(body), want) {
+			t.Errorf("package lacks %q", want)
+		}
+	}
+	if o := trRun(t, plain, "", "review", "package", "feat/x"); o.code != 0 || strings.TrimSpace(o.stdout) != path {
+		t.Errorf("text mode: %d %q", o.code, o.stdout)
+	}
+	// --since packages only the commits after the sha.
+	head := strings.TrimSpace(gitT(t, plain, "rev-parse", "HEAD~1"))
+	o = trRun(t, plain, "", "review", "package", "feat/x", "--since", head, "--json")
+	if o.code != 0 {
+		t.Fatalf("since: exit %d %s", o.code, o.stderr)
+	}
+	if n := envelope(t, o.stdout)["data"].(map[string]any)["files"].(float64); n != 1 {
+		t.Errorf("since: %v files, want 1", n)
+	}
+	for name, args := range map[string][]string{
+		"empty range":      {"review", "package", "empty"},
+		"missing branch":   {"review", "package", "nope"},
+		"missing base":     {"review", "package", "feat/x", "--base", "nope"},
+		"since off branch": {"review", "package", "empty", "--since", "feat/x"},
+		"since at the tip": {"review", "package", "feat/x", "--since", "feat/x"},
+	} {
+		if o := trRun(t, plain, "", args...); o.code != 3 {
+			t.Errorf("%s: exit %d %s", name, o.code, o.stderr)
+		}
+	}
+	if o := trRun(t, plain, "", "review", "package", "main"); o.code != 1 {
+		t.Errorf("base branch: exit %d", o.code)
+	}
+	if o := trRun(t, umb, "", "review", "package", "feat/x"); o.code != 2 {
+		t.Errorf("umbrella no repo: exit %d", o.code)
 	}
 }
