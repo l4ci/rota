@@ -28,10 +28,10 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundlease"
-	"github.com/l4ci/rota/internal/worker"
 )
 
 // Candidate kinds.
@@ -89,7 +89,7 @@ type LeaseOps interface {
 type Input struct {
 	Root string // project root
 	Base string // the branch work merges into
-	Git  worker.GitFunc
+	Git  git.Runner
 	// Report is the round's status (internal/round), the source of the live
 	// set: its rows say which checkouts have a slot or a matched agent, and
 	// its Unavailable list says whether the host could be read. Agents is the
@@ -208,7 +208,8 @@ func newState(ctx context.Context, in Input) (*state, error) {
 			}
 		}
 	}
-	out, errOut, code, err := in.Git(ctx, s.root, "worktree", "list", "--porcelain")
+	res, err := in.Git(ctx, s.root, "worktree", "list", "--porcelain")
+	out, errOut, code := res.Stdout, res.Stderr, res.ExitCode
 	if err != nil || code != 0 {
 		return nil, &exitcode.Error{Exit: exitcode.ExitUnavailable, Message: "git worktree list failed: " + strings.TrimSpace(errOut)}
 	}
@@ -281,7 +282,8 @@ func protectedBranch(b, base string) bool {
 }
 
 func (s *state) git(ctx context.Context, dir string, args ...string) (string, int, error) {
-	out, errOut, code, err := s.in.Git(ctx, dir, args...)
+	res, err := s.in.Git(ctx, dir, args...)
+	out, errOut, code := res.Stdout, res.Stderr, res.ExitCode
 	if err != nil {
 		return "", 0, err
 	}
@@ -516,7 +518,8 @@ func (s *state) remove(ctx context.Context, c Candidate) error {
 	switch c.Kind {
 	case KindWorktree:
 		// no --force: git refuses a dirty or locked checkout
-		_, errOut, code, err := s.in.Git(ctx, s.root, "worktree", "remove", c.Path)
+		res, err := s.in.Git(ctx, s.root, "worktree", "remove", c.Path)
+		errOut, code := res.Stderr, res.ExitCode
 		return gitErr(errOut, code, err)
 	case KindBranch:
 		if s.checkedOut[c.Name] || protectedBranch(c.Name, s.in.Base) {
@@ -525,7 +528,8 @@ func (s *state) remove(ctx context.Context, c Candidate) error {
 		if h := s.heldUnmerged(ctx, s.root, c.Name); h != "" {
 			return fmt.Errorf("no longer provably merged: %s", h)
 		}
-		_, errOut, code, err := s.in.Git(ctx, s.root, "branch", "-D", c.Name)
+		res, err := s.in.Git(ctx, s.root, "branch", "-D", c.Name)
+		errOut, code := res.Stderr, res.ExitCode
 		return gitErr(errOut, code, err)
 	case KindTab:
 		if s.in.Host == nil {

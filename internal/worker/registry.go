@@ -7,7 +7,6 @@ package worker
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"os/exec"
@@ -16,13 +15,13 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
@@ -383,20 +382,10 @@ func SlotData(sl *Slot) *jsonx.Object {
 	return out
 }
 
-// GitFunc runs git in dir and returns stdout, stderr and the exit code. A
-// non-nil error means git could not run at all.
-type GitFunc func(ctx context.Context, dir string, args ...string) (stdout, stderr string, code int, err error)
-
-// ExecGit is the production GitFunc. git is safe to run for real in tests that
-// use their own temp repositories; herdr and tmux never go through here.
-func ExecGit(ctx context.Context, dir string, args ...string) (string, string, int, error) {
-	res, err := git.Repo{Dir: dir}.Run(ctx, args...)
-	return res.Stdout, res.Stderr, res.Code, err
-}
-
 // git runs git and trims one trailing newline from stdout, like $(...).
 func (e Env) git(dir string, args ...string) (string, int) {
-	out, _, code, err := e.Git(e.context(), dir, args...)
+	res, err := e.Git(e.context(), dir, args...)
+	out, code := res.Stdout, res.ExitCode
 	if err != nil {
 		return "", 127
 	}
@@ -410,7 +399,7 @@ type Env struct {
 	// Ctx bounds every git call and is cancelled on SIGINT/SIGTERM by the
 	// CLI. Nil means context.Background().
 	Ctx context.Context
-	Git GitFunc
+	Git git.Runner
 	// NewHost returns the host for a work.dispatch value.
 	NewHost func(dispatch string) host.Host
 	// Sleep defaults to time.Sleep (poll's settle).
@@ -447,7 +436,7 @@ func (e Env) context() context.Context {
 
 func (e Env) withDefaults() Env {
 	if e.Git == nil {
-		e.Git = ExecGit
+		e.Git = git.Exec
 	}
 	if e.NewHost == nil {
 		e.NewHost = func(d string) host.Host { return host.New(d, host.Deps{}) }
@@ -483,39 +472,20 @@ func (e Env) withDefaults() Env {
 
 // execRun is the production Env.Run. It bounds the call like the host runner.
 func execRun(ctx context.Context, name string, args, env []string) (host.Result, error) {
-	ctx, cancel := context.WithTimeout(ctx, host.CallTimeout)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, name, args...)
-	cmd.Env = append(os.Environ(), env...)
-	var out, errb strings.Builder
-	cmd.Stdout, cmd.Stderr = &out, &errb
-	err := cmd.Run()
-	r := host.Result{Stdout: out.String(), Stderr: errb.String()}
-	var ee *exec.ExitError
-	if errors.As(err, &ee) {
-		r.ExitCode = ee.ExitCode()
-		return r, nil
-	}
-	return r, err
+	return proc.Run(ctx, proc.Cmd{Name: name, Args: args, Env: env, Timeout: host.CallTimeout})
 }
 
+// execShell is the production Env.Shell. A verification command may run as
+// long as the caller's context allows, so it sets no timeout of its own.
 func execShell(ctx context.Context, dir, command string) (string, int) {
-	cmd := exec.CommandContext(ctx, "sh", "-c", command)
-	cmd.Dir = dir
-	// Own process group, killed whole on cancel: a killed sh leaves its child
-	// holding the output pipe, which would block Wait.
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
-	cmd.WaitDelay = 5 * time.Second
-	out, err := cmd.CombinedOutput()
-	var ee *exec.ExitError
-	if errors.As(err, &ee) {
-		return string(out), ee.ExitCode()
-	}
+	res, err := proc.Run(ctx, proc.Cmd{
+		Name: "sh", Args: []string{"-c", command}, Dir: dir,
+		Timeout: proc.NoTimeout, Combined: true, Group: true,
+	})
 	if err != nil {
 		return err.Error(), 127
 	}
-	return string(out), 0
+	return res.Stdout, res.ExitCode
 }
 
 // RecordBounce counts one gate bounce against an item (`bounces` in the

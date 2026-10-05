@@ -31,7 +31,7 @@ type Counter struct {
 // at root and returns its Counter. Not being in a git repository is exit 5.
 func Open(root string) (*Counter, error) {
 	res, err := git.Repo{Dir: root}.Run(context.Background(), "rev-parse", "--abbrev-ref", "HEAD")
-	if err != nil || res.Code != 0 {
+	if err != nil || res.ExitCode != 0 {
 		return nil, exitcode.Errf(exitcode.ExitUnavailable, "not in a git repository (a debug session is keyed by the current branch)")
 	}
 	branch := strings.TrimSpace(res.Stdout)

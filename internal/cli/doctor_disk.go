@@ -13,7 +13,7 @@ import (
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/doctor"
-	"github.com/l4ci/rota/internal/worker"
+	"github.com/l4ci/rota/internal/git"
 )
 
 // leakAge is how old a temp dir must be before doctor calls it leaked: a run
@@ -42,13 +42,13 @@ func doctorDisk(dir string) *doctor.Disk {
 // doctorLeftovers names what rota left behind that would give disk back: temp
 // dirs a smoke or gate run leaked, and git worktrees whose directory is gone.
 // It only runs once the disk is low, because sizing the temp dirs walks them.
-func doctorLeftovers(ctx context.Context, root string) []string {
+func doctorLeftovers(ctx context.Context, run git.Runner, root string) []string {
 	var out []string
 	if n, size := leakedTempDirs(os.TempDir(), time.Now().Add(-leakAge)); n > 0 {
 		out = append(out, fmt.Sprintf("%d leaked temp dirs under %s (%s); safe to delete once no run is active", n, os.TempDir(), doctor.HumanBytes(uint64(size))))
 	}
 	if root != "" {
-		if n := prunableWorktrees(ctx, root); n > 0 {
+		if n := prunableWorktrees(ctx, run, root); n > 0 {
 			out = append(out, fmt.Sprintf("%d stale scratch worktrees (run: git worktree prune; rota reap lists the rest)", n))
 		}
 	}
@@ -84,13 +84,13 @@ func leakedTempDirs(dir string, cutoff time.Time) (n int, size int64) {
 }
 
 // prunableWorktrees counts checkouts git marks prunable (directory gone).
-func prunableWorktrees(ctx context.Context, root string) int {
-	out, _, code, err := worker.ExecGit(ctx, root, "worktree", "list", "--porcelain")
-	if err != nil || code != 0 {
+func prunableWorktrees(ctx context.Context, run git.Runner, root string) int {
+	res, err := run(ctx, root, "worktree", "list", "--porcelain")
+	if err != nil || res.ExitCode != 0 {
 		return 0
 	}
 	n := 0
-	for _, l := range strings.Split(out, "\n") {
+	for _, l := range strings.Split(res.Stdout, "\n") {
 		if strings.HasPrefix(l, "prunable") {
 			n++
 		}
@@ -101,7 +101,7 @@ func prunableWorktrees(ctx context.Context, root string) int {
 // doctorDiskInput fills the disk fields of in: the threshold from config
 // (doctor.minFreeDiskPercent, default 10) and, when the volume is under it,
 // the leftovers worth naming. A non-numeric threshold falls back to the default.
-func doctorDiskInput(ctx context.Context, in *doctor.Input, cfg any, root string) {
+func doctorDiskInput(ctx context.Context, in *doctor.Input, cfg any, root string, run git.Runner) {
 	min := 10
 	if cfg != nil {
 		if v, ok := config.Lookup(cfg, "doctor.minFreeDiskPercent"); ok {
@@ -120,6 +120,6 @@ func doctorDiskInput(ctx context.Context, in *doctor.Input, cfg any, root string
 	in.Disk = doctorDisk(dir)
 	if in.Disk != nil && in.Disk.Total > 0 && min > 0 &&
 		float64(in.Disk.Free)/float64(in.Disk.Total)*100 < float64(min) {
-		in.Leftovers = doctorLeftovers(ctx, root)
+		in.Leftovers = doctorLeftovers(ctx, run, root)
 	}
 }

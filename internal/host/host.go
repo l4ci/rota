@@ -9,7 +9,6 @@
 package host
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"net"
@@ -19,14 +18,12 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/l4ci/rota/internal/proc"
 )
 
 // Result is what a finished command left behind.
-type Result struct {
-	Stdout   string
-	Stderr   string
-	ExitCode int
-}
+type Result = proc.Result
 
 // Runner runs a command. A command that ran and exited non-zero is a Result
 // with ExitCode set and a nil error; err means it could not run at all
@@ -39,19 +36,7 @@ const CallTimeout = 10 * time.Minute
 
 // ExecRunner is the production Runner.
 func ExecRunner(ctx context.Context, name string, args []string) (Result, error) {
-	ctx, cancel := context.WithTimeout(ctx, CallTimeout)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, name, args...)
-	var out, errb bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &out, &errb
-	err := cmd.Run()
-	r := Result{Stdout: out.String(), Stderr: errb.String()}
-	var ee *exec.ExitError
-	if errors.As(err, &ee) {
-		r.ExitCode = ee.ExitCode()
-		return r, nil
-	}
-	return r, err
+	return proc.Run(ctx, proc.Cmd{Name: name, Args: args, Timeout: CallTimeout})
 }
 
 // Deps is everything a host touches outside its own memory. Tests fill every

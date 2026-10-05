@@ -90,7 +90,8 @@ func (e Env) Candidates(ctx context.Context, root string, be backlog.Backend, o 
 }
 
 func (e Env) trackedFiles(ctx context.Context, root string) []string {
-	out, _, code, err := e.Git(ctx, root, "ls-files")
+	res, err := e.Git(ctx, root, "ls-files")
+	out, code := res.Stdout, res.ExitCode
 	if err != nil || code != 0 {
 		return nil
 	}
