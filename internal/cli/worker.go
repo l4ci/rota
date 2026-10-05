@@ -513,8 +513,13 @@ func workerPoll(fs *flag.FlagSet) RunFunc {
 			o.Set("name", r.Name)
 			o.Set("state", strings.ToLower(r.State))
 			o.Set("evidence", r.Evidence)
+			line := fmt.Sprintf("%s\t%s\t%s", r.Name, strings.ToLower(r.State), r.Evidence)
+			if n := res.Notes[r.Name]; n != "" {
+				o.Set("note", n)
+				line += "\t(" + n + ")"
+			}
 			rows = append(rows, o)
-			text = append(text, fmt.Sprintf("%s\t%s\t%s", r.Name, strings.ToLower(r.State), r.Evidence))
+			text = append(text, line)
 		}
 		d := jsonx.NewObject()
 		d.Set("slots", rows)

@@ -756,3 +756,12 @@ func (c *countForge) OpenPRs(ctx context.Context) ([]tracker.PR, error) {
 	c.calls++
 	return c.fakeForge.OpenPRs(ctx)
 }
+
+// The brief ends on the sentinel step with the slot filled in (#227).
+func TestPointerBriefEndsWithSentinelStep(t *testing.T) {
+	got := pointerBrief("ben", "#9", "ben/9-x", "/c.md", nil, "decided: X", tierBrief{Kind: "claude", Tier: "standard"})
+	last := got[strings.LastIndex(strings.TrimRight(got, "\n"), "\n")+1:]
+	if !strings.Contains(last, "`ROTA-DONE ben <pr-url>`") {
+		t.Errorf("last line is not the sentinel step: %q", last)
+	}
+}

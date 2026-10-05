@@ -376,3 +376,36 @@ func TestOpenPRsByHeadRecordsOnlyUnrecordedSlots(t *testing.T) {
 		t.Errorf("recorded: %v", got)
 	}
 }
+
+// An idle slot with no sentinel whose branch heads an open PR is DONE with that
+// PR and says the sentinel was missing (#227). No PR, or a listing that fails,
+// leaves it idle (stuck) as before.
+func TestPromoteIdleWithPR(t *testing.T) {
+	idle := func() []PollRow { return []PollRow{{"w1", StateIdle, "static pane, no sentinel"}} }
+	w := newWorld(t, "")
+
+	w.forge("listed", "1")
+	rows, notes := w.env(false).withDefaults().promoteIdleWithPR(bg, w.dir, idle())
+	if rows[0] != (PollRow{"w1", StateDone, ghURL}) || notes["w1"] != missingSentinelNote {
+		t.Errorf("open PR: %+v %v", rows, notes)
+	}
+
+	w.forge("listed", "0")
+	rows, notes = w.env(false).withDefaults().promoteIdleWithPR(bg, w.dir, idle())
+	if rows[0].State != StateIdle || notes != nil {
+		t.Errorf("no PR: %+v %v", rows, notes)
+	}
+
+	w.forge("listError", "boom")
+	rows, notes = w.env(false).withDefaults().promoteIdleWithPR(bg, w.dir, idle())
+	if rows[0].State != StateIdle || notes != nil {
+		t.Errorf("lookup error: %+v %v", rows, notes)
+	}
+
+	// only an idle row is looked at
+	w.forge("listed", "1")
+	busy := []PollRow{{"w1", StateBusy, "x"}}
+	if rows, notes = w.env(false).withDefaults().promoteIdleWithPR(bg, w.dir, busy); rows[0].State != StateBusy || notes != nil {
+		t.Errorf("busy: %+v %v", rows, notes)
+	}
+}
