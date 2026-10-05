@@ -685,3 +685,50 @@ func TestGateVerifyCommandsComeFromBeforeTheMerge(t *testing.T) {
 		t.Errorf("verify must use the base's commands, got %+v %v", res, err)
 	}
 }
+
+// A slot that records no PR while its branch heads an open PR must take the PR
+// path: the old local merge landed on the local base only, left the PR open and
+// reported a pass (#210).
+func TestGateFindsTheOpenPROfAnUnrecordedSlot(t *testing.T) {
+	w := newWorld(t, "")
+	w.forge("listed", "1")
+	res, err := w.gate(false, GateOpts{})
+	if err != nil || res.Verdict != GatePass || res.PR != ghURL {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if !strings.Contains(w.logText(), "PRRequestMerge 7") {
+		t.Errorf("the PR was not merged through the forge:\n%s", w.logText())
+	}
+	if got := gitq(t, w.origin, "log", "--format=%s", "main"); !strings.Contains(got, "merge pr") {
+		t.Errorf("nothing reached origin/main:\n%s", got)
+	}
+	if got := LoadRegistry(w.dir).Slot("w1").PR(); got != ghURL {
+		t.Errorf("the slot still records no PR: %q", got)
+	}
+}
+
+func TestGateCheckOnlyAdoptsTheOpenPRWithoutRecordingIt(t *testing.T) {
+	w := newWorld(t, "")
+	w.forge("listed", "1")
+	res, err := w.gate(false, GateOpts{CheckOnly: true})
+	if err != nil || res.Verdict != GateFresh || res.PR != ghURL {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if got := LoadRegistry(w.dir).Slot("w1").PR(); got != "" {
+		t.Errorf("a check-only gate recorded %q", got)
+	}
+}
+
+// When the forge cannot say whether a PR is open, a local merge is not safe.
+func TestGateWithoutARecordedPRIsCheckBrokeWhenThePRsCannotBeListed(t *testing.T) {
+	w := newWorld(t, "")
+	gitq(t, w.dir, "fetch", "-q", "origin", "w1:w1")
+	w.forge("listError", "simulated: rate limited")
+	res, err := w.gate(false, GateOpts{})
+	if err != nil || res.Verdict != GateCheckBroke || res.Changed {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if _, serr := os.Stat(filepath.Join(w.dir, "work.txt")); serr == nil {
+		t.Error("the branch was merged locally")
+	}
+}
