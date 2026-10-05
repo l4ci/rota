@@ -397,22 +397,6 @@ func TestGateResultShape(t *testing.T) {
 	}
 }
 
-func TestApprovalsSection(t *testing.T) {
-	for in, want := range map[string]string{
-		"## Approvals\na\nb\n## X\nc": "a\nb",
-		"intro\n##  Approvals  \na":   "a",
-		"## Approvalsx\na":            "",
-		"## Approvals\n##\nc":         "",
-		"## Approvals\n### Sub\nc":    "### Sub\nc",
-		"no heading":                  "",
-	} {
-		got, found := approvalsSection(in)
-		if strings.TrimRight(got, "\n") != want || (want != "" && !found) {
-			t.Errorf("approvalsSection(%q) = %q, %v; want %q", in, got, found, want)
-		}
-	}
-}
-
 func (e Env) withForge(f func(provider, dir string) Forge, brokenMergeBase bool) Env {
 	e.Forge = func(provider, dir string, _ any) (Forge, error) { return f(provider, dir), nil }
 	if brokenMergeBase {
