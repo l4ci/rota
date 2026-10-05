@@ -2,7 +2,7 @@ package round
 
 import (
 	"context"
-	"strconv"
+	"github.com/l4ci/rota/internal/worker"
 
 	"github.com/l4ci/rota/internal/backlog"
 )
@@ -26,10 +26,8 @@ func (e Env) openPRIssues(ctx context.Context, be backlog.Backend) (map[int]int,
 		}
 	}
 	for _, pr := range prs {
-		if m := reIssueBranch.FindStringSubmatch(pr.Branch); m != nil {
-			if n, err := strconv.Atoi(m[1]); err == nil {
-				note(n, pr.Number)
-			}
+		if n, ok := worker.BranchIssue(pr.Branch); ok {
+			note(n, pr.Number)
 		}
 		for _, n := range e.Forge.ClosedNumbers(pr.Body) {
 			note(n, pr.Number)

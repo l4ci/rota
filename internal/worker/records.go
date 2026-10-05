@@ -35,7 +35,7 @@ type Escalation struct {
 
 func escalationFrom(o *jsonx.Object) Escalation {
 	nv, _ := o.Get("number")
-	n, _ := intOf(nv)
+	n, _ := jsonx.Int(nv)
 	e := Escalation{
 		ID: jsonx.Str(o, "id"), Kind: jsonx.Str(o, "kind"), Number: n,
 		Slot: jsonx.Str(o, "slot"), Title: jsonx.Str(o, "title"), CommentID: jsonx.Str(o, "commentId"),
@@ -126,7 +126,7 @@ func (l Limit) Resets() (time.Time, bool) {
 
 func limitFrom(o *jsonx.Object) Limit {
 	n, _ := o.Get("cycles")
-	cycles, _ := intOf(n)
+	cycles, _ := jsonx.Int(n)
 	return Limit{
 		ID: jsonx.Str(o, "id"), Session: jsonx.Str(o, "session"), Window: jsonx.Str(o, "window"),
 		Source: jsonx.Str(o, "source"), DetectedAt: jsonx.Str(o, "detectedAt"), ResetsAt: jsonx.Str(o, "resetsAt"),

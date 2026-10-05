@@ -7,7 +7,6 @@ package debugctr
 
 import (
 	"context"
-	"encoding/json"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/rotatree"
@@ -82,14 +81,8 @@ func asObj(v any) *jsonx.Object {
 }
 
 func intOf(v any) int {
-	switch n := v.(type) {
-	case int:
-		return n
-	case json.Number:
-		i, _ := strconv.Atoi(n.String())
-		return i
-	}
-	return 0
+	n, _ := jsonx.Int(v)
+	return n
 }
 
 func attemptsOf(o *jsonx.Object) []any {

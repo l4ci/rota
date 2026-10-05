@@ -1,6 +1,7 @@
 package jsonx
 
 import (
+	"encoding/json"
 	"os"
 	"testing"
 
@@ -75,5 +76,17 @@ func TestObjectSetDelete(t *testing.T) {
 	got, _ := Marshal(o)
 	if string(got) != "{\n  \"y\": 2\n}" {
 		t.Fatalf("got %s", got)
+	}
+}
+
+func TestInt(t *testing.T) {
+	for _, c := range []struct {
+		in   any
+		want int
+		ok   bool
+	}{{3, 3, true}, {float64(4), 4, true}, {json.Number("5"), 5, true}, {"6", 0, false}, {nil, 0, false}} {
+		if n, ok := Int(c.in); n != c.want || ok != c.ok {
+			t.Errorf("Int(%#v) = %d,%v", c.in, n, ok)
+		}
 	}
 }
