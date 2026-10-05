@@ -11,6 +11,7 @@ import (
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/orchestrate"
 	"github.com/l4ci/rota/internal/palette"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 // launchRig replaces the launcher's outside world: no herdr, tmux or agent is
@@ -20,6 +21,7 @@ type launchRig struct {
 	installed []string
 	runs      []string
 	execs     [][]string
+	panes     string // `herdr pane list` reply; empty means the call is not faked
 }
 
 func useLaunchRig(d *Deps, env map[string]string, installed ...string) *launchRig {
@@ -35,6 +37,16 @@ func useLaunchRig(d *Deps, env map[string]string, installed ...string) *launchRi
 		}
 		run := func(_ context.Context, name string, args []string) (host.Result, error) {
 			r.runs = append(r.runs, name+" "+strings.Join(args, " "))
+			if name == "herdr" && r.panes != "" {
+				switch strings.Join(args, " ") {
+				case "pane list":
+					return host.Result{Stdout: r.panes}, nil
+				case "tab list":
+					return host.Result{Stdout: `{"result":{"tabs":[]}}`}, nil
+				case "workspace list":
+					return host.Result{Stdout: `{"result":{"workspaces":[]}}`}, nil
+				}
+			}
 			if name == "herdr" && args[0] == "tab" {
 				return host.Result{Stdout: `{"result":{"tab":{"tab_id":"w1:t2"},"root_pane":{"pane_id":"w1:p2"}}}`}, nil
 			}
@@ -88,6 +100,28 @@ func TestOrchestrateOpensATabInsideHerdr(t *testing.T) {
 	}
 	if got := strings.Join(r.runs, "\n"); !strings.Contains(got, "herdr pane run w1:p2 /bin/rota keepalive run --first-prompt /rota-orchestrate -- claude") {
 		t.Errorf("runs:\n%s", got)
+	}
+}
+
+func TestOrchestrateRecordsItsPlainPaneAsTheCLIPane(t *testing.T) {
+	for _, tc := range []struct{ name, pane, agent, want string }{
+		{"plain pane", "w1:p1", "", "w1:p1"},
+		{"agent pane", "w1:p1", "claude", ""},
+		{"not in herdr", "", "", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			deps := testDeps()
+			passingDoctor(t)
+			r := useLaunchRig(deps, map[string]string{"HERDR_ENV": "1", "HERDR_WORKSPACE_ID": "w1", "HERDR_PANE_ID": tc.pane}, "herdr")
+			r.panes = `{"result":{"panes":[{"pane_id":"w1:p1","tab_id":"w1:t1","workspace_id":"w1","agent":"` + tc.agent + `"}]}}`
+			dir := trackerProject(t, "")
+			if code, env, errs := rotaRunWith(t, deps, "--json", "-C", dir, "orchestrate"); code != 0 {
+				t.Fatalf("exit %d: %v %s", code, env, errs)
+			}
+			if got := worker.LoadRegistry(dir).CLIPane(); got != tc.want {
+				t.Errorf("cliPane = %q, want %q", got, tc.want)
+			}
+		})
 	}
 }
 
