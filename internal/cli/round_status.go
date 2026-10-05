@@ -38,9 +38,8 @@ func defaultRoundEnv(ctx context.Context, root string) round.Env {
 	// rounds started by hand have always had.
 	hostKind := worker.RegistryHost(root)
 	if hostKind == "" {
-		dispatch, _ := config.Lookup(cfg, "work.dispatch")
 		hostKind = "tmux"
-		if dispatch == "herdr" || os.Getenv("HERDR_ENV") == "1" {
+		if config.Dispatch(cfg) == "herdr" || os.Getenv("HERDR_ENV") == "1" {
 			hostKind = "herdr"
 		}
 	}

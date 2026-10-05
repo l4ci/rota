@@ -155,11 +155,9 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 			}
 		}
 		env := roundEnv(ctx, root)
-		dispatch, _ := config.Lookup(cfg, "work.dispatch")
-		dispatchStr, _ := dispatch.(string)
 		st, err := env.Start(ctx, root, round.StartOpts{
 			Scope: sc, Items: splitList(*items), Slots: *slots, Base: *base, HolderPID: *pid,
-			Settings: set, Getenv: os.Getenv, DefaultNum: def, Dispatch: dispatchStr,
+			Settings: set, Getenv: os.Getenv, DefaultNum: def, Dispatch: config.Dispatch(cfg),
 		})
 		for _, w := range st.Warnings {
 			c.Warn("%s", w)
