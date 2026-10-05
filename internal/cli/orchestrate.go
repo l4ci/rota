@@ -97,6 +97,11 @@ func runOrchestrate(c *Ctx, dry bool) (Result, error) {
 	}
 	cfg := config.Load(filepath.Join(root, ".rota", "config.json"))
 	env := c.deps().OrchestrateEnv()
+	if env.PickAccount == nil {
+		env.PickAccount = func(root string) (string, bool) {
+			return c.deps().WorkerAccounts().Pick(c.Context(), root, nil)
+		}
+	}
 	plan, err := env.Resolve(root, cfg)
 	if err != nil {
 		return orchestrateErr(err)
@@ -107,8 +112,13 @@ func runOrchestrate(c *Ctx, dry bool) (Result, error) {
 	d.Set("mode", plan.Mode)
 	d.Set("cwd", plan.Cwd)
 	setIf(d, "session", plan.Session)
+	setIf(d, "account", plan.Account)
+	setIf(d, "configDir", plan.ConfigDir)
 	d.Set("command", strs(plan.Supervisor))
 	text := plan.Harness + " in " + plan.Host + " (" + plan.Mode + "): " + strings.Join(plan.Supervisor, " ")
+	if plan.Account != "" {
+		text += " [account " + plan.Account + "]"
+	}
 	if dry {
 		d.Set("dryRun", true)
 		d.Set("changed", false)

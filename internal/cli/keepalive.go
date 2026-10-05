@@ -79,10 +79,15 @@ func signalName(s syscall.Signal) string {
 
 // keepaliveSpawn starts the command in the current directory with the
 // terminal's stdio and the supervisor's process group.
-func keepaliveSpawn(c *Ctx) func(argv, extraEnv []string) (keepalive.Child, error) {
+// A configDir, when set, is the child's CLAUDE_CONFIG_DIR from the first start.
+func keepaliveSpawn(c *Ctx, configDir string) func(argv, extraEnv []string) (keepalive.Child, error) {
 	return func(argv, extraEnv []string) (keepalive.Child, error) {
 		cmd := exec.Command(argv[0], argv[1:]...)
-		cmd.Env = append(os.Environ(), extraEnv...)
+		cmd.Env = os.Environ()
+		if configDir != "" {
+			cmd.Env = append(cmd.Env, "CLAUDE_CONFIG_DIR="+configDir)
+		}
+		cmd.Env = append(cmd.Env, extraEnv...)
 		if f, ok := c.Stdin.(*os.File); ok {
 			cmd.Stdin = f
 		}
@@ -125,6 +130,7 @@ func keepaliveRun(fs *flag.FlagSet) RunFunc {
 	noLimits := fs.Bool("no-limits", false, "do not run the usage-limit watcher (rota limit watch) beside the command")
 	prompt := fs.String("prompt", "", "restart prompt, appended as the last argument on restarts (default orchestrator.restartPrompt)")
 	first := fs.String("first-prompt", "", "prompt appended as the last argument of the first start only (default none)")
+	configDir := fs.String("config-dir", "", "CLAUDE_CONFIG_DIR the command starts under (default the inherited one)")
 	return func(c *Ctx, args []string) (Result, error) {
 		if c.dashAt != 0 {
 			return Result{}, Usage("usage: rota keepalive run [flags] -- <command> [<arg>...]").
@@ -186,7 +192,7 @@ func keepaliveRun(fs *flag.FlagSet) RunFunc {
 		defer signal.Stop(sigs)
 
 		env := keepalive.Env{
-			Spawn:    keepaliveSpawn(c),
+			Spawn:    keepaliveSpawn(c, *configDir),
 			Signals:  sigs,
 			Lease:    le,
 			Holder:   le.Discover(os.Getpid(), os.Getenv),
@@ -204,6 +210,9 @@ func keepaliveRun(fs *flag.FlagSet) RunFunc {
 		if set.SwitchOnUsage {
 			opts.SwitchOnUsage, opts.UsageThreshold, opts.HoldFallback = true, set.UsageThreshold, set.HoldFallback
 			opts.ConfigDir = os.Getenv("CLAUDE_CONFIG_DIR")
+			if *configDir != "" {
+				opts.ConfigDir = *configDir
+			}
 			opts.Account = worker.AccountOf(root, opts.ConfigDir)
 			env.UsageMarker = usageMarker(cd, root)
 			env.Choose = usageChoose(ctx, c, root)

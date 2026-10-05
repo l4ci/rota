@@ -3,6 +3,8 @@ package orchestrate
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -274,5 +276,73 @@ func TestLaunchHerdrSessionAlreadyRunningOnlyAttaches(t *testing.T) {
 	}
 	if strings.Contains(strings.Join(r.calls, "\n"), "workspace create") || len(r.execs) != 1 {
 		t.Errorf("an existing session must be attached, not restarted:\n%s\n%q", strings.Join(r.calls, "\n"), r.execs)
+	}
+}
+
+func twoAccounts() map[string]any {
+	return map[string]any{"work.accounts": []any{
+		acctObj("a", "/cfg/a"), acctObj("b", "~/.claude-b"),
+	}}
+}
+
+func acctObj(name, dir string) *jsonx.Object {
+	o := jsonx.NewObject()
+	o.Set("name", name)
+	o.Set("configDir", dir)
+	return o
+}
+
+func TestAccountTheOrchestratorStartsUnder(t *testing.T) {
+	pickB := func(string) (string, bool) { return "b", true }
+	none := func(string) (string, bool) { return "", false }
+	home, _ := os.UserHomeDir()
+	bDir := filepath.Join(home, ".claude-b")
+	flagged := func(dir string) []string {
+		return []string{"/bin/rota", "keepalive", "run", "--first-prompt", "/rota-orchestrate", "--config-dir", dir, "--", "claude", "--model", "opus", "--permission-mode", "auto"}
+	}
+	cases := []struct {
+		name    string
+		env     map[string]string
+		cfg     map[string]any
+		harness string
+		pick    func(string) (string, bool)
+		account string
+		dir     string
+	}{
+		{"caller env wins", map[string]string{"CLAUDE_CONFIG_DIR": "/cfg/a"}, twoAccounts(), "", pickB, "a", "/cfg/a"},
+		{"caller env outside the accounts", map[string]string{"CLAUDE_CONFIG_DIR": "/other"}, twoAccounts(), "", pickB, "", "/other"},
+		{"caller env without accounts", map[string]string{"CLAUDE_CONFIG_DIR": "/other"}, nil, "", nil, "", "/other"},
+		{"picked account", nil, twoAccounts(), "", pickB, "b", bDir},
+		{"nothing usable falls back to the first", nil, twoAccounts(), "", none, "a", "/cfg/a"},
+		{"no picker falls back to the first", nil, twoAccounts(), "", nil, "a", "/cfg/a"},
+		{"no accounts", nil, nil, "", pickB, "", ""},
+		{"codex ignores accounts", nil, twoAccounts(), "codex", pickB, "", ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			l := newRig(c.env).launcher()
+			l.PickAccount = c.pick
+			cfg := map[string]any{}
+			for k, v := range c.cfg {
+				cfg[k] = v
+			}
+			if c.harness != "" {
+				cfg["orchestrator.harness"] = c.harness
+			}
+			p, err := l.Resolve("/p", cfgOf(t, cfg))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if p.Account != c.account || p.ConfigDir != c.dir {
+				t.Errorf("account/dir = %q/%q, want %q/%q", p.Account, p.ConfigDir, c.account, c.dir)
+			}
+			has := strings.Contains(strings.Join(p.Supervisor, " "), "--config-dir")
+			if has != (c.dir != "") {
+				t.Errorf("--config-dir in %q = %v, want %v", p.Supervisor, has, c.dir != "")
+			}
+			if c.harness == "" && c.dir != "" && !reflect.DeepEqual(p.Supervisor, flagged(c.dir)) {
+				t.Errorf("supervisor = %q\nwant %q", p.Supervisor, flagged(c.dir))
+			}
+		})
 	}
 }
