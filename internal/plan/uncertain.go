@@ -21,18 +21,50 @@ var (
 	codeSpanRe = regexp.MustCompile("`[^`]+`")
 )
 
-// Uncertain ports hv-uncertain for the file backend: whether an open item
-// warrants a peek before planning. Only Major items can be uncertain; the
-// reasons are "no detail file", "multiple open-question signals" and "no
-// concrete identifiers (unknown surface)".
-func Uncertain(root, id string) (typ string, reasons []string, err error) {
-	f := &backlog.File{Root: root}
+// OpenItem is what Uncertain reads of one open item: its ID and type as the
+// backlog knows them, its backlog line, and for a Major item its detail text
+// (HasDetail is false when there is none).
+type OpenItem struct {
+	ID, Type  string
+	Major     bool
+	Line      string
+	Detail    string
+	HasDetail bool
+}
+
+// Items finds open items. An item that does not exist or is not open is exit 3.
+type Items interface {
+	Open(id string) (OpenItem, error)
+}
+
+// Uncertain ports hv-uncertain: whether an open item warrants a peek before
+// planning. Only Major items can be uncertain; the reasons are "no detail
+// file", "multiple open-question signals" and "no concrete identifiers
+// (unknown surface)". It returns the item's ID and type for the answer.
+func Uncertain(src Items, id string) (itemID, typ string, reasons []string, err error) {
+	it, err := src.Open(id)
+	if err != nil {
+		return "", "", nil, err
+	}
+	if !it.Major {
+		return it.ID, it.Type, []string{}, nil
+	}
+	return it.ID, it.Type, uncertainReasons(it.Line, it.Detail, it.HasDetail), nil
+}
+
+// FileItems reads open items from the file backlog under root.
+func FileItems(root string) Items { return fileItems{root} }
+
+type fileItems struct{ root string }
+
+func (s fileItems) Open(id string) (OpenItem, error) {
+	f := &backlog.File{Root: s.root}
 	md, merr := f.Markdown(0)
 	if merr != nil {
 		if errors.Is(merr, backlog.ErrNotFound) {
-			return "", nil, exitcode.Errf(exitcode.ExitResolution, ".rota/BACKLOG.md not found")
+			return OpenItem{}, exitcode.Errf(exitcode.ExitResolution, ".rota/BACKLOG.md not found")
 		}
-		return "", nil, merr
+		return OpenItem{}, merr
 	}
 	// ROTA_OPEN_SECTIONS ("Bugs|Features|Tasks", as hv-types.sh exports it)
 	// limits which open sections the item may live in.
@@ -54,18 +86,51 @@ func Uncertain(root, id string) (typ string, reasons []string, err error) {
 		}
 	}
 	if line == "" {
-		return "", nil, exitcode.Errf(exitcode.ExitResolution, "item %s not found in BACKLOG.md", id)
+		return OpenItem{}, exitcode.Errf(exitcode.ExitResolution, "item %s not found in BACKLOG.md", id)
 	}
-	typ = id[:1]
-	reasons = []string{}
+	it := OpenItem{ID: id, Type: id[:1], Line: line}
 	if b, ok := backlog.ParseOpen(line); !ok || !strings.EqualFold(b.Tag, "major") {
-		return typ, reasons, nil
+		return it, nil
 	}
-	detail, has, derr := f.Detail(id)
-	if derr != nil {
-		return "", nil, derr
+	it.Major = true
+	var derr error
+	if it.Detail, it.HasDetail, derr = f.Detail(id); derr != nil {
+		return OpenItem{}, derr
 	}
-	return typ, uncertainReasons(line, detail, has), nil
+	return it, nil
+}
+
+// NewIssueItems reads open items from the issue backend; open connects to it
+// on first use, resolving the item.
+func NewIssueItems(open func() (backlog.Backend, error)) Items { return issueItems{open} }
+
+type issueItems struct {
+	open func() (backlog.Backend, error)
+}
+
+// Open takes the item's issue body (without the fields block) as the detail.
+// Only open items count, as only open bullets did.
+func (s issueItems) Open(id string) (OpenItem, error) {
+	be, err := s.open()
+	if err != nil {
+		return OpenItem{}, err
+	}
+	it, err := be.Get(id)
+	if err != nil {
+		return OpenItem{}, err
+	}
+	if it.Closed {
+		return OpenItem{}, exitcode.Errf(exitcode.ExitResolution, "item %s is not open", it.ID)
+	}
+	out := OpenItem{ID: it.ID, Type: it.Type, Line: it.Line}
+	if !strings.EqualFold(it.Tag, "major") {
+		return out, nil
+	}
+	out.Major = true
+	if out.Detail, out.HasDetail, err = be.Detail(it.ID); err != nil {
+		return OpenItem{}, err
+	}
+	return out, nil
 }
 
 // uncertainReasons applies the three gates to a Major item's bullet and its

@@ -77,7 +77,7 @@ func testTree() *Command {
 				return Result{Data: o}, Refused("item has no proof")
 			case "domain":
 				// A domain package's error, returned with no converter.
-				return Result{}, design.Add("", "bad", "title")
+				return Result{}, design.CheckID(design.Files(""), "bad")
 			case "wrapped":
 				return Result{}, fmt.Errorf("saving: %w", &exitcode.Error{Exit: exitcode.ExitUnavailable, Message: "gone away", Hint: "retry later"})
 			case "leak":
