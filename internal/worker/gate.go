@@ -166,6 +166,9 @@ func (r Registry) GateTarget(arg string) (GateTarget, error) {
 type Forge interface {
 	PRView(ctx context.Context, pr int) (tracker.PRInfo, error)
 	PRRequestMerge(ctx context.Context, pr int, o tracker.MergeOpts) error
+	// OpenPRs lists the open PRs, so a slot that records none can be matched
+	// to the PR its branch heads.
+	OpenPRs(ctx context.Context) ([]tracker.PR, error)
 }
 
 // Gate runs the merge gate for a slot or a queued PR (see GateTarget). A
@@ -211,6 +214,22 @@ func (e Env) gate(ctx context.Context, root string, o GateOpts, res GateResult, 
 	// and local refs are the right ones. A recorded PR with no origin remote is
 	// refused: a local merge would leave the PR open and bypass its review, CI
 	// and branch protection while reporting MERGED.
+	if pr == "" && !t.Queued && branch != "" {
+		// A worker can open its PR without the slot recording it. A local merge
+		// would then land on the local base only, leave the PR open and still
+		// report a pass, so look the PR up by head before taking that path.
+		adopted, msg := g.openPRForBranch()
+		if msg != "" {
+			return g.broke(msg)
+		}
+		if adopted != "" {
+			pr, g.pr, res.PR = adopted, adopted, adopted
+			res.Notes = append(res.Notes, fmt.Sprintf("PR-ADOPTED %s — the slot recorded no PR; open PR %s is headed by %s", o.Slot, adopted, branch))
+			if !o.CheckOnly {
+				UpdateSlot(root, o.Slot, func(s *Slot) { s.SetPR(adopted) })
+			}
+		}
+	}
 	if pr != "" {
 		g.prNum = trailingNumber(pr)
 		if _, code := e.git(root, "remote", "get-url", "origin"); code != 0 {
@@ -514,6 +533,29 @@ func (g *gate) prInfo() (tracker.PRInfo, bool) {
 	}
 	info, err := g.forge.PRView(g.ctx, n)
 	return info, err == nil
+}
+
+// openPRForBranch finds the open PR headed by the gate's branch. Without an
+// origin remote or a forge CLI there is no remote to hold one, and the local
+// merge stands. Any other failure to ask is a check-broke message: guessing
+// "none" would fail open into a local merge of a branch whose PR may be open.
+func (g *gate) openPRForBranch() (url, brokeMsg string) {
+	if _, code := g.e.git(g.root, "remote", "get-url", "origin"); code != 0 {
+		return "", ""
+	}
+	prs, err := g.forge.OpenPRs(g.ctx)
+	if err != nil {
+		if tracker.IsKind(err, tracker.KindUnavailable) && strings.Contains(err.Error(), "is not installed") {
+			return "", ""
+		}
+		return "", fmt.Sprintf("slot %s records no PR and the open PRs of %s could not be listed to look for one headed by %s: %v", g.o.Slot, g.provider, g.branch, err)
+	}
+	for _, p := range prs {
+		if p.Branch == g.branch {
+			return p.URL, ""
+		}
+	}
+	return "", ""
 }
 
 // prBody is the PR/MR description. An error means it could not be read.
