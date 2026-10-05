@@ -81,7 +81,8 @@ There are no servers and no ports in this repo.
 - Stage explicit paths. Commit messages: imperative subject under 72 chars, body says why,
   no `Co-Authored-By` trailer.
 - The PR body carries an `## Approvals` section citing the channel of every decision you
-  acted on, and labels your own calls as unratified. Reference the issue so it closes on
+  acted on (`None` if you acted only on your brief, which is not a relay). A `## Rulings`
+  section lists your own calls as `<what> — <why> — <cost if wrong>`. Reference the issue so it closes on
   merge, unless the PR is a partial slice.
 
 ## Tracker CLI gotchas
