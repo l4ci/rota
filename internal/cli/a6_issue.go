@@ -1,8 +1,10 @@
 package cli
 
 import (
-	"github.com/l4ci/rota/internal/artifact"
+	"path/filepath"
+
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/jsonx"
 )
 
@@ -10,13 +12,28 @@ import (
 // resolve through the A4 workflow (so "F7", "#7" and "7" all answer "7" and
 // an unknown item is exit 3).
 
+// issueBackend reports whether backlog.backend is "issues". An invalid value
+// is a corrupt config (contract, shared definitions): exit 70, never a quiet
+// fall back to file mode.
+func issueBackend(root string) (bool, error) {
+	name, err := config.Backend(config.Load(filepath.Join(root, ".rota", "config.json")))
+	if err != nil {
+		return false, &Error{Exit: ExitInternal, Message: err.Error()}
+	}
+	return name == "issues", nil
+}
+
 // modeRoot is the project root and whether backlog.backend is "issues".
 func modeRoot(c *Ctx) (root string, issue bool, err error) {
 	root, err = c.Root()
 	if err != nil {
 		return "", false, err
 	}
-	return root, artifact.IssueMode(root), nil
+	issue, err = issueBackend(root)
+	if err != nil {
+		return "", false, err
+	}
+	return root, issue, nil
 }
 
 // failAny maps a domain error (artifact or backlog) onto the exit table,
