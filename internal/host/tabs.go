@@ -114,3 +114,46 @@ func (h *herdr) CloseTab(ctx context.Context, id string) error {
 	}
 	return nil
 }
+
+// PaneSweeper is the optional way to close a slot's leftover shell panes by
+// working directory. A worker that exits leaves its pane behind as a bare
+// shell, and `layout split` moves panes out of their tab, so the tab handle
+// no longer finds them. Only herdr has it.
+type PaneSweeper interface {
+	// SweepShells closes every pane in the cwd that runs no agent and only
+	// shells, and returns how many it closed. A pane it cannot prove agentless
+	// is left alone.
+	SweepShells(ctx context.Context, cwd string) (int, error)
+}
+
+// SweepShells reads `herdr pane list` and closes each agentless, shell-only
+// pane whose cwd is the worktree.
+func (h *herdr) SweepShells(ctx context.Context, cwd string) (int, error) {
+	r := h.herdr(ctx, "pane", "list")
+	if r.ExitCode != 0 {
+		return 0, fmt.Errorf("herdr pane list failed: %s", strings.TrimSpace(r.Stderr))
+	}
+	var doc struct {
+		Result struct {
+			Panes []struct {
+				PaneID string `json:"pane_id"`
+				Cwd    string `json:"cwd"`
+				Agent  string `json:"agent"`
+				Status string `json:"agent_status"`
+			} `json:"panes"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal([]byte(r.Stdout), &doc); err != nil {
+		return 0, fmt.Errorf("herdr pane list: unreadable reply: %w", err)
+	}
+	n := 0
+	for _, p := range doc.Result.Panes {
+		if p.Cwd != cwd || p.Agent != "" || (p.Status != "unknown" && p.Status != "") || !h.onlyShells(ctx, p.PaneID) {
+			continue
+		}
+		if h.herdr(ctx, "pane", "close", p.PaneID).ExitCode == 0 {
+			n++
+		}
+	}
+	return n, nil
+}

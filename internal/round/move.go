@@ -401,8 +401,11 @@ func (e Env) Reclaim(ctx context.Context, root string, be Board, o ReclaimOpts) 
 	case HealthStalled:
 		reason = fmt.Sprintf("stalled %d min", int(h.Stall.Idle.Minutes()))
 	}
-	// A live pane must be gone before its worktree moves under it.
-	if h.Health != HealthDead {
+	// A live pane must be gone before its worktree moves under it. A dead
+	// slot's agent is gone, but its pane may linger as a bare shell.
+	if h.Health == HealthDead {
+		e.workerEnv().SweepSlot(ctx, root, o.Slot)
+	} else {
 		switch {
 		case e.HostName == host.Solo: // a subagent has no pane to close
 		case h.Known && !h.Alive: // provably gone
