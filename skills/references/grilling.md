@@ -15,7 +15,7 @@ Don't ask a question whose answer changes nothing downstream.
 
 ## Code before user
 
-Facts are not the user's to supply. Before a question reaches the user, try the code (`grep`, `Read`), `rota map query`, git history, `.rota/` state and the item's thread. For a fact that needs broad reading, send a `light` subagent (`references/subagent-dispatch.md`). Ask the user only for intent, preference, priority and risk tolerance. If the answer needs a running experiment, say it warrants `/rota-spike` instead of guessing.
+Facts are not the user's to supply. Before a question reaches the user, try the code (`grep`, `Read`), `rota map query`, git history, `.rota/` state and the item's thread. For a fact that needs broad reading, send a `light` subagent (see also `references/subagent-dispatch.md`). Ask the user only for intent, preference, priority and risk tolerance. If the answer needs a running experiment, say it warrants `/rota-spike` instead of guessing.
 
 ## Edge-case scenarios
 

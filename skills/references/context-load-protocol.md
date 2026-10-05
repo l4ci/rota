@@ -24,7 +24,7 @@ Run as a checklist. Items are ordered by broadening scope (target item → plan 
 
   Used by `/rota-plan` and `/rota-vision` to see siblings under the same milestone.
 
-- **KNOWLEDGE + DECISIONS** — see `references/knowledge-consult.md` for the canonical query pattern. Pass the topic names inferred from the work area.
+- **KNOWLEDGE + DECISIONS** — the canonical query pattern is in `references/knowledge-consult.md` (see also; the skills that use this protocol cite it directly). Pass the topic names inferred from the work area.
 - **Recent git history**:
 
   ```

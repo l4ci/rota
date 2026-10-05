@@ -47,7 +47,7 @@ On a terminal path (Stop here, or an empty backlog) run `rota release pending --
 
 ## Preview Mode (`--preview <target>`)
 
-`/rota-work --preview <target>` (the flag anywhere in the args) prints a read-only approach peek and stops: no writes, no commits, no status. Procedure and peek template in [`references/work-preview.md`](references/work-preview.md).
+`/rota-work --preview <target>` (the flag anywhere in the args) prints a read-only approach peek and stops: no writes, no commits, no status. Procedure and peek template in [`references/work-preview.md`](references/work-preview.md); it loads context per [`references/context-load-protocol.md`](references/context-load-protocol.md) and the K+D pattern in [`references/knowledge-consult.md`](references/knowledge-consult.md).
 
 ## Step 1 — Guard
 
@@ -55,7 +55,21 @@ On a terminal path (Stop here, or an empty backlog) run `rota release pending --
 rota git guard clean --context "/rota-work"
 ```
 
-Exit 0 = clean, continue. Exit 3 = not a repo, surface and stop. Exit 1 (dirty tree): if every dirty path is a tool-generated sibling (Godot `.gd.uid`, `Package.resolved`, `.DS_Store`...), sweep them into a `chore:` commit and continue; any user change stops with the guard's message. Patterns and commands in [`references/work-toolchain-siblings.md`](references/work-toolchain-siblings.md). On a fresh `git init` with no commits the guard points at a `chore: import initial files` baseline; run it and re-invoke.
+Exit 0 = clean, continue. Exit 3 = not a repo, surface and stop. Exit 1 (dirty tree): if every dirty path is a tool-generated sibling (Godot `.gd.uid`, `Package.resolved`, `.DS_Store`...), sweep them into a `chore:` commit and continue; any user change stops with the guard's message. Siblings are:
+
+- a path beside a tracked file (e.g. `Foo.gd.uid` beside tracked `Foo.gd`), or
+- one of `*.gd.uid`, `*.xcworkspace/contents.xcworkspacedata`, `Package.resolved`, `*.xcodeproj/project.pbxproj` regenerated without a meaningful diff, `.DS_Store`.
+
+Everything else is a user change. Classify every line of `git status --porcelain`; if **every** dirty path is a sibling, stage those paths by name and commit them on their own, never inside a task commit:
+
+```bash
+git add -- <sibling paths>
+git commit -m "chore: sweep tool-generated siblings"
+```
+
+If a tool only regenerates siblings when the editor loads (Godot `class_name` → `.gd.uid`), force generation once headless before the sweep (`godot --headless --editor --quit`). Record project-specific commands in `KNOWLEDGE.md`. Don't narrate the sweep unless it happened.
+
+On a fresh `git init` with no commits the guard points at a `chore: import initial files` baseline; run it and re-invoke.
 
 ## Step 2 — Clarify Ambiguous Briefs (only when needed)
 
@@ -120,7 +134,7 @@ This is the only `rota status add` of the cycle: create the branch or worktree f
 
 **Umbrella registration.** One repo: add `--repo <repo-name>`. Several repos register one entry per `(branch, repo)`: `rota status add <branch> --items <ids> --repos <repos-csv> [--worktrees <csv>]`.
 
-For umbrella branches (single sub-repo, multi-repo via `rota git branch <name> --repos <csv>`, Layout B worktree) see `references/umbrella-mode.md` *Branch creation*.
+For umbrella branches (single sub-repo, multi-repo via `rota git branch <name> --repos <csv>`, Layout B worktree) see `references/isolation-patterns.md`.
 
 **Issue mode** (`references/issue-mode.md`). Once the branch exists, per item run `rota item ready <ID>` (exit 1 prints what is missing: warn the user), then claim it with `rota item claim <ID> --as <branch>`. Exit 4 means another worker holds it: drop that item and continue with the rest, or stop when none remain. Exit 3 or 5: stop and report. Load each item's context as the reference's "Resuming an item" describes (start with `rota item show <ID>`) before planning tasks. For a `changes-requested` item, follow *Handling review feedback* in `references/worker-contract.md` when working its `feedback` comments.
 
@@ -214,7 +228,7 @@ For dependent tasks, wait for wave 1 to complete and verify, then dispatch wave 
 
 ## Step 8.5 — Sweep Tool-Generated Siblings
 
-After the task commits, sweep untracked toolchain siblings into their own `chore:` commit (staged by name) or the next `/rota-work` guard refuses a dirty tree. Non-sibling dirt means a subagent produced unexpected changes: investigate before merging. See [`references/work-toolchain-siblings.md`](references/work-toolchain-siblings.md).
+After the task commits, sweep untracked toolchain siblings into their own `chore:` commit (staged by name) or the next `/rota-work` guard refuses a dirty tree. Non-sibling dirt means a subagent produced unexpected changes: investigate before merging. Same rules as the Step 1 sweep.
 
 ## Step 9 — Close the Items
 
@@ -312,9 +326,9 @@ One line, only when `references/post-cycle-trigger-gate.md` fires: *"Run `/rota-
 | Reference | Purpose |
 |-----------|---------|
 | [`task-ledger.md`](references/task-ledger.md) | `Task:` commit trailer and the resume rule that skips finished tasks. |
+| [`context-load-protocol.md`](references/context-load-protocol.md) | Silent parallel context load behind `--preview`. |
 | [`work-preview.md`](references/work-preview.md) | `--preview` procedure and peek template. |
 | [`work-wave-planning.md`](references/work-wave-planning.md) | File and shared-symbol collisions, brief rules, verifying a completion. |
-| [`work-toolchain-siblings.md`](references/work-toolchain-siblings.md) | Tool-generated sibling patterns and the sweep commit. |
 | [`isolation-patterns.md`](references/isolation-patterns.md) | Branch / worktree creation per `work.isolation` and umbrella mode. |
 | [`issue-mode.md`](references/issue-mode.md) | Issue-mode helper map, state labels, PR flow, resuming an item, exit codes. |
 | [`knowledge-consult.md`](references/knowledge-consult.md) | Canonical K+D query pattern used by every cycle-starting skill. |
