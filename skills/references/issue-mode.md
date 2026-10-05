@@ -55,7 +55,7 @@ A fresh session has only the tracker. Load an item's context before working it:
 3. `rota item note show <ID> --kind design` and `--kind plan`: the design and plan notes (`exists: false` when absent).
 4. `rota item comment list <ID> [--kind K]`: just the comment rows, when only those are needed.
 
-Treat `decision` comments as binding and `feedback` comments (from review) as the to-do list for a `changes-requested` item.
+Treat `decision` comments as binding and `feedback` comments (from review) as the to-do list for a `changes-requested` item. Work them by the rules in `worker-contract.md`, *Handling review feedback*.
 
 ## Umbrella
 
