@@ -8,7 +8,6 @@ file	internal/cli/a6.go	internal/cli/debug.go	debug counter/verdict/reset; spike
 file	internal/cli/a6_docs.go	internal/cli/design_plan.go	design and plan groups, validate-docs, rename-check
 file	internal/cli/a6_issue.go	internal/cli/artifact_issue.go	issue-mode halves of design/plan/proof plus shared openers
 file	internal/cli/a6_milestone.go	internal/cli/milestone.go	milestone group
-file	internal/cli/a6_milestone_issue.go	internal/cli/milestone_issue.go	issue-mode milestone verbs
 file	internal/cli/a6_proof.go	internal/cli/proof.go	proof group and plan uncertain
 file	internal/cli/a4_test.go	internal/cli/item_test.go	tests for item.go and its shared helpers
 file	internal/cli/a4_issue_test.go	internal/cli/item_issue_test.go	item verbs in issue mode
@@ -158,3 +157,5 @@ ident	TestA4cConfigNeedsProjectAndRegisteredRepo	TestConfigNeedsProjectAndRegist
 ident	TestA4cConfigRoundTrip	TestConfigRoundTrip	drop the stutter
 ident	TestA4cConfigSetNotObjectIs70	TestConfigSetNotObjectIs70	drop the stutter
 ident	TestA4dMigrateIssues	TestMigrateIssues	drop the stutter
+file	internal/cli/a6_stores.go	internal/cli/artifact_stores.go	store openers for the design, plan and proof verbs
+ident	a4OpenFile	openBacklogFile	file-only variant of openBacklog
