@@ -165,18 +165,16 @@ For each candidate `{topic, title, correctionText, loggedAt}`, surface via `AskU
   2. *"Keep — false positive"* — leave tier unchanged
   3. *"Defer to next session"* — keep candidate in the queue
 
-After processing ALL candidates (regardless of per-candidate choice), call:
+Clear each candidate as soon as it is resolved (Demote or Keep), never a deferred one:
 
 ```bash
-rota knowledge contradiction clear
+rota knowledge contradiction clear --topic <T> --title <S>
 ```
 
-This clears the entire queue, deferred candidates included.
+A deferred candidate stays in the queue, so `rota knowledge contradiction list` shows it next session. Never run a bare `rota knowledge contradiction clear` here: it empties the whole queue.
 
 Track results in the confirm output as:
 
 ```
-Cleared N contradictions: <demoted-count> demoted, <skipped-count> skipped
+Cleared N contradictions: <demoted-count> demoted, <kept-count> kept, <deferred-count> deferred (still queued)
 ```
-
-(Where "skipped" covers both "Keep — false positive" and "Defer to next session" choices.)

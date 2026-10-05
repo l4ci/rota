@@ -187,6 +187,32 @@ func (s Store) ClearContradictions() (int, error) {
 	return n, err
 }
 
+// ClearContradiction drops every entry for (topic, title), keeps the rest in
+// order and returns how many it dropped.
+func (s Store) ClearContradiction(topic, title string) (int, error) {
+	n := 0
+	err := fsio.Locked(s.queuePath(), fsio.LockTimeout, func() error {
+		doc, pending, err := s.loadQueue()
+		if err != nil {
+			return err
+		}
+		kept := []any{}
+		for _, p := range pending {
+			if o, ok := p.(*jsonx.Object); ok && entryString(o, "topic") == topic && entryString(o, "title") == title {
+				n++
+				continue
+			}
+			kept = append(kept, p)
+		}
+		if n == 0 {
+			return nil
+		}
+		doc.Set("pending", kept)
+		return s.saveQueue(doc)
+	})
+	return n, err
+}
+
 func (s Store) saveQueue(doc *jsonx.Object) error {
 	return writeJSON(s.queuePath(), doc)
 }
