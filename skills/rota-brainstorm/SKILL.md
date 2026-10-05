@@ -1,6 +1,6 @@
 ---
 name: rota-brainstorm
-description: Per-item design before /rota-plan — a grilling pass for Major features and P0 bugs, then one draft with 2-3 approaches and an Acceptance section, one approval, stored as the item's design (a note on its issue, or .rota/designs/<ID>.md on the file backend). Use when a Major feature or P0 bug needs design negotiation before implementation planning.
+description: Use when a Major feature or P0 bug needs design negotiation before implementation planning, or on "brainstorm 42", "design this item".
 ---
 
 # rota-brainstorm — Per-item Design

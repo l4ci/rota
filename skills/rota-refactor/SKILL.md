@@ -1,6 +1,6 @@
 ---
 name: rota-refactor
-description: Architecture review that files findings as refactor-labelled issues. Finds shallow modules, leaky seams and hard-to-test code, ranks the candidates, and files each as an issue with acceptance criteria, deduped against open and closed issues. Fixing is opt-in with --fix. Use on "review the architecture", "find refactoring opportunities", "deepen modules", or scoped to one area ("/rota-refactor internal/cli").
+description: Use on "review the architecture", "find refactoring opportunities", "deepen modules", or scoped to one area ("/rota-refactor internal/cli").
 ---
 
 # rota-refactor

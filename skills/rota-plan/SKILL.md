@@ -1,6 +1,6 @@
 ---
 name: rota-plan
-description: Write an implementation plan as a first-class artifact before execution — keyed by item (#42, or M01-B07 when milestone-tagged) or milestone slice (M01-S01). One proposal, goal, approach, tasks with verifiable outcomes, open questions, assumptions. /rota-work consults the plan if present. Use when an item or slice is too big to one-shot, or when alignment matters before code lands.
+description: Use when an item or milestone slice is too big to one-shot, or when alignment matters before code lands, or on "plan 42", "write a plan for this".
 ---
 
 # rota-plan — Implementation Plan as Artifact

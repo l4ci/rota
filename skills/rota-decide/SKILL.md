@@ -1,6 +1,6 @@
 ---
 name: rota-decide
-description: Capture a hard-boundary decision into .rota/DECISIONS.md — manually confirmed, never auto-invoked. Decisions differ from learnings in KNOWLEDGE.md by being active commitments with explicit forbids/permits. Use on "decide on X", "we're committing to X", "lock in the boundary that Y", or when a session has produced a constraint future work must respect. Accepts `--from-learning <topic>` to promote a hardened KNOWLEDGE.md learning into a decision, and `--from-spike <name>` to promote a `.rota/spikes/<name>.md` finding.
+description: Use on "decide on X", "we're committing to X", "lock in the boundary that Y", or when a session has produced a constraint future work must respect. Manual only, never auto-invoked.
 ---
 
 # rota-decide — Capture Hard-Boundary Decisions

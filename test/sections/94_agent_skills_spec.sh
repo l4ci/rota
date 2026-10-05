@@ -26,6 +26,7 @@ pass "E2[a]: a compliant skill passes, optional spec keys and folded description
 
 # (b) each rule fails, and the message names the file and the rule
 LONG="$(python3 -c 'print("x" * 1025)')"
+OVERCAP="$(python3 -c 'print("x" * 351)')"
 n=0
 while IFS='|' read -r want fm; do
   n=$((n + 1)); F="$SPEC_TMP/bad$n"; sp_fixture "$F" "$fm"
@@ -38,13 +39,14 @@ must equal the directory|name: rota-b\ndescription: ok\n
 lowercase letters, digits|name: Hv-a\ndescription: ok\n
 lowercase letters, digits|name: hv--a\ndescription: ok\n
 the spec allows 1024|name: rota-a\ndescription: $LONG\n
+the cap is 350|name: rota-a\ndescription: $OVERCAP\n
 not in the Agent Skills spec|name: rota-a\ndescription: ok\nuser-invocable: true\n
 missing required key 'description'|name: rota-a\n
 missing required key 'name'|description: ok\n
 not valid YAML unquoted|name: rota-a\ndescription: Links GH: 12 refs.\n
 not valid YAML unquoted|name: rota-a\ndescription: Links issue #12 refs.\n
 EOF
-pass "E2[b]: a wrong name, a long description, an unknown key, a missing key and invalid unquoted YAML each fail"
+pass "E2[b]: a wrong name, a long description, an over-cap description, an unknown key, a missing key and invalid unquoted YAML each fail"
 
 # (c) the transitional sets excuse what is listed, and only that
 sp_fixture "$SPEC_TMP/pend" 'name: rota-a\ndescription: ok\nuser-invocable: true\n'

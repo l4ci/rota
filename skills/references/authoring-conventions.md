@@ -48,6 +48,23 @@ When adding a new boolean config flag whose purpose is to enable additional skil
 
 Codified after F15 introduced `docs.afterWork`. Without this rule, opt-in flags drift toward auto-flip-on-first-detect, which makes them on-by-default in practice — defeating the opt-in semantics.
 
+## Descriptions say when to use a skill, not how it works
+
+The `description` frontmatter is the trigger: the situations and phrases that should load the skill, nothing else. A description that summarises the workflow ("reproduce, hypothesize, fix, open a PR") gives the agent a shortcut, and it follows the summary instead of reading the skill body. State the trigger, name the neighbouring skill when the two are easy to confuse, and leave the steps to the body.
+
+`test/validate-skills.py` caps a description at 350 characters (`DESC_CAP`); the Agent Skills spec's 1024 is a ceiling, not a target.
+
+**Forbids.**
+- Listing steps, outputs, verbs or config keys the skill uses in its description.
+- Raising `DESC_CAP` to fit a longer description; cut the description instead.
+
+**Permits.**
+- Trigger phrases in quotes, a flag with its own trigger (`--undo` on "roll back the last cycle"), and one sentence routing a confusable request to the right skill.
+
+## Gates carry a Thought → Reality table
+
+A hard gate (Iron Law, proof, review verdict, manual gate) gets a short two-column table in its skill: the rationalization an agent reaches for when the gate is in the way, and the fact that answers it. Place it just before the skill's `Key Principles`. Keep rows to the shortcuts the skill's own steps have to resist, one line each, and cite the step or exit code that enforces the gate. `/rota-debug`, `/rota-work` and `/rota-ship` carry one; add a row when a gate is skipped in practice, not in anticipation.
+
 ## Dispatch heavy work to subagents
 
 Skills MUST consult `references/subagent-dispatch.md` for any step involving ≥3 file reads, repeated independent operations on N items, long tool output, or fan-out research. Orchestrator-only work (decisions, user interaction, atomic writes, verification of subagent output) is exempt — it stays on the main thread.

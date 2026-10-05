@@ -1,6 +1,6 @@
 ---
 name: rota-vision
-description: Brainstorm a project's vision and break it into milestones — short discovery, optional research, a deliberate challenge round, then write the milestones (which mirror the tracker's). Handles fresh vision and extending an existing one. Use on "let's plan", "what's the bigger picture", "create a roadmap", "brainstorm milestones".
+description: Use on "let's plan", "what's the bigger picture", "create a roadmap", "brainstorm milestones".
 ---
 
 # rota-vision — Project Vision & Milestones

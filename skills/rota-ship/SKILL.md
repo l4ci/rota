@@ -1,6 +1,6 @@
 ---
 name: rota-ship
-description: Bundle completed work on a feature branch into a PR (or direct merge) — extracts commits, resolved item IDs with titles, optionally runs /rota-review, and calls `rota ship pr` or `rota ship merge`. Use on "ship it", "open the PR", "finish this branch", when work is done and you want to integrate. Also supports --undo (guided rollback of the last cycle on the base branch) and --docs (public-docs maintenance). Use --undo on "roll back the last cycle", "revert that merge". Use --docs on "update docs"; auto-invoked post-cycle when docs/ exists.
+description: Use on "ship it", "open the PR", "finish this branch", when work is done and you want to integrate. Use --undo on "roll back the last cycle", "revert that merge". Use --docs on "update docs".
 ---
 
 ## Step 0 — Mode Dispatch
@@ -328,6 +328,17 @@ Resolves: #12, #15   (file backend: [B07], [F03])
 - Stubs are honest empty sections; the user fills the substance.
 - `<docs.path>/README.md` is the spine, `.docsignore` the safety boundary.
 - After-work proposes by default; only `docs.autoCreate: true` commits without approval.
+
+## Gates: Thought → Reality
+
+| Thought | Reality |
+|---|---|
+| "The review report reads fine, skip the verdict." | `rota verdict route` exit 3 means none was recorded: rerun `/rota-review`. Never read the report instead. |
+| "CONCERNS are minor, ship anyway." | CONCERNS routes to `ask`: surface each one, then the user picks. `FAIL` is `stop`, and `rota ship pr` and `rota ship merge` refuse it (exit 4, `blockedBy: "verdict"`). |
+| "I'm a round worker, run `/rota-review` once to be safe." | Review is the orchestrator's seat. Skip Step 3 on a `<agent>/<issue>-<slug>` branch. |
+| "Autonomy is on, so open the PR." | `pr-open` and `issue-close` are always manual, whatever `autonomy.level` says. Ask first. |
+| "The merge touched few files, `--confirm` it." | `blockedBy: "manual gate"` is `merge-approval`: ask, then rerun with `--confirm --confirm-note "<their answer>"`. |
+| "`--undo` only rewinds one cycle, no need to ask." | It runs `git reset --hard`, unrecoverable past the reflog. The confirmation is the only guard. |
 
 ## Key Principles
 
