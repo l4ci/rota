@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/backlog"
-	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
@@ -71,7 +70,7 @@ func archFixture(t *testing.T, every int, closed []tracker.Issue) (string, Env, 
 // seedReview records a past review so closed issues after it count.
 func seedReview(t *testing.T, root string) {
 	t.Helper()
-	err := updateReview(root, func(o *jsonx.Object) { o.Set("at", "2026-09-30T00:00:00Z") })
+	err := worker.Update(root, func(d *worker.Doc) { d.StartReview("2026-09-30T00:00:00Z", 1, "test", nil) })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -193,11 +192,7 @@ func TestReviewItemsAreInEveryScope(t *testing.T) {
 		t.Fatalf("a title alone must not bypass the scope: %v %v", got, err)
 	}
 	writeRegistry(t, root)
-	if err := worker.Update(root, jsonx.NewObject(), func(d *jsonx.Object) {
-		o := jsonx.NewObject()
-		o.Set("items", []any{"2"})
-		d.Set("architectureReview", o)
-	}); err != nil {
+	if err := worker.Update(root, func(d *worker.Doc) { d.RecordReviewItems([]string{"2"}) }); err != nil {
 		t.Fatal(err)
 	}
 	got, err = scopeSet(root, items, map[string]bool{}, roundcfg.ScopeSlate, []string{"1"})
@@ -230,9 +225,8 @@ func TestArchitectureFirstSightSeedsInsteadOfTriggering(t *testing.T) {
 	if got := ReviewSince(root); got != a.Since {
 		t.Fatalf("seed not saved: %q", got)
 	}
-	v, _ := worker.LoadRegistry(root).Doc.Get("architectureReview")
-	if seeded, _ := v.(*jsonx.Object).Get("seeded"); seeded != true {
-		t.Fatalf("the seeded timestamp should be marked unratified: %v", seeded)
+	if !worker.LoadRegistry(root).Review().Seeded {
+		t.Fatal("the seeded timestamp should be marked unratified")
 	}
 }
 

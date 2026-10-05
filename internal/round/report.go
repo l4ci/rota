@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/host"
-	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -55,8 +54,8 @@ func ReportSlot(root string, o ReportOpts) (Reported, error) {
 	}
 	found := false
 	var stateErr error
-	err := worker.UpdateDoc(root, func(doc *jsonx.Object) {
-		s := (worker.Registry{Doc: doc}).Slot(o.Slot)
+	err := worker.Update(root, func(doc *worker.Doc) {
+		s := doc.Slot(o.Slot)
 		if s == nil {
 			return
 		}

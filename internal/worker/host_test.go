@@ -132,8 +132,8 @@ func TestDispatchTaskRecreatesTheSession(t *testing.T) {
 			t.Errorf("slot.%s = %s, want %s", k, got, want)
 		}
 	}
-	if v, _ := LoadRegistry(dir).Doc.Get("round"); fmt.Sprint(v) != "3" {
-		t.Errorf("round = %v", v)
+	if n, ok := LoadRegistry(dir).Round(); !ok || n != 3 {
+		t.Errorf("round = %v", n)
 	}
 }
 

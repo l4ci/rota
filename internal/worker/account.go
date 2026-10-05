@@ -98,7 +98,7 @@ func Configured(root string) []acct {
 	var out []acct
 	for _, e := range list {
 		if o, ok := e.(*jsonx.Object); ok {
-			out = append(out, acct{Str(o, "name"), Str(o, "configDir")})
+			out = append(out, acct{jsonx.Str(o, "name"), jsonx.Str(o, "configDir")})
 		}
 	}
 	return out
@@ -308,7 +308,7 @@ func (a *Accounts) token(configDir string) (string, string) {
 	if oauth == nil {
 		return "", "no access token"
 	}
-	tok := Str(oauth, "accessToken")
+	tok := jsonx.Str(oauth, "accessToken")
 	if tok == "" {
 		return "", "no access token"
 	}

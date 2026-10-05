@@ -66,7 +66,7 @@ func TestQueuedPRHelpers(t *testing.T) {
 	os.WriteFile(RegistryPath(root), []byte(doc), 0o644)
 	reg := LoadRegistry(root)
 	for ref, issue := range map[string]string{"#7": "5", "7": "5", "https://github.com/o/r/pull/7": "5", "9": "6", "https://gitlab.com/o/r/-/merge_requests/9": "6"} {
-		if q := reg.QueuedPR(ref); q == nil || Str(q, "issue") != issue {
+		if q := reg.QueuedPR(ref); q == nil || q.Issue != issue {
 			t.Errorf("%s: %v", ref, q)
 		}
 	}
@@ -79,7 +79,7 @@ func TestQueuedPRHelpers(t *testing.T) {
 	if err := RemoveQueuedPR(root, "#7"); err != nil {
 		t.Fatal(err)
 	}
-	if got := LoadRegistry(root).PRs(); len(got) != 1 || Str(got[0], "issue") != "6" {
+	if got := LoadRegistry(root).PRs(); len(got) != 1 || got[0].Issue != "6" {
 		t.Errorf("after remove: %v", got)
 	}
 }

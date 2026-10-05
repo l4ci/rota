@@ -240,20 +240,20 @@ func (m *migrator) remapRegistry() error {
 		return "", false
 	}
 	var notes []string
-	err := worker.UpdateDoc(m.o.Root, func(doc *jsonx.Object) {
-		reg := worker.Registry{Doc: doc}
-		for _, s := range reg.Slots() {
+	err := worker.Update(m.o.Root, func(doc *worker.Doc) {
+		for _, s := range doc.Slots() {
 			if n, ok := to(s.Task()); ok {
 				notes = append(notes, fmt.Sprintf("remap slot %s task %s -> #%s", s.Name(), s.Task(), n))
 				s.SetTask(n)
 			}
 		}
-		for _, q := range reg.PRs() {
-			if n, ok := to(worker.Str(q, "issue")); ok {
-				notes = append(notes, fmt.Sprintf("remap queued PR %s issue %s -> #%s", worker.Str(q, "pr"), worker.Str(q, "issue"), n))
-				q.Set("issue", n)
+		doc.RetargetQueued(func(q worker.QueuedPR) (string, bool) {
+			n, ok := to(q.Issue)
+			if ok {
+				notes = append(notes, fmt.Sprintf("remap queued PR %s issue %s -> #%s", q.PR, q.Issue, n))
 			}
-		}
+			return n, ok
+		})
 	})
 	for _, n := range notes {
 		m.say(n)

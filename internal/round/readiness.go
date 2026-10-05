@@ -11,7 +11,6 @@ import (
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/gate"
-	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -319,16 +318,16 @@ func (e Env) InFlightItems(ctx context.Context, root string, be backlog.Backend,
 		paths := Footprint(itemText(be, id), tracked, shared)
 		paths = append(paths, e.queuedChanged(ctx, root, q, shared)...)
 		sort.Strings(paths)
-		out = append(out, InFlight{Slot: "queue:" + worker.Str(q, "from"), Issue: id, Paths: paths})
+		out = append(out, InFlight{Slot: "queue:" + q.From, Issue: id, Paths: paths})
 	}
 	return out
 }
 
 // queuedChanged lists the paths a queued PR's branch changes against its base,
 // read from the pushed branch in root (the local one when origin lacks it).
-func (e Env) queuedChanged(ctx context.Context, root string, q *jsonx.Object, shared []string) []string {
-	branch := worker.Str(q, "branch")
-	base := firstNonEmpty(worker.Str(q, "base"), e.Base)
+func (e Env) queuedChanged(ctx context.Context, root string, q worker.QueuedPR, shared []string) []string {
+	branch := q.Branch
+	base := firstNonEmpty(q.Base, e.Base)
 	if branch == "" || base == "" {
 		return nil
 	}

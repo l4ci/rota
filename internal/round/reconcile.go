@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -71,8 +70,8 @@ func (e Env) repair(ctx context.Context, root string, rep *Report, f Finding) er
 		}
 		return registerSlot(root, row, v)
 	case PRStale: // only a queued record carries a repair
-		return worker.UpdateDoc(root, func(doc *jsonx.Object) {
-			worker.DropQueued(doc, func(q *jsonx.Object) bool { return worker.Str(q, "issue") == f.Issue })
+		return worker.Update(root, func(doc *worker.Doc) {
+			doc.DropQueued(func(q worker.QueuedPR) bool { return q.Issue == f.Issue })
 		})
 	case ClaimMismatch:
 		return editSlot(root, f.Slot, func(s *worker.Slot) error { s.SetClaimID(""); return nil })
@@ -103,9 +102,8 @@ func editSlot(root, name string, edit func(*worker.Slot) error) error {
 // registerSlot adds the worktree's slot, parked or holding its issue. It
 // leaves the registry's session and round alone.
 func registerSlot(root string, row Row, v *view) error {
-	return worker.UpdateDoc(root, func(doc *jsonx.Object) {
-		reg := worker.Registry{Doc: doc}
-		if reg.Slot(row.Name) != nil {
+	return worker.Update(root, func(doc *worker.Doc) {
+		if doc.Slot(row.Name) != nil {
 			return
 		}
 		s := worker.NewSlot(row.Name, row.Branch, v.worktree, v.base, row.Tab)
@@ -115,6 +113,6 @@ func registerSlot(root string, row Row, v *view) error {
 		if v.openPR != nil {
 			s.SetPR(v.openPR.URL)
 		}
-		worker.AppendSlot(doc, s)
+		doc.AppendSlot(s)
 	})
 }
