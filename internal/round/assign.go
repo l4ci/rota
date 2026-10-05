@@ -166,6 +166,9 @@ func pointerBrief(agent, id, branch, brief string, siblings []string, decisions 
 	if d := strings.TrimSpace(decisions); d != "" {
 		fmt.Fprintf(&b, "\nDecisions already settled (verbatim):\n\n%s\n", d)
 	}
+	// Last, so it is the final thing read: a worker that ends on a prose summary
+	// of its PR otherwise never prints the sentinel the poll routes on.
+	fmt.Fprintf(&b, "\nFinal step, after your PR summary: print exactly `ROTA-DONE %s <pr-url>` (your PR's URL) as the last line of your last message, then stop. The poll reads only that line; a summary alone leaves your slot looking stuck.\n", agent)
 	return b.String()
 }
 

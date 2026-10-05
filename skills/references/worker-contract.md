@@ -51,7 +51,7 @@ Work only this task, then stop.
   on: what was approved and the channel it came through (`orchestrator relay
   round N`, `maintainer in pane`, `issue comment #<n>`). Never cite a relay as
   the maintainer. Label your own calls `unratified`.
-- When your PR is open, print `ROTA-DONE <slot> <pr-url>` and stop.
+- When your PR is open, print `ROTA-DONE <slot> <pr-url>` and stop. Print it as the LAST line of your last message, after any summary of the work: a summary alone leaves the slot looking stuck. The dispatched brief repeats it with your slot filled in. If a slot goes idle with no sentinel but its branch heads an open PR, `rota worker poll` / `round wait` record it as done with that PR and note the sentinel was missing.
 - An architecture-review item (`arch(<area>): architecture review`) produces issues,
   not code, so it has no PR. When every finding is filed, print
   `ROTA-DONE <slot> issues:#a,#b` (the issue numbers, comma-separated) and stop.
