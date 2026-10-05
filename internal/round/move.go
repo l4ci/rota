@@ -593,7 +593,7 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 		}
 	}
 	if queueTo {
-		if err := e.queuePR(ctx, root, o.To); err != nil {
+		if err := e.queuePR(ctx, root, be, o.To); err != nil {
 			return res, wrap(err)
 		}
 	}

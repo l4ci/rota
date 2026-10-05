@@ -338,3 +338,67 @@ func TestTransferFromAQueuedRecordToHuman(t *testing.T) {
 		t.Errorf("ben must keep its new issue: %v", f.slot("ben"))
 	}
 }
+
+// mintReview makes issue id a review item this round minted, held by ben.
+func (f *moveFx) mintReview(t *testing.T, id string) {
+	t.Helper()
+	f.be.items[id].Title = ReviewTitle("cli")
+	if err := worker.Update(f.root, jsonx.NewObject(), func(d *jsonx.Object) {
+		o := jsonx.NewObject()
+		o.Set("items", []any{id})
+		d.Set("architectureReview", o)
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func (f *moveFx) reportIssues(t *testing.T, slot string, refs ...string) {
+	t.Helper()
+	if err := editSlot(f.root, slot, func(s *worker.Slot) error {
+		s.MarkState("done", "")
+		s.SetIssues(refs)
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestAssignOntoReviewSlotClosesTheReviewItem(t *testing.T) {
+	f := newMoveFx(t)
+	f.mintReview(t, "12")
+	f.reportIssues(t, "ben", "#139", "#140")
+
+	res, err := f.assign("13", "ben")
+	if err != nil || !res.Dispatched {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if !f.be.items["12"].Closed || strings.Join(f.be.comments["12"][len(f.be.comments["12"])-2:], "|") != "Review done: filed #139, #140.|closed: filed #139, #140" {
+		t.Errorf("the review item closes with the issues listed: %v %v", f.be.items["12"].Closed, f.be.comments["12"])
+	}
+	if f.be.claims["12"] != "" || f.be.states["12"] == "in-progress" {
+		t.Errorf("claim and state are released: %v %v", f.be.claims, f.be.states)
+	}
+	if len(f.queued()) != 0 {
+		t.Errorf("no PR is queued: %v", f.queued())
+	}
+	if s := f.slot("ben"); s.Task() != "13" || len(s.Issues()) != 0 {
+		t.Errorf("slot: %v", s)
+	}
+}
+
+func TestReportedIssuesOnAnOrdinaryItemDoNotFreeTheSlot(t *testing.T) {
+	f := newMoveFx(t)
+	f.reportIssues(t, "ben", "#139")
+	_, err := f.assign("13", "ben")
+	if blockedBy(t, err) != BlockSlotBusy || !strings.Contains(err.Error(), "not an architecture review item") {
+		t.Fatalf("%v", err)
+	}
+	if f.be.items["12"].Closed || f.slot("ben").Task() != "12" {
+		t.Error("a refusal moves nothing")
+	}
+	// a title alone is not trusted either: the registry must have minted it
+	f.be.items["12"].Title = ReviewTitle("cli")
+	if _, err := f.assign("13", "ben"); blockedBy(t, err) != BlockSlotBusy || f.be.items["12"].Closed {
+		t.Errorf("unminted review title: %v", err)
+	}
+}

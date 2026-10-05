@@ -442,7 +442,7 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 	}
 	claimID := agent + "@" + strconv.Itoa(rnd)
 	if queue {
-		if err := e.queuePR(ctx, root, agent); err != nil {
+		if err := e.queuePR(ctx, root, be, agent); err != nil {
 			return res, wrap(err)
 		}
 	}

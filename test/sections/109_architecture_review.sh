@@ -57,6 +57,7 @@ pass "the threshold trigger fires; refactor-form completions are excluded"
 
 # Acting: one item per area, as many assigned as there are idle slots (one), the count restarts.
 OUT=$(ar round architecture --holder-pid "$HOLD") || fail "architecture failed: $OUT"
+MINTED_OUT=$OUT
 [ "$(echo "$OUT" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)["data"]["minted"]))')" = "2" ] || fail "should mint one item per area: $OUT"
 [ "$(echo "$OUT" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)["data"]["assigned"]))')" = "1" ] || fail "one idle slot takes one item: $OUT"
 [ "$(echo "$OUT" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)["data"]["unassigned"]))')" = "1" ] || fail "the second item stays a candidate: $OUT"
@@ -66,6 +67,18 @@ OUT=$(ar round architecture --check)
 [ "$(echo "$OUT" | jget data.due)" = "false" ] || fail "a review in flight should not retrigger: $OUT"
 case "$(ar round candidates)" in *"arch(worker)"*) ;; *) fail "the unassigned review item should be a candidate" ;; esac
 pass "a due review mints one item per area, assigns idle slots and restarts the count"
+
+# A review item has no PR: its worker reports the issues it filed, and assigning the
+# next item to the slot closes the review item and frees the slot (#149).
+SLOT=$(echo "$MINTED_OUT" | python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["assigned"][0]["agent"])')
+FIRST=$(echo "$MINTED_OUT" | python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["assigned"][0]["id"])')
+SECOND=$(echo "$MINTED_OUT" | python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["unassigned"][0])')
+ar round assign "$SECOND" --agent "$SLOT" --holder-pid "$HOLD" >/dev/null && fail "a busy review slot should refuse a new item"
+ar round report "$SLOT" --state done --issues "#139,#140" >/dev/null || fail "report --issues failed"
+ar round report "$SLOT" --state done --pr 5 --issues "#1" >/dev/null && fail "--pr and --issues are exclusive"
+ar round assign "$SECOND" --agent "$SLOT" --holder-pid "$HOLD" >/dev/null || fail "assign onto a done review slot failed"
+case "$(cat "$AP/.rota/BACKLOG.md")" in *"Completed"*"[T01] arch(cli)"*) ;; *) fail "the finished review item should be completed: $(cat "$AP/.rota/BACKLOG.md")" ;; esac
+pass "a review item reports done with its issues, frees the slot without a PR and closes"
 
 # Off: round.architectureEvery 0 never fires.
 ar config set round.architectureEvery 0 >/dev/null

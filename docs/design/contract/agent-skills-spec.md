@@ -28,9 +28,9 @@ C8 (#64) lets a round run with no terminal host: the orchestrator runs each work
 - **Claude only.** Solo workers are Claude `Agent`-tool subagents. A Codex subagent cannot be given a working directory (E3, #70), so it would edit the orchestrator's own checkout instead of the slot's worktree; solo mode does not run Codex workers: `round assign --kind codex` (or a slot whose kind is codex) exits 2 under solo, before anything is marked. Supporting them would need a clean-tree guard on the orchestrator checkout after each one.
 
 ### rota round report
-rota round report <slot> --state <done|blocked|idle|dead|limited> [--evidence <text>] [--pr <url|number>]
+rota round report <slot> --state <done|blocked|idle|dead|limited> [--evidence <text>] [--pr <url|number> | --issues <#a,#b>]
 repo: none
-data: {"slot": string, "state": string, "previous": string, "pr"?: string, "evidence"?: string, "changed": bool}
+data: {"slot": string, "state": string, "previous": string, "pr"?: string, "issues"?: [string], "evidence"?: string, "changed": bool}
 exit: 2 when `--state` is not one of the five, or the round's recorded `host` is not `solo` (or no round has started); 3 when there is no project root or the slot is not in the pool
 old: none (new in C8)
 note: records what a solo worker's `Agent` result said, writing exactly the fields a pane poll writes: `state` (lowercase), and `pr` when `--pr` is given (stored as `worker poll` stores it on `done`). `--evidence` is echoed in `data` only; tab mode stores no evidence either. Re-reporting the same state and PR is `changed: false`.
