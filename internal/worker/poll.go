@@ -210,6 +210,41 @@ type PollRow struct {
 	Name, State, Evidence string
 }
 
+// missingSentinelNote marks a row promoted to DONE from the forge.
+const missingSentinelNote = "no ROTA-DONE sentinel; PR found by branch head"
+
+// promoteIdleWithPR turns an IDLE row with no sentinel into DONE when the open
+// PR headed by the slot's own branch exists: the worker opened its PR and
+// stopped on a prose summary. A slot with no such PR, or a forge that cannot
+// be asked, stays IDLE (stuck), as before. notes names each promoted slot.
+func (e Env) promoteIdleWithPR(ctx context.Context, root string, rows []PollRow) (out []PollRow, notes map[string]string) {
+	idle := map[string]PollRow{}
+	for _, r := range rows {
+		if r.State == StateIdle {
+			idle[r.Name] = r
+		}
+	}
+	if len(idle) == 0 {
+		return rows, nil
+	}
+	reg := LoadRegistry(root)
+	openPRs := e.openPRsByHead(ctx, root, reg, idle)
+	for i, r := range rows {
+		s := reg.Slot(r.Name)
+		if _, ok := idle[r.Name]; !ok || s == nil || s.Branch() == "" || s.Branch() == "park/"+s.Name() {
+			continue
+		}
+		if url := openPRs[s.Branch()]; url != "" {
+			rows[i] = PollRow{r.Name, StateDone, url}
+			if notes == nil {
+				notes = map[string]string{}
+			}
+			notes[r.Name] = missingSentinelNote
+		}
+	}
+	return rows, notes
+}
+
 // PollOpts are the flags of `rota worker poll`.
 type PollOpts struct {
 	Slot   string
@@ -220,6 +255,7 @@ type PollOpts struct {
 // PollResult is the verdict list and whether the registry changed.
 type PollResult struct {
 	Slots   []PollRow
+	Notes   map[string]string // slot -> why its state was not read from a sentinel
 	Changed bool
 }
 
@@ -278,6 +314,7 @@ func (e Env) Poll(ctx context.Context, root string, o PollOpts) (PollResult, err
 	before, _ := os.ReadFile(RegistryPath(root))
 
 	rows, _ := e.classify(ctx, h, targets, o.Settle, o.Lines)
+	rows, notes := e.promoteIdleWithPR(ctx, root, rows)
 	for i, r := range rows {
 		// Notify on the transition only: a poll loop re-reading a stuck slot
 		// must not ring every few seconds.
@@ -315,7 +352,7 @@ func (e Env) Poll(ctx context.Context, root string, o PollOpts) (PollResult, err
 		return PollResult{}, rowErr
 	}
 	after, _ := os.ReadFile(RegistryPath(root))
-	return PollResult{Slots: rows, Changed: string(before) != string(after)}, nil
+	return PollResult{Slots: rows, Notes: notes, Changed: string(before) != string(after)}, nil
 }
 
 // openPRsByHead maps head branch to PR URL for the open PRs, read only when a
