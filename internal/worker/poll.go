@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
 	"unicode/utf8"
 
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/host"
 )
 
@@ -288,6 +290,7 @@ func (e Env) Poll(ctx context.Context, root string, o PollOpts) (PollResult, err
 	for _, r := range rows {
 		byName[r.Name] = r
 	}
+	openPRs := e.openPRsByHead(ctx, root, reg, byName)
 	var rowErr error
 	if err := UpdateSlots(root, func(s *Slot) {
 		r, ok := byName[s.Name()]
@@ -297,6 +300,14 @@ func (e Env) Poll(ctx context.Context, root string, o PollOpts) (PollResult, err
 		if err := recordRow(s, r, e.Now()); err != nil && rowErr == nil {
 			rowErr = err
 		}
+		// A worker can open its PR and never print the sentinel (or print it
+		// without a URL): the slot would stay busy and the gate would not find
+		// the PR. The open PR headed by the slot's own branch is the record.
+		if s.PR() == "" && s.Branch() != "" && s.Branch() != "park/"+s.Name() {
+			if url := openPRs[s.Branch()]; url != "" {
+				s.SetPR(url)
+			}
+		}
 	}); err != nil {
 		return PollResult{}, err
 	}
@@ -305,6 +316,38 @@ func (e Env) Poll(ctx context.Context, root string, o PollOpts) (PollResult, err
 	}
 	after, _ := os.ReadFile(RegistryPath(root))
 	return PollResult{Slots: rows, Changed: string(before) != string(after)}, nil
+}
+
+// openPRsByHead maps head branch to PR URL for the open PRs, read only when a
+// polled slot records no PR. Best effort: with no forge, no origin or a failing
+// listing the poll records what the panes say and nothing more.
+func (e Env) openPRsByHead(ctx context.Context, root string, reg Registry, polled map[string]PollRow) map[string]string {
+	need := false
+	for _, s := range reg.Slots() {
+		if _, ok := polled[s.Name()]; ok && s.PR() == "" && s.Branch() != "" && s.Branch() != "park/"+s.Name() {
+			need = true
+		}
+	}
+	if !need {
+		return nil
+	}
+	if _, code := e.git(root, "remote", "get-url", "origin"); code != 0 {
+		return nil
+	}
+	cfg := config.Load(filepath.Join(root, ".rota", "config.json"))
+	f, err := e.Forge(e.detectProvider(root, ""), root, cfg)
+	if err != nil {
+		return nil
+	}
+	prs, err := f.OpenPRs(ctx)
+	if err != nil {
+		return nil
+	}
+	out := map[string]string{}
+	for _, p := range prs {
+		out[p.Branch] = p.URL
+	}
+	return out
 }
 
 // seenKey is what `round wait` remembers of a slot it returned: the state and

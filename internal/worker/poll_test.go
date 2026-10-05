@@ -355,3 +355,24 @@ func TestPollRecordsIssuesDone(t *testing.T) {
 		t.Errorf("state = %s", got)
 	}
 }
+
+// A worker that opened a PR but printed no URL leaves the slot without one;
+// poll records the open PR headed by the slot's branch (#210).
+func TestOpenPRsByHeadRecordsOnlyUnrecordedSlots(t *testing.T) {
+	w := newWorld(t, "")
+	w.forge("listed", "1")
+	reg := LoadRegistry(w.dir)
+	polled := map[string]PollRow{"w1": {Name: "w1", State: StateIdle}}
+	if got := w.env(false).withDefaults().openPRsByHead(bg, w.dir, reg, polled)["w1"]; got != ghURL {
+		t.Errorf("w1 -> %q", got)
+	}
+	// an unpolled slot, or one that already records its PR, needs no listing
+	w.forge("listError", "must not be called")
+	if got := w.env(false).withDefaults().openPRsByHead(bg, w.dir, reg, nil); got != nil {
+		t.Errorf("unpolled: %v", got)
+	}
+	w.setSlot(ghURL, "")
+	if got := w.env(false).withDefaults().openPRsByHead(bg, w.dir, LoadRegistry(w.dir), polled); got != nil {
+		t.Errorf("recorded: %v", got)
+	}
+}
