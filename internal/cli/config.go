@@ -15,24 +15,24 @@ import (
 	"github.com/l4ci/rota/internal/version"
 )
 
-// The A4 `rota update`, `rota config show|set|check` and `rota repo which|resolve|
+// The `rota update`, `rota config show|set|check` and `rota repo which|resolve|
 // umbrella` verbs. Shapes, flags and exits are the verb contract's
-// (docs/design/contract/, "A3 and A4"); the old helpers named in
+// (docs/design/contract/version-config-repo.md); the old helpers named in
 // each `old:` line are the behaviour to match.
 
-func a4cCommands() []*Command {
+func configCommands() []*Command {
 	return []*Command{
-		{Name: "update", Summary: "check for a newer rota release", Verb: a4Update},
+		{Name: "update", Summary: "check for a newer rota release", Verb: updateVerb},
 		{Name: "config", Summary: "read and write .rota/config.json", Subs: []*Command{
-			{Name: "show", Summary: "effective value and source of config keys", Repo: true, Verb: a4ConfigShow},
-			{Name: "set", Summary: "set one key in .rota/config.json", Repo: true, Verb: a4ConfigSet},
-			{Name: "check", Summary: "compare .rota/config.json with the schema", Repo: true, Verb: a4ConfigCheck},
-			{Name: "fill", Summary: "write the default of every missing required key", Repo: true, Verb: a4ConfigFill},
+			{Name: "show", Summary: "effective value and source of config keys", Repo: true, Verb: configShow},
+			{Name: "set", Summary: "set one key in .rota/config.json", Repo: true, Verb: configSet},
+			{Name: "check", Summary: "compare .rota/config.json with the schema", Repo: true, Verb: configCheck},
+			{Name: "fill", Summary: "write the default of every missing required key", Repo: true, Verb: configFill},
 		}},
 		{Name: "repo", Summary: "umbrella sub-repo registry", Subs: []*Command{
-			{Name: "which", Summary: "the registered sub-repo the working directory is in", Verb: a4RepoWhich},
-			{Name: "resolve", Summary: "names to registered sub-repo paths", Verb: a4RepoResolve},
-			{Name: "umbrella", Summary: "is this an umbrella project", Verb: a4RepoUmbrella},
+			{Name: "which", Summary: "the registered sub-repo the working directory is in", Verb: repoWhich},
+			{Name: "resolve", Summary: "names to registered sub-repo paths", Verb: repoResolve},
+			{Name: "umbrella", Summary: "is this an umbrella project", Verb: repoUmbrella},
 		}},
 	}
 }
@@ -42,13 +42,13 @@ func a4cCommands() []*Command {
 // updateEnv is a seam: tests pin what rota update reads from the machine.
 var updateEnv = func() update.Env { return update.DefaultEnv(version.Get().Version) }
 
-func a4Update(fs *flag.FlagSet) RunFunc {
+func updateVerb(fs *flag.FlagSet) RunFunc {
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := a4Args(c, args, 0, 0, "update takes no arguments"); err != nil {
+		if err := argCount(c, args, 0, 0, "update takes no arguments"); err != nil {
 			return Result{}, err
 		}
 		r := update.Check(updateEnv())
-		data := a4Obj("installType", r.InstallType, "installRoot", r.InstallRoot,
+		data := jsonObj("installType", r.InstallType, "installRoot", r.InstallRoot,
 			"currentVersion", r.CurrentVersion, "latestVersion", r.LatestVersion,
 			"status", r.Status, "updateCommand", r.UpdateCommand)
 		text := fmt.Sprintf("rota %s (%s), latest %s: %s", orDash(r.CurrentVersion), r.InstallType, orDash(r.LatestVersion), r.Status)
@@ -68,12 +68,12 @@ func orDash(s string) string {
 
 // ---- config ----------------------------------------------------------------------
 
-func a4ConfigShow(fs *flag.FlagSet) RunFunc {
+func configShow(fs *flag.FlagSet) RunFunc {
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := a4Args(c, args, 0, 1, "config show takes at most one key"); err != nil {
+		if err := argCount(c, args, 0, 1, "config show takes at most one key"); err != nil {
 			return Result{}, err
 		}
-		root, err := a4Scope(c)
+		root, err := backlogScope(c)
 		if err != nil {
 			return Result{}, err
 		}
@@ -88,19 +88,19 @@ func a4ConfigShow(fs *flag.FlagSet) RunFunc {
 		rows := make([]any, 0, len(entries))
 		lines := make([]string, 0, len(entries))
 		for _, e := range entries {
-			rows = append(rows, a4Obj("key", e.Key, "value", e.Value, "source", e.Source))
+			rows = append(rows, jsonObj("key", e.Key, "value", e.Value, "source", e.Source))
 			lines = append(lines, e.Line())
 		}
-		return Result{Data: a4Obj("entries", rows), Text: strings.Join(lines, "\n")}, nil
+		return Result{Data: jsonObj("entries", rows), Text: strings.Join(lines, "\n")}, nil
 	}
 }
 
-func a4ConfigSet(fs *flag.FlagSet) RunFunc {
+func configSet(fs *flag.FlagSet) RunFunc {
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := a4Args(c, args, 2, 2, "config set takes a key and a value"); err != nil {
+		if err := argCount(c, args, 2, 2, "config set takes a key and a value"); err != nil {
 			return Result{}, err
 		}
-		root, err := a4Scope(c)
+		root, err := backlogScope(c)
 		if err != nil {
 			return Result{}, err
 		}
@@ -114,7 +114,7 @@ func a4ConfigSet(fs *flag.FlagSet) RunFunc {
 		default:
 			return Result{}, err
 		}
-		data := a4Obj("key", args[0], "value", res.Value)
+		data := jsonObj("key", args[0], "value", res.Value)
 		if res.HadPrevious {
 			data.Set("previous", res.Previous)
 		}
@@ -124,17 +124,17 @@ func a4ConfigSet(fs *flag.FlagSet) RunFunc {
 	}
 }
 
-func a4ConfigCheck(fs *flag.FlagSet) RunFunc {
+func configCheck(fs *flag.FlagSet) RunFunc {
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := a4Args(c, args, 0, 0, "config check takes no arguments"); err != nil {
+		if err := argCount(c, args, 0, 0, "config check takes no arguments"); err != nil {
 			return Result{}, err
 		}
-		root, err := a4Scope(c)
+		root, err := backlogScope(c)
 		if err != nil {
 			return Result{}, err
 		}
 		status, missing := config.Check(root)
-		data := a4Obj("status", status, "upToDate", status == config.UpToDate, "missing", a4Strings(missing))
+		data := jsonObj("status", status, "upToDate", status == config.UpToDate, "missing", anySlice(missing))
 		token := map[string]string{config.UpToDate: "UP_TO_DATE", config.Fresh: "FRESH", config.Corrupt: "CORRUPT"}[status]
 		if status == config.Stale {
 			token = "STALE:" + strings.Join(missing, ",")
@@ -142,7 +142,7 @@ func a4ConfigCheck(fs *flag.FlagSet) RunFunc {
 		res := Result{Data: data, Text: token}
 		if status == config.UpToDate || status == config.Stale {
 			if retired := config.Retired(root); len(retired) > 0 {
-				data.Set("retired", a4Strings(retired))
+				data.Set("retired", anySlice(retired))
 				res.Text = "RETIRED: " + strings.Join(retired, "; ")
 				return res, Failed("%s", retired[0])
 			}
@@ -159,14 +159,14 @@ func a4ConfigCheck(fs *flag.FlagSet) RunFunc {
 	}
 }
 
-// a4ConfigFill is the A9 `rota config fill` (contract G1): `config check`'s
+// configFill is the A9 `rota config fill` (contract G1): `config check`'s
 // missing keys get their schema defaults.
-func a4ConfigFill(fs *flag.FlagSet) RunFunc {
+func configFill(fs *flag.FlagSet) RunFunc {
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := a4Args(c, args, 0, 0, "config fill takes no arguments"); err != nil {
+		if err := argCount(c, args, 0, 0, "config fill takes no arguments"); err != nil {
 			return Result{}, err
 		}
-		root, err := a4Scope(c)
+		root, err := backlogScope(c)
 		if err != nil {
 			return Result{}, err
 		}
@@ -181,15 +181,15 @@ func a4ConfigFill(fs *flag.FlagSet) RunFunc {
 		if len(filled) > 0 {
 			text = "filled: " + strings.Join(filled, ", ")
 		}
-		return Result{Data: a4Obj("filled", a4Strings(filled), "changed", len(filled) > 0), Text: text}, nil
+		return Result{Data: jsonObj("filled", anySlice(filled), "changed", len(filled) > 0), Text: text}, nil
 	}
 }
 
 // ---- repo ------------------------------------------------------------------------
 
-func a4RepoWhich(fs *flag.FlagSet) RunFunc {
+func repoWhich(fs *flag.FlagSet) RunFunc {
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := a4Args(c, args, 0, 0, "repo which takes no arguments"); err != nil {
+		if err := argCount(c, args, 0, 0, "repo which takes no arguments"); err != nil {
 			return Result{}, err
 		}
 		cwd, err := os.Getwd()
@@ -200,7 +200,7 @@ func a4RepoWhich(fs *flag.FlagSet) RunFunc {
 		var masked *repos.MaskedError
 		switch {
 		case err == nil:
-			return Result{Data: a4Obj("name", r.Name, "path", r.Path), Text: r.Name}, nil
+			return Result{Data: jsonObj("name", r.Name, "path", r.Path), Text: r.Name}, nil
 		case errors.Is(err, repos.ErrGitMissing):
 			return Result{}, Unavailable("git is not installed")
 		case errors.As(err, &masked):
@@ -214,11 +214,11 @@ func a4RepoWhich(fs *flag.FlagSet) RunFunc {
 	}
 }
 
-func a4RepoResolve(fs *flag.FlagSet) RunFunc {
+func repoResolve(fs *flag.FlagSet) RunFunc {
 	return func(c *Ctx, args []string) (Result, error) {
 		names := status.ParseReposCSV(strings.Join(args, ","))
 		if len(names) == 0 {
-			return Result{Data: a4Obj("repos", []any{})}, nil
+			return Result{Data: jsonObj("repos", []any{})}, nil
 		}
 		root, err := c.Root()
 		if err != nil {
@@ -239,16 +239,16 @@ func a4RepoResolve(fs *flag.FlagSet) RunFunc {
 		rows := make([]any, 0, len(names))
 		lines := make([]string, 0, len(names))
 		for _, n := range names {
-			rows = append(rows, a4Obj("name", n, "path", path[n]))
+			rows = append(rows, jsonObj("name", n, "path", path[n]))
 			lines = append(lines, n+" "+path[n])
 		}
-		return Result{Data: a4Obj("repos", rows), Text: strings.Join(lines, "\n")}, nil
+		return Result{Data: jsonObj("repos", rows), Text: strings.Join(lines, "\n")}, nil
 	}
 }
 
-func a4RepoUmbrella(fs *flag.FlagSet) RunFunc {
+func repoUmbrella(fs *flag.FlagSet) RunFunc {
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := a4Args(c, args, 0, 0, "repo umbrella takes no arguments"); err != nil {
+		if err := argCount(c, args, 0, 0, "repo umbrella takes no arguments"); err != nil {
 			return Result{}, err
 		}
 		on := false
@@ -256,8 +256,8 @@ func a4RepoUmbrella(fs *flag.FlagSet) RunFunc {
 			on = repos.Umbrella(root)
 		}
 		if on {
-			return Result{Data: a4Obj("umbrella", true), Text: "yes"}, nil
+			return Result{Data: jsonObj("umbrella", true), Text: "yes"}, nil
 		}
-		return Result{Data: a4Obj("umbrella", false), Text: "no"}, Failed("not an umbrella project")
+		return Result{Data: jsonObj("umbrella", false), Text: "no"}, Failed("not an umbrella project")
 	}
 }

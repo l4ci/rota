@@ -1,6 +1,6 @@
 package main
 
-// Go-only scenarios for the A4 item verbs in issue mode (#48). Each scenario
+// Go-only scenarios for the item verbs in issue mode (#48). Each scenario
 // builds a git project whose origin resolves to github or gitlab, seeds the
 // stateful fake forge (test/fakes/fake_tracker.py), runs the Go binary, and
 // compares exit code, envelope and the final fake-forge database with the
@@ -216,7 +216,7 @@ func TestIssueFakesFirst(t *testing.T) {
 	}
 }
 
-func suiteA4Issue(t *testing.T) {
+func suiteItemIssue(t *testing.T) {
 	var all []isc
 	add := func(s ...isc) { all = append(all, s...) }
 	both := func(s isc) { // github and gitlab

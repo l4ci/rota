@@ -46,7 +46,7 @@ func issueGet(o *jsonx.Object, k string) any { v, _ := o.Get(k); return v }
 // Issue mode: every accepted spelling of an issue resolves to the canonical
 // id (the number) with the type letter beside it (contract rule 11).
 func TestIssueFieldGetCanonicalID(t *testing.T) {
-	root := a4Project(t, issuesConfig)
+	root := trackerProject(t, issuesConfig)
 	withTracker(t, issueFixture())
 	for _, ref := range []string{"7", "#7", "F7", "f7"} {
 		code, env, stderr := rotaRun(t, "--json", "-C", root, "item", "field", "get", ref, "--name", "title")
@@ -65,7 +65,7 @@ func TestIssueFieldGetCanonicalID(t *testing.T) {
 }
 
 func TestIssueFieldListClosedItem(t *testing.T) {
-	root := a4Project(t, issuesConfig)
+	root := trackerProject(t, issuesConfig)
 	withTracker(t, issueFixture())
 	code, env, stderr := rotaRun(t, "--json", "-C", root, "item", "field", "list", "#9")
 	if code != 0 {
@@ -82,7 +82,7 @@ func TestIssueFieldListClosedItem(t *testing.T) {
 // Unknown numbers, a type-letter mismatch and milestone tracking issues are
 // not items: exit 3.
 func TestIssueRefsThatDoNotResolve(t *testing.T) {
-	root := a4Project(t, issuesConfig)
+	root := trackerProject(t, issuesConfig)
 	withTracker(t, issueFixture())
 	for _, ref := range []string{"99", "B7", "#3", "x7"} {
 		if code, _, _ := rotaRun(t, "--json", "-C", root, "item", "field", "get", ref, "--name", "title"); code != ExitResolution {
@@ -93,7 +93,7 @@ func TestIssueRefsThatDoNotResolve(t *testing.T) {
 
 // File-only verbs are refused under issues (4, backend) before the tracker is built.
 func TestIssueModeFileOnly(t *testing.T) {
-	root := a4Project(t, issuesConfig)
+	root := trackerProject(t, issuesConfig)
 	withTracker(t, issueFixture())
 	raw := filepath.Join(t.TempDir(), "bullet.md")
 	if err := os.WriteFile(raw, []byte("- **[B05] [P1] Raw.** x\n"), 0o644); err != nil {
@@ -120,7 +120,7 @@ func TestIssueModeFileOnly(t *testing.T) {
 // Without an injected tracker the real one is built; a project with no
 // origin remote has no provider to pick, which is exit 5.
 func TestIssueModeWithoutTracker(t *testing.T) {
-	root := a4Project(t, issuesConfig)
+	root := trackerProject(t, issuesConfig)
 	if code, _, _ := rotaRun(t, "--json", "-C", root, "item", "field", "get", "7", "--name", "title"); code != ExitUnavailable {
 		t.Fatalf("exit %d, want %d", code, ExitUnavailable)
 	}

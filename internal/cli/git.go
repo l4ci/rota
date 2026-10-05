@@ -15,7 +15,7 @@ import (
 	"github.com/l4ci/rota/internal/repos"
 )
 
-// gitCommands is the `rota git` group (A8, #52).
+// gitCommands is the `rota git` group (#52).
 func gitCommands() *Command {
 	return &Command{Name: "git", Summary: "base branch, guards, branches and worktree paths", Subs: []*Command{
 		{Name: "base", Summary: "print the resolved base branch", Repo: true, Verb: noFlags(gitBase)},

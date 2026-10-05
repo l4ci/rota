@@ -1,6 +1,6 @@
 package main
 
-// Scenarios for the A4 item verbs (#48): id next, item create, complete,
+// Scenarios for the item verbs (#48): id next, item create, complete,
 // field get|list|set, reopen, rm, shipped, ready and comment add|list, on the
 // shared harness (harness_test.go) and checked against their frozen records.
 
@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-func suiteA4(t *testing.T) {
+func suiteItem(t *testing.T) {
 	bodyFx := fx{files: map[string]string{"body.md": "# {ID}\n\nSee [{ID}] in the backlog.\n"}}
 	relFx := fx{backlog: "# TODO\n\n## Bugs\n- **[B01] [P1] a.** x\n- **[B02] [P2] b.** y Related: [B01], [F01], [T01] Milestone: M01 Since: {h1}\n\n## Features\n- **[F01] [Major] f.** z Related: [B01], [B02]\n\n## Tasks\n- **[T01] t.** w Related: [B01]\n"}
 	var all []scn

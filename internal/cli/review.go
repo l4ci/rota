@@ -19,7 +19,7 @@ import (
 	"github.com/l4ci/rota/internal/repos"
 )
 
-// reviewCommands is the `rota review` group (A8, #52).
+// reviewCommands is the `rota review` group (#52).
 func reviewCommands() *Command {
 	return &Command{Name: "review", Summary: "scope a review, build the second-opinion brief, scan for scaffolding", Subs: []*Command{
 		{Name: "scope", Summary: "commits, files, item IDs and origin entries of a branch", Repo: true, Verb: noFlags(reviewScope)},
@@ -140,7 +140,7 @@ func reviewScanIssues(c *Ctx, t branchTarget, bodies string, info *reviewInfo) {
 		return
 	}
 	info.IDs = ids
-	be, err := a4Open(c, t.CorpusRoot, false, "")
+	be, err := openBacklog(c, t.CorpusRoot, false, "")
 	if err != nil {
 		return
 	}
@@ -417,7 +417,7 @@ type a8Backend interface {
 
 // a8Issues opens the issue backend for an issue-only verb. An unknown --repo
 // is exit 3 and the file backend is refused (RefusedError, backend; map it
-// with a4Fail, or a4FailRead for a read-only verb). At an umbrella root a verb
+// with backlogFail, or backlogFailRead for a read-only verb). At an umbrella root a verb
 // that acts on one sub-repo (perRepo) needs --repo (exit 2).
 func a8Issues(c *Ctx, hint string, perRepo bool) (a8Backend, error) {
 	root, err := c.Root()
@@ -439,7 +439,7 @@ func a8Issues(c *Ctx, hint string, perRepo bool) (a8Backend, error) {
 			return nil, Usage("%s from the umbrella root needs --repo <name>", c.Path)
 		}
 	}
-	be, err := a4Open(c, root, false, hint)
+	be, err := openBacklog(c, root, false, hint)
 	if err != nil {
 		return nil, err
 	}
@@ -456,19 +456,19 @@ func reviewQueue(c *Ctx, args []string) (Result, error) {
 	}
 	be, err := a8Issues(c, "", false)
 	if err != nil {
-		return a4FailRead(err)
+		return backlogFailRead(err)
 	}
 	rows, err := be.ReviewQueue()
 	if err != nil {
-		return a4FailRead(err)
+		return backlogFailRead(err)
 	}
 	items, lines := []any{}, []string{}
 	for _, r := range rows {
 		prs := []any{}
 		for _, p := range r.PRs {
-			prs = append(prs, a4Obj("number", p.Number, "title", p.Title, "branch", p.Branch, "url", p.URL, "body", p.Body))
+			prs = append(prs, jsonObj("number", p.Number, "title", p.Title, "branch", p.Branch, "url", p.URL, "body", p.Body))
 		}
-		row := a4Obj("id", r.ID, "type", r.Type, "number", r.Number, "title", r.Title)
+		row := jsonObj("id", r.ID, "type", r.Type, "number", r.Number, "title", r.Title)
 		if r.Repo != "" {
 			row.Set("repo", r.Repo)
 		}
@@ -476,5 +476,5 @@ func reviewQueue(c *Ctx, args []string) (Result, error) {
 		items = append(items, row)
 		lines = append(lines, r.Type+strconv.Itoa(r.Number)+" "+r.Title)
 	}
-	return Result{Data: a4Obj("items", items), Text: strings.Join(lines, "\n")}, nil
+	return Result{Data: jsonObj("items", items), Text: strings.Join(lines, "\n")}, nil
 }

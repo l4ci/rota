@@ -13,10 +13,10 @@ import (
 	"github.com/l4ci/rota/internal/tracker"
 )
 
-// a4dRepo is a project that is a git repo with the origin remote.
-func a4dRepo(t *testing.T, origin string) string {
+// issuesRepo is a project that is a git repo with the origin remote.
+func issuesRepo(t *testing.T, origin string) string {
 	t.Helper()
-	root := a4Project(t, `{"issues": {"bulkPaceMs": 0}}`)
+	root := trackerProject(t, `{"issues": {"bulkPaceMs": 0}}`)
 	for _, args := range [][]string{{"init", "-q", "-b", "main"}, {"remote", "add", "origin", origin}} {
 		cmd := exec.Command("git", args...)
 		cmd.Dir = root
@@ -27,8 +27,8 @@ func a4dRepo(t *testing.T, origin string) string {
 	return root
 }
 
-// a4dForge scripts gh and glab for the verbs: calls collects them.
-func a4dForge(t *testing.T, origin string, reply map[string]string) *[]string {
+// issuesForge scripts gh and glab for the verbs: calls collects them.
+func issuesForge(t *testing.T, origin string, reply map[string]string) *[]string {
 	t.Helper()
 	var calls []string
 	exe := func(_ context.Context, _ string, name string, args []string, _ []byte) ([]byte, []byte, int, error) {
@@ -50,9 +50,9 @@ func a4dForge(t *testing.T, origin string, reply map[string]string) *[]string {
 	return &calls
 }
 
-func TestA4dProvider(t *testing.T) {
+func TestIssuesProvider(t *testing.T) {
 	for origin, want := range map[string]string{"https://github.com/o/r.git": "github", "git@gitlab.com:o/r.git": "gitlab", "https://example.org/r.git": "unknown"} {
-		root := a4dRepo(t, origin)
+		root := issuesRepo(t, origin)
 		code, env, _ := rotaRun(t, "--json", "-C", root, "issues", "provider")
 		if code != 0 || get(dataOf(env), "provider") != want {
 			t.Errorf("%s: %d %v", origin, code, env)
@@ -62,16 +62,16 @@ func TestA4dProvider(t *testing.T) {
 	if code != ExitResolution {
 		t.Errorf("no project: %d", code)
 	}
-	root := a4dRepo(t, "https://github.com/o/r.git")
+	root := issuesRepo(t, "https://github.com/o/r.git")
 	if code, _, _ := rotaRun(t, "--json", "-C", root, "issues", "provider", "--repo", "web"); code != ExitResolution {
 		t.Errorf("--repo outside umbrella: %d", code)
 	}
 }
 
-func TestA4dLabelClose(t *testing.T) {
+func TestIssuesLabelClose(t *testing.T) {
 	origin := "https://github.com/o/r.git"
-	root := a4dRepo(t, origin)
-	calls := a4dForge(t, origin, map[string]string{
+	root := issuesRepo(t, origin)
+	calls := issuesForge(t, origin, map[string]string{
 		"issue view": `{"labels": [{"name": "x"}]}`,
 		"label list": `[{"name": "x"}]`,
 	})
@@ -102,8 +102,8 @@ func TestA4dLabelClose(t *testing.T) {
 	}
 }
 
-func TestA4dImported(t *testing.T) {
-	root := a4Project(t, "{}\n")
+func TestIssuesImported(t *testing.T) {
+	root := trackerProject(t, "{}\n")
 	os.WriteFile(filepath.Join(root, ".rota", "BACKLOG.md"), []byte("# T\n\n## Bugs\n- **[B01] [P1] A.** GH: #5 Repos: web\n"), 0o644)
 	code, env, _ := rotaRun(t, "--json", "-C", root, "issues", "imported")
 	rows, _ := get(dataOf(env), "entries").([]any)
@@ -142,8 +142,8 @@ func (s *msStub) Create(ctx context.Context, title, body string, labels []string
 	return s.Fake.Create(ctx, title, body, labels, ms)
 }
 
-func TestA4dMigrateIssues(t *testing.T) {
-	root := a4dRepo(t, "https://github.com/o/r.git")
+func TestMigrateIssues(t *testing.T) {
+	root := issuesRepo(t, "https://github.com/o/r.git")
 	stub := &msStub{Fake: &trackertest.Fake{}}
 	old := migrateTracker
 	migrateTracker = func(context.Context, string, any) (backlog.MigrateTracker, error) { return stub, nil }
@@ -195,12 +195,12 @@ func TestA4dMigrateIssues(t *testing.T) {
 	if code, _, _ := rotaRun(t, "--json", "-C", t.TempDir(), "migrate", "issues"); code != ExitResolution {
 		t.Errorf("no project: %d", code)
 	}
-	empty := a4Project(t, "{}\n")
+	empty := trackerProject(t, "{}\n")
 	os.Remove(filepath.Join(empty, ".rota", "BACKLOG.md"))
 	if code, _, _ := rotaRun(t, "--json", "-C", empty, "migrate", "issues"); code != ExitResolution {
 		t.Errorf("no backlog: %d", code)
 	}
-	umb := a4Project(t, "{}\n")
+	umb := trackerProject(t, "{}\n")
 	os.WriteFile(filepath.Join(umb, ".rota", "repos.json"), []byte(`{"repos": [{"name": "web", "path": "web"}]}`), 0o644)
 	code, env, _ = rotaRun(t, "--json", "-C", umb, "migrate", "issues")
 	if code != ExitRefused || get(dataOf(env), "blockedBy") != "umbrella" || get(dataOf(env), "changed") != false {
@@ -210,8 +210,8 @@ func TestA4dMigrateIssues(t *testing.T) {
 
 // Without --repo the verbs act on the sub-repo the working directory is in
 // (scope S); --repo wins, and the umbrella root has no origin of its own.
-func TestA4dScopeFollowsWorkingDirectory(t *testing.T) {
-	root := a4Project(t, "{}\n")
+func TestIssuesScopeFollowsWorkingDirectory(t *testing.T) {
+	root := trackerProject(t, "{}\n")
 	for name, origin := range map[string]string{"web": "https://github.com/o/web.git", "api": "https://gitlab.com/o/api.git"} {
 		dir := filepath.Join(root, name)
 		os.MkdirAll(filepath.Join(dir, "src"), 0o755)
@@ -240,10 +240,10 @@ func TestA4dScopeFollowsWorkingDirectory(t *testing.T) {
 	}
 }
 
-func TestA4dNoProviderAndMissingIssue(t *testing.T) {
+func TestIssuesNoProviderAndMissingIssue(t *testing.T) {
 	// no origin, no issues.provider: label exits 3 instead of an empty list
-	root := a4dRepo(t, "")
-	a4dForge(t, "", nil)
+	root := issuesRepo(t, "")
+	issuesForge(t, "", nil)
 	for _, argv := range [][]string{{"issues", "label", "3", "--add", "x"}} {
 		code, env, _ := rotaRun(t, append([]string{"--json", "-C", root}, argv...)...)
 		if msg, _ := get(env, "error", "message").(string); code != ExitResolution || !strings.Contains(msg, "issues.provider") {
@@ -251,14 +251,14 @@ func TestA4dNoProviderAndMissingIssue(t *testing.T) {
 		}
 	}
 	// issues.provider stands in for a missing origin
-	root = a4dRepo(t, "")
+	root = issuesRepo(t, "")
 	os.WriteFile(filepath.Join(root, ".rota", "config.json"), []byte(`{"issues": {"provider": "github"}}`), 0o644)
-	a4dForge(t, "", nil)
+	issuesForge(t, "", nil)
 	if code, env, _ := rotaRun(t, "--json", "-C", root, "issues", "provider"); code != 0 || get(dataOf(env), "provider") != "github" {
 		t.Errorf("config fallback: %d %v", code, env)
 	}
 	// a missing issue is exit 3; another forge failure stays exit 5
-	root = a4dRepo(t, "https://github.com/o/r.git")
+	root = issuesRepo(t, "https://github.com/o/r.git")
 	for stderr, want := range map[string]int{
 		"GraphQL: Could not resolve to an Issue with the number of 99.": ExitResolution,
 		"HTTP 500: server error": ExitUnavailable,

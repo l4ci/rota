@@ -17,7 +17,7 @@ import (
 // directory the tracker is built for).
 func umbrellaProject(t *testing.T) (root string, fakes map[string]*trackertest.Fake, built map[string]int) {
 	t.Helper()
-	root = a4Project(t, `{"backlog": {"backend": "issues"}, "issues": {"homeRepo": "web"}}`)
+	root = trackerProject(t, `{"backlog": {"backend": "issues"}, "issues": {"homeRepo": "web"}}`)
 	root, _ = filepath.EvalSymlinks(root)
 	fakes = map[string]*trackertest.Fake{
 		"web": {Issues: []backlog.Issue{
@@ -142,7 +142,7 @@ func TestUmbrellaCreateTarget(t *testing.T) {
 }
 
 func TestUmbrellaFileModeKeepsOneBacklog(t *testing.T) {
-	root := a4Project(t, "")
+	root := trackerProject(t, "")
 	os.WriteFile(filepath.Join(root, ".rota", "repos.json"), []byte(`{"repos": [{"name": "web", "path": "web"}]}`), 0o644)
 	if code, env, stderr := rotaRun(t, "--json", "-C", root, "item", "create", "--kind", "bugs", "--title", "Umbrella bug", "--repos", "web", "--repo", "web"); code != 0 {
 		t.Fatalf("exit %d: %s %v", code, stderr, env)

@@ -52,9 +52,9 @@ func roundTransfer(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		id, _, err := a4Item(be, args[0])
+		id, _, err := resolveItem(be, args[0])
 		if err != nil {
-			return a4Fail(err)
+			return backlogFail(err)
 		}
 		res, err := env.Transfer(c.Context(), root, be, round.TransferOpts{
 			Issue: id, To: *to, Note: text, BodyFile: bf, AcceptOverlap: *accept,
