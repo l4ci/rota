@@ -26,6 +26,7 @@ import (
 // print, not from inference:
 //
 //	ROTA-DONE <slot> <pr-url-or-branch>
+//	ROTA-DONE <slot> issues:#a,#b      (a review item: filed issues, no PR)
 //	ROTA-BLOCKED <slot>: <one question in plain language>
 //
 // LIMITED means the session hit its usage window; it routes to reassigning
@@ -101,7 +102,24 @@ var (
 		`Allow .{0,40}\bto run\b`,
 	})
 	rePRURL = regexp.MustCompile(`^https?://\S+/(?:pull|merge_requests)/\d+\S*$`)
+	// An architecture-review item produces issues, not code: its done line
+	// names them in place of a PR, `issues:#139,#140`.
+	reIssuesDone = regexp.MustCompile(`^issues:\s*#?\d+(?:\s*,\s*#?\d+)*$`)
+	reDigits     = regexp.MustCompile(`\d+`)
 )
+
+// ParseIssuesDone reads the evidence of `ROTA-DONE <slot> issues:#a,#b` into
+// the issue refs (`#a`, `#b`). ok is false for any other evidence.
+func ParseIssuesDone(evidence string) (refs []string, ok bool) {
+	ev := strings.TrimSpace(evidence)
+	if !reIssuesDone.MatchString(ev) {
+		return nil, false
+	}
+	for _, n := range reDigits.FindAllString(ev, -1) {
+		refs = append(refs, "#"+n)
+	}
+	return refs, true
+}
 
 func compileAll(prefix string, pats []string) []*regexp.Regexp {
 	out := make([]*regexp.Regexp, len(pats))
@@ -320,6 +338,13 @@ func recordRow(s *Slot, r PollRow, now time.Time) error {
 	// merge` fails where the gate's local merge would have worked.
 	if r.State == StateDone && rePRURL.MatchString(r.Evidence) {
 		s.SetPR(r.Evidence)
+	}
+	// A review item reports the issues it filed instead; `round assign` frees
+	// the slot on them and closes the item.
+	if r.State == StateDone {
+		if refs, ok := ParseIssuesDone(r.Evidence); ok {
+			s.SetIssues(refs)
+		}
 	}
 	return nil
 }

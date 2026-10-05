@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	"strings"
+	"time"
 
+	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -20,13 +22,14 @@ func queuedIssue(q *jsonx.Object) string {
 }
 
 // parkable says whether a slot's PR can be queued so the slot takes new work:
-// it holds an issue, records a PR, reports done or idle and its worktree has
+// it holds an issue, records a PR (or, for a review item, the issues it filed),
+// reports done or idle and its worktree has
 // no dirty paths. why names what is missing when it is not.
 func (e Env) parkable(ctx context.Context, s *worker.Slot) (ok bool, why string) {
 	switch {
 	case slotIssue(s) == "":
 		return false, "holds nothing"
-	case s.PR() == "":
+	case s.PR() == "" && len(s.Issues()) == 0:
 		return false, "no PR recorded"
 	}
 	if st := s.State(); st != "done" && st != "idle" {
@@ -53,7 +56,7 @@ func busyMsg(name, held, why string) string {
 // freeSlot does. A PR the forge already shows merged leaves no record, the work
 // is in; any other forge answer, or none, keeps it. The issue's claim and
 // in-progress state stay: it is still taken. No handoff comment.
-func (e Env) queuePR(ctx context.Context, root, name string) error {
+func (e Env) queuePR(ctx context.Context, root string, be Board, name string) error {
 	reg := worker.LoadRegistry(root)
 	s := reg.Slot(name)
 	if s == nil {
@@ -61,6 +64,9 @@ func (e Env) queuePR(ctx context.Context, root, name string) error {
 	}
 	if ok, why := e.parkable(ctx, s); !ok {
 		return blocked(BlockSlotBusy, "%s", busyMsg(name, slotIssue(s), why))
+	}
+	if s.PR() == "" {
+		return e.closeReview(ctx, root, be, s)
 	}
 	p, err := e.Park(ctx, root, name, "assign")
 	if err != nil {
@@ -94,4 +100,42 @@ func (e Env) queuePR(ctx context.Context, root, name string) error {
 			cur.Park(false)
 		}
 	})
+}
+
+// closeReview frees a slot whose architecture-review item reported done with
+// the issues it filed (`ROTA-DONE <slot> issues:#a,#b`): the item is closed
+// with a note listing them and the slot is freed. Only a review item this
+// round minted closes this way, so a worker cannot close an arbitrary issue by
+// naming issues in its done line; any other held item is refused.
+func (e Env) closeReview(ctx context.Context, root string, be Board, s *worker.Slot) error {
+	name, id := s.Name(), slotIssue(s)
+	it, err := be.Get(id)
+	if err != nil {
+		return wrap(err)
+	}
+	if !IsReviewTitle(it.Title) || !MintedReviews(root)[strings.ToUpper(it.ID)] {
+		return blocked(BlockSlotBusy, "%s", busyMsg(name, id, "reported issues, but it is not an architecture review item; it needs a PR"))
+	}
+	if _, err := e.Park(ctx, root, name, "assign"); err != nil {
+		return err
+	}
+	now := time.Now
+	if e.Now != nil {
+		now = e.Now
+	}
+	note := "filed " + strings.Join(s.Issues(), ", ")
+	// The close note is dropped by the file backend, so the list also goes in a comment.
+	if _, err := be.AddComment(it.ID, "feedback", "Review done: "+note+"."); err != nil {
+		return wrap(err)
+	}
+	if _, err := be.Complete(it.ID, backlog.CompleteInput{Date: now().Format("2006-01-02"), Reason: "done", Note: note, NoProof: true}); err != nil {
+		return wrap(err)
+	}
+	if _, err := releaseClaims(be, it.ID, name, s.ClaimID(), true); err != nil {
+		return wrap(err)
+	}
+	if _, err := be.SetState(it.ID, "none"); err != nil {
+		return wrap(err)
+	}
+	return freeSlot(root, name, false)
 }
