@@ -37,7 +37,7 @@ a round is the same idea with the assignment, waiting and merging done by verbs.
    host from where it runs (herdr inside a herdr pane, tmux inside tmux). Set `herdr` or `tmux` only
    to force one. With neither it falls back to
    [solo mode](#solo-mode).
-2. **A backlog.** With `backlog.backend: issues`, rounds take GitHub (`gh`) or GitLab (`glab`) issues, authenticated. On the file backend (the default) they take `.rota/BACKLOG.md` items and the orchestrator completes them at merge. See [issue backend](issue-backend.md).
+2. **A backlog.** With `backlog.backend: issues`, rounds take GitHub (`gh`) or GitLab (`glab`) issues, authenticated. On the file backend (the default) they take `.rota/BACKLOG.md` items and the orchestrator completes them at merge. Either way, workers open a PR against the base and the merge gate merges through the forge, so a project with an `origin` remote needs `gh` or `glab` installed and logged in on the file backend too (`rota doctor` checks it). See [issue backend](issue-backend.md).
 3. **Accounts, if you have more than one.** `work.accounts` maps slots to separate
    `CLAUDE_CONFIG_DIR`s, so workers draw on different usage limits and `rota round assign` can avoid a
    cooling account. The entries are paths on your machine, so they go in `.rota/config.local.json`
@@ -357,8 +357,8 @@ fresh, the PR is the worker's and provenance holds, then re-runs
 
 A branch that is only behind the base is merged as is when the merge is clean and the base did not
 change any file the branch changed (`round.sharedPaths` aside). A conflict, or a file changed on both
-sides, sends it back as `stale`. Each such bounce is counted per item; at `round.maxBounces` (default
-3) the gate parks the item `needs-human` with a comment instead of sending it back again.
+sides, sends it back as `stale`. Each `stale` or `provenance-fail` bounce is counted per item; at `round.maxBounces` (default
+3) the gate parks the item `needs-human` with a comment instead of sending it back again (the PR stays open; a pass resets the count, and `0` turns the cap off).
 
 ### Merge train
 
@@ -369,7 +369,7 @@ tree, and on a pass lands every member through the gate in order. If the base or
 while it verified, nothing lands (`base-moved`); the same verdict stops the train mid-way if the base changes between landings. Members must be all PRs or all slots without one.
 
 A red train bisects (up to ceil(log2 n) extra verifies, on the assumption that the base is green; a red base is reported as such): it verifies growing prefixes of the order and names the first member whose merge
-breaks the tree as `culprit`. That can be an interaction with the members before it, not that PR alone.
+breaks the tree as the `culprit` (the verdict is `verify-failed`). That can be an interaction with the members before it, not that PR alone.
 Nothing lands unless you pass `--land-green`, which lands the verified members before the culprit. A
 member that conflicts with the base plus the ones before it is `merge-failed` with that member named.
 One merge approval covers the whole train. Bounces are not counted.
@@ -450,7 +450,7 @@ Run it from the orchestrator that holds the lease, with the base checked out and
 the project root. It re-verifies the base (`refactor.verifyCommands`), then parks every
 roster slot on `park/<agent>` and releases the claims, then releases the lease. A red base
 (`verify-failed`, exit 1) keeps the lease. A slot with uncommitted changes or commits not on
-the base is reported as `retained` and left alone (`holds-work`, exit 4); the other slots are
+the base is reported as `retained` and left alone (`holds-work`, exit 4) and the lease is kept; the other slots are
 parked anyway, so fix the slot and run it again. It deletes no branch and clears no label: the
 `drift` count says what `rota round reconcile` and `rota reap` still have to do. After a round, run
 `rota reap` ([doctor and reap](doctor-and-reap.md)).

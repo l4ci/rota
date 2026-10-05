@@ -67,12 +67,11 @@ See [unattended rounds](../usage/unattended-rounds.md) for the hooks and [parall
 
 ## Missing `.rota/` from any other verb
 
-Exit `3` (`resolution`), with a message naming the missing root. Skills surface it the same way as above: point the user at `rota init` and stop.
+Exit `3` (`resolution`), with the message `no .rota/ directory here or in any parent` and the hint `run: rota init`. The skills carry no special message for it: they surface the verb's error and hint, and the user runs `rota init`.
 
 | Skill or verb | When `.rota/` is missing |
 |-------|------------------------|
-| `/rota-work` (no argument) | Surface *"Nothing tracked yet. Run `rota init` then `/rota-capture`."* and stop. |
-| `/rota-pause` | Surface *"Nothing to pause. Run `rota init` first."* and stop. |
+| Any verb that reads project state | Exit `3` with the hint `run: rota init`. |
 | `rota update` | Not affected: it runs without a project. |
 | `rota init` | Is the bootstrapper itself. |
 

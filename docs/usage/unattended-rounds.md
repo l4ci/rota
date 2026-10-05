@@ -63,7 +63,8 @@ With a statusline already set, plain `install` refuses (exit 4). `--wrap-statusl
 2. When the orchestrator tries to stop and the state shows `orchestrator.handoffThreshold` percent
    (default 75) or more, the Stop hook blocks. It tells the orchestrator to write
    `.rota/handoff/<base>.md` and run `/exit`.
-3. If it was told twice and still wrote nothing, the hook gives up and records `handoffFailed` in the
+3. If it blocked again `orchestrator.handoffMaxBlocks` (2) more times after the first block and still
+   found no handoff, the hook gives up and records `handoffFailed` in the
    state, so a session that cannot write a handoff is not held forever.
 
 The percentage comes from `context_window.used_percentage`, else from `current_usage` over

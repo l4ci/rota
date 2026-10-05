@@ -243,7 +243,7 @@ Settings for `rota round` (parallel rounds; see [the rounds guide](parallel-roun
 
 | Key | Default | Meaning |
 |-----|---------|---------|
-| `round.scope` | `"milestone"` | Which issues `rota round assign` accepts. `"slate"`: only the issues given to `rota round start --items`. `"milestone"`: the open items of the active milestones. `"next"`: the same, then the first planned milestone whose dependencies are shipped once none is left. `"open"`: every open item no slot holds. Assign refuses anything outside the scope. |
+| `round.scope` | `"milestone"` | Which issues `rota round assign` accepts. `"slate"`: only the issues given to `rota round start --items`. `"milestone"`: the open items of the active milestones. `"next"`: the same, then the first planned milestone whose dependencies are shipped once none of the active milestones has an item left to take. With no planned or active milestone at all, `"milestone"` and `"next"` offer every open item, as `"open"` does. `"open"`: every open item no slot holds. Assign refuses anything outside the scope. |
 | `round.roster` | `["ben","dana","nia","kit"]` | Agent names, one slot each (`.worktrees/<agent>`, parked on `park/<agent>`, working on `<agent>/<issue>-<slug>`). Lowercase letters, digits and `-`; no duplicates. |
 | `round.brief` | `""` | Path of the standing worker contract the assignment pointer names. Empty means `skills/references/worker-contract.md` in the project checkout, else the installed `rota-orchestrate/references/worker-contract.md`. |
 | `round.sharedPaths` | `[]` | Repo-relative globs the file-overlap readiness check ignores, for files every issue touches (a command registry, a contract doc). |
@@ -303,7 +303,7 @@ Controls how `/rota-ship` routes a `/rota-qa run` verdict when `ship.qa: true`. 
 | Value | Behavior |
 |-------|----------|
 | `"advisory"` (default) | All verdicts surface findings (PASS silently, CONCERNS / FAIL with the `QA concerns:` carrier label) and continue to merge / PR. Advisory means advisory: the ship is never blocked on QA. |
-| `"blocking"` | PASS continues silently. CONCERNS branches on `autonomy.level` (`AskUserQuestion` Address / Ship anyway / Stop). FAIL stops the ship; user fixes via `/rota-work` or `/rota-debug` and reruns `/rota-ship`. |
+| `"blocking"` | PASS continues silently. CONCERNS asks (`AskUserQuestion` Address / Ship anyway / Stop) at every `autonomy.level`. FAIL stops the ship; user fixes via `/rota-work` or `/rota-debug` and reruns `/rota-ship`. |
 
 `INFRA-FAIL` (dev server / creds / binary missing) is always treated as advisory regardless of `qa.gate`. Missing infrastructure isn't a quality signal; ship shouldn't break because the dev server happened to be down. The missing requirements surface as a note and the ship continues.
 
@@ -435,7 +435,7 @@ Skills that use the base branch (including `/rota-ship`, `/rota-review` and `/ro
 |-----|---------|--------|
 | `backlog.backend` | `"file"` | `"file"` or `"issues"`. `"issues"` puts the backlog on the tracker; see [issue backend](issue-backend.md). |
 | `issues.provider` | `"auto"` | `"auto"`, `"github"` or `"gitlab"`. |
-| `issues.retryWaitSeconds` | `60` | Seconds to wait before retrying a failed tracker call. |
+| `issues.retryWaitSeconds` | `60` | Seconds to wait before the single retry after a primary rate limit. |
 | `issues.bulkPaceMs` | `1000` | Milliseconds `rota migrate issues` waits between tracker writes. `0` disables the pause. |
 | `issues.homeRepo` | `""` | Umbrella mode only: sub-repo holding milestone tracking issues. Empty means the first registered sub-repo. |
 | `issues.labels.inProgress` | `"in-progress"` | Label name. |

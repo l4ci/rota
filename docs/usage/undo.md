@@ -54,9 +54,11 @@ Re-run [`/rota-work` (no argument)](picking-work.md) and `[F42]` shows up under 
 
 `/rota-ship --undo` rolls back the **merge commit on the base branch** (the base is reset to the commit immediately before it) and the cycle's **TODO entries** (reopened and moved from `## Completed` back to their original type sections under `## Features`, `## Bugs`, or `## Tasks`). An item that is already active again is left alone and reported as a no-op.
 
-Preserved untouched: **`ARCHIVE.md`** historical entries (the rolled-back done-line was in `BACKLOG.md ## Completed`, not in `ARCHIVE.md`), the **git reflog** (the merge commit is still recoverable for 90 days via `git reflog`), and **git objects** generally. The merged branch's commits stay reachable through the reflog, so nothing is irretrievably lost in the short term.
+Entries that `/rota-work` already moved to `.rota/ARCHIVE.md` are restored too: the cycle's done lines are found in `## Completed` and in `ARCHIVE.md`, and an archived one is moved out of `ARCHIVE.md` back to its type section. Other `ARCHIVE.md` entries are left alone.
 
-Not restored, by design: **handoff files** (`.rota/handoff/<branch>.md` are gitignored per-developer scratch and were lost when the branch was deleted at merge time), **plan files** (`.rota/plans/<key>.md` are tracked, so they survive on `main` after the ship commit, but an unmerged feature-branch plan is unrecoverable once the branch is gone), and **the merged branch itself** (direct-merge deletes it at ship time). The dry-run preview prints the literal `git branch …` command needed to recreate the branch from `<merge>^2` if you want to keep iterating on the same line of work.
+Preserved untouched: the **git reflog** (the merge commit is still recoverable for 90 days via `git reflog`) and **git objects** generally. The merged branch's commits stay reachable through the reflog, so nothing is irretrievably lost in the short term.
+
+Not restored, by design: **handoff files** (`.rota/handoff/<branch>.md` are gitignored per-developer scratch and were lost when the branch was deleted at merge time), **plan files** (`.rota/plans/<key>.md` are tracked, not gitignored, even though the preview block prints "gitignored" for them. `/rota-work` removes a milestone-tagged item's plan when the item ships, and `undo` does not bring it back; recover it from the merge's second parent or the reflog), and **the merged branch itself** (direct-merge deletes it at ship time). The dry-run preview prints the literal `git branch …` command needed to recreate the branch from `<merge>^2` if you want to keep iterating on the same line of work.
 
 ## Safety semantics
 

@@ -126,7 +126,7 @@ Most skills delegate umbrella resolution to the underlying verbs and stay umbrel
 - **`/rota-work --preview`** displays the resolved sub-repo for items with `Repos:` in its peek output.
 - **`/rota-debug`** routes its single fix-commit to the sub-repo resolved from the bug's `Repos:` tag.
 - **`/rota-review`** scopes its branch inspection to the sub-repo via `rota review scope --repo <name>`. `BACKLOG.md` and `ARCHIVE.md` lookups stay at the umbrella.
-- **`/rota-ship`** threads `--repo` through `rota ship merge` / `rota ship pr` so the merge or PR runs in the correct sub-repo.
+- **`/rota-ship`** threads `--repo` through `rota ship merge` / `rota ship pr` so the merge or PR runs in the correct sub-repo. Each run ships one sub-repo's branch (at the umbrella root `--repo` is required, exit 2 without it). For an item that spans several repos on the file backend, nothing opens linked PRs across repos or links them to each other: ship each repo's branch separately, one PR (or merge) per repo.
 - **`/rota-refactor`** runs once per sub-repo with `--repo <name>` (`rota refactor targets --json` lists them), so each finding is filed on the tracker that owns the code.
 - **`/rota-learn`** routes the learning (and `--term` Glossary entries) to the scope resolved from cwd or `--repo`: repo-local learnings land in `.rota/knowledge/<name>/KNOWLEDGE.md`, cross-repo ones in the umbrella file. At the umbrella root it asks once whether a learning is umbrella-shared or sub-repo-scoped. The per-sub-repo CLAUDE.md knowledge block lists umbrella ∪ that sub-repo's topics. DECISIONS via `/rota-decide` stays umbrella-only.
 
