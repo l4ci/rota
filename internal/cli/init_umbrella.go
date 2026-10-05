@@ -61,7 +61,7 @@ func initUmbrella(fs *flag.FlagSet) RunFunc {
 		for _, w := range res.Warnings {
 			c.Warn("%s", w)
 		}
-		cfg, err := initConfig(c, root)
+		cfg, err := initConfig(c, root, false)
 		if err != nil {
 			return Result{}, err
 		}
