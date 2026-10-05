@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/rotastate"
 )
 
 // StateTTL is how long an untouched session state file lives.
@@ -47,7 +48,7 @@ func StatePath(commonDir, sessionID string) (string, error) {
 	if !sessionIDRe.MatchString(sessionID) || strings.Contains(sessionID, "..") {
 		return "", fmt.Errorf("unusable session id %q", sessionID)
 	}
-	return filepath.Join(commonDir, "rota", "session", sessionID+".json"), nil
+	return filepath.Join(rotastate.SessionDir(commonDir), sessionID+".json"), nil
 }
 
 // ReadState loads a state file. found is false for a missing file; a file
@@ -64,6 +65,24 @@ func ReadState(path string) (st State, found bool, err error) {
 		return State{}, false, fmt.Errorf("%s: %w", path, err)
 	}
 	return st, true, nil
+}
+
+// Sessions is every readable session state file under a git common dir.
+// Unreadable or malformed files are skipped: callers look for the newest
+// evidence and a damaged file is none.
+func Sessions(commonDir string) []State {
+	dir := rotastate.SessionDir(commonDir)
+	ents, _ := os.ReadDir(dir)
+	var out []State
+	for _, e := range ents {
+		if !strings.HasSuffix(e.Name(), ".json") {
+			continue
+		}
+		if st, found, err := ReadState(filepath.Join(dir, e.Name())); err == nil && found {
+			out = append(out, st)
+		}
+	}
+	return out
 }
 
 func writeState(path string, st State) error {

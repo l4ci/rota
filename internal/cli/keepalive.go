@@ -23,6 +23,7 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/keepalive"
 	"github.com/l4ci/rota/internal/limits"
+	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -170,7 +171,7 @@ func keepaliveRun(fs *flag.FlagSet) RunFunc {
 		if promptSet {
 			set.Prompt = *prompt
 		}
-		cd, err := roundlease.CommonDir(root)
+		cd, err := rotastate.CommonDir(root)
 		if err != nil {
 			return Result{}, &Error{Exit: ExitUnavailable, Message: err.Error()}
 		}
@@ -267,16 +268,10 @@ func keepaliveGap(switchOnUsage bool) *atomic.Bool {
 // session files whose cwd is the project root (D4).
 func usageMarker(commonDir, root string) func(since time.Time) (hook.UsageHandoff, bool) {
 	return func(since time.Time) (hook.UsageHandoff, bool) {
-		dir := filepath.Join(commonDir, "rota", "session")
-		ents, _ := os.ReadDir(dir)
 		var best hook.UsageHandoff
 		var bestAt time.Time
-		for _, e := range ents {
-			if !strings.HasSuffix(e.Name(), ".json") {
-				continue
-			}
-			st, found, err := hook.ReadState(filepath.Join(dir, e.Name()))
-			if err != nil || !found || st.UsageHandoff == nil || !sameDir(st.Cwd, root) {
+		for _, st := range hook.Sessions(commonDir) {
+			if st.UsageHandoff == nil || !sameDir(st.Cwd, root) {
 				continue
 			}
 			at, err := time.Parse(time.RFC3339, st.UsageHandoff.At)
@@ -355,7 +350,7 @@ func keepaliveStatus(c *Ctx, args []string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	cd, err := roundlease.CommonDir(root)
+	cd, err := rotastate.CommonDir(root)
 	if err != nil {
 		return Result{}, &Error{Exit: ExitUnavailable, Message: err.Error()}
 	}

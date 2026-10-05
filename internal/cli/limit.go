@@ -19,6 +19,7 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/keepalive"
 	"github.com/l4ci/rota/internal/limits"
+	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundlease"
@@ -58,18 +59,10 @@ func escalateFunc(ctx context.Context, c *Ctx, root string) func(issue int, titl
 // evidence, so it reads as unknown.
 func orchestratorData(commonDir, root string, maxAge time.Duration) func(now time.Time) limits.Data {
 	return func(now time.Time) limits.Data {
-		ents, err := os.ReadDir(filepath.Join(commonDir, "rota", "session"))
-		if err != nil {
-			return limits.Data{}
-		}
 		var best hook.State
 		var bestAt time.Time
-		for _, e := range ents {
-			if !strings.HasSuffix(e.Name(), ".json") {
-				continue
-			}
-			st, found, err := hook.ReadState(filepath.Join(commonDir, "rota", "session", e.Name()))
-			if err != nil || !found || !sameDir(st.Cwd, root) {
+		for _, st := range hook.Sessions(commonDir) {
+			if !sameDir(st.Cwd, root) {
 				continue
 			}
 			at, err := time.Parse(time.RFC3339, st.UpdatedAt)
@@ -137,7 +130,7 @@ func buildLimits(ctx context.Context, c *Ctx, root string, cfg any, set limits.S
 	if !ok {
 		return nil, &Error{Exit: ExitUnavailable, Message: kind + " cannot address panes"}
 	}
-	cd, err := roundlease.CommonDir(root)
+	cd, err := rotastate.CommonDir(root)
 	if err != nil {
 		return nil, &Error{Exit: ExitUnavailable, Message: err.Error()}
 	}
@@ -299,7 +292,7 @@ func limitsLoop(c *Ctx, root string, cfg any, set limits.Settings, holderPID int
 			return warns
 		}
 		defer rig.Cancel()
-		if cd, err := roundlease.CommonDir(root); err == nil {
+		if cd, err := rotastate.CommonDir(root); err == nil {
 			rec := limits.Watching{PID: os.Getpid(), StartedAt: limits.Time(time.Now()), Mode: limits.ModeSupervisor}
 			if err := limits.WriteWatching(cd, rec); err == nil {
 				defer limits.RemoveWatching(cd, rec.PID)
@@ -334,7 +327,7 @@ func limitWatch(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, &Error{Exit: ExitInternal, Message: err.Error(), Hint: "fix the limits.* key with: rota config set"}
 		}
-		cd, err := roundlease.CommonDir(root)
+		cd, err := rotastate.CommonDir(root)
 		if err != nil {
 			return Result{}, &Error{Exit: ExitUnavailable, Message: err.Error()}
 		}
@@ -466,7 +459,7 @@ func limitStatus(c *Ctx, args []string) (Result, error) {
 	}
 	list := limits.Load(root)
 	watching := false
-	if cd, err := roundlease.CommonDir(root); err == nil {
+	if cd, err := rotastate.CommonDir(root); err == nil {
 		le := c.deps().RoundEnv(c.Context(), root).Lease
 		if le.Alive == nil {
 			le = roundlease.DefaultEnv()

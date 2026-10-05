@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/shlex"
 )
 
@@ -188,7 +189,7 @@ func (codex) Sign(key []byte, payload string) string { return signPrompt(key, pa
 
 // CodexHomesDir is where the slot homes live, beside the round lease, under
 // the git common dir.
-func CodexHomesDir(commonDir string) string { return filepath.Join(commonDir, "rota", "codex") }
+func CodexHomesDir(commonDir string) string { return rotastate.CodexDir(commonDir) }
 
 // CodexHome is the slot's CODEX_HOME: <git-common-dir>/rota/codex/<slot>. Never
 // ~/.codex, and never inside the worktree, where it would dirty git status.

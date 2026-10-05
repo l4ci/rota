@@ -186,13 +186,13 @@ func (e Env) PoolInit(ctx context.Context, root string, o InitOpts, acc *Account
 	return res, nil
 }
 
-// commonDir is the resolved git common dir of a worktree.
+// commonDir is the resolved git common dir of a worktree, "" when it has none.
 func (e Env) commonDir(dir string) string {
-	out, code := e.git(dir, "rev-parse", "--git-common-dir")
-	if code != 0 || out == "" {
+	cd, _, err := git.CommonDirVia(context.Background(), e.Git, dir)
+	if err != nil {
 		return ""
 	}
-	return realPath(git.AbsCommonDir(dir, out))
+	return cd
 }
 
 func realPath(p string) string {
