@@ -56,9 +56,12 @@ There are no servers and no ports in this repo.
   and `/rota-review --queue` is for a session outside a round, not for round PRs.
 - **Completion follows the merge.** On the issue backend the merge closes the issue. In file mode the
   orchestrator completes the PR's items at merge time; a worker skips `/rota-ship` Step 8.
+- **Workers never review.** A worker runs no `/rota-review` and dispatches no reviewer subagent on
+  its own branch; `/rota-ship` skips Step 3 for a round worker's PR. Review is the orchestrator's
+  seat.
 - **No second opinion on round PRs.** `ship.secondOpinion` is skipped for a round worker's PR even
-  when set: the worker's own review plus the merge gate are the two checks, and a further model pass
-  per PR costs more than it catches.
+  when set: the merge gate is the check, and a further model pass per PR costs more than it
+  catches.
 - **`work.mergeStrategy: direct` is ignored in issue mode.** `/rota-ship` always opens a PR there and
   says so; a round never direct-merges.
 

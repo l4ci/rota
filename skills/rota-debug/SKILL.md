@@ -5,7 +5,7 @@ description: Systematic root-cause investigation for a bug — reproduce first, 
 
 # rota-debug — Systematic Bug Cycle
 
-Reproduce → hypothesize → verify → fix → prove, for one bug. Anchors to a backlog item (`#N`; file backend `[B07]`) so the fix commit and PR close it. Work inline; delegate only reads and searches too big for your context (a `light` subagent), never the diagnosis itself.
+Reproduce (feedback loop) → hypothesize → verify → fix → prove, for one bug. Anchors to a backlog item (`#N`; file backend `[B07]`) so the fix commit and PR close it. Work inline; delegate only reads and searches too big for your context (a `light` subagent), never the diagnosis itself.
 
 **Not for:** a trivial obvious one-liner (`/rota-capture`, then `/rota-work`), several items in one pass (`/rota-work`), or a bug nobody has captured (`/rota-capture` first).
 
@@ -33,9 +33,31 @@ rota debug counter init <ID>
 
 Exit 4 (`data.blockedBy` `iron law`) means the bug already has 3 failed fixes: go to *Iron Law stop* without reproducing.
 
-## Step 3 — Reproduce
+## Step 3 — Build the feedback loop
 
-Non-negotiable, and before any hypothesis. In order of preference: run the bug's existing test, write a failing test in the suite, or reproduce by hand. You need a concrete failure signal (error message, wrong value, stack trace). If you cannot reproduce, stop and ask: *"Can't reproduce — need [X] from you (repro steps, environment, seed data)."*
+Non-negotiable, and the first deliverable: a command that shows the bug and that you can re-run. If you catch yourself reading code to build a theory before it exists, stop. Take the cheapest rung that works:
+
+1. **Existing test** — run the bug's test, if one exists.
+2. **New failing test** — write one in the suite.
+3. **CLI or HTTP call** — a `rota` verb, `curl`, or the app's own entry point with the failing input.
+4. **Replayed input** — feed a captured payload, log line, file or seed data to the code.
+5. **Bisect** — for "it worked before", `git bisect run <reproducer>` finds the commit.
+6. **Differential run** — same input on old and new (or two configs); the diff is the signal.
+7. **Loop** — for a flaky bug, wrap any rung above in a loop (see *Flaky bugs*).
+8. **Human-in-the-loop script** — last resort: a script that sets up state and prints the exact steps and the pass/fail question for the user.
+
+**Reproducer checklist.** All four before Step 4:
+
+- **Red now** — it fails today, with a concrete signal (error message, wrong value, stack trace).
+- **Deterministic** — same result every run; for a flaky bug, its failure rate is measured (below).
+- **Fast** — seconds, not minutes; a slow loop gets trimmed before you proceed.
+- **Unaided** — you can run it without the user. Only rung 8 is exempt, and it says so in the report.
+
+**Flaky bugs.** Run the reproducer N times (start at 20) and record `fails/N`. Raise the rate before hypothesising: more iterations, parallel runs, tighter timing, a fixed seed, injected load or delay. Step 4 starts once the rate is high enough that one run tells you something, and Step 6 re-runs at the same N.
+
+**Minimise.** Shrink the reproducer while it stays red: drop inputs, fields, setup steps and unrelated code, re-running after each cut. Stop when removing anything more turns it green. The minimal reproducer is the regression test in Step 5.
+
+If no rung produces a red run, stop and ask: *"Can't reproduce — need [X] from you (repro steps, environment, seed data)."*
 
 ## Step 4 — Hypothesize and verify
 
@@ -67,11 +89,11 @@ rota debug counter record-attempt --hypothesis "<one-line hypothesis>" --commit 
 
 Legitimate toolchain siblings (e.g. Godot `.gd.uid`) go in a separate `chore:` commit.
 
-**Regression test, or the missing seam.** Add a test at the bug's seam in the same commit. It must fail without the fix. If the only test you can write mocks the thing under test or asserts implementation details (call order, private state, exact internal strings), it pins nothing: do not commit it. That is a finding: no seam exists. Keep the Step 3 reproducer as the proof, and file the missing seam (Step 7). A real seam still gets a real test.
+**Regression test, or the missing seam.** Turn the minimal reproducer from Step 3 into a test at the bug's seam, in the same commit. It must fail without the fix. If the only test you can write mocks the thing under test or asserts implementation details (call order, private state, exact internal strings), it pins nothing: do not commit it. That is a finding: no seam exists. Keep the Step 3 reproducer as the proof, and file the missing seam (Step 7). A real seam still gets a real test.
 
 ## Step 6 — Verify the fix
 
-Re-run the Step 3 reproducer. It must pass; a new regression test must be in the suite and run under the default test command, unless Step 5 found no seam (then the reproducer alone is the proof). Then record the outcome:
+Re-run the Step 3 reproducer (flaky: N runs, zero failures). It must pass; a new regression test must be in the suite and run under the default test command, unless Step 5 found no seam (then the reproducer alone is the proof). Then record the outcome:
 
 ```bash
 rota debug verdict <ID> --verdict <PASS|FAIL> --json
@@ -128,7 +150,7 @@ One line of nudge, only when it applies: if the cause was not obvious from readi
 
 ## Key principles
 
-- **Reproduce before hypothesizing, verify before fixing.**
+- **Feedback loop before hypothesizing, verify before fixing.** The reproducer is red, deterministic, fast, unaided and minimal before Step 4 starts.
 - **Hypotheses are claims, plural and ranked.** "If X, then changing Y makes the bug vanish": falsifiable, 3–5 of them, so the first plausible idea does not anchor.
 - **Probes are tagged.** `[DEBUG-<id>]` on every temporary line; the cleanup grep must come back empty.
 - **Iron Law: no fix without a hypothesis; hard stop at 3 failed fixes.**

@@ -8,7 +8,7 @@ Invoke with a bug ID: `/rota-debug 42` on the [issue backend](issue-backend.md),
 
 The skill loads the item (its issue, or the `[B07]` entry in [`BACKLOG.md`](../reference/rota-folder.md) and any associated detail file), consults `KNOWLEDGE.md` for topics that match the bug's area, then works through a fixed cycle:
 
-1. **Reproduce**: runs the bug's existing test or writes a minimal failing reproducer.
+1. **Build a feedback loop**: before any theory, it builds a command that shows the bug, taking the cheapest rung of a ladder: existing test, new failing test, CLI or HTTP call, replayed input, `git bisect`, old-vs-new differential run, a loop for flaky bugs, or a script for you to run. The reproducer must be red now, deterministic (or have a measured failure rate), fast and runnable without you. A flaky bug is run N times and its rate raised first. Then the skill minimises the reproducer, and the minimal version becomes the regression test.
 2. **Hypothesize**: it writes 3–5 hypotheses ranked by likelihood, each as a falsifiable claim ("if X, then changing Y makes the bug vanish"), and prints the list before probing.
 3. **Verify**: it probes in rank order (log inspection, targeted reads, narrow experiment) before any code changes, striking each refuted hypothesis with its evidence. Temporary probe lines carry a `[DEBUG-<id>]` tag, and the skill will not commit or finish while `git grep` still finds one.
 4. **Fix**: the minimal change that removes the root cause, as one atomic commit tagged `fix: … [B07]` (`#42` on the issue backend).
@@ -27,7 +27,7 @@ Here is what the session looks like:
 /rota-debug B07
 ```
 
-**Reproduce phase.** The skill runs the relevant test or writes a new failing one. You see something like:
+**Feedback-loop phase.** The skill builds and minimises a reproducer. You see something like:
 ```
 Reproducer: tests/test_parser.py::test_empty_input  FAILED
 ```

@@ -6,6 +6,8 @@ package design
 
 import (
 	"errors"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/l4ci/rota/internal/backlog"
@@ -24,13 +26,19 @@ type Store interface {
 	Remove(id string) error
 }
 
+// issueNumber is the bare and #-prefixed forms the issue backend resolves.
+var issueNumber = regexp.MustCompile(`\A#?[0-9]+\z`)
+
 // CheckID is the ID rule every verb applies before it touches the store.
 func CheckID(s Store, id string) error {
 	if backlog.ValidID(id, s.Digits()) {
 		return nil
 	}
 	if s.Digits() <= 1 {
-		return exitcode.Errf(exitcode.ExitUsage, "ID must match [%s]\\d+ (e.g. B7, F3, T11); designs are per-item, not per-slice or per-milestone, got %q", backlog.ItemLetters, id)
+		if issueNumber.MatchString(id) {
+			return nil
+		}
+		return exitcode.Errf(exitcode.ExitUsage, "ID must be an issue number: N, #N or [%s]N (e.g. 233, #233, B7); designs are per-item, not per-slice or per-milestone, got %q", backlog.ItemLetters, id)
 	}
 	return exitcode.Errf(exitcode.ExitUsage, "ID must match [%s]\\d{%d,} (e.g. B07, F03, T11); designs are per-item, not per-slice or per-milestone, got %q", backlog.ItemLetters, s.Digits(), id)
 }
@@ -40,7 +48,7 @@ func Add(s Store, id, title string) error {
 	if err := CheckID(s, id); err != nil {
 		return err
 	}
-	return s.Create(id, stubText(id, title, time.Now().Format("2006-01-02")))
+	return s.Create(id, stubText(strings.TrimPrefix(id, "#"), title, time.Now().Format("2006-01-02")))
 }
 
 // Show is the stored design.
