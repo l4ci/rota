@@ -41,6 +41,19 @@ func (r *layoutRig) SplitInto(_ context.Context, pane, tab, target, dir string, 
 	r.setTab(pane, tab)
 	return nil
 }
+func (r *layoutRig) RenameTab(_ context.Context, tab, label string) error {
+	r.log = append(r.log, "rename tab "+tab+" "+label)
+	for i := range r.panes {
+		if r.panes[i].Tab == tab {
+			r.panes[i].TabLabel = label
+		}
+	}
+	return nil
+}
+func (r *layoutRig) RenamePane(_ context.Context, pane, label string) error {
+	r.log = append(r.log, "name pane "+pane+" "+label)
+	return nil
+}
 func (r *layoutRig) ToNewTab(_ context.Context, pane, label string) error {
 	r.log = append(r.log, fmt.Sprintf("tab %s %s", pane, label))
 	r.setTab(pane, "t-"+label)
@@ -113,7 +126,7 @@ func TestLayoutSplitThenTabs(t *testing.T) {
 	if code != 0 || jsonx.Str(rows[0], "layout") != "split" || jsonx.Str(rows[0], "before") != "tabs" {
 		t.Fatalf("exit %d rows %v: %s", code, rows, errs)
 	}
-	want := "split p-ben right p0 0.3333|split p-nia right p-ben 0.5|split p-dana down p-ben 0.5"
+	want := "split p-ben right p0 0.4|split p-nia right p-ben 0.5|split p-dana down p-ben 0.5|rename tab T rota|name pane p0 orchestrator"
 	if got := strings.Join(rig.log, "|"); got != want {
 		t.Errorf("moves = %s", got)
 	}
@@ -126,8 +139,42 @@ func TestLayoutSplitThenTabs(t *testing.T) {
 	if code != 0 || jsonx.Str(layoutRows(env)[0], "layout") != "tabs" {
 		t.Fatalf("tabs: exit %d %v", code, env)
 	}
-	if got := strings.Join(rig.log, "|"); got != "tab p-ben ben|tab p-dana dana|tab p-nia nia" {
+	if got := strings.Join(rig.log, "|"); got != "tab p-ben ben|tab p-dana dana|tab p-nia nia|rename tab T orchestrator" {
 		t.Errorf("moves = %s", got)
+	}
+}
+
+// Run from the pane that launched the round, split puts that pane on top of the
+// orchestrator in its own tab, and remembers it for later spawns.
+func TestLayoutSplitKeepsTheLaunchingCLIOnTop(t *testing.T) {
+	root, rig, deps := layoutProject(t, "herdr", []string{"ben"}, "ben")
+	rig.panes = append(rig.panes, host.LayoutPane{ID: "pc", Tab: "tc", TabLabel: "zsh", Cwd: root})
+	t.Setenv("HERDR_PANE_ID", "pc")
+	code, env, errs := rotaRunWith(t, deps, "--json", "-C", root, "layout", "split")
+	rows := layoutRows(env)
+	if code != 0 || jsonx.Str(rows[0], "layout") != "split" {
+		t.Fatalf("exit %d rows %v: %s", code, rows, errs)
+	}
+	want := "split p-ben right pc 0.4|split p0 down pc 0.25|rename tab tc rota|name pane p0 orchestrator"
+	if got := strings.Join(rig.log, "|"); got != want {
+		t.Errorf("moves = %s", got)
+	}
+	if got := worker.LoadRegistry(root).CLIPane(); got != "pc" {
+		t.Errorf("recorded cli pane = %q", got)
+	}
+	cli, _ := rows[0].Get("cli")
+	if jsonx.Str(cli.(*jsonx.Object), "pane") != "pc" {
+		t.Errorf("cli = %v", cli)
+	}
+	// From the orchestrator (an agent pane) the recorded CLI is still used,
+	// and tabs puts the orchestrator back in a tab of its own.
+	t.Setenv("HERDR_PANE_ID", "p0")
+	rig.log = nil
+	if code, _, errs := rotaRunWith(t, deps, "--json", "-C", root, "layout", "tabs"); code != 0 {
+		t.Fatalf("tabs: exit %d: %s", code, errs)
+	}
+	if got := strings.Join(rig.log, "|"); got != "tab p-ben ben|tab p0 orchestrator" {
+		t.Errorf("tabs moves = %s", got)
 	}
 }
 
@@ -137,7 +184,7 @@ func TestLayoutSkipsParkedAndDeadSlots(t *testing.T) {
 	if code, _, errs := rotaRunWith(t, deps, "--json", "layout", "split", "--project", root); code != 0 {
 		t.Fatalf("exit %d: %s", code, errs)
 	}
-	if got := strings.Join(rig.log, "|"); got != "split p-ben right p0 0.5" {
+	if got := strings.Join(rig.log, "|"); got != "split p-ben right p0 0.4|rename tab T rota|name pane p0 orchestrator" {
 		t.Errorf("moves = %s", got)
 	}
 }

@@ -43,6 +43,19 @@ func (g *gridHost) SplitInto(_ context.Context, pane, tab, target, dir string, k
 	g.move(pane, tab)
 	return nil
 }
+func (g *gridHost) RenameTab(_ context.Context, tab, label string) error {
+	g.log = append(g.log, "rename tab "+tab+" "+label)
+	for i := range g.panes {
+		if g.panes[i].Tab == tab {
+			g.panes[i].TabLabel = label
+		}
+	}
+	return nil
+}
+func (g *gridHost) RenamePane(_ context.Context, pane, label string) error {
+	g.log = append(g.log, "name pane "+pane+" "+label)
+	return nil
+}
 func (g *gridHost) ToNewTab(_ context.Context, pane, label string) error {
 	g.log = append(g.log, "tab "+pane+" "+label)
 	g.move(pane, "t-"+label)
@@ -76,7 +89,7 @@ func TestDispatchSpawnsIntoTheRecordedSplit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := strings.Join(g.log, "|"); got != "split p-w1 right p0 0.5" {
+	if got := strings.Join(g.log, "|"); got != "split p-w1 right p0 0.4|rename tab T rota|name pane p0 orchestrator" {
 		t.Errorf("moves = %q", got)
 	}
 	if len(res.Warnings) != 0 {
