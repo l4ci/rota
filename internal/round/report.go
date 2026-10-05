@@ -2,6 +2,7 @@ package round
 
 import (
 	"fmt"
+	"github.com/l4ci/rota/internal/exitcode"
 	"regexp"
 	"strings"
 
@@ -46,10 +47,10 @@ func ReportSlot(root string, o ReportOpts) (Reported, error) {
 	switch h := worker.RegistryHost(root); h {
 	case host.Solo:
 	case "":
-		return res, &worker.Error{Exit: worker.ExitUsage, Message: "no round host is recorded: run rota round start first",
+		return res, &exitcode.Error{Exit: exitcode.ExitUsage, Message: "no round host is recorded: run rota round start first",
 			Hint: "round report is for solo rounds; under herdr or tmux, rota worker poll records the state"}
 	default:
-		return res, &worker.Error{Exit: worker.ExitUsage, Message: fmt.Sprintf("the round host is %s, not solo: the pane is the truth", h),
+		return res, &exitcode.Error{Exit: exitcode.ExitUsage, Message: fmt.Sprintf("the round host is %s, not solo: the pane is the truth", h),
 			Hint: "rota worker poll records a pane's state; round report would race it"}
 	}
 	found := false
@@ -80,7 +81,7 @@ func ReportSlot(root string, o ReportOpts) (Reported, error) {
 		return res, stateErr
 	}
 	if !found {
-		return res, &worker.Error{Exit: worker.ExitResolution, Message: fmt.Sprintf("slot '%s' is not in the pool", o.Slot)}
+		return res, &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("slot '%s' is not in the pool", o.Slot)}
 	}
 	return res, nil
 }

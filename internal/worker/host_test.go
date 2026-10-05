@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -95,7 +96,7 @@ func slotField(t *testing.T, dir, slot, key string) string {
 }
 
 func exitOf(err error) int {
-	if we, ok := err.(*Error); ok {
+	if we, ok := err.(*exitcode.Error); ok {
 		return we.Exit
 	}
 	return -1
@@ -227,8 +228,8 @@ func TestDispatchRelayLoggingFollowsWhatMayHaveBeenSent(t *testing.T) {
 		exit   int
 		logged int
 	}{
-		"never submitted: may have landed, so logged": {host.ErrNotSubmitted, ExitRetry, 1},
-		"dialog open: certainly not sent":             {host.ErrDialogOpen, ExitUnavailable, 0},
+		"never submitted: may have landed, so logged": {host.ErrNotSubmitted, exitcode.ExitRetry, 1},
+		"dialog open: certainly not sent":             {host.ErrDialogOpen, exitcode.ExitUnavailable, 0},
 	} {
 		t.Run(name, func(t *testing.T) {
 			dir := newProject(t, `{}`)
@@ -257,8 +258,8 @@ func TestDispatchTaskSendFailureExits(t *testing.T) {
 		exit int
 		msg  string
 	}{
-		{host.ErrNotSubmitted, ExitRetry, "never picked up the brief — inspect the session before resending"},
-		{host.ErrDialogOpen, ExitUnavailable, "has a dialog open and refused input — inspect it before resending"},
+		{host.ErrNotSubmitted, exitcode.ExitRetry, "never picked up the brief — inspect the session before resending"},
+		{host.ErrDialogOpen, exitcode.ExitUnavailable, "has a dialog open and refused input — inspect it before resending"},
 	} {
 		dir := newProject(t, `{}`)
 		goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
@@ -276,7 +277,7 @@ func TestDispatchRelayWithoutASessionIsAResolutionError(t *testing.T) {
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	f := &fakeHost{name: "herdr", inSession: true}
 	_, err := envWith(f).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "q"), Relay: true})
-	if exitOf(err) != ExitResolution || !strings.Contains(err.Error(), "has no session to relay into") {
+	if exitOf(err) != exitcode.ExitResolution || !strings.Contains(err.Error(), "has no session to relay into") {
 		t.Errorf("err = %v", err)
 	}
 	if len(f.calls) != 0 {
@@ -289,7 +290,7 @@ func TestDispatchHerdrOutsideAPaneIsUnavailable(t *testing.T) {
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	f := &fakeHost{name: "herdr", inSession: false}
 	_, err := envWith(f).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "t"), Task: "T1"})
-	if exitOf(err) != ExitUnavailable || !strings.Contains(err.Error(), "must run from inside a herdr pane") {
+	if exitOf(err) != exitcode.ExitUnavailable || !strings.Contains(err.Error(), "must run from inside a herdr pane") {
 		t.Errorf("err = %v", err)
 	}
 	if len(f.calls) != 0 {
@@ -303,7 +304,7 @@ func TestDispatchHostMissingIsUnavailable(t *testing.T) {
 	f := tmuxFake()
 	f.requireErr = fmt.Errorf("tmux is not installed")
 	_, err := envWith(f).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "t"), Task: "T1"})
-	if exitOf(err) != ExitUnavailable {
+	if exitOf(err) != exitcode.ExitUnavailable {
 		t.Errorf("err = %v", err)
 	}
 }
@@ -315,7 +316,7 @@ func TestDispatchResolutionFailures(t *testing.T) {
 	brief := writeBrief(t, "t")
 	check := func(what string, err error, msg string) {
 		t.Helper()
-		if exitOf(err) != ExitResolution || !strings.Contains(err.Error(), msg) {
+		if exitOf(err) != exitcode.ExitResolution || !strings.Contains(err.Error(), msg) {
 			t.Errorf("%s: err = %v", what, err)
 		}
 	}
@@ -339,9 +340,9 @@ func TestDispatchRejectsResumeAndUnparseableWorkerCommands(t *testing.T) {
 		exit int
 		msg  string
 	}{
-		`{"work":{"workerCommand":"claude -c"}}`:         {ExitRefused, "contains '-c', which reopens the previous conversation"},
-		`{"work":{"workerCommand":"claude --resume=x"}}`: {ExitRefused, "contains '--resume=x'"},
-		`{"work":{"workerCommand":"claude \"oops"}}`:     {ExitUsage, "cannot be parsed (unbalanced quote?)"},
+		`{"work":{"workerCommand":"claude -c"}}`:         {exitcode.ExitRefused, "contains '-c', which reopens the previous conversation"},
+		`{"work":{"workerCommand":"claude --resume=x"}}`: {exitcode.ExitRefused, "contains '--resume=x'"},
+		`{"work":{"workerCommand":"claude \"oops"}}`:     {exitcode.ExitUsage, "cannot be parsed (unbalanced quote?)"},
 	} {
 		dir := newProject(t, cfg)
 		goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
@@ -371,7 +372,7 @@ func TestDispatchRefusesASlotHoldingWorkBeforeKilling(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, ".worktrees", "w1", "wip.txt"), []byte("x"), 0o644)
 	f := tmuxFake()
 	_, err := envWith(f).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "t"), Task: "T2"})
-	if exitOf(err) != ExitRefused || !strings.Contains(err.Error(), "REFUSED w1 — uncommitted changes") {
+	if exitOf(err) != exitcode.ExitRefused || !strings.Contains(err.Error(), "REFUSED w1 — uncommitted changes") {
 		t.Fatalf("err = %v", err)
 	}
 	if len(f.calls) != 0 {
@@ -389,7 +390,7 @@ func TestDispatchDoesNotSpawnBesideASessionThatWillNotClose(t *testing.T) {
 	f := tmuxFake()
 	f.killErr = fmt.Errorf("slot 'w1' previous session is still running (window rota:w1); not spawning a second one")
 	_, err := envWith(f).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "t"), Task: "T1"})
-	if exitOf(err) != ExitUnavailable || !strings.Contains(err.Error(), "not spawning a second one") {
+	if exitOf(err) != exitcode.ExitUnavailable || !strings.Contains(err.Error(), "not spawning a second one") {
 		t.Fatalf("err = %v", err)
 	}
 	if strings.Contains(strings.Join(f.calls, ","), "spawn") {
@@ -406,7 +407,7 @@ func TestDispatchSpawnFailureClearsTheDeadHandle(t *testing.T) {
 	f := tmuxFake()
 	f.spawnErr = fmt.Errorf("slot 'w1' session did not come up within 60s")
 	_, err := envWith(f).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "t"), Task: "T1"})
-	if exitOf(err) != ExitUnavailable {
+	if exitOf(err) != exitcode.ExitUnavailable {
 		t.Fatalf("err = %v", err)
 	}
 	if h, s := slotField(t, dir, "w1", "handle"), slotField(t, dir, "w1", "state"); h != "<null>" || s != "idle" {
@@ -490,7 +491,7 @@ func hostDeps(run host.Runner, env map[string]string) host.Deps {
 // refusal changes nothing; a slot holding work is refused before the kill.
 func TestDispatchRefusalsCarryFailureData(t *testing.T) {
 	data := func(err error) BlockData {
-		we, ok := err.(*Error)
+		we, ok := err.(*exitcode.Error)
 		if !ok {
 			t.Fatalf("err = %v", err)
 		}
@@ -542,7 +543,7 @@ func TestDispatchRelayResendSubmitsUnsentBrief(t *testing.T) {
 	}
 	f.sendErr = host.ErrNotSubmitted
 	relay := DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "q"), Relay: true}
-	if _, err := e.Dispatch(bg, dir, relay); exitOf(err) != ExitRetry {
+	if _, err := e.Dispatch(bg, dir, relay); exitOf(err) != exitcode.ExitRetry {
 		t.Fatalf("stalled relay err = %v", err)
 	}
 	if slotField(t, dir, "w1", "unsent") != "true" {

@@ -5,6 +5,7 @@ package plan
 
 import (
 	"fmt"
+	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -43,15 +44,15 @@ func ValidMilestone(s string) bool { return milestoneRe.MatchString(s) }
 
 func checkKey(key string) error {
 	if !ValidKey(key) {
-		return artifact.Errf(artifact.ExitUsage, "key must look like M01-B07 or M01-S02, got %q", key)
+		return exitcode.Errf(exitcode.ExitUsage, "key must look like M01-B07 or M01-S02, got %q", key)
 	}
 	return nil
 }
 
 func path(root, key string) string { return filepath.Join(root, ".rota", "plans", key+".md") }
 
-func notFound(key string) *artifact.Error {
-	return artifact.Errf(artifact.ExitResolution, "plan %s not found (.rota/plans/%s.md)", key, key)
+func notFound(key string) *exitcode.Error {
+	return exitcode.Errf(exitcode.ExitResolution, "plan %s not found (.rota/plans/%s.md)", key, key)
 }
 
 // AddOpts are the arguments of Add. Exactly one of Key or (Milestone with
@@ -70,7 +71,7 @@ type AddOpts struct {
 func parseAdd(o AddOpts, issue bool) (milestone, unit string, err error) {
 	switch {
 	case o.Key != "" && (o.Slice || o.Milestone != ""):
-		return "", "", artifact.Errf(artifact.ExitUsage, "a key cannot be combined with --slice or --milestone")
+		return "", "", exitcode.Errf(exitcode.ExitUsage, "a key cannot be combined with --slice or --milestone")
 	case o.Key != "":
 		if issue && ItemOnlyKey(o.Key) {
 			return "", strings.ToUpper(strings.TrimPrefix(o.Key, "#")), nil
@@ -81,18 +82,18 @@ func parseAdd(o AddOpts, issue bool) (milestone, unit string, err error) {
 		}
 		m := re.FindStringSubmatch(o.Key)
 		if m == nil {
-			return "", "", artifact.Errf(artifact.ExitUsage, "key must look like M01-B07 or M01-S02, got %q", o.Key)
+			return "", "", exitcode.Errf(exitcode.ExitUsage, "key must look like M01-B07 or M01-S02, got %q", o.Key)
 		}
 		return m[1], m[2], nil
 	case o.Slice && o.Milestone == "":
-		return "", "", artifact.Errf(artifact.ExitUsage, "--slice needs --milestone <M01>")
+		return "", "", exitcode.Errf(exitcode.ExitUsage, "--slice needs --milestone <M01>")
 	case o.Slice:
 		if !ValidMilestone(o.Milestone) {
-			return "", "", artifact.Errf(artifact.ExitUsage, "milestone must look like M01/M02/…, got %q", o.Milestone)
+			return "", "", exitcode.Errf(exitcode.ExitUsage, "milestone must look like M01/M02/…, got %q", o.Milestone)
 		}
 		return o.Milestone, "", nil
 	}
-	return "", "", artifact.Errf(artifact.ExitUsage, "give a plan key (#7 or M01-B07) or --milestone <M01> --slice")
+	return "", "", exitcode.Errf(exitcode.ExitUsage, "give a plan key (#7 or M01-B07) or --milestone <M01> --slice")
 }
 
 // extras validates --title, --design and --repos and returns the stub's
@@ -101,7 +102,7 @@ func parseAdd(o AddOpts, issue bool) (milestone, unit string, err error) {
 // design is a note on the item's issue.
 func extras(root string, o AddOpts, issue bool) (design, repo string, err error) {
 	if o.Title == "" {
-		return "", "", artifact.Errf(artifact.ExitUsage, "--title is required")
+		return "", "", exitcode.Errf(exitcode.ExitUsage, "--title is required")
 	}
 	if o.Design != "" {
 		re, like := designIDRe, "B07"
@@ -109,21 +110,21 @@ func extras(root string, o AddOpts, issue bool) (design, repo string, err error)
 			re, like = issueDesignRe, "3 or F3"
 		}
 		if !re.MatchString(o.Design) {
-			return "", "", artifact.Errf(artifact.ExitUsage, "--design must be an item ID like %s, got %q", like, o.Design)
+			return "", "", exitcode.Errf(exitcode.ExitUsage, "--design must be an item ID like %s, got %q", like, o.Design)
 		}
 		if issue {
 			design = "note:design"
 		} else {
 			design = ".rota/designs/" + o.Design + ".md"
 			if _, serr := os.Stat(filepath.Join(root, design)); serr != nil {
-				return "", "", artifact.Errf(artifact.ExitResolution, "--design file not found: %s", design)
+				return "", "", exitcode.Errf(exitcode.ExitResolution, "--design file not found: %s", design)
 			}
 		}
 	}
 	if o.Repos != "" {
 		names := artifact.SplitCSV(o.Repos)
 		if len(names) == 0 {
-			return "", "", artifact.Errf(artifact.ExitUsage, "--repos %q is empty after parsing", o.Repos)
+			return "", "", exitcode.Errf(exitcode.ExitUsage, "--repos %q is empty after parsing", o.Repos)
 		}
 		regs := artifact.Repos(root)
 		var missing []string
@@ -133,7 +134,7 @@ func extras(root string, o AddOpts, issue bool) (design, repo string, err error)
 			}
 		}
 		if len(missing) > 0 {
-			return "", "", artifact.Errf(artifact.ExitResolution, "--repos name(s) not in .rota/repos.json: %s", strings.Join(missing, ", "))
+			return "", "", exitcode.Errf(exitcode.ExitResolution, "--repos name(s) not in .rota/repos.json: %s", strings.Join(missing, ", "))
 		}
 		repo = strings.Join(names, ", ")
 	}
@@ -217,7 +218,7 @@ func Add(root string, o AddOpts) (key, unitKind string, err error) {
 		key, unitKind = milestone+"-"+unit, kindOfUnit(unit)
 		p := path(root, key)
 		if _, serr := os.Stat(p); serr == nil {
-			return artifact.Errf(artifact.ExitRefused, ".rota/plans/%s.md already exists", key)
+			return exitcode.Errf(exitcode.ExitRefused, ".rota/plans/%s.md already exists", key)
 		}
 		if err := os.MkdirAll(dir, 0o777); err != nil {
 			return err

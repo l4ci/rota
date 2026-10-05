@@ -2,6 +2,7 @@ package milestone
 
 import (
 	"errors"
+	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -9,12 +10,10 @@ import (
 	"strings"
 	"sync"
 	"testing"
-
-	"github.com/l4ci/rota/internal/artifact"
 )
 
 func exitOf(err error) int {
-	var ae *artifact.Error
+	var ae *exitcode.Error
 	if errors.As(err, &ae) {
 		return ae.Exit
 	}
@@ -249,7 +248,7 @@ func TestFileStoreRoundTrip(t *testing.T) {
 	if changed, err := st.Put(id, text); err != nil || changed {
 		t.Fatalf("put same text = %v %v", changed, err)
 	}
-	if _, err := st.Put(id, "no frontmatter"); exitOf(err) != artifact.ExitRefused {
+	if _, err := st.Put(id, "no frontmatter"); exitOf(err) != exitcode.ExitRefused {
 		t.Fatalf("put without id: %v", err)
 	}
 	if _, err := Reindex(root, st); err != nil {

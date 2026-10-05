@@ -96,7 +96,7 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 			return Result{Data: d}, gateErr
 		}
 		if err != nil {
-			return Result{}, fromWorker(err)
+			return Result{}, err
 		}
 		for _, n := range r.Notes {
 			fmt.Fprintln(c.Stderr, n)

@@ -26,7 +26,7 @@ func modeRoot(c *Ctx) (root string, issue bool, err error) {
 // keeping the exit-4 refusal data a duplicate create carries.
 func failAny(err error) (Result, error) {
 	if ae := asArtifact(err); ae != nil {
-		return Result{Data: refusal(err)}, fromArtifact(err)
+		return Result{Data: refusal(err)}, err
 	}
 	return a4Fail(err)
 }
@@ -148,7 +148,7 @@ func openIssues(c *Ctx) (backlog.Backend, error) {
 
 func planAddIssue(c *Ctx, root string, o plan.AddOpts) (Result, error) {
 	if err := plan.CheckAdd(o, true); err != nil {
-		return Result{}, fromArtifact(err)
+		return Result{}, err
 	}
 	slice := o.Key == ""
 	if !slice {
@@ -169,7 +169,7 @@ func planAddIssue(c *Ctx, root string, o plan.AddOpts) (Result, error) {
 	}
 	item, _, err := plan.ItemOf(o.Key)
 	if err != nil {
-		return Result{}, fromArtifact(err)
+		return Result{}, err
 	}
 	_, wf, _, _, err := a4Flow(c, item)
 	if err != nil {

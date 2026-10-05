@@ -7,6 +7,7 @@ import (
 
 	"github.com/l4ci/rota/internal/artifact"
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/jsonx"
 	ms "github.com/l4ci/rota/internal/milestone"
 )
@@ -50,12 +51,12 @@ func milestoneFail(err error, by string) (Result, error) {
 	var data any
 	switch {
 	case errors.Is(err, backlog.ErrMilestoneText):
-		return Result{Data: blocked(&artifact.Error{Exit: artifact.ExitRefused}, by)}, Refused("%s", err.Error())
+		return Result{Data: blocked(&exitcode.Error{Exit: exitcode.ExitRefused}, by)}, Refused("%s", err.Error())
 	case asArtifact(err) != nil:
 		if by != "" {
 			data = blocked(err, by)
 		}
-		return Result{Data: data}, fromArtifact(err)
+		return Result{Data: data}, err
 	}
 	return a4Fail(err)
 }
@@ -226,7 +227,7 @@ func milestoneOverview(fs *flag.FlagSet) RunFunc {
 		}
 		changed, err := ms.SetOverview(root, text)
 		if err != nil {
-			return Result{Data: blocked(err, "heading in body"), Text: ""}, fromArtifact(err)
+			return Result{Data: blocked(err, "heading in body"), Text: ""}, err
 		}
 		d := jsonx.NewObject()
 		d.Set("changed", changed)

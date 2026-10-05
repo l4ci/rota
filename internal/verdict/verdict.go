@@ -9,12 +9,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/exitcode"
 	"io"
 	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/l4ci/rota/internal/artifact"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
 )
@@ -132,7 +132,7 @@ type rawBody struct {
 }
 
 func usage(format string, a ...any) error {
-	return artifact.Errf(artifact.ExitUsage, format, a...)
+	return exitcode.Errf(exitcode.ExitUsage, format, a...)
 }
 
 // ParseBody validates a body strictly: one JSON object, no unknown keys,

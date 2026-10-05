@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"path/filepath"
 	"strings"
@@ -76,7 +77,7 @@ func SoloRefusal(root, equiv string) error {
 	if RegistryHost(root) != host.Solo {
 		return nil
 	}
-	return &Error{Exit: ExitUsage, Message: "solo round: workers are subagents, there are no panes", Hint: equiv}
+	return &exitcode.Error{Exit: exitcode.ExitUsage, Message: "solo round: workers are subagents, there are no panes", Hint: equiv}
 }
 
 // clearHandle: the slot's session is gone, so drop its handle and mark it idle.
@@ -154,25 +155,25 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 	}
 	brief, err := os.ReadFile(o.BodyFile)
 	if err != nil {
-		return res, fail(ExitResolution, "body file not found: "+o.BodyFile)
+		return res, fail(exitcode.ExitResolution, "body file not found: "+o.BodyFile)
 	}
 	h := e.NewHost(hostKind(root))
 	if err := h.Require(); err != nil {
-		return res, fail(ExitUnavailable, err.Error())
+		return res, fail(exitcode.ExitUnavailable, err.Error())
 	}
 	// herdr tabs are created in the caller's own workspace. Outside herdr there
 	// is none, and driving the server anyway lands tabs wherever a human is
 	// focused.
 	if h.Name() == "herdr" && !h.InSession() {
-		return res, fail(ExitUnavailable, "work.dispatch=herdr must run from inside a herdr pane (HERDR_ENV=1)")
+		return res, fail(exitcode.ExitUnavailable, "work.dispatch=herdr must run from inside a herdr pane (HERDR_ENV=1)")
 	}
 	reg := LoadRegistry(root)
 	if !reg.Exists {
-		return res, fail(ExitResolution, "no worker pool — run rota worker pool init first")
+		return res, fail(exitcode.ExitResolution, "no worker pool — run rota worker pool init first")
 	}
 	s := reg.Slot(o.Slot)
 	if s == nil {
-		return res, fail(ExitResolution, fmt.Sprintf("slot '%s' is not in the pool", o.Slot))
+		return res, fail(exitcode.ExitResolution, fmt.Sprintf("slot '%s' is not in the pool", o.Slot))
 	}
 	worktree := s.Worktree()
 	handle := s.PaneHandle()
@@ -182,7 +183,7 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 	}
 	configDir := s.ConfigDir()
 	if !isDir(worktree) {
-		return res, fail(ExitResolution, fmt.Sprintf("slot '%s' worktree missing: %s", o.Slot, worktree))
+		return res, fail(exitcode.ExitResolution, fmt.Sprintf("slot '%s' worktree missing: %s", o.Slot, worktree))
 	}
 	timeout := o.BootTimeout
 	if timeout <= 0 {
@@ -210,7 +211,7 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 			return res, err
 		}
 		if hit.Token != "" {
-			e := fail(ExitRefused, fmt.Sprintf("%s contains %s'%s', which reopens the previous conversation; a task dispatch must start a fresh session. Remove it.", key, hit.Noun, hit.Token))
+			e := fail(exitcode.ExitRefused, fmt.Sprintf("%s contains %s'%s', which reopens the previous conversation; a task dispatch must start a fresh session. Remove it.", key, hit.Noun, hit.Token))
 			e.Data = BlockData{BlockedBy: "resume flag"}
 			return res, e
 		}
@@ -218,7 +219,7 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 		// must be the kind's own: refuse before anything is killed.
 		if h.Name() == "herdr" {
 			if lk, _, _, lerr := host.LaunchArgs(launch); lerr != nil || lk != kind {
-				return res, fail(ExitUnavailable, fmt.Sprintf("work.dispatch=herdr starts a %s worker, but %s does not run %s: %s", kind, key, kind, launch))
+				return res, fail(exitcode.ExitUnavailable, fmt.Sprintf("work.dispatch=herdr starts a %s worker, but %s does not run %s: %s", kind, key, kind, launch))
 			}
 		}
 		// A launch the harness cannot run safely is refused before anything is
@@ -246,7 +247,7 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 		// Fresh session every task dispatch. The kill must be provable: a
 		// window that survives it would run beside the new one.
 		if err := h.Kill(ctx, o.Slot, handle); err != nil {
-			return res, fail(ExitUnavailable, err.Error())
+			return res, fail(exitcode.ExitUnavailable, err.Error())
 		}
 		// Re-check: the old session may have written between the check and its
 		// exit. The old session is dead from here on, so a failure must not
@@ -260,10 +261,10 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 			ConfigDir: configDir, CodexHome: codexHome, Launch: launch, BootTimeout: timeout})
 		if err != nil {
 			clearHandle(root, o.Slot)
-			return res, fail(ExitUnavailable, err.Error())
+			return res, fail(exitcode.ExitUnavailable, err.Error())
 		}
 	} else if handle == "" {
-		return res, fail(ExitResolution, fmt.Sprintf("slot '%s' has no session to relay into — dispatch a task first", o.Slot))
+		return res, fail(exitcode.ExitResolution, fmt.Sprintf("slot '%s' has no session to relay into — dispatch a task first", o.Slot))
 	} else {
 		// A relay is signed by the key of the session it goes into.
 		var err error
@@ -343,18 +344,18 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 	case sendErr == nil:
 		return res, nil
 	case errors.Is(sendErr, host.ErrDialogOpen):
-		return res, fail(ExitUnavailable, fmt.Sprintf("slot '%s' has a dialog open and refused input — inspect it before resending", o.Slot))
+		return res, fail(exitcode.ExitUnavailable, fmt.Sprintf("slot '%s' has a dialog open and refused input — inspect it before resending", o.Slot))
 	default:
-		return res, fail(ExitRetry, fmt.Sprintf("slot '%s' never picked up the brief — inspect the session before resending", o.Slot))
+		return res, fail(exitcode.ExitRetry, fmt.Sprintf("slot '%s' never picked up the brief — inspect the session before resending", o.Slot))
 	}
 }
 
 // resetRefusal maps a reset-guard error onto dispatch's exits: a slot holding
 // work is a refusal (4), anything else keeps its own exit.
 func resetRefusal(err error, changed bool) error {
-	var we *Error
+	var we *exitcode.Error
 	if errors.As(err, &we) && we.Data != nil {
-		return &Error{Exit: ExitRefused, Message: we.Message, Data: BlockData{BlockedBy: "reset guard", Changed: changed}}
+		return &exitcode.Error{Exit: exitcode.ExitRefused, Message: we.Message, Data: BlockData{BlockedBy: "reset guard", Changed: changed}}
 	}
 	return err
 }
@@ -422,7 +423,7 @@ func (e Env) KillSlot(ctx context.Context, root, slot string) error {
 	e = e.withDefaults()
 	s := LoadRegistry(root).Slot(slot)
 	if s == nil {
-		return fail(ExitResolution, fmt.Sprintf("slot '%s' is not in the pool", slot))
+		return fail(exitcode.ExitResolution, fmt.Sprintf("slot '%s' is not in the pool", slot))
 	}
 	if RegistryHost(root) == host.Solo {
 		return nil // a subagent has no pane to close
@@ -430,10 +431,10 @@ func (e Env) KillSlot(ctx context.Context, root, slot string) error {
 	handle := s.PaneHandle()
 	h := e.NewHost(hostKind(root))
 	if err := h.Require(); err != nil {
-		return fail(ExitUnavailable, err.Error())
+		return fail(exitcode.ExitUnavailable, err.Error())
 	}
 	if err := h.Kill(ctx, slot, handle); err != nil {
-		return fail(ExitUnavailable, err.Error())
+		return fail(exitcode.ExitUnavailable, err.Error())
 	}
 	return nil
 }

@@ -1,6 +1,7 @@
 package design
 
 import (
+	"github.com/l4ci/rota/internal/exitcode"
 	"regexp"
 	"time"
 
@@ -17,13 +18,13 @@ func ValidIssueID(id string) bool { return issueIDRe.MatchString(id) }
 
 func checkIssue(id string) error {
 	if !ValidIssueID(id) {
-		return artifact.Errf(artifact.ExitUsage, "ID must match [BFT]\\d+ (e.g. B7, F3, T11); designs are per-item, not per-slice or per-milestone, got %q", id)
+		return exitcode.Errf(exitcode.ExitUsage, "ID must match [BFT]\\d+ (e.g. B7, F3, T11); designs are per-item, not per-slice or per-milestone, got %q", id)
 	}
 	return nil
 }
 
-func noteMissing(id string) *artifact.Error {
-	return artifact.Errf(artifact.ExitResolution, "design note for %s not found", id)
+func noteMissing(id string) *exitcode.Error {
+	return exitcode.Errf(exitcode.ExitResolution, "design note for %s not found", id)
 }
 
 // stubText is the starter text of a design (the same in both modes).
@@ -61,7 +62,7 @@ func AddNote(n artifact.Notes, ref, id, title string) error {
 	if _, ok, err := n.NoteGet(ref, "design"); err != nil {
 		return err
 	} else if ok {
-		return artifact.Errf(artifact.ExitRefused, "design note for %s already exists", id)
+		return exitcode.Errf(exitcode.ExitRefused, "design note for %s already exists", id)
 	}
 	_, err := n.NotePut(ref, "design", stubText(id, title, time.Now().Format("2006-01-02")))
 	return err

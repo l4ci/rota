@@ -121,7 +121,7 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 	e.Reconcile = func(ctx context.Context) ([]string, []string, error) {
 		out, err := renv.Reconcile(ctx, root, true)
 		if err != nil {
-			return nil, nil, fromWorker(err)
+			return nil, nil, err
 		}
 		var repaired, drift []string
 		for _, f := range out.Repaired {
@@ -178,7 +178,7 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 			return "", &roundtick.Refusal{Why: blk.Msg}
 		}
 		if err != nil {
-			return "", fromWorker(err)
+			return "", err
 		}
 		return res.Agent, nil
 	}

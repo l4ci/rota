@@ -2,6 +2,7 @@ package plan
 
 import (
 	"fmt"
+	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -38,11 +39,11 @@ func ValidateDocs(root, key string) (mismatches []Mismatch, text string, err err
 	planPath := filepath.Join(".rota", "plans", key+".md")
 	content, rerr := fsio.ReadText(filepath.Join(root, planPath))
 	if rerr != nil {
-		return nil, "", artifact.Errf(artifact.ExitResolution, "plan not found: %s", planPath)
+		return nil, "", exitcode.Errf(exitcode.ExitResolution, "plan not found: %s", planPath)
 	}
 	fm, _, body := frontmatter.Parse(content)
 	if fm == nil {
-		return nil, "", artifact.Errf(artifact.ExitInternal, "plan %s has no parseable frontmatter", planPath)
+		return nil, "", exitcode.Errf(exitcode.ExitInternal, "plan %s has no parseable frontmatter", planPath)
 	}
 
 	docsSegment := "docs"

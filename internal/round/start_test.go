@@ -3,6 +3,7 @@ package round
 import (
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -314,8 +315,8 @@ func TestStartProvisionsRosterAndTakesLease(t *testing.T) {
 	// A second orchestrator, even from another worktree of the repo, is refused.
 	wt := filepath.Join(root, ".worktrees", "ben")
 	_, err = e.Start(bg, wt, startOpts(roundcfg.ScopeMilestone, 200))
-	var we *worker.Error
-	if !errors.As(err, &we) || we.Exit != worker.ExitRefused {
+	var we *exitcode.Error
+	if !errors.As(err, &we) || we.Exit != exitcode.ExitRefused {
 		t.Fatalf("second holder must be refused: %v", err)
 	}
 	if held, ok := we.Data.(*roundlease.HeldError); !ok || held.Lease.PID != 100 {
@@ -389,8 +390,8 @@ func TestStartRecordsSlateAndValidatesFlags(t *testing.T) {
 		"more slots than roster": func() StartOpts { o := startOpts(roundcfg.ScopeMilestone, 100); o.Slots = 9; return o }(),
 	} {
 		_, err := e.Start(bg, root, o)
-		var we *worker.Error
-		if !errors.As(err, &we) || we.Exit != worker.ExitUsage {
+		var we *exitcode.Error
+		if !errors.As(err, &we) || we.Exit != exitcode.ExitUsage {
 			t.Errorf("%s: want a usage error, got %v", name, err)
 		}
 	}
@@ -458,8 +459,8 @@ func TestStartFreshWithoutScopeUsesConfig(t *testing.T) {
 	// round.scope slate without items is refused, before the lease is taken.
 	root = newRepo(t, nil)
 	o.Settings.Scope = roundcfg.ScopeSlate
-	var we *worker.Error
-	if _, err := e.Start(bg, root, o); !errors.As(err, &we) || we.Exit != worker.ExitUsage {
+	var we *exitcode.Error
+	if _, err := e.Start(bg, root, o); !errors.As(err, &we) || we.Exit != exitcode.ExitUsage {
 		t.Fatalf("want usage error: %v", err)
 	}
 }
@@ -501,8 +502,8 @@ func TestStartNumbersALeaseTakenUnnumberedByTheSameHolder(t *testing.T) {
 	}
 	// A hand-run start from another process is refused.
 	_, err = e.Start(bg, root, startOpts(roundcfg.ScopeMilestone, 200))
-	var we *worker.Error
-	if !errors.As(err, &we) || we.Exit != worker.ExitRefused {
+	var we *exitcode.Error
+	if !errors.As(err, &we) || we.Exit != exitcode.ExitRefused {
 		t.Fatalf("a non-descendant must be refused: %v", err)
 	}
 }

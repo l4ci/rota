@@ -2,6 +2,7 @@ package worker
 
 import (
 	"fmt"
+	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"strings"
 )
@@ -53,7 +54,7 @@ func BranchFor(slot, task string) string {
 // Retry: dispatching the task id the slot already holds, while it sits on that
 // task's branch, keeps its WIP (Retained, no reset) instead of refusing it.
 //
-// A refusal returns an *Error (exit 4, or exit 1 with checkOnly) whose Data
+// A refusal returns an *exitcode.Error (exit 4, or exit 1 with checkOnly) whose Data
 // is the ResetResult.
 func (e Env) Reset(root, slot, task string, checkOnly bool) (ResetResult, error) {
 	return e.ResetTo(root, slot, task, BranchFor(slot, task), checkOnly)
@@ -66,18 +67,18 @@ func (e Env) ResetTo(root, slot, task, newBranch string, checkOnly bool) (ResetR
 	res := ResetResult{Slot: slot}
 	reg := LoadRegistry(root)
 	if !reg.Exists {
-		return res, fail(ExitResolution, "no worker pool — run rota worker pool init first")
+		return res, fail(exitcode.ExitResolution, "no worker pool — run rota worker pool init first")
 	}
 	s := reg.Slot(slot)
 	if s == nil {
-		return res, fail(ExitResolution, fmt.Sprintf("slot '%s' is not in the pool", slot))
+		return res, fail(exitcode.ExitResolution, fmt.Sprintf("slot '%s' is not in the pool", slot))
 	}
 	worktree, base, oldBranch, oldTask := s.Worktree(), s.Base(), s.Branch(), s.Task()
 	if !isDir(worktree) {
-		return res, fail(ExitResolution, fmt.Sprintf("slot '%s' worktree missing: %s", slot, worktree))
+		return res, fail(exitcode.ExitResolution, fmt.Sprintf("slot '%s' worktree missing: %s", slot, worktree))
 	}
 	if _, code := e.git(root, "rev-parse", "--verify", "--quiet", base+"^{commit}"); base == "" || code != 0 {
-		return res, fail(ExitResolution, fmt.Sprintf("slot '%s' base '%s' does not exist", slot, base))
+		return res, fail(exitcode.ExitResolution, fmt.Sprintf("slot '%s' base '%s' does not exist", slot, base))
 	}
 	res.Base = base
 
@@ -91,11 +92,11 @@ func (e Env) ResetTo(root, slot, task, newBranch string, checkOnly bool) (ResetR
 	// could then orphan unpushed commits. The old helper aborted here (set -e).
 	dirty, code := e.git(worktree, "status", "--porcelain")
 	if code != 0 {
-		return res, fail(ExitUnavailable, fmt.Sprintf("git status failed in %s (exit %d); not resetting slot '%s'", worktree, code, slot))
+		return res, fail(exitcode.ExitUnavailable, fmt.Sprintf("git status failed in %s (exit %d); not resetting slot '%s'", worktree, code, slot))
 	}
 	cherry, code := e.git(worktree, "cherry", base, "HEAD")
 	if code != 0 {
-		return res, fail(ExitUnavailable, fmt.Sprintf("git cherry %s HEAD failed in %s (exit %d); not resetting slot '%s'", base, worktree, code, slot))
+		return res, fail(exitcode.ExitUnavailable, fmt.Sprintf("git cherry %s HEAD failed in %s (exit %d); not resetting slot '%s'", base, worktree, code, slot))
 	}
 	var unmerged []string
 	for _, l := range strings.Split(cherry, "\n") {
@@ -108,9 +109,9 @@ func (e Env) ResetTo(root, slot, task, newBranch string, checkOnly bool) (ResetR
 		return res, nil
 	}
 	refuse := func(msg string) (ResetResult, error) {
-		ex := ExitRefused
+		ex := exitcode.ExitRefused
 		if checkOnly {
-			ex = ExitFailed
+			ex = exitcode.ExitFailed
 		}
 		err := fail(ex, msg)
 		err.Data = res
@@ -139,7 +140,7 @@ func (e Env) ResetTo(root, slot, task, newBranch string, checkOnly bool) (ResetR
 	}
 
 	if _, code := e.git(worktree, "switch", "-q", "-C", newBranch, base); code != 0 {
-		return res, fail(ExitUnavailable, fmt.Sprintf("could not cut %s from %s in %s", newBranch, base, worktree))
+		return res, fail(exitcode.ExitUnavailable, fmt.Sprintf("could not cut %s from %s in %s", newBranch, base, worktree))
 	}
 	// The old per-task branch was proved merged above; drop it so they don't pile up.
 	if strings.HasPrefix(oldBranch, "rota-worker/") && oldBranch != newBranch {

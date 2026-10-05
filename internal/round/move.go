@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -53,17 +54,17 @@ func wrap(err error) error {
 	if err == nil {
 		return nil
 	}
-	var we *worker.Error
+	var we *exitcode.Error
 	var blk *BlockedError
 	switch {
 	case errors.As(err, &we), errors.As(err, &blk):
 		return err
 	case errors.Is(err, backlog.ErrNotFound):
-		return &worker.Error{Exit: worker.ExitResolution, Message: err.Error()}
+		return &exitcode.Error{Exit: exitcode.ExitResolution, Message: err.Error()}
 	case errors.Is(err, fsio.ErrLockTimeout):
-		return &worker.Error{Exit: worker.ExitRetry, Message: err.Error()}
+		return &exitcode.Error{Exit: exitcode.ExitRetry, Message: err.Error()}
 	}
-	return &worker.Error{Exit: worker.ExitUnavailable, Message: err.Error()}
+	return &exitcode.Error{Exit: exitcode.ExitUnavailable, Message: err.Error()}
 }
 
 func registryRound(root string) int {
@@ -225,11 +226,11 @@ func (e Env) Return(ctx context.Context, root string, be Board, o ReturnOpts) (r
 	}
 	s := worker.LoadRegistry(root).Slot(o.Slot)
 	if s == nil {
-		return res, &worker.Error{Exit: worker.ExitResolution, Message: fmt.Sprintf("slot %s is not in the pool", o.Slot)}
+		return res, &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("slot %s is not in the pool", o.Slot)}
 	}
 	id := slotIssue(s)
 	if id == "" {
-		return res, &worker.Error{Exit: worker.ExitResolution, Message: fmt.Sprintf("slot %s holds no issue", o.Slot)}
+		return res, &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("slot %s holds no issue", o.Slot)}
 	}
 	res.Slot = o.Slot
 	if !o.InSlot {
@@ -373,7 +374,7 @@ func tolerateMissing(warnings *[]string, issue string) func(step string, err err
 func (e Env) Reclaim(ctx context.Context, root string, be Board, o ReclaimOpts) (res Reclaimed, err error) {
 	s := worker.LoadRegistry(root).Slot(o.Slot)
 	if s == nil {
-		return res, &worker.Error{Exit: worker.ExitResolution, Message: fmt.Sprintf("slot %s is not in the pool", o.Slot)}
+		return res, &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("slot %s is not in the pool", o.Slot)}
 	}
 	res.Slot = o.Slot
 	ok, err := e.holdsLease(ctx, root, o.HolderPID, o.Getenv)
@@ -486,7 +487,7 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 		return res, wrap(err)
 	}
 	if it.Closed {
-		return res, &worker.Error{Exit: worker.ExitResolution, Message: fmt.Sprintf("%s is closed", o.Issue)}
+		return res, &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("%s is closed", o.Issue)}
 	}
 	id := it.ID
 	res.Issue, res.To = id, o.To
@@ -526,7 +527,7 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 	case receiver != nil && sender == nil:
 		return res, blocked(BlockSameSlot, "slot %s already holds %s", o.To, id)
 	case sender == nil && rec == nil:
-		return res, &worker.Error{Exit: worker.ExitResolution, Message: fmt.Sprintf("no slot holds %s", id)}
+		return res, &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("no slot holds %s", id)}
 	}
 	switch {
 	case sender != nil:
@@ -541,7 +542,7 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 	queueTo := false // the receiver holds a PR that can wait in the queue
 	if !toHuman {
 		if to = reg.Slot(o.To); to == nil {
-			return res, &worker.Error{Exit: worker.ExitResolution, Message: fmt.Sprintf("slot %s is not provisioned: run rota round start", o.To)}
+			return res, &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("slot %s is not provisioned: run rota round start", o.To)}
 		}
 		if !resuming {
 			if h := slotIssue(to); h != "" {
@@ -582,7 +583,7 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 			// refuse; parking it clears that.
 			if !queueTo {
 				if _, err := e.workerEnv().ResetTo(root, o.To, id, BranchName(o.To, id, it.Title), true); err != nil {
-					var we *worker.Error
+					var we *exitcode.Error
 					if errors.As(err, &we) && we.Data != nil { // the reset guard's refusal
 						return res, blocked(BlockSlotBusy, "%s", we.Message)
 					}

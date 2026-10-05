@@ -2,6 +2,7 @@ package worker
 
 import (
 	"fmt"
+	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -87,7 +88,7 @@ func TestPollFixtureMode(t *testing.T) {
 	if res, _ = PollFixture(fx, "w3", "", 0); res.Slots[0].Name != "w3" {
 		t.Errorf("name = %s", res.Slots[0].Name)
 	}
-	if _, err = PollFixture("/no/such/file", "", "", 0); exitOf(err) != ExitUsage {
+	if _, err = PollFixture("/no/such/file", "", "", 0); exitOf(err) != exitcode.ExitUsage {
 		t.Errorf("missing fixture: %v", err)
 	}
 }
@@ -162,7 +163,7 @@ func TestPollNamedSlotAndSettle(t *testing.T) {
 			t.Errorf("polled an unnamed slot: %v", f.calls)
 		}
 	}
-	if _, err = envWith(f).Poll(bg, dir, PollOpts{Slot: "w9"}); exitOf(err) != ExitResolution {
+	if _, err = envWith(f).Poll(bg, dir, PollOpts{Slot: "w9"}); exitOf(err) != exitcode.ExitResolution {
 		t.Errorf("unknown slot: %v", err)
 	}
 }
@@ -201,7 +202,7 @@ func TestPollHostFailureAndNoRegistry(t *testing.T) {
 		t.Errorf("no registry: %+v %v", res, err)
 	}
 	f.requireErr = fmt.Errorf("tmux is not installed")
-	if _, err = envWith(f).Poll(bg, dir, PollOpts{}); exitOf(err) != ExitUnavailable {
+	if _, err = envWith(f).Poll(bg, dir, PollOpts{}); exitOf(err) != exitcode.ExitUnavailable {
 		t.Errorf("host missing: %v", err)
 	}
 }

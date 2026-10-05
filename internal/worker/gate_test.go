@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -397,27 +398,27 @@ func TestGateProvenance(t *testing.T) {
 func TestGateResolutionFailures(t *testing.T) {
 	w := newWorld(t, ghURL)
 	exit := func(err error) int { return exitOf(err) }
-	if _, err := w.gate(false, GateOpts{Base: "nope"}); exit(err) != ExitResolution || !strings.Contains(err.Error(), "base branch 'nope' does not exist") {
+	if _, err := w.gate(false, GateOpts{Base: "nope"}); exit(err) != exitcode.ExitResolution || !strings.Contains(err.Error(), "base branch 'nope' does not exist") {
 		t.Errorf("missing base: %v", err)
 	}
 	// the worker branch is only looked up locally when there is no PR
 	w.setSlot("", "")
 	w.setSlot("", "")
-	if _, err := w.gate(false, GateOpts{}); exit(err) != ExitResolution || !strings.Contains(err.Error(), "worker branch 'w1' does not exist") {
+	if _, err := w.gate(false, GateOpts{}); exit(err) != exitcode.ExitResolution || !strings.Contains(err.Error(), "worker branch 'w1' does not exist") {
 		t.Errorf("missing worker branch: %v", err)
 	}
 	os.Remove(RegistryPath(w.dir))
-	if _, err := w.gate(false, GateOpts{}); exit(err) != ExitResolution || !strings.Contains(err.Error(), "no worker pool") {
+	if _, err := w.gate(false, GateOpts{}); exit(err) != exitcode.ExitResolution || !strings.Contains(err.Error(), "no worker pool") {
 		t.Errorf("no registry: %v", err)
 	}
 	w.setSlot(ghURL, "")
 	e := w.env(false)
-	if _, err := e.Gate(bg, w.dir, GateOpts{Slot: "w9", Base: "main"}); exit(err) != ExitResolution || !strings.Contains(err.Error(), "slot 'w9' is not in the pool") {
+	if _, err := e.Gate(bg, w.dir, GateOpts{Slot: "w9", Base: "main"}); exit(err) != exitcode.ExitResolution || !strings.Contains(err.Error(), "slot 'w9' is not in the pool") {
 		t.Errorf("unknown slot: %v", err)
 	}
 	// merging needs the base checked out
 	gitq(t, w.dir, "checkout", "-q", "-b", "elsewhere")
-	if _, err := w.gate(false, GateOpts{}); exit(err) != ExitResolution || !strings.Contains(err.Error(), "gate must run with main checked out (currently on elsewhere)") {
+	if _, err := w.gate(false, GateOpts{}); exit(err) != exitcode.ExitResolution || !strings.Contains(err.Error(), "gate must run with main checked out (currently on elsewhere)") {
 		t.Errorf("wrong checkout: %v", err)
 	}
 	// --check-only does not need it

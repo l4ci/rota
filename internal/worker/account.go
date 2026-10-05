@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/l4ci/rota/internal/exitcode"
 	"io"
 	"math"
 	"net/http"
@@ -424,12 +425,12 @@ func (a *Accounts) OrchestratorTarget(ctx context.Context, root, currentDir stri
 func (a *Accounts) Assign(ctx context.Context, root, slot, account string) (name string, changed bool, err error) {
 	reg := LoadRegistry(root)
 	if !reg.Exists {
-		return "", false, fail(ExitResolution, "no worker pool — run rota worker pool init first")
+		return "", false, fail(exitcode.ExitResolution, "no worker pool — run rota worker pool init first")
 	}
 	if account == "" {
 		picked, ok := a.Pick(ctx, root, nil)
 		if !ok {
-			return "", false, fail(ExitRefused, "every configured account is cooling down")
+			return "", false, fail(exitcode.ExitRefused, "every configured account is cooling down")
 		}
 		account = picked
 	}
@@ -442,7 +443,7 @@ func (a *Accounts) Assign(ctx context.Context, root, slot, account string) (name
 		}
 	}
 	if match == nil {
-		return "", false, fail(ExitResolution, fmt.Sprintf("account '%s' is not in work.accounts", account))
+		return "", false, fail(exitcode.ExitResolution, fmt.Sprintf("account '%s' is not in work.accounts", account))
 	}
 	found, err := UpdateSlot(root, slot, func(s *Slot) {
 		if s.Account() != account || s.ConfigDir() != match.configDir {
@@ -454,7 +455,7 @@ func (a *Accounts) Assign(ctx context.Context, root, slot, account string) (name
 		return "", false, err
 	}
 	if !found {
-		return "", false, fail(ExitResolution, fmt.Sprintf("slot '%s' is not in the pool", slot))
+		return "", false, fail(exitcode.ExitResolution, fmt.Sprintf("slot '%s' is not in the pool", slot))
 	}
 	return account, changed, nil
 }

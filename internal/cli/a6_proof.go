@@ -73,7 +73,7 @@ func proofAdd(fs *flag.FlagSet) RunFunc {
 		}
 		row, changed, err := proof.Add(root, id, proof.AddOpts{Check: *check, Result: *result, Evidence: *evidence, Sha: *sha})
 		if err != nil {
-			return Result{}, fromArtifact(err)
+			return Result{}, err
 		}
 		d := proofData(id, nil)
 		d.Set("check", row.Check)
@@ -101,7 +101,7 @@ func proofShow(fs *flag.FlagSet) RunFunc {
 		}
 		rows, lines, err := proof.Show(root, id)
 		if err != nil {
-			return Result{}, fromArtifact(err)
+			return Result{}, err
 		}
 		return proofResult(id, id[:1], rows, lines, *count), nil
 	}
@@ -144,7 +144,7 @@ func runPlanUncertain(c *Ctx, args []string) (Result, error) {
 	}
 	typ, reasons, err := plan.Uncertain(root, id)
 	if err != nil {
-		return Result{}, fromArtifact(err)
+		return Result{}, err
 	}
 	return uncertainResult(id, typ, reasons)
 }

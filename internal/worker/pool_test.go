@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"path/filepath"
 	"strings"
@@ -58,12 +59,12 @@ func TestPoolInitDefaultsToCurrentBranchAndHv(t *testing.T) {
 func TestPoolInitErrors(t *testing.T) {
 	dir := newProject(t, `{}`)
 	_, err := goInit(t, dir, InitOpts{Slots: 1, Base: "nope"})
-	if we, ok := err.(*Error); !ok || we.Exit != ExitResolution || !strings.Contains(we.Message, "base branch 'nope' does not exist") {
+	if we, ok := err.(*exitcode.Error); !ok || we.Exit != exitcode.ExitResolution || !strings.Contains(we.Message, "base branch 'nope' does not exist") {
 		t.Errorf("missing base: %v", err)
 	}
 	sh(t, dir, "git", "checkout", "-q", "--detach")
 	_, err = goInit(t, dir, InitOpts{Slots: 1})
-	if we, ok := err.(*Error); !ok || we.Exit != ExitResolution || !strings.Contains(we.Message, "cannot resolve base branch") {
+	if we, ok := err.(*exitcode.Error); !ok || we.Exit != exitcode.ExitResolution || !strings.Contains(we.Message, "cannot resolve base branch") {
 		t.Errorf("detached HEAD without --base: %v", err)
 	}
 }
@@ -121,8 +122,8 @@ func TestPoolInitRefusesForeignRepoWorktree(t *testing.T) {
 	os.WriteFile(RegistryPath(b), []byte(reg), 0o644)
 	before, _ := os.ReadFile(RegistryPath(b))
 	_, err := goInit(t, b, InitOpts{Slots: 1, Base: "main"})
-	we, ok := err.(*Error)
-	if !ok || we.Exit != ExitResolution || !strings.Contains(we.Message, "slot w1 is registered at "+foreignB+", a worktree of another repository") {
+	we, ok := err.(*exitcode.Error)
+	if !ok || we.Exit != exitcode.ExitResolution || !strings.Contains(we.Message, "slot w1 is registered at "+foreignB+", a worktree of another repository") {
 		t.Fatalf("go: %v", err)
 	}
 	after, _ := os.ReadFile(RegistryPath(b))
