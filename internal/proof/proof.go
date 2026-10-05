@@ -12,6 +12,7 @@ import (
 	"github.com/l4ci/rota/internal/artifact"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/section"
 )
 
@@ -109,17 +110,28 @@ func headSha(dir string) string {
 	return "-"
 }
 
+// rowLines is the "- " lines of the "## Proof" section of content: the one
+// definition of what a proof row is, shared by parseRows and CountRows.
+func rowLines(content string) (lines []string) {
+	s, e, ok := section.Find(content, "Proof")
+	if !ok {
+		return nil
+	}
+	for _, l := range pystr.Splitlines(content[s:e]) {
+		if strings.HasPrefix(l, "- ") {
+			lines = append(lines, l)
+		}
+	}
+	return lines
+}
+
+// CountRows is the number of proof rows in an item's text (hv-proof-show --count).
+func CountRows(content string) int { return len(rowLines(content)) }
+
 // parseRows reads the "- " rows of the "## Proof" section of content.
 func parseRows(content string) (rows []Row, lines []string, err error) {
 	rows, lines = []Row{}, []string{}
-	s, e, ok := section.Find(content, "Proof")
-	if !ok {
-		return
-	}
-	for _, l := range strings.Split(content[s:e], "\n") {
-		if !strings.HasPrefix(l, "- ") {
-			continue
-		}
+	for _, l := range rowLines(content) {
 		p := strings.SplitN(l[2:], sep, 5)
 		for len(p) < 5 {
 			p = append(p, "")

@@ -41,7 +41,7 @@ func proj(t *testing.T, files map[string]string) (*File, string) {
 			t.Fatal(err)
 		}
 	}
-	return &File{Root: root}, refactor
+	return &File{Root: root, CountProof: stubCountProof}, refactor
 }
 
 func read(t *testing.T, f *File, rel string) string {
@@ -324,13 +324,11 @@ func TestComplete(t *testing.T) {
 			t.Errorf("dropped needs no proof: %v", err)
 		}
 	})
-	t.Run("proof stand-in is replaceable", func(t *testing.T) {
-		old := ProofCount
-		defer func() { ProofCount = old }()
-		ProofCount = func(string, string) (int, error) { return 1, nil }
-		f, _ := proj(t, rotaFiles(nil))
-		if _, err := f.Complete("B01", CompleteInput{Commit: "abc", Date: "d", Reason: "done"}); err != nil {
-			t.Fatal(err)
+	t.Run("a file backend without a proof counter refuses done", func(t *testing.T) {
+		f, _ := proj(t, rotaFiles(map[string]string{".rota/bugs/B01.md": "## Proof\n- ok\n"}))
+		f.CountProof = nil
+		if _, err := f.Complete("B01", CompleteInput{Commit: "abc", Date: "d", Reason: "done"}); err == nil {
+			t.Fatal("want an error, not a silent pass")
 		}
 	})
 	t.Run("already completed is a no-op", func(t *testing.T) {
@@ -364,19 +362,6 @@ func TestComplete(t *testing.T) {
 			t.Errorf("got %q", got)
 		}
 	})
-}
-
-func TestProofCountDefault(t *testing.T) {
-	f, _ := proj(t, rotaFiles(map[string]string{
-		".rota/bugs/B01.md":  "# x\n\n## Proof\n- a\n- b\nnot a row\n\n## Log\n- not proof\n",
-		".rota/bugs/B02.md":  "# x\n",
-		".rota/tasks/T01.md": "## Proof\n\n",
-	}))
-	for id, want := range map[string]int{"B01": 2, "B02": 0, "T01": 0, "B03": 0, "X1": 0} {
-		if n, err := ProofCount(f.Root, id); err != nil || n != want {
-			t.Errorf("ProofCount(%s) = %d, %v; want %d", id, n, err, want)
-		}
-	}
 }
 
 func TestReopen(t *testing.T) {

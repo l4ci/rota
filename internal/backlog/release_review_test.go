@@ -264,7 +264,7 @@ func rrBackend(t *testing.T, s rrSeed) (*Issues, *rrFake) {
 		f.Fake.Fail[m] = &tracker.Error{Kind: tracker.KindFailed, Code: code, Message: m + " failed"}
 	}
 	f.Fake.Calls = nil
-	return &Issues{Cfg: mustDecode(t, s.Cfg), Tracker: f}, f
+	return &Issues{Cfg: mustDecode(t, s.Cfg), Tracker: f, CountProof: stubCountProof}, f
 }
 
 func rrStepGo(b *Issues, st rrStep) map[string]any {
@@ -586,7 +586,7 @@ func rrUmbrella(t *testing.T) (*Umbrella, map[string]*rrFake) {
 		_, f := rrBackend(t, rrSeed{Cfg: defaultCfg, Issues: issues, Comments: rrComments(), Native: rrNativeSeed(), PRs: rrPRs()})
 		fakes[name] = f
 	}
-	u := &Umbrella{Cfg: mustDecode(t, defaultCfg),
+	u := &Umbrella{Cfg: mustDecode(t, defaultCfg), CountProof: stubCountProof,
 		Repos:      []repos.Repo{{Name: "gh", Rel: "gh", Path: "/umb/gh"}, {Name: "gl", Rel: "gl", Path: "/umb/gl"}},
 		NewTracker: func(dir string) (Tracker, error) { return fakes[strings.TrimPrefix(dir, "/umb/")], nil }}
 	return u, fakes

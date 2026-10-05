@@ -13,7 +13,7 @@ import (
 func newIssues(t *testing.T, cfg string, issues ...Issue) (*Issues, *fakeTracker) {
 	t.Helper()
 	tr := &fakeTracker{Issues: issues, Milestones: []string{"M07 — Title", "M09"}}
-	return &Issues{Cfg: mustDecode(t, cfg), Tracker: tr}, tr
+	return &Issues{Cfg: mustDecode(t, cfg), Tracker: tr, CountProof: stubCountProof}, tr
 }
 
 // calls renders the recorded calls as "method(args)" lines.
@@ -188,16 +188,6 @@ func TestIssuesComplete(t *testing.T) {
 			t.Errorf("%s: %v", ref, err)
 		}
 	}
-}
-
-func TestIssuesCompleteProofSeam(t *testing.T) {
-	b, tr := newIssues(t, `{}`, open(1))
-	var asked string
-	b.ProofCount = func(id string) (int, error) { asked = id; return 1, nil }
-	if ok, err := b.Complete("1", CompleteInput{Commit: "c", Reason: "done"}); !ok || err != nil || asked != "T1" {
-		t.Fatal(ok, err, asked)
-	}
-	wantCalls(t, tr, `get[1] close[1,"completed","Done in `+"`c`"+`\n\n<!-- rota:done -->"]`)
 }
 
 func TestIssuesReopen(t *testing.T) {
