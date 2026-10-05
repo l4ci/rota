@@ -113,7 +113,7 @@ func releasePush(fs *flag.FlagSet) RunFunc {
 				return Result{}, err
 			}
 			if p := releaseProvider(release.Host(url)); p != "" {
-				cl, err := tracker.New(c.Context(), tracker.SettingsFromConfig(releaseConfig(dir)), p, dir, trackerOptions...)
+				cl, err := tracker.New(c.Context(), tracker.SettingsFromConfig(releaseConfig(dir)), p, dir, c.deps().TrackerOptions...)
 				if err != nil {
 					return Result{}, trackerErr(err)
 				}
@@ -188,7 +188,7 @@ func releasePublish(fs *flag.FlagSet) RunFunc {
 			return Result{Data: data("", false)}, nil
 		}
 		ctx := c.Context()
-		cl, err := tracker.New(ctx, tracker.SettingsFromConfig(releaseConfig(dir)), provider, dir, trackerOptions...)
+		cl, err := tracker.New(ctx, tracker.SettingsFromConfig(releaseConfig(dir)), provider, dir, c.deps().TrackerOptions...)
 		if err != nil {
 			return Result{}, trackerErr(err)
 		}

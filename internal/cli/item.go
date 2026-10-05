@@ -26,10 +26,7 @@ import (
 
 // newTracker builds the issue tracker the issue backend reads and writes
 // through: the gh or glab adapter for the project's origin, configured by
-// issues.*. It is a variable so unit tests inject a fake.
-var newTracker = func(ctx context.Context, root string, cfg any) (backlog.Tracker, error) {
-	return tracker.New(ctx, tracker.SettingsFromConfig(cfg), "", root)
-}
+// issues.*. Deps.NewTracker builds it, so unit tests inject a fake.
 
 // withReadOnly joins the tracker groups and wraps their read-only verbs.
 func withReadOnly(groups ...[]*Command) []*Command {
@@ -169,7 +166,7 @@ func openBacklog(c *Ctx, root string, fileOnly bool, hint string) (backlog.Backe
 		Scope: c.Repo,
 		Cwd:   cwd,
 		NewTracker: func(ctx context.Context, dir string) (backlog.Tracker, error) {
-			return newTracker(ctx, dir, cfg)
+			return c.deps().NewTracker(ctx, dir, cfg)
 		},
 	})
 }

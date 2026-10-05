@@ -57,7 +57,7 @@ var gateYes = []string{"--confirm", "--confirm-note", "Yes, go ahead"}
 type gateCase struct {
 	gate  string
 	verb  string
-	setup func(t *testing.T, level string) (root string, args []string, stdin string, untouched func() bool)
+	setup func(t *testing.T, level string) (root string, args []string, stdin string, untouched func() bool, deps *Deps)
 }
 
 // gateRemote makes origin a bare repo at the relative path
@@ -116,41 +116,41 @@ func gateCases() []gateCase {
 		return gitT(t, work, "ls-remote", "--tags", "origin", "refs/tags/v1.2.3") != ""
 	}
 	return []gateCase{
-		{gate.TagPush, "release push", func(t *testing.T, level string) (string, []string, string, func() bool) {
+		{gate.TagPush, "release push", func(t *testing.T, level string) (string, []string, string, func() bool, *Deps) {
 			work := tagged(t, level)
-			return work, []string{"release", "push", "1.2.3"}, "", func() bool { return !onRemote(t, work) }
+			return work, []string{"release", "push", "1.2.3"}, "", func() bool { return !onRemote(t, work) }, testDeps()
 		}},
-		{gate.ReleasePublish, "release publish", func(t *testing.T, level string) (string, []string, string, func() bool) {
+		{gate.ReleasePublish, "release publish", func(t *testing.T, level string) (string, []string, string, func() bool, *Deps) {
 			work := tagged(t, level)
 			gitT(t, work, "push", "-q", "origin", "main", "v1.2.3")
 			f := releaseForge(releaseNone, nil)
-			useForge(t, f)
+			deps := useForge(t, f)
 			return work, []string{"release", "publish", "1.2.3", "--title", "v1.2.3 — x", "--body-file", "-"}, "notes",
-				func() bool { return len(releaseWrites(f)) == 0 }
+				func() bool { return len(releaseWrites(f)) == 0 }, deps
 		}},
-		{gate.PublicFiling, "tracker suggest-upstream", func(t *testing.T, level string) (string, []string, string, func() bool) {
+		{gate.PublicFiling, "tracker suggest-upstream", func(t *testing.T, level string) (string, []string, string, func() bool, *Deps) {
 			root := trProject(t, gateConfig(t, "", level, nil))
 			f := &forge{answer: func(string, []string) (string, string, int) {
 				return "https://github.com/l4ci/rota/issues/5\n", "", 0
 			}}
-			useForge(t, f)
+			deps := useForge(t, f)
 			return root, []string{"tracker", "suggest-upstream", "--title", "T", "--body-file", "-"}, "body",
-				func() bool { return len(f.calls) == 0 }
+				func() bool { return len(f.calls) == 0 }, deps
 		}},
-		{gate.MergeApproval, "ship merge", func(t *testing.T, level string) (string, []string, string, func() bool) {
+		{gate.MergeApproval, "ship merge", func(t *testing.T, level string) (string, []string, string, func() bool, *Deps) {
 			work := newRepo(t, t.TempDir(), "proj", "main")
 			write(t, filepath.Join(work, ".rota", "config.json"), gateConfig(t, `{"backlog":{"backend":"file"}}`, level, map[string]any{"mergeApproval": "all"}))
 			shipBranchOf(t, work, "rota/x", [3]string{"x.txt", "feat: x", ""})
 			return work, []string{"ship", "merge", "rota/x", "--body-file", "-"}, "merge: x",
-				func() bool { return gitT(t, work, "branch", "--list", "rota/x") != "" }
+				func() bool { return gitT(t, work, "branch", "--list", "rota/x") != "" }, testDeps()
 		}},
-		{gate.MergeApproval, "ship pr-merge", func(t *testing.T, level string) (string, []string, string, func() bool) {
+		{gate.MergeApproval, "ship pr-merge", func(t *testing.T, level string) (string, []string, string, func() bool, *Deps) {
 			f := a8Fixture()
-			root := a8Project(t, f)
+			root, deps := a8Project(t, f)
 			write(t, filepath.Join(root, ".rota", "config.json"), gateConfig(t, issuesConfig, level, map[string]any{"mergeApproval": "all"}))
-			return root, []string{"ship", "pr-merge", "10"}, "", func() bool { return len(f.merged) == 0 }
+			return root, []string{"ship", "pr-merge", "10"}, "", func() bool { return len(f.merged) == 0 }, deps
 		}},
-		{gate.MergeApproval, "worker gate", func(t *testing.T, level string) (string, []string, string, func() bool) {
+		{gate.MergeApproval, "worker gate", func(t *testing.T, level string) (string, []string, string, func() bool, *Deps) {
 			dir := workerProject(t, gateConfig(t, `{"refactor":{"verifyCommands":["test -f feature.txt"]}}`, level, map[string]any{"mergeApproval": "all"}))
 			rotaIn(t, dir, "worker", "pool", "init", "--slots", "1", "--base", "main")
 			wt := filepath.Join(dir, ".worktrees", "w1")
@@ -160,7 +160,7 @@ func gateCases() []gateCase {
 			return dir, []string{"worker", "gate", "w1", "--base", "main"}, "", func() bool {
 				_, err := os.Stat(filepath.Join(dir, "feature.txt"))
 				return os.IsNotExist(err)
-			}
+			}, testDeps()
 		}},
 	}
 }
@@ -172,8 +172,8 @@ func TestGatedVerbsAtEveryAutonomyLevel(t *testing.T) {
 	for _, level := range []string{"off", "auto"} {
 		for _, c := range gateCases() {
 			t.Run(level+"/"+c.verb, func(t *testing.T) {
-				root, args, stdin, untouched := c.setup(t, level)
-				o := trRun(t, root, stdin, append([]string{"--json"}, args...)...)
+				root, args, stdin, untouched, deps := c.setup(t, level)
+				o := trRunWith(t, deps, root, stdin, append([]string{"--json"}, args...)...)
 				d, _ := envelope(t, o.stdout)["data"].(map[string]any)
 				if o.code != 4 || d["blockedBy"] != "manual gate" || d["gate"] != c.gate || d["changed"] != false {
 					t.Fatalf("no confirm: %+v", o)
@@ -184,7 +184,7 @@ func TestGatedVerbsAtEveryAutonomyLevel(t *testing.T) {
 				if !untouched() || gateAudit(t, root) != nil {
 					t.Fatalf("a refusal acted or audited")
 				}
-				o = trRun(t, root, stdin, append(append([]string{"--json"}, args...), gateYes...)...)
+				o = trRunWith(t, deps, root, stdin, append(append([]string{"--json"}, args...), gateYes...)...)
 				if o.code != 0 {
 					t.Fatalf("confirmed: %+v", o)
 				}
@@ -202,9 +202,9 @@ func TestGatedVerbsAtEveryAutonomyLevel(t *testing.T) {
 
 func TestGatedVerbsRejectHalfAConfirmation(t *testing.T) {
 	for _, c := range gateCases() {
-		root, args, stdin, untouched := c.setup(t, "off")
+		root, args, stdin, untouched, deps := c.setup(t, "off")
 		for _, half := range [][]string{{"--confirm"}, {"--confirm-note", "yes"}, {"--confirm", "--confirm-note", " "}} {
-			if o := trRun(t, root, stdin, append(args, half...)...); o.code != 2 || !untouched() {
+			if o := trRunWith(t, deps, root, stdin, append(args, half...)...); o.code != 2 || !untouched() {
 				t.Errorf("%s %v: %+v", c.verb, half, o)
 			}
 		}
@@ -234,13 +234,13 @@ func TestMergeApprovalPaths(t *testing.T) {
 	// pr-merge reads the PR's files from the forge
 	f := a8Fixture()
 	f.files = map[int][]string{10: {"src/a.go"}, 11: {"README.md"}}
-	root := a8Project(t, f)
+	root, deps := a8Project(t, f)
 	write(t, filepath.Join(root, ".rota", "config.json"), gateConfig(t, issuesConfig, "auto",
 		map[string]any{"mergeApproval": "paths", "mergeApprovalPaths": []any{"*.md"}}))
-	if code, _, msg := a8Run(t, root, "ship", "pr-merge", "10"); code != 0 {
+	if code, _, msg := a8RunWith(t, deps, root, "ship", "pr-merge", "10"); code != 0 {
 		t.Fatalf("pr 10: %d %s", code, msg)
 	}
-	code, data, _ := a8Run(t, root, "ship", "pr-merge", "11")
+	code, data, _ := a8RunWith(t, deps, root, "ship", "pr-merge", "11")
 	if code != 4 || data["pr"] != float64(11) || !reflect.DeepEqual(data["paths"], []any{"README.md"}) || !reflect.DeepEqual(f.merged, []int{10}) {
 		t.Fatalf("pr 11: %d %v merged %v", code, data, f.merged)
 	}
@@ -261,14 +261,14 @@ func TestMergeApprovalBadMode(t *testing.T) {
 
 func TestWorkerGateApprovalRequiredVerdict(t *testing.T) {
 	c := gateCases()[5]
-	root, args, _, _ := c.setup(t, "auto")
-	code, out, _ := rotaIn(t, root, append([]string{"--json"}, args...)...)
+	root, args, _, _, deps := c.setup(t, "auto")
+	code, out, _ := rotaInWith(t, deps, root, append([]string{"--json"}, args...)...)
 	d := data(t, out)
 	if code != 4 || d["verdict"] != "approval-required" || d["slot"] != "w1" || d["blockedBy"] != "manual gate" || d["changed"] != false {
 		t.Fatalf("%d %v", code, d)
 	}
 	// --check-only never reaches the gate
-	if code, _, _ := rotaIn(t, root, append(args, "--check-only")...); code != 0 {
+	if code, _, _ := rotaInWith(t, deps, root, append(args, "--check-only")...); code != 0 {
 		t.Fatalf("check-only: %d", code)
 	}
 }
@@ -293,8 +293,8 @@ func TestReleasePublishHosts(t *testing.T) {
 	gh := newRepo(t, t.TempDir(), "proj", "main")
 	write(t, filepath.Join(gh, ".rota", "config.json"), "{}")
 	gateRemote(t, gh)
-	useForge(t, &forge{})
-	if o := trRun(t, gh, "notes", append([]string{"release", "publish", "1.0.0", "--title", "T", "--body-file", "-"}, gateYes...)...); o.code != 3 {
+	deps := useForge(t, &forge{})
+	if o := trRunWith(t, deps, gh, "notes", append([]string{"release", "publish", "1.0.0", "--title", "T", "--body-file", "-"}, gateYes...)...); o.code != 3 {
 		t.Fatalf("tag not on origin: %+v", o)
 	}
 	// github: gh release create with the notes file, the title and --draft
@@ -309,8 +309,8 @@ func TestReleasePublishHosts(t *testing.T) {
 			}
 		}
 	})
-	useForge(t, f)
-	o = trRun(t, gh, "## Fixed\n- x\n", append([]string{"--json", "release", "publish", "1.0.0", "--title", "v1.0.0 — x", "--body-file", "-", "--draft"}, gateYes...)...)
+	deps = useForge(t, f)
+	o = trRunWith(t, deps, gh, "## Fixed\n- x\n", append([]string{"--json", "release", "publish", "1.0.0", "--title", "v1.0.0 — x", "--body-file", "-", "--draft"}, gateYes...)...)
 	d, _ = envelope(t, o.stdout)["data"].(map[string]any)
 	if o.code != 0 || d["url"] != "https://github.com/fake/repo/releases/tag/v1.0.0" || d["draft"] != true || d["host"] != "github" {
 		t.Fatalf("github: %+v", o)
@@ -335,8 +335,8 @@ func TestReleasePublishFinishesTheDraft(t *testing.T) {
 		gitT(t, work, "tag", "v1.0.0")
 		gitT(t, work, "push", "-q", "origin", "v1.0.0")
 		f := releaseForge(view, nil)
-		useForge(t, f)
-		return trRun(t, work, "notes\n", append([]string{"--json", "release", "publish", "1.0.0", "--title", "T", "--body-file", "-"}, gateYes...)...), f, work
+		deps := useForge(t, f)
+		return trRunWith(t, deps, work, "notes\n", append([]string{"--json", "release", "publish", "1.0.0", "--title", "T", "--body-file", "-"}, gateYes...)...), f, work
 	}
 	draft := func(assets string) [3]any { return [3]any{`{"isDraft":true,"assets":` + assets + `}`, "", 0} }
 	o, f, _ := publish(t, true, draft(releaseAllAssets))
@@ -387,9 +387,9 @@ func TestReleasePushScopes(t *testing.T) {
 	gitT(t, work, "tag", "v1.2.3")
 	view := [3]any{`{"isDraft":true,"assets":` + releaseAllAssets + `}`, "", 0}
 	f := &forge{answer: func(string, []string) (string, string, int) { return view[0].(string), view[1].(string), view[2].(int) }}
-	useForge(t, f)
+	deps := useForge(t, f)
 	push := func(extra ...string) trOut {
-		return trRun(t, work, "", append(append([]string{"--json", "release", "push", "1.2.3"}, extra...), gateYes...)...)
+		return trRunWith(t, deps, work, "", append(append([]string{"--json", "release", "push", "1.2.3"}, extra...), gateYes...)...)
 	}
 	branchOnOrigin := func() bool { return gitT(t, work, "ls-remote", "--heads", "origin", "main") != "" }
 	if o := push("--tag-only", "--branch-only"); o.code != 2 {

@@ -175,7 +175,7 @@ func keepaliveRun(fs *flag.FlagSet) RunFunc {
 			return Result{}, &Error{Exit: ExitUnavailable, Message: err.Error()}
 		}
 		ctx := c.Context()
-		le := roundEnv(ctx, root).Lease
+		le := c.deps().RoundEnv(ctx, root).Lease
 		if le.Alive == nil {
 			le = roundlease.DefaultEnv()
 		}
@@ -190,8 +190,8 @@ func keepaliveRun(fs *flag.FlagSet) RunFunc {
 			Lease:    le,
 			Holder:   le.Discover(os.Getpid(), os.Getenv),
 			Handoff:  func() keepalive.HandoffRead { return readHandoff(handoffFile(root, cfg)) },
-			Escalate: escalateFunc(ctx, root),
-			Notify:   func(title, body string) { keepaliveNotify(context.WithoutCancel(ctx), cfg, title, body) },
+			Escalate: escalateFunc(ctx, c, root),
+			Notify:   func(title, body string) { keepaliveNotify(context.WithoutCancel(ctx), c, cfg, title, body) },
 		}
 		gap := keepaliveGap(set.SwitchOnUsage)
 		env.Gap = gap
@@ -205,7 +205,7 @@ func keepaliveRun(fs *flag.FlagSet) RunFunc {
 			opts.ConfigDir = os.Getenv("CLAUDE_CONFIG_DIR")
 			opts.Account = worker.AccountOf(root, opts.ConfigDir)
 			env.UsageMarker = usageMarker(cd, root)
-			env.Choose = usageChoose(ctx, root)
+			env.Choose = usageChoose(ctx, c, root)
 			env.Record = usageRecord(root, hookNow)
 		}
 		if !*noLimits {
@@ -293,9 +293,9 @@ func usageMarker(commonDir, root string) func(since time.Time) (hook.UsageHandof
 
 // usageChoose asks the account meters where an orchestrator at its threshold
 // can go (D4).
-func usageChoose(ctx context.Context, root string) func(string, int) keepalive.Choice {
+func usageChoose(ctx context.Context, c *Ctx, root string) func(string, int) keepalive.Choice {
 	return func(currentDir string, threshold int) keepalive.Choice {
-		m, ok, others := workerAccounts().OrchestratorTarget(ctx, root, currentDir, threshold)
+		m, ok, others := c.deps().WorkerAccounts().OrchestratorTarget(ctx, root, currentDir, threshold)
 		if !ok {
 			return keepalive.Choice{Others: others}
 		}
@@ -325,7 +325,7 @@ func usageRecord(root string, now func() time.Time) func(keepalive.Decision) err
 
 // keepaliveNotify raises the herdr notification alone, when the host is
 // herdr: work.dispatch is herdr or the process runs inside herdr.
-func keepaliveNotify(ctx context.Context, cfg any, title, body string) {
+func keepaliveNotify(ctx context.Context, c *Ctx, cfg any, title, body string) {
 	dispatch := ""
 	if v, err := config.Value(cfg, "work.dispatch"); err == nil {
 		dispatch, _ = v.(string)
@@ -334,7 +334,7 @@ func keepaliveNotify(ctx context.Context, cfg any, title, body string) {
 		return
 	}
 	var h host.Host
-	if ee := escalationEnv(); ee.Host != nil {
+	if ee := c.deps().EscalationEnv(); ee.Host != nil {
 		h = ee.Host()
 	} else {
 		h = host.New("herdr", host.Deps{})
@@ -354,7 +354,7 @@ func keepaliveStatus(c *Ctx, args []string) (Result, error) {
 		return Result{}, err
 	}
 	ctx := c.Context()
-	env := roundEnv(ctx, root)
+	env := c.deps().RoundEnv(ctx, root)
 	l, st, err := env.ReadLease(ctx, root)
 	if err != nil {
 		return Result{}, err

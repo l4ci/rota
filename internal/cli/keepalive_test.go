@@ -148,7 +148,6 @@ func mustStart(e roundlease.Env, pid int) uint64 { s, _ := e.StartTime(pid); ret
 func TestKeepaliveRunsTheLimitsLoopUnlessTold(t *testing.T) {
 	for _, noLimits := range []bool{false, true} {
 		dir := kaProject(t, "")
-		useLimFake(t)
 		cd, _ := roundlease.CommonDir(dir)
 		out := filepath.Join(t.TempDir(), "seen")
 		// the child waits for the loop's record to appear, or gives up

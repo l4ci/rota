@@ -76,7 +76,7 @@ func runVersionDrift(c *Ctx) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	stamped, installed, status := versionDrift(root)
+	stamped, installed, status := versionDrift(c, root)
 	data := jsonx.NewObject()
 	data.Set("version", installed)
 	data.Set("stamped", stamped)
@@ -89,10 +89,10 @@ func runVersionDrift(c *Ctx) (Result, error) {
 // versionDrift compares the stamped version (rota.version, else the legacy
 // the pre-rename stamp) of root's merged config with the running binary. Either
 // side empty is "unknown".
-func versionDrift(root string) (stamped, installed, status string) {
+func versionDrift(c *Ctx, root string) (stamped, installed, status string) {
 	cfg := config.Load(filepath.Join(root, ".rota", "config.json"))
 	stamped = config.StampedVersion(cfg)
-	installed = installedVersionFn()
+	installed = c.deps().InstalledVersion()
 	status = "unknown"
 	switch {
 	case stamped == "" || installed == "":
@@ -112,8 +112,8 @@ func driftLine(stamped, installed, status string) string {
 }
 
 // versionDriftLine is the drift nudge for root, or "".
-func versionDriftLine(root string) string {
-	return driftLine(versionDrift(root))
+func versionDriftLine(c *Ctx, root string) string {
+	return driftLine(versionDrift(c, root))
 }
 
 func runVersion(*Ctx) (Result, error) {

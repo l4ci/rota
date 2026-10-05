@@ -73,7 +73,7 @@ func roundTick(fs *flag.FlagSet) RunFunc {
 // autopilotTick runs one tick for the lease holder. The lease is checked on
 // every tick: wind-down or a takeover ends the autopilot cleanly.
 func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride string, pid int) (roundtick.Result, error) {
-	le := watchEnv()
+	le := c.deps().WatchEnv()
 	cd, err := roundlease.CommonDir(root)
 	if err != nil {
 		return roundtick.Result{}, Resolution("%v", err)
@@ -90,9 +90,9 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 		return roundtick.Result{}, err
 	}
 	ctx := c.Context()
-	renv := withBoard(c, root, roundEnv(ctx, root))
-	renv.Worker = workerEnvCtx(ctx)
-	renv.Accounts = workerAccounts()
+	renv := withBoard(c, root, c.deps().RoundEnv(ctx, root))
+	renv.Worker = workerEnvCtx(c, ctx)
+	renv.Accounts = c.deps().WorkerAccounts()
 
 	e := roundtick.Env{Cap: set.AutopilotCap, HumanMerge: policy.Mode != gate.MergeNone}
 	if e.Cap == 0 {

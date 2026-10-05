@@ -20,9 +20,10 @@ func b3Record(t *testing.T, root, key, kind, v, sha string) {
 	}
 }
 
-func b3ShipPR(t *testing.T, work string) (trOut, map[string]any) {
+// b3ShipPRWith ships feat/x as a PR with the given deps.
+func b3ShipPRWith(t *testing.T, deps *Deps, work string) (trOut, map[string]any) {
 	t.Helper()
-	o := trRun(t, work, "body\n", "ship", "pr", "feat/x", "--title", "T", "--body-file", "-", "--json")
+	o := trRunWith(t, deps, work, "body\n", "ship", "pr", "feat/x", "--title", "T", "--body-file", "-", "--json")
 	return o, envelope(t, o.stdout)
 }
 
@@ -31,11 +32,11 @@ func TestShipPRRefusedByVerdict(t *testing.T) {
 	work := shipFixture(t, "")
 	shipBranchOf(t, work, "feat/x", [3]string{"x.txt", "work", ""})
 	f := shipPRForge("https://github.com/fake/repo/pull/1")
-	useForge(t, f)
+	deps := useForge(t, f)
 	tip := gitT(t, work, "rev-parse", "--short", "feat/x")
 
 	b3Record(t, work, "feat/x", verdict.ReviewQuality, verdict.Fail, "old1234")
-	o, env := b3ShipPR(t, work)
+	o, env := b3ShipPRWith(t, deps, work)
 	d, _ := env["data"].(map[string]any)
 	if o.code != 4 || d["blockedBy"] != "verdict" || d["kind"] != "review-quality" || d["verdict"] != "FAIL" ||
 		d["sha"] != "old1234" || d["stale"] != true || d["changed"] != false {
@@ -50,11 +51,11 @@ func TestShipPRRefusedByVerdict(t *testing.T) {
 
 	// A fresh FAIL at the tip is not stale; a newer PASS clears it.
 	b3Record(t, work, "feat/x", verdict.ReviewQuality, verdict.Fail, tip)
-	if _, env = b3ShipPR(t, work); env["data"].(map[string]any)["stale"] != false {
+	if _, env = b3ShipPRWith(t, deps, work); env["data"].(map[string]any)["stale"] != false {
 		t.Errorf("tip FAIL reported stale: %v", env["data"])
 	}
 	b3Record(t, work, "feat/x", verdict.ReviewQuality, verdict.Pass, tip)
-	if o, _ = b3ShipPR(t, work); o.code != 0 {
+	if o, _ = b3ShipPRWith(t, deps, work); o.code != 0 {
 		t.Fatalf("a newer PASS must clear: exit %d\n%s%s", o.code, o.stdout, o.stderr)
 	}
 }
@@ -64,14 +65,14 @@ func TestShipPRSecondOpinionAdvisoryUnderCodex(t *testing.T) {
 	cfg := `{"backlog":{"backend":"file"},"issues":{"provider":"github","retryWaitSeconds":0},"ship":{"secondOpinionRunner":"codex"}}`
 	work := shipFixture(t, cfg)
 	shipBranchOf(t, work, "feat/x", [3]string{"x.txt", "work", ""})
-	useForge(t, shipPRForge("https://github.com/fake/repo/pull/1"))
+	deps := useForge(t, shipPRForge("https://github.com/fake/repo/pull/1"))
 	b3Record(t, work, "feat/x", verdict.SecondOpinion, verdict.Fail, "abc1234")
-	if o, _ := b3ShipPR(t, work); o.code != 0 {
+	if o, _ := b3ShipPRWith(t, deps, work); o.code != 0 {
 		t.Fatalf("codex advisory must not refuse: exit %d\n%s%s", o.code, o.stdout, o.stderr)
 	}
 	// A review FAIL still blocks under codex.
 	b3Record(t, work, "feat/x", verdict.ReviewSpec, verdict.Fail, "abc1234")
-	if o, _ := b3ShipPR(t, work); o.code != 4 {
+	if o, _ := b3ShipPRWith(t, deps, work); o.code != 4 {
 		t.Fatalf("review FAIL under codex: exit %d", o.code)
 	}
 }
@@ -99,11 +100,11 @@ func TestShipMergeRefusedByVerdict(t *testing.T) {
 
 func TestShipPRMergeRefusedByVerdict(t *testing.T) {
 	f := a8Fixture()
-	root := a8Project(t, f)
+	root, deps := a8Project(t, f)
 	// PR 11 would also fail the proof check; the verdict refusal comes first
 	// and records no changes-requested.
 	b3Record(t, root, "feat/eleven", verdict.ReviewSpec, verdict.Fail, "abc1234")
-	code, data, msg := a8Run(t, root, "ship", "pr-merge", "11")
+	code, data, msg := a8RunWith(t, deps, root, "ship", "pr-merge", "11")
 	if code != 4 || data["blockedBy"] != "verdict" || data["pr"] != float64(11) || data["kind"] != "review-spec" || data["changed"] != false {
 		t.Fatalf("exit %d data %v %s", code, data, msg)
 	}
@@ -114,7 +115,7 @@ func TestShipPRMergeRefusedByVerdict(t *testing.T) {
 		t.Fatalf("a refusal changed issue 2: %+v", is)
 	}
 	// An unblocked PR still merges.
-	if code, _, msg := a8Run(t, root, "ship", "pr-merge", "10"); code != 0 {
+	if code, _, msg := a8RunWith(t, deps, root, "ship", "pr-merge", "10"); code != 0 {
 		t.Fatalf("PR 10: exit %d %s", code, msg)
 	}
 }
@@ -122,8 +123,8 @@ func TestShipPRMergeRefusedByVerdict(t *testing.T) {
 func TestShipPRMergeNoHeadBranchWarns(t *testing.T) {
 	f := a8Fixture()
 	f.prs[0].Branch = ""
-	root := a8Project(t, f)
-	o := trRun(t, root, "", "--json", "ship", "pr-merge", "10")
+	root, deps := a8Project(t, f)
+	o := trRunWith(t, deps, root, "", "--json", "ship", "pr-merge", "10")
 	env := envelope(t, o.stdout)
 	if o.code != 0 {
 		t.Fatalf("exit %d\n%s%s", o.code, o.stdout, o.stderr)

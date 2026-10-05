@@ -25,9 +25,9 @@ func setupCommand() *Command {
 	return &Command{Name: "setup", Summary: "init this directory, asking for the main config choices", Verb: setupVerb}
 }
 
-// setupIsTTY is whether in is an interactive terminal (no pipe, file or /dev/null). A var so tests can
+// defaultSetupIsTTY is whether in is an interactive terminal (no pipe, file or /dev/null). Deps.SetupIsTTY lets tests
 // stand in for one.
-var setupIsTTY = func(in io.Reader) bool {
+func defaultSetupIsTTY(in io.Reader) bool {
 	f, ok := in.(*os.File)
 	if !ok {
 		return false
@@ -85,7 +85,7 @@ func setupVerb(fs *flag.FlagSet) RunFunc {
 			}
 			given[kv[0]] = kv[1]
 		}
-		interactive := !*yes && !c.JSON && setupIsTTY(c.Stdin)
+		interactive := !*yes && !c.JSON && c.deps().SetupIsTTY(c.Stdin)
 		if !interactive && !*yes && len(given) == 0 {
 			return Result{}, Usage("setup needs answers and there is no terminal").
 				WithHint("run: rota setup --list to see the questions, rota setup --yes for the defaults")
