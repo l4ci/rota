@@ -350,9 +350,9 @@ func (e Env) gate(ctx context.Context, root string, o GateOpts, res GateResult, 
 	}
 	if o.Approve != nil {
 		files := func() ([]string, error) {
-			out, code := e.git(root, "diff", "--name-only", g.baseRef+"..."+g.headRef)
+			out, code := e.git(root, "diff", "--name-only", g.baseRef+"..."+g.verified)
 			if code != 0 {
-				return nil, fmt.Errorf("git diff --name-only %s...%s exited %d", g.baseRef, g.headRef, code)
+				return nil, fmt.Errorf("git diff --name-only %s...%s exited %d", g.baseRef, g.verified, code)
 			}
 			var list []string
 			for _, l := range strings.Split(out, "\n") {
