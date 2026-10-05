@@ -18,6 +18,7 @@ func roundCommands() *Command {
 		{Name: "wind-down", Summary: "re-verify the base, park every slot, release the lease", Verb: roundWindDown},
 		{Name: "return", Summary: "a worker hands its issue back: park, comment, release", Verb: roundReturn},
 		{Name: "transfer", Summary: "move an assigned issue to another slot or to the human", Verb: roundTransfer},
+		{Name: "bounce", Summary: "count a review bounce of an issue; refuses at round.maxBounces", Verb: roundBounce},
 		{Name: "report", Summary: "record a solo worker's result: state and PR", Verb: roundReport},
 		{Name: "reclaim", Summary: "free a dead or stalled slot and make its issue assignable", Verb: roundReclaim},
 	}}
