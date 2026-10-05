@@ -96,11 +96,11 @@ A reference longer than 100 lines starts with a `## Contents` section, within it
 
 Skills MUST consult `references/subagent-dispatch.md` for any step involving ≥3 file reads, repeated independent operations on N items, long tool output, or fan-out research. Orchestrator-only work (decisions, user interaction, atomic writes, verification of subagent output) is exempt — it stays on the main thread.
 
-The reference defines the cost/benefit threshold, the small-brief template, the return-shape contract, the model-tier mapping (haiku / sonnet / opus), the parallel fan-out pattern (single-turn dispatch, worktree-isolation cross-cite), and the orchestrator's remaining responsibilities.
+The reference defines the cost/benefit threshold, the small-brief template, the return-shape contract, the subagent tiers (`light` / `standard` / `heavy`) and their model mapping, the parallel fan-out pattern (single-turn dispatch, worktree-isolation cross-cite), and the orchestrator's remaining responsibilities.
 
 **Forbids.** Dispatching for ≤2 small reads, for orchestrator-already-loaded context, for interactive steps, or when the brief would cost more tokens than the work. Cross-worker communication. Returning full transcripts instead of synthesis. Calling out to `superpowers:dispatching-parallel-agents` or other external skills — the rota dispatch discipline is self-contained.
 
-**Permits.** Mixed tiers in a single wave (one haiku worker alongside three sonnet workers in the same turn). Opportunistic haiku usage declared inline in the brief without a config flag. Per-skill judgment on which steps trip the threshold — the rule sets a floor, not a ceiling.
+**Permits.** Mixed tiers in a single wave (one `light` subagent alongside three `standard` ones in the same turn). Opportunistic `light` usage declared inline in the brief without a config flag. Per-skill judgment on which steps trip the threshold — the rule sets a floor, not a ceiling.
 
 ## Adjective thresholds in skill prose erode at the runtime model — bake the number at authoring time
 

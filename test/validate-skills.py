@@ -275,7 +275,7 @@ def prose_rules():
           has("skills/references/manual-gates.md", r"Step 6c|direct-push close", "missing the rota-ship Step 6c row", True)]
     # F73 subagent-dispatch discipline
     D = "skills/references/subagent-dispatch.md"
-    for h in ("When to dispatch", "Small-brief template", "Return-shape contract", "Model tier per work type",
+    for h in ("When to dispatch", "Small-brief template", "Return-shape contract", "Subagent tiers",
               "Parallel fan-out pattern", "What stays on the orchestrator"):
         r.append(has(D, f"^## {h}", f"section '{h}' missing", True, re.M))
     r += [has(D, "DECISIONS.md", "must cite the .rota/DECISIONS.md worktree-isolation rule"),
