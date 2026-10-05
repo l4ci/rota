@@ -112,6 +112,9 @@ func (f *labelForge) List(_ context.Context, fl tracker.ListFilter) ([]tracker.I
 	}
 	return out, nil
 }
+func (f *labelForge) Get(_ context.Context, n int, _ bool) (tracker.Issue, error) {
+	return tracker.Issue{Number: n, State: "open"}, nil
+}
 func (f *labelForge) AddLabels(_ context.Context, n int, labels []string, _ bool) error {
 	if f.labels == nil {
 		f.labels = map[int][]string{}
