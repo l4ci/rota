@@ -13,6 +13,7 @@ import (
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/orchestrate"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 // `rota orchestrate` (#19) and bare `rota`: launch the orchestrator session.
@@ -123,6 +124,7 @@ func runOrchestrate(c *Ctx, dry bool) (Result, error) {
 		d.Set("changed", false)
 		return Result{Data: d, Text: text}, nil
 	}
+	recordLaunchingPane(c, env, root, plan)
 	got, err := env.Launch(c.Context(), plan)
 	if err != nil {
 		return orchestrateErr(err)
@@ -131,6 +133,33 @@ func runOrchestrate(c *Ctx, dry bool) (Result, error) {
 	setIf(d, "tab", got.Handle)
 	d.Set("changed", true)
 	return Result{Data: d, Text: "orchestrator started in " + plan.Host + " tab " + got.Handle}, nil
+}
+
+// recordLaunchingPane remembers the plain herdr pane `rota orchestrate` runs in
+// as the round's CLI pane, so a later `rota layout split` needs no run from it.
+// It is recorded before the launch: the orchestrator's `round start` follows
+// at once and keeps it. Outside herdr, or from an agent pane, nothing changes.
+func recordLaunchingPane(c *Ctx, env orchestrate.Env, root string, plan orchestrate.Plan) {
+	me := env.Getenv("HERDR_PANE_ID")
+	if me == "" || plan.Host != "herdr" || plan.Mode != orchestrate.ModeTab {
+		return
+	}
+	l, ok := env.Host("herdr").(host.Layouter)
+	if !ok {
+		return
+	}
+	panes, err := l.LayoutPanes(c.Context())
+	if err != nil {
+		return
+	}
+	for _, p := range panes {
+		if p.ID == me && p.Agent == "" {
+			if err := worker.Update(root, func(d *worker.Doc) { d.SetCLIPane(me) }); err != nil {
+				c.Warn("could not remember the launching pane: %v", err)
+			}
+			return
+		}
+	}
 }
 
 func orchestrateErr(err error) (Result, error) {
