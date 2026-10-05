@@ -39,14 +39,24 @@ Non-negotiable, and before any hypothesis. In order of preference: run the bug's
 
 ## Step 4 — Hypothesize and verify
 
-State the hypothesis as a testable claim: **"X causes Y because Z"**, plus the probe that would confirm or refute it (a line to read, a temporary trace, a targeted test). Run the probe before touching production code.
+A single hypothesis anchors on the first plausible idea. Write 3–5, ranked most to least likely, each falsifiable: **"if X, then changing Y makes the bug vanish"**, with the probe that would confirm or refute it (a line to read, a temporary trace, a targeted test). Print the ranked list to the user before probing; it is information, not a question, so do not wait for a reply.
 
-- **Confirmed** — go to Step 5.
-- **Refuted** — new evidence, new hypothesis. Never fix-and-pray. After two refuted hypotheses, re-read the symptom and the reproducer from scratch before the third.
+```
+H1 (likely): if the badge reads a stale timer ref, resetting it in pause() makes the bug vanish. Probe: trace in pause().
+H2: if tick() early-returns on paused state, skipping the early return makes it vanish. Probe: read tick().
+H3 (unlikely): if the formatter drops zero durations, formatting 0 explicitly makes it vanish. Probe: unit test.
+```
+
+Probe in rank order, before touching production code. Tag every temporary probe line (trace, log, scratch assertion) with `[DEBUG-<id>]`, where `<id>` is the item number, so cleanup is a grep. Test files you keep are not probes and carry no tag.
+
+- **Confirmed** — go to Step 5 with that hypothesis. Remaining ones are dropped unprobed.
+- **Refuted** — strike it in the list with the evidence that refuted it (`~~H1~~ refuted: pause() ran, ref was valid`), then probe the next. Never fix-and-pray. When the list is exhausted, or after two refuted hypotheses, re-read the symptom and the reproducer from scratch, then write a new ranked list.
 
 ## Step 5 — Fix and commit
 
 **Iron Law: no fix without a verified hypothesis.** Make the minimal diff that removes the root cause: no unrelated cleanup, existing behavior for unaffected callers preserved, the file read before editing. Delegating the edit to a `standard` subagent is fine when it is large; give it the verified root cause, files and constraints, and tell it not to commit.
+
+**Probe cleanup gate.** Remove every probe, then run `git grep -n "\[DEBUG-<id>\]"`. Any hit means probes remain: remove them and re-run. Do not commit, and do not finish the cycle, while the grep prints anything.
 
 Commit one atomic fix with explicit paths (`git add <files>`, never `-A`):
 
@@ -80,7 +90,7 @@ rota debug counter clear
 rota proof add <ID> --check "<reproducer command>" --result PASS --evidence "<output line showing the symptom is gone>" --sha <commit-hash>
 ```
 
-Open a PR and hand it to review; never merge directly. The issue closes when the PR merges:
+Re-run `git grep -n "\[DEBUG-<id>\]"` once more; it must print nothing. Open a PR and hand it to review; never merge directly. The issue closes when the PR merges:
 
 ```bash
 printf '%s' "$BODY" | rota ship pr <branch> --title "<short title>" --body-file - --items <ID>
@@ -102,7 +112,8 @@ One line of nudge, only when it applies: if the cause was not obvious from readi
 ## Key principles
 
 - **Reproduce before hypothesizing, verify before fixing.**
-- **Hypothesis is a claim, not a description.** "X causes Y because Z": testable.
+- **Hypotheses are claims, plural and ranked.** "If X, then changing Y makes the bug vanish": falsifiable, 3–5 of them, so the first plausible idea does not anchor.
+- **Probes are tagged.** `[DEBUG-<id>]` on every temporary line; the cleanup grep must come back empty.
 - **Iron Law: no fix without a hypothesis; hard stop at 3 failed fixes.**
 - **One fix, one commit.** Scope creep in debug commits masks the root cause later.
 - **The ID closes the loop.** Commit carries the item ID, the PR carries `Closes #N`.

@@ -9,8 +9,8 @@ Invoke with a bug ID: `/rota-debug 42` on the [issue backend](issue-backend.md),
 The skill loads the item (its issue, or the `[B07]` entry in [`BACKLOG.md`](../reference/rota-folder.md) and any associated detail file), consults `KNOWLEDGE.md` for topics that match the bug's area, then works through a fixed cycle:
 
 1. **Reproduce**: runs the bug's existing test or writes a minimal failing reproducer.
-2. **Hypothesize**: it states a root cause as a testable claim ("X causes Y because Z") based on the reproduction and project context.
-3. **Verify**: the hypothesis is tested (log inspection, targeted reads, narrow experiment) before any code changes.
+2. **Hypothesize**: it writes 3–5 hypotheses ranked by likelihood, each as a falsifiable claim ("if X, then changing Y makes the bug vanish"), and prints the list before probing.
+3. **Verify**: it probes in rank order (log inspection, targeted reads, narrow experiment) before any code changes, striking each refuted hypothesis with its evidence. Temporary probe lines carry a `[DEBUG-<id>]` tag, and the skill will not commit or finish while `git grep` still finds one.
 4. **Fix**: the minimal change that removes the root cause, as one atomic commit tagged `fix: … [B07]` (`#42` on the issue backend).
 5. **Prove and hand off**: the reproducer must pass; the skill records a proof row and opens a PR. It never merges. The issue closes when the PR merges; on the file backend it completes the item.
 
@@ -32,15 +32,16 @@ Here is what the session looks like:
 Reproducer: tests/test_parser.py::test_empty_input  FAILED
 ```
 
-**Hypothesis phase.** After reproduction, the skill states a root cause candidate:
+**Hypothesis phase.** After reproduction, the skill prints a ranked list and starts probing without waiting for a reply:
 ```
-Hypothesis: empty-string input bypasses the null-guard on line 42 because
-  the guard tests `if not value` rather than `if value is None`.
+H1 (likely): if the null-guard on line 42 tests `if not value`, testing `is None` makes the bug vanish.
+H2: if the parser strips input before the guard, skipping the strip makes it vanish.
+H3 (unlikely): if the caller passes "" by mistake, fixing the caller makes it vanish.
 ```
 
 **Verify phase.** Before touching code, the skill confirms the hypothesis holds (targeted read, probe, or narrow experiment). A short verification note appears:
 ```
-Verified: `not ""` evaluates True, so the guard never fires for empty string.
+Verified H1: `not ""` evaluates True, so the guard never fires for empty string.
 ```
 
 **Fix and commit.** The minimal change is made, the reproducer is re-run, and the fix lands:
@@ -69,7 +70,7 @@ See [running work](running-work.md) for a full comparison of the entry points.
 
 ### Hypotheses that won't verify
 
-A refuted hypothesis calls for a new one, never a fix-and-pray. After two refuted hypotheses `/rota-debug` re-reads the symptom and the reproducer from scratch before the third.
+A refuted hypothesis is struck from the list with its evidence and the next one is probed, never a fix-and-pray. When the list runs out, or after two refuted hypotheses, `/rota-debug` re-reads the symptom and the reproducer from scratch and writes a new ranked list.
 
 ### Iron Law: hard stop at 3 failed fixes
 
