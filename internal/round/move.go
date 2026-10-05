@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -472,7 +473,7 @@ type Transferred struct {
 func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts) (res Transferred, err error) {
 	set := o.Settings
 	toHuman := o.To == HumanTarget
-	if o.To == "" || (!toHuman && !contains(set.Roster, o.To)) {
+	if o.To == "" || (!toHuman && !slices.Contains(set.Roster, o.To)) {
 		return res, usage("--to must be %s or a roster slot (%s)", HumanTarget, strings.Join(set.Roster, ", "))
 	}
 	if o.BodyFile != "" {

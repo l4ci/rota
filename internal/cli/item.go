@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -222,7 +223,7 @@ func idNext(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		if !hasString(idCounters, *kind) {
+		if !slices.Contains(idCounters, *kind) {
 			return Result{}, Usage("--kind must be bugs|features|tasks|milestones")
 		}
 		ops, err := openBacklogFile(c, root, "IDs are issue numbers; capture creates the issue")
@@ -235,15 +236,6 @@ func idNext(fs *flag.FlagSet) RunFunc {
 		}
 		return Result{Data: jsonObj("kind", *kind, "id", id, "changed", true), Text: id}, nil
 	}
-}
-
-func hasString(xs []string, x string) bool {
-	for _, y := range xs {
-		if x == y {
-			return true
-		}
-	}
-	return false
 }
 
 // ---- item create ----------------------------------------------------------
@@ -274,7 +266,7 @@ func itemCreate(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		given := givenFlags(fs)
-		if !hasString(itemKinds, *kind) {
+		if !slices.Contains(itemKinds, *kind) {
 			return Result{}, Usage("--kind must be bugs|features|tasks")
 		}
 		if given["raw-file"] {
@@ -369,7 +361,7 @@ func checkFieldName(name string, allowed []string, what string) error {
 	if name == "" {
 		return Usage("--name is required")
 	}
-	if !hasString(allowed, name) {
+	if !slices.Contains(allowed, name) {
 		return Usage("%s field %s; pick one of %s", what, name, strings.Join(allowed, ", "))
 	}
 	return nil
@@ -476,7 +468,7 @@ func itemComplete(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		if !hasString(backlog.ClosureReasons, *reason) {
+		if !slices.Contains(backlog.ClosureReasons, *reason) {
 			return Result{}, Usage("--reason must be done|handed-off|blocked|dropped")
 		}
 		hash := *commit
@@ -735,7 +727,7 @@ func itemCommentAdd(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		if !hasString(backlog.CommentKinds, *kind) {
+		if !slices.Contains(backlog.CommentKinds, *kind) {
 			return Result{}, Usage("--kind must be %s", strings.Join(backlog.CommentKinds, "|"))
 		}
 		if *bodyFile == "" {
@@ -783,7 +775,7 @@ func itemCommentList(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		if *kind != "" && !hasString(backlog.CommentKinds, *kind) {
+		if *kind != "" && !slices.Contains(backlog.CommentKinds, *kind) {
 			return Result{}, Usage("--kind must be %s", strings.Join(backlog.CommentKinds, "|"))
 		}
 		be, err := openBacklog(c, root, false, "")
