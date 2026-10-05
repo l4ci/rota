@@ -13,6 +13,7 @@ package roundtick
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/worker"
 	"slices"
 	"sort"
 	"strings"
@@ -21,9 +22,6 @@ import (
 // DefaultCap is round.autopilotCap: the most assigns, and the most merges, one
 // tick does.
 const DefaultCap = 3
-
-// Slot states that wait on the orchestrator, never on the autopilot.
-var attention = map[string]bool{"blocked": true, "needs-permission": true, "limited": true, "dead": true, "unknown": true}
 
 // Slot is the registry's view of one roster slot.
 type Slot struct{ Name, State, Issue, PR string }
@@ -147,7 +145,7 @@ func Run(ctx context.Context, e Env) (Result, error) {
 	var targets []string
 	for _, s := range slots {
 		switch {
-		case attention[s.State]:
+		case worker.NeedsAttention(s.State):
 			why := s.State
 			if s.Issue != "" {
 				why += " on " + s.Issue

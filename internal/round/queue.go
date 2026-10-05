@@ -26,7 +26,7 @@ func queuedIssue(q worker.QueuedPR) string {
 // no dirty paths. why names what is missing when it is not.
 func (e Env) parkable(ctx context.Context, s *worker.Slot) (ok bool, why string) {
 	switch {
-	case slotIssue(s) == "":
+	case s.HeldID() == "":
 		return false, "holds nothing"
 	case s.PR() == "" && len(s.Issues()) == 0:
 		return false, "no PR recorded"
@@ -62,7 +62,7 @@ func (e Env) queuePR(ctx context.Context, root string, be Board, name string) er
 		return &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("slot %s is not in the pool", name)}
 	}
 	if ok, why := e.parkable(ctx, s); !ok {
-		return blocked(BlockSlotBusy, "%s", busyMsg(name, slotIssue(s), why))
+		return blocked(BlockSlotBusy, "%s", busyMsg(name, s.HeldID(), why))
 	}
 	if s.PR() == "" {
 		return e.closeReview(ctx, root, be, s)
@@ -73,13 +73,13 @@ func (e Env) queuePR(ctx context.Context, root string, be Board, name string) er
 	}
 	pr := s.PR()
 	merged := false
-	if n, ok := prNumber(pr); ok && e.Forge != nil {
+	if n, ok := worker.PRRefNumber(pr); ok && e.Forge != nil {
 		if st, err := e.Forge.PRState(ctx, n); err == nil && st == "merged" {
 			merged = true
 		}
 	}
 	rec := worker.QueuedPR{
-		Issue: slotIssue(s), Branch: firstNonEmpty(p.Branch, s.Branch()), PR: pr,
+		Issue: s.HeldID(), Branch: firstNonEmpty(p.Branch, s.Branch()), PR: pr,
 		Base: firstNonEmpty(s.Base(), e.Base), From: name, ClaimID: s.ClaimID(),
 		Round: registryRound(root), Relays: s.Relays(),
 	}
@@ -99,7 +99,7 @@ func (e Env) queuePR(ctx context.Context, root string, be Board, name string) er
 // round minted closes this way, so a worker cannot close an arbitrary issue by
 // naming issues in its done line; any other held item is refused.
 func (e Env) closeReview(ctx context.Context, root string, be Board, s *worker.Slot) error {
-	name, id := s.Name(), slotIssue(s)
+	name, id := s.Name(), s.HeldID()
 	it, err := be.Get(id)
 	if err != nil {
 		return wrap(err)

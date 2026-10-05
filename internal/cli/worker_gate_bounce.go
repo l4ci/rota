@@ -20,7 +20,7 @@ func gateIssue(root, target string) string {
 	if t.Queued {
 		return t.Issue
 	}
-	return round.SlotIssue(t.Task, t.Branch, t.Name)
+	return worker.HeldID(t.Task, t.Branch, t.Name)
 }
 
 // gateBounce does the per-item bounce accounting after a real gate run (never

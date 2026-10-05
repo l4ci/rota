@@ -350,22 +350,6 @@ func TestFailedRepairStaysInDrift(t *testing.T) {
 	}
 }
 
-func TestIssueOfAndPRNumber(t *testing.T) {
-	for _, c := range []struct{ task, branch, name, want string }{
-		{"58", "x/1-y", "x", "58"}, {"#58", "", "x", "58"}, {"B07", "omar/58-a", "omar", "58"},
-		{"", "park/omar", "omar", ""}, {"", "main", "omar", ""},
-	} {
-		if got := issueOf(c.task, c.branch, c.name); got != c.want {
-			t.Errorf("issueOf(%q,%q) = %q, want %q", c.task, c.branch, got, c.want)
-		}
-	}
-	for in, want := range map[string]int{"https://github.com/o/r/pull/9": 9, "#12": 12, "7": 7, "https://gitlab.com/o/r/-/merge_requests/3": 3, "omar/58": 0, "omar/58-x": 0} {
-		if n, _ := prNumber(in); n != want {
-			t.Errorf("prNumber(%q) = %d, want %d", in, n, want)
-		}
-	}
-}
-
 func TestOpenEscalationsAreReported(t *testing.T) {
 	root, e, _ := fixture(t)
 	esc := func(id, slot, status, deadline string) worker.Escalation {
