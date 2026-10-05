@@ -11,7 +11,6 @@ import (
 
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
-	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -34,7 +33,7 @@ func noHost(t *testing.T, e *Env) {
 
 func setHost(t *testing.T, root, h string) {
 	t.Helper()
-	if err := worker.UpdateDoc(root, func(doc *jsonx.Object) { doc.Set("host", h) }); err != nil {
+	if err := worker.Update(root, func(d *worker.Doc) { d.SetHost(h) }); err != nil {
 		t.Fatal(err)
 	}
 }

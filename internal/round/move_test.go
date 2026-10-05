@@ -444,14 +444,14 @@ func TestReconcileEscalationPendingIsNotStalled(t *testing.T) {
 	f := newMoveFx(t)
 	f.agents("ben")
 	rawSlot(f.root, "ben", func(s *jsonx.Object) { s.Set("handle", "w1:ben") })
-	worker.UpdateDoc(f.root, func(doc *jsonx.Object) {
+	worker.UpdateEscalations(f.root, func([]any) []any {
 		e := jsonx.NewObject()
 		e.Set("id", "e1")
 		e.Set("kind", "issue")
 		e.Set("number", 12)
 		e.Set("slot", "ben")
 		e.Set("status", "pending")
-		doc.Set("escalations", []any{e})
+		return []any{e}
 	})
 	f.now = f.now.Add(5 * time.Hour)
 	rep, _ := f.env.Status(bg, f.root)
@@ -459,7 +459,7 @@ func TestReconcileEscalationPendingIsNotStalled(t *testing.T) {
 		t.Errorf("a slot waiting on an escalation is never stalled: %+v", rep.Findings)
 	}
 	// Without the escalation it is stalled, and 0 turns the check off.
-	worker.UpdateDoc(f.root, func(doc *jsonx.Object) { doc.Delete("escalations") })
+	worker.UpdateEscalations(f.root, func([]any) []any { return nil })
 	if rep, _ := f.env.Status(bg, f.root); !hasKind(kinds(rep.Findings)["ben"], StalledSlot) {
 		t.Fatalf("control: stalled once the escalation is gone: %+v", rep.Findings)
 	}

@@ -112,8 +112,8 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 	e.Queued = func() []string {
 		var out []string
 		for _, q := range worker.LoadRegistry(root).PRs() {
-			if pr := worker.Str(q, "pr"); pr != "" {
-				out = append(out, pr)
+			if q.PR != "" {
+				out = append(out, q.PR)
 			}
 		}
 		return out
@@ -233,12 +233,12 @@ func tickMerge(c *Ctx, root, defBase, override string, targets []string) ([]roun
 }
 
 func targetBase(root, target, def string) string {
-	s, _, err := worker.LoadRegistry(root).GateTarget(target)
+	t, err := worker.LoadRegistry(root).GateTarget(target)
 	if err != nil {
 		return def
 	}
-	if b := worker.Str(s, "base"); b != "" {
-		return b
+	if t.Base != "" {
+		return t.Base
 	}
 	return def
 }

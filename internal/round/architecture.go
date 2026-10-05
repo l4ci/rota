@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/backlog"
-	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/mapqa"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/tracker"
@@ -158,10 +157,7 @@ func (e Env) closedSinceReview(ctx context.Context, root string, be backlog.Back
 	}
 	if *since == "" {
 		at := e.now().UTC().Format(time.RFC3339)
-		if err := updateReview(root, func(o *jsonx.Object) {
-			o.Set("at", at)
-			o.Set("seeded", true)
-		}); err != nil {
+		if err := worker.Update(root, func(d *worker.Doc) { d.SeedReview(at) }); err != nil {
 			return -1, err.Error()
 		}
 		*since = at
@@ -190,13 +186,7 @@ func (e Env) closedSinceReview(ctx context.Context, root string, be backlog.Back
 	}
 	checked := e.now().UTC().Format(time.RFC3339)
 	// A failed cache write only costs the next call a refetch.
-	_ = updateReview(root, func(o *jsonx.Object) {
-		c := jsonx.NewObject()
-		c.Set("checked", checked)
-		c.Set("since", *since)
-		c.Set("count", n)
-		o.Set("closed", c)
-	})
+	_ = worker.Update(root, func(d *worker.Doc) { d.CacheClosedCount(checked, *since, n) })
 	return n, ""
 }
 
@@ -206,25 +196,15 @@ const closedCacheTTL = 5 * time.Minute
 // cachedClosed is the saved closed-item count for the review recorded at since,
 // when it is younger than closedCacheTTL.
 func (e Env) cachedClosed(root, since string) (int, bool) {
-	v, ok := worker.LoadRegistry(root).Doc.Get("architectureReview")
-	if !ok {
+	c := worker.LoadRegistry(root).Review().Closed
+	if c == nil || c.Since != since {
 		return 0, false
 	}
-	o, _ := v.(*jsonx.Object)
-	if o == nil {
-		return 0, false
-	}
-	cv, _ := o.Get("closed")
-	c, _ := cv.(*jsonx.Object)
-	if c == nil || worker.Str(c, "since") != since {
-		return 0, false
-	}
-	at, err := time.Parse(time.RFC3339, worker.Str(c, "checked"))
+	at, err := time.Parse(time.RFC3339, c.Checked)
 	if err != nil || e.now().Sub(at) >= closedCacheTTL || e.now().Before(at) {
 		return 0, false
 	}
-	n, _ := c.Get("count")
-	return numOf(n), true
+	return c.Count, true
 }
 
 func (e Env) now() time.Time {
@@ -232,33 +212,6 @@ func (e Env) now() time.Time {
 		return e.Now()
 	}
 	return time.Now()
-}
-
-// updateReview is a locked edit of the registry's architectureReview object,
-// created when missing.
-func updateReview(root string, mutate func(o *jsonx.Object)) error {
-	return worker.Update(root, jsonx.NewObject(), func(doc *jsonx.Object) {
-		o, _ := func() (*jsonx.Object, bool) {
-			v, ok := doc.Get("architectureReview")
-			oo, _ := v.(*jsonx.Object)
-			return oo, ok
-		}()
-		if o == nil {
-			o = jsonx.NewObject()
-			doc.Set("architectureReview", o)
-		}
-		mutate(o)
-	})
-}
-
-// recordItems adds ids to the review's cumulative item list.
-func recordItems(o *jsonx.Object, ids []string) {
-	l, _ := o.Get("items")
-	list, _ := l.([]any)
-	for _, id := range ids {
-		list = append(list, id)
-	}
-	o.Set("items", list)
 }
 
 func numOf(v any) int {
@@ -295,31 +248,15 @@ func reviewAreas(root string, set roundcfg.Settings) []string {
 // can file an issue could name one.
 func MintedReviews(root string) map[string]bool {
 	out := map[string]bool{}
-	if v, ok := worker.LoadRegistry(root).Doc.Get("architectureReview"); ok {
-		if o, _ := v.(*jsonx.Object); o != nil {
-			l, _ := o.Get("items")
-			list, _ := l.([]any)
-			for _, e := range list {
-				if id, ok := e.(string); ok {
-					out[strings.ToUpper(id)] = true
-				}
-			}
-		}
+	for _, id := range worker.LoadRegistry(root).Review().Items {
+		out[strings.ToUpper(id)] = true
 	}
 	return out
 }
 
 // ReviewSince is the time the last review was minted, "" when none was.
 func ReviewSince(root string) string {
-	v, ok := worker.LoadRegistry(root).Doc.Get("architectureReview")
-	if !ok {
-		return ""
-	}
-	o, _ := v.(*jsonx.Object)
-	if o == nil {
-		return ""
-	}
-	return worker.Str(o, "at")
+	return worker.LoadRegistry(root).Review().At
 }
 
 // MintReview creates one review item per area, labels them refactor in issue
@@ -332,7 +269,7 @@ func (e Env) MintReview(ctx context.Context, root string, be backlog.Backend, a 
 	// re-creates them nor counts them.
 	fail := func(err error) ([]string, error) {
 		if len(ids) > 0 {
-			if uerr := updateReview(root, func(o *jsonx.Object) { recordItems(o, ids) }); uerr != nil {
+			if uerr := worker.Update(root, func(d *worker.Doc) { d.RecordReviewItems(ids) }); uerr != nil {
 				err = fmt.Errorf("%w (and recording %s: %v)", err, strings.Join(ids, ", "), uerr)
 			}
 		}
@@ -362,21 +299,8 @@ func (e Env) MintReview(ctx context.Context, root string, be backlog.Backend, a 
 		}
 	}
 	at := e.now().UTC().Format(time.RFC3339)
-	err := worker.Update(root, jsonx.NewObject(), func(doc *jsonx.Object) {
-		o := jsonx.NewObject()
-		o.Set("at", at)
-		o.Set("round", round)
-		o.Set("trigger", a.Trigger)
-		// Cumulative: a review item still open from an earlier review stays recognised.
-		if old, ok := doc.Get("architectureReview"); ok {
-			if oo, _ := old.(*jsonx.Object); oo != nil {
-				l, _ := oo.Get("items")
-				o.Set("items", l)
-			}
-		}
-		recordItems(o, ids)
-		doc.Set("architectureReview", o)
-	})
+	// Cumulative: a review item still open from an earlier review stays recognised.
+	err := worker.Update(root, func(d *worker.Doc) { d.StartReview(at, round, a.Trigger, ids) })
 	return ids, err
 }
 
@@ -410,5 +334,5 @@ func refactorCmd(area string) string {
 
 // Current is the round number the registry last recorded, 0 before a start.
 func Current(root string) int {
-	return intOf(func() any { v, _ := worker.LoadRegistry(root).Doc.Get("round"); return v }())
+	return registryRound(root)
 }

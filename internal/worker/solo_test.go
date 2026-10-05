@@ -6,13 +6,12 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/host"
-	"github.com/l4ci/rota/internal/jsonx"
 )
 
 // recordHost marks the project's registry as a round on the given host.
 func recordHost(t *testing.T, dir, h string) {
 	t.Helper()
-	if err := UpdateDoc(dir, func(doc *jsonx.Object) { doc.Set("host", h) }); err != nil {
+	if err := Update(dir, func(d *Doc) { d.SetHost(h) }); err != nil {
 		t.Fatal(err)
 	}
 }

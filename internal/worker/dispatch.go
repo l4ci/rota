@@ -59,7 +59,7 @@ func dispatchKind(root string) string {
 
 // RegistryHost is the round host `round start` recorded (C8), "" when no
 // round is in flight.
-func RegistryHost(root string) string { return Str(LoadRegistry(root).Doc, "host") }
+func RegistryHost(root string) string { return LoadRegistry(root).Host() }
 
 // hostKind is the host a pane verb drives: the round's recorded host when
 // there is one, else what work.dispatch says, exactly as before C8. Never
@@ -89,11 +89,11 @@ func clearHandle(root, slot string) {
 // `round reconcile`) and, for a task, the task id (clearing the previous
 // task's PR and relay log).
 func recordDispatch(root, slot, handle, task, kind string, round *int, now string) error {
-	return Update(root, slotsDefault(), func(doc *jsonx.Object) {
+	return Update(root, func(d *Doc) {
 		if round != nil {
-			doc.Set("round", *round)
+			d.SetRound(*round)
 		}
-		for _, s := range (Registry{Doc: doc}).Slots() {
+		for _, s := range d.Slots() {
 			if s.Name() == slot {
 				s.Dispatch(handle, task, kind, now)
 			}
@@ -103,15 +103,8 @@ func recordDispatch(root, slot, handle, task, kind string, round *int, now strin
 
 // roundOf is the registry's round, else 1.
 func roundOf(root string) int {
-	if v, ok := LoadRegistry(root).Doc.Get("round"); ok {
-		if n, ok := v.(interface{ Int64() (int64, error) }); ok {
-			if i, err := n.Int64(); err == nil && i != 0 {
-				return int(i)
-			}
-		}
-		if i, ok := v.(int); ok && i != 0 {
-			return i
-		}
+	if n, ok := LoadRegistry(root).Round(); ok && n != 0 {
+		return n
 	}
 	return 1
 }
@@ -177,7 +170,7 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 	}
 	worktree := s.Worktree()
 	handle := s.PaneHandle()
-	session := Str(reg.Doc, "session")
+	session := reg.Session()
 	if session == "" {
 		session = "rota"
 	}

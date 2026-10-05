@@ -513,9 +513,7 @@ func TestAssignCodexResolvesAndStarts(t *testing.T) {
 	g.config(t, codexCfg)
 	gr := &codexRig{version: "codex-cli 0.159.2\n"} // not logged in
 	gr.install(g)
-	worker.UpdateDoc(g.root, func(doc *jsonx.Object) {
-		(worker.Registry{Doc: doc}).Slot("ben").Raw().Set("kind", "codex")
-	})
+	worker.UpdateSlot(g.root, "ben", func(s *worker.Slot) { s.Raw().Set("kind", "codex") })
 	var we *exitcode.Error
 	if _, err := g.assign("12", "ben", nil); !errors.As(err, &we) || we.Exit != exitcode.ExitUnavailable || !strings.Contains(we.Hint, "codex login") {
 		t.Fatalf("the recorded kind is the default, and an unlogged slot is exit 5: %v", err)
@@ -662,7 +660,7 @@ func TestWindDownClearsTheTierFields(t *testing.T) {
 	}
 	s := worker.LoadRegistry(f.root).Slot("ben")
 	for _, k := range []string{"kind", "tier", "model", "tierReason"} {
-		if worker.Str(s.Raw(), k) != "" {
+		if jsonx.Str(s.Raw(), k) != "" {
 			t.Errorf("%s must be cleared on park: %v", k, s)
 		}
 	}

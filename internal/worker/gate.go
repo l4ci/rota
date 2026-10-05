@@ -113,39 +113,54 @@ func (r GateResult) OK() bool { return r.Verdict == GateFresh || r.Verdict == Ga
 
 type prInfo struct{ head, sha, base, state, merge string }
 
-// GateTarget resolves the argument of `rota worker gate`: a slot name, or a PR
-// (`#N`, `N` or its URL) resolving to the queued record of a PR whose slot
-// moved on, else to a slot recording that PR. A queued record stands in for
-// the slot: it carries the branch, pr and relays the gate reads. queued says
-// which one it is.
+// GateTarget is what a gate argument resolves to: a slot, or the queued record
+// of a PR whose slot moved on. Both carry the branch, PR, base and relay log the
+// gate reads; Name and Task belong to a slot, Issue to a queued record.
+type GateTarget struct {
+	Queued                              bool
+	Name, Branch, PR, Base, Task, Issue string
+	relays                              []any
+}
+
+func gateSlot(s *Slot) GateTarget {
+	return GateTarget{Name: s.Name(), Branch: s.Branch(), PR: s.PR(), Base: s.Base(), Task: s.Task(), relays: s.Relays()}
+}
+
+func gateQueued(q QueuedPR) GateTarget {
+	return GateTarget{Queued: true, Issue: q.Issue, Branch: q.Branch, PR: q.PR, Base: q.Base, relays: q.Relays}
+}
+
+// GateTarget resolves the argument of `rota worker gate`: a slot name, or a PR (`#N`, `N`
+// or its URL) resolving to the queued record of a PR whose slot moved on, else
+// to a slot recording that PR. A queued record stands in for the slot.
 //
 // A slot that records no PR while a record queued from it exists is refused:
 // the habitual `gate <slot>` would otherwise merge the slot's NEW branch.
-func (r Registry) GateTarget(arg string) (s *jsonx.Object, queued bool, err error) {
+func (r Registry) GateTarget(arg string) (GateTarget, error) {
 	if sl := r.Slot(arg); sl != nil {
 		if sl.PR() == "" {
 			for _, q := range r.PRs() {
-				if Str(q, "from") == arg {
-					return nil, false, &exitcode.Error{Exit: exitcode.ExitUsage,
-						Message: fmt.Sprintf("slot %s records no PR, but its PR %s (%s) waits in review", arg, Str(q, "pr"), Str(q, "branch")),
-						Hint:    fmt.Sprintf("gate the PR in review with `rota worker gate %s`", trailingNumber(Str(q, "pr")))}
+				if q.From == arg {
+					return GateTarget{}, &exitcode.Error{Exit: exitcode.ExitUsage,
+						Message: fmt.Sprintf("slot %s records no PR, but its PR %s (%s) waits in review", arg, q.PR, q.Branch),
+						Hint:    fmt.Sprintf("gate the PR in review with `rota worker gate %s`", trailingNumber(q.PR))}
 				}
 			}
 		}
-		return sl.Raw(), false, nil
+		return gateSlot(sl), nil
 	}
 	if n, ok := PRRefNumber(arg); ok {
 		if q := r.QueuedPR(arg); q != nil {
-			return q, true, nil
+			return gateQueued(*q), nil
 		}
 		for _, sl := range r.Slots() {
 			if m, ok := PRRefNumber(sl.PR()); ok && m == n {
-				return sl.Raw(), false, nil
+				return gateSlot(sl), nil
 			}
 		}
-		return nil, false, fail(exitcode.ExitResolution, fmt.Sprintf("no PR in review or slot records PR #%d", n))
+		return GateTarget{}, fail(exitcode.ExitResolution, fmt.Sprintf("no PR in review or slot records PR #%d", n))
 	}
-	return nil, false, fail(exitcode.ExitResolution, fmt.Sprintf("slot '%s' is not in the pool", arg))
+	return GateTarget{}, fail(exitcode.ExitResolution, fmt.Sprintf("slot '%s' is not in the pool", arg))
 }
 
 // Gate runs the merge gate for a slot or a queued PR (see GateTarget). A
@@ -157,21 +172,21 @@ func (e Env) Gate(ctx context.Context, root string, o GateOpts) (GateResult, err
 	if !reg.Exists {
 		return res, fail(exitcode.ExitResolution, "no worker pool — run rota worker pool init first")
 	}
-	s, queued, err := reg.GateTarget(o.Slot)
+	t, err := reg.GateTarget(o.Slot)
 	if err != nil {
 		return res, err
 	}
-	res, err = e.gate(ctx, root, o, res, reg, s)
-	if err == nil && queued && res.Verdict == GatePass {
-		if err := RemoveQueuedPR(root, Str(s, "pr")); err != nil {
+	res, err = e.gate(ctx, root, o, res, reg, t)
+	if err == nil && t.Queued && res.Verdict == GatePass {
+		if err := RemoveQueuedPR(root, t.PR); err != nil {
 			return res, err
 		}
 	}
 	return res, err
 }
 
-func (e Env) gate(ctx context.Context, root string, o GateOpts, res GateResult, reg Registry, s *jsonx.Object) (GateResult, error) {
-	branch, pr := Str(s, "branch"), Str(s, "pr")
+func (e Env) gate(ctx context.Context, root string, o GateOpts, res GateResult, reg Registry, t GateTarget) (GateResult, error) {
+	branch, pr := t.Branch, t.PR
 	res.Branch, res.PR = branch, pr
 	cfg := config.Load(filepath.Join(root, ".rota", "config.json"))
 	settings := tracker.SettingsFromConfig(cfg)
@@ -179,7 +194,7 @@ func (e Env) gate(ctx context.Context, root string, o GateOpts, res GateResult, 
 	// .rota/config.json, which must not decide how it is verified.
 	verifyCmds := verifyCommandsAt(root)
 
-	g := &gate{e: e, ctx: ctx, root: root, res: &res, o: o, slot: s, reg: reg, branch: branch, pr: pr}
+	g := &gate{e: e, ctx: ctx, root: root, res: &res, o: o, target: t, reg: reg, branch: branch, pr: pr}
 	g.provider = e.detectProvider(root, pr)
 	g.cli = e.Forge(g.provider, root, settings.RetryWait)
 	g.cliName = "gh"
@@ -488,7 +503,7 @@ type gate struct {
 	root     string
 	res      *GateResult
 	o        GateOpts
-	slot     *jsonx.Object
+	target   GateTarget
 	reg      Registry
 	branch   string
 	pr       string
@@ -634,13 +649,9 @@ func (g *gate) checkProvenance() (failMsg, brokeMsg string) {
 		return "", fmt.Sprintf("could not read the body of %s to check its approvals: %v", g.pr, err)
 	}
 	var relays []*jsonx.Object
-	if v, _ := g.slot.Get("relays"); v != nil {
-		if l, ok := v.([]any); ok {
-			for _, r := range l {
-				if o, ok := r.(*jsonx.Object); ok {
-					relays = append(relays, o)
-				}
-			}
+	for _, r := range g.target.relays {
+		if o, ok := r.(*jsonx.Object); ok {
+			relays = append(relays, o)
 		}
 	}
 	section, found := approvalsSection(body)
@@ -652,12 +663,9 @@ func (g *gate) checkProvenance() (failMsg, brokeMsg string) {
 	}
 	rounds := map[int]bool{}
 	for _, r := range relays {
-		if v, ok := r.Get("round"); ok {
-			if n, ok := v.(json.Number); ok {
-				if i, err := strconv.Atoi(n.String()); err == nil {
-					rounds[i] = true
-				}
-			}
+		rv, _ := r.Get("round")
+		if i, ok := intOf(rv); ok {
+			rounds[i] = true
 		}
 	}
 	var problems []string
@@ -677,7 +685,7 @@ func (g *gate) checkProvenance() (failMsg, brokeMsg string) {
 			}
 		} else if strings.Contains(low, "maintainer") {
 			for _, r := range relays {
-				summary := norm(Str(r, "summary"))
+				summary := norm(jsonx.Str(r, "summary"))
 				if len([]rune(summary)) >= 12 && (strings.Contains(low, summary) || strings.Contains(summary, low)) {
 					rv, _ := r.Get("round")
 					problems = append(problems, fmt.Sprintf("cites the maintainer for text the orchestrator relayed (round %v): %s", rv, strings.TrimSpace(line)))

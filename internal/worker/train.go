@@ -97,16 +97,16 @@ func (e Env) Train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 	seen := map[string]bool{}
 	withPR := 0
 	for _, t := range o.Targets {
-		s, _, err := reg.GateTarget(t)
+		gt, err := reg.GateTarget(t)
 		if err != nil {
 			return res, err
 		}
-		key := Str(s, "branch") + "|" + Str(s, "pr")
+		key := gt.Branch + "|" + gt.PR
 		if seen[key] {
 			return res, fail(exitcode.ExitUsage, fmt.Sprintf("%s names a PR already in the train", t))
 		}
 		seen[key] = true
-		if Str(s, "pr") != "" {
+		if gt.PR != "" {
 			withPR++
 		}
 	}

@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -30,26 +31,29 @@ func fail(exit int, msg string) *exitcode.Error { return &exitcode.Error{Exit: e
 // RegistryPath is the registry file under the project root.
 func RegistryPath(root string) string { return filepath.Join(root, ".rota", "workers.json") }
 
-// Registry is a loaded .rota/workers.json.
+// Registry is a loaded .rota/workers.json. The document stays private: callers
+// read it through the accessors and write it through a Doc under Update.
 type Registry struct {
-	Doc    *jsonx.Object
+	doc    *jsonx.Object
 	Exists bool
 }
+
+// Doc is the registry document under an Update: the reads of Registry plus the
+// writes. Keys it does not know are left alone.
+type Doc struct{ Registry }
 
 // LoadRegistry reads the registry; a missing or corrupt file reads as
 // {"slots": []} with Exists false, like hvlib_io.load_json.
 func LoadRegistry(root string) Registry {
-	def := jsonx.NewObject()
-	def.Set("slots", []any{})
 	if o, ok := fsio.LoadJSON(RegistryPath(root), nil).(*jsonx.Object); ok {
-		return Registry{Doc: o, Exists: true}
+		return Registry{doc: o, Exists: true}
 	}
-	return Registry{Doc: def}
+	return Registry{doc: slotsDefault()}
 }
 
 // Slots lists the slot objects of the registry.
 func (r Registry) Slots() []*Slot {
-	raw, _ := r.Doc.Get("slots")
+	raw, _ := r.doc.Get("slots")
 	list, _ := raw.([]any)
 	var out []*Slot
 	for _, e := range list {
@@ -70,13 +74,116 @@ func (r Registry) Slot(name string) *Slot {
 	return nil
 }
 
-// PRs lists the queued PR records: open PRs whose slot moved on to another
-// issue (`prs` in the registry). A record is {issue, branch, pr, base, from,
-// claimId, round, relays}; the issue and its claim stay taken while it waits.
-func (r Registry) PRs() []*jsonx.Object { return queuedOf(r.Doc) }
+// Round is the round number the registry last recorded; ok is false before a
+// start. It is the one decode of the `round` field.
+func (r Registry) Round() (int, bool) {
+	v, _ := r.doc.Get("round")
+	return intOf(v)
+}
 
-func queuedOf(doc *jsonx.Object) []*jsonx.Object {
-	raw, _ := doc.Get("prs")
+func intOf(v any) (int, bool) {
+	switch t := v.(type) {
+	case int:
+		return t, true
+	case float64:
+		return int(t), true
+	case json.Number:
+		f, err := t.Float64()
+		return int(f), err == nil
+	}
+	return 0, false
+}
+
+// Host is the round host `round start` recorded, "" when none.
+func (r Registry) Host() string { return jsonx.Str(r.doc, "host") }
+
+// Session is the pane session the pool registered, "" when none.
+func (r Registry) Session() string { return jsonx.Str(r.doc, "session") }
+
+// Scope is the recorded round scope, "" when none.
+func (r Registry) Scope() string { return jsonx.Str(r.doc, "scope") }
+
+// Slate is the recorded slate of a slate-scoped round, nil when none.
+func (r Registry) Slate() []string {
+	v, _ := r.doc.Get("slate")
+	l, _ := v.([]any)
+	var out []string
+	for _, e := range l {
+		if s, ok := e.(string); ok {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// Escalations are the raw entries of the escalation list: the escalation
+// package owns that record's shape.
+func (r Registry) Escalations() []*jsonx.Object { return r.objects("escalations") }
+
+// Limits are the raw entries of the limit list: the limits package owns that
+// record's shape.
+func (r Registry) Limits() []*jsonx.Object { return r.objects("limits") }
+
+func (r Registry) objects(key string) []*jsonx.Object {
+	raw, _ := r.doc.Get(key)
+	list, _ := raw.([]any)
+	var out []*jsonx.Object
+	for _, e := range list {
+		if o, ok := e.(*jsonx.Object); ok {
+			out = append(out, o)
+		}
+	}
+	return out
+}
+
+// QueuedPR is a record of the registry's `prs`: an open PR whose slot moved on
+// to another issue. The issue and its claim stay taken while it waits.
+type QueuedPR struct {
+	Issue, Branch, PR, Base, From, ClaimID string
+	Round                                  int
+	Relays                                 []any
+}
+
+func queuedFrom(o *jsonx.Object) QueuedPR {
+	rv, _ := o.Get("round")
+	round, _ := intOf(rv)
+	relays, _ := o.Get("relays")
+	l, _ := relays.([]any)
+	return QueuedPR{
+		Issue: jsonx.Str(o, "issue"), Branch: jsonx.Str(o, "branch"), PR: jsonx.Str(o, "pr"),
+		Base: jsonx.Str(o, "base"), From: jsonx.Str(o, "from"), ClaimID: jsonx.Str(o, "claimId"),
+		Round: round, Relays: l,
+	}
+}
+
+func (q QueuedPR) object() *jsonx.Object {
+	relays := q.Relays
+	if relays == nil {
+		relays = []any{}
+	}
+	o := jsonx.NewObject()
+	o.Set("issue", q.Issue)
+	o.Set("branch", q.Branch)
+	o.Set("pr", q.PR)
+	o.Set("base", q.Base)
+	o.Set("from", q.From)
+	o.Set("claimId", q.ClaimID)
+	o.Set("round", q.Round)
+	o.Set("relays", relays)
+	return o
+}
+
+// PRs lists the queued PR records.
+func (r Registry) PRs() []QueuedPR {
+	var out []QueuedPR
+	for _, o := range r.queued() {
+		out = append(out, queuedFrom(o))
+	}
+	return out
+}
+
+func (r Registry) queued() []*jsonx.Object {
+	raw, _ := r.doc.Get("prs")
 	list, _ := raw.([]any)
 	var out []*jsonx.Object
 	for _, e := range list {
@@ -101,13 +208,21 @@ func PRRefNumber(ref string) (int, bool) {
 
 // QueuedPR finds a queued record by PR ref (`#N`, `N` or a PR URL), matching
 // on the PR number.
-func (r Registry) QueuedPR(ref string) *jsonx.Object {
+func (r Registry) QueuedPR(ref string) *QueuedPR {
+	if o := r.queuedByRef(ref); o != nil {
+		q := queuedFrom(o)
+		return &q
+	}
+	return nil
+}
+
+func (r Registry) queuedByRef(ref string) *jsonx.Object {
 	n, ok := PRRefNumber(ref)
 	if !ok {
 		return nil
 	}
-	for _, q := range r.PRs() {
-		if m, ok := PRRefNumber(Str(q, "pr")); ok && m == n {
+	for _, q := range r.queued() {
+		if m, ok := PRRefNumber(jsonx.Str(q, "pr")); ok && m == n {
 			return q
 		}
 	}
@@ -116,28 +231,33 @@ func (r Registry) QueuedPR(ref string) *jsonx.Object {
 
 // QueuedIssue finds the queued record holding an issue (backend spelling,
 // compared case-insensitively, `#` ignored).
-func (r Registry) QueuedIssue(id string) *jsonx.Object {
+func (r Registry) QueuedIssue(id string) *QueuedPR {
 	want := strings.ToUpper(strings.TrimPrefix(strings.TrimSpace(id), "#"))
-	for _, q := range r.PRs() {
-		if want != "" && strings.ToUpper(strings.TrimPrefix(Str(q, "issue"), "#")) == want {
-			return q
+	for _, o := range r.queued() {
+		if want != "" && strings.ToUpper(strings.TrimPrefix(jsonx.Str(o, "issue"), "#")) == want {
+			q := queuedFrom(o)
+			return &q
 		}
 	}
 	return nil
 }
 
-// QueuePR appends a record to doc under an Update, replacing one for the same
-// issue so a repeated call does not duplicate it.
-func QueuePR(doc *jsonx.Object, rec *jsonx.Object) {
-	DropQueued(doc, func(q *jsonx.Object) bool { return Str(q, "issue") == Str(rec, "issue") })
-	raw, _ := doc.Get("prs")
+// QueuePR appends a record, replacing one for the same issue so a repeated
+// call does not duplicate it.
+func (d *Doc) QueuePR(rec QueuedPR) {
+	d.dropQueued(func(q *jsonx.Object) bool { return jsonx.Str(q, "issue") == rec.Issue })
+	raw, _ := d.doc.Get("prs")
 	l, _ := raw.([]any)
-	doc.Set("prs", append(l, rec))
+	d.doc.Set("prs", append(l, rec.object()))
 }
 
-// DropQueued removes the records match accepts from doc under an Update.
-func DropQueued(doc *jsonx.Object, match func(*jsonx.Object) bool) {
-	raw, ok := doc.Get("prs")
+// DropQueued removes the records match accepts.
+func (d *Doc) DropQueued(match func(QueuedPR) bool) {
+	d.dropQueued(func(o *jsonx.Object) bool { return match(queuedFrom(o)) })
+}
+
+func (d *Doc) dropQueued(match func(*jsonx.Object) bool) {
+	raw, ok := d.doc.Get("prs")
 	list, _ := raw.([]any)
 	if !ok || len(list) == 0 {
 		return
@@ -152,41 +272,96 @@ func DropQueued(doc *jsonx.Object, match func(*jsonx.Object) bool) {
 	if keep == nil {
 		keep = []any{}
 	}
-	doc.Set("prs", keep)
+	d.doc.Set("prs", keep)
+}
+
+// RetargetQueued renames the issue of every queued record to what issue
+// returns, for those it accepts.
+func (d *Doc) RetargetQueued(issue func(QueuedPR) (string, bool)) {
+	for _, o := range d.queued() {
+		if n, ok := issue(queuedFrom(o)); ok {
+			o.Set("issue", n)
+		}
+	}
 }
 
 // RemoveQueuedPR drops the record for a PR ref, locked.
 func RemoveQueuedPR(root, ref string) error {
-	return Update(root, slotsDefault(), func(doc *jsonx.Object) {
-		if q := (Registry{Doc: doc}).QueuedPR(ref); q != nil {
-			DropQueued(doc, func(o *jsonx.Object) bool { return o == q })
+	return Update(root, func(d *Doc) {
+		if q := d.queuedByRef(ref); q != nil {
+			d.dropQueued(func(o *jsonx.Object) bool { return o == q })
 		}
 	})
 }
 
-// Str reads a string field, "" when absent, null or not a string.
-func Str(o *jsonx.Object, key string) string {
-	v, _ := o.Get(key)
-	s, _ := v.(string)
-	return s
+// SetRound records the round number.
+func (d *Doc) SetRound(n int) { d.doc.Set("round", n) }
+
+// SetHost records the round host.
+func (d *Doc) SetHost(h string) { d.doc.Set("host", h) }
+
+// ClearHost forgets the round host.
+func (d *Doc) ClearHost() { d.doc.Delete("host") }
+
+// SetSession records the pane session.
+func (d *Doc) SetSession(s string) { d.doc.Set("session", s) }
+
+// SetScope records the round scope.
+func (d *Doc) SetScope(scope string) { d.doc.Set("scope", scope) }
+
+// SetSlate records the slate of a slate-scoped round.
+func (d *Doc) SetSlate(slate []string) {
+	l := make([]any, 0, len(slate))
+	for _, s := range slate {
+		l = append(l, s)
+	}
+	d.doc.Set("slate", l)
 }
 
-// Bool reads a bool field, false when absent, null or not a bool.
-func Bool(o *jsonx.Object, key string) bool {
-	v, _ := o.Get(key)
-	b, _ := v.(bool)
-	return b
+// ClearSlate removes the slate.
+func (d *Doc) ClearSlate() { d.doc.Delete("slate") }
+
+// SetSlots replaces the slot list.
+func (d *Doc) SetSlots(slots []*Slot) {
+	l := make([]any, 0, len(slots))
+	for _, s := range slots {
+		l = append(l, s.o)
+	}
+	d.doc.Set("slots", l)
 }
 
-// Update is a locked read-modify-write of the registry. def is used when the
-// file is missing or corrupt, mutate edits the document in place.
-func Update(root string, def *jsonx.Object, mutate func(doc *jsonx.Object)) error {
+// AppendSlot adds s to the slot list.
+func (d *Doc) AppendSlot(s *Slot) {
+	list, _ := d.doc.Get("slots")
+	l, _ := list.([]any)
+	d.doc.Set("slots", append(l, s.o))
+}
+
+// SortSlots orders the slot list by name.
+func (d *Doc) SortSlots() {
+	list, _ := d.doc.Get("slots")
+	l, _ := list.([]any)
+	sort.SliceStable(l, func(i, j int) bool {
+		a, _ := l[i].(*jsonx.Object)
+		b, _ := l[j].(*jsonx.Object)
+		return a != nil && b != nil && jsonx.Str(a, "name") < jsonx.Str(b, "name")
+	})
+}
+
+// Update is a locked read-modify-write of the registry; a missing or corrupt
+// file starts from {"slots": []}.
+func Update(root string, mutate func(d *Doc)) error {
+	return update(root, slotsDefault(), mutate)
+}
+
+// update is Update with the document a missing or corrupt file starts from.
+func update(root string, def *jsonx.Object, mutate func(d *Doc)) error {
 	return fsio.UpdateJSON(RegistryPath(root), def, func(v any) (any, error) {
 		doc, ok := v.(*jsonx.Object)
 		if !ok {
 			doc = def
 		}
-		mutate(doc)
+		mutate(&Doc{Registry{doc: doc}})
 		return doc, nil
 	})
 }
@@ -350,7 +525,8 @@ func execShell(ctx context.Context, dir, command string) (string, int) {
 // seen again (a re-gate before the worker pushed anything) is not a new bounce
 // and returns the count unchanged. head "" always counts.
 func RecordBounce(root, issue, head string) (n int, err error) {
-	err = Update(root, slotsDefault(), func(doc *jsonx.Object) {
+	err = Update(root, func(d *Doc) {
+		doc := d.doc
 		b := bouncesOf(doc)
 		heads := bounceHeadsOf(doc)
 		n = bounceCount(b, issue)
@@ -370,7 +546,8 @@ func RecordBounce(root, issue, head string) (n int, err error) {
 
 // ClearBounces forgets an item's count: its PR merged or it was handed over.
 func ClearBounces(root, issue string) error {
-	return Update(root, slotsDefault(), func(doc *jsonx.Object) {
+	return Update(root, func(d *Doc) {
+		doc := d.doc
 		if b := bouncesOf(doc); bounceCount(b, issue) > 0 {
 			b.Delete(issue)
 			doc.Set("bounces", b)

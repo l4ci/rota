@@ -84,13 +84,13 @@ func TestRoundStatusAndReconcile(t *testing.T) {
 	}
 
 	// An open escalation shows in both verbs and on its slot's row.
-	if err := worker.Update(root, jsonx.NewObject(), func(doc *jsonx.Object) {
+	if err := worker.UpdateEscalations(root, func([]any) []any {
 		e := jsonx.NewObject()
 		for _, kv := range [][2]any{{"id", "e1"}, {"kind", "pr"}, {"number", 3}, {"slot", "dana"}, {"title", "Which option?"},
 			{"commentId", "1"}, {"sentAt", "2026-10-03T10:00:00Z"}, {"notified", false}, {"status", "pending"}} {
 			e.Set(kv[0].(string), kv[1])
 		}
-		doc.Set("escalations", []any{e})
+		return []any{e}
 	}); err != nil {
 		t.Fatal(err)
 	}

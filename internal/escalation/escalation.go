@@ -97,13 +97,9 @@ func Time(t time.Time) string { return t.UTC().Format(time.RFC3339) }
 
 // Load reads the escalations list; a missing or malformed list reads as empty.
 func Load(root string) []Entry {
-	raw, _ := worker.LoadRegistry(root).Doc.Get("escalations")
-	list, _ := raw.([]any)
 	var out []Entry
-	for _, v := range list {
-		if o, ok := v.(*jsonx.Object); ok {
-			out = append(out, fromObject(o))
-		}
+	for _, o := range worker.LoadRegistry(root).Escalations() {
+		out = append(out, fromObject(o))
 	}
 	return out
 }
@@ -116,17 +112,17 @@ func num(o *jsonx.Object, key string) int {
 
 func fromObject(o *jsonx.Object) Entry {
 	e := Entry{
-		ID: worker.Str(o, "id"), Kind: worker.Str(o, "kind"), Number: num(o, "number"),
-		Slot: worker.Str(o, "slot"), Title: worker.Str(o, "title"), CommentID: worker.Str(o, "commentId"),
-		SentAt: worker.Str(o, "sentAt"), Deadline: worker.Str(o, "deadline"), Status: worker.Str(o, "status"),
+		ID: jsonx.Str(o, "id"), Kind: jsonx.Str(o, "kind"), Number: num(o, "number"),
+		Slot: jsonx.Str(o, "slot"), Title: jsonx.Str(o, "title"), CommentID: jsonx.Str(o, "commentId"),
+		SentAt: jsonx.Str(o, "sentAt"), Deadline: jsonx.Str(o, "deadline"), Status: jsonx.Str(o, "status"),
 	}
 	if v, _ := o.Get("notified"); v == true {
 		e.Notified = true
 	}
 	if a, ok := o.Get("answer"); ok {
 		if ao, ok := a.(*jsonx.Object); ok {
-			e.Answer = &Answer{CommentID: worker.Str(ao, "commentId"), Author: worker.Str(ao, "author"),
-				Body: worker.Str(ao, "body"), SeenAt: worker.Str(ao, "seenAt")}
+			e.Answer = &Answer{CommentID: jsonx.Str(ao, "commentId"), Author: jsonx.Str(ao, "author"),
+				Body: jsonx.Str(ao, "body"), SeenAt: jsonx.Str(ao, "seenAt")}
 		}
 	}
 	return e
@@ -307,7 +303,7 @@ func Send(ctx context.Context, env Env, root string, o SendOpts) (SendResult, er
 		e.Deadline = Time(now.Add(o.Timeout))
 	}
 	res.Entry = e
-	err = worker.UpdateList(root, "escalations", func(list []any) []any {
+	err = worker.UpdateEscalations(root, func(list []any) []any {
 		return append(list, e.Object())
 	})
 	if err != nil {
@@ -422,14 +418,14 @@ func Check(ctx context.Context, env Env, root string, ids []string) (CheckResult
 	}
 
 	if len(found) > 0 {
-		err := worker.UpdateList(root, "escalations", func(stored []any) []any {
+		err := worker.UpdateEscalations(root, func(stored []any) []any {
 			for j, v := range stored {
 				o, ok := v.(*jsonx.Object)
 				if !ok {
 					continue
 				}
-				a, hit := found[worker.Str(o, "id")]
-				if !hit || worker.Str(o, "status") != StatusPending {
+				a, hit := found[jsonx.Str(o, "id")]
+				if !hit || jsonx.Str(o, "status") != StatusPending {
 					continue
 				}
 				o.Set("status", StatusAnswered)
