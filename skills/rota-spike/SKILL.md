@@ -27,13 +27,13 @@ Track these phases with the host's task tool if it has one.
 Phases:
 
 1. *Question* — Start: yes/no/conditional question sharpened (Step 2)
-2. *Branch* — Start: `spike/<name>` created, scratch file seeded (Steps 2.5–4, no confirmation)
+2. *Branch* — Start: `spike/<name>` created, scratch file seeded (Steps 2–4, no confirmation)
 3. *Investigate* — Start: experiment runs to a clear answer (between Start and Finish)
 4. *Findings* — Finish: spike file's findings section written from the branch state (Steps 5–6)
 5. *Decision* — Finish: verdict (yes / no / conditional / inconclusive) recorded (Step 6)
-6. *Promote / cleanup* — Finish: one-line `/rota-decide --from-spike` nudge, branch deleted (Steps 6.5–7)
+6. *Promote / cleanup* — Finish: one-line `/rota-decide --from-spike` nudge, branch deleted (Steps 6–7)
 
-## Step 2 (Start mode) — Sharpen the Question
+## Step 2 (Start mode) — Sharpen the Question and Resolve the Repo
 
 A spike answers a *yes/no/conditional* question. Push back if the question is vague:
 
@@ -42,9 +42,7 @@ A spike answers a *yes/no/conditional* question. Push back if the question is va
 
 Name the spike with a short kebab-case identifier (`sse-feasibility`, `auth-rotation`, `migration-cost`). The name becomes the branch suffix and the spike file's stem.
 
-## Step 2.5 (Start mode) — Resolve Sub-Repo (umbrella mode only)
-
-Skip this step entirely when umbrella mode is off (`rota repo umbrella` exits 1). See `references/umbrella-mode.md` for what umbrella mode means and how the registry works.
+**Resolve the sub-repo (umbrella mode only).** Skip this part entirely when umbrella mode is off (`rota repo umbrella` exits 1). See `references/umbrella-mode.md` for what umbrella mode means and how the registry works.
 
 In umbrella mode, the spike branch must land in a specific sub-repo (the umbrella root often is not a git repo at all). Resolve `<repo>` via the 3-step fallback:
 
@@ -134,9 +132,7 @@ rota spike finish <name>
 
 The verb sets `status: done` and `finished: <date>` in the spike file (a repeat call is a no-op). The branch is left as-is — historical reference, never merged.
 
-## Step 6.5 (Finish mode) — Promotion Nudge
-
-For a `viable`, `not viable` or `depends-on-X` decision, print one line and move on: *"Run `/rota-decide --from-spike <name>` to promote this to a hard boundary."* Say nothing for `inconclusive` or empty. Don't ask, don't dispatch.
+**Promotion nudge.** For a `viable`, `not viable` or `depends-on-X` decision, print one line and move on: *"Run `/rota-decide --from-spike <name>` to promote this to a hard boundary."* Say nothing for `inconclusive` or empty. Don't ask, don't dispatch.
 
 ## Step 7 (Finish mode) — Optional Follow-Up
 
