@@ -26,34 +26,34 @@ pass "skills and references pass the doclint"
 # Drop a pinned phrase from a copy of the real skills and the validator names
 # the file; a deleted target file is reported, not skipped.
 PL="$TMP/prose"; mkdir -p "$PL"
-cp -R "$REPO"/rota-* "$REPO/references" "$REPO/docs" "$REPO/README.md" "$REPO/CHANGELOG.md" "$PL/"
+cp -R "$REPO/skills" "$REPO/docs" "$REPO/README.md" "$REPO/CHANGELOG.md" "$PL/"
 OUT="$(cd "$PL" && python3 "$TESTDIR/validate-skills.py" 2>&1)" || fail "prose lint fails on a copy of the repo: $OUT"
-sed -i 's/rota status handoff/rota status hand-off/' "$PL/rota-work/$SK"
+sed -i 's/rota status handoff/rota status hand-off/' "$PL/skills/rota-work/$SK"
 RC=0; OUT="$(cd "$PL" && python3 "$TESTDIR/validate-skills.py" 2>&1)" || RC=$?
-[ "$RC" = 1 ] && grep -qF "rota-work/$SK: must call rota status handoff" <<<"$OUT" \
+[ "$RC" = 1 ] && grep -qF "skills/rota-work/$SK: must call rota status handoff" <<<"$OUT" \
   || fail "prose lint missed a dropped phrase (rc $RC): $OUT"
-rm -f "$PL/references/manual-gates.md"
+rm -f "$PL/skills/references/manual-gates.md"
 RC=0; OUT="$(cd "$PL" && python3 "$TESTDIR/validate-skills.py" 2>&1)" || RC=$?
-[ "$RC" = 1 ] && grep -qF "references/manual-gates.md: prose rule target is missing" <<<"$OUT" \
+[ "$RC" = 1 ] && grep -qF "skills/references/manual-gates.md: prose rule target is missing" <<<"$OUT" \
   || fail "prose lint skipped a missing target file (rc $RC): $OUT"
 pass "the prose lint names a skill that lost a pinned phrase and a missing target file"
 
 # ── a decoy under .worktrees/ is invisible to validate-skills (#79) ─────────
 VS="$TMP/vs"
 mkdir -p "$VS"
-cp -R "$REPO"/rota-* "$REPO/references" "$REPO/docs" "$REPO/README.md" "$REPO/CHANGELOG.md" "$VS/"
+cp -R "$REPO/skills" "$REPO/docs" "$REPO/README.md" "$REPO/CHANGELOG.md" "$VS/"
 mkdir -p "$VS/test"; cp "$TESTDIR/validate-skills.py" "$VS/test/"
 BASE_OUT="$(cd "$VS" && python3 test/validate-skills.py 2>&1)" || fail "validate-skills fixture does not pass on its own: $BASE_OUT"
 # A decoy skill that would fail every check, and a duplicate of a real one.
-mkdir -p "$VS/.worktrees/x/rota-decoy" "$VS/.worktrees/x/rota-plan"
-printf 'no frontmatter, banner or references\n' > "$VS/.worktrees/x/rota-decoy/$SK"
-cp "$VS/rota-plan/$SK" "$VS/.worktrees/x/rota-plan/$SK"
+mkdir -p "$VS/.worktrees/x/skills/rota-decoy" "$VS/.worktrees/x/skills/rota-plan"
+printf 'no frontmatter, banner or references\n' > "$VS/.worktrees/x/skills/rota-decoy/$SK"
+cp "$VS/skills/rota-plan/$SK" "$VS/.worktrees/x/skills/rota-plan/$SK"
 DECOY_OUT="$(cd "$VS" && python3 test/validate-skills.py 2>&1)" || fail "validate-skills picked up .worktrees/: $DECOY_OUT"
 [ "$BASE_OUT" = "$DECOY_OUT" ] || fail "validate-skills output changed with a decoy: '$BASE_OUT' vs '$DECOY_OUT'"
 pass "a decoy SKILL.md/CLAUDE.md under .worktrees/ is invisible to validate-skills"
 
 # ── census: the validator does not walk the project tree recursively ────────
-# validate-skills globs `rota-*/SKILL.md` (one level). A recursive walk of the
+# validate-skills globs `skills/rota-*/SKILL.md` (one level). A recursive walk of the
 # project root would find nested checkouts; fail on one. No exemptions.
 WALK='rglob\(|os\.walk\(|os\.scandir\(|recursive ?= ?True|glob\([^)]*\*\*|find +(\.|\./|"\$PWD"|\$PWD|"\$\(pwd\)"|\$\(pwd\))( |$)'
 # The pattern must bite: each of these walks has to trip it.
@@ -61,7 +61,7 @@ for SAMPLE in 'Path(".").rglob("SKILL.md")' 'os.walk(".")' 'os.scandir(root)' 'g
               'glob.glob(f"{d}/**/x")' 'find . -name SKILL.md' 'find "$PWD" -type f' 'find $PWD -type f'; do
   grep -qE "$WALK" <<<"$SAMPLE" || fail "census pattern does not catch: $SAMPLE"
 done
-for SAMPLE in 'find "$root/cmd" -newer "$bin"' 'sorted(Path(".").glob("rota-*/SKILL.md"))'; do
+for SAMPLE in 'find "$root/cmd" -newer "$bin"' 'sorted(Path(".").glob("skills/rota-*/SKILL.md"))'; do
   if grep -qE "$WALK" <<<"$SAMPLE"; then fail "census pattern flags an anchored lookup: $SAMPLE"; fi
 done
 HITS="$(cd "$REPO" && grep -nE "$WALK" test/validate-skills.py 2>/dev/null || true)"
@@ -78,7 +78,7 @@ if [ -z "${ROTA_BIN:-}" ]; then
   ROTA_BIN="$TMP/rota"
 fi
 LINT="$TESTDIR/lint-verbs.py"
-rc=0; OUT="$(python3 "$LINT" "$ROTA_BIN" "$REPO/rota-orchestrate/$SK" "$REPO/docs/usage/parallel-rounds.md" 2>&1)" || rc=$?
+rc=0; OUT="$(python3 "$LINT" "$ROTA_BIN" "$REPO/skills/rota-orchestrate/$SK" "$REPO/docs/usage/parallel-rounds.md" 2>&1)" || rc=$?
 [ "$rc" = "0" ] || fail "verbs named in the skill or docs that do not exist: $OUT"
 case "$OUT" in *"RESOLVED "*) ;; *) fail "the verb lint resolved nothing: $OUT" ;; esac
 # A doc naming a verb that is not there is caught.
@@ -92,6 +92,6 @@ rc=0; GOOD="$(python3 "$LINT" "$ROTA_BIN" "$TMP/c10.md" 2>&1)" || rc=$?
 printf 'Run `rota round reclaim ben` and `rota round bounce`.\n' > "$TMP/c10b.md"
 rc=0; BAD="$(python3 "$LINT" "$ROTA_BIN" "$TMP/c10b.md" 2>&1)" || rc=$?
 [ "$rc" = "1" ] && grep -q 'MISSING .*rota round bounce' <<<"$BAD" || fail "a made-up round verb should fail: rc=$rc $BAD"
-pass "every rota verb in rota-orchestrate/SKILL.md and docs/usage/parallel-rounds.md resolves ($(grep -o 'RESOLVED [0-9]*' <<<"$OUT"))"
+pass "every rota verb in skills/rota-orchestrate/SKILL.md and docs/usage/parallel-rounds.md resolves ($(grep -o 'RESOLVED [0-9]*' <<<"$OUT"))"
 
 echo "All doclint checks passed."

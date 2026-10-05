@@ -35,8 +35,16 @@ var (
 
 // Embedded is the set compiled into the binary.
 func Embedded() (*Set, error) {
-	embeddedOnce.Do(func() { embedded, embeddedErr = Load(rota.FS) })
+	embeddedOnce.Do(func() { embedded, embeddedErr = loadEmbedded() })
 	return embedded, embeddedErr
+}
+
+func loadEmbedded() (*Set, error) {
+	sub, err := fs.Sub(rota.FS, "skills")
+	if err != nil {
+		return nil, err
+	}
+	return Load(sub)
 }
 
 // refMention finds `references/<name>.md` in any spelling (`../references/x.md`

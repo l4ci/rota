@@ -558,7 +558,7 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 	var brief string
 	if !toHuman {
 		if brief, ok = briefPath(root, set, o.Getenv); !ok {
-			return res, blocked(BlockBriefMissing, "the worker contract (references/worker-contract.md) was not found; set round.brief")
+			return res, blocked(BlockBriefMissing, "the worker contract (skills/references/worker-contract.md) was not found; set round.brief")
 		}
 		if !resuming {
 			tracked := e.trackedFiles(ctx, root)

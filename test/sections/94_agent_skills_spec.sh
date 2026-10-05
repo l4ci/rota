@@ -11,8 +11,8 @@ SK='SKILL''.md'
 # A fixture repo with one skill whose frontmatter the caller supplies.
 sp_fixture() {
   local d="$1"
-  mkdir -p "$d/rota-a" "$d/references"
-  printf -- '---\n%b---\n\nbody\n' "$2" > "$d/rota-a/$SK"
+  mkdir -p "$d/skills/rota-a" "$d/skills/references"
+  printf -- '---\n%b---\n\nbody\n' "$2" > "$d/skills/rota-a/$SK"
 }
 # sp_run <dir> [pending] prints the validator output and returns its exit code.
 sp_run() { ( cd "$1" && ROTA_DOCLINT_PROSE=off ROTA_SPEC_PENDING="${2:-}" python3 "$VALIDATE" 2>&1 ); }
@@ -31,7 +31,7 @@ while IFS='|' read -r want fm; do
   n=$((n + 1)); F="$SPEC_TMP/bad$n"; sp_fixture "$F" "$fm"
   RC=0; OUT="$(sp_run "$F")" || RC=$?
   [ "$RC" = 1 ] || fail "E2[b]: lint passed '$want' (rc $RC): $OUT"
-  grep -qF "rota-a/$SK" <<<"$OUT" || fail "E2[b]: lint did not name the file for '$want': $OUT"
+  grep -qF "skills/rota-a/$SK" <<<"$OUT" || fail "E2[b]: lint did not name the file for '$want': $OUT"
   grep -qF "$want" <<<"$OUT" || fail "E2[b]: lint did not report '$want': $OUT"
 done <<EOF
 must equal the directory|name: rota-b\ndescription: ok\n
@@ -53,8 +53,8 @@ sp_fixture "$SPEC_TMP/clean" 'name: rota-a\ndescription: ok\n'
 RC=0; OUT="$(sp_run "$SPEC_TMP/clean" "user-invocable")" || RC=$?
 [ "$RC" = 1 ] && grep -qF "uses 'user-invocable' any more" <<<"$OUT" || fail "E2[c]: an unused pending key passed (rc $RC): $OUT"
 sp_fixture "$SPEC_TMP/plong" "name: rota-a\ndescription: $LONG\n"
-OUT="$(sp_run "$SPEC_TMP/plong" "rota-a/$SK")" || fail "E2[c]: a pending long description was flagged: $OUT"
-RC=0; OUT="$(sp_run "$SPEC_TMP/ok" "rota-a/$SK")" || RC=$?
+OUT="$(sp_run "$SPEC_TMP/plong" "skills/rota-a/$SK")" || fail "E2[c]: a pending long description was flagged: $OUT"
+RC=0; OUT="$(sp_run "$SPEC_TMP/ok" "skills/rota-a/$SK")" || RC=$?
 [ "$RC" = 1 ] && grep -qF "remove it from PENDING_LONG" <<<"$OUT" || fail "E2[c]: an unused PENDING_LONG entry passed (rc $RC): $OUT"
 pass "E2[c]: pending entries excuse only what they name, and a stale entry fails"
 
@@ -81,12 +81,12 @@ done
 hs "$SPEC_HOME" "$SPEC_TMP/cwd" status --scope user
 [ "$(jget data.roots[0].current <<<"$OUT")" = "true" ] && [ "$(jget data.roots[1].current <<<"$OUT")" = "true" ] || fail "F6a[d]: status not current: ${OUT:0:300}"
 # every references/<name>.md an installed file cites, and that exists in the
-# repo's references/, sits inside that skill's own directory
+# repo's skills/references/, sits inside that skill's own directory
 for sk in "$CL"/rota-*; do
   for f in "$sk"/*.md "$sk"/references/*.md; do
     CITED="$(grep -o 'references/[A-Za-z0-9._-]*\.md' "$f" || true)"
     for c in $CITED; do
-      [ -f "$REPO/$c" ] || continue
+      [ -f "$REPO/skills/$c" ] || continue
       [ -f "$sk/$c" ] || fail "F6a[d]: $f cites $c, missing from $sk"
     done
   done

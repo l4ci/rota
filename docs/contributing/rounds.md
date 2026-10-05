@@ -4,7 +4,7 @@ This is the brief for rounds on this repo: the gate, the repo rules and the rost
 user guide. How a round works for any project is in [Parallel rounds](../usage/parallel-rounds.md).
 
 The orchestrator reads this file and `rota-orchestrate` before it runs or joins a round. A worker reads
-[`references/worker-contract.md`](../../references/worker-contract.md); `rota round assign` points it there.
+[`skills/references/worker-contract.md`](../../skills/references/worker-contract.md); `rota round assign` points it there.
 Set `round.brief` to this file's path to make the assignment pointer name it as well.
 
 ## The gate
@@ -18,7 +18,7 @@ keeps one log per check. Every check makes its temp files under one gate-owned r
 any entry is left in it afterwards, so a run that leaks shows up as a red gate, not as a full `/tmp`.
 Workers do not run it.
 
-Before a PR, a worker runs targeted checks only, as the [worker contract](../../references/worker-contract.md)
+Before a PR, a worker runs targeted checks only, as the [worker contract](../../skills/references/worker-contract.md)
 says: `python3 test/validate-skills.py` (under a second), `bash test/doclint.sh` when it touched a skill or doc, `go vet` and `go test` for the packages it
 touched, and only the smoke sections its change adds or touches, sourced through `test/runner.sh`
 in a sandbox (sections are never executable alone). Several workers running full suites at once
@@ -57,7 +57,7 @@ There are no servers and no ports in this repo.
 
 ## Repo rules that bind workers
 
-- Edit canonical sources only: `cmd/`, `internal/`, `rota-*/SKILL.md`, `references/`, `docs/`, `test/`.
+- Edit canonical sources only: `cmd/`, `internal/`, `skills/` (`rota-*/SKILL.md`, `references/`), `docs/`, `test/`.
 - Never hand-edit tracked `.rota/` content. The backlog row for your issue is updated by the
   orchestrator at merge time.
 - Before touching a verb, pull the matching `.rota/KNOWLEDGE.md` topics with

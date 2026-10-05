@@ -233,7 +233,7 @@ Whether a merge needs a human. The merge verbs (`rota ship merge`, `rota ship pr
 | `"all"` | Every merge needs a human. The verb refuses with exit 4 until the skill asks and re-runs it with `--confirm --confirm-note "<answer>"`. |
 | `"paths"` | Only merges that change a file matching `ship.mergeApprovalPaths` need a human. The refusal lists the matching files. |
 
-`ship.mergeApprovalPaths` is a list of repo-relative entries. A changed file matches an entry when it equals it, lies under it (`"rota-release"` matches `rota-release/SKILL.md`), or matches it as a glob against the whole path (`"*.md"` matches top-level Markdown only). Set them with `rota config set ship.mergeApproval paths` and `rota config set ship.mergeApprovalPaths '["migrations", "*.lock"]'`. Every approval lands in `.rota/gate-audit.jsonl`; see [`references/manual-gates.md`](../../references/manual-gates.md).
+`ship.mergeApprovalPaths` is a list of repo-relative entries. A changed file matches an entry when it equals it, lies under it (`"skills/rota-release"` matches `skills/rota-release/SKILL.md`), or matches it as a glob against the whole path (`"*.md"` matches top-level Markdown only). Set them with `rota config set ship.mergeApproval paths` and `rota config set ship.mergeApprovalPaths '["migrations", "*.lock"]'`. Every approval lands in `.rota/gate-audit.jsonl`; see [`references/manual-gates.md`](../../skills/references/manual-gates.md).
 
 ## round keys
 
@@ -243,7 +243,7 @@ Settings for `rota round` (parallel rounds; see [the rounds guide](parallel-roun
 |-----|---------|---------|
 | `round.scope` | `"milestone"` | Which issues `rota round assign` accepts. `"slate"`: only the issues given to `rota round start --items`. `"milestone"`: the open items of the active milestones. `"next"`: the same, then the first planned milestone whose dependencies are shipped once none is left. `"open"`: every open item no slot holds. Assign refuses anything outside the scope. |
 | `round.roster` | `["ben","dana","nia","kit"]` | Agent names, one slot each (`.worktrees/<agent>`, parked on `park/<agent>`, working on `<agent>/<issue>-<slug>`). Lowercase letters, digits and `-`; no duplicates. |
-| `round.brief` | `""` | Path of the standing worker contract the assignment pointer names. Empty means `references/worker-contract.md` from the plugin or project. |
+| `round.brief` | `""` | Path of the standing worker contract the assignment pointer names. Empty means `skills/references/worker-contract.md` in the project checkout, else the installed `rota-orchestrate/references/worker-contract.md`. |
 | `round.sharedPaths` | `[]` | Repo-relative globs the file-overlap readiness check ignores, for files every issue touches (a command registry, a contract doc). |
 | `round.stallMinutes` | `30` | Minutes without a commit, an uncommitted edit or a state change before `rota round reconcile` reports a slot that holds an issue and has a live agent as `stalled`. `0` turns the check off. A slot waiting on an escalation is never stalled; a dead agent is `dead`, not stalled. |
 | `round.maxBounces` | `3` | How often `rota worker gate` may send one item's PR back to its worker (a `stale` or `provenance-fail` verdict on a real run, never `--check-only`) before it parks the item: the slot is freed, the issue gets the `needs-human` label and a comment, and the PR stays open. The count is per item and resets on a pass or a park. `0` turns the cap off. |

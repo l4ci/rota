@@ -11,7 +11,7 @@ Both runs started from the same base, `de253be` (first parent of the merge), in 
 | | Plain | Worker |
 |---|---|---|
 | Harness | `claude -p`, `--model sonnet`, bypass permissions | same |
-| Prompt | issue text + "Fix this issue." | issue text + the standing worker contract from `references/worker-contract.md` |
+| Prompt | issue text + "Fix this issue." | issue text + the standing worker contract from `skills/references/worker-contract.md` |
 | Shared rules | commit locally, no push/PR/GitHub, no full smoke or test suite | same |
 
 Both were given the issue body and its thread inline. Run in parallel, so they saw the same load.

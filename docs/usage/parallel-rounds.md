@@ -9,7 +9,7 @@ PRs; the merge gate is the only full verification run.
 The orchestrator runs the `rota-orchestrate` skill, which holds the judgment: which issues, how to
 read a stuck worker, what to escalate, when to merge. The mechanics are `rota round` verbs, so a round
 never polls inside the orchestrator's context. A worker reads
-[`references/worker-contract.md`](../../references/worker-contract.md); `rota round assign` points it there.
+[`skills/references/worker-contract.md`](../../skills/references/worker-contract.md); `rota round assign` points it there.
 
 This page covers what a round does and how to run one. Running a round on rota itself, with its
 gate and repo rules, is in [contributing: rounds](../contributing/rounds.md).
@@ -184,7 +184,7 @@ with `no round`, `out of scope`, `not ready`, `overlap`, `claimed`, `slot busy`,
 `no free slot` or `brief missing`, and marks nothing in those cases. When it goes through it
 claims the item (`<agent>@<round>`), sets it in progress with a comment, cuts the slot's
 branch `<agent>/<issue>-<slug>`, picks the account and dispatches a short signed brief: a
-pointer to the standing contract (`round.brief`, else `references/worker-contract.md`), the
+pointer to the standing contract (`round.brief`, else `skills/references/worker-contract.md`), the
 issue to read and dispute, the siblings and the decisions from `--body-file`.
 
 - **Tier.** `--tier light|standard|heavy` picks the worker's model tier (default `round.tier`); a
@@ -345,7 +345,7 @@ When the policy covers a merge and no approval is on record, the gate exits 4 an
 `--approval`, `--escalate` and `--confirm` are mutually exclusive. An approval belongs to the thread,
 not to a commit: pushes after the answer are covered, though freshness and provenance are re-checked
 every time. Each approval is appended to `.rota/gate-audit.jsonl`. This policy holds at every
-`autonomy.level`; see [manual gates](../../references/manual-gates.md) and
+`autonomy.level`; see [manual gates](../../skills/references/manual-gates.md) and
 [configuration](configuration.md#shipmergeapproval-and-shipmergeapprovalpaths).
 
 `rota worker gate <slot> --check-only` judges freshness, PR identity and provenance and merges nothing.

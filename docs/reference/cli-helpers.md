@@ -447,7 +447,7 @@ Verdicts are `PASS`, `CONCERNS` or `FAIL` (`qa` also takes `INFRA-FAIL`). They l
 |---|---|
 | `rota gate list` | list every manual gate and the verbs that enforce it |
 
-A gated verb refuses with exit 4 (`blockedBy: "manual gate"`) at every autonomy level unless `--confirm` and `--confirm-note` carry the human's answer, and appends each approval to `.rota/gate-audit.jsonl`. See [`references/manual-gates.md`](../../references/manual-gates.md).
+A gated verb refuses with exit 4 (`blockedBy: "manual gate"`) at every autonomy level unless `--confirm` and `--confirm-note` carry the human's answer, and appends each approval to `.rota/gate-audit.jsonl`. See [`references/manual-gates.md`](../../skills/references/manual-gates.md).
 
 ## `rota init`
 
