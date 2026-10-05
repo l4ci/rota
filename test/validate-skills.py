@@ -61,6 +61,13 @@ PENDING_LONG = set()
 # summarises the workflow and agents follow it instead of reading the skill
 # (#246, references/authoring-conventions.md). The spec's 1024 is a ceiling, not a target.
 DESC_CAP = 350
+# The description is injected into the system prompt, so it is written in the
+# third person (Anthropic's skill authoring guide, #248). Quoted trigger phrases
+# are the user's own words and may say "you" or "I".
+SECOND_PERSON = re.compile(r"\b(you|your|I)\b")
+# A reference longer than this opens with a "## Contents" section so a partial
+# read still shows what the file covers (same guide, #248).
+REF_TOC_LINES = 100
 
 
 def pending_spec():
@@ -138,6 +145,9 @@ def check_spec_frontmatter(path, text, issues):
     elif len(desc) > DESC_CAP:
         issues.append(f"{rel}: description is {len(desc)} chars; the cap is {DESC_CAP}. "
                       f"State when to use the skill, not how it works")
+    if SECOND_PERSON.search(re.sub(r'"[^"]*"', "", desc)):
+        issues.append(f"{rel}: description must be in the third person: say 'the user', not 'you' or 'I', "
+                      f"outside quoted trigger phrases")
     for key in plain_scalar_hazards(text):
         issues.append(f"{rel}: frontmatter '{key}' is not valid YAML unquoted (': ', ' #' or a leading indicator); "
                       f"use a folded block (>-) or quote it")
@@ -173,6 +183,13 @@ def check_references(path, text, issues):
         resolved = (Path(path).parent.parent / target).resolve()
         if not resolved.exists():
             issues.append(f"{path}: broken reference '{target}' -> '{resolved}'")
+
+
+def check_reference_toc(issues):
+    for ref in sorted(Path(".").glob("skills/references/*.md")):
+        lines = ref.read_text(encoding="utf-8").splitlines()
+        if len(lines) > REF_TOC_LINES and "## Contents" not in lines[:15]:
+            issues.append(f"{ref.as_posix()}: {len(lines)} lines with no '## Contents' section in its first 15 lines")
 
 
 # Prose-contract lint (#173). Skills and docs document rota verbs and flags that
@@ -330,6 +347,7 @@ def main():
         check_references(skill_path, text, issues)
 
     check_pending_spec(skill_files, issues)
+    check_reference_toc(issues)
     check_prose(issues)
 
     n = len(skill_files)

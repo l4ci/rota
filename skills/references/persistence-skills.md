@@ -16,7 +16,7 @@ Every persistence skill (and `/rota-learn`'s `--term` mode) follows:
 4. **Merges via a writer verb** that owns insertion, deduplication, and the date stamp:
    - `/rota-learn` (topic bullets) → `rota knowledge add`
    - `/rota-learn --term` → `rota glossary write`
-   - `/rota-decide` → `Edit` directly on `.rota/DECISIONS.md` (no verb today)
+   - `/rota-decide` → `Edit` directly on `.rota/DECISIONS.md` (no writer verb)
 5. **Regenerates the managed index block** in the instructions file (`AGENTS.md` when it exists, else `CLAUDE.md`; the verb resolves it) via `rota block`. The block is the always-on signal to read-side skills:
    - `/rota-learn` (both modes) → `rota block knowledge` (`--term` runs it internally via `rota glossary write`; Glossary surfaces as a topic name in the Knowledge index automatically)
    - `/rota-decide` → `rota block decisions`
@@ -60,19 +60,19 @@ If a new persistence skill needs a different gate, choose deliberately from {non
 
 ## Umbrella scoping
 
-How KNOWLEDGE.md, DECISIONS.md and the Glossary behave in an umbrella project (a root repo with registered sub-repos). Shipped in **F21**. The hard boundary is `.rota/DECISIONS.md` *"Persistence-trio scoping under umbrella mode"* (Architecture); this section describes the model and does not re-decide it. Changing the model means revisiting that decision first.
+How KNOWLEDGE.md, DECISIONS.md and the Glossary behave in an umbrella project (a root repo with registered sub-repos). The hard boundary is `.rota/DECISIONS.md` *"Persistence-trio scoping under umbrella mode"* (Architecture); this section describes the model and does not re-decide it. Changing the model means revisiting that decision first.
 
 **KNOWLEDGE.md is hybrid.** `.rota/KNOWLEDGE.md` (always present) holds cross-repo learnings and umbrella Glossary terms. `.rota/knowledge/<name>/KNOWLEDGE.md` (created on first write or by `rota init` umbrella setup) holds that sub-repo's learnings and Glossary terms. Learnings that apply across repos go in the umbrella file; one-repo learnings (*"`web`'s Postgres pool config differs from `api`'s"*) go in that repo's file.
 
 **DECISIONS.md is umbrella-only.** One `.rota/DECISIONS.md` at the umbrella root, never split per sub-repo: hard boundaries are cross-repo. A truly repo-local "decision" is a learning; use `/rota-learn`.
 
-**Glossary follows KNOWLEDGE's scoping.** The `## Glossary` topic in each file holds that scope's terms. Glossary skips the F03 tier lifecycle: terms are canonical when written, not probationary.
+**Glossary follows KNOWLEDGE's scoping.** The `## Glossary` topic in each file holds that scope's terms. Glossary skips the tier lifecycle: terms are canonical when written, not probationary.
 
 **Scope resolution**, highest priority first:
 
 1. `--repo umbrella|<name>` always wins.
 2. cwd inside a registered sub-repo selects that sub-repo. At the umbrella root, skills ask once via `AskUserQuestion` (umbrella-shared vs a specific sub-repo).
-3. Single-repo projects always resolve to `umbrella`, byte-identical to pre-F21.
+3. Single-repo projects always resolve to `umbrella`.
 
 The scoped `rota knowledge` and `rota glossary` verbs resolve the target file and tier sidecar from the global `--repo` flag or the cwd.
 

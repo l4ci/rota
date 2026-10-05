@@ -37,8 +37,6 @@ Run as a checklist. Items are ordered by broadening scope (target item → plan 
 
 All reads in the list above are independent. The calling skill MUST issue them as parallel tool calls in a single response — load latency dominates this step, and serial reads make the skill feel slow without any benefit. Workers reading this reference should treat sequential reads as a planning failure.
 
-A recent path-encoding helper audit confirmed why: when load steps drift between skills, the "shared protocol" rots. Parallelism keeps the reads visibly shaped the same across consumers, which keeps the contract honest.
-
 ## Skill-specific extras
 
 Each calling skill adds its own reads inline. The protocol lists only the common subset. Concretely:
@@ -60,4 +58,4 @@ Reads in this list are lookups. A missing plan (`rota plan show` exits 3), an em
 ## What this reference does NOT cover
 
 - **K+D query mechanics** — those live in `references/knowledge-consult.md`. This reference cites that one for the K+D portion; it does not redefine the query pattern.
-- **`/rota-debug`, `/rota-refactor`, `/rota-review` context loads** — those consume only `references/knowledge-consult.md`, not the full protocol. Their inputs are different (a bug ID, a diff range, a feature branch), so they don't load TODO entries / plans / milestones the same way.
+- **`/rota-debug`, `/rota-refactor`, `/rota-review` context loads** — those consume only `references/knowledge-consult.md`, not the full protocol. Their inputs are different (a bug ID, a diff range, a feature branch), so they don't load backlog entries / plans / milestones the same way.

@@ -2,6 +2,12 @@
 
 Used by `/rota-orchestrate` rounds (`rota round assign` hands it over by pointer). The standing brief every dispatched worker reads, and the provenance rules that keep an approval citable. Host mechanics live in [`tmux-dispatch.md`](tmux-dispatch.md) and [`herdr-dispatch.md`](herdr-dispatch.md); neither repeats this file.
 
+## Contents
+
+- The standing contract
+- Handling review feedback
+- Provenance
+
 ## The standing contract
 
 A worker boots with **none** of the orchestrator's context: no conversation, no loaded KNOWLEDGE, no plan. Everything it needs is in the brief. `rota worker dispatch` signs the brief (see *Provenance*), and a round's assignment points the worker here.

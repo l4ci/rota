@@ -15,7 +15,7 @@ Substitute `<source>` with `KNOWLEDGE.md <topic>` or `spike <name>` as appropria
 3. Pick the bullet to promote:
    - **1 bullet** — use it directly, no question.
    - **2-4 bullets** — call `AskUserQuestion` with header `"Bullet"` and question *"Which bullet from `<topic>` should become the decision?"*, one option per bullet. Truncate each option label to ≤80 chars; the option's description carries the full bullet text plus its date stamp.
-   - **5+ bullets** — call `AskUserQuestion` the same way but with the 4 most-recent bullets as options. The 4-cap (Skill Authoring: Workflows & Autonomy, 2026-05-08) makes a multiSelect chunked picker overkill for this volume — if the user wants a less-recent bullet, they re-run with a more specific topic.
+   - **5+ bullets** — call `AskUserQuestion` the same way but with the 4 most-recent bullets as options. The 4-cap makes a multiSelect chunked picker overkill for this volume — if the user wants a less-recent bullet, they re-run with a more specific topic.
 4. Draft the four parts from the picked bullet:
    - **Rule** = the bullet's text (the user can edit in Step 3 / Step 5).
    - **Why** = *"Promoted from KNOWLEDGE.md `<topic>` (<date>)."* plus any sub-bullet context attached to the picked bullet.

@@ -2,9 +2,32 @@
 
 These conventions constrain how new rota skills (or new behavior in existing skills) are authored. Skill authors consult this reference when writing or modifying any `rota-*/SKILL.md` file. New authoring rules land here, not inline. The index in `references/README.md` is the entry point.
 
+## Contents
+
+- Skills are self-contained — no shared contract file
+- Imperative rules in autonomy-aware steps must live inline at every dispatch point
+- Don't ask what the code can answer
+- No ceremony: banners, mandatory task lists, per-site ask fallbacks
+- User-volition gates enforced at exactly one point
+- Stage features across slices using pass-through stubs
+- Helper-centric surface extension
+- Opt-in feature flags default to `false`
+- Descriptions say when to use a skill, not how it works
+- Gates carry a Thought → Reality table
+- References over 100 lines open with a Contents list
+- Dispatch heavy work to subagents
+- Adjective thresholds in skill prose erode at the runtime model — bake the number at authoring time
+- `AskUserQuestion` option list capped at 4
+- Ask in the user's terms, and name the default
+- Nudges on terminal/idle paths only
+- The verb contract is the contract — SKILL.md prose paraphrasing drifts
+- Inventory table beside a citation when ≥4 sibling rules extracted
+- Avoid `&` in `TaskCreate`/`TodoWrite` payloads
+- `/rota-x` and `$rota-x` are the same invocation
+
 ## Skills are self-contained — no shared contract file
 
-Each skill owns its rules inline. A "shared contract" reference file (an old `GUIDE.md` was one) is a smell when every rule has a single owner. Audit the cross-refs before retaining a shared file: if each rule is already mirrored inline at the call site (autonomy off/auto dispatch, learn trigger thresholds, etc.), the central file is vestigial pointer-chasing. Build a shared file only when N≥3 callers need the same long rule verbatim.
+Each skill owns its rules inline. A "shared contract" reference file is a smell when every rule has a single owner. Audit the cross-refs before retaining a shared file: if each rule is already mirrored inline at the call site (autonomy off/auto dispatch, learn trigger thresholds, etc.), the central file is vestigial pointer-chasing. Build a shared file only when N≥3 callers need the same long rule verbatim.
 
 ## Imperative rules in autonomy-aware steps must live inline at every dispatch point
 
@@ -32,9 +55,9 @@ Manual confirmation gates (`/rota-decide`'s manual-only contract, the acceptance
 
 Multi-slice features ship the SHAPE early via pass-through stubs that explicitly name the future-slice wiring point (e.g. *"Layer-1 filter is a pass-through stub; the substantive helper lands in M01-S03"*). This signals what consumers should NOT rely on yet. **Companion rule:** when the milestone flips to `shipped`, sweep all `M0X-S0Y` slice references — they were placeholders and become stale after merge.
 
-## Helper-centric V2-surface extension
+## Helper-centric surface extension
 
-When scaling a feature surface from "single X" to "list of X" (e.g. one repo → many) across N skills, push parsing/validation/dispatch into `bin/` helpers and confine each SKILL.md edit to a single guard paragraph: *"if the value resolves to ≥2 entries, call helper-X; otherwise unchanged."* Single-X path stays byte-identical, multi-X complexity lives in code (exercised by smoke), per-skill prose stays ≤15 lines.
+When scaling a feature surface from "single X" to "list of X" (e.g. one repo → many) across N skills, push parsing/validation/dispatch into `rota` verbs (`cmd/`, `internal/`) and confine each SKILL.md edit to a single guard paragraph: *"if the value resolves to ≥2 entries, call the verb; otherwise unchanged."* Single-X path stays byte-identical, multi-X complexity lives in code (exercised by smoke), per-skill prose stays ≤15 lines.
 
 ## Opt-in feature flags default to `false`
 
@@ -52,7 +75,7 @@ Codified after F15 introduced `docs.afterWork`. Without this rule, opt-in flags 
 
 The `description` frontmatter is the trigger: the situations and phrases that should load the skill, nothing else. A description that summarises the workflow ("reproduce, hypothesize, fix, open a PR") gives the agent a shortcut, and it follows the summary instead of reading the skill body. State the trigger, name the neighbouring skill when the two are easy to confuse, and leave the steps to the body.
 
-`test/validate-skills.py` caps a description at 350 characters (`DESC_CAP`); the Agent Skills spec's 1024 is a ceiling, not a target.
+`test/validate-skills.py` caps a description at 350 characters (`DESC_CAP`); the Agent Skills spec's 1024 is a ceiling, not a target. It also rejects "you", "your" and "I" outside quoted trigger phrases: the description lands in the system prompt, so it is written in the third person ("the user").
 
 **Forbids.**
 - Listing steps, outputs, verbs or config keys the skill uses in its description.
@@ -64,6 +87,10 @@ The `description` frontmatter is the trigger: the situations and phrases that sh
 ## Gates carry a Thought → Reality table
 
 A hard gate (Iron Law, proof, review verdict, manual gate) gets a short two-column table in its skill: the rationalization an agent reaches for when the gate is in the way, and the fact that answers it. Place it just before the skill's `Key Principles`. Keep rows to the shortcuts the skill's own steps have to resist, one line each, and cite the step or exit code that enforces the gate. `/rota-debug`, `/rota-work` and `/rota-ship` carry one; add a row when a gate is skipped in practice, not in anticipation.
+
+## References over 100 lines open with a Contents list
+
+A reference longer than 100 lines starts with a `## Contents` section, within its first 15 lines, listing its `##` headings. A model that previews a file with a partial read still sees everything the file covers. `test/validate-skills.py` enforces it (`REF_TOC_LINES`); update the list when you add, rename or remove a section.
 
 ## Dispatch heavy work to subagents
 
