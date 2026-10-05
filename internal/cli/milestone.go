@@ -27,22 +27,11 @@ func openMilestones(c *Ctx) (ms.Store, error) {
 	if !issue {
 		return ms.FileStore{Root: root}, nil
 	}
-	be, err := openIssues(c)
+	be, err := openIssueBackend(c, "", false)
 	if err != nil {
 		return nil, err
 	}
-	warn := func(msg string) { c.Warn("%s", msg) }
-	switch b := be.(type) {
-	case *backlog.Issues:
-		b.Warn = warn
-		return b.MilestoneStore(), nil
-	case *backlog.Umbrella:
-		if home, err := b.HomeSub(); err == nil {
-			home.Warn = warn
-		}
-		return b.MilestoneStore(), nil
-	}
-	return nil, Refused("%s works on the issue backend only", c.Path)
+	return be.MilestoneStore(), nil
 }
 
 // milestoneFail maps a store error, whichever store raised it, onto the exit

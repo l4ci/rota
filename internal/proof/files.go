@@ -38,6 +38,7 @@ func (s files) Update(id string, fn func(string) (string, bool, error)) error {
 	if err != nil {
 		return err
 	}
+	// File-mode store by definition; it cannot import cli (documented exception to backend_select.go).
 	f := &backlog.File{Root: s.root}
 	_, title, found := backlog.FindOrigin(f.Corpus(), id)
 	if !found {

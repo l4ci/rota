@@ -186,6 +186,29 @@ func TestShipBody(t *testing.T) {
 	shipSame(t, "--repo", u, "", 0, "ship", "body", "feat/x", "--repo", "svc")
 }
 
+// In issue mode the item titles come from the tracker, not the (empty) file
+// corpus; an ID the tracker does not know is listed bare.
+func TestShipBodyIssueMode(t *testing.T) {
+	shipDeterministic(t)
+	cfg := `{"backlog":{"backend":"issues"},"issues":{"provider":"github","retryWaitSeconds":0}}`
+	work := shipFixture(t, cfg)
+	shipBranchOf(t, work, "feat/t",
+		[3]string{"a.txt", "feat: export [F07]", ""},
+		[3]string{"b.txt", "fix: crash [B09]", "Refs [F99]"})
+	deps := useForge(t, shipPRForge("https://x.test/pr/5"))
+	deps.NewTracker = withTracker(t, issueFixture()).NewTracker
+
+	o := trRunWith(t, deps, work, "", "ship", "body", "feat/t")
+	if o.code != 0 {
+		t.Fatalf("%+v", o)
+	}
+	for _, want := range []string{"- [F07] Add export\n", "- [B09] Crash on start\n", "- [F99]\n"} {
+		if !strings.Contains(o.stdout, want) {
+			t.Errorf("body lacks %q:\n%s", want, o.stdout)
+		}
+	}
+}
+
 // ---- ship merge --------------------------------------------------------------
 
 func TestShipMerge(t *testing.T) {
