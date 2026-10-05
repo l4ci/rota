@@ -14,6 +14,8 @@ func roundTransfer(fs *flag.FlagSet) RunFunc {
 	to := fs.String("to", "", "a roster slot, or human")
 	note := fs.String("note-file", "", "what is done and what is next (- for stdin)")
 	body := fs.String("body-file", "", "decisions already settled, passed verbatim to the receiver (- for stdin)")
+	tier := fs.String("tier", "", "receiver's tier: light, standard or heavy (default round.tier)")
+	tierReason := fs.String("tier-reason", "", "one line on why; required above the default tier")
 	accept := fs.Bool("accept-overlap", false, "skip the file-overlap check only")
 	pid := fs.Int("holder-pid", 0, "orchestrator pid, when its ancestry cannot be read")
 	return func(c *Ctx, args []string) (Result, error) {
@@ -58,7 +60,7 @@ func roundTransfer(fs *flag.FlagSet) RunFunc {
 		}
 		res, err := env.Transfer(c.Context(), root, be, round.TransferOpts{
 			Issue: id, To: *to, Note: text, BodyFile: bf, AcceptOverlap: *accept,
-			HolderPID: *pid, Settings: set, Getenv: os.Getenv,
+			Tier: *tier, TierReason: *tierReason, HolderPID: *pid, Settings: set, Getenv: os.Getenv,
 		})
 		if err != nil {
 			r, ferr := moveFailure(err, res.Changed)
