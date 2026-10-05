@@ -19,6 +19,7 @@ import (
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/repos"
 	"github.com/l4ci/rota/internal/section"
+	"github.com/l4ci/rota/internal/ship"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/verdict"
 )
@@ -630,13 +631,6 @@ func shipUndo(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		g := func(a ...string) (string, error) {
-			res, err := shipGit(c, dir, a...)
-			if err == nil && res.Code != 0 {
-				err = Unavailable("git %s: %s", strings.Join(a, " "), shipFirstLine(res.Stderr))
-			}
-			return shipLine(res.Stdout), err
-		}
 		ctx := c.Context()
 		base, ok, err := resolveBase(ctx, dir)
 		if err != nil {
@@ -651,144 +645,76 @@ func shipUndo(fs *flag.FlagSet) RunFunc {
 		} else if res.Code == 0 {
 			cur = shipLine(res.Stdout)
 		}
-		if cur != base {
-			if cur == "" {
-				cur = "(detached HEAD)"
-			}
-			return shipBlocked("not on base branch", "must run on the base branch (%s), currently on %s", base, cur)
-		}
 		dirty, _, err := git.Repo{Dir: dir}.Dirty(ctx)
 		if err != nil {
 			return Result{}, gitErr(err)
 		}
-		if dirty {
-			return shipBlocked("dirty tree", "uncommitted changes: stash (`git stash`) or commit before running ship undo")
-		}
 
-		// With no --cycle, HEAD itself must be the merge.
-		if *cycle == "" {
-			parents, err := g("rev-list", "--parents", "-1", "HEAD")
-			if err != nil {
-				return Result{}, err
-			}
-			switch n := len(strings.Fields(parents)); n {
-			case 3:
-			case 2:
-				res, err := shipBlocked("not a merge", "HEAD is not a merge commit; undo is not supported for this shape")
-				return res, err.(*Error).WithHint("revert it instead: git revert HEAD (squash- and rebase-merges leave one parent)")
-			default:
-				return shipBlocked("not a merge", "unexpected HEAD shape (%d parents); manual investigation required", n-1)
-			}
-		}
-
-		var merge string
-		if *cycle != "" {
-			res, err := shipGit(c, dir, "rev-parse", "--verify", *cycle+"^{commit}")
-			if err != nil {
-				return Result{}, err
-			}
-			if res.Code != 0 {
-				return Result{}, Resolution("--cycle hash '%s' is not a valid commit", *cycle)
-			}
-			merge = shipLine(res.Stdout)
-			parents, err := g("rev-list", "--parents", "-n", "1", merge)
-			if err != nil {
-				return Result{}, err
-			}
-			if len(strings.Fields(parents)) < 3 {
-				return shipBlocked("not a merge", "--cycle commit %s is not a merge commit", *cycle)
-			}
-		} else {
-			if merge, err = g("log", "--first-parent", "--merges", "-1", "--pretty=%H", base); err != nil {
-				merge = ""
-			}
-			if merge == "" {
-				return Result{}, Resolution("no merge commit found on %s", base)
-			}
-		}
-		subject, err := g("log", "-1", "--pretty=%s", merge)
-		if err != nil {
-			return Result{}, err
-		}
-		if !strings.HasPrefix(subject, "merge: ") {
-			if *cycle != "" {
-				return shipBlocked("merge subject", "--cycle commit %s has subject not matching '^merge: ' (subject: %s)", *cycle, subject)
-			}
-			return shipBlocked("merge subject", "most recent merge on %s is not a rota cycle merge (subject: %s)", base, subject)
-		}
-
-		short, err := g("rev-parse", "--short", merge)
-		if err != nil {
-			return Result{}, err
-		}
-		preMerge, err := g("rev-parse", merge+"^1")
-		if err != nil {
-			return Result{}, err
-		}
-		preShort, err := g("rev-parse", "--short", preMerge)
-		if err != nil {
-			return Result{}, err
-		}
-		tip, err := g("rev-parse", merge+"^2")
-		if err != nil {
-			return Result{}, err
-		}
-
-		post, _ := g("log", "--first-parent", "--oneline", merge+".."+base)
-		postCount := 0
-		if post != "" {
-			postCount = len(strings.Split(post, "\n"))
-		}
-		if postCount > 0 && !*allowPost {
-			res, err := shipBlocked("post-merge commits", "%d commit(s) on %s after the cycle merge", postCount, base)
-			return res, err.(*Error).WithHint("pass --allow-post-merge to discard them, or reset manually first")
-		}
-
-		// A remote ref at the cycle tip means the cycle went through a PR.
-		if refs, _ := g("for-each-ref", "--format=%(refname:short)", "--points-at", tip, "refs/remotes/"); refs != "" {
-			res, err := shipBlocked("pr mode", "PR-mode cycle: rolling back upstream PRs is manual (gh pr close / git revert); remote ref(s) at the cycle tip: %s",
-				strings.Join(strings.Split(refs, "\n"), ", "))
-			return res, err
-		}
-
-		hashes := map[string]bool{}
-		hs, _ := g("log", "--pretty=%h", merge+"^1.."+merge+"^2")
-		for _, h := range strings.Split(hs, "\n") {
-			if h = pystr.Strip(h); h != "" {
-				hashes[h] = true
-			}
-		}
 		root := shipRoot(dir)
-		ids := shipCycleIDs(root, hashes)
+		g := shipGitRunner{c, dir}
+		plan, err := ship.PlanUndo(g, base, cur, dirty, ship.UndoOpts{
+			Cycle: *cycle, AllowPost: *allowPost,
+			IDs: func(hashes map[string]bool) []string { return shipCycleIDs(root, hashes) },
+		})
+		if err != nil {
+			return shipUndoErr(err)
+		}
+		short, ids := plan.Short, plan.IDs
 
-		plan := shipPlan(short, subject, base, postCount, ids, *apply)
-		data := gitObj("applied", *apply, "cycle", short, "subject", pystr.Strip(subject), "base", base,
+		text := shipPlan(short, plan.Subject, base, plan.PostCount, ids, *apply)
+		data := gitObj("applied", *apply, "cycle", short, "subject", pystr.Strip(plan.Subject), "base", base,
 			"items", append([]string{}, ids...))
 		if !*apply {
 			c.Warn("preview only; pass --apply")
 			data.Set("changed", false)
-			return Result{Data: data, Text: plan}, nil
+			return Result{Data: data, Text: text}, nil
 		}
 
-		if _, err := g("reset", "--hard", merge+"^1"); err != nil {
-			return Result{}, err
-		}
-		if len(ids) > 0 {
-			if err := shipRestore(c, root, ids); err != nil {
-				head, _ := g("rev-parse", "--short", "HEAD")
-				return Result{}, Unavailable("the reset already happened (HEAD is now %s), but restoring an item failed: %v", head, err)
-			}
+		if err := ship.ApplyUndo(g, plan, func(ids []string) error { return shipRestore(c, root, ids) }); err != nil {
+			return shipUndoErr(err)
 		}
 		restored := "none"
 		if len(ids) > 0 {
 			restored = strings.Join(ids, ",")
 		}
-		text := fmt.Sprintf("Undone cycle %s. Reset %s to %s. Restored: %s.", short, base, preShort, restored)
-		data.Set("restoredTo", preShort)
+		text = fmt.Sprintf("Undone cycle %s. Reset %s to %s. Restored: %s.", short, base, plan.PreShort, restored)
+		data.Set("restoredTo", plan.PreShort)
 		data.Set("restored", append([]string{}, ids...))
 		data.Set("changed", true)
 		return Result{Data: data, Text: text}, nil
 	}
+}
+
+// shipGitRunner adapts git in dir to ship.Git, mapping a failure to run git
+// onto the exit table.
+type shipGitRunner struct {
+	c   *Ctx
+	dir string
+}
+
+func (r shipGitRunner) Run(args ...string) (git.Result, error) {
+	return shipGit(r.c, r.dir, args...)
+}
+
+// shipUndoErr maps a ship undo failure onto the envelope and exit table.
+func shipUndoErr(err error) (Result, error) {
+	var ref *ship.Refusal
+	var nf *ship.NotFoundError
+	var ge *ship.GitError
+	var pe *ship.PartialError
+	switch {
+	case errors.As(err, &ref):
+		res, e := shipBlocked(ref.By, "%s", ref.Msg)
+		if ref.Hint != "" {
+			e.(*Error).WithHint(ref.Hint)
+		}
+		return res, e
+	case errors.As(err, &nf):
+		return Result{}, Resolution("%s", nf.Msg)
+	case errors.As(err, &ge), errors.As(err, &pe):
+		return Result{}, Unavailable("%s", err.Error())
+	}
+	return Result{}, err
 }
 
 // shipPlan is the block ship undo prints before it changes anything.
