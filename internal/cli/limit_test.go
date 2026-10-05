@@ -14,6 +14,7 @@ import (
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/keepalive"
 	"github.com/l4ci/rota/internal/limits"
+	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/roundlease"
 )
 
@@ -92,7 +93,7 @@ func TestLimitStatusReadsTheLogBack(t *testing.T) {
 	if _, text, _ := rotaIn(t, dir, "limit", "status"); !strings.Contains(text, "l1\twaiting\torchestrator\tfive_hour") {
 		t.Errorf("text %q", text)
 	}
-	cd, _ := roundlease.CommonDir(dir)
+	cd, _ := rotastate.CommonDir(dir)
 	limits.WriteWatching(cd, limits.Watching{PID: os.Getpid(), StartedAt: "x", Mode: limits.ModeWatch})
 	if _, out, _ = rotaIn(t, dir, "limit", "status", "--json"); data(t, out)["watching"] != true {
 		t.Errorf("a live watcher record must read as watching: %s", out)
@@ -123,7 +124,7 @@ func TestLimitWatchRefusals(t *testing.T) {
 		t.Fatalf("no lease: %d %v", code, d)
 	}
 	// a lease held by someone else
-	cd, _ := roundlease.CommonDir(dir)
+	cd, _ := rotastate.CommonDir(dir)
 	env := roundlease.DefaultEnv()
 	if _, _, _, err := env.Acquire(cd, dir, roundlease.Holder{PID: 1, Start: mustStart(env, 1)}, 2); err != nil {
 		t.Fatal(err)
@@ -161,7 +162,7 @@ func TestLimitWatchResumesAnEntryWhoseResetPassed(t *testing.T) {
 	t.Setenv("TMUX_PANE", "%9")
 	t.Setenv("ROTA_TEST_HOLDER_PID", strconv.Itoa(os.Getpid()))
 	t.Setenv("ROTA_TEST_NOW", "2026-10-03T16:00:00Z")
-	cd, _ := roundlease.CommonDir(dir)
+	cd, _ := rotastate.CommonDir(dir)
 	env := roundlease.DefaultEnv()
 	if _, _, _, err := env.Acquire(cd, dir, env.Discover(os.Getpid(), os.Getenv), 1); err != nil {
 		t.Fatal(err)
@@ -195,7 +196,7 @@ func TestLimitWatchTextOnTheOrchestratorPane(t *testing.T) {
 	t.Setenv("ROTA_TEST_HOLDER_PID", strconv.Itoa(os.Getpid()))
 	t.Setenv("ROTA_TEST_NOW", "2026-10-03T12:00:00Z")
 	t.Setenv("TZ", "UTC")
-	cd, _ := roundlease.CommonDir(dir)
+	cd, _ := rotastate.CommonDir(dir)
 	env := roundlease.DefaultEnv()
 	env.Acquire(cd, dir, env.Discover(os.Getpid(), os.Getenv), 1)
 
@@ -218,7 +219,7 @@ func TestLimitWatchTextOnTheOrchestratorPane(t *testing.T) {
 
 func TestOrchestratorDataIsTheNewestSessionFileOfTheRoot(t *testing.T) {
 	dir := limProject(t)
-	cd, _ := roundlease.CommonDir(dir)
+	cd, _ := rotastate.CommonDir(dir)
 	now := time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC)
 	write := func(id, cwd string, at time.Time, used int, reset time.Time) {
 		payload := `{"session_id":"` + id + `","cwd":"` + cwd + `","rate_limits":{"five_hour":{"used_percentage":` + strconv.Itoa(used) + `,"resets_at":` + strconv.FormatInt(reset.Unix(), 10) + `}}}`

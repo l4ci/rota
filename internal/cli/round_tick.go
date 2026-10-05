@@ -10,6 +10,7 @@ import (
 
 	"github.com/l4ci/rota/internal/gate"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundlease"
@@ -74,7 +75,7 @@ func roundTick(fs *flag.FlagSet) RunFunc {
 // every tick: wind-down or a takeover ends the autopilot cleanly.
 func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride string, pid int) (roundtick.Result, error) {
 	le := c.deps().WatchEnv()
-	cd, err := roundlease.CommonDir(root)
+	cd, err := rotastate.CommonDir(root)
 	if err != nil {
 		return roundtick.Result{}, Resolution("%v", err)
 	}

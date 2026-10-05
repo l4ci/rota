@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/rotastate"
 )
 
 // FileName is the state file under <git-common-dir>/rota/, next to the lease.
@@ -51,7 +52,7 @@ type State struct {
 }
 
 // StatePath is the state file of a repo, by its git common dir.
-func StatePath(commonDir string) string { return filepath.Join(commonDir, "rota", FileName) }
+func StatePath(commonDir string) string { return rotastate.File(commonDir, FileName) }
 
 // ReadState loads the state file. found is false for a missing file; a file
 // that does not parse is an error.

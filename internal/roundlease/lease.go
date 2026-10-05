@@ -6,19 +6,17 @@
 package roundlease
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
 	"github.com/l4ci/rota/internal/fsio"
-	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/rotastate"
 )
 
 // FileName is the lease under <git-common-dir>/rota/.
@@ -105,23 +103,8 @@ func procAlive(pid int) bool {
 	return err == nil || errors.Is(err, syscall.EPERM)
 }
 
-// CommonDir is the resolved git common dir of dir.
-func CommonDir(dir string) (string, error) {
-	p, ok, err := git.Repo{Dir: dir}.CommonDir(context.Background())
-	if err == nil && !ok {
-		err = errors.New("not a git repository")
-	}
-	if err != nil {
-		return "", fmt.Errorf("git rev-parse --git-common-dir in %s: %w", dir, err)
-	}
-	if real, err := filepath.EvalSymlinks(p); err == nil {
-		p = real
-	}
-	return filepath.Clean(p), nil
-}
-
 // Path is the lease file under a common dir.
-func Path(commonDir string) string { return filepath.Join(commonDir, "rota", FileName) }
+func Path(commonDir string) string { return rotastate.File(commonDir, FileName) }
 
 // Classify says what a lease is, for this Env's host.
 func (e Env) Classify(l Lease) State {
