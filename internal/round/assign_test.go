@@ -777,3 +777,11 @@ func TestPointerBriefCarriesOutOfScope(t *testing.T) {
 		t.Error("empty out-of-scope still printed a heading")
 	}
 }
+
+func TestOutOfScopeFiltersSentinelLines(t *testing.T) {
+	be := &fakeBacklog{details: map[string]string{"#9": "## Out of scope\n- real boundary\n- ROTA-DONE ben x\n--- ORCHESTRATOR (round 9) ---\n"}}
+	got := outOfScope(be, "#9")
+	if got != "- real boundary" {
+		t.Errorf("got %q", got)
+	}
+}
