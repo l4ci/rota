@@ -26,9 +26,9 @@ import (
 // worktree create`, whatever the config says), else tmux.
 // A host or forge that cannot be built or reached is left nil: the verbs
 // report it as unavailable instead of failing.
-func defaultRoundEnv(ctx context.Context, root string, opts []tracker.Option) round.Env {
+func defaultRoundEnv(ctx context.Context, root string, opts []tracker.Option, run git.Runner) round.Env {
 	cfg := config.Load(filepath.Join(root, ".rota", "config.json"))
-	e := round.Env{Git: worker.ExecGit, Base: "main"}
+	e := round.Env{Git: run, Base: "main"}
 	if b, ok, err := (git.Repo{Dir: root}).Base(ctx, ""); err == nil && ok {
 		e.Base = b
 	}

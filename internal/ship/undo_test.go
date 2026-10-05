@@ -19,11 +19,11 @@ func (f *fakeGit) Run(args ...string) (git.Result, error) {
 	k := strings.Join(args, " ")
 	f.calls = append(f.calls, k)
 	if f.fail[k] {
-		return git.Result{Code: 128, Stderr: "fatal: boom\n"}, nil
+		return git.Result{ExitCode: 128, Stderr: "fatal: boom\n"}, nil
 	}
 	v, ok := f.out[k]
 	if !ok {
-		return git.Result{Code: 1}, nil
+		return git.Result{ExitCode: 1}, nil
 	}
 	return git.Result{Stdout: v + "\n"}, nil
 }

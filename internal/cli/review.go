@@ -46,10 +46,10 @@ func reviewGit(ctx context.Context, dir string, args ...string) (string, error) 
 	if err != nil {
 		return "", gitErr(err)
 	}
-	if res.Code != 0 {
+	if res.ExitCode != 0 {
 		msg := strings.TrimSpace(res.Stderr)
 		if msg == "" {
-			msg = fmt.Sprintf("exit %d", res.Code)
+			msg = fmt.Sprintf("exit %d", res.ExitCode)
 		}
 		return "", Unavailable("git %s failed: %s", args[0], msg)
 	}
@@ -252,7 +252,7 @@ func reviewBrief(c *Ctx, args []string) (Result, error) {
 			return Result{}, gitErr(err)
 		}
 		diff := res.Stdout
-		if res.Code != 0 {
+		if res.ExitCode != 0 {
 			diff = ""
 		}
 		p(fmt.Sprintf("### `%s`", path))

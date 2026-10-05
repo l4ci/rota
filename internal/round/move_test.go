@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/git"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -131,11 +132,11 @@ type moveFx struct {
 
 func gitIn(t *testing.T, dir string, args ...string) string {
 	t.Helper()
-	out, errOut, code, err := worker.ExecGit(bg, dir, args...)
-	if err != nil || code != 0 {
-		t.Fatalf("git %v in %s: %v %s", args, dir, err, errOut)
+	res, err := git.Exec(bg, dir, args...)
+	if err != nil || res.ExitCode != 0 {
+		t.Fatalf("git %v in %s: %v %s", args, dir, err, res.Stderr)
 	}
-	return strings.TrimSpace(out)
+	return strings.TrimSpace(res.Stdout)
 }
 
 // newMoveFx is a started round (ben and dana, pid 100 holds the lease) with a
@@ -162,9 +163,9 @@ func newMoveFx(t *testing.T) *moveFx {
 	sh(t, f.root, "push", "-q", "origin", "main")
 	milestoneDoc(t, f.root, "M01", "active")
 
-	f.env = Env{Git: worker.ExecGit, Base: "main", Lease: fakeLease("h", 100), StallMinutes: 30, Forge: f.forge,
+	f.env = Env{Git: git.Exec, Base: "main", Lease: fakeLease("h", 100), StallMinutes: 30, Forge: f.forge,
 		Now: func() time.Time { return f.now }}
-	f.env.Worker = worker.Env{Git: worker.ExecGit, Now: func() time.Time { return f.now }, Sleep: func(time.Duration) {},
+	f.env.Worker = worker.Env{Git: git.Exec, Now: func() time.Time { return f.now }, Sleep: func(time.Duration) {},
 		NewHost: func(string) host.Host { return &killHost{hostFake: f.host, killed: &f.killed} }}
 
 	fb := &fakeBacklog{}

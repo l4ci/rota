@@ -76,12 +76,12 @@ func NeedsModel(root, kind string) bool {
 
 // CommonDir is the git common dir of root, absolute and symlink-resolved: the
 // directory beside which the round lease and the codex homes live.
-func CommonDir(ctx context.Context, run GitFunc, root string) (string, error) {
-	out, errOut, code, err := run(ctx, root, "rev-parse", "--git-common-dir")
-	if err != nil || code != 0 {
-		return "", fail(exitcode.ExitUnavailable, "git rev-parse --git-common-dir failed: "+strings.TrimSpace(errOut))
+func CommonDir(ctx context.Context, run git.Runner, root string) (string, error) {
+	res, err := run(ctx, root, "rev-parse", "--git-common-dir")
+	if err != nil || res.ExitCode != 0 {
+		return "", fail(exitcode.ExitUnavailable, "git rev-parse --git-common-dir failed: "+strings.TrimSpace(res.Stderr))
 	}
-	p := git.AbsCommonDir(root, out)
+	p := git.AbsCommonDir(root, res.Stdout)
 	if r, err := filepath.EvalSymlinks(p); err == nil {
 		p = r
 	}

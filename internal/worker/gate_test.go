@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/git"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -417,11 +418,11 @@ func (e Env) withForge(f func(provider, dir string) Forge, brokenMergeBase bool)
 	if brokenMergeBase {
 		realGit := e.Git
 		if realGit == nil {
-			realGit = ExecGit
+			realGit = git.Exec
 		}
-		e.Git = func(ctx context.Context, dir string, args ...string) (string, string, int, error) {
+		e.Git = func(ctx context.Context, dir string, args ...string) (git.Result, error) {
 			if len(args) > 0 && args[0] == "merge-base" {
-				return "", "", 128, nil
+				return git.Result{ExitCode: 128}, nil
 			}
 			return realGit(ctx, dir, args...)
 		}
@@ -441,12 +442,12 @@ func TestGateLocalMergeFailureIsAbortedAndReported(t *testing.T) {
 	e := w.env(false)
 	inner := e.Git
 	if inner == nil {
-		inner = ExecGit
+		inner = git.Exec
 	}
-	e.Git = func(ctx context.Context, dir string, args ...string) (string, string, int, error) {
+	e.Git = func(ctx context.Context, dir string, args ...string) (git.Result, error) {
 		seen = append(seen, strings.Join(args, " "))
 		if len(args) > 0 && args[0] == "merge" && args[1] == "--no-ff" {
-			return "CONFLICT (content): Merge conflict in work.txt", "", 1, nil
+			return git.Result{Stdout: "CONFLICT (content): Merge conflict in work.txt", ExitCode: 1}, nil
 		}
 		return inner(ctx, dir, args...)
 	}
@@ -526,11 +527,11 @@ func (f *flakyForge) PRView(ctx context.Context, pr int) (tracker.PRInfo, error)
 func TestGateRevParseFailureIsCheckBroke(t *testing.T) {
 	w := newWorld(t, ghURL)
 	e := w.env(false)
-	e.Git = func(ctx context.Context, dir string, args ...string) (string, string, int, error) {
+	e.Git = func(ctx context.Context, dir string, args ...string) (git.Result, error) {
 		if len(args) == 2 && args[0] == "rev-parse" && args[1] == "origin/w1" {
-			return "", "fatal", 128, nil
+			return git.Result{Stderr: "fatal", ExitCode: 128}, nil
 		}
-		return ExecGit(ctx, dir, args...)
+		return git.Exec(ctx, dir, args...)
 	}
 	res, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main", CheckOnly: true})
 	if err != nil || res.Verdict != GateCheckBroke || !strings.Contains(res.Err, "git rev-parse origin/w1 failed") {
@@ -562,10 +563,10 @@ func TestGateLocalMergeNonConflictFailureShowsGitsWords(t *testing.T) {
 	w := newWorld(t, "")
 	gitq(t, w.dir, "fetch", "-q", "origin", "w1:w1")
 	e := w.env(false)
-	inner := ExecGit
-	e.Git = func(ctx context.Context, dir string, args ...string) (string, string, int, error) {
+	inner := git.Exec
+	e.Git = func(ctx context.Context, dir string, args ...string) (git.Result, error) {
 		if len(args) > 1 && args[0] == "merge" && args[1] == "--no-ff" {
-			return "", "fatal: unable to auto-detect email address", 128, nil
+			return git.Result{Stderr: "fatal: unable to auto-detect email address", ExitCode: 128}, nil
 		}
 		return inner(ctx, dir, args...)
 	}

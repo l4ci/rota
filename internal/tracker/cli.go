@@ -1,7 +1,6 @@
 package tracker
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -11,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/l4ci/rota/internal/proc"
 )
 
 // Exec starts name with args in dir and returns its output and exit code.
@@ -67,27 +68,11 @@ func (c *CLI) lookPath(name string) (string, error) {
 }
 
 func osExec(ctx context.Context, dir, name string, args []string, stdin []byte) ([]byte, []byte, int, error) {
-	cmd := exec.CommandContext(ctx, name, args...)
-	cmd.Dir = dir
-	// A killed gh can leave a child holding the pipes; don't wait on it.
-	cmd.WaitDelay = 5 * time.Second
-	if stdin != nil {
-		cmd.Stdin = bytes.NewReader(stdin)
-	}
-	var out, errb bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &out, &errb
-	err := cmd.Run()
-	if ctx.Err() != nil {
-		return nil, nil, 0, ctx.Err()
-	}
-	var ee *exec.ExitError
-	if errors.As(err, &ee) {
-		return out.Bytes(), errb.Bytes(), ee.ExitCode(), nil
-	}
+	res, err := proc.Run(ctx, proc.Cmd{Name: name, Args: args, Dir: dir, Stdin: stdin})
 	if err != nil {
 		return nil, nil, 0, err
 	}
-	return out.Bytes(), errb.Bytes(), 0, nil
+	return []byte(res.Stdout), []byte(res.Stderr), res.ExitCode, nil
 }
 
 // ResolveProvider picks the provider: want (a --provider value) unless it is
