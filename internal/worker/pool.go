@@ -86,8 +86,7 @@ func (e Env) PoolInit(ctx context.Context, root string, o InitOpts, acc *Account
 
 	// tmux handles are known now; herdr tab ids exist only after a dispatch.
 	cfg := config.Load(filepath.Join(root, ".rota", "config.json"))
-	dispatchV, _ := config.Lookup(cfg, "work.dispatch")
-	dispatch, _ := dispatchV.(string)
+	dispatch := config.Dispatch(cfg)
 
 	names, branchOf := o.slotNames()
 	for _, name := range names {

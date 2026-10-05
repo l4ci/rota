@@ -43,10 +43,8 @@ var limitHost = func(kind string) host.Host { return host.New(kind, host.Deps{})
 // limitHostKind is herdr when work.dispatch says so or the process runs inside
 // herdr, else tmux, as round status chooses.
 func limitHostKind(cfg any) string {
-	if v, err := config.Value(cfg, "work.dispatch"); err == nil {
-		if s, _ := v.(string); s == "herdr" {
-			return "herdr"
-		}
+	if config.Dispatch(cfg) == "herdr" {
+		return "herdr"
 	}
 	if os.Getenv("HERDR_ENV") == "1" {
 		return "herdr"
