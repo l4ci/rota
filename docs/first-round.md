@@ -1,6 +1,6 @@
 # Your first round
 
-This walks you from a fresh machine to a first parallel round in [herdr](https://herdr.dev): an orchestrator in one pane, workers in tabs, each worker on its own issue. The details behind each step live in [parallel rounds](usage/parallel-rounds.md); this page is the order to do them in.
+This walks you from a fresh machine to a first parallel round in [herdr](https://herdr.dev) or [tmux](https://github.com/tmux/tmux): an orchestrator in one pane, workers in tabs (tmux: windows), each worker on its own issue. The details behind each step live in [parallel rounds](usage/parallel-rounds.md); this page is the order to do them in.
 
 ## 1. Prerequisites
 
@@ -8,7 +8,7 @@ This walks you from a fresh machine to a first parallel round in [herdr](https:/
 - `gh` (GitHub) or `glab` (GitLab), logged in.
 - A few open issues with acceptance criteria. A round only offers issues that have them (or a design or plan note).
 - `claude` (Claude Code) on your `PATH`.
-- herdr 0.9.x, from [herdr.dev](https://herdr.dev).
+- A terminal host: herdr 0.9.x, from [herdr.dev](https://herdr.dev), or [tmux](https://github.com/tmux/tmux). herdr reports each worker's state directly; under tmux rota reads the panes instead.
 
 ## 2. Install rota
 
@@ -74,17 +74,18 @@ Then check them:
 rota worker account list
 ```
 
-## 7. Start herdr
+## 7. Start herdr or tmux
 
 ```bash
 herdr                       # or: herdr --session <name>
+tmux new -s <name>          # with tmux instead
 ```
 
-Open a pane and `cd` to the project root. Run everything from here on in that pane, so the round can detect herdr.
+Open a pane and `cd` to the project root. Run everything from here on in that pane, so the round can detect its host.
 
-## 8. Install the herdr integration
+## 8. Install the herdr integration (herdr only)
 
-herdr reports each worker's state (working, blocked, idle) only for agents it has an integration for. Install it once per account:
+Skip this under tmux. herdr reports each worker's state (working, blocked, idle) only for agents it has an integration for. Install it once per account:
 
 ```bash
 herdr integration install claude
@@ -122,7 +123,7 @@ For a first round, skip the hooks and keepalive both. Hooks without keepalive me
 rota doctor
 ```
 
-Fix every `fail`; each one prints the command or edit that fixes it. Run it inside the herdr pane so it sees herdr. See [doctor and reap](usage/doctor-and-reap.md).
+Fix every `fail`; each one prints the command or edit that fixes it. Run it inside the herdr or tmux pane so it sees the host. See [doctor and reap](usage/doctor-and-reap.md).
 
 ## 12. Launch the orchestrator
 
@@ -132,13 +133,13 @@ In the pane, at the project root:
 rota orchestrate
 ```
 
-It runs `rota doctor`, then opens a focused orchestrator tab that runs the agent under `rota keepalive run` and has already started `/rota-orchestrate`. In an initialized project, `rota` alone does the same. Tell the orchestrator what you want, for example "run a round on issues 12 and 13". `orchestrator.harness` picks the agent (`claude` or `codex`). See [your first round](usage/parallel-rounds.md#your-first-round) for what happens outside herdr.
+It runs `rota doctor`, then opens a focused orchestrator tab that runs the agent under `rota keepalive run` and has already started `/rota-orchestrate`. In an initialized project, `rota` alone does the same. Tell the orchestrator what you want, for example "run a round on issues 12 and 13". `orchestrator.harness` picks the agent (`claude` or `codex`). See [your first round](usage/parallel-rounds.md#your-first-round) for what happens outside herdr or tmux.
 
-The skill runs `rota doctor` again, then `rota round start`. That takes the orchestrator lease, creates the worker slots and lists the ready issues, and it detects herdr from the pane it runs in. It starts no worker yet. The orchestrator then picks the slate and assigns each issue with `rota round assign`, which cuts a branch and starts a worker in a new tab.
+The skill runs `rota doctor` again, then `rota round start`. That takes the orchestrator lease, creates the worker slots and lists the ready issues, and it detects herdr or tmux from the pane it runs in. It starts no worker yet. The orchestrator then picks the slate and assigns each issue with `rota round assign`, which cuts a branch and starts a worker in a new tab.
 
 ## 13. Watch
 
-Each worker shows up as a herdr tab. To see all slots with their host, PR and drift:
+Each worker shows up as a herdr tab or a tmux window. To see all slots with their host, PR and drift:
 
 ```bash
 rota round status
