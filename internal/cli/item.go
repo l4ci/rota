@@ -246,12 +246,48 @@ var (
 	bulletID     = regexp.MustCompile(`\*\*\[(` + backlog.IDPattern(1) + `)\]`)
 )
 
+var (
+	dependsHeadRe = regexp.MustCompile(`(?mi)^#{1,6}[ \t]+depends[ \t]+on[ \t]*$`)
+	dependsRefRe  = regexp.MustCompile(`^(?:#\d+|` + backlog.IDPattern(backlog.FileIDDigits) + `)$`)
+)
+
+// dependsRefs splits a --depends-on value into item references, rejecting
+// anything the readiness check could not look up.
+func dependsRefs(v string) ([]string, error) {
+	var refs []string
+	for _, t := range strings.FieldsFunc(v, func(r rune) bool { return r == ',' || r == ' ' || r == '\t' || r == '\n' }) {
+		if !dependsRefRe.MatchString(t) {
+			return nil, Usage("--depends-on %q is not an item reference (#N or an ID like B07)", t)
+		}
+		refs = append(refs, t)
+	}
+	if len(refs) == 0 {
+		return nil, Usage("--depends-on needs a value")
+	}
+	return refs, nil
+}
+
+// appendDependsOn adds the ## Depends on section the round readiness check
+// reads, one bullet per reference, after body.
+func appendDependsOn(body []byte, refs []string) []byte {
+	var b strings.Builder
+	if t := strings.TrimRight(string(body), "\n"); t != "" {
+		b.WriteString(t + "\n\n")
+	}
+	b.WriteString("## Depends on\n\n")
+	for _, r := range refs {
+		b.WriteString("- " + r + "\n")
+	}
+	return []byte(b.String())
+}
+
 func itemCreate(fs *flag.FlagSet) RunFunc {
 	kind := fs.String("kind", "", "bugs|features|tasks")
 	title := fs.String("title", "", "item title")
 	tag := fs.String("tag", "", "P0..P3 (bugs) or Major|Minor|Cosmetic (features)")
 	desc := fs.String("desc", "", "one-line description")
 	bodyFile := fs.String("body-file", "", "detail file content, path or - for stdin")
+	dependsOn := fs.String("depends-on", "", "items that must close first, comma or space separated (#N, or an ID like B07); written as a ## Depends on section")
 	rawFile := fs.String("raw-file", "", "a preformatted bullet to append verbatim, path or - for stdin")
 	named := map[string]*string{}
 	for _, n := range []string{"related", "milestone", "repos", "subsystem", "captured"} {
@@ -313,6 +349,17 @@ func itemCreate(fs *flag.FlagSet) RunFunc {
 				return Result{}, readInputErr("body-file", *bodyFile, err)
 			}
 			in.Body, in.HasBody = body, true
+		}
+		if given["depends-on"] {
+			refs, err := dependsRefs(*dependsOn)
+			if err != nil {
+				return Result{}, err
+			}
+			if dependsHeadRe.Match(in.Body) {
+				return Result{}, Usage("--depends-on conflicts with the ## Depends on section already in --body-file")
+			}
+			in.Body = appendDependsOn(in.Body, refs)
+			in.HasBody = true
 		}
 		be, err := openBacklog(c, root, false, "")
 		if err != nil {
