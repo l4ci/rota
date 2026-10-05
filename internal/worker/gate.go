@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	"os"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/land"
 	"github.com/l4ci/rota/internal/overlap"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/tracker"
@@ -368,20 +370,23 @@ func (e Env) gate(ctx context.Context, root string, o GateOpts, res GateResult, 
 			return r, nil
 		}
 	} else {
-		res, gerr := e.Git(e.context(), root, "merge", "--no-ff", "-m", fmt.Sprintf("merge: %s into %s", branch, o.Base), branch)
-		out, errb, code := res.Stdout, res.Stderr, res.ExitCode
-		if gerr != nil {
-			code, errb = 127, gerr.Error()
+		head, code := e.git(root, "rev-parse", g.headRef)
+		if code != 0 || head == "" {
+			return g.broke(fmt.Sprintf("git rev-parse %s failed (exit %d)", g.headRef, code))
 		}
-		if code != 0 {
-			e.git(root, "merge", "--abort")
+		run := func(args ...string) (git.Result, error) { return e.Git(e.context(), root, args...) }
+		if err := land.MergeLocal(run, head, fmt.Sprintf("merge: %s into %s", branch, o.Base)); err != nil {
 			// Only a real conflict is called one. Anything else (no committer
 			// identity, a hook, a locked index) is reported with git's own words,
 			// so it is not mistaken for work to resolve with the slot.
-			if git.IsMergeConflict(out + errb) {
+			var me *land.MergeError
+			switch {
+			case errors.As(err, new(*land.ConflictError)):
 				return g.verdict(GateMergeFailed, fmt.Sprintf("error: merge of %s into %s conflicted — resolve with the slot that owns the context", branch, o.Base), ""), nil
+			case errors.As(err, &me):
+				return g.verdict(GateMergeFailed, fmt.Sprintf("error: merge of %s into %s failed (exit %d): %s", branch, o.Base, me.Code, strings.TrimSpace(me.Out)), ""), nil
 			}
-			return g.verdict(GateMergeFailed, fmt.Sprintf("error: merge of %s into %s failed (exit %d): %s", branch, o.Base, code, strings.TrimSpace(errb+" "+out)), ""), nil
+			return g.verdict(GateMergeFailed, fmt.Sprintf("error: merge of %s into %s failed (exit 127): %s", branch, o.Base, err), ""), nil
 		}
 	}
 	res.Changed = true
@@ -611,7 +616,7 @@ func (g *gate) mergeRemote() (GateResult, bool) {
 	// adapter turns auto-merge off where the forge would otherwise schedule a
 	// merge that reports success and merges nothing.
 	n, _ := strconv.Atoi(g.prNum)
-	if err := g.forge.PRRequestMerge(g.ctx, n, tracker.MergeOpts{HeadSHA: g.verified}); err != nil {
+	if err := land.RequestForge(g.ctx, g.forge, n, g.verified, false); err != nil {
 		return g.verdict(GateMergeFailed, fmt.Sprintf("error: %s merge failed for %s:\n%s", g.cliName, g.pr, tailLines(err.Error(), 20)), ""), true
 	}
 
