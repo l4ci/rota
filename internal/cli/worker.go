@@ -17,7 +17,6 @@ import (
 
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -732,10 +731,10 @@ func slotApprovalThread(root, slot string) (approvalThread, error) {
 	// its thread names none.
 	slot = t.Name
 	branch := t.Branch
-	if n, ok := round.PRNumber(t.PR); ok {
+	if n, ok := worker.PRRefNumber(t.PR); ok {
 		return approvalThread{Kind: "pr", Number: n, Slot: slot, Title: fmt.Sprintf("Merge approval: PR #%d", n)}, nil
 	}
-	if n, err := strconv.Atoi(round.SlotIssue(t.Task, branch, slot)); err == nil {
+	if n, err := strconv.Atoi(worker.HeldID(t.Task, branch, slot)); err == nil {
 		return approvalThread{Kind: "issue", Number: n, Slot: slot, Title: fmt.Sprintf("Merge approval: %s (%s)", slot, branch)}, nil
 	}
 	return approvalThread{}, Usage("--approval and --escalate need an approval thread: slot %s has no PR and no issue number", slot)

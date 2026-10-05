@@ -172,7 +172,7 @@ func buildLimits(ctx context.Context, c *Ctx, root string, cfg any, set limits.S
 				mu.Unlock()
 			}
 			out = append(out, limits.Target{Session: name, Pane: pane, Account: s.Account(),
-				Issue: round.SlotIssue(s.Task(), s.Branch(), name)})
+				Issue: s.HeldID()})
 		}
 		return out
 	}
@@ -219,7 +219,7 @@ func buildLimits(ctx context.Context, c *Ctx, root string, cfg any, set limits.S
 				if s.Account() != account || !slices.Contains(rc.Roster, name) {
 					continue
 				}
-				if round.SlotIssue(s.Task(), s.Branch(), name) == "" && s.State() != "busy" {
+				if s.HeldID() == "" && s.State() != "busy" {
 					return name, true
 				}
 			}
