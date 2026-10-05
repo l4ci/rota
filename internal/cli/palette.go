@@ -35,6 +35,8 @@ func paletteEntries(c *Ctx, out *paletteOutcome) []palette.Entry {
 			return nil
 		}},
 		paletteVerb(c, "Round status", "slots, PRs, drift", palette.InProject, "round", "status"),
+		paletteVerb(c, "Split view", "workers beside the orchestrator", palette.Always, "layout", "split"),
+		paletteVerb(c, "Tab view", "one tab per worker", palette.Always, "layout", "tabs"),
 		paletteVerb(c, "Doctor", "check git, forge, host and agent", palette.InProject, "doctor"),
 		paletteVerb(c, "Skills update", "refresh the installed skills", palette.Always, "skills", "update"),
 		paletteVerb(c, "Projects", "rota projects on this machine", palette.Always, "projects"),
