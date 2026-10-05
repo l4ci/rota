@@ -93,13 +93,9 @@ type acct struct{ name, configDir string }
 // Configured returns work.accounts of the project config.
 func Configured(root string) []acct {
 	cfg := config.Load(filepath.Join(root, ".rota", "config.json"))
-	raw, _ := config.Lookup(cfg, "work.accounts")
-	list, _ := raw.([]any)
 	var out []acct
-	for _, e := range list {
-		if o, ok := e.(*jsonx.Object); ok {
-			out = append(out, acct{Str(o, "name"), Str(o, "configDir")})
-		}
+	for _, a := range config.Accounts(cfg) {
+		out = append(out, acct{a.Name, a.ConfigDir})
 	}
 	return out
 }

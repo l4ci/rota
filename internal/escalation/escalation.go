@@ -247,9 +247,7 @@ type SendResult struct {
 }
 
 func dispatchKind(root string) string {
-	v, _ := config.Lookup(config.Load(filepath.Join(root, ".rota", "config.json")), "work.dispatch")
-	s, _ := v.(string)
-	return s
+	return config.Dispatch(config.Load(filepath.Join(root, ".rota", "config.json")))
 }
 
 // Send posts the escalation comment, raises the notification and records the

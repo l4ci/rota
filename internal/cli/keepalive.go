@@ -326,11 +326,7 @@ func usageRecord(root string, now func() time.Time) func(keepalive.Decision) err
 // keepaliveNotify raises the herdr notification alone, when the host is
 // herdr: work.dispatch is herdr or the process runs inside herdr.
 func keepaliveNotify(ctx context.Context, c *Ctx, cfg any, title, body string) {
-	dispatch := ""
-	if v, err := config.Value(cfg, "work.dispatch"); err == nil {
-		dispatch, _ = v.(string)
-	}
-	if dispatch != "herdr" && os.Getenv("HERDR_ENV") != "1" {
+	if config.Dispatch(cfg) != "herdr" && os.Getenv("HERDR_ENV") != "1" {
 		return
 	}
 	var h host.Host
