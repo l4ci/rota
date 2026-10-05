@@ -1,6 +1,6 @@
 # Rolling back a cycle
 
-`/rota-ship --undo` inverts [`/rota-work`](running-work.md)'s commit and completion steps. It resets the base branch past a cycle's merge commit, moves that cycle's TODO entries from `## Completed` back to their type sections, and decrements `since_refactor` counters the cycle bumped. The default mode is a dry run with a structured preview; nothing is written until you confirm. MVP support covers direct-merge cycles only. Cycles shipped through `/rota-ship`'s PR path are refused.
+`/rota-ship --undo` inverts [`/rota-work`](running-work.md)'s commit and completion steps. It resets the base branch past a cycle's merge commit and reopens the items that cycle completed, which moves their entries from `## Completed` back to their type sections. The default mode is a dry run with a structured preview; nothing is written until you confirm. It covers direct-merge cycles only. Cycles shipped through `/rota-ship`'s PR path are refused, and in [issue mode](issue-backend.md) `/rota-ship` always opens a PR, so there is no direct-merge cycle to undo.
 
 ## /rota-ship --undo
 
@@ -28,30 +28,31 @@ You realize the preview implementation conflicts with a milestone constraint tha
 The skill prints the rollback plan:
 
 ```
-[F42] cycle rollback plan:
-  Subject: merge: F42 — inline preview for share links
-  Base:    main (will reset to 7c91a2e, one commit before merge)
-  Items:   [F42] (1)
-  Branch:  rota/F42-share-link-preview (already deleted by direct-merge; recreate with: git branch rota/F42-share-link-preview 4d2f8b1^2)
-  Status:  no active stream for this cycle
-  Handoff: no handoff file present
-  Plans:   no plan file present
-  Counters: since_refactor: 7 → 6
+Undo plan for last cycle: 4d2f8b1
 
-dry-run: no files modified.
+Subject:  merge: F42 — inline preview for share links
+Base:     main will reset --hard 4d2f8b1^1 (currently 4d2f8b1)
+Items:    F42 will be restored to BACKLOG.md (Features)
+
+Branch:   deleted by rota ship merge; rerun `git branch <name> 4d2f8b1^2` to keep the work
+Status:   no active entry to clear (cycle already removed it)
+Handoff:  gitignored — not restorable
+Plans:    gitignored — not restorable
+
+Re-run with --apply to apply.
 ```
 
-The skill then asks for confirmation through the standard *Apply* / *Cancel* picker. Pick *Apply* and the helper runs again with `--force`, applies the changes, and reports:
+The skill then asks for confirmation through the standard *Apply* / *Cancel* picker. Pick *Apply* and the skill runs `rota ship undo --apply`, which applies the changes and reports:
 
 ```
-[F42] cycle rolled back: base reset to 7c91a2e, 1 TODO entry restored, counters decremented
+Undone cycle 4d2f8b1. Reset main to 7c91a2e. Restored: F42.
 ```
 
 Re-run [`/rota-work` (no argument)](picking-work.md) and `[F42]` shows up under Features again, ready to be re-planned or replaced. The detail file at `.rota/features/F42.md` is untouched; only the active backlog state and the merge commit moved. If you want to amend the item's description before re-running, edit the detail file directly and `/rota-work` (no argument) will pick up the new wording on its next pass.
 
 ## What gets rolled back vs. preserved
 
-`/rota-ship --undo` rolls back the **merge commit on the base branch** (the base is reset to the commit immediately before it), the cycle's **TODO entries** (un-strikethroughed and moved from `## Completed` back to their original type sections under `## Features`, `## Bugs`, or `## Tasks`), and **`since_refactor` counters** (decremented once per non-refactor commit the cycle introduced).
+`/rota-ship --undo` rolls back the **merge commit on the base branch** (the base is reset to the commit immediately before it) and the cycle's **TODO entries** (reopened and moved from `## Completed` back to their original type sections under `## Features`, `## Bugs`, or `## Tasks`). An item that is already active again is left alone and reported as a no-op.
 
 Preserved untouched: **`ARCHIVE.md`** historical entries (the rolled-back done-line was in `BACKLOG.md ## Completed`, not in `ARCHIVE.md`), the **git reflog** (the merge commit is still recoverable for 90 days via `git reflog`), and **git objects** generally. The merged branch's commits stay reachable through the reflog, so nothing is irretrievably lost in the short term.
 
@@ -61,7 +62,7 @@ Not restored, by design: **handoff files** (`.rota/handoff/<branch>.md` are giti
 
 `/rota-ship --undo` enforces four guards before it will apply anything.
 
-**Clean tree required.** A dirty working tree exits with code 2. Commit, stash, or discard your in-flight changes before rolling back; `git reset --hard` cannot run safely otherwise.
+**Clean tree required.** A dirty working tree is refused (exit 4). Commit, stash, or discard your in-flight changes before rolling back; `git reset --hard` cannot run safely otherwise.
 
 **Base branch required.** `/rota-ship --undo` must run on the base branch (whatever [`rota git base`](../reference/cli-helpers.md) returns, usually `main` or `master`). Running from a feature branch refuses with a pointer to switch first.
 

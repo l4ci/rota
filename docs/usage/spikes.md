@@ -23,7 +23,7 @@ You experiment freely on that branch: try the library, prototype the integration
 
 ## How spikes end
 
-When you have enough evidence, update `.rota/spikes/<name>.md` with one of four verdicts:
+When you have enough evidence, run `/rota-spike done <name>`. It records one of four verdicts in `.rota/spikes/<name>.md`:
 
 | Verdict | Meaning |
 |---------|---------|
@@ -36,7 +36,7 @@ Honest reporting matters more than salvage. A `not viable` conclusion is useful:
 
 The spike branch stays around as a reference but is never merged.
 
-After you mark the spike done, the skill asks one extra question when the verdict is `viable`, `not viable`, or `depends-on-X`: *"Promote the finding to a hard-boundary decision in `DECISIONS.md`?"* If you say yes, it dispatches `/rota-decide --from-spike <name>`. The spike's question, verdict, and recommended approach pre-fill the rule and why; you supply the forbids and permits that distinguish a decision from a learning. `inconclusive` spikes skip the prompt. See [decisions](decisions.md) for the rule/why/forbids/permits structure.
+After you mark the spike done with `/rota-spike done <name>`, the skill prints a one-line nudge when the verdict is `viable`, `not viable`, or `depends-on-X`: run `/rota-decide --from-spike <name>` to promote the finding to a hard-boundary decision in `DECISIONS.md`. It does not ask or dispatch it. When you run it, the spike's question, verdict, and recommended approach pre-fill the rule and why; you supply the forbids and permits that distinguish a decision from a learning. `inconclusive` spikes skip the nudge. See [decisions](decisions.md) for the rule/why/forbids/permits structure.
 
 ## After the spike
 
@@ -44,17 +44,17 @@ The findings feed back into whatever decision triggered the spike, usually a mil
 
 See [vision and plans](vision-and-plans.md) for how spikes fit the broader planning flow.
 
-## Spikes vs capture-and-work vs /rota-work
+## Spikes vs capture and work
 
 | Skill | Use when… |
 |-------|-----------|
 | `/rota-spike` | You don't know if something is even possible and need to find out before committing |
-| `/rota-capture` (accept the hand-off) | You know exactly what to do and want to capture and implement it in one pass |
+| `/rota-capture`, then `/rota-work <ID>` | You know exactly what to do and want to file it and implement it |
 | `/rota-work` | You have a captured backlog item and want the orchestrator to implement it properly |
 
 Spike when you don't know; work when you do. Skipping a spike on a hunch costs more than running one.
 
-See [running work](running-work.md) for how the `/rota-capture` hand-off and `/rota-work` behave once the question is settled.
+See [running work](running-work.md) for how `/rota-capture` and `/rota-work` behave once the question is settled.
 
 ## Spike hygiene
 

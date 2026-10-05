@@ -2,6 +2,8 @@
 
 `/rota-capture --remove` permanently removes backlog entries from [`BACKLOG.md`](../reference/rota-folder.md), their associated files, and any cross-references. It's the local inverse of plain [`/rota-capture`](capturing-work.md).
 
+It works on the file backend only (`rota item rm` refuses under `backlog.backend: "issues"`). On the [issue backend](issue-backend.md) the issue is the item: close it with `rota item complete <ID> --reason dropped`.
+
 ## /rota-capture --remove
 
 ```
@@ -27,23 +29,14 @@ Later you find it's a duplicate of `[F42]`. Run:
 The skill prints a structured preview:
 
 ```
-[F99] removal plan:
-  TODO entry: .rota/BACKLOG.md ## Features (line removed)
-    - **[F99] [Major] Redesign the splash screen.** ...
-  Cross-references to strip: 1
-    .rota/BACKLOG.md ## Bugs [B12]: Related: [F99] → (removed)
-  Detail file: .rota/features/F99.md (delete)
-  Plan files: 0
-  ARCHIVE: untouched (use --scrub-archive to mirror)
-  Active stream: none
-
-dry-run: no files modified.
+F99: would remove TODO entry, 1 cross-reference(s), detail file
+preview only; pass --apply
 ```
 
-The skill then asks for confirmation with three options: *Apply (Recommended)*, *Apply + scrub ARCHIVE*, *Cancel*. Pick *Apply* and the helper runs again with `--force`, applies the changes, and reports:
+The skill then asks for confirmation with three options: *Apply (Recommended)*, *Apply + scrub ARCHIVE*, *Cancel*. Pick *Apply* and the skill runs `rota item rm --apply F99`, which applies the changes and reports:
 
 ```
-[F99] removed: TODO entry, 1 cross-reference, detail file
+F99: removed TODO entry, 1 cross-reference(s), detail file
 ```
 
 ## What gets cleaned vs. preserved
@@ -54,26 +47,26 @@ The skill then asks for confirmation with three options: *Apply (Recommended)*, 
 | `Related:` cross-references in active `BACKLOG.md` | removed | removed |
 | `.rota/features/<ID>.md` / `.rota/bugs/<ID>.md` / `.rota/tasks/<ID>.md` | deleted if present | deleted if present |
 | `.rota/plans/<milestone>-<ID>.md` | deleted if present | deleted if present |
-| `status.json` active entry | stripped with `--force`; refused otherwise | same |
+| Item active in `status.json` | apply refused until the stream ends | same |
 | `ARCHIVE.md` entry | preserved | removed |
 | ID counters in `counters.json` | not decremented; ID stays claimed | not decremented |
-| GitHub issue references | not touched | not touched |
+| Upstream issues (legacy `GH: #N` tags) | not touched; the skill offers to remove the `in-progress` label | same |
 
 Counters never decrement. An ID removed today won't be reissued to a different item tomorrow; gaps in the sequence are intentional and prevent ID collisions in git history.
 
-Close GitHub issues upstream manually. `/rota-capture --remove` has no knowledge of remote trackers.
+Close upstream issues manually. `/rota-capture --remove` never closes them.
 
 ## Safety semantics
 
 `/rota-capture --remove` refuses to apply until you confirm. The confirmation gate runs even when [`autonomy.level`](autonomy.md) is set to `auto`; removal is always a manual step.
 
-Active items (items present in any `status.json` `items` array) are refused by default:
+Active items (items present in any `status.json` `items` array) are refused when you apply:
 
 ```
-error: [F99] is active on branch rota/redesign-splash; pass --force to strip from active stream
+error: [F99] is active on branch rota/redesign-splash
 ```
 
-Pass `--force` to override. With `--force`, the ID is stripped from the entry's items list (the entry is dropped if it becomes empty) and a warning is written to stderr. `--force` doesn't touch any branch or worktree; it removes only the backlog record. Branch commits survive unchanged.
+The preview still works and marks the branch. End the stream first with `rota status rm <branch>`, then re-run. There is no `--force`. Ending the stream touches only the status entry (and drops that branch's handoff note); it doesn't touch any branch or worktree, and branch commits survive unchanged.
 
 ## CSV / batch usage
 
@@ -100,6 +93,6 @@ If an item is done rather than unwanted, use [/rota-work](running-work.md) to co
 
 `/rota-capture --remove` isn't a soft-delete or an undo mechanism. Once applied, the entry is gone from the active backlog. `ARCHIVE.md` keeps a historical record by default; `--scrub-archive` erases it there too.
 
-`/rota-capture --remove` doesn't close GitHub issues. Close upstream issues manually after removing a backlog entry.
+`/rota-capture --remove` doesn't close upstream issues. Close them manually after removing a backlog entry.
 
-`/rota-capture --remove --force` only removes the backlog record for an active item. It won't delete the branch, revert commits, or discard work in progress. To abandon a branch, use git directly after removing the backlog entry.
+It never deletes a branch, reverts commits, or discards work in progress. To abandon a branch, end its stream with `rota status rm <branch>` and delete the branch with git.

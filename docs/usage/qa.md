@@ -56,7 +56,7 @@ Triggered by `/rota-ship` when `ship.qa: true`. Runs after `/rota-review` and th
 | `qa.gate` | `PASS` | `CONCERNS` | `FAIL` |
 |---|---|---|---|
 | `"advisory"` (default) | continue silently | surface findings, continue | surface findings, continue (advisory means advisory) |
-| `"blocking"` | continue silently | surface, branch on autonomy level | stop; user fixes via `/rota-work` or `/rota-debug` and reruns `/rota-ship` |
+| `"blocking"` | continue silently | surface, ask you how to proceed | stop; user fixes via `/rota-work` or `/rota-debug` and reruns `/rota-ship` |
 
 ## When to use
 

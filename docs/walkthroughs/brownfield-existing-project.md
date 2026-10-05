@@ -33,7 +33,7 @@ $ rota init
 
 Same defaults as a greenfield setup. For an existing repo I usually flip two with `rota config set`: `worktree` isolation so `main` stays untouched while agents run (useful when you also need to deploy from `main` mid-cycle), and `pr` merge strategy if your team requires GitHub review. For a solo maintenance pass, the defaults are fine.
 
-`rota init` writes `.rota/` and the managed blocks in `CLAUDE.md`. It doesn't read your code. That happens next.
+`rota init` writes `.rota/` and the managed blocks in `AGENTS.md` (`CLAUDE.md` imports it). It doesn't read your code. That happens next.
 
 ## Step 2: Scaffold the project map by hand
 
@@ -78,7 +78,7 @@ Rule-based alerting. Reads events, evaluates rules, dedups within a window, and 
 - Dedup window is hardcoded; per-rule windows are on the backlog.
 ```
 
-Run `rota map index` once after writing the files; it pulls each file's `summary:` into the always-on `## Project Map` block in `CLAUDE.md`. The map isn't exhaustive; just enough for the orchestrator to know where to look. After every `/rota-work` cycle, touched subsystems get their `touched:` date bumped automatically and the always-on block is regenerated. When subsystems drift or duplicate later, edit or retire the relevant `.rota/map/<name>.md` files by hand.
+Run `rota map index` once after writing the files; it pulls each file's `summary:` into the always-on `## Project Map` block in `AGENTS.md`. The map isn't exhaustive; just enough for the orchestrator to know where to look. After every `/rota-work` cycle, touched subsystems get their `touched:` date bumped automatically and the always-on block is regenerated. When subsystems drift or duplicate later, edit or retire the relevant `.rota/map/<name>.md` files by hand.
 
 ## Step 3: open issues (optional)
 
@@ -88,7 +88,7 @@ If your project has no remote tracker, skip this step entirely.
 
 ## Step 4: /rota-capture for the mental backlog
 
-The remaining items, the ones you've been tracking informally, go in via `/rota-capture`. Brain-dump in one go; the model splits, classifies, and assigns IDs.
+The remaining items, the ones you've been tracking informally, go in via `/rota-capture`. Brain-dump in one go; the model splits, classifies, and assigns IDs. The IDs and files below are the file backend's; on the issues backend each item is an issue and its ID is `#N` ([issue backend](../usage/issue-backend.md)).
 
 ```bash
 $ /rota-capture "alert rule editor crashes on empty title; we should add a /health endpoint for k8s; dedup window is hardcoded at 5 min, should be per-rule; DST off-by-one on dashboard 24h filter"
@@ -232,9 +232,9 @@ If you'd configured `work.mergeStrategy = direct` instead, `/rota-ship` would ha
 
 After a week of dropping rota into Pinpoint:
 
-- `BACKLOG.md` has 11 items from the combined import and brain-dump; six are shipped, two in flight, the rest queued
+- `BACKLOG.md` has 11 items from the issue-linked items and the brain-dump; six are shipped, two in flight, the rest queued
 - `KNOWLEDGE.md` has four to six bullets across `Alerts`, `Storage`, `Integrations`, and `Security`. Surprises worth keeping, not a fix log
-- `.rota/MAP.md` has six subsystems, three of them `last-touched: 2026-05-19` (this week) and three older
+- `.rota/map/` has six subsystems, three of them `touched: 2026-05-19` (this week) and three older
 - `DECISIONS.md` has one hard boundary you committed to mid-cycle: *"Secrets are never accepted via URL query params on any integration endpoint. Forbids: query-string POST bodies. Permits: form bodies with `type=password` inputs."* Future workers must respect it; the orchestrator surfaces it during planning if a touched file is in scope.
 - One milestone if you decided to add one, e.g. `M01 — security hardening`. Or none, if you've been working straight off the backlog. Either is fine; brownfield doesn't require a milestone to be useful.
 
@@ -242,7 +242,7 @@ What you notice over time is that the same class of gotcha stops recurring. Thre
 
 ## What changes structurally
 
-You don't have to refactor anything to adopt rota. The only structural addition is `.rota/` (tracked by default, with a few machine-specific paths gitignored) and a managed block in `CLAUDE.md`. Your existing build, tests, deploy pipeline, and code layout stay the same. The map and the knowledge accumulate from how you already work (debug, fix, ship), except now the loop leaves a trace that future cycles consult automatically.
+You don't have to refactor anything to adopt rota. The only structural addition is `.rota/` (tracked by default, with a few machine-specific paths gitignored) and a managed block in `AGENTS.md`. Your existing build, tests, deploy pipeline, and code layout stay the same. The map and the knowledge accumulate from how you already work (debug, fix, ship), except now the loop leaves a trace that future cycles consult automatically.
 
 ## Scale to a round
 

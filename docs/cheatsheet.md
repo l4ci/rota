@@ -3,7 +3,7 @@
 What each `/rota-*` skill does, one line each. For details: [`reference/slash-commands.md`](reference/slash-commands.md).
 
 ## Capture & pick
-- **`/rota-capture`**: add bugs, features, tasks to the backlog. No code yet. Prints the new IDs and stops. Flag: `--remove`.
+- **`/rota-capture`**: add bugs, features, tasks to the backlog (`.rota/BACKLOG.md` or GitHub/GitLab issues, per `backlog.backend`; see [issue backend](usage/issue-backend.md)). No code yet. Prints the new IDs and stops. Flag: `--remove`.
 - **`/rota-pause`**: stop cleanly; leave a handoff note for the next session.
 
 ## Plan & build
@@ -31,6 +31,8 @@ What each `/rota-*` skill does, one line each. For details: [`reference/slash-co
 - **`/rota-release`**: cut a release.
 
 ## Verbs, not skills
+- **`rota`** (bare, in a terminal): runs `rota setup` in a directory without `.rota/`, launches the orchestrator in an initialized project.
+- **`rota orchestrate`**: run `rota doctor`, then start the orchestrator under `rota keepalive run`.
 - **`rota init`** (`rota init umbrella`): scaffold `.rota/` and fill config defaults.
 - **`rota projects`**: list every project `rota init` registered on this machine (`$XDG_CONFIG_HOME/rota/projects.json`, default `~/.config/rota`). Paths that no longer exist are marked `(missing)`.
 - **`rota setup`**: `rota init` plus a short config walkthrough on a terminal. `--yes` takes the defaults, `--set key=value` answers one question, `--list` prints them.

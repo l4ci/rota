@@ -1,6 +1,6 @@
 # Picking work
 
-Two flows help you orient and pick what to do next. `/rota-work` (no argument) reconciles git state, surfaces any [`/rota-pause`](pausing-and-resuming.md) handoff note for active streams, presents the backlog, and suggests work. `/rota-work --preview <ID>` lets you peek at the orchestrator's plan before code lands.
+Two flows help you orient and pick what to do next. `/rota-work` (no argument) reconciles git state, surfaces any [`/rota-pause`](pausing-and-resuming.md) handoff note for active streams, presents the backlog (`.rota/BACKLOG.md`, or the tracker's issues on the [issue backend](issue-backend.md)), and suggests work. `/rota-work --preview <ID>` lets you peek at the orchestrator's plan before code lands.
 
 ## /rota-work (no argument)
 
@@ -9,7 +9,7 @@ Reconciles the backlog against actual git state, then suggests what to pick up.
 Before presenting results it:
 
 1. Validates active branches and worktrees against git; stale entries get cleaned automatically.
-2. Archives completions older than five days to `ARCHIVE.md`.
+2. Archives completions older than five days to `ARCHIVE.md` (file backend only; issues are closed on the tracker).
 3. Shows the backlog sorted by priority and size, with a clusters section built from `Related:` links.
 4. Suggests one item. P0 bugs jump the queue.
 
@@ -38,7 +38,7 @@ After you confirm the pick, `/rota-work` (no argument) routes you to [running wo
 /rota-work
 ```
 
-Output: a backlog table with a highlighted suggestion, e.g. `→ Suggest: B03 (P0 bug): fix auth token expiry`. Answer `y` (or pick a different item) and work begins.
+Output: the backlog table plus a suggestion, e.g. `Suggested next: B03 Fix auth token expiry (P0)` and one sentence why (`#42` instead of `B03` on the issue backend). Answer `y` (or pick a different item) and work begins.
 
 If the suggestion is a size-Major feature or a P0/P1 bug, `/rota-work` (no argument) offers `/rota-work --preview` as a question option before routing to `/rota-work`.
 
@@ -51,7 +51,7 @@ Prints the orchestrator's intended approach for an item before any code is writt
 Output structure:
 
 - One-paragraph approach summary
-- Bulleted lists: *Files I'd touch*, *Files I'd create*, *Tests I'd add*, *Assumptions I'm making*, *Known unknowns*
+- Bulleted lists: *Files I'd touch*, *Files I'd create*, *Hard boundaries to respect* (when a `DECISIONS.md` topic matches), *Tests I'd add*, *Assumptions I'm making*, *Known unknowns*
 
 Use it as a cheap gate before `/rota-work` on size-Major-or-larger items or P0/P1 bugs, where corrections after the fact are expensive. Review the output, then push back, ask for a durable plan ([`/rota-plan`](vision-and-plans.md)), or proceed to [running work](running-work.md) by re-invoking `/rota-work` without the flag.
 
@@ -63,7 +63,7 @@ Use it as a cheap gate before `/rota-work` on size-Major-or-larger items or P0/P
 
 Output: specific file paths, test names, and function names the orchestrator would touch, not generic descriptions.
 
-If a plan already exists at [`.rota/plans/<key>.md`](../reference/rota-folder.md), the peek restates it. Without a plan, the output is an ad-hoc decomposition; reach for `/rota-plan` when alignment needs to survive beyond the current session.
+If a plan already exists (file backend: [`.rota/plans/<key>.md`](../reference/rota-folder.md); issue backend: a note on the issue), the peek restates it. Without a plan, the output is an ad-hoc decomposition; reach for `/rota-plan` when alignment needs to survive beyond the current session.
 
 ## How reconciliation keeps state honest
 

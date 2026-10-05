@@ -2,7 +2,7 @@
 
 A round is one orchestrator session plus two to five workers. Each worker is a standing agent in
 its own git worktree and terminal tab (herdr or tmux), or an in-harness subagent when there is no
-terminal host ([solo mode](#solo-mode)). Each holds one GitHub issue at a time. Workers implement,
+terminal host ([solo mode](#solo-mode)). Each holds one backlog item at a time: a GitHub or GitLab issue, or a `.rota/BACKLOG.md` item on the file backend ([issue backend](issue-backend.md)). Workers implement,
 verify and open a PR; they never merge. The orchestrator assigns issues, relays decisions, merges
 PRs; the merge gate is the only full verification run.
 
@@ -37,7 +37,7 @@ a round is the same idea with the assignment, waiting and merging done by verbs.
    host from where it runs (herdr inside a herdr pane, tmux inside tmux). Set `herdr` or `tmux` only
    to force one. With neither it falls back to
    [solo mode](#solo-mode).
-2. **A tracker.** Rounds take GitHub issues (`gh`) or GitLab issues (`glab`), authenticated.
+2. **A backlog.** With `backlog.backend: issues`, rounds take GitHub (`gh`) or GitLab (`glab`) issues, authenticated. On the file backend (the default) they take `.rota/BACKLOG.md` items and the orchestrator completes them at merge. See [issue backend](issue-backend.md).
 3. **Accounts, if you have more than one.** `work.accounts` maps slots to separate
    `CLAUDE_CONFIG_DIR`s, so workers draw on different usage limits and `rota round assign` can avoid a
    cooling account. The entries are paths on your machine, so they go in `.rota/config.local.json`
@@ -149,7 +149,7 @@ takes `--json` for a machine-readable envelope.
 candidates; it starts no agent.
 
 ```sh
-rota round start --slots 3                    # scope from round.scope (default milestone)
+rota round start --slots 3                    # default work.workerSlots (3); scope from round.scope (default milestone)
 rota round start --scope slate --items 12,13  # only these issues
 rota round start --scope open                 # every open issue, as it becomes ready
 rota round candidates                         # re-read the board with readiness checks
@@ -174,7 +174,7 @@ rota round candidates                         # re-read the board with readiness
 
 Candidates carry three checks:
 
-- `criteria`: acceptance criteria, or a design or plan note.
+- `criteria`: acceptance criteria, or a design or plan note. Acceptance criteria in the `assign --body-file` text count too.
 - `dependencies`: every `## Depends on` reference is closed. One that cannot be looked up fails the
   check, so fix the issue text.
 - `overlap`: no shared file with an in-flight slot, from a `## Files` section or the paths the issue
@@ -193,7 +193,7 @@ rota round assign 59 --agent ben --body-file decisions.md --siblings 58,60,62
 
 Without `--agent` the first idle roster slot takes it, else the first slot whose worker is done with
 a PR (see [PRs in review](#prs-in-review)). Assign refuses (exit 4, `blockedBy`)
-with `no round`, `out of scope`, `not ready`, `overlap`, `claimed`, `slot busy`,
+with `no round`, `out of scope`, `not ready`, `overlap`, `claimed`, `open PR`, `slot busy`,
 `no free slot` or `brief missing`, and marks nothing in those cases. When it goes through it
 claims the item (`<agent>@<round>`), sets it in progress with a comment, cuts the slot's
 branch `<agent>/<issue>-<slug>`, picks the account and dispatches a short signed brief: a

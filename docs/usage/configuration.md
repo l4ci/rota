@@ -20,7 +20,7 @@ Default config:
     "confirmBeforeExecute": true
   },
   "learn": {
-    "verify": true
+    "verify": false
   },
   "ship": {
     "review": true
@@ -74,7 +74,9 @@ Controls how [`/rota-ship`](review-and-ship.md) integrates completed work.
 | Strategy | How it works | When to use |
 |----------|-------------|-------------|
 | `"direct"` | Merge to main, delete branch | Solo work, fast iteration |
-| `"pr"` | Push branch, create GitHub PR | Team work, code review required |
+| `"pr"` | Push branch, open a PR (GitHub) or MR (GitLab) | Team work, code review required |
+
+Under `backlog.backend: "issues"` this key is ignored: `/rota-work`, `/rota-debug` and `/rota-ship` always open a PR or MR and never merge. See [issue backend](issue-backend.md).
 
 ## work.dispatch: subagent, tmux or herdr
 
@@ -97,7 +99,7 @@ Two things behave differently under `tmux` and `herdr` than in `/rota-work`:
 - **`work.isolation` stops applying.** Every slot has its own worktree, so its own git index, by construction.
 - **Workers commit.** The orchestrator's per-task commit step is skipped; integration happens through the merge gate instead, which re-verifies the *merged* tree. Two workers can each be honestly green and still break the cycle branch together — a signature one widens while another adds a caller, a constant one stops emitting while another starts reading it. Nothing about a clean merge rules that out, which is why the gate runs `refactor.verifyCommands` after every merge rather than trusting the branches.
 
-Related keys: `work.workerSlots` (pool size, default `3`), `work.workerCommand` (default builds `claude --model <models.worker> --dangerously-skip-permissions`), `work.codexCommand` (the same for Codex workers; default builds `codex --model <model> --dangerously-bypass-approvals-and-sandbox --dangerously-bypass-hook-trust --no-daemon --no-alt-screen`), `work.operatorCommand` (`/rota-work` under tmux only; default builds `claude --continue --model <models.orchestrator> --permission-mode auto`; a round's orchestrator is started by you and restarted by `rota keepalive run`), and `work.accounts`.
+Related keys: `work.workerSlots` (pool size, default `3`), `work.workerCommand` (default builds `claude --model <models.worker> --dangerously-skip-permissions`), `work.codexCommand` (the same for Codex workers; default builds `codex --model <model> --dangerously-bypass-approvals-and-sandbox --dangerously-bypass-hook-trust --no-daemon --no-alt-screen`), `work.operatorCommand` (starts the orchestrator for `rota orchestrate` and `rota worker session ensure`; default builds `claude --model <models.orchestrator> --permission-mode auto`, with `--continue` added for `session ensure`; `rota keepalive run` restarts it), and `work.accounts`.
 
 **Workers run with permissions skipped; the operator does not.** A worker is briefed to commit, open a PR and run tests with nobody in its pane to answer a prompt, so a narrower mode just stalls it. What bounds a worker is scope rather than gating — a throwaway branch in its own worktree, with `rota worker gate` re-verifying the merged tree before anything reaches the cycle branch. The operator keeps `auto` because it performs the merges and it is the window a human is actually watching. Narrow either via its config key; a worker that then stops on a prompt reports `NEEDS-PERMISSION` rather than hanging.
 
@@ -347,19 +349,19 @@ Relative path (from the project root) to the documentation folder that [`/rota-s
 - **Type:** boolean
 - **Default:** `false`
 
-Controls whether `/rota-ship --docs` after-work mode automatically writes proposed doc updates without pausing for approval. When `false` (the default), the after-work flow proposes changes and waits for your confirmation before writing. That's the safe propose-mode path. When `true`, it writes changes and reports what it did. The `true` path will gain a Layer-3 LLM safety review before commit when M01-S03 ships; until then, `false` is the recommended default and `true` is opt-in.
+Controls whether `/rota-ship --docs` after-work mode automatically writes proposed doc updates without pausing for approval. When `false` (the default), the after-work flow proposes changes and waits for your confirmation before writing. That's the safe propose-mode path. When `true`, it skips the approval gate and commits the doc updates directly.
 
 | Value | Behavior |
 |-------|----------|
-| `false` (default) | After-work mode proposes updates and waits for approval before writing. Recommended until M01-S03 ships the auto-write safety review. |
-| `true` | After-work mode writes doc updates automatically. Fast; assumes you trust the agent's judgment on doc prose. Best paired with a `git diff` review per cycle. |
+| `false` (default) | After-work mode proposes updates and waits for approval before writing. |
+| `true` | After-work mode commits doc updates without the approval gate. Fast; assumes you trust the agent's judgment on doc prose. Best paired with a `git diff` review per cycle. |
 
 ## docs.afterWork
 
 - **Type:** boolean
 - **Default:** `false`
 
-Gate for the after-work docs flow. When `true`, the skills [`/rota-work`](running-work.md), `/rota-ship`, and [`/rota-release`](../reference/slash-commands.md#rota-release) trigger the docs after-work flow after their primary action completes. `/rota-work` and `/rota-ship` only fire on cycles that resolve 2+ items or touch 5+ files (small fixes don't trigger); `/rota-release` fires on every successful release (release notes are inherently user-facing). Under `autonomy.level: off`, the trigger is a one-line nudge in the terminal report; under `auto`, the skill auto-dispatches `/rota-ship --docs` directly (or runs the after-work flow inline if called from `/rota-ship` itself).
+Gate for the after-work docs flow. When `true`, the skills [`/rota-work`](running-work.md), `/rota-ship`, and [`/rota-release`](../reference/slash-commands.md#rota-release) trigger the docs after-work flow after their primary action completes. `/rota-work` and `/rota-ship` only fire on cycles that resolve 2+ items or touch 5+ files (small fixes don't trigger); `/rota-release` fires on every successful release (release notes are inherently user-facing). `/rota-work` only nudges, in a one-line terminal report, at either autonomy level. `/rota-ship` runs the after-work flow inline, with its approval gate as the checkpoint. `/rota-release` nudges under `autonomy.level: off` and auto-dispatches `/rota-ship --docs` under `auto`.
 
 ```json
 { "docs": { "afterWork": true } }

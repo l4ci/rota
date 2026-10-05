@@ -19,11 +19,15 @@ Run `rota init` once at the project root. It scaffolds `.rota/` and writes the R
 config defaults (models, isolation, merge strategy, quality gates, autonomy level). Keep the
 defaults unless you have a reason not to.
 
-Two settings worth a second of thought:
+`rota setup` does the same and, on a terminal, asks the main choices (backlog backend, isolation, merge strategy, autonomy, review and QA gates); bare `rota` in an uninitialized project runs it.
+
+Three settings worth a second of thought:
+
+- **Backlog.** `file` (default) keeps it in `.rota/BACKLOG.md`. `issues` makes GitHub or GitLab issues the backlog. See the [issue backend](usage/issue-backend.md).
 
 - **Isolation.** `branch` is fine for solo work. Switch to `worktree` if you want `main`
   untouched while agents run, or if you plan to run parallel `/rota-work` sessions.
-- **Merge strategy.** `direct` for fast iteration. `pr` if your team requires GitHub review.
+- **Merge strategy.** `direct` for fast iteration. `pr` if your team requires GitHub review (the issue backend always opens a PR).
 
 To change a setting later, run `rota config set <key> <value>` (`rota config show` lists the keys). See [config options](reference/config-options.md). Don't hand-edit the JSON files.
 

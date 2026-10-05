@@ -4,12 +4,12 @@ rota supports planning above the day-to-day backlog. `/rota-vision` frames miles
 
 ## /rota-vision: brainstorm milestones
 
-`/rota-vision` is a brainstorming skill. It runs Socratic discovery (a couple of questions tailored to whether you are creating a roadmap from scratch or editing an existing one), pulls grounded findings from web research, pushes back on your scope and ordering, and proposes milestones with explicit dependencies. You iterate until the breakdown feels right.
+`/rota-vision` is a brainstorming skill. It runs Socratic discovery (a couple of questions tailored to whether you are creating a roadmap from scratch or editing an existing one), optionally pulls grounded findings from web research (it asks first), pushes back on your scope and ordering, and proposes milestones with explicit dependencies. You iterate until the breakdown feels right.
 
-When the session ends, `/rota-vision` writes two things to disk:
+When the session ends, `/rota-vision` writes two things:
 
-- `.rota/MILESTONES.md`: an active milestone list and a one- to two-line overview of every milestone with its status and dependencies. The file opens with a vision intro paragraph as preamble.
-- `.rota/milestones/M01.md`, `M02.md`, …: one detail file per milestone with the goal, acceptance criteria, rationale, risks, and research findings.
+- `.rota/MILESTONES.md`: a short vision paragraph and the Active list, regenerated with `rota milestone index`.
+- One plan per milestone with the goal, acceptance criteria, rationale and risks. On the file backend that is `.rota/milestones/M01.md`, `M02.md`, …; on the [issue backend](issue-backend.md) it is the body of the milestone's tracking issue next to a native tracker milestone.
 
 Run `/rota-vision` whenever the conversation is about strategy rather than tactics: *"plan the next quarter"*, *"what's the bigger picture"*, *"create a roadmap"*, *"brainstorm milestones"*. Re-running it on a project that already has milestones enters edit mode automatically.
 
@@ -26,16 +26,18 @@ Each milestone carries one of four statuses:
 
 Multiple milestones can be `active` simultaneously when their dependencies allow. [`/rota-work` (no argument)](picking-work.md) prefers items tagged to active milestones within each priority and size band, so the active set scopes work without being a hard wall. P0 bugs always jump the queue regardless of milestone, and general-backlog items without a tag still surface.
 
-When an active milestone has no open items remaining, `/rota-work` (no argument) surfaces an empty-active notice so you know the milestone is ready to close. Run `rota milestone status <MID> shipped` to flip its status, which immediately unblocks any milestone that listed it as a dependency.
+When an active milestone has no open items remaining, `/rota-work` (no argument) surfaces an empty-active notice so you know the milestone is ready to close. Run `rota milestone status <MID> --to shipped` to flip its status, which immediately unblocks any milestone that listed it as a dependency.
 
 Marking a milestone `shipped` immediately unblocks anything that depended on it. Marking it `archived` does not. Use `archived` for milestones you are intentionally dropping, not for ones that finished.
 
 ## /rota-plan: write the implementation plan
 
-`/rota-plan` writes an agreed implementation note for a milestone slice or a single backlog item before [`/rota-work`](running-work.md) runs. The plan lives at:
+`/rota-plan` writes an agreed implementation note for a milestone slice or a single backlog item before [`/rota-work`](running-work.md) runs. On the file backend the plan lives at:
 
 - `.rota/plans/M01-S01.md` for a slice of milestone work
-- `.rota/plans/M01-B07.md` for a single item that warrants its own plan
+- `.rota/plans/M01-B07.md` for a single item that warrants its own plan (a milestone tag is optional; the key is the item ID as given)
+
+On the [issue backend](issue-backend.md) an item plan is a note on the item's issue (key `#42`), and a slice plan lives on the milestone's tracking issue.
 
 Each plan contains: goal in one sentence, approach in 3–6 sentences, tasks with observable behaviors and verify steps, named assumptions, and open questions. Tasks must fit one execution window. If they don't, split the plan. Every task requires a verify step; a task without one is not well-defined.
 
@@ -43,7 +45,7 @@ Before the plan is signed off, `/rota-plan` checks doc-by-path deliverables: any
 
 When `/rota-work` starts its planning step, it checks for a matching plan file and uses it as the dispatch source instead of decomposing ad-hoc. `/rota-work` (no argument) suggests running `/rota-plan` for size-Major items that do not have a plan yet. `/rota-vision` offers it alongside [`/rota-capture`](capturing-work.md) when you finish seeding a freshly activated milestone.
 
-After `/rota-work` ships an item that had its own plan (e.g. `M01-B07.md`), the plan file is removed automatically. Once the cycle commits, the plan's task decomposition and assumptions are stale, and leaving the file would confuse a future cycle on the same key. Slice plans (`M01-S01.md`) stay through their multi-item lifetime; remove the slice plan with `rota plan rm M01-S01` once the slice is fully shipped.
+On the file backend, after `/rota-work` completes an item that had its own plan (e.g. `M01-B07.md`), the plan file is removed automatically. Once the cycle commits, the plan's task decomposition and assumptions are stale, and leaving the file would confuse a future cycle on the same key. Slice plans (`M01-S01.md`) stay through their multi-item lifetime; remove the slice plan with `rota plan rm M01-S01` once the slice is fully shipped.
 
 ## When to use /rota-plan vs skipping it
 
@@ -59,7 +61,7 @@ When a milestone hinges on a question you cannot answer from the chair (*"can SS
 
 ## Tagging items to milestones
 
-`/rota-capture` tags captured items with the active milestone automatically when there is exactly one active. When multiple milestones are active simultaneously, it surfaces them as picks. Items can carry a `Milestone: M01` field or a comma-separated list (`Milestone: M01, M03`) when work spans milestones.
+`/rota-capture` tags an item when you name a milestone, or asks once whether to tag when exactly one milestone is active (the default is untagged). With several active milestones and none named, it leaves items untagged. On the file backend an item can carry a `Milestone: M01` field or a comma-separated list (`Milestone: M01, M03`) when work spans milestones; the issue backend takes one milestone.
 
 `/rota-work` (no argument) prefers milestone-tagged items within each priority and size band but general-backlog items still surface. The active milestone set acts as a soft scope rather than a hard filter, so you stay focused without losing sight of the rest of the backlog.
 

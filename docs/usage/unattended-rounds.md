@@ -17,7 +17,7 @@ What you need first is a working round: [parallel rounds](parallel-rounds.md). W
 | Account switch | `orchestrator.switchOnUsage` | an orchestrator close to a limit, before it hits | `orchestrator.usageThreshold` |
 
 A typical unattended start: `rota hook install`, then in the orchestrator's pane
-`rota keepalive run -- claude --model opus`. The keepalive supervisor runs the limit watcher beside the
+`rota keepalive run -- claude --model opus`. `rota orchestrate` already starts the orchestrator under `rota keepalive run`, so after `rota hook install` you only start it. The keepalive supervisor runs the limit watcher beside the
 command, so there is nothing more to start.
 
 ## Orchestrator handoff
@@ -155,7 +155,7 @@ never deletes the handoff; only the SessionStart hook consumes it.
 
 ### Flags
 
-`--max-restarts`, `--breaker`, `--backoff` and `--prompt` override the config for one run.
+`--max-restarts`, `--breaker`, `--backoff` and `--prompt` override the config for one run. `--first-prompt` appends a prompt to the first start only (`rota orchestrate` uses it to start `/rota-orchestrate`).
 `--no-limits` leaves out the usage-limit watcher the supervisor otherwise runs beside the command (see
 [usage limits](#usage-limits)). `--json` prints one envelope when the loop ends, not before.
 

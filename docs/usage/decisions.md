@@ -35,16 +35,16 @@ Both flags only seed `Rule` and `Why`. You still articulate `Forbids` and `Permi
 
 `inconclusive` spikes can't be promoted, since the verdict isn't a commitment yet. Add findings on the spike branch, re-run `/rota-spike done <name>`, then come back.
 
-`/rota-spike`'s Finish mode also nudges this flow automatically: when a spike concludes `viable`, `not viable`, or `depends-on-X`, the skill asks whether to promote the finding and dispatches `/rota-decide --from-spike <name>` if you say yes. See [spikes](spikes.md) for the full Finish-mode flow.
+`/rota-spike`'s Finish mode also nudges this flow: when a spike concludes `viable`, `not viable`, or `depends-on-X`, it prints a one-line pointer to `/rota-decide --from-spike <name>`. It does not ask or dispatch it. See [spikes](spikes.md) for the full Finish-mode flow.
 
 ## Where decisions are consulted
 
 | Skill | When |
 |---|---|
-| `/rota-work` | Step 4 plan phase. Workers receive matching entries as a `**Hard boundaries:**` block; orchestrator FAILs the plan if it would violate. |
+| `/rota-work` | Step 4 plan phase. Workers receive matching entries as a `**Hard boundaries:**` block; the orchestrator stops and surfaces a task that would violate one before dispatching. |
 | `/rota-debug` | Pre-hypothesis. Boundaries can rule out fix directions before cycles are wasted. |
 | `/rota-plan` | Plan-write phase. Boundaries become hard constraints in the plan's design. |
-| `/rota-refactor` | Design phase. Designs that violate a boundary are disqualified before approach selection. |
+| `/rota-refactor` | Orient phase. Recorded decisions are respected; one is reopened only on real friction, and the finding says so. |
 | `/rota-review` | Review checklist. Reviewer FAILs on any forbidden pattern in the diff. |
 | `/rota-vision` | Milestone planning. Boundaries constrain what milestones can promise. |
 
@@ -52,11 +52,11 @@ Both flags only seed `Rule` and `Why`. You still articulate `Forbids` and `Permi
 
 ## Suggest nudges
 
-[`/rota-work`](running-work.md) and [`/rota-debug`](debugging.md) end with an optional nudge: *"Did this cycle codify any boundaries? Run `/rota-decide` to lock them in."* The nudge fires regardless of [`autonomy.level`](autonomy.md), since decisions are your call.
+[`/rota-work`](running-work.md) and [`/rota-debug`](debugging.md) can end with a one-line pointer to `/rota-decide` (`/rota-work` when the post-cycle trigger gate fires, `/rota-debug` when the fix locked in a boundary). Neither ever invokes it, whatever [`autonomy.level`](autonomy.md) says, since decisions are your call.
 
 ## File location
 
-`.rota/DECISIONS.md` is tracked by default, so decisions travel with the repo alongside `KNOWLEDGE.md` and `BACKLOG.md`. To keep decisions private, add `.rota/DECISIONS.md` to `.gitignore`.
+`.rota/DECISIONS.md` is tracked by default, so decisions travel with the repo alongside `KNOWLEDGE.md`. To keep decisions private, add `.rota/DECISIONS.md` to `.gitignore`.
 
 ## See also
 

@@ -134,7 +134,7 @@ In the pane, at the project root:
 rota orchestrate
 ```
 
-It runs `rota doctor`, then opens a focused orchestrator tab that runs the agent under `rota keepalive run` and has already started `/rota-orchestrate`. `rota` alone opens a small palette (banner, version, the project and round state, and the common actions) with Orchestrate preselected, so `rota` then Enter does the same. Tell the orchestrator what you want, for example "run a round on issues 12 and 13". `orchestrator.harness` picks the agent (`claude` or `codex`). A `claude` orchestrator starts under your `CLAUDE_CONFIG_DIR` if set, else under the `work.accounts` entry with the most headroom. See [your first round](usage/parallel-rounds.md#your-first-round) for what happens outside herdr or tmux.
+It runs `rota doctor`, then opens a focused orchestrator tab that runs the agent under `rota keepalive run` and has already started `/rota-orchestrate`. `rota` alone opens a small palette (banner, version, the project and round state, and the common actions) with Orchestrate preselected, so `rota` then Enter does the same. Tell the orchestrator what you want, for example "run a round on issues 12 and 13". `orchestrator.harness` picks the agent (`claude`, `codex`, `hermes` or `opencode`). A `claude` orchestrator starts under your `CLAUDE_CONFIG_DIR` if set, else under the `work.accounts` entry with the most headroom. See [your first round](usage/parallel-rounds.md#your-first-round) for what happens outside herdr or tmux.
 
 The skill runs `rota doctor` again, then `rota round start`. That takes the orchestrator lease, creates the worker slots and lists the ready issues, and it detects herdr or tmux from the pane it runs in. It starts no worker yet. The orchestrator then picks the slate and assigns each issue with `rota round assign`, which cuts a branch and starts a worker in a new tab.
 
@@ -146,7 +146,7 @@ Each worker shows up as a herdr tab or a tmux window. To see all slots with thei
 rota round status
 ```
 
-You don't need to poll. The orchestrator waits on `rota round wait` and wakes when a slot is done, blocked or dead.
+You don't need to poll. The orchestrator waits on `rota round wait` and wakes when a slot is done, blocked or dead. A slot is free as soon as its worker opens a PR: the orchestrator gives it the next issue while that PR waits for review.
 
 ## 14. Merges and escalations
 

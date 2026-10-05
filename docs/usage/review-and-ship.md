@@ -1,6 +1,6 @@
 # Review and ship
 
-`/rota-ship` integrates completed work into main, gated by `/rota-review` by default.
+`/rota-ship` integrates completed work into main (or opens a PR), gated by `/rota-review` by default.
 
 ## /rota-review
 
@@ -29,7 +29,7 @@ The report ends with one verdict (`PASS` / `CONCERNS` / `FAIL`) with file:line e
 | `CONCERNS` | Issues found, but not blocking. You can proceed or fix first. |
 | `FAIL` | Integration is blocked. |
 
-You can run `/rota-review` at any time on a branch, not only before shipping.
+You can run `/rota-review` at any time on a branch, not only before shipping. On the [issue backend](issue-backend.md), `/rota-review --queue` reviews the PRs waiting on `needs-review` items and merges the ones that pass.
 
 ## /rota-ship
 
@@ -39,7 +39,7 @@ You can run `/rota-review` at any time on a branch, not only before shipping.
 /rota-ship
 ```
 
-**Default flow:** [preflight](../reference/preflight.md) → `/rota-review` (if `ship.review` is `true`) → second-opinion gate (if `ship.secondOpinion` is `true`) → `/rota-qa` gate (if `ship.qa` is `true`) → build PR body → open PR or merge → close resolved items.
+**Default flow:** branch check → `/rota-review` (if `ship.review` is `true`) → second-opinion gate (if `ship.secondOpinion` is `true`) → `/rota-qa` gate (if `ship.qa` is `true`) → build PR body → open PR or merge → close resolved items (on the issue backend the PR merge closes them).
 
 The review gate behaves as follows:
 
@@ -51,7 +51,7 @@ The review gate behaves as follows:
 
 When `ship.secondOpinion: true` and `/rota-review` returned `PASS`, `/rota-ship` dispatches a fresh subagent with **no prior conversation context** and gives it only the diff plus the stated goal. `/rota-review` shares the project's context (conventions, `KNOWLEDGE.md`, plan) with the work it produced, and a reviewer with that context normalizes blind spots. A reviewer without it must reason from the diff alone, catching what the contextualized reviewer let pass.
 
-Returns `PASS` / `CONCERNS` / `FAIL` and routes through the same verdict logic as `/rota-review`. Skipped if the user already accepted CONCERNS in Step 3 (no value in re-litigating). Opt-in because it adds one fresh-context roundtrip per ship and most cycles don't need it. Enable when shipping release tooling, security paths, or data migrations. See [`ship.secondOpinion`](configuration.md#shipsecondopinion).
+Returns `PASS` / `CONCERNS` / `FAIL` and routes through the same verdict logic as `/rota-review`. Skipped if the user already accepted CONCERNS in Step 3 (no value in re-litigating), and for a round worker's PR (the orchestrator's merge gate is the second check). Opt-in because it adds one fresh-context roundtrip per ship and most cycles don't need it. Enable when shipping release tooling, security paths, or data migrations. See [`ship.secondOpinion`](configuration.md#shipsecondopinion).
 
 ### QA gate (opt-in)
 
@@ -62,20 +62,20 @@ Verdict routes per `qa.gate`:
 | `qa.gate` | `PASS` | `CONCERNS` | `FAIL` |
 |---|---|---|---|
 | `"advisory"` (default) | continue silently | surface findings, continue | surface findings, continue (advisory means advisory) |
-| `"blocking"` | continue silently | branch on autonomy level | stop the ship |
+| `"blocking"` | continue silently | ask you how to proceed | stop the ship |
 
 `INFRA-FAIL` (dev server / creds / binary missing) is always advisory regardless of `qa.gate`. See [product QA](qa.md) for the full strategy file format.
 
 Use `/rota-ship` to integrate finished work. Finish the implementation cycle in [`/rota-work`](running-work.md) first; don't call `/rota-ship` mid-implementation.
 
-## Direct merge vs GitHub PR
+## Direct merge vs PR
 
-`work.mergeStrategy` in `.rota/config.json` controls how the branch is integrated:
+`work.mergeStrategy` in `.rota/config.json` controls how the branch is integrated. On the [issue backend](issue-backend.md) this setting is ignored: `/rota-ship` always opens a PR / MR and never merges.
 
 | Strategy | How it works | When to use |
 |----------|-------------|-------------|
 | `"direct"` | Merges to main and deletes the branch locally. | Solo work, fast iteration. |
-| `"pr"` | Pushes the branch and opens a GitHub PR with a generated body. | Team work, required code review. |
+| `"pr"` | Pushes the branch and opens a GitHub PR or GitLab MR with a generated body. | Team work, required code review. |
 
 The PR body is built from commit subjects, the list of resolved item IDs, and a short test plan derived from the touched areas.
 
@@ -106,7 +106,7 @@ The nudge fires when EITHER `release.nudgeAfterCommits` (default 10) OR `release
 
 ## Release checklist
 
-`/rota-release` walks a per-project checklist (`.rota/RELEASE.md` by default) as a preflight gate at Step 1.5, before the version bump and before any writes. Each `- [ ]` line is one gate. Released-once-forgotten-forever drift like a sibling version file going stale, a missing CHANGELOG humanization pass, or an infra rollout step nobody owns ends up here. The skill itself stays generic.
+`/rota-release` walks a per-project checklist (`.rota/RELEASE.md` by default) as a preflight gate before the version bump and before any writes. Each `- [ ]` line is one gate. Released-once-forgotten-forever drift like a sibling version file going stale, a missing CHANGELOG humanization pass, or an infra rollout step nobody owns ends up here. The skill itself stays generic.
 
 ```markdown
 # Release Checklist

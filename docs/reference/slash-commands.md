@@ -7,8 +7,8 @@ Setup, config, update and migration are `rota` verbs, not skills: `rota init` (a
 | Skill | Description |
 |-------|-------------|
 | `/rota-vision` | Brainstorm a project's bigger vision and milestones using Socratic discovery, web research, and a critique pass; writes `MILESTONES.md` plus per-milestone detail files |
-| `/rota-brainstorm` | Per-item design exploration before `/rota-plan`: Socratic discovery, 2-3 approaches with tradeoffs, sectioned design with per-section approval; writes `.rota/designs/<ID>.md` which `/rota-plan` reads as soft input |
-| `/rota-capture` | Capture bugs, features, and tasks: auto-classifies, assigns priority/size, routes to the correct section. On milestone-spec captures, audits the diff for ship-evidence and asks per flagged title before appending. Prints the new IDs and stops |
+| `/rota-brainstorm` | Per-item design exploration before `/rota-plan`: Socratic discovery, 2-3 approaches with tradeoffs, sectioned design with per-section approval; stores the design as `.rota/designs/<ID>.md` (file backend) or a note on the issue (issue backend), which `/rota-plan` reads as soft input |
+| `/rota-capture` | Capture bugs, features, and tasks into the configured backlog (`.rota/BACKLOG.md` or GitHub/GitLab issues): auto-classifies, assigns priority/size, routes to the correct section or labels. On milestone-spec captures, audits the diff for ship-evidence and asks per flagged title before appending. Prints the new IDs and stops |
 | `/rota-capture --remove` | Remove a captured backlog item and clean up its dependencies. Dry-run preview by default, asks before applying |
 | `/rota-pause` | Gracefully stop mid-session; writes a handoff note (next step, hypothesis, mid-edit files) for the next session's `/rota-work` (no argument) |
 | `/rota-plan` | Write an implementation plan for a milestone slice or item (`M01-S01`, `M01-B07`): task decomposition with verifiable outcomes, named assumptions, open questions; `/rota-work` consults if present |
@@ -30,11 +30,11 @@ Alphabetical reference of every `/rota-*` command.
 
 ## /rota-capture
 
-Captures bugs, features, and tasks into [`BACKLOG.md`](rota-folder.md). Auto-classifies each item, assigns priority (P0/P1/P2) for bugs and size (Major/Minor/Cosmetic) for features, and routes it to the correct section with a zero-padded auto-incrementing ID (`[B01]`, `[F01]`, `[T01]`). See [capturing work](../usage/capturing-work.md) for the full flow.
+Captures bugs, features, and tasks into the backlog with `rota item create`. Where the item lands depends on `backlog.backend`. On the file backend (default) it goes into [`BACKLOG.md`](rota-folder.md) under the correct section with a zero-padded auto-incrementing ID (`[B01]`, `[F01]`, `[T01]`). On the issue backend it becomes a GitHub or GitLab issue with type, priority and size labels, and the ID is the issue number (`#42`); see [issue backend](../usage/issue-backend.md). Either way it auto-classifies each item and assigns priority (P0/P1/P2) for bugs and size (Major/Minor/Cosmetic) for features. See [capturing work](../usage/capturing-work.md) for the full flow.
 
 ## /rota-debug
 
-Systematic root-cause cycle for a single `[B##]` bug: reproduce, hypothesize with the orchestrator model, verify the hypothesis before touching code, fix with the worker model, confirm the reproducer passes, commit, mark complete. Two circuit breakers: (1) if the hypothesize → verify loop iterates 3 times without converging (single-hypothesis mode only), escalates to a fresh-context subagent with a "for-next-agent" brief; (2) if 3 committed fixes fail to resolve the reproducer (counter persisted at `.rota/debug/<session>.json`, survives `/clear`), the Iron Law fires a hard stop with no further agents, surfacing to the user. Uses the same isolation mode as `/rota-work`, and nudges you toward [`/rota-learn`](../usage/learning.md) when the root cause was non-obvious. See [debugging](../usage/debugging.md) for the full flow.
+Systematic root-cause cycle for a single bug (`[B##]` on the file backend, `#N` on the issue backend): reproduce, hypothesize with the orchestrator model, verify the hypothesis before touching code, fix with the worker model, confirm the reproducer passes, commit, mark complete. Two circuit breakers: (1) if the hypothesize → verify loop iterates 3 times without converging (single-hypothesis mode only), escalates to a fresh-context subagent with a "for-next-agent" brief; (2) if 3 committed fixes fail to resolve the reproducer (counter persisted at `.rota/debug/<session>.json`, survives `/clear`), the Iron Law fires a hard stop with no further agents, surfacing to the user. Uses the same isolation mode as `/rota-work`, and nudges you toward [`/rota-learn`](../usage/learning.md) when the root cause was non-obvious. See [debugging](../usage/debugging.md) for the full flow.
 
 ## /rota-decide
 
@@ -46,15 +46,15 @@ Writes durable knowledge from the current session into `.rota/KNOWLEDGE.md`, gro
 
 ## /rota-orchestrate
 
-Runs a parallel round: you are the orchestrator, and up to five standing workers each take one issue in their own worktree and terminal tab. The skill decides what the `rota round` verbs cannot: which issues make a good slate, how to read a stuck worker, what to escalate to you and when to merge. Sequencing and the rules are the verbs' job (`rota doctor`, `rota round start`, `assign`, `wait`, `rota worker gate`, `rota round wind-down`), and a refusal from a verb is the rule, not an obstacle. Workers build and open PRs; they never merge. Triggered by "you are the orchestrator" or "run a round". For one item, use `/rota-work`. See [parallel rounds](../usage/parallel-rounds.md) and the [`rota round` verbs](cli-helpers.md#rota-round).
+Runs a parallel round: you are the orchestrator, and standing workers (`work.workerSlots`, at most as many as `round.roster` names) each take one issue in their own worktree and terminal tab. Start it with `rota orchestrate` or bare `rota` (`orchestrator.harness` picks the agent), or tell an existing session "you are the orchestrator". The skill decides what the `rota round` verbs cannot: which issues make a good slate, how to read a stuck worker, what to escalate to you and when to merge. Sequencing and the rules are the verbs' job (`rota doctor`, `rota round start`, `assign`, `wait`, `rota worker gate`, `rota round wind-down`), and a refusal from a verb is the rule, not an obstacle. Workers build and open PRs; they never merge. Triggered by "you are the orchestrator" or "run a round". For one item, use `/rota-work`. See [parallel rounds](../usage/parallel-rounds.md) and the [`rota round` verbs](cli-helpers.md#rota-round).
 
 ## /rota-pause
 
-Stops mid-session by writing a handoff note to `.rota/handoff/<branch>.md` that captures current hypothesis, next planned step, files mid-edit, and gotchas discovered. Use it when the context window is filling or you need to step away mid-`/rota-work`. See [pausing and resuming](../usage/pausing-and-resuming.md) for the full flow.
+Stops mid-session (or an orchestrator mid-round, without winding the round down) by writing a handoff note to `.rota/handoff/<branch>.md` that captures current hypothesis, next planned step, files mid-edit, and gotchas discovered. Use it when the context window is filling or you need to step away mid-`/rota-work`. See [pausing and resuming](../usage/pausing-and-resuming.md) for the full flow.
 
 ## /rota-plan
 
-Writes an implementation plan before `/rota-work` runs, keyed under a milestone and unit (e.g. `M01-S01`). Tasks must fit one execution window and each requires a verifiable outcome. `/rota-work` consults the plan automatically if one exists. See [vision and plans](../usage/vision-and-plans.md) for the full flow.
+Writes an implementation plan before `/rota-work` runs, keyed by a milestone slice (`M01-S01`) or an item (`M01-B07`, `#42`). Tasks must fit one execution window and each requires a verifiable outcome. `/rota-work` consults the plan automatically if one exists. See [vision and plans](../usage/vision-and-plans.md) for the full flow.
 
 ## /rota-qa
 
@@ -76,17 +76,17 @@ After publishing, an always-manual gate offers to close any upstream GitHub/GitL
 
 ## /rota-review
 
-Staff-engineer review of a feature branch before it leaves your machine: scopes the diff, pulls relevant `KNOWLEDGE.md` topics, returns PASS / CONCERNS / FAIL with file-and-line evidence. Read-only; no mutations, no commits. See [review and ship](../usage/review-and-ship.md) for the full flow.
+Staff-engineer review of a feature branch before it leaves your machine: scopes the diff, pulls relevant `KNOWLEDGE.md` topics, returns PASS / CONCERNS / FAIL with file-and-line evidence. Read-only; no mutations, no commits. On the issue backend, `--queue` instead works through every `needs-review` item's open PR or MR and merges the ones that pass. See [review and ship](../usage/review-and-ship.md) for the full flow.
 
 ## /rota-capture --remove
 
-Removes a captured backlog item and cleans up its dependencies in one operation. Strips the item's entry from `BACKLOG.md`, removes `Related:` cross-references that point to it from other items, deletes any matching detail file (`.rota/bugs/`, `.rota/features/`, `.rota/tasks/`) and plan file (`.rota/plans/`), and strips the item from `status.json`. Items currently active in `status.json` are refused unless `--force` is passed.
+Removes a captured backlog item and cleans up its dependencies in one operation, through `rota item rm`. File backend only; on the issue backend close the issue with `rota item complete <ID> --reason dropped` instead. Strips the item's entry from `BACKLOG.md`, removes `Related:` cross-references that point to it from other items, and deletes any matching detail file (`.rota/bugs/`, `.rota/features/`, `.rota/tasks/`) and plan file (`.rota/plans/`). An item active in `status.json` is refused on apply until its stream is dropped with `rota status rm <branch>`.
 
-Dry-run-by-default: the first pass shows what would change, then an explicit `AskUserQuestion` confirmation gate must be cleared before any writes happen. `ARCHIVE.md` is preserved by default as the historical record; pass `--scrub-archive` to also remove an archived entry and its cross-references there. Accepts one or more comma-separated IDs (e.g. `B07,F03`). Validation is all-or-nothing: if any ID is unknown, the whole batch aborts before any write. See [removing work](../usage/removing-work.md) for the full flow.
+Dry-run-by-default: the first pass shows what would change, then an explicit `AskUserQuestion` confirmation gate must be cleared before any writes happen. `ARCHIVE.md` is preserved by default as the historical record; pass `--scrub-archive` to also remove an archived entry and its cross-references there. Accepts one or more comma-separated IDs (e.g. `B07,F03`). If any ID is unknown, the verb exits 3 before any write. See [removing work](../usage/removing-work.md) for the full flow.
 
 ## /rota-ship
 
-Finishes a feature branch: runs `/rota-review` (by default), builds a PR body from commit subjects and resolved item IDs, then either opens a GitHub PR or merges directly based on configured strategy. Clears the `status.json` entry and closes referenced items on completion. See [review and ship](../usage/review-and-ship.md).
+Finishes a feature branch: runs `/rota-review` (by default), builds a PR body from commit subjects and resolved item IDs, then either opens a PR (GitHub) or MR (GitLab) or merges directly based on `work.mergeStrategy`. Clears the `status.json` entry and closes referenced items on completion. On the issue backend it always opens a PR or MR with `Closes #N` lines and never merges; the merge closes the issues ([issue backend](../usage/issue-backend.md)). See [review and ship](../usage/review-and-ship.md).
 
 Two modes folded in via flags:
 
@@ -99,7 +99,7 @@ Throwaway feasibility experiment on a dedicated `spike/<name>` branch that is ne
 
 ## /rota-vision
 
-Brainstorms a project's bigger vision and breaks it into milestones with explicit dependencies and ready/blocked status, writing `MILESTONES.md` and per-milestone detail files under `.rota/milestones/`. Uses Socratic discovery, web research, and deliberate challenge before proposing milestones. See [vision and plans](../usage/vision-and-plans.md) for the full flow.
+Brainstorms a project's bigger vision and breaks it into milestones with explicit dependencies and ready/blocked status, writing `MILESTONES.md` and per-milestone detail files under `.rota/milestones/` (on the issue backend each milestone is also a tracker milestone with a tracking issue). Uses Socratic discovery, web research, and deliberate challenge before proposing milestones. See [vision and plans](../usage/vision-and-plans.md) for the full flow.
 
 ## /rota-work
 

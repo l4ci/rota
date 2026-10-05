@@ -48,11 +48,11 @@ No questions. For a solo greenfield the defaults are what I want: orchestrator `
 
 The command writes:
 
-- `.rota/BACKLOG.md`, `KNOWLEDGE.md`, `DECISIONS.md`, `MILESTONES.md`, `CONTEXT.md`
-- `.rota/counters.json`, `config.json`, `status.json`
-- Managed blocks in `CLAUDE.md` so the orchestrator picks up project knowledge, decisions, context, and the active milestone
+- `.rota/BACKLOG.md`, `KNOWLEDGE.md`, `DECISIONS.md`, `MILESTONES.md`, `MAP.md`
+- `.rota/counters.json`, `config.json`, `status.json`, `repos.json`
+- Managed blocks in `AGENTS.md` (`CLAUDE.md` imports it) so the orchestrator picks up project knowledge, decisions, the map, and the active milestone
 
-Most of `.rota/` is tracked by default, so the backlog and learnings travel with the repo from the first commit. Only `.rota/status.json`, `.rota/repos.json`, `.rota/config.local.json`, `.rota/handoff/`, `.rota/qa-runs/`, `.rota/gate-audit.jsonl`, and `.rota/**/*.lock` files are gitignored.
+Most of `.rota/` is tracked by default, so the backlog and learnings travel with the repo from the first commit. Only `.rota/status.json`, `.rota/repos.json`, `.rota/config.local.json`, `.rota/handoff/`, `.rota/qa-runs/`, `.rota/verdicts.json`, `.rota/gate-audit.jsonl`, `.rota/workers.json`, and `.rota/**/*.lock` files are gitignored.
 
 ## Step 2: /rota-vision
 
@@ -101,7 +101,7 @@ Privacy-first household budget tracker. CLI as the daily driver, web dashboard f
 
 Plus three detail files at `.rota/milestones/M01.md`, `M02.md`, `M03.md`, each with goal, acceptance criteria, rationale, risks, and the research findings from the session.
 
-`/rota-vision` marks M01 active and seeds the always-on `## Project Vision` block in `CLAUDE.md`. Every subsequent skill knows what the active milestone is.
+`/rota-vision` marks M01 active and seeds the always-on `## Project Vision` block in `AGENTS.md`. Every subsequent skill knows what the active milestone is.
 
 ## Step 3: /rota-spike (optional)
 
@@ -190,7 +190,7 @@ The output:
 [F05] tally list command                          Feature, Minor, Milestone: M01
 ```
 
-Each gets a row in `BACKLOG.md` under `## Features`, tagged `Milestone: M01`. Detail files live at `.rota/features/F01.md` … `F05.md` (auto-created when the description is long enough to overflow the BACKLOG row).
+Each gets a row in `BACKLOG.md` under `## Features`, tagged `Milestone: M01`. Detail files live at `.rota/features/F01.md` … `F05.md` (auto-created when the description is long enough to overflow the BACKLOG row). With `backlog.backend: "issues"` each item is an issue on the tracker instead; see the [issue backend](../usage/issue-backend.md).
 
 If any of these had been size-Major instead of Minor, `/rota-capture` would have nudged you toward `/rota-brainstorm` before plan to negotiate the design first. Minor items skip that layer.
 
@@ -264,7 +264,7 @@ $ /rota-ship
 
 For M01-S01 you get `PASS` with one `CONCERNS` note attached: *"F05 uses `fmt.Println` for output; consider `cmd.OutOrStdout()` for testability when the web dashboard imports the same package in M02."* You file that as a follow-up via `/rota-capture` and continue.
 
-`/rota-ship` then either opens a GitHub PR or merges directly into `main`, depending on `work.mergeStrategy`. Solo mode for Tally is direct merge.
+`/rota-ship` then either opens a GitHub PR or merges directly into `main`, depending on `work.mergeStrategy` (the issue backend always opens a PR). Solo mode for Tally is direct merge.
 
 ## Step 9: /rota-learn
 
@@ -274,7 +274,7 @@ The float-bug session produced one durable insight. `/rota-learn` writes it into
 $ /rota-learn
 ```
 
-The verifier judges every bullet for durability before it lands. It rejects "fixed the bug" but accepts:
+`/rota-learn` keeps only durable bullets (`--strict` adds an Opus verifier pass). It skips "fixed the bug" but writes:
 
 ```markdown
 ## Money & Decimals
@@ -282,7 +282,7 @@ The verifier judges every bullet for durability before it lands. It rejects "fix
 - **Never multiply a `decimal.Decimal` by a float to convert to minor units.** `Float64() * 100` produces `9.999…` for inputs like `0.10`; truncation gives `9`. Use `decimal.NewFromString(...).Shift(2).IntPart()` end-to-end. The float path is silently wrong, not noisy.
 ```
 
-The topic shows up in the `## Project Knowledge` block in `CLAUDE.md`. Next time `/rota-work` touches money handling, the orchestrator pulls this section via `rota knowledge query "Money & Decimals"` before planning, so the same trap doesn't bite a worker again.
+The topic shows up in the `## Project Knowledge` block in `AGENTS.md`. Next time `/rota-work` touches money handling, the orchestrator pulls this section via `rota knowledge query "Money & Decimals"` before planning, so the same trap doesn't bite a worker again.
 
 ## Step 10: repeat, then close M01
 
@@ -292,7 +292,7 @@ After the importer ships, `/rota-work` (no argument) says:
 
 ```
 M01 has no open items.
-Run `rota milestone status M01 shipped` to close the milestone?
+Run `rota milestone status M01 --to shipped` to close the milestone?
 ```
 
 You run it. M02 and M03 (which both depend on M01) flip from blocked to ready in `MILESTONES.md`. The next `/rota-vision` invocation enters edit mode and refines M02's plan with what you learned in M01. The float gotcha now informs the dashboard's number rendering, and the XDG-paths-Linux-only assumption gets revisited for cross-platform packaging.
@@ -305,7 +305,7 @@ You run it. M02 and M03 (which both depend on M01) flip from blocked to ready in
 - `.rota/plans/` keeps the M01-S01 plan on disk (slice plans persist; item-specific plans are auto-cleaned on ship)
 - `.rota/spikes/sqlite-schema.md` is a permanent record of why M01 stayed single-currency
 
-The next session in a fresh `/clear` starts from `/rota-work` (no argument), which reads the active milestone, the open backlog, and the managed blocks in `CLAUDE.md`. Nothing important is in your head. It's on disk, and the orchestrator's planning context now starts with what you learned.
+The next session in a fresh `/clear` starts from `/rota-work` (no argument), which reads the active milestone, the open backlog, and the managed blocks in `AGENTS.md`. Nothing important is in your head. It's on disk, and the orchestrator's planning context now starts with what you learned.
 
 ## Scale to a round
 

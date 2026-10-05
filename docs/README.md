@@ -18,11 +18,12 @@ Public user guide for rota, a zero-dependency dev workflow for Claude Code and C
 
 ### Rounds
 
-- [Your first round](first-round.md): install, skills, herdr, launching the orchestrator, a first round and wind-down, step by step
+- [Your first round](first-round.md): install, skills, herdr or tmux, launching the orchestrator, a first round and wind-down, step by step
 - [Parallel rounds](usage/parallel-rounds.md): an orchestrator, standing workers in worktrees, the merge gate, solo mode
 - [Unattended rounds](usage/unattended-rounds.md): hooks, statusline, keepalive, usage limits, the orchestrator switch
 - [Doctor and reap](usage/doctor-and-reap.md): check the machine before a round, clear leftovers after
 - [Codex workers](usage/codex-workers.md): run Codex as a worker in a round
+- [Orchestrator harnesses](usage/orchestrator-harnesses.md): run the orchestrator in Claude Code, Codex, Hermes or opencode
 - [Skills in Codex](usage/codex-skills.md): install and call the skills from Codex
 
 ### Capture and backlog

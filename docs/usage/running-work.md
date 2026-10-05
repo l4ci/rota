@@ -1,17 +1,17 @@
 # Implementing
 
-Items captured in [`BACKLOG.md`](../reference/rota-folder.md) reach "merged" through `/rota-work`, an orchestrator that plans, dispatches parallel workers, and lands one atomic commit per task. For a single ad-hoc fix, run `/rota-capture`, then `/rota-work <ID>`.
+Items captured in the backlog ([`BACKLOG.md`](../reference/rota-folder.md), or issues on the [issue backend](issue-backend.md)) reach "merged" through `/rota-work`, an orchestrator that plans, dispatches parallel workers, and lands one atomic commit per task. For a single ad-hoc fix, run `/rota-capture`, then `/rota-work <ID>`.
 
 ## /rota-work
 
-`/rota-work` is the main implementation driver. The orchestrator plans tasks, dispatches workers in parallel (one per task), verifies each result, then either merges to main or opens a PR based on your `work.mergeStrategy`.
+`/rota-work` is the main implementation driver. The orchestrator plans tasks, dispatches workers in parallel (one per task), verifies each result, then either merges to main or opens a PR based on your `work.mergeStrategy`. On the issue backend it always opens a PR.
 
 **Trigger phrases:**
 
 - `/rota-work` with no argument reconciles the backlog, suggests an item, then works it
-- `/rota-work [B03]` to implement a specific item by ID
+- `/rota-work [B03]` to implement a specific item by ID (`/rota-work 42` on the issue backend)
 - `/rota-work [B03] [F07]` to implement a batch of items together
-- `/rota-work "add retry logic to the upload pipeline"` describes the work; it captures and executes
+- `/rota-work "add retry logic to the upload pipeline"` takes a brief; run `/rota-capture` first so the work has an ID to close
 
 **Precondition:** refuses to start on a dirty working tree. Commit or stash first.
 
@@ -109,9 +109,9 @@ After `/rota-work` finishes, `work.mergeStrategy` in `config.json` controls what
 | Strategy | Behavior |
 |----------|----------|
 | `"direct"` (default) | Merges the branch to main with `--no-ff`, deletes the branch |
-| `"pr"` | Pushes the branch and creates a GitHub PR with a summary |
+| `"pr"` | Pushes the branch and opens a GitHub PR or GitLab MR with a summary |
 
-The actual ship-time gates (review, preflight, PR body composition) live in [review and ship](review-and-ship.md).
+On the issue backend the strategy is treated as `pr`, the PR closes the issues when it merges, and `/rota-work` never merges (`/rota-review --queue` does). The actual ship-time gates (review, second opinion, QA, PR body composition) live in [review and ship](review-and-ship.md).
 
 ## Many items at once
 
