@@ -53,6 +53,9 @@ type HvOptions struct {
 	Home, ClaudeDir string
 	// Version is recorded in the manifest of the reinstalled skills.
 	Version string
+	// InstalledVersion is the version stamped into rota.version; nil or ""
+	// skips the stamp. It is the running binary's version.
+	InstalledVersion func() string
 	// Skills is the set to reinstall where an hv install was; nil skips it.
 	Skills *skills.Set
 	// Milestone returns the milestone-index step for the block regeneration
@@ -713,7 +716,10 @@ func RunHv(o HvOptions) (*HvReport, error) {
 	if !ok {
 		return nil, ErrNoState
 	}
-	want := InstalledVersion()
+	want := ""
+	if o.InstalledVersion != nil {
+		want = o.InstalledVersion()
+	}
 
 	// The projects: the root, then each registered sub-repo with state.
 	var projs []*hvProj

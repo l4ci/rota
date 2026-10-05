@@ -36,7 +36,7 @@ func (r Registry) Review() Review {
 	if cv, _ := o.Get("closed"); cv != nil {
 		if c, ok := cv.(*jsonx.Object); ok {
 			cnt, _ := c.Get("count")
-			n, _ := intOf(cnt)
+			n, _ := jsonx.Int(cnt)
 			rv.Closed = &ClosedCount{Since: jsonx.Str(c, "since"), Checked: jsonx.Str(c, "checked"), Count: n}
 		}
 	}

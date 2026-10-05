@@ -9,6 +9,8 @@ A round is one orchestrator (you) and the roster's standing workers (`round.rost
 
 The workers' standing brief is [references/worker-contract.md](references/worker-contract.md). `rota round assign` hands it over by pointer. Read it once so you know what your workers were told, and what you are not allowed to contradict.
 
+Host mechanics are in [references/tmux-dispatch.md](references/tmux-dispatch.md) (polling, relays, the merge gate, permissions, accounts and failure modes, for both hosts) and, under herdr, [references/herdr-dispatch.md](references/herdr-dispatch.md) (what herdr changes). Read both for the host in use; each is complete for its step without a further hop.
+
 ## When NOT to use
 
 - One item, no parallelism → `/rota-work`.

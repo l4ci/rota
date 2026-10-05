@@ -6,19 +6,17 @@ Used by `/rota-work` Step 5. The isolation patterns plus the umbrella-mode workt
 
 ## Decision table
 
-| Scope | Isolation | Pattern |
+| Scope | Isolation | Pattern (commands below) |
 |---|---|---|
-| Single-repo | branch | `git checkout -b <branch>` + `rota status add <branch> --items <items>` |
-| Single-repo | worktree | `git branch <branch>` + `git worktree add .claude/worktrees/<branch>` + `rota status add <branch> --items <items> --worktree <path>` |
-| Umbrella (sub-repo) | branch | `(cd <repo> && git checkout -b <branch>)` + `rota status add <branch> --items <items> --repo <repo>` |
-| Umbrella (sub-repo) | worktree (Layout B) | `(cd <repo> && git branch <branch>)`, `rota git worktree-path <branch> --repo <repo>`, `git -C <repo> worktree add "$WT" <branch>`, `rota status add <branch> --items <items> --worktree "$WT" --repo <repo>` |
-| Umbrella (multi-repo) | branch | `rota git branch <branch> --repos <csv>` + `rota status add <branch> --items <ids-csv> --repos <csv>` |
+| Single-repo | branch | Single-repo, branch |
+| Single-repo | worktree | Single-repo, worktree |
+| Umbrella (sub-repo) | branch | Umbrella sub-repo, branch |
+| Umbrella (sub-repo) | worktree (Layout B) | Umbrella sub-repo, Layout B worktree |
+| Umbrella (multi-repo) | branch | Umbrella multi-repo, branch |
 
-`rota git branch` precheck refuses ALL repos if the branch exists in ANY one — no partial creation. Multi-repo workers are safe under either isolation mode (see *Cross-repo parallelism* below).
+Multi-repo workers are safe under either isolation mode (see *Cross-repo parallelism* below). Umbrella patterns run from the umbrella root (the orchestrator stays there so it can read/write `.rota/`); workers `cd` into the sub-repo path before any git operation.
 
 ## Per-pattern code
-
-The table is the contract; these are the invocations spelled out for the worker brief.
 
 **Single-repo, branch:**
 
@@ -35,6 +33,13 @@ git worktree add .claude/worktrees/<branch> <branch>
 rota status add <branch> --items <ID>[,<ID>...] --worktree .claude/worktrees/<branch>
 ```
 
+**Umbrella sub-repo, branch:**
+
+```bash
+(cd <repo> && git checkout -b <branch>)
+rota status add <branch> --items <ID>[,<ID>...] --repo <repo>
+```
+
 **Umbrella sub-repo, Layout B worktree:**
 
 ```bash
@@ -44,7 +49,16 @@ git -C <repo> worktree add "$WT" <branch>
 rota status add <branch> --items <ID>[,<ID>...] --worktree "$WT" --repo <repo>
 ```
 
-Full umbrella branch-creation ceremony (single + multi) lives in `references/umbrella-mode.md`; do not duplicate it here.
+`rota git worktree-path` produces the canonical Layout B path `<umbrella>/.claude/worktrees/<repo>/<branch>`: use it for both `worktree add` and `rota status add`. `rota ship merge` and `rota ship pr` remove that worktree themselves before they integrate the branch.
+
+**Umbrella multi-repo, branch:**
+
+```bash
+rota git branch <branch> --repos <csv>
+rota status add <branch> --items <ID>[,<ID>...] --repos <csv>
+```
+
+`rota git branch` is atomic: a precheck refuses (exit 4) for ALL repos if the branch exists in ANY one, before any branch is written. Its `--repos` takes no spaces after commas, so drop them from the `Repos:` value first.
 
 ## Cross-repo parallelism is safe by construction
 
@@ -52,7 +66,7 @@ Each sub-repo has its own `.git/index`, so multi-repo waves (one branch, N sub-r
 
 ## Umbrella mechanics
 
-This reference covers only the isolation-and-worktree-creation aspects of umbrella mode. The broader umbrella concept — the registry (`.rota/repos.json`), resolution verbs (`rota repo which`, `rota repo resolve`), the `Repos:` field on backlog items, walk-up convenience, merge/PR `--repo` plumbing — lives in `references/umbrella-mode.md`. Cite it from call sites that need both halves.
+This reference covers the branch and worktree creation for umbrella mode. The broader umbrella concept — the registry (`.rota/repos.json`), resolution verbs (`rota repo which`, `rota repo resolve`), the `Repos:` field on backlog items, walk-up convenience, status registration, merge/PR `--repo` plumbing — lives in `references/umbrella-mode.md` (see also).
 
 ## Not covered here
 

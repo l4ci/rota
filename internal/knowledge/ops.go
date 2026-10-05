@@ -46,7 +46,7 @@ func (s Store) Add(scope, topic, title, body, date string) (AddResult, error) {
 		return AddResult{}, err
 	}
 	if date == "" {
-		date = Today()
+		date = s.today()
 	}
 	body = strings.TrimRight(body, "\n")
 	content, err := ReadFile(target)
@@ -92,7 +92,7 @@ func (s Store) initTier(scope, topic, title string) error {
 		return err
 	}
 	// The old helper swallowed every error from hv-knowledge-tier --init.
-	_ = Update(p, func(sc *Sidecar) (bool, error) { return sc.Init(topic, title), nil })
+	_ = Update(p, func(sc *Sidecar) (bool, error) { return sc.Init(topic, title, s.today()), nil })
 	return nil
 }
 

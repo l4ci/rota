@@ -2,7 +2,7 @@
 
 What herdr changes versus tmux, for `/rota-orchestrate` rounds. Each worker is its own Claude Code session in its own `git worktree`, as under tmux; the difference is where the session lives: a **herdr tab** in the orchestrator's own workspace instead of a tmux window. herdr recognises the agent in each tab and reports its state natively, which removes most of the guesswork tmux needs.
 
-Everything about the *workers* rather than the *host* lives in [`worker-contract.md`](worker-contract.md) (standing contract and [provenance](worker-contract.md#provenance)) and [`tmux-dispatch.md`](tmux-dispatch.md): [polling](tmux-dispatch.md#polling), [escalating and relaying](tmux-dispatch.md#escalating-and-relaying), [the merge gate](tmux-dispatch.md#the-merge-gate), [permissions](tmux-dispatch.md#permissions) and [accounts](tmux-dispatch.md#accounts). This file does not repeat them.
+Everything about the *workers* rather than the *host* lives in [`worker-contract.md`](worker-contract.md) (standing contract and [provenance](worker-contract.md#provenance)) and [`tmux-dispatch.md`](tmux-dispatch.md): [polling](tmux-dispatch.md#polling), [escalating and relaying](tmux-dispatch.md#escalating-and-relaying), [the merge gate](tmux-dispatch.md#the-merge-gate), [permissions](tmux-dispatch.md#permissions) and [accounts](tmux-dispatch.md#accounts). This file does not repeat them; `/rota-orchestrate` cites all three directly.
 
 Verbs: the same four (`rota worker pool`, `rota worker dispatch`, `rota worker poll`, `rota worker gate`) plus `rota worker session`. `rota` picks the host (herdr or tmux) from `work.dispatch` and the surrounding environment.
 

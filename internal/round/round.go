@@ -15,7 +15,6 @@ import (
 	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -161,11 +160,7 @@ type view struct {
 	openPR   *tracker.PR
 }
 
-var (
-	reIssueBranch = regexp.MustCompile(`^[^/]+/(\d+)-`)
-	reIssueTask   = regexp.MustCompile(`^#?(\d+)$`)
-	rePRNumber    = regexp.MustCompile(`^(?:#|.*/(?:pull|merge_requests)/)?(\d+)/?$`)
-)
+var ()
 
 type worktree struct{ path, name, branch string }
 
@@ -209,7 +204,7 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 			branch, wt = w.branch, w.path
 		}
 		r := &Row{Name: name, Branch: branch, PR: s.PR(), Tab: s.Handle(), Registered: true}
-		r.Issue = issueOf(s.Task(), branch, name)
+		r.Issue = worker.HeldID(s.Task(), branch, name)
 		r.Kind, r.Tier, r.Model, r.TierReason = s.Kind(), s.Tier(), s.Model(), s.TierReason()
 		if r.Issue != "" {
 			r.Bounces = reg.Bounces(r.Issue)
@@ -222,7 +217,7 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 			continue
 		}
 		r := &Row{Name: w.name, Branch: w.branch}
-		r.Issue = issueOf("", w.branch, w.name)
+		r.Issue = worker.HeldID("", w.branch, w.name)
 		add(r, &view{worktree: w.path, base: e.Base})
 	}
 
@@ -334,7 +329,7 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 						rep.add(Finding{Kind: PRUnrecorded, Slot: r.Name, Issue: r.Issue, Detail: fmt.Sprintf("open PR #%d has branch %s as head, slot records none", pr.Number, r.Branch), Repair: "record pr"})
 					}
 				}
-			} else if n, ok := prNumber(r.PR); ok {
+			} else if n, ok := worker.PRRefNumber(r.PR); ok {
 				st, err := e.Forge.PRState(ctx, n)
 				if err != nil {
 					rep.Warnings = append(rep.Warnings, fmt.Sprintf("PR #%d state: %v", n, err))
@@ -349,7 +344,7 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 			}
 		}
 		if labelsOK && !parked && r.Issue != "" && r.PRState != "merged" && r.PRState != "closed" {
-			if n, _ := strconv.Atoi(r.Issue); !labelled[n] && !e.issueClosed(ctx, rep, n) {
+			if n, err := strconv.Atoi(r.Issue); err == nil && !labelled[n] && !e.issueClosed(ctx, rep, n) {
 				rep.add(Finding{Kind: LabelMissing, Slot: r.Name, Issue: r.Issue, Detail: fmt.Sprintf("slot holds #%s, which lacks %s", r.Issue, e.Label), Repair: "add " + e.Label})
 			}
 		}
@@ -359,7 +354,7 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 		if id := queuedIssue(q); id != "" {
 			held[id] = true
 		}
-		if n, ok := prNumber(q.PR); ok && forgeOK {
+		if n, ok := worker.PRRefNumber(q.PR); ok && forgeOK {
 			st, err := e.Forge.PRState(ctx, n)
 			switch {
 			case err != nil:
@@ -483,37 +478,6 @@ func matchAgent(agents []host.Agent, slot, tab, wt string) int {
 		}
 	}
 	return -1
-}
-
-// issueOf is the issue a slot holds: its task when that is a number, else the
-// number leading the branch `<agent>/<issue>-<slug>`. A parked slot with no
-// task holds none.
-func issueOf(task, branch, name string) string {
-	if m := reIssueTask.FindStringSubmatch(strings.TrimSpace(task)); m != nil {
-		return m[1]
-	}
-	if branch == "park/"+name {
-		return ""
-	}
-	if m := reIssueBranch.FindStringSubmatch(branch); m != nil {
-		return m[1]
-	}
-	return ""
-}
-
-// SlotIssue is the issue number a slot holds (issueOf), "" when it holds none.
-func SlotIssue(task, branch, name string) string { return issueOf(task, branch, name) }
-
-// PRNumber reads the number from a recorded PR (a bare number, #n or a URL).
-func PRNumber(pr string) (int, bool) { return prNumber(pr) }
-
-func prNumber(pr string) (int, bool) {
-	m := rePRNumber.FindStringSubmatch(strings.TrimSpace(pr))
-	if m == nil {
-		return 0, false
-	}
-	n, err := strconv.Atoi(m[1])
-	return n, err == nil
 }
 
 func firstNonEmpty(a, b string) string {

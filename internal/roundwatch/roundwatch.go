@@ -275,9 +275,6 @@ func PRStateKey(slot string) string { return changeKeySlotPR + "state/" + slot }
 // EscalationStatusKey is the snapshot key of the forge-checked escalation status.
 func EscalationStatusKey(id string) string { return changeKeyEscalat + "status/" + id }
 
-// attention are the recorded states that wait on the orchestrator.
-var attention = map[string]bool{"done": true, "blocked": true, "needs-permission": true, "limited": true, "dead": true, "unknown": true}
-
 // Digest is the one-line round state the prompt hook shows: each active
 // slot with its issue and PR, the open escalations and whether a watch is armed.
 func Digest(root string, round int, armed bool) string {
@@ -288,13 +285,17 @@ func Digest(root string, round int, armed bool) string {
 			continue
 		}
 		p := s.Name() + " " + st
-		if is := s.Issue(); is != "" {
+		is := s.Issue()
+		if is == "" {
+			is = s.HeldID()
+		}
+		if is != "" {
 			p += " #" + strings.TrimPrefix(is, "#")
 		}
 		if pr := s.PR(); pr != "" {
 			p += " " + pr
 		}
-		if attention[st] {
+		if worker.NeedsWake(st) {
 			p += " (needs you)"
 		}
 		parts = append(parts, p)
@@ -336,7 +337,7 @@ func NeedsWatch(root string) (bool, []string) {
 			continue
 		}
 		need = true
-		if attention[st] {
+		if worker.NeedsWake(st) {
 			attn = append(attn, s.Name()+" "+st)
 		}
 	}

@@ -72,7 +72,7 @@ func checkApprovals(body string, relayLog []any) string {
 	rounds := map[int]bool{}
 	for _, r := range relays {
 		rv, _ := r.Get("round")
-		if i, ok := intOf(rv); ok {
+		if i, ok := jsonx.Int(rv); ok {
 			rounds[i] = true
 		}
 	}

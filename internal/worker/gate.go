@@ -7,7 +7,6 @@ import (
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/rotatree"
 	"os"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -143,7 +142,7 @@ func (r Registry) GateTarget(arg string) (GateTarget, error) {
 				if q.From == arg {
 					return GateTarget{}, &exitcode.Error{Exit: exitcode.ExitUsage,
 						Message: fmt.Sprintf("slot %s records no PR, but its PR %s (%s) waits in review", arg, q.PR, q.Branch),
-						Hint:    fmt.Sprintf("gate the PR in review with `rota worker gate %s`", trailingNumber(q.PR))}
+						Hint:    fmt.Sprintf("gate the PR in review with `rota worker gate %s`", prNumText(q.PR))}
 				}
 			}
 		}
@@ -312,7 +311,7 @@ func (g *gate) stepRemote() (bool, error) {
 	if g.pr == "" {
 		return false, nil
 	}
-	g.prNum = trailingNumber(g.pr)
+	g.prNum = prNumText(g.pr)
 	if _, code := g.e.runGit(g.root, "remote", "get-url", "origin"); code != 0 {
 		return g.broke(fmt.Sprintf("slot %s has PR %s but this repo has no 'origin' remote; refusing a local merge that would bypass the PR", g.o.Slot, g.pr))
 	}
@@ -593,11 +592,6 @@ func indentTail(text string, n int) string {
 	return "    " + strings.Join(lines, "\n    ")
 }
 
-func trailingNumber(s string) string {
-	m := regexp.MustCompile(`[0-9]+$`).FindString(s)
-	return m
-}
-
 // detectProvider reads the provider from the PR URL (a bare number carries
 // none), then origin, and falls back to github, which is what this gate always
 // assumed.
@@ -683,9 +677,9 @@ func (g *gate) openPRForBranch() (url, brokeMsg string) {
 
 // prBody is the PR/MR description. An error means it could not be read.
 func (g *gate) prBody() (string, error) {
-	n, err := strconv.Atoi(trailingNumber(g.pr))
-	if err != nil {
-		return "", err
+	n, ok := PRRefNumber(g.pr)
+	if !ok {
+		return "", fmt.Errorf("no PR number in %q", g.pr)
 	}
 	info, err := g.forge.PRView(g.ctx, n)
 	return info.Body, err

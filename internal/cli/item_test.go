@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/backlog/trackertest"
@@ -177,5 +178,23 @@ func TestItemFailMapping(t *testing.T) {
 	}
 	if _, err := backlogFail(errors.New("boom")); asError(err).Exit != ExitInternal {
 		t.Errorf("unclassified error should be internal, got %v", err)
+	}
+}
+
+// item complete stamps the clock's day, so a pinned Deps.Today (what
+// ROTA_TEST_TODAY feeds at the edge) fixes the date it writes end to end.
+func TestItemCompleteStampsTheDepsDay(t *testing.T) {
+	root := trackerProject(t, "")
+	if code, _, stderr := rotaRun(t, "--json", "-C", root, "item", "create", "--kind", "bugs", "--title", "Dated bug"); code != 0 {
+		t.Fatalf("create: exit %d: %s", code, stderr)
+	}
+	d := testDeps()
+	d.Today = func() time.Time { return time.Date(2031, 2, 3, 12, 0, 0, 0, time.UTC) }
+	if code, _, stderr := rotaRunWith(t, d, "--json", "-C", root, "item", "complete", "B01", "--commit", "abc1234", "--no-proof"); code != 0 {
+		t.Fatalf("complete: exit %d: %s", code, stderr)
+	}
+	b, _ := os.ReadFile(filepath.Join(root, ".rota", "BACKLOG.md"))
+	if !strings.Contains(string(b), "2031-02-03") {
+		t.Errorf("BACKLOG.md lacks the pinned day:\n%s", b)
 	}
 }

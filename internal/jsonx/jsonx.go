@@ -371,3 +371,18 @@ func Bool(o *Object, key string) bool {
 	b, _ := v.(bool)
 	return b
 }
+
+// Int reads a decoded JSON number (int, float64 or json.Number) as an int; ok
+// is false for anything else.
+func Int(v any) (int, bool) {
+	switch t := v.(type) {
+	case int:
+		return t, true
+	case float64:
+		return int(t), true
+	case json.Number:
+		f, err := t.Float64()
+		return int(f), err == nil
+	}
+	return 0, false
+}

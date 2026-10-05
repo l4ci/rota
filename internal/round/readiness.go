@@ -273,7 +273,7 @@ func (e Env) InFlightItems(ctx context.Context, root string, be backlog.Backend,
 	for _, s := range reg.Slots() {
 		name := s.Name()
 		branch := s.Branch()
-		id := heldID(s.Task(), branch, name)
+		id := worker.HeldID(s.Task(), branch, name)
 		if id == "" {
 			continue
 		}
@@ -369,14 +369,4 @@ func (e Env) changed(ctx context.Context, wt, base string, shared []string) []st
 		out = append(out, p)
 	}
 	return out
-}
-
-// heldID is the item a slot holds, in the backend's spelling: the task when
-// set (`#12`, `12`, `B07`), else the number leading `<agent>/<issue>-<slug>`.
-func heldID(task, branch, name string) string {
-	t := strings.TrimPrefix(strings.TrimSpace(task), "#")
-	if t != "" {
-		return strings.ToUpper(t)
-	}
-	return issueOf("", branch, name)
 }
