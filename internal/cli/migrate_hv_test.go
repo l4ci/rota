@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -63,16 +64,16 @@ func TestMigrateHvRunsOnAnUnmigratedProject(t *testing.T) {
 	os.RemoveAll(filepath.Join(dir, ".rota"))
 	os.MkdirAll(filepath.Join(dir, ".hv"), 0o777)
 	os.WriteFile(filepath.Join(dir, ".hv", "config.json"), []byte(`{"hv":{"version":"4.9.0"}}`), 0o644)
-	installedVersionFn = func() string { return "5.0.0" }
-	t.Cleanup(func() { installedVersionFn = installedVersion })
-	code, out, stderr := rotaIn(t, dir, "--json", "migrate", "hv")
+	d := testDeps()
+	d.InstalledVersion = func() string { return "5.0.0" }
+	code, out, stderr := rotaInWith(t, d, dir, "--json", "migrate", "hv")
 	if code != 0 || !strings.Contains(out, `"move": true`) || !strings.Contains(stderr, "preview only") {
 		t.Fatalf("dry-run: exit %d %s %s", code, out, stderr)
 	}
 	if _, err := os.Stat(filepath.Join(dir, ".hv")); err != nil {
 		t.Fatal("dry-run moved .hv/")
 	}
-	code, out, stderr = rotaIn(t, dir, "--json", "migrate", "hv", "--apply", "--skip-skills")
+	code, out, stderr = rotaInWith(t, d, dir, "--json", "migrate", "hv", "--apply", "--skip-skills")
 	if code != 0 {
 		t.Fatalf("apply: exit %d %s %s", code, out, stderr)
 	}
@@ -80,8 +81,20 @@ func TestMigrateHvRunsOnAnUnmigratedProject(t *testing.T) {
 	if !strings.Contains(string(cfg), `"5.0.0"`) {
 		t.Errorf("config = %s", cfg)
 	}
-	code, out, _ = rotaIn(t, dir, "--json", "migrate", "hv", "--apply")
+	code, out, _ = rotaInWith(t, d, dir, "--json", "migrate", "hv", "--apply")
 	if code != 0 || !strings.Contains(out, `"noop": true`) {
 		t.Errorf("second apply: exit %d %s", code, out)
 	}
+}
+
+func rotaInWith(t *testing.T, d *Deps, dir string, args ...string) (int, string, string) {
+	t.Helper()
+	old, _ := os.Getwd()
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chdir(old)
+	var so, se bytes.Buffer
+	code := mainWith(d, args, strings.NewReader(""), &so, &se)
+	return code, so.String(), se.String()
 }

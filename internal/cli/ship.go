@@ -299,10 +299,10 @@ func shipPR(fs *flag.FlagSet) RunFunc {
 
 		// The provider and the Closes lines come before the push, so a bad
 		// --items ID fails with nothing pushed.
-		cl, err := tracker.New(ctx, tracker.SettingsFromConfig(cfg), "", dir, trackerOptions...)
+		cl, err := tracker.New(ctx, tracker.SettingsFromConfig(cfg), "", dir, c.deps().TrackerOptions...)
 		if err != nil {
 			// An origin that is neither GitHub nor GitLab falls back to github.
-			if cl, err = tracker.New(ctx, tracker.SettingsFromConfig(cfg), "github", dir, trackerOptions...); err != nil {
+			if cl, err = tracker.New(ctx, tracker.SettingsFromConfig(cfg), "github", dir, c.deps().TrackerOptions...); err != nil {
 				return Result{}, trackerErr(err)
 			}
 		}

@@ -19,8 +19,7 @@ import (
 )
 
 // The C2 verbs `rota round status` and `rota round reconcile`; the assembly and
-// the drift rules are internal/round. Tests swap roundEnv for fakes.
-var roundEnv = defaultRoundEnv
+// the drift rules are internal/round. Tests swap Deps.RoundEnv for fakes.
 
 // defaultRoundEnv wires the real git, host and forge. The host is herdr when
 // the round recorded (C8); with none it is herdr when work.dispatch says so or
@@ -28,7 +27,7 @@ var roundEnv = defaultRoundEnv
 // worktree create`, whatever the config says), else tmux.
 // A host or forge that cannot be built or reached is left nil: the verbs
 // report it as unavailable instead of failing.
-func defaultRoundEnv(ctx context.Context, root string) round.Env {
+func defaultRoundEnv(ctx context.Context, root string, opts []tracker.Option) round.Env {
 	cfg := config.Load(filepath.Join(root, ".rota", "config.json"))
 	e := round.Env{Git: worker.ExecGit, Base: "main"}
 	if b, ok, err := (git.Repo{Dir: root}).Base(ctx, ""); err == nil && ok {
@@ -58,7 +57,7 @@ func defaultRoundEnv(ctx context.Context, root string) round.Env {
 	if set, err := roundcfg.Load(root); err == nil {
 		e.StallMinutes = set.StallMinutes
 	}
-	f, err := tracker.New(ctx, tracker.SettingsFromConfig(cfg), "", root, trackerOptions...)
+	f, err := tracker.New(ctx, tracker.SettingsFromConfig(cfg), "", root, opts...)
 	if err != nil {
 		e.ForgeErr = err.Error()
 	} else {
@@ -98,7 +97,7 @@ func roundStatus(*flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		ctx := c.Context()
-		rep, err := withBoard(c, root, roundEnv(ctx, root)).Status(ctx, root)
+		rep, err := withBoard(c, root, c.deps().RoundEnv(ctx, root)).Status(ctx, root)
 		if err != nil {
 			return Result{}, err
 		}
@@ -167,7 +166,7 @@ func roundReconcile(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		ctx := c.Context()
-		out, err := withBoard(c, root, roundEnv(ctx, root)).Reconcile(ctx, root, *apply)
+		out, err := withBoard(c, root, c.deps().RoundEnv(ctx, root)).Reconcile(ctx, root, *apply)
 		if err != nil {
 			return Result{}, err
 		}

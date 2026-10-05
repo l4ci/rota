@@ -75,7 +75,11 @@ func TestTreeImplementsEveryContractVerb(t *testing.T) {
 }
 
 func runMain(args ...string) (int, string, string) {
+	return runMainWith(testDeps(), args...)
+}
+
+func runMainWith(d *Deps, args ...string) (int, string, string) {
 	var so, se bytes.Buffer
-	code := Main(args, strings.NewReader(""), &so, &se)
+	code := mainWith(d, args, strings.NewReader(""), &so, &se)
 	return code, so.String(), se.String()
 }

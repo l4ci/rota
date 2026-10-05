@@ -149,8 +149,8 @@ func approvalFlags(fs *flag.FlagSet) func() (gate.Confirm, approvalReq, error) {
 }
 
 // approvalNow is the clock for the derived escalation status.
-func approvalNow() time.Time {
-	if env := escalationEnv(); env.Now != nil {
+func approvalNow(c *Ctx) time.Time {
+	if env := c.deps().EscalationEnv(); env.Now != nil {
 		return env.Now()
 	}
 	return time.Now()
@@ -192,7 +192,7 @@ func approvalConfirm(c *Ctx, id string, th approvalThread, extra *jsonx.Object) 
 	case e.Kind != th.Kind || e.Number != th.Number:
 		return gate.Confirm{}, Result{}, Usage("escalation %s is on %s #%d, not on this merge's approval thread (%s #%d)", id, e.Kind, e.Number, th.Kind, th.Number)
 	case e.Status != escalation.StatusAnswered:
-		status := e.Derived(approvalNow())
+		status := e.Derived(approvalNow(c))
 		res, err := approvalFail(extra, fmt.Sprintf("escalation %s is %s; no approval yet", id, status),
 			"blockedBy", "approval pending", "escalation", id, "status", status)
 		return gate.Confirm{}, res, err
@@ -242,9 +242,9 @@ func approvalEscalate(c *Ctx, p gate.MergePolicy, hit []string, th approvalThrea
 	if e, ok := escalation.PendingOn(escalation.Load(root), th.Kind, th.Number); ok {
 		return e.Object()
 	}
-	env := escalationEnv()
+	env := c.deps().EscalationEnv()
 	if env.Forge == nil {
-		env.Forge = escalationForge()
+		env.Forge = escalationForge(c)
 	}
 	res, err := escalation.Send(c.Context(), env, root, escalation.SendOpts{
 		Number: th.Number, PR: th.Kind == "pr", Slot: th.Slot, Title: th.Title, Body: approvalRequestBody(p, hit),

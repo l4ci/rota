@@ -43,38 +43,52 @@ const prAllCfg = `{"backlog":{"backend":"issues"},"issues":{"provider":"github"}
 
 // prMergeProject is an issue-mode project with ship.mergeApproval set, a fake
 // forge for the PRs and a fake comment thread for the escalations.
-func prMergeProject(t *testing.T, ship map[string]any) (string, *a8Forge, *fakeThread) {
+func prMergeProject(t *testing.T, ship map[string]any) (string, *Deps, *a8Forge, *fakeThread) {
 	t.Helper()
 	f := a8Fixture()
-	root := a8Project(t, f)
+	root, _ := a8Project(t, f)
 	write(t, filepath.Join(root, ".rota", "config.json"), gateConfig(t, prAllCfg, "auto", ship))
 	th := &fakeThread{}
-	useThread(t, th)
+	deps := useThread(t, th)
+	deps.NewTracker = withTracker(t, f).NewTracker
 	clock := time.Date(2026, 10, 3, 10, 0, 0, 0, time.UTC)
-	useEscalation(t, &escHost{}, "", &clock)
-	return root, f, th
+	useEscalation(deps, &escHost{}, "", &clock)
+	return root, deps, f, th
+}
+
+// a8RunWith is a8Run with the given deps.
+func a8RunWith(t *testing.T, deps *Deps, root string, args ...string) (int, map[string]any, string) {
+	t.Helper()
+	o := trRunWith(t, deps, root, "", append([]string{"--json"}, args...)...)
+	env := envelope(t, o.stdout)
+	data, _ := env["data"].(map[string]any)
+	msg := ""
+	if e, ok := env["error"].(map[string]any); ok {
+		msg, _ = e["message"].(string)
+	}
+	return o.code, data, msg
 }
 
 func TestApprovalFlagsMutuallyExclusive(t *testing.T) {
-	root, f, th := prMergeProject(t, map[string]any{"mergeApproval": "all"})
+	root, deps, f, th := prMergeProject(t, map[string]any{"mergeApproval": "all"})
 	for _, args := range [][]string{
 		{"--approval", "e1", "--escalate"},
 		{"--approval", "e1", "--confirm", "--confirm-note", "yes"},
 		{"--escalate", "--confirm", "--confirm-note", "yes"},
 	} {
-		code, _, msg := a8Run(t, root, append([]string{"ship", "pr-merge", "10"}, args...)...)
+		code, _, msg := a8RunWith(t, deps, root, append([]string{"ship", "pr-merge", "10"}, args...)...)
 		if code != 2 || !strings.Contains(msg, "mutually exclusive") || len(f.merged) != 0 || posts(th) != 0 || gateAudit(t, root) != nil {
 			t.Errorf("%v: %d %s", args, code, msg)
 		}
 	}
 	// the same on worker gate, before any other work
-	if code, _, _ := rotaIn(t, t.TempDir(), "worker", "gate", "w1", "--base", "main", "--approval", "e1", "--escalate"); code != 2 {
+	if code, _, _ := rotaInWith(t, deps, t.TempDir(), "worker", "gate", "w1", "--base", "main", "--approval", "e1", "--escalate"); code != 2 {
 		t.Errorf("worker gate: exit %d", code)
 	}
 }
 
 func TestPRMergeApproval(t *testing.T) {
-	root, f, _ := prMergeProject(t, map[string]any{"mergeApproval": "all"})
+	root, deps, f, _ := prMergeProject(t, map[string]any{"mergeApproval": "all"})
 	late := escEntry("e3", "pr", 10, "pending", "")
 	late["deadline"] = "2026-10-03T09:59:00Z"
 	seedEscalations(t, root,
@@ -87,7 +101,7 @@ func TestPRMergeApproval(t *testing.T) {
 	)
 	refuse := func(id string, wantCode int) map[string]any {
 		t.Helper()
-		code, d, msg := a8Run(t, root, "ship", "pr-merge", "10", "--approval", id)
+		code, d, msg := a8RunWith(t, deps, root, "ship", "pr-merge", "10", "--approval", id)
 		if code != wantCode || len(f.merged) != 0 || gateAudit(t, root) != nil {
 			t.Fatalf("%s: %d %s merged %v audit %v", id, code, msg, f.merged, gateAudit(t, root))
 		}
@@ -105,7 +119,7 @@ func TestPRMergeApproval(t *testing.T) {
 	if d := refuse("e4", 4); d["blockedBy"] != "approval declined" || d["escalation"] != "e4" || d["answer"] != "no, hold it" || d["changed"] != false {
 		t.Errorf("declined: %v", d)
 	}
-	code, _, msg := a8Run(t, root, "ship", "pr-merge", "10", "--approval", "e1")
+	code, _, msg := a8RunWith(t, deps, root, "ship", "pr-merge", "10", "--approval", "e1")
 	if code != 0 || !reflect.DeepEqual(f.merged, []int{10}) {
 		t.Fatalf("approved: %d %s merged %v", code, msg, f.merged)
 	}
@@ -116,8 +130,8 @@ func TestPRMergeApproval(t *testing.T) {
 }
 
 func TestPRMergeEscalate(t *testing.T) {
-	root, f, th := prMergeProject(t, map[string]any{"mergeApproval": "all"})
-	code, d, _ := a8Run(t, root, "ship", "pr-merge", "10", "--escalate")
+	root, deps, f, th := prMergeProject(t, map[string]any{"mergeApproval": "all"})
+	code, d, _ := a8RunWith(t, deps, root, "ship", "pr-merge", "10", "--escalate")
 	e, _ := d["escalation"].(map[string]any)
 	if code != 4 || d["blockedBy"] != "manual gate" || d["pr"] != float64(10) || e["id"] != "e1" || e["kind"] != "pr" || e["number"] != float64(10) || e["status"] != "pending" {
 		t.Fatalf("first: %d %v", code, d)
@@ -131,7 +145,7 @@ func TestPRMergeEscalate(t *testing.T) {
 		t.Errorf("body: %s", body)
 	}
 	// a re-gate reuses the pending escalation and posts nothing
-	code, d, _ = a8Run(t, root, "ship", "pr-merge", "10", "--escalate")
+	code, d, _ = a8RunWith(t, deps, root, "ship", "pr-merge", "10", "--escalate")
 	if e, _ := d["escalation"].(map[string]any); code != 4 || e["id"] != "e1" || posts(th) != 1 {
 		t.Fatalf("second: %d %v posts %d", code, d, posts(th))
 	}
@@ -141,16 +155,16 @@ func TestPRMergeEscalate(t *testing.T) {
 }
 
 func TestPRMergeEscalatePathsAndSendFailure(t *testing.T) {
-	root, f, th := prMergeProject(t, map[string]any{"mergeApproval": "paths", "mergeApprovalPaths": []any{"*.md"}})
+	root, deps, f, th := prMergeProject(t, map[string]any{"mergeApproval": "paths", "mergeApprovalPaths": []any{"*.md"}})
 	f.files = map[int][]string{10: {"src/a.go"}, 11: {"README.md"}}
 	// not covered: both flags are accepted and do nothing
-	if code, _, msg := a8Run(t, root, "ship", "pr-merge", "10", "--approval", "e99"); code != 0 {
+	if code, _, msg := a8RunWith(t, deps, root, "ship", "pr-merge", "10", "--approval", "e99"); code != 0 {
 		t.Fatalf("approval, not covered: %d %s", code, msg)
 	}
-	if code, _, _ := a8Run(t, root, "ship", "pr-merge", "12", "--escalate"); code != 0 || posts(th) != 0 || gateAudit(t, root) != nil {
+	if code, _, _ := a8RunWith(t, deps, root, "ship", "pr-merge", "12", "--escalate"); code != 0 || posts(th) != 0 || gateAudit(t, root) != nil {
 		t.Fatalf("escalate, not covered: posts %d", posts(th))
 	}
-	code, d, _ := a8Run(t, root, "ship", "pr-merge", "11", "--escalate")
+	code, d, _ := a8RunWith(t, deps, root, "ship", "pr-merge", "11", "--escalate")
 	if code != 4 || posts(th) != 1 || d["escalation"] == nil {
 		t.Fatalf("covered: %d %v", code, d)
 	}
@@ -158,9 +172,9 @@ func TestPRMergeEscalatePathsAndSendFailure(t *testing.T) {
 		t.Errorf("body: %s", body)
 	}
 	// a send failure is a warning; the refusal stands without an escalation
-	root2, _, th2 := prMergeProject(t, map[string]any{"mergeApproval": "all"})
+	root2, deps2, _, th2 := prMergeProject(t, map[string]any{"mergeApproval": "all"})
 	th2.notFound = true
-	o := trRun(t, root2, "", "--json", "ship", "pr-merge", "10", "--escalate")
+	o := trRunWith(t, deps2, root2, "", "--json", "ship", "pr-merge", "10", "--escalate")
 	env := envelope(t, o.stdout)
 	d2, _ := env["data"].(map[string]any)
 	if o.code != 4 || d2["blockedBy"] != "manual gate" || d2["escalation"] != nil || !strings.Contains(o.stderr, "approval request not sent") {
@@ -202,18 +216,18 @@ func TestSlotApprovalThread(t *testing.T) {
 
 func TestWorkerGateApprovalOnIssueThread(t *testing.T) {
 	dir := workerProject(t, gateConfig(t, `{"refactor":{"verifyCommands":["test -f feature.txt"]},"issues":{"provider":"github"}}`, "auto", map[string]any{"mergeApproval": "all"}))
-	rotaIn(t, dir, "worker", "pool", "init", "--slots", "1", "--base", "main")
+	rotaInWith(t, testDeps(), dir, "worker", "pool", "init", "--slots", "1", "--base", "main")
 	wt := filepath.Join(dir, ".worktrees", "w1")
 	write(t, filepath.Join(wt, "feature.txt"), "f")
 	gitT(t, wt, "add", "feature.txt")
 	gitT(t, wt, "commit", "-q", "-m", "feature")
 	th := &fakeThread{}
-	useThread(t, th)
+	deps := useThread(t, th)
 	clock := time.Date(2026, 10, 3, 10, 0, 0, 0, time.UTC)
-	useEscalation(t, &escHost{}, "", &clock)
+	useEscalation(deps, &escHost{}, "", &clock)
 	merged := func() bool { _, err := os.Stat(filepath.Join(dir, "feature.txt")); return err == nil }
 	run := func(args ...string) (int, map[string]any, string) {
-		code, out, errOut := rotaIn(t, dir, append([]string{"--json", "worker", "gate", "w1", "--base", "main"}, args...)...)
+		code, out, errOut := rotaInWith(t, deps, dir, append([]string{"--json", "worker", "gate", "w1", "--base", "main"}, args...)...)
 		return code, data(t, out), errOut
 	}
 

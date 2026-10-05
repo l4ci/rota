@@ -43,11 +43,17 @@ type shipCallIn struct {
 // data the golden recorded.
 func shipSame(t *testing.T, name, dir, stdin string, wantCode int, args ...string) map[string]any {
 	t.Helper()
+	return shipSameWith(t, testDeps(), name, dir, stdin, wantCode, args...)
+}
+
+// shipSameWith is shipSame with the given deps.
+func shipSameWith(t *testing.T, deps *Deps, name, dir, stdin string, wantCode int, args ...string) map[string]any {
+	t.Helper()
 	masked := make([]string, len(args)) // the project's temp dir is not part of the case
 	for i, a := range args {
 		masked[i] = strings.ReplaceAll(a, dir, "DIR")
 	}
-	n := trRun(t, dir, stdin, append(append([]string{}, args...), "--json")...)
+	n := trRunWith(t, deps, dir, stdin, append(append([]string{}, args...), "--json")...)
 	nenv := envelope(t, n.stdout)
 	if n.code != wantCode {
 		t.Errorf("%s: exit %d, want %d\n%s%s", name, n.code, wantCode, n.stdout, n.stderr)
@@ -268,9 +274,9 @@ func TestShipPRFileMode(t *testing.T) {
 			work := shipFixture(t, cfg)
 			shipBranchOf(t, work, "feat/x", [3]string{"x.txt", "work", ""})
 			f := shipPRForge(tc.url)
-			useForge(t, f)
+			deps := useForge(t, f)
 
-			n := trRun(t, work, "Summary line\n", "ship", "pr", "feat/x", "--title", "My title", "--body-file", "-", "--items", "F1,2", "--json")
+			n := trRunWith(t, deps, work, "Summary line\n", "ship", "pr", "feat/x", "--title", "My title", "--body-file", "-", "--items", "F1,2", "--json")
 			if n.code != 0 {
 				t.Fatalf("exit %d\n%s%s", n.code, n.stdout, n.stderr)
 			}
@@ -300,7 +306,7 @@ func TestShipPRFileMode(t *testing.T) {
 			if gitT(t, work, "config", "branch.feat/x.remote") != "origin" {
 				t.Errorf("upstream not set")
 			}
-			if n.stdout == "" || trRun(t, work, "b", "ship", "pr", "feat/x", "--title", "T", "--body-file", "-").stdout != tc.url+"\n" {
+			if n.stdout == "" || trRunWith(t, deps, work, "b", "ship", "pr", "feat/x", "--title", "T", "--body-file", "-").stdout != tc.url+"\n" {
 				t.Errorf("text mode must print the URL")
 			}
 		})
@@ -312,23 +318,23 @@ func TestShipPRUsageAndResolution(t *testing.T) {
 	work := shipFixture(t, "")
 	shipBranchOf(t, work, "feat/y", [3]string{"y.txt", "work", ""})
 	f := shipPRForge("https://github.com/fake/repo/pull/9")
-	useForge(t, f)
+	deps := useForge(t, f)
 	pr := []string{"ship", "pr", "feat/y", "--title", "T", "--body-file", "-"}
-	shipSame(t, "no title", work, "b", 2, "ship", "pr", "feat/y", "--body-file", "-")
-	shipSame(t, "no body-file", work, "b", 2, "ship", "pr", "feat/y", "--title", "T")
-	shipSame(t, "empty body", work, "\n", 2, pr...)
-	shipSame(t, "unknown branch", work, "b", 3, "ship", "pr", "no/such", "--title", "T", "--body-file", "-")
+	shipSameWith(t, deps, "no title", work, "b", 2, "ship", "pr", "feat/y", "--body-file", "-")
+	shipSameWith(t, deps, "no body-file", work, "b", 2, "ship", "pr", "feat/y", "--title", "T")
+	shipSameWith(t, deps, "empty body", work, "\n", 2, pr...)
+	shipSameWith(t, deps, "unknown branch", work, "b", 3, "ship", "pr", "no/such", "--title", "T", "--body-file", "-")
 	u := umbrella(t)
 	shipBranchOf(t, filepath.Join(u, "svc"), "feat/y", [3]string{"y.txt", "work", ""})
-	shipSame(t, "umbrella root", u, "b", 2, pr...)
+	shipSameWith(t, deps, "umbrella root", u, "b", 2, pr...)
 	if len(f.calls) != 0 {
 		t.Errorf("no forge call expected: %q", f.calls)
 	}
 	// the push fails: no origin
 	gitT(t, work, "remote", "remove", "origin")
-	shipErrHas(t, "push fails", trRun(t, work, "b", pr...), ExitUnavailable, "git push")
+	shipErrHas(t, "push fails", trRunWith(t, deps, work, "b", pr...), ExitUnavailable, "git push")
 	gitT(t, work, "remote", "add", "origin", filepath.Join(t.TempDir(), "gone.git"))
-	if o := trRun(t, work, "b", pr...); o.code != ExitUnavailable {
+	if o := trRunWith(t, deps, work, "b", pr...); o.code != ExitUnavailable {
 		t.Errorf("unreachable origin: %+v", o)
 	}
 }
@@ -338,15 +344,15 @@ func TestShipPRTrackerFailures(t *testing.T) {
 	work := shipFixture(t, "")
 	shipBranchOf(t, work, "feat/z", [3]string{"z.txt", "work", ""})
 	f := &forge{answer: func(string, []string) (string, string, int) { return "", "boom", 1 }}
-	useForge(t, f)
+	deps := useForge(t, f)
 	pr := []string{"ship", "pr", "feat/z", "--title", "T", "--body-file", "-"}
-	shipErrHas(t, "cli fails", trRun(t, work, "b", pr...), ExitUnavailable, "boom")
+	shipErrHas(t, "cli fails", trRunWith(t, deps, work, "b", pr...), ExitUnavailable, "boom")
 	f.answer = func(string, []string) (string, string, int) { return "", "secondary rate limit", 1 }
-	if o := trRun(t, work, "b", pr...); o.code != ExitRetry {
+	if o := trRunWith(t, deps, work, "b", pr...); o.code != ExitRetry {
 		t.Errorf("rate limit: %+v", o)
 	}
 	f.found = false
-	if o := trRun(t, work, "b", pr...); o.code != ExitUnavailable {
+	if o := trRunWith(t, deps, work, "b", pr...); o.code != ExitUnavailable {
 		t.Errorf("gh missing: %+v", o)
 	}
 }
@@ -379,8 +385,8 @@ func TestShipPRProviderDetection(t *testing.T) {
 			}
 			return answer(name, args)
 		}
-		useForge(t, f)
-		n := trRun(t, work, "b", "ship", "pr", "feat/p", "--title", "T", "--body-file", "-", "--json")
+		deps := useForge(t, f)
+		n := trRunWith(t, deps, work, "b", "ship", "pr", "feat/p", "--title", "T", "--body-file", "-", "--json")
 		if n.code != 0 {
 			t.Fatalf("%s: %+v", tc.url, n)
 		}
@@ -397,12 +403,12 @@ func TestShipPRIssueMode(t *testing.T) {
 			cfg := `{"backlog":{"backend":"issues"},"issues":{"provider":"` + prov + `","retryWaitSeconds":0}}`
 			work := shipFixture(t, cfg)
 			shipBranchOf(t, work, "feat/i", [3]string{"i.txt", "work", ""})
-			withTracker(t, issueFixture())
 			f := shipPRForge("https://x.test/pr/5")
-			useForge(t, f)
+			deps := useForge(t, f)
+			deps.NewTracker = withTracker(t, issueFixture()).NewTracker
 
 			// --items resolves through the issue backend: F7 and 9 -> issues 7 and 9
-			n := trRun(t, work, "Summary line\n", "ship", "pr", "feat/i", "--title", "T", "--body-file", "-", "--items", "F7,9", "--json")
+			n := trRunWith(t, deps, work, "Summary line\n", "ship", "pr", "feat/i", "--title", "T", "--body-file", "-", "--items", "F7,9", "--json")
 			if n.code != 0 {
 				t.Fatalf("%+v", n)
 			}
@@ -421,7 +427,7 @@ func TestShipPRIssueMode(t *testing.T) {
 			// an unknown item fails before anything is pushed
 			shipBranchOf(t, work, "feat/j", [3]string{"j.txt", "work", ""})
 			before := len(f.calls)
-			o := trRun(t, work, "b", "ship", "pr", "feat/j", "--title", "T", "--body-file", "-", "--items", "F99")
+			o := trRunWith(t, deps, work, "b", "ship", "pr", "feat/j", "--title", "T", "--body-file", "-", "--items", "F99")
 			shipErrHas(t, "unknown item", o, ExitResolution, "F99")
 			if len(f.calls) != before {
 				t.Errorf("forge called after a bad item")
@@ -440,18 +446,18 @@ func TestShipPRIssueModeUmbrella(t *testing.T) {
 	write(t, filepath.Join(u, ".rota", "config.json"), `{"backlog":{"backend":"issues"},"issues":{"provider":"github"}}`)
 	svc := filepath.Join(u, "svc")
 	shipBranchOf(t, svc, "feat/u", [3]string{"u.txt", "work", ""})
-	withTracker(t, issueFixture())
-	useForge(t, shipPRForge("https://x.test/pr/1"))
+	deps := useForge(t, shipPRForge("https://x.test/pr/1"))
+	deps.NewTracker = withTracker(t, issueFixture()).NewTracker
 	origin := t.TempDir()
 	gitT(t, origin, "init", "-q", "--bare")
 	gitT(t, svc, "remote", "add", "origin", origin)
 	// The items resolve inside the --repo sub-repo, and one qualified with
 	// another sub-repo is unknown there.
-	o := trRun(t, u, "b", "ship", "pr", "feat/u", "--title", "T", "--body-file", "-", "--items", "web:7", "--repo", "svc")
+	o := trRunWith(t, deps, u, "b", "ship", "pr", "feat/u", "--title", "T", "--body-file", "-", "--items", "web:7", "--repo", "svc")
 	if o.code != 3 {
 		t.Errorf("item of another sub-repo: %+v", o)
 	}
-	o = trRun(t, u, "b", "ship", "pr", "feat/u", "--title", "T", "--body-file", "-", "--items", "7", "--repo", "svc", "--json")
+	o = trRunWith(t, deps, u, "b", "ship", "pr", "feat/u", "--title", "T", "--body-file", "-", "--items", "7", "--repo", "svc", "--json")
 	if o.code != 0 {
 		t.Fatalf("umbrella ship pr --items: %+v", o)
 	}
@@ -464,8 +470,8 @@ func TestShipPRIssueModeUmbrella(t *testing.T) {
 
 func TestShipPRMerge(t *testing.T) {
 	f := a8Fixture()
-	root := a8Project(t, f)
-	code, data, msg := a8Run(t, root, "ship", "pr-merge", "10")
+	root, deps := a8Project(t, f)
+	code, data, msg := a8RunWith(t, deps, root, "ship", "pr-merge", "10")
 	if code != 0 {
 		t.Fatalf("exit %d: %s", code, msg)
 	}
@@ -480,27 +486,27 @@ func TestShipPRMerge(t *testing.T) {
 	}
 	// Key order is the contract's, and text mode prints the old helper's lines.
 	f2 := a8Fixture()
-	o := trRun(t, a8Project(t, f2), "", "--json", "ship", "pr-merge", "10")
+	o := trRunIn(t, f2, "", "--json", "ship", "pr-merge", "10")
 	if !strings.Contains(o.stdout, `"data": {"pr": 10, "sha": "0123456", "closed": ["1"], "changed": true}`) {
 		t.Fatalf("key order: %s", o.stdout)
 	}
 	f3 := a8Fixture()
-	if o := trRun(t, a8Project(t, f3), "", "ship", "pr-merge", "10"); o.code != 0 || o.stdout != "merged 10 as 0123456\nclosed F1\n" {
+	if o := trRunIn(t, f3, "", "ship", "pr-merge", "10"); o.code != 0 || o.stdout != "merged 10 as 0123456\nclosed F1\n" {
 		t.Fatalf("text %+v", o)
 	}
 }
 
 func TestShipPRMergeItems(t *testing.T) {
 	f := a8Fixture()
-	root := a8Project(t, f)
+	root, deps := a8Project(t, f)
 	// An explicit list replaces the PR body's links; spaces and empty entries are dropped.
-	code, data, msg := a8Run(t, root, "ship", "pr-merge", "12", "--items", " F1 ,, ")
+	code, data, msg := a8RunWith(t, deps, root, "ship", "pr-merge", "12", "--items", " F1 ,, ")
 	if code != 0 || !reflect.DeepEqual(data["closed"], []any{"1"}) {
 		t.Fatalf("exit %d %v %s", code, data, msg)
 	}
 	// No linked items: the PR merges and nothing is closed.
 	f = a8Fixture()
-	code, data, msg = a8Run(t, a8Project(t, f), "ship", "pr-merge", "12")
+	code, data, msg = a8RunIn(t, f, "ship", "pr-merge", "12")
 	if code != 0 || !reflect.DeepEqual(data["closed"], []any{}) || !reflect.DeepEqual(f.merged, []int{12}) {
 		t.Fatalf("exit %d %v %s", code, data, msg)
 	}
@@ -508,8 +514,8 @@ func TestShipPRMergeItems(t *testing.T) {
 
 func TestShipPRMergeUnproven(t *testing.T) {
 	f := a8Fixture()
-	root := a8Project(t, f)
-	code, data, _ := a8Run(t, root, "ship", "pr-merge", "11")
+	root, deps := a8Project(t, f)
+	code, data, _ := a8RunWith(t, deps, root, "ship", "pr-merge", "11")
 	want := map[string]any{"pr": float64(11), "merged": false, "unproven": []any{"2"}, "changesRequested": []any{"2"}, "changed": true}
 	if code != 4 || !reflect.DeepEqual(data, want) {
 		t.Fatalf("exit %d data %v", code, data)
@@ -522,14 +528,14 @@ func TestShipPRMergeUnproven(t *testing.T) {
 		!strings.Contains(is.Comments[len(is.Comments)-1].Body, "rota:comment feedback") {
 		t.Fatalf("issue 2 %+v", is)
 	}
-	o := trRun(t, a8Project(t, a8Fixture()), "", "--json", "ship", "pr-merge", "11")
+	o := trRunIn(t, a8Fixture(), "", "--json", "ship", "pr-merge", "11")
 	if !strings.Contains(o.stdout, `"data": {"pr": 11, "merged": false, "unproven": ["2"], "changesRequested": ["2"], "changed": true}`) {
 		t.Fatalf("key order: %s", o.stdout)
 	}
 }
 
 func TestShipPRMergeExits(t *testing.T) {
-	root := a8Project(t, a8Fixture())
+	root, deps := a8Project(t, a8Fixture())
 	for _, c := range []struct {
 		args []string
 		code int
@@ -544,18 +550,18 @@ func TestShipPRMergeExits(t *testing.T) {
 		{[]string{"12", "--items", "M01"}, 3}, // not an item
 		{[]string{"12", "--items", "3"}, 3},   // the milestone tracking issue
 	} {
-		code, _, msg := a8Run(t, root, append([]string{"ship", "pr-merge"}, c.args...)...)
+		code, _, msg := a8RunWith(t, deps, root, append([]string{"ship", "pr-merge"}, c.args...)...)
 		if code != c.code {
 			t.Errorf("%v: exit %d (%s), want %d", c.args, code, msg, c.code)
 		}
 	}
 	// Already merged: no longer open.
 	f := a8Fixture()
-	root = a8Project(t, f)
-	if code, _, _ := a8Run(t, root, "ship", "pr-merge", "12"); code != 0 {
+	root, deps = a8Project(t, f)
+	if code, _, _ := a8RunWith(t, deps, root, "ship", "pr-merge", "12"); code != 0 {
 		t.Fatalf("first merge: exit %d", code)
 	}
-	if code, _, _ := a8Run(t, root, "ship", "pr-merge", "12"); code != 3 {
+	if code, _, _ := a8RunWith(t, deps, root, "ship", "pr-merge", "12"); code != 3 {
 		t.Errorf("already merged: exit %d, want 3", code)
 	}
 }
@@ -563,24 +569,24 @@ func TestShipPRMergeExits(t *testing.T) {
 func TestShipPRMergeRefused(t *testing.T) {
 	f := a8Fixture()
 	f.mergeErr = &tracker.Error{Kind: tracker.KindFailed, Code: 1, Message: "gh pr merge 12: not mergeable"}
-	code, data, _ := a8Run(t, a8Project(t, f), "ship", "pr-merge", "12")
+	code, data, _ := a8RunIn(t, f, "ship", "pr-merge", "12")
 	want := map[string]any{"pr": float64(12), "merged": false, "unproven": []any{}, "changesRequested": []any{}, "changed": false}
 	if code != 4 || !reflect.DeepEqual(data, want) {
 		t.Fatalf("exit %d data %v", code, data)
 	}
 	f = a8Fixture()
 	f.mergeErr = &tracker.Error{Kind: tracker.KindRateLimited, Code: 4, Message: "rate limit"}
-	if code, _, _ := a8Run(t, a8Project(t, f), "ship", "pr-merge", "12"); code != 6 {
+	if code, _, _ := a8RunIn(t, f, "ship", "pr-merge", "12"); code != 6 {
 		t.Errorf("rate limited: exit %d", code)
 	}
 	f = a8Fixture()
 	f.mergeErr = &tracker.Error{Kind: tracker.KindUnavailable, Code: 3, Message: "gh missing"}
-	if code, _, _ := a8Run(t, a8Project(t, f), "ship", "pr-merge", "12"); code != 5 {
+	if code, _, _ := a8RunIn(t, f, "ship", "pr-merge", "12"); code != 5 {
 		t.Errorf("unavailable: exit %d", code)
 	}
 	f = a8Fixture()
 	f.Fake.Fail = map[string]error{"open_prs": &tracker.Error{Kind: tracker.KindUnavailable, Code: 3, Message: "boom"}}
-	if code, _, _ := a8Run(t, a8Project(t, f), "ship", "pr-merge", "12"); code != 5 {
+	if code, _, _ := a8RunIn(t, f, "ship", "pr-merge", "12"); code != 5 {
 		t.Errorf("PR list failure: exit %d", code)
 	}
 }

@@ -10,9 +10,6 @@ func migrateCommands() *Command {
 	}}
 }
 
-// installedVersionFn is a seam for tests.
-var installedVersionFn = installedVersion
-
 func installedVersion() string {
 	if v := version.Get().Version; v != "dev" {
 		return v

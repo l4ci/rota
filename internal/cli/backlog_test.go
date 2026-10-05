@@ -63,13 +63,13 @@ func TestBacklogFileOnlyVerbsAreRefusedUnderIssues(t *testing.T) {
 
 func TestBacklogViewsInIssueMode(t *testing.T) {
 	root := trackerProject(t, `{"backlog": {"backend": "issues"}}`)
-	withTracker(t, &trackertest.Fake{Issues: []backlog.Issue{
+	deps := withTracker(t, &trackertest.Fake{Issues: []backlog.Issue{
 		{Number: 12, Title: "Crash on save", State: "open", Labels: []string{"type:bug"}, Milestone: "M02 — Next",
 			Body: "<!-- rota:fields\nRelated: F3\n-->"},
 		{Number: 3, Title: "Dark mode", State: "open", Labels: []string{"type:feature"}, Body: "<!-- rota:fields\nRelated: B12\n-->"},
 		{Number: 5, Title: "Chore", State: "open"},
 	}})
-	code, env, _ := rotaRun(t, "--json", "-C", root, "backlog", "list")
+	code, env, _ := rotaRunWith(t, deps, "--json", "-C", root, "backlog", "list")
 	if code != 0 {
 		t.Fatalf("list: exit %d env=%v", code, env)
 	}
@@ -82,12 +82,12 @@ func TestBacklogViewsInIssueMode(t *testing.T) {
 		t.Errorf("clusters = %v", got)
 	}
 
-	code, env, _ = rotaRun(t, "--json", "-C", root, "backlog", "ids", "--milestone", "M02")
+	code, env, _ = rotaRunWith(t, deps, "--json", "-C", root, "backlog", "ids", "--milestone", "M02")
 	if code != 0 || !reflect.DeepEqual(get(dataOf(env), "ids"), []any{"12"}) {
 		t.Errorf("ids: %d %v", code, env)
 	}
 	for _, ref := range []string{"12", "#12", "B12"} {
-		code, env, _ = rotaRun(t, "--json", "-C", root, "backlog", "milestones", ref)
+		code, env, _ = rotaRunWith(t, deps, "--json", "-C", root, "backlog", "milestones", ref)
 		if code != 0 || !reflect.DeepEqual(get(dataOf(env), "milestones"), []any{"M02"}) {
 			t.Errorf("milestones %s: %d %v", ref, code, env)
 		}
@@ -96,7 +96,7 @@ func TestBacklogViewsInIssueMode(t *testing.T) {
 	// Active streams use the issue number as the in-progress ID; its type
 	// comes from the listing.
 	os.WriteFile(filepath.Join(root, ".rota", "status.json"), []byte(`{"active": [{"branch": "b", "items": ["12"], "startedAt": "2026-09-01T10:00:00Z"}]}`), 0o644)
-	_, env, _ = rotaRun(t, "--json", "-C", root, "backlog", "list")
+	_, env, _ = rotaRunWith(t, deps, "--json", "-C", root, "backlog", "list")
 	prog := get(dataOf(env), "inProgress").([]any)
 	if len(prog) != 1 || get(prog[0], "id") != "12" || get(prog[0], "type") != "B" {
 		t.Errorf("in progress = %v", prog)
@@ -257,7 +257,7 @@ func TestBacklogSummaryRecentIsNewestFirstInFileMode(t *testing.T) {
 	wd, _ := os.Getwd()
 	defer os.Chdir(wd)
 	var out, errb bytes.Buffer
-	Main([]string{"-C", root, "summary"}, strings.NewReader(""), &out, &errb)
+	mainWith(testDeps(), []string{"-C", root, "summary"}, strings.NewReader(""), &out, &errb)
 	if !strings.Contains(out.String(), "Recent: [B04] on 2026-10-04, [B05] on 2026-10-03, [B02] on 2026-10-03") {
 		t.Errorf("text output: %s", out.String())
 	}

@@ -28,7 +28,7 @@ func issuesRepo(t *testing.T, origin string) string {
 }
 
 // issuesForge scripts gh and glab for the verbs: calls collects them.
-func issuesForge(t *testing.T, origin string, reply map[string]string) *[]string {
+func issuesForge(t *testing.T, deps *Deps, origin string, reply map[string]string) *[]string {
 	t.Helper()
 	var calls []string
 	exe := func(_ context.Context, _ string, name string, args []string, _ []byte) ([]byte, []byte, int, error) {
@@ -44,9 +44,7 @@ func issuesForge(t *testing.T, origin string, reply map[string]string) *[]string
 		}
 		return nil, nil, 0, nil
 	}
-	old := trackerOptions
-	trackerOptions = []tracker.Option{tracker.WithExec(exe, func(n string) (string, error) { return "/fake/" + n, nil })}
-	t.Cleanup(func() { trackerOptions = old })
+	deps.TrackerOptions = []tracker.Option{tracker.WithExec(exe, func(n string) (string, error) { return "/fake/" + n, nil })}
 	return &calls
 }
 
@@ -71,15 +69,16 @@ func TestIssuesProvider(t *testing.T) {
 func TestIssuesLabelClose(t *testing.T) {
 	origin := "https://github.com/o/r.git"
 	root := issuesRepo(t, origin)
-	calls := issuesForge(t, origin, map[string]string{
+	deps := testDeps()
+	calls := issuesForge(t, deps, origin, map[string]string{
 		"issue view": `{"labels": [{"name": "x"}]}`,
 		"label list": `[{"name": "x"}]`,
 	})
-	code, env, _ := rotaRun(t, "--json", "-C", root, "issues", "label", "3", "--add", "x")
+	code, env, _ := rotaRunWith(t, deps, "--json", "-C", root, "issues", "label", "3", "--add", "x")
 	if code != 0 || get(dataOf(env), "changed") != false || get(dataOf(env), "action") != "add" {
 		t.Errorf("label no-op: %d %v", code, env)
 	}
-	code, env, _ = rotaRun(t, "--json", "-C", root, "issues", "label", "3", "--remove", "x")
+	code, env, _ = rotaRunWith(t, deps, "--json", "-C", root, "issues", "label", "3", "--remove", "x")
 	if code != 0 || get(dataOf(env), "changed") != true {
 		t.Errorf("label remove: %d %v", code, env)
 	}
@@ -90,38 +89,37 @@ func TestIssuesLabelClose(t *testing.T) {
 		{"issues", "close", "3"}, {"issues", "close", "3x", "--commit", "HEAD"}, {"issues", "close", "--commit", "HEAD"},
 		{"issues", "imported", "x"}, {"migrate", "issues", "--limit", "x"}, {"migrate", "issues", "extra"},
 	} {
-		if code, _, _ := rotaRun(t, append([]string{"--json", "-C", root}, argv...)...); code != ExitUsage {
+		if code, _, _ := rotaRunWith(t, deps, append([]string{"--json", "-C", root}, argv...)...); code != ExitUsage {
 			t.Errorf("%v: exit %d, want usage", argv, code)
 		}
 	}
 	// the commit is checked before the forge
 	n := len(*calls)
-	code, _, _ = rotaRun(t, "--json", "-C", root, "issues", "close", "3", "--commit", "deadbeef")
+	code, _, _ = rotaRunWith(t, deps, "--json", "-C", root, "issues", "close", "3", "--commit", "deadbeef")
 	if code != ExitResolution || len(*calls) != n {
 		t.Errorf("unknown commit: %d, %d new calls", code, len(*calls)-n)
 	}
 }
 
 func TestIssuesImported(t *testing.T) {
+	deps := testDeps()
 	root := trackerProject(t, "{}\n")
 	os.WriteFile(filepath.Join(root, ".rota", "BACKLOG.md"), []byte("# T\n\n## Bugs\n- **[B01] [P1] A.** GH: #5 Repos: web\n"), 0o644)
-	code, env, _ := rotaRun(t, "--json", "-C", root, "issues", "imported")
+	code, env, _ := rotaRunWith(t, deps, "--json", "-C", root, "issues", "imported")
 	rows, _ := get(dataOf(env), "entries").([]any)
 	if code != 0 || len(rows) != 1 || get(rows[0], "itemId") != "B01" || get(rows[0], "repo") != "web" || get(rows[0], "status") != "open" {
 		t.Errorf("%d %v", code, env)
 	}
-	if code, env, _ := rotaRun(t, "--json", "-C", root, "issues", "imported", "--for-repo", "api"); code != 0 || len(get(dataOf(env), "entries").([]any)) != 0 {
+	if code, env, _ := rotaRunWith(t, deps, "--json", "-C", root, "issues", "imported", "--for-repo", "api"); code != 0 || len(get(dataOf(env), "entries").([]any)) != 0 {
 		t.Errorf("filter: %d %v", code, env)
 	}
 	// --open-only asks the forge; a missing CLI drops the entry, exit stays 0
-	old := trackerOptions
-	trackerOptions = []tracker.Option{tracker.WithExec(nil, func(string) (string, error) { return "", exec.ErrNotFound })}
-	defer func() { trackerOptions = old }()
-	if code, env, _ := rotaRun(t, "--json", "-C", root, "issues", "imported", "--open-only"); code != 0 || len(get(dataOf(env), "entries").([]any)) != 0 {
+	deps.TrackerOptions = []tracker.Option{tracker.WithExec(nil, func(string) (string, error) { return "", exec.ErrNotFound })}
+	if code, env, _ := rotaRunWith(t, deps, "--json", "-C", root, "issues", "imported", "--open-only"); code != 0 || len(get(dataOf(env), "entries").([]any)) != 0 {
 		t.Errorf("open-only: %d %v", code, env)
 	}
 	// the repo flag belongs to the other verbs
-	if code, _, _ := rotaRun(t, "--json", "-C", root, "issues", "imported", "--repo", "web"); code != ExitUsage {
+	if code, _, _ := rotaRunWith(t, deps, "--json", "-C", root, "issues", "imported", "--repo", "web"); code != ExitUsage {
 		t.Errorf("--repo: %d", code)
 	}
 }
@@ -145,11 +143,10 @@ func (s *msStub) Create(ctx context.Context, title, body string, labels []string
 func TestMigrateIssues(t *testing.T) {
 	root := issuesRepo(t, "https://github.com/o/r.git")
 	stub := &msStub{Fake: &trackertest.Fake{}}
-	old := migrateTracker
-	migrateTracker = func(context.Context, string, any) (backlog.MigrateTracker, error) { return stub, nil }
-	defer func() { migrateTracker = old }()
+	deps := testDeps()
+	deps.MigrateTracker = func(context.Context, string, any) (backlog.MigrateTracker, error) { return stub, nil }
 
-	code, env, stderr := rotaRun(t, "--json", "-C", root, "migrate", "issues")
+	code, env, stderr := rotaRunWith(t, deps, "--json", "-C", root, "migrate", "issues")
 	d := dataOf(env)
 	ops, _ := get(d, "operations").([]any)
 	if code != 0 || get(d, "applied") != false || len(ops) != 1 || get(ops[0], "action") != "create-issue" || len(stub.Issues) != 0 {
@@ -164,12 +161,12 @@ func TestMigrateIssues(t *testing.T) {
 
 	// a rate limit and a failure keep their exits, and the message ends with the progress
 	stub.fail = &tracker.Error{Kind: tracker.KindRateLimited, Code: 4, Message: "slow"}
-	code, env, _ = rotaRun(t, "--json", "-C", root, "migrate", "issues", "--apply")
+	code, env, _ = rotaRunWith(t, deps, "--json", "-C", root, "migrate", "issues", "--apply")
 	if msg, _ := get(env, "error", "message").(string); code != ExitRetry || msg != "0 of 1 migrated" {
 		t.Errorf("rate limit: %d %v", code, env)
 	}
 	stub.fail = &tracker.Error{Kind: tracker.KindFailed, Code: 1, Message: "boom"}
-	code, env, _ = rotaRun(t, "--json", "-C", root, "migrate", "issues", "--apply")
+	code, env, _ = rotaRunWith(t, deps, "--json", "-C", root, "migrate", "issues", "--apply")
 	if msg, _ := get(env, "error", "message").(string); code != ExitUnavailable || msg != "boom; 0 of 1 migrated" {
 		t.Errorf("failure: %d %v", code, env)
 	}
@@ -178,7 +175,7 @@ func TestMigrateIssues(t *testing.T) {
 	}
 
 	stub.fail = nil
-	code, env, _ = rotaRun(t, "--json", "-C", root, "migrate", "issues", "--apply")
+	code, env, _ = rotaRunWith(t, deps, "--json", "-C", root, "migrate", "issues", "--apply")
 	d = dataOf(env)
 	if code != 0 || get(d, "changed") != true || get(d, "migrated").(interface{ String() string }).String() != "1" || len(stub.Issues) != 1 {
 		t.Fatalf("apply: %d %v", code, env)
@@ -186,23 +183,23 @@ func TestMigrateIssues(t *testing.T) {
 	if b, _ := os.ReadFile(filepath.Join(root, ".rota", "BACKLOG.md")); !strings.HasPrefix(string(b), "> Frozen:") {
 		t.Error("not frozen")
 	}
-	code, env, _ = rotaRun(t, "--json", "-C", root, "migrate", "issues", "--apply")
+	code, env, _ = rotaRunWith(t, deps, "--json", "-C", root, "migrate", "issues", "--apply")
 	if code != 0 || get(dataOf(env), "changed") != false {
 		t.Errorf("rerun: %d %v", code, env)
 	}
 
 	// refusals
-	if code, _, _ := rotaRun(t, "--json", "-C", t.TempDir(), "migrate", "issues"); code != ExitResolution {
+	if code, _, _ := rotaRunWith(t, deps, "--json", "-C", t.TempDir(), "migrate", "issues"); code != ExitResolution {
 		t.Errorf("no project: %d", code)
 	}
 	empty := trackerProject(t, "{}\n")
 	os.Remove(filepath.Join(empty, ".rota", "BACKLOG.md"))
-	if code, _, _ := rotaRun(t, "--json", "-C", empty, "migrate", "issues"); code != ExitResolution {
+	if code, _, _ := rotaRunWith(t, deps, "--json", "-C", empty, "migrate", "issues"); code != ExitResolution {
 		t.Errorf("no backlog: %d", code)
 	}
 	umb := trackerProject(t, "{}\n")
 	os.WriteFile(filepath.Join(umb, ".rota", "repos.json"), []byte(`{"repos": [{"name": "web", "path": "web"}]}`), 0o644)
-	code, env, _ = rotaRun(t, "--json", "-C", umb, "migrate", "issues")
+	code, env, _ = rotaRunWith(t, deps, "--json", "-C", umb, "migrate", "issues")
 	if code != ExitRefused || get(dataOf(env), "blockedBy") != "umbrella" || get(dataOf(env), "changed") != false {
 		t.Errorf("umbrella: %d %v", code, env)
 	}
@@ -242,10 +239,11 @@ func TestIssuesScopeFollowsWorkingDirectory(t *testing.T) {
 
 func TestIssuesNoProviderAndMissingIssue(t *testing.T) {
 	// no origin, no issues.provider: label exits 3 instead of an empty list
+	deps := testDeps()
 	root := issuesRepo(t, "")
-	issuesForge(t, "", nil)
+	issuesForge(t, deps, "", nil)
 	for _, argv := range [][]string{{"issues", "label", "3", "--add", "x"}} {
-		code, env, _ := rotaRun(t, append([]string{"--json", "-C", root}, argv...)...)
+		code, env, _ := rotaRunWith(t, deps, append([]string{"--json", "-C", root}, argv...)...)
 		if msg, _ := get(env, "error", "message").(string); code != ExitResolution || !strings.Contains(msg, "issues.provider") {
 			t.Errorf("%v: %d %v", argv, code, env)
 		}
@@ -253,8 +251,8 @@ func TestIssuesNoProviderAndMissingIssue(t *testing.T) {
 	// issues.provider stands in for a missing origin
 	root = issuesRepo(t, "")
 	os.WriteFile(filepath.Join(root, ".rota", "config.json"), []byte(`{"issues": {"provider": "github"}}`), 0o644)
-	issuesForge(t, "", nil)
-	if code, env, _ := rotaRun(t, "--json", "-C", root, "issues", "provider"); code != 0 || get(dataOf(env), "provider") != "github" {
+	issuesForge(t, deps, "", nil)
+	if code, env, _ := rotaRunWith(t, deps, "--json", "-C", root, "issues", "provider"); code != 0 || get(dataOf(env), "provider") != "github" {
 		t.Errorf("config fallback: %d %v", code, env)
 	}
 	// a missing issue is exit 3; another forge failure stays exit 5
@@ -272,10 +270,9 @@ func TestIssuesNoProviderAndMissingIssue(t *testing.T) {
 			}
 			return nil, nil, 0, nil
 		}
-		old := trackerOptions
-		trackerOptions = []tracker.Option{tracker.WithExec(exe, func(n string) (string, error) { return "/fake/" + n, nil })}
-		code, env, _ := rotaRun(t, "--json", "-C", root, "issues", "label", "99", "--remove", "x")
-		trackerOptions = old
+		deps := testDeps()
+		deps.TrackerOptions = []tracker.Option{tracker.WithExec(exe, func(n string) (string, error) { return "/fake/" + n, nil })}
+		code, env, _ := rotaRunWith(t, deps, "--json", "-C", root, "issues", "label", "99", "--remove", "x")
 		if code != want {
 			t.Errorf("%q: exit %d, want %d: %v", stderr, code, want, env)
 		}

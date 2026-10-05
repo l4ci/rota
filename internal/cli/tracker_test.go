@@ -24,7 +24,7 @@ type forge struct {
 	found  bool
 }
 
-func useForge(t *testing.T, f *forge) {
+func useForge(t *testing.T, f *forge) *Deps {
 	t.Helper()
 	trip := t.TempDir()
 	for _, cli := range []string{"gh", "glab"} {
@@ -54,8 +54,9 @@ func useForge(t *testing.T, f *forge) {
 		}
 		return "/fake/" + name, nil
 	}
-	trackerOptions = []tracker.Option{tracker.WithExec(x, look), tracker.WithSleep(func(time.Duration) {})}
-	t.Cleanup(func() { trackerOptions = nil })
+	d := testDeps()
+	d.TrackerOptions = []tracker.Option{tracker.WithExec(x, look), tracker.WithSleep(func(time.Duration) {})}
+	return d
 }
 
 // trProject is a project dir with .rota/config.json holding cfg.
@@ -78,13 +79,19 @@ type trOut struct {
 
 func trRun(t *testing.T, dir, stdin string, args ...string) trOut {
 	t.Helper()
+	return trRunWith(t, testDeps(), dir, stdin, args...)
+}
+
+// trRunWith is trRun with the given deps.
+func trRunWith(t *testing.T, d *Deps, dir, stdin string, args ...string) trOut {
+	t.Helper()
 	old, _ := os.Getwd()
 	if err := os.Chdir(dir); err != nil {
 		t.Fatal(err)
 	}
 	defer os.Chdir(old)
 	var so, se bytes.Buffer
-	code := Main(args, strings.NewReader(stdin), &so, &se)
+	code := mainWith(d, args, strings.NewReader(stdin), &so, &se)
 	return trOut{code, so.String(), se.String()}
 }
 
@@ -99,10 +106,10 @@ func envelope(t *testing.T, s string) map[string]any {
 
 func TestTrackerCallPassthrough(t *testing.T) {
 	f := &forge{answer: func(string, []string) (string, string, int) { return "[1]\nno newline", "note\n", 0 }}
-	useForge(t, f)
+	d := useForge(t, f)
 	dir := trProject(t, `{"issues":{"provider":"github"}}`)
 
-	o := trRun(t, dir, "", "tracker", "call", "--", "issue", "view", "3")
+	o := trRunWith(t, d, dir, "", "tracker", "call", "--", "issue", "view", "3")
 	if o.code != 0 || o.stdout != "[1]\nno newline" || o.stderr != "note\n" {
 		t.Fatalf("text mode must pass output through unchanged: %+v", o)
 	}
@@ -110,7 +117,7 @@ func TestTrackerCallPassthrough(t *testing.T) {
 		t.Fatalf("ran %q", f.calls[0])
 	}
 
-	o = trRun(t, dir, "", "tracker", "call", "--json", "--", "issue", "list")
+	o = trRunWith(t, d, dir, "", "tracker", "call", "--json", "--", "issue", "list")
 	env := envelope(t, o.stdout)
 	data := env["data"].(map[string]any)
 	if o.code != 0 || env["ok"] != true || data["provider"] != "github" || data["exitCode"] != 0.0 ||
@@ -144,16 +151,16 @@ func TestTrackerCallFailures(t *testing.T) {
 	}
 	for _, c := range cases {
 		f := &forge{answer: c.answer}
-		useForge(t, f)
+		d := useForge(t, f)
 		f.found = c.found
-		o := trRun(t, dir, "", append([]string{"tracker", "call"}, c.args...)...)
+		o := trRunWith(t, d, dir, "", append([]string{"tracker", "call"}, c.args...)...)
 		if o.code != c.code || !strings.Contains(o.stderr, c.has) {
 			t.Errorf("%s: exit %d, stderr %q; want %d with %q", c.name, o.code, o.stderr, c.code, c.has)
 		}
 	}
 	// exit 1 carries the CLI's answer in data.exitCode.
-	useForge(t, &forge{answer: func(string, []string) (string, string, int) { return "partial", "boom", 7 }})
-	o := trRun(t, dir, "", "tracker", "call", "--json", "--", "issue", "view", "9")
+	d := useForge(t, &forge{answer: func(string, []string) (string, string, int) { return "partial", "boom", 7 }})
+	o := trRunWith(t, d, dir, "", "tracker", "call", "--json", "--", "issue", "view", "9")
 	env := envelope(t, o.stdout)
 	data, _ := env["data"].(map[string]any)
 	if o.code != 1 || data["exitCode"] != 7.0 || data["stdout"] != "partial" {
@@ -163,7 +170,7 @@ func TestTrackerCallFailures(t *testing.T) {
 
 func TestTrackerCallProviderAndRepo(t *testing.T) {
 	f := &forge{answer: func(string, []string) (string, string, int) { return "[]", "", 0 }}
-	useForge(t, f)
+	d := useForge(t, f)
 	dir := trProject(t, `{"issues":{"provider":"gitlab"}}`)
 	sub := filepath.Join(dir, "svc")
 	if err := os.Mkdir(sub, 0o755); err != nil {
@@ -172,9 +179,9 @@ func TestTrackerCallProviderAndRepo(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, ".rota", "repos.json"), []byte(`{"repos":[{"name":"svc","path":"svc"}]}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	trRun(t, dir, "", "tracker", "call", "--", "mr", "list")
-	trRun(t, dir, "", "tracker", "call", "--provider", "github", "--", "pr", "list")
-	trRun(t, dir, "", "tracker", "call", "--repo", "svc", "--", "issue", "view", "1")
+	trRunWith(t, d, dir, "", "tracker", "call", "--", "mr", "list")
+	trRunWith(t, d, dir, "", "tracker", "call", "--provider", "github", "--", "pr", "list")
+	trRunWith(t, d, dir, "", "tracker", "call", "--repo", "svc", "--", "issue", "view", "1")
 	want := []string{"glab mr list --per-page 100", "gh pr list --limit 1000", "glab issue view 1"}
 	for i, w := range want {
 		if f.calls[i] != w {
@@ -186,12 +193,12 @@ func TestTrackerCallProviderAndRepo(t *testing.T) {
 		t.Errorf("--repo ran in %q, want %q", f.dirs[2], real)
 	}
 	// stdin reaches the CLI only when an argument takes it.
-	trRun(t, dir, "body text", "tracker", "call", "--", "issue", "create", "-F", "-")
-	trRun(t, dir, "body text", "tracker", "call", "--", "issue", "view", "1")
+	trRunWith(t, d, dir, "body text", "tracker", "call", "--", "issue", "create", "-F", "-")
+	trRunWith(t, d, dir, "body text", "tracker", "call", "--", "issue", "view", "1")
 	if f.stdins[3] != "body text" || f.stdins[4] != "" {
 		t.Errorf("stdins %q", f.stdins[3:])
 	}
-	if o := trRun(t, dir, "", "tracker", "call", "--repo", "nope", "--", "x"); o.code != 3 {
+	if o := trRunWith(t, d, dir, "", "tracker", "call", "--repo", "nope", "--", "x"); o.code != 3 {
 		t.Errorf("unknown --repo: %+v", o)
 	}
 }
@@ -215,9 +222,9 @@ func TestTrackerSuggestUpstream(t *testing.T) {
 	}
 
 	f := &forge{answer: created}
-	useForge(t, f)
+	d := useForge(t, f)
 	t.Setenv("ROTA_UPSTREAM_REPO", "")
-	o := trRun(t, dir, "", append([]string{"tracker", "suggest-upstream", "--json", "--title", "A learning", "--body-file", body}, ok...)...)
+	o := trRunWith(t, d, dir, "", append([]string{"tracker", "suggest-upstream", "--json", "--title", "A learning", "--body-file", body}, ok...)...)
 	env := envelope(t, o.stdout)
 	data := env["data"].(map[string]any)
 	if o.code != 0 || data["url"] != "https://github.com/l4ci/rota/issues/123" || data["number"] != 123.0 ||
@@ -234,10 +241,10 @@ func TestTrackerSuggestUpstream(t *testing.T) {
 
 	// $ROTA_UPSTREAM_REPO, then --upstream-repo, wins over the default; - reads stdin.
 	f = &forge{answer: created}
-	useForge(t, f)
+	d = useForge(t, f)
 	t.Setenv("ROTA_UPSTREAM_REPO", "env/repo")
-	trRun(t, dir, "from stdin", append([]string{"tracker", "suggest-upstream", "--title", "T", "--body-file", "-"}, ok...)...)
-	o = trRun(t, dir, "x", append([]string{"tracker", "suggest-upstream", "--title", "T", "--body-file", "-", "--upstream-repo", "flag/repo"}, ok...)...)
+	trRunWith(t, d, dir, "from stdin", append([]string{"tracker", "suggest-upstream", "--title", "T", "--body-file", "-"}, ok...)...)
+	o = trRunWith(t, d, dir, "x", append([]string{"tracker", "suggest-upstream", "--title", "T", "--body-file", "-", "--upstream-repo", "flag/repo"}, ok...)...)
 	if !strings.Contains(f.calls[1], "-R env/repo") || !strings.Contains(f.calls[3], "-R flag/repo") || f.stdins[1] != "from stdin" {
 		t.Fatalf("calls %q stdins %q", f.calls, f.stdins)
 	}
@@ -271,13 +278,13 @@ func TestTrackerSuggestUpstream(t *testing.T) {
 		}, true, []string{"--title", "T", "--body-file", body}, 5, "HTTP 422"},
 	} {
 		f := &forge{answer: c.answer}
-		useForge(t, f)
+		d = useForge(t, f)
 		f.found = c.found
 		args := c.args
 		if c.code == 5 {
 			args = append(append([]string{}, args...), ok...)
 		}
-		o := trRun(t, dir, "", append([]string{"tracker", "suggest-upstream"}, args...)...)
+		o := trRunWith(t, d, dir, "", append([]string{"tracker", "suggest-upstream"}, args...)...)
 		if c.code == 4 && len(f.calls) != 0 {
 			t.Errorf("%s: gh ran before the gate refused: %q", c.name, f.calls)
 		}

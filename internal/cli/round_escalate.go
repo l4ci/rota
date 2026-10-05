@@ -21,12 +21,10 @@ import (
 // escalationEnv is the seam tests replace to inject a clock and a fake host.
 // The forge goes through trackerOptions like every other verb, so a test
 // swaps the executor there.
-var escalationEnv = func() escalation.Env { return escalation.Env{} }
-
-func escalationForge() func(ctx context.Context, root string) (escalation.Forge, error) {
+func escalationForge(c *Ctx) func(ctx context.Context, root string) (escalation.Forge, error) {
 	return func(ctx context.Context, root string) (escalation.Forge, error) {
 		cfg := config.Load(filepath.Join(root, ".rota", "config.json"))
-		return tracker.New(ctx, tracker.SettingsFromConfig(cfg), "", root, trackerOptions...)
+		return tracker.New(ctx, tracker.SettingsFromConfig(cfg), "", root, c.deps().TrackerOptions...)
 	}
 }
 
@@ -87,9 +85,9 @@ func roundEscalateSend(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		env := escalationEnv()
+		env := c.deps().EscalationEnv()
 		if env.Forge == nil {
-			env.Forge = escalationForge()
+			env.Forge = escalationForge(c)
 		}
 		res, err := escalation.Send(c.Context(), env, root, escalation.SendOpts{
 			Number: n, PR: *pr, Slot: *slot, Title: strings.TrimSpace(*title), Body: string(raw),
@@ -117,9 +115,9 @@ func roundEscalateCheck(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		env := escalationEnv()
+		env := c.deps().EscalationEnv()
 		if env.Forge == nil {
-			env.Forge = escalationForge()
+			env.Forge = escalationForge(c)
 		}
 		res, err := escalation.Check(c.Context(), env, root, args)
 		for _, w := range res.Warnings {
