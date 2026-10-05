@@ -66,3 +66,13 @@ func TestStringHelpersMatchPython(t *testing.T) {
 	}
 	golden.Check(t, map[string]any{"input": cases}, got)
 }
+
+func TestSplitCSV(t *testing.T) {
+	got := SplitCSV(" a ,, b ,")
+	if len(got) != 2 || got[0] != "a" || got[1] != "b" {
+		t.Errorf("got %q", got)
+	}
+	if got := SplitCSV(""); got == nil || len(got) != 0 {
+		t.Errorf("empty = %#v, want non-nil empty", got)
+	}
+}
