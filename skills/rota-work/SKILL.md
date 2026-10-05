@@ -1,6 +1,6 @@
 ---
 name: rota-work
-description: Implement backlog items with in-process subagent workers — plans tasks, dispatches write-only workers, verifies, commits atomically per task. Supports branch or worktree isolation and direct merge or PR. Use when backlog items already exist and need implementation ("implement 42", "build these", or "implement [B07]" on the file backend); with no argument it reconciles active work and suggests the next item. A parallel round with standing workers is /rota-orchestrate, not this skill; an item not yet captured goes through /rota-capture first.
+description: Use when backlog items already exist and need implementation ("implement 42", "build these", or "implement [B07]" on the file backend), or with no argument to reconcile active work and pick the next item. A parallel round with standing workers is /rota-orchestrate, not this skill; an item not yet captured goes through /rota-capture first.
 ---
 
 # rota-work
@@ -276,6 +276,17 @@ Read `rota config show qa.afterWork` (default `false`). `false` → skip silentl
 ## Step 13 — After the Cycle
 
 One line, only when `references/post-cycle-trigger-gate.md` fires: *"Run `/rota-learn` to save what this cycle taught; `/rota-decide`, `/rota-ship --docs` and `/rota-refactor` are there when you want them."* Never auto-invoke any of them. If the cycle touched files in a `.rota/map/<name>.md` entry's `Key files / dirs`, bump its `touched:` and run `rota map index`.
+
+## Gates: Thought → Reality
+
+| Thought | Reality |
+|---|---|
+| "The worker said it passed." | Step 7 trusts the diff: `git status`, `git diff` and the read files, never the worker's narrative. |
+| "The check is obvious, skip the proof row." | `rota item complete` exits 4 without one. An unproven item stays open and is surfaced. |
+| "Pass `--no-proof`, the code is fine." | Never on your own. The row records what ran; the flag records that nothing did. |
+| "A worker disputing its brief is noise." | A dispute is a FAIL on the plan. Fix the plan, then re-dispatch. |
+| "Open the PR now, the user wants it shipped." | Opening a PR is a manual gate whatever `autonomy.level` says (Step 10, `/rota-ship` Step 6a). |
+| "Run the full smoke after each task." | Per-task checks stay structural. The full suite runs in `/rota-ship` and `/rota-review`. |
 
 ## Key Principles
 

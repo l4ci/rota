@@ -1,7 +1,6 @@
 ---
 name: rota-capture
-description: >-
-  Capture bugs, features, and tasks into the backlog without executing them, via `rota item create`, on whichever backend is configured (GitHub/GitLab issues, IDs `#N`, or file BACKLOG.md, IDs `[B07]`). Classifies each item and assigns priority/size. Also supports `--remove <ID>[,<ID>...]` to delete captured items and clean up cross-references (dry-run + confirmation gate). Use when the user brain-dumps work, says "capture", "add to backlog", "note this bug", "/rota-capture", "remove [B07]", "delete this entry", "drop this item", or describes a problem without asking for an immediate fix. Records and prints the new IDs; `/rota-work` picks them up.
+description: Use when the user brain-dumps work, says "capture", "add to backlog", "note this bug", "/rota-capture", or describes a problem without asking for an immediate fix. Also use on "remove [B07]", "delete this entry", "drop this item" to delete captured items.
 ---
 
 # rota-capture — Capture & Manage Work Items

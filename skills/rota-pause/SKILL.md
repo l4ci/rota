@@ -1,6 +1,6 @@
 ---
 name: rota-pause
-description: Gracefully pause mid-session — writes a handoff note (current hypothesis, next planned step, mid-edit files, uncommitted work strategy) to .rota/handoff/<branch>.md so `/rota-work` with no argument in a fresh session can pick up with full context, not just git state. Also covers an orchestrator mid-round, recording the round (lease, slots, PRs awaiting review) without winding it down. Use when the session is approaching a context limit, you need to hand off, or you want to stop a long /rota-work cycle cleanly.
+description: Use when the session is approaching a context limit, you need to hand off, you want to stop a long /rota-work cycle cleanly, or an orchestrator must stop mid-round.
 ---
 
 # rota-pause — Graceful Session Pause

@@ -57,6 +57,10 @@ SPEC_KEYS = {"name", "description", "license", "compatibility", "metadata", "all
 NAME_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 PENDING_KEYS = set()
 PENDING_LONG = set()
+# A description says when to use the skill, not how it works: a long one
+# summarises the workflow and agents follow it instead of reading the skill
+# (#246, references/authoring-conventions.md). The spec's 1024 is a ceiling, not a target.
+DESC_CAP = 350
 
 
 def pending_spec():
@@ -131,6 +135,9 @@ def check_spec_frontmatter(path, text, issues):
             issues.append(f"{rel}: description is {len(desc)} chars; the spec allows 1024")
     elif rel in pending_long:
         issues.append(f"{rel}: description is within 1024 chars; remove it from PENDING_LONG")
+    elif len(desc) > DESC_CAP:
+        issues.append(f"{rel}: description is {len(desc)} chars; the cap is {DESC_CAP}. "
+                      f"State when to use the skill, not how it works")
     for key in plain_scalar_hazards(text):
         issues.append(f"{rel}: frontmatter '{key}' is not valid YAML unquoted (': ', ' #' or a leading indicator); "
                       f"use a folded block (>-) or quote it")

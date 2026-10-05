@@ -1,6 +1,6 @@
 ---
 name: rota-qa
-description: QA the built product — not the diff. Use on "/rota-qa", "run QA", "test the feature", "validate the build", before ship as a gate, or on first cycle to scaffold a per-repo strategy. Detects testing surfaces per repo (web, API, CLI, mobile, lib), picks runners (Playwright, smoke, contract, lighthouse, ZAP, axe), and produces a scored report with executable pass/fail results plus audit-style usability findings. Strategy is per-repo in .rota/qa/<repo>.md so the skill never hardcodes "browser". Modes — first-run (probe + propose strategy), run (execute strategy, emit verdict), restructure (audit strategy files). Opt-in gate via ship.qa.
+description: Use on "/rota-qa", "run QA", "test the feature", "validate the build", before ship as a gate, or on the first cycle to scaffold a per-repo QA strategy. QA of the built product, not the diff.
 ---
 
 # rota-qa — Product Quality Assurance
