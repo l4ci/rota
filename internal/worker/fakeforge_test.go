@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
+	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/l4ci/rota/internal/tracker"
@@ -54,6 +57,49 @@ func (f *fakeForge) OpenPRs(context.Context) ([]tracker.PR, error) {
 		return nil, nil
 	}
 	return []tracker.PR{{Number: 7, Branch: f.w.forgeWord("head"), URL: ghURL}}, nil
+}
+
+// ClosedNumbers reads `Closes #N` lines. Get and RemoveLabels serve one issue
+// whose state ("issueState", default open) and labels ("issueLabels", comma
+// separated) live in the forge DB; "issueErr" makes both fail.
+func (f *fakeForge) ClosedNumbers(body string) []int {
+	var out []int
+	for _, m := range regexp.MustCompile(`(?i)closes #(\d+)`).FindAllStringSubmatch(body, -1) {
+		n, _ := strconv.Atoi(m[1])
+		out = append(out, n)
+	}
+	return out
+}
+
+func (f *fakeForge) Get(_ context.Context, n int, _ bool) (tracker.Issue, error) {
+	f.logf("Get %d", n)
+	if msg := f.w.forgeWord("issueErr"); msg != "" {
+		return tracker.Issue{}, errors.New(msg)
+	}
+	state := f.w.forgeWord("issueState")
+	if state == "" {
+		state = "open"
+	}
+	is := tracker.Issue{Number: n, State: state}
+	if l := f.w.forgeWord("issueLabels"); l != "" {
+		is.Labels = strings.Split(l, ",")
+	}
+	return is, nil
+}
+
+func (f *fakeForge) RemoveLabels(_ context.Context, n int, labels []string) error {
+	f.logf("RemoveLabels %d %s", n, strings.Join(labels, ","))
+	if f.w.forgeWord("removeErr") != "" {
+		return errors.New(f.w.forgeWord("removeErr"))
+	}
+	var keep []string
+	for _, l := range strings.Split(f.w.forgeWord("issueLabels"), ",") {
+		if !slices.Contains(labels, l) {
+			keep = append(keep, l)
+		}
+	}
+	f.w.forge("issueLabels", strings.Join(keep, ","))
+	return nil
 }
 
 func (f *fakeForge) PRRequestMerge(_ context.Context, pr int, o tracker.MergeOpts) error {
