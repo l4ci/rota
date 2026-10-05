@@ -88,11 +88,6 @@ func (e Env) holdsLease(ctx context.Context, root string, pid int, getenv func(s
 	return (st == roundlease.Live || st == roundlease.Foreign) && holder.SameAs(lease, le.Host), nil
 }
 
-// slotIssue is the issue a slot holds, in the backend's spelling.
-func slotIssue(s *worker.Slot) string {
-	return heldID(s.Task(), s.Branch(), s.Name())
-}
-
 // freeSlot records a slot as idle and parked: no issue, no claim, no PR.
 func freeSlot(root, name string, clearHandle bool) error {
 	return editSlot(root, name, func(s *worker.Slot) error { s.Park(clearHandle); return nil })
@@ -227,7 +222,7 @@ func (e Env) Return(ctx context.Context, root string, be Board, o ReturnOpts) (r
 	if s == nil {
 		return res, &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("slot %s is not in the pool", o.Slot)}
 	}
-	id := slotIssue(s)
+	id := s.HeldID()
 	if id == "" {
 		return res, &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("slot %s holds no issue", o.Slot)}
 	}
@@ -294,7 +289,7 @@ type SlotHealth struct {
 // state dead). stalled: alive and nothing moved for StallMinutes. healthy: the
 // rest, including a slot waiting on an escalation.
 func (e Env) Health(ctx context.Context, root string, s *worker.Slot, now time.Time) SlotHealth {
-	h := SlotHealth{Issue: slotIssue(s), Health: HealthIdle}
+	h := SlotHealth{Issue: s.HeldID(), Health: HealthIdle}
 	if h.Issue == "" {
 		return h
 	}
@@ -517,7 +512,7 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 	reg := worker.LoadRegistry(root)
 	var sender, receiver *worker.Slot
 	for _, s := range reg.Slots() {
-		if slotIssue(s) != strings.ToUpper(id) {
+		if s.HeldID() != strings.ToUpper(id) {
 			continue
 		}
 		if s.Name() == o.To {
@@ -557,7 +552,7 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 			return res, &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("slot %s is not provisioned: run rota round start", o.To)}
 		}
 		if !resuming {
-			if h := slotIssue(to); h != "" {
+			if h := to.HeldID(); h != "" {
 				ok, why := e.parkable(ctx, to)
 				if !ok {
 					return res, blocked(BlockSlotBusy, "%s", busyMsg(o.To, h, why))

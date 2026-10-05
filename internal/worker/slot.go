@@ -48,9 +48,6 @@ func (s *Slot) ActiveAt() string   { return jsonx.Str(s.o, "activeAt") }
 func (s *Slot) Seen() string       { return jsonx.Str(s.o, "seen") }
 func (s *Slot) Unsent() bool       { return jsonx.Bool(s.o, "unsent") }
 
-// Issue is the legacy issue field some registries still carry.
-func (s *Slot) Issue() string { return jsonx.Str(s.o, "issue") }
-
 // Relays is the relay log the gate reads for approval provenance.
 func (s *Slot) Relays() []any {
 	v, _ := s.o.Get("relays")

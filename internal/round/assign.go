@@ -321,7 +321,7 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 	} else {
 		for _, name := range set.Roster {
 			s := reg.Slot(name)
-			if s != nil && heldID(s.Task(), s.Branch(), name) == strings.ToUpper(id) {
+			if s != nil && s.HeldID() == strings.ToUpper(id) {
 				slot, resuming = s, true
 				break
 			}
@@ -330,7 +330,7 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 			if slot != nil {
 				break
 			}
-			if s := reg.Slot(name); s != nil && heldID(s.Task(), s.Branch(), name) == "" {
+			if s := reg.Slot(name); s != nil && s.HeldID() == "" {
 				slot = s
 			}
 		}
@@ -350,7 +350,7 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 	}
 	agent := slot.Name()
 	res.Agent = agent
-	if h := heldID(slot.Task(), slot.Branch(), agent); h != "" {
+	if h := worker.HeldID(slot.Task(), slot.Branch(), agent); h != "" {
 		if h != strings.ToUpper(id) {
 			ok, why := e.parkable(ctx, slot)
 			if !ok {
@@ -633,15 +633,4 @@ func failedChecks(r Readiness) string {
 		}
 	}
 	return strings.Join(out, ", ")
-}
-
-func intOf(v any) int {
-	switch t := v.(type) {
-	case float64:
-		return int(t)
-	case interface{ Int64() (int64, error) }:
-		i, _ := t.Int64()
-		return int(i)
-	}
-	return 0
 }

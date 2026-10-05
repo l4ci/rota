@@ -138,7 +138,7 @@ func (e Env) WindDown(ctx context.Context, root string, be Board, o WindDownOpts
 		park := "park/" + name
 		wasParked := s.Branch() == park && s.Task() == ""
 		claim := s.ClaimID()
-		issue := heldID(s.Task(), s.Branch(), name)
+		issue := s.HeldID()
 		if !wasParked {
 			so.Issue = firstNonEmpty(so.Issue, issue)
 		} else {
