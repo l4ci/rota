@@ -157,6 +157,8 @@ You are implementing Task N of [total].
 **Critical constraints:**
 [Behavior preservation, patterns to follow, things NOT to touch]
 
+**RED before GREEN:** [behavior change: write the new test first, run it against the unchanged code and report the command plus the failing output line before touching production code; a test that already passes proves nothing, so fix the test. Docs, skill-text or other no-test-seam change: write `no test seam: docs/skill change` and skip.]
+
 **Claims to verify before building on them:**
 [Every factual claim this brief rests on: a line number, a call-site count, "function X already returns Y". Check each first. If one is false, STOP and report which claim and what is actually there; do not implement around it.]
 
@@ -164,7 +166,7 @@ You are implementing Task N of [total].
 
 **Suggested commit message:** [exact message; the orchestrator uses it in Step 7.5]
 
-**On completion:** report the files you modified, plus any tool-generated siblings the toolchain produced, and confirm you did not stage or commit. Name any brief claim that turned out false, even if you worked around it.
+**On completion:** report the RED command and failing line (or the no-test-seam note), the files you modified, plus any tool-generated siblings the toolchain produced, and confirm you did not stage or commit. Name any brief claim that turned out false, even if you worked around it.
 ```
 
 **Umbrella.** The `[UMBRELLA]` line replaces the WORKTREE line under branch isolation; both appear under Layout B worktrees. Workers MUST `cd` to the named directory before any `git` command: the orchestrator stays at the umbrella for `.rota/` access, so a worker's default cwd targets the wrong `.git/`. For a multi-repo set, dispatch one worker per sub-repo with that repo's name and path; each brief lists only its own files, and Step 7 verifies each repo's commit independently.
@@ -183,7 +185,7 @@ Verify internally; don't narrate. Trust the diff, not the worker's narrative.
 
 **PASS** → move on silently. **FAIL** → dispatch a fix agent and re-verify; surface failures only if they persist.
 
-**Record proof.** For each task that PASSes, append one row per item it resolves: `rota proof add <ID> --check "<verify command or grep>" --result PASS --evidence "<output line or path>" [--sha <task-commit>]`. A FAIL that persists is recorded with `--result FAIL`. Proof rows are facts about what ran, not acceptance: `rota item complete` (Step 9) is the acceptance write and exits 4 when an item has no proof. `--no-proof` is never passed on its own; an unproven item stays open and is surfaced. Issue mode records the rows in the item's proof note.
+**Record proof.** For each task that PASSes, append one row per item it resolves: `rota proof add <ID> --check "<verify command or grep>" --result PASS --evidence "<output line or path>" [--sha <task-commit>]`. A FAIL that persists is recorded with `--result FAIL`. For a behavior task, first record the worker's reported RED run: `rota proof add <ID> --check "<test command>" --result FAIL --evidence "<failing line>" --sha <sha before the change>`, then the PASS row after. A docs or skill-only task has no RED: put `no test seam: docs/skill change` in the PASS row's `--check`. A worker that reports no RED for a behavior change gets a fix dispatch (Step 7 FAIL). Proof rows are facts about what ran, not acceptance: `rota item complete` (Step 9) is the acceptance write and exits 4 when an item has no proof. `--no-proof` is never passed on its own; an unproven item stays open and is surfaced. Issue mode records the rows in the item's proof note.
 
 ## Step 7.5 — Commit per Task (orchestrator)
 
@@ -283,6 +285,7 @@ One line, only when `references/post-cycle-trigger-gate.md` fires: *"Run `/rota-
 |---|---|
 | "The worker said it passed." | Step 7 trusts the diff: `git status`, `git diff` and the read files, never the worker's narrative. |
 | "The check is obvious, skip the proof row." | `rota item complete` exits 4 without one. An unproven item stays open and is surfaced. |
+| "The new test passes, that's enough." | A test that never failed may not test the change. A behavior task needs a RED run first, recorded as a FAIL row, then the PASS row. |
 | "Pass `--no-proof`, the code is fine." | Never on your own. The row records what ran; the flag records that nothing did. |
 | "A worker disputing its brief is noise." | A dispute is a FAIL on the plan. Fix the plan, then re-dispatch. |
 | "Open the PR now, the user wants it shipped." | Opening a PR is a manual gate whatever `autonomy.level` says (Step 10, `/rota-ship` Step 6a). |

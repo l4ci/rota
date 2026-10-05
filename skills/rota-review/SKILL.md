@@ -144,7 +144,7 @@ Check each named edge is handled and pinned by a test; an unhandled or untested 
 
 **Recorded proof:**
 <rows from `rota proof show <ID>` per item, or "none recorded">
-Rows are verification already run (check, result, sha, evidence). Do NOT re-run a check that has a PASS row at the current sha; spot-check one row. A FAIL row or a row at a stale sha is a gap to cite.
+Rows are verification already run (check, result, sha, evidence). Do NOT re-run a check that has a PASS row at the current sha; spot-check one row. A FAIL row or a row at a stale sha is a gap to cite. A behavior change whose proof has no FAIL row (RED run before the change) is a CONCERN; a docs or skill-only change is exempt when its proof row says `no test seam: docs/skill change`.
 
 **Rubric. For each item, return PASS / CONCERN / FAIL with evidence.**
 
