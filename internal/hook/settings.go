@@ -28,65 +28,33 @@ type Settings struct {
 	UsageThreshold int  // usageThreshold, percent 1..100
 }
 
-// IntKey reads an integer config key and checks it is within min..max. The
-// message is what a verb prints for exit 70.
-func IntKey(cfg any, key string, min, max int) (int, error) {
-	v, err := config.Value(cfg, key)
-	if err != nil {
-		return 0, err
-	}
-	n, ok := v.(interface{ Int64() (int64, error) })
-	if !ok {
-		return 0, fmt.Errorf("%s must be an integer (got %v)", key, v)
-	}
-	i, err := n.Int64()
-	if err != nil || i < int64(min) || i > int64(max) {
-		return 0, fmt.Errorf("%s must be an integer from %d to %d (got %v)", key, min, max, v)
-	}
-	return int(i), nil
-}
-
 // LoadSettings reads and validates the orchestrator.* keys from a merged
 // config. The hooks treat an error as a pass; doctor and verbs report it.
 func LoadSettings(cfg any) (Settings, error) {
 	var s Settings
-	get := func(key string, min, max int) (int, error) { return IntKey(cfg, key, min, max) }
+	get := func(key string, min, max int) (int, error) { return config.Int(cfg, key, min, max) }
 	var err error
 	if s.Threshold, err = get("orchestrator.handoffThreshold", 1, 100); err != nil {
 		return s, err
 	}
-	if s.StateMaxAge, err = get("orchestrator.stateMaxAgeSeconds", 1, 1<<30); err != nil {
+	if s.StateMaxAge, err = get("orchestrator.stateMaxAgeSeconds", 1, config.MaxInt); err != nil {
 		return s, err
 	}
-	if s.HandoffMaxAge, err = get("orchestrator.handoffMaxAgeSeconds", 1, 1<<30); err != nil {
+	if s.HandoffMaxAge, err = config.HandoffMaxAgeSeconds(cfg); err != nil {
 		return s, err
 	}
 	if s.HandoffMaxBlks, err = get("orchestrator.handoffMaxBlocks", 0, 1000); err != nil {
 		return s, err
 	}
-	if s.SwitchOnUsage, err = BoolKey(cfg, "orchestrator.switchOnUsage"); err != nil {
+	if s.SwitchOnUsage, err = config.SwitchOnUsage(cfg); err != nil {
 		return s, err
 	}
 	if s.SwitchOnUsage {
 		// Read only when on: a bad threshold must not disable the context
 		// handoff of a project that never opted in.
-		s.UsageThreshold, err = get("orchestrator.usageThreshold", 1, 100)
+		s.UsageThreshold, err = config.UsageThreshold(cfg)
 	}
 	return s, err
-}
-
-// BoolKey reads a boolean config key. The message is what a verb prints for
-// exit 70.
-func BoolKey(cfg any, key string) (bool, error) {
-	v, err := config.Value(cfg, key)
-	if err != nil {
-		return false, err
-	}
-	b, ok := v.(bool)
-	if !ok {
-		return false, fmt.Errorf("%s must be true or false (got %v)", key, v)
-	}
-	return b, nil
 }
 
 // Scope is where a settings file lives; the order below is Claude Code's
