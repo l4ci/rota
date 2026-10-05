@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/rotatree"
@@ -28,6 +29,17 @@ var ErrScope = errors.New("scope")
 type Store struct {
 	Root  string
 	Repos map[string]string
+	// Now is the clock that dates new entries; nil is the wall clock.
+	Now func() time.Time
+}
+
+// today is the YYYY-MM-DD date stamped on what Store writes.
+func (s Store) today() string {
+	now := time.Now
+	if s.Now != nil {
+		now = s.Now
+	}
+	return now().Format("2006-01-02")
 }
 
 // check validates a sub-repo scope against the registry.

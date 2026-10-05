@@ -215,7 +215,7 @@ func keepaliveRun(fs *flag.FlagSet) RunFunc {
 			opts.Account = worker.AccountOf(root, opts.ConfigDir)
 			env.UsageMarker = usageMarker(cd, root)
 			env.Choose = usageChoose(ctx, c, root)
-			env.Record = usageRecord(root, hookNow)
+			env.Record = usageRecord(root, c.deps().Now)
 		}
 		if !*noLimits {
 			lset, err := limits.LoadSettings(cfg)
