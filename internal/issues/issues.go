@@ -27,7 +27,8 @@ var ErrNoProvider = errors.New("no issue provider")
 
 // Env is what every call runs with.
 type Env struct {
-	Settings tracker.Settings
+	// Config is the loaded .rota/config.json (nil reads the defaults).
+	Config any
 	// Opts reach every forge CLI the calls build (tests swap the executor).
 	Opts []tracker.Option
 }
@@ -40,7 +41,7 @@ func Provider(ctx context.Context, env Env, dir string) string {
 	if err == nil {
 		return p
 	}
-	if c := env.Settings.Provider; c == "github" || c == "gitlab" {
+	if c := tracker.SettingsFromConfig(env.Config).Provider; c == "github" || c == "gitlab" {
 		return c
 	}
 	return "unknown"
@@ -65,7 +66,7 @@ func unavailable(format string, a ...any) *tracker.Error {
 
 // adapter is the forge adapter for provider, whose CLI runs in dir.
 func (e Env) adapter(ctx context.Context, provider, dir string) (tracker.Adapter, error) {
-	return tracker.New(ctx, e.Settings, provider, dir, e.Opts...)
+	return tracker.NewFromConfig(ctx, e.Config, provider, dir, e.Opts...)
 }
 
 // ---- label ----------------------------------------------------------------

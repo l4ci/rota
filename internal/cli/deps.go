@@ -81,6 +81,13 @@ func defaultDeps() *Deps {
 
 // deps is the invocation's dependencies. A Ctx built by hand, without run,
 // gets the real ones.
+func (c *Ctx) deps() *Deps {
+	if c.Deps == nil {
+		c.Deps = defaultDeps()
+	}
+	return c.Deps
+}
+
 // forge is the one place a verb builds its forge adapter: settings from cfg,
 // provider resolution and the TrackerOptions a test swaps the executor through.
 func (d *Deps) forge(ctx context.Context, cfg any, provider, dir string) (tracker.Adapter, error) {
@@ -90,11 +97,4 @@ func (d *Deps) forge(ctx context.Context, cfg any, provider, dir string) (tracke
 // forgeOrGitHub is forge falling back to github for an unrecognized origin.
 func (d *Deps) forgeOrGitHub(ctx context.Context, cfg any, provider, dir string) (tracker.Adapter, error) {
 	return tracker.NewFromConfigOrGitHub(ctx, cfg, provider, dir, d.TrackerOptions...)
-}
-
-func (c *Ctx) deps() *Deps {
-	if c.Deps == nil {
-		c.Deps = defaultDeps()
-	}
-	return c.Deps
 }
