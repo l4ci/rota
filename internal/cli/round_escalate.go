@@ -15,7 +15,6 @@ import (
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/escalation"
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/tracker"
 )
 
 // escalationEnv is the seam tests replace to inject a clock and a fake host.
@@ -24,7 +23,7 @@ import (
 func escalationForge(c *Ctx) func(ctx context.Context, root string) (escalation.Forge, error) {
 	return func(ctx context.Context, root string) (escalation.Forge, error) {
 		cfg := config.Load(filepath.Join(root, ".rota", "config.json"))
-		return tracker.New(ctx, tracker.SettingsFromConfig(cfg), "", root, c.deps().TrackerOptions...)
+		return c.deps().forge(ctx, cfg, "", root)
 	}
 }
 

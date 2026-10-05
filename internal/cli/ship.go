@@ -283,12 +283,9 @@ func shipPR(fs *flag.FlagSet) RunFunc {
 		root := shipRoot(dir)
 		cfg := config.Load(filepath.Join(root, ".rota", "config.json"))
 
-		cl, err := tracker.New(ctx, tracker.SettingsFromConfig(cfg), "", dir, c.deps().TrackerOptions...)
+		cl, err := c.deps().forgeOrGitHub(ctx, cfg, "", dir)
 		if err != nil {
-			// An origin that is neither GitHub nor GitLab falls back to github.
-			if cl, err = tracker.New(ctx, tracker.SettingsFromConfig(cfg), "github", dir, c.deps().TrackerOptions...); err != nil {
-				return Result{}, trackerErr(err)
-			}
+			return Result{}, trackerErr(err)
 		}
 		given := pystr.SplitCSV(*items)
 		pr, err := ship.OpenPR(ctx, ship.PRPorts{

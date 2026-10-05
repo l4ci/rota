@@ -413,7 +413,7 @@ func TestApprovalsSection(t *testing.T) {
 }
 
 func (e Env) withForge(f func(provider, dir string) Forge, brokenMergeBase bool) Env {
-	e.Forge = func(provider, dir string, _ time.Duration) (Forge, error) { return f(provider, dir), nil }
+	e.Forge = func(provider, dir string, _ any) (Forge, error) { return f(provider, dir), nil }
 	if brokenMergeBase {
 		realGit := e.Git
 		if realGit == nil {
@@ -478,7 +478,7 @@ func TestGateProvenanceFailsClosedWhenTheBodyCannotBeRead(t *testing.T) {
 			w := newWorld(t, ghURL)
 			e := w.env(false)
 			inner := e.Forge
-			e.Forge = func(p, d string, r time.Duration) (Forge, error) {
+			e.Forge = func(p, d string, r any) (Forge, error) {
 				f, err := inner(p, d, r)
 				return tc.wrap(f), err
 			}
@@ -499,7 +499,7 @@ func TestGateProvenanceFailsClosedWhenTheBodyCannotBeRead(t *testing.T) {
 	w := newWorld(t, ghURL)
 	e := w.env(false)
 	inner := e.Forge
-	e.Forge = func(p, d string, r time.Duration) (Forge, error) {
+	e.Forge = func(p, d string, r any) (Forge, error) {
 		f, err := inner(p, d, r)
 		return &flakyForge{Forge: f, from: 1, err: &tracker.Error{Kind: tracker.KindUnavailable, Code: 3, Message: "gh is not installed"}}, err
 	}
