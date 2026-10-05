@@ -181,9 +181,9 @@ gt_case f "$GL_URL"
 RC="$(gt_gate env FORGE_MODE=squash "$ROTA_BIN" --json worker gate w1 --base main)"
 [ "$RC" = 0 ] && [ "$(gt_verdict)" = pass ] || fail "gate (f): clean gitlab merge must pass (rc=$RC): $(cat "$GT_DIR.out")"
 [ "$(jget data.verifySkipped <"$GT_DIR.out")" = true ] || fail "gate (f): no verifyCommands must report verifySkipped: $(cat "$GT_DIR.out")"
-grep -q "^glab mr merge 7 -y --auto-merge=false --sha $(git -C "$GT_WORKER" rev-parse HEAD)$" "$FORGE_LOG" \
+grep -q "^glab mr merge 7 --yes --auto-merge=false --sha $(git -C "$GT_WORKER" rev-parse HEAD)$" "$FORGE_LOG" \
   || fail "gate (f): glab merge must disable auto-merge and pin the sha: $(cat "$FORGE_LOG")"
-grep -q "^glab api projects/:fullpath/merge_requests/7" "$FORGE_LOG" || fail "gate (f): glab must read the MR through the API"
+grep -q "^glab api projects/:id/merge_requests/7" "$FORGE_LOG" || fail "gate (f): glab must read the MR through the API"
 gt_case f2 "$GL_URL"
 set_forge body $'## Approvals\n- x: orchestrator relay round 2\n'
 printf '{"slots":[{"name":"w1","branch":"w1","pr":"%s","relays":[]}]}' "$GL_URL" > "$GT_DIR/.rota/workers.json"

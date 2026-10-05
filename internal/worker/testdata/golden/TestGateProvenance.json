@@ -176,73 +176,73 @@
       "Exit": 4,
       "Origin": "seed",
       "Local": "seed",
-      "Forge": "gh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\ngh pr view https://github.com/o/r/pull/7 --json body -q .body\n"
+      "Forge": "github PRView 7\ngithub PRView 7\n"
     },
     "maintainer line with different text": {
       "Exit": 0,
       "Origin": "seed",
       "Local": "seed",
-      "Forge": "gh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\ngh pr view https://github.com/o/r/pull/7 --json body -q .body\n"
+      "Forge": "github PRView 7\ngithub PRView 7\n"
     },
     "no section while relays exist": {
       "Exit": 4,
       "Origin": "seed",
       "Local": "seed",
-      "Forge": "gh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\ngh pr view https://github.com/o/r/pull/7 --json body -q .body\n"
+      "Forge": "github PRView 7\ngithub PRView 7\n"
     },
     "no section, no relays": {
       "Exit": 0,
       "Origin": "seed",
       "Local": "seed",
-      "Forge": "gh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\ngh pr view https://github.com/o/r/pull/7 --json body -q .body\n"
+      "Forge": "github PRView 7\ngithub PRView 7\n"
     },
     "only one section counts: ### is not a new heading": {
       "Exit": 4,
       "Origin": "seed",
       "Local": "seed",
-      "Forge": "gh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\ngh pr view https://github.com/o/r/pull/7 --json body -q .body\n"
+      "Forge": "github PRView 7\ngithub PRView 7\n"
     },
     "relay cited and logged": {
       "Exit": 0,
       "Origin": "seed",
       "Local": "seed",
-      "Forge": "gh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\ngh pr view https://github.com/o/r/pull/7 --json body -q .body\n"
+      "Forge": "github PRView 7\ngithub PRView 7\n"
     },
     "relay cited with no number but none logged": {
       "Exit": 4,
       "Origin": "seed",
       "Local": "seed",
-      "Forge": "gh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\ngh pr view https://github.com/o/r/pull/7 --json body -q .body\n"
+      "Forge": "github PRView 7\ngithub PRView 7\n"
     },
     "relay cited with no number, one logged": {
       "Exit": 0,
       "Origin": "seed",
       "Local": "seed",
-      "Forge": "gh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\ngh pr view https://github.com/o/r/pull/7 --json body -q .body\n"
+      "Forge": "github PRView 7\ngithub PRView 7\n"
     },
     "relay round never sent": {
       "Exit": 4,
       "Origin": "seed",
       "Local": "seed",
-      "Forge": "gh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\ngh pr view https://github.com/o/r/pull/7 --json body -q .body\n"
+      "Forge": "github PRView 7\ngithub PRView 7\n"
     },
     "relayed text cited as the maintainer": {
       "Exit": 4,
       "Origin": "seed",
       "Local": "seed",
-      "Forge": "gh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\ngh pr view https://github.com/o/r/pull/7 --json body -q .body\n"
+      "Forge": "github PRView 7\ngithub PRView 7\n"
     },
     "section ends at the next heading": {
       "Exit": 0,
       "Origin": "seed",
       "Local": "seed",
-      "Forge": "gh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\ngh pr view https://github.com/o/r/pull/7 --json body -q .body\n"
+      "Forge": "github PRView 7\ngithub PRView 7\n"
     },
     "short summary is not matched": {
       "Exit": 0,
       "Origin": "seed",
       "Local": "seed",
-      "Forge": "gh pr view 7 --json headRefName,headRefOid,baseRefName,state,mergeCommit\ngh pr view https://github.com/o/r/pull/7 --json body -q .body\n"
+      "Forge": "github PRView 7\ngithub PRView 7\n"
     }
   }
 }

@@ -497,12 +497,14 @@ func shipMerge(fs *flag.FlagSet) RunFunc {
 		if co.Code != 0 {
 			return Result{}, Unavailable("git checkout %s: %s", base, shipFirstLine(co.Stderr))
 		}
+		// A local merge: there is no forge PR head to pin, the branch tip is the
+		// thing merged. Merges that go through a forge pin via tracker.MergeOpts.
 		mg, err := shipGit(c, dir, "merge", "--no-ff", branch, "-m", msg)
 		if err != nil {
 			return Result{}, err
 		}
 		if mg.Code != 0 {
-			if all := mg.Stdout + mg.Stderr; strings.Contains(all, "CONFLICT") || strings.Contains(all, "Automatic merge failed") {
+			if all := mg.Stdout + mg.Stderr; git.IsMergeConflict(all) {
 				// The tree is left as it was.
 				shipGit(c, dir, "merge", "--abort")
 				return shipBlocked("conflict", "merge conflict; merge aborted")

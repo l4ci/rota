@@ -315,7 +315,7 @@ func (f *a8Forge) ClosedNumbers(body string) []int {
 	return out
 }
 
-func (f *a8Forge) PRMerge(_ context.Context, pr int) (string, error) {
+func (f *a8Forge) PRMerge(_ context.Context, pr int, _ tracker.MergeOpts) (string, error) {
 	if f.mergeErr != nil {
 		return "", f.mergeErr
 	}
