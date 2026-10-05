@@ -142,11 +142,12 @@ func mergePorts(g Git) MergePorts {
 
 func mergeGit() *fakeGit {
 	return &fakeGit{out: map[string]string{
-		"worktree list --porcelain": "",
-		"checkout -q main":          "",
-		"merge --no-ff feat -m msg": "",
-		"branch -d feat":            "",
-		"log -1 --format=%h":        "abc1234",
+		"worktree list --porcelain":           "",
+		"checkout -q main":                    "",
+		"rev-parse --verify -q feat^{commit}": "cafe123",
+		"merge --no-ff -m msg cafe123":        "",
+		"branch -d feat":                      "",
+		"log -1 --format=%h":                  "abc1234",
 	}}
 }
 
@@ -163,8 +164,8 @@ func TestMergeBranchRefusals(t *testing.T) {
 		t.Errorf("base: %v", err)
 	}
 	g := mergeGit()
-	g.fail = map[string]bool{"merge --no-ff feat -m msg": true}
-	g.out["merge --no-ff feat -m msg"] = ""
+	g.fail = map[string]bool{"merge --no-ff -m msg cafe123": true}
+	g.out["merge --no-ff -m msg cafe123"] = ""
 	// A conflict aborts the merge and refuses.
 	cg := &conflictGit{fakeGit: g}
 	if _, err := MergeBranch(mergePorts(cg), "feat", "main", "msg"); !errors.As(err, &ref) || ref.By != "conflict" {
@@ -203,8 +204,10 @@ func TestMergeBranchGatesFirst(t *testing.T) {
 	if _, err := MergeBranch(p, "feat", "main", "msg"); !errors.Is(err, boom) {
 		t.Fatalf("err = %v", err)
 	}
-	if len(g.calls) != 0 {
-		t.Errorf("git ran: %v", g.calls)
+	for _, c := range g.calls { // the pin is read first; nothing else may run
+		if !strings.HasPrefix(c, "rev-parse") {
+			t.Errorf("git ran: %v", g.calls)
+		}
 	}
 }
 

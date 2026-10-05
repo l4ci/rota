@@ -2,9 +2,11 @@ package worker
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/land"
 	"os"
 	"path/filepath"
 	"sort"
@@ -196,24 +198,24 @@ func (e Env) Train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 	tips := make([]string, len(res.Members)+1) // tips[i]: the scratch tree with the first i members merged
 	tips[0] = baseSHA
 	for i, m := range res.Members {
-		gr, gerr := e.Git(ctx, scratch, "merge", "--no-ff", "-m", fmt.Sprintf("train: %s into %s", m.Branch, o.Base), heads[i])
-		out, errb, code := gr.Stdout, gr.Stderr, gr.ExitCode
-		if gerr != nil {
-			code, errb = 127, gerr.Error()
-		}
-		if code != 0 {
-			e.git(scratch, "merge", "--abort")
+		run := func(args ...string) (git.Result, error) { return e.Git(ctx, scratch, args...) }
+		if merr := land.MergeLocal(run, heads[i], fmt.Sprintf("train: %s into %s", m.Branch, o.Base)); merr != nil {
 			res.Culprit = m.Target
 			res.Members[i].Culprit = true
 			res.Verdict = GateMergeFailed
-			if git.IsMergeConflict(out + errb) {
+			var me *land.MergeError
+			switch {
+			case errors.As(merr, new(*land.ConflictError)):
 				res.Err = fmt.Sprintf("TRAIN-FAIL %s — %s does not merge onto %s with the %d member(s) before it: conflict", m.Target, m.Branch, o.Base, i)
 				res.Hint = fmt.Sprintf("send %s back to merge %s, or run the train without it", m.Target, o.Base)
-			} else {
-				res.Err = fmt.Sprintf("TRAIN-FAIL %s — merging %s into the scratch tree failed (exit %d): %s", m.Target, m.Branch, code, strings.TrimSpace(errb+" "+out))
+			case errors.As(merr, &me):
+				res.Err = fmt.Sprintf("TRAIN-FAIL %s — merging %s into the scratch tree failed (exit %d): %s", m.Target, m.Branch, me.Code, strings.TrimSpace(me.Out))
+			default:
+				res.Err = fmt.Sprintf("TRAIN-FAIL %s — merging %s into the scratch tree failed (exit 127): %s", m.Target, m.Branch, merr)
 			}
 			return res, nil
 		}
+		var code int
 		if tips[i+1], code = e.git(scratch, "rev-parse", "HEAD"); code != 0 {
 			return e.trainBroke(res, "git rev-parse HEAD failed in the scratch tree")
 		}

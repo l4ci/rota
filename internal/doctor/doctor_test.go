@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/skills"
 )
@@ -89,7 +90,7 @@ func TestRunTable(t *testing.T) {
 		}
 		return m
 	}
-	herdrIn := Input{Dispatch: "herdr", Accounts: []Account{{"a", good}}}
+	herdrIn := Input{Dispatch: "herdr", Accounts: []config.Account{{Name: "a", ConfigDir: good}}}
 	env := func(kv ...string) func(string) string {
 		return func(k string) string {
 			for i := 0; i+1 < len(kv); i += 2 {
@@ -100,7 +101,7 @@ func TestRunTable(t *testing.T) {
 			return ""
 		}
 	}
-	inHerdr := Input{Dispatch: "subagent", Getenv: env("HERDR_ENV", "1"), Accounts: []Account{{"a", good}}}
+	inHerdr := Input{Dispatch: "subagent", Getenv: env("HERDR_ENV", "1"), Accounts: []config.Account{{Name: "a", ConfigDir: good}}}
 
 	for _, tc := range []struct {
 		name   string
@@ -142,18 +143,18 @@ func TestRunTable(t *testing.T) {
 		{"tracker config fallback", Input{IssuesProvider: "gitlab"}, all, with(map[string]Result{"git remote get-url origin": {ExitCode: 2}}), "tracker", Pass, "glab", ""},
 
 		{"accounts none", Input{}, all, with(nil), "accounts", Skip, "no accounts", ""},
-		{"accounts ok", Input{Accounts: []Account{{"a", good}}}, all, with(nil), "accounts", Pass, "1 accounts", ""},
-		{"accounts tilde", Input{Home: home, Accounts: []Account{{"a", "~/good"}}}, all, with(nil), "accounts", Pass, "", ""},
-		{"accounts no dir", Input{Accounts: []Account{{"a", filepath.Join(home, "gone")}}}, all, with(nil), "accounts", Fail, "does not exist", "claude /login"},
-		{"accounts no creds", Input{Accounts: []Account{{"a", nocred}}}, all, with(nil), "accounts", Fail, "no credentials file", "CLAUDE_CONFIG_DIR="},
-		{"accounts no configDir", Input{Accounts: []Account{{"a", ""}}}, all, with(nil), "accounts", Fail, "no configDir", "work.accounts"},
+		{"accounts ok", Input{Accounts: []config.Account{{Name: "a", ConfigDir: good}}}, all, with(nil), "accounts", Pass, "1 accounts", ""},
+		{"accounts tilde", Input{Home: home, Accounts: []config.Account{{Name: "a", ConfigDir: "~/good"}}}, all, with(nil), "accounts", Pass, "", ""},
+		{"accounts no dir", Input{Accounts: []config.Account{{Name: "a", ConfigDir: filepath.Join(home, "gone")}}}, all, with(nil), "accounts", Fail, "does not exist", "claude /login"},
+		{"accounts no creds", Input{Accounts: []config.Account{{Name: "a", ConfigDir: nocred}}}, all, with(nil), "accounts", Fail, "no credentials file", "CLAUDE_CONFIG_DIR="},
+		{"accounts no configDir", Input{Accounts: []config.Account{{Name: "a", ConfigDir: ""}}}, all, with(nil), "accounts", Fail, "no configDir", "work.accounts"},
 
 		{"hook ok", herdrIn, all, with(nil), "hook", Pass, "a: current", ""},
 		{"hook not installed", herdrIn, all, with(map[string]Result{"herdr integration status": {Stdout: miss}}), "hook", Fail, "a: not installed", "herdr integration install claude"},
 		{"hook status errors", herdrIn, all, with(map[string]Result{"herdr integration status": {ExitCode: 1}}), "hook", Fail, "status failed", "herdr integration install claude"},
 		{"hook runs for a detected herdr pane", inHerdr, all, with(nil), "hook", Pass, "a: current", ""},
-		{"hook skips for detected tmux", Input{Dispatch: "subagent", Getenv: env("TMUX", "x"), Accounts: []Account{{"a", good}}}, all, with(nil), "hook", Skip, "not herdr", ""},
-		{"hook skips off herdr", Input{Dispatch: "tmux", Accounts: []Account{{"a", good}}}, all, with(nil), "hook", Skip, "not herdr", ""},
+		{"hook skips for detected tmux", Input{Dispatch: "subagent", Getenv: env("TMUX", "x"), Accounts: []config.Account{{Name: "a", ConfigDir: good}}}, all, with(nil), "hook", Skip, "not herdr", ""},
+		{"hook skips off herdr", Input{Dispatch: "tmux", Accounts: []config.Account{{Name: "a", ConfigDir: good}}}, all, with(nil), "hook", Skip, "not herdr", ""},
 		{"hook skips without accounts", Input{Dispatch: "herdr"}, all, with(nil), "hook", Skip, "no accounts", ""},
 		{"hook skips without herdr", herdrIn, without("herdr"), with(nil), "hook", Skip, "see host", ""},
 	} {
@@ -183,7 +184,7 @@ func TestHookRunsPerAccountWithItsConfigDir(t *testing.T) {
 	f := &fake{have: map[string]bool{"herdr": true}, reply: map[string]Result{
 		"herdr integration status": {Stdout: fixture(t, "integration_status_current.txt")},
 	}}
-	in := Input{Dispatch: "herdr", Home: d, Accounts: []Account{{"a", "~/one"}, {"b", "/two"}}, Exec: f.exec, Look: f.look}
+	in := Input{Dispatch: "herdr", Home: d, Accounts: []config.Account{{Name: "a", ConfigDir: "~/one"}, {Name: "b", ConfigDir: "/two"}}, Exec: f.exec, Look: f.look}
 	c := statusOf(Run(context.Background(), in), "hook")
 	if c.Status != Pass {
 		t.Fatalf("%+v", c)
@@ -518,19 +519,19 @@ func TestOrchestratorChecksSkipUntilOptedIn(t *testing.T) {
 
 func TestSwitchCheck(t *testing.T) {
 	o := newOrch(t)
-	run := func(on bool, accts []Account, have map[string]bool) Check {
+	run := func(on bool, accts []config.Account, have map[string]bool) Check {
 		f := &fake{have: have, reply: map[string]Result{}}
 		r := Run(context.Background(), Input{Exec: f.exec, Look: f.look, ProjectRoot: o.root, ConfigDirs: []string{o.a, o.b}, SwitchOnUsage: on, Accounts: accts})
 		return statusOf(r, "switch")
 	}
-	two := []Account{{"a", o.a}, {"b", o.b}}
+	two := []config.Account{{Name: "a", ConfigDir: o.a}, {Name: "b", ConfigDir: o.b}}
 	if c := run(false, nil, nil); c.Status != Skip {
 		t.Fatalf("off: %+v", c)
 	}
 	if c := run(true, one(two), map[string]bool{"rota": true}); c.Status != Fail || c.Hint != "add a second account to work.accounts" {
 		t.Fatalf("one account: %+v", c)
 	}
-	if c := run(true, []Account{{"a", o.a}, {"b", ""}}, nil); c.Status != Fail {
+	if c := run(true, []config.Account{{Name: "a", ConfigDir: o.a}, {Name: "b", ConfigDir: ""}}, nil); c.Status != Fail {
 		t.Fatalf("no configDir does not count: %+v", c)
 	}
 	if c := run(true, two, map[string]bool{"rota": true}); c.Status != Fail || c.Hint != "rota hook install" {
@@ -542,4 +543,4 @@ func TestSwitchCheck(t *testing.T) {
 	}
 }
 
-func one(a []Account) []Account { return a[:1] }
+func one(a []config.Account) []config.Account { return a[:1] }

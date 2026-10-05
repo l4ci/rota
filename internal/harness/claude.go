@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/shlex"
 )
 
@@ -31,13 +32,13 @@ func (claude) CommandKey() string { return "work.workerCommand" }
 // custom command without the placeholder runs as written (ModelApplies).
 func (claude) Launch(cfg any, chosen string) (string, error) {
 	model := "sonnet"
-	if s := str(cfg, "models.worker"); s != "" {
+	if s := config.StringIfSet(cfg, "models.worker"); s != "" {
 		model = s
 	}
 	if chosen != "" {
 		model = chosen
 	}
-	if s := str(cfg, "work.workerCommand"); s != "" {
+	if s := config.StringIfSet(cfg, "work.workerCommand"); s != "" {
 		return strings.ReplaceAll(s, ModelPlaceholder, model), nil
 	}
 	return "claude --model " + model + " --dangerously-skip-permissions", nil
@@ -51,7 +52,7 @@ func (claude) NeedsModel(any) bool { return true }
 func (c claude) ModelApplies(cfg any) bool { return placeholderApplies(cfg, c.CommandKey()) }
 
 func placeholderApplies(cfg any, key string) bool {
-	if s := str(cfg, key); s != "" {
+	if s := config.StringIfSet(cfg, key); s != "" {
 		return strings.Contains(s, ModelPlaceholder)
 	}
 	return true
@@ -128,14 +129,14 @@ func (claude) Sign(_ []byte, payload string) string { return payload }
 func (claude) Name() string   { return Claude }
 func (claude) Prompt() string { return "/rota-orchestrate" }
 func (claude) Command(cfg any) ([]string, error) {
-	if s := str(cfg, "work.operatorCommand"); s != "" {
+	if s := config.StringIfSet(cfg, "work.operatorCommand"); s != "" {
 		argv, err := shlex.Split(s)
 		if err != nil || len(argv) == 0 {
 			return nil, fmt.Errorf("work.operatorCommand is not a command line: %q", s)
 		}
 		return argv, nil
 	}
-	model := str(cfg, "models.orchestrator")
+	model := config.StringIfSet(cfg, "models.orchestrator")
 	if model == "" {
 		model = "opus"
 	}

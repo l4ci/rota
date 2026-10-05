@@ -12,7 +12,6 @@ import (
 	"github.com/l4ci/rota/internal/doctor"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/harness"
-	"github.com/l4ci/rota/internal/hook"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/migrate"
 	"github.com/l4ci/rota/internal/proc"
@@ -102,12 +101,12 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 	}
 	for _, a := range config.Accounts(cfg) {
 		if a.Name != "" {
-			in.Accounts = append(in.Accounts, doctor.Account(a))
+			in.Accounts = append(in.Accounts, a)
 		}
 	}
 	in.ProjectRoot = root
 	doctorDiskInput(ctx, &in, cfg, root, d.Git)
-	if on, err := hook.BoolKey(cfg, "orchestrator.switchOnUsage"); err == nil {
+	if on, err := config.SwitchOnUsage(cfg); err == nil {
 		in.SwitchOnUsage = on
 	}
 	for _, a := range in.Accounts {
