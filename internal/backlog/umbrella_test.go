@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -265,7 +266,7 @@ func TestUmbrellaWritesGoToTheOwner(t *testing.T) {
 	if fakes["api"].Issues[3].State != "open" {
 		t.Errorf("api #2 not reopened")
 	}
-	if !has(fakes["web"].Issues[2].Labels, "in-progress") {
+	if !slices.Contains(fakes["web"].Issues[2].Labels, "in-progress") {
 		t.Errorf("web #5 labels %v", fakes["web"].Issues[2].Labels)
 	}
 	for _, c := range fakes["api"].Calls {
