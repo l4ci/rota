@@ -30,7 +30,7 @@ flowchart LR
   REFACTOR["/rota-refactor"] --> COMMIT
   COMMIT -.review.-> REVIEW["/rota-review"]
   REVIEW -.gate.-> SHIP["/rota-ship"]
-  SHIP -.ship.qa.-> QA["/rota-qa"]
+  SHIP -.->|ship.qa| QA["/rota-qa"]
   QA -.strategy.-> QASTRAT[(.rota/qa/)]
   SHIP --> PR[(PR / merge)]
   SHIP -.rollback.-> UNDO["/rota-ship --undo"]

@@ -15,7 +15,7 @@ Before presenting results it:
 
 ```mermaid
 flowchart TD
-    A[/rota-work no argument] --> B[Reconcile status.json vs git]
+    A["/rota-work (no argument)"] --> B[Reconcile status.json vs git]
     B --> C{Active streams?}
     C -->|Yes| D[Read handoff notes per stream]
     D --> E[Ask: resume / ship / abandon]
@@ -24,8 +24,8 @@ flowchart TD
     F --> G[Present backlog tables + clusters]
     G --> H[Suggest one item]
     H --> I{User picks…}
-    I -->|Start| J[/rota-work]
-    I -->|Peek first| K[/rota-work --preview]
+    I -->|Start| J["/rota-work"]
+    I -->|Peek first| K["/rota-work --preview"]
     I -->|Different pick| H
     I -->|Stop| L[End]
 ```
