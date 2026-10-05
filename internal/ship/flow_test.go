@@ -10,6 +10,7 @@ import (
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/proof"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/verdict"
 )
@@ -20,7 +21,7 @@ func TestBody(t *testing.T) {
 		"log --no-merges --format=%s main..feat": "Add thing [F01]\n\nTidy",
 		"log --no-merges --format=%B main..feat": "Add thing [F01]\n\nTidy",
 	}}
-	got, err := Body(g, "main", "feat", func() (TitleOf, error) { return CorpusTitles(corpus), nil })
+	got, err := Body(g, "main", "feat", func() (TitleOf, error) { return CorpusTitles(corpus), nil }, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -31,12 +32,37 @@ func TestBody(t *testing.T) {
 	}
 }
 
+func TestBodyEvidence(t *testing.T) {
+	g := &fakeGit{out: map[string]string{
+		"log --no-merges --format=%s main..feat": "Add thing [F01]",
+		"log --no-merges --format=%B main..feat": "Add thing [F01]\n\nRefs [F02]",
+	}}
+	proofs := func(id string) ([]proof.Row, error) {
+		if id == "F01" {
+			return []proof.Row{{Check: "unit | tests", Result: "PASS", Evidence: "go test ok"}}, nil
+		}
+		return nil, nil
+	}
+	got, err := Body(g, "main", "feat", func() (TitleOf, error) { return CorpusTitles(""), nil }, proofs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "## Evidence\n\n**[F01]**\n\n| Check | Result | Evidence |\n| --- | --- | --- |\n| unit \\| tests | PASS | go test ok |\n"
+	if !strings.Contains(got, want) || strings.Contains(got, "[F02]**") {
+		t.Errorf("body:\n%s", got)
+	}
+	none, _ := Body(g, "main", "feat", func() (TitleOf, error) { return CorpusTitles(""), nil }, func(string) ([]proof.Row, error) { return nil, nil })
+	if strings.Contains(none, "## Evidence") {
+		t.Errorf("empty evidence section:\n%s", none)
+	}
+}
+
 func TestBodyNoCommits(t *testing.T) {
 	g := &fakeGit{out: map[string]string{
 		"log --no-merges --format=%s main..feat": "",
 		"log --no-merges --format=%B main..feat": "",
 	}}
-	_, err := Body(g, "main", "feat", func() (TitleOf, error) { t.Error("corpus read"); return CorpusTitles(""), nil })
+	_, err := Body(g, "main", "feat", func() (TitleOf, error) { t.Error("corpus read"); return CorpusTitles(""), nil }, nil)
 	var nc *NoCommitsError
 	if !errors.As(err, &nc) || nc.Branch != "feat" {
 		t.Fatalf("err = %v", err)

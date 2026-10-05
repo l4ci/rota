@@ -17,10 +17,11 @@ import (
 
 // reviewCommands is the `rota review` group (#52).
 func reviewCommands() *Command {
-	return &Command{Name: "review", Summary: "scope a review, build the second-opinion brief, scan for scaffolding", Subs: []*Command{
+	return &Command{Name: "review", Summary: "scope a review, package its diff, build the second-opinion brief, scan for scaffolding", Subs: []*Command{
 		{Name: "scope", Summary: "commits, files, item IDs and origin entries of a branch", Repo: true, Verb: noFlags(reviewScope)},
 		{Name: "brief", Summary: "fresh-eyes second-opinion brief for a branch", Repo: true, Verb: noFlags(reviewBrief)},
 		{Name: "scaffolding", Summary: "added diff lines that look like leftover task scaffolding", Repo: true, Verb: reviewScaffolding},
+		{Name: "package", Summary: "write a branch's commits, stat and diff to a file for the reviewer", Repo: true, Verb: reviewPackage},
 		{Name: "queue", Summary: "open issues waiting for review", Repo: true, Verb: noFlags(reviewQueue)},
 	}}
 }
