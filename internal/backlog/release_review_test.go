@@ -2,7 +2,6 @@ package backlog
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
@@ -376,35 +375,11 @@ func rrRun(t *testing.T, s rrSeed) map[string]any {
 // issues, milestones and PRs left behind.
 func TestIssuesReleaseReviewMatchPython(t *testing.T) {
 	scen := rrScenarios()
-	var want []map[string]any
-	golden.GoldenJSON(t, scen, &want)
-	steps, bad := 0, 0
-	for i, s := range scen {
-		got := norm(t, rrRun(t, s)).(map[string]any)
-		w := norm(t, want[i]).(map[string]any)
-		gs, ws := got["steps"].([]any), w["steps"].([]any)
-		for j := range s.Steps {
-			steps++
-			if !reflect.DeepEqual(gs[j], ws[j]) {
-				bad++
-				st, _ := json.Marshal(s.Steps[j])
-				g, _ := json.Marshal(gs[j])
-				p, _ := json.Marshal(ws[j])
-				t.Errorf("scenario %d step %d %s\n go:     %s\n python: %s", i, j, st, g, p)
-			}
-		}
-		for _, k := range []string{"final", "native", "prs"} {
-			if !reflect.DeepEqual(got[k], w[k]) {
-				bad++
-				g, _ := json.Marshal(got[k])
-				p, _ := json.Marshal(w[k])
-				t.Errorf("scenario %d %s differs\n go:     %.1200s\n python: %.1200s", i, k, g, p)
-			}
-		}
+	var got []any
+	for _, s := range scen {
+		got = append(got, rrRun(t, s))
 	}
-	if steps == 0 || bad > 0 {
-		t.Fatalf("%d steps, %d mismatches", steps, bad)
-	}
+	golden.Check(t, map[string]any{"input": scen}, got)
 }
 
 func rrOne(t *testing.T) (*Issues, *rrFake) {

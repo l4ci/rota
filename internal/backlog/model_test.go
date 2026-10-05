@@ -38,19 +38,16 @@ func TestParseRefMatchesPython(t *testing.T) {
 	refs := []string{"B7", "b7", "#7", "7", "repo:B7", "repo:#7", "repo:7", "repo#7", "", "#", "B", "X7", "B-7", "repo:", ":7",
 		"a b#7", "repo:b07", "٢٣", "B٢", "repo#٢", "#B7", "7\n", " 7", "B7x", "repo:B7:x", "r#1#2", "r:#7", "r:#B7",
 		"t5", "T5", "f 5", "5 5", " B7 ", "web:F12", "web#012", "my-web.x:T3", "00", "0"}
-	var want []map[string]any
-	golden.GoldenJSON(t, refs, &want)
-	var got, w, inputs []any
-	for i, r := range refs {
+	var got []any
+	for _, r := range refs {
 		ref, err := ParseRef(r)
 		if err != nil {
 			got = append(got, map[string]any{"err": true})
 		} else {
 			got = append(got, map[string]any{"repo": ref.Repo, "letter": ref.Letter, "number": ref.Number})
 		}
-		w, inputs = append(w, want[i]), append(inputs, r)
 	}
-	golden.Compare(t, "refs", inputs, got, w)
+	golden.Check(t, map[string]any{"input": refs}, got)
 }
 
 func TestOpenSelectsBackend(t *testing.T) {

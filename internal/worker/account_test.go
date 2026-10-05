@@ -58,31 +58,17 @@ func goMeters(t *testing.T, dir, usage string) []Meter {
 
 func TestAccountListMeters(t *testing.T) {
 	dir, usage := newProject(t, acctConfig), usageDir(t)
-	var old []map[string]any
-	golden.Golden(t, map[string]any{"argv": []string{"list", "--json"}, "config": acctConfig, "usage": usageFixtures()}, &old)
 	got := goMeters(t, dir, usage)
-	if len(got) != len(old) {
-		t.Fatalf("%d rows, old %d", len(got), len(old))
-	}
-	for i, m := range got {
-		o := old[i]
-		if m.Name != o["name"] || m.ConfigDir != o["configDir"] || m.Verdict != o["verdict"] || m.Reason != o["reason"] {
-			t.Errorf("row %d: %+v vs old %v", i, m, o)
-		}
-		for key, v := range map[string]*float64{"fiveHour": m.FiveHour, "sevenDay": m.SevenDay, "headroom": m.Headroom} {
-			if (o[key] == nil) != (v == nil) || (v != nil && o[key].(float64) != *v) {
-				t.Errorf("%s %s = %v, old %v", m.Name, key, v, o[key])
-			}
-		}
-		oldReset, _ := o["resetsAt"].(string)
-		gotReset := ""
+	rows := make([]map[string]any, 0, len(got))
+	for _, m := range got {
+		var resets any
 		if m.ResetsAt != nil {
-			gotReset = ISOFormat(*m.ResetsAt)
+			resets = ISOFormat(*m.ResetsAt)
 		}
-		if oldReset != gotReset {
-			t.Errorf("%s resetsAt = %q, old %q", m.Name, gotReset, oldReset)
-		}
+		rows = append(rows, map[string]any{"name": m.Name, "configDir": m.ConfigDir, "verdict": m.Verdict, "reason": m.Reason,
+			"fiveHour": m.FiveHour, "sevenDay": m.SevenDay, "headroom": m.Headroom, "resetsAt": resets})
 	}
+	golden.Check(t, map[string]any{"argv": []string{"list", "--json"}, "config": acctConfig, "usage": usageFixtures()}, rows)
 	verdicts := map[string]string{}
 	for _, m := range got {
 		verdicts[m.Name] = m.Verdict
@@ -119,22 +105,16 @@ func TestAccountPick(t *testing.T) {
 		return ""
 	}}
 	excludes := []string{"", "gamma", "gamma,alpha", " gamma , alpha ", "gamma,alpha,epsilon,zeta", "alpha,beta,gamma,delta,epsilon,zeta"}
-	var picks []string // "" where the helper exited non-zero: nothing eligible
-	golden.Golden(t, map[string]any{"config": acctConfig, "usage": usageFixtures(), "excludes": excludes}, &picks)
-	for i, excl := range excludes {
+	picks := []string{} // "" where nothing was eligible
+	for _, excl := range excludes {
 		var skip []string
 		if excl != "" {
 			skip = strings.Split(excl, ",")
 		}
-		name, ok := acc.Pick(bg, dir, skip)
-		if picks[i] == "" {
-			if ok {
-				t.Errorf("exclude %q: nothing was eligible, go picked %q", excl, name)
-			}
-		} else if !ok || name != picks[i] {
-			t.Errorf("exclude %q: go %q/%v, want %q", excl, name, ok, picks[i])
-		}
+		name, _ := acc.Pick(bg, dir, skip)
+		picks = append(picks, name)
 	}
+	golden.Check(t, map[string]any{"config": acctConfig, "usage": usageFixtures(), "excludes": excludes}, picks)
 }
 
 func TestAccountPickRotatesWhenNoMeterIsReadable(t *testing.T) {
@@ -150,9 +130,7 @@ func TestAccountPickRotatesWhenNoMeterIsReadable(t *testing.T) {
 func TestAccountAssign(t *testing.T) {
 	b := newProject(t, acctConfig)
 	goInit(t, b, InitOpts{Slots: 2, Base: "main"})
-	var want map[string]string // workers.json the helper left after each assign
-	golden.Golden(t, map[string]any{"config": acctConfig, "usage": usageFixtures(), "pool": "init --slots 2 --base main",
-		"steps": []string{"assign --slot w1 --account beta", "assign --slot w2"}}, &want)
+	got := map[string]string{} // workers.json after each assign
 	usage := usageDir(t)
 	acc := &Accounts{Getenv: func(k string) string {
 		if k == "ROTA_ACCOUNT_USAGE_DIR" {
@@ -165,7 +143,7 @@ func TestAccountAssign(t *testing.T) {
 	if err != nil || name != "beta" || !changed {
 		t.Fatalf("go %v %v %v", name, changed, err)
 	}
-	mustEqual(t, "workers.json", want["after w1 beta"], registry(t, b))
+	got["after w1 beta"] = registry(t, b)
 
 	if _, changed, _ := acc.Assign(bg, b, "w1", "beta"); changed {
 		t.Error("assigning the same account again must report changed=false")
@@ -176,7 +154,9 @@ func TestAccountAssign(t *testing.T) {
 	if err != nil || name == "" {
 		t.Fatalf("go %v %v", name, err)
 	}
-	mustEqual(t, "workers.json after pick", want["after w2 pick"], registry(t, b))
+	got["after w2 pick"] = registry(t, b)
+	golden.Check(t, map[string]any{"config": acctConfig, "usage": usageFixtures(), "pool": "init --slots 2 --base main",
+		"steps": []string{"assign --slot w1 --account beta", "assign --slot w2"}}, got)
 
 	exitOf := func(err error) int {
 		if we, ok := err.(*Error); ok {
@@ -219,8 +199,6 @@ func TestAccountAssignWithEveryAccountCoolingIsRefused(t *testing.T) {
 func TestPoolInitSpreadsAccounts(t *testing.T) {
 	b := newProject(t, acctConfig)
 	usage := usageDir(t)
-	var want map[string]string
-	golden.Golden(t, map[string]any{"config": acctConfig, "usage": usageFixtures(), "argv": "init --slots 5 --base main"}, &want)
 	acc := &Accounts{Getenv: func(k string) string {
 		if k == "ROTA_ACCOUNT_USAGE_DIR" {
 			return usage
@@ -230,7 +208,7 @@ func TestPoolInitSpreadsAccounts(t *testing.T) {
 	if _, err := (Env{}).PoolInit(bg, b, InitOpts{Slots: 5, Base: "main"}, acc); err != nil {
 		t.Fatal(err)
 	}
-	mustEqual(t, "workers.json", want["workers.json"], registry(t, b))
+	golden.Check(t, map[string]any{"config": acctConfig, "usage": usageFixtures(), "argv": "init --slots 5 --base main"}, map[string]string{"workers.json": registry(t, b)})
 	if !strings.Contains(registry(t, b), `"account": "alpha"`) {
 		t.Error("no slot was assigned an account")
 	}

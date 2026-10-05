@@ -21,11 +21,7 @@ func TestRoundTripMatchesPython(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var want string
-	golden.Golden(t, map[string]any{"file": string(raw)}, &want)
-	if string(got) != want {
-		t.Fatalf("Go and Python disagree.\n--- go\n%s\n--- python\n%s", got, want)
-	}
+	golden.Check(t, map[string]any{"file": string(raw)}, string(got))
 }
 
 // The golden is json.dumps(json.loads(file)) with Python's default separators.
@@ -36,11 +32,7 @@ func TestCompactMatchesPython(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, _ := MarshalCompact(v)
-	var want string
-	golden.Golden(t, map[string]any{"file": string(raw)}, &want)
-	if string(got) != want {
-		t.Fatalf("\n--- go\n%s\n--- python\n%s", got, want)
-	}
+	golden.Check(t, map[string]any{"file": string(raw)}, string(got))
 }
 
 func TestDuplicateKeyKeepsFirstPosition(t *testing.T) {

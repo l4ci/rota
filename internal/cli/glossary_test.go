@@ -77,11 +77,10 @@ func TestGlossaryWriteMatchGolden(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			want, got := knFrozen(t, glProject(t, c.umbrella, c.fixture), "", c.newArgs...)
-			if want.RC != c.oldRC || got.RC != c.wantRC {
-				t.Fatalf("rc frozen=%d (want %d) new=%d (want %d)\nfrozen: %s\nnew: %s", want.RC, c.oldRC, got.RC, c.wantRC, want.Stderr, got.Stderr)
+			got := knFrozenView(t, glProject(t, c.umbrella, c.fixture), "", knOldRC(c.oldRC), c.newArgs...)
+			if got.RC != c.wantRC {
+				t.Fatalf("rc = %d, want %d: %s", got.RC, c.wantRC, got.Stderr)
 			}
-			knSameDelta(t, want, got)
 		})
 	}
 }
@@ -102,11 +101,10 @@ func TestGlossaryImportMatchGolden(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			want, got := knFrozen(t, glProject(t, false, glFixtureTerms), c.manifest, append([]string{"glossary", "import", "--body-file", "-"}, c.args...)...)
-			if want.RC != c.oldRC || got.RC != c.wantRC {
-				t.Fatalf("rc frozen=%d (want %d) new=%d (want %d)\nfrozen: %s\nnew: %s", want.RC, c.oldRC, got.RC, c.wantRC, want.Stderr, got.Stderr)
+			got := knFrozenView(t, glProject(t, false, glFixtureTerms), c.manifest, knOldRC(c.oldRC), append([]string{"glossary", "import", "--body-file", "-"}, c.args...)...)
+			if got.RC != c.wantRC {
+				t.Fatalf("rc = %d, want %d: %s", got.RC, c.wantRC, got.Stderr)
 			}
-			knSameDelta(t, want, got)
 		})
 	}
 }
@@ -121,9 +119,9 @@ func TestGlossaryReadMatchGolden(t *testing.T) {
 		if umbrella {
 			args = append(args, "--repo", "web", "Page")
 		}
-		want, got := knFrozen(t, dir, "", args...)
-		if want.Stdout != got.Stdout || got.RC != 0 {
-			t.Errorf("umbrella=%v\n--- frozen ---\n%s\n--- new ---\n%s\nrc=%d %s", umbrella, want.Stdout, got.Stdout, got.RC, got.Stderr)
+		got := knFrozen(t, dir, "", args...)
+		if got.RC != 0 {
+			t.Errorf("umbrella=%v rc=%d %s", umbrella, got.RC, got.Stderr)
 		}
 		if !strings.Contains(got.Stdout, "> from: .rota/KNOWLEDGE.md (## Glossary)") {
 			t.Errorf("no provenance line: %s", got.Stdout)
@@ -161,14 +159,10 @@ func TestBlockMatchGolden(t *testing.T) {
 			dir := glProject(t, c.umbrella, glFixtureTerms)
 			knWrite(t, filepath.Join(dir, "AGENTS.md"), c.agents)
 			knWrite(t, filepath.Join(dir, ".rota", "DECISIONS.md"), "# Decisions\n\n## Architecture\n\n### Rule\n")
-			want, got := knFrozen(t, dir, c.stdin, c.newArgs...)
-			if want.RC != c.oldRC || got.RC != c.wantRC {
-				t.Fatalf("rc frozen=%d (want %d) new=%d (want %d)\nfrozen: %s\nnew: %s", want.RC, c.oldRC, got.RC, c.wantRC, want.Stderr, got.Stderr)
+			got := knFrozenView(t, dir, c.stdin, knOldRC(c.oldRC), c.newArgs...)
+			if got.RC != c.wantRC {
+				t.Fatalf("rc = %d, want %d: %s", got.RC, c.wantRC, got.Stderr)
 			}
-			if c.oldRC == 0 && strings.TrimSpace(want.Stdout) != strings.TrimSpace(got.Stdout) {
-				t.Errorf("status frozen=%q new=%q", want.Stdout, got.Stdout)
-			}
-			knSameDelta(t, want, got)
 		})
 	}
 }
@@ -194,14 +188,13 @@ func TestBlockIsIdempotent(t *testing.T) {
 
 func TestBlockSkillsMatchGolden(t *testing.T) {
 	dir := glProject(t, false, glFixtureTerms)
-	want, got := knFrozen(t, dir, "", "block", "skills")
-	if want.RC != 0 || got.RC != 0 {
-		t.Fatalf("rc frozen=%d new=%d %s %s", want.RC, got.RC, want.Stderr, got.Stderr)
+	got := knFrozen(t, dir, "", "block", "skills")
+	if got.RC != 0 {
+		t.Fatalf("rc = %d: %s", got.RC, got.Stderr)
 	}
 	// The golden carries the old helper's output with the A9 G4 body, which
 	// names rota verbs, and B2's `.rota/verdicts.json` in the gitignored list
 	// (#55); everything around the body is the frozen output.
-	knSameDelta(t, want, got)
 	if got := knNew(t, dir, "x", "block", "skills", "--body-file", "-"); got.rc != 2 {
 		t.Errorf("skills with a body: rc=%d", got.rc)
 	}
@@ -230,14 +223,9 @@ func TestInstructionsInitMatchGolden(t *testing.T) {
 			if c.agent != "" {
 				knWrite(t, filepath.Join(dir, "AGENTS.md"), c.agent)
 			}
-			want, got := knFrozen(t, dir, "", "instructions", "init")
-			if want.RC != 0 || got.RC != 0 {
-				t.Fatalf("rc frozen=%d new=%d %s %s", want.RC, got.RC, want.Stderr, got.Stderr)
+			if got := knFrozen(t, dir, "", "instructions", "init"); got.RC != 0 {
+				t.Fatalf("rc = %d: %s", got.RC, got.Stderr)
 			}
-			if want.Stdout != got.Stdout {
-				t.Errorf("actions differ\nfrozen: %q\nnew: %q", want.Stdout, got.Stdout)
-			}
-			knSameDelta(t, want, got)
 			// A second run has nothing left to do.
 			again := knNew(t, dir, "", "instructions", "init", "--json")
 			if !strings.Contains(again.stdout, `"actions": [], "changed": false`) {
@@ -268,11 +256,9 @@ func TestCRLFMatchGoldenForGlossaryBlocksAndInstructions(t *testing.T) {
 	t.Run("glossary write and block", func(t *testing.T) {
 		dir := glProject(t, false, crlf(glFixtureTerms))
 		knWrite(t, filepath.Join(dir, "AGENTS.md"), crlf("# Agents\n\ntext\n"))
-		want, got := knFrozen(t, dir, "", "glossary", "write", "Batch", "--def", "a group")
-		if want.RC != 0 || got.RC != 0 {
-			t.Fatalf("rc frozen=%d new=%d %s %s", want.RC, got.RC, want.Stderr, got.Stderr)
+		if got := knFrozen(t, dir, "", "glossary", "write", "Batch", "--def", "a group"); got.RC != 0 {
+			t.Fatalf("rc = %d: %s", got.RC, got.Stderr)
 		}
-		knSameDelta(t, want, got)
 		for k, v := range knTree(t, dir) {
 			if strings.Contains(v, "\r") && !strings.HasSuffix(k, ".lock") {
 				t.Errorf("%s kept CR", k)
@@ -280,15 +266,11 @@ func TestCRLFMatchGoldenForGlossaryBlocksAndInstructions(t *testing.T) {
 		}
 	})
 	t.Run("glossary read", func(t *testing.T) {
-		want, got := knFrozen(t, glProject(t, false, crlf(glFixtureTerms)), "", "glossary", "read", "worker")
-		if want.Stdout != got.Stdout {
-			t.Errorf("frozen %q new %q", want.Stdout, got.Stdout)
-		}
+		knFrozen(t, glProject(t, false, crlf(glFixtureTerms)), "", "glossary", "read", "worker")
 	})
 	t.Run("instructions init", func(t *testing.T) {
 		dir := knProject(t, false)
 		knWrite(t, filepath.Join(dir, "CLAUDE.md"), crlf("# Mine\n\n<!-- rota-knowledge-start -->\nK\n<!-- rota-knowledge-end -->\n\nafter\n"))
-		want, got := knFrozen(t, dir, "", "instructions", "init")
-		knSameDelta(t, want, got)
+		knFrozen(t, dir, "", "instructions", "init")
 	})
 }

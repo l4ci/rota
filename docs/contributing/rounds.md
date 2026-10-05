@@ -36,9 +36,8 @@ behaviour change updates the record with
 diff is the review. The 30m timeout is for a loaded box (#120).
 
 The package goldens in `internal/*/testdata/golden/` (`internal/golden`) work the same way for
-tests that end in `golden.Compare`: `go test ./internal/<pkg> -run '^TestX$' -update-golden`
+tests that call `golden.Check`: `go test ./internal/<pkg> -run '^TestX$' -update-golden`
 rewrites the changed outputs if the rest of the test passes, and the JSON diff is the review.
-Tests that compare by hand fail under the flag with a message; edit their record by hand.
 
 There are no servers and no ports in this repo.
 

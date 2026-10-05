@@ -32,11 +32,7 @@ func TestLoadMatchesPython(t *testing.T) {
 					files[n] = string(raw)
 				}
 			}
-			var want string
-			golden.Golden(t, map[string]any{"files": files}, &want)
-			if string(got) != want {
-				t.Fatalf("\n--- go\n%s\n--- golden\n%s", got, want)
-			}
+			golden.Check(t, map[string]any{"files": files}, string(got))
 		})
 	}
 }

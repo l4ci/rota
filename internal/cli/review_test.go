@@ -89,7 +89,7 @@ type reviewCall struct {
 	Args []string
 }
 
-// reviewWant is the retired helper's exit code and, on success, its data.
+// reviewWant is an exit code and, on success, the data: the shape of the golden.
 type reviewWant struct {
 	RC   int `json:"rc"`
 	Data any `json:"data"`
@@ -99,8 +99,7 @@ type reviewWant struct {
 // and, on success, the data with the golden. It returns the data per call.
 func reviewCheck(t *testing.T, plain, umb string, calls []reviewCall) []map[string]any {
 	t.Helper()
-	var want []reviewWant
-	golden.Golden(t, calls, &want)
+	got := make([]reviewWant, len(calls))
 	out := make([]map[string]any, len(calls))
 	for i, c := range calls {
 		dir := plain
@@ -108,21 +107,17 @@ func reviewCheck(t *testing.T, plain, umb string, calls []reviewCall) []map[stri
 			dir = umb
 		}
 		o := trRun(t, dir, "", append(append([]string{}, c.Args...), "--json")...)
-		if o.code != want[i].RC {
-			t.Fatalf("%s: go exit %d, golden exit %d\n%s%s", c.Name, o.code, want[i].RC, o.stdout, o.stderr)
-		}
 		env := envelope(t, o.stdout)
-		if want[i].RC != 0 {
+		got[i] = reviewWant{RC: o.code, Data: env["data"]}
+		if o.code != 0 {
 			if env["data"] != nil {
 				t.Errorf("%s: failure carries data %v", c.Name, env["data"])
 			}
 			continue
 		}
-		if !reflect.DeepEqual(env["data"], want[i].Data) {
-			t.Errorf("%s: data differs\ngo:     %v\ngolden: %v", c.Name, env["data"], want[i].Data)
-		}
 		out[i], _ = env["data"].(map[string]any)
 	}
+	golden.Check(t, calls, got)
 	return out
 }
 
@@ -185,17 +180,17 @@ func TestReviewBriefParity(t *testing.T) {
 		{true, []string{"review", "brief", "--repo", "svc", "feat/x"}},
 	}
 	var texts []string
-	golden.Golden(t, runs, &texts)
-	for i, c := range runs {
+	for _, c := range runs {
 		dir := plain
 		if c.Umb {
 			dir = umb
 		}
-		want := texts[i]
 		o := trRun(t, dir, "", c.Args...)
-		if o.code != 0 || o.stdout != want {
-			t.Errorf("%v: text differs (exit %d)\n--- go\n%q\n--- golden\n%q", c.Args, o.code, o.stdout, want)
+		if o.code != 0 {
+			t.Errorf("%v: exit %d", c.Args, o.code)
 		}
+		want := o.stdout
+		texts = append(texts, want)
 		o = trRun(t, dir, "", append(append([]string{}, c.Args...), "--json")...)
 		data := envelope(t, o.stdout)["data"].(map[string]any)
 		if data["brief"] != want || data["commitCount"] != 2.0 || data["base"] != "main" || data["branch"] != "feat/x" {
@@ -205,6 +200,7 @@ func TestReviewBriefParity(t *testing.T) {
 			t.Errorf("keys %v", data)
 		}
 	}
+	golden.Check(t, runs, texts)
 	reviewCheck(t, plain, umb, []reviewCall{
 		{"shim parity", false, []string{"review", "brief", "feat/x"}},
 		{"shim current", false, []string{"review", "brief"}},
@@ -256,12 +252,11 @@ func TestReviewScaffoldingParity(t *testing.T) {
 	}
 
 	// Text mode is the retired helper's stdout.
-	var want string
-	golden.Golden(t, []string{"review", "scaffolding", "feat/x"}, &want)
 	o := trRun(t, plain, "", "review", "scaffolding", "feat/x")
-	if o.code != 0 || o.stdout != want {
-		t.Errorf("text differs\n--- go\n%q\n--- golden\n%q", o.stdout, want)
+	if o.code != 0 {
+		t.Errorf("text mode: exit %d", o.code)
 	}
+	golden.Check(t, []string{"review", "scaffolding", "feat/x"}, o.stdout)
 	if o := trRun(t, umb, "", "review", "scaffolding", "feat/x"); o.code != 2 {
 		t.Errorf("umbrella no repo: exit %d", o.code)
 	}
