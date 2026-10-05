@@ -1,6 +1,6 @@
 ---
 name: rota-learn
-description: Extract durable session learnings (gotchas, conventions, constraints) into .rota/KNOWLEDGE.md grouped by topic, and update the topic index in the project instructions file. Use at end of a session that surfaced reusable knowledge, after a correction-rich debugging arc, or on "save what we learned", "capture this learning", "/rota-learn". Pass --strict (or set learn.verify true in config.json) for an Opus verification pass.
+description: Use at the end of a session that surfaced reusable knowledge, after a correction-rich debugging arc, or on "save what we learned", "capture this learning", "/rota-learn".
 ---
 
 # rota-learn — Capture Session Learnings
