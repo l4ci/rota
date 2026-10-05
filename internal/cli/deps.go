@@ -49,9 +49,11 @@ type Deps struct {
 
 	WorkerEnv      func() worker.Env
 	WorkerAccounts func() *worker.Accounts
-	LimitHost      func(kind string) host.Host
-	// LayoutHost is the herdr that `rota layout` rearranges.
-	LayoutHost func() (host.Layouter, error)
+
+	// Host is the one place a verb gets a pane host: it builds the host for a
+	// kind ("herdr", "tmux"). The env hooks above leave their host fields nil
+	// and are filled from it, so a test swaps this one field to fake every host.
+	Host func(kind string) host.Host
 
 	UpdateEnv        func() update.Env
 	InstalledVersion func() string
@@ -73,8 +75,7 @@ func defaultDeps() *Deps {
 		EscalationEnv:    func() escalation.Env { return escalation.Env{} },
 		WatchEnv:         func() roundlease.Env { return roundlease.DefaultEnv() },
 		OrchestrateEnv:   defaultOrchestrateEnv,
-		LimitHost:        func(kind string) host.Host { return host.New(kind, host.Deps{}) },
-		LayoutHost:       defaultLayoutHost,
+		Host:             func(kind string) host.Host { return host.New(kind, host.Deps{}) },
 		UpdateEnv:        func() update.Env { return update.DefaultEnv(version.Get().Version) },
 		InstalledVersion: installedVersion,
 		SeedBase:         seedProject,
@@ -91,7 +92,7 @@ func defaultDeps() *Deps {
 	}
 	d.RoundEnv = func(ctx context.Context, root string) round.Env { return defaultRoundEnv(ctx, root, d) }
 	d.ReapEnv = func(ctx context.Context, root string) (round.Env, reap.HostOps) {
-		return defaultReapEnv(ctx, root, d.RoundEnv)
+		return defaultReapEnv(ctx, root, d)
 	}
 	return d
 }
@@ -103,6 +104,34 @@ func (c *Ctx) deps() *Deps {
 		c.Deps = defaultDeps()
 	}
 	return c.Deps
+}
+
+// workerEnv is the WorkerEnv hook with its host filled from Host.
+func (d *Deps) workerEnv() worker.Env {
+	e := d.WorkerEnv()
+	if e.NewHost == nil {
+		e.NewHost = func(kind string) host.Host { return d.Host(kind) }
+	}
+	return e
+}
+
+// escalationEnv is the EscalationEnv hook with its host (always herdr, the
+// only one with notifications) filled from Host.
+func (d *Deps) escalationEnv() escalation.Env {
+	e := d.EscalationEnv()
+	if e.Host == nil {
+		e.Host = func() host.Host { return d.Host("herdr") }
+	}
+	return e
+}
+
+// orchestrateEnv is the OrchestrateEnv hook with its host filled from Host.
+func (d *Deps) orchestrateEnv() orchestrate.Env {
+	e := d.OrchestrateEnv()
+	if e.Host == nil {
+		e.Host = func(kind string) host.Host { return d.Host(kind) }
+	}
+	return e
 }
 
 // forge is the one place a verb builds its forge adapter: settings from cfg,

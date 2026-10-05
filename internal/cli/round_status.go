@@ -28,6 +28,7 @@ import (
 func defaultRoundEnv(ctx context.Context, root string, d *Deps) round.Env {
 	cfg := config.Load(rotatree.Config(root))
 	e := round.Env{Git: d.Git, Base: "main"}
+	e.Worker.NewHost = func(kind string) host.Host { return d.Host(kind) }
 	if b, ok, err := (git.Repo{Dir: root}).Base(ctx, ""); err == nil && ok {
 		e.Base = b
 	}
@@ -37,7 +38,7 @@ func defaultRoundEnv(ctx context.Context, root string, d *Deps) round.Env {
 	if hostKind == host.Solo {
 		e.HostName = host.Solo // no panes to snapshot, and not an unavailable host
 	} else {
-		h := host.New(hostKind, host.Deps{})
+		h := d.Host(hostKind)
 		if err := h.Require(); err != nil {
 			e.HostErr = err.Error()
 		} else if s, ok := h.(host.Snapshotter); ok {

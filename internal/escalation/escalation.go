@@ -73,9 +73,6 @@ func (e Env) withDefaults() Env {
 	if e.Getenv == nil {
 		e.Getenv = os.Getenv
 	}
-	if e.Host == nil {
-		e.Host = func() host.Host { return host.New("herdr", host.Deps{}) }
-	}
 	return e
 }
 

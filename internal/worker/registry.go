@@ -458,9 +458,6 @@ func (e Env) withDefaults() Env {
 	if e.Git == nil {
 		e.Git = git.Exec
 	}
-	if e.NewHost == nil {
-		e.NewHost = func(d string) host.Host { return host.New(d, host.Deps{}) }
-	}
 	if e.Sleep == nil {
 		e.Sleep = time.Sleep
 	}
