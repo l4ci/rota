@@ -58,8 +58,8 @@ If `commitCount` is 0, stop and tell the user.
 
 The spec is what each referenced item promised. Collect one entry per `referencedId`, in parallel:
 
-- **Issue mode** (`backlog.backend: "issues"`): the issue body is the spec. `rota item field list <ID>` returns it; add `rota item comment list <ID> --kind decision`, because a decision recorded as a comment changes the body's promise. A plan note (`rota item note show <ID> --kind plan`, `exists: false` when absent) is extra detail, not a requirement.
-- **File mode**: the item's `Intent` line from `intents`, plus its plan when it has a milestone (`rota item field get <ID> --name milestone`, then `rota plan show "<MNN>-<ID>"`; exit 3 means no plan file).
+- **Issue mode** (`backlog.backend: "issues"`): the issue body is the spec. `rota item field list <ID>` returns it; add `rota item comment list <ID> --kind decision`, because a decision recorded as a comment changes the body's promise. A plan note (`rota item note show <ID> --kind plan`, `exists: false` when absent) is extra detail, not a requirement, except its `## Review Focus` section: lift it out and carry it into the brief verbatim.
+- **File mode**: the item's `Intent` line from `intents`, plus its plan when it has a milestone (`rota item field get <ID> --name milestone`, then `rota plan show "<MNN>-<ID>"`; exit 3 means no plan file). Lift the plan's `## Review Focus` section out the same way.
 
 An item with no body and no plan contributes only its title. That is fine: the reviewer judges intent match from what exists, and says so when a spec is too thin to check against.
 
@@ -110,6 +110,10 @@ promised, and is it good enough to merge?
 
 ### [B07] Timer badge shows stale duration
 <same>
+
+**Review Focus (from the plan, verbatim):**
+<the plan's `## Review Focus` lines per item, or drop this section>
+Check each named edge is handled and pinned by a test; an unhandled or untested one is a CONCERN.
 
 **Recorded proof:**
 <rows from `rota proof show <ID>` per item, or "none recorded">
