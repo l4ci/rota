@@ -11,10 +11,9 @@ import (
 	"github.com/l4ci/rota/internal/initproj"
 )
 
-// seedBase is the base seeding `rota init` does; `init umbrella` runs it first
-// (the old init skill always ran hv-bootstrap before hv-umbrella-init). A
-// variable so a test can swap the seed.
-var seedBase = func(root string) error { _, err := initproj.Init(root); return err }
+// seedProject is the base seeding `rota init` does; `init umbrella` runs it
+// first (the old init skill always ran hv-bootstrap before hv-umbrella-init).
+func seedProject(root string) error { _, err := initproj.Init(root); return err }
 
 func initUmbrella(fs *flag.FlagSet) RunFunc {
 	repos := fs.String("repos", "", "comma-separated sub-repo names to register (empty: none)")
@@ -49,7 +48,7 @@ func initUmbrella(fs *flag.FlagSet) RunFunc {
 			names = strings.Split(*repos, ",")
 		}
 		var seed func() error
-		if seedBase != nil {
+		if seedBase := c.deps().SeedBase; seedBase != nil {
 			seed = func() error { return seedBase(root) }
 		}
 		res, err := initproj.Umbrella(root, initproj.UmbrellaOptions{All: *all, Names: names}, seed)
@@ -62,7 +61,7 @@ func initUmbrella(fs *flag.FlagSet) RunFunc {
 		for _, w := range res.Warnings {
 			c.Warn("%s", w)
 		}
-		cfg, err := initConfig(root)
+		cfg, err := initConfig(c, root)
 		if err != nil {
 			return Result{}, err
 		}

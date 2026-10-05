@@ -12,7 +12,6 @@ import (
 	"github.com/l4ci/rota/internal/repos"
 	"github.com/l4ci/rota/internal/status"
 	"github.com/l4ci/rota/internal/update"
-	"github.com/l4ci/rota/internal/version"
 )
 
 // The `rota update`, `rota config show|set|check` and `rota repo which|resolve|
@@ -39,15 +38,12 @@ func configCommands() []*Command {
 
 // ---- update ----------------------------------------------------------------------
 
-// updateEnv is a seam: tests pin what rota update reads from the machine.
-var updateEnv = func() update.Env { return update.DefaultEnv(version.Get().Version) }
-
 func updateVerb(fs *flag.FlagSet) RunFunc {
 	return func(c *Ctx, args []string) (Result, error) {
 		if err := argCount(c, args, 0, 0, "update takes no arguments"); err != nil {
 			return Result{}, err
 		}
-		r := update.Check(updateEnv())
+		r := update.Check(c.deps().UpdateEnv())
 		data := jsonObj("installType", r.InstallType, "installRoot", r.InstallRoot,
 			"currentVersion", r.CurrentVersion, "latestVersion", r.LatestVersion,
 			"status", r.Status, "updateCommand", r.UpdateCommand)

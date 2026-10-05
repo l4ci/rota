@@ -81,7 +81,7 @@ func TestWrongBackendRefusals(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			root := trackerProject(t, c.config)
-			withTracker(t, issueFixture())
+			deps := withTracker(t, issueFixture())
 			dir := t.TempDir()
 			body, rawBullet := filepath.Join(dir, "body.md"), filepath.Join(dir, "raw.md")
 			os.WriteFile(body, []byte("a plan\n"), 0o644)
@@ -93,7 +93,7 @@ func TestWrongBackendRefusals(t *testing.T) {
 					argv[i] = a
 				}
 			}
-			code, env, stderr := rotaRun(t, append([]string{"--json", "-C", root}, argv...)...)
+			code, env, stderr := rotaRunWith(t, deps, append([]string{"--json", "-C", root}, argv...)...)
 			d := dataOf(env)
 			if code != c.exit || get(d, "blockedBy") != "backend" || get(d, "changed") != false {
 				t.Fatalf("exit %d (want %d), data %v, stderr %s", code, c.exit, env["data"], stderr)

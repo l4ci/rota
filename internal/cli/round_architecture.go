@@ -43,7 +43,7 @@ func architectureFor(c *Ctx, root string, set roundcfg.Settings) (round.Architec
 	if recScope != "" {
 		sc = recScope
 	}
-	env := roundEnv(ctx, root)
+	env := c.deps().RoundEnv(ctx, root)
 	cands, err := env.Candidates(ctx, root, be, round.CandidateOpts{Scope: sc, Slate: slate, Shared: set.SharedPaths})
 	if err != nil {
 		return round.Architecture{}, err
@@ -91,9 +91,9 @@ func roundArchitecture(fs *flag.FlagSet) RunFunc {
 		if !ok {
 			return Result{}, &Error{Exit: ExitInternal, Message: "the backlog backend has no workflow"}
 		}
-		env := roundEnv(ctx, root)
-		env.Worker = workerEnvCtx(ctx)
-		env.Accounts = workerAccounts()
+		env := c.deps().RoundEnv(ctx, root)
+		env.Worker = workerEnvCtx(c, ctx)
+		env.Accounts = c.deps().WorkerAccounts()
 		ids, err := env.MintReview(ctx, root, be, a, round.Current(root))
 		if err != nil {
 			_, ferr := backlogFail(err)

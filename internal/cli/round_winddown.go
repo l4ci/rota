@@ -58,14 +58,14 @@ func roundWindDown(fs *flag.FlagSet) RunFunc {
 		if raw, err := openBacklog(c, root, false, ""); err == nil {
 			board, _ = raw.(round.Board)
 		}
-		env := roundEnv(ctx, root)
-		env.Worker = workerEnvCtx(ctx)
+		env := c.deps().RoundEnv(ctx, root)
+		env.Worker = workerEnvCtx(c, ctx)
 		// An autopilot watch must not assign or merge while the base is being
 		// re-verified; a kept lease lets it resume.
 		var cd string
 		var rnd int
 		if d, err := roundlease.CommonDir(root); err == nil {
-			if l, _, err := watchEnv().Read(d); err == nil {
+			if l, _, err := c.deps().WatchEnv().Read(d); err == nil {
 				cd, rnd = d, l.Round
 				_ = roundtick.SetStopped(cd, rnd, true)
 			}

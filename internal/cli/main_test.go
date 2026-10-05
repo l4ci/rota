@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -46,7 +47,6 @@ func TestMain(m *testing.M) {
 	// doctor's disk check reads the real volume: pin a healthy one so a full
 	// developer disk does not add a line to every doctor golden (#85).
 	os.Setenv("ROTA_TEST_DOCTOR_DISK", "50:100")
-	limitHost = func(string) host.Host { return &limFake{} }
 	// Fixture repos commit and merge: the identity comes from here, not from
 	// the developer's (or CI's missing) global git config. Same identity as gitT,
 	// so commit hashes in the goldens do not move.
@@ -60,4 +60,19 @@ func TestMain(m *testing.M) {
 	}
 	os.RemoveAll(dir)
 	os.Exit(code)
+}
+
+// testDeps is what a test's invocation reaches: the real machine, except the
+// usage-limit watcher's host, which is a fake that records. A test swaps a
+// field on its own copy and runs through mainWith, so nothing leaks across
+// tests.
+func testDeps() *Deps {
+	d := defaultDeps()
+	d.LimitHost = func(string) host.Host { return &limFake{} }
+	return d
+}
+
+// mainWith is Main with the given Deps.
+func mainWith(d *Deps, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	return run(Tree(), d, args, stdin, stdout, stderr)
 }

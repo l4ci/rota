@@ -90,11 +90,11 @@ func (f *fakeThread) reads() int {
 	return n
 }
 
-func useThread(t *testing.T, f *fakeThread) {
+func useThread(t *testing.T, f *fakeThread) *Deps {
 	t.Helper()
-	old := trackerOptions
-	trackerOptions = []tracker.Option{tracker.WithExec(f.exec, func(n string) (string, error) { return "/fake/" + n, nil })}
-	t.Cleanup(func() { trackerOptions = old })
+	deps := testDeps()
+	deps.TrackerOptions = []tracker.Option{tracker.WithExec(f.exec, func(n string) (string, error) { return "/fake/" + n, nil })}
+	return deps
 }
 
 // escHost is a herdr host that only records notifications.
@@ -109,19 +109,16 @@ func (h *escHost) Notify(_ context.Context, title, body string) {
 	h.notes = append(h.notes, title+"|"+body)
 }
 
-// useEscalation swaps the escalation env: a clock the test moves, a fake
+// useEscalation sets the escalation env on deps: a clock the test moves, a fake
 // host, and HERDR_ENV as given.
-func useEscalation(t *testing.T, h *escHost, herdrEnv string, clock *time.Time) {
-	t.Helper()
-	old := escalationEnv
-	escalationEnv = func() escalation.Env {
+func useEscalation(deps *Deps, h *escHost, herdrEnv string, clock *time.Time) {
+	deps.EscalationEnv = func() escalation.Env {
 		return escalation.Env{
 			Now:    func() time.Time { return *clock },
 			Getenv: func(k string) string { return map[string]string{"HERDR_ENV": herdrEnv}[k] },
 			Host:   func() host.Host { return h },
 		}
 	}
-	t.Cleanup(func() { escalationEnv = old })
 }
 
 func escProject(t *testing.T, cfg string) string {
@@ -154,12 +151,12 @@ const ghCfg = `{"issues":{"provider":"github"}}`
 func TestEscalateSendRecordsAndPosts(t *testing.T) {
 	dir := escProject(t, ghCfg)
 	f := &fakeThread{}
-	useThread(t, f)
+	deps := useThread(t, f)
 	h := &escHost{cliHost: cliHost{herdr: true}}
 	clock := time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC)
-	useEscalation(t, h, "1", &clock)
+	useEscalation(deps, h, "1", &clock)
 
-	code, out, errOut := rotaIn(t, dir, "round", "escalate", "send", "7", "--title", "Pick one", "--body-file", "body.md", "--timeout", "3600", "--json")
+	code, out, errOut := rotaInWith(t, deps, dir, "round", "escalate", "send", "7", "--title", "Pick one", "--body-file", "body.md", "--timeout", "3600", "--json")
 	d := data(t, out)
 	if code != 0 {
 		t.Fatalf("send: %d %s %s", code, out, errOut)
@@ -195,15 +192,15 @@ func TestEscalateSendRecordsAndPosts(t *testing.T) {
 func TestEscalateSendOnePerThread(t *testing.T) {
 	dir := escProject(t, ghCfg)
 	f := &fakeThread{}
-	useThread(t, f)
+	deps := useThread(t, f)
 	h := &escHost{cliHost: cliHost{herdr: true}}
 	clock := time.Now().UTC()
-	useEscalation(t, h, "1", &clock)
-	if code, out, _ := rotaIn(t, dir, "round", "escalate", "send", "7", "--title", "A", "--body-file", "body.md"); code != 0 {
+	useEscalation(deps, h, "1", &clock)
+	if code, out, _ := rotaInWith(t, deps, dir, "round", "escalate", "send", "7", "--title", "A", "--body-file", "body.md"); code != 0 {
 		t.Fatalf("first send: %d %s", code, out)
 	}
 	posted := len(f.comments)
-	code, out, _ := rotaIn(t, dir, "round", "escalate", "send", "7", "--title", "B", "--body-file", "body.md", "--json")
+	code, out, _ := rotaInWith(t, deps, dir, "round", "escalate", "send", "7", "--title", "B", "--body-file", "body.md", "--json")
 	d := data(t, out)
 	if code != 4 || d["pending"] != "e1" || d["changed"] != false {
 		t.Fatalf("second send: %d %v", code, d)
@@ -212,7 +209,7 @@ func TestEscalateSendOnePerThread(t *testing.T) {
 		t.Error("a refused send must not post")
 	}
 	// The same number as a PR is another thread; the id keeps counting.
-	code, out, _ = rotaIn(t, dir, "round", "escalate", "send", "7", "--pr", "--title", "C", "--body-file", "body.md", "--json")
+	code, out, _ = rotaInWith(t, deps, dir, "round", "escalate", "send", "7", "--pr", "--title", "C", "--body-file", "body.md", "--json")
 	if e := data(t, out)["escalation"].(map[string]any); code != 0 || e["id"] != "e2" || e["kind"] != "pr" {
 		t.Fatalf("pr send: %d %s", code, out)
 	}
@@ -224,9 +221,9 @@ func TestEscalateSendOnePerThread(t *testing.T) {
 func TestEscalateSendUsageAndResolution(t *testing.T) {
 	dir := escProject(t, ghCfg)
 	f := &fakeThread{}
-	useThread(t, f)
+	deps := useThread(t, f)
 	clock := time.Now().UTC()
-	useEscalation(t, &escHost{}, "", &clock)
+	useEscalation(deps, &escHost{}, "", &clock)
 	os.WriteFile(filepath.Join(dir, "empty.md"), []byte(" \n\n"), 0o644)
 	for name, args := range map[string][]string{
 		"no number":        {"--title", "t", "--body-file", "body.md"},
@@ -239,25 +236,25 @@ func TestEscalateSendUsageAndResolution(t *testing.T) {
 		"negative timeout": {"7", "--title", "t", "--body-file", "body.md", "--timeout", "-1"},
 		"bad timeout":      {"7", "--title", "t", "--body-file", "body.md", "--timeout", "soon"},
 	} {
-		if code, _, _ := rotaIn(t, dir, append([]string{"round", "escalate", "send"}, args...)...); code != 2 {
+		if code, _, _ := rotaInWith(t, deps, dir, append([]string{"round", "escalate", "send"}, args...)...); code != 2 {
 			t.Errorf("%s: exit %d, want 2", name, code)
 		}
 	}
 	if len(f.calls) != 0 {
 		t.Errorf("usage errors must not reach the forge: %v", f.calls)
 	}
-	if code, _, _ := rotaIn(t, dir, "round", "escalate", "send", "7", "--slot", "ghost", "--title", "t", "--body-file", "body.md"); code != 3 {
+	if code, _, _ := rotaInWith(t, deps, dir, "round", "escalate", "send", "7", "--slot", "ghost", "--title", "t", "--body-file", "body.md"); code != 3 {
 		t.Errorf("unknown slot: %d, want 3", code)
 	}
 	if len(f.calls) != 0 {
 		t.Errorf("slot resolution comes before the forge: %v", f.calls)
 	}
 	bare := t.TempDir()
-	if code, _, _ := rotaIn(t, bare, "round", "escalate", "send", "7", "--title", "t", "--body-file", filepath.Join(dir, "body.md")); code != 3 {
+	if code, _, _ := rotaInWith(t, deps, bare, "round", "escalate", "send", "7", "--title", "t", "--body-file", filepath.Join(dir, "body.md")); code != 3 {
 		t.Errorf("no project root: %d, want 3", code)
 	}
 	f.notFound = true
-	if code, _, _ := rotaIn(t, dir, "round", "escalate", "send", "7", "--title", "t", "--body-file", "body.md"); code != 3 {
+	if code, _, _ := rotaInWith(t, deps, dir, "round", "escalate", "send", "7", "--title", "t", "--body-file", "body.md"); code != 3 {
 		t.Errorf("forge has no such issue: %d, want 3", code)
 	}
 	if doc := registryDoc(t, dir); doc["escalations"] != nil {
@@ -267,15 +264,14 @@ func TestEscalateSendUsageAndResolution(t *testing.T) {
 
 func TestEscalateSendForgeMissing(t *testing.T) {
 	dir := escProject(t, ghCfg)
-	old := trackerOptions
-	trackerOptions = []tracker.Option{tracker.WithExec(nil, func(string) (string, error) { return "", exec.ErrNotFound })}
-	t.Cleanup(func() { trackerOptions = old })
+	deps := testDeps()
+	deps.TrackerOptions = []tracker.Option{tracker.WithExec(nil, func(string) (string, error) { return "", exec.ErrNotFound })}
 	clock := time.Now().UTC()
-	useEscalation(t, &escHost{}, "", &clock)
-	if code, _, _ := rotaIn(t, dir, "round", "escalate", "send", "7", "--title", "t", "--body-file", "body.md"); code != 5 {
+	useEscalation(deps, &escHost{}, "", &clock)
+	if code, _, _ := rotaInWith(t, deps, dir, "round", "escalate", "send", "7", "--title", "t", "--body-file", "body.md"); code != 5 {
 		t.Errorf("forge CLI missing: %d, want 5", code)
 	}
-	if code, _, _ := rotaIn(t, dir, "round", "escalate", "check"); code != 0 {
+	if code, _, _ := rotaInWith(t, deps, dir, "round", "escalate", "check"); code != 0 {
 		t.Errorf("check with nothing pending needs no forge: %d, want 0", code)
 	}
 }
@@ -293,11 +289,11 @@ func TestEscalateSendNotifyRules(t *testing.T) {
 		{"herdr not installed", ghCfg, "1", errors.New("herdr is not installed"), false},
 	} {
 		dir := escProject(t, c.cfg)
-		useThread(t, &fakeThread{})
+		deps := useThread(t, &fakeThread{})
 		h := &escHost{require: c.require}
 		clock := time.Now().UTC()
-		useEscalation(t, h, c.env, &clock)
-		code, out, errOut := rotaIn(t, dir, "round", "escalate", "send", "7", "--title", "t", "--body-file", "body.md", "--json")
+		useEscalation(deps, h, c.env, &clock)
+		code, out, errOut := rotaInWith(t, deps, dir, "round", "escalate", "send", "7", "--title", "t", "--body-file", "body.md", "--json")
 		d := data(t, out)
 		if code != 0 || d["notified"] != c.notified || d["escalation"].(map[string]any)["notified"] != c.notified {
 			t.Errorf("%s: %d %v", c.name, code, d)
@@ -318,10 +314,10 @@ func TestEscalateSendSlotAndGitLabPR(t *testing.T) {
 		t.Fatal("pool init")
 	}
 	f := &fakeThread{}
-	useThread(t, f)
+	deps := useThread(t, f)
 	clock := time.Now().UTC()
-	useEscalation(t, &escHost{}, "", &clock)
-	code, out, _ := rotaIn(t, dir, "round", "escalate", "send", "7", "--pr", "--slot", "w1", "--title", "t", "--body-file", "body.md", "--json")
+	useEscalation(deps, &escHost{}, "", &clock)
+	code, out, _ := rotaInWith(t, deps, dir, "round", "escalate", "send", "7", "--pr", "--slot", "w1", "--title", "t", "--body-file", "body.md", "--json")
 	d := data(t, out)
 	e, _ := d["escalation"].(map[string]any)
 	if code != 0 || e["slot"] != "w1" || d["url"] != "https://gitlab.com/o/r/-/merge_requests/7#note_1" {
@@ -340,16 +336,16 @@ func TestEscalateSendSlotAndGitLabPR(t *testing.T) {
 func TestEscalateCheckLifecycle(t *testing.T) {
 	dir := escProject(t, ghCfg)
 	f := &fakeThread{}
-	useThread(t, f)
+	deps := useThread(t, f)
 	h := &escHost{}
 	clock := time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC)
-	useEscalation(t, h, "", &clock)
-	rotaIn(t, dir, "round", "escalate", "send", "7", "--title", "A", "--body-file", "body.md", "--timeout", "60")
+	useEscalation(deps, h, "", &clock)
+	rotaInWith(t, deps, dir, "round", "escalate", "send", "7", "--title", "A", "--body-file", "body.md", "--timeout", "60")
 	f.add("<!-- rota:claim dana -->\nClaimed by dana")
 	f.add("<!-- rota:escalation e9 -->\nnot an answer either")
 
 	check := func(args ...string) (int, map[string]any, string) {
-		code, out, errOut := rotaIn(t, dir, append([]string{"round", "escalate", "check", "--json"}, args...)...)
+		code, out, errOut := rotaInWith(t, deps, dir, append([]string{"round", "escalate", "check", "--json"}, args...)...)
 		return code, data(t, out), errOut
 	}
 	rowStatus := func(d map[string]any, i int) string {
@@ -398,7 +394,7 @@ func TestEscalateCheckLifecycle(t *testing.T) {
 	if code, _, _ := check("e1", "e5"); code != 3 {
 		t.Errorf("unknown id: %d, want 3", code)
 	}
-	if code, _, _ := rotaIn(t, t.TempDir(), "round", "escalate", "check"); code != 3 {
+	if code, _, _ := rotaInWith(t, deps, t.TempDir(), "round", "escalate", "check"); code != 3 {
 		t.Errorf("no project root: %d, want 3", code)
 	}
 }
@@ -406,14 +402,14 @@ func TestEscalateCheckLifecycle(t *testing.T) {
 func TestEscalateCheckForgeFailureAndDeletedComment(t *testing.T) {
 	dir := escProject(t, ghCfg)
 	f := &fakeThread{}
-	useThread(t, f)
+	deps := useThread(t, f)
 	clock := time.Now().UTC()
-	useEscalation(t, &escHost{}, "", &clock)
-	rotaIn(t, dir, "round", "escalate", "send", "7", "--title", "A", "--body-file", "body.md")
-	rotaIn(t, dir, "round", "escalate", "send", "8", "--title", "B", "--body-file", "body.md")
+	useEscalation(deps, &escHost{}, "", &clock)
+	rotaInWith(t, deps, dir, "round", "escalate", "send", "7", "--title", "A", "--body-file", "body.md")
+	rotaInWith(t, deps, dir, "round", "escalate", "send", "8", "--title", "B", "--body-file", "body.md")
 
 	f.failRead = errors.New("HTTP 500: boom")
-	code, out, errOut := rotaIn(t, dir, "round", "escalate", "check", "--json")
+	code, out, errOut := rotaInWith(t, deps, dir, "round", "escalate", "check", "--json")
 	d := data(t, out)
 	if code != 0 || d["pending"] != 2.0 || !strings.Contains(errOut, "e1: cannot read issue #7") {
 		t.Errorf("forge failure is a warning: %d %v %s", code, d, errOut)
@@ -423,7 +419,7 @@ func TestEscalateCheckForgeFailureAndDeletedComment(t *testing.T) {
 	// e1's comment is deleted, e2's thread still has it and an answer.
 	f.remove("1")
 	f.add("yes")
-	code, out, errOut = rotaIn(t, dir, "round", "escalate", "check", "--json")
+	code, out, errOut = rotaInWith(t, deps, dir, "round", "escalate", "check", "--json")
 	d = data(t, out)
 	rows := d["escalations"].([]any)
 	if code != 0 || d["pending"] != 1.0 || d["answered"] != 1.0 || d["changed"] != true ||

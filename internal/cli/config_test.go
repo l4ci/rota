@@ -10,22 +10,21 @@ import (
 )
 
 func TestConfigUpdateIsPinned(t *testing.T) {
-	old := updateEnv
-	defer func() { updateEnv = old }()
-	updateEnv = func() update.Env {
+	deps := testDeps()
+	deps.UpdateEnv = func() update.Env {
 		return update.Env{ExeDir: "", Current: "1.0.0",
 			Latest: func() string { return "2.0.0" }}
 	}
-	code, env, _ := rotaRun(t, "--json", "update")
+	code, env, _ := umbRunWith(t, deps, "--json", "update")
 	d := dataOf(env)
 	// No binary path resolves, so the install type is unknown.
 	if code != 0 || get(d, "status") != "behind" || get(d, "currentVersion") != "1.0.0" || get(d, "latestVersion") != "2.0.0" || get(d, "installType") != "unknown" {
 		t.Errorf("code=%d env=%v", code, env)
 	}
-	if code, _, _ := rotaRun(t, "--json", "update", "extra"); code != ExitUsage {
+	if code, _, _ := umbRunWith(t, deps, "--json", "update", "extra"); code != ExitUsage {
 		t.Errorf("positional: %d", code)
 	}
-	if code, _, _ := rotaRun(t, "--json", "update", "--repo", "x"); code != ExitUsage {
+	if code, _, _ := umbRunWith(t, deps, "--json", "update", "--repo", "x"); code != ExitUsage {
 		t.Errorf("--repo: %d", code)
 	}
 }

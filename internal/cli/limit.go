@@ -37,9 +37,6 @@ func limitCommands() *Command {
 	}}
 }
 
-// limitHost builds the host for a kind; tests replace it.
-var limitHost = func(kind string) host.Host { return host.New(kind, host.Deps{}) }
-
 // limitHostKind is herdr when work.dispatch says so or the process runs inside
 // herdr, else tmux, as round status chooses.
 func limitHostKind(cfg any) string {
@@ -55,11 +52,11 @@ func limitHostKind(cfg any) string {
 }
 
 // escalateFunc posts on an issue thread through C4's library entry.
-func escalateFunc(ctx context.Context, root string) func(issue int, title, body string) (string, []string, error) {
+func escalateFunc(ctx context.Context, c *Ctx, root string) func(issue int, title, body string) (string, []string, error) {
 	return func(issue int, title, body string) (string, []string, error) {
-		ee := escalationEnv()
+		ee := c.deps().EscalationEnv()
 		if ee.Forge == nil {
-			ee.Forge = escalationForge()
+			ee.Forge = escalationForge(c)
 		}
 		res, err := escalation.Send(context.WithoutCancel(ctx), ee, root, escalation.SendOpts{Number: issue, Title: title, Body: body})
 		if err != nil {
@@ -143,7 +140,7 @@ type limitRig struct {
 // and the rig says so in warn.
 func buildLimits(ctx context.Context, c *Ctx, root string, cfg any, set limits.Settings, holderPID int, tick time.Duration, gap *atomic.Bool, warn func(string, ...any)) (*limitRig, error) {
 	kind := limitHostKind(cfg)
-	h := limitHost(kind)
+	h := c.deps().LimitHost(kind)
 	if err := h.Require(); err != nil {
 		return nil, &Error{Exit: ExitUnavailable, Message: err.Error()}
 	}
@@ -159,7 +156,7 @@ func buildLimits(ctx context.Context, c *Ctx, root string, cfg any, set limits.S
 	if hs, err := hook.LoadSettings(cfg); err == nil {
 		maxAge = time.Duration(hs.StateMaxAge) * time.Second
 	}
-	accounts := workerAccounts
+	accounts := c.deps().WorkerAccounts
 	orchPane := os.Getenv("TMUX_PANE")
 	if kind == "herdr" {
 		orchPane = os.Getenv("HERDR_PANE_ID")
@@ -265,8 +262,8 @@ func buildLimits(ctx context.Context, c *Ctx, root string, cfg any, set limits.S
 		Send: func(ctx context.Context, t limits.Target, prompt string) error {
 			return ph.SendPane(ctx, t.Pane, prompt)
 		},
-		Escalate: escalateFunc(ctx, root),
-		Notify:   func(title, body string) { keepaliveNotify(context.WithoutCancel(ctx), cfg, title, body) },
+		Escalate: escalateFunc(ctx, c, root),
+		Notify:   func(title, body string) { keepaliveNotify(context.WithoutCancel(ctx), c, cfg, title, body) },
 	}
 	rig := &limitRig{Cancel: func() {}}
 
@@ -524,7 +521,7 @@ func limitWatch(fs *flag.FlagSet) RunFunc {
 // standing: a live supervisor, another watcher, or a caller without the lease.
 func limitWatchGuard(c *Ctx, root, cd string) (Result, error) {
 	ctx := c.Context()
-	le := roundEnv(ctx, root).Lease
+	le := c.deps().RoundEnv(ctx, root).Lease
 	if le.Alive == nil {
 		le = roundlease.DefaultEnv()
 	}
@@ -609,7 +606,7 @@ func limitStatus(c *Ctx, args []string) (Result, error) {
 	list := limits.Load(root)
 	watching := false
 	if cd, err := roundlease.CommonDir(root); err == nil {
-		le := roundEnv(c.Context(), root).Lease
+		le := c.deps().RoundEnv(c.Context(), root).Lease
 		if le.Alive == nil {
 			le = roundlease.DefaultEnv()
 		}

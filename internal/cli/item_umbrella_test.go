@@ -13,9 +13,9 @@ import (
 )
 
 // umbrellaProject is an issue-mode umbrella with git sub-repos web and api and
-// one fake tracker each, served by the injected newTracker (keyed by the
+// one fake tracker each, served by the injected NewTracker (keyed by the
 // directory the tracker is built for).
-func umbrellaProject(t *testing.T) (root string, fakes map[string]*trackertest.Fake, built map[string]int) {
+func umbrellaProject(t *testing.T) (root string, deps *Deps, fakes map[string]*trackertest.Fake, built map[string]int) {
 	t.Helper()
 	root = trackerProject(t, `{"backlog": {"backend": "issues"}, "issues": {"homeRepo": "web"}}`)
 	root, _ = filepath.EvalSymlinks(root)
@@ -44,19 +44,18 @@ func umbrellaProject(t *testing.T) (root string, fakes map[string]*trackertest.F
 	if err := os.WriteFile(filepath.Join(root, ".rota", "repos.json"), []byte(`{"repos": [`+strings.Join(reg, ",")+`]}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	old := newTracker
-	newTracker = func(_ context.Context, dir string, _ any) (backlog.Tracker, error) {
+	deps = testDeps()
+	deps.NewTracker = func(_ context.Context, dir string, _ any) (backlog.Tracker, error) {
 		name := filepath.Base(dir)
 		built[name]++
 		return fakes[name], nil
 	}
-	t.Cleanup(func() { newTracker = old })
-	return root, fakes, built
+	return root, deps, fakes, built
 }
 
 func TestUmbrellaIssueRefs(t *testing.T) {
-	root, _, built := umbrellaProject(t)
-	code, env, stderr := rotaRun(t, "--json", "-C", root, "item", "field", "get", "api:F1", "--name", "title")
+	root, deps, _, built := umbrellaProject(t)
+	code, env, stderr := rotaRunWith(t, deps, "--json", "-C", root, "item", "field", "get", "api:F1", "--name", "title")
 	if code != 0 {
 		t.Fatalf("exit %d: %s", code, stderr)
 	}
@@ -68,49 +67,49 @@ func TestUmbrellaIssueRefs(t *testing.T) {
 		t.Errorf("a qualified ref built web's tracker: %v", built)
 	}
 	// bare and ambiguous
-	code, _, stderr = rotaRun(t, "--json", "-C", root, "item", "field", "get", "F1", "--name", "title")
+	code, _, stderr = rotaRunWith(t, deps, "--json", "-C", root, "item", "field", "get", "F1", "--name", "title")
 	if code != ExitUsage || !strings.Contains(stderr, "web:1, api:1") {
 		t.Errorf("ambiguous: exit %d, %s", code, stderr)
 	}
-	code, env, _ = rotaRun(t, "--json", "-C", root, "item", "field", "get", "B2", "--name", "title")
+	code, env, _ = rotaRunWith(t, deps, "--json", "-C", root, "item", "field", "get", "B2", "--name", "title")
 	if code != 0 || issueGet(issueData(t, env), "id") != "web:2" {
 		t.Errorf("unique bare: exit %d %v", code, env)
 	}
 	for _, ref := range []string{"nope:F1", "api:99", "F99"} {
-		if code, _, _ := rotaRun(t, "--json", "-C", root, "item", "field", "get", ref, "--name", "title"); code != ExitResolution {
+		if code, _, _ := rotaRunWith(t, deps, "--json", "-C", root, "item", "field", "get", ref, "--name", "title"); code != ExitResolution {
 			t.Errorf("%s: exit %d, want 3", ref, code)
 		}
 	}
 }
 
 func TestUmbrellaRepoFlagNarrows(t *testing.T) {
-	root, _, _ := umbrellaProject(t)
-	code, env, stderr := rotaRun(t, "--json", "-C", root, "item", "field", "get", "F1", "--name", "title", "--repo", "web")
+	root, deps, _, _ := umbrellaProject(t)
+	code, env, stderr := rotaRunWith(t, deps, "--json", "-C", root, "item", "field", "get", "F1", "--name", "title", "--repo", "web")
 	if code != 0 {
 		t.Fatalf("exit %d: %s", code, stderr)
 	}
 	if d := issueData(t, env); issueGet(d, "id") != "web:1" || issueGet(d, "value") != "Web feat" {
 		t.Errorf("data %v", d)
 	}
-	if code, _, _ := rotaRun(t, "--json", "-C", root, "item", "field", "get", "B2", "--name", "title", "--repo", "api"); code != ExitResolution {
+	if code, _, _ := rotaRunWith(t, deps, "--json", "-C", root, "item", "field", "get", "B2", "--name", "title", "--repo", "api"); code != ExitResolution {
 		t.Errorf("web's B2 outside --repo api: exit %d, want 3", code)
 	}
-	if code, _, _ := rotaRun(t, "--json", "-C", root, "item", "field", "get", "F1", "--name", "title", "--repo", "nope"); code != ExitResolution {
+	if code, _, _ := rotaRunWith(t, deps, "--json", "-C", root, "item", "field", "get", "F1", "--name", "title", "--repo", "nope"); code != ExitResolution {
 		t.Errorf("unregistered --repo: exit %d, want 3", code)
 	}
 }
 
 func TestUmbrellaCreateTarget(t *testing.T) {
+	root, deps, fakes, built := umbrellaProject(t)
 	create := func(root string, extra ...string) (int, string, string) {
 		args := append([]string{"--json", "-C", root, "item", "create", "--kind", "tasks", "--title", "New"}, extra...)
-		code, env, stderr := rotaRun(t, args...)
+		code, env, stderr := rotaRunWith(t, deps, args...)
 		id := ""
 		if code == 0 {
 			id, _ = issueGet(issueData(t, env), "id").(string)
 		}
 		return code, id, stderr
 	}
-	root, fakes, built := umbrellaProject(t)
 	for _, c := range []struct {
 		name  string
 		cwd   string
@@ -157,9 +156,9 @@ func TestUmbrellaFileModeKeepsOneBacklog(t *testing.T) {
 }
 
 func TestUmbrellaFileOnlyVerbsRefused(t *testing.T) {
-	root, _, built := umbrellaProject(t)
+	root, deps, _, built := umbrellaProject(t)
 	for _, argv := range [][]string{{"id", "next", "--kind", "bugs"}, {"item", "rm", "web:F1"}, {"backlog", "archive"}} {
-		if code, env, _ := rotaRun(t, append([]string{"--json", "-C", root}, argv...)...); code != ExitRefused || env["ok"] != false {
+		if code, env, _ := rotaRunWith(t, deps, append([]string{"--json", "-C", root}, argv...)...); code != ExitRefused || env["ok"] != false {
 			t.Errorf("%v: exit %d", argv, code)
 		}
 	}
@@ -169,8 +168,8 @@ func TestUmbrellaFileOnlyVerbsRefused(t *testing.T) {
 }
 
 func TestUmbrellaBacklogListQualifiesIDs(t *testing.T) {
-	root, _, _ := umbrellaProject(t)
-	code, env, stderr := rotaRun(t, "--json", "-C", root, "backlog", "list")
+	root, deps, _, _ := umbrellaProject(t)
+	code, env, stderr := rotaRunWith(t, deps, "--json", "-C", root, "backlog", "list")
 	if code != 0 {
 		t.Fatalf("exit %d: %s", code, stderr)
 	}
@@ -187,7 +186,7 @@ func TestUmbrellaBacklogListQualifiesIDs(t *testing.T) {
 	if got := strings.Join(ids, " "); got != "web:2 web:1 api:1" {
 		t.Errorf("ids %q", got)
 	}
-	code, env, _ = rotaRun(t, "--json", "-C", root, "backlog", "list", "--repo", "api")
+	code, env, _ = rotaRunWith(t, deps, "--json", "-C", root, "backlog", "list", "--repo", "api")
 	if code != 0 || len(issueGet(issueData(t, env), "features").([]any)) != 1 {
 		t.Errorf("--repo api: exit %d %v", code, env)
 	}

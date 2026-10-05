@@ -99,7 +99,7 @@ type out struct {
 
 func call(args ...string) out {
 	var so, se bytes.Buffer
-	code := run(testTree(), args, strings.NewReader(""), &so, &se)
+	code := run(testTree(), testDeps(), args, strings.NewReader(""), &so, &se)
 	return out{code, so.String(), se.String()}
 }
 
@@ -224,14 +224,14 @@ func TestCwdAndRoot(t *testing.T) {
 
 func TestVersionVerb(t *testing.T) {
 	var so, se bytes.Buffer
-	if code := Main([]string{"--version"}, nil, &so, &se); code != 0 || !strings.HasPrefix(so.String(), "rota ") {
+	if code := mainWith(testDeps(), []string{"--version"}, nil, &so, &se); code != 0 || !strings.HasPrefix(so.String(), "rota ") {
 		t.Fatalf("--version: code=%d out=%q err=%q", code, so.String(), se.String())
 	}
 	so.Reset()
-	if code := Main([]string{"version", "--json"}, nil, &so, &se); code != 0 || !strings.HasPrefix(so.String(), `{"ok": true, "data": {"version": `) {
+	if code := mainWith(testDeps(), []string{"version", "--json"}, nil, &so, &se); code != 0 || !strings.HasPrefix(so.String(), `{"ok": true, "data": {"version": `) {
 		t.Fatalf("version --json: %q", so.String())
 	}
-	if code := Main([]string{"version", "extra"}, nil, &so, &se); code != 2 {
+	if code := mainWith(testDeps(), []string{"version", "extra"}, nil, &so, &se); code != 2 {
 		t.Fatalf("version extra: code=%d", code)
 	}
 }

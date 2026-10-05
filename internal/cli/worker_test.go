@@ -231,30 +231,28 @@ func (h *cliHost) Kill(context.Context, string, string) error {
 }
 func (h *cliHost) Notify(context.Context, string, string) {}
 
-func useHost(t *testing.T, h host.Host) {
-	t.Helper()
-	old := workerEnv
-	workerEnv = func() worker.Env {
+func useHost(d *Deps, h host.Host) {
+	d.WorkerEnv = func() worker.Env {
 		return worker.Env{NewHost: func(string) host.Host { return h }, Sleep: func(time.Duration) {}}
 	}
-	t.Cleanup(func() { workerEnv = old })
 }
 
 func TestWorkerDispatchVerb(t *testing.T) {
+	deps := testDeps()
 	dir := workerProject(t, `{}`)
-	rotaIn(t, dir, "worker", "pool", "init", "--slots", "1", "--base", "main")
+	rotaInWith(t, deps, dir, "worker", "pool", "init", "--slots", "1", "--base", "main")
 	h := &cliHost{inSession: true}
-	useHost(t, h)
+	useHost(deps, h)
 	brief := filepath.Join(t.TempDir(), "b.md")
 	os.WriteFile(brief, []byte("hello\n"), 0o644)
 
-	if code, _, _ := rotaIn(t, dir, "worker", "dispatch", "w1"); code != 2 {
+	if code, _, _ := rotaInWith(t, deps, dir, "worker", "dispatch", "w1"); code != 2 {
 		t.Errorf("no --body-file: %d", code)
 	}
-	if code, _, _ := rotaIn(t, dir, "worker", "dispatch", "w1", "--body-file", brief, "--round", "x"); code != 2 {
+	if code, _, _ := rotaInWith(t, deps, dir, "worker", "dispatch", "w1", "--body-file", brief, "--round", "x"); code != 2 {
 		t.Errorf("bad --round: %d", code)
 	}
-	code, out, _ := rotaIn(t, dir, "worker", "dispatch", "w1", "--body-file", brief, "--task", "T1", "--round", "2", "--json")
+	code, out, _ := rotaInWith(t, deps, dir, "worker", "dispatch", "w1", "--body-file", brief, "--task", "T1", "--round", "2", "--json")
 	d := data(t, out)
 	if code != 0 || d["slot"] != "w1" || d["handle"] != "rota:w1" || d["task"] != "T1" || d["round"] != 2.0 || d["relay"] != false || d["changed"] != true {
 		t.Fatalf("dispatch: %d %v", code, d)
@@ -262,51 +260,53 @@ func TestWorkerDispatchVerb(t *testing.T) {
 	if got := strings.Join(h.calls, ","); got != "kill,spawn,send:--- ORCHESTRATOR (round 2) ---\nhello\n" {
 		t.Errorf("calls = %q", got)
 	}
-	code, out, _ = rotaIn(t, dir, "worker", "dispatch", "w1", "--body-file", brief, "--relay", "--json")
+	code, out, _ = rotaInWith(t, deps, dir, "worker", "dispatch", "w1", "--body-file", brief, "--relay", "--json")
 	if d = data(t, out); code != 0 || d["relay"] != true {
 		t.Errorf("relay: %d %v", code, d)
 	}
 
 	// the contract's split: never submitted is retry (6), a dialog is unavailable (5)
 	h.sendErr = host.ErrNotSubmitted
-	if code, _, _ := rotaIn(t, dir, "worker", "dispatch", "w1", "--body-file", brief, "--relay"); code != 6 {
+	if code, _, _ := rotaInWith(t, deps, dir, "worker", "dispatch", "w1", "--body-file", brief, "--relay"); code != 6 {
 		t.Errorf("never submitted: %d, want 6", code)
 	}
 	h.sendErr = host.ErrDialogOpen
-	if code, _, _ := rotaIn(t, dir, "worker", "dispatch", "w1", "--body-file", brief, "--relay"); code != 5 {
+	if code, _, _ := rotaInWith(t, deps, dir, "worker", "dispatch", "w1", "--body-file", brief, "--relay"); code != 5 {
 		t.Errorf("dialog open: %d, want 5", code)
 	}
-	if code, _, _ := rotaIn(t, dir, "worker", "dispatch", "ghost", "--body-file", brief); code != 3 {
+	if code, _, _ := rotaInWith(t, deps, dir, "worker", "dispatch", "ghost", "--body-file", brief); code != 3 {
 		t.Errorf("unknown slot: %d", code)
 	}
 }
 
 func TestWorkerDispatchBodyFromStdin(t *testing.T) {
+	deps := testDeps()
 	dir := workerProject(t, `{}`)
-	rotaIn(t, dir, "worker", "pool", "init", "--slots", "1", "--base", "main")
+	rotaInWith(t, deps, dir, "worker", "pool", "init", "--slots", "1", "--base", "main")
 	h := &cliHost{inSession: true}
-	useHost(t, h)
+	useHost(deps, h)
 	old, _ := os.Getwd()
 	os.Chdir(dir)
 	defer os.Chdir(old)
 	var so, se bytes.Buffer
-	code := Main([]string{"worker", "dispatch", "w1", "--body-file", "-", "--task", "T1"}, strings.NewReader("from stdin\n"), &so, &se)
+	code := mainWith(deps, []string{"worker", "dispatch", "w1", "--body-file", "-", "--task", "T1"}, strings.NewReader("from stdin\n"), &so, &se)
 	if code != 0 || !strings.HasSuffix(strings.Join(h.calls, ","), "from stdin\n") {
 		t.Errorf("exit %d calls %q err %s", code, h.calls, se.String())
 	}
 }
 
 func TestWorkerPollVerb(t *testing.T) {
+	deps := testDeps()
 	dir := workerProject(t, `{}`)
-	rotaIn(t, dir, "worker", "pool", "init", "--slots", "1", "--base", "main")
-	useHost(t, &cliHost{inSession: true})
-	code, out, _ := rotaIn(t, dir, "worker", "poll", "--settle", "0", "--json")
+	rotaInWith(t, deps, dir, "worker", "pool", "init", "--slots", "1", "--base", "main")
+	useHost(deps, &cliHost{inSession: true})
+	code, out, _ := rotaInWith(t, deps, dir, "worker", "poll", "--settle", "0", "--json")
 	d := data(t, out)
 	rows := d["slots"].([]any)
 	if code != 0 || len(rows) != 1 || rows[0].(map[string]any)["state"] != "idle" || d["changed"] != false {
 		t.Fatalf("poll: %d %v", code, d)
 	}
-	if code, _, _ := rotaIn(t, dir, "worker", "poll", "ghost"); code != 3 {
+	if code, _, _ := rotaInWith(t, deps, dir, "worker", "poll", "ghost"); code != 3 {
 		t.Errorf("unknown slot: %d", code)
 	}
 
@@ -314,31 +314,32 @@ func TestWorkerPollVerb(t *testing.T) {
 	os.WriteFile(fx, []byte("ROTA-BLOCKED w1: which?\n"), 0o644)
 	t.Setenv("ROTA_TEST_POLL_FIXTURE", fx)
 	t.Setenv("ROTA_TEST_POLL_STATUS", "working")
-	code, out, _ = rotaIn(t, dir, "worker", "poll", "--json")
+	code, out, _ = rotaInWith(t, deps, dir, "worker", "poll", "--json")
 	rows = data(t, out)["slots"].([]any)
 	if code != 0 || rows[0].(map[string]any)["state"] != "blocked" || rows[0].(map[string]any)["name"] != "fixture" {
 		t.Errorf("fixture mode: %d %v", code, rows)
 	}
 	t.Setenv("ROTA_TEST_POLL_FIXTURE", "/no/such")
-	if code, _, _ := rotaIn(t, dir, "worker", "poll"); code != 2 {
+	if code, _, _ := rotaInWith(t, deps, dir, "worker", "poll"); code != 2 {
 		t.Errorf("missing fixture: %d", code)
 	}
 }
 
 func TestWorkerSessionVerbs(t *testing.T) {
+	deps := testDeps()
 	dir := workerProject(t, `{}`)
 	h := &cliHost{}
-	useHost(t, h)
-	code, out, _ := rotaIn(t, dir, "worker", "session", "check", "--json")
+	useHost(deps, h)
+	code, out, _ := rotaInWith(t, deps, dir, "worker", "session", "check", "--json")
 	if d := data(t, out); code != 1 || d["inside"] != false {
 		t.Errorf("outside: %d %v", code, d)
 	}
 	h.inSession = true
-	code, out, _ = rotaIn(t, dir, "worker", "session", "check", "--json")
+	code, out, _ = rotaInWith(t, deps, dir, "worker", "session", "check", "--json")
 	if d := data(t, out); code != 0 || d["inside"] != true || d["where"] != "main" {
 		t.Errorf("inside: %d %v", code, d)
 	}
-	code, out, _ = rotaIn(t, dir, "worker", "session", "ensure", "--json")
+	code, out, _ = rotaInWith(t, deps, dir, "worker", "session", "ensure", "--json")
 	if d := data(t, out); code != 0 || d["handedOff"] != false || d["changed"] != false || d["inside"] != true {
 		t.Errorf("ensure inside: %d %v", code, d)
 	}
@@ -401,12 +402,13 @@ func TestWorkerGateVerb(t *testing.T) {
 }
 
 func TestWorkerDispatchRefusalEnvelopeCarriesData(t *testing.T) {
+	deps := testDeps()
 	dir := workerProject(t, `{"work":{"workerCommand":"claude --resume"}}`)
-	rotaIn(t, dir, "worker", "pool", "init", "--slots", "1", "--base", "main")
-	useHost(t, &cliHost{inSession: true})
+	rotaInWith(t, deps, dir, "worker", "pool", "init", "--slots", "1", "--base", "main")
+	useHost(deps, &cliHost{inSession: true})
 	brief := filepath.Join(t.TempDir(), "b.md")
 	os.WriteFile(brief, []byte("x"), 0o644)
-	code, out, _ := rotaIn(t, dir, "worker", "dispatch", "w1", "--body-file", brief, "--task", "T1", "--json")
+	code, out, _ := rotaInWith(t, deps, dir, "worker", "dispatch", "w1", "--body-file", brief, "--task", "T1", "--json")
 	d := data(t, out)
 	if code != 4 || d["blockedBy"] != "resume flag" || d["changed"] != false {
 		t.Errorf("%d %s", code, out)
@@ -414,9 +416,10 @@ func TestWorkerDispatchRefusalEnvelopeCarriesData(t *testing.T) {
 }
 
 func TestWorkerSessionEnsureHerdrOutsideCarriesBlockedBy(t *testing.T) {
+	deps := testDeps()
 	dir := workerProject(t, `{"work":{"dispatch":"herdr"}}`)
-	useHost(t, &cliHost{herdr: true})
-	code, out, _ := rotaIn(t, dir, "worker", "session", "ensure", "--json")
+	useHost(deps, &cliHost{herdr: true})
+	code, out, _ := rotaInWith(t, deps, dir, "worker", "session", "ensure", "--json")
 	d := data(t, out)
 	if code != 4 || d["blockedBy"] != "outside herdr" || d["changed"] != false {
 		t.Errorf("%d %s", code, out)
@@ -425,10 +428,8 @@ func TestWorkerSessionEnsureHerdrOutsideCarriesBlockedBy(t *testing.T) {
 
 // useCodex swaps in a host and scripted codex/herdr runners: no real binary is
 // reachable. version is codex's `--version` stdout.
-func useCodex(t *testing.T, h host.Host, version string, loggedIn bool) {
-	t.Helper()
-	old := workerEnv
-	workerEnv = func() worker.Env {
+func useCodex(d *Deps, h host.Host, version string, loggedIn bool) {
+	d.WorkerEnv = func() worker.Env {
 		return worker.Env{
 			NewHost:  func(string) host.Host { return h },
 			Sleep:    func(time.Duration) {},
@@ -448,24 +449,24 @@ func useCodex(t *testing.T, h host.Host, version string, loggedIn bool) {
 			},
 		}
 	}
-	t.Cleanup(func() { workerEnv = old })
 }
 
 func TestWorkerDispatchKindFlag(t *testing.T) {
+	deps := testDeps()
 	dir := workerProject(t, `{"work":{"dispatch":"herdr"}}`)
-	rotaIn(t, dir, "worker", "pool", "init", "--slots", "1", "--base", "main")
+	rotaInWith(t, deps, dir, "worker", "pool", "init", "--slots", "1", "--base", "main")
 	brief := filepath.Join(t.TempDir(), "b.md")
 	os.WriteFile(brief, []byte("hello\n"), 0o644)
 
-	useCodex(t, &cliHost{herdr: true, inSession: true}, "codex-cli 0.159.2\n", true)
-	if code, _, _ := rotaIn(t, dir, "worker", "dispatch", "w1", "--body-file", brief, "--task", "T1", "--kind", "gemini"); code != 2 {
+	useCodex(deps, &cliHost{herdr: true, inSession: true}, "codex-cli 0.159.2\n", true)
+	if code, _, _ := rotaInWith(t, deps, dir, "worker", "dispatch", "w1", "--body-file", brief, "--task", "T1", "--kind", "gemini"); code != 2 {
 		t.Errorf("a bad --kind: %d, want 2", code)
 	}
-	code, out, _ := rotaIn(t, dir, "worker", "dispatch", "w1", "--body-file", brief, "--task", "T1", "--kind", "codex", "--json")
+	code, out, _ := rotaInWith(t, deps, dir, "worker", "dispatch", "w1", "--body-file", brief, "--task", "T1", "--kind", "codex", "--json")
 	if d := data(t, out); code != 0 || d["kind"] != "codex" {
 		t.Fatalf("codex dispatch: %d %s", code, out)
 	}
-	code, out, _ = rotaIn(t, dir, "worker", "dispatch", "w1", "--body-file", brief, "--relay", "--kind", "codex", "--json")
+	code, out, _ = rotaInWith(t, deps, dir, "worker", "dispatch", "w1", "--body-file", brief, "--relay", "--kind", "codex", "--json")
 	if d := data(t, out); code != 0 {
 		t.Fatalf("relay: %d %s", code, out)
 	} else if _, has := d["kind"]; has {
@@ -473,19 +474,19 @@ func TestWorkerDispatchKindFlag(t *testing.T) {
 	}
 
 	// version refusal: exit 4 with blockedBy, and the flag lets one call through
-	useCodex(t, &cliHost{herdr: true, inSession: true}, "codex-cli 0.200.0\n", true)
-	code, out, _ = rotaIn(t, dir, "worker", "dispatch", "w1", "--body-file", brief, "--task", "T2", "--kind", "codex", "--json")
+	useCodex(deps, &cliHost{herdr: true, inSession: true}, "codex-cli 0.200.0\n", true)
+	code, out, _ = rotaInWith(t, deps, dir, "worker", "dispatch", "w1", "--body-file", brief, "--task", "T2", "--kind", "codex", "--json")
 	if d := data(t, out); code != 4 || d["blockedBy"] != "codex version" || d["changed"] != false {
 		t.Errorf("version refusal: %d %s", code, out)
 	}
-	code, out, stderr := rotaIn(t, dir, "worker", "dispatch", "w1", "--body-file", brief, "--task", "T2", "--kind", "codex", "--accept-codex-version", "--json")
+	code, out, stderr := rotaInWith(t, deps, dir, "worker", "dispatch", "w1", "--body-file", brief, "--task", "T2", "--kind", "codex", "--accept-codex-version", "--json")
 	if code != 0 || !strings.Contains(stderr, "codex 0.200.0 is outside the supported range >=0.159.0 <0.160.0") {
 		t.Errorf("accepted: %d %s %s", code, out, stderr)
 	}
 
 	// an unlogged slot is exit 5 with the login hint
-	useCodex(t, &cliHost{herdr: true, inSession: true}, "codex-cli 0.159.2\n", false)
-	code, _, stderr = rotaIn(t, dir, "worker", "dispatch", "w1", "--body-file", brief, "--task", "T3", "--kind", "codex")
+	useCodex(deps, &cliHost{herdr: true, inSession: true}, "codex-cli 0.159.2\n", false)
+	code, _, stderr = rotaInWith(t, deps, dir, "worker", "dispatch", "w1", "--body-file", brief, "--task", "T3", "--kind", "codex")
 	if code != 5 || !strings.Contains(stderr, "codex login") {
 		t.Errorf("login: %d %s", code, stderr)
 	}

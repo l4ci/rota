@@ -43,7 +43,7 @@ func rotaRun(t *testing.T, args ...string) (int, map[string]any, string) {
 	wd, _ := os.Getwd()
 	defer os.Chdir(wd)
 	var out, errb bytes.Buffer
-	code := Main(args, strings.NewReader(""), &out, &errb)
+	code := mainWith(testDeps(), args, strings.NewReader(""), &out, &errb)
 	var env map[string]any
 	if out.Len() > 0 {
 		v, err := jsonx.Decode(out.Bytes())
@@ -89,7 +89,7 @@ func TestItemIssueModeNeedsTracker(t *testing.T) {
 func TestItemIssueModeUnknownItem(t *testing.T) {
 	root := trackerProject(t, `{"backlog": {"backend": "issues"}}`)
 	fake := &trackertest.Fake{}
-	withTracker(t, fake)
+	deps := withTracker(t, fake)
 	for _, argv := range [][]string{
 		{"item", "complete", "12", "--commit", "abc"},
 		{"item", "reopen", "12"},
@@ -101,7 +101,7 @@ func TestItemIssueModeUnknownItem(t *testing.T) {
 		{"item", "note", "show", "12", "--kind", "plan"},
 		{"item", "field", "set", "12", "--name", "milestone", "--value", "M1"},
 	} {
-		code, _, stderr := rotaRun(t, append([]string{"--json", "-C", root}, argv...)...)
+		code, _, stderr := rotaRunWith(t, deps, append([]string{"--json", "-C", root}, argv...)...)
 		if code != ExitResolution {
 			t.Errorf("%v: code=%d stderr=%s", argv, code, stderr)
 		}
