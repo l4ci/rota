@@ -29,7 +29,7 @@ func roundWait(fs *flag.FlagSet) RunFunc {
 		}
 		ctx, stop := workerContext()
 		defer stop()
-		res, err := workerEnvCtx(ctx).Wait(ctx, root, worker.WaitOpts{
+		res, err := workerEnvCtx(c, ctx).Wait(ctx, root, worker.WaitOpts{
 			Slots:   args,
 			Timeout: time.Duration(*timeout * float64(time.Second)),
 			Settle:  time.Duration(*settle * float64(time.Second)),

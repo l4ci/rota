@@ -22,11 +22,7 @@ import (
 )
 
 // The A7 verbs (worker pool, reset, account, ...) live in internal/worker;
-// this file is their glue. Tests swap the package variables below for fakes.
-var (
-	workerEnv      = func() worker.Env { return worker.Env{} }
-	workerAccounts = func() *worker.Accounts { return &worker.Accounts{Now: hookNow} } // ROTA_TEST_NOW fixes the meters' clock too
-)
+// this file is their glue. Tests swap Deps.WorkerEnv and Deps.WorkerAccounts for fakes.
 
 // workerContext is cancelled on SIGINT and SIGTERM, so a Ctrl-C reaches the
 // git and host calls a verb has in flight instead of leaving them running.
@@ -35,8 +31,8 @@ func workerContext() (context.Context, context.CancelFunc) {
 }
 
 // workerEnvCtx is the worker Env bound to ctx.
-func workerEnvCtx(ctx context.Context) worker.Env {
-	e := workerEnv()
+func workerEnvCtx(c *Ctx, ctx context.Context) worker.Env {
+	e := c.deps().WorkerEnv()
 	e.Ctx = ctx
 	return e
 }
@@ -96,8 +92,8 @@ func poolInit(fs *flag.FlagSet) RunFunc {
 		}
 		ctx, stop := workerContext()
 		defer stop()
-		res, err := workerEnvCtx(ctx).PoolInit(ctx, root,
-			worker.InitOpts{Slots: n, Base: *base, Session: *session}, workerAccounts())
+		res, err := workerEnvCtx(c, ctx).PoolInit(ctx, root,
+			worker.InitOpts{Slots: n, Base: *base, Session: *session}, c.deps().WorkerAccounts())
 		if err != nil {
 			return Result{}, err
 		}
@@ -153,7 +149,7 @@ func poolReap(fs *flag.FlagSet) RunFunc {
 		}
 		ctx, stop := workerContext()
 		defer stop()
-		reaped, err := workerEnvCtx(ctx).Reap(root, args, *all)
+		reaped, err := workerEnvCtx(c, ctx).Reap(root, args, *all)
 		if err != nil {
 			return Result{}, err
 		}
@@ -214,7 +210,7 @@ func workerReset(fs *flag.FlagSet) RunFunc {
 		}
 		ctx, stop := workerContext()
 		defer stop()
-		r, err := workerEnvCtx(ctx).Reset(root, slot, *task, *check)
+		r, err := workerEnvCtx(c, ctx).Reset(root, slot, *task, *check)
 		res := Result{Data: resetData(r)}
 		if err != nil {
 			var we *exitcode.Error
@@ -271,7 +267,7 @@ func runAccountList(c *Ctx, args []string) (Result, error) {
 	}
 	ctx, stop := workerContext()
 	defer stop()
-	rows := workerAccounts().Meters(ctx, root)
+	rows := c.deps().WorkerAccounts().Meters(ctx, root)
 	list := make([]any, 0, len(rows))
 	var lines []string
 	for _, m := range rows {
@@ -318,7 +314,7 @@ func accountPick(fs *flag.FlagSet) RunFunc {
 		}
 		ctx, stop := workerContext()
 		defer stop()
-		name, found := workerAccounts().Pick(ctx, root, skip)
+		name, found := c.deps().WorkerAccounts().Pick(ctx, root, skip)
 		d := jsonx.NewObject()
 		d.Set("found", found)
 		if !found {
@@ -345,7 +341,7 @@ func accountAssign(fs *flag.FlagSet) RunFunc {
 		}
 		ctx, stop := workerContext()
 		defer stop()
-		name, changed, err := workerAccounts().Assign(ctx, root, slot, *account)
+		name, changed, err := c.deps().WorkerAccounts().Assign(ctx, root, slot, *account)
 		if err != nil {
 			return Result{}, err
 		}
@@ -415,7 +411,7 @@ func workerDispatch(fs *flag.FlagSet) RunFunc {
 		opts.BodyFile = path
 		ctx, stop := workerContext()
 		defer stop()
-		res, err := workerEnvCtx(ctx).Dispatch(ctx, root, opts)
+		res, err := workerEnvCtx(c, ctx).Dispatch(ctx, root, opts)
 		for _, w := range res.Warnings {
 			c.Warn("%s", w)
 		}
@@ -503,7 +499,7 @@ func workerPoll(fs *flag.FlagSet) RunFunc {
 			}
 			ctx, stop := workerContext()
 			defer stop()
-			res, err = workerEnvCtx(ctx).Poll(ctx, root, worker.PollOpts{
+			res, err = workerEnvCtx(c, ctx).Poll(ctx, root, worker.PollOpts{
 				Slot: slot, Settle: time.Duration(*settle * float64(time.Second)), Lines: *lines})
 		}
 		if err != nil {
@@ -550,7 +546,7 @@ func sessionCheck(fs *flag.FlagSet) RunFunc {
 		}
 		ctx, stop := workerContext()
 		defer stop()
-		st := workerEnvCtx(ctx).SessionCheck(ctx, root)
+		st := workerEnvCtx(c, ctx).SessionCheck(ctx, root)
 		if !st.Inside {
 			return Result{Data: sessionData(st), Text: "outside"}, Failed("not inside a managed host session")
 		}
@@ -581,7 +577,7 @@ func sessionEnsure(fs *flag.FlagSet) RunFunc {
 		}
 		ctx, stop := workerContext()
 		defer stop()
-		st, err := workerEnvCtx(ctx).SessionEnsure(ctx, root, opts)
+		st, err := workerEnvCtx(c, ctx).SessionEnsure(ctx, root, opts)
 		if err != nil {
 			var we *exitcode.Error
 			if errors.As(err, &we) {
@@ -659,7 +655,7 @@ func workerGate(fs *flag.FlagSet) RunFunc {
 		ctx, stop := workerContext()
 		defer stop()
 		issue := gateIssue(root, slot)
-		r, err := workerEnvCtx(ctx).Gate(ctx, root, worker.GateOpts{Slot: slot, Base: *base, CheckOnly: *check, NoVerify: *noVerify, Approve: approve})
+		r, err := workerEnvCtx(c, ctx).Gate(ctx, root, worker.GateOpts{Slot: slot, Base: *base, CheckOnly: *check, NoVerify: *noVerify, Approve: approve})
 		if gateErr != nil {
 			var e *Error
 			if !errors.As(gateErr, &e) {

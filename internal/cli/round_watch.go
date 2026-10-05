@@ -20,9 +20,6 @@ import (
 	"github.com/l4ci/rota/internal/worker"
 )
 
-// watchEnv is the process side of `rota round watch`; tests replace it.
-var watchEnv = func() roundlease.Env { return roundlease.DefaultEnv() }
-
 // roundWatch is `rota round watch`: `round wait` for a session that must stay
 // free. It is meant to run in the background, one at a time; the harness wakes
 // the orchestrator when it exits, and the orchestrator re-arms it.
@@ -64,7 +61,7 @@ func roundWatch(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, Resolution("%v", err)
 		}
-		lenv := watchEnv()
+		lenv := c.deps().WatchEnv()
 		release, err := roundwatch.Arm(lenv, cd, os.Getpid(), secs(*heartbeat))
 		if err != nil {
 			var ae *roundwatch.ArmedError
@@ -77,7 +74,7 @@ func roundWatch(fs *flag.FlagSet) RunFunc {
 
 		ctx, stop := workerContext()
 		defer stop()
-		wenv := workerEnvCtx(ctx)
+		wenv := workerEnvCtx(c, ctx)
 		env := roundwatch.Env{
 			Now: lenv.Now,
 			Sleep: func(ctx context.Context, d time.Duration) {
@@ -103,7 +100,7 @@ func roundWatch(fs *flag.FlagSet) RunFunc {
 				return &roundwatch.SlotNews{Slot: res.Slot, State: strings.ToLower(res.State), Evidence: res.Evidence, Source: res.Source}, nil
 			},
 			Local: func() map[string]string { return roundwatch.LocalSnapshot(root) },
-			Forge: func(ctx context.Context) map[string]string { return watchForge(ctx, root) },
+			Forge: func(ctx context.Context) map[string]string { return watchForge(ctx, c, root) },
 		}
 		opts := roundwatch.Opts{Heartbeat: secs(*heartbeat), Poll: secs(*poll), ForgeEvery: secs(*forgePoll)}
 		if !*autopilot {
@@ -123,18 +120,18 @@ func secs(f float64) time.Duration { return time.Duration(f * float64(time.Secon
 // escalations (as `round escalate check` does) and reads each slot's PR state
 // from `round status`. A forge that cannot be reached leaves the entries out,
 // which reads as no change.
-func watchForge(ctx context.Context, root string) map[string]string {
+func watchForge(ctx context.Context, c *Ctx, root string) map[string]string {
 	out := map[string]string{}
-	env := escalationEnv()
+	env := c.deps().EscalationEnv()
 	if env.Forge == nil {
-		env.Forge = escalationForge()
+		env.Forge = escalationForge(c)
 	}
 	if res, err := escalation.Check(ctx, env, root, nil); err == nil {
 		for _, r := range res.Reports {
 			out[roundwatch.EscalationStatusKey(r.Entry.ID)] = r.Status
 		}
 	}
-	if rep, err := roundEnv(ctx, root).Status(ctx, root); err == nil {
+	if rep, err := c.deps().RoundEnv(ctx, root).Status(ctx, root); err == nil {
 		for _, r := range rep.Rows {
 			if r.PR != "" && r.PRState != "" {
 				out[roundwatch.PRStateKey(r.Name)] = r.PRState

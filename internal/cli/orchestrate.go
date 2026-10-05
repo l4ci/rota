@@ -23,9 +23,10 @@ func orchestrateCommand() *Command {
 	return &Command{Name: "orchestrate", Summary: "launch the orchestrator: an agent under keepalive that starts /rota-orchestrate", Verb: orchestrateVerb}
 }
 
-// orchestrateEnv is what the launcher touches outside its own memory. Tests
-// replace it: a real launch opens tabs in the herdr or tmux a round runs in.
-var orchestrateEnv = func() orchestrate.Env {
+// defaultOrchestrateEnv is what the launcher touches outside its own memory.
+// Tests replace Deps.OrchestrateEnv: a real launch opens tabs in the herdr or
+// tmux a round runs in.
+func defaultOrchestrateEnv() orchestrate.Env {
 	self, err := os.Executable()
 	if err != nil {
 		self = "rota"
@@ -40,14 +41,14 @@ var orchestrateEnv = func() orchestrate.Env {
 	}
 }
 
-// bareSetup is what bare `rota` runs in a directory with no .rota/: the
+// defaultBareSetup is what bare `rota` runs in a directory with no .rota/: the
 // interactive setup of #25 (`rota setup`) with its defaults.
-var bareSetup RunFunc = func(c *Ctx, args []string) (Result, error) {
+func defaultBareSetup(c *Ctx, args []string) (Result, error) {
 	return setupVerb(flag.NewFlagSet("setup", flag.ContinueOnError))(c, args)
 }
 
-// isTerminal: bare `rota` opens an interactive session, so it needs a person.
-var isTerminal = func(f any) bool {
+// defaultIsTerminal: bare `rota` opens an interactive session, so it needs a person.
+func defaultIsTerminal(f any) bool {
 	file, ok := f.(*os.File)
 	if !ok {
 		return false
@@ -65,11 +66,11 @@ func bareRota(*flag.FlagSet) RunFunc {
 		if len(args) > 0 {
 			return Result{}, Usage("unknown command %q", args[0]).WithHint("run: rota --help")
 		}
-		if c.JSON || !isTerminal(c.Stdin) || !isTerminal(c.Stdout) {
+		if c.JSON || !c.deps().IsTerminal(c.Stdin) || !c.deps().IsTerminal(c.Stdout) {
 			return Result{}, Usage("missing command").WithHint("run: rota --help")
 		}
 		if _, err := c.Root(); err != nil {
-			return bareSetup(c, nil)
+			return c.deps().BareSetup(c, nil)
 		}
 		return runOrchestrate(c, false)
 	}
@@ -95,7 +96,7 @@ func runOrchestrate(c *Ctx, dry bool) (Result, error) {
 		return res, Failed("doctor reports a failure: no session started").WithHint("fix each fail above (the hint says how), then run rota orchestrate again")
 	}
 	cfg := config.Load(filepath.Join(root, ".rota", "config.json"))
-	env := orchestrateEnv()
+	env := c.deps().OrchestrateEnv()
 	plan, err := env.Resolve(root, cfg)
 	if err != nil {
 		return orchestrateErr(err)

@@ -36,7 +36,7 @@ func migrateHv(fs *flag.FlagSet) RunFunc {
 		if home == "" {
 			home, _ = os.UserHomeDir()
 		}
-		migrate.InstalledVersion = installedVersionFn
+		migrate.InstalledVersion = c.deps().InstalledVersion
 		o := migrate.HvOptions{Apply: *apply, Verbose: *verbose, SkipSkills: *skip, Cwd: cwd,
 			Home: home, ClaudeDir: skills.ClaudeDir(home), Version: version.Get().Version}
 		if !*skip {

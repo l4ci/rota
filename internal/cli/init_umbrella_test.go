@@ -47,10 +47,10 @@ func TestInitUmbrellaRegisters(t *testing.T) {
 	root := umbrellaFixture(t, "web", "api")
 	os.MkdirAll(filepath.Join(root, ".git"), 0o755)
 	var seededAt string
-	seedBase = func(r string) error { seededAt = r; return os.MkdirAll(filepath.Join(r, ".rota", "bugs"), 0o755) }
-	t.Cleanup(func() { seedBase = nil })
+	d := testDeps()
+	d.SeedBase = func(r string) error { seededAt = r; return os.MkdirAll(filepath.Join(r, ".rota", "bugs"), 0o755) }
 
-	code, env, stderr := rotaRun(t, "--json", "-C", root, "init", "umbrella", "--repos", "web,nope")
+	code, env, stderr := umbRunWith(t, d, "--json", "-C", root, "init", "umbrella", "--repos", "web,nope")
 	data := umbData(env)
 	if code != 0 || seededAt != root || data["root"] != root || data["umbrellaIsGitRepo"] != true || data["changed"] != true ||
 		!reflect.DeepEqual(data["registered"], []any{"web"}) {
@@ -66,7 +66,7 @@ func TestInitUmbrellaRegisters(t *testing.T) {
 		}
 	}
 	// second run: nothing to do
-	code, env, _ = rotaRun(t, "--json", "-C", root, "init", "umbrella", "--repos", "web")
+	code, env, _ = umbRunWith(t, d, "--json", "-C", root, "init", "umbrella", "--repos", "web")
 	if data = umbData(env); code != 0 || data["changed"] != false || len(data["created"].([]any)) != 0 {
 		t.Fatalf("rerun: code=%d env=%v", code, env)
 	}
@@ -104,16 +104,15 @@ func TestInitUmbrellaExits(t *testing.T) {
 
 func TestVersionDrift(t *testing.T) {
 	root := trackerProject(t, `{"rota": {"version": "4.9.0"}}`)
-	old := installedVersionFn
-	t.Cleanup(func() { installedVersionFn = old })
+	d := testDeps()
 
 	cases := []struct {
 		installed, status string
 		drift             bool
 	}{{"4.9.0", "match", false}, {"5.0.0", "drift", true}, {"", "unknown", false}}
 	for _, tc := range cases {
-		installedVersionFn = func() string { return tc.installed }
-		code, env, stderr := rotaRun(t, "--json", "-C", root, "version", "--drift")
+		d.InstalledVersion = func() string { return tc.installed }
+		code, env, stderr := umbRunWith(t, d, "--json", "-C", root, "version", "--drift")
 		d := umbData(env)
 		if code != 0 || d["status"] != tc.status || d["drift"] != tc.drift || d["stamped"] != "4.9.0" ||
 			d["installed"] != tc.installed || d["version"] != tc.installed {
@@ -122,36 +121,36 @@ func TestVersionDrift(t *testing.T) {
 	}
 
 	// text mode: a nudge on drift only
-	installedVersionFn = func() string { return "5.0.0" }
+	d.InstalledVersion = func() string { return "5.0.0" }
 	wd, _ := os.Getwd()
 	t.Cleanup(func() { os.Chdir(wd) })
 	var out, errb bytes.Buffer
-	if code := Main([]string{"-C", root, "version", "--drift"}, nil, &out, &errb); code != 0 || !strings.HasPrefix(out.String(), "rota drift: project at 4.9.0, binary at 5.0.0") {
+	if code := mainWith(d, []string{"-C", root, "version", "--drift"}, nil, &out, &errb); code != 0 || !strings.HasPrefix(out.String(), "rota drift: project at 4.9.0, binary at 5.0.0") {
 		t.Fatalf("code=%d out=%q", code, out.String())
 	}
 	out.Reset()
-	installedVersionFn = func() string { return "4.9.0" }
-	if code := Main([]string{"-C", root, "version", "--drift"}, nil, &out, &errb); code != 0 || out.Len() != 0 {
+	d.InstalledVersion = func() string { return "4.9.0" }
+	if code := mainWith(d, []string{"-C", root, "version", "--drift"}, nil, &out, &errb); code != 0 || out.Len() != 0 {
 		t.Fatalf("match must be silent: code=%d out=%q", code, out.String())
 	}
-	installedVersionFn = func() string { return "5.0.0" }
+	d.InstalledVersion = func() string { return "5.0.0" }
 
 	// no stamp is unknown; config.local.json overrides the stamp
 	bare := trackerProject(t, "")
-	installedVersionFn = func() string { return "5.0.0" }
-	if _, env, _ := rotaRun(t, "--json", "-C", bare, "version", "--drift"); umbData(env)["status"] != "unknown" {
+	d.InstalledVersion = func() string { return "5.0.0" }
+	if _, env, _ := umbRunWith(t, d, "--json", "-C", bare, "version", "--drift"); umbData(env)["status"] != "unknown" {
 		t.Fatalf("env=%v", env)
 	}
 	os.WriteFile(filepath.Join(root, ".rota", "config.local.json"), []byte(`{"rota": {"version": "5.0.0"}}`), 0o644)
-	if _, env, _ := rotaRun(t, "--json", "-C", root, "version", "--drift"); umbData(env)["status"] != "match" {
+	if _, env, _ := umbRunWith(t, d, "--json", "-C", root, "version", "--drift"); umbData(env)["status"] != "match" {
 		t.Fatalf("local override ignored: env=%v", env)
 	}
 
 	// no .rota/ anywhere: exit 3
-	if code, _, _ := rotaRun(t, "-C", t.TempDir(), "version", "--drift"); code != ExitResolution {
+	if code, _, _ := umbRunWith(t, d, "-C", t.TempDir(), "version", "--drift"); code != ExitResolution {
 		t.Fatalf("no .rota: code=%d", code)
 	}
-	if code, _, _ := rotaRun(t, "version", "extra", "--drift"); code != ExitUsage {
+	if code, _, _ := umbRunWith(t, d, "version", "extra", "--drift"); code != ExitUsage {
 		t.Fatalf("extra arg: code=%d", code)
 	}
 }
@@ -171,16 +170,15 @@ func umbData(env map[string]any) map[string]any {
 // it, and rota init moves it to rota.version stamped with the binary version.
 func TestVersionDriftReadsLegacyKeyAndInitMigratesIt(t *testing.T) {
 	root := trackerProject(t, `{"hv": {"version": "4.9.0"}}`)
-	old := installedVersionFn
-	t.Cleanup(func() { installedVersionFn = old })
-	installedVersionFn = func() string { return "5.0.0" }
+	d := testDeps()
+	d.InstalledVersion = func() string { return "5.0.0" }
 
-	_, env, stderr := rotaRun(t, "--json", "-C", root, "version", "--drift")
+	_, env, stderr := umbRunWith(t, d, "--json", "-C", root, "version", "--drift")
 	if d := umbData(env); d["stamped"] != "4.9.0" || d["status"] != "drift" {
 		t.Fatalf("legacy key not read: env=%v stderr=%s", env, stderr)
 	}
 
-	if code, env, stderr := rotaRun(t, "--json", "-C", root, "init", "--no-blocks"); code != 0 {
+	if code, env, stderr := umbRunWith(t, d, "--json", "-C", root, "init", "--no-blocks"); code != 0 {
 		t.Fatalf("init: code=%d env=%v stderr=%s", code, env, stderr)
 	}
 	cfg := readCfg(t, filepath.Join(root, ".rota", "config.json"))
@@ -190,7 +188,31 @@ func TestVersionDriftReadsLegacyKeyAndInitMigratesIt(t *testing.T) {
 	if _, ok := lookupDotted(cfg, "hv"); ok {
 		t.Errorf("hv left in config: %v", cfg)
 	}
-	if _, env, _ := rotaRun(t, "--json", "-C", root, "version", "--drift"); umbData(env)["status"] != "match" {
+	if _, env, _ := umbRunWith(t, d, "--json", "-C", root, "version", "--drift"); umbData(env)["status"] != "match" {
 		t.Errorf("drift not cleared: %v", env)
 	}
+}
+
+// umbRunWith is rotaRun with a caller-built Deps.
+func umbRunWith(t *testing.T, d *Deps, args ...string) (int, map[string]any, string) {
+	t.Helper()
+	wd, _ := os.Getwd()
+	defer os.Chdir(wd)
+	var out, errb bytes.Buffer
+	code := mainWith(d, args, strings.NewReader(""), &out, &errb)
+	var env map[string]any
+	if out.Len() > 0 {
+		v, err := jsonx.Decode(out.Bytes())
+		if err != nil {
+			t.Fatalf("stdout %q: %v", out.String(), err)
+		}
+		m := map[string]any{}
+		if o, ok := v.(*jsonx.Object); ok {
+			for _, k := range o.Keys() {
+				m[k], _ = o.Get(k)
+			}
+		}
+		env = m
+	}
+	return code, env, errb.String()
 }
