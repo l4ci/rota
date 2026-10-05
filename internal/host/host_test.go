@@ -1060,3 +1060,65 @@ func TestLooksBooted(t *testing.T) {
 		}
 	}
 }
+
+// A layout split moves the pane out of its tab: Kill must close the pane, not
+// only the tab, or the session outlives the close (#207).
+func TestHerdrKillClosesAMovedPane(t *testing.T) {
+	closed := false
+	f := &fake{}
+	f.handler = func(_ string, a []string) Result {
+		switch a[0] + " " + a[1] {
+		case "agent get":
+			return Result{Stdout: agentJSON("idle")}
+		case "pane process-info":
+			return Result{Stdout: `{"result":{"process_info":{"foreground_processes":[{"pid":10}],"shell_pid":9}}}`}
+		case "tab close":
+			return Result{ExitCode: 1, Stderr: herdrErr("tab_not_found")} // the tab is gone
+		case "pane close":
+			closed = true
+		case "tab get":
+			return Result{ExitCode: 1, Stderr: herdrErr("tab_not_found")}
+		}
+		return Result{}
+	}
+	d := deps(f, herdrEnv, &clock{})
+	d.Alive = func(int) bool { return !closed }
+	if err := New("herdr", d).Kill(bg, "w1", "w9:t7"); err != nil {
+		t.Fatalf("Kill = %v\n%s", err, f.log())
+	}
+	if !strings.Contains(f.log(), "pane close ") {
+		t.Errorf("want a pane close:\n%s", f.log())
+	}
+}
+
+// A worker that exited leaves a bare shell, possibly in another tab. Only the
+// agentless, shell-only pane in the worktree is closed.
+func TestHerdrSweepShells(t *testing.T) {
+	const list = `{"result":{"panes":[
+{"pane_id":"w1:p3","tab_id":"w1:t2","cwd":"/wt/ben","agent_status":"unknown"},
+{"pane_id":"w1:p4","tab_id":"w1:t2","cwd":"/wt/ben","agent":"claude","agent_status":"idle"},
+{"pane_id":"w1:p5","tab_id":"w1:t2","cwd":"/wt/dana","agent_status":"unknown"},
+{"pane_id":"w1:p6","tab_id":"w1:t2","cwd":"/wt/ben","agent_status":"unknown"}]}}`
+	f := &fake{}
+	f.handler = func(_ string, a []string) Result {
+		switch a[0] + " " + a[1] {
+		case "pane list":
+			return Result{Stdout: list}
+		case "pane process-info":
+			if a[len(a)-1] == "w1:p6" { // a pane running something other than a shell
+				return Result{Stdout: `{"result":{"process_info":{"foreground_processes":[{"name":"vim"}]}}}`}
+			}
+			return Result{Stdout: `{"result":{"process_info":{"foreground_processes":[{"name":"zsh"}]}}}`}
+		}
+		return Result{}
+	}
+	n, err := New("herdr", deps(f, herdrEnv, &clock{})).(PaneSweeper).SweepShells(bg, "/wt/ben")
+	if err != nil || n != 1 {
+		t.Fatalf("SweepShells = %d, %v", n, err)
+	}
+	log := f.log()
+	if !strings.Contains(log, "pane close w1:p3") || strings.Contains(log, "pane close w1:p4") ||
+		strings.Contains(log, "pane close w1:p5") || strings.Contains(log, "pane close w1:p6") {
+		t.Errorf("wrong panes closed:\n%s", log)
+	}
+}

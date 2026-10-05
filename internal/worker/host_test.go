@@ -68,6 +68,16 @@ func (f *fakeHost) Notify(_ context.Context, title, body string) {
 	f.calls = append(f.calls, "notify "+title+" | "+body)
 }
 
+// sweepHost is a herdr-like host that can close leftover shell panes.
+type sweepHost struct {
+	*fakeHost
+}
+
+func (s *sweepHost) SweepShells(_ context.Context, cwd string) (int, error) {
+	s.calls = append(s.calls, "sweep "+filepath.Base(cwd))
+	return 1, nil
+}
+
 func envWith(h host.Host) Env {
 	return Env{NewHost: func(string) host.Host { return h }, Sleep: func(time.Duration) {}, Now: func() time.Time {
 		return time.Date(2026, 10, 2, 15, 4, 5, 0, time.UTC)
@@ -569,5 +579,20 @@ func TestDispatchRelayResendSubmitsUnsentBrief(t *testing.T) {
 	}
 	if strings.Join(f.calls, ",") != "submit-pending w1,send w1 w9:t7" {
 		t.Errorf("calls = %v", f.calls)
+	}
+}
+
+// #207: a task dispatch closes the shell pane an exited worker left behind
+// before it kills the recorded tab, wherever a layout split moved that pane.
+func TestDispatchSweepsLeftoverShellPanesBeforeKill(t *testing.T) {
+	dir := newProject(t, `{}`)
+	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
+	f := &sweepHost{tmuxFake()}
+	if _, err := envWith(f).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "t"), Task: "T1"}); err != nil {
+		t.Fatal(err)
+	}
+	got := strings.Join(f.calls, ",")
+	if i, j := strings.Index(got, "sweep w1"), strings.Index(got, "kill w1"); i < 0 || j < i {
+		t.Errorf("want sweep before kill: %s", got)
 	}
 }

@@ -458,11 +458,17 @@ func (h *herdr) Kill(ctx context.Context, slot, handle string) error {
 	}
 	name := AgentName(slot, handle)
 	var pids []int
-	if pane := jget(h.herdr(ctx, "agent", "get", name).Stdout, "result.agent.pane_id"); pane != "" {
+	pane := jget(h.herdr(ctx, "agent", "get", name).Stdout, "result.agent.pane_id")
+	if pane != "" {
 		pids = processPIDs(h.herdr(ctx, "pane", "process-info", "--pane", pane).Stdout)
 	}
 	h.herdr(ctx, "agent", "prompt", name, "/exit")
 	h.herdr(ctx, "tab", "close", handle)
+	// A `layout split` moves the pane out of its tab, so closing the tab no
+	// longer reaches it: close the pane itself.
+	if pane != "" {
+		h.herdr(ctx, "pane", "close", pane)
+	}
 	alive, ok := killLoop(&h.d, pids, func() bool { return h.herdr(ctx, "tab", "get", handle).ExitCode != 0 })
 	if ok {
 		return nil
