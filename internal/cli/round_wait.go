@@ -61,6 +61,11 @@ func roundWait(fs *flag.FlagSet) RunFunc {
 		d.Set("evidence", res.Evidence)
 		d.Set("source", res.Source)
 		d.Set("waited", res.Waited.Seconds())
-		return Result{Data: d, Text: fmt.Sprintf("%s\t%s\t%s", res.Slot, state, res.Evidence)}, nil
+		text := fmt.Sprintf("%s\t%s\t%s", res.Slot, state, res.Evidence)
+		if res.Note != "" {
+			d.Set("note", res.Note)
+			text += "\t(" + res.Note + ")"
+		}
+		return Result{Data: d, Text: text}, nil
 	}
 }
