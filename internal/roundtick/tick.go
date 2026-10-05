@@ -13,6 +13,7 @@ package roundtick
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -278,7 +279,7 @@ func (e Env) assign(ctx context.Context, r *Result, minted []string) error {
 		return err
 	}
 	for _, c := range cands {
-		if !contains(minted, c.ID) {
+		if !slices.Contains(minted, c.ID) {
 			queue = append(queue, c)
 		}
 	}
@@ -302,15 +303,6 @@ func (e Env) assign(ctx context.Context, r *Result, minted []string) error {
 		}
 	}
 	return nil
-}
-
-func contains(l []string, s string) bool {
-	for _, x := range l {
-		if x == s {
-			return true
-		}
-	}
-	return false
 }
 
 func asRefusal(err error, out **Refusal) bool {

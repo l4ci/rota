@@ -6,6 +6,7 @@ import (
 	gitx "github.com/l4ci/rota/internal/git"
 	"os"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"unicode/utf8"
@@ -146,11 +147,11 @@ func (f *File) Drift(targets []Target) ([]DriftItem, []SymbolDrift, error) {
 				if !ok || len(then) > 0 {
 					continue // the anchor does not resolve here, or the symbol was already there
 				}
-				if !contains(matched, sym) {
+				if !slices.Contains(matched, sym) {
 					matched = append(matched, sym)
 				}
 				for _, p := range now {
-					if p != "" && !contains(files, p) {
+					if p != "" && !slices.Contains(files, p) {
 						files = append(files, p)
 					}
 				}
@@ -170,15 +171,6 @@ func sortedKeys[V any](m map[string]V) []string {
 	}
 	sort.Strings(keys)
 	return keys
-}
-
-func contains(xs []string, x string) bool {
-	for _, y := range xs {
-		if x == y {
-			return true
-		}
-	}
-	return false
 }
 
 // grepFound lists the files that contain symbol at treeish, with the treeish

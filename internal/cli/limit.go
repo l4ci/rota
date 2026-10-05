@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -214,7 +215,7 @@ func buildLimits(ctx context.Context, c *Ctx, root string, cfg any, set limits.S
 			}
 			for _, s := range worker.LoadRegistry(root).Slots() {
 				name := s.Name()
-				if s.Account() != account || !inList(rc.Roster, name) {
+				if s.Account() != account || !slices.Contains(rc.Roster, name) {
 					continue
 				}
 				if round.SlotIssue(s.Task(), s.Branch(), name) == "" && s.State() != "busy" {
@@ -493,13 +494,4 @@ func limitStatusRows(list []limits.Entry) ([]any, []string) {
 		lines = append(lines, limitLine(e))
 	}
 	return limitRows(list), lines
-}
-
-func inList(l []string, s string) bool {
-	for _, x := range l {
-		if x == s {
-			return true
-		}
-	}
-	return false
 }
