@@ -18,7 +18,7 @@
 
 ## Autonomous rounds
 
-The main reason to adopt rota. One always-on orchestrator drives the `rota` CLI. It starts a round, assigns each issue to a worker agent (Claude Code or Codex) in its own git worktree and herdr or tmux tab, waits on the workers without polling, runs the gate and merges. When it needs you, it notifies you and comments on the issue or PR, then works on other items until you answer. Without herdr or tmux it runs the workers as subagents. [Your first round](docs/first-round.md) goes from install to a finished round in herdr; [parallel rounds](docs/usage/parallel-rounds.md) has the details.
+The main reason to adopt rota. One always-on orchestrator drives the `rota` CLI. It starts a round, assigns each issue to a worker agent (Claude Code or Codex) in its own git worktree and herdr or tmux tab, waits on the workers without polling, runs the gate and merges. When it needs you, it notifies you and comments on the issue or PR, then works on other items until you answer. Without herdr or tmux it runs the workers as subagents. [Your first round](docs/first-round.md) goes from install to a finished round in herdr or tmux; [parallel rounds](docs/usage/parallel-rounds.md) has the details.
 
 Rounds hold up over hours because state persists. `KNOWLEDGE.md` and `DECISIONS.md` carry what earlier work learned and committed to. Handoff notes carry a half-finished task across a `/clear` or a restart. Issues say what work exists; `.rota/` says who is doing it now.
 
