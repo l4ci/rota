@@ -75,7 +75,7 @@ func (u *Umbrella) NextMilestoneID() (string, error) {
 	for _, found := range set {
 		for _, nm := range found {
 			if id, _, ok := parseMSTitle(nm.Title); ok {
-				if n, err := atoi(id[1:]); err == nil {
+				if n, err := Atoi(id[1:]); err == nil {
 					highest = max(highest, n)
 				}
 			}

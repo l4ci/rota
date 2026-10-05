@@ -160,7 +160,7 @@ func (b *Issues) NextMilestoneID() (string, error) {
 	highest := 0
 	for _, nm := range found {
 		if id, _, ok := parseMSTitle(nm.Title); ok {
-			if n, err := atoi(id[1:]); err == nil {
+			if n, err := Atoi(id[1:]); err == nil {
 				highest = max(highest, n)
 			}
 		}
@@ -182,7 +182,7 @@ func (b *Issues) MilestoneAdd(mid, title, summary string, depends []string, toda
 	}
 	native := mid + " — " + title
 	labels := []string{config.Label(b.Cfg, "milestoneTracker"), msStatusPrefix + "planned"}
-	if err := mt.EnsureLabels(b.ctx(), labels, b.autoCreate()); err != nil {
+	if err := mt.EnsureLabels(b.ctx(), labels, b.AutoCreate()); err != nil {
 		return "", err
 	}
 	if _, err := mt.CreateMilestone(b.ctx(), native, oneLine(summary)); err != nil {
@@ -289,7 +289,7 @@ func (b *Issues) MilestoneStatus(mid, status string) error {
 		}
 	}
 	if !has(is.Labels, label) {
-		if err := mt.AddLabels(b.ctx(), n, []string{label}, b.autoCreate()); err != nil {
+		if err := mt.AddLabels(b.ctx(), n, []string{label}, b.AutoCreate()); err != nil {
 			return err
 		}
 	}
@@ -436,7 +436,7 @@ func (b *Issues) slicePartsOf(n int) (map[string][]slicePart, error) {
 		}
 		idx := 1
 		if m[4] >= 0 {
-			if idx, err = atoi(body[m[4]:m[5]]); err != nil {
+			if idx, err = Atoi(body[m[4]:m[5]]); err != nil {
 				return nil, err
 			}
 		}
@@ -446,8 +446,8 @@ func (b *Issues) slicePartsOf(n int) (map[string][]slicePart, error) {
 }
 
 func unitLess(a, b string) bool {
-	x, ea := atoi(a[1:])
-	y, eb := atoi(b[1:])
+	x, ea := Atoi(a[1:])
+	y, eb := Atoi(b[1:])
 	if ea == nil && eb == nil && x != y {
 		return x < y
 	}
