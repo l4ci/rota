@@ -270,13 +270,13 @@ func buildLimits(ctx context.Context, c *Ctx, root string, cfg any, set limits.S
 	}
 	rig := &limitRig{Cancel: func() {}}
 
-	var feed *outputFeed
+	var feed *limits.Feed
 	if kind == "herdr" {
 		ow, ok := h.(host.OutputWatcher)
 		if !ok {
 			return nil, &Error{Exit: ExitUnavailable, Message: "herdr cannot watch pane output"}
 		}
-		f, err := startOutputFeed(ctx, ow, targets, worker.LimitRegex(), tick)
+		f, err := limits.NewFeed(ctx, ow, targets, worker.LimitRegex(), tick)
 		switch {
 		case errors.Is(err, host.ErrUnsupportedHerdr):
 			return nil, &Error{Exit: ExitUnavailable, Message: err.Error()}
@@ -285,148 +285,20 @@ func buildLimits(ctx context.Context, c *Ctx, root string, cfg any, set limits.S
 			d.Poll = true
 		default:
 			feed = f
-			rig.Feed, rig.Cancel = f.out, f.stop
+			rig.Feed, rig.Cancel = f.Matches(), f.Stop
 		}
 	} else {
 		d.Poll = true
 	}
 	rig.W = limits.New(d)
 	if feed != nil {
-		feed.onDegrade = func(err error) {
+		feed.OnDegrade = func(err error) {
 			warn("herdr output events stopped (%v); capturing the panes every %s instead", err, tick)
 			rig.W.SetPoll(true)
 		}
-		feed.start()
+		feed.Start()
 	}
 	return rig, nil
-}
-
-// outputFeed turns herdr's pane.output_matched events into limits.Matches. It
-// subscribes to the panes known at the start and again whenever the set of
-// panes changes (a slot dispatched later), and reports a dead stream.
-type outputFeed struct {
-	ow        host.OutputWatcher
-	targets   func(ctx context.Context) []limits.Target
-	regex     string
-	tick      time.Duration
-	ctx       context.Context
-	cancel    context.CancelFunc
-	out       chan limits.Match
-	cur       host.OutputWatch
-	key       string
-	sessions  map[string]string // pane -> session
-	onDegrade func(error)
-	done      chan struct{}
-}
-
-func startOutputFeed(ctx context.Context, ow host.OutputWatcher, targets func(context.Context) []limits.Target, regex string, tick time.Duration) (*outputFeed, error) {
-	fctx, cancel := context.WithCancel(ctx)
-	f := &outputFeed{ow: ow, targets: targets, regex: regex, tick: tick, ctx: fctx, cancel: cancel,
-		out: make(chan limits.Match, 64), done: make(chan struct{})}
-	if err := f.subscribe(); err != nil {
-		cancel()
-		return nil, err
-	}
-	return f, nil
-}
-
-func (f *outputFeed) stop() {
-	f.cancel()
-	<-f.done
-}
-
-// subscribe opens a subscription for the current panes, replacing the old one.
-func (f *outputFeed) subscribe() error {
-	ts := f.targets(f.ctx)
-	panes := make([]string, 0, len(ts))
-	sessions := map[string]string{}
-	for _, t := range ts {
-		panes = append(panes, t.Pane)
-		sessions[t.Pane] = t.Session
-	}
-	key := strings.Join(panes, ",")
-	w, err := f.ow.WatchOutput(f.ctx, panes, f.regex)
-	if err != nil {
-		return err
-	}
-	if f.cur != nil {
-		f.cur.Close()
-	}
-	f.cur, f.key, f.sessions = w, key, sessions
-	return nil
-}
-
-type feedMsg struct {
-	m   host.OutputMatch
-	err error
-}
-
-func (f *outputFeed) start() {
-	go func() {
-		defer close(f.done)
-		defer func() {
-			if f.cur != nil {
-				f.cur.Close()
-			}
-		}()
-		tick := time.NewTicker(f.tick)
-		defer tick.Stop()
-		var msgs chan feedMsg
-		read := func(w host.OutputWatch) chan feedMsg {
-			ch := make(chan feedMsg, 1)
-			go func() {
-				for {
-					m, err := w.Next(f.ctx)
-					select {
-					case ch <- feedMsg{m, err}:
-					case <-f.ctx.Done():
-						return
-					}
-					if err != nil {
-						return
-					}
-				}
-			}()
-			return ch
-		}
-		msgs = read(f.cur)
-		for {
-			select {
-			case <-f.ctx.Done():
-				return
-			case r := <-msgs:
-				if r.err != nil {
-					// The stream is dead: try once to open it again.
-					msgs = nil
-					if err := f.subscribe(); err != nil {
-						f.onDegrade(err)
-						return
-					}
-					msgs = read(f.cur)
-					continue
-				}
-				if s := f.sessions[r.m.Pane]; s != "" {
-					select {
-					case f.out <- limits.Match{Session: s, Line: r.m.Line, Text: r.m.Text}:
-					case <-f.ctx.Done():
-						return
-					}
-				}
-			case <-tick.C:
-				// a slot dispatched since the subscription has no events yet
-				ts := f.targets(f.ctx)
-				panes := make([]string, 0, len(ts))
-				for _, t := range ts {
-					panes = append(panes, t.Pane)
-				}
-				if strings.Join(panes, ",") != f.key {
-					if err := f.subscribe(); err == nil {
-						msgs = read(f.cur)
-					}
-				}
-			}
-		}
-	}()
 }
 
 // limitsLoop is the loop the supervisor runs beside its child. Failures are
