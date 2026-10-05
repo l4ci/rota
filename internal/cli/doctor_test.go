@@ -12,7 +12,12 @@ import (
 func doctorFakes(t *testing.T, tools map[string]string) {
 	t.Helper()
 	dir := t.TempDir()
+	// jq is a doctor check too; every fake PATH carries one unless a test sets its own.
+	all := map[string]string{"jq": "exit 0"}
 	for name, body := range tools {
+		all[name] = body
+	}
+	for name, body := range all {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte("#!/bin/sh\n"+body+"\n"), 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -39,7 +44,7 @@ func doctorData(t *testing.T, out string) (bool, map[string]map[string]any) {
 		byName[c["name"].(string)] = c
 		order += c["name"].(string) + ","
 	}
-	if order != "git,host,tracker,accounts,hook,statusline,stop-hook,switch,skills,codex," {
+	if order != "git,jq,host,tracker,accounts,hook,statusline,stop-hook,switch,skills,codex," {
 		t.Errorf("check order %s", order)
 	}
 	return env.Data.OK, byName

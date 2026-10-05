@@ -21,6 +21,7 @@ never exits 5.
 | Check | Looks at | Skips when |
 |---|---|---|
 | `git` | git on `PATH`, and `.worktrees/` gitignored | never |
+| `jq` | `jq` on `PATH`; the skills read fields from `rota … --json` output with it | never |
 | `host` | the host a round would run on: `work.dispatch` as named, or with it unset or `subagent`, herdr inside a herdr pane, else tmux inside tmux. herdr on `PATH` and 0.9.x, or tmux on `PATH` | no host is detected (solo needs none) |
 | `tracker` | `gh` or `glab` on `PATH` and authenticated, for the provider `origin` names (else `issues.provider`) | `origin` names neither GitHub nor GitLab, and `issues.provider` is not set |
 | `accounts` | every account in `work.accounts` has an existing `configDir` with a credentials file | no accounts configured |

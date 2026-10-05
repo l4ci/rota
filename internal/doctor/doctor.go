@@ -1,5 +1,5 @@
 // Package doctor is the logic behind `rota doctor`: one read-only preflight
-// check per thing a parallel round depends on (git, the dispatch host, the
+// check per thing a parallel round depends on (git, jq, the dispatch host, the
 // forge CLI, the worker accounts, herdr's agent integration, the installed skills).
 //
 // Nothing here reaches os/exec or the real PATH directly: the caller injects
@@ -120,7 +120,7 @@ type Input struct {
 func Run(ctx context.Context, in Input) Report {
 	d := &runner{in: in, ctx: ctx}
 	checks := []Check{
-		d.git(), d.host(), d.tracker(), d.accounts(), d.hook(), d.statusline(), d.stopHook(), d.switchCheck(), d.skills(), d.codex(),
+		d.git(), d.jq(), d.host(), d.tracker(), d.accounts(), d.hook(), d.statusline(), d.stopHook(), d.switchCheck(), d.skills(), d.codex(),
 	}
 	if c, ok := d.disk(); ok {
 		// Only a volume below the threshold adds a line: a healthy one stays
@@ -167,6 +167,15 @@ func (d *runner) git() Check {
 	default:
 		return fail("git", "not inside a git repository", "run: git init")
 	}
+}
+
+// jq is a skill dependency, not a round one: the skills read fields out of
+// `rota … --json` with it, and a missing jq fails them halfway through a write.
+func (d *runner) jq() Check {
+	if _, ok := d.in.Look("jq"); !ok {
+		return fail("jq", "jq not found on PATH", "install jq (skills read rota --json output with it)")
+	}
+	return pass("jq", "jq on PATH")
 }
 
 var versionRe = regexp.MustCompile(`(\d+)\.(\d+)\.(\d+)`)

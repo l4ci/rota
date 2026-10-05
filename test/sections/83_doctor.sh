@@ -8,7 +8,7 @@ trap 'rm -rf "$TMP_DR"' EXIT
 
 DR_BIN="$TMP_DR/bin"
 mkdir -p "$DR_BIN"
-ln -s "$(command -v git)" "$DR_BIN/git"
+ln -s "$(command -v git)" "$DR_BIN/git"; printf '#!/bin/sh\nexit 0\n' > "$DR_BIN/jq"; chmod +x "$DR_BIN/jq"
 dr_herdr() { # dr_herdr <version>: a fake herdr; "installed" in CLAUDE_CONFIG_DIR means the claude hook is current
   cat >"$DR_BIN/herdr" <<FAKE
 #!/bin/sh
@@ -53,7 +53,7 @@ rc=0; OUT="$(dr_run "$TMP_DR/proj")" || rc=$?
 [ "$rc" -eq 0 ] || fail "C6[a]: healthy project exited $rc: $OUT"
 [ "$(printf '%s' "$OUT" | dr_ok)" = "True" ] || fail "C6[a]: ok is not true: $OUT"
 NAMES="$(printf '%s' "$OUT" | python3 -c 'import json,sys; print(",".join(c["name"] for c in json.load(sys.stdin)["data"]["checks"]))')"
-[ "$NAMES" = "git,host,tracker,accounts,hook,statusline,stop-hook,switch,skills,codex" ] || fail "C6[a]: checks were: $NAMES"
+[ "$NAMES" = "git,jq,host,tracker,accounts,hook,statusline,stop-hook,switch,skills,codex" ] || fail "C6[a]: checks were: $NAMES"
 for pair in git:pass host:pass tracker:skip accounts:pass hook:pass statusline:skip stop-hook:skip skills:skip codex:skip; do
   [ "$(printf '%s' "$OUT" | dr_field "${pair%%:*}" status)" = "${pair##*:}" ] || fail "C6[a]: ${pair%%:*} was not ${pair##*:}: $OUT"
 done

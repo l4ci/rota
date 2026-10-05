@@ -64,7 +64,7 @@ Size: **mech** is a wording or deletion fix with no behaviour change. **large** 
 | rota-spike | Concise | One umbrella fact stated four times; duplicate principles | Keep once | large | #281 |
 | rota-vision | Templates | Milestone proposal format is a run-on sentence | Add a template | large | #276 |
 | rota-brainstorm | — | No finding beyond the shared items | — | — | — |
-| rota-capture, rota-plan, rota-vision, rota-spike | Don't assume tools are installed | `… --json \| jq -r .data.<field>`; `rota doctor` checks `git` and `gh`, not `jq` | Doctor check, or a field flag on the verbs | large | #282 |
+| rota-capture, rota-plan, rota-vision, rota-spike | Don't assume tools are installed | `… --json \| jq -r .data.<field>`; `rota doctor` checks `git` and `gh`, not `jq` (fixed in #282: doctor now checks `jq`) | Doctor check, or a field flag on the verbs | large | #282 |
 | all | Evaluations | No skill has an evaluation; none is tested across Haiku, Sonnet and Opus | Write scenarios for the core skills | large | #279 |
 
 ## Findings in references

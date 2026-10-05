@@ -61,7 +61,7 @@ func TestRunTable(t *testing.T) {
 	os.MkdirAll(nocred, 0o755)
 	cur, miss := fixture(t, "integration_status_current.txt"), fixture(t, "integration_status_missing.txt")
 
-	all := map[string]bool{"git": true, "herdr": true, "tmux": true, "gh": true, "glab": true}
+	all := map[string]bool{"git": true, "jq": true, "herdr": true, "tmux": true, "gh": true, "glab": true}
 	base := map[string]Result{
 		"git check-ignore -q .worktrees/x": {},
 		"git remote get-url origin":        {Stdout: "git@github.com:a/b.git\n"},
@@ -115,6 +115,8 @@ func TestRunTable(t *testing.T) {
 	}{
 		{"git ok", Input{}, all, with(nil), "git", Pass, "gitignored", ""},
 		{"git missing", Input{}, without("git"), with(nil), "git", Fail, "not found", "install git"},
+		{"jq ok", Input{}, all, with(nil), "jq", Pass, "on PATH", ""},
+		{"jq missing", Input{}, without("jq"), with(nil), "jq", Fail, "jq not found", "install jq"},
 		{"worktrees not ignored", Input{}, all, with(map[string]Result{"git check-ignore -q .worktrees/x": {ExitCode: 1}}), "git", Fail, "not gitignored", "rota init"},
 		{"not a repo", Input{}, all, with(map[string]Result{"git check-ignore -q .worktrees/x": {ExitCode: 128}}), "git", Fail, "not inside", "git init"},
 
@@ -202,7 +204,7 @@ func TestOrderAndOK(t *testing.T) {
 	for _, c := range r.Checks {
 		names = append(names, c.Name)
 	}
-	if got := strings.Join(names, ","); got != "git,host,tracker,accounts,hook,statusline,stop-hook,switch,skills,codex" {
+	if got := strings.Join(names, ","); got != "git,jq,host,tracker,accounts,hook,statusline,stop-hook,switch,skills,codex" {
 		t.Errorf("order %s", got)
 	}
 	if r.OK() {
