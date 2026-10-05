@@ -17,6 +17,7 @@ See KNOWLEDGE.md "Skill Authoring: Prose & References" for the conventions that 
 | [`handoff-template.md`](handoff-template.md) | Handoff-note template written by `/rota-pause` and read by `/rota-work` (no argument). | `/rota-pause` |
 | [`humanizing-prose.md`](humanizing-prose.md) | Rule sheet + silent self-audit pass applied to user-facing prose (release notes, PR body, doc-page edits) before the draft is shown to the user. | `/rota-release`, `/rota-ship` |
 | [`isolation-patterns.md`](isolation-patterns.md) | Branch / worktree creation patterns per work.isolation + umbrella mode. | `/rota-work` |
+| [`task-ledger.md`](task-ledger.md) | `Task:` commit trailer written per task and read on resume to skip finished tasks. | `/rota-pause`, `/rota-work` |
 | [`work-preview.md`](work-preview.md) | `/rota-work --preview` procedure and peek template. | `/rota-work` |
 | [`work-toolchain-siblings.md`](work-toolchain-siblings.md) | Tool-generated sibling patterns and the sweep commit. | `/rota-work` |
 | [`work-wave-planning.md`](work-wave-planning.md) | File and shared-symbol collisions, brief rules, verifying a completion. | `/rota-work` |
