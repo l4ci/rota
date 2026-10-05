@@ -18,8 +18,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-
-	"github.com/l4ci/rota/internal/config"
 )
 
 // Harness kinds of a worker.
@@ -196,10 +194,4 @@ type Orchestrator interface {
 // Orchestrators is the launch table, in the order the error message lists it.
 func Orchestrators() []Orchestrator {
 	return []Orchestrator{claude{}, codex{}, hermes{}, opencode{}}
-}
-
-func str(cfg any, key string) string {
-	v, _ := config.Lookup(cfg, key)
-	s, _ := v.(string)
-	return s
 }

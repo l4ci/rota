@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
-	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/land"
 	"github.com/l4ci/rota/internal/pystr"
 )
 
@@ -26,6 +26,15 @@ func MergeBranch(p MergePorts, branch, base, msg string) (string, error) {
 	if base == branch {
 		return "", &Refusal{By: "base branch", Msg: "'" + branch + "' is the base branch"}
 	}
+	// The commit the gates judge is the commit that lands: a push to the
+	// branch after this point cannot ride in.
+	pin, err := p.Git.Run("rev-parse", "--verify", "-q", branch+"^{commit}")
+	if err != nil {
+		return "", err
+	}
+	if pin.ExitCode != 0 {
+		return "", &GitError{Msg: "git rev-parse " + branch + ": " + firstLine(pin.Stderr)}
+	}
 	if err := p.Verdict(branch); err != nil {
 		return "", err
 	}
@@ -42,18 +51,16 @@ func MergeBranch(p MergePorts, branch, base, msg string) (string, error) {
 	if co.ExitCode != 0 {
 		return "", &GitError{Msg: "git checkout " + base + ": " + firstLine(co.Stderr)}
 	}
-	// A local merge: there is no forge PR head to pin, the branch tip is the
-	// thing merged. Merges that go through a forge pin via tracker.MergeOpts.
-	mg, err := p.Git.Run("merge", "--no-ff", branch, "-m", msg)
-	if err != nil {
-		return "", err
-	}
-	if mg.ExitCode != 0 {
-		if git.IsMergeConflict(mg.Stdout + mg.Stderr) {
-			p.Git.Run("merge", "--abort")
-			return "", &Refusal{By: "conflict", Msg: "merge conflict; merge aborted"}
+	switch err := land.MergeLocal(p.Git.Run, line(pin.Stdout), msg); {
+	case err == nil:
+	case errors.As(err, new(*land.ConflictError)):
+		return "", &Refusal{By: "conflict", Msg: "merge conflict; merge aborted"}
+	default:
+		var me *land.MergeError
+		if errors.As(err, &me) {
+			return "", &GitError{Msg: "git merge " + branch + ": " + firstLine(me.Out)}
 		}
-		return "", &GitError{Msg: "git merge " + branch + ": " + firstLine(mg.Stderr+mg.Stdout)}
+		return "", err
 	}
 	del, err := p.Git.Run("branch", "-d", branch)
 	if err != nil {

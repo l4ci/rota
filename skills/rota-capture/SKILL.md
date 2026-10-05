@@ -16,7 +16,6 @@ Track the steps below with the host's task tool if it has one.
 | First arg | Mode |
 |-----------|------|
 | `--remove <ID>[,<ID>...]` | [Remove Mode](#remove-mode) |
-| `--from-github` / `--from-gitlab` | Print: *"Import was removed. Under `backlog.backend: "issues"` the issues already are the backlog. On the file backend, create the item by hand: `rota item create --kind <bugs|features|tasks> --title "..." --desc "... GH: #N"`."* Stop. |
 | anything else / nothing | Step 2 onward |
 
 Skip Steps 2 to 7 in Remove Mode.
@@ -150,7 +149,7 @@ Run `rota item rm <IDS>` and show stdout verbatim. If an item has `activeBranch`
 
 > Removing the `in-progress` label upstream is externally visible: collaborators see the issue no longer claimed. The item delete proceeds either way; this decides only whether the label is cleaned up too.
 
-Legacy file-backend items carry `GH: #N` / `GL: #N` tags. Find upstream links: `rota issues imported --json`, keep `data.entries` whose `itemId` is in the removal set. Read the label from `rota config show --json issues.label` (default `in-progress`). No matches: skip to Step R4.
+Find upstream links: `rota issues imported --json`, keep `data.entries` whose `itemId` is in the removal set. Read the label from `rota config show --json issues.label` (default `in-progress`). No matches: skip to Step R4.
 
 Otherwise ask:
 

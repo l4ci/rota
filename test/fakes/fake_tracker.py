@@ -203,7 +203,7 @@ def new_pr(db, tool, title, body, head, base):
     n = db.get(key, 1)
     db[key] = n + 1
     pr = {"number": n, "title": title, "body": body or "", "head": head, "base": base,
-          "state": "open"}
+          "state": "open", "sha": _sha1(("fake-head-%s" % head).encode()).hexdigest()}
     db.setdefault("prs", []).append(pr)
     return pr
 
@@ -211,13 +211,14 @@ def new_pr(db, tool, title, body, head, base):
 def gh_pr(p):
     return {"number": p["number"], "title": p["title"], "body": p["body"],
             "headRefName": p["head"], "baseRefName": p["base"], "state": p["state"].upper(),
+            "headRefOid": p.get("sha", ""),
             "mergeCommit": {"oid": p["merge_sha"]} if p.get("merge_sha") else None,
             "url": "https://github.com/fake/repo/pull/%d" % p["number"]}
 
 
 def gl_mr(p):
     out = {"iid": p["number"], "title": p["title"], "description": p["body"],
-           "source_branch": p["head"], "target_branch": p["base"],
+           "source_branch": p["head"], "target_branch": p["base"], "sha": p.get("sha", ""),
            "state": "opened" if p["state"] == "open" else p["state"],
            "web_url": "https://gitlab.com/fake/repo/-/merge_requests/%d" % p["number"]}
     if p.get("merge_sha"):
@@ -254,6 +255,12 @@ def checkout_pr(p):
         raise Fail("checkout failed: " + r.stderr.strip())
 
 
+def check_pin(p, want):
+    """The forges refuse a pinned merge when the head has moved."""
+    if want and want != p.get("sha"):
+        raise Fail("Head branch was modified. Review the latest changes and try again.")
+
+
 def merge_pr(db, p):
     """Mark merged with a deterministic fake sha; like the real hosts, linked
     issues close automatically only when the base is the default branch."""
@@ -272,7 +279,7 @@ def merge_pr(db, p):
 GH_PR_FLAGS = {"--title": "title", "-t": "title", "--body": "body", "-b": "body",
                "--body-file": "body_file", "-F": "body_file", "--base": "base", "-B": "base",
                "--head": "head", "-H": "head", "--json": "json", "--state": "state", "-s": "state",
-               "--limit": "limit", "-L": "limit"}
+               "--limit": "limit", "-L": "limit", "--match-head-commit": "match_head"}
 GH_PR_BOOLS = ("--merge", "--squash", "--rebase", "--delete-branch", "-d", "-m")
 
 
@@ -301,7 +308,9 @@ def gh_pr_cmd(db, args):
     elif verb == "checkout":
         checkout_pr(find_pr(prs, pos[0]))
     elif verb == "merge":
-        merge_pr(db, find_pr(prs, pos[0]))
+        p = find_pr(prs, pos[0])
+        check_pin(p, one(o, "match_head"))
+        merge_pr(db, p)
     elif verb == "comment":
         find_pr(prs, pos[0]).setdefault("comments", []).append(text_arg(o, "body", "body_file") or "")
         save(db)
@@ -339,7 +348,9 @@ def gl_mr_cmd(db, args):
     elif verb == "checkout":
         checkout_pr(find_pr(prs, pos[0], True))
     elif verb == "merge":
-        merge_pr(db, find_pr(prs, pos[0], True))
+        p = find_pr(prs, pos[0], True)
+        check_pin(p, one(o, "sha"))
+        merge_pr(db, p)
     elif verb == "note":
         find_pr(prs, pos[0], True).setdefault("comments", []).append(one(o, "message", ""))
         save(db)
@@ -702,6 +713,12 @@ def gl_api(db, args):
     method = (method or ("POST" if fields else "GET")).upper()
     if path == "user" and method == "GET":
         return emit({"id": 1, "username": USER})
+    mr = re.match(r"^projects/.+?/merge_requests/(\d+)$", path)
+    if mr and method == "GET":
+        hit = [p for p in db.get("prs", []) if p.get("mr") and p["number"] == int(mr.group(1))]
+        if not hit:
+            raise Fail("404 Not Found")
+        return emit(gl_mr(hit[-1]))
     m = re.match(r"^projects/.+?/((?:milestones|issues).*)$", path)
     if not m:
         raise Fail("unsupported", 2)
