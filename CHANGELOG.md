@@ -1,5 +1,57 @@
 # Changelog
 
+## v0.10.0 — 2026-10-05
+
+Continuous rounds with a sharded merge gate, an easier start, and a large internal cleanup.
+
+### Breaking
+
+- `autonomy.level: loop` is gone. Use `auto`.
+- `rota issues list` and `/rota-capture --from-github`/`--from-gitlab` are removed. With `backlog.backend: issues`, the tracker already is the backlog.
+- `rota-learn` no longer verifies by default. Pass `--strict` to opt in.
+
+### New
+
+- **Getting started.** Bare `rota` runs `rota setup` (an interactive config walkthrough) in a directory without `.rota/`. Otherwise it launches the orchestrator, in a herdr session when you are outside a multiplexer. `rota projects` lists every rota project on the machine.
+- **Continuous rounds.** A slot frees as soon as its PR opens, so workers get the next issue without waiting for the merge. New verbs: `rota round watch` (it wakes the orchestrator on any slot, PR or escalation change), `rota round tick` and `--autopilot` for mechanical assign and gate, `rota worker train` (verify several PRs in one gate), and an `open` round scope.
+- **Automatic architecture review.** After `round.architectureEvery` non-refactor issues (default 20), or when the queue runs dry with a slot idle, the round mints a review item and assigns it. Its findings become issues. A review finishes with `ROTA-DONE <slot> issues:#a,#b` instead of a PR. `/rota-refactor` is now this findings-first review.
+- **Orchestrator harnesses.** Claude Code, Codex, Hermes and opencode can run the orchestrator.
+- **Faster gate.** `test/gate.sh` runs validate, doclint, vet, `go test -race` and four smoke shards at once. It takes about 150 s instead of about 590 s, and only one gate runs per machine. Workers run targeted checks only. The full gate runs once, at merge.
+- **Safer merges.** The gate merges the exact SHA it verified, through the tracker adapter (gh and glab). Releases require a `.minisig` for every asset, and `install.sh` verifies minisign signatures.
+- **Doctor** warns on low disk. The gate fails when tests leak temp files.
+
+### Fixed
+
+- Dispatch submits a brief left unsent on the prompt line, and only when the agent is idle.
+- `round candidates` and `round assign` skip issues that already have an open PR.
+- The tmux host detects a booted Claude Code 2.1.289 pane.
+- Slots stay usable after `rota migrate issues` runs mid-round.
+- Flaky tests are fixed: the fsio concurrent-writers lock budget, the smoke 108 busy pane and the smoke 110 prompt marker.
+
+### Internal
+
+Three architecture reviews ran in this cycle, and every finding is merged. A domain module now owns each of these:
+- the item ID grammar
+- git and subprocess runners (`internal/git`, `internal/proc`)
+- state paths (`rotastate`)
+- backlog backend selection
+- tracker construction
+- the typed worker registry
+- the round host resolver
+- the ship flow (`internal/ship`)
+- migration (`internal/migrate`)
+
+Other changes:
+- Verb files and frozen suites are named by domain instead of by port phase.
+- Every golden can be regenerated with `-update-golden`.
+- The CLI keeps its dependencies on `Ctx` instead of in package globals.
+- Skills are leaner: no banners or task-list ceremony, issue-first IDs, a single review pass and one merge owner.
+
+### Stats
+155 commits, 634 files changed, +30286 −18950 lines
+
+**Full changelog:** https://github.com/l4ci/rota/compare/v0.9.0...v0.10.0
+
 ## v0.9.0 — 2026-10-04
 
 rota was hv-skills. The CLI moved to a new repo with a fresh history, and what would have been hv-skills 5.0 is rota 0.9.0. Older history stays in hv-skills.
