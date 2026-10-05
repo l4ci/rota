@@ -18,7 +18,6 @@ import (
 	"github.com/l4ci/rota/internal/counter"
 	"github.com/l4ci/rota/internal/frontmatter"
 	"github.com/l4ci/rota/internal/fsio"
-	"github.com/l4ci/rota/internal/knowledge"
 	"github.com/l4ci/rota/internal/section"
 )
 
@@ -472,12 +471,11 @@ func IndexFrom(root string, items []Entry, issue bool) (changed bool, err error)
 		body = "_(no milestones yet — run `/rota-vision` to brainstorm)_"
 		intro = "Project milestones live in `.rota/MILESTONES.md`."
 	}
-	target := section.InstructionsFile(root)
-	before, _ := os.ReadFile(target)
-	if _, err := (knowledge.Store{Root: root}).WriteCustomBlock("vision", "## Project Vision\n\n"+intro+"\n\n"+body); err != nil {
+	status, err := section.UpsertManaged(root, "vision", "## Project Vision\n\n"+intro+"\n\n"+body)
+	if err != nil {
 		return changed, err
 	}
-	if after, _ := os.ReadFile(target); string(after) != string(before) {
+	if status != section.Unchanged {
 		changed = true
 	}
 	return changed, nil
