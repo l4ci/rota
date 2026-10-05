@@ -402,14 +402,57 @@ func (g *GitLab) PRCheckout(ctx context.Context, pr int) error {
 	return err
 }
 
+func (g *GitLab) PRView(ctx context.Context, pr int) (PRInfo, error) {
+	var d struct {
+		Source      string `json:"source_branch"`
+		SHA         string `json:"sha"`
+		Target      string `json:"target_branch"`
+		State       string `json:"state"`
+		Description string `json:"description"`
+		Merge       string `json:"merge_commit_sha"`
+		Squash      string `json:"squash_commit_sha"`
+	}
+	if err := g.json(ctx, []string{"api", fmt.Sprintf("projects/:id/merge_requests/%d", pr)}, &d); err != nil {
+		return PRInfo{}, err
+	}
+	if d.Source == "" && d.SHA == "" {
+		return PRInfo{}, failed("cannot read MR %d", pr)
+	}
+	info := PRInfo{Head: d.Source, HeadSHA: d.SHA, Base: d.Target, State: "CLOSED", Body: d.Description, MergeSHA: d.Merge}
+	switch d.State {
+	case "opened":
+		info.State = "OPEN"
+	case "merged":
+		info.State = "MERGED"
+	}
+	if info.MergeSHA == "" {
+		info.MergeSHA = d.Squash
+	}
+	return info, nil
+}
+
+// PRRequestMerge runs `glab mr merge` with auto-merge off.
+func (g *GitLab) PRRequestMerge(ctx context.Context, pr int, o MergeOpts) error {
+	args := []string{"mr", "merge", strconv.Itoa(pr), "--yes"}
+	if o.DeleteBranch {
+		args = append(args, "--remove-source-branch")
+	}
+	args = append(args, "--auto-merge=false")
+	if o.HeadSHA != "" {
+		args = append(args, "--sha", o.HeadSHA)
+	}
+	_, err := g.run(ctx, args, "")
+	return err
+}
+
 // PRMerge merges with auto-merge off (glab otherwise schedules a merge while a
 // pipeline runs, reports success and merges nothing). A squash merge returns
 // the squash commit. A fast-forward or rebase merge has no merge commit: the
 // MR must then be merged and its head an ancestor of origin/<target>, and the
 // head sha is returned.
-func (g *GitLab) PRMerge(ctx context.Context, pr int) (string, error) {
+func (g *GitLab) PRMerge(ctx context.Context, pr int, o MergeOpts) (string, error) {
 	n := strconv.Itoa(pr)
-	if _, err := g.run(ctx, []string{"mr", "merge", n, "--yes", "--remove-source-branch", "--auto-merge=false"}, ""); err != nil {
+	if err := g.PRRequestMerge(ctx, pr, o); err != nil {
 		return "", err
 	}
 	var d struct {

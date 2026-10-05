@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -20,8 +19,8 @@ import (
 )
 
 // The gate tests rebuild smoke section 68's world: a bare origin, a gate
-// checkout on main, a worker clone with a pushed branch w1, and a fake forge
-// (test/fakes/fake_forge.py) that can lie the ways a real one does. Each case
+// checkout on main, a worker clone with a pushed branch w1, and a fake Forge
+// (fakeforge_test.go) that can lie the ways a real one does. Each case
 // runs the Go port and compares the outcome with what the retired shell gate
 // produced, frozen under testdata/golden. The fake forge only talks to the
 // local bare origin.
@@ -121,59 +120,12 @@ func (w *world) forgeWord(key string) string {
 	return s
 }
 
-func fakeForgeScript(t *testing.T) string {
-	p, err := filepath.Abs("../../test/fakes/fake_forge.py")
-	if err != nil {
-		t.Fatal(err)
-	}
-	return p
-}
-
-// pathWith returns a PATH whose first entry holds gh and glab wrappers around
-// the fake forge, plus an optional git shim.
-func (w *world) pathWith(brokenMergeBase bool) string {
-	dir := w.t.TempDir()
-	for _, tool := range []string{"gh", "glab"} {
-		script := fmt.Sprintf("#!/usr/bin/env bash\nFORGE_TOOL=%s exec python3 %q \"$@\"\n", tool, fakeForgeScript(w.t))
-		os.WriteFile(filepath.Join(dir, tool), []byte(script), 0o755)
-	}
-	if brokenMergeBase {
-		realGit, _ := exec.LookPath("git")
-		os.WriteFile(filepath.Join(dir, "git"), []byte(fmt.Sprintf("#!/usr/bin/env bash\n[ \"$1\" = merge-base ] && exit 128\nexec %q \"$@\"\n", realGit)), 0o755)
-	}
-	return dir + string(os.PathListSeparator) + os.Getenv("PATH")
-}
-
-// env builds the Go Env: forge calls run the same fake script through
-// tracker.CLI's Exec, never a real gh or glab.
+// env builds the Go Env around a fake Forge over the world's bare origin.
 func (w *world) env(brokenMergeBase bool) Env {
-	script := fakeForgeScript(w.t)
 	return Env{
 		Sleep:  func(time.Duration) {},
 		Getenv: func(k string) string { return map[string]string{"ROTA_GATE_SHA_WAIT": "0"}[k] },
-	}.withForge(func(provider, dir string) *tracker.CLI {
-		tool := "gh"
-		if provider == "gitlab" {
-			tool = "glab"
-		}
-		return &tracker.CLI{Provider: provider, Dir: dir,
-			LookPath: func(n string) (string, error) { return "/fake/" + n, nil },
-			Exec: func(ctx context.Context, d, name string, args []string, stdin []byte) ([]byte, []byte, int, error) {
-				if name != tool {
-					w.t.Fatalf("forge exec of %q, want only %q", name, tool)
-				}
-				cmd := exec.CommandContext(ctx, "python3", append([]string{script}, args...)...)
-				cmd.Dir = d
-				cmd.Env = append(os.Environ(), "FORGE_TOOL="+tool, "FORGE_DB="+w.forgeDB, "FORGE_LOG="+w.log, "FORGE_MODE="+w.mode)
-				var out, errb strings.Builder
-				cmd.Stdout, cmd.Stderr = &out, &errb
-				err := cmd.Run()
-				if ee, ok := err.(*exec.ExitError); ok {
-					return []byte(out.String()), []byte(errb.String()), ee.ExitCode(), nil
-				}
-				return []byte(out.String()), []byte(errb.String()), 0, err
-			}}
-	}, brokenMergeBase)
+	}.withForge(func(provider, dir string) Forge { return &fakeForge{w: w, provider: provider} }, brokenMergeBase)
 }
 
 func (w *world) gate(brokenMergeBase bool, o GateOpts) (GateResult, error) {
@@ -460,8 +412,8 @@ func TestApprovalsSection(t *testing.T) {
 	}
 }
 
-func (e Env) withForge(f func(provider, dir string) *tracker.CLI, brokenMergeBase bool) Env {
-	e.Forge = func(provider, dir string, _ time.Duration) *tracker.CLI { return f(provider, dir) }
+func (e Env) withForge(f func(provider, dir string) Forge, brokenMergeBase bool) Env {
+	e.Forge = func(provider, dir string, _ time.Duration) (Forge, error) { return f(provider, dir), nil }
 	if brokenMergeBase {
 		realGit := e.Git
 		if realGit == nil {
@@ -511,36 +463,27 @@ func TestGateLocalMergeFailureIsAbortedAndReported(t *testing.T) {
 // anyway (fail open). Only a missing forge CLI may skip now; any other read
 // error is check-broke and nothing merges.
 func TestGateProvenanceFailsClosedWhenTheBodyCannotBeRead(t *testing.T) {
+	// failFrom makes every PRView from the nth call on fail: the first reads
+	// the PR (identity check), the second its body (provenance).
+	failFrom := func(n int, err error) func(Forge) Forge {
+		return func(f Forge) Forge { return &flakyForge{Forge: f, from: n, err: err} }
+	}
 	for name, tc := range map[string]struct {
-		verdict string
-		wrap    func(c *tracker.CLI, w *world)
+		wrap func(Forge) Forge
 	}{
-		"body read exits non-zero": {GateCheckBroke, func(c *tracker.CLI, w *world) {
-			inner := c.Exec
-			c.Exec = func(ctx context.Context, d, n string, a []string, in []byte) ([]byte, []byte, int, error) {
-				if strings.Contains(strings.Join(a, " "), "--json body") {
-					return nil, []byte("HTTP 502"), 1, nil
-				}
-				return inner(ctx, d, n, a, in)
-			}
-		}},
-		"not authenticated": {GateCheckBroke, func(c *tracker.CLI, w *world) {
-			inner := c.Exec
-			c.Exec = func(ctx context.Context, d, n string, a []string, in []byte) ([]byte, []byte, int, error) {
-				if strings.Contains(strings.Join(a, " "), "--json body") {
-					return nil, []byte("gh auth login"), 1, nil
-				}
-				return inner(ctx, d, n, a, in)
-			}
-		}},
+		"body read fails":   {failFrom(2, &tracker.Error{Kind: tracker.KindFailed, Code: 1, Message: "HTTP 502"})},
+		"not authenticated": {failFrom(2, &tracker.Error{Kind: tracker.KindUnavailable, Code: 3, Message: "gh auth login"})},
 	} {
 		t.Run(name, func(t *testing.T) {
 			w := newWorld(t, ghURL)
 			e := w.env(false)
-			forge := e.Forge
-			e.Forge = func(p, d string, r time.Duration) *tracker.CLI { c := forge(p, d, r); tc.wrap(c, w); return c }
+			inner := e.Forge
+			e.Forge = func(p, d string, r time.Duration) (Forge, error) {
+				f, err := inner(p, d, r)
+				return tc.wrap(f), err
+			}
 			res, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main"})
-			if err != nil || res.Verdict != tc.verdict || res.Changed {
+			if err != nil || res.Verdict != GateCheckBroke || res.Changed {
 				t.Fatalf("%+v %v", res, err)
 			}
 			if _, err := os.Stat(filepath.Join(w.dir, "work.txt")); err == nil {
@@ -555,16 +498,29 @@ func TestGateProvenanceFailsClosedWhenTheBodyCannotBeRead(t *testing.T) {
 	// the PR read fails, so the gate stops there instead
 	w := newWorld(t, ghURL)
 	e := w.env(false)
-	forge := e.Forge
-	e.Forge = func(p, d string, r time.Duration) *tracker.CLI {
-		c := forge(p, d, r)
-		c.LookPath = func(string) (string, error) { return "", os.ErrNotExist }
-		return c
+	inner := e.Forge
+	e.Forge = func(p, d string, r time.Duration) (Forge, error) {
+		f, err := inner(p, d, r)
+		return &flakyForge{Forge: f, from: 1, err: &tracker.Error{Kind: tracker.KindUnavailable, Code: 3, Message: "gh is not installed"}}, err
 	}
 	res, _ := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main", CheckOnly: true})
 	if res.Verdict != GateCheckBroke {
 		t.Errorf("PR info needs the CLI too: %+v", res)
 	}
+}
+
+// flakyForge fails every PRView from the from-th call on with err.
+type flakyForge struct {
+	Forge
+	from, calls int
+	err         error
+}
+
+func (f *flakyForge) PRView(ctx context.Context, pr int) (tracker.PRInfo, error) {
+	if f.calls++; f.calls >= f.from {
+		return tracker.PRInfo{}, f.err
+	}
+	return f.Forge.PRView(ctx, pr)
 }
 
 func TestGateRevParseFailureIsCheckBroke(t *testing.T) {
@@ -580,7 +536,7 @@ func TestGateRevParseFailureIsCheckBroke(t *testing.T) {
 	if err != nil || res.Verdict != GateCheckBroke || !strings.Contains(res.Err, "git rev-parse origin/w1 failed") {
 		t.Errorf("%+v %v", res, err)
 	}
-	if strings.Contains(w.logText(), "pr merge") {
+	if strings.Contains(w.logText(), "PRRequestMerge") {
 		t.Error("nothing may be merged")
 	}
 }

@@ -244,10 +244,10 @@ type Env struct {
 	Now func() time.Time
 	// Getenv defaults to os.Getenv (ROTA_GATE_SHA_WAIT).
 	Getenv func(string) string
-	// Forge returns the forge CLI runner for a provider ("github" or
-	// "gitlab") running in dir. Every forge call goes through internal/tracker,
-	// never an exec of gh or glab from here. Tests inject a fake Exec.
-	Forge func(provider, dir string, retryWait time.Duration) *tracker.CLI
+	// Forge returns the forge a provider ("github" or "gitlab") runs in dir.
+	// Every forge call goes through internal/tracker, never an exec of gh or
+	// glab from here. Tests inject a fake Forge.
+	Forge func(provider, dir string, retryWait time.Duration) (Forge, error)
 	// Shell runs one verification command through `sh -c` in dir and returns
 	// its combined output and exit code.
 	Shell func(ctx context.Context, dir, command string) (output string, code int)
@@ -287,8 +287,8 @@ func (e Env) withDefaults() Env {
 		e.Getenv = os.Getenv
 	}
 	if e.Forge == nil {
-		e.Forge = func(provider, dir string, wait time.Duration) *tracker.CLI {
-			return &tracker.CLI{Provider: provider, Dir: dir, RetryWait: wait}
+		e.Forge = func(provider, dir string, wait time.Duration) (Forge, error) {
+			return tracker.New(e.context(), tracker.Settings{Provider: provider, RetryWait: wait}, provider, dir)
 		}
 	}
 	if e.Shell == nil {
