@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
-	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -24,7 +23,7 @@ var reClaimID = regexp.MustCompile(`^([a-z][a-z0-9-]*)@\d+$`)
 // hold that issue. Only a claim that is gone has a repair (clear the claimId);
 // the tracker is the source of truth and is never edited. Needs the Board and,
 // for the second shape, the labelled issues; file mode has no claims to read.
-func (e Env) claimFindings(ctx context.Context, rep *Report, rows []*Row, slotObj map[string]*worker.Slot, queued []*jsonx.Object, labelled map[int]bool, labelsOK bool) {
+func (e Env) claimFindings(ctx context.Context, rep *Report, rows []*Row, slotObj map[string]*worker.Slot, queued []worker.QueuedPR, labelled map[int]bool, labelsOK bool) {
 	if e.Board == nil {
 		return
 	}
@@ -71,7 +70,7 @@ func (e Env) claimFindings(ctx context.Context, rep *Report, rows []*Row, slotOb
 			continue
 		}
 		held[id] = true
-		want := worker.Str(q, "claimId")
+		want := q.ClaimID
 		if want == "" {
 			continue
 		}

@@ -96,16 +96,7 @@ func (e Env) Start(ctx context.Context, root string, o StartOpts) (Started, erro
 	}
 	le := e.leaseEnv()
 	holder := le.Discover(o.HolderPID, o.Getenv)
-	prev := 0
-	if v, ok := worker.LoadRegistry(root).Doc.Get("round"); ok {
-		switch t := v.(type) {
-		case float64:
-			prev = int(t)
-		case interface{ Int64() (int64, error) }:
-			i, _ := t.Int64()
-			prev = int(i)
-		}
-	}
+	prev, _ := worker.LoadRegistry(root).Round()
 	l, out, stale, err := le.Acquire(cd, root, holder, prev+1)
 	if err != nil {
 		if held, ok := err.(*roundlease.HeldError); ok {
@@ -150,23 +141,23 @@ func (e Env) Start(ctx context.Context, root string, o StartOpts) (Started, erro
 	res.Changed = pool.Changed || out != roundlease.Renewed
 	res.Warnings = append(res.Warnings, pool.Warnings...)
 
-	if err := worker.UpdateDoc(root, func(doc *jsonx.Object) {
+	if err := worker.Update(root, func(doc *worker.Doc) {
 		if out != roundlease.Renewed { // taken, reclaimed or numbered
-			doc.Set("round", l.Round)
+			doc.SetRound(l.Round)
 		}
 		// The host is chosen once per round: a restarted start keeps it, a new
 		// round (a newly taken lease) resolves again.
-		if rec := worker.Str(doc, "host"); rec != "" && out == roundlease.Renewed {
+		if rec := doc.Host(); rec != "" && out == roundlease.Renewed {
 			res.Host = rec
 		} else {
 			res.Host = host.Resolve("", o.Dispatch, o.Getenv, o.LookPath)
-			doc.Set("host", res.Host)
+			doc.SetHost(res.Host)
 		}
-		doc.Set("scope", scope)
+		doc.SetScope(scope)
 		if scope == roundcfg.ScopeSlate {
-			doc.Set("slate", strs2any(slate))
+			doc.SetSlate(slate)
 		} else {
-			doc.Delete("slate")
+			doc.ClearSlate()
 		}
 	}); err != nil {
 		return res, err
@@ -187,20 +178,8 @@ func (e Env) Start(ctx context.Context, root string, o StartOpts) (Started, erro
 
 // SlateOf is the recorded slate and scope of the round, "" and nil when none.
 func SlateOf(root string) (scope string, slate []string) {
-	doc := worker.LoadRegistry(root).Doc
-	if v, ok := doc.Get("scope"); ok {
-		scope, _ = v.(string)
-	}
-	if v, ok := doc.Get("slate"); ok {
-		if l, ok := v.([]any); ok {
-			for _, e := range l {
-				if s, ok := e.(string); ok {
-					slate = append(slate, s)
-				}
-			}
-		}
-	}
-	return
+	reg := worker.LoadRegistry(root)
+	return reg.Scope(), reg.Slate()
 }
 
 func normaliseSlate(items []string) []string {

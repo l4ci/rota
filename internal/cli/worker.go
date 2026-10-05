@@ -70,8 +70,9 @@ func slotList(slots []*jsonx.Object) []any {
 	return out
 }
 
-func slotLine(s *jsonx.Object) string {
-	return strings.Join([]string{worker.Str(s, "name"), worker.Str(s, "state"), worker.Str(s, "branch"), worker.Str(s, "worktree")}, "\t")
+func slotLine(o *jsonx.Object) string {
+	s := worker.AsSlot(o)
+	return strings.Join([]string{s.Name(), s.State(), s.Branch(), s.Worktree()}, "\t")
 }
 
 func poolInit(fs *flag.FlagSet) RunFunc {
@@ -714,7 +715,7 @@ func workerGate(fs *flag.FlagSet) RunFunc {
 // recorded PR, else the slot's issue. The argument may also be a PR ref, which
 // resolves to a queued PR record. Neither is exit 2.
 func slotApprovalThread(root, slot string) (approvalThread, error) {
-	s, queued, err := worker.LoadRegistry(root).GateTarget(slot)
+	t, err := worker.LoadRegistry(root).GateTarget(slot)
 	if err != nil {
 		var we *exitcode.Error
 		if errors.As(err, &we) && we.Exit == exitcode.ExitResolution {
@@ -724,15 +725,12 @@ func slotApprovalThread(root, slot string) (approvalThread, error) {
 	}
 	// The arg may have been a PR ref. A queued record's slot has moved on, so
 	// its thread names none.
-	slot = worker.Str(s, "name")
-	if queued {
-		slot = ""
-	}
-	branch := worker.Str(s, "branch")
-	if n, ok := round.PRNumber(worker.Str(s, "pr")); ok {
+	slot = t.Name
+	branch := t.Branch
+	if n, ok := round.PRNumber(t.PR); ok {
 		return approvalThread{Kind: "pr", Number: n, Slot: slot, Title: fmt.Sprintf("Merge approval: PR #%d", n)}, nil
 	}
-	if n, err := strconv.Atoi(round.SlotIssue(worker.Str(s, "task"), branch, slot)); err == nil {
+	if n, err := strconv.Atoi(round.SlotIssue(t.Task, branch, slot)); err == nil {
 		return approvalThread{Kind: "issue", Number: n, Slot: slot, Title: fmt.Sprintf("Merge approval: %s (%s)", slot, branch)}, nil
 	}
 	return approvalThread{}, Usage("--approval and --escalate need an approval thread: slot %s has no PR and no issue number", slot)

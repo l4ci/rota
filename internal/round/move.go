@@ -17,7 +17,6 @@ import (
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
-	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/tracker"
@@ -68,10 +67,8 @@ func wrap(err error) error {
 }
 
 func registryRound(root string) int {
-	if v, ok := worker.LoadRegistry(root).Doc.Get("round"); ok {
-		return intOf(v)
-	}
-	return 0
+	n, _ := worker.LoadRegistry(root).Round()
+	return n
 }
 
 // holdsLease: this process is the orchestrator the lease names.
@@ -518,7 +515,7 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 		receiver.ClaimID() == o.To+"@"+strconv.Itoa(rnd)
 	// rec: no slot holds the issue but a queued PR does (its slot moved on, or
 	// a transfer from it was left half done).
-	var rec *jsonx.Object
+	var rec *worker.QueuedPR
 	if sender == nil {
 		rec = reg.QueuedIssue(id)
 	}
@@ -533,7 +530,7 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 	case sender != nil:
 		res.From = sender.Name()
 	case rec != nil:
-		res.From = worker.Str(rec, "from")
+		res.From = rec.From
 	default:
 		res.From = o.To
 	}
@@ -613,9 +610,9 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 			}
 			oldClaim = firstNonEmpty(sender.ClaimID(), oldClaim)
 		} else { // a queued PR: already pushed, nothing to park
-			p.Branch = worker.Str(rec, "branch")
+			p.Branch = rec.Branch
 			p.Head = e.queuedHead(ctx, root, p.Branch)
-			oldClaim = firstNonEmpty(worker.Str(rec, "claimId"), oldClaim)
+			oldClaim = firstNonEmpty(rec.ClaimID, oldClaim)
 		}
 		res.Branch, res.Head, res.Salvaged = p.Branch, p.Head, p.Salvaged
 		branch = p.Branch
@@ -639,7 +636,7 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 				if err := freeSlot(root, from, false); err != nil {
 					return res, wrap(err)
 				}
-			} else if err := worker.RemoveQueuedPR(root, worker.Str(rec, "pr")); err != nil {
+			} else if err := worker.RemoveQueuedPR(root, rec.PR); err != nil {
 				return res, wrap(err)
 			}
 			res.Changed = true
@@ -684,12 +681,7 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 		if rec == nil {
 			return nil
 		}
-		pr, relays := worker.Str(rec, "pr"), []any{}
-		if v, _ := rec.Get("relays"); v != nil {
-			if l, ok := v.([]any); ok {
-				relays = append(relays, l...)
-			}
-		}
+		pr, relays := rec.PR, append([]any{}, rec.Relays...)
 		if err := editSlot(root, o.To, func(s *worker.Slot) error {
 			s.SetPR(pr)
 			s.AppendRelays(relays)
@@ -718,7 +710,7 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 	text += fmt.Sprintf("\nThis issue was handed to you by %s. Read its latest rota:handoff comment first (it ends with a `<!-- rota:handoff %s@%d -->` marker), then continue from the pushed work on %s, already checked out in your worktree.\n",
 		res.From, res.From, rnd, branch)
 	if rec != nil {
-		text += fmt.Sprintf("Its PR %s is already open: push to the branch to update it instead of opening another.\n", worker.Str(rec, "pr"))
+		text += fmt.Sprintf("Its PR %s is already open: push to the branch to update it instead of opening another.\n", rec.PR)
 	}
 	if solo {
 		// No pane: mark the receiver busy and hand the brief back.

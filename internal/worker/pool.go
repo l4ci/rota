@@ -211,25 +211,29 @@ func registerSlot(root, name, branch, worktree, base, session, handle string) er
 	def := jsonx.NewObject()
 	def.Set("session", session)
 	def.Set("slots", []any{})
-	return Update(root, def, func(doc *jsonx.Object) {
-		doc.Set("session", session)
-		if _, ok := doc.Get("slots"); !ok {
-			doc.Set("slots", []any{})
+	return update(root, def, func(d *Doc) {
+		d.SetSession(session)
+		if _, ok := d.doc.Get("slots"); !ok {
+			d.doc.Set("slots", []any{})
 		}
-		if existing := (Registry{Doc: doc}).Slot(name); existing == nil {
-			AppendSlot(doc, NewSlot(name, branch, worktree, base, handle))
+		if existing := d.Slot(name); existing == nil {
+			d.AppendSlot(NewSlot(name, branch, worktree, base, handle))
 		} else {
 			existing.Reregister(branch, worktree, base, handle)
 		}
-		SortSlots(doc)
+		d.SortSlots()
 	})
 }
 
 // PoolList returns the registry for `pool list`; ok is false when there is none.
 func PoolList(root string) (session any, round any, slots []*jsonx.Object) {
 	reg := LoadRegistry(root)
-	session, _ = reg.Doc.Get("session")
-	round, _ = reg.Doc.Get("round")
+	if s := reg.Session(); s != "" {
+		session = s
+	}
+	if n, ok := reg.Round(); ok {
+		round = n
+	}
 	for _, s := range reg.Slots() {
 		slots = append(slots, SlotData(s))
 	}
@@ -272,17 +276,14 @@ func (e Env) Reap(root string, names []string, all bool) (reaped []string, err e
 	for _, n := range reaped {
 		gone[n] = true
 	}
-	err = Update(root, slotsDefault(), func(doc *jsonx.Object) {
-		var keep []any
-		for _, s := range (Registry{Doc: doc}).Slots() {
+	err = Update(root, func(d *Doc) {
+		var keep []*Slot
+		for _, s := range d.Slots() {
 			if !gone[s.Name()] {
-				keep = append(keep, s.Raw())
+				keep = append(keep, s)
 			}
 		}
-		if keep == nil {
-			keep = []any{}
-		}
-		doc.Set("slots", keep)
+		d.SetSlots(keep)
 	})
 	return reaped, err
 }

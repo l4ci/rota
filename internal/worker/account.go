@@ -304,7 +304,7 @@ func (a *Accounts) token(configDir string) (string, string) {
 	if oauth == nil {
 		return "", "no access token"
 	}
-	tok := Str(oauth, "accessToken")
+	tok := jsonx.Str(oauth, "accessToken")
 	if tok == "" {
 		return "", "no access token"
 	}

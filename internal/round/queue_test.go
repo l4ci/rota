@@ -24,7 +24,7 @@ func (f *moveFx) finish(t *testing.T, slot, pr string) {
 	}
 }
 
-func (f *moveFx) queued() []*jsonx.Object { return worker.LoadRegistry(f.root).PRs() }
+func (f *moveFx) queued() []worker.QueuedPR { return worker.LoadRegistry(f.root).PRs() }
 
 func TestAssignOntoDoneSlotQueuesItsPR(t *testing.T) {
 	f := newMoveFx(t)
@@ -43,11 +43,10 @@ func TestAssignOntoDoneSlotQueuesItsPR(t *testing.T) {
 		t.Fatalf("one record, have %v", q)
 	}
 	r := q[0]
-	if worker.Str(r, "issue") != "12" || worker.Str(r, "branch") != branch || worker.Str(r, "pr") != pr7 ||
-		worker.Str(r, "from") != "ben" || worker.Str(r, "claimId") != "ben@1" || worker.Str(r, "base") != "main" {
+	if r.Issue != "12" || r.Branch != branch || r.PR != pr7 || r.From != "ben" || r.ClaimID != "ben@1" || r.Base != "main" {
 		t.Errorf("record: %v", r)
 	}
-	if v, _ := r.Get("relays"); len(v.([]any)) != 1 {
+	if len(r.Relays) != 1 {
 		t.Errorf("relays are copied: %v", r)
 	}
 	s := f.slot("ben")
@@ -199,7 +198,7 @@ func TestStatusReportsQueuedPRs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(rep.Queued) != 1 || rep.Queued[0] != (QueuedPR{Issue: "12", PR: pr7, Branch: worker.Str(f.queued()[0], "branch"), From: "ben"}) {
+	if len(rep.Queued) != 1 || rep.Queued[0] != (QueuedPR{Issue: "12", PR: pr7, Branch: f.queued()[0].Branch, From: "ben"}) {
 		t.Errorf("queued: %+v", rep.Queued)
 	}
 	for _, fd := range rep.Findings {
@@ -267,7 +266,7 @@ func TestTransferToParkableReceiverQueuesIt(t *testing.T) {
 		t.Fatalf("%+v %v", res, err)
 	}
 	q := f.queued()
-	if len(q) != 1 || worker.Str(q[0], "issue") != "13" || worker.Str(q[0], "from") != "dana" {
+	if len(q) != 1 || q[0].Issue != "13" || q[0].From != "dana" {
 		t.Errorf("dana's PR is queued: %v", q)
 	}
 	if f.slot("dana").Task() != "12" || f.slot("ben").Task() != "" {
@@ -343,11 +342,7 @@ func TestTransferFromAQueuedRecordToHuman(t *testing.T) {
 func (f *moveFx) mintReview(t *testing.T, id string) {
 	t.Helper()
 	f.be.items[id].Title = ReviewTitle("cli")
-	if err := worker.Update(f.root, jsonx.NewObject(), func(d *jsonx.Object) {
-		o := jsonx.NewObject()
-		o.Set("items", []any{id})
-		d.Set("architectureReview", o)
-	}); err != nil {
+	if err := worker.Update(f.root, func(d *worker.Doc) { d.RecordReviewItems([]string{id}) }); err != nil {
 		t.Fatal(err)
 	}
 }

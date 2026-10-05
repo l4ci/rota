@@ -371,7 +371,7 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 	}
 
 	if q := reg.QueuedIssue(id); q != nil && !resuming {
-		return res, blocked(BlockClaimed, "%s has PR %s in review (from %s): rota round transfer %s --to <slot> picks it up", id, worker.Str(q, "pr"), worker.Str(q, "from"), id)
+		return res, blocked(BlockClaimed, "%s has PR %s in review (from %s): rota round transfer %s --to <slot> picks it up", id, q.PR, q.From, id)
 	}
 
 	if !resuming && !o.AcceptOpenPR {
@@ -436,10 +436,7 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 	}
 
 	// 6. Claim, in-progress, comment.
-	rnd := 0
-	if v, ok := worker.LoadRegistry(root).Doc.Get("round"); ok {
-		rnd = intOf(v)
-	}
+	rnd := registryRound(root)
 	claimID := agent + "@" + strconv.Itoa(rnd)
 	if queue {
 		if err := e.queuePR(ctx, root, be, agent); err != nil {

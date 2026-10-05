@@ -468,7 +468,7 @@ func TestMigrateRemapsRegistryIDs(t *testing.T) {
 	if got := reg.Slot("ben").ClaimID(); got != "ben@1" {
 		t.Errorf("claimId %q", got)
 	}
-	if got := worker.Str(reg.PRs()[0], "issue"); got != "4" {
+	if got := reg.PRs()[0].Issue; got != "4" {
 		t.Errorf("queued issue %q", got)
 	}
 	// rerunning leaves the rewritten IDs alone

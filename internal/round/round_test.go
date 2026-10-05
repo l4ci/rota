@@ -56,24 +56,17 @@ func newRepo(t *testing.T, branches map[string]string, ahead ...string) string {
 	return root
 }
 
-func writeRegistry(t *testing.T, root string, slots ...*jsonx.Object) {
+func writeRegistry(t *testing.T, root string, slots ...*worker.Slot) {
 	t.Helper()
-	err := worker.UpdateDoc(root, func(doc *jsonx.Object) {
-		var l []any
-		for _, s := range slots {
-			l = append(l, s)
-		}
-		doc.Set("slots", l)
-	})
-	if err != nil {
+	if err := worker.Update(root, func(doc *worker.Doc) { doc.SetSlots(slots) }); err != nil {
 		t.Fatal(err)
 	}
 }
 
-func slot(root, name, branch string, mod func(*jsonx.Object)) *jsonx.Object {
-	s := worker.NewSlot(name, branch, filepath.Join(root, ".worktrees", name), "main", "").Raw()
+func slot(root, name, branch string, mod func(*jsonx.Object)) *worker.Slot {
+	s := worker.NewSlot(name, branch, filepath.Join(root, ".worktrees", name), "main", "")
 	if mod != nil {
-		mod(s)
+		mod(s.Raw())
 	}
 	return s
 }
@@ -350,12 +343,12 @@ func TestOpenEscalationsAreReported(t *testing.T) {
 		o.Set("status", status)
 		return o
 	}
-	if err := worker.Update(root, jsonx.NewObject(), func(doc *jsonx.Object) {
-		doc.Set("escalations", []any{
+	if err := worker.UpdateEscalations(root, func([]any) []any {
+		return []any{
 			esc("e1", "kit", "answered", ""),
 			esc("e2", "kit", "pending", "2026-10-03T11:00:00Z"),
 			esc("e3", "", "pending", ""),
-		})
+		}
 	}); err != nil {
 		t.Fatal(err)
 	}

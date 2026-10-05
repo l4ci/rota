@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/backlog"
-	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -17,8 +16,8 @@ import (
 // need the slot), and the issue stays claimed and in progress.
 
 // queuedIssue is the issue a queued record holds, in the backend's spelling.
-func queuedIssue(q *jsonx.Object) string {
-	return strings.ToUpper(strings.TrimPrefix(strings.TrimSpace(worker.Str(q, "issue")), "#"))
+func queuedIssue(q worker.QueuedPR) string {
+	return strings.ToUpper(strings.TrimPrefix(strings.TrimSpace(q.Issue), "#"))
 }
 
 // parkable says whether a slot's PR can be queued so the slot takes new work:
@@ -79,24 +78,16 @@ func (e Env) queuePR(ctx context.Context, root string, be Board, name string) er
 			merged = true
 		}
 	}
-	rec := jsonx.NewObject()
-	rec.Set("issue", slotIssue(s))
-	rec.Set("branch", firstNonEmpty(p.Branch, s.Branch()))
-	rec.Set("pr", pr)
-	rec.Set("base", firstNonEmpty(s.Base(), e.Base))
-	rec.Set("from", name)
-	rec.Set("claimId", s.ClaimID())
-	rec.Set("round", registryRound(root))
-	relays := s.Relays()
-	if relays == nil {
-		relays = []any{}
+	rec := worker.QueuedPR{
+		Issue: slotIssue(s), Branch: firstNonEmpty(p.Branch, s.Branch()), PR: pr,
+		Base: firstNonEmpty(s.Base(), e.Base), From: name, ClaimID: s.ClaimID(),
+		Round: registryRound(root), Relays: s.Relays(),
 	}
-	rec.Set("relays", relays)
-	return worker.UpdateDoc(root, func(doc *jsonx.Object) {
+	return worker.Update(root, func(doc *worker.Doc) {
 		if !merged {
-			worker.QueuePR(doc, rec)
+			doc.QueuePR(rec)
 		}
-		if cur := (worker.Registry{Doc: doc}).Slot(name); cur != nil {
+		if cur := doc.Slot(name); cur != nil {
 			cur.Park(false)
 		}
 	})
