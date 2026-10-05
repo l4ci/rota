@@ -5,13 +5,13 @@ import (
 	"flag"
 	"io"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/gate"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
@@ -30,7 +30,7 @@ func trackerSettings(c *Ctx) tracker.Settings {
 	if err != nil {
 		return tracker.SettingsFromConfig(nil)
 	}
-	return tracker.SettingsFromConfig(config.Load(filepath.Join(root, ".rota", "config.json")))
+	return tracker.SettingsFromConfig(config.Load(rotatree.Config(root)))
 }
 
 // trackerErr maps a tracker failure onto the exit table through its kind.

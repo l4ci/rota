@@ -19,6 +19,7 @@ import (
 
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/rotatree"
 )
 
 // ErrSeed is wrapped by every failure of seeding: a file that is unreadable,
@@ -50,7 +51,7 @@ var seedDirs = []string{"bugs", "features", "tasks", "milestones", "plans", "spi
 func Init(root string) (Result, error) {
 	var res Result
 	before := snapshot(root)
-	rota := filepath.Join(root, ".rota")
+	rota := rotatree.Dir(root)
 	// A corrupt counters.json is refused before anything is written, so exit 70
 	// leaves the tree as it was.
 	if err := checkCounters(filepath.Join(rota, "counters.json")); err != nil {

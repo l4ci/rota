@@ -177,7 +177,7 @@ func backlogFailRead(err error) (Result, error) {
 // unknown number, a type-letter mismatch or a milestone tracker is exit 3
 // before anything is written, and "F7" or "#7" both answer "7" and "F".
 func resolveItem(be backlog.Backend, ref string) (id, typ string, err error) {
-	if be.Name() != "issues" {
+	if !be.Capabilities().Tracker {
 		return ref, backlog.ItemType(ref), nil
 	}
 	it, err := be.Get(ref)

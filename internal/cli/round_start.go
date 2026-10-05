@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/pystr"
+	"github.com/l4ci/rota/internal/rotatree"
 	"os"
 	"strings"
 
@@ -16,7 +17,6 @@ import (
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundlease"
-	"path/filepath"
 )
 
 // The C3 verbs `rota round start` and `rota round candidates`; the lease,
@@ -136,7 +136,7 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 			return Result{}, Usage("--slots must be a positive integer")
 		}
 		ctx := c.Context()
-		cfg := config.Load(filepath.Join(root, ".rota", "config.json"))
+		cfg := config.Load(rotatree.Config(root))
 		def := 3
 		if v, err := config.Value(cfg, "work.workerSlots"); err == nil {
 			if n, ok := v.(interface{ Int64() (int64, error) }); ok {
@@ -178,7 +178,7 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 			return backlogFail(err)
 		}
 		drift := 0
-		if b, ok := be.(round.Board); ok && be.Name() == "issues" {
+		if b, ok := be.(round.Board); ok && be.Capabilities().Tracker {
 			env.Board = b
 		}
 		if rep, err := env.Status(ctx, root); err == nil {

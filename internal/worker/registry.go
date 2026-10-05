@@ -8,9 +8,9 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/rotatree"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
@@ -28,7 +28,7 @@ import (
 func fail(exit int, msg string) *exitcode.Error { return &exitcode.Error{Exit: exit, Message: msg} }
 
 // RegistryPath is the registry file under the project root.
-func RegistryPath(root string) string { return filepath.Join(root, ".rota", "workers.json") }
+func RegistryPath(root string) string { return rotatree.Workers(root) }
 
 // Registry is a loaded .rota/workers.json. The document stays private: callers
 // read it through the accessors and write it through a Doc under Update.
@@ -123,14 +123,6 @@ func (r Registry) Slate() []string {
 	}
 	return out
 }
-
-// Escalations are the raw entries of the escalation list: the escalation
-// package owns that record's shape.
-func (r Registry) Escalations() []*jsonx.Object { return r.objects("escalations") }
-
-// Limits are the raw entries of the limit list: the limits package owns that
-// record's shape.
-func (r Registry) Limits() []*jsonx.Object { return r.objects("limits") }
 
 func (r Registry) objects(key string) []*jsonx.Object {
 	raw, _ := r.doc.Get(key)

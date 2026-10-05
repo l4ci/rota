@@ -22,6 +22,7 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/keepalive"
 	"github.com/l4ci/rota/internal/rotastate"
+	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/roundwatch"
 	"github.com/l4ci/rota/internal/status"
@@ -174,7 +175,7 @@ func hookSetup(c *Ctx, needLeaseFree bool) (hc hookContext, ok bool) {
 	if hc.root == "" {
 		return hc, false
 	}
-	hc.cfg = config.Load(filepath.Join(hc.root, ".rota", "config.json"))
+	hc.cfg = config.Load(rotatree.Config(hc.root))
 	if hc.set, err = hook.LoadSettings(hc.cfg); err != nil {
 		return hc, false // a bad value is a pass, never a block
 	}
@@ -184,7 +185,7 @@ func hookSetup(c *Ctx, needLeaseFree bool) (hc hookContext, ok bool) {
 
 func findHvRoot(dir string) string {
 	for d := dir; d != ""; {
-		if fi, err := os.Stat(filepath.Join(d, ".rota")); err == nil && fi.IsDir() {
+		if rotatree.Exists(d) {
 			return d
 		}
 		p := filepath.Dir(d)

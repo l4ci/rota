@@ -18,6 +18,7 @@ import (
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/pystr"
+	"github.com/l4ci/rota/internal/rotatree"
 )
 
 // Now is the clock stamps are taken from; tests replace it.
@@ -28,7 +29,7 @@ var Now = time.Now
 func Stamp() string { return Now().UTC().Format("2006-01-02T15:04:05Z") }
 
 // Path is the status.json of the project rooted at root.
-func Path(root string) string { return filepath.Join(root, ".rota", "status.json") }
+func Path(root string) string { return rotatree.Status(root) }
 
 // Entry is one active work stream.
 type Entry struct {

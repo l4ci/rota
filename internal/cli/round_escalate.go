@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -15,6 +14,7 @@ import (
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/escalation"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/rotatree"
 )
 
 // escalationEnv is the seam tests replace to inject a clock and a fake host.
@@ -22,7 +22,7 @@ import (
 // swaps the executor there.
 func escalationForge(c *Ctx) func(ctx context.Context, root string) (escalation.Forge, error) {
 	return func(ctx context.Context, root string) (escalation.Forge, error) {
-		cfg := config.Load(filepath.Join(root, ".rota", "config.json"))
+		cfg := config.Load(rotatree.Config(root))
 		return c.deps().forge(ctx, cfg, "", root)
 	}
 }

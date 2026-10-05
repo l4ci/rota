@@ -5,7 +5,6 @@ import (
 	"flag"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"syscall"
 
@@ -13,6 +12,7 @@ import (
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/orchestrate"
+	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -94,7 +94,7 @@ func runOrchestrate(c *Ctx, dry bool) (Result, error) {
 	if res, err := runDoctor(c, nil); err != nil {
 		return res, Failed("doctor reports a failure: no session started").WithHint("fix each fail above (the hint says how), then run rota orchestrate again")
 	}
-	cfg := config.Load(filepath.Join(root, ".rota", "config.json"))
+	cfg := config.Load(rotatree.Config(root))
 	env := c.deps().orchestrateEnv()
 	if env.PickAccount == nil {
 		env.PickAccount = func(root string) (string, bool) {

@@ -12,6 +12,7 @@ import (
 	"github.com/l4ci/rota/internal/layout"
 	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/repos"
+	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -166,7 +167,7 @@ func layoutRoots(c *Ctx, project string) ([]string, error) {
 		if err != nil {
 			return nil, Resolution("%v", err)
 		}
-		if st, err := os.Stat(filepath.Join(abs, ".rota")); err != nil || !st.IsDir() {
+		if !rotatree.Exists(abs) {
 			return nil, Resolution("%s is not a rota project (no .rota/)", project)
 		}
 		return []string{repos.Realpath(abs)}, nil

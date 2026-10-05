@@ -6,13 +6,13 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/skills"
 	"github.com/l4ci/rota/internal/version"
 	"github.com/l4ci/rota/internal/worker"
@@ -112,7 +112,7 @@ func skillsClaudeDirs(home, root string) (dirs, skipped []string) {
 	if root == "" {
 		return dirs, nil
 	}
-	for _, ac := range config.Accounts(config.Load(filepath.Join(root, ".rota", "config.json"))) {
+	for _, ac := range config.Accounts(config.Load(rotatree.Config(root))) {
 		if ac.ConfigDir == "" {
 			continue
 		}

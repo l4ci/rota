@@ -15,6 +15,7 @@ import (
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/pystr"
+	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/section"
 )
 
@@ -90,7 +91,7 @@ func Find(root, kind string, days int, today time.Time) ([]Entry, error) {
 func fmtDate(t time.Time) string { return t.Format("2006-01-02") }
 
 func findMap(root string, days int, today time.Time) ([]Entry, error) {
-	dir := filepath.Join(root, ".rota", "map")
+	dir := rotatree.File(root, rotatree.MapDir)
 	paths, _ := filepath.Glob(filepath.Join(dir, "*.md"))
 	sort.Strings(paths)
 	type ent struct {
@@ -125,7 +126,7 @@ func findMap(root string, days int, today time.Time) ([]Entry, error) {
 }
 
 func findKnowledge(root string, days int, today time.Time) ([]Entry, error) {
-	text, err := fsio.ReadText(filepath.Join(root, ".rota", "KNOWLEDGE.md"))
+	text, err := fsio.ReadText(rotatree.File(root, rotatree.KnowledgeFile))
 	if err != nil {
 		return nil, nil
 	}

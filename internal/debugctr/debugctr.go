@@ -10,8 +10,8 @@ import (
 	"encoding/json"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/rotatree"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -39,7 +39,7 @@ func Open(root string) (*Counter, error) {
 		return nil, exitcode.Errf(exitcode.ExitUnavailable, "could not determine current git branch")
 	}
 	session := strings.ReplaceAll(branch, "/", "-")
-	return &Counter{Session: session, Path: filepath.Join(root, ".rota", "debug", session+".json")}, nil
+	return &Counter{Session: session, Path: rotatree.File(root, rotatree.DebugDir, session+".json")}, nil
 }
 
 func nowISO() string {

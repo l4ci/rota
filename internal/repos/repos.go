@@ -10,6 +10,7 @@ import (
 
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/rotatree"
 )
 
 // Repo is one registered sub-repo: Rel as written in repos.json, Path
@@ -21,7 +22,7 @@ type Repo struct {
 // Load returns root's registered sub-repos in file order. A missing or
 // unreadable registry is empty.
 func Load(root string) []Repo {
-	reg, ok := fsio.LoadJSON(filepath.Join(root, ".rota", "repos.json"), nil).(*jsonx.Object)
+	reg, ok := fsio.LoadJSON(rotatree.Repos(root), nil).(*jsonx.Object)
 	if !ok {
 		return nil
 	}
