@@ -15,6 +15,7 @@ import (
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/proof"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/repos"
 	"github.com/l4ci/rota/internal/ship"
@@ -224,6 +225,13 @@ func shipBody(c *Ctx, args []string) (Result, error) {
 	body, err := ship.Body(shipGitRunner{c, t.Dir}, t.Base, t.Branch, func() (ship.TitleOf, error) {
 		f, err := shipTitles(c, t.CorpusRoot)
 		return ship.TitleOf(f), err
+	}, func(id string) ([]proof.Row, error) {
+		_, st, _, err := openProof(c, id)
+		if err != nil {
+			return nil, err
+		}
+		rows, _, err := proof.Show(st, id)
+		return rows, err
 	})
 	if err != nil {
 		return shipErr(err)

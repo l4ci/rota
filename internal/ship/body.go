@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/proof"
 	"github.com/l4ci/rota/internal/pystr"
 )
 
@@ -18,6 +19,9 @@ func CorpusTitles(corpus string) TitleOf {
 	return func(id string) (string, string, bool) { return backlog.FindOrigin(corpus, id) }
 }
 
+// ProofOf returns an item's proof rows.
+type ProofOf func(id string) ([]proof.Row, error)
+
 // NoCommitsError is a branch with nothing past its base.
 type NoCommitsError struct{ Branch string }
 
@@ -27,7 +31,9 @@ func (e *NoCommitsError) Error() string { return "no commits between base and " 
 // bullet per subject and, for every item ID the commits name, the item's title
 // and the `Closes #n` lines its origin line carries. titles opens the lookup
 // (backlog file or tracker) and is only called when a commit names an item.
-func Body(g Git, base, branch string, titles func() (TitleOf, error)) (string, error) {
+// proofs, when non-nil, adds an "## Evidence" section from those items' proof
+// rows; an item whose rows cannot be read is left out, the body being advisory.
+func Body(g Git, base, branch string, titles func() (TitleOf, error), proofs ProofOf) (string, error) {
 	rng := base + ".." + branch
 	subj, err := g.Run("log", "--no-merges", "--format=%s", rng)
 	if err != nil {
@@ -91,5 +97,31 @@ func Body(g Git, base, branch string, titles func() (TitleOf, error)) (string, e
 			b.WriteString("\n")
 		}
 	}
+	if ids := backlog.FindItemIDs(full.Stdout, ""); len(ids) > 0 && proofs != nil {
+		writeEvidence(&b, ids, proofs)
+	}
 	return b.String(), nil
 }
+
+// writeEvidence adds the "## Evidence" section: a check/result/evidence table
+// per item that has proof rows, nothing when none does.
+func writeEvidence(b *strings.Builder, ids []string, proofs ProofOf) {
+	var sec strings.Builder
+	for _, id := range ids {
+		rows, err := proofs(id)
+		if err != nil || len(rows) == 0 {
+			continue
+		}
+		sec.WriteString("**[" + id + "]**\n\n| Check | Result | Evidence |\n| --- | --- | --- |\n")
+		for _, r := range rows {
+			sec.WriteString("| " + cell(r.Check) + " | " + cell(r.Result) + " | " + cell(r.Evidence) + " |\n")
+		}
+		sec.WriteString("\n")
+	}
+	if sec.Len() > 0 {
+		b.WriteString("## Evidence\n\n" + sec.String())
+	}
+}
+
+// cell escapes a table cell: a pipe would split it.
+func cell(s string) string { return strings.ReplaceAll(s, "|", "\\|") }
