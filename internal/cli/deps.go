@@ -11,6 +11,7 @@ import (
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/migrate"
 	"github.com/l4ci/rota/internal/orchestrate"
+	"github.com/l4ci/rota/internal/palette"
 	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/reap"
 	"github.com/l4ci/rota/internal/round"
@@ -58,6 +59,8 @@ type Deps struct {
 	SetupIsTTY       func(in io.Reader) bool
 	IsTerminal       func(f any) bool
 	BareSetup        RunFunc
+	// Palette is the menu bare `rota` opens; a test swaps in a fake terminal.
+	Palette func(palette.Config) error
 }
 
 // defaultDeps is the real machine: git, the forge CLIs, tmux or herdr.
@@ -78,6 +81,7 @@ func defaultDeps() *Deps {
 		SetupIsTTY:       defaultSetupIsTTY,
 		IsTerminal:       defaultIsTerminal,
 		BareSetup:        defaultBareSetup,
+		Palette:          palette.RunTerminal,
 	}
 	d.NewTracker = func(ctx context.Context, root string, cfg any) (backlog.Tracker, error) {
 		return d.forge(ctx, cfg, "", root)

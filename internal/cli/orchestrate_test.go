@@ -10,6 +10,7 @@ import (
 
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/orchestrate"
+	"github.com/l4ci/rota/internal/palette"
 )
 
 // launchRig replaces the launcher's outside world: no herdr, tmux or agent is
@@ -138,6 +139,7 @@ func TestOrchestrateOutsideAMultiplexerAttachesARotaHerdrSession(t *testing.T) {
 // bareRig fakes a terminal and the setup verb for bare `rota`.
 func bareRig(d *Deps) *int {
 	d.IsTerminal = func(any) bool { return true }
+	d.Palette = palette.RunDefault // Enter on the preselected entry
 	setups := 0
 	d.BareSetup = func(*Ctx, []string) (Result, error) { setups++; return Result{Text: "setup ran"}, nil }
 	return &setups
