@@ -101,7 +101,7 @@ func TestPaletteQuitRunsNothingAndExitsZero(t *testing.T) {
 func TestPaletteVerbEntryPrintsItsOutputThenReturns(t *testing.T) {
 	deps := testDeps()
 	bareRig(deps)
-	raws, restores := paletteRig(deps, "6", "x", "q") // Config: config show
+	raws, restores := paletteRig(deps, "8", "x", "q") // Config: config show
 	r := useLaunchRig(deps, nil)
 	code, out, errs := bareIn(t, deps, trackerProject(t, ""))
 	if code != 0 || len(r.execs) != 0 {
