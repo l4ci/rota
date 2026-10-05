@@ -26,6 +26,9 @@ import (
 	"github.com/l4ci/rota/internal/repos"
 )
 
+// Label names the orchestrator's tab or window (`rota orchestrate` opens it).
+const Label = "orchestrator"
+
 // Layout names how a project's panes are arranged.
 const (
 	Split = "split" // every live worker is in the orchestrator's tab
@@ -263,4 +266,24 @@ func (r Result) Describe() string {
 		return fmt.Sprintf("%s (already)", r.After)
 	}
 	return fmt.Sprintf("%s (%d moved)", r.After, r.Moves)
+}
+
+// Arrange puts root's live workers into mode: the arrangement `rota layout`
+// makes and a round keeps for the workers it spawns later. ok is false when
+// the orchestrator's pane is not among the panes.
+func Arrange(ctx context.Context, h host.Layouter, root, mode string, workers []Worker) (st State, res Result, ok bool, err error) {
+	panes, err := h.LayoutPanes(ctx)
+	if err != nil {
+		return State{}, Result{}, false, err
+	}
+	st, ok = Find(panes, root, Label, workers)
+	if !ok {
+		return State{}, Result{}, false, nil
+	}
+	if mode == Split {
+		res, err = ToSplit(ctx, h, st)
+	} else {
+		res, err = ToTabs(ctx, h, st)
+	}
+	return st, res, true, err
 }

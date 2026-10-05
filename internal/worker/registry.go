@@ -96,6 +96,10 @@ func intOf(v any) (int, bool) {
 // Host is the round host `round start` recorded, "" when none.
 func (r Registry) Host() string { return jsonx.Str(r.doc, "host") }
 
+// Layout is the pane layout `rota layout split|tabs` recorded for the round:
+// "split" or "", where "" means tabs (the default of a new round).
+func (r Registry) Layout() string { return jsonx.Str(r.doc, "layout") }
+
 // Session is the pane session the pool registered, "" when none.
 func (r Registry) Session() string { return jsonx.Str(r.doc, "session") }
 
@@ -301,6 +305,16 @@ func (d *Doc) SetHost(h string) { d.doc.Set("host", h) }
 
 // ClearHost forgets the round host.
 func (d *Doc) ClearHost() { d.doc.Delete("host") }
+
+// SetLayout records the round's pane layout. Tabs is the default, so it
+// forgets the key instead of storing it.
+func (d *Doc) SetLayout(l string) {
+	if l == "" || l == "tabs" {
+		d.doc.Delete("layout")
+		return
+	}
+	d.doc.Set("layout", l)
+}
 
 // SetSession records the pane session.
 func (d *Doc) SetSession(s string) { d.doc.Set("session", s) }
