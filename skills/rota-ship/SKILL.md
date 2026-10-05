@@ -21,7 +21,7 @@ Read `.rota/config.json` (`rota config show`):
 
 - `work.mergeStrategy` — `"pr"` or `"direct"`; unset means ask (Step 5)
 - `ship.review` — `true` (default) runs `/rota-review` first; `false` skips it
-- `ship.secondOpinion` — `false` (default); `true` runs a no-prior-context adversarial review after `/rota-review` (Step 3.5), except for round PRs, which never get one. A leftover `ship.secondOpinionRunner: "codex"` runs the subagent in advisory mode: print *"ship.secondOpinionRunner: codex was removed in 5.0; using subagent (run `rota config set ship.secondOpinionRunner subagent` to silence this)"* and carry on.
+- `ship.secondOpinion` — `false` (default); `true` runs a no-prior-context adversarial review after `/rota-review` (Step 3.5), except for round PRs, which never get one.
 - `ship.qa` — `false` (default); `true` runs `/rota-qa run` after the reviews (Step 3.75)
 - `autonomy.level` — `"off"` (default), `"auto"`: whether Step 8.5 nudges or invokes directly
 - `docs.path` (default `"docs"`), `docs.afterWork` (default `false`), `docs.autoCreate` (default `false`)
