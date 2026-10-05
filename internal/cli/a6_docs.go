@@ -2,6 +2,7 @@ package cli
 
 import (
 	"flag"
+	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"strings"
 
@@ -68,7 +69,7 @@ func readBody(c *Ctx, file string) (string, error) {
 		return "", Usage("--body-file is required")
 	}
 	s, err := artifact.ReadBody(c.Stdin, file)
-	return s, fromArtifact(err)
+	return s, err
 }
 
 func idData(id string, changed any) *jsonx.Object {
@@ -108,10 +109,10 @@ func designAdd(fs *flag.FlagSet) RunFunc {
 			return designAddIssue(c, id, *title)
 		}
 		if !design.ValidID(id) {
-			return Result{}, fromArtifact(design.Add("", id, *title)) // reports the bad ID
+			return Result{}, design.Add("", id, *title) // reports the bad ID
 		}
 		if err := design.Add(root, id, *title); err != nil {
-			return Result{Data: refusal(err)}, fromArtifact(err)
+			return Result{Data: refusal(err)}, err
 		}
 		return Result{Data: idData(id, true), Text: id}, nil
 	}
@@ -119,7 +120,7 @@ func designAdd(fs *flag.FlagSet) RunFunc {
 
 // refusal is the exit-4 failure data: {"blockedBy": "exists", "changed": false}.
 func refusal(err error) any {
-	if ae, ok := err.(*artifact.Error); ok && ae.Exit == artifact.ExitRefused {
+	if ae, ok := err.(*exitcode.Error); ok && ae.Exit == exitcode.ExitRefused {
 		d := jsonx.NewObject()
 		d.Set("blockedBy", "exists")
 		d.Set("changed", false)
@@ -169,7 +170,7 @@ func runDesignShow(c *Ctx, args []string) (Result, error) {
 	}
 	body, err := design.Show(root, id)
 	if err != nil {
-		return Result{}, fromArtifact(err)
+		return Result{}, err
 	}
 	d := idData(id, nil)
 	d.Set("body", body)
@@ -192,7 +193,7 @@ func designPut(fs *flag.FlagSet) RunFunc {
 		}
 		if !design.ValidID(id) {
 			_, err := design.Put("", id, "")
-			return Result{}, fromArtifact(err)
+			return Result{}, err
 		}
 		text, err := readBody(c, *file)
 		if err != nil {
@@ -200,7 +201,7 @@ func designPut(fs *flag.FlagSet) RunFunc {
 		}
 		changed, err := design.Put(root, id, text)
 		if err != nil {
-			return Result{}, fromArtifact(err)
+			return Result{}, err
 		}
 		return Result{Data: idData(id, changed), Text: id}, nil
 	}
@@ -219,7 +220,7 @@ func runDesignRm(c *Ctx, args []string) (Result, error) {
 		return designRmIssue(c, id)
 	}
 	if err := design.Rm(root, id); err != nil {
-		return Result{}, fromArtifact(err)
+		return Result{}, err
 	}
 	return Result{Data: idData(id, true), Text: id}, nil
 }
@@ -245,7 +246,7 @@ func designAmend(fs *flag.FlagSet) RunFunc {
 		}
 		if !design.ValidID(id) {
 			_, err := design.Amend("", id, *heading, *mode, "")
-			return Result{}, fromArtifact(err)
+			return Result{}, err
 		}
 		text, err := readBody(c, *file)
 		if err != nil {
@@ -253,7 +254,7 @@ func designAmend(fs *flag.FlagSet) RunFunc {
 		}
 		changed, err := design.Amend(root, id, *heading, *mode, text)
 		if err != nil {
-			return Result{}, fromArtifact(err)
+			return Result{}, err
 		}
 		d := idData(id, nil)
 		d.Set("section", *heading)
@@ -288,7 +289,7 @@ func planAdd(fs *flag.FlagSet) RunFunc {
 		}
 		key, kind, err := plan.Add(root, o)
 		if err != nil {
-			return Result{Data: refusal(err)}, fromArtifact(err)
+			return Result{Data: refusal(err)}, err
 		}
 		d := jsonx.NewObject()
 		d.Set("key", key)
@@ -370,7 +371,7 @@ func runPlanShow(c *Ctx, args []string) (Result, error) {
 	}
 	body, err := plan.Show(root, key)
 	if err != nil {
-		return Result{}, fromArtifact(err)
+		return Result{}, err
 	}
 	d := keyData(key, nil)
 	d.Set("body", body)
@@ -393,7 +394,7 @@ func planPut(fs *flag.FlagSet) RunFunc {
 		}
 		if !plan.ValidKey(key) {
 			_, err := plan.Put("", key, "")
-			return Result{}, fromArtifact(err)
+			return Result{}, err
 		}
 		text, err := readBody(c, *file)
 		if err != nil {
@@ -401,7 +402,7 @@ func planPut(fs *flag.FlagSet) RunFunc {
 		}
 		changed, err := plan.Put(root, key, text)
 		if err != nil {
-			return Result{}, fromArtifact(err)
+			return Result{}, err
 		}
 		return Result{Data: keyData(key, changed), Text: key}, nil
 	}
@@ -420,7 +421,7 @@ func runPlanRm(c *Ctx, args []string) (Result, error) {
 		return planRmIssue(c, key)
 	}
 	if err := plan.Rm(root, key); err != nil {
-		return Result{}, fromArtifact(err)
+		return Result{}, err
 	}
 	return Result{Data: keyData(key, true), Text: key}, nil
 }
@@ -436,7 +437,7 @@ func runPlanValidateDocs(c *Ctx, args []string) (Result, error) {
 	}
 	ms, text, err := plan.ValidateDocs(root, key)
 	if err != nil {
-		return Result{}, fromArtifact(err)
+		return Result{}, err
 	}
 	rows := []any{}
 	for _, m := range ms {

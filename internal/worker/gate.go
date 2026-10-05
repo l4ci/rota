@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -125,7 +126,7 @@ func (r Registry) GateTarget(arg string) (s *jsonx.Object, queued bool, err erro
 		if sl.PR() == "" {
 			for _, q := range r.PRs() {
 				if Str(q, "from") == arg {
-					return nil, false, &Error{Exit: ExitUsage,
+					return nil, false, &exitcode.Error{Exit: exitcode.ExitUsage,
 						Message: fmt.Sprintf("slot %s records no PR, but its PR %s (%s) waits in review", arg, Str(q, "pr"), Str(q, "branch")),
 						Hint:    fmt.Sprintf("gate the PR in review with `rota worker gate %s`", trailingNumber(Str(q, "pr")))}
 				}
@@ -142,9 +143,9 @@ func (r Registry) GateTarget(arg string) (s *jsonx.Object, queued bool, err erro
 				return sl.Raw(), false, nil
 			}
 		}
-		return nil, false, fail(ExitResolution, fmt.Sprintf("no PR in review or slot records PR #%d", n))
+		return nil, false, fail(exitcode.ExitResolution, fmt.Sprintf("no PR in review or slot records PR #%d", n))
 	}
-	return nil, false, fail(ExitResolution, fmt.Sprintf("slot '%s' is not in the pool", arg))
+	return nil, false, fail(exitcode.ExitResolution, fmt.Sprintf("slot '%s' is not in the pool", arg))
 }
 
 // Gate runs the merge gate for a slot or a queued PR (see GateTarget). A
@@ -154,7 +155,7 @@ func (e Env) Gate(ctx context.Context, root string, o GateOpts) (GateResult, err
 	res := GateResult{Slot: o.Slot, Base: o.Base}
 	reg := LoadRegistry(root)
 	if !reg.Exists {
-		return res, fail(ExitResolution, "no worker pool — run rota worker pool init first")
+		return res, fail(exitcode.ExitResolution, "no worker pool — run rota worker pool init first")
 	}
 	s, queued, err := reg.GateTarget(o.Slot)
 	if err != nil {
@@ -202,7 +203,7 @@ func (e Env) gate(ctx context.Context, root string, o GateOpts, res GateResult, 
 		g.remote = true
 	}
 	if _, code := e.git(root, "rev-parse", "--verify", "--quiet", o.Base); code != 0 {
-		return res, fail(ExitResolution, fmt.Sprintf("base branch '%s' does not exist", o.Base))
+		return res, fail(exitcode.ExitResolution, fmt.Sprintf("base branch '%s' does not exist", o.Base))
 	}
 	if g.remote {
 		if _, code := e.git(root, "fetch", "origin", "-q"); code != 0 {
@@ -218,7 +219,7 @@ func (e Env) gate(ctx context.Context, root string, o GateOpts, res GateResult, 
 	} else {
 		g.headRef, g.baseRef = branch, o.Base
 		if _, code := e.git(root, "rev-parse", "--verify", "--quiet", branch); code != 0 {
-			return res, fail(ExitResolution, fmt.Sprintf("worker branch '%s' does not exist", branch))
+			return res, fail(exitcode.ExitResolution, fmt.Sprintf("worker branch '%s' does not exist", branch))
 		}
 	}
 
@@ -295,7 +296,7 @@ func (e Env) gate(ctx context.Context, root string, o GateOpts, res GateResult, 
 	// 2. Merge.
 	cur, _ := e.git(root, "rev-parse", "--abbrev-ref", "HEAD")
 	if cur != o.Base {
-		return res, fail(ExitResolution, fmt.Sprintf("gate must run with %s checked out (currently on %s)", o.Base, cur))
+		return res, fail(exitcode.ExitResolution, fmt.Sprintf("gate must run with %s checked out (currently on %s)", o.Base, cur))
 	}
 	if o.Approve != nil {
 		files := func() ([]string, error) {

@@ -1,6 +1,7 @@
 package plan
 
 import (
+	"github.com/l4ci/rota/internal/exitcode"
 	"regexp"
 	"strings"
 
@@ -33,8 +34,8 @@ func ItemOf(key string) (item string, isItem bool, err error) {
 	return "", false, nil
 }
 
-func noteMissing(item string) *artifact.Error {
-	return artifact.Errf(artifact.ExitResolution, "plan note for %s not found", item)
+func noteMissing(item string) *exitcode.Error {
+	return exitcode.Errf(exitcode.ExitResolution, "plan note for %s not found", item)
 }
 
 // AddItemNote creates the plan note on the item's issue for the explicit key
@@ -49,12 +50,12 @@ func AddItemNote(root string, n artifact.Notes, o AddOpts) (key string, err erro
 		return "", err
 	}
 	if unit == "" || !(issueAddUnitRe.MatchString(unit) || milestone == "" && digitsRe.MatchString(unit)) || strings.HasPrefix(unit, "S") {
-		return "", artifact.Errf(artifact.ExitUsage, "unit must be an item ID like B7/F3/T11 for an item plan, got %q", unit)
+		return "", exitcode.Errf(exitcode.ExitUsage, "unit must be an item ID like B7/F3/T11 for an item plan, got %q", unit)
 	}
 	if _, ok, err := n.NoteGet(unit, "plan"); err != nil {
 		return "", err
 	} else if ok {
-		return "", artifact.Errf(artifact.ExitRefused, "plan note for %s already exists", unit)
+		return "", exitcode.Errf(exitcode.ExitRefused, "plan note for %s already exists", unit)
 	}
 	key = milestone + "-" + unit
 	if milestone == "" {
@@ -104,7 +105,7 @@ func RmItemNote(n artifact.Notes, item string) error {
 // detail. Only open items count, as only open bullets did.
 func UncertainIssue(be backlog.Backend, it *backlog.Item) (typ string, reasons []string, err error) {
 	if it.Closed {
-		return "", nil, artifact.Errf(artifact.ExitResolution, "item %s is not open", it.ID)
+		return "", nil, exitcode.Errf(exitcode.ExitResolution, "item %s is not open", it.ID)
 	}
 	typ, reasons = it.Type, []string{}
 	if !strings.EqualFold(it.Tag, "major") {
@@ -125,7 +126,7 @@ func CheckAdd(o AddOpts, issue bool) error {
 		return err
 	}
 	if o.Title == "" {
-		return artifact.Errf(artifact.ExitUsage, "--title is required")
+		return exitcode.Errf(exitcode.ExitUsage, "--title is required")
 	}
 	return nil
 }

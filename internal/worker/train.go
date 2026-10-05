@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"path/filepath"
 	"sort"
@@ -81,17 +82,17 @@ func (e Env) Train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 	e = e.withDefaults()
 	res := TrainResult{Base: o.Base}
 	if len(o.Targets) == 0 {
-		return res, fail(ExitUsage, "a train needs at least one PR or slot")
+		return res, fail(exitcode.ExitUsage, "a train needs at least one PR or slot")
 	}
 	reg := LoadRegistry(root)
 	if !reg.Exists {
-		return res, fail(ExitResolution, "no worker pool — run rota worker pool init first")
+		return res, fail(exitcode.ExitResolution, "no worker pool — run rota worker pool init first")
 	}
 	if _, code := e.git(root, "rev-parse", "--verify", "--quiet", o.Base); code != 0 {
-		return res, fail(ExitResolution, fmt.Sprintf("base branch '%s' does not exist", o.Base))
+		return res, fail(exitcode.ExitResolution, fmt.Sprintf("base branch '%s' does not exist", o.Base))
 	}
 	if cur, _ := e.git(root, "rev-parse", "--abbrev-ref", "HEAD"); cur != o.Base {
-		return res, fail(ExitResolution, fmt.Sprintf("a train must run with %s checked out (currently on %s)", o.Base, cur))
+		return res, fail(exitcode.ExitResolution, fmt.Sprintf("a train must run with %s checked out (currently on %s)", o.Base, cur))
 	}
 	seen := map[string]bool{}
 	withPR := 0
@@ -102,7 +103,7 @@ func (e Env) Train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 		}
 		key := Str(s, "branch") + "|" + Str(s, "pr")
 		if seen[key] {
-			return res, fail(ExitUsage, fmt.Sprintf("%s names a PR already in the train", t))
+			return res, fail(exitcode.ExitUsage, fmt.Sprintf("%s names a PR already in the train", t))
 		}
 		seen[key] = true
 		if Str(s, "pr") != "" {
@@ -110,7 +111,7 @@ func (e Env) Train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 		}
 	}
 	if withPR != 0 && withPR != len(o.Targets) {
-		return res, fail(ExitUsage, fmt.Sprintf("a train is all PRs or all slots without one, not a mix: PRs merge onto origin/%s and slots onto the local %s", o.Base, o.Base))
+		return res, fail(exitcode.ExitUsage, fmt.Sprintf("a train is all PRs or all slots without one, not a mix: PRs merge onto origin/%s and slots onto the local %s", o.Base, o.Base))
 	}
 
 	// 1. Check every member.

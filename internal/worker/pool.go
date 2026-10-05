@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"path/filepath"
 
@@ -59,12 +60,12 @@ func (e Env) PoolInit(ctx context.Context, root string, o InitOpts, acc *Account
 	if base == "" {
 		cur, _ := e.git(root, "rev-parse", "--abbrev-ref", "HEAD")
 		if cur == "" || cur == "HEAD" {
-			return res, fail(ExitResolution, "cannot resolve base branch — pass --base <branch>")
+			return res, fail(exitcode.ExitResolution, "cannot resolve base branch — pass --base <branch>")
 		}
 		base = cur
 	}
 	if _, code := e.git(root, "rev-parse", "--verify", "--quiet", base); code != 0 {
-		return res, fail(ExitResolution, fmt.Sprintf("base branch '%s' does not exist", base))
+		return res, fail(exitcode.ExitResolution, fmt.Sprintf("base branch '%s' does not exist", base))
 	}
 	session := o.Session
 	if session == "" {
@@ -74,7 +75,7 @@ func (e Env) PoolInit(ctx context.Context, root string, o InitOpts, acc *Account
 	before, _ := os.ReadFile(RegistryPath(root))
 
 	if err := os.MkdirAll(filepath.Join(root, WorktreeRoot), 0o777); err != nil {
-		return res, fail(ExitUnavailable, err.Error())
+		return res, fail(exitcode.ExitUnavailable, err.Error())
 	}
 	// A tracked-looking .worktrees/ makes every `git status` in the project
 	// noisy. Warn rather than edit .gitignore: rota init owns that line.
@@ -108,7 +109,7 @@ func (e Env) PoolInit(ctx context.Context, root string, o InitOpts, acc *Account
 				// dispatch, reset and the gate as if it were a slot (#79).
 				ours, theirs := e.commonDir(root), e.commonDir(regWT)
 				if ours != theirs {
-					return res, fail(ExitResolution, fmt.Sprintf("slot %s is registered at %s, a worktree of another repository (%s, not %s); fix or remove the registry entry", name, regWT, theirs, ours))
+					return res, fail(exitcode.ExitResolution, fmt.Sprintf("slot %s is registered at %s, a worktree of another repository (%s, not %s); fix or remove the registry entry", name, regWT, theirs, ours))
 				}
 				rel = regWT
 				res.Warnings = append(res.Warnings, fmt.Sprintf("note: slot %s stays at %s (outside %s/); git worktree move it to relocate", name, regWT, WorktreeRoot))
@@ -126,10 +127,10 @@ func (e Env) PoolInit(ctx context.Context, root string, o InitOpts, acc *Account
 			e.git(root, "worktree", "prune")
 			if _, code := e.git(root, "rev-parse", "--verify", "--quiet", branch); code == 0 {
 				if _, code := e.git(root, "worktree", "add", rel, branch); code != 0 {
-					return res, fail(ExitUnavailable, fmt.Sprintf("could not add worktree for %s on existing branch %s", name, branch))
+					return res, fail(exitcode.ExitUnavailable, fmt.Sprintf("could not add worktree for %s on existing branch %s", name, branch))
 				}
 			} else if _, code := e.git(root, "worktree", "add", "-b", branch, rel, base); code != 0 {
-				return res, fail(ExitUnavailable, fmt.Sprintf("could not create worktree/branch for %s from %s", name, base))
+				return res, fail(exitcode.ExitUnavailable, fmt.Sprintf("could not create worktree/branch for %s from %s", name, base))
 			}
 		}
 
@@ -267,7 +268,7 @@ func (e Env) Reap(root string, names []string, all bool) (reaped []string, err e
 	}
 	if len(reaped) > 0 {
 		if _, code := e.git(root, "worktree", "prune"); code != 0 {
-			return reaped, fail(ExitUnavailable, "git worktree prune failed")
+			return reaped, fail(exitcode.ExitUnavailable, "git worktree prune failed")
 		}
 	}
 	gone := map[string]bool{}

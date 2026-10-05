@@ -2,11 +2,11 @@ package plan
 
 import (
 	"errors"
+	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"regexp"
 	"strings"
 
-	"github.com/l4ci/rota/internal/artifact"
 	"github.com/l4ci/rota/internal/backlog"
 )
 
@@ -30,7 +30,7 @@ func Uncertain(root, id string) (typ string, reasons []string, err error) {
 	md, merr := f.Markdown(0)
 	if merr != nil {
 		if errors.Is(merr, backlog.ErrNotFound) {
-			return "", nil, artifact.Errf(artifact.ExitResolution, ".rota/BACKLOG.md not found")
+			return "", nil, exitcode.Errf(exitcode.ExitResolution, ".rota/BACKLOG.md not found")
 		}
 		return "", nil, merr
 	}
@@ -54,7 +54,7 @@ func Uncertain(root, id string) (typ string, reasons []string, err error) {
 		}
 	}
 	if line == "" {
-		return "", nil, artifact.Errf(artifact.ExitResolution, "item %s not found in BACKLOG.md", id)
+		return "", nil, exitcode.Errf(exitcode.ExitResolution, "item %s not found in BACKLOG.md", id)
 	}
 	typ = id[:1]
 	reasons = []string{}

@@ -2,6 +2,7 @@ package plan
 
 import (
 	"fmt"
+	"github.com/l4ci/rota/internal/exitcode"
 	"regexp"
 	"strconv"
 
@@ -32,8 +33,8 @@ func SliceOf(key string) (milestone, unit string, isSlice bool) {
 	return "", "", false
 }
 
-func sliceMissing(key string) *artifact.Error {
-	return artifact.Errf(artifact.ExitResolution, "plan note for %s not found", key)
+func sliceMissing(key string) *exitcode.Error {
+	return exitcode.Errf(exitcode.ExitResolution, "plan note for %s not found", key)
 }
 
 // AddSliceNote creates a slice plan note on the milestone's tracking issue.
@@ -69,7 +70,7 @@ func AddSliceNote(root string, s SliceStore, o AddOpts) (key string, err error) 
 	if _, ok, err := s.SliceGet(milestone, unit); err != nil {
 		return "", err
 	} else if ok {
-		return "", artifact.Errf(artifact.ExitRefused, "plan note for %s already exists", key)
+		return "", exitcode.Errf(exitcode.ExitRefused, "plan note for %s already exists", key)
 	}
 	_, err = s.SlicePut(milestone, unit, stub(key, milestone, unit, "slice", repo, design, o.Title))
 	return key, err

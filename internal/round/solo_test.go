@@ -3,6 +3,7 @@ package round
 import (
 	"context"
 	"errors"
+	"github.com/l4ci/rota/internal/exitcode"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -148,8 +149,8 @@ func TestAssignUnderSoloRefusesACodexWorker(t *testing.T) {
 	f := soloAssign(t)
 	f.set.Models = map[string]map[string]string{harness.Codex: {"light": "c-l", "standard": "c-s", "heavy": "c-h"}}
 	_, err := f.assign("12", "ben", func(o *AssignOpts) { o.Kind = harness.Codex })
-	var we *worker.Error
-	if !errors.As(err, &we) || we.Exit != worker.ExitUsage || !strings.Contains(we.Message, "Claude subagents") {
+	var we *exitcode.Error
+	if !errors.As(err, &we) || we.Exit != exitcode.ExitUsage || !strings.Contains(we.Message, "Claude subagents") {
 		t.Fatalf("a codex worker under solo is a usage error: %v", err)
 	}
 	if _, held := f.be.claims["12"]; held {
@@ -212,11 +213,11 @@ func TestReportRefusals(t *testing.T) {
 		o    ReportOpts
 		want int
 	}{
-		{"busy is not reportable", ReportOpts{Slot: "ben", State: "busy"}, worker.ExitUsage},
-		{"unknown state", ReportOpts{Slot: "ben", State: "finished"}, worker.ExitUsage},
-		{"no state", ReportOpts{Slot: "ben"}, worker.ExitUsage},
-		{"bad pr", ReportOpts{Slot: "ben", State: "done", PR: "soon"}, worker.ExitUsage},
-		{"unknown slot", ReportOpts{Slot: "zed", State: "done"}, worker.ExitResolution},
+		{"busy is not reportable", ReportOpts{Slot: "ben", State: "busy"}, exitcode.ExitUsage},
+		{"unknown state", ReportOpts{Slot: "ben", State: "finished"}, exitcode.ExitUsage},
+		{"no state", ReportOpts{Slot: "ben"}, exitcode.ExitUsage},
+		{"bad pr", ReportOpts{Slot: "ben", State: "done", PR: "soon"}, exitcode.ExitUsage},
+		{"unknown slot", ReportOpts{Slot: "zed", State: "done"}, exitcode.ExitResolution},
 	}
 	for _, c := range cases {
 		if _, err := ReportSlot(f.root, c.o); exitOf(err) != c.want {
@@ -229,7 +230,7 @@ func TestReportRefusals(t *testing.T) {
 	for _, h := range []string{"tmux", "herdr", ""} {
 		setHost(t, f.root, h)
 		_, err := ReportSlot(f.root, ReportOpts{Slot: "ben", State: "done"})
-		if exitOf(err) != worker.ExitUsage {
+		if exitOf(err) != exitcode.ExitUsage {
 			t.Errorf("host %q: %v, want exit 2", h, err)
 		}
 	}

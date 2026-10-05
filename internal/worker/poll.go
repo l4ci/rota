@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"regexp"
 	"strings"
@@ -208,7 +209,7 @@ type PollResult struct {
 func PollFixture(path, slot, status string, lines int) (PollResult, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
-		return PollResult{}, fail(ExitUsage, "fixture not found: "+path)
+		return PollResult{}, fail(exitcode.ExitUsage, "fixture not found: "+path)
 	}
 	if slot == "" {
 		slot = "fixture"
@@ -238,11 +239,11 @@ func (e Env) Poll(ctx context.Context, root string, o PollOpts) (PollResult, err
 	}
 	h := e.NewHost(hostKind(root))
 	if err := h.Require(); err != nil {
-		return PollResult{}, fail(ExitUnavailable, err.Error())
+		return PollResult{}, fail(exitcode.ExitUnavailable, err.Error())
 	}
 	reg := LoadRegistry(root)
 	if o.Slot != "" && reg.Slot(o.Slot) == nil {
-		return PollResult{}, fail(ExitResolution, fmt.Sprintf("slot '%s' is not in the pool", o.Slot))
+		return PollResult{}, fail(exitcode.ExitResolution, fmt.Sprintf("slot '%s' is not in the pool", o.Slot))
 	}
 	var targets []pollTarget
 	for _, s := range reg.Slots() {
