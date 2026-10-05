@@ -44,9 +44,18 @@ func TestIssueModeDesign(t *testing.T) {
 	if d := ddata(t, env); code != 0 || d["id"] != "7" || d["type"] != "F" || d["changed"] != true {
 		t.Fatalf("add: %d %v %s", code, env, stderr)
 	}
-	code, env, _ = issueRunWith(t, deps, root, "design", "add", "7", "--title", "x")
-	if code != 2 {
-		t.Errorf("a bare number is not a design ID: %d", code)
+	for _, ref := range []string{"7", "#7"} {
+		if code, _, _ := issueRunWith(t, deps, root, "design", "add", ref, "--title", "x"); code != 4 {
+			t.Errorf("add %s resolves the item whose design exists: %d, want 4", ref, code)
+		}
+		_, env, _ := issueRunWith(t, deps, root, "design", "show", ref)
+		if body, _ := ddata(t, env)["body"].(string); !strings.HasPrefix(body, "---\nid: F7\n") {
+			t.Errorf("show %s: %q", ref, body)
+		}
+	}
+	code, env, stderr = issueRunWith(t, deps, root, "design", "add", "x7", "--title", "x")
+	if code != 2 || !strings.Contains(stderr+strings.Join(keysOf(env), ","), "N, #N") {
+		t.Errorf("bad shape: %d %s, want exit 2 naming N/#N", code, stderr)
 	}
 	code, env, _ = issueRunWith(t, deps, root, "design", "add", "F7", "--title", "again")
 	if code != 4 || !strings.Contains(strings.Join(keysOf(env), ","), "data") {
