@@ -29,6 +29,9 @@ Work only this task, then stop.
   orchestrator's gate on the merged tree. Several workers running full suites at
   once starve the CPU and turn time-budgeted tests into false reds, which costs
   everyone a re-measurement to disprove.
+- Before opening a PR, regenerate the frozen and golden records your change touches
+  (`go test ./<pkg> -run '^TestX$' -update-frozen` / `-update-golden`) and run the
+  affected package tests. A stale record is the top cause of red PR runs.
 - Escalate rather than guess. If the task leaves a choice a user would notice
   unsettled, and neither the brief nor the code settles it, print
   `ROTA-BLOCKED <slot>: <one question in plain language>` and stop. Ask ONE
