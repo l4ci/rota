@@ -65,7 +65,7 @@ var (
 func ParseRef(s string) (Ref, error) {
 	s = pystr.Strip(s)
 	if m := qualHashRe.FindStringSubmatch(s); m != nil {
-		n, err := atoi(m[2])
+		n, err := Atoi(m[2])
 		if err != nil {
 			return Ref{}, err
 		}
@@ -97,7 +97,7 @@ func resolveItemRef(ref string) (n int, letter string, err error) {
 	if digits == "" {
 		digits = m[3]
 	}
-	if n, err = atoi(digits); err != nil {
+	if n, err = Atoi(digits); err != nil {
 		return 0, "", err
 	}
 	if m[2] != "" {
@@ -113,8 +113,8 @@ func upper(b byte) byte {
 	return b
 }
 
-// atoi reads a run of Unicode decimal digits (Python's int() accepts them).
-func atoi(digits string) (int, error) {
+// Atoi reads a run of Unicode decimal digits (Python's int() accepts them).
+func Atoi(digits string) (int, error) {
 	n := 0
 	for _, r := range digits {
 		d := pystr.DigitValue(r)

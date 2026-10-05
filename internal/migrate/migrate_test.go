@@ -1,4 +1,4 @@
-package backlog
+package migrate
 
 import (
 	"errors"
@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/backlog/trackertest"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/tracker"
@@ -56,12 +57,12 @@ func migProject(t *testing.T, files map[string]string) string {
 	return root
 }
 
-func newMig(t *testing.T, root string, apply bool, f *trackertest.MS) (MigrateOptions, *[]string, *[]time.Duration) {
+func newMig(t *testing.T, root string, apply bool, f *trackertest.MS) (Options, *[]string, *[]time.Duration) {
 	t.Helper()
 	var warns []string
 	var sleeps []time.Duration
-	return MigrateOptions{Root: root, Apply: apply, Limit: -1, Cfg: jsonx.NewObject(),
-		Tracker: func() (MigrateTracker, error) {
+	return Options{Root: root, Apply: apply, Limit: -1, Cfg: jsonx.NewObject(),
+		Tracker: func() (Tracker, error) {
 			if f == nil {
 				t.Fatal("the tracker was built")
 			}
@@ -75,7 +76,7 @@ func newMig(t *testing.T, root string, apply bool, f *trackertest.MS) (MigrateOp
 func TestMigratePreviewTouchesNothing(t *testing.T) {
 	root := migProject(t, nil)
 	o, warns, _ := newMig(t, root, false, nil)
-	res, err := MigrateIssues(o)
+	res, err := Run(o)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +122,7 @@ func TestMigrateApplyAndNoop(t *testing.T) {
 	root := migProject(t, nil)
 	f := &trackertest.MS{Fake: &trackertest.Fake{}}
 	o, warns, _ := newMig(t, root, true, f)
-	res, err := MigrateIssues(o)
+	res, err := Run(o)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +153,7 @@ func TestMigrateApplyAndNoop(t *testing.T) {
 	}
 	// a finished migration makes no tracker call and writes nothing
 	calls := len(f.Calls)
-	res, err = MigrateIssues(o)
+	res, err = Run(o)
 	if err != nil || res.Changed || len(f.Calls) != calls {
 		t.Errorf("rerun: %v changed %v, %d new calls", err, res.Changed, len(f.Calls)-calls)
 	}
@@ -168,7 +169,7 @@ func TestMigratePace(t *testing.T) {
 	f := &trackertest.MS{Fake: &trackertest.Fake{}}
 	o, _, sleeps := newMig(t, root, true, f)
 	o.Cfg = migCfg(t, `{"issues": {"bulkPaceMs": 250}}`)
-	res, err := MigrateIssues(o)
+	res, err := Run(o)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -195,13 +196,13 @@ func TestMigratePace(t *testing.T) {
 		root = migProject(t, nil)
 		o, _, sleeps = newMig(t, root, true, &trackertest.MS{Fake: &trackertest.Fake{}})
 		o.Cfg = migCfg(t, cfg)
-		if _, err := MigrateIssues(o); err != nil || len(*sleeps) != 0 {
+		if _, err := Run(o); err != nil || len(*sleeps) != 0 {
 			t.Errorf("%s: %v, %d pauses", cfg, err, len(*sleeps))
 		}
 	}
 	o, _, sleeps = newMig(t, migProject(t, nil), false, nil)
 	o.Cfg = migCfg(t, `{"issues": {"bulkPaceMs": 250}}`)
-	if _, err := MigrateIssues(o); err != nil || len(*sleeps) != 0 {
+	if _, err := Run(o); err != nil || len(*sleeps) != 0 {
 		t.Errorf("preview paused %d times", len(*sleeps))
 	}
 }
@@ -220,7 +221,7 @@ func TestMigrateLimitResumes(t *testing.T) {
 	f := &trackertest.MS{Fake: &trackertest.Fake{}}
 	o, _, _ := newMig(t, root, true, f)
 	o.Limit = 2
-	res, err := MigrateIssues(o)
+	res, err := Run(o)
 	if err != nil || res.Done || res.Migrated != 2 {
 		t.Fatalf("first run: %v done %v migrated %d", err, res.Done, res.Migrated)
 	}
@@ -236,7 +237,7 @@ func TestMigrateLimitResumes(t *testing.T) {
 		}
 	}
 	o.Limit = -1
-	res, err = MigrateIssues(o)
+	res, err = Run(o)
 	if err != nil || !res.Done || res.Migrated != 4 {
 		t.Fatalf("second run: %v done %v migrated %d", err, res.Done, res.Migrated)
 	}
@@ -251,7 +252,7 @@ func TestMigrateTrackerStopsKeepProgress(t *testing.T) {
 	o, _, _ := newMig(t, root, true, f)
 	// the notes fail after every item exists
 	f.Fake.Fail = map[string]error{"add_comment": &tracker.Error{Kind: tracker.KindRateLimited, Code: 4, Message: "slow down"}}
-	res, err := MigrateIssues(o)
+	res, err := Run(o)
 	var te *tracker.Error
 	if !errors.As(err, &te) || te.Kind != tracker.KindRateLimited {
 		t.Fatalf("err %v", err)
@@ -267,7 +268,7 @@ func TestMigrateTrackerStopsKeepProgress(t *testing.T) {
 	}
 	// resume finishes
 	f.Fake.Fail = nil
-	res, err = MigrateIssues(o)
+	res, err = Run(o)
 	if err != nil || !res.Done {
 		t.Fatalf("resume: %v done %v", err, res != nil && res.Done)
 	}
@@ -276,11 +277,11 @@ func TestMigrateTrackerStopsKeepProgress(t *testing.T) {
 	f = &trackertest.MS{Fake: &trackertest.Fake{}}
 	o, _, _ = newMig(t, root, true, f)
 	f.Fake.Fail = map[string]error{"create": errors.New("not a tracker error")}
-	if _, err = MigrateIssues(o); err == nil || errors.As(err, &te) {
+	if _, err = Run(o); err == nil || errors.As(err, &te) {
 		t.Errorf("non-tracker error: %v", err)
 	}
 	f.Fake.Fail = map[string]error{"create": &tracker.Error{Kind: tracker.KindFailed, Code: 1, Message: "boom"}}
-	res, err = MigrateIssues(o)
+	res, err = Run(o)
 	if !errors.As(err, &te) || !strings.Contains(strings.Join(res.Lines, "\n"), "stopped on a tracker error") {
 		t.Errorf("tracker failure: %v %q", err, res.Lines)
 	}
@@ -288,23 +289,23 @@ func TestMigrateTrackerStopsKeepProgress(t *testing.T) {
 
 func TestMigrateRefusals(t *testing.T) {
 	o, _, _ := newMig(t, t.TempDir(), true, nil)
-	if _, err := MigrateIssues(o); !errors.Is(err, ErrNothingToMigrate) {
+	if _, err := Run(o); !errors.Is(err, ErrNothingToMigrate) {
 		t.Errorf("no backlog: %v", err)
 	}
 	root := migProject(t, map[string]string{".rota/repos.json": `{"repos": [{"name": "web", "path": "web"}]}`})
 	o, _, _ = newMig(t, root, true, nil)
-	if _, err := MigrateIssues(o); !errors.Is(err, ErrUmbrellaMigrate) {
+	if _, err := Run(o); !errors.Is(err, ErrUmbrellaMigrate) {
 		t.Errorf("umbrella: %v", err)
 	}
 	root = migProject(t, map[string]string{".rota/issue-map.json": "[]"})
 	o, _, _ = newMig(t, root, true, nil)
-	if _, err := MigrateIssues(o); !errors.Is(err, ErrBadMap) {
+	if _, err := Run(o); !errors.Is(err, ErrBadMap) {
 		t.Errorf("array map: %v", err)
 	}
 	// a map that does not parse starts over
 	root = migProject(t, map[string]string{".rota/issue-map.json": "{oops"})
 	o, _, _ = newMig(t, root, false, nil)
-	if _, err := MigrateIssues(o); err != nil {
+	if _, err := Run(o); err != nil {
 		t.Errorf("unparseable map: %v", err)
 	}
 }
@@ -313,7 +314,7 @@ func TestMigrateWarnings(t *testing.T) {
 	root := migProject(t, map[string]string{".rota/BACKLOG.md": "# TODO\n\n## Bugs\n- **[B01] [P9] Odd tag.** a Milestone: M07\n- **[B02] [P1] Fine.** b Milestone: M09\n"})
 	f := &trackertest.MS{Fake: &trackertest.Fake{Milestones: []string{"M09 — Shipped"}}}
 	o, warns, _ := newMig(t, root, true, f)
-	if _, err := MigrateIssues(o); err != nil {
+	if _, err := Run(o); err != nil {
 		t.Fatal(err)
 	}
 	want := []string{
@@ -363,21 +364,21 @@ func TestScanImported(t *testing.T) {
 	put(".rota/BACKLOG.md", "# T\n\n## Bugs\n- **[B01] [P1] A.** GH: #5 GL:#6 Repos: web, api Related: [F01]\n- **[B02] [P1] B.** GH:   #7\n\n## Completed\n- ~~**[B03] [P1] C.** GH: #8~~ Done 2026-01-01 [`a`]\n")
 	put(".rota/ARCHIVE.md", "## Old\n- ~~**[B01] [P1] A.** GH: #5 Repos: web Related: [F01]~~ Done 2026-01-01 [`a`]\n- ~~**[F05] [Minor] D.** GL: #9~~ Done 2026-01-01 [`a`]\n")
 	put(".rota/bugs/B02.md", "GH: #7\nGH: #70\n")
-	got := ScanImported(root, "")
-	want := []Imported{
-		{"github", "web", 5, "B01", "open"}, {"github", "api", 5, "B01", "open"},
-		{"gitlab", "web", 6, "B01", "open"}, {"gitlab", "api", 6, "B01", "open"},
-		{"github", "", 7, "B02", "open"},
-		{"gitlab", "", 9, "F05", "archived"},
-		{"github", "", 70, "B02", "open"},
+	got := backlog.ScanImported(root, "")
+	want := []backlog.Imported{
+		{Provider: "github", Repo: "web", Issue: 5, ItemID: "B01", Status: "open"}, {Provider: "github", Repo: "api", Issue: 5, ItemID: "B01", Status: "open"},
+		{Provider: "gitlab", Repo: "web", Issue: 6, ItemID: "B01", Status: "open"}, {Provider: "gitlab", Repo: "api", Issue: 6, ItemID: "B01", Status: "open"},
+		{Provider: "github", Repo: "", Issue: 7, ItemID: "B02", Status: "open"},
+		{Provider: "gitlab", Repo: "", Issue: 9, ItemID: "F05", Status: "archived"},
+		{Provider: "github", Repo: "", Issue: 70, ItemID: "B02", Status: "open"},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("entries\n%+v\nwant\n%+v", got, want)
 	}
-	if got := ScanImported(root, "api"); len(got) != 2 || got[0].Issue != 5 {
+	if got := backlog.ScanImported(root, "api"); len(got) != 2 || got[0].Issue != 5 {
 		t.Errorf("for-repo: %+v", got)
 	}
-	if got := ScanImported(t.TempDir(), ""); len(got) != 0 {
+	if got := backlog.ScanImported(t.TempDir(), ""); len(got) != 0 {
 		t.Errorf("empty project: %+v", got)
 	}
 }
@@ -388,7 +389,7 @@ const adoptBacklog = `# TODO
 - **[B01] [P1] New bug.** Fresh. Related: [T01]
 
 ## Tasks
-- **[T01] Imported task.** From the tracker. GH: #1 Related: [B01] Since: abc1234
+- **[T01] backlog.Imported task.** From the tracker. GH: #1 Related: [B01] Since: abc1234
 `
 
 func TestMigrateAdoptsTrackerImports(t *testing.T) {
@@ -396,7 +397,7 @@ func TestMigrateAdoptsTrackerImports(t *testing.T) {
 	// preview: adopt, not create; the would-be map points at the issue
 	root := migProject(t, files)
 	o, _, _ := newMig(t, root, false, nil)
-	res, err := MigrateIssues(o)
+	res, err := Run(o)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -404,7 +405,7 @@ func TestMigrateAdoptsTrackerImports(t *testing.T) {
 	for _, op := range res.Ops {
 		got = append(got, op.Action+": "+op.Text)
 	}
-	for _, w := range []string{`adopt: T01 → #1 "Imported task" [type:task]`, `create-issue: B01 → bug "New bug" [type:bug, p1]`} {
+	for _, w := range []string{`adopt: T01 → #1 "backlog.Imported task" [type:task]`, `create-issue: B01 → bug "New bug" [type:bug, p1]`} {
 		if !slices.Contains(got, w) {
 			t.Errorf("preview ops %q lack %q", got, w)
 		}
@@ -417,9 +418,9 @@ func TestMigrateAdoptsTrackerImports(t *testing.T) {
 
 	// apply: no second issue for T01, labels added, design and Related still run
 	root = migProject(t, files)
-	f := &trackertest.MS{Fake: &trackertest.Fake{Issues: []tracker.Issue{{Number: 1, State: "open", Title: "Imported task", Body: "orig", URL: "u1"}}}}
+	f := &trackertest.MS{Fake: &trackertest.Fake{Issues: []tracker.Issue{{Number: 1, State: "open", Title: "backlog.Imported task", Body: "orig", URL: "u1"}}}}
 	o, _, _ = newMig(t, root, true, f)
-	res, err = MigrateIssues(o)
+	res, err = Run(o)
 	if err != nil || !res.Done || res.Migrated != 2 {
 		t.Fatalf("apply: %v done %v migrated %d", err, res != nil && res.Done, res.Migrated)
 	}
@@ -427,7 +428,7 @@ func TestMigrateAdoptsTrackerImports(t *testing.T) {
 		t.Fatalf("%d issues: %+v", len(f.Issues), f.Issues)
 	}
 	adopted := f.Issues[0]
-	if !slices.Contains(adopted.Labels, "type:task") || !strings.HasPrefix(adopted.Body, "orig") || adopted.Title != "Imported task" {
+	if !slices.Contains(adopted.Labels, "type:task") || !strings.HasPrefix(adopted.Body, "orig") || adopted.Title != "backlog.Imported task" {
 		t.Errorf("adopted issue %+v", adopted)
 	}
 	if len(adopted.Comments) != 1 || !strings.Contains(adopted.Comments[0].Body, "design") {
@@ -443,7 +444,7 @@ func TestMigrateAdoptsTrackerImports(t *testing.T) {
 	}
 	// a re-run adopts nothing twice
 	calls := len(f.Calls)
-	if res, err = MigrateIssues(o); err != nil || res.Changed || len(f.Calls) != calls {
+	if res, err = Run(o); err != nil || res.Changed || len(f.Calls) != calls {
 		t.Errorf("rerun: %v changed %v, %d new calls", err, res.Changed, len(f.Calls)-calls)
 	}
 }
@@ -457,7 +458,7 @@ func TestMigrateRemapsRegistryIDs(t *testing.T) {
 		`"prs":[{"issue":"#F01","pr":"#9"}]}`})
 	f := &trackertest.MS{Fake: &trackertest.Fake{}}
 	o, _, _ := newMig(t, root, true, f)
-	res, err := MigrateIssues(o)
+	res, err := Run(o)
 	if err != nil || !res.Done {
 		t.Fatalf("%v %+v", err, res)
 	}
@@ -472,7 +473,7 @@ func TestMigrateRemapsRegistryIDs(t *testing.T) {
 		t.Errorf("queued issue %q", got)
 	}
 	// rerunning leaves the rewritten IDs alone
-	if _, err := MigrateIssues(o); err != nil {
+	if _, err := Run(o); err != nil {
 		t.Fatal(err)
 	}
 	if got := worker.LoadRegistry(root).Slot("ben").Task(); got != "2" {

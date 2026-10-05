@@ -8,6 +8,7 @@ import (
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/escalation"
 	"github.com/l4ci/rota/internal/host"
+	"github.com/l4ci/rota/internal/migrate"
 	"github.com/l4ci/rota/internal/orchestrate"
 	"github.com/l4ci/rota/internal/reap"
 	"github.com/l4ci/rota/internal/round"
@@ -29,7 +30,7 @@ type Deps struct {
 	TrackerOptions []tracker.Option
 
 	NewTracker     func(ctx context.Context, root string, cfg any) (backlog.Tracker, error)
-	MigrateTracker func(ctx context.Context, root string, cfg any) (backlog.MigrateTracker, error)
+	MigrateTracker func(ctx context.Context, root string, cfg any) (migrate.Tracker, error)
 	MigrateSleep   func(d time.Duration)
 
 	RoundEnv       func(ctx context.Context, root string) round.Env
@@ -69,7 +70,7 @@ func defaultDeps() *Deps {
 	d.NewTracker = func(ctx context.Context, root string, cfg any) (backlog.Tracker, error) {
 		return tracker.New(ctx, tracker.SettingsFromConfig(cfg), "", root)
 	}
-	d.MigrateTracker = func(ctx context.Context, root string, cfg any) (backlog.MigrateTracker, error) {
+	d.MigrateTracker = func(ctx context.Context, root string, cfg any) (migrate.Tracker, error) {
 		return tracker.New(ctx, tracker.SettingsFromConfig(cfg), "", root, d.TrackerOptions...)
 	}
 	d.RoundEnv = func(ctx context.Context, root string) round.Env { return defaultRoundEnv(ctx, root, d.TrackerOptions) }

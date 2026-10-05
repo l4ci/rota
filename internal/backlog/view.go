@@ -139,7 +139,7 @@ func MilestonesFor(rows []Row, match func(Row) bool) []string {
 	for m := range set {
 		out = append(out, m)
 	}
-	num := func(m string) int { n, _ := atoi(m[1:]); return n }
+	num := func(m string) int { n, _ := Atoi(m[1:]); return n }
 	sort.Slice(out, func(i, j int) bool {
 		if a, b := num(out[i]), num(out[j]); a != b {
 			return a < b

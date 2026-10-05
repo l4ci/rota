@@ -58,7 +58,8 @@ func (b *Issues) tracker() (Tracker, error) {
 	return b.Tracker, nil
 }
 
-func (b *Issues) autoCreate() bool {
+// AutoCreate reports issues.autoCreateLabel.
+func (b *Issues) AutoCreate() bool {
 	v, _ := config.Value(b.Cfg, "issues.autoCreateLabel")
 	switch t := v.(type) {
 	case nil:
@@ -181,7 +182,7 @@ func (b *Issues) Create(in CreateInput) (CreateResult, error) {
 		}
 	}
 	full := RenderFieldsBlock(strings.Join(parts, "\n\n"), names, values)
-	if err := tr.EnsureLabels(b.ctx(), labels, b.autoCreate()); err != nil {
+	if err := tr.EnsureLabels(b.ctx(), labels, b.AutoCreate()); err != nil {
 		return CreateResult{}, err
 	}
 	n, err := tr.Create(b.ctx(), title, full, labels, msTitle)
@@ -303,7 +304,7 @@ func (b *Issues) Complete(ref string, in CompleteInput) (bool, error) {
 				return false, nil
 			}
 		}
-		if err := tr.AddLabels(b.ctx(), n, []string{label}, b.autoCreate()); err != nil {
+		if err := tr.AddLabels(b.ctx(), n, []string{label}, b.AutoCreate()); err != nil {
 			return false, err
 		}
 		_, err := tr.AddComment(b.ctx(), n, "Blocked"+suffix+"\n\n"+marker.Line("blocked"))
@@ -514,7 +515,7 @@ func (b *Issues) noteComments(n int, kind string) ([]notePart, error) {
 		}
 		idx := 1
 		if m[4] >= 0 {
-			if idx, err = atoi(body[m[4]:m[5]]); err != nil {
+			if idx, err = Atoi(body[m[4]:m[5]]); err != nil {
 				return nil, err
 			}
 		}
@@ -761,7 +762,7 @@ func (b *Issues) applyState(is Issue, want string) (bool, error) {
 		return false, nil
 	}
 	if len(add) > 0 {
-		if err := b.Tracker.EnsureLabels(b.ctx(), add, b.autoCreate()); err != nil {
+		if err := b.Tracker.EnsureLabels(b.ctx(), add, b.AutoCreate()); err != nil {
 			return false, err
 		}
 	}

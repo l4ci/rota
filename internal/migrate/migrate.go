@@ -1,4 +1,4 @@
-package backlog
+package migrate
 
 import (
 	"context"
@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
@@ -36,33 +37,33 @@ var (
 	ErrBadMap = errors.New("issue-map.json is not a JSON object")
 )
 
-// MigrateTracker is the part of tracker.Adapter the migration calls: the
+// Tracker is the part of tracker.Adapter the migration calls: the
 // issue backend's subset plus the native milestone calls.
-type MigrateTracker = MilestoneTracker
+type Tracker = backlog.MilestoneTracker
 
-// MigrateOptions are the inputs of one run.
-type MigrateOptions struct {
+// Options are the inputs of one run.
+type Options struct {
 	Root  string // the project root, the directory that holds .rota/
 	Apply bool   // false only reports what it would do
 	Limit int    // create at most this many items; negative is no limit
 	Cfg   any    // loaded config
 	// Tracker builds the forge adapter on first use. A preview never calls it.
-	Tracker func() (MigrateTracker, error)
+	Tracker func() (Tracker, error)
 	Sleep   func(time.Duration) // the issues.bulkPaceMs pause; nil is time.Sleep
 	Warn    func(string)        // notices (dropped tags and milestones, duplicate tracking issues)
 	Today   func() string       // YYYY-MM-DD; nil is the local date
 	Ctx     context.Context     // for every tracker call; nil is context.Background()
 }
 
-// MigrateOp is one planned or run operation: Action is the first word of the
+// Op is one planned or run operation: Action is the first word of the
 // old helper's output line, Text the rest.
-type MigrateOp struct{ Action, Text string }
+type Op struct{ Action, Text string }
 
-// MigrateResult is what a run did. It is returned with the error too, so a
+// Result is what a run did. It is returned with the error too, so a
 // failed run still reports its progress.
-type MigrateResult struct {
+type Result struct {
 	Lines    []string // the old helper's stdout, line by line
-	Ops      []MigrateOp
+	Ops      []Op
 	Map      *jsonx.Object // preview: the would-be map; apply: .rota/issue-map.json afterwards
 	Migrated int           // items with an issue in .rota/issue-map.json
 	Total    int           // open items found
@@ -71,7 +72,7 @@ type MigrateResult struct {
 }
 
 type migrator struct {
-	o      MigrateOptions
+	o      Options
 	ctx    context.Context
 	apply  bool
 	items  []*migItem
@@ -79,10 +80,10 @@ type migrator struct {
 	msIDs  map[string]bool
 	imap   *jsonx.Object
 	mapRel string
-	res    *MigrateResult
+	res    *Result
 
-	tr      MigrateTracker
-	be      *Issues
+	tr      Tracker
+	be      *backlog.Issues
 	doneOps int
 	pending int
 	created int
@@ -90,17 +91,17 @@ type migrator struct {
 }
 
 var (
-	migItemKey = regexp.MustCompile(`\A[` + ItemLetters + `]\p{Nd}+\z`)
+	migItemKey = regexp.MustCompile(`\A[` + backlog.ItemLetters + `]\p{Nd}+\z`)
 )
 
 // frozenPrefix starts the banner a finished migration puts on BACKLOG.md.
 const frozenPrefix = "> Frozen:"
 
-// MigrateIssues runs the migration. The error is ErrNothingToMigrate,
+// Run runs the migration. The error is ErrNothingToMigrate,
 // ErrUmbrellaMigrate, ErrBadMap, a *tracker.Error when the forge stopped the
 // run (the map keeps the progress), or another failure of a write; the result
 // is non-nil whenever a run got as far as planning.
-func MigrateIssues(o MigrateOptions) (*MigrateResult, error) {
+func Run(o Options) (*Result, error) {
 	if o.Sleep == nil {
 		o.Sleep = time.Sleep
 	}
@@ -123,7 +124,7 @@ func MigrateIssues(o MigrateOptions) (*MigrateResult, error) {
 		return nil, ErrUmbrellaMigrate
 	}
 	m := &migrator{o: o, ctx: migrateCtx(o.Ctx), apply: o.Apply, msCache: map[string]bool{},
-		mapRel: filepath.Join(rota, "issue-map.json"), res: &MigrateResult{}}
+		mapRel: filepath.Join(rota, "issue-map.json"), res: &Result{}}
 	m.items = planItems(o.Root, text, o.Warn)
 	m.ms = planMilestones(o.Root)
 	m.msIDs = map[string]bool{}
@@ -262,7 +263,7 @@ func (m *migrator) remapRegistry() error {
 }
 
 // finish loads the map as it is on disk and counts what it holds.
-func (m *migrator) finish() *MigrateResult {
+func (m *migrator) finish() *Result {
 	disk, _ := fsio.LoadJSON(m.mapRel, jsonx.NewObject()).(*jsonx.Object)
 	if disk == nil {
 		disk = jsonx.NewObject()
@@ -318,7 +319,7 @@ func (m *migrator) say(line string) {
 	}
 	for _, p := range opActions {
 		if strings.HasPrefix(line, p.prefix) {
-			m.res.Ops = append(m.res.Ops, MigrateOp{p.action, strings.TrimPrefix(line, p.prefix)})
+			m.res.Ops = append(m.res.Ops, Op{p.action, strings.TrimPrefix(line, p.prefix)})
 			return
 		}
 	}
@@ -367,7 +368,7 @@ func (m *migrator) pace() time.Duration {
 }
 
 // backend is the issue backend over the lazily built tracker.
-func (m *migrator) backend() (*Issues, error) {
+func (m *migrator) backend() (*backlog.Issues, error) {
 	if m.be != nil {
 		return m.be, nil
 	}
@@ -376,7 +377,7 @@ func (m *migrator) backend() (*Issues, error) {
 		return nil, err
 	}
 	m.tr = tr
-	m.be = &Issues{Cfg: m.o.Cfg, Tracker: tr, Ctx: m.ctx, Warn: m.o.Warn}
+	m.be = &backlog.Issues{Cfg: m.o.Cfg, Tracker: tr, Ctx: m.ctx, Warn: m.o.Warn}
 	return m.be, nil
 }
 
@@ -594,10 +595,10 @@ func (m *migrator) run() (bool, error) {
 			}
 			continue
 		}
-		fields := []Field{}
+		fields := []backlog.Field{}
 		for _, n := range migOrder {
 			if v := it.fields[n]; v != "" {
-				fields = append(fields, Field{n, v})
+				fields = append(fields, backlog.Field{Name: n, Value: v})
 			}
 		}
 		note := ""
@@ -607,7 +608,7 @@ func (m *migrator) run() (bool, error) {
 				return false, err
 			}
 			if ok {
-				fields = append(fields, Field{"Milestone", it.milestone})
+				fields = append(fields, backlog.Field{Name: "Milestone", Value: it.milestone})
 				note = " milestone " + it.milestone
 			} else {
 				m.o.Warn(fmt.Sprintf("%s: milestone %s is not on the tracker (shipped/archived milestones are not migrated); Milestone field dropped", old, it.milestone))
@@ -624,7 +625,7 @@ func (m *migrator) run() (bool, error) {
 			if err != nil {
 				return err
 			}
-			in := CreateInput{Kind: it.kind, Title: it.title, Tag: it.tag, Desc: it.desc, Fields: fields, Since: it.since}
+			in := backlog.CreateInput{Kind: it.kind, Title: it.title, Tag: it.tag, Desc: it.desc, Fields: fields, Since: it.since}
 			if it.body != nil {
 				in.Body, in.HasBody = []byte(*it.body), true
 			}
@@ -792,10 +793,10 @@ func (m *migrator) adopt(it *migItem) error {
 		if err != nil {
 			return err
 		}
-		if err := be.Tracker.EnsureLabels(m.ctx, labels, be.autoCreate()); err != nil {
+		if err := be.Tracker.EnsureLabels(m.ctx, labels, be.AutoCreate()); err != nil {
 			return err
 		}
-		if err := be.Tracker.AddLabels(m.ctx, n, labels, be.autoCreate()); err != nil {
+		if err := be.Tracker.AddLabels(m.ctx, n, labels, be.AutoCreate()); err != nil {
 			return err
 		}
 		return m.setEntry(old, old[:1]+strconv.Itoa(n), jn(n), got.URL)
@@ -820,13 +821,13 @@ func jn(n int) json.Number { return json.Number(strconv.Itoa(n)) }
 
 // ---- milestones: a native milestone and a tracking issue ----------------------------
 
-// The milestone calls live on Issues (milestones.go), shared with rota
+// The milestone calls live on backlog.Issues (milestones.go), shared with rota
 // milestone; the migrator only builds the backend and passes its inputs.
 
-func (m *migrator) trackerIssue(mid string) (Issue, error) {
+func (m *migrator) trackerIssue(mid string) (backlog.Issue, error) {
 	be, err := m.backend()
 	if err != nil {
-		return Issue{}, err
+		return backlog.Issue{}, err
 	}
 	return be.TrackerIssue(mid)
 }
@@ -856,7 +857,7 @@ func (m *migrator) putMilestone(mid string, ms *migMilestone) error {
 		return err
 	}
 	err = be.MilestonePut(mid, m.rewrite(ms.text, false))
-	if errors.Is(err, ErrMilestoneText) {
+	if errors.Is(err, backlog.ErrMilestoneText) {
 		m.o.Warn(fmt.Sprintf("%s: plan body not copied (%s)", mid, err.Error()))
 		return nil
 	}
