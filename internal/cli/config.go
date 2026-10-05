@@ -32,6 +32,8 @@ func configCommands() []*Command {
 			{Name: "which", Summary: "the registered sub-repo the working directory is in", Verb: repoWhich},
 			{Name: "resolve", Summary: "names to registered sub-repo paths", Verb: repoResolve},
 			{Name: "umbrella", Summary: "is this an umbrella project", Verb: repoUmbrella},
+			{Name: "add", Summary: "register one sub-repo in the umbrella registry", Verb: repoAdd},
+			{Name: "rm", Summary: "unregister one sub-repo from the umbrella registry", Verb: repoRm},
 		}},
 	}
 }

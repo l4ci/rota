@@ -291,3 +291,17 @@ func exists(p string) bool {
 	_, err := os.Stat(p)
 	return err == nil
 }
+
+// Seed is what registering one sub-repo leaves behind outside repos.json, as
+// Umbrella does for each name: its knowledge directory, and a .gitignore line
+// for its directory (rel, below root) when root is itself a git repo. It
+// reports whether it wrote the .gitignore.
+func Seed(root, name, rel string) (bool, error) {
+	if err := os.MkdirAll(filepath.Join(root, ".rota", "knowledge", name), 0o755); err != nil {
+		return false, err
+	}
+	if !exists(filepath.Join(root, ".git")) {
+		return false, nil
+	}
+	return ignoreBlock(root, []string{strings.Trim(filepath.ToSlash(rel), "./")})
+}

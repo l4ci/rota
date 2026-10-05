@@ -71,7 +71,21 @@ The registry is one JSON file at the umbrella's `.rota/repos.json`:
 - Entries are sorted alphabetically for stable diffs.
 - No SHAs, no version pins. Sub-repos are independent git repositories. See `.rota/DECISIONS.md` (Architecture, "Umbrella mode does not use git submodules") for the rationale.
 
-To edit the registry today, re-run `rota init umbrella` from the umbrella. `rota init umbrella` is idempotent: a second run with the same selection is a no-op; a run with new names adds them; names you omit but were previously registered are kept (with a warning).
+Edit the registry with `rota repo add` and `rota repo rm` (see below), or re-run `rota init umbrella` to rescan. `rota init umbrella` is idempotent: a second run with the same selection is a no-op; a run with new names adds them; names you omit but were previously registered are kept (with a warning).
+
+### Editing the registry: `rota repo add` and `rota repo rm`
+
+```bash
+rota repo add services/billing            # registers "billing" at ./services/billing
+rota repo add ./api --name backend        # registers "backend" at ./api
+rota repo rm backend                      # unregisters it; ./api is left alone
+```
+
+`rota repo add <path>` registers one git repo below the umbrella root. The name defaults to the directory's name; `--name` overrides it. Run again with the same name and directory, it changes nothing and exits 0. A name already taken by another directory, or a directory already registered under another name, exits 4. A path that is missing, not a git repo or outside the umbrella exits 3. A new entry gets the same `.rota/knowledge/<name>/` directory and `.gitignore` line `rota init umbrella` writes.
+
+`rota repo rm <name>` drops the entry and nothing else: the repo, its knowledge directory and its `.gitignore` line stay. An unregistered name exits 3. It warns when open items still carry the repo in `Repos:` or an active stream in `status.json` is in it; the warning does not block, and `--json` lists both as `openItems` and `activeStreams`.
+
+Both take `--json`.
 
 ### KNOWLEDGE.md and Glossary in umbrella mode
 
@@ -135,7 +149,6 @@ The `--repo <name>` flag is also exposed on the underlying verbs when you call t
 ## What's not yet in umbrella mode
 
 - **Multi-repo items on the issue backend.** An item lives on one sub-repo's tracker, so `rota item create` refuses several repos: capture one item per repo and link them with `Related:`. On the file backend `Repos:` takes a comma-separated list and `/rota-work` branches in each repo.
-- **Registry editor.** Add/remove repos without re-running `rota init umbrella`. Planned: [#182](https://github.com/l4ci/rota/issues/182).
 
 ## Footguns
 

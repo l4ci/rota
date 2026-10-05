@@ -73,6 +73,8 @@ exit codes and repo scope: [verb contract](../design/contract/README.md).
 | `rota repo which` | the registered sub-repo the working directory is in |
 | `rota repo resolve [<name>…]` | names to registered sub-repo paths |
 | `rota repo umbrella` | is this an umbrella project |
+| `rota repo add <path> [--name <name>]` | register one sub-repo in the umbrella registry |
+| `rota repo rm <name>` | unregister one sub-repo; warns on open items and active streams |
 
 ## `rota id`
 
