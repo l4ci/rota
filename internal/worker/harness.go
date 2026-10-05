@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/exitcode"
 	"path/filepath"
 	"strings"
 
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/harness"
 )
 
@@ -22,7 +24,7 @@ func loadConfig(root string) any { return config.Load(filepath.Join(root, ".rota
 func Harness(kind string) (harness.Harness, error) {
 	h, ok := harness.Lookup(kind)
 	if !ok {
-		return nil, fail(ExitUsage, "kind must be "+harness.KindList()+", got: "+kind)
+		return nil, fail(exitcode.ExitUsage, "kind must be "+harness.KindList()+", got: "+kind)
 	}
 	return h, nil
 }
@@ -34,9 +36,9 @@ func asError(err error) error {
 	if !errors.As(err, &r) {
 		return err
 	}
-	exit := map[harness.Class]int{harness.Usage: ExitUsage, harness.Unavailable: ExitUnavailable,
-		harness.Refused: ExitRefused, harness.Resolution: ExitResolution}[r.Class]
-	e := &Error{Exit: exit, Message: r.Msg, Hint: r.Hint}
+	exit := map[harness.Class]int{harness.Usage: exitcode.ExitUsage, harness.Unavailable: exitcode.ExitUnavailable,
+		harness.Refused: exitcode.ExitRefused, harness.Resolution: exitcode.ExitResolution}[r.Class]
+	e := &exitcode.Error{Exit: exit, Message: r.Msg, Hint: r.Hint}
 	if r.BlockedBy != "" {
 		e.Data = BlockData{BlockedBy: r.BlockedBy}
 	}
@@ -74,15 +76,12 @@ func NeedsModel(root, kind string) bool {
 
 // CommonDir is the git common dir of root, absolute and symlink-resolved: the
 // directory beside which the round lease and the codex homes live.
-func CommonDir(ctx context.Context, git GitFunc, root string) (string, error) {
-	out, errOut, code, err := git(ctx, root, "rev-parse", "--git-common-dir")
+func CommonDir(ctx context.Context, run GitFunc, root string) (string, error) {
+	out, errOut, code, err := run(ctx, root, "rev-parse", "--git-common-dir")
 	if err != nil || code != 0 {
-		return "", fail(ExitUnavailable, "git rev-parse --git-common-dir failed: "+strings.TrimSpace(errOut))
+		return "", fail(exitcode.ExitUnavailable, "git rev-parse --git-common-dir failed: "+strings.TrimSpace(errOut))
 	}
-	p := strings.TrimSpace(out)
-	if !filepath.IsAbs(p) {
-		p = filepath.Join(root, p)
-	}
+	p := git.AbsCommonDir(root, out)
 	if r, err := filepath.EvalSymlinks(p); err == nil {
 		p = r
 	}
@@ -100,7 +99,7 @@ func (e Env) Preflight(ctx context.Context, root, kind, slot string, accept bool
 	}
 	wt := ""
 	if s := LoadRegistry(root).Slot(slot); s != nil {
-		wt = Str(s, "worktree")
+		wt = s.Worktree()
 	}
 	set, err := h.Preflight(ctx, e.probe(), harness.PreflightOpts{
 		Slot: slot, Accept: accept, Herdr: dispatchKind(root) == "herdr", Worktree: wt,
@@ -121,7 +120,7 @@ func launchLine(root string, h harness.Harness, model string) (launch string, hi
 		if errors.As(err, &r) {
 			return launch, hit, asError(err)
 		}
-		return launch, hit, fail(ExitUsage, fmt.Sprintf("%s cannot be parsed (unbalanced quote?): %s", h.CommandKey(), launch))
+		return launch, hit, fail(exitcode.ExitUsage, fmt.Sprintf("%s cannot be parsed (unbalanced quote?): %s", h.CommandKey(), launch))
 	}
 	return launch, hit, nil
 }

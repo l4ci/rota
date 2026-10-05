@@ -73,6 +73,7 @@ func TestA4dLabelClose(t *testing.T) {
 	root := a4dRepo(t, origin)
 	calls := a4dForge(t, origin, map[string]string{
 		"issue view": `{"labels": [{"name": "x"}]}`,
+		"label list": `[{"name": "x"}]`,
 	})
 	code, env, _ := rotaRun(t, "--json", "-C", root, "issues", "label", "3", "--add", "x")
 	if code != 0 || get(dataOf(env), "changed") != false || get(dataOf(env), "action") != "add" {

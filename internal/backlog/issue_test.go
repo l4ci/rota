@@ -10,8 +10,8 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/backlog/trackertest"
+	"github.com/l4ci/rota/internal/golden"
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/pytest"
 )
 
 // fakeTracker is the in-memory, call-recording Tracker.
@@ -121,12 +121,9 @@ func TestIssuesMatchPython(t *testing.T) {
 		scen = append(scen, s)
 	}
 
-	var want []map[string]any
-	pytest.GoldenJSON(t, scen, &want)
-
-	var inputs, got, w []any
+	var got []any
 	items := 0
-	for i, s := range scen {
+	for _, s := range scen {
 		cfg, err := jsonx.Decode([]byte(s.Cfg))
 		if err != nil {
 			t.Fatal(err)
@@ -180,14 +177,12 @@ func TestIssuesMatchPython(t *testing.T) {
 			}
 		}
 		got = append(got, r)
-		w = append(w, want[i])
-		inputs = append(inputs, map[string]any{"scenario": i, "cfg": s.Cfg, "repo": s.Repo, "issues": s.Issues})
 	}
-	n := pytest.Compare(t, "IssueBackend", inputs, got, w)
-	t.Logf("compared %d scenarios (%d items) against IssueBackend.backlog_markdown/fields/_bullet_inner/_done_line/detail_text", n, items)
 	if items < 300 {
 		t.Fatalf("only %d items resolved; test too weak", items)
 	}
+	golden.Check(t, map[string]any{"input": scen}, got)
+	t.Logf("compared %d scenarios (%d items) against IssueBackend.backlog_markdown/fields/_bullet_inner/_done_line/detail_text", len(scen), items)
 }
 
 func TestFieldsBlockMatchesPython(t *testing.T) {
@@ -203,10 +198,8 @@ func TestFieldsBlockMatchesPython(t *testing.T) {
 	for _, is := range genIssues(rng, 150, false) {
 		bodies = append(bodies, is.Body)
 	}
-	var want []map[string]any
-	pytest.GoldenJSON(t, bodies, &want)
-	var got, w, inputs []any
-	for i, body := range bodies {
+	var got []any
+	for _, body := range bodies {
 		text, fields, order := ParseFieldsBlock(body)
 		if order == nil {
 			order = []string{}
@@ -214,11 +207,9 @@ func TestFieldsBlockMatchesPython(t *testing.T) {
 		got = append(got, map[string]any{"text": text, "fields": fields, "order": order,
 			"render":  RenderFieldsBlock(text, order, fields),
 			"render2": RenderFieldsBlock(body, []string{"A", "B", "C", "D"}, map[string]string{"A": " x\n y ", "D": "v"})})
-		w = append(w, want[i])
-		inputs = append(inputs, body)
 	}
-	n := pytest.Compare(t, "fields block", inputs, got, w)
-	t.Logf("compared %d bodies (parse_fields_block, render_fields_block)", n)
+	golden.Check(t, map[string]any{"input": bodies}, got)
+	t.Logf("compared %d bodies (parse_fields_block, render_fields_block)", len(bodies))
 }
 
 func TestIssuesOpenAndErrors(t *testing.T) {

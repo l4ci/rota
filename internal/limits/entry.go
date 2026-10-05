@@ -158,23 +158,10 @@ func NextID(list []Entry) string {
 	return "l" + strconv.Itoa(highest+1)
 }
 
-func registryDef() *jsonx.Object {
-	d := jsonx.NewObject()
-	d.Set("slots", []any{})
-	return d
-}
-
-func listOf(doc *jsonx.Object) []any {
-	raw, _ := doc.Get("limits")
-	list, _ := raw.([]any)
-	return list
-}
-
 // Append adds the entry under the registry lock, numbering it from the list
 // as it is at that moment, and returns it with its id.
 func Append(root string, e Entry) (Entry, error) {
-	err := worker.Update(root, registryDef(), func(doc *jsonx.Object) {
-		list := listOf(doc)
+	err := worker.UpdateList(root, "limits", func(list []any) []any {
 		var cur []Entry
 		for _, v := range list {
 			if o, ok := v.(*jsonx.Object); ok {
@@ -182,20 +169,19 @@ func Append(root string, e Entry) (Entry, error) {
 			}
 		}
 		e.ID = NextID(cur)
-		doc.Set("limits", append(list, e.Object()))
+		return append(list, e.Object())
 	})
 	return e, err
 }
 
 // Save rewrites the entry with the same id under the registry lock.
 func Save(root string, e Entry) error {
-	return worker.Update(root, registryDef(), func(doc *jsonx.Object) {
-		list := listOf(doc)
+	return worker.UpdateList(root, "limits", func(list []any) []any {
 		for i, v := range list {
 			if o, ok := v.(*jsonx.Object); ok && worker.Str(o, "id") == e.ID {
 				list[i] = e.Object()
 			}
 		}
-		doc.Set("limits", list)
+		return list
 	})
 }

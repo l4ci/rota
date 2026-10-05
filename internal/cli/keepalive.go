@@ -357,7 +357,7 @@ func keepaliveStatus(c *Ctx, args []string) (Result, error) {
 	env := roundEnv(ctx, root)
 	l, st, err := env.ReadLease(ctx, root)
 	if err != nil {
-		return Result{}, fromWorker(err)
+		return Result{}, err
 	}
 	cd, err := roundlease.CommonDir(root)
 	if err != nil {

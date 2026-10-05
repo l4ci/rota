@@ -6,13 +6,13 @@ package migrate
 // allowlist of test/grep-gate.sh.
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -22,6 +22,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/hook"
 	"github.com/l4ci/rota/internal/initproj"
 	"github.com/l4ci/rota/internal/jsonx"
@@ -619,18 +620,16 @@ func gitClean(dir string, umbrella bool) error {
 	if _, err := os.Stat(filepath.Join(dir, ".git")); err != nil && umbrella {
 		return nil
 	}
-	cmd := exec.Command("git", "status", "--porcelain")
-	cmd.Dir = dir
-	out, err := cmd.Output()
-	if err != nil {
+	repo := git.Repo{Dir: dir}
+	st, err := repo.Run(context.Background(), "status", "--porcelain")
+	if err != nil || st.Code != 0 {
 		return fmt.Errorf("%w: not inside a git repo (or git unavailable)", ErrGit)
 	}
-	pc := exec.Command("git", "rev-parse", "--show-prefix")
-	pc.Dir = dir
-	pb, _ := pc.Output()
-	prefix := strings.TrimSpace(string(pb))
+	out := st.Stdout
+	pc, _ := repo.Run(context.Background(), "rev-parse", "--show-prefix")
+	prefix := strings.TrimSpace(pc.Stdout)
 	var dirty []string
-	for _, line := range strings.Split(string(out), "\n") {
+	for _, line := range strings.Split(out, "\n") {
 		if len(line) < 4 {
 			continue
 		}
@@ -972,13 +971,8 @@ func legacySkillRoots(o HvOptions, projs []*hvProj) []skills.Root {
 
 // projectTop is the git toplevel of dir, "" outside a work tree.
 func projectTop(dir string) string {
-	cmd := exec.Command("git", "rev-parse", "--show-toplevel")
-	cmd.Dir = dir
-	out, err := cmd.Output()
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(out))
+	top, _, _ := git.Repo{Dir: dir}.Toplevel(context.Background())
+	return top
 }
 
 type legacyManifestFile struct {
@@ -1157,17 +1151,6 @@ func legacyRepos(dir, state string) []legacyRepo {
 
 // workerBranches lists the local hv-worker/* branches of the repo at dir.
 func workerBranches(dir string) []string {
-	cmd := exec.Command("git", "for-each-ref", "--format=%(refname:short)", "refs/heads/hv-worker/")
-	cmd.Dir = dir
-	out, err := cmd.Output()
-	if err != nil {
-		return nil
-	}
-	var b []string
-	for _, l := range strings.Split(strings.TrimSpace(string(out)), "\n") {
-		if l != "" {
-			b = append(b, l)
-		}
-	}
+	b, _, _ := git.Repo{Dir: dir}.ForEachRef(context.Background(), "refs/heads/hv-worker/")
 	return b
 }

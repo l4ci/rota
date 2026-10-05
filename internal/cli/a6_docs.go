@@ -2,6 +2,7 @@ package cli
 
 import (
 	"flag"
+	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"strings"
 
@@ -11,8 +12,9 @@ import (
 	"github.com/l4ci/rota/internal/plan"
 )
 
-// Glue for the design and plan groups (A6). File mode only: issue mode
-// needs internal/tracker and the item model, so those calls exit 71.
+// Glue for the design and plan groups (A6). Add, show, put and rm run on
+// whichever store the backend gives them (a6_stores.go); list, amend and the
+// plan checks work on the files and refuse under backlog.backend "issues".
 
 func docsCommands() []*Command {
 	return []*Command{
@@ -46,7 +48,11 @@ func fileRoot(c *Ctx, readOnly bool) (string, Result, error) {
 	if err != nil {
 		return "", Result{}, err
 	}
-	if !artifact.IssueMode(root) {
+	issue, err := issueBackend(root)
+	if err != nil {
+		return "", Result{}, err
+	}
+	if !issue {
 		return root, Result{}, nil
 	}
 	d := jsonx.NewObject()
@@ -68,7 +74,7 @@ func readBody(c *Ctx, file string) (string, error) {
 		return "", Usage("--body-file is required")
 	}
 	s, err := artifact.ReadBody(c.Stdin, file)
-	return s, fromArtifact(err)
+	return s, err
 }
 
 func idData(id string, changed any) *jsonx.Object {
@@ -100,26 +106,20 @@ func designAdd(fs *flag.FlagSet) RunFunc {
 		if *title == "" {
 			return Result{}, Usage("--title is required")
 		}
-		root, issue, err := modeRoot(c)
+		st, w, err := openDesign(c, id)
 		if err != nil {
 			return Result{}, err
 		}
-		if issue {
-			return designAddIssue(c, id, *title)
+		if err := design.Add(st, id, *title); err != nil {
+			return failAny(err)
 		}
-		if !design.ValidID(id) {
-			return Result{}, fromArtifact(design.Add("", id, *title)) // reports the bad ID
-		}
-		if err := design.Add(root, id, *title); err != nil {
-			return Result{Data: refusal(err)}, fromArtifact(err)
-		}
-		return Result{Data: idData(id, true), Text: id}, nil
+		return Result{Data: typedData(w.ID, w.Type, true), Text: w.ID}, nil
 	}
 }
 
 // refusal is the exit-4 failure data: {"blockedBy": "exists", "changed": false}.
 func refusal(err error) any {
-	if ae, ok := err.(*artifact.Error); ok && ae.Exit == artifact.ExitRefused {
+	if ae, ok := err.(*exitcode.Error); ok && ae.Exit == exitcode.ExitRefused {
 		d := jsonx.NewObject()
 		d.Set("blockedBy", "exists")
 		d.Set("changed", false)
@@ -160,18 +160,15 @@ func runDesignShow(c *Ctx, args []string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	root, issue, err := modeRoot(c)
+	st, w, err := openDesign(c, id)
 	if err != nil {
 		return Result{}, err
 	}
-	if issue {
-		return designShowIssue(c, id)
-	}
-	body, err := design.Show(root, id)
+	body, err := design.Show(st, id)
 	if err != nil {
-		return Result{}, fromArtifact(err)
+		return failAny(err)
 	}
-	d := idData(id, nil)
+	d := typedData(w.ID, w.Type, nil)
 	d.Set("body", body)
 	return Result{Data: d, Text: body}, nil
 }
@@ -183,26 +180,22 @@ func designPut(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		root, issue, err := modeRoot(c)
+		st, w, err := openDesign(c, id)
 		if err != nil {
 			return Result{}, err
 		}
-		if issue {
-			return designPutIssue(c, id, *file)
-		}
-		if !design.ValidID(id) {
-			_, err := design.Put("", id, "")
-			return Result{}, fromArtifact(err)
+		if err := design.CheckID(st, id); err != nil {
+			return failAny(err)
 		}
 		text, err := readBody(c, *file)
 		if err != nil {
 			return Result{}, err
 		}
-		changed, err := design.Put(root, id, text)
+		changed, err := design.Put(st, id, text)
 		if err != nil {
-			return Result{}, fromArtifact(err)
+			return failAny(err)
 		}
-		return Result{Data: idData(id, changed), Text: id}, nil
+		return Result{Data: typedData(w.ID, w.Type, changed), Text: w.ID}, nil
 	}
 }
 
@@ -211,17 +204,14 @@ func runDesignRm(c *Ctx, args []string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	root, issue, err := modeRoot(c)
+	st, w, err := openDesign(c, id)
 	if err != nil {
 		return Result{}, err
 	}
-	if issue {
-		return designRmIssue(c, id)
+	if err := design.Rm(st, id); err != nil {
+		return failAny(err)
 	}
-	if err := design.Rm(root, id); err != nil {
-		return Result{}, fromArtifact(err)
-	}
-	return Result{Data: idData(id, true), Text: id}, nil
+	return Result{Data: typedData(w.ID, w.Type, true), Text: w.ID}, nil
 }
 
 func designAmend(fs *flag.FlagSet) RunFunc {
@@ -245,7 +235,7 @@ func designAmend(fs *flag.FlagSet) RunFunc {
 		}
 		if !design.ValidID(id) {
 			_, err := design.Amend("", id, *heading, *mode, "")
-			return Result{}, fromArtifact(err)
+			return Result{}, err
 		}
 		text, err := readBody(c, *file)
 		if err != nil {
@@ -253,7 +243,7 @@ func designAmend(fs *flag.FlagSet) RunFunc {
 		}
 		changed, err := design.Amend(root, id, *heading, *mode, text)
 		if err != nil {
-			return Result{}, fromArtifact(err)
+			return Result{}, err
 		}
 		d := idData(id, nil)
 		d.Set("section", *heading)
@@ -279,16 +269,13 @@ func planAdd(fs *flag.FlagSet) RunFunc {
 		if len(args) == 1 {
 			o.Key = args[0]
 		}
-		root, issue, err := modeRoot(c)
+		root, st, err := openPlans(c)
 		if err != nil {
 			return Result{}, err
 		}
-		if issue {
-			return planAddIssue(c, root, o)
-		}
-		key, kind, err := plan.Add(root, o)
+		key, kind, err := plan.Add(root, st, o)
 		if err != nil {
-			return Result{Data: refusal(err)}, fromArtifact(err)
+			return failAny(err)
 		}
 		d := jsonx.NewObject()
 		d.Set("key", key)
@@ -307,16 +294,13 @@ func planList(fs *flag.FlagSet) RunFunc {
 		if *milestone != "" && !plan.ValidMilestone(*milestone) {
 			return Result{}, Usage("--milestone must look like M01, got %q", *milestone)
 		}
-		root, issue, err := modeRoot(c)
+		_, st, err := openPlans(c)
 		if err != nil {
 			return Result{}, err
 		}
-		if issue {
-			return planListIssue(c, *milestone)
-		}
-		list, err := plan.List(root, *milestone)
+		list, err := plan.List(st, *milestone)
 		if err != nil {
-			return Result{}, err
+			return failAny(err)
 		}
 		return planListResult(list), nil
 	}
@@ -361,16 +345,13 @@ func runPlanShow(c *Ctx, args []string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	root, issue, err := modeRoot(c)
+	_, st, err := openPlans(c)
 	if err != nil {
 		return Result{}, err
 	}
-	if issue {
-		return planShowIssue(c, key)
-	}
-	body, err := plan.Show(root, key)
+	body, err := plan.Show(st, key)
 	if err != nil {
-		return Result{}, fromArtifact(err)
+		return failAny(err)
 	}
 	d := keyData(key, nil)
 	d.Set("body", body)
@@ -384,24 +365,20 @@ func planPut(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		root, issue, err := modeRoot(c)
+		_, st, err := openPlans(c)
 		if err != nil {
 			return Result{}, err
 		}
-		if issue {
-			return planPutIssue(c, key, *file)
-		}
-		if !plan.ValidKey(key) {
-			_, err := plan.Put("", key, "")
-			return Result{}, fromArtifact(err)
+		if err := plan.CheckKey(st, key); err != nil {
+			return failAny(err)
 		}
 		text, err := readBody(c, *file)
 		if err != nil {
 			return Result{}, err
 		}
-		changed, err := plan.Put(root, key, text)
+		changed, err := plan.Put(st, key, text)
 		if err != nil {
-			return Result{}, fromArtifact(err)
+			return failAny(err)
 		}
 		return Result{Data: keyData(key, changed), Text: key}, nil
 	}
@@ -412,15 +389,12 @@ func runPlanRm(c *Ctx, args []string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	root, issue, err := modeRoot(c)
+	_, st, err := openPlans(c)
 	if err != nil {
 		return Result{}, err
 	}
-	if issue {
-		return planRmIssue(c, key)
-	}
-	if err := plan.Rm(root, key); err != nil {
-		return Result{}, fromArtifact(err)
+	if err := plan.Rm(st, key); err != nil {
+		return failAny(err)
 	}
 	return Result{Data: keyData(key, true), Text: key}, nil
 }
@@ -436,7 +410,7 @@ func runPlanValidateDocs(c *Ctx, args []string) (Result, error) {
 	}
 	ms, text, err := plan.ValidateDocs(root, key)
 	if err != nil {
-		return Result{}, fromArtifact(err)
+		return Result{}, err
 	}
 	rows := []any{}
 	for _, m := range ms {

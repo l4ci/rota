@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -13,7 +14,6 @@ import (
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
-	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/worker"
@@ -32,6 +32,7 @@ const (
 	BlockNotReady     = "not ready"
 	BlockOverlap      = "overlap"
 	BlockClaimed      = "claimed"
+	BlockOpenPR       = "open PR"
 	BlockSlotBusy     = "slot busy"
 	BlockNoFreeSlot   = "no free slot"
 	BlockBriefMissing = "brief missing"
@@ -58,9 +59,11 @@ type AssignOpts struct {
 	Siblings      []string
 	CheckOnly     bool
 	AcceptOverlap bool
-	HolderPID     int
-	Settings      roundcfg.Settings
-	Getenv        func(string) string
+	// AcceptOpenPR lets a deliberate redo through an issue an open PR resolves.
+	AcceptOpenPR bool
+	HolderPID    int
+	Settings     roundcfg.Settings
+	Getenv       func(string) string
 	// Tier, TierReason and Kind are C9: "" means round.tier, no reason, and
 	// the slot's recorded kind, else claude.
 	Tier, TierReason, Kind string
@@ -205,7 +208,7 @@ func blocked(by, format string, a ...any) *BlockedError {
 }
 
 func usage(format string, a ...any) error {
-	return &worker.Error{Exit: worker.ExitUsage, Message: fmt.Sprintf(format, a...)}
+	return &exitcode.Error{Exit: exitcode.ExitUsage, Message: fmt.Sprintf(format, a...)}
 }
 
 func (e Env) workerEnv() worker.Env {
@@ -276,17 +279,17 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 	// issue but is done with a PR: it is parked right before the claim, so a
 	// refusal on the way moves nothing.
 	reg := worker.LoadRegistry(root)
-	var slot *jsonx.Object
+	var slot *worker.Slot
 	resuming, queue := false, false
 	if o.Agent != "" {
 		slot = reg.Slot(o.Agent)
 		if slot == nil {
-			return res, &worker.Error{Exit: worker.ExitResolution, Message: fmt.Sprintf("slot %s is not provisioned: run rota round start", o.Agent)}
+			return res, &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("slot %s is not provisioned: run rota round start", o.Agent)}
 		}
 	} else {
 		for _, name := range set.Roster {
 			s := reg.Slot(name)
-			if s != nil && heldID(worker.Str(s, "task"), worker.Str(s, "branch"), name) == strings.ToUpper(id) {
+			if s != nil && heldID(s.Task(), s.Branch(), name) == strings.ToUpper(id) {
 				slot, resuming = s, true
 				break
 			}
@@ -295,7 +298,7 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 			if slot != nil {
 				break
 			}
-			if s := reg.Slot(name); s != nil && heldID(worker.Str(s, "task"), worker.Str(s, "branch"), name) == "" {
+			if s := reg.Slot(name); s != nil && heldID(s.Task(), s.Branch(), name) == "" {
 				slot = s
 			}
 		}
@@ -313,9 +316,9 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 			return res, blocked(BlockNoFreeSlot, "every roster slot is busy")
 		}
 	}
-	agent := worker.Str(slot, "name")
+	agent := slot.Name()
 	res.Agent = agent
-	if h := heldID(worker.Str(slot, "task"), worker.Str(slot, "branch"), agent); h != "" {
+	if h := heldID(slot.Task(), slot.Branch(), agent); h != "" {
 		if h != strings.ToUpper(id) {
 			ok, why := e.parkable(ctx, slot)
 			if !ok {
@@ -331,7 +334,7 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 	// Kind, tier and model (C9): the model is the tier's entry for the kind.
 	kind := o.Kind
 	if kind == "" {
-		kind = worker.Str(slot, "kind")
+		kind = slot.Kind()
 	}
 	hz, err := worker.Harness(kind)
 	if err != nil {
@@ -371,6 +374,16 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 		return res, blocked(BlockClaimed, "%s has PR %s in review (from %s): rota round transfer %s --to <slot> picks it up", id, worker.Str(q, "pr"), worker.Str(q, "from"), id)
 	}
 
+	if !resuming && !o.AcceptOpenPR {
+		openPR, err := e.openPRIssues(ctx, be)
+		if err != nil {
+			return res, err
+		}
+		if n := openPR[it.Number]; n != 0 {
+			return res, blocked(BlockOpenPR, "%s has open PR #%d: not ready; --accept-open-pr assigns it again for a deliberate redo", id, n)
+		}
+	}
+
 	// 4. Readiness.
 	tracked := e.trackedFiles(ctx, root)
 	inFlight := e.InFlightItems(ctx, root, be, tracked, set.SharedPaths)
@@ -406,8 +419,8 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 	// anything is marked. dispatch runs the same preflight again.
 	setup, err := e.workerEnv().Preflight(ctx, root, kind, agent, o.AcceptCodexVersion)
 	if err != nil {
-		var we *worker.Error
-		if errors.As(err, &we) && we.Exit == worker.ExitRefused {
+		var we *exitcode.Error
+		if errors.As(err, &we) && we.Exit == exitcode.ExitRefused {
 			if bd, ok := we.Data.(worker.BlockData); ok {
 				return res, blocked(bd.BlockedBy, "%s", we.Message)
 			}
@@ -444,11 +457,7 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 		res.Changed = false
 		be.SetState(id, "none")
 		be.Release(id, claimID)
-		mutateSlot(root, agent, func(s *jsonx.Object) {
-			for _, k := range []string{"task", "claimId", "kind", "tier", "model", "tierReason"} {
-				s.Set(k, nil)
-			}
-		})
+		editSlot(root, agent, func(s *worker.Slot) error { s.Unbind(); return nil })
 	}
 	changed, err := be.SetState(id, "in-progress")
 	if err != nil {
@@ -467,19 +476,15 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 	w := e.workerEnv()
 	if _, err := w.ResetTo(root, agent, id, res.Branch, false); err != nil {
 		undo()
-		var we *worker.Error
-		if errors.As(err, &we) && we.Exit == worker.ExitRefused {
+		var we *exitcode.Error
+		if errors.As(err, &we) && we.Exit == exitcode.ExitRefused {
 			return res, blocked(BlockSlotBusy, "%s", we.Message)
 		}
 		return res, err
 	}
-	if err := mutateSlot(root, agent, func(s *jsonx.Object) {
-		s.Set("task", id)
-		s.Set("claimId", claimID)
-		s.Set("kind", kind)
-		s.Set("tier", tier)
-		s.Set("model", nilIfEmpty(res.Model))
-		s.Set("tierReason", nilIfEmpty(reason))
+	if err := editSlot(root, agent, func(s *worker.Slot) error {
+		s.Bind(worker.Binding{Task: id, ClaimID: claimID, Kind: kind, Tier: tier, Model: res.Model, TierReason: reason})
+		return nil
 	}); err != nil {
 		undo()
 		return res, err
@@ -539,7 +544,7 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 func (e Env) pickAccount(ctx context.Context, root, agent string) (string, error) {
 	cur := ""
 	if s := worker.LoadRegistry(root).Slot(agent); s != nil {
-		cur = worker.Str(s, "account")
+		cur = s.Account()
 	}
 	if cur != "" {
 		for _, m := range e.Accounts.Meters(ctx, root) {
@@ -550,7 +555,7 @@ func (e Env) pickAccount(ctx context.Context, root, agent string) (string, error
 	}
 	name, ok := e.Accounts.Pick(ctx, root, nil)
 	if !ok {
-		return "", &worker.Error{Exit: worker.ExitUnavailable, Message: "no work.accounts account has headroom: every configured account is cooling down"}
+		return "", &exitcode.Error{Exit: exitcode.ExitUnavailable, Message: "no work.accounts account has headroom: every configured account is cooling down"}
 	}
 	if _, _, err := e.Accounts.Assign(ctx, root, agent, name); err != nil {
 		return "", err

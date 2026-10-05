@@ -22,6 +22,7 @@ type archForge struct {
 
 func (archForge) OpenPRs(context.Context) ([]tracker.PR, error) { return nil, nil }
 func (archForge) PRState(context.Context, int) (string, error)  { return "", nil }
+func (archForge) ClosedNumbers(string) []int                    { return nil }
 func (f archForge) List(context.Context, tracker.ListFilter) ([]tracker.Issue, error) {
 	return f.closed, nil
 }

@@ -3,6 +3,7 @@ package round
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/exitcode"
 	"strings"
 
 	"github.com/l4ci/rota/internal/jsonx"
@@ -21,17 +22,17 @@ func queuedIssue(q *jsonx.Object) string {
 // parkable says whether a slot's PR can be queued so the slot takes new work:
 // it holds an issue, records a PR, reports done or idle and its worktree has
 // no dirty paths. why names what is missing when it is not.
-func (e Env) parkable(ctx context.Context, s *jsonx.Object) (ok bool, why string) {
+func (e Env) parkable(ctx context.Context, s *worker.Slot) (ok bool, why string) {
 	switch {
 	case slotIssue(s) == "":
 		return false, "holds nothing"
-	case worker.Str(s, "pr") == "":
+	case s.PR() == "":
 		return false, "no PR recorded"
 	}
-	if st := worker.Str(s, "state"); st != "done" && st != "idle" {
+	if st := s.State(); st != "done" && st != "idle" {
 		return false, firstNonEmpty(st, "busy")
 	}
-	dirty, err := e.dirtyPaths(ctx, worker.Str(s, "worktree"))
+	dirty, err := e.dirtyPaths(ctx, s.Worktree())
 	if err != nil {
 		return false, "worktree unreadable"
 	}
@@ -56,7 +57,7 @@ func (e Env) queuePR(ctx context.Context, root, name string) error {
 	reg := worker.LoadRegistry(root)
 	s := reg.Slot(name)
 	if s == nil {
-		return &worker.Error{Exit: worker.ExitResolution, Message: fmt.Sprintf("slot %s is not in the pool", name)}
+		return &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("slot %s is not in the pool", name)}
 	}
 	if ok, why := e.parkable(ctx, s); !ok {
 		return blocked(BlockSlotBusy, "%s", busyMsg(name, slotIssue(s), why))
@@ -65,7 +66,7 @@ func (e Env) queuePR(ctx context.Context, root, name string) error {
 	if err != nil {
 		return err
 	}
-	pr := worker.Str(s, "pr")
+	pr := s.PR()
 	merged := false
 	if n, ok := prNumber(pr); ok && e.Forge != nil {
 		if st, err := e.Forge.PRState(ctx, n); err == nil && st == "merged" {
@@ -74,27 +75,23 @@ func (e Env) queuePR(ctx context.Context, root, name string) error {
 	}
 	rec := jsonx.NewObject()
 	rec.Set("issue", slotIssue(s))
-	rec.Set("branch", firstNonEmpty(p.Branch, worker.Str(s, "branch")))
+	rec.Set("branch", firstNonEmpty(p.Branch, s.Branch()))
 	rec.Set("pr", pr)
-	rec.Set("base", firstNonEmpty(worker.Str(s, "base"), e.Base))
+	rec.Set("base", firstNonEmpty(s.Base(), e.Base))
 	rec.Set("from", name)
-	rec.Set("claimId", worker.Str(s, "claimId"))
+	rec.Set("claimId", s.ClaimID())
 	rec.Set("round", registryRound(root))
-	relays, _ := s.Get("relays")
+	relays := s.Relays()
 	if relays == nil {
 		relays = []any{}
 	}
 	rec.Set("relays", relays)
-	return worker.Update(root, slotsDefault(), func(doc *jsonx.Object) {
+	return worker.UpdateDoc(root, func(doc *jsonx.Object) {
 		if !merged {
 			worker.QueuePR(doc, rec)
 		}
 		if cur := (worker.Registry{Doc: doc}).Slot(name); cur != nil {
-			cur.Set("task", nil)
-			cur.Set("pr", nil)
-			cur.Delete("claimId")
-			cur.Set("state", "idle")
-			cur.Set("branch", "park/"+name)
+			cur.Park(false)
 		}
 	})
 }

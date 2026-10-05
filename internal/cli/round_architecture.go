@@ -123,7 +123,7 @@ func roundArchitecture(fs *flag.FlagSet) RunFunc {
 				continue
 			}
 			if err != nil {
-				return a4Fail(fromWorker(err))
+				return a4Fail(err)
 			}
 			o := jsonx.NewObject()
 			o.Set("id", id)

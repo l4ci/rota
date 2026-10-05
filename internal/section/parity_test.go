@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/l4ci/rota/internal/pytest"
+	"github.com/l4ci/rota/internal/golden"
 )
 
 type kase struct {
@@ -98,14 +98,11 @@ func generated(n int) []kase {
 func TestMatchesPython(t *testing.T) {
 	cases := append(tableCases(), generated(600)...)
 	got := make([]any, len(cases))
-	inputs := make([]any, len(cases))
 	for i, c := range cases {
-		got[i], inputs[i] = goResult(c), c
+		got[i] = goResult(c)
 	}
-	var want []any
-	pytest.GoldenJSON(t, cases, &want)
-	n := pytest.Compare(t, "section", inputs, got, want)
-	t.Logf("compared %d cases (find, body, replace, append, topics)", n)
+	golden.Check(t, map[string]any{"input": cases}, got)
+	t.Logf("compared %d cases (find, body, replace, append, topics)", len(cases))
 }
 
 func TestFindEdges(t *testing.T) {

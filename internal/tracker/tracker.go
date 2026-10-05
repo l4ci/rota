@@ -114,6 +114,7 @@ type Issue struct {
 	ClosedAt    string
 	URL         string
 	Assignees   []string
+	Author      string
 	Comments    []Comment
 }
 
@@ -143,11 +144,15 @@ type PR struct {
 	Body   string
 }
 
-// ListFilter selects issues. An empty State means "open".
+// ListFilter selects issues. An empty State means "open". Mine keeps the
+// issues assigned to the authenticated user; a Limit above zero keeps the
+// first Limit of the result.
 type ListFilter struct {
 	State     string // open | closed | all
 	Labels    []string
 	Milestone string
+	Mine      bool
+	Limit     int
 }
 
 // IssueEdit is a partial issue update; nil and empty fields are left alone.
@@ -170,6 +175,9 @@ type MilestoneEdit struct {
 // Adapter is the normalized API both forges implement.
 type Adapter interface {
 	Provider() string
+	// CheckAuth fails with KindUnavailable unless the forge CLI is installed
+	// and logged in.
+	CheckAuth(ctx context.Context) error
 
 	Create(ctx context.Context, title, body string, labels []string, milestone string) (int, error)
 	Get(ctx context.Context, number int, withComments bool) (Issue, error)
@@ -221,6 +229,22 @@ type Adapter interface {
 	PRComment(ctx context.Context, pr int, body string) error
 	// PRState is "open", "merged" or "closed".
 	PRState(ctx context.Context, pr int) (string, error)
+
+	// PRNeedsBase reports whether PRCreate needs PRSpec.Base (GitLab does).
+	PRNeedsBase() bool
+	// PRCreate opens a PR/MR from s.Head and returns its URL.
+	PRCreate(ctx context.Context, s PRSpec) (string, error)
+
+	// ReleaseDrafts reports whether the forge has draft releases.
+	ReleaseDrafts() bool
+	// ReleaseView reads the release for tag; checked is false when the forge
+	// is not asked (GitLab), and the tag then counts as unreleased.
+	ReleaseView(ctx context.Context, tag string) (rel Release, checked bool, err error)
+	// ReleaseCreate makes a release and returns its URL.
+	ReleaseCreate(ctx context.Context, s ReleaseSpec) (string, error)
+	// ReleaseEdit finishes an existing release (a draft the release workflow
+	// made) and returns its URL.
+	ReleaseEdit(ctx context.Context, s ReleaseSpec) (string, error)
 }
 
 // Settings are the issues.* config values the tracker reads.
@@ -303,6 +327,19 @@ type base struct {
 }
 
 func (b *base) Provider() string { return b.cli.Provider }
+
+// CheckAuth runs `auth status`; any failure, a missing CLI included, is
+// KindUnavailable.
+func (b *base) CheckAuth(ctx context.Context) error {
+	name := "gh"
+	if b.cli.Provider == "gitlab" {
+		name = "glab"
+	}
+	if res, err := b.cli.Run(ctx, []string{"auth", "status"}, nil); err != nil || res.ExitCode != 0 {
+		return unavailable("%s not installed or not authenticated", name)
+	}
+	return nil
+}
 
 func (b *base) ClosedNumbers(body string) []int { return b.closing(body) }
 
@@ -446,6 +483,14 @@ func idText(raw json.RawMessage) string {
 		return s
 	}
 	return string(raw)
+}
+
+// firstN is the first n of list; n at or below zero keeps all of it.
+func firstN(list []Issue, n int) []Issue {
+	if n > 0 && len(list) > n {
+		return list[:n]
+	}
+	return list
 }
 
 // uniq drops empty and repeated names, keeping first-seen order.

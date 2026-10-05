@@ -1,7 +1,10 @@
 package backlog
 
 import (
+	"context"
 	"errors"
+	"time"
+
 	"github.com/l4ci/rota/internal/repos"
 
 	"github.com/l4ci/rota/internal/config"
@@ -17,9 +20,10 @@ type Backend interface {
 	// List returns the backlog's items with canonical IDs (contract rule 11):
 	// open items first, in BACKLOG order (Bugs, Features, Tasks; issue mode sorts by
 	// number within each type, as Markdown renders them), then, when includeClosed,
-	// the closed ones (file: ## Completed in file order, then ARCHIVE.md; issue: newest
-	// closed first, as Markdown renders them). Each Item is what Get(item.ID)
-	// returns. This is how callers enumerate; they must not parse Markdown.
+	// the closed ones, newest first in every backend by Item.ClosedAt (file: ## Completed
+	// and ARCHIVE.md, where a later line is newer on equal dates; issue: closed_at, then
+	// number). Each Item is what Get(item.ID) returns. This is how callers enumerate; they
+	// must not parse Markdown.
 	List(includeClosed bool) ([]Item, error)
 	// Markdown renders the backlog as BACKLOG.md-shaped text, for renderers
 	// only: its bullets spell IDs differently per backend ("F12" in issue mode
@@ -56,11 +60,40 @@ type Backend interface {
 	AddComment(ref, kind, text string) (id string, err error)
 }
 
+// FileOps are the verbs only the file backend has. Callers reach them with
+// `ops, ok := be.(backlog.FileOps)`; issue and umbrella backends do not satisfy it.
+type FileOps interface {
+	NextID(kind string) (string, error)
+	Append(sec, line string) error
+	Remove(ids []string, scrubArchive, apply bool) (RmResult, error)
+	Drift(targets []Target) ([]DriftItem, []SymbolDrift, error)
+	BackfillSince(head string) (stamped int, err error)
+	Archive(days int, today time.Time) (moved int, err error)
+}
+
+// SubRepoScoped is implemented by the umbrella backend: SubRepo is the
+// sub-repo its items resolve in (--repo, else the working directory's), "" when none.
+type SubRepoScoped interface {
+	SubRepo() string
+}
+
+// Options configure Open.
+type Options struct {
+	// Scope narrows an umbrella's reads and bare references to one sub-repo.
+	Scope string
+	// Cwd is the working directory; an umbrella derives its CwdRepo from it.
+	Cwd string
+	// NewTracker builds the tracker for the project root (issues) or one
+	// sub-repo directory (umbrella). It is not called in file mode.
+	NewTracker func(ctx context.Context, dir string) (Tracker, error)
+}
+
 // Open returns the backend selected by backlog.backend in cfg, the loaded
-// config, for the project rooted at root (the directory holding .rota/). The
-// issue backend reads through tr. Umbrella issue mode, where .rota/repos.json
-// registers sub-repos and every one has its own tracker, is NewUmbrella's.
-func Open(root string, cfg any, tr Tracker) (Backend, error) {
+// config, for the project rooted at root (the directory holding .rota/):
+// the file backend, the issues backend, or, when .rota/repos.json registers
+// sub-repos under issue mode, the umbrella. ctx, scope and cwd are set on the
+// result.
+func Open(ctx context.Context, root string, cfg any, opts Options) (Backend, error) {
 	name, err := config.Backend(cfg)
 	if err != nil {
 		return nil, err
@@ -68,22 +101,28 @@ func Open(root string, cfg any, tr Tracker) (Backend, error) {
 	if name == "file" {
 		return &File{Root: root}, nil
 	}
-	if hasRepos(root) {
-		return nil, errors.New("umbrella issue mode opens through NewUmbrella")
-	}
-	if tr == nil {
+	if opts.NewTracker == nil {
 		return nil, errors.New("backlog.backend \"issues\" needs a tracker")
 	}
-	return &Issues{Cfg: cfg, Tracker: tr}, nil
+	if repos.Umbrella(root) {
+		u := NewUmbrella(root, cfg, func(dir string) (Tracker, error) { return opts.NewTracker(ctx, dir) })
+		u.Ctx = ctx
+		u.Scope = opts.Scope
+		if opts.Cwd != "" {
+			u.CwdRepo = CwdSubRepo(opts.Cwd, u.Repos)
+		}
+		return u, nil
+	}
+	tr, err := opts.NewTracker(ctx, root)
+	if err != nil {
+		return nil, err
+	}
+	return &Issues{Cfg: cfg, Tracker: tr, Ctx: ctx}, nil
 }
 
-// IsUmbrella is whether root registers sub-repos in .rota/repos.json.
-func IsUmbrella(root string) bool { return hasRepos(root) }
-
-// hasRepos is whether .rota/repos.json registers at least one sub-repo.
-func hasRepos(root string) bool { return len(repos.Load(root)) > 0 }
-
 var (
-	_ Backend = (*File)(nil)
-	_ Backend = (*Issues)(nil)
+	_ Backend       = (*File)(nil)
+	_ Backend       = (*Issues)(nil)
+	_ FileOps       = (*File)(nil)
+	_ SubRepoScoped = (*Umbrella)(nil)
 )

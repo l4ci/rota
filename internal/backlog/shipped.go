@@ -1,8 +1,9 @@
 package backlog
 
 import (
+	"context"
+	gitx "github.com/l4ci/rota/internal/git"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -90,14 +91,13 @@ func extractTokens(title string) (distinctive, common []string) {
 
 // grepCommits is `git log --oneline --grep=<tok> -i -10` in dir.
 func grepCommits(dir, tok string) []string {
-	cmd := exec.Command("git", "log", "--oneline", "--grep="+tok, "-i", "-10")
-	cmd.Dir = dir
-	out, err := cmd.Output()
-	if err != nil {
+	res, err := gitx.Repo{Dir: dir}.Run(context.Background(), "log", "--oneline", "--grep="+tok, "-i", "-10")
+	if err != nil || res.Code != 0 {
 		return nil
 	}
+	out := res.Stdout
 	var lines []string
-	for _, l := range pystr.Splitlines(string(out)) {
+	for _, l := range pystr.Splitlines(out) {
 		if l = pystr.Strip(l); l != "" {
 			lines = append(lines, l)
 		}
@@ -191,13 +191,11 @@ func AuditTitle(dir, root, title string) TitleAudit {
 // GitRoot is `git rev-parse --show-toplevel` in dir, or dir itself when it is
 // not in a repo.
 func GitRoot(dir string) string {
-	cmd := exec.Command("git", "rev-parse", "--show-toplevel")
-	cmd.Dir = dir
-	out, err := cmd.Output()
-	if err != nil {
+	top, ok, err := gitx.Repo{Dir: dir}.Toplevel(context.Background())
+	if err != nil || !ok {
 		return dir
 	}
-	return pystr.Strip(string(out))
+	return pystr.Strip(top)
 }
 
 // Audit runs the audit for each non-blank title in the git repo around dir.

@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,33 +19,13 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
-// Error is a verb failure with its exit code from the exit table. Data is the
-// failure data a verb may attach on exit 1 and 4.
-type Error struct {
-	Exit    int
-	Message string
-	Hint    string
-	Data    any
-}
-
-func (e *Error) Error() string { return e.Message }
-
-func fail(exit int, msg string) *Error { return &Error{Exit: exit, Message: msg} }
-
-// Exit codes, mirrored from internal/cli so this package does not import it.
-const (
-	ExitFailed      = 1
-	ExitUsage       = 2
-	ExitResolution  = 3
-	ExitRefused     = 4
-	ExitUnavailable = 5
-	ExitRetry       = 6
-)
+func fail(exit int, msg string) *exitcode.Error { return &exitcode.Error{Exit: exit, Message: msg} }
 
 // RegistryPath is the registry file under the project root.
 func RegistryPath(root string) string { return filepath.Join(root, ".rota", "workers.json") }
@@ -67,22 +48,22 @@ func LoadRegistry(root string) Registry {
 }
 
 // Slots lists the slot objects of the registry.
-func (r Registry) Slots() []*jsonx.Object {
+func (r Registry) Slots() []*Slot {
 	raw, _ := r.Doc.Get("slots")
 	list, _ := raw.([]any)
-	var out []*jsonx.Object
+	var out []*Slot
 	for _, e := range list {
 		if o, ok := e.(*jsonx.Object); ok {
-			out = append(out, o)
+			out = append(out, AsSlot(o))
 		}
 	}
 	return out
 }
 
 // Slot finds a slot by name.
-func (r Registry) Slot(name string) *jsonx.Object {
+func (r Registry) Slot(name string) *Slot {
 	for _, s := range r.Slots() {
-		if Str(s, "name") == name {
+		if s.Name() == name {
 			return s
 		}
 	}
@@ -176,9 +157,7 @@ func DropQueued(doc *jsonx.Object, match func(*jsonx.Object) bool) {
 
 // RemoveQueuedPR drops the record for a PR ref, locked.
 func RemoveQueuedPR(root, ref string) error {
-	def := jsonx.NewObject()
-	def.Set("slots", []any{})
-	return Update(root, def, func(doc *jsonx.Object) {
+	return Update(root, slotsDefault(), func(doc *jsonx.Object) {
 		if q := (Registry{Doc: doc}).QueuedPR(ref); q != nil {
 			DropQueued(doc, func(o *jsonx.Object) bool { return o == q })
 		}
@@ -212,23 +191,9 @@ func Update(root string, def *jsonx.Object, mutate func(doc *jsonx.Object)) erro
 	})
 }
 
-// updateSlot edits one slot under the lock, reporting whether it was found.
-func updateSlot(root, name string, mutate func(s *jsonx.Object)) (found bool, err error) {
-	def := jsonx.NewObject()
-	def.Set("slots", []any{})
-	err = Update(root, def, func(doc *jsonx.Object) {
-		for _, s := range (Registry{Doc: doc}).Slots() {
-			if Str(s, "name") == name {
-				mutate(s)
-				found = true
-			}
-		}
-	})
-	return found, err
-}
-
 // SlotData is a slot as `data` shows it: null registry fields are absent.
-func SlotData(s *jsonx.Object) *jsonx.Object {
+func SlotData(sl *Slot) *jsonx.Object {
+	s := sl.Raw()
 	out := jsonx.NewObject()
 	for _, k := range s.Keys() {
 		v, _ := s.Get(k)
@@ -247,27 +212,11 @@ func SlotData(s *jsonx.Object) *jsonx.Object {
 // non-nil error means git could not run at all.
 type GitFunc func(ctx context.Context, dir string, args ...string) (stdout, stderr string, code int, err error)
 
-// gitTimeout bounds one git call.
-const gitTimeout = 2 * time.Minute
-
 // ExecGit is the production GitFunc. git is safe to run for real in tests that
 // use their own temp repositories; herdr and tmux never go through here.
 func ExecGit(ctx context.Context, dir string, args ...string) (string, string, int, error) {
-	ctx, cancel := context.WithTimeout(ctx, gitTimeout)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "git", args...)
-	cmd.Dir = dir
-	// git translates its messages ("CONFLICT (content)" among them) in some
-	// locales; the gate matches on them, so ask for the C locale.
-	cmd.Env = append(os.Environ(), "LC_ALL=C", "LANGUAGE=C")
-	var out, errb strings.Builder
-	cmd.Stdout, cmd.Stderr = &out, &errb
-	err := cmd.Run()
-	var ee *exec.ExitError
-	if errors.As(err, &ee) {
-		return out.String(), errb.String(), ee.ExitCode(), nil
-	}
-	return out.String(), errb.String(), 0, err
+	res, err := git.Repo{Dir: dir}.Run(ctx, args...)
+	return res.Stdout, res.Stderr, res.Code, err
 }
 
 // git runs git and trims one trailing newline from stdout, like $(...).
@@ -401,9 +350,7 @@ func execShell(ctx context.Context, dir, command string) (string, int) {
 // seen again (a re-gate before the worker pushed anything) is not a new bounce
 // and returns the count unchanged. head "" always counts.
 func RecordBounce(root, issue, head string) (n int, err error) {
-	def := jsonx.NewObject()
-	def.Set("slots", []any{})
-	err = Update(root, def, func(doc *jsonx.Object) {
+	err = Update(root, slotsDefault(), func(doc *jsonx.Object) {
 		b := bouncesOf(doc)
 		heads := bounceHeadsOf(doc)
 		n = bounceCount(b, issue)
@@ -423,9 +370,7 @@ func RecordBounce(root, issue, head string) (n int, err error) {
 
 // ClearBounces forgets an item's count: its PR merged or it was handed over.
 func ClearBounces(root, issue string) error {
-	def := jsonx.NewObject()
-	def.Set("slots", []any{})
-	return Update(root, def, func(doc *jsonx.Object) {
+	return Update(root, slotsDefault(), func(doc *jsonx.Object) {
 		if b := bouncesOf(doc); bounceCount(b, issue) > 0 {
 			b.Delete(issue)
 			doc.Set("bounces", b)

@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -227,18 +228,6 @@ func fromTracker(err error) *Error {
 	return &Error{Exit: 70, Message: err.Error()}
 }
 
-func ensureList(doc *jsonx.Object) []any {
-	raw, _ := doc.Get("escalations")
-	list, _ := raw.([]any)
-	return list
-}
-
-func registryDef() *jsonx.Object {
-	d := jsonx.NewObject()
-	d.Set("slots", []any{})
-	return d
-}
-
 // SendOpts are the flags of `rota round escalate send`.
 type SendOpts struct {
 	Number  int
@@ -270,7 +259,7 @@ func Send(ctx context.Context, env Env, root string, o SendOpts) (SendResult, er
 	env = env.withDefaults()
 	var res SendResult
 	if o.Slot != "" && worker.LoadRegistry(root).Slot(o.Slot) == nil {
-		return res, &Error{Exit: worker.ExitResolution, Message: fmt.Sprintf("--slot %s is not a registered slot", o.Slot)}
+		return res, &Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("--slot %s is not a registered slot", o.Slot)}
 	}
 	kind := kindOf(o.PR)
 	// The pending check and NextID below read the registry outside its lock.
@@ -278,11 +267,11 @@ func Send(ctx context.Context, env Env, root string, o SendOpts) (SendResult, er
 	// (ratified by the orchestrator, round 4).
 	list := Load(root)
 	if p, ok := PendingOn(list, kind, o.Number); ok {
-		return res, &Error{Exit: worker.ExitRefused, Message: fmt.Sprintf("escalation %s is still pending on %s #%d", p.ID, kind, o.Number),
+		return res, &Error{Exit: exitcode.ExitRefused, Message: fmt.Sprintf("escalation %s is still pending on %s #%d", p.ID, kind, o.Number),
 			Data: pendingData(p.ID)}
 	}
 	if env.Forge == nil {
-		return res, &Error{Exit: worker.ExitUnavailable, Message: "no forge configured"}
+		return res, &Error{Exit: exitcode.ExitUnavailable, Message: "no forge configured"}
 	}
 	f, err := env.Forge(ctx, root)
 	if err != nil {
@@ -298,7 +287,7 @@ func Send(ctx context.Context, env Env, root string, o SendOpts) (SendResult, er
 	}
 	if err != nil {
 		te := fromTracker(err)
-		if te.Exit == worker.ExitResolution {
+		if te.Exit == exitcode.ExitResolution {
 			te.Message = fmt.Sprintf("no such %s #%d: %s", kind, o.Number, te.Message)
 		}
 		return res, te
@@ -318,8 +307,8 @@ func Send(ctx context.Context, env Env, root string, o SendOpts) (SendResult, er
 		e.Deadline = Time(now.Add(o.Timeout))
 	}
 	res.Entry = e
-	err = worker.Update(root, registryDef(), func(doc *jsonx.Object) {
-		doc.Set("escalations", append(ensureList(doc), e.Object()))
+	err = worker.UpdateList(root, "escalations", func(list []any) []any {
+		return append(list, e.Object())
 	})
 	if err != nil {
 		d := jsonx.NewObject()
@@ -327,7 +316,7 @@ func Send(ctx context.Context, env Env, root string, o SendOpts) (SendResult, er
 		d.Set("commentId", cid)
 		d.Set("url", res.URL)
 		d.Set("changed", false)
-		return res, &Error{Exit: worker.ExitFailed, Message: fmt.Sprintf("comment %s posted (%s) but the record was not written: %v", cid, res.URL, err), Data: d}
+		return res, &Error{Exit: exitcode.ExitFailed, Message: fmt.Sprintf("comment %s posted (%s) but the record was not written: %v", cid, res.URL, err), Data: d}
 	}
 	return res, nil
 }
@@ -394,7 +383,7 @@ func Check(ctx context.Context, env Env, root string, ids []string) (CheckResult
 				}
 			}
 			if !found {
-				return res, &Error{Exit: worker.ExitResolution, Message: fmt.Sprintf("no escalation %s", id)}
+				return res, &Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("no escalation %s", id)}
 			}
 		}
 	}
@@ -407,7 +396,7 @@ func Check(ctx context.Context, env Env, root string, ids []string) (CheckResult
 		}
 		if forge == nil {
 			if env.Forge == nil {
-				return res, &Error{Exit: worker.ExitUnavailable, Message: "no forge configured"}
+				return res, &Error{Exit: exitcode.ExitUnavailable, Message: "no forge configured"}
 			}
 			f, err := env.Forge(ctx, root)
 			if err != nil {
@@ -433,8 +422,7 @@ func Check(ctx context.Context, env Env, root string, ids []string) (CheckResult
 	}
 
 	if len(found) > 0 {
-		err := worker.Update(root, registryDef(), func(doc *jsonx.Object) {
-			stored := ensureList(doc)
+		err := worker.UpdateList(root, "escalations", func(stored []any) []any {
 			for j, v := range stored {
 				o, ok := v.(*jsonx.Object)
 				if !ok {
@@ -448,7 +436,7 @@ func Check(ctx context.Context, env Env, root string, ids []string) (CheckResult
 				o.Set("answer", a.Object())
 				stored[j] = o
 			}
-			doc.Set("escalations", stored)
+			return stored
 		})
 		if err != nil {
 			return res, err

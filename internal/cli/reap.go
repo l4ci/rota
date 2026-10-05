@@ -158,12 +158,12 @@ func reapVerb(fs *flag.FlagSet) RunFunc {
 		}
 		rep, err := env.Status(ctx, root)
 		if err != nil {
-			return Result{}, fromWorker(err)
+			return Result{}, err
 		}
 		in := reap.Input{Root: root, Base: env.Base, Git: env.Git, Report: rep, Agents: agents, Host: ops, Lease: env}
 		found, err := reap.Find(ctx, in, kinds)
 		if err != nil {
-			return Result{}, fromWorker(err)
+			return Result{}, err
 		}
 		for _, w := range found.Warnings {
 			c.Warn("%s", w)

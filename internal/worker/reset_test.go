@@ -2,12 +2,13 @@ package worker
 
 import (
 	"context"
+	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/l4ci/rota/internal/pytest"
+	"github.com/l4ci/rota/internal/golden"
 )
 
 // slotProject builds a project with one initialised slot.
@@ -31,13 +32,11 @@ func commitIn(t *testing.T, dir, file string) {
 
 func TestResetCleanSlotCutsTaskBranch(t *testing.T) {
 	b := slotProject(t)
-	var want map[string]string
-	pytest.Golden(t, map[string]any{"config": `{}`, "pool": "init --slots 1 --base main", "argv": "reset --slot w1 --task 'T-7/Fix Me'"}, &want)
 	res, err := Env{}.Reset(b, "w1", "T-7/Fix Me", false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	mustEqual(t, "workers.json", want["workers.json"], registry(t, b))
+	golden.Check(t, map[string]any{"config": `{}`, "pool": "init --slots 1 --base main", "argv": "reset --slot w1 --task 'T-7/Fix Me'"}, map[string]string{"workers.json": registry(t, b)})
 	if res.Branch != "rota-worker/w1-t-7-fix-me" || !res.Changed || !res.Clean || res.Retained {
 		t.Errorf("%+v", res)
 	}
@@ -70,8 +69,8 @@ func TestResetRefusesDirtyWorktree(t *testing.T) {
 	os.WriteFile(filepath.Join(wt(b), "untracked.txt"), []byte("x"), 0o644)
 	before := registry(t, b)
 	res, err := Env{}.Reset(b, "w1", "T2", false)
-	we, ok := err.(*Error)
-	if !ok || we.Exit != ExitRefused || !strings.Contains(we.Message, "REFUSED w1 — uncommitted changes") {
+	we, ok := err.(*exitcode.Error)
+	if !ok || we.Exit != exitcode.ExitRefused || !strings.Contains(we.Message, "REFUSED w1 — uncommitted changes") {
 		t.Fatalf("err = %v", err)
 	}
 	if res.Clean || res.Changed || len(res.Dirty) != 1 || res.Dirty[0] != "?? untracked.txt" || len(res.Unmerged) != 0 {
@@ -83,7 +82,7 @@ func TestResetRefusesDirtyWorktree(t *testing.T) {
 	mustEqual(t, "registry", before, registry(t, b))
 	// the same refusal is exit 1 under --check-only
 	_, err = Env{}.Reset(b, "w1", "T2", true)
-	if we, ok := err.(*Error); !ok || we.Exit != ExitFailed {
+	if we, ok := err.(*exitcode.Error); !ok || we.Exit != exitcode.ExitFailed {
 		t.Errorf("--check-only err = %v", err)
 	}
 }
@@ -92,8 +91,8 @@ func TestResetRefusesUnmergedCommits(t *testing.T) {
 	b := slotProject(t)
 	commitIn(t, wt(b), "work.txt")
 	res, err := Env{}.Reset(b, "w1", "T3", false)
-	we, ok := err.(*Error)
-	if !ok || we.Exit != ExitRefused || !strings.Contains(we.Message, "REFUSED w1 — 1 commit(s) not on main") {
+	we, ok := err.(*exitcode.Error)
+	if !ok || we.Exit != exitcode.ExitRefused || !strings.Contains(we.Message, "REFUSED w1 — 1 commit(s) not on main") {
 		t.Fatalf("err = %v", err)
 	}
 	if len(res.Unmerged) != 1 || !strings.HasSuffix(res.Unmerged[0], " add work.txt") || len(res.Dirty) != 0 {
@@ -115,9 +114,6 @@ func TestResetTreatsACherryPickedCommitAsMerged(t *testing.T) {
 
 func TestResetRetryKeepsTheTasksOwnWork(t *testing.T) {
 	b := slotProject(t)
-	var want map[string]string
-	pytest.Golden(t, map[string]any{"config": `{}`, "pool": "init --slots 1 --base main",
-		"steps": []string{"reset --slot w1 --task T4", "write wip.txt in w1, record task T4 on the slot", "reset --slot w1 --task T4"}}, &want)
 	if _, err := (Env{}).Reset(b, "w1", "T4", false); err != nil {
 		t.Fatal(err)
 	}
@@ -131,7 +127,8 @@ func TestResetRetryKeepsTheTasksOwnWork(t *testing.T) {
 		t.Fatalf("%+v %v", res, err)
 	}
 	mustEqual(t, "registry", before, registry(t, b))
-	mustEqual(t, "registry vs golden", want["workers.json"], registry(t, b))
+	golden.Check(t, map[string]any{"config": `{}`, "pool": "init --slots 1 --base main",
+		"steps": []string{"reset --slot w1 --task T4", "write wip.txt in w1, record task T4 on the slot", "reset --slot w1 --task T4"}}, map[string]string{"workers.json": registry(t, b)})
 	if _, err := os.Stat(filepath.Join(wt(b), "wip.txt")); err != nil {
 		t.Error("the WIP was dropped")
 	}
@@ -144,25 +141,25 @@ func TestResetRetryKeepsTheTasksOwnWork(t *testing.T) {
 func TestResetResolutionFailures(t *testing.T) {
 	dir := newProject(t, `{}`)
 	exit := func(err error) int {
-		if we, ok := err.(*Error); ok {
+		if we, ok := err.(*exitcode.Error); ok {
 			return we.Exit
 		}
 		return -1
 	}
 	_, err := Env{}.Reset(dir, "w1", "", false)
-	if exit(err) != ExitResolution || !strings.Contains(err.Error(), "no worker pool") {
+	if exit(err) != exitcode.ExitResolution || !strings.Contains(err.Error(), "no worker pool") {
 		t.Errorf("no registry: %v", err)
 	}
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
-	if _, err = (Env{}).Reset(dir, "w9", "", false); exit(err) != ExitResolution || !strings.Contains(err.Error(), "slot 'w9' is not in the pool") {
+	if _, err = (Env{}).Reset(dir, "w9", "", false); exit(err) != exitcode.ExitResolution || !strings.Contains(err.Error(), "slot 'w9' is not in the pool") {
 		t.Errorf("unknown slot: %v", err)
 	}
 	sh(t, dir, "git", "branch", "-m", "main", "trunk")
-	if _, err = (Env{}).Reset(dir, "w1", "", false); exit(err) != ExitResolution || !strings.Contains(err.Error(), "base 'main' does not exist") {
+	if _, err = (Env{}).Reset(dir, "w1", "", false); exit(err) != exitcode.ExitResolution || !strings.Contains(err.Error(), "base 'main' does not exist") {
 		t.Errorf("missing base: %v", err)
 	}
 	os.RemoveAll(wt(dir))
-	if _, err = (Env{}).Reset(dir, "w1", "", false); exit(err) != ExitResolution || !strings.Contains(err.Error(), "worktree missing") {
+	if _, err = (Env{}).Reset(dir, "w1", "", false); exit(err) != exitcode.ExitResolution || !strings.Contains(err.Error(), "worktree missing") {
 		t.Errorf("missing worktree: %v", err)
 	}
 }
@@ -205,8 +202,8 @@ func TestResetTreatsAFailingGitAsUnavailableNotClean(t *testing.T) {
 		}}
 		for _, checkOnly := range []bool{true, false} {
 			res, err := e.Reset(b, "w1", "T9", checkOnly)
-			we, ok := err.(*Error)
-			if !ok || we.Exit != ExitUnavailable || !strings.Contains(we.Message, "git "+failing) || res.Clean || res.Changed {
+			we, ok := err.(*exitcode.Error)
+			if !ok || we.Exit != exitcode.ExitUnavailable || !strings.Contains(we.Message, "git "+failing) || res.Clean || res.Changed {
 				t.Errorf("%s checkOnly=%v: %+v %v", failing, checkOnly, res, err)
 			}
 		}

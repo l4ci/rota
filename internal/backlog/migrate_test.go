@@ -462,10 +462,10 @@ func TestMigrateRemapsRegistryIDs(t *testing.T) {
 		t.Fatalf("%v %+v", err, res)
 	}
 	reg := worker.LoadRegistry(root)
-	if got := worker.Str(reg.Slot("ben"), "task"); got != "2" {
+	if got := reg.Slot("ben").Task(); got != "2" {
 		t.Errorf("task %q", got)
 	}
-	if got := worker.Str(reg.Slot("ben"), "claimId"); got != "ben@1" {
+	if got := reg.Slot("ben").ClaimID(); got != "ben@1" {
 		t.Errorf("claimId %q", got)
 	}
 	if got := worker.Str(reg.PRs()[0], "issue"); got != "4" {
@@ -475,7 +475,7 @@ func TestMigrateRemapsRegistryIDs(t *testing.T) {
 	if _, err := MigrateIssues(o); err != nil {
 		t.Fatal(err)
 	}
-	if got := worker.Str(worker.LoadRegistry(root).Slot("ben"), "task"); got != "2" {
+	if got := worker.LoadRegistry(root).Slot("ben").Task(); got != "2" {
 		t.Errorf("rerun task %q", got)
 	}
 }

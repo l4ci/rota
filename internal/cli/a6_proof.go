@@ -5,14 +5,13 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/plan"
 	"github.com/l4ci/rota/internal/proof"
 )
 
 // Glue for the proof group and plan uncertain, which read items through
-// internal/backlog. File mode only for now; issue mode exits 71.
+// internal/backlog. Both run on whichever store the backend gives them.
 
 func proofCommands() []*Command {
 	return []*Command{
@@ -21,31 +20,6 @@ func proofCommands() []*Command {
 			{Name: "show", Summary: "list an item's proof rows", Verb: proofShow},
 		}},
 	}
-}
-
-// backlogMode is the project root and whether backlog.backend is "issues".
-// An invalid backlog.backend is an internal error (exit 70, as the old
-// helpers exited 1 on it).
-func backlogMode(c *Ctx) (root string, issue bool, err error) {
-	root, err = c.Root()
-	if err != nil {
-		return "", false, err
-	}
-	name, err := config.Backend(config.Load(root + "/.rota/config.json"))
-	if err != nil {
-		return "", false, &Error{Exit: ExitInternal, Message: err.Error()}
-	}
-	return root, name == "issues", nil
-}
-
-func proofData(id string, changed any) *jsonx.Object {
-	d := jsonx.NewObject()
-	d.Set("id", id)
-	d.Set("type", id[:1])
-	if changed != nil {
-		d.Set("changed", changed)
-	}
-	return d
 }
 
 func proofAdd(fs *flag.FlagSet) RunFunc {
@@ -64,24 +38,21 @@ func proofAdd(fs *flag.FlagSet) RunFunc {
 		if *result != "PASS" && *result != "FAIL" {
 			return Result{}, Usage("--result must be exactly PASS or FAIL")
 		}
-		root, issue, err := backlogMode(c)
+		root, st, w, err := openProof(c, id)
 		if err != nil {
 			return Result{}, err
 		}
-		if issue {
-			return proofAddIssue(c, root, id, proof.AddOpts{Check: *check, Result: *result, Evidence: *evidence, Sha: *sha})
-		}
-		row, changed, err := proof.Add(root, id, proof.AddOpts{Check: *check, Result: *result, Evidence: *evidence, Sha: *sha})
+		row, changed, err := proof.Add(st, root, id, proof.AddOpts{Check: *check, Result: *result, Evidence: *evidence, Sha: *sha})
 		if err != nil {
-			return Result{}, fromArtifact(err)
+			return failAny(err)
 		}
-		d := proofData(id, nil)
+		d := typedData(w.ID, w.Type, nil)
 		d.Set("check", row.Check)
 		d.Set("result", row.Result)
 		d.Set("sha", row.Sha)
 		d.Set("evidence", row.Evidence)
 		d.Set("changed", changed)
-		return Result{Data: d, Text: id}, nil
+		return Result{Data: d, Text: w.ID}, nil
 	}
 }
 
@@ -92,18 +63,15 @@ func proofShow(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		root, issue, err := backlogMode(c)
+		_, st, w, err := openProof(c, id)
 		if err != nil {
 			return Result{}, err
 		}
-		if issue {
-			return proofShowIssue(c, id, *count)
-		}
-		rows, lines, err := proof.Show(root, id)
+		rows, lines, err := proof.Show(st, id)
 		if err != nil {
-			return Result{}, fromArtifact(err)
+			return failAny(err)
 		}
-		return proofResult(id, id[:1], rows, lines, *count), nil
+		return proofResult(w.ID, w.Type, rows, lines, *count), nil
 	}
 }
 
@@ -135,18 +103,15 @@ func runPlanUncertain(c *Ctx, args []string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	root, issue, err := backlogMode(c)
+	src, err := openItems(c, id)
 	if err != nil {
 		return Result{}, err
 	}
-	if issue {
-		return uncertainIssue(c, id)
-	}
-	typ, reasons, err := plan.Uncertain(root, id)
+	itemID, typ, reasons, err := plan.Uncertain(src, id)
 	if err != nil {
-		return Result{}, fromArtifact(err)
+		return failAny(err)
 	}
-	return uncertainResult(id, typ, reasons)
+	return uncertainResult(itemID, typ, reasons)
 }
 
 func uncertainResult(id, typ string, reasons []string) (Result, error) {

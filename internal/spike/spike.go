@@ -3,9 +3,11 @@
 package spike
 
 import (
+	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/exitcode"
+	gitx "github.com/l4ci/rota/internal/git"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -24,7 +26,7 @@ func ValidName(name string) bool { return nameRe.MatchString(name) }
 
 func checkName(name string) error {
 	if !ValidName(name) {
-		return artifact.Errf(artifact.ExitUsage, "name must be lowercase alphanumeric + dashes, got '%s'", name)
+		return exitcode.Errf(exitcode.ExitUsage, "name must be lowercase alphanumeric + dashes, got '%s'", name)
 	}
 	return nil
 }
@@ -32,9 +34,14 @@ func checkName(name string) error {
 func file(root, name string) string { return filepath.Join(root, ".rota", "spikes", name+".md") }
 
 func git(dir string, args ...string) error {
-	cmd := exec.Command("git", args...)
-	cmd.Dir = dir
-	return cmd.Run()
+	res, err := gitx.Repo{Dir: dir}.Run(context.Background(), args...)
+	if err != nil {
+		return err
+	}
+	if res.Code != 0 {
+		return fmt.Errorf("exit status %d", res.Code)
+	}
+	return nil
 }
 
 // Add (under the spike file's lock) creates branch spike/<name> in gitDir (the sub-repo named by repo, or
@@ -61,7 +68,7 @@ func Add(root, gitDir, name, question, repo string) (branch string, err error) {
 func add(root, gitDir, path, name, question, repo string) (branch string, err error) {
 	branch = "spike/" + name
 	if _, serr := os.Stat(path); serr == nil {
-		return "", artifact.Errf(artifact.ExitRefused, ".rota/spikes/%s.md already exists", name)
+		return "", exitcode.Errf(exitcode.ExitRefused, ".rota/spikes/%s.md already exists", name)
 	}
 	if git(gitDir, "rev-parse", "--git-dir") != nil {
 		regs := artifact.Repos(root)
@@ -71,16 +78,16 @@ func add(root, gitDir, path, name, question, repo string) (branch string, err er
 				names = append(names, n)
 			}
 			sort.Strings(names)
-			return "", artifact.Errf(artifact.ExitUsage, "spike add from the umbrella root requires --repo <name>").
+			return "", exitcode.Errf(exitcode.ExitUsage, "spike add from the umbrella root requires --repo <name>").
 				WithHint("registered sub-repos: " + strings.Join(names, " "))
 		}
-		return "", artifact.Errf(artifact.ExitUnavailable, "%s is not a git repository", gitDir)
+		return "", exitcode.Errf(exitcode.ExitUnavailable, "%s is not a git repository", gitDir)
 	}
 	if git(gitDir, "rev-parse", "--verify", branch) == nil {
-		return "", artifact.Errf(artifact.ExitRefused, "branch %s already exists", branch)
+		return "", exitcode.Errf(exitcode.ExitRefused, "branch %s already exists", branch)
 	}
 	if err = git(gitDir, "branch", branch); err != nil {
-		return "", artifact.Errf(artifact.ExitUnavailable, "git branch %s failed: %v", branch, err)
+		return "", exitcode.Errf(exitcode.ExitUnavailable, "git branch %s failed: %v", branch, err)
 	}
 	repoLine := ""
 	if repo != "" {
@@ -130,18 +137,18 @@ func Finish(root, name string) (changed bool, err error) {
 	path := file(root, name)
 	content, rerr := fsio.ReadText(path)
 	if rerr != nil {
-		return false, artifact.Errf(artifact.ExitResolution, "spike %s not found (.rota/spikes/%s.md)", name, name)
+		return false, exitcode.Errf(exitcode.ExitResolution, "spike %s not found (.rota/spikes/%s.md)", name, name)
 	}
 	fm, _, _ := frontmatter.Parse(content)
 	if _, has := fm["status"]; !has {
-		return false, artifact.Errf(artifact.ExitInternal, "status field not found in .rota/spikes/%s.md", name)
+		return false, exitcode.Errf(exitcode.ExitInternal, "status field not found in .rota/spikes/%s.md", name)
 	}
 	if frontmatter.Str(fm, "status") == "done" {
 		return false, nil
 	}
 	updated, found := frontmatter.UpdateField(content, "status", "done")
 	if !found {
-		return false, artifact.Errf(artifact.ExitInternal, "status field not found in .rota/spikes/%s.md", name)
+		return false, exitcode.Errf(exitcode.ExitInternal, "status field not found in .rota/spikes/%s.md", name)
 	}
 	date := time.Now().Format("2006-01-02")
 	finished := regexp.MustCompile(`(?m)^(finished:\s*).+$`)
@@ -164,7 +171,7 @@ func Show(root, name string) (string, error) {
 	}
 	b, err := os.ReadFile(file(root, name))
 	if err != nil {
-		return "", artifact.Errf(artifact.ExitResolution, "spike %s not found (.rota/spikes/%s.md)", name, name)
+		return "", exitcode.Errf(exitcode.ExitResolution, "spike %s not found (.rota/spikes/%s.md)", name, name)
 	}
 	return string(b), nil
 }
@@ -176,17 +183,13 @@ type Entry struct {
 }
 
 func spikeBranches(dir string) map[string]bool {
-	cmd := exec.Command("git", "for-each-ref", "--format=%(refname:short)", "refs/heads/spike/")
-	cmd.Dir = dir
-	out, err := cmd.Output()
+	refs, ok, err := gitx.Repo{Dir: dir}.ForEachRef(context.Background(), "refs/heads/spike/")
 	set := map[string]bool{}
-	if err != nil {
+	if err != nil || !ok {
 		return set
 	}
-	for _, l := range strings.Split(string(out), "\n") {
-		if l = strings.TrimSpace(l); l != "" {
-			set[l] = true
-		}
+	for _, l := range refs {
+		set[l] = true
 	}
 	return set
 }

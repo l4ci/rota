@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"errors"
+	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"path/filepath"
 	"strings"
@@ -141,17 +142,17 @@ func TestCodexPreflightRefusals(t *testing.T) {
 		warn   string
 	}
 	cases := map[string]rc{
-		"no codex":       {rig: codexRig{missing: map[string]bool{"codex": true}}, exit: ExitUnavailable},
-		"no herdr":       {rig: codexRig{loggedIn: true, missing: map[string]bool{"herdr": true}}, exit: ExitUnavailable},
-		"too old":        {rig: codexRig{version: "codex-cli 0.158.9\n", loggedIn: true}, exit: ExitRefused, by: "codex version"},
-		"too new":        {rig: codexRig{version: "codex-cli 0.160.0\n", loggedIn: true}, exit: ExitRefused, by: "codex version"},
+		"no codex":       {rig: codexRig{missing: map[string]bool{"codex": true}}, exit: exitcode.ExitUnavailable},
+		"no herdr":       {rig: codexRig{loggedIn: true, missing: map[string]bool{"herdr": true}}, exit: exitcode.ExitUnavailable},
+		"too old":        {rig: codexRig{version: "codex-cli 0.158.9\n", loggedIn: true}, exit: exitcode.ExitRefused, by: "codex version"},
+		"too new":        {rig: codexRig{version: "codex-cli 0.160.0\n", loggedIn: true}, exit: exitcode.ExitRefused, by: "codex version"},
 		"warnings first": {rig: codexRig{version: "WARNING: x\ncodex-cli 0.160.2\n", loggedIn: true}, accept: true, warn: "codex 0.160.2 is outside the supported range >=0.159.0 <0.160.0"},
 		"in range":       {rig: codexRig{version: "WARNING: update available\ncodex-cli 0.159.0\n", loggedIn: true}},
-		"unreadable":     {rig: codexRig{version: "hello\n", loggedIn: true}, exit: ExitRefused, by: "codex version"},
+		"unreadable":     {rig: codexRig{version: "hello\n", loggedIn: true}, exit: exitcode.ExitRefused, by: "codex version"},
 		"unreadable ok":  {rig: codexRig{version: "hello\n", loggedIn: true}, accept: true, warn: "codex (version unreadable) is outside the supported range >=0.159.0 <0.160.0"},
-		"prerelease":     {rig: codexRig{version: "codex-cli 0.159.2-alpha.1\n", loggedIn: true}, exit: ExitRefused, by: "codex version"},
-		"not logged in":  {rig: codexRig{}, exit: ExitUnavailable, hint: "codex login"},
-		"install fails":  {rig: codexRig{loggedIn: true, installRC: 1}, exit: ExitUnavailable, hint: "herdr integration install codex"},
+		"prerelease":     {rig: codexRig{version: "codex-cli 0.159.2-alpha.1\n", loggedIn: true}, exit: exitcode.ExitRefused, by: "codex version"},
+		"not logged in":  {rig: codexRig{}, exit: exitcode.ExitUnavailable, hint: "codex login"},
+		"install fails":  {rig: codexRig{loggedIn: true, installRC: 1}, exit: exitcode.ExitUnavailable, hint: "herdr integration install codex"},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -163,7 +164,7 @@ func TestCodexPreflightRefusals(t *testing.T) {
 				}
 				return
 			}
-			we, _ := err.(*Error)
+			we, _ := err.(*exitcode.Error)
 			if we == nil || we.Exit != c.exit {
 				t.Fatalf("want exit %d, got %v", c.exit, err)
 			}
@@ -185,7 +186,7 @@ func TestCodexPreflightNeedsHerdr(t *testing.T) {
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	rig := &codexRig{loggedIn: true}
 	_, err := rig.env(tmuxFake()).Preflight(bg, dir, harness.Codex, "w1", false)
-	if exitOf(err) != ExitUnavailable || !strings.Contains(err.Error(), "codex workers need work.dispatch=herdr") {
+	if exitOf(err) != exitcode.ExitUnavailable || !strings.Contains(err.Error(), "codex workers need work.dispatch=herdr") {
 		t.Fatalf("%v", err)
 	}
 	if _, serr := os.Stat(filepath.Join(dir, ".git", "rota", "codex")); serr == nil {
@@ -202,7 +203,7 @@ func herdrFake() *fakeHost {
 func TestDispatchCodexSpawnsWithItsHome(t *testing.T) {
 	dir, home := codexProject(t)
 	// An account on the slot must not leak into a codex pane.
-	Update(dir, nil, func(doc *jsonx.Object) { (Registry{Doc: doc}).Slot("w1").Set("configDir", "/acct") })
+	Update(dir, nil, func(doc *jsonx.Object) { (Registry{Doc: doc}).Slot("w1").Raw().Set("configDir", "/acct") })
 	rig := &codexRig{loggedIn: true}
 	f := herdrFake()
 	res, err := rig.env(f).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "go\n"), Task: "T1", Kind: "codex", Model: "gpt-x"})
@@ -222,7 +223,7 @@ func TestDispatchCodexSpawnsWithItsHome(t *testing.T) {
 
 func TestDispatchKindDefaultsToTheSlotsRecordedKind(t *testing.T) {
 	dir, home := codexProject(t)
-	Update(dir, nil, func(doc *jsonx.Object) { (Registry{Doc: doc}).Slot("w1").Set("kind", "codex") })
+	Update(dir, nil, func(doc *jsonx.Object) { (Registry{Doc: doc}).Slot("w1").Raw().Set("kind", "codex") })
 	rig := &codexRig{loggedIn: true}
 	f := herdrFake()
 	res, err := rig.env(f).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "go\n"), Task: "T1"})
@@ -246,15 +247,15 @@ func TestDispatchCodexRefusalsTouchNothing(t *testing.T) {
 		exit    int
 		by, msg string
 	}{
-		"resume":                    {cfg: `{"work":{"dispatch":"herdr","codexCommand":"codex resume --last"}}`, rig: codexRig{loggedIn: true}, exit: ExitRefused, by: "resume flag", msg: "subcommand 'resume'"},
-		"fork":                      {cfg: `{"work":{"dispatch":"herdr","codexCommand":"codex --model x fork"}}`, rig: codexRig{loggedIn: true}, exit: ExitRefused, by: "resume flag", msg: "'fork'"},
-		"unparseable":               {cfg: `{"work":{"dispatch":"herdr","codexCommand":"codex \"oops"}}`, rig: codexRig{loggedIn: true}, exit: ExitUsage, msg: "work.codexCommand cannot be parsed"},
-		"model needed":              {cfg: `{"work":{"dispatch":"herdr","codexCommand":"codex -m {model}"}}`, rig: codexRig{loggedIn: true}, exit: ExitUsage, msg: "{model}"},
-		"wrong binary":              {cfg: `{"work":{"dispatch":"herdr","codexCommand":"claude --x"}}`, rig: codexRig{loggedIn: true}, exit: ExitUnavailable, msg: "does not run codex"},
-		"claude kind, codex binary": {cfg: `{"work":{"dispatch":"herdr","workerCommand":"codex --x"}}`, rig: codexRig{loggedIn: true}, kind: "claude", exit: ExitUnavailable, msg: "does not run claude"},
-		"version":                   {cfg: `{"work":{"dispatch":"herdr"}}`, rig: codexRig{version: "codex-cli 0.200.0\n", loggedIn: true}, exit: ExitRefused, by: "codex version", msg: "outside the supported range"},
-		"login":                     {cfg: `{"work":{"dispatch":"herdr"}}`, rig: codexRig{}, exit: ExitUnavailable, msg: "not logged in"},
-		"bad kind":                  {cfg: `{"work":{"dispatch":"herdr"}}`, rig: codexRig{loggedIn: true}, kind: "gemini", exit: ExitUsage, msg: "claude or codex"},
+		"resume":                    {cfg: `{"work":{"dispatch":"herdr","codexCommand":"codex resume --last"}}`, rig: codexRig{loggedIn: true}, exit: exitcode.ExitRefused, by: "resume flag", msg: "subcommand 'resume'"},
+		"fork":                      {cfg: `{"work":{"dispatch":"herdr","codexCommand":"codex --model x fork"}}`, rig: codexRig{loggedIn: true}, exit: exitcode.ExitRefused, by: "resume flag", msg: "'fork'"},
+		"unparseable":               {cfg: `{"work":{"dispatch":"herdr","codexCommand":"codex \"oops"}}`, rig: codexRig{loggedIn: true}, exit: exitcode.ExitUsage, msg: "work.codexCommand cannot be parsed"},
+		"model needed":              {cfg: `{"work":{"dispatch":"herdr","codexCommand":"codex -m {model}"}}`, rig: codexRig{loggedIn: true}, exit: exitcode.ExitUsage, msg: "{model}"},
+		"wrong binary":              {cfg: `{"work":{"dispatch":"herdr","codexCommand":"claude --x"}}`, rig: codexRig{loggedIn: true}, exit: exitcode.ExitUnavailable, msg: "does not run codex"},
+		"claude kind, codex binary": {cfg: `{"work":{"dispatch":"herdr","workerCommand":"codex --x"}}`, rig: codexRig{loggedIn: true}, kind: "claude", exit: exitcode.ExitUnavailable, msg: "does not run claude"},
+		"version":                   {cfg: `{"work":{"dispatch":"herdr"}}`, rig: codexRig{version: "codex-cli 0.200.0\n", loggedIn: true}, exit: exitcode.ExitRefused, by: "codex version", msg: "outside the supported range"},
+		"login":                     {cfg: `{"work":{"dispatch":"herdr"}}`, rig: codexRig{}, exit: exitcode.ExitUnavailable, msg: "not logged in"},
+		"bad kind":                  {cfg: `{"work":{"dispatch":"herdr"}}`, rig: codexRig{loggedIn: true}, kind: "gemini", exit: exitcode.ExitUsage, msg: "claude or codex"},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -266,7 +267,7 @@ func TestDispatchCodexRefusalsTouchNothing(t *testing.T) {
 			}
 			f := herdrFake()
 			_, err := c.rig.env(f).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "t"), Task: "T1", Kind: kind, Model: c.model})
-			we, _ := err.(*Error)
+			we, _ := err.(*exitcode.Error)
 			if we == nil || we.Exit != c.exit || !strings.Contains(err.Error(), c.msg) {
 				t.Fatalf("err = %v, want exit %d with %q", err, c.exit, c.msg)
 			}
@@ -371,7 +372,7 @@ func TestDispatchCodexRelayWithoutKeyFailsBeforeSending(t *testing.T) {
 	os.Remove(filepath.Join(home, harness.PromptKeyFile))
 	f.calls, f.sent = nil, ""
 	_, err := e.Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "q\n"), Relay: true})
-	if exitOf(err) != ExitUnavailable || !strings.Contains(err.(*Error).Hint, "re-dispatch") {
+	if exitOf(err) != exitcode.ExitUnavailable || !strings.Contains(err.(*exitcode.Error).Hint, "re-dispatch") {
 		t.Fatalf("%v", err)
 	}
 	if len(f.calls) != 0 || f.sent != "" {
@@ -388,7 +389,7 @@ func TestDispatchCodexNeedsTheHookTrustFlag(t *testing.T) {
 	rig := &codexRig{loggedIn: true}
 	f := herdrFake()
 	_, err := rig.env(f).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "t"), Task: "T1", Kind: "codex"})
-	if exitOf(err) != ExitUnavailable || !strings.Contains(err.Error(), "--dangerously-bypass-hook-trust") {
+	if exitOf(err) != exitcode.ExitUnavailable || !strings.Contains(err.Error(), "--dangerously-bypass-hook-trust") {
 		t.Fatalf("%v", err)
 	}
 	if len(f.calls) != 0 || len(rig.calls) != 0 || slotField(t, dir, "w1", "task") != "<null>" {

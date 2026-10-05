@@ -38,6 +38,9 @@ func (r Repo) Run(ctx context.Context, args ...string) (Result, error) {
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = r.Dir
+	// git translates its messages ("CONFLICT (content)" among them) in some
+	// locales; callers match on them, so ask for the C locale.
+	cmd.Env = append(os.Environ(), "LC_ALL=C", "LANGUAGE=C")
 	var out, errb bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errb
 	err := cmd.Run()
@@ -140,6 +143,77 @@ func (r Repo) CreateBranch(ctx context.Context, name string) (msg string, ok boo
 		return "", false, err
 	}
 	return strings.TrimSpace(res.Stderr), res.Code == 0, nil
+}
+
+// out runs git and returns stdout with trailing newlines trimmed. ok is
+// false when git exited non-zero; a failure to run is an error.
+func (r Repo) out(ctx context.Context, args ...string) (s string, ok bool, err error) {
+	res, err := r.Run(ctx, args...)
+	if err != nil || res.Code != 0 {
+		return "", false, err
+	}
+	return strings.TrimRight(res.Stdout, "\n"), true, nil
+}
+
+// CommonDir is the absolute git common dir of Dir (symlinks unresolved), so a
+// linked worktree resolves to its main repository's .git. ok is false when
+// Dir is not in a repository.
+func (r Repo) CommonDir(ctx context.Context) (dir string, ok bool, err error) {
+	p, ok, err := r.out(ctx, "rev-parse", "--git-common-dir")
+	if err != nil || !ok {
+		return "", false, err
+	}
+	base := r.Dir
+	if base == "" {
+		if base, err = os.Getwd(); err != nil {
+			return "", false, err
+		}
+	}
+	return AbsCommonDir(base, p), true, nil
+}
+
+// AbsCommonDir makes the output of `git rev-parse --git-common-dir` run in
+// dir absolute (git prints it relative to dir) and clean. For callers that
+// run git through their own seam; symlinks stay unresolved.
+func AbsCommonDir(dir, out string) string {
+	p := strings.TrimSpace(out)
+	if !filepath.IsAbs(p) {
+		p = filepath.Join(dir, p)
+	}
+	return filepath.Clean(p)
+}
+
+// Toplevel is the root of Dir's work tree; ok is false outside one.
+func (r Repo) Toplevel(ctx context.Context) (string, bool, error) {
+	return r.out(ctx, "rev-parse", "--show-toplevel")
+}
+
+// ShortHead is HEAD's abbreviated hash; ok is false without a first commit.
+func (r Repo) ShortHead(ctx context.Context) (string, bool, error) {
+	return r.out(ctx, "rev-parse", "--short", "HEAD")
+}
+
+// LastCommitDate is the committer date (YYYY-MM-DD) of the newest commit that
+// touched path; ok is false when git fails or the path has no history.
+func (r Repo) LastCommitDate(ctx context.Context, path string) (string, bool, error) {
+	d, ok, err := r.out(ctx, "log", "-1", "--format=%cs", "--", path)
+	return d, ok && d != "", err
+}
+
+// ForEachRef lists the short names of the refs under prefix
+// ("refs/heads/spike/"); ok is false when git fails.
+func (r Repo) ForEachRef(ctx context.Context, prefix string) ([]string, bool, error) {
+	o, ok, err := r.out(ctx, "for-each-ref", "--format=%(refname:short)", prefix)
+	if err != nil || !ok {
+		return nil, false, err
+	}
+	var refs []string
+	for _, l := range strings.Split(o, "\n") {
+		if l = strings.TrimSpace(l); l != "" {
+			refs = append(refs, l)
+		}
+	}
+	return refs, true, nil
 }
 
 // WorktreePath is the umbrella's Layout B worktree for a sub-repo branch.

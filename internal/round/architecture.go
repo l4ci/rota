@@ -105,7 +105,7 @@ func (e Env) Architecture(ctx context.Context, root string, be backlog.Backend, 
 	}
 	reg := worker.LoadRegistry(root)
 	for _, name := range set.Roster {
-		if s := reg.Slot(name); s != nil && heldID(worker.Str(s, "task"), worker.Str(s, "branch"), name) == "" {
+		if s := reg.Slot(name); s != nil && heldID(s.Task(), s.Branch(), name) == "" {
 			a.Idle++
 		}
 	}

@@ -37,3 +37,6 @@ __pycache__/
 
 # rota release builds (goreleaser)
 dist/
+
+# Bytecode cache of the smoke fakes
+__pycache__/

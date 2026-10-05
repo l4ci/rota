@@ -223,7 +223,7 @@ func suiteA4D(t *testing.T) {
 	dboth(&all, one("label/bad-number", dr(2, "issues", "label", "abc", "--add", "bug")))
 	dboth(&all, one("label/two-numbers", dr(2, "issues", "label", "1", "2", "--add", "bug")))
 	dboth(&all, one("label/forge-fails", dr(5, "issues", "label", "1", "--add", "bug").env1("FAKE_TRACKER_FAIL=issue")))
-	add(one("label/rate-limited/github", dr(5, "issues", "label", "1", "--add", "bug").env1(append([]string{"FAKE_TRACKER_FAIL=issue edit"}, rate...)...)),
+	add(one("label/rate-limited/github", dr(6, "issues", "label", "1", "--add", "bug").env1(append([]string{"FAKE_TRACKER_FAIL=issue edit"}, rate...)...)),
 		one("label/rate-limited-remove/github", dr(6, "issues", "label", "1", "--remove", "bug").env1(append([]string{"FAKE_TRACKER_FAIL=issue edit"}, rate...)...)),
 		one("label/rate-limited/gitlab", dr(6, "issues", "label", "1", "--add", "bug").env1(append([]string{"FAKE_TRACKER_FAIL=issue update"}, rate...)...)).on("gitlab"),
 		one("label/rate-limited-remove/gitlab", dr(6, "issues", "label", "1", "--remove", "bug").env1(append([]string{"FAKE_TRACKER_FAIL=issue update"}, rate...)...)).on("gitlab"))

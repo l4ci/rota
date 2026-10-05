@@ -3,8 +3,10 @@ package round
 import (
 	"context"
 	"errors"
+	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -13,6 +15,7 @@ import (
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/roundcfg"
+	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -177,7 +180,7 @@ func TestAssignMarksResetsAndDispatches(t *testing.T) {
 		t.Errorf("claim, state and comment: %+v %+v %v", f.be.claims, f.be.states, f.be.notes)
 	}
 	s := worker.LoadRegistry(f.root).Slot("ben")
-	if worker.Str(s, "task") != "12" || worker.Str(s, "claimId") != "ben@1" || worker.Str(s, "branch") != res.Branch || worker.Str(s, "state") != "busy" {
+	if s.Task() != "12" || s.ClaimID() != "ben@1" || s.Branch() != res.Branch || s.State() != "busy" {
 		t.Errorf("slot: %v", s)
 	}
 	out, _, _, _ := worker.ExecGit(bg, filepath.Join(f.root, ".worktrees", "ben"), "symbolic-ref", "--short", "HEAD")
@@ -205,8 +208,8 @@ func TestAssignRefusals(t *testing.T) {
 	if _, err := f.assign("12", "ben", func(o *AssignOpts) { o.Settings.Roster = []string{"zed"} }); err == nil {
 		t.Error("an agent outside the roster must be refused")
 	}
-	var we *worker.Error
-	if _, err := f.assign("12", "zed", nil); !errors.As(err, &we) || we.Exit != worker.ExitUsage {
+	var we *exitcode.Error
+	if _, err := f.assign("12", "zed", nil); !errors.As(err, &we) || we.Exit != exitcode.ExitUsage {
 		t.Errorf("--agent outside the roster is usage: %v", err)
 	}
 
@@ -338,7 +341,7 @@ func TestAssignUndoesWhenNothingWasSent(t *testing.T) {
 	if len(f.be.claims) != 0 || len(f.be.states) != 0 {
 		t.Errorf("a failure before dispatch undoes claim and state: %+v %+v", f.be.claims, f.be.states)
 	}
-	if s := worker.LoadRegistry(f.root).Slot("ben"); worker.Str(s, "task") != "" || worker.Str(s, "claimId") != "" {
+	if s := worker.LoadRegistry(f.root).Slot("ben"); s.Task() != "" || s.ClaimID() != "" {
 		t.Errorf("and the slot: %v", s)
 	}
 }
@@ -373,7 +376,7 @@ func TestAssignDefaultTierStartsTheWorkerOnItsModel(t *testing.T) {
 		t.Errorf("the worker must launch on the standard model: %q", f.host.launch)
 	}
 	s := worker.LoadRegistry(f.root).Slot("ben")
-	if worker.Str(s, "tier") != "standard" || worker.Str(s, "model") != "sonnet" || worker.Str(s, "kind") != "claude" {
+	if s.Tier() != "standard" || s.Model() != "sonnet" || s.Kind() != "claude" {
 		t.Errorf("slot fields: %v", s)
 	}
 	for _, want := range []string{"Your tier is standard (sonnet).", "claude): light = haiku, standard = sonnet, heavy = opus", "Worker tier: standard (sonnet)"} {
@@ -405,8 +408,8 @@ func TestAssignStandardTierFollowsModelsWorker(t *testing.T) {
 
 func TestAssignAboveDefaultNeedsAReasonAndRecordsIt(t *testing.T) {
 	f := newAssignFixture(t)
-	var we *worker.Error
-	if _, err := f.assign("12", "ben", func(o *AssignOpts) { o.Tier = "heavy" }); !errors.As(err, &we) || we.Exit != worker.ExitUsage {
+	var we *exitcode.Error
+	if _, err := f.assign("12", "ben", func(o *AssignOpts) { o.Tier = "heavy" }); !errors.As(err, &we) || we.Exit != exitcode.ExitUsage {
 		t.Fatalf("heavy above standard needs a reason: %v", err)
 	}
 	if len(f.be.claims) != 0 {
@@ -417,7 +420,7 @@ func TestAssignAboveDefaultNeedsAReasonAndRecordsIt(t *testing.T) {
 		t.Fatalf("%v %+v", err, res)
 	}
 	s := worker.LoadRegistry(f.root).Slot("ben")
-	if worker.Str(s, "tierReason") != "touches the lease protocol" || !strings.Contains(f.host.launch, "--model opus") {
+	if s.TierReason() != "touches the lease protocol" || !strings.Contains(f.host.launch, "--model opus") {
 		t.Errorf("reason recorded and model applied: %v %q", s, f.host.launch)
 	}
 	if !strings.Contains(f.host.sent, "above the default standard: touches the lease protocol") || !strings.Contains(f.host.sent, "Worker tier: heavy (opus)") {
@@ -434,12 +437,12 @@ func TestAssignBelowDefaultNeedsNoReason(t *testing.T) {
 
 func TestAssignRejectsUnknownTierAndKind(t *testing.T) {
 	f := newAssignFixture(t)
-	var we *worker.Error
+	var we *exitcode.Error
 	for name, mod := range map[string]func(*AssignOpts){
 		"tier": func(o *AssignOpts) { o.Tier = "ultra" },
 		"kind": func(o *AssignOpts) { o.Kind = "gemini" },
 	} {
-		if _, err := f.assign("12", "ben", mod); !errors.As(err, &we) || we.Exit != worker.ExitUsage {
+		if _, err := f.assign("12", "ben", mod); !errors.As(err, &we) || we.Exit != exitcode.ExitUsage {
 			t.Errorf("%s: %v", name, err)
 		}
 	}
@@ -502,7 +505,7 @@ func TestAssignCodexResolvesAndStarts(t *testing.T) {
 	if f.host.codexHome != home || f.host.configDir != "" {
 		t.Errorf("home %q configDir %q", f.host.codexHome, f.host.configDir)
 	}
-	if s := worker.LoadRegistry(f.root).Slot("ben"); worker.Str(s, "kind") != "codex" {
+	if s := worker.LoadRegistry(f.root).Slot("ben"); s.Kind() != "codex" {
 		t.Errorf("the kind is recorded: %v", s)
 	}
 	// A slot's recorded kind is the default.
@@ -510,11 +513,11 @@ func TestAssignCodexResolvesAndStarts(t *testing.T) {
 	g.config(t, codexCfg)
 	gr := &codexRig{version: "codex-cli 0.159.2\n"} // not logged in
 	gr.install(g)
-	worker.Update(g.root, slotsDefault(), func(doc *jsonx.Object) {
-		(worker.Registry{Doc: doc}).Slot("ben").Set("kind", "codex")
+	worker.UpdateDoc(g.root, func(doc *jsonx.Object) {
+		(worker.Registry{Doc: doc}).Slot("ben").Raw().Set("kind", "codex")
 	})
-	var we *worker.Error
-	if _, err := g.assign("12", "ben", nil); !errors.As(err, &we) || we.Exit != worker.ExitUnavailable || !strings.Contains(we.Hint, "codex login") {
+	var we *exitcode.Error
+	if _, err := g.assign("12", "ben", nil); !errors.As(err, &we) || we.Exit != exitcode.ExitUnavailable || !strings.Contains(we.Hint, "codex login") {
 		t.Fatalf("the recorded kind is the default, and an unlogged slot is exit 5: %v", err)
 	}
 }
@@ -559,12 +562,12 @@ func TestAssignCodexPreflightRefusesBeforeMarking(t *testing.T) {
 		by     string
 		hint   string
 	}{
-		"no codex":      {rig: codexRig{noCodex: true}, exit: worker.ExitUnavailable},
+		"no codex":      {rig: codexRig{noCodex: true}, exit: exitcode.ExitUnavailable},
 		"old codex":     {rig: codexRig{version: "codex-cli 0.158.9\n", loggedIn: true}, by: BlockCodexVersion},
 		"new codex":     {rig: codexRig{version: "codex-cli 0.160.0\n", loggedIn: true}, by: BlockCodexVersion},
 		"unreadable":    {rig: codexRig{version: "something else\n", loggedIn: true}, by: BlockCodexVersion},
-		"not logged in": {rig: codexRig{version: "codex-cli 0.159.2\n"}, exit: worker.ExitUnavailable, hint: "codex login"},
-		"tmux":          {rig: codexRig{version: "codex-cli 0.159.2\n", loggedIn: true}, cfg: `{"round":{"tiers":{"codex":{"light":"a","standard":"b","heavy":"c"}}}}`, exit: worker.ExitUnavailable},
+		"not logged in": {rig: codexRig{version: "codex-cli 0.159.2\n"}, exit: exitcode.ExitUnavailable, hint: "codex login"},
+		"tmux":          {rig: codexRig{version: "codex-cli 0.159.2\n", loggedIn: true}, cfg: `{"round":{"tiers":{"codex":{"light":"a","standard":"b","heavy":"c"}}}}`, exit: exitcode.ExitUnavailable},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -575,7 +578,7 @@ func TestAssignCodexPreflightRefusesBeforeMarking(t *testing.T) {
 			f.config(t, c.cfg)
 			c.rig.install(f)
 			_, err := f.assign("12", "ben", func(o *AssignOpts) { o.Kind = "codex"; o.AcceptCodexVersion = c.accept })
-			var we *worker.Error
+			var we *exitcode.Error
 			switch {
 			case c.by != "":
 				if blockedBy(t, err) != c.by {
@@ -587,7 +590,7 @@ func TestAssignCodexPreflightRefusesBeforeMarking(t *testing.T) {
 			if len(f.be.claims) != 0 || len(f.be.states) != 0 || len(f.be.notes) != 0 || len(f.host.spawned) != 0 {
 				t.Fatalf("nothing is marked before the refusal: %+v %+v %v", f.be.claims, f.be.states, f.host.spawned)
 			}
-			if s := worker.LoadRegistry(f.root).Slot("ben"); worker.Str(s, "task") != "" || worker.Str(s, "kind") != "" {
+			if s := worker.LoadRegistry(f.root).Slot("ben"); s.Task() != "" || s.Kind() != "" {
 				t.Errorf("the slot stays untouched: %v", s)
 			}
 		})
@@ -637,7 +640,7 @@ func TestAssignCustomWorkerCommandModelPlaceholder(t *testing.T) {
 	if strings.Contains(f.host.launch, "sonnet") || f.host.launch != "mywrap --dangerously-skip-permissions" {
 		t.Errorf("the command runs as written: %q", f.host.launch)
 	}
-	if s := worker.LoadRegistry(f.root).Slot("ben"); worker.Str(s, "tier") != "standard" || worker.Str(s, "model") != "" {
+	if s := worker.LoadRegistry(f.root).Slot("ben"); s.Tier() != "standard" || s.Model() != "" {
 		t.Errorf("tier recorded, model left out: %v", s)
 	}
 
@@ -659,8 +662,87 @@ func TestWindDownClearsTheTierFields(t *testing.T) {
 	}
 	s := worker.LoadRegistry(f.root).Slot("ben")
 	for _, k := range []string{"kind", "tier", "model", "tierReason"} {
-		if worker.Str(s, k) != "" {
+		if worker.Str(s.Raw(), k) != "" {
 			t.Errorf("%s must be cleared on park: %v", k, s)
 		}
 	}
+}
+
+// openPRFixture: issues 12 and 13 carry numbers, and the forge lists open PRs.
+func openPRFixture(t *testing.T, prs ...tracker.PR) *assignFixture {
+	t.Helper()
+	f := newAssignFixture(t)
+	for _, id := range []string{"12", "13", "14"} {
+		n, _ := strconv.Atoi(id)
+		f.be.items[id].Number = n
+	}
+	f.env.Forge = &fakeForge{prs: prs}
+	return f
+}
+
+func TestCandidatesMarkIssuesWithAnOpenPR(t *testing.T) {
+	f := openPRFixture(t,
+		tracker.PR{Number: 104, Branch: "ben/12-add-the-round-assign"},
+		tracker.PR{Number: 109, Branch: "kit/99-other", Body: "Closes #13"},
+		tracker.PR{Number: 95, Branch: "dana/12-duplicate"})
+	cands, err := f.env.Candidates(bg, f.root, f.be, CandidateOpts{Scope: roundcfg.ScopeMilestone})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]int{"12": 95, "13": 109, "14": 0}
+	for _, c := range cands {
+		if c.OpenPR != want[c.ID] {
+			t.Errorf("%s: open PR %d, want %d", c.ID, c.OpenPR, want[c.ID])
+		}
+		if (c.OpenPR != 0) && c.Ready() {
+			t.Errorf("%s has an open PR and must not read ready", c.ID)
+		}
+	}
+}
+
+func TestAssignRefusesAnIssueWithAnOpenPR(t *testing.T) {
+	f := openPRFixture(t, tracker.PR{Number: 104, Branch: "ben/12-add-the-round-assign"})
+	_, err := f.assign("12", "dana", nil)
+	if by := blockedBy(t, err); by != BlockOpenPR || !strings.Contains(err.Error(), "#104") {
+		t.Fatalf("open PR must refuse and name it: %v", err)
+	}
+	if len(f.be.claims) != 0 || f.host.sent != "" {
+		t.Fatal("a refusal must write nothing")
+	}
+	if _, err := f.assign("12", "dana", func(o *AssignOpts) { o.AcceptOpenPR = true }); err != nil {
+		t.Fatalf("--accept-open-pr is a deliberate redo: %v", err)
+	}
+}
+
+func TestAssignResumingASlotIgnoresItsOwnOpenPR(t *testing.T) {
+	f := openPRFixture(t)
+	if _, err := f.assign("12", "ben", nil); err != nil {
+		t.Fatal(err)
+	}
+	f.env.Forge = &fakeForge{prs: []tracker.PR{{Number: 104, Branch: "ben/12-add-the-round-assign"}}}
+	if _, err := f.assign("12", "ben", nil); err != nil {
+		t.Fatalf("the slot that holds the issue owns that PR: %v", err)
+	}
+}
+
+func TestOpenPRsAreListedOncePerCandidatesRun(t *testing.T) {
+	f := openPRFixture(t)
+	cf := &countForge{}
+	f.env.Forge = cf
+	if _, err := f.env.Candidates(bg, f.root, f.be, CandidateOpts{Scope: roundcfg.ScopeMilestone}); err != nil {
+		t.Fatal(err)
+	}
+	if cf.calls != 1 {
+		t.Errorf("OpenPRs called %d times, want 1", cf.calls)
+	}
+}
+
+type countForge struct {
+	fakeForge
+	calls int
+}
+
+func (c *countForge) OpenPRs(ctx context.Context) ([]tracker.PR, error) {
+	c.calls++
+	return c.fakeForge.OpenPRs(ctx)
 }

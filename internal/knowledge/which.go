@@ -1,9 +1,10 @@
 package knowledge
 
 import (
-	"os/exec"
+	"context"
 	"path/filepath"
-	"strings"
+
+	"github.com/l4ci/rota/internal/git"
 )
 
 // DefaultScope is the scope a verb without --repo acts on: the sub-repo that
@@ -14,11 +15,11 @@ func (s Store) DefaultScope(cwd string) string {
 	if len(s.Repos) == 0 {
 		return Umbrella
 	}
-	out, err := exec.Command("git", "-C", cwd, "rev-parse", "--path-format=absolute", "--git-common-dir").Output()
-	if err != nil {
+	common, ok, err := git.Repo{Dir: cwd}.CommonDir(context.Background())
+	if err != nil || !ok {
 		return Umbrella
 	}
-	top := filepath.Dir(strings.TrimSpace(string(out)))
+	top := filepath.Dir(common)
 	if real, err := filepath.EvalSymlinks(top); err == nil {
 		top = real
 	}

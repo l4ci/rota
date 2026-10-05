@@ -40,6 +40,7 @@ type glIssue struct {
 	ClosedAt    string                      `json:"closed_at"`
 	WebURL      string                      `json:"web_url"`
 	Assignees   []struct{ Username string } `json:"assignees"`
+	Author      *struct{ Username string }  `json:"author"`
 	Notes       []glNote                    `json:"notes"`
 }
 
@@ -74,6 +75,9 @@ func (g *GitLab) norm(d glIssue) Issue {
 	}
 	for _, a := range d.Assignees {
 		is.Assignees = append(is.Assignees, a.Username)
+	}
+	if d.Author != nil {
+		is.Author = d.Author.Username
 	}
 	return is
 }
@@ -206,6 +210,14 @@ func (g *GitLab) List(ctx context.Context, f ListFilter) ([]Issue, error) {
 	if f.Milestone != "" {
 		args = append(args, "--milestone", f.Milestone)
 	}
+	if f.Mine {
+		// glab takes usernames for --assignee, not @me (see AssignSelf).
+		me, err := g.username(ctx)
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, "--assignee", me)
+	}
 	var raw []glIssue
 	if err := g.list(ctx, args, glPerPage, glPaging, &raw); err != nil {
 		return nil, err
@@ -214,7 +226,7 @@ func (g *GitLab) List(ctx context.Context, f ListFilter) ([]Issue, error) {
 	for _, d := range raw {
 		out = append(out, g.norm(d))
 	}
-	return out, nil
+	return firstN(out, f.Limit), nil
 }
 
 func (g *GitLab) Edit(ctx context.Context, number int, e IssueEdit) error {

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/l4ci/rota/internal/pytest"
+	"github.com/l4ci/rota/internal/golden"
 )
 
 // project is one generated .rota/ tree.
@@ -85,18 +85,15 @@ func TestFileMatchesPython(t *testing.T) {
 	for _, p := range projects {
 		p.write(t)
 	}
-	var want []map[string]any
 	// Roots are fresh temp dirs; the golden records the inputs without them.
 	recorded := make([]project, len(projects))
 	copy(recorded, projects)
 	for i := range recorded {
 		recorded[i].Root = ""
 	}
-	pytest.Golden(t, map[string]any{"input": recorded}, &want)
-
-	var got, inputs []any
+	var got []any
 	items := 0
-	for i, p := range projects {
+	for _, p := range projects {
 		f := &File{Root: p.Root}
 		r := map[string]any{"corpus": f.Corpus(), "items": []any{}, "detail": []any{}}
 		if md, err := f.Markdown(-1); err == nil {
@@ -138,19 +135,13 @@ func TestFileMatchesPython(t *testing.T) {
 				r["detail"] = append(r["detail"].([]any), nil)
 			}
 		}
-		_ = i
 		got = append(got, r)
-		inputs = append(inputs, map[string]any{"project": i, "backlog": p.Backlog, "archive": p.Archive, "noBacklog": p.NoBacklog})
 	}
-	w := make([]any, len(want))
-	for i := range want {
-		w[i] = want[i]
-	}
-	n := pytest.Compare(t, "FileBackend", inputs, got, w)
-	t.Logf("compared %d projects (%d items found) against FileBackend.fields/detail_text/backlog_markdown and load_backlog_corpus", n, items)
 	if items < 100 {
 		t.Fatalf("generator found only %d items; the test is too weak", items)
 	}
+	golden.Check(t, map[string]any{"input": recorded}, got)
+	t.Logf("compared %d projects (%d items found) against FileBackend.fields/detail_text/backlog_markdown and load_backlog_corpus", len(projects), items)
 }
 
 func TestFileItemShape(t *testing.T) {
@@ -205,12 +196,9 @@ func TestNextIDMatchesPython(t *testing.T) {
 		{"- **[B0001] a.**", "", nil, []string{"bugs"}},
 		{"- **[B100] a.**", "", str(`{"bugs": 1}`), []string{"bugs"}},
 	}
-	var want []map[string]any
-	pytest.GoldenJSON(t, scen, &want)
-
-	var inputs, got, w []any
+	var got []any
 	ids := 0
-	for i, s := range scen {
+	for _, s := range scen {
 		root := t.TempDir()
 		rota := filepath.Join(root, ".rota")
 		os.MkdirAll(rota, 0o755)
@@ -237,11 +225,9 @@ func TestNextIDMatchesPython(t *testing.T) {
 			r["counters"] = string(raw)
 		}
 		got = append(got, r)
-		w = append(w, want[i])
-		inputs = append(inputs, s)
 	}
-	n := pytest.Compare(t, "next_id", inputs, got, w)
-	t.Logf("compared %d counter scenarios (%d IDs minted), counters.json byte for byte", n, ids)
+	golden.Check(t, map[string]any{"input": scen}, got)
+	t.Logf("compared %d counter scenarios (%d IDs minted), counters.json byte for byte", len(scen), ids)
 }
 
 // A fractional counter at or above every ID: Python writes the bumped float
@@ -331,10 +317,30 @@ func TestFileListOrder(t *testing.T) {
 	}
 	all, _ := f.List(true)
 	// B02 is open in the backlog and also on a done line: listed once, first.
-	if got := strings.Join(ids(all), ","); got != "B02,B01,F05,T01,B09,B08,F01" {
+	// The closed ones follow newest first.
+	if got := strings.Join(ids(all), ","); got != "B02,B01,F05,T01,B08,B09,F01" {
 		t.Fatalf("all = %s", got)
 	}
-	if all[5].Reason != "dropped" || all[5].Note != "no" || !all[5].Closed {
-		t.Fatalf("B08 = %+v", all[5])
+	if all[4].Reason != "dropped" || all[4].Note != "no" || !all[4].Closed || all[4].ClosedAt != "2026-01-03" {
+		t.Fatalf("B08 = %+v", all[4])
+	}
+}
+
+// #17: completions that share a date list the later line first, and Completed
+// is newer than ARCHIVE.md on a tie.
+func TestFileListClosedNewestFirst(t *testing.T) {
+	root := t.TempDir()
+	p := project{Root: root,
+		Backlog: "## Bugs\n\n## Features\n\n## Tasks\n\n## Completed\n\n" +
+			"- ~~**[B01] One.**~~ Done 2026-02-01 [`a`]\n- ~~**[B02] Two.**~~ Done 2026-03-01 [`b`]\n" +
+			"- ~~**[B03] Three.**~~ Done 2026-03-01 [`c`]\n- ~~**[B04] Four.**~~ Done 2026-03-01 [`d`]\n",
+		Archive: "- ~~**[B05] Five.**~~ Done 2026-03-01 [`e`]\n- ~~**[B06] Six.**~~ Done 2026-04-01 [`f`]\n"}
+	p.write(t)
+	all, err := (&File{Root: root}).List(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(ids(all), ","); got != "B06,B04,B03,B02,B05,B01" {
+		t.Fatalf("all = %s", got)
 	}
 }

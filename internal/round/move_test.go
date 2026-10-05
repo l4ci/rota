@@ -3,6 +3,7 @@ package round
 import (
 	"context"
 	"errors"
+	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -227,7 +228,7 @@ func (f *moveFx) agents(slots ...string) {
 	}
 }
 
-func (f *moveFx) slot(name string) *jsonx.Object { return worker.LoadRegistry(f.root).Slot(name) }
+func (f *moveFx) slot(name string) *worker.Slot { return worker.LoadRegistry(f.root).Slot(name) }
 
 func (f *moveFx) remoteHas(t *testing.T, branch string) bool {
 	t.Helper()
@@ -244,7 +245,7 @@ func hasKind(l []string, k string) bool {
 }
 
 func exitOf(err error) int {
-	var we *worker.Error
+	var we *exitcode.Error
 	if errors.As(err, &we) {
 		return we.Exit
 	}
@@ -255,7 +256,7 @@ func exitOf(err error) int {
 
 func TestParkSalvagesDirtyPathsByNameAndPushes(t *testing.T) {
 	f := newMoveFx(t)
-	branch := worker.Str(f.slot("ben"), "branch")
+	branch := f.slot("ben").Branch()
 	os.WriteFile(filepath.Join(f.wt("ben"), "ben-work.txt"), []byte("edited"), 0o644)
 	os.WriteFile(filepath.Join(f.wt("ben"), "new.txt"), []byte("new"), 0o644)
 	os.WriteFile(filepath.Join(f.root, "elsewhere.txt"), []byte("not the slot's"), 0o644)
@@ -290,13 +291,13 @@ func TestParkSalvagesDirtyPathsByNameAndPushes(t *testing.T) {
 
 func TestParkFailedPushLeavesTheSlotAsFound(t *testing.T) {
 	f := newMoveFx(t)
-	branch := worker.Str(f.slot("ben"), "branch")
+	branch := f.slot("ben").Branch()
 	os.WriteFile(filepath.Join(f.wt("ben"), "dirty.txt"), []byte("wip"), 0o644)
 	head := gitIn(t, f.wt("ben"), "rev-parse", "HEAD")
 	sh(t, f.root, "remote", "set-url", "origin", filepath.Join(t.TempDir(), "gone.git"))
 
 	_, err := f.env.Park(bg, f.root, "ben", "return")
-	if exitOf(err) != worker.ExitUnavailable {
+	if exitOf(err) != exitcode.ExitUnavailable {
 		t.Fatalf("a failed push is exit 5: %v", err)
 	}
 	if cur := gitIn(t, f.wt("ben"), "symbolic-ref", "--short", "HEAD"); cur != branch {
@@ -312,14 +313,14 @@ func TestParkFailedPushLeavesTheSlotAsFound(t *testing.T) {
 
 func TestParkRejectedSalvageCommitLeavesTheSlotAsFound(t *testing.T) {
 	f := newMoveFx(t)
-	branch := worker.Str(f.slot("ben"), "branch")
+	branch := f.slot("ben").Branch()
 	hook := filepath.Join(f.root, ".git", "hooks")
 	os.MkdirAll(hook, 0o755)
 	os.WriteFile(filepath.Join(hook, "pre-commit"), []byte("#!/bin/sh\necho no >&2\nexit 1\n"), 0o755)
 	os.WriteFile(filepath.Join(f.wt("ben"), "dirty.txt"), []byte("wip"), 0o644)
 
 	_, err := f.env.Park(bg, f.root, "ben", "return")
-	if exitOf(err) != worker.ExitUnavailable {
+	if exitOf(err) != exitcode.ExitUnavailable {
 		t.Fatalf("a rejected commit is exit 5: %v", err)
 	}
 	if cur := gitIn(t, f.wt("ben"), "symbolic-ref", "--short", "HEAD"); cur != branch {
@@ -400,7 +401,7 @@ func TestStalledReadsCommitsAndUncommittedEdits(t *testing.T) {
 func TestReconcileReportsStalledNeverRepairsIt(t *testing.T) {
 	f := newMoveFx(t)
 	f.agents("ben")
-	mutateSlot(f.root, "ben", func(s *jsonx.Object) {
+	rawSlot(f.root, "ben", func(s *jsonx.Object) {
 		s.Set("handle", "w1:ben")
 		s.Set("activeAt", f.now.Add(-45*time.Minute).UTC().Format(time.RFC3339))
 	})
@@ -419,7 +420,7 @@ func TestReconcileReportsStalledNeverRepairsIt(t *testing.T) {
 			t.Error("stalled is never repaired")
 		}
 	}
-	if s := f.slot("ben"); worker.Str(s, "task") != "12" || worker.Str(s, "claimId") != "ben@1" {
+	if s := f.slot("ben"); s.Task() != "12" || s.ClaimID() != "ben@1" {
 		t.Errorf("apply must leave the slot alone: %v", s)
 	}
 }
@@ -427,7 +428,7 @@ func TestReconcileReportsStalledNeverRepairsIt(t *testing.T) {
 func TestReconcileDeadIsNotStalled(t *testing.T) {
 	f := newMoveFx(t)
 	f.agents() // the host runs nothing
-	mutateSlot(f.root, "ben", func(s *jsonx.Object) { s.Set("handle", "w1:ben") })
+	rawSlot(f.root, "ben", func(s *jsonx.Object) { s.Set("handle", "w1:ben") })
 	f.now = f.now.Add(5 * time.Hour)
 	rep, err := f.env.Status(bg, f.root)
 	if err != nil {
@@ -442,8 +443,8 @@ func TestReconcileDeadIsNotStalled(t *testing.T) {
 func TestReconcileEscalationPendingIsNotStalled(t *testing.T) {
 	f := newMoveFx(t)
 	f.agents("ben")
-	mutateSlot(f.root, "ben", func(s *jsonx.Object) { s.Set("handle", "w1:ben") })
-	worker.Update(f.root, slotsDefault(), func(doc *jsonx.Object) {
+	rawSlot(f.root, "ben", func(s *jsonx.Object) { s.Set("handle", "w1:ben") })
+	worker.UpdateDoc(f.root, func(doc *jsonx.Object) {
 		e := jsonx.NewObject()
 		e.Set("id", "e1")
 		e.Set("kind", "issue")
@@ -458,7 +459,7 @@ func TestReconcileEscalationPendingIsNotStalled(t *testing.T) {
 		t.Errorf("a slot waiting on an escalation is never stalled: %+v", rep.Findings)
 	}
 	// Without the escalation it is stalled, and 0 turns the check off.
-	worker.Update(f.root, slotsDefault(), func(doc *jsonx.Object) { doc.Delete("escalations") })
+	worker.UpdateDoc(f.root, func(doc *jsonx.Object) { doc.Delete("escalations") })
 	if rep, _ := f.env.Status(bg, f.root); !hasKind(kinds(rep.Findings)["ben"], StalledSlot) {
 		t.Fatalf("control: stalled once the escalation is gone: %+v", rep.Findings)
 	}
@@ -506,7 +507,7 @@ func TestClaimMismatchOnADesyncedFixture(t *testing.T) {
 	if !repaired {
 		t.Fatalf("apply should clear the claimId: %+v", out)
 	}
-	if s := f.slot("ben"); worker.Str(s, "claimId") != "" || worker.Str(s, "task") != "12" {
+	if s := f.slot("ben"); s.ClaimID() != "" || s.Task() != "12" {
 		t.Errorf("claimId cleared, task kept: %v", s)
 	}
 	if len(f.be.claims) != 0 {
@@ -514,7 +515,7 @@ func TestClaimMismatchOnADesyncedFixture(t *testing.T) {
 	}
 
 	// Another holder: reported, not repaired (ambiguous).
-	mutateSlot(f.root, "ben", func(s *jsonx.Object) { s.Set("claimId", "ben@1") })
+	rawSlot(f.root, "ben", func(s *jsonx.Object) { s.Set("claimId", "ben@1") })
 	f.be.claims["12"] = "dana@1"
 	out, _ = f.env.Reconcile(bg, f.root, true)
 	for _, r := range out.Repaired {
@@ -522,7 +523,7 @@ func TestClaimMismatchOnADesyncedFixture(t *testing.T) {
 			t.Errorf("an ambiguous mismatch is not repaired: %+v", r)
 		}
 	}
-	if s := f.slot("ben"); worker.Str(s, "claimId") != "ben@1" {
+	if s := f.slot("ben"); s.ClaimID() != "ben@1" {
 		t.Errorf("the registry must be left alone: %v", s)
 	}
 	drifted := false
@@ -550,7 +551,7 @@ func TestClaimMismatchOnADesyncedFixture(t *testing.T) {
 
 func TestReturnParksCommentsReleasesAndFreesTheSlot(t *testing.T) {
 	f := newMoveFx(t)
-	branch := worker.Str(f.slot("ben"), "branch")
+	branch := f.slot("ben").Branch()
 	os.WriteFile(filepath.Join(f.wt("ben"), "half.txt"), []byte("wip"), 0o644)
 
 	res, err := f.ret("ben", "premise is wrong", func(o *ReturnOpts) { o.Note = "tried A, B is next" })
@@ -576,7 +577,7 @@ func TestReturnParksCommentsReleasesAndFreesTheSlot(t *testing.T) {
 		t.Errorf("the marker ends the comment:\n%s", last)
 	}
 	s := f.slot("ben")
-	if worker.Str(s, "task") != "" || worker.Str(s, "claimId") != "" || worker.Str(s, "state") != "idle" || worker.Str(s, "branch") != "park/ben" || worker.Str(s, "pr") != "" {
+	if s.Task() != "" || s.ClaimID() != "" || s.State() != "idle" || s.Branch() != "park/ben" || s.PR() != "" {
 		t.Errorf("slot: %v", s)
 	}
 	if cur := gitIn(t, f.wt("ben"), "symbolic-ref", "--short", "HEAD"); cur != "park/ben" {
@@ -586,7 +587,7 @@ func TestReturnParksCommentsReleasesAndFreesTheSlot(t *testing.T) {
 
 func TestReturnThenAssignPicksTheItemUpAgain(t *testing.T) {
 	f := newMoveFx(t)
-	branch := worker.Str(f.slot("ben"), "branch")
+	branch := f.slot("ben").Branch()
 	if _, err := f.ret("ben", "wrong premise", nil); err != nil {
 		t.Fatal(err)
 	}
@@ -612,13 +613,13 @@ func TestReturnThenAssignPicksTheItemUpAgain(t *testing.T) {
 
 func TestReturnRefusals(t *testing.T) {
 	f := newMoveFx(t)
-	if _, err := f.ret("ben", "  ", nil); exitOf(err) != worker.ExitUsage {
+	if _, err := f.ret("ben", "  ", nil); exitOf(err) != exitcode.ExitUsage {
 		t.Errorf("empty reason is usage: %v", err)
 	}
-	if _, err := f.ret("zed", "x", nil); exitOf(err) != worker.ExitResolution {
+	if _, err := f.ret("zed", "x", nil); exitOf(err) != exitcode.ExitResolution {
 		t.Errorf("unknown slot: %v", err)
 	}
-	if _, err := f.ret("dana", "x", nil); exitOf(err) != worker.ExitResolution {
+	if _, err := f.ret("dana", "x", nil); exitOf(err) != exitcode.ExitResolution {
 		t.Errorf("a slot holding no issue: %v", err)
 	}
 	_, err := f.ret("ben", "x", func(o *ReturnOpts) { o.InSlot, o.HolderPID = false, 999 })
@@ -637,10 +638,10 @@ func TestReturnRefusals(t *testing.T) {
 func TestReturnRepeatsAfterAFailureAndDoesNotCommentTwice(t *testing.T) {
 	f := newMoveFx(t)
 	f.be.failState = errors.New("tracker down")
-	if _, err := f.ret("ben", "stuck", nil); exitOf(err) != worker.ExitUnavailable {
+	if _, err := f.ret("ben", "stuck", nil); exitOf(err) != exitcode.ExitUnavailable {
 		t.Fatalf("a tracker failure is exit 5: %v", err)
 	}
-	if s := f.slot("ben"); worker.Str(s, "task") != "12" {
+	if s := f.slot("ben"); s.Task() != "12" {
 		t.Fatalf("a failed return leaves the registry as found: %v", s)
 	}
 	if _, err := f.ret("ben", "stuck", nil); err != nil {
@@ -655,7 +656,7 @@ func TestReturnRepeatsAfterAFailureAndDoesNotCommentTwice(t *testing.T) {
 	if n != 1 {
 		t.Errorf("one handoff comment, got %d", n)
 	}
-	if f.slot("ben") == nil || worker.Str(f.slot("ben"), "task") != "" {
+	if f.slot("ben") == nil || f.slot("ben").Task() != "" {
 		t.Error("slot freed")
 	}
 }
@@ -663,13 +664,13 @@ func TestReturnRepeatsAfterAFailureAndDoesNotCommentTwice(t *testing.T) {
 func TestReturnFailedPushLeavesEverythingAsFound(t *testing.T) {
 	f := newMoveFx(t)
 	sh(t, f.root, "remote", "set-url", "origin", filepath.Join(t.TempDir(), "gone.git"))
-	if _, err := f.ret("ben", "x", nil); exitOf(err) != worker.ExitUnavailable {
+	if _, err := f.ret("ben", "x", nil); exitOf(err) != exitcode.ExitUnavailable {
 		t.Fatalf("%v", err)
 	}
 	if f.be.claims["12"] != "ben@1" || len(f.be.comments["12"]) != 1 { // only assign's own note
 		t.Errorf("the tracker is untouched: %v %v", f.be.claims, f.be.comments)
 	}
-	if s := f.slot("ben"); worker.Str(s, "task") != "12" {
+	if s := f.slot("ben"); s.Task() != "12" {
 		t.Errorf("slot as found: %v", s)
 	}
 }
@@ -678,7 +679,7 @@ func TestReturnFailedPushLeavesEverythingAsFound(t *testing.T) {
 
 func TestTransferToASlotChecksOutTheExistingBranch(t *testing.T) {
 	f := newMoveFx(t)
-	branch := worker.Str(f.slot("ben"), "branch")
+	branch := f.slot("ben").Branch()
 	f.host.sent = ""
 	res, err := f.transfer("12", "dana", func(o *TransferOpts) { o.Note = "carry on from the parser" })
 	if err != nil {
@@ -700,10 +701,10 @@ func TestTransferToASlotChecksOutTheExistingBranch(t *testing.T) {
 		t.Errorf("claim moves, in-progress stays: %v %v", f.be.claims, f.be.states)
 	}
 	d, b := f.slot("dana"), f.slot("ben")
-	if worker.Str(d, "task") != "12" || worker.Str(d, "branch") != branch || worker.Str(d, "claimId") != "dana@1" || worker.Str(d, "state") != "busy" {
+	if d.Task() != "12" || d.Branch() != branch || d.ClaimID() != "dana@1" || d.State() != "busy" {
 		t.Errorf("receiver: %v", d)
 	}
-	if worker.Str(b, "task") != "" || worker.Str(b, "claimId") != "" || worker.Str(b, "state") != "idle" {
+	if b.Task() != "" || b.ClaimID() != "" || b.State() != "idle" {
 		t.Errorf("sender: %v", b)
 	}
 	for _, want := range []string{"You are dana", "handed to you by ben", "rota:handoff ben@1", branch} {
@@ -719,16 +720,16 @@ func TestTransferToASlotChecksOutTheExistingBranch(t *testing.T) {
 
 func TestTransferRefusals(t *testing.T) {
 	f := newMoveFx(t)
-	if _, err := f.transfer("12", "", nil); exitOf(err) != worker.ExitUsage {
+	if _, err := f.transfer("12", "", nil); exitOf(err) != exitcode.ExitUsage {
 		t.Errorf("empty --to: %v", err)
 	}
-	if _, err := f.transfer("12", "zed", nil); exitOf(err) != worker.ExitUsage {
+	if _, err := f.transfer("12", "zed", nil); exitOf(err) != exitcode.ExitUsage {
 		t.Errorf("--to outside the roster: %v", err)
 	}
-	if _, err := f.transfer("99", "dana", nil); exitOf(err) != worker.ExitResolution {
+	if _, err := f.transfer("99", "dana", nil); exitOf(err) != exitcode.ExitResolution {
 		t.Errorf("unknown issue: %v", err)
 	}
-	if _, err := f.transfer("13", "dana", nil); exitOf(err) != worker.ExitResolution {
+	if _, err := f.transfer("13", "dana", nil); exitOf(err) != exitcode.ExitResolution {
 		t.Errorf("no slot holds 13: %v", err)
 	}
 	if _, err := f.transfer("12", "dana", func(o *TransferOpts) { o.HolderPID = 999 }); blockedBy(t, err) != BlockNoRound {
@@ -746,7 +747,7 @@ func TestTransferRefusals(t *testing.T) {
 	if _, err := f.transfer("12", "dana", nil); blockedBy(t, err) != BlockSlotBusy {
 		t.Errorf("dana holds 13: %v", err)
 	}
-	if f.be.claims["12"] != "ben@1" || worker.Str(f.slot("ben"), "task") != "12" {
+	if f.be.claims["12"] != "ben@1" || f.slot("ben").Task() != "12" {
 		t.Error("a refusal changes nothing")
 	}
 }
@@ -773,7 +774,7 @@ func TestTransferOverlapIsCheckedForTheReceiverAgainstOtherSlots(t *testing.T) {
 	if blk.Readiness == nil || len(blk.Readiness.Overlaps) != 1 || blk.Readiness.Overlaps[0].Slot != "dana" {
 		t.Errorf("the overlap names the other slot, not the sender: %+v", blk.Readiness)
 	}
-	if f.be.claims["12"] != "ben@1" || worker.Str(f.slot("ben"), "task") != "12" {
+	if f.be.claims["12"] != "ben@1" || f.slot("ben").Task() != "12" {
 		t.Error("an overlap refusal changes nothing")
 	}
 	res, err := f.transfer("12", "nia", func(o *TransferOpts) { o.AcceptOverlap = true })
@@ -784,13 +785,13 @@ func TestTransferOverlapIsCheckedForTheReceiverAgainstOtherSlots(t *testing.T) {
 
 func TestTransferDispatchFailureKeepsTheMoveAndResumes(t *testing.T) {
 	f := newMoveFx(t)
-	branch := worker.Str(f.slot("ben"), "branch")
+	branch := f.slot("ben").Branch()
 	f.env.Worker.NewHost = func(string) host.Host { return &failingHost{hostFake: f.host} }
 	res, err := f.transfer("12", "dana", nil)
 	if err == nil || res.Dispatched || !res.Changed || res.ClaimID != "dana@1" {
 		t.Fatalf("the move is reported though the dispatch failed: %v %+v", err, res)
 	}
-	if f.be.claims["12"] != "dana@1" || worker.Str(f.slot("dana"), "task") != "12" || worker.Str(f.slot("dana"), "branch") != branch {
+	if f.be.claims["12"] != "dana@1" || f.slot("dana").Task() != "12" || f.slot("dana").Branch() != branch {
 		t.Fatalf("claim and branch stay with the receiver: %v %v", f.be.claims, f.slot("dana"))
 	}
 	f.env.Worker.NewHost = func(string) host.Host { return &killHost{hostFake: f.host, killed: &f.killed} }
@@ -832,7 +833,7 @@ func TestTransferToHumanLabelsAndDispatchesNothing(t *testing.T) {
 	if f.host.sent != "" || len(f.host.spawned) != spawned {
 		t.Error("nothing is dispatched")
 	}
-	if s := f.slot("ben"); worker.Str(s, "task") != "" || worker.Str(s, "state") != "idle" {
+	if s := f.slot("ben"); s.Task() != "" || s.State() != "idle" {
 		t.Errorf("sender freed: %v", s)
 	}
 	if cur := gitIn(t, f.wt("ben"), "symbolic-ref", "--short", "HEAD"); cur != "park/ben" {
@@ -859,9 +860,9 @@ func TestTransferToHumanLabelsAndDispatchesNothing(t *testing.T) {
 
 func TestReclaimDeadSlotParksReleasesAndClearsTheHandle(t *testing.T) {
 	f := newMoveFx(t)
-	branch := worker.Str(f.slot("ben"), "branch")
+	branch := f.slot("ben").Branch()
 	f.agents() // the host has no agent for ben's recorded tab
-	mutateSlot(f.root, "ben", func(s *jsonx.Object) { s.Set("handle", "w1:ben") })
+	rawSlot(f.root, "ben", func(s *jsonx.Object) { s.Set("handle", "w1:ben") })
 	os.WriteFile(filepath.Join(f.wt("ben"), "half.txt"), []byte("wip"), 0o644)
 
 	res, err := f.reclaim("ben", nil)
@@ -878,7 +879,7 @@ func TestReclaimDeadSlotParksReleasesAndClearsTheHandle(t *testing.T) {
 		t.Errorf("released, state cleared, branch pushed: %v %v", f.be.claims, f.be.states)
 	}
 	s := f.slot("ben")
-	if worker.Str(s, "task") != "" || worker.Str(s, "handle") != "" || worker.Str(s, "state") != "idle" || worker.Str(s, "claimId") != "" {
+	if s.Task() != "" || s.Handle() != "" || s.State() != "idle" || s.ClaimID() != "" {
 		t.Errorf("slot: %v", s)
 	}
 	last := f.be.comments["12"][len(f.be.comments["12"])-1]
@@ -894,7 +895,7 @@ func TestReclaimDeadSlotParksReleasesAndClearsTheHandle(t *testing.T) {
 func TestReclaimRefusesAHealthySlotWithoutForceAndKillsAfterForce(t *testing.T) {
 	f := newMoveFx(t)
 	f.agents("ben")
-	mutateSlot(f.root, "ben", func(s *jsonx.Object) { s.Set("handle", "w1:ben") })
+	rawSlot(f.root, "ben", func(s *jsonx.Object) { s.Set("handle", "w1:ben") })
 	if _, err := f.reclaim("ben", nil); blockedBy(t, err) != BlockHealthy {
 		t.Fatalf("a healthy slot: %v", err)
 	}
@@ -916,7 +917,7 @@ func TestReclaimRefusesAHealthySlotWithoutForceAndKillsAfterForce(t *testing.T) 
 func TestReclaimStalledSlotKillsThePaneFirst(t *testing.T) {
 	f := newMoveFx(t)
 	f.agents("ben")
-	mutateSlot(f.root, "ben", func(s *jsonx.Object) { s.Set("handle", "w1:ben") })
+	rawSlot(f.root, "ben", func(s *jsonx.Object) { s.Set("handle", "w1:ben") })
 	f.now = f.now.Add(40 * time.Minute) // ben's commit and dispatch are 40 min old
 	res, err := f.reclaim("ben", nil)
 	if err != nil || res.Health != HealthStalled || len(f.killed) != 1 {
@@ -941,7 +942,7 @@ func TestReclaimIdleSlotIsANoOp(t *testing.T) {
 
 func TestReclaimRefusals(t *testing.T) {
 	f := newMoveFx(t)
-	if _, err := f.reclaim("zed", nil); exitOf(err) != worker.ExitResolution {
+	if _, err := f.reclaim("zed", nil); exitOf(err) != exitcode.ExitResolution {
 		t.Errorf("unknown slot: %v", err)
 	}
 	if _, err := f.reclaim("ben", func(o *ReclaimOpts) { o.HolderPID = 999 }); blockedBy(t, err) != BlockNoRound {
@@ -949,7 +950,7 @@ func TestReclaimRefusals(t *testing.T) {
 	}
 	// No host to ask: a forced reclaim cannot prove the pane gone.
 	f.env.Snapshot = nil
-	mutateSlot(f.root, "ben", func(s *jsonx.Object) { s.Set("handle", "w1:ben") })
+	rawSlot(f.root, "ben", func(s *jsonx.Object) { s.Set("handle", "w1:ben") })
 	if _, err := f.reclaim("ben", func(o *ReclaimOpts) { o.Force = true }); blockedBy(t, err) != BlockLiveAgent {
 		t.Errorf("live agent: %v", err)
 	}
@@ -957,7 +958,7 @@ func TestReclaimRefusals(t *testing.T) {
 		t.Error("a refusal changes nothing")
 	}
 	// A slot the registry marks dead needs no host.
-	mutateSlot(f.root, "ben", func(s *jsonx.Object) { s.Set("state", "dead") })
+	rawSlot(f.root, "ben", func(s *jsonx.Object) { s.Set("state", "dead") })
 	if res, err := f.reclaim("ben", nil); err != nil || res.Health != HealthDead {
 		t.Errorf("dead without a host: %v %+v", err, res)
 	}
@@ -966,7 +967,7 @@ func TestReclaimRefusals(t *testing.T) {
 func TestReclaimReleasesEveryClaimOfTheSlotEvenWhenTheRegistryLostIt(t *testing.T) {
 	f := newMoveFx(t)
 	f.agents()
-	mutateSlot(f.root, "ben", func(s *jsonx.Object) { s.Set("handle", "w1:ben"); s.Delete("claimId") })
+	rawSlot(f.root, "ben", func(s *jsonx.Object) { s.Set("handle", "w1:ben"); s.Delete("claimId") })
 	res, err := f.reclaim("ben", nil)
 	if err != nil || !res.Released {
 		t.Fatalf("%v %+v", err, res)
@@ -981,7 +982,7 @@ func TestReclaimReleasesEveryClaimOfTheSlotEvenWhenTheRegistryLostIt(t *testing.
 func TestReclaimFreesASlotWhoseIssueNoLongerResolves(t *testing.T) {
 	f := newMoveFx(t)
 	f.agents()
-	mutateSlot(f.root, "ben", func(s *jsonx.Object) { s.Set("handle", "w1:ben"); s.Set("task", "B31") })
+	rawSlot(f.root, "ben", func(s *jsonx.Object) { s.Set("handle", "w1:ben"); s.Set("task", "B31") })
 	f.be.gone = map[string]bool{"B31": true}
 	res, err := f.reclaim("ben", nil)
 	if err != nil {
@@ -991,7 +992,7 @@ func TestReclaimFreesASlotWhoseIssueNoLongerResolves(t *testing.T) {
 		t.Fatalf("%+v", res)
 	}
 	s := f.slot("ben")
-	if worker.Str(s, "task") != "" || worker.Str(s, "state") != "idle" || worker.Str(s, "claimId") != "" {
+	if s.Task() != "" || s.State() != "idle" || s.ClaimID() != "" {
 		t.Errorf("slot not freed: %v", s)
 	}
 	if _, err := f.assign("12", "ben"); err != nil {
@@ -1011,7 +1012,7 @@ func TestReturnFreesASlotWhoseIssueNoLongerResolves(t *testing.T) {
 	if !res.Changed || len(res.Warnings) != 3 {
 		t.Fatalf("%+v", res)
 	}
-	if s := f.slot("ben"); worker.Str(s, "task") != "" || worker.Str(s, "state") != "idle" {
+	if s := f.slot("ben"); s.Task() != "" || s.State() != "idle" {
 		t.Errorf("slot not freed: %v", s)
 	}
 }
@@ -1026,7 +1027,7 @@ func TestTransferToHumanFreesASenderWhoseIssueNoLongerResolves(t *testing.T) {
 	if !res.Changed || len(res.Warnings) != 3 {
 		t.Fatalf("%+v", res)
 	}
-	if s := f.slot("ben"); worker.Str(s, "task") != "" || worker.Str(s, "state") != "idle" {
+	if s := f.slot("ben"); s.Task() != "" || s.State() != "idle" {
 		t.Errorf("sender not freed: %v", s)
 	}
 }

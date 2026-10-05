@@ -71,6 +71,8 @@ func TestProvider(t *testing.T) {
 func TestLabelGitHub(t *testing.T) {
 	ctx := context.Background()
 	view := reply{out: `{"labels": [{"name": "have"}]}`}
+	known := reply{out: `[{"name": "have"}, {"name": "new"}]`}
+	none := reply{out: `[]`}
 	cases := []struct {
 		name        string
 		add         bool
@@ -80,15 +82,16 @@ func TestLabelGitHub(t *testing.T) {
 		wantChanged bool
 		wantErr     bool
 		wantCalls   []string
+		noCalls     []string
 	}{
-		{"add present", true, "have", true, map[string]reply{"issue view": view}, false, false, []string{"gh issue edit 3 --add-label have"}},
-		{"add new", true, "new", true, map[string]reply{"issue view": view}, true, false, []string{"gh issue edit 3 --add-label new"}},
-		{"remove present", false, "have", true, map[string]reply{"issue view": view}, true, false, []string{"gh issue edit 3 --remove-label have"}},
-		{"remove absent", false, "gone", true, map[string]reply{"issue view": view}, false, false, nil},
-		{"unreadable issue", true, "x", true, map[string]reply{"issue view": {code: 1, err: "nope"}}, true, false, nil},
-		{"create the label", true, "new", true, map[string]reply{"issue view": view, "issue edit": {code: 1, err: "could not add label: 'new' not found"}}, true, true, []string{"gh label create new --force"}},
-		{"no creation allowed", true, "new", false, map[string]reply{"issue view": view, "issue edit": {code: 1, err: "could not add label: 'new' not found"}}, false, true, nil},
-		{"other failure", true, "new", true, map[string]reply{"issue view": view, "issue edit": {code: 1, err: "server exploded"}}, false, true, nil},
+		{"add present", true, "have", true, map[string]reply{"issue view": view, "label list": known}, false, false, []string{"gh issue edit 3 --add-label have"}, nil},
+		{"add new", true, "new", true, map[string]reply{"issue view": view, "label list": known}, true, false, []string{"gh issue edit 3 --add-label new"}, nil},
+		{"remove present", false, "have", true, map[string]reply{"issue view": view}, true, false, []string{"gh issue edit 3 --remove-label have"}, nil},
+		{"remove absent", false, "gone", true, map[string]reply{"issue view": view}, false, false, nil, nil},
+		{"unreadable issue", true, "x", true, map[string]reply{"issue view": {code: 1, err: "nope"}, "label list": reply{out: `[{"name": "x"}]`}}, true, false, []string{"gh issue edit 3 --add-label x"}, nil},
+		{"create the label", true, "new", true, map[string]reply{"issue view": view, "label list": none}, true, false, []string{"gh label create new --force", "gh issue edit 3 --add-label new"}, nil},
+		{"no creation allowed", true, "new", false, map[string]reply{"issue view": view, "label list": none}, false, true, nil, []string{"gh label create", "gh issue edit"}},
+		{"other failure", true, "new", true, map[string]reply{"issue view": view, "label list": known, "issue edit": {code: 1, err: "server exploded"}}, false, true, nil, nil},
 	}
 	for _, c := range cases {
 		f := &forge{origin: gh, reply: c.replies}
@@ -101,20 +104,23 @@ func TestLabelGitHub(t *testing.T) {
 				t.Errorf("%s: missing call %q in %q", c.name, w, f.calls)
 			}
 		}
-		if c.name == "no creation allowed" && f.did("gh label create") {
-			t.Errorf("%s: created a label", c.name)
+		for _, w := range c.noCalls {
+			if f.did(w) {
+				t.Errorf("%s: unexpected call %q in %q", c.name, w, f.calls)
+			}
 		}
 	}
 }
 
 func TestLabelGitLab(t *testing.T) {
 	ctx := context.Background()
-	f := &forge{origin: gl, reply: map[string]reply{"issue view": {out: `{"labels": ["have"]}`}, "label create": {code: 1, err: "exists"}}}
+	f := &forge{origin: gl, reply: map[string]reply{"issue view": {out: `{"labels": ["have"]}`}}}
 	changed, err := Label(ctx, f.env(t), "", 3, "have", true, true)
 	if err != nil || changed {
 		t.Errorf("add present: %v %v", changed, err)
 	}
-	if !f.did("glab label create --name have") || !f.did("glab issue update 3 --label have") {
+	// glab creates a missing label on the update itself
+	if f.did("glab label create") || !f.did("glab issue update 3 --label have") {
 		t.Errorf("calls %q", f.calls)
 	}
 	f = &forge{origin: gl, reply: map[string]reply{"issue view": {out: `{"labels": ["have"]}`}}}
@@ -188,22 +194,22 @@ func gitProject(t *testing.T) (dir, sha string) {
 func TestCloseGitHub(t *testing.T) {
 	ctx := context.Background()
 	dir, sha := gitProject(t)
-	f := &forge{origin: gh, reply: map[string]reply{"issue view": {out: "OPEN\n"}}}
+	f := &forge{origin: gh, reply: map[string]reply{"issue view": {out: `{"state": "OPEN"}`}}}
 	changed, err := Close(ctx, f.env(t), dir, 12, "HEAD", "B07")
 	if err != nil || !changed {
 		t.Fatalf("%v %v", changed, err)
 	}
-	if want := "gh issue close 12 --comment Closed by rota: shipped in " + sha + " ([B07])\n\n<!-- rota:shipped -->"; !f.did(want) {
+	if want := "gh issue close 12 --reason completed --comment Closed by rota: shipped in " + sha + " ([B07])\n\n<!-- rota:shipped -->"; !f.did(want) {
 		t.Errorf("calls %q, want %q", f.calls, want)
 	}
 	// already closed: no write
-	f = &forge{origin: gh, reply: map[string]reply{"issue view": {out: "CLOSED\n"}}}
+	f = &forge{origin: gh, reply: map[string]reply{"issue view": {out: `{"state": "CLOSED"}`}}}
 	if changed, err := Close(ctx, f.env(t), dir, 12, sha, ""); err != nil || changed || f.did("gh issue close") {
 		t.Errorf("already closed: %v %v %q", changed, err, f.calls)
 	}
 	// a failed state read still closes; no item leaves no suffix
 	f = &forge{origin: gh, reply: map[string]reply{"issue view": {code: 1, err: "x"}}}
-	if changed, err := Close(ctx, f.env(t), dir, 12, sha, ""); err != nil || !changed || !f.did("gh issue close 12 --comment Closed by rota: shipped in "+sha) || f.did("gh issue close 12 --comment Closed by rota: shipped in "+sha+" (") {
+	if changed, err := Close(ctx, f.env(t), dir, 12, sha, ""); err != nil || !changed || !f.did("gh issue close 12 --reason completed --comment Closed by rota: shipped in "+sha) || f.did("gh issue close 12 --reason completed --comment Closed by rota: shipped in "+sha+" (") {
 		t.Errorf("unreadable state: %v %v %q", changed, err, f.calls)
 	}
 	// a failing close
@@ -223,7 +229,7 @@ func TestCloseGitLab(t *testing.T) {
 	}
 	note, closeCall := -1, -1
 	for i, c := range f.calls {
-		if c == "glab issue note 3 --message Closed by rota: shipped in "+sha+" ([F2])\n\n<!-- rota:shipped -->" {
+		if c == "glab issue note 3 -m Closed by rota: shipped in "+sha+" ([F2])\n\n<!-- rota:shipped -->" {
 			note = i
 		}
 		if c == "glab issue close 3" {
@@ -272,8 +278,8 @@ func TestStillOpen(t *testing.T) {
 		reply    reply
 		want     bool
 	}{
-		{"github", reply{out: "OPEN\n"}, true},
-		{"github", reply{out: "CLOSED\n"}, false},
+		{"github", reply{out: `{"state": "OPEN"}`}, true},
+		{"github", reply{out: `{"state": "CLOSED"}`}, false},
 		{"github", reply{code: 1, err: "gone"}, false},
 		{"gitlab", reply{out: `{"state": "opened"}`}, true},
 		{"gitlab", reply{out: `{"state": "closed"}`}, false},

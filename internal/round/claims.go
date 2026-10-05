@@ -24,7 +24,7 @@ var reClaimID = regexp.MustCompile(`^([a-z][a-z0-9-]*)@\d+$`)
 // hold that issue. Only a claim that is gone has a repair (clear the claimId);
 // the tracker is the source of truth and is never edited. Needs the Board and,
 // for the second shape, the labelled issues; file mode has no claims to read.
-func (e Env) claimFindings(ctx context.Context, rep *Report, rows []*Row, slotObj map[string]*jsonx.Object, queued []*jsonx.Object, labelled map[int]bool, labelsOK bool) {
+func (e Env) claimFindings(ctx context.Context, rep *Report, rows []*Row, slotObj map[string]*worker.Slot, queued []*jsonx.Object, labelled map[int]bool, labelsOK bool) {
 	if e.Board == nil {
 		return
 	}
@@ -45,7 +45,7 @@ func (e Env) claimFindings(ctx context.Context, rep *Report, rows []*Row, slotOb
 			continue
 		}
 		held[r.Issue] = true
-		want := worker.Str(s, "claimId")
+		want := s.ClaimID()
 		if want == "" {
 			continue // adopted or pre-C3 slot: no claim to compare
 		}

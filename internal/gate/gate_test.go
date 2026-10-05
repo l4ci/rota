@@ -204,3 +204,14 @@ func TestValidateIgnoresEscalation(t *testing.T) {
 		t.Errorf("Validate must keep --confirm semantics: %v", err)
 	}
 }
+
+func TestAutopilotAuditLine(t *testing.T) {
+	root := t.TempDir()
+	if err := Autopilot(root, "round tick merge", "ben", "into main"); err != nil {
+		t.Fatal(err)
+	}
+	ls := auditLines(t, root)
+	if len(ls) != 1 || ls[0]["gate"] != "autopilot" || ls[0]["verb"] != "round tick merge" || ls[0]["target"] != "ben" || ls[0]["note"] != "into main" {
+		t.Fatalf("%v", ls)
+	}
+}

@@ -2,6 +2,7 @@ package round
 
 import (
 	"fmt"
+	"github.com/l4ci/rota/internal/exitcode"
 	"regexp"
 	"strings"
 
@@ -46,35 +47,41 @@ func ReportSlot(root string, o ReportOpts) (Reported, error) {
 	switch h := worker.RegistryHost(root); h {
 	case host.Solo:
 	case "":
-		return res, &worker.Error{Exit: worker.ExitUsage, Message: "no round host is recorded: run rota round start first",
+		return res, &exitcode.Error{Exit: exitcode.ExitUsage, Message: "no round host is recorded: run rota round start first",
 			Hint: "round report is for solo rounds; under herdr or tmux, rota worker poll records the state"}
 	default:
-		return res, &worker.Error{Exit: worker.ExitUsage, Message: fmt.Sprintf("the round host is %s, not solo: the pane is the truth", h),
+		return res, &exitcode.Error{Exit: exitcode.ExitUsage, Message: fmt.Sprintf("the round host is %s, not solo: the pane is the truth", h),
 			Hint: "rota worker poll records a pane's state; round report would race it"}
 	}
 	found := false
-	err := worker.Update(root, slotsDefault(), func(doc *jsonx.Object) {
+	var stateErr error
+	err := worker.UpdateDoc(root, func(doc *jsonx.Object) {
 		s := (worker.Registry{Doc: doc}).Slot(o.Slot)
 		if s == nil {
 			return
 		}
 		found = true
-		res.Previous = worker.Str(s, "state")
+		res.Previous = s.State()
 		if res.Previous != state {
-			s.Set("state", state)
+			if stateErr = s.MarkState(state, ""); stateErr != nil {
+				return
+			}
 			res.Changed = true
 		}
-		s.Delete("seen") // a report is news to `round wait`, even of the same state
-		if pr != "" && worker.Str(s, "pr") != pr {
-			s.Set("pr", pr)
+		s.ClearSeen() // a report is news to `round wait`, even of the same state
+		if pr != "" && s.PR() != pr {
+			s.SetPR(pr)
 			res.Changed = true
 		}
 	})
 	if err != nil {
 		return res, err
 	}
+	if stateErr != nil {
+		return res, stateErr
+	}
 	if !found {
-		return res, &worker.Error{Exit: worker.ExitResolution, Message: fmt.Sprintf("slot '%s' is not in the pool", o.Slot)}
+		return res, &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("slot '%s' is not in the pool", o.Slot)}
 	}
 	return res, nil
 }

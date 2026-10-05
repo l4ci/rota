@@ -245,8 +245,9 @@ func (b *Issues) bulletInner(is Issue) string {
 
 var paraSplit = regexp.MustCompile(`\n[` + pystr.SpaceClass + `]*\n`)
 
-// doneLine is the closed form of the bullet (_done_line).
-func (b *Issues) doneLine(is Issue) string {
+// closedDate is the date part of the issue's closed_at, the epoch when the
+// tracker gave none.
+func closedDate(is Issue) string {
 	date := is.ClosedAt
 	if date == "" {
 		date = "1970-01-01"
@@ -254,6 +255,12 @@ func (b *Issues) doneLine(is Issue) string {
 	if rs := []rune(date); len(rs) > 10 {
 		date = string(rs[:10])
 	}
+	return date
+}
+
+// doneLine is the closed form of the bullet (_done_line).
+func (b *Issues) doneLine(is Issue) string {
+	date := closedDate(is)
 	suffix := ""
 	if is.StateReason == "not_planned" {
 		suffix = " (dropped)"
@@ -462,6 +469,7 @@ func (b *Issues) item(is Issue) *Item {
 	}
 	it.Fields.Detail = is.URL
 	if it.Closed {
+		it.ClosedAt = closedDate(is)
 		it.Reason = "done"
 		if is.StateReason == "not_planned" {
 			it.Reason = "dropped"

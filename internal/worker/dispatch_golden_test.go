@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/golden"
 	"github.com/l4ci/rota/internal/host"
-	"github.com/l4ci/rota/internal/pytest"
 )
 
 // These tests run the Go port against the fake herdr/tmux scripts
@@ -113,21 +113,20 @@ func TestDispatchHostTraffic(t *testing.T) {
 				text, _ := os.ReadFile(st.file)
 				inputs = append(inputs, map[string]string{"step": st.name, "brief": string(text), "argv": st.argv})
 			}
-			var want []dispatchTraffic
-			pytest.Golden(t, map[string]any{"kind": kind, "pool": "init --slots 1 --base main", "steps": inputs}, &want)
-			if len(want) != len(steps) {
-				t.Fatalf("golden has %d steps, test has %d", len(want), len(steps))
-			}
-			for i, st := range steps {
+			got := []dispatchTraffic{}
+			for _, st := range steps {
 				o := st.go_
 				o.Slot, o.BodyFile = "w1", st.file
 				if _, err := goR.goEnv.Dispatch(bg, goR.root, o); err != nil {
 					t.Fatalf("%s: go: %v", st.name, err)
 				}
-				mustEqual(t, st.name+": host log", want[i].Log, normalise(goR.log(t), goR.root))
-				mustEqual(t, st.name+": prompt", want[i].Prompt, goR.lastPayload(t))
-				mustEqual(t, st.name+": workers.json", want[i].Workers, normalise(registry(t, goR.root), goR.root))
+				got = append(got, dispatchTraffic{
+					Log:     normalise(goR.log(t), goR.root),
+					Prompt:  goR.lastPayload(t),
+					Workers: normalise(registry(t, goR.root), goR.root),
+				})
 			}
+			golden.Check(t, map[string]any{"kind": kind, "pool": "init --slots 1 --base main", "steps": inputs}, got)
 		})
 	}
 }
@@ -135,12 +134,12 @@ func TestDispatchHostTraffic(t *testing.T) {
 func TestSessionEnsureTmuxHostTraffic(t *testing.T) {
 	goR := newRig(t, "tmux")
 	instr := writeBrief(t, "take over\n")
-	var want map[string]string
-	pytest.Golden(t, map[string]any{"kind": "tmux", "session": "ops", "instruction": "take over\n"}, &want)
 	st, err := goR.goEnv.SessionEnsure(bg, goR.root, SessionOpts{Session: "ops", BodyFile: instr})
 	if err != nil || !st.HandedOff || st.Session != "ops" {
 		t.Fatalf("go: %+v %v", st, err)
 	}
-	mustEqual(t, "host log", want["host log"], normalise(goR.log(t), goR.root))
-	mustEqual(t, "instruction", want["instruction"], goR.lastPayload(t))
+	golden.Check(t, map[string]any{"kind": "tmux", "session": "ops", "instruction": "take over\n"}, map[string]string{
+		"host log":    normalise(goR.log(t), goR.root),
+		"instruction": goR.lastPayload(t),
+	})
 }

@@ -36,7 +36,7 @@ func roundWait(fs *flag.FlagSet) RunFunc {
 			Lines:   *lines,
 		})
 		if err != nil {
-			return Result{}, fromWorker(err)
+			return Result{}, err
 		}
 		d := jsonx.NewObject()
 		if res.TimedOut {

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"strings"
 
@@ -14,7 +15,6 @@ import (
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundlease"
-	"github.com/l4ci/rota/internal/worker"
 	"path/filepath"
 )
 
@@ -51,6 +51,9 @@ func candidateList(cs []round.Candidate) []any {
 		o.Set("title", c.Title)
 		setIf(o, "milestone", c.Milestone)
 		o.Set("ready", c.Ready())
+		if c.OpenPR != 0 {
+			o.Set("openPr", c.OpenPR)
+		}
 		o.Set("checks", checkList(c.Checks))
 		out = append(out, o)
 	}
@@ -61,7 +64,9 @@ func candidateLines(cs []round.Candidate) []string {
 	var lines []string
 	for _, c := range cs {
 		state := "ready"
-		if !c.Ready() {
+		if c.OpenPR != 0 {
+			state = fmt.Sprintf("not ready: open PR #%d", c.OpenPR)
+		} else if !c.Ready() {
 			var bad []string
 			for _, ch := range c.Checks {
 				if !ch.OK {
@@ -160,8 +165,8 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 			c.Warn("%s", w)
 		}
 		if err != nil {
-			var we *worker.Error
-			if errors.As(err, &we) && we.Exit == worker.ExitRefused {
+			var we *exitcode.Error
+			if errors.As(err, &we) && we.Exit == exitcode.ExitRefused {
 				if held, ok := we.Data.(*roundlease.HeldError); ok {
 					d := jsonx.NewObject()
 					d.Set("blockedBy", "lease held")
@@ -170,7 +175,7 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 					return Result{Data: d}, &Error{Exit: ExitRefused, Message: we.Message}
 				}
 			}
-			return Result{}, fromWorker(err)
+			return Result{}, err
 		}
 		// Start has just recorded the round's host (C8): rebuild the env so the
 		// drift count asks that host, not the guess made before it existed.

@@ -1,13 +1,12 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
 	"os"
-	"os/exec"
 	"regexp"
-	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -15,8 +14,10 @@ import (
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/frontmatter"
 	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/pystr"
+	"github.com/l4ci/rota/internal/repos"
 	"github.com/l4ci/rota/internal/section"
 	"github.com/l4ci/rota/internal/stale"
 	"github.com/l4ci/rota/internal/status"
@@ -223,13 +224,13 @@ func a4Drift(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		be, err := a4Open(c, root, true, `PRs carry "Closes #N", so the tracker closes shipped issues`)
+		ops, err := a4OpenFile(c, root, `PRs carry "Closes #N", so the tracker closes shipped issues`)
 		if err != nil {
 			return a4FailRead(err)
 		}
 		var targets []backlog.Target
-		if repos := status.LoadRepos(root); len(repos) > 0 {
-			for _, r := range repos {
+		if registry := repos.Load(root); len(registry) > 0 {
+			for _, r := range registry {
 				if c.Repo == "" || r.Name == c.Repo {
 					targets = append(targets, backlog.Target{Name: r.Name, Dir: r.Path})
 				}
@@ -237,7 +238,7 @@ func a4Drift(fs *flag.FlagSet) RunFunc {
 		} else {
 			targets = []backlog.Target{{Dir: root}}
 		}
-		drift, syms, err := be.(*backlog.File).Drift(targets)
+		drift, syms, err := ops.Drift(targets)
 		if err != nil {
 			return a4Fail(err)
 		}
@@ -268,18 +269,15 @@ func a4Backfill(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		be, err := a4Open(c, root, true, "Since: anchors exist only in the file backend")
+		ops, err := a4OpenFile(c, root, "Since: anchors exist only in the file backend")
 		if err != nil {
 			return a4Fail(err)
 		}
-		cmd := exec.Command("git", "rev-parse", "--short", "HEAD")
-		cmd.Dir = root
-		out, gerr := cmd.Output()
-		head := pystr.Strip(string(out))
-		if gerr != nil || head == "" {
+		head, ok, gerr := git.Repo{Dir: root}.ShortHead(context.Background())
+		if gerr != nil || !ok || head == "" {
 			return Result{}, Unavailable("not in a git repo with a HEAD commit: cannot backfill Since:")
 		}
-		n, err := be.(*backlog.File).BackfillSince(head)
+		n, err := ops.BackfillSince(head)
 		if err != nil {
 			return a4Fail(err)
 		}
@@ -300,7 +298,7 @@ func a4Archive(fs *flag.FlagSet) RunFunc {
 		if *days < 0 {
 			return Result{}, Usage("--days must be a number")
 		}
-		be, err := a4Open(c, root, true, "closed issues are the archive")
+		ops, err := a4OpenFile(c, root, "closed issues are the archive")
 		if err != nil {
 			return a4Fail(err)
 		}
@@ -308,7 +306,7 @@ func a4Archive(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		moved, err := be.(*backlog.File).Archive(*days, today)
+		moved, err := ops.Archive(*days, today)
 		if err != nil {
 			return a4Fail(err)
 		}
@@ -457,7 +455,7 @@ func a4Summary(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return a4Fail(err)
 		}
-		md, err := be.Markdown(20)
+		items, err := be.List(true)
 		if errors.Is(err, backlog.ErrNotFound) {
 			return Result{}, Resolution("no .rota/BACKLOG.md found").WithHint("run: rota init")
 		}
@@ -465,8 +463,16 @@ func a4Summary(fs *flag.FlagSet) RunFunc {
 			return a4Fail(err)
 		}
 		var lines []string
-		counts := backlog.CountOpen(md)
-		bugs, feats, tasks := counts["Bugs"], counts["Features"], counts["Tasks"]
+		open := map[string]int{}
+		var closed []backlog.Item
+		for _, it := range items {
+			if it.Closed {
+				closed = append(closed, it)
+			} else {
+				open[it.Type]++
+			}
+		}
+		bugs, feats, tasks := open["B"], open["F"], open["T"]
 		lines = append(lines, fmt.Sprintf("Backlog: %s, %s, %s", plural(bugs, "bug"), plural(feats, "feature"), plural(tasks, "task")))
 		data := a4Obj("backlog", a4Obj("bugs", bugs, "features", feats, "tasks", tasks))
 
@@ -499,40 +505,15 @@ func a4Summary(fs *flag.FlagSet) RunFunc {
 
 		recent := []any{}
 		var done []string
-		var ds []backlog.Done
-		for _, raw := range pystr.Splitlines(section.Body(md, "Completed")) {
-			if d, ok := backlog.ParseDone(pystr.Strip(raw)); ok {
-				ds = append(ds, d)
-			}
-		}
-		if be.Name() == "file" {
-			// File mode appends completions, so the file runs oldest to newest:
-			// reverse it (later is newer on equal dates), then stable-sort by date.
-			slices.Reverse(ds)
-			slices.SortStableFunc(ds, func(a, b backlog.Done) int { return strings.Compare(b.Date, a.Date) })
-		}
-		for _, d := range ds[:min(3, len(ds))] {
-			s := "[" + d.ID + "] on " + d.Date
-			if d.Reason != "done" {
-				s += " (" + d.Reason + ")"
+		for _, it := range closed[:min(3, len(closed))] {
+			s := "[" + it.Key() + "] on " + it.ClosedAt
+			if it.Reason != "done" {
+				s += " (" + it.Reason + ")"
 			}
 			done = append(done, s)
-			if d.ID == "" {
-				continue
-			}
-			id := d.ID
-			if be.Name() == "issues" {
-				id = id[1:]
-				if _, ok := be.(*backlog.Umbrella); ok {
-					// The Done line names its sub-repo in the Repos field.
-					if repo := backlog.ParseFields("- " + d.Inner).Get("repos"); repo != "" {
-						id = repo + ":" + id
-					}
-				}
-			}
-			o := a4Obj("id", id, "type", d.ID[:1], "date", d.Date)
-			if d.Reason != "done" {
-				o.Set("reason", d.Reason)
+			o := a4Obj("id", it.ID, "type", it.Type, "date", it.ClosedAt)
+			if it.Reason != "done" {
+				o.Set("reason", it.Reason)
 			}
 			recent = append(recent, o)
 		}
@@ -603,7 +584,7 @@ func splitItems(csv string) []string {
 func a4StatusAdd(fs *flag.FlagSet) RunFunc {
 	items := fs.String("items", "", "item IDs, comma-separated")
 	worktree := fs.String("worktree", "", "worktree path (one repo)")
-	repos := fs.String("repos", "", "sub-repo names, comma-separated")
+	reposCSV := fs.String("repos", "", "sub-repo names, comma-separated")
 	worktrees := fs.String("worktrees", "", "worktree paths, comma-separated, one per --repos name")
 	ifAbsent := fs.Bool("if-absent", false, "leave an existing entry alone")
 	return func(c *Ctx, args []string) (Result, error) {
@@ -633,7 +614,7 @@ func a4StatusAdd(fs *flag.FlagSet) RunFunc {
 		scope := []string{c.Repo}
 		changed := false
 		if multi {
-			names := status.ParseReposCSV(*repos)
+			names := status.ParseReposCSV(*reposCSV)
 			if len(names) == 0 {
 				return Result{}, Usage("--repos needs at least one name")
 			}
@@ -644,7 +625,7 @@ func a4StatusAdd(fs *flag.FlagSet) RunFunc {
 					return Result{}, Usage("--worktrees must list one path per --repos name")
 				}
 			}
-			if missing := status.Missing(status.LoadRepos(root), names); len(missing) > 0 {
+			if missing := status.Missing(repos.Load(root), names); len(missing) > 0 {
 				return Result{}, Resolution("unregistered sub-repo(s): %s", strings.Join(missing, ", "))
 			}
 			scope = names
@@ -798,18 +779,18 @@ func a4RefactorTargets(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		repos := status.LoadRepos(cwd)
-		if len(repos) == 0 {
+		registry := repos.Load(cwd)
+		if len(registry) == 0 {
 			return Result{Data: a4Obj("umbrella", nil, "subRepos", []any{}), Text: "single repo"}, nil
 		}
-		sort.Slice(repos, func(i, j int) bool { return repos[i].Name < repos[j].Name })
+		sort.Slice(registry, func(i, j int) bool { return registry[i].Name < registry[j].Name })
 		subs := []any{}
 		var lines []string
-		for _, r := range repos {
+		for _, r := range registry {
 			subs = append(subs, a4Obj("name", r.Name, "path", r.Path))
 			lines = append(lines, r.Name+" "+r.Path)
 		}
-		return Result{Data: a4Obj("umbrella", a4Obj("hasCode", status.HasCode(cwd, repos)), "subRepos", subs),
+		return Result{Data: a4Obj("umbrella", a4Obj("hasCode", status.HasCode(cwd, registry)), "subRepos", subs),
 			Text: strings.Join(lines, "\n")}, nil
 	}
 }

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/l4ci/rota/internal/pytest"
+	"github.com/l4ci/rota/internal/golden"
 )
 
 // registry is the ROTA_TYPE_REGISTRY line of the retired shell type registry, frozen
@@ -43,8 +43,6 @@ func TestTypesMatchRegistry(t *testing.T) {
 }
 
 func TestTypesMatchPython(t *testing.T) {
-	var want map[string]any
-	pytest.GoldenJSON(t, nil, &want)
 	var countable, plannable string
 	dirs, sections := map[string]any{}, map[string]any{}
 	for _, ty := range Types {
@@ -58,12 +56,8 @@ func TestTypesMatchPython(t *testing.T) {
 			dirs[ty.Letter], sections[ty.Kind] = ty.Kind, ty.Section
 		}
 	}
-	got := map[string]any{"items": ItemLetters, "countable": countable, "plannable": plannable, "dir": dirs, "section": sections}
-	for k, g := range got {
-		if !sameJSON(g, want[k]) {
-			t.Errorf("%s: Go %v, Python %v", k, g, want[k])
-		}
-	}
+	golden.Check(t, map[string]any{"input": nil}, map[string]any{"items": ItemLetters, "countable": countable, "plannable": plannable,
+		"dir": dirs, "section": sections, "open": OpenSections})
 }
 
 func TestTypeLookups(t *testing.T) {

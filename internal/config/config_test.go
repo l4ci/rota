@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/l4ci/rota/internal/golden"
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/pytest"
 )
 
 // Each testdata/<case>/ directory is a fixture: Go's Load must produce the
@@ -32,11 +32,7 @@ func TestLoadMatchesPython(t *testing.T) {
 					files[n] = string(raw)
 				}
 			}
-			var want string
-			pytest.Golden(t, map[string]any{"files": files}, &want)
-			if string(got) != want {
-				t.Fatalf("\n--- go\n%s\n--- golden\n%s", got, want)
-			}
+			golden.Check(t, map[string]any{"files": files}, string(got))
 		})
 	}
 }

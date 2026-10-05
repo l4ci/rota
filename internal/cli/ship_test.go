@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/l4ci/rota/internal/pytest"
+	"github.com/l4ci/rota/internal/golden"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
@@ -43,21 +43,17 @@ type shipCallIn struct {
 // data the golden recorded.
 func shipSame(t *testing.T, name, dir, stdin string, wantCode int, args ...string) map[string]any {
 	t.Helper()
-	var want any
 	masked := make([]string, len(args)) // the project's temp dir is not part of the case
 	for i, a := range args {
 		masked[i] = strings.ReplaceAll(a, dir, "DIR")
 	}
-	pytest.Golden(t, shipCallIn{name, masked, stdin, wantCode}, &want)
 	n := trRun(t, dir, stdin, append(append([]string{}, args...), "--json")...)
 	nenv := envelope(t, n.stdout)
 	if n.code != wantCode {
 		t.Errorf("%s: exit %d, want %d\n%s%s", name, n.code, wantCode, n.stdout, n.stderr)
 		return nenv
 	}
-	if !reflect.DeepEqual(want, nenv["data"]) {
-		t.Errorf("%s: data differs\ngolden: %#v\nnew:    %#v", name, want, nenv["data"])
-	}
+	golden.Check(t, shipCallIn{name, masked, stdin, wantCode}, nenv["data"])
 	return nenv
 }
 
@@ -200,11 +196,7 @@ func TestShipMerge(t *testing.T) {
 	if d := nenv["data"].(map[string]any); d["base"] != "main" || d["changed"] != true || d["sha"] != gitT(t, work, "rev-parse", "--short", "HEAD") {
 		t.Errorf("merge data %v", d)
 	}
-	var wantHead string // the merge commit the retired helper made
-	pytest.Golden(t, "HEAD after the merge of rota/wt", &wantHead)
-	if gitT(t, work, "rev-parse", "HEAD") != wantHead {
-		t.Errorf("merge commit differs from the golden %s", wantHead)
-	}
+	golden.Check(t, "HEAD after the merge of rota/wt", gitT(t, work, "rev-parse", "HEAD"))
 	if gitT(t, work, "branch", "--list", "rota/wt") != "" || strings.Contains(gitT(t, work, "worktree", "list", "--porcelain"), "rota/wt") {
 		t.Errorf("branch or worktree left behind: %s", gitT(t, work, "worktree", "list", "--porcelain"))
 	}
@@ -278,17 +270,13 @@ func TestShipPRFileMode(t *testing.T) {
 			f := shipPRForge(tc.url)
 			useForge(t, f)
 
-			var want any // the retired helper's data against its fake forge
-			pytest.Golden(t, map[string]any{"provider": tc.prov, "url": tc.url, "stdin": "Summary line",
-				"args": []string{"ship", "pr", "feat/x", "--title", "My title", "--body-file", "-", "--items", "F1,2"}}, &want)
 			n := trRun(t, work, "Summary line\n", "ship", "pr", "feat/x", "--title", "My title", "--body-file", "-", "--items", "F1,2", "--json")
 			if n.code != 0 {
 				t.Fatalf("exit %d\n%s%s", n.code, n.stdout, n.stderr)
 			}
 			nenv := envelope(t, n.stdout)
-			if !reflect.DeepEqual(want, nenv["data"]) {
-				t.Errorf("data\ngolden: %#v\nnew:    %#v", want, nenv["data"])
-			}
+			golden.Check(t, map[string]any{"provider": tc.prov, "url": tc.url, "stdin": "Summary line",
+				"args": []string{"ship", "pr", "feat/x", "--title", "My title", "--body-file", "-", "--items", "F1,2"}}, nenv["data"])
 			d := nenv["data"].(map[string]any)
 			if d["provider"] != tc.prov || d["number"] != 1.0 || d["changed"] != true || !reflect.DeepEqual(d["items"], []any{"F1", "2"}) {
 				t.Errorf("data %v", d)
@@ -655,7 +643,7 @@ func shipCycle(t *testing.T) string {
 	return root
 }
 
-// shipUndoWant is what the retired undo helper left behind and answered: data,
+// shipUndoWant is what an undo answered and left behind: data,
 // the .rota/ tree, HEAD and git status.
 type shipUndoWant struct {
 	Data   any
@@ -670,25 +658,13 @@ func shipUndoBoth(t *testing.T, name string, src string, wantCode int, args ...s
 	t.Helper()
 	nu := shipCopy(t, src)
 	oargs := append([]string{"ship", "undo"}, args...)
-	var want shipUndoWant
-	pytest.Golden(t, shipCallIn{Name: name, Args: oargs, Code: wantCode}, &want)
 	n := trRun(t, nu, "", append(append([]string{}, oargs...), "--json")...)
 	nenv := envelope(t, n.stdout)
 	if n.code != wantCode {
 		t.Fatalf("%s: exit %d want %d\n%s%s", name, n.code, wantCode, n.stdout, n.stderr)
 	}
-	if !reflect.DeepEqual(want.Data, nenv["data"]) {
-		t.Errorf("%s: data\ngolden: %#v\nnew:    %#v", name, want.Data, nenv["data"])
-	}
-	if !reflect.DeepEqual(want.Tree, shipTree(t, nu)) {
-		t.Errorf("%s: .rota/ trees differ\ngolden: %v\nnew:    %v", name, want.Tree, shipTree(t, nu))
-	}
-	if b := gitT(t, nu, "rev-parse", "HEAD"); b != want.Head {
-		t.Errorf("%s: HEAD golden %s new %s", name, want.Head, b)
-	}
-	if b := gitT(t, nu, "status", "--porcelain"); b != want.Status {
-		t.Errorf("%s: status golden %q new %q", name, want.Status, b)
-	}
+	golden.Check(t, shipCallIn{Name: name, Args: oargs, Code: wantCode}, shipUndoWant{
+		Data: nenv["data"], Tree: shipTree(t, nu), Head: gitT(t, nu, "rev-parse", "HEAD"), Status: gitT(t, nu, "status", "--porcelain")})
 	return nenv
 }
 
