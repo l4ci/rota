@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/pystr"
 	"os"
 	"strings"
 
@@ -81,7 +82,7 @@ func roundAssign(fs *flag.FlagSet) RunFunc {
 		env.Worker = workerEnvCtx(c, ctx)
 		env.Accounts = c.deps().WorkerAccounts()
 		res, err := env.Assign(ctx, root, be, round.AssignOpts{
-			ID: id, Agent: *agent, BodyFile: bf, Siblings: splitList(*siblings),
+			ID: id, Agent: *agent, BodyFile: bf, Siblings: pystr.SplitCSV(*siblings),
 			CheckOnly: *checkOnly, AcceptOverlap: *accept, AcceptOpenPR: *acceptOpenPR, HolderPID: *pid,
 			Tier: *tier, TierReason: *tierReason, Kind: *kind, AcceptCodexVersion: *acceptCodex,
 			Settings: set, Getenv: os.Getenv,

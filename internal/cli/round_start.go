@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/pystr"
 	"os"
 	"strings"
 
@@ -20,16 +21,6 @@ import (
 
 // The C3 verbs `rota round start` and `rota round candidates`; the lease,
 // provisioning and readiness are internal/round, the config is internal/roundcfg.
-
-func splitList(s string) []string {
-	var out []string
-	for _, p := range strings.Split(s, ",") {
-		if p = strings.TrimSpace(p); p != "" {
-			out = append(out, p)
-		}
-	}
-	return out
-}
 
 func checkList(cs []round.Check) []any {
 	out := make([]any, 0, len(cs))
@@ -156,7 +147,7 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 		}
 		env := c.deps().RoundEnv(ctx, root)
 		st, err := env.Start(ctx, root, round.StartOpts{
-			Scope: sc, Items: splitList(*items), Slots: *slots, Base: *base, HolderPID: *pid,
+			Scope: sc, Items: pystr.SplitCSV(*items), Slots: *slots, Base: *base, HolderPID: *pid,
 			Settings: set, Getenv: os.Getenv, DefaultNum: def, Dispatch: config.Dispatch(cfg),
 		})
 		for _, w := range st.Warnings {

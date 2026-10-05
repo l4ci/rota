@@ -73,3 +73,15 @@ func Splitlines(s string) []string {
 	}
 	return out
 }
+
+// SplitCSV splits a comma-separated flag value, strips each part and drops
+// the blank ones. The result is never nil, so it encodes as [] in JSON.
+func SplitCSV(s string) []string {
+	out := []string{}
+	for _, p := range strings.Split(s, ",") {
+		if p = Strip(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
