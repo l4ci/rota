@@ -163,9 +163,6 @@ One line of nudge, only when it applies: if the cause was not obvious from readi
 
 - **Feedback loop before hypothesizing, verify before fixing.** The reproducer is red, deterministic, fast, unaided and minimal before Step 4 starts.
 - **Hypotheses are claims, plural and ranked.** "If X, then changing Y makes the bug vanish": falsifiable, 3–5 of them, so the first plausible idea does not anchor.
-- **Probes are tagged.** `[DEBUG-<id>]` on every temporary line; the cleanup grep must come back empty.
-- **Iron Law: no fix without a hypothesis; hard stop at 3 failed fixes.**
-- **A test that pins nothing is worse than none.** No honest seam means the reproducer is the proof and a `refactor` item names the seam.
 - **One fix, one commit.** Scope creep in debug commits masks the root cause later.
 - **The ID closes the loop.** Commit carries the item ID, the PR carries `Closes #N`.
 

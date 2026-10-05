@@ -29,17 +29,6 @@ Run each check; stop with a one-liner on failure.
    - `"auto"` — count `git rev-list @{u}..HEAD --count`. Below `release.confirmLargePushCommits`: run `git push origin <current-branch>` silently and continue. At or above it, ask once whatever the autonomy: header `"Large push"`, *"<N> unpushed commits about to be pushed as part of this release. Continue?"*, options `Push and continue (Recommended)` / `Abort`.
    - `"off"` — header `"Unpushed"`, *"HEAD has unpushed commits. Push them as part of this release?"*, options `Push and continue (Recommended)` / `Abort`.
 
-Track these phases with the host's task tool if it has one.
-
-1. *Guard* — clean tree, on trunk, HEAD pushed (Step 1)
-2. *Project checklist* — walk `.rota/RELEASE.md` items as gates (Step 2)
-3. *Bump version* — level chosen, version file and CHANGELOG written (Steps 4-5, 7-8)
-4. *Generate notes* — categorized notes drafted and approved (Steps 5-6)
-5. *Tag* — annotated tag created and pushed (Steps 9-10)
-6. *Publish* — remote release published if origin matches, then the branch pushed (Steps 11, 11b)
-7. *Close upstream issues / milestone* — manual gate (Steps 12-13)
-8. *Post-release nudges* — summary + docs (Steps 14-15)
-
 `--dry-run` (any step): run the read-only verbs and the judgment questions, skip every write, commit, tag and push, and print what would happen instead.
 
 ## Step 2 — Project Checklist
@@ -132,7 +121,7 @@ If `data.to` differs from `new_version`, stop: the file may be partly modified, 
 rota release push <new_version> --tag-only --json --confirm --confirm-note "$APPROVAL"
 ```
 
-Only the tag goes now (an unflagged push is refused where goreleaser builds the release). The `VERSION` bump on the branch announces binaries that do not exist until the release is published, so the branch waits for Step 11b. Where the repo has a `.goreleaser.yaml`, the tag starts the release workflow, which builds the binaries into a draft release. Exit 3 (no origin) or 5 (push failed): stop; the error names the tag SHA for manual recovery. Skipped in `--dry-run`.
+Only the tag goes now (an unflagged push is refused where goreleaser builds the release); the branch waits for Step 11b. Where the repo has a `.goreleaser.yaml`, the tag starts the release workflow, which builds the binaries into a draft release. Exit 3 (no origin) or 5 (push failed): stop; the error names the tag SHA for manual recovery. Skipped in `--dry-run`.
 
 ## Step 11 — Publish Remote Release
 
