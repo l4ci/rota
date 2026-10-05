@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/l4ci/rota/internal/host"
@@ -37,7 +38,7 @@ type Reported struct {
 func ReportSlot(root string, o ReportOpts) (Reported, error) {
 	res := Reported{Slot: o.Slot, Evidence: o.Evidence}
 	state := strings.ToLower(strings.TrimSpace(o.State))
-	if !contains(ReportStates, state) {
+	if !slices.Contains(ReportStates, state) {
 		return res, usage("--state must be one of %s", strings.Join(ReportStates, ", "))
 	}
 	res.State = state

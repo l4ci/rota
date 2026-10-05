@@ -7,6 +7,7 @@ import (
 	"io"
 	"os/exec"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -259,7 +260,7 @@ func (c *CLI) inject(args []string) ([]string, int) {
 			limit = 100
 		}
 	}
-	if len(args) >= 1 && args[0] == "api" && !contains(args, "--paginate") {
+	if len(args) >= 1 && args[0] == "api" && !slices.Contains(args, "--paginate") {
 		if apiMethod(args) == "GET" && !hasFields(args) {
 			args = append(args, "--paginate")
 		}
@@ -320,15 +321,6 @@ func takesStdin(args []string) bool {
 func anyMatch(args []string, re *regexp.Regexp) bool {
 	for _, a := range args {
 		if re.MatchString(a) {
-			return true
-		}
-	}
-	return false
-}
-
-func contains(args []string, s string) bool {
-	for _, a := range args {
-		if a == s {
 			return true
 		}
 	}

@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/l4ci/rota/internal/fsio"
@@ -78,7 +79,7 @@ func (s Store) InstructionsInit() ([]Action, error) {
 			var chunks []string
 			for _, m := range blockKeyRe.FindAllStringSubmatch(text, -1) {
 				key := m[1]
-				if contains(moved, key) {
+				if slices.Contains(moved, key) {
 					continue
 				}
 				re := section.BlockRegex(key, true)
@@ -143,15 +144,6 @@ func (s Store) InstructionsInit() ([]Action, error) {
 		}
 	}
 	return acts, nil
-}
-
-func contains(l []string, s string) bool {
-	for _, x := range l {
-		if x == s {
-			return true
-		}
-	}
-	return false
 }
 
 // DeprecatedBlockKeys are managed-block keys earlier versions wrote that no

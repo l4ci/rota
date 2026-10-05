@@ -8,6 +8,7 @@ import (
 	"github.com/l4ci/rota/internal/milestone"
 	"os"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -341,7 +342,7 @@ func backlogStale(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		if !hasString(stale.Kinds, *kind) {
+		if !slices.Contains(stale.Kinds, *kind) {
 			return Result{}, Usage("--kind must be map|knowledge|todo")
 		}
 		today, err := ageToday()
@@ -599,7 +600,7 @@ func statusAdd(fs *flag.FlagSet) RunFunc {
 		}
 		entries := []any{}
 		for _, e := range status.Entries(root) {
-			if e.Branch != branch || !hasString(scope, e.Repo) {
+			if e.Branch != branch || !slices.Contains(scope, e.Repo) {
 				continue
 			}
 			entries = append(entries, jsonObj("repo", nullStr(e.Repo), "items", e.Items, "worktree", nullStr(e.Worktree), "startedAt", e.StartedAt))

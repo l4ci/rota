@@ -5,13 +5,14 @@ import (
 	ms "github.com/l4ci/rota/internal/milestone"
 	"os"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/marker"
+	"github.com/l4ci/rota/internal/notechunk"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/tracker"
 )
@@ -316,7 +317,7 @@ func (b *Issues) Complete(ref string, in CompleteInput) (bool, error) {
 	}
 	var stale []string
 	for _, l := range b.stateLabels() {
-		if has(is.Labels, l) {
+		if slices.Contains(is.Labels, l) {
 			stale = append(stale, l)
 		}
 	}
@@ -329,15 +330,6 @@ func (b *Issues) Complete(ref string, in CompleteInput) (bool, error) {
 		return true, tr.Close(b.ctx(), n, "completed", "Done in `"+in.Commit+"`"+suffix+"\n\n"+marker.Line("done"))
 	}
 	return true, tr.Close(b.ctx(), n, "not_planned", "Closed: "+in.Reason+suffix+"\n\n"+marker.Line("closed"))
-}
-
-func has(list []string, s string) bool {
-	for _, x := range list {
-		if x == s {
-			return true
-		}
-	}
-	return false
 }
 
 // Reopen reopens a closed issue (clearing not-planned and blocked) or unblocks
@@ -353,7 +345,7 @@ func (b *Issues) Reopen(ref string) (bool, error) {
 	}
 	var stale []string
 	for _, l := range b.stateLabels("notPlanned", "blocked") {
-		if has(is.Labels, l) {
+		if slices.Contains(is.Labels, l) {
 			stale = append(stale, l)
 		}
 	}
@@ -361,7 +353,7 @@ func (b *Issues) Reopen(ref string) (bool, error) {
 		if err := tr.Reopen(b.ctx(), is.Number); err != nil {
 			return false, err
 		}
-	} else if !has(stale, config.Label(b.Cfg, "blocked")) {
+	} else if !slices.Contains(stale, config.Label(b.Cfg, "blocked")) {
 		return false, nil
 	}
 	if len(stale) > 0 {
@@ -419,74 +411,6 @@ func noteLimit() int {
 	return max(80, n)
 }
 
-func noteNorm(text string) string {
-	return strings.TrimRight(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
-}
-
-func runes(s string) int { return utf8.RuneCountInString(s) }
-
-// keepLines is str.splitlines(keepends=True).
-func keepLines(s string) []string {
-	var out []string
-	start, i := 0, 0
-	for i < len(s) {
-		r, n := utf8.DecodeRuneInString(s[i:])
-		i += n
-		switch r {
-		case '\n', '\v', '\f', 0x1c, 0x1d, 0x1e, 0x85, 0x2028, 0x2029:
-		case '\r':
-			if i < len(s) && s[i] == '\n' {
-				i++
-			}
-		default:
-			continue
-		}
-		out = append(out, s[start:i])
-		start = i
-	}
-	if start < len(s) {
-		out = append(out, s[start:])
-	}
-	return out
-}
-
-// noteParts is the comment bodies for text: one `<!-- rota:kind -->` comment, or
-// numbered `<!-- rota:kind i/n -->` parts split on line boundaries (a line longer
-// than a part is cut) (_note_parts).
-func noteParts(kind, text string) []string {
-	text = noteNorm(text)
-	limit := noteLimit()
-	single := marker.NoteHeader(kind, 1, 1)
-	if runes(single)+runes(text) <= limit {
-		return []string{single + text}
-	}
-	budget := limit - runes(marker.NoteHeader(kind, 99, 99))
-	var chunks []string
-	cur := ""
-	for _, line := range keepLines(text) {
-		for runes(line) > budget {
-			if cur != "" {
-				chunks = append(chunks, cur)
-				cur = ""
-			}
-			rs := []rune(line)
-			chunks = append(chunks, string(rs[:budget]))
-			line = string(rs[budget:])
-		}
-		if runes(cur)+runes(line) > budget {
-			chunks = append(chunks, cur)
-			cur = ""
-		}
-		cur += line
-	}
-	chunks = append(chunks, cur)
-	out := make([]string, len(chunks))
-	for i, c := range chunks {
-		out[i] = marker.NoteHeader(kind, i+1, len(chunks)) + c
-	}
-	return out
-}
-
 type notePart struct {
 	idx  int
 	c    tracker.Comment
@@ -534,7 +458,7 @@ func idLess(a, b string) bool {
 }
 
 func checkNoteKind(kind string) error {
-	if has(NoteKinds, kind) || sliceKindRe.MatchString(kind) {
+	if slices.Contains(NoteKinds, kind) || sliceKindRe.MatchString(kind) {
 		return nil
 	}
 	return errf(ErrInvalid, "note kind must be one of %s (or plan:S<NN>)", strings.Join(NoteKinds, "/"))
@@ -561,7 +485,7 @@ func (b *Issues) NoteGet(ref, kind string) (string, bool, error) {
 	for _, p := range parts {
 		all.WriteString(p.rest)
 	}
-	return noteNorm(all.String()), true, nil
+	return notechunk.Norm(all.String()), true, nil
 }
 
 // NotePut upserts the note: edits existing parts in place, adds missing ones,
@@ -583,7 +507,7 @@ func (b *Issues) NotePut(ref, kind, text string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	want := noteParts(kind, text)
+	want := notechunk.Parts(kind, text, noteLimit())
 	changed := false
 	for i, body := range want {
 		if i < len(existing) {
@@ -653,7 +577,7 @@ func (b *Issues) AddComment(ref, kind, text string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return tr.AddComment(b.ctx(), n, marker.CommentHeader(kind)+noteNorm(text))
+	return tr.AddComment(b.ctx(), n, marker.CommentHeader(kind)+notechunk.Norm(text))
 }
 
 // Comments lists the context comments oldest first, optionally only kind.
@@ -698,7 +622,7 @@ func openClaims(comments []tracker.Comment) []string {
 			continue
 		}
 		if verb == marker.KindClaim {
-			if !has(held, id) {
+			if !slices.Contains(held, id) {
 				held = append(held, id)
 			}
 		} else if i := indexOf(held, id); i >= 0 {
@@ -727,11 +651,11 @@ func (b *Issues) applyState(is Issue, want string) (bool, error) {
 	}
 	var drop, add []string
 	for _, l := range b.stateLabels("inProgress", "needsReview", "changesRequested") {
-		if l != keep && has(is.Labels, l) {
+		if l != keep && slices.Contains(is.Labels, l) {
 			drop = append(drop, l)
 		}
 	}
-	if keep != "" && !has(is.Labels, keep) {
+	if keep != "" && !slices.Contains(is.Labels, keep) {
 		add = []string{keep}
 	}
 	if len(drop) == 0 && len(add) == 0 {
@@ -819,14 +743,14 @@ func (b *Issues) Release(ref, claimID string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	if !has(held, claimID) {
+	if !slices.Contains(held, claimID) {
 		return false, nil
 	}
 	if _, err := tr.AddComment(b.ctx(), is.Number, marker.Release(claimID)); err != nil {
 		return false, err
 	}
 	if len(held) == 1 {
-		if label := config.Label(b.Cfg, "inProgress"); has(is.Labels, label) {
+		if label := config.Label(b.Cfg, "inProgress"); slices.Contains(is.Labels, label) {
 			if err := tr.RemoveLabels(b.ctx(), is.Number, []string{label}); err != nil {
 				return true, err
 			}
@@ -882,7 +806,7 @@ func (b *Issues) Status(ref string) (*Status, error) {
 	_, block, _ := ParseFieldsBlock(is.Body)
 	var state []string
 	for _, l := range b.stateLabels() {
-		if has(is.Labels, l) {
+		if slices.Contains(is.Labels, l) {
 			state = append(state, l)
 		}
 	}
@@ -890,7 +814,7 @@ func (b *Issues) Status(ref string) (*Status, error) {
 	notes := []string{}
 	for _, c := range comments {
 		nt, ok := marker.ParseNote(c.Body)
-		if ok && !has(notes, nt.Kind) {
+		if ok && !slices.Contains(notes, nt.Kind) {
 			notes = append(notes, nt.Kind)
 		}
 	}
