@@ -6,7 +6,6 @@
 package git
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"os"
@@ -14,6 +13,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/l4ci/rota/internal/proc"
 )
 
 // Timeout bounds one git call.
@@ -33,38 +34,39 @@ func IsMergeConflict(out string) bool {
 // Repo runs git in Dir ("" is the process cwd).
 type Repo struct{ Dir string }
 
-// Result is one git call.
-type Result struct {
-	Stdout, Stderr string
-	Code           int
+// Result is one git call: what proc reports for any command.
+type Result = proc.Result
+
+// Runner runs git with args in dir. A non-zero exit is a Result, not an error;
+// err is ErrNoGit when git is missing, or the context's error. It is the
+// injection point for every layer that runs git: tests fake it, production
+// passes Exec.
+type Runner func(ctx context.Context, dir string, args ...string) (Result, error)
+
+// Exec is the production Runner.
+func Exec(ctx context.Context, dir string, args ...string) (Result, error) {
+	return Via(proc.Run, ctx, dir, args...)
+}
+
+// Via runs git through a process runner with the policy every git call shares:
+// the git timeout and the C locale. git translates its messages ("CONFLICT
+// (content)" among them) in some locales; callers match on them, so ask for
+// the C locale.
+func Via(run proc.Runner, ctx context.Context, dir string, args ...string) (Result, error) {
+	res, err := run(ctx, proc.Cmd{
+		Name: "git", Args: args, Dir: dir, Timeout: Timeout,
+		Env: []string{"LC_ALL=C", "LANGUAGE=C"},
+	})
+	if errors.Is(err, exec.ErrNotFound) {
+		return Result{}, ErrNoGit
+	}
+	return res, err
 }
 
 // Run runs git with args. A non-zero exit is a Result, not an error; err is
 // ErrNoGit when git is missing, or the context's error.
 func (r Repo) Run(ctx context.Context, args ...string) (Result, error) {
-	ctx, cancel := context.WithTimeout(ctx, Timeout)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "git", args...)
-	cmd.Dir = r.Dir
-	// git translates its messages ("CONFLICT (content)" among them) in some
-	// locales; callers match on them, so ask for the C locale.
-	cmd.Env = append(os.Environ(), "LC_ALL=C", "LANGUAGE=C")
-	var out, errb bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &out, &errb
-	err := cmd.Run()
-	if ctx.Err() != nil {
-		return Result{}, ctx.Err()
-	}
-	var ee *exec.ExitError
-	switch {
-	case errors.As(err, &ee):
-		return Result{out.String(), errb.String(), ee.ExitCode()}, nil
-	case errors.Is(err, exec.ErrNotFound):
-		return Result{}, ErrNoGit
-	case err != nil:
-		return Result{}, err
-	}
-	return Result{out.String(), errb.String(), 0}, nil
+	return Exec(ctx, r.Dir, args...)
 }
 
 // ok reports whether a call exited 0; a failure to run is an error.
@@ -73,7 +75,7 @@ func (r Repo) ok(ctx context.Context, args ...string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return res.Code == 0, nil
+	return res.ExitCode == 0, nil
 }
 
 // Verify reports whether ref resolves (`git rev-parse --verify`).
@@ -94,7 +96,7 @@ func (r Repo) Base(ctx context.Context, configured string) (base string, ok bool
 		}
 	}
 	res, err := r.Run(ctx, "symbolic-ref", "refs/remotes/origin/HEAD")
-	if err != nil || res.Code != 0 {
+	if err != nil || res.ExitCode != 0 {
 		return "", false, err
 	}
 	head := strings.TrimRight(res.Stdout, "\n")
@@ -112,7 +114,7 @@ func (r Repo) CurrentBranch(ctx context.Context) (string, error) {
 		return "", err
 	}
 	b := strings.TrimRight(res.Stdout, "\n")
-	if res.Code != 0 || b == "HEAD" {
+	if res.ExitCode != 0 || b == "HEAD" {
 		return "", nil
 	}
 	return b, nil
@@ -127,7 +129,7 @@ func (r Repo) IsRepo(ctx context.Context) (bool, error) {
 // ok is false when status itself fails (not a repo).
 func (r Repo) Dirty(ctx context.Context) (dirty, ok bool, err error) {
 	res, err := r.Run(ctx, "status", "--porcelain")
-	if err != nil || res.Code != 0 {
+	if err != nil || res.ExitCode != 0 {
 		return false, false, err
 	}
 	return strings.TrimSpace(res.Stdout) != "", true, nil
@@ -150,14 +152,14 @@ func (r Repo) CreateBranch(ctx context.Context, name string) (msg string, ok boo
 	if err != nil {
 		return "", false, err
 	}
-	return strings.TrimSpace(res.Stderr), res.Code == 0, nil
+	return strings.TrimSpace(res.Stderr), res.ExitCode == 0, nil
 }
 
 // out runs git and returns stdout with trailing newlines trimmed. ok is
 // false when git exited non-zero; a failure to run is an error.
 func (r Repo) out(ctx context.Context, args ...string) (s string, ok bool, err error) {
 	res, err := r.Run(ctx, args...)
-	if err != nil || res.Code != 0 {
+	if err != nil || res.ExitCode != 0 {
 		return "", false, err
 	}
 	return strings.TrimRight(res.Stdout, "\n"), true, nil

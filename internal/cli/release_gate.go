@@ -31,7 +31,7 @@ func releaseGitOK(c *Ctx, dir string, args ...string) (string, bool, error) {
 	if err != nil {
 		return "", false, err
 	}
-	return shipLine(res.Stdout), res.Code == 0, nil
+	return shipLine(res.Stdout), res.ExitCode == 0, nil
 }
 
 func releasePush(fs *flag.FlagSet) RunFunc {
@@ -142,7 +142,7 @@ func releasePush(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		if res.Code != 0 {
+		if res.ExitCode != 0 {
 			return Result{}, Unavailable("git push origin %s: %s (tag %s is at %s)", strings.Join(refs, " "), shipFirstLine(res.Stderr), tag, sha)
 		}
 		return Result{Data: gitObj("tag", tag, "branch", branch, "remote", "origin", "scope", scope, "changed", true), Text: text}, nil

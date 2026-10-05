@@ -35,7 +35,7 @@ func (v VerdictCheck) Block(branch string) error {
 	}
 	// A branch whose tip cannot be read has moved on as far as we can tell.
 	stale := true
-	if res, err := v.Git.Run("rev-parse", "--short", branch); err == nil && res.Code == 0 {
+	if res, err := v.Git.Run("rev-parse", "--short", branch); err == nil && res.ExitCode == 0 {
 		stale = r.Sha != strings.TrimSpace(res.Stdout)
 	}
 	return &VerdictBlockedError{Branch: branch, Record: r, Stale: stale}

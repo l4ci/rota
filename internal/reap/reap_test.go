@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundlease"
@@ -27,16 +28,16 @@ type gitResp struct {
 	code     int
 }
 
-func (f *fakeGit) run(_ context.Context, dir string, args ...string) (string, string, int, error) {
+func (f *fakeGit) run(_ context.Context, dir string, args ...string) (git.Result, error) {
 	a := strings.Join(args, " ")
 	f.calls = append(f.calls, dir+"|"+a)
 	if r, ok := f.resp[dir+"|"+a]; ok {
-		return r.out, r.err, r.code, nil
+		return git.Result{Stdout: r.out, Stderr: r.err, ExitCode: r.code}, nil
 	}
 	if r, ok := f.resp[a]; ok {
-		return r.out, r.err, r.code, nil
+		return git.Result{Stdout: r.out, Stderr: r.err, ExitCode: r.code}, nil
 	}
-	return "", "", 1, nil
+	return git.Result{ExitCode: 1}, nil
 }
 
 func (f *fakeGit) ran(prefix string) bool {

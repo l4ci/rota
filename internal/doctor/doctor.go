@@ -18,6 +18,7 @@ import (
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/hook"
 	"github.com/l4ci/rota/internal/host"
+	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/skills"
 )
 
@@ -62,10 +63,7 @@ type Disk struct {
 }
 
 // Result is what a finished command left behind.
-type Result struct {
-	Stdout, Stderr string
-	ExitCode       int
-}
+type Result = proc.Result
 
 // Exec runs bin (a path Look returned) in dir with extraEnv added to the
 // process environment. A command that ran and exited non-zero is a Result

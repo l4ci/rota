@@ -343,7 +343,8 @@ func (e Env) gate(ctx context.Context, root string, o GateOpts, res GateResult, 
 			return r, nil
 		}
 	} else {
-		out, errb, code, gerr := e.Git(e.context(), root, "merge", "--no-ff", "-m", fmt.Sprintf("merge: %s into %s", branch, o.Base), branch)
+		res, gerr := e.Git(e.context(), root, "merge", "--no-ff", "-m", fmt.Sprintf("merge: %s into %s", branch, o.Base), branch)
+		out, errb, code := res.Stdout, res.Stderr, res.ExitCode
 		if gerr != nil {
 			code, errb = 127, gerr.Error()
 		}

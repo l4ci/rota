@@ -7,9 +7,11 @@ import (
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/escalation"
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/migrate"
 	"github.com/l4ci/rota/internal/orchestrate"
+	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/reap"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundlease"
@@ -25,6 +27,11 @@ import (
 // variable. Fields read each other through the Deps, so a swapped
 // TrackerOptions reaches the round environment too.
 type Deps struct {
+	// Git runs git for every verb that reads a repository; Proc runs any
+	// other binary. A test swaps in a fake instead of reaching the machine.
+	Git  git.Runner
+	Proc proc.Runner
+
 	// TrackerOptions apply to every forge CLI the verbs build; a test swaps
 	// in a fake executor here.
 	TrackerOptions []tracker.Option
@@ -54,6 +61,8 @@ type Deps struct {
 // defaultDeps is the real machine: git, the forge CLIs, tmux or herdr.
 func defaultDeps() *Deps {
 	d := &Deps{
+		Git:              git.Exec,
+		Proc:             proc.Run,
 		WorkerEnv:        func() worker.Env { return worker.Env{} },
 		WorkerAccounts:   func() *worker.Accounts { return &worker.Accounts{Now: hookNow} }, // ROTA_TEST_NOW fixes the meters' clock too
 		EscalationEnv:    func() escalation.Env { return escalation.Env{} },

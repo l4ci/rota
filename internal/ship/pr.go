@@ -71,7 +71,7 @@ func OpenPR(ctx context.Context, p PRPorts, r PRRequest) (PR, error) {
 	if err != nil {
 		return PR{}, err
 	}
-	if push.Code != 0 {
+	if push.ExitCode != 0 {
 		return PR{}, &GitError{Msg: "git push -u origin " + r.Branch + " failed: " + firstLine(push.Stderr)}
 	}
 	url, err := p.Forge.PRCreate(ctx, tracker.PRSpec{Title: r.Title, Body: body, Head: r.Branch, Base: base})

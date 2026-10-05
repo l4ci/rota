@@ -10,10 +10,12 @@ import (
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/doctor"
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/hook"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/migrate"
+	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/skills"
 	"github.com/l4ci/rota/internal/version"
 	"github.com/l4ci/rota/internal/worker"
@@ -32,7 +34,7 @@ func runDoctor(c *Ctx, args []string) (Result, error) {
 	if err := noArgs(args); err != nil {
 		return Result{}, err
 	}
-	rep := doctor.Run(c.Context(), doctorInput())
+	rep := doctor.Run(c.Context(), doctorInput(c.Context(), c.deps()))
 	checks := make([]any, 0, len(rep.Checks))
 	var lines []string
 	for _, ch := range rep.Checks {
@@ -58,8 +60,8 @@ func runDoctor(c *Ctx, args []string) (Result, error) {
 
 // doctorInput gathers the real environment: ROTA_TEST_DOCTOR_PATH replaces PATH
 // for tool lookup (a test hook, not part of the CLI).
-func doctorInput() doctor.Input {
-	in := doctor.Input{Exec: doctorExec, Getenv: os.Getenv, Look: doctorLook(os.Getenv("ROTA_TEST_DOCTOR_PATH"))}
+func doctorInput(ctx context.Context, d *Deps) doctor.Input {
+	in := doctor.Input{Exec: doctorExec(d.Proc), Getenv: os.Getenv, Look: doctorLook(os.Getenv("ROTA_TEST_DOCTOR_PATH"))}
 	in.Dir, _ = os.Getwd()
 	in.Home, _ = os.UserHomeDir()
 	in.Skills = doctorSkills(in.Home)
@@ -81,7 +83,7 @@ func doctorInput() doctor.Input {
 		}
 	}
 	if root == "" {
-		doctorDiskInput(context.Background(), &in, nil, "")
+		doctorDiskInput(ctx, &in, nil, "", d.Git)
 		return in
 	}
 	cfg := config.Load(filepath.Join(root, ".rota", "config.json"))
@@ -91,7 +93,7 @@ func doctorInput() doctor.Input {
 		return s
 	}
 	in.Dispatch, in.IssuesProvider = config.Dispatch(cfg), str("issues.provider")
-	in.CodexHomes = codexHomes(root)
+	in.CodexHomes = codexHomes(ctx, d.Git, root)
 	for _, t := range []string{"light", "standard", "heavy"} {
 		if strings.TrimSpace(str("round.tiers.codex."+t)) != "" {
 			in.CodexTiers = true
@@ -103,7 +105,7 @@ func doctorInput() doctor.Input {
 		}
 	}
 	in.ProjectRoot = root
-	doctorDiskInput(context.Background(), &in, cfg, root)
+	doctorDiskInput(ctx, &in, cfg, root, d.Git)
 	if on, err := hook.BoolKey(cfg, "orchestrator.switchOnUsage"); err == nil {
 		in.SwitchOnUsage = on
 	}
@@ -158,28 +160,18 @@ func doctorLook(pathOverride string) func(string) (string, bool) {
 	}
 }
 
-func doctorExec(ctx context.Context, bin string, args, extraEnv []string, dir string) (doctor.Result, error) {
-	ctx, cancel := context.WithTimeout(ctx, doctorCallTimeout)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, bin, args...)
-	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), extraEnv...)
-	var out, errb strings.Builder
-	cmd.Stdout, cmd.Stderr = &out, &errb
-	err := cmd.Run()
-	r := doctor.Result{Stdout: out.String(), Stderr: errb.String()}
-	if ee, ok := err.(*exec.ExitError); ok {
-		r.ExitCode = ee.ExitCode()
-		return r, nil
+// doctorExec adapts a process runner to doctor.Exec, bounding each call.
+func doctorExec(run proc.Runner) doctor.Exec {
+	return func(ctx context.Context, bin string, args, extraEnv []string, dir string) (doctor.Result, error) {
+		return run(ctx, proc.Cmd{Name: bin, Args: args, Env: extraEnv, Dir: dir, Timeout: doctorCallTimeout})
 	}
-	return r, err
 }
 
 // codexHomes lists the slot homes that exist under <git-common-dir>/rota/codex/,
 // sorted by slot name. Any failure reads as none: the check then has no home
 // to look at, and git trouble is the git check's to report.
-func codexHomes(root string) []doctor.CodexHome {
-	cd, err := worker.CommonDir(context.Background(), worker.ExecGit, root)
+func codexHomes(ctx context.Context, run git.Runner, root string) []doctor.CodexHome {
+	cd, err := worker.CommonDir(ctx, run, root)
 	if err != nil {
 		return nil
 	}

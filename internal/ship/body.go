@@ -37,7 +37,7 @@ func Body(g Git, base, branch string, titles func() (TitleOf, error)) (string, e
 	if err != nil {
 		return "", err
 	}
-	if subj.Code != 0 || full.Code != 0 {
+	if subj.ExitCode != 0 || full.ExitCode != 0 {
 		return "", &GitError{Msg: "git log " + rng + ": " + firstLine(subj.Stderr+full.Stderr)}
 	}
 	var subjects []string

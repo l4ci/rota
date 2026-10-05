@@ -531,7 +531,7 @@ func shipUndo(fs *flag.FlagSet) RunFunc {
 		cur := ""
 		if res, err := shipGit(c, dir, "symbolic-ref", "--short", "HEAD"); err != nil {
 			return Result{}, err
-		} else if res.Code == 0 {
+		} else if res.ExitCode == 0 {
 			cur = shipLine(res.Stdout)
 		}
 		dirty, _, err := git.Repo{Dir: dir}.Dirty(ctx)

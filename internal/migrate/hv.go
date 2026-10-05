@@ -622,7 +622,7 @@ func gitClean(dir string, umbrella bool) error {
 	}
 	repo := git.Repo{Dir: dir}
 	st, err := repo.Run(context.Background(), "status", "--porcelain")
-	if err != nil || st.Code != 0 {
+	if err != nil || st.ExitCode != 0 {
 		return fmt.Errorf("%w: not inside a git repo (or git unavailable)", ErrGit)
 	}
 	out := st.Stdout

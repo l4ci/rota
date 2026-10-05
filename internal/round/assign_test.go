@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/git"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -117,8 +118,8 @@ func newAssignFixture(t *testing.T) *assignFixture {
 	}
 	h := &hostFake{}
 	f := &assignFixture{root: root, host: h}
-	f.env = Env{Git: worker.ExecGit, Base: "main", Lease: fakeLease("h", 100)}
-	f.env.Worker = worker.Env{Git: worker.ExecGit, NewHost: func(string) host.Host { return h },
+	f.env = Env{Git: git.Exec, Base: "main", Lease: fakeLease("h", 100)}
+	f.env.Worker = worker.Env{Git: git.Exec, NewHost: func(string) host.Host { return h },
 		Sleep: func(time.Duration) {}, Now: time.Now}
 	fb := &fakeBacklog{}
 	fb.add("12", "Add the round assign verb now please", "M01", false, "## Acceptance\n- [ ] works\n\nedits internal/cli/round.go")
@@ -184,7 +185,8 @@ func TestAssignMarksResetsAndDispatches(t *testing.T) {
 	if s.Task() != "12" || s.ClaimID() != "ben@1" || s.Branch() != res.Branch || s.State() != "busy" {
 		t.Errorf("slot: %v", s)
 	}
-	out, _, _, _ := worker.ExecGit(bg, filepath.Join(f.root, ".worktrees", "ben"), "symbolic-ref", "--short", "HEAD")
+	gres, _ := git.Exec(bg, filepath.Join(f.root, ".worktrees", "ben"), "symbolic-ref", "--short", "HEAD")
+	out := gres.Stdout
 	if strings.TrimSpace(out) != res.Branch {
 		t.Errorf("worktree must sit on the issue branch, not %q", out)
 	}

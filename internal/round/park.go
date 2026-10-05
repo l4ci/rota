@@ -22,7 +22,8 @@ type Parked struct {
 }
 
 func (e Env) gitOut(ctx context.Context, dir string, args ...string) (string, string, int) {
-	out, errOut, code, err := e.Git(ctx, dir, args...)
+	res, err := e.Git(ctx, dir, args...)
+	out, errOut, code := res.Stdout, res.Stderr, res.ExitCode
 	if err != nil {
 		return "", err.Error(), 127
 	}
@@ -37,7 +38,8 @@ func unavailable(format string, a ...any) error {
 // added and untracked (a new directory by its own name), a rename by its new
 // name.
 func (e Env) dirtyPaths(ctx context.Context, wt string) ([]string, error) {
-	out, errOut, code, err := e.Git(ctx, wt, "status", "--porcelain", "-z")
+	res, err := e.Git(ctx, wt, "status", "--porcelain", "-z")
+	out, errOut, code := res.Stdout, res.Stderr, res.ExitCode
 	if err != nil || code != 0 {
 		return nil, unavailable("git status failed in %s: %s", wt, strings.TrimSpace(errOut))
 	}

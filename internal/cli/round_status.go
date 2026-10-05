@@ -27,7 +27,7 @@ import (
 // report it as unavailable instead of failing.
 func defaultRoundEnv(ctx context.Context, root string, d *Deps) round.Env {
 	cfg := config.Load(filepath.Join(root, ".rota", "config.json"))
-	e := round.Env{Git: worker.ExecGit, Base: "main"}
+	e := round.Env{Git: d.Git, Base: "main"}
 	if b, ok, err := (git.Repo{Dir: root}).Base(ctx, ""); err == nil && ok {
 		e.Base = b
 	}

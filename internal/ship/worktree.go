@@ -22,7 +22,7 @@ func ClearWorktree(g Git, branch string, onDisk func() string) error {
 	if err != nil {
 		return err
 	}
-	if rm.Code != 0 {
+	if rm.ExitCode != 0 {
 		return &GitError{Msg: "git worktree remove " + wt + ": " + firstLine(rm.Stderr)}
 	}
 	return nil

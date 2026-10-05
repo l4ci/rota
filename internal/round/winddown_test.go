@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/git"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -61,7 +62,8 @@ func TestWindDownParksReleasesAndSummarises(t *testing.T) {
 			t.Errorf("the summary keeps the issue the slot held: %+v", s)
 		}
 	}
-	out, _, _, _ := worker.ExecGit(bg, filepath.Join(f.root, ".worktrees", "ben"), "symbolic-ref", "--short", "HEAD")
+	gres, _ := git.Exec(bg, filepath.Join(f.root, ".worktrees", "ben"), "symbolic-ref", "--short", "HEAD")
+	out := gres.Stdout
 	if got := out[:len(out)-1]; got != "park/ben" {
 		t.Errorf("ben must be parked, on %q", got)
 	}

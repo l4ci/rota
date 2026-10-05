@@ -41,7 +41,7 @@ func git(dir string, args ...string) (stdout string, code int) {
 	if err != nil {
 		return "", -1
 	}
-	return res.Stdout, res.Code
+	return res.Stdout, res.ExitCode
 }
 
 // reachable is the set of commits in <since>..HEAD of dir, or nil when since
