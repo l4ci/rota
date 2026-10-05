@@ -5,7 +5,7 @@ description: Use when backlog items already exist and need implementation ("impl
 
 # rota-work
 
-Orchestrator-driven implementation with per-task verification and commits. Workers are in-process `Agent` subagents that write files; the orchestrator commits.
+Main-session-driven implementation with per-task verification and commits. The subagents are in-process `Agent` calls that write files; the main session commits.
 
 **Rounds are not this skill.** Standing workers in their own worktrees and host tabs (tmux or herdr), PRs behind a merge gate, relays, slot reclaim: that is `/rota-orchestrate` and the `rota round` verbs. If `work.dispatch` is `"tmux"` or `"herdr"`, this skill still dispatches subagents; say so once and continue, or point the user at `/rota-orchestrate` for a multi-issue round.
 
@@ -13,8 +13,8 @@ Orchestrator-driven implementation with per-task verification and commits. Worke
 
 Read `.rota/config.json`:
 
-- `models.orchestrator` — model for planning and verification (default `opus`)
-- `models.worker` — model for implementation subagents (default `sonnet`)
+- `models.orchestrator` — main session model: planning and verification (default `opus`)
+- `models.worker` — the `standard` tier: implementation subagents (default `sonnet`)
 - `work.isolation` — `"branch"` (default) or `"worktree"`
 - `work.mergeStrategy` — `"direct"` (default) or `"pr"`
 
@@ -85,7 +85,7 @@ Choose a descriptive branch name (`rota/quick-switch`, `rota/fix-timer-badge`). 
 
 **Plan-as-artifact check (first).** For an item tagged to a milestone (`Milestone: M01` on `B07` → key `M01-B07`) or a slice (`M01-S01`), run `rota plan show <milestone>-<unit> 2>/dev/null`. If a plan exists, use its decomposition, files, verify steps and assumptions as the dispatch briefs instead of decomposing ad hoc; restate user redlines, and if the conversation contradicts the plan, ask whether to update the plan first (`/rota-plan`) or proceed and ignore it.
 
-1. **Consult knowledge and decisions** with the canonical K+D pattern (`references/knowledge-consult.md`), topics inferred from the planned work. Run `rota glossary read <terms in the item>…` too, and call out synonym or drift when the user's wording deviates from a canonical term. Carry matches into Step 6 briefs as `**Known gotchas:**` (relevant bullets only) and `**Hard boundaries:**` (full entries: rule, *Why*, **Forbids**, **Permits**). Workers treat boundaries as constraints. If a planned task would violate a decision, **stop and surface it** before dispatching. Run `rota map stats --cap` (a one-line stderr nudge at or over the soft cap; never blocks).
+1. **Consult knowledge and decisions** with the canonical K+D pattern (`references/knowledge-consult.md`), topics inferred from the planned work. Run `rota glossary read <terms in the item>…` too, and call out synonym or drift when the user's wording deviates from a canonical term. Carry matches into Step 6 briefs as `**Known gotchas:**` (relevant bullets only) and `**Hard boundaries:**` (full entries: rule, *Why*, **Forbids**, **Permits**). Subagents treat boundaries as constraints. If a planned task would violate a decision, **stop and surface it** before dispatching. Run `rota map stats --cap` (a one-line stderr nudge at or over the soft cap; never blocks).
 
    > **REQUIRED — Register hits on consumed bullets.** After writing the briefs, apply *Hit-register after consumption* in `references/knowledge-consult.md`: one `rota knowledge hit --topic "<T>" --title "<first-line-of-bullet>"` per bullet that landed in a brief's `**Known gotchas:**`, all in one parallel batch. Bullets pruned before the briefs earn no credit. Silent on success.
 
@@ -124,11 +124,11 @@ For umbrella branches (single sub-repo, multi-repo via `rota git branch <name> -
 
 **Issue mode** (`references/issue-mode.md`). Once the branch exists, per item run `rota item ready <ID>` (exit 1 prints what is missing: warn the user), then claim it with `rota item claim <ID> --as <branch>`. Exit 4 means another worker holds it: drop that item and continue with the rest, or stop when none remain. Exit 3 or 5: stop and report. Load each item's context as the reference's "Resuming an item" describes (start with `rota item show <ID>`) before planning tasks. For a `changes-requested` item, follow *Handling review feedback* in `references/worker-contract.md` when working its `feedback` comments.
 
-The orchestrator stays at the repo root (umbrella root in umbrella mode); workers `cd` into their assigned directory first and use absolute paths.
+The main session stays at the repo root (umbrella root in umbrella mode); subagents `cd` into their assigned directory first and use absolute paths.
 
-## Step 6 — Dispatch Worker Agents
+## Step 6 — Dispatch Subagents
 
-For each independent task dispatch a subagent with the **worker** model. Workers write files and never stage or commit, so parallel workers cannot race on `.git/index` under either isolation mode. Launch all independent agents in one message; don't announce.
+For each independent task dispatch a subagent on the `standard` tier. Subagents write files and never stage or commit, so parallel subagents cannot race on `.git/index` under either isolation mode. Launch all independent agents in one message; don't announce.
 
 ```
 You are implementing Task N of [total].
@@ -148,7 +148,7 @@ You are implementing Task N of [total].
 [Relevant bullets from rota knowledge query output]
 
 **Hard boundaries:**
-[Relevant entries from rota decisions query: full rule plus forbids/permits. Workers MUST respect these; Step 7 checks the diff for violations.]
+[Relevant entries from rota decisions query: full rule plus forbids/permits. Subagents MUST respect these; Step 7 checks the diff for violations.]
 
 **Canonical terms:**
 [Relevant terms from rota glossary read: definition plus aliases. Use these names in code, comments and commit messages.]
@@ -161,26 +161,26 @@ You are implementing Task N of [total].
 **Claims to verify before building on them:**
 [Every factual claim this brief rests on: a line number, a call-site count, "function X already returns Y". Check each first. If one is false, STOP and report which claim and what is actually there; do not implement around it.]
 
-**Do NOT run `git add` or `git commit`.** Write changes to files only. The orchestrator commits (Step 7.5); leave a clean working-tree diff matching the brief.
+**Do NOT run `git add` or `git commit`.** Write changes to files only. The main session commits (Step 7.5); leave a clean working-tree diff matching the brief.
 
-**Suggested commit message:** [exact message; the orchestrator uses it in Step 7.5]
+**Suggested commit message:** [exact message; the main session uses it in Step 7.5]
 
 **On completion:** report the RED command and failing line (or the no-test-seam note), the files you modified, plus any tool-generated siblings the toolchain produced, and confirm you did not stage or commit. Name any brief claim that turned out false, even if you worked around it.
 ```
 
-**Umbrella.** The `[UMBRELLA]` line replaces the WORKTREE line under branch isolation; both appear under Layout B worktrees. Workers MUST `cd` to the named directory before any `git` command: the orchestrator stays at the umbrella for `.rota/` access, so a worker's default cwd targets the wrong `.git/`. For a multi-repo set, dispatch one worker per sub-repo with that repo's name and path; each brief lists only its own files, and Step 7 verifies each repo's commit independently.
+**Umbrella.** The `[UMBRELLA]` line replaces the WORKTREE line under branch isolation; both appear under Layout B worktrees. Subagents MUST `cd` to the named directory before any `git` command: the main session stays at the umbrella for `.rota/` access, so a subagent's default cwd targets the wrong `.git/`. For a multi-repo set, dispatch one subagent per sub-repo with that repo's name and path; each brief lists only its own files, and Step 7 verifies each repo's commit independently.
 
 Brief-writing rules, falsifiable-claims discipline, pre-baked citations, doc-writer ordering and the same-file Edit race: [`references/work-wave-planning.md`](references/work-wave-planning.md).
 
 ## Step 7 — Verify Each Completion
 
-Verify internally; don't narrate. Trust the diff, not the worker's narrative.
+Verify internally; don't narrate. Trust the diff, not the subagent's narrative.
 
-1. `git status --porcelain`, then `git diff` for the files the worker reported.
+1. `git status --porcelain`, then `git diff` for the files the subagent reported.
 2. Read the modified files: do they match the brief?
 3. Structural checks: grep for expected patterns, no regressions.
-4. **Rename validation.** Re-run `git grep -l "<old-name>" -- <scope>`; files outside the worker's set get a fix-up dispatch before staging.
-5. Claim-weight check on gap-fills, and treat a worker's dispute of its brief as a FAIL on the plan (see `references/work-wave-planning.md`, *Verifying a completion*).
+4. **Rename validation.** Re-run `git grep -l "<old-name>" -- <scope>`; files outside the subagent's set get a fix-up dispatch before staging.
+5. Claim-weight check on gap-fills, and treat a subagent's dispute of its brief as a FAIL on the plan (see `references/work-wave-planning.md`, *Verifying a completion*).
 
 **PASS** → move on silently. **FAIL** → dispatch a fix agent and re-verify; surface failures only if they persist.
 
@@ -188,12 +188,12 @@ Verify internally; don't narrate. Trust the diff, not the worker's narrative.
 
 - **PASS:** one row per item the task resolves: `rota proof add <ID> --check "<verify command or grep>" --result PASS --evidence "<output line or path>" [--sha <task-commit>]`.
 - **Persistent FAIL:** record it with `--result FAIL`.
-- **Behavior task:** first record the worker's reported RED run: `rota proof add <ID> --check "<test command>" --result FAIL --evidence "<failing line>" --sha <sha before the change>`, then the PASS row after. A worker that reports no RED gets a fix dispatch (a FAIL above).
+- **Behavior task:** first record the subagent's reported RED run: `rota proof add <ID> --check "<test command>" --result FAIL --evidence "<failing line>" --sha <sha before the change>`, then the PASS row after. A subagent that reports no RED gets a fix dispatch (a FAIL above).
 - **Docs or skill-only task:** no RED. Put `no test seam: docs/skill change` in the PASS row's `--check`.
 - **Acceptance:** `rota item complete` (Step 9) writes it and exits 4 when an item has no proof. Never pass `--no-proof` on your own; an unproven item stays open and is surfaced.
 - **Issue mode:** the rows go in the item's proof note.
 
-## Step 7.5 — Commit per Task (orchestrator)
+## Step 7.5 — Commit per Task (main session)
 
 One commit per task, sequential, in dispatch order, staging only that task's files:
 
@@ -203,9 +203,9 @@ git commit -m "<suggested-message-from-task-N-brief>" -m "Task: <key>/<N>"
 ```
 
 - Every task commit ends with the `Task: <key>/<N>` trailer (the task ledger, [`references/task-ledger.md`](references/task-ledger.md)); a resumed session reads these to skip finished tasks.
-- Stage exactly the files named in the task's brief. Never `git add -A` or `git add .`: sweeping in another worker's changes breaks atomicity.
+- Stage exactly the files named in the task's brief. Never `git add -A` or `git add .`: sweeping in another subagent's changes breaks atomicity.
 - Use the brief's suggested message verbatim, adjusted only if a FAIL→re-dispatch loop changed what landed.
-- **Same-file carve-out.** Two parallel workers editing different ranges of one file get ONE commit naming both task IDs; granularity lives in the message.
+- **Same-file carve-out.** Two parallel subagents editing different ranges of one file get ONE commit naming both task IDs; granularity lives in the message.
 - Worktree isolation: commit against the worktree's index (`git -C <worktree-path>`). Umbrella: commit inside each target sub-repo (`git -C <umbrella>/<repo>`).
 
 ## Step 8 — Sequential Waves
@@ -214,7 +214,7 @@ For dependent tasks, wait for wave 1 to complete and verify, then dispatch wave 
 
 ## Step 8.5 — Sweep Tool-Generated Siblings
 
-After the task commits, sweep untracked toolchain siblings into their own `chore:` commit (staged by name) or the next `/rota-work` guard refuses a dirty tree. Non-sibling dirt means a worker produced unexpected changes: investigate before merging. See [`references/work-toolchain-siblings.md`](references/work-toolchain-siblings.md).
+After the task commits, sweep untracked toolchain siblings into their own `chore:` commit (staged by name) or the next `/rota-work` guard refuses a dirty tree. Non-sibling dirt means a subagent produced unexpected changes: investigate before merging. See [`references/work-toolchain-siblings.md`](references/work-toolchain-siblings.md).
 
 ## Step 9 — Close the Items
 
@@ -291,21 +291,21 @@ One line, only when `references/post-cycle-trigger-gate.md` fires: *"Run `/rota-
 
 | Thought | Reality |
 |---|---|
-| "The worker said it passed." | Step 7 trusts the diff: `git status`, `git diff` and the read files, never the worker's narrative. |
+| "The subagent said it passed." | Step 7 trusts the diff: `git status`, `git diff` and the read files, never the subagent's narrative. |
 | "The check is obvious, skip the proof row." | `rota item complete` exits 4 without one. An unproven item stays open and is surfaced. |
 | "The new test passes, that's enough." | A test that never failed may not test the change. A behavior task needs a RED run first, recorded as a FAIL row, then the PASS row. |
 | "Pass `--no-proof`, the code is fine." | Never on your own. The row records what ran; the flag records that nothing did. |
-| "A worker disputing its brief is noise." | A dispute is a FAIL on the plan. Fix the plan, then re-dispatch. |
+| "A subagent disputing its brief is noise." | A dispute is a FAIL on the plan. Fix the plan, then re-dispatch. |
 | "Open the PR now, the user wants it shipped." | Opening a PR is a manual gate whatever `autonomy.level` says (Step 10, `/rota-ship` Step 6a). |
 | "Run the full smoke after each task." | Per-task checks stay structural. The full suite runs in `/rota-ship` and `/rota-review`. |
 
 ## Key Principles
 
 - **No noise.** Report results, not process.
-- **Orchestrator plans and verifies; worker executes.** Never dispatch without a clear brief; never trust completion without reading the result.
-- **Orchestrator owns `.rota/` state.** Only the orchestrator touches `status.json` and the backlog (`rota item` verbs).
+- **The main session plans and verifies; subagents execute.** Never dispatch without a clear brief; never trust completion without reading the result.
+- **The main session owns `.rota/` state.** Only the main session touches `status.json` and the backlog (`rota item` verbs).
 - **Isolation protects main.** Branch or worktree, never work directly on main.
-- **One commit per task, owned by the orchestrator.** Clean history, easy revert granularity, no `.git/index` races.
+- **One commit per task, owned by the main session.** Clean history, easy revert granularity, no `.git/index` races.
 
 ## References
 
