@@ -155,6 +155,18 @@ In umbrella `--all` mode, the rollup verdict is the worst-of across targets. Per
 rota verdict add <branch> --kind qa --verdict <PASS|CONCERNS|FAIL|INFRA-FAIL> --body-file "$VERDICT" --json
 ```
 
+`$VERDICT` is one JSON object (`internal/verdict`: strict, unknown keys rejected). `verdict`, when present, must equal `--verdict`:
+
+```json
+{
+  "summary": "<one line: what ran and the result>",
+  "findings": [
+    {"severity": "blocker|major|minor|info", "title": "<failed check or audit finding>",
+     "file": "<path, optional>", "line": 12, "detail": "<command and evidence, optional>"}
+  ]
+}
+```
+
 Exit 2 names the field that failed validation; fix the body and re-run. `/rota-ship` routes on this record, not on the printed report.
 
 #### Step 8 — Report
@@ -162,7 +174,7 @@ Exit 2 names the field that failed validation; fix the body and re-run. `/rota-s
 Print a structured report:
 
 ```
-QA verdict: <PASS|CONCERNS|FAIL>
+QA verdict: <PASS|CONCERNS|FAIL|INFRA-FAIL>
 
 Targets:
   <target-1>: <verdict>

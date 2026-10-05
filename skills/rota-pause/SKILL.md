@@ -22,7 +22,7 @@ description: Use when the session is approaching a context limit, the work must 
 
 ## Step 1 — Is a Round Running?
 
-Run `rota round status --json`. A round is in flight when a row in `data.slots` holds an issue or `data.review` is non-empty; slots parked on `park/<agent>` with nothing queued are not a round. If so, follow *Pausing an orchestrator* below; the feature-branch steps do not apply, because the orchestrator sits on the base branch. Otherwise continue with Step 2.
+Run `rota round status --json`. A round is in flight when a row in `data.slots` holds an issue or `data.review` is non-empty; slots parked on `park/<agent>` with nothing queued are not a round. If so, follow *Pausing an orchestrator* after Step 6; the feature-branch steps do not apply, because the orchestrator sits on the base branch. Otherwise continue with Step 2.
 
 ## Step 2 — Resolve the Pause Set
 
@@ -64,16 +64,6 @@ Gotchas and dead ends belong in `/rota-learn` (Step 6), not the note.
 
 For each entry run `rota status add <branch> --items <ids> [--worktree <path>] [--repo <repo>] --if-absent` so the resume flow finds it. `--if-absent` keeps the original `startedAt`, so time in flight stays accurate; the note carries the pause time.
 
-## Pausing an orchestrator
-
-A round outlives the session that runs it: workers keep working in their own worktrees and tabs. A pause records the round and leaves it running; it never winds the round down (`rota round wind-down` re-verifies, parks every slot and releases the lease, which is the end of a round, not a pause) and never merges, reclaims or reassigns anything.
-
-1. Read `rota round status --json`: the host, each slot's issue, state and PR, the `review` list (PRs waiting for gate and merge), open `escalations`, `limits` and the `drift` count. Add `rota round candidates` only if the slate is part of what the next session must decide.
-2. Write the note to `.rota/handoff/<base>.md` (`<base>` from `rota git base`), first line `<!-- rota-handoff: orchestrator -->`, the marker the SessionStart hook injects without a lease. Sections: **Round** (host from `rota round status`; the round number from `.rota/workers.json`; the lease holder from `rota keepalive status` when a supervisor runs), **Slots** (one line each: agent, issue, state, PR), **Review queue** (PR numbers in merge order, and why that order), **Waiting on** (escalation ids and what each blocks, slots out of quota with reset time), **Next** (the one concrete call: usually `rota round wait`). Record decisions the maintainer settled that a worker brief does not already carry; leave out anything `rota round status` reproduces.
-3. Leave the lease alone. A gone holder makes it stale, and the next `rota round start` reclaims it and keeps the round. Don't pin `rota status add`; the round's registry is `.rota/workers.json`.
-4. Uncommitted work on the base branch: report it and leave it in place; don't WIP-commit onto the base.
-5. Confirm in one block: round number, slots busy and free, PRs in review, what the next session does first. Resume is `rota round start` (it keeps the recorded scope) and then the note, with `/rota-orchestrate` for the judgment calls. Add the `/rota-learn` line below when it applies.
-
 ## Step 6 — Confirm
 
 One compact block. Single entry:
@@ -105,6 +95,16 @@ Resume with `/rota-work` in a fresh session.
 Stage, Next and Hypothesis are shared across the wave; Uncommitted is per repo.
 
 **Learn nudge (conditional).** Pausing loses context. If the session hit a durable gotcha (a hypothesis that contradicted assumptions, a non-obvious root cause, a tool quirk), add one line: *"Run `/rota-learn` now to preserve session insights durably — handoff captures intent, not learnings."* Skip if nothing non-obvious surfaced or `/rota-learn` already ran. Advisory only.
+
+## Pausing an orchestrator
+
+A round outlives the session that runs it: workers keep working in their own worktrees and tabs. A pause records the round and leaves it running; it never winds the round down (`rota round wind-down` re-verifies, parks every slot and releases the lease, which is the end of a round, not a pause) and never merges, reclaims or reassigns anything.
+
+1. Read `rota round status --json`: the host, each slot's issue, state and PR, the `review` list (PRs waiting for gate and merge), open `escalations`, `limits` and the `drift` count. Add `rota round candidates` only if the slate is part of what the next session must decide.
+2. Write the note to `.rota/handoff/<base>.md` (`<base>` from `rota git base`), first line `<!-- rota-handoff: orchestrator -->`, the marker the SessionStart hook injects without a lease. Sections: **Round** (host from `rota round status`; the round number from `.rota/workers.json`; the lease holder from `rota keepalive status` when a supervisor runs), **Slots** (one line each: agent, issue, state, PR), **Review queue** (PR numbers in merge order, and why that order), **Waiting on** (escalation ids and what each blocks, slots out of quota with reset time), **Next** (the one concrete call: usually `rota round wait`). Record decisions the maintainer settled that a worker brief does not already carry; leave out anything `rota round status` reproduces.
+3. Leave the lease alone. A gone holder makes it stale, and the next `rota round start` reclaims it and keeps the round. Don't pin `rota status add`; the round's registry is `.rota/workers.json`.
+4. Uncommitted work on the base branch: report it and leave it in place; don't WIP-commit onto the base.
+5. Confirm in one block: round number, slots busy and free, PRs in review, what the next session does first. Resume is `rota round start` (it keeps the recorded scope) and then the note, with `/rota-orchestrate` for the judgment calls. Add the Step 6 learn nudge when it applies.
 
 ## Rules
 
