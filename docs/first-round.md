@@ -45,12 +45,11 @@ rota config set work.workerSlots 2
 
 ## 5. Extra accounts (optional)
 
-Skip this if you have one Claude account. For each additional account, create a config dir, log in once, and install the skills into it. User-scope skills live per config dir, so each account needs its own copy (a project-scope install covers every account).
+Skip this if you have one Claude account. For each additional account, create a config dir and log in once. `rota skills install` copies the skills into every account you list in step 6, so the install in step 6 covers them (it skips a dir that does not exist).
 
 ```bash
 mkdir ~/.claude-b
 CLAUDE_CONFIG_DIR=~/.claude-b claude          # log in, then exit
-CLAUDE_CONFIG_DIR=~/.claude-b rota skills install
 ```
 
 ## 6. Tell rota about the accounts
@@ -68,10 +67,11 @@ Account paths are machine-specific, so they go in `.rota/config.local.json` (git
 }
 ```
 
-Then check them:
+Then check them, and install the skills into each one:
 
 ```bash
 rota worker account list
+rota skills install
 ```
 
 ## 7. Start herdr or tmux

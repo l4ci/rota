@@ -64,7 +64,6 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 	in := doctor.Input{Exec: doctorExec(d.Proc), Getenv: os.Getenv, Look: doctorLook(os.Getenv("ROTA_TEST_DOCTOR_PATH"))}
 	in.Dir, _ = os.Getwd()
 	in.Home, _ = os.UserHomeDir()
-	in.Skills = doctorSkills(in.Home)
 	if abs, err := filepath.EvalSymlinks(in.Dir); err == nil {
 		in.LegacyDir, _ = migrate.LegacyState(abs)
 	} else {
@@ -82,6 +81,7 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 			break
 		}
 	}
+	in.Skills = doctorSkills(in.Home, root)
 	if root == "" {
 		doctorDiskInput(ctx, &in, nil, "", d.Git)
 		return in
@@ -126,13 +126,13 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 
 // doctorSkills reads the skill roots in both scopes; nil when the embedded set
 // or the roots cannot be resolved (the check then skips).
-func doctorSkills(home string) *skills.Report {
+func doctorSkills(home, root string) *skills.Report {
 	set, err := skills.Embedded()
 	if err != nil {
 		return nil
 	}
-	cdir := skills.ClaudeDir(home)
-	roots, err := skills.Roots("", "all", home, cdir, gitToplevel())
+	dirs, _ := skillsClaudeDirs(home, root)
+	roots, err := skills.RootsFor("", "all", home, dirs, gitToplevel())
 	if err != nil {
 		return nil
 	}
