@@ -47,7 +47,7 @@ func (f *limFake) SendPane(_ context.Context, pane, text string) error {
 func limDeps() (*Deps, *limFake) {
 	f := &limFake{panes: map[string]string{}}
 	d := testDeps()
-	d.LimitHost = func(string) host.Host { return f }
+	d.Host = func(string) host.Host { return f }
 	return d, f
 }
 

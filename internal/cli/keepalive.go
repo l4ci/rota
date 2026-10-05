@@ -18,7 +18,6 @@ import (
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/hook"
-	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/keepalive"
 	"github.com/l4ci/rota/internal/limits"
@@ -333,12 +332,7 @@ func keepaliveNotify(ctx context.Context, c *Ctx, root string, title, body strin
 	if worker.ResolveHost(root, nil, nil) != "herdr" {
 		return
 	}
-	var h host.Host
-	if ee := c.deps().EscalationEnv(); ee.Host != nil {
-		h = ee.Host()
-	} else {
-		h = host.New("herdr", host.Deps{})
-	}
+	h := c.deps().Host("herdr")
 	if h.Require() != nil {
 		return
 	}

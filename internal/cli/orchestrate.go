@@ -35,7 +35,6 @@ func defaultOrchestrateEnv() orchestrate.Env {
 	return orchestrate.Env{
 		Getenv:   os.Getenv,
 		LookPath: exec.LookPath,
-		Host:     func(kind string) host.Host { return host.New(kind, host.Deps{}) },
 		Exec:     syscall.Exec,
 		Env:      os.Environ(),
 		Self:     self,
@@ -96,7 +95,7 @@ func runOrchestrate(c *Ctx, dry bool) (Result, error) {
 		return res, Failed("doctor reports a failure: no session started").WithHint("fix each fail above (the hint says how), then run rota orchestrate again")
 	}
 	cfg := config.Load(rotatree.Config(root))
-	env := c.deps().OrchestrateEnv()
+	env := c.deps().orchestrateEnv()
 	if env.PickAccount == nil {
 		env.PickAccount = func(root string) (string, bool) {
 			return c.deps().WorkerAccounts().Pick(c.Context(), root, nil)

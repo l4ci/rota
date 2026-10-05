@@ -43,7 +43,7 @@ func limitCommands() *Command {
 // escalateFunc posts on an issue thread through C4's library entry.
 func escalateFunc(ctx context.Context, c *Ctx, root string) func(issue int, title, body string) (string, []string, error) {
 	return func(issue int, title, body string) (string, []string, error) {
-		ee := c.deps().EscalationEnv()
+		ee := c.deps().escalationEnv()
 		if ee.Forge == nil {
 			ee.Forge = escalationForge(c)
 		}
@@ -124,7 +124,7 @@ func buildLimits(ctx context.Context, c *Ctx, root string, cfg any, set limits.S
 	if kind == host.Solo {
 		kind = "tmux" // New maps solo to tmux; say so for the error text
 	}
-	h := c.deps().LimitHost(kind)
+	h := c.deps().Host(kind)
 	if err := h.Require(); err != nil {
 		return nil, &Error{Exit: ExitUnavailable, Message: err.Error()}
 	}

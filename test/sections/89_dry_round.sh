@@ -257,8 +257,7 @@ OUT="$(dyj round reconcile)"
   || fail "dry round: reconcile after wind-down should be clean and write nothing: $OUT"
 pass "reconcile: clean after wind-down, no dead tab left behind"
 
-printf '{"workspaces":[],"agents":[],"processes":[]}\n' > "$TMP_DY/host.json"
-rc=0; OUT="$(ROTA_TEST_REAP_HOST="$TMP_DY/host.json" "$ROTA_BIN" --json -C "$DY" reap 2>/dev/null)" || rc=$?
+rc=0; OUT="$(dyj reap)" || rc=$?
 [ "$rc" = "0" ] && [ "$(jget data.changed <<<"$OUT")" = "false" ] || fail "dry round: reap preview exits 0 and changes nothing: rc=$rc $OUT"
 KINDS="$(python3 -c 'import json,sys; print(",".join(c["id"] for c in json.load(sys.stdin)["data"]["candidates"]))' <<<"$OUT")"
 case ",$KINDS," in *,tab:*|*,process:*|*,worktree:*) fail "dry round: reap lists a live or parked thing: $KINDS" ;; esac
