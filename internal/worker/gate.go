@@ -7,14 +7,14 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/l4ci/rota/internal/config"
-	gatepath "github.com/l4ci/rota/internal/gate"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/overlap"
+	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
@@ -416,51 +416,22 @@ func (g *gate) staleReason(cfg any) (why, brokeMsg string) {
 	if code != 0 || mb == "" {
 		return "", fmt.Sprintf("git merge-base %s %s exited %d", g.baseRef, g.headRef, code)
 	}
-	changed := func(ref string) (map[string]bool, bool) {
+	changed := func(ref string) ([]string, bool) {
 		out, code := e.git(root, "diff", "--name-only", "--no-renames", mb, ref)
 		if code != 0 {
 			return nil, false
 		}
-		set := map[string]bool{}
-		for _, l := range strings.Split(out, "\n") {
-			if l != "" {
-				set[l] = true
-			}
-		}
-		return set, true
+		return strings.Split(out, "\n"), true
 	}
 	onBase, ok1 := changed(g.baseRef)
 	onHead, ok2 := changed(g.headRef)
 	if !ok1 || !ok2 {
 		return "", fmt.Sprintf("git diff --name-only against %s failed", mb)
 	}
-	var shared []string
-	if v, ok := config.Lookup(cfg, "round.sharedPaths"); ok {
-		if list, ok := v.([]any); ok {
-			for _, p := range list {
-				shared = append(shared, fmt.Sprint(p))
-			}
-		}
-	}
-	var both []string
-	for f := range onHead {
-		if !onBase[f] {
-			continue
-		}
-		skip := false
-		for _, p := range shared {
-			if gatepath.MatchPath(p, f) {
-				skip = true
-			}
-		}
-		if !skip {
-			both = append(both, f)
-		}
-	}
+	both := overlap.Both(onBase, onHead, roundcfg.SharedPaths(cfg))
 	if len(both) == 0 {
 		return "", ""
 	}
-	sort.Strings(both)
 	return "both sides changed " + strings.Join(both, ", "), ""
 }
 

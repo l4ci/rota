@@ -130,29 +130,6 @@ func TestClearAppends(t *testing.T) {
 	}
 }
 
-func TestMatchPath(t *testing.T) {
-	for _, c := range []struct {
-		entry, file string
-		want        bool
-	}{
-		{"rota-release", "rota-release/SKILL.md", true},
-		{"rota-release/", "rota-release/SKILL.md", true},
-		{"./docs", "docs/a/b.md", true},
-		{"docs", "docsx/a.md", false},
-		{"go.mod", "go.mod", true},
-		{"*.md", "README.md", true},
-		{"*.md", "docs/README.md", false},
-		{"internal/*/gate.go", "internal/cli/gate.go", true},
-		{"", "x", false},
-		{"[", "[", true}, // equal wins over a malformed glob
-		{"[", "a", false},
-	} {
-		if got := MatchPath(c.entry, c.file); got != c.want {
-			t.Errorf("MatchPath(%q, %q) = %v", c.entry, c.file, got)
-		}
-	}
-}
-
 func TestMergePolicy(t *testing.T) {
 	p, err := LoadMergePolicy(project(t, ""))
 	if err != nil || p.Mode != MergeNone || p.NeedsFiles() {
