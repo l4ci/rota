@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
-	"github.com/l4ci/rota/internal/gate"
+	"github.com/l4ci/rota/internal/overlap"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -158,13 +158,7 @@ func Footprint(text string, tracked, shared []string) []string {
 	}
 	var kept []string
 	for _, p := range out {
-		skip := false
-		for _, g := range shared {
-			if gate.MatchPath(g, strings.TrimSuffix(p, "/")) {
-				skip = true
-			}
-		}
-		if !skip {
+		if !overlap.Shared(shared, strings.TrimSuffix(p, "/")) {
 			kept = append(kept, p)
 		}
 	}
@@ -345,18 +339,12 @@ func (e Env) queuedChanged(ctx context.Context, root string, q worker.QueuedPR, 
 		return nil
 	}
 	var paths []string
-next:
 	for _, l := range strings.Split(out, "\n") {
 		if l = strings.TrimSpace(l); l != "" {
-			for _, g := range shared {
-				if gate.MatchPath(g, l) {
-					continue next
-				}
-			}
 			paths = append(paths, l)
 		}
 	}
-	return paths
+	return overlap.Filter(paths, shared)
 }
 
 // changed lists the paths a worktree changed against the base: commits on its
@@ -364,12 +352,9 @@ next:
 func (e Env) changed(ctx context.Context, wt, base string, shared []string) []string {
 	seen := map[string]bool{}
 	add := func(p string) {
-		for _, g := range shared {
-			if gate.MatchPath(g, p) {
-				return
-			}
+		if !overlap.Shared(shared, p) {
+			seen[p] = true
 		}
-		seen[p] = true
 	}
 	ref := base
 	if res, err := e.Git(ctx, wt, "rev-parse", "--verify", "-q", "origin/"+base); err == nil && res.ExitCode == 0 {

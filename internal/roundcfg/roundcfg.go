@@ -251,3 +251,12 @@ func list(cfg any, key string) ([]string, error) {
 	}
 	return out, nil
 }
+
+// SharedPaths reads round.sharedPaths from a loaded config: the globs two
+// branches may both touch without counting as an overlap. An unreadable value
+// yields none, so a caller that only filters (the merge gate) is not blocked by
+// a config error that Load reports elsewhere.
+func SharedPaths(cfg any) []string {
+	paths, _ := list(cfg, "round.sharedPaths")
+	return paths
+}
