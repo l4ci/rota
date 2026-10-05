@@ -53,7 +53,13 @@ Work only this task, then stop.
 - Put an `## Approvals` section in your PR body. One line per approval you acted
   on: what was approved and the channel it came through (`orchestrator relay
   round N`, `maintainer in pane`, `issue comment #<n>`). Never cite a relay as
-  the maintainer. Label your own calls `unratified`.
+  the maintainer. The assignment brief is not a relay: a worker that acted only on
+  its brief writes `None` under Approvals, never `orchestrator relay round N`.
+- Put a `## Rulings` section in your PR body. One line per call you made yourself,
+  unratified by anyone: `<what> — <why> — <cost if wrong>`. State the cost
+  concretely (a revert, a migration, a renamed flag users already typed), so the
+  orchestrator can tell a harmless call from a risky one. Write `None` if you made
+  none. Own calls go here, not under Approvals.
 - When your PR is open, print `ROTA-DONE <slot> <pr-url>` and stop. Print it as the LAST line of your last message, after any summary of the work: a summary alone leaves the slot looking stuck. The dispatched brief repeats it with your slot filled in. If a slot goes idle with no sentinel but its branch heads an open PR, `rota worker poll` / `round wait` record it as done with that PR and note the sentinel was missing.
 - An architecture-review item (`arch(<area>): architecture review`) produces issues,
   not code, so it has no PR. When every finding is filed, print
