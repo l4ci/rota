@@ -31,18 +31,23 @@ Show the plan as plain markdown, not yet saved:
 
 - **Goal** — one sentence
 - **Approach** — 3-6 sentences: the design choice and why
-- **Tasks** — each with **Observable behavior** (true after it ships), **Files**, **Verify** (the command or check that proves it done)
+- **Tasks** — each with **Observable behavior** (true after it ships), **Files**, **Interfaces**, **Verify** (the command or check that proves it done)
+- **Review Focus** — `## Review Focus`, at most 5 lines: risky inputs or edges the spec implies but never names
 - **Open questions** — decisions needed before or during execution
 - **Assumptions** — implicit constraints made explicit
 
 Rules:
 
 - **Verify is non-negotiable.** No verify step, no task.
+- **Interfaces** is `Consumes:` (types, functions, files the task relies on) and `Produces:` (what it creates for later tasks). Write `none` rather than omit a line.
+- **Review Focus** entries are each pinned by a test in the owning task's Verify. An edge with no test goes in Open questions instead.
 - Tasks fit one execution window; too big means two tasks.
 - Vertical slivers, not horizontal layers: each task crosses every layer it needs (UI + logic + data) to be observable.
 - No half-implementations: real runnable code, no stubs.
 - A rename and its incoming-link sweep are one task; derive the file list from `git grep -l "<old-name>"`.
 - Doc deliverables under `docs/` (or `docs.path`) must land in an existing doc home; otherwise raise it as an Open question (umbrella: a sibling `<repo>-docs` is the usual home).
+
+**Self-check before asking.** Silently verify: every Acceptance criterion maps to a task; no placeholder text (`TBD`, `...`, `similar to Task N`); every name, path and signature matches across tasks, including each task's Consumes against an earlier task's Produces. Fix misses in the draft, then say in one line what you fixed (omit the line if nothing).
 
 Ask for approval once: *yes* writes it, *changes* means apply the user's edits and write. Don't loop. Silence is not approval; ask *"Confirm this plan? (yes / changes)"* once. If the redirect moves the Goal itself, re-propose.
 
