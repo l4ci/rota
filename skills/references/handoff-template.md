@@ -18,11 +18,11 @@ An orchestrator mid-round writes a different note, to `.rota/handoff/<base>.md` 
 - **Repo:** web                              <!-- omit when single-repo / no umbrella scope -->
 - **Items:** [B07], [F03]
 - **Milestone:** M01 — Auth foundation  <!-- omit if no active milestone or items aren't tagged -->
-- **Stage:** <e.g., "mid-hypothesis verification for B07", "implementing wave 2 of 3">
+- **Stage:** <e.g., "mid-hypothesis verification for B07", "tasks 1-2 of 4 done (task ledger)">
 
 ## Next planned step
 
-<one or two sentences — the concrete action `/rota-work` should dispatch. Not a summary; a directive.>
+<one or two sentences — the concrete action `/rota-work` should dispatch. Not a summary; a directive. Start from the first task the task ledger shows unfinished.>
 
 ## Current hypothesis (if debugging)
 
