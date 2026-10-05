@@ -344,7 +344,7 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 			}
 		}
 		if labelsOK && !parked && r.Issue != "" && r.PRState != "merged" && r.PRState != "closed" {
-			if n, _ := strconv.Atoi(r.Issue); !labelled[n] && !e.issueClosed(ctx, rep, n) {
+			if n, err := strconv.Atoi(r.Issue); err == nil && !labelled[n] && !e.issueClosed(ctx, rep, n) {
 				rep.add(Finding{Kind: LabelMissing, Slot: r.Name, Issue: r.Issue, Detail: fmt.Sprintf("slot holds #%s, which lacks %s", r.Issue, e.Label), Repair: "add " + e.Label})
 			}
 		}
