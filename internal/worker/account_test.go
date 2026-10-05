@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/l4ci/rota/internal/pytest"
+	"github.com/l4ci/rota/internal/golden"
 )
 
 const acctConfig = `{"work":{"accounts":[
@@ -59,7 +59,7 @@ func goMeters(t *testing.T, dir, usage string) []Meter {
 func TestAccountListMeters(t *testing.T) {
 	dir, usage := newProject(t, acctConfig), usageDir(t)
 	var old []map[string]any
-	pytest.Golden(t, map[string]any{"argv": []string{"list", "--json"}, "config": acctConfig, "usage": usageFixtures()}, &old)
+	golden.Golden(t, map[string]any{"argv": []string{"list", "--json"}, "config": acctConfig, "usage": usageFixtures()}, &old)
 	got := goMeters(t, dir, usage)
 	if len(got) != len(old) {
 		t.Fatalf("%d rows, old %d", len(got), len(old))
@@ -120,7 +120,7 @@ func TestAccountPick(t *testing.T) {
 	}}
 	excludes := []string{"", "gamma", "gamma,alpha", " gamma , alpha ", "gamma,alpha,epsilon,zeta", "alpha,beta,gamma,delta,epsilon,zeta"}
 	var picks []string // "" where the helper exited non-zero: nothing eligible
-	pytest.Golden(t, map[string]any{"config": acctConfig, "usage": usageFixtures(), "excludes": excludes}, &picks)
+	golden.Golden(t, map[string]any{"config": acctConfig, "usage": usageFixtures(), "excludes": excludes}, &picks)
 	for i, excl := range excludes {
 		var skip []string
 		if excl != "" {
@@ -151,7 +151,7 @@ func TestAccountAssign(t *testing.T) {
 	b := newProject(t, acctConfig)
 	goInit(t, b, InitOpts{Slots: 2, Base: "main"})
 	var want map[string]string // workers.json the helper left after each assign
-	pytest.Golden(t, map[string]any{"config": acctConfig, "usage": usageFixtures(), "pool": "init --slots 2 --base main",
+	golden.Golden(t, map[string]any{"config": acctConfig, "usage": usageFixtures(), "pool": "init --slots 2 --base main",
 		"steps": []string{"assign --slot w1 --account beta", "assign --slot w2"}}, &want)
 	usage := usageDir(t)
 	acc := &Accounts{Getenv: func(k string) string {
@@ -220,7 +220,7 @@ func TestPoolInitSpreadsAccounts(t *testing.T) {
 	b := newProject(t, acctConfig)
 	usage := usageDir(t)
 	var want map[string]string
-	pytest.Golden(t, map[string]any{"config": acctConfig, "usage": usageFixtures(), "argv": "init --slots 5 --base main"}, &want)
+	golden.Golden(t, map[string]any{"config": acctConfig, "usage": usageFixtures(), "argv": "init --slots 5 --base main"}, &want)
 	acc := &Accounts{Getenv: func(k string) string {
 		if k == "ROTA_ACCOUNT_USAGE_DIR" {
 			return usage

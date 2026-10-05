@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/l4ci/rota/internal/pytest"
+	"github.com/l4ci/rota/internal/golden"
 )
 
 type bulletIn struct {
@@ -76,11 +76,11 @@ func TestBulletParityWithPython(t *testing.T) {
 		Docs    []any `json:"docs"`
 		Skipped any   `json:"-"`
 	}
-	pytest.GoldenJSON(t, in, &want)
+	golden.GoldenJSON(t, in, &want)
 
 	total := 0
 	check := func(name string, inputs []any, got []any, want []any) {
-		total += pytest.Compare(t, name, inputs, got, want)
+		total += golden.Compare(t, name, inputs, got, want)
 	}
 	lineIn := toAny(lines)
 	var got []any

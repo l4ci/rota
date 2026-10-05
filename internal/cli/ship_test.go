@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/l4ci/rota/internal/pytest"
+	"github.com/l4ci/rota/internal/golden"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
@@ -48,7 +48,7 @@ func shipSame(t *testing.T, name, dir, stdin string, wantCode int, args ...strin
 	for i, a := range args {
 		masked[i] = strings.ReplaceAll(a, dir, "DIR")
 	}
-	pytest.Golden(t, shipCallIn{name, masked, stdin, wantCode}, &want)
+	golden.Golden(t, shipCallIn{name, masked, stdin, wantCode}, &want)
 	n := trRun(t, dir, stdin, append(append([]string{}, args...), "--json")...)
 	nenv := envelope(t, n.stdout)
 	if n.code != wantCode {
@@ -201,7 +201,7 @@ func TestShipMerge(t *testing.T) {
 		t.Errorf("merge data %v", d)
 	}
 	var wantHead string // the merge commit the retired helper made
-	pytest.Golden(t, "HEAD after the merge of rota/wt", &wantHead)
+	golden.Golden(t, "HEAD after the merge of rota/wt", &wantHead)
 	if gitT(t, work, "rev-parse", "HEAD") != wantHead {
 		t.Errorf("merge commit differs from the golden %s", wantHead)
 	}
@@ -279,7 +279,7 @@ func TestShipPRFileMode(t *testing.T) {
 			useForge(t, f)
 
 			var want any // the retired helper's data against its fake forge
-			pytest.Golden(t, map[string]any{"provider": tc.prov, "url": tc.url, "stdin": "Summary line",
+			golden.Golden(t, map[string]any{"provider": tc.prov, "url": tc.url, "stdin": "Summary line",
 				"args": []string{"ship", "pr", "feat/x", "--title", "My title", "--body-file", "-", "--items", "F1,2"}}, &want)
 			n := trRun(t, work, "Summary line\n", "ship", "pr", "feat/x", "--title", "My title", "--body-file", "-", "--items", "F1,2", "--json")
 			if n.code != 0 {
@@ -671,7 +671,7 @@ func shipUndoBoth(t *testing.T, name string, src string, wantCode int, args ...s
 	nu := shipCopy(t, src)
 	oargs := append([]string{"ship", "undo"}, args...)
 	var want shipUndoWant
-	pytest.Golden(t, shipCallIn{Name: name, Args: oargs, Code: wantCode}, &want)
+	golden.Golden(t, shipCallIn{Name: name, Args: oargs, Code: wantCode}, &want)
 	n := trRun(t, nu, "", append(append([]string{}, oargs...), "--json")...)
 	nenv := envelope(t, n.stdout)
 	if n.code != wantCode {
