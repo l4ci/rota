@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/rotatree"
 	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -371,7 +371,7 @@ func (e Env) openPRsByHead(ctx context.Context, root string, reg Registry, polle
 	if _, code := e.git(root, "remote", "get-url", "origin"); code != 0 {
 		return nil
 	}
-	cfg := config.Load(filepath.Join(root, ".rota", "config.json"))
+	cfg := config.Load(rotatree.Config(root))
 	f, err := e.Forge(e.detectProvider(root, ""), root, cfg)
 	if err != nil {
 		return nil

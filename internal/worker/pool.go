@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/rotatree"
 	"os"
 	"path/filepath"
 
@@ -85,7 +86,7 @@ func (e Env) PoolInit(ctx context.Context, root string, o InitOpts, acc *Account
 	}
 
 	// tmux handles are known now; herdr tab ids exist only after a dispatch.
-	cfg := config.Load(filepath.Join(root, ".rota", "config.json"))
+	cfg := config.Load(rotatree.Config(root))
 	dispatch := config.Dispatch(cfg)
 
 	names, branchOf := o.slotNames()

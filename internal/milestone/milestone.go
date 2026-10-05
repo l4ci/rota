@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/rotatree"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -84,8 +85,8 @@ func ValidStatus(s string) bool {
 	return false
 }
 
-func detailPath(root, id string) string { return filepath.Join(root, ".rota", "milestones", id+".md") }
-func overviewPath(root string) string   { return filepath.Join(root, ".rota", "MILESTONES.md") }
+func detailPath(root, id string) string { return rotatree.Doc(root, rotatree.MilestonesDir, id) }
+func overviewPath(root string) string   { return rotatree.Milestones(root) }
 
 func notFound(id string) *exitcode.Error {
 	return exitcode.Errf(exitcode.ExitResolution, "milestone %s not found (.rota/milestones/%s.md)", id, id)
@@ -153,7 +154,7 @@ type Entry struct {
 // List reads .rota/milestones/*.md in name order. ready is true when every
 // dependency is shipped.
 func List(root string) ([]Entry, error) {
-	docs, err := artifact.ListDocs(filepath.Join(root, ".rota", "milestones"))
+	docs, err := artifact.ListDocs(rotatree.File(root, rotatree.MilestonesDir))
 	if err != nil {
 		return nil, err
 	}

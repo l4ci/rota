@@ -2,7 +2,6 @@ package design
 
 import (
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/l4ci/rota/internal/artifact"
@@ -10,6 +9,7 @@ import (
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/frontmatter"
 	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/section"
 )
 
@@ -24,7 +24,7 @@ func Files(root string) Store { return files{root} }
 
 func (files) Digits() int { return backlog.FileIDDigits }
 
-func path(root, id string) string { return filepath.Join(root, ".rota", "designs", id+".md") }
+func path(root, id string) string { return rotatree.Doc(root, rotatree.DesignsDir, id) }
 
 func notFound(id string) *exitcode.Error {
 	return exitcode.Errf(exitcode.ExitResolution, "design %s not found (.rota/designs/%s.md)", id, id)
@@ -87,7 +87,7 @@ type Entry struct{ ID, Title, Status, Created string }
 // List reads .rota/designs/*.md in name order; files without frontmatter are
 // skipped. status defaults to draft and id to the file stem.
 func List(root string) ([]Entry, error) {
-	docs, err := artifact.ListDocs(filepath.Join(root, ".rota", "designs"))
+	docs, err := artifact.ListDocs(rotatree.File(root, rotatree.DesignsDir))
 	if err != nil {
 		return nil, err
 	}

@@ -1,13 +1,13 @@
 package knowledge
 
 import (
-	"path/filepath"
 	"strings"
 
+	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/section"
 )
 
-func (s Store) decisionsPath() string { return filepath.Join(s.Root, ".rota", "DECISIONS.md") }
+func (s Store) decisionsPath() string { return rotatree.Decisions(s.Root) }
 
 // DecisionsQuery prints the requested "## Topic" sections of DECISIONS.md in
 // document order. Topics matching no heading are returned in missing.

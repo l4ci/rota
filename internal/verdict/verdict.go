@@ -10,8 +10,8 @@ import (
 	"errors"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/rotatree"
 	"io"
-	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -293,7 +293,7 @@ type Store struct {
 }
 
 // Path is the store file under root.
-func Path(root string) string { return filepath.Join(root, ".rota", "verdicts.json") }
+func Path(root string) string { return rotatree.Verdicts(root) }
 
 // BranchKey keys a branch, qualified by its sub-repo in umbrella mode.
 func BranchKey(repo, branch string) string {
