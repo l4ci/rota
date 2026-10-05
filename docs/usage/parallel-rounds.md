@@ -261,6 +261,11 @@ rota layout tabs      # the mobile view (the default): one tab per worker
 rota layout           # which one each project is in: split, tabs or mixed
 ```
 
+The choice is remembered for the round: after `rota layout split`, every worker `round assign`,
+`round transfer` or a re-dispatch spawns joins the grid instead of getting a tab, until
+`rota layout tabs`. A new round starts in tabs again. A reclaimed worker's pane closes with its
+session, and the next spawn re-lays the grid.
+
 In the split view the orchestrator is the left column at full height. Workers fill columns two panes
 high in slot order (`rota round status` order), column by column. An odd count leaves the last column
 as one tall pane. Every column, the orchestrator's included, gets the same width.

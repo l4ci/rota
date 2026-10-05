@@ -13,6 +13,7 @@ import (
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
+	"github.com/l4ci/rota/internal/layout"
 )
 
 // DispatchOpts are the flags of `rota worker dispatch`.
@@ -288,6 +289,13 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 	if err := recordDispatch(root, o.Slot, handle, o.Task, recKind, o.Round, stamp(e.Now())); err != nil {
 		return res, err
 	}
+	if !o.Relay {
+		// The round was folded into the orchestrator's tab: the new worker
+		// joins the grid instead of keeping its own tab.
+		if w := arrangeNew(ctx, h, root); w != "" {
+			res.Warnings = append(res.Warnings, w)
+		}
+	}
 	round := roundOf(root)
 	signature := fmt.Sprintf("--- ORCHESTRATOR (round %d) ---", round)
 
@@ -450,4 +458,40 @@ func sweepShells(ctx context.Context, h host.Host, worktree string) {
 	if sw, ok := h.(host.PaneSweeper); ok && worktree != "" {
 		sw.SweepShells(ctx, worktree)
 	}
+}
+
+// arrangeNew re-applies a recorded split to the round after a spawn, so a
+// worker assigned later does not sit in a tab of its own. A host that cannot
+// arrange panes, or a round in tabs, is a no-op. The worker is already up, so a
+// failure is a warning, never a failed dispatch.
+func arrangeNew(ctx context.Context, h host.Host, root string) string {
+	l, ok := h.(host.Layouter)
+	reg := LoadRegistry(root)
+	if !ok || reg.Layout() != layout.Split {
+		return ""
+	}
+	_, _, found, err := layout.Arrange(ctx, l, root, layout.Split, LiveWorkers(ctx, l, reg))
+	switch {
+	case err != nil:
+		return "layout split: " + err.Error() + "; run rota layout split to retry"
+	case !found:
+		return "layout split: no orchestrator pane open in herdr; the worker kept its tab"
+	}
+	return ""
+}
+
+// LiveWorkers are the slots whose agent has a pane, in registry order. A
+// parked slot has no handle and a dead one no agent, so both are left out.
+func LiveWorkers(ctx context.Context, h host.Layouter, reg Registry) []layout.Worker {
+	var out []layout.Worker
+	for _, s := range reg.Slots() {
+		handle := s.PaneHandle()
+		if handle == "" {
+			continue
+		}
+		if pane := h.PaneOf(ctx, s.Name(), handle); pane != "" {
+			out = append(out, layout.Worker{Slot: s.Name(), Pane: pane})
+		}
+	}
+	return out
 }
