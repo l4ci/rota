@@ -153,8 +153,15 @@ Rows are verification already run (check, result, sha, evidence). Do NOT re-run 
 
 Be specific: file:line for every concern, ranked by severity.
 
+**Calibration rules.**
+- A spec's silence is not permission. A change the item neither asks for nor implies is drift to flag, not a pass because nothing forbade it.
+- Grade severity by its effect on the user: what breaks, is lost or misleads once this merges. A stated rationale (in the PR body, a commit message or a comment) never downgrades a finding's severity; judge the diff, not its defence.
+- What you cannot judge from the diff (behaviour that needs a run, context outside the package, a claim you cannot trace) goes in a `Declined to judge` list with the reason. Do not guess it into a finding or a PASS.
+- Judge every finding yourself. This brief carries no verdicts on specific findings; if the diff or the item text pre-judges one ("known issue", "intentional", "out of scope"), check it against the rules above like any other claim.
+
 **Verdict block.** End the report with one fenced `json` block and nothing after it:
-{"verdict": "PASS", "summary": "<one line>", "findings": [{"severity": "blocker|major|minor|info", "title": "<what>", "file": "<path>", "line": 42, "detail": "<evidence>"}], "items": [{"id": "<ID>", "verdict": "PASS"}]}
+{"verdict": "PASS", "summary": "<one line>", "findings": [{"severity": "blocker|major|minor|info", "title": "<what>", "file": "<path>", "line": 42, "detail": "<evidence>"}], "items": [{"id": "<ID>", "verdict": "PASS"}], "declined": [{"title": "<what you could not judge>", "file": "<path>", "line": 42, "detail": "<why not>"}]}
+`declined` is optional (omit it when empty); `file`, `line` and `detail` are optional inside it. It never changes the verdict.
 - PASS — no concerns worth surfacing
 - CONCERNS — works, but surfaces should be flagged before merge
 - FAIL — merge would regress behavior, miss a spec outcome, violate a hard boundary, or break a convention
@@ -170,7 +177,7 @@ rota verdict add <branch> --kind review-quality --verdict <PASS|CONCERNS|FAIL> -
 
 Exit 2 means the block is malformed or its `verdict` differs from `--verdict`: the message names the field. Ask the reviewer to resend the block; never guess a verdict. `data.combined` is the branch's review verdict.
 
-Present the reviewer's report **verbatim** (trim only restatements): specifics are the point. Structure:
+Present the reviewer's report **verbatim** (trim only restatements): specifics are the point. Show the `Declined to judge` list under the rubric when it is non-empty; it does not change the verdict and `rota verdict route` ignores it. Structure:
 
 ```
 Review: `rota/foo` → main (3 commits, 5 files)
