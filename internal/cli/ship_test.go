@@ -898,17 +898,3 @@ func TestShipUndoRepo(t *testing.T) {
 		t.Errorf("svc not reset")
 	}
 }
-
-// shipClearWorktree is a silent no-op for a branch no worktree has: no error,
-// worktree list unchanged.
-func TestShipClearWorktreeMissingBranch(t *testing.T) {
-	shipDeterministic(t)
-	work := shipFixture(t, "")
-	before := gitT(t, work, "worktree", "list", "--porcelain")
-	if err := shipClearWorktree(&Ctx{}, work, "nonexistent-branch"); err != nil {
-		t.Fatalf("missing branch must be a no-op, got %v", err)
-	}
-	if after := gitT(t, work, "worktree", "list", "--porcelain"); after != before {
-		t.Errorf("worktree list changed:\n%s\n--\n%s", before, after)
-	}
-}

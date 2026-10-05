@@ -571,16 +571,6 @@ func first10(s string) string {
 
 // ---- status ----------------------------------------------------------------------
 
-func splitItems(csv string) []string {
-	items := []string{}
-	for _, p := range strings.Split(csv, ",") {
-		if p = pystr.Strip(p); p != "" {
-			items = append(items, p)
-		}
-	}
-	return items
-}
-
 func statusAdd(fs *flag.FlagSet) RunFunc {
 	items := fs.String("items", "", "item IDs, comma-separated")
 	worktree := fs.String("worktree", "", "worktree path (one repo)")
@@ -610,7 +600,7 @@ func statusAdd(fs *flag.FlagSet) RunFunc {
 		if branch == "" {
 			return Result{}, Usage("status add needs a branch")
 		}
-		list := splitItems(*items)
+		list := pystr.SplitCSV(*items)
 		scope := []string{c.Repo}
 		changed := false
 		if multi {
