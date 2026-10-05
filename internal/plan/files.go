@@ -9,12 +9,11 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/artifact"
+	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/frontmatter"
 	"github.com/l4ci/rota/internal/fsio"
 )
-
-var designIDRe = regexp.MustCompile(`^[BFT]\d{2,}$`)
 
 // files keeps each plan in .rota/plans/<key>.md under root.
 type files struct{ root string }
@@ -22,7 +21,7 @@ type files struct{ root string }
 // Files is the file-mode store.
 func Files(root string) Store { return files{root} }
 
-func (files) Digits() int { return 2 }
+func (files) Digits() int { return backlog.FileIDDigits }
 
 func (files) ItemOnly() bool { return false }
 
@@ -34,7 +33,7 @@ func notFound(key string) *exitcode.Error {
 
 // DesignRef is the path of the design file, which must exist.
 func (s files) DesignRef(_ bool, design string) (string, error) {
-	if !designIDRe.MatchString(design) {
+	if !backlog.ValidID(design, backlog.FileIDDigits) {
 		return "", exitcode.Errf(exitcode.ExitUsage, "--design must be an item ID like B07, got %q", design)
 	}
 	ref := ".rota/designs/" + design + ".md"

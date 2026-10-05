@@ -6,10 +6,9 @@ package design
 
 import (
 	"errors"
-	"fmt"
-	"regexp"
 	"time"
 
+	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/exitcode"
 )
 
@@ -25,16 +24,9 @@ type Store interface {
 	Remove(id string) error
 }
 
-// Type is the item type letter of a valid ID.
-func Type(id string) string { return id[:1] }
-
-func idRe(digits int) *regexp.Regexp {
-	return regexp.MustCompile(fmt.Sprintf(`^[BFT]\d{%d,}$`, digits))
-}
-
 // CheckID is the ID rule every verb applies before it touches the store.
 func CheckID(s Store, id string) error {
-	if idRe(s.Digits()).MatchString(id) {
+	if backlog.ValidID(id, s.Digits()) {
 		return nil
 	}
 	if s.Digits() <= 1 {

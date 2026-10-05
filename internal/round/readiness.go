@@ -65,7 +65,7 @@ var (
 	pathTokenRe    = regexp.MustCompile("[A-Za-z0-9_./*@+-]+")
 	foreignRefRe   = regexp.MustCompile(`https?://\S+|[\w.-]+/[\w.-]+#\d+`)
 	issueRefRe     = regexp.MustCompile(`#(\d+)`)
-	itemRefRe      = regexp.MustCompile(`\b([BFT]\d{2,})\b`)
+	itemRefRe      = regexp.MustCompile(`\b(` + backlog.IDPattern(backlog.FileIDDigits) + `)\b`)
 )
 
 // section is the text under the first heading matching head, up to the next
