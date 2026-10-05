@@ -15,7 +15,7 @@ With `backlog.backend: "issues"` the tracker (GitHub or GitLab) is the backlog. 
 | `issues.autoCreateLabel` | `true` | Create a missing label on first use. When off, a missing label is an error. |
 | `issues.homeRepo` | `""` | Umbrella only: sub-repo holding milestone tracking issues; empty is the first registered sub-repo. |
 | `issues.bulkPaceMs` | `1000` | Pause between writes in `rota migrate issues`. |
-| `issues.retryWaitSeconds` | `60` | Wait before retrying a failed tracker call. |
+| `issues.retryWaitSeconds` | `60` | Seconds to wait before the one retry after a primary rate limit. |
 
 ## How items map to issues
 
@@ -48,7 +48,7 @@ Each sub-repo's items stay on that sub-repo's own tracker; the provider is detec
 
 ## Rate limits
 
-Exit 5 means the tracker is unavailable; exit 6 means rate-limited. Both stop the run and report. `rota` never retries in a loop; wait, then re-run.
+Exit 5 means the tracker is unavailable; exit 6 means rate-limited. Both stop the run and report. On a primary rate limit `rota` waits `issues.retryWaitSeconds` and retries the call once, then stops with exit 6. A secondary rate limit stops at once, and other failures are not retried. There is no retry loop; wait, then re-run.
 
 ## Migrating a file backlog
 

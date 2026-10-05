@@ -63,7 +63,7 @@ Use it as a cheap gate before `/rota-work` on size-Major-or-larger items or P0/P
 
 Output: specific file paths, test names, and function names the orchestrator would touch, not generic descriptions.
 
-If a plan already exists (file backend: [`.rota/plans/<key>.md`](../reference/rota-folder.md); issue backend: a note on the issue), the peek restates it. Without a plan, the output is an ad-hoc decomposition; reach for `/rota-plan` when alignment needs to survive beyond the current session.
+If a plan already exists (file backend: [`.rota/plans/<key>.md`](../reference/rota-folder.md); issue backend: a note on the issue), the peek loads it as context and builds on it; it doesn't reprint the plan. Without a plan, the output is an ad-hoc decomposition; reach for `/rota-plan` when alignment needs to survive beyond the current session.
 
 ## How reconciliation keeps state honest
 

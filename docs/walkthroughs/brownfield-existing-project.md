@@ -224,7 +224,7 @@ When the branch is ready:
 $ /rota-ship
 ```
 
-`/rota-review` reads commits, resolved IDs, and any `KNOWLEDGE.md` topics matching touched files. For the B01 fix it returns `PASS`. `/rota-ship` builds a PR body from the commit subjects and the `GH: #14` cross-reference on B01, opens the PR via `gh`, and prints the URL. On merge, GitHub auto-closes #14 because the body includes `Closes #14`. `BACKLOG.md` moves B01 to `## Completed` and stamps it with the merge commit SHA.
+`/rota-review` reads commits, resolved IDs, and any `KNOWLEDGE.md` topics matching touched files. For the B01 fix it returns `PASS`. `/rota-ship` builds a PR body from the commit subjects and the `GH: #14` cross-reference on B01, opens the PR via `gh`, and prints the URL. On merge, GitHub auto-closes #14 because the body includes `Closes #14`. B01 was already moved to `## Completed` in `BACKLOG.md` when `/rota-debug` closed it on the file backend, stamped with the fix commit's hash; the merge changes nothing in the backlog.
 
 If you'd configured `work.mergeStrategy = direct` instead, `/rota-ship` would have merged into `main` directly and prompted the optional `rota issues close` step to close #14 upstream with a tracking comment naming the commit.
 

@@ -26,7 +26,9 @@ starve the CPU and turn time-budgeted tests into false reds. A stale branch does
 either: the merge gate verifies the merged tree.
 
 If the merge gate fails, the orchestrator first runs it on `origin/main` in a throwaway worktree
-(`.rota/KNOWLEDGE.md`, "Pre-existing smoke failures"), then bounces the PR with the failing check.
+(`.rota/KNOWLEDGE.md`, "Build & Tooling: Smoke testing", entry "Pre-existing smoke failures: check main before
+triaging your branch"). A failure that main shares pre-exists the PR and is captured as its own bug; otherwise the
+orchestrator bounces the PR with the failing check.
 New smoke sections take the number your dispatch assigns; do not pick one yourself, siblings are
 numbering theirs at the same time.
 

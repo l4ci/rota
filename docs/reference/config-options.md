@@ -130,8 +130,9 @@ Free text. Default: `""` (auto-detect). Key `git.baseBranch`.
 
 ## Validation rules
 
-- **Enums.** `models.*` take `opus`, `sonnet` or `haiku`; `work.isolation` takes `branch` or `worktree`; `work.mergeStrategy` takes `direct` or `pr`; `autonomy.level` takes `off` or `auto`. `rota config set` does not enforce them; `"loop"` was removed and `rota config check` flags it.
-- **Booleans and integers.** Booleans take `true` or `false`; integer keys state their minimum below. Out-of-range values exit 70 where a verb reads them.
+- **`rota config set`** checks only that the key is in the schema. It accepts any value (JSON when it parses, else the string) and checks no enum or range.
+- **Enums without a reader check.** `models.*` (`opus`, `sonnet` or `haiku`), `work.isolation` (`branch` or `worktree`), `work.mergeStrategy` (`direct` or `pr`) and `autonomy.level` (`off` or `auto`) are not validated by any verb. The skills and the launch command read them as plain strings, so a bad value surfaces as that skill's or the model's failure. `rota config check` only reports a missing key or the removed `autonomy.level` `"loop"`.
+- **Checked where a verb reads them.** A bad value exits 70 (`rota round` verbs for the `round.*` keys, `rota keepalive` and `rota limit` for the `orchestrator.*` keepalive and switch keys and the `limits.*` keys, and any verb that reads `backlog.backend`). The checks are these: booleans take `true` or `false`; integers must be in the minimum-to-maximum range stated for the key below; `round.scope` and `limits.mode` take their listed enums; `round.roster` entries are unique lowercase names. `ship.mergeApproval` is also checked at read time, but a bad value there exits 2.
 
 ## Silent-default keys
 
@@ -163,7 +164,7 @@ Free text. Default: `""` (auto-detect). Key `git.baseBranch`.
 - `work.workerCommand`: command used to launch a worker session in its tmux window. Free text; silent default `""`, which builds `claude --model <models.worker> --dangerously-skip-permissions`. Workers commit, open PRs and run tests with nobody in the pane to answer a prompt, so a narrower mode stalls them. Set it to narrow the grant or to add a wrapper; a worker that then stops on a prompt reports `NEEDS-PERMISSION` instead of hanging.
 - `backlog.backend`: where the backlog lives. `"file"` (silent default) or `"issues"`. Switch to issues mode via `rota migrate issues`. Set via `rota config set backlog.backend issues`. See [`usage/configuration.md`](../usage/configuration.md#issues-backend-keys).
 - `issues.provider`: which tracker the issue backend talks to. `"auto"` (silent default), `"github"` or `"gitlab"`. Used by `backlog.backend: "issues"`.
-- `issues.retryWaitSeconds`: seconds to wait before retrying a failed tracker call. Integer; silent default `60`.
+- `issues.retryWaitSeconds`: seconds to wait before the single retry after a primary rate limit. Integer; silent default `60`.
 - `issues.bulkPaceMs`: milliseconds `rota migrate issues` waits between tracker writes, to stay under GitHub's secondary rate limits. Integer; silent default `1000`. Set `0` in tests.
 - `issues.homeRepo`: umbrella mode with `backlog.backend: "issues"` only. Name of the registered sub-repo that holds milestone tracking issues. String; silent default `""` (the first registered sub-repo).
 - `issues.labels.*`: tracker label names per role. Defaults: `inProgress` `in-progress`, `needsReview` `needs-review`, `changesRequested` `changes-requested`, `released` `released`, `notPlanned` `not-planned`, `blocked` `blocked`, `needsHuman` `needs-human` (set by `rota round transfer --to human`, skipped by `rota round candidates`; silent default), `milestoneTracker` `milestone-tracker`, `types.bug` `type:bug`, `types.feature` `type:feature`, `types.task` `type:task`, `priorityPrefix` `p`, `sizePrefix` `size:` (feature size labels such as `size:Major`). `issues.label` is the legacy alias of `issues.labels.inProgress` and is used when the new key is unset.

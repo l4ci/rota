@@ -44,15 +44,15 @@ sequenceDiagram
 
 ## One commit per task
 
-Each task lands as its own atomic commit. One item, one commit, tagged with the item ID:
+Each task lands as its own atomic commit. The skill doesn't fix a message format: each worker brief carries a suggested message and the orchestrator commits with it verbatim. Naming the item ID in the message (for example `[B03]`) is what lets `/rota-ship` find the item for the PR body. Commits might look like this:
 
 ```
 a1b2c3d fix: retry logic on network timeout [B03]
 d4e5f6a feat: per-project theme support [F07]
-g7h8i9j task: update CI to Node 20 [T02]
+g7h8i9j chore: update CI to Node 20 [T02]
 ```
 
-That keeps reverts surgical (drop one task without touching others), makes PR review easier (read commit by commit), and leaves a predictable history `/rota-ship` reads to build PR bodies automatically.
+That keeps reverts surgical (drop one task without touching others), makes PR review easier (read commit by commit), and leaves a history `/rota-ship` reads to build PR bodies: it lists the items whose IDs the commits name.
 
 ## Isolation: branch vs. worktree
 

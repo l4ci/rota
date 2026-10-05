@@ -288,14 +288,13 @@ The topic shows up in the `## Project Knowledge` block in `AGENTS.md`. Next time
 
 You loop steps 6–9 through additional slices: `tally summary` for monthly rollups, `tally yoy` for year-over-year compare, a CSV importer. Each `/rota-plan M01-S02`, `M01-S03`, `M01-S04` writes its own slice plan; `/rota-capture` seeds items; `/rota-work` ships them; `/rota-learn` catches anything subtle that surfaced.
 
-After the importer ships, `/rota-work` (no argument) says:
+After the importer ships, `/rota-work` (no argument) flags the empty milestone in its orientation output:
 
 ```
-M01 has no open items.
-Run `rota milestone status M01 --to shipped` to close the milestone?
+empty-active: M01
 ```
 
-You run it. M02 and M03 (which both depend on M01) flip from blocked to ready in `MILESTONES.md`. The next `/rota-vision` invocation enters edit mode and refines M02's plan with what you learned in M01. The float gotcha now informs the dashboard's number rendering, and the XDG-paths-Linux-only assumption gets revisited for cross-platform packaging.
+You close it with `rota milestone status M01 --to shipped`. M02 and M03 (which both depend on M01) flip from blocked to ready in `MILESTONES.md`. The next `/rota-vision` invocation enters edit mode and refines M02's plan with what you learned in M01. The float gotcha now informs the dashboard's number rendering, and the XDG-paths-Linux-only assumption gets revisited for cross-platform packaging.
 
 ## What you have after two weeks
 
