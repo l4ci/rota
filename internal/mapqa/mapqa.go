@@ -125,8 +125,7 @@ func QAIndexBlock(root string) string {
 
 // WriteIndex upserts body as the key block of the project's instructions file.
 func WriteIndex(root, key, body string) (string, error) {
-	block := fmt.Sprintf("<!-- rota-%s-start -->\n%s\n<!-- rota-%s-end -->", key, strings.TrimRight(body, "\n"), key)
-	return section.UpsertBlock(section.InstructionsFile(root), key, block)
+	return section.UpsertManaged(root, key, strings.TrimRight(body, "\n"))
 }
 
 // Subsystem is one row of Stats.

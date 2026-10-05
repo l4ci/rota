@@ -124,6 +124,12 @@ func (u *Umbrella) scoped() []string {
 // Name is "issues".
 func (u *Umbrella) Name() string { return "issues" }
 
+// Capabilities: tracker issues across sub-repos.
+func (u *Umbrella) Capabilities() Capabilities { return Capabilities{Tracker: true, Umbrella: true} }
+
+// Rows lists the open issues of every sub-repo, each naming its owner.
+func (u *Umbrella) Rows() ([]Row, error) { return issueRows(u, true) }
+
 // ---- reads -----------------------------------------------------------------
 
 type closedEntry struct {

@@ -39,6 +39,9 @@ func (f *fakeBacklog) add(id, title, milestone string, closed bool, detail strin
 	f.details[id] = detail
 }
 func (f *fakeBacklog) Name() string { return "issues" }
+func (f *fakeBacklog) Capabilities() backlog.Capabilities {
+	return backlog.Capabilities{Tracker: true}
+}
 func (f *fakeBacklog) Get(ref string) (*backlog.Item, error) {
 	if it, ok := f.items[strings.ToUpper(strings.TrimPrefix(ref, "#"))]; ok {
 		return it, nil

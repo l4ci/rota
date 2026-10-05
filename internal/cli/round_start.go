@@ -178,7 +178,7 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 			return backlogFail(err)
 		}
 		drift := 0
-		if b, ok := be.(round.Board); ok && be.Name() == "issues" {
+		if b, ok := be.(round.Board); ok && be.Capabilities().Tracker {
 			env.Board = b
 		}
 		if rep, err := env.Status(ctx, root); err == nil {
