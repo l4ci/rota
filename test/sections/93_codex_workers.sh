@@ -49,15 +49,9 @@ cxrc worker dispatch ben --body-file "$CX/contract.md" --task F01 --kind gemini
 [ "$RC" = "2" ] || fail "an unknown --kind should exit 2, got $RC: $OUT"
 pass "worker dispatch rejects an unknown --kind"
 
-# Codex under tmux is refused before anything is marked.
-cxc config set work.dispatch tmux >/dev/null
-cxrc round assign F01 --agent ben --kind codex --holder-pid "$HOLDER"
-[ "$RC" = "5" ] || fail "codex under tmux should exit 5, got $RC: $OUT"
-case "$ERR" in *"codex workers need work.dispatch=herdr"*) ;; *) fail "wrong tmux message: $ERR" ;; esac
-parked ben || fail "the refusal must leave ben parked"
-[ ! -e "$HOME_BEN" ] || fail "no codex home is made for a host that cannot run codex"
-cxc config set work.dispatch herdr >/dev/null
-pass "codex under tmux exits 5 before marking, and makes no home"
+# Codex under a tmux round is refused in Preflight (internal/worker/codex_test.go).
+# This round recorded herdr at start, and the recorded host wins over a later
+# work.dispatch change (#139), so there is no tmux case to drive here.
 
 # An unsupported version is exit 4 / blockedBy "codex version"; the flag passes one call.
 ROTA_FAKE_CODEX_VERSION=0.160.0 cxrc round assign F01 --agent ben --kind codex --holder-pid "$HOLDER"
