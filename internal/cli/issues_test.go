@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/backlog/trackertest"
+	"github.com/l4ci/rota/internal/migrate"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
@@ -144,7 +144,7 @@ func TestMigrateIssues(t *testing.T) {
 	root := issuesRepo(t, "https://github.com/o/r.git")
 	stub := &msStub{Fake: &trackertest.Fake{}}
 	deps := testDeps()
-	deps.MigrateTracker = func(context.Context, string, any) (backlog.MigrateTracker, error) { return stub, nil }
+	deps.MigrateTracker = func(context.Context, string, any) (migrate.Tracker, error) { return stub, nil }
 
 	code, env, stderr := rotaRunWith(t, deps, "--json", "-C", root, "migrate", "issues")
 	d := dataOf(env)

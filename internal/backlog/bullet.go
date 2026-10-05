@@ -315,9 +315,9 @@ func dropFieldMin(line, marker string, others []string, minWS int) string {
 
 const sp = "[" + pystr.SpaceClass + "]"
 
-// openRe is open_bullet_re(): `- **[B07] [P1] Title.** rest`, anchored at the
+// OpenRe is open_bullet_re(): `- **[B07] [P1] Title.** rest`, anchored at the
 // start. \d is \p{Nd} to match Python's Unicode digits.
-var openRe = regexp.MustCompile(`(?m)\A- \*\*\[([` + ItemLetters + `]\p{Nd}+)\](?:` + sp + `+\[([^\]]+)\])?` + sp + `+([^*]+?)\*\*(.*)$`)
+var OpenRe = regexp.MustCompile(`(?m)\A- \*\*\[([` + ItemLetters + `]\p{Nd}+)\](?:` + sp + `+\[([^\]]+)\])?` + sp + `+([^*]+?)\*\*(.*)$`)
 
 // Bullet is one parsed open bullet line.
 type Bullet struct {
@@ -330,7 +330,7 @@ type Bullet struct {
 // ParseOpen parses an open bullet line (`- **[B07] [P1] Title.** ...`). Done
 // lines, which start `- ~~**[`, do not match.
 func ParseOpen(line string) (Bullet, bool) {
-	m := openRe.FindStringSubmatch(strings.TrimRight(line, "\n"))
+	m := OpenRe.FindStringSubmatch(strings.TrimRight(line, "\n"))
 	if m == nil {
 		return Bullet{}, false
 	}

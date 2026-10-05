@@ -481,7 +481,7 @@ func (b *Issues) labelReleased(mid, tag string, optional bool) (issues int, err 
 		}
 		issues++
 		if !has(is.Labels, label) {
-			if err := b.Tracker.AddLabels(b.ctx(), is.Number, []string{label}, b.autoCreate()); err != nil {
+			if err := b.Tracker.AddLabels(b.ctx(), is.Number, []string{label}, b.AutoCreate()); err != nil {
 				return issues, err
 			}
 		}
