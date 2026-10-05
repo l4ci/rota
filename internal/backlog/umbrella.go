@@ -159,7 +159,7 @@ func (u *Umbrella) closed() ([]closedEntry, error) {
 }
 
 func (u *Umbrella) qualify(name string, it Item) Item {
-	it.ID = name + ":" + it.ID
+	it.ID = qualifyID(name, it.ID)
 	return it
 }
 
@@ -296,16 +296,14 @@ func (u *Umbrella) owner(ref string) (*Issues, string, error) {
 
 // Get returns the item behind ref with its ID as "<repo>:<number>".
 func (u *Umbrella) Get(ref string) (*Item, error) {
-	s, plain, err := u.owner(ref)
-	if err != nil {
-		return nil, err
-	}
-	it, err := s.Get(plain)
-	if err != nil {
-		return nil, err
-	}
-	q := u.qualify(s.Repo, *it)
-	return &q, nil
+	return viaOwner(u, ref, func(s *Issues, plain string) (*Item, error) {
+		it, err := s.Get(plain)
+		if err != nil {
+			return nil, err
+		}
+		q := u.qualify(s.Repo, *it)
+		return &q, nil
+	})
 }
 
 // Detail is the issue body without its fields block; ok is false when the
@@ -385,7 +383,7 @@ func (u *Umbrella) Create(in CreateInput) (CreateResult, error) {
 	if err != nil {
 		return CreateResult{}, err
 	}
-	res.ID = name + ":" + res.ID
+	res.ID = qualifyID(name, res.ID)
 	return res, nil
 }
 
@@ -395,124 +393,76 @@ func (u *Umbrella) SetField(ref, field, value string) (bool, error) {
 	if strings.ToLower(field) == "repos" {
 		return false, errf(ErrInvalid, "repos is the owning sub-repo; an issue cannot move between trackers")
 	}
-	s, plain, err := u.owner(ref)
-	if err != nil {
-		return false, err
-	}
-	return s.SetField(plain, field, value)
+	return viaOwner(u, ref, func(s *Issues, plain string) (bool, error) { return s.SetField(plain, field, value) })
 }
 
 // Complete closes the item on its sub-repo's tracker.
 func (u *Umbrella) Complete(ref string, in CompleteInput) (bool, error) {
-	s, plain, err := u.owner(ref)
-	if err != nil {
-		return false, err
-	}
-	return s.Complete(plain, in)
+	return viaOwner(u, ref, func(s *Issues, plain string) (bool, error) { return s.Complete(plain, in) })
 }
 
 // Reopen reopens the item on its sub-repo's tracker.
 func (u *Umbrella) Reopen(ref string) (bool, error) {
-	s, plain, err := u.owner(ref)
-	if err != nil {
-		return false, err
-	}
-	return s.Reopen(plain)
+	return viaOwner(u, ref, func(s *Issues, plain string) (bool, error) { return s.Reopen(plain) })
 }
 
 // Ready lists what the item lacks to be startable.
 func (u *Umbrella) Ready(ref string) ([]string, error) {
-	s, plain, err := u.owner(ref)
-	if err != nil {
-		return nil, err
-	}
-	return s.Ready(plain)
+	return viaOwner(u, ref, func(s *Issues, plain string) ([]string, error) { return s.Ready(plain) })
 }
 
 // Comments lists the item's comments, oldest first.
 func (u *Umbrella) Comments(ref, kind string) ([]Comment, error) {
-	s, plain, err := u.owner(ref)
-	if err != nil {
-		return nil, err
-	}
-	return s.Comments(plain, kind)
+	return viaOwner(u, ref, func(s *Issues, plain string) ([]Comment, error) { return s.Comments(plain, kind) })
 }
 
 // AddComment appends a comment on the item's tracker.
 func (u *Umbrella) AddComment(ref, kind, text string) (string, error) {
-	s, plain, err := u.owner(ref)
-	if err != nil {
-		return "", err
-	}
-	return s.AddComment(plain, kind, text)
+	return viaOwner(u, ref, func(s *Issues, plain string) (string, error) { return s.AddComment(plain, kind, text) })
 }
 
 // Claim takes the item for claimID.
-func (u *Umbrella) Claim(ref, claimID string) (bool, string, error) {
-	s, plain, err := u.owner(ref)
-	if err != nil {
-		return false, "", err
-	}
-	return s.Claim(plain, claimID)
+func (u *Umbrella) Claim(ref, claimID string) (ok bool, owner string, err error) {
+	err = u.onOwner(ref, func(s *Issues, plain string) (e error) { ok, owner, e = s.Claim(plain, claimID); return })
+	return
 }
 
 // Release gives the item back.
 func (u *Umbrella) Release(ref, claimID string) (bool, error) {
-	s, plain, err := u.owner(ref)
-	if err != nil {
-		return false, err
-	}
-	return s.Release(plain, claimID)
+	return viaOwner(u, ref, func(s *Issues, plain string) (bool, error) { return s.Release(plain, claimID) })
 }
 
 // SetState sets the item's state label.
 func (u *Umbrella) SetState(ref, state string) (bool, error) {
-	s, plain, err := u.owner(ref)
-	if err != nil {
-		return false, err
-	}
-	return s.SetState(plain, state)
+	return viaOwner(u, ref, func(s *Issues, plain string) (bool, error) { return s.SetState(plain, state) })
 }
 
 // Status is the read-back of the item, its ID "<repo>:<number>".
 func (u *Umbrella) Status(ref string) (*Status, error) {
-	s, plain, err := u.owner(ref)
-	if err != nil {
-		return nil, err
-	}
-	st, err := s.Status(plain)
-	if err != nil {
-		return nil, err
-	}
-	st.ID = s.Repo + ":" + st.ID
-	return st, nil
+	return viaOwner(u, ref, func(s *Issues, plain string) (*Status, error) {
+		st, err := s.Status(plain)
+		if err != nil {
+			return nil, err
+		}
+		st.ID = qualifyID(s.Repo, st.ID)
+		return st, nil
+	})
 }
 
 // NoteGet returns the item's durable note of a kind.
-func (u *Umbrella) NoteGet(ref, kind string) (string, bool, error) {
-	s, plain, err := u.owner(ref)
-	if err != nil {
-		return "", false, err
-	}
-	return s.NoteGet(plain, kind)
+func (u *Umbrella) NoteGet(ref, kind string) (text string, ok bool, err error) {
+	err = u.onOwner(ref, func(s *Issues, plain string) (e error) { text, ok, e = s.NoteGet(plain, kind); return })
+	return
 }
 
 // NotePut writes the item's durable note.
 func (u *Umbrella) NotePut(ref, kind, text string) (bool, error) {
-	s, plain, err := u.owner(ref)
-	if err != nil {
-		return false, err
-	}
-	return s.NotePut(plain, kind, text)
+	return viaOwner(u, ref, func(s *Issues, plain string) (bool, error) { return s.NotePut(plain, kind, text) })
 }
 
 // NoteRm deletes the item's durable note.
 func (u *Umbrella) NoteRm(ref, kind string) (bool, error) {
-	s, plain, err := u.owner(ref)
-	if err != nil {
-		return false, err
-	}
-	return s.NoteRm(plain, kind)
+	return viaOwner(u, ref, func(s *Issues, plain string) (bool, error) { return s.NoteRm(plain, kind) })
 }
 
 // ---- milestones ------------------------------------------------------------
