@@ -65,7 +65,7 @@ func withBoard(c *Ctx, root string, env round.Env) round.Env {
 	if env.Board != nil {
 		return env
 	}
-	if name, err := config.Backend(config.Load(filepath.Join(root, ".rota", "config.json"))); err != nil || name != "issues" {
+	if name, _, err := backendMode(root); err != nil || name != "issues" {
 		return env
 	}
 	be, err := openBacklog(c, root, false, "")

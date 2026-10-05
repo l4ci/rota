@@ -58,6 +58,7 @@ func FileItems(root string) Items { return fileItems{root} }
 type fileItems struct{ root string }
 
 func (s fileItems) Open(id string) (OpenItem, error) {
+	// File-mode store by definition; it cannot import cli (documented exception to backend_select.go).
 	f := &backlog.File{Root: s.root}
 	md, merr := f.Markdown(0)
 	if merr != nil {

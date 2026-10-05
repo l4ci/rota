@@ -1,40 +1,13 @@
 package cli
 
 import (
-	"path/filepath"
-
 	"github.com/l4ci/rota/internal/backlog"
-	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/jsonx"
 )
 
 // Issue-backend helpers the plan store and the milestone verbs share. Items
 // resolve through the item workflow (so "F7", "#7" and "7" all answer "7" and
 // an unknown item is exit 3).
-
-// issueBackend reports whether backlog.backend is "issues". An invalid value
-// is a corrupt config (contract, shared definitions): exit 70, never a quiet
-// fall back to file mode.
-func issueBackend(root string) (bool, error) {
-	name, err := config.Backend(config.Load(filepath.Join(root, ".rota", "config.json")))
-	if err != nil {
-		return false, &Error{Exit: ExitInternal, Message: err.Error()}
-	}
-	return name == "issues", nil
-}
-
-// modeRoot is the project root and whether backlog.backend is "issues".
-func modeRoot(c *Ctx) (root string, issue bool, err error) {
-	root, err = c.Root()
-	if err != nil {
-		return "", false, err
-	}
-	issue, err = issueBackend(root)
-	if err != nil {
-		return "", false, err
-	}
-	return root, issue, nil
-}
 
 // failAny maps a domain error (artifact or backlog) onto the exit table,
 // keeping the exit-4 refusal data a duplicate create carries.
@@ -56,35 +29,16 @@ func typedData(id, typ string, changed any) *jsonx.Object {
 }
 
 // issuesBackend opens the issue backend for verbs that address a milestone
-// rather than an item; duplicate-tracking-issue notices go to stderr and
-// into the envelope's warnings.
+// rather than an item, narrowed to the home sub-repo where slice plans, and
+// the plan of a milestone, live.
 func issuesBackend(c *Ctx) (*backlog.Issues, error) {
-	be, err := openIssues(c)
+	be, err := openIssueBackend(c, "", false)
 	if err != nil {
 		return nil, err
 	}
-	switch b := be.(type) {
-	case *backlog.Issues:
-		b.Warn = func(msg string) { c.Warn("%s", msg) }
-		return b, nil
-	case *backlog.Umbrella:
-		// Slice plans, and the plan of a milestone, live on the home sub-repo.
-		home, err := b.HomeSub()
-		if err != nil {
-			return nil, err
-		}
-		home.Warn = func(msg string) { c.Warn("%s", msg) }
-		return home, nil
-	}
-	return nil, Refused("%s works on the issue backend only", c.Path)
-}
-
-// openIssues opens the backlog backend for a verb that addresses a milestone
-// rather than an item.
-func openIssues(c *Ctx) (backlog.Backend, error) {
-	root, err := backlogScope(c)
+	home, err := be.HomeIssues()
 	if err != nil {
 		return nil, err
 	}
-	return openBacklog(c, root, false, "")
+	return home, nil
 }

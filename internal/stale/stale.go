@@ -141,6 +141,7 @@ func findKnowledge(root string, days int, today time.Time) ([]Entry, error) {
 }
 
 func findTodo(root string, days int, today time.Time) ([]Entry, error) {
+	// File-mode store by definition; it cannot import cli (documented exception to backend_select.go).
 	md, err := (&backlog.File{Root: root}).Markdown(0)
 	if errors.Is(err, backlog.ErrNotFound) {
 		return nil, nil

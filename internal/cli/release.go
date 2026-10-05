@@ -415,7 +415,7 @@ func releaseMilestoneCheck(c *Ctx, args []string) (Result, error) {
 	if err := releaseNotAtUmbrella(c); err != nil {
 		return Result{}, err
 	}
-	be, err := a8Issues(c, "", true)
+	be, err := openIssueBackend(c, "", true)
 	if err != nil {
 		return backlogFailRead(err)
 	}
@@ -451,7 +451,7 @@ func releaseCloseMilestone(fs *flag.FlagSet) RunFunc {
 		if err := releaseNotAtUmbrella(c); err != nil {
 			return Result{}, err
 		}
-		be, err := a8Issues(c, "", true)
+		be, err := openIssueBackend(c, "", true)
 		if err != nil {
 			return backlogFail(err)
 		}
@@ -471,7 +471,7 @@ var releaseTagged = regexp.MustCompile(`\[[A-Z]\p{Nd}+(?:-S\p{Nd}+)?\]|#\p{Nd}+`
 // issues by type, then, with --since, the commit subjects that name no item
 // (hv-release-notes-from-issues).
 func releaseNotesIssues(c *Ctx, mid, since string) (Result, error) {
-	be, err := a8Issues(c, "", true)
+	be, err := openIssueBackend(c, "", true)
 	if err != nil {
 		return backlogFailRead(err)
 	}

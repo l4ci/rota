@@ -234,11 +234,14 @@ func shipBody(c *Ctx, args []string) (Result, error) {
 	}
 	b.WriteString("\n")
 	if ids := backlog.FindItemIDs(full.Stdout, ""); len(ids) > 0 {
-		corpus := (&backlog.File{Root: t.CorpusRoot}).Corpus()
+		titleOf, err := shipTitles(c, t.CorpusRoot)
+		if err != nil {
+			return Result{}, err
+		}
 		origin := map[string]string{}
 		b.WriteString("## Items resolved\n\n")
 		for _, id := range ids {
-			line, title, ok := backlog.FindOrigin(corpus, id)
+			line, title, ok := titleOf(id)
 			if ok {
 				origin[id] = line
 			}
@@ -267,6 +270,32 @@ func shipBody(c *Ctx, args []string) (Result, error) {
 		}
 	}
 	return Result{Data: gitObj("branch", t.Branch, "body", b.String()), Text: b.String()}, nil
+}
+
+// shipTitles resolves an item ID to its origin line and title: through the
+// tracker in issue mode (an unresolvable ID has none), else through the file
+// corpus.
+func shipTitles(c *Ctx, root string) (func(id string) (line, title string, ok bool), error) {
+	issue, err := issueBackend(root)
+	if err != nil {
+		return nil, err
+	}
+	if !issue {
+		corpus := fileBackend(root).Corpus()
+		return func(id string) (string, string, bool) { return backlog.FindOrigin(corpus, id) }, nil
+	}
+	be, err := openBacklog(c, root, false, "")
+	if err != nil {
+		// The body is advisory text: an unreachable tracker lists the IDs bare.
+		return func(string) (string, string, bool) { return "", "", false }, nil
+	}
+	return func(id string) (string, string, bool) {
+		it, err := be.Get(id)
+		if err != nil || it == nil {
+			return "", "", false
+		}
+		return it.Line, it.Title, true
+	}, nil
 }
 
 // ---- ship pr ---------------------------------------------------------------
@@ -368,9 +397,9 @@ func shipClosesLines(c *Ctx, root string, cfg any, ids []string) (string, error)
 	if len(ids) == 0 {
 		return "", nil
 	}
-	name, err := config.Backend(cfg)
+	name, _, err := backendMode(root)
 	if err != nil {
-		return "", &Error{Exit: ExitInternal, Message: err.Error()}
+		return "", err
 	}
 	if name == "file" {
 		return "", nil
@@ -536,7 +565,7 @@ func shipPRMerge(fs *flag.FlagSet) RunFunc {
 				items = append(items, s)
 			}
 		}
-		be, err := a8Issues(c, "use: rota ship merge", true)
+		be, err := openIssueBackend(c, "use: rota ship merge", true)
 		if err != nil {
 			return backlogFail(err)
 		}
