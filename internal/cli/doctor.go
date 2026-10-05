@@ -90,28 +90,16 @@ func doctorInput() doctor.Input {
 		s, _ := v.(string)
 		return s
 	}
-	in.Dispatch, in.IssuesProvider = str("work.dispatch"), str("issues.provider")
+	in.Dispatch, in.IssuesProvider = config.Dispatch(cfg), str("issues.provider")
 	in.CodexHomes = codexHomes(root)
 	for _, t := range []string{"light", "standard", "heavy"} {
 		if strings.TrimSpace(str("round.tiers.codex."+t)) != "" {
 			in.CodexTiers = true
 		}
 	}
-	if raw, _ := config.Lookup(cfg, "work.accounts"); raw != nil {
-		list, _ := raw.([]any)
-		for _, e := range list {
-			if o, ok := e.(*jsonx.Object); ok {
-				a := doctor.Account{}
-				if v, ok := o.Get("name"); ok {
-					a.Name, _ = v.(string)
-				}
-				if v, ok := o.Get("configDir"); ok {
-					a.ConfigDir, _ = v.(string)
-				}
-				if a.Name != "" {
-					in.Accounts = append(in.Accounts, a)
-				}
-			}
+	for _, a := range config.Accounts(cfg) {
+		if a.Name != "" {
+			in.Accounts = append(in.Accounts, doctor.Account(a))
 		}
 	}
 	in.ProjectRoot = root

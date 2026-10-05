@@ -109,7 +109,7 @@ func (e Env) Resolve(root string, cfg any) (Plan, error) {
 	// Outside any multiplexer herdr is preferred: it is what rounds use, so the
 	// orchestrator's workers open beside it. The session is rota's own, never
 	// the user's default one.
-	dispatch := str(cfg, "work.dispatch")
+	dispatch := config.Dispatch(cfg)
 	switch {
 	case herdr.InSession() && herdr.Require() == nil:
 		p.Host, p.Mode = "herdr", ModeTab
