@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/land"
 	"github.com/l4ci/rota/internal/marker"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/tracker"
@@ -20,6 +21,7 @@ type PRTracker interface {
 	Tracker
 	OpenPRs(ctx context.Context) ([]tracker.PR, error)
 	ClosedNumbers(body string) []int
+	PRView(ctx context.Context, pr int) (tracker.PRInfo, error)
 	PRMerge(ctx context.Context, pr int, o tracker.MergeOpts) (string, error)
 	PRFiles(ctx context.Context, pr int) ([]string, error)
 }
@@ -181,6 +183,12 @@ func (b *Issues) MergePRGated(pr int, items []string, approve MergeApprover) (Me
 	if found == nil {
 		return MergeResult{}, errf(ErrNotFound, "PR %d is not open", pr)
 	}
+	// Pin the merge to the head the gates below judge: a push after this read
+	// is refused by the forge instead of landing unreviewed.
+	info, err := pt.PRView(b.ctx(), pr)
+	if err != nil {
+		return MergeResult{}, err
+	}
 	if approve != nil {
 		if err := approve(found.Branch, func() ([]string, error) { return pt.PRFiles(b.ctx(), pr) }); err != nil {
 			return MergeResult{}, err
@@ -216,11 +224,7 @@ func (b *Issues) MergePRGated(pr int, items []string, approve MergeApprover) (Me
 		}
 		return MergeResult{Unproven: itemRefs(unproven)}, nil
 	}
-	// Unpinned: nothing here verified a head sha. The proof, verdict and
-	// approval checks above key on the PR and its branch, not on a commit, so
-	// there is no sha to pin to. The gate (internal/worker), which does verify
-	// one, pins it.
-	sha, err := pt.PRMerge(b.ctx(), pr, tracker.MergeOpts{DeleteBranch: true})
+	sha, err := land.MergeForge(b.ctx(), pt, pr, info.HeadSHA, true)
 	if err != nil {
 		var te *tracker.Error
 		if errors.As(err, &te) && te.Kind == tracker.KindFailed && !strings.HasPrefix(te.Message, "cannot read the merge commit") {

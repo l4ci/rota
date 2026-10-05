@@ -316,6 +316,10 @@ func (f *a8Forge) ClosedNumbers(body string) []int {
 	return out
 }
 
+func (f *a8Forge) PRView(context.Context, int) (tracker.PRInfo, error) {
+	return tracker.PRInfo{HeadSHA: "feedface00000000000000000000000000000001"}, nil
+}
+
 func (f *a8Forge) PRMerge(_ context.Context, pr int, _ tracker.MergeOpts) (string, error) {
 	if f.mergeErr != nil {
 		return "", f.mergeErr
