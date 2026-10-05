@@ -41,8 +41,8 @@ type Store interface {
 }
 
 var (
-	keyRe       = regexp.MustCompile(`^M\d{2,}-(?:S\d+|` + backlog.IDPattern(1) + `)$`)
-	milestoneRe = regexp.MustCompile(`^M\d{2,}$`)
+	keyRe       = regexp.MustCompile(`^` + backlog.MilestonePattern + `-(?:` + backlog.SlicePattern + `|` + backlog.IDPattern(1) + `)$`)
+	milestoneRe = regexp.MustCompile(`^` + backlog.MilestonePattern + `$`)
 )
 
 // itemOnlyRe is a milestone-free item plan key (issue mode): #7, B7, f12.
@@ -89,7 +89,7 @@ func parseAdd(o AddOpts, s Store) (milestone, unit string, err error) {
 		if s.ItemOnly() && ItemOnlyKey(o.Key) {
 			return "", strings.ToUpper(strings.TrimPrefix(o.Key, "#")), nil
 		}
-		re := regexp.MustCompile(fmt.Sprintf(`^(M\d{2,})-([BFTS]\d{%d,})$`, s.Digits()))
+		re := regexp.MustCompile(fmt.Sprintf(`^(%s)-([%sS]\p{Nd}{%d,})$`, backlog.MilestonePattern, backlog.ItemLetters, s.Digits()))
 		m := re.FindStringSubmatch(o.Key)
 		if m == nil {
 			return "", "", exitcode.Errf(exitcode.ExitUsage, "key must look like M01-B07 or M01-S02, got %q", o.Key)

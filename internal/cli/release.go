@@ -466,7 +466,7 @@ func releaseCloseMilestone(fs *flag.FlagSet) RunFunc {
 	}
 }
 
-var releaseTagged = regexp.MustCompile(`\[(?:` + backlog.IDPattern(1) + `|M\p{Nd}+-S\p{Nd}+)\]|#\p{Nd}+`)
+var releaseTagged = regexp.MustCompile(`\[(?:` + backlog.IDPattern(1) + `|M\p{Nd}+(?:-S\p{Nd}+)?)\]|#\p{Nd}+`)
 
 // releaseNotesIssues is `release notes --from issues`: the milestone's closed
 // issues by type, then, with --since, the commit subjects that name no item

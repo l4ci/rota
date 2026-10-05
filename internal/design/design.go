@@ -30,9 +30,9 @@ func CheckID(s Store, id string) error {
 		return nil
 	}
 	if s.Digits() <= 1 {
-		return exitcode.Errf(exitcode.ExitUsage, "ID must match [BFT]\\d+ (e.g. B7, F3, T11); designs are per-item, not per-slice or per-milestone, got %q", id)
+		return exitcode.Errf(exitcode.ExitUsage, "ID must match [%s]\\d+ (e.g. B7, F3, T11); designs are per-item, not per-slice or per-milestone, got %q", backlog.ItemLetters, id)
 	}
-	return exitcode.Errf(exitcode.ExitUsage, "ID must match [BFT]\\d{%d,} (e.g. B07, F03, T11); designs are per-item, not per-slice or per-milestone, got %q", s.Digits(), id)
+	return exitcode.Errf(exitcode.ExitUsage, "ID must match [%s]\\d{%d,} (e.g. B07, F03, T11); designs are per-item, not per-slice or per-milestone, got %q", backlog.ItemLetters, s.Digits(), id)
 }
 
 // Add creates the design stub; an existing design is exit 4.

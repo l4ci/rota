@@ -27,6 +27,13 @@ func IDPattern(minDigits int) string {
 // back needs it; nothing that mints or validates an item ID does.
 const AnyTypeIDPattern = `[` + ItemLetters + `S]\p{Nd}+`
 
+// MilestonePattern and SlicePattern are the regexp sources of a milestone ID
+// (M01) and of the slice part of a plan key (S1), unanchored like IDPattern.
+const (
+	MilestonePattern = `M\p{Nd}{2,}`
+	SlicePattern     = `S\p{Nd}+`
+)
+
 // ValidID reports whether id is exactly one item ID: a type letter from
 // ItemLetters followed by at least minDigits digits.
 func ValidID(id string, minDigits int) bool {

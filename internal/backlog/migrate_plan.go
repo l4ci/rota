@@ -256,7 +256,7 @@ type tokenMatch struct {
 }
 
 // tokenMatches finds the item IDs in s the way the old TOKEN pattern did:
-// (?<![\w/-])([BFT]\d+)(?!\w)(?!\.md).
+// (?<![\w/-])(IDPattern)(?!\w)(?!\.md), IDPattern being the central grammar.
 func tokenMatches(s string) []tokenMatch {
 	var out []tokenMatch
 	for i := 0; i < len(s); {

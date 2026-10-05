@@ -174,7 +174,7 @@ func (b *Issues) fields(is Issue, block map[string]string) []kv {
 }
 
 // bracketIDs turns "F12, B03" into "[F12], [B03]" so Related matches the file
-// grammar: (?<![\[\w])([BFT]\d+)(?![\]\w]).
+// grammar: a bracketed ID, (?<![\[\w])(IDPattern)(?![\]\w]).
 func bracketIDs(v string) string {
 	var out strings.Builder
 	for i := 0; i < len(v); {
