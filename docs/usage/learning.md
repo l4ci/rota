@@ -85,6 +85,10 @@ Three explicit flags bypass the heuristic flow when you already know what you wa
 
 All three operate on `(topic, title)` pairs. The tier sidecar is the source of truth for the lifecycle state. `KNOWLEDGE.md` itself stays human-readable without tier annotations.
 
+### Retrospective: `--retro`
+
+`/rota-learn --retro` looks at the session's mistakes instead of its discoveries and sorts each into one of four classes: a **guardrail** (lint, test, hook or CI check), a **written standard** (a `KNOWLEDGE.md` bullet or a decision), a **navigation pointer** (a map entry or an `AGENTS.md` line) or a **tool-economy fix**. Guardrail candidates are filed as items with `rota item create` and never built in the same run. The retro also lists bullets that look like no-ops (never hit, or restating code) as removal candidates. It does not delete or deprecate them; you decide, then use `--deprecate`.
+
 ## When to invoke
 
 Invoke `/rota-learn` after a session that surfaced discoveries: two or more
