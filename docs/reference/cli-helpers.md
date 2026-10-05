@@ -448,6 +448,7 @@ Verdicts are `PASS`, `CONCERNS` or `FAIL` (`qa` also takes `INFRA-FAIL`). They l
 | `rota review scope [<branch>]` | commits, files, item IDs and origin entries of a branch |
 | `rota review brief [<branch>]` | fresh-eyes second-opinion brief for a branch |
 | `rota review scaffolding [<branch>] [--base <branch>]` | added diff lines that look like leftover task scaffolding |
+| `rota review package [<branch>] [--base <ref>] [--since <sha>]` | write a branch's commits, `--stat` and full diff (`-U10`) to `.rota/review/<branch>.md` and print the path; `--since` packages only the commits after a sha |
 | `rota review queue` | open issues waiting for review |
 
 ## `rota ship`

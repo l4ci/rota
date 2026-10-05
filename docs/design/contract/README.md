@@ -70,7 +70,7 @@ Field types use JSON names (`string`, `number`, `bool`, `object`, `[]string`). `
 | worker | `pool init`, `pool list`, `pool reap`, `reset`, `dispatch`, `poll`, `gate` (B1 gates its merge), `session check`, `session ensure`, `account list`, `account pick`, `account assign` | A7 |
 | tracker | `call`, `suggest-upstream` (B1 adds the gate) | A8, B1 |
 | git | `base`, `guard clean`, `guard feature-branch`, `branch`, `worktree-path` | A8 |
-| review | `scope`, `brief`, `scaffolding`, `queue` | A8 |
+| review | `scope`, `brief`, `scaffolding`, `package`, `queue` | A8 |
 | ship | `body`, `pr`, `merge`, `pr-merge`, `undo` (B1 gates `merge` and `pr-merge`) | A8, B1 |
 | release | `version`, `bump`, `host`, `notes`, `changelog`, `pending`, `milestone-check`, `close-milestone` (A8), `push`, `publish` (B1) | A8, B1 |
 | init | `init`, `init check`, `init umbrella`, `projects` (#24) | A9 |
