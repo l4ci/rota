@@ -28,6 +28,7 @@ __pycache__/
 .rota/workers.json
 .rota/config.local.json
 .rota/handoff/
+.rota/review/
 .rota/qa-runs/
 .rota/verdicts.json
 .rota/gate-audit.jsonl

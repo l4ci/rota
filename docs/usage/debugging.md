@@ -12,7 +12,7 @@ The skill loads the item (its issue, or the `[B07]` entry in [`BACKLOG.md`](../r
 2. **Hypothesize**: it writes 3–5 hypotheses ranked by likelihood, each as a falsifiable claim ("if X, then changing Y makes the bug vanish"), and prints the list before probing.
 3. **Verify**: it probes in rank order (log inspection, targeted reads, narrow experiment) before any code changes, striking each refuted hypothesis with its evidence. Temporary probe lines carry a `[DEBUG-<id>]` tag, and the skill will not commit or finish while `git grep` still finds one.
 4. **Fix**: the minimal change that removes the root cause, as one atomic commit tagged `fix: … [B07]` (`#42` on the issue backend).
-5. **Prove and hand off**: the reproducer must pass; the skill records a proof row and opens a PR. It never merges. The issue closes when the PR merges; on the file backend it completes the item.
+5. **Prove and hand off**: the reproducer must pass, and the fix carries a regression test at the bug's seam. If the only possible test would mock the code under test or assert internals, the skill skips it, files a `refactor` item naming the missing seam, and records the reproducer as the proof with a row that links that item. It opens a PR. It never merges. The issue closes when the PR merges; on the file backend it completes the item.
 
 If the root cause was non-obvious (required extra verification rounds, or contradicted the initial hypothesis, or touched a known-tricky subsystem), the skill nudges you to run [`/rota-learn`](learning.md) so the insight lands in `KNOWLEDGE.md`.
 
