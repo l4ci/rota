@@ -252,6 +252,7 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 		}
 		// Fresh session every task dispatch. The kill must be provable: a
 		// window that survives it would run beside the new one.
+		sweepShells(ctx, h, worktree)
 		if err := h.Kill(ctx, o.Slot, handle); err != nil {
 			return res, fail(exitcode.ExitUnavailable, err.Error())
 		}
@@ -421,8 +422,32 @@ func (e Env) KillSlot(ctx context.Context, root, slot string) error {
 	if err := h.Require(); err != nil {
 		return fail(exitcode.ExitUnavailable, err.Error())
 	}
+	sweepShells(ctx, h, s.Worktree())
 	if err := h.Kill(ctx, slot, handle); err != nil {
 		return fail(exitcode.ExitUnavailable, err.Error())
 	}
 	return nil
+}
+
+// SweepSlot closes the leftover shell panes of a slot whose agent is already
+// gone (a dead slot), wherever a layout split moved them. Best effort: a pane
+// that stays is a stray window, not a reason to refuse a reclaim.
+func (e Env) SweepSlot(ctx context.Context, root, slot string) {
+	e = e.withDefaults()
+	s := LoadRegistry(root).Slot(slot)
+	if s == nil || RegistryHost(root) == host.Solo {
+		return
+	}
+	h := e.NewHost(e.hostKind(root))
+	if h.Require() == nil {
+		sweepShells(ctx, h, s.Worktree())
+	}
+}
+
+// sweepShells closes the bare-shell panes left in the worktree, on a host that
+// can list them. Best effort: Kill still proves the session gone.
+func sweepShells(ctx context.Context, h host.Host, worktree string) {
+	if sw, ok := h.(host.PaneSweeper); ok && worktree != "" {
+		sw.SweepShells(ctx, worktree)
+	}
 }
