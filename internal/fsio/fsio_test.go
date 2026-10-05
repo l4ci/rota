@@ -41,6 +41,10 @@ func bump(v any) (any, error) {
 // Concurrent writers each do a read-modify-write under the lock. Any lost
 // update leaves the counter short, so the final value proves exclusion.
 func TestConcurrentWritersLoseNoUpdates(t *testing.T) {
+	// Locked polls with no fairness, so under the gate's CPU contention a writer
+	// can outwait the 10 s LockTimeout. Exclusion is judged by the counter below,
+	// not by how long writers queue, so give the queue a generous budget.
+	const budget = 2 * time.Minute
 	path := filepath.Join(t.TempDir(), "state.json")
 	const writers, rounds = 8, 25
 	var wg sync.WaitGroup
@@ -50,7 +54,7 @@ func TestConcurrentWritersLoseNoUpdates(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for range rounds {
-				if err := UpdateJSON(path, nil, bump); err != nil {
+				if err := updateJSON(path, nil, budget, bump); err != nil {
 					errs <- err
 					return
 				}
