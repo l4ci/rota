@@ -9,6 +9,7 @@ import (
 
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/pystr"
+	"github.com/l4ci/rota/internal/rotatree"
 )
 
 // Imported is one upstream issue a backlog item points at through a
@@ -44,7 +45,7 @@ type importedKey struct {
 // used directory order). forRepo, when not empty, keeps the entries of that
 // Repos: name. Missing files are skipped.
 func ScanImported(root, forRepo string) []Imported {
-	rota := filepath.Join(root, ".rota")
+	rota := rotatree.Dir(root)
 	seen := map[importedKey]int{}
 	var out []Imported
 	register := func(provider string, issue int, item string, repos []string, status string) {

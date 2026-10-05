@@ -23,9 +23,9 @@ import (
 
 // Statuses. StatusTimedOut is derived on read and never stored.
 const (
-	StatusPending  = "pending"
-	StatusAnswered = "answered"
-	StatusTimedOut = "timed-out"
+	StatusPending  = worker.EscalationPending
+	StatusAnswered = worker.EscalationAnswered
+	StatusTimedOut = worker.EscalationTimedOut
 )
 
 // Error is a verb failure with its exit code; Data is the failure data for
@@ -39,24 +39,11 @@ type Error struct {
 func (e *Error) Error() string { return e.Message }
 
 // Answer is the comment that answered an escalation.
-type Answer struct {
-	CommentID, Author, Body, SeenAt string
-}
+type Answer = worker.EscalationAnswer
 
-// Entry is one record of the `escalations` list.
-type Entry struct {
-	ID        string
-	Kind      string // issue | pr
-	Number    int
-	Slot      string
-	Title     string
-	CommentID string
-	SentAt    string
-	Deadline  string
-	Notified  bool
-	Status    string // stored: pending | answered
-	Answer    *Answer
-}
+// Entry is one record of the `escalations` list; the worker package owns its
+// stored shape.
+type Entry = worker.Escalation
 
 // Forge is the part of tracker.Adapter the verbs use.
 type Forge interface {
@@ -93,81 +80,7 @@ func (e Env) withDefaults() Env {
 func Time(t time.Time) string { return t.UTC().Format(time.RFC3339) }
 
 // Load reads the escalations list; a missing or malformed list reads as empty.
-func Load(root string) []Entry {
-	var out []Entry
-	for _, o := range worker.LoadRegistry(root).Escalations() {
-		out = append(out, fromObject(o))
-	}
-	return out
-}
-
-func num(o *jsonx.Object, key string) int {
-	v, _ := o.Get(key)
-	n, _ := strconv.Atoi(fmt.Sprint(v))
-	return n
-}
-
-func fromObject(o *jsonx.Object) Entry {
-	e := Entry{
-		ID: jsonx.Str(o, "id"), Kind: jsonx.Str(o, "kind"), Number: num(o, "number"),
-		Slot: jsonx.Str(o, "slot"), Title: jsonx.Str(o, "title"), CommentID: jsonx.Str(o, "commentId"),
-		SentAt: jsonx.Str(o, "sentAt"), Deadline: jsonx.Str(o, "deadline"), Status: jsonx.Str(o, "status"),
-	}
-	if v, _ := o.Get("notified"); v == true {
-		e.Notified = true
-	}
-	if a, ok := o.Get("answer"); ok {
-		if ao, ok := a.(*jsonx.Object); ok {
-			e.Answer = &Answer{CommentID: jsonx.Str(ao, "commentId"), Author: jsonx.Str(ao, "author"),
-				Body: jsonx.Str(ao, "body"), SeenAt: jsonx.Str(ao, "seenAt")}
-		}
-	}
-	return e
-}
-
-func (a Answer) Object() *jsonx.Object {
-	o := jsonx.NewObject()
-	o.Set("commentId", a.CommentID)
-	o.Set("author", a.Author)
-	o.Set("body", a.Body)
-	o.Set("seenAt", a.SeenAt)
-	return o
-}
-
-// Object is the stored shape of the entry (the contract's `escalation`).
-func (e Entry) Object() *jsonx.Object {
-	o := jsonx.NewObject()
-	o.Set("id", e.ID)
-	o.Set("kind", e.Kind)
-	o.Set("number", e.Number)
-	if e.Slot != "" {
-		o.Set("slot", e.Slot)
-	}
-	o.Set("title", e.Title)
-	o.Set("commentId", e.CommentID)
-	o.Set("sentAt", e.SentAt)
-	if e.Deadline != "" {
-		o.Set("deadline", e.Deadline)
-	}
-	o.Set("notified", e.Notified)
-	o.Set("status", e.Status)
-	if e.Answer != nil {
-		o.Set("answer", e.Answer.Object())
-	}
-	return o
-}
-
-// Derived is the status as reported: a stored pending entry past its deadline
-// reads as timed-out. Nothing stores it, so a late answer still lands.
-func (e Entry) Derived(now time.Time) string {
-	if e.Status != StatusPending || e.Deadline == "" {
-		return e.Status
-	}
-	if d, err := time.Parse(time.RFC3339, e.Deadline); err == nil && now.After(d) {
-		return StatusTimedOut
-	}
-	return e.Status
-}
+func Load(root string) []Entry { return worker.LoadRegistry(root).Escalations() }
 
 // NextID is e<N>, N one more than the highest in the list.
 func NextID(list []Entry) string {
@@ -294,8 +207,8 @@ func Send(ctx context.Context, env Env, root string, o SendOpts) (SendResult, er
 		e.Deadline = Time(now.Add(o.Timeout))
 	}
 	res.Entry = e
-	err = worker.UpdateEscalations(root, func(list []any) []any {
-		return append(list, e.Object())
+	err = worker.UpdateEscalations(root, func(list []Entry) []Entry {
+		return append(list, e)
 	})
 	if err != nil {
 		d := jsonx.NewObject()
@@ -410,19 +323,13 @@ func Check(ctx context.Context, env Env, root string, ids []string) (CheckResult
 	}
 
 	if len(found) > 0 {
-		err := worker.UpdateEscalations(root, func(stored []any) []any {
-			for j, v := range stored {
-				o, ok := v.(*jsonx.Object)
-				if !ok {
+		err := worker.UpdateEscalations(root, func(stored []Entry) []Entry {
+			for j := range stored {
+				a, hit := found[stored[j].ID]
+				if !hit || stored[j].Status != StatusPending {
 					continue
 				}
-				a, hit := found[jsonx.Str(o, "id")]
-				if !hit || jsonx.Str(o, "status") != StatusPending {
-					continue
-				}
-				o.Set("status", StatusAnswered)
-				o.Set("answer", a.Object())
-				stored[j] = o
+				stored[j].Status, stored[j].Answer = StatusAnswered, &a
 			}
 			return stored
 		})

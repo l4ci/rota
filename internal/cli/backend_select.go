@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/proof"
 	"github.com/l4ci/rota/internal/repos"
+	"github.com/l4ci/rota/internal/rotatree"
 )
 
 // Backend selection: the one place in cli that reads backlog.backend, builds a
@@ -25,7 +25,7 @@ import (
 // ("file" or "issues") and the loaded config. An invalid value is a corrupt
 // config (contract, shared definitions): exit 70, never a quiet fall back.
 func backendMode(root string) (name string, cfg any, err error) {
-	cfg = config.Load(filepath.Join(root, ".rota", "config.json"))
+	cfg = config.Load(rotatree.Config(root))
 	name, err = config.Backend(cfg)
 	if err != nil {
 		return "", nil, &Error{Exit: ExitInternal, Message: err.Error()}

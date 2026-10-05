@@ -11,12 +11,10 @@
 package limits
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -54,83 +52,15 @@ const (
 // session is its slot name.
 const Orchestrator = "orchestrator"
 
-// Entry is one record of the `limits` list.
-type Entry struct {
-	ID         string
-	Session    string // Orchestrator or a slot name
-	Window     string
-	Source     string
-	DetectedAt string
-	ResetsAt   string // empty when unknown
-	Action     string
-	Account    string // the limited slot's account
-	To         string // the slot the issue moved to
-	Status     string
-	Cycles     int
-	ResolvedAt string
-	Note       string
-}
+// Entry is one record of the `limits` list; the worker package owns its
+// stored shape.
+type Entry = worker.Limit
 
 // Time renders t as RFC 3339 UTC.
 func Time(t time.Time) string { return t.UTC().Format(time.RFC3339) }
 
-// Resets is ResetsAt parsed, false when absent.
-func (e Entry) Resets() (time.Time, bool) {
-	if e.ResetsAt == "" {
-		return time.Time{}, false
-	}
-	t, err := time.Parse(time.RFC3339, e.ResetsAt)
-	return t, err == nil
-}
-
-// Object is the stored shape of the entry.
-func (e Entry) Object() *jsonx.Object {
-	o := jsonx.NewObject()
-	o.Set("id", e.ID)
-	o.Set("session", e.Session)
-	o.Set("window", e.Window)
-	o.Set("source", e.Source)
-	o.Set("detectedAt", e.DetectedAt)
-	if e.ResetsAt != "" {
-		o.Set("resetsAt", e.ResetsAt)
-	}
-	o.Set("action", e.Action)
-	if e.Account != "" {
-		o.Set("account", e.Account)
-	}
-	if e.To != "" {
-		o.Set("to", e.To)
-	}
-	o.Set("status", e.Status)
-	o.Set("cycles", e.Cycles)
-	if e.ResolvedAt != "" {
-		o.Set("resolvedAt", e.ResolvedAt)
-	}
-	if e.Note != "" {
-		o.Set("note", e.Note)
-	}
-	return o
-}
-
-func fromObject(o *jsonx.Object) Entry {
-	n, _ := o.Get("cycles")
-	cycles, _ := strconv.Atoi(fmt.Sprint(n))
-	return Entry{
-		ID: jsonx.Str(o, "id"), Session: jsonx.Str(o, "session"), Window: jsonx.Str(o, "window"),
-		Source: jsonx.Str(o, "source"), DetectedAt: jsonx.Str(o, "detectedAt"), ResetsAt: jsonx.Str(o, "resetsAt"),
-		Action: jsonx.Str(o, "action"), Account: jsonx.Str(o, "account"), To: jsonx.Str(o, "to"),
-		Status: jsonx.Str(o, "status"), Cycles: cycles, ResolvedAt: jsonx.Str(o, "resolvedAt"), Note: jsonx.Str(o, "note"),
-	}
-}
-
 // Load reads the limits list; a missing or malformed list reads as empty.
-func Load(root string) []Entry {
-	var out []Entry
-	for _, o := range worker.LoadRegistry(root).Limits() {
-		out = append(out, fromObject(o))
-	}
-	return out
-}
+func Load(root string) []Entry { return worker.LoadRegistry(root).Limits() }
 
 // Waiting are the entries still waiting, in list order.
 func Waiting(list []Entry) []Entry {
@@ -157,25 +87,19 @@ func NextID(list []Entry) string {
 // Append adds the entry under the registry lock, numbering it from the list
 // as it is at that moment, and returns it with its id.
 func Append(root string, e Entry) (Entry, error) {
-	err := worker.UpdateLimits(root, func(list []any) []any {
-		var cur []Entry
-		for _, v := range list {
-			if o, ok := v.(*jsonx.Object); ok {
-				cur = append(cur, fromObject(o))
-			}
-		}
-		e.ID = NextID(cur)
-		return append(list, e.Object())
+	err := worker.UpdateLimits(root, func(list []Entry) []Entry {
+		e.ID = NextID(list)
+		return append(list, e)
 	})
 	return e, err
 }
 
 // Save rewrites the entry with the same id under the registry lock.
 func Save(root string, e Entry) error {
-	return worker.UpdateLimits(root, func(list []any) []any {
-		for i, v := range list {
-			if o, ok := v.(*jsonx.Object); ok && jsonx.Str(o, "id") == e.ID {
-				list[i] = e.Object()
+	return worker.UpdateLimits(root, func(list []Entry) []Entry {
+		for i := range list {
+			if list[i].ID == e.ID {
+				list[i] = e
 			}
 		}
 		return list

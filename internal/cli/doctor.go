@@ -16,6 +16,7 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/migrate"
 	"github.com/l4ci/rota/internal/proc"
+	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/skills"
 	"github.com/l4ci/rota/internal/version"
 	"github.com/l4ci/rota/internal/worker"
@@ -71,7 +72,7 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 	}
 	root := ""
 	for d := in.Dir; d != ""; {
-		if fi, err := os.Stat(filepath.Join(d, ".rota")); err == nil && fi.IsDir() {
+		if rotatree.Exists(d) {
 			root = d
 			break
 		}
@@ -86,7 +87,7 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 		doctorDiskInput(ctx, &in, nil, "", d.Git)
 		return in
 	}
-	cfg := config.Load(filepath.Join(root, ".rota", "config.json"))
+	cfg := config.Load(rotatree.Config(root))
 	str := func(key string) string {
 		v, _ := config.Lookup(cfg, key)
 		s, _ := v.(string)

@@ -2,7 +2,7 @@ package backlog
 
 import (
 	ms "github.com/l4ci/rota/internal/milestone"
-	"path/filepath"
+	"github.com/l4ci/rota/internal/rotatree"
 	"regexp"
 	"strconv"
 	"unicode"
@@ -88,5 +88,5 @@ func DetailPath(root, id string) string {
 	if dir == "" {
 		return ""
 	}
-	return filepath.Join(root, ".rota", dir, id+".md")
+	return rotatree.Doc(root, dir, id)
 }
