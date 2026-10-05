@@ -79,7 +79,7 @@ RC=0; mh "$MHV_D" "$MHV_H" backlog list --help >/dev/null 2>&1 || RC=$?
 [ $RC -eq 0 ] || fail "--help must not hit the hard stop, got $RC"
 
 echo "  doctor fails on the leftover"
-MHV_BIN="$TMP_MHV/bin"; mkdir -p "$MHV_BIN"; ln -s "$(command -v git)" "$MHV_BIN/git"
+MHV_BIN="$TMP_MHV/bin"; mkdir -p "$MHV_BIN"; ln -s "$(command -v git)" "$MHV_BIN/git"; printf '#!/bin/sh\nexit 0\n' > "$MHV_BIN/jq"; chmod +x "$MHV_BIN/jq"
 RC=0
 OUT="$(HOME="$MHV_H" CLAUDE_CONFIG_DIR="$MHV_H/.claude" ROTA_TEST_DOCTOR_PATH="$MHV_BIN" "$ROTA_BIN" --json -C "$MHV_D" doctor 2>/dev/null)" || RC=$?
 [ $RC -eq 1 ] || fail "doctor on an hv project should exit 1, got $RC: $OUT"

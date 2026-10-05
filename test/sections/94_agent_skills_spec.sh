@@ -162,7 +162,7 @@ grep -q 'name: rota-pause' "$SPEC_TMP/legacy/rota-pause/$SK" || fail "F6a[g]: in
 pass "F6a[g]: project scope installs at the git toplevel, exits 3 outside a repo and replaces a legacy symlink"
 
 # (h) doctor: skip with nothing installed, pass when current, fail on an edit
-DRB="$SPEC_TMP/drbin"; mkdir -p "$DRB"; ln -s "$(command -v git)" "$DRB/git"
+DRB="$SPEC_TMP/drbin"; mkdir -p "$DRB"; ln -s "$(command -v git)" "$DRB/git"; printf '#!/bin/sh\nexit 0\n' > "$DRB/jq"; chmod +x "$DRB/jq"
 DHOME="$SPEC_TMP/dhome"; DREPO="$SPEC_TMP/drepo"; mkdir -p "$DHOME" "$DREPO"; git -C "$DREPO" init -q
 # dr runs doctor (RC, OUT); dsk <field> reads a field of its skills check.
 dr() { RC=0; OUT="$( cd "$DREPO" && HOME="$DHOME" CLAUDE_CONFIG_DIR= ROTA_TEST_DOCTOR_PATH="$DRB" "$ROTA_BIN" --json doctor 2>/dev/null )" || RC=$?; }

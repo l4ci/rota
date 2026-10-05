@@ -125,7 +125,7 @@ pass "--accept-codex-version assigns with a warning"
 
 # doctor: the codex check passes, then fails on a slot that lost its login.
 DRB="$TMP_CX/drbin"
-mkdir -p "$DRB" && ln -s "$(command -v git)" "$DRB/git" && cp "$FKB/codex" "$FKB/herdr" "$DRB/"
+mkdir -p "$DRB" && ln -s "$(command -v git)" "$DRB/git"; printf '#!/bin/sh\nexit 0\n' > "$DRB/jq"; chmod +x "$DRB/jq" && cp "$FKB/codex" "$FKB/herdr" "$DRB/"
 dr() { RC=0; OUT=$( cd "$CX" && ROTA_TEST_DOCTOR_PATH="$DRB" FAKE_HERDR="$FH" "$ROTA_BIN" --json doctor 2>/dev/null ) || RC=$?; }
 drf() { echo "$OUT" | python3 -c '
 import json,sys

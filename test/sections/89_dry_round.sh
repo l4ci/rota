@@ -45,7 +45,7 @@ chmod +x "$FK/bin/herdr" "$FK/bin/gh"
 : > "$FK/herdr/pane.txt"
 
 # doctor's tool lookup: its own PATH, so only these fakes (and real git) exist.
-ln -s "$(command -v git)" "$FK/doctor/git"
+ln -s "$(command -v git)" "$FK/doctor/git"; printf '#!/bin/sh\nexit 0\n' > "$FK/doctor/jq"; chmod +x "$FK/doctor/jq"
 cat > "$FK/doctor/herdr" <<'SH'
 #!/bin/sh
 case "$1 $2" in
@@ -96,7 +96,7 @@ dyj() { dy "$ROTA_BIN" --json "$@" 2>/dev/null; }
 rc=0; OUT="$(ROTA_TEST_DOCTOR_PATH="$FK/doctor" CLAUDE_CONFIG_DIR="$TMP_DY/acct" "$ROTA_BIN" --json -C "$DY" doctor 2>/dev/null)" || rc=$?
 [ "$rc" = "0" ] || fail "dry round: doctor should pass on the fixture, got $rc: $OUT"
 [ "$(jget data.ok <<<"$OUT")" = "true" ] || fail "dry round: doctor data.ok: $OUT"
-[ "$(jget data.checks[1].name <<<"$OUT")" = "host" ] && [ "$(jget data.checks[1].status <<<"$OUT")" = "pass" ] || fail "dry round: doctor host check: $OUT"
+[ "$(jget data.checks[2].name <<<"$OUT")" = "host" ] && [ "$(jget data.checks[2].status <<<"$OUT")" = "pass" ] || fail "dry round: doctor host check: $OUT"
 # A failing check carries its hint and flips the exit code (the skill: fix every fail first).
 rm "$FK/doctor/herdr"
 rc=0; OUT="$(ROTA_TEST_DOCTOR_PATH="$FK/doctor" "$ROTA_BIN" --json -C "$DY" doctor 2>/dev/null)" || rc=$?
