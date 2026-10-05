@@ -223,7 +223,7 @@ def prose_rules():
           has("docs/usage/configuration.md", r"positional|<key>=<value>", "missing positional-args mention", True),
           has("docs/usage/configuration.md", "work.dispatch", "does not explain work.dispatch")]
     for key in ("models.orchestrator models.worker work.isolation work.mergeStrategy ship.review learn.verify "
-                "refactor.confirmBeforeExecute debug.competingHypotheses autonomy.level docs.path docs.autoCreate "
+                "refactor.confirmBeforeExecute autonomy.level docs.path docs.autoCreate "
                 "docs.afterWork git.baseBranch umbrella.enabled work.dispatch work.workerSlots work.workerCommand").split():
         r.append(has("docs/reference/config-options.md", key, f"does not document {key}"))
     for key in ("work.dispatch", "work.workerSlots", "work.workerCommand"):

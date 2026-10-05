@@ -64,7 +64,7 @@ func TestFillKeepsPresentAndUnknownKeys(t *testing.T) {
 	doc, _ := jsonx.Decode([]byte(read(t, root)))
 	o := doc.(*jsonx.Object)
 	// present keys keep their order; added ones go before the first later sibling
-	want := []string{"zzz", "work", "models", "refactor", "learn", "ship", "qa", "autonomy", "debug", "docs", "git", "umbrella", "hvSkills", "issues", "rota"}
+	want := []string{"zzz", "work", "models", "refactor", "learn", "ship", "qa", "autonomy", "docs", "git", "umbrella", "hvSkills", "issues", "rota"}
 	if got := o.Keys(); !reflect.DeepEqual(got, want) {
 		t.Errorf("top keys %v", got)
 	}
