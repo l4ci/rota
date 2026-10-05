@@ -116,7 +116,9 @@ Exit 3: `/rota-qa` recorded nothing; stop and rerun it. Route per the Step 3 tab
 rota ship body <branch>
 ```
 
-Capture the output (`## Summary`, `## Items resolved`) and append `## Test plan`: 2-5 checkboxes, one per meaningful area (not per file), from the scope JSON's touched files, each naming the most visible behavior change. No generic checks. Run the self-audit in `references/humanizing-prose.md` silently and show the post-audit draft.
+Capture the output (`## Summary`, `## Items resolved`, and `## Evidence` when the items carry proof rows) and append `## Test plan`: 2-5 checkboxes, one per meaningful area (not per file), from the scope JSON's touched files, each naming the most visible behavior change. No generic checks.
+
+End the body with one line written from the diff: `Door: one-way|two-way. Blast radius: <surfaces a mistake reaches>.` One-way means a mistake outlives a revert (migration, published format, released API, deleted data); two-way means reverting the PR undoes it. Name surfaces (CLI verbs, skills, docs, file formats), not files. Run the self-audit in `references/humanizing-prose.md` silently and show the post-audit draft.
 
 ## Step 5 — Pick Strategy
 
