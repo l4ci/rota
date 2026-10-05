@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/config"
-	"github.com/l4ci/rota/internal/hook"
 )
 
 // Settings are the orchestrator.* keepalive keys (the contract's Config
@@ -27,40 +26,38 @@ type Settings struct {
 // DefaultPrompt is the default of orchestrator.restartPrompt.
 const DefaultPrompt = "Continue as orchestrator: read the handoff injected at session start, run rota round status, and resume the round."
 
-const maxInt = 1 << 30
-
 // LoadSettings reads and validates the keys from a merged config. An error is
 // the message of exit 70.
 func LoadSettings(cfg any) (Settings, error) {
 	var s Settings
 	var err error
-	if s.MaxRestarts, err = hook.IntKey(cfg, "orchestrator.keepaliveMaxRestarts", 0, maxInt); err != nil {
+	if s.MaxRestarts, err = config.Int(cfg, "orchestrator.keepaliveMaxRestarts", 0, config.MaxInt); err != nil {
 		return s, err
 	}
-	if s.Breaker, err = hook.IntKey(cfg, "orchestrator.keepaliveBreaker", 1, maxInt); err != nil {
+	if s.Breaker, err = config.Int(cfg, "orchestrator.keepaliveBreaker", 1, config.MaxInt); err != nil {
 		return s, err
 	}
-	secs, err := hook.IntKey(cfg, "orchestrator.keepaliveBackoffSeconds", 0, maxInt)
+	secs, err := config.Int(cfg, "orchestrator.keepaliveBackoffSeconds", 0, config.MaxInt)
 	if err != nil {
 		return s, err
 	}
 	s.Backoff = time.Duration(secs) * time.Second
-	if s.EscalateIssue, err = hook.IntKey(cfg, "orchestrator.escalateIssue", 0, maxInt); err != nil {
+	if s.EscalateIssue, err = config.EscalateIssue(cfg); err != nil {
 		return s, err
 	}
-	age, err := hook.IntKey(cfg, "orchestrator.handoffMaxAgeSeconds", 1, maxInt)
+	age, err := config.HandoffMaxAgeSeconds(cfg)
 	if err != nil {
 		return s, err
 	}
 	s.HandoffMaxAge = time.Duration(age) * time.Second
-	if s.SwitchOnUsage, err = hook.BoolKey(cfg, "orchestrator.switchOnUsage"); err != nil {
+	if s.SwitchOnUsage, err = config.SwitchOnUsage(cfg); err != nil {
 		return s, err
 	}
 	if s.SwitchOnUsage { // the keys below matter only when it is on
-		if s.UsageThreshold, err = hook.IntKey(cfg, "orchestrator.usageThreshold", 1, 100); err != nil {
+		if s.UsageThreshold, err = config.UsageThreshold(cfg); err != nil {
 			return s, err
 		}
-		fb, err := hook.IntKey(cfg, "limits.fallbackSleepSeconds", 1, maxInt)
+		fb, err := config.FallbackSleepSeconds(cfg)
 		if err != nil {
 			return s, err
 		}
