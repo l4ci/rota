@@ -195,7 +195,6 @@ func (e Env) gate(ctx context.Context, root string, o GateOpts, res GateResult, 
 	branch, pr := t.Branch, t.PR
 	res.Branch, res.PR = branch, pr
 	cfg := config.Load(filepath.Join(root, ".rota", "config.json"))
-	settings := tracker.SettingsFromConfig(cfg)
 	// Read before the merge: the branch lands in root and may carry its own
 	// .rota/config.json, which must not decide how it is verified.
 	verifyCmds := verifyCommandsAt(root)
@@ -204,7 +203,7 @@ func (e Env) gate(ctx context.Context, root string, o GateOpts, res GateResult, 
 	g.provider = e.detectProvider(root, pr)
 	g.cliName = tracker.CLIName(g.provider)
 	var ferr error
-	if g.forge, ferr = e.Forge(g.provider, root, settings.RetryWait); ferr != nil {
+	if g.forge, ferr = e.Forge(g.provider, root, cfg); ferr != nil {
 		return g.broke(fmt.Sprintf("cannot reach the %s forge: %v", g.provider, ferr))
 	}
 

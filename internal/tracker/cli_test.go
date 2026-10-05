@@ -370,3 +370,26 @@ func TestPagesConcatenates(t *testing.T) {
 		t.Fatalf("ran %q", f.last())
 	}
 }
+
+func TestNewFromConfigOrGitHubFallsBack(t *testing.T) {
+	x := func(_ context.Context, _, name string, args []string, _ []byte) ([]byte, []byte, int, error) {
+		if name == "git" {
+			return []byte("https://example.com/x/y.git\n"), nil, 0, nil
+		}
+		return []byte("[]"), nil, 0, nil
+	}
+	opts := []Option{WithExec(x, func(string) (string, error) { return "/fake", nil })}
+
+	if _, err := NewFromConfig(context.Background(), nil, "", "", opts...); err == nil {
+		t.Fatal("NewFromConfig: want an error for an unrecognized origin")
+	}
+	a, err := NewFromConfigOrGitHub(context.Background(), nil, "", "", opts...)
+	if err != nil || a.Provider() != "github" {
+		t.Fatalf("fallback = %v, %v; want github", a, err)
+	}
+	cfg, _ := jsonx.Decode([]byte(`{"issues":{"provider":"gitlab"}}`))
+	a, err = NewFromConfigOrGitHub(context.Background(), cfg, "", "", opts...)
+	if err != nil || a.Provider() != "gitlab" {
+		t.Fatalf("configured provider = %v, %v; want gitlab, no fallback", a, err)
+	}
+}
