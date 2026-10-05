@@ -24,7 +24,7 @@ type SliceStore interface {
 
 var (
 	sliceKeyRe = regexp.MustCompile(`^(M\d{2,})-(S\d+)$`)
-	itemKeyRe  = regexp.MustCompile(`^M\d{2,}-([BFT]\d+)$`)
+	itemKeyRe  = regexp.MustCompile(`^M\d{2,}-(` + backlog.IDPattern(1) + `)$`)
 	// issueDesignRe is --design in issue mode: an issue number ("3") or the
 	// lettered form with any digit count ("F3").
 	issueDesignRe = regexp.MustCompile(`^[BFT]?\d+$`)

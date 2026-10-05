@@ -14,6 +14,7 @@ import (
 
 	"context"
 	"github.com/l4ci/rota/internal/artifact"
+	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
 )
@@ -40,12 +41,12 @@ type Store interface {
 }
 
 var (
-	keyRe       = regexp.MustCompile(`^M\d{2,}-(?:S\d+|[BFT]\d+)$`)
+	keyRe       = regexp.MustCompile(`^M\d{2,}-(?:S\d+|` + backlog.IDPattern(1) + `)$`)
 	milestoneRe = regexp.MustCompile(`^M\d{2,}$`)
 )
 
 // itemOnlyRe is a milestone-free item plan key (issue mode): #7, B7, f12.
-var itemOnlyRe = regexp.MustCompile(`(?i)^(?:#(\d+)|[BFT]\d+)$`)
+var itemOnlyRe = regexp.MustCompile(`(?i)^(?:#(\d+)|` + backlog.IDPattern(1) + `)$`)
 
 // ItemOnlyKey reports whether key names an item plan without a milestone.
 func ItemOnlyKey(key string) bool { return itemOnlyRe.MatchString(key) }

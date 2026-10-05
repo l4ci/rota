@@ -224,13 +224,6 @@ func titleOf(md, id string) string {
 	return pystr.Strip(t[1])
 }
 
-func typeOf(id string) string {
-	if id != "" && strings.Contains(ItemLetters, id[:1]) {
-		return id[:1]
-	}
-	return ""
-}
-
 // BuildListing assembles rota backlog list. Items that are active appear only in
 // In Progress. grep, when non-empty, keeps the Bugs, Features and Tasks rows
 // whose bullet contains it, case-insensitively, and the clusters with a member
@@ -241,7 +234,7 @@ func BuildListing(rows []Row, md string, active []Active, grep string) *Listing 
 	for _, e := range active {
 		for _, id := range e.Items {
 			activeIDs[id] = true
-			l.InProgress = append(l.InProgress, InProgress{ID: id, Type: typeOf(id), Title: titleOf(md, id),
+			l.InProgress = append(l.InProgress, InProgress{ID: id, Type: ItemType(id), Title: titleOf(md, id),
 				Branch: e.Branch, StartedAt: e.StartedAt, Repo: e.Repo})
 		}
 	}

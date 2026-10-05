@@ -87,11 +87,11 @@ var (
 // "## Proof" section of the item's detail file, as hv-proof-show --count does
 // in file mode. Tests replace it.
 var ProofCount = func(root, id string) (int, error) {
-	dir := detailDir(id)
-	if dir == "" {
+	path := DetailPath(root, id)
+	if path == "" {
 		return 0, nil
 	}
-	content, err := fsio.ReadText(filepath.Join(root, ".rota", dir, id+".md"))
+	content, err := fsio.ReadText(path)
 	if err != nil || content == "" {
 		return 0, nil
 	}

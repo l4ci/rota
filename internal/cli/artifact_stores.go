@@ -37,7 +37,7 @@ func openDesign(c *Ctx, id string) (design.Store, *who, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	w := &who{ID: id, Type: itemType(id)}
+	w := &who{ID: id, Type: backlog.ItemType(id)}
 	if issue {
 		return design.NewNotes(itemNotes(c, id, w)), w, nil
 	}
@@ -50,7 +50,7 @@ func openProof(c *Ctx, id string) (root string, st proof.Store, w *who, err erro
 	if err != nil {
 		return "", nil, nil, err
 	}
-	w = &who{ID: id, Type: itemType(id)}
+	w = &who{ID: id, Type: backlog.ItemType(id)}
 	if issue {
 		return root, proof.NewNotes(itemNotes(c, id, w)), w, nil
 	}

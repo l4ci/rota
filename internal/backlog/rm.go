@@ -46,7 +46,7 @@ type RmResult struct {
 	Items   []RmItem
 }
 
-var relatedIDRe = regexp.MustCompile(`\[([A-Z]\p{Nd}+)\]`)
+var relatedIDRe = regexp.MustCompile(`\[(` + IDPattern(1) + `)\]`)
 
 func parseRelatedIDs(v string) []string {
 	var out []string
