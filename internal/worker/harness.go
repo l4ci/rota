@@ -102,7 +102,7 @@ func (e Env) Preflight(ctx context.Context, root, kind, slot string, accept bool
 		wt = s.Worktree()
 	}
 	set, err := h.Preflight(ctx, e.probe(), harness.PreflightOpts{
-		Slot: slot, Accept: accept, Herdr: dispatchKind(root) == "herdr", Worktree: wt,
+		Slot: slot, Accept: accept, Herdr: e.hostKind(root) == "herdr", Worktree: wt,
 		CommonDir: func() (string, error) { return CommonDir(ctx, e.Git, root) },
 	})
 	return set, asError(err)
