@@ -223,7 +223,7 @@ func (s *Slot) Bind(b Binding) {
 func (s *Slot) Unbind() {
 	s.o.Set("task", nil)
 	s.o.Set("pr", nil)
-	for _, k := range []string{"claimId", "kind", "tier", "model", "tierReason"} {
+	for _, k := range []string{"claimId", "kind", "tier", "model", "tierReason", "issues"} {
 		s.o.Delete(k)
 	}
 }
@@ -270,6 +270,33 @@ func (s *Slot) SetPR(url string) {
 		return
 	}
 	s.o.Set("pr", url)
+}
+
+// Issues are the issues a review item's worker reported filing
+// (`ROTA-DONE <slot> issues:#a,#b`), the slot's done evidence in place of a PR.
+func (s *Slot) Issues() []string {
+	l, _ := s.o.Get("issues")
+	list, _ := l.([]any)
+	var out []string
+	for _, e := range list {
+		if v, ok := e.(string); ok {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
+// SetIssues records the reported issues; none clears them.
+func (s *Slot) SetIssues(refs []string) {
+	if len(refs) == 0 {
+		s.o.Delete("issues")
+		return
+	}
+	l := make([]any, len(refs))
+	for i, r := range refs {
+		l[i] = r
+	}
+	s.o.Set("issues", l)
 }
 
 // SetHandle records the pane handle; "" clears it.

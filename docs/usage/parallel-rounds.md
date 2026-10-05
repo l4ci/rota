@@ -409,7 +409,7 @@ set and fails when unavailable; solo is never a fallback from it.
 
 Under solo, each worker is a Claude `Agent` subagent the orchestrator launches in the slot's
 `.worktrees/<agent>` checkout. `rota round assign` returns the brief and the worktree instead
-of starting a pane, `rota round report <slot> --state ...` records what the subagent said,
+of starting a pane, `rota round report <slot> --state ...` records what the subagent said (`--issues "#a,#b"` in place of `--pr` for an architecture-review item),
 and `rota round wait` reads the registry without blocking. The pane verbs (`rota worker
 dispatch`, `rota worker poll`, `rota worker session`) refuse. The registry holds what tab mode writes (minus the
 pane fields), so `rota round reconcile`, the gate and the merge policy work unchanged.

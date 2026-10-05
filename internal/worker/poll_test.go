@@ -310,3 +310,48 @@ func TestLimitRegexIsTheAlternationOfTheClassifierPhrases(t *testing.T) {
 		t.Error("matched a bare limit")
 	}
 }
+
+func TestParseIssuesDone(t *testing.T) {
+	for in, want := range map[string][]string{
+		"issues:#139":            {"#139"},
+		"issues:#139,#140, #141": {"#139", "#140", "#141"},
+		"issues: 7,8":            {"#7", "#8"},
+	} {
+		got, ok := ParseIssuesDone(in)
+		if !ok || strings.Join(got, " ") != strings.Join(want, " ") {
+			t.Errorf("%q: %v %v", in, got, ok)
+		}
+	}
+	for _, in := range []string{"", "rota-worker/w1", "https://github.com/o/r/pull/12", "issues:", "issues:#a", "issues:#1,"} {
+		if got, ok := ParseIssuesDone(in); ok {
+			t.Errorf("%q parsed as %v", in, got)
+		}
+	}
+}
+
+func TestClassifyIssuesDone(t *testing.T) {
+	st, ev := Classify("work\nROTA-DONE ben issues:#139,#140\n", false, 60, "")
+	if st != StateDone || ev != "issues:#139,#140" {
+		t.Errorf("%s %q", st, ev)
+	}
+}
+
+// A review item's done line names the issues it filed; Poll records them on the
+// slot and leaves slot.pr empty.
+func TestPollRecordsIssuesDone(t *testing.T) {
+	dir, f := pollRegistry(t, "tmux")
+	f.panes["w1"] = []string{"x\n", "ROTA-DONE w1 issues:#139,#140\n"}
+	f.panes["w2"] = []string{"a\n", "a\n"}
+	if _, err := envWith(f).Poll(bg, dir, PollOpts{Lines: 60}); err != nil {
+		t.Fatal(err)
+	}
+	if got := LoadRegistry(dir).Slot("w1").Issues(); strings.Join(got, ",") != "#139,#140" {
+		t.Errorf("issues = %v", got)
+	}
+	if got := slotField(t, dir, "w1", "pr"); got != "<null>" {
+		t.Errorf("pr = %s", got)
+	}
+	if got := slotField(t, dir, "w1", "state"); got != "done" {
+		t.Errorf("state = %s", got)
+	}
+}

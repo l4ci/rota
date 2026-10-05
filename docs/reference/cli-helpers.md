@@ -316,7 +316,7 @@ The orchestrator's verbs for a [parallel round](../usage/parallel-rounds.md). Al
 | `rota round tick [--base <branch>] [--holder-pid <n>]` | one autopilot pass: repair safe drift, merge finished PRs behind the gate, assign ready items (`round.autopilot`) |
 | `rota round status` | list the round's slots with host, PR and drift |
 | `rota round reconcile [--apply]` | report drift between registry, host, git and forge; `--apply` repairs the safe kinds |
-| `rota round report <slot> --state <done\|blocked\|idle\|dead\|limited> [--evidence <text>] [--pr <url\|number>]` | record a solo worker's result: state and PR |
+| `rota round report <slot> --state <done\|blocked\|idle\|dead\|limited> [--evidence <text>] [--pr <url\|number> \| --issues <#a,#b>]` | record a solo worker's result: state and PR (or, for a review item, the issues it filed) |
 | `rota round escalate send <number> [--pr] [--slot <name>] --title <text> --body-file <path\|-> [--timeout <seconds>]` | ask the human on an issue or PR thread |
 | `rota round escalate check [<id>…]` | look for the human's answers |
 | `rota round return <slot> --reason <text> [--note-file <path\|->] [--holder-pid <n>]` | a worker hands its issue back: park, comment, release |
