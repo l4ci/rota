@@ -7,13 +7,11 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
 
 	"github.com/l4ci/rota/internal/backlog"
-	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/pystr"
@@ -127,62 +125,6 @@ func argCount(c *Ctx, args []string, min, max int, usage string) error {
 		return Usage("%s", usage)
 	}
 	return nil
-}
-
-// backlogScope finds the project root and checks --repo against the registry (exit
-// 3 for an unregistered name, before any check of the verb's own). A file-mode
-// umbrella keeps one backlog at its root, so a valid scope needs nothing more;
-// issue mode narrows the backend to the sub-repo in openBacklog.
-func backlogScope(c *Ctx) (string, error) {
-	root, err := c.Root()
-	if err != nil {
-		return "", err
-	}
-	if _, err := c.RepoPath(); err != nil {
-		return "", err
-	}
-	return root, nil
-}
-
-// openBacklog selects the backlog backend from backlog.backend. A file-only verb
-// under issues is refused (exit 4, backend) before the tracker is built. In an
-// umbrella, issue mode opens one tracker per sub-repo, built on first use;
-// --repo narrows reads and bare references to one sub-repo and names the
-// capture target, and a capture with none goes to the sub-repo the working
-// directory is in.
-func openBacklog(c *Ctx, root string, fileOnly bool, hint string) (backlog.Backend, error) {
-	cfg := config.Load(filepath.Join(root, ".rota", "config.json"))
-	name, err := config.Backend(cfg)
-	if err != nil {
-		// An invalid backlog.backend is a corrupt config (contract, shared definitions).
-		return nil, &Error{Exit: ExitInternal, Message: err.Error()}
-	}
-	if name != "file" && fileOnly {
-		return nil, &backlog.RefusedError{BlockedBy: "backend", Hint: hint, Err: backlog.ErrWrongBackend,
-			Msg: `not available with backlog.backend "issues"`}
-	}
-	cwd, _ := os.Getwd()
-	return backlog.Open(c.Context(), root, cfg, backlog.Options{
-		Scope: c.Repo,
-		Cwd:   cwd,
-		NewTracker: func(ctx context.Context, dir string) (backlog.Tracker, error) {
-			return c.deps().NewTracker(ctx, dir, cfg)
-		},
-	})
-}
-
-// openBacklogFile opens the backlog for a file-only verb: a refusal (exit 4,
-// backend) under issues, else the file backend's FileOps.
-func openBacklogFile(c *Ctx, root, hint string) (backlog.FileOps, error) {
-	be, err := openBacklog(c, root, true, hint)
-	if err != nil {
-		return nil, err
-	}
-	ops, ok := be.(backlog.FileOps)
-	if !ok {
-		return nil, &Error{Exit: ExitInternal, Message: "backlog backend " + be.Name() + " has no file operations"}
-	}
-	return ops, nil
 }
 
 // backlogFail maps a backlog error to a verb failure and, for a refusal, its
