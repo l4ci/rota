@@ -1,6 +1,6 @@
 ---
 name: rota-brainstorm
-description: Per-item design before /rota-plan — one draft with 2-3 approaches and an Acceptance section, one approval, stored as the item's design (a note on its issue, or .rota/designs/<ID>.md on the file backend). Use when a Major feature or P0 bug needs design negotiation before implementation planning.
+description: Per-item design before /rota-plan — a grilling pass for Major features and P0 bugs, then one draft with 2-3 approaches and an Acceptance section, one approval, stored as the item's design (a note on its issue, or .rota/designs/<ID>.md on the file backend). Use when a Major feature or P0 bug needs design negotiation before implementation planning.
 ---
 
 # rota-brainstorm — Per-item Design
@@ -9,7 +9,7 @@ Fills the gap between `/rota-capture` (what to build) and `/rota-plan` (how). Sc
 
 ## Step 1 — Resolve target
 
-The target is `#N` / a bare number (issue backend) or `[BFT]\d{2,}` (file backend). Reject milestone and slice IDs: *"/rota-brainstorm operates on a single backlog item. For project-level exploration use /rota-vision; for slice planning use /rota-plan."* `rota item field get <ID> --name title` exits 3 for an unknown item: refuse and point at `/rota-capture`.
+The target is `#N` / a bare number (issue backend) or `[BFT]\d{2,}` (file backend), plus an optional `--grill` flag (Step 3). Reject milestone and slice IDs: *"/rota-brainstorm operates on a single backlog item. For project-level exploration use /rota-vision; for slice planning use /rota-plan."* `rota item field get <ID> --name title` exits 3 for an unknown item: refuse and point at `/rota-capture`.
 
 If a design exists, ask once (View / Edit / Replace, default View): View runs `rota design show <ID>` and exits; Edit loads it as the starting draft; Replace runs `rota design rm <ID>` first.
 
@@ -21,7 +21,7 @@ Follow `references/context-load-protocol.md` (parallel, silent), plus `rota item
 
 ## Step 3 — One draft
 
-Ask nothing unless there is real ambiguity or a decision conflict you cannot resolve from the item, its thread and the code; then ask the one question that unblocks you (`AskUserQuestion`, ≤ 4 options). If a question needs code-touching evidence (feasibility, library support, performance), say: *"This warrants a spike. Run `/rota-spike <name>` first, then re-invoke `/rota-brainstorm <ID>`."* Don't guess.
+**Grill first, once.** Run one pass of `references/grilling.md` before drafting when the item is a Major feature or P0 bug (`rota item show <ID>`), or the invocation has `--grill`. Skip it when the issue body already has `## Acceptance` (Step 2): that design is settled, and `--grill` does not override it. Skip it for other items too: ask nothing unless there is real ambiguity or a decision conflict you cannot resolve from the item, its thread and the code; then ask the one question that unblocks you (`AskUserQuestion`, ≤ 4 options). Answers that changed direction are recorded in Step 5. If a question needs code-touching evidence (feasibility, library support, performance), say: *"This warrants a spike. Run `/rota-spike <name>` first, then re-invoke `/rota-brainstorm <ID>`."* Don't guess.
 
 Write the whole design as one draft, plain markdown, not yet saved:
 
@@ -59,4 +59,5 @@ Report two lines (artifact, approaches, open questions). On hand-off say *"Run `
 ## References
 
 - [`references/design-exploration.md`](references/design-exploration.md) — shared spine with `/rota-vision`.
+- [`references/grilling.md`](references/grilling.md) — the grilling pass (Major / P0 / `--grill`).
 - [`references/context-load-protocol.md`](references/context-load-protocol.md) — shared parallel context load.
