@@ -110,6 +110,7 @@ func reviewScan(c *Ctx, t branchTarget) (reviewInfo, error) {
 	if ids := backlog.FindItemIDs(bodies, backlog.ItemLetters); ids != nil {
 		info.IDs = ids
 	}
+	// File mode only (the issue branch returned above): the corpus is BACKLOG.md and ARCHIVE.md.
 	corpus := fileBackend(t.CorpusRoot).Corpus()
 	for _, id := range info.IDs {
 		if line, title, ok := backlog.FindOrigin(corpus, id); ok {
