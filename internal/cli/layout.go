@@ -18,7 +18,7 @@ import (
 // `rota layout` (#180): arrange a round's herdr panes as one split view
 // (split) or as tabs (tabs); bare, report which each project is in. The grid
 // and the moves are internal/layout; this file finds the projects and the
-// panes. Deps.LayoutHost is the seam tests replace: a real run moves the
+// panes. Deps.Host is the seam tests replace: a real run moves the
 // panes of the herdr it is inside.
 
 func layoutCommand() *Command {
@@ -28,9 +28,9 @@ func layoutCommand() *Command {
 	}}
 }
 
-// defaultLayoutHost is herdr, when it is installed.
-func defaultLayoutHost() (host.Layouter, error) {
-	h := host.New("herdr", host.Deps{})
+// layoutHost is herdr, when it is installed.
+func layoutHost(d *Deps) (host.Layouter, error) {
+	h := d.Host("herdr")
 	if err := h.Require(); err != nil {
 		return nil, err
 	}
@@ -66,7 +66,7 @@ func runLayout(c *Ctx, mode, project string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	h, herr := c.deps().LayoutHost()
+	h, herr := layoutHost(c.deps())
 	ctx := c.Context()
 	var outs []layoutOut
 	var panes []host.LayoutPane

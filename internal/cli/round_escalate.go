@@ -84,7 +84,7 @@ func roundEscalateSend(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		env := c.deps().EscalationEnv()
+		env := c.deps().escalationEnv()
 		if env.Forge == nil {
 			env.Forge = escalationForge(c)
 		}
@@ -114,7 +114,7 @@ func roundEscalateCheck(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		env := c.deps().EscalationEnv()
+		env := c.deps().escalationEnv()
 		if env.Forge == nil {
 			env.Forge = escalationForge(c)
 		}

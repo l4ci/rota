@@ -144,3 +144,59 @@ func TestReapFailureExitsOneWithData(t *testing.T) {
 		t.Errorf("the rest must still be removed: %v", d)
 	}
 }
+
+// A host's tabs and processes are reaped through the ops the env hands reap; a
+// live agent's tab and process stay. (Replaces the ROTA_TEST_REAP_HOST smoke.)
+func TestReapApplyClosesDeadTabAndProcess(t *testing.T) {
+	ops := &recordingReapOps{
+		tabs:  []host.Tab{{ID: "w5:t1", Agentless: true}, {ID: "w3:t1", Agentless: false}},
+		procs: []reap.Process{{PID: 4242, Name: "npm", Tab: "w5:t1"}, {PID: 4343, Name: "node", Tab: "w3:t1"}},
+	}
+	root, deps := reapProject(t, ops, true)
+	ops.tabs[0].Cwds = []string{filepath.Join(root, ".worktrees", "old")}
+	ops.tabs[1].Cwds = []string{filepath.Join(root, ".worktrees", "live")}
+	ops.procs[0].Cwd = filepath.Join(root, ".worktrees", "old")
+	ops.procs[1].Cwd = filepath.Join(root, ".worktrees", "live")
+	_, out, _ := rotaInWith(t, deps, root, "--json", "reap", "--apply")
+	d := data(t, out)
+	if !reflect.DeepEqual(d["reaped"], []any{"worktree:old", "branch:kit/9-gone", "tab:w5:t1", "process:4242"}) {
+		t.Fatalf("reaped = %v", d["reaped"])
+	}
+	if !reflect.DeepEqual(ops.removed, []string{"tab w5:t1", "process 4242"}) {
+		t.Errorf("host removals = %v", ops.removed)
+	}
+}
+
+type recordingReapOps struct {
+	tabs    []host.Tab
+	procs   []reap.Process
+	removed []string
+}
+
+func (o *recordingReapOps) Tabs(context.Context) ([]host.Tab, error)          { return o.tabs, nil }
+func (o *recordingReapOps) Processes(context.Context) ([]reap.Process, error) { return o.procs, nil }
+func (o *recordingReapOps) CloseTab(_ context.Context, id string) error {
+	o.removed = append(o.removed, "tab "+id)
+	return nil
+}
+func (o *recordingReapOps) StopProcess(_ context.Context, pid int) error {
+	o.removed = append(o.removed, fmt.Sprintf("process %d", pid))
+	return nil
+}
+
+// One swap of Deps.Host reaches every hook that builds a host.
+func TestDepsHostFactoryFeedsEveryHook(t *testing.T) {
+	d := defaultDeps()
+	var asked []string
+	fake := &cliHost{}
+	d.Host = func(kind string) host.Host { asked = append(asked, kind); return fake }
+	if d.workerEnv().NewHost("tmux") != host.Host(fake) ||
+		d.escalationEnv().Host() != host.Host(fake) ||
+		d.orchestrateEnv().Host("herdr") != host.Host(fake) ||
+		d.RoundEnv(context.Background(), t.TempDir()).Worker.NewHost("tmux") != host.Host(fake) {
+		t.Fatal("a hook built its own host instead of asking Deps.Host")
+	}
+	if want := []string{"tmux", "herdr", "herdr", "tmux"}; !reflect.DeepEqual(asked[:4], want) {
+		t.Errorf("asked = %v, want prefix %v", asked, want)
+	}
+}
