@@ -122,6 +122,8 @@ Judgment the skill does own:
 - **`--related`:** link only items that clearly relate. Scan open items with `rota backlog list` for connections (file backend: also `.rota/ARCHIVE.md`); items in the same batch can reference each other. Don't force links.
 - **`--subsystem`:** match filenames and skill names in the user's text against `.rota/map/` (or the `## Project Map` block in CLAUDE.md), e.g. `rota-work` or `rota init`. Pass `Subsystem: <name>` only on a confident match; never block or delay capture for it.
 - **`--desc`:** what happens, when, what should happen instead (bugs); what it does, where, why it matters (features); what and why (tasks). One to three sentences.
+- **Behavior, not paths:** descriptions and acceptance criteria state observable behavior. File paths and line numbers go in a separate `## Pointers` section of the body (`--body-file`), never in the criteria.
+- **`## Out of scope`:** features and Major items get this section in the body (`--body-file`): one to three bullets naming what a worker must not take on, or the single line "nothing noted". `rota round assign` copies it into the worker brief, so write it as the contract's boundary, not as a wish list. Bugs and tasks may omit it.
 
 ## Step 7 — Brainstorm Nudge
 

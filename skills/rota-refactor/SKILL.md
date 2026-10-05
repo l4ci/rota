@@ -109,13 +109,14 @@ rota issues label <number> --add refactor
 
 Body sections:
 
-- **Files** — paths and line ranges.
+- **Pointers** — paths and line ranges. Paths live here only, never in Acceptance, which states behavior.
 - **Problem** — the friction, in vocabulary terms, with the deletion-test result.
 - **Solution** — plain description of what would change. No signatures unless `--designs` ran.
 - **Benefits** — locality and leverage, and how the tests improve.
 - **Strength** — Strong / Worth exploring / Speculative, and whether it is the top recommendation.
 - **Conflicts** — the recorded decision it contradicts, if any, and why it is worth reopening.
 - **## Acceptance** — checkable boxes: the interface the callers use afterwards, which duplicated logic is gone, which tests cross the seam. Include "existing tests still pass".
+- **## Out of scope** — one to three bullets on what the fix must not touch, or "nothing noted". `rota round assign` copies it into the worker brief.
 
 Report: a table of filed issues (number, title, strength), the skipped duplicates with the issue they matched, and the top recommendation. Zero filed is a valid result.
 
