@@ -68,6 +68,17 @@ func ClaudeDir(home string) string {
 // project roots are then skipped for scope "" and an error for scope
 // "project". A user root whose base is unknown is ErrNoHome.
 func Roots(scope, agent, home, claudeDir, top string) ([]Root, error) {
+	var dirs []string
+	if claudeDir != "" {
+		dirs = []string{claudeDir}
+	}
+	return RootsFor(scope, agent, home, dirs, top)
+}
+
+// RootsFor is Roots with several Claude config dirs: user scope yields one
+// Claude root per dir, in order. No dirs means the user Claude root is unknown
+// (ErrNoHome).
+func RootsFor(scope, agent, home string, claudeDirs []string, top string) ([]Root, error) {
 	var out []Root
 	for _, sc := range []string{User, Project} {
 		if scope != "" && scope != sc {
@@ -83,18 +94,22 @@ func Roots(scope, agent, home, claudeDir, top string) ([]Root, error) {
 			if agent != "" && agent != "all" && agent != ag.name {
 				continue
 			}
-			var p string
+			var paths []string
 			switch {
 			case sc == Project:
-				p = filepath.Join(top, ag.dir, "skills")
-			case ag.name == Claude && claudeDir != "":
-				p = filepath.Join(claudeDir, "skills")
+				paths = []string{filepath.Join(top, ag.dir, "skills")}
+			case ag.name == Claude && len(claudeDirs) > 0:
+				for _, d := range claudeDirs {
+					paths = append(paths, filepath.Join(d, "skills"))
+				}
 			case ag.name == Codex && home != "":
-				p = filepath.Join(home, ag.dir, "skills")
+				paths = []string{filepath.Join(home, ag.dir, "skills")}
 			default:
 				return nil, ErrNoHome
 			}
-			out = append(out, Root{Path: p, Agent: ag.name, Scope: sc})
+			for _, p := range paths {
+				out = append(out, Root{Path: p, Agent: ag.name, Scope: sc})
+			}
 		}
 	}
 	return out, nil
