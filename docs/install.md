@@ -65,7 +65,7 @@ The skills are copies, not symlinks, and `install` writes a `.rota-manifest.json
 
 If both exist, Claude Code uses the user copy of a skill over the project copy with the same name, so a stale user install hides a newer project one. Keep one scope per machine, or run `rota skills update` after every upgrade. `rota skills status` lists every root it finds.
 
-User scope is per Claude Code config directory: rota writes to `$CLAUDE_CONFIG_DIR/skills` when that is set, else `~/.claude/skills`. With several accounts (one `CLAUDE_CONFIG_DIR` each), run `rota skills install` once per account with the variable set, or use project scope, which covers every account.
+User scope is per Claude Code config directory: rota writes to `$CLAUDE_CONFIG_DIR/skills` when that is set, else `~/.claude/skills`. Inside a rota project, user scope also covers every `work.accounts` `configDir` (install, update, uninstall and status each print one line per root). A configured dir that does not exist is reported and skipped, not created. Pass `--current-account` to touch only the current dir. Project scope is unchanged: one copy serves every account.
 
 ## Upgrading
 

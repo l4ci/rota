@@ -6,12 +6,16 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/skills"
 	"github.com/l4ci/rota/internal/version"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 // The `rota skills` group (F6a): install the skills embedded in the binary for
@@ -28,8 +32,9 @@ func skillsCommands() *Command {
 
 // skillsArgs are the parsed flags of a skills verb.
 type skillsArgs struct {
-	scope, agent string
-	overwrite    bool
+	scope, agent   string
+	overwrite      bool
+	currentAccount bool
 }
 
 func skillsVerb(run func(*Ctx, skillsArgs) (Result, error), defScope string, overwrite bool) func(*flag.FlagSet) RunFunc {
@@ -44,6 +49,7 @@ func skillsVerb(run func(*Ctx, skillsArgs) (Result, error), defScope string, ove
 		if overwrite {
 			fs.BoolVar(&a.overwrite, "overwrite", false, "replace edited and unmanaged files")
 		}
+		fs.BoolVar(&a.currentAccount, "current-account", false, "user scope: only the current Claude config dir, not every work.accounts dir")
 		return func(c *Ctx, args []string) (Result, error) {
 			if err := noArgs(args); err != nil {
 				return Result{}, err
@@ -60,30 +66,90 @@ func skillsVerb(run func(*Ctx, skillsArgs) (Result, error), defScope string, ove
 }
 
 // skillsEnv resolves the roots a verb works on.
-func skillsEnv(a skillsArgs) (set *skills.Set, roots []skills.Root, err error) {
+//
+// At user scope the Claude roots cover the current config dir plus every
+// work.accounts configDir (skipped lists the configured dirs that do not
+// exist), since each dir holds its own copy of the skills.
+func skillsEnv(c *Ctx, a skillsArgs) (set *skills.Set, roots []skills.Root, skipped []string, err error) {
 	set, err = skills.Embedded()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	home := os.Getenv("HOME")
 	if home == "" {
 		home, _ = os.UserHomeDir()
 	}
-	claudeDir := skills.ClaudeDir(home)
+	root := ""
+	if !a.currentAccount {
+		root, _ = c.Root()
+	}
+	claudeDirs, skipped := skillsClaudeDirs(home, root)
 	top := ""
 	if a.scope != skills.User {
 		top = gitToplevel()
 	}
-	roots, err = skills.Roots(a.scope, a.agent, home, claudeDir, top)
+	roots, err = skills.RootsFor(a.scope, a.agent, home, claudeDirs, top)
 	switch {
 	case errors.Is(err, skills.ErrNoProject):
-		return nil, nil, Resolution("--scope project: the working directory is not in a git work tree")
+		return nil, nil, nil, Resolution("--scope project: the working directory is not in a git work tree")
 	case errors.Is(err, skills.ErrNoHome):
-		return nil, nil, Resolution("%v", err).WithHint("set HOME (or CLAUDE_CONFIG_DIR for --agent claude), or use --scope project")
+		return nil, nil, nil, Resolution("%v", err).WithHint("set HOME (or CLAUDE_CONFIG_DIR for --agent claude), or use --scope project")
 	case err != nil:
-		return nil, nil, Resolution("%v", err)
+		return nil, nil, nil, Resolution("%v", err)
 	}
-	return set, roots, nil
+	return set, roots, skipped, nil
+}
+
+// skillsClaudeDirs is the Claude config dirs user-scope skills go to: the
+// current one (CLAUDE_CONFIG_DIR, else ~/.claude), then each work.accounts
+// configDir of the project at root ("" for none), de-duplicated with
+// worker.SameConfigDir. An account dir that does not exist is returned in
+// skipped, never created.
+func skillsClaudeDirs(home, root string) (dirs, skipped []string) {
+	if cur := skills.ClaudeDir(home); cur != "" {
+		dirs = append(dirs, cur)
+	}
+	if root == "" {
+		return dirs, nil
+	}
+	for _, ac := range config.Accounts(config.Load(filepath.Join(root, ".rota", "config.json"))) {
+		if ac.ConfigDir == "" {
+			continue
+		}
+		dir := worker.ExpandConfigDir(ac.ConfigDir)
+		dup := false
+		for _, d := range append(append([]string{}, dirs...), skipped...) {
+			dup = dup || worker.SameConfigDir(d, dir)
+		}
+		if dup {
+			continue
+		}
+		if fi, err := os.Stat(dir); err != nil || !fi.IsDir() {
+			skipped = append(skipped, dir)
+			continue
+		}
+		dirs = append(dirs, dir)
+	}
+	return dirs, skipped
+}
+
+// withSkipped reports the configured account dirs that were left out.
+func withSkipped(res Result, skipped []string) Result {
+	if len(skipped) == 0 {
+		return res
+	}
+	if o, ok := res.Data.(*jsonx.Object); ok {
+		o.Set("skipped", strs(skipped))
+	}
+	var lines []string
+	if res.Text != "" {
+		lines = append(lines, res.Text)
+	}
+	for _, d := range skipped {
+		lines = append(lines, d+": config dir does not exist, skipped")
+	}
+	res.Text = strings.Join(lines, "\n")
+	return res
 }
 
 // gitToplevel is the toplevel of the git work tree around the working
@@ -103,7 +169,7 @@ func skillsErr(err error) error {
 }
 
 func skillsInstall(c *Ctx, a skillsArgs) (Result, error) {
-	set, roots, err := skillsEnv(a)
+	set, roots, skipped, err := skillsEnv(c, a)
 	if err != nil {
 		return Result{}, err
 	}
@@ -111,11 +177,12 @@ func skillsInstall(c *Ctx, a skillsArgs) (Result, error) {
 	if err != nil {
 		return Result{}, skillsErr(err)
 	}
-	return skillsInstallResult(c, "install", res)
+	out, err := skillsInstallResult(c, "install", res)
+	return withSkipped(out, skipped), err
 }
 
 func skillsUpdate(c *Ctx, a skillsArgs) (Result, error) {
-	set, roots, err := skillsEnv(a)
+	set, roots, skipped, err := skillsEnv(c, a)
 	if err != nil {
 		return Result{}, err
 	}
@@ -124,10 +191,11 @@ func skillsUpdate(c *Ctx, a skillsArgs) (Result, error) {
 		return Result{}, skillsErr(err)
 	}
 	if len(res) == 0 {
-		return Result{Data: knObj("roots", []any{}, "changed", false)},
+		return withSkipped(Result{Data: knObj("roots", []any{}, "changed", false)}, skipped),
 			Failed("no skills install found in scope").WithHint("run: rota skills install")
 	}
-	return skillsInstallResult(c, "update", res)
+	out, err := skillsInstallResult(c, "update", res)
+	return withSkipped(out, skipped), err
 }
 
 // skillsInstallResult renders install and update results, exit 4 when a path
@@ -187,7 +255,7 @@ func skillsInstallResult(c *Ctx, verb string, res []skills.RootResult) (Result, 
 }
 
 func skillsUninstall(c *Ctx, a skillsArgs) (Result, error) {
-	_, roots, err := skillsEnv(a)
+	_, roots, skipped, err := skillsEnv(c, a)
 	if err != nil {
 		return Result{}, err
 	}
@@ -215,13 +283,13 @@ func skillsUninstall(c *Ctx, a skillsArgs) (Result, error) {
 	out := Result{Data: data, Text: strings.Join(text, "\n")}
 	if keptAny {
 		data.Set("blockedBy", "edited")
-		return out, Refused("edited files were kept").WithHint("run: rota skills uninstall --overwrite")
+		return withSkipped(out, skipped), Refused("edited files were kept").WithHint("run: rota skills uninstall --overwrite")
 	}
-	return out, nil
+	return withSkipped(out, skipped), nil
 }
 
 func skillsStatus(c *Ctx, a skillsArgs) (Result, error) {
-	set, roots, err := skillsEnv(a)
+	set, roots, skipped, err := skillsEnv(c, a)
 	if err != nil {
 		return Result{}, err
 	}
@@ -257,7 +325,7 @@ func skillsStatus(c *Ctx, a skillsArgs) (Result, error) {
 		rootsData = append(rootsData, o)
 	}
 	data := knObj("version", rep.Version, "digest", rep.Digest, "roots", rootsData)
-	return Result{Data: data, Text: strings.Join(text, "\n")}, nil
+	return withSkipped(Result{Data: data, Text: strings.Join(text, "\n")}, skipped), nil
 }
 
 func short(digest string) string {

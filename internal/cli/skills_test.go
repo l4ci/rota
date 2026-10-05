@@ -210,3 +210,133 @@ func TestSkillsNoHome(t *testing.T) {
 		t.Errorf("claude with CLAUDE_CONFIG_DIR only: %d %s", code, errOut)
 	}
 }
+
+// accountProject is a rota project whose work.accounts name two existing
+// config dirs and one that does not exist.
+func accountProject(t *testing.T, home string) (proj, a, b, gone string) {
+	t.Helper()
+	proj = t.TempDir()
+	a, b, gone = filepath.Join(home, ".claude-a"), filepath.Join(home, ".claude-b"), filepath.Join(home, ".claude-gone")
+	for _, d := range []string{a, b, filepath.Join(proj, ".rota")} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cfg := `{"work":{"accounts":[{"name":"a","configDir":"` + a + `"},{"name":"b","configDir":"` + b + `"},{"name":"gone","configDir":"` + gone + `"},{"name":"dup","configDir":"` + filepath.Join(home, ".claude") + `/"}]}}`
+	if err := os.WriteFile(filepath.Join(proj, ".rota", "config.json"), []byte(cfg), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return proj, a, b, gone
+}
+
+func TestSkillsCoverWorkAccounts(t *testing.T) {
+	home := t.TempDir()
+	proj, a, b, gone := accountProject(t, home)
+	code, env, errOut := skillsRun(t, home, proj, "skills", "install", "--agent", "claude")
+	if code != 0 {
+		t.Fatalf("install %d %s", code, errOut)
+	}
+	d := skData(env)
+	var got []string
+	for _, r := range d["roots"].([]any) {
+		got = append(got, r.(map[string]any)["root"].(string))
+	}
+	want := []string{filepath.Join(home, ".claude", "skills"), filepath.Join(a, "skills"), filepath.Join(b, "skills")}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Errorf("roots %v, want %v", got, want)
+	}
+	if sk, _ := d["skipped"].([]any); len(sk) != 1 || sk[0] != gone {
+		t.Errorf("skipped %v", d["skipped"])
+	}
+	if _, err := os.Stat(gone); err == nil {
+		t.Error("missing config dir was created")
+	}
+
+	// One account goes stale: status flags it, update refreshes it.
+	mp := filepath.Join(b, "skills", ".rota-manifest.json")
+	raw, err := os.ReadFile(mp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		t.Fatal(err)
+	}
+	m["digest"], m["version"] = "stale", "0.0.1"
+	raw, _ = json.Marshal(m)
+	if err := os.WriteFile(mp, raw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, env, _ = skillsRun(t, home, proj, "skills", "status", "--agent", "claude", "--scope", "user")
+	current := map[string]any{}
+	for _, r := range skData(env)["roots"].([]any) {
+		rm := r.(map[string]any)
+		current[rm["root"].(string)] = rm["current"]
+	}
+	if current[filepath.Join(a, "skills")] != true || current[filepath.Join(b, "skills")] != false {
+		t.Errorf("status %v", current)
+	}
+	if code, _, errOut = skillsRun(t, home, proj, "skills", "update", "--agent", "claude"); code != 0 {
+		t.Fatalf("update %d %s", code, errOut)
+	}
+	_, env, _ = skillsRun(t, home, proj, "skills", "status", "--agent", "claude", "--scope", "user")
+	for _, r := range skData(env)["roots"].([]any) {
+		if r.(map[string]any)["current"] != true {
+			t.Errorf("still stale: %v", r)
+		}
+	}
+
+	// doctor reads the same roots, so the lagging account would show there.
+	rep := doctorSkills(home, proj)
+	if rep == nil {
+		t.Fatal("doctor skills nil")
+	}
+	n := 0
+	for _, r := range rep.Roots {
+		if r.Agent == "claude" && r.Scope == "user" && r.Installed {
+			n++
+		}
+	}
+	if n != 3 {
+		t.Errorf("doctor sees %d installed claude user roots, want 3", n)
+	}
+
+	code, env, _ = skillsRun(t, home, proj, "skills", "uninstall", "--agent", "claude")
+	if code != 0 || len(skData(env)["roots"].([]any)) != 3 {
+		t.Errorf("uninstall %d %v", code, env)
+	}
+	if _, err := os.Stat(filepath.Join(b, "skills", "rota-pause")); err == nil {
+		t.Error("account b skill left behind")
+	}
+}
+
+func TestSkillsCurrentAccountFlag(t *testing.T) {
+	home := t.TempDir()
+	proj, a, _, _ := accountProject(t, home)
+	_, env, _ := skillsRun(t, home, proj, "skills", "install", "--agent", "claude", "--current-account")
+	d := skData(env)
+	if rs := d["roots"].([]any); len(rs) != 1 || rs[0].(map[string]any)["root"] != filepath.Join(home, ".claude", "skills") {
+		t.Errorf("%v", rs)
+	}
+	if _, ok := d["skipped"]; ok {
+		t.Errorf("skipped reported: %v", d["skipped"])
+	}
+	if _, err := os.Stat(filepath.Join(a, "skills")); err == nil {
+		t.Error("account dir written despite --current-account")
+	}
+}
+
+func TestSkillsProjectScopeIgnoresAccounts(t *testing.T) {
+	home := t.TempDir()
+	proj, a, _, _ := accountProject(t, home)
+	if out, err := exec.Command("git", "-C", proj, "init", "-q").CombinedOutput(); err != nil {
+		t.Fatalf("%v %s", err, out)
+	}
+	_, env, _ := skillsRun(t, home, proj, "skills", "install", "--agent", "claude", "--scope", "project")
+	if rs := skData(env)["roots"].([]any); len(rs) != 1 {
+		t.Errorf("%v", rs)
+	}
+	if _, err := os.Stat(filepath.Join(a, "skills")); err == nil {
+		t.Error("project scope touched an account dir")
+	}
+}
