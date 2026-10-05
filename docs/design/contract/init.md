@@ -47,7 +47,15 @@ repo: none
 data: {"dir": string, "projects": [{"name": string, "path": string, "lastSeen": string, "missing": bool}]}
 exit: 70 when the global config dir cannot be located (neither `XDG_CONFIG_HOME` nor `HOME` is set). Read-only; runs without a `.rota/` root and ignores the working directory.
 old: none.
-note: the machine-wide registry `rota init` fills (#24): `<global config dir>/projects.json`, `{"projects": [{"path", "name", "lastSeen"}]}`, `path` absolute and realpath-resolved, `name` its directory name, `lastSeen` the UTC RFC 3339 time of the last `rota init` there. Rows are sorted by name, then path. `missing` is true when the path no longer exists; such an entry is flagged, never pruned, so a project on an unmounted drive returns with it. Text mode prints `name<TAB>path` per row, plus `(missing)`. An absent or unreadable registry lists nothing and exits 0. This is not `.rota/repos.json`, the per-project umbrella sub-repo registry.
+note: the machine-wide registry `rota init` fills (#24): `<global config dir>/projects.json`, `{"projects": [{"path", "name", "lastSeen"}]}`, `path` absolute and realpath-resolved, `name` its directory name, `lastSeen` the UTC RFC 3339 time of the last `rota init` there. Rows are sorted by name, then path. `missing` is true when the path no longer exists; such an entry is flagged, never pruned by this verb (`rota projects cleanup` does), so a project on an unmounted drive returns with it. Text mode prints `name<TAB>path` per row, plus `(missing)`. An absent or unreadable registry lists nothing and exits 0. This is not `.rota/repos.json`, the per-project umbrella sub-repo registry.
+
+### rota projects cleanup
+rota projects cleanup
+repo: none
+data: {"removed": [{"name": string, "path": string, "lastSeen": string}], "changed": bool}
+exit: 70 as `rota projects`. Runs without a `.rota/` root and ignores the working directory.
+old: none.
+note: deletes at once, no preview (#195): every registry entry whose directory is gone or no longer holds `.rota/`, under the registry's lock. Text mode prints `removed<TAB>name<TAB>path` per entry, or `noop: no stale projects`. An absent registry removes nothing and is not created. Plain `rota projects` still never prunes.
 
 ### rota setup
 rota setup [--yes] [--set <key>=<value>]... | --list
