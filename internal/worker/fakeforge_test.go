@@ -43,6 +43,19 @@ func (f *fakeForge) PRView(_ context.Context, pr int) (tracker.PRInfo, error) {
 	return info, nil
 }
 
+// OpenPRs lists the world's PR only when the world opted in with listed=1, so
+// the cases that record no PR keep their frozen forge log (a listing is not
+// logged). listError makes the listing fail.
+func (f *fakeForge) OpenPRs(context.Context) ([]tracker.PR, error) {
+	if f.w.forgeWord("listError") != "" {
+		return nil, errors.New(f.w.forgeWord("listError"))
+	}
+	if f.w.forgeWord("listed") != "1" {
+		return nil, nil
+	}
+	return []tracker.PR{{Number: 7, Branch: f.w.forgeWord("head"), URL: ghURL}}, nil
+}
+
 func (f *fakeForge) PRRequestMerge(_ context.Context, pr int, o tracker.MergeOpts) error {
 	f.logf("PRRequestMerge %d pin=%s deleteBranch=%v", pr, o.HeadSHA, o.DeleteBranch)
 	w := f.w
