@@ -38,7 +38,7 @@ func TestDoctorDiskInput(t *testing.T) {
 	t.Setenv("ROTA_TEST_DOCTOR_DISK", "1000:100000") // 1% free
 	t.Setenv("TMPDIR", t.TempDir())
 	in := doctor.Input{Dir: t.TempDir()}
-	doctorDiskInput(context.Background(), &in, cfg, "", git.Exec)
+	doctorDiskInput(context.Background(), &in, cfg, "", git.Exec, time.Now())
 	if in.MinFreeDiskPercent != 10 || in.Disk == nil || in.Disk.Free != 1000 {
 		t.Fatalf("default threshold / disk not read: %+v", in)
 	}
@@ -58,7 +58,7 @@ func TestDoctorDiskInput(t *testing.T) {
 	}
 	t.Setenv("ROTA_TEST_DOCTOR_DISK", "50000:100000")
 	in = doctor.Input{Dir: t.TempDir()}
-	doctorDiskInput(context.Background(), &in, cfg, "", git.Exec)
+	doctorDiskInput(context.Background(), &in, cfg, "", git.Exec, time.Now())
 	if len(in.Leftovers) != 0 {
 		t.Errorf("leftovers are only scanned when the disk is low: %v", in.Leftovers)
 	}
