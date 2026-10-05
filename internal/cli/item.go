@@ -14,6 +14,7 @@ import (
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/itembody"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/tracker"
@@ -247,8 +248,7 @@ var (
 )
 
 var (
-	dependsHeadRe = regexp.MustCompile(`(?mi)^#{1,6}[ \t]+depends[ \t]+on[ \t]*$`)
-	dependsRefRe  = regexp.MustCompile(`^(?:#\d+|` + backlog.IDPattern(backlog.FileIDDigits) + `)$`)
+	dependsRefRe = regexp.MustCompile(`^(?:#\d+|` + backlog.IDPattern(backlog.FileIDDigits) + `)$`)
 )
 
 // dependsRefs splits a --depends-on value into item references, rejecting
@@ -265,20 +265,6 @@ func dependsRefs(v string) ([]string, error) {
 		return nil, Usage("--depends-on needs a value")
 	}
 	return refs, nil
-}
-
-// appendDependsOn adds the ## Depends on section the round readiness check
-// reads, one bullet per reference, after body.
-func appendDependsOn(body []byte, refs []string) []byte {
-	var b strings.Builder
-	if t := strings.TrimRight(string(body), "\n"); t != "" {
-		b.WriteString(t + "\n\n")
-	}
-	b.WriteString("## Depends on\n\n")
-	for _, r := range refs {
-		b.WriteString("- " + r + "\n")
-	}
-	return []byte(b.String())
 }
 
 func itemCreate(fs *flag.FlagSet) RunFunc {
@@ -355,10 +341,10 @@ func itemCreate(fs *flag.FlagSet) RunFunc {
 			if err != nil {
 				return Result{}, err
 			}
-			if dependsHeadRe.Match(in.Body) {
+			if itembody.HasDependsOn(in.Body) {
 				return Result{}, Usage("--depends-on conflicts with the ## Depends on section already in --body-file")
 			}
-			in.Body = appendDependsOn(in.Body, refs)
+			in.Body = itembody.AppendDependsOn(in.Body, refs)
 			in.HasBody = true
 		}
 		be, err := openBacklog(c, root, false, "")
