@@ -53,7 +53,7 @@ func (s Store) Hit(scope, topic, title string) (HitResult, error) {
 	threshold := s.PromoteThreshold()
 	var res HitResult
 	err = Update(p, func(sc *Sidecar) (bool, error) {
-		e := sc.Bump(topic, title)
+		e := sc.Bump(topic, title, s.today())
 		if e.Tier == Provisional && e.Hits >= threshold {
 			has, err := s.HasContradiction(topic, title)
 			if err != nil {

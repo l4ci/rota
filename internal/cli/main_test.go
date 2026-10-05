@@ -10,19 +10,18 @@ import (
 
 	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/host"
-	"github.com/l4ci/rota/internal/knowledge"
 )
 
 // goldenDay is the day the goldens in testdata/golden were recorded from the
 // retired helpers. The knowledge, glossary, decisions and migrate verbs stamp
-// knowledge.Today on what they write, so the tests pin it to that day.
+// the day on what they write, so the tests pin ROTA_TEST_TODAY to that day.
 const goldenDay = "2026-10-03"
 
-// TestMain pins knowledge.Today to goldenDay and puts tripwire gh and glab
+// TestMain pins ROTA_TEST_TODAY to goldenDay and puts tripwire gh and glab
 // first on PATH: issue mode builds the real tracker unless a test injects one,
 // and no test may reach a forge.
 func TestMain(m *testing.M) {
-	knowledge.Today = func() string { return goldenDay }
+	os.Setenv("ROTA_TEST_TODAY", goldenDay)
 	dir, err := os.MkdirTemp("", "cli-tripwire")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)

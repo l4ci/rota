@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -51,23 +50,6 @@ func hookCommands() *Command {
 
 const maxHookInput = 8 << 20
 
-// hookNow is the clock; ROTA_TEST_NOW (RFC 3339) fixes it for tests.
-func hookNow() time.Time {
-	if v := os.Getenv("ROTA_TEST_NOW"); v != "" {
-		if t, err := time.Parse(time.RFC3339, v); err == nil {
-			return t
-		}
-	}
-	return time.Now()
-}
-
-// hookHolderPID is a test seam: ROTA_TEST_HOLDER_PID stands in for the nearest
-// non-shell ancestor, which a smoke test cannot arrange.
-func hookHolderPID() int {
-	n, _ := strconv.Atoi(os.Getenv("ROTA_TEST_HOLDER_PID"))
-	return n
-}
-
 func readInput(c *Ctx) []byte {
 	b, _ := io.ReadAll(io.LimitReader(c.Stdin, maxHookInput))
 	return b
@@ -97,7 +79,7 @@ func statuslineDump(fs *flag.FlagSet) RunFunc {
 		}
 		debug := os.Getenv("ROTA_STATUSLINE_DEBUG") != ""
 		input := readInput(c)
-		if err := dumpState(input); err != nil && debug {
+		if err := dumpState(input, c.deps().Now()); err != nil && debug {
 			fmt.Fprintf(c.Stderr, "rota statusline dump: %v\n", err)
 		}
 		if *then != "" {
@@ -112,7 +94,7 @@ func statuslineDump(fs *flag.FlagSet) RunFunc {
 	}
 }
 
-func dumpState(input []byte) (err error) {
+func dumpState(input []byte, now time.Time) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("panic: %v", r)
@@ -126,7 +108,7 @@ func dumpState(input []byte) (err error) {
 	if err != nil {
 		return err
 	}
-	return hook.Dump(cd, input, hookNow())
+	return hook.Dump(cd, input, now)
 }
 
 // hookPrint is a hook's stdout: one JSON line, no HTML escaping.
@@ -150,6 +132,7 @@ type hookContext struct {
 	cfg       any
 	set       hook.Settings
 	handoff   string // absolute path
+	now       func() time.Time
 }
 
 // hookSetup returns false for every reason the hook should pass silently.
@@ -165,7 +148,8 @@ func hookSetup(c *Ctx, needLeaseFree bool) (hc hookContext, ok bool) {
 		return hc, false
 	}
 	hc.commonDir = cd
-	hc.who = hook.Identify(roundlease.DefaultEnv(), os.Getenv, hookHolderPID(), cd)
+	hc.now = c.deps().Now
+	hc.who = hook.Identify(roundlease.DefaultEnv(), os.Getenv, c.deps().HolderPID(), cd)
 	switch {
 	case hc.who.Orchestrator:
 		hc.root = hc.who.Lease.Root
@@ -254,10 +238,10 @@ func stopHandoff(hc hookContext, sid string, active bool) (d hook.StopDecision, 
 	if err != nil || !found {
 		return d, false
 	}
-	now := hookNow()
+	now := hc.now()
 	in := hook.StopIn{StopHookActive: active}
 	if hc.set.SwitchOnUsage {
-		in.Supervised, in.HoldUntil = supervisedHold(hc.commonDir, hookNow())
+		in.Supervised, in.HoldUntil = supervisedHold(hc.commonDir, hc.now())
 	}
 	d = hook.DecideStop(in, st, hc.set, hook.StatHandoff(hc.handoff), hc.handoff, now)
 	if d.Persist {
@@ -359,7 +343,7 @@ func hookSessionStart(c *Ctx, args []string) (res Result, _ error) {
 		return Result{}, nil
 	}
 	maxAge := time.Duration(hc.set.HandoffMaxAge) * time.Second
-	if !hook.ShouldInject(source, hc.who.Orchestrator, hc.who.LeaseFree, ho, hook.FirstLine(hc.handoff), maxAge, hookNow()) {
+	if !hook.ShouldInject(source, hc.who.Orchestrator, hc.who.LeaseFree, ho, hook.FirstLine(hc.handoff), maxAge, hc.now()) {
 		return Result{}, nil
 	}
 	body, ok := hook.Consume(hc.handoff)

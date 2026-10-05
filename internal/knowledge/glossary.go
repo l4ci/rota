@@ -278,7 +278,7 @@ func (s Store) GlossaryWrite(scope string, t Term, touch, notsProvided bool) (na
 	if c := CheckAliasCollisions(entries, []Term{t}); len(c) > 0 {
 		return "", false, fmt.Errorf("%w: %s", ErrAliasCollision, aliasMessage(c[0]))
 	}
-	today := Today()
+	today := s.today()
 	byKey := map[string]Term{}
 	for _, e := range entries {
 		byKey[strings.ToLower(e.Name)] = e
@@ -356,7 +356,7 @@ func (s Store) GlossaryImport(scope, manifest string, touch bool) (terms []strin
 	if c := CheckAliasCollisions(entries, cands); len(c) > 0 {
 		return nil, false, fmt.Errorf("%w: batch alias collisions — refusing entire batch:\n  %s", ErrAliasCollision, strings.Join(c, "\n  "))
 	}
-	today := Today()
+	today := s.today()
 	byKey := map[string]Term{}
 	for _, e := range entries {
 		byKey[strings.ToLower(e.Name)] = e

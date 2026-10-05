@@ -178,7 +178,7 @@ func buildLimits(ctx context.Context, c *Ctx, root string, cfg any, set limits.S
 	}
 
 	d := limits.Deps{
-		Root: root, Settings: set, Now: hookNow, Tick: tick,
+		Root: root, Settings: set, Now: c.deps().Now, Tick: tick,
 		Targets: targets,
 		Capture: func(ctx context.Context, t limits.Target) string {
 			if t.Orchestrator && inGap(gap) {
@@ -295,7 +295,7 @@ func limitsLoop(c *Ctx, root string, cfg any, set limits.Settings, holderPID int
 		}
 		defer rig.Cancel()
 		if cd, err := rotastate.CommonDir(root); err == nil {
-			rec := limits.Watching{PID: os.Getpid(), StartedAt: limits.Time(time.Now()), Mode: limits.ModeSupervisor}
+			rec := limits.Watching{PID: os.Getpid(), StartedAt: limits.Time(c.deps().Now()), Mode: limits.ModeSupervisor}
 			if err := limits.WriteWatching(cd, rec); err == nil {
 				defer limits.RemoveWatching(cd, rec.PID)
 			}
@@ -344,12 +344,12 @@ func limitWatch(fs *flag.FlagSet) RunFunc {
 			defer cancel()
 		}
 		tick := time.Duration(*settle * float64(time.Second))
-		rig, err := buildLimits(ctx, c, root, cfg, set, hookHolderPID(), tick, nil, func(f string, a ...any) { c.Warn(f, a...) })
+		rig, err := buildLimits(ctx, c, root, cfg, set, c.deps().HolderPID(), tick, nil, func(f string, a ...any) { c.Warn(f, a...) })
 		if err != nil {
 			return Result{}, err
 		}
 		defer rig.Cancel()
-		rec := limits.Watching{PID: os.Getpid(), StartedAt: limits.Time(time.Now()), Mode: limits.ModeWatch}
+		rec := limits.Watching{PID: os.Getpid(), StartedAt: limits.Time(c.deps().Now()), Mode: limits.ModeWatch}
 		if err := limits.WriteWatching(cd, rec); err != nil {
 			c.Warn("watcher record not written: %v", err)
 		} else {
@@ -396,7 +396,7 @@ func limitWatchGuard(c *Ctx, root, cd string) (Result, error) {
 		return refuse("supervised", fmt.Sprintf("rota keepalive run (pid %d) holds the lease and already watches for usage limits", ks.PID),
 			"run rota limit status, or start the supervisor with --no-limits to watch by hand")
 	}
-	if !live || !le.Discover(hookHolderPID(), os.Getenv).SameAs(lease, le.Host) {
+	if !live || !le.Discover(c.deps().HolderPID(), os.Getenv).SameAs(lease, le.Host) {
 		return refuse("no round", "this process holds no round lease: run rota round start first", "a switch moves work, which is the orchestrator's act")
 	}
 	if w, ok := limits.ReadWatching(cd); ok && w.PID != os.Getpid() && le.Alive(w.PID) {

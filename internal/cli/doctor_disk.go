@@ -42,9 +42,9 @@ func doctorDisk(dir string) *doctor.Disk {
 // doctorLeftovers names what rota left behind that would give disk back: temp
 // dirs a smoke or gate run leaked, and git worktrees whose directory is gone.
 // It only runs once the disk is low, because sizing the temp dirs walks them.
-func doctorLeftovers(ctx context.Context, run git.Runner, root string) []string {
+func doctorLeftovers(ctx context.Context, run git.Runner, root string, now time.Time) []string {
 	var out []string
-	if n, size := leakedTempDirs(os.TempDir(), time.Now().Add(-leakAge)); n > 0 {
+	if n, size := leakedTempDirs(os.TempDir(), now.Add(-leakAge)); n > 0 {
 		out = append(out, fmt.Sprintf("%d leaked temp dirs under %s (%s); safe to delete once no run is active", n, os.TempDir(), doctor.HumanBytes(uint64(size))))
 	}
 	if root != "" {
@@ -101,7 +101,7 @@ func prunableWorktrees(ctx context.Context, run git.Runner, root string) int {
 // doctorDiskInput fills the disk fields of in: the threshold from config
 // (doctor.minFreeDiskPercent, default 10) and, when the volume is under it,
 // the leftovers worth naming. A non-numeric threshold falls back to the default.
-func doctorDiskInput(ctx context.Context, in *doctor.Input, cfg any, root string, run git.Runner) {
+func doctorDiskInput(ctx context.Context, in *doctor.Input, cfg any, root string, run git.Runner, now time.Time) {
 	min := 10
 	if cfg != nil {
 		if v, ok := config.Lookup(cfg, "doctor.minFreeDiskPercent"); ok {
@@ -120,6 +120,6 @@ func doctorDiskInput(ctx context.Context, in *doctor.Input, cfg any, root string
 	in.Disk = doctorDisk(dir)
 	if in.Disk != nil && in.Disk.Total > 0 && min > 0 &&
 		float64(in.Disk.Free)/float64(in.Disk.Total)*100 < float64(min) {
-		in.Leftovers = doctorLeftovers(ctx, run, root)
+		in.Leftovers = doctorLeftovers(ctx, run, root, now)
 	}
 }
