@@ -23,7 +23,9 @@ func TestNoDirectGitExec(t *testing.T) {
 			if err != nil {
 				return err
 			}
-			if d.IsDir() && p == filepath.Join(root, "internal", "git") {
+			// internal/gittest is the test fixture package: tests build repos
+			// with the plain git binary, with no timeout or context to add.
+			if d.IsDir() && (p == filepath.Join(root, "internal", "git") || p == filepath.Join(root, "internal", "gittest")) {
 				return filepath.SkipDir
 			}
 			if d.IsDir() || !strings.HasSuffix(p, ".go") || strings.HasSuffix(p, "_test.go") {

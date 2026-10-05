@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/l4ci/rota/internal/gittest"
 )
 
 var tripwireHit string
@@ -38,9 +40,7 @@ func TestMain(m *testing.M) {
 	}
 	// The gate's local merge commits as the caller. CI runners have no git
 	// identity, so the tests bring their own.
-	for k, v := range map[string]string{"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"} {
-		os.Setenv(k, v)
-	}
+	gittest.SetIdentity()
 	for _, k := range []string{"TMUX", "TMUX_PANE", "HERDR_ENV", "HERDR_WORKSPACE_ID", "HERDR_PANE_ID", "HERDR_SOCKET_PATH", "ROTA_ACCOUNT_USAGE_DIR"} {
 		os.Unsetenv(k)
 	}
@@ -55,11 +55,11 @@ func TestMain(m *testing.M) {
 
 // ── fixtures shared by the tests ────────────────────────────────────────────
 
+// sh runs a non-git command in dir; git goes through gittest.Run.
 func sh(t *testing.T, dir string, name string, args ...string) string {
 	t.Helper()
 	cmd := exec.Command(name, args...)
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@t", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@t")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("%s %v in %s: %v\n%s", name, args, dir, err, out)
@@ -71,17 +71,14 @@ func sh(t *testing.T, dir string, name string, args ...string) string {
 // .worktrees/ and the given .rota/config.json. The path is symlink-resolved.
 func newProject(t *testing.T, config string) string {
 	t.Helper()
-	dir, err := filepath.EvalSymlinks(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	sh(t, dir, "git", "init", "-q", "-b", "main", ".")
+	dir := gittest.TempDir(t)
+	gittest.Init(t, dir, "main")
 	os.MkdirAll(filepath.Join(dir, ".rota"), 0o755)
 	os.WriteFile(filepath.Join(dir, ".gitignore"), []byte(".worktrees/\n"), 0o644)
 	os.WriteFile(filepath.Join(dir, "seed.txt"), []byte("seed\n"), 0o644)
 	os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(config), 0o644)
-	sh(t, dir, "git", "add", ".gitignore", "seed.txt")
-	sh(t, dir, "git", "commit", "-q", "-m", "seed")
+	gittest.Run(t, dir, "add", ".gitignore", "seed.txt")
+	gittest.Run(t, dir, "commit", "-q", "-m", "seed")
 	return dir
 }
 

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/golden"
 )
 
@@ -26,8 +27,8 @@ func wt(d string) string { return filepath.Join(d, ".worktrees", "w1") }
 func commitIn(t *testing.T, dir, file string) {
 	t.Helper()
 	os.WriteFile(filepath.Join(dir, file), []byte(file+"\n"), 0o644)
-	sh(t, dir, "git", "add", file)
-	sh(t, dir, "git", "commit", "-q", "-m", "add "+file)
+	gittest.Run(t, dir, "add", file)
+	gittest.Run(t, dir, "commit", "-q", "-m", "add "+file)
 }
 
 func TestResetCleanSlotCutsTaskBranch(t *testing.T) {
@@ -40,13 +41,13 @@ func TestResetCleanSlotCutsTaskBranch(t *testing.T) {
 	if res.Branch != "rota-worker/w1-t-7-fix-me" || !res.Changed || !res.Clean || res.Retained {
 		t.Errorf("%+v", res)
 	}
-	if want := sh(t, b, "git", "rev-parse", "--short", "main"); res.SHA != want {
+	if want := gittest.Run(t, b, "rev-parse", "--short", "main"); res.SHA != want {
 		t.Errorf("sha = %s, want %s", res.SHA, want)
 	}
-	if got := sh(t, wt(b), "git", "symbolic-ref", "--short", "HEAD"); got != "rota-worker/w1-t-7-fix-me" {
+	if got := gittest.Run(t, wt(b), "symbolic-ref", "--short", "HEAD"); got != "rota-worker/w1-t-7-fix-me" {
 		t.Errorf("worktree on %s", got)
 	}
-	if out := sh(t, b, "git", "branch", "--list", "rota-worker/w1"); out != "" {
+	if out := gittest.Run(t, b, "branch", "--list", "rota-worker/w1"); out != "" {
 		t.Errorf("old per-task branch not dropped: %s", out)
 	}
 }
@@ -59,7 +60,7 @@ func TestResetCheckOnlyChangesNothing(t *testing.T) {
 		t.Fatalf("%+v %v", res, err)
 	}
 	mustEqual(t, "registry", before, registry(t, b))
-	if got := sh(t, wt(b), "git", "symbolic-ref", "--short", "HEAD"); got != "rota-worker/w1" {
+	if got := gittest.Run(t, wt(b), "symbolic-ref", "--short", "HEAD"); got != "rota-worker/w1" {
 		t.Errorf("--check-only moved the worktree to %s", got)
 	}
 }
@@ -104,8 +105,8 @@ func TestResetRefusesUnmergedCommits(t *testing.T) {
 func TestResetTreatsACherryPickedCommitAsMerged(t *testing.T) {
 	b := slotProject(t)
 	commitIn(t, wt(b), "work.txt")
-	sha := sh(t, wt(b), "git", "rev-parse", "HEAD")
-	sh(t, b, "git", "cherry-pick", sha)
+	sha := gittest.Run(t, wt(b), "rev-parse", "HEAD")
+	gittest.Run(t, b, "cherry-pick", sha)
 	res, err := Env{}.Reset(b, "w1", "", true)
 	if err != nil || !res.Clean {
 		t.Errorf("%+v %v", res, err)
@@ -154,7 +155,7 @@ func TestResetResolutionFailures(t *testing.T) {
 	if _, err = (Env{}).Reset(dir, "w9", "", false); exit(err) != exitcode.ExitResolution || !strings.Contains(err.Error(), "slot 'w9' is not in the pool") {
 		t.Errorf("unknown slot: %v", err)
 	}
-	sh(t, dir, "git", "branch", "-m", "main", "trunk")
+	gittest.Run(t, dir, "branch", "-m", "main", "trunk")
 	if _, err = (Env{}).Reset(dir, "w1", "", false); exit(err) != exitcode.ExitResolution || !strings.Contains(err.Error(), "base 'main' does not exist") {
 		t.Errorf("missing base: %v", err)
 	}
@@ -207,7 +208,7 @@ func TestResetTreatsAFailingGitAsUnavailableNotClean(t *testing.T) {
 				t.Errorf("%s checkOnly=%v: %+v %v", failing, checkOnly, res, err)
 			}
 		}
-		if got := sh(t, wt(b), "git", "symbolic-ref", "--short", "HEAD"); got != "rota-worker/w1" {
+		if got := gittest.Run(t, wt(b), "symbolic-ref", "--short", "HEAD"); got != "rota-worker/w1" {
 			t.Errorf("%s: the worktree was switched to %s", failing, got)
 		}
 		mustEqual(t, "registry", before, registry(t, b))
@@ -248,7 +249,7 @@ func TestExecGitRunsInTheCLocale(t *testing.T) {
 // Contract: each unmerged entry is `<sha7> <subject>`.
 func TestResetUnmergedEntriesAreSevenCharSHAAndSubject(t *testing.T) {
 	b := slotProject(t)
-	sh(t, b, "git", "config", "core.abbrev", "12")
+	gittest.Run(t, b, "config", "core.abbrev", "12")
 	commitIn(t, wt(b), "work.txt")
 	res, err := Env{}.Reset(b, "w1", "T1", true)
 	if err == nil || len(res.Unmerged) != 1 {
