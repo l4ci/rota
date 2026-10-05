@@ -37,7 +37,7 @@ Items:    F42 will be restored to BACKLOG.md (Features)
 Branch:   deleted by rota ship merge; rerun `git branch <name> 4d2f8b1^2` to keep the work
 Status:   no active entry to clear (cycle already removed it)
 Handoff:  gitignored — not restorable
-Plans:    gitignored — not restorable
+Plans:    removed on ship for milestone items — not restored
 
 Re-run with --apply to apply.
 ```
@@ -58,7 +58,7 @@ Entries that `/rota-work` already moved to `.rota/ARCHIVE.md` are restored too: 
 
 Preserved untouched: the **git reflog** (the merge commit is still recoverable for 90 days via `git reflog`) and **git objects** generally. The merged branch's commits stay reachable through the reflog, so nothing is irretrievably lost in the short term.
 
-Not restored, by design: **handoff files** (`.rota/handoff/<branch>.md` are gitignored per-developer scratch and were lost when the branch was deleted at merge time), **plan files** (`.rota/plans/<key>.md` are tracked, not gitignored, even though the preview block prints "gitignored" for them. `/rota-work` removes a milestone-tagged item's plan when the item ships, and `undo` does not bring it back; recover it from the merge's second parent or the reflog), and **the merged branch itself** (direct-merge deletes it at ship time). The dry-run preview prints the literal `git branch …` command needed to recreate the branch from `<merge>^2` if you want to keep iterating on the same line of work.
+Not restored, by design: **handoff files** (`.rota/handoff/<branch>.md` are gitignored per-developer scratch and were lost when the branch was deleted at merge time), **plan files** (`.rota/plans/<key>.md` are tracked. `/rota-work` removes a milestone-tagged item's plan when the item ships, and `undo` does not bring it back; recover it from the merge's second parent or the reflog), and **the merged branch itself** (direct-merge deletes it at ship time). The dry-run preview prints the literal `git branch …` command needed to recreate the branch from `<merge>^2` if you want to keep iterating on the same line of work.
 
 ## Safety semantics
 

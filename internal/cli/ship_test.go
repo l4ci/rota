@@ -716,7 +716,7 @@ func TestShipUndoPreviewAndApply(t *testing.T) {
 		"Base:     main will reset --hard " + short + "^1 (currently " + short + ")\n" +
 		"Items:    F03 will be restored to BACKLOG.md (Features)\n          B01 will be restored to BACKLOG.md (Bugs)\n\n" +
 		"Branch:   deleted by rota ship merge; rerun `git branch <name> " + short + "^2` to keep the work\n" +
-		"Status:   no active entry to clear (cycle already removed it)\nHandoff:  gitignored — not restorable\nPlans:    gitignored — not restorable\n\nRe-run with --apply to apply.\n"
+		"Status:   no active entry to clear (cycle already removed it)\nHandoff:  gitignored — not restorable\nPlans:    removed on ship for milestone items — not restored\n\nRe-run with --apply to apply.\n"
 	if o.code != 0 || o.stdout != wantText {
 		t.Errorf("plan text:\n%q\nwant\n%q", o.stdout, wantText)
 	}
