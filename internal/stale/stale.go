@@ -3,9 +3,9 @@
 package stale
 
 import (
+	"context"
 	"errors"
 	"fmt"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"time"
@@ -13,6 +13,7 @@ import (
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/frontmatter"
 	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/section"
 )
@@ -45,13 +46,11 @@ func ParseDate(s string) (time.Time, bool) {
 // (git_mtime), read in dir; ok is false when git fails, the path is untracked
 // or the result is empty.
 func gitMtime(dir, rel string) (time.Time, bool) {
-	cmd := exec.Command("git", "log", "-1", "--format=%cs", "--", rel)
-	cmd.Dir = dir
-	out, err := cmd.Output()
-	if err != nil {
+	out, ok, err := git.Repo{Dir: dir}.LastCommitDate(context.Background(), rel)
+	if err != nil || !ok {
 		return time.Time{}, false
 	}
-	return ParseDate(string(out))
+	return ParseDate(out)
 }
 
 // ErrKind is wrapped by the error for an unknown kind.
