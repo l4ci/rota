@@ -56,6 +56,8 @@ Write one note per `(branch, repo)` entry. Get the path from `rota status handof
 
 In a wave, entries share Items, Milestone, Stage, Next planned step and Current hypothesis; only `Repo:` and the Uncommitted artifact differ. Keep separate files so one repo can be abandoned while the others resume.
 
+Fill *Stage* and *Next planned step* from the task ledger ([`references/task-ledger.md`](references/task-ledger.md)): `rota git base`, then the `Task:` trailers in `git log <base>..HEAD`. Name the finished tasks and make the first unfinished one the next step.
+
 Gotchas and dead ends belong in `/rota-learn` (Step 6), not the note.
 
 ## Step 5 — Pin Status
@@ -116,4 +118,5 @@ Stage, Next and Hypothesis are shared across the wave; Uncommitted is per repo.
 
 ## References
 
+- [`references/task-ledger.md`](references/task-ledger.md) — `Task:` commit trailer; read for the note's Stage and Next planned step.
 - [`references/handoff-template.md`](references/handoff-template.md) — Handoff-note template written by `/rota-pause`, read by `/rota-work`.
