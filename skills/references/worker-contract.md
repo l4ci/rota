@@ -21,6 +21,9 @@ Work only this task, then stop.
   hypothesis). If your brief names your tier and a tier table, use that table for
   the model names; if it names none, use your harness's own defaults. Say which
   tier you ran on in your PR body when the brief asks for it.
+- Never dispatch a reviewer subagent or run `/rota-review` on your own branch.
+  Review is the orchestrator's seat (the merge gate); a worker-side review
+  duplicates it. Verify with targeted checks, then open the PR.
 - Stay in your worktree. Confirm `pwd` before editing and use worktree-rooted
   paths — an absolute path under the main checkout silently edits the WRONG tree.
 - Stage explicit paths. Never `git add -A` or `git add .`.
