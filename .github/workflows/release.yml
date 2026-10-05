@@ -19,9 +19,9 @@ permissions:
 
 jobs:
   goreleaser:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
       - name: Tag matches VERSION
@@ -31,7 +31,7 @@ jobs:
             echo "tag $GITHUB_REF_NAME does not match VERSION ($want)" >&2
             exit 1
           fi
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
       # Signs the release assets (signs: in .goreleaser.yaml). Same implementation
