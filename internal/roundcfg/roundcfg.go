@@ -130,13 +130,13 @@ func Load(root string) (Settings, error) {
 	if s.SharedPaths, err = list(cfg, "round.sharedPaths"); err != nil {
 		return s, err
 	}
-	if s.StallMinutes, err = nonNegInt(cfg, "round.stallMinutes"); err != nil {
+	if s.StallMinutes, err = config.Int(cfg, "round.stallMinutes", 0, config.MaxInt); err != nil {
 		return s, err
 	}
-	if s.MaxBounces, err = nonNegInt(cfg, "round.maxBounces"); err != nil {
+	if s.MaxBounces, err = config.Int(cfg, "round.maxBounces", 0, config.MaxInt); err != nil {
 		return s, err
 	}
-	if s.ArchitectureEvery, err = nonNegInt(cfg, "round.architectureEvery"); err != nil {
+	if s.ArchitectureEvery, err = config.Int(cfg, "round.architectureEvery", 0, config.MaxInt); err != nil {
 		return s, err
 	}
 	if s.ArchitectureAreas, err = list(cfg, "round.architectureAreas"); err != nil {
@@ -151,27 +151,10 @@ func Load(root string) (Settings, error) {
 		return s, fmt.Errorf("round.autopilot must be true or false (got %v)", v)
 	}
 	s.Autopilot = b
-	if s.AutopilotCap, err = nonNegInt(cfg, "round.autopilotCap"); err != nil {
+	if s.AutopilotCap, err = config.Int(cfg, "round.autopilotCap", 0, config.MaxInt); err != nil {
 		return s, err
 	}
 	return s, loadTiers(cfg, &s)
-}
-
-// nonNegInt reads a key that must be an integer of 0 or more.
-func nonNegInt(cfg any, key string) (int, error) {
-	v, err := config.Value(cfg, key)
-	if err != nil {
-		return 0, err
-	}
-	n, ok := v.(interface{ Int64() (int64, error) })
-	if !ok {
-		return 0, fmt.Errorf("%s must be a non-negative integer (got %v)", key, v)
-	}
-	i, err := n.Int64()
-	if err != nil || i < 0 {
-		return 0, fmt.Errorf("%s must be a non-negative integer (got %v)", key, v)
-	}
-	return int(i), nil
 }
 
 // loadTiers reads round.tier and round.tiers.<kind>.<tier>. The claude standard

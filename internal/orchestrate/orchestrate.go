@@ -42,12 +42,6 @@ const DefaultHarness = "claude"
 // Label names the orchestrator's tab or window.
 const Label = layout.Label
 
-func str(cfg any, key string) string {
-	v, _ := config.Lookup(cfg, key)
-	s, _ := v.(string)
-	return s
-}
-
 // Modes of a launch.
 const (
 	ModeTab     = "tab"     // a new tab or window in the host the caller is inside
@@ -99,7 +93,7 @@ type Env struct {
 // Resolve plans the launch for the project at root: harness from
 // orchestrator.harness, host from where the caller is and from work.dispatch.
 func (e Env) Resolve(root string, cfg any) (Plan, error) {
-	name := str(cfg, "orchestrator.harness")
+	name := config.StringIfSet(cfg, "orchestrator.harness")
 	if name == "" {
 		name = DefaultHarness
 	}
