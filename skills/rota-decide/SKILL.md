@@ -61,6 +61,8 @@ If the user invoked `/rota-decide` with a clear candidate from the conversation,
 
 > "What boundary do you want to lock in? State it as one sentence — what the decision says."
 
+Ground the boundary with `references/grilling.md`: pin the rule's terms, then grill forbids and permits as numbered questions with a recommended answer each, answering from code first and testing the edges with a scenario. Stop at an empty frontier.
+
 If after one round the user can't articulate **forbids** *or* **permits**, surface that — it's a signal this is a learning, not a decision. Suggest `/rota-learn` instead and stop. **Do not auto-invoke `/rota-learn`** — the user re-runs it deliberately.
 
 **Source-prefill modes (`--from-learning <topic>`, `--from-spike <name>`).** Both pre-fill the four-part draft from a source artifact and surface the same closing prompt. Full bodies live in `references/source-prefill.md`.
@@ -171,5 +173,6 @@ If the entry created a new topic, prepend a line: *"New topic: `<topic>`."*
 
 ## References
 
+- [`references/grilling.md`](references/grilling.md) — Frontier-round questioning for forbids/permits.
 - [`references/persistence-skills.md`](references/persistence-skills.md) — Shared spine and divergence axes for the persistence duo (`/rota-learn`, `/rota-decide`) — including `/rota-learn --term` for Glossary entries.
 - [`references/source-prefill.md`](references/source-prefill.md) — Source-prefill / promote-between-artifacts semantics for `/rota-decide`.

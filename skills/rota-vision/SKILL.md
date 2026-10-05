@@ -30,7 +30,7 @@ Skip unless the user asks for it or the framing leans on outside context (prior 
 
 ## Step 5 — Challenge
 
-Push back on the framing. This is the highest-value step; a polite review wastes the cycle. Tactics:
+Push back on the framing. This is the highest-value step; a polite review wastes the cycle. Run the rounds, recommended answers, code-first lookups, edge-case scenarios, term handling and stop condition of `references/grilling.md`, with the tactics below as the lens for each question:
 
 - **Scope check** — *"M02 has 12 acceptance criteria. What's the smaller version that ships in two weeks?"*
 - **Risk frontloading** — *"M01 assumes auth is straightforward; session storage is the bigger risk. Frontload it?"*
@@ -40,7 +40,7 @@ Push back on the framing. This is the highest-value step; a polite review wastes
 - **Assumption naming** — name implicit assumptions (*"this assumes single-tenant"*) and force a stance.
 - **Why this order** — for each adjacent pair, why the earlier comes first.
 
-Batch points needing input into one `AskUserQuestion` (max 3 questions; `multiSelect: true` for choosing trade-offs). Expect to iterate; don't move on until the framing has survived honest pushback.
+Batch each round into one `AskUserQuestion` (max 3 questions; `multiSelect: true` for choosing trade-offs). Move on when the frontier is empty and the framing has survived honest pushback.
 
 ## Step 6 — Propose, once
 
@@ -81,4 +81,5 @@ If a newly active milestone has no items, offer (default Capture): `/rota-captur
 ## References
 
 - [`references/context-load-protocol.md`](references/context-load-protocol.md) — shared parallel context load.
+- [`references/grilling.md`](references/grilling.md) — the Step 5 challenge rounds.
 - [`references/design-exploration.md`](references/design-exploration.md) — shared spine with `/rota-brainstorm`.
