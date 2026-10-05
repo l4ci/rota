@@ -76,6 +76,10 @@ That runs `rota doctor`, stops if a check fails, then opens an orchestrator sess
 started `/rota-orchestrate`. Nothing is typed into a pane. The session runs under
 `rota keepalive run`, so it restarts from a handoff when its context fills.
 
+With the `claude` harness it starts under the account in your `CLAUDE_CONFIG_DIR` if that is set.
+Otherwise, if `work.accounts` is configured, it takes the account with the most headroom (the first
+one when no meter is readable). `rota orchestrate --dry-run` names it.
+
 Where it opens depends on where you ran it:
 
 | You are | The orchestrator opens |

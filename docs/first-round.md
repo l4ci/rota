@@ -134,7 +134,7 @@ In the pane, at the project root:
 rota orchestrate
 ```
 
-It runs `rota doctor`, then opens a focused orchestrator tab that runs the agent under `rota keepalive run` and has already started `/rota-orchestrate`. In an initialized project, `rota` alone does the same. Tell the orchestrator what you want, for example "run a round on issues 12 and 13". `orchestrator.harness` picks the agent (`claude` or `codex`). See [your first round](usage/parallel-rounds.md#your-first-round) for what happens outside herdr or tmux.
+It runs `rota doctor`, then opens a focused orchestrator tab that runs the agent under `rota keepalive run` and has already started `/rota-orchestrate`. In an initialized project, `rota` alone does the same. Tell the orchestrator what you want, for example "run a round on issues 12 and 13". `orchestrator.harness` picks the agent (`claude` or `codex`). A `claude` orchestrator starts under your `CLAUDE_CONFIG_DIR` if set, else under the `work.accounts` entry with the most headroom. See [your first round](usage/parallel-rounds.md#your-first-round) for what happens outside herdr or tmux.
 
 The skill runs `rota doctor` again, then `rota round start`. That takes the orchestrator lease, creates the worker slots and lists the ready issues, and it detects herdr or tmux from the pane it runs in. It starts no worker yet. The orchestrator then picks the slate and assigns each issue with `rota round assign`, which cuts a branch and starts a worker in a new tab.
 
