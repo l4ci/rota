@@ -67,9 +67,11 @@ rota debug counter record-attempt --hypothesis "<one-line hypothesis>" --commit 
 
 Legitimate toolchain siblings (e.g. Godot `.gd.uid`) go in a separate `chore:` commit.
 
+**Regression test, or the missing seam.** Add a test at the bug's seam in the same commit. It must fail without the fix. If the only test you can write mocks the thing under test or asserts implementation details (call order, private state, exact internal strings), it pins nothing: do not commit it. That is a finding: no seam exists. Keep the Step 3 reproducer as the proof, and file the missing seam (Step 7). A real seam still gets a real test.
+
 ## Step 6 — Verify the fix
 
-Re-run the Step 3 reproducer. It must pass; a new regression test must be in the suite and run under the default test command. Then record the outcome:
+Re-run the Step 3 reproducer. It must pass; a new regression test must be in the suite and run under the default test command, unless Step 5 found no seam (then the reproducer alone is the proof). Then record the outcome:
 
 ```bash
 rota debug verdict <ID> --verdict <PASS|FAIL> --json
@@ -89,6 +91,21 @@ Three failed committed fixes: no further attempts. Print `rota debug counter sum
 rota debug counter clear
 rota proof add <ID> --check "<reproducer command>" --result PASS --evidence "<output line showing the symptom is gone>" --sha <commit-hash>
 ```
+
+**No seam.** When Step 5 found no honest seam, file the refactor item first (dedup and body shape as in `/rota-refactor`'s filing step), naming the missing seam and the bug it would have caught:
+
+```bash
+rota item create --json --kind tasks --title "<verb-first title naming the seam>" --desc "<one line>" --body-file <scratch> --related <ID>
+rota issues label <number> --add refactor
+```
+
+The body needs `## Acceptance` boxes, one being a regression test for <ID> across the new seam. Check `rota tracker call -- issue list --label refactor --state all` for an open item on the same seam; if one exists, comment there instead of filing. File backend: `rota item create` alone. Then word the proof row so it says no seam existed and links the item:
+
+```bash
+rota proof add <ID> --check "<reproducer command>" --result PASS --evidence "no regression test: no seam (<what would be mocked>); refactor #<n>" --sha <commit-hash>
+```
+
+Put the same line in the PR body.
 
 Re-run `git grep -n "\[DEBUG-<id>\]"` once more; it must print nothing. Open a PR and hand it to review; never merge directly. The issue closes when the PR merges:
 
@@ -115,6 +132,7 @@ One line of nudge, only when it applies: if the cause was not obvious from readi
 - **Hypotheses are claims, plural and ranked.** "If X, then changing Y makes the bug vanish": falsifiable, 3–5 of them, so the first plausible idea does not anchor.
 - **Probes are tagged.** `[DEBUG-<id>]` on every temporary line; the cleanup grep must come back empty.
 - **Iron Law: no fix without a hypothesis; hard stop at 3 failed fixes.**
+- **A test that pins nothing is worse than none.** No honest seam means the reproducer is the proof and a `refactor` item names the seam.
 - **One fix, one commit.** Scope creep in debug commits masks the root cause later.
 - **The ID closes the loop.** Commit carries the item ID, the PR carries `Closes #N`.
 
