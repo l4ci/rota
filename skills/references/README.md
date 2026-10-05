@@ -23,7 +23,7 @@ See KNOWLEDGE.md "Skill Authoring: Prose & References" for the conventions that 
 | [`work-toolchain-siblings.md`](work-toolchain-siblings.md) | Tool-generated sibling patterns and the sweep commit. | `/rota-work` |
 | [`work-wave-planning.md`](work-wave-planning.md) | File and shared-symbol collisions, brief rules, verifying a completion. | `/rota-work` |
 | [`knowledge-consult.md`](knowledge-consult.md) | Canonical K+D query pattern (`rota knowledge query` + `rota decisions query`) used by every cycle-starting skill. | `/rota-debug`, `/rota-review`, `/rota-work` |
-| [`learn-rare-modes.md`](learn-rare-modes.md) | `/rota-learn` manual flags (`--term`, `--promote`, `--deprecate`, `--amend`) and the contradiction queue. | `/rota-learn` |
+| [`learn-rare-modes.md`](learn-rare-modes.md) | `/rota-learn` manual flags (`--retro`, `--term`, `--promote`, `--deprecate`, `--amend`) and the contradiction queue. | `/rota-learn` |
 | [`manual-gates.md`](manual-gates.md) | The manual-gate registry (`rota gate list`): gates the verbs enforce with `--confirm`, and the skill-only callouts. | `/rota-release`, `/rota-ship` |
 | [`milestone-tagging.md`](milestone-tagging.md) | Milestone-tagging UX pattern used by capture/go skills. | `/rota-capture` |
 | [`persistence-skills.md`](persistence-skills.md) | Shared spine and divergence axes for the persistence duo (`/rota-learn`, `/rota-decide`), plus umbrella scoping (hybrid KNOWLEDGE, umbrella-only DECISIONS). | `/rota-decide`, `/rota-learn` |

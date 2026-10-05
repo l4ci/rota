@@ -21,6 +21,7 @@ Phases:
 **Args parsing.** Inspect the `args` value passed at invocation.
 
 - `--strict` — run the Opus verifier (Step 7) for this run.
+- `--retro` — retrospective mode. Skip Steps 2 to 8 and follow *`--retro`* in [`references/learn-rare-modes.md`](references/learn-rare-modes.md), then exit.
 - `--term <name>`, `--promote <topic> "<title>"`, `--deprecate <topic> "<title>"`, `--amend <topic> "<title>"` — manual modes. Skip Steps 2 to 8 and follow the matching section of [`references/learn-rare-modes.md`](references/learn-rare-modes.md), then exit.
 
 With none of those, run the normal flow (Step 2 onward).
