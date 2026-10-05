@@ -62,6 +62,7 @@ exit codes and repo scope: [verb contract](../design/contract/README.md).
 | Usage | What it does |
 |---|---|
 | `rota config show [<key>]` | effective value and source of config keys |
+| `rota config edit` | change keys interactively (needs a terminal) |
 | `rota config set <key> <value>` | set one key in .rota/config.json |
 | `rota config check` | compare .rota/config.json with the schema |
 | `rota config fill` | write the schema default for every missing key |

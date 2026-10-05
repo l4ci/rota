@@ -1,6 +1,6 @@
 # Configuration
 
-All settings live in [`.rota/config.json`](../reference/rota-folder.md). Run `rota config show` to list every key with its value and source, and `rota config set <key> <value>` to change one (positional arguments; see [config options](../reference/config-options.md)). `rota init` fills any missing key with its default. Don't hand-edit the file.
+All settings live in [`.rota/config.json`](../reference/rota-folder.md). Run `rota config show` to list every key with its value and source, `rota config edit` to change keys from a prompt loop (terminal only: booleans toggle, enum keys pick from their choices, other keys take a typed value; it is also the Config entry of the bare-`rota` menu), and `rota config set <key> <value>` to change one from a script (positional arguments; see [config options](../reference/config-options.md)). `rota init` fills any missing key with its default. Don't hand-edit the file.
 
 For the allowed values and option labels of each key, see [Configuration options](../reference/config-options.md).
 
