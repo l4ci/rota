@@ -13,7 +13,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/l4ci/rota/internal/pytest"
+	"github.com/l4ci/rota/internal/golden"
 )
 
 // The parity tests run a rota verb on a fixture and compare its output and the
@@ -203,7 +203,7 @@ func knFrozenInputs(before map[string]string, stdin string, args []string) map[s
 func knFrozen(t *testing.T, dir, stdin string, args ...string) (want, got knFrozenOut) {
 	t.Helper()
 	before := knTree(t, dir)
-	pytest.Golden(t, knFrozenInputs(before, stdin, args), &want)
+	golden.Golden(t, knFrozenInputs(before, stdin, args), &want)
 	n := knNew(t, dir, stdin, args...)
 	got = knFrozenOut{Stdout: n.stdout, Stderr: n.stderr, RC: n.rc}
 	got.Changed, got.Removed = knDelta(before, knTree(t, dir))

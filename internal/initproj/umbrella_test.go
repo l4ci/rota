@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/l4ci/rota/internal/pytest"
+	"github.com/l4ci/rota/internal/golden"
 )
 
 // tree builds an umbrella fixture: git children (dir or worktree-style .git
@@ -150,7 +150,7 @@ func umbrellaCases() []umbrellaCase {
 func TestUmbrellaMatchesHelperGolden(t *testing.T) {
 	cases := umbrellaCases()
 	var want []umbrellaOutcome
-	pytest.Golden(t, cases, &want)
+	golden.Golden(t, cases, &want)
 	if len(want) != len(cases) {
 		t.Fatalf("golden has %d outcomes for %d cases", len(want), len(cases))
 	}

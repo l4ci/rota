@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/l4ci/rota/internal/pytest"
+	"github.com/l4ci/rota/internal/golden"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
@@ -238,7 +238,7 @@ func gateGolden(t *testing.T, cases []gateCase) map[string]gateOutcome {
 			"files": c.files, "noFiles": c.noFiles, "body": c.body, "relays": c.relays})
 	}
 	var want map[string]gateOutcome
-	pytest.Golden(t, map[string]any{"cases": descs}, &want)
+	golden.Golden(t, map[string]any{"cases": descs}, &want)
 	return want
 }
 

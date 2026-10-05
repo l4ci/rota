@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/l4ci/rota/internal/pytest"
+	"github.com/l4ci/rota/internal/golden"
 )
 
 // Fixture goldens: the Go port runs on a freshly built project and must leave
@@ -23,7 +23,7 @@ func TestPoolInit(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			b := newProject(t, cfg)
 			var want map[string]string
-			pytest.Golden(t, map[string]any{"config": cfg, "steps": []string{"init --slots 3 --base main --session s1", "init --slots 4 --base main --session s1"}}, &want)
+			golden.Golden(t, map[string]any{"config": cfg, "steps": []string{"init --slots 3 --base main --session s1", "init --slots 4 --base main --session s1"}}, &want)
 			res, err := goInit(t, b, InitOpts{Slots: 3, Base: "main", Session: "s1"})
 			if err != nil {
 				t.Fatal(err)
@@ -49,7 +49,7 @@ func TestPoolInit(t *testing.T) {
 func TestPoolInitDefaultsToCurrentBranchAndHv(t *testing.T) {
 	b := newProject(t, `{}`)
 	var want map[string]string
-	pytest.Golden(t, map[string]any{"config": `{}`, "argv": "init --slots 1"}, &want)
+	golden.Golden(t, map[string]any{"config": `{}`, "argv": "init --slots 1"}, &want)
 	res, err := goInit(t, b, InitOpts{Slots: 1})
 	if err != nil || res.Base != "main" || res.Session != "rota" {
 		t.Fatalf("%+v %v", res, err)
@@ -74,7 +74,7 @@ func TestPoolInitMigratesWindowToHandleAndKeepsLiveTab(t *testing.T) {
 	cfg := `{"work":{"dispatch":"herdr"}}`
 	b := newProject(t, cfg)
 	var want map[string]string
-	pytest.Golden(t, map[string]any{"config": cfg, "steps": []string{"init --slots 2 --base main", "slot 1 handle w9:t4, slot 2 window rota:w2", "init --slots 2 --base main"}}, &want)
+	golden.Golden(t, map[string]any{"config": cfg, "steps": []string{"init --slots 2 --base main", "slot 1 handle w9:t4, slot 2 window rota:w2", "init --slots 2 --base main"}}, &want)
 	goInit(t, b, InitOpts{Slots: 2, Base: "main"})
 	// slot 1 had a live tab recorded; slot 2 is an unmigrated pre-herdr registry
 	raw, _ := os.ReadFile(RegistryPath(b))
@@ -91,7 +91,7 @@ func TestPoolInitMigratesWindowToHandleAndKeepsLiveTab(t *testing.T) {
 func TestPoolInitRegistersTheBranchActuallyCheckedOut(t *testing.T) {
 	b := newProject(t, `{}`)
 	var want map[string]string
-	pytest.Golden(t, map[string]any{"config": `{}`, "steps": []string{"init --slots 1 --base main", "git switch -c rota-worker/w1-t9 in w1", "init --slots 1 --base main"}}, &want)
+	golden.Golden(t, map[string]any{"config": `{}`, "steps": []string{"init --slots 1 --base main", "git switch -c rota-worker/w1-t9 in w1", "init --slots 1 --base main"}}, &want)
 	goInit(t, b, InitOpts{Slots: 1, Base: "main"})
 	sh(t, filepath.Join(b, ".worktrees", "w1"), "git", "switch", "-q", "-c", "rota-worker/w1-t9")
 	goInit(t, b, InitOpts{Slots: 1, Base: "main"})
@@ -105,7 +105,7 @@ func TestPoolInitRegistersTheBranchActuallyCheckedOut(t *testing.T) {
 func TestPoolInitLegacySlotStays(t *testing.T) {
 	b := newProject(t, `{}`)
 	var want map[string]string
-	pytest.Golden(t, map[string]any{"config": `{}`, "legacy slot": "w1 at <root>/.claude/worktrees/rota-worker/w1 on rota-worker/w1, handle rota:w1", "argv": "init --slots 1 --base main"}, &want)
+	golden.Golden(t, map[string]any{"config": `{}`, "legacy slot": "w1 at <root>/.claude/worktrees/rota-worker/w1 on rota-worker/w1, handle rota:w1", "argv": "init --slots 1 --base main"}, &want)
 	legacy := filepath.Join(b, ".claude", "worktrees", "rota-worker", "w1")
 	sh(t, b, "git", "worktree", "add", "-q", "-b", "rota-worker/w1", legacy, "main")
 	reg := `{"session":"rota","slots":[{"name":"w1","branch":"rota-worker/w1","worktree":"` + legacy + `","base":"main","handle":"rota:w1","state":"idle","task":null,"pr":null,"relays":[],"configDir":null}]}`
@@ -155,7 +155,7 @@ func TestPoolInitWarnsWhenWorktreesNotIgnored(t *testing.T) {
 func TestPoolInitTreatsAPlainDirInsideTheProjectAsHealthy(t *testing.T) {
 	b := newProject(t, `{}`)
 	var want map[string]string
-	pytest.Golden(t, map[string]any{"config": `{}`, "plain dir": ".worktrees/w1 holding junk", "argv": "init --slots 1 --base main"}, &want)
+	golden.Golden(t, map[string]any{"config": `{}`, "plain dir": ".worktrees/w1 holding junk", "argv": "init --slots 1 --base main"}, &want)
 	os.MkdirAll(filepath.Join(b, ".worktrees", "w1"), 0o755)
 	os.WriteFile(filepath.Join(b, ".worktrees", "w1", "junk"), []byte("x"), 0o644)
 	if _, err := goInit(t, b, InitOpts{Slots: 1, Base: "main"}); err != nil {
@@ -167,7 +167,7 @@ func TestPoolInitTreatsAPlainDirInsideTheProjectAsHealthy(t *testing.T) {
 func TestPoolReap(t *testing.T) {
 	b := newProject(t, `{}`)
 	var want map[string]string
-	pytest.Golden(t, map[string]any{"config": `{}`, "steps": []string{"init --slots 3 --base main", "reap --slot w2", "reap --all"}}, &want)
+	golden.Golden(t, map[string]any{"config": `{}`, "steps": []string{"init --slots 3 --base main", "reap --slot w2", "reap --all"}}, &want)
 	goInit(t, b, InitOpts{Slots: 3, Base: "main"})
 
 	reaped, err := Env{}.Reap(b, []string{"w2", "nope"}, false)
