@@ -2,33 +2,25 @@ package cli
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/l4ci/rota/internal/gittest"
 )
 
 // gitT runs git in dir and fails the test on error.
 func gitT(t *testing.T, dir string, args ...string) string {
 	t.Helper()
-	cmd := exec.Command("git", append([]string{"-c", "user.email=t@x", "-c", "user.name=t", "-c", "init.defaultBranch=main"}, args...)...)
-	cmd.Dir = dir
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("git %v in %s: %v\n%s", args, dir, err, out)
-	}
-	return strings.TrimSpace(string(out))
+	return gittest.Run(t, dir, args...)
 }
 
 // newRepo makes a repo in dir/name with one commit on branch.
 func newRepo(t *testing.T, dir, name, branch string) string {
 	t.Helper()
 	p := filepath.Join(dir, name)
-	if err := os.MkdirAll(p, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	gitT(t, p, "init", "-q", "-b", branch)
+	gittest.Init(t, p, branch)
 	gitT(t, p, "commit", "-q", "--allow-empty", "-m", "init")
 	return p
 }
