@@ -1,6 +1,6 @@
 # `/rota-ship` (Docs Mode) scaffold conventions
 
-Used by `/rota-ship` (Docs Mode) Step 4 (Propose Tailored Tree) and Step 5 (Scaffold on Approval). The page-naming convention and the seed `.docsignore` are both consumed by `/rota-ship` (Docs Mode) alone — co-located here so the skill's prose stays focused on the UX flow.
+Used by `/rota-ship` (Docs Mode) Step D4 (Propose Tailored Tree) and Step D5 (Scaffold on Approval). The page-naming convention and the seed `.docsignore` are both consumed by `/rota-ship` (Docs Mode) alone — co-located here so the skill's prose stays focused on the UX flow.
 
 ## Page-naming convention
 
@@ -10,7 +10,7 @@ Tailored trees follow this layout — already in use across rota's own `docs/` a
 - **Phase-grouped usage pages** — `docs/usage/<verb-noun>.md`: examples — `picking-work.md`, `running-work.md`, `pausing-and-resuming.md`, `review-and-ship.md`. The verb-noun shape keeps file names self-documenting and groups related actions.
 - **Reference material** — `docs/reference/`: full helper / command / config references — `slash-commands.md`, `cli-helpers.md`, `configuration.md`, etc. Reference pages are flat lists/tables; usage pages are narrative walkthroughs.
 
-When the tailored proposal in Step 4 doesn't fit the convention (e.g., a CLI tool with no usage phases, or a library with API references but no walkthroughs), describe the deviation in one line in the proposal — *"This project ships only reference material; no `usage/` pages proposed."* — so the user sees the conscious choice.
+When the tailored proposal in Step D4 doesn't fit the convention (e.g., a CLI tool with no usage phases, or a library with API references but no walkthroughs), describe the deviation in one line in the proposal — *"This project ships only reference material; no `usage/` pages proposed."* — so the user sees the conscious choice.
 
 ## `.docsignore` seed
 
@@ -38,7 +38,7 @@ build/
 target/
 ```
 
-The seed is conservative — the user extends it for project-specific paths after the scaffold lands. `/rota-ship` (Docs Mode)'s after-work flow (Step A2) filters the diff through `.docsignore` before classifying changes.
+The seed is conservative — the user extends it for project-specific paths after the scaffold lands. `/rota-ship` (Docs Mode)'s after-work flow (Step D-A2) filters the diff through `.docsignore` before classifying changes.
 
 ## What this reference does NOT cover
 

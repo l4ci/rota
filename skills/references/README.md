@@ -8,9 +8,9 @@ See KNOWLEDGE.md "Skill Authoring: Prose & References" for the conventions that 
 
 | Reference | Purpose | Cited by |
 |-----------|---------|----------|
-| [`authoring-conventions.md`](authoring-conventions.md) | Authoring rules shared across SKILL.md files (inline autonomy directives, mirror-step threshold). | `/rota-capture`, `/rota-refactor`, `/rota-ship` |
+| [`authoring-conventions.md`](authoring-conventions.md) | Authoring rules shared across SKILL.md files (inline autonomy directives, gate shape, ask-in-user's-terms, verb-contract rules). | `/rota-capture`, `/rota-refactor`, `/rota-ship` |
 | [`context-load-protocol.md`](context-load-protocol.md) | K+D context loading sequence shared by every cycle-starting skill. | `/rota-plan`, `/rota-vision`, `/rota-work` (including `--preview`) |
-| [`design-exploration.md`](design-exploration.md) | Shared five-step spine for skills that negotiate what to build before downstream skills capture how. | `/rota-brainstorm`, `/rota-vision` |
+| [`design-exploration.md`](design-exploration.md) | Shared draft, approve, write, hand-off shape for skills that negotiate what to build before downstream skills capture how. | `/rota-brainstorm`, `/rota-vision` |
 | [`dependent-items.md`](dependent-items.md) | When an edge is a dependency, `--depends-on` usage, creation order, expand → migrate → contract for wide refactors. | `/rota-capture`, `/rota-plan`, `/rota-refactor` |
 | [`detail-files.md`](detail-files.md) | Detail-file template used when an item's input exceeds 3 sentences. | `/rota-capture` |
 | [`docs-conventions.md`](docs-conventions.md) | Conventions for content under `docs/` (registration sites, audience split). | `/rota-ship` (Docs Mode) |
@@ -44,7 +44,7 @@ See KNOWLEDGE.md "Skill Authoring: Prose & References" for the conventions that 
 - **Path style.** Citations from SKILL.md use the form `references/<file>.md` (relative to the installed skill's directory). `rota skills install` copies the references each skill cites into `<skill>/references/`, so links resolve wherever a skill is loaded.
 - **Inline vs. extracted.** Inline prose wins when it's local to its step and under 30 lines. Extract to `references/<topic>.md` when the same choreography appears in 2+ skills OR when extraction shrinks a SKILL.md by ≥30 lines of self-contained content (per the "Single-consumer references" KNOWLEDGE entry).
 - **One-line purpose.** Each row's `Purpose` column is one sentence; longer context lives inside the reference file. If the one-liner needs a clause about scope or a noteworthy exception, keep it under 25 words.
-- **Cited by.** The `Cited by` column is the canonical consumer set — derived by `grep -l "references/<name>" rota-*/SKILL.md`. A reference with no consumers should not exist; if you find one while running step 2 above, flag it in your completion report.
+- **Cited by.** The `Cited by` column is the canonical consumer set — derived by `grep -l "references/<name>" rota-*/SKILL.md`. A reference with no consumers should not exist; if you find one, flag it in your completion report.
 
 ## Maintenance
 

@@ -24,7 +24,6 @@ Read `.rota/config.json`:
 Guard → Clarify (if needed) → Status → Plan → Isolate → Dispatch → Verify → Commit → Close → Merge/PR → Status
 ```
 
-Use it when the user describes a task, feature or list of improvements with enough spec to act on, decomposable into 2+ independent pieces.
 
 ## No-Argument Mode (reconcile, suggest, then work)
 

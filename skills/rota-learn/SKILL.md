@@ -103,9 +103,9 @@ When `.rota/repos.json` registers at least one sub-repo (umbrella mode), `rota k
   1. `"Umbrella-shared (Recommended)"` — *"Write to `.rota/KNOWLEDGE.md`; visible across all sub-repos."*
   2. `"<name>"` (one option per registered sub-repo) — *"Write to `.rota/knowledge/<name>/KNOWLEDGE.md`; scoped to that repo."*
 
-Pass the chosen scope as `--repo <scope>` to `rota knowledge add`. `/rota-learn --term` (F18 Glossary entries) uses the same routing — per the *"Persistence-trio scoping"* decision the Glossary topic follows KNOWLEDGE's hybrid scoping, so a `--repo`-scoped term lands in that sub-repo's `## Glossary` (wired in T5).
+Pass the chosen scope as `--repo <scope>` to `rota knowledge add`. `/rota-learn --term` (Glossary entries) uses the same routing — per the *"Persistence-trio scoping"* decision the Glossary topic follows KNOWLEDGE's hybrid scoping, so a `--repo`-scoped term lands in that sub-repo's `## Glossary`.
 
-**Single-repo projects:** no `--repo` needed — scope always resolves to `"umbrella"` and the `.rota/KNOWLEDGE.md` path is used unchanged; behavior is byte-identical to pre-F21.
+**Single-repo projects:** no `--repo` needed — scope always resolves to `"umbrella"` and the `.rota/KNOWLEDGE.md` path is used unchanged.
 
 **New topics in a scoped file:** the "append `## <Topic>` heading first" rule applies to the *resolved* file. A fresh sub-repo `KNOWLEDGE.md` starts empty — seed the heading in that scoped file before calling `rota knowledge add`, just as you would for the umbrella file.
 
@@ -152,7 +152,7 @@ Updated the topic index in <AGENTS.md|CLAUDE.md> — /rota-work will consult the
   1. Read the topic's bullets via `rota knowledge query "<topic>"`.
   2. Group bullets into 2 or 3 cohesive facets by semantic theme (e.g. `Helpers` / `Workers & Parallelism`, `Conventions` / `References`). Each facet must hold ≥3 bullets; `Misc` / `Other` / `Etc.` facets are forbidden — every bullet gets a substantive home. If no plausible split axis exists (bullets are byte-equivalent in theme), fall back to the `"off"` nudge for that topic and skip steps 3–7.
   3. Append `## <Topic>: <FacetA>` and `## <Topic>: <FacetB>` headings to `.rota/KNOWLEDGE.md` immediately before the old `## <Topic>` heading.
-  4. For each bullet in `<Topic>`, call `rota knowledge rename-topic --from "<Topic>" --to "<Topic>: <Facet>" --title "<bullet-title>"`. The verb relocates the bullet body byte-identical AND re-keys its `.rota/knowledge-tier.json` entry from `<Topic>::<title>` to `<Topic>: <Facet>::<title>` in one atomic step — tier and hit state survive the split. Issue all calls for one offender as a single parallel batch (each invocation is atomic on a different bullet). Do NOT hand-edit bullets via `Edit` for this — that path silently orphans sidecar entries (the T03 / rota#13 regression this auto-split was fixed to prevent).
+  4. For each bullet in `<Topic>`, call `rota knowledge rename-topic --from "<Topic>" --to "<Topic>: <Facet>" --title "<bullet-title>"`. The verb relocates the bullet body byte-identical AND re-keys its `.rota/knowledge-tier.json` entry from `<Topic>::<title>` to `<Topic>: <Facet>::<title>` in one atomic step — tier and hit state survive the split. Issue all calls for one offender as a single parallel batch (each invocation is atomic on a different bullet). Do NOT hand-edit bullets via `Edit` for this; it silently orphans sidecar entries.
   5. Remove the now-empty old `## <Topic>` heading.
   6. Re-run `rota block knowledge` to refresh the managed `<!-- rota-knowledge-start -->` block.
   7. Append one line to the confirm output: `Auto-split <topic> → <topic>: <FacetA> + <topic>: <FacetB> — N → A+B bullets.`
