@@ -12,7 +12,7 @@ import (
 // closes the issue (`Closes #N`). One OpenPRs call serves every issue. File
 // mode and a missing forge have no open PRs to read, so the map is nil.
 func (e Env) openPRIssues(ctx context.Context, be backlog.Backend) (map[int]int, error) {
-	if e.Forge == nil || be.Name() != "issues" {
+	if e.Forge == nil || !be.Capabilities().Tracker {
 		return nil, nil
 	}
 	prs, err := e.Forge.OpenPRs(ctx)
