@@ -5,12 +5,12 @@ import (
 	"encoding/hex"
 	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"syscall"
 	"testing"
 
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/hook"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/skills"
@@ -132,13 +132,7 @@ func TestRewriteSettingsDropsHvHookNextToRotaOne(t *testing.T) {
 
 func gitIn(t *testing.T, dir string, args ...string) string {
 	t.Helper()
-	cmd := exec.Command("git", append([]string{"-c", "user.email=t@t", "-c", "user.name=t", "-c", "init.defaultBranch=main"}, args...)...)
-	cmd.Dir = dir
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("git %v: %v\n%s", args, err, out)
-	}
-	return string(out)
+	return gittest.Run(t, dir, args...)
 }
 
 func write(t *testing.T, path, text string) {

@@ -32,6 +32,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/l4ci/rota/internal/gittest"
 )
 
 var (
@@ -210,26 +212,20 @@ func expand(s string, i info) string {
 // commitFile writes path and commits it, returning the short hash.
 func commitFile(t *testing.T, dir, subject, path, content string) string {
 	t.Helper()
-	write(t, dir, path, content)
-	git(t, dir, "add", path)
-	git(t, dir, "commit", "-q", "-m", subject)
-	return git(t, dir, "rev-parse", "--short", "HEAD")
+	return gitRunner().Commit(t, dir, subject, path, content)
+}
+
+// gitRunner pins the fixture's commit time (noon UTC of the harness day) so its
+// hashes repeat from run to run; the frozen records hold them.
+func gitRunner() gittest.Runner {
+	when := startDay + "T12:00:00Z"
+	return gittest.Runner{Env: append(append([]string{}, baseEnv...), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null",
+		"GIT_AUTHOR_DATE="+when, "GIT_COMMITTER_DATE="+when)}
 }
 
 func git(t *testing.T, dir string, args ...string) string {
 	t.Helper()
-	cmd := exec.Command("git", args...)
-	cmd.Dir = dir
-	// Fixed commit time (noon UTC of the harness day) so a fixture's hashes
-	// repeat from run to run; the frozen records hold them.
-	when := startDay + "T12:00:00Z"
-	cmd.Env = append(append([]string{}, baseEnv...), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null",
-		"GIT_AUTHOR_DATE="+when, "GIT_COMMITTER_DATE="+when)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("git %v: %v\n%s", args, err, out)
-	}
-	return strings.TrimSpace(string(out))
+	return gitRunner().Run(t, dir, args...)
 }
 
 func write(t *testing.T, root, rel, content string) {

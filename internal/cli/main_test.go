@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/knowledge"
 )
@@ -48,11 +49,9 @@ func TestMain(m *testing.M) {
 	os.Setenv("ROTA_TEST_DOCTOR_DISK", "50:100")
 	limitHost = func(string) host.Host { return &limFake{} }
 	// Fixture repos commit and merge: the identity comes from here, not from
-	// the developer's (or CI's missing) global git config. Same identity as gitT,
-	// so commit hashes in the goldens do not move.
-	for k, v := range map[string]string{"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@x", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@x"} {
-		os.Setenv(k, v)
-	}
+	// the developer's (or CI's missing) global git config. t@x, not gittest's
+	// default: the goldens hold commit hashes made under it.
+	gittest.SetIdentity("GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@x", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@x")
 	code := m.Run()
 	if b, err := os.ReadFile(hit); err == nil {
 		fmt.Fprintf(os.Stderr, "FAIL: tests exec'd the forge CLI from PATH:\n%s", b)

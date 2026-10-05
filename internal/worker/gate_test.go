@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/golden"
 	"github.com/l4ci/rota/internal/tracker"
 )
@@ -44,7 +45,7 @@ type world struct {
 
 func gitq(t *testing.T, dir string, args ...string) string {
 	t.Helper()
-	return sh(t, dir, "git", append([]string{"-c", "user.name=t", "-c", "user.email=t@t"}, args...)...)
+	return gittest.Run(t, dir, append([]string{"-c", "user.name=t", "-c", "user.email=t@t"}, args...)...)
 }
 
 // newWorld is gt_case: pr is the recorded PR (URL), "" for none.
@@ -56,14 +57,14 @@ func newWorld(t *testing.T, pr string) *world {
 	}
 	w := &world{t: t, dir: filepath.Join(base, "gate"), origin: filepath.Join(base, "origin.git"), worker: filepath.Join(base, "worker"),
 		forgeDB: filepath.Join(base, "forge.json"), log: filepath.Join(base, "forge.log"), mode: "ok"}
-	sh(t, base, "git", "init", "-q", "--bare", "-b", "main", w.origin)
-	sh(t, base, "git", "clone", "-q", w.origin, w.dir)
+	gittest.Run(t, base, "init", "-q", "--bare", "-b", "main", w.origin)
+	gittest.Run(t, base, "clone", "-q", w.origin, w.dir)
 	gitq(t, w.dir, "checkout", "-q", "-B", "main")
 	os.WriteFile(filepath.Join(w.dir, "seed.txt"), []byte("seed\n"), 0o644)
 	gitq(t, w.dir, "add", "seed.txt")
 	gitq(t, w.dir, "commit", "-q", "-m", "seed")
 	gitq(t, w.dir, "push", "-q", "origin", "main")
-	sh(t, base, "git", "clone", "-q", w.origin, w.worker)
+	gittest.Run(t, base, "clone", "-q", w.origin, w.worker)
 	gitq(t, w.worker, "checkout", "-q", "-b", "w1")
 	os.WriteFile(filepath.Join(w.worker, "work.txt"), []byte("work\n"), 0o644)
 	gitq(t, w.worker, "add", "work.txt")

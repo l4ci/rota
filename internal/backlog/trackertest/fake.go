@@ -81,7 +81,7 @@ func (f *Fake) Get(_ context.Context, n int, withComments bool) (tracker.Issue, 
 	return out, nil
 }
 
-// List returns the issues in the filter's state, in number order.
+// List returns the issues in the filter's state, newest first, as gh does.
 func (f *Fake) List(_ context.Context, fl tracker.ListFilter) ([]tracker.Issue, error) {
 	state := fl.State
 	if state == "" {
@@ -97,7 +97,7 @@ func (f *Fake) List(_ context.Context, fl tracker.ListFilter) ([]tracker.Issue, 
 			out = append(out, is)
 		}
 	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].Number < out[j].Number })
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Number > out[j].Number })
 	return out, nil
 }
 
