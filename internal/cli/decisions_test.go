@@ -64,9 +64,8 @@ func decProject(t *testing.T, decisions, status string) string {
 func TestDecisionsQueryMatchGolden(t *testing.T) {
 	dir := decProject(t, decFixture, "")
 	for _, topics := range [][]string{{"build"}, {"Build", "architecture"}, {"nothing"}} {
-		want, got := knFrozen(t, dir, "", append([]string{"decisions", "query"}, topics...)...)
-		if want.Stdout != got.Stdout || got.RC != 0 {
-			t.Errorf("%v\n--- frozen ---\n%s\n--- new ---\n%s", topics, want.Stdout, got.Stdout)
+		if got := knFrozen(t, dir, "", append([]string{"decisions", "query"}, topics...)...); got.RC != 0 {
+			t.Errorf("%v: rc %d", topics, got.RC)
 		}
 	}
 	j := knNew(t, dir, "", "decisions", "query", "Build", "ghost", "--json")
@@ -99,9 +98,8 @@ func TestMapQueryAndQAQueryMatchGolden(t *testing.T) {
 	knWrite(t, filepath.Join(dir, ".rota", "qa", "web.md"), "---\nsurface: web\nsummary: browser\n---\n\n# Web QA\n")
 	for _, group := range []string{"map", "qa"} {
 		names := []string{"cli", "ghost", "alpha", "web"}
-		want, got := knFrozen(t, dir, "", append([]string{group, "query"}, names...)...)
-		if want.Stdout != got.Stdout || got.RC != 0 {
-			t.Errorf("%s\n--- frozen ---\n%s\n--- new ---\n%s", group, want.Stdout, got.Stdout)
+		if got := knFrozen(t, dir, "", append([]string{group, "query"}, names...)...); got.RC != 0 {
+			t.Errorf("%s: rc %d", group, got.RC)
 		}
 		if got := knNew(t, dir, "", group, "query"); got.rc != 2 {
 			t.Errorf("%s with no name: rc=%d", group, got.rc)
@@ -125,12 +123,8 @@ func TestMapAndQAIndexMatchGolden(t *testing.T) {
 				knWrite(t, filepath.Join(dir, ".rota", "qa", "web.md"), "---\nsurface: web\nsummary: browser\n---\n")
 				knWrite(t, filepath.Join(dir, ".rota", "qa", "bare.md"), "---\n---\n")
 			}
-			want, got := knFrozen(t, dir, "", c.group, "index")
-			if want.RC != 0 || got.RC != 0 {
-				t.Fatalf("%s rc frozen=%d new=%d %s %s", c.group, want.RC, got.RC, want.Stderr, got.Stderr)
-			}
-			if want.Changed["../AGENTS.md"] != got.Changed["../AGENTS.md"] {
-				t.Errorf("%s (entries=%v) AGENTS.md differs\n--- frozen ---\n%s\n--- new ---\n%s", c.group, withEntries, want.Changed["../AGENTS.md"], got.Changed["../AGENTS.md"])
+			if got := knFrozen(t, dir, "", c.group, "index"); got.RC != 0 {
+				t.Fatalf("%s rc %d %s", c.group, got.RC, got.Stderr)
 			}
 			again := knNew(t, dir, "", c.group, "index", "--json")
 			if !strings.Contains(again.stdout, `"status": "unchanged", "changed": false`) {
@@ -170,9 +164,9 @@ func TestMapStatsCap(t *testing.T) {
 		t.Errorf("over cap: %s", over.stdout)
 	}
 	// The old nudge text matches: the helper printed it on stderr, rota prints it on stdout.
-	want, got := knFrozen(t, dir, "", "map", "stats", "--cap")
-	if want.Stderr != got.Stdout || !strings.HasPrefix(got.Stdout, "note: project map has 2 subsystems") {
-		t.Errorf("text mode: frozen %q new %q", want.Stderr, got.Stdout)
+	got := knFrozenView(t, dir, "", func(o *knFrozenOut) { o.Stdout, o.Stderr = "", o.Stdout }, "map", "stats", "--cap")
+	if !strings.HasPrefix(got.Stdout, "note: project map has 2 subsystems") {
+		t.Errorf("text mode: %q", got.Stdout)
 	}
 }
 
@@ -180,16 +174,14 @@ func TestCRLFMatchGoldenForDecisionsMapAndQA(t *testing.T) {
 	crlf := func(s string) string { return strings.ReplaceAll(s, "\n", "\r\n") }
 	t.Run("decisions query", func(t *testing.T) {
 		dir := decProject(t, crlf(decFixture), "")
-		if want, got := knFrozen(t, dir, "", "decisions", "query", "build"); want.Stdout != got.Stdout {
-			t.Errorf("query frozen %q new %q", want.Stdout, got.Stdout)
-		}
+		knFrozen(t, dir, "", "decisions", "query", "build")
 	})
 	t.Run("map query, stats and index", func(t *testing.T) {
 		dir := mapProject(t)
 		knWrite(t, filepath.Join(dir, ".rota", "map", "cli.md"), crlf(mapFileA))
 		knWrite(t, filepath.Join(dir, "cmd", "main.go"), crlf("package main\n\nfunc main() {}\n"))
-		if want, got := knFrozen(t, dir, "", "map", "query", "cli"); want.Stdout != got.Stdout || strings.Contains(got.Stdout, "\r") {
-			t.Errorf("query frozen %q new %q", want.Stdout, got.Stdout)
+		if got := knFrozen(t, dir, "", "map", "query", "cli"); strings.Contains(got.Stdout, "\r") {
+			t.Errorf("query kept CR: %q", got.Stdout)
 		}
 		n := knNew(t, dir, "", "map", "stats", "--json")
 		if !strings.Contains(n.stdout, `"entryPoints": 3, "brokenRefs": 2`) {
