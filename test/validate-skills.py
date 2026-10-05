@@ -239,10 +239,10 @@ def prose_rules():
     # config verbs and the positional-args doc (F09, F78)
     for n in ("ship",):
         r.append(has(sk(n), "rota config set", "missing rota config set call"))
-    r += [has(sk("ship"), r"\| Manual invoke.*after-work.*manual mode",
+    r += [has("skills/rota-ship/docs-mode.md", r"\| Manual invoke.*after-work.*manual mode",
               "Docs Mode Modes row for manual invocation must reflect after-work in manual mode", True),
-          has(sk("ship"), "Route to the After-work sub-flow", "Docs Mode Step D1 'Already true' branch must route to the after-work sub-flow"),
-          has(sk("ship"), "Manual entry bypasses the gate", "Docs Mode Step D-A1 missing the manual-entry bypass clause"),
+          has("skills/rota-ship/docs-mode.md", "Route to the After-work sub-flow", "Docs Mode Step D1 'Already true' branch must route to the after-work sub-flow"),
+          has("skills/rota-ship/docs-mode.md", "Manual entry bypasses the gate", "Docs Mode Step D-A1 missing the manual-entry bypass clause"),
           has("docs/reference/config-options.md", "positional", "missing positional-args mention"),
           has("docs/usage/configuration.md", r"positional|<key>=<value>", "missing positional-args mention", True),
           has("docs/usage/configuration.md", "work.dispatch", "does not explain work.dispatch")]
