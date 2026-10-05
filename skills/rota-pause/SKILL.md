@@ -1,6 +1,6 @@
 ---
 name: rota-pause
-description: Use when the session is approaching a context limit, you need to hand off, you want to stop a long /rota-work cycle cleanly, or an orchestrator must stop mid-round.
+description: Use when the session is approaching a context limit, the work must be handed off, a long /rota-work cycle should stop cleanly, or an orchestrator must stop mid-round.
 ---
 
 # rota-pause — Graceful Session Pause

@@ -22,7 +22,7 @@
       1. *"Address via `/rota-work` (Recommended)"* — *"Route the concerns to `/rota-work` as a fix list; rerun the calling skill after."*
       2. *"Ship anyway"* — *"Proceed with the integration despite the concerns."*
       3. *"Stop"* — *"Leave the branch as-is; no integration now."*
-- **`surface`** (an advisory gate: QA under `qa.gate: "advisory"`, any QA `INFRA-FAIL`, or a second opinion from the retired `codex` runner) — surface the findings and continue. `data.advisory` is true.
+- **`surface`** (an advisory gate: QA under `qa.gate: "advisory"`, or any QA `INFRA-FAIL`) — surface the findings and continue. `data.advisory` is true.
 - **`stop`** (FAIL) — stop unconditionally. Surface the findings; do not auto-route to ship/merge.
 
 ## Why "Ship anyway" never auto-picks
@@ -56,7 +56,7 @@ The reviewer rubric (what makes a diff PASS, CONCERNS or FAIL) stays in each pro
 
 When a non-canonical caller of this routing (e.g. `/rota-ship` Step 3.5 second-opinion gate, or any future producer that emits the same PASS/CONCERNS/FAIL verdict shape) surfaces concerns, the caller MAY label them with a carrier prefix so the user can distinguish them from the primary `/rota-review` concerns in a session that runs both.
 
-Convention: prefix surfaced concern lines with the producer's name and a dash, e.g. *"Second-opinion concerns:"* before listing the bullets. The routing (`rota verdict route`) is unchanged — only the prose label differs. Codified for `/rota-ship` Step 3.5 second-opinion gate (F04); future producers follow the same shape.
+Convention: prefix surfaced concern lines with the producer's name and a dash, e.g. *"Second-opinion concerns:"* before listing the bullets. The routing (`rota verdict route`) is unchanged — only the prose label differs.
 
 ## See also
 

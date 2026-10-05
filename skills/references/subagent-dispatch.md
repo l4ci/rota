@@ -2,7 +2,7 @@
 
 Cross-skill rulebook for when and how skills push work into subagents instead of doing it on the orchestrator's main thread. The orchestrator is a dispatcher + synthesizer; reads, scans, summaries, and serial queries belong elsewhere.
 
-Cited by `references/authoring-conventions.md`. Companion to the worktree-isolation rule in `.rota/DECISIONS.md` (the 2026-05-02 entry on `work.isolation` for ≥2 commit-producing parallel workers).
+Cited by `references/authoring-conventions.md`. Companion to the worktree-isolation rule in `.rota/DECISIONS.md` (`work.isolation` for ≥2 commit-producing parallel workers).
 
 ## When to dispatch
 
@@ -49,7 +49,7 @@ Read `models.*` from `.rota/config.json` when the skill exposes the keys (`model
 When dispatching N independent subagents:
 
 - Issue all `Agent` tool calls in a **single assistant turn** (one message, multiple tool-use blocks) so they run concurrently.
-- Independence requirement: no shared mutable state between workers. File disjointness is mandatory; for commit-producing waves the worktree-isolation rule from `.rota/DECISIONS.md` (2026-05-02) applies — under `work.isolation == "branch"`, ≥2 commit-producing parallel workers in one wave is forbidden because they race the shared `.git/index`.
+- Independence requirement: no shared mutable state between workers. File disjointness is mandatory; for commit-producing waves the worktree-isolation rule from `.rota/DECISIONS.md` applies — under `work.isolation == "branch"`, ≥2 commit-producing parallel workers in one wave is forbidden because they race the shared `.git/index`.
 - Aggregation: the orchestrator collects returns and merges per the return-shape contract above. Workers never communicate with each other; the orchestrator is the only synthesizer.
 
 Read-only workers (research, summary, query relays) are exempt from the worktree-isolation guard — they don't touch `.git/`. The guard fires only when ≥2 workers in a single wave are instructed to stage and commit.

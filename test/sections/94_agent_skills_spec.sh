@@ -22,7 +22,9 @@ sp_fixture "$SPEC_TMP/ok" 'name: rota-a\ndescription: Does a thing.\nlicense: MI
 OUT="$(sp_run "$SPEC_TMP/ok")" || fail "E2[a]: lint flagged a compliant skill: $OUT"
 sp_fixture "$SPEC_TMP/folded" 'name: rota-a\ndescription: >\n  Folded text\n  over lines.\n'
 OUT="$(sp_run "$SPEC_TMP/folded")" || fail "E2[a]: lint flagged a folded description: $OUT"
-pass "E2[a]: a compliant skill passes, optional spec keys and folded descriptions included"
+sp_fixture "$SPEC_TMP/quoted" 'name: rota-a\ndescription: >-\n  Use on "you are the orchestrator" or "can I ship".\n'
+OUT="$(sp_run "$SPEC_TMP/quoted")" || fail "E2[a]: lint flagged a second-person word inside a quoted trigger: $OUT"
+pass "E2[a]: a compliant skill passes, optional spec keys, folded descriptions and quoted triggers included"
 
 # (b) each rule fails, and the message names the file and the rule
 LONG="$(python3 -c 'print("x" * 1025)')"
@@ -45,8 +47,20 @@ missing required key 'description'|name: rota-a\n
 missing required key 'name'|description: ok\n
 not valid YAML unquoted|name: rota-a\ndescription: Links GH: 12 refs.\n
 not valid YAML unquoted|name: rota-a\ndescription: Links issue #12 refs.\n
+third person|name: rota-a\ndescription: Use when you need to hand off.\n
+third person|name: rota-a\ndescription: Use when I want a plan.\n
 EOF
-pass "E2[b]: a wrong name, a long description, an over-cap description, an unknown key, a missing key and invalid unquoted YAML each fail"
+pass "E2[b]: a wrong name, a long description, an over-cap description, an unknown key, a missing key, invalid unquoted YAML and a second-person description each fail"
+
+# (b2) a reference over 100 lines needs a ## Contents section near the top, so a
+# partial read still shows its scope (Anthropic skill authoring guide, #248)
+sp_fixture "$SPEC_TMP/toc" 'name: rota-a\ndescription: ok\n'
+{ echo '# Long'; for i in $(seq 1 100); do echo "line $i"; done; } > "$SPEC_TMP/toc/skills/references/long.md"
+RC=0; OUT="$(sp_run "$SPEC_TMP/toc")" || RC=$?
+[ "$RC" = 1 ] && grep -qF "skills/references/long.md: 101 lines with no '## Contents'" <<<"$OUT" || fail "E2[b2]: a long reference without contents passed (rc $RC): $OUT"
+{ echo '# Long'; echo; echo '## Contents'; for i in $(seq 1 100); do echo "line $i"; done; } > "$SPEC_TMP/toc/skills/references/long.md"
+OUT="$(sp_run "$SPEC_TMP/toc")" || fail "E2[b2]: a long reference with contents was flagged: $OUT"
+pass "E2[b2]: a reference over 100 lines fails without a ## Contents section and passes with one"
 
 # (c) the transitional sets excuse what is listed, and only that
 sp_fixture "$SPEC_TMP/pend" 'name: rota-a\ndescription: ok\nuser-invocable: true\n'

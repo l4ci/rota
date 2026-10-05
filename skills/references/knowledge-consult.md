@@ -27,7 +27,7 @@ The two verbs return different *kinds* of content and the calling skill must han
 
 **DECISIONS entries are hard boundaries.** Pass the FULL entry to the consumer — rule, *Why*, **Forbids**, **Permits** — not just the title. The calling skill MUST treat them as constraints, not suggestions. If the planned action would violate a decision, stop and surface to the user before proceeding. Do not paper over a violation by rewording or scoping it away.
 
-## Hit-register after consumption (F03 lifecycle)
+## Hit-register after consumption
 
 **This step is mandatory whenever the calling skill carries bullets into a downstream brief.** Skip only when `rota knowledge query` returned nothing or all returned bullets were pruned before the brief was written.
 
@@ -67,5 +67,5 @@ A caller MAY add carrier-specific failure semantics on top — for example, "if 
 
 ## What this reference does NOT cover
 
-- **Full pre-planning context load.** This is the K+D *query* pattern only. The composed load (TODO entry, plan, milestone, git history, plus K+D) lives in `references/context-load-protocol.md`, which cites this file for the K+D subset.
+- **Full pre-planning context load.** This is the K+D *query* pattern only. The composed load (backlog entry, plan, milestone, git history, plus K+D) lives in `references/context-load-protocol.md`, which cites this file for the K+D subset.
 - **`.rota/KNOWLEDGE.md` `## Glossary` vocabulary lookup.** That's `rota glossary read`, a term-keyed reader against the Glossary topic. Glossary entries are stored alongside other topics in KNOWLEDGE.md but the reader returns nested-bullet entries (term + definition + aliases + not) rather than topic bodies.

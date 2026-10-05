@@ -1,6 +1,6 @@
 ---
 name: rota-spike
-description: Use when you need to try X before committing to it ("can we use SSE?", "does this library handle our scale?") and the answer is a finding, not shipped code.
+description: Use when X must be tried before committing to it ("can we use SSE?", "does this library handle our scale?") and the answer is a finding, not shipped code.
 ---
 
 # rota-spike — Throwaway Feasibility Experiment
@@ -46,7 +46,7 @@ Name the spike with a short kebab-case identifier (`sse-feasibility`, `auth-rota
 
 Skip this step entirely when umbrella mode is off (`rota repo umbrella` exits 1). See `references/umbrella-mode.md` for what umbrella mode means and how the registry works.
 
-In umbrella mode, the spike branch must land in a specific sub-repo (the umbrella root often is not a git repo at all). Resolve `<repo>` via the 3-step fallback codified in KNOWLEDGE 2026-05-02:
+In umbrella mode, the spike branch must land in a specific sub-repo (the umbrella root often is not a git repo at all). Resolve `<repo>` via the 3-step fallback:
 
 1. If the user named a sub-repo in their input (e.g. *"spike SSE feasibility in web"*) — use it.
 2. Else, run `rota repo which --json` from the current cwd; if it succeeds (`data.name`), default to the resolved name.

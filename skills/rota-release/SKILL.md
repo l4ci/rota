@@ -13,7 +13,7 @@ Read from `.rota/config.json` (all keys optional — defaults apply if absent):
 |---|---|---|
 | `release.versionFile` | (auto-detect) | Explicit path override; skips auto-detect search |
 | `release.changelogPath` | `CHANGELOG.md` | Project-root relative |
-| `release.checklistPath` | `.rota/RELEASE.md` | Per-project release checklist walked in Step 1.5; absent = offer scaffold |
+| `release.checklistPath` | `.rota/RELEASE.md` | Per-project release checklist walked in Step 2; absent = offer scaffold |
 | `release.tagPrefix` | `v` | Set to `""` for unprefixed tags |
 | `release.draft` | `false` | Pass `--draft` to `gh`/`glab` |
 | `release.requireCleanTree` | `true` | Set `false` to allow dirty releases (testing only) |

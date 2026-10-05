@@ -44,7 +44,6 @@ Read `.rota/config.json`:
 | Mode-3 name | `restructure` (re-probe surfaces, retire dead strategies, fix broken commands) |
 | After-work approval gate | opt-in via `qa.afterWork: true`; default off — QA runs are slow and may need infra |
 | After-work trigger gate | `qa.afterWork: true` AND touched files match a target's `Watch globs` |
-| Authoring tier | Tier S for `run` (integer Step headers); Tier C for `first-run` / `restructure` (mode-numbered lists) |
 | Commit ownership | `run` does not commit (read-only verdict, recorded with `rota verdict add`); `first-run` / `restructure` own a `chore(qa):` commit |
 
 ### Mode: first-run
@@ -212,7 +211,7 @@ Run on demand when strategy files have drifted from the project (new surfaces, r
 - **No strategy file** — halt; tell user to run `/rota-qa first-run`. Don't auto-scaffold.
 - **Infra unavailable** — record an `INFRA-FAIL` verdict; halt. User starts services, re-runs.
 - **Runner subagent timeout** — re-run that check alone per Step 5 before recording it. If it passes solo, the original red was contention: record `met: true` with both `uptime` figures in `evidence`. If it times out solo too, record `met: false` with `evidence: "timeout after Ns at load <figure>, reproduced alone at load <figure>"`. QA continues either way; verdict reflects the confirmed result, never the contended one.
-- **Strategy references retired tool** — that check is `met: false` with `evidence: "command not found"`. Surface in `restructure` mode. This includes a `codex-verify` runner from a pre-5.0 strategy: the Codex runner was removed in 5.0, so `restructure` drops the entry.
+- **Strategy references retired tool** — that check is `met: false` with `evidence: "command not found"`. Surface in `restructure` mode. This includes a `codex-verify` runner from an older strategy: that runner is retired, so `restructure` drops the entry.
 
 ## References
 
