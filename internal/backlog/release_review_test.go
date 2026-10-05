@@ -58,7 +58,18 @@ func (f *rrFake) ClosedNumbers(body string) []int {
 // gate, so it records nothing.
 func (f *rrFake) PRFiles(context.Context, int) ([]string, error) { return nil, nil }
 
-func (f *rrFake) PRMerge(_ context.Context, pr int, _ tracker.MergeOpts) (string, error) {
+// rrHead is the head sha every fake PR reports; PRMerge must be pinned to it.
+const rrHead = "feedface00000000000000000000000000000001"
+
+// PRView is not recorded: the parity scenarios key on the Python call list.
+func (f *rrFake) PRView(context.Context, int) (tracker.PRInfo, error) {
+	return tracker.PRInfo{HeadSHA: rrHead}, nil
+}
+
+func (f *rrFake) PRMerge(_ context.Context, pr int, o tracker.MergeOpts) (string, error) {
+	if o.HeadSHA != rrHead {
+		return "", &tracker.Error{Kind: tracker.KindFailed, Code: 1, Message: "unpinned merge of PR " + strconv.Itoa(pr)}
+	}
 	if err := f.rec("pr_merge", pr); err != nil {
 		return "", err
 	}
