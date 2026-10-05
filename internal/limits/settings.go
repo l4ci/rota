@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/config"
-	"github.com/l4ci/rota/internal/hook"
 )
 
 // Modes of limits.mode.
@@ -25,8 +24,6 @@ type Settings struct {
 	EscalateIssue int           // orchestrator.escalateIssue (D2), 0 means unset
 }
 
-const maxInt = 1 << 30
-
 // LoadSettings reads and validates the keys from a merged config. An error is
 // the message of exit 70.
 func LoadSettings(cfg any) (Settings, error) {
@@ -40,20 +37,20 @@ func LoadSettings(cfg any) (Settings, error) {
 		return s, fmt.Errorf("limits.mode must be switch or sleep (got %v)", v)
 	}
 	s.Mode = mode
-	margin, err := hook.IntKey(cfg, "limits.resumeMarginSeconds", 0, maxInt)
+	margin, err := config.Int(cfg, "limits.resumeMarginSeconds", 0, config.MaxInt)
 	if err != nil {
 		return s, err
 	}
 	s.Margin = time.Duration(margin) * time.Second
-	fb, err := hook.IntKey(cfg, "limits.fallbackSleepSeconds", 1, maxInt)
+	fb, err := config.FallbackSleepSeconds(cfg)
 	if err != nil {
 		return s, err
 	}
 	s.Fallback = time.Duration(fb) * time.Second
-	if s.MaxResumes, err = hook.IntKey(cfg, "limits.maxResumes", 1, maxInt); err != nil {
+	if s.MaxResumes, err = config.Int(cfg, "limits.maxResumes", 1, config.MaxInt); err != nil {
 		return s, err
 	}
-	if s.EscalateIssue, err = hook.IntKey(cfg, "orchestrator.escalateIssue", 0, maxInt); err != nil {
+	if s.EscalateIssue, err = config.EscalateIssue(cfg); err != nil {
 		return s, err
 	}
 	p, err := config.Value(cfg, "limits.resumePrompt")

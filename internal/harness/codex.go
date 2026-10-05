@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/shlex"
 )
@@ -45,7 +46,7 @@ func (codex) CommandKey() string { return "work.codexCommand" }
 // placeholder runs as written.
 func (c codex) Launch(cfg any, model string) (string, error) {
 	cmd, custom := DefaultCodexCommand, false
-	if s := str(cfg, c.CommandKey()); s != "" {
+	if s := config.StringIfSet(cfg, c.CommandKey()); s != "" {
 		cmd, custom = s, true
 	}
 	if model == "" {

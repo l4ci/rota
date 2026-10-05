@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/itembody"
 	"github.com/l4ci/rota/internal/overlap"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -59,33 +60,16 @@ type InFlight struct {
 }
 
 var (
-	filesHeadingRe = regexp.MustCompile(`(?mi)^#{1,6}[ \t]+files(?:[ \t]+touched)?[ \t]*$`)
-	dependsHeadRe  = regexp.MustCompile(`(?mi)^#{1,6}[ \t]+depends[ \t]+on[ \t]*$`)
-	headingRe      = regexp.MustCompile(`(?m)^#{1,6}[ \t]`)
-	pathTokenRe    = regexp.MustCompile("[A-Za-z0-9_./*@+-]+")
-	foreignRefRe   = regexp.MustCompile(`https?://\S+|[\w.-]+/[\w.-]+#\d+`)
-	issueRefRe     = regexp.MustCompile(`#(\d+)`)
-	itemRefRe      = regexp.MustCompile(`\b(` + backlog.IDPattern(backlog.FileIDDigits) + `)\b`)
+	pathTokenRe  = regexp.MustCompile("[A-Za-z0-9_./*@+-]+")
+	foreignRefRe = regexp.MustCompile(`https?://\S+|[\w.-]+/[\w.-]+#\d+`)
+	issueRefRe   = regexp.MustCompile(`#(\d+)`)
+	itemRefRe    = regexp.MustCompile(`\b(` + backlog.IDPattern(backlog.FileIDDigits) + `)\b`)
 )
-
-// section is the text under the first heading matching head, up to the next
-// heading. ok is false when there is none.
-func section(text string, head *regexp.Regexp) (string, bool) {
-	loc := head.FindStringIndex(text)
-	if loc == nil {
-		return "", false
-	}
-	rest := text[loc[1]:]
-	if n := headingRe.FindStringIndex(rest); n != nil {
-		rest = rest[:n[0]]
-	}
-	return rest, true
-}
 
 // Dependencies parses the `## Depends on` section into item references (in
 // the item's own spelling) and references that cannot be looked up.
 func Dependencies(text string) (refs, unverifiable []string) {
-	sec, ok := section(text, dependsHeadRe)
+	sec, ok := itembody.Section(text, itembody.DependsHeadRe)
 	if !ok {
 		return nil, nil
 	}
@@ -117,7 +101,7 @@ func Dependencies(text string) (refs, unverifiable []string) {
 // Directories end in "/". shared globs are dropped.
 func Footprint(text string, tracked, shared []string) []string {
 	var out []string
-	if sec, ok := section(text, filesHeadingRe); ok {
+	if sec, ok := itembody.Section(text, itembody.FilesHeadRe); ok {
 		for _, line := range strings.Split(sec, "\n") {
 			line = strings.TrimSpace(line)
 			line = strings.TrimLeft(line, "-*+ \t")

@@ -79,7 +79,7 @@ The `/rota-review` reviewer shares context with the work it produced and normali
 rota review brief [--repo "$REPO"] <branch>
 ```
 
-Dispatch the brief verbatim to a fresh `Agent` (`subagent_type: "general-purpose"`, `model: "sonnet"`, `description: "Second-opinion review of <branch>"`). It returns a report ending in a fenced `json` verdict block. Save the block to a temp file, then:
+Dispatch the brief verbatim to a fresh `standard` subagent (`Agent` with `subagent_type: "general-purpose"`, `model: "sonnet"`, `description: "Second-opinion review of <branch>"`). It returns a report ending in a fenced `json` verdict block. Save the block to a temp file, then:
 
 ```bash
 rota verdict add <branch> --kind second-opinion --verdict <PASS|CONCERNS|FAIL> --body-file "$VERDICT" --json

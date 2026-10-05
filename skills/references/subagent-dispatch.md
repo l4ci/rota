@@ -36,13 +36,17 @@ Briefs say what the orchestrator needs back, not what the orchestrator already k
 
 Subagents return synthesis, not transcripts. Structured shape: `findings · decisions · open questions`. The caller treats the return as the source of truth; the worker's working memory is discarded.
 
-## Model tier per work type
+## Subagent tiers
 
-- `haiku` — mechanical: parse JSON, count items, format markdown, run a known query and relay its output
-- `sonnet` — routine reasoning: summarize a file, classify items, search and synthesize
-- `opus` — judgment: verification, design selection, hypothesis evaluation
+Skills size a subagent by **tier**, never by model name. Three tiers, lightest first:
 
-Read `models.*` from `.rota/config.json` when the skill exposes the keys (`models.orchestrator`, `models.worker`). Haiku usage is opportunistic — declared inline in the brief, not in config.
+| Tier | Work | Claude model (default) | Config key |
+|---|---|---|---|
+| `light` | mechanical or read-only: parse JSON, count items, format markdown, search, discover, relay a known query | `haiku` | `round.tiers.claude.light` |
+| `standard` | routine reasoning and writing: summarize a file, classify items, write code and tests | `sonnet` | `round.tiers.claude.standard`, which follows `models.worker` until set |
+| `heavy` | judgment: verification, design selection, hypothesis evaluation, hard debugging | `opus` | `round.tiers.claude.heavy` |
+
+`rota round assign --tier` picks the tier of a round worker from the same table; Codex maps tiers through `round.tiers.codex.*` (see `docs/usage/configuration.md`, *Round keys*). The tier is chosen per subagent call; the main session's own model is `models.orchestrator` and is not a tier. A skill that names a subagent model says `light`, `standard` or `heavy`, and the model comes from this table. Where the `Agent` tool takes a literal `model`, resolve the tier through the config key. Haiku usage is opportunistic: declared inline in the brief, not in config.
 
 ## Parallel fan-out pattern
 
