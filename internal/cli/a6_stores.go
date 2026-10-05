@@ -3,7 +3,6 @@ package cli
 import (
 	"github.com/l4ci/rota/internal/artifact"
 	"github.com/l4ci/rota/internal/backlog"
-	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/design"
 	"github.com/l4ci/rota/internal/plan"
 	"github.com/l4ci/rota/internal/proof"
@@ -14,21 +13,6 @@ import (
 // verb then calls the kind's module without asking which backend it is.
 // Stores that need the tracker connect on first use, so a verb that fails
 // validation never reaches it.
-
-// backlogMode is the project root and whether backlog.backend is "issues".
-// An invalid backlog.backend is an internal error (exit 70, as the old
-// helpers exited 1 on it).
-func backlogMode(c *Ctx) (root string, issue bool, err error) {
-	root, err = c.Root()
-	if err != nil {
-		return "", false, err
-	}
-	name, err := config.Backend(config.Load(root + "/.rota/config.json"))
-	if err != nil {
-		return "", false, &Error{Exit: ExitInternal, Message: err.Error()}
-	}
-	return root, name == "issues", nil
-}
 
 // who is the item a verb answers for: the ID the backend resolves the typed
 // one to ("F7" is "7" on the issue backend) and its type letter. A notes
@@ -49,7 +33,7 @@ func itemNotes(c *Ctx, id string, w *who) func() (artifact.Notes, error) {
 
 // openDesign is the design store for item id.
 func openDesign(c *Ctx, id string) (design.Store, *who, error) {
-	root, issue, err := backlogMode(c)
+	root, issue, err := modeRoot(c)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -62,7 +46,7 @@ func openDesign(c *Ctx, id string) (design.Store, *who, error) {
 
 // openProof is the proof store for item id.
 func openProof(c *Ctx, id string) (root string, st proof.Store, w *who, err error) {
-	root, issue, err := backlogMode(c)
+	root, issue, err := modeRoot(c)
 	if err != nil {
 		return "", nil, nil, err
 	}
@@ -76,7 +60,7 @@ func openProof(c *Ctx, id string) (root string, st proof.Store, w *who, err erro
 // openPlans is the plan store: item plans resolve their item, slice plans
 // open the milestone's tracking issue.
 func openPlans(c *Ctx) (root string, st plan.Store, err error) {
-	root, issue, err := backlogMode(c)
+	root, issue, err := modeRoot(c)
 	if err != nil {
 		return "", nil, err
 	}
@@ -98,7 +82,7 @@ func openPlans(c *Ctx) (root string, st plan.Store, err error) {
 
 // openItems is where plan uncertain looks for open item id.
 func openItems(c *Ctx, id string) (plan.Items, error) {
-	root, issue, err := backlogMode(c)
+	root, issue, err := modeRoot(c)
 	if err != nil {
 		return nil, err
 	}

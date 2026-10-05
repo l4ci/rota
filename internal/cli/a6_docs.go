@@ -48,7 +48,11 @@ func fileRoot(c *Ctx, readOnly bool) (string, Result, error) {
 	if err != nil {
 		return "", Result{}, err
 	}
-	if !artifact.IssueMode(root) {
+	issue, err := issueBackend(root)
+	if err != nil {
+		return "", Result{}, err
+	}
+	if !issue {
 		return root, Result{}, nil
 	}
 	d := jsonx.NewObject()

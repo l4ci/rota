@@ -12,7 +12,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/l4ci/rota/internal/artifact"
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/git"
@@ -104,7 +103,11 @@ func reviewScan(c *Ctx, t branchTarget) (reviewInfo, error) {
 	if err != nil {
 		return info, err
 	}
-	if artifact.IssueMode(t.CorpusRoot) {
+	issue, err := issueBackend(t.CorpusRoot)
+	if err != nil {
+		return info, err
+	}
+	if issue {
 		reviewScanIssues(c, t, bodies, &info)
 		return info, nil
 	}
