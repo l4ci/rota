@@ -1,5 +1,38 @@
 # Changelog
 
+## v0.11.0 — 2026-10-05
+
+Split and tab layouts for herdr rounds, an interactive palette on bare `rota`, and leaner CI.
+
+### New
+
+- **`rota layout split|tabs`.** Arranges a round's herdr panes: the orchestrator full height on the left, workers in columns two high to its right, or one tab per worker. It only moves live panes, so nothing restarts. Bare `rota layout` shows each project's current arrangement.
+- **Palette.** Bare `rota` in a terminal opens a menu with the banner, version, project and round state. Orchestrate is preselected, so `rota` then Enter works as before. Pipes, `--json` and arguments skip it.
+- **`rota repo add|rm`** edits the umbrella registry without re-running `rota init umbrella`. (#182)
+- **Skills for every account.** `rota skills install|update|status` cover each `work.accounts` config dir as well as the current one; `--current-account` limits a run to the current dir. `rota doctor` flags an account whose skills lag the binary. (#179)
+- `/rota-work` runs `/rota-qa run` after a cycle when `qa.afterWork` is on.
+
+### Removed
+
+- `debug.competingHypotheses`: no code ever read it.
+
+### Fixed
+
+- A test flake where git's background housekeeping wrote into a test repo during cleanup. (#184)
+- The `/rota-ship --undo` preview no longer calls plan files gitignored.
+- Two mermaid diagrams in the docs failed to render.
+
+### Internal
+
+- CI is one cached workflow that runs on main and on ready PRs, cancels superseded runs and times out after 15 minutes. (#183)
+- The bracketed item-ID regexes come from the central ID grammar. (#176)
+- An audit corrected the user docs against the code and skills, covering both backlog backends.
+
+### Stats
+18 commits, 96 files changed, +3925 −457 lines
+
+**Full changelog:** https://github.com/l4ci/rota/compare/v0.10.1...v0.11.0
+
 ## v0.10.1 — 2026-10-05
 
 The orchestrator now starts under a configured account; skills moved under skills/.
