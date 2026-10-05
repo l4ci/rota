@@ -110,10 +110,10 @@ func newAssignFixture(t *testing.T) *assignFixture {
 	t.Helper()
 	root := newRepo(t, nil)
 	milestoneDoc(t, root, "M01", "active")
-	if err := os.MkdirAll(filepath.Join(root, "references"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(root, "skills", "references"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(root, "references", "worker-contract.md"), []byte("contract"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "skills", "references", "worker-contract.md"), []byte("contract"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	h := &hostFake{}

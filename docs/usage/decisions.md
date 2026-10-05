@@ -60,6 +60,6 @@ Both flags only seed `Rule` and `Why`. You still articulate `Forbids` and `Permi
 
 ## See also
 
-- [`/rota-decide` skill](../../rota-decide/SKILL.md) for the capture flow itself
+- [`/rota-decide` skill](../../skills/rota-decide/SKILL.md) for the capture flow itself
 - [Knowledge verbs](../reference/cli-helpers.md#rota-knowledge) for the parallel pattern used by `/rota-learn`
 - Sibling persistence skill: [`docs/usage/learning.md`](learning.md) covers both topic-bullet learnings and `--term <name>` Glossary capture

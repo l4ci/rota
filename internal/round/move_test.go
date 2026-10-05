@@ -147,7 +147,7 @@ func newMoveFx(t *testing.T) *moveFx {
 	f.root = newRepo(t, nil)
 	sh(t, f.root, "config", "user.email", "t@t")
 	sh(t, f.root, "config", "user.name", "t")
-	for p, c := range map[string]string{"references/worker-contract.md": "contract", "internal/cli/round.go": "x"} {
+	for p, c := range map[string]string{"skills/references/worker-contract.md": "contract", "internal/cli/round.go": "x"} {
 		if err := os.MkdirAll(filepath.Dir(filepath.Join(f.root, p)), 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -155,7 +155,7 @@ func newMoveFx(t *testing.T) *moveFx {
 			t.Fatal(err)
 		}
 	}
-	sh(t, f.root, "add", "internal", "references")
+	sh(t, f.root, "add", "internal", "skills")
 	sh(t, f.root, "commit", "-q", "-m", "files")
 	f.origin = filepath.Join(t.TempDir(), "origin.git")
 	sh(t, f.root, "init", "-q", "--bare", f.origin)

@@ -159,11 +159,11 @@ def check_pending_spec(skill_files, issues):
 def check_references(path, text, issues):
     # Skills cite references/<x>.md; `rota skills install` copies each cited file
     # next to the skill, so in the source tree the link resolves against the
-    # repo-root references/ dir.
+    # skills/references/ dir.
     pattern = re.compile(r'\((references/[^)\s]+\.md)\)')
     for m in pattern.finditer(text):
         target = m.group(1)
-        resolved = Path(target).resolve()
+        resolved = (Path(path).parent.parent / target).resolve()
         if not resolved.exists():
             issues.append(f"{path}: broken reference '{target}' -> '{resolved}'")
 
@@ -202,7 +202,7 @@ def paired(glob, trigger, need, msg):
 
 def prose_rules():
     r = []
-    sk = lambda n: f"rota-{n}/SKILL.md"
+    sk = lambda n: f"skills/rota-{n}/SKILL.md"
     CALLOUT = "**always manual** — never auto-invoked, regardless of `autonomy.level`"
     # handoff / feature-branch guard calls
     r += [has(sk("work"), "rota status handoff", "must call rota status handoff"),
@@ -233,7 +233,7 @@ def prose_rules():
           has(sk("capture"), "comma-separated list of registered sub-repos", "field-order line must say 'comma-separated list of registered sub-repos'"),
           lacks(sk("capture"), "single name in V1", "must no longer carry the 'single name in V1' qualifier"),
           has(sk("plan"), "multi-repo items pass the full comma-list", "must explain the multi-repo --repo flow"),
-          has("references/work-preview.md", "one line per repo for multi-repo items", "Preview Mode peek must show one Repo line per sub-repo"),
+          has("skills/references/work-preview.md", "one line per repo for multi-repo items", "Preview Mode peek must show one Repo line per sub-repo"),
           has(sk("work"), "rota git branch", "must reference rota git branch for multi-repo branch creation"),
           has(sk("work"), r"rota status add .*--repos", "must reference rota status add --repos for multi-repo status entries", True),
           has(sk("work"), "rota repo resolve", "must reference rota repo resolve for multi-repo validation"),
@@ -242,23 +242,23 @@ def prose_rules():
     # worker reset guard, proof path, manual gates
     r += [lacks(sk("work"), r"work\.dispatch.*(tmux|herdr).*(pool|slot)|rota worker (pool|dispatch|poll)", "legacy tmux/herdr dispatch path was removed; rounds own it", True),
           lacks(sk("work"), r"git add (-A|\.)( |$|\n)", "must not stage directory-wide", True, re.M),
-          paired("rota-*/SKILL.md", "rota item complete", "rota proof add",
+          paired("skills/rota-*/SKILL.md", "rota item complete", "rota proof add",
                  "calls rota item complete without a rota proof add path"),
           lacks(sk("capture"), "Import Mode", "Import Mode was removed"),
           has(sk("capture"), "Step R3", "missing Step R3 (Remove Mode de-tag gate)"),
           has(sk("ship"), "Step 6c", "missing Step 6c (direct-push close gate)"),
           has(sk("ship"), CALLOUT, "missing the manual-gate callout (Step 6c)"),
-          has("references/manual-gates.md", r"Step 6c|direct-push close", "missing the rota-ship Step 6c row", True)]
+          has("skills/references/manual-gates.md", r"Step 6c|direct-push close", "missing the rota-ship Step 6c row", True)]
     # F73 subagent-dispatch discipline
-    D = "references/subagent-dispatch.md"
+    D = "skills/references/subagent-dispatch.md"
     for h in ("When to dispatch", "Small-brief template", "Return-shape contract", "Model tier per work type",
               "Parallel fan-out pattern", "What stays on the orchestrator"):
         r.append(has(D, f"^## {h}", f"section '{h}' missing", True, re.M))
     r += [has(D, "DECISIONS.md", "must cite the .rota/DECISIONS.md worktree-isolation rule"),
           lacks(D, r"TBD|TODO|FIXME|XXX", "contains placeholders", True, re.I),
-          has("references/authoring-conventions.md", "^## Dispatch heavy work to subagents",
+          has("skills/references/authoring-conventions.md", "^## Dispatch heavy work to subagents",
               "missing the 'Dispatch heavy work to subagents' rule", True, re.M),
-          has("references/authoring-conventions.md", D, "missing the cross-reference to subagent-dispatch.md")]
+          has("skills/references/authoring-conventions.md", D[len("skills/"):], "missing the cross-reference to subagent-dispatch.md")]
     return r
 
 
@@ -314,7 +314,7 @@ def check_prose(issues):
 def main():
     issues = []
 
-    skill_files = sorted(Path(".").glob("rota-*/SKILL.md"))
+    skill_files = sorted(Path(".").glob("skills/rota-*/SKILL.md"))
 
     for skill_path in skill_files:
         text = skill_path.read_text(encoding="utf-8")

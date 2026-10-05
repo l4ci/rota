@@ -5,8 +5,9 @@ package rota
 
 import "embed"
 
-// FS holds every skill's markdown (rota-*/*.md) and the shared references
-// (references/*.md).
+// FS holds every skill's markdown (skills/rota-*/*.md) and the shared
+// references (skills/references/*.md). Consumers that expect rota-* and
+// references/ at the tree root use fs.Sub(FS, "skills").
 //
-//go:embed rota-*/*.md references/*.md
+//go:embed skills/rota-*/*.md skills/references/*.md
 var FS embed.FS

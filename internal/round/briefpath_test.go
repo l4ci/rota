@@ -18,7 +18,7 @@ func writeAt(t *testing.T, path, body string) {
 	}
 }
 
-// round.brief, then the project's references/, then an installed Claude root
+// round.brief, then the project's skills/references/, then an installed Claude root
 // (project before user). CLAUDE_PLUGIN_ROOT is no longer read.
 func TestBriefPathOrder(t *testing.T) {
 	root, home := t.TempDir(), t.TempDir()
@@ -54,16 +54,16 @@ func TestBriefPathOrder(t *testing.T) {
 	if p, _ := briefPath(root, roundcfg.Settings{}, env); p != filepath.Join(projRoot, rel) {
 		t.Errorf("project root before user: %q", p)
 	}
-	writeAt(t, filepath.Join(root, "references", "worker-contract.md"), "checkout")
-	if p, _ := briefPath(root, roundcfg.Settings{}, env); p != filepath.Join(root, "references", "worker-contract.md") {
+	writeAt(t, filepath.Join(root, "skills", "references", "worker-contract.md"), "checkout")
+	if p, _ := briefPath(root, roundcfg.Settings{}, env); p != filepath.Join(root, "skills", "references", "worker-contract.md") {
 		t.Errorf("source checkout first: %q", p)
 	}
 	// CLAUDE_CONFIG_DIR replaces ~/.claude as the user root.
 	cfgDir = t.TempDir()
-	if p, _ := briefPath(root, roundcfg.Settings{}, env); p != filepath.Join(root, "references", "worker-contract.md") {
+	if p, _ := briefPath(root, roundcfg.Settings{}, env); p != filepath.Join(root, "skills", "references", "worker-contract.md") {
 		t.Errorf("checkout still first: %q", p)
 	}
-	os.Remove(filepath.Join(root, "references", "worker-contract.md"))
+	os.Remove(filepath.Join(root, "skills", "references", "worker-contract.md"))
 	os.RemoveAll(projRoot)
 	if p, ok := briefPath(root, roundcfg.Settings{}, env); ok {
 		t.Errorf("~/.claude used although CLAUDE_CONFIG_DIR is set: %q", p)

@@ -9,7 +9,7 @@ decisions, merges PRs and re-verifies on `main` after every merge.
 
 **"You are the orchestrator" is the kickoff trigger: invoke the `rota-orchestrate` skill.**
 Read it and `docs/contributing/rounds.md` (the project brief: gate, repo rules, roster)
-before running or joining a round. A worker reads `references/worker-contract.md`.
+before running or joining a round. A worker reads `skills/references/worker-contract.md`.
 
 <!-- rota-knowledge-start -->
 ## Project Knowledge
@@ -35,14 +35,14 @@ _(no active milestones — all shipped or archived; run `/rota-vision` to plan m
 
 ## Working in this repo
 
-**Don't edit `.rota/` by hand — use the skills and `rota` verbs.** Most of `.rota/` is tracked (knowledge, decisions, backlog, milestones, designs, plans, spikes, per-item detail, release checklist, config). These paths stay gitignored: `.rota/status.json` and `.rota/repos.json` (per-developer runtime state); `.rota/config.local.json` (per-developer config overrides deep-merged on top of `.rota/config.json`); `.rota/handoff/` (per-developer `/rota-pause` scratch); `.rota/qa-runs/` (bulky `/rota-qa` artifacts); `.rota/gate-audit.jsonl` (per-developer log of manual-gate approvals); `.rota/workers.json` (per-developer worker slot registry); and `.rota/**/*.lock` (transient sidecar lockfiles `rota` takes around read-modify-write). Tracked `.rota/` content is skill-owned — capture via `/rota-capture`, learn via `/rota-learn`, decide via `/rota-decide`, etc. Real code/skill changes still go in canonical sources: skill folders (`rota-*/SKILL.md`), `cmd/` and `internal/` (the `rota` binary), `docs/`, `test/`.
+**Don't edit `.rota/` by hand — use the skills and `rota` verbs.** Most of `.rota/` is tracked (knowledge, decisions, backlog, milestones, designs, plans, spikes, per-item detail, release checklist, config). These paths stay gitignored: `.rota/status.json` and `.rota/repos.json` (per-developer runtime state); `.rota/config.local.json` (per-developer config overrides deep-merged on top of `.rota/config.json`); `.rota/handoff/` (per-developer `/rota-pause` scratch); `.rota/qa-runs/` (bulky `/rota-qa` artifacts); `.rota/gate-audit.jsonl` (per-developer log of manual-gate approvals); `.rota/workers.json` (per-developer worker slot registry); and `.rota/**/*.lock` (transient sidecar lockfiles `rota` takes around read-modify-write). Tracked `.rota/` content is skill-owned — capture via `/rota-capture`, learn via `/rota-learn`, decide via `/rota-decide`, etc. Real code/skill changes still go in canonical sources: skill folders (`skills/rota-*/SKILL.md`), `cmd/` and `internal/` (the `rota` binary), `docs/`, `test/`.
 
 **Run `bash test/smoke.sh` only at integration boundaries — not per task.** The full smoke suite is slow (~450 s serial; `bash test/gate.sh` shards it and runs it beside the Go checks). Per-task verification inside `/rota-work` and `/rota-debug` stays structural: `git status` / `git diff` / targeted greps / re-running the specific reproducer. Run the full smoke in `/rota-ship` and `/rota-review` (pre-merge / pre-PR), or when explicitly asked. If a single section is clearly relevant to the change in flight, sourcing just that section file in a sandbox is fine; defer the full run to ship time.
 
 <!-- rota-skills-start -->
 ## rota
 
-This project uses rota for backlog tracking, planning, and skill orchestration. State lives in `.rota/` — most content is tracked (backlog, knowledge, decisions, plans, designs, milestones) so it travels with the repo. Only `.rota/status.json`, `.rota/repos.json`, `.rota/config.local.json`, `.rota/handoff/`, `.rota/qa-runs/`, `.rota/verdicts.json`, `.rota/gate-audit.jsonl`, `.rota/workers.json`, and `.rota/**/*.lock` files are gitignored. Use the skills and `rota` verbs to update tracked content (never edit by hand). Edit canonical sources (`rota-*/`, `cmd/`, `internal/`, `docs/`, `test/`) for skill changes.
+This project uses rota for backlog tracking, planning, and skill orchestration. State lives in `.rota/` — most content is tracked (backlog, knowledge, decisions, plans, designs, milestones) so it travels with the repo. Only `.rota/status.json`, `.rota/repos.json`, `.rota/config.local.json`, `.rota/handoff/`, `.rota/qa-runs/`, `.rota/verdicts.json`, `.rota/gate-audit.jsonl`, `.rota/workers.json`, and `.rota/**/*.lock` files are gitignored. Use the skills and `rota` verbs to update tracked content (never edit by hand). Edit canonical sources (`skills/`, `cmd/`, `internal/`, `docs/`, `test/`) for skill changes.
 
 **Capture & pick** — `/rota-capture` (with `--remove <ID>` to delete items; offers to hand off to `/rota-work`), `/rota-pause`
 **Plan & build** — `/rota-brainstorm`, `/rota-plan`, `/rota-spike`, `/rota-work` (no argument reconciles active work and suggests the next item; `--preview` for read-only peek), `/rota-debug`

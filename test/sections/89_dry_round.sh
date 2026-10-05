@@ -1,7 +1,7 @@
 echo "dry round: rota-orchestrate's verbs in the skill's order on a fixture repo (#63)"
 # #63 acceptance: "a dry round on a fixture repo runs end to end using only the
 # new skill and rota". A shell script cannot be the skill, so this section runs
-# the verbs in the order rota-orchestrate/SKILL.md describes (doctor, start,
+# the verbs in the order skills/rota-orchestrate/SKILL.md describes (doctor, start,
 # candidates, assign, wait, status/reconcile, gate with an escalated approval,
 # wind-down, reap). The lint that every `rota <group> <verb>` the skill and
 # docs/usage/parallel-rounds.md name exists is test/doclint.sh. Everything runs against FAKES: herdr
@@ -61,7 +61,7 @@ echo '{}' > "$TMP_DY/acct/.credentials.json"
 # ── fixture repo: bare origin, project clone, one milestone, one item ──────
 # The standing brief `round assign` hands over by pointer: assign refuses
 # ("brief missing") without it, so the fixture carries the real one.
-WORKER_CONTRACT="$REPO/references/worker-contract.md"
+WORKER_CONTRACT="$REPO/skills/references/worker-contract.md"
 ORIGIN="$TMP_DY/origin.git"
 DY="$TMP_DY/proj"
 git init -q --bare -b main "$ORIGIN"
@@ -69,14 +69,14 @@ git clone -q "$ORIGIN" "$DY" 2>/dev/null
 (
   cd "$DY" && git checkout -q -b main 2>/dev/null
   git config user.email t@t && git config user.name t
-  mkdir -p .rota/milestones references
+  mkdir -p .rota/milestones skills/references
   printf '.rota/\n.worktrees/\n' > .gitignore
-  cp "$WORKER_CONTRACT" references/worker-contract.md
+  cp "$WORKER_CONTRACT" skills/references/worker-contract.md
   printf '# TODO\n\n## Bugs\n\n## Features\n\n## Tasks\n\n## Completed\n' > .rota/BACKLOG.md
   printf -- '---\nid: M01\ntitle: "m"\nstatus: active\ndepends: []\n---\n' > .rota/milestones/M01.md
   # Doctor runs on the config a fresh herdr project has: one account, herdr dispatch.
   printf '{"work":{"dispatch":"herdr","accounts":[{"name":"a","configDir":"%s"}]},"refactor":{"verifyCommands":[]}}\n' "$TMP_DY/acct" > .rota/config.json
-  git add .gitignore references && git commit -q -m seed && git push -q origin main
+  git add .gitignore skills && git commit -q -m seed && git push -q origin main
 ) || fail "dry round: fixture repo setup failed"
 
 # dy <cmd...> runs in the project with the fakes first on PATH; dyj is rota --json

@@ -111,7 +111,7 @@ func BranchName(agent, id, title string) string {
 }
 
 // briefPath is the standing worker contract the pointer names: round.brief,
-// else references/worker-contract.md in the project (a source checkout), else
+// else skills/references/worker-contract.md in the project (a source checkout), else
 // rota-orchestrate/references/worker-contract.md under the first installed
 // skills root (rota skills install): the project's before the user's, Claude's
 // before Codex's, so a Codex-only install finds it too.
@@ -124,7 +124,7 @@ func briefPath(root string, set roundcfg.Settings, getenv func(string) string) (
 		}
 		cands = append(cands, p)
 	} else {
-		cands = append(cands, filepath.Join(root, "references", "worker-contract.md"))
+		cands = append(cands, filepath.Join(root, "skills", "references", "worker-contract.md"))
 		installed := filepath.Join("rota-orchestrate", "references", "worker-contract.md")
 		skillRoots := []string{filepath.Join(root, ".claude", "skills"), filepath.Join(root, ".agents", "skills")}
 		if d := getenv("CLAUDE_CONFIG_DIR"); d != "" {
@@ -432,7 +432,7 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 	// 5. The brief exists before anything is marked.
 	brief, ok := briefPath(root, set, o.Getenv)
 	if !ok {
-		return res, blocked(BlockBriefMissing, "the worker contract (references/worker-contract.md) was not found; set round.brief")
+		return res, blocked(BlockBriefMissing, "the worker contract (skills/references/worker-contract.md) was not found; set round.brief")
 	}
 
 	// 6-9. The marks and the dispatch run as compensating steps (saga.go): a
