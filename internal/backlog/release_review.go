@@ -517,19 +517,16 @@ func (u *Umbrella) perRepo() (string, *Issues, error) {
 // order, with IDs as "<repo>:<number>".
 func (u *Umbrella) ReviewQueue() ([]QueueEntry, error) {
 	out := []QueueEntry{}
-	for _, name := range u.scoped() {
-		s, err := u.sub(name)
-		if err != nil {
-			return nil, err
-		}
+	err := u.eachScoped(func(name string, s *Issues) error {
 		q, err := s.ReviewQueue()
-		if err != nil {
-			return nil, err
-		}
 		for _, e := range q {
-			e.ID, e.Repo = name+":"+e.ID, name
+			e.ID, e.Repo = qualifyID(name, e.ID), name
 			out = append(out, e)
 		}
+		return err
+	})
+	if err != nil {
+		return nil, err
 	}
 	return out, nil
 }
@@ -562,10 +559,10 @@ func (u *Umbrella) MergePRGated(pr int, items []string, approve MergeApprover) (
 	}
 	res, err := s.MergePRGated(pr, plain, approve)
 	for i := range res.Closed {
-		res.Closed[i].ID = name + ":" + res.Closed[i].ID
+		res.Closed[i].ID = qualifyID(name, res.Closed[i].ID)
 	}
 	for i := range res.Unproven {
-		res.Unproven[i].ID = name + ":" + res.Unproven[i].ID
+		res.Unproven[i].ID = qualifyID(name, res.Unproven[i].ID)
 	}
 	return res, err
 }
@@ -573,44 +570,38 @@ func (u *Umbrella) MergePRGated(pr int, items []string, approve MergeApprover) (
 // ReleaseGate is the release gate of mid in the --repo sub-repo, whose
 // tracking issue may live in the home sub-repo.
 func (u *Umbrella) ReleaseGate(mid string) ([]Blocker, []Issue, error) {
-	_, s, err := u.perRepo()
-	if err != nil {
-		return nil, nil, err
+	type gate struct {
+		blocked []Blocker
+		warn    []Issue
 	}
-	return s.releaseGate(mid, true)
+	g, err := viaRepo(u, func(_ string, s *Issues) (gate, error) {
+		blocked, warn, err := s.releaseGate(mid, true)
+		return gate{blocked, warn}, err
+	})
+	return g.blocked, g.warn, err
 }
 
 // ReleaseNotes are the release notes of mid in the --repo sub-repo.
 func (u *Umbrella) ReleaseNotes(mid string) ([]NoteSection, error) {
-	_, s, err := u.perRepo()
-	if err != nil {
-		return nil, err
-	}
-	return s.releaseNotes(mid, true)
+	return viaRepo(u, func(_ string, s *Issues) ([]NoteSection, error) { return s.releaseNotes(mid, true) })
 }
 
 // natives maps each sub-repo that has milestone mid to its native milestone,
 // open ones first (UmbrellaBackend._natives).
 func (u *Umbrella) natives(mid string) (map[string]*tracker.Milestone, error) {
 	out := map[string]*tracker.Milestone{}
-	for _, r := range u.Repos {
-		s, err := u.sub(r.Name)
-		if err != nil {
-			return nil, err
-		}
+	err := u.eachRepo(func(name string, s *Issues) error {
 		mt, err := s.milestoneTracker()
 		if err != nil {
-			return nil, err
+			return err
 		}
 		nm, err := s.nativeMilestone(mt, mid, Issue{})
-		if err != nil {
-			return nil, err
-		}
 		if nm != nil {
-			out[r.Name] = nm
+			out[name] = nm
 		}
-	}
-	return out, nil
+		return err
+	})
+	return out, err
 }
 
 // ReleaseClose closes out mid in the --repo sub-repo: it labels and comments
@@ -657,14 +648,12 @@ func (u *Umbrella) ReleaseClose(mid, tag string) (issues int, changed bool, err 
 // milestone is closed, so no other sub-repo's milestone is left to close). It
 // reports whether it wrote anything.
 func (u *Umbrella) milestoneShipped(mid string) (bool, error) {
-	home, err := u.homeSub()
-	if err != nil {
-		return false, err
-	}
-	hc, hw, err := home.counting()
-	if err != nil {
-		return false, err
-	}
-	err = hc.MilestoneStatus(mid, "shipped")
-	return hw.n > 0, err
+	return viaHome(u, func(home *Issues) (bool, error) {
+		hc, hw, err := home.counting()
+		if err != nil {
+			return false, err
+		}
+		err = hc.MilestoneStatus(mid, "shipped")
+		return hw.n > 0, err
+	})
 }
