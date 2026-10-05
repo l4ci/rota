@@ -2,6 +2,7 @@ package backlog
 
 import (
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"unicode"
 )
@@ -21,6 +22,10 @@ func IDPattern(minDigits int) string {
 	}
 	return `[` + ItemLetters + `]\p{Nd}{` + strconv.Itoa(minDigits) + `,}`
 }
+
+// BracketedIDRe matches a bracketed item ID such as [B07]; submatch 1 is the
+// ID without brackets. It is IDPattern(1) in a capture group.
+var BracketedIDRe = regexp.MustCompile(`\[(` + IDPattern(1) + `)\]`)
 
 // AnyTypeIDPattern is IDPattern(1) widened to every registered type letter,
 // the slice S included. Done lines can carry a slice's key, so reading them

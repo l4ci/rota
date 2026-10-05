@@ -206,7 +206,7 @@ type Listing struct {
 
 var (
 	progressTitleRe = regexp.MustCompile(`\]` + sp + `+([^.]+?)\.`)
-	idInRelatedRe   = regexp.MustCompile(`\[([` + ItemLetters + `]\p{Nd}+)\]`)
+	idInRelatedRe   = BracketedIDRe
 )
 
 // titleOf is hv-backlog's title_of: the text between the ID and the first "."
