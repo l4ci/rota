@@ -4,13 +4,13 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"path/filepath"
 	"strings"
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/worker"
@@ -26,7 +26,7 @@ import (
 // A host or forge that cannot be built or reached is left nil: the verbs
 // report it as unavailable instead of failing.
 func defaultRoundEnv(ctx context.Context, root string, d *Deps) round.Env {
-	cfg := config.Load(filepath.Join(root, ".rota", "config.json"))
+	cfg := config.Load(rotatree.Config(root))
 	e := round.Env{Git: d.Git, Base: "main"}
 	if b, ok, err := (git.Repo{Dir: root}).Base(ctx, ""); err == nil && ok {
 		e.Base = b

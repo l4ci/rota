@@ -17,6 +17,7 @@ import (
 	"github.com/l4ci/rota/internal/frontmatter"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/section"
 )
 
@@ -31,7 +32,7 @@ func Query(root, dir string, names []string) (text string, missing []string, err
 			missing = append(missing, name)
 			continue
 		}
-		raw, err := readText(filepath.Join(root, ".rota", dir, name+".md"))
+		raw, err := readText(rotatree.Doc(root, dir, name))
 		if os.IsNotExist(err) {
 			missing = append(missing, name)
 			continue
@@ -89,7 +90,7 @@ func orDefault(s, def string) string {
 
 // MapIndexBlock is the body of the rota-map managed block.
 func MapIndexBlock(root string) string {
-	entries := mapEntries(filepath.Join(root, ".rota", "map"))
+	entries := mapEntries(rotatree.File(root, rotatree.MapDir))
 	bullets := "- _(no subsystems yet — write `.rota/map/<name>.md` as you discover subsystems)_"
 	if len(entries) > 0 {
 		lines := make([]string, len(entries))
@@ -103,7 +104,7 @@ func MapIndexBlock(root string) string {
 
 // QAIndexBlock is the body of the rota-qa managed block.
 func QAIndexBlock(root string) string {
-	files, _ := filepath.Glob(filepath.Join(root, ".rota", "qa", "*.md"))
+	files, _ := filepath.Glob(rotatree.File(root, rotatree.QADir, "*.md"))
 	sort.Strings(files)
 	bullets := "- _(no QA strategy yet — run `/rota-qa first-run` to scaffold)_"
 	if len(files) > 0 {
@@ -142,7 +143,7 @@ var entryRe = regexp.MustCompile(`(?m)^- ([^:\s]+):(\d+)\b`)
 // "Entry points" references no longer resolve to a line of a file.
 func Stats(root string) []Subsystem {
 	out := []Subsystem{}
-	for _, e := range mapEntries(filepath.Join(root, ".rota", "map")) {
+	for _, e := range mapEntries(rotatree.File(root, rotatree.MapDir)) {
 		fi, err := os.Stat(e.path)
 		if err != nil {
 			continue
@@ -198,7 +199,7 @@ const DefaultCap = 20
 
 // SoftCap reads map.softcap_subsystems from the project config.
 func SoftCap(root string) int {
-	cfg := config.Load(filepath.Join(root, ".rota", "config.json"))
+	cfg := config.Load(rotatree.Config(root))
 	if v, ok := config.Lookup(cfg, "map.softcap_subsystems"); ok {
 		if n, err := strconv.Atoi(fmt.Sprint(v)); err == nil {
 			return n
