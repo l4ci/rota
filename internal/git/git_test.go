@@ -27,11 +27,11 @@ func newRepo(t *testing.T) string {
 func TestRunMapsExitCodeToResult(t *testing.T) {
 	dir := newRepo(t)
 	res, err := Repo{dir}.Run(context.Background(), "rev-parse", "--verify", "-q", "nope")
-	if err != nil || res.Code == 0 {
+	if err != nil || res.ExitCode == 0 {
 		t.Fatalf("got %+v, %v; want non-zero Result and nil error", res, err)
 	}
 	res, err = Repo{dir}.Run(context.Background(), "rev-parse", "--git-dir")
-	if err != nil || res.Code != 0 || strings.TrimSpace(res.Stdout) != ".git" {
+	if err != nil || res.ExitCode != 0 || strings.TrimSpace(res.Stdout) != ".git" {
 		t.Fatalf("got %+v, %v", res, err)
 	}
 }

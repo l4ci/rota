@@ -332,14 +332,15 @@ func (e Env) queuedChanged(ctx context.Context, root string, q worker.QueuedPR, 
 		return nil
 	}
 	head := branch
-	if _, _, code, err := e.Git(ctx, root, "rev-parse", "--verify", "-q", "refs/remotes/origin/"+branch); err == nil && code == 0 {
+	if res, err := e.Git(ctx, root, "rev-parse", "--verify", "-q", "refs/remotes/origin/"+branch); err == nil && res.ExitCode == 0 {
 		head = "origin/" + branch
 	}
 	ref := base
-	if _, _, code, err := e.Git(ctx, root, "rev-parse", "--verify", "-q", "origin/"+base); err == nil && code == 0 {
+	if res, err := e.Git(ctx, root, "rev-parse", "--verify", "-q", "origin/"+base); err == nil && res.ExitCode == 0 {
 		ref = "origin/" + base
 	}
-	out, _, code, err := e.Git(ctx, root, "diff", "--name-only", ref+"..."+head)
+	res, err := e.Git(ctx, root, "diff", "--name-only", ref+"..."+head)
+	out, code := res.Stdout, res.ExitCode
 	if err != nil || code != 0 {
 		return nil
 	}
@@ -371,17 +372,19 @@ func (e Env) changed(ctx context.Context, wt, base string, shared []string) []st
 		seen[p] = true
 	}
 	ref := base
-	if _, _, code, err := e.Git(ctx, wt, "rev-parse", "--verify", "-q", "origin/"+base); err == nil && code == 0 {
+	if res, err := e.Git(ctx, wt, "rev-parse", "--verify", "-q", "origin/"+base); err == nil && res.ExitCode == 0 {
 		ref = "origin/" + base
 	}
-	if out, _, code, err := e.Git(ctx, wt, "diff", "--name-only", ref+"...HEAD"); err == nil && code == 0 {
+	if res, err := e.Git(ctx, wt, "diff", "--name-only", ref+"...HEAD"); err == nil && res.ExitCode == 0 {
+		out := res.Stdout
 		for _, l := range strings.Split(out, "\n") {
 			if l = strings.TrimSpace(l); l != "" {
 				add(l)
 			}
 		}
 	}
-	if out, _, code, err := e.Git(ctx, wt, "status", "--porcelain"); err == nil && code == 0 {
+	if res, err := e.Git(ctx, wt, "status", "--porcelain"); err == nil && res.ExitCode == 0 {
+		out := res.Stdout
 		for _, l := range strings.Split(out, "\n") {
 			if len(l) > 3 {
 				p := strings.TrimSpace(l[3:])

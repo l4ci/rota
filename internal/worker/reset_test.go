@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/git"
 	"os"
 	"path/filepath"
 	"strings"
@@ -195,11 +196,11 @@ func TestResetTreatsAFailingGitAsUnavailableNotClean(t *testing.T) {
 		b := slotProject(t)
 		commitIn(t, wt(b), "unpushed.txt")
 		before := registry(t, b)
-		e := Env{Git: func(ctx context.Context, dir string, args ...string) (string, string, int, error) {
+		e := Env{Git: func(ctx context.Context, dir string, args ...string) (git.Result, error) {
 			if len(args) > 0 && args[0] == failing {
-				return "", "fatal: boom", 128, nil
+				return git.Result{Stderr: "fatal: boom", ExitCode: 128}, nil
 			}
-			return ExecGit(ctx, dir, args...)
+			return git.Exec(ctx, dir, args...)
 		}}
 		for _, checkOnly := range []bool{true, false} {
 			res, err := e.Reset(b, "w1", "T9", checkOnly)
@@ -217,8 +218,8 @@ func TestResetTreatsAFailingGitAsUnavailableNotClean(t *testing.T) {
 		}
 	}
 	// a git that cannot run at all (code 127) is the same
-	e := Env{Git: func(context.Context, string, ...string) (string, string, int, error) {
-		return "", "", 0, os.ErrNotExist
+	e := Env{Git: func(context.Context, string, ...string) (git.Result, error) {
+		return git.Result{}, os.ErrNotExist
 	}}
 	b := slotProject(t)
 	if _, err := e.Reset(b, "w1", "", false); err == nil {
@@ -229,20 +230,20 @@ func TestResetTreatsAFailingGitAsUnavailableNotClean(t *testing.T) {
 func TestExecGitHonoursCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(bg)
 	cancel()
-	_, _, code, err := ExecGit(ctx, t.TempDir(), "status")
-	if err == nil && code == 0 {
+	res, err := git.Exec(ctx, t.TempDir(), "status")
+	if err == nil && res.ExitCode == 0 {
 		t.Error("a cancelled context must stop git")
 	}
 }
 
-// The gate matches git's English messages (CONFLICT), so ExecGit pins the
+// The gate matches git's English messages (CONFLICT), so git.Exec pins the
 // locale whatever the caller has.
 func TestExecGitRunsInTheCLocale(t *testing.T) {
 	t.Setenv("LC_ALL", "de_DE.UTF-8")
 	t.Setenv("LANGUAGE", "de")
-	out, _, code, err := ExecGit(bg, t.TempDir(), "-c", "alias.loc=!echo $LC_ALL/$LANGUAGE", "loc")
-	if err != nil || code != 0 || strings.TrimSpace(out) != "C/C" {
-		t.Errorf("%q %d %v", out, code, err)
+	res, err := git.Exec(bg, t.TempDir(), "-c", "alias.loc=!echo $LC_ALL/$LANGUAGE", "loc")
+	if err != nil || res.ExitCode != 0 || strings.TrimSpace(res.Stdout) != "C/C" {
+		t.Errorf("%q %d %v", res.Stdout, res.ExitCode, err)
 	}
 }
 

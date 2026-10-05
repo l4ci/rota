@@ -145,7 +145,7 @@ func shortSHA(dir, commit string) (string, error) {
 	if errors.Is(err, git.ErrNoGit) {
 		return "", unavailable("git is not installed")
 	}
-	if err != nil || res.Code != 0 {
+	if err != nil || res.ExitCode != 0 {
 		return "", notFound
 	}
 	return pystr.Strip(res.Stdout), nil

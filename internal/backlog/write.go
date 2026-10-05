@@ -133,7 +133,7 @@ func (f *File) requireBacklog() error {
 // git runs git in the project root and returns trimmed stdout.
 func (f *File) git(args ...string) (string, bool) {
 	res, err := gitx.Repo{Dir: f.Root}.Run(context.Background(), args...)
-	return pystr.Strip(res.Stdout), err == nil && res.Code == 0
+	return pystr.Strip(res.Stdout), err == nil && res.ExitCode == 0
 }
 
 // Append adds line at the end of a section ("## Bugs" or "Bugs") of

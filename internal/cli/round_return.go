@@ -164,11 +164,11 @@ func returnRoot(c *Ctx, slot string) (string, error) {
 	if err != nil || worker.LoadRegistry(root).Slot(slot) != nil {
 		return root, err
 	}
-	out, _, code, gerr := worker.ExecGit(c.Context(), root, "rev-parse", "--path-format=absolute", "--git-common-dir")
-	if gerr != nil || code != 0 {
+	res, gerr := c.deps().Git(c.Context(), root, "rev-parse", "--path-format=absolute", "--git-common-dir")
+	if gerr != nil || res.ExitCode != 0 {
 		return root, nil
 	}
-	common := strings.TrimSpace(out)
+	common := strings.TrimSpace(res.Stdout)
 	if filepath.Base(common) != ".git" {
 		return root, nil
 	}

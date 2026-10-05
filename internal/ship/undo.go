@@ -105,7 +105,7 @@ func PlanUndo(g Git, base, cur string, dirty bool, o UndoOpts) (UndoPlan, error)
 		if err != nil {
 			return UndoPlan{}, err
 		}
-		if res.Code != 0 {
+		if res.ExitCode != 0 {
 			return UndoPlan{}, &NotFoundError{Msg: fmt.Sprintf("--cycle hash '%s' is not a valid commit", o.Cycle)}
 		}
 		merge = line(res.Stdout)
@@ -199,7 +199,7 @@ func ApplyUndo(g Git, p UndoPlan, restore func(ids []string) error) error {
 // is a *GitError.
 func out(g Git, args ...string) (string, error) {
 	res, err := g.Run(args...)
-	if err == nil && res.Code != 0 {
+	if err == nil && res.ExitCode != 0 {
 		err = &GitError{Msg: fmt.Sprintf("git %s: %s", strings.Join(args, " "), firstLine(res.Stderr))}
 	}
 	return line(res.Stdout), err

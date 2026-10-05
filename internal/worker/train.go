@@ -196,7 +196,8 @@ func (e Env) Train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 	tips := make([]string, len(res.Members)+1) // tips[i]: the scratch tree with the first i members merged
 	tips[0] = baseSHA
 	for i, m := range res.Members {
-		out, errb, code, gerr := e.Git(ctx, scratch, "merge", "--no-ff", "-m", fmt.Sprintf("train: %s into %s", m.Branch, o.Base), heads[i])
+		gr, gerr := e.Git(ctx, scratch, "merge", "--no-ff", "-m", fmt.Sprintf("train: %s into %s", m.Branch, o.Base), heads[i])
+		out, errb, code := gr.Stdout, gr.Stderr, gr.ExitCode
 		if gerr != nil {
 			code, errb = 127, gerr.Error()
 		}

@@ -92,7 +92,7 @@ func extractTokens(title string) (distinctive, common []string) {
 // grepCommits is `git log --oneline --grep=<tok> -i -10` in dir.
 func grepCommits(dir, tok string) []string {
 	res, err := gitx.Repo{Dir: dir}.Run(context.Background(), "log", "--oneline", "--grep="+tok, "-i", "-10")
-	if err != nil || res.Code != 0 {
+	if err != nil || res.ExitCode != 0 {
 		return nil
 	}
 	out := res.Stdout

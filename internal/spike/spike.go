@@ -38,8 +38,8 @@ func git(dir string, args ...string) error {
 	if err != nil {
 		return err
 	}
-	if res.Code != 0 {
-		return fmt.Errorf("exit status %d", res.Code)
+	if res.ExitCode != 0 {
+		return fmt.Errorf("exit status %d", res.ExitCode)
 	}
 	return nil
 }

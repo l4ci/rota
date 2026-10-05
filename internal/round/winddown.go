@@ -215,7 +215,8 @@ func (e Env) WindDown(ctx context.Context, root string, be Board, o WindDownOpts
 // requireBase refuses unless the project root is on the base with no tracked
 // changes: the verify must read the base, not a half-edited tree.
 func (e Env) requireBase(ctx context.Context, root string) error {
-	cur, _, code, err := e.Git(ctx, root, "rev-parse", "--abbrev-ref", "HEAD")
+	res, err := e.Git(ctx, root, "rev-parse", "--abbrev-ref", "HEAD")
+	cur, code := res.Stdout, res.ExitCode
 	if err != nil || code != 0 {
 		return &exitcode.Error{Exit: exitcode.ExitUnavailable, Message: "git rev-parse failed in " + root}
 	}
@@ -223,7 +224,8 @@ func (e Env) requireBase(ctx context.Context, root string) error {
 		return &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("the project root is on %s, not the base %s", strings.TrimSpace(cur), e.Base),
 			Hint: "wind-down verifies the base: check it out in the project root first"}
 	}
-	out, _, code, err := e.Git(ctx, root, "status", "--porcelain", "--untracked-files=no")
+	res, err = e.Git(ctx, root, "status", "--porcelain", "--untracked-files=no")
+	out, code := res.Stdout, res.ExitCode
 	if err != nil || code != 0 {
 		return &exitcode.Error{Exit: exitcode.ExitUnavailable, Message: "git status failed in " + root}
 	}

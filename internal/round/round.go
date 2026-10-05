@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/escalation"
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/limits"
 	"github.com/l4ci/rota/internal/roundlease"
@@ -69,7 +70,7 @@ type Forge interface {
 // Env is what a round touches outside its own memory. A nil Snapshot or Forge
 // means that source is unavailable; tests fill every field with fakes.
 type Env struct {
-	Git worker.GitFunc
+	Git git.Runner
 	// Snapshot lists the host's live agents; HostName is "herdr" or "tmux", or
 	// "solo" with no Snapshot when the round has no terminal host.
 	Snapshot func(ctx context.Context) ([]host.Agent, error)
@@ -493,7 +494,8 @@ func firstNonEmpty(a, b string) string {
 
 // worktrees lists the checkouts directly under <root>/.worktrees/.
 func (e Env) worktrees(ctx context.Context, root string) ([]worktree, error) {
-	out, errOut, code, err := e.Git(ctx, root, "worktree", "list", "--porcelain")
+	res, err := e.Git(ctx, root, "worktree", "list", "--porcelain")
+	out, errOut, code := res.Stdout, res.Stderr, res.ExitCode
 	if err != nil || code != 0 {
 		return nil, &exitcode.Error{Exit: exitcode.ExitUnavailable, Message: "git worktree list failed: " + strings.TrimSpace(errOut)}
 	}
@@ -527,10 +529,11 @@ func (e Env) ahead(ctx context.Context, root, base, branch string) int {
 		return 0
 	}
 	ref := base
-	if _, _, code, err := e.Git(ctx, root, "rev-parse", "--verify", "-q", "origin/"+base); err == nil && code == 0 {
+	if res, err := e.Git(ctx, root, "rev-parse", "--verify", "-q", "origin/"+base); err == nil && res.ExitCode == 0 {
 		ref = "origin/" + base
 	}
-	out, _, code, err := e.Git(ctx, root, "rev-list", "--count", ref+".."+branch)
+	res, err := e.Git(ctx, root, "rev-list", "--count", ref+".."+branch)
+	out, code := res.Stdout, res.ExitCode
 	if err != nil || code != 0 {
 		return 0
 	}

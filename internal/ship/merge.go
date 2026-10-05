@@ -39,7 +39,7 @@ func MergeBranch(p MergePorts, branch, base, msg string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if co.Code != 0 {
+	if co.ExitCode != 0 {
 		return "", &GitError{Msg: "git checkout " + base + ": " + firstLine(co.Stderr)}
 	}
 	// A local merge: there is no forge PR head to pin, the branch tip is the
@@ -48,7 +48,7 @@ func MergeBranch(p MergePorts, branch, base, msg string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if mg.Code != 0 {
+	if mg.ExitCode != 0 {
 		if git.IsMergeConflict(mg.Stdout + mg.Stderr) {
 			p.Git.Run("merge", "--abort")
 			return "", &Refusal{By: "conflict", Msg: "merge conflict; merge aborted"}
@@ -59,7 +59,7 @@ func MergeBranch(p MergePorts, branch, base, msg string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if del.Code != 0 {
+	if del.ExitCode != 0 {
 		return "", &GitError{Msg: "git branch -d " + branch + ": " + firstLine(del.Stderr)}
 	}
 	sha, err := p.Git.Run("log", "-1", "--format=%h")
@@ -76,7 +76,7 @@ func ChangedFiles(g Git, rng string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	if res.Code != 0 {
+	if res.ExitCode != 0 {
 		return nil, &GitError{Msg: "git diff " + rng + ": " + firstLine(res.Stderr)}
 	}
 	return pystr.Splitlines(strings.TrimSpace(res.Stdout)), nil

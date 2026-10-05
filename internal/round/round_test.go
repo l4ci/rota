@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
@@ -105,7 +106,7 @@ func (f *fakeForge) AddLabels(_ context.Context, n int, _ []string, _ bool) erro
 }
 
 func env(agents []host.Agent, forge Forge) Env {
-	e := Env{Git: worker.ExecGit, Base: "main", Forge: forge, HostName: "herdr"}
+	e := Env{Git: git.Exec, Base: "main", Forge: forge, HostName: "herdr"}
 	if agents != nil {
 		e.Snapshot = func(context.Context) ([]host.Agent, error) { return agents, nil }
 	}
@@ -222,7 +223,7 @@ func TestEmptyRegistryDerivesRowsFromWorktrees(t *testing.T) {
 
 func TestUnavailableSourcesSkipTheirKinds(t *testing.T) {
 	root, _, _ := fixture(t)
-	rep, err := Env{Git: worker.ExecGit, Base: "main"}.Status(bg, root)
+	rep, err := Env{Git: git.Exec, Base: "main"}.Status(bg, root)
 	if err != nil {
 		t.Fatal(err)
 	}

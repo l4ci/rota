@@ -211,7 +211,7 @@ func releaseHost(c *Ctx, args []string) (Result, error) {
 	}
 	url := ""
 	// A failing git (no origin, not a repo, no git) means no host, as before.
-	if res, err := (git.Repo{Dir: dir}).Run(c.Context(), "remote", "get-url", "origin"); err == nil && res.Code == 0 {
+	if res, err := (git.Repo{Dir: dir}).Run(c.Context(), "remote", "get-url", "origin"); err == nil && res.ExitCode == 0 {
 		url = strings.TrimRight(res.Stdout, "\n")
 	}
 	host := release.Host(url)
@@ -265,7 +265,7 @@ func releaseNotes(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, gitErr(err)
 		}
-		if res.Code != 0 {
+		if res.ExitCode != 0 {
 			msg := releaseFirstLine(res.Stderr)
 			if msg == "" {
 				msg = "git log failed"
@@ -367,7 +367,7 @@ func releasePending(c *Ctx, args []string) (Result, error) {
 	ctx, r := c.Context(), git.Repo{Dir: dir}
 	tag, commits, tagTS := "", 0, int64(0)
 	// describe failing (no tag, not a repo, no git) means no tag yet.
-	if res, err := r.Run(ctx, "describe", "--tags", "--abbrev=0"); err == nil && res.Code == 0 {
+	if res, err := r.Run(ctx, "describe", "--tags", "--abbrev=0"); err == nil && res.ExitCode == 0 {
 		tag = strings.TrimRight(res.Stdout, "\n")
 	}
 	if tag != "" {
@@ -395,7 +395,7 @@ func releaseGitCount(ctx context.Context, r git.Repo, args ...string) (int64, er
 	if err != nil {
 		return 0, gitErr(err)
 	}
-	if res.Code != 0 {
+	if res.ExitCode != 0 {
 		msg := releaseFirstLine(res.Stderr)
 		if msg == "" {
 			msg = "git " + args[0] + " failed"
@@ -490,7 +490,7 @@ func releaseNotesIssues(c *Ctx, mid, since string) (Result, error) {
 		if err != nil {
 			return Result{}, gitErr(err)
 		}
-		if res.Code != 0 {
+		if res.ExitCode != 0 {
 			return Result{}, Resolution("git log %s..HEAD failed: %s", since, pystr.Strip(res.Stderr))
 		}
 		for _, s := range pystr.Splitlines(res.Stdout) {
