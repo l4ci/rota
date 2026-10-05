@@ -33,22 +33,16 @@ type nativeSet map[string][]tracker.Milestone
 
 func (u *Umbrella) fetchNatives() (nativeSet, error) {
 	set := nativeSet{}
-	for _, r := range u.Repos {
-		sub, err := u.sub(r.Name)
-		if err != nil {
-			return nil, err
-		}
+	err := u.eachRepo(func(name string, sub *Issues) error {
 		mt, err := sub.milestoneTracker()
 		if err != nil {
-			return nil, err
+			return err
 		}
 		found, err := mt.Milestones(u.ctx(), "all")
-		if err != nil {
-			return nil, err
-		}
-		set[r.Name] = found
-	}
-	return set, nil
+		set[name] = found
+		return err
+	})
+	return set, err
 }
 
 // of is the native milestone of mid per sub-repo, an open one before a closed
@@ -93,16 +87,15 @@ func (u *Umbrella) NextMilestoneID() (string, error) {
 // MilestoneAdd creates the milestone on the home sub-repo with an ID minted
 // over all sub-repos (mid "" mints).
 func (u *Umbrella) MilestoneAdd(mid, title, summary string, depends []string, today string) (string, error) {
-	home, err := u.homeSub()
-	if err != nil {
-		return "", err
-	}
-	if mid == "" {
-		if mid, err = u.NextMilestoneID(); err != nil {
-			return "", err
+	return viaHome(u, func(home *Issues) (string, error) {
+		if mid == "" {
+			var err error
+			if mid, err = u.NextMilestoneID(); err != nil {
+				return "", err
+			}
 		}
-	}
-	return home.MilestoneAdd(mid, title, summary, depends, today)
+		return home.MilestoneAdd(mid, title, summary, depends, today)
+	})
 }
 
 // MilestoneList is the home sub-repo's list, except that a shipped milestone
@@ -153,20 +146,13 @@ func (u *Umbrella) MilestoneList() ([]ms.Entry, error) {
 
 // MilestoneShow is the milestone plan on the home sub-repo.
 func (u *Umbrella) MilestoneShow(mid string) (string, error) {
-	home, err := u.homeSub()
-	if err != nil {
-		return "", err
-	}
-	return home.MilestoneShow(mid)
+	return viaHome(u, func(home *Issues) (string, error) { return home.MilestoneShow(mid) })
 }
 
 // MilestonePut replaces the milestone plan on the home sub-repo.
 func (u *Umbrella) MilestonePut(mid, text string) error {
-	home, err := u.homeSub()
-	if err != nil {
-		return err
-	}
-	return home.MilestonePut(mid, text)
+	_, err := viaHome(u, func(home *Issues) (struct{}, error) { return struct{}{}, home.MilestonePut(mid, text) })
+	return err
 }
 
 // MilestoneStatus moves the milestone on the home sub-repo, then opens or
