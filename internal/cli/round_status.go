@@ -45,6 +45,7 @@ func defaultRoundEnv(ctx context.Context, root string, d *Deps) round.Env {
 		}
 	}
 	e.NeedsHuman = config.Label(cfg, "needsHuman")
+	e.Label = config.Label(cfg, "inProgress")
 	if set, err := roundcfg.Load(root); err == nil {
 		e.StallMinutes = set.StallMinutes
 	}

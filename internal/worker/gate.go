@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -169,6 +170,11 @@ type Forge interface {
 	// OpenPRs lists the open PRs, so a slot that records none can be matched
 	// to the PR its branch heads.
 	OpenPRs(ctx context.Context) ([]tracker.PR, error)
+	// ClosedNumbers, Get and RemoveLabels let a landed PR release the claim
+	// label on the issues it closed.
+	ClosedNumbers(body string) []int
+	Get(ctx context.Context, number int, withComments bool) (tracker.Issue, error)
+	RemoveLabels(ctx context.Context, number int, labels []string) error
 }
 
 // Gate runs the merge gate for a slot or a queued PR (see GateTarget). A
@@ -204,6 +210,7 @@ func (e Env) gate(ctx context.Context, root string, o GateOpts, res GateResult, 
 	g := &gate{e: e, ctx: ctx, root: root, res: &res, o: o, target: t, reg: reg, branch: branch, pr: pr}
 	g.provider = e.detectProvider(root, pr)
 	g.cliName = tracker.CLIName(g.provider)
+	g.label = config.Label(cfg, "inProgress")
 	var ferr error
 	if g.forge, ferr = e.Forge(g.provider, root, cfg); ferr != nil {
 		return g.broke(fmt.Sprintf("cannot reach the %s forge: %v", g.provider, ferr))
@@ -509,6 +516,7 @@ type gate struct {
 	provider string
 	forge    Forge
 	cliName  string
+	label    string // issues.labels.inProgress: the claim label a merge releases
 	remote   bool
 	headRef  string
 	baseRef  string
@@ -618,14 +626,14 @@ func (g *gate) mergeRemote() (GateResult, bool) {
 			wait = time.Duration(f * float64(time.Second))
 		}
 	}
-	var sha, state string
+	var sha, state, body string
 	for i := 0; i < 5; i++ {
 		info, ok := g.prInfo()
 		if !ok {
 			res, _ := g.broke(fmt.Sprintf("could not re-read PR %s after merging", g.prNum))
 			return res, true
 		}
-		state, sha = info.State, info.MergeSHA
+		state, sha, body = info.State, info.MergeSHA, info.Body
 		if state == "MERGED" && sha != "" {
 			break
 		}
@@ -636,6 +644,7 @@ func (g *gate) mergeRemote() (GateResult, bool) {
 	if state != "MERGED" {
 		return g.verdict(GateNotMerged, fmt.Sprintf("NOT-MERGED %s — PR %s is %s after the merge call; nothing is on %s", o.Slot, g.prNum, state, o.Base), ""), true
 	}
+	g.releaseClaimLabels(body)
 	if sha == "" {
 		sha = g.verified
 	}
@@ -664,6 +673,31 @@ func (g *gate) mergeRemote() (GateResult, bool) {
 		return g.verdict(GateMergedRemotely, fmt.Sprintf("MERGED-REMOTELY %s — PR %s is on %s but %s is not in the local %s; do not re-merge, reconcile %s by hand", o.Slot, g.prNum, g.baseRef, sha, o.Base, o.Base), ""), true
 	}
 	return GateResult{}, false
+}
+
+// releaseClaimLabels drops the in-progress label from every issue the merged PR
+// closes. The forge closes them but leaves the label, so the label would stop
+// meaning "being worked on". An issue still open (the PR landed on a branch
+// other than the default, or the forge has not closed it yet) keeps its label.
+// Best effort: the PR is already merged, so a failure is a note, and
+// `rota round reconcile --apply` clears whatever this missed.
+func (g *gate) releaseClaimLabels(body string) {
+	if g.label == "" {
+		return
+	}
+	for _, n := range g.forge.ClosedNumbers(body) {
+		is, err := g.forge.Get(g.ctx, n, false)
+		if err != nil {
+			g.res.Notes = append(g.res.Notes, fmt.Sprintf("LABEL-KEPT %s — cannot read #%d to release %s: %v", g.o.Slot, n, g.label, err))
+			continue
+		}
+		if is.State != "closed" || !slices.Contains(is.Labels, g.label) {
+			continue
+		}
+		if err := g.forge.RemoveLabels(g.ctx, n, []string{g.label}); err != nil {
+			g.res.Notes = append(g.res.Notes, fmt.Sprintf("LABEL-KEPT %s — cannot remove %s from #%d: %v", g.o.Slot, g.label, n, err))
+		}
+	}
 }
 
 func tailLines(s string, n int) string {
