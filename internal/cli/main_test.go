@@ -68,10 +68,21 @@ func TestMain(m *testing.M) {
 // tests.
 func testDeps() *Deps {
 	d := defaultDeps()
-	d.LimitHost = func(string) host.Host { return &limFake{} }
-	d.LayoutHost = func() (host.Layouter, error) { return nil, errors.New("herdr is not installed") }
+	d.Host = func(kind string) host.Host {
+		if kind == "herdr" {
+			return &absentHerdr{}
+		}
+		return &limFake{}
+	}
 	return d
 }
+
+// absentHerdr is herdr on a machine without it: Require fails, so the verbs
+// that need it report it unavailable instead of reaching a real one.
+type absentHerdr struct{ cliHost }
+
+func (*absentHerdr) Name() string   { return "herdr" }
+func (*absentHerdr) Require() error { return errors.New("herdr is not installed") }
 
 // mainWith is Main with the given Deps.
 func mainWith(d *Deps, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
