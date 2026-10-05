@@ -385,10 +385,13 @@ FAKEBIN="$TMP_WD/fakebin"; mkdir -p "$FAKEBIN"
 cat > "$FAKEBIN/gh" <<'SH'
 #!/usr/bin/env bash
 if [ "$1 $2" = "pr view" ]; then
-  case "$*" in
-    *headRefName*) printf '{"headRefName":"%s","headRefOid":"%s","baseRefName":"main","state":"OPEN","mergeCommit":null}\n' "$FAKE_PR_HEAD" "$FAKE_PR_SHA" ;;
-    *) cat "$FAKE_PR_BODY" ;;
-  esac
+  # PRView reads head, state and body from this one reply.
+  python3 - "$FAKE_PR_HEAD" "$FAKE_PR_SHA" "$FAKE_PR_BODY" <<'PY'
+import json, sys
+head, sha, body = sys.argv[1:4]
+print(json.dumps({"headRefName": head, "headRefOid": sha, "baseRefName": "main", "state": "OPEN",
+                  "mergeCommit": None, "body": open(body).read()}))
+PY
 fi
 SH
 chmod +x "$FAKEBIN/gh"
