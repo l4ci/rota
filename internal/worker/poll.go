@@ -237,7 +237,7 @@ func (e Env) Poll(ctx context.Context, root string, o PollOpts) (PollResult, err
 	if err := SoloRefusal(root, "rota round report records a subagent's state"); err != nil {
 		return PollResult{}, err
 	}
-	h := e.NewHost(hostKind(root))
+	h := e.NewHost(e.hostKind(root))
 	if err := h.Require(); err != nil {
 		return PollResult{}, fail(exitcode.ExitUnavailable, err.Error())
 	}

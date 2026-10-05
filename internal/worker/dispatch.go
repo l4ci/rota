@@ -51,22 +51,39 @@ type DispatchResult struct {
 	Warnings []string
 }
 
-func dispatchKind(root string) string {
-	return config.Dispatch(config.Load(filepath.Join(root, ".rota", "config.json")))
+// dispatchSetting is work.dispatch from the project config, "" when unset.
+func dispatchSetting(root string) string {
+	v, _ := config.Lookup(config.Load(filepath.Join(root, ".rota", "config.json")), "work.dispatch")
+	s, _ := v.(string)
+	return s
 }
 
 // RegistryHost is the round host `round start` recorded (C8), "" when no
 // round is in flight.
 func RegistryHost(root string) string { return Str(LoadRegistry(root).Doc, "host") }
 
-// hostKind is the host a pane verb drives: the round's recorded host when
-// there is one, else what work.dispatch says, exactly as before C8. Never
-// pass "solo" on to host.New: callers refuse it first (SoloRefusal).
-func hostKind(root string) string {
-	if h := RegistryHost(root); h != "" {
-		return h
+// ResolveHost is the host the project's round runs on: host.Resolve over the
+// round's recorded host, work.dispatch and the environment. Every verb that
+// needs the host asks here. getenv and lookPath default to the process's own.
+func ResolveHost(root string, getenv func(string) string, lookPath func(string) (string, error)) string {
+	return host.Resolve(RegistryHost(root), dispatchSetting(root), getenv, lookPath)
+}
+
+// ResolvePaneHost is ResolveHost for a verb that must drive a pane host even
+// with no round recorded: a bare environment reads as tmux, which reports
+// unavailable if it is absent. A recorded solo round stays solo.
+func ResolvePaneHost(root string, getenv func(string) string, lookPath func(string) (string, error)) string {
+	k := ResolveHost(root, getenv, lookPath)
+	if k == host.Solo && RegistryHost(root) == "" {
+		return "tmux"
 	}
-	return dispatchKind(root)
+	return k
+}
+
+// hostKind is the host a pane verb drives. Never pass "solo" on to host.New:
+// callers refuse it first (SoloRefusal), and New maps it to tmux anyway.
+func (e Env) hostKind(root string) string {
+	return ResolveHost(root, e.Getenv, e.LookPath)
 }
 
 // SoloRefusal is the exit 2 a pane verb gives when the round's recorded host
@@ -155,7 +172,7 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 	if err != nil {
 		return res, fail(exitcode.ExitResolution, "body file not found: "+o.BodyFile)
 	}
-	h := e.NewHost(hostKind(root))
+	h := e.NewHost(e.hostKind(root))
 	if err := h.Require(); err != nil {
 		return res, fail(exitcode.ExitUnavailable, err.Error())
 	}
@@ -427,7 +444,7 @@ func (e Env) KillSlot(ctx context.Context, root, slot string) error {
 		return nil // a subagent has no pane to close
 	}
 	handle := s.PaneHandle()
-	h := e.NewHost(hostKind(root))
+	h := e.NewHost(e.hostKind(root))
 	if err := h.Require(); err != nil {
 		return fail(exitcode.ExitUnavailable, err.Error())
 	}

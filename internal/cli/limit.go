@@ -37,18 +37,6 @@ func limitCommands() *Command {
 	}}
 }
 
-// limitHostKind is herdr when work.dispatch says so or the process runs inside
-// herdr, else tmux, as round status chooses.
-func limitHostKind(cfg any) string {
-	if config.Dispatch(cfg) == "herdr" {
-		return "herdr"
-	}
-	if os.Getenv("HERDR_ENV") == "1" {
-		return "herdr"
-	}
-	return "tmux"
-}
-
 // escalateFunc posts on an issue thread through C4's library entry.
 func escalateFunc(ctx context.Context, c *Ctx, root string) func(issue int, title, body string) (string, []string, error) {
 	return func(issue int, title, body string) (string, []string, error) {
@@ -137,7 +125,10 @@ type limitRig struct {
 // failed herdr subscription is not: the watcher captures the panes instead,
 // and the rig says so in warn.
 func buildLimits(ctx context.Context, c *Ctx, root string, cfg any, set limits.Settings, holderPID int, tick time.Duration, gap *atomic.Bool, warn func(string, ...any)) (*limitRig, error) {
-	kind := limitHostKind(cfg)
+	kind := worker.ResolvePaneHost(root, nil, nil)
+	if kind == host.Solo {
+		kind = "tmux" // New maps solo to tmux; say so for the error text
+	}
 	h := c.deps().LimitHost(kind)
 	if err := h.Require(); err != nil {
 		return nil, &Error{Exit: ExitUnavailable, Message: err.Error()}
@@ -261,7 +252,7 @@ func buildLimits(ctx context.Context, c *Ctx, root string, cfg any, set limits.S
 			return ph.SendPane(ctx, t.Pane, prompt)
 		},
 		Escalate: escalateFunc(ctx, c, root),
-		Notify:   func(title, body string) { keepaliveNotify(context.WithoutCancel(ctx), c, cfg, title, body) },
+		Notify:   func(title, body string) { keepaliveNotify(context.WithoutCancel(ctx), c, root, title, body) },
 	}
 	rig := &limitRig{Cancel: func() {}}
 

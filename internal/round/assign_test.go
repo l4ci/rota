@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/roundcfg"
@@ -361,6 +362,13 @@ func (f *assignFixture) config(t *testing.T, cfg string) {
 		t.Fatal(err)
 	}
 	f.set = set
+	// The round recorded its host at start, before this config; the registry
+	// wins, so a config that names a host re-records it, as a new round would.
+	if d, _ := config.Lookup(config.Load(filepath.Join(f.root, ".rota", "config.json")), "work.dispatch"); d == "herdr" || d == "tmux" {
+		if err := worker.UpdateDoc(f.root, func(doc *jsonx.Object) { doc.Set("host", d) }); err != nil {
+			t.Fatal(err)
+		}
+	}
 }
 
 func TestAssignDefaultTierStartsTheWorkerOnItsModel(t *testing.T) {
