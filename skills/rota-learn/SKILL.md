@@ -5,11 +5,7 @@ description: Use at the end of a session that surfaced reusable knowledge, after
 
 # rota-learn — Capture Session Learnings
 
-## Step 1 — Task list
-
-Track these phases with the host's task tool if it has one.
-
-Phases:
+**Task list.** Track these phases with the host's task tool if it has one:
 
 1. *Scan session* — transcript + recent commits sifted for durable gotchas (Step 2)
 2. *Classify topic* — each candidate matched to a `KNOWLEDGE.md` topic (Step 3)
@@ -18,7 +14,9 @@ Phases:
 5. *Verify (Opus)* — only under `--strict` or `learn.verify: true` (Step 7)
 6. *Confirm* — compact summary and size nudges (Step 8)
 
-**Args parsing.** Inspect the `args` value passed at invocation.
+## Step 1 — Parse Args
+
+Inspect the `args` value passed at invocation.
 
 - `--strict` — run the Opus verifier (Step 7) for this run.
 - `--retro` — retrospective mode. Skip Steps 2 to 8 and follow *`--retro`* in [`references/learn-rare-modes.md`](references/learn-rare-modes.md), then exit.

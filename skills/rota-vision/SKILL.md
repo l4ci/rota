@@ -44,7 +44,19 @@ Batch each round into one `AskUserQuestion` (max 3 questions; `multiSelect: true
 
 ## Step 6 — Propose, once
 
-Show the milestone list as plain markdown, not yet saved: per milestone an ID, title, `[ready · no deps]` or `[blocked · depends M01]`, Goal, Acceptance (a few checkable bullets), Rationale, Open risks (at least one; if you can't name one it isn't thought through). No cap on count. Order by dependency layer and make parallel-able milestones visible. Apply the user's redlines (merge, cut, retire, add, re-order) and ask for one explicit confirmation before writing; silence is not confirmation.
+Show the milestone list as plain markdown, not yet saved, one block per milestone:
+
+```
+### M01 — <title>   [ready · no deps]
+**Goal:** <one sentence>
+**Acceptance:**
+- <checkable bullet>
+- <checkable bullet>
+**Rationale:** <why this one, why now>
+**Open risks:** <at least one; if you can't name one it isn't thought through>
+```
+
+The tag is `[ready · no deps]` or `[blocked · depends M01]`. No cap on count. Order by dependency layer and make parallel-able milestones visible. Apply the user's redlines (merge, cut, retire, add, re-order) and ask for one explicit confirmation before writing; silence is not confirmation.
 
 ## Step 7 — Write
 

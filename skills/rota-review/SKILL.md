@@ -106,6 +106,8 @@ Empty stdout (no `data.findings`) → no candidates. Otherwise carry the matches
 
 ## Step 7 — Dispatch the Reviewers
 
+**Gate.** If `rota verdict show <branch> --json` has a review record with `verdict` PASS and `stale: false`, skip this step and report that verdict.
+
 Dispatch two reviewers **in parallel** (one message, two dispatches), fresh context each, same diff file and same Steps 2-6 context. Two axes, judged apart, so one cannot mask the other:
 
 - **Spec** — **orchestrator** model. Does the diff do what the items promised, and nothing more?
@@ -272,7 +274,7 @@ Exit 5 or 6 (tracker unavailable or rate-limited) from any verb stops the queue 
 - **Evidence over opinion.** Every concern must cite file:line or commit hash.
 - **Scope is bounded.** Only the diff against the base is reviewed — don't wander into unchanged code.
 - **Call it honestly.** If conventions were violated but the user has a good reason, the reviewer still reports CONCERN — the user decides what to do.
-- **Don't re-run on a passed branch.** If `rota verdict show <branch> --json` has a review record with `verdict` PASS and `stale: false`, skip Step 7 and report that verdict.
+- **Don't re-run on a passed branch.** Step 7's gate skips the reviewers when the recorded review is a fresh PASS.
 
 ## References
 
