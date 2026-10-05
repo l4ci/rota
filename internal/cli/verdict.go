@@ -185,8 +185,8 @@ func verdictRoute(fs *flag.FlagSet) RunFunc {
 		}
 		cfg := config.Load(filepath.Join(t.root, ".rota", "config.json"))
 		s := verdict.Settings{
-			QAGate: configString(cfg, "qa.gate"),
-			Runner: configString(cfg, "ship.secondOpinionRunner"),
+			QAGate: config.String(cfg, "qa.gate"),
+			Runner: config.String(cfg, "ship.secondOpinionRunner"),
 		}
 		next := verdict.Route(*consumer, r.Verdict, s)
 		d := jsonx.NewObject()
@@ -199,12 +199,6 @@ func verdictRoute(fs *flag.FlagSet) RunFunc {
 		d.Set("next", next)
 		return Result{Data: d, Text: next}, nil
 	}
-}
-
-func configString(cfg any, key string) string {
-	v, _ := config.Value(cfg, key)
-	s, _ := v.(string)
-	return s
 }
 
 // ---- debug verdict
