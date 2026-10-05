@@ -16,6 +16,7 @@ Read `.rota/config.json`:
 - Before merging or opening a PR — typically invoked from `/rota-ship`
 - *"Review this branch"*, *"Second-opinion this"*, *"Look over what I've got"*
 - After manual commits to a branch you want validated before integrating
+- `/rota-review --since <sha>` re-reviews a bounced branch: only the fix, against the findings of the last review (see Re-review)
 - `/rota-review --queue` (issue backend) reviews and merges the PRs waiting on `needs-review` items (see Queue mode)
 
 ## When NOT to Use
@@ -80,6 +81,17 @@ rota review package <branch> --base <base> [--since <sha>] --json
 ```
 
 `data.path` is the file (commits, `--stat` and the full `-U10` diff); `data.files` and `data.bytes` size it. There is no file cap: the reviewer reads the file, you don't. Pass `--since <sha>` on a re-review to package only the commits after the sha the last review covered. Exit 3 means an empty range or a `--since` that is not on the branch: report it and stop.
+
+### Re-review (`--since <sha>`)
+
+After a bounce the worker pushes a fix. Review that fix, not the whole branch again. `<sha>` is the `sha` of the branch's last recorded review (`rota verdict show <branch> --json`, the newest record of kind `review-quality`); without a recorded review there is nothing to re-review against, so run the full review. Do these in place of the full Step 7 brief:
+
+- Step 5 packages only `--since <sha>`. Steps 2-4 and 6 still run, on the fix range.
+- Put the last review's `findings` into the brief as `**Earlier findings:**`, numbered.
+- The reviewer marks every earlier finding `ADDRESSED` or `NOT ADDRESSED`, with the diff line that settles it. A finding the fix does not touch is `NOT ADDRESSED`.
+- Only the fix gets the rubric. Anything the reviewer notices outside the fix goes to a `**Deferred:**` list in the report: it is never a finding and never moves the verdict.
+- The verdict block carries each `NOT ADDRESSED` finding again, plus any new finding the fix itself introduced. `ADDRESSED` ones appear only in `summary`, as a count. `PASS` needs every earlier finding `ADDRESSED` and no new finding in the fix.
+- Relay the `**Deferred:**` list to the caller beside the verdict. File it with `/rota-capture` if the caller wants; never fold it into this branch.
 
 ## Step 6 — Pre-flight Scaffolding Scan
 

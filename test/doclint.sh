@@ -89,9 +89,9 @@ rc=0; BAD="$(python3 "$LINT" "$ROTA_BIN" "$TMP/bad.md" 2>&1)" || rc=$?
 printf 'Run `rota round reclaim ben`, `rota round return ben` and `rota round transfer 5 --to dana`.\n' > "$TMP/c10.md"
 rc=0; GOOD="$(python3 "$LINT" "$ROTA_BIN" "$TMP/c10.md" 2>&1)" || rc=$?
 [ "$rc" = "0" ] && grep -q 'RESOLVED 3' <<<"$GOOD" || fail "the C10 verbs should resolve: rc=$rc $GOOD"
-printf 'Run `rota round reclaim ben` and `rota round bounce`.\n' > "$TMP/c10b.md"
+printf 'Run `rota round reclaim ben` and `rota round bouncer`.\n' > "$TMP/c10b.md"
 rc=0; BAD="$(python3 "$LINT" "$ROTA_BIN" "$TMP/c10b.md" 2>&1)" || rc=$?
-[ "$rc" = "1" ] && grep -q 'MISSING .*rota round bounce' <<<"$BAD" || fail "a made-up round verb should fail: rc=$rc $BAD"
+[ "$rc" = "1" ] && grep -q 'MISSING .*rota round bouncer' <<<"$BAD" || fail "a made-up round verb should fail: rc=$rc $BAD"
 pass "every rota verb in skills/rota-orchestrate/SKILL.md and docs/usage/parallel-rounds.md resolves ($(grep -o 'RESOLVED [0-9]*' <<<"$OUT"))"
 
 echo "All doclint checks passed."

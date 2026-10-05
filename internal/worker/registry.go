@@ -542,6 +542,11 @@ func RecordBounce(root, issue, head string) (n int, err error) {
 	return n, err
 }
 
+// Bounces is how often an item's PR has been sent back so far (0 when never).
+func (r Registry) Bounces(issue string) int {
+	return bounceCount(bouncesOf(r.doc), issue)
+}
+
 // ClearBounces forgets an item's count: its PR merged or it was handed over.
 func ClearBounces(root, issue string) error {
 	return Update(root, func(d *Doc) {
