@@ -31,6 +31,7 @@ const (
 // state of every watched slot when the timeout passed.
 type WaitResult struct {
 	Slot, State, Evidence, Source string
+	Note                          string // set when the state did not come from a sentinel
 	Waited                        time.Duration
 	TimedOut                      bool
 	Slots                         []PollRow
@@ -141,6 +142,7 @@ func (e Env) Wait(ctx context.Context, root string, o WaitOpts) (WaitResult, err
 		if ctx.Err() != nil {
 			return stop()
 		}
+		rows, notes := e.promoteIdleWithPR(ctx, root, rows)
 		last = rows
 		for _, r := range rows {
 			key := seenKey(r.State, r.Evidence)
@@ -165,7 +167,7 @@ func (e Env) Wait(ctx context.Context, root string, o WaitOpts) (WaitResult, err
 				if rowErr != nil {
 					return WaitResult{}, rowErr
 				}
-				return WaitResult{Slot: r.Name, State: r.State, Evidence: r.Evidence,
+				return WaitResult{Slot: r.Name, State: r.State, Evidence: r.Evidence, Note: notes[r.Name],
 					Source: source, Waited: e.Now().Sub(start)}, nil
 			}
 		}
