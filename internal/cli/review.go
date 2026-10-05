@@ -4,8 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"os"
-	"path/filepath"
 	"regexp"
 	"slices"
 	"sort"
@@ -13,10 +11,8 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
-	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/pystr"
-	"github.com/l4ci/rota/internal/repos"
 )
 
 // reviewCommands is the `rota review` group (#52).
@@ -114,7 +110,7 @@ func reviewScan(c *Ctx, t branchTarget) (reviewInfo, error) {
 	if ids := backlog.FindItemIDs(bodies, backlog.ItemLetters); ids != nil {
 		info.IDs = ids
 	}
-	corpus := (&backlog.File{Root: t.CorpusRoot}).Corpus()
+	corpus := fileBackend(t.CorpusRoot).Corpus()
 	for _, id := range info.IDs {
 		if line, title, ok := backlog.FindOrigin(corpus, id); ok {
 			info.Intents = append(info.Intents, reviewIntent{id, title, line, id[:1]})
@@ -405,56 +401,11 @@ func reviewScaffolding(fs *flag.FlagSet) RunFunc {
 	}
 }
 
-// a8Backend is what the issue-only verbs need of the issue backend; the
-// single-repo *backlog.Issues and the *backlog.Umbrella both have it.
-type a8Backend interface {
-	ReviewQueue() ([]backlog.QueueEntry, error)
-	MergePRGated(pr int, items []string, approve backlog.MergeApprover) (backlog.MergeResult, error)
-	ReleaseGate(mid string) ([]backlog.Blocker, []backlog.Issue, error)
-	ReleaseNotes(mid string) ([]backlog.NoteSection, error)
-	ReleaseClose(mid, tag string) (int, bool, error)
-}
-
-// a8Issues opens the issue backend for an issue-only verb. An unknown --repo
-// is exit 3 and the file backend is refused (RefusedError, backend; map it
-// with backlogFail, or backlogFailRead for a read-only verb). At an umbrella root a verb
-// that acts on one sub-repo (perRepo) needs --repo (exit 2).
-func a8Issues(c *Ctx, hint string, perRepo bool) (a8Backend, error) {
-	root, err := c.Root()
-	if err != nil {
-		return nil, err
-	}
-	if _, err := c.RepoPath(); err != nil {
-		return nil, err
-	}
-	cfg := config.Load(filepath.Join(root, ".rota", "config.json"))
-	if name, err := config.Backend(cfg); err == nil && name == "file" {
-		return nil, &backlog.RefusedError{BlockedBy: "backend", Hint: hint, Err: backlog.ErrWrongBackend,
-			Msg: c.Path + ` is not available with backlog.backend "file"`}
-	}
-	if perRepo && c.Repo == "" && repos.Umbrella(root) {
-		// Scope S: inside a sub-repo the verb acts on it; only the umbrella
-		// root itself needs --repo.
-		if cwd, err := os.Getwd(); err != nil || backlog.CwdSubRepo(cwd, repos.Load(root)) == "" {
-			return nil, Usage("%s from the umbrella root needs --repo <name>", c.Path)
-		}
-	}
-	be, err := openBacklog(c, root, false, hint)
-	if err != nil {
-		return nil, err
-	}
-	ab, ok := be.(a8Backend)
-	if !ok {
-		return nil, &Error{Exit: ExitInternal, Message: fmt.Sprintf("%s: backend %T has no issue verbs", c.Path, be)}
-	}
-	return ab, nil
-}
-
 func reviewQueue(c *Ctx, args []string) (Result, error) {
 	if len(args) > 0 {
 		return Result{}, Usage("usage: rota review queue")
 	}
-	be, err := a8Issues(c, "", false)
+	be, err := openIssueBackend(c, "", false)
 	if err != nil {
 		return backlogFailRead(err)
 	}

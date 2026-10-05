@@ -739,7 +739,7 @@ func refactorAge(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		feats, bugs, err := (&backlog.File{Root: root}).RefactorAge()
+		feats, bugs, err := fileBackend(root).RefactorAge()
 		if err != nil {
 			return backlogFail(err)
 		}
@@ -762,7 +762,7 @@ func refactorReset(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		changed, err := (&backlog.File{Root: root}).RefactorReset()
+		changed, err := fileBackend(root).RefactorReset()
 		if err != nil {
 			return backlogFail(err)
 		}
