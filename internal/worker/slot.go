@@ -327,22 +327,3 @@ func slotsDefault() *jsonx.Object {
 	def.Set("slots", []any{})
 	return def
 }
-
-// UpdateEscalations edits the escalation list under the registry lock: mutate
-// gets the list as it is and returns the new one.
-func UpdateEscalations(root string, mutate func(list []any) []any) error {
-	return updateList(root, "escalations", mutate)
-}
-
-// UpdateLimits is UpdateEscalations for the limit list.
-func UpdateLimits(root string, mutate func(list []any) []any) error {
-	return updateList(root, "limits", mutate)
-}
-
-func updateList(root, key string, mutate func(list []any) []any) error {
-	return Update(root, func(d *Doc) {
-		raw, _ := d.doc.Get(key)
-		list, _ := raw.([]any)
-		d.doc.Set(key, mutate(list))
-	})
-}
