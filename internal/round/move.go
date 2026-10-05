@@ -17,6 +17,7 @@ import (
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
+	"github.com/l4ci/rota/internal/marker"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/tracker"
@@ -108,7 +109,7 @@ type handoff struct {
 	note       string
 }
 
-func (h handoff) marker() string { return fmt.Sprintf("<!-- rota:handoff %s@%d -->", h.from, h.round) }
+func (h handoff) marker() string { return marker.Handoff(h.from, h.round) }
 
 func (h handoff) body() string {
 	state := "committed"
@@ -155,7 +156,7 @@ func latestHandoffBranch(be Board, id string) string {
 		return ""
 	}
 	for i := len(cs) - 1; i >= 0; i-- {
-		if t := cs[i].Text; strings.Contains(t, "<!-- rota:handoff ") || strings.Contains(t, "<!-- hv:handoff ") {
+		if t := cs[i].Text; marker.HasHandoff(t) {
 			if m := reHandoffBranch.FindStringSubmatch(cs[i].Text); m != nil {
 				return m[1]
 			}
@@ -727,8 +728,8 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 				decisions = string(b)
 			}
 			text = pointerBrief(o.To, id, branch, brief, nil, decisions, tierBrief{Kind: kind, Tier: tier, Model: model, Default: tier, Table: o.Settings.Models[kind]})
-			text += fmt.Sprintf("\nThis issue was handed to you by %s. Read its latest rota:handoff comment first (it ends with a `<!-- rota:handoff %s@%d -->` marker), then continue from the pushed work on %s, already checked out in your worktree.\n",
-				res.From, res.From, rnd, branch)
+			text += fmt.Sprintf("\nThis issue was handed to you by %s. Read its latest rota:handoff comment first (it ends with a `%s` marker), then continue from the pushed work on %s, already checked out in your worktree.\n",
+				res.From, marker.Handoff(res.From, rnd), branch)
 			if rec != nil {
 				text += fmt.Sprintf("Its PR %s is already open: push to the branch to update it instead of opening another.\n", rec.PR)
 			}
