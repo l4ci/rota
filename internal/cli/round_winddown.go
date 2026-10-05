@@ -7,9 +7,9 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
-	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/roundtick"
 )
 
@@ -64,7 +64,7 @@ func roundWindDown(fs *flag.FlagSet) RunFunc {
 		// re-verified; a kept lease lets it resume.
 		var cd string
 		var rnd int
-		if d, err := roundlease.CommonDir(root); err == nil {
+		if d, err := rotastate.CommonDir(root); err == nil {
 			if l, _, err := c.deps().WatchEnv().Read(d); err == nil {
 				cd, rnd = d, l.Round
 				_ = roundtick.SetStopped(cd, rnd, true)

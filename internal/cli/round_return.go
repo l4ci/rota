@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -164,15 +165,15 @@ func returnRoot(c *Ctx, slot string) (string, error) {
 	if err != nil || worker.LoadRegistry(root).Slot(slot) != nil {
 		return root, err
 	}
-	res, gerr := c.deps().Git(c.Context(), root, "rev-parse", "--path-format=absolute", "--git-common-dir")
-	if gerr != nil || res.ExitCode != 0 {
+	common, err := rotastate.CommonDirVia(c.Context(), c.deps().Git, root)
+	if err != nil {
 		return root, nil
 	}
-	common := strings.TrimSpace(res.Stdout)
-	if filepath.Base(common) != ".git" {
+	main, ok := rotastate.MainCheckout(common)
+	if !ok {
 		return root, nil
 	}
-	if main := filepath.Dir(common); main != root && worker.LoadRegistry(main).Slot(slot) != nil {
+	if main != root && worker.LoadRegistry(main).Slot(slot) != nil {
 		return main, nil
 	}
 	return root, nil

@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/roundlease"
 )
 
@@ -84,7 +85,7 @@ func TestKeepaliveRunRestartsOnFreshHandoff(t *testing.T) {
 	if h, _ := os.ReadFile(filepath.Join(child[4], "holder")); strings.TrimSpace(string(h)) != strconv.Itoa(os.Getpid()) {
 		t.Errorf("child must see ROTA_ROUND_HOLDER_PID: %q", h)
 	}
-	cd, _ := roundlease.CommonDir(dir)
+	cd, _ := rotastate.CommonDir(dir)
 	if _, st, _ := roundlease.DefaultEnv().Read(cd); st != roundlease.None {
 		t.Errorf("lease must be released: %v", st)
 	}
@@ -119,7 +120,7 @@ func TestKeepaliveRunBreakerExitsOneWithoutEscalateIssue(t *testing.T) {
 
 func TestKeepaliveRunRefusedWhileLeaseHeldAndCommandMissing(t *testing.T) {
 	dir := kaProject(t, "")
-	cd, _ := roundlease.CommonDir(dir)
+	cd, _ := rotastate.CommonDir(dir)
 	env := roundlease.DefaultEnv()
 	// pid 1 is alive and never us.
 	if _, _, _, err := env.Acquire(cd, dir, roundlease.Holder{PID: 1, Start: mustStart(env, 1)}, 3); err != nil {
@@ -148,7 +149,7 @@ func mustStart(e roundlease.Env, pid int) uint64 { s, _ := e.StartTime(pid); ret
 func TestKeepaliveRunsTheLimitsLoopUnlessTold(t *testing.T) {
 	for _, noLimits := range []bool{false, true} {
 		dir := kaProject(t, "")
-		cd, _ := roundlease.CommonDir(dir)
+		cd, _ := rotastate.CommonDir(dir)
 		out := filepath.Join(t.TempDir(), "seen")
 		// the child waits for the loop's record to appear, or gives up
 		script := `i=0; while [ ! -e "$1" ] && [ $i -lt 50 ]; do sleep 0.1; i=$((i+1)); done; if [ -e "$1" ]; then echo yes > "$2"; else echo no > "$2"; fi`

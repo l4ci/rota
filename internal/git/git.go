@@ -165,32 +165,34 @@ func (r Repo) out(ctx context.Context, args ...string) (s string, ok bool, err e
 	return strings.TrimRight(res.Stdout, "\n"), true, nil
 }
 
-// CommonDir is the absolute git common dir of Dir (symlinks unresolved), so a
-// linked worktree resolves to its main repository's .git. ok is false when
-// Dir is not in a repository.
+// CommonDir is the absolute, symlink-resolved git common dir of Dir, so a
+// linked worktree resolves to its main repository's .git and every spelling of
+// the path agrees. ok is false when Dir is not in a repository.
 func (r Repo) CommonDir(ctx context.Context) (dir string, ok bool, err error) {
-	p, ok, err := r.out(ctx, "rev-parse", "--git-common-dir")
-	if err != nil || !ok {
-		return "", false, err
-	}
-	base := r.Dir
-	if base == "" {
-		if base, err = os.Getwd(); err != nil {
-			return "", false, err
-		}
-	}
-	return AbsCommonDir(base, p), true, nil
+	return CommonDirVia(ctx, Exec, r.Dir)
 }
 
-// AbsCommonDir makes the output of `git rev-parse --git-common-dir` run in
-// dir absolute (git prints it relative to dir) and clean. For callers that
-// run git through their own seam; symlinks stay unresolved.
-func AbsCommonDir(dir, out string) string {
-	p := strings.TrimSpace(out)
-	if !filepath.IsAbs(p) {
-		p = filepath.Join(dir, p)
+// CommonDirVia is Repo.CommonDir through a Runner, for layers that run git
+// through their own seam. dir "" is the process cwd.
+func CommonDirVia(ctx context.Context, run Runner, dir string) (string, bool, error) {
+	res, err := run(ctx, dir, "rev-parse", "--git-common-dir")
+	if err != nil || res.ExitCode != 0 {
+		return "", false, err
 	}
-	return filepath.Clean(p)
+	p := strings.TrimSpace(res.Stdout)
+	if !filepath.IsAbs(p) {
+		base := dir
+		if base == "" {
+			if base, err = os.Getwd(); err != nil {
+				return "", false, err
+			}
+		}
+		p = filepath.Join(base, p)
+	}
+	if real, err := filepath.EvalSymlinks(p); err == nil {
+		p = real
+	}
+	return filepath.Clean(p), true, nil
 }
 
 // Toplevel is the root of Dir's work tree; ok is false outside one.

@@ -21,6 +21,7 @@ import (
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/keepalive"
+	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/roundwatch"
 	"github.com/l4ci/rota/internal/status"
@@ -120,7 +121,7 @@ func dumpState(input []byte) (err error) {
 	if json.Unmarshal(input, &m) != nil || m == nil {
 		return fmt.Errorf("input is not a JSON object")
 	}
-	cd, err := roundlease.CommonDir(payloadCwd(m))
+	cd, err := rotastate.CommonDir(payloadCwd(m))
 	if err != nil {
 		return err
 	}
@@ -158,7 +159,7 @@ func hookSetup(c *Ctx, needLeaseFree bool) (hc hookContext, ok bool) {
 		return hc, false
 	}
 	cwd := payloadCwd(hc.payload)
-	cd, err := roundlease.CommonDir(cwd)
+	cd, err := rotastate.CommonDir(cwd)
 	if err != nil {
 		return hc, false
 	}

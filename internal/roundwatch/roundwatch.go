@@ -23,6 +23,7 @@ import (
 
 	"github.com/l4ci/rota/internal/escalation"
 	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -41,7 +42,7 @@ type Marker struct {
 }
 
 // MarkerPath is the marker file under a common dir.
-func MarkerPath(commonDir string) string { return filepath.Join(commonDir, "rota", MarkerFile) }
+func MarkerPath(commonDir string) string { return rotastate.File(commonDir, MarkerFile) }
 
 // Armed reports the live watch of the repo, if any. A marker whose process is
 // gone, or on another host, is not armed: nothing can be checked about it.

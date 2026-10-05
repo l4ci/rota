@@ -7,6 +7,7 @@ import (
 	"sort"
 
 	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/rotastate"
 )
 
 // StateFile is the autopilot's memory between ticks, next to the round lease.
@@ -23,7 +24,7 @@ type State struct {
 	Reported []string          `json:"reported,omitempty"`
 }
 
-func statePath(commonDir string) string { return filepath.Join(commonDir, "rota", StateFile) }
+func statePath(commonDir string) string { return rotastate.File(commonDir, StateFile) }
 
 // LoadState reads the state; a missing, unreadable or foreign-round file is the
 // empty state.

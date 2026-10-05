@@ -13,6 +13,7 @@ import (
 	"github.com/l4ci/rota/internal/escalation"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/roundtick"
@@ -57,7 +58,7 @@ func roundWatch(fs *flag.FlagSet) RunFunc {
 		if *autopilot && !set.Autopilot {
 			return Result{}, Refused("round.autopilot is off").WithHint("rota config set round.autopilot true")
 		}
-		cd, err := roundlease.CommonDir(root)
+		cd, err := rotastate.CommonDir(root)
 		if err != nil {
 			return Result{}, Resolution("%v", err)
 		}
