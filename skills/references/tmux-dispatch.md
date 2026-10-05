@@ -14,7 +14,7 @@ A worker's value is that it can idle on a question and a human can answer in its
 
 ## The worker contract
 
-Shared by both hosts and kept in [`worker-contract.md`](worker-contract.md): the standing brief every worker reads, the `ROTA-BLOCKED` / `ROTA-DONE` sentinels the poll below routes on, and the provenance rules. Read it before dispatching.
+Shared by both hosts and kept in [`worker-contract.md`](worker-contract.md): the standing brief every worker reads, the `ROTA-BLOCKED` / `ROTA-DONE` sentinels the poll below routes on, and the provenance rules. `/rota-orchestrate` cites it directly.
 
 ## Polling
 

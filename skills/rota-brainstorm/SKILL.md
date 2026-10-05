@@ -60,4 +60,6 @@ Report two lines (artifact, approaches, open questions). On hand-off say *"Run `
 
 - [`references/design-exploration.md`](references/design-exploration.md) — shared spine with `/rota-vision`.
 - [`references/grilling.md`](references/grilling.md) — the grilling pass (Major / P0 / `--grill`).
+- [`references/subagent-dispatch.md`](references/subagent-dispatch.md) — the `light` subagent that grilling sends for broad reads.
 - [`references/context-load-protocol.md`](references/context-load-protocol.md) — shared parallel context load.
+- [`references/knowledge-consult.md`](references/knowledge-consult.md) — the K+D query pattern the load uses.

@@ -85,3 +85,4 @@ Offer `/rota-work` as a one-line prompt if the user is ready.
 
 - [`references/dependent-items.md`](references/dependent-items.md) — declaring `## Depends on` edges; expand → migrate → contract.
 - [`references/context-load-protocol.md`](references/context-load-protocol.md) — shared parallel context load.
+- [`references/knowledge-consult.md`](references/knowledge-consult.md) — the K+D query pattern the load uses.
