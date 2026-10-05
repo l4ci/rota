@@ -93,5 +93,7 @@ If a newly active milestone has no items, offer (default Capture): `/rota-captur
 ## References
 
 - [`references/context-load-protocol.md`](references/context-load-protocol.md) — shared parallel context load.
+- [`references/knowledge-consult.md`](references/knowledge-consult.md) — the K+D query pattern the load uses.
 - [`references/grilling.md`](references/grilling.md) — the Step 5 challenge rounds.
+- [`references/subagent-dispatch.md`](references/subagent-dispatch.md) — the `light` subagent that grilling sends for broad reads.
 - [`references/design-exploration.md`](references/design-exploration.md) — shared spine with `/rota-brainstorm`.

@@ -42,5 +42,5 @@ Detail: .rota/<kind>/{ID}.md
 ## What this reference does NOT cover
 
 - **The BACKLOG-entry write itself** — see rota-capture Step 6 inline.
-- **Milestone tagging** — see `references/milestone-tagging.md`.
+- **Milestone tagging** — see rota-capture Step 4.5 inline.
 - **Sub-repo tagging** — see rota-capture Step 4.6 inline / `references/umbrella-mode.md`.
