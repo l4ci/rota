@@ -45,6 +45,7 @@ Rules:
 - Vertical slivers, not horizontal layers: each task crosses every layer it needs (UI + logic + data) to be observable.
 - No half-implementations: real runnable code, no stubs.
 - A rename and its incoming-link sweep are one task; derive the file list from `git grep -l "<old-name>"`.
+- A wide rename-style refactor (too many call sites for one window) is planned as expand → migrate in batches → contract, per `references/dependent-items.md`; each step becomes its own task.
 - Doc deliverables under `docs/` (or `docs.path`) must land in an existing doc home; otherwise raise it as an Open question (umbrella: a sibling `<repo>-docs` is the usual home).
 
 **Self-check before asking.** Silently verify: every Acceptance criterion maps to a task; no placeholder text (`TBD`, `...`, `similar to Task N`); every name, path and signature matches across tasks, including each task's Consumes against an earlier task's Produces. Fix misses in the draft, then say in one line what you fixed (omit the line if nothing).
@@ -60,6 +61,8 @@ KEY=$(rota plan add --json --milestone <MID> --slice --title "<title>" | jq -r .
 ```
 
 Quote `#42` so the shell keeps it. Pass `--design <ID>` when a design exists; the frontmatter records the pointer. On the issue backend draft the sections in a scratch file and publish with `rota plan put <key> --body-file <file>|-`; on the file backend `Edit` the stub's sections and keep the frontmatter. List with `rota plan list [--milestone <M>]`. Record plan-shaping answers with `rota item comment add <ID> --kind decision --body-file -`.
+
+When the plan splits into separate items (a sliced milestone, or the expand/migrate/contract steps), file each with `rota item create ... --depends-on <prerequisite IDs>` where it clearly needs another open one first, prerequisites first (`references/dependent-items.md`). Tasks inside one plan need no items.
 
 Then `rota plan validate-docs <key>` (advisory, exits 0): for each `data.mismatches` entry append an Open question naming the path, target repo and suggestion.
 
@@ -82,4 +85,5 @@ Offer `/rota-work` as a one-line prompt if the user is ready.
 
 ## References
 
+- [`references/dependent-items.md`](references/dependent-items.md) — declaring `## Depends on` edges; expand → migrate → contract.
 - [`references/context-load-protocol.md`](references/context-load-protocol.md) — shared parallel context load.

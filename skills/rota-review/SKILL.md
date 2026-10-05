@@ -1,6 +1,6 @@
 ---
 name: rota-review
-description: Staff-engineer review of a feature branch before merge or PR — reads commits, diff, referenced item IDs, and matching KNOWLEDGE.md topics; dispatches an Opus reviewer that checks intent match, convention compliance, and quality. Returns PASS / CONCERNS / FAIL. Use on "review this", "check before I ship", "look over the branch", or implicitly from /rota-ship.
+description: Staff-engineer review of a feature branch before merge or PR — reads commits, diff, referenced item IDs, and matching KNOWLEDGE.md topics; dispatches two parallel reviewers, Spec (intent match) and Standards (conventions, quality, tests), and reports them separately. Returns PASS / CONCERNS / FAIL, the worse of the two. Use on "review this", "check before I ship", "look over the branch", or implicitly from /rota-ship.
 ---
 
 # rota-review — Pre-Merge Review
@@ -9,13 +9,15 @@ description: Staff-engineer review of a feature branch before merge or PR — re
 
 Read `.rota/config.json`:
 
-- `models.orchestrator` — model for the reviewer (default `opus`)
+- `models.orchestrator` — model for the Spec reviewer (default `opus`)
+- `round.tiers.claude.standard` — model for the Standards reviewer (the `standard` tier; silent default `models.worker`). No review-specific key.
 
 ## When to Use
 
 - Before merging or opening a PR — typically invoked from `/rota-ship`
 - *"Review this branch"*, *"Second-opinion this"*, *"Look over what I've got"*
 - After manual commits to a branch you want validated before integrating
+- `/rota-review --since <sha>` re-reviews a bounced branch: only the fix, against the findings of the last review (see Re-review)
 - `/rota-review --queue` (issue backend) reviews and merges the PRs waiting on `needs-review` items (see Queue mode)
 
 ## When NOT to Use
@@ -32,8 +34,8 @@ Track these phases with the host's task tool if it has one.
 1. *Read commits and items* — branch range walked, referenced item IDs collected (Step 2)
 2. *Resolve the spec* — what each referenced item promised (Step 3)
 3. *Capture context* — KNOWLEDGE / DECISIONS topics, diff, scaffolding pre-scan (Steps 4, 5, 6)
-4. *Review* — one reviewer, one brief (Step 7)
-5. *Verdict* — PASS / CONCERNS / FAIL with structured findings (Step 8)
+4. *Review* — Spec and Standards reviewers in parallel (Step 7)
+5. *Verdict* — spec then quality recorded, two sections reported (Step 8)
 6. *Knowledge lifecycle* — register hits on consumed bullets via `rota knowledge hit` (Step 4)
 
 ## Step 2 — Scope the Review
@@ -81,6 +83,17 @@ rota review package <branch> --base <base> [--since <sha>] --json
 
 `data.path` is the file (commits, `--stat` and the full `-U10` diff); `data.files` and `data.bytes` size it. There is no file cap: the reviewer reads the file, you don't. Pass `--since <sha>` on a re-review to package only the commits after the sha the last review covered. Exit 3 means an empty range or a `--since` that is not on the branch: report it and stop.
 
+### Re-review (`--since <sha>`)
+
+After a bounce the worker pushes a fix. Review that fix, not the whole branch again. `<sha>` is the `sha` of the branch's last recorded review (`rota verdict show <branch> --json`, the newest record of kind `review-quality`); without a recorded review there is nothing to re-review against, so run the full review. Do these in place of the full Step 7 brief:
+
+- Step 5 packages only `--since <sha>`. Steps 2-4 and 6 still run, on the fix range.
+- Both reviewers run, each on its own axis. `rota verdict show <branch> --json` holds the latest `review-spec` and `review-quality` records: put each record's `findings` into its reviewer's brief as `**Earlier findings:**`, numbered. `<sha>` is the `review-quality` record's sha.
+- Each reviewer marks every earlier finding `ADDRESSED` or `NOT ADDRESSED`, with the diff line that settles it. A finding the fix does not touch is `NOT ADDRESSED`.
+- Only the fix gets the rubric. Anything the reviewer notices outside the fix goes to a `**Deferred:**` list in the report: it is never a finding and never moves the verdict.
+- The verdict block carries each `NOT ADDRESSED` finding again, plus any new finding the fix itself introduced. `ADDRESSED` ones appear only in `summary`, as a count. `PASS` needs every earlier finding `ADDRESSED` and no new finding in the fix.
+- Relay the `**Deferred:**` list to the caller beside the verdict. File it with `/rota-capture` if the caller wants; never fold it into this branch.
+
 ## Step 6 — Pre-flight Scaffolding Scan
 
 Multi-task feature branches sometimes ship comments that referenced earlier task numbers ("Umbrella behavior is added in Task 7 — for now --repo is parsed but ignored") even after the referenced task completed. Before dispatching the reviewer, run a deterministic diff scan:
@@ -91,13 +104,17 @@ rota review scaffolding [--repo <name>] --base <base> <branch>
 
 Empty stdout (no `data.findings`) → no candidates. Otherwise carry the matches into the brief as `**Possible stale scaffolding:**` evidence. Do not auto-FAIL — the reviewer judges each match as real scaffolding or legitimate prose. The verb surfaces; the reviewer decides.
 
-## Step 7 — Dispatch the Reviewer
+## Step 7 — Dispatch the Reviewers
 
-Dispatch one reviewer using the **orchestrator** model, with this brief. Fill the bracketed parts from Steps 2-6 and drop any section that has nothing in it.
+Dispatch two reviewers **in parallel** (one message, two dispatches), fresh context each, same diff file and same Steps 2-6 context. Two axes, judged apart, so one cannot mask the other:
+
+- **Spec** — **orchestrator** model. Does the diff do what the items promised, and nothing more?
+- **Standards** — **`standard`** tier. Does it meet the project's standards?
+
+Fill the bracketed parts from Steps 2-6 and drop any section that has nothing in it. Both briefs open with the shared block, then add their own rubric.
 
 ```
-Review `<branch>` against base `<base>`: does the diff deliver what the items
-promised, and is it good enough to merge?
+Review `<branch>` against base `<base>` on one axis (named below).
 
 **Commits:**
 <hash> <subject>
@@ -111,6 +128,16 @@ promised, and is it good enough to merge?
 ### [B07] Timer badge shows stale duration
 <same>
 
+**Diff:** read `<data.path from Step 5>` (commits, `--stat`, full diff with context). Do not ask for the diff to be pasted.
+```
+
+### Spec reviewer brief
+
+Shared block, plus these sections (items and Review Focus go here; the Standards reviewer does not get them beyond the shared block):
+
+```
+**Axis: Spec.** Does the diff deliver what the items promised, nothing more? Do not judge style, conventions or test quality: another reviewer does.
+
 **Review Focus (from the plan, verbatim):**
 <the plan's `## Review Focus` lines per item, or drop this section>
 Check each named edge is handled and pinned by a test; an unhandled or untested one is a CONCERN.
@@ -118,6 +145,19 @@ Check each named edge is handled and pinned by a test; an unhandled or untested 
 **Recorded proof:**
 <rows from `rota proof show <ID>` per item, or "none recorded">
 Rows are verification already run (check, result, sha, evidence). Do NOT re-run a check that has a PASS row at the current sha; spot-check one row. A FAIL row or a row at a stale sha is a gap to cite.
+
+**Rubric. For each item, return PASS / CONCERN / FAIL with evidence.**
+
+1. **Intent match** — does the diff deliver every outcome in the item's spec? PASS cites the diff line for each outcome. A partially met outcome (stub, missing test for a named outcome) is a CONCERN. A missing outcome, or edits to files the spec does not imply, is a FAIL. If an item's spec is too thin to check, say so rather than inventing one.
+2. **Drift** — trace each change back to the item's intent. Sensible steps nobody asked for (extra options, generalised helpers, adjacent cleanups) are a CONCERN naming the drift path, never a FAIL on their own.
+```
+
+### Standards reviewer brief
+
+Shared block, plus:
+
+```
+**Axis: Standards.** Does the diff meet the project's standards? Do not judge whether it matches the items' intent: another reviewer does.
 
 **Relevant project conventions (from KNOWLEDGE.md):**
 - <bullet>
@@ -128,17 +168,19 @@ Rows are verification already run (check, result, sha, evidence). Do NOT re-run 
 **Possible stale scaffolding (deterministic pre-flight grep):**
 <file:line>: <matched line text>
 
-**Diff:** read `<data.path from Step 5>` (commits, `--stat`, full diff with context). Do not ask for the diff to be pasted.
+**Rubric. Return PASS / CONCERN / FAIL per heading, with evidence.**
 
-**Evaluate on the rubric below. For each item, return PASS / CONCERN / FAIL with evidence.**
-
-1. **Intent match** — does the diff deliver every outcome in the item's spec? PASS cites the diff line for each outcome. A partially met outcome (stub, missing test for a named outcome) is a CONCERN. A missing outcome, or edits to files the spec does not imply, is a FAIL. Then trace each change back to the item's intent and flag drift: sensible steps nobody asked for (extra options, generalised helpers, adjacent cleanups) are a CONCERN naming the drift path, never a FAIL on their own. If an item's spec is too thin to check, say so rather than inventing one.
-2. **Convention compliance** — does the diff respect the KNOWLEDGE.md bullets? Any regression on a captured gotcha?
-3. **Obvious quality** — dead code, error swallowing, untested new branches, security smells, API contract breaks, performance cliffs. Not a full code review; focus on what the user would regret after merge.
+1. **Convention compliance** — does the diff respect the KNOWLEDGE.md bullets? Any regression on a captured gotcha?
+2. **Code-smell baseline** — dead code, error swallowing, security smells, API contract breaks, performance cliffs, untested new branches. A short baseline, not a full code review; focus on what the user would regret after merge. A documented project standard (a KNOWLEDGE bullet, a DECISIONS entry, the repo's own idiom) overrides the baseline: code that follows it is never a smell.
+3. **Tests** — flag a **tautological** test (the expected value is computed the way the code computes it, so it cannot disagree with the code) and an **implementation-coupled** test (pinned to internals or call order instead of behaviour, so a correct refactor breaks it). Each is a CONCERN with file:line.
 4. **Stale scaffolding** — judge each `**Possible stale scaffolding:**` match: a leftover *Task N* / *placeholder* / *not yet wired* / *added later* / *in flight* annotation that should have gone once the work landed is a CONCERN with file:line; legitimate prose (a markdown placeholder section, a docstring describing user-visible "in flight" semantics, an enum value named `placeholder`, a `Task <N>` in a per-task brief or test name) is a PASS. Many matches are benign.
 5. **Silent failure check** — for every verification claim in the diff (new test, smoke section, assertion, helper-output check), apply the four-question rubric: (a) what does this verify concretely? (b) is the asserted-on shape the same shape the real consumer reads? (c) was the new code path actually exercised? (d) if you deleted the new code, would the assertion still pass? Any *no* or *unclear* is a `SILENT-FAIL` with file:line and a one-sentence explanation; treat it as a CONCERN. Full rubric: `references/silent-failure-hunter.md`.
 6. **Decision violations** — compare the diff against `**Hard boundaries:**`. Any forbidden pattern present = FAIL.
+```
 
+### Both briefs end with
+
+```
 Be specific: file:line for every concern, ranked by severity.
 
 **Calibration rules.**
@@ -149,41 +191,47 @@ Be specific: file:line for every concern, ranked by severity.
 
 **Verdict block.** End the report with one fenced `json` block and nothing after it:
 {"verdict": "PASS", "summary": "<one line>", "findings": [{"severity": "blocker|major|minor|info", "title": "<what>", "file": "<path>", "line": 42, "detail": "<evidence>"}], "items": [{"id": "<ID>", "verdict": "PASS"}], "declined": [{"title": "<what you could not judge>", "file": "<path>", "line": 42, "detail": "<why not>"}]}
-`declined` is optional (omit it when empty); `file`, `line` and `detail` are optional inside it. It never changes the verdict.
+`declined` is optional (omit it when empty); `file`, `line` and `detail` are optional inside it. It never changes the verdict. The Standards reviewer's `items` may be omitted.
 - PASS — no concerns worth surfacing
 - CONCERNS — works, but surfaces should be flagged before merge
-- FAIL — merge would regress behavior, miss a spec outcome, violate a hard boundary, or break a convention
+- FAIL — Spec: merge would miss a spec outcome. Standards: merge would regress behavior, violate a hard boundary or break a convention.
 ```
+
+Never put a finding from one reviewer into the other's block or rerank them: each block is that reviewer's own.
 
 ## Step 8 — Record and Relay the Verdict
 
-Save the reviewer's JSON block to a temp file and record it (umbrella: add `--repo <name>`):
+Save each reviewer's JSON block to its own temp file. Record **spec first, then quality**, at the same sha (umbrella: add `--repo <name>`):
 
 ```bash
-rota verdict add <branch> --kind review-quality --verdict <PASS|CONCERNS|FAIL> --body-file "$VERDICT" --json
+rota verdict add <branch> --kind review-spec --verdict <PASS|CONCERNS|FAIL> --body-file "$SPEC" --json
+rota verdict add <branch> --kind review-quality --verdict <PASS|CONCERNS|FAIL> --body-file "$STANDARDS" --json
 ```
 
-Exit 2 means the block is malformed or its `verdict` differs from `--verdict`: the message names the field. Ask the reviewer to resend the block; never guess a verdict. `data.combined` is the branch's review verdict.
+Record both even when Spec is FAIL: both ran, and the Standards findings are the author's to-do list too. Order alone decides the result: `review-quality` stores `combined`, the worse of the two at the same sha. `data.combined` on the second call is the branch's review verdict.
 
-Present the reviewer's report **verbatim** (trim only restatements): specifics are the point. Show the `Declined to judge` list under the rubric when it is non-empty; it does not change the verdict and `rota verdict route` ignores it. Structure:
+Exit 2 means the block is malformed or its `verdict` differs from `--verdict`: the message names the field. Ask that reviewer to resend the block; never guess a verdict.
+
+Present both reports **verbatim** (trim only restatements): specifics are the point. Spec first, Standards second, each under its own heading, neither merged into or reranked against the other. Show each reviewer's `Declined to judge` list under its section when non-empty; it does not change the verdict and `rota verdict route` ignores it. Structure:
 
 ```
 Review: `rota/foo` → main (3 commits, 5 files)
 
+## Spec — PASS
 ### [F03] Quick-switch projects — PASS
 <evidence: each spec outcome ↔ diff line(s)>
 
 ### [B07] Timer badge — CONCERN
-<evidence>
+<evidence, drift>
 
-## Rubric
-### 2. Convention compliance — CONCERN
+## Standards — CONCERNS
+### 1. Convention compliance — CONCERN
 - src/Foo.swift:42 — uses raw URLSession; KNOWLEDGE says all network calls go through NetworkClient
 
-### 3. Obvious quality — PASS
+### 3. Tests — PASS
 ...
 
-Verdict: CONCERNS
+Verdict: CONCERNS (worse of Spec PASS and Standards CONCERNS)
 ```
 
 ## Step 9 — Route Based on Verdict

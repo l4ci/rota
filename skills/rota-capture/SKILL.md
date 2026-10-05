@@ -115,11 +115,12 @@ Create each item in one command; it prints the new ID:
 ID=$(rota item create --json --kind bugs --title "Short title" --tag P1 --desc "Description." --related "[F02]" | jq -r .data.id)
 ```
 
-Flags: `--kind bugs|features|tasks`, `--tag` (`P0`-`P3` for bugs, `Major`/`Minor`/`Cosmetic` for features, none for tasks), `--desc`, `--related`, `--milestone`, `--repos`, `--subsystem`, `--body-file`. See `rota item create --help` and `docs/design/contract/backlog.md` (*rota item create*) for ID minting, field order, the `Since:` stamp, detail-file placement and the issue-backend mapping; none of that is the skill's job.
+Flags: `--kind bugs|features|tasks`, `--tag` (`P0`-`P3` for bugs, `Major`/`Minor`/`Cosmetic` for features, none for tasks), `--desc`, `--related`, `--milestone`, `--repos`, `--subsystem`, `--body-file`, `--depends-on`. See `rota item create --help` and `docs/design/contract/backlog.md` (*rota item create*) for ID minting, field order, the `Since:` stamp, detail-file placement and the issue-backend mapping; none of that is the skill's job.
 
 Judgment the skill does own:
 
 - **`--related`:** link only items that clearly relate. Scan open items with `rota backlog list` for connections (file backend: also `.rota/ARCHIVE.md`); items in the same batch can reference each other. Don't force links.
+- **`--depends-on`:** when an item clearly needs another open item done first, including one earlier in the same batch, pass it (`references/dependent-items.md`). Create prerequisites first and use the IDs just printed. Related-but-independent items stay `--related`.
 - **`--subsystem`:** match filenames and skill names in the user's text against `.rota/map/` (or the `## Project Map` block in CLAUDE.md), e.g. `rota-work` or `rota init`. Pass `Subsystem: <name>` only on a confident match; never block or delay capture for it.
 - **`--desc`:** what happens, when, what should happen instead (bugs); what it does, where, why it matters (features); what and why (tasks). One to three sentences.
 - **Behavior, not paths:** descriptions and acceptance criteria state observable behavior. File paths and line numbers go in a separate `## Pointers` section of the body (`--body-file`), never in the criteria.
@@ -193,6 +194,7 @@ Run the chosen command and pass its per-ID output through verbatim. On exit 4 (`
 | Reference | Purpose |
 |-----------|---------|
 | [`authoring-conventions.md`](references/authoring-conventions.md) | Destructive and manual gates. |
+| [`dependent-items.md`](references/dependent-items.md) | When to declare `--depends-on` and in what order to create. |
 | [`detail-files.md`](references/detail-files.md) | Detail-file template for bulky input. |
 | [`issue-mode.md`](references/issue-mode.md) | Issue-backend umbrella rules (Step 4.6). |
 | [`milestone-tagging.md`](references/milestone-tagging.md) | Milestone-tagging question shapes (Step 4.5). |

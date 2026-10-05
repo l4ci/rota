@@ -1105,3 +1105,25 @@ func TestReclaimDeadSlotSweepsItsLeftoverShellPane(t *testing.T) {
 		t.Errorf("swept = %v, want [%s]", f.host.swept, f.wt("ben"))
 	}
 }
+
+func TestTransferTierBindsTheReceiverAndNeedsAReason(t *testing.T) {
+	f := newMoveFx(t)
+	f.set.Models = map[string]map[string]string{"claude": {"light": "haiku", "standard": "sonnet", "heavy": "opus"}}
+	f.set.Tier = "standard"
+	if _, err := f.transfer("12", "dana", func(o *TransferOpts) { o.Tier = "heavy" }); err == nil || !strings.Contains(err.Error(), "--tier-reason") {
+		t.Fatalf("a tier above the default needs a reason, got %v", err)
+	}
+	if _, err := f.transfer("12", "dana", func(o *TransferOpts) { o.Tier = "huge" }); err == nil || !strings.Contains(err.Error(), "--tier must be") {
+		t.Fatalf("unknown tier: %v", err)
+	}
+	f.host.sent = ""
+	if _, err := f.transfer("12", "dana", func(o *TransferOpts) { o.Tier = "heavy"; o.TierReason = "bounced 3 times" }); err != nil {
+		t.Fatal(err)
+	}
+	if d := f.slot("dana"); d.Tier() != "heavy" || d.Model() != "opus" || d.TierReason() != "bounced 3 times" {
+		t.Errorf("receiver tier: %s %s %s", d.Tier(), d.Model(), d.TierReason())
+	}
+	if !strings.Contains(f.host.sent, "Your tier is heavy (opus), above the default standard: bounced 3 times") {
+		t.Errorf("brief lacks the tier:\n%s", f.host.sent)
+	}
+}

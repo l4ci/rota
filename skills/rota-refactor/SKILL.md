@@ -107,6 +107,8 @@ rota issues label <number> --add refactor
 
 (File-mode backlogs have no tracker: `rota item create` alone, and the item is the finding.)
 
+When findings must land in order (one builds on another's seam, or both rewrite the same lines), file the prerequisite first and pass `--depends-on <its ID>` on the next; see `references/dependent-items.md`. Independent findings get no edge.
+
 Body sections:
 
 - **Pointers** — paths and line ranges. Paths live here only, never in Acceptance, which states behavior.
@@ -152,4 +154,5 @@ Report the commit and the issues it closes in a few lines. Do not recap explorat
 ## References
 
 - [`references/refactor-design-approaches.md`](references/refactor-design-approaches.md) — competing-interface choreography for `--designs`.
+- [`references/dependent-items.md`](references/dependent-items.md) — ordering filed findings with `--depends-on`.
 - [`references/knowledge-consult.md`](references/knowledge-consult.md) — the knowledge and decisions query pattern used in Orient.
