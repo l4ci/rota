@@ -290,4 +290,4 @@ func tokenMatches(s string) []tokenMatch {
 	return out
 }
 
-var bracketedRe = regexp.MustCompile(`\[([` + backlog.ItemLetters + `]\p{Nd}+)\]`)
+var bracketedRe = backlog.BracketedIDRe

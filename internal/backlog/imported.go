@@ -25,7 +25,7 @@ var (
 	GHRefRe  = regexp.MustCompile(`GH:[` + pystr.SpaceClass + `]*#(\p{Nd}+)`)
 	GLRefRe  = regexp.MustCompile(`GL:[` + pystr.SpaceClass + `]*#(\p{Nd}+)`)
 	reposRe  = regexp.MustCompile(`Repos:[` + pystr.SpaceClass + `]*([^\n]+?)(?:[` + pystr.SpaceClass + `]+(?:Detail|Related|Milestone):|$)`)
-	bulletID = regexp.MustCompile(`\[([` + ItemLetters + `]\p{Nd}+)\]`)
+	bulletID = BracketedIDRe
 )
 
 type importedKey struct {
