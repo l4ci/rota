@@ -36,10 +36,10 @@ rwr() { ( cd "$RWP" && PATH="$FK/bin:$PATH" FAKE_TMUX="$FK/tmux" CLAUDE_CONFIG_D
 rw_stop() { printf '{"session_id":"s1","cwd":"%s","stop_hook_active":%s}' "$RWP" "$1" | rwr "$ROTA_BIN" hook stop; }
 rw_prompt() { printf '{"session_id":"s1","cwd":"%s","prompt":"hi"}' "$RWP" | rwr "$ROTA_BIN" hook prompt; }
 # A tmux pane that never changes reads as idle, so a busy worker is a pane whose
-# text keeps moving.
-CHURN=""
-churn() { ( i=0; while :; do i=$((i+1)); printf 'working %s\n' "$i" > "$FK/tmux/pane"; sleep 0.1; done ) & CHURN=$!; }
-unchurn() { [ -z "$CHURN" ] || { kill "$CHURN" 2>/dev/null || true; wait "$CHURN" 2>/dev/null || true; CHURN=""; }; }
+# text moves. The fake's tick file makes every capture differ; a background
+# writer here was starved under the sharded gate and the pane read as idle (#135).
+churn() { printf 'working\n' > "$FK/tmux/pane"; : > "$FK/tmux/tick"; }
+unchurn() { rm -f "$FK/tmux/tick"; }
 trap 'unchurn; kill "$ORCH_RWT" "$WATCH_PID" 2>/dev/null || true; rm -rf "${TMP_RWT:?}"' EXIT
 churn
 rwslots busy
