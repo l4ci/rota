@@ -153,7 +153,7 @@ func approvalNow(c *Ctx) time.Time {
 	if env := c.deps().escalationEnv(); env.Now != nil {
 		return env.Now()
 	}
-	return time.Now()
+	return c.deps().Now()
 }
 
 // approvalFail builds the exit 4 refusal of a --approval check: extra's

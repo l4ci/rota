@@ -56,7 +56,7 @@ func knStore(c *Ctx) (knowledge.Store, string, error) {
 	if err != nil {
 		return knowledge.Store{}, "", err
 	}
-	st := knowledge.Store{Root: root, Repos: repos}
+	st := knowledge.Store{Root: root, Repos: repos, Now: c.deps().Today}
 	if c.Repo != "" {
 		return st, c.Repo, nil
 	}

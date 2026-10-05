@@ -145,7 +145,7 @@ func TestLimitWatchRefusals(t *testing.T) {
 	// the supervisor is gone: the holder may watch, once
 	keepalive.WriteState(keepalive.StatePath(cd), keepalive.State{PID: 1 << 30, Status: keepalive.StatusRunning, StartedAt: "x", RunStartedAt: "x"})
 	limits.WriteWatching(cd, limits.Watching{PID: 1, StartedAt: "x", Mode: limits.ModeWatch})
-	t.Setenv("ROTA_TEST_HOLDER_PID", strconv.Itoa(os.Getpid()))
+	deps.HolderPID = func() int { return os.Getpid() }
 	if code, out, _ = rotaInWith(t, deps, dir, "limit", "watch", "--json"); code != 4 || data(t, out)["blockedBy"] != "watching" {
 		t.Fatalf("watching: %d %s", code, out)
 	}

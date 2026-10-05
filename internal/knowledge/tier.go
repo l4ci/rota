@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
@@ -25,9 +24,6 @@ func ValidTier(t string) bool { return t == Provisional || t == Confirmed || t =
 
 // GlossaryTopic holds terms, which are canonical names and never tiered.
 const GlossaryTopic = "Glossary"
-
-// Today is the date stamped on new entries; tests replace it.
-var Today = func() string { return time.Now().Format("2006-01-02") }
 
 // Entry is one sidecar record, keyed "<topic>::<title>" in the file.
 type Entry struct {
@@ -164,7 +160,7 @@ func (s *Sidecar) Get(topic, title string) (Entry, bool) {
 
 // Set puts (topic, title) on tier. An untracked entry starts at 0 hits. It
 // returns the previous tier ("" when there was none).
-func (s *Sidecar) Set(topic, title, tier string) (previous string) {
+func (s *Sidecar) Set(topic, title, tier, today string) (previous string) {
 	k := key(topic, title)
 	if r := s.rec(k); r != nil {
 		if v, ok := r.Get("tier"); ok {
@@ -173,31 +169,31 @@ func (s *Sidecar) Set(topic, title, tier string) (previous string) {
 		r.Set("tier", tier)
 		return previous
 	}
-	s.ents.Set(k, newRec(tier, 0, Today()))
+	s.ents.Set(k, newRec(tier, 0, today))
 	return ""
 }
 
 // Init adds (topic, title) as provisional with 0 hits unless it is tracked.
-func (s *Sidecar) Init(topic, title string) (created bool) {
+func (s *Sidecar) Init(topic, title, today string) (created bool) {
 	k := key(topic, title)
 	if s.rec(k) != nil {
 		return false
 	}
-	s.ents.Set(k, newRec(Provisional, 0, Today()))
+	s.ents.Set(k, newRec(Provisional, 0, today))
 	return true
 }
 
 // Bump registers a hit: an existing entry gets hits+1 and today's date, a
 // new one starts provisional at 1 hit (bump_hit).
-func (s *Sidecar) Bump(topic, title string) Entry {
+func (s *Sidecar) Bump(topic, title, today string) Entry {
 	k := key(topic, title)
 	if r := s.rec(k); r != nil {
 		e := entryOf(topic, title, r)
 		r.Set("hits", json.Number(fmt.Sprint(e.Hits+1)))
-		r.Set("lastSeen", Today())
+		r.Set("lastSeen", today)
 		return entryOf(topic, title, r)
 	}
-	r := newRec(Provisional, 1, Today())
+	r := newRec(Provisional, 1, today)
 	s.ents.Set(k, r)
 	return entryOf(topic, title, r)
 }
@@ -332,7 +328,7 @@ func (s Store) TierSet(scope, topic, title, tier string) (previous string, chang
 		return "", false, err
 	}
 	err = Update(p, func(sc *Sidecar) (bool, error) {
-		previous = sc.Set(topic, title, tier)
+		previous = sc.Set(topic, title, tier, s.today())
 		changed = previous != tier
 		return true, nil
 	})
@@ -379,7 +375,7 @@ func (s Store) backfillTiers(scope string) {
 			}
 			for _, line := range section.Lines(t.Body) {
 				if m := titleRe.FindStringSubmatch(strings.TrimSpace(line)); m != nil {
-					changed = sc.Init(t.Name, m[1]) || changed
+					changed = sc.Init(t.Name, m[1], s.today()) || changed
 				}
 			}
 		}
