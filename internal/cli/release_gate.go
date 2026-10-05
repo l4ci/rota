@@ -112,7 +112,7 @@ func releasePush(fs *flag.FlagSet) RunFunc {
 			if err != nil {
 				return Result{}, err
 			}
-			if p := releaseProvider(release.Host(url)); p != "" {
+			if p := releaseRemoteForge(url); p != "" {
 				cl, err := c.deps().forge(c.Context(), releaseConfig(dir), p, dir)
 				if err != nil {
 					return Result{}, trackerErr(err)
@@ -182,7 +182,7 @@ func releasePublish(fs *flag.FlagSet) RunFunc {
 		data := func(url string, changed bool) any {
 			return gitObj("tag", tag, "host", host, "url", url, "draft", *draft, "changed", changed)
 		}
-		provider := releaseProvider(host)
+		provider := releaseRemoteForge(url)
 		if provider == "" {
 			c.Warn("no recognized remote; nothing published")
 			return Result{Data: data("", false)}, nil
@@ -318,13 +318,10 @@ func releaseUsable(rel tracker.Release, dir, tag string) (bool, error) {
 	return true, nil
 }
 
-// releaseProvider is the forge a remote host runs ("" for none we publish to).
-func releaseProvider(host string) string {
-	switch host {
-	case "github", "github-enterprise":
-		return "github"
-	case "gitlab", "gitlab-self-hosted":
-		return "gitlab"
+// releaseRemoteForge is the forge a remote runs ("" for none we publish to).
+func releaseRemoteForge(url string) string {
+	if p := tracker.ProviderFromURL(url); p != tracker.ProviderUnknown {
+		return p
 	}
 	return ""
 }

@@ -37,14 +37,8 @@ type Env struct {
 // cwd). The origin host decides, as in hv-issues-provider; issues.provider
 // is only the fallback when origin is missing or names no forge.
 func Provider(ctx context.Context, env Env, dir string) string {
-	p, err := tracker.ResolveProvider(ctx, "", "", dir, execOf(env))
-	if err == nil {
-		return p
-	}
-	if c := tracker.SettingsFromConfig(env.Config).Provider; c == "github" || c == "gitlab" {
-		return c
-	}
-	return "unknown"
+	origin := tracker.OriginURL(ctx, dir, execOf(env))
+	return tracker.ProviderFromOrigin(origin, tracker.SettingsFromConfig(env.Config).Provider)
 }
 
 func noProvider(verb string) error {
