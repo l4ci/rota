@@ -12,9 +12,14 @@ import (
 
 func initRun(t *testing.T, dir string, args ...string) (int, *jsonx.Object, string) {
 	t.Helper()
+	return initRunWith(t, testDeps(), dir, args...)
+}
+
+func initRunWith(t *testing.T, d *Deps, dir string, args ...string) (int, *jsonx.Object, string) {
+	t.Helper()
 	wd, _ := os.Getwd() // -C changes the process directory; put it back
 	t.Cleanup(func() { os.Chdir(wd) })
-	code, out, errOut := runMain(append([]string{"-C", dir}, append(args, "--json")...)...)
+	code, out, errOut := runMainWith(d, append([]string{"-C", dir}, append(args, "--json")...)...)
 	v, err := jsonx.Decode([]byte(out))
 	if err != nil {
 		t.Fatalf("%v: %v\n%s", args, err, out)
@@ -123,11 +128,10 @@ func TestInitCheckDoesNotWalkUp(t *testing.T) {
 func TestInitCheckWarnsOnVersionDrift(t *testing.T) {
 	dir := t.TempDir()
 	initRun(t, dir, "init", "--no-blocks")
-	old := installedVersionFn
-	installedVersionFn = func() string { return "5.0.0" }
-	t.Cleanup(func() { installedVersionFn = old })
+	d := testDeps()
+	d.InstalledVersion = func() string { return "5.0.0" }
 	os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(`{"rota":{"version":"4.9.0"}}`), 0o644)
-	code, env, errOut := initRun(t, dir, "init", "check")
+	code, env, errOut := initRunWith(t, d, dir, "init", "check")
 	w, _ := env.Get("warnings")
 	if l, _ := w.([]any); code != 0 || len(l) != 1 || !strings.Contains(l[0].(string), "project at 4.9.0, binary at 5.0.0") || !strings.Contains(errOut, "drift") {
 		t.Errorf("exit %d warnings %v stderr %q", code, w, errOut)
@@ -172,14 +176,11 @@ func TestInitDefaultHasNoCodex(t *testing.T) {
 }
 
 func TestInitFillsConfigAndStampsVersion(t *testing.T) {
-	old := installedVersionFn
-	t.Cleanup(func() { installedVersionFn = old })
 	cfgPath := func(dir string) string { return filepath.Join(dir, ".rota", "config.json") }
-	check := func(t *testing.T, dir string) string {
+	check := func(t *testing.T, deps *Deps, dir string) string {
 		t.Helper()
-		_, env, _ := initRun(t, dir, "config", "check")
-		d := initData(env)
-		s, _ := d.Get("status")
+		_, env, _ := initRunWith(t, deps, dir, "config", "check")
+		s, _ := initData(env).Get("status")
 		st, _ := s.(string)
 		return st
 	}
@@ -199,13 +200,14 @@ func TestInitFillsConfigAndStampsVersion(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			installedVersionFn = func() string { return tc.version }
+			deps := testDeps()
+			deps.InstalledVersion = func() string { return tc.version }
 			dir := t.TempDir()
 			if tc.seed != "" {
 				os.MkdirAll(filepath.Join(dir, ".rota"), 0o755)
 				os.WriteFile(cfgPath(dir), []byte(tc.seed), 0o644)
 			}
-			code, env, _ := initRun(t, dir, "init", "--no-blocks")
+			code, env, _ := initRunWith(t, deps, dir, "init", "--no-blocks")
 			d := initData(env)
 			if code != 0 {
 				t.Fatal(env)
@@ -217,7 +219,7 @@ func TestInitFillsConfigAndStampsVersion(t *testing.T) {
 			if l, _ := f.([]any); len(l) == 0 {
 				t.Error("nothing filled")
 			}
-			if st := check(t, dir); st != "upToDate" {
+			if st := check(t, deps, dir); st != "upToDate" {
 				t.Errorf("config check %q after init", st)
 			}
 			cfg := readCfg(t, cfgPath(dir))
@@ -228,7 +230,7 @@ func TestInitFillsConfigAndStampsVersion(t *testing.T) {
 			}
 			// second run: nothing to fill or stamp, file untouched
 			before, _ := os.ReadFile(cfgPath(dir))
-			_, env, _ = initRun(t, dir, "init", "--no-blocks")
+			_, env, _ = initRunWith(t, deps, dir, "init", "--no-blocks")
 			d = initData(env)
 			f, _ = d.Get("configFilled")
 			if l, _ := f.([]any); len(l) != 0 {
@@ -248,26 +250,24 @@ func TestInitFillsConfigAndStampsVersion(t *testing.T) {
 }
 
 func TestInitClearsVersionDrift(t *testing.T) {
-	old := installedVersionFn
-	installedVersionFn = func() string { return "5.0.0" }
-	t.Cleanup(func() { installedVersionFn = old })
+	d := testDeps()
+	d.InstalledVersion = func() string { return "5.0.0" }
 	dir := t.TempDir()
-	initRun(t, dir, "init", "--no-blocks")
+	initRunWith(t, d, dir, "init", "--no-blocks")
 	os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(`{"rota":{"version":"4.9.0"}}`), 0o644)
-	initRun(t, dir, "init", "--no-blocks")
-	_, env, _ := initRun(t, dir, "init", "check")
+	initRunWith(t, d, dir, "init", "--no-blocks")
+	_, env, _ := initRunWith(t, d, dir, "init", "check")
 	if w, _ := env.Get("warnings"); w != nil {
 		t.Errorf("drift not cleared: %v", w)
 	}
 }
 
 func TestInitUmbrellaEnablesUmbrella(t *testing.T) {
-	old := installedVersionFn
-	installedVersionFn = func() string { return "5.0.0" }
-	t.Cleanup(func() { installedVersionFn = old })
+	deps := testDeps()
+	deps.InstalledVersion = func() string { return "5.0.0" }
 	dir := t.TempDir()
 	os.MkdirAll(filepath.Join(dir, "api", ".git"), 0o755)
-	code, env, _ := initRun(t, dir, "init", "umbrella", "--all")
+	code, env, _ := initRunWith(t, deps, dir, "init", "umbrella", "--all")
 	d := initData(env)
 	if code != 0 {
 		t.Fatal(env)
@@ -279,7 +279,7 @@ func TestInitUmbrellaEnablesUmbrella(t *testing.T) {
 	if got, _ := lookupDotted(cfg, "umbrella.enabled"); got != true {
 		t.Errorf("umbrella.enabled = %v", got)
 	}
-	_, env, _ = initRun(t, dir, "init", "umbrella", "--all")
+	_, env, _ = initRunWith(t, deps, dir, "init", "umbrella", "--all")
 	if v, _ := initData(env).Get("umbrellaEnabled"); v != false {
 		t.Errorf("second run umbrellaEnabled %v", v)
 	}

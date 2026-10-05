@@ -755,33 +755,33 @@ func TestReleaseIssueVerbsArgsAndBackend(t *testing.T) {
 
 func TestReleaseMilestoneCheck(t *testing.T) {
 	f := a8Fixture()
-	root := a8Project(t, f)
-	code, data, msg := a8Run(t, root, "release", "milestone-check", "M01")
+	root, deps := a8Project(t, f)
+	code, data, msg := a8RunWith(t, deps, root, "release", "milestone-check", "M01")
 	want := map[string]any{"clear": false,
 		"blocked":   []any{map[string]any{"number": float64(1), "title": "One", "label": "needs-review"}, map[string]any{"number": float64(2), "title": "Two", "label": "needs-review"}, map[string]any{"number": float64(5), "title": "Wip", "label": "in-progress"}},
 		"stillOpen": []any{map[string]any{"number": float64(6), "title": "Plain"}}}
 	if code != 1 || !reflect.DeepEqual(data, want) || !strings.Contains(msg, "M01 is blocked by 3 open issue(s)") {
 		t.Fatalf("blocked: exit %d data %v (%s)", code, data, msg)
 	}
-	o := trRun(t, root, "", "release", "milestone-check", "M01")
+	o := trRunWith(t, deps, root, "", "release", "milestone-check", "M01")
 	if o.code != 1 || o.stdout != "blocked: #1 One [needs-review]\nblocked: #2 Two [needs-review]\nblocked: #5 Wip [in-progress]\nwarning: #6 Plain (still open)\n" {
 		t.Fatalf("text %+v", o)
 	}
 	// Open issues alone exit 0.
 	f = a8Fixture()
 	f.Fake.Issues[0].State, f.Fake.Issues[1].State, f.Fake.Issues[4].State = "closed", "closed", "closed"
-	code, data, _ = a8Run(t, a8Project(t, f), "release", "milestone-check", "M01")
+	code, data, _ = a8RunIn(t, f, "release", "milestone-check", "M01")
 	if code != 0 || data["clear"] != true || !reflect.DeepEqual(data["blocked"], []any{}) || len(data["stillOpen"].([]any)) != 1 {
 		t.Fatalf("clear: exit %d data %v", code, data)
 	}
-	o = trRun(t, a8Project(t, a8Fixture()), "", "--json", "release", "milestone-check", "M01")
+	o = trRunIn(t, a8Fixture(), "", "--json", "release", "milestone-check", "M01")
 	if !strings.Contains(o.stdout, `"data": {"clear": false, "blocked": [{"number": 1, "title": "One", "label": "needs-review"}`) {
 		t.Fatalf("key order: %s", o.stdout)
 	}
 }
 
 func TestReleaseMilestoneCheckExits(t *testing.T) {
-	if code, _, _ := a8Run(t, a8Project(t, a8Fixture()), "release", "milestone-check", "M99"); code != 3 {
+	if code, _, _ := a8RunIn(t, a8Fixture(), "release", "milestone-check", "M99"); code != 3 {
 		t.Errorf("unknown milestone: exit %d", code)
 	}
 	code, data, _ := a8Run(t, a8FileProject(t), "release", "milestone-check", "M01")
@@ -790,45 +790,45 @@ func TestReleaseMilestoneCheckExits(t *testing.T) {
 	}
 	f := a8Fixture()
 	f.Fake.Fail = map[string]error{"list": &tracker.Error{Kind: tracker.KindRateLimited, Code: 4, Message: "slow down"}}
-	if code, _, _ := a8Run(t, a8Project(t, f), "release", "milestone-check", "M01"); code != 6 {
+	if code, _, _ := a8RunIn(t, f, "release", "milestone-check", "M01"); code != 6 {
 		t.Errorf("rate limited: exit %d", code)
 	}
 	f = a8Fixture()
 	f.Fake.Fail = map[string]error{"list": &tracker.Error{Kind: tracker.KindUnavailable, Code: 3, Message: "no gh"}}
-	if code, _, _ := a8Run(t, a8Project(t, f), "release", "milestone-check", "M01"); code != 5 {
+	if code, _, _ := a8RunIn(t, f, "release", "milestone-check", "M01"); code != 5 {
 		t.Errorf("unavailable: exit %d", code)
 	}
 }
 
 func TestReleaseNotesIssues(t *testing.T) {
-	root := a8Project(t, a8Fixture())
-	code, data, msg := a8Run(t, root, "release", "notes", "--from", "issues", "M01")
+	root, deps := a8Project(t, a8Fixture())
+	code, data, msg := a8RunWith(t, deps, root, "release", "notes", "--from", "issues", "M01")
 	// Completed issues only: 4 (task) and 7 (bug); 8 was dropped, the open ones do not count.
 	md := "### Fixed\n\n- Fix crash (#7)\n\n### Changed\n\n- Old (#4)\n"
 	if code != 0 || data["from"] != "issues" || data["markdown"] != md || data["empty"] != false {
 		t.Fatalf("exit %d data %v (%s)", code, data, msg)
 	}
-	if o := trRun(t, root, "", "release", "notes", "--from", "issues", "M01"); o.code != 0 || o.stdout != md {
+	if o := trRunWith(t, deps, root, "", "release", "notes", "--from", "issues", "M01"); o.code != 0 || o.stdout != md {
 		t.Fatalf("text %+v", o)
 	}
-	o := trRun(t, root, "", "--json", "release", "notes", "--from", "issues", "M01")
+	o := trRunWith(t, deps, root, "", "--json", "release", "notes", "--from", "issues", "M01")
 	if !strings.Contains(o.stdout, `"data": {"from": "issues", "markdown": "### Fixed`) {
 		t.Fatalf("key order: %s", o.stdout)
 	}
 }
 
 func TestReleaseNotesIssuesSince(t *testing.T) {
-	root := a8Project(t, a8Fixture())
+	root, deps := a8Project(t, a8Fixture())
 	gitT(t, root, "tag", "base")
 	for _, m := range []string{"tidy things", "Fix crash [B7]", "ref #4 only", "more tidy"} {
 		gitT(t, root, "commit", "-q", "--allow-empty", "-m", m)
 	}
-	code, data, msg := a8Run(t, root, "release", "notes", "--from", "issues", "M01", "--since", "base")
+	code, data, msg := a8RunWith(t, deps, root, "release", "notes", "--from", "issues", "M01", "--since", "base")
 	md := "### Fixed\n\n- Fix crash (#7)\n\n### Changed\n\n- Old (#4)\n\n### Other\n\n- more tidy\n- tidy things\n"
 	if code != 0 || data["markdown"] != md {
 		t.Fatalf("exit %d data %v (%s)", code, data, msg)
 	}
-	if code, _, _ := a8Run(t, root, "release", "notes", "--from", "issues", "M01", "--since", "nope"); code != 3 {
+	if code, _, _ := a8RunWith(t, deps, root, "release", "notes", "--from", "issues", "M01", "--since", "nope"); code != 3 {
 		t.Errorf("bad ref: exit %d", code)
 	}
 }
@@ -836,18 +836,18 @@ func TestReleaseNotesIssuesSince(t *testing.T) {
 func TestReleaseNotesIssuesEmpty(t *testing.T) {
 	f := a8Fixture()
 	f.Fake.Issues = f.Fake.Issues[:3]
-	code, data, _ := a8Run(t, a8Project(t, f), "release", "notes", "--from", "issues", "M01")
+	code, data, _ := a8RunIn(t, f, "release", "notes", "--from", "issues", "M01")
 	if code != 0 || data["markdown"] != "\n" || data["empty"] != true {
 		t.Fatalf("exit %d data %v", code, data)
 	}
 }
 
 func TestReleaseNotesIssuesExits(t *testing.T) {
-	root := a8Project(t, a8Fixture())
-	if code, _, _ := a8Run(t, root, "release", "notes", "--from", "issues", "M99"); code != 3 {
+	root, deps := a8Project(t, a8Fixture())
+	if code, _, _ := a8RunWith(t, deps, root, "release", "notes", "--from", "issues", "M99"); code != 3 {
 		t.Errorf("unknown milestone: exit %d", code)
 	}
-	if code, _, _ := a8Run(t, root, "release", "notes", "--from", "issues"); code != 2 {
+	if code, _, _ := a8RunWith(t, deps, root, "release", "notes", "--from", "issues"); code != 2 {
 		t.Errorf("no milestone: exit %d", code)
 	}
 	code, data, _ := a8Run(t, a8FileProject(t), "release", "notes", "--from", "issues", "M01")
@@ -856,15 +856,15 @@ func TestReleaseNotesIssuesExits(t *testing.T) {
 	}
 	f := a8Fixture()
 	f.Fake.Fail = map[string]error{"list": &tracker.Error{Kind: tracker.KindUnavailable, Code: 3, Message: "no gh"}}
-	if code, _, _ := a8Run(t, a8Project(t, f), "release", "notes", "--from", "issues", "M01"); code != 5 {
+	if code, _, _ := a8RunIn(t, f, "release", "notes", "--from", "issues", "M01"); code != 5 {
 		t.Errorf("unavailable: exit %d", code)
 	}
 }
 
 func TestReleaseCloseMilestone(t *testing.T) {
 	f := a8Fixture()
-	root := a8Project(t, f)
-	code, data, msg := a8Run(t, root, "release", "close-milestone", "M01", "--release", "1.2.0")
+	root, deps := a8Project(t, f)
+	code, data, msg := a8RunWith(t, deps, root, "release", "close-milestone", "M01", "--release", "1.2.0")
 	want := map[string]any{"milestone": "M01", "release": "1.2.0", "tag": "v1.2.0", "issues": float64(2), "changed": true}
 	if code != 0 || !reflect.DeepEqual(data, want) {
 		t.Fatalf("exit %d data %v (%s)", code, data, msg)
@@ -885,25 +885,25 @@ func TestReleaseCloseMilestone(t *testing.T) {
 		t.Errorf("milestone open: %+v %+v", f.Fake.Issues[2], f.MS.Native)
 	}
 	// Re-running is a no-op success.
-	code, data, _ = a8Run(t, root, "release", "close-milestone", "M01", "--release", "1.2.0")
+	code, data, _ = a8RunWith(t, deps, root, "release", "close-milestone", "M01", "--release", "1.2.0")
 	if code != 0 || data["issues"] != float64(2) || data["changed"] != false {
 		t.Fatalf("second run: exit %d data %v", code, data)
 	}
 	if n := len(f.Fake.Issues[3].Comments); n != 1 {
 		t.Errorf("comments after second run: %d", n)
 	}
-	o := trRun(t, a8Project(t, a8Fixture()), "", "release", "close-milestone", "M01", "--release", "1.2.0")
+	o := trRunIn(t, a8Fixture(), "", "release", "close-milestone", "M01", "--release", "1.2.0")
 	if o.code != 0 || o.stdout != "closed-out M01 v1.2.0: 2 issues\n" {
 		t.Fatalf("text %+v", o)
 	}
-	o = trRun(t, a8Project(t, a8Fixture()), "", "--json", "release", "close-milestone", "M01", "--release", "1.2.0")
+	o = trRunIn(t, a8Fixture(), "", "--json", "release", "close-milestone", "M01", "--release", "1.2.0")
 	if !strings.Contains(o.stdout, `"data": {"milestone": "M01", "release": "1.2.0", "tag": "v1.2.0", "issues": 2, "changed": true}`) {
 		t.Fatalf("key order: %s", o.stdout)
 	}
 }
 
 func TestReleaseCloseMilestoneExits(t *testing.T) {
-	root := a8Project(t, a8Fixture())
+	root, deps := a8Project(t, a8Fixture())
 	for _, c := range []struct {
 		args []string
 		code int
@@ -912,7 +912,7 @@ func TestReleaseCloseMilestoneExits(t *testing.T) {
 		{[]string{"M01"}, 2},
 		{[]string{"M01", "--release", "v1.0.0"}, 2},
 	} {
-		if code, _, msg := a8Run(t, root, append([]string{"release", "close-milestone"}, c.args...)...); code != c.code {
+		if code, _, msg := a8RunWith(t, deps, root, append([]string{"release", "close-milestone"}, c.args...)...); code != c.code {
 			t.Errorf("%v: exit %d (%s), want %d", c.args, code, msg, c.code)
 		}
 	}
@@ -922,12 +922,12 @@ func TestReleaseCloseMilestoneExits(t *testing.T) {
 	}
 	f := a8Fixture()
 	f.Fake.Fail = map[string]error{"close": &tracker.Error{Kind: tracker.KindRateLimited, Code: 4, Message: "slow down"}}
-	if code, _, _ := a8Run(t, a8Project(t, f), "release", "close-milestone", "M01", "--release", "1.0.0"); code != 6 {
+	if code, _, _ := a8RunIn(t, f, "release", "close-milestone", "M01", "--release", "1.0.0"); code != 6 {
 		t.Errorf("rate limited: exit %d", code)
 	}
 	f = a8Fixture()
 	f.Fake.Fail = map[string]error{"add_labels": &tracker.Error{Kind: tracker.KindUnavailable, Code: 3, Message: "no gh"}}
-	if code, _, _ := a8Run(t, a8Project(t, f), "release", "close-milestone", "M01", "--release", "1.0.0"); code != 5 {
+	if code, _, _ := a8RunIn(t, f, "release", "close-milestone", "M01", "--release", "1.0.0"); code != 5 {
 		t.Errorf("unavailable: exit %d", code)
 	}
 }

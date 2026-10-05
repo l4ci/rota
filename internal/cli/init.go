@@ -79,7 +79,7 @@ func runInit(c *Ctx, noBlocks bool) (Result, error) {
 	for _, p := range res.Created {
 		lines = append(lines, "created: "+p)
 	}
-	cfg, err := initConfig(dir)
+	cfg, err := initConfig(c, dir)
 	if err != nil {
 		return Result{}, err
 	}
@@ -142,7 +142,7 @@ func (r initConfigResult) report(data *jsonx.Object, lines *[]string) {
 // required key with its schema default (never touching a present key), then
 // stamp rota.version with the binary's version, which clears the drift
 // nudge. Idempotent; an unreleased (dev) binary stamps nothing.
-func initConfig(root string) (initConfigResult, error) {
+func initConfig(c *Ctx, root string) (initConfigResult, error) {
 	var r initConfigResult
 	filled, err := config.Fill(root)
 	if errors.Is(err, config.ErrCorrupt) {
@@ -152,7 +152,7 @@ func initConfig(root string) (initConfigResult, error) {
 		return r, err
 	}
 	r.filled = filled
-	if v := installedVersionFn(); v != "" {
+	if v := c.deps().InstalledVersion(); v != "" {
 		if config.StampedVersion(config.Load(filepath.Join(root, ".rota", "config.json"))) != v {
 			if _, err := config.Set(root, config.VersionKey, v); err != nil {
 				return r, err
@@ -199,7 +199,7 @@ func initCheck(c *Ctx, args []string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	res := initproj.Check(dir, func() string { return versionDriftLine(dir) })
+	res := initproj.Check(dir, func() string { return versionDriftLine(c, dir) })
 	data := knObj("initialized", res.Initialized, "missing", strSlice(res.Missing))
 	if !res.Initialized {
 		return Result{Data: data}, Failed("not initialized: %s missing", strings.Join(res.Missing, ", ")).WithHint("run: rota init")

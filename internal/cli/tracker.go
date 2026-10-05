@@ -15,10 +15,6 @@ import (
 	"github.com/l4ci/rota/internal/tracker"
 )
 
-// trackerOptions are applied to every forge CLI the verbs build; tests use
-// them to swap in a fake executor.
-var trackerOptions []tracker.Option
-
 // trackerCommands is the `rota tracker` group (#52).
 func trackerCommands() *Command {
 	return &Command{Name: "tracker", Summary: "gh/glab passthrough and upstream issues", Subs: []*Command{
@@ -62,7 +58,7 @@ func trCall(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		ctx := c.Context()
-		cl, err := tracker.NewCLI(ctx, trackerSettings(c), *provider, dir, trackerOptions...)
+		cl, err := tracker.NewCLI(ctx, trackerSettings(c), *provider, dir, c.deps().TrackerOptions...)
 		if err != nil {
 			return Result{}, trackerErr(err)
 		}
@@ -134,7 +130,7 @@ func trSuggest(fs *flag.FlagSet) RunFunc {
 		}
 
 		ctx := c.Context()
-		cl, err := tracker.NewCLI(ctx, trackerSettings(c), "github", "", trackerOptions...)
+		cl, err := tracker.NewCLI(ctx, trackerSettings(c), "github", "", c.deps().TrackerOptions...)
 		if err != nil {
 			return Result{}, trackerErr(err).WithHint(manual)
 		}

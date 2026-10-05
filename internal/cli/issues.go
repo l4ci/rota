@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -9,7 +8,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/config"
@@ -57,7 +55,7 @@ func issuesScope(c *Ctx) (root, dir string, env issues.Env, err error) {
 			}
 		}
 	}
-	env = issues.Env{Settings: tracker.SettingsFromConfig(config.Load(filepath.Join(root, ".rota", "config.json"))), Opts: trackerOptions}
+	env = issues.Env{Settings: tracker.SettingsFromConfig(config.Load(filepath.Join(root, ".rota", "config.json"))), Opts: c.deps().TrackerOptions}
 	return
 }
 
@@ -164,7 +162,7 @@ func issuesImported(fs *flag.FlagSet) RunFunc {
 		entries := backlog.ScanImported(root, *forRepo)
 		if *openOnly {
 			ctx := c.Context()
-			env := issues.Env{Settings: tracker.SettingsFromConfig(config.Load(filepath.Join(root, ".rota", "config.json"))), Opts: trackerOptions}
+			env := issues.Env{Settings: tracker.SettingsFromConfig(config.Load(filepath.Join(root, ".rota", "config.json"))), Opts: c.deps().TrackerOptions}
 			paths := repos.Paths(root)
 			var kept []backlog.Imported
 			for _, e := range entries {
@@ -227,14 +225,6 @@ func issuesClose(fs *flag.FlagSet) RunFunc {
 
 // ---- migrate issues -----------------------------------------------------------
 
-// migrateSleep and migrateTracker are seams: tests pin the pace and the forge.
-var (
-	migrateSleep   func(d time.Duration)
-	migrateTracker = func(ctx context.Context, root string, cfg any) (backlog.MigrateTracker, error) {
-		return tracker.New(ctx, tracker.SettingsFromConfig(cfg), "", root, trackerOptions...)
-	}
-)
-
 func migrateIssues(fs *flag.FlagSet) RunFunc {
 	apply := fs.Bool("apply", false, "do the work; without it only report the plan")
 	limit := fs.String("limit", "", "create at most this many items this run")
@@ -259,8 +249,8 @@ func migrateIssues(fs *flag.FlagSet) RunFunc {
 		// with its error alone, so they go to stderr only.
 		var notices []string
 		opts := backlog.MigrateOptions{Root: root, Apply: *apply, Limit: lim, Cfg: cfg, Ctx: c.Context(),
-			Sleep: migrateSleep, Warn: func(s string) { notices = append(notices, s) },
-			Tracker: func() (backlog.MigrateTracker, error) { return migrateTracker(c.Context(), root, cfg) }}
+			Sleep: c.deps().MigrateSleep, Warn: func(s string) { notices = append(notices, s) },
+			Tracker: func() (backlog.MigrateTracker, error) { return c.deps().MigrateTracker(c.Context(), root, cfg) }}
 		res, err := backlog.MigrateIssues(opts)
 		if err != nil {
 			for _, n := range notices {

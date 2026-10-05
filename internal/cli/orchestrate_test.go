@@ -21,12 +21,9 @@ type launchRig struct {
 	execs     [][]string
 }
 
-func useLaunchRig(t *testing.T, env map[string]string, installed ...string) *launchRig {
-	t.Helper()
+func useLaunchRig(d *Deps, env map[string]string, installed ...string) *launchRig {
 	r := &launchRig{env: env, installed: installed}
-	old := orchestrateEnv
-	t.Cleanup(func() { orchestrateEnv = old })
-	orchestrateEnv = func() orchestrate.Env {
+	d.OrchestrateEnv = func() orchestrate.Env {
 		look := func(n string) (string, error) {
 			for _, i := range r.installed {
 				if i == n {
@@ -59,10 +56,11 @@ func passingDoctor(t *testing.T) {
 }
 
 func TestOrchestrateDryRunPlansWithoutStarting(t *testing.T) {
+	deps := testDeps()
 	passingDoctor(t)
-	r := useLaunchRig(t, nil)
+	r := useLaunchRig(deps, nil)
 	dir := trackerProject(t, "")
-	code, env, errs := rotaRun(t, "--json", "-C", dir, "orchestrate", "--dry-run")
+	code, env, errs := rotaRunWith(t, deps, "--json", "-C", dir, "orchestrate", "--dry-run")
 	if code != 0 {
 		t.Fatalf("exit %d: %v %s", code, env, errs)
 	}
@@ -76,10 +74,11 @@ func TestOrchestrateDryRunPlansWithoutStarting(t *testing.T) {
 }
 
 func TestOrchestrateOpensATabInsideHerdr(t *testing.T) {
+	deps := testDeps()
 	passingDoctor(t)
-	r := useLaunchRig(t, map[string]string{"HERDR_ENV": "1", "HERDR_WORKSPACE_ID": "w1"}, "herdr")
+	r := useLaunchRig(deps, map[string]string{"HERDR_ENV": "1", "HERDR_WORKSPACE_ID": "w1"}, "herdr")
 	dir := trackerProject(t, "")
-	code, env, errs := rotaRun(t, "--json", "-C", dir, "orchestrate")
+	code, env, errs := rotaRunWith(t, deps, "--json", "-C", dir, "orchestrate")
 	if code != 0 {
 		t.Fatalf("exit %d: %v %s", code, env, errs)
 	}
@@ -92,25 +91,27 @@ func TestOrchestrateOpensATabInsideHerdr(t *testing.T) {
 }
 
 func TestOrchestrateHarnessComesFromConfig(t *testing.T) {
+	deps := testDeps()
 	passingDoctor(t)
-	useLaunchRig(t, nil)
+	useLaunchRig(deps, nil)
 	dir := trackerProject(t, `{"orchestrator":{"harness":"codex"}}`)
-	code, env, _ := rotaRun(t, "--json", "-C", dir, "orchestrate", "--dry-run")
+	code, env, _ := rotaRunWith(t, deps, "--json", "-C", dir, "orchestrate", "--dry-run")
 	cmd, _ := umbData(env)["command"].([]any)
 	if code != 0 || len(cmd) < 3 || cmd[len(cmd)-1] != "codex" || cmd[4] != "$rota-orchestrate" {
 		t.Errorf("exit %d, command %v", code, cmd)
 	}
 	dir = trackerProject(t, `{"orchestrator":{"harness":"emacs"}}`)
-	if code, _, errs := rotaRun(t, "-C", dir, "orchestrate", "--dry-run"); code != ExitInternal || !strings.Contains(errs, "claude, codex") {
+	if code, _, errs := rotaRunWith(t, deps, "-C", dir, "orchestrate", "--dry-run"); code != ExitInternal || !strings.Contains(errs, "claude, codex") {
 		t.Errorf("unknown harness: exit %d %s", code, errs)
 	}
 }
 
 func TestOrchestrateStopsOnADoctorFailureBeforeAnySession(t *testing.T) {
+	deps := testDeps()
 	doctorFakes(t, map[string]string{"herdr": `echo "herdr 0.8.2"`}) // too old; no git on PATH
-	r := useLaunchRig(t, map[string]string{"HERDR_ENV": "1", "HERDR_WORKSPACE_ID": "w1"}, "herdr")
+	r := useLaunchRig(deps, map[string]string{"HERDR_ENV": "1", "HERDR_WORKSPACE_ID": "w1"}, "herdr")
 	dir := trackerProject(t, `{"work":{"dispatch":"herdr"}}`)
-	code, out, errs := rotaIn(t, dir, "orchestrate")
+	code, out, errs := rotaInWith(t, deps, dir, "orchestrate")
 	if code != ExitFailed || !strings.Contains(errs, "no session started") || !strings.Contains(out, "fail\thost") {
 		t.Fatalf("exit %d: %s | %s", code, out, errs)
 	}
@@ -120,12 +121,13 @@ func TestOrchestrateStopsOnADoctorFailureBeforeAnySession(t *testing.T) {
 }
 
 func TestOrchestrateOutsideAMultiplexerAttachesARotaHerdrSession(t *testing.T) {
+	deps := testDeps()
 	doctorFakes(t, map[string]string{"git": `case "$1" in remote) exit 2;; esac; exit 0`, "herdr": `echo "herdr 0.9.3"`})
-	r := useLaunchRig(t, nil, "herdr", "tmux")
+	r := useLaunchRig(deps, nil, "herdr", "tmux")
 	dir := trackerProject(t, `{"work":{"dispatch":"herdr"}}`)
 	// The fake herdr answers `status server`, so the session counts as running
 	// and only the attach replaces this process.
-	if code, out, errs := rotaIn(t, dir, "orchestrate"); code != 0 {
+	if code, out, errs := rotaInWith(t, deps, dir, "orchestrate"); code != 0 {
 		t.Fatalf("exit %d: %s | %s", code, out, errs)
 	}
 	if len(r.execs) != 1 || r.execs[0][1] != "herdr" || r.execs[0][2] != "session" || r.execs[0][3] != "attach" {
@@ -134,17 +136,14 @@ func TestOrchestrateOutsideAMultiplexerAttachesARotaHerdrSession(t *testing.T) {
 }
 
 // bareRig fakes a terminal and the setup verb for bare `rota`.
-func bareRig(t *testing.T) *int {
-	t.Helper()
-	oldT, oldS := isTerminal, bareSetup
-	t.Cleanup(func() { isTerminal, bareSetup = oldT, oldS })
-	isTerminal = func(any) bool { return true }
+func bareRig(d *Deps) *int {
+	d.IsTerminal = func(any) bool { return true }
 	setups := 0
-	bareSetup = func(*Ctx, []string) (Result, error) { setups++; return Result{Text: "setup ran"}, nil }
+	d.BareSetup = func(*Ctx, []string) (Result, error) { setups++; return Result{Text: "setup ran"}, nil }
 	return &setups
 }
 
-func bareIn(t *testing.T, dir string, args ...string) (int, string, string) {
+func bareIn(t *testing.T, d *Deps, dir string, args ...string) (int, string, string) {
 	t.Helper()
 	wd, _ := os.Getwd()
 	defer os.Chdir(wd)
@@ -152,14 +151,15 @@ func bareIn(t *testing.T, dir string, args ...string) (int, string, string) {
 		t.Fatal(err)
 	}
 	var out, errb bytes.Buffer
-	code := Main(args, strings.NewReader(""), &out, &errb)
+	code := mainWith(d, args, strings.NewReader(""), &out, &errb)
 	return code, out.String(), errb.String()
 }
 
 func TestBareRotaWithoutRotaDirRunsSetup(t *testing.T) {
-	setups := bareRig(t)
-	r := useLaunchRig(t, nil)
-	code, out, _ := bareIn(t, t.TempDir())
+	deps := testDeps()
+	setups := bareRig(deps)
+	r := useLaunchRig(deps, nil)
+	code, out, _ := bareIn(t, deps, t.TempDir())
 	if code != 0 || *setups != 1 || !strings.Contains(out, "setup ran") {
 		t.Errorf("exit %d, setups %d, out %q", code, *setups, out)
 	}
@@ -169,10 +169,11 @@ func TestBareRotaWithoutRotaDirRunsSetup(t *testing.T) {
 }
 
 func TestBareRotaInAnInitializedProjectLaunchesTheOrchestrator(t *testing.T) {
-	setups := bareRig(t)
+	deps := testDeps()
+	setups := bareRig(deps)
 	passingDoctor(t)
-	r := useLaunchRig(t, nil)
-	code, _, errs := bareIn(t, trackerProject(t, ""))
+	r := useLaunchRig(deps, nil)
+	code, _, errs := bareIn(t, deps, trackerProject(t, ""))
 	if code != 0 || *setups != 0 {
 		t.Fatalf("exit %d, setups %d: %s", code, *setups, errs)
 	}
@@ -182,18 +183,19 @@ func TestBareRotaInAnInitializedProjectLaunchesTheOrchestrator(t *testing.T) {
 }
 
 func TestBareRotaNeverLaunchesWithoutATerminalOrWithJSON(t *testing.T) {
-	setups := bareRig(t)
-	isTerminal = func(any) bool { return false }
-	r := useLaunchRig(t, nil)
+	deps := testDeps()
+	setups := bareRig(deps)
+	deps.IsTerminal = func(any) bool { return false }
+	r := useLaunchRig(deps, nil)
 	dir := trackerProject(t, "")
-	if code, _, errs := bareIn(t, dir); code != ExitUsage || !strings.Contains(errs, "missing command") {
+	if code, _, errs := bareIn(t, deps, dir); code != ExitUsage || !strings.Contains(errs, "missing command") {
 		t.Errorf("pipe: exit %d %s", code, errs)
 	}
-	isTerminal = func(any) bool { return true }
-	if code, _, errs := bareIn(t, dir, "--json"); code != ExitUsage || !strings.Contains(errs, "missing command") {
+	deps.IsTerminal = func(any) bool { return true }
+	if code, _, errs := bareIn(t, deps, dir, "--json"); code != ExitUsage || !strings.Contains(errs, "missing command") {
 		t.Errorf("--json: exit %d %s", code, errs)
 	}
-	if code, _, errs := bareIn(t, dir, "bogus"); code != ExitUsage || !strings.Contains(errs, `unknown command "bogus"`) {
+	if code, _, errs := bareIn(t, deps, dir, "bogus"); code != ExitUsage || !strings.Contains(errs, `unknown command "bogus"`) {
 		t.Errorf("bogus: exit %d %s", code, errs)
 	}
 	if *setups != 0 || len(r.execs) != 0 {
@@ -202,10 +204,11 @@ func TestBareRotaNeverLaunchesWithoutATerminalOrWithJSON(t *testing.T) {
 }
 
 func TestBareRotaTakesGlobalFlagsBeforeNothing(t *testing.T) {
-	bareRig(t)
+	deps := testDeps()
+	bareRig(deps)
 	passingDoctor(t)
-	r := useLaunchRig(t, nil)
-	if code, _, errs := bareIn(t, t.TempDir(), "-C", trackerProject(t, "")); code != 0 || len(r.execs) != 1 {
+	r := useLaunchRig(deps, nil)
+	if code, _, errs := bareIn(t, deps, t.TempDir(), "-C", trackerProject(t, "")); code != 0 || len(r.execs) != 1 {
 		t.Errorf("exit %d execs %v: %s", code, r.execs, errs)
 	}
 }

@@ -119,7 +119,7 @@ func knNew(t *testing.T, dir, stdin string, args ...string) knOut {
 	}
 	defer os.Chdir(old)
 	var so, se bytes.Buffer
-	rc := Main(args, strings.NewReader(stdin), &so, &se)
+	rc := mainWith(testDeps(), args, strings.NewReader(stdin), &so, &se)
 	return knOut{so.String(), se.String(), rc}
 }
 

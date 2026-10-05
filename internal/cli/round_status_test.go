@@ -18,8 +18,8 @@ import (
 )
 
 // roundFixture is a project with one parked and one working worktree, and a
-// roundEnv with a fake host and no forge, so nothing reaches herdr or gh.
-func roundFixture(t *testing.T, agents []host.Agent) string {
+// RoundEnv with a fake host and no forge, so nothing reaches herdr or gh.
+func roundFixture(t *testing.T, agents []host.Agent) (string, *Deps) {
 	t.Helper()
 	root := gitRepo(t)
 	for name, br := range map[string]string{"ben": "park/ben", "dana": "dana/58-x"} {
@@ -29,9 +29,8 @@ func roundFixture(t *testing.T, agents []host.Agent) string {
 			t.Fatalf("%v %s", err, out)
 		}
 	}
-	saved := roundEnv
-	t.Cleanup(func() { roundEnv = saved })
-	roundEnv = func(context.Context, string) round.Env {
+	d := testDeps()
+	d.RoundEnv = func(context.Context, string) round.Env {
 		e := round.Env{Git: worker.ExecGit, Base: "feat/x", ForgeErr: "fake: no forge"}
 		if agents != nil {
 			e.Snapshot = func(context.Context) ([]host.Agent, error) { return agents, nil }
@@ -39,19 +38,19 @@ func roundFixture(t *testing.T, agents []host.Agent) string {
 		}
 		return e
 	}
-	return root
+	return root, d
 }
 
 func TestRoundStatusAndReconcile(t *testing.T) {
-	root := roundFixture(t, []host.Agent{})
+	root, deps := roundFixture(t, []host.Agent{})
 	// Re-point the fake at the real worktree path now that root is known.
-	roundEnv = func(context.Context, string) round.Env {
+	deps.RoundEnv = func(context.Context, string) round.Env {
 		return round.Env{Git: worker.ExecGit, Base: "feat/x", HostName: "herdr", ForgeErr: "fake: no forge",
 			Snapshot: func(context.Context) ([]host.Agent, error) {
 				return []host.Agent{{Tab: "w1:t1", Name: "dana", Cwd: filepath.Join(root, ".worktrees", "dana"), Status: "working"}}, nil
 			}}
 	}
-	code, out, _ := rotaIn(t, root, "--json", "round", "status")
+	code, out, _ := rotaInWith(t, deps, root, "--json", "round", "status")
 	if code != 0 {
 		t.Fatalf("status exit %d: %s", code, out)
 	}
@@ -65,7 +64,7 @@ func TestRoundStatusAndReconcile(t *testing.T) {
 		t.Errorf("dana = %v", dana)
 	}
 
-	code, out, _ = rotaIn(t, root, "--json", "round", "reconcile")
+	code, out, _ = rotaInWith(t, deps, root, "--json", "round", "reconcile")
 	d = data(t, out)
 	if code != 0 || d["changed"] != false || d["clean"] != false || len(d["drift"].([]any)) != 2 {
 		t.Fatalf("reconcile = %d %v", code, d)
@@ -74,7 +73,7 @@ func TestRoundStatusAndReconcile(t *testing.T) {
 		t.Fatal("reconcile without --apply wrote the registry")
 	}
 
-	code, out, _ = rotaIn(t, root, "--json", "round", "reconcile", "--apply")
+	code, out, _ = rotaInWith(t, deps, root, "--json", "round", "reconcile", "--apply")
 	d = data(t, out)
 	if code != 0 || d["changed"] != true || len(d["repaired"].([]any)) != 2 || len(d["drift"].([]any)) != 0 {
 		t.Fatalf("reconcile --apply = %d %v", code, d)
@@ -94,7 +93,7 @@ func TestRoundStatusAndReconcile(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	_, out, _ = rotaIn(t, root, "--json", "round", "status")
+	_, out, _ = rotaInWith(t, deps, root, "--json", "round", "status")
 	d = data(t, out)
 	esc := d["escalations"].([]any)
 	if len(esc) != 1 || esc[0].(map[string]any)["id"] != "e1" || esc[0].(map[string]any)["status"] != "pending" {
@@ -105,29 +104,29 @@ func TestRoundStatusAndReconcile(t *testing.T) {
 			t.Errorf("dana row escalations = %v", r["escalations"])
 		}
 	}
-	_, out, _ = rotaIn(t, root, "--json", "round", "reconcile")
+	_, out, _ = rotaInWith(t, deps, root, "--json", "round", "reconcile")
 	if d = data(t, out); len(d["escalations"].([]any)) != 1 || d["clean"] != true {
 		t.Errorf("reconcile escalations = %v", d)
 	}
 }
 
 func TestRoundVerbsRejectRepoAndArgs(t *testing.T) {
-	root := roundFixture(t, nil)
+	root, deps := roundFixture(t, nil)
 	for _, args := range [][]string{{"round", "status", "x"}, {"round", "reconcile", "x"}, {"--repo", "a", "round", "status"}} {
-		if code, _, _ := rotaIn(t, root, args...); code != 2 {
+		if code, _, _ := rotaInWith(t, deps, root, args...); code != 2 {
 			t.Errorf("%v exit %d, want 2", args, code)
 		}
 	}
 }
 
 func TestRoundStatusAndReconcileListWaitingLimits(t *testing.T) {
-	root := roundFixture(t, []host.Agent{})
+	root, deps := roundFixture(t, []host.Agent{})
 	addLimit(t, root, waitingEntry(time.Date(2026, 10, 3, 15, 0, 0, 0, time.UTC)))
 	resolved := waitingEntry(time.Date(2026, 10, 3, 10, 0, 0, 0, time.UTC))
 	resolved.Status = limits.StatusResumed
 	addLimit(t, root, resolved)
 	for _, verb := range []string{"status", "reconcile"} {
-		code, out, _ := rotaIn(t, root, "--json", "round", verb)
+		code, out, _ := rotaInWith(t, deps, root, "--json", "round", verb)
 		d := data(t, out)
 		rows, _ := d["limits"].([]any)
 		if code != 0 || len(rows) != 1 || rows[0].(map[string]any)["id"] != "l1" {
@@ -136,7 +135,7 @@ func TestRoundStatusAndReconcileListWaitingLimits(t *testing.T) {
 		if verb == "reconcile" && len(d["drift"].([]any)) != 2 {
 			t.Errorf("a waiting limit must add no drift: %v", d["drift"])
 		}
-		_, text, _ := rotaIn(t, root, "round", verb)
+		_, text, _ := rotaInWith(t, deps, root, "round", verb)
 		if !strings.Contains(text, "limit\tl1\twaiting\torchestrator") {
 			t.Errorf("%s text: %q", verb, text)
 		}

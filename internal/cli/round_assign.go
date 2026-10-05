@@ -77,9 +77,9 @@ func roundAssign(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return backlogFail(err)
 		}
-		env := roundEnv(ctx, root)
-		env.Worker = workerEnvCtx(ctx)
-		env.Accounts = workerAccounts()
+		env := c.deps().RoundEnv(ctx, root)
+		env.Worker = workerEnvCtx(c, ctx)
+		env.Accounts = c.deps().WorkerAccounts()
 		res, err := env.Assign(ctx, root, be, round.AssignOpts{
 			ID: id, Agent: *agent, BodyFile: bf, Siblings: splitList(*siblings),
 			CheckOnly: *checkOnly, AcceptOverlap: *accept, AcceptOpenPR: *acceptOpenPR, HolderPID: *pid,
