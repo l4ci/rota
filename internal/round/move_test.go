@@ -88,6 +88,12 @@ type killHost struct {
 	killed *[]string
 }
 
+// SweepShells records the worktrees whose leftover shell panes were swept.
+func (k *killHost) SweepShells(_ context.Context, cwd string) (int, error) {
+	k.hostFake.swept = append(k.hostFake.swept, cwd)
+	return 1, nil
+}
+
 func (k *killHost) Kill(_ context.Context, slot, _ string) error {
 	*k.killed = append(*k.killed, slot)
 	return nil
@@ -1082,5 +1088,20 @@ func TestOpenScopeSkipsItemsTakenOutsideTheRound(t *testing.T) {
 	cands, _ = f.env.Candidates(bg, f.root, f.be, CandidateOpts{Scope: roundcfg.ScopeOpen})
 	if got := ids(cands); len(got) != 2 {
 		t.Errorf("released items are offered again: %v", got)
+	}
+}
+
+// #207: a dead slot has no agent to kill, but its pane may linger as a bare
+// shell in another tab; reclaim sweeps it by worktree.
+func TestReclaimDeadSlotSweepsItsLeftoverShellPane(t *testing.T) {
+	f := newMoveFx(t)
+	f.agents()
+	rawSlot(f.root, "ben", func(s *jsonx.Object) { s.Set("handle", "w1:ben") })
+	f.host.swept = nil // the fixture's own assign swept once already
+	if _, err := f.reclaim("ben", nil); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.host.swept) != 1 || f.host.swept[0] != f.wt("ben") {
+		t.Errorf("swept = %v, want [%s]", f.host.swept, f.wt("ben"))
 	}
 }

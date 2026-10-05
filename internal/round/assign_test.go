@@ -71,6 +71,7 @@ type hostFake struct {
 	// name is the host's name; "" is tmux.
 	name                 string
 	codexHome, configDir string
+	swept                []string // worktrees whose shell panes were swept
 }
 
 func (h *hostFake) Name() string {
