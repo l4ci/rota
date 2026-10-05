@@ -183,14 +183,15 @@ func outOfScope(be backlog.Backend, id string) string {
 	var keep []string
 	for _, l := range strings.Split(secpkg.Body(text, "Out of scope"), "\n") {
 		// Lines that mimic the signature or a sentinel never ride in a signed brief.
-		if strings.Contains(l, "ROTA-") || strings.Contains(l, "ORCHESTRATOR") || strings.Contains(l, "rota:") {
+		if strings.Contains(l, "ROTA-") || strings.Contains(l, "ORCHESTRATOR") || strings.Contains(l, "rota:") ||
+			strings.Contains(l, "issue-text") || strings.Contains(l, "<<<") || strings.Contains(l, ">>>") {
 			continue
 		}
 		keep = append(keep, l)
 	}
 	out := strings.TrimSpace(strings.Join(keep, "\n"))
 	if len(out) > maxOutOfScope {
-		out = strings.TrimSpace(out[:maxOutOfScope]) + " [truncated: read the issue]"
+		out = strings.TrimSpace(strings.ToValidUTF8(out[:maxOutOfScope], "")) + " [truncated: read the issue]"
 	}
 	return out
 }
