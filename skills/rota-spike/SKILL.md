@@ -1,6 +1,6 @@
 ---
 name: rota-spike
-description: Throwaway feasibility experiment on a dedicated git branch — answers a specific question without polluting main or the backlog. Creates spike/<name> branch and .rota/spikes/<name>.md for question + findings + decision. Branch is never merged; only findings come back. Use when you need to try X before committing to it ("can we use SSE?", "does this library handle our scale?").
+description: Use when you need to try X before committing to it ("can we use SSE?", "does this library handle our scale?") and the answer is a finding, not shipped code.
 ---
 
 # rota-spike — Throwaway Feasibility Experiment

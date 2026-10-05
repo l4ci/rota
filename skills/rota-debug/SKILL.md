@@ -1,6 +1,6 @@
 ---
 name: rota-debug
-description: Systematic root-cause investigation for a bug — reproduce first, state a testable hypothesis, verify it, fix with one atomic commit, record proof, open a PR. Hard stop at 3 failed fixes (Iron Law). Use on "debug 42" or "debug [B07]" on the file backend, "why is X broken", "investigate the crash", when a bug needs a proper cycle rather than a one-shot fix.
+description: Use on "debug 42" or "debug [B07]" on the file backend, "why is X broken", "investigate the crash", or when a bug needs a proper cycle rather than a one-shot fix.
 ---
 
 # rota-debug — Systematic Bug Cycle
@@ -147,6 +147,17 @@ Fix: reset badge to `--:--` in `pause()` before invalidating.
 ```
 
 One line of nudge, only when it applies: if the cause was not obvious from reading the code, *"Run `/rota-learn` to save this gotcha"*; if the fix locked in a boundary, *"`/rota-decide`"* (never auto-invoked). Then offer `/rota-ship`.
+
+## Gates: Thought → Reality
+
+| Thought | Reality |
+|---|---|
+| "The cause is obvious, skip the reproducer." | Step 4 starts only on a red, deterministic reproducer. An unreproduced bug has no proof row to write. |
+| "One more fix attempt, it's close." | Three failed committed fixes is the stop. `rota debug counter` exits 4 and the count survives a new branch or session. |
+| "Reset the counter so I can keep going." | `rota debug reset` is a manual gate: an `AskUserQuestion` yes and `--confirm-note`, never your own call. |
+| "The fix works, keep the partial one while I try another." | `hypothesize` means the fix failed. Drop it before the next hypothesis. |
+| "No seam for a test, so no proof." | The reproducer re-run is the proof row. Say no seam existed and link the `refactor` item. |
+| "`--no-proof` to close it." | A missing row means Step 6 was skipped. Go back and run it. |
 
 ## Key principles
 

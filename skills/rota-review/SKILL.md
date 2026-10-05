@@ -1,6 +1,6 @@
 ---
 name: rota-review
-description: Staff-engineer review of a feature branch before merge or PR — reads commits, diff, referenced item IDs, and matching KNOWLEDGE.md topics; dispatches two parallel reviewers, Spec (intent match) and Standards (conventions, quality, tests), and reports them separately. Returns PASS / CONCERNS / FAIL, the worse of the two. Use on "review this", "check before I ship", "look over the branch", or implicitly from /rota-ship.
+description: Use on "review this", "check before I ship", "look over the branch", before a merge or PR, or implicitly from /rota-ship.
 ---
 
 # rota-review — Pre-Merge Review
