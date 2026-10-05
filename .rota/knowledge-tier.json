@@ -390,6 +390,31 @@
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-05-18"
+    },
+    "Rounds: Orchestration::Record maintainer answers by their real channel, never as a relay": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-05"
+    },
+    "Rounds: Orchestration::Workers often skip the ROTA-DONE sentinel": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-05"
+    },
+    "Rounds: Orchestration::Rebuild the installed rota after merging round-verb fixes": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-05"
+    },
+    "Rounds: Orchestration::gh pr edit fails silently on this repo": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-05"
+    },
+    "Build & Tooling: Helpers & migrations::update-golden writes compact JSON": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-05"
     }
   }
 }
