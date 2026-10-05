@@ -12,6 +12,7 @@ import (
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/projects"
 )
 
 // `rota setup` is rota init with the main config choices asked up front. It is
@@ -65,7 +66,7 @@ func setupVerb(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		if *list {
-			return setupList(), nil
+			return setupList(setupDefaults(c)), nil
 		}
 		dir, err := initDir()
 		if err != nil {
@@ -90,7 +91,7 @@ func setupVerb(fs *flag.FlagSet) RunFunc {
 			return Result{}, Usage("setup needs answers and there is no terminal").
 				WithHint("run: rota setup --list to see the questions, rota setup --yes for the defaults")
 		}
-		answers, err := resolveAnswers(c, given, interactive)
+		answers, err := resolveAnswers(c, given, interactive, setupDefaults(c))
 		if err != nil {
 			return Result{}, err
 		}
@@ -120,7 +121,7 @@ func setupVerb(fs *flag.FlagSet) RunFunc {
 // resolveAnswers settles every applicable question: the --set value, else the
 // typed answer when interactive, else the default. A question whose condition
 // does not hold is skipped, and --set naming it is a usage error.
-func resolveAnswers(c *Ctx, given map[string]string, interactive bool) (map[string]string, error) {
+func resolveAnswers(c *Ctx, given map[string]string, interactive bool, defs map[string]string) (map[string]string, error) {
 	answers := map[string]string{}
 	in := bufio.NewReader(c.Stdin)
 	if interactive {
@@ -138,11 +139,11 @@ func resolveAnswers(c *Ctx, given map[string]string, interactive bool) (map[stri
 		case ok:
 		case interactive:
 			var err error
-			if v, err = ask(in, c.Stderr, p); err != nil {
+			if v, err = ask(in, c.Stderr, p, defs[p.Key]); err != nil {
 				return nil, err
 			}
 		default:
-			v = p.DefaultChoice()
+			v = defs[p.Key]
 		}
 		answers[p.Key] = v
 	}
@@ -152,8 +153,7 @@ func resolveAnswers(c *Ctx, given map[string]string, interactive bool) (map[stri
 // ask prints p and reads until the answer is a choice number, a choice value
 // or empty (the default). End of input is a usage error, not a default: a
 // closed pipe must not silently configure the project.
-func ask(in *bufio.Reader, out io.Writer, p config.Prompt) (string, error) {
-	def := p.DefaultChoice()
+func ask(in *bufio.Reader, out io.Writer, p config.Prompt, def string) (string, error) {
 	fmt.Fprintf(out, "\n%s (%s)\n", p.Title, p.Key)
 	defN := 0
 	for i, ch := range p.Choices {
@@ -183,6 +183,31 @@ func ask(in *bufio.Reader, out io.Writer, p config.Prompt) (string, error) {
 	}
 }
 
+// setupDefaults is each question's default: the global config's value when it
+// is one of the question's choices (a hand-edited bad value is ignored), else
+// the schema default. A broken global file warns and falls back to the schema.
+func setupDefaults(c *Ctx) map[string]string {
+	defs := map[string]string{}
+	for _, p := range config.Prompts {
+		defs[p.Key] = p.DefaultChoice()
+	}
+	dir, err := projects.Dir()
+	var vals map[string]any
+	if err == nil {
+		vals, err = config.LoadGlobal(dir)
+	}
+	if err != nil {
+		c.Warn("ignoring the global config: %v", err)
+		return defs
+	}
+	for _, p := range config.Prompts {
+		if v, ok := vals[p.Key]; ok && p.Valid(fmt.Sprint(v)) {
+			defs[p.Key] = fmt.Sprint(v)
+		}
+	}
+	return defs
+}
+
 func choiceValues(p config.Prompt) string {
 	vals := make([]string, len(p.Choices))
 	for i, ch := range p.Choices {
@@ -193,7 +218,7 @@ func choiceValues(p config.Prompt) string {
 
 // setupList is `setup --list`: every question with its choices, default and
 // the flag that answers it.
-func setupList() Result {
+func setupList(defs map[string]string) Result {
 	var qs []any
 	var lines []string
 	for _, p := range config.Prompts {
@@ -201,8 +226,8 @@ func setupList() Result {
 		for _, ch := range p.Choices {
 			chs = append(chs, knObj("value", ch.Value, "description", ch.Desc))
 		}
-		q := knObj("key", p.Key, "title", p.Title, "default", p.DefaultChoice(), "choices", chs)
-		line := fmt.Sprintf("%s  %s  [%s]  default %s", p.Key, p.Title, choiceValues(p), p.DefaultChoice())
+		q := knObj("key", p.Key, "title", p.Title, "default", defs[p.Key], "choices", chs)
+		line := fmt.Sprintf("%s  %s  [%s]  default %s", p.Key, p.Title, choiceValues(p), defs[p.Key])
 		if p.IfKey != "" {
 			q.Set("if", p.IfKey+"="+p.IfValue)
 			line += fmt.Sprintf("  (only when %s=%s)", p.IfKey, p.IfValue)
