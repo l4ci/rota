@@ -435,107 +435,140 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 		return res, blocked(BlockBriefMissing, "the worker contract (references/worker-contract.md) was not found; set round.brief")
 	}
 
-	// 6. Claim, in-progress, comment.
+	// 6-9. The marks and the dispatch run as compensating steps (saga.go): a
+	// failure before dispatch undoes the claim and state; the dispatch itself
+	// keeps them, because the pane may already hold the brief.
 	rnd := registryRound(root)
 	claimID := agent + "@" + strconv.Itoa(rnd)
-	if queue {
-		if err := e.queuePR(ctx, root, be, agent); err != nil {
-			return res, wrap(err)
-		}
-	}
-	won, holderID, err := be.Claim(id, claimID)
-	if err != nil {
-		return res, err
-	}
-	if !won {
-		return res, blocked(BlockClaimed, "%s is claimed by %s", id, holderID)
-	}
-	undo := func() {
-		res.Changed = false
-		be.SetState(id, "none")
-		be.Release(id, claimID)
-		editSlot(root, agent, func(s *worker.Slot) error { s.Unbind(); return nil })
-	}
-	changed, err := be.SetState(id, "in-progress")
-	if err != nil {
-		undo()
-		return res, err
-	}
-	res.Changed = changed || !resuming
-	if !resuming {
-		if _, err := be.AddComment(id, "feedback", fmt.Sprintf("In progress: agent **%s** on branch `%s`.", agent, res.Branch)); err != nil {
-			undo()
-			return res, err
-		}
-	}
-
-	// 7. The slot onto its issue branch.
 	w := e.workerEnv()
-	if _, err := w.ResetTo(root, agent, id, res.Branch, false); err != nil {
-		undo()
-		var we *exitcode.Error
-		if errors.As(err, &we) && we.Exit == exitcode.ExitRefused {
-			return res, blocked(BlockSlotBusy, "%s", we.Message)
-		}
-		return res, err
-	}
-	if err := editSlot(root, agent, func(s *worker.Slot) error {
-		s.Bind(worker.Binding{Task: id, ClaimID: claimID, Kind: kind, Tier: tier, Model: res.Model, TierReason: reason})
-		return nil
-	}); err != nil {
-		undo()
-		return res, err
-	}
-
-	// 8. The account is the pane's CLAUDE_CONFIG_DIR: keep the slot's own while
-	// it has headroom, else pick; none usable is a refusal to start.
-	// work.accounts is Anthropic's: a codex slot's CODEX_HOME is its account.
-	// Under solo every subagent runs on the orchestrator's own account.
 	solo := isSolo(root)
-	if !solo && hz.WorkAccounts() && e.Accounts != nil && len(worker.Configured(root)) > 0 {
-		name, err := e.pickAccount(ctx, root, agent)
-		if err != nil {
-			undo()
-			return res, err
-		}
-		res.Account = name
-	}
-
-	// 9. Dispatch the pointer brief.
-	decisions := ""
-	if o.BodyFile != "" {
-		b, _ := os.ReadFile(o.BodyFile)
-		decisions = string(b)
-	}
-	text := pointerBrief(agent, id, res.Branch, brief, o.Siblings, decisions, tierBrief{Kind: kind, Tier: tier, Model: res.Model, Default: set.Tier, Reason: reason, Table: set.Models[kind]})
-	if hb := latestHandoffBranch(be, id); hb != "" {
-		text += fmt.Sprintf("\nAn earlier worker handed this issue back: read the latest `rota:handoff` comment on it. Its work is pushed on branch %s (origin/%s); fetch it before you start over.\n", hb, hb)
+	var text, tmpName string
+	steps := []step{
+		{name: "queue the slot's PR", skip: func() bool { return !queue }, do: func() error {
+			return wrap(e.queuePR(ctx, root, be, agent))
+		}},
+		claimStep(be, id, claimID, func() {
+			editSlot(root, agent, func(s *worker.Slot) error { s.Unbind(); return nil })
+		}),
+		stateStep(be, id, resuming, &res.Changed),
+		{name: "comment", skip: func() bool { return resuming }, do: func() error {
+			_, err := be.AddComment(id, "feedback", fmt.Sprintf("In progress: agent **%s** on branch `%s`.", agent, res.Branch))
+			return err
+		}},
+		// 7. The slot onto its issue branch.
+		{name: "reset the slot onto its branch", do: func() error {
+			if _, err := w.ResetTo(root, agent, id, res.Branch, false); err != nil {
+				var we *exitcode.Error
+				if errors.As(err, &we) && we.Exit == exitcode.ExitRefused {
+					return blocked(BlockSlotBusy, "%s", we.Message)
+				}
+				return err
+			}
+			return nil
+		}},
+		{name: "bind the slot", do: func() error {
+			return editSlot(root, agent, func(s *worker.Slot) error {
+				s.Bind(worker.Binding{Task: id, ClaimID: claimID, Kind: kind, Tier: tier, Model: res.Model, TierReason: reason})
+				return nil
+			})
+		}},
+		// 8. The account is the pane's CLAUDE_CONFIG_DIR: keep the slot's own
+		// while it has headroom, else pick; none usable is a refusal to start.
+		// work.accounts is Anthropic's: a codex slot's CODEX_HOME is its account.
+		// Under solo every subagent runs on the orchestrator's own account.
+		{name: "account", skip: func() bool {
+			return solo || !hz.WorkAccounts() || e.Accounts == nil || len(worker.Configured(root)) == 0
+		}, do: func() error {
+			name, err := e.pickAccount(ctx, root, agent)
+			res.Account = name
+			return err
+		}},
+		// 9. The pointer brief.
+		{name: "write the brief", do: func() error {
+			decisions := ""
+			if o.BodyFile != "" {
+				b, _ := os.ReadFile(o.BodyFile)
+				decisions = string(b)
+			}
+			text = pointerBrief(agent, id, res.Branch, brief, o.Siblings, decisions, tierBrief{Kind: kind, Tier: tier, Model: res.Model, Default: set.Tier, Reason: reason, Table: set.Models[kind]})
+			if hb := latestHandoffBranch(be, id); hb != "" {
+				text += fmt.Sprintf("\nAn earlier worker handed this issue back: read the latest `rota:handoff` comment on it. Its work is pushed on branch %s (origin/%s); fetch it before you start over.\n", hb, hb)
+			}
+			if solo {
+				return nil
+			}
+			tmp, err := os.CreateTemp("", "rota-round-brief-")
+			if err != nil {
+				return err
+			}
+			tmpName = tmp.Name()
+			tmp.WriteString(text)
+			return tmp.Close()
+		}},
 	}
 	if solo {
 		// No pane: mark the slot busy and hand the brief back.
-		brief, wt, err := e.soloHandOff(root, agent, text, rnd)
+		steps = append(steps, step{name: "solo hand-off", do: func() error {
+			b, wt, err := e.soloHandOff(root, agent, text, rnd)
+			if err != nil {
+				return err
+			}
+			res.Host, res.Brief, res.Worktree = host.Solo, b, wt
+			res.Changed = true
+			return nil
+		}})
+	} else {
+		steps = append(steps, step{name: "dispatch", keep: true, do: func() error {
+			if _, err := w.Dispatch(ctx, root, worker.DispatchOpts{Slot: agent, BodyFile: tmpName, Task: id, Round: &rnd, Branch: res.Branch, Model: res.Model,
+				Kind: kind, AcceptCodexVersion: o.AcceptCodexVersion}); err != nil {
+				return err
+			}
+			res.Dispatched, res.Changed = true, true
+			return nil
+		}})
+	}
+	err = runSteps(steps)
+	if tmpName != "" {
+		os.Remove(tmpName)
+	}
+	return res, err
+}
+
+// claimStep takes the issue's claim; its undo gives the claim back and clears
+// the slot's binding. A lost claim is a refusal and leaves nothing to undo.
+func claimStep(be Board, id, claimID string, unbind func()) step {
+	return step{name: "claim", do: func() error {
+		won, holder, err := be.Claim(id, claimID)
 		if err != nil {
-			undo()
-			return res, err
+			return err
 		}
-		res.Host, res.Brief, res.Worktree = host.Solo, brief, wt
-		res.Changed = true
-		return res, nil
-	}
-	tmp, err := os.CreateTemp("", "rota-round-brief-")
-	if err != nil {
-		undo()
-		return res, err
-	}
-	defer os.Remove(tmp.Name())
-	tmp.WriteString(text)
-	tmp.Close()
-	if _, err := w.Dispatch(ctx, root, worker.DispatchOpts{Slot: agent, BodyFile: tmp.Name(), Task: id, Round: &rnd, Branch: res.Branch, Model: res.Model,
-		Kind: kind, AcceptCodexVersion: o.AcceptCodexVersion}); err != nil {
-		return res, err
-	}
-	res.Dispatched, res.Changed = true, true
-	return res, nil
+		if !won {
+			return blocked(BlockClaimed, "%s is claimed by %s", id, holder)
+		}
+		return nil
+	}, undo: func() {
+		be.Release(id, claimID)
+		unbind()
+	}}
+}
+
+// stateStep marks the issue in-progress and records in changed whether that
+// moved anything; its undo clears the state again.
+func stateStep(be Board, id string, resuming bool, changed *bool) step {
+	return step{name: "in-progress", do: func() error {
+		c, err := be.SetState(id, "in-progress")
+		if err != nil {
+			// The write may have landed partly (a label added, the old one
+			// not removed): clear it, since a failed step is not undone.
+			be.SetState(id, "none")
+			return err
+		}
+		*changed = c || !resuming
+		return nil
+	}, undo: func() {
+		*changed = false
+		be.SetState(id, "none")
+	}}
 }
 
 func (e Env) pickAccount(ctx context.Context, root, agent string) (string, error) {
