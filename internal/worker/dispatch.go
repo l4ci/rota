@@ -9,12 +9,10 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
-	"github.com/l4ci/rota/internal/jsonx"
 )
 
 // DispatchOpts are the flags of `rota worker dispatch`.
@@ -340,10 +338,7 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 	// the text was lost, and the gate must not call a delivered relay unlogged;
 	// only a refused dialog is certain nothing went out.
 	if o.Relay && !errors.Is(sendErr, host.ErrDialogOpen) {
-		entry := jsonx.NewObject()
-		entry.Set("round", round)
-		entry.Set("ts", e.Now().UTC().Format("2006-01-02T15:04:05Z"))
-		entry.Set("summary", relaySummary(string(brief)))
+		entry := newRelayEntry(round, e.Now(), string(brief))
 		if _, err := UpdateSlot(root, o.Slot, func(s *Slot) { s.AppendRelay(entry) }); err != nil {
 			return res, err
 		}
@@ -373,21 +368,6 @@ func resetRefusal(err error, changed bool) error {
 type BlockData struct {
 	BlockedBy string
 	Changed   bool
-}
-
-// relaySummary is the first non-blank line of the brief that is not the
-// signature, stripped and cut to 200 characters.
-func relaySummary(text string) string {
-	for _, l := range splitLines(text) {
-		l = strings.TrimSpace(l)
-		if l != "" && !strings.HasPrefix(l, "--- ORCHESTRATOR") {
-			if utf8.RuneCountInString(l) > 200 {
-				l = string([]rune(l)[:200])
-			}
-			return l
-		}
-	}
-	return ""
 }
 
 // splitLines is Python's str.splitlines for the separators that matter.
