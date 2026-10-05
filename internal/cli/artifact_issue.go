@@ -9,7 +9,7 @@ import (
 )
 
 // Issue-backend helpers the plan store and the milestone verbs share. Items
-// resolve through the A4 workflow (so "F7", "#7" and "7" all answer "7" and
+// resolve through the item workflow (so "F7", "#7" and "7" all answer "7" and
 // an unknown item is exit 3).
 
 // issueBackend reports whether backlog.backend is "issues". An invalid value
@@ -42,7 +42,7 @@ func failAny(err error) (Result, error) {
 	if ae := asArtifact(err); ae != nil {
 		return Result{Data: refusal(err)}, err
 	}
-	return a4Fail(err)
+	return backlogFail(err)
 }
 
 func typedData(id, typ string, changed any) *jsonx.Object {
@@ -82,9 +82,9 @@ func issuesBackend(c *Ctx) (*backlog.Issues, error) {
 // openIssues opens the backlog backend for a verb that addresses a milestone
 // rather than an item.
 func openIssues(c *Ctx) (backlog.Backend, error) {
-	root, err := a4Scope(c)
+	root, err := backlogScope(c)
 	if err != nil {
 		return nil, err
 	}
-	return a4Open(c, root, false, "")
+	return openBacklog(c, root, false, "")
 }

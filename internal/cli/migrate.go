@@ -6,7 +6,7 @@ import "github.com/l4ci/rota/internal/version"
 func migrateCommands() *Command {
 	return &Command{Name: "migrate", Summary: "one-shot project migrations", Subs: []*Command{
 		hvMigrateCommand(),
-		{Name: "issues", Summary: "move the file backlog onto the issue tracker (preview unless --apply)", Verb: a4dMigrateIssues},
+		{Name: "issues", Summary: "move the file backlog onto the issue tracker (preview unless --apply)", Verb: migrateIssues},
 	}}
 }
 

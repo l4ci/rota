@@ -55,7 +55,7 @@ func roundWindDown(fs *flag.FlagSet) RunFunc {
 		ctx, stop := workerContext()
 		defer stop()
 		var board round.Board
-		if raw, err := a4Open(c, root, false, ""); err == nil {
+		if raw, err := openBacklog(c, root, false, ""); err == nil {
 			board, _ = raw.(round.Board)
 		}
 		env := roundEnv(ctx, root)

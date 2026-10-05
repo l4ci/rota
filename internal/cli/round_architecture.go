@@ -34,7 +34,7 @@ func architectureData(a round.Architecture) *jsonx.Object {
 // architectureFor reads the counter against the round's current candidates.
 func architectureFor(c *Ctx, root string, set roundcfg.Settings) (round.Architecture, error) {
 	ctx := c.Context()
-	be, err := a4Open(c, root, false, "")
+	be, err := openBacklog(c, root, false, "")
 	if err != nil {
 		return round.Architecture{}, err
 	}
@@ -68,7 +68,7 @@ func roundArchitecture(fs *flag.FlagSet) RunFunc {
 		}
 		a, err := architectureFor(c, root, set)
 		if err != nil {
-			return a4Fail(err)
+			return backlogFail(err)
 		}
 		d := architectureData(a)
 		line := a.Line()
@@ -83,9 +83,9 @@ func roundArchitecture(fs *flag.FlagSet) RunFunc {
 
 		ctx, stop := workerContext()
 		defer stop()
-		raw, err := a4Open(c, root, false, "")
+		raw, err := openBacklog(c, root, false, "")
 		if err != nil {
-			return a4Fail(err)
+			return backlogFail(err)
 		}
 		be, ok := raw.(round.Board)
 		if !ok {
@@ -96,7 +96,7 @@ func roundArchitecture(fs *flag.FlagSet) RunFunc {
 		env.Accounts = workerAccounts()
 		ids, err := env.MintReview(ctx, root, be, a, round.Current(root))
 		if err != nil {
-			_, ferr := a4Fail(err)
+			_, ferr := backlogFail(err)
 			d.Set("minted", strs(ids))
 			d.Set("changed", len(ids) > 0)
 			return Result{Data: d}, ferr
@@ -123,7 +123,7 @@ func roundArchitecture(fs *flag.FlagSet) RunFunc {
 				continue
 			}
 			if err != nil {
-				return a4Fail(err)
+				return backlogFail(err)
 			}
 			o := jsonx.NewObject()
 			o.Set("id", id)

@@ -61,7 +61,7 @@ func passingDoctor(t *testing.T) {
 func TestOrchestrateDryRunPlansWithoutStarting(t *testing.T) {
 	passingDoctor(t)
 	r := useLaunchRig(t, nil)
-	dir := a4Project(t, "")
+	dir := trackerProject(t, "")
 	code, env, errs := rotaRun(t, "--json", "-C", dir, "orchestrate", "--dry-run")
 	if code != 0 {
 		t.Fatalf("exit %d: %v %s", code, env, errs)
@@ -78,7 +78,7 @@ func TestOrchestrateDryRunPlansWithoutStarting(t *testing.T) {
 func TestOrchestrateOpensATabInsideHerdr(t *testing.T) {
 	passingDoctor(t)
 	r := useLaunchRig(t, map[string]string{"HERDR_ENV": "1", "HERDR_WORKSPACE_ID": "w1"}, "herdr")
-	dir := a4Project(t, "")
+	dir := trackerProject(t, "")
 	code, env, errs := rotaRun(t, "--json", "-C", dir, "orchestrate")
 	if code != 0 {
 		t.Fatalf("exit %d: %v %s", code, env, errs)
@@ -94,13 +94,13 @@ func TestOrchestrateOpensATabInsideHerdr(t *testing.T) {
 func TestOrchestrateHarnessComesFromConfig(t *testing.T) {
 	passingDoctor(t)
 	useLaunchRig(t, nil)
-	dir := a4Project(t, `{"orchestrator":{"harness":"codex"}}`)
+	dir := trackerProject(t, `{"orchestrator":{"harness":"codex"}}`)
 	code, env, _ := rotaRun(t, "--json", "-C", dir, "orchestrate", "--dry-run")
 	cmd, _ := umbData(env)["command"].([]any)
 	if code != 0 || len(cmd) < 3 || cmd[len(cmd)-1] != "codex" || cmd[4] != "$rota-orchestrate" {
 		t.Errorf("exit %d, command %v", code, cmd)
 	}
-	dir = a4Project(t, `{"orchestrator":{"harness":"emacs"}}`)
+	dir = trackerProject(t, `{"orchestrator":{"harness":"emacs"}}`)
 	if code, _, errs := rotaRun(t, "-C", dir, "orchestrate", "--dry-run"); code != ExitInternal || !strings.Contains(errs, "claude, codex") {
 		t.Errorf("unknown harness: exit %d %s", code, errs)
 	}
@@ -109,7 +109,7 @@ func TestOrchestrateHarnessComesFromConfig(t *testing.T) {
 func TestOrchestrateStopsOnADoctorFailureBeforeAnySession(t *testing.T) {
 	doctorFakes(t, map[string]string{"herdr": `echo "herdr 0.8.2"`}) // too old; no git on PATH
 	r := useLaunchRig(t, map[string]string{"HERDR_ENV": "1", "HERDR_WORKSPACE_ID": "w1"}, "herdr")
-	dir := a4Project(t, `{"work":{"dispatch":"herdr"}}`)
+	dir := trackerProject(t, `{"work":{"dispatch":"herdr"}}`)
 	code, out, errs := rotaIn(t, dir, "orchestrate")
 	if code != ExitFailed || !strings.Contains(errs, "no session started") || !strings.Contains(out, "fail\thost") {
 		t.Fatalf("exit %d: %s | %s", code, out, errs)
@@ -122,7 +122,7 @@ func TestOrchestrateStopsOnADoctorFailureBeforeAnySession(t *testing.T) {
 func TestOrchestrateOutsideAMultiplexerAttachesARotaHerdrSession(t *testing.T) {
 	doctorFakes(t, map[string]string{"git": `case "$1" in remote) exit 2;; esac; exit 0`, "herdr": `echo "herdr 0.9.3"`})
 	r := useLaunchRig(t, nil, "herdr", "tmux")
-	dir := a4Project(t, `{"work":{"dispatch":"herdr"}}`)
+	dir := trackerProject(t, `{"work":{"dispatch":"herdr"}}`)
 	// The fake herdr answers `status server`, so the session counts as running
 	// and only the attach replaces this process.
 	if code, out, errs := rotaIn(t, dir, "orchestrate"); code != 0 {
@@ -172,7 +172,7 @@ func TestBareRotaInAnInitializedProjectLaunchesTheOrchestrator(t *testing.T) {
 	setups := bareRig(t)
 	passingDoctor(t)
 	r := useLaunchRig(t, nil)
-	code, _, errs := bareIn(t, a4Project(t, ""))
+	code, _, errs := bareIn(t, trackerProject(t, ""))
 	if code != 0 || *setups != 0 {
 		t.Fatalf("exit %d, setups %d: %s", code, *setups, errs)
 	}
@@ -185,7 +185,7 @@ func TestBareRotaNeverLaunchesWithoutATerminalOrWithJSON(t *testing.T) {
 	setups := bareRig(t)
 	isTerminal = func(any) bool { return false }
 	r := useLaunchRig(t, nil)
-	dir := a4Project(t, "")
+	dir := trackerProject(t, "")
 	if code, _, errs := bareIn(t, dir); code != ExitUsage || !strings.Contains(errs, "missing command") {
 		t.Errorf("pipe: exit %d %s", code, errs)
 	}
@@ -205,7 +205,7 @@ func TestBareRotaTakesGlobalFlagsBeforeNothing(t *testing.T) {
 	bareRig(t)
 	passingDoctor(t)
 	r := useLaunchRig(t, nil)
-	if code, _, errs := bareIn(t, t.TempDir(), "-C", a4Project(t, "")); code != 0 || len(r.execs) != 1 {
+	if code, _, errs := bareIn(t, t.TempDir(), "-C", trackerProject(t, "")); code != 0 || len(r.execs) != 1 {
 		t.Errorf("exit %d execs %v: %s", code, r.execs, errs)
 	}
 }

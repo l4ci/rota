@@ -18,27 +18,27 @@ import (
 	"github.com/l4ci/rota/internal/tracker"
 )
 
-// The A4 `rota issues label|imported|close|provider` and `rota migrate
+// The `rota issues label|imported|close|provider` and `rota migrate
 // issues` verbs. Shapes, flags and exits are the verb contract's
 // (docs/design/contract/); the old helpers named in each `old:`
 // line are the behaviour to match. These verbs exec gh or glab, always
 // through internal/tracker.
 
-func a4dCommands() []*Command {
+func issuesCommands() []*Command {
 	return []*Command{
 		{Name: "issues", Summary: "upstream issues on GitHub or GitLab", Subs: []*Command{
-			{Name: "label", Summary: "add or remove a label on an upstream issue", Repo: true, Verb: a4dLabel},
-			{Name: "imported", Summary: "backlog items that point at upstream issues", Verb: a4dImported},
-			{Name: "close", Summary: "close an upstream issue naming the shipping commit", Repo: true, Verb: a4dClose},
-			{Name: "provider", Summary: "github, gitlab or unknown for the origin remote", Repo: true, Verb: a4dProvider},
+			{Name: "label", Summary: "add or remove a label on an upstream issue", Repo: true, Verb: issuesLabel},
+			{Name: "imported", Summary: "backlog items that point at upstream issues", Verb: issuesImported},
+			{Name: "close", Summary: "close an upstream issue naming the shipping commit", Repo: true, Verb: issuesClose},
+			{Name: "provider", Summary: "github, gitlab or unknown for the origin remote", Repo: true, Verb: issuesProvider},
 		}},
 	}
 }
 
-// a4dScope is the project root, the issues config and the directory the
+// issuesScope is the project root, the issues config and the directory the
 // forge CLI runs in (scope S): --repo's sub-repo, else the registered
 // sub-repo the working directory is in, else the root.
-func a4dScope(c *Ctx) (root, dir string, env issues.Env, err error) {
+func issuesScope(c *Ctx) (root, dir string, env issues.Env, err error) {
 	root, err = c.Root()
 	if err != nil {
 		return
@@ -61,8 +61,8 @@ func a4dScope(c *Ctx) (root, dir string, env issues.Env, err error) {
 	return
 }
 
-// a4dErr maps the issues package's failures onto the exit table.
-func a4dErr(err error) error {
+// issuesErr maps the issues package's failures onto the exit table.
+func issuesErr(err error) error {
 	var te *tracker.Error
 	switch {
 	case err == nil:
@@ -85,8 +85,8 @@ func a4dErr(err error) error {
 	return &Error{Exit: ExitInternal, Message: err.Error()}
 }
 
-// a4dNumber is an issue number argument.
-func a4dNumber(c *Ctx, text string) (int, error) {
+// issueNumber is an issue number argument.
+func issueNumber(c *Ctx, text string) (int, error) {
 	n, err := strconv.Atoi(text)
 	if err != nil || n < 0 || strings.TrimSpace(text) != text || strings.HasPrefix(text, "+") {
 		return 0, Usage("%s: issue must be a number, got %q", c.Path, text)
@@ -96,30 +96,30 @@ func a4dNumber(c *Ctx, text string) (int, error) {
 
 // ---- provider ---------------------------------------------------------------
 
-func a4dProvider(fs *flag.FlagSet) RunFunc {
+func issuesProvider(fs *flag.FlagSet) RunFunc {
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := a4Args(c, args, 0, 0, "issues provider takes no arguments"); err != nil {
+		if err := argCount(c, args, 0, 0, "issues provider takes no arguments"); err != nil {
 			return Result{}, err
 		}
-		_, dir, env, err := a4dScope(c)
+		_, dir, env, err := issuesScope(c)
 		if err != nil {
 			return Result{}, err
 		}
 		p := issues.Provider(c.Context(), env, dir)
-		return Result{Data: a4Obj("provider", p), Text: p}, nil
+		return Result{Data: jsonObj("provider", p), Text: p}, nil
 	}
 }
 
 // ---- label ------------------------------------------------------------------
 
-func a4dLabel(fs *flag.FlagSet) RunFunc {
+func issuesLabel(fs *flag.FlagSet) RunFunc {
 	add := fs.String("add", "", "label to add")
 	remove := fs.String("remove", "", "label to remove")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := a4Args(c, args, 1, 1, "issues label takes one issue number"); err != nil {
+		if err := argCount(c, args, 1, 1, "issues label takes one issue number"); err != nil {
 			return Result{}, err
 		}
-		given := a4Given(fs)
+		given := givenFlags(fs)
 		if given["add"] == given["remove"] {
 			return Result{}, Usage("%s: pass exactly one of --add and --remove", c.Path)
 		}
@@ -130,31 +130,31 @@ func a4dLabel(fs *flag.FlagSet) RunFunc {
 		if name == "" {
 			return Result{}, Usage("%s: --%s needs a label name", c.Path, action)
 		}
-		number, err := a4dNumber(c, args[0])
+		number, err := issueNumber(c, args[0])
 		if err != nil {
 			return Result{}, err
 		}
-		root, dir, env, err := a4dScope(c)
+		root, dir, env, err := issuesScope(c)
 		if err != nil {
 			return Result{}, err
 		}
 		auto, _ := config.Value(config.Load(filepath.Join(root, ".rota", "config.json")), "issues.autoCreateLabel")
 		changed, err := issues.Label(c.Context(), env, dir, number, name, action == "add", auto != false && auto != nil)
 		if err != nil {
-			return Result{}, a4dErr(err)
+			return Result{}, issuesErr(err)
 		}
-		return Result{Data: a4Obj("issue", number, "label", name, "action", action, "changed", changed),
+		return Result{Data: jsonObj("issue", number, "label", name, "action", action, "changed", changed),
 			Text: fmt.Sprintf("%s %s on #%d", action, name, number)}, nil
 	}
 }
 
 // ---- imported ---------------------------------------------------------------
 
-func a4dImported(fs *flag.FlagSet) RunFunc {
+func issuesImported(fs *flag.FlagSet) RunFunc {
 	forRepo := fs.String("for-repo", "", "only entries of this Repos: name")
 	openOnly := fs.Bool("open-only", false, "drop issues that are closed upstream")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := a4Args(c, args, 0, 0, "issues imported takes no positional arguments"); err != nil {
+		if err := argCount(c, args, 0, 0, "issues imported takes no positional arguments"); err != nil {
 			return Result{}, err
 		}
 		root, err := c.Root()
@@ -181,7 +181,7 @@ func a4dImported(fs *flag.FlagSet) RunFunc {
 		rows := []any{}
 		var lines []string
 		for _, e := range entries {
-			rows = append(rows, a4Obj("provider", e.Provider, "repo", nullStr(e.Repo), "issue", e.Issue,
+			rows = append(rows, jsonObj("provider", e.Provider, "repo", nullStr(e.Repo), "issue", e.Issue,
 				"itemId", e.ItemID, "status", e.Status))
 			repo := ""
 			if e.Repo != "" {
@@ -189,39 +189,39 @@ func a4dImported(fs *flag.FlagSet) RunFunc {
 			}
 			lines = append(lines, fmt.Sprintf("%s %s#%d %s %s", e.Provider, repo, e.Issue, e.ItemID, e.Status))
 		}
-		return Result{Data: a4Obj("entries", rows), Text: strings.Join(lines, "\n")}, nil
+		return Result{Data: jsonObj("entries", rows), Text: strings.Join(lines, "\n")}, nil
 	}
 }
 
 // ---- close ------------------------------------------------------------------
 
-func a4dClose(fs *flag.FlagSet) RunFunc {
+func issuesClose(fs *flag.FlagSet) RunFunc {
 	commit := fs.String("commit", "", "the commit that shipped the issue")
 	item := fs.String("item", "", "backlog item ID named in the comment")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := a4Args(c, args, 1, 1, "issues close takes one issue number"); err != nil {
+		if err := argCount(c, args, 1, 1, "issues close takes one issue number"); err != nil {
 			return Result{}, err
 		}
 		if *commit == "" {
 			return Result{}, Usage("%s: --commit is required", c.Path)
 		}
-		number, err := a4dNumber(c, args[0])
+		number, err := issueNumber(c, args[0])
 		if err != nil {
 			return Result{}, err
 		}
-		_, dir, env, err := a4dScope(c)
+		_, dir, env, err := issuesScope(c)
 		if err != nil {
 			return Result{}, err
 		}
 		changed, err := issues.Close(c.Context(), env, dir, number, *commit, *item)
 		if err != nil {
-			return Result{}, a4dErr(err)
+			return Result{}, issuesErr(err)
 		}
 		text := fmt.Sprintf("closed #%d", number)
 		if !changed {
 			text = fmt.Sprintf("#%d already closed", number)
 		}
-		return Result{Data: a4Obj("issue", number, "commit", *commit, "changed", changed), Text: text}, nil
+		return Result{Data: jsonObj("issue", number, "commit", *commit, "changed", changed), Text: text}, nil
 	}
 }
 
@@ -235,15 +235,15 @@ var (
 	}
 )
 
-func a4dMigrateIssues(fs *flag.FlagSet) RunFunc {
+func migrateIssues(fs *flag.FlagSet) RunFunc {
 	apply := fs.Bool("apply", false, "do the work; without it only report the plan")
 	limit := fs.String("limit", "", "create at most this many items this run")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := a4Args(c, args, 0, 0, "migrate issues takes no positional arguments"); err != nil {
+		if err := argCount(c, args, 0, 0, "migrate issues takes no positional arguments"); err != nil {
 			return Result{}, err
 		}
 		lim := -1
-		if a4Given(fs)["limit"] {
+		if givenFlags(fs)["limit"] {
 			n, err := strconv.Atoi(*limit)
 			if *limit == "" || err != nil || n < 0 || strings.HasPrefix(*limit, "+") {
 				return Result{}, Usage("%s: --limit must be a number", c.Path)
@@ -266,7 +266,7 @@ func a4dMigrateIssues(fs *flag.FlagSet) RunFunc {
 			for _, n := range notices {
 				fmt.Fprintf(c.Stderr, "%s: warning: %s\n", c.Path, n)
 			}
-			return a4dMigrateFail(res, err)
+			return migrateIssuesFail(res, err)
 		}
 		for _, n := range notices {
 			c.Warn("%s", n)
@@ -276,24 +276,24 @@ func a4dMigrateIssues(fs *flag.FlagSet) RunFunc {
 		}
 		ops := []any{}
 		for _, o := range res.Ops {
-			ops = append(ops, a4Obj("action", o.Action, "text", o.Text))
+			ops = append(ops, jsonObj("action", o.Action, "text", o.Text))
 		}
-		data := a4Obj("applied", *apply, "operations", ops, "map", res.Map, "migrated", res.Migrated,
+		data := jsonObj("applied", *apply, "operations", ops, "map", res.Map, "migrated", res.Migrated,
 			"total", res.Total, "changed", res.Changed)
 		return Result{Data: data, Text: strings.Join(res.Lines, "\n")}, nil
 	}
 }
 
-// a4dMigrateFail maps a stopped migration onto the exit table. A tracker
+// migrateIssuesFail maps a stopped migration onto the exit table. A tracker
 // failure carries no failure data, so its message ends with the progress the
 // map kept.
-func a4dMigrateFail(res *backlog.MigrateResult, err error) (Result, error) {
+func migrateIssuesFail(res *backlog.MigrateResult, err error) (Result, error) {
 	var te *tracker.Error
 	switch {
 	case errors.Is(err, backlog.ErrNothingToMigrate):
 		return Result{}, Resolution("%s", strings.TrimPrefix(err.Error(), backlog.ErrNothingToMigrate.Error()+": ")+" (nothing to migrate)")
 	case errors.Is(err, backlog.ErrUmbrellaMigrate):
-		return Result{Data: a4Obj("blockedBy", "umbrella", "changed", false)},
+		return Result{Data: jsonObj("blockedBy", "umbrella", "changed", false)},
 			Refused("%s", err.Error()).WithHint("run rota migrate issues inside each sub-repo")
 	case errors.Is(err, backlog.ErrBadMap):
 		return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}

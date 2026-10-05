@@ -77,7 +77,7 @@ func withBoard(c *Ctx, root string, env round.Env) round.Env {
 	if name, err := config.Backend(config.Load(filepath.Join(root, ".rota", "config.json"))); err != nil || name != "issues" {
 		return env
 	}
-	be, err := a4Open(c, root, false, "")
+	be, err := openBacklog(c, root, false, "")
 	if err != nil {
 		c.Warn("claim check skipped: %v", err)
 		return env

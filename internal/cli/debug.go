@@ -13,12 +13,12 @@ import (
 	"github.com/l4ci/rota/internal/verdict"
 )
 
-// The A6 verbs (milestone, plan, design, spike, proof, debug) live in
+// The debug and spike verbs live in
 // domain packages that return *exitcode.Error; this file is their glue.
 // The packages cannot register themselves because cli imports them.
 
-func a6Commands() []*Command {
-	return append(append(append(docsCommands(), proofCommands()...), milestoneCommands()...), []*Command{
+func debugCommands() []*Command {
+	return []*Command{
 		{Name: "debug", Summary: "Iron Law fix-attempt counter", Subs: []*Command{
 			{Name: "counter", Summary: "per-branch debug session counter", Subs: []*Command{
 				{Name: "init", Summary: "start the counter for a bug", Verb: noFlags(runCounterInit)},
@@ -33,13 +33,18 @@ func a6Commands() []*Command {
 			{Name: "verdict", Summary: "record whether a fix held and route on the item's failed-fix count", Verb: debugVerdict},
 			{Name: "reset", Summary: "start an item's failed-fix count again", Verb: debugReset},
 		}},
+	}
+}
+
+func spikeCommands() []*Command {
+	return []*Command{
 		{Name: "spike", Summary: "throwaway feasibility spikes", Subs: []*Command{
 			{Name: "add", Summary: "create spike/<name> and its file", Repo: true, Verb: spikeAdd},
 			{Name: "finish", Summary: "mark a spike done", Verb: noFlags(runSpikeFinish)},
 			{Name: "list", Summary: "list spikes", Verb: noFlags(runSpikeList)},
 			{Name: "show", Summary: "print a spike file", Verb: noFlags(runSpikeShow)},
 		}},
-	}...)
+	}
 }
 
 func asArtifact(err error) *exitcode.Error {

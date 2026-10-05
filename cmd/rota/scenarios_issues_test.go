@@ -174,7 +174,7 @@ func umbrella(f fx) fx {
 	return f
 }
 
-func suiteA4D(t *testing.T) {
+func suiteIssues(t *testing.T) {
 	var all []dsc
 	add := func(s ...dsc) { all = append(all, s...) }
 	rate := []string{"FAKE_TRACKER_FAIL_MSG=secondary rate limit"}

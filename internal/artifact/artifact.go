@@ -1,6 +1,6 @@
-// Package artifact holds what the A6 file-mode verbs (milestone, plan,
+// Package artifact holds what the file-mode verbs (milestone, plan,
 // design, spike, proof, debug counter) share: the exit-coded error their
-// packages return. It does not import internal/cli; internal/cli's A6 glue
+// packages return. It does not import internal/cli; internal/cli's glue
 // maps Error to the exit table.
 package artifact
 

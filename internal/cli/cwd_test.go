@@ -8,7 +8,7 @@ import (
 
 // From a symlinked cwd with $PWD naming the link (what a shell leaves after
 // `cd link/src/deep`), the root walk and the sub-repo match use the physical
-// path, as Python's os.getcwd() does (A4 acceptance, section 15).
+// path, as Python's os.getcwd() does (acceptance, section 15).
 func TestSymlinkedCwdResolvesPhysically(t *testing.T) {
 	base := t.TempDir()
 	umb := filepath.Join(base, "umb")

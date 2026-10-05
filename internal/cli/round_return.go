@@ -47,9 +47,9 @@ func sha7(head string) string {
 // verb needs, and the board.
 func moveEnv(c *Ctx, root string) (round.Env, round.Board, error) {
 	ctx := c.Context()
-	raw, err := a4Open(c, root, false, "")
+	raw, err := openBacklog(c, root, false, "")
 	if err != nil {
-		_, ferr := a4Fail(err)
+		_, ferr := backlogFail(err)
 		return round.Env{}, nil, ferr
 	}
 	be, ok := raw.(round.Board)
@@ -80,7 +80,7 @@ func moveFailure(err error, changed bool) (Result, error) {
 		f.Set("changed", false)
 		return Result{Data: f}, &Error{Exit: ExitRefused, Message: blk.Msg}
 	}
-	_, ferr := a4Fail(err)
+	_, ferr := backlogFail(err)
 	f := jsonx.NewObject()
 	f.Set("changed", changed)
 	return Result{Data: f}, ferr

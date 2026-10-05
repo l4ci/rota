@@ -23,38 +23,38 @@ import (
 	"github.com/l4ci/rota/internal/status"
 )
 
-// The A4 backlog views and maintenance verbs, `rota summary`, `rota status` and
+// The backlog views and maintenance verbs, `rota summary`, `rota status` and
 // `rota refactor`. Shapes, flags and exits are the verb contract's
 // (docs/design/contract/); the old helpers named on each verb are
 // the behaviour to match.
 
-func a4bCommands() []*Command {
+func backlogCommands() []*Command {
 	return []*Command{
 		{Name: "backlog", Summary: "backlog views and upkeep", Subs: []*Command{
-			{Name: "list", Summary: "open items as sorted tables, with clusters", Repo: true, Verb: a4BacklogList},
-			{Name: "ids", Summary: "IDs of the open items tagged with a milestone", Repo: true, Verb: a4BacklogIDs},
-			{Name: "milestones", Summary: "milestones the given items are tagged with", Repo: true, Verb: a4BacklogMilestones},
-			{Name: "drift", Summary: "open items that commits already mention", Repo: true, Verb: a4Drift},
-			{Name: "backfill", Summary: "stamp Since: on open items that lack it", Repo: true, Verb: a4Backfill},
-			{Name: "archive", Summary: "move old completed items to ARCHIVE.md", Repo: true, Verb: a4Archive},
-			{Name: "stale", Summary: "stale map, knowledge or backlog entries", Repo: true, Verb: a4Stale},
+			{Name: "list", Summary: "open items as sorted tables, with clusters", Repo: true, Verb: backlogList},
+			{Name: "ids", Summary: "IDs of the open items tagged with a milestone", Repo: true, Verb: backlogIDs},
+			{Name: "milestones", Summary: "milestones the given items are tagged with", Repo: true, Verb: backlogMilestones},
+			{Name: "drift", Summary: "open items that commits already mention", Repo: true, Verb: backlogDrift},
+			{Name: "backfill", Summary: "stamp Since: on open items that lack it", Repo: true, Verb: backlogBackfill},
+			{Name: "archive", Summary: "move old completed items to ARCHIVE.md", Repo: true, Verb: backlogArchive},
+			{Name: "stale", Summary: "stale map, knowledge or backlog entries", Repo: true, Verb: backlogStale},
 		}},
-		{Name: "summary", Summary: "compact project state", Repo: true, Verb: a4Summary},
+		{Name: "summary", Summary: "compact project state", Repo: true, Verb: summaryVerb},
 		{Name: "status", Summary: "active work streams", Subs: []*Command{
-			{Name: "add", Summary: "record an active work stream", Repo: true, Verb: a4StatusAdd},
-			{Name: "rm", Summary: "end a work stream and drop its handoff note", Repo: true, Verb: a4StatusRm},
-			{Name: "show", Summary: "which repo a branch's stream is in", Repo: true, Verb: a4StatusShow},
-			{Name: "handoff", Summary: "path of a branch's handoff note", Repo: true, Verb: a4StatusHandoff},
+			{Name: "add", Summary: "record an active work stream", Repo: true, Verb: statusAdd},
+			{Name: "rm", Summary: "end a work stream and drop its handoff note", Repo: true, Verb: statusRm},
+			{Name: "show", Summary: "which repo a branch's stream is in", Repo: true, Verb: statusShow},
+			{Name: "handoff", Summary: "path of a branch's handoff note", Repo: true, Verb: statusHandoff},
 		}},
 		{Name: "refactor", Summary: "refactor cycle bookkeeping", Subs: []*Command{
-			{Name: "age", Summary: "features and bugs completed since the last refactor", Repo: true, Verb: a4RefactorAge},
-			{Name: "reset", Summary: "zero the since-refactor counters", Repo: true, Verb: a4RefactorReset},
-			{Name: "targets", Summary: "what a refactor can cover", Verb: a4RefactorTargets},
+			{Name: "age", Summary: "features and bugs completed since the last refactor", Repo: true, Verb: refactorAge},
+			{Name: "reset", Summary: "zero the since-refactor counters", Repo: true, Verb: refactorReset},
+			{Name: "targets", Summary: "what a refactor can cover", Verb: refactorTargets},
 		}},
 	}
 }
 
-func a4Strings(xs []string) []any {
+func anySlice(xs []string) []any {
 	out := make([]any, len(xs))
 	for i, x := range xs {
 		out[i] = x
@@ -73,25 +73,25 @@ func nullStr(s string) any {
 
 var relatedIDRe = regexp.MustCompile(`[A-Z]\p{Nd}+`)
 
-func a4BacklogList(fs *flag.FlagSet) RunFunc {
+func backlogList(fs *flag.FlagSet) RunFunc {
 	grep := fs.String("grep", "", "keep rows whose bullet contains this, case-insensitively")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := a4Args(c, args, 0, 0, "backlog list takes no positional arguments"); err != nil {
+		if err := argCount(c, args, 0, 0, "backlog list takes no positional arguments"); err != nil {
 			return Result{}, err
 		}
-		root, err := a4Scope(c)
+		root, err := backlogScope(c)
 		if err != nil {
 			return Result{}, err
 		}
-		be, err := a4Open(c, root, false, "")
+		be, err := openBacklog(c, root, false, "")
 		if err != nil {
-			return a4Fail(err)
+			return backlogFail(err)
 		}
 		rows, md, ok, err := backlog.OpenRows(be)
 		if err != nil {
-			return a4Fail(err)
+			return backlogFail(err)
 		}
-		data := a4Obj("inProgress", []any{}, "bugs", []any{}, "features", []any{}, "tasks", []any{}, "clusters", []any{})
+		data := jsonObj("inProgress", []any{}, "bugs", []any{}, "features", []any{}, "tasks", []any{}, "clusters", []any{})
 		if !ok {
 			return Result{Data: data, Text: "No .rota/BACKLOG.md yet. Run rota init then /rota-capture."}, nil
 		}
@@ -111,7 +111,7 @@ func a4BacklogList(fs *flag.FlagSet) RunFunc {
 			if typ == "" {
 				typ = typeOfID[p.ID]
 			}
-			o := a4Obj("id", p.ID, "type", typ, "title", p.Title, "branch", p.Branch, "startedAt", p.StartedAt)
+			o := jsonObj("id", p.ID, "type", typ, "title", p.Title, "branch", p.Branch, "startedAt", p.StartedAt)
 			if p.Repo != "" {
 				o.Set("repo", p.Repo)
 			}
@@ -122,7 +122,7 @@ func a4BacklogList(fs *flag.FlagSet) RunFunc {
 		rowsOf := func(rs []backlog.ListRow, tagName string) []any {
 			out := []any{}
 			for _, r := range rs {
-				o := a4Obj("id", r.ID)
+				o := jsonObj("id", r.ID)
 				if tagName != "" {
 					o.Set(tagName, r.Tag)
 				}
@@ -158,48 +158,48 @@ func a4BacklogList(fs *flag.FlagSet) RunFunc {
 
 // ---- backlog ids / milestones ----------------------------------------------------
 
-func a4BacklogIDs(fs *flag.FlagSet) RunFunc {
+func backlogIDs(fs *flag.FlagSet) RunFunc {
 	milestone := fs.String("milestone", "", "milestone ID, such as M01")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := a4Args(c, args, 0, 0, "backlog ids takes no positional arguments"); err != nil {
+		if err := argCount(c, args, 0, 0, "backlog ids takes no positional arguments"); err != nil {
 			return Result{}, err
 		}
-		root, err := a4Scope(c)
+		root, err := backlogScope(c)
 		if err != nil {
 			return Result{}, err
 		}
 		if *milestone == "" {
 			return Result{}, Usage("--milestone is required")
 		}
-		be, err := a4Open(c, root, false, "")
+		be, err := openBacklog(c, root, false, "")
 		if err != nil {
-			return a4Fail(err)
+			return backlogFail(err)
 		}
 		rows, _, _, err := backlog.OpenRows(be)
 		if err != nil {
-			return a4Fail(err)
+			return backlogFail(err)
 		}
 		ids := backlog.IDsByMilestone(rows, *milestone)
-		return Result{Data: a4Obj("milestone", *milestone, "ids", ids), Text: strings.Join(ids, "\n")}, nil
+		return Result{Data: jsonObj("milestone", *milestone, "ids", ids), Text: strings.Join(ids, "\n")}, nil
 	}
 }
 
-func a4BacklogMilestones(fs *flag.FlagSet) RunFunc {
+func backlogMilestones(fs *flag.FlagSet) RunFunc {
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := a4Args(c, args, 1, -1, "backlog milestones takes one or more item IDs"); err != nil {
+		if err := argCount(c, args, 1, -1, "backlog milestones takes one or more item IDs"); err != nil {
 			return Result{}, err
 		}
-		root, err := a4Scope(c)
+		root, err := backlogScope(c)
 		if err != nil {
 			return Result{}, err
 		}
-		be, err := a4Open(c, root, false, "")
+		be, err := openBacklog(c, root, false, "")
 		if err != nil {
-			return a4Fail(err)
+			return backlogFail(err)
 		}
 		rows, _, _, err := backlog.OpenRows(be)
 		if err != nil {
-			return a4Fail(err)
+			return backlogFail(err)
 		}
 		wanted := map[string]bool{}
 		for _, a := range args {
@@ -209,24 +209,24 @@ func a4BacklogMilestones(fs *flag.FlagSet) RunFunc {
 		ms := backlog.MilestonesFor(rows, func(r backlog.Row) bool {
 			return wanted[r.ID] || (issues && r.IssueMatches(wanted))
 		})
-		return Result{Data: a4Obj("milestones", ms), Text: strings.Join(ms, "\n")}, nil
+		return Result{Data: jsonObj("milestones", ms), Text: strings.Join(ms, "\n")}, nil
 	}
 }
 
 // ---- backlog drift / backfill / archive ------------------------------------------
 
-func a4Drift(fs *flag.FlagSet) RunFunc {
+func backlogDrift(fs *flag.FlagSet) RunFunc {
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := a4Args(c, args, 0, 0, "backlog drift takes no arguments"); err != nil {
+		if err := argCount(c, args, 0, 0, "backlog drift takes no arguments"); err != nil {
 			return Result{}, err
 		}
-		root, err := a4Scope(c)
+		root, err := backlogScope(c)
 		if err != nil {
 			return Result{}, err
 		}
-		ops, err := a4OpenFile(c, root, `PRs carry "Closes #N", so the tracker closes shipped issues`)
+		ops, err := openBacklogFile(c, root, `PRs carry "Closes #N", so the tracker closes shipped issues`)
 		if err != nil {
-			return a4FailRead(err)
+			return backlogFailRead(err)
 		}
 		var targets []backlog.Target
 		if registry := repos.Load(root); len(registry) > 0 {
@@ -240,38 +240,38 @@ func a4Drift(fs *flag.FlagSet) RunFunc {
 		}
 		drift, syms, err := ops.Drift(targets)
 		if err != nil {
-			return a4Fail(err)
+			return backlogFail(err)
 		}
 		dl, sl := []any{}, []any{}
 		var lines []string
 		for _, d := range drift {
 			cs := []any{}
 			for _, cm := range d.Commits {
-				cs = append(cs, a4Obj("repo", cm.Repo, "hash", cm.Hash, "subject", cm.Subject))
+				cs = append(cs, jsonObj("repo", cm.Repo, "hash", cm.Hash, "subject", cm.Subject))
 				lines = append(lines, fmt.Sprintf("%s: %s %s", d.ID, cm.Hash, cm.Subject))
 			}
-			dl = append(dl, a4Obj("id", d.ID, "type", d.Type, "commits", cs))
+			dl = append(dl, jsonObj("id", d.ID, "type", d.Type, "commits", cs))
 		}
 		for _, s := range syms {
-			sl = append(sl, a4Obj("id", s.ID, "type", s.Type, "symbols", s.Symbols, "files", s.Files))
+			sl = append(sl, jsonObj("id", s.ID, "type", s.Type, "symbols", s.Symbols, "files", s.Files))
 			lines = append(lines, fmt.Sprintf("%s: symbols %s in %s", s.ID, strings.Join(s.Symbols, ", "), strings.Join(s.Files, ", ")))
 		}
-		return Result{Data: a4Obj("drift", dl, "symbolDrift", sl), Text: strings.Join(lines, "\n")}, nil
+		return Result{Data: jsonObj("drift", dl, "symbolDrift", sl), Text: strings.Join(lines, "\n")}, nil
 	}
 }
 
-func a4Backfill(fs *flag.FlagSet) RunFunc {
+func backlogBackfill(fs *flag.FlagSet) RunFunc {
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := a4Args(c, args, 0, 0, "backlog backfill takes no arguments"); err != nil {
+		if err := argCount(c, args, 0, 0, "backlog backfill takes no arguments"); err != nil {
 			return Result{}, err
 		}
-		root, err := a4Scope(c)
+		root, err := backlogScope(c)
 		if err != nil {
 			return Result{}, err
 		}
-		ops, err := a4OpenFile(c, root, "Since: anchors exist only in the file backend")
+		ops, err := openBacklogFile(c, root, "Since: anchors exist only in the file backend")
 		if err != nil {
-			return a4Fail(err)
+			return backlogFail(err)
 		}
 		head, ok, gerr := git.Repo{Dir: root}.ShortHead(context.Background())
 		if gerr != nil || !ok || head == "" {
@@ -279,44 +279,44 @@ func a4Backfill(fs *flag.FlagSet) RunFunc {
 		}
 		n, err := ops.BackfillSince(head)
 		if err != nil {
-			return a4Fail(err)
+			return backlogFail(err)
 		}
-		return Result{Data: a4Obj("stamped", n, "changed", n > 0), Text: fmt.Sprintf("stamped %d", n)}, nil
+		return Result{Data: jsonObj("stamped", n, "changed", n > 0), Text: fmt.Sprintf("stamped %d", n)}, nil
 	}
 }
 
-func a4Archive(fs *flag.FlagSet) RunFunc {
+func backlogArchive(fs *flag.FlagSet) RunFunc {
 	days := fs.Int("days", 5, "move done lines older than this many days")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := a4Args(c, args, 0, 0, "backlog archive takes no positional arguments"); err != nil {
+		if err := argCount(c, args, 0, 0, "backlog archive takes no positional arguments"); err != nil {
 			return Result{}, err
 		}
-		root, err := a4Scope(c)
+		root, err := backlogScope(c)
 		if err != nil {
 			return Result{}, err
 		}
 		if *days < 0 {
 			return Result{}, Usage("--days must be a number")
 		}
-		ops, err := a4OpenFile(c, root, "closed issues are the archive")
+		ops, err := openBacklogFile(c, root, "closed issues are the archive")
 		if err != nil {
-			return a4Fail(err)
+			return backlogFail(err)
 		}
-		today, err := a4AgeToday()
+		today, err := ageToday()
 		if err != nil {
 			return Result{}, err
 		}
 		moved, err := ops.Archive(*days, today)
 		if err != nil {
-			return a4Fail(err)
+			return backlogFail(err)
 		}
-		return Result{Data: a4Obj("days", *days, "moved", moved, "changed", moved > 0), Text: fmt.Sprintf("archived %d", moved)}, nil
+		return Result{Data: jsonObj("days", *days, "moved", moved, "changed", moved > 0), Text: fmt.Sprintf("archived %d", moved)}, nil
 	}
 }
 
-// a4AgeToday is the day archive and stale measure age against: today, or the
+// ageToday is the day archive and stale measure age against: today, or the
 // ROTA_TEST_TODAY override the tests pin it with.
-func a4AgeToday() (time.Time, error) {
+func ageToday() (time.Time, error) {
 	v := os.Getenv("ROTA_TEST_TODAY")
 	if v == "" {
 		return time.Now(), nil
@@ -330,36 +330,36 @@ func a4AgeToday() (time.Time, error) {
 
 // ---- backlog stale ---------------------------------------------------------------
 
-func a4Stale(fs *flag.FlagSet) RunFunc {
+func backlogStale(fs *flag.FlagSet) RunFunc {
 	kind := fs.String("kind", "", "map|knowledge|todo")
 	days := fs.Int("days", 90, "list entries this many days old or older")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := a4Args(c, args, 0, 0, "backlog stale takes no positional arguments"); err != nil {
+		if err := argCount(c, args, 0, 0, "backlog stale takes no positional arguments"); err != nil {
 			return Result{}, err
 		}
-		root, err := a4Scope(c)
+		root, err := backlogScope(c)
 		if err != nil {
 			return Result{}, err
 		}
-		if !a4In(stale.Kinds, *kind) {
+		if !hasString(stale.Kinds, *kind) {
 			return Result{}, Usage("--kind must be map|knowledge|todo")
 		}
-		today, err := a4AgeToday()
+		today, err := ageToday()
 		if err != nil {
 			return Result{}, err
 		}
 		today = time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, time.UTC)
 		entries, err := stale.Find(root, *kind, *days, today)
 		if err != nil {
-			return a4Fail(err)
+			return backlogFail(err)
 		}
 		list := []any{}
 		var lines []string
 		for _, e := range entries {
-			list = append(list, a4Obj("name", e.Name, "date", e.Date))
+			list = append(list, jsonObj("name", e.Name, "date", e.Date))
 			lines = append(lines, e.Name+" "+e.Date)
 		}
-		return Result{Data: a4Obj("kind", *kind, "days", *days, "entries", list), Text: strings.Join(lines, "\n")}, nil
+		return Result{Data: jsonObj("kind", *kind, "days", *days, "entries", list), Text: strings.Join(lines, "\n")}, nil
 	}
 }
 
@@ -403,7 +403,7 @@ type milestone struct{ id, title string }
 // activeMilestones is the active milestones of .rota/milestones/*.md, read the
 // way hv-vision-list reads them: frontmatter id (else the file name), title
 // and status (else "planned"), files without frontmatter skipped. This is the
-// minimal read rota summary needs; the milestone verbs (A6) own the rest.
+// minimal read rota summary needs; the milestone verbs own the rest.
 func activeMilestones(root string) []milestone {
 	dir := root + "/.rota/milestones"
 	entries, err := os.ReadDir(dir)
@@ -442,25 +442,25 @@ func activeMilestones(root string) []milestone {
 	return out
 }
 
-func a4Summary(fs *flag.FlagSet) RunFunc {
+func summaryVerb(fs *flag.FlagSet) RunFunc {
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := a4Args(c, args, 0, 0, "summary takes no arguments"); err != nil {
+		if err := argCount(c, args, 0, 0, "summary takes no arguments"); err != nil {
 			return Result{}, err
 		}
-		root, err := a4Scope(c)
+		root, err := backlogScope(c)
 		if err != nil {
 			return Result{}, err
 		}
-		be, err := a4Open(c, root, false, "")
+		be, err := openBacklog(c, root, false, "")
 		if err != nil {
-			return a4Fail(err)
+			return backlogFail(err)
 		}
 		items, err := be.List(true)
 		if errors.Is(err, backlog.ErrNotFound) {
 			return Result{}, Resolution("no .rota/BACKLOG.md found").WithHint("run: rota init")
 		}
 		if err != nil {
-			return a4Fail(err)
+			return backlogFail(err)
 		}
 		var lines []string
 		open := map[string]int{}
@@ -474,7 +474,7 @@ func a4Summary(fs *flag.FlagSet) RunFunc {
 		}
 		bugs, feats, tasks := open["B"], open["F"], open["T"]
 		lines = append(lines, fmt.Sprintf("Backlog: %s, %s, %s", plural(bugs, "bug"), plural(feats, "feature"), plural(tasks, "task")))
-		data := a4Obj("backlog", a4Obj("bugs", bugs, "features", feats, "tasks", tasks))
+		data := jsonObj("backlog", jsonObj("bugs", bugs, "features", feats, "tasks", tasks))
 
 		active := []any{}
 		for _, e := range status.Entries(root) {
@@ -491,7 +491,7 @@ func a4Summary(fs *flag.FlagSet) RunFunc {
 				repoStr = " (repo: " + e.Repo + ")"
 			}
 			lines = append(lines, fmt.Sprintf("Active: %s on %s%s%s (since %s)", ids, e.Branch, loc, repoStr, started))
-			o := a4Obj("items", e.Items, "branch", e.Branch)
+			o := jsonObj("items", e.Items, "branch", e.Branch)
 			if e.Worktree != "" {
 				o.Set("worktree", e.Worktree)
 			}
@@ -511,7 +511,7 @@ func a4Summary(fs *flag.FlagSet) RunFunc {
 				s += " (" + it.Reason + ")"
 			}
 			done = append(done, s)
-			o := a4Obj("id", it.ID, "type", it.Type, "date", it.ClosedAt)
+			o := jsonObj("id", it.ID, "type", it.Type, "date", it.ClosedAt)
 			if it.Reason != "done" {
 				o.Set("reason", it.Reason)
 			}
@@ -524,9 +524,9 @@ func a4Summary(fs *flag.FlagSet) RunFunc {
 
 		ms := []any{}
 		var msText []string
-		if be.Name() == "file" { // issue mode keeps milestones in the tracker (A6/A8)
+		if be.Name() == "file" { // issue mode keeps milestones in the tracker
 			for _, m := range activeMilestones(root) {
-				ms = append(ms, a4Obj("id", m.id, "title", m.title))
+				ms = append(ms, jsonObj("id", m.id, "title", m.title))
 				msText = append(msText, pystr.Strip(m.id+" "+m.title))
 			}
 		}
@@ -538,7 +538,7 @@ func a4Summary(fs *flag.FlagSet) RunFunc {
 		for _, k := range []struct{ label, file, key string }{{"Knowledge", "KNOWLEDGE.md", "knowledge"}, {"Decisions", "DECISIONS.md", "decisions"}} {
 			if n, shown, ok := topicsLine(root + "/.rota/" + k.file); ok {
 				lines = append(lines, k.label+": "+topicsText(n, shown))
-				data.Set(k.key, a4Obj("count", n, "topics", shown))
+				data.Set(k.key, jsonObj("count", n, "topics", shown))
 			}
 		}
 		if text, err := fsio.ReadText(root + "/.rota/ARCHIVE.md"); err == nil {
@@ -581,22 +581,22 @@ func splitItems(csv string) []string {
 	return items
 }
 
-func a4StatusAdd(fs *flag.FlagSet) RunFunc {
+func statusAdd(fs *flag.FlagSet) RunFunc {
 	items := fs.String("items", "", "item IDs, comma-separated")
 	worktree := fs.String("worktree", "", "worktree path (one repo)")
 	reposCSV := fs.String("repos", "", "sub-repo names, comma-separated")
 	worktrees := fs.String("worktrees", "", "worktree paths, comma-separated, one per --repos name")
 	ifAbsent := fs.Bool("if-absent", false, "leave an existing entry alone")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := a4Args(c, args, 1, 1, "status add takes one branch"); err != nil {
+		if err := argCount(c, args, 1, 1, "status add takes one branch"); err != nil {
 			return Result{}, err
 		}
 		branch := args[0]
-		root, err := a4Scope(c)
+		root, err := backlogScope(c)
 		if err != nil {
 			return Result{}, err
 		}
-		given := a4Given(fs)
+		given := givenFlags(fs)
 		if *items == "" {
 			return Result{}, Usage("--items is required")
 		}
@@ -636,34 +636,34 @@ func a4StatusAdd(fs *flag.FlagSet) RunFunc {
 				}
 				ch, err := status.Add(root, branch, name, list, w, *ifAbsent)
 				if err != nil {
-					return a4Fail(err)
+					return backlogFail(err)
 				}
 				changed = changed || ch
 			}
 		} else {
 			ch, err := status.Add(root, branch, c.Repo, list, *worktree, *ifAbsent)
 			if err != nil {
-				return a4Fail(err)
+				return backlogFail(err)
 			}
 			changed = ch
 		}
 		entries := []any{}
 		for _, e := range status.Entries(root) {
-			if e.Branch != branch || !a4In(scope, e.Repo) {
+			if e.Branch != branch || !hasString(scope, e.Repo) {
 				continue
 			}
-			entries = append(entries, a4Obj("repo", nullStr(e.Repo), "items", e.Items, "worktree", nullStr(e.Worktree), "startedAt", e.StartedAt))
+			entries = append(entries, jsonObj("repo", nullStr(e.Repo), "items", e.Items, "worktree", nullStr(e.Worktree), "startedAt", e.StartedAt))
 		}
-		return Result{Data: a4Obj("branch", branch, "entries", entries, "changed", changed), Text: "active: " + branch}, nil
+		return Result{Data: jsonObj("branch", branch, "entries", entries, "changed", changed), Text: "active: " + branch}, nil
 	}
 }
 
-func a4StatusRm(fs *flag.FlagSet) RunFunc {
+func statusRm(fs *flag.FlagSet) RunFunc {
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := a4Args(c, args, 1, 1, "status rm takes one branch"); err != nil {
+		if err := argCount(c, args, 1, 1, "status rm takes one branch"); err != nil {
 			return Result{}, err
 		}
-		root, err := a4Scope(c)
+		root, err := backlogScope(c)
 		if err != nil {
 			return Result{}, err
 		}
@@ -676,43 +676,43 @@ func a4StatusRm(fs *flag.FlagSet) RunFunc {
 		}
 		removed, err := status.Remove(root, branch, c.Repo)
 		if err != nil {
-			return a4Fail(err)
+			return backlogFail(err)
 		}
 		swept, err := status.RemoveHandoff(root, branch, c.Repo)
 		if err != nil {
-			return a4Fail(err)
+			return backlogFail(err)
 		}
-		return Result{Data: a4Obj("branch", branch, "removed", removed, "handoffRemoved", swept, "changed", removed > 0 || swept),
+		return Result{Data: jsonObj("branch", branch, "removed", removed, "handoffRemoved", swept, "changed", removed > 0 || swept),
 			Text: "removed " + branch}, nil
 	}
 }
 
-func a4StatusShow(fs *flag.FlagSet) RunFunc {
+func statusShow(fs *flag.FlagSet) RunFunc {
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := a4Args(c, args, 1, 1, "status show takes one branch"); err != nil {
+		if err := argCount(c, args, 1, 1, "status show takes one branch"); err != nil {
 			return Result{}, err
 		}
-		root, err := a4Scope(c)
+		root, err := backlogScope(c)
 		if err != nil {
 			return Result{}, err
 		}
 		branch := args[0]
 		e, ok := status.Find(root, branch, c.Repo)
 		if !ok {
-			return Result{Data: a4Obj("branch", branch, "active", false, "repo", nil, "items", []string{}, "worktree", nil)}, nil
+			return Result{Data: jsonObj("branch", branch, "active", false, "repo", nil, "items", []string{}, "worktree", nil)}, nil
 		}
-		return Result{Data: a4Obj("branch", branch, "active", true, "repo", nullStr(e.Repo), "items", e.Items,
+		return Result{Data: jsonObj("branch", branch, "active", true, "repo", nullStr(e.Repo), "items", e.Items,
 			"worktree", nullStr(e.Worktree), "startedAt", e.StartedAt), Text: e.Repo}, nil
 	}
 }
 
-func a4StatusHandoff(fs *flag.FlagSet) RunFunc {
+func statusHandoff(fs *flag.FlagSet) RunFunc {
 	canonical := fs.Bool("canonical", false, "return the write path without probing")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := a4Args(c, args, 1, 1, "status handoff takes one branch"); err != nil {
+		if err := argCount(c, args, 1, 1, "status handoff takes one branch"); err != nil {
 			return Result{}, err
 		}
-		root, err := a4Scope(c)
+		root, err := backlogScope(c)
 		if err != nil {
 			return Result{}, err
 		}
@@ -724,55 +724,55 @@ func a4StatusHandoff(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, Usage("%s", err.Error())
 		}
-		return Result{Data: a4Obj("branch", branch, "path", nullStr(p), "exists", exists), Text: p}, nil
+		return Result{Data: jsonObj("branch", branch, "path", nullStr(p), "exists", exists), Text: p}, nil
 	}
 }
 
 // ---- refactor --------------------------------------------------------------------
 
-func a4RefactorAge(fs *flag.FlagSet) RunFunc {
+func refactorAge(fs *flag.FlagSet) RunFunc {
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := a4Args(c, args, 0, 0, "refactor age takes no arguments"); err != nil {
+		if err := argCount(c, args, 0, 0, "refactor age takes no arguments"); err != nil {
 			return Result{}, err
 		}
-		root, err := a4Scope(c)
+		root, err := backlogScope(c)
 		if err != nil {
 			return Result{}, err
 		}
 		feats, bugs, err := (&backlog.File{Root: root}).RefactorAge()
 		if err != nil {
-			return a4Fail(err)
+			return backlogFail(err)
 		}
-		return Result{Data: a4Obj("features", feats, "bugs", bugs),
-			Text: fmt.Sprintf("%s features, %s bugs since the last refactor", a4Num(feats), a4Num(bugs))}, nil
+		return Result{Data: jsonObj("features", feats, "bugs", bugs),
+			Text: fmt.Sprintf("%s features, %s bugs since the last refactor", numText(feats), numText(bugs))}, nil
 	}
 }
 
-func a4Num(v any) string {
+func numText(v any) string {
 	b, _ := jsonx.MarshalCompact(v)
 	return string(b)
 }
 
-func a4RefactorReset(fs *flag.FlagSet) RunFunc {
+func refactorReset(fs *flag.FlagSet) RunFunc {
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := a4Args(c, args, 0, 0, "refactor reset takes no arguments"); err != nil {
+		if err := argCount(c, args, 0, 0, "refactor reset takes no arguments"); err != nil {
 			return Result{}, err
 		}
-		root, err := a4Scope(c)
+		root, err := backlogScope(c)
 		if err != nil {
 			return Result{}, err
 		}
 		changed, err := (&backlog.File{Root: root}).RefactorReset()
 		if err != nil {
-			return a4Fail(err)
+			return backlogFail(err)
 		}
-		return Result{Data: a4Obj("changed", changed), Text: "refactor counters reset"}, nil
+		return Result{Data: jsonObj("changed", changed), Text: "refactor counters reset"}, nil
 	}
 }
 
-func a4RefactorTargets(fs *flag.FlagSet) RunFunc {
+func refactorTargets(fs *flag.FlagSet) RunFunc {
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := a4Args(c, args, 0, 0, "refactor targets takes no arguments"); err != nil {
+		if err := argCount(c, args, 0, 0, "refactor targets takes no arguments"); err != nil {
 			return Result{}, err
 		}
 		cwd, err := os.Getwd()
@@ -781,16 +781,16 @@ func a4RefactorTargets(fs *flag.FlagSet) RunFunc {
 		}
 		registry := repos.Load(cwd)
 		if len(registry) == 0 {
-			return Result{Data: a4Obj("umbrella", nil, "subRepos", []any{}), Text: "single repo"}, nil
+			return Result{Data: jsonObj("umbrella", nil, "subRepos", []any{}), Text: "single repo"}, nil
 		}
 		sort.Slice(registry, func(i, j int) bool { return registry[i].Name < registry[j].Name })
 		subs := []any{}
 		var lines []string
 		for _, r := range registry {
-			subs = append(subs, a4Obj("name", r.Name, "path", r.Path))
+			subs = append(subs, jsonObj("name", r.Name, "path", r.Path))
 			lines = append(lines, r.Name+" "+r.Path)
 		}
-		return Result{Data: a4Obj("umbrella", a4Obj("hasCode", status.HasCode(cwd, registry)), "subRepos", subs),
+		return Result{Data: jsonObj("umbrella", jsonObj("hasCode", status.HasCode(cwd, registry)), "subRepos", subs),
 			Text: strings.Join(lines, "\n")}, nil
 	}
 }

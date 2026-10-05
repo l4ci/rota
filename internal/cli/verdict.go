@@ -19,7 +19,7 @@ import (
 )
 
 // verdictCommands is the `rota verdict` group (B2, #55). `rota debug verdict`
-// lives in the debug group (a6.go) and shares this file's glue.
+// lives in the debug group (debug.go) and shares this file's glue.
 func verdictCommands() *Command {
 	return &Command{Name: "verdict", Summary: "record typed review, second-opinion and QA verdicts and route on them", Subs: []*Command{
 		{Name: "add", Summary: "record a verdict for a branch", Repo: true, Verb: verdictAdd},
