@@ -100,6 +100,11 @@ func (r Registry) Host() string { return jsonx.Str(r.doc, "host") }
 // "split" or "", where "" means tabs (the default of a new round).
 func (r Registry) Layout() string { return jsonx.Str(r.doc, "layout") }
 
+// CLIPane is the herdr pane that launched the round, recorded by `rota layout
+// split` run from it: the split keeps it on top of the orchestrator. "" when
+// unknown.
+func (r Registry) CLIPane() string { return jsonx.Str(r.doc, "cliPane") }
+
 // Session is the pane session the pool registered, "" when none.
 func (r Registry) Session() string { return jsonx.Str(r.doc, "session") }
 
@@ -314,6 +319,15 @@ func (d *Doc) SetLayout(l string) {
 		return
 	}
 	d.doc.Set("layout", l)
+}
+
+// SetCLIPane records the pane that launched the round; "" forgets it.
+func (d *Doc) SetCLIPane(p string) {
+	if p == "" {
+		d.doc.Delete("cliPane")
+		return
+	}
+	d.doc.Set("cliPane", p)
 }
 
 // SetSession records the pane session.
