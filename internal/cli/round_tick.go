@@ -135,9 +135,9 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 	e.Merge = func(ctx context.Context, targets []string) ([]roundtick.Merged, error) {
 		return tickMerge(c, root, renv.Base, baseOverride, targets)
 	}
-	be, err := a4Open(c, root, false, "")
+	be, err := openBacklog(c, root, false, "")
 	if err != nil {
-		_, ferr := a4Fail(err)
+		_, ferr := backlogFail(err)
 		return roundtick.Result{}, ferr
 	}
 	board, ok := be.(round.Board)

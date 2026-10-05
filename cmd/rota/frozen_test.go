@@ -13,7 +13,7 @@ package main
 // Regenerating: go test ./cmd/rota -run '^TestFrozen<Suite>$' -update-frozen
 // accepts the current Go output, provided every scenario's own assertions
 // (want, check) still pass. A change to a record is a behaviour change: read
-// the jsonl diff and say why in the PR. A filtered run (-run 'TestFrozenA4/x')
+// the jsonl diff and say why in the PR. A filtered run (-run 'TestFrozenItem/x')
 // updates only the scenarios it ran and needs a file from the same day; a
 // whole-suite run rewrites the file and drops records with no scenario.
 //
@@ -140,7 +140,7 @@ func (f *frozenFile) write(suite string) error {
 }
 
 // suiteOf splits a subtest name into the suite file and the scenario name:
-// TestFrozenA4B/list/std is a4b, list/std.
+// TestFrozenBacklog/list/std is backlog, list/std.
 func suiteOf(t *testing.T) (suite, name string) {
 	top, rest, _ := strings.Cut(t.Name(), "/")
 	return strings.ToLower(strings.TrimPrefix(top, "TestFrozen")), rest
@@ -437,10 +437,10 @@ func withoutJSON(argv []string) []string {
 	return out
 }
 
-func TestFrozenA4(t *testing.T)             { t.Parallel(); runFrozen(t, suiteA4) }
-func TestFrozenA4B(t *testing.T)            { t.Parallel(); runFrozen(t, suiteA4B) }
-func TestFrozenA4C(t *testing.T)            { t.Parallel(); runFrozen(t, suiteA4C) }
-func TestFrozenA4D(t *testing.T)            { t.Parallel(); runFrozen(t, suiteA4D) }
-func TestFrozenA4Issue(t *testing.T)        { t.Parallel(); runFrozen(t, suiteA4Issue) }
-func TestFrozenA4Umbrella(t *testing.T)     { t.Parallel(); runFrozen(t, suiteA4Umbrella) }
-func TestFrozenA4UmbrellaFile(t *testing.T) { t.Parallel(); runFrozen(t, suiteA4UmbrellaFile) }
+func TestFrozenItem(t *testing.T)         { t.Parallel(); runFrozen(t, suiteItem) }
+func TestFrozenBacklog(t *testing.T)      { t.Parallel(); runFrozen(t, suiteBacklog) }
+func TestFrozenConfig(t *testing.T)       { t.Parallel(); runFrozen(t, suiteConfig) }
+func TestFrozenIssues(t *testing.T)       { t.Parallel(); runFrozen(t, suiteIssues) }
+func TestFrozenItemIssue(t *testing.T)    { t.Parallel(); runFrozen(t, suiteItemIssue) }
+func TestFrozenUmbrella(t *testing.T)     { t.Parallel(); runFrozen(t, suiteUmbrella) }
+func TestFrozenUmbrellaFile(t *testing.T) { t.Parallel(); runFrozen(t, suiteUmbrellaFile) }

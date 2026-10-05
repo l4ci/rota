@@ -9,7 +9,7 @@ import (
 	"github.com/l4ci/rota/internal/update"
 )
 
-func TestA4cUpdateIsPinned(t *testing.T) {
+func TestConfigUpdateIsPinned(t *testing.T) {
 	old := updateEnv
 	defer func() { updateEnv = old }()
 	updateEnv = func() update.Env {
@@ -30,8 +30,8 @@ func TestA4cUpdateIsPinned(t *testing.T) {
 	}
 }
 
-func TestA4cConfigRoundTrip(t *testing.T) {
-	root := a4Project(t, "{}\n")
+func TestConfigRoundTrip(t *testing.T) {
+	root := trackerProject(t, "{}\n")
 	code, env, _ := rotaRun(t, "--json", "-C", root, "config", "set", "work.workerSlots", "5")
 	if code != 0 || get(dataOf(env), "changed") != true {
 		t.Fatalf("set: %d %v", code, env)
@@ -60,18 +60,18 @@ func TestA4cConfigRoundTrip(t *testing.T) {
 	}
 }
 
-func TestA4cConfigNeedsProjectAndRegisteredRepo(t *testing.T) {
+func TestConfigNeedsProjectAndRegisteredRepo(t *testing.T) {
 	if code, _, _ := rotaRun(t, "--json", "-C", t.TempDir(), "config", "check"); code != ExitResolution {
 		t.Errorf("no .rota: %d", code)
 	}
-	root := a4Project(t, "{}\n")
+	root := trackerProject(t, "{}\n")
 	if code, _, _ := rotaRun(t, "--json", "-C", root, "config", "check", "--repo", "web"); code != ExitResolution {
 		t.Errorf("--repo outside umbrella: %d", code)
 	}
 }
 
-func TestA4cConfigSetNotObjectIs70(t *testing.T) {
-	root := a4Project(t, "[1]\n")
+func TestConfigSetNotObjectIs70(t *testing.T) {
+	root := trackerProject(t, "[1]\n")
 	if code, _, stderr := rotaRun(t, "--json", "-C", root, "config", "set", "docs.path", "x"); code != ExitInternal || !strings.Contains(stderr, "not a JSON object") {
 		t.Errorf("code=%d %s", code, stderr)
 	}
@@ -79,7 +79,7 @@ func TestA4cConfigSetNotObjectIs70(t *testing.T) {
 
 // A9 G1: fill brings a stale config up to date, then is a no-op.
 func TestA9ConfigFill(t *testing.T) {
-	root := a4Project(t, `{"models": {"worker": "haiku"}}`+"\n")
+	root := trackerProject(t, `{"models": {"worker": "haiku"}}`+"\n")
 	code, env, _ := rotaRun(t, "--json", "-C", root, "config", "fill")
 	d := dataOf(env)
 	filled, _ := get(d, "filled").([]any)
@@ -99,14 +99,14 @@ func TestA9ConfigFill(t *testing.T) {
 	if code, _, _ := rotaRun(t, "--json", "-C", t.TempDir(), "config", "fill"); code != ExitResolution {
 		t.Errorf("no .rota: %d", code)
 	}
-	bad := a4Project(t, "{oops\n")
+	bad := trackerProject(t, "{oops\n")
 	if code, _, stderr := rotaRun(t, "--json", "-C", bad, "config", "fill"); code != ExitInternal || !strings.Contains(stderr, "not a valid JSON object") {
 		t.Errorf("corrupt: %d %s", code, stderr)
 	}
 }
 
-func TestA4cRepoVerbs(t *testing.T) {
-	root := a4Project(t, "")
+func TestConfigRepoVerbs(t *testing.T) {
+	root := trackerProject(t, "")
 	os.WriteFile(filepath.Join(root, ".rota", "repos.json"), []byte(`{"repos": [{"name": "web", "path": "web"}]}`), 0o644)
 	code, env, _ := rotaRun(t, "--json", "-C", root, "repo", "umbrella")
 	if code != 0 || get(dataOf(env), "umbrella") != true {
@@ -134,8 +134,8 @@ func TestA4cRepoVerbs(t *testing.T) {
 }
 
 // autonomy.level "loop" was removed (#70): config check fails and names it.
-func TestA4cConfigCheckFailsOnRetiredLoop(t *testing.T) {
-	root := a4Project(t, `{"autonomy": {"level": "loop"}}`+"\n")
+func TestConfigCheckFailsOnRetiredLoop(t *testing.T) {
+	root := trackerProject(t, `{"autonomy": {"level": "loop"}}`+"\n")
 	code, env, _ := rotaRun(t, "--json", "-C", root, "config", "check")
 	retired, _ := get(dataOf(env), "retired").([]any)
 	if code != ExitFailed || len(retired) != 1 || !strings.Contains(retired[0].(string), `"loop" was removed`) {
@@ -144,7 +144,7 @@ func TestA4cConfigCheckFailsOnRetiredLoop(t *testing.T) {
 	if code, out, _ := rotaIn(t, root, "config", "check"); code != ExitFailed || !strings.HasPrefix(out, "RETIRED: ") {
 		t.Errorf("text mode: %d %q", code, out)
 	}
-	root = a4Project(t, `{"autonomy": {"level": "auto"}}`+"\n")
+	root = trackerProject(t, `{"autonomy": {"level": "auto"}}`+"\n")
 	if _, env, _ := rotaRun(t, "--json", "-C", root, "config", "check"); get(dataOf(env), "retired") != nil {
 		t.Errorf("auto flagged: %v", env)
 	}

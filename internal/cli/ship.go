@@ -24,7 +24,7 @@ import (
 	"github.com/l4ci/rota/internal/verdict"
 )
 
-// shipCommands is the `rota ship` group (A8, #52).
+// shipCommands is the `rota ship` group (#52).
 func shipCommands() *Command {
 	return &Command{Name: "ship", Summary: "PR bodies, pull requests, merges and undo", Subs: []*Command{
 		{Name: "body", Summary: "build a PR body from a branch's commits", Repo: true, Verb: noFlags(shipBody)},
@@ -375,7 +375,7 @@ func shipClosesLines(c *Ctx, root string, cfg any, ids []string) (string, error)
 	if name == "file" {
 		return "", nil
 	}
-	b, err := a4Open(c, root, false, "")
+	b, err := openBacklog(c, root, false, "")
 	if err != nil {
 		return "", shipBackendErr(err)
 	}
@@ -407,7 +407,7 @@ func shipClosesLines(c *Ctx, root string, cfg any, ids []string) (string, error)
 // shipBackendErr maps a backlog failure onto the exit table; one the
 // mapping does not know is a tracker or storage failure (exit 5).
 func shipBackendErr(err error) error {
-	_, ferr := a4Fail(err)
+	_, ferr := backlogFail(err)
 	var e *Error
 	if errors.As(ferr, &e) {
 		return e
@@ -538,7 +538,7 @@ func shipPRMerge(fs *flag.FlagSet) RunFunc {
 		}
 		be, err := a8Issues(c, "use: rota ship merge", true)
 		if err != nil {
-			return a4Fail(err)
+			return backlogFail(err)
 		}
 		policy, err := mergePolicy(c)
 		if err != nil {
@@ -557,7 +557,7 @@ func shipPRMerge(fs *flag.FlagSet) RunFunc {
 			req.Thread = func() (approvalThread, error) {
 				return approvalThread{Kind: "pr", Number: pr, Title: fmt.Sprintf("Merge approval: PR #%d", pr)}, nil
 			}
-			gateRes, gateErr = clearMerge(c, policy, "PR "+args[0], conf, req, files, a4Obj("pr", pr))
+			gateRes, gateErr = clearMerge(c, policy, "PR "+args[0], conf, req, files, jsonObj("pr", pr))
 			return gateErr
 		}
 		res, err := be.MergePRGated(pr, items, approve)
@@ -568,18 +568,18 @@ func shipPRMerge(fs *flag.FlagSet) RunFunc {
 			if errors.As(gateErr, &e) {
 				return gateRes, gateErr
 			}
-			return a4Fail(gateErr) // listing the PR's files failed at the tracker
+			return backlogFail(gateErr) // listing the PR's files failed at the tracker
 		case errors.As(err, &mf):
-			return Result{Data: a4Obj("pr", pr, "merged", false, "unproven", []string{}, "changesRequested", []string{}, "changed", false)},
+			return Result{Data: jsonObj("pr", pr, "merged", false, "unproven", []string{}, "changesRequested", []string{}, "changed", false)},
 				Refused("%s", err.Error())
 		case err != nil:
-			return a4Fail(err)
+			return backlogFail(err)
 		case len(res.Unproven) > 0:
 			ids := []string{}
 			for _, u := range res.Unproven {
 				ids = append(ids, u.ID)
 			}
-			return Result{Data: a4Obj("pr", pr, "merged", false, "unproven", ids, "changesRequested", ids, "changed", true)},
+			return Result{Data: jsonObj("pr", pr, "merged", false, "unproven", ids, "changesRequested", ids, "changed", true)},
 				Refused("an item has no proof; not merged")
 		}
 		closed, lines := []string{}, []string{"merged " + args[0] + " as " + res.SHA[:min(7, len(res.SHA))]}
@@ -587,7 +587,7 @@ func shipPRMerge(fs *flag.FlagSet) RunFunc {
 			closed = append(closed, r.ID)
 			lines = append(lines, "closed "+r.Ref())
 		}
-		return Result{Data: a4Obj("pr", pr, "sha", res.SHA[:min(7, len(res.SHA))], "closed", closed, "changed", true),
+		return Result{Data: jsonObj("pr", pr, "sha", res.SHA[:min(7, len(res.SHA))], "closed", closed, "changed", true),
 			Text: strings.Join(lines, "\n")}, nil
 	}
 }
@@ -770,7 +770,7 @@ func shipActive(root, id string) bool {
 }
 
 func shipRestore(c *Ctx, root string, ids []string) error {
-	b, err := a4Open(c, root, false, "")
+	b, err := openBacklog(c, root, false, "")
 	if err != nil {
 		return err
 	}

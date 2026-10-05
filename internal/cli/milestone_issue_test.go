@@ -29,7 +29,7 @@ func msFixture() *trackertest.MS {
 }
 
 func TestIssueModeMilestones(t *testing.T) {
-	root := a4Project(t, issuesConfig)
+	root := trackerProject(t, issuesConfig)
 	fake := msFixture()
 	withTracker(t, fake)
 
@@ -144,7 +144,7 @@ func contains(l []string, s string) bool {
 }
 
 func TestIssueModeSlicePlans(t *testing.T) {
-	root := a4Project(t, issuesConfig)
+	root := trackerProject(t, issuesConfig)
 	fake := msFixture()
 	withTracker(t, fake)
 

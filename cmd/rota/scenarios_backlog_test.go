@@ -1,6 +1,6 @@
 package main
 
-// Go-only scenarios for the A4 backlog views, summary, status and refactor verbs
+// Go-only scenarios for the backlog views, summary, status and refactor verbs
 // (#48), on the harness of harness_test.go. Each scenario runs the Go binary and
 // checks the exit code and its own assertions; frozen_test.go then compares the
 // run with the frozen record, which pins the envelope and the .rota/ changes.
@@ -97,7 +97,7 @@ const stUmb = `{
 
 // ---- the scenarios ---------------------------------------------------------------
 
-func suiteA4B(t *testing.T) {
+func suiteBacklog(t *testing.T) {
 	var all []scn
 	add := func(s ...scn) { all = append(all, s...) }
 

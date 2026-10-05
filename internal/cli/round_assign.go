@@ -65,17 +65,17 @@ func roundAssign(fs *flag.FlagSet) RunFunc {
 			f.Close()
 			bf = f.Name()
 		}
-		raw, err := a4Open(c, root, false, "")
+		raw, err := openBacklog(c, root, false, "")
 		if err != nil {
-			return a4Fail(err)
+			return backlogFail(err)
 		}
 		be, ok := raw.(round.Board)
 		if !ok {
 			return Result{}, &Error{Exit: ExitInternal, Message: "the backlog backend has no workflow"}
 		}
-		id, typ, err := a4Item(be, args[0])
+		id, typ, err := resolveItem(be, args[0])
 		if err != nil {
-			return a4Fail(err)
+			return backlogFail(err)
 		}
 		env := roundEnv(ctx, root)
 		env.Worker = workerEnvCtx(ctx)
@@ -106,7 +106,7 @@ func roundAssign(fs *flag.FlagSet) RunFunc {
 			f.Set("changed", false)
 			return Result{Data: f}, &Error{Exit: ExitRefused, Message: blk.Msg}
 		case err != nil:
-			_, ferr := a4Fail(err)
+			_, ferr := backlogFail(err)
 			f := jsonx.NewObject()
 			f.Set("changed", res.Changed)
 			return Result{Data: f}, ferr

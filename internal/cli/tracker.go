@@ -19,7 +19,7 @@ import (
 // them to swap in a fake executor.
 var trackerOptions []tracker.Option
 
-// trackerCommands is the `rota tracker` group (A8, #52).
+// trackerCommands is the `rota tracker` group (#52).
 func trackerCommands() *Command {
 	return &Command{Name: "tracker", Summary: "gh/glab passthrough and upstream issues", Subs: []*Command{
 		{Name: "call", Summary: "run gh or glab with list limits and rate-limit handling", Repo: true, Verb: trCall},
