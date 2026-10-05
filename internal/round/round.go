@@ -244,7 +244,7 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 		if r.Tab == "" && (r.Branch == "" || r.Branch == "park/"+r.Name) {
 			wt = ""
 		}
-		if i := matchAgent(agents, r.Tab, wt); i >= 0 {
+		if i := matchAgent(agents, r.Name, r.Tab, wt); i >= 0 {
 			claimed[i] = true
 			alive[r.Name] = true
 			r.Agent, r.HostState = agents[i].Name, agents[i].Status
@@ -432,12 +432,20 @@ func (r *Report) unavailable(src, why string) {
 	r.Warnings = append(r.Warnings, fmt.Sprintf("%s unavailable: %s", src, why))
 }
 
-// matchAgent finds the agent a row owns: by recorded tab, else by working in
-// the row's worktree. -1 when none.
-func matchAgent(agents []host.Agent, tab, wt string) int {
+// matchAgent finds the agent a row owns: by recorded tab, else by the herdr
+// agent name derived from slot and handle (it survives `rota layout` moving the
+// pane to another tab, which closes the recorded one), else by working in the
+// row's worktree. -1 when none.
+func matchAgent(agents []host.Agent, slot, tab, wt string) int {
 	if tab != "" {
 		for i, a := range agents {
 			if a.Tab == tab {
+				return i
+			}
+		}
+		name := host.AgentName(slot, tab)
+		for i, a := range agents {
+			if a.Name == name {
 				return i
 			}
 		}
