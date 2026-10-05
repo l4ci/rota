@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/milestone"
 	"os"
 	"regexp"
 	"sort"
@@ -12,7 +13,6 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/backlog"
-	"github.com/l4ci/rota/internal/frontmatter"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
@@ -398,50 +398,6 @@ func topicsText(count int, shown []string) string {
 	return fmt.Sprintf("%d topics (%s%s)", count, strings.Join(shown, ", "), suffix)
 }
 
-type milestone struct{ id, title string }
-
-// activeMilestones is the active milestones of .rota/milestones/*.md, read the
-// way hv-vision-list reads them: frontmatter id (else the file name), title
-// and status (else "planned"), files without frontmatter skipped. This is the
-// minimal read rota summary needs; the milestone verbs own the rest.
-func activeMilestones(root string) []milestone {
-	dir := root + "/.rota/milestones"
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil
-	}
-	var names []string
-	for _, e := range entries {
-		if strings.HasSuffix(e.Name(), ".md") && !e.IsDir() {
-			names = append(names, e.Name())
-		}
-	}
-	sort.Strings(names)
-	var out []milestone
-	for _, n := range names {
-		text, err := fsio.ReadText(dir + "/" + n)
-		if err != nil {
-			continue
-		}
-		fm, _, _ := frontmatter.Parse(text)
-		if len(fm) == 0 {
-			continue
-		}
-		id := frontmatter.Str(fm, "id")
-		if id == "" {
-			id = strings.TrimSuffix(n, ".md")
-		}
-		st := frontmatter.Str(fm, "status")
-		if st == "" {
-			st = "planned"
-		}
-		if st == "active" {
-			out = append(out, milestone{id, frontmatter.Str(fm, "title")})
-		}
-	}
-	return out
-}
-
 func summaryVerb(fs *flag.FlagSet) RunFunc {
 	return func(c *Ctx, args []string) (Result, error) {
 		if err := argCount(c, args, 0, 0, "summary takes no arguments"); err != nil {
@@ -525,9 +481,13 @@ func summaryVerb(fs *flag.FlagSet) RunFunc {
 		ms := []any{}
 		var msText []string
 		if be.Name() == "file" { // issue mode keeps milestones in the tracker
-			for _, m := range activeMilestones(root) {
-				ms = append(ms, jsonObj("id", m.id, "title", m.title))
-				msText = append(msText, pystr.Strip(m.id+" "+m.title))
+			list, _ := milestone.List(root)
+			for _, m := range list {
+				if m.Status != "active" {
+					continue
+				}
+				ms = append(ms, jsonObj("id", m.ID, "title", m.Title))
+				msText = append(msText, pystr.Strip(m.ID+" "+m.Title))
 			}
 		}
 		if len(msText) > 0 {

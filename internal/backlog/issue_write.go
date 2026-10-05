@@ -2,6 +2,7 @@ package backlog
 
 import (
 	"errors"
+	ms "github.com/l4ci/rota/internal/milestone"
 	"os"
 	"regexp"
 	"sort"
@@ -41,11 +42,10 @@ var NoteKinds = []string{"proof", "design", "plan"}
 const noteLimitDefault = 60000
 
 var (
-	markerRe     = regexp.MustCompile(`\A<!-- (?:rota|hv):(proof|design|plan(?::S\p{Nd}+)?)(?: (\p{Nd}+)/(\p{Nd}+))? -->(?:\n|\z)`)
-	sliceKindRe  = regexp.MustCompile(`\Aplan:S\p{Nd}+\z`)
-	commentRe    = regexp.MustCompile(`\A<!-- (?:rota|hv):comment (` + wordClass + `+) -->(?:\n|\z)`)
-	claimRe      = regexp.MustCompile(`\A<!-- (?:rota|hv):(claim|release) ([^` + pystr.SpaceClass + `]+) -->`)
-	milestoneIDs = regexp.MustCompile(`\AM\p{Nd}+\z`)
+	markerRe    = regexp.MustCompile(`\A<!-- (?:rota|hv):(proof|design|plan(?::S\p{Nd}+)?)(?: (\p{Nd}+)/(\p{Nd}+))? -->(?:\n|\z)`)
+	sliceKindRe = regexp.MustCompile(`\Aplan:S\p{Nd}+\z`)
+	commentRe   = regexp.MustCompile(`\A<!-- (?:rota|hv):comment (` + wordClass + `+) -->(?:\n|\z)`)
+	claimRe     = regexp.MustCompile(`\A<!-- (?:rota|hv):(claim|release) ([^` + pystr.SpaceClass + `]+) -->`)
 )
 
 const wordClass = `[\p{L}\p{N}_]`
@@ -114,7 +114,7 @@ func (b *Issues) number(ref string) (int, error) {
 // (_milestone_title). An ID the tracker does not know wraps ErrNotFound.
 func (b *Issues) milestoneTitle(value string) (string, error) {
 	value = pystr.Strip(value)
-	if !milestoneIDs.MatchString(value) {
+	if !(ms.LeadingID(value) == value && value != "") {
 		return "", errf(ErrInvalid, "issue mode takes one milestone ID like M07, got '%s'", value)
 	}
 	title, ok, err := b.Tracker.FindMilestone(b.ctx(), value)

@@ -2,6 +2,7 @@ package backlog
 
 import (
 	"errors"
+	ms "github.com/l4ci/rota/internal/milestone"
 	"regexp"
 	"sort"
 	"strconv"
@@ -101,11 +102,9 @@ func (r Row) IssueMatches(wanted map[string]bool) bool {
 	return wanted[n] || wanted[r.Repo+":"+r.Key] || wanted[r.Repo+":#"+n] || wanted[r.Repo+"#"+n]
 }
 
-var milestoneIDRe = regexp.MustCompile(`M\p{Nd}+`)
-
 // ParseMilestones is parse_milestones: every milestone ID (M01, M3) in text,
 // in order, duplicates kept.
-func ParseMilestones(text string) []string { return milestoneIDRe.FindAllString(text, -1) }
+func ParseMilestones(text string) []string { return ms.IDs(text) }
 
 // IDsByMilestone is hv-todo-by-milestone: the open items tagged with mid, in
 // backlog order. A multi-valued "Milestone: M01, M03" matches either.
