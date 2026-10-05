@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/rotatree"
 )
 
 // VerifyResult is one run of refactor.verifyCommands. Callers only phrase the
@@ -77,7 +77,7 @@ func HasVerifyCommands(root string) bool { return len(verifyCommandsAt(root)) > 
 // the non-blank entries, trimmed.
 func verifyCommandsAt(root string) []string {
 	var cmds []string
-	cfg := config.Load(filepath.Join(root, ".rota", "config.json"))
+	cfg := config.Load(rotatree.Config(root))
 	if v, ok := config.Lookup(cfg, "refactor.verifyCommands"); ok {
 		if list, ok := v.([]any); ok {
 			for _, c := range list {

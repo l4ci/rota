@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
@@ -13,6 +12,7 @@ import (
 	"github.com/l4ci/rota/internal/counter"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/pystr"
+	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/section"
 )
 
@@ -30,7 +30,7 @@ type File struct {
 func (f *File) Name() string { return "file" }
 
 func (f *File) rota(parts ...string) string {
-	return filepath.Join(append([]string{f.Root, ".rota"}, parts...)...)
+	return rotatree.File(f.Root, parts...)
 }
 
 // Corpus is BACKLOG.md with its trailing newlines trimmed, a newline, then

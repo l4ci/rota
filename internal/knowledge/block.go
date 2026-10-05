@@ -2,9 +2,9 @@ package knowledge
 
 import (
 	"fmt"
-	"path/filepath"
 	"strings"
 
+	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/section"
 )
 
@@ -54,7 +54,7 @@ func (s Store) BlockInputs(key, scope string) (topics []string, target string, e
 	}
 	switch key {
 	case "decisions":
-		return topicsOf(filepath.Join(s.Root, ".rota", "DECISIONS.md")), section.InstructionsFile(s.Root), nil
+		return topicsOf(rotatree.Decisions(s.Root)), section.InstructionsFile(s.Root), nil
 	case "knowledge":
 		up, _ := s.KnowledgePath(Umbrella)
 		if scope == "" || scope == Umbrella {

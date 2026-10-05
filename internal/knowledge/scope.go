@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/rotatree"
 )
 
 // Umbrella is the scope name of the project-level files.
@@ -51,9 +52,9 @@ func (s Store) check(scope string) error {
 // dir is the directory holding the scope's knowledge files.
 func (s Store) dir(scope string) string {
 	if scope == "" || scope == Umbrella {
-		return filepath.Join(s.Root, ".rota")
+		return rotatree.Dir(s.Root)
 	}
-	return filepath.Join(s.Root, ".rota", "knowledge", scope)
+	return rotatree.File(s.Root, rotatree.KnowledgeDir, scope)
 }
 
 // KnowledgePath is the KNOWLEDGE.md of scope. The directory is not created:

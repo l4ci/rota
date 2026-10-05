@@ -6,13 +6,13 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/repos"
+	"github.com/l4ci/rota/internal/rotatree"
 )
 
 // gitCommands is the `rota git` group (#52).
@@ -77,7 +77,7 @@ func configuredBase(dir string) string {
 	if err != nil {
 		return ""
 	}
-	v, _ := config.Lookup(config.Load(filepath.Join(root, ".rota", "config.json")), "git.baseBranch")
+	v, _ := config.Lookup(config.Load(rotatree.Config(root)), "git.baseBranch")
 	s, _ := v.(string)
 	return s
 }

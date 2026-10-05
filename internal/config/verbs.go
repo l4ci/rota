@@ -5,11 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/rotatree"
 )
 
 // The `rota config show|set|check` verbs, ported from bin/hv-config-show,
@@ -37,9 +37,9 @@ var ErrNotSchemaKey = errors.New("not a config key")
 // ErrNotObject is Set's answer when config.json holds JSON that is not an object.
 var ErrNotObject = errors.New(".rota/config.json is not a JSON object")
 
-func configPath(root string) string { return filepath.Join(root, ".rota", "config.json") }
+func configPath(root string) string { return rotatree.Config(root) }
 
-func localPath(root string) string { return filepath.Join(root, ".rota", "config.local.json") }
+func localPath(root string) string { return rotatree.ConfigLocal(root) }
 
 // IsSchemaKey is whether name is a row of Keys.
 func IsSchemaKey(name string) bool {

@@ -8,6 +8,7 @@ import (
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/repos"
+	"github.com/l4ci/rota/internal/rotatree"
 )
 
 // CoreFiles are the files `rota init check` requires under .rota/.
@@ -27,9 +28,9 @@ type CheckResult struct {
 // version --drift` reports), or nil.
 func Check(root string, drift func() string) CheckResult {
 	res := CheckResult{Missing: []string{}, Warnings: []string{}}
-	rota := filepath.Join(root, ".rota")
+	rota := rotatree.Dir(root)
 	if fi, err := os.Stat(rota); err != nil || !fi.IsDir() {
-		res.Missing = []string{".rota"}
+		res.Missing = []string{rotatree.DirName}
 		return res
 	}
 	for _, f := range CoreFiles {
