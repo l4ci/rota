@@ -75,7 +75,7 @@ For each captured bullet, call:
 printf '%s' "$BODY" | rota knowledge add --topic "<Topic>" --title "<Short rule title>" --body-file -
 ```
 
-The verb handles insertion at the top of the topic, the date stamp, and atomic dedup by (topic, title) — calling it twice with the same title under the same topic is a silent no-op.
+The verb handles insertion at the top of the topic, the date stamp, and dedup.
 
 **Pre-step rules (handle in prose, the verb assumes them):**
 
@@ -164,10 +164,7 @@ If verification ran and passed, add a middle line: `Opus verification: PASS — 
 ## Key Principles
 
 - **Durable, not ephemeral.** If it only matters this week, it's a TODO. Use `/rota-capture`.
-- **Preserve existing structure.** Edit surgically; never regenerate the whole file.
 - **Sharp and short.** One sentence with a concrete claim. If you need a paragraph, link to code instead.
-- **Today's date.** Always stamp with the absolute current date.
-- **Sibling persistence skills.** `/rota-learn` (with `--term <name>` for Glossary entries) and `/rota-decide` share one contract (persist + index the instructions file + confirm) and intentionally diverge on gate strength — see `references/persistence-skills.md`.
 
 ## References
 

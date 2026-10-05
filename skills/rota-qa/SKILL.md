@@ -72,18 +72,6 @@ Run when `.rota/qa/` is empty for the active scope (umbrella: per-repo; single-r
 
 ### Mode: run
 
-Track these phases with the host's task tool if it has one.
-
-Phases:
-
-1. *Resolve scope* — which targets to QA (Step 2)
-2. *Load strategies* — read `.rota/qa/<target>.md` for each (Step 3)
-3. *Infra preflight* — verify `Infra requirements` are met (Step 4)
-4. *Execute checks* — dispatch runner subagents (Step 5)
-5. *Audit pass* — usability findings (Step 6)
-6. *Score & verdict* — aggregate (Step 7)
-7. *Report* — relay to user (Step 8)
-
 #### Step 1 — Project Check
 
 No separate check: every `rota` verb exits 3 when there is no `.rota/` project. Surface that and stop.
@@ -125,11 +113,7 @@ The orchestrator does not run the checks itself — parallel dispatch is the poi
 
 **Record proof.** For every item on the branch (`rota review scope --json` `data.referencedIds`), write each executable-check result as a proof row: `rota proof add <ID> --check "<check name>" --result PASS|FAIL --evidence "<artifact path under .rota/qa-runs/ or one-line output>"`. Rows are facts; the QA verdict (Step 7) is still the judgement.
 
-**Re-run a failed check alone before recording it.** Parallel runners contend for one box, and every check with a fixed time budget starts failing on elapsed time rather than on truth once the machine is loaded. Before writing `met: false` for any check that timed out, blew a duration budget, or failed on a connection error, re-run that one check with nothing else in flight and record `uptime` alongside both runs. Three consequences worth stating separately:
-
-- **A timeout is not a failure of the thing under test.** It says the assertion never ran — read the runner's actual output before forming a theory about the code.
-- **Never resolve one of these by raising the budget.** A bigger fixed number fails at some higher load and makes the genuine regression slower to report. If the check is genuinely too slow, the fix belongs in `.rota/qa/<target>.md` as less work, not more time.
-- **A red with no load figure beside it is not evidence in either direction.** Quote both `uptime` readings in the check's `evidence` field so the verdict is auditable.
+**Re-run a failed check alone before recording it.** Parallel runners contend for one box, so fixed time budgets fail on load, not truth. Before writing `met: false` for a check that timed out, blew a duration budget, or hit a connection error, re-run it with nothing else in flight and put both `uptime` readings in `evidence`. A timeout means the assertion never ran: read the runner's output before theorizing about the code. Never raise the budget; if the check is too slow, cut its work in `.rota/qa/<target>.md`.
 
 Connection-refused and address-in-use errors across *many* checks at once are infrastructure, not findings — re-run serially before reporting anything.
 
