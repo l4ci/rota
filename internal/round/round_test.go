@@ -76,6 +76,7 @@ type fakeForge struct {
 	prs      []tracker.PR
 	states   map[int]string
 	labelled []int
+	closed   map[int]bool
 	prsErr   error
 	added    []int
 	addErr   error
@@ -99,6 +100,12 @@ func (f *fakeForge) List(context.Context, tracker.ListFilter) ([]tracker.Issue, 
 		out = append(out, tracker.Issue{Number: n})
 	}
 	return out, nil
+}
+func (f *fakeForge) Get(_ context.Context, n int, _ bool) (tracker.Issue, error) {
+	if f.closed[n] {
+		return tracker.Issue{Number: n, State: "closed"}, nil
+	}
+	return tracker.Issue{Number: n, State: "open"}, nil
 }
 func (f *fakeForge) AddLabels(_ context.Context, n int, _ []string, _ bool) error {
 	f.added = append(f.added, n)
@@ -295,6 +302,23 @@ func TestReconcileApplyRepairsOnlyTheSafeKinds(t *testing.T) {
 		case DeadTab, UnregisteredWorktree, PRUnrecorded:
 			t.Errorf("%s still drifts after --apply", f.Kind)
 		}
+	}
+}
+
+func TestReconcileTreatsClosedIssueAsFinished(t *testing.T) {
+	root, e, forge := fixture(t)
+	forge.closed = map[int]bool{58: true}
+	out, err := e.Reconcile(bg, root, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range append(out.Drift, out.Repaired...) {
+		if f.Kind == LabelMissing {
+			t.Errorf("closed issue still reports label-missing: %+v", f)
+		}
+	}
+	if len(forge.added) != 0 {
+		t.Errorf("labels added to a closed issue = %v", forge.added)
 	}
 }
 
