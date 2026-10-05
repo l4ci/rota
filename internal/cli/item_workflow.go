@@ -3,6 +3,7 @@ package cli
 import (
 	"flag"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
@@ -197,7 +198,7 @@ func itemState(fs *flag.FlagSet) RunFunc {
 		if err := argCount(c, args, 1, 1, "item state takes one item ID"); err != nil {
 			return Result{}, err
 		}
-		if !hasString(backlog.States, *to) {
+		if !slices.Contains(backlog.States, *to) {
 			return Result{}, Usage("--to must be %s", strings.Join(backlog.States, "|"))
 		}
 		_, wf, id, typ, err := itemFlow(c, args[0])
@@ -220,7 +221,7 @@ func itemState(fs *flag.FlagSet) RunFunc {
 // ---- item note ------------------------------------------------------------
 
 func checkNoteKind(kind string) error {
-	if !hasString(backlog.NoteKinds, kind) {
+	if !slices.Contains(backlog.NoteKinds, kind) {
 		return Usage("--kind must be %s", strings.Join(backlog.NoteKinds, "|"))
 	}
 	return nil

@@ -1,7 +1,10 @@
 package cli
 
 import (
+	"bytes"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -98,18 +101,39 @@ func TestPaletteQuitRunsNothingAndExitsZero(t *testing.T) {
 	}
 }
 
-func TestPaletteVerbEntryPrintsItsOutputThenReturns(t *testing.T) {
+func TestPaletteConfigEntryOpensTheConfigEditor(t *testing.T) {
 	deps := testDeps()
 	bareRig(deps)
-	raws, restores := paletteRig(deps, "8", "x", "q") // Config: config show
+	// Config (8) runs `config edit` on a cooked terminal: the next reads are
+	// its lines (toggle ship.review, finish); then a key dismisses the wait
+	// and q quits the palette.
+	raws, restores := new(int), new(int)
+	term := &scriptedKeys{[]string{"8", "ship.review\n", "\n", "x", "q"}}
+	deps.IsTerminal = func(any) bool { return true }
+	deps.Palette = func(cfg palette.Config) error {
+		cfg.In = term
+		cfg.MakeRaw = func() (func(), error) { *raws++; return func() { *restores++ }, nil }
+		cfg.Width = func() int { return 80 }
+		return palette.Run(cfg)
+	}
 	r := useLaunchRig(deps, nil)
-	code, out, errs := bareIn(t, deps, trackerProject(t, ""))
+	root := trackerProject(t, "")
+	wd, _ := os.Getwd()
+	defer os.Chdir(wd)
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	var outb, errb bytes.Buffer
+	code := mainWith(deps, nil, term, &outb, &errb)
+	out, errs := outb.String(), errb.String()
 	if code != 0 || len(r.execs) != 0 {
 		t.Fatalf("exit %d execs %v: %s", code, r.execs, errs)
 	}
-	i := strings.Index(out, "press any key")
-	if i < 0 || strings.Count(out, "› 1  Orchestrate") < 1 || !strings.Contains(out[:i], "orchestrator.harness") && !strings.Contains(out[:i], "work.") {
-		t.Errorf("verb output or wait missing:\n%s", out)
+	if !strings.Contains(out, "changed: ship.review") || !strings.Contains(out, "press any key") {
+		t.Errorf("editor result or wait missing:\n%s", out)
+	}
+	if b, _ := os.ReadFile(filepath.Join(root, ".rota", "config.json")); !strings.Contains(string(b), `"review": false`) {
+		t.Errorf("config not written: %s", b)
 	}
 	if *raws != 2 || *restores != 2 {
 		t.Errorf("raw %d restore %d, want 2/2", *raws, *restores)

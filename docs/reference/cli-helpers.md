@@ -62,6 +62,7 @@ exit codes and repo scope: [verb contract](../design/contract/README.md).
 | Usage | What it does |
 |---|---|
 | `rota config show [<key>]` | effective value and source of config keys |
+| `rota config edit` | change keys interactively (needs a terminal) |
 | `rota config set <key> <value>` | set one key in .rota/config.json |
 | `rota config check` | compare .rota/config.json with the schema |
 | `rota config fill` | write the schema default for every missing key |
@@ -485,6 +486,7 @@ A gated verb refuses with exit 4 (`blockedBy: "manual gate"`) at every autonomy 
 |---|---|
 | `rota init` | create or refresh `.rota/`, the managed blocks and `.gitignore` |
 | `rota projects` | list the projects registered on this machine; `rota init` registers, a missing path is marked, not pruned |
+| `rota projects cleanup` | delete every entry whose directory is gone or has no `.rota/`, printing each; no preview |
 | `rota setup [--yes] [--set <key>=<value>]... \| --list` | `rota init` plus the main config choices, asked on a terminal; `--yes` takes defaults, `--list` prints the questions |
 | `rota init check` | is `.rota/` initialized (exit 1 when not) |
 | `rota init umbrella (--repos <csv> \| --all \| --list)` | register sub-repos and make this directory an umbrella |

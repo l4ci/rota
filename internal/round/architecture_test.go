@@ -25,6 +25,9 @@ func (archForge) ClosedNumbers(string) []int                    { return nil }
 func (f archForge) List(context.Context, tracker.ListFilter) ([]tracker.Issue, error) {
 	return f.closed, nil
 }
+func (archForge) Get(_ context.Context, n int, _ bool) (tracker.Issue, error) {
+	return tracker.Issue{Number: n, State: "open"}, nil
+}
 func (f archForge) AddLabels(_ context.Context, n int, l []string, _ bool) error {
 	f.added[n] = l
 	return nil
