@@ -63,6 +63,8 @@ Where the time goes, from `strace -f -e trace=execve` on two slow sections:
 
 ## 2. Go: `go vet` and `go test -race ./...`
 
+The frozen suites were renamed by domain after these measurements (#77): `A4` is now `TestFrozenItem`, `A4B` `TestFrozenBacklog`, `A4C` `TestFrozenConfig`, `A4D` `TestFrozenIssues`, `A4Issue` `TestFrozenItemIssue`, `A4Umbrella` `TestFrozenUmbrella`, `A4UmbrellaFile` `TestFrozenUmbrellaFile`. The figures keep the names they were taken under.
+
 `-count=1` throughout, to defeat the result cache.
 
 | Run | Load start -> end | Wall |
