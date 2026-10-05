@@ -22,13 +22,12 @@ func TestPoolInit(t *testing.T) {
 	for name, cfg := range map[string]string{"tmux": `{}`, "herdr": `{"work":{"dispatch":"herdr"}}`} {
 		t.Run(name, func(t *testing.T) {
 			b := newProject(t, cfg)
-			var want map[string]string
-			golden.Golden(t, map[string]any{"config": cfg, "steps": []string{"init --slots 3 --base main --session s1", "init --slots 4 --base main --session s1"}}, &want)
+			got := map[string]string{}
 			res, err := goInit(t, b, InitOpts{Slots: 3, Base: "main", Session: "s1"})
 			if err != nil {
 				t.Fatal(err)
 			}
-			mustEqual(t, "workers.json", want["after init"], registry(t, b))
+			got["after init"] = registry(t, b)
 			if !res.Changed || len(res.Slots) != 3 {
 				t.Errorf("result = %+v", res)
 			}
@@ -38,7 +37,8 @@ func TestPoolInit(t *testing.T) {
 				t.Errorf("re-init changed=%v err=%v", again.Changed, err)
 			}
 			goInit(t, b, InitOpts{Slots: 4, Base: "main", Session: "s1"})
-			mustEqual(t, "grown workers.json", want["after grow"], registry(t, b))
+			got["after grow"] = registry(t, b)
+			golden.Check(t, map[string]any{"config": cfg, "steps": []string{"init --slots 3 --base main --session s1", "init --slots 4 --base main --session s1"}}, got)
 			if _, err := os.Stat(filepath.Join(b, ".worktrees", "w4", ".git")); err != nil {
 				t.Errorf("w4 worktree missing: %v", err)
 			}
@@ -48,13 +48,11 @@ func TestPoolInit(t *testing.T) {
 
 func TestPoolInitDefaultsToCurrentBranchAndHv(t *testing.T) {
 	b := newProject(t, `{}`)
-	var want map[string]string
-	golden.Golden(t, map[string]any{"config": `{}`, "argv": "init --slots 1"}, &want)
 	res, err := goInit(t, b, InitOpts{Slots: 1})
 	if err != nil || res.Base != "main" || res.Session != "rota" {
 		t.Fatalf("%+v %v", res, err)
 	}
-	mustEqual(t, "workers.json", want["workers.json"], registry(t, b))
+	golden.Check(t, map[string]any{"config": `{}`, "argv": "init --slots 1"}, map[string]string{"workers.json": registry(t, b)})
 }
 
 func TestPoolInitErrors(t *testing.T) {
@@ -73,8 +71,6 @@ func TestPoolInitErrors(t *testing.T) {
 func TestPoolInitMigratesWindowToHandleAndKeepsLiveTab(t *testing.T) {
 	cfg := `{"work":{"dispatch":"herdr"}}`
 	b := newProject(t, cfg)
-	var want map[string]string
-	golden.Golden(t, map[string]any{"config": cfg, "steps": []string{"init --slots 2 --base main", "slot 1 handle w9:t4, slot 2 window rota:w2", "init --slots 2 --base main"}}, &want)
 	goInit(t, b, InitOpts{Slots: 2, Base: "main"})
 	// slot 1 had a live tab recorded; slot 2 is an unmigrated pre-herdr registry
 	raw, _ := os.ReadFile(RegistryPath(b))
@@ -82,7 +78,7 @@ func TestPoolInitMigratesWindowToHandleAndKeepsLiveTab(t *testing.T) {
 	s = strings.Replace(s, `"handle": null,`, `"window": "rota:w2",`, 1)
 	os.WriteFile(RegistryPath(b), []byte(s), 0o644)
 	goInit(t, b, InitOpts{Slots: 2, Base: "main"})
-	mustEqual(t, "migrated workers.json", want["workers.json"], registry(t, b))
+	golden.Check(t, map[string]any{"config": cfg, "steps": []string{"init --slots 2 --base main", "slot 1 handle w9:t4, slot 2 window rota:w2", "init --slots 2 --base main"}}, map[string]string{"workers.json": registry(t, b)})
 	if got := registry(t, b); !strings.Contains(got, `"handle": "w9:t4"`) || !strings.Contains(got, `"handle": "rota:w2"`) || strings.Contains(got, `"window"`) {
 		t.Errorf("window not migrated or live tab clobbered:\n%s", got)
 	}
@@ -90,12 +86,10 @@ func TestPoolInitMigratesWindowToHandleAndKeepsLiveTab(t *testing.T) {
 
 func TestPoolInitRegistersTheBranchActuallyCheckedOut(t *testing.T) {
 	b := newProject(t, `{}`)
-	var want map[string]string
-	golden.Golden(t, map[string]any{"config": `{}`, "steps": []string{"init --slots 1 --base main", "git switch -c rota-worker/w1-t9 in w1", "init --slots 1 --base main"}}, &want)
 	goInit(t, b, InitOpts{Slots: 1, Base: "main"})
 	sh(t, filepath.Join(b, ".worktrees", "w1"), "git", "switch", "-q", "-c", "rota-worker/w1-t9")
 	goInit(t, b, InitOpts{Slots: 1, Base: "main"})
-	mustEqual(t, "workers.json", want["workers.json"], registry(t, b))
+	golden.Check(t, map[string]any{"config": `{}`, "steps": []string{"init --slots 1 --base main", "git switch -c rota-worker/w1-t9 in w1", "init --slots 1 --base main"}}, map[string]string{"workers.json": registry(t, b)})
 	if !strings.Contains(registry(t, b), `"branch": "rota-worker/w1-t9"`) {
 		t.Error("init registered the init-time name, not the checked-out branch")
 	}
@@ -104,8 +98,6 @@ func TestPoolInitRegistersTheBranchActuallyCheckedOut(t *testing.T) {
 // #79: a slot registered at a legacy path stays there; a foreign repo is refused.
 func TestPoolInitLegacySlotStays(t *testing.T) {
 	b := newProject(t, `{}`)
-	var want map[string]string
-	golden.Golden(t, map[string]any{"config": `{}`, "legacy slot": "w1 at <root>/.claude/worktrees/rota-worker/w1 on rota-worker/w1, handle rota:w1", "argv": "init --slots 1 --base main"}, &want)
 	legacy := filepath.Join(b, ".claude", "worktrees", "rota-worker", "w1")
 	sh(t, b, "git", "worktree", "add", "-q", "-b", "rota-worker/w1", legacy, "main")
 	reg := `{"session":"rota","slots":[{"name":"w1","branch":"rota-worker/w1","worktree":"` + legacy + `","base":"main","handle":"rota:w1","state":"idle","task":null,"pr":null,"relays":[],"configDir":null}]}`
@@ -114,7 +106,7 @@ func TestPoolInitLegacySlotStays(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	mustEqual(t, "workers.json", want["workers.json"], registry(t, b))
+	golden.Check(t, map[string]any{"config": `{}`, "legacy slot": "w1 at <root>/.claude/worktrees/rota-worker/w1 on rota-worker/w1, handle rota:w1", "argv": "init --slots 1 --base main"}, map[string]string{"workers.json": registry(t, b)})
 	if len(res.Warnings) != 1 || !strings.Contains(res.Warnings[0], "stays at") {
 		t.Errorf("warnings = %v", res.Warnings)
 	}
@@ -154,27 +146,24 @@ func TestPoolInitWarnsWhenWorktreesNotIgnored(t *testing.T) {
 // golden pins what the retired helper did; changing it is a behaviour change.
 func TestPoolInitTreatsAPlainDirInsideTheProjectAsHealthy(t *testing.T) {
 	b := newProject(t, `{}`)
-	var want map[string]string
-	golden.Golden(t, map[string]any{"config": `{}`, "plain dir": ".worktrees/w1 holding junk", "argv": "init --slots 1 --base main"}, &want)
 	os.MkdirAll(filepath.Join(b, ".worktrees", "w1"), 0o755)
 	os.WriteFile(filepath.Join(b, ".worktrees", "w1", "junk"), []byte("x"), 0o644)
 	if _, err := goInit(t, b, InitOpts{Slots: 1, Base: "main"}); err != nil {
 		t.Fatal(err)
 	}
-	mustEqual(t, "workers.json", want["workers.json"], registry(t, b))
+	golden.Check(t, map[string]any{"config": `{}`, "plain dir": ".worktrees/w1 holding junk", "argv": "init --slots 1 --base main"}, map[string]string{"workers.json": registry(t, b)})
 }
 
 func TestPoolReap(t *testing.T) {
 	b := newProject(t, `{}`)
-	var want map[string]string
-	golden.Golden(t, map[string]any{"config": `{}`, "steps": []string{"init --slots 3 --base main", "reap --slot w2", "reap --all"}}, &want)
+	got := map[string]string{}
 	goInit(t, b, InitOpts{Slots: 3, Base: "main"})
 
 	reaped, err := Env{}.Reap(b, []string{"w2", "nope"}, false)
 	if err != nil || len(reaped) != 1 || reaped[0] != "w2" {
 		t.Fatalf("reaped = %v, %v", reaped, err)
 	}
-	mustEqual(t, "after reap w2", want["after reap w2"], registry(t, b))
+	got["after reap w2"] = registry(t, b)
 	if _, err := os.Stat(filepath.Join(b, ".worktrees", "w2")); err == nil {
 		t.Error("worktree survived the reap")
 	}
@@ -186,7 +175,8 @@ func TestPoolReap(t *testing.T) {
 	if len(reaped) != 2 {
 		t.Errorf("reaped = %v", reaped)
 	}
-	mustEqual(t, "after reap --all", want["after reap --all"], registry(t, b))
+	got["after reap --all"] = registry(t, b)
+	golden.Check(t, map[string]any{"config": `{}`, "steps": []string{"init --slots 3 --base main", "reap --slot w2", "reap --all"}}, got)
 }
 
 func TestPoolReapWithoutRegistryIsANoop(t *testing.T) {

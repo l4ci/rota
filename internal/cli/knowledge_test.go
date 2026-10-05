@@ -197,46 +197,36 @@ func knFrozenInputs(before map[string]string, stdin string, args []string) map[s
 	return map[string]any{"argv": args, "stdin": stdin, "fixture": hex.EncodeToString(sum[:])}
 }
 
-// knFrozen runs rota in dir like knNew and returns what the retired helper
-// produced for the same case (want, read from the golden) next to what rota did
-// (got, with its tree delta). Call it once per recorded case, in order.
-func knFrozen(t *testing.T, dir, stdin string, args ...string) (want, got knFrozenOut) {
-	t.Helper()
-	before := knTree(t, dir)
-	golden.Golden(t, knFrozenInputs(before, stdin, args), &want)
-	n := knNew(t, dir, stdin, args...)
-	got = knFrozenOut{Stdout: n.stdout, Stderr: n.stderr, RC: n.rc}
-	got.Changed, got.Removed = knDelta(before, knTree(t, dir))
-	return want, got
+// knFrozen runs rota in dir like knNew, checks what it did (streams, exit code
+// and tree delta) against the golden recorded from the retired helper and
+// returns it. Call it once per recorded case, in order.
+func knFrozen(t *testing.T, dir, stdin string, args ...string) knFrozenOut {
+	return knFrozenView(t, dir, stdin, nil, args...)
 }
 
-// knSameDelta reports where rota's tree delta differs from the frozen one.
-func knSameDelta(t *testing.T, want, got knFrozenOut) {
+// knFrozenView is knFrozen for a case where rota deliberately differs from the
+// helper: view rewrites a copy of rota's result into the helper's terms before
+// the golden check, and the caller asserts the real difference itself.
+func knFrozenView(t *testing.T, dir, stdin string, view func(*knFrozenOut), args ...string) knFrozenOut {
 	t.Helper()
-	var names []string
-	seen := map[string]bool{}
-	for _, m := range []map[string]string{want.Changed, got.Changed} {
-		for k := range m {
-			if !seen[k] {
-				seen[k] = true
-				names = append(names, k)
-			}
-		}
+	before := knTree(t, dir)
+	inputs := knFrozenInputs(before, stdin, args)
+	n := knNew(t, dir, stdin, args...)
+	got := knFrozenOut{Stdout: n.stdout, Stderr: n.stderr, RC: n.rc}
+	got.Changed, got.Removed = knDelta(before, knTree(t, dir))
+	checked := got
+	checked.Stdout = strings.ReplaceAll(checked.Stdout, dir, "<dir>")
+	checked.Stderr = strings.ReplaceAll(checked.Stderr, dir, "<dir>")
+	if view != nil {
+		view(&checked)
 	}
-	sort.Strings(names)
-	for _, k := range names {
-		w, wok := want.Changed[k]
-		g, gok := got.Changed[k]
-		switch {
-		case wok != gok:
-			t.Errorf(".rota/%s written: frozen=%v rota=%v", k, wok, gok)
-		case w != g:
-			t.Errorf(".rota/%s differs\n--- frozen ---\n%s\n--- rota ---\n%s", k, w, g)
-		}
-	}
-	if strings.Join(want.Removed, "\n") != strings.Join(got.Removed, "\n") {
-		t.Errorf("removed files: frozen=%v rota=%v", want.Removed, got.Removed)
-	}
+	golden.Check(t, inputs, checked)
+	return got
+}
+
+// knOldRC maps rota's exit code to the helper's recorded one for the golden check.
+func knOldRC(rc int) func(*knFrozenOut) {
+	return func(o *knFrozenOut) { o.RC = rc }
 }
 
 // knStep is one parity case: the rota call whose result is compared with the
@@ -296,14 +286,10 @@ func TestKnowledgeWritesMatchGolden(t *testing.T) {
 	}
 	for _, s := range steps {
 		t.Run(s.name, func(t *testing.T) {
-			want, got := knFrozen(t, knProject(t, s.umbrella), s.stdin, s.newArgs...)
-			if want.RC != s.oldRC {
-				t.Fatalf("frozen helper rc = %d, want %d; stderr: %s", want.RC, s.oldRC, want.Stderr)
-			}
+			got := knFrozenView(t, knProject(t, s.umbrella), s.stdin, knOldRC(s.oldRC), s.newArgs...)
 			if got.RC != s.wantRC {
 				t.Fatalf("rota rc = %d, want %d; stderr: %s", got.RC, s.wantRC, got.Stderr)
 			}
-			knSameDelta(t, want, got)
 		})
 	}
 }
@@ -313,19 +299,16 @@ func TestKnowledgeWritesMatchGolden(t *testing.T) {
 func TestKnowledgeSequenceMatchGolden(t *testing.T) {
 	dir := knProject(t, false)
 	for i := 0; i < 3; i++ {
-		want, got := knFrozen(t, dir, "", "knowledge", "hit", "--topic", "Architecture", "--title", "Beta rule")
-		knSameDelta(t, want, got)
+		knFrozen(t, dir, "", "knowledge", "hit", "--topic", "Architecture", "--title", "Beta rule")
 	}
 	if tier := knTree(t, dir)["knowledge-tier.json"]; !strings.Contains(tier, `"tier": "confirmed"`) {
 		t.Fatalf("Beta rule not promoted:\n%s", tier)
 	}
 
 	// A pending contradiction blocks promotion.
-	want, got := knFrozen(t, dir, "", "knowledge", "contradiction", "add", "--topic", "Build", "--title", "Gamma tip", "--text", "c")
-	knSameDelta(t, want, got)
+	knFrozen(t, dir, "", "knowledge", "contradiction", "add", "--topic", "Build", "--title", "Gamma tip", "--text", "c")
 	for i := 0; i < 4; i++ {
-		want, got := knFrozen(t, dir, "", "knowledge", "hit", "--topic", "Build", "--title", "Gamma tip")
-		knSameDelta(t, want, got)
+		knFrozen(t, dir, "", "knowledge", "hit", "--topic", "Build", "--title", "Gamma tip")
 	}
 	if tier := knTree(t, dir)["knowledge-tier.json"]; !strings.Contains(tier, `"Build::Gamma tip": {
       "tier": "provisional",
@@ -349,17 +332,8 @@ func TestKnowledgeQueryMatchGolden(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			want, got := knFrozen(t, knProject(t, c.umbrella), "", c.newArgs...)
-			if want.Stdout != got.Stdout {
-				t.Errorf("stdout differs\n--- frozen ---\n%s\n--- new ---\n%s", want.Stdout, got.Stdout)
-			}
-			if want.RC != 0 || got.RC != 0 {
-				t.Errorf("rc frozen=%d new=%d", want.RC, got.RC)
-			}
-			warnOld := strings.Count(want.Stderr, "no topic heading matches")
-			warnNew := strings.Count(got.Stderr, "no topic heading matches")
-			if warnOld != warnNew {
-				t.Errorf("warnings frozen=%d new=%d\n%s", warnOld, warnNew, got.Stderr)
+			if got := knFrozen(t, knProject(t, c.umbrella), "", c.newArgs...); got.RC != 0 {
+				t.Errorf("rc = %d: %s", got.RC, got.Stderr)
 			}
 		})
 	}
@@ -449,11 +423,9 @@ func TestKnowledgeCRLFMatchGolden(t *testing.T) {
 		t.Run(s.name, func(t *testing.T) {
 			dir := knProject(t, false)
 			knWrite(t, filepath.Join(dir, ".rota", "KNOWLEDGE.md"), crlf)
-			want, got := knFrozen(t, dir, s.stdin, s.newArgs...)
-			if want.RC != 0 || got.RC != 0 {
-				t.Fatalf("rc frozen=%d new=%d %s %s", want.RC, got.RC, want.Stderr, got.Stderr)
+			if got := knFrozen(t, dir, s.stdin, s.newArgs...); got.RC != 0 {
+				t.Fatalf("rc = %d: %s", got.RC, got.Stderr)
 			}
-			knSameDelta(t, want, got)
 			if strings.Contains(knTree(t, dir)["KNOWLEDGE.md"], "\r") {
 				t.Error("CR survived the rewrite")
 			}
