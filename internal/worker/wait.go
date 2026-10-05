@@ -62,7 +62,7 @@ func (e Env) Wait(ctx context.Context, root string, o WaitOpts) (WaitResult, err
 	if RegistryHost(root) == host.Solo {
 		return soloWait(root, o)
 	}
-	h := e.NewHost(hostKind(root))
+	h := e.NewHost(e.hostKind(root))
 	if err := h.Require(); err != nil {
 		return WaitResult{}, fail(exitcode.ExitUnavailable, err.Error())
 	}

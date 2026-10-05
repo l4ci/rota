@@ -116,9 +116,10 @@ func useEscalation(t *testing.T, h *escHost, herdrEnv string, clock *time.Time) 
 	old := escalationEnv
 	escalationEnv = func() escalation.Env {
 		return escalation.Env{
-			Now:    func() time.Time { return *clock },
-			Getenv: func(k string) string { return map[string]string{"HERDR_ENV": herdrEnv}[k] },
-			Host:   func() host.Host { return h },
+			Now:      func() time.Time { return *clock },
+			Getenv:   func(k string) string { return map[string]string{"HERDR_ENV": herdrEnv}[k] },
+			LookPath: func(n string) (string, error) { return "/bin/" + n, nil },
+			Host:     func() host.Host { return h },
 		}
 	}
 	t.Cleanup(func() { escalationEnv = old })

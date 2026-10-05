@@ -181,7 +181,7 @@ func (d *runner) roundHost() string {
 	if getenv == nil {
 		getenv = func(string) string { return "" }
 	}
-	return host.ResolveRound(d.in.Dispatch, getenv, func(name string) (string, error) {
+	return host.Resolve("", d.in.Dispatch, getenv, func(name string) (string, error) {
 		if p, ok := d.in.Look(name); ok {
 			return p, nil
 		}

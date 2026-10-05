@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -34,16 +33,9 @@ func defaultRoundEnv(ctx context.Context, root string) round.Env {
 	if b, ok, err := (git.Repo{Dir: root}).Base(ctx, ""); err == nil && ok {
 		e.Base = b
 	}
-	// The round's recorded host wins (C8). With none, the guess below is what
-	// rounds started by hand have always had.
-	hostKind := worker.RegistryHost(root)
-	if hostKind == "" {
-		dispatch, _ := config.Lookup(cfg, "work.dispatch")
-		hostKind = "tmux"
-		if dispatch == "herdr" || os.Getenv("HERDR_ENV") == "1" {
-			hostKind = "herdr"
-		}
-	}
+	// A round started by hand (`herdr worktree create`) has no recorded host and
+	// resolves from the environment like every other verb.
+	hostKind := worker.ResolvePaneHost(root, nil, nil)
 	if hostKind == host.Solo {
 		e.HostName = host.Solo // no panes to snapshot, and not an unavailable host
 	} else {

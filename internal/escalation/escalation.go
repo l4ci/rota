@@ -10,12 +10,10 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/marker"
@@ -73,6 +71,8 @@ type Forge interface {
 type Env struct {
 	Now    func() time.Time
 	Getenv func(string) string
+	// LookPath reports whether a binary is installed; nil means exec.LookPath.
+	LookPath func(string) (string, error)
 	// Forge returns the forge for the project, an error when none resolves.
 	Forge func(ctx context.Context, root string) (Forge, error)
 	// Host returns the herdr host (never tmux, which has no notifications).
@@ -246,12 +246,6 @@ type SendResult struct {
 	Warnings []string
 }
 
-func dispatchKind(root string) string {
-	v, _ := config.Lookup(config.Load(filepath.Join(root, ".rota", "config.json")), "work.dispatch")
-	s, _ := v.(string)
-	return s
-}
-
 // Send posts the escalation comment, raises the notification and records the
 // entry. The comment goes first, so a failed write leaves a comment and no
 // record: that is exit 1 with the comment's url in the failure data.
@@ -331,11 +325,12 @@ func pendingData(id string) *jsonx.Object {
 // notify raises the herdr notification when the host is herdr: work.dispatch
 // is herdr or the process runs inside herdr, and the binary is installed.
 func notify(ctx context.Context, env Env, root, id string, o SendOpts, warns []string) (bool, []string) {
-	if worker.RegistryHost(root) == "solo" { // the PR comment is the only channel
+	switch worker.ResolveHost(root, env.Getenv, env.LookPath) {
+	case host.Solo: // the PR comment is the only channel
 		return false, append(warns, "no notification: the round is solo, there is no herdr")
-	}
-	if dispatchKind(root) != "herdr" && env.Getenv("HERDR_ENV") != "1" {
-		return false, append(warns, "no notification: the host is not herdr (work.dispatch is not herdr and HERDR_ENV is not 1)")
+	case "herdr":
+	default:
+		return false, append(warns, "no notification: the host is not herdr (the round, work.dispatch and the environment do not name herdr)")
 	}
 	h := env.Host()
 	if err := h.Require(); err != nil {
