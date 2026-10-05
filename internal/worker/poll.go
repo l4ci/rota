@@ -372,7 +372,7 @@ func (e Env) openPRsByHead(ctx context.Context, root string, reg Registry, polle
 		return nil
 	}
 	cfg := config.Load(rotatree.Config(root))
-	f, err := e.Forge(e.detectProvider(root, ""), root, cfg)
+	f, err := e.Forge(e.gateEnv().detectProvider(root, ""), root, cfg)
 	if err != nil {
 		return nil
 	}
