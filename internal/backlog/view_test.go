@@ -257,3 +257,42 @@ func TestTitleOf(t *testing.T) {
 		}
 	}
 }
+
+func TestBuildSummary(t *testing.T) {
+	f := fileBackend(t, viewBacklog)
+	root := f.Root
+	rota := filepath.Join(root, ".rota")
+	write := func(name, body string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(rota, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("KNOWLEDGE.md", "## A\n- x\n## B\n- y\n")
+	write("ARCHIVE.md", "- ~~one~~\n- ~~two~~\n- other\n")
+	write("status.json", `{"active":[{"items":["B01"],"branch":"b/x","startedAt":"2026-10-01T10:00:00Z"}]}`)
+	items, err := f.List(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sm := BuildSummary(root, items, true)
+	if sm.Bugs != 3 || sm.Features != 2 || sm.Tasks != 1 {
+		t.Errorf("counts = %d/%d/%d", sm.Bugs, sm.Features, sm.Tasks)
+	}
+	if len(sm.Recent) != 1 || sm.Recent[0].ID != "B09" || sm.Recent[0].ClosedAt != "2026-09-30" {
+		t.Errorf("recent = %+v", sm.Recent)
+	}
+	if len(sm.Active) != 1 || sm.Active[0].Branch != "b/x" || sm.Active[0].Since != "2026-10-01" {
+		t.Errorf("active = %+v", sm.Active)
+	}
+	if len(sm.Topics) != 1 || sm.Topics[0].Key != "knowledge" || sm.Topics[0].Count != 2 || !reflect.DeepEqual(sm.Topics[0].Shown, []string{"A", "B"}) {
+		t.Errorf("topics = %+v", sm.Topics)
+	}
+	if sm.Archive != 2 {
+		t.Errorf("archive = %d", sm.Archive)
+	}
+	if len(sm.Milestones) != 0 {
+		t.Errorf("milestones = %+v", sm.Milestones)
+	}
+}
