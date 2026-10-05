@@ -1,0 +1,79 @@
+{
+  "skill": "rota-capture",
+  "scenarios": [
+    {
+      "id": "capture-split-three",
+      "query": "/rota-capture the app crashes on startup when the config is empty. Also we should support dark mode. And bump the Go dependencies.",
+      "situation": "Single repo, file backend, no active milestones, no umbrella. The code answers every factual question already. Assume the user answers any question you ask with the Recommended option. List the commands you would run in order. Simulated results: every `rota` read verb returns nothing relevant; `rota item create` prints a new ID (#101, #102, ...).",
+      "expected": "Splits into three items of kind bugs, features and tasks; creates each with `rota item create`; does not investigate the crash, does not start work.",
+      "must": [
+        "--kind bugs",
+        "--kind features",
+        "--kind tasks",
+        {
+          "re": "rota item create",
+          "min": 3
+        }
+      ],
+      "mustNot": [
+        "^CMD:.*rota-work",
+        "^CMD:.*git (checkout|commit)",
+        "offer.*start"
+      ],
+      "order": []
+    },
+    {
+      "id": "capture-major-nudge",
+      "query": "/rota-capture add a plugin system so third parties can ship their own skills",
+      "situation": "Single repo, file backend. Treat it as a [Major] feature. Assume the user answers questions with the Recommended option. Simulated results: every `rota` read verb returns nothing relevant; `rota item create` prints a new ID (#101, #102, ...).",
+      "expected": "Creates a Major feature with an `## Out of scope` section in the body file, then prints a one-line nudge to run /rota-brainstorm. Never grills, never invokes brainstorm, never offers to start work.",
+      "must": [
+        "Major",
+        "Out of scope",
+        "/rota-brainstorm"
+      ],
+      "mustNot": [
+        "^CMD:.*Skill.*rota-brainstorm",
+        "^CMD:.*rota-work",
+        "want me to (start|implement)"
+      ],
+      "order": []
+    },
+    {
+      "id": "capture-remove-gate",
+      "query": "/rota-capture --remove #42",
+      "situation": "You already ran `rota item rm #42` (preview). It printed: `Would remove #42 'Dup of #40'; no Related: references; no active branch.` No upstream issue carries the in-progress label. The user has not answered the confirmation question yet: stop at it.",
+      "expected": "Removal is destructive: shows the preview and asks Apply / Apply + scrub ARCHIVE / Cancel. Does not run --apply until the user says yes.",
+      "must": [
+        "^ASK:"
+      ],
+      "mustNot": [
+        "^CMD:.*--apply",
+        "^CMD:.*rota issues label"
+      ],
+      "order": []
+    },
+    {
+      "id": "capture-detailed-no-questions",
+      "query": "/rota-capture bug: login button throws TypeError 'cannot read property token of undefined' in internal/auth/login.go on every click in Safari 17. Blocks sign-in entirely, no workaround. Expected: user lands on the dashboard.",
+      "situation": "Single repo, file backend, no milestones, no umbrella. The input already gives expected vs actual, trigger, frequency, component and error output. Simulated results: every `rota` read verb returns nothing relevant; `rota item create` prints a new ID (#101, #102, ...).",
+      "expected": "The brief answers everything the code cannot, so it asks no questions. Tags it P0 (blocks core workflow) and creates one bug.",
+      "must": [
+        "--kind bugs",
+        "P0",
+        {
+          "re": "rota item create",
+          "min": 1
+        }
+      ],
+      "mustNot": [
+        {
+          "re": "^ASK:",
+          "max": 0
+        },
+        "^CMD:.*rota-work"
+      ],
+      "order": []
+    }
+  ]
+}

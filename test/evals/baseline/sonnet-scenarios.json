@@ -1,0 +1,102 @@
+{
+  "model": "sonnet",
+  "mode": "scenarios",
+  "results": [
+    {
+      "id": "capture-split-three",
+      "kind": "scenario",
+      "ok": true,
+      "fails": [],
+      "cost": 0.0313482,
+      "output": "CMD: grep -rniE \"config\" --include=*.go -l . | head -20\nCMD: rota map query config\nCMD: rota glossary read \"dark mode\"\nCMD: rota backlog list\nCMD: rota milestone active --json\nCMD: rota repo umbrella\nCMD: mkdir -p /tmp/rota-capture && printf '## Description\\nThe app supports a dark colour scheme alongside the existing light one, so users can read it comfortably in low light.\\n\\n## Out of scope\\n- Per-component custom theming or user-defined palettes\\n- Automatic switching based on time of day\\n' > /tmp/rota-capture/dark-mode.md\nCMD: ID1=$(rota item create --json --kind bugs --title \"App crashes on startup when config is empty\" --tag P0 --desc \"Starting the app with an empty config crashes it instead of starting. It should fall back to default settings (or report a clear error) and start normally.\" | jq -r .data.id)\nCMD: ID2=$(rota item create --json --kind features --title \"Support dark mode\" --tag Major --desc \"Add a dark colour scheme across the app so users can pick it instead of the light theme.\" --body-file /tmp/rota-capture/dark-mode.md | jq -r .data.id)\nCMD: ID3=$(rota item create --json --kind tasks --title \"Bump Go dependencies\" --desc \"Update the Go module dependencies to their latest compatible versions to pick up fixes and keep the build current.\" | jq -r .data.id)\nSAY: Captured: #101 [P0] App crashes on startup when config is empty; #102 [Major] Support dark mode; #103 Bump Go dependencies.\nSAY: Run `/rota-brainstorm #101` before `/rota-plan` to negotiate the design.\nSAY: Run `/rota-brainstorm #102` before `/rota-plan` to negotiate the design."
+    },
+    {
+      "id": "capture-major-nudge",
+      "kind": "scenario",
+      "ok": true,
+      "fails": [],
+      "cost": 0.03158,
+      "output": "CMD: grep -ril \"plugin\" skills docs src --include=* 2>/dev/null | head -20\nCMD: rota map query skills\nCMD: rota map query plugin\nCMD: rota milestone active --json\nCMD: rota repo umbrella\nCMD: rota glossary read plugin\nCMD: rota backlog list\nASK: Who should be able to install a third-party plugin, and how? Options: (1) \"Local directory the user opts into, e.g. .rota/plugins/<name>/ (Recommended)\", (2) \"Fetched from a git URL or registry\", (3) \"Both\".\nASK: How should plugin-shipped skills be trusted? Options: (1) \"Explicit per-plugin opt-in, no auto-run of plugin code (Recommended)\", (2) \"Trusted once installed\", (3) \"Sandboxed execution\".\nASK: Any current workaround for third parties, and how urgent is this? Options: (1) \"Fork or copy skills into the repo by hand; not urgent (Recommended)\", (2) \"Blocking an external partner now\".\nCMD: mkdir -p .rota/detail && cat > .rota/detail/plugin-system.md <<'EOF'\n## Description\nLet third parties ship their own skills as plugins. A plugin is a local directory under .rota/plugins/<name>/ that the user explicitly opts into. Plugin skills are discoverable alongside built-in skills. Plugin code is never auto-run on install.\n\n## Acceptance criteria\n- A user can place a plugin directory in the plugins location and enable it explicitly.\n- Enabled plugins' skills appear in skill discovery next to built-in skills.\n- A disabled or non-opted-in plugin contributes no skills and runs nothing.\n- A plugin whose skill name collides with a built-in is rejected with a clear message.\n\n## Out of scope\n- Remote fetching from git URLs or a registry.\n- Sandboxed execution of plugin code.\n- A plugin marketplace or publishing flow.\n\n## Pointers\n- Skill discovery and loading paths (see rota map query skills).\nEOF\nCMD: ID=$(rota item create --json --kind features --title \"Plugin system for third-party skills\" --tag Major --desc \"Third parties cannot ship their own skills today. Add a plugin mechanism where a locally placed, explicitly enabled plugin directory contributes skills alongside built-in ones, without auto-running plugin code.\" --body-file .rota/detail/plugin-system.md | jq -r .data.id)\nSAY: Captured #101 \u2014 Plugin system for third-party skills [Major feature].\nSAY: Run `/rota-brainstorm #101` before `/rota-plan` to negotiate the design."
+    },
+    {
+      "id": "capture-remove-gate",
+      "kind": "scenario",
+      "ok": true,
+      "fails": [],
+      "cost": 0.0321054,
+      "output": "ASK: Apply this removal plan for #42? (Header: \"Apply\") Options: 1. \"Apply (Recommended)\" \u2014 `rota item rm --apply #42`; ARCHIVE entries stay as the historical record. 2. \"Apply + scrub ARCHIVE\" \u2014 `rota item rm --apply --scrub-archive #42`; also removes the ARCHIVE entry and its cross-references. 3. \"Cancel\" \u2014 print \"No changes.\" and stop."
+    },
+    {
+      "id": "capture-detailed-no-questions",
+      "kind": "scenario",
+      "ok": true,
+      "fails": [],
+      "cost": 0.025672800000000003,
+      "output": "CMD: grep -rn \"token\" internal/auth/login.go\nCMD: rota map query auth\nCMD: rota glossary read login\nCMD: rota backlog list\nCMD: rota milestone active --json\nSAY: Input already gives expected vs actual, trigger, frequency, component and error output, so no questions are needed. Classified as one bug, [P0] since it blocks sign-in with no workaround.\nCMD: ID=$(rota item create --json --kind bugs --title \"Login button throws TypeError on click in Safari 17\" --tag P0 --desc \"Clicking the login button in Safari 17 throws TypeError 'cannot read property token of undefined' (internal/auth/login.go) on every click, blocking sign-in entirely with no workaround. Expected: the user lands on the dashboard.\" | jq -r .data.id)\nSAY: Captured #101 [P0] Login button throws TypeError on click in Safari 17.\nSAY: Run `/rota-brainstorm #101` before `/rota-plan` to negotiate the design."
+    },
+    {
+      "id": "ship-on-base",
+      "kind": "scenario",
+      "ok": true,
+      "fails": [],
+      "cost": 0.022352000000000004,
+      "output": "CMD: rota git guard feature-branch\nSAY: You're on `main`, the base branch, so there is nothing to ship. `/rota-ship` needs a feature branch with at least one commit. Switch to your feature branch, or start work with `/rota-work`, then run `/rota-ship` again."
+    },
+    {
+      "id": "ship-review-fail",
+      "kind": "scenario",
+      "ok": true,
+      "fails": [],
+      "cost": 0.0228602,
+      "output": "SAY: The review verdict for `rota/queue-skip` is FAIL, and `rota verdict route` returned `stop`, so I'm not shipping. I haven't opened a PR, merged anything or changed any item status.\n\nSAY: Fix the review findings with `/rota-work` or `/rota-debug`, then run `/rota-ship` again. `rota ship pr` and `rota ship merge` would refuse a recorded FAIL anyway."
+    },
+    {
+      "id": "ship-round-worker",
+      "kind": "scenario",
+      "ok": true,
+      "fails": [],
+      "cost": 0.0271168,
+      "output": "CMD: rota git guard feature-branch\nCMD: rota status show --json nia/279-evals\nCMD: rota review scope --json nia/279-evals\nSAY: Round worker on the issue backend: skipping review (3), second opinion (3.5) and QA (3.75). Strategy is PR, so I'm going straight to Step 6a.\nCMD: rota ship body nia/279-evals\nSAY: Appending the Test plan (2-5 checkboxes from the touched files) and the closing line `Door: two-way. Blast radius: <surfaces from the diff>.` to the body, after the humanizing self-audit.\nCMD: printf '%s' \"$BODY\" | rota ship pr nia/279-evals --title \"<short title from strongest commit subject>\" --body-file - --items \"#279\"\nCMD: rota item state \"#279\" --to needs-review\nCMD: rota status rm nia/279-evals\nSAY: PR opened: <PR URL from rota ship pr>\nSAY: Title: <short title>\nSAY: Resolved: #279\nCMD: rota release pending --json"
+    },
+    {
+      "id": "ship-undo-confirm",
+      "kind": "scenario",
+      "ok": true,
+      "fails": [],
+      "cost": 0.0330312,
+      "output": "SAY: Preview of the rollback for the last cycle (`merge: queue skip`, a1b2c3d): reset `main` to 9f8e7d6 and restore item [B07] to BACKLOG. The tree is clean and there are no post-merge commits.\nASK: Apply this rollback plan? (header \"Apply\") Options: \"Apply (Recommended)\" \u2014 resets main with `git reset --hard` and restores [B07] to BACKLOG; unrecoverable past the reflog window. / \"Cancel\" \u2014 print \"No changes.\" and stop."
+    },
+    {
+      "id": "work-dirty-tree",
+      "kind": "scenario",
+      "ok": true,
+      "fails": [],
+      "cost": 0.024612000000000002,
+      "output": "CMD: rota git guard clean --context \"/rota-work\"\nSAY: Stopping: the working tree is dirty. `internal/menu/timer.go` has an uncommitted change that is yours, not a tool-generated sibling, so I won't sweep it into a commit or build on top of it. Commit it, or set it aside with a WIP commit, then re-run `/rota-work implement 42`."
+    },
+    {
+      "id": "work-no-red",
+      "kind": "scenario",
+      "ok": true,
+      "fails": [],
+      "cost": 0.0768278,
+      "output": "SAY: Dispatching a fix agent (standard tier) for Task 1, because the completion report has no RED run: no command and no failing line, and the skill treats that as a FAIL.\nSAY: Fix-agent brief. You are fixing Task 1 of 1 for item #42, where `rota queue pop` must skip claimed items. The working directory is /home/vo/dev/rota/.worktrees/nia. Your earlier change to internal/queue/pop.go and the new test TestPopSkipsClaimed are in the tree and match the brief. Do not change them, except as step 2 requires. What is missing is proof that the test fails without the fix. Steps: 1) Copy internal/queue/pop.go to a temp file outside the repo. 2) Restore the pre-change production code in internal/queue/pop.go, leaving the test file in place. Use `git show HEAD:internal/queue/pop.go > internal/queue/pop.go`. Do not use `git stash`, `git add` or `git commit`. 3) Run `go test ./internal/queue -run TestPopSkipsClaimed -count=1`. It must FAIL because the claimed item gets popped. If it passes, the test proves nothing, so fix the test until it fails against the old code. 4) Report the exact command and the failing output line. 5) Copy your temp file back over internal/queue/pop.go so that your fix is restored. 6) Re-run the same command and confirm it PASSES. Run only this targeted test, not the full gate. Confirm that you did not stage or commit and that `git diff` shows only your original pop.go and test changes. Report the RED command and failing line, the GREEN command and passing line, and any brief claim that turned out false.\nSAY: Fix agent dispatched. I'm stopping here until its report arrives. After that I'll verify the diff, then record the RED row with `rota proof add 42 --result FAIL`, then the PASS row, and commit Task 1 with the `Task: <key>/1` trailer."
+    },
+    {
+      "id": "work-issue-backend-finish",
+      "kind": "scenario",
+      "ok": true,
+      "fails": [],
+      "cost": 0.027392,
+      "output": "SAY: Issue backend forces the PR path, so `work.mergeStrategy = direct` is ignored here and nothing is merged. Step 9 is skipped because the issue closes when the PR merges.\nCMD: printf '%s' \"Skip already-claimed items when the queue picks the next item. Closes #42\" | rota ship pr rota/queue-skip-claimed --title \"Fix queue skip\" --body-file - --items 42\nCMD: rota item state 42 --to needs-review\nCMD: rota status rm rota/queue-skip-claimed\nCMD: rota config show qa.afterWork\nSAY: Done. Opened a PR for `rota/queue-skip-claimed` titled \"Fix queue skip\". #42 is now needs-review and its claim stays until the PR merges, which `/rota-review --queue` handles. After-work QA is skipped unless `qa.afterWork` is true and a QA strategy matches the touched files."
+    },
+    {
+      "id": "work-no-arg-commits",
+      "kind": "scenario",
+      "ok": true,
+      "fails": [],
+      "cost": 0.0271176,
+      "output": "CMD: rota status show\nCMD: rota git base\nCMD: rota status handoff rota/fix-badge\nASK: Stream `rota/fix-badge` has 3 commits past the base and no /rota-pause handoff note. How should I resolve it? Options: Ship via /rota-ship (Recommended); Resume the stream; Leave as-is.\nSAY: Taking the Recommended path for `rota/fix-badge`: shipping it via /rota-ship, which reads the task ledger and runs the merge or PR flow. After that I'll continue with orientation.\nCMD: rota backlog archive --days 5\nCMD: rota milestone active\nCMD: rota backlog list\nCMD: rota backlog stale"
+    }
+  ]
+}

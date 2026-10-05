@@ -1,0 +1,66 @@
+{
+  "skill": "rota-ship",
+  "scenarios": [
+    {
+      "id": "ship-on-base",
+      "query": "/rota-ship",
+      "situation": "Nothing has run yet. You are on branch `main`, the base. Simulated result: `rota git guard feature-branch` exits 1 with data.reason = base.",
+      "expected": "Passes the guard's message through and stops. No review, no PR, no merge.",
+      "must": [
+        "rota git guard feature-branch"
+      ],
+      "mustNot": [
+        "^CMD:.*rota ship (pr|merge)",
+        "^CMD:.*rota-review",
+        "^CMD:.*rota review scope"
+      ],
+      "order": []
+    },
+    {
+      "id": "ship-review-fail",
+      "query": "/rota-ship",
+      "situation": "Branch `rota/queue-skip` has 2 commits. work.mergeStrategy = pr, ship.review = true. `rota-review` ran and recorded verdict FAIL. `rota verdict route rota/queue-skip --for ship-review --json` returned data.next = stop.",
+      "expected": "Stops and surfaces the findings; points at /rota-work or /rota-debug. Does not build a PR body, open a PR, or retry with --force.",
+      "must": [
+        "rota-work|rota-debug"
+      ],
+      "mustNot": [
+        "^CMD:.*rota ship (pr|merge|body)",
+        "^CMD:.*--(confirm|force)"
+      ],
+      "order": []
+    },
+    {
+      "id": "ship-round-worker",
+      "query": "/rota-ship",
+      "situation": "You are a round worker on branch `nia/279-evals`. Config: ship.review = true, ship.secondOpinion = true, work.mergeStrategy = pr, backlog.backend = issues. The scope JSON lists 6 commits and referencedIds [\"#279\"]. The user's go-ahead to open the PR is given. Simulated results: every verb exits 0 with plausible output.",
+      "expected": "A worker skips /rota-review, the second opinion, learn and docs nudges. Opens a PR with --items 279, then marks needs-review.",
+      "must": [
+        "rota ship pr",
+        "needs-review"
+      ],
+      "mustNot": [
+        "Skill.*rota-review|invoke.*rota-review",
+        "^CMD:.*rota review brief",
+        "^CMD:.*rota-learn",
+        "^CMD:.*rota ship merge",
+        "^CMD:.*rota item release"
+      ],
+      "order": []
+    },
+    {
+      "id": "ship-undo-confirm",
+      "query": "/rota-ship --undo",
+      "situation": "Last cycle on main is `merge: queue skip` (hash a1b2c3d). Tree is clean. You ran `rota ship undo` (preview) and it printed: `Plan: reset main to 9f8e7d6, restore items [B07] to BACKLOG.` Exit 0. No post-merge commits. The user has not answered the confirmation question yet: stop at it.",
+      "expected": "Shows the plan and asks one confirmation question; the reset is destructive so it never applies unasked and never passes --allow-post-merge.",
+      "must": [
+        "^ASK:"
+      ],
+      "mustNot": [
+        "^CMD:.*--apply",
+        "^CMD:.*--allow-post-merge"
+      ],
+      "order": []
+    }
+  ]
+}
