@@ -1,5 +1,13 @@
 <div align="center">
 
+```text
+               __
+   _________  / /_____ _
+  / ___/ __ \/ __/ __ `/
+ / /  / /_/ / /_/ /_/ /
+/_/   \____/\__/\__,_/
+```
+
 # rota
 
 **Autonomous rounds for coding agents: an orchestrator hands issues to parallel workers, merges what passes the gate, and keeps going. Persistent knowledge, decisions and handoffs make that reliable.**
