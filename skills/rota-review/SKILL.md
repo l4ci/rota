@@ -29,14 +29,7 @@ Read `.rota/config.json`:
 
 ## Step 1 — Task List
 
-Track these phases with the host's task tool if it has one.
-
-1. *Read commits and items* — branch range walked, referenced item IDs collected (Step 2)
-2. *Resolve the spec* — what each referenced item promised (Step 3)
-3. *Capture context* — KNOWLEDGE / DECISIONS topics, diff, scaffolding pre-scan (Steps 4, 5, 6)
-4. *Review* — Spec and Standards reviewers in parallel (Step 7)
-5. *Verdict* — spec then quality recorded, two sections reported (Step 8)
-6. *Knowledge lifecycle* — register hits on consumed bullets via `rota knowledge hit` (Step 4)
+Track Steps 2-8 with the host's task tool if it has one.
 
 ## Step 2 — Scope the Review
 

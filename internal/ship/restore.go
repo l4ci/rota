@@ -3,12 +3,12 @@ package ship
 import (
 	"fmt"
 	"io"
-	"path/filepath"
 	"regexp"
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/pystr"
+	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/section"
 )
 
@@ -18,7 +18,7 @@ func CycleIDs(root string, hashes map[string]bool) []string {
 	var ids []string
 	seen := map[string]bool{}
 	for _, name := range []string{"BACKLOG.md", "ARCHIVE.md"} {
-		text, err := fsio.ReadText(filepath.Join(root, ".rota", name))
+		text, err := fsio.ReadText(rotatree.File(root, name))
 		if err != nil {
 			continue
 		}
@@ -34,7 +34,7 @@ func CycleIDs(root string, hashes map[string]bool) []string {
 
 // Reopener is the part of the backlog Restore writes through.
 type Reopener interface {
-	Name() string
+	Capabilities() backlog.Capabilities
 	Reopen(ref string) (changed bool, err error)
 }
 
@@ -44,7 +44,7 @@ type Reopener interface {
 func Restore(b Reopener, root string, ids []string, warn io.Writer) error {
 	for _, id := range ids {
 		changed := false
-		if b.Name() != "file" || !active(root, id) {
+		if b.Capabilities().Tracker || !active(root, id) {
 			var err error
 			if changed, err = b.Reopen(id); err != nil {
 				return err
@@ -62,7 +62,7 @@ func Restore(b Reopener, root string, ids []string, warn io.Writer) error {
 // keeps the no-op from leaving a .lock sidecar, which the old helper never
 // created and which dirties a tree that does not ignore it.
 func active(root, id string) bool {
-	content, err := fsio.ReadText(filepath.Join(root, ".rota", "BACKLOG.md"))
+	content, err := fsio.ReadText(rotatree.Backlog(root))
 	if err != nil {
 		return false
 	}

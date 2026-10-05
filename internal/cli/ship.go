@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -18,6 +17,7 @@ import (
 	"github.com/l4ci/rota/internal/proof"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/repos"
+	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/ship"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/verdict"
@@ -109,7 +109,7 @@ func shipVerdict(c *Ctx, dir, root string) ship.VerdictCheck {
 			repo = r.Name
 		}
 	}
-	cfg := config.Load(filepath.Join(root, ".rota", "config.json"))
+	cfg := config.Load(rotatree.Config(root))
 	return ship.VerdictCheck{
 		Git:      shipGitRunner{c, dir},
 		Store:    verdict.Load(root),
@@ -290,7 +290,7 @@ func shipPR(fs *flag.FlagSet) RunFunc {
 		}
 		ctx := c.Context()
 		root := shipRoot(dir)
-		cfg := config.Load(filepath.Join(root, ".rota", "config.json"))
+		cfg := config.Load(rotatree.Config(root))
 
 		cl, err := c.deps().forgeOrGitHub(ctx, cfg, "", dir)
 		if err != nil {

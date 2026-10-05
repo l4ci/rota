@@ -116,7 +116,7 @@ func backlogList(fs *flag.FlagSet) RunFunc {
 			progress = append(progress, o)
 		}
 		data.Set("inProgress", progress)
-		issues := be.Name() == "issues"
+		issues := be.Capabilities().Tracker
 		rowsOf := func(rs []backlog.ListRow, tagName string) []any {
 			out := []any{}
 			for _, r := range rs {
@@ -203,7 +203,7 @@ func backlogMilestones(fs *flag.FlagSet) RunFunc {
 		for _, a := range args {
 			wanted[a] = true
 		}
-		issues := be.Name() == "issues"
+		issues := be.Capabilities().Tracker
 		ms := backlog.MilestonesFor(rows, func(r backlog.Row) bool {
 			return wanted[r.ID] || (issues && r.IssueMatches(wanted))
 		})
@@ -398,7 +398,7 @@ func summaryVerb(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return backlogFail(err)
 		}
-		sm := backlog.BuildSummary(root, items, be.Name() == "file")
+		sm := backlog.BuildSummary(root, items, !be.Capabilities().Tracker)
 		lines := []string{fmt.Sprintf("Backlog: %s, %s, %s", plural(sm.Bugs, "bug"), plural(sm.Features, "feature"), plural(sm.Tasks, "task"))}
 		data := jsonObj("backlog", jsonObj("bugs", sm.Bugs, "features", sm.Features, "tasks", sm.Tasks))
 

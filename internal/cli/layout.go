@@ -12,13 +12,14 @@ import (
 	"github.com/l4ci/rota/internal/layout"
 	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/repos"
+	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/worker"
 )
 
 // `rota layout` (#180): arrange a round's herdr panes as one split view
 // (split) or as tabs (tabs); bare, report which each project is in. The grid
 // and the moves are internal/layout; this file finds the projects and the
-// panes. Deps.LayoutHost is the seam tests replace: a real run moves the
+// panes. Deps.Host is the seam tests replace: a real run moves the
 // panes of the herdr it is inside.
 
 func layoutCommand() *Command {
@@ -28,9 +29,9 @@ func layoutCommand() *Command {
 	}}
 }
 
-// defaultLayoutHost is herdr, when it is installed.
-func defaultLayoutHost() (host.Layouter, error) {
-	h := host.New("herdr", host.Deps{})
+// layoutHost is herdr, when it is installed.
+func layoutHost(d *Deps) (host.Layouter, error) {
+	h := d.Host("herdr")
 	if err := h.Require(); err != nil {
 		return nil, err
 	}
@@ -66,7 +67,7 @@ func runLayout(c *Ctx, mode, project string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	h, herr := c.deps().LayoutHost()
+	h, herr := layoutHost(c.deps())
 	ctx := c.Context()
 	var outs []layoutOut
 	var panes []host.LayoutPane
@@ -166,7 +167,7 @@ func layoutRoots(c *Ctx, project string) ([]string, error) {
 		if err != nil {
 			return nil, Resolution("%v", err)
 		}
-		if st, err := os.Stat(filepath.Join(abs, ".rota")); err != nil || !st.IsDir() {
+		if !rotatree.Exists(abs) {
 			return nil, Resolution("%s is not a rota project (no .rota/)", project)
 		}
 		return []string{repos.Realpath(abs)}, nil

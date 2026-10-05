@@ -27,6 +27,7 @@ import (
 	"github.com/l4ci/rota/internal/initproj"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/repos"
+	"github.com/l4ci/rota/internal/section"
 	"github.com/l4ci/rota/internal/skills"
 )
 
@@ -144,7 +145,6 @@ var (
 	blockMarkerRe  = regexp.MustCompile(`<!-- hv-([\w-]+)-(start|end) -->`)
 	legacyMarkerRe = regexp.MustCompile(`<!-- hv:([\w-]+):(start|end) -->`)
 	itemMarkerRe   = regexp.MustCompile(`<!-- hv:([a-z][\w-]*)\b`)
-	rotaBlockRe    = regexp.MustCompile(`(?s)<!-- rota-([\w-]+)-start -->.*?<!-- rota-([\w-]+)-end -->`)
 	blockHeadingRe = regexp.MustCompile(`(?m)^## hv(?:-skills)?[ \t]*$`)
 	detailLinkRe   = regexp.MustCompile("(Detail: `)\\.hv/")
 	mdLinkRe       = regexp.MustCompile(`\]\(((?:\./)?)\.hv/`)
@@ -181,7 +181,7 @@ func RewriteMarkers(s string) (string, int) {
 // managed blocks only.
 func rewriteBlockHeadings(s string) (string, int) {
 	n := 0
-	out := rotaBlockRe.ReplaceAllStringFunc(s, func(b string) string {
+	out := section.AnyBlockRe.ReplaceAllStringFunc(s, func(b string) string {
 		if c := len(blockHeadingRe.FindAllString(b, -1)); c > 0 {
 			n += c
 			return blockHeadingRe.ReplaceAllString(b, "## rota")
@@ -504,7 +504,7 @@ func planProject(dir, scope, state string, want string) (*hvPlan, error) {
 			p.blocks = true
 			add(rel, raw, text)
 		}
-		if c := lingering(rotaBlockRe.ReplaceAllString(text, "")); c > 0 {
+		if c := lingering(section.AnyBlockRe.ReplaceAllString(text, "")); c > 0 {
 			p.manual = append(p.manual, fmt.Sprintf("%s: %d line(s) outside the managed blocks still name .hv/ or a /hv-* skill; review by hand", filepath.Join(scopeRel(scope), rel), c))
 		}
 	}

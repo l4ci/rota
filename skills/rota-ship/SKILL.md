@@ -39,16 +39,6 @@ rota git guard feature-branch
 
 Exit 1 (`data.reason` `base` or `detached`): pass the message through and stop.
 
-Track these phases with the host's task tool if it has one.
-
-1. *Branch check* (Step 1)
-2. *Extract commits & items* (Step 2)
-3. *Review* — `/rota-review` when `ship.review: true`, never for a round worker (Step 3)
-4. *Second-opinion gate* — when `ship.secondOpinion: true` (Step 3.5)
-5. *QA gate* — `/rota-qa run` when `ship.qa: true` (Step 3.75)
-6. *Merge or PR* (Steps 4–8)
-7. *Report & nudges* (Steps 9–10)
-
 ## Step 2 — Scope the Work
 
 ```bash
