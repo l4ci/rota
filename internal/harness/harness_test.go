@@ -114,6 +114,7 @@ func TestCodexCheckLaunch(t *testing.T) {
 
 type scripted struct {
 	version  string
+	help     string
 	loggedIn bool
 	current  bool
 	runErr   map[string]error
@@ -132,6 +133,8 @@ func (s *scripted) probe() Probe {
 			switch key {
 			case "codex --version":
 				return Result{Stdout: s.version}, nil
+			case "codex --help":
+				return Result{Stdout: s.help}, nil
 			case "codex login status":
 				if !s.loggedIn {
 					return Result{ExitCode: 1}, nil
@@ -153,9 +156,10 @@ func TestCheckCodexVersion(t *testing.T) {
 		want Code
 	}{
 		{"codex-cli 0.159.2\n", ""},
-		{"codex-cli 0.158.0\n", VersionOutOfRange},
-		{"codex-cli 0.160.0\n", VersionOutOfRange},
-		{"hello", VersionUnreadable},
+		{"codex-cli 0.158.0\n", ""},
+		{"codex-cli 0.160.0\n", ""},
+		{"codex-cli 9.9.9\n", ""},
+		{"hello", ""},
 	} {
 		s := &scripted{version: c.out}
 		_, f := CheckCodexVersion(context.Background(), s.probe(), "/bin/codex", "/h")
@@ -167,6 +171,34 @@ func TestCheckCodexVersion(t *testing.T) {
 	s := &scripted{runErr: map[string]error{"codex --version": errors.New("boom")}}
 	if _, f := CheckCodexVersion(context.Background(), s.probe(), "/bin/codex", ""); f == nil || f.Code != VersionUnreadable {
 		t.Errorf("a version that cannot run is unreadable: %+v", f)
+	}
+}
+
+func TestCheckCodexFlags(t *testing.T) {
+	run := func(s *scripted, flags ...string) string {
+		var names []string
+		for _, f := range CheckCodexFlags(context.Background(), s.probe(), "/bin/codex", "/h", flags) {
+			if f.Code != FlagMissing {
+				t.Errorf("code = %q", f.Code)
+			}
+			names = append(names, f.Flag)
+		}
+		return strings.Join(names, ",")
+	}
+	s := &scripted{help: "  --a\n  --b <X>\n"}
+	if got := run(s, "--a", "--b"); got != "" {
+		t.Errorf("listed flags: missing %q", got)
+	}
+	if got := run(s, "--a", "--c", "--d"); got != "--c,--d" {
+		t.Errorf("missing flags: %q", got)
+	}
+	n := len(s.calls)
+	if got := run(s); got != "" || len(s.calls) != n {
+		t.Errorf("no flags needs no probe: %q, %d calls", got, len(s.calls)-n)
+	}
+	e := &scripted{runErr: map[string]error{"codex --help": errors.New("boom")}}
+	if got := run(e, "--a"); got != "--a" {
+		t.Errorf("help that cannot run lists nothing: %q", got)
 	}
 }
 
