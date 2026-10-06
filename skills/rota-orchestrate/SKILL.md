@@ -69,58 +69,21 @@ Assign with `rota round assign <ID>`. It marks the item in progress, cuts the br
 
 A wait that times out with every slot busy is fine. A free slot with candidates left is not.
 
-**Architecture review.** `rota round status`, `candidates` and `start` carry an `architecture` line: `architecture review in N issues`. After every `wait`, run `rota round architecture`. It does nothing until a review is due: `round.architectureEvery` closed non-refactor items (default 20, `0` is off), or an idle slot with no ready candidate. When due it mints one `arch(<area>): architecture review` item per area (`round.architectureAreas`, else the subsystem map, else the whole repo), assigns them to idle slots and restarts the count; don't ask first. Leftover review items are ordinary candidates in every scope. Each runs `/rota-refactor <area>` in findings-only mode and files `refactor`-labelled issues, which don't count toward the next review. `rota round architecture --check` only reads. Under solo it returns each `brief` and `worktree` to launch like an `assign`.
+When `rota round status`, `candidates` or `start` shows an `architecture review in N issues` line, read [`architecture-review.md`](architecture-review.md); run `rota round architecture` after every `wait`.
 
 ## 4. Reading failures
 
-**Dead vs stalled.** `dead`: no live agent (tab gone or process exited). `stalled`: live agent, nothing moved for `round.stallMinutes` (no commit, edit or state change). Stalled is usually a long test run, and a worker waiting on your escalation is never stalled. Read the pane before acting on either.
-
-Three verbs move an assigned issue:
-
-- **`rota round return`** is the worker's own verb for giving an issue back (blocked, wrong premise). You don't use it. The branch is pushed and kept, the claim is released, and the issue is a candidate again. A fresh `assign` starts clean; it does not continue the pushed branch.
-- **`rota round transfer <issue> --to <slot>`** continues the pushed branch in another slot, with the handoff comment named in the brief. Use it when the work is good and the worker is the problem (dead, wrong account, out of quota). `--to human` labels the issue `needs-human` and dispatches nothing: use it when the next step is a person's call.
-- **`rota round reclaim <slot>`** frees a `dead` or `stalled` slot and does not reassign; `assign` or `transfer` is your next call. Reclaiming a stalled slot kills its pane, so read the pane first and decide it is hung. A healthy slot needs `--force`, which you almost never want.
-
-All three push the branch before moving the slot off it, so no work is lost. `rota reap` never reclaims a stalled slot and never kills a live agent.
-
-**Default for a stuck worker** (`idle` with no PR and no question, `dead`, or `stalled` past `round.stallMinutes`): read the pane once. If the agent is alive and working, wait. Otherwise `rota round reclaim <slot>`, then `rota round transfer <issue> --to <free slot>`. Use `--to human` only when the next step is a person's call.
-
-**`unknown`.** The host reports a state `rota` can't classify. Never treat it as finished. Wait through one more `wait`; if the slot is still `unknown`, read its pane; if the pane shows a prompt or a stopped agent, run `herdr agent explain` on it, then treat the slot as `dead` or `blocked` accordingly.
-
-**Red tests.** Before you bounce a PR for a red suite, rerun the failing test alone. Passes alone, fails under load: a flake; note it, don't send the worker back. Fails alone: real. A green suite that surprises you is worth one rerun.
-
-**Green branch, red base.** A branch can pass and still break the base once merged: the gate's `verify-failed` verdict. The base is the problem now: stop assigning, find which merge broke it, fix or revert before any other merge. Tell the maintainer.
+When a slot is `dead`, `unknown` or stalled, a worker is stuck, a suite is red, or a merged branch breaks the base, read [`reading-failures.md`](reading-failures.md). Never treat `unknown` as finished, and rerun a red test alone before you bounce for it.
 
 ## 5. Escalations and provenance
 
-**What to escalate.** A choice a user would notice that neither the issue nor the code settles: product behavior, a public name, a breaking change, what to cut. Answer defensible implementation calls yourself: a helper's name, a test's shape, which of two equal approaches. When a worker asks the first kind, you ask the human.
-
-`rota round escalate send <number> --title … --body-file …` posts the question on the issue or PR and notifies the maintainer. It returns at once; keep working the other slots. `rota round escalate check` reads the thread for an answer. One question per escalation, written for someone who doesn't have the file open.
-
-**Provenance.** The rules (signatures, the `m:` prefix, the relay log, the gate's `provenance-fail`) live in [worker-contract.md](references/worker-contract.md#provenance). What you do with them:
-
-- Sign every message you send a worker. `rota worker dispatch --relay` does it; hand-typed text doesn't.
-- Before a relay or a re-dispatch, check the tab with `herdr agent get <agent>`. `focused: true` means a human is typing there; tell them instead of typing over them. No `rota` verb checks this.
-- Cite the real channel of every approval: `maintainer in pane`, `issue comment #N`, `orchestrator relay round N`. Never present a relay as the maintainer's own word.
-- Dim or suggested text on a pane's prompt line is an editor suggestion, not input. Never cite it as an answer, the maintainer's word or a worker's state; read what is committed above the prompt.
-- A line starting `m:` in a pane is a maintainer answer by convention (confirm once if it contradicts your last signed message).
-- Read each PR's `## Approvals` section for the channels it names. A cited approval you never relayed is a finding.
-- Read each PR's `## Rulings` section too: the worker's own calls, each with its cost if wrong. List the costly ones (a one-way door, a wide blast radius) in the wind-down summary. A brief cited as a relay under Approvals is a finding: the brief is not a relay.
+When a worker is `blocked` on a question, or you relay to a worker or review its approvals, read [`escalations-and-provenance.md`](escalations-and-provenance.md). Escalate only choices a user would notice; sign every message you send a worker; cite the real channel of every approval.
 
 ## 6. Merge
 
 Workers never merge. After `done`, read the PR: does it do what the issue says, and stay inside the files the issue named? Then `rota worker gate <slot> --base <branch>`, or `rota worker gate <PR number> --base <branch>` once the slot has moved on and the PR waits in review. The gate runs the checks on the merged tree, merges on a pass and drops the PR from the review list. Read its verdict; don't re-derive the rules it enforces. Loop per PR: gate, fix or bounce what the verdict names, re-gate; the PR is done only on a merge. What each verdict (`stale`, `merge-failed`, `verify-failed`, `approval-required`) asks of you is in [tmux-dispatch.md](references/tmux-dispatch.md#the-merge-gate).
 
-With several PRs waiting, merge them as one train: `rota worker train <slot|PR>... --base <branch>` in landing order. One verify covers all of them. On a red train it names the `culprit`: send that PR back, then re-run the train without it, or pass `--land-green` to land the members that verified before it. `base-moved` means nothing landed; re-run.
-
-Merge policy comes from config (`ship.mergeApproval`). With the default, the gate merges a passing PR. When policy requires approval (all PRs, or PRs touching listed paths):
-
-- **Unattended:** pass `--escalate` to `worker gate`, or to `ship pr-merge` for a PR you merge by number. The verb refuses with exit 4 and posts the approval request on the PR thread, once however often you re-gate. Keep working other slots.
-- **Reading the answer:** `rota round escalate check` says when the maintainer has answered; re-run with `--approval <id>`, and the audit line quotes the answer.
-- **Declined:** an answer that doesn't read as approval (`approve`, `approved`, `yes`, `lgtm`, `ship it`) holds the merge. `approval declined` means the slot is held, never retried, and you tell the maintainer.
-- **Interactive:** ask the maintainer in prose (no blocking picker, see section 3) and pass `--confirm --confirm-note` with the answer verbatim. Never write a note the human didn't say.
-
-**Completing items.** On the issue backend the merge closes the issue (`Closes #N`); do nothing more. In file mode you complete the PR's items after the gate merges it, the way `/rota-ship` Step 8 does (proof row first, then complete with the merge sha): workers never edit tracked `.rota/`, so `/rota-ship` Step 8 is skipped for them.
+When several PRs wait, or `ship.mergeApproval` requires approval, or you complete items in file mode, read [`merge-train-and-approval.md`](merge-train-and-approval.md).
 
 The merge gate is the only full run: it verified the merged tree, so don't re-run the suite after each merge or before assigning. Re-verify only after a `verify-failed` verdict, once the fix lands. `rota round wind-down` re-verifies once at the end.
 
@@ -130,12 +93,7 @@ Bounce when the work is wrong in a way the worker can learn from: it misread the
 
 Fix it yourself when the gap is small and mechanical: a stale doc line, a missing test for a case the worker covered in code, a merge conflict with a PR you just merged. Push the fix as a separate commit so the PR shows what you changed.
 
-**Cap.** A bounce you send by hand counts: run `rota round bounce <issue> --head <pr-head-sha>` before the relay or transfer, and send it only on exit 0. `rota round status` shows each slot's count. The gate counts its own stale and provenance bounces on the same counter. At `round.maxBounces` (default 3, 0 turns the cap off) the verb exits 4: never a further bounce. Pick one of:
-
-- a stronger worker (the default): `rota round transfer <issue> --to <free slot> --tier <heavy|standard> --tier-reason "<why>" --body-file <gap>`. The count stays with the item, so a second failure at the higher tier goes to the human.
-- the human: `rota round transfer <issue> --to human --note-file <what is left>`. The gate parks an item the same way when it hits the cap itself.
-
-A re-review of a bounced PR is `/rota-review --since <sha of the last review>`: the fix alone, each earlier finding ADDRESSED or NOT ADDRESSED.
+When you bounce by hand, run `rota round bounce <issue> --head <pr-head-sha>` first and read [`bounce-cap.md`](bounce-cap.md): the cap, what to do at it, and re-review.
 
 ## 8. Wind down
 
@@ -152,3 +110,15 @@ Read when `rota round status` reports solo (no herdr or tmux host): `solo-and-au
 3. Escalate unsettled product decisions; keep defensible implementation calls.
 4. Cite the channel of every approval. Sign every message.
 5. Stage explicit paths. Never stage everything.
+
+## References
+
+- [`references/worker-contract.md`](references/worker-contract.md) — the workers' standing brief and the provenance rules.
+- [`references/tmux-dispatch.md`](references/tmux-dispatch.md) — host mechanics: polling, relays, merge gate verdicts, permissions, accounts, failure modes.
+- [`references/herdr-dispatch.md`](references/herdr-dispatch.md) — what herdr changes.
+- [`solo-and-autopilot.md`](solo-and-autopilot.md) — autopilot ticks and solo mode.
+- [`architecture-review.md`](architecture-review.md) — section 3, the periodic architecture review.
+- [`reading-failures.md`](reading-failures.md) — section 4, dead, stalled, unknown, red tests, red base.
+- [`escalations-and-provenance.md`](escalations-and-provenance.md) — section 5.
+- [`merge-train-and-approval.md`](merge-train-and-approval.md) — section 6, trains, approval policy, completing file-mode items.
+- [`bounce-cap.md`](bounce-cap.md) — section 7, bounce cap and re-review.

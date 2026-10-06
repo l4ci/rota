@@ -44,16 +44,7 @@ Skip Steps 2 to 7 in Remove Mode.
 
 ## Step 2.5 — Audit Against Code State (milestone-spec capture only)
 
-Fires only when the input captures *from a milestone spec*: it names an `M<NN>` tag or a `milestones/M<NN>.md` path. Otherwise skip.
-
-Milestone specs drift behind code; run `rota item shipped "<title 1>" "<title 2>" …` with the parsed titles. Exit 0 means ship evidence was found (stdout lists hits per title, `--json` has `data.titles[].hits`); exit 1 means none, continue silently.
-
-On exit 0, print the report verbatim, then `AskUserQuestion`, up to 4 flagged titles per call. Header `"Item N"`. Question: *"`<short-title>` looks shipped — `<hash>` `<subject>`. What now?"* Options:
-  1. *"Skip this item (Recommended)"* — drop it from this run.
-  2. *"Capture anyway"* — the user reviewed the matches and the item is genuinely distinct.
-  3. *"Stop the whole capture"* — print *"Capture aborted — reconcile the milestone spec before retrying."* and write nothing.
-
-Filtered titles never reach the backlog.
+When the input captures from a milestone spec, read [`milestone-spec-audit.md`](milestone-spec-audit.md) and run it: it drops items already shipped.
 
 ## Step 3 — Gather Context
 
@@ -85,9 +76,7 @@ Tasks get no priority or size tag.
 
 ## Step 4.5 — Tag Active Milestone (when applicable)
 
-Tag only when the user named a milestone (`--milestone M01`, *"for M02"*), or when exactly one milestone is active (`rota milestone active --json`, `data.ids`) and the items plainly belong to it. In that case ask one question, `AskUserQuestion`, single-select: *"Tag these with `<MID> — <title>`?"* — *"Yes — tag all"* / *"No — leave untagged (Recommended)"*. With no active milestone, or several and none named, skip and leave untagged. An ambiguous reply means untagged.
-
-Carry the choice (`"M01"` or `"M01, M03"`) as `--milestone` into Step 6. Omit it when untagged.
+When the user named a milestone (`--milestone M01`, *"for M02"*) or exactly one milestone is active (`rota milestone active --json`), read [`milestone-tagging.md`](milestone-tagging.md) and run it: it yields the `--milestone` value for Step 6. Otherwise skip and leave untagged.
 
 ## Step 4.6 — Tag Sub-Repo (when umbrella mode is on)
 
@@ -99,7 +88,7 @@ When input exceeds about 3 sentences (stack traces, logs, specs, long repro), us
 
 ## Step 6 — Create All Items
 
-**Consult the Glossary.** Scan the `## Glossary` topic of `.rota/KNOWLEDGE.md` (`rota glossary read <term>`). If the user's phrasing maps to a canonical term or alias, write the canonical name silently (no question) and add one line to the report: `Used canonical term "<term>" for "<phrasing>".` Spend a question only when one phrase maps to two glossary entries; ask which, with the likelier entry `(Recommended)`, and count it against the Step 3 cap. If the capture introduces a new domain concept the user names, suggest `/rota-learn --term <name>` afterwards; never auto-invoke.
+When the user's phrasing may map to a canonical glossary term (`## Glossary` in `.rota/KNOWLEDGE.md`), read [`glossary-terms.md`](glossary-terms.md) before creating.
 
 Create each item in one command; it prints the new ID:
 
@@ -144,6 +133,11 @@ Read [`remove-mode.md`](remove-mode.md) when the first arg is `--remove` and fol
 
 | Reference | Purpose |
 |-----------|---------|
+| [`milestone-spec-audit.md`](milestone-spec-audit.md) | Step 2.5: drop items already shipped when capturing from a milestone spec. |
+| [`milestone-tagging.md`](milestone-tagging.md) | Step 4.5: tag the active or named milestone. |
+| [`umbrella-tagging.md`](umbrella-tagging.md) | Step 4.6: pick sub-repos for `--repos`. |
+| [`glossary-terms.md`](glossary-terms.md) | Step 6: write canonical glossary terms. |
+| [`remove-mode.md`](remove-mode.md) | `--remove` flow, Steps R1 to R5. |
 | [`authoring-conventions.md`](references/authoring-conventions.md) | Destructive and manual gates. |
 | [`dependent-items.md`](references/dependent-items.md) | When to declare `--depends-on` and in what order to create. |
 | [`detail-files.md`](references/detail-files.md) | Detail-file template for bulky input. |
