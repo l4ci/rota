@@ -58,6 +58,22 @@ func TestConfigEditListsEveryKeyWithValueAndSource(t *testing.T) {
 	}
 }
 
+func TestConfigEditShowsMergedDefault(t *testing.T) {
+	root := trackerProject(t, `{"ship":{"qa":true}}`)
+	if err := os.WriteFile(filepath.Join(root, ".rota", "config.local.json"), []byte(`{"ship":{"qa":null}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	code, _, errs := editRun(t, root, true, "q\n")
+	if code != 0 || !strings.Contains(errs, "ship.qa = false  (source: default)") {
+		t.Fatalf("edit: exit %d: %s", code, errs)
+	}
+	code, env, _ := rotaRun(t, "--json", "-C", root, "config", "show", "ship.qa")
+	rows, _ := get(dataOf(env), "entries").([]any)
+	if code != 0 || len(rows) != 1 || get(rows[0], "value") != false || get(rows[0], "source") != "default" {
+		t.Fatalf("show: exit %d: %v", code, env)
+	}
+}
+
 func TestConfigEditTogglesBoolsPicksEnumsAndValidatesFreeValues(t *testing.T) {
 	root := trackerProject(t, `{"ship":{"review":true}}`+"\n")
 	typed := strings.Join([]string{
