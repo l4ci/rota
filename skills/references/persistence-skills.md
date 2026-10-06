@@ -10,7 +10,7 @@ The two skills share one **contract** but different **gate strengths**. New pers
 
 Every persistence skill (and `/rota-learn`'s `--term` mode) follows:
 
-1. **Lists its phases** at the start (Step 1), tracked with the host's task tool if it has one. Phase count and names are skill-specific.
+1. **Opens with a step checklist** in the format of `authoring-conventions.md`, one line per step heading. Step count and names are skill-specific.
 2. **Identifies a candidate** (learning / term / decision) from arguments, conversation context, or a source artifact. The shape of this step is intentionally skill-local.
 3. **Classifies into a section heading** — by topic for both `/rota-learn` topic bullets and `/rota-decide`; by term name for `/rota-learn --term` (the term entry lands under the fixed `## Glossary` topic). Topic-keyed branches share the alphabetical-with-pinning rule below.
 4. **Merges via a writer verb** that owns insertion, deduplication, and the date stamp:

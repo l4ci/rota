@@ -54,6 +54,14 @@ Use these terms in every finding (not "component", "service", "API", "boundary")
 
 Orient → Explore → Rank → File → *(opt-in)* Fix
 
+Copy this checklist and track your progress:
+```
+- [ ] Step 1 — Orient
+- [ ] Step 2 — Explore
+- [ ] Step 3 — Rank
+- [ ] Step 4 — File
+```
+
 ### Step 1 — Orient
 
 Pull what the project already decided that touches the area:

@@ -12,6 +12,14 @@ Two modes:
 - **Start mode** — open a new spike with a question
 - **Finish mode** — extract findings from a spike branch into the spike file
 
+Copy this checklist and track your progress (start mode; Step 1 routes to either mode):
+```
+- [ ] Step 1 — Mode
+- [ ] Step 2 (Start mode) — Sharpen the Question and Resolve the Repo
+- [ ] Step 3 (Start mode) — Branch Without Asking
+- [ ] Step 4 (Start mode) — Create the Spike
+```
+
 ## Step 1 — Mode
 
 Determine the mode silently:
@@ -71,6 +79,13 @@ Hack freely on the branch. When done, return to main and run:
 ```
 
 Nothing further here; the user drives the experiment.
+
+Copy this checklist and track your progress (finish mode):
+```
+- [ ] Step 5 (Finish mode) — Read the Spike Branch
+- [ ] Step 6 (Finish mode) — Write the Findings
+- [ ] Step 7 (Finish mode) — Optional Follow-Up
+```
 
 ## Step 5 (Finish mode) — Read the Spike Branch
 

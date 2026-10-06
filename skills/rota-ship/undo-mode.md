@@ -2,7 +2,7 @@
 
 Inverse of a `/rota-work` cycle: `rota ship undo` resets the most recent `merge: …` commit on the base branch and restores the resolved items to BACKLOG. Previews unless given `--apply`; refuses PR-mode cycles (the merge happened upstream), post-merge commits without `--allow-post-merge`, a dirty tree, a non-base branch and a non-`merge: ` subject. A different cycle: `rota ship undo --cycle <hash>`, run by the user directly.
 
-Phases: *Preview*, *Confirm*, *Apply*, *Report*. Track them with the host's task tool if it has one.
+Phases: *Preview*, *Confirm*, *Apply*, *Report*.
 
 **U1 — Preview.** `rota ship undo`, then show the plan verbatim. Exit 3: no cycle, say so and stop. Exit 4: surface the verb's message verbatim and stop. A dirty tree gets *"Working tree is dirty — commit, stash, or discard before /rota-ship --undo can run."* If post-merge commits block it, name `--allow-post-merge` (discards them) but never pass it unasked.
 

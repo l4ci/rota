@@ -7,13 +7,17 @@ description: Use on "decide on X", "we're committing to X", "lock in the boundar
 
 Distill an active commitment from the session into `.rota/DECISIONS.md`, by topic, so future work treats it as a hard constraint. Decisions are *active* (boundaries with forbids/permits); `/rota-learn` captures *passive* knowledge (gotchas, conventions).
 
-**Task list.** Track these phases with the host's task tool if it has one:
-
-1. *Mode* — default vs `--from-learning` vs `--from-spike` resolved (Step 1)
-2. *Identify candidate* — boundary articulated; three-gate check passes (Step 2)
-3. *Compose four parts* — rule, *Why*, **Forbids**, **Permits** drafted (Step 3)
-4. *Confirmation gate* — manual user approval (never auto-invoked, Step 5)
-5. *Merge & index update* — append to `DECISIONS.md`, regenerate the decisions index (Steps 6–7)
+Copy this checklist and track your progress:
+```
+- [ ] Step 1 — Mode (default vs source-prefill)
+- [ ] Step 2 — Identify the Candidate Decision
+- [ ] Step 3 — Compose the Four Parts
+- [ ] Step 4 — Classify by Topic
+- [ ] Step 5 — Confirmation Gate
+- [ ] Step 6 — Merge into DECISIONS.md
+- [ ] Step 7 — Update the Decisions Index
+- [ ] Step 8 — Confirm
+```
 
 ## Step 1 — Mode (default vs source-prefill)
 
