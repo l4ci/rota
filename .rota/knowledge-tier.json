@@ -415,6 +415,31 @@
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-05"
+    },
+    "Rounds: Orchestration::Read held commits before reaping a round": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-06"
+    },
+    "Rounds: Orchestration::Worker workarounds are bug reproductions": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-06"
+    },
+    "Rounds: Orchestration::Gating a PR outside a round": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-06"
+    },
+    "Rounds: Orchestration::No harness version pins; Codex uses the default account": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-06"
+    },
+    "Architecture: Skill authoring::Shorten skills structurally, not by rewording": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-06"
     }
   }
 }
