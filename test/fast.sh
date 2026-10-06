@@ -11,7 +11,7 @@
 # test/runner.sh, test/lib.sh) runs the "infra" check: bash -n on the shell
 # files, py_compile on the python ones, and test/runner_leak_test.py.
 # FAST_DRY_RUN=1 prints the selected checks as "plan: <check>" and runs nothing;
-# test/sections/117_fast_mapping.sh asserts the mapping through it.
+# test/sections/120_fast_mapping.sh asserts the mapping through it.
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
