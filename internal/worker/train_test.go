@@ -239,3 +239,52 @@ func TestTrainReportsFailedRecovery(t *testing.T) {
 		}
 	}
 }
+
+// e2eWorld is trainWorld with a test.e2e tier next to test.full.
+func e2eWorld(t *testing.T, full, e2e string, branches ...string) *world {
+	t.Helper()
+	w := trainWorld(t, full, branches...)
+	w.setConfig(fmt.Sprintf(`{"test":{"full":[%q],"e2e":[%q]}}`, full, e2e))
+	return w
+}
+
+func TestTrainRunsE2EAfterFull(t *testing.T) {
+	w := e2eWorld(t, "true", "test -f b1.txt && test -f b2.txt", "b1", "b2")
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}})
+	if err != nil || res.Verdict != GatePass || strings.Join(res.Landed, ",") != "b1,b2" {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if len(res.Verified) != 1 || len(res.E2EVerified) != 1 {
+		t.Errorf("full %v, e2e %v", res.Verified, res.E2EVerified)
+	}
+}
+
+func TestTrainBisectsE2E(t *testing.T) {
+	w := e2eWorld(t, "true", "test ! -f b2.txt", "b1", "b2", "b3")
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3"}})
+	if err != nil || res.Verdict != GateVerifyFailed || res.Culprit != "b2" || len(res.Landed) != 0 {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if !strings.Contains(res.Err, "test.e2e") || !strings.Contains(res.Err, "the first 1 member(s) pass") {
+		t.Errorf("message: %s", res.Err)
+	}
+	if w.onMain("b1.txt") {
+		t.Error("nothing lands on a red e2e")
+	}
+}
+
+func TestTrainE2ELandGreen(t *testing.T) {
+	w := e2eWorld(t, "true", "test ! -f b3.txt", "b1", "b2", "b3")
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3"}, LandGreen: true})
+	if err != nil || res.Culprit != "b3" || strings.Join(res.Landed, ",") != "b1,b2" {
+		t.Fatalf("%+v %v", res, err)
+	}
+}
+
+func TestTrainSkipsE2EWhenFullFails(t *testing.T) {
+	w := e2eWorld(t, "test ! -f b2.txt", "exit 1", "b1", "b2")
+	res, _ := w.train(TrainOpts{Targets: []string{"b1", "b2"}})
+	if res.Culprit != "b2" || strings.Contains(res.Err, "test.e2e") || len(res.E2EVerified) != 0 {
+		t.Fatalf("e2e must not run on a red full: %+v", res)
+	}
+}
