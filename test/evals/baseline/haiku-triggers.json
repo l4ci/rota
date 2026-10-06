@@ -1,0 +1,326 @@
+{
+  "model": "haiku",
+  "mode": "triggers",
+  "results": [
+    {
+      "id": "rota-brainstorm-loads",
+      "kind": "trigger",
+      "expect": "load",
+      "got": "rota-brainstorm",
+      "better": null,
+      "ok": true,
+      "cost": 0.0123194,
+      "fails": []
+    },
+    {
+      "id": "rota-brainstorm-skips",
+      "kind": "trigger",
+      "expect": "skip",
+      "got": "rota-plan",
+      "better": "rota-plan",
+      "ok": true,
+      "cost": 0.15060700000000002,
+      "fails": []
+    },
+    {
+      "id": "rota-capture-loads",
+      "kind": "trigger",
+      "expect": "load",
+      "got": "rota-capture",
+      "better": null,
+      "ok": true,
+      "cost": 0.0124794,
+      "fails": []
+    },
+    {
+      "id": "rota-capture-skips",
+      "kind": "trigger",
+      "expect": "skip",
+      "got": "rota-work",
+      "better": "rota-work",
+      "ok": true,
+      "cost": 0.091249,
+      "fails": []
+    },
+    {
+      "id": "rota-debug-loads",
+      "kind": "trigger",
+      "expect": "load",
+      "got": "rota-debug",
+      "better": null,
+      "ok": true,
+      "cost": 0.0125294,
+      "fails": []
+    },
+    {
+      "id": "rota-debug-skips",
+      "kind": "trigger",
+      "expect": "skip",
+      "got": "rota-work",
+      "better": "rota-work",
+      "ok": true,
+      "cost": 0.0123174,
+      "fails": []
+    },
+    {
+      "id": "rota-decide-loads",
+      "kind": "trigger",
+      "expect": "load",
+      "got": "rota-decide",
+      "better": null,
+      "ok": true,
+      "cost": 0.0123664,
+      "fails": []
+    },
+    {
+      "id": "rota-decide-skips",
+      "kind": "trigger",
+      "expect": "skip",
+      "got": "rota-learn",
+      "better": "rota-learn",
+      "ok": true,
+      "cost": 0.0123174,
+      "fails": []
+    },
+    {
+      "id": "rota-learn-loads",
+      "kind": "trigger",
+      "expect": "load",
+      "got": "rota-learn",
+      "better": null,
+      "ok": true,
+      "cost": 0.0126454,
+      "fails": []
+    },
+    {
+      "id": "rota-learn-skips",
+      "kind": "trigger",
+      "expect": "skip",
+      "got": "rota-decide",
+      "better": "rota-decide",
+      "ok": true,
+      "cost": 0.012465400000000001,
+      "fails": []
+    },
+    {
+      "id": "rota-orchestrate-loads",
+      "kind": "trigger",
+      "expect": "load",
+      "got": "rota-orchestrate",
+      "better": null,
+      "ok": true,
+      "cost": 0.012341399999999999,
+      "fails": []
+    },
+    {
+      "id": "rota-orchestrate-skips",
+      "kind": "trigger",
+      "expect": "skip",
+      "got": "rota-work",
+      "better": "rota-work",
+      "ok": true,
+      "cost": 0.008405099999999999,
+      "fails": []
+    },
+    {
+      "id": "rota-pause-loads",
+      "kind": "trigger",
+      "expect": "load",
+      "got": "rota-pause",
+      "better": null,
+      "ok": true,
+      "cost": 0.0127774,
+      "fails": []
+    },
+    {
+      "id": "rota-pause-skips",
+      "kind": "trigger",
+      "expect": "skip",
+      "got": "rota-ship",
+      "better": "rota-ship",
+      "ok": true,
+      "cost": 0.002588,
+      "fails": []
+    },
+    {
+      "id": "rota-plan-loads",
+      "kind": "trigger",
+      "expect": "load",
+      "got": "rota-plan",
+      "better": null,
+      "ok": true,
+      "cost": 0.0125364,
+      "fails": []
+    },
+    {
+      "id": "rota-plan-skips",
+      "kind": "trigger",
+      "expect": "skip",
+      "got": "rota-brainstorm",
+      "better": "rota-brainstorm",
+      "ok": true,
+      "cost": 0.0123904,
+      "fails": []
+    },
+    {
+      "id": "rota-qa-loads",
+      "kind": "trigger",
+      "expect": "load",
+      "got": "rota-qa",
+      "better": null,
+      "ok": true,
+      "cost": 0.012479399999999998,
+      "fails": []
+    },
+    {
+      "id": "rota-qa-skips",
+      "kind": "trigger",
+      "expect": "skip",
+      "got": "rota-review",
+      "better": "rota-review",
+      "ok": true,
+      "cost": 0.012337399999999998,
+      "fails": []
+    },
+    {
+      "id": "rota-refactor-loads",
+      "kind": "trigger",
+      "expect": "load",
+      "got": "rota-refactor",
+      "better": null,
+      "ok": true,
+      "cost": 0.012408399999999998,
+      "fails": []
+    },
+    {
+      "id": "rota-refactor-skips",
+      "kind": "trigger",
+      "expect": "skip",
+      "got": "none",
+      "better": null,
+      "ok": true,
+      "cost": 0.0184744,
+      "fails": []
+    },
+    {
+      "id": "rota-release-loads",
+      "kind": "trigger",
+      "expect": "load",
+      "got": "rota-release",
+      "better": null,
+      "ok": true,
+      "cost": 0.012549399999999999,
+      "fails": []
+    },
+    {
+      "id": "rota-release-skips",
+      "kind": "trigger",
+      "expect": "skip",
+      "got": "rota-ship",
+      "better": "rota-ship",
+      "ok": true,
+      "cost": 0.0121704,
+      "fails": []
+    },
+    {
+      "id": "rota-review-loads",
+      "kind": "trigger",
+      "expect": "load",
+      "got": "rota-review",
+      "better": null,
+      "ok": true,
+      "cost": 0.0123874,
+      "fails": []
+    },
+    {
+      "id": "rota-review-skips",
+      "kind": "trigger",
+      "expect": "skip",
+      "got": "rota-qa",
+      "better": "rota-qa",
+      "ok": true,
+      "cost": 0.114254,
+      "fails": []
+    },
+    {
+      "id": "rota-ship-loads",
+      "kind": "trigger",
+      "expect": "load",
+      "got": "rota-ship",
+      "better": null,
+      "ok": true,
+      "cost": 0.11416,
+      "fails": []
+    },
+    {
+      "id": "rota-ship-skips",
+      "kind": "trigger",
+      "expect": "skip",
+      "got": "rota-release",
+      "better": "rota-release",
+      "ok": true,
+      "cost": 0.11408700000000001,
+      "fails": []
+    },
+    {
+      "id": "rota-spike-loads",
+      "kind": "trigger",
+      "expect": "load",
+      "got": "rota-spike",
+      "better": null,
+      "ok": true,
+      "cost": 0.0106213,
+      "fails": []
+    },
+    {
+      "id": "rota-spike-skips",
+      "kind": "trigger",
+      "expect": "skip",
+      "got": "rota-plan",
+      "better": "rota-plan",
+      "ok": true,
+      "cost": 0.010634300000000001,
+      "fails": []
+    },
+    {
+      "id": "rota-vision-loads",
+      "kind": "trigger",
+      "expect": "load",
+      "got": "rota-vision",
+      "better": null,
+      "ok": true,
+      "cost": 0.010366300000000002,
+      "fails": []
+    },
+    {
+      "id": "rota-vision-skips",
+      "kind": "trigger",
+      "expect": "skip",
+      "got": "rota-plan",
+      "better": "rota-plan",
+      "ok": true,
+      "cost": 0.0102143,
+      "fails": []
+    },
+    {
+      "id": "rota-work-loads",
+      "kind": "trigger",
+      "expect": "load",
+      "got": "rota-work",
+      "better": null,
+      "ok": true,
+      "cost": 0.0100143,
+      "fails": []
+    },
+    {
+      "id": "rota-work-skips",
+      "kind": "trigger",
+      "expect": "skip",
+      "got": "rota-orchestrate",
+      "better": "rota-orchestrate",
+      "ok": true,
+      "cost": 0.0105573,
+      "fails": []
+    }
+  ]
+}

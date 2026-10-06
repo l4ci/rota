@@ -1,0 +1,70 @@
+{
+  "skill": "rota-work",
+  "scenarios": [
+    {
+      "id": "work-dirty-tree",
+      "query": "/rota-work implement 42",
+      "situation": "Backlog backend: issues. Item #42 exists. Nothing has run yet. Simulated result: `rota git guard clean --context \"/rota-work\"` exits 1 and prints `Working tree is dirty: M internal/menu/timer.go (uncommitted change by the user)`.",
+      "expected": "Runs the guard first. A user change is not a tool-generated sibling, so it stops with the guard's message. No branch, no dispatch, no stash, no commit.",
+      "must": [
+        "rota git guard clean"
+      ],
+      "mustNot": [
+        "^CMD:.*git (checkout -b|switch -c|stash|add|commit)",
+        "^CMD:.*rota status add",
+        "^CMD:.*rota item claim"
+      ],
+      "order": []
+    },
+    {
+      "id": "work-no-red",
+      "query": "/rota-work implement 42",
+      "situation": "Item #42 is a behavior change: `rota queue pop` must skip claimed items. You are at Step 7 for Task 1. The standard-tier subagent's completion report says: \"Done. Edited internal/queue/pop.go and added TestPopSkipsClaimed. All tests pass.\" It names no RED command and no failing line. `git diff` matches the brief. Stop after you dispatch the fix agent: its report is not in yet.",
+      "expected": "A behavior task needs a RED run. A report without one is a FAIL, so it dispatches a fix agent and records no PASS proof. It never passes --no-proof and never completes the item.",
+      "must": [
+        "RED|failing"
+      ],
+      "mustNot": [
+        "^CMD:.*--no-proof",
+        "^CMD:.*rota item complete",
+        "^CMD:.*rota proof add .*--result PASS"
+      ],
+      "order": []
+    },
+    {
+      "id": "work-issue-backend-finish",
+      "query": "/rota-work implement 42",
+      "situation": "Config: backlog.backend = issues, work.mergeStrategy = direct. Item #42 is claimed, both tasks are committed and verified, proof rows are recorded, branch is `rota/queue-skip-claimed`. You are at Step 9/10. List every remaining command through the end of the cycle. Simulated results: every verb exits 0. Use `Fix queue skip` as the PR title and a one-line body; do not ask for them.",
+      "expected": "Issue backend skips Step 9 and forces the PR path: `rota ship pr` with --items, then `rota item state 42 --to needs-review`. It does not merge, complete or release the claim.",
+      "must": [
+        "rota ship pr",
+        "--items",
+        "needs-review"
+      ],
+      "mustNot": [
+        "^CMD:.*rota ship merge",
+        "^CMD:.*rota item complete",
+        "^CMD:.*rota item release"
+      ],
+      "order": [
+        "rota ship pr",
+        "needs-review"
+      ]
+    },
+    {
+      "id": "work-no-arg-commits",
+      "query": "/rota-work",
+      "situation": "No argument. `rota status show` lists one stream: branch `rota/fix-badge`, which exists, has 3 commits past the base, and `rota status handoff rota/fix-badge` returns nothing. The backlog has other open items. The user has not answered the stream question yet: stop at it.",
+      "expected": "Reconciles before suggesting: asks about the stream, with 'ship via /rota-ship' as the Recommended option. Does not silently start a new item or delete the branch.",
+      "must": [
+        "^ASK:",
+        "rota-ship"
+      ],
+      "mustNot": [
+        "^CMD:.*git branch -D",
+        "^CMD:.*rota status rm"
+      ],
+      "order": []
+    }
+  ]
+}
