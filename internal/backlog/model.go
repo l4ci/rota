@@ -22,10 +22,11 @@ type Item struct {
 	// ClosedAt is the close date, YYYY-MM-DD ("" when open): the done line's
 	// date in file mode, the tracker's closed_at in issue mode.
 	ClosedAt string
-	Note     string // closure note (file backend)
-	Line     string // the bullet: file = origin line as FindOrigin returns it; issue = rendered "- **[F12] ...**" line
-	Number   int    // issue mode: the issue number; 0 in file mode
-	URL      string // issue mode
+	Note     string   // closure note (file backend)
+	Line     string   // the bullet: file = origin line as FindOrigin returns it; issue = rendered "- **[F12] ...**" line
+	Number   int      // issue mode: the issue number; 0 in file mode
+	URL      string   // issue mode
+	Labels   []string // issue mode: the issue's labels
 }
 
 // Key is how an item is spelled inside bullets and Related cells: the type
