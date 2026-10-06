@@ -336,7 +336,11 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 				} else {
 					r.PRState = st
 					if st == "merged" || st == "closed" {
-						rep.add(Finding{Kind: PRStale, Slot: r.Name, Issue: r.Issue, Detail: fmt.Sprintf("PR #%d is %s and the slot still holds %s", n, st, r.Branch)})
+						f := Finding{Kind: PRStale, Slot: r.Name, Issue: r.Issue, Detail: fmt.Sprintf("PR #%d is %s and the slot still holds %s", n, st, r.Branch)}
+						if st == "merged" && r.Registered { // a closed PR may hold unmerged work: report only
+							f.Repair = "park the slot"
+						}
+						rep.add(f)
 					}
 				}
 			} else if ahead := e.ahead(ctx, root, v.base, r.Branch); ahead > 0 {

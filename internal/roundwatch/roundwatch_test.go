@@ -191,3 +191,14 @@ func TestNeedsWatchAndDigest(t *testing.T) {
 		t.Fatal("an all-idle round has nothing to watch")
 	}
 }
+
+// With every slot idle there is nothing to wait on, and the watch holds until
+// the heartbeat instead of returning at once (#327).
+func TestRunNothingToWatchHoldsUntilHeartbeat(t *testing.T) {
+	fc := &fakeClock{now: time.Unix(0, 0)}
+	env := fc.env(func(time.Duration) (*SlotNews, error) { return nil, ErrNothingToWatch }, empty, empty)
+	res, err := Run(context.Background(), env, Opts{Heartbeat: 100 * time.Second, Poll: 30 * time.Second, ForgeEvery: 60 * time.Second})
+	if err != nil || res.Reason != ReasonHeartbeat || res.Waited != 100*time.Second {
+		t.Fatalf("%+v %v", res, err)
+	}
+}
