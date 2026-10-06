@@ -1,6 +1,9 @@
 package cli
 
 import (
+	"errors"
+	"fmt"
+	"github.com/l4ci/rota/internal/land"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -903,5 +906,18 @@ func TestShipUndoRepo(t *testing.T) {
 	}
 	if gitT(t, svc, "rev-list", "--count", "HEAD") != "1" {
 		t.Errorf("svc not reset")
+	}
+}
+
+func TestShipErrPreservesCleanupFailure(t *testing.T) {
+	original := Unavailable("merge interrupted")
+	failure := &land.CleanupError{Merge: original, Cleanup: fmt.Errorf("git merge --abort failed: index locked")}
+	_, err := shipErr(failure)
+	if err == nil || !strings.Contains(err.Error(), "merge interrupted") || !strings.Contains(err.Error(), "index locked") || !strings.Contains(err.Error(), "git status") {
+		t.Fatalf("cleanup detail lost: %v", err)
+	}
+	var rendered *Error
+	if !errors.As(err, &rendered) || rendered == original {
+		t.Fatalf("nested merge error replaced cleanup error: %v", err)
 	}
 }

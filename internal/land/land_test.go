@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/tracker"
@@ -86,7 +87,7 @@ func (f *forge) PRMerge(ctx context.Context, pr int, o tracker.MergeOpts) (strin
 func TestLocalAndForgeAgree(t *testing.T) {
 	t.Run("unpinned is refused", func(t *testing.T) {
 		r := newRepo(t)
-		if err := MergeLocal(r.run, "", "m"); !errors.Is(err, ErrUnpinned) {
+		if err := MergeLocal(r.run, "", "m", r.run); !errors.Is(err, ErrUnpinned) {
 			t.Errorf("local: %v", err)
 		}
 		f := &forge{head: "abc"}
@@ -108,7 +109,7 @@ func TestLocalAndForgeAgree(t *testing.T) {
 		pin := r.git("rev-parse", "HEAD")
 		r.commit("late.txt", "pushed after the check\n") // the branch moves on
 		r.git("checkout", "-q", "main")
-		if err := MergeLocal(r.run, pin, "merge feat"); err != nil {
+		if err := MergeLocal(r.run, pin, "merge feat", r.run); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := os.Stat(filepath.Join(r.dir, "late.txt")); err == nil {
@@ -136,7 +137,7 @@ func TestLocalAndForgeAgree(t *testing.T) {
 		r.commit("work.txt", "main side\n")
 		before := r.git("rev-parse", "HEAD")
 
-		err := MergeLocal(r.run, pin, "merge feat")
+		err := MergeLocal(r.run, pin, "merge feat", r.run)
 		var ce *ConflictError
 		if !errors.As(err, &ce) {
 			t.Fatalf("err = %v, want *ConflictError", err)
@@ -148,4 +149,112 @@ func TestLocalAndForgeAgree(t *testing.T) {
 			t.Errorf("tree dirty after abort: %q", st)
 		}
 	})
+}
+
+func TestMergeLocalRecovery(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		merge    git.Result
+		mergeErr error
+		abort    git.Result
+		abortErr error
+	}{
+		{name: "conflict abort fails", merge: git.Result{ExitCode: 1, Stdout: "CONFLICT in work.txt"}, abort: git.Result{ExitCode: 128, Stderr: "index.lock exists"}},
+		{name: "non-conflict abort fails", merge: git.Result{ExitCode: 128, Stderr: "hook failed"}, abort: git.Result{ExitCode: 128, Stderr: "index.lock exists"}},
+		{name: "cancelled merge abort fails", mergeErr: context.Canceled, abortErr: context.DeadlineExceeded},
+		{name: "timed out merge abort succeeds", mergeErr: context.DeadlineExceeded},
+		{name: "runner error abort succeeds", mergeErr: errors.New("runner failed")},
+		{name: "conflict abort succeeds", merge: git.Result{ExitCode: 1, Stdout: "CONFLICT in work.txt"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			aborts := 0
+			run := func(args ...string) (git.Result, error) {
+				if strings.Join(args, " ") == "merge --abort" {
+					aborts++
+					return tc.abort, tc.abortErr
+				}
+				return tc.merge, tc.mergeErr
+			}
+			err := MergeLocal(run, "pin", "message", run)
+			if aborts != 1 {
+				t.Errorf("abort attempts = %d, want 1", aborts)
+			}
+			if err == nil {
+				t.Fatal("merge failure lost")
+			}
+			if tc.mergeErr != nil && !errors.Is(err, tc.mergeErr) {
+				t.Errorf("merge error lost: %v", err)
+			}
+			if tc.abortErr != nil && !errors.Is(err, tc.abortErr) {
+				t.Errorf("abort error lost: %v", err)
+			}
+			if tc.abort.ExitCode != 0 || tc.abortErr != nil {
+				for _, want := range []string{"git merge --abort", "git status", tc.merge.Stdout, tc.merge.Stderr, tc.abort.Stderr} {
+					if !strings.Contains(err.Error(), want) {
+						t.Errorf("error %q missing %q", err, want)
+					}
+				}
+				if strings.Contains(err.Error(), "merge aborted") {
+					t.Errorf("false restoration claim: %v", err)
+				}
+			} else if tc.mergeErr == nil && !strings.Contains(err.Error(), "merge aborted") {
+				t.Errorf("successful abort not reported: %v", err)
+			}
+		})
+	}
+}
+
+// The runner reports an interruption after a real merge wrote MERGE_HEAD.
+// Recovery must still run after the caller's context is cancelled.
+func TestInterruptedMergeRestoresTree(t *testing.T) {
+	for _, failure := range []error{context.Canceled, context.DeadlineExceeded} {
+		t.Run(failure.Error(), func(t *testing.T) {
+			r := newRepo(t)
+			r.git("checkout", "-q", "-b", "feat")
+			r.commit("work.txt", "feature\n")
+			pin := r.git("rev-parse", "HEAD")
+			r.git("checkout", "-q", "main")
+			r.commit("work.txt", "main\n")
+			before := r.git("rev-parse", "HEAD")
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			run := func(args ...string) (git.Result, error) {
+				res, err := r.run(args...)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if res.ExitCode != 1 {
+					t.Fatalf("expected actual conflict, got %+v", res)
+				}
+				r.git("rev-parse", "--verify", "MERGE_HEAD")
+				cancel()
+				return res, failure
+			}
+			recovery := RecoveryGit(ctx, func(cleanup context.Context, dir string, args ...string) (git.Result, error) {
+				if cleanup.Err() != nil {
+					t.Fatalf("cleanup inherited cancellation: %v", cleanup.Err())
+				}
+				deadline, ok := cleanup.Deadline()
+				if !ok || time.Until(deadline) > git.Timeout {
+					t.Fatal("cleanup is not bounded")
+				}
+				return git.Exec(cleanup, dir, args...)
+			}, r.dir)
+			err := MergeLocal(run, pin, "merge", recovery)
+			if !errors.Is(err, failure) {
+				t.Fatalf("original failure lost: %v", err)
+			}
+			var ce *CleanupError
+			if errors.As(err, &ce) {
+				t.Fatalf("recovery failed: %v", err)
+			}
+			if r.git("rev-parse", "HEAD") != before || r.git("status", "--porcelain") != "" {
+				t.Fatal("tree was not restored")
+			}
+			res, err := r.run("rev-parse", "--verify", "-q", "MERGE_HEAD")
+			if err != nil || res.ExitCode == 0 {
+				t.Fatal("MERGE_HEAD left behind")
+			}
+		})
+	}
 }

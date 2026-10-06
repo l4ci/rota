@@ -482,7 +482,7 @@ func (g *gate) changedFiles() ([]string, error) {
 // the gate with a verdict.
 func (g *gate) mergeLocal() (done bool) {
 	run := func(args ...string) (git.Result, error) { return g.e.git(g.e.ctx, g.root, args...) }
-	err := land.MergeLocal(run, g.verified, fmt.Sprintf("merge: %s into %s", g.branch, g.o.Base))
+	err := land.MergeLocal(run, g.verified, fmt.Sprintf("merge: %s into %s", g.branch, g.o.Base), land.RecoveryGit(g.e.ctx, g.e.git, g.root))
 	if err == nil {
 		return false
 	}
@@ -491,6 +491,8 @@ func (g *gate) mergeLocal() (done bool) {
 	// so it is not mistaken for work to resolve with the slot.
 	var me *land.MergeError
 	switch {
+	case errors.As(err, new(*land.CleanupError)):
+		g.verdict(GateMergeFailed, fmt.Sprintf("error: merge of %s into %s failed: %s", g.branch, g.o.Base, err), "")
 	case errors.As(err, new(*land.ConflictError)):
 		g.verdict(GateMergeFailed, fmt.Sprintf("error: merge of %s into %s conflicted — resolve with the slot that owns the context", g.branch, g.o.Base), "")
 	case errors.As(err, &me):
