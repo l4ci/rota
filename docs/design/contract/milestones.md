@@ -239,6 +239,16 @@ old: hv-proof-add <ID> --check "<check>" --result <result> --evidence "<evidence
 shim: echoes the flags into `data`. `sha` is the passed value, or `git log -1 --format=%h` (else `-`), the same default as the helper. `changed` is false when the old helper wrote nothing: an identical (check, result, sha, evidence) row exists, and the date is ignored. The shim compares `hv-proof-show --count` before and after.
 note: `data.sha`, `check` and `evidence` carry the whitespace-collapsed values that were stored.
 
+### rota proof record
+rota proof record <ID> [--base <ref>] -- <cmd>...
+repo: none    (an umbrella-issue item is addressed as `<repo>:<ID>`, as in shared definitions)
+data: {"id": string, "type": "B"|"F"|"T", "check": string, "result": "PASS"|"FAIL", "sha": string, "evidence": string, "exitCode": number, "changed": bool}
+exit: 0 when the command exited 0; 1 when it exited non-zero (the FAIL row is still written, and `data` is the same shape); 2 when `--` or the command is missing; 3 when the item doesn't exist (checked before the command runs, so nothing runs for an unknown item) or `{files}` is used and no base resolves; tracker
+old: none (new in the proof family)
+note: runs the command in the project root and records what ran, so a row cannot be invented. `check` is the command as run: one argument is a shell line as typed, several are each single-quoted and joined by spaces. `{files}` expands as in `rota test run` (changed files against `--base`, default the base branch, each single-quoted), so an empty expansion shows in `check`. `result` is PASS for exit 0, else FAIL. `sha` is HEAD. `evidence` is `exit=<code> output-sha256=<hex>`, the hash over the combined stdout and stderr. The command's own output is not echoed or stored.
+note: dedup is `proof add`'s: an identical (check, result, sha, evidence) row is not added and `changed` is false. A re-run whose output differs (a timestamp, say) is a new row.
+note: `rota proof add` is unchanged and stays for rows no command backs (docs-only changes).
+
 ### rota proof show
 rota proof show <ID> [--count]
 repo: none

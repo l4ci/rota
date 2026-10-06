@@ -3,6 +3,7 @@ package cli
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -80,5 +81,50 @@ func TestPlanUncertain(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, ".rota/config.json"), []byte(`{"backlog": {"backend": "bogus"}}`), 0o644)
 	if code, _, _ := rotaIn(t, dir, "plan", "uncertain", "B07"); code != 70 {
 		t.Errorf("invalid backend: %d, want 70", code)
+	}
+}
+
+func TestProofRecord(t *testing.T) {
+	dir := backlogProject(t)
+	code, out, _ := rotaIn(t, dir, "proof", "record", "B07", "--json", "--", "echo hi")
+	d := data(t, out)
+	if code != 0 || d["result"] != "PASS" || d["check"] != "echo hi" || d["exitCode"] != float64(0) || d["changed"] != true {
+		t.Fatalf("passing: %d %s", code, out)
+	}
+	// sha256 of "hi\n"
+	if ev, _ := d["evidence"].(string); !strings.HasPrefix(ev, "exit=0 output-sha256=98ea6e4f216f2fb4b69fff9b3a44842c38686ca685f3f55dc48c5d3fb1107be4") {
+		t.Errorf("evidence: %q", ev)
+	}
+	code, out, _ = rotaIn(t, dir, "proof", "record", "B07", "--json", "--", "echo", "out; exit 3")
+	if code != 0 || data(t, out)["check"] != "'echo' 'out; exit 3'" {
+		t.Errorf("multi-arg quoting: %d %s", code, out)
+	}
+	code, out, _ = rotaIn(t, dir, "proof", "record", "B07", "--json", "--", "sh -c 'exit 3'")
+	d = data(t, out)
+	if code != 1 || d["result"] != "FAIL" || d["exitCode"] != float64(3) || d["changed"] != true {
+		t.Fatalf("failing: %d %s", code, out)
+	}
+	if _, out, _ = rotaIn(t, dir, "proof", "record", "B07", "--json", "--", "echo hi"); data(t, out)["changed"] != false {
+		t.Errorf("identical re-run duplicated the row: %s", out)
+	}
+	_, out, _ = rotaIn(t, dir, "proof", "show", "B07", "--json")
+	if data(t, out)["count"] != float64(3) {
+		t.Errorf("rows: %s", out)
+	}
+	for _, args := range [][]string{
+		{"proof", "record", "B07"},
+		{"proof", "record", "B07", "--"},
+		{"proof", "record", "B07", "echo", "hi"},
+		{"proof", "record", "--", "echo", "hi"},
+	} {
+		if code, _, _ := rotaIn(t, dir, args...); code != 2 {
+			t.Errorf("%v: exit %d, want 2", args, code)
+		}
+	}
+	if code, _, _ := rotaIn(t, dir, "proof", "record", "B99", "--", "touch ran.txt"); code != 3 {
+		t.Errorf("unknown item: exit %d, want 3", code)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "ran.txt")); err == nil {
+		t.Errorf("command ran for an unknown item")
 	}
 }

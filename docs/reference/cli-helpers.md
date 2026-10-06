@@ -270,6 +270,7 @@ exit codes and repo scope: [verb contract](../design/contract/README.md).
 | Usage | What it does |
 |---|---|
 | `rota proof add <ID> --check <text> --result <PASS\|FAIL> --evidence <text> [--sha <commit>]` | append a proof row |
+| `rota proof record <ID> [--base <ref>] -- <cmd>...` | run the command and append a proof row measured, not typed: PASS for exit 0, FAIL otherwise; exits 0 or 1 to match |
 | `rota proof show <ID> [--count]` | list an item's proof rows |
 
 ## `rota debug`
