@@ -26,7 +26,7 @@ Exit 2 from `add` names the malformed field: ask the agent to resend; never gues
 
 ## Step 3.75 — QA Gate
 
-Skipped for a round worker's PR (`round-worker-and-issue-mode.md`): the merge train runs `test.e2e` once on the merged tree, and `/rota-qa` runs once on the train result when the orchestrator calls it. Also skipped when `ship.qa` is `false` or `REVIEW_CHOICE == ship-anyway`. If there is no `.rota/qa/` strategy for the scope (single repo: no `.rota/qa/*.md`; umbrella: no `.rota/qa/<REPO>.md`), say *"`ship.qa: true` but no QA strategy for `<scope>`. Run `/rota-qa first-run` to bootstrap, or set `ship.qa: false` to skip."* and continue.
+Skipped for a round worker's PR (`round-worker-and-issue-mode.md`): the merge gate and train run `test.e2e` on the merged tree, and `/rota-qa` runs once on the train result when the orchestrator calls it. Also skipped when `ship.qa` is `false` or `REVIEW_CHOICE == ship-anyway`. If there is no `.rota/qa/` strategy for the scope (single repo: no `.rota/qa/*.md`; umbrella: no `.rota/qa/<REPO>.md`), say *"`ship.qa: true` but no QA strategy for `<scope>`. Run `/rota-qa first-run` to bootstrap, or set `ship.qa: false` to skip."* and continue.
 
 Invoke `Skill(skill="rota-qa", args="run")` (umbrella: `args="run --repo $REPO"`), then:
 

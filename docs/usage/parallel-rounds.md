@@ -379,7 +379,7 @@ only channel, because there is no host to notify.
 
 `rota worker gate <slot> --base <branch>` is the one merge path in a round. It checks the branch is
 fresh, the PR is the worker's and provenance holds, then re-runs
-`test.full` on the merged tree and merges on a pass.
+`test.full` on the merged tree, then `test.e2e` when set, and merges on a pass.
 
 A branch that is only behind the base is merged as is when the merge is clean and the base did not
 change any file the branch changed (`round.sharedPaths` aside). A conflict, or a file changed on both

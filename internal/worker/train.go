@@ -252,7 +252,8 @@ func (e Env) Train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 
 	// 4b. E2E: the most expensive tier runs once, on the train result, after
 	// test.full passed. A red e2e bisects the same way a red full does.
-	if e2e := TierCommands(root, "e2e"); green && len(e2e) > 0 {
+	e2e := TierCommands(root, "e2e")
+	if green && len(e2e) > 0 {
 		run := func() (VerifyResult, error) { return e.RunVerify(ctx, e2e, scratch) }
 		er, err := run()
 		if err != nil {
@@ -268,6 +269,10 @@ func (e Env) Train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 				return res, err
 			}
 		}
+	}
+
+	if !green && passing > 0 && len(e2e) > 0 {
+		res.Notes = append(res.Notes, fmt.Sprintf("NO-E2E land-green — the verified first %d member(s) land without test.e2e; it never ran on that prefix.", passing))
 	}
 
 	// 5. Land. The tree that was verified must still be the one that lands.
