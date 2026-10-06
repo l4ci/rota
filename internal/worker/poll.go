@@ -139,6 +139,41 @@ func clip(s string, n int) string {
 	return string([]rune(s)[:n])
 }
 
+// reRelayHead opens an orchestrator relay or brief echoed into the pane.
+var reRelayHead = regexp.MustCompile(`^\s*--- ORCHESTRATOR \(round \d+\) ---\s*$`)
+
+// reReplyMarker starts a line of the worker's own output (see reBlocked).
+var reReplyMarker = regexp.MustCompile(`^\s*[●⏺•]`)
+
+// lastSentinel returns the state of the last ROTA-BLOCKED/ROTA-DONE line the
+// worker itself printed. Text from a `--- ORCHESTRATOR (round N) ---` header up
+// to the worker's next reply marker is a relay: sentinel text quoted there is
+// the orchestrator's, so only a marker-prefixed line counts inside it.
+func lastSentinel(lines []string) (state, evidence string, ok bool) {
+	inRelay := false
+	for i, l := range lines {
+		marked := reReplyMarker.MatchString(l)
+		switch {
+		case reRelayHead.MatchString(l):
+			inRelay = true
+			continue
+		case marked:
+			inRelay = false
+		case inRelay:
+			continue
+		}
+		// Match against the text from this line on, as the classifier always
+		// has: a bare `ROTA-DONE <slot>` takes the next line as its evidence.
+		rest := strings.Join(lines[i:], "\n")
+		if m := reBlocked.FindStringSubmatchIndex(rest); m != nil && m[0] == 0 {
+			state, evidence, ok = StateBlocked, strings.TrimSpace(rest[m[4]:m[5]]), true
+		} else if m := reDone.FindStringSubmatchIndex(rest); m != nil && m[0] == 0 {
+			state, evidence, ok = StateDone, strings.TrimSpace(rest[m[4]:m[5]]), true
+		}
+	}
+	return
+}
+
 // Classify decides one slot's state from its pane text. native is herdr's
 // agent_status (or `gone`), empty under tmux, which has none. moved says the
 // pane changed between the two captures.
@@ -151,11 +186,10 @@ func Classify(text string, moved bool, lines int, native string) (state, evidenc
 
 	// Sentinels win over everything, including movement: a worker that printed
 	// ROTA-DONE and is still rendering its own output is finished, not busy.
-	if m := reBlocked.FindStringSubmatch(tail); m != nil {
-		return StateBlocked, strings.TrimSpace(m[2])
-	}
-	if m := reDone.FindStringSubmatch(tail); m != nil {
-		return StateDone, strings.TrimSpace(m[2])
+	// The LAST sentinel decides: a ROTA-DONE printed after an answered
+	// ROTA-BLOCKED means the worker moved on.
+	if st, ev, ok := lastSentinel(all); ok {
+		return st, ev
 	}
 	// `Retrying in` is the only positive proof a retry is in flight. Check it
 	// before the DEAD patterns so a live retry is never read as a corpse.
