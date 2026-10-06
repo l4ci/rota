@@ -32,10 +32,10 @@ If even that returns nothing usable (dismissed or empty), write `Decision: incon
 
 `Edit` `.rota/spikes/<name>.md` to fill in:
 
-- **What was tried** — concrete commands run, libraries pulled in, files touched (cite the diff stat)
-- **Findings** — 3–5 bullets. Bad findings are as valuable as good
-- **Decision** — `viable` / `not viable` / `depends-on-X` / `inconclusive`
-- **Recommended approach** — only if viable. Describe the shape of the *real* implementation. Do not paste spike code
+- **What was tried**: concrete commands run, libraries pulled in, files touched (cite the diff stat)
+- **Findings**: 3 to 5 bullets. Bad findings are as valuable as good
+- **Decision**: `viable` / `not viable` / `depends-on-X` / `inconclusive`
+- **Recommended approach**: only if viable. Describe the shape of the *real* implementation. Do not paste spike code
 
 Then mark the spike done:
 

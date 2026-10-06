@@ -5,7 +5,7 @@ description: Use when an item or milestone slice is too big to one-shot, or when
 
 # rota-plan — Implementation Plan as Artifact
 
-Write a plan the user signs off on before `/rota-work` runs. Keyed by a backlog item — `#42` (issue backend; file backend `B07`, `F03`, `T11` keep the `M01-B07` form) — or a milestone slice, `M01-S01`. **A milestone is never required.** Issue backend: an item plan is a note on the item's issue, a slice plan lives on the milestone's tracking issue. File backend: `.rota/plans/<key>.md`.
+Write a plan the user signs off on before `/rota-work` runs. Keyed by a backlog item (`#42` on the issue backend; file backend `B07`, `F03`, `T11` keep the `M01-B07` form) or a milestone slice, `M01-S01`. **A milestone is never required.** Issue backend: an item plan is a note on the item's issue, a slice plan lives on the milestone's tracking issue. File backend: `.rota/plans/<key>.md`.
 
 Copy this checklist and track your progress:
 ```
@@ -18,9 +18,9 @@ Copy this checklist and track your progress:
 
 ## Step 1 — Resolve target
 
-- **Item** (`#42`, `B07`, …) — item mode; the key is the ref as given (`M01-B07` is equally valid for a milestone-tagged item).
-- **Milestone** (`M01`) — slice mode; the next slice number is minted.
-- **Free-form** — find the item with `rota backlog` / `rota item show`; ask only if still ambiguous.
+- **Item** (`#42`, `B07`, …): item mode; the key is the ref as given (`M01-B07` is equally valid for a milestone-tagged item).
+- **Milestone** (`M01`): slice mode; the next slice number is minted.
+- **Free-form**: find the item with `rota backlog` / `rota item show`; ask only if still ambiguous.
 
 `rota plan show <key>` exits 3 for no plan. If one exists, ask once: view, edit (use it as the starting proposal), or replace (`rota plan rm <key>` first).
 
@@ -38,12 +38,12 @@ Follow `references/context-load-protocol.md` (parallel, silent): item detail and
 
 Show the plan as unsaved markdown:
 
-- **Goal** — one sentence
-- **Approach** — 3-6 sentences: the design choice and why
-- **Tasks** — each with **Observable behavior** (true after it ships), **Files**, **Interfaces**, **Verify** (the command or check that proves it done)
-- **Review Focus** — `## Review Focus`, at most 5 lines: risky inputs or edges the spec implies but never names
-- **Open questions** — decisions needed before or during execution
-- **Assumptions** — implicit constraints made explicit
+- **Goal**: one sentence
+- **Approach**: 3-6 sentences: the design choice and why
+- **Tasks**: each with **Observable behavior** (true after it ships), **Files**, **Interfaces**, **Verify** (the command or check that proves it done)
+- **Review Focus**: `## Review Focus`, at most 5 lines: risky inputs or edges the spec implies but never names
+- **Open questions**: decisions needed before or during execution
+- **Assumptions**: implicit constraints made explicit
 
 Rules:
 
@@ -68,14 +68,14 @@ KEY=$(rota plan add --json '#42' --title "<title>" --repos web,api | jq -r .data
 KEY=$(rota plan add --json --milestone <MID> --slice --title "<title>" | jq -r .data.key) # slice
 ```
 
-Quote `#42`. Pass `--design <ID>` when a design exists; the frontmatter records the pointer. Issue backend: draft in a scratch file and publish with `rota plan put <key> --body-file <file>|-`; file backend: `Edit` the stub's sections, keep the frontmatter. List with `rota plan list [--milestone <M>]`. Record plan-shaping answers with `rota item comment add <ID> --kind decision --body-file -`.
+Quote `#42`. Pass `--design <ID>` when a design exists; the frontmatter records it. Issue backend: draft in a scratch file and publish with `rota plan put <key> --body-file <file>|-`; file backend: `Edit` the stub's sections, keep the frontmatter. List with `rota plan list [--milestone <M>]`. Record plan-shaping answers with `rota item comment add <ID> --kind decision --body-file -`.
 
 When the plan splits into separate items, or after writing, read [`plan-edge-cases.md`](plan-edge-cases.md) for dependent-item filing and the docs-path check.
 
 ## Step 5 — Report
 
 ```
-Plan written: #42 — Auth foundation
+Plan written: #42 Auth foundation
   Tasks: 4   Open questions: 1
 Next: /rota-work #42 (or --preview to peek first).
 ```
@@ -88,7 +88,7 @@ Offer `/rota-work` in one line.
 
 ## References
 
-- [`plan-edge-cases.md`](plan-edge-cases.md) — rename/refactor/docs task rules (Step 3); splitting into dependent items and `validate-docs` (Step 4).
-- [`references/dependent-items.md`](references/dependent-items.md) — declaring `## Depends on` edges; expand → migrate → contract.
-- [`references/context-load-protocol.md`](references/context-load-protocol.md) — shared parallel context load.
-- [`references/knowledge-consult.md`](references/knowledge-consult.md) — the K+D query pattern the load uses.
+- [`plan-edge-cases.md`](plan-edge-cases.md): rename/refactor/docs task rules (Step 3); splitting into dependent items and `validate-docs` (Step 4).
+- [`references/dependent-items.md`](references/dependent-items.md): declaring `## Depends on` edges; expand → migrate → contract.
+- [`references/context-load-protocol.md`](references/context-load-protocol.md): shared parallel context load.
+- [`references/knowledge-consult.md`](references/knowledge-consult.md): the K+D query pattern the load uses.
