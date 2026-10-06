@@ -174,7 +174,7 @@ func backlogFailRead(err error) (Result, error) {
 // unknown number, a type-letter mismatch or a milestone tracker is exit 3
 // before anything is written, and "F7" or "#7" both answer "7" and "F".
 func resolveItem(be backlog.Backend, ref string) (id, typ string, err error) {
-	if !be.Capabilities().Tracker {
+	if !be.Capabilities().IssueIDs {
 		return ref, backlog.ItemType(ref), nil
 	}
 	it, err := be.Get(ref)
@@ -350,12 +350,12 @@ var (
 	itemSetFields = backlog.SettableFields
 )
 
-func itemFieldValue(it *backlog.Item, name string) string {
+func itemFieldValue(caps backlog.Capabilities, it *backlog.Item, name string) string {
 	switch name {
 	case "title":
 		// The old helpers' title stops at the first "." (FindOrigin); issue
 		// mode keeps the full title, as hv-todo-field did there.
-		if it.Number == 0 {
+		if !caps.IssueIDs {
 			_, t, _ := backlog.FindOrigin("- "+it.Line, it.ID)
 			return t
 		}
@@ -400,7 +400,7 @@ func itemFieldGet(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return backlogFail(err)
 		}
-		v := itemFieldValue(it, *name)
+		v := itemFieldValue(be.Capabilities(), it, *name)
 		return Result{Data: jsonObj("id", it.ID, "type", it.Type, "field", *name, "value", v), Text: v}, nil
 	}
 }
@@ -424,7 +424,7 @@ func itemFieldList(fs *flag.FlagSet) RunFunc {
 		}
 		fields := jsonx.NewObject()
 		for _, n := range itemGetFields {
-			fields.Set(n, itemFieldValue(it, n))
+			fields.Set(n, itemFieldValue(be.Capabilities(), it, n))
 		}
 		text, _ := jsonx.MarshalCompact(fields)
 		return Result{Data: jsonObj("id", it.ID, "type", it.Type, "fields", fields), Text: string(text)}, nil

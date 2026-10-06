@@ -29,7 +29,11 @@ func itemFlow(c *Ctx, ref string) (backlog.Backend, backlog.Workflow, string, st
 	if err != nil {
 		return nil, nil, "", "", err
 	}
-	return be, be.(backlog.Workflow), id, typ, nil
+	wf, err := backlog.WorkflowOf(be)
+	if err != nil {
+		return nil, nil, "", "", err
+	}
+	return be, wf, id, typ, nil
 }
 
 // ---- item show ------------------------------------------------------------
@@ -158,7 +162,7 @@ func itemClaim(fs *flag.FlagSet) RunFunc {
 			return Result{Data: jsonObj("blockedBy", "claimed", "changed", true)},
 				Refused("%s is claimed by %s", id, holder)
 		}
-		issue := be.Capabilities().Tracker
+		issue := be.Capabilities().ClaimWrites
 		res := Result{Data: jsonObj("id", id, "type", typ, "claimId", *as, "changed", issue)}
 		if issue {
 			res.Text = fmt.Sprintf("claimed %s as %s", id, *as)

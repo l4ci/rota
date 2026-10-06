@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -56,7 +57,7 @@ func promptLine(pane string) string {
 	_, size := utf8.DecodeRuneInString(pane[i:])
 	rest := pane[i+size:]
 	line, _, _ := strings.Cut(rest, "\n")
-	line = strings.Trim(line, " \t\r│")
+	line = strings.TrimFunc(line, func(r rune) bool { return unicode.IsSpace(r) || r == '│' })
 	if dialogOption.MatchString(line) || dialogFooter.MatchString(rest) {
 		return "" // a dialog's selected option, not a prompt
 	}

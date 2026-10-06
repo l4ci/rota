@@ -558,7 +558,7 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 				queueTo = true
 			}
 		}
-	} else if e.Forge == nil || it.Number == 0 {
+	} else if !e.forgeOn(be) {
 		return res, unavailable("handing %s to the human needs the issue tracker (the %s label); this project has none", id, firstNonEmpty(e.NeedsHuman, DefaultNeedsHuman))
 	}
 

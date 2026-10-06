@@ -75,7 +75,7 @@ func withBoard(c *Ctx, root string, env round.Env) round.Env {
 		c.Warn("claim check skipped: %v", err)
 		return env
 	}
-	if b, ok := be.(round.Board); ok {
+	if b, ok := round.BoardOf(be); ok {
 		env.Board = b
 	}
 	return env

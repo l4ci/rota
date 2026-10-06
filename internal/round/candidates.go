@@ -73,7 +73,7 @@ func (e Env) Candidates(ctx context.Context, root string, be backlog.Backend, o 
 	inFlight := e.InFlightItems(ctx, root, be, tracked, o.Shared)
 	var out []Candidate
 	for _, it := range chosen {
-		if it.Number != 0 && handed[it.Number] {
+		if handed[it.Number] {
 			continue
 		}
 		if taken != nil && taken(it) {
@@ -85,7 +85,7 @@ func (e Env) Candidates(ctx context.Context, root string, be backlog.Backend, o 
 		}
 		ms := backlog.ParseMilestones(it.Fields.Get("milestone"))
 		c := Candidate{ID: it.ID, Title: it.Title, OpenPR: openPR[it.Number], Readiness: r}
-		if p, err := PickOf(it); err != nil {
+		if p, err := PickOf(be.Capabilities(), it); err != nil {
 			c.PickErr = err.Error()
 		} else {
 			c.Pick = p
@@ -301,7 +301,7 @@ func InScope(root string, be backlog.Backend, scope string, slate []string, id s
 // open item, so without this a hand-worked issue reads as ready and assign
 // refuses it as claimed. File mode has neither labels nor claims.
 func (e Env) takenOutside(ctx context.Context, be backlog.Backend) (func(backlog.Item) bool, error) {
-	if e.Forge == nil || !be.Capabilities().Tracker {
+	if !e.forgeOn(be) {
 		return nil, nil
 	}
 	issues, err := e.Forge.List(ctx, tracker.ListFilter{State: "open", Labels: []string{firstNonEmpty(e.Label, DefaultLabel)}})
@@ -312,17 +312,15 @@ func (e Env) takenOutside(ctx context.Context, be backlog.Backend) (func(backlog
 	for _, is := range issues {
 		labelled[is.Number] = true
 	}
-	st, _ := be.(interface {
-		Status(string) (*backlog.Status, error)
-	})
+	wf, _ := backlog.WorkflowOf(be)
 	return func(it backlog.Item) bool {
 		if labelled[it.Number] {
 			return true
 		}
-		if st == nil {
+		if wf == nil {
 			return false
 		}
-		s, err := st.Status(it.ID)
+		s, err := wf.Status(it.ID)
 		return err == nil && s != nil && s.Claim != ""
 	}, nil
 }
@@ -330,7 +328,7 @@ func (e Env) takenOutside(ctx context.Context, be backlog.Backend) (func(backlog
 // handedToHuman is the open issues carrying the needs-human label (C10): the
 // human holds them, so a round does not offer them. File mode has no labels.
 func (e Env) handedToHuman(ctx context.Context, be backlog.Backend) (map[int]bool, error) {
-	if e.Forge == nil || !be.Capabilities().Tracker {
+	if !e.forgeOn(be) {
 		return nil, nil
 	}
 	issues, err := e.Forge.List(ctx, tracker.ListFilter{State: "open", Labels: []string{firstNonEmpty(e.NeedsHuman, DefaultNeedsHuman)}})
