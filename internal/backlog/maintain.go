@@ -38,17 +38,10 @@ const archiveHeader = "# Archive\n\nCompleted items older than the active window
 // leaves it. ARCHIVE.md gains the moved lines in order, after its own text with
 // trailing whitespace trimmed, or after the default header when it is new.
 func (f *File) Archive(days int, today time.Time) (moved int, err error) {
-	path := f.backlogPath()
 	cutoff := time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, time.UTC).AddDate(0, 0, -days)
 	var old []string
-	err = fsio.Locked(path, fsio.LockTimeout, func() error {
-		content, err := fsio.ReadText(path)
-		if errors.Is(err, os.ErrNotExist) {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
+	err = f.withDocuments(func(d *documents) error {
+		content := d.backlog
 		start, end, ok := section.Find(content, "Completed")
 		if !ok {
 			return nil
@@ -74,22 +67,32 @@ func (f *File) Archive(days int, today time.Time) (moved int, err error) {
 		if !strings.HasPrefix(sec, "\n") {
 			sec = "\n" + sec
 		}
-		return fsio.WriteFileAtomic(path, []byte(content[:start]+sec+content[end:]))
+		existing := d.archive
+		if !d.archiveExists {
+			existing = archiveHeader
+		}
+		// A destination write may have succeeded before source cleanup failed.
+		// Match whole lines, preserving distinct historical entries for an ID.
+		seen := make(map[string]bool)
+		for _, line := range strings.Split(existing, "\n") {
+			seen[line] = true
+		}
+		var appendLines []string
+		for _, line := range old {
+			if !seen[line] {
+				appendLines = append(appendLines, line)
+				seen[line] = true
+			}
+		}
+		archive := d.archive
+		if len(appendLines) > 0 {
+			archive = pystr.Rstrip(existing) + "\n" + strings.Join(appendLines, "\n") + "\n"
+		}
+		return d.write(content[:start]+sec+content[end:], archive, true)
 	})
-	if err != nil || len(old) == 0 {
+	if err != nil {
 		return 0, err
 	}
-	ap := f.archivePath()
-	err = fsio.Locked(ap, fsio.LockTimeout, func() error {
-		existing, err := fsio.ReadText(ap)
-		if errors.Is(err, os.ErrNotExist) {
-			existing, err = archiveHeader, nil
-		}
-		if err != nil {
-			return err
-		}
-		return fsio.WriteFileAtomic(ap, []byte(pystr.Rstrip(existing)+"\n"+strings.Join(old, "\n")+"\n"))
-	})
 	return len(old), err
 }
 
