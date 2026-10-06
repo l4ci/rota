@@ -14,6 +14,12 @@ func TestGitHubCommitChecks(t *testing.T) {
 			t.Fatalf("unexpected command: %s %q", name, args)
 		}
 		switch args[1] {
+		case "repos/{owner}/{repo}/commits/abc123/check-suites?per_page=100":
+			// A suite whose later jobs have no check run yet; an app that never ran.
+			return `{"check_suites":[
+				{"app":{"name":"GitHub Actions"},"status":"in_progress","conclusion":null,"latest_check_runs_count":2},
+				{"app":{"name":"Done"},"status":"completed","conclusion":"success","latest_check_runs_count":1},
+				{"app":{"name":"Idle"},"status":"queued","conclusion":null,"latest_check_runs_count":0}]}`, "", 0
 		case "repos/{owner}/{repo}/commits/abc123/check-runs?per_page=100":
 			return `{"check_runs":[
 				{"name":"build","status":"completed","conclusion":"success","html_url":"u1"},
@@ -40,7 +46,8 @@ func TestGitHubCommitChecks(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []CheckRun{
-		{"build", CheckSuccess, "u1"}, {"lint", CheckSuccess, "u2"}, {"docs", CheckSuccess, "u3"},
+		{"suite GitHub Actions", CheckPending, ""}, {"suite Done", CheckSuccess, ""},
+		{"build", CheckSuccess, "u1"}, {"lint", CheckSkipped, "u2"}, {"docs", CheckSkipped, "u3"},
 		{"test", CheckFailure, "u4"}, {"slow", CheckFailure, "u5"}, {"stop", CheckFailure, "u6"},
 		{"odd", CheckFailure, "u7"}, {"queued", CheckPending, "u8"}, {"busy", CheckPending, "u9"},
 		{"ci/a", CheckSuccess, "s1"}, {"ci/b", CheckPending, "s2"},
@@ -53,8 +60,8 @@ func TestGitHubCommitChecks(t *testing.T) {
 
 func TestGitHubCommitChecksPaginated(t *testing.T) {
 	s := &scripted{answer: func(_ string, args []string) (string, string, int) {
-		if strings.Contains(args[1], "/status") {
-			return `{"statuses":[]}`, "", 0
+		if !strings.Contains(args[1], "/check-runs") {
+			return `{}`, "", 0
 		}
 		return `{"check_runs":[{"name":"a","status":"completed","conclusion":"success","html_url":"1"}]}` + "\n" +
 			`{"check_runs":[{"name":"b","status":"queued","html_url":"2"}]}`, "", 0
@@ -68,8 +75,11 @@ func TestGitHubCommitChecksPaginated(t *testing.T) {
 
 func TestGitHubCommitChecksEmpty(t *testing.T) {
 	s := &scripted{answer: func(_ string, args []string) (string, string, int) {
-		if strings.HasSuffix(args[1], "/status") {
+		switch {
+		case strings.HasSuffix(args[1], "/status"):
 			return `{"statuses":[]}`, "", 0
+		case strings.Contains(args[1], "/check-suites"):
+			return `{"check_suites":[]}`, "", 0
 		}
 		return `{"check_runs":[]}`, "", 0
 	}}
@@ -101,7 +111,7 @@ func TestGitLabCommitChecks(t *testing.T) {
 		{"pipeline #7 (feat)", CheckPending, "f7"},
 		{"pipeline #9 (main)", CheckSuccess, "m9"},
 		{"pipeline #4 (man)", CheckFailure, "n4"},
-		{"pipeline #2 (skip)", CheckFailure, "k2"},
+		{"pipeline #2 (skip)", CheckSkipped, "k2"},
 		{"pipeline #1 (unk)", CheckPending, "u1"},
 		{"pipeline #3 (zed)", CheckFailure, "z3"},
 	}

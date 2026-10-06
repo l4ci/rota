@@ -28,12 +28,46 @@ import (
 // the pushed commit within the start window is verdict ci-not-run, before
 // anything lands.
 
-// CI verdicts, both exit 1: CI did not start on the pushed commit, or did not
-// finish within test.ciTimeoutMinutes. Nothing landed.
+// CI verdicts, all exit 1 with nothing landed: CI did not start on the pushed
+// commit, did not finish within test.ciTimeoutMinutes, or would have run a CI
+// definition the merge itself changes.
 const (
-	GateCINotRun      = "ci-not-run"
-	GateVerifyTimeout = "verify-timeout"
+	GateCINotRun        = "ci-not-run"
+	GateVerifyTimeout   = "verify-timeout"
+	GateCIConfigChanged = "ci-config-changed"
 )
+
+// ciConfigPaths define a project's CI: GitHub workflows and local actions,
+// GitLab's default pipeline file and its usual include directory. CI runs the
+// definition in the pushed tree, so a merge that changes one would choose its
+// own verification, which the gate never lets a branch do (see Gate). A
+// pipeline file kept elsewhere is not recognised.
+var ciConfigPaths = []string{".github/workflows/", ".github/actions/", ".gitlab-ci.yml", ".gitlab/ci/"}
+
+// ciConfigChanges is the files among changed that define CI.
+func ciConfigChanges(changed []string) []string {
+	var hit []string
+	for _, f := range changed {
+		for _, p := range ciConfigPaths {
+			if f == p || (strings.HasSuffix(p, "/") && strings.HasPrefix(f, p)) {
+				hit = append(hit, f)
+				break
+			}
+		}
+	}
+	return hit
+}
+
+// ciConfigRefusal is the ci-config-changed message and hint for who, or ""
+// when no file in changed defines CI.
+func ciConfigRefusal(who string, changed []string) (msg, hint string) {
+	hit := ciConfigChanges(changed)
+	if len(hit) == 0 {
+		return "", ""
+	}
+	return fmt.Sprintf("CI-CONFIG %s — the merge changes the CI definition (%s), so under test.fullWhere ci it would choose its own verification; nothing landed", who, strings.Join(hit, ", ")),
+		"review the CI change, then land it with test.fullWhere local or by hand"
+}
 
 // ciRefPrefix is where verification commits are pushed; the docs tell projects
 // to run CI on it.
@@ -115,25 +149,44 @@ func (v *ciVerifier) verify(sha, name string) (VerifyResult, error) {
 	}
 	defer v.e.runGit(v.root, "push", "-q", "origin", "--delete", ref)
 	start := v.e.now()
+	green := "" // the checks of the last all-green poll
 	for {
 		checks, err := v.forge.CommitChecks(v.e.ctx, sha)
 		if err != nil {
 			return res, fmt.Errorf("could not read the CI checks of %s: %w", short(sha), err)
 		}
 		elapsed := v.e.now().Sub(start)
-		pending, failed := 0, false
+		pending, passed, failed := 0, 0, false
+		var names []string
 		for _, c := range checks {
+			names = append(names, c.Name)
 			switch c.State {
 			case tracker.CheckSuccess:
+				passed++
+			case tracker.CheckSkipped:
 			case tracker.CheckFailure:
 				failed = true
 			default:
 				pending++
 			}
 		}
+		done := len(checks) > 0 && pending == 0
+		if done && !failed && passed > 0 {
+			// A check can appear after the others finished (a later workflow,
+			// a job created only when it starts), so green must hold for two
+			// polls in a row with the same checks.
+			sig := strings.Join(names, "\n")
+			if sig != green {
+				green = sig
+				v.e.sleep(v.set.poll)
+				continue
+			}
+		}
+		green = ""
 		switch {
-		case failed || (len(checks) > 0 && pending == 0):
-			// One red check is the verdict; the rest need not finish.
+		case failed || done:
+			// One red check is the verdict; the rest need not finish. Checks
+			// that all skipped tested nothing and pass nothing.
 			for _, c := range checks {
 				line := c.State + " " + c.Name
 				if c.URL != "" {
@@ -146,6 +199,9 @@ func (v *ciVerifier) verify(sha, name string) (VerifyResult, error) {
 				case tracker.CheckFailure:
 					res.Failed = append(res.Failed, c.Name)
 				}
+			}
+			if !failed && passed == 0 {
+				res.Failed = append(res.Failed, "every check skipped")
 			}
 			return res, nil
 		case len(checks) == 0 && elapsed >= v.set.start:
@@ -205,25 +261,26 @@ func (e gateEnv) scratchTree(root, sha string) (dir string, cleanup func(), err 
 // fullTier is the train's seam for the full tier: verify runs it on the tree
 // checked out in dir, with test.full here or on CI under test.fullWhere ci.
 // brokeMsg refuses the run before anything merges; err is a bad config.
-func (e Env) fullTier(ctx context.Context, root, name string) (verify func(dir string) (VerifyResult, error), brokeMsg string, err error) {
+// onCI says the tier runs on CI.
+func (e Env) fullTier(ctx context.Context, root, name string) (verify func(dir string) (VerifyResult, error), onCI bool, brokeMsg string, err error) {
 	cfg := config.Load(rotatree.Config(root))
 	where, err := FullWhere(cfg)
 	if err != nil {
-		return nil, "", fail(exitcode.ExitInternal, err.Error())
+		return nil, false, "", fail(exitcode.ExitInternal, err.Error())
 	}
 	if where == WhereLocal {
-		return func(dir string) (VerifyResult, error) { return e.Verify(ctx, root, dir) }, "", nil
+		return func(dir string) (VerifyResult, error) { return e.Verify(ctx, root, dir) }, false, "", nil
 	}
 	ge := e.gateEnv()
 	ge.ctx = ctx
 	provider := ge.detectProvider(root, "")
 	forge, ferr := ge.forge(provider, root, cfg)
 	if ferr != nil {
-		return nil, fmt.Sprintf("cannot reach the %s forge to read CI checks: %v", provider, ferr), nil
+		return nil, true, fmt.Sprintf("cannot reach the %s forge to read CI checks: %v", provider, ferr), nil
 	}
 	ci, msg := ge.newCIVerifier(root, forge, cfg)
 	if msg != "" {
-		return nil, msg, nil
+		return nil, true, msg, nil
 	}
 	return func(dir string) (VerifyResult, error) {
 		sha, code := ge.runGit(dir, "rev-parse", "HEAD")
@@ -231,5 +288,5 @@ func (e Env) fullTier(ctx context.Context, root, name string) (verify func(dir s
 			return VerifyResult{}, fmt.Errorf("git rev-parse HEAD exited %d in %s", code, dir)
 		}
 		return ci.verify(sha, name)
-	}, "", nil
+	}, true, "", nil
 }

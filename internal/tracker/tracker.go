@@ -161,13 +161,14 @@ type PRInfo struct {
 // commit status, or a GitLab pipeline.
 type CheckRun struct {
 	Name  string
-	State string // CheckPending, CheckSuccess or CheckFailure
+	State string // CheckPending, CheckSuccess, CheckSkipped or CheckFailure
 	URL   string
 }
 
 const (
 	CheckPending = "pending"
 	CheckSuccess = "success"
+	CheckSkipped = "skipped" // finished without testing anything (skipped, neutral)
 	CheckFailure = "failure"
 )
 

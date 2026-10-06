@@ -1,7 +1,9 @@
 package worker
 
 import (
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -171,8 +173,9 @@ func TestTrainCIGreen(t *testing.T) {
 	if res.Verdict != GatePass || strings.Join(res.Landed, ",") != "b1,b2" || !w.onMain("b1.txt") || !w.onMain("b2.txt") {
 		t.Fatalf("%+v", res)
 	}
-	if n := strings.Count(w.logText(), "CommitChecks"); n != 1 {
-		t.Errorf("CommitChecks calls = %d, want 1:\n%s", n, w.logText())
+	// One CI run: green, then the same checks green again to settle.
+	if n := strings.Count(w.logText(), "CommitChecks"); n != 2 {
+		t.Errorf("CommitChecks calls = %d, want 2:\n%s", n, w.logText())
 	}
 }
 
@@ -223,4 +226,65 @@ func parseCfg(s string) any {
 		panic(err)
 	}
 	return v
+}
+
+// Green is not final until it holds for a second poll: a check that appears
+// after the first (a later workflow, a job created when it starts) counts.
+func TestGateCILateCheck(t *testing.T) {
+	w := newWorld(t, ghURL)
+	w.setConfig(ciCfg)
+	w.forge("ci", "late")
+	res, err := w.ciGate(GateOpts{})
+	if err != nil || res.Verdict != GateVerifyFailed || w.forgeWord("state") != "OPEN" || !strings.Contains(res.Err, "ci/late") {
+		t.Fatalf("%+v %v", res, err)
+	}
+}
+
+// Checks that all skipped tested nothing, so they pass nothing.
+func TestGateCIAllSkipped(t *testing.T) {
+	w := newWorld(t, ghURL)
+	w.setConfig(ciCfg)
+	w.forge("ci", "skipped")
+	res, err := w.ciGate(GateOpts{})
+	if err != nil || res.Verdict != GateVerifyFailed || w.forgeWord("state") != "OPEN" || !strings.Contains(res.Err, "nothing landed") {
+		t.Fatalf("%+v %v", res, err)
+	}
+}
+
+// A merge that edits the CI definition would choose its own verification.
+func TestGateCIConfigChanged(t *testing.T) {
+	w := newWorld(t, ghURL)
+	w.setConfig(ciCfg)
+	os.MkdirAll(filepath.Join(w.worker, ".github", "workflows"), 0o755)
+	os.WriteFile(filepath.Join(w.worker, ".github", "workflows", "ci.yml"), []byte("on: push\n"), 0o644)
+	gitq(t, w.worker, "add", ".github")
+	gitq(t, w.worker, "commit", "-q", "-m", "ci")
+	gitq(t, w.worker, "push", "-q", "origin", "w1")
+	w.forge("sha", gitq(t, w.worker, "rev-parse", "HEAD"))
+	res, err := w.ciGate(GateOpts{})
+	if err != nil || res.Verdict != GateCIConfigChanged || w.forgeWord("state") != "OPEN" || !strings.Contains(res.Err, ".github/workflows/ci.yml") {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if strings.Contains(w.logText(), "CommitChecks") {
+		t.Error("CI must not run on a merge that changes it")
+	}
+}
+
+func TestTrainCIConfigChanged(t *testing.T) {
+	w := trainWorld(t, "true", "b1", "b2")
+	gitq(t, w.dir, "checkout", "-q", "b2")
+	trainWrite(t, w, ".gitlab-ci.yml", "test: {script: [true]}")
+	gitq(t, w.dir, "checkout", "-q", "main")
+	w.setConfig(ciCfg)
+	res, err := w.ciEnv().Train(bg, w.dir, TrainOpts{Targets: []string{"b1", "b2"}, Base: "main"})
+	if err != nil || res.Verdict != GateCIConfigChanged || len(res.Landed) != 0 || !strings.Contains(res.Err, ".gitlab-ci.yml") {
+		t.Fatalf("%+v %v", res, err)
+	}
+}
+
+func TestCIConfigChanges(t *testing.T) {
+	got := ciConfigChanges([]string{"a.go", ".github/workflows/x.yml", ".github/CODEOWNERS", ".gitlab-ci.yml", ".gitlab/ci/t.yml", "sub/.gitlab-ci.yml"})
+	if strings.Join(got, ",") != ".github/workflows/x.yml,.gitlab-ci.yml,.gitlab/ci/t.yml" {
+		t.Fatalf("%v", got)
+	}
 }

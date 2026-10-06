@@ -484,12 +484,23 @@ func (g *GitHub) PRState(ctx context.Context, pr int) (string, error) {
 	return strings.ToLower(d.State), nil
 }
 
-// CommitChecks joins the commit's check runs with its combined status, which
-// covers CI that reports through the older status API. Both answer the latest
-// result per check already. The CLI paginates these calls, so a long answer
-// is several JSON objects back to back; each is decoded in turn.
+// CommitChecks joins the commit's check suites, check runs and combined
+// status. A suite stays in progress until its last job finishes, so it covers
+// the jobs (`needs:`) that have no check run yet; a suite with no runs is an
+// app that never reported and is left out. The status covers CI that reports
+// through the older API. All three answer the latest result already. The CLI
+// paginates these calls, so a long answer is several JSON objects back to
+// back; each is decoded in turn.
 func (g *GitHub) CommitChecks(ctx context.Context, sha string) ([]CheckRun, error) {
 	type page struct {
+		CheckSuites []struct {
+			App struct {
+				Name string `json:"name"`
+			} `json:"app"`
+			Status     string `json:"status"`
+			Conclusion string `json:"conclusion"`
+			Runs       int    `json:"latest_check_runs_count"`
+		} `json:"check_suites"`
 		CheckRuns []struct {
 			Name       string `json:"name"`
 			Status     string `json:"status"`
@@ -503,7 +514,7 @@ func (g *GitHub) CommitChecks(ctx context.Context, sha string) ([]CheckRun, erro
 		} `json:"statuses"`
 	}
 	var all page
-	for _, path := range []string{"check-runs?per_page=100", "status"} {
+	for _, path := range []string{"check-suites?per_page=100", "check-runs?per_page=100", "status"} {
 		out, err := g.run(ctx, []string{"api", "repos/{owner}/{repo}/commits/" + sha + "/" + path}, "")
 		if err != nil {
 			return nil, err
@@ -514,22 +525,19 @@ func (g *GitHub) CommitChecks(ctx context.Context, sha string) ([]CheckRun, erro
 			if err := dec.Decode(&p); err != nil {
 				return nil, failed("unparseable tracker output: %q", clip(out))
 			}
+			all.CheckSuites = append(all.CheckSuites, p.CheckSuites...)
 			all.CheckRuns = append(all.CheckRuns, p.CheckRuns...)
 			all.Statuses = append(all.Statuses, p.Statuses...)
 		}
 	}
 	checks := []CheckRun{}
-	for _, r := range all.CheckRuns {
-		state := CheckPending
-		if r.Status == "completed" {
-			switch r.Conclusion {
-			case "success", "neutral", "skipped":
-				state = CheckSuccess
-			default:
-				state = CheckFailure
-			}
+	for _, su := range all.CheckSuites {
+		if su.Runs > 0 {
+			checks = append(checks, CheckRun{Name: "suite " + su.App.Name, State: ghCheckState(su.Status, su.Conclusion)})
 		}
-		checks = append(checks, CheckRun{Name: r.Name, State: state, URL: r.HTMLURL})
+	}
+	for _, r := range all.CheckRuns {
+		checks = append(checks, CheckRun{Name: r.Name, State: ghCheckState(r.Status, r.Conclusion), URL: r.HTMLURL})
 	}
 	for _, s := range all.Statuses {
 		state := CheckPending
@@ -542,4 +550,20 @@ func (g *GitHub) CommitChecks(ctx context.Context, sha string) ([]CheckRun, erro
 		checks = append(checks, CheckRun{Name: s.Context, State: state, URL: s.TargetURL})
 	}
 	return checks, nil
+}
+
+// ghCheckState maps a check suite's or run's status and conclusion. Neutral
+// and skipped finished without testing anything; any other conclusion but
+// success is a failure.
+func ghCheckState(status, conclusion string) string {
+	if status != "completed" {
+		return CheckPending
+	}
+	switch conclusion {
+	case "success":
+		return CheckSuccess
+	case "neutral", "skipped":
+		return CheckSkipped
+	}
+	return CheckFailure
 }

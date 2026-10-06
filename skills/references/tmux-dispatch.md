@@ -41,6 +41,7 @@ Neither author can see it, and git's mergeability answer is about text, not mean
 - `merge-failed` (a conflict): route to the slot that owns the branch context; never resolve a cross-worker semantic conflict blind.
 - `verify-failed`: the merged tree is broken and the merge already landed. Fix forward on the base branch; the owning slot has usually moved on, and small orphaned-reference fixes are the orchestrator's to make. With `test.fullWhere` `ci` it is the other way round: CI verified the merge result before the merge, nothing landed (`data.changed` false), and the slot goes back to fix it.
 - `ci-not-run` / `verify-timeout` (`test.fullWhere` `ci`): nothing landed. `ci-not-run` means the project's CI does not run on `rota/ci/**` pushes; fix that or set `test.fullWhere` to `local`. `verify-timeout` means checks were still pending after `test.ciTimeoutMinutes`; re-gate when CI has caught up.
+- `ci-config-changed` (`test.fullWhere` `ci`): the merge edits the CI definition, which would then verify itself. Review that change yourself, then land it with `test.fullWhere` `local` or by hand.
 - `base-moved`: the base changed while the gate verified. With `data.changed` false nothing landed: re-gate on the new base. With `data.changed` true it landed but the landed tree is not the verified one: never re-merge, verify the base as it is.
 - `data.verifySkipped: true` means no command gated the merged tree. A project on this backend should set `test.full`; otherwise the re-verify is a structural diff review and nothing more.
 

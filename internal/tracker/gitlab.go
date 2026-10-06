@@ -572,7 +572,9 @@ func (g *GitLab) CommitChecks(ctx context.Context, sha string) ([]CheckRun, erro
 		switch p.Status {
 		case "success":
 			state = CheckSuccess
-		case "failed", "canceled", "skipped", "manual":
+		case "skipped":
+			state = CheckSkipped
+		case "failed", "canceled", "manual":
 			state = CheckFailure
 		}
 		checks = append(checks, CheckRun{Name: fmt.Sprintf("pipeline #%d (%s)", p.ID, ref), State: state, URL: p.WebURL})

@@ -132,7 +132,7 @@ func (e Env) Train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 		res.Members = append(res.Members, TrainMember{Target: t, Branch: gr.Branch, PR: gr.PR})
 		remote = remote || gr.PR != ""
 	}
-	verify, brokeMsg, err := e.fullTier(ctx, root, "train")
+	verify, onCI, brokeMsg, err := e.fullTier(ctx, root, "train")
 	if err != nil {
 		return res, err
 	}
@@ -150,28 +150,40 @@ func (e Env) Train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 		return m.Branch
 	}
 
+	// The union of the files the members change.
+	files := func() ([]string, error) {
+		set := map[string]bool{}
+		for _, m := range res.Members {
+			out, code := e.git(root, "diff", "--name-only", baseRef+"..."+headRef(m))
+			if code != 0 {
+				return nil, fmt.Errorf("git diff --name-only %s...%s exited %d", baseRef, headRef(m), code)
+			}
+			for _, l := range strings.Split(out, "\n") {
+				if l != "" {
+					set[l] = true
+				}
+			}
+		}
+		list := make([]string, 0, len(set))
+		for f := range set {
+			list = append(list, f)
+		}
+		sort.Strings(list)
+		return list, nil
+	}
+	if onCI {
+		changed, err := files()
+		if err != nil {
+			return e.trainBroke(res, err.Error())
+		}
+		if msg, hint := ciConfigRefusal("train", changed); msg != "" {
+			res.Verdict, res.Err, res.Hint = GateCIConfigChanged, msg, hint
+			return res, nil
+		}
+	}
+
 	// 2. One approval for the train.
 	if o.Approve != nil {
-		files := func() ([]string, error) {
-			set := map[string]bool{}
-			for _, m := range res.Members {
-				out, code := e.git(root, "diff", "--name-only", baseRef+"..."+headRef(m))
-				if code != 0 {
-					return nil, fmt.Errorf("git diff --name-only %s...%s exited %d", baseRef, headRef(m), code)
-				}
-				for _, l := range strings.Split(out, "\n") {
-					if l != "" {
-						set[l] = true
-					}
-				}
-			}
-			list := make([]string, 0, len(set))
-			for f := range set {
-				list = append(list, f)
-			}
-			sort.Strings(list)
-			return list, nil
-		}
 		if err := o.Approve(files); err != nil {
 			res.Verdict = GateApprovalRequired
 			return res, err
