@@ -315,7 +315,7 @@ func (h *herdr) Send(ctx context.Context, slot, handle, file string) error {
 	text = strings.TrimRight(text, "\n") // the shell host read it with $(cat)
 	name := AgentName(slot, handle)
 	// A human typing in the pane would get the brief mixed into their draft.
-	if waitNoDraft(&h.d, func() string { return h.promptPane(ctx, name) }, text) != "" {
+	if waitNoDraft(&h.d, func() string { return h.draftPane(ctx, name) }, text) != "" {
 		return ErrDraftOnPrompt
 	}
 	r := h.herdr(ctx, "agent", "prompt", name, text,
@@ -377,10 +377,22 @@ func (h *herdr) promptPane(ctx context.Context, name string) string {
 		"--lines", "60", "--format", "text"))
 }
 
+// draftPane reads the pane with styling and drops the dim runs, so a ghost
+// suggestion is not mistaken for typed text. A failed or empty styled read
+// falls back to the plain text.
+func (h *herdr) draftPane(ctx context.Context, name string) string {
+	r := h.herdr(ctx, "agent", "read", name, "--source", "recent-unwrapped",
+		"--lines", "60", "--format", "ansi")
+	if r.ExitCode == 0 && strings.TrimSpace(r.Stdout) != "" {
+		return stripDim(r.Stdout)
+	}
+	return h.promptPane(ctx, name)
+}
+
 // Draft implements Drafter.
 func (h *herdr) Draft(ctx context.Context, slot, handle, file string) string {
 	text, _ := readFile(file)
-	return humanDraft(h.promptPane(ctx, AgentName(slot, handle)), strings.TrimRight(text, "\n"))
+	return humanDraft(h.draftPane(ctx, AgentName(slot, handle)), strings.TrimRight(text, "\n"))
 }
 
 const promptMarker = "\u276f"
