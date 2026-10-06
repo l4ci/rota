@@ -38,7 +38,8 @@ Work only this task, then stop.
   paths. An absolute path under the main checkout silently edits the WRONG tree.
 - Stage explicit paths. Never `git add -A` or `git add .`.
 - Commit your own work, then open a PR against `<base-branch>`. Never merge.
-- Run TARGETED verification only: the files you touched. The full suite is the
+- Run TARGETED verification only: the files you touched. When the project sets
+  `test.fast`, that is `rota test run fast`; otherwise pick the checks by hand. The full suite is the
   orchestrator's gate on the merged tree. Several workers running full suites at
   once starve the CPU and turn time-budgeted tests into false reds, which costs
   everyone a re-measurement to disprove.
