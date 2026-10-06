@@ -285,7 +285,10 @@ func suiteItem(t *testing.T) {
 		rmPlan("unknown", fx{}, "B99", true, false, 3, nil),
 		rmPlan("one-unknown-among-known", fx{}, "B01,B99", true, false, 3, nil),
 		rmPlan("no-backlog", fx{noBacklog: true}, "B01", true, false, 3, nil),
-		rmPlan("plain-archive-entry-not-found", fx{archive: "plain"}, "B05", true, true, 3, nil),
+		rmPlan("plain-archive-with-scrub", fx{archive: "plain"}, "B05", true, true, 0, func(t *testing.T, e envl) {
+			eq(t, e, "data.items.0.archive", true)
+			eq(t, e, "data.items.0.todoEntry", false)
+		}),
 		rmPlan("sectioned-archive-without-scrub", fx{archive: "sectioned"}, "B05", true, false, 0, func(t *testing.T, e envl) {
 			eq(t, e, "data.items.0.archive", true)
 			eq(t, e, "data.items.0.todoEntry", false)
