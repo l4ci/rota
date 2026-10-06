@@ -146,8 +146,8 @@ func (e Env) Architecture(ctx context.Context, root string, be backlog.Backend, 
 // is cached in the registry for closedCacheTTL: status, candidates and start
 // would otherwise each fetch every closed issue.
 func (e Env) closedSinceReview(ctx context.Context, root string, be backlog.Backend, since *string) (int, string) {
-	if age, ok := be.(interface{ RefactorAge() (any, any, error) }); ok {
-		feats, bugs, err := age.RefactorAge()
+	if rc, ok := backlog.RefactorOf(be); ok {
+		feats, bugs, err := rc.RefactorAge()
 		if err != nil {
 			return -1, err.Error()
 		}
@@ -294,8 +294,8 @@ func (e Env) MintReview(ctx context.Context, root string, be backlog.Backend, a 
 			}
 		}
 	}
-	if r, ok := be.(interface{ RefactorReset() (bool, error) }); ok {
-		if _, err := r.RefactorReset(); err != nil {
+	if rc, ok := backlog.RefactorOf(be); ok {
+		if _, err := rc.RefactorReset(); err != nil {
 			return fail(err)
 		}
 	}
