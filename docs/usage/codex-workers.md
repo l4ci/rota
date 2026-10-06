@@ -21,9 +21,10 @@ rota round assign 59 --kind codex
 - **herdr.** Codex workers run under `work.dispatch` set to `herdr` (or detected inside a herdr pane).
   Under tmux, `rota round assign --kind codex` exits 5 with `codex workers need work.dispatch=herdr`. Solo
   mode runs Claude subagents only.
-- **Codex CLI 0.159.x.** rota pins the range `>= 0.159.0, < 0.160.0` (tested on 0.159.2), read from
-  `codex --version`. Outside it, `assign` refuses (exit 4, `blockedBy: "codex version"`) before it marks
-  anything. `--accept-codex-version` lets one call through with a warning. `rota doctor` reports the same check.
+- **A Codex CLI with rota's launch flags.** rota does not pin a Codex version. Before it marks anything,
+  `assign` and `dispatch` check that `codex --help` lists every flag the launch line uses. A missing flag
+  refuses with exit 4, `blockedBy: "codex flags"`, naming the flag. A `codex` that is not installed or will
+  not run is exit 5. `--accept-codex-version` is deprecated: it warns and does nothing.
 - **A Codex login.** See below.
 
 ## Codex home and login
@@ -129,11 +130,10 @@ brief.
 - **No usage meter.** `work.accounts` and its headroom meter are Anthropic's, and a Codex slot is skipped
   by them. `work.codexAccounts` spreads slots but cannot measure headroom, so `rota limit watch` has nothing
   to switch to. Account switching and [usage-limit handling](unattended-rounds.md#usage-limits) apply to Claude slots.
-- **Version pin.** A Codex update outside 0.159.x blocks `assign` until rota's range moves or you pass
-  `--accept-codex-version`.
-- **The prompt check is unverified on an accepted version.** It was verified on 0.159.2. An older Codex may
-  ignore `-c features.hooks=true`, so with `--accept-codex-version` rota warns `prompt check unverified on
-  this Codex` and unsigned pane text may reach the worker.
+- **A Codex update can still break a flag.** If a release renames or drops a launch flag, `assign` refuses
+  and names it. Fix `work.codexCommand`, or wait for rota to follow.
+- **The prompt check was verified on 0.159.2.** rota does not gate on the version, so it cannot tell a Codex
+  that ignores `-c features.hooks=true`. Unsigned pane text could then reach the worker.
 
 ## Check it
 

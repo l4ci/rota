@@ -39,9 +39,8 @@ const (
 	BlockNoFreeSlot   = "no free slot"
 	BlockBriefMissing = "brief missing"
 	BlockNoTierMap    = "no tier map"
-	// BlockCodexVersion: the installed Codex CLI is outside the supported
-	// range and --accept-codex-version is not given (E1, #68).
-	BlockCodexVersion = harness.BlockCodexVersion
+	// BlockCodexFlags: `codex --help` does not list a flag the launch line uses.
+	BlockCodexFlags = harness.BlockCodexFlags
 )
 
 // BlockedError is an assignment refused before anything was marked or sent.
@@ -71,9 +70,6 @@ type AssignOpts struct {
 	Tier, TierReason, Kind string
 	// Model is --model: it beats the item's model: label and the tier map.
 	Model string
-	// AcceptCodexVersion lets one codex assignment through a Codex CLI outside
-	// the supported range, with a warning.
-	AcceptCodexVersion bool
 }
 
 // Assigned is what Assign did.
@@ -470,9 +466,9 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 	if why := hz.SoloRefusal(); why != "" && isSolo(root) {
 		return res, usage("%s", why)
 	}
-	// A worker that cannot start (version, host, login) is refused before
+	// A worker that cannot start (launch flags, host, login) is refused before
 	// anything is marked. dispatch runs the same preflight again.
-	setup, err := e.workerEnv().Preflight(ctx, root, kind, agent, o.AcceptCodexVersion)
+	setup, err := e.workerEnv().Preflight(ctx, root, kind, agent, model)
 	if err != nil {
 		var we *exitcode.Error
 		if errors.As(err, &we) && we.Exit == exitcode.ExitRefused {
@@ -575,7 +571,7 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 	} else {
 		steps = append(steps, step{name: "dispatch", keep: true, do: func() error {
 			if _, err := w.Dispatch(ctx, root, worker.DispatchOpts{Slot: agent, BodyFile: tmpName, Task: id, Round: &rnd, Branch: res.Branch, Model: res.Model,
-				Kind: kind, AcceptCodexVersion: o.AcceptCodexVersion}); err != nil {
+				Kind: kind}); err != nil {
 				return err
 			}
 			res.Dispatched, res.Changed = true, true

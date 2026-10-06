@@ -53,12 +53,13 @@ func (d *runner) codex() Check {
 	v, f := harness.CheckCodexVersion(d.ctx, p, bin, home)
 	switch {
 	case f == nil:
-	case f.Code == harness.VersionOutOfRange:
-		return fail("codex", fmt.Sprintf("codex %s, need %s", v, harness.CodexRange), harness.CodexInstallHint)
 	default:
-		return fail("codex", "codex version unreadable", harness.CodexInstallHint)
+		return fail("codex", "codex not runnable: `codex --version` failed", harness.CodexInstallHint)
 	}
-	head := "codex " + v.String()
+	head := "codex"
+	if v != (harness.CodexVersion{}) {
+		head += " " + v.String()
+	}
 	// The tier map is optional for codex (#68): unset, a worker runs on
 	// Codex's own default model.
 	tiers := ""

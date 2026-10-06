@@ -36,13 +36,16 @@ func roundAssign(fs *flag.FlagSet) RunFunc {
 	tierReason := fs.String("tier-reason", "", "one line on why; required above the default tier")
 	kind := fs.String("kind", "", "harness kind: claude or codex (default the issue's harness: label, then the slot's, else claude)")
 	model := fs.String("model", "", "model id (default the issue's model: label, then the tier map)")
-	acceptCodex := fs.Bool("accept-codex-version", false, "let this call through a Codex CLI outside the supported range")
+	acceptCodex := fs.Bool("accept-codex-version", false, "deprecated and ignored: rota no longer checks the Codex version")
 	accept := fs.Bool("accept-overlap", false, "skip the file-overlap check only")
 	acceptOpenPR := fs.Bool("accept-open-pr", false, "assign an issue an open PR already resolves, for a deliberate redo")
 	pid := fs.Int("holder-pid", 0, "orchestrator pid, when its ancestry cannot be read")
 	return func(c *Ctx, args []string) (Result, error) {
 		if len(args) != 1 {
 			return Result{}, Usage("round assign takes one item ID")
+		}
+		if *acceptCodex {
+			c.Warn("--accept-codex-version is deprecated and does nothing: rota no longer checks the Codex version")
 		}
 		root, err := c.Root()
 		if err != nil {
@@ -85,7 +88,7 @@ func roundAssign(fs *flag.FlagSet) RunFunc {
 		res, err := env.Assign(ctx, root, be, round.AssignOpts{
 			ID: id, Agent: *agent, BodyFile: bf, Siblings: pystr.SplitCSV(*siblings),
 			CheckOnly: *checkOnly, AcceptOverlap: *accept, AcceptOpenPR: *acceptOpenPR, HolderPID: *pid,
-			Tier: *tier, TierReason: *tierReason, Kind: *kind, Model: *model, AcceptCodexVersion: *acceptCodex,
+			Tier: *tier, TierReason: *tierReason, Kind: *kind, Model: *model,
 			Settings: set, Getenv: os.Getenv,
 		})
 		for _, w := range res.Warnings {

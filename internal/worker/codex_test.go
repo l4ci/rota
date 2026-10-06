@@ -13,6 +13,18 @@ import (
 	"github.com/l4ci/rota/internal/host"
 )
 
+// codexHelp is the `codex --help` the rig prints: every flag the default
+// launch line uses.
+const codexHelp = `Usage: codex [OPTIONS]
+
+Options:
+  -m, --model <MODEL>
+      --dangerously-bypass-approvals-and-sandbox
+      --dangerously-bypass-hook-trust
+      --no-daemon
+      --no-alt-screen
+`
+
 // ── preflight ───────────────────────────────────────────────────────────────
 
 // codexRig scripts codex and herdr: every call is logged with its env, and no
@@ -20,6 +32,7 @@ import (
 type codexRig struct {
 	calls     []string
 	version   string // `codex --version` stdout; "" means codex-cli 0.159.2
+	noFlag    string // a launch flag `codex --help` leaves out
 	loggedIn  bool
 	installed bool // herdr reports codex current
 	installRC int
@@ -45,6 +58,8 @@ func (r *codexRig) env(h host.Host) Env {
 				v = "codex-cli 0.159.2\n"
 			}
 			return host.Result{Stdout: v}, nil
+		case "codex --help":
+			return host.Result{Stdout: strings.ReplaceAll(codexHelp, r.noFlag+"\n", "\n")}, nil
 		case "codex login status":
 			if r.loggedIn {
 				return host.Result{Stdout: "Logged in\n"}, nil
@@ -84,8 +99,8 @@ func codexProject(t *testing.T) (dir, home string) {
 func TestCodexPreflightDefaultHome(t *testing.T) {
 	dir, slotDir := codexProject(t)
 	rig := &codexRig{loggedIn: true}
-	set, err := rig.env(tmuxFake()).Preflight(bg, dir, harness.Codex, "w1", false)
-	if err != nil || set.Home != "" || set.Account != "" || set.StateDir != slotDir || set.Version != "0.159.2" || len(set.Warnings) != 0 {
+	set, err := rig.env(tmuxFake()).Preflight(bg, dir, harness.Codex, "w1", "")
+	if err != nil || set.Home != "" || set.Account != "" || set.StateDir != slotDir || len(set.Warnings) != 0 {
 		t.Fatalf("%+v %v", set, err)
 	}
 	if fi, err := os.Stat(slotDir); err != nil || fi.Mode().Perm() != 0o700 {
@@ -113,7 +128,7 @@ func TestCodexPreflightDefaultHome(t *testing.T) {
 func TestCodexPreflightSkipsAnInstalledIntegration(t *testing.T) {
 	dir, _ := codexProject(t)
 	rig := &codexRig{loggedIn: true, installed: true}
-	if _, err := rig.env(tmuxFake()).Preflight(bg, dir, harness.Codex, "w1", false); err != nil {
+	if _, err := rig.env(tmuxFake()).Preflight(bg, dir, harness.Codex, "w1", ""); err != nil {
 		t.Fatal(err)
 	}
 	if rig.ran("herdr integration install") != 0 {
@@ -132,7 +147,7 @@ func TestCodexPreflightAccounts(t *testing.T) {
 	e := rig.env(tmuxFake())
 	pick := func(slot string) harness.Setup {
 		t.Helper()
-		set, err := e.Preflight(bg, dir, harness.Codex, slot, false)
+		set, err := e.Preflight(bg, dir, harness.Codex, slot, "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -166,7 +181,7 @@ func TestCodexPreflightAccountNotLoggedIn(t *testing.T) {
 	dir := newProject(t, codexAcctCfg)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	rig := &codexRig{installed: true}
-	_, err := rig.env(tmuxFake()).Preflight(bg, dir, harness.Codex, "w1", false)
+	_, err := rig.env(tmuxFake()).Preflight(bg, dir, harness.Codex, "w1", "")
 	we, _ := err.(*exitcode.Error)
 	if we == nil || we.Exit != exitcode.ExitUnavailable || we.Hint != "CODEX_HOME=/h/a codex login" || !strings.Contains(we.Message, "account 'a'") {
 		t.Fatalf("%v", err)
@@ -175,32 +190,30 @@ func TestCodexPreflightAccountNotLoggedIn(t *testing.T) {
 
 func TestCodexPreflightRefusals(t *testing.T) {
 	type rc struct {
-		rig    codexRig
-		accept bool
-		exit   int
-		by     string
-		hint   string
-		warn   string
+		rig  codexRig
+		exit int
+		by   string
+		hint string
+		msg  string
 	}
 	cases := map[string]rc{
 		"no codex":       {rig: codexRig{missing: map[string]bool{"codex": true}}, exit: exitcode.ExitUnavailable},
 		"no herdr":       {rig: codexRig{loggedIn: true, missing: map[string]bool{"herdr": true}}, exit: exitcode.ExitUnavailable},
-		"too old":        {rig: codexRig{version: "codex-cli 0.158.9\n", loggedIn: true}, exit: exitcode.ExitRefused, by: "codex version"},
-		"too new":        {rig: codexRig{version: "codex-cli 0.160.0\n", loggedIn: true}, exit: exitcode.ExitRefused, by: "codex version"},
-		"warnings first": {rig: codexRig{version: "WARNING: x\ncodex-cli 0.160.2\n", loggedIn: true}, accept: true, warn: "codex 0.160.2 is outside the supported range >=0.159.0 <0.160.0"},
-		"in range":       {rig: codexRig{version: "WARNING: update available\ncodex-cli 0.159.0\n", loggedIn: true}},
-		"unreadable":     {rig: codexRig{version: "hello\n", loggedIn: true}, exit: exitcode.ExitRefused, by: "codex version"},
-		"unreadable ok":  {rig: codexRig{version: "hello\n", loggedIn: true}, accept: true, warn: "codex (version unreadable) is outside the supported range >=0.159.0 <0.160.0"},
-		"prerelease":     {rig: codexRig{version: "codex-cli 0.159.2-alpha.1\n", loggedIn: true}, exit: exitcode.ExitRefused, by: "codex version"},
+		"new codex":      {rig: codexRig{version: "codex-cli 0.200.0\n", loggedIn: true}},
+		"warnings first": {rig: codexRig{version: "WARNING: x\ncodex-cli 0.160.2\n", loggedIn: true}},
+		"unparsable":     {rig: codexRig{version: "hello\n", loggedIn: true}},
+		"prerelease":     {rig: codexRig{version: "codex-cli 0.159.2-alpha.1\n", loggedIn: true}},
+		"flag missing":   {rig: codexRig{noFlag: "--no-daemon", loggedIn: true}, exit: exitcode.ExitRefused, by: "codex flags", msg: "--no-daemon"},
+		"last flag":      {rig: codexRig{noFlag: "--no-alt-screen", loggedIn: true}, exit: exitcode.ExitRefused, by: "codex flags", msg: "--no-alt-screen"},
 		"not logged in":  {rig: codexRig{}, exit: exitcode.ExitUnavailable, hint: "codex login"},
 		"install fails":  {rig: codexRig{loggedIn: true, installRC: 1}, exit: exitcode.ExitUnavailable, hint: "herdr integration install codex"},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
 			dir, _ := codexProject(t)
-			set, err := c.rig.env(tmuxFake()).Preflight(bg, dir, harness.Codex, "w1", c.accept)
+			set, err := c.rig.env(tmuxFake()).Preflight(bg, dir, harness.Codex, "w1", "m")
 			if c.exit == 0 {
-				if err != nil || (c.warn != "" && (len(set.Warnings) != 2 || set.Warnings[0] != c.warn || !strings.Contains(set.Warnings[1], "prompt check unverified"))) || (c.warn == "" && len(set.Warnings) != 0) {
+				if err != nil || len(set.Warnings) != 0 {
 					t.Fatalf("%+v %v", set, err)
 				}
 				return
@@ -211,6 +224,9 @@ func TestCodexPreflightRefusals(t *testing.T) {
 			}
 			if bd, _ := we.Data.(BlockData); bd.BlockedBy != c.by {
 				t.Errorf("blockedBy = %q, want %q", bd.BlockedBy, c.by)
+			}
+			if !strings.Contains(we.Message, c.msg) {
+				t.Errorf("message = %q, want %q", we.Message, c.msg)
 			}
 			if c.hint != "" && !strings.Contains(we.Hint, c.hint) {
 				t.Errorf("hint = %q", we.Hint)
@@ -226,7 +242,7 @@ func TestCodexPreflightNeedsHerdr(t *testing.T) {
 	dir := newProject(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	rig := &codexRig{loggedIn: true}
-	_, err := rig.env(tmuxFake()).Preflight(bg, dir, harness.Codex, "w1", false)
+	_, err := rig.env(tmuxFake()).Preflight(bg, dir, harness.Codex, "w1", "")
 	if exitOf(err) != exitcode.ExitUnavailable || !strings.Contains(err.Error(), "codex workers need work.dispatch=herdr") {
 		t.Fatalf("%v", err)
 	}
@@ -296,7 +312,7 @@ func TestDispatchCodexRefusalsTouchNothing(t *testing.T) {
 		"model needed":              {cfg: `{"work":{"dispatch":"herdr","codexCommand":"codex -m {model}"}}`, rig: codexRig{loggedIn: true}, exit: exitcode.ExitUsage, msg: "{model}"},
 		"wrong binary":              {cfg: `{"work":{"dispatch":"herdr","codexCommand":"claude --x"}}`, rig: codexRig{loggedIn: true}, exit: exitcode.ExitUnavailable, msg: "does not run codex"},
 		"claude kind, codex binary": {cfg: `{"work":{"dispatch":"herdr","workerCommand":"codex --x"}}`, rig: codexRig{loggedIn: true}, kind: "claude", exit: exitcode.ExitUnavailable, msg: "does not run claude"},
-		"version":                   {cfg: `{"work":{"dispatch":"herdr"}}`, rig: codexRig{version: "codex-cli 0.200.0\n", loggedIn: true}, exit: exitcode.ExitRefused, by: "codex version", msg: "outside the supported range"},
+		"flag":                      {cfg: `{"work":{"dispatch":"herdr"}}`, rig: codexRig{noFlag: "--no-daemon", loggedIn: true}, exit: exitcode.ExitRefused, by: "codex flags", msg: "--no-daemon"},
 		"login":                     {cfg: `{"work":{"dispatch":"herdr"}}`, rig: codexRig{}, exit: exitcode.ExitUnavailable, msg: "not logged in"},
 		"bad kind":                  {cfg: `{"work":{"dispatch":"herdr"}}`, rig: codexRig{loggedIn: true}, kind: "gemini", exit: exitcode.ExitUsage, msg: "claude or codex"},
 	}
@@ -327,12 +343,40 @@ func TestDispatchCodexRefusalsTouchNothing(t *testing.T) {
 	}
 }
 
-func TestDispatchCodexAcceptVersionPasses(t *testing.T) {
+// Codex's version is never gated on: a release past the one rota was tested on
+// dispatches without a flag and without a warning.
+func TestDispatchCodexNewVersionPasses(t *testing.T) {
 	dir, _ := codexProject(t)
 	rig := &codexRig{version: "codex-cli 0.200.0\n", loggedIn: true}
-	res, err := rig.env(herdrFake()).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "go\n"), Task: "T1", Kind: "codex", AcceptCodexVersion: true})
-	if err != nil || len(res.Warnings) != 2 || !strings.Contains(res.Warnings[0], "codex 0.200.0 is outside the supported range") || !strings.Contains(res.Warnings[1], "prompt check unverified") {
+	res, err := rig.env(herdrFake()).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "go\n"), Task: "T1", Kind: "codex"})
+	if err != nil || len(res.Warnings) != 0 {
 		t.Fatalf("%+v %v", res, err)
+	}
+}
+
+// A custom launch line is probed for its own flags only.
+func TestDispatchCodexCustomCommandProbesItsFlags(t *testing.T) {
+	for name, c := range map[string]struct {
+		cmd, by string
+	}{
+		"listed flags only": {cmd: "codex --dangerously-bypass-hook-trust --model x"},
+		"unlisted flag":     {cmd: "codex --dangerously-bypass-hook-trust --made-up=1", by: "codex flags"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir := newProject(t, `{"work":{"dispatch":"herdr","codexCommand":"`+c.cmd+`"}}`)
+			goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
+			_, err := (&codexRig{noFlag: "--no-daemon", loggedIn: true}).env(tmuxFake()).Preflight(bg, dir, harness.Codex, "w1", "")
+			if c.by == "" {
+				if err != nil {
+					t.Fatal(err)
+				}
+				return
+			}
+			we, _ := err.(*exitcode.Error)
+			if bd, _ := we.Data.(BlockData); we == nil || bd.BlockedBy != c.by || !strings.Contains(we.Message, "--made-up") {
+				t.Fatalf("%v", err)
+			}
+		})
 	}
 }
 

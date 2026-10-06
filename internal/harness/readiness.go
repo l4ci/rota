@@ -6,20 +6,15 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/l4ci/rota/internal/shlex"
 )
 
-// The supported Codex CLI range (E1, #68): 0.159.0 inclusive up to 0.160.0
-// exclusive. `rota worker dispatch`, `rota round assign` and the doctor
-// `codex` check all read it from here.
-const (
-	CodexMin   = "0.159.0"
-	CodexMax   = "0.160.0"
-	CodexRange = ">=" + CodexMin + " <" + CodexMax
-	// CodexInstallHint is the doctor hint for a missing or unsupported codex.
-	CodexInstallHint = "install codex-cli 0.159.x"
-)
+// CodexInstallHint is the doctor hint for a missing or unrunnable codex.
+const CodexInstallHint = "install codex-cli and put it on PATH"
 
-// CodexVersion is a parsed `codex --version` result.
+// CodexVersion is a parsed `codex --version` result, shown in reports. rota
+// never gates on it: the launch flags are probed instead (CheckCodexFlags).
 type CodexVersion struct{ Major, Minor, Patch int }
 
 func (v CodexVersion) String() string { return fmt.Sprintf("%d.%d.%d", v.Major, v.Minor, v.Patch) }
@@ -42,23 +37,6 @@ func ParseCodexVersion(out string) (CodexVersion, bool) {
 		return v, true
 	}
 	return CodexVersion{}, false
-}
-
-// InRange reports whether v is inside CodexMin..CodexMax.
-func (v CodexVersion) InRange() bool {
-	min, _ := ParseCodexVersion("codex-cli " + CodexMin)
-	max, _ := ParseCodexVersion("codex-cli " + CodexMax)
-	return !v.less(min) && v.less(max)
-}
-
-func (v CodexVersion) less(o CodexVersion) bool {
-	if v.Major != o.Major {
-		return v.Major < o.Major
-	}
-	if v.Minor != o.Minor {
-		return v.Minor < o.Minor
-	}
-	return v.Patch < o.Patch
 }
 
 // ParseIntegration reads the line for agent from `herdr integration status`
@@ -99,10 +77,12 @@ type Home struct{ Slot, Dir string }
 type Code string
 
 const (
-	// VersionUnreadable: `codex --version` failed or printed no version.
+	// VersionUnreadable: `codex --version` could not run, so codex is not
+	// installed or not runnable.
 	VersionUnreadable Code = "version-unreadable"
-	// VersionOutOfRange: the version is outside CodexRange (Finding.Version).
-	VersionOutOfRange Code = "version-out-of-range"
+	// FlagMissing: `codex --help` does not list a flag the launch line uses
+	// (Finding.Flag).
+	FlagMissing Code = "flag-missing"
 	// IntegrationStale: herdr's codex integration is not current in the home.
 	IntegrationStale Code = "integration-stale"
 	// IntegrationUnrunnable: `herdr integration status` could not run (Err).
@@ -113,29 +93,96 @@ const (
 
 // Finding is one thing a readiness check found wrong.
 type Finding struct {
-	Code    Code
-	Slot    string
-	Dir     string // the CODEX_HOME probed
-	Version string // VersionOutOfRange: the version found
-	Err     error  // IntegrationUnrunnable
+	Code Code
+	Slot string
+	Dir  string // the CODEX_HOME probed
+	Flag string // FlagMissing: the launch flag codex does not list
+	Err  error  // IntegrationUnrunnable
 }
 
 // CheckCodexVersion runs `codex --version` under home (the empty string means
-// no CODEX_HOME) and returns the version, or why it cannot be accepted.
+// no CODEX_HOME). It passes whenever codex runs; the returned version is for
+// display and is the zero value when the output holds none.
 func CheckCodexVersion(ctx context.Context, p Probe, bin, home string) (CodexVersion, *Finding) {
-	var env []string
-	if home != "" {
-		env = []string{"CODEX_HOME=" + home}
+	r, err := p.Run(ctx, bin, []string{"--version"}, codexEnv(home))
+	if err != nil || r.ExitCode != 0 {
+		return CodexVersion{}, &Finding{Code: VersionUnreadable}
 	}
-	r, err := p.Run(ctx, bin, []string{"--version"}, env)
-	v, ok := ParseCodexVersion(r.Stdout + "\n" + r.Stderr)
-	switch {
-	case err != nil || r.ExitCode != 0 || !ok:
-		return v, &Finding{Code: VersionUnreadable}
-	case !v.InRange():
-		return v, &Finding{Code: VersionOutOfRange, Version: v.String()}
-	}
+	v, _ := ParseCodexVersion(r.Stdout + "\n" + r.Stderr)
 	return v, nil
+}
+
+func codexEnv(home string) []string {
+	if home == "" {
+		return nil
+	}
+	return []string{"CODEX_HOME=" + home}
+}
+
+// LaunchFlags are the long flags of a launch line, `--flag=value` cut to
+// `--flag`, in order and without repeats. A line that cannot be split has none.
+func LaunchFlags(launch string) []string {
+	toks, err := shlex.Split(launch)
+	if err != nil {
+		return nil
+	}
+	var out []string
+	seen := map[string]bool{}
+	for _, t := range toks {
+		if !strings.HasPrefix(t, "--") || len(t) == 2 {
+			continue
+		}
+		f, _, _ := strings.Cut(t, "=")
+		if !seen[f] {
+			seen[f] = true
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// CheckCodexFlags runs `codex --help` and returns a FlagMissing finding for
+// each of flags it does not list. Codex's version is never consulted: a
+// release that keeps the flags rota launches with needs no rota bump. If help
+// cannot run, every flag counts as missing.
+func CheckCodexFlags(ctx context.Context, p Probe, bin, home string, flags []string) []Finding {
+	if len(flags) == 0 {
+		return nil
+	}
+	r, err := p.Run(ctx, bin, []string{"--help"}, codexEnv(home))
+	if err != nil || r.ExitCode != 0 {
+		r = Result{}
+	}
+	help := r.Stdout + "\n" + r.Stderr
+	var out []Finding
+	for _, f := range flags {
+		if !helpHasFlag(help, f) {
+			out = append(out, Finding{Code: FlagMissing, Flag: f})
+		}
+	}
+	return out
+}
+
+// helpHasFlag reports whether help lists flag as a whole word, so `--no-daemon`
+// is not satisfied by `--no-daemon-foo`.
+func helpHasFlag(help, flag string) bool {
+	for i := 0; ; {
+		j := strings.Index(help[i:], flag)
+		if j < 0 {
+			return false
+		}
+		at, end := i+j, i+j+len(flag)
+		before := at == 0 || !isFlagChar(help[at-1])
+		after := end == len(help) || !isFlagChar(help[end])
+		if before && after {
+			return true
+		}
+		i = end
+	}
+}
+
+func isFlagChar(c byte) bool {
+	return c == '-' || c == '_' || c >= '0' && c <= '9' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z'
 }
 
 // CheckCodexHome probes one home: with a herdr binary, whether its codex
