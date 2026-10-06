@@ -111,12 +111,19 @@ func (t *tmux) Spawn(ctx context.Context, o SpawnOpts) (string, error) {
 }
 
 // Send pastes the file's contents, submits, and confirms the pane changed.
-// It gives up after 4 attempts.
+// It gives up after 4 attempts. A human draft on the prompt line is waited out
+// and then refused (ErrDraftOnPrompt) with nothing pasted.
 func (t *tmux) Send(ctx context.Context, slot, handle, file string) error {
 	return t.sendFile(ctx, handle, file, "rota-"+slot)
 }
 
 func (t *tmux) sendFile(ctx context.Context, handle, file, buf string) error {
+	// A human typing in the pane would get the brief pasted into their draft.
+	text, _ := readFile(file)
+	text = strings.TrimRight(text, "\n")
+	if waitNoDraft(&t.d, func() string { return t.pane(ctx, handle) }, text) != "" {
+		return ErrDraftOnPrompt
+	}
 	before := t.pane(ctx, handle)
 	if t.tmux(ctx, "load-buffer", "-b", buf, file).ExitCode != 0 {
 		return ErrNotSubmitted
@@ -144,6 +151,12 @@ func (t *tmux) Capture(ctx context.Context, slot, handle string, lines int) stri
 		return ""
 	}
 	return t.pane(ctx, handle)
+}
+
+// Draft implements Drafter.
+func (t *tmux) Draft(ctx context.Context, slot, handle, file string) string {
+	text, _ := readFile(file)
+	return humanDraft(t.pane(ctx, handle), strings.TrimRight(text, "\n"))
 }
 
 // Status: tmux has no native agent state, so the classifier decides from
