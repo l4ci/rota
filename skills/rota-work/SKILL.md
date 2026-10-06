@@ -20,8 +20,26 @@ Read `.rota/config.json`:
 
 ## Flow
 
+Copy this checklist and track your progress:
+
 ```
-Guard → Clarify (if needed) → Name → Plan → Isolate + Register → Dispatch → Verify → Commit → Close → Merge/PR → Unregister
+- [ ] Step 1 — Guard
+- [ ] Step 2 — Clarify Ambiguous Briefs (only when needed)
+- [ ] Step 2.5 — Detect Knowledge-vs-Correction Contradictions
+- [ ] Step 3 — Name the Branch
+- [ ] Step 4 — Plan Tasks
+- [ ] Step 4.5 — Umbrella Pre-Flight
+- [ ] Step 5 — Create Branch or Worktree
+- [ ] Step 6 — Dispatch Subagents
+- [ ] Step 7 — Verify Each Completion
+- [ ] Step 7.5 — Commit per Task (main session)
+- [ ] Step 8 — Sequential Waves
+- [ ] Step 8.5 — Sweep Tool-Generated Siblings
+- [ ] Step 9 — Close the Items
+- [ ] Step 10 — Merge or PR
+- [ ] Step 11 — Update Status and Report
+- [ ] Step 12 — After-Work QA
+- [ ] Step 13 — After the Cycle
 ```
 
 ## No-Argument Mode (reconcile, suggest, then work)
@@ -177,7 +195,7 @@ Verify silently. Trust the diff, not the subagent's narrative.
 4. **Rename validation.** Re-run `git grep -l "<old-name>" -- <scope>`; files outside the subagent's set get a fix-up dispatch before staging.
 5. Claim-weight check on gap-fills, and treat a subagent's dispute of its brief as a FAIL on the plan (see `references/work-wave-planning.md`, *Verifying a completion*).
 
-**PASS** → move on. **FAIL** → dispatch a fix agent and re-verify; surface only persistent failures.
+**PASS** → move on. **FAIL** → dispatch a fix agent and re-verify; repeat until PASS, and surface only persistent failures. Commit (Step 7.5) only on PASS.
 
 **Record proof** (facts about what ran, not acceptance). Per task:
 

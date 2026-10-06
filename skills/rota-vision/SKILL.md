@@ -7,6 +7,18 @@ description: Use on "let's plan", "what's the bigger picture", "create a roadmap
 
 Milestones are optional structure; nothing else in rota requires one. On the issue backend a milestone is a native tracker milestone `MNN — <title>` plus a tracking issue (`references/issue-mode.md`), and the list you write mirrors that. `.rota/MILESTONES.md` holds a short vision paragraph and the Active list; each milestone's plan is its tracking-issue body (file backend: `.rota/milestones/MNN.md`).
 
+Copy this checklist and track your progress:
+```
+- [ ] Step 1 — Mode
+- [ ] Step 2 — Load context
+- [ ] Step 3 — Frame and discover
+- [ ] Step 4 — Research (opt-in)
+- [ ] Step 5 — Challenge
+- [ ] Step 6 — Propose, once
+- [ ] Step 7 — Write
+- [ ] Step 8 — Report
+```
+
 ## Step 1 — Mode
 
 `rota milestone list --json`: `data.milestones` empty → **Create**; non-empty → **Edit** (extend, refine, retire, re-prioritize). Don't announce it.

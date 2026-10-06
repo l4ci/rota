@@ -210,6 +210,73 @@ def check_skill_files(path, text, issues):
                 issues.append(f"{sib.as_posix()}: links sibling '{m.group(1)}'; extracted files do not link each other")
 
 
+STEP_HEADING = re.compile(r'^#{2,4}\s+((?:Step\s+\d|\d+\.\s).*?)\s*$')
+CHECKLIST_LEAD = "Copy this checklist"
+
+
+def checklist_parts(text):
+    # Walk a SKILL.md outside code fences. Returns the step headings (title text,
+    # in file order) and the checklist blocks: the fenced blocks that follow a
+    # "Copy this checklist" line, each as a list of "- [ ]" line texts with the
+    # offset of the first step heading seen so far.
+    headings, blocks = [], []
+    fence, lead, cur = None, False, None
+    for line in text.splitlines():
+        m = re.match(r'^(`{3,}|~{3,})', line)
+        if fence is None:
+            if m:
+                fence = m.group(1)
+                cur = [] if lead else None
+                if cur is not None:
+                    blocks.append((len(headings), cur))
+                lead = False
+                continue
+            h = STEP_HEADING.match(line)
+            if h:
+                headings.append(h.group(1))
+            if line.strip():
+                lead = line.startswith(CHECKLIST_LEAD)
+        else:
+            if m and m.group(1)[0] == fence[0] and len(m.group(1)) >= len(fence):
+                fence, cur = None, None
+                continue
+            if cur is not None:
+                c = re.match(r'^- \[ \] (.+?)\s*$', line)
+                if c:
+                    cur.append(c.group(1))
+    return headings, blocks
+
+
+def check_checklist(path, text, issues):
+    # #318: a skill with step headings opens its workflow with a copyable
+    # checklist (the skills guide's "Workflows and feedback loops" format). One
+    # line per step, verbatim heading text (a trailing " (...)" marks a
+    # conditional), in heading order; every step heading has a line.
+    headings, blocks = checklist_parts(text)
+    if not headings:
+        return
+    if not blocks:
+        issues.append(f"{path}: has step headings but no '{CHECKLIST_LEAD}' checklist block")
+        return
+    if blocks[0][0] != 0:
+        issues.append(f"{path}: the first checklist must open the workflow, before the first step heading")
+    covered = set()
+    for _, lines in blocks:
+        last = -1
+        for ln in lines:
+            idx = next((i for i, h in enumerate(headings) if ln == h or ln.startswith(h + " (")), None)
+            if idx is None:
+                issues.append(f"{path}: checklist line '{ln}' names no step heading")
+                continue
+            if idx < last:
+                issues.append(f"{path}: checklist line '{ln}' is out of run order")
+            last = max(last, idx)
+            covered.add(idx)
+    for i, h in enumerate(headings):
+        if i not in covered:
+            issues.append(f"{path}: step heading '{h}' is missing from the checklist")
+
+
 def check_reference_toc(issues):
     for ref in sorted(Path(".").glob("skills/references/*.md")):
         lines = ref.read_text(encoding="utf-8").splitlines()
@@ -372,6 +439,7 @@ def main():
         check_spec_frontmatter(skill_path, text, issues)
         check_references(skill_path, text, issues)
         check_skill_files(skill_path, text, issues)
+        check_checklist(skill_path, text, issues)
 
     check_pending_spec(skill_files, issues)
     check_reference_toc(issues)
