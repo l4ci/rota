@@ -45,9 +45,11 @@ Work only this task, then stop.
   everyone a re-measurement to disprove.
 - Show a failing test first, unless `rota config show work.tdd` is `false` (then no
   RED row; PASS rows stay). For a behavior change, run the new test before the
-  production change and see it fail, then record it: `rota proof add <ID> --check
-  "<test command>" --result FAIL --evidence "<failing line>"` (at the sha the test ran
-  against), and the PASS row after the change. A test that passes before the change
+  production change and see it fail, recording the run itself: `rota proof record <ID> --
+  <test command>` (it runs the command and writes the row, FAIL on a non-zero exit, so
+  it exits 1 on the RED; that is expected), and the PASS row the same way after the
+  change. Record every check through `rota proof record` so a row is measured, not
+  typed; `rota proof add` is for docs-only rows with no command. A test that passes before the change
   proves nothing: fix the test. So does one that fails on a build, compile or setup
   error (missing import, typo, undefined symbol): the RED must be a failed assertion. Docs and skill-only changes have no RED: say
   `no test seam: docs/skill change` in the proof row's check.
