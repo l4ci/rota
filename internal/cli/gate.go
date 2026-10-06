@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/exitcode"
 	"strings"
 	"time"
 
@@ -264,30 +265,30 @@ func approvalEscalate(c *Ctx, p gate.MergePolicy, hit []string, th approvalThrea
 // cover passes without an audit line, whatever --approval or --escalate say.
 // --approval swaps the confirmation for an answered escalation's; --escalate
 // asks the human when the gate refuses.
-func clearMerge(c *Ctx, p gate.MergePolicy, target string, conf gate.Confirm, req approvalReq, files func() ([]string, error), extra *jsonx.Object) (Result, error) {
+func clearMerge(c *Ctx, p gate.MergePolicy, target string, conf gate.Confirm, req approvalReq, files func() ([]string, error), extra *jsonx.Object) error {
 	var changed []string
 	if p.NeedsFiles() {
 		var err error
 		if changed, err = files(); err != nil {
-			return Result{}, err
+			return err
 		}
 	}
 	covered, hit := p.Covers(changed)
 	if !covered {
-		return Result{}, nil
+		return nil
 	}
 	var th approvalThread
 	if req.ID != "" || req.Escalate {
 		var err error
 		if th, err = req.Thread(); err != nil {
-			return Result{}, err
+			return err
 		}
 	}
 	if req.ID != "" {
 		var res Result
 		var err error
 		if conf, res, err = approvalConfirm(c, req.ID, th, extra); err != nil {
-			return res, err
+			return carryData(res, err)
 		}
 	}
 	res, err := clearGate(c, gate.MergeApproval, target, conf, hit, extra)
@@ -298,5 +299,44 @@ func clearMerge(c *Ctx, p gate.MergePolicy, target string, conf gate.Confirm, re
 			}
 		}
 	}
-	return res, err
+	return carryData(res, err)
+}
+
+// carryData attaches the refusal envelope in res to err, so it travels with
+// the error through a domain callback that can only return an error. The
+// caller reads it back with refusalData.
+func carryData(res Result, err error) error {
+	var e *Error
+	if err != nil && res.Data != nil && errors.As(err, &e) {
+		e.Data = res.Data
+	}
+	return err
+}
+
+// refusalData is the envelope carryData attached to err, or nil.
+func refusalData(err error) *jsonx.Object {
+	d, _ := exitcode.DataOf[*jsonx.Object](err)
+	return d
+}
+
+// gateRefusal is the result of a merge whose approval gate refused: d is the
+// verb's own data, with the keys of the gate's envelope copied onto it. An
+// error that is not an exit-coded refusal means listing the merge's files
+// failed.
+func gateRefusal(err error, d *jsonx.Object) (Result, error) {
+	if !errors.As(err, new(*Error)) {
+		return Result{}, Unavailable("%v", err)
+	}
+	if g := refusalData(err); g != nil {
+		for _, k := range []string{"blockedBy", "gate", "paths", "changed"} {
+			v, _ := g.Get(k)
+			d.Set(k, v)
+		}
+		for _, k := range []string{"escalation", "status", "answer"} { // C5, only when set
+			if v, ok := g.Get(k); ok {
+				d.Set(k, v)
+			}
+		}
+	}
+	return Result{Data: d}, err
 }

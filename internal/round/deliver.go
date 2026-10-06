@@ -45,7 +45,7 @@ func (e Env) deliveryRefusals(ctx context.Context, root, kind, slot, model strin
 	if err != nil {
 		var we *exitcode.Error
 		if errors.As(err, &we) && we.Exit == exitcode.ExitRefused {
-			if bd, ok := we.Data.(worker.BlockData); ok {
+			if bd, ok := exitcode.DataOf[worker.BlockData](err); ok {
 				return nil, blocked(bd.BlockedBy, "%s", we.Message)
 			}
 		}
