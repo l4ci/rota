@@ -98,6 +98,8 @@ ID=$(rota item create --json --kind bugs --title "Short title" --tag P1 --desc "
 
 Flags: `--kind bugs|features|tasks`, `--tag` (`P0`-`P3` for bugs, `Major`/`Minor`/`Cosmetic` for features, none for tasks), `--desc`, `--related`, `--milestone`, `--repos`, `--subsystem`, `--body-file`, `--depends-on`. See `rota item create --help` and `docs/design/contract/backlog.md` (*rota item create*) for ID minting, field order, the `Since:` stamp, detail-file placement and the issue-backend mapping.
 
+**Harness and model.** When the text names a harness ("with codex") or a model, record it so `rota round assign` picks it up. Issue backend: after create, `rota issues label <N> --add harness:codex` and, for a model, `--add model:<id>` (values `harness:claude|codex`; one of each). File backend: end `--desc` with `Harness: codex Model: <id>`. Add nothing when the text names neither.
+
 Judgment calls:
 
 - **`--related`:** link only clearly related items. Scan `rota backlog list` (file backend: also `.rota/ARCHIVE.md`); batch items can reference each other.
