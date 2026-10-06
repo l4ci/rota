@@ -1,10 +1,10 @@
 # Remove Mode (`--remove`)
 
-The inverse of capture. `rota item rm` owns the mechanics: BACKLOG entry, `Related:` cross-references, the detail file and any plan keyed to the item. It previews by default and only `--apply` writes. ARCHIVE entries stay unless `--scrub-archive`, the only audit trail a removed item has left. Counters never decrement. Contract: `docs/design/contract/backlog.md` (*rota item rm*).
+`rota item rm` handles the BACKLOG entry, `Related:` cross-references, detail file and any plan keyed to the item. It previews by default; only `--apply` writes. ARCHIVE entries stay unless `--scrub-archive`. Counters never decrement. Contract: `docs/design/contract/backlog.md` (*rota item rm*).
 
 ### Step R1 — Resolve IDs
 
-Split the argument on commas and pass the IDs as positionals. Exit 3 means an ID is unknown: show stderr and stop.
+Split on commas, pass IDs as positionals. Exit 3 = unknown ID: show stderr and stop.
 
 ### Step R2 — Dry-Run Preview
 
@@ -12,9 +12,9 @@ Run `rota item rm <IDS>` and show stdout verbatim. If an item has `activeBranch`
 
 ### Step R3 — De-tag Upstream Issues
 
-> Removing the `in-progress` label upstream is externally visible: collaborators see the issue no longer claimed. The item delete proceeds either way; this decides only whether the label is cleaned up too.
+> Removing the `in-progress` label upstream is externally visible. The item delete proceeds either way.
 
-Find upstream links: `rota issues imported --json`, keep `data.entries` whose `itemId` is in the removal set. Read the label from `rota config show --json issues.label` (default `in-progress`). No matches: skip to Step R4.
+Run `rota issues imported --json`, keep `data.entries` whose `itemId` is in the removal set. Label: `rota config show --json issues.label` (default `in-progress`). No matches: skip to Step R4.
 
 Otherwise ask:
 
@@ -37,4 +37,4 @@ Anything but an explicit yes cancels. This is a destructive gate: it always asks
 
 Run the chosen command and pass its per-ID output through verbatim. On exit 4 (`data.blockedBy: "active"`), tell the user to run `rota status rm <branch>` first and stop. Don't nudge any other skill.
 
-**When to use `--remove`:** duplicate of an existing item, wrong premise, made obsolete by other work, captured against the wrong project or milestone, ruled out by a spike or decision, or the user changed their mind. It does not close upstream issues; that is always manual.
+`--remove` does not close upstream issues; that is always manual.

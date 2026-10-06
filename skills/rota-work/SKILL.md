@@ -5,9 +5,9 @@ description: Use when backlog items already exist and need implementation ("impl
 
 # rota-work
 
-Main-session-driven implementation with per-task verification and commits. The subagents are in-process `Agent` calls that write files; the main session commits.
+Main-session-driven implementation with per-task verification and commits. Subagents are in-process `Agent` calls that write files; the main session commits.
 
-**Rounds are not this skill.** Standing workers in their own worktrees and host tabs (tmux or herdr), PRs behind a merge gate, relays, slot reclaim: that is `/rota-orchestrate` and the `rota round` verbs. If `work.dispatch` is `"tmux"` or `"herdr"`, this skill still dispatches subagents; say so once and continue, or point the user at `/rota-orchestrate` for a multi-issue round.
+**Rounds are not this skill** (standing workers, merge gate, relays: `/rota-orchestrate` and the `rota round` verbs). If `work.dispatch` is `"tmux"` or `"herdr"`, this skill still dispatches subagents; say so once and continue, or point the user at `/rota-orchestrate` for a multi-issue round.
 
 ## Configuration
 
@@ -24,14 +24,13 @@ Read `.rota/config.json`:
 Guard → Clarify (if needed) → Name → Plan → Isolate + Register → Dispatch → Verify → Commit → Close → Merge/PR → Unregister
 ```
 
-
 ## No-Argument Mode (reconcile, suggest, then work)
 
-Read [`no-argument-mode.md`](no-argument-mode.md) when `/rota-work` has no item, ID or brief and follow it: it reconciles active streams, shows the backlog, suggests one item and continues into Step 1 with it.
+With no item, ID or brief, read [`no-argument-mode.md`](no-argument-mode.md) and follow it: it reconciles active streams, suggests one item and continues into Step 1.
 
 ## Preview Mode (`--preview <target>`)
 
-`/rota-work --preview <target>` (the flag anywhere in the args) prints a read-only approach peek and stops: no writes, no commits, no status. Procedure and peek template in [`references/work-preview.md`](references/work-preview.md); it loads context per [`references/context-load-protocol.md`](references/context-load-protocol.md) and the K+D pattern in [`references/knowledge-consult.md`](references/knowledge-consult.md).
+`--preview <target>` (flag anywhere in the args) prints a read-only approach peek and stops: no writes, no commits, no status. Procedure in [`references/work-preview.md`](references/work-preview.md); context per [`references/context-load-protocol.md`](references/context-load-protocol.md) and [`references/knowledge-consult.md`](references/knowledge-consult.md).
 
 ## Step 1 — Guard
 
@@ -39,33 +38,31 @@ Read [`no-argument-mode.md`](no-argument-mode.md) when `/rota-work` has no item,
 rota git guard clean --context "/rota-work"
 ```
 
-Exit 0 = clean, continue. Exit 3 = not a repo, surface and stop. Exit 1 (dirty tree): if every dirty path is a tool-generated sibling (Godot `.gd.uid`, `Package.resolved`, `.DS_Store`...), sweep them into a `chore:` commit and continue; any user change stops with the guard's message. Siblings are:
+Exit 0: continue. Exit 3: not a repo, surface and stop. Exit 1 (dirty tree): if **every** dirty path in `git status --porcelain` is a tool-generated sibling, sweep them into their own `chore:` commit (never inside a task commit) and continue; any user change stops with the guard's message. Siblings are:
 
 - a path beside a tracked file (e.g. `Foo.gd.uid` beside tracked `Foo.gd`), or
 - one of `*.gd.uid`, `*.xcworkspace/contents.xcworkspacedata`, `Package.resolved`, `*.xcodeproj/project.pbxproj` regenerated without a meaningful diff, `.DS_Store`.
 
-Everything else is a user change. Classify every line of `git status --porcelain`; if **every** dirty path is a sibling, stage those paths by name and commit them on their own, never inside a task commit:
+Stage by name:
 
 ```bash
 git add -- <sibling paths>
 git commit -m "chore: sweep tool-generated siblings"
 ```
 
-If a tool only regenerates siblings when the editor loads (Godot `class_name` → `.gd.uid`), force generation once headless before the sweep (`godot --headless --editor --quit`). Record project-specific commands in `KNOWLEDGE.md`. Don't narrate the sweep unless it happened.
+If a tool only regenerates siblings when the editor loads (Godot `class_name` → `.gd.uid`), force generation once headless first (`godot --headless --editor --quit`). Don't narrate the sweep unless it happened.
 
 On a fresh `git init` with no commits the guard points at a `chore: import initial files` baseline; run it and re-invoke.
 
 ## Step 2 — Clarify Ambiguous Briefs (only when needed)
 
-If, and only if, the brief is too thin to plan concrete tasks (missing scope, conflicting requirements, two equally plausible readings), resolve it with one `AskUserQuestion` call of 1-3 questions before touching code. Otherwise skip: the default is to proceed.
-
-Ask when the scope hits 2+ incompatible areas, a requirement is vague enough to yield opposite implementations (*"add sorting"*: which direction, which columns), or captured items imply different orderings. Don't ask to confirm you understood, for preferences inferable from `KNOWLEDGE.md` or the codebase, or for style inside an agreed scope.
+Only when the brief is too thin to plan concrete tasks (scope hits 2+ incompatible areas, a requirement could yield opposite implementations, captured items imply different orderings), ask one `AskUserQuestion` of 1-3 questions before touching code. Otherwise proceed. Don't ask to confirm understanding, for preferences inferable from `KNOWLEDGE.md` or the codebase, or for style inside an agreed scope.
 
 Each question gets a short `header`, options that map to concrete plans with the likeliest marked `(Recommended)`, and `multiSelect: true` for conflicting items. On ambiguity, default to Recommended and state it in the dispatch brief.
 
 ## Step 2.5 — Detect Knowledge-vs-Correction Contradictions
 
-When Step 2 produced a non-Recommended answer that pushes back on a stated assumption, cache the correction text. After Step 4's K+D query returns, check it against each returned bullet: a fragment of ≥4 contiguous lowercase words from the bullet appearing in the correction (case-insensitive) makes the bullet a candidate. Log each, in parallel (the verb locks its sidecar):
+When Step 2 produced a non-Recommended answer that pushes back on a stated assumption, cache the correction text. After Step 4's K+D query, a bullet is a candidate when ≥4 contiguous words of it appear in the correction (case-insensitive). Log each, in parallel:
 
 ```bash
 rota knowledge contradiction add --topic <T> --title <S> --text "<first 200 chars of correction>"
@@ -75,26 +72,26 @@ rota knowledge contradiction add --topic <T> --title <S> --text "<first 200 char
 
 ## Step 3 — Name the Branch
 
-Choose a descriptive branch name (`rota/quick-switch`, `rota/fix-timer-badge`). Nothing is registered yet: Step 5 creates the branch and registers it in status once.
+Pick a descriptive branch name (`rota/quick-switch`). Step 5 creates the branch and registers it once.
 
-**Umbrella mode** (items carry `Repos:`, a comma-separated list; read it with `rota item field get <ID> --name repos`). All items in a wave must share the same repo set. Validate the names with `rota repo resolve <name>…`; exit 3 names the missing ones: surface them and stop.
+**Umbrella mode** (items carry `Repos:`, comma-separated; `rota item field get <ID> --name repos`). All items in a wave must share the same repo set. Validate with `rota repo resolve <name>…`; exit 3 names the missing ones: surface and stop.
 
 ## Step 4 — Plan Tasks
 
-**Plan-as-artifact check (first).** For an item tagged to a milestone (`Milestone: M01` on `B07` → key `M01-B07`) or a slice (`M01-S01`), run `rota plan show <milestone>-<unit> 2>/dev/null`. If a plan exists, use its decomposition, files, verify steps and assumptions as the dispatch briefs instead of decomposing ad hoc; restate user redlines, and if the conversation contradicts the plan, ask whether to update the plan first (`/rota-plan`) or proceed and ignore it.
+**Plan-as-artifact check (first).** For an item tagged to a milestone (`Milestone: M01` on `B07` → key `M01-B07`) or a slice (`M01-S01`), run `rota plan show <milestone>-<unit> 2>/dev/null`. If a plan exists, use its decomposition, files, verify steps and assumptions as the dispatch briefs; restate user redlines. If the conversation contradicts the plan, ask whether to update it first (`/rota-plan`) or proceed and ignore it.
 
-1. **Consult knowledge and decisions** with the canonical K+D pattern (`references/knowledge-consult.md`), topics inferred from the planned work. Run `rota glossary read <terms in the item>…` too, and call out synonym or drift when the user's wording deviates from a canonical term. Carry matches into Step 6 briefs as `**Known gotchas:**` (relevant bullets only) and `**Hard boundaries:**` (full entries: rule, *Why*, **Forbids**, **Permits**). Subagents treat boundaries as constraints. If a planned task would violate a decision, **stop and surface it** before dispatching. Run `rota map stats --cap` (a one-line stderr nudge at or over the soft cap; never blocks).
+1. **Consult knowledge and decisions** with the canonical K+D pattern (`references/knowledge-consult.md`), topics inferred from the planned work. Run `rota glossary read <terms in the item>…` too; call out drift from a canonical term. Carry matches into Step 6 briefs as `**Known gotchas:**` (relevant bullets only) and `**Hard boundaries:**` (full entries: rule, *Why*, **Forbids**, **Permits**). If a planned task would violate a decision, **stop and surface it** before dispatching. Run `rota map stats --cap` (one-line nudge; never blocks).
 
-   > **REQUIRED — Register hits on consumed bullets.** After writing the briefs, apply *Hit-register after consumption* in `references/knowledge-consult.md`: one `rota knowledge hit --topic "<T>" --title "<first-line-of-bullet>"` per bullet that landed in a brief's `**Known gotchas:**`, all in one parallel batch. Bullets pruned before the briefs earn no credit. Silent on success.
+   > **REQUIRED — Register hits on consumed bullets.** After writing the briefs, apply *Hit-register after consumption* in `references/knowledge-consult.md`: one `rota knowledge hit --topic "<T>" --title "<first-line-of-bullet>"` per bullet that landed in a brief's `**Known gotchas:**`, all in one parallel batch. Bullets pruned before the briefs earn no credit.
 
 2. **Resuming** (a branch with commits past the base): apply the resume rule in [`references/task-ledger.md`](references/task-ledger.md) after decomposing, and plan only the unfinished tasks.
-3. Identify discrete tasks: files to create or modify, what changes, acceptance criteria.
+3. Identify tasks: files, what changes, acceptance criteria.
 4. **Absorb file collisions** before grouping: any two tasks whose modified-file sets intersect, and shared-symbol changes that disjoint file sets hide. Rules and the rename check in [`references/work-wave-planning.md`](references/work-wave-planning.md).
 5. Group into dependency waves: wave 1 is independent files (parallel); wave 2+ depends on earlier output.
 
 ## Step 4.5 — Umbrella Pre-Flight
 
-Skip when `rota repo umbrella` exits 1 (single-repo). Registry shape and `Repos:` semantics are in `references/umbrella-mode.md`. When it exits 0:
+Skip when `rota repo umbrella` exits 1 (single-repo). Registry shape and `Repos:` semantics: `references/umbrella-mode.md`. When it exits 0:
 
 1. **Every item must carry `Repos:`.** Otherwise stop: *"Error: `[<ID>]` lacks a `Repos:` tag. Re-run `/rota-capture` to add it. Cannot route to a sub-repo."*
 2. **All items in a wave resolve to the same repo set** (order-independent). Otherwise stop: *"Error: items in this wave target different sub-repo sets: `<set-a>` vs `<set-b>`. Split into separate `/rota-work` runs."*
@@ -107,18 +104,18 @@ Carry the resolved set into Step 5 and Step 10.
 
 ## Step 5 — Create Branch or Worktree
 
-Use the Step 3 name. The pattern depends on `work.isolation` and umbrella mode; `references/isolation-patterns.md` has the table. The common case, single-repo with branch isolation:
+Use the Step 3 name; `references/isolation-patterns.md` has the pattern per `work.isolation` and umbrella mode. Single-repo, branch isolation:
 
 ```bash
 git checkout -b <branch>
 rota status add <branch> --items <ID>[,<ID>...]
 ```
 
-This is the only `rota status add` of the cycle: create the branch or worktree first, then register it once (with `--worktree <path>` for a worktree). The call is idempotent on `(branch, repo)`.
+The only `rota status add` of the cycle: create the branch or worktree first, then register once (`--worktree <path>` for a worktree). Idempotent on `(branch, repo)`.
 
 **Umbrella registration.** One repo: add `--repo <repo-name>`. Several repos register one entry per `(branch, repo)`: `rota status add <branch> --items <ids> --repos <repos-csv> [--worktrees <csv>]`.
 
-For umbrella branches (single sub-repo, multi-repo via `rota git branch <name> --repos <csv>`, Layout B worktree) see `references/isolation-patterns.md`.
+Umbrella branches (`rota git branch <name> --repos <csv>`, Layout B worktree): `references/isolation-patterns.md`.
 
 **Issue mode** (`references/issue-mode.md`). Once the branch exists, per item run `rota item ready <ID>` (exit 1 prints what is missing: warn the user), then claim it with `rota item claim <ID> --as <branch>`. Exit 4 means another worker holds it: drop that item and continue with the rest, or stop when none remain. Exit 3 or 5: stop and report. Load each item's context as the reference's "Resuming an item" describes (start with `rota item show <ID>`) before planning tasks. For a `changes-requested` item, follow *Handling review feedback* in `references/worker-contract.md` when working its `feedback` comments.
 
@@ -126,7 +123,7 @@ The main session stays at the repo root (umbrella root in umbrella mode); subage
 
 ## Step 6 — Dispatch Subagents
 
-For each independent task dispatch a subagent on the `standard` tier. Subagents write files and never stage or commit, so parallel subagents cannot race on `.git/index` under either isolation mode. Launch all independent agents in one message; don't announce.
+Dispatch one `standard`-tier subagent per independent task, all in one message; don't announce. Subagents write files and never stage or commit (no `.git/index` races).
 
 ```
 You are implementing Task N of [total].
@@ -166,13 +163,13 @@ You are implementing Task N of [total].
 **On completion:** report the RED command and failing line (or the no-test-seam note), the files you modified, plus any tool-generated siblings the toolchain produced, and confirm you did not stage or commit. Name any brief claim that turned out false, even if you worked around it.
 ```
 
-**Umbrella.** The `[UMBRELLA]` line replaces the WORKTREE line under branch isolation; both appear under Layout B worktrees. Subagents MUST `cd` to the named directory before any `git` command: the main session stays at the umbrella for `.rota/` access, so a subagent's default cwd targets the wrong `.git/`. For a multi-repo set, dispatch one subagent per sub-repo with that repo's name and path; each brief lists only its own files, and Step 7 verifies each repo's commit independently.
+**Umbrella.** The `[UMBRELLA]` line replaces the WORKTREE line under branch isolation; both appear under Layout B worktrees. Subagents MUST `cd` to the named directory before any `git` command (their default cwd targets the wrong `.git/`). For a multi-repo set, dispatch one subagent per sub-repo; each brief lists only its own files, and Step 7 verifies each repo's commit independently.
 
 Brief-writing rules, falsifiable-claims discipline, pre-baked citations, doc-writer ordering and the same-file Edit race: [`references/work-wave-planning.md`](references/work-wave-planning.md).
 
 ## Step 7 — Verify Each Completion
 
-Verify internally; don't narrate. Trust the diff, not the subagent's narrative.
+Verify silently. Trust the diff, not the subagent's narrative.
 
 1. `git status --porcelain`, then `git diff` for the files the subagent reported.
 2. Read the modified files: do they match the brief?
@@ -180,9 +177,9 @@ Verify internally; don't narrate. Trust the diff, not the subagent's narrative.
 4. **Rename validation.** Re-run `git grep -l "<old-name>" -- <scope>`; files outside the subagent's set get a fix-up dispatch before staging.
 5. Claim-weight check on gap-fills, and treat a subagent's dispute of its brief as a FAIL on the plan (see `references/work-wave-planning.md`, *Verifying a completion*).
 
-**PASS** → move on silently. **FAIL** → dispatch a fix agent and re-verify; surface failures only if they persist.
+**PASS** → move on. **FAIL** → dispatch a fix agent and re-verify; surface only persistent failures.
 
-**Record proof.** Proof rows are facts about what ran, not acceptance. Per task:
+**Record proof** (facts about what ran, not acceptance). Per task:
 
 - **PASS:** one row per item the task resolves: `rota proof add <ID> --check "<verify command or grep>" --result PASS --evidence "<output line or path>" [--sha <task-commit>]`.
 - **Persistent FAIL:** record it with `--result FAIL`.
@@ -200,29 +197,29 @@ git add <task-N-files>
 git commit -m "<suggested-message-from-task-N-brief>" -m "Task: <key>/<N>"
 ```
 
-- Every task commit ends with the `Task: <key>/<N>` trailer (the task ledger, [`references/task-ledger.md`](references/task-ledger.md)); a resumed session reads these to skip finished tasks.
-- Stage exactly the files named in the task's brief. Never `git add -A` or `git add .`: sweeping in another subagent's changes breaks atomicity.
-- Use the brief's suggested message verbatim, adjusted only if a FAIL→re-dispatch loop changed what landed.
+- Every task commit ends with the `Task: <key>/<N>` trailer ([`references/task-ledger.md`](references/task-ledger.md)); a resumed session skips finished tasks by it.
+- Stage exactly the files named in the task's brief. Never `git add -A` or `git add .`.
+- Use the brief's suggested message verbatim, unless a FAIL→re-dispatch loop changed what landed.
 - **Same-file carve-out.** Two parallel subagents editing different ranges of one file get ONE commit naming both task IDs; granularity lives in the message.
 - Worktree isolation: commit against the worktree's index (`git -C <worktree-path>`). Umbrella: commit inside each target sub-repo (`git -C <umbrella>/<repo>`).
 
 ## Step 8 — Sequential Waves
 
-For dependent tasks, wait for wave 1 to complete and verify, then dispatch wave 2 with updated context. Step 7.5 already committed wave 1, so wave 2 sees a clean tree.
+Wait for wave 1 to complete, verify and commit (Step 7.5), then dispatch wave 2 with updated context.
 
 ## Step 8.5 — Sweep Tool-Generated Siblings
 
-After the task commits, sweep untracked toolchain siblings into their own `chore:` commit (staged by name) or the next `/rota-work` guard refuses a dirty tree. Non-sibling dirt means a subagent produced unexpected changes: investigate before merging. Same rules as the Step 1 sweep.
+After the task commits, sweep untracked toolchain siblings into their own `chore:` commit (staged by name), per Step 1, or the next `/rota-work` guard refuses a dirty tree. Non-sibling dirt is an unexpected subagent change: investigate before merging.
 
 ## Step 9 — Close the Items
 
 **Issue backend:** skip this step. Don't call `rota item complete`: the issue closes when its PR merges (`Closes #<n>`, Step 10).
 
-**File backend:** read [`file-backend-close.md`](file-backend-close.md) when closing items on the file backend and follow it per resolved item. It tombstones the item's plan, runs `rota item complete <ID> --commit <commit-hash>` (the only write to the backlog; never edit `.rota/` by hand), then commits `.rota/BACKLOG.md` and the removed plan by name.
+**File backend:** follow [`file-backend-close.md`](file-backend-close.md) per resolved item: it tombstones the item's plan, runs `rota item complete <ID> --commit <commit-hash>` (the only write to the backlog), then commits `.rota/BACKLOG.md` and the removed plan by name.
 
 ## Step 10 — Merge or PR
 
-`work.mergeStrategy` picks `rota ship merge` (direct, the default and when unset) or `rota ship pr`. The user set the policy via `rota config set`; don't ask. Invocations (umbrella `--repo`, exit-4 verdict, merge-approval handling) are in `rota-ship` Steps 6a/6b. Opening a PR is a manual gate.
+`work.mergeStrategy` picks `rota ship merge` (direct, the default and when unset) or `rota ship pr`. Don't ask. Invocations (umbrella `--repo`, exit-4 verdict, merge-approval handling) are in `rota-ship` Steps 6a/6b. Opening a PR is a manual gate.
 
 **The issue backend forces the PR path** and never merges:
 
@@ -239,9 +236,9 @@ Don't call `rota item release`: the claim persists until the PR merges, which is
 rota status rm <branch>                  # umbrella: add --repo <repo>
 ```
 
-Without `--repo`, `rota status rm` preserves umbrella-tagged entries, so umbrella waves MUST pass it or the entry leaks into the next no-argument `/rota-work`.
+Umbrella waves MUST pass `--repo`, or the entry leaks into the next no-argument `/rota-work`.
 
-Then one compact summary; don't recap the plan, list verification results or describe intermediate steps:
+Then one compact summary, no plan recap or verification list:
 
 ```
 Done — merged `rota/fix-timer-badge` into main.
@@ -253,7 +250,7 @@ Commit: a1b2c3d
 
 ## Step 12 — After-Work QA
 
-Read `rota config show qa.afterWork` (default `false`). `false` → skip silently. `true` → check the touched files against the `Watch globs` of the `.rota/qa/*.md` strategies (umbrella: `.rota/qa/<REPO>.md`); on a match, invoke `Skill(skill="rota-qa", args="run")` for the item just finished (umbrella: `args="run --repo $REPO"`). No strategy or no match → skip silently. The verdict is advisory here; route nothing on it. Skip this step in a round worker: the worker contract (`references/worker-contract.md`) limits workers to targeted verification and a PR, and QA is the orchestrator's or `/rota-ship`'s call (`ship.qa`).
+Read `rota config show qa.afterWork` (default `false`). `false` → skip silently. `true` → check the touched files against the `Watch globs` of the `.rota/qa/*.md` strategies (umbrella: `.rota/qa/<REPO>.md`); on a match, invoke `Skill(skill="rota-qa", args="run")` for the item just finished (umbrella: `args="run --repo $REPO"`). No strategy or no match → skip silently. The verdict is advisory here; route nothing on it. Skip in a round worker (`references/worker-contract.md`): QA is the orchestrator's or `/rota-ship`'s call (`ship.qa`).
 
 ## Step 13 — After the Cycle
 
@@ -274,21 +271,11 @@ One line, only when `references/post-cycle-trigger-gate.md` fires: *"Run `/rota-
 ## Key Principles
 
 - **No noise.** Report results, not process.
-- **The main session plans and verifies; subagents execute.** Never dispatch without a clear brief; never trust completion without reading the result.
-- **The main session owns `.rota/` state.** Only the main session touches `status.json` and the backlog (`rota item` verbs).
-- **Isolation protects main.** Branch or worktree, never work directly on main.
-- **One commit per task, owned by the main session.** Clean history, easy revert granularity, no `.git/index` races.
+- **The main session plans and verifies; subagents execute.** Never dispatch without a clear brief or trust completion unread.
+- **The main session owns `.rota/` state** (`status.json`, backlog via `rota item` verbs).
+- **Never work directly on main.**
+- **One commit per task, owned by the main session.**
 
 ## References
 
-| Reference | Purpose |
-|-----------|---------|
-| [`task-ledger.md`](references/task-ledger.md) | `Task:` commit trailer and the resume rule that skips finished tasks. |
-| [`context-load-protocol.md`](references/context-load-protocol.md) | Silent parallel context load behind `--preview`. |
-| [`work-preview.md`](references/work-preview.md) | `--preview` procedure and peek template. |
-| [`work-wave-planning.md`](references/work-wave-planning.md) | File and shared-symbol collisions, brief rules, verifying a completion. |
-| [`isolation-patterns.md`](references/isolation-patterns.md) | Branch / worktree creation per `work.isolation` and umbrella mode. |
-| [`issue-mode.md`](references/issue-mode.md) | Issue-mode helper map, state labels, PR flow, resuming an item, exit codes. |
-| [`knowledge-consult.md`](references/knowledge-consult.md) | Canonical K+D query pattern used by every cycle-starting skill. |
-| [`post-cycle-trigger-gate.md`](references/post-cycle-trigger-gate.md) | The condition for the Step 13 nudge. |
-| [`umbrella-mode.md`](references/umbrella-mode.md) | Umbrella verbs, registry shape, `Repos:` field semantics. |
+`task-ledger.md`, `context-load-protocol.md`, `work-preview.md`, `work-wave-planning.md`, `isolation-patterns.md`, `issue-mode.md`, `knowledge-consult.md`, `post-cycle-trigger-gate.md`, `umbrella-mode.md`.

@@ -1,8 +1,6 @@
 # Umbrella-mode routing for `/rota-learn`
 
-Loaded by `skills/rota-learn/SKILL.md` Step 5 when `.rota/repos.json` registers at least one sub-repo.
-
-When `.rota/repos.json` registers at least one sub-repo (umbrella mode), `rota knowledge add` honors the global `--repo umbrella|<name>` flag that controls which `KNOWLEDGE.md` receives the write:
+Loaded by `skills/rota-learn/SKILL.md` Step 5 when `.rota/repos.json` registers at least one sub-repo. `rota knowledge add` honors `--repo umbrella|<name>` to pick the `KNOWLEDGE.md` written:
 
 - **`--repo <name>`** — writes to `.rota/knowledge/<name>/KNOWLEDGE.md` (the sub-repo's scoped file).
 - **`--repo umbrella`** — writes to `.rota/KNOWLEDGE.md` (the shared umbrella file).
@@ -16,8 +14,8 @@ When `.rota/repos.json` registers at least one sub-repo (umbrella mode), `rota k
   1. `"Umbrella-shared (Recommended)"` — *"Write to `.rota/KNOWLEDGE.md`; visible across all sub-repos."*
   2. `"<name>"` (one option per registered sub-repo) — *"Write to `.rota/knowledge/<name>/KNOWLEDGE.md`; scoped to that repo."*
 
-Pass the chosen scope as `--repo <scope>` to `rota knowledge add`. `/rota-learn --term` (Glossary entries) uses the same routing — per the *"Persistence-trio scoping"* decision the Glossary topic follows KNOWLEDGE's hybrid scoping, so a `--repo`-scoped term lands in that sub-repo's `## Glossary`.
+Pass the chosen scope as `--repo <scope>` to `rota knowledge add`. `/rota-learn --term` (Glossary entries) uses the same routing — a `--repo`-scoped term lands in that sub-repo's `## Glossary`.
 
-**New topics in a scoped file:** the "append `## <Topic>` heading first" rule applies to the *resolved* file. A fresh sub-repo `KNOWLEDGE.md` starts empty — seed the heading in that scoped file before calling `rota knowledge add`, just as you would for the umbrella file.
+**New topics in a scoped file:** the "append the heading first" rule applies to the *resolved* file; a fresh sub-repo `KNOWLEDGE.md` is empty, so seed the heading there first.
 
-**DECISIONS stay umbrella-only.** Per the *"Persistence-trio scoping under umbrella mode"* decision in `.rota/DECISIONS.md`, only KNOWLEDGE is hybrid (umbrella + per-sub-repo). DECISIONS is umbrella-only — do not offer or pass a `--repo` scope when writing decisions.
+**DECISIONS stay umbrella-only** (*"Persistence-trio scoping under umbrella mode"* in `.rota/DECISIONS.md`): never offer or pass `--repo` when writing decisions.

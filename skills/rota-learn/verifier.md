@@ -1,10 +1,10 @@
 # rota-learn verifier brief
 
-Loaded on demand by `/rota-learn` under `--strict` or when `learn.verify` is `true` in `.rota/config.json`. Not in-band with the main skill, so the default path doesn't pay the token cost.
+Loaded by `/rota-learn` under `--strict` or `learn.verify: true`.
 
 ## Dispatch
 
-Use the `Agent` tool with a `heavy` subagent (`model: "opus"`, the default `round.tiers.claude.heavy`) and `subagent_type: "general-purpose"`. Do a cold read of the written files — don't pre-bias the verifier with your own notes.
+Use the `Agent` tool with a `heavy` subagent (`model: "opus"`, the default `round.tiers.claude.heavy`) and `subagent_type: "general-purpose"`. Cold read: don't pre-bias the verifier with your own notes.
 
 ## Brief (paste to the agent, substituting today's date)
 
@@ -15,7 +15,7 @@ Files:
 - .rota/KNOWLEDGE.md  (entries stamped <!-- YYYY-MM-DD --> with today's date are the new ones)
 - AGENTS.md or CLAUDE.md, whichever holds the block (the block between <!-- rota-knowledge-start --> and <!-- rota-knowledge-end -->)
 
-Today's date: <absolute date — e.g. 2026-04-18>
+Today's date: <absolute date>
 
 For each new entry, judge:
 1. Durable — will this still matter in 6 months, or is it ephemeral session state?

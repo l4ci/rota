@@ -16,8 +16,6 @@ description: Use at the end of a session that surfaced reusable knowledge, after
 
 ## Step 1 — Parse Args
 
-Inspect the `args` value passed at invocation.
-
 - `--strict` — run the Opus verifier (Step 7) for this run.
 - `--retro` — retrospective mode. Skip Steps 2 to 8 and follow *`--retro`* in [`references/learn-rare-modes.md`](references/learn-rare-modes.md), then exit.
 - `--term <name>`, `--promote <topic> "<title>"`, `--deprecate <topic> "<title>"`, `--amend <topic> "<title>"` — manual modes. Skip Steps 2 to 8 and follow the matching section of [`references/learn-rare-modes.md`](references/learn-rare-modes.md), then exit.
@@ -26,26 +24,15 @@ With none of those, run the normal flow (Step 2 onward).
 
 ## Step 2 — Scan the Session for Learnings
 
-A learning is worth capturing if it would save a future `/rota-work` run from re-discovering it.
+Capture what would save a future `/rota-work` run from re-discovering it: gotchas, project conventions not obvious from code, constraints and invariants, root causes of hard-won bugs, decisions with rationale, tool quirks.
 
-**Capture:**
+**Skip:** anything documented in code or README, transient session state, obvious facts, framework-doc restatements, personal preferences.
 
-- **Gotchas** — non-obvious failure modes, footguns (e.g., "this API returns 200 on auth failure")
-- **Conventions** — project-specific patterns not obvious from the code (e.g., "all network calls go through NetworkClient")
-- **Constraints** — invariants, compatibility rules (e.g., "schema migrations must be backward-compatible for 2 versions")
-- **Debugging insights** — root causes for hard-won bugs
-- **Decisions with rationale** — why we chose X over Y
-- **Tool quirks** — build/test behavior that trips people up
-
-**Skip:** things documented in code or README, transient session state, obvious facts, restatements of framework docs, personal preferences.
-
-If nothing is worth capturing, say so and stop. Don't manufacture learnings.
+If nothing qualifies, say so and stop. Don't manufacture learnings.
 
 ## Step 3 — Classify by Topic
 
-Open `.rota/KNOWLEDGE.md` first and reuse existing `## Topic` headings when they fit. Create a new topic only if nothing fits. Good topic examples: `Build & Tooling`, `Testing`, `Networking`, `Persistence`, `Auth`, `Architecture`, `Performance`, `Third-Party APIs`, `Deployment`.
-
-Don't create a topic per learning.
+Reuse existing `## Topic` headings in `.rota/KNOWLEDGE.md`; new topic only if nothing fits, never one per learning.
 
 ## Step 4 — Auto-Write
 
@@ -55,9 +42,7 @@ Verification is **off by default**. Run Step 7 only when `--strict` is in the ar
 
 ## Step 5 — Merge into KNOWLEDGE.md
 
-Topics that grow past 25 bullets or 10 KB get a size nudge in Step 8 (`rota knowledge stats`-driven). It is informational only — the merge always proceeds.
-
-`.rota/KNOWLEDGE.md` is organized as:
+Format of `.rota/KNOWLEDGE.md` (size nudges for big topics come in Step 8; the merge always proceeds):
 
 ```markdown
 # Knowledge
@@ -67,7 +52,7 @@ Topics that grow past 25 bullets or 10 KB get a size nudge in Step 8 (`rota know
 - <older legacy learning without title>
 ```
 
-Each new bullet has a short bold `**Title**` (sentence-case, identifies the rule), an em-dash separator (em-dash U+2014, not a hyphen), the body, and a trailing ISO-8601 date stamp in an HTML comment (`<!-- YYYY-MM-DD -->`). The schema is normative — `rota knowledge add` dedups by (topic, title), so calling it twice with the same title under the same topic is a silent no-op. Sharper-wording replacement requires manual `Edit` on the existing bullet; the helper refuses to overwrite a title hit. Existing bullets without a title are legacy — leave them as-is.
+Each new bullet: short sentence-case `**Title**`, an em-dash (U+2014, not a hyphen), the body, and a trailing `<!-- YYYY-MM-DD -->` stamp. `rota knowledge add` dedups by (topic, title): a repeat is a silent no-op and never overwrites. Leave untitled legacy bullets as-is.
 
 For each captured bullet, call:
 
@@ -75,21 +60,20 @@ For each captured bullet, call:
 printf '%s' "$BODY" | rota knowledge add --topic "<Topic>" --title "<Short rule title>" --body-file -
 ```
 
-The verb handles insertion at the top of the topic, the date stamp, and dedup.
+The verb inserts at the top of the topic, stamps the date and dedups (case-insensitive title).
 
-**Pre-step rules (handle in prose, the verb assumes them):**
+**Pre-step rules:**
 
-- **New topics:** the verb requires `## <Topic>` to already exist. If you're introducing a new topic, append the `## <Topic>` heading to `.rota/KNOWLEDGE.md` first (alphabetical order, except `Build & Tooling` and `Architecture` may be pinned near the top), then call `rota knowledge add` to insert the first bullet.
-- **Sharpened wording:** the verb dedups on a case-insensitive title match; it does NOT replace an older entry with sharper wording. If a captured learning is a sharper version of an existing bullet, use `Edit` to update the existing bullet directly, then skip the `knowledge add` call for that learning.
-- **Preserve existing topics:** the verb writes only to the named topic's section. Other topics are untouched.
+- **New topics:** `## <Topic>` must already exist. Append the heading to `.rota/KNOWLEDGE.md` first (alphabetical, except `Build & Tooling` and `Architecture` may be pinned near the top), then call the verb.
+- **Sharpened wording:** the verb never replaces an older entry. For a sharper version of an existing bullet, `Edit` that bullet and skip `knowledge add`.
 
-`rota knowledge add` exits 0 on insert OR on idempotent no-op (`changed: false`); exit 3 if the topic doesn't exist (handle topic creation first as above).
+Exit 0 on insert or idempotent no-op (`changed: false`); exit 3 if the topic doesn't exist.
 
 ### Umbrella-mode routing
 
 When `.rota/repos.json` registers at least one sub-repo, read [`umbrella-routing.md`](umbrella-routing.md) before calling `rota knowledge add`: it covers the `--repo` scope flag and the scope question. Step 6 and `/rota-learn --term` follow the same scope.
 
-**Single-repo projects:** no `--repo` needed — scope always resolves to `"umbrella"` and the `.rota/KNOWLEDGE.md` path is used unchanged.
+Single-repo projects: no `--repo` needed.
 
 ## Step 6 — Update the Topic Index
 
@@ -97,17 +81,17 @@ When `.rota/repos.json` registers at least one sub-repo, read [`umbrella-routing
 rota block knowledge
 ```
 
-Reads `.rota/KNOWLEDGE.md`, extracts `## Topic` headings in order, and updates the managed `<!-- rota-knowledge-start -->` block in the project instructions file: `AGENTS.md` when it exists, else `CLAUDE.md`. The verb resolves the file; never hardcode one. It creates or appends as needed and never touches other content. `/rota-work` reads this block to know when to consult `KNOWLEDGE.md`.
+Updates the managed `<!-- rota-knowledge-start -->` block in the project instructions file (`AGENTS.md` if present, else `CLAUDE.md`; the verb resolves it, never hardcode). `/rota-work` reads this block to know when to consult `KNOWLEDGE.md`.
 
-In umbrella mode, pass `--repo <scope>` where `<scope>` is the same scope the learning was written to: this regenerates that sub-repo's instructions file with a block listing umbrella topics first, then any topics unique to that sub-repo, while `--repo umbrella` (or omitting the flag in a single-repo project) regenerates the umbrella/project file unchanged. DECISIONS are umbrella-only and never take `--repo`.
+In umbrella mode, pass `--repo <scope>`, the same scope the learning was written to: it regenerates that sub-repo's instructions file (umbrella topics first, then sub-repo-only topics); `--repo umbrella` or no flag regenerates the umbrella/project file. DECISIONS are umbrella-only and never take `--repo`.
 
 ## Step 7 — Opus Verification (opt-in)
 
-Skip unless `--strict` was passed or `learn.verify` is `true`. Read [`verifier.md`](verifier.md) and follow it — it contains the dispatch instructions, the verifier prompt, and the verdict-application rules. Apply the verdict, then continue to Step 8.
+Skip unless `--strict` was passed or `learn.verify` is `true`. Read [`verifier.md`](verifier.md) (dispatch, prompt, verdict rules) and follow it, then continue to Step 8.
 
 ## Step 8 — Confirm
 
-Tell the user, in one compact block, what was captured:
+Report in one compact block:
 
 ```
 Captured 3 learnings into .rota/KNOWLEDGE.md:
@@ -117,7 +101,7 @@ Captured 3 learnings into .rota/KNOWLEDGE.md:
 Updated the topic index in <AGENTS.md|CLAUDE.md> — /rota-work will consult these on relevant tasks.
 ```
 
-**Topic-size handling.** Run `rota knowledge stats --json` and check `data.topics`. If any topic has `bullets >= 25` OR `bytes >= 10240`, branch on `autonomy.level` (read `.rota/config.json`):
+**Topic-size handling.** Run `rota knowledge stats --json`; for any topic in `data.topics` with `bullets >= 25` OR `bytes >= 10240`, branch on `autonomy.level` (`.rota/config.json`):
 
 - `"off"` (default) — append a single nudge line per offender to the confirm output:
 
@@ -125,19 +109,19 @@ Updated the topic index in <AGENTS.md|CLAUDE.md> — /rota-work will consult the
   Note: `<topic>` is large (<bullets> bullets, <bytes-as-KB-rounded-1dp> KB). Consider splitting it (e.g. `<topic>: <facet-A>` + `<topic>: <facet-B>`) to reduce per-query cost in /rota-work, /rota-debug, /rota-plan.
   ```
 
-  Format KB as `{bytes/1024:.1f}` (e.g. `9.8 KB` for 9876 bytes). Splitting is editorial; the user accepts or declines.
+  KB = `{bytes/1024:.1f}`. The user accepts or declines the split.
 
 - `"auto"` — **perform the split immediately — no prompt, no confirmation, no "want me to" question.** For each offender topic:
 
   1. Read the topic's bullets via `rota knowledge query "<topic>"`.
-  2. Group bullets into 2 or 3 cohesive facets by semantic theme (e.g. `Helpers` / `Workers & Parallelism`, `Conventions` / `References`). Each facet must hold ≥3 bullets; `Misc` / `Other` / `Etc.` facets are forbidden — every bullet gets a substantive home. If no plausible split axis exists (bullets are byte-equivalent in theme), fall back to the `"off"` nudge for that topic and skip steps 3–7.
+  2. Group bullets into 2 or 3 cohesive facets by theme. Each facet holds ≥3 bullets; `Misc` / `Other` / `Etc.` facets are forbidden. If no plausible split axis exists, fall back to the `"off"` nudge for that topic and skip steps 3–7.
   3. Append `## <Topic>: <FacetA>` and `## <Topic>: <FacetB>` headings to `.rota/KNOWLEDGE.md` immediately before the old `## <Topic>` heading.
-  4. For each bullet in `<Topic>`, call `rota knowledge rename-topic --from "<Topic>" --to "<Topic>: <Facet>" --title "<bullet-title>"`. The verb relocates the bullet body byte-identical AND re-keys its `.rota/knowledge-tier.json` entry from `<Topic>::<title>` to `<Topic>: <Facet>::<title>` in one atomic step — tier and hit state survive the split. Issue all calls for one offender as a single parallel batch (each invocation is atomic on a different bullet). Do NOT hand-edit bullets via `Edit` for this; it silently orphans sidecar entries.
+  4. For each bullet in `<Topic>`, call `rota knowledge rename-topic --from "<Topic>" --to "<Topic>: <Facet>" --title "<bullet-title>"`. The verb moves the bullet byte-identical and re-keys its `.rota/knowledge-tier.json` entry atomically. Issue all calls for one offender as one parallel batch. Do NOT hand-edit bullets via `Edit`; it orphans sidecar entries.
   5. Remove the now-empty old `## <Topic>` heading.
   6. Re-run `rota block knowledge` to refresh the managed `<!-- rota-knowledge-start -->` block.
   7. Append one line to the confirm output: `Auto-split <topic> → <topic>: <FacetA> + <topic>: <FacetB> — N → A+B bullets.`
 
-  Format KB as `{bytes/1024:.1f}` in any size figures appearing in the confirm line. Split each offender at most once per session — a topic that re-trips the threshold mid-session is a planning failure, not a re-split target.
+  Split each offender at most once per session.
 
 If verification ran and passed, add a middle line: `Opus verification: PASS — all entries durable, sharp, correctly categorized.` If it returned `PASS_WITH_NOTES`, replace that line with a one-liner naming what was adjusted. If it failed, say so and stop.
 
@@ -145,8 +129,8 @@ If verification ran and passed, add a middle line: `Opus verification: PASS — 
 
 ## Key Principles
 
-- **Durable, not ephemeral.** If it only matters this week, it's a TODO. Use `/rota-capture`.
-- **Sharp and short.** One sentence with a concrete claim. If you need a paragraph, link to code instead.
+- **Durable, not ephemeral.** If it only matters this week, use `/rota-capture`.
+- **Sharp and short.** One sentence, concrete claim; otherwise link to code.
 
 ## References
 
