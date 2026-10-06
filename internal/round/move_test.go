@@ -13,74 +13,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/roundcfg"
-	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
-
-// moveBoard is a board with a comment store, a claim read-back and a state
-// that can be made to fail once.
-type moveBoard struct {
-	*boardFake
-	comments  map[string][]string
-	failState error
-	gone      map[string]bool // issues the tracker answers 404 for
-}
-
-func (b *moveBoard) notFound(ref string) error {
-	if b.gone[ref] {
-		return &tracker.Error{Kind: tracker.KindNotFound, Message: "gh: Not Found (HTTP 404)"}
-	}
-	return nil
-}
-func (b *moveBoard) Release(ref, claim string) (bool, error) {
-	if err := b.notFound(ref); err != nil {
-		return false, err
-	}
-	return b.boardFake.Release(ref, claim)
-}
-
-// Complete closes the item and keeps the note, the way a tracker's close comment does.
-func (b *moveBoard) Complete(ref string, in backlog.CompleteInput) (bool, error) {
-	it, err := b.Get(ref)
-	if err != nil || it.Closed {
-		return false, err
-	}
-	it.Closed = true
-	b.comments[ref] = append(b.comments[ref], "closed: "+in.Note)
-	return true, nil
-}
-
-func (b *moveBoard) AddComment(ref, kind, text string) (string, error) {
-	if err := b.notFound(ref); err != nil {
-		return "", err
-	}
-	b.comments[ref] = append(b.comments[ref], text)
-	return strconv.Itoa(len(b.comments[ref])), nil
-}
-func (b *moveBoard) Comments(ref, kind string) ([]backlog.Comment, error) {
-	var out []backlog.Comment
-	for _, t := range b.comments[ref] {
-		out = append(out, backlog.Comment{Kind: "feedback", Text: t})
-	}
-	return out, nil
-}
-func (b *moveBoard) Status(ref string) (*backlog.Status, error) {
-	return &backlog.Status{ID: ref, Claim: b.claims[ref], State: b.states[ref]}, nil
-}
-func (b *moveBoard) SetState(ref, state string) (bool, error) {
-	if err := b.notFound(ref); err != nil {
-		return false, err
-	}
-	if err := b.failState; err != nil {
-		b.failState = nil
-		return false, err
-	}
-	return b.boardFake.SetState(ref, state)
-}
 
 // killHost records the panes it was asked to kill.
 type killHost struct {
@@ -99,43 +36,13 @@ func (k *killHost) Kill(_ context.Context, slot, _ string) error {
 	return nil
 }
 
-// labelForge answers List by label, so needs-human is observable.
-type labelForge struct {
-	fakeForge
-	labels map[int][]string
-}
-
-func (f *labelForge) List(_ context.Context, fl tracker.ListFilter) ([]tracker.Issue, error) {
-	var out []tracker.Issue
-	for n, ls := range f.labels {
-		for _, l := range ls {
-			for _, want := range fl.Labels {
-				if l == want {
-					out = append(out, tracker.Issue{Number: n})
-				}
-			}
-		}
-	}
-	return out, nil
-}
-func (f *labelForge) Get(_ context.Context, n int, _ bool) (tracker.Issue, error) {
-	return tracker.Issue{Number: n, State: "open"}, nil
-}
-func (f *labelForge) AddLabels(_ context.Context, n int, labels []string, _ bool) error {
-	if f.labels == nil {
-		f.labels = map[int][]string{}
-	}
-	f.labels[n] = append(f.labels[n], labels...)
-	return nil
-}
-
 type moveFx struct {
 	root, origin string
 	env          Env
-	be           *moveBoard
+	be           *fakeRemote
 	host         *hostFake
 	killed       []string
-	forge        *labelForge
+	forge        *fakeRemote
 	set          roundcfg.Settings
 	now          time.Time
 }
@@ -153,7 +60,8 @@ func gitIn(t *testing.T, dir string, args ...string) string {
 // bare origin, issue 12 assigned to ben and a commit on ben's branch.
 func newMoveFx(t *testing.T) *moveFx {
 	t.Helper()
-	f := &moveFx{now: time.Now(), host: &hostFake{}, forge: &labelForge{}}
+	f := &moveFx{now: time.Now(), host: &hostFake{}, forge: &fakeRemote{comments: map[string][]string{}}}
+	f.be = f.forge
 	f.root = newRepo(t, nil)
 	sh(t, f.root, "config", "user.email", "t@t")
 	sh(t, f.root, "config", "user.name", "t")
@@ -174,12 +82,12 @@ func newMoveFx(t *testing.T) *moveFx {
 	sh(t, f.root, "push", "-q", "origin", "main")
 	milestoneDoc(t, f.root, "M01", "active")
 
-	f.env = Env{Git: git.Exec, Base: "main", Lease: fakeLease("h", 100), StallMinutes: 30, Forge: f.forge,
+	f.env = Env{Git: git.Exec, Base: "main", Lease: fakeLease("h", 100), StallMinutes: 30, Forge: f.forge.asForge(),
 		Now: func() time.Time { return f.now }}
 	f.env.Worker = worker.Env{Git: git.Exec, Now: func() time.Time { return f.now }, Sleep: func(time.Duration) {},
 		NewHost: func(string) host.Host { return &killHost{hostFake: f.host, killed: &f.killed} }}
 
-	fb := &fakeBacklog{}
+	fb := f.be
 	fb.add("12", "Add the round assign verb now please", "M01", false, "## Acceptance\n- [ ] works\n\nedits internal/cli/round.go")
 	fb.add("13", "Second issue", "M01", false, "## Acceptance\n- [ ] ok\n\nedits internal/other.go")
 	fb.add("14", "Third issue", "M01", false, "## Acceptance\n- [ ] ok\n\nalso edits internal/cli/round.go")
@@ -187,7 +95,6 @@ func newMoveFx(t *testing.T) *moveFx {
 		n, _ := strconv.Atoi(it.ID)
 		it.Number = n
 	}
-	f.be = &moveBoard{boardFake: &boardFake{fakeBacklog: fb}, comments: map[string][]string{}}
 	f.set, _ = roundcfg.Load(os.TempDir())
 
 	if _, err := f.env.Start(bg, f.root, startOpts(roundcfg.ScopeMilestone, 100)); err != nil {
@@ -581,8 +488,8 @@ func TestReturnParksCommentsReleasesAndFreesTheSlot(t *testing.T) {
 	if !f.remoteHas(t, branch) {
 		t.Error("the branch stays, on origin")
 	}
-	if f.be.claims["12"] != "" || f.be.states["12"] != "" {
-		t.Errorf("claim and in-progress must be gone: %v %v", f.be.claims, f.be.states)
+	if f.be.claims["12"] != "" || f.be.bstates["12"] != "" {
+		t.Errorf("claim and in-progress must be gone: %v %v", f.be.claims, f.be.bstates)
 	}
 	last := f.be.comments["12"][len(f.be.comments["12"])-1]
 	for _, want := range []string{"**rota handoff** (return, from ben)", "Branch: `" + branch + "`", "Head: ", "State: committed, salvage commit", "Reason: premise is wrong", "Done and next:\ntried A, B is next", "<!-- rota:handoff ben@1 -->"} {
@@ -620,7 +527,7 @@ func TestReturnThenAssignPicksTheItemUpAgain(t *testing.T) {
 		t.Fatalf("a returned issue is a candidate again: %v", ids(cands))
 	}
 	res, err := f.assign("12", "dana")
-	if err != nil || !res.Dispatched || f.be.claims["12"] != "dana@1" || f.be.states["12"] != "in-progress" {
+	if err != nil || !res.Dispatched || f.be.claims["12"] != "dana@1" || f.be.bstates["12"] != "in-progress" {
 		t.Fatalf("assign after return: %v %+v %v", err, res, f.be.claims)
 	}
 	if !strings.Contains(f.host.sent, "rota:handoff") || !strings.Contains(f.host.sent, branch) {
@@ -714,8 +621,8 @@ func TestTransferToASlotChecksOutTheExistingBranch(t *testing.T) {
 	if cur := gitIn(t, f.wt("ben"), "symbolic-ref", "--short", "HEAD"); cur != "park/ben" {
 		t.Errorf("the sender is parked, on %s", cur)
 	}
-	if f.be.claims["12"] != "dana@1" || f.be.states["12"] != "in-progress" {
-		t.Errorf("claim moves, in-progress stays: %v %v", f.be.claims, f.be.states)
+	if f.be.claims["12"] != "dana@1" || f.be.bstates["12"] != "in-progress" {
+		t.Errorf("claim moves, in-progress stays: %v %v", f.be.claims, f.be.bstates)
 	}
 	d, b := f.slot("dana"), f.slot("ben")
 	if d.Task() != "12" || d.Branch() != branch || d.ClaimID() != "dana@1" || d.State() != "busy" {
@@ -841,8 +748,8 @@ func TestTransferToHumanLabelsAndDispatchesNothing(t *testing.T) {
 	if res.To != HumanTarget || res.Dispatched || res.ClaimID != "" || !res.Changed {
 		t.Fatalf("%+v", res)
 	}
-	if f.be.claims["12"] != "" || f.be.states["12"] != "" {
-		t.Errorf("no claim and no in-progress: %v %v", f.be.claims, f.be.states)
+	if f.be.claims["12"] != "" || f.be.bstates["12"] != "" {
+		t.Errorf("no claim and no in-progress: %v %v", f.be.claims, f.be.bstates)
 	}
 	if got := f.forge.labels[12]; len(got) != 1 || got[0] != "needs-human" {
 		t.Errorf("labels %v", got)
@@ -892,8 +799,8 @@ func TestReclaimDeadSlotParksReleasesAndClearsTheHandle(t *testing.T) {
 	if len(f.killed) != 0 {
 		t.Errorf("a dead slot has nothing to kill: %v", f.killed)
 	}
-	if f.be.claims["12"] != "" || f.be.states["12"] != "" || !f.remoteHas(t, branch) {
-		t.Errorf("released, state cleared, branch pushed: %v %v", f.be.claims, f.be.states)
+	if f.be.claims["12"] != "" || f.be.bstates["12"] != "" || !f.remoteHas(t, branch) {
+		t.Errorf("released, state cleared, branch pushed: %v %v", f.be.claims, f.be.bstates)
 	}
 	s := f.slot("ben")
 	if s.Task() != "" || s.Handle() != "" || s.State() != "idle" || s.ClaimID() != "" {
@@ -1052,7 +959,7 @@ func TestTransferToHumanFreesASenderWhoseIssueNoLongerResolves(t *testing.T) {
 // A handoff comment hv posted before the rename (#236) still names the branch
 // the next worker continues from.
 func TestLatestHandoffBranchReadsLegacyMarker(t *testing.T) {
-	b := &moveBoard{comments: map[string][]string{
+	b := &fakeRemote{comments: map[string][]string{
 		"#5": {"**hv handoff** (return, from ben)\nBranch: `ben/5-x`\n\n<!-- hv:handoff ben@1 -->"},
 	}}
 	if got := latestHandoffBranch(b, "#5"); got != "ben/5-x" {

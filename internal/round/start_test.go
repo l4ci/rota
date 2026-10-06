@@ -19,55 +19,6 @@ import (
 	"github.com/l4ci/rota/internal/worker"
 )
 
-// fakeBacklog is the read side Candidates and Assess need.
-type fakeBacklog struct {
-	backlog.Backend
-	items    map[string]*backlog.Item
-	order    []string
-	details  map[string]string
-	comments map[string][]string
-	ready    map[string][]string // reasons; absent means ready
-}
-
-func (f *fakeBacklog) add(id, title, milestone string, closed bool, detail string) {
-	it := &backlog.Item{ID: id, Title: title, Closed: closed}
-	it.Fields.Milestone = milestone
-	if f.items == nil {
-		f.items, f.details = map[string]*backlog.Item{}, map[string]string{}
-	}
-	f.items[id] = it
-	f.order = append(f.order, id)
-	f.details[id] = detail
-}
-func (f *fakeBacklog) Name() string { return "issues" }
-func (f *fakeBacklog) Capabilities() backlog.Capabilities {
-	return backlog.Capabilities{Tracker: true}
-}
-func (f *fakeBacklog) Get(ref string) (*backlog.Item, error) {
-	if it, ok := f.items[strings.ToUpper(strings.TrimPrefix(ref, "#"))]; ok {
-		return it, nil
-	}
-	return nil, fmt.Errorf("%w: %s", backlog.ErrNotFound, ref)
-}
-func (f *fakeBacklog) List(closed bool) ([]backlog.Item, error) {
-	var out []backlog.Item
-	for _, id := range f.order {
-		if it := f.items[id]; closed || !it.Closed {
-			out = append(out, *it)
-		}
-	}
-	return out, nil
-}
-func (f *fakeBacklog) Detail(ref string) (string, bool, error) { return f.details[ref], true, nil }
-func (f *fakeBacklog) Ready(ref string) ([]string, error)      { return f.ready[ref], nil }
-func (f *fakeBacklog) Comments(ref, kind string) ([]backlog.Comment, error) {
-	var out []backlog.Comment
-	for _, t := range f.comments[ref] {
-		out = append(out, backlog.Comment{Text: t})
-	}
-	return out, nil
-}
-
 func milestoneDoc(t *testing.T, root, id, status string, depends ...string) {
 	t.Helper()
 	dir := filepath.Join(root, ".rota", "milestones")
@@ -143,7 +94,7 @@ func TestOverlaps(t *testing.T) {
 }
 
 func TestAssessChecks(t *testing.T) {
-	be := &fakeBacklog{ready: map[string][]string{"3": {"no acceptance criteria in the issue body", "no design or plan note"}}}
+	be := &fakeRemote{ready: map[string][]string{"3": {"no acceptance criteria in the issue body", "no design or plan note"}}}
 	be.add("1", "done dep", "", true, "")
 	be.add("2", "open dep", "", false, "")
 	be.add("3", "no criteria", "", false, "")
@@ -193,7 +144,7 @@ func TestCandidatesPerScope(t *testing.T) {
 	milestoneDoc(t, root, "M01", "active")
 	milestoneDoc(t, root, "M02", "planned", "M01")
 	milestoneDoc(t, root, "M03", "planned", "M09")
-	be := &fakeBacklog{}
+	be := &fakeRemote{}
 	be.add("10", "in M01", "M01", false, "")
 	be.add("11", "in M01, held", "M01", false, "")
 	be.add("12", "in M02", "M02", false, "")
@@ -255,7 +206,7 @@ func TestCandidatesReadOverlapAgainstSlotChanges(t *testing.T) {
 		t.Fatal(err)
 	}
 	milestoneDoc(t, root, "M01", "active")
-	be := &fakeBacklog{}
+	be := &fakeRemote{}
 	be.add("7", "ben's issue", "M01", false, "")
 	be.add("8", "wants the seed file", "M01", false, "edits seed")
 	writeRegistry(t, root, slot(root, "ben", "ben/7-pool", nil))
