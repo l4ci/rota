@@ -68,8 +68,25 @@ func TestTestRunExpandsFilesAgainstBase(t *testing.T) {
 		t.Fatalf("exit %d\n%s%s", o.code, o.stdout, o.stderr)
 	}
 	b, _ := os.ReadFile(filepath.Join(root, "out.txt"))
-	if string(b) != "it's here.txt\nkeep.txt\n" {
+	if string(b) != "it's here.txt\nkeep.txt\n.rota/config.json\n" { // config.json is untracked
 		t.Errorf("expanded files = %q", b)
+	}
+}
+
+func TestTestRunFilesIncludesUntrackedNotIgnored(t *testing.T) {
+	root := tierProject(t, `{"test":{"fast":["printf '%s\\n' {files} > ../out.txt"]}}`)
+	write(t, filepath.Join(root, ".gitignore"), "*.log\n")
+	gitT(t, root, "add", ".gitignore")
+	gitT(t, root, "commit", "-q", "-m", "ignore")
+	gitT(t, root, "checkout", "-q", "-b", "feat")
+	write(t, filepath.Join(root, "new one.txt"), "x")
+	write(t, filepath.Join(root, "noise.log"), "x")
+	if o := trRun(t, root, "", "test", "run", "fast", "--base", "main"); o.code != 0 {
+		t.Fatalf("exit %d\n%s%s", o.code, o.stdout, o.stderr)
+	}
+	b, _ := os.ReadFile(filepath.Join(filepath.Dir(root), "out.txt"))
+	if string(b) != ".rota/config.json\nnew one.txt\n" {
+		t.Errorf("expanded files = %q, want the untracked files minus the ignored one", b)
 	}
 }
 
