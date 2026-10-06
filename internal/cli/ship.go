@@ -441,10 +441,6 @@ func shipMerge(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		g := shipGitRunner{c, dir}
-		// clearMerge's refusal carries its own envelope, so it is kept aside
-		// and returned as is.
-		var gateRes Result
-		var gateErr error
 		sha, err := ship.MergeBranch(ship.MergePorts{
 			Git:     g,
 			Recover: land.RecoveryGit(c.Context(), git.Exec, dir),
@@ -457,15 +453,14 @@ func shipMerge(fs *flag.FlagSet) RunFunc {
 					}
 					return fl, err
 				}
-				gateRes, gateErr = clearMerge(c, policy, branch, conf, approvalReq{}, files, nil)
-				return gateErr
+				return clearMerge(c, policy, branch, conf, approvalReq{}, files, nil)
 			},
 			WorktreeCheck: shipWorktreeCheck(c, dir, branch),
 		}, branch, base, msg)
-		if gateErr != nil {
-			return gateRes, gateErr
-		}
 		if err != nil {
+			if d := refusalData(err); d != nil { // clearMerge's refusal carries its own envelope
+				return Result{Data: d}, err
+			}
 			return shipErr(err)
 		}
 		return Result{Data: gitObj("branch", branch, "base", base, "sha", sha, "changed", true), Text: sha}, nil
@@ -508,30 +503,23 @@ func shipPRMerge(fs *flag.FlagSet) RunFunc {
 		}
 		// The verdict check (B3) runs before the merge-approval gate (B1), so
 		// a branch that would be refused never writes an audit line.
-		var gateRes Result
-		var gateErr error
 		approve := func(branch string, files func() ([]string, error)) error {
 			if branch == "" {
 				c.Warn("could not resolve the head branch of PR %d; verdicts not checked", pr)
-			} else if gateRes, gateErr = shipPRVerdict(c, pr, branch); gateErr != nil {
-				return gateErr
+			} else if res, err := shipPRVerdict(c, pr, branch); err != nil {
+				return carryData(res, err)
 			}
 			req.Thread = func() (approvalThread, error) {
 				return approvalThread{Kind: "pr", Number: pr, Title: fmt.Sprintf("Merge approval: PR #%d", pr)}, nil
 			}
-			gateRes, gateErr = clearMerge(c, policy, "PR "+args[0], conf, req, files, jsonObj("pr", pr))
-			return gateErr
+			return clearMerge(c, policy, "PR "+args[0], conf, req, files, jsonObj("pr", pr))
 		}
 		merged, err := ship.MergePR(be, pr, items, approve)
 		var refused *ship.PRMergeRefused
 		var unproven *ship.UnprovenError
 		switch {
-		case gateErr != nil:
-			var e *Error
-			if errors.As(gateErr, &e) {
-				return gateRes, gateErr
-			}
-			return backlogFail(gateErr) // listing the PR's files failed at the tracker
+		case refusalData(err) != nil:
+			return Result{Data: refusalData(err)}, err
 		case errors.As(err, &refused):
 			return Result{Data: jsonObj("pr", pr, "merged", false, "unproven", []string{}, "changesRequested", []string{}, "changed", false)},
 				Refused("%s", err.Error())

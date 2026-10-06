@@ -843,3 +843,17 @@ func TestGateSkipsE2EWhenFullRed(t *testing.T) {
 		t.Error("e2e ran after a red test.full")
 	}
 }
+
+// A refused Approve reaches the caller as the same typed refusal, data
+// intact, for the gate and (in train_test.go) the train.
+func TestGateApprovalRefusalCarriesData(t *testing.T) {
+	w := newWorld(t, ghURL)
+	want := &exitcode.Error{Exit: exitcode.ExitRefused, Message: "gate", Data: BlockData{BlockedBy: "manual gate"}}
+	res, err := w.gate(false, GateOpts{Approve: func(func() ([]string, error)) error { return want }})
+	if res.Verdict != GateApprovalRequired {
+		t.Fatalf("verdict %q", res.Verdict)
+	}
+	if bd, ok := exitcode.DataOf[BlockData](err); !ok || bd.BlockedBy != "manual gate" {
+		t.Errorf("refusal data = %+v, %v (err %v)", bd, ok, err)
+	}
+}

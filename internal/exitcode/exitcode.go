@@ -3,7 +3,10 @@
 // artifact and worker can all share it.
 package exitcode
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
 
 // Exit codes; see docs/design/5.0-cli-conventions.md, Exit codes.
 const (
@@ -50,3 +53,16 @@ func Errf(exit int, format string, a ...any) *Error {
 
 // WithHint returns e with a hint line added.
 func (e *Error) WithHint(hint string) *Error { e.Hint = hint; return e }
+
+// DataOf reads the failure data of the exit-coded error err wraps as a T. It
+// is the one typed accessor for refusal data: a caller names the type it
+// expects instead of asserting on Error.Data itself.
+func DataOf[T any](err error) (T, bool) {
+	var e *Error
+	if errors.As(err, &e) {
+		d, ok := e.Data.(T)
+		return d, ok
+	}
+	var zero T
+	return zero, false
+}
