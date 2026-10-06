@@ -65,6 +65,95 @@
         "^CMD:.*rota status rm"
       ],
       "order": []
+    },
+    {
+      "id": "work-item-plan",
+      "query": "/rota-work implement 42",
+      "situation": "You are entering Step 4. Backend: issues. Issue #42 has no milestone. The request is to add CSV export. In the preceding /rota-plan session the user approved and saved a plan. Simulated result of rota plan show for its supported key: frontmatter key: #42; T1: stream CSV rows in internal/export/csv.go, Verify: go test ./internal/export -run TestCSVStreaming; T2: expose export in cmd/export.go, Verify: go test ./cmd -run TestExportCommand. Assumptions: preserve column order; never buffer the full dataset. No commits past base, no knowledge or decision conflicts, no conversation change to the plan. Stop once you have prepared the task briefs, before dispatch. Show each task number, files, constraints and verify command in SAY lines.",
+      "expected": "Loads the saved plan through rota plan show using #42, without inventing a milestone. Uses its two tasks, streaming constraint and exact verification commands before dispatch.",
+      "must": [
+        "^CMD:.*rota plan show ['\"]#42['\"]",
+        "^SAY:.*(?:T1|Task 1).*internal/export/csv.go",
+        "^SAY:.*(?:T2|Task 2).*cmd/export.go",
+        "go test ./internal/export -run TestCSVStreaming",
+        "go test ./cmd -run TestExportCommand",
+        "column order",
+        "(?:never|not|no|avoid|without)[^\n]*buffer|stream[^\n]*(?:dataset|rows)"
+      ],
+      "mustNot": [
+        "^CMD:.*rota plan (?:add|put|rm)"
+      ],
+      "order": [
+        "rota plan show",
+        "^SAY:.*(?:T1|Task 1)"
+      ]
+    },
+    {
+      "id": "work-file-plan",
+      "query": "/rota-work implement B07",
+      "situation": "You are entering Step 4. Backend: file. Item B07 has Milestone: M01. The request is to add CSV export. In the preceding /rota-plan session the user approved and saved a plan. Simulated result of rota plan show for its supported key: frontmatter key: M01-B07; T1: stream CSV rows in internal/export/csv.go, Verify: go test ./internal/export -run TestCSVStreaming; T2: expose export in cmd/export.go, Verify: go test ./cmd -run TestExportCommand. Assumptions: preserve column order; never buffer the full dataset. No commits past base, no knowledge or decision conflicts, no conversation change to the plan. Stop once you have prepared the task briefs, before dispatch. Show each task number, files, constraints and verify command in SAY lines.",
+      "expected": "Loads the saved plan through rota plan show using M01-B07, without inventing a milestone. Uses its two tasks, streaming constraint and exact verification commands before dispatch.",
+      "must": [
+        "^CMD:.*rota plan show ['\"]?M01-B07\\b",
+        "^SAY:.*(?:T1|Task 1).*internal/export/csv.go",
+        "^SAY:.*(?:T2|Task 2).*cmd/export.go",
+        "go test ./internal/export -run TestCSVStreaming",
+        "go test ./cmd -run TestExportCommand",
+        "column order",
+        "(?:never|not|no|avoid|without)[^\n]*buffer|stream[^\n]*(?:dataset|rows)"
+      ],
+      "mustNot": [
+        "^CMD:.*rota plan (?:add|put|rm)"
+      ],
+      "order": [
+        "rota plan show",
+        "^SAY:.*(?:T1|Task 1)"
+      ]
+    },
+    {
+      "id": "work-slice-plan",
+      "query": "/rota-work M01-S01",
+      "situation": "You are entering Step 4. Backend: issues. Milestone slice M01-S01 covers issues #42 and #43. The request is to add CSV export. In the preceding /rota-plan session the user approved and saved a plan. Simulated result of rota plan show for its supported key: frontmatter key: M01-S01; T1: stream CSV rows in internal/export/csv.go, Verify: go test ./internal/export -run TestCSVStreaming; T2: expose export in cmd/export.go, Verify: go test ./cmd -run TestExportCommand. Assumptions: preserve column order; never buffer the full dataset. No commits past base, no knowledge or decision conflicts, no conversation change to the plan. Stop once you have prepared the task briefs, before dispatch. Show each task number, files, constraints and verify command in SAY lines.",
+      "expected": "Loads the saved plan through rota plan show using M01-S01, without inventing a milestone. Uses its two tasks, streaming constraint and exact verification commands before dispatch.",
+      "must": [
+        "^CMD:.*rota plan show ['\"]?M01-S01\\b",
+        "^SAY:.*(?:T1|Task 1).*internal/export/csv.go",
+        "^SAY:.*(?:T2|Task 2).*cmd/export.go",
+        "go test ./internal/export -run TestCSVStreaming",
+        "go test ./cmd -run TestExportCommand",
+        "column order",
+        "(?:never|not|no|avoid|without)[^\n]*buffer|stream[^\n]*(?:dataset|rows)"
+      ],
+      "mustNot": [
+        "^CMD:.*rota plan (?:add|put|rm)"
+      ],
+      "order": [
+        "rota plan show",
+        "^SAY:.*(?:T1|Task 1)"
+      ]
+    },
+    {
+      "id": "work-item-plan-resume",
+      "query": "/rota-work resume 42",
+      "situation": "You are entering Step 4 on existing branch rota/csv-export. Backend: issues. Issue #42 has no milestone. A previous /rota-plan session saved the approved plan: rota plan show returns frontmatter key: #42; T1: stream CSV rows in internal/export/csv.go, Verify: go test ./internal/export -run TestCSVStreaming; T2: expose export in cmd/export.go, Verify: go test ./cmd -run TestExportCommand. Constraints: preserve column order; never buffer the full dataset. Simulated command result: git log --format='%(trailers:key=Task,valueonly,separator=%x0a)' \"$(rota git base)\"..HEAD returns #42/1 and a blank line from an unmarked wip commit. The old handoff says next step is T1. No conflicts with the conversation. Stop after preparing the remaining dispatch brief, before dispatch. Show the done/remaining split and each remaining task number, files, constraints and verify command in SAY lines.",
+      "expected": "Reloads the issue plan without a milestone, reads Task trailers, and keeps the plan key #42 and original task number 2. Skips committed task 1 despite the stale handoff; does not rebuild or renumber the decomposition.",
+      "must": [
+        "^CMD:.*rota plan show ['\"]#42['\"]",
+        "^CMD:.*git log.*trailers:key=Task",
+        "(?:done|finished|committed)[^\\n]*\\b1\\b[^\\n]*(?:remaining|unfinished)[^\\n]*\\b2\\b",
+        "^SAY:.*(?:T2|Task 2).*cmd/export.go",
+        "go test ./cmd -run TestExportCommand",
+        "column order"
+      ],
+      "mustNot": [
+        "^CMD:.*rota plan (?:add|put|rm)",
+        "^SAY:.*(?:T1|Task 1).*cmd/export.go",
+        "^CMD:.*(?:dispatch|Agent).*?(?:T1|Task 1|#42/1)"
+      ],
+      "order": [
+        "rota plan show",
+        "(?:done|finished|committed)[^\\n]*\\b1\\b[^\\n]*(?:remaining|unfinished)[^\\n]*\\b2\\b"
+      ]
     }
   ]
 }
