@@ -109,7 +109,7 @@ func WriteJSONAtomic(path string, v any) error {
 // sits on a sibling file because the atomic rename swaps the data file's
 // inode. A busy lock is retried every 50 ms until timeout. The kernel drops
 // the lock if the process dies; the empty .lock file stays in place.
-// Hold at most one lock at a time.
+// Callers taking multiple locks must use a consistent order across operations.
 func Locked(path string, timeout time.Duration, fn func() error) error {
 	lockPath := path + ".lock"
 	if err := os.MkdirAll(filepath.Dir(lockPath), 0o777); err != nil {
