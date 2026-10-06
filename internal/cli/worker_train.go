@@ -32,6 +32,7 @@ func trainData(r worker.TrainResult) *jsonx.Object {
 	}
 	d.Set("landed", strList(r.Landed))
 	d.Set("verified", strList(r.Verified))
+	d.Set("e2eVerified", strList(r.E2EVerified))
 	d.Set("changed", r.Changed)
 	if r.SHA != "" {
 		d.Set("sha", r.SHA)

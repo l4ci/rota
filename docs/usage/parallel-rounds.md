@@ -391,10 +391,10 @@ sides, sends it back as `stale`. Each `stale` or `provenance-fail` bounce is cou
 When several PRs wait in review, `rota worker train <slot|PR>... --base <branch>` gates them together and
 pays for the verify once instead of once per PR. It checks each member the way `gate --check-only` does,
 merges them in the order given onto the base in a scratch worktree, runs `test.full` on that
-tree, and on a pass lands every member through the gate in order. If the base or a member's head moved
+tree, then `test.e2e` when set (the most expensive tier runs once per train, not once per PR), and on a pass lands every member through the gate in order. If the base or a member's head moved
 while it verified, nothing lands (`base-moved`); the same verdict stops the train mid-way if the base changes between landings. Members must be all PRs or all slots without one.
 
-A red train bisects (up to ceil(log2 n) extra verifies, on the assumption that the base is green; a red base is reported as such): it verifies growing prefixes of the order and names the first member whose merge
+A red train, from either tier, bisects (up to ceil(log2 n) extra verifies, on the assumption that the base is green; a red base is reported as such): it verifies growing prefixes of the order and names the first member whose merge
 breaks the tree as the `culprit` (the verdict is `verify-failed`). That can be an interaction with the members before it, not that PR alone.
 Nothing lands unless you pass `--land-green`, which lands the verified members before the culprit. A
 member that conflicts with the base plus the ones before it is `merge-failed` with that member named.

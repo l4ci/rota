@@ -6,6 +6,7 @@ Loaded by `SKILL.md` when the branch is a round worker's (`<agent>/<issue>-<slug
 
 - **Step 3 (review):** review is the orchestrator's seat, so a worker never runs `/rota-review` on its own branch (`skills/references/worker-contract.md`). Skip Step 3's routing and treat `REVIEW_CHOICE` as unset.
 - **Step 3.5 (second opinion):** skipped; the orchestrator's merge gate is the second check (`docs/contributing/rounds.md`).
+- **Step 3.75 (QA):** skipped; `test.e2e` runs once on the merge-train result (`rota worker train`), not per branch.
 - **Step 8 (file mode):** a round worker skips it (workers never edit tracked `.rota/`); the orchestrator completes the items when it merges the PR.
 - **Steps 8.5 and 8.6:** skipped; the orchestrator runs learn and docs once per round.
 
