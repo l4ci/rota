@@ -3,7 +3,7 @@ echo "#85: rota doctor warns on low free disk and names reclaimable leftovers"
 TMP_DD="$(mktemp -d)"
 trap 'rm -rf "$TMP_DD"' EXIT
 mkdir -p "$TMP_DD/bin" "$TMP_DD/proj/.rota" "$TMP_DD/tmpdir"
-ln -s "$(command -v git)" "$TMP_DD/bin/git"
+ln -s "$(command -v git)" "$TMP_DD/bin/git"; printf '#!/bin/sh\nexit 0\n' > "$TMP_DD/bin/jq"; chmod +x "$TMP_DD/bin/jq"
 printf '{"doctor":{"minFreeDiskPercent":10}}\n' > "$TMP_DD/proj/.rota/config.json"
 # A temp dir a run left behind long ago, in the temp root doctor scans.
 mkdir -p "$TMP_DD/tmpdir/rota-smoke.leaked" && head -c 4096 /dev/zero > "$TMP_DD/tmpdir/rota-smoke.leaked/blob"
