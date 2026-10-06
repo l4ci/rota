@@ -123,6 +123,7 @@ note: `<branch>` is optional (default current branch), as for `rota review brief
 ### rota ship pr
 rota ship pr <branch> --title <text> --body-file <path|-> [--items <ID>[,<ID>…]]
 repo: scoped
+note: PR creation never removes a worktree; it can run inside a round slot or cycle worktree, including one with uncommitted files.
 data: {"branch": string, "url": string, "provider": string, "number"?: number, "items": []string, "changed": bool}; failure data on exit 4 is the verdict-refusal shape (B3)
 exit: 2 when --title or --body-file is missing or the body is empty, or at an umbrella root without --repo; 3 when an --items item is unknown, the branch does not exist, or no base branch resolves; 4 when a FAIL verdict blocks the branch (B3; checked after the --items lookup and before the push); 5 when the push fails; tracker
 old: hv-pr [--repo <repo>] [--closes <ID,ID>] <branch> <title> < <body-file>    (`--items` is the old `--closes`)
@@ -136,6 +137,7 @@ note: in umbrella issue mode `--items` resolves inside the sub-repo the PR opens
 ### rota ship merge
 rota ship merge <branch> --body-file <path|-> [--confirm --confirm-note <answer>]
 repo: scoped
+note: worktree cleanup requires a matching `(branch, repo, worktree)` entry in `status.json`, as recorded by `/rota-work`. Cleanup refuses with exit 4 and `blockedBy: "worktree"` before merging when the worktree belongs to a registered round slot, contains the current directory (including nested or symlink paths), lacks that ownership record, or has modified, staged, untracked or ignored files. Run from outside the cycle worktree. Cleanup never uses `--force` or guesses ownership from a path or branch name.
 data: {"branch": string, "base": string, "sha": string, "changed": bool}; failure data on the B3 refusal is the verdict-refusal shape
 exit: 2 when --body-file is missing or empty, at an umbrella root without --repo, a confirmation flag is given without the other, or `ship.mergeApproval` is not `none`, `all` or `paths`; 4 when a FAIL verdict blocks the branch (B3; checked after the base resolves, before the merge-approval gate and before any change); 4 when `ship.mergeApproval` covers this merge and the `merge-approval` gate is not cleared (B1; checked after the base resolves and before the worktree is cleared, so a refusal changes nothing); 3 when the branch does not exist or no base branch resolves; 4 when the merge conflicts (the merge is aborted, so the tree is left as it was and `changed` is false) or the branch is the base branch; 5 when git fails otherwise
 old: hv-merge [--repo <repo>] <branch> < <body-file>

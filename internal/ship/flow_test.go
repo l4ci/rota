@@ -261,8 +261,8 @@ func TestVerdictCheck(t *testing.T) {
 
 func TestClearWorktree(t *testing.T) {
 	list := "worktree /repo\nbranch refs/heads/main\n\nworktree /wt/feat\nbranch refs/heads/feat\n"
-	g := &fakeGit{out: map[string]string{"worktree list --porcelain": list, "worktree remove /wt/feat": ""}}
-	if err := ClearWorktree(g, "feat", nil); err != nil {
+	g := &fakeGit{out: map[string]string{"worktree list --porcelain": list, "worktree remove /wt/feat": "", "-C /wt/feat status --porcelain --untracked-files=all --ignored": ""}}
+	if err := ClearWorktree(g, "feat", func(string) error { return nil }); err != nil {
 		t.Fatal(err)
 	}
 	if !contains(g.calls, "worktree remove /wt/feat") {
@@ -273,9 +273,10 @@ func TestClearWorktree(t *testing.T) {
 	if err := ClearWorktree(g, "nope", nil); err != nil || len(g.calls) != 1 {
 		t.Errorf("err %v calls %v", err, g.calls)
 	}
-	// The on-disk fallback names a worktree git does not list.
-	g = &fakeGit{out: map[string]string{"worktree list --porcelain": list, "worktree remove /disk": ""}}
-	if err := ClearWorktree(g, "nope", func() string { return "/disk" }); err != nil || !contains(g.calls, "worktree remove /disk") {
+	// Unknown ownership refuses instead of removing an arbitrary worktree.
+	g = &fakeGit{out: map[string]string{"worktree list --porcelain": list}}
+	var refusal *Refusal
+	if err := ClearWorktree(g, "feat", nil); !errors.As(err, &refusal) || contains(g.calls, "worktree remove /wt/feat") {
 		t.Errorf("err %v calls %v", err, g.calls)
 	}
 }

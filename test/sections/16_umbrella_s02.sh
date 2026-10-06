@@ -97,6 +97,8 @@ mkdir -p "$UMB/.claude/worktrees/web"
 (cd "$UMB/web" && git worktree add "$UMB/.claude/worktrees/web/rota-wt-x" rota/wt-x >/dev/null 2>&1)
 [ -d "$UMB/.claude/worktrees/web/rota-wt-x" ] || fail "Layout B worktree setup failed"
 (cd "$UMB/.claude/worktrees/web/rota-wt-x" && echo y > y.txt && git add y.txt && git -c user.email=t@t -c user.name=t commit -q -m "feat: y")
+(cd "$UMB" && hvj status add rota/wt-x --items B01 --repo web --worktree "$UMB/.claude/worktrees/web/rota-wt-x" >/dev/null) \
+  || fail "register Layout B cycle worktree failed"
 (cd "$UMB" && printf 'merge: wt-x\n\n- added y\n' | hvj ship merge rota/wt-x --repo web --body-file - >/dev/null) \
   || fail "ship merge --repo web of a worktree branch failed"
 [ ! -d "$UMB/.claude/worktrees/web/rota-wt-x" ] || fail "Layout B worktree was not cleaned up by ship merge"
