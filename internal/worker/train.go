@@ -172,9 +172,13 @@ func (e Env) Train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 		return list, nil
 	}
 	if onCI {
-		changed, err := files()
-		if err != nil {
-			return e.trainBroke(res, err.Error())
+		var changed []string
+		for _, m := range res.Members {
+			f, err := e.gateEnv().ciDiffFiles(root, baseRef, headRef(m))
+			if err != nil {
+				return e.trainBroke(res, err.Error())
+			}
+			changed = append(changed, f...)
 		}
 		if msg, hint := ciConfigRefusal("train", changed); msg != "" {
 			res.Verdict, res.Err, res.Hint = GateCIConfigChanged, msg, hint

@@ -58,6 +58,23 @@ func ciConfigChanges(changed []string) []string {
 	return hit
 }
 
+// ciDiffFiles lists every path the merge of head onto base touches, for
+// ciConfigChanges: NUL-separated so no path comes back quoted, and without
+// rename detection so a workflow moved away counts by its old path too.
+func (e gateEnv) ciDiffFiles(root, base, head string) ([]string, error) {
+	out, code := e.runGit(root, "diff", "--no-renames", "--name-only", "-z", base+"..."+head)
+	if code != 0 {
+		return nil, fmt.Errorf("git diff --name-only %s...%s exited %d", base, head, code)
+	}
+	var files []string
+	for _, f := range strings.Split(out, "\x00") {
+		if f != "" {
+			files = append(files, f)
+		}
+	}
+	return files, nil
+}
+
 // ciConfigRefusal is the ci-config-changed message and hint for who, or ""
 // when no file in changed defines CI.
 func ciConfigRefusal(who string, changed []string) (msg, hint string) {

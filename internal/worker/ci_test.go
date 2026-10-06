@@ -288,3 +288,36 @@ func TestCIConfigChanges(t *testing.T) {
 		t.Fatalf("%v", got)
 	}
 }
+
+// A quoted path or a rename must not hide a CI file from the check.
+func TestGateCIConfigRenamedOrQuoted(t *testing.T) {
+	for _, c := range []struct{ name, setup, want string }{
+		{"rename", "rename", ".github/workflows/ci.yml"},
+		{"quoted", "quoted", ".github/workflows/\u00e9.yml"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			w := newWorld(t, ghURL)
+			wf := filepath.Join(w.dir, ".github", "workflows")
+			os.MkdirAll(wf, 0o755)
+			os.WriteFile(filepath.Join(wf, "ci.yml"), []byte("on: push\n"), 0o644)
+			gitq(t, w.dir, "add", ".github")
+			gitq(t, w.dir, "commit", "-q", "-m", "ci")
+			gitq(t, w.dir, "push", "-q", "origin", "main")
+			gitq(t, w.worker, "pull", "-q", "--no-rebase", "origin", "main")
+			if c.setup == "rename" {
+				gitq(t, w.worker, "mv", ".github/workflows/ci.yml", "disabled.yml")
+			} else {
+				os.WriteFile(filepath.Join(w.worker, ".github", "workflows", "\u00e9.yml"), []byte("on: push\n"), 0o644)
+				gitq(t, w.worker, "add", ".github")
+			}
+			gitq(t, w.worker, "commit", "-q", "-m", c.name)
+			gitq(t, w.worker, "push", "-q", "origin", "w1")
+			w.forge("sha", gitq(t, w.worker, "rev-parse", "HEAD"))
+			w.setConfig(ciCfg)
+			res, err := w.ciGate(GateOpts{})
+			if err != nil || res.Verdict != GateCIConfigChanged || !strings.Contains(res.Err, c.want) {
+				t.Fatalf("%+v %v", res, err)
+			}
+		})
+	}
+}
