@@ -306,9 +306,9 @@ pass "worker poll reports NEEDS-PERMISSION instead of mistaking a stalled worker
 # ── (c) merge gate ──────────────────────────────────────────────────────────
 # Verification command imports every module present, so it naturally covers
 # files that only exist after a merge.
-python3 - "$TMP_WD/.rota/config.json" <<'PYEOF' || fail "could not write verifyCommands fixture config"
+python3 - "$TMP_WD/.rota/config.json" <<'PYEOF' || fail "could not write test.full fixture config"
 import json, sys
-json.dump({"refactor": {"verifyCommands": [
+json.dump({"test": {"full": [
     'for f in *.py; do python3 -c "import ${f%.py}" || exit 1; done'
 ]}}, open(sys.argv[1], "w"))
 PYEOF
@@ -366,16 +366,16 @@ GATE_OUT=$( cd "$TMP_WD" && "$ROTA_BIN" --json worker gate w2 --base main 2>/dev
 [ "$(jget data.verdict <<<"$GATE_OUT")" = "verify-failed" ] || fail "worker gate should answer verdict=verify-failed on the merged-tree break, got: $GATE_OUT"
 pass "worker gate catches a merged-tree break both branches verified green against"
 
-# Empty verifyCommands must say so rather than claim a pass it did not earn.
-python3 - "$TMP_WD/.rota/config.json" <<'PYEOF' || fail "could not clear verifyCommands"
+# Empty test.full must say so rather than claim a pass it did not earn.
+python3 - "$TMP_WD/.rota/config.json" <<'PYEOF' || fail "could not clear test.full"
 import json, sys
-json.dump({"refactor": {"verifyCommands": []}}, open(sys.argv[1], "w"))
+json.dump({"test": {"full": []}}, open(sys.argv[1], "w"))
 PYEOF
 ( cd "$TMP_WD" && "$ROTA_BIN" worker pool init --slots 3 --base main ) >/dev/null 2>&1 \
   || fail "could not add slot w3"
 GATE_OUT=$( cd "$TMP_WD" && "$ROTA_BIN" --json worker gate w3 --base main 2>/dev/null )
 [ "$(jget data.verifySkipped <<<"$GATE_OUT")" = "true" ] \
-  || fail "worker gate with empty verifyCommands must report verifySkipped, got: $GATE_OUT"
+  || fail "worker gate with empty test.full must report verifySkipped, got: $GATE_OUT"
 pass "worker gate reports verifySkipped rather than a pass it cannot back"
 
 # ── (c1) provenance check ───────────────────────────────────────────────────

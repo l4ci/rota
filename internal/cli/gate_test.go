@@ -151,7 +151,7 @@ func gateCases() []gateCase {
 			return root, []string{"ship", "pr-merge", "10"}, "", func() bool { return len(f.merged) == 0 }, deps
 		}},
 		{gate.MergeApproval, "worker gate", func(t *testing.T, level string) (string, []string, string, func() bool, *Deps) {
-			dir := workerProject(t, gateConfig(t, `{"refactor":{"verifyCommands":["test -f feature.txt"]}}`, level, map[string]any{"mergeApproval": "all"}))
+			dir := workerProject(t, gateConfig(t, `{"test":{"full":["test -f feature.txt"]}}`, level, map[string]any{"mergeApproval": "all"}))
 			rotaIn(t, dir, "worker", "pool", "init", "--slots", "1", "--base", "main")
 			wt := filepath.Join(dir, ".worktrees", "w1")
 			write(t, filepath.Join(wt, "feature.txt"), "f")

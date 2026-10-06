@@ -15,7 +15,7 @@ Read `.rota/config.json`:
 
 - `models.orchestrator`: main session model: exploration and ranking (default `opus`)
 
-`--fix` also reads `models.worker`, `refactor.verifyCommands` and `refactor.confirmBeforeExecute`; [`fix-path.md`](fix-path.md) lists them.
+`--fix` also reads `models.worker`, `test.full` and `refactor.confirmBeforeExecute`; [`fix-path.md`](fix-path.md) lists them.
 
 ## Args
 

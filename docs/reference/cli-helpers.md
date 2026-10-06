@@ -299,6 +299,7 @@ exit codes and repo scope: [verb contract](../design/contract/README.md).
 | `rota worker poll [<slot>] [--settle <seconds>] [--lines <n>]` | classify slot states from their panes |
 | `rota worker gate <slot> --base <branch> [--check-only] [--no-verify] [--confirm --confirm-note <answer> \| --approval <escalation> \| --escalate]` | merge gate for one slot's branch or PR; exit 4 when `ship.mergeApproval` needs a human, `--escalate` asks on the thread, `--approval` cites the answer |
 | `rota worker train <slot\|PR>... --base <branch> [--land-green] [--confirm --confirm-note <answer> \| --approval <escalation> \| --escalate]` | merge several PRs in order in a scratch tree, verify once, land them all on a pass; a red train bisects to the first member that breaks it |
+| `rota test run <fast\|full\|e2e> [--base <ref>]` | run `test.<tier>` in order, stopping at the first failure; `{files}` expands to the files changed against base; exit 3 when the tier is empty |
 | `rota worker prompt-check [--key <file>]` | Codex UserPromptSubmit hook: pass only signed or maintainer input |
 | `rota worker session check [--session <name>]` | inside a managed host session? (exit 1 when outside) |
 | `rota worker session ensure [--session <name>] [--body-file <path\|->] [--boot-timeout <s>]` | hand the orchestrator off into a host session |
