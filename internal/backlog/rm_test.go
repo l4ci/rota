@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestRemoveCrossRefs(t *testing.T) {
@@ -48,10 +49,15 @@ func TestRemoveFinalBullet(t *testing.T) {
 		{"backlog-completed", ".rota/BACKLOG.md", "Completed", "- ~~**[B01] [P1] Last.** x~~ Done 2026-01-01 [`abc`]"},
 		{"archive-open", ".rota/ARCHIVE.md", "Bugs", "- **[B01] [P1] Last.** x"},
 		{"archive-completed", ".rota/ARCHIVE.md", "Completed", "- ~~**[B01] [P1] Last.** x~~ Done 2026-01-01 [`abc`]"},
+		{"archive-flat", ".rota/ARCHIVE.md", "", "- ~~**[B01] [P1] Last.** x~~ Done 2026-01-01 [`abc`]"},
 	} {
 		for _, ending := range []struct{ name, text string }{{"newline", "\n"}, {"EOF", ""}} {
 			t.Run(layout.name+"/"+ending.name, func(t *testing.T) {
-				keep := "# Items\n\n## " + layout.section + "\n- **[B02] [P2] Keep.** y\n"
+				keep := "# Items\n\n"
+				if layout.section != "" {
+					keep += "## " + layout.section + "\n"
+				}
+				keep += "- **[B02] [P2] Keep.** y\n"
 				f := rmProject(t, map[string]string{
 					".rota/BACKLOG.md": "# Backlog\n",
 					layout.path:        keep + layout.bullet + ending.text,
@@ -197,4 +203,101 @@ func TestRemove(t *testing.T) {
 			t.Error("a refused removal deleted a file")
 		}
 	})
+}
+
+func TestRemoveWriterArchive(t *testing.T) {
+	for _, layout := range []struct{ name, header, section string }{
+		{"flat", "", "Archive"},
+		{"sectioned", "# Archive\n\n## Completed\n", "Completed"},
+		{"dated", "# Archive\n\n## 2025\n", "2025"},
+	} {
+		for _, scrub := range []bool{false, true} {
+			name := layout.name + "/keep"
+			if scrub {
+				name = layout.name + "/scrub"
+			}
+			t.Run(name, func(t *testing.T) {
+				target := "- ~~**[B01] Remove.** body~~ Done 2025-01-01 [`abc`]\n"
+				onlyRef := "- ~~**[B02] Keep.** Related: [B01]~~ Done 2025-01-01 [`def`] (blocked: see [B01])\n"
+				multiRef := "- ~~**[B03] Keep too.** Related: [B01], [F01]~~ Done 2025-01-01 [`ghi`]\n"
+				unrelated := "- ~~**[B04] Unrelated.** body~~ Done 2025-01-01 [`jkl`]\n"
+				files := map[string]string{
+					".rota/BACKLOG.md":  "# Backlog\n\n## Bugs\n- **[B05] Open.** Related: [B01], [F01]\n\n## Completed\n" + target + onlyRef + multiRef + unrelated,
+					".rota/bugs/B01.md": "detail", ".rota/plans/M01-B01.md": "plan",
+				}
+				if layout.header != "" {
+					files[".rota/ARCHIVE.md"] = layout.header
+				}
+				f, _ := proj(t, files)
+				if n, err := f.Archive(5, time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)); err != nil || n != 4 {
+					t.Fatalf("archive: moved=%d err=%v", n, err)
+				}
+				archiveBefore := read(t, f, ".rota/ARCHIVE.md")
+				backlogBefore := read(t, f, ".rota/BACKLOG.md")
+				wantRefs := 1
+				if scrub {
+					wantRefs = 3
+				}
+				for _, apply := range []bool{false, true} {
+					res, err := f.Remove([]string{"B01"}, scrub, apply)
+					if err != nil || res.Applied != apply || len(res.Items) != 1 {
+						t.Fatalf("remove apply=%t: res=%+v err=%v", apply, res, err)
+					}
+					it := res.Items[0]
+					if !it.Archive || it.TodoEntry || it.Section != layout.section || it.CrossRefs != wantRefs {
+						t.Errorf("item=%+v; want archive in %s and %d references", it, layout.section, wantRefs)
+					}
+					if !apply {
+						if read(t, f, ".rota/ARCHIVE.md") != archiveBefore || read(t, f, ".rota/BACKLOG.md") != backlogBefore {
+							t.Fatal("preview changed a document")
+						}
+						for _, path := range []string{".rota/bugs/B01.md", ".rota/plans/M01-B01.md"} {
+							if _, err := os.Stat(filepath.Join(f.Root, path)); err != nil {
+								t.Fatalf("preview removed %s: %v", path, err)
+							}
+						}
+					}
+				}
+				wantArchive := archiveBefore
+				if scrub {
+					wantArchive = strings.Replace(wantArchive, target, "", 1)
+					wantArchive = strings.Replace(wantArchive, " Related: [B01]~~", "~~", 1)
+					wantArchive = strings.Replace(wantArchive, "Related: [B01], [F01]", "Related: [F01]", 1)
+				}
+				if got := read(t, f, ".rota/ARCHIVE.md"); got != wantArchive {
+					t.Errorf("archive after removal:\n%s\nwant:\n%s", got, wantArchive)
+				}
+				if got := read(t, f, ".rota/BACKLOG.md"); got != strings.Replace(backlogBefore, "Related: [B01], [F01]", "Related: [F01]", 1) {
+					t.Errorf("backlog after removal:\n%s", got)
+				}
+				for _, path := range []string{".rota/bugs/B01.md", ".rota/plans/M01-B01.md"} {
+					if _, err := os.Stat(filepath.Join(f.Root, path)); !os.IsNotExist(err) {
+						t.Errorf("artifact remains: %s (%v)", path, err)
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestRemoveArchiveRemainingAborts(t *testing.T) {
+	before := "# Archive\n\n- ~~**[B01] First copy.**~~ Done 2025-01-01 [`abc`]\n\n## Completed\n- ~~**[B01] Second copy.**~~ Done 2025-01-01 [`def`]"
+	f := rmProject(t, map[string]string{
+		".rota/BACKLOG.md": "# Backlog\n",
+		".rota/ARCHIVE.md": before,
+	})
+	for _, apply := range []bool{false, true} {
+		res, err := f.Remove([]string{"B01"}, true, apply)
+		if !errors.Is(err, ErrInvalid) || res.Applied {
+			t.Fatalf("apply=%t: res=%+v err=%v; want duplicate refusal", apply, res, err)
+		}
+		if read(t, f, ".rota/ARCHIVE.md") != before {
+			t.Fatal("failed removal changed the archive")
+		}
+		for _, path := range []string{".rota/bugs/B01.md", ".rota/plans/M01-B01.md"} {
+			if _, err := os.Stat(filepath.Join(f.Root, path)); err != nil {
+				t.Fatalf("failed removal deleted %s: %v", path, err)
+			}
+		}
+	}
 }
