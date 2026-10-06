@@ -53,8 +53,8 @@ func TestAssignOntoDoneSlotQueuesItsPR(t *testing.T) {
 	if s.Task() != "13" || s.ClaimID() != "ben@1" || s.PR() != "" || s.State() != "busy" {
 		t.Errorf("slot: %v", s)
 	}
-	if f.be.claims["12"] != "ben@1" || f.be.states["12"] != "in-progress" {
-		t.Errorf("the queued issue stays taken: %v %v", f.be.claims, f.be.states)
+	if f.be.claims["12"] != "ben@1" || f.be.bstates["12"] != "in-progress" {
+		t.Errorf("the queued issue stays taken: %v %v", f.be.claims, f.be.bstates)
 	}
 	if !f.remoteHas(t, branch) {
 		t.Error("the queued branch is pushed")
@@ -193,7 +193,7 @@ func TestStatusReportsQueuedPRs(t *testing.T) {
 	if _, err := f.assign("13", "ben"); err != nil {
 		t.Fatal(err)
 	}
-	f.env.Forge = &fakeForge{labelled: []int{12, 13}}
+	f.env.Forge = (&fakeRemote{labelled: []int{12, 13}}).asForge()
 	rep, err := f.env.Status(bg, f.root)
 	if err != nil {
 		t.Fatal(err)
@@ -208,7 +208,7 @@ func TestStatusReportsQueuedPRs(t *testing.T) {
 	}
 
 	// Merged on the forge: a finding with a repair that drops the record.
-	f.env.Forge = &fakeForge{labelled: []int{12, 13}, states: map[int]string{7: "merged"}}
+	f.env.Forge = (&fakeRemote{labelled: []int{12, 13}, states: map[int]string{7: "merged"}}).asForge()
 	out, err := f.env.Reconcile(bg, f.root, true)
 	if err != nil {
 		t.Fatal(err)
@@ -231,7 +231,7 @@ func TestClaimFindingsTreatAQueuedRecordLikeASlot(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.env.Board = f.be
-	f.env.Forge = &fakeForge{labelled: []int{12, 13}}
+	f.env.Forge = (&fakeRemote{labelled: []int{12, 13}}).asForge()
 	rep, err := f.env.Status(bg, f.root)
 	if err != nil {
 		t.Fatal(err)
@@ -327,8 +327,8 @@ func TestTransferFromAQueuedRecordToHuman(t *testing.T) {
 	if _, err := f.transfer("12", HumanTarget, nil); err != nil {
 		t.Fatal(err)
 	}
-	if len(f.queued()) != 0 || f.be.claims["12"] != "" || f.be.states["12"] != "" {
-		t.Errorf("record %v claims %v states %v", f.queued(), f.be.claims, f.be.states)
+	if len(f.queued()) != 0 || f.be.claims["12"] != "" || f.be.bstates["12"] != "" {
+		t.Errorf("record %v claims %v states %v", f.queued(), f.be.claims, f.be.bstates)
 	}
 	if got := f.forge.labels[12]; len(got) != 1 || got[0] != DefaultNeedsHuman {
 		t.Errorf("labels: %v", f.forge.labels)
@@ -370,8 +370,8 @@ func TestAssignOntoReviewSlotClosesTheReviewItem(t *testing.T) {
 	if !f.be.items["12"].Closed || strings.Join(f.be.comments["12"][len(f.be.comments["12"])-2:], "|") != "Review done: filed #139, #140.|closed: filed #139, #140" {
 		t.Errorf("the review item closes with the issues listed: %v %v", f.be.items["12"].Closed, f.be.comments["12"])
 	}
-	if f.be.claims["12"] != "" || f.be.states["12"] == "in-progress" {
-		t.Errorf("claim and state are released: %v %v", f.be.claims, f.be.states)
+	if f.be.claims["12"] != "" || f.be.bstates["12"] == "in-progress" {
+		t.Errorf("claim and state are released: %v %v", f.be.claims, f.be.bstates)
 	}
 	if len(f.queued()) != 0 {
 		t.Errorf("no PR is queued: %v", f.queued())
