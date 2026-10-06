@@ -87,6 +87,9 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 				if cerr := worker.ClearBounces(root, issues[i]); cerr != nil {
 					fmt.Fprintln(c.Stderr, "BOUNCE-COUNT "+m.Target+" — "+cerr.Error())
 				}
+				if cerr := worker.ClearItemStart(root, issues[i]); cerr != nil {
+					fmt.Fprintln(c.Stderr, "ITEM-CLOCK "+m.Target+" — "+cerr.Error())
+				}
 			}
 		}
 		res := Result{Data: trainData(r)}

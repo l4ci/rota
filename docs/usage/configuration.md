@@ -104,6 +104,14 @@ Related keys: `work.workerSlots` (pool size, default `3`), `work.workerCommand` 
 
 Applies to `/rota-refactor --fix` only; the default findings run files issues and writes no code. When `true` (default), `--fix` confirms the list of candidates before implementing them. Set to `false` to fix without that pause.
 
+## work.itemTimeoutMinutes: wall-clock cap per item
+
+Integer 0 or more, silent default `0` (off). Counted per item from its first assignment, not per slot, so handing the item to another worker does not reset it. Once an item is past the limit, `rota round reconcile` reports an `item-timeout` finding; `rota round reconcile --apply` parks the item for a human the way `round.maxBounces` does: the slot is freed, the issue gets the `needs-human` label and a comment naming the limit, and the PR stays open. Parking needs the round lease.
+
+```bash
+rota config set work.itemTimeoutMinutes 240
+```
+
 ## work.tdd: red-first on or off
 
 `true` (default): a behavior change needs a recorded red run, a FAIL proof row from a test that failed on an assertion, before its PASS row. A FAIL whose evidence is a build, compile or setup failure (missing import, typo, undefined symbol) is not a red run; the task gets a fix dispatch. `false`: `/rota-work` Step 7 and the worker contract require no RED row. PASS rows are still recorded.

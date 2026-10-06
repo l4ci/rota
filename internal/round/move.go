@@ -664,6 +664,9 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 					return wrap(freeSlot(root, from, false))
 				}
 				return wrap(worker.RemoveQueuedPR(root, rec.PR))
+			}},
+			step{name: "stop the item clock", do: func() error {
+				return wrap(worker.ClearItemStart(root, strings.ToUpper(id)))
 			}})
 		if err := runSteps(steps); err != nil {
 			return res, err
