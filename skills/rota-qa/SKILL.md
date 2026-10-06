@@ -12,9 +12,7 @@ description: Use on "/rota-qa", "run QA", "test the feature", "validate the buil
 Read `.rota/config.json`:
 
 - `models.orchestrator` — model dispatching the runners (default `opus`).
-- `qa.gate` — `"advisory"` (default) emits the verdict, never blocks ship; `"blocking"` halts `ship.qa: true` invocations on `FAIL`.
-- `qa.afterWork` — `false` (default). When `true`, `/rota-work` invokes `/rota-qa run` post-cycle if touched files match a QA target's `Watch globs`.
-- `ship.qa` — `false` (default). When `true`, `/rota-ship` calls `/rota-qa run` between `/rota-review` and the merge/PR step.
+- `qa.gate`, `qa.afterWork`, `ship.qa` — gate and hook flags, all off or advisory by default. When a caller or flag decides whether QA runs, read [`gates-and-modes.md`](gates-and-modes.md).
 
 ## When NOT to Use
 
@@ -24,14 +22,7 @@ Read `.rota/config.json`:
 
 ## Modes
 
-`/rota-qa` shares the three-mode skeleton with `/rota-ship`'s Docs Mode (scaffold / after-work / audit); see `references/three-mode-skill-shape.md`. Divergences:
-
-| Aspect | `/rota-qa` |
-|---|---|
-| Artifact root | `.rota/qa/<target>.md`, one strategy per target. Umbrella: `<target>` is a registered repo name; single-repo: a user-named surface (`web`, `api`, `cli`, ...) |
-| Mode-3 name | `restructure` (re-probe surfaces, retire dead strategies, fix broken commands) |
-| After-work trigger gate | `qa.afterWork: true` AND touched files match a target's `Watch globs` (default off) |
-| Commit ownership | `run` does not commit (read-only; verdict recorded with `rota verdict add`); `first-run` / `restructure` own a `chore(qa):` commit |
+Three modes (first-run, run, restructure) share a skeleton with `/rota-ship`'s Docs Mode. When picking a mode or checking commit ownership, read [`gates-and-modes.md`](gates-and-modes.md).
 
 ### Mode: first-run
 
@@ -57,8 +48,7 @@ Any `rota` verb exiting 3 means no `.rota/` project: surface that and stop.
 
 A named target (`/rota-qa run web`) wins. Otherwise:
 
-- **Umbrella** (`.rota/repos.json` non-empty): the repo of the current branch (`rota repo which`, field `name`). `--repo <name>` or `--all` override.
-- **Single-repo**: all `.rota/qa/*.md` entries.
+When `.rota/repos.json` is non-empty (umbrella), read [`umbrella-scope.md`](umbrella-scope.md). Single-repo: all `.rota/qa/*.md` entries.
 
 No strategy file for the scope: halt, tell the user to run `/rota-qa first-run`.
 
@@ -84,13 +74,11 @@ Dispatch one subagent per check group (per pillar per target) in parallel via th
 - Captures stdout, exit code and artifact paths under `.rota/qa-runs/<timestamp>/<target>/<check>/`.
 - Returns `{ name, command, exitCode, passCriterion, met, evidence }`.
 
-**Reuse proof; the merge gate is the only full run.** The merge gate already ran the full suite (`refactor.verifyCommands`) on the merged tree. Before dispatching, run `rota proof show <ID> --json` per item: a PASS row for the same check at the current `git rev-parse HEAD` (its `sha`) is reused, not re-run. Where a strategy check is the gate's own command, the gate's PASS at that sha is the QA run. Dispatch runners only for checks with no PASS at this sha (browser, lighthouse, audit and other surface checks). Mark reused rows as such in the report.
+Before dispatching, read [`proof-reuse.md`](proof-reuse.md): checks already PASS at the current sha are reused, not re-run.
 
 **Record proof.** For every item on the branch (`rota review scope --json` `data.referencedIds`), write each check result: `rota proof add <ID> --check "<check name>" --result PASS|FAIL --evidence "<artifact path under .rota/qa-runs/ or one-line output>"`. Rows are facts; the Step 6 verdict is the judgement.
 
-**Re-run a failed check alone before recording it.** Parallel runners contend for one box, so time budgets fail on load, not truth. Before writing `met: false` for a check that timed out, blew a duration budget or hit a connection error, re-run it with nothing else in flight and put both `uptime` readings in `evidence`. A timeout means the assertion never ran: read the runner's output before theorizing about the code. Never raise the budget; if the check is too slow, cut its work in `.rota/qa/<target>.md`.
-
-Connection-refused and address-in-use errors across many checks at once are infrastructure, not findings: re-run serially before reporting. A check still `met: false` after its lone re-run is a finding: record it, don't loop on it.
+When a check timed out, blew a duration budget or hit a connection error, read [`rerun-failed-check.md`](rerun-failed-check.md) before recording `met: false`.
 
 #### Step 5 — Audit Pass
 
@@ -106,9 +94,7 @@ Per target:
 - **CONCERNS** — all executable checks met, but audit has P0/P1, OR ≥1 check passed only with a warning. Ship allowed; user owns the call.
 - **FAIL** — any executable check `met: false`, OR an audit P0 with `severity: blocker`.
 
-`--all` rollup is worst-of across targets; per-target verdicts still report individually.
-
-**Record the verdict** for the current branch, once per repo (umbrella: `--repo <name>` with that repo's verdict). The body carries the failed executable checks and P0/P1 audit findings, mapping P0 `blocker` to `blocker`, other P0 and P1 to `major`, the rest to `minor`:
+**Record the verdict** for the current branch, once per repo (umbrella: read [`umbrella-scope.md`](umbrella-scope.md)). The body carries the failed executable checks and P0/P1 audit findings, mapping P0 `blocker` to `blocker`, other P0 and P1 to `major`, the rest to `minor`:
 
 ```bash
 rota verdict add <branch> --kind qa --verdict <PASS|CONCERNS|FAIL|INFRA-FAIL> --body-file "$VERDICT" --json
@@ -150,21 +136,16 @@ Audit findings (P0/P1 inline; full list at <path>):
 Evidence: .rota/qa-runs/<timestamp>/
 ```
 
-Same PASS/CONCERNS/FAIL contract as `references/review-verdict-routing.md`; carrier label `QA concerns:` when invoked from `/rota-ship` (that reference's "Carrier-label override").
+Same PASS/CONCERNS/FAIL contract as `references/review-verdict-routing.md`.
 
 #### Step 8 — Routing
 
 - Standalone: relay the verdict per `Producer-side relay` in the verdict-routing reference.
-- From `/rota-ship`: return the verdict only. `/rota-ship` routes with `rota verdict route --for ship-qa`, which applies `qa.gate` (`"advisory"` never halts; `"blocking"` halts on `FAIL` and prompts on `CONCERNS`).
+- From `/rota-ship`: return the verdict only. When invoked from `/rota-ship`, read [`gates-and-modes.md`](gates-and-modes.md) for routing and the `QA concerns:` label.
 
 ### Mode: restructure
 
-On demand, when strategy files drifted (new surfaces, retired tools, dead targets).
-
-1. Re-run the `Detect surfaces` and `Detect existing test infra` probes (steps 1 and 2 of `first-run.md`).
-2. Diff against `.rota/qa/*.md`; flag targets with no surface (dead), surfaces with no target (uncovered), commands using tools not installed (broken), `Watch globs` matching no files (stale).
-3. Propose changes (archive dead, draft new, fix broken, update globs) and show the user before writing.
-4. On approval, write, run `rota qa index`, commit `chore(qa): restructure QA strategy (<summary>)`.
+When strategy files drifted, read [`restructure.md`](restructure.md) and follow it.
 
 ## Rules
 
@@ -178,7 +159,7 @@ On demand, when strategy files drifted (new surfaces, retired tools, dead target
 ## Failure Modes
 
 - **No strategy file** — halt; don't auto-scaffold.
-- **Runner subagent timeout** — re-run that check alone per Step 4. Passes solo: the red was contention; record `met: true` with both `uptime` figures in `evidence`. Times out solo too: `met: false` with `evidence: "timeout after Ns at load <figure>, reproduced alone at load <figure>"`. QA continues either way; the verdict reflects the confirmed result.
+- **Runner subagent timeout** — re-run that check alone; see [`rerun-failed-check.md`](rerun-failed-check.md).
 - **Strategy references retired tool** — `met: false` with `evidence: "command not found"`. Surface in `restructure`.
 
 ## References
@@ -188,3 +169,9 @@ On demand, when strategy files drifted (new surfaces, retired tools, dead target
 - [`references/review-verdict-routing.md`](references/review-verdict-routing.md) — PASS / CONCERNS / FAIL contract; QA reuses it.
 - [`references/umbrella-mode.md`](references/umbrella-mode.md) — Per-repo resolution for `--repo` / `--all`.
 - [`references/post-cycle-trigger-gate.md`](references/post-cycle-trigger-gate.md) — When `qa.afterWork: true` should fire.
+- [`first-run.md`](first-run.md) — `first-run` mode: probe surfaces, propose strategy.
+- [`restructure.md`](restructure.md) — `restructure` mode.
+- [`gates-and-modes.md`](gates-and-modes.md) — gate/hook config, mode skeleton, `/rota-ship` routing.
+- [`umbrella-scope.md`](umbrella-scope.md) — Steps 1 and 6 in umbrella repos.
+- [`proof-reuse.md`](proof-reuse.md) — Step 4 reuse of PASS proof at the current sha.
+- [`rerun-failed-check.md`](rerun-failed-check.md) — Step 4 lone re-run before recording a failure.

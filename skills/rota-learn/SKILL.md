@@ -86,7 +86,7 @@ rota block knowledge
 
 Updates the managed `<!-- rota-knowledge-start -->` block in the project instructions file (`AGENTS.md` if present, else `CLAUDE.md`; the verb resolves it, never hardcode). `/rota-work` reads this block to know when to consult `KNOWLEDGE.md`.
 
-In umbrella mode, pass `--repo <scope>`, the same scope the learning was written to: it regenerates that sub-repo's instructions file (umbrella topics first, then sub-repo-only topics); `--repo umbrella` or no flag regenerates the umbrella/project file. DECISIONS are umbrella-only and never take `--repo`.
+When `.rota/repos.json` registers a sub-repo, read [`umbrella-routing.md`](umbrella-routing.md) (*Step 6*) for the `--repo` flag.
 
 ## Step 7 — Opus Verification (opt-in)
 
@@ -104,27 +104,7 @@ Captured 3 learnings into .rota/KNOWLEDGE.md:
 Updated the topic index in <AGENTS.md|CLAUDE.md> — /rota-work will consult these on relevant tasks.
 ```
 
-**Topic-size handling.** Run `rota knowledge stats --json`; for any topic in `data.topics` with `bullets >= 25` OR `bytes >= 10240`, branch on `autonomy.level` (`.rota/config.json`):
-
-- `"off"` (default) — append a single nudge line per offender to the confirm output:
-
-  ```
-  Note: `<topic>` is large (<bullets> bullets, <bytes-as-KB-rounded-1dp> KB). Consider splitting it (e.g. `<topic>: <facet-A>` + `<topic>: <facet-B>`) to reduce per-query cost in /rota-work, /rota-debug, /rota-plan.
-  ```
-
-  KB = `{bytes/1024:.1f}`. The user accepts or declines the split.
-
-- `"auto"` — **perform the split immediately — no prompt, no confirmation, no "want me to" question.** For each offender topic:
-
-  1. Read the topic's bullets via `rota knowledge query "<topic>"`.
-  2. Group bullets into 2 or 3 cohesive facets by theme. Each facet holds ≥3 bullets; `Misc` / `Other` / `Etc.` facets are forbidden. If no plausible split axis exists, fall back to the `"off"` nudge for that topic and skip steps 3–7.
-  3. Append `## <Topic>: <FacetA>` and `## <Topic>: <FacetB>` headings to `.rota/KNOWLEDGE.md` immediately before the old `## <Topic>` heading.
-  4. For each bullet in `<Topic>`, call `rota knowledge rename-topic --from "<Topic>" --to "<Topic>: <Facet>" --title "<bullet-title>"`. The verb moves the bullet byte-identical and re-keys its `.rota/knowledge-tier.json` entry atomically. Issue all calls for one offender as one parallel batch. Do NOT hand-edit bullets via `Edit`; it orphans sidecar entries.
-  5. Remove the now-empty old `## <Topic>` heading.
-  6. Re-run `rota block knowledge` to refresh the managed `<!-- rota-knowledge-start -->` block.
-  7. Append one line to the confirm output: `Auto-split <topic> → <topic>: <FacetA> + <topic>: <FacetB> — N → A+B bullets.`
-
-  Split each offender at most once per session.
+**Topic-size handling.** Run `rota knowledge stats --json`. When any topic in `data.topics` has `bullets >= 25` OR `bytes >= 10240`, read [`topic-size.md`](topic-size.md) (nudge or auto-split by `autonomy.level`).
 
 If verification ran and passed, add a middle line: `Opus verification: PASS — all entries durable, sharp, correctly categorized.` If it returned `PASS_WITH_NOTES`, replace that line with a one-liner naming what was adjusted. If it failed, say so and stop.
 
@@ -139,3 +119,6 @@ If verification ran and passed, add a middle line: `Opus verification: PASS — 
 
 - [`references/persistence-skills.md`](references/persistence-skills.md) — Shared spine and divergence axes for the persistence duo (`/rota-learn`, `/rota-decide`) — including `/rota-learn --term` for Glossary entries.
 - [`references/learn-rare-modes.md`](references/learn-rare-modes.md) — `--term`, `--promote`, `--deprecate`, `--amend`, and the contradiction queue.
+- [`umbrella-routing.md`](umbrella-routing.md) — Step 5 / 6 `--repo` scope flag and scope question in umbrella mode.
+- [`topic-size.md`](topic-size.md) — Step 8 nudge or auto-split for large topics.
+- [`verifier.md`](verifier.md) — Step 7 Opus verifier dispatch, prompt and verdict rules.

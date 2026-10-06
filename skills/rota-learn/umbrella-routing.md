@@ -19,3 +19,5 @@ Pass the chosen scope as `--repo <scope>` to `rota knowledge add`. `/rota-learn 
 **New topics in a scoped file:** the "append the heading first" rule applies to the *resolved* file; a fresh sub-repo `KNOWLEDGE.md` is empty, so seed the heading there first.
 
 **DECISIONS stay umbrella-only** (*"Persistence-trio scoping under umbrella mode"* in `.rota/DECISIONS.md`): never offer or pass `--repo` when writing decisions.
+
+**Step 6 (topic index).** In umbrella mode, pass `--repo <scope>`, the same scope the learning was written to: it regenerates that sub-repo's instructions file (umbrella topics first, then sub-repo-only topics); `--repo umbrella` or no flag regenerates the umbrella/project file. DECISIONS are umbrella-only and never take `--repo`.
