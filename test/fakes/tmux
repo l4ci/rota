@@ -12,6 +12,8 @@
 #   frozen       capture-pane stops changing (a brief that never submits)
 #   tick         capture-pane appends a fresh timestamp, so the pane reads as
 #                busy without a background writer a loaded host can starve
+#   pane.<win>   per-window override of pane (and tick.<win>, frozen.<win> of
+#                tick, frozen): lets several slots show different panes
 #   name         session name for display-message (default hvfake)
 # $FAKE_TMUX_SNAPSHOT, when set, names a file of `session:window<TAB>path` lines
 # that `list-windows -a -F ...pane_current_path...` prints (the host snapshot).
@@ -38,9 +40,13 @@ case "$1" in
     [ -f "$F/windows" ] && grep -v "^$name " "$F/windows" >"$F/windows.new"
     mv "$F/windows.new" "$F/windows" 2>/dev/null; exit 0 ;;
   capture-pane)
-    cat "$F/pane" 2>/dev/null
-    [ -f "$F/frozen" ] || cat "$F/n" 2>/dev/null
-    if [ -f "$F/tick" ]; then date +%s%N; fi ;;
+    win=""
+    while [ $# -gt 0 ]; do [ "$1" = "-t" ] && win="${2#*:}"; shift; done
+    # A window with its own pane.<win> file is steered by that window's files only.
+    sfx=""; [ -n "$win" ] && [ -f "$F/pane.$win" ] && sfx=".$win"
+    cat "$F/pane$sfx" 2>/dev/null
+    [ -f "$F/frozen$sfx" ] || cat "$F/n" 2>/dev/null
+    if [ -f "$F/tick$sfx" ]; then date +%s%N; fi ;;
   send-keys)
     for last; do :; done
     if [ "$last" = "C-m" ]; then echo $(( $(cat "$F/n" 2>/dev/null || echo 0) + 1 )) >"$F/n"; fi ;;
