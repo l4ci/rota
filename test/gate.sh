@@ -57,6 +57,9 @@ gate_lock_acquire "$LOCK"
 
 LOGS="${ROTA_GATE_LOGS:-$(mktemp -d "${TMPDIR:-/tmp}/rota-gate-logs-XXXXXX")}"
 mkdir -p "$LOGS"
+# Smoke differences retain snapshots beside the logs, outside GATE_TMP (which
+# cleanup always removes). Resolve relative log paths before runners change cwd.
+SMOKE_DIAGNOSTICS="$(cd "$LOGS" && pwd -P)"
 # Every check makes its temp files under one gate-owned root, so a leak is
 # countable: the root must be empty once the checks have exited (#85).
 GATE_TMP="$(mktemp -d "$LOGS/tmp.XXXXXX")" || exit 1  # fresh: LOGS may be shared, and GATE_TMP is rm -rf'd
@@ -130,7 +133,7 @@ if [ "$SMOKE_ONLY" = 0 ]; then
 fi
 N="$(partition)" || { echo "gate: partition failed" >&2; exit 2; }
 for i in $(seq 1 "$N"); do
-  launch "smoke-shard$i" env SECTION_LIST="$(cat "$LOGS/shard$i.list")" bash test/runner.sh
+  launch "smoke-shard$i" env ROTA_SMOKE_DIAGNOSTICS="$SMOKE_DIAGNOSTICS" SECTION_LIST="$(cat "$LOGS/shard$i.list")" bash test/runner.sh
 done
 echo "gate: ${#NAMES[@]} checks running ($N smoke shards); logs in $LOGS"
 

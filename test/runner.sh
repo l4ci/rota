@@ -69,6 +69,13 @@ trap 'rm -rf "$RUN_TMP"' EXIT
 # Fixture repos commit and merge. The identity comes from here so the run does
 # not depend on the developer's (or CI's missing) global git config.
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
+# Keep diagnostic artifacts outside the disposable run root. The gate points
+# this at its retained log directory; standalone runs use the caller's tmpdir.
+SMOKE_DIAGNOSTICS="${ROTA_SMOKE_DIAGNOSTICS:-${TMPDIR:-/tmp}}"
+case "$SMOKE_DIAGNOSTICS" in
+  /*) ;;
+  *) SMOKE_DIAGNOSTICS="$PWD/$SMOKE_DIAGNOSTICS" ;;
+esac
 export TMPDIR="$RUN_TMP"
 d="$(mktemp -d)" || exit 1
 TMP="$(cd "$d" && pwd -P)" || exit 1
@@ -134,36 +141,11 @@ isolate_env "$RUN_TMP/iso"
 WORKTREES_BEFORE="$(mktemp)" || exit 1
 worktree_snapshot "$REPO" > "$WORKTREES_BEFORE"
 
-# Leak guard: snapshot $REPO/CLAUDE.md and the dev tree's tracked .rota/
-# content before any section runs. Under v4.1's partial-tracking model
-# (.rota/ files committed to the repo), a section helper that walks up past
-# $TMP can clobber real project state. The post-loop assertion below
-# restores + fails. The check is explicit-at-end (not EXIT-trap-based)
-# because sections follow the F38 local-trap convention and overwrite
-# EXIT — see test/lib.sh.
-REPO_CLAUDE="$REPO/CLAUDE.md"
-REPO_CLAUDE_SNAP=""
-if [ -f "$REPO_CLAUDE" ]; then
-  REPO_CLAUDE_SNAP="$(mktemp)" || exit 1
-  cp "$REPO_CLAUDE" "$REPO_CLAUDE_SNAP"
-fi
-REPO_AGENTS="$REPO/AGENTS.md"
-REPO_AGENTS_SNAP=""
-if [ -f "$REPO_AGENTS" ]; then
-  REPO_AGENTS_SNAP="$(mktemp)" || exit 1
-  cp "$REPO_AGENTS" "$REPO_AGENTS_SNAP"
-fi
-# Snapshot dev tree's tracked .rota/ content. We snap the whole subtree
-# (excluding gitignored paths) so any leak surfaces as a diff at the end.
-REPO_ROTA_SNAP=""
-if [ -d "$REPO/.rota" ]; then
-  REPO_ROTA_SNAP="$(mktemp -d)" || exit 1
-  # Use git ls-files to capture exactly what git tracks, preserving paths.
-  (cd "$REPO" && git ls-files .rota/) | while IFS= read -r f; do
-    mkdir -p "$REPO_ROTA_SNAP/$(dirname "$f")"
-    cp "$REPO/$f" "$REPO_ROTA_SNAP/$f"
-  done
-fi
+# Snapshot the checkout read-only. A difference may be a leak OR legitimate
+# concurrent work; never restore it. The explicit post-loop check survives
+# sections replacing EXIT traps and retains before/after evidence on failure.
+REPO_SNAPSHOT="$ROTA_STAGE/checkout-before"
+python3 "$TESTDIR/lib/checkout-guard.py" snapshot "$REPO" "$REPO_SNAPSHOT"
 
 cd "$TMP"
 mkdir -p .rota/bugs .rota/features .rota/tasks .rota/milestones
@@ -230,42 +212,12 @@ set +e
 SECTIONS_RC=$?
 set -e
 
-# Leak guard assertion: if any section wrote to $REPO/CLAUDE.md or any
-# tracked .rota/ file in the dev tree, restore from snapshot and fail.
-# Smoke is supposed to be hermetic w.r.t. $TMP; a diff here means a
-# helper walked up past $TMP/.rota to the dev tree's.
+# Fail conservatively on checkout differences, without attributing them to a
+# section or writing back to the checkout. Each shard keeps its own evidence.
 LEAKED=0
-if [ -n "$REPO_CLAUDE_SNAP" ] && ! cmp -s "$REPO_CLAUDE_SNAP" "$REPO_CLAUDE"; then
-  printf '\n\033[31merror: smoke leaked into %s — restoring from snapshot\033[0m\n' "$REPO_CLAUDE" >&2
-  cp "$REPO_CLAUDE_SNAP" "$REPO_CLAUDE"
-  LEAKED=1
-fi
-if [ -n "$REPO_AGENTS_SNAP" ] && ! cmp -s "$REPO_AGENTS_SNAP" "$REPO_AGENTS"; then
-  printf '\n\033[31merror: smoke leaked into %s — restoring from snapshot\033[0m\n' "$REPO_AGENTS" >&2
-  cp "$REPO_AGENTS_SNAP" "$REPO_AGENTS"
-  LEAKED=1
-fi
-if [ -n "$REPO_ROTA_SNAP" ]; then
-  while IFS= read -r f; do
-    snap_path="$REPO_ROTA_SNAP/$f"
-    live_path="$REPO/$f"
-    if [ -f "$snap_path" ] && [ -f "$live_path" ] && ! cmp -s "$snap_path" "$live_path"; then
-      printf '\n\033[31merror: smoke leaked into %s — restoring from snapshot\033[0m\n' "$live_path" >&2
-      cp "$snap_path" "$live_path"
-      LEAKED=1
-    elif [ -f "$snap_path" ] && [ ! -f "$live_path" ]; then
-      printf '\n\033[31merror: smoke deleted %s — restoring from snapshot\033[0m\n' "$live_path" >&2
-      mkdir -p "$(dirname "$live_path")"
-      cp "$snap_path" "$live_path"
-      LEAKED=1
-    fi
-  done < <(cd "$REPO_ROTA_SNAP" && find . -type f | sed 's|^\./||')
-fi
+python3 "$TESTDIR/lib/checkout-guard.py" check "$REPO" "$REPO_SNAPSHOT" "$SMOKE_DIAGNOSTICS" || LEAKED=1
 worktree_guard_check "$WORKTREES_BEFORE" "$REPO" || LEAKED=1
 rm -f "$WORKTREES_BEFORE"
-[ -n "$REPO_CLAUDE_SNAP" ] && rm -f "$REPO_CLAUDE_SNAP"
-[ -n "$REPO_AGENTS_SNAP" ] && rm -f "$REPO_AGENTS_SNAP"
-[ -n "$REPO_ROTA_SNAP" ] && rm -rf "$REPO_ROTA_SNAP"
 # Temp-dir guard (#110): everything the run made is under $RUN_TMP. Entries
 # other than the runner's own were left behind by sections or helpers; report
 # the count so growth shows up, then the EXIT trap removes it all.
