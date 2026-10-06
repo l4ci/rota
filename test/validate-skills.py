@@ -374,6 +374,13 @@ def prose_rules():
     r += [has(D, "DECISIONS.md", "must cite the .rota/DECISIONS.md worktree-isolation rule"),
           lacks(D, r"TBD|TODO|FIXME|XXX", "contains placeholders", True, re.I),
           has(D, "Skills MUST consult this file", "missing the rule that skills consult the dispatch discipline")]
+    # --retro reads the session transcript for evidence
+    RR = "skills/references/learn-rare-modes.md"
+    r += [has(RR, "~/.codex/sessions/", "--retro Step 1 must locate the Codex transcript"),
+          has(RR, "~/.claude/projects/", "--retro Step 1 must locate the Claude Code transcript"),
+          has(RR, "must cite transcript evidence", "--retro Step 1 must require transcript citations"),
+          has(RR, "No transcript found", "--retro Step 1 must state the no-transcript fallback"),
+          has("docs/usage/learning.md", "session transcript", "learning.md must mention the --retro transcript read")]
     return r
 
 
