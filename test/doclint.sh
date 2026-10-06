@@ -33,9 +33,9 @@ pass "eval case files cover every skill's triggers and 3+ scenarios for work, sh
 PL="$TMP/prose"; mkdir -p "$PL"
 cp -R "$REPO/skills" "$REPO/docs" "$REPO/README.md" "$REPO/CHANGELOG.md" "$PL/"
 OUT="$(cd "$PL" && python3 "$TESTDIR/validate-skills.py" 2>&1)" || fail "prose lint fails on a copy of the repo: $OUT"
-sed -i 's/rota status handoff/rota status hand-off/' "$PL/skills/rota-work/$SK"
+sed -i 's/rota status handoff/rota status hand-off/' "$PL/skills/rota-work/no-argument-mode.md"
 RC=0; OUT="$(cd "$PL" && python3 "$TESTDIR/validate-skills.py" 2>&1)" || RC=$?
-[ "$RC" = 1 ] && grep -qF "skills/rota-work/$SK: must call rota status handoff" <<<"$OUT" \
+[ "$RC" = 1 ] && grep -qF "skills/rota-work/no-argument-mode.md: must call rota status handoff" <<<"$OUT" \
   || fail "prose lint missed a dropped phrase (rc $RC): $OUT"
 rm -f "$PL/skills/references/manual-gates.md"
 RC=0; OUT="$(cd "$PL" && python3 "$TESTDIR/validate-skills.py" 2>&1)" || RC=$?
