@@ -205,7 +205,14 @@ issue to read and dispute, the item's `## Out of scope` section when it has one,
   shown by `rota round status`, and named in the brief with the tier table for the worker's own
   subagents. See [round keys](configuration.md#round-keys).
 - **Kind.** `--kind codex` starts a Codex worker instead of a Claude one; see
-  [Codex workers](codex-workers.md).
+  [Codex workers](codex-workers.md). An issue can ask for its own harness and model: label it
+  `harness:claude` or `harness:codex`, and optionally `model:<id>` (file backend: end the bullet with
+  `Harness: codex Model: <id>`). Harness: `--kind`, then the label, then the slot's kind, else
+  `claude`. Model: `--model <id>`, then the label, then the tier map, else the harness default.
+  An unknown harness, two labels of one key, or a model id with anything beyond letters, digits and
+  `. _ : / @ -` refuses with exit 4 (`blockedBy` `harness label` or `model label`). A model named by
+  flag or label needs a `{model}` placeholder in the harness's command. `round candidates` and
+  `round status` show the choice.
 - **Overlap.** `--accept-overlap` skips the file-overlap check only. Say which PR merges first in
   the second worker's brief.
 - **Open PR.** An issue an open PR already resolves (head branch `<agent>/<issue>-*` or `Closes #N`)

@@ -138,7 +138,7 @@ See [../usage/pausing-and-resuming.md](../usage/pausing-and-resuming.md) for the
 | `host` | `herdr`, `tmux` or `solo`, fixed by `rota round start` for the life of the round |
 | `round`, `scope`, `slate` | the round number, the scope it started with, and the issue IDs for a `slate` scope |
 
-`rota round status` and `rota round reconcile` show what it holds against the host, git and the tracker. A slot that is gone from the host but still registered is drift; `reconcile --apply` repairs the safe kinds and `rota reap` removes what nothing owns.
+`rota round status` and `rota round reconcile` show what it holds against the host, git and the tracker. A slot that is gone from the host but still registered is drift; `reconcile --apply` repairs the safe kinds (including parking a slot whose PR already merged, so `watch` stops looping on it) and `rota reap` removes what nothing owns.
 
 ### Beside `.rota/`: the lease, session files and keepalive.json
 

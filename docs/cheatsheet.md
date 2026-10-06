@@ -36,7 +36,7 @@ What each `/rota-*` skill does, one line each. For details: [`reference/slash-co
 - **`rota init`** (`rota init umbrella`): scaffold `.rota/` and fill config defaults.
 - **`rota projects`**: list every project `rota init` registered on this machine (`$XDG_CONFIG_HOME/rota/projects.json`, default `~/.config/rota`). Paths that no longer exist are marked `(missing)`. `rota projects cleanup` deletes, at once, every entry whose directory is gone or no longer holds `.rota/`, and prints each.
 - **`rota setup`**: `rota init` plus a short config walkthrough on a terminal. `--yes` takes the defaults, `--set key=value` answers one question, `--list` prints them.
-- **`rota config show` / `rota config set`**: read and change settings.
+- **`rota config show` / `rota config set` / `rota config edit`**: read and change settings; `edit` is an interactive editor (terminal only). `rota config save-global` saves this project's config as the defaults for new projects.
 - **`rota update`**: check for a newer release.
 - **`rota migrate issues`**: move the backlog to GitHub or GitLab issues.
 - **`rota skills install` / `update` / `status`**: write the skills for Claude Code and Codex, refresh them after an upgrade, compare with the binary.
