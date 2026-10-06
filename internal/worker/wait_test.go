@@ -11,8 +11,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/tracker"
 )
 
 // waitHost is a host whose panes and native status the test steers. With
@@ -468,5 +470,38 @@ func TestSoloWaitReturnsAnArrivalOnce(t *testing.T) {
 	}
 	if res, err = soloWait(dir, WaitOpts{Slots: []string{"w1"}}); err != nil || !res.TimedOut {
 		t.Fatalf("second: %+v %v, want timed out", res, err)
+	}
+}
+
+// stateForge answers PRView with a fixed state; the rest of Forge is unused.
+type stateForge struct {
+	Forge
+	state string
+}
+
+func (f stateForge) PRView(context.Context, int) (tracker.PRInfo, error) {
+	return tracker.PRInfo{State: f.state}, nil
+}
+
+// A done slot whose PR is merged is not news: the orchestrator has nothing to
+// review, so every re-armed watch would end at once on it (#327).
+func TestWaitIgnoresADoneSlotWhoseRecordedPRIsMerged(t *testing.T) {
+	for state, wantNews := range map[string]bool{"MERGED": false, "OPEN": true} {
+		dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
+		gittest.Run(t, dir, "remote", "add", "origin", "https://github.com/o/r.git")
+		if _, err := UpdateSlot(dir, "w1", func(s *Slot) { s.SetPR("https://github.com/o/r/pull/9") }); err != nil {
+			t.Fatal(err)
+		}
+		h := newWaitHost("herdr")
+		h.set("w1", "ROTA-DONE w1 https://github.com/o/r/pull/9\n", "done")
+		e := envWith(watcherHost{h})
+		e.Forge = func(string, string, any) (Forge, error) { return stateForge{state: state}, nil }
+		res, err := e.Wait(bg, dir, WaitOpts{Timeout: 30 * time.Millisecond})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := !res.TimedOut; got != wantNews {
+			t.Errorf("PR %s: news = %v, want %v (%+v)", state, got, wantNews, res)
+		}
 	}
 }
