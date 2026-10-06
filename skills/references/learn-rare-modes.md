@@ -20,7 +20,9 @@ Each flag skips discovery (Steps 2 to 7 of the skill) and exits after its one re
 
 Turns the session's mistakes into the right artifact, not a knowledge bullet by default. Mechanical mistakes become deterministic checks; judgement calls become written standards.
 
-**1. Collect mistakes.** Scan the transcript and recent commits for: user corrections, reverted or redone work, failed gates or tests that a check would have caught, wrong-file or wrong-tree edits, and wasted tool calls. One line per mistake: what went wrong, what would have prevented it. No mistakes: say so and stop.
+**1. Collect mistakes.** Locate the current session transcript and read it: Claude Code keeps JSONL files under `~/.claude/projects/<project-dir>/` (or `$CLAUDE_CONFIG_DIR/projects/` when set), Codex under `~/.codex/sessions/`. Pick the newest file whose cwd matches this worktree. If none is found, say so in one line (`No transcript found; retro runs from session memory and recent commits.`) and fall back to session memory plus recent commits. Scan it for: user corrections, reverted or redone work, failed gates or tests that a check would have caught, wrong-file or wrong-tree edits, and wasted tool calls. One line per mistake: what went wrong, what would have prevented it.
+
+Every repeated-work, ignored-plan or skipped-step mistake must cite transcript evidence (file plus line or entry number) before it is classified or filed. A mistake with no citable evidence is dropped, or listed as `unverified` in the report and never filed as a guardrail. With no transcript, no mistake can cite one: mark those `unverified` too. No mistakes: say so and stop.
 
 **2. Classify each mistake** into exactly one class:
 
@@ -39,7 +41,7 @@ When a mistake is both mechanical and judgement-heavy, prefer the guardrail: a c
 printf '%s' "$BODY" | rota item create --kind tasks --title "<check> guards against <mistake>" --desc "<one line>" --body-file -
 ```
 
-The body names the mistake, the check that would catch it, and where it would run (lint, test, hook, CI). Dedup against open items first (`rota backlog list`). Do not write the check in this run.
+The body names the mistake, quotes its transcript citation (file and line or entry number), the check that would catch it, and where it would run (lint, test, hook, CI). Dedup against open items first (`rota backlog list`). Do not write the check in this run.
 
 **4. Write the rest.** Written standards, navigation pointers and tool-economy fixes that need no new item go through their normal verbs. Apply the skill's *Skip* list from Step 2: no restating code, no transient state.
 
