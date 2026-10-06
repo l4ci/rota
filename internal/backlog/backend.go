@@ -68,14 +68,44 @@ type Backend interface {
 	AddComment(ref, kind, text string) (id string, err error)
 }
 
-// Capabilities are the differences between backends that callers act on.
+// Capabilities are the differences between backends that callers act on. Each
+// field answers one question a caller asks, so none doubles for another.
 type Capabilities struct {
-	// Tracker: items are tracker issues, so they carry labels, claims and open
-	// PRs, and IDs are canonical issue numbers. False: items are BACKLOG.md
-	// bullets, with none of those.
-	Tracker bool
+	// IssueIDs: IDs are canonical issue numbers, Item.Number is set, and
+	// "#N" in related lists spells another item. False: items are BACKLOG.md
+	// bullets keyed by "B07", with Number 0 and the bullet in Item.Line.
+	IssueIDs bool
+	// ClaimWrites: Claim and Release write to the tracker (a claim comment),
+	// so a successful claim changed state. False: they are no-ops.
+	ClaimWrites bool
+	// Forge: items carry tracker labels and open PRs a round can read. A round
+	// still needs a configured forge client on top.
+	Forge bool
 	// Umbrella: items span several sub-repos, each Row names its owner.
 	Umbrella bool
+}
+
+// WorkflowOf is the backend's claim, state and note verbs. Both backends
+// have them; the error is for a backend that does not.
+func WorkflowOf(be Backend) (Workflow, error) {
+	wf, ok := be.(Workflow)
+	if !ok {
+		return nil, ErrWrongBackend
+	}
+	return wf, nil
+}
+
+// RefactorCounter is the since-refactor counter the file backend keeps in
+// BACKLOG.md; the issue backends count from the tracker instead.
+type RefactorCounter interface {
+	RefactorAge() (features, bugs any, err error)
+	RefactorReset() (changed bool, err error)
+}
+
+// RefactorOf resolves the backend's counter; ok is false when it has none.
+func RefactorOf(be Backend) (RefactorCounter, bool) {
+	rc, ok := be.(RefactorCounter)
+	return rc, ok
 }
 
 // FileOps are the verbs only the file backend has. Callers reach them with

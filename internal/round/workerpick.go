@@ -36,9 +36,9 @@ var fileField = map[string]*regexp.Regexp{
 // labels of an issue, the Harness:/Model: fields of a file bullet. A harness
 // value rota does not know, or two of either key on one issue, is a refusal
 // naming the label.
-func PickOf(it backlog.Item) (Pick, error) {
+func PickOf(caps backlog.Capabilities, it backlog.Item) (Pick, error) {
 	var p Pick
-	if it.Number == 0 {
+	if !caps.IssueIDs {
 		if m := fileField["Harness"].FindStringSubmatch(it.Line); m != nil {
 			if !harness.Valid(m[1]) {
 				return p, blocked(BlockHarnessLabel, "%s has Harness: %s: harness must be one of %s", it.ID, m[1], strings.Join(harness.Kinds, ", "))

@@ -44,7 +44,7 @@ type Reopener interface {
 func Restore(b Reopener, root string, ids []string, warn io.Writer) error {
 	for _, id := range ids {
 		changed := false
-		if b.Capabilities().Tracker || !active(root, id) {
+		if b.Capabilities().IssueIDs || !active(root, id) {
 			var err error
 			if changed, err = b.Reopen(id); err != nil {
 				return err

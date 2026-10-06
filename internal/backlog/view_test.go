@@ -114,13 +114,13 @@ func TestIDsByMilestoneAndMilestonesFor(t *testing.T) {
 }
 
 func TestCapabilities(t *testing.T) {
-	if c := (&File{}).Capabilities(); c.Tracker || c.Umbrella {
+	if c := (&File{}).Capabilities(); c != (Capabilities{}) {
 		t.Errorf("file = %+v", c)
 	}
-	if c := (&Issues{}).Capabilities(); !c.Tracker || c.Umbrella {
+	if c := (&Issues{}).Capabilities(); c != (Capabilities{IssueIDs: true, ClaimWrites: true, Forge: true}) {
 		t.Errorf("issues = %+v", c)
 	}
-	if c := (&Umbrella{}).Capabilities(); !c.Tracker || !c.Umbrella {
+	if c := (&Umbrella{}).Capabilities(); c != (Capabilities{IssueIDs: true, ClaimWrites: true, Forge: true, Umbrella: true}) {
 		t.Errorf("umbrella = %+v", c)
 	}
 }
