@@ -27,9 +27,18 @@ Read `.rota/config.json`:
 - Nothing committed yet
 - You want product-level evidence (works? perf budgets? a11y? smoke green?) → `/rota-qa run`. `/rota-review` reasons from commits and diff; it does not run the product.
 
-## Step 1 — Task List
+Copy this checklist and track your progress:
 
-Track Steps 2-8 with the host's task tool if it has one.
+```
+- [ ] Step 2 — Scope the Review
+- [ ] Step 3 — Resolve the Spec
+- [ ] Step 4 — Consult KNOWLEDGE & DECISIONS
+- [ ] Step 5 — Capture the Diff
+- [ ] Step 6 — Pre-flight Scaffolding Scan
+- [ ] Step 7 — Dispatch the Reviewers
+- [ ] Step 8 — Record and Relay the Verdict
+- [ ] Step 9 — Route Based on Verdict
+```
 
 ## Step 2 — Scope the Review
 

@@ -14,6 +14,16 @@ description: Use when the session is approaching a context limit, the work must 
 - No active branch, no `/rota-work` running and no round
 - Round finished → `rota round wind-down`
 
+Copy this checklist and track your progress:
+```
+- [ ] Step 1 — Is a Round Running?
+- [ ] Step 2 — Resolve the Pause Set
+- [ ] Step 3 — Handle Uncommitted Work
+- [ ] Step 4 — Write the Handoff Note
+- [ ] Step 5 — Pin Status
+- [ ] Step 6 — Confirm
+```
+
 ## Step 1 — Is a Round Running?
 
 Run `rota round status --json`. A round is in flight when a row in `data.slots` holds an issue or `data.review` is non-empty; slots parked on `park/<agent>` with nothing queued are not a round. If in flight, follow *Pausing an orchestrator* below; Steps 2-5 do not apply (the orchestrator sits on the base branch). Otherwise continue with Step 2.

@@ -19,6 +19,27 @@ From `.rota/config.json` (all keys optional):
 | `release.requireCleanTree` | `true` | Set `false` to allow dirty releases (testing only) |
 | `release.confirmLargePushCommits` | `10` | Threshold (commits) above which auto autonomy still confirms before pushing unpushed HEAD |
 
+Copy this checklist and track your progress:
+
+```
+- [ ] Step 1 — Guard
+- [ ] Step 2 — Project Checklist
+- [ ] Step 3 — Milestone Gate (issue mode)
+- [ ] Step 4 — Version and Bump Level
+- [ ] Step 5 — Generate Release Notes
+- [ ] Step 6 — Review Notes
+- [ ] Step 7 — Write Version File and CHANGELOG
+- [ ] Step 8 — Commit
+- [ ] Step 9 — Tag
+- [ ] Step 10 — Push the Tag
+- [ ] Step 11 — Publish Remote Release
+- [ ] Step 11b — Push the Branch
+- [ ] Step 12 — Close Out the Milestone (issue mode)
+- [ ] Step 13 — Close Upstream Issues
+- [ ] Step 14 — Docs Nudge
+- [ ] Step 15 — Summary
+```
+
 ## Step 1 — Guard
 
 Stop with a one-liner on any failure.

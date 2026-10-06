@@ -7,7 +7,8 @@ These conventions constrain how new rota skills (or new behavior in existing ski
 - Skills are self-contained — no shared contract file
 - Imperative rules in autonomy-aware steps must live inline at every dispatch point
 - Don't ask what the code can answer
-- No ceremony: banners, mandatory task lists, per-site ask fallbacks
+- No ceremony: banners, per-site ask fallbacks
+- Open each workflow with a copyable step checklist
 - User-volition gates enforced at exactly one point
 - Stage features across slices using pass-through stubs
 - Helper-centric surface extension
@@ -39,9 +40,28 @@ Before a skill calls `AskUserQuestion`, check whether the answer is derivable fr
 
 Codified from grill-with-docs (2026-05-10): *"If a question can be answered by exploring the codebase, explore the codebase instead."* Companion to the *AskUserQuestion option list capped at 4* rule (`KNOWLEDGE.md`, 2026-05-08) — that one constrains the option list when asking is the right move; this one constrains whether to ask at all.
 
-## No ceremony: banners, mandatory task lists, per-site ask fallbacks
+## No ceremony: banners, per-site ask fallbacks
 
-Skills print no banner, and none requires a task-list tool. A multi-phase skill may list its phases and say *"Track these phases with the host's task tool if it has one."* That is the whole rule: no `ToolSearch` load, no per-phase `TaskCreate` boilerplate. Subagent dispatches never create tasks; the orchestrator owns the list.
+Skills print no banner and require no task-list tool: no `ToolSearch` load, no per-phase `TaskCreate` boilerplate. Subagent dispatches never create tasks; the orchestrator owns the list. The step checklist below is plain text the model copies into its reply, not a tool call.
+
+## Open each workflow with a copyable step checklist
+
+The skills guide ("Workflows and feedback loops") asks for a checklist Claude can copy into its response and tick off. Every skill with step headings opens its workflow with one, before the first step heading:
+
+````markdown
+Copy this checklist and track your progress:
+
+```
+- [ ] Step 1 — Resolve target
+- [ ] Step 2 — Load context
+- [ ] Step 3 — Write
+```
+````
+
+- One line per step, in run order, with the step heading's text verbatim. `test/validate-skills.py` fails a line that names no step heading and a step heading missing from the checklist.
+- A skill with modes gives one checklist per mode, each placed above its mode's steps. A line may add a trailing parenthetical to mark a conditional step (`- [ ] Step 2.5 — Audit Against Code State (milestone-spec capture only)`); put the marker in the heading when the step is always conditional.
+- A step that runs a validator (tests, gate, `validate-skills`, a review verdict, smoke) states the loop in its body: run, fix what fails, re-run, and continue only on a pass. The checklist line stays one line; the loop lives in the step.
+- Do not add a "Task list" step or a "Track these phases with the host's task tool" line; the checklist replaces both.
 
 When a skill asks the user a question, ask in prose with the options listed and a recommended default when the host has no option picker. `AskUserQuestion` is the Claude Code example of such a picker; a skill names it only to describe the question shape. A free-text reply to a picker is mapped to the nearest option. Ask once, and on an ambiguous reply take the site's stated default and say which one landed. Destructive operations and opt-in flags default to the safe side (cancel, `false`). Skills do not carry per-site "Plain-text fallback" lines.
 

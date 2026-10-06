@@ -17,6 +17,18 @@ Host mechanics are in [references/tmux-dispatch.md](references/tmux-dispatch.md)
 - You are a worker, not the orchestrator → read the contract above and stop.
 - No terminal host (herdr or tmux) → run solo mode (below). For one or two small items, `/rota-work` with subagents is lighter.
 
+Copy this checklist and track your progress:
+```
+- [ ] 1. Start
+- [ ] 2. Choose the slate
+- [ ] 3. The loop
+- [ ] 4. Reading failures
+- [ ] 5. Escalations and provenance
+- [ ] 6. Merge
+- [ ] 7. Bounce or fix
+- [ ] 8. Wind down
+```
+
 ## 1. Start
 
 Run `rota doctor`. Fix every `fail` with its hint first. Then `rota round start`, and read `data.drift` and `data.candidates`. For a round that keeps going as issues become ready, start it with `--scope open`: every open issue is a candidate and overlap and dependencies decide the order. Re-running `start` keeps the recorded scope unless you pass `--scope`; `--scope slate --items …` replaces the slate without ending the round. Non-zero `drift` is the previous round's mess: `rota round reconcile` shows it, `rota reap` clears the leftovers once you've read the list.
@@ -97,7 +109,7 @@ All three push the branch before moving the slot off it, so no work is lost. `ro
 
 ## 6. Merge
 
-Workers never merge. After `done`, read the PR: does it do what the issue says, and stay inside the files the issue named? Then `rota worker gate <slot> --base <branch>`, or `rota worker gate <PR number> --base <branch>` once the slot has moved on and the PR waits in review. The gate runs the checks on the merged tree, merges on a pass and drops the PR from the review list. Read its verdict; don't re-derive the rules it enforces. What each verdict (`stale`, `merge-failed`, `verify-failed`, `approval-required`) asks of you is in [tmux-dispatch.md](references/tmux-dispatch.md#the-merge-gate).
+Workers never merge. After `done`, read the PR: does it do what the issue says, and stay inside the files the issue named? Then `rota worker gate <slot> --base <branch>`, or `rota worker gate <PR number> --base <branch>` once the slot has moved on and the PR waits in review. The gate runs the checks on the merged tree, merges on a pass and drops the PR from the review list. Read its verdict; don't re-derive the rules it enforces. Loop per PR: gate, fix or bounce what the verdict names, re-gate; the PR is done only on a merge. What each verdict (`stale`, `merge-failed`, `verify-failed`, `approval-required`) asks of you is in [tmux-dispatch.md](references/tmux-dispatch.md#the-merge-gate).
 
 With several PRs waiting, merge them as one train: `rota worker train <slot|PR>... --base <branch>` in landing order. One verify covers all of them. On a red train it names the `culprit`: send that PR back, then re-run the train without it, or pass `--land-green` to land the members that verified before it. `base-moved` means nothing landed; re-run.
 
