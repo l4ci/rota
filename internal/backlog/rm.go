@@ -168,11 +168,10 @@ func findBulletIn(content, id string, sections []string) (sec, line string, ok b
 	return "", "", false
 }
 
-// stripBullet is strip_bullet_from_content: drop the bullet line and one
-// blank line after it. A bullet on the last line, with no newline, stays, as
-// in Python.
+// stripBullet drops one whole bullet line, accepting EOF as a line terminator
+// and preserving any blank line after the bullet.
 func stripBullet(content, bullet string) string {
-	re := regexp.MustCompile(`(?m)^` + regexp.QuoteMeta(bullet) + `\n(\n)?`)
+	re := regexp.MustCompile(`(?m)^` + regexp.QuoteMeta(bullet) + `(?:\n(\n)?|\z)`)
 	m := re.FindStringSubmatchIndex(content)
 	if m == nil {
 		return content
@@ -312,6 +311,21 @@ func (f *File) Remove(ids []string, scrubArchive, apply bool) (RmResult, error) 
 				newTodo = stripBullet(newTodo, info.Bullet)
 			} else if info.Archive && scrubArchive {
 				newArchive = stripBullet(newArchive, info.Bullet)
+			}
+		}
+		// Validate the complete removal before writing documents or deleting
+		// artifacts. Archive entries intentionally retained without scrub are exempt.
+		for _, id := range ids {
+			info := infos[id]
+			content, path := newTodo, "BACKLOG.md"
+			if info.Archive {
+				if !scrubArchive {
+					continue
+				}
+				content, path = newArchive, "ARCHIVE.md"
+			}
+			if _, _, found := findBulletIn(content, id, allSections); found {
+				return errf(ErrInvalid, "[%s] remains in .rota/%s after removal; no changes applied", id, path)
 			}
 		}
 		var detail, plans []string
