@@ -113,7 +113,7 @@ Fires when the batch includes a `[Major]` feature or a `[P0]` bug; skip otherwis
 
 > *"Run `/rota-brainstorm [ID]` before `/rota-plan` to negotiate the design."*
 
-**Never grill and never invoke `/rota-brainstorm` from here** (`references/grilling.md` is not loaded by capture). Capture is pure intake; `/rota-work` with no argument suggests the next item.
+**Never grill and never invoke `/rota-brainstorm` from here** (`references/grilling.md` is not loaded by capture). `/rota-work` with no argument suggests the next item.
 
 Print every new ID with its title, then stop. Capture ends here; do not offer to start work.
 

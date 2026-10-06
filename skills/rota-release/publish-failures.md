@@ -6,6 +6,6 @@
 
 ## Edge cases
 
-- **Multiple version files** — first match wins; pin with `release.versionFile`.
-- **`gh`/`glab` missing but origin matches** — Step 11 fails after the tag push, so the branch is still unpushed. Recovery: install the CLI and re-run `rota release publish <X.Y.Z> --title … --body-file <path> --confirm --confirm-note "<answer>"`; to revert the tag, `git push --delete origin v<X.Y.Z>`.
-- **No origin** — push exits 3; publish is skipped. Tag and CHANGELOG stay committed locally.
+- **Multiple version files:** first match wins; pin with `release.versionFile`.
+- **`gh`/`glab` missing but origin matches:** Step 11 fails after the tag push, so the branch is still unpushed. Recovery: install the CLI and re-run `rota release publish <X.Y.Z> --title … --body-file <path> --confirm --confirm-note "<answer>"`; to revert the tag, `git push --delete origin v<X.Y.Z>`.
+- **No origin:** push exits 3; publish is skipped. Tag and CHANGELOG stay committed locally.
