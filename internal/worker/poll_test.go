@@ -409,3 +409,25 @@ func TestPromoteIdleWithPR(t *testing.T) {
 		t.Errorf("busy: %+v %v", rows, notes)
 	}
 }
+
+// TestClassifyLastSentinelWins pins #321: a ROTA-DONE printed after an answered
+// ROTA-BLOCKED (and its relay) is the slot's state, and sentinel text quoted in
+// a relay is not the worker's own signal.
+func TestClassifyLastSentinelWins(t *testing.T) {
+	relay := "--- ORCHESTRATOR (round 5) ---\n[ORCHESTRATOR RELAY — forwarded.]\n\nPush is allowed now.\nROTA-BLOCKED ben: git push to origin is denied\n\n"
+	pane := "● ROTA-BLOCKED ben: git push to origin is denied\n\n" + relay +
+		"● pushing\n● ROTA-DONE ben https://github.com/l4ci/rota/pull/314\n"
+	if st, ev := Classify(pane, false, 60, "idle"); st != StateDone || ev != "https://github.com/l4ci/rota/pull/314" {
+		t.Errorf("blocked, relay, done: %s %q", st, ev)
+	}
+	// A relay that quotes a blocked line, with no later worker output, is not blocked.
+	quoted := "● working\n" + relay
+	if st, _ := Classify(quoted, false, 60, "idle"); st == StateBlocked {
+		t.Errorf("relay-quoted sentinel counted as the worker's: %s", st)
+	}
+	// A done line followed by a fresh blocked line stays blocked.
+	again := "● ROTA-DONE ben x\n● ROTA-BLOCKED ben: new question\n"
+	if st, ev := Classify(again, false, 60, "idle"); st != StateBlocked || ev != "new question" {
+		t.Errorf("done then blocked: %s %q", st, ev)
+	}
+}
