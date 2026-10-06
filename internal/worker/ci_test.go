@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -9,7 +10,9 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/tracker"
 )
 
 const ciCfg = `{"test":{"full":["false"],"fullWhere":"ci"}}` // "false" proves the local tier did not run
@@ -319,5 +322,146 @@ func TestGateCIConfigRenamedOrQuoted(t *testing.T) {
 				t.Fatalf("%+v %v", res, err)
 			}
 		})
+	}
+}
+
+// originCommit pushes a commit adding file to the origin's main, as another
+// merge would.
+func (w *world) originCommit(file string) {
+	w.t.Helper()
+	d := w.t.TempDir()
+	gitq(w.t, d, "clone", "-q", w.origin, ".")
+	os.WriteFile(filepath.Join(d, file), []byte(file+"\n"), 0o644)
+	gitq(w.t, d, "add", file)
+	gitq(w.t, d, "commit", "-q", "-m", "add "+file)
+	gitq(w.t, d, "push", "-q", "origin", "HEAD:main")
+}
+
+// scratchTrees lists the worktrees of the gate checkout other than itself.
+func (w *world) scratchTrees() []string {
+	var extra []string
+	for _, l := range strings.Split(gitq(w.t, w.dir, "worktree", "list", "--porcelain"), "\n") {
+		if p, ok := strings.CutPrefix(l, "worktree "); ok && p != w.dir {
+			extra = append(extra, p)
+		}
+	}
+	return extra
+}
+
+// CI verified the merge on a base that moved before the merge: nothing lands.
+func TestGateCIBaseMovedAfterCI(t *testing.T) {
+	w := newWorld(t, ghURL)
+	w.setConfig(ciCfg)
+	w.forge("ciMoveBase", "other.txt")
+	res, err := w.ciGate(GateOpts{})
+	if err != nil || res.Verdict != GateBaseMoved || !strings.Contains(res.Err, "while CI verified; nothing landed") {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if w.forgeWord("state") != "OPEN" || w.onOriginMain("work.txt") || res.Changed {
+		t.Errorf("work landed: state %s", w.forgeWord("state"))
+	}
+	if b := w.ciBranches(); b != "" {
+		t.Errorf("rota/ci branch left behind:\n%s", b)
+	}
+}
+
+// The forge merged onto a base that moved after the gate's check, so what
+// landed is not what CI verified.
+func TestGateCILandedTreeMismatch(t *testing.T) {
+	w := newWorld(t, ghURL)
+	w.setConfig(ciCfg)
+	w.forge("pushBeforeMerge", "other.txt")
+	res, err := w.ciGate(GateOpts{})
+	if err != nil || res.Verdict != GateBaseMoved || !strings.Contains(res.Err, "differs from the tree CI verified") {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if !res.Changed || !w.onOriginMain("work.txt") {
+		t.Errorf("Changed = %v; the PR did land", res.Changed)
+	}
+}
+
+// A push to the base after the merge is not the merge differing from CI: the
+// landed merge commit's tree is compared, not the base's new tip.
+func TestGateCIPushAfterMerge(t *testing.T) {
+	w := newWorld(t, ghURL)
+	w.setConfig(ciCfg)
+	w.forge("pushAfterMerge", "later.txt")
+	res, err := w.ciGate(GateOpts{})
+	if err != nil || res.Verdict != GatePass {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if !w.onOriginMain("later.txt") || !w.onOriginMain("work.txt") {
+		t.Error("origin/main lacks the merge or the later push")
+	}
+}
+
+// cancelForge cancels the run while CI is still pending.
+type cancelForge struct {
+	*fakeForge
+	cancel context.CancelFunc
+}
+
+func (f cancelForge) CommitChecks(ctx context.Context, sha string) ([]tracker.CheckRun, error) {
+	f.cancel()
+	return []tracker.CheckRun{{Name: "ci/test", State: tracker.CheckPending}}, nil
+}
+
+// An interrupted gate still deletes its rota/ci branch and scratch worktree.
+func TestGateCICancelCleansUp(t *testing.T) {
+	w := newWorld(t, ghURL)
+	w.setConfig(ciCfg)
+	ctx, cancel := context.WithCancel(bg)
+	defer cancel()
+	e := w.ciEnv().withForge(func(provider, dir string) Forge {
+		return cancelForge{fakeForge: &fakeForge{w: w, provider: provider}, cancel: cancel}
+	}, false)
+	e.Git = func(ctx context.Context, dir string, args ...string) (git.Result, error) {
+		if err := ctx.Err(); err != nil { // git.Exec would be killed; fail it outright
+			return git.Result{ExitCode: -1}, err
+		}
+		return git.Exec(ctx, dir, args...)
+	}
+	e.Ctx = ctx
+	e.Gate(ctx, w.dir, GateOpts{Slot: "w1", Base: "main"})
+	if b := w.ciBranches(); b != "" {
+		t.Errorf("rota/ci branch left behind:\n%s", b)
+	}
+	if extra := w.scratchTrees(); len(extra) != 0 {
+		t.Errorf("scratch worktree left behind: %v", extra)
+	}
+	if w.forgeWord("state") != "OPEN" {
+		t.Errorf("state %s", w.forgeWord("state"))
+	}
+}
+
+// A red or unfinished CI train deletes every branch it pushed, bisect
+// included, and its scratch worktree.
+func TestTrainCICleansUp(t *testing.T) {
+	for _, c := range []struct{ name, ci, fail, verdict string }{
+		{"red", "", "b2.txt", GateVerifyFailed},
+		{"timeout", "pending", "", GateVerifyTimeout},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			w, res := ciTrain(t, c.ci, c.fail, "b1", "b2", "b3")
+			if res.Verdict != c.verdict || len(res.Landed) != 0 {
+				t.Fatalf("%+v", res)
+			}
+			if b := w.ciBranches(); b != "" {
+				t.Errorf("rota/ci branch left behind:\n%s", b)
+			}
+			if extra := w.scratchTrees(); len(extra) != 0 {
+				t.Errorf("scratch worktree left behind: %v", extra)
+			}
+		})
+	}
+}
+
+// Under test.fullWhere ci, test.e2e still runs here, on the landed tree.
+func TestGateCIRunsE2ELocally(t *testing.T) {
+	w := newWorld(t, ghURL)
+	w.setConfig(`{"test":{"full":["false"],"fullWhere":"ci","e2e":["false"]}}`)
+	res, err := w.ciGate(GateOpts{})
+	if err != nil || res.Verdict != GateVerifyFailed || !strings.Contains(res.Err, "test.e2e") || !res.Changed {
+		t.Fatalf("%+v %v", res, err)
 	}
 }

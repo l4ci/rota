@@ -288,3 +288,28 @@ func TestTrainSkipsE2EWhenFullFails(t *testing.T) {
 		t.Fatalf("e2e must not run on a red full: %+v", res)
 	}
 }
+
+// In local mode a verify run that cannot start is an error, not a verdict:
+// nothing about the train is wrong. TMPDIR turns read-only once the scratch
+// tree exists, so the verify log cannot be created.
+func TestTrainLocalVerifyErrorIsError(t *testing.T) {
+	w := trainWorld(t, "true", "b1")
+	tmp := t.TempDir()
+	t.Setenv("TMPDIR", tmp)
+	t.Cleanup(func() { os.Chmod(tmp, 0o700) })
+	e := w.env(false)
+	e.Git = func(ctx context.Context, dir string, args ...string) (git.Result, error) {
+		r, err := git.Exec(ctx, dir, args...)
+		if len(args) > 1 && args[0] == "worktree" && args[1] == "add" {
+			os.Chmod(tmp, 0o500)
+		}
+		return r, err
+	}
+	res, err := e.Train(bg, w.dir, TrainOpts{Base: "main", Targets: []string{"b1"}})
+	if err == nil || res.Verdict == GateCheckBroke {
+		t.Fatalf("want an error, got %+v %v", res, err)
+	}
+	if w.onMain("b1.txt") {
+		t.Error("b1 landed")
+	}
+}

@@ -253,7 +253,10 @@ func (e Env) Train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 	// A local run that cannot start is an error, as before; a CI push or
 	// forge read that fails is CHECK-BROKE, since nothing has landed.
 	verifyErr := func(err error) (TrainResult, error) {
-		return e.trainBroke(res, err.Error())
+		if onCI {
+			return e.trainBroke(res, err.Error())
+		}
+		return res, err
 	}
 	full := func() (VerifyResult, error) { return verify(scratch) }
 	vr, err := full()

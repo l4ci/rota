@@ -128,6 +128,9 @@ func (f *fakeForge) PRRequestMerge(_ context.Context, pr int, o tracker.MergeOpt
 		return strings.TrimSpace(string(out))
 	}
 	target, head := w.forgeWord("base"), w.forgeWord("head")
+	if f := w.forgeWord("pushBeforeMerge"); f != "" { // the base moves between the gate's check and the merge
+		w.originCommit(f)
+	}
 	g("clone", "-q", w.forgeWord("origin"), ".")
 	if w.mode == "elsewhere" {
 		target = "stack"
@@ -140,6 +143,9 @@ func (f *fakeForge) PRRequestMerge(_ context.Context, pr int, o tracker.MergeOpt
 		w.forge("merge", g("rev-parse", "HEAD"))
 	}
 	g("push", "-q", "origin", target)
+	if f := w.forgeWord("pushAfterMerge"); f != "" { // someone lands work right after the merge
+		w.originCommit(f)
+	}
 	w.forge("state", "MERGED")
 	return nil
 }
@@ -149,6 +155,8 @@ func (f *fakeForge) PRRequestMerge(_ context.Context, pr int, o tracker.MergeOpt
 // "ciFail", else success. "ci" overrides it: none (CI never started), pending
 // (still running) or skipped (finished, tested nothing); late adds a failing
 // "ci/late" from the second call on. A commit not pushed there has no checks.
+// "ciMoveBase" names a file pushed to the origin's main on the first call, as
+// if someone landed work while CI ran.
 func (f *fakeForge) CommitChecks(_ context.Context, sha string) ([]tracker.CheckRun, error) {
 	f.logf("CommitChecks %s", sha[:7])
 	w := f.w
@@ -163,6 +171,10 @@ func (f *fakeForge) CommitChecks(_ context.Context, sha string) ([]tracker.Check
 	g := func(args ...string) (string, error) {
 		out, err := exec.Command("git", append([]string{"-C", w.origin}, args...)...).Output()
 		return strings.TrimSpace(string(out)), err
+	}
+	if f := w.forgeWord("ciMoveBase"); f != "" {
+		w.forge("ciMoveBase", "")
+		w.originCommit(f)
 	}
 	refs, _ := g("for-each-ref", "--format=%(objectname)", "refs/heads/rota/ci/")
 	if !slices.Contains(strings.Fields(refs), sha) {

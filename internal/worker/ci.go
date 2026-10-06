@@ -164,7 +164,7 @@ func (v *ciVerifier) verify(sha, name string) (VerifyResult, error) {
 	if out, code := v.e.runGit(v.root, "push", "-q", "--force", "origin", sha+":refs/heads/"+ref); code != 0 {
 		return res, fmt.Errorf("git push of %s to origin %s failed (exit %d): %s", short(sha), ref, code, strings.TrimSpace(out))
 	}
-	defer v.e.runGit(v.root, "push", "-q", "origin", "--delete", ref)
+	defer v.e.cleanupGit(v.root, "push", "-q", "origin", "--delete", ref)
 	start := v.e.now()
 	green := "" // the checks of the last all-green poll
 	for {
@@ -269,10 +269,22 @@ func (e gateEnv) scratchTree(root, sha string) (dir string, cleanup func(), err 
 		return "", nil, fmt.Errorf("could not create the scratch worktree: %s", out)
 	}
 	return dir, func() {
-		e.runGit(root, "worktree", "remove", "--force", dir)
+		e.cleanupGit(root, "worktree", "remove", "--force", dir)
 		os.RemoveAll(tmp)
-		e.runGit(root, "worktree", "prune")
+		e.cleanupGit(root, "worktree", "prune")
 	}, nil
+}
+
+// cleanupTimeout bounds one cleanup git call.
+const cleanupTimeout = 30 * time.Second
+
+// cleanupGit runs git for cleanup on a fresh context, so a cancelled or
+// interrupted run still deletes its CI branch and scratch worktree.
+func (e gateEnv) cleanupGit(dir string, args ...string) {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(e.ctx), cleanupTimeout)
+	defer cancel()
+	e.ctx = ctx
+	e.runGit(dir, args...)
 }
 
 // fullTier is the train's seam for the full tier: verify runs it on the tree
