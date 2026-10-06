@@ -580,12 +580,16 @@ func (r Registry) ItemStart(issue string) (time.Time, bool) {
 // ClearItemStart forgets an item's clock: its PR merged or it was parked for a
 // human, so a later assignment starts afresh.
 func ClearItemStart(root, issue string) error {
+	// Update rewrites the file, so look first: no entry means no write (and no
+	// workers.json created where there was none).
+	if _, ok := itemStartsOf(LoadRegistry(root).doc).Get(issue); !ok {
+		return nil
+	}
 	return Update(root, func(d *Doc) {
 		doc := d.doc
-		if m := itemStartsOf(doc); m.Len() > 0 {
-			m.Delete(issue)
-			doc.Set("itemStarts", m)
-		}
+		m := itemStartsOf(doc)
+		m.Delete(issue)
+		doc.Set("itemStarts", m)
 	})
 }
 
