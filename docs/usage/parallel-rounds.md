@@ -126,7 +126,7 @@ slot `wait` named, or gate a PR in review by number (`rota worker gate 61 --base
 
 | Step | Verb | What it does |
 |---|---|---|
-| Check | `rota doctor` | git, host, tracker auth, accounts, herdr hooks, `rota` version, Codex; each failure carries its fix |
+| Check | `rota doctor` | git, jq, host, tracker auth, accounts, herdr hooks, `rota` version, Codex; each failure carries its fix |
 | Start | `rota round start` | takes the repo's orchestrator lease, provisions slots, lists ready candidates |
 | Pick | `rota round candidates` | the open items that pass the criteria, dependency and overlap checks |
 | Review | `rota round architecture` | after `round.architectureEvery` closed non-refactor items, or when a slot is idle and nothing is assignable, mints one architecture-review item per area and assigns them to idle slots |

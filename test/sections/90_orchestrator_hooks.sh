@@ -183,7 +183,7 @@ pass "D1: install wraps an existing statusline, a re-run changes nothing, uninst
 
 # --- doctor -------------------------------------------------------------------
 DB="$OH/bin"; mkdir -p "$DB"
-ln -s "$(command -v git)" "$DB/git"
+ln -s "$(command -v git)" "$DB/git"; printf '#!/bin/sh\nexit 0\n' > "$DB/jq"; chmod +x "$DB/jq"
 ln -s "$ROTA_BIN" "$DB/rota"
 dd_run() { ROTA_TEST_DOCTOR_PATH="$DB" CLAUDE_CONFIG_DIR="$CC" "$ROTA_BIN" --json -C "$P" doctor 2>/dev/null; }
 dd_field() { python3 -c '
