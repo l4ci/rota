@@ -90,7 +90,8 @@ func ParseIntegration(out, agent string) string {
 	return "no status"
 }
 
-// Home is one slot's CODEX_HOME.
+// Home is one CODEX_HOME to probe: Slot labels it (the account name) and an
+// empty Dir is the default Codex home.
 type Home struct{ Slot, Dir string }
 
 // Code names what a readiness check found wrong. Doctor renders the findings
@@ -137,11 +138,14 @@ func CheckCodexVersion(ctx context.Context, p Probe, bin, home string) (CodexVer
 	return v, nil
 }
 
-// CheckCodexHome probes one slot home: with a herdr binary, whether its codex
+// CheckCodexHome probes one home: with a herdr binary, whether its codex
 // integration is current there, then whether the home is logged in. Findings
 // come in that order; a caller that cannot go on past one stops at it.
 func CheckCodexHome(ctx context.Context, p Probe, bin, herdr string, h Home) []Finding {
-	henv := []string{"CODEX_HOME=" + h.Dir}
+	var henv []string
+	if h.Dir != "" {
+		henv = []string{"CODEX_HOME=" + h.Dir}
+	}
 	var out []Finding
 	if herdr != "" {
 		st, err := p.Run(ctx, herdr, []string{"integration", "status"}, henv)

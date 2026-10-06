@@ -462,12 +462,11 @@ func TestAssignCodexResolvesAndStarts(t *testing.T) {
 	if err != nil || !res.Dispatched || res.Kind != "codex" || res.Model != "c-s" {
 		t.Fatalf("%v %+v", err, res)
 	}
-	if !strings.HasPrefix(f.host.launch, "codex -c features.hooks=true ") || !strings.Contains(f.host.launch, " --model c-s ") || strings.Contains(f.host.launch, "{model}") {
+	if !strings.HasPrefix(f.host.launch, "codex -c 'projects.") || !strings.Contains(f.host.launch, "check_for_update_on_startup=false -c features.hooks=true ") || !strings.Contains(f.host.launch, " --model c-s ") || strings.Contains(f.host.launch, "{model}") {
 		t.Errorf("launch = %q", f.host.launch)
 	}
-	home := filepath.Join(f.root, ".git", "rota", "codex", "ben")
-	if f.host.codexHome != home || f.host.configDir != "" {
-		t.Errorf("home %q configDir %q", f.host.codexHome, f.host.configDir)
+	if f.host.codexHome != "" || f.host.configDir != "" {
+		t.Errorf("the default home sets no CODEX_HOME: home %q configDir %q", f.host.codexHome, f.host.configDir)
 	}
 	if s := worker.LoadRegistry(f.root).Slot("ben"); s.Kind() != "codex" {
 		t.Errorf("the kind is recorded: %v", s)
@@ -497,7 +496,7 @@ func TestAssignCodexWithoutTierMap(t *testing.T) {
 	if err != nil || !res.Dispatched || res.Model != "" {
 		t.Fatalf("an unset codex map dispatches with no model: %v %+v", err, res)
 	}
-	if !strings.HasPrefix(f.host.launch, "codex -c features.hooks=true ") || !strings.Contains(f.host.launch, "hooks.UserPromptSubmit=") || !strings.Contains(f.host.launch, " --dangerously-bypass-approvals-and-sandbox ") || strings.Contains(f.host.launch, "--model") {
+	if !strings.HasPrefix(f.host.launch, "codex -c 'projects.") || !strings.Contains(f.host.launch, "hooks.UserPromptSubmit=") || !strings.Contains(f.host.launch, " --dangerously-bypass-approvals-and-sandbox ") || strings.Contains(f.host.launch, "--model") {
 		t.Errorf("launch = %q", f.host.launch)
 	}
 

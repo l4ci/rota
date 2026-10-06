@@ -241,8 +241,13 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 			return res, err
 		}
 		res.Warnings = setup.Warnings
-		if codexHome = setup.Home; codexHome != "" {
-			configDir = "" // the slot's account is its home, not a claude config dir
+		codexHome = setup.Home
+		if kind == harness.Codex {
+			configDir = "" // a codex slot's account is its home, not a claude config dir
+			account := setup.Account
+			if _, err := UpdateSlot(root, o.Slot, func(sl *Slot) { sl.SetCodexAccount(account) }); err != nil {
+				return res, err
+			}
 		}
 		if launch, signKey, err = hz.Prepare(launch, e.Executable, setup); err != nil {
 			return res, asError(err)

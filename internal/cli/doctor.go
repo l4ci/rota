@@ -10,15 +10,12 @@ import (
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/doctor"
-	"github.com/l4ci/rota/internal/git"
-	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/migrate"
 	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/skills"
 	"github.com/l4ci/rota/internal/version"
-	"github.com/l4ci/rota/internal/worker"
 )
 
 // doctorCommand is `rota doctor` (C6): a read-only preflight. It runs without
@@ -93,7 +90,7 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 		return s
 	}
 	in.Dispatch, in.IssuesProvider = config.Dispatch(cfg), str("issues.provider")
-	in.CodexHomes = codexHomes(ctx, d.Git, root)
+	in.CodexHomes = codexHomes(cfg)
 	for _, t := range []string{"light", "standard", "heavy"} {
 		if strings.TrimSpace(str("round.tiers.codex."+t)) != "" {
 			in.CodexTiers = true
@@ -167,23 +164,17 @@ func doctorExec(run proc.Runner) doctor.Exec {
 	}
 }
 
-// codexHomes lists the slot homes that exist under <git-common-dir>/rota/codex/,
-// sorted by slot name. Any failure reads as none: the check then has no home
-// to look at, and git trouble is the git check's to report.
-func codexHomes(ctx context.Context, run git.Runner, root string) []doctor.CodexHome {
-	cd, err := worker.CommonDir(ctx, run, root)
-	if err != nil {
-		return nil
-	}
-	entries, err := os.ReadDir(harness.CodexHomesDir(cd))
-	if err != nil {
-		return nil
-	}
+// codexHomes lists the Codex homes a worker can run under: the accounts of
+// work.codexAccounts, else the default Codex home (an empty Dir).
+func codexHomes(cfg any) []doctor.CodexHome {
 	var homes []doctor.CodexHome
-	for _, e := range entries {
-		if e.IsDir() {
-			homes = append(homes, doctor.CodexHome{Slot: e.Name(), Dir: filepath.Join(harness.CodexHomesDir(cd), e.Name())})
+	for _, a := range config.CodexAccounts(cfg) {
+		if a.Name != "" {
+			homes = append(homes, doctor.CodexHome{Slot: a.Name, Dir: a.CodexHome})
 		}
+	}
+	if len(homes) == 0 {
+		homes = []doctor.CodexHome{{}}
 	}
 	return homes
 }

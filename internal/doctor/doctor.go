@@ -79,7 +79,8 @@ type Input struct {
 	IssuesProvider string // issues.provider
 	Accounts       []config.Account
 	SwitchOnUsage  bool // orchestrator.switchOnUsage (D4)
-	// CodexHomes are the existing slot homes under <git-common-dir>/rota/codex/.
+	// CodexHomes are the Codex homes a worker can run under: the accounts of
+	// work.codexAccounts, else the default Codex home (a zero CodexHome).
 	CodexHomes []CodexHome
 	// CodexTiers is whether any round.tiers.codex.<tier> is set.
 	CodexTiers bool

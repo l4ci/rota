@@ -4,10 +4,13 @@
 # ~/.codex. Never put the real codex on a test's PATH.
 #   --version      prints `codex-cli $ROTA_FAKE_CODEX_VERSION` (default 0.159.2)
 #   login status   exit 0 when "$CODEX_HOME/.fake-logged-in" exists, else
-#                  "Not logged in" and exit 1 (also when CODEX_HOME is unset)
+#                  "Not logged in" and exit 1. With CODEX_HOME unset it reads
+#                  $FAKE_DEFAULT_CODEX_HOME (the stand-in for the default
+#                  Codex home); with neither set it is "Not logged in".
 case "$1 $2" in
   "--version"*) echo "codex-cli ${ROTA_FAKE_CODEX_VERSION:-0.159.2}" ;;
   "login status")
-    if [ -n "${CODEX_HOME:-}" ] && [ -f "$CODEX_HOME/.fake-logged-in" ]; then echo "Logged in using ChatGPT"; else echo "Not logged in"; exit 1; fi ;;
+    CH="${CODEX_HOME:-${FAKE_DEFAULT_CODEX_HOME:-}}"
+    if [ -n "$CH" ] && [ -f "$CH/.fake-logged-in" ]; then echo "Logged in using ChatGPT"; else echo "Not logged in"; exit 1; fi ;;
   *) echo "fake codex: unsupported call: $*" >&2; exit 98 ;;
 esac

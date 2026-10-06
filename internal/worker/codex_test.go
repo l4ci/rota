@@ -81,53 +81,95 @@ func codexProject(t *testing.T) (dir, home string) {
 	return dir, filepath.Join(dir, ".git", "rota", "codex", "w1")
 }
 
-func TestCodexPreflightHappyPathSeedsAndInstalls(t *testing.T) {
-	dir, home := codexProject(t)
+func TestCodexPreflightDefaultHome(t *testing.T) {
+	dir, slotDir := codexProject(t)
 	rig := &codexRig{loggedIn: true}
 	set, err := rig.env(tmuxFake()).Preflight(bg, dir, harness.Codex, "w1", false)
-	if err != nil || set.Home != home || set.Version != "0.159.2" || len(set.Warnings) != 0 {
+	if err != nil || set.Home != "" || set.Account != "" || set.StateDir != slotDir || set.Version != "0.159.2" || len(set.Warnings) != 0 {
 		t.Fatalf("%+v %v", set, err)
 	}
-	if fi, err := os.Stat(home); err != nil || fi.Mode().Perm() != 0o700 {
-		t.Errorf("home = %v %v", fi, err)
+	if fi, err := os.Stat(slotDir); err != nil || fi.Mode().Perm() != 0o700 {
+		t.Errorf("slot state dir = %v %v", fi, err)
 	}
-	b, _ := os.ReadFile(filepath.Join(home, "config.toml"))
-	wt := filepath.Join(dir, ".worktrees", "w1")
-	want := "check_for_update_on_startup = false\n\n[projects.\"" + wt + "\"]\ntrust_level = \"trusted\"\n"
-	if string(b) != want {
-		t.Errorf("config.toml =\n%s\nwant\n%s", b, want)
-	}
-	if _, err := os.Stat(filepath.Join(home, "auth.json")); err == nil {
-		t.Error("rota must never write auth.json")
-	}
-	for _, c := range []string{"herdr integration status | CODEX_HOME=" + home, "herdr integration install codex | CODEX_HOME=" + home, "codex login status | CODEX_HOME=" + home} {
-		if rig.ran(c) != 1 {
-			t.Errorf("want one %q in %v", c, rig.calls)
+	// Nothing is written into a Codex home: the slot dir holds no config or auth.
+	for _, f := range []string{"config.toml", "auth.json"} {
+		if _, err := os.Stat(filepath.Join(slotDir, f)); err == nil {
+			t.Errorf("rota must not write %s", f)
 		}
 	}
-	// Even the version call runs under the slot home, never ~/.codex.
-	if rig.calls[0] != "codex --version | CODEX_HOME="+home {
-		t.Errorf("version call = %q", rig.calls[0])
+	// No call sets CODEX_HOME: Codex uses its own default.
+	for _, c := range []string{"herdr integration status | ", "herdr integration install codex | ", "codex login status | ", "codex --version | "} {
+		if rig.ran(c) != 1 {
+			t.Errorf("want one %q with no CODEX_HOME in %v", c, rig.calls)
+		}
+	}
+	for _, c := range rig.calls {
+		if strings.Contains(c, "CODEX_HOME") {
+			t.Errorf("the default home sets no CODEX_HOME: %q", c)
+		}
 	}
 }
 
-func TestCodexPreflightKeepsAnExistingConfigAndInstalledIntegration(t *testing.T) {
-	dir, home := codexProject(t)
-	os.MkdirAll(home, 0o700)
-	os.WriteFile(filepath.Join(home, "config.toml"), []byte("# mine\n"), 0o600)
+func TestCodexPreflightSkipsAnInstalledIntegration(t *testing.T) {
+	dir, _ := codexProject(t)
 	rig := &codexRig{loggedIn: true, installed: true}
 	if _, err := rig.env(tmuxFake()).Preflight(bg, dir, harness.Codex, "w1", false); err != nil {
 		t.Fatal(err)
 	}
-	if b, _ := os.ReadFile(filepath.Join(home, "config.toml")); string(b) != "# mine\n" {
-		t.Errorf("an existing config.toml must stay untouched: %q", b)
-	}
 	if rig.ran("herdr integration install") != 0 {
 		t.Errorf("a current integration is not reinstalled: %v", rig.calls)
 	}
-	// With the home present, the version runs under it.
-	if !strings.Contains(rig.calls[0], "CODEX_HOME="+home) {
-		t.Errorf("version call = %q", rig.calls[0])
+}
+
+const codexAcctCfg = `{"work":{"dispatch":"herdr","codexAccounts":[{"name":"a","codexHome":"/h/a"},{"name":"b","codexHome":"/h/b"}]}}`
+
+// Configured accounts are spread over the codex slots, the slot keeps its own
+// while it is configured, and login is checked in the account's home.
+func TestCodexPreflightAccounts(t *testing.T) {
+	dir := newProject(t, codexAcctCfg)
+	goInit(t, dir, InitOpts{Slots: 3, Base: "main"})
+	rig := &codexRig{loggedIn: true, installed: true}
+	e := rig.env(tmuxFake())
+	pick := func(slot string) harness.Setup {
+		t.Helper()
+		set, err := e.Preflight(bg, dir, harness.Codex, slot, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// dispatch records the account; do the same here.
+		UpdateSlot(dir, slot, func(s *Slot) { s.Raw().Set("kind", "codex"); s.SetCodexAccount(set.Account) })
+		return set
+	}
+	if got := pick("w1"); got.Account != "a" || got.Home != "/h/a" {
+		t.Errorf("w1 = %+v", got)
+	}
+	if got := pick("w2"); got.Account != "b" || got.Home != "/h/b" {
+		t.Errorf("w2 = %+v", got)
+	}
+	if got := pick("w3"); got.Account != "a" {
+		t.Errorf("w3 spreads on to the least loaded: %+v", got)
+	}
+	if got := pick("w2"); got.Account != "b" {
+		t.Errorf("a slot keeps its account: %+v", got)
+	}
+	if rig.ran("codex login status | CODEX_HOME=/h/a") == 0 || rig.ran("codex login status | CODEX_HOME=/h/b") == 0 {
+		t.Errorf("login is checked per configured home: %v", rig.calls)
+	}
+	// An account that left the config is replaced.
+	UpdateSlot(dir, "w1", func(s *Slot) { s.SetCodexAccount("gone") })
+	if got := pick("w1"); got.Account == "gone" || got.Account == "" {
+		t.Errorf("a stale account is re-picked: %+v", got)
+	}
+}
+
+func TestCodexPreflightAccountNotLoggedIn(t *testing.T) {
+	dir := newProject(t, codexAcctCfg)
+	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
+	rig := &codexRig{installed: true}
+	_, err := rig.env(tmuxFake()).Preflight(bg, dir, harness.Codex, "w1", false)
+	we, _ := err.(*exitcode.Error)
+	if we == nil || we.Exit != exitcode.ExitUnavailable || we.Hint != "CODEX_HOME=/h/a codex login" || !strings.Contains(we.Message, "account 'a'") {
+		t.Fatalf("%v", err)
 	}
 }
 
@@ -155,7 +197,7 @@ func TestCodexPreflightRefusals(t *testing.T) {
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
-			dir, home := codexProject(t)
+			dir, _ := codexProject(t)
 			set, err := c.rig.env(tmuxFake()).Preflight(bg, dir, harness.Codex, "w1", c.accept)
 			if c.exit == 0 {
 				if err != nil || (c.warn != "" && (len(set.Warnings) != 2 || set.Warnings[0] != c.warn || !strings.Contains(set.Warnings[1], "prompt check unverified"))) || (c.warn == "" && len(set.Warnings) != 0) {
@@ -173,8 +215,8 @@ func TestCodexPreflightRefusals(t *testing.T) {
 			if c.hint != "" && !strings.Contains(we.Hint, c.hint) {
 				t.Errorf("hint = %q", we.Hint)
 			}
-			if strings.Contains(we.Hint, "codex login") && !strings.Contains(we.Hint, "CODEX_HOME="+home) {
-				t.Errorf("the login hint names the slot home: %q", we.Hint)
+			if strings.Contains(we.Hint, "codex login") && we.Hint != "codex login" {
+				t.Errorf("the default home's login hint is the plain `codex login`: %q", we.Hint)
 			}
 		})
 	}
@@ -189,7 +231,7 @@ func TestCodexPreflightNeedsHerdr(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 	if _, serr := os.Stat(filepath.Join(dir, ".git", "rota", "codex")); serr == nil {
-		t.Error("no home is created for a host that cannot run codex workers")
+		t.Error("no state is created for a host that cannot run codex workers")
 	}
 }
 
@@ -199,8 +241,8 @@ func herdrFake() *fakeHost {
 	return &fakeHost{name: "herdr", inSession: true, where: "herdr workspace w9"}
 }
 
-func TestDispatchCodexSpawnsWithItsHome(t *testing.T) {
-	dir, home := codexProject(t)
+func TestDispatchCodexSpawnsOnTheDefaultHome(t *testing.T) {
+	dir, slotDir := codexProject(t)
 	// An account on the slot must not leak into a codex pane.
 	Update(dir, func(d *Doc) { d.Slot("w1").Raw().Set("configDir", "/acct") })
 	rig := &codexRig{loggedIn: true}
@@ -209,24 +251,26 @@ func TestDispatchCodexSpawnsWithItsHome(t *testing.T) {
 	if err != nil || res.Kind != "codex" {
 		t.Fatalf("%+v %v", res, err)
 	}
-	keyPath := filepath.Join(home, harness.PromptKeyFile)
+	keyPath := filepath.Join(slotDir, harness.PromptKeyFile)
 	_, _, largs, lerr := host.LaunchArgs(f.spawnOpts.Launch)
-	want := append(harness.CodexHookArgs("/opt/rota", keyPath), "--model", "gpt-x", "--dangerously-bypass-approvals-and-sandbox", "--dangerously-bypass-hook-trust", "--no-daemon", "--no-alt-screen")
-	if f.spawnOpts.CodexHome != home || f.spawnOpts.ConfigDir != "" || lerr != nil || strings.Join(largs, "\x00") != strings.Join(want, "\x00") {
+	wt := filepath.Join(dir, ".worktrees", "w1")
+	trust := []string{"-c", "projects.\"" + wt + "\".trust_level=\"trusted\"", "-c", "check_for_update_on_startup=false"}
+	want := append(append(trust, harness.CodexHookArgs("/opt/rota", keyPath)...), "--model", "gpt-x", "--dangerously-bypass-approvals-and-sandbox", "--dangerously-bypass-hook-trust", "--no-daemon", "--no-alt-screen")
+	if f.spawnOpts.CodexHome != "" || f.spawnOpts.ConfigDir != "" || lerr != nil || strings.Join(largs, "\x00") != strings.Join(want, "\x00") {
 		t.Errorf("spawn opts = %+v (args %q, want %q)", f.spawnOpts, largs, want)
 	}
-	if !strings.Contains(largs[3], "/opt/rota worker prompt-check --key "+keyPath) {
+	if !strings.Contains(largs[7], "/opt/rota worker prompt-check --key "+keyPath) {
 		t.Errorf("hook = %s", largs[3])
 	}
 }
 
 func TestDispatchKindDefaultsToTheSlotsRecordedKind(t *testing.T) {
-	dir, home := codexProject(t)
+	dir, _ := codexProject(t)
 	Update(dir, func(d *Doc) { d.Slot("w1").Raw().Set("kind", "codex") })
 	rig := &codexRig{loggedIn: true}
 	f := herdrFake()
 	res, err := rig.env(f).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "go\n"), Task: "T1"})
-	if err != nil || res.Kind != "codex" || f.spawnOpts.CodexHome != home || strings.Contains(f.spawnOpts.Launch, "--model") {
+	if err != nil || res.Kind != "codex" || f.spawnOpts.CodexHome != "" || strings.Contains(f.spawnOpts.Launch, "--model") {
 		t.Fatalf("%+v %v %+v", res, err, f.spawnOpts)
 	}
 	// An explicit kind beats the recorded one.
@@ -408,5 +452,23 @@ func TestDispatchClaudePayloadIsNotSigned(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(home, harness.PromptKeyFile)); err == nil {
 		t.Error("a claude dispatch wrote a key")
+	}
+}
+
+// A configured account reaches the pane as its CODEX_HOME and is recorded on
+// the slot; the prompt key stays in the slot's own state dir.
+func TestDispatchCodexAccountSpawnsWithItsHome(t *testing.T) {
+	dir := newProject(t, codexAcctCfg)
+	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
+	rig := &codexRig{loggedIn: true, installed: true}
+	f := herdrFake()
+	if _, err := rig.env(f).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "go\n"), Task: "T1", Kind: "codex"}); err != nil {
+		t.Fatal(err)
+	}
+	if f.spawnOpts.CodexHome != "/h/a" || LoadRegistry(dir).Slot("w1").CodexAccount() != "a" {
+		t.Errorf("spawn %+v, account %q", f.spawnOpts, LoadRegistry(dir).Slot("w1").CodexAccount())
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".git", "rota", "codex", "w1", harness.PromptKeyFile)); err != nil {
+		t.Errorf("the prompt key lives in the slot state dir: %v", err)
 	}
 }

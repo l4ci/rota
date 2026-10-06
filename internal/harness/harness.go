@@ -134,13 +134,29 @@ type PreflightOpts struct {
 	// CommonDir is the git common dir, asked for only by a harness that keeps
 	// per-slot state beside it.
 	CommonDir func() (string, error)
+	// Accounts are the configured Codex homes (work.codexAccounts); none
+	// means the default Codex home. Account is the one the slot ran under
+	// last, Load how many other codex slots hold each account.
+	Accounts []HomeAccount
+	Account  string
+	Load     map[string]int
 }
+
+// HomeAccount is one named CODEX_HOME of work.codexAccounts.
+type HomeAccount struct{ Name, Home string }
 
 // Setup is what a passed preflight leaves for the dispatch. A non-empty Home
 // means the slot's account is that home and the claude config dir is not its
-// business.
+// business; a codex slot on the default home leaves it empty.
 type Setup struct {
-	Home     string
+	Home string
+	// Account names the configured Codex account the slot got ("" on the
+	// default home); the dispatch records it so the next pick keeps it.
+	Account string
+	// StateDir is the slot's own state directory (the codex prompt key).
+	StateDir string
+	// Worktree is the slot's worktree, trusted on a codex launch line.
+	Worktree string
 	Version  string
 	Warnings []string
 }

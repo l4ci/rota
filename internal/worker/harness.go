@@ -93,13 +93,27 @@ func (e Env) Preflight(ctx context.Context, root, kind, slot string, accept bool
 	if err != nil {
 		return harness.Setup{}, err
 	}
-	wt := ""
-	if s := LoadRegistry(root).Slot(slot); s != nil {
-		wt = s.Worktree()
+	wt, current := "", ""
+	reg := LoadRegistry(root)
+	if s := reg.Slot(slot); s != nil {
+		wt, current = s.Worktree(), s.CodexAccount()
+	}
+	var accts []harness.HomeAccount
+	load := map[string]int{}
+	if kind == harness.Codex {
+		for _, a := range config.CodexAccounts(loadConfig(root)) {
+			accts = append(accts, harness.HomeAccount{Name: a.Name, Home: a.CodexHome})
+		}
+		for _, s := range reg.Slots() {
+			if s.Name() != slot && s.Kind() == harness.Codex && s.CodexAccount() != "" {
+				load[s.CodexAccount()]++
+			}
+		}
 	}
 	set, err := h.Preflight(ctx, e.probe(), harness.PreflightOpts{
 		Slot: slot, Accept: accept, Herdr: e.hostKind(root) == "herdr", Worktree: wt,
 		CommonDir: func() (string, error) { return CommonDir(ctx, e.Git, root) },
+		Accounts:  accts, Account: current, Load: load,
 	})
 	return set, asError(err)
 }
