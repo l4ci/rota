@@ -2,7 +2,7 @@
 
 Used by `/rota-pause` (writes the handoff note) and `/rota-work` with no argument (reads it). Both skills point here so the template lives in one place.
 
-Fill each section from the current session — omit sections that don't apply, but don't manufacture content. The four sections below are exactly what `/rota-work` consumes (Stage, Next planned step and Current hypothesis are what its no-argument mode reads); anything else (commit log, files mid-edit, gotchas, dead ends) belongs elsewhere (`git log`, `git status`, `/rota-learn`).
+Fill each section from the current session. Omit sections that don't apply; don't manufacture content. The four sections below are exactly what `/rota-work` consumes (its no-argument mode reads Stage, Next planned step and Current hypothesis). Anything else (commit log, files mid-edit, gotchas, dead ends) belongs in `git log`, `git status` or `/rota-learn`.
 
 An orchestrator mid-round writes a different handoff note, to `.rota/handoff/<base>.md` with first line `<!-- rota-handoff: orchestrator -->`; its sections are listed in `/rota-pause` *Pausing an orchestrator*.
 

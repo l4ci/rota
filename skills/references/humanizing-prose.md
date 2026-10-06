@@ -1,6 +1,6 @@
 # Humanizing user-facing prose
 
-Used by `/rota-release` Step 5 (release notes + summary line), `/rota-ship` Step 4 (PR body), and `/rota-ship` Docs Mode Step D-A4 (doc-page edits). Defines the rule sheet and self-audit pass that runs after the model drafts user-facing prose, before the draft is shown to the user.
+Used by `/rota-release` Step 5 (release notes + summary line), `/rota-ship` Step 4 (PR body), and `/rota-ship` Docs Mode Step D-A4 (doc-page edits). Defines the rule sheet and self-audit pass that run after drafting user-facing prose, before the user sees it.
 
 The general AI-tells catalog (puffery, promotional adjectives, -ing clauses, copula avoidance, negative parallelism, rule-of-three, synonym cycling, AI vocabulary, filler, hedging) is not repeated here. See Wikipedia's [Signs of AI writing](https://en.wikipedia.org/wiki/Wikipedia:Signs_of_AI_writing) or the `humanizer` skill. The rules below are project-specific.
 
@@ -8,9 +8,9 @@ The general AI-tells catalog (puffery, promotional adjectives, -ing clauses, cop
 
 - **Evidence over assertion.** Cite the change, not its importance. *"Adds `--remove` flag to `/rota-capture`"* beats *"a powerful new capability for backlog management"*.
 - **Terse.** Sentences earn their length. Cut filler.
-- **No slogans.** Generic upbeat closers are dead weight; the reader didn't ask for a pep talk.
+- **No slogans.** Generic upbeat closers are dead weight.
 - **First-person plural for project intent**, never for individual actions. *"We removed eight commands"* is fine; *"we ran the smoke test"* isn't.
-- **One voice per artifact.** Release notes, PR bodies, and docs each have a target reader; the rules below tighten all three, but a single draft should not switch register mid-paragraph.
+- **One voice per artifact.** Release notes, PR bodies, and docs each have a target reader; a draft should not switch register mid-paragraph.
 
 ## House style
 
@@ -26,10 +26,10 @@ After drafting any user-facing prose, before showing it to the user:
 3. Revise the specific tells you named in step 2. Replace them rather than rewriting around them.
 4. Show the revised draft to the user.
 
-The self-audit is silent. The user sees one draft — the post-audit one. Don't narrate the audit; don't list the patterns you removed.
+The self-audit is silent. The user sees one draft, the post-audit one. Don't narrate the audit or list the patterns you removed.
 
 ## What this reference does NOT cover
 
-- **Commit messages.** Commit subjects and bodies follow the project's existing `git log` style and stay terse by construction; they're not user-facing artifacts in the same sense.
+- **Commit messages.** Commit subjects and bodies follow the project's existing `git log` style and stay terse by construction; they are not user-facing artifacts.
 - **AskUserQuestion option text.** Each skill writes its own prompts; this reference is for generated artifacts, not UX prompts.
 - **KNOWLEDGE.md / DECISIONS.md content.** Their structure is encoded in `references/persistence-skills.md`. The prose rules above apply to the bullet text but the structural shape stays as defined there.

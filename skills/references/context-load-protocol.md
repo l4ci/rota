@@ -1,10 +1,10 @@
 # Context-load protocol
 
-Used by `/rota-work` (Step 4 for the normal flow, `references/work-preview.md` for the peek), `/rota-plan` Step 2, and `/rota-vision` Step 2 — the silent context load that runs before the skill proposes anything to the user. The goal: read everything that informs the planned action in parallel, form a picture, then act.
+Used by `/rota-work` (Step 4 for the normal flow, `references/work-preview.md` for the peek), `/rota-plan` Step 2, and `/rota-vision` Step 2 — the silent context load before the skill proposes anything. Read everything that informs the action in parallel, form a picture, then act.
 
 ## The canonical reads
 
-Run as a checklist. Items are ordered by broadening scope (target item → plan → milestone → repo-wide). Skip an item when its precondition doesn't apply — that's not a failure, that's the protocol.
+Run as a checklist. Items are ordered by broadening scope (target item → plan → milestone → repo-wide). Skip an item when its precondition doesn't apply; that is the protocol, not a failure.
 
 - **The target item entry** in `.rota/BACKLOG.md` (when a specific backlog ID is the target) and its overflow detail file at `.rota/<bugs|features|tasks>/<id>.md` if one exists.
 - **The plan file** at `.rota/plans/<key>.md` if one exists for this work. Use:
@@ -13,7 +13,7 @@ Run as a checklist. Items are ordered by broadening scope (target item → plan 
   rota plan show <key>
   ```
 
-  A missing plan exits 3 with empty stdout, not a failure. Treat that as "no plan yet".
+  A missing plan exits 3 with empty stdout, not a failure. Treat it as "no plan yet".
 
 - **The milestone** (`rota milestone show <MID>`) only when the work is milestone-scoped or the item carries a milestone tag. Never required.
 - **Items scoped to the milestone** via:
@@ -35,11 +35,11 @@ Run as a checklist. Items are ordered by broadening scope (target item → plan 
 
 ## Issue in parallel
 
-All reads in the list above are independent. The calling skill MUST issue them as parallel tool calls in a single response — load latency dominates this step, and serial reads make the skill feel slow without any benefit. Workers reading this reference should treat sequential reads as a planning failure.
+All reads above are independent. The calling skill MUST issue them as parallel tool calls in a single response: load latency dominates this step and serial reads gain nothing. Workers should treat sequential reads as a planning failure.
 
 ## Skill-specific extras
 
-Each calling skill adds its own reads inline. The protocol lists only the common subset. Concretely:
+Each calling skill adds its own reads inline; the protocol lists only the common subset:
 
 - `/rota-vision` Step 2 adds `.rota/MILESTONES.md`, every `.rota/milestones/M*.md`, glossary terms from `.rota/KNOWLEDGE.md` `## Glossary` (via `rota glossary read`), and stack files (`README.md`, `package.json`, `Cargo.toml`, `pyproject.toml`, etc.) — domain-shape reads that other skills don't need.
 - `/rota-work` preview (`references/work-preview.md`) adds Repos: parsing for umbrella items (resolves via `rota repo resolve` when umbrella mode is on).
@@ -47,9 +47,9 @@ Each calling skill adds its own reads inline. The protocol lists only the common
 
 ## What to do with the loaded context
 
-Read for picture, don't dump. The user did not invoke the skill to receive a context dump — they invoked it for the skill's actual deliverable (a peek, a plan, a milestone, a work cycle). Carry what's relevant into the next step; discard the rest silently.
+Read for picture, don't dump. The user invoked the skill for its deliverable (a peek, a plan, a milestone, a work cycle), not a context dump. Carry what's relevant into the next step; discard the rest silently.
 
-If a skill finds itself wanting to recite the loaded context back at the user, that's a signal the load was the wrong shape, not that the user needs the recital.
+If a skill wants to recite the loaded context back, the load was the wrong shape.
 
 ## Lookup, not resolve
 

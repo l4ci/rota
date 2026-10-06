@@ -1,6 +1,6 @@
 # Manual gates
 
-Certain operations are **manual gates**: no `autonomy.level` (`"off"` or `"auto"`) may pass them on its own. They produce externally-visible state or commit the project to a hard boundary. Auto mode chains routing steps (one hop toward done) but never answers an acceptance-of-risk question (commit on the user's authority).
+Certain operations are **manual gates**: no `autonomy.level` (`"off"` or `"auto"`) may pass them on its own. They produce externally-visible state or commit the project to a hard boundary. Auto mode chains routing steps (one hop toward done) but never answers an acceptance-of-risk question.
 
 The registry lives in code. `rota gate list` prints every gate, whether a verb enforces it, the verbs and skills involved, and the state it creates. There are two kinds.
 
@@ -14,7 +14,7 @@ The registry lives in code. `rota gate list` prints every gate, whether a verb e
 | `merge-approval` | `rota ship merge`, `rota ship pr-merge`, `rota worker gate`, when `ship.mergeApproval` covers the merge (`all`, or `paths` matching `ship.mergeApprovalPaths`) | `/rota-ship` Step 6b, `/rota-review --queue`, `/rota-work` gate step |
 | `debug-reset` | `rota debug reset <ID> --reason <why>` (starts an item's failed-fix count again after the Iron Law halted it) | `/rota-debug` Step 9.5 |
 
-The verb exits 4 with `data.blockedBy: "manual gate"` and `data.gate` unless it gets `--confirm --confirm-note "<answer>"`, at every autonomy level. `merge-approval` adds `data.paths`, the changed files that matched (`worker gate` reports `data.verdict: "approval-required"`). A cleared gate appends one line to `.rota/gate-audit.jsonl` (gitignored): gate, verb, target, time, the quoted answer and the autonomy level.
+At every autonomy level the verb exits 4 with `data.blockedBy: "manual gate"` and `data.gate` unless it gets `--confirm --confirm-note "<answer>"`. `merge-approval` adds `data.paths`, the changed files that matched (`worker gate` reports `data.verdict: "approval-required"`). A cleared gate appends one line to `.rota/gate-audit.jsonl` (gitignored): gate, verb, target, time, the quoted answer and the autonomy level.
 
 The skill's side:
 
@@ -24,13 +24,13 @@ The skill's side:
 
 ### Merge approval in an unattended round
 
-When nobody is at the prompt (an orchestrator driving herdr workers), `merge-approval` goes through the escalation channel instead of `AskUserQuestion`. `rota worker gate` and `rota ship pr-merge` take `--escalate`: on the refusal they post the approval request on the PR thread (or the slot's issue) with `rota round escalate send`, and `data.escalation.id` names it; a pending request on that thread is reused, never posted twice. Note the id against the slot, keep working other slots, and poll with `rota round escalate check`. Once it reports `answered`, re-run with `--approval <id>`. The verb itself decides whether the reply approves (first word `approve`, `approved`, `yes`, `lgtm`, or `ship it`) and audits the reply verbatim. Exit 4 `approval declined` means the human held the merge: surface `data.answer` and hold the slot, never retry. Exit 4 `approval pending` means `check` has not seen an answer yet. `rota ship merge` has no thread and keeps the `--confirm` path.
+When nobody is at the prompt (an orchestrator driving herdr workers), `merge-approval` goes through the escalation channel instead of `AskUserQuestion`. `rota worker gate` and `rota ship pr-merge` take `--escalate`: on the refusal they post the approval request on the PR thread (or the slot's issue) with `rota round escalate send`, and `data.escalation.id` names it; a pending request on that thread is reused, never posted twice. Note the id against the slot, work other slots, and poll with `rota round escalate check`. Once it reports `answered`, re-run with `--approval <id>`. The verb itself decides whether the reply approves (first word `approve`, `approved`, `yes`, `lgtm`, or `ship it`) and audits the reply verbatim. Exit 4 `approval declined` means the human held the merge: surface `data.answer` and hold the slot, never retry. Exit 4 `approval pending` means `check` has not seen an answer yet. `rota ship merge` has no thread and keeps the `--confirm` path.
 
-Call sites show the flags and the exit-4 handling; they don't restate the rule, which the verb now enforces.
+Call sites show the flags and the exit-4 handling; the verb enforces the rule, so they don't restate it.
 
 ## Skill-only gates: the callout holds the line
 
-Closing upstream issues stays out of code (maintainer ruling, B1), and some gates have no verb to put the check in. These keep the inline callout immediately before the action, per the authoring convention *"Imperative rules in autonomy-aware steps must live inline at every dispatch point"* (see `references/authoring-conventions.md`, autonomy-rule-must-stay-inline). A reference cite cannot replace it.
+Closing upstream issues stays out of code (maintainer ruling, B1), and some gates have no verb to hold the check. These keep the inline callout immediately before the action, per the authoring convention *"Imperative rules in autonomy-aware steps must live inline at every dispatch point"* (see `references/authoring-conventions.md`, autonomy-rule-must-stay-inline). A reference cite cannot replace it.
 
 The canonical callout shape (block-quote) is:
 
@@ -38,7 +38,7 @@ The canonical callout shape (block-quote) is:
 > **Manual gate — <one-line artifact name>.** <One sentence on what externally-visible state this creates.> This step is **always manual** — never auto-invoked, regardless of `autonomy.level`. <Optional: how prior approval feeds this step.>
 ```
 
-Sites with multi-paragraph prose may use the *inline* form, a `**always manual** — never auto-invoked, regardless of \`autonomy.level\`` sentence embedded in the step's body. Both shapes are accepted; the block-quote is preferred for single-action steps. A prior step may collect the approval (pre-approved elsewhere); the gate at the action site then runs *because of* that approval.
+Sites with multi-paragraph prose may use the *inline* form, a `**always manual** — never auto-invoked, regardless of \`autonomy.level\`` sentence embedded in the step's body. Both shapes are accepted; prefer the block-quote for single-action steps. A prior step may collect the approval; the gate at the action site then runs *because of* it.
 
 | Gate | Skill | Step | Externally-visible state |
 |------|-------|------|--------------------------|
@@ -47,11 +47,11 @@ Sites with multi-paragraph prose may use the *inline* form, a `**always manual**
 | `issue-close` | `/rota-ship` | Step 6c (Direct-push close) | Posts a tracking comment and closes upstream issues after a direct merge. |
 | `issue-close` | `/rota-release` | Step 13 | Closes upstream issues still open for shipped items. |
 
-`/rota-ship` Step 3's *"Ship anyway"* option (in the CONCERNS-routing AskUserQuestion) is manual-shaped too; see `references/review-verdict-routing.md` for why it is never auto-picked. Acceptance of risk is the user's choice.
+`/rota-ship` Step 3's *"Ship anyway"* option (in the CONCERNS-routing AskUserQuestion) is manual-shaped too; `references/review-verdict-routing.md` says why it is never auto-picked.
 
 ## Why not auto-invoke?
 
-Auto mode only chains routing steps that move the work forward without committing to anything irreversible. A manual gate IS the irreversible commit: a public PR, a release tag, a `DECISIONS.md` entry that constrains future code. Auto-picking these would replace the user on questions that need human judgment about reputation, external coordination, or long-term project shape.
+Auto mode only chains routing steps that move work forward without committing to anything irreversible. A manual gate is the irreversible commit: a public PR, a release tag, a `DECISIONS.md` entry that constrains future code. Auto-picking one would answer for the user on questions of reputation, external coordination, or long-term project shape.
 
 The skip-route is configuration. If a project wants concerns ignored on every ship, set `ship.review` to `false`; if it wants no human on merges, leave `ship.mergeApproval` at `none`.
 

@@ -1,6 +1,6 @@
 # Preview mode (`/rota-work --preview <target>`)
 
-Read-only approach peek, then stop. No writes, no commits, no guard, no status registration, no `rota` calls beyond reads. Steps 1–11 of `/rota-work` are bypassed.
+Read-only approach peek, then stop. No writes, commits, guard, status registration or `rota` calls beyond reads. Steps 1–11 of `/rota-work` are bypassed.
 
 The target is a backlog item (`#42`, or `B07`/`F03`/`T11` on the file backend), a plan key (`M01-S01`, `M01-B07`) or a milestone (`M01`). Ambiguous: ask once, don't auto-pick.
 

@@ -1,10 +1,10 @@
 # `/rota-ship` (Docs Mode) scaffold conventions
 
-Used by `/rota-ship` (Docs Mode) Step D4 (Propose Tailored Tree) and Step D5 (Scaffold on Approval). The page-naming convention and the seed `.docsignore` are both consumed by `/rota-ship` (Docs Mode) alone — co-located here so the skill's prose stays focused on the UX flow.
+Used by `/rota-ship` (Docs Mode) Step D4 (Propose Tailored Tree) and Step D5 (Scaffold on Approval). Only `/rota-ship` (Docs Mode) uses the page-naming convention and the seed `.docsignore`; they live here so the skill's prose stays on the UX flow.
 
 ## Page-naming convention
 
-Tailored trees follow this layout — already in use across rota's own `docs/` and reusable for other projects:
+Tailored trees follow this layout, used across rota's own `docs/` and reusable elsewhere:
 
 - **Spine** — top-level pages: `README.md` (TOC), `getting-started.md` (5-minute walkthrough), `faq.md` (common questions, optional).
 - **Phase-grouped usage pages** — `docs/usage/<verb-noun>.md`: examples — `picking-work.md`, `running-work.md`, `pausing-and-resuming.md`, `review-and-ship.md`. The verb-noun shape keeps file names self-documenting and groups related actions.
@@ -38,7 +38,7 @@ build/
 target/
 ```
 
-The seed is conservative — the user extends it for project-specific paths after the scaffold lands. `/rota-ship` (Docs Mode)'s after-work flow (Step D-A2) filters the diff through `.docsignore` before classifying changes.
+The seed is conservative; the user extends it for project-specific paths after the scaffold lands. `/rota-ship` (Docs Mode)'s after-work flow (Step D-A2) filters the diff through `.docsignore` before classifying changes.
 
 ## What this reference does NOT cover
 
