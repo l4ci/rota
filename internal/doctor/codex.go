@@ -11,7 +11,7 @@ import (
 // CodexHome is one slot's CODEX_HOME.
 type CodexHome struct{ Slot, Dir string }
 
-// codex is the E1 check: the Codex CLI is in range and every slot home that
+// codex is the E1 check: the Codex CLI runs and every slot home that
 // exists is logged in (and, under herdr, has the integration). The readiness
 // logic is the harness package's, shared with dispatch; this renders its
 // findings as a report line.
@@ -36,12 +36,13 @@ func (d *runner) codex() Check {
 	v, f := harness.CheckCodexVersion(d.ctx, p, bin, home)
 	switch {
 	case f == nil:
-	case f.Code == harness.VersionOutOfRange:
-		return fail("codex", fmt.Sprintf("codex %s, need %s", v, harness.CodexRange), harness.CodexInstallHint)
 	default:
-		return fail("codex", "codex version unreadable", harness.CodexInstallHint)
+		return fail("codex", "codex not runnable: `codex --version` failed", harness.CodexInstallHint)
 	}
-	head := "codex " + v.String()
+	head := "codex"
+	if v != (harness.CodexVersion{}) {
+		head += " " + v.String()
+	}
 	// The tier map is optional for codex (#68): unset, a worker runs on
 	// Codex's own default model.
 	tiers := ""

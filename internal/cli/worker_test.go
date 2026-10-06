@@ -428,7 +428,25 @@ func TestWorkerSessionEnsureHerdrOutsideCarriesBlockedBy(t *testing.T) {
 
 // useCodex swaps in a host and scripted codex/herdr runners: no real binary is
 // reachable. version is codex's `--version` stdout.
+// codexHelp is the `codex --help` the fake prints: every default launch flag
+// except the one in lacks.
+func codexHelp(lacks string) string {
+	return strings.ReplaceAll(`Usage: codex [OPTIONS]
+
+Options:
+  -m, --model <MODEL>
+      --dangerously-bypass-approvals-and-sandbox
+      --dangerously-bypass-hook-trust
+      --no-daemon
+      --no-alt-screen
+`, lacks+"\n", "\n")
+}
+
 func useCodex(d *Deps, h host.Host, version string, loggedIn bool) {
+	useCodexLacking(d, h, version, loggedIn, "")
+}
+
+func useCodexLacking(d *Deps, h host.Host, version string, loggedIn bool, lacks string) {
 	d.WorkerEnv = func() worker.Env {
 		return worker.Env{
 			NewHost:  func(string) host.Host { return h },
@@ -438,6 +456,8 @@ func useCodex(d *Deps, h host.Host, version string, loggedIn bool) {
 				switch filepath.Base(name) + " " + strings.Join(args, " ") {
 				case "codex --version":
 					return host.Result{Stdout: version}, nil
+				case "codex --help":
+					return host.Result{Stdout: codexHelp(lacks)}, nil
 				case "codex login status":
 					if !loggedIn {
 						return host.Result{ExitCode: 1}, nil
@@ -473,15 +493,17 @@ func TestWorkerDispatchKindFlag(t *testing.T) {
 		t.Errorf("a relay ignores kind and reports none: %s", out)
 	}
 
-	// version refusal: exit 4 with blockedBy, and the flag lets one call through
+	// a newer codex passes; a missing launch flag is exit 4 naming it, and
+	// the deprecated flag warns and changes nothing
 	useCodex(deps, &cliHost{herdr: true, inSession: true}, "codex-cli 0.200.0\n", true)
-	code, out, _ = rotaInWith(t, deps, dir, "worker", "dispatch", "w1", "--body-file", brief, "--task", "T2", "--kind", "codex", "--json")
-	if d := data(t, out); code != 4 || d["blockedBy"] != "codex version" || d["changed"] != false {
-		t.Errorf("version refusal: %d %s", code, out)
+	code, out, stderr := rotaInWith(t, deps, dir, "worker", "dispatch", "w1", "--body-file", brief, "--task", "T2", "--kind", "codex", "--json")
+	if code != 0 || strings.Contains(stderr, "supported range") {
+		t.Errorf("new codex: %d %s %s", code, out, stderr)
 	}
-	code, out, stderr := rotaInWith(t, deps, dir, "worker", "dispatch", "w1", "--body-file", brief, "--task", "T2", "--kind", "codex", "--accept-codex-version", "--json")
-	if code != 0 || !strings.Contains(stderr, "codex 0.200.0 is outside the supported range >=0.159.0 <0.160.0") {
-		t.Errorf("accepted: %d %s %s", code, out, stderr)
+	useCodexLacking(deps, &cliHost{herdr: true, inSession: true}, "codex-cli 0.200.0\n", true, "--no-daemon")
+	code, out, stderr = rotaInWith(t, deps, dir, "worker", "dispatch", "w1", "--body-file", brief, "--task", "T2", "--kind", "codex", "--accept-codex-version", "--json")
+	if d := data(t, out); code != 4 || d["blockedBy"] != "codex flags" || d["changed"] != false || !strings.Contains(stderr, "--no-daemon") || !strings.Contains(stderr, "--accept-codex-version is deprecated") {
+		t.Errorf("flag refusal: %d %s %s", code, out, stderr)
 	}
 
 	// an unlogged slot is exit 5 with the login hint
