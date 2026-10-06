@@ -65,3 +65,32 @@ func TestCodexResume(t *testing.T) {
 		t.Error("an unbalanced quote must be an error")
 	}
 }
+
+func TestPickCodexAccount(t *testing.T) {
+	accts := []HomeAccount{{"a", "/h/a"}, {"", "/h/none"}, {"b", "/h/b"}}
+	for _, c := range []struct {
+		name, current, want string
+		load                map[string]int
+	}{
+		{"first when empty", "", "a", nil},
+		{"least loaded", "", "b", map[string]int{"a": 1}},
+		{"tie goes to config order", "", "a", map[string]int{"a": 1, "b": 1}},
+		{"keeps the current account", "b", "b", map[string]int{"b": 5}},
+		{"a removed account is re-picked", "gone", "a", nil},
+	} {
+		if got, _ := PickCodexAccount(accts, c.current, c.load); got.Name != c.want {
+			t.Errorf("%s: got %q, want %q", c.name, got.Name, c.want)
+		}
+	}
+	if got, ok := PickCodexAccount(nil, "x", nil); ok || got.Home != "" {
+		t.Errorf("no accounts is the default home: %+v %v", got, ok)
+	}
+}
+
+func TestCodexLaunchArgs(t *testing.T) {
+	got := codexLaunchArgs("/wt/ben")
+	want := []string{"-c", `projects."/wt/ben".trust_level="trusted"`, "-c", "check_for_update_on_startup=false"}
+	if strings.Join(got, "\x00") != strings.Join(want, "\x00") {
+		t.Errorf("%q, want %q", got, want)
+	}
+}

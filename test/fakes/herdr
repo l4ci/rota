@@ -17,7 +17,9 @@
 #   tab_stays          `tab get` keeps succeeding after `tab close`
 # `integration status` reports the codex line from $CODEX_HOME/.fake-herdr-codex
 # (present: current, absent: not installed); `integration install codex` writes
-# that file. Both need CODEX_HOME, so a stray call can never touch ~/.codex.
+# that file. With CODEX_HOME unset they use $FAKE_DEFAULT_CODEX_HOME (the
+# stand-in for the default Codex home); with neither set they fail, so a stray
+# call can never touch ~/.codex.
 [ -n "${FAKE_HERDR:-}" ] || { echo "fake herdr: FAKE_HERDR is not set" >&2; exit 98; }
 F="$FAKE_HERDR"
 printf '%s\n' "$*" >>"$F/log"
@@ -56,13 +58,13 @@ case "$1 $2" in
     agent_json agent_prompted working ;;
   "pane process-info") echo '{"id":"cli","result":{"process_info":{"foreground_process_group_id":0,"foreground_processes":[],"pane_id":"w9:p11","shell_pid":0},"type":"process_info"}}' ;;
   "integration status")
-    [ -n "${CODEX_HOME:-}" ] || err codex_home_unset
+    CH="${CODEX_HOME:-${FAKE_DEFAULT_CODEX_HOME:-}}"; [ -n "$CH" ] || err codex_home_unset
     echo "claude: current (v10) (/x/hook.sh)"
-    if [ -f "$CODEX_HOME/.fake-herdr-codex" ]; then echo "codex: current (v8) (/x/codex.sh)"; else echo "codex: not installed (/x/codex.sh)"; fi ;;
+    if [ -f "$CH/.fake-herdr-codex" ]; then echo "codex: current (v8) (/x/codex.sh)"; else echo "codex: not installed (/x/codex.sh)"; fi ;;
   "integration install")
-    [ -n "${CODEX_HOME:-}" ] || err codex_home_unset
+    CH="${CODEX_HOME:-${FAKE_DEFAULT_CODEX_HOME:-}}"; [ -n "$CH" ] || err codex_home_unset
     [ "$3" = "codex" ] || err unknown_method
-    : >"$CODEX_HOME/.fake-herdr-codex"; echo '{"id":"cli","result":{"type":"ok"}}' ;;
+    : >"$CH/.fake-herdr-codex"; echo '{"id":"cli","result":{"type":"ok"}}' ;;
   "notification show") echo '{"id":"cli","result":{"type":"notification_show","shown":true,"reason":"shown"}}' ;;
   *) err unknown_method ;;
 esac

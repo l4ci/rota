@@ -142,7 +142,7 @@ See [../usage/pausing-and-resuming.md](../usage/pausing-and-resuming.md) for the
 
 ### Beside `.rota/`: the lease, session files and keepalive.json
 
-A few round files do not live in `.rota/`. They sit in `<git-common-dir>/rota/` so every worktree of the repo shares them: the round lease (`round-lease.json`), one session file per Claude session (`session/<id>.json`), the keepalive supervisor's state (`keepalive.json`), the usage-limit watcher's marker (`limit-watch.json`) and one `CODEX_HOME` per Codex slot (`codex/<slot>/`). None is tracked and `rota init` adds no ignore line for them. See [architecture](architecture.md#round-state-outside-rota).
+A few round files do not live in `.rota/`. They sit in `<git-common-dir>/rota/` so every worktree of the repo shares them: the round lease (`round-lease.json`), one session file per Claude session (`session/<id>.json`), the keepalive supervisor's state (`keepalive.json`), the usage-limit watcher's marker (`limit-watch.json`) and one state directory per Codex slot (`codex/<slot>/`, its prompt key). None is tracked and `rota init` adds no ignore line for them. See [architecture](architecture.md#round-state-outside-rota).
 
 The orchestrator hooks `rota hook install` writes are not in `.rota/` either: by default they go to `.claude/settings.local.json`, which Claude Code treats as per-developer.
 

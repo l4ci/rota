@@ -31,8 +31,8 @@ const (
 
 const hookTrustFlag = "--dangerously-bypass-hook-trust"
 
-// codex is the Codex CLI. Its account is a CODEX_HOME per slot, and every
-// payload sent to it is signed: Codex follows unsigned text typed into its
+// codex is the Codex CLI. Its account is the default Codex home, or a named
+// home of work.codexAccounts, and every payload sent to it is signed: Codex follows unsigned text typed into its
 // pane, so a UserPromptSubmit hook blocks anything without the signature.
 type codex struct{}
 
@@ -121,8 +121,9 @@ func (codex) SoloRefusal() string {
 
 func (codex) WorkAccounts() bool { return false }
 
-// AccountEnv is the slot's CODEX_HOME; the claude config dir is not its
-// business, and work.accounts is Anthropic's.
+// AccountEnv is the slot's CODEX_HOME, set only for a configured account: the
+// default home is Codex's own. The claude config dir is not its business, and
+// work.accounts is Anthropic's.
 func (codex) AccountEnv(a Account) []string {
 	if a.CodexHome == "" {
 		return nil
@@ -152,17 +153,19 @@ func (c codex) CheckLaunch(launch string) error {
 }
 
 // Prepare adds the prompt-check hook to the launch line and rotates the
-// session's signing key, which lives in the slot's home.
+// session's signing key, which lives in the slot's state directory. Folder
+// trust and the update check ride on the launch line, so no config.toml is
+// written into a Codex home.
 func (c codex) Prepare(launch string, exe func() (string, error), s Setup) (string, []byte, error) {
 	bin, err := exe()
 	if err != nil {
 		return "", nil, refuse(Unavailable, "cannot find the rota binary for the prompt-check hook: %v", err)
 	}
-	keyPath, key, err := newPromptKey(s.Home)
+	keyPath, key, err := newPromptKey(s.StateDir)
 	if err != nil {
-		return "", nil, refuse(Unavailable, "cannot write the prompt key in %s: %v", s.Home, err)
+		return "", nil, refuse(Unavailable, "cannot write the prompt key in %s: %v", s.StateDir, err)
 	}
-	out, err := withPromptHook(launch, CodexHookArgs(bin, keyPath))
+	out, err := withPromptHook(launch, append(codexLaunchArgs(s.Worktree), CodexHookArgs(bin, keyPath)...))
 	if err != nil {
 		return "", nil, refuse(Unavailable, "cannot add the prompt-check hook to %s: %v", c.CommandKey(), err)
 	}
@@ -175,7 +178,7 @@ func (codex) RelayKey(commonDir func() (string, error), slot string) ([]byte, er
 	if err != nil {
 		return nil, err
 	}
-	keyFile := filepath.Join(CodexHome(cd, slot), PromptKeyFile)
+	keyFile := filepath.Join(CodexSlotDir(cd, slot), PromptKeyFile)
 	key, err := LoadPromptKey(keyFile)
 	if err != nil {
 		r := refuse(Unavailable, "slot '%s' is a codex worker but its prompt key is unreadable (%s): %v", slot, keyFile, err)
@@ -188,20 +191,71 @@ func (codex) RelayKey(commonDir func() (string, error), slot string) ([]byte, er
 // Sign ends payload with its ROTA-SIG trailer.
 func (codex) Sign(key []byte, payload string) string { return signPrompt(key, payload) }
 
-// CodexHomesDir is where the slot homes live, beside the round lease, under
-// the git common dir.
-func CodexHomesDir(commonDir string) string { return rotastate.CodexDir(commonDir) }
+// CodexSlotsDir is where the slots' state directories live, beside the round
+// lease, under the git common dir.
+func CodexSlotsDir(commonDir string) string { return rotastate.CodexDir(commonDir) }
 
-// CodexHome is the slot's CODEX_HOME: <git-common-dir>/rota/codex/<slot>. Never
-// ~/.codex, and never inside the worktree, where it would dirty git status.
-func CodexHome(commonDir, slot string) string { return filepath.Join(CodexHomesDir(commonDir), slot) }
+// CodexSlotDir is the slot's own state directory,
+// <git-common-dir>/rota/codex/<slot>. It holds the prompt key and nothing
+// Codex reads: a Codex process never gets it as CODEX_HOME. Never inside the
+// worktree, where it would dirty git status. Directories left by the
+// per-slot homes of earlier releases stay as they are.
+func CodexSlotDir(commonDir, slot string) string {
+	return filepath.Join(CodexSlotsDir(commonDir), slot)
+}
+
+// codexLaunchArgs are the codex flags that keep a dialog out of an unattended
+// pane without writing to a Codex home: the slot's worktree trusted, and no
+// update check.
+func codexLaunchArgs(worktree string) []string {
+	var out []string
+	if worktree != "" {
+		if abs, err := filepath.Abs(worktree); err == nil {
+			worktree = abs
+		}
+		out = append(out, "-c", "projects."+tomlString(worktree)+".trust_level=\"trusted\"")
+	}
+	return append(out, "-c", "check_for_update_on_startup=false")
+}
+
+// PickCodexAccount is the configured account a slot runs under: the one it
+// ran under last while that is still configured, else the one holding the
+// fewest other slots (ties in config order). Nothing configured is "": the
+// default Codex home. A nameless account is skipped.
+func PickCodexAccount(accts []HomeAccount, current string, load map[string]int) (HomeAccount, bool) {
+	var best HomeAccount
+	found := false
+	for _, a := range accts {
+		if a.Name == "" {
+			continue
+		}
+		if a.Name == current {
+			return a, true
+		}
+		if !found || load[a.Name] < load[best.Name] {
+			best, found = a, true
+		}
+	}
+	return best, found
+}
+
+// homeEnv is the shell prefix that runs a command in a Codex home: nothing
+// for the default home.
+func homeEnv(dir string) string {
+	if dir == "" {
+		return ""
+	}
+	return "CODEX_HOME=" + dir + " "
+}
 
 // Preflight is everything a codex worker needs before anything is marked or
 // killed, shared by `worker dispatch` and `round assign`: codex installed
 // (Unavailable), its version in range (Refused, blockedBy BlockCodexVersion,
-// unless Accept), the host herdr, the slot home created and seeded, herdr's
-// codex integration installed there, and the home logged in (Unavailable, hint
-// `CODEX_HOME=<home> codex login`). It never writes auth.json.
+// unless Accept), the host herdr, the account's home (the default Codex home,
+// or a configured account's) with herdr's codex integration installed and
+// logged in (Unavailable, hint `[CODEX_HOME=<home> ]codex login`), and the
+// slot's state directory. It never writes into a Codex home beyond herdr's own
+// integration install, and never touches auth.json.
 func (c codex) Preflight(ctx context.Context, p Probe, o PreflightOpts) (Setup, error) {
 	var set Setup
 	bin, ok := p.Look("codex")
@@ -220,13 +274,24 @@ func (c codex) Preflight(ctx context.Context, p Probe, o PreflightOpts) (Setup, 
 	if err != nil {
 		return set, err
 	}
-	home := CodexHome(cd, o.Slot)
-	set.Home = home
+	set.StateDir = CodexSlotDir(cd, o.Slot)
+	set.Worktree = o.Worktree
+	if o.Worktree == "" {
+		return set, refuse(Resolution, "slot '%s' has no worktree to trust", o.Slot)
+	}
+	acct, _ := PickCodexAccount(o.Accounts, o.Account, o.Load)
+	home := acct.Home
+	if acct.Name != "" && home == "" {
+		return set, refuse(Usage, "work.codexAccounts account '%s' has no codexHome", acct.Name)
+	}
+	set.Home, set.Account = home, acct.Name
+	who := "Codex"
+	if acct.Name != "" {
+		who = fmt.Sprintf("Codex account '%s' (CODEX_HOME=%s)", acct.Name, home)
+	}
 
-	// The home exists before the first codex call, so even --version runs
-	// under it and never under ~/.codex.
-	if err := os.MkdirAll(home, 0o700); err != nil {
-		return set, refuse(Unavailable, "cannot create the codex home %s: %v", home, err)
+	if err := os.MkdirAll(set.StateDir, 0o700); err != nil {
+		return set, refuse(Unavailable, "cannot create the slot state directory %s: %v", set.StateDir, err)
 	}
 	v, f := CheckCodexVersion(ctx, p, bin, home)
 	if f == nil {
@@ -248,58 +313,32 @@ func (c codex) Preflight(ctx context.Context, p Probe, o PreflightOpts) (Setup, 
 		set.Warnings = append(set.Warnings, "prompt check unverified on this Codex: an older version may ignore -c features.hooks=true, so unsigned pane text could reach the worker")
 	}
 
-	if err := ensureCodexHome(o.Slot, home, o.Worktree); err != nil {
-		return set, err
-	}
-	for _, f := range CheckCodexHome(ctx, p, bin, herdr, Home{Slot: o.Slot, Dir: home}) {
+	for _, f := range CheckCodexHome(ctx, p, bin, herdr, Home{Slot: acct.Name, Dir: home}) {
 		switch f.Code {
 		case IntegrationUnrunnable:
 			return set, refuse(Unavailable, "herdr integration status could not run: %v", f.Err)
 		case IntegrationStale:
-			henv := []string{"CODEX_HOME=" + home}
+			var henv []string
+			if home != "" {
+				henv = []string{"CODEX_HOME=" + home}
+			}
 			in, err := p.Run(ctx, herdr, []string{"integration", "install", "codex"}, henv)
 			if err != nil || in.ExitCode != 0 {
 				msg := strings.TrimSpace(in.Stderr)
 				if err != nil {
 					msg = err.Error()
 				}
-				x := refuse(Unavailable, "herdr integration install codex failed for slot '%s': %s", o.Slot, msg)
-				x.Hint = "CODEX_HOME=" + home + " herdr integration install codex"
+				x := refuse(Unavailable, "herdr integration install codex failed for %s: %s", who, msg)
+				x.Hint = homeEnv(home) + "herdr integration install codex"
 				return set, x
 			}
 		case NotLoggedIn:
-			x := refuse(Unavailable, "slot '%s' is not logged in to Codex (CODEX_HOME=%s)", o.Slot, home)
-			x.Hint = "CODEX_HOME=" + home + " codex login"
+			x := refuse(Unavailable, "%s is not logged in", who)
+			x.Hint = homeEnv(home) + "codex login"
 			return set, x
 		}
 	}
 	return set, nil
-}
-
-// ensureCodexHome creates the slot home (0700) and, only when config.toml is
-// absent, seeds it so no dialog opens in an unattended pane: no update check,
-// and the slot's worktree trusted. An existing config.toml is never touched.
-func ensureCodexHome(slot, home, worktree string) error {
-	if err := os.MkdirAll(home, 0o700); err != nil {
-		return refuse(Unavailable, "cannot create the codex home %s: %v", home, err)
-	}
-	cfgPath := filepath.Join(home, "config.toml")
-	if _, err := os.Stat(cfgPath); err == nil {
-		return nil
-	} else if !os.IsNotExist(err) {
-		return refuse(Unavailable, "cannot read %s: %v", cfgPath, err)
-	}
-	if worktree == "" {
-		return refuse(Resolution, "slot '%s' has no worktree to trust", slot)
-	}
-	if abs, err := filepath.Abs(worktree); err == nil {
-		worktree = abs
-	}
-	body := "check_for_update_on_startup = false\n\n[projects." + tomlString(worktree) + "]\ntrust_level = \"trusted\"\n"
-	if err := os.WriteFile(cfgPath, []byte(body), 0o600); err != nil {
-		return refuse(Unavailable, "cannot write %s: %v", cfgPath, err)
-	}
-	return nil
 }
 
 // The orchestrator facet: codex takes a `$skill` mention.

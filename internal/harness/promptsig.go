@@ -22,7 +22,7 @@ import (
 // with an HMAC trailer, and a Codex UserPromptSubmit hook (`rota worker
 // prompt-check`) blocks anything else before it reaches the model.
 
-// PromptKeyFile is the per-slot key, kept in the slot's codex home.
+// PromptKeyFile is the per-slot key, kept in the slot's state directory.
 const PromptKeyFile = "rota-prompt.key"
 
 var (
