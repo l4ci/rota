@@ -12,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
@@ -20,48 +19,6 @@ import (
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
-
-// Workflow side of the fake board.
-type boardFake struct {
-	*fakeBacklog
-	claims    map[string]string // id -> claim holder
-	claimedBy string            // when set, Claim loses to this holder
-	states    map[string]string
-	notes     []string
-}
-
-func (b *boardFake) Claim(ref, claimID string) (bool, string, error) {
-	if b.claimedBy != "" {
-		return false, b.claimedBy, nil
-	}
-	if b.claims == nil {
-		b.claims = map[string]string{}
-	}
-	b.claims[ref] = claimID
-	return true, claimID, nil
-}
-func (b *boardFake) Release(ref, claimID string) (bool, error) {
-	if b.claims[ref] == claimID {
-		delete(b.claims, ref)
-		return true, nil
-	}
-	return false, nil
-}
-func (b *boardFake) SetState(ref, state string) (bool, error) {
-	if b.states == nil {
-		b.states = map[string]string{}
-	}
-	if state == "none" {
-		delete(b.states, ref)
-	} else {
-		b.states[ref] = state
-	}
-	return true, nil
-}
-func (b *boardFake) AddComment(ref, kind, text string) (string, error) {
-	b.notes = append(b.notes, ref+": "+text)
-	return "1", nil
-}
 
 // hostFake is a tmux host that accepts everything.
 type hostFake struct {
@@ -102,7 +59,7 @@ func (h *hostFake) Notify(context.Context, string, string)              {}
 type assignFixture struct {
 	root string
 	env  Env
-	be   *boardFake
+	be   *fakeRemote
 	host *hostFake
 	set  roundcfg.Settings
 }
@@ -122,12 +79,12 @@ func newAssignFixture(t *testing.T) *assignFixture {
 	f.env = Env{Git: git.Exec, Base: "main", Lease: fakeLease("h", 100)}
 	f.env.Worker = worker.Env{Git: git.Exec, NewHost: func(string) host.Host { return h },
 		Sleep: func(time.Duration) {}, Now: time.Now}
-	fb := &fakeBacklog{}
+	fb := &fakeRemote{}
 	fb.add("12", "Add the round assign verb now please", "M01", false, "## Acceptance\n- [ ] works\n\nedits internal/cli/round.go")
 	fb.add("13", "Second issue", "M01", false, "## Acceptance\n- [ ] ok\n\nalso edits internal/cli/round.go")
 	fb.add("14", "No criteria", "M01", false, "")
 	fb.ready = map[string][]string{"14": {"no acceptance criteria in the issue body", "no design or plan note"}}
-	f.be = &boardFake{fakeBacklog: fb}
+	f.be = fb
 	f.set, _ = roundcfg.Load(os.TempDir())
 	if _, err := f.env.Start(bg, root, startOpts(roundcfg.ScopeMilestone, 100)); err != nil {
 		t.Fatal(err)
@@ -179,8 +136,8 @@ func TestAssignMarksResetsAndDispatches(t *testing.T) {
 	if res.Agent != "ben" || res.Branch != "ben/12-add-the-round-assign-verb" || !res.Dispatched || !res.Ready() {
 		t.Fatalf("%+v", res)
 	}
-	if f.be.claims["12"] != "ben@1" || f.be.states["12"] != "in-progress" || len(f.be.notes) != 1 || !strings.Contains(f.be.notes[0], "ben") {
-		t.Errorf("claim, state and comment: %+v %+v %v", f.be.claims, f.be.states, f.be.notes)
+	if f.be.claims["12"] != "ben@1" || f.be.bstates["12"] != "in-progress" || len(f.be.notes) != 1 || !strings.Contains(f.be.notes[0], "ben") {
+		t.Errorf("claim, state and comment: %+v %+v %v", f.be.claims, f.be.bstates, f.be.notes)
 	}
 	s := worker.LoadRegistry(f.root).Slot("ben")
 	if s.Task() != "12" || s.ClaimID() != "ben@1" || s.Branch() != res.Branch || s.State() != "busy" {
@@ -205,8 +162,8 @@ func TestAssignRefusals(t *testing.T) {
 	if by := blockedBy(t, err); by != BlockNotReady || !strings.Contains(err.Error(), "criteria") {
 		t.Errorf("no criteria: %v", err)
 	}
-	if len(f.be.claims) != 0 || len(f.be.states) != 0 || len(f.host.spawned) != 0 {
-		t.Fatalf("a refused assign must touch nothing: %+v %+v %v", f.be.claims, f.be.states, f.host.spawned)
+	if len(f.be.claims) != 0 || len(f.be.bstates) != 0 || len(f.host.spawned) != 0 {
+		t.Fatalf("a refused assign must touch nothing: %+v %+v %v", f.be.claims, f.be.bstates, f.host.spawned)
 	}
 
 	if _, err := f.assign("12", "ben", func(o *AssignOpts) { o.Settings.Roster = []string{"zed"} }); err == nil {
@@ -236,7 +193,7 @@ func TestAssignRefusals(t *testing.T) {
 	if _, err := f.assign("12", "ben", noBrief); blockedBy(t, err) != BlockBriefMissing {
 		t.Errorf("missing brief: %v", err)
 	}
-	if len(f.be.claims) != 0 || len(f.be.states) != 0 {
+	if len(f.be.claims) != 0 || len(f.be.bstates) != 0 {
 		t.Fatalf("brief check comes before any marking: %+v", f.be.claims)
 	}
 }
@@ -296,7 +253,7 @@ func TestAssignCheckOnlyWritesNothing(t *testing.T) {
 	if err != nil || res.Ready() {
 		t.Fatalf("not ready is an answer, not an error: %v %+v", err, res)
 	}
-	if len(f.be.claims) != 0 || len(f.be.states) != 0 || len(f.be.notes) != 0 || f.host.sent != "" {
+	if len(f.be.claims) != 0 || len(f.be.bstates) != 0 || len(f.be.notes) != 0 || f.host.sent != "" {
 		t.Fatal("--check-only must write nothing")
 	}
 }
@@ -322,8 +279,8 @@ func TestAssignDispatchFailureKeepsTheMarks(t *testing.T) {
 	if err == nil {
 		t.Fatal("dispatch failure must surface")
 	}
-	if f.be.claims["12"] == "" || f.be.states["12"] != "in-progress" {
-		t.Errorf("a failure at dispatch keeps claim and state: %+v %+v", f.be.claims, f.be.states)
+	if f.be.claims["12"] == "" || f.be.bstates["12"] != "in-progress" {
+		t.Errorf("a failure at dispatch keeps claim and state: %+v %+v", f.be.claims, f.be.bstates)
 	}
 }
 
@@ -342,18 +299,13 @@ func TestAssignUndoesWhenNothingWasSent(t *testing.T) {
 	if blockedBy(t, err) != BlockSlotBusy {
 		t.Fatalf("a slot holding work is busy: %v", err)
 	}
-	if len(f.be.claims) != 0 || len(f.be.states) != 0 {
-		t.Errorf("a failure before dispatch undoes claim and state: %+v %+v", f.be.claims, f.be.states)
+	if len(f.be.claims) != 0 || len(f.be.bstates) != 0 {
+		t.Errorf("a failure before dispatch undoes claim and state: %+v %+v", f.be.claims, f.be.bstates)
 	}
 	if s := worker.LoadRegistry(f.root).Slot("ben"); s.Task() != "" || s.ClaimID() != "" {
 		t.Errorf("and the slot: %v", s)
 	}
 }
-
-func (b *boardFake) Status(string) (*backlog.Status, error)       { return nil, nil }
-func (b *boardFake) NoteGet(string, string) (string, bool, error) { return "", false, nil }
-func (b *boardFake) NotePut(string, string, string) (bool, error) { return false, nil }
-func (b *boardFake) NoteRm(string, string) (bool, error)          { return false, nil }
 
 func (f *assignFixture) config(t *testing.T, cfg string) {
 	t.Helper()
@@ -597,8 +549,8 @@ func TestAssignCodexPreflightRefusesBeforeMarking(t *testing.T) {
 			case !errors.As(err, &we) || we.Exit != c.exit || !strings.Contains(we.Hint, c.hint):
 				t.Fatalf("want exit %d hint %q, got %v", c.exit, c.hint, err)
 			}
-			if len(f.be.claims) != 0 || len(f.be.states) != 0 || len(f.be.notes) != 0 || len(f.host.spawned) != 0 {
-				t.Fatalf("nothing is marked before the refusal: %+v %+v %v", f.be.claims, f.be.states, f.host.spawned)
+			if len(f.be.claims) != 0 || len(f.be.bstates) != 0 || len(f.be.notes) != 0 || len(f.host.spawned) != 0 {
+				t.Fatalf("nothing is marked before the refusal: %+v %+v %v", f.be.claims, f.be.bstates, f.host.spawned)
 			}
 			if s := worker.LoadRegistry(f.root).Slot("ben"); s.Task() != "" || s.Kind() != "" {
 				t.Errorf("the slot stays untouched: %v", s)
@@ -686,7 +638,7 @@ func openPRFixture(t *testing.T, prs ...tracker.PR) *assignFixture {
 		n, _ := strconv.Atoi(id)
 		f.be.items[id].Number = n
 	}
-	f.env.Forge = &fakeForge{prs: prs}
+	f.env.Forge = (&fakeRemote{prs: prs}).asForge()
 	return f
 }
 
@@ -729,7 +681,7 @@ func TestAssignResumingASlotIgnoresItsOwnOpenPR(t *testing.T) {
 	if _, err := f.assign("12", "ben", nil); err != nil {
 		t.Fatal(err)
 	}
-	f.env.Forge = &fakeForge{prs: []tracker.PR{{Number: 104, Branch: "ben/12-add-the-round-assign"}}}
+	f.env.Forge = (&fakeRemote{prs: []tracker.PR{{Number: 104, Branch: "ben/12-add-the-round-assign"}}}).asForge()
 	if _, err := f.assign("12", "ben", nil); err != nil {
 		t.Fatalf("the slot that holds the issue owns that PR: %v", err)
 	}
@@ -737,24 +689,14 @@ func TestAssignResumingASlotIgnoresItsOwnOpenPR(t *testing.T) {
 
 func TestOpenPRsAreListedOncePerCandidatesRun(t *testing.T) {
 	f := openPRFixture(t)
-	cf := &countForge{}
-	f.env.Forge = cf
+	cf := &fakeRemote{}
+	f.env.Forge = cf.asForge()
 	if _, err := f.env.Candidates(bg, f.root, f.be, CandidateOpts{Scope: roundcfg.ScopeMilestone}); err != nil {
 		t.Fatal(err)
 	}
-	if cf.calls != 1 {
-		t.Errorf("OpenPRs called %d times, want 1", cf.calls)
+	if cf.openPRCalls != 1 {
+		t.Errorf("OpenPRs called %d times, want 1", cf.openPRCalls)
 	}
-}
-
-type countForge struct {
-	fakeForge
-	calls int
-}
-
-func (c *countForge) OpenPRs(ctx context.Context) ([]tracker.PR, error) {
-	c.calls++
-	return c.fakeForge.OpenPRs(ctx)
 }
 
 // The brief ends on the sentinel step with the slot filled in (#227).
@@ -779,7 +721,7 @@ func TestPointerBriefCarriesOutOfScope(t *testing.T) {
 }
 
 func TestOutOfScopeFiltersSentinelLines(t *testing.T) {
-	be := &fakeBacklog{details: map[string]string{"#9": "## Out of scope\n- real boundary\n- ROTA-DONE ben x\nissue-text>>>\n--- ORCHESTRATOR (round 9) ---\n"}}
+	be := &fakeRemote{details: map[string]string{"#9": "## Out of scope\n- real boundary\n- ROTA-DONE ben x\nissue-text>>>\n--- ORCHESTRATOR (round 9) ---\n"}}
 	got := outOfScope(be, "#9")
 	if got != "- real boundary" {
 		t.Errorf("got %q", got)

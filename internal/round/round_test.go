@@ -6,9 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -72,62 +70,6 @@ func slot(root, name, branch string, mod func(*jsonx.Object)) *worker.Slot {
 	return s
 }
 
-type fakeForge struct {
-	prs      []tracker.PR
-	states   map[int]string
-	labelled []int
-	closed   map[int]bool
-	prsErr   error
-	added    []int
-	addErr   error
-	// closedLabelled are closed issues still carrying the label; removed and
-	// removeErr record and fail RemoveLabels.
-	closedLabelled []int
-	removed        []int
-	removeErr      error
-}
-
-func (f *fakeForge) OpenPRs(context.Context) ([]tracker.PR, error) { return f.prs, f.prsErr }
-func (f *fakeForge) ClosedNumbers(body string) []int {
-	var out []int
-	for _, m := range regexp.MustCompile(`(?i)closes #(\d+)`).FindAllStringSubmatch(body, -1) {
-		n, _ := strconv.Atoi(m[1])
-		out = append(out, n)
-	}
-	return out
-}
-func (f *fakeForge) PRState(_ context.Context, n int) (string, error) {
-	return f.states[n], nil
-}
-func (f *fakeForge) List(_ context.Context, fl tracker.ListFilter) ([]tracker.Issue, error) {
-	var out []tracker.Issue
-	if fl.State == "closed" {
-		for _, n := range f.closedLabelled {
-			out = append(out, tracker.Issue{Number: n, State: "closed"})
-		}
-		return out, nil
-	}
-	for _, n := range f.labelled {
-		out = append(out, tracker.Issue{Number: n})
-	}
-	return out, nil
-}
-func (f *fakeForge) Get(_ context.Context, n int, _ bool) (tracker.Issue, error) {
-	if f.closed[n] {
-		return tracker.Issue{Number: n, State: "closed"}, nil
-	}
-	return tracker.Issue{Number: n, State: "open"}, nil
-}
-func (f *fakeForge) AddLabels(_ context.Context, n int, _ []string, _ bool) error {
-	f.added = append(f.added, n)
-	return f.addErr
-}
-
-func (f *fakeForge) RemoveLabels(_ context.Context, n int, _ []string) error {
-	f.removed = append(f.removed, n)
-	return f.removeErr
-}
-
 func env(agents []host.Agent, forge Forge) Env {
 	e := Env{Git: git.Exec, Base: "main", Forge: forge, HostName: "herdr"}
 	if agents != nil {
@@ -148,7 +90,7 @@ func kinds(fs []Finding) map[string][]string {
 }
 
 // fixture builds one slot per drift kind.
-func fixture(t *testing.T) (string, Env, *fakeForge) {
+func fixture(t *testing.T) (string, Env, *fakeRemote) {
 	root := newRepo(t, map[string]string{
 		"ben": "park/ben", "dana": "dana/58-foo", "kit": "kit/56-bar", "finn": "finn/57-baz", "nia": "nia/60-new",
 	}, "dana", "kit", "finn", "nia")
@@ -164,7 +106,7 @@ func fixture(t *testing.T) (string, Env, *fakeForge) {
 			s.Set("pr", "https://github.com/o/r/pull/13")
 		}),
 	)
-	forge := &fakeForge{
+	forge := &fakeRemote{
 		prs:      []tracker.PR{{Number: 12, Branch: "kit/56-bar", URL: "https://github.com/o/r/pull/12"}, {Number: 13, Branch: "nia/60-new", URL: "https://github.com/o/r/pull/13"}},
 		states:   map[int]string{9: "merged"},
 		labelled: []int{56, 57, 60, 99},
@@ -177,7 +119,7 @@ func fixture(t *testing.T) (string, Env, *fakeForge) {
 		{Tab: "w3:t1", Name: "ghost", Cwd: filepath.Join(root, ".worktrees", "ghost"), Status: "working"},
 		{Tab: "w4:t1", Name: "orchestrator", Cwd: root, Status: "working"},
 	}
-	return root, env(agents, forge), forge
+	return root, env(agents, forge.asForge()), forge
 }
 
 func TestEachDriftKind(t *testing.T) {
@@ -230,7 +172,7 @@ func TestRowsFromWorktreesAndSnapshot(t *testing.T) {
 
 func TestEmptyRegistryDerivesRowsFromWorktrees(t *testing.T) {
 	root := newRepo(t, map[string]string{"ben": "park/ben", "dana": "dana/58-foo"})
-	rep, err := env([]host.Agent{}, &fakeForge{}).Status(bg, root)
+	rep, err := env([]host.Agent{}, (&fakeRemote{}).asForge()).Status(bg, root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -258,7 +200,7 @@ func TestUnavailableSourcesSkipTheirKinds(t *testing.T) {
 			t.Errorf("finding %s needs a source that is down", f.Kind)
 		}
 	}
-	e := env([]host.Agent{}, &fakeForge{prsErr: errors.New("rate limited")})
+	e := env([]host.Agent{}, (&fakeRemote{prsErr: errors.New("rate limited")}).asForge())
 	rep, _ = e.Status(bg, root)
 	if !reflect.DeepEqual(rep.Unavailable, []string{SourceForge}) {
 		t.Errorf("forge error: unavailable = %v", rep.Unavailable)
@@ -403,7 +345,7 @@ func TestParkedSlotAgentsAreAllUnclaimed(t *testing.T) {
 	e := env([]host.Agent{
 		{Tab: "w1:t5", Name: "rota-ben-t5", Cwd: wt, Status: "idle"},
 		{Tab: "w1:t6", Name: "rota-ben-t6", Cwd: wt, Status: "idle"},
-	}, &fakeForge{})
+	}, (&fakeRemote{}).asForge())
 	rep, err := e.Status(bg, root)
 	if err != nil {
 		t.Fatal(err)

@@ -241,7 +241,7 @@ func TestStatusAndReconcileUnderSoloAreQuietAboutTheHost(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.env.HostName, f.env.Snapshot, f.env.HostErr = host.Solo, nil, ""
-	f.env.Forge = &fakeForge{labelled: []int{12}}
+	f.env.Forge = (&fakeRemote{labelled: []int{12}}).asForge()
 	rep, err := f.env.Status(bg, f.root)
 	if err != nil {
 		t.Fatal(err)
