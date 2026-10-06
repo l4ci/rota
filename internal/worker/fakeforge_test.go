@@ -143,3 +143,33 @@ func (f *fakeForge) PRRequestMerge(_ context.Context, pr int, o tracker.MergeOpt
 	w.forge("state", "MERGED")
 	return nil
 }
+
+// CommitChecks reports one check, "ci/test", on a commit pushed to the
+// origin's rota/ci/* branches: failure when its tree holds the file named by
+// "ciFail", else success. "ci" overrides it: none (CI never started) or
+// pending (still running). A commit not pushed there has no checks.
+func (f *fakeForge) CommitChecks(_ context.Context, sha string) ([]tracker.CheckRun, error) {
+	f.logf("CommitChecks %s", sha[:7])
+	w := f.w
+	switch w.forgeWord("ci") {
+	case "none":
+		return nil, nil
+	case "pending":
+		return []tracker.CheckRun{{Name: "ci/test", State: tracker.CheckPending}}, nil
+	}
+	g := func(args ...string) (string, error) {
+		out, err := exec.Command("git", append([]string{"-C", w.origin}, args...)...).Output()
+		return strings.TrimSpace(string(out)), err
+	}
+	refs, _ := g("for-each-ref", "--format=%(objectname)", "refs/heads/rota/ci/")
+	if !slices.Contains(strings.Fields(refs), sha) {
+		return nil, nil
+	}
+	state := tracker.CheckSuccess
+	if bad := w.forgeWord("ciFail"); bad != "" {
+		if _, err := g("cat-file", "-e", sha+":"+bad); err == nil {
+			state = tracker.CheckFailure
+		}
+	}
+	return []tracker.CheckRun{{Name: "ci/test", State: state, URL: "https://ci.example/" + sha[:7]}}, nil
+}

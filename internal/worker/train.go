@@ -132,6 +132,13 @@ func (e Env) Train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 		res.Members = append(res.Members, TrainMember{Target: t, Branch: gr.Branch, PR: gr.PR})
 		remote = remote || gr.PR != ""
 	}
+	verify, brokeMsg, err := e.fullTier(ctx, root, "train")
+	if err != nil {
+		return res, err
+	}
+	if brokeMsg != "" {
+		return e.trainBroke(res, brokeMsg)
+	}
 	baseRef := o.Base
 	if remote {
 		baseRef = "origin/" + o.Base
@@ -226,15 +233,18 @@ func (e Env) Train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 	// 4. Verify once.
 	n := len(res.Members)
 	passing := n
-	vr, err := e.Verify(ctx, root, scratch)
+	vr, err := verify(scratch)
 	if err != nil {
-		return res, err
+		return e.trainBroke(res, err.Error())
+	}
+	if r, done := trainStopped(res, vr); done {
+		return r, nil
 	}
 	if vr.NoCommands {
 		res.Notes = append(res.Notes, "NO-VERIFY train — test.full is empty; the merged tree was NOT gated by a command.",
 			"set test.full via rota config set to make this gate real")
 	} else {
-		failLog := vr.LogPath
+		failed := vr // the run whose output names the culprit
 		res.Verified = vr.Verified
 		for _, c := range vr.Failed {
 			res.Notes = append(res.Notes, "verify FAILED: "+c)
@@ -247,30 +257,38 @@ func (e Env) Train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 				if _, code := e.git(scratch, "checkout", "-q", "--detach", tips[mid]); code != 0 {
 					return e.trainBroke(res, "git checkout "+tips[mid]+" failed in the scratch tree")
 				}
-				pr, err := e.Verify(ctx, root, scratch)
+				pr, err := verify(scratch)
 				if err != nil {
-					return res, err
+					return e.trainBroke(res, err.Error())
+				}
+				if r, done := trainStopped(res, pr); done {
+					os.Remove(failed.LogPath)
+					return r, nil
 				}
 				if pr.OK() {
 					lo = mid
 				} else {
-					os.Remove(failLog)
-					failLog, hi = pr.LogPath, mid
+					os.Remove(failed.LogPath)
+					failed, hi = pr, mid
 				}
 			}
 			if lo == 0 { // bisect assumes a green base; the first member only looks guilty on a red one
 				if _, code := e.git(scratch, "checkout", "-q", "--detach", tips[0]); code != 0 {
 					return e.trainBroke(res, "git checkout "+tips[0]+" failed in the scratch tree")
 				}
-				br, err := e.Verify(ctx, root, scratch)
+				br, err := verify(scratch)
 				if err != nil {
-					return res, err
+					return e.trainBroke(res, err.Error())
+				}
+				if r, done := trainStopped(res, br); done {
+					os.Remove(failed.LogPath)
+					return r, nil
 				}
 				if !br.OK() {
-					os.Remove(failLog)
+					os.Remove(failed.LogPath)
 					res.Verdict = GateVerifyFailed
-					res.Err = fmt.Sprintf("TRAIN-FAIL base — %s fails verification on its own, so no member can be blamed\nlast lines of the verify output (full log: %s):\n%s",
-						baseRef, br.LogPath, indentTail(br.Log, 20))
+					res.Err = fmt.Sprintf("TRAIN-FAIL base — %s fails verification on its own, so no member can be blamed\n%s",
+						baseRef, br.detail())
 					res.Hint = fmt.Sprintf("fix %s, then re-run the train", baseRef)
 					return res, nil
 				}
@@ -278,9 +296,8 @@ func (e Env) Train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 			c := res.Members[hi-1]
 			res.Members[hi-1].Culprit = true
 			res.Culprit, res.Verdict = c.Target, GateVerifyFailed
-			b, _ := os.ReadFile(failLog)
-			res.Err = fmt.Sprintf("TRAIN-FAIL %s — the train fails verification once %s (%s) is merged; the first %d member(s) pass\nlast lines of the verify output (full log: %s):\n%s",
-				c.Target, c.Target, c.Branch, lo, failLog, indentTail(string(b), 20))
+			res.Err = fmt.Sprintf("TRAIN-FAIL %s — the train fails verification once %s (%s) is merged; the first %d member(s) pass\n%s",
+				c.Target, c.Target, c.Branch, lo, failed.detail())
 			res.Hint = fmt.Sprintf("send %s back, or run the train without it; it may break only with the member(s) before it", c.Target)
 			if !o.LandGreen || lo == 0 {
 				return res, nil
@@ -359,6 +376,17 @@ func short(sha string) string {
 func (e Env) trainBroke(res TrainResult, msg string) (TrainResult, error) {
 	res.Verdict, res.Err = GateCheckBroke, "CHECK-BROKE train — "+msg
 	return res, nil
+}
+
+// trainStopped ends the train when a CI run gave no answer (ci-not-run,
+// verify-timeout). Nothing has landed at any point it is called.
+func trainStopped(res TrainResult, vr VerifyResult) (TrainResult, bool) {
+	v, msg, hint := vr.stopVerdict("train")
+	if v == "" {
+		return res, false
+	}
+	res.Verdict, res.Err, res.Hint = v, msg, hint
+	return res, true
 }
 
 func (e Env) trainMoved(res TrainResult, culprit, msg string) (TrainResult, error) {
