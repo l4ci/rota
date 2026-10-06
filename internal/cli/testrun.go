@@ -111,7 +111,8 @@ func shellQuote(s string) string {
 }
 
 // changedFiles lists the files that differ between the merge-base of base and
-// HEAD and the working tree (committed and uncommitted changes), minus deleted ones.
+// HEAD and the working tree (committed and uncommitted changes, plus untracked
+// files git does not ignore), minus deleted ones.
 func changedFiles(c *Ctx, root, base string) ([]string, error) {
 	ctx := c.Context()
 	repo := git.Repo{Dir: root}
@@ -139,9 +140,18 @@ func changedFiles(c *Ctx, root, base string) ([]string, error) {
 	if out.ExitCode != 0 {
 		return nil, Failed("git diff failed: %s", strings.TrimSpace(out.Stderr))
 	}
+	untracked, err := repo.Run(ctx, "ls-files", "--others", "--exclude-standard", "-z")
+	if err != nil {
+		return nil, gitErr(err)
+	}
+	if untracked.ExitCode != 0 {
+		return nil, Failed("git ls-files failed: %s", strings.TrimSpace(untracked.Stderr))
+	}
 	var files []string
-	for _, f := range strings.Split(out.Stdout, "\x00") {
-		if f != "" {
+	seen := map[string]bool{}
+	for _, f := range strings.Split(out.Stdout+"\x00"+untracked.Stdout, "\x00") {
+		if f != "" && !seen[f] {
+			seen[f] = true
 			files = append(files, f)
 		}
 	}
