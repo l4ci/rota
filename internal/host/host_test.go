@@ -1122,3 +1122,166 @@ func TestHerdrSweepShells(t *testing.T) {
 		t.Errorf("wrong panes closed:\n%s", log)
 	}
 }
+
+// tmuxDraftSend runs Send against a pane that shows the given prompt line, and
+// reports the error and whether any key reached the pane.
+func tmuxDraftSend(t *testing.T, pane, brief string) (error, *fake, *clock) {
+	t.Helper()
+	file := filepath.Join(t.TempDir(), "p.md")
+	os.WriteFile(file, []byte(brief), 0o644)
+	changed := false
+	f := &fake{handler: func(_ string, a []string) Result {
+		switch a[0] {
+		case "send-keys":
+			changed = true
+		case "capture-pane":
+			if changed {
+				return Result{Stdout: pane + "after"}
+			}
+			return Result{Stdout: pane}
+		}
+		return Result{}
+	}}
+	c := &clock{}
+	return New("tmux", deps(f, nil, c)).Send(bg, "w1", "rota:w1", file), f, c
+}
+
+func TestTmuxSendRefusesAHumanDraft(t *testing.T) {
+	err, f, c := tmuxDraftSend(t, "⏺ done\n❯ half a senten\n", "sig\nthe last line of the brief\n")
+	if err != ErrDraftOnPrompt {
+		t.Fatalf("Send = %v, want ErrDraftOnPrompt", err)
+	}
+	for _, k := range []string{"tmux load-buffer", "tmux paste-buffer", "tmux send-keys"} {
+		if f.count(k) != 0 {
+			t.Errorf("%s ran against a human draft:\n%s", k, f.log())
+		}
+	}
+	if c.slept == 0 {
+		t.Error("Send must wait for the draft to clear before refusing")
+	}
+}
+
+func TestTmuxSendEmptyPromptAndPlaceholders(t *testing.T) {
+	for name, pane := range map[string]string{
+		"empty":        "⏺ done\n❯ \n",
+		"no prompt":    "booting\n",
+		"claude hint":  "❯ Try \"fix lint errors\"\n",
+		"codex hint":   "› Ask Codex to do anything\n",
+		"dialog opt":   "❯ 1. Yes, I trust this folder\n",
+		"boxed empty":  "│ ❯              │\n",
+		"sent in past": "❯ sig\nthe last line of the brief\n⏺ ok\n❯ \n",
+	} {
+		if err, _, _ := tmuxDraftSend(t, pane, "sig\nthe last line of the brief\n"); err != nil {
+			t.Errorf("%s: Send = %v", name, err)
+		}
+	}
+}
+
+func TestTmuxSendDraftClearsWithinTheWait(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "p.md")
+	os.WriteFile(file, []byte("hi"), 0o644)
+	reads, changed := 0, false
+	f := &fake{handler: func(_ string, a []string) Result {
+		switch a[0] {
+		case "send-keys":
+			changed = true
+		case "capture-pane":
+			reads++
+			if changed {
+				return Result{Stdout: "after"}
+			}
+			if reads < 2 {
+				return Result{Stdout: "❯ typing\n"}
+			}
+		}
+		return Result{}
+	}}
+	if err := New("tmux", deps(f, nil, &clock{})).Send(bg, "w1", "rota:w1", file); err != nil {
+		t.Fatalf("Send = %v, want success once the human sent their draft", err)
+	}
+}
+
+// A brief rota itself left on the prompt line is not a human draft.
+func TestTmuxDraftIgnoresRotaBrief(t *testing.T) {
+	brief := "sig\nthe last line of the brief"
+	for name, pane := range map[string]string{
+		"tail":        "❯ sig the last line of the brief\n",
+		"placeholder": "❯ [Pasted text #1 +16 lines]\n",
+	} {
+		f := &fake{handler: func(string, []string) Result { return Result{Stdout: pane} }}
+		file := filepath.Join(t.TempDir(), "p.md")
+		os.WriteFile(file, []byte(brief), 0o644)
+		if d := New("tmux", deps(f, nil, &clock{})).(Drafter).Draft(bg, "w1", "rota:w1", file); d != "" {
+			t.Errorf("%s: Draft = %q, want none", name, d)
+		}
+	}
+	f := &fake{handler: func(string, []string) Result { return Result{Stdout: "❯ my own words\n"} }}
+	file := filepath.Join(t.TempDir(), "p.md")
+	os.WriteFile(file, []byte(brief), 0o644)
+	if d := New("tmux", deps(f, nil, &clock{})).(Drafter).Draft(bg, "w1", "rota:w1", file); d != "my own words" {
+		t.Errorf("Draft = %q", d)
+	}
+}
+
+func TestHerdrSendRefusesAHumanDraft(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "p.md")
+	os.WriteFile(file, []byte("sig\nthe last line of the brief\n"), 0o644)
+	f := &fake{handler: func(_ string, a []string) Result {
+		if a[1] == "read" {
+			return Result{Stdout: "⏺ done\n❯ half a senten\n"}
+		}
+		return Result{Stdout: agentJSON("idle")}
+	}}
+	c := &clock{}
+	err := New("herdr", deps(f, herdrEnv, c)).Send(bg, "w1", "w9:t7", file)
+	if err != ErrDraftOnPrompt {
+		t.Fatalf("Send = %v, want ErrDraftOnPrompt", err)
+	}
+	if f.count("herdr agent prompt") != 0 || f.count("herdr agent send-keys") != 0 {
+		t.Errorf("keys reached the pane:\n%s", f.log())
+	}
+	if c.slept == 0 {
+		t.Error("Send must wait for the draft to clear before refusing")
+	}
+}
+
+func TestHerdrSendPassesEmptyPromptAndRotaBrief(t *testing.T) {
+	brief := "sig\nthe last line of the brief\n"
+	for name, pane := range map[string]string{
+		"empty":       "⏺ done\n❯ \n",
+		"rota brief":  "❯ sig the last line of the brief\n",
+		"placeholder": "❯ [Pasted text #1 +16 lines]\n",
+	} {
+		file := filepath.Join(t.TempDir(), "p.md")
+		os.WriteFile(file, []byte(brief), 0o644)
+		f := &fake{handler: func(_ string, a []string) Result {
+			if a[1] == "read" {
+				return Result{Stdout: pane}
+			}
+			return Result{Stdout: agentJSON("working")}
+		}}
+		if err := New("herdr", deps(f, herdrEnv, &clock{})).Send(bg, "w1", "w9:t7", file); err != nil {
+			t.Errorf("%s: Send = %v", name, err)
+		}
+		if f.count("herdr agent prompt") != 1 {
+			t.Errorf("%s: brief not typed:\n%s", name, f.log())
+		}
+	}
+}
+
+func TestHerdrDraft(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "p.md")
+	os.WriteFile(file, []byte("sig\nthe last line of the brief\n"), 0o644)
+	for pane, want := range map[string]string{
+		"❯ \n":                                          "",
+		"❯ my own words\n":                              "my own words",
+		"❯ sig the last line of the brief\n":            "",
+		"❯ [Pasted text #1 +16 lines]\n":                "",
+		"❯ sig\nthe last line of the brief\n⏺ ok\n❯ \n": "",
+	} {
+		f := &fake{handler: func(string, []string) Result { return Result{Stdout: pane} }}
+		if d := New("herdr", deps(f, herdrEnv, &clock{})).(Drafter).Draft(bg, "w1", "w9:t7", file); d != want {
+			t.Errorf("pane %q: Draft = %q, want %q", pane, d, want)
+		}
+	}
+}

@@ -302,7 +302,8 @@ const submitRetries = 3
 // observed working (or blocked on a dialog), NOT when the task finishes,
 // since a plain --wait would hold until the whole task settled. ErrNotSubmitted
 // means no activity followed the submission; ErrDialogOpen means a dialog was
-// already up and nothing was sent.
+// already up and nothing was sent; ErrDraftOnPrompt means a human draft is on
+// the prompt line and nothing was typed.
 //
 // herdr can type the brief and lose the Enter (#89). A brief left on the
 // prompt line is submitted with bounded Enter retries instead of failing.
@@ -313,6 +314,10 @@ func (h *herdr) Send(ctx context.Context, slot, handle, file string) error {
 	}
 	text = strings.TrimRight(text, "\n") // the shell host read it with $(cat)
 	name := AgentName(slot, handle)
+	// A human typing in the pane would get the brief mixed into their draft.
+	if waitNoDraft(&h.d, func() string { return h.promptPane(ctx, name) }, text) != "" {
+		return ErrDraftOnPrompt
+	}
 	r := h.herdr(ctx, "agent", "prompt", name, text,
 		"--wait", "--until", "working", "--until", "blocked", "--timeout", "60000")
 	if r.ExitCode == 0 {
@@ -353,17 +358,7 @@ var pastePlaceholder = regexp.MustCompile(`\[Pasted text #\d+( \+\d+ lines)?\]`)
 // already sent and never counts. Whitespace is dropped on both sides so soft
 // wraps do not matter.
 func (h *herdr) briefOnPrompt(ctx context.Context, name, text string) bool {
-	tail := ""
-	for _, l := range strings.Split(text, "\n") {
-		if t := squeeze(l); t != "" {
-			tail = t
-		}
-	}
-	if len(tail) > 80 {
-		tail = tail[len(tail)-80:]
-	}
-	pane := paneText(h.herdr(ctx, "agent", "read", name, "--source", "recent-unwrapped",
-		"--lines", "60", "--format", "text"))
+	pane := h.promptPane(ctx, name)
 	i := strings.LastIndex(pane, promptMarker)
 	if i < 0 {
 		return false
@@ -372,7 +367,20 @@ func (h *herdr) briefOnPrompt(ctx context.Context, name, text string) bool {
 	if pastePlaceholder.MatchString(prompt) {
 		return true
 	}
+	tail := briefTail(text)
 	return tail != "" && strings.Contains(squeeze(prompt), tail)
+}
+
+// promptPane is the recent pane text the prompt line is read from.
+func (h *herdr) promptPane(ctx context.Context, name string) string {
+	return paneText(h.herdr(ctx, "agent", "read", name, "--source", "recent-unwrapped",
+		"--lines", "60", "--format", "text"))
+}
+
+// Draft implements Drafter.
+func (h *herdr) Draft(ctx context.Context, slot, handle, file string) string {
+	text, _ := readFile(file)
+	return humanDraft(h.promptPane(ctx, AgentName(slot, handle)), strings.TrimRight(text, "\n"))
 }
 
 const promptMarker = "\u276f"

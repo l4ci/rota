@@ -5,7 +5,7 @@
     "session": "ops"
   },
   "outputs": {
-    "host log": "has-session -t ops\nnew-session -d -s ops -c ROOT -n scratch\nlist-windows -t ops -F #{window_name}\nnew-window -d -t ops -n operator -c ROOT\nsend-keys -t ops:operator claude --continue --model opus --permission-mode auto C-m\ncapture-pane -pJ -t ops:operator\ncapture-pane -pJ -t ops:operator\nload-buffer -b rota-operator TMPFILE\npaste-buffer -b rota-operator -t ops:operator\ndelete-buffer -b rota-operator\nsend-keys -t ops:operator C-m\ncapture-pane -pJ -t ops:operator\n",
+    "host log": "has-session -t ops\nnew-session -d -s ops -c ROOT -n scratch\nlist-windows -t ops -F #{window_name}\nnew-window -d -t ops -n operator -c ROOT\nsend-keys -t ops:operator claude --continue --model opus --permission-mode auto C-m\ncapture-pane -pJ -t ops:operator\ncapture-pane -pJ -t ops:operator\ncapture-pane -pJ -t ops:operator\nload-buffer -b rota-operator TMPFILE\npaste-buffer -b rota-operator -t ops:operator\ndelete-buffer -b rota-operator\nsend-keys -t ops:operator C-m\ncapture-pane -pJ -t ops:operator\n",
     "instruction": "take over\n"
   }
 }

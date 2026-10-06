@@ -347,8 +347,8 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 	}
 	// Log the relay once it was (or may have been) sent. A stall does not prove
 	// the text was lost, and the gate must not call a delivered relay unlogged;
-	// only a refused dialog is certain nothing went out.
-	if o.Relay && !errors.Is(sendErr, host.ErrDialogOpen) {
+	// only a refused dialog or a human draft is certain nothing went out.
+	if o.Relay && !errors.Is(sendErr, host.ErrDialogOpen) && !errors.Is(sendErr, host.ErrDraftOnPrompt) {
 		entry := newRelayEntry(round, e.Now(), string(brief))
 		if _, err := UpdateSlot(root, o.Slot, func(s *Slot) { s.AppendRelay(entry) }); err != nil {
 			return res, err
@@ -359,6 +359,8 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 		return res, nil
 	case errors.Is(sendErr, host.ErrDialogOpen):
 		return res, fail(exitcode.ExitUnavailable, fmt.Sprintf("slot '%s' has a dialog open and refused input — inspect it before resending", o.Slot))
+	case errors.Is(sendErr, host.ErrDraftOnPrompt):
+		return res, fail(exitcode.ExitUnavailable, fmt.Sprintf("slot '%s' has a human draft on its prompt line and nothing was sent — resend once it is submitted or cleared", o.Slot))
 	default:
 		return res, fail(exitcode.ExitRetry, fmt.Sprintf("slot '%s' never picked up the brief — inspect the session before resending", o.Slot))
 	}
