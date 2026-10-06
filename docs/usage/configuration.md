@@ -104,6 +104,14 @@ Related keys: `work.workerSlots` (pool size, default `3`), `work.workerCommand` 
 
 Applies to `/rota-refactor --fix` only; the default findings run files issues and writes no code. When `true` (default), `--fix` confirms the list of candidates before implementing them. Set to `false` to fix without that pause.
 
+## work.tdd: red-first on or off
+
+`true` (default): a behavior change needs a recorded red run, a FAIL proof row from a test that failed on an assertion, before its PASS row. A FAIL whose evidence is a build, compile or setup failure (missing import, typo, undefined symbol) is not a red run; the task gets a fix dispatch. `false`: `/rota-work` Step 7 and the worker contract require no RED row. PASS rows are still recorded.
+
+```bash
+rota config set work.tdd false
+```
+
 ## test.fast, test.full, test.e2e
 
 Three tiers of shell commands, each an array defaulting to `[]`:
