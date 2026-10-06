@@ -13,7 +13,6 @@ An umbrella project hosts shared `.rota/` coordinator state at its root, while g
 - Walk-up convenience
 - Status registration
 - Merge / PR with `--repo`
-- What this reference does NOT cover
 
 ## When umbrella mode is on
 
@@ -76,7 +75,3 @@ echo "<body>"          | rota ship pr    <branch> --title "<title>" --body-file 
 ```
 
 Each operates within the sub-repo's `.git/`. At the umbrella root without `--repo`, both exit 2: the umbrella root has no `.git/` to merge into.
-
-## What this reference does NOT cover
-
-- **`rota-capture`'s `Repos:` tagging interaction.** How items acquire `Repos:` at capture time (cwd inference, AskUserQuestion shape) is per-skill carrier semantics; see `/rota-capture` Step 4.6 inline.

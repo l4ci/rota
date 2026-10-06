@@ -39,9 +39,3 @@ target/
 ```
 
 The seed is conservative; the user extends it for project-specific paths after the scaffold lands. `/rota-ship` (Docs Mode)'s after-work flow (Step D-A2) filters the diff through `.docsignore` before classifying changes.
-
-## What this reference does NOT cover
-
-- **First-run vs. after-work mode selection.** Lives in `rota-ship/docs-mode.md` Step D1 (mode detection branches on `<docs.path>/` state + `docs.afterWork`).
-- **The post-cycle trigger gate.** Lives in `references/post-cycle-trigger-gate.md` — shared with `/rota-work` and `/rota-ship`.
-- **The three-mode skeleton shared with `/rota-qa`.** Lives in `references/three-mode-skill-shape.md` — covers the family-level shape and intentional divergences.

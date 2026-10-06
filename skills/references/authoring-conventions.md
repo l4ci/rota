@@ -4,19 +4,16 @@ Rules for authoring new rota skills or new behavior in existing ones. Consult th
 
 ## Contents
 
-- Skills are self-contained — no shared contract file
-- Imperative rules in autonomy-aware steps must live inline at every dispatch point
+- Skills are self-contained, with autonomy rules inline
 - Don't ask what the code can answer
 - No ceremony: banners, per-site ask fallbacks
 - Open each workflow with a copyable step checklist
-- User-volition gates enforced at exactly one point
 - Stage features across slices using pass-through stubs
 - Helper-centric surface extension
 - Opt-in feature flags default to `false`
 - Descriptions say when to use a skill, not how it works
 - Gates carry a Thought → Reality table
 - References over 100 lines open with a Contents list
-- Dispatch heavy work to subagents
 - Adjective thresholds in skill prose erode at the runtime model — bake the number at authoring time
 - `AskUserQuestion` option list capped at 4
 - Ask in the user's terms, and name the default
@@ -26,19 +23,15 @@ Rules for authoring new rota skills or new behavior in existing ones. Consult th
 - Avoid `&` in `TaskCreate`/`TodoWrite` payloads
 - `/rota-x` and `$rota-x` are the same invocation
 
-## Skills are self-contained — no shared contract file
+## Skills are self-contained, with autonomy rules inline
 
-Each skill owns its rules inline. A "shared contract" file is a smell when every rule has a single owner. Before keeping one, audit the cross-refs: if each rule is already mirrored inline at the call site (autonomy off/auto dispatch, learn trigger thresholds, etc.), the central file is vestigial pointer-chasing. Build a shared file only when N≥3 callers need the same long rule verbatim.
+Each skill owns its rules inline. A shared contract file is a smell when every rule has a single owner: audit the cross-refs, and if each rule is already mirrored at its call site, the central file is vestigial pointer-chasing. Build one only when N≥3 callers need the same long rule verbatim.
 
-## Imperative rules in autonomy-aware steps must live inline at every dispatch point
-
-Steps that branch on `autonomy.level` (off/auto) and dispatch the next skill via `Skill` ("no prompt, no confirmation, no 'want me to' question") must repeat the directive verbatim alongside each `Skill`-tool invocation. Readers don't chase cross-refs, and the harness drifts toward asking when only the rule's name is at the dispatch site. Redundancy is cheaper than scattered authority.
+Steps that branch on `autonomy.level` (off/auto) and dispatch the next skill via `Skill` ("no prompt, no confirmation, no 'want me to' question") repeat that directive verbatim beside each `Skill` invocation. Readers don't chase cross-refs, and the harness drifts toward asking when only the rule's name is at the dispatch site. Redundancy is cheaper than scattered authority.
 
 ## Don't ask what the code can answer
 
 Before a skill calls `AskUserQuestion`, check whether the answer is derivable from the codebase, git history, or `.rota/` state — `grep`, `Read`, `git log`, `BACKLOG.md`, `KNOWLEDGE.md`, `status.json`, helper output. If it is, derive the answer (with a one-line note inline about what was found and where) and skip the question. `AskUserQuestion` is for genuine ambiguity (open requirements, opposing reasonable interpretations, the user's risk tolerance on a destructive op), not a forced-yes ritual confirming state the skill could discover.
-
-Codified from grill-with-docs (2026-05-10): *"If a question can be answered by exploring the codebase, explore the codebase instead."* Companion to the *AskUserQuestion option list capped at 4* rule (`KNOWLEDGE.md`, 2026-05-08) — that one constrains the option list once asking is right; this one constrains whether to ask at all.
 
 ## No ceremony: banners, per-site ask fallbacks
 
@@ -67,10 +60,6 @@ When a skill asks the user a question, ask in prose with the options listed and 
 
 Phase outcomes, where a skill names them, stay mechanically verifiable (a file exists, a command exits 0, a commit landed, a recorded user answer), not subjective states.
 
-## User-volition gates enforced at exactly one point
-
-Manual confirmation gates (`/rota-decide`'s manual-only contract, the acceptance-of-risk gate in `/rota-ship` Step 6a, etc.) must be enforced at exactly ONE point in a skill, never propagated across orchestrator + called skill. The gate is architecture-enforced — only the owning skill can ask the question, and no other skill dispatches the gated skill via `Skill`. Putting a confirmation check in a skill that other skills can invoke breaks the contract under autonomy.
-
 ## Stage features across slices using pass-through stubs
 
 Multi-slice features ship the SHAPE early via pass-through stubs that explicitly name the future-slice wiring point (e.g. *"Layer-1 filter is a pass-through stub; the substantive helper lands in M01-S03"*). This signals what consumers should NOT rely on yet. **Companion rule:** when the milestone flips to `shipped`, sweep all `M0X-S0Y` slice references — they were placeholders and become stale after merge.
@@ -89,7 +78,7 @@ When adding a new boolean config flag whose purpose is to enable additional skil
 - `rota config set` edits the flag explicitly (the flag is never read-only).
 - **Exempt:** standard-on settings with opt-out semantics (e.g. `ship.review: true`) — these are not opt-in flags. Mode switches inside an already-enabled feature (e.g. `docs.autoCreate: false→true`) are also exempt.
 
-Codified after F15 introduced `docs.afterWork`. Without this rule, opt-in flags drift toward auto-flip-on-first-detect, which makes them on-by-default in practice.
+Without this rule, opt-in flags drift toward auto-flip-on-first-detect, which makes them on-by-default in practice.
 
 ## Descriptions say when to use a skill, not how it works
 
@@ -112,44 +101,13 @@ A hard gate (Iron Law, proof, review verdict, manual gate) gets a short two-colu
 
 A reference longer than 100 lines starts with a `## Contents` section, within its first 15 lines, listing its `##` headings. A model that previews a file with a partial read still sees everything the file covers. `test/validate-skills.py` enforces it (`REF_TOC_LINES`); update the list when you add, rename or remove a section.
 
-## Dispatch heavy work to subagents
-
-Skills MUST consult `references/subagent-dispatch.md` for any step involving ≥3 file reads, repeated independent operations on N items, long tool output, or fan-out research. Orchestrator-only work (decisions, user interaction, atomic writes, verification of subagent output) is exempt — it stays on the main thread.
-
-The reference defines the cost/benefit threshold, the small-brief template, the return-shape contract, the subagent tiers (`light` / `standard` / `heavy`) and their model mapping, the parallel fan-out pattern (single-turn dispatch, worktree-isolation cross-cite), and the orchestrator's remaining responsibilities.
-
-**Forbids.** Dispatching for ≤2 small reads, for orchestrator-already-loaded context, for interactive steps, or when the brief would cost more tokens than the work. Cross-worker communication. Returning full transcripts instead of synthesis. Calling out to `superpowers:dispatching-parallel-agents` or other external skills — the rota dispatch discipline is self-contained.
-
-**Permits.** Mixed tiers in a single wave (one `light` subagent alongside three `standard` ones in the same turn). Opportunistic `light` usage declared inline in the brief without a config flag. Per-skill judgment on which steps trip the threshold — the rule sets a floor, not a ceiling.
-
 ## Adjective thresholds in skill prose erode at the runtime model — bake the number at authoring time
 
-Prose like "a few", "many", "high X", "ambiguous", "might/may" forces the runtime LLM to invent a threshold every invocation, and two competent readers can read the same adjective two ways. Before shipping, test each one: if the adjective could plausibly be read in opposite directions by two competent readers, replace it with (a) a number, (b) a conditional (*"when X happens, Y"*), or (c) an assertive verb.
-
-**Forbids.**
-- Shipping prose with vague quantity adjectives (*"a few"*, *"many"*, *"several"*) when a number or conditional would lock the threshold.
-- Shipping prose with vague intensity adjectives (*"high X"*, *"low X"*, *"common"*, *"rare"*) when the threshold matters for the rule's correctness.
-- Hedging verbs (*"might"*, *"may"*, *"could"*) in normative rules where the runtime needs a binary answer.
-
-**Permits.**
-- Adjectives in descriptive prose where no threshold is implied (*"a typical day"*, *"common workflow"*) — flavor doesn't trip the runtime if no rule fires off it.
-- Hedging in genuinely open situations that the rule explicitly flags as a known unknown.
-
-Codified during the T52 sweep across `rota-debug`, `rota-release`, `rota-review`, `rota-spike`, and `references/post-cycle-trigger-gate.md` (six phrases replaced with concrete thresholds).
+Prose like "a few", "many", "high X", "ambiguous", "might/may" forces the runtime LLM to invent a threshold every invocation. Test each one: if two competent readers could read it in opposite directions, replace it with (a) a number, (b) a conditional (*"when X happens, Y"*) or (c) an assertive verb. Normative rules never hedge with "might", "may" or "could" where the runtime needs a binary answer. Descriptive prose where no rule fires off the adjective (*"a typical day"*) and genuinely open situations the rule flags as a known unknown are exempt.
 
 ## `AskUserQuestion` option list capped at 4
 
-`AskUserQuestion`'s option list is hard-capped at 4. Any SKILL.md picklist with N>4 silently degrades to prose (the user has to type names back), defeating the native UX promised in the skill description.
-
-**Forbids.**
-- Designing a question with 5+ options on the assumption the host will scroll — the host won't; the array is rejected and the skill falls back to free text.
-- Compressing categories to fit 4 by merging unrelated answers — the merger destroys the picklist's semantic clarity.
-
-**Permits.**
-- Chunking into multiple sequential `AskUserQuestion` calls with ≤4 options each, `multiSelect: true` so the user picks across batches.
-- Two-stage flow: pick categories first (single multiSelect, ≤4), then drill into the keys within each chosen category in a second call.
-
-Codified during the B11 fix where a 13-key config picklist silently fell back to free text; resolved with category-then-keys staging.
+The host rejects an option list longer than 4, and the skill degrades to free text (the user types names back). Never design a 5+ option question on the assumption the host will scroll, and never merge unrelated categories to fit 4. Chunk instead: several sequential calls with ≤4 options each (`multiSelect: true` to pick across batches), or two stages (pick categories first, then drill into the keys of each chosen category).
 
 ## Ask in the user's terms, and name the default
 
@@ -166,7 +124,7 @@ The skill holds the context, so translating is its job. A question phrased in im
 - Several questions in one `AskUserQuestion` call — the host renders each separately and returns an answer per question, so batching does not produce the partial answers that a free-text channel would. `/rota-work` Step 2's 1–3 question batch stays correct.
 - Implementation vocabulary in the `description` field of an option, where it disambiguates for a user who *does* have the file open.
 
-Codified from a read of klufft's `swarm.md` (rota#20, 2026-07-31), whose orchestrator pays for this in tmux panes rather than pickers. Its companion rule — *ask one question at a time* — deliberately did **not** transfer: it is a property of a free-text channel where a batch gets a partial reply, and `AskUserQuestion` is not that channel.
+The companion rule *ask one question at a time* does not apply: it is a property of a free-text channel where a batch gets a partial reply, and `AskUserQuestion` is not that channel.
 
 ## Nudges on terminal/idle paths only
 
@@ -180,8 +138,6 @@ When a nudge or check could fire from multiple skills that converge on the same 
 - Firing the nudge from the terminal branch of a routing skill (e.g. `/rota-work` no-argument mode "Stop here" / empty-backlog) where the user is about to step away.
 - Firing the nudge from the post-ship report (`/rota-ship` Step 9.5) where the cycle ended and no auto-dispatch follows.
 
-Codified after F19's release-pending nudge: fires from `/rota-work` no-argument mode only on the "Stop here" / empty-backlog branch and from `/rota-ship`'s post-ship report, never from inside `/rota-work`'s tail (the most-frequent path, but always followed by a dispatch).
-
 ## The verb contract is the contract — SKILL.md prose paraphrasing drifts
 
 When a SKILL.md cites an `rota` verb, the verb's entry in `docs/design/contract/` (index in `README.md`) (and `rota <verb> --help`) IS the contract; prose paraphrases drift. Before authoring prose ABOUT a verb, read its entry — if the SKILL.md disagrees with the contract, the SKILL.md is wrong.
@@ -193,8 +149,6 @@ When a SKILL.md cites an `rota` verb, the verb's entry in `docs/design/contract/
 **Permits.**
 - Quoting the verb's contract entry verbatim in the SKILL.md when the prose needs the exact contract.
 - Updating SKILL.md prose to match a verb after its contract changes (the prose follows the code, not the other way around).
-
-Codified on T28: `rota-work/SKILL.md` Step 4.5 gated umbrella mode on `umbrella.enabled`, but the umbrella-on helper's header pinned the contract to `.rota/repos.json` presence (today: `rota repo umbrella`). The header was authoritative; the SKILL.md was wrong.
 
 ## Inventory table beside a citation when ≥4 sibling rules extracted
 
@@ -208,22 +162,9 @@ When a SKILL.md extracts N≥4 sibling rules to a `references/` file, leave a on
 - For ≤3 extracted rules, citing the reference inline without an inventory (the rule names fit in the citing sentence).
 - Inventory tables with extra columns (audience, complexity, etc.) when those columns help readers triage.
 
-Codified on T39: a SKILL.md grew a 9-row inventory table beside its `references/authoring-conventions.md` citation; the inventory itself is what triggered this rule's codification.
-
 ## Avoid `&` in `TaskCreate`/`TodoWrite` payloads
 
-Claude Code's TUI HTML-escapes task titles for rendering but never decodes — strings containing `&` show up as the literal entity `&amp;` in the task list view. Workaround until the upstream renderer is fixed: in any `TaskCreate(subject=…)`, `TaskCreate(activeForm=…)`, `TaskUpdate(...)`, or `TodoWrite(...)` payload (in examples in skill prose or in actual calls), use `and` or `+` instead of `&`. The substitution is purely cosmetic; both renderings parse identically.
-
-**Forbids.**
-- Ampersand in any `subject`, `description`, or `activeForm` string in `TaskCreate`/`TodoWrite`/`TaskUpdate` payloads — including example strings embedded in skill prose.
-- Workarounds using `&amp;` or `&` in payloads to "pre-encode" — the bug isn't in encoding; the renderer escapes whatever it sees, so pre-encoded forms double-escape.
-
-**Permits.**
-- `&` elsewhere in prose, code blocks, or shell commands — the bug is scoped to task-list payloads, not all skill content.
-- Topic headings like `## Build & Tooling` in `KNOWLEDGE.md` — those aren't TaskCreate payloads.
-- `+` as the connector where it reads naturally (e.g. *"Commit + TODO + smoke"*) — already used elsewhere; renders correctly.
-
-Codified on T01: a `/rota-work` session surfaced `Dispatch &amp; verify wave` and `Merge &amp; report` rendered with literal `&amp;` in the TUI task list. Four example payloads were swept in `rota-ship`, `rota-review`, `rota-work` SKILL.md; the F06 SKILL-format validator can grow a rule for this once the upstream Claude Code fix lands and we want to track removal.
+Claude Code's TUI HTML-escapes task titles but never decodes them, so `&` shows as the literal `&amp;`. In any `TaskCreate`, `TaskUpdate` or `TodoWrite` payload (including examples in skill prose), use `and` or `+` instead; pre-encoding with `&amp;` double-escapes. `&` stays fine in prose, code blocks, shell commands and topic headings like `## Build & Tooling`.
 
 ## `/rota-x` and `$rota-x` are the same invocation
 

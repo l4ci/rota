@@ -57,7 +57,6 @@ No-op bullet candidates (not touched): 2
   <topic> :: <title> — 0 hits since <date>
 ```
 
-Then exit (skip remaining steps).
 
 ### `--term <name>`
 
@@ -81,7 +80,6 @@ Report one line:
 Captured term: <name> in .rota/KNOWLEDGE.md ## Glossary
 ```
 
-Then exit (skip remaining steps).
 
 ### `--promote <topic> "<title>"`
 
@@ -98,7 +96,6 @@ rota knowledge tier set --topic "<topic>" --title "<title>" --tier confirmed
 Promoted: <topic> :: <title> → confirmed
 ```
 
-Then exit (skip remaining steps).
 
 ### `--deprecate <topic> "<title>"`
 
@@ -117,7 +114,6 @@ Deprecated: <topic> :: <title> → deprecated
 
 **Important:** manual deprecations do NOT touch the contradictions queue. Do NOT call `rota knowledge contradiction clear` here: the queue holds heuristic candidates only.
 
-Then exit (skip remaining steps).
 
 ### `--amend <topic> "<title>"`
 
@@ -142,7 +138,6 @@ Flow:
 Amended: <topic> :: <title> (tier=<tier>, hits=<hits> preserved)
 ```
 
-Then exit (skip remaining steps).
 
 ## Process contradiction candidates
 

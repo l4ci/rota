@@ -16,10 +16,6 @@ A post-cycle nudge or auto-dispatch fires when **at least one** of:
 - Pure mechanical changes: bulk rename, dependency bump, formatting sweep, generated-file refresh. Diff size doesn't capture intent; skip the nudge when there's clearly nothing durable to learn or document.
 - The same nudge has already fired in the current session for the current trigger (don't repeat).
 
-## Why a gate at all
-
-The downstream nudges (Learn, Docs After-Work) cost user attention or token budget. Firing on every single-item fix trains the user to dismiss them, which loses the signal when something worth capturing happens. A cycle big enough to trip any one threshold is plausibly worth a post-cycle pass.
-
 ## The choreography
 
 Every post-cycle nudge step runs the same sequence. The call site supplies the **bolded parameters**; this reference supplies the sequence.
@@ -37,8 +33,3 @@ Every post-cycle nudge step runs the same sequence. The call site supplies the *
 ### Manual entry
 
 Manual invocation of a gated flow (e.g. the user running `/rota-ship --docs` by hand) bypasses this gate; the invocation is the trigger. The owning skill states the rule at its entry step (`/rota-ship` Step D1).
-
-## See also
-
-- `references/authoring-conventions.md`: the inline-at-dispatch-point rule: each site keeps the dispatch imperative and target inline; this file owns the shared sequence around it.
-- `references/manual-gates.md`: for the orthogonal *"always manual, never auto-invoked"* gates (`/rota-decide`, `/rota-ship` Step 6a, `/rota-release` Steps 6, 10, 11 and 13). Those are separate from this trigger: they fire even when the trigger does, and never auto-pick.

@@ -64,8 +64,3 @@ Issue all calls **in a single parallel tool-call batch**: each verb serializes i
 Either verb can return no rows. That is not an error; no topic in the registry matched. Carry only what matched into the downstream brief. No empty headings, placeholder "(none)" lines, or apology prose.
 
 A caller MAY add carrier-specific failure semantics on top, for example "if my brief explicitly asserts that topic X is registered and the lookup returns empty, surface to the user." That logic belongs in the calling skill, not here or in the verbs.
-
-## What this reference does NOT cover
-
-- **Full pre-planning context load.** This is the K+D *query* pattern only. The composed load (backlog entry, plan, milestone, git history, plus K+D) lives in `references/context-load-protocol.md`, which cites this file for the K+D subset.
-- **`.rota/KNOWLEDGE.md` `## Glossary` vocabulary lookup.** That's `rota glossary read`, a term-keyed reader against the Glossary topic. Glossary entries sit alongside other topics in KNOWLEDGE.md, but the reader returns nested-bullet entries (term + definition + aliases + not), not topic bodies.
