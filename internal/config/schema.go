@@ -118,6 +118,7 @@ var Keys = []Key{
 	{"round.architectureAreas", []any{}, false},
 	{"round.autopilot", false, false},
 	{"round.autopilotCap", json.Number("3"), false},
+	{"work.itemTimeoutMinutes", json.Number("0"), false}, // 0: no wall-clock cap per item
 	{"issues.labels.needsHuman", "needs-human", false},
 	{"work.codexAccounts", []any{}, false}, // named Codex homes; empty: the default Codex home
 	{"work.codexCommand", "", false},       // empty: DefaultCodexCommand in internal/harness

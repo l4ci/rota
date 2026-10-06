@@ -552,3 +552,48 @@ func bounceCount(b *jsonx.Object, issue string) int {
 	}
 	return 0
 }
+
+// RecordItemStart stamps when an item was first assigned (`itemStarts` in the
+// registry maps the issue to an RFC 3339 UTC time). Counted per item, not per
+// slot, so a transfer to another slot keeps the clock running; an item that
+// already has a start keeps it.
+func RecordItemStart(root, issue string, at time.Time) error {
+	return Update(root, func(d *Doc) {
+		doc := d.doc
+		m := itemStartsOf(doc)
+		if _, ok := m.Get(issue); ok {
+			return
+		}
+		m.Set(issue, at.UTC().Format(time.RFC3339))
+		doc.Set("itemStarts", m)
+	})
+}
+
+// ItemStart is when an item was first assigned; false when never recorded.
+func (r Registry) ItemStart(issue string) (time.Time, bool) {
+	v, _ := itemStartsOf(r.doc).Get(issue)
+	s, _ := v.(string)
+	t, err := time.Parse(time.RFC3339, s)
+	return t, err == nil
+}
+
+// ClearItemStart forgets an item's clock: its PR merged or it was parked for a
+// human, so a later assignment starts afresh.
+func ClearItemStart(root, issue string) error {
+	return Update(root, func(d *Doc) {
+		doc := d.doc
+		if m := itemStartsOf(doc); m.Len() > 0 {
+			m.Delete(issue)
+			doc.Set("itemStarts", m)
+		}
+	})
+}
+
+func itemStartsOf(doc *jsonx.Object) *jsonx.Object {
+	if v, _ := doc.Get("itemStarts"); v != nil {
+		if m, ok := v.(*jsonx.Object); ok {
+			return m
+		}
+	}
+	return jsonx.NewObject()
+}

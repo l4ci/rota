@@ -49,6 +49,10 @@ type Settings struct {
 	// item's PR back to its worker before parking the item as needs-human; 0
 	// turns the cap off.
 	MaxBounces int
+	// ItemTimeoutMinutes is work.itemTimeoutMinutes: how long one item may run
+	// from its first assignment before `round reconcile` reports it
+	// item-timeout; 0 turns the cap off.
+	ItemTimeoutMinutes int
 	// ArchitectureEvery is round.architectureEvery: closed non-refactor items
 	// between architecture reviews; 0 turns the automatic review off.
 	// ArchitectureAreas is round.architectureAreas: the areas a review is
@@ -134,6 +138,9 @@ func Load(root string) (Settings, error) {
 		return s, err
 	}
 	if s.MaxBounces, err = config.Int(cfg, "round.maxBounces", 0, config.MaxInt); err != nil {
+		return s, err
+	}
+	if s.ItemTimeoutMinutes, err = config.Int(cfg, "work.itemTimeoutMinutes", 0, config.MaxInt); err != nil {
 		return s, err
 	}
 	if s.ArchitectureEvery, err = config.Int(cfg, "round.architectureEvery", 0, config.MaxInt); err != nil {
