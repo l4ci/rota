@@ -3,6 +3,7 @@ package ship
 import (
 	"context"
 	"errors"
+	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"path/filepath"
 	"strings"
@@ -364,5 +365,18 @@ func TestMergeBranchPreservesCleanupFailure(t *testing.T) {
 	}
 	if contains(g.calls, "branch -d feat") {
 		t.Fatal("branch deleted after failed recovery")
+	}
+}
+
+// A refused Approve passes through MergeBranch with its data attached.
+func TestMergeBranchApproveRefusalCarriesData(t *testing.T) {
+	g := mergeGit()
+	p := mergePorts(g)
+	p.Approve = func() error {
+		return &exitcode.Error{Exit: exitcode.ExitRefused, Message: "gate", Data: "envelope"}
+	}
+	_, err := MergeBranch(p, "feat", "main", "msg")
+	if d, ok := exitcode.DataOf[string](err); !ok || d != "envelope" {
+		t.Errorf("refusal data = %q, %v (err %v)", d, ok, err)
 	}
 }

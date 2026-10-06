@@ -421,7 +421,7 @@ func workerDispatch(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			var we *exitcode.Error
 			if errors.As(err, &we) {
-				if bd, ok := we.Data.(worker.BlockData); ok && we.Exit == ExitRefused {
+				if bd, ok := exitcode.DataOf[worker.BlockData](err); ok && we.Exit == ExitRefused {
 					return Result{Data: knObj("blockedBy", bd.BlockedBy, "changed", bd.Changed)}, err
 				}
 			}
@@ -589,7 +589,7 @@ func sessionEnsure(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			var we *exitcode.Error
 			if errors.As(err, &we) {
-				if bd, ok := we.Data.(worker.BlockData); ok && we.Exit == ExitRefused {
+				if bd, ok := exitcode.DataOf[worker.BlockData](err); ok && we.Exit == ExitRefused {
 					return Result{Data: knObj("blockedBy", bd.BlockedBy, "changed", bd.Changed)}, err
 				}
 			}
@@ -653,35 +653,16 @@ func workerGate(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		var gateRes Result
-		var gateErr error
 		approve := func(files func() ([]string, error)) error {
 			req.Thread = func() (approvalThread, error) { return slotApprovalThread(root, slot) }
-			gateRes, gateErr = clearMerge(c, policy, slot+" into "+*base, conf, req, files, nil)
-			return gateErr
+			return clearMerge(c, policy, slot+" into "+*base, conf, req, files, nil)
 		}
 		ctx, stop := workerContext()
 		defer stop()
 		issue := gateIssue(root, slot)
 		r, err := workerEnvCtx(c, ctx).Gate(ctx, root, worker.GateOpts{Slot: slot, Base: *base, CheckOnly: *check, NoVerify: *noVerify, Approve: approve})
-		if gateErr != nil {
-			var e *Error
-			if !errors.As(gateErr, &e) {
-				return Result{}, Unavailable("%v", gateErr) // listing the merge's files failed
-			}
-			d := gateData(r)
-			if g, ok := gateRes.Data.(*jsonx.Object); ok {
-				for _, k := range []string{"blockedBy", "gate", "paths", "changed"} {
-					v, _ := g.Get(k)
-					d.Set(k, v)
-				}
-				for _, k := range []string{"escalation", "status", "answer"} { // C5, only when set
-					if v, ok := g.Get(k); ok {
-						d.Set(k, v)
-					}
-				}
-			}
-			return Result{Data: d}, gateErr
+		if err != nil && r.Verdict == worker.GateApprovalRequired {
+			return gateRefusal(err, gateData(r))
 		}
 		if err != nil {
 			return Result{}, err

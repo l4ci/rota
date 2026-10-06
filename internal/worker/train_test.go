@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
 	"os"
 	"path/filepath"
@@ -286,5 +287,17 @@ func TestTrainSkipsE2EWhenFullFails(t *testing.T) {
 	res, _ := w.train(TrainOpts{Targets: []string{"b1", "b2"}})
 	if res.Culprit != "b2" || strings.Contains(res.Err, "test.e2e") || len(res.E2EVerified) != 0 {
 		t.Fatalf("e2e must not run on a red full: %+v", res)
+	}
+}
+
+func TestTrainApprovalRefusalCarriesData(t *testing.T) {
+	w := trainWorld(t, "true", "b1", "b2")
+	want := &exitcode.Error{Exit: exitcode.ExitRefused, Message: "gate", Data: BlockData{BlockedBy: "manual gate"}}
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}, Approve: func(func() ([]string, error)) error { return want }})
+	if res.Verdict != GateApprovalRequired {
+		t.Fatalf("verdict %q", res.Verdict)
+	}
+	if bd, ok := exitcode.DataOf[BlockData](err); !ok || bd.BlockedBy != "manual gate" {
+		t.Errorf("refusal data = %+v, %v (err %v)", bd, ok, err)
 	}
 }
