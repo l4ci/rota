@@ -14,63 +14,18 @@ import (
 	"github.com/l4ci/rota/internal/worker"
 )
 
-type archForge struct {
-	closed []tracker.Issue
-	added  map[int][]string
-}
-
-func (archForge) OpenPRs(context.Context) ([]tracker.PR, error) { return nil, nil }
-func (archForge) PRState(context.Context, int) (string, error)  { return "", nil }
-func (archForge) ClosedNumbers(string) []int                    { return nil }
-func (f archForge) List(context.Context, tracker.ListFilter) ([]tracker.Issue, error) {
-	return f.closed, nil
-}
-func (archForge) Get(_ context.Context, n int, _ bool) (tracker.Issue, error) {
-	return tracker.Issue{Number: n, State: "open"}, nil
-}
-func (f archForge) AddLabels(_ context.Context, n int, l []string, _ bool) error {
-	f.added[n] = l
-	return nil
-}
-
-func (archForge) RemoveLabels(context.Context, int, []string) error { return nil }
-
-type archBacklog struct {
-	backlog.Backend
-	open []backlog.Item
-	made []backlog.CreateInput
-}
-
-func (b *archBacklog) Name() string                       { return "issues" }
-func (b *archBacklog) Capabilities() backlog.Capabilities { return backlog.Capabilities{Tracker: true} }
-func (b *archBacklog) List(bool) ([]backlog.Item, error)  { return b.open, nil }
-func (b *archBacklog) Get(ref string) (*backlog.Item, error) {
-	for i := range b.open {
-		if b.open[i].ID == ref {
-			return &b.open[i], nil
-		}
-	}
-	return nil, backlog.ErrNotFound
-}
-func (b *archBacklog) Create(in backlog.CreateInput) (backlog.CreateResult, error) {
-	b.made = append(b.made, in)
-	n := 100 + len(b.made)
-	id := fmt.Sprint(n)
-	b.open = append(b.open, backlog.Item{ID: id, Number: n, Title: in.Title})
-	return backlog.CreateResult{ID: id, Type: "T"}, nil
-}
-
-func archFixture(t *testing.T, every int, closed []tracker.Issue) (string, Env, *archBacklog, roundcfg.Settings) {
+func archFixture(t *testing.T, every int, closed []tracker.Issue) (string, Env, *fakeRemote, roundcfg.Settings) {
 	t.Helper()
 	root := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(root, ".rota"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	writeRegistry(t, root, slot(root, "ben", "park/ben", nil))
-	e := env(nil, archForge{closed: closed, added: map[int][]string{}})
+	r := &fakeRemote{closedIssues: closed}
+	e := env(nil, r.asForge())
 	e.Now = func() time.Time { return time.Date(2026, 10, 4, 12, 0, 0, 0, time.UTC) }
 	set := roundcfg.Settings{Roster: []string{"ben"}, ArchitectureEvery: every, ArchitectureAreas: []string{"cli", "worker"}}
-	return root, e, &archBacklog{}, set
+	return root, e, r, set
 }
 
 // seedReview records a past review so closed issues after it count.
@@ -123,8 +78,8 @@ func TestArchitectureThresholdMintsPerAreaAndRestartsCount(t *testing.T) {
 	if be.made[0].Title != "arch(cli): architecture review" || be.made[1].Title != "arch(worker): architecture review" {
 		t.Fatalf("titles %q %q", be.made[0].Title, be.made[1].Title)
 	}
-	if f := e.Forge.(archForge); len(f.added) != 2 || f.added[101][0] != RefactorLabel {
-		t.Fatalf("review items should carry the refactor label: %v", f.added)
+	if len(be.labels) != 2 || be.labels[101][0] != RefactorLabel {
+		t.Fatalf("review items should carry the refactor label: %v", be.labels)
 	}
 	if got := ReviewSince(root); got != "2026-10-04T12:00:00Z" {
 		t.Fatalf("since %q", got)
@@ -135,9 +90,9 @@ func TestArchitectureThresholdMintsPerAreaAndRestartsCount(t *testing.T) {
 		t.Fatalf("a review in flight should not retrigger: %+v", a)
 	}
 	// Once the review items close, only items closed after it count.
-	be.open = nil
+	be.items, be.order = nil, nil
 	e.Now = func() time.Time { return time.Date(2026, 10, 6, 0, 0, 0, 0, time.UTC) } // past the cache
-	e.Forge = archForge{closed: append(closed, closedIssue(3, "c", "2026-10-05T00:00:00Z")), added: map[int][]string{}}
+	be.closedIssues = append(closed, closedIssue(3, "c", "2026-10-05T00:00:00Z"))
 	a, _ = e.Architecture(ctx, root, be, set, []Candidate{{ID: "9"}})
 	if a.Count != 1 || a.Due {
 		t.Fatalf("count should restart after the review: %+v", a)
@@ -163,7 +118,7 @@ func TestArchitectureQueueEmptyNeedsIdleSlotNoReadyCandidateAndNewWork(t *testin
 	}
 	// Nothing closed since the last review: an empty queue has nothing to review.
 	writeRegistry(t, root, slot(root, "ben", "park/ben", nil))
-	e.Forge = archForge{added: map[int][]string{}}
+	be.closedIssues = nil
 	e.Now = func() time.Time { return time.Date(2026, 10, 4, 13, 0, 0, 0, time.UTC) } // past the cache
 	if a, _ = e.Architecture(ctx, root, be, set, nil); a.Due {
 		t.Fatal("an empty queue with no new closed work must not loop reviews")
@@ -207,17 +162,6 @@ func TestReviewItemsAreInEveryScope(t *testing.T) {
 	}
 }
 
-// countingForge counts closed-issue fetches.
-type countingForge struct {
-	archForge
-	lists *int
-}
-
-func (f countingForge) List(ctx context.Context, fl tracker.ListFilter) ([]tracker.Issue, error) {
-	*f.lists++
-	return f.archForge.List(ctx, fl)
-}
-
 func TestArchitectureFirstSightSeedsInsteadOfTriggering(t *testing.T) {
 	closed := []tracker.Issue{closedIssue(1, "a", "2026-10-01T00:00:00Z"), closedIssue(2, "b", "2026-10-02T00:00:00Z")}
 	root, e, be, set := archFixture(t, 2, closed)
@@ -239,29 +183,20 @@ func TestArchitectureFirstSightSeedsInsteadOfTriggering(t *testing.T) {
 func TestArchitectureCachesClosedCount(t *testing.T) {
 	root, e, be, set := archFixture(t, 5, []tracker.Issue{closedIssue(1, "a", "2026-10-01T00:00:00Z")})
 	seedReview(t, root)
-	lists := 0
-	e.Forge = countingForge{archForge{closed: []tracker.Issue{closedIssue(1, "a", "2026-10-01T00:00:00Z")}, added: map[int][]string{}}, &lists}
 	ctx := context.Background()
 	for i := 0; i < 3; i++ {
 		if a, _ := e.Architecture(ctx, root, be, set, []Candidate{{ID: "9"}}); a.Count != 1 {
 			t.Fatalf("count %d", a.Count)
 		}
 	}
-	if lists != 1 {
-		t.Fatalf("closed issues fetched %d times, want 1", lists)
+	if be.closedLists != 1 {
+		t.Fatalf("closed issues fetched %d times, want 1", be.closedLists)
 	}
 	e.Now = func() time.Time { return time.Date(2026, 10, 4, 12, 10, 0, 0, time.UTC) }
 	e.Architecture(ctx, root, be, set, []Candidate{{ID: "9"}})
-	if lists != 2 {
-		t.Fatalf("an expired cache should refetch, fetched %d times", lists)
+	if be.closedLists != 2 {
+		t.Fatalf("an expired cache should refetch, fetched %d times", be.closedLists)
 	}
-}
-
-// failingLabels fails every AddLabels call.
-type failingLabels struct{ archForge }
-
-func (failingLabels) AddLabels(context.Context, int, []string, bool) error {
-	return fmt.Errorf("label boom")
 }
 
 func TestMintReviewRecordsCreatedItemsOnError(t *testing.T) {
@@ -269,7 +204,7 @@ func TestMintReviewRecordsCreatedItemsOnError(t *testing.T) {
 	seedReview(t, root)
 	ctx := context.Background()
 	a, _ := e.Architecture(ctx, root, be, set, []Candidate{{ID: "9"}})
-	e.Forge = failingLabels{archForge{added: map[int][]string{}}}
+	be.addErr = fmt.Errorf("label boom")
 	if _, err := e.MintReview(ctx, root, be, a, 1); err == nil {
 		t.Fatal("want the label error")
 	}

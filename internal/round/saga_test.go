@@ -64,7 +64,7 @@ func TestRunStepsSkippedStepIsStillUndone(t *testing.T) {
 }
 
 func TestClaimStepUndoReleasesAndUnbinds(t *testing.T) {
-	be := &boardFake{fakeBacklog: &fakeBacklog{}}
+	be := &fakeRemote{}
 	unbound := false
 	s := claimStep(be, "12", "ben@1", func() { unbound = true })
 	if err := s.do(); err != nil || be.claims["12"] != "ben@1" {
@@ -77,7 +77,7 @@ func TestClaimStepUndoReleasesAndUnbinds(t *testing.T) {
 }
 
 func TestClaimStepLostClaimIsBlockedAndUndoesNothingElse(t *testing.T) {
-	be := &boardFake{fakeBacklog: &fakeBacklog{}, claimedBy: "dana@1"}
+	be := &fakeRemote{claimedBy: "dana@1"}
 	steps := []step{claimStep(be, "12", "ben@1", func() { t.Error("unbind without a claim") })}
 	err := runSteps(steps)
 	if blockedBy(t, err) != BlockClaimed {
@@ -86,26 +86,26 @@ func TestClaimStepLostClaimIsBlockedAndUndoesNothingElse(t *testing.T) {
 }
 
 func TestStateStepUndoClearsStateAndChanged(t *testing.T) {
-	be := &boardFake{fakeBacklog: &fakeBacklog{}}
+	be := &fakeRemote{}
 	changed := false
 	s := stateStep(be, "12", false, &changed)
-	if err := s.do(); err != nil || be.states["12"] != "in-progress" || !changed {
-		t.Fatalf("state: %v %v %v", err, be.states, changed)
+	if err := s.do(); err != nil || be.bstates["12"] != "in-progress" || !changed {
+		t.Fatalf("state: %v %v %v", err, be.bstates, changed)
 	}
 	s.undo()
-	if len(be.states) != 0 || changed {
-		t.Errorf("undo must clear the state and Changed: %v %v", be.states, changed)
+	if len(be.bstates) != 0 || changed {
+		t.Errorf("undo must clear the state and Changed: %v %v", be.bstates, changed)
 	}
 }
 
 // failingStateBoard writes the state, then reports the write as failed: a
 // partial label update.
 type failingStateBoard struct {
-	*boardFake
+	*fakeRemote
 }
 
 func (b *failingStateBoard) SetState(ref, state string) (bool, error) {
-	b.boardFake.SetState(ref, state)
+	b.fakeRemote.SetState(ref, state)
 	if state == "in-progress" {
 		return false, errors.New("label write failed")
 	}
@@ -113,12 +113,12 @@ func (b *failingStateBoard) SetState(ref, state string) (bool, error) {
 }
 
 func TestStateStepFailureClearsItsOwnPartialWrite(t *testing.T) {
-	be := &failingStateBoard{&boardFake{fakeBacklog: &fakeBacklog{}}}
+	be := &failingStateBoard{&fakeRemote{}}
 	changed := false
 	if err := runSteps([]step{stateStep(be, "12", false, &changed)}); err == nil {
 		t.Fatal("want the failure")
 	}
-	if len(be.states) != 0 || changed {
-		t.Errorf("a failed state step must clear its partial write: %v %v", be.states, changed)
+	if len(be.bstates) != 0 || changed {
+		t.Errorf("a failed state step must clear its partial write: %v %v", be.bstates, changed)
 	}
 }

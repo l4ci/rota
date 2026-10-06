@@ -10,7 +10,7 @@ import (
 
 func TestMilestoneScopeFallsBackWithoutUnfinishedMilestones(t *testing.T) {
 	root := newRepo(t, nil)
-	be := &fakeBacklog{}
+	be := &fakeRemote{}
 	be.add("1", "open one", "", false, "")
 	be.add("2", "open two", "", false, "")
 	e := Env{Git: git.Exec, Base: "main"}
@@ -44,7 +44,7 @@ func TestMilestoneScopeFallsBackWithoutUnfinishedMilestones(t *testing.T) {
 func TestWhyEmptyNamesReasonAndNextCommand(t *testing.T) {
 	root := newRepo(t, nil)
 	e := Env{Git: git.Exec, Base: "main"}
-	be := &fakeBacklog{}
+	be := &fakeRemote{}
 	why := func(scope string, slate ...string) Empty {
 		t.Helper()
 		w, err := e.WhyEmpty(bg, root, be, scope, slate)
@@ -74,7 +74,7 @@ func TestWhyEmptyNamesReasonAndNextCommand(t *testing.T) {
 }
 
 func TestAssessBriefTakesCriteriaFromTheBrief(t *testing.T) {
-	be := &fakeBacklog{ready: map[string][]string{"3": {"no acceptance criteria in the issue body", "no design or plan note"}}}
+	be := &fakeRemote{ready: map[string][]string{"3": {"no acceptance criteria in the issue body", "no design or plan note"}}}
 	be.add("3", "bare", "", false, "")
 	if r, err := Assess(be, "3", nil, nil, nil, false); err != nil || r.Ready() {
 		t.Fatalf("a bare item is not ready: %v %v", r, err)
