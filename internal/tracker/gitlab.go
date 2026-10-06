@@ -499,32 +499,28 @@ func (g *GitLab) onBase(ctx context.Context, pr int, sha, target string) error {
 	return failed("MR %d merged without a merge commit, and git merge-base --is-ancestor %s %s failed: %s", pr, sha, ref, strings.TrimSpace(string(errb)))
 }
 
-// glDiffPage is the page size PRFiles asks the MR diffs API for.
-const glDiffPage = 100
-
-// PRFiles pages through the MR diffs API; a short page is the last. A
-// renamed file counts under both its paths.
+// PRFiles lets the CLI paginate the MR diffs API. A renamed file counts
+// under both its paths; each path is returned once, in first-seen order.
 func (g *GitLab) PRFiles(ctx context.Context, pr int) ([]string, error) {
+	var d []struct {
+		Old string `json:"old_path"`
+		New string `json:"new_path"`
+	}
+	path := fmt.Sprintf("projects/:id/merge_requests/%d/diffs?per_page=100", pr)
+	if err := g.pages(ctx, path, &d); err != nil {
+		return nil, err
+	}
 	var files []string
-	for page := 1; ; page++ {
-		var d []struct {
-			Old string `json:"old_path"`
-			New string `json:"new_path"`
-		}
-		path := fmt.Sprintf("projects/:id/merge_requests/%d/diffs?per_page=%d&page=%d", pr, glDiffPage, page)
-		if err := g.json(ctx, []string{"api", path}, &d); err != nil {
-			return nil, err
-		}
-		for _, f := range d {
-			files = append(files, f.New)
-			if f.Old != "" && f.Old != f.New {
-				files = append(files, f.Old)
+	seen := make(map[string]bool)
+	for _, f := range d {
+		for _, path := range []string{f.New, f.Old} {
+			if path != "" && !seen[path] {
+				seen[path] = true
+				files = append(files, path)
 			}
 		}
-		if len(d) < glDiffPage {
-			return files, nil
-		}
 	}
+	return files, nil
 }
 
 func (g *GitLab) PRComment(ctx context.Context, pr int, body string) error {
