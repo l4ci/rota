@@ -61,3 +61,36 @@ pass "config fill moves hv.version to rota.version"
 
 trap 'rm -rf "$TMP"' EXIT
 rm -rf "$CF"
+
+# refactor.verifyCommands moved to test.full: copied, old key dropped, listed in filled.
+CF="$(mktemp -d)"
+trap 'rm -rf "$CF"' EXIT
+mkdir -p "$CF/.rota"
+printf '{"refactor": {"verifyCommands": ["x"]}}\n' > "$CF/.rota/config.json"
+OUT=$( cd "$CF" && hvj config fill )
+[ "$(echo "$OUT" | jget data.changed)" = "true" ] || fail "fill should move refactor.verifyCommands: $OUT"
+echo "$OUT" | python3 -c 'import json, sys; sys.exit("test.full" not in json.load(sys.stdin)["data"]["filled"])' \
+  || fail "filled should list test.full: $OUT"
+python3 - "$CF/.rota/config.json" <<'PY' || fail "refactor.verifyCommands was not moved to test.full"
+import json, sys
+cfg = json.load(open(sys.argv[1]))
+assert cfg["test"]["full"] == ["x"], cfg.get("test")
+assert "verifyCommands" not in cfg["refactor"], cfg["refactor"]
+PY
+OUT=$( cd "$CF" && hvj config fill )
+[ "$(echo "$OUT" | jget data.changed)" = "false" ] || fail "second fill after the move should not change anything: $OUT"
+pass "config fill moves refactor.verifyCommands to test.full and is idempotent"
+
+# A non-empty test.full wins over the legacy key, which is still dropped.
+printf '{"test": {"full": ["keep"]}, "refactor": {"verifyCommands": ["old"]}}\n' > "$CF/.rota/config.json"
+( cd "$CF" && hvj config fill >/dev/null )
+python3 - "$CF/.rota/config.json" <<'PY' || fail "existing test.full was not kept over refactor.verifyCommands"
+import json, sys
+cfg = json.load(open(sys.argv[1]))
+assert cfg["test"]["full"] == ["keep"], cfg["test"]
+assert "verifyCommands" not in cfg["refactor"], cfg["refactor"]
+PY
+pass "config fill keeps an existing test.full when the legacy key is present"
+
+trap 'rm -rf "$TMP"' EXIT
+rm -rf "$CF"
