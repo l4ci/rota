@@ -13,6 +13,7 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/tracker"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 // The item verbs: `rota id next` and `rota item create|field|complete|reopen|
@@ -554,7 +555,14 @@ func itemReopen(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		return withBackend(c, root, false, "", func(be backlog.Backend) (Result, error) {
-			return reopenItem(be, args[0])
+			res, err := reopenItem(be, args[0])
+			if err == nil {
+				// A reopened item starts a fresh wall-clock (work.itemTimeoutMinutes).
+				if id := strings.ToUpper(strings.TrimPrefix(args[0], "#")); id != "" {
+					_ = worker.ClearItemStart(root, id)
+				}
+			}
+			return res, err
 		})
 	}
 }
