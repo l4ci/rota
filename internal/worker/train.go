@@ -24,12 +24,12 @@ import (
 //     files the members change), before the expensive step.
 //  3. MERGE the members in order onto the base in a scratch worktree. A conflict
 //     names the member that does not fit on the base plus the members before it.
-//  4. VERIFY the scratch tree once with test.full.
+//  4. VERIFY the scratch tree once with test.full, then once with test.e2e (#378).
 //  5. On a pass LAND every member through the ordinary gate (forge merge, pinned
 //     to the verified head), in order, without re-verifying. Before the first
 //     landing the base and every head must still be what the scratch tree was
 //     built from; otherwise nothing lands.
-//  6. On a fail BISECT: verify growing prefixes of the train to find the first
+//  6. On a fail of either tier BISECT: verify growing prefixes of the train to find the first
 //     member whose addition breaks the tree and name it. That is the member to
 //     send back; it can be an interaction with the members before it, not only
 //     the member alone. With LandGreen the verified prefix before it lands.
@@ -64,17 +64,18 @@ type TrainMember struct {
 // provenance-fail, ...), merge-failed, verify-failed, approval-required,
 // base-moved. Culprit names the member the verdict is about, when one.
 type TrainResult struct {
-	Base     string
-	Verdict  string
-	Members  []TrainMember
-	Culprit  string
-	Verified []string
-	Landed   []string
-	Changed  bool
-	SHA      string
-	Err      string
-	Hint     string
-	Notes    []string
+	Base        string
+	Verdict     string
+	Members     []TrainMember
+	Culprit     string
+	Verified    []string // test.full commands that passed
+	E2EVerified []string // test.e2e commands that passed
+	Landed      []string
+	Changed     bool
+	SHA         string
+	Err         string
+	Hint        string
+	Notes       []string
 }
 
 // OK reports a train that verified and landed whole.
@@ -246,81 +247,65 @@ func (e Env) Train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 		}
 	}
 
-	// 4. Verify once.
+	// 4. Verify once: test.full, then test.e2e on the same tree.
 	n := len(res.Members)
 	passing := n
-	vr, err := verify(scratch)
-	if err != nil {
+	// A local run that cannot start is an error, as before; a CI push or
+	// forge read that fails is CHECK-BROKE, since nothing has landed.
+	verifyErr := func(err error) (TrainResult, error) {
 		return e.trainBroke(res, err.Error())
+	}
+	full := func() (VerifyResult, error) { return verify(scratch) }
+	vr, err := full()
+	if err != nil {
+		return verifyErr(err)
 	}
 	if r, done := trainStopped(res, vr); done {
 		return r, nil
 	}
+	green := true // test.full passed (or had nothing to run), so test.e2e may run
 	if vr.NoCommands {
 		res.Notes = append(res.Notes, "NO-VERIFY train — test.full is empty; the merged tree was NOT gated by a command.",
 			"set test.full via rota config set to make this gate real")
 	} else {
-		failed := vr // the run whose output names the culprit
 		res.Verified = vr.Verified
 		for _, c := range vr.Failed {
 			res.Notes = append(res.Notes, "verify FAILED: "+c)
 		}
 		if !vr.OK() {
-			// 6. Bisect: the first prefix that fails ends in the culprit.
-			lo, hi := 0, n
-			for hi-lo > 1 {
-				mid := (lo + hi) / 2
-				if _, code := e.git(scratch, "checkout", "-q", "--detach", tips[mid]); code != 0 {
-					return e.trainBroke(res, "git checkout "+tips[mid]+" failed in the scratch tree")
-				}
-				pr, err := verify(scratch)
-				if err != nil {
-					return e.trainBroke(res, err.Error())
-				}
-				if r, done := trainStopped(res, pr); done {
-					os.Remove(failed.LogPath)
-					return r, nil
-				}
-				if pr.OK() {
-					lo = mid
-				} else {
-					os.Remove(failed.LogPath)
-					failed, hi = pr, mid
-				}
-			}
-			if lo == 0 { // bisect assumes a green base; the first member only looks guilty on a red one
-				if _, code := e.git(scratch, "checkout", "-q", "--detach", tips[0]); code != 0 {
-					return e.trainBroke(res, "git checkout "+tips[0]+" failed in the scratch tree")
-				}
-				br, err := verify(scratch)
-				if err != nil {
-					return e.trainBroke(res, err.Error())
-				}
-				if r, done := trainStopped(res, br); done {
-					os.Remove(failed.LogPath)
-					return r, nil
-				}
-				if !br.OK() {
-					os.Remove(failed.LogPath)
-					res.Verdict = GateVerifyFailed
-					res.Err = fmt.Sprintf("TRAIN-FAIL base — %s fails verification on its own, so no member can be blamed\n%s",
-						baseRef, br.detail())
-					res.Hint = fmt.Sprintf("fix %s, then re-run the train", baseRef)
-					return res, nil
-				}
-			}
-			c := res.Members[hi-1]
-			res.Members[hi-1].Culprit = true
-			res.Culprit, res.Verdict = c.Target, GateVerifyFailed
-			res.Err = fmt.Sprintf("TRAIN-FAIL %s — the train fails verification once %s (%s) is merged; the first %d member(s) pass\n%s",
-				c.Target, c.Target, c.Branch, lo, failed.detail())
-			res.Hint = fmt.Sprintf("send %s back, or run the train without it; it may break only with the member(s) before it", c.Target)
-			if !o.LandGreen || lo == 0 {
+			green = false
+			var stop bool
+			if passing, stop, err = e.bisectTrain(scratch, &res, tips, "test.full", full, vr, o.LandGreen); err != nil {
+				return verifyErr(err)
+			} else if stop {
 				return res, nil
 			}
-			passing = lo
-			res.Hint += fmt.Sprintf("; the verified first %d member(s) landed (--land-green)", lo)
 		}
+	}
+
+	// 4b. E2E: the most expensive tier runs once, on the train result, after
+	// test.full passed. A red e2e bisects the same way a red full does.
+	e2e := TierCommands(root, "e2e")
+	if green && len(e2e) > 0 {
+		run := func() (VerifyResult, error) { return e.RunVerify(ctx, e2e, scratch) }
+		er, err := run()
+		if err != nil {
+			return res, err
+		}
+		res.E2EVerified = er.Verified
+		for _, c := range er.Failed {
+			res.Notes = append(res.Notes, "e2e FAILED: "+c)
+		}
+		if !er.OK() {
+			var stop bool
+			if passing, stop, err = e.bisectTrain(scratch, &res, tips, "test.e2e", run, er, o.LandGreen); err != nil || stop {
+				return res, err
+			}
+		}
+	}
+
+	if !green && passing > 0 && len(e2e) > 0 {
+		res.Notes = append(res.Notes, fmt.Sprintf("NO-E2E land-green — the verified first %d member(s) land without test.e2e; it never ran on that prefix.", passing))
 	}
 
 	// 5. Land. The tree that was verified must still be the one that lands.
@@ -415,4 +400,75 @@ func (e Env) trainMoved(res TrainResult, culprit, msg string) (TrainResult, erro
 	res.Err = fmt.Sprintf("BASE-MOVED train — %s; landed %d of %d member(s): %s", msg, len(res.Landed), len(res.Members), strings.Join(res.Landed, ", "))
 	res.Hint = fmt.Sprintf("landed %d of %d member(s); re-run the train for the rest on the new base", len(res.Landed), len(res.Members))
 	return res, nil
+}
+
+// bisectTrain finds the first member whose merge makes tier fail, using verify
+// on growing prefixes of the train (tips), and writes the verdict into res.
+// failed is the failed full-train run; the caller hands its log over. It
+// assumes the base is green: a red base is reported as such. passing is how
+// many leading members may still land (all but the culprit under LandGreen);
+// stop is true when the train must end here with res as the answer.
+func (e Env) bisectTrain(scratch string, res *TrainResult, tips []string, tier string, verify func() (VerifyResult, error), failed VerifyResult, landGreen bool) (passing int, stop bool, err error) {
+	broke := func(msg string) (int, bool, error) {
+		*res, _ = e.trainBroke(*res, msg)
+		return 0, true, nil
+	}
+	// run verifies one prefix; done means a CI run gave no answer and res holds it.
+	run := func() (VerifyResult, bool, error) {
+		r, err := verify()
+		if err != nil {
+			return r, true, err
+		}
+		if r2, done := trainStopped(*res, r); done {
+			os.Remove(failed.LogPath)
+			*res = r2
+			return r, true, nil
+		}
+		return r, false, nil
+	}
+	lo, hi := 0, len(res.Members)
+	for hi-lo > 1 {
+		mid := (lo + hi) / 2
+		if _, code := e.git(scratch, "checkout", "-q", "--detach", tips[mid]); code != 0 {
+			return broke("git checkout " + tips[mid] + " failed in the scratch tree")
+		}
+		pr, done, err := run()
+		if done {
+			return 0, true, err
+		}
+		if pr.OK() {
+			lo = mid
+		} else {
+			os.Remove(failed.LogPath)
+			failed, hi = pr, mid
+		}
+	}
+	if lo == 0 { // bisect assumes a green base; the first member only looks guilty on a red one
+		if _, code := e.git(scratch, "checkout", "-q", "--detach", tips[0]); code != 0 {
+			return broke("git checkout " + tips[0] + " failed in the scratch tree")
+		}
+		br, done, err := run()
+		if done {
+			return 0, true, err
+		}
+		if !br.OK() {
+			os.Remove(failed.LogPath)
+			res.Verdict = GateVerifyFailed
+			res.Err = fmt.Sprintf("TRAIN-FAIL base — the base fails verification on its own (%s), so no member can be blamed\n%s",
+				tier, br.detail())
+			res.Hint = "fix the base, then re-run the train"
+			return 0, true, nil
+		}
+	}
+	c := res.Members[hi-1]
+	res.Members[hi-1].Culprit = true
+	res.Culprit, res.Verdict = c.Target, GateVerifyFailed
+	res.Err = fmt.Sprintf("TRAIN-FAIL %s — the train fails %s once %s (%s) is merged; the first %d member(s) pass\n%s",
+		c.Target, tier, c.Target, c.Branch, lo, failed.detail())
+	res.Hint = fmt.Sprintf("send %s back, or run the train without it; it may break only with the member(s) before it", c.Target)
+	if !landGreen || lo == 0 {
+		return 0, true, nil
+	}
+	res.Hint += fmt.Sprintf("; the verified first %d member(s) landed (--land-green)", lo)
+	return lo, false, nil
 }

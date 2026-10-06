@@ -800,3 +800,46 @@ func TestGateLocalMergeReportsFailedRecovery(t *testing.T) {
 		}
 	}
 }
+
+func TestGateRunsE2EAfterFull(t *testing.T) {
+	w := newWorld(t, "")
+	gitq(t, w.dir, "fetch", "-q", "origin", "w1:w1")
+	w.setConfig(`{"test":{"full":["true"],"e2e":["test -f work.txt"]}}`)
+	res, err := w.gate(false, GateOpts{})
+	if err != nil || res.Verdict != GatePass || res.VerifySkipped {
+		t.Fatalf("%+v %v", res, err)
+	}
+}
+
+func TestGateRunsE2EWhenFullIsEmpty(t *testing.T) {
+	w := newWorld(t, "")
+	gitq(t, w.dir, "fetch", "-q", "origin", "w1:w1")
+	w.setConfig(`{"test":{"full":[],"e2e":["false"]}}`)
+	res, _ := w.gate(false, GateOpts{})
+	if res.Verdict != GateVerifyFailed || !strings.Contains(res.Err, "test.e2e") {
+		t.Fatalf("e2e must gate even without test.full: %+v", res)
+	}
+}
+
+func TestGateE2ERedFails(t *testing.T) {
+	w := newWorld(t, "")
+	gitq(t, w.dir, "fetch", "-q", "origin", "w1:w1")
+	w.setConfig(`{"test":{"full":["true"],"e2e":["false"]}}`)
+	res, err := w.gate(false, GateOpts{})
+	if err != nil || res.Verdict != GateVerifyFailed || !strings.Contains(res.Err, "test.e2e") {
+		t.Fatalf("%+v %v", res, err)
+	}
+}
+
+func TestGateSkipsE2EWhenFullRed(t *testing.T) {
+	w := newWorld(t, "")
+	gitq(t, w.dir, "fetch", "-q", "origin", "w1:w1")
+	w.setConfig(`{"test":{"full":["false"],"e2e":["echo ran >> e2e-ran.txt"]}}`)
+	res, _ := w.gate(false, GateOpts{})
+	if res.Verdict != GateVerifyFailed || strings.Contains(res.Err, "test.e2e") {
+		t.Fatalf("%+v", res)
+	}
+	if _, err := os.Stat(filepath.Join(w.dir, "e2e-ran.txt")); err == nil {
+		t.Error("e2e ran after a red test.full")
+	}
+}

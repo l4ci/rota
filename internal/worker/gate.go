@@ -199,6 +199,7 @@ func (e Env) Gate(ctx context.Context, root string, o GateOpts) (GateResult, err
 		// Read before the merge: the branch lands in root and may carry its own
 		// .rota/config.json, which must not decide how it is verified.
 		verifyCmds: verifyCommandsAt(root),
+		e2eCmds:    TierCommands(root, "e2e"),
 	}
 	if in.where, err = FullWhere(in.cfg); err != nil {
 		return res, fail(exitcode.ExitInternal, err.Error())
@@ -216,7 +217,8 @@ func (e Env) Gate(ctx context.Context, root string, o GateOpts) (GateResult, err
 type gateInput struct {
 	cfg        any
 	verifyCmds []string
-	where      string // test.fullWhere
+	where      string   // test.fullWhere
+	e2eCmds    []string // test.e2e, read before the merge like verifyCmds
 }
 
 // gateEnv is the slice of Env the gate touches.
@@ -486,6 +488,9 @@ func (g *gate) stepMerge() (bool, error) {
 		return true, nil
 	}
 	g.res.Changed = true
+	if !g.remote {
+		g.landed, _ = g.e.runGit(g.root, "rev-parse", "HEAD")
+	}
 	g.res.SHA, _ = g.e.runGit(g.root, "rev-parse", "--short=7", "HEAD")
 	return false, nil
 }
@@ -546,17 +551,19 @@ func (g *gate) verifyOnCI(ci *ciVerifier) (bool, error) {
 	return false, nil
 }
 
-// confirmCITree ends a CI gate: the tree that landed must be the one CI
-// verified, or the forge merged something else (the base moved in between).
-func (g *gate) confirmCITree() (bool, error) {
-	if tree, _ := g.e.runGit(g.root, "rev-parse", "HEAD^{tree}"); tree != g.ciTree {
+// confirmCITree checks the tree that landed is the one CI verified, or the
+// forge merged something else (the base moved in between). It reads the merge
+// commit itself, not the base's tip: a push to the base after the merge is not
+// a mismatch. false ends the gate with the verdict set.
+func (g *gate) confirmCITree() bool {
+	tree, _ := g.e.runGit(g.root, "rev-parse", "HEAD^{tree}")
+	if tree != g.ciTree {
 		g.verdict(GateBaseMoved, fmt.Sprintf("BASE-MOVED %s — it landed, but the landed tree %s differs from the tree CI verified (%s); %s changed during the merge", g.o.Slot, short(tree), short(g.ciTree), g.o.Base),
 			fmt.Sprintf("do not re-merge; verify %s as it is now", g.o.Base))
-		return true, nil
+		return false
 	}
 	g.res.Verified = g.ciRun.Verified
-	g.res.Verdict = GatePass
-	return true, nil
+	return true
 }
 
 // changedFiles lists the paths the merge changes, for the approval gate.
@@ -607,30 +614,58 @@ func (g *gate) stepVerify() (bool, error) {
 		return true, nil
 	}
 	if g.ciRun != nil {
-		return g.confirmCITree()
+		if !g.confirmCITree() {
+			return true, nil
+		}
+	} else if done, err := g.verifyFull(); done || err != nil {
+		return true, err
 	}
+	// test.e2e: only after test.full passed, so a gate is a train of one.
+	if len(g.in.e2eCmds) > 0 {
+		er, err := runVerifyCmds(g.ctx, g.e.shell, g.in.e2eCmds, g.root)
+		if err != nil {
+			return true, err
+		}
+		for _, c := range er.Failed {
+			res.Notes = append(res.Notes, "e2e FAILED: "+c)
+		}
+		if !er.OK() {
+			g.verdict(GateVerifyFailed, fmt.Sprintf("GATE-FAIL %s — merged tree does not pass test.e2e at %s\nlast lines of the e2e output (full log: %s):\n%s",
+				o.Slot, res.SHA, er.LogPath, indentTail(er.Log, 20)),
+				fmt.Sprintf("fix forward on %s; the owning slot has usually moved on", o.Base))
+			return true, nil
+		}
+		res.VerifySkipped = false
+	}
+	res.Verdict = GatePass
+	return true, nil
+}
+
+// verifyFull runs test.full locally on the merged tree. done is true when it
+// ends the gate with a verdict.
+func (g *gate) verifyFull() (bool, error) {
+	res, o := g.res, g.o
 	vr, err := runVerifyCmds(g.ctx, g.e.shell, g.in.verifyCmds, g.root)
 	if err != nil {
 		return true, err
 	}
 	if vr.NoCommands {
-		res.Verdict, res.VerifySkipped = GatePass, true
+		res.VerifySkipped = true
 		res.Notes = append(res.Notes, fmt.Sprintf("NO-VERIFY %s — test.full is empty; merged tree was NOT gated by a command.", o.Slot),
 			"set test.full via rota config set to make this gate real")
-		return true, nil
+	} else {
+		res.Verified = vr.Verified
+		for _, c := range vr.Failed {
+			res.Notes = append(res.Notes, "verify FAILED: "+c)
+		}
+		if !vr.OK() {
+			g.verdict(GateVerifyFailed, fmt.Sprintf("GATE-FAIL %s — merged tree does not pass verification at %s\n%s",
+				o.Slot, res.SHA, vr.detail()),
+				fmt.Sprintf("fix forward on %s; the owning slot has usually moved on", o.Base))
+			return true, nil
+		}
 	}
-	res.Verified = vr.Verified
-	for _, c := range vr.Failed {
-		res.Notes = append(res.Notes, "verify FAILED: "+c)
-	}
-	if !vr.OK() {
-		g.verdict(GateVerifyFailed, fmt.Sprintf("GATE-FAIL %s — merged tree does not pass verification at %s\n%s",
-			o.Slot, res.SHA, vr.detail()),
-			fmt.Sprintf("fix forward on %s; the owning slot has usually moved on", o.Base))
-		return true, nil
-	}
-	res.Verdict = GatePass
-	return true, nil
+	return false, nil
 }
 
 // staleReason says why a branch behind the base must go back to its worker:
@@ -735,6 +770,9 @@ type gate struct {
 	// ciTree its tree: what must land.
 	ciRun  *VerifyResult
 	ciTree string
+	// landed is the commit the merge produced: the forge's merge commit, or
+	// the local merge's HEAD.
+	landed string
 }
 
 // verdict records a non-success verdict.
@@ -832,6 +870,7 @@ func (g *gate) mergeRemote() (done bool) {
 	if done {
 		return true
 	}
+	g.landed = sha
 	return g.confirmLanded(sha)
 }
 
