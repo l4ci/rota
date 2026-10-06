@@ -5,8 +5,8 @@
   python3 test/evals/run.py triggers --model haiku  does the model pick the right skill for a request?
   python3 test/evals/run.py scenarios --model opus  does it act as the skill says in a described situation?
 
-Nothing here runs in the merge gate: every run costs model calls. `--check` is free and
-is what CI may run. Scenario answers are simulated (no tools, no repo): the model gets the
+Live evals do not run in the merge gate: they cost model calls. `--check` and the
+offline runner tests are free. Scenario answers are simulated (no tools, no repo): the model gets the
 SKILL.md text plus the skill's own sibling .md files (each under a header naming it, so text
 moved out of SKILL.md stays visible) and a situation, and lists the actions it would take,
 scored by regex. Shared files under skills/references/ are NOT loaded.
@@ -55,15 +55,30 @@ def skill_text(skill):
 
 
 def ask(model, system, prompt):
-    p = subprocess.run(
-        ["claude", "-p", "--model", model, "--system-prompt", system, "--tools", "",
-         "--disable-slash-commands", "--setting-sources", "", "--no-session-persistence",
-         "--output-format", "json"],
-        input=prompt, capture_output=True, text=True, timeout=300)
+    try:
+        p = subprocess.run(
+            ["claude", "-p", "--model", model, "--system-prompt", system, "--tools", "",
+             "--disable-slash-commands", "--setting-sources", "", "--no-session-persistence",
+             "--output-format", "json"],
+            input=prompt, capture_output=True, text=True, timeout=300)
+    except subprocess.TimeoutExpired as e:
+        return "", 0.0, f"claude timed out after {e.timeout}s"
+    except (OSError, UnicodeError) as e:
+        return "", 0.0, f"claude call failed: {e}"[:300]
     if p.returncode != 0:
-        return "", 0.0, p.stderr.strip()[:300]
-    j = json.loads(p.stdout)
-    return j.get("result", ""), j.get("total_cost_usd", 0.0), ""
+        return "", 0.0, f"claude exit {p.returncode}: {p.stderr.strip() or 'no stderr'}"[:300]
+    try:
+        j = json.loads(p.stdout)
+    except json.JSONDecodeError as e:
+        return "", 0.0, f"invalid JSON response: {e}"[:300]
+    if not isinstance(j, dict) or not isinstance(j.get("result"), str):
+        return "", 0.0, "invalid response: expected an object with a string result"
+    cost = j.get("total_cost_usd", 0.0)
+    if type(cost) not in (int, float) or not 0 <= cost <= sys.float_info.max:
+        return "", 0.0, "invalid response: total_cost_usd must be a finite nonnegative number"
+    if j.get("is_error"):
+        return "", cost, f"model error: {j['result']}"[:300]
+    return j["result"], cost, ""
 
 
 def pattern(rule):
@@ -147,11 +162,19 @@ def run_triggers(model, workers):
 
     def one(c):
         out, cost, err = ask(model, TRIGGER_SYS + listing, f"Request: {c['request']}")
-        m = re.search(r"SKILL:\s*([\w-]+)", out)
-        got = m.group(1) if m else (err or out[:80])
-        ok = (got == c["skill"]) if c["expect"] == "load" else (got != c["skill"])
+        m = re.fullmatch(r"SKILL: ([\w-]+)", out.strip())
+        got = m.group(1) if m else out[:80]
+        fails = []
+        if err:
+            fails = [f"call failed: {err}"]
+        elif not m:
+            fails = [f"invalid routing response: expected SKILL: <name> or SKILL: none, got {out[:80]!r}"]
+        elif got != "none" and got not in skills:
+            fails = [f"invalid routing response: unknown skill {got}"]
+        elif (got == c["skill"]) != (c["expect"] == "load"):
+            fails = [f"expected {c['expect']} {c['skill']}, got {got}"]
         return dict(id=c["id"], kind="trigger", expect=c["expect"], got=got, better=c.get("better"),
-                    ok=ok, cost=cost, fails=[] if ok else [f"expected {c['expect']} {c['skill']}, got {got}"])
+                    ok=not fails, cost=cost, fails=fails)
     with ThreadPoolExecutor(workers) as ex:
         return list(ex.map(one, cases))
 
