@@ -6,7 +6,9 @@ against the skills. Origin: #279, from the #248 audit against Anthropic's skill 
 guide ("build evaluations first": three per skill, tested on Haiku, Sonnet and Opus).
 
 They are **not** in the merge gate: every live run costs model calls (#279 out of scope).
-Only `--check`, which makes no call, runs in `test/doclint.sh`.
+The offline case check (`--check`) and runner regressions (fake subprocess responses)
+run in `test/doclint.sh`. Run the regressions alone with
+`python3 -m unittest discover -s test/evals -p 'test_*.py'`.
 
 ```bash
 python3 test/evals/run.py --check                  # offline: case files are well-formed
@@ -16,6 +18,11 @@ python3 test/evals/run.py scenarios --model sonnet --only work-no-red rota-ship 
 ```
 
 Needs the `claude` CLI, logged in. `--model` takes `haiku`, `sonnet`, `opus`.
+
+Failed calls and invalid JSON responses fail the affected case; the remaining cases
+still run. Trigger replies must be a single `SKILL: <installed-name>` or `SKILL: none`
+line. Empty replies, extra text and unknown skills fail validation before load/skip
+scoring. Failures appear in the console and in `--out` results, and make the run exit nonzero.
 
 ## Cases
 
