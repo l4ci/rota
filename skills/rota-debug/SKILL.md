@@ -65,7 +65,7 @@ The first deliverable, non-negotiable: a command that shows the bug and that you
 - **Fast** — seconds; trim a slow loop first.
 - **Unaided** — you can run it without the user. Only rung 8 is exempt, and it says so in the report.
 
-**Flaky bugs.** Run the reproducer N times (start at 20), record `fails/N`, and raise the rate (parallel runs, tighter timing, fixed seed, injected load) until one run is informative. Step 6 re-runs at the same N.
+**Flaky bugs.** When the bug is intermittent, read [`flaky-bugs.md`](flaky-bugs.md).
 
 **Minimise.** Shrink the reproducer while it stays red, re-running after each cut, until any further removal turns it green. It becomes the regression test in Step 5.
 
@@ -115,7 +115,7 @@ Route on `data.next`: `complete` Step 7; `hypothesize` the fix failed, back to S
 
 ## Iron Law stop
 
-Three failed committed fixes: no further attempts. Print `rota debug counter summary` and suggest `/rota-pause` or reopening from a different angle. Further attempts are refused until a human runs `rota debug reset <ID> --reason "<why>"`, a manual gate (`references/manual-gates.md`): only after an `AskUserQuestion` yes, passing `--confirm --confirm-note "<their answer>"`, never on your own. Leave the branch and status entry; do not `rota item complete`; do not dispatch any continuation skill.
+When Step 2 or Step 6 routes here, read [`iron-law-stop.md`](iron-law-stop.md).
 
 ## Step 7 — Proof, PR, cleanup
 
@@ -126,20 +126,7 @@ rota debug counter clear
 rota proof add <ID> --check "<reproducer command>" --result PASS --evidence "<output line showing the symptom is gone>" --sha <commit-hash>
 ```
 
-**No seam.** File the refactor item first (dedup and body shape as in `/rota-refactor`'s filing step), naming the missing seam and the bug it would have caught:
-
-```bash
-rota item create --json --kind tasks --title "<verb-first title naming the seam>" --desc "<one line>" --body-file <scratch> --related <ID>
-rota issues label <number> --add refactor
-```
-
-The body needs `## Acceptance` boxes, one being a regression test for <ID> across the new seam. Check `rota tracker call -- issue list --label refactor --state all` for an open item on the same seam; if one exists, comment there instead of filing. File backend: `rota item create` alone. Then word the proof row to say no seam existed and link the item:
-
-```bash
-rota proof add <ID> --check "<reproducer command>" --result PASS --evidence "no regression test: no seam (<what would be mocked>); refactor #<n>" --sha <commit-hash>
-```
-
-Put the same line in the PR body.
+**No seam.** When Step 5 found no seam, read [`no-seam.md`](no-seam.md) for filing the item and wording the proof row.
 
 Re-run `git grep -n "\[DEBUG-<id>\]"` once more; it must print nothing. Open a PR and hand it to review; never merge directly. The issue closes when the PR merges:
 
@@ -181,3 +168,6 @@ Nudge one line, only when it applies: cause not obvious from the code, *"Run `/r
 ## References
 
 - [`references/knowledge-consult.md`](references/knowledge-consult.md) — K+D query pattern.
+- [`flaky-bugs.md`](flaky-bugs.md) — measuring and raising the failure rate of an intermittent bug.
+- [`iron-law-stop.md`](iron-law-stop.md) — what to do after three failed fixes.
+- [`no-seam.md`](no-seam.md) — filing the missing seam and wording the proof row.

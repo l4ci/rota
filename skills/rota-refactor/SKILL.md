@@ -14,9 +14,8 @@ Surface architectural friction and file each finding as an issue. The default ru
 Read `.rota/config.json`:
 
 - `models.orchestrator` — main session model: exploration and ranking (default `opus`)
-- `models.worker` — the `standard` tier: `--fix` implementation subagents (default `sonnet`)
-- `refactor.verifyCommands` — shell commands run as gates in `--fix` verification (default `[]`)
-- `refactor.confirmBeforeExecute` — `--fix` only: pause before fixing (default `true`)
+
+`--fix` also reads `models.worker`, `refactor.verifyCommands` and `refactor.confirmBeforeExecute`; [`fix-path.md`](fix-path.md) lists them.
 
 ## Args
 
@@ -25,7 +24,7 @@ Read `.rota/config.json`:
 - `--designs` — for structural findings, draft competing interfaces before recommending one (`references/refactor-design-approaches.md`). Off by default (expensive).
 - `--interactive` — present the ranked findings and ask which to file instead of filing all.
 
-Umbrella projects: `rota refactor targets --json` lists the sub-repos. Run once per sub-repo with the global `--repo <name>` so each finding lands on the owning tracker. Do not fan out sub-agents from here; a round's orchestrator assigns one area per worker.
+In an umbrella project, read [`options.md`](options.md) (Umbrella projects).
 
 ## Vocabulary
 
@@ -73,8 +72,6 @@ rota decisions query <topic>…
 ```
 
 Use the glossary's names for domain concepts. Do not re-suggest what a recorded decision rules out; if friction warrants reopening one, file the finding and name the decision in the body.
-
-Run `rota git guard clean --context "/rota-refactor"` only under `--fix`.
 
 ### Step 2 — Explore
 
@@ -130,9 +127,7 @@ Body sections:
 
 Report: table of filed issues (number, title, strength), skipped duplicates with the matched issue, the top recommendation. Zero filed is valid.
 
-**Rejections.** If the user rejects a finding for a reason a later review must respect, offer `/rota-decide`. Skip ephemeral ("not now") and self-evident reasons.
-
-Under `--interactive`, show the ranked list before filing and let the user drop or reorder; design discussion of a chosen finding belongs in `/rota-brainstorm`.
+When the user rejects a finding, or `--interactive` was passed, read [`options.md`](options.md) (Rejections, Interactive filing).
 
 Without `--fix`, stop here.
 
@@ -142,6 +137,8 @@ Read [`fix-path.md`](fix-path.md) when `--fix` was passed and follow it. `--fix`
 
 ## References
 
+- [`options.md`](options.md) — umbrella projects, `--interactive` filing, recording rejections.
+- [`fix-path.md`](fix-path.md) — `--fix` configuration, clean-tree guard and the fix steps.
 - [`references/refactor-design-approaches.md`](references/refactor-design-approaches.md) — competing-interface choreography for `--designs`.
 - [`references/dependent-items.md`](references/dependent-items.md) — ordering filed findings with `--depends-on`.
 - [`references/knowledge-consult.md`](references/knowledge-consult.md) — the knowledge and decisions query pattern used in Orient.

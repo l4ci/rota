@@ -28,7 +28,7 @@ Determine the mode silently:
 - *"spike done"*, *"finish the SSE spike"*, *"extract findings"* → **Finish mode**
 - Neither matches, or both → ask once
 
-In Finish mode, if no spike is named, list open spikes via `rota spike list` (`data.spikes`, `status` not `done`) and ask which.
+In Finish mode with no spike named, see Step 5.
 
 ## Step 2 (Start mode) — Sharpen the Question and Resolve the Repo
 
@@ -39,38 +39,26 @@ A spike answers a *yes/no/conditional* question. Push back on a vague one:
 
 Name it with a short kebab-case identifier (`sse-feasibility`, `auth-rotation`). It becomes the branch suffix and the spike file's stem.
 
-**Sub-repo (umbrella mode only; skip when `rota repo umbrella` exits 1, see `references/umbrella-mode.md`).** The spike branch must land in a specific sub-repo (the umbrella root often is not a git repo). Resolve `<repo>`:
-
-1. The user named a sub-repo (*"spike SSE feasibility in web"*) → use it.
-2. Else `rota repo which --json` from the cwd; on success use `data.name`.
-3. Else ask via `AskUserQuestion`:
-   - **Header:** `"Repo"`
-   - **Question:** *"Which sub-repo should `spike/<name>` live in?"*
-   - **Options:** one per registered sub-repo (names from `.rota/repos.json`, or `rota repo resolve --json`), single-select.
-
-Carry `<repo>` into Step 4 as `--repo <repo>`.
+In umbrella mode (`rota repo umbrella` exits 0), read [`start-umbrella.md`](start-umbrella.md) first: it resolves `<repo>` for `--repo <repo>` in Step 4.
 
 ## Step 3 (Start mode) — Branch Without Asking
 
-No confirmation: the branch is throwaway. On a clean tree, create it and switch to it. On a dirty tree, create it but stay on the current branch (so the changes don't follow) and say so in the handoff. Umbrella mode: the branch is created in `<repo>`.
+No confirmation: the branch is throwaway. On a clean tree, create it and switch to it. On a dirty tree, create it but stay on the current branch (so the changes don't follow) and say so in the handoff.
 
 ## Step 4 (Start mode) — Create the Spike
 
 ```bash
-# Single-repo:
 BRANCH=$(rota spike add --json <name> --question "<question>" | jq -r .data.branch)
-# Umbrella mode — spike lives in <repo>:
-BRANCH=$(rota spike add --json --repo <repo> <name> --question "<question>" | jq -r .data.branch)
 ```
 
-The verb creates branch `spike/<name>` off the current HEAD (in the sub-repo with `--repo`) and writes `.rota/spikes/<name>.md` (frontmatter, question, section stubs). The spike file lives at the umbrella root regardless of `--repo`; only the branch lands in the sub-repo. Frontmatter records `repo: <name>` so `/rota-spike done` and listings know which sub-repo to use.
+The verb creates branch `spike/<name>` off the current HEAD (in the sub-repo with `--repo`) and writes `.rota/spikes/<name>.md` (frontmatter, question, section stubs).
 
-On a clean tree, run `git checkout "$BRANCH"` (umbrella: `cd` into `<repo>` first, or `git -C <repo-path> checkout "$BRANCH"`).
+On a clean tree, run `git checkout "$BRANCH"`. In umbrella mode, `start-umbrella.md` covers `--repo`, the checkout and the handoff.
 
 Compact handoff:
 
 ```
-Spike opened: spike/<name>           # umbrella: Spike opened: spike/<name> (in <repo>)
+Spike opened: spike/<name>
 Question: <one line>
 File: .rota/spikes/<name>.md
 
@@ -106,4 +94,6 @@ See Step 5: `finish-mode.md` holds Steps 5 to 7.
 
 ## References
 
+- [`start-umbrella.md`](start-umbrella.md) — umbrella-mode start: resolve `<repo>`, `--repo` variant of the verb, checkout and handoff.
+- [`finish-mode.md`](finish-mode.md) — Steps 5 to 7: pick the spike, read the branch, write findings, follow-up.
 - [`references/umbrella-mode.md`](references/umbrella-mode.md) — umbrella-mode verbs, registry shape, `Repos:` field semantics.

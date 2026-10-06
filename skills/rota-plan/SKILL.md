@@ -54,9 +54,7 @@ Rules:
 - Tasks fit one execution window; too big means two tasks.
 - Vertical slivers, not horizontal layers: each task crosses every layer it needs to be observable.
 - No stubs: real runnable code.
-- A rename and its incoming-link sweep are one task; derive the file list from `git grep -l "<old-name>"`.
-- A wide rename-style refactor (too many call sites for one window) is planned as expand → migrate in batches → contract, per `references/dependent-items.md`; each step becomes its own task.
-- Doc deliverables under `docs/` (or `docs.path`) must land in an existing doc home; otherwise raise it as an Open question (umbrella: a sibling `<repo>-docs` is the usual home).
+- When the work is a rename, a wide refactor, or ships docs, read [`plan-edge-cases.md`](plan-edge-cases.md) for the task-shaping rules.
 
 **Self-check before asking** (silent): every Acceptance criterion maps to a task; no placeholders (`TBD`, `...`, `similar to Task N`); names, paths and signatures match across tasks, each Consumes against an earlier Produces. Fix misses, then say in one line what you fixed (omit if nothing).
 
@@ -72,9 +70,7 @@ KEY=$(rota plan add --json --milestone <MID> --slice --title "<title>" | jq -r .
 
 Quote `#42`. Pass `--design <ID>` when a design exists; the frontmatter records the pointer. Issue backend: draft in a scratch file and publish with `rota plan put <key> --body-file <file>|-`; file backend: `Edit` the stub's sections, keep the frontmatter. List with `rota plan list [--milestone <M>]`. Record plan-shaping answers with `rota item comment add <ID> --kind decision --body-file -`.
 
-When the plan splits into separate items (a sliced milestone, or the expand/migrate/contract steps), file each with `rota item create ... --depends-on <prerequisite IDs>` where it clearly needs another open one first, prerequisites first (`references/dependent-items.md`). Tasks inside one plan need no items.
-
-Then `rota plan validate-docs <key>` (advisory, exits 0): for each `data.mismatches` entry append an Open question naming the path, target repo and suggestion.
+When the plan splits into separate items, or after writing, read [`plan-edge-cases.md`](plan-edge-cases.md) for dependent-item filing and the docs-path check.
 
 ## Step 5 — Report
 
@@ -92,6 +88,7 @@ Offer `/rota-work` in one line.
 
 ## References
 
+- [`plan-edge-cases.md`](plan-edge-cases.md) — rename/refactor/docs task rules (Step 3); splitting into dependent items and `validate-docs` (Step 4).
 - [`references/dependent-items.md`](references/dependent-items.md) — declaring `## Depends on` edges; expand → migrate → contract.
 - [`references/context-load-protocol.md`](references/context-load-protocol.md) — shared parallel context load.
 - [`references/knowledge-consult.md`](references/knowledge-consult.md) — the K+D query pattern the load uses.

@@ -1,5 +1,13 @@
 # Fix path (`--fix`)
 
+Config read only here:
+
+- `models.worker` — the `standard` tier: `--fix` implementation subagents (default `sonnet`)
+- `refactor.verifyCommands` — shell commands run as gates in `--fix` verification (default `[]`)
+- `refactor.confirmBeforeExecute` — pause before fixing (default `true`)
+
+Before dispatching, run `rota git guard clean --context "/rota-refactor"`.
+
 Fix only the findings the user named, or all filed in this run if they said "all". With `refactor.confirmBeforeExecute` true, confirm the list once with `AskUserQuestion` first.
 
 1. **Group.** Independent files run in parallel; one agent per file when files overlap; order real dependencies.
