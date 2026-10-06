@@ -26,6 +26,19 @@ type Board interface {
 	backlog.Workflow
 }
 
+// BoardOf is the one place a backend becomes a Board; ok is false when it
+// has no workflow verbs.
+func BoardOf(be backlog.Backend) (Board, bool) {
+	b, ok := be.(Board)
+	return b, ok
+}
+
+// forgeOn says whether a round can read labels and PRs for be's items: the
+// backend must carry them and a forge client must be configured.
+func (e Env) forgeOn(be backlog.Backend) bool {
+	return e.Forge != nil && be.Capabilities().Forge
+}
+
 // Blocked reasons of an assignment (exit 4, `blockedBy`).
 const (
 	BlockNoRound      = "no round"
@@ -371,7 +384,7 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 	res.Branch = BranchName(agent, id, it.Title)
 
 	// Kind, tier and model (C9): the model is the tier's entry for the kind.
-	pick, err := PickOf(*it)
+	pick, err := PickOf(be.Capabilities(), *it)
 	if err != nil {
 		return res, err
 	}
