@@ -109,8 +109,6 @@ Dispatch two reviewers **in parallel** (one message, two dispatches), fresh cont
 
 Fill the bracketed parts from Steps 2-6 and drop any empty section. Read [`reviewer-briefs.md`](reviewer-briefs.md) for the shared block, the Spec and Standards briefs, and the closing calibration and verdict-block text; build both briefs from it.
 
-Never put a finding from one reviewer into the other's block or rerank them.
-
 ## Step 8 — Record and Relay the Verdict
 
 Save each reviewer's JSON block to its own temp file. Record **spec first, then quality**, at the same sha (umbrella: add `--repo <name>`, see `umbrella-mode.md`):

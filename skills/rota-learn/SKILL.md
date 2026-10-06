@@ -19,9 +19,9 @@ Copy this checklist and track your progress:
 
 ## Step 1 — Parse Args
 
-- `--strict` — run the Opus verifier (Step 7) for this run.
-- `--retro` — retrospective mode. Skip Steps 2 to 8 and follow *`--retro`* in [`references/learn-rare-modes.md`](references/learn-rare-modes.md), then exit.
-- `--term <name>`, `--promote <topic> "<title>"`, `--deprecate <topic> "<title>"`, `--amend <topic> "<title>"` — manual modes. Skip Steps 2 to 8 and follow the matching section of [`references/learn-rare-modes.md`](references/learn-rare-modes.md), then exit.
+- `--strict`: run the Opus verifier (Step 7) for this run.
+- `--retro`: retrospective mode. Skip Steps 2 to 8 and follow *`--retro`* in [`references/learn-rare-modes.md`](references/learn-rare-modes.md), then exit.
+- `--term <name>`, `--promote <topic> "<title>"`, `--deprecate <topic> "<title>"`, `--amend <topic> "<title>"`: manual modes. Skip Steps 2 to 8 and follow the matching section of [`references/learn-rare-modes.md`](references/learn-rare-modes.md), then exit.
 
 With none of those, run the normal flow (Step 2 onward).
 
@@ -55,7 +55,7 @@ Format of `.rota/KNOWLEDGE.md` (size nudges for big topics come in Step 8; the m
 - <older legacy learning without title>
 ```
 
-Each new bullet: short sentence-case `**Title**`, an em-dash (U+2014, not a hyphen), the body, and a trailing `<!-- YYYY-MM-DD -->` stamp. `rota knowledge add` dedups by (topic, title): a repeat is a silent no-op and never overwrites. Leave untitled legacy bullets as-is.
+Each new bullet: short sentence-case `**Title**`, an em-dash (U+2014, not a hyphen), the body, and a trailing `<!-- YYYY-MM-DD -->` stamp. `rota knowledge add` dedups by (topic, title, case-insensitive): a repeat is a silent no-op and never overwrites. Leave untitled legacy bullets as-is.
 
 For each captured bullet, call:
 
@@ -63,7 +63,7 @@ For each captured bullet, call:
 printf '%s' "$BODY" | rota knowledge add --topic "<Topic>" --title "<Short rule title>" --body-file -
 ```
 
-The verb inserts at the top of the topic, stamps the date and dedups (case-insensitive title).
+The verb inserts at the top of the topic and stamps the date.
 
 **Pre-step rules:**
 
@@ -117,8 +117,8 @@ If verification ran and passed, add a middle line: `Opus verification: PASS — 
 
 ## References
 
-- [`references/persistence-skills.md`](references/persistence-skills.md) — Shared spine and divergence axes for the persistence duo (`/rota-learn`, `/rota-decide`) — including `/rota-learn --term` for Glossary entries.
-- [`references/learn-rare-modes.md`](references/learn-rare-modes.md) — `--term`, `--promote`, `--deprecate`, `--amend`, and the contradiction queue.
-- [`umbrella-routing.md`](umbrella-routing.md) — Step 5 / 6 `--repo` scope flag and scope question in umbrella mode.
-- [`topic-size.md`](topic-size.md) — Step 8 nudge or auto-split for large topics.
-- [`verifier.md`](verifier.md) — Step 7 Opus verifier dispatch, prompt and verdict rules.
+- [`references/persistence-skills.md`](references/persistence-skills.md): shared spine and divergence axes for `/rota-learn` and `/rota-decide`, including `--term` for Glossary entries.
+- [`references/learn-rare-modes.md`](references/learn-rare-modes.md): `--term`, `--promote`, `--deprecate`, `--amend`, and the contradiction queue.
+- [`umbrella-routing.md`](umbrella-routing.md): Step 5 / 6 `--repo` scope flag and scope question in umbrella mode.
+- [`topic-size.md`](topic-size.md): Step 8 nudge or auto-split for large topics.
+- [`verifier.md`](verifier.md): Step 7 Opus verifier dispatch, prompt and verdict rules.

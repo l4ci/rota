@@ -37,9 +37,9 @@ When `--undo` is present, read [`undo-mode.md`](undo-mode.md) and follow it; ter
 
 Read `.rota/config.json` (`rota config show`):
 
-- `work.mergeStrategy` — `"pr"` or `"direct"`; unset means ask (Step 5)
-- `ship.review` — `true` (default) runs `/rota-review` first; `false` skips it
-- `autonomy.level` — `"off"` (default), `"auto"`: whether Step 8.5 nudges or invokes directly
+- `work.mergeStrategy`: `"pr"` or `"direct"`; unset means ask (Step 5)
+- `ship.review`: `true` (default) runs `/rota-review` first; `false` skips it
+- `autonomy.level`: `"off"` (default), `"auto"`: whether Step 8.5 nudges or invokes directly
 
 `ship.secondOpinion` and `ship.qa` are read by [`opt-in-gates.md`](opt-in-gates.md); `docs.path`, `docs.afterWork` and `docs.autoCreate` by [`docs-mode.md`](docs-mode.md).
 
