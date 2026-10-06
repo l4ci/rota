@@ -63,10 +63,10 @@ func TestSigning(t *testing.T) {
 	}
 
 	cd, home := t.TempDir(), ""
-	home = CodexHome(cd, "w1")
+	home = CodexSlotDir(cd, "w1")
 	os.MkdirAll(home, 0o700)
-	launch, key, err := (codex{}).Prepare("codex --model x --dangerously-bypass-hook-trust", func() (string, error) { return "/opt/rota", nil }, Setup{Home: home})
-	if err != nil || len(key) != 32 || !strings.Contains(launch, "prompt-check") || !strings.HasPrefix(launch, "codex -c features.hooks=true") {
+	launch, key, err := (codex{}).Prepare("codex --model x --dangerously-bypass-hook-trust", func() (string, error) { return "/opt/rota", nil }, Setup{StateDir: home, Worktree: "/wt"})
+	if err != nil || len(key) != 32 || !strings.Contains(launch, "prompt-check") || !strings.Contains(launch, "codex -c 'projects.") && strings.Contains(launch, "-c features.hooks=true") {
 		t.Fatalf("Prepare: %q %v %v", launch, key, err)
 	}
 	signed := (codex{}).Sign(key, payload)
@@ -83,7 +83,7 @@ func TestSigning(t *testing.T) {
 	if !errors.As(err, &r) || r.Class != Unavailable || r.Hint == "" {
 		t.Errorf("a missing key must be an unavailable refusal with a hint: %v", err)
 	}
-	if _, _, err := (codex{}).Prepare("codex", func() (string, error) { return "", errors.New("no exe") }, Setup{Home: home}); err == nil {
+	if _, _, err := (codex{}).Prepare("codex", func() (string, error) { return "", errors.New("no exe") }, Setup{StateDir: home, Worktree: "/wt"}); err == nil {
 		t.Error("no rota binary must refuse")
 	}
 }

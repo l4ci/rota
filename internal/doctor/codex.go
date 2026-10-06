@@ -8,22 +8,39 @@ import (
 	"github.com/l4ci/rota/internal/harness"
 )
 
-// CodexHome is one slot's CODEX_HOME.
+// CodexHome is one CODEX_HOME a worker can run under: a work.codexAccounts
+// account (Slot is its name), or the default Codex home (empty Slot and Dir).
 type CodexHome struct{ Slot, Dir string }
 
-// codex is the E1 check: the Codex CLI runs and every slot home that
-// exists is logged in (and, under herdr, has the integration). The readiness
-// logic is the harness package's, shared with dispatch; this renders its
-// findings as a report line.
+func (h CodexHome) label() string {
+	if h.Slot == "" {
+		return "default home"
+	}
+	return h.Slot
+}
+
+func (h CodexHome) env() string {
+	if h.Dir == "" {
+		return ""
+	}
+	return "CODEX_HOME=" + h.Dir + " "
+}
+
+// codex is the E1 check: the Codex CLI is in range and every home a worker
+// can run under is logged in (and, under herdr, has the integration). The
+// readiness logic is the harness package's, shared with dispatch; this renders
+// its findings as a report line. A configured account that is not ready fails
+// the check; the default home only notes it, since a project that never runs
+// Codex workers has no reason to log in.
 func (d *runner) codex() Check {
 	look := func(name string) (string, bool) { return d.in.Look(name) }
 	bin, have := look("codex")
 	homes := d.in.CodexHomes
-	if !have && len(homes) == 0 {
-		return skip("codex", "codex not on PATH and no slot has a codex home")
-	}
 	if !have {
-		return fail("codex", "codex not found on PATH, but slot homes exist: "+d.homeNames(), harness.CodexInstallHint)
+		if !d.hasCodexAccounts() {
+			return skip("codex", "codex not on PATH and no work.codexAccounts configured")
+		}
+		return fail("codex", "codex not found on PATH, but work.codexAccounts is configured: "+d.homeNames(), harness.CodexInstallHint)
 	}
 	p := harness.Probe{Look: look, Run: func(ctx context.Context, bin string, args, env []string) (harness.Result, error) {
 		r, err := d.in.Exec(ctx, bin, args, env, d.in.Dir)
@@ -50,20 +67,14 @@ func (d *runner) codex() Check {
 		tiers = "; round.tiers.codex unset (optional): workers use Codex's default model"
 	}
 	if len(homes) == 0 {
-		return pass("codex", head+", no slot homes yet"+tiers)
+		return pass("codex", head+tiers)
 	}
 	herdr := ""
 	if d.in.Dispatch == "herdr" {
 		herdr, _ = look("herdr")
 	}
-	var bad []string
+	var bad, notes []string
 	var hint string
-	note := func(msg, h string) {
-		bad = append(bad, msg)
-		if hint == "" {
-			hint = h
-		}
-	}
 	for _, h := range homes {
 		found := harness.CheckCodexHome(d.ctx, p, bin, herdr, harness.Home(h))
 		// A home's login problem reads before its integration problem.
@@ -72,10 +83,17 @@ func (d *runner) codex() Check {
 				if f.Code != want {
 					continue
 				}
-				if want == harness.NotLoggedIn {
-					note(h.Slot+": not logged in", "CODEX_HOME="+h.Dir+" codex login")
-				} else {
-					note(h.Slot+": herdr integration not current", "CODEX_HOME="+h.Dir+" herdr integration install codex")
+				msg, fix := h.label()+": not logged in", h.env()+"codex login"
+				if want != harness.NotLoggedIn {
+					msg, fix = h.label()+": herdr integration not current", h.env()+"herdr integration install codex"
+				}
+				if h.Slot == "" {
+					notes = append(notes, msg+" (run `"+fix+"` before a Codex worker)")
+					continue
+				}
+				bad = append(bad, msg)
+				if hint == "" {
+					hint = fix
 				}
 			}
 		}
@@ -83,13 +101,25 @@ func (d *runner) codex() Check {
 	if len(bad) > 0 {
 		return fail("codex", head+"; "+strings.Join(bad, "; "), hint)
 	}
+	if len(notes) > 0 {
+		return pass("codex", head+"; "+strings.Join(notes, "; ")+tiers)
+	}
 	return pass("codex", fmt.Sprintf("%s; homes checked: %s%s", head, d.homeNames(), tiers))
+}
+
+func (d *runner) hasCodexAccounts() bool {
+	for _, h := range d.in.CodexHomes {
+		if h.Slot != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func (d *runner) homeNames() string {
 	var names []string
 	for _, h := range d.in.CodexHomes {
-		names = append(names, h.Slot)
+		names = append(names, h.label())
 	}
 	return strings.Join(names, ", ")
 }

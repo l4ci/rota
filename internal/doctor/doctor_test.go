@@ -304,7 +304,7 @@ func TestCodexCheck(t *testing.T) {
 	// the claude fixtures carry a codex line of their own, so build these here
 	codexCur := "claude: current (v10)\ncodex: current (v8) (/x)\n"
 	codexMiss := "claude: current (v10)\ncodex: not installed (/x)\n"
-	homes := []CodexHome{{"ben", "/cd/rota/codex/ben"}, {"dana", "/cd/rota/codex/dana"}}
+	homes := []CodexHome{{"ben", "/h/ben"}, {"dana", "/h/dana"}}
 	ver := Result{Stdout: "codex-cli 0.159.2\n"}
 	for _, tc := range []struct {
 		name     string
@@ -316,12 +316,18 @@ func TestCodexCheck(t *testing.T) {
 		detail   string // substring
 		hint     string
 	}{
-		{"skip: no codex, no homes", nil, "herdr", nil, nil, Skip, "no slot has a codex home", ""},
-		{"pass: codex alone", []string{"codex"}, "", nil, map[string]Result{"codex --version": ver}, Pass, "codex 0.159.2, no slot homes yet; round.tiers.codex unset (optional)", ""},
-		{"fail: homes but no codex", nil, "herdr", homes, nil, Fail, "codex not found on PATH", harness.CodexInstallHint},
-		{"pass: version not in the output", []string{"codex"}, "", nil, map[string]Result{"codex --version": {Stdout: "hello"}}, Pass, "codex, no slot homes yet", ""},
+		{"skip: no codex, default home", nil, "herdr", []CodexHome{{}}, nil, Skip, "no work.codexAccounts configured", ""},
+		{"pass: codex alone", []string{"codex"}, "", nil, map[string]Result{"codex --version": ver}, Pass, "codex 0.159.2; round.tiers.codex unset (optional)", ""},
+		{"pass: default home logged in", []string{"codex", "herdr"}, "herdr", []CodexHome{{}},
+			map[string]Result{"codex --version": ver, "codex login status": {}, "herdr integration status": {Stdout: codexCur}},
+			Pass, "homes checked: default home", ""},
+		{"pass with a note: default home not logged in", []string{"codex"}, "", []CodexHome{{}},
+			map[string]Result{"codex --version": ver, "codex login status": {ExitCode: 1}},
+			Pass, "default home: not logged in (run `codex login` before a Codex worker)", ""},
+		{"fail: accounts but no codex", nil, "herdr", homes, nil, Fail, "codex not found on PATH", harness.CodexInstallHint},
+		{"pass: version not in the output", []string{"codex"}, "", nil, map[string]Result{"codex --version": {Stdout: "hello"}}, Pass, "codex; round.tiers.codex unset", ""},
 		{"fail: version command fails", []string{"codex"}, "", nil, map[string]Result{"codex --version": {ExitCode: 3, Stdout: "codex-cli 0.159.2"}}, Fail, "not runnable", harness.CodexInstallHint},
-		{"pass: a newer codex", []string{"codex"}, "", nil, map[string]Result{"codex --version": {Stdout: "codex-cli 0.160.1"}}, Pass, "codex 0.160.1, no slot homes yet", ""},
+		{"pass: a newer codex", []string{"codex"}, "", nil, map[string]Result{"codex --version": {Stdout: "codex-cli 0.160.1"}}, Pass, "codex 0.160.1", ""},
 		{"pass: logged in, herdr integration current", []string{"codex", "herdr"}, "herdr", homes,
 			map[string]Result{"codex --version": ver, "codex login status": {}, "herdr integration status": {Stdout: codexCur}},
 			Pass, "homes checked: ben, dana; round.tiers.codex unset (optional)", ""},
@@ -330,10 +336,10 @@ func TestCodexCheck(t *testing.T) {
 			Pass, "ben, dana", ""},
 		{"fail: not logged in", []string{"codex", "herdr"}, "herdr", homes,
 			map[string]Result{"codex --version": ver, "codex login status": {ExitCode: 1}, "herdr integration status": {Stdout: codexCur}},
-			Fail, "ben: not logged in", "CODEX_HOME=/cd/rota/codex/ben codex login"},
+			Fail, "ben: not logged in", "CODEX_HOME=/h/ben codex login"},
 		{"fail: integration missing", []string{"codex", "herdr"}, "herdr", homes[:1],
 			map[string]Result{"codex --version": ver, "codex login status": {}, "herdr integration status": {Stdout: codexMiss}},
-			Fail, "ben: herdr integration not current", "CODEX_HOME=/cd/rota/codex/ben herdr integration install codex"},
+			Fail, "ben: herdr integration not current", "CODEX_HOME=/h/ben herdr integration install codex"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			have := map[string]bool{}
@@ -378,9 +384,9 @@ func (f *codexFake) exec(ctx context.Context, bin string, args []string, env []s
 	return f.fake.exec(ctx, bin, args, env, dir)
 }
 
-// The version runs under the first slot home so ~/.codex is never read, and
-// every home gets its own login call.
-func TestCodexCheckUsesSlotHomes(t *testing.T) {
+// The version runs under the first account's home, and every configured
+// account gets its own login call.
+func TestCodexCheckUsesAccountHomes(t *testing.T) {
 	f := &codexFake{fake: fake{
 		have:  map[string]bool{"codex": true},
 		reply: map[string]Result{"codex --version": {Stdout: "codex-cli 0.159.2"}, "codex login status": {}},
