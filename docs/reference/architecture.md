@@ -37,7 +37,7 @@ A [parallel round](../usage/parallel-rounds.md) keeps its per-repo state in the 
 ├── session/<id>.json    # one per Claude session: context %, rate limits, last refresh
 ├── keepalive.json       # the keepalive supervisor's state (rota keepalive run)
 ├── limit-watch.json     # the running usage-limit watcher, if any
-└── codex/<slot>/        # CODEX_HOME for each Codex worker slot
+└── codex/<slot>/        # state of each Codex worker slot (its prompt key)
 ```
 
 | File | Written by | Read by |
@@ -46,11 +46,11 @@ A [parallel round](../usage/parallel-rounds.md) keeps its per-repo state in the 
 | `session/<id>.json` | the statusline (`rota statusline dump`) on every refresh; files idle for 24 hours are dropped by the next dump | `rota hook stop`, `rota limit watch` |
 | `keepalive.json` | `rota keepalive run` on every transition | `rota keepalive status`, the Stop hook (the usage hold) |
 | `limit-watch.json` | `rota limit watch`, or the supervisor's own watcher | `rota limit status`, a second `watch` (to refuse it) |
-| `codex/<slot>/` | `rota round assign --kind codex`, and `codex login` | the Codex worker |
+| `codex/<slot>/` | `rota round assign --kind codex` | `rota worker prompt-check`, relays to the slot |
 
 The lease is what makes a session "the orchestrator". The Stop and SessionStart hooks act only for the session that holds it, so installing them wide leaves workers alone. Under `rota keepalive run` the supervisor holds the lease for its whole life, across restarts, and hands the pid to the orchestrator it starts through `ROTA_ROUND_HOLDER_PID`.
 
-The Codex homes sit outside `.worktrees/`, so `rota reap` never sees them and a `wind-down` keeps each slot's login. `~/.codex` is never used for a slot.
+The slot state directories sit outside `.worktrees/`, so `rota reap` never sees them. Codex workers log in through the default Codex home (or a `work.codexAccounts` home), never a per-slot one.
 
 The registry the round writes inside the project is `.rota/workers.json`: see [`.rota/` folder](rota-folder.md#workersjson-round-state). The orchestrator's handoff is `.rota/handoff/<base>.md`, delivered to the next session by the SessionStart hook.
 

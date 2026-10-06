@@ -46,7 +46,7 @@ func File(commonDir, name string) string { return filepath.Join(Dir(commonDir), 
 // SessionDir holds one state file per Claude Code session.
 func SessionDir(commonDir string) string { return filepath.Join(Dir(commonDir), "session") }
 
-// CodexDir holds the per-slot CODEX_HOME directories.
+// CodexDir holds the per-slot Codex state directories (the prompt key).
 func CodexDir(commonDir string) string { return filepath.Join(Dir(commonDir), "codex") }
 
 // MainCheckout is the main work tree of the repository a common dir belongs

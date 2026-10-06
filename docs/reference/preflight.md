@@ -59,7 +59,7 @@ The checks, in the order they run:
 | `stop-hook` | a Stop and a SessionStart hook installed by `rota hook install` exist and their command resolves | the orchestrator hooks are not installed (opt-in) |
 | `switch` | with `orchestrator.switchOnUsage` on: two or more accounts have a `configDir` and the Stop hook is installed | `orchestrator.switchOnUsage` is off |
 | `skills` | every installed skills root (user and project, Claude and Codex, including each `work.accounts` config dir) matches the binary's skill set, and has no missing or edited files | no root has a `.rota-manifest.json` (run `rota skills install`) |
-| `codex` | `codex` runs, and each Codex slot home is logged in and has the herdr integration | `codex` is not on `PATH` and no slot has a home |
+| `codex` | `codex` runs, and the default Codex home (or each `work.codexAccounts` account) is logged in and has the herdr integration | `codex` is not on `PATH` and no `work.codexAccounts` are configured |
 
 The two hook checks are opt-in. Until something `rota hook install` writes is present, they skip and do not fail a project that never installed the hooks. Once it is, a partial or broken install fails. `skills` follows the same rule: it skips until `rota skills install` has written a manifest.
 

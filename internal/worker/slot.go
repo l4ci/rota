@@ -49,9 +49,23 @@ func (s *Slot) TierReason() string { return jsonx.Str(s.o, "tierReason") }
 func (s *Slot) PR() string         { return jsonx.Str(s.o, "pr") }
 func (s *Slot) Account() string    { return jsonx.Str(s.o, "account") }
 func (s *Slot) ConfigDir() string  { return jsonx.Str(s.o, "configDir") }
-func (s *Slot) ActiveAt() string   { return jsonx.Str(s.o, "activeAt") }
-func (s *Slot) Seen() string       { return jsonx.Str(s.o, "seen") }
-func (s *Slot) Unsent() bool       { return jsonx.Bool(s.o, "unsent") }
+
+// CodexAccount is the work.codexAccounts entry the slot last ran a codex
+// worker under ("" on the default Codex home).
+func (s *Slot) CodexAccount() string { return jsonx.Str(s.o, "codexAccount") }
+
+// SetCodexAccount records the Codex account; "" removes it.
+func (s *Slot) SetCodexAccount(name string) {
+	if name == "" {
+		s.o.Delete("codexAccount")
+		return
+	}
+	s.o.Set("codexAccount", name)
+}
+
+func (s *Slot) ActiveAt() string { return jsonx.Str(s.o, "activeAt") }
+func (s *Slot) Seen() string     { return jsonx.Str(s.o, "seen") }
+func (s *Slot) Unsent() bool     { return jsonx.Bool(s.o, "unsent") }
 
 // Relays is the relay log the gate reads for approval provenance.
 func (s *Slot) Relays() []any {
