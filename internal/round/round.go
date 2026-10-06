@@ -41,6 +41,7 @@ const (
 	LabelOrphan          = "label-orphan"
 	LabelStale           = "label-stale"
 	StalledSlot          = "stalled"
+	ItemTimeout          = "item-timeout"
 	ClaimMismatch        = "claim-mismatch"
 	// LeaseStale is declared in lease.go.
 )
@@ -98,6 +99,11 @@ type Env struct {
 	Board Board
 	// StallMinutes is round.stallMinutes; 0 turns the stalled check off.
 	StallMinutes int
+	// ItemTimeoutMinutes is work.itemTimeoutMinutes; 0 turns the item-timeout check off.
+	ItemTimeoutMinutes int
+	// HolderPID names the lease holder for the item-timeout park; 0 discovers
+	// it from the process, as the other verbs do.
+	HolderPID int
 	// NeedsHuman is issues.labels.needsHuman; "" means DefaultNeedsHuman.
 	NeedsHuman string
 }
@@ -410,6 +416,19 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 			if st.Stalled {
 				rep.add(Finding{Kind: StalledSlot, Slot: r.Name, Issue: r.Issue,
 					Detail: fmt.Sprintf("nothing moved for %d min (last: %s)", int(st.Idle.Minutes()), st.Signal)})
+			}
+		}
+	}
+	if e.ItemTimeoutMinutes > 0 {
+		limit := time.Duration(e.ItemTimeoutMinutes) * time.Minute
+		for _, r := range rows {
+			if r.Issue == "" || !r.Registered {
+				continue
+			}
+			if at, ok := reg.ItemStart(r.Issue); ok && now().Sub(at) >= limit {
+				rep.add(Finding{Kind: ItemTimeout, Slot: r.Name, Issue: r.Issue,
+					Detail: fmt.Sprintf("running %d min since first assignment (work.itemTimeoutMinutes is %d)", int(now().Sub(at).Minutes()), e.ItemTimeoutMinutes),
+					Repair: "park as needs-human"})
 			}
 		}
 	}
