@@ -229,8 +229,13 @@ func TestShipMerge(t *testing.T) {
 	shipBranchOf(t, work, "rota/clash", [3]string{"clash.txt", "feat: other side", ""})
 	shipCommit(t, work, "clash.txt", "chore: base side", "")
 
-	// ok: a linked worktree on the branch is removed first.
-	gitT(t, work, "worktree", "add", "-q", filepath.Join(t.TempDir(), "wt"), "rota/wt")
+	// ok: a registered cycle worktree on the branch is removed first.
+	wt := filepath.Join(t.TempDir(), "wt")
+	gitT(t, work, "worktree", "add", "-q", wt, "rota/wt")
+	write(t, filepath.Join(work, ".git", "info", "exclude"), ".rota/status.json*\n")
+	if o := trRun(t, work, "", "status", "add", "rota/wt", "--items", "B70", "--worktree", wt); o.code != 0 {
+		t.Fatalf("register cycle worktree: %+v", o)
+	}
 	nenv := shipSame(t, "merge with worktree", work, "merge: wt branch\n\nbody\n", 0, "ship", "merge", "rota/wt", "--body-file", "-")
 	if d := nenv["data"].(map[string]any); d["base"] != "main" || d["changed"] != true || d["sha"] != gitT(t, work, "rev-parse", "--short", "HEAD") {
 		t.Errorf("merge data %v", d)
