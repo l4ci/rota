@@ -56,7 +56,7 @@ func roundWindDown(fs *flag.FlagSet) RunFunc {
 		defer stop()
 		var board round.Board
 		if raw, err := openBacklog(c, root, false, ""); err == nil {
-			board, _ = raw.(round.Board)
+			board, _ = round.BoardOf(raw)
 		}
 		env := c.deps().RoundEnv(ctx, root)
 		env.Worker = workerEnvCtx(c, ctx)

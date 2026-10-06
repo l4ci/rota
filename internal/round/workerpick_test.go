@@ -32,7 +32,7 @@ func TestPickOf(t *testing.T) {
 		{name: "file none", it: file("- **[B01] x.** Related: B02")},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			p, err := PickOf(c.it)
+			p, err := PickOf(backlog.Capabilities{IssueIDs: c.it.Number != 0}, c.it)
 			if c.by != "" {
 				be, ok := err.(*BlockedError)
 				if !ok || be.By != c.by || !strings.Contains(be.Msg, c.msg) {
