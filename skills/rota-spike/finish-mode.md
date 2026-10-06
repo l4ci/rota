@@ -2,6 +2,8 @@
 
 ## Step 5 (Finish mode) — Read the Spike Branch
 
+If no spike is named, list open spikes via `rota spike list` (`data.spikes`, `status` not `done`) and ask which.
+
 Read `repo:` from `.rota/spikes/<name>.md`'s frontmatter first (parallel-load with the spike file). When set, run the git calls in the sub-repo (`rota repo resolve <name>`, `data.repos[0].path`) via `git -C <sub-repo path>`; when unset, run them in the cwd:
 
 ```bash

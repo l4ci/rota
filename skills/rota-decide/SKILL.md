@@ -55,16 +55,7 @@ Ground the boundary with `references/grilling.md`: pin the rule's terms, then gr
 
 If after one round the user can't articulate **forbids** *or* **permits**, it's a learning, not a decision: suggest `/rota-learn` and stop. **Do not auto-invoke `/rota-learn`** — the user re-runs it deliberately.
 
-**Source-prefill modes (`--from-learning <topic>`, `--from-spike <name>`).** Both pre-fill the four-part draft from a source artifact. Full bodies in `references/source-prefill.md`.
-
-Source-prefill seeds only rule and *Why*; **Forbids** and **Permits** stay as `_(user must articulate)_` placeholders that block the merge until the user fills them. Sources without a commitment (an `inconclusive` spike) are refused at the gate.
-
-| Mode | Section in `references/source-prefill.md` |
-|------|-------------------------------------------|
-| `--from-learning <topic>` | `## --from-learning <topic>` |
-| `--from-spike <name>`     | `## --from-spike <name>`     |
-
-After the mode runs and the user supplies Forbids/Permits, continue to Step 3.
+When invoked with `--from-learning <topic>` or `--from-spike <name>`, read [`source-prefill-modes.md`](source-prefill-modes.md), then continue to Step 3.
 
 ## Step 3 — Compose the Four Parts
 
@@ -157,3 +148,4 @@ If the entry created a new topic, prepend a line: *"New topic: `<topic>`."*
 - [`references/subagent-dispatch.md`](references/subagent-dispatch.md) — the `light` subagent that grilling sends for broad reads.
 - [`references/persistence-skills.md`](references/persistence-skills.md) — Shared spine and divergence axes for the persistence duo (`/rota-learn`, `/rota-decide`) — including `/rota-learn --term` for Glossary entries.
 - [`references/source-prefill.md`](references/source-prefill.md) — Source-prefill / promote-between-artifacts semantics for `/rota-decide`.
+- [`source-prefill-modes.md`](source-prefill-modes.md) — Source-prefill seeding rules and mode-to-section table.
