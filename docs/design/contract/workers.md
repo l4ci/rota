@@ -134,3 +134,12 @@ exit: 3 when the registry, the slot or the named account is unknown; 4 when --ac
 old: hv-worker-account assign --slot <slot> [--account <name>]
 shim: parses `assigned: <slot> -> <account>`; `changed` is false when the slot already held that account. Old exit 3 for no usable account becomes 4.
 note: no usable account was exit 1; as a mutating verb that declines, it is now 4 (rule 7).
+
+### rota test run
+rota test run <fast|full|e2e> [--base <ref>]
+repo: none
+data: {"tier": string, "commands": []string, "verified": []string, "failed": []string, "logPath"?: string}
+exit: 1 when a command fails (`failed` names it, `logPath` is its captured output); 3 when the tier holds no commands (the message names `test.<tier>`) or `{files}` is used and no base or merge base resolves; 2 for a tier other than `fast`, `full` or `e2e`
+old: none (new in #375)
+note: runs `test.<tier>` in the project root, in order, and stops at the first failure; `commands` lists what ran (after `{files}` expansion), `verified` the ones that passed. `full` reads what the merge gate reads, so a config that still holds `refactor.verifyCommands` keeps working.
+note: `{files}` in a command expands to the files that differ between `git merge-base <base> HEAD` and the working tree (committed and uncommitted changes, deleted files left out), each single-quoted for the shell and joined by spaces; no changes expand to the empty string, with no length cap. `--base` defaults to the resolved base branch (`rota git base`). The diff is read only when a command contains `{files}`.
