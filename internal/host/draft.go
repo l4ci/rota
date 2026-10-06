@@ -37,6 +37,10 @@ const promptMarkers = "❯›"
 // dialogOption: a dialog marks its selected choice with the same glyph.
 var dialogOption = regexp.MustCompile(`^\d+[.)]\s`)
 
+// dialogFooter: a dialog's key hint below its options. Marks an unnumbered
+// choice (Claude Code's folder-trust dialog) that dialogOption cannot.
+var dialogFooter = regexp.MustCompile(`(?i)enter to (confirm|select)|esc to cancel`)
+
 // promptPlaceholders are what an empty prompt line shows. They read as text but
 // nobody typed them.
 var promptPlaceholders = []string{`Try "`, "Ask Codex to do anything"}
@@ -53,7 +57,7 @@ func promptLine(pane string) string {
 	rest := pane[i+size:]
 	line, _, _ := strings.Cut(rest, "\n")
 	line = strings.Trim(line, " \t\r│")
-	if dialogOption.MatchString(line) {
+	if dialogOption.MatchString(line) || dialogFooter.MatchString(rest) {
 		return "" // a dialog's selected option, not a prompt
 	}
 	for _, p := range promptPlaceholders {
@@ -144,7 +148,14 @@ func sgrDim(params string, dim bool) bool {
 // brief rota itself left there (its tail, or a paste placeholder), else "".
 func humanDraft(pane, brief string) string {
 	line := promptLine(pane)
-	if line == "" || briefInPrompt(line, brief) {
+	if line == "" {
+		return ""
+	}
+	// A multi-line brief runs past the first prompt line, so look for its tail
+	// in everything after the marker.
+	i := strings.LastIndexAny(pane, promptMarkers)
+	_, size := utf8.DecodeRuneInString(pane[i:])
+	if briefInPrompt(line, brief) || briefInPrompt(pane[i+size:], brief) {
 		return ""
 	}
 	return line
