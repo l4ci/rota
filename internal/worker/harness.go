@@ -87,7 +87,7 @@ func CommonDir(ctx context.Context, run git.Runner, root string) (string, error)
 // Preflight is the harness's check of a slot before anything is marked or
 // killed, shared by `worker dispatch` and `round assign`. A harness with
 // nothing to check passes.
-func (e Env) Preflight(ctx context.Context, root, kind, slot string, accept bool) (harness.Setup, error) {
+func (e Env) Preflight(ctx context.Context, root, kind, slot, model string) (harness.Setup, error) {
 	e = e.withDefaults()
 	h, err := Harness(kind)
 	if err != nil {
@@ -97,8 +97,12 @@ func (e Env) Preflight(ctx context.Context, root, kind, slot string, accept bool
 	if s := LoadRegistry(root).Slot(slot); s != nil {
 		wt = s.Worktree()
 	}
+	launch, _, err := launchLine(root, h, model)
+	if err != nil {
+		return harness.Setup{}, err
+	}
 	set, err := h.Preflight(ctx, e.probe(), harness.PreflightOpts{
-		Slot: slot, Accept: accept, Herdr: e.hostKind(root) == "herdr", Worktree: wt,
+		Slot: slot, Launch: launch, Herdr: e.hostKind(root) == "herdr", Worktree: wt,
 		CommonDir: func() (string, error) { return CommonDir(ctx, e.Git, root) },
 	})
 	return set, asError(err)

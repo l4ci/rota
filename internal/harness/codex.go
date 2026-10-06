@@ -2,7 +2,6 @@ package harness
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -22,12 +21,9 @@ import (
 // tree, so dispatch's kill is provable.
 const DefaultCodexCommand = "codex --model {model} --dangerously-bypass-approvals-and-sandbox --dangerously-bypass-hook-trust --no-daemon --no-alt-screen"
 
-// BlockCodexVersion is the blockedBy of a codex worker outside the supported
-// version range; CodexVersionFlag is the flag that lets one call through.
-const (
-	BlockCodexVersion = "codex version"
-	CodexVersionFlag  = "--accept-codex-version"
-)
+// BlockCodexFlags is the blockedBy of a codex worker whose launch line uses a
+// flag `codex --help` does not list.
+const BlockCodexFlags = "codex flags"
 
 const hookTrustFlag = "--dangerously-bypass-hook-trust"
 
@@ -198,15 +194,15 @@ func CodexHome(commonDir, slot string) string { return filepath.Join(CodexHomesD
 
 // Preflight is everything a codex worker needs before anything is marked or
 // killed, shared by `worker dispatch` and `round assign`: codex installed
-// (Unavailable), its version in range (Refused, blockedBy BlockCodexVersion,
-// unless Accept), the host herdr, the slot home created and seeded, herdr's
+// (Unavailable), every flag of the launch line listed by `codex --help`
+// (Refused, blockedBy BlockCodexFlags), the host herdr, the slot home created and seeded, herdr's
 // codex integration installed there, and the home logged in (Unavailable, hint
 // `CODEX_HOME=<home> codex login`). It never writes auth.json.
 func (c codex) Preflight(ctx context.Context, p Probe, o PreflightOpts) (Setup, error) {
 	var set Setup
 	bin, ok := p.Look("codex")
 	if !ok {
-		return set, refuse(Unavailable, "codex is not installed (codex workers need codex-cli %s)", CodexRange)
+		return set, refuse(Unavailable, "codex is not installed or not runnable")
 	}
 	if !o.Herdr {
 		return set, refuse(Unavailable, "codex workers need work.dispatch=herdr")
@@ -229,23 +225,20 @@ func (c codex) Preflight(ctx context.Context, p Probe, o PreflightOpts) (Setup, 
 		return set, refuse(Unavailable, "cannot create the codex home %s: %v", home, err)
 	}
 	v, f := CheckCodexVersion(ctx, p, bin, home)
-	if f == nil {
+	if f != nil {
+		return set, refuse(Unavailable, "codex is not installed or not runnable: `codex --version` failed")
+	}
+	if v != (CodexVersion{}) {
 		set.Version = v.String()
-	} else {
-		shown := "(version unreadable)"
-		if f.Code == VersionOutOfRange {
-			shown = f.Version
+	}
+	if miss := CheckCodexFlags(ctx, p, bin, home, LaunchFlags(o.Launch)); len(miss) > 0 {
+		names := make([]string, len(miss))
+		for i, m := range miss {
+			names[i] = m.Flag
 		}
-		if !o.Accept {
-			r := refuse(Refused, "codex %s is outside the supported range %s; install codex-cli 0.159.x or pass %s", shown, CodexRange, CodexVersionFlag)
-			r.BlockedBy = BlockCodexVersion
-			return set, r
-		}
-		set.Version = shown
-		set.Warnings = append(set.Warnings, fmt.Sprintf("codex %s is outside the supported range %s", shown, CodexRange))
-		// An older Codex may ignore -c features.hooks=true, which would leave
-		// unsigned pane text unchecked (#3).
-		set.Warnings = append(set.Warnings, "prompt check unverified on this Codex: an older version may ignore -c features.hooks=true, so unsigned pane text could reach the worker")
+		r := refuse(Refused, "codex --help does not list %s, which the launch line uses; update codex or change work.codexCommand", strings.Join(names, ", "))
+		r.BlockedBy = BlockCodexFlags
+		return set, r
 	}
 
 	if err := ensureCodexHome(o.Slot, home, o.Worktree); err != nil {

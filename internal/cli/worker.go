@@ -378,7 +378,7 @@ func workerDispatch(fs *flag.FlagSet) RunFunc {
 	round := fs.String("round", "", "orchestrator round for the signature")
 	boot := fs.Int("boot-timeout", 60, "seconds to wait for the session to boot")
 	kind := fs.String("kind", "", "harness kind: claude or codex (default the slot's, else claude)")
-	acceptCodex := fs.Bool("accept-codex-version", false, "let this call through a Codex CLI outside the supported range")
+	acceptCodex := fs.Bool("accept-codex-version", false, "deprecated and ignored: rota no longer checks the Codex version")
 	return func(c *Ctx, args []string) (Result, error) {
 		slot, err := oneArg(args, "slot")
 		if err != nil {
@@ -387,11 +387,14 @@ func workerDispatch(fs *flag.FlagSet) RunFunc {
 		if *body == "" {
 			return Result{}, Usage("--body-file is required")
 		}
+		if *acceptCodex {
+			c.Warn("--accept-codex-version is deprecated and does nothing: rota no longer checks the Codex version")
+		}
 		if *kind != "" && !harness.Valid(*kind) {
 			return Result{}, Usage("--kind must be one of %s", strings.Join(harness.Kinds, ", "))
 		}
 		opts := worker.DispatchOpts{Slot: slot, Task: *task, Relay: *relay, BootTimeout: *boot,
-			Kind: *kind, AcceptCodexVersion: *acceptCodex}
+			Kind: *kind}
 		if *round != "" {
 			n, err := strconv.Atoi(*round)
 			if err != nil || n < 0 || strings.TrimLeft(*round, "0123456789") != "" {
