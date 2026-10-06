@@ -87,27 +87,9 @@ The verb handles insertion at the top of the topic, the date stamp, and dedup.
 
 ### Umbrella-mode routing
 
-When `.rota/repos.json` registers at least one sub-repo (umbrella mode), `rota knowledge add` honors the global `--repo umbrella|<name>` flag that controls which `KNOWLEDGE.md` receives the write:
-
-- **`--repo <name>`** — writes to `.rota/knowledge/<name>/KNOWLEDGE.md` (the sub-repo's scoped file).
-- **`--repo umbrella`** — writes to `.rota/KNOWLEDGE.md` (the shared umbrella file).
-- **No `--repo`** — scope auto-resolves from cwd: inside a registered sub-repo's directory the verb writes that sub-repo's scoped file; at the umbrella root it falls back to `.rota/KNOWLEDGE.md`.
-
-**At the umbrella root**, when a learning is clearly repo-local rather than cross-repo, ask once via `AskUserQuestion` before calling `rota knowledge add`:
-
-- Header: `"Learning scope"`
-- Question: *"Capture this learning as umbrella-shared, or scoped to a specific sub-repo?"*
-- Options (single-select, one per registered sub-repo plus a shared option):
-  1. `"Umbrella-shared (Recommended)"` — *"Write to `.rota/KNOWLEDGE.md`; visible across all sub-repos."*
-  2. `"<name>"` (one option per registered sub-repo) — *"Write to `.rota/knowledge/<name>/KNOWLEDGE.md`; scoped to that repo."*
-
-Pass the chosen scope as `--repo <scope>` to `rota knowledge add`. `/rota-learn --term` (Glossary entries) uses the same routing — per the *"Persistence-trio scoping"* decision the Glossary topic follows KNOWLEDGE's hybrid scoping, so a `--repo`-scoped term lands in that sub-repo's `## Glossary`.
+When `.rota/repos.json` registers at least one sub-repo, read [`umbrella-routing.md`](umbrella-routing.md) before calling `rota knowledge add`: it covers the `--repo` scope flag and the scope question. Step 6 and `/rota-learn --term` follow the same scope.
 
 **Single-repo projects:** no `--repo` needed — scope always resolves to `"umbrella"` and the `.rota/KNOWLEDGE.md` path is used unchanged.
-
-**New topics in a scoped file:** the "append `## <Topic>` heading first" rule applies to the *resolved* file. A fresh sub-repo `KNOWLEDGE.md` starts empty — seed the heading in that scoped file before calling `rota knowledge add`, just as you would for the umbrella file.
-
-**DECISIONS stay umbrella-only.** Per the *"Persistence-trio scoping under umbrella mode"* decision in `.rota/DECISIONS.md`, only KNOWLEDGE is hybrid (umbrella + per-sub-repo). DECISIONS is umbrella-only — do not offer or pass a `--repo` scope when writing decisions.
 
 ## Step 6 — Update the Topic Index
 
@@ -121,7 +103,7 @@ In umbrella mode, pass `--repo <scope>` where `<scope>` is the same scope the le
 
 ## Step 7 — Opus Verification (opt-in)
 
-Skip unless `--strict` was passed or `learn.verify` is `true`. Follow the brief in `rota-learn/verifier.md` — it contains the dispatch instructions, the verifier prompt, and the verdict-application rules. Apply the verdict, then continue to Step 8.
+Skip unless `--strict` was passed or `learn.verify` is `true`. Read [`verifier.md`](verifier.md) and follow it — it contains the dispatch instructions, the verifier prompt, and the verdict-application rules. Apply the verdict, then continue to Step 8.
 
 ## Step 8 — Confirm
 
