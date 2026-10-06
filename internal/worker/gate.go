@@ -556,7 +556,7 @@ func (g *gate) verifyOnCI(ci *ciVerifier) (bool, error) {
 // commit itself, not the base's tip: a push to the base after the merge is not
 // a mismatch. false ends the gate with the verdict set.
 func (g *gate) confirmCITree() bool {
-	tree, _ := g.e.runGit(g.root, "rev-parse", "HEAD^{tree}")
+	tree, _ := g.e.runGit(g.root, "rev-parse", g.landed+"^{tree}")
 	if tree != g.ciTree {
 		g.verdict(GateBaseMoved, fmt.Sprintf("BASE-MOVED %s — it landed, but the landed tree %s differs from the tree CI verified (%s); %s changed during the merge", g.o.Slot, short(tree), short(g.ciTree), g.o.Base),
 			fmt.Sprintf("do not re-merge; verify %s as it is now", g.o.Base))
