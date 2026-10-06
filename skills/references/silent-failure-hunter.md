@@ -41,16 +41,3 @@ For each `SILENT-FAIL` flag, surface one bullet under a `### Silent failure chec
 ```
 
 `SILENT-FAIL` flags route as `CONCERNS` in the verdict. They don't break the build, but the user sees them before merging. A diff that gets `PASS` on intent + convention + quality but has `SILENT-FAIL` flags becomes `CONCERNS`. A diff that's already at `FAIL` stays `FAIL` (regression beats silence).
-
-## Invocation contract
-
-`/rota-review` Step 7 carries the rubric as the silent-failure check item ("Silent failure check — apply the four-question rubric from `references/silent-failure-hunter.md` to every verification claim in the diff"). The reviewer prompt links to this file for the full text. It is item 5 of the reviewer rubric.
-
-`/rota-ship` Step 3 inherits the check through `/rota-review`, with no separate dispatch. The reviewer already has the diff and the intent loaded; a second adversarial pass for silent failures alone would double the cost without changing the verdict shape.
-
-`/rota-ship` does **not** call this rubric when `ship.review: false` — opting out of review opts out of the hunter too. The rubric augments review; it is not a separate gate.
-
-## See also
-
-- `references/review-verdict-routing.md` — how `CONCERNS` (including silent-failure flags) routes through `/rota-ship` per `autonomy.level`.
-- `rota-review/SKILL.md` Step 7 — the reviewer brief that carries the rubric inline.

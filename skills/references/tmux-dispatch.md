@@ -6,15 +6,11 @@ Each worker is **its own Claude Code session**, in its own `git worktree`, on it
 
 Verbs: `rota worker pool`, `rota worker dispatch`, `rota worker poll`, `rota worker gate`. They drive tmux through the `rota` binary's tmux host.
 
-herdr runs the same workers in tabs; see [`herdr-dispatch.md`](herdr-dispatch.md), which covers only what herdr changes. The sections below apply to both hosts.
+herdr runs the same workers in tabs; [`herdr-dispatch.md`](herdr-dispatch.md) covers only what herdr changes. The sections below apply to both hosts.
 
 ## Being inside tmux is a precondition
 
 A worker's value is that it can idle on a question and a human can answer in its pane. Outside tmux the windows land in a **detached session nobody is attached to**, every escalation goes unanswered, and the host degrades into a slower subagent mode. Detection is `$TMUX` (`rota worker session check`: exit 0 inside, 1 outside); `tmux has-session` is the wrong test, since it says whether a session *exists*, not whether *we are in it*. Outside tmux, `rota worker session ensure --body-file <path>` creates the session and an `operator` window running `work.operatorCommand` (`claude --continue --model <orchestrator>` by default). The caller **must stop after a successful `ensure`**: two orchestrators on one pool dispatch the same task twice. It is idempotent on the operator window.
-
-## The worker contract
-
-Shared by both hosts and kept in [`worker-contract.md`](worker-contract.md): the standing brief every worker reads, the `ROTA-BLOCKED` / `ROTA-DONE` sentinels the poll below routes on, and the provenance rules. `/rota-orchestrate` cites it directly.
 
 ## Polling
 
@@ -28,7 +24,7 @@ Shared by both hosts and kept in [`worker-contract.md`](worker-contract.md): the
 
 A `blocked` slot carries the worker's question in `evidence`. Answer it or escalate it per `rota-orchestrate/SKILL.md` section 5 (in prose, never a blocking picker), then relay with `rota worker dispatch <n> --body-file <answer> --relay`.
 
-`--relay` signs the text and logs it in the slot's `relays[]`; why, and what the gate cross-checks, is in [provenance](worker-contract.md#provenance). Read every PR body for the channel named, not merely for whether a citation exists.
+`--relay` signs the text and logs it in the slot's `relays[]`; why, and what the gate cross-checks, is in [provenance](worker-contract.md#provenance).
 
 ## The merge gate
 
@@ -37,7 +33,7 @@ Worker-owned branches make integration git-native and bring back the failure cla
 - a symbol one worker **widens or re-types** while another adds a fresh call to it;
 - a constant, key, or output field one worker **stops emitting** while another starts depending on it.
 
-Neither author can see it: the conflicting change never existed in their tree. Git's mergeability answer is about text, not meaning.
+Neither author can see it, and git's mergeability answer is about text, not meaning.
 
 `rota worker gate <n> --base <branch>` runs freshness, merge and re-verify on the merged tree (`refactor.verifyCommands`); read `data.verdict` under `--json`. `approval-required` (exit 4) means `ship.mergeApproval` wants a human: ask, then re-gate with `--confirm --confirm-note "<answer>"`. Judgment the verdicts do not make:
 
@@ -85,7 +81,3 @@ The two roles run at different trust levels, on purpose:
 - **A timeout is not a failure of the thing under test.** It says the assertion never ran. Read the output before forming a theory.
 - **Bracket every `pgrep`/`pkill` pattern** (`[v]itest`, not `vitest`). An unbracketed pattern matches the argv of the shell running it: as `pkill` that is a confusing exit 144, but inside a wait-loop it never terminates at all: the loop matches itself and spins forever while the pane reports work still running.
 - **Never trust a piped command's exit code.** `cmd | tail -40` reports `tail`'s status. Read the result line, or run unpiped.
-
-## See also
-
-- [`references/subagent-dispatch.md`](subagent-dispatch.md): when to dispatch at all, and the brief shape both backends share.

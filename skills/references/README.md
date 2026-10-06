@@ -1,51 +1,45 @@
 # References
 
-Project-root `references/` holds extracted choreography that two or more skills share: UX shapes, decision tables, multi-step protocols. Skills cite these inline; this index shows what each reference contains and which skills consume it.
+Extracted choreography that two or more skills share: UX shapes, decision tables, multi-step protocols. Skills cite these inline. Each file's opening line names its consumers; `grep -l "references/<name>" rota-*/SKILL.md` lists them.
 
-See KNOWLEDGE.md "Skill Authoring: Prose & References" for the conventions that govern when to extract (≥30 lines of self-contained choreography), how to size the reference (per cohesive scope, not per consumer), and when to keep prose inline.
+See KNOWLEDGE.md "Skill Authoring: Prose & References" for when to extract (≥30 lines of self-contained choreography) and how to size a reference (per cohesive scope, not per consumer).
 
 ## Index
 
-| Reference | Purpose | Cited by |
-|-----------|---------|----------|
-| [`authoring-conventions.md`](authoring-conventions.md) | Authoring rules shared across SKILL.md files (inline autonomy directives, gate shape, ask-in-user's-terms, verb-contract rules). | `/rota-capture`, `/rota-refactor`, `/rota-ship` |
-| [`context-load-protocol.md`](context-load-protocol.md) | K+D context loading sequence shared by every cycle-starting skill. | `/rota-plan`, `/rota-vision`, `/rota-work` (including `--preview`) |
-| [`design-exploration.md`](design-exploration.md) | Shared draft, approve, write, hand-off shape for skills that negotiate what to build before downstream skills capture how. | `/rota-brainstorm`, `/rota-vision` |
-| [`dependent-items.md`](dependent-items.md) | When an edge is a dependency, `--depends-on` usage, creation order, expand → migrate → contract for wide refactors. | `/rota-capture`, `/rota-plan`, `/rota-refactor` |
-| [`detail-files.md`](detail-files.md) | Detail-file template used when an item's input exceeds 3 sentences. | `/rota-capture` |
-| [`docs-conventions.md`](docs-conventions.md) | Conventions for content under `docs/` (registration sites, audience split). | `/rota-ship` (Docs Mode) |
-| [`grilling.md`](grilling.md) | Frontier-round questioning with a recommended answer per question, code before user, edge-case scenarios, glossary conflicts, explicit stop condition. | `/rota-brainstorm`, `/rota-decide`, `/rota-vision` |
-| [`handoff-template.md`](handoff-template.md) | Handoff note template written by `/rota-pause` and read by `/rota-work` (no argument). | `/rota-pause` |
-| [`humanizing-prose.md`](humanizing-prose.md) | Rule sheet + silent self-audit pass applied to user-facing prose (release notes, PR body, doc-page edits) before the draft is shown to the user. | `/rota-release`, `/rota-ship` |
-| [`isolation-patterns.md`](isolation-patterns.md) | Branch / worktree creation patterns per work.isolation + umbrella mode. | `/rota-work` |
-| [`task-ledger.md`](task-ledger.md) | `Task:` commit trailer written per task and read on resume to skip finished tasks. | `/rota-pause`, `/rota-work` |
-| [`work-preview.md`](work-preview.md) | `/rota-work --preview` procedure and peek template. | `/rota-work` |
-| [`work-wave-planning.md`](work-wave-planning.md) | File and shared-symbol collisions, brief rules, verifying a completion. | `/rota-work` |
-| [`knowledge-consult.md`](knowledge-consult.md) | Canonical K+D query pattern (`rota knowledge query` + `rota decisions query`) used by every cycle-starting skill. | `/rota-debug`, `/rota-review`, `/rota-work` |
-| [`learn-rare-modes.md`](learn-rare-modes.md) | `/rota-learn` manual flags (`--retro`, `--term`, `--promote`, `--deprecate`, `--amend`) and the contradiction queue. | `/rota-learn` |
-| [`manual-gates.md`](manual-gates.md) | The manual-gate registry (`rota gate list`): gates the verbs enforce with `--confirm`, and the skill-only callouts. | `/rota-release`, `/rota-ship` |
-| [`persistence-skills.md`](persistence-skills.md) | Shared spine and divergence axes for the persistence duo (`/rota-learn`, `/rota-decide`), plus umbrella scoping (hybrid KNOWLEDGE, umbrella-only DECISIONS). | `/rota-decide`, `/rota-learn` |
-| [`post-cycle-trigger-gate.md`](post-cycle-trigger-gate.md) | Trigger condition + nudge-or-dispatch choreography for post-cycle skills. | `/rota-qa`, `/rota-ship`, `/rota-work` |
-| [`refactor-design-approaches.md`](refactor-design-approaches.md) | Competing-design choreography (decisions consult, agent constraints, output shape) for `/rota-refactor --designs`. | `/rota-refactor` |
-| [`review-verdict-routing.md`](review-verdict-routing.md) | Verdict semantics, `AskUserQuestion` shapes for `/rota-review` consumers. | `/rota-qa`, `/rota-review`, `/rota-ship` |
-| [`silent-failure-hunter.md`](silent-failure-hunter.md) | Rubric for detecting work that reports complete but didn't move the system, used in review passes. | `/rota-review`, `/rota-ship` |
-| [`source-prefill.md`](source-prefill.md) | Source-prefill / promote-between-artifacts semantics for `/rota-decide`. | `/rota-decide` |
-| [`subagent-dispatch.md`](subagent-dispatch.md) | Cross-skill rulebook for when and how skills push work into subagents instead of the orchestrator thread. | `/rota-debug`, `/rota-qa`, `/rota-vision` |
-| [`worker-contract.md`](worker-contract.md) | Standing worker contract and approval provenance for round workers. | `/rota-orchestrate` |
-| [`herdr-dispatch.md`](herdr-dispatch.md) | What herdr changes versus tmux: tabs as slots, startup dialogs, worker-contract additions. | `/rota-orchestrate` |
-| [`tmux-dispatch.md`](tmux-dispatch.md) | Judgment `rota worker` verbs do not enforce: permissions, relay provenance, merge-gate lore, failure modes (both hosts). | `/rota-orchestrate` |
-| [`three-mode-skill-shape.md`](three-mode-skill-shape.md) | Three-mode skill shape (first-run / after-work / restructure) used by `/rota-ship` (Docs Mode) and `/rota-qa`. | `/rota-qa`, `/rota-ship` |
-| [`umbrella-mode.md`](umbrella-mode.md) | Umbrella-mode helpers, registry shape, and `Repos:` field semantics. | `/rota-capture`, `/rota-qa`, `/rota-spike`, `/rota-work` |
+| Reference | Purpose |
+|-----------|---------|
+| [`authoring-conventions.md`](authoring-conventions.md) | Authoring rules shared across SKILL.md files. |
+| [`context-load-protocol.md`](context-load-protocol.md) | Context reads before a cycle-starting skill proposes anything. |
+| [`dependent-items.md`](dependent-items.md) | Dependency edges, `--depends-on`, creation order, expand → migrate → contract. |
+| [`design-exploration.md`](design-exploration.md) | Draft, approve, write, hand-off shape for skills that negotiate what to build. |
+| [`detail-files.md`](detail-files.md) | Detail-file template for items whose input exceeds 3 sentences. |
+| [`docs-conventions.md`](docs-conventions.md) | Conventions for content under `docs/`. |
+| [`grilling.md`](grilling.md) | Frontier-round questioning with a recommended answer per question. |
+| [`handoff-template.md`](handoff-template.md) | Handoff note written by `/rota-pause`, read by `/rota-work`. |
+| [`herdr-dispatch.md`](herdr-dispatch.md) | What herdr changes versus tmux. |
+| [`humanizing-prose.md`](humanizing-prose.md) | Rule sheet and silent self-audit for user-facing prose. |
+| [`isolation-patterns.md`](isolation-patterns.md) | Branch and worktree creation per `work.isolation` and umbrella mode. |
+| [`issue-mode.md`](issue-mode.md) | The issue backend: IDs, verb map, state labels, PR flow, milestones. |
+| [`knowledge-consult.md`](knowledge-consult.md) | The `rota knowledge query` + `rota decisions query` pattern. |
+| [`learn-rare-modes.md`](learn-rare-modes.md) | `/rota-learn` manual flags and the contradiction queue. |
+| [`manual-gates.md`](manual-gates.md) | The manual-gate registry: verb-enforced gates and skill-only callouts. |
+| [`persistence-skills.md`](persistence-skills.md) | Shared spine, gate strengths and umbrella scoping for `/rota-learn` and `/rota-decide`. |
+| [`post-cycle-trigger-gate.md`](post-cycle-trigger-gate.md) | Trigger condition and nudge-or-dispatch sequence for post-cycle steps. |
+| [`refactor-design-approaches.md`](refactor-design-approaches.md) | Competing-design choreography for `/rota-refactor --designs`. |
+| [`review-verdict-routing.md`](review-verdict-routing.md) | Verdict semantics and routing for review consumers. |
+| [`silent-failure-hunter.md`](silent-failure-hunter.md) | Rubric for work that reports complete but didn't move the system. |
+| [`source-prefill.md`](source-prefill.md) | `/rota-decide --from-learning` and `--from-spike` prefill. |
+| [`subagent-dispatch.md`](subagent-dispatch.md) | When and how skills push work into subagents; the tier table. |
+| [`task-ledger.md`](task-ledger.md) | `Task:` commit trailer, read on resume to skip finished tasks. |
+| [`three-mode-skill-shape.md`](three-mode-skill-shape.md) | First-run / after-work / restructure shape for `/rota-ship --docs` and `/rota-qa`. |
+| [`tmux-dispatch.md`](tmux-dispatch.md) | Judgment the `rota worker` verbs do not enforce; shared by both hosts. |
+| [`umbrella-mode.md`](umbrella-mode.md) | Umbrella registry, `Repos:` field and resolution verbs. |
+| [`work-preview.md`](work-preview.md) | `/rota-work --preview` procedure and peek template. |
+| [`work-wave-planning.md`](work-wave-planning.md) | Wave collisions, brief rules, verifying a completion. |
+| [`worker-contract.md`](worker-contract.md) | Standing worker contract and approval provenance. |
 
 ## Conventions
 
-- **Path style.** Citations from SKILL.md use the form `references/<file>.md` (relative to the installed skill's directory). `rota skills install` copies the references each skill cites into `<skill>/references/`, so links resolve wherever a skill is loaded.
-- **Inline vs. extracted.** Inline prose wins when it's local to its step and under 30 lines. Extract to `references/<topic>.md` when the same choreography appears in 2+ skills OR extraction shrinks a SKILL.md by ≥30 lines of self-contained content (per the "Single-consumer references" KNOWLEDGE entry).
-- **One-line purpose.** Each row's `Purpose` column is one sentence; longer context lives inside the reference file. If the one-liner needs a clause about scope or a noteworthy exception, keep it under 25 words.
-- **Cited by.** The `Cited by` column is the canonical consumer set, derived by `grep -l "references/<name>" rota-*/SKILL.md`. A reference with no consumers should not exist; flag any you find in your completion report.
-
-## Maintenance
-
-When adding a reference file, append a row to the Index table in alphabetical order, fill in `Purpose` and `Cited by`, and add at least one inline citation in a SKILL.md (otherwise the reference shouldn't exist yet; write it from a consumer's perspective).
-
-When the consumer set for a reference changes, re-run the grep above and update the `Cited by` column.
+- **Path style.** SKILL.md cites `references/<file>.md`, relative to the installed skill's directory. `rota skills install` copies each cited reference into `<skill>/references/`.
+- **Inline vs. extracted.** Inline prose wins when it is local to its step and under 30 lines. Extract when the same choreography appears in 2+ skills or extraction shrinks a SKILL.md by ≥30 lines.
+- **New reference.** Add a row in alphabetical order and at least one inline citation in a SKILL.md; without a consumer the reference should not exist yet.

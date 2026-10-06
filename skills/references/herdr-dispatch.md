@@ -49,7 +49,7 @@ Agent names are unique per herdr **server**, not per workspace, so a bare `w1` w
 | 3 | pool, slot, worktree or body file missing, or `--relay` found no running session |
 | 4 | the reset guard found the slot holding work, or `work.workerCommand` carries a resume flag |
 | 5 | host failure, including outside herdr, a wrapper command and an unrecognised startup dialog; also `agent_blocked`: a dialog was already up, nothing was sent |
-| 6 | `agent_prompt_stalled` or timeout: no activity after the prompt. Dispatch already pressed Enter up to 3 times if the brief was visible on the prompt line. A `--relay` resend then submits that pending text instead of typing it again (the slot is marked `unsent` in `workers.json`); a task dispatch starts a fresh session. Inspect the tab before resending; a stall does not prove the text was lost |
+| 6 | `agent_prompt_stalled` or timeout: no activity after the prompt. Dispatch already pressed Enter up to 3 times if the brief was visible on the prompt line. A `--relay` resend then submits that pending text instead of typing it again (the slot is marked `unsent` in `workers.json`); a task dispatch starts a fresh session. Read the tab (`herdr agent read <name>`) before resending: a stall does not prove the text was lost, and a duplicate brief costs a worker its context |
 
 ## Polling
 
@@ -68,10 +68,4 @@ Append to the [standing contract](worker-contract.md#the-standing-contract) unde
 ## Rules herdr adds
 
 - **`focused: true` means a human is looking at that agent.** The `rota` verbs do not check it. Before a relay or a re-dispatch, check `herdr agent get <name>` (the slot's agent name, above); if the tab is focused, someone is typing in it, so tell them instead of typing over them.
-- **A timeout or stall does not prove the prompt was lost.** Read the tab (`herdr agent read <name>`) before sending the same brief again. A duplicate brief costs a worker its context.
 - **Install the herdr Claude integration once per config dir** (`herdr integration`) when provisioning an account for herdr slots.
-
-## See also
-
-- [`worker-contract.md`](worker-contract.md): the standing worker contract and approval provenance.
-- [`tmux-dispatch.md`](tmux-dispatch.md): relay, merge gate, permissions, accounts and failure modes both hosts share.
