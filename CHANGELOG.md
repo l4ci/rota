@@ -1,5 +1,74 @@
 # Changelog
 
+## v0.12.0 — 2026-10-06
+
+Codex workers on your own account, per-issue harness and model labels, leaner skills, and a fix for slot worktrees vanishing mid-round.
+
+### New
+
+- **Pick a worker's harness and model per issue.** Label an issue `harness:claude` or `harness:codex`, and optionally `model:<id>` (file backend: `Harness:` / `Model:` fields). `rota round assign` picks them up; `--kind` and the new `--model` override them. `candidates` and `status` show the choice. `/rota-capture` adds the labels when you name a harness or model.
+- **Codex workers use your default Codex account.** No per-slot login. Optional `work.codexAccounts` spreads slots across several Codex homes, like `work.accounts` does for Claude.
+- **No Codex version pin.** Preflight checks that `codex --help` lists the flags the launch line uses. `--accept-codex-version` is now a no-op.
+- **Config:** `rota config edit` (an interactive editor, also reachable from the bare `rota` palette), a global config that seeds new projects, and `rota projects cleanup` to prune stale project entries.
+- **Rounds:**
+  - Split layout names the tab `rota` and the pane `orchestrator`, keeps the CLI on top, and is remembered per round.
+  - `rota round bounce` caps review bounces.
+  - `transfer --tier`.
+  - PR bodies gain `## Rulings`, proof evidence and a door/blast-radius line.
+  - Briefs carry the item's Out of scope section.
+- **Skills:**
+  - `/rota-review` runs separate Spec and Standards reviewers.
+  - `/rota-learn --retro` turns mistakes into guardrails.
+  - `/rota-debug` builds a feedback loop before guessing, and ranks hypotheses.
+  - `/rota-work` resumes from `Task:` trailers.
+  - `item create --depends-on` orders items.
+  - Behavioural evals cover skill triggers and the core skills.
+
+### Changed
+
+- **Skills are shorter and easier to follow.**
+  - Each SKILL.md keeps the happy path inline and moves rare cases into per-skill files.
+  - Each workflow opens with a copyable step checklist.
+  - Duplicated rules across `skills/references/` now have one owner file (-10% words).
+- `rota config show` and the editor show the value rota actually uses, including defaults behind a local `null`.
+- The `blockedBy` for a Codex launch problem is now `codex flags` (was `codex version`).
+
+### Fixed
+
+- `rota ship pr` deleted the worktree it ran in, so a round slot could vanish mid-round. Ship verbs now never remove slots, the current directory, or a worktree with changes.
+- Model ids from labels, fields and `--model` are validated before they reach the shell launch line.
+- **Gate:**
+  - The lock stays exclusive during stale-lock takeover.
+  - The smoke leak guard no longer overwrites concurrent edits.
+  - The gate and runner scrub HOME, XDG, SSH and host variables.
+- **Rounds:**
+  - `worker poll` lets the last sentinel decide a slot's state.
+  - `reconcile --apply` parks slots whose PR merged, so `watch` no longer loops on them.
+- **Merges:** merge-abort failures are reported with recovery steps instead of claiming a clean abort.
+- **Items:**
+  - Debug items get one canonical identity for the Iron Law count.
+  - Item plans load without a milestone.
+  - Removing the last backlog bullet works without a trailing newline.
+  - `item rm` recognizes rota-written flat archives.
+  - Archive, reopen and remove keep items across failed or concurrent transfers.
+- **Other:**
+  - GitLab changed-file lists paginate correctly.
+  - Skill evals fail on failed model calls.
+
+### Internal
+
+Large refactors with no behaviour change:
+- one merge module for branches and PRs;
+- typed worker-registry rows;
+- a single host-factory seam and clock on Deps;
+- config typing centralised;
+- one fake for round tests.
+
+## Stats
+107 commits, 440 files changed, +16005 −5435 lines
+
+**Full changelog:** https://github.com/l4ci/rota/compare/v0.11.0...v0.12.0
+
 ## v0.11.0 — 2026-10-05
 
 Split and tab layouts for herdr rounds, an interactive palette on bare `rota`, and leaner CI.
