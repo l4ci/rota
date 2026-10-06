@@ -1,19 +1,15 @@
 package cli
 
 import (
-	"context"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"os"
-	"regexp"
 	"slices"
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
-	"github.com/l4ci/rota/internal/git"
-	"github.com/l4ci/rota/internal/itembody"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/tracker"
@@ -187,6 +183,37 @@ func resolveItem(be backlog.Backend, ref string) (id, typ string, err error) {
 	return it.ID, it.Type, nil
 }
 
+// withBackend opens the backlog and runs fn on it; every backlog error comes
+// back as the verb's failure. fileOnly refuses the issue backend with hint.
+func withBackend(c *Ctx, root string, fileOnly bool, hint string, fn func(be backlog.Backend) (Result, error)) (Result, error) {
+	be, err := openBacklog(c, root, fileOnly, hint)
+	if err != nil {
+		return backlogFail(err)
+	}
+	res, err := fn(be)
+	var e *Error
+	if err != nil && !errors.As(err, &e) {
+		return backlogFail(err)
+	}
+	return res, err
+}
+
+// withItem resolves ref to its canonical ID and type, then runs fn. A backlog
+// error becomes the verb's failure; a Result fn returns beside an *Error (a
+// verdict such as "not ready") is kept.
+func withItem(be backlog.Backend, ref string, fn func(id, typ string) (Result, error)) (Result, error) {
+	id, typ, err := resolveItem(be, ref)
+	if err != nil {
+		return backlogFail(err)
+	}
+	res, err := fn(id, typ)
+	var e *Error
+	if err != nil && !errors.As(err, &e) {
+		return backlogFail(err)
+	}
+	return res, err
+}
+
 func todayDate(c *Ctx) string { return c.deps().Today().Format("2006-01-02") }
 
 // givenFlags is the set of flags the parser saw, by name.
@@ -240,32 +267,6 @@ func idNext(fs *flag.FlagSet) RunFunc {
 
 // ---- item create ----------------------------------------------------------
 
-var (
-	itemKinds    = []string{"bugs", "features", "tasks"}
-	itemSections = map[string]string{"bugs": "## Bugs", "features": "## Features", "tasks": "## Tasks"}
-	bulletID     = regexp.MustCompile(`\*\*\[(` + backlog.IDPattern(1) + `)\]`)
-)
-
-var (
-	dependsRefRe = regexp.MustCompile(`^(?:#\d+|` + backlog.IDPattern(backlog.FileIDDigits) + `)$`)
-)
-
-// dependsRefs splits a --depends-on value into item references, rejecting
-// anything the readiness check could not look up.
-func dependsRefs(v string) ([]string, error) {
-	var refs []string
-	for _, t := range strings.FieldsFunc(v, func(r rune) bool { return r == ',' || r == ' ' || r == '\t' || r == '\n' }) {
-		if !dependsRefRe.MatchString(t) {
-			return nil, Usage("--depends-on %q is not an item reference (#N or an ID like B07)", t)
-		}
-		refs = append(refs, t)
-	}
-	if len(refs) == 0 {
-		return nil, Usage("--depends-on needs a value")
-	}
-	return refs, nil
-}
-
 func itemCreate(fs *flag.FlagSet) RunFunc {
 	kind := fs.String("kind", "", "bugs|features|tasks")
 	title := fs.String("title", "", "item title")
@@ -287,7 +288,7 @@ func itemCreate(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		given := givenFlags(fs)
-		if !slices.Contains(itemKinds, *kind) {
+		if !backlog.ValidKind(*kind) {
 			return Result{}, Usage("--kind must be bugs|features|tasks")
 		}
 		if given["raw-file"] {
@@ -300,66 +301,44 @@ func itemCreate(fs *flag.FlagSet) RunFunc {
 			if err != nil {
 				return Result{}, readInputErr("raw-file", *rawFile, err)
 			}
-			entry := strings.TrimRight(newlineReplacer.Replace(string(raw)), "\n")
-			m := bulletID.FindStringSubmatch(entry)
-			if m == nil {
-				return Result{}, Usage("--raw-file bullet needs a **[ID]")
-			}
 			ops, err := openBacklogFile(c, root, "--raw-file appends to BACKLOG.md; use item create --title")
 			if err != nil {
 				return backlogFail(err)
 			}
-			if err := ops.Append(itemSections[*kind], entry); err != nil {
+			res, err := backlog.AppendRaw(ops, *kind, raw)
+			if err != nil {
 				return backlogFail(err)
 			}
-			typ, _ := backlog.TypeByKind(*kind)
-			return Result{Data: jsonObj("id", m[1], "type", typ.Letter, "kind", *kind, "changed", true), Text: m[1]}, nil
+			return Result{Data: jsonObj("id", res.ID, "type", res.Type, "kind", *kind, "changed", true), Text: res.ID}, nil
 		}
-		if *title == "" {
-			return Result{}, Usage("--title is required")
-		}
-		in := backlog.CreateInput{Kind: *kind, Title: *title, Tag: *tag, Desc: *desc}
-		for _, n := range backlog.CreateFields {
-			key := strings.ToLower(n)
-			if given[key] && pystr.Strip(*named[key]) == "" {
-				return Result{}, Usage("--%s needs a value", key)
-			}
-			if v := *named[key]; v != "" {
-				in.Fields = append(in.Fields, backlog.Field{Name: n, Value: v})
-			}
+		req := backlog.CaptureRequest{Kind: *kind, Title: *title, Tag: *tag, Desc: *desc,
+			Fields: map[string]string{}, Given: given, DependsOn: *dependsOn, DependsGiven: given["depends-on"]}
+		for n, v := range named {
+			req.Fields[n] = *v
 		}
 		if *bodyFile != "" {
 			body, err := readInputFile(c, *bodyFile)
 			if err != nil {
 				return Result{}, readInputErr("body-file", *bodyFile, err)
 			}
-			in.Body, in.HasBody = body, true
+			req.Body, req.HasBody = body, true
 		}
-		if given["depends-on"] {
-			refs, err := dependsRefs(*dependsOn)
+		in, err := backlog.BuildCreateInput(req)
+		if err != nil {
+			return backlogFail(err)
+		}
+		return withBackend(c, root, false, "", func(be backlog.Backend) (Result, error) {
+			res, err := be.Create(in)
 			if err != nil {
 				return Result{}, err
 			}
-			if itembody.HasDependsOn(in.Body) {
-				return Result{}, Usage("--depends-on conflicts with the ## Depends on section already in --body-file")
+			data := jsonObj("id", res.ID, "type", res.Type, "kind", *kind)
+			if res.Detail != "" {
+				data.Set("detail", res.Detail)
 			}
-			in.Body = itembody.AppendDependsOn(in.Body, refs)
-			in.HasBody = true
-		}
-		be, err := openBacklog(c, root, false, "")
-		if err != nil {
-			return backlogFail(err)
-		}
-		res, err := be.Create(in)
-		if err != nil {
-			return backlogFail(err)
-		}
-		data := jsonObj("id", res.ID, "type", res.Type, "kind", *kind)
-		if res.Detail != "" {
-			data.Set("detail", res.Detail)
-		}
-		data.Set("changed", true)
-		return Result{Data: data, Text: res.ID}, nil
+			data.Set("changed", true)
+			return Result{Data: data, Text: res.ID}, nil
+		})
 	}
 }
 
@@ -468,24 +447,58 @@ func itemFieldSet(fs *flag.FlagSet) RunFunc {
 		if !givenFlags(fs)["value"] {
 			return Result{}, Usage("--value is required (--value '' clears the field)")
 		}
-		be, err := openBacklog(c, root, *name == "detail", "--name detail points at a file; issues have a body instead")
-		if err != nil {
-			return backlogFail(err)
-		}
-		id, typ, err := resolveItem(be, args[0])
-		if err != nil {
-			return backlogFail(err)
-		}
-		changed, err := be.SetField(args[0], *name, *value)
-		if err != nil {
-			return backlogFail(err)
-		}
-		return Result{Data: jsonObj("id", id, "type", typ, "field", *name, "value", *value, "changed", changed),
-			Text: fmt.Sprintf("%s %s: %s", id, *name, *value)}, nil
+		return withBackend(c, root, *name == "detail", "--name detail points at a file; issues have a body instead", func(be backlog.Backend) (Result, error) {
+			return setItemField(be, args[0], *name, *value)
+		})
 	}
 }
 
+// setItemField sets one field of the item behind ref.
+func setItemField(be backlog.Backend, ref, name, value string) (Result, error) {
+	return withItem(be, ref, func(id, typ string) (Result, error) {
+		changed, err := be.SetField(ref, name, value)
+		if err != nil {
+			return Result{}, err
+		}
+		return Result{Data: jsonObj("id", id, "type", typ, "field", name, "value", value, "changed", changed),
+			Text: fmt.Sprintf("%s %s: %s", id, name, value)}, nil
+	})
+}
+
 // ---- item complete / reopen -----------------------------------------------
+
+// completeItem closes the item behind ref. A done close without proof is a
+// refusal whose hint names the proof verb.
+func completeItem(be backlog.Backend, ref string, in backlog.CompleteInput) (Result, error) {
+	return withItem(be, ref, func(id, typ string) (Result, error) {
+		changed, err := be.Complete(ref, in)
+		if err != nil {
+			if errors.Is(err, backlog.ErrProofMissing) {
+				res, e := backlogFail(err)
+				e.(*Error).Hint = "record proof with `rota proof add`, or pass --no-proof"
+				return res, e
+			}
+			return Result{}, err
+		}
+		return Result{Data: jsonObj("id", id, "type", typ, "reason", in.Reason, "commit", in.Commit, "changed", changed),
+			Text: fmt.Sprintf("completed %s (%s) at %s", id, in.Reason, in.Commit)}, nil
+	})
+}
+
+// reopenItem restores the completed item behind ref.
+func reopenItem(be backlog.Backend, ref string) (Result, error) {
+	return withItem(be, ref, func(id, typ string) (Result, error) {
+		changed, err := be.Reopen(ref)
+		if err != nil {
+			return Result{}, err
+		}
+		text := "reopened " + id
+		if !changed {
+			text = id + " is already active"
+		}
+		return Result{Data: jsonObj("id", id, "type", typ, "changed", changed), Text: text}, nil
+	})
+}
 
 func itemComplete(fs *flag.FlagSet) RunFunc {
 	commit := fs.String("commit", "", "commit hash for the Done line; default HEAD")
@@ -505,33 +518,30 @@ func itemComplete(fs *flag.FlagSet) RunFunc {
 		}
 		hash := *commit
 		if hash == "" {
-			h, ok, gerr := git.Repo{}.ShortHead(context.Background())
-			if hash = h; gerr != nil || !ok || hash == "" {
-				return Result{}, Unavailable("git has no HEAD to default --commit").WithHint("pass --commit <hash>")
+			h, err := shortHead(c)
+			if err != nil {
+				return Result{}, err
 			}
+			hash = h
 		}
-		be, err := openBacklog(c, root, false, "")
-		if err != nil {
-			return backlogFail(err)
-		}
-		id, typ, err := resolveItem(be, args[0])
-		if err != nil {
-			return backlogFail(err)
-		}
-		changed, err := be.Complete(args[0], backlog.CompleteInput{
-			Commit: hash, Date: todayDate(c), Reason: *reason,
-			Note: strings.ReplaceAll(*note, "\n", " "), NoProof: *noProof,
+		return withBackend(c, root, false, "", func(be backlog.Backend) (Result, error) {
+			return completeItem(be, args[0], backlog.CompleteInput{
+				Commit: hash, Date: todayDate(c), Reason: *reason,
+				Note: strings.ReplaceAll(*note, "\n", " "), NoProof: *noProof,
+			})
 		})
-		if err != nil {
-			res, e := backlogFail(err)
-			if errors.Is(err, backlog.ErrProofMissing) {
-				e.(*Error).Hint = "record proof with `rota proof add`, or pass --no-proof"
-			}
-			return res, e
-		}
-		return Result{Data: jsonObj("id", id, "type", typ, "reason", *reason, "commit", hash, "changed", changed),
-			Text: fmt.Sprintf("completed %s (%s) at %s", id, *reason, hash)}, nil
 	}
+}
+
+// shortHead is HEAD's short hash through the Deps git runner, the default of
+// --commit.
+func shortHead(c *Ctx) (string, error) {
+	res, err := c.deps().Git(c.Context(), "", "rev-parse", "--short", "HEAD")
+	h := strings.TrimRight(res.Stdout, "\n")
+	if err != nil || res.ExitCode != 0 || h == "" {
+		return "", Unavailable("git has no HEAD to default --commit").WithHint("pass --commit <hash>")
+	}
+	return h, nil
 }
 
 func itemReopen(fs *flag.FlagSet) RunFunc {
@@ -543,23 +553,9 @@ func itemReopen(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		be, err := openBacklog(c, root, false, "")
-		if err != nil {
-			return backlogFail(err)
-		}
-		id, typ, err := resolveItem(be, args[0])
-		if err != nil {
-			return backlogFail(err)
-		}
-		changed, err := be.Reopen(args[0])
-		if err != nil {
-			return backlogFail(err)
-		}
-		text := "reopened " + id
-		if !changed {
-			text = id + " is already active"
-		}
-		return Result{Data: jsonObj("id", id, "type", typ, "changed", changed), Text: text}, nil
+		return withBackend(c, root, false, "", func(be backlog.Backend) (Result, error) {
+			return reopenItem(be, args[0])
+		})
 	}
 }
 
@@ -664,11 +660,9 @@ func itemShipped(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		audits := backlog.Audit(dir, titles)
-		found := false
+		rep := backlog.Shipped(dir, titles)
 		out := []any{}
-		var text strings.Builder
-		for _, a := range audits {
+		for _, a := range rep.Audits {
 			hits := []any{}
 			for _, h := range a.Hits {
 				o := jsonObj("level", h.Level)
@@ -683,25 +677,10 @@ func itemShipped(fs *flag.FlagSet) RunFunc {
 				}
 				hits = append(hits, o)
 			}
-			if len(a.Hits) > 0 {
-				found = true
-				fmt.Fprintf(&text, "=== %s ===\n", a.Title)
-				for _, h := range a.Hits {
-					switch h.Level {
-					case backlog.HitStrong:
-						fmt.Fprintf(&text, "  [STRONG] %s %s  (tokens: %s)\n", h.Hash, h.Subject, strings.Join(h.Tokens, ", "))
-					case backlog.HitMedium:
-						fmt.Fprintf(&text, "  [MEDIUM] %s %s  (tokens: %s)\n", h.Hash, h.Subject, strings.Join(h.Tokens, ", "))
-					default:
-						fmt.Fprintf(&text, "  [PATH]   %s → %s\n", h.Token, h.Path)
-					}
-				}
-				text.WriteString("\n")
-			}
 			out = append(out, jsonObj("title", a.Title, "hits", hits))
 		}
-		res := Result{Data: jsonObj("found", found, "titles", out), Text: strings.TrimRight(text.String(), "\n")}
-		if !found {
+		res := Result{Data: jsonObj("found", rep.Found, "titles", out), Text: rep.Text}
+		if !rep.Found {
 			res.Text = "no ship evidence found"
 			return res, Failed("no ship evidence found")
 		}
@@ -720,29 +699,24 @@ func itemReady(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		be, err := openBacklog(c, root, false, "")
-		if err != nil {
-			return backlogFail(err)
-		}
-		id, typ, err := resolveItem(be, args[0])
-		if err != nil {
-			return backlogFail(err)
-		}
-		reasons, err := be.Ready(args[0])
-		if err != nil {
-			return backlogFail(err)
-		}
-		if reasons == nil {
-			reasons = []string{}
-		}
-		ready := len(reasons) == 0
-		res := Result{Data: jsonObj("id", id, "type", typ, "ready", ready, "reasons", reasons)}
-		if ready {
-			res.Text = id + " is ready"
-			return res, nil
-		}
-		res.Text = strings.Join(reasons, "\n")
-		return res, Failed("%s is not ready: %s", id, strings.Join(reasons, "; "))
+		return withBackend(c, root, false, "", func(be backlog.Backend) (Result, error) {
+			return withItem(be, args[0], func(id, typ string) (Result, error) {
+				reasons, err := be.Ready(args[0])
+				if err != nil {
+					return Result{}, err
+				}
+				if reasons == nil {
+					reasons = []string{}
+				}
+				res := Result{Data: jsonObj("id", id, "type", typ, "ready", len(reasons) == 0, "reasons", reasons)}
+				if len(reasons) == 0 {
+					res.Text = id + " is ready"
+					return res, nil
+				}
+				res.Text = strings.Join(reasons, "\n")
+				return res, Failed("%s is not ready: %s", id, strings.Join(reasons, "; "))
+			})
+		})
 	}
 }
 
@@ -773,24 +747,20 @@ func itemCommentAdd(fs *flag.FlagSet) RunFunc {
 		if pystr.Strip(text) == "" {
 			return Result{}, Usage("empty comment body")
 		}
-		be, err := openBacklog(c, root, false, "")
-		if err != nil {
-			return backlogFail(err)
-		}
-		id, typ, err := resolveItem(be, args[0])
-		if err != nil {
-			return backlogFail(err)
-		}
-		cid, err := be.AddComment(args[0], *kind, text)
-		if err != nil {
-			return backlogFail(err)
-		}
-		data := jsonObj("id", id, "type", typ, "kind", *kind)
-		if cid != "" {
-			data.Set("commentId", cid)
-		}
-		data.Set("changed", true)
-		return Result{Data: data, Text: fmt.Sprintf("commented on %s (%s)", id, *kind)}, nil
+		return withBackend(c, root, false, "", func(be backlog.Backend) (Result, error) {
+			return withItem(be, args[0], func(id, typ string) (Result, error) {
+				cid, err := be.AddComment(args[0], *kind, text)
+				if err != nil {
+					return Result{}, err
+				}
+				data := jsonObj("id", id, "type", typ, "kind", *kind)
+				if cid != "" {
+					data.Set("commentId", cid)
+				}
+				data.Set("changed", true)
+				return Result{Data: data, Text: fmt.Sprintf("commented on %s (%s)", id, *kind)}, nil
+			})
+		})
 	}
 }
 
@@ -810,41 +780,34 @@ func itemCommentList(fs *flag.FlagSet) RunFunc {
 		if *kind != "" && !slices.Contains(backlog.CommentKinds, *kind) {
 			return Result{}, Usage("--kind must be %s", strings.Join(backlog.CommentKinds, "|"))
 		}
-		be, err := openBacklog(c, root, false, "")
-		if err != nil {
-			return backlogFail(err)
-		}
-		id, typ, err := resolveItem(be, args[0])
-		if err != nil {
-			return backlogFail(err)
-		}
-		rows, err := be.Comments(args[0], *kind)
-		if err != nil {
-			return backlogFail(err)
-		}
-		list := []any{}
-		var lines []string
-		for _, r := range rows {
-			list = append(list, jsonObj("who", r.Who, "kind", r.Kind, "text", r.Text))
-			first, rest, _ := strings.Cut(r.Text, "\n")
-			who := r.Who
-			if who == "" {
-				who = "?"
-			}
-			lines = append(lines, fmt.Sprintf("- %s · %s · %s", who, r.Kind, first))
-			if rest != "" || strings.Contains(r.Text, "\n") {
-				for _, l := range strings.Split(rest, "\n") {
-					if pystr.Strip(l) != "" {
-						lines = append(lines, "  "+l)
-					} else {
-						lines = append(lines, "")
+		return withBackend(c, root, false, "", func(be backlog.Backend) (Result, error) {
+			return withItem(be, args[0], func(id, typ string) (Result, error) {
+				rows, err := be.Comments(args[0], *kind)
+				if err != nil {
+					return Result{}, err
+				}
+				list := []any{}
+				var lines []string
+				for _, r := range rows {
+					list = append(list, jsonObj("who", r.Who, "kind", r.Kind, "text", r.Text))
+					first, rest, _ := strings.Cut(r.Text, "\n")
+					who := r.Who
+					if who == "" {
+						who = "?"
+					}
+					lines = append(lines, fmt.Sprintf("- %s · %s · %s", who, r.Kind, first))
+					if rest != "" || strings.Contains(r.Text, "\n") {
+						for _, l := range strings.Split(rest, "\n") {
+							if pystr.Strip(l) != "" {
+								lines = append(lines, "  "+l)
+							} else {
+								lines = append(lines, "")
+							}
+						}
 					}
 				}
-			}
-		}
-		return Result{Data: jsonObj("id", id, "type", typ, "comments", list), Text: strings.Join(lines, "\n")}, nil
+				return Result{Data: jsonObj("id", id, "type", typ, "comments", list), Text: strings.Join(lines, "\n")}, nil
+			})
+		})
 	}
 }
-
-// newlineReplacer applies read_text's universal newlines to text read from stdin.
-var newlineReplacer = strings.NewReplacer("\r\n", "\n", "\r", "\n")
