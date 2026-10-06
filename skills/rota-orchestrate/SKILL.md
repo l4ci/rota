@@ -41,17 +41,7 @@ Assign with `rota round assign <ID>`. The verb marks the item in progress, cuts 
 
 `rota round wait` is the blocking form, for when you have nothing else to do. It blocks until a slot needs you, then returns that slot with the state and the evidence, and records what it returned. A slot comes back once per change: the next `wait` skips it until its worker moves again (a relay, a dispatch, a new state). Never poll in your own context: no sleep loops, no repeated `status`, no tailing panes. When `watch` or `wait` returns, act, then wait again. If your shell cuts commands short, loop on a finite `--timeout`.
 
-**Autopilot.** With `round.autopilot` on, run `rota round watch --autopilot` in place of the plain watch. Each wake it ticks:
-
-- repairs safe drift;
-- gates and merges finished PRs (never where `ship.mergeApproval` asks for a person, never without a pass);
-- assigns ready candidates to idle slots at the default tier.
-
-It returns only for `autopilot.needsYou` items you have not seen: a blocked, limited or dead slot, a failed gate, drift it won't repair, a merge a policy leaves to you. Those stay yours: answer, escalate, bounce or fix as usual.
-
-- It never answers a `ROTA-BLOCKED`, so don't read a quiet watch as "no questions".
-- It is still the one watch the Stop hook wants, and a wind-down stops it.
-- `rota round tick` runs one pass by hand.
+**Autopilot.** With `round.autopilot` on, run `rota round watch --autopilot` in place of the plain watch, and read [`solo-and-autopilot.md`](solo-and-autopilot.md) for what each tick does and what still comes back to you.
 
 **Keep every slot fed.** After every `wait`, before you review anything, fill every free slot from `rota round candidates`. A PR in review does not hold a slot. Once a worker reports `done` with a PR, the slot is free: `assign` parks it, keeps the PR on the round's review list (`rota round status` lists it under `review`) and gives the slot its next issue. Review and merge that PR while the worker builds the next one. Hold a slot back only for a real ordering constraint: a dependency, an overlap you have decided to serialize, or the maintainer's stated order. "One worker is still busy" is never a reason.
 
@@ -145,13 +135,7 @@ When the slate is done or the maintainer calls the round: `rota round wind-down`
 
 ## Solo mode
 
-`rota round start` picks the host once per round. With `work.dispatch` unset or `subagent` it uses herdr inside a herdr pane, tmux inside tmux, and otherwise solo; `rota round status` shows which. Under solo each worker is a subagent you launch, working in its slot's worktree. That needs a harness whose subagent can be pinned to a directory: only Claude Code (its `Agent` tool) qualifies, and everything below says `Agent` for that. In Codex, Hermes or opencode, if `rota round status` reports solo, don't start workers: tell the maintainer to run the round in tmux or herdr (`rota config set work.dispatch tmux`, then relaunch `rota orchestrate`).
-
-- **Launch.** `rota round assign` starts nothing: it returns `data.brief` and `data.worktree`. Launch one `Agent` per assignment, in the background so the workers run at once, with the brief as the prompt and an opening line telling it to work only in that worktree. A worker that edits your checkout instead has broken the round; reset its work before assigning again.
-- **Collect.** When an `Agent` returns, record what it said: `rota round report <slot> --state done --pr <url>`, or `blocked`, `dead`, `limited`, with `--evidence` quoting its last line. `rota round wait` doesn't block under solo; the `Agent` completion is your wait. Then review and gate as usual.
-- **No panes.** `worker dispatch`, `--relay`, `poll` and `session` refuse. To answer a blocked worker, launch a fresh `Agent` on the same worktree with the brief and your signed answer. There is nothing to kill: report a runaway `dead` and reclaim the slot.
-- **Unchanged.** Gates, merge policy, escalations, `reconcile`, `reap` and wind-down work as in tab mode. An escalation reaches the maintainer only as the thread comment; there is no notification.
-- **Limits.** Every subagent shares your account, rate window and context. One `limited` stops them all and you with them, so keep to two or three slots and ask each `Agent` for a short result (PR URL, one line). Claude only: a Codex subagent cannot be given the worktree, so `--kind codex` refuses.
+Read when `rota round status` reports solo (no herdr or tmux host): `solo-and-autopilot.md` (section Solo mode). Workers are subagents you launch; gates, merge policy and wind-down are unchanged.
 
 ## Rules that outlive any verb
 

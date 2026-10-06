@@ -111,6 +111,14 @@ func TestEmbeddedInstallResolvesEveryReference(t *testing.T) {
 		if n == 0 {
 			t.Errorf("%s: no reference citation found, the check proves nothing", r.Path)
 		}
+		// Per-skill topic files (rota-ship/docs-mode.md, #316) ship with their skill.
+		siblings, _ := filepath.Glob("../../skills/rota-*/*.md")
+		for _, src := range siblings {
+			rel := filepath.Base(filepath.Dir(src)) + "/" + filepath.Base(src)
+			if _, err := os.Stat(filepath.Join(r.Path, filepath.FromSlash(rel))); err != nil {
+				t.Errorf("%s: skill file %s not installed: %v", r.Path, rel, err)
+			}
+		}
 	}
 }
 
