@@ -137,6 +137,22 @@ func (e Env) Wait(ctx context.Context, root string, o WaitOpts) (WaitResult, err
 		}
 	}
 	source := SourceSnapshot
+	// A done or idle slot whose PR is merged has nothing left for the
+	// orchestrator but a park (`round reconcile --apply`), so it is not news.
+	// Merged is final, so each slot is asked about once per wait.
+	merged := map[string]bool{}
+	settled := func(r PollRow) bool {
+		if r.State != StateDone && r.State != StateIdle {
+			return false
+		}
+		m, asked := merged[r.Name]
+		if !asked {
+			s := LoadRegistry(root).Slot(r.Name)
+			m = s != nil && e.prMerged(ctx, root, s)
+			merged[r.Name] = m
+		}
+		return m
+	}
 	for {
 		rows, settling := e.classify(ctx, h, targets, o.Settle, o.Lines)
 		if ctx.Err() != nil {
@@ -155,7 +171,7 @@ func (e Env) Wait(ctx context.Context, root string, o WaitOpts) (WaitResult, err
 			}
 			// A row already returned once is treated like busy until the slot
 			// shows a different state or evidence; alwaysNews states never are.
-			if r.State != StateBusy && (seen[r.Name] != key || alwaysNews(r.State)) {
+			if r.State != StateBusy && (seen[r.Name] != key || alwaysNews(r.State)) && !settled(r) {
 				var rowErr error
 				if _, err := UpdateSlot(root, r.Name, func(s *Slot) {
 					if rowErr = recordRow(s, r, e.Now()); rowErr == nil && !alwaysNews(r.State) {

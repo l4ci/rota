@@ -421,6 +421,25 @@ func (e Env) openPRsByHead(ctx context.Context, root string, reg Registry, polle
 	return out
 }
 
+// prMerged says whether the forge shows the slot's recorded PR merged. A slot
+// with no PR, a project with no origin or a forge that cannot answer is not.
+func (e Env) prMerged(ctx context.Context, root string, s *Slot) bool {
+	n, ok := PRRefNumber(s.PR())
+	if !ok {
+		return false
+	}
+	if _, code := e.git(root, "remote", "get-url", "origin"); code != 0 {
+		return false
+	}
+	cfg := config.Load(rotatree.Config(root))
+	f, err := e.Forge(e.gateEnv().detectProvider(root, ""), root, cfg)
+	if err != nil {
+		return false
+	}
+	info, err := f.PRView(ctx, n)
+	return err == nil && strings.EqualFold(info.State, "MERGED")
+}
+
 // seenKey is what `round wait` remembers of a slot it returned: the state and
 // its evidence, so a new ROTA-BLOCKED question or limit line is news again.
 func seenKey(state, evidence string) string {

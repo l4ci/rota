@@ -288,12 +288,12 @@ func TestReconcileApplyRepairsOnlyTheSafeKinds(t *testing.T) {
 		t.Fatal(err)
 	}
 	if got, want := kinds(out.Repaired), map[string][]string{
-		"ben": {DeadTab}, "dana": {LabelMissing, UnregisteredWorktree}, "kit": {PRUnrecorded},
+		"ben": {DeadTab}, "dana": {LabelMissing, UnregisteredWorktree}, "kit": {PRUnrecorded}, "finn": {PRStale},
 	}; !reflect.DeepEqual(got, want) {
 		t.Errorf("repaired\n got %v\nwant %v", got, want)
 	}
 	if got, want := kinds(out.Drift), map[string][]string{
-		"dana": {BranchNoPR}, "finn": {PRStale}, "ghost": {UnclaimedTab}, "": {LabelOrphan},
+		"dana": {BranchNoPR}, "ghost": {UnclaimedTab}, "": {LabelOrphan},
 	}; !reflect.DeepEqual(got, want) {
 		t.Errorf("remaining\n got %v\nwant %v", got, want)
 	}
@@ -307,6 +307,9 @@ func TestReconcileApplyRepairsOnlyTheSafeKinds(t *testing.T) {
 	if k := reg.Slot("kit"); k.PR() != "https://github.com/o/r/pull/12" {
 		t.Errorf("kit pr = %q", k.PR())
 	}
+	if f := reg.Slot("finn"); f.PR() != "" || f.Branch() != "park/finn" || f.State() != "idle" {
+		t.Errorf("finn not parked: branch %q pr %q state %q", f.Branch(), f.PR(), f.State())
+	}
 	d := reg.Slot("dana")
 	if d == nil || d.Task() != "58" || d.Branch() != "dana/58-foo" || d.Handle() != "w2:t1" {
 		t.Errorf("dana = %v", d)
@@ -315,7 +318,7 @@ func TestReconcileApplyRepairsOnlyTheSafeKinds(t *testing.T) {
 	again, _ := e.Reconcile(bg, root, false)
 	for _, f := range again.Drift {
 		switch f.Kind {
-		case DeadTab, UnregisteredWorktree, PRUnrecorded:
+		case DeadTab, UnregisteredWorktree, PRUnrecorded, PRStale:
 			t.Errorf("%s still drifts after --apply", f.Kind)
 		}
 	}

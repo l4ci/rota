@@ -23,7 +23,7 @@ func (o Outcome) Clean() bool { return len(o.Drift) == 0 && len(o.Repaired) == 0
 // clears the handle of a dead tab, registers an unregistered worktree,
 // records an unrecorded PR, adds a missing in-progress label, removes it from a closed issue and clears a
 // claimId whose claim is gone from the tracker (never the tracker's side) and
-// drops a queued PR record whose PR is merged or closed. Every other
+// drops a queued PR record whose PR is merged or closed and parks a slot whose PR is merged. Every other
 // kind is only reported (a tab may be a live worker; opening a PR is the
 // worker's act; resetting a slot and removing a label are the orchestrator's).
 // A repair that fails becomes a warning and leaves its finding in Drift.
@@ -69,7 +69,10 @@ func (e Env) repair(ctx context.Context, root string, rep *Report, f Finding) er
 			}
 		}
 		return registerSlot(root, row, v)
-	case PRStale: // only a queued record carries a repair
+	case PRStale:
+		if f.Slot != "" {
+			return e.parkMerged(ctx, root, f.Slot)
+		}
 		return worker.Update(root, func(doc *worker.Doc) {
 			doc.DropQueued(func(q worker.QueuedPR) bool { return q.Issue == f.Issue })
 		})
@@ -89,6 +92,33 @@ func (e Env) repair(ctx context.Context, root string, rep *Report, f Finding) er
 		return e.Forge.RemoveLabels(ctx, n, []string{e.Label})
 	}
 	return fmt.Errorf("%s has no safe repair", f.Kind)
+}
+
+// parkMerged frees a slot that still holds a branch whose PR is merged, as
+// `assign` would: the worktree moves to park/<agent> at the base and the
+// registry drops the issue, claim and PR. Nothing is pushed (the work is in the
+// base) and nothing is salvaged: a worker still running, or a dirty worktree,
+// is left alone.
+func (e Env) parkMerged(ctx context.Context, root, name string) error {
+	s := worker.LoadRegistry(root).Slot(name)
+	if s == nil {
+		return fmt.Errorf("slot %s is not in the registry", name)
+	}
+	if st := s.State(); st != "done" && st != "idle" {
+		return fmt.Errorf("slot %s is %s, not done or idle", name, firstNonEmpty(st, "busy"))
+	}
+	dirty, err := e.dirtyPaths(ctx, s.Worktree())
+	if err != nil {
+		return err
+	}
+	if len(dirty) > 0 {
+		return fmt.Errorf("slot %s has uncommitted changes", name)
+	}
+	base := firstNonEmpty(s.Base(), e.Base)
+	if _, errOut, code := e.gitOut(ctx, s.Worktree(), "switch", "-q", "-C", "park/"+name, base); code != 0 {
+		return fmt.Errorf("could not switch %s to park/%s: %s", name, name, errOut)
+	}
+	return freeSlot(root, name, false)
 }
 
 // editSlot edits one slot under the registry lock. A slot that is not there is
