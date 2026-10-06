@@ -7,6 +7,15 @@ description: Use when a Major feature or P0 bug needs design negotiation before 
 
 Sits between `/rota-capture` (what) and `/rota-plan` (how). Scope is one backlog item (`#N`; file backend `B07`/`F03`/`T05`); project-level exploration is `/rota-vision`. The design (`rota design show <ID>`) is soft input to `/rota-plan`, never required. Milestone tags are context only.
 
+Copy this checklist and track your progress:
+```
+- [ ] Step 1 — Resolve target
+- [ ] Step 2 — Load context
+- [ ] Step 3 — One draft
+- [ ] Step 4 — One approval
+- [ ] Step 5 — Store
+```
+
 ## Step 1 — Resolve target
 
 Target: `#N` / bare number (issue backend) or `[BFT]\d{2,}` (file backend), plus optional `--grill` (Step 3). Reject milestone and slice IDs: *"/rota-brainstorm operates on a single backlog item. For project-level exploration use /rota-vision; for slice planning use /rota-plan."* `rota item field get <ID> --name title` exits 3 for an unknown item: refuse and point at `/rota-capture`.

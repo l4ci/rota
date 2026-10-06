@@ -13,6 +13,18 @@ Reproduce → hypothesize → verify → fix → prove, for one bug, anchored to
 
 From `.rota/config.json`: `work.isolation` (`"branch"` default, or `"worktree"`). The Iron Law count is per item in `.rota/verdicts.json`; a new branch or session does not reset it.
 
+Copy this checklist and track your progress:
+```
+- [ ] Step 1 — Guard and resolve
+- [ ] Step 2 — Branch and claim
+- [ ] Step 3 — Build the feedback loop
+- [ ] Step 4 — Hypothesize and verify
+- [ ] Step 5 — Fix and commit
+- [ ] Step 6 — Verify the fix
+- [ ] Step 7 — Proof, PR, cleanup
+- [ ] Step 8 — Report
+```
+
 ## Step 1 — Guard and resolve
 
 ```bash
@@ -93,7 +105,7 @@ Legitimate toolchain siblings (e.g. Godot `.gd.uid`) go in a separate `chore:` c
 
 ## Step 6 — Verify the fix
 
-Re-run the Step 3 reproducer (flaky: N runs, zero failures). It must pass, and the regression test must run under the default test command (unless Step 5 found no seam). Record the outcome:
+Loop: re-run the Step 3 reproducer (flaky: N runs, zero failures), fix what still fails, re-run; continue only on a pass. The regression test must also run under the default test command (unless Step 5 found no seam). Record the outcome:
 
 ```bash
 rota debug verdict <ID> --verdict <PASS|FAIL> --json

@@ -3,6 +3,30 @@ name: rota-ship
 description: Use on "ship it", "open the PR", "finish this branch", or when work is done and ready to integrate. Use --undo on "roll back the last cycle", "revert that merge". Use --docs on "update docs".
 ---
 
+# rota-ship — Finish a Feature Branch
+
+Copy this checklist and track your progress:
+
+```
+- [ ] Step 0 — Mode Dispatch
+- [ ] Step 1 — Branch Check
+- [ ] Step 2 — Scope the Work
+- [ ] Step 3 — Review (opt-in)
+- [ ] Step 3.5 — Second-Opinion Gate (opt-in)
+- [ ] Step 3.75 — QA Gate (opt-in)
+- [ ] Step 4 — Build the PR Body
+- [ ] Step 5 — Pick Strategy
+- [ ] Step 6a — Open a PR
+- [ ] Step 6b — Direct Merge
+- [ ] Step 6c — Close Upstream Issues (direct-merge path only)
+- [ ] Step 7 — Update Status
+- [ ] Step 8 — Mark Unfinished Items Complete
+- [ ] Step 8.5 — Learn (Nudge or Auto-Invoke)
+- [ ] Step 8.6 — Docs After-Work (inline)
+- [ ] Step 9 — Report to User
+- [ ] Step 9.5 — Release Nudge
+```
+
 ## Step 0 — Mode Dispatch
 
 Read `$ARGUMENTS`. Route on the first flag present:
@@ -12,8 +36,6 @@ Read `$ARGUMENTS`. Route on the first flag present:
 | `--undo` | **Undo Mode**: guided rollback of the last cycle on the base branch. Terminal: never falls through to Docs Mode. |
 | `--docs` (or `--docs restructure`) | **Docs Mode**: maintain the public user guide under `<docs.path>/`. Read [`docs-mode.md`](docs-mode.md) and follow it; nothing else in this file applies. |
 | (none) | **Normal Ship Mode** (Steps 1–10). Step 8.6 inline-runs Docs Mode's after-work flow when `docs.afterWork: true` and the trigger fires. |
-
-# rota-ship — Finish a Feature Branch
 
 ## Configuration
 
@@ -56,7 +78,7 @@ Skipped when `ship.review` is `false`, and for a round worker's PR (branch `<age
 rota verdict route <branch> --for ship-review --json
 ```
 
-Exit 3: no verdict recorded; stop and rerun `/rota-review`, never read the report instead. Act on `data.next`; the table also serves Steps 3.5 and 3.75.
+The gate is a loop: review, fix via `/rota-work` on a stop, rerun, and go on only once the verdict routes `continue`, `surface` or an accepted `ask`. Exit 3: no verdict recorded; stop and rerun `/rota-review`, never read the report instead. Act on `data.next`; the table also serves Steps 3.5 and 3.75.
 
 | `data.next` | Meaning | Do |
 |---|---|---|

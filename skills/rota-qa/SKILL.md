@@ -39,6 +39,18 @@ Read [`first-run.md`](first-run.md) and follow it when `.rota/qa/` is empty for 
 
 ### Mode: run
 
+Copy this checklist and track your progress (run mode):
+```
+- [ ] Step 1 — Resolve Scope
+- [ ] Step 2 — Load Strategies
+- [ ] Step 3 — Infra Preflight
+- [ ] Step 4 — Execute Checks
+- [ ] Step 5 — Audit Pass
+- [ ] Step 6 — Score & Verdict
+- [ ] Step 7 — Report
+- [ ] Step 8 — Routing
+```
+
 #### Step 1 — Resolve Scope
 
 Any `rota` verb exiting 3 means no `.rota/` project: surface that and stop.
@@ -78,7 +90,7 @@ Dispatch one subagent per check group (per pillar per target) in parallel via th
 
 **Re-run a failed check alone before recording it.** Parallel runners contend for one box, so time budgets fail on load, not truth. Before writing `met: false` for a check that timed out, blew a duration budget or hit a connection error, re-run it with nothing else in flight and put both `uptime` readings in `evidence`. A timeout means the assertion never ran: read the runner's output before theorizing about the code. Never raise the budget; if the check is too slow, cut its work in `.rota/qa/<target>.md`.
 
-Connection-refused and address-in-use errors across many checks at once are infrastructure, not findings: re-run serially before reporting.
+Connection-refused and address-in-use errors across many checks at once are infrastructure, not findings: re-run serially before reporting. A check still `met: false` after its lone re-run is a finding: record it, don't loop on it.
 
 #### Step 5 — Audit Pass
 
@@ -114,7 +126,7 @@ rota verdict add <branch> --kind qa --verdict <PASS|CONCERNS|FAIL|INFRA-FAIL> --
 }
 ```
 
-Exit 2 names the failing field; fix the body and re-run. `/rota-ship` routes on this record, not the printed report.
+Exit 2 names the failing field: fix the body, re-run `rota verdict add`, and continue to Step 7 only on exit 0. `/rota-ship` routes on this record, not the printed report.
 
 #### Step 7 — Report
 

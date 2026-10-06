@@ -5,14 +5,17 @@ description: Use at the end of a session that surfaced reusable knowledge, after
 
 # rota-learn — Capture Session Learnings
 
-**Task list.** Track these phases with the host's task tool if it has one:
-
-1. *Scan session* — transcript + recent commits sifted for durable gotchas (Step 2)
-2. *Classify topic* — each candidate matched to a `KNOWLEDGE.md` topic (Step 3)
-3. *Merge into KNOWLEDGE.md* — entries appended under topic headings (Step 5)
-4. *Update topic index* — `rota block knowledge` regenerates the managed block in the instructions file (Step 6)
-5. *Verify (Opus)* — only under `--strict` or `learn.verify: true` (Step 7)
-6. *Confirm* — compact summary and size nudges (Step 8)
+Copy this checklist and track your progress:
+```
+- [ ] Step 1 — Parse Args
+- [ ] Step 2 — Scan the Session for Learnings
+- [ ] Step 3 — Classify by Topic
+- [ ] Step 4 — Auto-Write
+- [ ] Step 5 — Merge into KNOWLEDGE.md
+- [ ] Step 6 — Update the Topic Index
+- [ ] Step 7 — Opus Verification (opt-in)
+- [ ] Step 8 — Confirm
+```
 
 ## Step 1 — Parse Args
 

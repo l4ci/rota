@@ -7,6 +7,15 @@ description: Use when an item or milestone slice is too big to one-shot, or when
 
 Write a plan the user signs off on before `/rota-work` runs. Keyed by a backlog item — `#42` (issue backend; file backend `B07`, `F03`, `T11` keep the `M01-B07` form) — or a milestone slice, `M01-S01`. **A milestone is never required.** Issue backend: an item plan is a note on the item's issue, a slice plan lives on the milestone's tracking issue. File backend: `.rota/plans/<key>.md`.
 
+Copy this checklist and track your progress:
+```
+- [ ] Step 1 — Resolve target
+- [ ] Step 2 — Load context, once
+- [ ] Step 3 — One proposal
+- [ ] Step 4 — Write
+- [ ] Step 5 — Report
+```
+
 ## Step 1 — Resolve target
 
 - **Item** (`#42`, `B07`, …) — item mode; the key is the ref as given (`M01-B07` is equally valid for a milestone-tagged item).

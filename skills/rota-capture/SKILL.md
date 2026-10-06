@@ -7,11 +7,21 @@ description: Use when the user brain-dumps work, says "capture", "add to backlog
 
 Quick-capture bugs, features and tasks with just enough context to act on later. Items are created with `rota item create` on the configured backend (`backlog.backend`): a tracker issue (`#N`) or a `.rota/BACKLOG.md` entry (`[B07]`). Handles several items and mixed types in one pass. `--remove <ID>` deletes an item.
 
-## Step 1 — Task list
+Copy this checklist and track your progress:
+```
+- [ ] Step 1 — Mode Dispatch
+- [ ] Step 2 — Parse & Classify
+- [ ] Step 2.5 — Audit Against Code State (milestone-spec capture only)
+- [ ] Step 3 — Gather Context
+- [ ] Step 4 — Assign Priority / Size
+- [ ] Step 4.5 — Tag Active Milestone (when applicable)
+- [ ] Step 4.6 — Tag Sub-Repo (when umbrella mode is on)
+- [ ] Step 5 — Handle Large Input
+- [ ] Step 6 — Create All Items
+- [ ] Step 7 — Brainstorm Nudge
+```
 
-Track the steps below with the host's task tool if it has one.
-
-## Step 1.5 — Mode Dispatch
+## Step 1 — Mode Dispatch
 
 | First arg | Mode |
 |-----------|------|
