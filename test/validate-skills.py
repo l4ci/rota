@@ -351,9 +351,9 @@ def prose_rules():
           lacks("skills/rota-capture/umbrella-tagging.md", "single name in V1", "must no longer carry the 'single name in V1' qualifier"),
           has(sk("plan"), "multi-repo items pass the full comma-list", "must explain the multi-repo --repo flow"),
           has("skills/references/work-preview.md", "one line per repo for multi-repo items", "Preview Mode peek must show one Repo line per sub-repo"),
-          has(sk("work"), "rota git branch", "must reference rota git branch for multi-repo branch creation"),
-          has(sk("work"), r"rota status add .*--repos", "must reference rota status add --repos for multi-repo status entries", True),
-          has(sk("work"), "rota repo resolve", "must reference rota repo resolve for multi-repo validation"),
+          has("skills/rota-work/umbrella-and-issue-mode.md", "rota git branch", "must reference rota git branch for multi-repo branch creation"),
+          has("skills/rota-work/umbrella-and-issue-mode.md", r"rota status add .*--repos", "must reference rota status add --repos for multi-repo status entries", True),
+          has("skills/rota-work/umbrella-and-issue-mode.md", "rota repo resolve", "must reference rota repo resolve for multi-repo validation"),
           lacks(sk("work"), "M03 (deferred)", "must no longer say 'M03 (deferred)'"),
           lacks(sk("work"), "wait for M03 multi-repo support", "must no longer say 'wait for M03 multi-repo support'")]
     # worker reset guard, proof path, manual gates
