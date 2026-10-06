@@ -330,9 +330,8 @@ func (f *File) planFiles(id string) []string {
 // removed only with scrubArchive.
 func (f *File) Remove(ids []string, scrubArchive, apply bool) (RmResult, error) {
 	var res RmResult
-	run := func() error {
-		todo, _ := fsio.ReadText(f.rota("BACKLOG.md"))
-		archive, _ := fsio.ReadText(f.rota("ARCHIVE.md"))
+	run := func(docs *documents) error {
+		todo, archive := docs.backlog, docs.archive
 		infos := map[string]RmItem{}
 		for _, id := range ids {
 			if sec, line, ok := findBulletIn(todo, id, allSections); ok {
@@ -361,27 +360,23 @@ func (f *File) Remove(ids []string, scrubArchive, apply bool) (RmResult, error) 
 			info := infos[id]
 			if info.TodoEntry {
 				newTodo = stripBullet(newTodo, info.Bullet)
-			} else if info.Archive && scrubArchive {
-				newArchive = stripBullet(newArchive, info.Bullet)
+			}
+			if scrubArchive {
+				if _, line, ok := findArchiveBullet(newArchive, id); ok {
+					newArchive = stripBullet(newArchive, line)
+				}
 			}
 		}
 		// Validate the complete removal before writing documents or deleting
 		// artifacts. Archive entries intentionally retained without scrub are exempt.
 		for _, id := range ids {
-			info := infos[id]
-			content, path := newTodo, "BACKLOG.md"
-			find := func(content, id string) (string, string, bool) {
-				return findBulletIn(content, id, allSections)
+			if _, _, found := findBulletIn(newTodo, id, allSections); found {
+				return errf(ErrInvalid, "[%s] remains in .rota/BACKLOG.md after removal; no changes applied", id)
 			}
-			if info.Archive {
-				if !scrubArchive {
-					continue
+			if scrubArchive {
+				if _, _, found := findArchiveBullet(newArchive, id); found {
+					return errf(ErrInvalid, "[%s] remains in .rota/ARCHIVE.md after removal; no changes applied", id)
 				}
-				content, path = newArchive, "ARCHIVE.md"
-				find = findArchiveBullet
-			}
-			if _, _, found := find(content, id); found {
-				return errf(ErrInvalid, "[%s] remains in .rota/%s after removal; no changes applied", id, path)
 			}
 		}
 		var detail, plans []string
@@ -414,15 +409,8 @@ func (f *File) Remove(ids []string, scrubArchive, apply bool) (RmResult, error) 
 		if !apply {
 			return nil
 		}
-		if newTodo != todo {
-			if err := fsio.WriteFileAtomic(f.rota("BACKLOG.md"), []byte(newTodo)); err != nil {
-				return err
-			}
-		}
-		if newArchive != archive && scrubArchive {
-			if err := fsio.WriteFileAtomic(f.rota("ARCHIVE.md"), []byte(newArchive)); err != nil {
-				return err
-			}
+		if err := docs.write(newTodo, newArchive, false); err != nil {
+			return err
 		}
 		for _, rel := range append(detail, plans...) {
 			if err := os.Remove(filepath.Join(f.Root, filepath.FromSlash(rel))); err != nil && !os.IsNotExist(err) {
@@ -433,8 +421,13 @@ func (f *File) Remove(ids []string, scrubArchive, apply bool) (RmResult, error) 
 		return nil
 	}
 	if !apply {
-		return res, run()
+		docs, err := f.readDocuments()
+		if err != nil {
+			return res, err
+		}
+		err = run(docs)
+		return res, err
 	}
-	err := fsio.Locked(f.rota("BACKLOG.md"), fsio.LockTimeout, run)
+	err := f.withDocuments(run)
 	return res, err
 }
