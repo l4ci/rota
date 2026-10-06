@@ -1,6 +1,6 @@
 # Task ledger
 
-Used by `/rota-work` (writes a marker on every task commit, reads the markers on resume) and `/rota-pause` (reads them into the handoff note). Git history is the ledger: it survives compaction, a fresh session and a lost handoff note, and it cannot disagree with the tree.
+Used by `/rota-work` (writes a marker on every task commit, reads the markers on resume) and `/rota-pause` (reads them into the handoff note). Git history is the ledger: it survives compaction, a fresh session and a lost handoff note, and cannot disagree with the tree.
 
 ## Marker
 
@@ -34,4 +34,4 @@ If the decomposition no longer matches the ledger (a marker whose `<n>` has no t
 
 ## Pause
 
-`/rota-pause` writes the ledger result into the note's *Stage* (`tasks 1-2 of 4 done`) and derives *Next planned step* from the first unfinished task. It reads the ledger from git, never from memory of the session.
+`/rota-pause` writes the ledger result into the note's *Stage* (`tasks 1-2 of 4 done`) and derives *Next planned step* from the first unfinished task. It reads the ledger from git, never from session memory.

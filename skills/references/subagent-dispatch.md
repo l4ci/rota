@@ -1,12 +1,12 @@
 # Subagent dispatch discipline
 
-Cross-skill rulebook for when and how skills push work into subagents instead of doing it on the orchestrator's main thread. The orchestrator is a dispatcher + synthesizer; reads, scans, summaries, and serial queries belong elsewhere.
+Cross-skill rulebook for when and how skills push work into subagents instead of the orchestrator's main thread. The orchestrator is a dispatcher and synthesizer; reads, scans, summaries and serial queries belong elsewhere.
 
 Cited by `references/authoring-conventions.md`. Companion to the worktree-isolation rule in `.rota/DECISIONS.md` (`work.isolation` for ≥2 commit-producing parallel workers).
 
 ## When to dispatch
 
-Cost/benefit rule, not a vibe.
+A cost/benefit rule, not a vibe.
 
 **Dispatch when:**
 
@@ -46,7 +46,7 @@ Skills size a subagent by **tier**, never by model name. Three tiers, lightest f
 | `standard` | routine reasoning and writing: summarize a file, classify items, write code and tests | `sonnet` | `round.tiers.claude.standard`, which follows `models.worker` until set |
 | `heavy` | judgment: verification, design selection, hypothesis evaluation, hard debugging | `opus` | `round.tiers.claude.heavy` |
 
-`rota round assign --tier` picks the tier of a round worker from the same table; Codex maps tiers through `round.tiers.codex.*` (see `docs/usage/configuration.md`, *Round keys*). The tier is chosen per subagent call; the main session's own model is `models.orchestrator` and is not a tier. A skill that names a subagent model says `light`, `standard` or `heavy`, and the model comes from this table. Where the `Agent` tool takes a literal `model`, resolve the tier through the config key. Haiku usage is opportunistic: declared inline in the brief, not in config.
+`rota round assign --tier` picks the tier of a round worker from the same table; Codex maps tiers through `round.tiers.codex.*` (see `docs/usage/configuration.md`, *Round keys*). The tier is chosen per subagent call; the main session's model is `models.orchestrator`, not a tier. A skill that names a subagent model says `light`, `standard` or `heavy`; the model comes from this table. Where the `Agent` tool takes a literal `model`, resolve the tier through the config key. Haiku usage is opportunistic: declared inline in the brief, not in config.
 
 ## Parallel fan-out pattern
 
@@ -56,7 +56,7 @@ When dispatching N independent subagents:
 - Independence requirement: no shared mutable state between workers. File disjointness is mandatory; for commit-producing waves the worktree-isolation rule from `.rota/DECISIONS.md` applies — under `work.isolation == "branch"`, ≥2 commit-producing parallel workers in one wave is forbidden because they race the shared `.git/index`.
 - Aggregation: the orchestrator collects returns and merges per the return-shape contract above. Workers never communicate with each other; the orchestrator is the only synthesizer.
 
-Read-only workers (research, summary, query relays) are exempt from the worktree-isolation guard — they don't touch `.git/`. The guard fires only when ≥2 workers in a single wave are instructed to stage and commit.
+Read-only workers (research, summary, query relays) are exempt from the worktree-isolation guard because they don't touch `.git/`. The guard fires only when ≥2 workers in one wave are told to stage and commit.
 
 ## What stays on the orchestrator
 
@@ -65,4 +65,4 @@ Read-only workers (research, summary, query relays) are exempt from the worktree
 - **Atomic disk writes** — when ordering or all-or-nothing matters.
 - **Verification of subagent output** — confirm the return shape, sanity-check claims, reconcile contradictions.
 
-The orchestrator is dispatcher + synthesizer. Never reader-of-everything.
+The orchestrator dispatches and synthesizes; it never reads everything.

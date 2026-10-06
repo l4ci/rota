@@ -1,10 +1,10 @@
 # Dependent items
 
-Used by `/rota-capture`, `/rota-plan` and `/rota-refactor` when they create more than one item. A round holds an item until everything in its `## Depends on` section is closed (`rota round` readiness, check `dependencies`), so an ordering written here is one the orchestrator does not have to rebuild by hand.
+Used by `/rota-capture`, `/rota-plan` and `/rota-refactor` when they create more than one item. A round holds an item until everything in its `## Depends on` section is closed (`rota round` readiness, check `dependencies`), so an ordering written here is one the orchestrator need not rebuild by hand.
 
 ## When to declare
 
-Declare an edge only when the later item **cannot start or cannot merge** before the earlier one closes: it consumes an interface, file or behaviour the earlier one produces, or both rewrite the same lines and the second must build on the first. Shared theme, shared subsystem or "nicer in this order" is `--related`, not a dependency. A false edge holds an item back for nothing, and an edge to an item that never closes holds it forever.
+Declare an edge only when the later item **cannot start or cannot merge** before the earlier one closes: it consumes an interface, file or behaviour the earlier one produces, or both rewrite the same lines and the second must build on the first. Shared theme, shared subsystem or "nicer in this order" is `--related`, not a dependency. A false edge holds an item back for nothing; an edge to an item that never closes holds it forever.
 
 Point at open items only. A closed dependency is satisfied already: leave it out.
 

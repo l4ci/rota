@@ -4,13 +4,13 @@ Loaded by `/rota-refactor` when `--designs` is passed, for findings that are **s
 
 ## Consult decisions before designing
 
-**Consult decisions before designing.** Pull relevant boundary entries:
+Pull relevant boundary entries:
 
 ```bash
 rota decisions query <topics…>
 ```
 
-Any approach that violates a decision is disqualified before the design phase. If every generated approach would violate, **stop and surface to the user** — refactors must not silently work around committed boundaries. Refactors are exactly when boundaries matter most.
+Any approach that violates a decision is disqualified before the design phase. If every generated approach would violate, **stop and surface to the user**: refactors must not silently work around committed boundaries, and they are when boundaries matter most.
 
 ## Agent dispatch
 

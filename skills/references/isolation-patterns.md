@@ -1,8 +1,8 @@
 # Isolation patterns
 
-Used by `/rota-work` Step 5. The isolation patterns plus the umbrella-mode worktree variant.
+Used by `/rota-work` Step 5: the isolation patterns plus the umbrella-mode worktree variant.
 
-`/rota-work` isolates each cycle from main by creating a feature branch or a separate worktree; the choice depends on `work.isolation` in `.rota/config.json` (`"branch"` or `"worktree"`).
+`/rota-work` isolates each cycle from main with a feature branch or a separate worktree, per `work.isolation` in `.rota/config.json` (`"branch"` or `"worktree"`).
 
 ## Decision table
 
@@ -14,7 +14,7 @@ Used by `/rota-work` Step 5. The isolation patterns plus the umbrella-mode workt
 | Umbrella (sub-repo) | worktree (Layout B) | Umbrella sub-repo, Layout B worktree |
 | Umbrella (multi-repo) | branch | Umbrella multi-repo, branch |
 
-Multi-repo workers are safe under either isolation mode (see *Cross-repo parallelism* below). Umbrella patterns run from the umbrella root (the orchestrator stays there so it can read/write `.rota/`); workers `cd` into the sub-repo path before any git operation.
+Multi-repo workers are safe under either isolation mode (see *Cross-repo parallelism* below). Umbrella patterns run from the umbrella root (the orchestrator stays there to read and write `.rota/`); workers `cd` into the sub-repo path before any git operation.
 
 ## Per-pattern code
 
@@ -66,7 +66,7 @@ Each sub-repo has its own `.git/index`, so multi-repo waves (one branch, N sub-r
 
 ## Umbrella mechanics
 
-This reference covers the branch and worktree creation for umbrella mode. The broader umbrella concept — the registry (`.rota/repos.json`), resolution verbs (`rota repo which`, `rota repo resolve`), the `Repos:` field on backlog items, walk-up convenience, status registration, merge/PR `--repo` plumbing — lives in `references/umbrella-mode.md` (see also).
+This reference covers branch and worktree creation for umbrella mode. The broader umbrella concept (the registry in `.rota/repos.json`, resolution verbs (`rota repo which`, `rota repo resolve`), the `Repos:` field on backlog items, walk-up convenience, status registration, merge/PR `--repo` plumbing) lives in `references/umbrella-mode.md` (see also).
 
 ## Not covered here
 
