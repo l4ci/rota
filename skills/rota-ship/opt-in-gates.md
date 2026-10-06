@@ -2,7 +2,7 @@
 
 ## Step 3.5 — Second-Opinion Gate
 
-The `/rota-review` reviewer shares context with the work it produced and normalizes its blind spots. This gate gives a fresh subagent only the diff and the goal:
+A fresh subagent gets only the diff and the goal:
 
 ```bash
 rota review brief [--repo "$REPO"] <branch>
@@ -19,7 +19,7 @@ Exit 2 from `add` names the malformed field: ask the agent to resend; never gues
 
 ## Step 3.75 — QA Gate
 
-Review and second opinion judge the diff; QA runs the product. Invoke `Skill(skill="rota-qa", args="run")` (umbrella: `args="run --repo $REPO"`), then:
+Invoke `Skill(skill="rota-qa", args="run")` (umbrella: `args="run --repo $REPO"`), then:
 
 ```bash
 rota verdict route <branch> --for ship-qa --json

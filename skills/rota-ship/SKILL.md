@@ -28,8 +28,8 @@ Read `.rota/config.json` (`rota config show`):
 
 ## When to Use
 
-- A feature branch has 1+ commits, the work is done, you want to integrate (including after `/rota-work` with `mergeStrategy: "pr"`).
-- Not while work is in progress (finish via `/rota-work`), not with nothing committed, not to resume a paused branch (`/rota-work` with no argument).
+- Feature branch has 1+ commits and the work is done (including after `/rota-work` with `mergeStrategy: "pr"`).
+- Not mid-work (finish via `/rota-work`), not with nothing committed, not to resume a paused branch (`/rota-work` with no argument).
 
 ## Step 1 — Branch Check
 
@@ -46,17 +46,17 @@ rota status show --json <branch>        # data.repo is $REPO, null in single-rep
 rota review scope --json [--repo "$REPO"] <branch>
 ```
 
-Keep the scope JSON (commits, `touchedFiles`, `referencedIds`, `intents`); later steps reuse it. Exit 1 means the branch has no commits beyond the base: tell the user and stop.
+Keep the scope JSON (commits, `touchedFiles`, `referencedIds`, `intents`) for later steps. Exit 1: no commits beyond the base; tell the user and stop.
 
 ## Step 3 — Review (opt-in)
 
-Skipped when `ship.review` is `false`, and for a round worker's PR (the branch is `<agent>/<issue>-<slug>`, or the brief says it is a round slot): review is the orchestrator's seat, so a worker never runs `/rota-review` on its own branch (`skills/references/worker-contract.md`). Skip Step 3's routing and treat `REVIEW_CHOICE` as unset. Otherwise invoke `rota-review` via the `Skill` tool. Its brief carries the silent-failure rubric (`references/silent-failure-hunter.md`); `SILENT-FAIL` flags arrive as CONCERNS in the same verdict block. `/rota-review` records its verdict; route on it (umbrella: add `--repo "$REPO"`):
+Skipped when `ship.review` is `false`, and for a round worker's PR (branch `<agent>/<issue>-<slug>`, or the brief says it is a round slot): review is the orchestrator's seat, so a worker never runs `/rota-review` on its own branch (`skills/references/worker-contract.md`). Skip Step 3's routing and treat `REVIEW_CHOICE` as unset. Otherwise invoke `rota-review` via the `Skill` tool. Its brief carries the silent-failure rubric (`references/silent-failure-hunter.md`); `SILENT-FAIL` flags arrive as CONCERNS. Route on the recorded verdict (umbrella: add `--repo "$REPO"`):
 
 ```bash
 rota verdict route <branch> --for ship-review --json
 ```
 
-Exit 3 means no verdict was recorded: stop and rerun `/rota-review`; never read the report instead. Act on `data.next`; the same table serves Steps 3.5 and 3.75.
+Exit 3: no verdict recorded; stop and rerun `/rota-review`, never read the report instead. Act on `data.next`; the table also serves Steps 3.5 and 3.75.
 
 | `data.next` | Meaning | Do |
 |---|---|---|
@@ -67,19 +67,19 @@ Exit 3 means no verdict was recorded: stop and rerun `/rota-review`; never read 
 
 Label surfaced concerns by producer (carrier labels in `references/review-verdict-routing.md`): "Second-opinion concerns", "QA concerns".
 
-Remember a CONCERNS answer as `REVIEW_CHOICE` (`address`, `ship-anyway`, `stop`). Step 3.5 and 3.75 read it; Step 9 reads it. A review FAIL also makes `rota ship pr` and `rota ship merge` refuse (exit 4, `data.blockedBy: "verdict"`), but stop here rather than relying on that.
+Remember a CONCERNS answer as `REVIEW_CHOICE` (`address`, `ship-anyway`, `stop`); Steps 3.5, 3.75 and 9 read it. A review FAIL also makes `rota ship pr` and `rota ship merge` refuse (exit 4, `data.blockedBy: "verdict"`), but stop here.
 
 ## Step 3.5 — Second-Opinion Gate (opt-in)
 
-Skipped for a round worker's PR (the branch is `<agent>/<issue>-<slug>`, or the brief says it is a round slot): the orchestrator's merge gate is the second check, and a fourth model pass per PR costs more than it catches (`docs/contributing/rounds.md`). Also skipped when `ship.secondOpinion` is `false`, when Step 3 was skipped and the user has not asked for a second opinion this session, or when `REVIEW_CHOICE == ship-anyway` (a second adversarial pass would re-litigate the accepted risk).
+Skipped for a round worker's PR (branch `<agent>/<issue>-<slug>`, or the brief says it is a round slot; the orchestrator's merge gate is the second check, `docs/contributing/rounds.md`). Also skipped when `ship.secondOpinion` is `false`, when Step 3 was skipped and the user has not asked for a second opinion this session, or when `REVIEW_CHOICE == ship-anyway`.
 
-Otherwise read [`opt-in-gates.md`](opt-in-gates.md) (when `ship.secondOpinion` or `ship.qa` is on) and run Step 3.5 there.
+Otherwise run Step 3.5 in [`opt-in-gates.md`](opt-in-gates.md).
 
 ## Step 3.75 — QA Gate (opt-in)
 
 Skipped when `ship.qa` is `false` or `REVIEW_CHOICE == ship-anyway`. If there is no `.rota/qa/` strategy for the scope (single repo: no `.rota/qa/*.md`; umbrella: no `.rota/qa/<REPO>.md`), say *"`ship.qa: true` but no QA strategy for `<scope>`. Run `/rota-qa first-run` to bootstrap, or set `ship.qa: false` to skip."* and continue.
 
-Otherwise run the QA gate: Step 3.75 in `opt-in-gates.md`.
+Otherwise run Step 3.75 in `opt-in-gates.md`.
 
 ## Step 4 — Build the PR Body
 
@@ -87,15 +87,15 @@ Otherwise run the QA gate: Step 3.75 in `opt-in-gates.md`.
 rota ship body <branch>
 ```
 
-Capture the output (`## Summary`, `## Items resolved`, and `## Evidence` when the items carry proof rows) and append `## Test plan`: 2-5 checkboxes, one per meaningful area (not per file), from the scope JSON's touched files, each naming the most visible behavior change. No generic checks.
+Capture the output (`## Summary`, `## Items resolved`, `## Evidence` when items carry proof rows) and append `## Test plan`: 2-5 checkboxes, one per meaningful area (not per file), from the touched files, each naming the most visible behavior change. No generic checks.
 
-End the body with one line written from the diff: `Door: one-way|two-way. Blast radius: <surfaces a mistake reaches>.` One-way means a mistake outlives a revert (migration, published format, released API, deleted data); two-way means reverting the PR undoes it. Name surfaces (CLI verbs, skills, docs, file formats), not files. Run the self-audit in `references/humanizing-prose.md` silently and show the post-audit draft.
+End the body with one line written from the diff: `Door: one-way|two-way. Blast radius: <surfaces a mistake reaches>.` One-way: a mistake outlives a revert (migration, published format, released API, deleted data); two-way: reverting the PR undoes it. Name surfaces (CLI verbs, skills, docs, file formats), not files. Run the self-audit in `references/humanizing-prose.md` silently and show the post-audit draft.
 
 ## Step 5 — Pick Strategy
 
 On the issue backend (`references/issue-mode.md`) there is no question: go to Step 6a, never direct-merge. If `work.mergeStrategy` is `"direct"`, say so in one line (*"`work.mergeStrategy` is `direct` but the issue backend always opens a PR; ignoring it."*) so the mismatch is visible, then go on.
 
-If `work.mergeStrategy` is `"direct"` or `"pr"` and the user has not said otherwise this session, use it silently. If unset, or the user hinted at the other option, ask (single-select, header `"Strategy"`, *"How should I integrate `<branch>`?"*):
+If `work.mergeStrategy` is `"direct"` or `"pr"` and the user has not said otherwise this session, use it silently. If unset or the user hinted otherwise, ask (single-select, header `"Strategy"`, *"How should I integrate `<branch>`?"*):
 
 - `"Direct merge"` — *"Merge into the base with `--no-ff` and delete the branch."*
 - `"PR"` — *"Push and open a PR with the body."*
@@ -104,13 +104,13 @@ Mark the configured strategy `(Recommended)`; unset defaults to Direct merge.
 
 ## Step 6a — Open a PR
 
-> **Manual gate — filing a public artifact (`pr-open`).** Opening a PR creates externally visible state. This step is **always manual** — never auto-invoked, regardless of `autonomy.level`. `rota gate list` shows it is skill-enforced only (the verb does not refuse), so never skip the Step 5 question or the user's go-ahead. See `references/manual-gates.md`.
+> **Manual gate — filing a public artifact (`pr-open`).** Opening a PR creates externally visible state. This step is **always manual** — never auto-invoked, regardless of `autonomy.level`. Skill-enforced only (the verb does not refuse), so never skip the Step 5 question or the user's go-ahead. See `references/manual-gates.md`.
 
 ```bash
 printf '%s' "$BODY" | rota ship pr <branch> --title "<short title>" --body-file - [--repo <name>]
 ```
 
-Title: from the strongest commit subject, 70 characters at most, no `[ID]` tags (the body carries the linkage). Share the PR URL. Exit 4 with `data.blockedBy: "verdict"` is a recorded FAIL: surface it and stop.
+Title: strongest commit subject, 70 characters max, no `[ID]` tags. Share the PR URL. Exit 4 with `data.blockedBy: "verdict"` is a recorded FAIL: surface it and stop.
 
 **Issue mode:** add `--items <ID1>,<ID2>` (qualified `<repo>:<ID>` in an umbrella) so the PR closes them, then `rota item state <ID> --to needs-review` per item. Do not call `rota item release`: the claim stays until the PR merges. Shipping never merges here. The merge owner is the orchestrator in a round (`rota worker gate`), otherwise whoever runs `/rota-review --queue`. Skip Steps 6b, 6c and 8.
 
@@ -120,7 +120,7 @@ Title: from the strongest commit subject, 70 characters at most, no `[ID]` tags 
 printf 'merge: <summary>\n\n- item 1\n- item 2\n' | rota ship merge <branch> --body-file - [--repo <name>]
 ```
 
-The subject must start `merge: ` (undo recognizes cycles by it). Share the hash from `data.sha`. Exit 4: `data.blockedBy: "verdict"` is a recorded FAIL, surface and stop. `"manual gate"` is the `merge-approval` gate (`ship.mergeApproval` requires a human; `data.paths` names the files that triggered it) and nothing changed: ask in an `AskUserQuestion`, then rerun with `--confirm --confirm-note "<their answer>"`. A merge conflict (also exit 4) is aborted by the verb; tell the user.
+The subject must start `merge: ` (undo recognizes cycles by it). Share the hash from `data.sha`. Exit 4: `data.blockedBy: "verdict"` is a recorded FAIL; surface and stop. `"manual gate"` is the `merge-approval` gate (`ship.mergeApproval` requires a human; `data.paths` names the files that triggered it) and nothing changed: ask in an `AskUserQuestion`, then rerun with `--confirm --confirm-note "<their answer>"`. A merge conflict (also exit 4) is aborted by the verb; tell the user.
 
 ## Step 6c — Close Upstream Issues (direct-merge path only)
 
@@ -128,7 +128,7 @@ Skip on the PR path (`rota ship body` already emits `Closes #N`) and on the issu
 
 `rota issues imported --json --open-only`; keep `data.entries` whose `itemId` is in the shipped IDs from Step 2. None: skip silently.
 
-> **Manual gate — closing public upstream issues (`issue-close`).** Closing posts a comment and changes issue state on the remote. This step is **always manual** — never auto-invoked, regardless of `autonomy.level`. The registry marks it skill-enforced only. See `references/manual-gates.md`.
+> **Manual gate — closing public upstream issues (`issue-close`).** Closing posts a comment and changes issue state on the remote. This step is **always manual** — never auto-invoked, regardless of `autonomy.level`. Skill-enforced only. See `references/manual-gates.md`.
 
 Ask (header `"Close"`, *"Close N upstream issue(s) tied to the shipped items? (`#N, …`)"*): `"Yes, close all"` / `"Pick subset"` / `"No, leave open"`. For a subset, a second multiSelect `AskUserQuestion` (header `"Pick issues"`, options `"#N (item <ID>)"`, chunk by 4). Close each selected issue in one parallel batch:
 
@@ -144,7 +144,7 @@ On "No, leave open" print *"Skipping upstream issue close — N issue(s) left op
 rota status rm [--repo "$REPO"] <branch>
 ```
 
-Umbrella waves must pass `--repo`; without it only legacy `repo: null` entries are removed and the active entry leaks into the next `/rota-work`.
+Umbrella waves must pass `--repo`; without it the active entry leaks into the next `/rota-work`.
 
 ## Step 8 — Mark Unfinished Items Complete
 
@@ -152,7 +152,7 @@ Umbrella waves must pass `--repo`; without it only legacy `repo: null` entries a
 
 **File mode:** the merger completes items. Outside a round that is this step; a round worker skips it (workers never edit tracked `.rota/`) and the orchestrator completes the items when it merges the PR.
 
-`/rota-work` completes most IDs already; this catches manual commits that referenced IDs without closing them. For each ID in `referencedIds`:
+`/rota-work` completes most IDs; this catches manual commits that referenced IDs without closing them. For each ID in `referencedIds`:
 
 ```bash
 rota item complete <ID> --commit <merge-or-last-commit-hash> [--reason handed-off|blocked|dropped --note <text>]
@@ -160,17 +160,17 @@ rota item complete <ID> --commit <merge-or-last-commit-hash> [--reason handed-of
 
 Already-completed IDs are a no-op; an unknown ID exits 3.
 
-Exit 4 with `blockedBy: proof missing`: the item stays open with no `## Proof` row. Record one row per executed check that passed during this ship (the Step 3.75 QA run, or the project's test or smoke command run before merge), then rerun:
+Exit 4 with `blockedBy: proof missing`: no `## Proof` row. Record one row per executed check that passed during this ship (the Step 3.75 QA run, or the project's test or smoke command), then rerun:
 
 ```bash
 rota proof add <ID> --check "<command that ran>" --result PASS --evidence "<summary line or log path>" --sha <merge-or-last-commit-hash>
 ```
 
-A `/rota-review` or second-opinion PASS is acceptance, not proof: it reads the diff and runs nothing, so it never becomes a row. If no executed check exists, ask: run the project's test command now and record it (Recommended) / close with `--no-proof` (the user's call, named in the Step 9 report) / leave the item open. Never pass `--no-proof` without that answer.
+A `/rota-review` or second-opinion PASS is acceptance, not proof (it runs nothing), so it never becomes a row. If no executed check exists, ask: run the project's test command now and record it (Recommended) / close with `--no-proof` (the user's call, named in the Step 9 report) / leave the item open. Never pass `--no-proof` without that answer.
 
 ## Step 8.5 — Learn (Nudge or Auto-Invoke)
 
-Integration is a natural capture moment. **Inside a round, skip Steps 8.5 and 8.6 for round workers** (a worker's branch name is `<agent>/<issue>-<slug>`, or the brief says it is a round slot): the orchestrator runs learn and docs once per round, not per PR. Otherwise run `references/post-cycle-trigger-gate.md` with:
+**Round workers skip Steps 8.5 and 8.6** (branch `<agent>/<issue>-<slug>`, or the brief says it is a round slot): the orchestrator runs learn and docs once per round. Otherwise run `references/post-cycle-trigger-gate.md` with:
 
 - **Nudge (`"off"`):** append to the Step 9 report *"Capture learnings before context fades? Run `/rota-learn` — this cycle has the fresh session context."*
 - **Target (`"auto"`):** dispatch `rota-learn` via `Skill` immediately, no prompt.
@@ -182,7 +182,7 @@ Skipped for round workers (see Step 8.5). Run `references/post-cycle-trigger-gat
 
 ## Step 9 — Report to User
 
-One compact block.
+One compact block:
 
 ```
 PR opened: https://github.com/.../pull/42
@@ -198,11 +198,11 @@ After a successful ship (PR or merge): `rota release pending --json`. If `should
 
 ## Undo Mode (--undo)
 
-Read [`undo-mode.md`](undo-mode.md) when `--undo` is passed and follow it (Steps U1 to U3: preview, confirm, apply). Terminal: never falls through to another mode.
+Read [`undo-mode.md`](undo-mode.md) and follow it (Steps U1 to U3: preview, confirm, apply). Terminal.
 
 ## Docs Mode (--docs)
 
-Read `docs-mode.md` (next to this file) and follow it: Steps D1–D6 (first-run scaffold) and D-A1–D-A6 (after-work). Only `--docs` and Step 8.6 load it.
+Read `docs-mode.md` and follow it: Steps D1–D6 (first-run scaffold) and D-A1–D-A6 (after-work). Only `--docs` and Step 8.6 load it.
 
 ## Gates: Thought → Reality
 
@@ -218,20 +218,9 @@ Read `docs-mode.md` (next to this file) and follow it: Steps D1–D6 (first-run 
 ## Key Principles
 
 - **Read-only until Step 6.** Review, scoping and body generation mutate nothing.
-- **One integration pass.** If review passes, ship; don't split it into "review, then ship later".
-- **Titles stay clean.** PR titles are for humans; the body carries the linkage.
+- **One integration pass.** If review passes, ship.
+- **Titles stay clean.** The body carries the linkage.
 
 ## References
 
-| Reference | Purpose |
-|-----------|---------|
-| [`authoring-conventions.md`](references/authoring-conventions.md) | Authoring rules shared across SKILL.md files (manual gates, verb contract). |
-| [`docs-mode.md`](docs-mode.md) | Docs Mode (`--docs`): Steps D1–D6 and D-A1–D-A6. Loaded only for `--docs` and Step 8.6. |
-| [`docs-conventions.md`](references/docs-conventions.md) | Conventions for content under `docs/` (page naming, `.docsignore` seed). Consumed by Docs Mode. |
-| [`humanizing-prose.md`](references/humanizing-prose.md) | Self-audit for the PR body and doc edits. |
-| [`issue-mode.md`](references/issue-mode.md) | Issue-mode PR and item lifecycle. |
-| [`manual-gates.md`](references/manual-gates.md) | The manual-gate registry (`rota gate list`): verb-enforced gates and skill-only callouts. |
-| [`post-cycle-trigger-gate.md`](references/post-cycle-trigger-gate.md) | Trigger condition and nudge-or-dispatch choreography for Steps 8.5, 8.6 and D-A1. |
-| [`review-verdict-routing.md`](references/review-verdict-routing.md) | Verdict meaning, the CONCERNS question text and carrier labels. |
-| [`silent-failure-hunter.md`](references/silent-failure-hunter.md) | Silent-failure rubric carried in the review brief. |
-| [`three-mode-skill-shape.md`](references/three-mode-skill-shape.md) | Three-mode shape (first-run / after-work / restructure) shared with `/rota-qa`. |
+`authoring-conventions.md`, `docs-mode.md`, `docs-conventions.md`, `humanizing-prose.md`, `issue-mode.md`, `manual-gates.md`, `post-cycle-trigger-gate.md`, `review-verdict-routing.md`, `silent-failure-hunter.md`, `three-mode-skill-shape.md`.

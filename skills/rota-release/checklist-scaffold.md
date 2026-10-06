@@ -7,7 +7,7 @@ Starter template:
 ```markdown
 # Release Checklist
 
-Each `- [ ]` line is a gate `/rota-release` walks before bumping the version. Edit freely — nothing here is hardcoded. Items marked `- [x]` are ignored. Append `(manual)` to any item that must interject even in `autonomy.level: auto`.
+Each `- [ ]` line is a gate `/rota-release` walks before bumping the version. `- [x]` items are ignored. Append `(manual)` to an item that must ask even in `autonomy.level: auto`.
 
 - [ ] Sibling version-bearing files are in sync (e.g., `.claude-plugin/marketplace.json`, lockfiles, docs version refs)
 - [ ] CI is green on the release branch (the merge gate already ran the full suite on the release commit: confirm it, don't re-run smoke or `go test`)
