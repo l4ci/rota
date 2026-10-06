@@ -24,7 +24,7 @@ Run as a checklist. Items are ordered by broadening scope (target item → plan 
 
   Used by `/rota-plan` and `/rota-vision` to see siblings under the same milestone.
 
-- **KNOWLEDGE + DECISIONS** — the canonical query pattern is in `references/knowledge-consult.md` (see also; the skills that use this protocol cite it directly). Pass the topic names inferred from the work area.
+- **KNOWLEDGE + DECISIONS** — the query pattern is `references/knowledge-consult.md`, cited directly by the skills that use this protocol. Pass the topic names inferred from the work area.
 - **Recent git history**:
 
   ```
@@ -53,9 +53,4 @@ If a skill wants to recite the loaded context back, the load was the wrong shape
 
 ## Lookup, not resolve
 
-Reads in this list are lookups. A missing plan (`rota plan show` exits 3), an empty `rota backlog ids` list, or a missing detail file is the answer, not a failure. Do not wrap these calls in `2>/dev/null` or fallbacks; handle the exit code or read `--json` `data`.
-
-## What this reference does NOT cover
-
-- **K+D query mechanics** — those live in `references/knowledge-consult.md`. This reference cites that one for the K+D portion; it does not redefine the query pattern.
-- **`/rota-debug`, `/rota-refactor`, `/rota-review` context loads** — those consume only `references/knowledge-consult.md`, not the full protocol. Their inputs are different (a bug ID, a diff range, a feature branch), so they don't load backlog entries / plans / milestones the same way.
+Reads in this list are lookups: a missing plan (`rota plan show` exits 3), an empty `rota backlog ids` list or a missing detail file is the answer, not a failure. Handle the exit code or read `--json` `data`; never wrap them in `2>/dev/null` (same rule as *Verbs* in `knowledge-consult.md`).

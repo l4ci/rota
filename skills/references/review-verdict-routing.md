@@ -4,11 +4,11 @@
 
 ## Verdict semantics
 
-| Verdict | Meaning | Caller should |
-|---------|---------|---------------|
-| `PASS` | No concerns worth surfacing. The diff matches intent and respects conventions. | Continue silently. The reviewed work is integration-ready. |
-| `CONCERNS` | The diff works, but flag these before merge: convention drift, suboptimal patterns, stale scaffolding. Not a regression. | Surface each concern, then ask how to proceed (see Consumer routing below). |
-| `FAIL` | Merging would regress behavior, break intent, or violate a hard-boundary `DECISIONS.md` entry. | Stop. Surface findings. The ship verbs refuse the branch until a newer verdict replaces the FAIL. The user fixes via `/rota-work` or `/rota-debug` and reruns the review. |
+| Verdict | Meaning |
+|---------|---------|
+| `PASS` | No concerns worth surfacing. The diff matches intent and respects conventions. |
+| `CONCERNS` | The diff works, but flag these before merge: convention drift, suboptimal patterns, stale scaffolding. Not a regression. |
+| `FAIL` | Merging would regress behavior, break intent, or violate a hard-boundary `DECISIONS.md` entry. The ship verbs refuse the branch until a newer verdict replaces the FAIL; the user fixes via `/rota-work` or `/rota-debug` and reruns the review. |
 
 ## Consumer routing
 
@@ -29,17 +29,6 @@
 
 *"Address via /rota-work"* is the safe routing: it goes back through review on the next ship attempt and surfaces repeat concerns. *"Ship anyway"* is a user-volition gate: it overrides surfaced concerns and produces a public artifact (merge or PR) on the user's authority. It is an **acceptance-of-risk** answer, never auto-picked at any autonomy level. If a project genuinely wants concerns ignored, set `ship.review` to `false`.
 
-## Queue routing (`/rota-review --queue`, issue mode)
-
-The queue loop is the consumer (`rota verdict route --for queue`). It routes per PR / MR and always posts the verdict as a `feedback` comment on each linked item and the PR.
-
-| `data.next` | Verdict | Action |
-|---------|---------|--------|
-| `ask` | `PASS` | `AskUserQuestion` merge / skip / stop; merge runs `rota ship pr-merge <pr> --confirm --confirm-note "<answer>"` (exit 4 = not merged) |
-| `request-changes` | `CONCERNS` or `FAIL` | findings as feedback, `rota item state <ID> --to changes-requested`; no merge |
-
-Exit 3 / 4 from any verb stops the queue. Label lifecycle: see also `references/issue-mode.md` (`/rota-review` cites it directly).
-
 ## Producer-side relay (standalone `/rota-review` runs)
 
 When `/rota-review` is invoked directly (not from `/rota-ship`), it relays the verdict to the user as the final product instead of routing on it:
@@ -57,7 +46,3 @@ The reviewer rubric (what makes a diff PASS, CONCERNS or FAIL) stays in each pro
 When a non-canonical caller (e.g. `/rota-ship` Step 3.5 second-opinion gate, or any producer that emits the same PASS/CONCERNS/FAIL shape) surfaces concerns, it MAY label them with a carrier prefix, so the user can tell them from the primary `/rota-review` concerns in a session that runs both.
 
 Convention: prefix surfaced concern lines with the producer's name, e.g. *"Second-opinion concerns:"* before the bullets. Routing (`rota verdict route`) is unchanged; only the label differs.
-
-## See also
-
-- `references/manual-gates.md`: *"Ship anyway"* as a user-volition gate alongside the other manual gates.

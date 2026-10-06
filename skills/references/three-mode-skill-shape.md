@@ -22,9 +22,6 @@ The two implementations diverge by design on every operational axis:
 |---|---|---|
 | Artifact root | `<docs.path>/` — typically `docs/` at repo root | `.rota/qa/<target>.md` — per-target strategy files (umbrella: `<target>` is a registered repo name; single-repo: user-named surface like `web`, `api`, `cli`) |
 | Audience | end users (humans) | AI runners + contributors triaging findings |
-| Mode-3 name | `restructure` (audit + reorganize the IA) | `restructure` (re-probe surfaces, retire dead strategies, fix broken commands) |
-| Mode-2 nature | edits the artifact (after-work) | executes against the artifact (`run` — emits a verdict, does not edit) |
-| After-work approval gate | propose-mode by default (`docs.autoCreate: false`); auto-write opt-in | not applicable — `run` reads strategy, executes, scores; no artifact edits |
 | Trigger gate | post-cycle trigger condition — see `references/post-cycle-trigger-gate.md` | gated by `ship.qa: true` from `/rota-ship`; also runs on demand from the user |
 | First-run opt-in for downstream automation | flips `docs.afterWork: true` on scaffold approval | opt-in via `ship.qa: true` and `qa.afterWork: true` |
 | Commit ownership | Docs Mode: own commit (`docs:` prefix) when run inline from `/rota-ship` Step 8.6 or manually via `/rota-ship --docs` | no commits — `/rota-qa` is read-only on the codebase |
@@ -40,8 +37,3 @@ A skill belongs in this family when its purpose is **continuous curation of a si
 - The artifact periodically needs maintenance (stale entries, duplicates, broken links) — not just "append-only growth".
 
 Skills that import, generate or transform once (`/rota-release` cuts a tag; `/rota-spike` runs one experiment) don't fit, even if they touch persistent files.
-
-## See also
-
-- `references/post-cycle-trigger-gate.md` — the shared `2+/5+/hard-bug` trigger used by Docs Mode after-work (and by `/rota-ship` for its post-cycle `/rota-learn` and docs steps; `/rota-work` only nudges).
-- `references/persistence-skills.md` — the persistence duo (`/rota-learn` for topic bullets and `--term` Glossary entries, plus `/rota-decide`) shares a different spine. Persistence skills capture one entry at a time; three-mode skills curate a body of entries over time.

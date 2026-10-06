@@ -63,13 +63,3 @@ rota status add <branch> --items <ID>[,<ID>...] --repos <csv>
 ## Cross-repo parallelism is safe by construction
 
 Each sub-repo has its own `.git/index`, so multi-repo waves (one branch, N sub-repos, M workers) run in parallel under either isolation mode. Within one repo `/rota-work` workers never stage or commit (the orchestrator commits per task, Step 7.5), so branch isolation has no shared-index race either.
-
-## Umbrella mechanics
-
-This reference covers branch and worktree creation for umbrella mode. The broader umbrella concept (the registry in `.rota/repos.json`, resolution verbs (`rota repo which`, `rota repo resolve`), the `Repos:` field on backlog items, walk-up convenience, status registration, merge/PR `--repo` plumbing) lives in `references/umbrella-mode.md` (see also).
-
-## Not covered here
-
-- **Rounds.** Standing workers each own a worktree provisioned by `rota round start`; see `/rota-orchestrate`.
-- **The umbrella concept, registry and resolution verbs**: `references/umbrella-mode.md`.
-- **Worker briefs and dispatch**: `/rota-work` Step 6.

@@ -18,4 +18,4 @@ rota review queue --json
    - **`request-changes`** (CONCERNS / FAIL) — post the findings as a `feedback` comment on each linked item and on the PR (same commands), then `rota item state <ID> --to changes-requested`. The author's next `/rota-work` claim reads the feedback. No merge, under any autonomy level.
 5. **Return.** `git checkout <base>` before the next entry.
 
-Exit 5 or 6 (tracker unavailable or rate-limited) from any verb stops the queue with a report of what was done and what is left. Never retry. Routing table: `references/review-verdict-routing.md` (Queue routing).
+Every verdict, PASS included, is also posted as a `feedback` comment on each linked item and the PR. Exit 3 (no verdict recorded), 5 or 6 (tracker unavailable or rate-limited) from any verb stops the queue with a report of what was done and what is left. Never retry.
