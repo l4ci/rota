@@ -1,8 +1,8 @@
 # `/rota-decide` source-prefill modes
 
-Loaded by `/rota-decide` Step 2 when invoked with `--from-learning <topic>` or `--from-spike <name>`. Both modes pre-fill the same four-part decision draft (Rule, Why, Forbids, Permits) from a source artifact, then surface the same closing prompt asking the user to articulate Forbids/Permits — those carry the active commitment the source artifact lacks. Step 3 (Compose the Four Parts) receives the same draft shape from either path.
+Loaded by `/rota-decide` Step 2 when invoked with `--from-learning <topic>` or `--from-spike <name>`. Both modes pre-fill the same four-part decision draft (Rule, Why, Forbids, Permits) from a source artifact, then surface the same closing prompt asking the user for Forbids/Permits, the active commitment the source lacks. Step 3 (Compose the Four Parts) gets the same draft shape from either path.
 
-The shared closing prompt — emitted at the end of either mode — is:
+The shared closing prompt, emitted at the end of either mode:
 
 > *"Pre-filled rule and why from `<source>`. Now name the forbids and permits — those are what make this a decision, not a learning."*
 
@@ -15,7 +15,7 @@ Substitute `<source>` with `KNOWLEDGE.md <topic>` or `spike <name>` as appropria
 3. Pick the bullet to promote:
    - **1 bullet** — use it directly, no question.
    - **2-4 bullets** — call `AskUserQuestion` with header `"Bullet"` and question *"Which bullet from `<topic>` should become the decision?"*, one option per bullet. Truncate each option label to ≤80 chars; the option's description carries the full bullet text plus its date stamp.
-   - **5+ bullets** — call `AskUserQuestion` the same way but with the 4 most-recent bullets as options. The 4-cap makes a multiSelect chunked picker overkill for this volume — if the user wants a less-recent bullet, they re-run with a more specific topic.
+   - **5+ bullets** — call `AskUserQuestion` the same way but with the 4 most-recent bullets as options. The 4-cap makes a chunked multiSelect picker overkill; a user who wants an older bullet re-runs with a more specific topic.
 4. Draft the four parts from the picked bullet:
    - **Rule** = the bullet's text (the user can edit in Step 3 / Step 5).
    - **Why** = *"Promoted from KNOWLEDGE.md `<topic>` (<date>)."* plus any sub-bullet context attached to the picked bullet.
@@ -37,7 +37,7 @@ Substitute `<source>` with `KNOWLEDGE.md <topic>` or `spike <name>` as appropria
      - `viable` → *"Use `<X derived from question/recommended>` as the supported approach."*
      - `not viable` → *"Do not use `<X derived from question>`."*
      - `depends-on-X` → *"Use `<X>` only when `<the depends-on condition>`."*
-   - **Why** = the original `## Question` plus a 1-2 sentence summary of the spike's `## Findings` section. Keep it tight — most-impactful bullets only, one paragraph max.
+   - **Why** = the original `## Question` plus a 1-2 sentence summary of the spike's `## Findings` section. Keep it tight: most-impactful bullets only, one paragraph max.
    - **Forbids** = `_(user must articulate — what specific patterns/files/approaches does this rule out?)_`
    - **Permits** = `_(user must articulate — what alternatives stay allowed?)_`
 5. Surface the shared closing prompt above.

@@ -1,6 +1,6 @@
 # Authoring conventions
 
-These conventions constrain how new rota skills (or new behavior in existing skills) are authored. Skill authors consult this reference when writing or modifying any `rota-*/SKILL.md` file. New authoring rules land here, not inline. The index in `references/README.md` is the entry point.
+Rules for authoring new rota skills or new behavior in existing ones. Consult this when writing or modifying any `rota-*/SKILL.md`. New authoring rules land here, not inline. The index in `references/README.md` is the entry point.
 
 ## Contents
 
@@ -28,17 +28,17 @@ These conventions constrain how new rota skills (or new behavior in existing ski
 
 ## Skills are self-contained — no shared contract file
 
-Each skill owns its rules inline. A "shared contract" reference file is a smell when every rule has a single owner. Audit the cross-refs before retaining a shared file: if each rule is already mirrored inline at the call site (autonomy off/auto dispatch, learn trigger thresholds, etc.), the central file is vestigial pointer-chasing. Build a shared file only when N≥3 callers need the same long rule verbatim.
+Each skill owns its rules inline. A "shared contract" file is a smell when every rule has a single owner. Before keeping one, audit the cross-refs: if each rule is already mirrored inline at the call site (autonomy off/auto dispatch, learn trigger thresholds, etc.), the central file is vestigial pointer-chasing. Build a shared file only when N≥3 callers need the same long rule verbatim.
 
 ## Imperative rules in autonomy-aware steps must live inline at every dispatch point
 
-Steps that branch on `autonomy.level` (off/auto) and dispatch the next skill via `Skill` ("no prompt, no confirmation, no 'want me to' question") must repeat the directive verbatim alongside each `Skill`-tool invocation. Readers don't chase cross-refs to a single source of truth, and the harness drifts toward asking when only the rule's name is at the dispatch site. Redundancy is cheaper than scattered authority.
+Steps that branch on `autonomy.level` (off/auto) and dispatch the next skill via `Skill` ("no prompt, no confirmation, no 'want me to' question") must repeat the directive verbatim alongside each `Skill`-tool invocation. Readers don't chase cross-refs, and the harness drifts toward asking when only the rule's name is at the dispatch site. Redundancy is cheaper than scattered authority.
 
 ## Don't ask what the code can answer
 
-Before a skill calls `AskUserQuestion`, check whether the answer is derivable from the codebase, git history, or `.rota/` state — `grep`, `Read`, `git log`, `BACKLOG.md`, `KNOWLEDGE.md`, `status.json`, helper output. If it is, derive the answer (with a one-line note inline about what was found and where) and skip the question. `AskUserQuestion` is for genuine ambiguity — open requirements, opposing reasonable interpretations, the user's risk tolerance on a destructive op — not a forced-yes ritual confirming state the skill could discover.
+Before a skill calls `AskUserQuestion`, check whether the answer is derivable from the codebase, git history, or `.rota/` state — `grep`, `Read`, `git log`, `BACKLOG.md`, `KNOWLEDGE.md`, `status.json`, helper output. If it is, derive the answer (with a one-line note inline about what was found and where) and skip the question. `AskUserQuestion` is for genuine ambiguity (open requirements, opposing reasonable interpretations, the user's risk tolerance on a destructive op), not a forced-yes ritual confirming state the skill could discover.
 
-Codified from grill-with-docs (2026-05-10): *"If a question can be answered by exploring the codebase, explore the codebase instead."* Companion to the *AskUserQuestion option list capped at 4* rule (`KNOWLEDGE.md`, 2026-05-08) — that one constrains the option list when asking is the right move; this one constrains whether to ask at all.
+Codified from grill-with-docs (2026-05-10): *"If a question can be answered by exploring the codebase, explore the codebase instead."* Companion to the *AskUserQuestion option list capped at 4* rule (`KNOWLEDGE.md`, 2026-05-08) — that one constrains the option list once asking is right; this one constrains whether to ask at all.
 
 ## No ceremony: banners, per-site ask fallbacks
 
@@ -89,11 +89,11 @@ When adding a new boolean config flag whose purpose is to enable additional skil
 - `rota config set` edits the flag explicitly (the flag is never read-only).
 - **Exempt:** standard-on settings with opt-out semantics (e.g. `ship.review: true`) — these are not opt-in flags. Mode switches inside an already-enabled feature (e.g. `docs.autoCreate: false→true`) are also exempt.
 
-Codified after F15 introduced `docs.afterWork`. Without this rule, opt-in flags drift toward auto-flip-on-first-detect, which makes them on-by-default in practice — defeating the opt-in semantics.
+Codified after F15 introduced `docs.afterWork`. Without this rule, opt-in flags drift toward auto-flip-on-first-detect, which makes them on-by-default in practice.
 
 ## Descriptions say when to use a skill, not how it works
 
-The `description` frontmatter is the trigger: the situations and phrases that should load the skill, nothing else. A description that summarises the workflow ("reproduce, hypothesize, fix, open a PR") gives the agent a shortcut, and it follows the summary instead of reading the skill body. State the trigger, name the neighbouring skill when the two are easy to confuse, and leave the steps to the body.
+The `description` frontmatter is the trigger: the situations and phrases that should load the skill, nothing else. A description that summarises the workflow ("reproduce, hypothesize, fix, open a PR") gives the agent a shortcut: it follows the summary and skips the skill body. State the trigger, name the neighbouring skill when the two are easy to confuse, and leave the steps to the body.
 
 `test/validate-skills.py` caps a description at 350 characters (`DESC_CAP`); the Agent Skills spec's 1024 is a ceiling, not a target. It also rejects "you", "your" and "I" outside quoted trigger phrases: the description lands in the system prompt, so it is written in the third person ("the user").
 
@@ -124,7 +124,7 @@ The reference defines the cost/benefit threshold, the small-brief template, the 
 
 ## Adjective thresholds in skill prose erode at the runtime model — bake the number at authoring time
 
-Prose like "a few", "many", "high X", "ambiguous", "might/may" forces the runtime LLM to invent a threshold every invocation. Two thoughtful readers can interpret the same adjective two ways. Before shipping, test each one: if the adjective could plausibly be read in opposite directions by two competent readers, replace it with (a) a number, (b) a conditional (*"when X happens, Y"*), or (c) an assertive verb.
+Prose like "a few", "many", "high X", "ambiguous", "might/may" forces the runtime LLM to invent a threshold every invocation, and two competent readers can read the same adjective two ways. Before shipping, test each one: if the adjective could plausibly be read in opposite directions by two competent readers, replace it with (a) a number, (b) a conditional (*"when X happens, Y"*), or (c) an assertive verb.
 
 **Forbids.**
 - Shipping prose with vague quantity adjectives (*"a few"*, *"many"*, *"several"*) when a number or conditional would lock the threshold.
@@ -155,7 +155,7 @@ Codified during the B11 fix where a 13-key config picklist silently fell back to
 
 Write every `AskUserQuestion` for someone who does not have the file open. Name the choice in the vocabulary of what the user observes — the behavior, the artifact, the outcome — not in the vocabulary of the code that implements it, and say what the skill will do by default if the answer turns out not to matter. *"Should a finished game still show the training row, or only live ones?"* beats *"confirm expected `inGameMenuActions` behaviour for `replayClosable && mode === 'bot'`"*: same decision, but only the first can be answered without a file open.
 
-The skill is the side of the exchange holding the context, so translating is its job. A question phrased in implementation terms transfers that work to the user and usually gets a guess back — which reads exactly like an answer and is acted on as one. Stating the default converts a question the user does not care about into one they can decline cheaply.
+The skill holds the context, so translating is its job. A question phrased in implementation terms hands that work to the user and usually gets a guess back, which reads like an answer and is acted on as one. Stating the default converts a question the user does not care about into one they can decline cheaply.
 
 **Forbids.**
 - Naming a symbol, file, config key, or boolean expression as the *subject* of the question when a user-observable phrasing exists. (Citing one as supporting detail after the question is fine.)
@@ -170,7 +170,7 @@ Codified from a read of klufft's `swarm.md` (rota#20, 2026-07-31), whose orchest
 
 ## Nudges on terminal/idle paths only
 
-When a nudge or check could fire from multiple skills that converge on the same end-state (e.g., `/rota-work` → `/rota-ship` → `/rota-learn` handoffs), place the nudge on the *terminal/idle paths* — where the user is about to leave the session — NOT on dispatch paths that hand off to another skill. Multiple skills firing the same nudge from convergent flows drowns the signal.
+When a nudge or check could fire from multiple skills that converge on the same end-state (e.g., `/rota-work` → `/rota-ship` → `/rota-learn` handoffs), place the nudge on the *terminal/idle paths* — where the user is about to leave the session — NOT on dispatch paths that hand off to another skill. Several skills firing the same nudge from convergent flows drowns the signal.
 
 **Forbids.**
 - Firing the same nudge from a skill's tail when that skill auto-dispatches the next skill (the user never sees the message — it's overwritten by the dispatched skill's output).
