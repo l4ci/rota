@@ -8,7 +8,7 @@
 # frozen jsonl) runs <pkg>; an asset in a dir whose .go files //go:embed (e.g.
 # internal/knowledge/skills_block.md) runs that package; skills/ is embedded by
 # the root package (embed.go), so it runs "."; test infra (test/lib, test/fakes,
-# test/runner.sh, test/lib.sh) runs the "infra" check: bash -n on the shell
+# test/runner.sh, test/lib.sh, test/e2e) runs the "infra" check: bash -n on the shell
 # files, py_compile on the python ones, and test/runner_leak_test.py.
 # FAST_DRY_RUN=1 prints the selected checks as "plan: <check>" and runs nothing;
 # test/sections/120_fast_mapping.sh asserts the mapping through it.
@@ -58,7 +58,7 @@ for f in "$@"; do
       ;;
   esac
   case "$f" in
-    test/lib/*|test/fakes/*|test/runner.sh|test/lib.sh) infra=1 ;;
+    test/lib/*|test/fakes/*|test/e2e/*|test/runner.sh|test/lib.sh) infra=1 ;;
   esac
   case "$f" in
     skills/*|docs/*|*.md|test/validate-skills.py|test/doclint.sh) docs=1 ;;
@@ -97,7 +97,7 @@ fi
 
 if [ "$infra" = 1 ]; then
   echo "fast: infra (bash -n, py_compile, runner_leak_test)"
-  for f in test/runner.sh test/lib.sh test/lib/* test/fakes/*; do
+  for f in test/runner.sh test/lib.sh test/lib/* test/fakes/* test/e2e/*.sh test/e2e/scenarios/*.sh; do
     [ -f "$f" ] || continue
     case "$f" in
       *.py) python3 -c 'import ast,sys; ast.parse(open(sys.argv[1]).read())' "$f" ;;
