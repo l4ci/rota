@@ -73,32 +73,13 @@ Remember a CONCERNS answer as `REVIEW_CHOICE` (`address`, `ship-anyway`, `stop`)
 
 Skipped for a round worker's PR (the branch is `<agent>/<issue>-<slug>`, or the brief says it is a round slot): the orchestrator's merge gate is the second check, and a fourth model pass per PR costs more than it catches (`docs/contributing/rounds.md`). Also skipped when `ship.secondOpinion` is `false`, when Step 3 was skipped and the user has not asked for a second opinion this session, or when `REVIEW_CHOICE == ship-anyway` (a second adversarial pass would re-litigate the accepted risk).
 
-The `/rota-review` reviewer shares context with the work it produced and normalizes its blind spots. This gate gives a fresh subagent only the diff and the goal:
-
-```bash
-rota review brief [--repo "$REPO"] <branch>
-```
-
-Dispatch the brief verbatim to a fresh `standard` subagent (`Agent` with `subagent_type: "general-purpose"`, `model: "sonnet"`, `description: "Second-opinion review of <branch>"`). It returns a report ending in a fenced `json` verdict block. Save the block to a temp file, then:
-
-```bash
-rota verdict add <branch> --kind second-opinion --verdict <PASS|CONCERNS|FAIL> --body-file "$VERDICT" --json
-rota verdict route <branch> --for ship-second-opinion --json
-```
-
-Exit 2 from `add` names the malformed field: ask the agent to resend; never guess a verdict. Route per the Step 3 table.
+Otherwise read [`opt-in-gates.md`](opt-in-gates.md) (when `ship.secondOpinion` or `ship.qa` is on) and run Step 3.5 there.
 
 ## Step 3.75 — QA Gate (opt-in)
 
 Skipped when `ship.qa` is `false` or `REVIEW_CHOICE == ship-anyway`. If there is no `.rota/qa/` strategy for the scope (single repo: no `.rota/qa/*.md`; umbrella: no `.rota/qa/<REPO>.md`), say *"`ship.qa: true` but no QA strategy for `<scope>`. Run `/rota-qa first-run` to bootstrap, or set `ship.qa: false` to skip."* and continue.
 
-Review and second opinion judge the diff; QA runs the product. Invoke `Skill(skill="rota-qa", args="run")` (umbrella: `args="run --repo $REPO"`), then:
-
-```bash
-rota verdict route <branch> --for ship-qa --json
-```
-
-Exit 3: `/rota-qa` recorded nothing; stop and rerun it. Route per the Step 3 table (`qa.gate` decides advisory versus blocking inside the verb).
+Otherwise run the QA gate: Step 3.75 in `opt-in-gates.md`.
 
 ## Step 4 — Build the PR Body
 
