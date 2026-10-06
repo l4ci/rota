@@ -61,8 +61,17 @@ mkdir -p "$LOGS"
 # countable: the root must be empty once the checks have exited (#85).
 GATE_TMP="$(mktemp -d "$LOGS/tmp.XXXXXX")" || exit 1  # fresh: LOGS may be shared, and GATE_TMP is rm -rf'd
 export TMPDIR="$GATE_TMP"
+# Every check runs scrubbed (#320): no live herdr/tmux identity, no ssh-agent, and
+# HOME/XDG pinned to a gate-owned dir, since go test, grep-gate and doclint run
+# rota verbs outside the smoke runner's own scrub. The worktree list of this repo
+# must come out unchanged, whatever a check does.
+. "$REPO/test/lib/isolate.sh"
+ISO_DIR="$LOGS/iso"
+isolate_env "$ISO_DIR"
+WORKTREES_BEFORE="$GATE_TMP.worktrees"
+worktree_snapshot "$REPO" > "$WORKTREES_BEFORE"
 PIDS=()
-cleanup() { gate_lock_release "$LOCK"; rm -rf "$GATE_TMP"; }
+cleanup() { gate_lock_release "$LOCK"; rm -rf "$GATE_TMP" "$ISO_DIR" "$WORKTREES_BEFORE"; }
 trap 'cleanup' EXIT
 # On INT/TERM stop the checks too, with their children (the shard runners and go).
 stop_checks() { for p in "${PIDS[@]}"; do pkill -P "$p" 2>/dev/null; kill "$p" 2>/dev/null; done; }
@@ -141,6 +150,7 @@ if [ -n "$(ls -A "$GATE_TMP" 2>/dev/null)" ]; then
   echo "FAIL leak: checks left temp entries under $GATE_TMP:"; ls -A "$GATE_TMP" | head -20 | sed 's/^/     /'
   fail=1
 fi
+worktree_guard_check "$WORKTREES_BEFORE" "$REPO" || { echo "FAIL worktree guard"; fail=1; }
 if [ "$fail" = 0 ]; then
   [ -n "${ROTA_GATE_LOGS:-}" ] || rm -rf "$LOGS"
   echo "All smoke tests passed."

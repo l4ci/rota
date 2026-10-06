@@ -117,19 +117,22 @@ mkdir -p "$CLAUDE_CONFIG_DIR"
 # at an empty dir for the sections: the go build above already ran with the
 # real one, git identity comes from GIT_* above, and gh/glab/herdr/tmux/codex
 # are poisoned. A section that needs a home sets HOME itself, as 83/94/98 do.
-export HOME="$RUN_TMP/home"
-mkdir -p "$HOME"
 # The global project registry (#24) lives under $XDG_CONFIG_HOME/rota when
 # that is set, so a developer's XDG_CONFIG_HOME would bypass the HOME override.
-export XDG_CONFIG_HOME="$RUN_TMP/xdg"
-mkdir -p "$XDG_CONFIG_HOME"
 # doctor's disk check reads the real volume. Pin a healthy one so a full
 # developer disk does not add a line to every doctor section (#85); section 112
 # sets its own.
 export ROTA_TEST_DOCTOR_DISK="50:100"
-# Nor may a section inherit this shell's live host identity (pane, tab,
-# socket): sections that need one set fake values themselves.
-for v in $(compgen -e | grep -E '^(HERDR_|TMUX)'); do unset "$v"; done
+# Nor may a section inherit this shell's live host identity (pane, tab, socket)
+# or the developer's ssh-agent: sections that need one set fake values
+# themselves. isolate_env (test/lib/isolate.sh, #320) strips them and pins HOME
+# and every XDG dir under $RUN_TMP/iso, which the temp-dir guard below skips.
+. "$TESTDIR/lib/isolate.sh"
+isolate_env "$RUN_TMP/iso"
+# Leak guard: this repo's worktree list must be the same after the run. A section
+# that removes or prunes a live round's slot worktrees fails here.
+WORKTREES_BEFORE="$(mktemp)" || exit 1
+worktree_snapshot "$REPO" > "$WORKTREES_BEFORE"
 
 # Leak guard: snapshot $REPO/CLAUDE.md and the dev tree's tracked .rota/
 # content before any section runs. Under v4.1's partial-tracking model
@@ -258,13 +261,15 @@ if [ -n "$REPO_ROTA_SNAP" ]; then
     fi
   done < <(cd "$REPO_ROTA_SNAP" && find . -type f | sed 's|^\./||')
 fi
+worktree_guard_check "$WORKTREES_BEFORE" "$REPO" || LEAKED=1
+rm -f "$WORKTREES_BEFORE"
 [ -n "$REPO_CLAUDE_SNAP" ] && rm -f "$REPO_CLAUDE_SNAP"
 [ -n "$REPO_AGENTS_SNAP" ] && rm -f "$REPO_AGENTS_SNAP"
 [ -n "$REPO_ROTA_SNAP" ] && rm -rf "$REPO_ROTA_SNAP"
 # Temp-dir guard (#110): everything the run made is under $RUN_TMP. Entries
 # other than the runner's own were left behind by sections or helpers; report
 # the count so growth shows up, then the EXIT trap removes it all.
-RUN_LEFT="$(find "$RUN_TMP" -mindepth 1 -maxdepth 1 ! -path "$TMP" ! -path "$ROTA_STAGE" ! -path "$CLAUDE_CONFIG_DIR" ! -path "$HOME" ! -path "$XDG_CONFIG_HOME" 2>/dev/null | wc -l | tr -d ' ')"
+RUN_LEFT="$(find "$RUN_TMP" -mindepth 1 -maxdepth 1 ! -path "$TMP" ! -path "$ROTA_STAGE" ! -path "$CLAUDE_CONFIG_DIR" ! -path "$RUN_TMP/iso" 2>/dev/null | wc -l | tr -d ' ')"
 [ "$RUN_LEFT" -eq 0 ] || printf 'note: %s temp entries left under %s by sections; removing them\n' "$RUN_LEFT" "$RUN_TMP" >&2
 if [ "$RUN_LEFT" -gt "${ROTA_SMOKE_TMP_MAX:-150}" ]; then
   printf '\n\033[31merror: %s temp entries left under %s (limit %s); a section or helper is leaking\033[0m\n' "$RUN_LEFT" "$RUN_TMP" "${ROTA_SMOKE_TMP_MAX:-150}" >&2
