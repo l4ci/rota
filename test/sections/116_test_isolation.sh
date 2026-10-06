@@ -35,4 +35,7 @@ git -C "$GR" worktree remove --force "$GR/.worktrees/ben"
 if guard "$IS/before" "$GR" >/dev/null 2>&1; then fail "worktree guard missed a removed worktree"; fi
 pass "worktree guard fails on an added or removed worktree and passes when unchanged"
 
+python3 "$TESTDIR/runner_leak_test.py" || fail "runner checkout guard regression"
+pass "runner preserves concurrent edits, deletions and merges across overlapping shards"
+
 trap 'rm -rf "$TMP"' EXIT
