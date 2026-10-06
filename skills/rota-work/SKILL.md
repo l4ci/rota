@@ -125,7 +125,7 @@ Verify silently. Trust the diff, not the subagent's narrative.
 
 - **PASS:** one row per item the task resolves: `rota proof add <ID> --check "<verify command or grep>" --result PASS --evidence "<output line or path>" [--sha <task-commit>]`.
 - **Persistent FAIL:** record it with `--result FAIL`.
-- **Behavior task:** first record the subagent's reported RED run: `rota proof add <ID> --check "<test command>" --result FAIL --evidence "<failing line>" --sha <sha before the change>`, then the PASS row after. A subagent that reports no RED gets a fix dispatch (a FAIL above).
+- **Behavior task** (skip the RED half when `rota config show work.tdd` is `false`; PASS rows stay): first record the subagent's reported RED run: `rota proof add <ID> --check "<test command>" --result FAIL --evidence "<failing line>" --sha <sha before the change>`, then the PASS row after. A subagent that reports no RED gets a fix dispatch (a FAIL above). So does one whose RED evidence is a build, compile or setup failure (`undefined:`, `cannot find`, `no such file`, `command not found`, import or syntax error): the test must fail on an assertion, so the fix agent repairs the test until it does.
 - **Docs or skill-only task:** no RED. Put `no test seam: docs/skill change` in the PASS row's `--check`.
 - **Acceptance:** `rota item complete` (Step 9) writes it and exits 4 when an item has no proof. Never pass `--no-proof` on your own; an unproven item stays open and is surfaced.
 
