@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -20,8 +21,10 @@ import (
 	"github.com/l4ci/rota/internal/repos"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/ship"
+	"github.com/l4ci/rota/internal/status"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/verdict"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 // shipCommands is the `rota ship` group (#52). The flow itself is
@@ -191,18 +194,50 @@ func shipExistingBranch(c *Ctx, branch string) (string, error) {
 	return dir, nil
 }
 
-// shipOnDisk is ship.ClearWorktree's layout-B fallback: the worktree on disk
-// under the umbrella, "" when there is none or no --repo.
-func shipOnDisk(c *Ctx, dir, branch string) func() string {
-	return func() string {
-		if c.Repo == "" {
-			return ""
+// shipWorktreeCheck recognizes /rota-work's status registration. A branch
+// match or a familiar directory name alone never authorizes deletion.
+func shipWorktreeCheck(c *Ctx, dir, branch string) func(string) error {
+	return func(wt string) error {
+		listing, err := shipGit(c, dir, "worktree", "list", "--porcelain")
+		if err != nil {
+			return err
 		}
-		p := git.WorktreePath(shipRoot(dir), c.Repo, branch)
-		if fi, err := os.Stat(p); err == nil && fi.IsDir() {
-			return p
+		if listing.ExitCode != 0 {
+			return Unavailable("cannot read worktree ownership: %s", shipFirstLine(listing.Stderr))
 		}
-		return ""
+		primary := strings.TrimPrefix(strings.SplitN(listing.Stdout, "\n", 2)[0], "worktree ")
+		roots := []string{shipRoot(primary), primary, shipRoot(dir)}
+		resolve := func(root, path string) string {
+			if filepath.IsAbs(path) {
+				return path
+			}
+			return filepath.Join(root, path)
+		}
+		for _, root := range roots {
+			for _, slot := range worker.LoadRegistry(root).Slots() {
+				if path := slot.Worktree(); path != "" && ship.PathContains(resolve(root, path), wt) {
+					return &ship.Refusal{By: "worktree", Msg: "worktree belongs to round slot " + slot.Name() + ": " + wt, Hint: "leave slot cleanup to the round orchestrator"}
+				}
+			}
+		}
+		repo := c.Repo
+		if repo == "" {
+			if r, err := repos.Which(dir); err == nil {
+				repo = r.Name
+			}
+		}
+		for _, root := range roots {
+			for _, entry := range status.Entries(root) {
+				if entry.Branch != branch || entry.Repo != repo || entry.Worktree == "" {
+					continue
+				}
+				path := resolve(root, entry.Worktree)
+				if ship.PathContains(path, wt) && ship.PathContains(wt, path) {
+					return nil
+				}
+			}
+		}
+		return &ship.Refusal{By: "worktree", Msg: "worktree is not registered as cycle work: " + wt, Hint: "preserve this worktree; use the owning workflow to manage it"}
 	}
 }
 
@@ -306,7 +341,6 @@ func shipPR(fs *flag.FlagSet) RunFunc {
 			Closes:  func(ids []string) (string, error) { return shipClosesLines(c, root, cfg, ids) },
 			Verdict: shipVerdict(c, dir, root).Block,
 			Base:    func() (string, error) { return shipBase(c, dir) },
-			OnDisk:  shipOnDisk(c, dir, branch),
 		}, ship.PRRequest{Branch: branch, Title: *title, Body: body, Items: given})
 		if err != nil {
 			return shipErr(err)
@@ -426,7 +460,7 @@ func shipMerge(fs *flag.FlagSet) RunFunc {
 				gateRes, gateErr = clearMerge(c, policy, branch, conf, approvalReq{}, files, nil)
 				return gateErr
 			},
-			OnDisk: shipOnDisk(c, dir, branch),
+			WorktreeCheck: shipWorktreeCheck(c, dir, branch),
 		}, branch, base, msg)
 		if gateErr != nil {
 			return gateRes, gateErr

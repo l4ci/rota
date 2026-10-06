@@ -49,7 +49,7 @@ git -C <repo> worktree add "$WT" <branch>
 rota status add <branch> --items <ID>[,<ID>...] --worktree "$WT" --repo <repo>
 ```
 
-`rota git worktree-path` produces the canonical Layout B path `<umbrella>/.claude/worktrees/<repo>/<branch>`: use it for both `worktree add` and `rota status add`. `rota ship merge` and `rota ship pr` remove that worktree themselves before they integrate the branch.
+`rota git worktree-path` produces the canonical Layout B path `<umbrella>/.claude/worktrees/<repo>/<branch>`: use it for both `worktree add` and `rota status add`. `rota ship pr` preserves worktrees. Run `rota ship merge` from outside the worktree: it removes only a clean worktree recorded by `rota status add --worktree`. It refuses cleanup of round slots, the current directory, and worktrees with uncommitted or ignored files.
 
 **Umbrella multi-repo, branch:**
 

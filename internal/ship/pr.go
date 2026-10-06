@@ -24,15 +24,14 @@ type PRRequest struct {
 
 // PRPorts are what OpenPR cannot decide itself. Closes turns item IDs into
 // the `Closes #n` lines (empty in file mode); Verdict is the B3 gate; Base
-// resolves the base branch for a forge that needs one; OnDisk is
-// ClearWorktree's layout-B fallback. Their errors pass through unchanged.
+// resolves the base branch for a forge that needs one. Their errors pass
+// through unchanged.
 type PRPorts struct {
 	Git     Git
 	Forge   Forge
 	Closes  func(ids []string) (string, error)
 	Verdict func(branch string) error
 	Base    func() (string, error)
-	OnDisk  func() string
 }
 
 // PR is the opened pull request. Number is 0 when the URL carries none.
@@ -63,9 +62,6 @@ func OpenPR(ctx context.Context, p PRPorts, r PRRequest) (PR, error) {
 		if base, err = p.Base(); err != nil {
 			return PR{}, err
 		}
-	}
-	if err := ClearWorktree(p.Git, r.Branch, p.OnDisk); err != nil {
-		return PR{}, err
 	}
 	push, err := p.Git.Run("push", "-u", "origin", r.Branch)
 	if err != nil {
