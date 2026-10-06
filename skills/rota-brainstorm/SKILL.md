@@ -34,12 +34,12 @@ Follow `references/context-load-protocol.md` (parallel, silent), plus `rota item
 
 Write the whole design as one unsaved markdown draft:
 
-- **Goal** — one sentence on what shipping this means
-- **Design** — 3-8 sentences: chosen shape, moving parts, where they live
-- **Approaches considered** — 2-3 candidates, each with shape, pros, cons, deciding factor; mark the pick. A simple item may have one approach and a two-line design.
-- **Acceptance** — a `- [ ]` checklist, observable outcomes (skip when the issue body already has one)
-- **Open questions** — what must be answered before or during `/rota-plan`; mark spike candidates
-- **Assumptions** — implicit constraints made explicit
+- **Goal**: one sentence on what shipping this means
+- **Design**: 3-8 sentences: chosen shape, moving parts, where they live
+- **Approaches considered**: 2-3 candidates, each with shape, pros, cons, deciding factor; mark the pick. A simple item may have one approach and a two-line design.
+- **Acceptance**: a `- [ ]` checklist, observable outcomes (skip when the issue body already has one)
+- **Open questions**: what must be answered before or during `/rota-plan`; mark spike candidates
+- **Assumptions**: implicit constraints made explicit
 
 Self-review before showing: no placeholders, no contradictions (pick matches Design; Open questions vs Assumptions), nothing leaking into sibling items.
 
@@ -66,8 +66,8 @@ Report two lines (artifact, approaches, open questions). On hand-off say *"Run `
 
 ## References
 
-- [`references/design-exploration.md`](references/design-exploration.md) — shared spine with `/rota-vision`.
-- [`references/grilling.md`](references/grilling.md) — the grilling pass (Major / P0 / `--grill`).
-- [`references/subagent-dispatch.md`](references/subagent-dispatch.md) — the `light` subagent that grilling sends for broad reads.
-- [`references/context-load-protocol.md`](references/context-load-protocol.md) — shared parallel context load.
-- [`references/knowledge-consult.md`](references/knowledge-consult.md) — the K+D query pattern the load uses.
+- [`references/design-exploration.md`](references/design-exploration.md): shared spine with `/rota-vision`.
+- [`references/grilling.md`](references/grilling.md): the grilling pass (Major / P0 / `--grill`).
+- [`references/subagent-dispatch.md`](references/subagent-dispatch.md): the `light` subagent that grilling sends for broad reads.
+- [`references/context-load-protocol.md`](references/context-load-protocol.md): shared parallel context load.
+- [`references/knowledge-consult.md`](references/knowledge-consult.md): the K+D query pattern the load uses.

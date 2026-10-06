@@ -42,7 +42,7 @@ Skip unless the user asks or the framing leans on outside context (prior art, pi
 
 ## Step 5 — Challenge
 
-Push back on the framing. This is the highest-value step; a polite review wastes the cycle. Run the rounds, recommended answers, code-first lookups, edge-case scenarios, term handling and stop condition of `references/grilling.md`, with these tactics as the lens:
+Push back on the framing; a polite review wastes the cycle. Run the rounds, recommended answers, code-first lookups, edge-case scenarios, term handling and stop condition of `references/grilling.md`, with these tactics as the lens:
 
 - **Scope check** — *"M02 has 12 acceptance criteria. What's the smaller version that ships in two weeks?"*
 - **Risk frontloading** — *"M01 assumes auth is straightforward; session storage is the bigger risk. Frontload it?"*
@@ -104,9 +104,9 @@ If a newly active milestone has no items, offer (default Capture): `/rota-captur
 
 ## References
 
-- [`research.md`](research.md) — opt-in web research procedure; read from Step 4.
-- [`references/context-load-protocol.md`](references/context-load-protocol.md) — shared parallel context load.
-- [`references/knowledge-consult.md`](references/knowledge-consult.md) — the K+D query pattern the load uses.
-- [`references/grilling.md`](references/grilling.md) — the Step 5 challenge rounds.
-- [`references/subagent-dispatch.md`](references/subagent-dispatch.md) — the `light` subagent that grilling sends for broad reads.
-- [`references/design-exploration.md`](references/design-exploration.md) — shared spine with `/rota-brainstorm`.
+- [`research.md`](research.md): opt-in web research; read from Step 4.
+- [`references/context-load-protocol.md`](references/context-load-protocol.md): shared parallel context load.
+- [`references/knowledge-consult.md`](references/knowledge-consult.md): the K+D query pattern the load uses.
+- [`references/grilling.md`](references/grilling.md): the Step 5 challenge rounds.
+- [`references/subagent-dispatch.md`](references/subagent-dispatch.md): the `light` subagent that grilling sends for broad reads.
+- [`references/design-exploration.md`](references/design-exploration.md): shared spine with `/rota-brainstorm`.

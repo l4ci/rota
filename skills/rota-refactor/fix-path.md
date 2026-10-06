@@ -2,9 +2,9 @@
 
 Config read only here:
 
-- `models.worker` — the `standard` tier: `--fix` implementation subagents (default `sonnet`)
-- `refactor.verifyCommands` — shell commands run as gates in `--fix` verification (default `[]`)
-- `refactor.confirmBeforeExecute` — pause before fixing (default `true`)
+- `models.worker`: the `standard` tier: `--fix` implementation subagents (default `sonnet`)
+- `refactor.verifyCommands`: shell commands run as gates in `--fix` verification (default `[]`)
+- `refactor.confirmBeforeExecute`: pause before fixing (default `true`)
 
 Before dispatching, run `rota git guard clean --context "/rota-refactor"`.
 
@@ -19,4 +19,4 @@ Fix only the findings the user named, or all filed in this run if they said "all
 rota refactor reset
 ```
 
-Report the commit and closed issues in a few lines; no recap of exploration or designs.
+Report the commit and closed issues in a few lines.

@@ -47,7 +47,7 @@ All clean: record `clean tree`. Any dirty: ask once via `AskUserQuestion`:
 - **Question:** *"N uncommitted files on `<branch>`. How should I handle them?"* For a wave, name the dirty repos instead of N.
 - **Options** (single-select):
   1. "WIP commit (Recommended)" — *"Stage the dirty paths by name (`git add -- <paths from git status --porcelain>`), then `git commit -m 'wip: pause before context cutoff'`. Keeps changes on the branch."*
-  2. "Stash" — *"`git stash push -u -m 'rota-pause <branch>'` — keeps changes out of history."*
+  2. "Stash" — *"`git stash push -u -m 'rota-pause <branch>'`. Keeps changes out of history."*
   3. "Leave in place" — *"No action; the handoff note will record that the tree is dirty."*
 
 Apply the choice only to dirty entries, with `git -C <path>`. Record each entry's artifact (commit hash, stash ref, `dirty tree`, `clean tree`).
@@ -98,7 +98,7 @@ Show the `(web)` suffix only when `repo` is non-null.
 
 ## References
 
-- [`orchestrator-pause.md`](orchestrator-pause.md) — pausing an orchestrator mid-round; read from Step 1 when a round is in flight.
-- [`umbrella-wave.md`](umbrella-wave.md) — multi-repo wave pauses; read from Steps 2 and 4.
-- [`references/task-ledger.md`](references/task-ledger.md) — `Task:` commit trailer; read for the handoff note's Stage and Next planned step.
-- [`references/handoff-template.md`](references/handoff-template.md) — Handoff note template written by `/rota-pause`, read by `/rota-work`.
+- [`orchestrator-pause.md`](orchestrator-pause.md): pausing an orchestrator mid-round; read from Step 1 when a round is in flight.
+- [`umbrella-wave.md`](umbrella-wave.md): multi-repo wave pauses; read from Steps 2 and 4.
+- [`references/task-ledger.md`](references/task-ledger.md): `Task:` commit trailer; read for the handoff note's Stage and Next planned step.
+- [`references/handoff-template.md`](references/handoff-template.md): handoff note template, written by `/rota-pause`, read by `/rota-work`.
