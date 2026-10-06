@@ -26,6 +26,8 @@ pass "skills and references pass the doclint"
 # Offline only: no model call. Live runs are `python3 test/evals/run.py triggers|scenarios`.
 OUT="$(python3 "$TESTDIR/evals/run.py" --check 2>&1)" || fail "eval case files are malformed: $OUT"
 pass "eval case files cover every skill's triggers and 3+ scenarios for work, ship and capture"
+OUT="$(python3 -m unittest discover -s "$TESTDIR/evals" -p 'test_*.py' 2>&1)" || fail "offline eval runner tests failed: $OUT"
+pass "eval runner rejects failed calls and invalid routes without aborting the batch"
 
 # ── the prose lint can fail ─────────────────────────────────────────────────
 # Drop a pinned phrase from a copy of the real skills and the validator names
