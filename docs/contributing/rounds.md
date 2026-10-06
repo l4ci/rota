@@ -16,7 +16,7 @@ and the smoke suite in `gate.smokeShards` (default 4) shards, all at once. The s
 running the smoke suite in series is several times slower. It takes a machine-wide lock, so two gates never overlap, and
 keeps one log per check. Every check makes its temp files under one gate-owned root, and the gate fails if
 any entry is left in it afterwards, so a run that leaks shows up as a red gate, not as a full `/tmp`.
-Workers do not run it. The same goes for `test.e2e`: the merge train runs it once on the merged tree after `test.full`, and round PRs skip per-branch ship-time QA.
+Workers do not run it. The same goes for `test.e2e`: the gate and the merge train run it on the merged tree after `test.full`, and round PRs skip per-branch ship-time QA.
 
 GitHub CI (`.github/workflows/ci.yml`: gofmt, `go vet`, `go test`, validate-skills, doclint) is a backstop, not
 the merge gate. It runs on pushes to `main`, on PRs once they are ready for review (opened non-draft,

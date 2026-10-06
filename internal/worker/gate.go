@@ -197,6 +197,7 @@ func (e Env) Gate(ctx context.Context, root string, o GateOpts) (GateResult, err
 		// Read before the merge: the branch lands in root and may carry its own
 		// .rota/config.json, which must not decide how it is verified.
 		verifyCmds: verifyCommandsAt(root),
+		e2eCmds:    TierCommands(root, "e2e"),
 	}
 	res, err = e.gateEnv().gate(ctx, root, o, res, in, t)
 	if err == nil && t.Queued && res.Verdict == GatePass {
@@ -211,6 +212,7 @@ func (e Env) Gate(ctx context.Context, root string, o GateOpts) (GateResult, err
 type gateInput struct {
 	cfg        any
 	verifyCmds []string
+	e2eCmds    []string // test.e2e, read before the merge like verifyCmds
 }
 
 // gateEnv is the slice of Env the gate touches.
@@ -515,20 +517,37 @@ func (g *gate) stepVerify() (bool, error) {
 		return true, err
 	}
 	if vr.NoCommands {
-		res.Verdict, res.VerifySkipped = GatePass, true
+		res.VerifySkipped = true
 		res.Notes = append(res.Notes, fmt.Sprintf("NO-VERIFY %s — test.full is empty; merged tree was NOT gated by a command.", o.Slot),
 			"set test.full via rota config set to make this gate real")
-		return true, nil
+	} else {
+		res.Verified = vr.Verified
+		for _, c := range vr.Failed {
+			res.Notes = append(res.Notes, "verify FAILED: "+c)
+		}
+		if !vr.OK() {
+			g.verdict(GateVerifyFailed, fmt.Sprintf("GATE-FAIL %s — merged tree does not pass verification at %s\nlast lines of the verify output (full log: %s):\n%s",
+				o.Slot, res.SHA, vr.LogPath, indentTail(vr.Log, 20)),
+				fmt.Sprintf("fix forward on %s; the owning slot has usually moved on", o.Base))
+			return true, nil
+		}
 	}
-	res.Verified = vr.Verified
-	for _, c := range vr.Failed {
-		res.Notes = append(res.Notes, "verify FAILED: "+c)
-	}
-	if !vr.OK() {
-		g.verdict(GateVerifyFailed, fmt.Sprintf("GATE-FAIL %s — merged tree does not pass verification at %s\nlast lines of the verify output (full log: %s):\n%s",
-			o.Slot, res.SHA, vr.LogPath, indentTail(vr.Log, 20)),
-			fmt.Sprintf("fix forward on %s; the owning slot has usually moved on", o.Base))
-		return true, nil
+	// test.e2e: only after test.full passed, so a gate is a train of one.
+	if len(g.in.e2eCmds) > 0 {
+		er, err := runVerifyCmds(g.ctx, g.e.shell, g.in.e2eCmds, g.root)
+		if err != nil {
+			return true, err
+		}
+		for _, c := range er.Failed {
+			res.Notes = append(res.Notes, "e2e FAILED: "+c)
+		}
+		if !er.OK() {
+			g.verdict(GateVerifyFailed, fmt.Sprintf("GATE-FAIL %s — merged tree does not pass test.e2e at %s\nlast lines of the e2e output (full log: %s):\n%s",
+				o.Slot, res.SHA, er.LogPath, indentTail(er.Log, 20)),
+				fmt.Sprintf("fix forward on %s; the owning slot has usually moved on", o.Base))
+			return true, nil
+		}
+		res.VerifySkipped = false
 	}
 	res.Verdict = GatePass
 	return true, nil
