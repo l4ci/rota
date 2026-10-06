@@ -1301,6 +1301,15 @@ func TestStripDim(t *testing.T) {
 		"❯ \x1b[38;2;120;120;120mghost\x1b[0m": "❯ ",
 		"❯ \x1b[1;32mreal\x1b[0m":              "❯ real",
 		"❯ \x1b[2mghost\x1b[22mreal":           "❯ real",
+		"❯ \x1b[38;2;255;255;255mtyped\x1b[0m": "❯ typed",
+		"❯ \x1b[38;2;240;240;240mtyped\x1b[0m": "❯ typed",
+		"❯ \x1b[38;2;10;10;10mtyped\x1b[0m":    "❯ typed",
+		"❯ \x1b[38;2;128;128;128mghost\x1b[0m": "❯ ",
+		"❯ \x1b[38;2;128;140;128mtyped\x1b[0m": "❯ typed",
+		"❯ \x1b[38;5;255mtyped\x1b[0m":         "❯ typed",
+		"❯ \x1b[38;5;252mtyped\x1b[0m":         "❯ typed",
+		"❯ \x1b[38;5;232mtyped\x1b[0m":         "❯ typed",
+		"❯ \x1b[38;5;250mghost\x1b[0m":         "❯ ",
 		"\x1b[31mred\x1b[0m":                   "red",
 	} {
 		if got := stripDim(in); got != want {

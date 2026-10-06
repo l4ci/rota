@@ -92,8 +92,16 @@ func stripDim(s string) string {
 	return b.String()
 }
 
+// midGray: equal channels (within a few units) in the middle of the range.
+// White, black and near-extremes are ordinary text colours, and missing a
+// real draft is worse than a false refusal.
+func midGray(r, g, b int) bool {
+	lo, hi := min(r, g, b), max(r, g, b)
+	return hi-lo <= 8 && lo >= 90 && hi <= 200
+}
+
 // sgrDim applies one SGR parameter list to the dim state: faint (2) and a gray
-// foreground (90, 256-colour 232-250, or an equal-channel truecolour) start it;
+// foreground (90, 256-colour 241-250, or a mid-range equal-channel truecolour) start it;
 // reset (0, empty), normal intensity (22) and any other foreground end it.
 func sgrDim(params string, dim bool) bool {
 	p := strings.Split(params, ";")
@@ -116,10 +124,15 @@ func sgrDim(params string, dim bool) bool {
 			mode := p[i+1]
 			if mode == "5" && i+2 < len(p) {
 				c, _ := strconv.Atoi(p[i+2])
-				dim = c >= 232 && c <= 250
+				// The gray ramp 232-255 runs 8..238 in steps of 10; only its
+				// middle (about 90-200) reads as a suggestion.
+				dim = c >= 241 && c <= 250
 				i += 2
 			} else if mode == "2" && i+4 < len(p) {
-				dim = p[i+2] == p[i+3] && p[i+3] == p[i+4]
+				r, _ := strconv.Atoi(p[i+2])
+				g, _ := strconv.Atoi(p[i+3])
+				bl, _ := strconv.Atoi(p[i+4])
+				dim = midGray(r, g, bl)
 				i += 4
 			}
 		}
