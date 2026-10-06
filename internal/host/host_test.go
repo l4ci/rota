@@ -1398,3 +1398,17 @@ func TestDraftFallsBackToPlainWhenStyledReadFails(t *testing.T) {
 		}
 	}
 }
+
+func TestHumanDraftMultiLineBriefAndUnnumberedDialog(t *testing.T) {
+	brief := "first line\nthe last line of the brief"
+	if got := humanDraft("❯ first line\nthe last line of the brief\n", brief); got != "" {
+		t.Errorf("a brief wrapped over several prompt lines is not a draft, got %q", got)
+	}
+	if got := humanDraft("❯ first line\nsomething else\n", brief); got == "" {
+		t.Error("a different multi-line draft must still count")
+	}
+	dialog := " ❯ No, exit\n   Yes, I trust this folder\n\n Enter to confirm · Esc to cancel\n"
+	if got := humanDraft(dialog, brief); got != "" {
+		t.Errorf("an unnumbered dialog option is not a draft, got %q", got)
+	}
+}
