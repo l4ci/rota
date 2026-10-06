@@ -1,6 +1,6 @@
 # rota-learn rare modes
 
-Loaded by `/rota-learn` only when the args carry one of the manual flags below, or at session end when the contradiction queue is non-empty. The default capture flow never needs this file.
+`/rota-learn` loads this file only when the args carry one of the manual flags below, or at session end when the contradiction queue is non-empty. The default capture flow never needs it.
 
 ## Contents
 
@@ -18,9 +18,9 @@ Each flag skips discovery (Steps 2 to 7 of the skill) and exits after its one re
 
 ### `--retro`
 
-Turns the session's mistakes into the right artifact instead of a knowledge bullet by default. Mechanical mistakes become deterministic checks; judgement calls become written standards.
+Turns the session's mistakes into the right artifact, not a knowledge bullet by default. Mechanical mistakes become deterministic checks; judgement calls become written standards.
 
-**1. Collect mistakes.** Scan the transcript and recent commits for: user corrections, reverted or redone work, failed gates or tests that a check would have caught, wrong-file or wrong-tree edits, and wasted tool calls. One line per mistake: what went wrong, what would have prevented it. No mistakes, say so and stop.
+**1. Collect mistakes.** Scan the transcript and recent commits for: user corrections, reverted or redone work, failed gates or tests that a check would have caught, wrong-file or wrong-tree edits, and wasted tool calls. One line per mistake: what went wrong, what would have prevented it. No mistakes: say so and stop.
 
 **2. Classify each mistake** into exactly one class:
 
@@ -71,9 +71,9 @@ Shell command shape:
 rota glossary write "<name>" --def "<text>" [--alias "a,b"] [--not "x,y"] [--touch]
 ```
 
-Reads the existing Glossary topic, performs cross-term alias-collision uniqueness check, inserts (alphabetically) or updates the entry, regenerates the managed `<!-- rota-knowledge-start -->` block in the instructions file. Exit 4 on alias collision (`blockedBy: alias-collision`: an alias matches one already attached to a different term in Glossary); on collision, surface the error and stop without writing.
+The verb reads the Glossary topic, checks aliases for collisions with other terms, inserts (alphabetically) or updates the entry, and regenerates the managed `<!-- rota-knowledge-start -->` block in the instructions file. Exit 4 on alias collision (`blockedBy: alias-collision`: an alias matches one already attached to a different term in Glossary); on collision, surface the error and stop without writing.
 
-Definitional-signal autowrite — when the user phrases something like *"by X I mean Y"*, *"let's call this X"*, or *"X means Y"* during a normal session (not via the explicit `--term` flag), the orchestrator may run this same verb inline without going through `/rota-learn`. The flag form is the user-facing entry point; the inline form covers conversational writes.
+Definitional-signal autowrite: when the user says something like *"by X I mean Y"*, *"let's call this X"*, or *"X means Y"* in a normal session (no `--term` flag), the orchestrator may run this verb inline without `/rota-learn`. The flag is the user-facing entry point; the inline form covers conversational writes.
 
 Report one line:
 
@@ -92,7 +92,7 @@ Shell command shape:
 rota knowledge tier set --topic "<topic>" --title "<title>" --tier confirmed
 ```
 
-`tier set` always writes the new tier (idempotent — promoting an already-confirmed bullet is a no-op in effect). Report one line:
+`tier set` always writes the new tier (idempotent: promoting an already-confirmed bullet changes nothing). Report one line:
 
 ```
 Promoted: <topic> :: <title> → confirmed
@@ -115,7 +115,7 @@ Report one line:
 Deprecated: <topic> :: <title> → deprecated
 ```
 
-**Important:** manual deprecations do NOT touch the contradictions queue. Do NOT call `rota knowledge contradiction clear` here — the queue is for heuristic candidates only, not for manually declared deprecations.
+**Important:** manual deprecations do NOT touch the contradictions queue. Do NOT call `rota knowledge contradiction clear` here: the queue holds heuristic candidates only.
 
 Then exit (skip remaining steps).
 
@@ -134,8 +134,8 @@ Flow:
    ```bash
    printf '%s' "<new body suffix>" | rota knowledge amend --topic "<topic>" --fragment "<unique fragment from existing title>" --mode append --body-file -
    ```
-   The `--fragment` can be the title text itself (it is unique by (topic, title)).
-3. The sidecar entry is left untouched — tier and hits are preserved.
+   `--fragment` can be the title text itself (unique by (topic, title)).
+3. The sidecar entry stays untouched, so tier and hits are preserved.
 4. Read back the current tier and hits via `rota knowledge tier get --topic "<topic>" --title "<title>"` and report:
 
 ```
@@ -173,7 +173,7 @@ rota knowledge contradiction clear --topic <T> --title <S>
 
 A deferred candidate stays in the queue, so `rota knowledge contradiction list` shows it next session. Never run a bare `rota knowledge contradiction clear` here: it empties the whole queue.
 
-Track results in the confirm output as:
+Report results in the confirm output as:
 
 ```
 Cleared N contradictions: <demoted-count> demoted, <kept-count> kept, <deferred-count> deferred (still queued)

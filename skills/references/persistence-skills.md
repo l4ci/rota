@@ -1,10 +1,10 @@
 # Persistence skills
 
-Used by `/rota-learn` and `/rota-decide` — the duo that writes durable project state into `.rota/<FILE>.md` and re-renders a managed block in `CLAUDE.md` so read-side skills (`/rota-work`, `/rota-debug`, `/rota-plan`, `/rota-refactor`, `/rota-review`, `/rota-vision`) can consult it.
+`/rota-learn` and `/rota-decide` are the duo that writes durable project state into `.rota/<FILE>.md` and re-renders a managed block in `CLAUDE.md`, so read-side skills (`/rota-work`, `/rota-debug`, `/rota-plan`, `/rota-refactor`, `/rota-review`, `/rota-vision`) can consult it.
 
-`/rota-learn` carries two modes — passive learnings written as bullets under topic headings in `.rota/KNOWLEDGE.md`, and term entries written as nested-bullets under the pinned `## Glossary` topic of the same file (via the `--term <name>` flag). Both modes share the same writer-skill surface.
+`/rota-learn` has two modes: passive learnings written as bullets under topic headings in `.rota/KNOWLEDGE.md`, and term entries written as nested bullets under the pinned `## Glossary` topic of the same file (via `--term <name>`). Both share the same writer-skill surface.
 
-The two skills share one **contract** but different **gate strengths**. New persistence skills should match the contract; their gate strength is a design pick, not a free-form decision.
+The two skills share one **contract** but differ in **gate strength**. A new persistence skill matches the contract and picks its gate strength deliberately.
 
 ## The contract
 
@@ -22,7 +22,7 @@ Every persistence skill (and `/rota-learn`'s `--term` mode) follows:
    - `/rota-decide` → `rota block decisions`
 6. **Confirms via a compact block** — *"Captured `<artifact>` into `.rota/<FILE>.md`… Updated CLAUDE.md `<block>` block."* Match the shape; don't recap the plan.
 
-The duo does **not** commit. `.rota/KNOWLEDGE.md`, `.rota/DECISIONS.md`, and `CLAUDE.md` are all tracked under the partial-ignore model, so the duo leaves three working-tree diffs and lets the caller (the user, or a parent `/rota-work` cycle) commit them as one summary. Aligning here matters — the duo is dispatched in sequence under `autonomy.level: auto`, so a per-skill commit would fragment what should be one summary commit.
+The duo does **not** commit. `.rota/KNOWLEDGE.md`, `.rota/DECISIONS.md`, and `CLAUDE.md` are all tracked under the partial-ignore model, so the duo leaves up to three working-tree diffs and lets the caller (the user, or a parent `/rota-work` cycle) commit them as one summary. Under `autonomy.level: auto` the duo runs in sequence, so a per-skill commit would split what should be one commit.
 
 ## Topic-classification rule (rota-learn topic bullets ↔ rota-decide)
 
@@ -37,7 +37,7 @@ Both topic-keyed branches share:
 
 ## Intentional divergences
 
-The gate strengths are by design. The active/passive distinction lives here:
+The gate strengths are by design. This is where the active/passive distinction lives:
 
 | Aspect | `/rota-learn --term` | `/rota-learn` (topic bullet) | `/rota-decide` |
 |---|---|---|---|
@@ -47,13 +47,13 @@ The gate strengths are by design. The active/passive distinction lives here:
 | Source-prefill flags | `--def`, `--alias`, `--not`, `--touch` | none | `--from-learning`, `--from-spike` |
 | Active vs passive | vocabulary (low-risk additive) | passive ("remember if relevant") | active commitment (forbids + permits) |
 
-A future skill author looking at this table should read it as: **these are not bugs to file**. The gate-strength column encodes the project's policy on what costs the user *must* approve. `/rota-decide` always asks because writing a forbids/permits constrains future work; `/rota-learn` topic bullets never ask because passive content is cheap to amend; `/rota-learn --term` only asks on alias collision because adding a fresh term is additive.
+Read this table as: **these are not bugs to file**. The gate-strength column encodes the project's policy on what the user *must* approve. `/rota-decide` always asks because writing a forbids/permits constrains future work; `/rota-learn` topic bullets never ask because passive content is cheap to amend; `/rota-learn --term` only asks on alias collision because adding a fresh term is additive.
 
-If a new persistence skill needs a different gate, choose deliberately from {none, conditional, manual}; don't invent a fourth shape.
+A new persistence skill picks its gate from {none, conditional, manual}; don't invent a fourth shape.
 
 ## What this reference does NOT cover
 
-- **The user-facing distinction.** `docs/usage/learning.md` and `docs/usage/decisions.md` explain the duo to users — terminology + gotchas vs. boundaries. This reference is for skill authors.
+- **The user-facing distinction.** `docs/usage/learning.md` and `docs/usage/decisions.md` explain the duo to users (terminology and gotchas vs. boundaries). This reference is for skill authors.
 - **Manual gates inventory.** The list of always-manual sites across all skills (not just this duo) lives in `references/manual-gates.md`.
 - **Knowledge & decisions consult.** The read-side pattern (verbs, carrier semantics, parallelism) lives in `references/knowledge-consult.md`.
 - **Umbrella-mode scoping.** The model is in *Umbrella scoping* below.

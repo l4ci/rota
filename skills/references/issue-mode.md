@@ -1,6 +1,6 @@
 # Issue backend
 
-The issue backend (`backlog.backend` is `"issues"` in `.rota/config.json`; check with `rota config show backlog.backend`) is the primary backlog: the tracker (GitHub or GitLab) holds the items, and every verb already branches on the backend. `.rota/BACKLOG.md` and `.rota/<kind>/` detail files belong to the legacy file backend, where skills keep their file-backend steps. Item IDs read `#N` (or a bare `N`) here and `[B07]` in file mode; this page covers the issue-backend mechanics, and notes where the file backend differs.
+The issue backend (`backlog.backend` is `"issues"` in `.rota/config.json`; check with `rota config show backlog.backend`) is the primary backlog: the tracker (GitHub or GitLab) holds the items, and every verb branches on the backend. `.rota/BACKLOG.md` and `.rota/<kind>/` detail files belong to the legacy file backend, where skills keep their file-backend steps. Item IDs read `#N` (or a bare `N`) here and `[B07]` in file mode. This page covers the issue backend and notes where the file backend differs.
 
 ## IDs
 
@@ -31,16 +31,16 @@ An item ID is `#42` or a bare `42`; the legacy `F42` / `B42` / `T42` forms (type
 One of `in-progress`, `needs-review`, `changes-requested` at a time, cleared on close.
 
 - `rota item claim` sets `in-progress` (and assigns the user).
-- `rota item state <ref> --to needs-review` after the PR / MR is open.
+- `rota item state <ref> --to needs-review` once the PR / MR is open.
 - A reviewer sets `changes-requested` (`/rota-review --queue`, or `rota ship pr-merge` for an unproven item); the next `/rota-work` claim returns it to `in-progress`.
 
 ## PR flow
 
-`/rota-work`, `/rota-debug` and `/rota-ship` in issue mode always open a PR / MR, whatever `work.mergeStrategy` says (it is treated as `pr`). `rota ship pr --items <IDs>` appends one `Closes #<n>` line per item, so the tracker closes the issues when the PR merges. The claim stays until then: do not call `rota item release` after opening the PR.
+In issue mode `/rota-work`, `/rota-debug` and `/rota-ship` always open a PR / MR, whatever `work.mergeStrategy` says (treated as `pr`). `rota ship pr --items <IDs>` appends one `Closes #<n>` line per item, so the tracker closes the issues when the PR merges. The claim stays until then: do not call `rota item release` after opening the PR.
 
-**Merging belongs to `/rota-review --queue`.** It lists the queue with `rota review queue`, reviews each PR / MR, and merges PASSes with `rota ship pr-merge <pr>`. It checks proof before merging: an open linked item with no proof blocks the merge (the item becomes `changes-requested` with a feedback comment, exit 4), because a merge into the default branch lets the host close the issue and skip the gate. After a merge, the host closes the linked issues itself when the PR targets the default branch; for any other base `rota ship pr-merge` closes them with `rota item complete` semantics (reason done, merge sha). `/rota-work` and `/rota-ship` never merge in issue mode and never call `rota item complete` for a `done` close: the merge closes the issue.
+**Merging belongs to `/rota-review --queue`.** It lists the queue with `rota review queue`, reviews each PR / MR, and merges PASSes with `rota ship pr-merge <pr>`. It checks proof first: an open linked item with no proof blocks the merge (the item becomes `changes-requested` with a feedback comment, exit 4), since a merge into the default branch lets the host close the issue and skip the gate. After a merge, the host closes the linked issues itself when the PR targets the default branch; for any other base `rota ship pr-merge` closes them with `rota item complete` semantics (reason done, merge sha). `/rota-work` and `/rota-ship` never merge in issue mode and never call `rota item complete` for a `done` close: the merge closes the issue.
 
-`rota item complete` is still how to close an item with `--reason handed-off|blocked|dropped`. Reasons: `done` closes as completed; `dropped` and `handed-off` close as not planned (comment carries reason and note); `blocked` keeps the issue open with the `blocked` label.
+Use `rota item complete` to close an item with `--reason handed-off|blocked|dropped`. `done` closes as completed; `dropped` and `handed-off` close as not planned (comment carries reason and note); `blocked` keeps the issue open with the `blocked` label.
 
 ## Milestones and release
 
@@ -48,14 +48,14 @@ A milestone is a native tracker milestone `MNN — <title>` plus a tracking issu
 
 ## Resuming an item
 
-A fresh session has only the tracker. Load an item's context before working it:
+A fresh session has only the tracker. Load the item's context first:
 
 1. `rota item show <ID>`: state label, claim holder, assignee, milestone, which notes exist (design / plan / proof) and every question / answer / decision / feedback comment. Read-only.
 2. `rota item field list <ID>`: the issue body and fields.
 3. `rota item note show <ID> --kind design` and `--kind plan`: the design and plan notes (`exists: false` when absent).
 4. `rota item comment list <ID> [--kind K]`: just the comment rows, when only those are needed.
 
-Treat `decision` comments as binding and `feedback` comments (from review) as the to-do list for a `changes-requested` item. The rules for working them are *Handling review feedback* in `worker-contract.md` (see also; `/rota-work` cites it directly).
+Treat `decision` comments as binding and `feedback` comments (from review) as the to-do list for a `changes-requested` item. The rules for working them are *Handling review feedback* in `worker-contract.md` (`/rota-work` cites it directly).
 
 ## Umbrella
 

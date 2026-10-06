@@ -35,10 +35,10 @@ Work only this task, then stop.
   Review is the orchestrator's seat (the merge gate); a worker-side review
   duplicates it. Verify with targeted checks, then open the PR.
 - Stay in your worktree. Confirm `pwd` before editing and use worktree-rooted
-  paths — an absolute path under the main checkout silently edits the WRONG tree.
+  paths. An absolute path under the main checkout silently edits the WRONG tree.
 - Stage explicit paths. Never `git add -A` or `git add .`.
 - Commit your own work, then open a PR against `<base-branch>`. Never merge.
-- Run TARGETED verification only — the files you touched. The full suite is the
+- Run TARGETED verification only: the files you touched. The full suite is the
   orchestrator's gate on the merged tree. Several workers running full suites at
   once starve the CPU and turn time-budgeted tests into false reds, which costs
   everyone a re-measurement to disprove.
@@ -85,7 +85,7 @@ Work only this task, then stop.
 
 `rota worker poll` and `rota round wait` read `issues:#a,#b` as done with the issue list as evidence and record it on the slot instead of a PR. `rota round assign` (or `transfer`) onto that slot then closes the review item with a note listing the issues, releases its claim and frees the slot. Only a review item the round minted closes this way: a worker that reports issues on any other item is refused until it has a PR. Solo rounds record the same with `rota round report <slot> --state done --issues "#a,#b"`.
 
-The two sentinels are the contract's load-bearing half. We own the worker's instructions, so state is *declared* rather than inferred from prose — which is what makes `rota worker poll` reliable where pattern-matching a TUI is not.
+The two sentinels are the contract's load-bearing half. We own the worker's instructions, so state is declared, not inferred from prose, and `rota worker poll` is reliable where pattern-matching a TUI is not.
 
 ## Handling review feedback
 
@@ -99,7 +99,7 @@ Applies to a bounced worker and to `/rota-work` on a `changes-requested` item, w
 
 ## Provenance
 
-The worker writes its own PR body, and an orchestrator relay, a maintainer typing in the pane and stray text all arrive through the same channel. Without a signature the worker genuinely cannot tell them apart, and what it cites is permanent once merged.
+The worker writes its own PR body, and an orchestrator relay, a maintainer typing in the pane and stray text all arrive through the same channel. Without a signature the worker cannot tell them apart, and what it cites is permanent once merged.
 
 - **Signing.** `rota worker dispatch` prepends `--- ORCHESTRATOR (round N) ---` as the first line of every brief and every `--relay`. The round comes from `--round <N>`, else the round last recorded in `.rota/workers.json`, else `1`. A relay also carries a bracketed note saying it is forwarded text, not the maintainer.
 - **Codex: checked before the model.** A Codex worker cannot be trusted to hold the rule itself (#3). A codex task dispatch writes a fresh key to `rota-prompt.key` (0600) in the slot's `CODEX_HOME`; every brief and relay to that slot ends with `--- ROTA-SIG <hex> ---`, an HMAC-SHA256 under that key over the text with all whitespace removed (a rewrapped pane still verifies, any other edit breaks it).

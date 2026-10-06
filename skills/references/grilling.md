@@ -28,4 +28,4 @@ When a decision looks settled, test it with one concrete scenario that stresses 
 
 ## Stop condition
 
-Stop when a round's frontier is empty: every decision is answered, derived from code or marked a deferred open question with an owner. Say so in one line (*"Frontier empty; nothing left assumed."*) and move on. Don't run an extra round to be thorough, and don't stop while an unanswered decision remains; an assumption you keep goes in the artifact's Assumptions, named.
+Stop when a round's frontier is empty: every decision is answered, derived from code or marked a deferred open question with an owner. Say so in one line (*"Frontier empty; nothing left assumed."*) and move on. Don't run an extra round to be thorough, and don't stop while a decision is unanswered; an assumption you keep goes in the artifact's Assumptions, named.
