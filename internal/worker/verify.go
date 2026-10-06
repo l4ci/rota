@@ -78,6 +78,10 @@ func runVerifyCmds(ctx context.Context, shell func(ctx context.Context, dir, com
 // that must check preconditions before it does.
 func HasVerifyCommands(root string) bool { return len(verifyCommandsAt(root)) > 0 }
 
+// GateCommands is what the merge gate runs for test.full: test.full, or the
+// deprecated refactor.verifyCommands while a config still holds only that.
+func GateCommands(root string) []string { return verifyCommandsAt(root) }
+
 // TierCommands is test.<tier> (fast, full or e2e) from root's config: the
 // non-blank entries, trimmed.
 func TierCommands(root, tier string) []string {

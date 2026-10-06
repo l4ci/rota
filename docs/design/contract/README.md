@@ -95,7 +95,7 @@ The entries live one file per verb group, so a change to one group does not conf
 | [backlog.md](backlog.md) | A4 | `id`, `item`, `backlog`, `summary`, `issues`, `status`, `refactor`, `migrate issues` |
 | [knowledge.md](knowledge.md) | A5 | `knowledge`, `decisions`, `glossary`, `block`, `instructions`, `map`, `qa`, `migrate hv` |
 | [milestones.md](milestones.md) | A6 | `milestone`, `plan`, `design`, `spike`, `proof`, `debug` |
-| [workers.md](workers.md) | A7 | `worker` (pool, dispatch, poll, gate, session, account) |
+| [workers.md](workers.md) | A7 | `worker` (pool, dispatch, poll, gate, session, account), `test run` |
 | [tracker-git-ship.md](tracker-git-ship.md) | A8 | `tracker`, `git`, `review`, `ship`, `release` |
 | [init.md](init.md) | A9 | `init` |
 | [verdicts.md](verdicts.md) | B2 | `verdict` |
