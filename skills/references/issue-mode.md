@@ -74,4 +74,4 @@ Shared by the `rota item`, `rota ship pr` and `rota tracker call` verbs:
 
 - `5` tracker unavailable (CLI missing, not authenticated, provider unknown): stop and report; do not fall back to files.
 - `6` rate-limited: stop and report; never retry in a loop.
-- `4` refused. `rota item claim`: another worker holds the item (claim lost): drop that item and pick another. `rota ship pr-merge`: a linked item has no proof and moves to `changes-requested`: report it; or, with `data.blockedBy: "verdict"`, the PR's branch carries a recorded FAIL and nothing changed: report it and skip the PR; or, with `data.blockedBy: "manual gate"`, `ship.mergeApproval` requires a human: ask, then re-run with `--confirm --confirm-note "<answer>"`.
+- `4` refused. `rota item claim`: another worker holds the item (claim lost): drop that item and pick another. `rota ship pr-merge`: a linked item has no proof and moves to `changes-requested`: report it; or, with `data.blockedBy: "verdict"`, the PR's branch carries a recorded FAIL and nothing changed: report it and skip the PR; or, with `data.blockedBy: "manual gate"`, `ship.mergeApproval` requires a human (`manual-gates.md`).

@@ -2,7 +2,7 @@
 
 Cross-skill rulebook for when and how skills push work into subagents instead of the orchestrator's main thread. The orchestrator is a dispatcher and synthesizer; reads, scans, summaries and serial queries belong elsewhere.
 
-Cited by `references/authoring-conventions.md`. Companion to the worktree-isolation rule in `.rota/DECISIONS.md` (`work.isolation` for ≥2 commit-producing parallel workers).
+Skills MUST consult this file for any step that trips the *Dispatch when* thresholds below; the rule sets a floor, and each skill judges which of its steps trip it. Companion to the worktree-isolation rule in `.rota/DECISIONS.md` (`work.isolation` for ≥2 commit-producing parallel workers).
 
 ## When to dispatch
 
@@ -21,6 +21,8 @@ A cost/benefit rule, not a vibe.
 - Work depends on context the orchestrator has already loaded
 - Step is interactive (`AskUserQuestion`, Socratic discovery)
 - The brief itself would cost more tokens than the work
+
+Also forbidden: cross-worker communication, returning full transcripts instead of synthesis, and calling out to `superpowers:dispatching-parallel-agents` or other external skills (this discipline is self-contained). Mixed tiers in one wave are fine (a `light` subagent beside three `standard` ones in the same turn).
 
 ## Small-brief template
 

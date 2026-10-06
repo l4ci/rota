@@ -373,9 +373,7 @@ def prose_rules():
         r.append(has(D, f"^## {h}", f"section '{h}' missing", True, re.M))
     r += [has(D, "DECISIONS.md", "must cite the .rota/DECISIONS.md worktree-isolation rule"),
           lacks(D, r"TBD|TODO|FIXME|XXX", "contains placeholders", True, re.I),
-          has("skills/references/authoring-conventions.md", "^## Dispatch heavy work to subagents",
-              "missing the 'Dispatch heavy work to subagents' rule", True, re.M),
-          has("skills/references/authoring-conventions.md", D[len("skills/"):], "missing the cross-reference to subagent-dispatch.md")]
+          has(D, "Skills MUST consult this file", "missing the rule that skills consult the dispatch discipline")]
     return r
 
 

@@ -24,13 +24,13 @@ The skill's side:
 
 ### Merge approval in an unattended round
 
-When nobody is at the prompt (an orchestrator driving herdr workers), `merge-approval` goes through the escalation channel instead of `AskUserQuestion`. `rota worker gate` and `rota ship pr-merge` take `--escalate`: on the refusal they post the approval request on the PR thread (or the slot's issue) with `rota round escalate send`, and `data.escalation.id` names it; a pending request on that thread is reused, never posted twice. Note the id against the slot, work other slots, and poll with `rota round escalate check`. Once it reports `answered`, re-run with `--approval <id>`. The verb itself decides whether the reply approves (first word `approve`, `approved`, `yes`, `lgtm`, or `ship it`) and audits the reply verbatim. Exit 4 `approval declined` means the human held the merge: surface `data.answer` and hold the slot, never retry. Exit 4 `approval pending` means `check` has not seen an answer yet. `rota ship merge` has no thread and keeps the `--confirm` path.
+With nobody at the prompt, `merge-approval` goes through the escalation channel (`--escalate`) instead of `AskUserQuestion`; `/rota-orchestrate` owns the mechanics (its merge-train file).
 
 Call sites show the flags and the exit-4 handling; the verb enforces the rule, so they don't restate it.
 
 ## Skill-only gates: the callout holds the line
 
-Closing upstream issues stays out of code (maintainer ruling, B1), and some gates have no verb to hold the check. These keep the inline callout immediately before the action, per the authoring convention *"Imperative rules in autonomy-aware steps must live inline at every dispatch point"* (see `references/authoring-conventions.md`, autonomy-rule-must-stay-inline). A reference cite cannot replace it.
+Closing upstream issues stays out of code (maintainer ruling, B1), and some gates have no verb to hold the check. These keep the inline callout immediately before the action, per the authoring convention *"Skills are self-contained, with autonomy rules inline"*. A reference cite cannot replace it.
 
 The canonical callout shape (block-quote) is:
 
@@ -47,15 +47,12 @@ Sites with multi-paragraph prose may use the *inline* form, a `**always manual**
 | `issue-close` | `/rota-ship` | Step 6c (Direct-push close) | Posts a tracking comment and closes upstream issues after a direct merge. |
 | `issue-close` | `/rota-release` | Step 13 | Closes upstream issues still open for shipped items. |
 
-`/rota-ship` Step 3's *"Ship anyway"* option (in the CONCERNS-routing AskUserQuestion) is manual-shaped too; `references/review-verdict-routing.md` says why it is never auto-picked.
+`/rota-ship` Step 3's *"Ship anyway"* option (in the CONCERNS-routing AskUserQuestion) is manual-shaped too and never auto-picked; `references/review-verdict-routing.md` owns why.
 
-## Why not auto-invoke?
+## One enforcement point
 
-Auto mode only chains routing steps that move work forward without committing to anything irreversible. A manual gate is the irreversible commit: a public PR, a release tag, a `DECISIONS.md` entry that constrains future code. Auto-picking one would answer for the user on questions of reputation, external coordination, or long-term project shape.
+Enforce a gate at exactly ONE point: the skill that owns the question. No other skill dispatches the gated skill via `Skill`, and a confirmation check inside a skill other skills can invoke breaks the contract under autonomy.
 
-The skip-route is configuration. If a project wants concerns ignored on every ship, set `ship.review` to `false`; if it wants no human on merges, leave `ship.mergeApproval` at `none`.
+## The skip-route
 
-## See also
-
-- `references/authoring-conventions.md` rule *"Imperative rules in autonomy-aware steps must live inline at every dispatch point"*: why a skill-only callout cannot be replaced by a reference cite.
-- `references/review-verdict-routing.md`: *"Ship anyway"* is a manual-shaped option inside the CONCERNS-routing question; it is never auto-picked.
+Auto-picking a gate would answer for the user on reputation, external coordination or long-term project shape. The skip-route is configuration. If a project wants concerns ignored on every ship, set `ship.review` to `false`; if it wants no human on merges, leave `ship.mergeApproval` at `none`.

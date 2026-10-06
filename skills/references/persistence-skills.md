@@ -2,9 +2,7 @@
 
 `/rota-learn` and `/rota-decide` are the duo that writes durable project state into `.rota/<FILE>.md` and re-renders a managed block in `CLAUDE.md`, so read-side skills (`/rota-work`, `/rota-debug`, `/rota-plan`, `/rota-refactor`, `/rota-review`, `/rota-vision`) can consult it.
 
-`/rota-learn` has two modes: passive learnings written as bullets under topic headings in `.rota/KNOWLEDGE.md`, and term entries written as nested bullets under the pinned `## Glossary` topic of the same file (via `--term <name>`). Both share the same writer-skill surface.
-
-The two skills share one **contract** but differ in **gate strength**. A new persistence skill matches the contract and picks its gate strength deliberately.
+`/rota-learn` writes passive learnings as bullets under topic headings in `.rota/KNOWLEDGE.md`, and (`--term <name>`) term entries as nested bullets under its pinned `## Glossary` topic. The two skills share one **contract** but differ in **gate strength**; a new persistence skill matches the contract and picks its gate strength deliberately.
 
 ## The contract
 
@@ -47,16 +45,9 @@ The gate strengths are by design. This is where the active/passive distinction l
 | Source-prefill flags | `--def`, `--alias`, `--not`, `--touch` | none | `--from-learning`, `--from-spike` |
 | Active vs passive | vocabulary (low-risk additive) | passive ("remember if relevant") | active commitment (forbids + permits) |
 
-Read this table as: **these are not bugs to file**. The gate-strength column encodes the project's policy on what the user *must* approve. `/rota-decide` always asks because writing a forbids/permits constrains future work; `/rota-learn` topic bullets never ask because passive content is cheap to amend; `/rota-learn --term` only asks on alias collision because adding a fresh term is additive.
+These divergences are **not bugs to file**: the gate strength encodes what the user *must* approve. A forbids/permits entry constrains future work, so `/rota-decide` always asks; passive bullets are cheap to amend and a fresh term is additive.
 
 A new persistence skill picks its gate from {none, conditional, manual}; don't invent a fourth shape.
-
-## What this reference does NOT cover
-
-- **The user-facing distinction.** `docs/usage/learning.md` and `docs/usage/decisions.md` explain the duo to users (terminology and gotchas vs. boundaries). This reference is for skill authors.
-- **Manual gates inventory.** The list of always-manual sites across all skills (not just this duo) lives in `references/manual-gates.md`.
-- **Knowledge & decisions consult.** The read-side pattern (verbs, carrier semantics, parallelism) lives in `references/knowledge-consult.md`.
-- **Umbrella-mode scoping.** The model is in *Umbrella scoping* below.
 
 ## Umbrella scoping
 
@@ -81,4 +72,3 @@ The scoped `rota knowledge` and `rota glossary` verbs resolve the target file an
 **Tier sidecars** are per file: `.rota/knowledge-tier.json` (umbrella) and `.rota/knowledge/<name>/knowledge-tier.json`, each tracking only its own bullets. Glossary is exempt in both.
 
 **CLAUDE.md managed block.** A sub-repo's CLAUDE.md (or AGENTS.md when present) gets `rota block knowledge --repo <name>`, listing umbrella topics plus that sub-repo's own, so a reader in the sub-repo sees the full topic index. The umbrella-root file lists umbrella topics only. Single-repo projects are unchanged.
-

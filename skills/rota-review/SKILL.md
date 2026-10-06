@@ -148,11 +148,7 @@ Verdict: CONCERNS (worse of Spec PASS and Standards CONCERNS)
 
 The verdict is the entire product: return it and stop. Never ask a follow-up; the caller owns what happens next.
 
-From `/rota-ship`, return the verdict; the parent routes on the recorded verdict with `rota verdict route --for ship-review` (`references/review-verdict-routing.md`). Standalone, relay it using the *Producer-side relay* table in that reference:
-
-- **PASS** — *"Ready to ship. Run `/rota-ship`."*
-- **CONCERNS** — concerns are already printed; suggest *"Address via `/rota-work` and rerun `/rota-review`, or accept and ship via `/rota-ship`."*
-- **FAIL** — the merge would regress. Suggest `/rota-work` or `/rota-debug`. Don't route to `/rota-ship`.
+From `/rota-ship`, return the verdict; the parent routes on the recorded verdict with `rota verdict route --for ship-review` (`references/review-verdict-routing.md`). Standalone, relay it per *Producer-side relay* in that reference (concerns are already printed by then).
 
 ## Queue mode (`--queue`, issue mode)
 
