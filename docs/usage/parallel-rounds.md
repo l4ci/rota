@@ -379,7 +379,7 @@ only channel, because there is no host to notify.
 
 `rota worker gate <slot> --base <branch>` is the one merge path in a round. It checks the branch is
 fresh, the PR is the worker's and provenance holds, then re-runs
-`test.full` on the merged tree and merges on a pass.
+`test.full` on the merged tree, then `test.e2e` when set, and merges on a pass.
 
 A branch that is only behind the base is merged as is when the merge is clean and the base did not
 change any file the branch changed (`round.sharedPaths` aside). A conflict, or a file changed on both
@@ -391,12 +391,12 @@ sides, sends it back as `stale`. Each `stale` or `provenance-fail` bounce is cou
 When several PRs wait in review, `rota worker train <slot|PR>... --base <branch>` gates them together and
 pays for the verify once instead of once per PR. It checks each member the way `gate --check-only` does,
 merges them in the order given onto the base in a scratch worktree, runs `test.full` on that
-tree, and on a pass lands every member through the gate in order. If the base or a member's head moved
+tree, then `test.e2e` when set (the most expensive tier runs once per train, not once per PR), and on a pass lands every member through the gate in order. If the base or a member's head moved
 while it verified, nothing lands (`base-moved`); the same verdict stops the train mid-way if the base changes between landings. Members must be all PRs or all slots without one.
 
-With `test.fullWhere` set to `ci` the train pushes its merged tree as `rota/ci/train` and waits for CI instead of running `test.full` here; bisect pushes each prefix the same way, one CI run per step. If CI never starts or does not finish in time the verdict is `ci-not-run` or `verify-timeout`, and nothing lands; a member that changes the CI definition stops it as `ci-config-changed`. See [running the full tier on CI](configuration.md#running-the-full-tier-on-ci).
+With `test.fullWhere` set to `ci` the train pushes its merged tree as `rota/ci/train` and waits for CI instead of running `test.full` here (`test.e2e` still runs here, after CI is green); bisect pushes each prefix the same way, one CI run per step. If CI never starts or does not finish in time the verdict is `ci-not-run` or `verify-timeout`, and nothing lands; a member that changes the CI definition stops it as `ci-config-changed`. See [running the full tier on CI](configuration.md#running-the-full-tier-on-ci).
 
-A red train bisects (up to ceil(log2 n) extra verifies, on the assumption that the base is green; a red base is reported as such): it verifies growing prefixes of the order and names the first member whose merge
+A red train, from either tier, bisects (up to ceil(log2 n) extra verifies, on the assumption that the base is green; a red base is reported as such): it verifies growing prefixes of the order and names the first member whose merge
 breaks the tree as the `culprit` (the verdict is `verify-failed`). That can be an interaction with the members before it, not that PR alone.
 Nothing lands unless you pass `--land-green`, which lands the verified members before the culprit. A
 member that conflicts with the base plus the ones before it is `merge-failed` with that member named.
