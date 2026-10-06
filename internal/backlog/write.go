@@ -440,26 +440,38 @@ func (f *File) Reopen(ref string) (bool, error) {
 	if err := f.requireBacklog(); err != nil {
 		return false, err
 	}
-	path := f.backlogPath()
-	apath := f.rota("ARCHIVE.md")
 	restored := false
 	doneHash, dirName := "", ""
-	err := fsio.Locked(path, fsio.LockTimeout, func() error {
-		content, err := fsio.ReadText(path)
-		if err != nil {
-			return err
-		}
+	err := f.withDocuments(func(docs *documents) error {
+		content := docs.backlog
 		cs, ce, hasC := section.Find(content, "Completed")
 		activeRe := regexp.MustCompile(`(?m)^- \*\*\[` + regexp.QuoteMeta(ref) + `\]`)
 		for _, m := range activeRe.FindAllStringIndex(content, -1) {
 			if !hasC || !(cs <= m[0] && m[0] < ce) {
+				// A prior reopen may have persisted the active destination but
+				// failed to remove its archived source. Finish that cleanup.
+				if start, end, d, ok := findDoneIn(docs.archive, ref); ok {
+					lineEnd := strings.IndexByte(content[m[0]:], '\n')
+					if lineEnd < 0 {
+						lineEnd = len(content) - m[0]
+					}
+					if content[m[0]:m[0]+lineEnd] == "- "+d.Inner {
+						if strings.HasPrefix(docs.archive[end:], "\n") {
+							end++
+						}
+						if err := docs.write(content, docs.archive[:start]+docs.archive[end:], false); err != nil {
+							return err
+						}
+						restored, doneHash, dirName = true, d.Hash, detailDir(ref)
+					}
+				}
 				return nil // already active
 			}
 		}
 
 		source := ""
 		var done Done
-		var archive string
+		archive := docs.archive
 		if hasC {
 			if lstart, lend, d, ok := findDoneIn(content[cs:ce], ref); ok {
 				done = d
@@ -472,7 +484,7 @@ func (f *File) Reopen(ref string) (bool, error) {
 			}
 		}
 		if source == "" {
-			if raw, err := fsio.ReadText(apath); err == nil {
+			if raw := docs.archive; raw != "" {
 				if lstart, lend, d, ok := findDoneIn(raw, ref); ok {
 					done = d
 					cut := lend
@@ -513,13 +525,18 @@ func (f *File) Reopen(ref string) (bool, error) {
 			}
 			content = content[:s] + nb + content[e:]
 		}
-		if err := fsio.WriteFileAtomic(path, []byte(content)); err != nil {
-			return err
-		}
-		if source == "archive" {
-			if err := fsio.WriteFileAtomic(apath, []byte(archive)); err != nil {
-				return err
+		// If Archive was interrupted after its destination write, the same
+		// completed source can still be present in both documents.
+		if source == "backlog" {
+			if start, end, archived, ok := findDoneIn(archive, ref); ok && archived == done {
+				if strings.HasPrefix(archive[end:], "\n") {
+					end++
+				}
+				archive = archive[:start] + archive[end:]
 			}
+		}
+		if err := docs.write(content, archive, false); err != nil {
+			return err
 		}
 		restored, doneHash = true, done.Hash
 		return nil
