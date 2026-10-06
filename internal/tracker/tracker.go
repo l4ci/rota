@@ -157,6 +157,20 @@ type PRInfo struct {
 	Body     string
 }
 
+// CheckRun is one CI check reported on a commit: a GitHub check run or
+// commit status, or a GitLab pipeline.
+type CheckRun struct {
+	Name  string
+	State string // CheckPending, CheckSuccess or CheckFailure
+	URL   string
+}
+
+const (
+	CheckPending = "pending"
+	CheckSuccess = "success"
+	CheckFailure = "failure"
+)
+
 // MergeOpts shapes a PR merge. HeadSHA pins the merge: the forge refuses it
 // when the PR head is no longer that commit, so a push after the check cannot
 // land unreviewed. "" merges whatever the head is.
@@ -255,6 +269,9 @@ type Adapter interface {
 	// merge-approval gate (B1).
 	PRFiles(ctx context.Context, pr int) ([]string, error)
 	PRComment(ctx context.Context, pr int, body string) error
+	// CommitChecks lists the CI checks reported on sha, latest run per check.
+	// None reported is an empty list, not an error.
+	CommitChecks(ctx context.Context, sha string) ([]CheckRun, error)
 	// PRState is "open", "merged" or "closed".
 	PRState(ctx context.Context, pr int) (string, error)
 
