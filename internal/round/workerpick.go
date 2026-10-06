@@ -17,6 +17,14 @@ const (
 // Pick is the harness and model an item asks for; "" is no request.
 type Pick struct{ Harness, Model string }
 
+// modelID is what a model id may look like. The id lands in a shell launch
+// line, and a label is typed by anyone who can triage the issue, so nothing
+// else (spaces, quotes, `;`, `$`, backticks, a leading `-`) gets through.
+var modelID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:/@-]{0,99}$`)
+
+// ValidModel reports whether v is a usable model id.
+func ValidModel(v string) bool { return modelID.MatchString(v) }
+
 // fileField reads a trailing `Harness:`/`Model:` field off a file-backend
 // bullet; the value is one token.
 var fileField = map[string]*regexp.Regexp{
@@ -38,6 +46,9 @@ func PickOf(it backlog.Item) (Pick, error) {
 			p.Harness = m[1]
 		}
 		if m := fileField["Model"].FindStringSubmatch(it.Line); m != nil {
+			if !ValidModel(m[1]) {
+				return p, blocked(BlockModelLabel, "%s has Model: %s: not a valid model id", it.ID, m[1])
+			}
 			p.Model = m[1]
 		}
 		return p, nil
@@ -58,8 +69,8 @@ func PickOf(it backlog.Item) (Pick, error) {
 	}
 	if len(ms) == 1 {
 		v := strings.TrimPrefix(ms[0], "model:")
-		if strings.TrimSpace(v) == "" {
-			return p, blocked(BlockModelLabel, "%s has label %s: name a model id after model:", it.ID, ms[0])
+		if !ValidModel(v) {
+			return p, blocked(BlockModelLabel, "%s has label %s: not a valid model id (letters, digits, . _ : / @ -)", it.ID, ms[0])
 		}
 		p.Model = v
 	}

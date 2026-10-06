@@ -279,8 +279,8 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 	if o.Tier != "" && !roundcfg.ValidTier(o.Tier) {
 		return res, usage("--tier must be one of %s", strings.Join(roundcfg.Tiers, ", "))
 	}
-	if o.Model != "" && strings.ContainsAny(o.Model, " \t") {
-		return res, usage("--model takes one model id")
+	if o.Model != "" && !ValidModel(o.Model) {
+		return res, usage("--model %q is not a valid model id (letters, digits, . _ : / @ -)", o.Model)
 	}
 	if o.Kind != "" && !harness.Valid(o.Kind) {
 		return res, usage("--kind must be one of %s", strings.Join(harness.Kinds, ", "))
