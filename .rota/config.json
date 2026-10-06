@@ -5,13 +5,15 @@
   },
   "work": {
     "isolation": "branch",
-    "mergeStrategy": "direct"
+    "mergeStrategy": "direct",
+    "dispatch": "subagent",
+    "workerSlots": 3,
+    "workerCommand": "",
+    "accounts": [],
+    "operatorCommand": ""
   },
   "refactor": {
-    "confirmBeforeExecute": true,
-    "verifyCommands": [
-      "bash test/gate.sh"
-    ]
+    "confirmBeforeExecute": true
   },
   "learn": {
     "verify": true,
@@ -20,6 +22,7 @@
   "ship": {
     "review": true,
     "secondOpinion": false,
+    "secondOpinionRunner": "subagent",
     "qa": false
   },
   "autonomy": {
@@ -55,5 +58,14 @@
   },
   "backlog": {
     "backend": "issues"
+  },
+  "test": {
+    "fast": [
+      "bash test/fast.sh {files}"
+    ],
+    "full": [
+      "bash test/gate.sh"
+    ],
+    "e2e": []
   }
 }
