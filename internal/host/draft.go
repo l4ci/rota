@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -61,6 +62,69 @@ func promptLine(pane string) string {
 		}
 	}
 	return line
+}
+
+// stripDim turns a styled capture into plain text with the dim runs removed.
+// Claude Code renders its ghost suggestion faint (SGR 2) or gray on an idle
+// prompt, and nobody typed it. Prompt glyphs are kept even when dimmed, since
+// promptLine anchors on them. Every escape sequence is dropped.
+func stripDim(s string) string {
+	var b strings.Builder
+	dim := false
+	for i := 0; i < len(s); {
+		if s[i] == 0x1b && i+1 < len(s) && s[i+1] == '[' {
+			j := i + 2
+			for j < len(s) && (s[j] < 0x40 || s[j] > 0x7e) {
+				j++
+			}
+			if j < len(s) && s[j] == 'm' {
+				dim = sgrDim(s[i+2:j], dim)
+			}
+			i = j + 1
+			continue
+		}
+		r, size := utf8.DecodeRuneInString(s[i:])
+		if !dim || r == '\n' || strings.ContainsRune(promptMarkers, r) {
+			b.WriteString(s[i : i+size])
+		}
+		i += size
+	}
+	return b.String()
+}
+
+// sgrDim applies one SGR parameter list to the dim state: faint (2) and a gray
+// foreground (90, 256-colour 232-250, or an equal-channel truecolour) start it;
+// reset (0, empty), normal intensity (22) and any other foreground end it.
+func sgrDim(params string, dim bool) bool {
+	p := strings.Split(params, ";")
+	if params == "" {
+		return false
+	}
+	for i := 0; i < len(p); i++ {
+		n, err := strconv.Atoi(p[i])
+		if err != nil {
+			continue
+		}
+		switch {
+		case n == 0, n == 22, n == 39:
+			dim = false
+		case n == 2, n == 90:
+			dim = true
+		case (n >= 30 && n <= 37) || (n >= 91 && n <= 97):
+			dim = false
+		case n == 38 && i+1 < len(p):
+			mode := p[i+1]
+			if mode == "5" && i+2 < len(p) {
+				c, _ := strconv.Atoi(p[i+2])
+				dim = c >= 232 && c <= 250
+				i += 2
+			} else if mode == "2" && i+4 < len(p) {
+				dim = p[i+2] == p[i+3] && p[i+3] == p[i+4]
+				i += 4
+			}
+		}
+	}
+	return dim
 }
 
 // humanDraft returns the prompt line's text when it is neither empty nor the

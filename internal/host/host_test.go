@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -1282,6 +1283,109 @@ func TestHerdrDraft(t *testing.T) {
 		f := &fake{handler: func(string, []string) Result { return Result{Stdout: pane} }}
 		if d := New("herdr", deps(f, herdrEnv, &clock{})).(Drafter).Draft(bg, "w1", "w9:t7", file); d != want {
 			t.Errorf("pane %q: Draft = %q, want %q", pane, d, want)
+		}
+	}
+}
+
+const (
+	ghost = "\x1b[2mTry \"fix lint errors\"\x1b[0m"
+	grayG = "\x1b[38;5;244mrun the tests again\x1b[39m"
+)
+
+func TestStripDim(t *testing.T) {
+	for in, want := range map[string]string{
+		"❯ " + ghost + "\n":                    "❯ \n",
+		"\x1b[2m❯\x1b[0m \x1b[2mghost\x1b[0m":  "❯ ",
+		"❯ " + grayG:                           "❯ ",
+		"❯ \x1b[90mghost\x1b[0m":               "❯ ",
+		"❯ \x1b[38;2;120;120;120mghost\x1b[0m": "❯ ",
+		"❯ \x1b[1;32mreal\x1b[0m":              "❯ real",
+		"❯ \x1b[2mghost\x1b[22mreal":           "❯ real",
+		"\x1b[31mred\x1b[0m":                   "red",
+	} {
+		if got := stripDim(in); got != want {
+			t.Errorf("stripDim(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// ghostPaneFake answers the styled read with the given text and any plain read
+// with the same text stripped of escapes, as a real host would.
+func ghostPaneFake(styled string, send func(a []string)) *fake {
+	return &fake{handler: func(_ string, a []string) Result {
+		if send != nil {
+			send(a)
+		}
+		if a[0] == "agent" && a[1] == "get" {
+			return Result{Stdout: agentJSON("working")}
+		}
+		if a[0] == "capture-pane" || (a[0] == "agent" && a[1] == "read") {
+			for _, x := range a {
+				if x == "-pJe" || x == "ansi" {
+					return Result{Stdout: styled}
+				}
+			}
+			return Result{Stdout: regexp.MustCompile("\x1b\\[[0-9;]*m").ReplaceAllString(styled, "")}
+		}
+		return Result{}
+	}}
+}
+
+func TestGhostSuggestionIsNotADraft(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "p.md")
+	os.WriteFile(file, []byte("sig\nthe last line of the brief\n"), 0o644)
+	for _, tc := range []struct{ name, host, handle, pane, want string }{
+		{"tmux ghost", "tmux", "rota:w1", "⏺ done\n❯ " + ghost + "\n", ""},
+		{"herdr ghost", "herdr", "w9:t7", "⏺ done\n❯ " + ghost + "\n", ""},
+		{"tmux gray ghost", "tmux", "rota:w1", "❯ " + grayG + "\n", ""},
+		{"herdr gray ghost", "herdr", "w9:t7", "❯ " + grayG + "\n", ""},
+		{"tmux dim then typed", "tmux", "rota:w1", "❯ " + ghost + "my words\n", "my words"},
+		{"herdr dim then typed", "herdr", "w9:t7", "❯ " + ghost + "my words\n", "my words"},
+	} {
+		f := ghostPaneFake(tc.pane, nil)
+		if d := New(tc.host, deps(f, herdrEnv, &clock{})).(Drafter).Draft(bg, "w1", tc.handle, file); d != tc.want {
+			t.Errorf("%s: Draft = %q, want %q", tc.name, d, tc.want)
+		}
+	}
+}
+
+func TestSendIgnoresGhostAndRefusesTypedAfterIt(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "p.md")
+	os.WriteFile(file, []byte("sig\nthe last line of the brief\n"), 0o644)
+	for _, hostName := range []string{"tmux", "herdr"} {
+		handle := map[string]string{"tmux": "rota:w1", "herdr": "w9:t7"}[hostName]
+		ok := ghostPaneFake("❯ "+ghost+"\n", nil)
+		if err := New(hostName, deps(ok, herdrEnv, &clock{})).Send(bg, "w1", handle, file); hostName == "herdr" && err != nil {
+			t.Errorf("%s: Send over a ghost = %v", hostName, err)
+		} else if hostName == "tmux" && err == ErrDraftOnPrompt {
+			t.Errorf("%s: refused a ghost suggestion", hostName)
+		}
+		bad := ghostPaneFake("❯ "+ghost+"my words\n", nil)
+		if err := New(hostName, deps(bad, herdrEnv, &clock{})).Send(bg, "w1", handle, file); err != ErrDraftOnPrompt {
+			t.Errorf("%s: Send over typed text = %v, want ErrDraftOnPrompt", hostName, err)
+		}
+		if bad.count(hostName+" agent prompt")+bad.count("tmux paste-buffer")+bad.count("tmux send-keys") != 0 {
+			t.Errorf("%s: keys reached the pane:\n%s", hostName, bad.log())
+		}
+	}
+}
+
+// A styled read that fails falls back to plain text, still seeing a draft.
+func TestDraftFallsBackToPlainWhenStyledReadFails(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "p.md")
+	os.WriteFile(file, []byte("sig\nthe last line of the brief\n"), 0o644)
+	for _, hostName := range []string{"tmux", "herdr"} {
+		f := &fake{handler: func(_ string, a []string) Result {
+			for _, x := range a {
+				if x == "-pJe" || x == "ansi" {
+					return Result{ExitCode: 1}
+				}
+			}
+			return Result{Stdout: "❯ my own words\n"}
+		}}
+		handle := map[string]string{"tmux": "rota:w1", "herdr": "w9:t7"}[hostName]
+		if d := New(hostName, deps(f, herdrEnv, &clock{})).(Drafter).Draft(bg, "w1", handle, file); d != "my own words" {
+			t.Errorf("%s: Draft = %q", hostName, d)
 		}
 	}
 }

@@ -121,7 +121,7 @@ func (t *tmux) sendFile(ctx context.Context, handle, file, buf string) error {
 	// A human typing in the pane would get the brief pasted into their draft.
 	text, _ := readFile(file)
 	text = strings.TrimRight(text, "\n")
-	if waitNoDraft(&t.d, func() string { return t.pane(ctx, handle) }, text) != "" {
+	if waitNoDraft(&t.d, func() string { return t.draftPane(ctx, handle) }, text) != "" {
 		return ErrDraftOnPrompt
 	}
 	before := t.pane(ctx, handle)
@@ -153,10 +153,20 @@ func (t *tmux) Capture(ctx context.Context, slot, handle string, lines int) stri
 	return t.pane(ctx, handle)
 }
 
+// draftPane captures with styling (-e) and drops the dim runs, so a ghost
+// suggestion is not mistaken for typed text; plain text when that capture fails.
+func (t *tmux) draftPane(ctx context.Context, window string) string {
+	r := t.tmux(ctx, "capture-pane", "-pJe", "-t", window)
+	if r.ExitCode == 0 && strings.TrimSpace(r.Stdout) != "" {
+		return stripDim(r.Stdout)
+	}
+	return t.pane(ctx, window)
+}
+
 // Draft implements Drafter.
 func (t *tmux) Draft(ctx context.Context, slot, handle, file string) string {
 	text, _ := readFile(file)
-	return humanDraft(t.pane(ctx, handle), strings.TrimRight(text, "\n"))
+	return humanDraft(t.draftPane(ctx, handle), strings.TrimRight(text, "\n"))
 }
 
 // Status: tmux has no native agent state, so the classifier decides from
