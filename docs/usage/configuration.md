@@ -134,6 +134,28 @@ Commands run from the repo root (or, in umbrella mode, the sub-repo's root), one
 rota config set test.full '["uv run ruff check .","uv run ruff format --check ."]'
 ```
 
+### Running the full tier on CI
+
+`test.fullWhere` is `local` (default) or `ci`. With `ci`, `rota worker gate` and `rota worker train` do not run `test.full` here. They build the merge result (base plus PR head, `--no-ff`) in a scratch worktree, push it to `origin` as `rota/ci/<slot>` (`rota/ci/train` for a train, one push per bisect step), and poll the forge's checks on that commit: GitHub check runs and commit statuses, GitLab the newest pipeline for the ref. Only a green result merges. The branch is deleted after each run. `test.ciTimeoutMinutes` (default `60`, 1-1440) bounds the wait.
+
+This moves verification before the merge. A red result lands nothing and the slot goes back (`verify-failed`, the first red check ends the wait); a local gate verifies after the merge and fixes forward. Before merging, the gate checks the base did not move (`base-moved`, nothing landed); after merging, that the landed tree is the tree CI verified. `--no-verify` skips CI too.
+
+The project's CI must run on pushes to `rota/ci/**`. If no check appears on the pushed commit within 5 minutes, the verdict is `ci-not-run` and nothing lands; that is the preflight. A missing `origin` remote is `check-broke`.
+
+- GitHub Actions: add the branch pattern to the workflow, next to what is already there.
+
+  ```yaml
+  on:
+    push:
+      branches: ['rota/ci/**']
+  ```
+
+- GitLab: pipelines run on branch pushes unless `workflow:rules` exclude them. Make sure `rota/ci/` branches are allowed.
+
+Trade-off: a CI queue can be slower than a 2-3 minute local gate, so `local` stays a fine choice. `ci` saves local or VPS CPU and avoids running the suite twice.
+
+Not covered: the `rota round wind-down` base re-verify and `rota test run full` still run `test.full` locally. Tuning, in seconds: `ROTA_CI_POLL` (default 20), `ROTA_CI_START_WAIT` (300), `ROTA_CI_TIMEOUT` (overrides the config timeout).
+
 ## gate.smokeShards
 
 Number of concurrent shards `bash test/gate.sh` splits the smoke suite into. Integer ≥ 1, default `4`; `ROTA_SMOKE_SHARDS=<N>` overrides it for one run. Each shard is its own `test/runner.sh` run with its own temp root and its own log (the gate prints the log directory, and keeps it on a failure). Shards only help while sections stay independent: `bash test/gate.sh --smoke-only --random` deals the sections out at random, and a scheduled CI job runs it on `main` to catch a section that needs another's state. Only one gate runs per machine at a time; a second waits on `/tmp/rota-gate.lock`.
