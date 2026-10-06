@@ -15,12 +15,19 @@ import (
 // array, null, or a type mismatch) replaces the base. A missing or
 // unparseable file counts as absent; with no base the result is {}.
 func Load(configPath string) any {
+	merged, _ := loadLayers(configPath)
+	return merged
+}
+
+// loadLayers keeps the local layer alongside the runtime config so display
+// provenance uses the same reads and merge semantics as Load.
+func loadLayers(configPath string) (merged, local any) {
 	base := fsio.LoadJSON(configPath, jsonx.NewObject())
-	local := fsio.LoadJSON(filepath.Join(filepath.Dir(configPath), "config.local.json"), nil)
+	local = fsio.LoadJSON(filepath.Join(filepath.Dir(configPath), "config.local.json"), nil)
 	if local == nil {
-		return base
+		return base, local
 	}
-	return Merge(base, local)
+	return Merge(base, local), local
 }
 
 // Merge returns base with override merged in; neither input is modified.

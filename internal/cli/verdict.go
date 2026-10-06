@@ -237,6 +237,10 @@ func debugVerdict(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		r := verdict.NewRecord(verdict.DebugFix, *v, strings.TrimSpace(out), b)
+		bug, err = debugItem(c, bug)
+		if err != nil {
+			return backlogFail(err)
+		}
 		failed, err := verdict.AddItem(root, bug, r)
 		if err != nil {
 			return Result{}, err
@@ -324,6 +328,10 @@ func debugReset(fs *flag.FlagSet) RunFunc {
 		root, err := c.Root()
 		if err != nil {
 			return Result{}, err
+		}
+		bug, err = debugItem(c, bug)
+		if err != nil {
+			return backlogFail(err)
 		}
 		failed := verdict.FailedFixes(verdict.Load(root).Items[bug])
 		if failed == 0 {

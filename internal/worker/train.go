@@ -199,12 +199,14 @@ func (e Env) Train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 	tips[0] = baseSHA
 	for i, m := range res.Members {
 		run := func(args ...string) (git.Result, error) { return e.Git(ctx, scratch, args...) }
-		if merr := land.MergeLocal(run, heads[i], fmt.Sprintf("train: %s into %s", m.Branch, o.Base)); merr != nil {
+		if merr := land.MergeLocal(run, heads[i], fmt.Sprintf("train: %s into %s", m.Branch, o.Base), land.RecoveryGit(ctx, e.Git, scratch)); merr != nil {
 			res.Culprit = m.Target
 			res.Members[i].Culprit = true
 			res.Verdict = GateMergeFailed
 			var me *land.MergeError
 			switch {
+			case errors.As(merr, new(*land.CleanupError)):
+				res.Err = fmt.Sprintf("TRAIN-FAIL %s — merging %s into the scratch tree failed: %s", m.Target, m.Branch, merr)
 			case errors.As(merr, new(*land.ConflictError)):
 				res.Err = fmt.Sprintf("TRAIN-FAIL %s — %s does not merge onto %s with the %d member(s) before it: conflict", m.Target, m.Branch, o.Base, i)
 				res.Hint = fmt.Sprintf("send %s back to merge %s, or run the train without it", m.Target, o.Base)

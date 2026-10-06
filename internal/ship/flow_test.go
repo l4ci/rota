@@ -166,6 +166,7 @@ func TestMergeBranchRefusals(t *testing.T) {
 	g := mergeGit()
 	g.fail = map[string]bool{"merge --no-ff -m msg cafe123": true}
 	g.out["merge --no-ff -m msg cafe123"] = ""
+	g.out["merge --abort"] = ""
 	// A conflict aborts the merge and refuses.
 	cg := &conflictGit{fakeGit: g}
 	if _, err := MergeBranch(mergePorts(cg), "feat", "main", "msg"); !errors.As(err, &ref) || ref.By != "conflict" {
@@ -351,5 +352,17 @@ func TestRestore(t *testing.T) {
 	}
 	if want := "noop: [B01] already active in BACKLOG.md\n"; warn.String() != want {
 		t.Errorf("warn %q", warn.String())
+	}
+}
+
+func TestMergeBranchPreservesCleanupFailure(t *testing.T) {
+	g := mergeGit()
+	g.fail = map[string]bool{"merge --no-ff -m msg cafe123": true, "merge --abort": true}
+	_, err := MergeBranch(mergePorts(&conflictGit{fakeGit: g}), "feat", "main", "msg")
+	if err == nil || !strings.Contains(err.Error(), "git merge --abort failed") || !strings.Contains(err.Error(), "CONFLICT") || strings.Contains(err.Error(), "merge aborted") {
+		t.Fatalf("cleanup failure lost: %v", err)
+	}
+	if contains(g.calls, "branch -d feat") {
+		t.Fatal("branch deleted after failed recovery")
 	}
 }

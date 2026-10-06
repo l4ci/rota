@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -59,6 +60,94 @@ func TestShowSources(t *testing.T) {
 		es, err := Show(root, key, true)
 		if err != nil || len(es) != 1 || !reflect.DeepEqual(es[0], want) {
 			t.Errorf("%s: %+v, %v; want %+v", key, es, err, want)
+		}
+	}
+}
+
+func TestShowMatchesRuntime(t *testing.T) {
+	// Populate every schema key so replacement cases cannot pass merely because
+	// the project value already equals the default.
+	base := map[string]any{}
+	for _, k := range Keys {
+		setPath(base, k.Name, "project")
+	}
+	encode := func(v any) string {
+		b, err := json.Marshal(v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(b)
+	}
+	for _, tc := range []struct {
+		name, project, local string
+		source               string
+	}{
+		{"missing", "", "", "default"},
+		{"project", encode(base), "", "project"},
+		{"empty-merge", encode(base), `{}`, "project"},
+		{"root-null-ignored", encode(base), `null`, "project"},
+		{"corrupt-local-ignored", encode(base), `{`, "project"},
+		{"root-scalar", encode(base), `false`, "default"},
+		{"root-array", encode(base), `[]`, "default"},
+		{"leaf-null", encode(base), "", "default"},
+		{"parent-null", encode(base), "", "default"},
+		{"parent-scalar", encode(base), "", "default"},
+		{"parent-array", encode(base), "", "default"},
+		{"local", encode(base), encode(base), "local"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			local := map[string]any{}
+			for _, k := range Keys {
+				switch tc.name {
+				case "leaf-null":
+					setPath(local, k.Name, nil)
+				case "parent-null", "parent-scalar", "parent-array":
+					parent := strings.Split(k.Name, ".")[0]
+					var v any
+					if tc.name == "parent-scalar" {
+						v = false
+					} else if tc.name == "parent-array" {
+						v = []any{}
+					}
+					local[parent] = v
+				}
+			}
+			if len(local) > 0 {
+				tc.local = encode(local)
+			}
+			root := project(t, tc.project, tc.local)
+			cfg := Load(configPath(root))
+			rows, err := Show(root, "", false)
+			if err != nil || len(rows) != len(Keys) {
+				t.Fatalf("Show: %d rows, %v", len(rows), err)
+			}
+			for _, row := range rows {
+				want, err := Value(cfg, row.Key)
+				if err != nil || !reflect.DeepEqual(row.Value, want) || row.Source != tc.source {
+					t.Errorf("%s: show=%v (%s), runtime=%v; want source %s, err=%v", row.Key, row.Value, row.Source, want, tc.source, err)
+				}
+				one, err := Show(root, row.Key, true)
+				if err != nil || len(one) != 1 || !reflect.DeepEqual(one[0], row) {
+					t.Errorf("single-key Show disagrees: %v, %v", one, err)
+				}
+			}
+		})
+	}
+}
+
+func TestShowDeepMergeSources(t *testing.T) {
+	root := project(t,
+		`{"ship":{"qa":true,"review":false},"issues":{"labels":{"types":{"bug":"defect","task":"chore"}}}}`,
+		`{"ship":{"qa":null},"issues":{"labels":{"types":{"bug":"bug"}}}}`)
+	for key, want := range map[string]Entry{
+		"ship.qa":                  {"ship.qa", false, "default"},
+		"ship.review":              {"ship.review", false, "project"},
+		"issues.labels.types.bug":  {"issues.labels.types.bug", "bug", "local"},
+		"issues.labels.types.task": {"issues.labels.types.task", "chore", "project"},
+	} {
+		rows, err := Show(root, key, true)
+		if err != nil || len(rows) != 1 || !reflect.DeepEqual(rows[0], want) {
+			t.Errorf("%s: %v, %v; want %v", key, rows, err, want)
 		}
 	}
 }
