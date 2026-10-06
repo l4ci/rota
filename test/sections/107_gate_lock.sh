@@ -36,12 +36,26 @@ bash -c '. "$1"; gate_lock_acquire "$2" 0.1; gate_lock_release "$2"' _ "$LIB" "$
 if [ -e "$GL/own.lock" ] || [ -L "$GL/own.lock" ]; then fail "gate lock: release left the caller's own lock behind"; fi
 pass "release removes the caller's lock and never another gate's"
 
-# Two waiters on one dead lock: exactly one wins; the loser must not delete the winner's lock.
+# Force B's stale observation to outlive A's acquisition, then introduce C at
+# B's removal/wait boundary. Check the critical sections, not only completion.
+python3 "$TESTDIR/lib/gate-lock-race.py" "$LIB" "$GL/controlled" "$DEAD" \
+  || fail "gate lock: controlled stale takeover violated mutual exclusion"
+pass "delayed stale takeover preserves the live lock and critical-section exclusion"
+
+# Uncontrolled contention also checks overlap and takeover-file cleanup.
 ln -s "$DEAD" "$GL/race.lock"
 for i in 1 2 3 4; do
-  ( timeout 20 bash -c '. "$1"; gate_lock_acquire "$2" 0.1; sleep 1.5; gate_lock_release "$2"; echo ok' _ "$LIB" "$GL/race.lock" > "$GL/race$i.out" 2>/dev/null ) &
+  ( timeout 20 bash -c '
+    . "$1"; gate_lock_acquire "$2" 0.1
+    mkdir "$3/critical" || { touch "$3/overlap"; exit 1; }
+    sleep 0.1
+    rmdir "$3/critical"
+    gate_lock_release "$2"; echo ok
+  ' _ "$LIB" "$GL/race.lock" "$GL" > "$GL/race$i.out" 2>/dev/null ) &
 done
 wait
 [ "$(cat "$GL"/race?.out | grep -c ok)" = 4 ] || fail "gate lock: racing waiters did not all get a turn"
+[ ! -e "$GL/overlap" ] || fail "gate lock: racing critical sections overlapped"
+[ -z "$(find "$GL" -name '*.stale.*' -print)" ] || fail "gate lock: racing waiters left takeover files behind"
 pass "racing waiters on a dead lock each acquire in turn"
 rm -rf "${GL:?}"
