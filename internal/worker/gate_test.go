@@ -433,6 +433,9 @@ func TestGateLocalMergeFailureIsAbortedAndReported(t *testing.T) {
 		if len(args) > 0 && args[0] == "merge" && args[1] == "--no-ff" {
 			return git.Result{Stdout: "CONFLICT (content): Merge conflict in work.txt", ExitCode: 1}, nil
 		}
+		if strings.Join(args, " ") == "merge --abort" {
+			return git.Result{}, nil
+		}
 		return inner(ctx, dir, args...)
 	}
 	res, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main"})
@@ -556,7 +559,8 @@ func TestGateLocalMergeNonConflictFailureShowsGitsWords(t *testing.T) {
 	}
 	res, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main"})
 	if err != nil || res.Verdict != GateMergeFailed || strings.Contains(res.Err, "conflicted") ||
-		!strings.Contains(res.Err, "failed (exit 128): fatal: unable to auto-detect email address") {
+		!strings.Contains(res.Err, "fatal: unable to auto-detect email address") ||
+		!strings.Contains(res.Err, "git merge --abort failed") {
 		t.Errorf("%+v %v", res, err)
 	}
 }
@@ -768,5 +772,31 @@ func TestGateReleasesTheClaimLabelOfClosedIssues(t *testing.T) {
 				t.Errorf("notes = %v, want %q", res.Notes, c.note)
 			}
 		})
+	}
+}
+
+func TestGateLocalMergeReportsFailedRecovery(t *testing.T) {
+	w := newWorld(t, "")
+	gitq(t, w.dir, "fetch", "-q", "origin", "w1:w1")
+	e := w.env(false)
+	e.Git = func(ctx context.Context, dir string, args ...string) (git.Result, error) {
+		if len(args) > 1 && args[0] == "merge" {
+			if args[1] == "--no-ff" {
+				return git.Result{ExitCode: 1, Stdout: "CONFLICT in work.txt"}, nil
+			}
+			if args[1] == "--abort" {
+				return git.Result{ExitCode: 128, Stderr: "index.lock exists"}, nil
+			}
+		}
+		return git.Exec(ctx, dir, args...)
+	}
+	res, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main"})
+	if err != nil || res.Verdict != GateMergeFailed || res.Changed {
+		t.Fatalf("%+v %v", res, err)
+	}
+	for _, want := range []string{"CONFLICT", "index.lock exists", "git merge --abort", "git status"} {
+		if !strings.Contains(res.Err, want) {
+			t.Errorf("result missing %q: %s", want, res.Err)
+		}
 	}
 }

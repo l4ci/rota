@@ -251,17 +251,18 @@ note: in file mode an unknown ID or missing detail file stays a lenient `count: 
 
 ### rota debug counter init
 rota debug counter init <bugId>
-repo: none
+repo: scoped
 data: {"session": string, "bugId": string, "changed": bool}; failure data on exit 4 is the Iron Law shape (B3)
 exit: 4 when the item has 3 or more failed fixes since its last reset (B3, the Iron Law; checked before the state file is touched); 5 when not in a git repository (old 1)
 old: hv-debug-counter init <bugId>
 shim: `session` is the current branch with `/` replaced by `-`; `changed` is false when `.rota/debug/<session>.json` already existed, which keeps init idempotent.
+note: init and record-attempt resolve issue identities as B3 specifies; unknown or invalid items exit 3, ambiguous umbrella references exit 2, and tracker errors propagate. New sessions store the canonical ID in `bug_id`.
 note: the tree lists one `debug counter` verb, but its eight actions take different arguments and return different data, so each gets its own entry.
 note: the state file keeps its old snake_case keys, so `rota` and the old helper can share it during the port.
 
 ### rota debug counter record-attempt
 rota debug counter record-attempt --hypothesis <text> --commit <hash>
-repo: none
+repo: scoped
 data: {"attempt": number, "changed": true}; failure data on exit 4 is the Iron Law shape (B3)
 exit: 2 when --hypothesis or --commit is missing; 3 when the session has no state file (hint: rota debug counter init); 4 when the session's item has 3 or more failed fixes since its last reset (B3, the Iron Law; nothing is recorded); 5 when not in a git repository
 old: hv-debug-counter record-attempt --hypothesis "<text>" --commit <hash>

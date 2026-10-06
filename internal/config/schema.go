@@ -179,15 +179,19 @@ func Value(cfg any, dotted string) (any, error) {
 		if k.Name != dotted {
 			continue
 		}
-		if v, ok := walk(cfg, dotted); ok {
-			return v, nil
-		}
-		if list, isList := k.Default.([]any); isList {
-			return append([]any{}, list...), nil // a fresh slice, so callers cannot edit the table
-		}
-		return k.Default, nil
+		v, _ := effectiveValue(cfg, k)
+		return v, nil
 	}
 	return nil, fmt.Errorf("unknown config key %q", dotted)
+}
+
+// effectiveValue resolves a schema key from the merged config. The boolean
+// reports whether the value was configured rather than supplied by its default.
+func effectiveValue(cfg any, k Key) (any, bool) {
+	if v, ok := walk(cfg, k.Name); ok {
+		return v, true
+	}
+	return Default(k), false
 }
 
 // Backend returns the configured backlog backend, "file" or "issues". Any

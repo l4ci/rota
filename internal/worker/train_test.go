@@ -1,7 +1,9 @@
 package worker
 
 import (
+	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/git"
 	"os"
 	"path/filepath"
 	"strings"
@@ -210,5 +212,30 @@ func TestTrainRefusesMixedMembers(t *testing.T) {
 	os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"), []byte(`{"slots":[{"name":"b1","branch":"b1"},{"name":"b2","branch":"b2","pr":"https://example.test/o/r/pull/7"}]}`), 0o644)
 	if _, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}}); err == nil || !strings.Contains(err.Error(), "all PRs or all slots") {
 		t.Fatalf("a mixed train is refused: %v", err)
+	}
+}
+
+func TestTrainReportsFailedRecovery(t *testing.T) {
+	w := trainWorld(t, "true", "b1")
+	e := w.env(false)
+	e.Git = func(ctx context.Context, dir string, args ...string) (git.Result, error) {
+		if len(args) > 1 && args[0] == "merge" {
+			if args[1] == "--no-ff" {
+				return git.Result{ExitCode: 1, Stdout: "CONFLICT in work.txt"}, nil
+			}
+			if args[1] == "--abort" {
+				return git.Result{ExitCode: 128, Stderr: "index.lock exists"}, nil
+			}
+		}
+		return git.Exec(ctx, dir, args...)
+	}
+	res, err := e.Train(bg, w.dir, TrainOpts{Targets: []string{"b1"}, Base: "main"})
+	if err != nil || res.Verdict != GateMergeFailed || res.Changed {
+		t.Fatalf("%+v %v", res, err)
+	}
+	for _, want := range []string{"CONFLICT", "index.lock exists", "git merge --abort", "git status"} {
+		if !strings.Contains(res.Err, want) {
+			t.Errorf("result missing %q: %s", want, res.Err)
+		}
 	}
 }

@@ -21,8 +21,8 @@ func debugCommands() []*Command {
 	return []*Command{
 		{Name: "debug", Summary: "Iron Law fix-attempt counter", Subs: []*Command{
 			{Name: "counter", Summary: "per-branch debug session counter", Subs: []*Command{
-				{Name: "init", Summary: "start the counter for a bug", Verb: noFlags(runCounterInit)},
-				{Name: "record-attempt", Summary: "record a pending fix attempt", Verb: counterRecordAttempt},
+				{Name: "init", Summary: "start the counter for a bug", Repo: true, Verb: noFlags(runCounterInit)},
+				{Name: "record-attempt", Summary: "record a pending fix attempt", Repo: true, Verb: counterRecordAttempt},
 				{Name: "fail", Summary: "mark the last attempt failed", Verb: noFlags(runCounterFail)},
 				{Name: "pass", Summary: "mark the last attempt passed", Verb: noFlags(runCounterPass)},
 				{Name: "show", Summary: "print the counter state", Verb: noFlags(runCounterShow)},
@@ -30,8 +30,8 @@ func debugCommands() []*Command {
 				{Name: "clear", Summary: "delete the counter", Verb: noFlags(runCounterClear)},
 				{Name: "inc-cycle", Summary: "count a hypothesis cycle", Verb: noFlags(runCounterIncCycle)},
 			}},
-			{Name: "verdict", Summary: "record whether a fix held and route on the item's failed-fix count", Verb: debugVerdict},
-			{Name: "reset", Summary: "start an item's failed-fix count again", Verb: debugReset},
+			{Name: "verdict", Summary: "record whether a fix held and route on the item's failed-fix count", Repo: true, Verb: debugVerdict},
+			{Name: "reset", Summary: "start an item's failed-fix count again", Repo: true, Verb: debugReset},
 		}},
 	}
 }
@@ -109,6 +109,10 @@ func runCounterInit(c *Ctx, args []string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
+	bug, err = debugItem(c, bug)
+	if err != nil {
+		return backlogFail(err)
+	}
 	if res, err := ironLaw(c, bug); err != nil {
 		return res, err
 	}
@@ -147,6 +151,10 @@ func counterRecordAttempt(fs *flag.FlagSet) RunFunc {
 		}
 		bug, _ := st.Get("bug_id")
 		if id, _ := bug.(string); id != "" {
+			id, err = debugItem(c, id)
+			if err != nil {
+				return backlogFail(err)
+			}
 			if res, err := ironLaw(c, id); err != nil {
 				return res, err
 			}

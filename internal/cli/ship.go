@@ -15,6 +15,7 @@ import (
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/land"
 	"github.com/l4ci/rota/internal/proof"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/repos"
@@ -84,6 +85,8 @@ func shipErr(err error) (Result, error) {
 	var nc *ship.NoCommitsError
 	var ui *ship.UnknownItemError
 	switch {
+	case errors.As(err, new(*land.CleanupError)):
+		return Result{}, Unavailable("%s", err.Error())
 	case errors.As(err, &ref):
 		res, e := shipBlocked(ref.By, "%s", ref.Msg)
 		if ref.Hint != "" {
@@ -444,6 +447,7 @@ func shipMerge(fs *flag.FlagSet) RunFunc {
 		var gateErr error
 		sha, err := ship.MergeBranch(ship.MergePorts{
 			Git:     g,
+			Recover: land.RecoveryGit(c.Context(), git.Exec, dir),
 			Verdict: shipVerdict(c, dir, shipRoot(dir)).Block,
 			Approve: func() error {
 				files := func() ([]string, error) {
