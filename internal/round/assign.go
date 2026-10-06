@@ -14,7 +14,6 @@ import (
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/harness"
-	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundlease"
 	secpkg "github.com/l4ci/rota/internal/section"
@@ -436,14 +435,13 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 	}
 
 	// 4. Readiness.
+	decisions, err := readBody(o.BodyFile)
+	if err != nil {
+		return res, err
+	}
 	tracked := e.trackedFiles(ctx, root)
 	inFlight := e.InFlightItems(ctx, root, be, tracked, set.SharedPaths)
-	var settled string
-	if o.BodyFile != "" {
-		b, _ := os.ReadFile(o.BodyFile)
-		settled = string(b)
-	}
-	r, err := AssessBrief(be, id, tracked, set.SharedPaths, inFlight, o.AcceptOverlap, settled)
+	r, err := AssessBrief(be, id, tracked, set.SharedPaths, inFlight, o.AcceptOverlap, decisions)
 	if err != nil {
 		return res, err
 	}
@@ -461,24 +459,12 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 		return res, blk
 	}
 
-	// Solo runs Claude subagents only (E3, #70): a harness that cannot be
-	// given a working directory would edit the orchestrator's checkout.
-	if why := hz.SoloRefusal(); why != "" && isSolo(root) {
-		return res, usage("%s", why)
-	}
-	// A worker that cannot start (launch flags, host, login) is refused before
-	// anything is marked. dispatch runs the same preflight again.
-	setup, err := e.workerEnv().Preflight(ctx, root, kind, agent, model)
+	// A worker that cannot start is refused before anything is marked.
+	warns, err := e.deliveryRefusals(ctx, root, kind, agent, model)
 	if err != nil {
-		var we *exitcode.Error
-		if errors.As(err, &we) && we.Exit == exitcode.ExitRefused {
-			if bd, ok := we.Data.(worker.BlockData); ok {
-				return res, blocked(bd.BlockedBy, "%s", we.Message)
-			}
-		}
 		return res, err
 	}
-	res.Warnings = append(res.Warnings, setup.Warnings...)
+	res.Warnings = append(res.Warnings, warns...)
 
 	// 5. The brief exists before anything is marked.
 	brief, ok := briefPath(root, set, o.Getenv)
@@ -492,8 +478,6 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 	rnd := registryRound(root)
 	claimID := agent + "@" + strconv.Itoa(rnd)
 	w := e.workerEnv()
-	solo := isSolo(root)
-	var text, tmpName string
 	steps := []step{
 		{name: "queue the slot's PR", skip: func() bool { return !queue }, do: func() error {
 			return wrap(e.queuePR(ctx, root, be, agent))
@@ -523,65 +507,26 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 				return nil
 			})
 		}},
-		// 8. The account is the pane's CLAUDE_CONFIG_DIR: keep the slot's own
-		// while it has headroom, else pick; none usable is a refusal to start.
-		// work.accounts is Anthropic's: a codex slot's CODEX_HOME is its account.
-		// Under solo every subagent runs on the orchestrator's own account.
-		{name: "account", skip: func() bool {
-			return solo || !hz.WorkAccounts() || e.Accounts == nil || len(worker.Configured(root)) == 0
-		}, do: func() error {
-			name, err := e.pickAccount(ctx, root, agent)
-			res.Account = name
-			return err
-		}},
-		// 9. The pointer brief.
-		{name: "write the brief", do: func() error {
-			decisions := ""
-			if o.BodyFile != "" {
-				b, _ := os.ReadFile(o.BodyFile)
-				decisions = string(b)
-			}
-			text = pointerBrief(agent, id, res.Branch, brief, o.Siblings, decisions, outOfScope(be, id), tierBrief{Kind: kind, Tier: tier, Model: res.Model, Default: set.Tier, Reason: reason, Table: set.Models[kind], Pick: pick.String()})
+	}
+	d := &delivery{Slot: agent, Task: id, Branch: func() string { return res.Branch }, Kind: kind, Model: res.Model, Round: rnd,
+		Brief: func() string {
+			text := pointerBrief(agent, id, res.Branch, brief, o.Siblings, decisions, outOfScope(be, id), tierBrief{Kind: kind, Tier: tier, Model: res.Model, Default: set.Tier, Reason: reason, Table: set.Models[kind], Pick: pick.String()})
 			if hb := latestHandoffBranch(be, id); hb != "" {
 				text += fmt.Sprintf("\nAn earlier worker handed this issue back: read the latest `rota:handoff` comment on it. Its work is pushed on branch %s (origin/%s); fetch it before you start over.\n", hb, hb)
 			}
-			if solo {
-				return nil
-			}
-			tmp, err := os.CreateTemp("", "rota-round-brief-")
-			if err != nil {
-				return err
-			}
-			tmpName = tmp.Name()
-			tmp.WriteString(text)
-			return tmp.Close()
-		}},
+			return text
+		}}
+	// 8-9. The account, the pointer brief and the hand-off.
+	ds, err := d.steps(ctx, e, root)
+	if err != nil {
+		return res, err
 	}
-	if solo {
-		// No pane: mark the slot busy and hand the brief back.
-		steps = append(steps, step{name: "solo hand-off", do: func() error {
-			b, wt, err := e.soloHandOff(root, agent, text, rnd)
-			if err != nil {
-				return err
-			}
-			res.Host, res.Brief, res.Worktree = host.Solo, b, wt
-			res.Changed = true
-			return nil
-		}})
-	} else {
-		steps = append(steps, step{name: "dispatch", keep: true, do: func() error {
-			if _, err := w.Dispatch(ctx, root, worker.DispatchOpts{Slot: agent, BodyFile: tmpName, Task: id, Round: &rnd, Branch: res.Branch, Model: res.Model,
-				Kind: kind}); err != nil {
-				return err
-			}
-			res.Dispatched, res.Changed = true, true
-			return nil
-		}})
-	}
+	steps = append(steps, ds...)
 	err = runSteps(steps)
-	if tmpName != "" {
-		os.Remove(tmpName)
-	}
+	d.cleanup()
+	res.Account, res.Host, res.Brief, res.Worktree = d.Account, d.Host, d.BriefText, d.Worktree
+	res.Dispatched = res.Dispatched || d.Dispatched
+	res.Changed = res.Changed || d.Changed
 	return res, err
 }
 
