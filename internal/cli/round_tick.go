@@ -141,7 +141,7 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 		_, ferr := backlogFail(err)
 		return roundtick.Result{}, ferr
 	}
-	board, ok := be.(round.Board)
+	board, ok := round.BoardOf(be)
 	if !ok {
 		return roundtick.Result{}, &Error{Exit: ExitInternal, Message: "the backlog backend has no workflow"}
 	}

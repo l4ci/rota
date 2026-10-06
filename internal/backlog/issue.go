@@ -75,7 +75,9 @@ func (b *Issues) ctx() context.Context {
 func (b *Issues) Name() string { return "issues" }
 
 // Capabilities: tracker issues.
-func (b *Issues) Capabilities() Capabilities { return Capabilities{Tracker: true} }
+func (b *Issues) Capabilities() Capabilities {
+	return Capabilities{IssueIDs: true, ClaimWrites: true, Forge: true}
+}
 
 // Rows lists the open issues.
 func (b *Issues) Rows() ([]Row, error) { return issueRows(b, false) }

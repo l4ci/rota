@@ -24,7 +24,7 @@ func debugItem(c *Ctx, ref string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if !be.Capabilities().Tracker {
+	if !be.Capabilities().IssueIDs {
 		return id, nil
 	}
 	registered := repos.Load(root)
