@@ -458,7 +458,7 @@ func (g *gate) stepMerge() (bool, error) {
 		if ci, msg = g.e.newCIVerifier(g.root, g.forge, g.in.cfg); msg != "" {
 			return g.broke(msg)
 		}
-		changed, err := g.changedFiles()
+		changed, err := g.e.ciDiffFiles(g.root, g.baseRef, g.verified)
 		if err != nil {
 			return g.broke(err.Error())
 		}
