@@ -118,7 +118,7 @@ Three tiers of shell commands, each an array defaulting to `[]`:
 
 - `test.fast`: quick checks for a task or worker to run while working.
 - `test.full`: the full suite. The merge gate (`rota worker gate`) and the merge train run it on the merged tree, and [`/rota-refactor`](../reference/slash-commands.md#rota-refactor) runs it in `--fix` verification as CI-shape gates before committing. Empty means read-only verification, and the gate reports `NO-VERIFY`.
-- `test.e2e`: slow end-to-end checks. Reserved; nothing reads it yet.
+- `test.e2e`: slow end-to-end checks. `rota worker gate` and the merge train run it on the merged tree after `test.full` passes, so a round pays for it at merge instead of once per branch (a train runs it once for all members). A red train run bisects like a red `test.full`. Empty skips the step.
 
 `test.full` replaces `refactor.verifyCommands`. `rota config fill` moves the old key's commands to `test.full` and deletes it. Until then the gate still reads the old key when `test.full` is empty, and warns on stderr that it is deprecated.
 
