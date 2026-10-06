@@ -14,14 +14,15 @@ import (
 // changes and their errors pass through unchanged.
 type MergePorts struct {
 	Git     Git
+	Recover land.Git // optional recovery runner, independent of caller cancellation
 	Verdict func(branch string) error
 	Approve func() error
 	OnDisk  func() string
 }
 
 // MergeBranch merges branch into base with --no-ff and deletes it, returning
-// the merge commit's short hash. A conflict aborts the merge and leaves the
-// tree as it was.
+// the merge commit's short hash. Failed merges attempt an abort; recovery
+// failures pass through with their original merge error.
 func MergeBranch(p MergePorts, branch, base, msg string) (string, error) {
 	if base == branch {
 		return "", &Refusal{By: "base branch", Msg: "'" + branch + "' is the base branch"}
@@ -51,8 +52,14 @@ func MergeBranch(p MergePorts, branch, base, msg string) (string, error) {
 	if co.ExitCode != 0 {
 		return "", &GitError{Msg: "git checkout " + base + ": " + firstLine(co.Stderr)}
 	}
-	switch err := land.MergeLocal(p.Git.Run, line(pin.Stdout), msg); {
+	recover := p.Recover
+	if recover == nil {
+		recover = p.Git.Run
+	}
+	switch err := land.MergeLocal(p.Git.Run, line(pin.Stdout), msg, recover); {
 	case err == nil:
+	case errors.As(err, new(*land.CleanupError)):
+		return "", err
 	case errors.As(err, new(*land.ConflictError)):
 		return "", &Refusal{By: "conflict", Msg: "merge conflict; merge aborted"}
 	default:
