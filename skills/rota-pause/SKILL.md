@@ -5,39 +5,33 @@ description: Use when the session is approaching a context limit, the work must 
 
 # rota-pause — Graceful Session Pause
 
-`/rota-work` with no argument reads the handoff note on the next session; the handoff note goes away when that stream is resumed or abandoned (`rota status rm` deletes it).
-
-## When to Use
-
-- Context window is filling up and you want to stop cleanly
-- You have to step away mid-`/rota-work` or mid-`/rota-debug` cycle, or mid-round as the orchestrator
-- Work will continue in a new session; git commits alone won't carry the intent
+`/rota-work` with no argument reads the handoff note next session; it goes away when the stream is resumed or abandoned (`rota status rm` deletes it).
 
 ## When NOT to Use
 
-- Work is actually complete → `/rota-ship`
-- You can finish in this session → just finish
-- No active branch, no `/rota-work` running and no round → nothing to hand off
-- The round is finished → `rota round wind-down`, not a pause
+- Work complete → `/rota-ship`
+- You can finish in this session
+- No active branch, no `/rota-work` running and no round
+- Round finished → `rota round wind-down`
 
 ## Step 1 — Is a Round Running?
 
-Run `rota round status --json`. A round is in flight when a row in `data.slots` holds an issue or `data.review` is non-empty; slots parked on `park/<agent>` with nothing queued are not a round. If so, follow *Pausing an orchestrator* after Step 6; the feature-branch steps do not apply, because the orchestrator sits on the base branch. Otherwise continue with Step 2.
+Run `rota round status --json`. A round is in flight when a row in `data.slots` holds an issue or `data.review` is non-empty; slots parked on `park/<agent>` with nothing queued are not a round. If in flight, follow *Pausing an orchestrator* below; Steps 2-5 do not apply (the orchestrator sits on the base branch). Otherwise continue with Step 2.
 
 ## Step 2 — Resolve the Pause Set
 
-The pause set is the `(branch, repo)` entries to pause: one for a single-repo cycle or a scoped umbrella pause, two or more when one `/rota-work` wave fanned out across sub-repos.
+The pause set is the `(branch, repo)` entries to pause: one for a single-repo cycle or scoped umbrella pause, several when a `/rota-work` wave fanned out across sub-repos.
 
 1. `rota status show`: take the active streams whose `branch` matches the current branch. One match is the pause set (`repo` may be null).
-2. Several matches: run `rota repo which`. Exit 0 means the user `cd`-ed into one sub-repo, so pause only that entry. Exit 3 (umbrella root) means pause all matches as one wave. Do not ask which repo.
-3. No match: use `git rev-parse --abbrev-ref HEAD` and pause `[(branch, null)]`, covering `/rota-pause` before `/rota-work` registered status.
+2. Several matches: run `rota repo which`. Exit 0: the user `cd`-ed into one sub-repo; pause only that entry. Exit 3 (umbrella root): pause all matches as one wave. Do not ask which repo.
+3. No match: use `git rev-parse --abbrev-ref HEAD` and pause `[(branch, null)]`, for `/rota-pause` before `/rota-work` registered status.
 4. `rota git guard feature-branch <branch>` exiting 1 means the base branch: tell the user there is no feature work to pause and stop.
 
 ## Step 3 — Handle Uncommitted Work
 
 Check each entry's tree with `git -C <path> status --porcelain` (path from `rota repo resolve <repo> --json`, `data.repos[0].path`; cwd when `repo` is null).
 
-All clean: record `clean tree` and continue. Any dirty: ask once via `AskUserQuestion`:
+All clean: record `clean tree`. Any dirty: ask once via `AskUserQuestion`:
 
 - **Header:** `"Uncommitted"`
 - **Question:** *"N uncommitted files on `<branch>`. How should I handle them?"* For a wave, name the dirty repos instead of N.
@@ -54,19 +48,19 @@ Find the milestone first: `rota backlog milestones <ID>...` for the captured ite
 
 Write one handoff note per `(branch, repo)` entry. Get the path from `rota status handoff "$BRANCH" --canonical ${REPO:+--repo "$REPO"}`. Fill the template in `references/handoff-template.md` from the session: omit sections that do not apply, do not invent content. Always overwrite.
 
-In a wave, entries share Items, Milestone, Stage, Next planned step and Current hypothesis; only `Repo:` and the Uncommitted artifact differ. Keep separate files so one repo can be abandoned while the others resume.
+In a wave, only `Repo:` and the Uncommitted artifact differ; keep separate files so one repo can be abandoned while others resume.
 
 Fill *Stage* and *Next planned step* from the task ledger ([`references/task-ledger.md`](references/task-ledger.md)): `rota git base`, then the `Task:` trailers in `git log <base>..HEAD`. Name the finished tasks and make the first unfinished one the next step.
 
-Gotchas and dead ends belong in `/rota-learn` (Step 6), not the handoff note.
+Gotchas and dead ends go to `/rota-learn` (Step 6), not the note.
 
 ## Step 5 — Pin Status
 
-For each entry run `rota status add <branch> --items <ids> [--worktree <path>] [--repo <repo>] --if-absent` so the resume flow finds it. `--if-absent` keeps the original `startedAt`, so time in flight stays accurate; the note carries the pause time.
+For each entry run `rota status add <branch> --items <ids> [--worktree <path>] [--repo <repo>] --if-absent` so resume finds it. `--if-absent` keeps the original `startedAt`; the note carries the pause time.
 
 ## Step 6 — Confirm
 
-One compact block. Wave: name every repo, count the handoffs, list Uncommitted per repo.
+One compact block. Wave: name every repo, count handoffs, list Uncommitted per repo.
 
 ```
 Paused `rota/fix-B07-timer-badge` (web) — handoff note saved.
@@ -78,29 +72,29 @@ Uncommitted: wip commit a1b2c3d
 Resume with `/rota-work` in a fresh session.
 ```
 
-Show the `(web)` suffix only when `repo` is non-null. Stage, Next and Hypothesis are shared across a wave; Uncommitted is per repo.
+Show the `(web)` suffix only when `repo` is non-null.
 
-**Learn nudge (conditional).** Pausing loses context. If the session hit a durable gotcha (a hypothesis that contradicted assumptions, a non-obvious root cause, a tool quirk), add one line: *"Run `/rota-learn` now to preserve session insights durably — handoff captures intent, not learnings."* Skip if nothing non-obvious surfaced or `/rota-learn` already ran. Advisory only.
+**Learn nudge (conditional).** If the session hit a durable gotcha (a hypothesis that contradicted assumptions, a non-obvious root cause, a tool quirk), add one line: *"Run `/rota-learn` now to preserve session insights durably — handoff captures intent, not learnings."* Skip if nothing non-obvious surfaced or `/rota-learn` already ran.
 
 ## Pausing an orchestrator
 
-A round outlives the session that runs it: workers keep working in their own worktrees and tabs. A pause records the round and leaves it running; it never winds the round down (`rota round wind-down` re-verifies, parks every slot and releases the lease, which is the end of a round, not a pause) and never merges, reclaims or reassigns anything.
+Workers keep running after the session ends. A pause records the round and leaves it running; it never winds down (`rota round wind-down` re-verifies, parks every slot and releases the lease: the end of a round), merges, reclaims or reassigns.
 
-1. Read `rota round status --json`: the host, each slot's issue, state and PR, the `review` list (PRs waiting for gate and merge), open `escalations`, `limits` and the `drift` count. Add `rota round candidates` only if the slate is part of what the next session must decide.
-2. Write the handoff note to `.rota/handoff/<base>.md` (`<base>` from `rota git base`), first line `<!-- rota-handoff: orchestrator -->`, the marker the SessionStart hook injects without a lease. Sections: **Round** (host from `rota round status`; the round number from `.rota/workers.json`; the lease holder from `rota keepalive status` when a supervisor runs), **Slots** (one line each: agent, issue, state, PR), **Review queue** (PR numbers in merge order, and why that order), **Waiting on** (escalation ids and what each blocks, slots out of quota with reset time), **Next** (the one concrete call: usually `rota round wait`). Record decisions the maintainer settled that a worker brief does not already carry; leave out anything `rota round status` reproduces.
-3. Leave the lease alone. A gone holder makes it stale, and the next `rota round start` reclaims it and keeps the round. Don't pin `rota status add`; the round's registry is `.rota/workers.json`.
+1. Read `rota round status --json`: the host, each slot's issue, state and PR, the `review` list (PRs waiting for gate and merge), open `escalations`, `limits` and the `drift` count. Add `rota round candidates` only if the next session must decide the slate.
+2. Write the handoff note to `.rota/handoff/<base>.md` (`<base>` from `rota git base`), first line `<!-- rota-handoff: orchestrator -->`, the marker the SessionStart hook injects without a lease. Sections: **Round** (host from `rota round status`; the round number from `.rota/workers.json`; the lease holder from `rota keepalive status` when a supervisor runs), **Slots** (one line each: agent, issue, state, PR), **Review queue** (PR numbers in merge order, and why that order), **Waiting on** (escalation ids and what each blocks, slots out of quota with reset time), **Next** (the one concrete call: usually `rota round wait`). Record maintainer decisions no worker brief carries; omit anything `rota round status` reproduces.
+3. Leave the lease alone: a gone holder makes it stale and the next `rota round start` reclaims it, keeping the round. Don't `rota status add`; the registry is `.rota/workers.json`.
 4. Uncommitted work on the base branch: report it and leave it in place; don't WIP-commit onto the base.
-5. Confirm in one block: round number, slots busy and free, PRs in review, what the next session does first. Resume is `rota round start` (it keeps the recorded scope) and then the handoff note, with `/rota-orchestrate` for the judgment calls. Add the Step 6 learn nudge when it applies.
+5. Confirm in one block: round number, slots busy and free, PRs in review, what the next session does first. Resume: `rota round start` (keeps the recorded scope), then the handoff note, with `/rota-orchestrate` for judgment calls. Add the Step 6 learn nudge when it applies.
 
 ## Rules
 
-- **Write what you know, not what you wish you knew.** The handoff note is a snapshot of orchestrator state, not a task spec.
+- **Write what you know.** The note is a state snapshot, not a task spec.
 - **One handoff note per `(branch, repo)`.** Overwrite on re-pause.
-- **A multi-repo wave is one logical pause.** Scope to one sub-repo by `cd`-ing into it first.
-- **Never commit `.rota/handoff/`.** It is per-developer scratch and gitignored by `rota init`.
-- **Do not delete the handoff note here.** Resuming or abandoning the stream removes it; the orchestrator handoff note is consumed by the next session's hook.
+- **A multi-repo wave is one logical pause.** `cd` into a sub-repo to scope to it.
+- **Never commit `.rota/handoff/`** (gitignored per-developer scratch).
+- **Do not delete the handoff note here.** Resume or abandon removes it; the next session's hook consumes the orchestrator note.
 - **A paused round is not a finished round.** Never wind down, merge or reclaim from a pause.
-- **No mutation beyond the handoff note, status pin and the chosen wip commit or stash.** Capture, not integration.
+- **No mutation beyond the handoff note, status pin and the chosen wip commit or stash.**
 
 ## References
 

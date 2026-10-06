@@ -14,18 +14,18 @@ Read `.rota/config.json`:
 
 ## When to Use
 
-- Before merging or opening a PR — typically invoked from `/rota-ship`
-- *"Review this branch"*, *"Second-opinion this"*, *"Look over what I've got"*
-- After manual commits to a branch you want validated before integrating
-- `/rota-review --since <sha>` re-reviews a bounced branch: only the fix, against the findings of the last review (see Re-review)
+- Before merging or opening a PR, typically from `/rota-ship`
+- "Review this branch", "second-opinion this"
+- After manual commits you want validated before integrating
+- `/rota-review --since <sha>` re-reviews a bounced branch: only the fix, against the last review's findings (see Re-review)
 - `/rota-review --queue` (issue backend) reviews and merges the PRs waiting on `needs-review` items (see Queue mode)
 
 ## When NOT to Use
 
-- Code is still in flight → finish implementing via `/rota-work`
-- You want to change code based on the review → `/rota-refactor` or a fresh `/rota-work` run
-- Nothing committed yet → there's nothing to review
-- You want product-level evidence (does it actually work? perf budgets met? a11y clean? smoke tests green?) → `/rota-qa run`. `/rota-review` reasons from commits and diff; it does not run the product.
+- Code still in flight → `/rota-work`
+- You want code changed based on the review → `/rota-refactor` or a fresh `/rota-work` run
+- Nothing committed yet
+- You want product-level evidence (works? perf budgets? a11y? smoke green?) → `/rota-qa run`. `/rota-review` reasons from commits and diff; it does not run the product.
 
 ## Step 1 — Task List
 
@@ -37,9 +37,9 @@ Track Steps 2-8 with the host's task tool if it has one.
 rota review scope --json <branch>
 ```
 
-**Umbrella mode.** When the branch lives in a sub-repo, pass `--repo <name>` so git ops resolve there: `rota review scope --json --repo <name> <branch>`. Determine `<name>` from `data.repo` of `rota status show <branch> --json` (the active stream's repo), or from `rota repo which` if invoked from inside the sub-repo's worktree. Backlog lookups stay umbrella-flat: `rota review scope` reads them from the umbrella's `.rota/`, so no repo flag is needed for intent matching.
+**Umbrella mode.** When the branch lives in a sub-repo, pass `--repo <name>`: `rota review scope --json --repo <name> <branch>`. Get `<name>` from `data.repo` of `rota status show <branch> --json`, or from `rota repo which` inside the sub-repo's worktree. Backlog lookups stay umbrella-flat; no repo flag needed for intent matching.
 
-If the user didn't name a branch, default to the current one. `rota review scope` returns, under `data`:
+Default to the current branch if none is named. `data` holds:
 
 - `branch`, `base`, `commitCount`
 - `commits` — array of `{hash, subject}`
@@ -54,48 +54,48 @@ If `commitCount` is 0, stop and tell the user.
 The spec is what each referenced item promised. Collect one entry per `referencedId`, in parallel:
 
 - **Issue mode** (`backlog.backend: "issues"`): the issue body is the spec. `rota item field list <ID>` returns it; add `rota item comment list <ID> --kind decision`, because a decision recorded as a comment changes the body's promise. A plan note (`rota item note show <ID> --kind plan`, `exists: false` when absent) is extra detail, not a requirement, except its `## Review Focus` section: lift it out and carry it into the brief verbatim.
-- **File mode**: the item's `Intent` line from `intents`, plus its plan when it has a milestone (`rota item field get <ID> --name milestone`, then `rota plan show "<MNN>-<ID>"`; exit 3 means no plan file). Lift the plan's `## Review Focus` section out the same way.
+- **File mode**: the item's `Intent` line from `intents`, plus its plan when it has a milestone (`rota item field get <ID> --name milestone`, then `rota plan show "<MNN>-<ID>"`; exit 3 means no plan file). Lift the plan's `## Review Focus` section the same way.
 
-An item with no body and no plan contributes only its title. That is fine: the reviewer judges intent match from what exists, and says so when a spec is too thin to check against.
+An item with no body and no plan contributes only its title; the reviewer says so when a spec is too thin to check against.
 
 ## Step 4 — Consult KNOWLEDGE & DECISIONS
 
-Apply the canonical K+D query pattern (`references/knowledge-consult.md`) with topics that plausibly touch the changed areas based on `touchedFiles` and commit subjects — infer liberally (e.g., a file under `Networking/` → the `Networking` topic).
+Apply the canonical K+D query pattern (`references/knowledge-consult.md`) with topics that plausibly touch the changed areas, from `touchedFiles` and commit subjects. Infer liberally (a file under `Networking/` → the `Networking` topic).
 
-Carry KNOWLEDGE bullets into the reviewer brief. Pass DECISIONS entries under a `**Hard boundaries:**` section — the reviewer must **FAIL** if the diff violates any boundary, even if the change looks otherwise good.
+Carry KNOWLEDGE bullets into the reviewer brief. Pass DECISIONS entries under a `**Hard boundaries:**` section; the reviewer must **FAIL** if the diff violates any boundary, even if the change looks otherwise good.
 
-> **REQUIRED — Register hits on consumed bullets.** After building the reviewer brief, apply the hit-register pattern from `references/knowledge-consult.md` *Hit-register after consumption*: for each bullet that landed in the brief's `**Relevant project conventions (from KNOWLEDGE.md):**` section, call `rota knowledge hit --topic "<T>" --title "<first-line-of-bullet>"` once, issuing all calls as a single parallel batch. Bullets returned but pruned before the brief don't earn credit. Silent on success. Provisional bullets auto-promote to confirmed once `hits >= learn.promoteThreshold` (default 3).
+> **REQUIRED — Register hits on consumed bullets.** After building the reviewer brief, apply the hit-register pattern from `references/knowledge-consult.md` *Hit-register after consumption*: for each bullet that landed in the brief's `**Relevant project conventions (from KNOWLEDGE.md):**` section, call `rota knowledge hit --topic "<T>" --title "<first-line-of-bullet>"` once, issuing all calls as a single parallel batch. Bullets pruned before the brief don't earn credit. Silent on success. Provisional bullets auto-promote to confirmed once `hits >= learn.promoteThreshold` (default 3).
 
 ## Step 5 — Capture the Diff
 
-The reviewer needs concrete diff content, not just file names. Write it to a file rather than into your own context:
+Write the diff to a file, not into your context:
 
 ```bash
 rota review package <branch> --base <base> [--since <sha>] --json
 ```
 
-`data.path` is the file (commits, `--stat` and the full `-U10` diff); `data.files` and `data.bytes` size it. There is no file cap: the reviewer reads the file, you don't. Pass `--since <sha>` on a re-review to package only the commits after the sha the last review covered. Exit 3 means an empty range or a `--since` that is not on the branch: report it and stop.
+`data.path` is the file (commits, `--stat` and the full `-U10` diff); `data.files` and `data.bytes` size it. No file cap: the reviewer reads the file, you don't. Exit 3 means an empty range or a `--since` not on the branch: report it and stop.
 
 ### Re-review (`--since <sha>`)
 
-After a bounce the worker pushes a fix. Review that fix, not the whole branch again. `<sha>` is the `sha` of the branch's last recorded review (`rota verdict show <branch> --json`, the newest record of kind `review-quality`); without a recorded review there is nothing to re-review against, so run the full review. Do these in place of the full Step 7 brief:
+After a bounce the worker pushes a fix. Review the fix, not the whole branch. `<sha>` is the `sha` of the branch's last recorded review (`rota verdict show <branch> --json`, the newest record of kind `review-quality`); with no recorded review, run the full review. Do these in place of the full Step 7 brief:
 
 - Step 5 packages only `--since <sha>`. Steps 2-4 and 6 still run, on the fix range.
-- Both reviewers run, each on its own axis. `rota verdict show <branch> --json` holds the latest `review-spec` and `review-quality` records: put each record's `findings` into its reviewer's brief as `**Earlier findings:**`, numbered. `<sha>` is the `review-quality` record's sha.
+- Both reviewers run, each on its own axis. `rota verdict show <branch> --json` holds the latest `review-spec` and `review-quality` records: put each record's `findings` into its reviewer's brief as `**Earlier findings:**`, numbered.
 - Each reviewer marks every earlier finding `ADDRESSED` or `NOT ADDRESSED`, with the diff line that settles it. A finding the fix does not touch is `NOT ADDRESSED`.
-- Only the fix gets the rubric. Anything the reviewer notices outside the fix goes to a `**Deferred:**` list in the report: it is never a finding and never moves the verdict.
-- The verdict block carries each `NOT ADDRESSED` finding again, plus any new finding the fix itself introduced. `ADDRESSED` ones appear only in `summary`, as a count. `PASS` needs every earlier finding `ADDRESSED` and no new finding in the fix.
+- Only the fix gets the rubric. Anything noticed outside the fix goes to a `**Deferred:**` list in the report: never a finding, never moves the verdict.
+- The verdict block carries each `NOT ADDRESSED` finding again, plus any new finding the fix introduced. `ADDRESSED` ones appear only in `summary`, as a count. `PASS` needs every earlier finding `ADDRESSED` and no new finding in the fix.
 - Relay the `**Deferred:**` list to the caller beside the verdict. File it with `/rota-capture` if the caller wants; never fold it into this branch.
 
 ## Step 6 — Pre-flight Scaffolding Scan
 
-Before dispatching the reviewer, run a deterministic diff scan for comments that reference task numbers ("added in Task 7"):
+Before dispatching, scan the diff for comments that reference task numbers ("added in Task 7"):
 
 ```bash
 rota review scaffolding [--repo <name>] --base <base> <branch>
 ```
 
-Empty stdout (no `data.findings`) → no candidates. Otherwise carry the matches into the brief as `**Possible stale scaffolding:**` evidence. Do not auto-FAIL — the reviewer judges each match as real scaffolding or legitimate prose. The verb surfaces; the reviewer decides.
+No `data.findings` → no candidates. Otherwise carry the matches into the brief as `**Possible stale scaffolding:**`. Do not auto-FAIL; the reviewer judges each match.
 
 ## Step 7 — Dispatch the Reviewers
 
@@ -106,7 +106,7 @@ Dispatch two reviewers **in parallel** (one message, two dispatches), fresh cont
 - **Spec** — **orchestrator** model. Does the diff do what the items promised, and nothing more?
 - **Standards** — **`standard`** tier. Does it meet the project's standards?
 
-Fill the bracketed parts from Steps 2-6 and drop any section that has nothing in it. Both briefs open with the shared block, then add their own rubric.
+Fill the bracketed parts from Steps 2-6 and drop any empty section. Both briefs open with the shared block, then add their own rubric.
 
 ```
 Review `<branch>` against base `<base>` on one axis (named below).
@@ -128,7 +128,7 @@ Review `<branch>` against base `<base>` on one axis (named below).
 
 ### Spec reviewer brief
 
-Shared block, plus these sections (items and Review Focus go here; the Standards reviewer does not get them beyond the shared block):
+Shared block, plus these sections (items and Review Focus go here; the Standards reviewer gets them only via the shared block):
 
 ```
 **Axis: Spec.** Does the diff deliver what the items promised, nothing more? Do not judge style, conventions or test quality: another reviewer does.
@@ -192,7 +192,7 @@ Be specific: file:line for every concern, ranked by severity.
 - FAIL — Spec: merge would miss a spec outcome. Standards: merge would regress behavior, violate a hard boundary or break a convention.
 ```
 
-Never put a finding from one reviewer into the other's block or rerank them: each block is that reviewer's own.
+Never put a finding from one reviewer into the other's block or rerank them.
 
 ## Step 8 — Record and Relay the Verdict
 
@@ -203,11 +203,11 @@ rota verdict add <branch> --kind review-spec --verdict <PASS|CONCERNS|FAIL> --bo
 rota verdict add <branch> --kind review-quality --verdict <PASS|CONCERNS|FAIL> --body-file "$STANDARDS" --json
 ```
 
-Record both even when Spec is FAIL: both ran, and the Standards findings are the author's to-do list too. Order alone decides the result: `review-quality` stores `combined`, the worse of the two at the same sha. `data.combined` on the second call is the branch's review verdict.
+Record both even when Spec is FAIL: the Standards findings are the author's to-do list too. Order decides the result: `review-quality` stores `combined`, the worse of the two at the same sha. `data.combined` on the second call is the branch's review verdict.
 
-Exit 2 means the block is malformed or its `verdict` differs from `--verdict`: the message names the field. Ask that reviewer to resend the block; never guess a verdict.
+Exit 2 means the block is malformed or its `verdict` differs from `--verdict`: the message names the field. Ask that reviewer to resend; never guess a verdict.
 
-Present both reports **verbatim** (trim only restatements): specifics are the point. Spec first, Standards second, each under its own heading, neither merged into or reranked against the other. Show each reviewer's `Declined to judge` list under its section when non-empty; it does not change the verdict and `rota verdict route` ignores it. Structure:
+Present both reports **verbatim** (trim only restatements). Spec first, Standards second, each under its own heading, neither merged into or reranked against the other. Show each reviewer's `Declined to judge` list under its section when non-empty; it does not change the verdict and `rota verdict route` ignores it. Structure:
 
 ```
 Review: `rota/foo` → main (3 commits, 5 files)
@@ -231,13 +231,13 @@ Verdict: CONCERNS (worse of Spec PASS and Standards CONCERNS)
 
 ## Step 9 — Route Based on Verdict
 
-The verdict is the entire product — return it and stop. Never ask a follow-up; the caller (the user, or `/rota-ship` when invoked) owns what happens next.
+The verdict is the entire product: return it and stop. Never ask a follow-up; the caller owns what happens next.
 
-When invoked from `/rota-ship`, return the verdict; the parent routes on the recorded verdict with `rota verdict route --for ship-review` (`references/review-verdict-routing.md`). When invoked standalone, relay the verdict to the user using the *Producer-side relay* table in the reference — short summary:
+From `/rota-ship`, return the verdict; the parent routes on the recorded verdict with `rota verdict route --for ship-review` (`references/review-verdict-routing.md`). Standalone, relay it using the *Producer-side relay* table in that reference:
 
 - **PASS** — *"Ready to ship. Run `/rota-ship`."*
-- **CONCERNS** — the concerns are already printed; suggest *"Address via `/rota-work` and rerun `/rota-review`, or accept and ship via `/rota-ship`."*
-- **FAIL** — tell the user the merge would regress. Suggest fixing via `/rota-work` or `/rota-debug`. Don't route to `/rota-ship`.
+- **CONCERNS** — concerns are already printed; suggest *"Address via `/rota-work` and rerun `/rota-review`, or accept and ship via `/rota-ship`."*
+- **FAIL** — the merge would regress. Suggest `/rota-work` or `/rota-debug`. Don't route to `/rota-ship`.
 
 ## Queue mode (`--queue`, issue mode)
 
@@ -245,13 +245,13 @@ Read [`queue-mode.md`](queue-mode.md) when invoked with `--queue` (issue backend
 
 ## Rules
 
-- **Read-only.** Never edit, commit, or stage. The verdict is the entire product; recording it with `rota verdict add` (the gitignored `.rota/verdicts.json`) is the one write.
-- **Evidence over opinion.** Every concern must cite file:line or commit hash.
-- **Scope is bounded.** Only the diff against the base is reviewed — don't wander into unchanged code.
-- **Call it honestly.** If conventions were violated but the user has a good reason, the reviewer still reports CONCERN — the user decides what to do.
+- **Read-only.** Never edit, commit, or stage. Recording with `rota verdict add` (the gitignored `.rota/verdicts.json`) is the one write.
+- **Evidence over opinion.** Every concern cites file:line or commit hash.
+- **Scope is bounded.** Only the diff against the base; don't wander into unchanged code.
+- **Call it honestly.** If conventions were violated for a good reason, the reviewer still reports CONCERN; the user decides.
 - **Don't re-run on a passed branch.** Step 7's gate skips the reviewers when the recorded review is a fresh PASS.
 
 ## References
 
-- [`references/knowledge-consult.md`](references/knowledge-consult.md) — Canonical K+D query pattern (`rota knowledge query` + `rota decisions query`) used by every cycle-starting skill.
+- [`references/knowledge-consult.md`](references/knowledge-consult.md) — canonical K+D query pattern (`rota knowledge query` + `rota decisions query`).
 - [`references/review-verdict-routing.md`](references/review-verdict-routing.md) — PASS / CONCERNS / FAIL routing for `/rota-review` consumers.

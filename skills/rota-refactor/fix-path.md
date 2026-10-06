@@ -11,4 +11,4 @@ Fix only the findings the user named, or all filed in this run if they said "all
 rota refactor reset
 ```
 
-Report the commit and the issues it closes in a few lines. Do not recap exploration or designs.
+Report the commit and closed issues in a few lines; no recap of exploration or designs.

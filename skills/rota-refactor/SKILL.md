@@ -7,7 +7,7 @@ description: Use on "review the architecture", "find refactoring opportunities",
 
 > The architecture vocabulary, heuristics and finding format below are adapted from `improve-codebase-architecture` in [mattpocock/skills](https://github.com/mattpocock/skills) (MIT); see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
-Surface architectural friction and file each finding as an issue. The default run changes no code. The aim is code that is easier to test and easier for an agent to navigate.
+Surface architectural friction and file each finding as an issue. The default run changes no code.
 
 ## Configuration
 
@@ -20,35 +20,35 @@ Read `.rota/config.json`:
 
 ## Args
 
-- `<area>` — a path, directory or subsystem name. Scope the review to it. Several sessions can each take one area. Without an area, review the whole repo (see Explore for prioritization).
+- `<area>` — a path, directory or subsystem name. Scopes the review. Without one, review the whole repo (see Explore).
 - `--fix` — after filing, implement the findings you pick (Fix path below). Without it the run ends at Step 4.
-- `--designs` — for structural findings, draft competing interfaces before recommending one (`references/refactor-design-approaches.md`). Off by default; it is the expensive step.
-- `--interactive` — present the ranked findings and ask which to file instead of filing all of them.
+- `--designs` — for structural findings, draft competing interfaces before recommending one (`references/refactor-design-approaches.md`). Off by default (expensive).
+- `--interactive` — present the ranked findings and ask which to file instead of filing all.
 
-Umbrella projects: `rota refactor targets --json` lists the sub-repos. Run once per sub-repo with the global `--repo <name>` so each finding lands on the tracker that owns the code. Do not fan out sub-agents from here; the orchestrator of a round assigns one area per worker.
+Umbrella projects: `rota refactor targets --json` lists the sub-repos. Run once per sub-repo with the global `--repo <name>` so each finding lands on the owning tracker. Do not fan out sub-agents from here; a round's orchestrator assigns one area per worker.
 
 ## Vocabulary
 
-Use these terms in every finding. Do not drift into "component", "service", "API" or "boundary".
+Use these terms in every finding (not "component", "service", "API", "boundary"); drift breaks search and dedup.
 
-- **Module** — anything with an interface and an implementation: a function, a package, a skill, a command.
-- **Interface** — everything a caller must know to use the module: types, invariants, error modes, ordering, required config. Not just the signature.
+- **Module** — anything with an interface and an implementation: function, package, skill, command.
+- **Interface** — everything a caller must know: types, invariants, error modes, ordering, required config. Not just the signature.
 - **Implementation** — the code behind the interface.
-- **Depth** — how much behaviour sits behind how small an interface. **Deep** = a lot behind a little. **Shallow** = the interface is about as complex as the implementation.
-- **Seam** — the place a module's interface lives, where behaviour can change without editing in place.
-- **Adapter** — a concrete thing that satisfies an interface at a seam.
-- **Leverage** — what callers get from depth: one implementation pays back across many call sites and tests.
-- **Locality** — what maintainers get from depth: change, bugs and knowledge concentrate in one place.
+- **Depth** — behaviour behind interface size. **Deep** = a lot behind a little. **Shallow** = interface about as complex as the implementation.
+- **Seam** — where a module's interface lives; behaviour can change there without editing in place.
+- **Adapter** — a concrete thing satisfying an interface at a seam.
+- **Leverage** — callers' payoff from depth: one implementation serves many call sites and tests.
+- **Locality** — maintainers' payoff from depth: change, bugs and knowledge concentrate in one place.
 
 ## Heuristics
 
-- **Deletion test.** Imagine deleting the module. If the complexity vanishes, it was a pass-through. If it reappears in N callers, the module was earning its keep. A finding is one where deletion would concentrate complexity, not just move it.
-- **The interface is the test surface.** Callers and tests cross the same seam. A module you have to test past its interface is the wrong shape.
+- **Deletion test.** Imagine deleting the module. Complexity vanishes: pass-through. It reappears in N callers: the module earns its keep. A finding is a module where deletion would concentrate complexity, not just move it.
+- **The interface is the test surface.** Callers and tests cross the same seam; a module tested past its interface is the wrong shape.
 - **One adapter is a hypothetical seam; two are a real one.** Do not propose a seam unless something actually varies across it.
 - **Extraction that lost locality.** Pure functions pulled out for testability while the bugs live in how they are called.
-- **Leaks across seams.** Tightly coupled modules that reach into each other's internals or share hidden state.
-- **Hard to test through the interface.** Code that needs mocks of its own internals, or has no test at its seam.
-- **Concept sprawl.** Understanding one idea takes bouncing between many small modules.
+- **Leaks across seams.** Modules reaching into each other's internals or sharing hidden state.
+- **Hard to test through the interface.** Needs mocks of its own internals, or no test at its seam.
+- **Concept sprawl.** One idea takes bouncing between many small modules.
 
 ## Flow
 
@@ -56,7 +56,7 @@ Orient → Explore → Rank → File → *(opt-in)* Fix
 
 ### Step 1 — Orient
 
-Read what the project already decided before looking at code. Pull only what touches the area:
+Pull what the project already decided that touches the area:
 
 ```bash
 rota glossary read <term>…
@@ -64,15 +64,15 @@ rota knowledge query <topic>…
 rota decisions query <topic>…
 ```
 
-Use the glossary's names for domain concepts ("the claim module", not "the FooHandler"). Do not re-suggest something a recorded decision rules out. If friction is real enough to warrant reopening a decision, file the finding anyway and name the decision it contradicts in the body.
+Use the glossary's names for domain concepts. Do not re-suggest what a recorded decision rules out; if friction warrants reopening one, file the finding and name the decision in the body.
 
 Run `rota git guard clean --context "/rota-refactor"` only under `--fix`.
 
 ### Step 2 — Explore
 
-Dispatch one exploration subagent on the main session's model (`models.orchestrator`); a `light` subagent is enough when the area is small. Scope it to the area. Rule: rank files by inbound imports, then size, then recent change; read the top fifth in full and one hop of callers and importers; sample the rest. Stop at 8–12 findings, or after 30+ files with no new kind of friction in the last 5. Do not pad.
+Dispatch one exploration subagent on `models.orchestrator` (`light` is enough for a small area), scoped to the area. Rank files by inbound imports, then size, then recent change; read the top fifth in full plus one hop of callers and importers; sample the rest. Stop at 8–12 findings, or after 30+ files with no new kind of friction in the last 5. Do not pad.
 
-For each finding the agent reports: files with line ranges, the friction in vocabulary terms, the deletion-test result, and what is hard to test today. It does not propose interfaces.
+Per finding it reports files with line ranges, the friction in vocabulary terms, the deletion-test result and what is hard to test today. No interface proposals.
 
 ### Step 3 — Rank
 
@@ -82,7 +82,7 @@ Assign each finding a strength:
 - **Worth exploring** — plausible depth gain, but a design choice or a missing second adapter is unsettled.
 - **Speculative** — a hunch the code does not yet back.
 
-Mark one **top recommendation** and say why it goes first. Findings that are only a one-line fix with no design choice are *simple*; file them like the rest, labelled in the body. With `--designs`, run the competing-design step now for the structural ones.
+Mark one **top recommendation** and say why it goes first. One-line fixes with no design choice are *simple*: file them like the rest, labelled in the body. With `--designs`, run the competing-design step now for structural ones.
 
 ### Step 4 — File
 
@@ -94,9 +94,9 @@ File one issue per finding. Never file a finding you cannot state acceptance for
 rota tracker call -- issue list --label refactor --state all --limit 200 --json number,title,state,body
 ```
 
-- A match that is open: skip, and comment with any new evidence.
-- A match that is closed: skip unless the friction demonstrably came back; then file a new issue that cites it (`Related: #<n>`).
-- A closed match whose reason was "won't do": treat as rejected, do not re-file.
+- Open match: skip; comment any new evidence.
+- Closed match: skip unless the friction demonstrably came back; then file a new issue citing it (`Related: #<n>`).
+- Closed as "won't do": rejected, do not re-file.
 
 **Create.** Body in a scratch file, then:
 
@@ -107,38 +107,30 @@ rota issues label <number> --add refactor
 
 (File-mode backlogs have no tracker: `rota item create` alone, and the item is the finding.)
 
-When findings must land in order (one builds on another's seam, or both rewrite the same lines), file the prerequisite first and pass `--depends-on <its ID>` on the next; see `references/dependent-items.md`. Independent findings get no edge.
+When findings must land in order (one builds on another's seam, or both rewrite the same lines), file the prerequisite first and pass `--depends-on <its ID>` on the next (`references/dependent-items.md`). Independent findings get no edge.
 
 Body sections:
 
 - **Pointers** — paths and line ranges. Paths live here only, never in Acceptance, which states behavior.
 - **Problem** — the friction, in vocabulary terms, with the deletion-test result.
-- **Solution** — plain description of what would change. No signatures unless `--designs` ran.
-- **Benefits** — locality and leverage, and how the tests improve.
+- **Solution** — what would change, in plain words. No signatures unless `--designs` ran.
+- **Benefits** — locality, leverage, test improvement.
 - **Strength** — Strong / Worth exploring / Speculative, and whether it is the top recommendation.
 - **Conflicts** — the recorded decision it contradicts, if any, and why it is worth reopening.
 - **## Acceptance** — checkable boxes: the interface the callers use afterwards, which duplicated logic is gone, which tests cross the seam. Include "existing tests still pass".
 - **## Out of scope** — one to three bullets on what the fix must not touch, or "nothing noted". `rota round assign` copies it into the worker brief.
 
-Report: a table of filed issues (number, title, strength), the skipped duplicates with the issue they matched, and the top recommendation. Zero filed is a valid result.
+Report: table of filed issues (number, title, strength), skipped duplicates with the matched issue, the top recommendation. Zero filed is valid.
 
-**Rejections.** If the user rejects a finding with a reason a later review would need to avoid re-suggesting it, offer `/rota-decide` to record it. Skip ephemeral reasons ("not now") and self-evident ones.
+**Rejections.** If the user rejects a finding for a reason a later review must respect, offer `/rota-decide`. Skip ephemeral ("not now") and self-evident reasons.
 
-Under `--interactive`, show the ranked list before filing and let the user drop or reorder findings; the grilling conversation about the shape of a chosen finding belongs in `/rota-brainstorm`, not here.
+Under `--interactive`, show the ranked list before filing and let the user drop or reorder; design discussion of a chosen finding belongs in `/rota-brainstorm`.
 
 Without `--fix`, stop here.
 
 ## Fix path (`--fix`)
 
-Read [`fix-path.md`](fix-path.md) when `--fix` was passed and follow it: group, dispatch, verify, commit the findings the user named.
-
-## Key principles
-
-- **Findings first.** The default output is issues, not diffs. A review that finds nothing worth filing says so.
-- **Same words every time.** Vocabulary drift makes the findings unsearchable and the dedup unreliable.
-- **Respect recorded decisions.** Reopen one only with real friction, and say so.
-- **Minimal diffs on the fix path.** Each fix touches only what it needs.
-- **Verify before commit.** `--fix` never commits without the verify subagent's sign-off.
+Read [`fix-path.md`](fix-path.md) when `--fix` was passed and follow it. `--fix` never commits without the verify subagent's sign-off.
 
 ## References
 
