@@ -168,6 +168,6 @@ Nudge one line, only when it applies: cause not obvious from the code, *"Run `/r
 ## References
 
 - [`references/knowledge-consult.md`](references/knowledge-consult.md) — K+D query pattern.
-- [`flaky-bugs.md`](flaky-bugs.md) — measuring and raising the failure rate of an intermittent bug.
+- [`flaky-bugs.md`](flaky-bugs.md) — measuring and raising an intermittent bug's failure rate.
 - [`iron-law-stop.md`](iron-law-stop.md) — what to do after three failed fixes.
 - [`no-seam.md`](no-seam.md) — filing the missing seam and wording the proof row.

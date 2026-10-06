@@ -13,16 +13,16 @@ Surface architectural friction and file each finding as an issue. The default ru
 
 Read `.rota/config.json`:
 
-- `models.orchestrator` — main session model: exploration and ranking (default `opus`)
+- `models.orchestrator`: main session model: exploration and ranking (default `opus`)
 
 `--fix` also reads `models.worker`, `refactor.verifyCommands` and `refactor.confirmBeforeExecute`; [`fix-path.md`](fix-path.md) lists them.
 
 ## Args
 
-- `<area>` — a path, directory or subsystem name. Scopes the review. Without one, review the whole repo (see Explore).
-- `--fix` — after filing, implement the findings you pick (Fix path below). Without it the run ends at Step 4.
-- `--designs` — for structural findings, draft competing interfaces before recommending one (`references/refactor-design-approaches.md`). Off by default (expensive).
-- `--interactive` — present the ranked findings and ask which to file instead of filing all.
+- `<area>`: a path, directory or subsystem name. Scopes the review. Without one, review the whole repo (see Explore).
+- `--fix`: after filing, implement the findings you pick (Fix path below). Without it the run ends at Step 4.
+- `--designs`: for structural findings, draft competing interfaces before recommending one (`references/refactor-design-approaches.md`). Off by default (expensive).
+- `--interactive`: present the ranked findings and ask which to file instead of filing all.
 
 In an umbrella project, read [`options.md`](options.md) (Umbrella projects).
 
@@ -30,14 +30,14 @@ In an umbrella project, read [`options.md`](options.md) (Umbrella projects).
 
 Use these terms in every finding (not "component", "service", "API", "boundary"); drift breaks search and dedup.
 
-- **Module** — anything with an interface and an implementation: function, package, skill, command.
-- **Interface** — everything a caller must know: types, invariants, error modes, ordering, required config. Not just the signature.
-- **Implementation** — the code behind the interface.
-- **Depth** — behaviour behind interface size. **Deep** = a lot behind a little. **Shallow** = interface about as complex as the implementation.
-- **Seam** — where a module's interface lives; behaviour can change there without editing in place.
-- **Adapter** — a concrete thing satisfying an interface at a seam.
-- **Leverage** — callers' payoff from depth: one implementation serves many call sites and tests.
-- **Locality** — maintainers' payoff from depth: change, bugs and knowledge concentrate in one place.
+- **Module**: anything with an interface and an implementation: function, package, skill, command.
+- **Interface**: everything a caller must know: types, invariants, error modes, ordering, required config. Not just the signature.
+- **Implementation**: the code behind the interface.
+- **Depth**: behaviour behind interface size. **Deep** = a lot behind a little. **Shallow** = interface about as complex as the implementation.
+- **Seam**: where a module's interface lives; behaviour can change there without editing in place.
+- **Adapter**: a concrete thing satisfying an interface at a seam.
+- **Leverage**: callers' payoff from depth: one implementation serves many call sites and tests.
+- **Locality**: maintainers' payoff from depth: change, bugs and knowledge concentrate in one place.
 
 ## Heuristics
 
@@ -75,7 +75,7 @@ Use the glossary's names for domain concepts. Do not re-suggest what a recorded 
 
 ### Step 2 — Explore
 
-Dispatch one exploration subagent on `models.orchestrator` (`light` is enough for a small area), scoped to the area. Rank files by inbound imports, then size, then recent change; read the top fifth in full plus one hop of callers and importers; sample the rest. Stop at 8–12 findings, or after 30+ files with no new kind of friction in the last 5. Do not pad.
+Dispatch one exploration subagent on `models.orchestrator` (`light` is enough for a small area), scoped to the area. Rank files by inbound imports, then size, then recent change; read the top fifth in full plus one hop of callers and importers; sample the rest. Stop at 8 to 12 findings, or after 30+ files with no new kind of friction in the last 5. Do not pad.
 
 Per finding it reports files with line ranges, the friction in vocabulary terms, the deletion-test result and what is hard to test today. No interface proposals.
 
@@ -83,9 +83,9 @@ Per finding it reports files with line ranges, the friction in vocabulary terms,
 
 Assign each finding a strength:
 
-- **Strong** — deletion test concentrates complexity, a real seam exists, tests would get simpler.
-- **Worth exploring** — plausible depth gain, but a design choice or a missing second adapter is unsettled.
-- **Speculative** — a hunch the code does not yet back.
+- **Strong**: deletion test concentrates complexity, a real seam exists, tests would get simpler.
+- **Worth exploring**: plausible depth gain, but a design choice or a missing second adapter is unsettled.
+- **Speculative**: a hunch the code does not yet back.
 
 Mark one **top recommendation** and say why it goes first. One-line fixes with no design choice are *simple*: file them like the rest, labelled in the body. With `--designs`, run the competing-design step now for structural ones.
 
@@ -116,14 +116,14 @@ When findings must land in order (one builds on another's seam, or both rewrite 
 
 Body sections:
 
-- **Pointers** — paths and line ranges. Paths live here only, never in Acceptance, which states behavior.
-- **Problem** — the friction, in vocabulary terms, with the deletion-test result.
-- **Solution** — what would change, in plain words. No signatures unless `--designs` ran.
-- **Benefits** — locality, leverage, test improvement.
-- **Strength** — Strong / Worth exploring / Speculative, and whether it is the top recommendation.
-- **Conflicts** — the recorded decision it contradicts, if any, and why it is worth reopening.
-- **## Acceptance** — checkable boxes: the interface the callers use afterwards, which duplicated logic is gone, which tests cross the seam. Include "existing tests still pass".
-- **## Out of scope** — one to three bullets on what the fix must not touch, or "nothing noted". `rota round assign` copies it into the worker brief.
+- **Pointers**: paths and line ranges. Paths live here only, never in Acceptance, which states behavior.
+- **Problem**: the friction, in vocabulary terms, with the deletion-test result.
+- **Solution**: what would change, in plain words. No signatures unless `--designs` ran.
+- **Benefits**: locality, leverage, test improvement.
+- **Strength**: Strong / Worth exploring / Speculative, and whether it is the top recommendation.
+- **Conflicts**: the recorded decision it contradicts, if any, and why it is worth reopening.
+- **## Acceptance**: checkable boxes: the interface the callers use afterwards, which duplicated logic is gone, which tests cross the seam. Include "existing tests still pass".
+- **## Out of scope**: one to three bullets on what the fix must not touch, or "nothing noted". `rota round assign` copies it into the worker brief.
 
 Report: table of filed issues (number, title, strength), skipped duplicates with the matched issue, the top recommendation. Zero filed is valid.
 
@@ -137,8 +137,8 @@ Read [`fix-path.md`](fix-path.md) when `--fix` was passed and follow it. `--fix`
 
 ## References
 
-- [`options.md`](options.md) — umbrella projects, `--interactive` filing, recording rejections.
-- [`fix-path.md`](fix-path.md) — `--fix` configuration, clean-tree guard and the fix steps.
-- [`references/refactor-design-approaches.md`](references/refactor-design-approaches.md) — competing-interface choreography for `--designs`.
-- [`references/dependent-items.md`](references/dependent-items.md) — ordering filed findings with `--depends-on`.
-- [`references/knowledge-consult.md`](references/knowledge-consult.md) — the knowledge and decisions query pattern used in Orient.
+- [`options.md`](options.md): umbrella projects, `--interactive` filing, recording rejections.
+- [`fix-path.md`](fix-path.md): `--fix` configuration, clean-tree guard and the fix steps.
+- [`references/refactor-design-approaches.md`](references/refactor-design-approaches.md): competing-interface choreography for `--designs`.
+- [`references/dependent-items.md`](references/dependent-items.md): ordering filed findings with `--depends-on`.
+- [`references/knowledge-consult.md`](references/knowledge-consult.md): the knowledge and decisions query pattern used in Orient.

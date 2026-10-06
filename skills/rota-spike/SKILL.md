@@ -9,8 +9,8 @@ description: Use when X must be tried before committing to it ("can we use SSE?"
 
 Two modes:
 
-- **Start mode** — open a new spike with a question
-- **Finish mode** — extract findings from a spike branch into the spike file
+- **Start mode**: open a new spike with a question
+- **Finish mode**: extract findings from a spike branch into the spike file
 
 Copy this checklist and track your progress (start mode; Step 1 routes to either mode):
 ```
@@ -66,7 +66,6 @@ Hack freely on the branch. When done, return to main and run:
   /rota-spike done <name>
 ```
 
-Nothing further here; the user drives the experiment.
 
 Copy this checklist and track your progress (finish mode):
 ```
@@ -94,6 +93,6 @@ See Step 5: `finish-mode.md` holds Steps 5 to 7.
 
 ## References
 
-- [`start-umbrella.md`](start-umbrella.md) — umbrella-mode start: resolve `<repo>`, `--repo` variant of the verb, checkout and handoff.
-- [`finish-mode.md`](finish-mode.md) — Steps 5 to 7: pick the spike, read the branch, write findings, follow-up.
-- [`references/umbrella-mode.md`](references/umbrella-mode.md) — umbrella-mode verbs, registry shape, `Repos:` field semantics.
+- [`start-umbrella.md`](start-umbrella.md): umbrella-mode start: resolve `<repo>`, `--repo` variant of the verb, checkout and handoff.
+- [`finish-mode.md`](finish-mode.md): Steps 5 to 7: pick the spike, read the branch, write findings, follow-up.
+- [`references/umbrella-mode.md`](references/umbrella-mode.md): umbrella-mode verbs, registry shape, `Repos:` field semantics.
