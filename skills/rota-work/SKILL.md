@@ -74,14 +74,14 @@ Pick a descriptive branch name (`rota/quick-switch`). Step 5 creates the branch 
 
 ## Step 4 — Plan Tasks
 
-**Plan-as-artifact check (first).** For an item tagged to a milestone or slice, read [`plan-artifact.md`](plan-artifact.md); otherwise skip.
+**Plan-as-artifact check (first, including resume).** For every item or slice, read [`plan-artifact.md`](plan-artifact.md) and resolve its supported backend key before decomposing. An issue plan needs no milestone. Use the stored tasks, constraints and verify steps when a plan exists.
 
 1. **Consult knowledge and decisions** with the canonical K+D pattern (`references/knowledge-consult.md`), topics inferred from the planned work. Run `rota glossary read <terms in the item>…` too; call out drift from a canonical term. Carry matches into Step 6 briefs as `**Known gotchas:**` (relevant bullets only) and `**Hard boundaries:**` (full entries: rule, *Why*, **Forbids**, **Permits**). If a planned task would violate a decision, **stop and surface it** before dispatching. Run `rota map stats --cap` (one-line nudge; never blocks).
 
    > **REQUIRED — Register hits on consumed bullets.** After writing the briefs, apply *Hit-register after consumption* in `references/knowledge-consult.md`: one `rota knowledge hit --topic "<T>" --title "<first-line-of-bullet>"` per bullet that landed in a brief's `**Known gotchas:**`, all in one parallel batch. Bullets pruned before the briefs earn no credit.
 
-2. **Resuming** (a branch with commits past the base): apply the resume rule in [`references/task-ledger.md`](references/task-ledger.md) after decomposing, and plan only the unfinished tasks.
-3. Identify tasks: files, what changes, acceptance criteria.
+2. Identify tasks from the loaded plan, preserving its key and task numbers; only decompose ad hoc when no plan exists. Include files, what changes and acceptance criteria.
+3. **Resuming** (a branch with commits past the base): apply the resume rule in [`references/task-ledger.md`](references/task-ledger.md) to those tasks, skip committed task IDs and plan only the unfinished tasks. Do not silently re-decompose or renumber a saved plan.
 4. **Absorb file collisions** before grouping: any two tasks whose modified-file sets intersect, and shared-symbol changes that disjoint file sets hide. Rules and the rename check in [`references/work-wave-planning.md`](references/work-wave-planning.md).
 5. Group into dependency waves: wave 1 is independent files (parallel); wave 2+ depends on earlier output.
 
@@ -210,7 +210,7 @@ One line, only when `references/post-cycle-trigger-gate.md` fires: *"Run `/rota-
 - [`references/umbrella-mode.md`](references/umbrella-mode.md): umbrella registry and `Repos:` semantics.
 - [`references/post-cycle-trigger-gate.md`](references/post-cycle-trigger-gate.md): when the Step 13 learn nudge fires.
 - [`references/worker-contract.md`](references/worker-contract.md): round-worker rules and review-feedback handling.
-- [`plan-artifact.md`](plan-artifact.md): Step 4 plan lookup for milestone-tagged items.
+- [`plan-artifact.md`](plan-artifact.md): Step 4 backend keys, saved tasks and resume identity for item and slice plans.
 - [`no-argument-mode.md`](no-argument-mode.md): reconcile, suggest, then work.
 - [`sibling-sweep.md`](sibling-sweep.md): Step 1 / 8.5 tool-generated sibling sweep.
 - [`contradictions.md`](contradictions.md): Step 2.5 contradiction logging.
