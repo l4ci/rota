@@ -718,6 +718,9 @@ func TestTransferDispatchFailureKeepsTheMoveAndResumes(t *testing.T) {
 	if f.be.claims["12"] != "dana@1" || f.slot("dana").Task() != "12" || f.slot("dana").Branch() != branch {
 		t.Fatalf("claim and branch stay with the receiver: %v %v", f.be.claims, f.slot("dana"))
 	}
+	if st := f.slot("dana").State(); st != "idle" {
+		t.Errorf("slot state after a failed dispatch: %q", st)
+	}
 	f.env.Worker.NewHost = func(string) host.Host { return &killHost{hostFake: f.host, killed: &f.killed} }
 	res, err = f.transfer("12", "dana", nil)
 	if err != nil || !res.Dispatched {
@@ -1026,5 +1029,28 @@ func TestTransferTierBindsTheReceiverAndNeedsAReason(t *testing.T) {
 	}
 	if !strings.Contains(f.host.sent, "Your tier is heavy (opus), above the default standard: bounced 3 times") {
 		t.Errorf("brief lacks the tier:\n%s", f.host.sent)
+	}
+}
+
+// Transfer applies the preflight Assign does: a launch line that cannot start a
+// worker is refused before the sender is parked or the claim moves.
+func TestTransferPreflightRefusesBeforeMoving(t *testing.T) {
+	f := newMoveFx(t)
+	if err := os.WriteFile(filepath.Join(f.root, ".rota", "config.json"), []byte(`{"work":{"workerCommand":"claude \"oops"}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	branch := f.slot("ben").Branch()
+	_, err := f.transfer("12", "dana", nil)
+	var we *exitcode.Error
+	if !errors.As(err, &we) || we.Exit != exitcode.ExitUsage || !strings.Contains(we.Message, "cannot be parsed") {
+		t.Fatalf("want the preflight refusal, got %v", err)
+	}
+	if f.be.claims["12"] != "ben@1" || f.slot("ben").Task() != "12" || f.slot("ben").Branch() != branch || f.slot("dana").Task() != "" {
+		t.Errorf("a refusal moves nothing: %v ben=%v dana=%v", f.be.claims, f.slot("ben"), f.slot("dana"))
+	}
+	for _, c := range f.be.comments["12"] {
+		if strings.Contains(c, "rota:handoff") {
+			t.Errorf("and posts no handoff: %v", c)
+		}
 	}
 }

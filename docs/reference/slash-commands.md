@@ -42,7 +42,7 @@ Captures a hard-boundary decision into `.rota/DECISIONS.md`. Manually confirmed,
 
 ## /rota-learn
 
-Writes durable knowledge from the current session into `.rota/KNOWLEDGE.md`, grouped by topic. Captures gotchas, project conventions, constraints, debugging insights, and decisions with rationale. Skips anything already obvious from reading the code. `--strict` adds a verifier pass over the new bullets (off by default). `--retro` classifies the session's mistakes into guardrails (filed as items), standards, navigation pointers and tool-economy fixes, and flags no-op bullets for removal without deleting them. In umbrella mode the write (and `--term` Glossary entries) routes to the cwd/`--repo`-resolved scope: repo-local vs the umbrella-shared `.rota/KNOWLEDGE.md`. See [learning](../usage/learning.md) and [umbrella mode](../usage/umbrella-mode.md) for the full flow.
+Writes durable knowledge from the current session into `.rota/KNOWLEDGE.md`, grouped by topic. Captures gotchas, project conventions, constraints, debugging insights, and decisions with rationale. Skips anything already obvious from reading the code. `--strict` adds a verifier pass over the new bullets (off by default). `--retro` reads the session transcript (Claude Code or Codex) and cites it as evidence, then classifies the session's mistakes into guardrails (filed as items), standards, navigation pointers and tool-economy fixes, and flags no-op bullets for removal without deleting them. In umbrella mode the write (and `--term` Glossary entries) routes to the cwd/`--repo`-resolved scope: repo-local vs the umbrella-shared `.rota/KNOWLEDGE.md`. See [learning](../usage/learning.md) and [umbrella mode](../usage/umbrella-mode.md) for the full flow.
 
 ## /rota-orchestrate
 

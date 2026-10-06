@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"strings"
@@ -110,6 +111,29 @@ func shellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
+// remoteBase prefers origin/<base> over a local base it is strictly ahead of,
+// so a lagging local branch does not pull upstream commits into {files}. It
+// returns base when there is no such remote ref or local is not behind it.
+func remoteBase(ctx context.Context, repo git.Repo, base string) string {
+	remote := "origin/" + base
+	if found, err := repo.Verify(ctx, "refs/remotes/"+remote); err != nil || !found {
+		return base
+	}
+	// Exit 0 when base is an ancestor of remote; equal tips are not "ahead".
+	anc, err := repo.Run(ctx, "merge-base", "--is-ancestor", base, remote)
+	if err != nil || anc.ExitCode != 0 {
+		return base
+	}
+	same, err := repo.Run(ctx, "rev-parse", base, remote)
+	if err != nil || same.ExitCode != 0 {
+		return base
+	}
+	if shas := strings.Fields(same.Stdout); len(shas) == 2 && shas[0] == shas[1] {
+		return base
+	}
+	return remote
+}
+
 // changedFiles lists the files that differ between the merge-base of base and
 // HEAD and the working tree (committed and uncommitted changes, plus untracked
 // files git does not ignore), minus deleted ones.
@@ -124,7 +148,7 @@ func changedFiles(c *Ctx, root, base string) ([]string, error) {
 		if !ok {
 			return nil, Resolution("could not determine base branch for {files}").WithHint("pass --base <ref>")
 		}
-		base = b
+		base = remoteBase(ctx, repo, b)
 	}
 	mb, err := repo.Run(ctx, "merge-base", base, "HEAD")
 	if err != nil {

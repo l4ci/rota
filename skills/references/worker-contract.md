@@ -53,9 +53,15 @@ Work only this task, then stop.
   proves nothing: fix the test. So does one that fails on a build, compile or setup
   error (missing import, typo, undefined symbol): the RED must be a failed assertion. Docs and skill-only changes have no RED: say
   `no test seam: docs/skill change` in the proof row's check.
-- Before opening a PR, regenerate the frozen and golden records your change touches
-  (`go test ./<pkg> -run '^TestX$' -update-frozen` / `-update-golden`) and run the
-  affected package tests. A stale record is the top cause of red PR runs.
+- Before opening a PR, run this deterministic checklist on your own branch. It is
+  commands only, no model reviewer, so the no-reviewer rule above stands:
+  1. Scaffolding: `rota review scaffolding --base <base-branch> <your-branch>`. Fix each
+     finding, or justify it in the PR body.
+  2. Stale records: regenerate the frozen and golden records your change touches
+     (`go test ./<pkg> -run '^TestX$' -update-frozen` / `-update-golden`) and run the
+     affected package tests. A stale record is the top cause of red PR runs.
+  3. File scope: compare `git diff --name-only <base-branch>...HEAD` with the files the
+     issue names. Explain every extra or missing file in the PR body.
 - Escalate rather than guess. If the task leaves a choice a user would notice
   unsettled, and neither the brief nor the code settles it, print
   `ROTA-BLOCKED <slot>: <one question in plain language>` and stop. Ask ONE
