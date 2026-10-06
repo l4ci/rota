@@ -53,13 +53,15 @@ pass "worker dispatch rejects an unknown --kind"
 # This round recorded herdr at start, and the recorded host wins over a later
 # work.dispatch change (#139), so there is no tmux case to drive here.
 
-# An unsupported version is exit 4 / blockedBy "codex version"; the flag passes one call.
-ROTA_FAKE_CODEX_VERSION=0.160.0 cxrc round assign F01 --agent ben --kind codex --holder-pid "$HOLDER"
-[ "$RC" = "4" ] && [ "$(echo "$OUT" | jget data.blockedBy)" = "codex version" ] || fail "version 0.160.0 should be refused: $RC $OUT"
-[ "$(echo "$OUT" | jget data.changed)" = "false" ] || fail "the version refusal must not change anything: $OUT"
-parked ben || fail "the version refusal must leave ben parked"
-[ ! -e "$HOME_BEN/config.toml" ] || fail "nothing is seeded before the version is accepted"
-pass "an out-of-range codex is refused with blockedBy codex version"
+# A launch flag missing from `codex --help` is exit 4 / blockedBy "codex flags",
+# naming the flag. The version is never consulted.
+ROTA_FAKE_CODEX_LACKS=--no-daemon cxrc round assign F01 --agent ben --kind codex --holder-pid "$HOLDER"
+[ "$RC" = "4" ] && [ "$(echo "$OUT" | jget data.blockedBy)" = "codex flags" ] || fail "a missing flag should be refused: $RC $OUT"
+case "$ERR$OUT" in *"--no-daemon"*) ;; *) fail "the refusal should name the flag: $ERR $OUT" ;; esac
+[ "$(echo "$OUT" | jget data.changed)" = "false" ] || fail "the flag refusal must not change anything: $OUT"
+parked ben || fail "the flag refusal must leave ben parked"
+[ ! -e "$HOME_BEN/config.toml" ] || fail "nothing is seeded before the flags pass"
+pass "a codex missing a launch flag is refused with blockedBy codex flags"
 
 # Not logged in: exit 5 with the per-slot login hint. The home is made and seeded.
 cxrc round assign F01 --agent ben --kind codex --holder-pid "$HOLDER"
@@ -116,12 +118,14 @@ cxrc worker dispatch dana --body-file "$CX/contract.md" --task F02 --kind codex
 cxc config set work.codexCommand "" >/dev/null
 pass "a resume or fork subcommand is refused with blockedBy resume flag"
 
-# --accept-codex-version lets one call through, with the warning; dana logs in first.
+# A newer codex passes without any flag; --accept-codex-version is a deprecated
+# no-op that warns. dana logs in first.
 mkdir -p "$HOME_DANA" && : > "$HOME_DANA/.fake-logged-in"
 ROTA_FAKE_CODEX_VERSION=0.161.0 cxrc round assign F02 --agent dana --kind codex --accept-codex-version --holder-pid "$HOLDER"
-[ "$RC" = "0" ] || fail "--accept-codex-version should let the call through, got $RC: $OUT $ERR"
-case "$ERR" in *"codex 0.161.0 is outside the supported range >=0.159.0 <0.160.0"*) ;; *) fail "the warning should be printed: $ERR" ;; esac
-pass "--accept-codex-version assigns with a warning"
+[ "$RC" = "0" ] || fail "a newer codex should assign, got $RC: $OUT $ERR"
+case "$ERR" in *"--accept-codex-version is deprecated"*) ;; *) fail "the deprecation warning should be printed: $ERR" ;; esac
+case "$ERR" in *"supported range"*) fail "no version range is left to warn about: $ERR" ;; esac
+pass "a newer codex assigns; --accept-codex-version warns and does nothing"
 
 # doctor: the codex check passes, then fails on a slot that lost its login.
 DRB="$TMP_CX/drbin"
@@ -142,8 +146,8 @@ dr
 [ "$(drf hint)" = "CODEX_HOME=$HOME_BEN codex login" ] || fail "doctor hint should be the slot login: $(drf hint)"
 : > "$HOME_BEN/.fake-logged-in"
 ROTA_FAKE_CODEX_VERSION=0.158.0 dr
-[ "$(drf status)" = "fail" ] || fail "doctor codex should fail on an old codex: $OUT"
-case "$(drf detail)" in *"need >=0.159.0 <0.160.0"*) ;; *) fail "doctor detail should name the range: $(drf detail)" ;; esac
-pass "doctor codex checks the version and each slot home's login"
+[ "$(drf status)" = "pass" ] || fail "doctor codex does not gate on the version: $OUT"
+case "$(drf detail)" in *"codex 0.158.0"*) ;; *) fail "doctor detail should show the version: $(drf detail)" ;; esac
+pass "doctor codex checks each slot home's login, not the version"
 
 trap 'rm -rf "$TMP"' EXIT

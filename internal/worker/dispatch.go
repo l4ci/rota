@@ -33,9 +33,6 @@ type DispatchOpts struct {
 	// Kind is the harness, "claude" or "codex" (E1); "" is the slot's
 	// recorded kind, else claude. A relay ignores it.
 	Kind string
-	// AcceptCodexVersion lets one codex dispatch through a Codex CLI outside
-	// the supported range, with a warning.
-	AcceptCodexVersion bool
 }
 
 // DispatchResult is what a successful dispatch did.
@@ -234,9 +231,9 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 		if err := hz.CheckLaunch(launch); err != nil {
 			return res, asError(err)
 		}
-		// The slot's account, version and login are checked before the old
+		// The slot's account, launch flags and login are checked before the old
 		// session is killed or anything is marked.
-		setup, err := e.Preflight(ctx, root, kind, o.Slot, o.AcceptCodexVersion)
+		setup, err := e.Preflight(ctx, root, kind, o.Slot, o.Model)
 		if err != nil {
 			return res, err
 		}

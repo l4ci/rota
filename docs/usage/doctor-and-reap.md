@@ -30,7 +30,7 @@ never exits 5.
 | `stop-hook` | a `Stop` and a `SessionStart` entry marked `# rota-hook`, and the command resolves | hooks not installed (opt-in) |
 | `switch` | with `orchestrator.switchOnUsage` on: the Stop hook and two accounts with a `configDir` | the key is off |
 | `skills` | every installed skills root (user and project, Claude and Codex) matches the binary's skill set, and has no missing or edited files | no root has a `.rota-manifest.json` (run `rota skills install`) |
-| `codex` | `codex` version in the supported range, each slot home logged in, herdr integration per home | `codex` is not on `PATH` and no slot has a home |
+| `codex` | `codex` runs, each slot home logged in, herdr integration per home | `codex` is not on `PATH` and no slot has a home |
 
 `disk` is the one line that appears only when something is wrong. When the free share of the volume holding the project (else the working directory) is under `doctor.minFreeDiskPercent` (default 10; `0` turns it off), doctor prints `warn disk`, which never fails the run, and its hint names what rota left behind that would give space back: temp dirs a smoke or gate run leaked (`rota-smoke.*`, `rota-gate-logs-*`, older than an hour, in the temp root) and git worktrees whose directory is gone. `rota reap` lists the rest of the stale scratch worktrees. See [`doctor.minFreeDiskPercent`](configuration.md#doctorminfreediskpercent).
 
