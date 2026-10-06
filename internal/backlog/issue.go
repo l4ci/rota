@@ -467,6 +467,7 @@ func (b *Issues) item(is Issue) *Item {
 		Closed: is.State == "closed",
 		Number: is.Number,
 		URL:    is.URL,
+		Labels: is.Labels,
 	}
 	if it.Title == "" {
 		it.Title = "(untitled)"

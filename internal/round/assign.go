@@ -69,6 +69,8 @@ type AssignOpts struct {
 	// Tier, TierReason and Kind are C9: "" means round.tier, no reason, and
 	// the slot's recorded kind, else claude.
 	Tier, TierReason, Kind string
+	// Model is --model: it beats the item's model: label and the tier map.
+	Model string
 	// AcceptCodexVersion lets one codex assignment through a Codex CLI outside
 	// the supported range, with a warning.
 	AcceptCodexVersion bool
@@ -87,7 +89,9 @@ type Assigned struct {
 	// Kind, Tier and Model are what the worker starts with; Model is "" when a
 	// custom work.workerCommand has no {model} placeholder.
 	Kind, Tier, Model, TierReason string
-	Warnings                      []string
+	// Pick is what the item's labels (or file fields) ask for.
+	Pick     Pick
+	Warnings []string
 }
 
 var (
@@ -205,6 +209,8 @@ const maxOutOfScope = 1500
 type tierBrief struct {
 	Kind, Tier, Model, Default, Reason string
 	Table                              map[string]string
+	// Pick is what the issue's labels (file: fields) asked for, "" for none.
+	Pick string
 }
 
 func (t tierBrief) text() string {
@@ -222,6 +228,9 @@ func (t tierBrief) text() string {
 		}
 	}
 	b.WriteString(".\n")
+	if t.Pick != "" {
+		fmt.Fprintf(&b, "The issue asks for %s: that is why you run on %s.\n", t.Pick, t.Kind)
+	}
 	if len(t.Table) == 0 {
 		fmt.Fprintf(&b, "No model tiers are set for %s: your own subagents use its default model.\n", t.Kind)
 	} else {
@@ -273,6 +282,9 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 	}
 	if o.Tier != "" && !roundcfg.ValidTier(o.Tier) {
 		return res, usage("--tier must be one of %s", strings.Join(roundcfg.Tiers, ", "))
+	}
+	if o.Model != "" && strings.ContainsAny(o.Model, " \t") {
+		return res, usage("--model takes one model id")
 	}
 	if o.Kind != "" && !harness.Valid(o.Kind) {
 		return res, usage("--kind must be one of %s", strings.Join(harness.Kinds, ", "))
@@ -364,10 +376,12 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 	res.Branch = BranchName(agent, id, it.Title)
 
 	// Kind, tier and model (C9): the model is the tier's entry for the kind.
-	kind := o.Kind
-	if kind == "" {
-		kind = slot.Kind()
+	pick, err := PickOf(*it)
+	if err != nil {
+		return res, err
 	}
+	res.Pick = pick
+	kind := resolveKind(o.Kind, pick.Harness, slot.Kind())
 	hz, err := worker.Harness(kind)
 	if err != nil {
 		return res, err
@@ -376,13 +390,22 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 	// An unset codex tier map is allowed: the default codex command drops
 	// --model and Codex picks its own. A custom work.codexCommand holding
 	// {model} would fail at dispatch, after the claim, so it is refused here.
-	model := set.Model(kind, tier)
+	model := resolveModel(o.Model, pick.Model, set.Model(kind, tier))
 	if model == "" && worker.NeedsModel(root, kind) {
 		return res, blocked(BlockNoTierMap, "round.tiers.%s has no model for the %s tier: set round.tiers.%s.*", kind, tier, kind)
 	}
 	res.Kind, res.Tier, res.TierReason = kind, tier, reason
 	res.Model = model
 	if !worker.ModelAppliesTo(root, kind) {
+		// A model asked for by name must reach the launch line; the tier map's
+		// is a default and only warns.
+		if o.Model != "" || pick.Model != "" {
+			by, src := BlockModelLabel, "model:"+pick.Model+" label"
+			if o.Model != "" {
+				src = "--model " + o.Model
+			}
+			return res, blocked(by, "%s cannot apply: %s has no {model} placeholder", src, hz.CommandKey())
+		}
 		res.Model = ""
 		res.Warnings = append(res.Warnings, "tier model not applied: "+hz.CommandKey()+" has no {model} placeholder")
 	}
@@ -522,7 +545,7 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 				b, _ := os.ReadFile(o.BodyFile)
 				decisions = string(b)
 			}
-			text = pointerBrief(agent, id, res.Branch, brief, o.Siblings, decisions, outOfScope(be, id), tierBrief{Kind: kind, Tier: tier, Model: res.Model, Default: set.Tier, Reason: reason, Table: set.Models[kind]})
+			text = pointerBrief(agent, id, res.Branch, brief, o.Siblings, decisions, outOfScope(be, id), tierBrief{Kind: kind, Tier: tier, Model: res.Model, Default: set.Tier, Reason: reason, Table: set.Models[kind], Pick: pick.String()})
 			if hb := latestHandoffBranch(be, id); hb != "" {
 				text += fmt.Sprintf("\nAn earlier worker handed this issue back: read the latest `rota:handoff` comment on it. Its work is pushed on branch %s (origin/%s); fetch it before you start over.\n", hb, hb)
 			}

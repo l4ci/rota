@@ -41,6 +41,9 @@ func candidateList(cs []round.Candidate) []any {
 		o.Set("id", c.ID)
 		o.Set("title", c.Title)
 		setIf(o, "milestone", c.Milestone)
+		setIf(o, "harness", c.Pick.Harness)
+		setIf(o, "model", c.Pick.Model)
+		setIf(o, "pickError", c.PickErr)
 		o.Set("ready", c.Ready())
 		if c.OpenPR != 0 {
 			o.Set("openPr", c.OpenPR)
@@ -65,6 +68,12 @@ func candidateLines(cs []round.Candidate) []string {
 				}
 			}
 			state = "not ready: " + strings.Join(bad, ",")
+		}
+		if c.PickErr != "" {
+			state = "not ready: " + c.PickErr
+		}
+		if p := c.Pick.String(); p != "" {
+			state += " [" + p + "]"
 		}
 		lines = append(lines, fmt.Sprintf("%s\t%s\t%s", c.ID, state, c.Title))
 	}
