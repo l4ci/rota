@@ -61,7 +61,7 @@ var severities = []string{"blocker", "major", "minor", "info"}
 // IronLaw is the number of failed fixes that halts a debug session.
 const IronLaw = 3
 
-// keep is how many records each branch or item list holds.
+// keep is the history limit, extended for items with older active failures.
 const keep = 20
 
 // KnownKind reports whether kind is a branch kind or debug-fix.
@@ -371,7 +371,7 @@ func AddBranch(root, key string, r Record) (Record, error) {
 // failed-fix count after it.
 func AddItem(root, id string, r Record) (failed int, err error) {
 	err = update(root, func(s *Store) {
-		s.Items[id] = appendCapped(s.Items[id], r)
+		s.Items[id] = appendItem(s.Items[id], r)
 		failed = FailedFixes(s.Items[id])
 	})
 	return
@@ -398,7 +398,7 @@ func FailedFixes(list []Record) int {
 func ResetItem(root, id string, r Record) (cleared int, err error) {
 	err = update(root, func(s *Store) {
 		if cleared = FailedFixes(s.Items[id]); cleared > 0 {
-			s.Items[id] = appendCapped(s.Items[id], r)
+			s.Items[id] = appendItem(s.Items[id], r)
 		}
 	})
 	return
