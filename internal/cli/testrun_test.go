@@ -11,6 +11,7 @@ import (
 // tierProject is a repo on main whose config holds cfg.
 func tierProject(t *testing.T, cfg string) string {
 	t.Helper()
+	t.Setenv("TMPDIR", t.TempDir()) // a failing tier keeps its verify log
 	root := newRepo(t, t.TempDir(), "proj", "main")
 	write(t, filepath.Join(root, ".rota", "config.json"), cfg)
 	return root
