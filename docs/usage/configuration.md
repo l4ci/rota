@@ -136,11 +136,13 @@ rota config set test.full '["uv run ruff check .","uv run ruff format --check ."
 
 ### Running the full tier on CI
 
-`test.fullWhere` is `local` (default) or `ci`. With `ci`, `rota worker gate` and `rota worker train` do not run `test.full` here. They build the merge result (base plus PR head, `--no-ff`) in a scratch worktree, push it to `origin` as `rota/ci/<slot>` (`rota/ci/train` for a train, one push per bisect step), and poll the forge's checks on that commit: GitHub check runs and commit statuses, GitLab the newest pipeline for the ref. Only a green result merges. The branch is deleted after each run. `test.ciTimeoutMinutes` (default `60`, 1-1440) bounds the wait.
+`test.fullWhere` is `local` (default) or `ci`. With `ci`, `rota worker gate` and `rota worker train` do not run `test.full` here. They build the merge result (base plus PR head, `--no-ff`) in a scratch worktree, push it to `origin` as `rota/ci/<slot>` (`rota/ci/train` for a train, one push per bisect step), and poll the forge's checks on that commit: GitHub check suites, check runs and commit statuses, GitLab the newest pipeline for the ref. Only a green result merges: every check finished, at least one passed and none failed (checks that all skipped tested nothing), and the same checks still green on one more poll, since a later workflow or job can appear after the first ones finish. The branch is deleted after each run. `test.ciTimeoutMinutes` (default `60`, 1-1440) bounds the wait.
 
 This moves verification before the merge. A red result lands nothing and the slot goes back (`verify-failed`, the first red check ends the wait); a local gate verifies after the merge and fixes forward. Before merging, the gate checks the base did not move (`base-moved`, nothing landed); after merging, that the landed tree is the tree CI verified. `--no-verify` skips CI too.
 
 The project's CI must run on pushes to `rota/ci/**`. If no check appears on the pushed commit within 5 minutes, the verdict is `ci-not-run` and nothing lands; that is the preflight. A missing `origin` remote is `check-broke`.
+
+CI runs the definition in the pushed tree, so a merge that changes it would choose its own verification. A merge (or any train member) that touches `.github/workflows/`, `.github/actions/`, `.gitlab-ci.yml` or `.gitlab/ci/` is refused as `ci-config-changed` before anything is pushed; review the CI change and land it with `local` or by hand. A pipeline file kept elsewhere is not recognised.
 
 - GitHub Actions: add the branch pattern to the workflow, next to what is already there.
 

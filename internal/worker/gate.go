@@ -458,6 +458,14 @@ func (g *gate) stepMerge() (bool, error) {
 		if ci, msg = g.e.newCIVerifier(g.root, g.forge, g.in.cfg); msg != "" {
 			return g.broke(msg)
 		}
+		changed, err := g.changedFiles()
+		if err != nil {
+			return g.broke(err.Error())
+		}
+		if msg, hint := ciConfigRefusal(g.o.Slot, changed); msg != "" {
+			g.verdict(GateCIConfigChanged, msg, hint)
+			return true, nil
+		}
 	}
 	if g.o.Approve != nil {
 		if err := g.o.Approve(g.changedFiles); err != nil {

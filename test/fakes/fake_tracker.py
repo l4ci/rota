@@ -518,10 +518,12 @@ def gh_api(db, args):
     if not m:
         raise Fail("unsupported", 2)
     rest = m.group(1)
-    ci = re.match(r"^commits/[0-9a-f]+/(check-runs|status)$", rest)
+    ci = re.match(r"^commits/[0-9a-f]+/(check-suites|check-runs|status)$", rest)
     if ci and method == "GET":
         # FAKE_CI: pass, fail, pending, or unset (CI never started).
         state = os.environ.get("FAKE_CI", "")
+        if ci.group(1) == "check-suites":
+            return emit({"total_count": 0, "check_suites": []})
         if ci.group(1) == "status":
             return emit({"state": "pending", "statuses": []})
         runs = {"pass": [{"name": "ci/test", "status": "completed", "conclusion": "success"}],
