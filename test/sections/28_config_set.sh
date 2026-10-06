@@ -133,6 +133,7 @@ cfg = json.load(open(p))
 cfg["work"].update({"dispatch": "subagent", "workerSlots": 3, "workerCommand": "",
                     "accounts": [], "operatorCommand": ""})
 cfg["ship"]["secondOpinionRunner"] = "subagent"
+cfg["test"] = {"fast": [], "full": [], "e2e": []}
 json.dump(cfg, open(p, "w"))
 PYEOF
 rc=0; VERDICT=$( cd "$CFG_F78" && hvj config check 2>/dev/null ) || rc=$?
