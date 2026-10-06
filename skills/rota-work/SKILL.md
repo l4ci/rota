@@ -117,6 +117,7 @@ Verify silently. Trust the diff, not the subagent's narrative.
 3. Structural checks: grep for expected patterns, no regressions.
 4. **Rename validation.** Re-run `git grep -l "<old-name>" -- <scope>`; files outside the subagent's set get a fix-up dispatch before staging.
 5. Claim-weight check on gap-fills, and treat a subagent's dispute of its brief as a FAIL on the plan (see `references/work-wave-planning.md`, *Verifying a completion*).
+6. When `test.fast` is set, run `rota test run fast`; a FAIL is a FAIL. Use it as the PASS proof `--check`.
 
 **PASS** → move on. **FAIL** → dispatch a fix agent and re-verify; repeat until PASS, and surface only persistent failures. Commit (Step 7.5) only on PASS.
 
