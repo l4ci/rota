@@ -93,11 +93,13 @@ func TestSchemaMatchesPython(t *testing.T) {
 	// in #70). Generate the same random cases from the old table so the
 	// recorded inputs line up, and skip those keys.
 	var py []Key
-	py = append(py, Keys[:20]...)
+	py = append(py, Keys[:10]...)
+	py = append(py, Key{Name: "refactor.verifyCommands"}) // moved to test.full
+	py = append(py, Keys[10:19]...)
 	py = append(py, Key{Name: "debug.competingHypotheses"})
-	py = append(py, Keys[20:28]...)
+	py = append(py, Keys[19:27]...)
 	py = append(py, Key{Name: "loop.webResearch"})
-	py = append(py, Keys[28:PythonKeys]...)
+	py = append(py, Keys[27:PythonKeys]...)
 	add = func(add func(map[string]any, string)) func(map[string]any, string) {
 		return func(tree map[string]any, key string) {
 			if key != "loop.webResearch" && key != "debug.competingHypotheses" {

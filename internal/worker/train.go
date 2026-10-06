@@ -24,7 +24,7 @@ import (
 //     files the members change), before the expensive step.
 //  3. MERGE the members in order onto the base in a scratch worktree. A conflict
 //     names the member that does not fit on the base plus the members before it.
-//  4. VERIFY the scratch tree once with refactor.verifyCommands.
+//  4. VERIFY the scratch tree once with test.full.
 //  5. On a pass LAND every member through the ordinary gate (forge merge, pinned
 //     to the verified head), in order, without re-verifying. Before the first
 //     landing the base and every head must still be what the scratch tree was
@@ -231,8 +231,8 @@ func (e Env) Train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 		return res, err
 	}
 	if vr.NoCommands {
-		res.Notes = append(res.Notes, "NO-VERIFY train — refactor.verifyCommands is empty; the merged tree was NOT gated by a command.",
-			"set refactor.verifyCommands via rota config set to make this gate real")
+		res.Notes = append(res.Notes, "NO-VERIFY train — test.full is empty; the merged tree was NOT gated by a command.",
+			"set test.full via rota config set to make this gate real")
 	} else {
 		failLog := vr.LogPath
 		res.Verified = vr.Verified

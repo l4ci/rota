@@ -53,7 +53,6 @@ var Keys = []Key{
 	{"work.accounts", []any{}, true},
 	{"work.operatorCommand", "", true},
 	{"refactor.confirmBeforeExecute", true, true},
-	{"refactor.verifyCommands", []any{}, true},
 	{"learn.verify", false, true},
 	{"learn.promoteThreshold", json.Number("3"), true},
 	{"ship.review", true, true},
@@ -95,6 +94,10 @@ var Keys = []Key{
 	{"release.confirmLargePushCommits", json.Number("10"), false},
 	{"release.nudgeAfterCommits", json.Number("10"), false},
 	{"release.nudgeAfterDays", json.Number("14"), false},
+	// Test tiers (replace refactor.verifyCommands): not in CONFIG_KEYS.
+	{"test.fast", []any{}, true},
+	{"test.full", []any{}, true},
+	{"test.e2e", []any{}, true},
 	// 5.0 keys: not in CONFIG_KEYS.
 	{"ship.mergeApproval", "none", false},
 	{"ship.mergeApprovalPaths", []any{}, false},
@@ -148,7 +151,7 @@ var Keys = []Key{
 }
 
 // PythonKeys is how many leading rows of Keys are CONFIG_KEYS.
-const PythonKeys = 52
+const PythonKeys = 51
 
 // backlogBackends are the accepted values of backlog.backend.
 var backlogBackends = []string{"file", "issues"}

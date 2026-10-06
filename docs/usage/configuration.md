@@ -94,7 +94,7 @@ rota config set work.dispatch tmux
 Two things behave differently under `tmux` and `herdr` than in `/rota-work`:
 
 - **`work.isolation` stops applying.** Every slot has its own worktree, so its own git index, by construction.
-- **Workers commit.** The orchestrator's per-task commit step is skipped; integration happens through the merge gate instead, which re-verifies the *merged* tree. Two workers can each be honestly green and still break the cycle branch together — a signature one widens while another adds a caller, a constant one stops emitting while another starts reading it. Nothing about a clean merge rules that out, which is why the gate runs `refactor.verifyCommands` after every merge rather than trusting the branches.
+- **Workers commit.** The orchestrator's per-task commit step is skipped; integration happens through the merge gate instead, which re-verifies the *merged* tree. Two workers can each be honestly green and still break the cycle branch together — a signature one widens while another adds a caller, a constant one stops emitting while another starts reading it. Nothing about a clean merge rules that out, which is why the gate runs `test.full` after every merge rather than trusting the branches.
 
 Related keys: `work.workerSlots` (pool size, default `3`), `work.workerCommand` (default builds `claude --model <models.worker> --dangerously-skip-permissions`), `work.codexAccounts` (named Codex homes for Codex workers, the counterpart of `work.accounts`; unset, they use the default Codex home), `work.codexCommand` (the same for Codex workers; default builds `codex --model <model> --dangerously-bypass-approvals-and-sandbox --dangerously-bypass-hook-trust --no-daemon --no-alt-screen`), `work.operatorCommand` (starts the orchestrator for `rota orchestrate` and `rota worker session ensure`; default builds `claude --model <models.orchestrator> --permission-mode auto`, with `--continue` added for `session ensure`; `rota keepalive run` restarts it), and `work.accounts`.
 
@@ -104,18 +104,23 @@ Related keys: `work.workerSlots` (pool size, default `3`), `work.workerCommand` 
 
 Applies to `/rota-refactor --fix` only; the default findings run files issues and writes no code. When `true` (default), `--fix` confirms the list of candidates before implementing them. Set to `false` to fix without that pause.
 
-## refactor.verifyCommands
+## test.fast, test.full, test.e2e
 
-Array of shell commands that [`/rota-refactor`](../reference/slash-commands.md#rota-refactor) runs in `--fix` verification as CI-shape gates before committing. Default: `[]` (read-only verification, behavior unchanged).
+Three tiers of shell commands, each an array defaulting to `[]`:
 
-When non-empty, the `--fix` verifier executes each command in order and refuses to PASS unless every command exits zero. This catches formatter drift, import-sort failures, and type errors locally instead of on push. See [rota #9](https://github.com/l4ci/rota/issues/9) for the motivating incident.
+- `test.fast`: quick checks for a task or worker to run while working.
+- `test.full`: the full suite. The merge gate (`rota worker gate`) and the merge train run it on the merged tree, and [`/rota-refactor`](../reference/slash-commands.md#rota-refactor) runs it in `--fix` verification as CI-shape gates before committing. Empty means read-only verification, and the gate reports `NO-VERIFY`.
+- `test.e2e`: slow end-to-end checks. Reserved; nothing reads it yet.
+
+`test.full` replaces `refactor.verifyCommands`. `rota config fill` moves the old key's commands to `test.full` and deletes it. Until then the gate still reads the old key when `test.full` is empty, and warns on stderr that it is deprecated.
+
+When `test.full` is non-empty, the verifier executes each command in order and refuses to PASS unless every command exits zero. This catches formatter drift, import-sort failures, and type errors locally instead of on push. See [rota #9](https://github.com/l4ci/rota/issues/9) for the motivating incident.
 
 Example for a Python project using ruff + pytest:
 
 ```json
-"refactor": {
-  "confirmBeforeExecute": false,
-  "verifyCommands": [
+"test": {
+  "full": [
     "uv run ruff check .",
     "uv run ruff format --check .",
     "uv run pytest -q"
@@ -126,7 +131,7 @@ Example for a Python project using ruff + pytest:
 Commands run from the repo root (or, in umbrella mode, the sub-repo's root), one after the other. To use several cores, put the concurrency in one command: this repo sets the list to `["bash test/gate.sh"]`, which runs validate, `go vet`, `go test -race` and the smoke suite together (smoke split into [`gate.smokeShards`](#gatesmokeshards) shards, the sharded gate takes about 2–3 minutes, serial smoke is several times slower). Set via `rota config set` (which parses argv[2] as JSON):
 
 ```bash
-rota config set refactor.verifyCommands '["uv run ruff check .","uv run ruff format --check ."]'
+rota config set test.full '["uv run ruff check .","uv run ruff format --check ."]'
 ```
 
 ## gate.smokeShards

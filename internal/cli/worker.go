@@ -631,7 +631,7 @@ func gateData(r worker.GateResult) *jsonx.Object {
 func workerGate(fs *flag.FlagSet) RunFunc {
 	base := fs.String("base", "", "the cycle branch the slot merges into")
 	check := fs.Bool("check-only", false, "judge freshness, PR identity and provenance; merge nothing")
-	noVerify := fs.Bool("no-verify", false, "merge without running refactor.verifyCommands")
+	noVerify := fs.Bool("no-verify", false, "merge without running test.full")
 	confirm := approvalFlags(fs)
 	return func(c *Ctx, args []string) (Result, error) {
 		slot, err := oneArg(args, "slot")

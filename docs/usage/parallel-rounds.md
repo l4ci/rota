@@ -379,7 +379,7 @@ only channel, because there is no host to notify.
 
 `rota worker gate <slot> --base <branch>` is the one merge path in a round. It checks the branch is
 fresh, the PR is the worker's and provenance holds, then re-runs
-`refactor.verifyCommands` on the merged tree and merges on a pass.
+`test.full` on the merged tree and merges on a pass.
 
 A branch that is only behind the base is merged as is when the merge is clean and the base did not
 change any file the branch changed (`round.sharedPaths` aside). A conflict, or a file changed on both
@@ -390,7 +390,7 @@ sides, sends it back as `stale`. Each `stale` or `provenance-fail` bounce is cou
 
 When several PRs wait in review, `rota worker train <slot|PR>... --base <branch>` gates them together and
 pays for the verify once instead of once per PR. It checks each member the way `gate --check-only` does,
-merges them in the order given onto the base in a scratch worktree, runs `refactor.verifyCommands` on that
+merges them in the order given onto the base in a scratch worktree, runs `test.full` on that
 tree, and on a pass lands every member through the gate in order. If the base or a member's head moved
 while it verified, nothing lands (`base-moved`); the same verdict stops the train mid-way if the base changes between landings. Members must be all PRs or all slots without one.
 
@@ -474,7 +474,7 @@ rota round wind-down --no-verify
 ```
 
 Run it from the orchestrator that holds the lease, with the base checked out and clean in
-the project root. It re-verifies the base (`refactor.verifyCommands`), then parks every
+the project root. It re-verifies the base (`test.full`), then parks every
 roster slot on `park/<agent>` and releases the claims, then releases the lease. A red base
 (`verify-failed`, exit 1) keeps the lease. A slot with uncommitted changes or commits not on
 the base is reported as `retained` and left alone (`holds-work`, exit 4) and the lease is kept; the other slots are

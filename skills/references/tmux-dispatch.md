@@ -35,12 +35,12 @@ Worker-owned branches make integration git-native and bring back the failure cla
 
 Neither author can see it, and git's mergeability answer is about text, not meaning.
 
-`rota worker gate <n> --base <branch>` runs freshness, merge and re-verify on the merged tree (`refactor.verifyCommands`); read `data.verdict` under `--json`. `approval-required` (exit 4) means `ship.mergeApproval` wants a human: ask, then re-gate with `--confirm --confirm-note "<answer>"`. Judgment the verdicts do not make:
+`rota worker gate <n> --base <branch>` runs freshness, merge and re-verify on the merged tree (`test.full`); read `data.verdict` under `--json`. `approval-required` (exit 4) means `ship.mergeApproval` wants a human: ask, then re-gate with `--confirm --confirm-note "<answer>"`. Judgment the verdicts do not make:
 
 - `stale`: the gate already merges a behind-the-base branch itself when the merge is clean and no file changed on both sides, so a `stale` verdict means a conflict, a shared file or work already on the base. Bounce it to the slot with a summary of what landed, **once**. The gate counts bounces per item and, at `round.maxBounces` (default 3), parks the item `needs-human` (`data.parked`); do not re-dispatch a parked item. With several slots in flight the owner often goes stale again while re-syncing, and a bounce loop is worse than resolving it yourself in the worker's worktree and documenting that on the PR.
 - `merge-failed` (a conflict): route to the slot that owns the branch context; never resolve a cross-worker semantic conflict blind.
 - `verify-failed`: the merged tree is broken and the merge already landed. Fix forward on the base branch; the owning slot has usually moved on, and small orphaned-reference fixes are the orchestrator's to make.
-- `data.verifySkipped: true` means no command gated the merged tree. A project on this backend should set `refactor.verifyCommands`; otherwise the re-verify is a structural diff review and nothing more.
+- `data.verifySkipped: true` means no command gated the merged tree. A project on this backend should set `test.full`; otherwise the re-verify is a structural diff review and nothing more.
 
 Batching: the gate is the one full run, so nothing re-verifies after it. Gate each PR individually by default. A group of PRs with genuinely disjoint file sets can be merged and gated once; never batch when a PR touches a shared module, widens a shared type, or renames a shared symbol.
 

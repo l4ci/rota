@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/l4ci/rota/internal/jsonx"
@@ -64,7 +65,7 @@ func TestFillKeepsPresentAndUnknownKeys(t *testing.T) {
 	doc, _ := jsonx.Decode([]byte(read(t, root)))
 	o := doc.(*jsonx.Object)
 	// present keys keep their order; added ones go before the first later sibling
-	want := []string{"zzz", "work", "models", "refactor", "learn", "ship", "qa", "autonomy", "docs", "git", "umbrella", "hvSkills", "issues", "rota"}
+	want := []string{"zzz", "work", "models", "refactor", "learn", "ship", "qa", "autonomy", "docs", "git", "umbrella", "hvSkills", "issues", "rota", "test"}
 	if got := o.Keys(); !reflect.DeepEqual(got, want) {
 		t.Errorf("top keys %v", got)
 	}
@@ -204,7 +205,7 @@ func TestFillLegacyKeepsExistingNewValue(t *testing.T) {
 		t.Error("hv left")
 	}
 	// dropping the legacy key counts as filling rota.version either way
-	if filled[len(filled)-1] != VersionKey {
+	if !slices.Contains(filled, VersionKey) {
 		t.Errorf("rota.version not listed: %v", filled)
 	}
 }
@@ -239,5 +240,44 @@ func TestStampedVersion(t *testing.T) {
 	}
 	if StampedVersion(nil) != "" {
 		t.Error("nil cfg")
+	}
+}
+
+// refactor.verifyCommands moved to test.full: Fill copies it, drops the old
+// key, lists test.full, and leaves the rest of refactor alone.
+func TestFillMovesVerifyCommandsToTestFull(t *testing.T) {
+	root := project(t, `{"refactor":{"confirmBeforeExecute":true,"verifyCommands":["x"]}}`, "")
+	filled, err := Fill(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(filled, "test.full") {
+		t.Errorf("filled %v lacks test.full", filled)
+	}
+	doc, _ := jsonx.Decode([]byte(read(t, root)))
+	o := doc.(*jsonx.Object)
+	if v, ok := Lookup(o, "test.full"); !ok || !reflect.DeepEqual(v, []any{"x"}) {
+		t.Errorf("test.full = %v", v)
+	}
+	if _, ok := Lookup(o, "refactor.verifyCommands"); ok {
+		t.Error("refactor.verifyCommands left")
+	}
+	if _, ok := Lookup(o, "refactor.confirmBeforeExecute"); !ok {
+		t.Error("confirmBeforeExecute dropped")
+	}
+}
+
+func TestFillKeepsNonEmptyTestFull(t *testing.T) {
+	root := project(t, `{"test":{"full":["keep"]},"refactor":{"verifyCommands":["old"]}}`, "")
+	if _, err := Fill(root); err != nil {
+		t.Fatal(err)
+	}
+	doc, _ := jsonx.Decode([]byte(read(t, root)))
+	o := doc.(*jsonx.Object)
+	if v, _ := Lookup(o, "test.full"); !reflect.DeepEqual(v, []any{"keep"}) {
+		t.Errorf("test.full = %v", v)
+	}
+	if _, ok := Lookup(o, "refactor.verifyCommands"); ok {
+		t.Error("old key left")
 	}
 }

@@ -9,7 +9,7 @@ Set `round.brief` to this file's path to make the assignment pointer name it as 
 
 ## The gate
 
-The full gate runs once, at merge: `rota worker gate` runs `refactor.verifyCommands` on the merged
+The full gate runs once, at merge: `rota worker gate` runs `test.full` on the merged
 tree through `bash test/gate.sh`: validate-skills, the doc lints (`bash test/doclint.sh`: prose pins, the
 `.worktrees/` decoy check, and that every `rota` verb the docs name exists), `go vet ./...`, `go test -race -timeout 30m ./...`
 and the smoke suite in `gate.smokeShards` (default 4) shards, all at once. The sharded gate takes about 2–3 minutes;
@@ -24,8 +24,9 @@ reopened, or marked ready; drafts are skipped) and on manual dispatch, not on ev
 newer run on the same ref cancels the older one. The local gate above decides whether a PR merges.
 
 Before a PR, a worker runs targeted checks only, as the [worker contract](../../skills/references/worker-contract.md)
-says: `python3 test/validate-skills.py` (under a second), `bash test/doclint.sh` when it touched a skill or doc, `go vet` and `go test` for the packages it
-touched, and only the smoke sections its change adds or touches, sourced through `test/runner.sh`
+says: `rota test run fast`. In this repo that runs `test/fast.sh`, which maps the changed files to
+`python3 test/validate-skills.py`, `bash test/doclint.sh` (skill, doc or markdown changes), `go vet` and `go test` for the
+packages it touched, and only the smoke sections its change adds or touches, sourced through `test/runner.sh`
 in a sandbox (sections are never executable alone). Several workers running full suites at once
 starve the CPU and turn time-budgeted tests into false reds. A stale branch does not need a re-run
 either: the merge gate verifies the merged tree.
