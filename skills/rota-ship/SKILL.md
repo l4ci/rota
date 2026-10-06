@@ -73,32 +73,13 @@ Remember a CONCERNS answer as `REVIEW_CHOICE` (`address`, `ship-anyway`, `stop`)
 
 Skipped for a round worker's PR (the branch is `<agent>/<issue>-<slug>`, or the brief says it is a round slot): the orchestrator's merge gate is the second check, and a fourth model pass per PR costs more than it catches (`docs/contributing/rounds.md`). Also skipped when `ship.secondOpinion` is `false`, when Step 3 was skipped and the user has not asked for a second opinion this session, or when `REVIEW_CHOICE == ship-anyway` (a second adversarial pass would re-litigate the accepted risk).
 
-The `/rota-review` reviewer shares context with the work it produced and normalizes its blind spots. This gate gives a fresh subagent only the diff and the goal:
-
-```bash
-rota review brief [--repo "$REPO"] <branch>
-```
-
-Dispatch the brief verbatim to a fresh `standard` subagent (`Agent` with `subagent_type: "general-purpose"`, `model: "sonnet"`, `description: "Second-opinion review of <branch>"`). It returns a report ending in a fenced `json` verdict block. Save the block to a temp file, then:
-
-```bash
-rota verdict add <branch> --kind second-opinion --verdict <PASS|CONCERNS|FAIL> --body-file "$VERDICT" --json
-rota verdict route <branch> --for ship-second-opinion --json
-```
-
-Exit 2 from `add` names the malformed field: ask the agent to resend; never guess a verdict. Route per the Step 3 table.
+Otherwise read [`opt-in-gates.md`](opt-in-gates.md) (when `ship.secondOpinion` or `ship.qa` is on) and run Step 3.5 there.
 
 ## Step 3.75 — QA Gate (opt-in)
 
 Skipped when `ship.qa` is `false` or `REVIEW_CHOICE == ship-anyway`. If there is no `.rota/qa/` strategy for the scope (single repo: no `.rota/qa/*.md`; umbrella: no `.rota/qa/<REPO>.md`), say *"`ship.qa: true` but no QA strategy for `<scope>`. Run `/rota-qa first-run` to bootstrap, or set `ship.qa: false` to skip."* and continue.
 
-Review and second opinion judge the diff; QA runs the product. Invoke `Skill(skill="rota-qa", args="run")` (umbrella: `args="run --repo $REPO"`), then:
-
-```bash
-rota verdict route <branch> --for ship-qa --json
-```
-
-Exit 3: `/rota-qa` recorded nothing; stop and rerun it. Route per the Step 3 table (`qa.gate` decides advisory versus blocking inside the verb).
+Otherwise run the QA gate: Step 3.75 in `opt-in-gates.md`.
 
 ## Step 4 — Build the PR Body
 
@@ -217,19 +198,7 @@ After a successful ship (PR or merge): `rota release pending --json`. If `should
 
 ## Undo Mode (--undo)
 
-The inverse of a `/rota-work` cycle: `rota ship undo` resets the most recent `merge: …` commit on the base branch and restores the resolved items to BACKLOG. It previews unless given `--apply`, and refuses PR-mode cycles (the merge happened upstream), post-merge commits without `--allow-post-merge`, a dirty tree, a non-base branch and a non-`merge: ` subject. A different cycle is `rota ship undo --cycle <hash>`, run by the user directly.
-
-Phases: *Preview*, *Confirm*, *Apply*, *Report*. Track these phases with the host's task tool if it has one.
-
-**U1 — Preview.** `rota ship undo`, then show the plan verbatim. Exit 3: no cycle, say so and stop. Exit 4: surface the verb's message verbatim and stop. A dirty tree gets *"Working tree is dirty — commit, stash, or discard before /rota-ship --undo can run."* If post-merge commits block it, name `--allow-post-merge` (discards them) but do not pass it unasked.
-
-**U2 — Confirm.** One `AskUserQuestion` with the plan above it, header `"Apply"`, *"Apply this rollback plan?"*: `"Apply (Recommended)"` (resets the base branch, restores the entries) / `"Cancel"` (print *"No changes."*, stop). Only an explicit yes applies.
-
-> **Manual gate — destructive reset.** The gate always asks. `rota gate list` has no entry for it and the verb enforces nothing beyond the `--apply` preview split, so this confirmation is the only guard before `git reset --hard`, which is unrecoverable past the reflog window.
-
-**U3 — Apply.** `rota ship undo --apply` (exit 5 means the reset happened but restoring an item failed: tell the user which). Print the verb's summary line. Undo is terminal: no `/rota-learn`, no docs. The user reruns `/rota-work` to see the restored backlog.
-
-Use undo when a landed cycle proved wrong, a reviewer found a regression and "roll back, redesign" is simplest, or the premise was wrong and the item needs reopening. Not for PR-mode cycles (`gh pr close` for open PRs, `git revert` for merged ones), not for more than one cycle at once (invoke twice), not for edits to what landed (`/rota-capture` then `/rota-work`).
+Read [`undo-mode.md`](undo-mode.md) when `--undo` is passed and follow it (Steps U1 to U3: preview, confirm, apply). Terminal: never falls through to another mode.
 
 ## Docs Mode (--docs)
 

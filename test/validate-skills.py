@@ -185,6 +185,31 @@ def check_references(path, text, issues):
             issues.append(f"{path}: broken reference '{target}' -> '{resolved}'")
 
 
+def check_skill_files(path, text, issues):
+    # A skill's own sibling files (skills/rota-<name>/<topic>.md, #316) are linked
+    # from SKILL.md as `[x](x.md)` and read on a condition. Every such link must
+    # resolve, every sibling must be linked, and a sibling does not link another.
+    folder = Path(path).parent
+    linked = set()
+    for m in re.finditer(r'\]\(([A-Za-z0-9][A-Za-z0-9._-]*\.md)\)', text):
+        linked.add(m.group(1))
+        if not (folder / m.group(1)).is_file():
+            issues.append(f"{path}: broken sibling link '{m.group(1)}'")
+    for sib in sorted(folder.glob("*.md")):
+        if sib.name == "SKILL.md":
+            continue
+        if sib.name not in linked:
+            issues.append(f"{sib.as_posix()}: not linked from {path}")
+        body = sib.read_text(encoding="utf-8")
+        lines = body.splitlines()
+        if len(lines) > REF_TOC_LINES and "## Contents" not in lines[:15]:
+            issues.append(f"{sib.as_posix()}: {len(lines)} lines with no '## Contents' section in its first 15 lines")
+        others = {s.name for s in folder.glob("*.md") if s != sib}
+        for m in re.finditer(r'\]\(([A-Za-z0-9][A-Za-z0-9._-]*\.md)\)', body):
+            if m.group(1) in others:
+                issues.append(f"{sib.as_posix()}: links sibling '{m.group(1)}'; extracted files do not link each other")
+
+
 def check_reference_toc(issues):
     for ref in sorted(Path(".").glob("skills/references/*.md")):
         lines = ref.read_text(encoding="utf-8").splitlines()
@@ -229,12 +254,12 @@ def prose_rules():
     sk = lambda n: f"skills/rota-{n}/SKILL.md"
     CALLOUT = "**always manual** — never auto-invoked, regardless of `autonomy.level`"
     # handoff / feature-branch guard calls
-    r += [has(sk("work"), "rota status handoff", "must call rota status handoff"),
+    r += [has("skills/rota-work/no-argument-mode.md", "rota status handoff", "must call rota status handoff"),
           has(sk("ship"), "rota git guard feature-branch", "must call rota git guard feature-branch"),
           has(sk("pause"), "rota git guard feature-branch", "must call rota git guard feature-branch")]
     # map / backlog touchpoints
     r += [has(sk("work"), r"rota map stats --cap|rota map index", "has no map touchpoint", True),
-          has(sk("work"), "rota backlog stale", "missing the stale-summary call"),
+          has("skills/rota-work/no-argument-mode.md", "rota backlog stale", "missing the stale-summary call"),
           has(sk("capture"), "Subsystem:", "missing the Subsystem field")]
     # config verbs and the positional-args doc (F09, F78)
     for n in ("ship",):
@@ -253,9 +278,10 @@ def prose_rules():
     for key in ("work.dispatch", "work.workerSlots", "work.workerCommand"):
         r.append(has("docs/reference/config-options.md", key, f"does not document {key}"))
     # multi-repo flow (M03)
-    r += [has(sk("capture"), r"multiSelect:.*true", "Step 4.6 must declare multiSelect: true for the Repos question", True),
-          has(sk("capture"), "comma-separated list of registered sub-repos", "field-order line must say 'comma-separated list of registered sub-repos'"),
+    r += [has("skills/rota-capture/umbrella-tagging.md", r"multiSelect:.*true", "Step 4.6 must declare multiSelect: true for the Repos question", True),
+          has("skills/rota-capture/umbrella-tagging.md", "comma-separated list of registered sub-repos", "field-order line must say 'comma-separated list of registered sub-repos'"),
           lacks(sk("capture"), "single name in V1", "must no longer carry the 'single name in V1' qualifier"),
+          lacks("skills/rota-capture/umbrella-tagging.md", "single name in V1", "must no longer carry the 'single name in V1' qualifier"),
           has(sk("plan"), "multi-repo items pass the full comma-list", "must explain the multi-repo --repo flow"),
           has("skills/references/work-preview.md", "one line per repo for multi-repo items", "Preview Mode peek must show one Repo line per sub-repo"),
           has(sk("work"), "rota git branch", "must reference rota git branch for multi-repo branch creation"),
@@ -269,7 +295,7 @@ def prose_rules():
           paired("skills/rota-*/SKILL.md", "rota item complete", "rota proof add",
                  "calls rota item complete without a rota proof add path"),
           lacks(sk("capture"), "Import Mode", "Import Mode was removed"),
-          has(sk("capture"), "Step R3", "missing Step R3 (Remove Mode de-tag gate)"),
+          has("skills/rota-capture/remove-mode.md", "Step R3", "missing Step R3 (Remove Mode de-tag gate)"),
           has(sk("ship"), "Step 6c", "missing Step 6c (direct-push close gate)"),
           has(sk("ship"), CALLOUT, "missing the manual-gate callout (Step 6c)"),
           has("skills/references/manual-gates.md", r"Step 6c|direct-push close", "missing the rota-ship Step 6c row", True)]
@@ -345,6 +371,7 @@ def main():
         check_frontmatter(skill_path, text, issues)
         check_spec_frontmatter(skill_path, text, issues)
         check_references(skill_path, text, issues)
+        check_skill_files(skill_path, text, issues)
 
     check_pending_spec(skill_files, issues)
     check_reference_toc(issues)

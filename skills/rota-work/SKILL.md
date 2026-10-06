@@ -27,23 +27,7 @@ Guard → Clarify (if needed) → Name → Plan → Isolate + Register → Dispa
 
 ## No-Argument Mode (reconcile, suggest, then work)
 
-`/rota-work` with no item, ID or brief reconciles what is in flight, shows the backlog, suggests one item and continues into Step 1 with it.
-
-**1. Reconcile active streams.** `rota status show` lists them. Git is the source of truth over `status.json`. For each stream: a branch that no longer exists is dropped with `rota status rm <branch> [--repo <repo>]`; otherwise note whether it has commits past the base (`rota git base`) and whether `rota status handoff <branch> [--repo <repo>]` returns a `/rota-pause` note (read its Stage, Next planned step and Current hypothesis). A note for a paused orchestrator also carries round state: surface it and point at `/rota-orchestrate`, which resumes from `rota round status`. Resolve each stream with `AskUserQuestion`, Recommended first:
-
-- handoff present: resume with the note as the brief (Recommended); leave it for later; abandon.
-- commits, no handoff: ship via `/rota-ship` (Recommended); resume; leave as-is.
-- no commits, no handoff: resume (Recommended); abandon; leave as-is.
-
-Resume continues on the existing branch. For a stream with commits, read the task ledger (`references/task-ledger.md`) and carry only the unfinished tasks into Step 4; a handoff note's *Next planned step* never re-dispatches a task the ledger shows finished. Abandon is `git branch -D <branch>` plus `rota status rm`, and removes that stream's handoff note. A note is deleted only when its stream is resumed or abandoned.
-
-**2. Orient.** Run `rota backlog archive --days 5` (silent), `rota milestone active` and one `rota backlog ids --milestone <MID>` per active milestone, then `rota backlog list`. Print the list in full, every row and section: the table is the point of the mode and is exempt from length limits. Prefix it with `Active milestones: <ids and titles>` when there are any. Advisories, never blocking: for each ID in `rota backlog drift --json` print `<ID> looks shipped on <hash> but still open`, and suggest `rota proof add` then `rota item complete <ID> --commit <hash>` (or `--no-proof`), never auto-complete. Print `stale: map=N, knowledge=M, todo=K` from `rota backlog stale` (zero kinds dropped) and `empty-active: <MID>` for an active milestone with no open items. `rota backlog drift` is file-backend only; skip it on the issue backend.
-
-**3. Suggest one item.** Order: P0 bugs; clusters holding a blocking bug; quick wins (Cosmetic, P2); the highest-impact P1; blocking tasks (`Related:`); Minor features; Major features only when nothing else is pending or the user asks. Milestone bias at every level except P0: items tagged to an active milestone first, then untagged, then non-active milestones. Items labelled `changes-requested` (issue backend) rank right after P0. Skip items already active. Print `Suggested next: <ID> Title (tag)` and one sentence why. For a `[Major]` feature or `[P0]` bug with no design (`rota design show <ID>`), add *"consider `/rota-brainstorm <ID>` before this"*.
-
-**4. Confirm.** `AskUserQuestion`: Start (Recommended); Peek approach first (`--preview`, offered for Major, P0/P1 or a batch); Write a plan first (`/rota-plan`, offered for a Major item tagged to a milestone with no plan (`rota plan show`)); Pick different items; Stop here. "Other" text is the item spec.
-
-On a terminal path (Stop here, or an empty backlog) run `rota release pending --json` and, when `shouldNudge` is true, print its `message` as one line. Skip it when work continues and when there is no tag yet. Pass the item's text into Step 1 so it is not re-read.
+Read [`no-argument-mode.md`](no-argument-mode.md) when `/rota-work` has no item, ID or brief and follow it: it reconciles active streams, shows the backlog, suggests one item and continues into Step 1 with it.
 
 ## Preview Mode (`--preview <target>`)
 
@@ -234,33 +218,7 @@ After the task commits, sweep untracked toolchain siblings into their own `chore
 
 **Issue backend:** skip this step. Don't call `rota item complete`: the issue closes when its PR merges (`Closes #<n>`, Step 10).
 
-**File backend**, per resolved item (match by keyword overlap between task and item title; leave items you didn't work on), in this order:
-
-1. **Tombstone the item's plan.** Skip when the item has no milestone tag or no plan file:
-
-   ```bash
-   MILESTONE=$(rota item field get <ID> --name milestone)
-   if [ -n "$MILESTONE" ] && [ -f ".rota/plans/${MILESTONE}-<ID>.md" ]; then
-     rota plan rm "${MILESTONE}-<ID>"
-   fi
-   ```
-
-   The plan's decomposition is stale once the item ships; truth lives in code and commits. **Slice plans (`M01-S01.md`) stay**: a slice covers several items, and cleanup is manual via `rota plan rm <key>`.
-
-2. **Complete the item:**
-
-   ```bash
-   rota item complete <ID> --commit <commit-hash>
-   ```
-
-   `rota item complete` is the only write to the backlog; never edit `.rota/` by hand.
-
-3. **Commit by name.** Step 1 may have removed a plan file and step 2 leaves `.rota/BACKLOG.md` modified. No directory-wide `git add .rota/`:
-
-   ```bash
-   git add .rota/BACKLOG.md [.rota/plans/<key>.md …]
-   git commit -m "chore: close <IDs>"
-   ```
+**File backend:** read [`file-backend-close.md`](file-backend-close.md) when closing items on the file backend and follow it per resolved item. It tombstones the item's plan, runs `rota item complete <ID> --commit <commit-hash>` (the only write to the backlog; never edit `.rota/` by hand), then commits `.rota/BACKLOG.md` and the removed plan by name.
 
 ## Step 10 — Merge or PR
 

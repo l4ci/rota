@@ -7,8 +7,9 @@
 
 Nothing here runs in the merge gate: every run costs model calls. `--check` is free and
 is what CI may run. Scenario answers are simulated (no tools, no repo): the model gets the
-SKILL.md text plus a situation and lists the actions it would take, scored by regex.
-Reference files under skills/references/ are NOT loaded, so scenarios test SKILL.md only.
+SKILL.md text plus the skill's own sibling .md files (each under a header naming it, so text
+moved out of SKILL.md stays visible) and a situation, and lists the actions it would take,
+scored by regex. Shared files under skills/references/ are NOT loaded.
 """
 import argparse, json, re, subprocess, sys
 from concurrent.futures import ThreadPoolExecutor
@@ -42,6 +43,15 @@ def descriptions():
         raw = m.group(1).strip()
         out[d.name] = " ".join(raw.lstrip(">-").split()).strip("\"'")
     return out
+
+
+def skill_text(skill):
+    d = SKILLS / skill
+    parts = [(d / "SKILL.md").read_text()]
+    for f in sorted(d.glob("*.md")):
+        if f.name != "SKILL.md":
+            parts.append(f"\n\n--- {skill}/{f.name} ---\n\n" + f.read_text())
+    return "".join(parts)
 
 
 def ask(model, system, prompt):
@@ -150,9 +160,8 @@ def run_scenarios(model, workers, only):
     cases = [c for c in load_scenarios() if not only or c["id"] in only or c["skill"] in only]
 
     def one(c):
-        skill_text = (SKILLS / c["skill"] / "SKILL.md").read_text()
         prompt = f"Situation: {c['situation']}\n\nThe user typed: {c['query']}\n\nYour next actions:"
-        out, cost, err = ask(model, SCENARIO_SYS + skill_text, prompt)
+        out, cost, err = ask(model, SCENARIO_SYS + skill_text(c["skill"]), prompt)
         fails = score(c, out) if not err else [f"call failed: {err}"]
         return dict(id=c["id"], kind="scenario", ok=not fails, fails=fails, cost=cost, output=out)
     with ThreadPoolExecutor(workers) as ex:
