@@ -1412,3 +1412,13 @@ func TestHumanDraftMultiLineBriefAndUnnumberedDialog(t *testing.T) {
 		t.Errorf("an unnumbered dialog option is not a draft, got %q", got)
 	}
 }
+
+func TestHumanDraftBootedPaneIsNotADraft(t *testing.T) {
+	b, err := os.ReadFile("testdata/claude-booted-2.1.289.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := humanDraft(string(b), "brief"); got != "" {
+		t.Errorf("the placeholder after a no-break space is not a draft, got %q", got)
+	}
+}
