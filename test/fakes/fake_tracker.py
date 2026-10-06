@@ -518,6 +518,16 @@ def gh_api(db, args):
     if not m:
         raise Fail("unsupported", 2)
     rest = m.group(1)
+    ci = re.match(r"^commits/[0-9a-f]+/(check-runs|status)$", rest)
+    if ci and method == "GET":
+        # FAKE_CI: pass, fail, pending, or unset (CI never started).
+        state = os.environ.get("FAKE_CI", "")
+        if ci.group(1) == "status":
+            return emit({"state": "pending", "statuses": []})
+        runs = {"pass": [{"name": "ci/test", "status": "completed", "conclusion": "success"}],
+                "fail": [{"name": "ci/test", "status": "completed", "conclusion": "failure"}],
+                "pending": [{"name": "ci/test", "status": "in_progress", "conclusion": None}]}.get(state, [])
+        return emit({"total_count": len(runs), "check_runs": runs})
     gm = lambda x: {"number": x["number"], "title": x["title"],
                     "description": x["description"], "state": x["state"]}
     if rest == "milestones" and method == "GET":
