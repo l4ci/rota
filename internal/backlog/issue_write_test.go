@@ -464,3 +464,16 @@ func TestWorkflowFileMode(t *testing.T) {
 		}
 	}
 }
+
+// An issue's labels ride on its Item, so a round can read harness:/model:
+// off GitHub and GitLab alike (both trackers fill Issue.Labels verbatim).
+func TestIssueItemCarriesLabels(t *testing.T) {
+	b, _ := newIssues(t, `{}`, Issue{Number: 5, Title: "T", State: "open", Labels: []string{"type:task", "harness:codex", "model:gpt-5.5-codex"}})
+	it, err := b.Get("5")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(it.Labels, ","); got != "type:task,harness:codex,model:gpt-5.5-codex" {
+		t.Errorf("labels = %q", got)
+	}
+}

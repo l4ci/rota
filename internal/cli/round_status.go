@@ -120,6 +120,9 @@ func roundStatus(*flag.FlagSet) RunFunc {
 		}
 		for _, r := range rep.Rows {
 			cols := []string{r.Name, dash(r.Issue), dash(r.Branch), dash(r.PR), dash(r.HostState), dash(strings.Join(r.Drift, ","))}
+			if r.Kind != "" {
+				cols = append(cols, strings.TrimSuffix(r.Kind+"/"+r.Model, "/"))
+			}
 			if r.Bounces > 0 {
 				cols = append(cols, fmt.Sprintf("bounces %d", r.Bounces))
 			}

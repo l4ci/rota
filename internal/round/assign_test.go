@@ -727,3 +727,117 @@ func TestOutOfScopeFiltersSentinelLines(t *testing.T) {
 		t.Errorf("got %q", got)
 	}
 }
+
+// labelled gives issue id the labels, as the tracker would return them.
+func (f *assignFixture) labelled(id string, labels ...string) { f.be.items[id].Labels = labels }
+
+func TestAssignHarnessAndModelLabels(t *testing.T) {
+	setup := func(t *testing.T) (*assignFixture, *codexRig) {
+		f := newAssignFixture(t)
+		f.config(t, codexCfg)
+		rig := &codexRig{version: "codex-cli 0.159.2\n", loggedIn: true}
+		rig.install(f)
+		f.host.name = "herdr"
+		return f, rig
+	}
+	t.Run("harness label starts codex with no --kind", func(t *testing.T) {
+		f, _ := setup(t)
+		f.labelled("12", "harness:codex")
+		res, err := f.assign("12", "ben", nil)
+		if err != nil || res.Kind != "codex" || res.Model != "c-s" || !strings.Contains(f.host.launch, "--dangerously-bypass-approvals-and-sandbox") {
+			t.Fatalf("%v %+v launch=%q", err, res, f.host.launch)
+		}
+	})
+	t.Run("model label wins over the tier map and keeps the tier", func(t *testing.T) {
+		f, _ := setup(t)
+		f.labelled("12", "harness:codex", "model:gpt-5.5-codex")
+		res, err := f.assign("12", "ben", nil)
+		if err != nil || res.Model != "gpt-5.5-codex" || res.Tier != "standard" || !strings.Contains(f.host.launch, " --model gpt-5.5-codex ") {
+			t.Fatalf("%v %+v launch=%q", err, res, f.host.launch)
+		}
+	})
+	t.Run("flags beat labels", func(t *testing.T) {
+		f, _ := setup(t)
+		f.labelled("12", "harness:claude", "model:label-model")
+		res, err := f.assign("12", "ben", func(o *AssignOpts) { o.Kind = "codex"; o.Model = "flag-model" })
+		if err != nil || res.Kind != "codex" || res.Model != "flag-model" {
+			t.Fatalf("%v %+v", err, res)
+		}
+	})
+	t.Run("label beats the slot kind", func(t *testing.T) {
+		f, _ := setup(t)
+		worker.UpdateSlot(f.root, "ben", func(s *worker.Slot) { s.Raw().Set("kind", "codex") })
+		f.labelled("12", "harness:claude")
+		res, err := f.assign("12", "ben", nil)
+		if err != nil || res.Kind != "claude" {
+			t.Fatalf("%v %+v", err, res)
+		}
+	})
+	t.Run("no labels, no flags: unchanged", func(t *testing.T) {
+		f := newAssignFixture(t)
+		res, err := f.assign("12", "ben", nil)
+		if err != nil || res.Kind != "claude" || res.Model != "sonnet" || res.Pick != (Pick{}) {
+			t.Fatalf("%v %+v", err, res)
+		}
+	})
+	t.Run("the brief names the pick", func(t *testing.T) {
+		got := pointerBrief("ben", "#9", "ben/9-x", "/c.md", nil, "", "", tierBrief{Kind: "codex", Tier: "standard", Pick: "harness:codex"})
+		if !strings.Contains(got, "The issue asks for harness:codex") {
+			t.Errorf("brief = %s", got)
+		}
+	})
+}
+
+func TestAssignRefusesBadHarnessAndModelLabels(t *testing.T) {
+	for name, c := range map[string]struct {
+		labels []string
+		by     string
+		cfg    string
+		mod    func(*AssignOpts)
+		named  string
+	}{
+		"unknown harness":   {labels: []string{"harness:gemini"}, by: BlockHarnessLabel, named: "harness:gemini"},
+		"two harness":       {labels: []string{"harness:claude", "harness:codex"}, by: BlockHarnessLabel, named: "harness:codex"},
+		"two model":         {labels: []string{"model:a", "model:b"}, by: BlockModelLabel, named: "model:b"},
+		"model, no {model}": {labels: []string{"model:opus"}, by: BlockModelLabel, cfg: `{"work":{"workerCommand":"mywrap --dangerously-skip-permissions"}}`, named: "model:opus"},
+		"--model, no {model}": {cfg: `{"work":{"workerCommand":"mywrap --dangerously-skip-permissions"}}`, by: BlockModelLabel,
+			mod: func(o *AssignOpts) { o.Model = "opus" }, named: "--model opus"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := newAssignFixture(t)
+			if c.cfg != "" {
+				f.config(t, c.cfg)
+			}
+			f.labelled("12", c.labels...)
+			_, err := f.assign("12", "ben", c.mod)
+			var b *BlockedError
+			if !errors.As(err, &b) || b.By != c.by || !strings.Contains(b.Msg, c.named) {
+				t.Fatalf("want blockedBy %q naming %q, got %v", c.by, c.named, err)
+			}
+			if f.host.launch != "" || len(f.be.claims) != 0 {
+				t.Errorf("a refusal marks and launches nothing: %q %v", f.host.launch, f.be.claims)
+			}
+		})
+	}
+}
+
+func TestCandidatesShowThePick(t *testing.T) {
+	f := newAssignFixture(t)
+	f.labelled("12", "harness:codex", "model:m")
+	f.labelled("13", "harness:gemini")
+	f.env.Board = f.be
+	cands, err := f.env.Candidates(bg, f.root, f.be, CandidateOpts{Scope: roundcfg.ScopeMilestone})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]Candidate{}
+	for _, c := range cands {
+		got[c.ID] = c
+	}
+	if p := got["12"].Pick; p.Harness != "codex" || p.Model != "m" {
+		t.Errorf("12: %+v", p)
+	}
+	if c := got["13"]; c.PickErr == "" || c.Ready() {
+		t.Errorf("13: a bad label is shown and not ready: %+v", c)
+	}
+}
