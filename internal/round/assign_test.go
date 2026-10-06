@@ -419,7 +419,19 @@ type codexRig struct {
 	version  string // `codex --version` stdout
 	loggedIn bool
 	noCodex  bool
+	noFlag   string // a launch flag `codex --help` leaves out
 }
+
+// codexHelp is the `codex --help` the rig prints: every default launch flag.
+const codexHelp = `Usage: codex [OPTIONS]
+
+Options:
+  -m, --model <MODEL>
+      --dangerously-bypass-approvals-and-sandbox
+      --dangerously-bypass-hook-trust
+      --no-daemon
+      --no-alt-screen
+`
 
 func (c *codexRig) install(f *assignFixture) {
 	f.env.Worker.LookPath = func(n string) (string, error) {
@@ -433,6 +445,8 @@ func (c *codexRig) install(f *assignFixture) {
 		switch strings.TrimPrefix(name, "/fake/") + " " + strings.Join(args, " ") {
 		case "codex --version":
 			return host.Result{Stdout: c.version}, nil
+		case "codex --help":
+			return host.Result{Stdout: strings.ReplaceAll(codexHelp, c.noFlag+"\n", "\n")}, nil
 		case "codex login status":
 			if c.loggedIn {
 				return host.Result{}, nil
@@ -516,17 +530,14 @@ func TestAssignCodexWithoutTierMap(t *testing.T) {
 // Every codex refusal happens before anything is marked, claimed or spawned.
 func TestAssignCodexPreflightRefusesBeforeMarking(t *testing.T) {
 	cases := map[string]struct {
-		rig    codexRig
-		cfg    string
-		accept bool
-		exit   int
-		by     string
-		hint   string
+		rig  codexRig
+		cfg  string
+		exit int
+		by   string
+		hint string
 	}{
 		"no codex":      {rig: codexRig{noCodex: true}, exit: exitcode.ExitUnavailable},
-		"old codex":     {rig: codexRig{version: "codex-cli 0.158.9\n", loggedIn: true}, by: BlockCodexVersion},
-		"new codex":     {rig: codexRig{version: "codex-cli 0.160.0\n", loggedIn: true}, by: BlockCodexVersion},
-		"unreadable":    {rig: codexRig{version: "something else\n", loggedIn: true}, by: BlockCodexVersion},
+		"flag missing":  {rig: codexRig{version: "codex-cli 0.160.1\n", noFlag: "--no-daemon", loggedIn: true}, by: BlockCodexFlags},
 		"not logged in": {rig: codexRig{version: "codex-cli 0.159.2\n"}, exit: exitcode.ExitUnavailable, hint: "codex login"},
 		"tmux":          {rig: codexRig{version: "codex-cli 0.159.2\n", loggedIn: true}, cfg: `{"round":{"tiers":{"codex":{"light":"a","standard":"b","heavy":"c"}}}}`, exit: exitcode.ExitUnavailable},
 	}
@@ -538,7 +549,7 @@ func TestAssignCodexPreflightRefusesBeforeMarking(t *testing.T) {
 			}
 			f.config(t, c.cfg)
 			c.rig.install(f)
-			_, err := f.assign("12", "ben", func(o *AssignOpts) { o.Kind = "codex"; o.AcceptCodexVersion = c.accept })
+			_, err := f.assign("12", "ben", func(o *AssignOpts) { o.Kind = "codex" })
 			var we *exitcode.Error
 			switch {
 			case c.by != "":
@@ -558,19 +569,17 @@ func TestAssignCodexPreflightRefusesBeforeMarking(t *testing.T) {
 	}
 }
 
-func TestAssignCodexAcceptVersionWarns(t *testing.T) {
+// Codex 0.160.1 was refused by the old version range; its flags are all there,
+// so it assigns without a flag and without a warning.
+func TestAssignCodexNewVersionPasses(t *testing.T) {
 	f := newAssignFixture(t)
 	f.config(t, codexCfg)
 	rig := &codexRig{version: "codex-cli 0.160.1\n", loggedIn: true}
 	rig.install(f)
 	f.host.name = "herdr"
-	res, err := f.assign("12", "ben", func(o *AssignOpts) { o.Kind = "codex"; o.AcceptCodexVersion = true })
-	if err != nil || !res.Dispatched {
+	res, err := f.assign("12", "ben", func(o *AssignOpts) { o.Kind = "codex" })
+	if err != nil || !res.Dispatched || len(res.Warnings) != 0 {
 		t.Fatalf("%v %+v", err, res)
-	}
-	want := "codex 0.160.1 is outside the supported range >=0.159.0 <0.160.0"
-	if len(res.Warnings) != 2 || res.Warnings[0] != want || !strings.Contains(res.Warnings[1], "prompt check unverified") {
-		t.Errorf("warnings = %q", res.Warnings)
 	}
 }
 

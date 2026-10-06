@@ -125,8 +125,9 @@ type ResumeHit struct{ Token, Noun string }
 // anything is marked or killed.
 type PreflightOpts struct {
 	Slot string
-	// Accept lets the slot through an unsupported CLI version, with a warning.
-	Accept bool
+	// Launch is the launch line the slot will run; a harness probes the flags
+	// it holds.
+	Launch string
 	// Herdr is whether the round's host is herdr.
 	Herdr bool
 	// Worktree is the slot's worktree, which a seeded home must trust.

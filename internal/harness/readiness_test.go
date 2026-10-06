@@ -3,6 +3,7 @@ package harness
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/l4ci/rota/internal/config"
@@ -57,19 +58,15 @@ func TestParseCodexVersion(t *testing.T) {
 	for _, tc := range []struct {
 		name, out string
 		want      string // "" means unparseable
-		inRange   bool
 	}{
-		{"plain", "codex-cli 0.159.2\n", "0.159.2", true},
-		{"lower bound", "codex-cli 0.159.0", "0.159.0", true},
-		{"below", "codex-cli 0.158.99\n", "0.158.99", false},
-		{"upper bound is exclusive", "codex-cli 0.160.0\n", "0.160.0", false},
-		{"next major", "codex-cli 1.0.0\n", "1.0.0", false},
-		{"warning lines around it", "WARNING: proceeding\ncodex-cli 0.159.5\nWARNING: x\n", "0.159.5", true},
-		{"stderr joined", "\nWARNING: Failed to load config\ncodex-cli 0.159.1", "0.159.1", true},
-		{"prerelease is not a version", "codex-cli 0.159.2-alpha.1\n", "", false},
-		{"other tool", "claude 2.1.0\n", "", false},
-		{"bare number", "0.159.2\n", "", false},
-		{"empty", "", "", false},
+		{"plain", "codex-cli 0.159.2\n", "0.159.2"},
+		{"next major", "codex-cli 1.0.0\n", "1.0.0"},
+		{"warning lines around it", "WARNING: proceeding\ncodex-cli 0.159.5\nWARNING: x\n", "0.159.5"},
+		{"stderr joined", "\nWARNING: Failed to load config\ncodex-cli 0.159.1", "0.159.1"},
+		{"prerelease is not a version", "codex-cli 0.159.2-alpha.1\n", ""},
+		{"other tool", "claude 2.1.0\n", ""},
+		{"bare number", "0.159.2\n", ""},
+		{"empty", "", ""},
 	} {
 		v, ok := ParseCodexVersion(tc.out)
 		if tc.want == "" {
@@ -78,8 +75,36 @@ func TestParseCodexVersion(t *testing.T) {
 			}
 			continue
 		}
-		if !ok || v.String() != tc.want || v.InRange() != tc.inRange {
-			t.Errorf("%s: got %v %v inRange %v, want %s %v", tc.name, v, ok, v.InRange(), tc.want, tc.inRange)
+		if !ok || v.String() != tc.want {
+			t.Errorf("%s: got %v %v, want %s", tc.name, v, ok, tc.want)
+		}
+	}
+}
+
+func TestLaunchFlags(t *testing.T) {
+	for _, tc := range []struct {
+		launch string
+		want   string
+	}{
+		{DefaultCodexCommand, "--model --dangerously-bypass-approvals-and-sandbox --dangerously-bypass-hook-trust --no-daemon --no-alt-screen"},
+		{"codex -m x -c a=b --foo=bar --foo --", "--foo"},
+		{"codex \"oops", ""},
+		{"codex", ""},
+	} {
+		if got := strings.Join(LaunchFlags(tc.launch), " "); got != tc.want {
+			t.Errorf("%q: got %q, want %q", tc.launch, got, tc.want)
+		}
+	}
+}
+
+func TestHelpHasFlag(t *testing.T) {
+	help := "  -m, --model <MODEL>\n      --no-daemon-foo\n      --no-alt-screen, --x"
+	for flag, want := range map[string]bool{
+		"--model": true, "--no-alt-screen": true, "--x": true,
+		"--no-daemon": false, "--mod": false, "--no-alt": false,
+	} {
+		if got := helpHasFlag(help, flag); got != want {
+			t.Errorf("%s: got %v, want %v", flag, got, want)
 		}
 	}
 }
