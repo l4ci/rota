@@ -83,7 +83,7 @@ if [ -z "${ROTA_BIN:-}" ]; then
   ROTA_BIN="$TMP/rota"
 fi
 LINT="$TESTDIR/lint-verbs.py"
-rc=0; OUT="$(python3 "$LINT" "$ROTA_BIN" "$REPO/skills/rota-orchestrate/$SK" "$REPO/skills/rota-orchestrate/solo-and-autopilot.md" "$REPO/docs/usage/parallel-rounds.md" 2>&1)" || rc=$?
+rc=0; OUT="$(python3 "$LINT" "$ROTA_BIN" "$REPO/skills/rota-orchestrate/$SK" "$REPO/skills/rota-orchestrate/solo-and-autopilot.md" "$REPO"/skills/rota-orchestrate/{architecture-review,reading-failures,escalations-and-provenance,merge-train-and-approval,bounce-cap}.md "$REPO/docs/usage/parallel-rounds.md" 2>&1)" || rc=$?
 [ "$rc" = "0" ] || fail "verbs named in the skill or docs that do not exist: $OUT"
 case "$OUT" in *"RESOLVED "*) ;; *) fail "the verb lint resolved nothing: $OUT" ;; esac
 # A doc naming a verb that is not there is caught.

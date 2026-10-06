@@ -46,9 +46,7 @@ Stop with a one-liner on any failure.
 
 1. **Clean tree** — `git status --porcelain`. Non-empty and `release.requireCleanTree` true: stop, show `git status -s`, suggest commit/stash or `release.requireCleanTree: false`.
 2. **On trunk** — branch must be `main`, `master` or `trunk`.
-3. **HEAD pushed** — `git rev-parse HEAD` vs `@{u}`. Unpushed commits ship with the release; not an error. Branch on `autonomy.level`:
-   - `"auto"` — count `git rev-list @{u}..HEAD --count`. Below `release.confirmLargePushCommits`: run `git push origin <current-branch>` silently and continue. At or above it, ask once whatever the autonomy: header `"Large push"`, *"<N> unpushed commits about to be pushed as part of this release. Continue?"*, options `Push and continue (Recommended)` / `Abort`.
-   - `"off"` — header `"Unpushed"`, *"HEAD has unpushed commits. Push them as part of this release?"*, options `Push and continue (Recommended)` / `Abort`.
+3. **HEAD pushed** — `git rev-parse HEAD` vs `@{u}`. When HEAD has unpushed commits, read [`unpushed-commits.md`](unpushed-commits.md) and follow it.
 
 `--dry-run` (any step): run the read-only verbs and the judgment questions, skip every write, commit, tag and push, and print what would happen instead.
 
@@ -65,11 +63,7 @@ Per-project release steps live in `release.checklistPath`; the skill hardcodes n
 
 ## Step 3 — Milestone Gate (issue mode)
 
-**Issue mode** (`backlog.backend: "issues"`; `references/issue-mode.md`): pick the milestone. `--milestone MNN` wins; else the single one from `rota milestone active`. Several active: `AskUserQuestion`. Then `rota release milestone-check <MNN> --json`.
-
-Exit 1 means blocked: show each `data.blocked` entry (open issues labelled `in-progress`, `needs-review` or `changes-requested`) and stop. `data.stillOpen` entries do not block; show them and continue. Other exits (2, 3, 4, 5, 6): stop and report the verb's message.
-
-**Umbrella** (`rota repo umbrella` exits 0): releases run per sub-repo. Pass `--repo <name>` to `release milestone-check`, `release notes --from issues` and `release close-milestone`; without it they exit 2. The milestone reads `shipped` only once every sub-repo's milestone MNN is closed.
+When `backlog.backend` is `"issues"` or `rota repo umbrella` exits 0, read [`milestone-gate.md`](milestone-gate.md), *Step 3*, and follow it. Otherwise skip.
 
 ## Step 4 — Version and Bump Level
 
@@ -125,7 +119,7 @@ If `data.to` differs from `new_version`, stop and surface it (the file may be pa
 rota release push <new_version> --tag-only --json --confirm --confirm-note "$APPROVAL"
 ```
 
-Only the tag goes now (an unflagged push is refused where goreleaser builds the release); the branch waits for Step 11b. With a `.goreleaser.yaml`, the tag starts the workflow that builds binaries into a draft release. Exit 3 (no origin) or 5 (push failed): stop; the error names the tag SHA for manual recovery. Skipped in `--dry-run`.
+Only the tag goes now (an unflagged push is refused where goreleaser builds the release); the branch waits for Step 11b. On failure, read [`publish-failures.md`](publish-failures.md). Skipped in `--dry-run`.
 
 ## Step 11 — Publish Remote Release
 
@@ -136,7 +130,7 @@ rota release publish <new_version> --json --title "v<new_version> — <one-line 
   --body-file "$NOTES_FILE" [--draft] --confirm --confirm-note "$APPROVAL"
 ```
 
-Add `--draft` when `release.draft` is true and the host is GitHub (GitLab refuses it). There is one release per version: where the workflow already made a draft, the verb finishes it (notes, title, un-draft) and never creates a second. It exits 3 while that draft lacks any of the four `rota_<os>_<arch>` binaries or `checksums.txt`, lacks the `.minisig` of any attached asset (binaries, tarballs, `checksums.txt.minisig`; `install.sh` refuses an unsigned binary, see `docs/contributing/release-signing.md`), or while no release exists and the repo builds with goreleaser, so wait for the workflow (`gh run watch`) and re-run. Origin on neither host: the verb publishes nothing (`changed: false`) and the summary says `skipped`. `data.url` goes in the summary. Exit 5 (`gh`/`glab` missing): print the error and continue; the tag is already public. Skipped in `--dry-run`; print the command.
+Add `--draft` when `release.draft` is true and the host is GitHub. `data.url` goes in the summary. When it exits non-zero or reports `changed: false`, read [`publish-failures.md`](publish-failures.md). Skipped in `--dry-run`; print the command.
 
 ## Step 11b — Push the Branch
 
@@ -146,29 +140,19 @@ Once the release is published and the binaries resolve, the same `tag-push` gate
 rota release push <new_version> --branch-only --json --confirm --confirm-note "$APPROVAL"
 ```
 
-It exits 3 while the tag is not on origin or its release is missing or still a draft, so the branch never leads the binaries. Skipped in `--dry-run`.
+Skipped in `--dry-run`. On a non-zero exit, read [`publish-failures.md`](publish-failures.md).
 
 ## Step 12 — Close Out the Milestone (issue mode)
 
-After Steps 10 and 11, `rota release close-milestone <MNN> --release <new_version> [--repo <name>]` (bare `X.Y.Z`). It marks the milestone's completed issues `released`, closes the milestone and sets it `shipped`; tell the user `data.issues`. Exit 2-6: report the message. Skipped in `--dry-run`. Step 13 does not apply: the tracker is the backlog, nothing is imported.
+In issue mode, read [`milestone-gate.md`](milestone-gate.md), *Step 12*, after Steps 10 and 11. Otherwise skip.
 
 ## Step 13 — Close Upstream Issues
 
-Closes upstream issues shipped in this release but still open (pushed straight to main, or `/rota-ship` chose "leave open"). Same shape as `/rota-ship` Step 6c, scoped to the release range. Skip in `--dry-run`.
-
-`rota issues imported --json --open-only` lists candidates (already-closed or unresolvable ones are dropped). Empty `data.entries`: skip silently.
-
-> **Manual gate — closing public upstream issues.** Closing posts a comment and changes issue state remotely. **Always manual** — never auto-invoked, regardless of `autonomy.level`. See `references/manual-gates.md`.
-
-Ask (single-select): header `"Close"`, *"Close N upstream issue(s) released in `v<new_version>`? (`<#N list>`)"*, options `Yes, close all` / `Pick subset` / `No, leave open`.
-
-- **Close all:** run `rota issues close <N> --commit <release-commit-sha> --item <ID> [--repo <name>]` per candidate, in one parallel batch. `--repo` only for entries with a non-null `repo`.
-- **Pick subset:** multiSelect `AskUserQuestion` (header `"Pick issues"`, *"Which issue(s) should be closed?"*, options `"#N (item <ID>)"`, chunk at 4), then close the selection as above.
-- **Leave open:** print *"Skipping upstream issue close — N issue(s) left open. Run `gh issue close <N>` / `glab issue close <N>` manually if desired."*
+When `rota issues imported --json --open-only` lists open upstream issues, read [`upstream-issues.md`](upstream-issues.md) and follow it. Skip in `--dry-run`.
 
 ## Step 14 — Docs Nudge
 
-Skip unless `docs.afterWork` (default `false`) is true, in `--dry-run`, or already run this session. `"off"`: append to the summary *"Release shipped. Run `/rota-ship --docs` to review and update public docs (after-work mode)."* `"auto"`: dispatch `rota-ship --docs` via `Skill` immediately, no prompt, with a brief naming the version, bump type and the one-line summary. `/rota-ship` self-skips if the docs path is missing or empty.
+When `docs.afterWork` is true, read [`docs-nudge.md`](docs-nudge.md); otherwise skip.
 
 ## Step 15 — Summary
 
@@ -184,12 +168,6 @@ Released v<new_version>
 
 List skipped checklist items under `Skipped checklist items:`. In `--dry-run`, prefix the block with `DRY RUN — no changes written.`
 
-## Edge Cases
-
-- **Multiple version files** — first match wins; pin with `release.versionFile`.
-- **`gh`/`glab` missing but origin matches** — Step 11 fails after the tag push, so the branch is still unpushed. Recovery: install the CLI and re-run `rota release publish <X.Y.Z> --title … --body-file <path> --confirm --confirm-note "<answer>"`; to revert the tag, `git push --delete origin v<X.Y.Z>`.
-- **No origin** — push exits 3; publish is skipped. Tag and CHANGELOG stay committed locally.
-
 ## Rules
 
 - Never bump without a user-confirmed bump type.
@@ -199,6 +177,12 @@ List skipped checklist items under `Skipped checklist items:`. In `--dry-run`, p
 
 ## References
 
+- [`unpushed-commits.md`](unpushed-commits.md) — Step 1 handling of unpushed HEAD commits.
+- [`milestone-gate.md`](milestone-gate.md) — Issue-mode milestone gate and close-out, umbrella repos (Steps 3, 12).
+- [`publish-failures.md`](publish-failures.md) — Push/publish failure handling and edge cases (Steps 10-11b).
+- [`upstream-issues.md`](upstream-issues.md) — Close shipped upstream issues (Step 13).
+- [`docs-nudge.md`](docs-nudge.md) — After-work docs nudge (Step 14).
+- [`checklist-scaffold.md`](checklist-scaffold.md) — Starter checklist when the file is absent (Step 2).
 - [`references/manual-gates.md`](references/manual-gates.md) — The manual-gate registry (`rota gate list`): gates the verbs enforce with `--confirm`, and the skill-only callouts.
 - [`references/issue-mode.md`](references/issue-mode.md) — Issue-mode milestones and release.
 - [`references/humanizing-prose.md`](references/humanizing-prose.md) — Self-audit for model-written notes.
