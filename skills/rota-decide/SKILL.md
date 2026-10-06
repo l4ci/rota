@@ -25,7 +25,7 @@ Copy this checklist and track your progress:
 - **`--from-learning <topic>`** — Source-Prefill Mode (Learning): Step 2 seeds the draft from `.rota/KNOWLEDGE.md`.
 - **`--from-spike <name>`** — Source-Prefill Mode (Spike): Step 2 seeds the draft from `.rota/spikes/<name>.md`.
 
-Both flags together is invalid — error with *"`/rota-decide` accepts at most one of `--from-learning <topic>` or `--from-spike <name>` per invocation."* and stop.
+Both flags together is invalid: error with *"`/rota-decide` accepts at most one of `--from-learning <topic>` or `--from-spike <name>` per invocation."* and stop.
 
 ## Step 2 — Identify the Candidate Decision
 
@@ -43,7 +43,7 @@ If **any** gate fails, do **not** write to `DECISIONS.md`. Surface to the user:
 
 > "This reads like a [preference / convention / default] rather than a hard boundary — gate (X) failed. Run `/rota-learn` to capture it as durable knowledge instead, or leave it inline at the call site."
 
-Substitute the failing gate's letter for `(X)`; suggest `/rota-learn` if a learning is worth keeping, else "leave inline", and stop. **Do not auto-invoke `/rota-learn`** — same manual-gate policy as the no-forbids/no-permits redirect below.
+Substitute the failing gate's letter for `(X)`; suggest `/rota-learn` if a learning is worth keeping, else "leave inline", and stop. **Do not auto-invoke `/rota-learn`**: same manual-gate policy as the no-forbids/no-permits redirect below.
 
 **Default mode.**
 
@@ -53,7 +53,7 @@ Surface a clear candidate from the conversation; if none, ask:
 
 Ground the boundary with `references/grilling.md`: pin the rule's terms, then grill forbids and permits as numbered questions with a recommended answer each, answering from code first and testing the edges with a scenario. Stop at an empty frontier.
 
-If after one round the user can't articulate **forbids** *or* **permits**, it's a learning, not a decision: suggest `/rota-learn` and stop. **Do not auto-invoke `/rota-learn`** — the user re-runs it deliberately.
+If after one round the user can't articulate **forbids** *or* **permits**, it's a learning, not a decision: suggest `/rota-learn` and stop. **Do not auto-invoke `/rota-learn`**; the user re-runs it deliberately.
 
 When invoked with `--from-learning <topic>` or `--from-spike <name>`, read [`source-prefill-modes.md`](source-prefill-modes.md), then continue to Step 3.
 
@@ -139,13 +139,13 @@ If the entry created a new topic, prepend a line: *"New topic: `<topic>`."*
 
 ## Key Principles
 
-- **Never auto-invoked.** Regardless of `autonomy.level`, and Step 5's confirmation is the only gate. Manual confirmation is the verification: no verifier runs.
+- **Never auto-invoked.** Regardless of `autonomy.level`; Step 5's confirmation is the only gate. Manual confirmation is the verification: no verifier runs.
 - **One sentence rule, one paragraph why.** More: link a plan or knowledge entry.
 
 ## References
 
 - [`references/grilling.md`](references/grilling.md) — Frontier-round questioning for forbids/permits.
 - [`references/subagent-dispatch.md`](references/subagent-dispatch.md) — the `light` subagent that grilling sends for broad reads.
-- [`references/persistence-skills.md`](references/persistence-skills.md) — Shared spine and divergence axes for the persistence duo (`/rota-learn`, `/rota-decide`) — including `/rota-learn --term` for Glossary entries.
+- [`references/persistence-skills.md`](references/persistence-skills.md) — Shared spine and divergence axes for the persistence duo (`/rota-learn`, `/rota-decide`), including `/rota-learn --term` for Glossary entries.
 - [`references/source-prefill.md`](references/source-prefill.md) — Source-prefill / promote-between-artifacts semantics for `/rota-decide`.
 - [`source-prefill-modes.md`](source-prefill-modes.md) — Source-prefill seeding rules and mode-to-section table.
