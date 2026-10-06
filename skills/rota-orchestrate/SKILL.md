@@ -113,12 +113,12 @@ Read when `rota round status` reports solo (no herdr or tmux host): `solo-and-au
 
 ## References
 
-- [`references/worker-contract.md`](references/worker-contract.md) — the workers' standing brief and the provenance rules.
-- [`references/tmux-dispatch.md`](references/tmux-dispatch.md) — host mechanics: polling, relays, merge gate verdicts, permissions, accounts, failure modes.
-- [`references/herdr-dispatch.md`](references/herdr-dispatch.md) — what herdr changes.
-- [`solo-and-autopilot.md`](solo-and-autopilot.md) — autopilot ticks and solo mode.
-- [`architecture-review.md`](architecture-review.md) — section 3, the periodic architecture review.
-- [`reading-failures.md`](reading-failures.md) — section 4, dead, stalled, unknown, red tests, red base.
-- [`escalations-and-provenance.md`](escalations-and-provenance.md) — section 5.
-- [`merge-train-and-approval.md`](merge-train-and-approval.md) — section 6, trains, approval policy, completing file-mode items.
-- [`bounce-cap.md`](bounce-cap.md) — section 7, bounce cap and re-review.
+- [`references/worker-contract.md`](references/worker-contract.md): the workers' standing brief and the provenance rules.
+- [`references/tmux-dispatch.md`](references/tmux-dispatch.md): host mechanics: polling, relays, merge gate verdicts, permissions, accounts, failure modes.
+- [`references/herdr-dispatch.md`](references/herdr-dispatch.md): what herdr changes.
+- [`solo-and-autopilot.md`](solo-and-autopilot.md): autopilot ticks and solo mode.
+- [`architecture-review.md`](architecture-review.md): section 3, the periodic architecture review.
+- [`reading-failures.md`](reading-failures.md): section 4, dead, stalled, unknown, red tests, red base.
+- [`escalations-and-provenance.md`](escalations-and-provenance.md): section 5.
+- [`merge-train-and-approval.md`](merge-train-and-approval.md): section 6, trains, approval policy, completing file-mode items.
+- [`bounce-cap.md`](bounce-cap.md): section 7, bounce cap and re-review.

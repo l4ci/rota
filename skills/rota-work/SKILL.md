@@ -13,10 +13,10 @@ Main-session-driven implementation with per-task verification and commits. Subag
 
 Read `.rota/config.json`:
 
-- `models.orchestrator` — main session model: planning and verification (default `opus`)
-- `models.worker` — the `standard` tier: implementation subagents (default `sonnet`)
-- `work.isolation` — `"branch"` (default) or `"worktree"`
-- `work.mergeStrategy` — `"direct"` (default) or `"pr"`
+- `models.orchestrator`: main session model: planning and verification (default `opus`)
+- `models.worker`: the `standard` tier: implementation subagents (default `sonnet`)
+- `work.isolation`: `"branch"` (default) or `"worktree"`
+- `work.mergeStrategy`: `"direct"` (default) or `"pr"`
 
 ## Flow
 
@@ -200,21 +200,21 @@ One line, only when `references/post-cycle-trigger-gate.md` fires: *"Run `/rota-
 
 ## References
 
-- [`references/knowledge-consult.md`](references/knowledge-consult.md) — canonical K+D query pattern and hit-register rule.
-- [`references/context-load-protocol.md`](references/context-load-protocol.md) — shared parallel context load (Preview Mode).
-- [`references/work-preview.md`](references/work-preview.md) — `--preview` procedure.
-- [`references/task-ledger.md`](references/task-ledger.md) — `Task:` trailer and resume rule.
-- [`references/work-wave-planning.md`](references/work-wave-planning.md) — file collisions, brief-writing rules, verifying a completion.
-- [`references/isolation-patterns.md`](references/isolation-patterns.md) — branch, worktree and umbrella layouts.
-- [`references/issue-mode.md`](references/issue-mode.md) — issue backend: claim, proof note, PR path.
-- [`references/umbrella-mode.md`](references/umbrella-mode.md) — umbrella registry and `Repos:` semantics.
-- [`references/post-cycle-trigger-gate.md`](references/post-cycle-trigger-gate.md) — when the Step 13 learn nudge fires.
-- [`references/worker-contract.md`](references/worker-contract.md) — round-worker rules and review-feedback handling.
-- [`plan-artifact.md`](plan-artifact.md) — Step 4 plan lookup for milestone-tagged items.
-- [`no-argument-mode.md`](no-argument-mode.md) — reconcile, suggest, then work.
-- [`sibling-sweep.md`](sibling-sweep.md) — Step 1 / 8.5 tool-generated sibling sweep.
-- [`contradictions.md`](contradictions.md) — Step 2.5 contradiction logging.
-- [`umbrella-and-issue-mode.md`](umbrella-and-issue-mode.md) — umbrella and issue-backend branches of Steps 3–11.
-- [`dispatch-brief.md`](dispatch-brief.md) — Step 6 brief template.
-- [`file-backend-close.md`](file-backend-close.md) — Step 9 on the file backend.
-- [`after-work-qa.md`](after-work-qa.md) — Step 12.
+- [`references/knowledge-consult.md`](references/knowledge-consult.md): canonical K+D query pattern and hit-register rule.
+- [`references/context-load-protocol.md`](references/context-load-protocol.md): shared parallel context load (Preview Mode).
+- [`references/work-preview.md`](references/work-preview.md): `--preview` procedure.
+- [`references/task-ledger.md`](references/task-ledger.md): `Task:` trailer and resume rule.
+- [`references/work-wave-planning.md`](references/work-wave-planning.md): file collisions, brief-writing rules, verifying a completion.
+- [`references/isolation-patterns.md`](references/isolation-patterns.md): branch, worktree and umbrella layouts.
+- [`references/issue-mode.md`](references/issue-mode.md): issue backend: claim, proof note, PR path.
+- [`references/umbrella-mode.md`](references/umbrella-mode.md): umbrella registry and `Repos:` semantics.
+- [`references/post-cycle-trigger-gate.md`](references/post-cycle-trigger-gate.md): when the Step 13 learn nudge fires.
+- [`references/worker-contract.md`](references/worker-contract.md): round-worker rules and review-feedback handling.
+- [`plan-artifact.md`](plan-artifact.md): Step 4 plan lookup for milestone-tagged items.
+- [`no-argument-mode.md`](no-argument-mode.md): reconcile, suggest, then work.
+- [`sibling-sweep.md`](sibling-sweep.md): Step 1 / 8.5 tool-generated sibling sweep.
+- [`contradictions.md`](contradictions.md): Step 2.5 contradiction logging.
+- [`umbrella-and-issue-mode.md`](umbrella-and-issue-mode.md): umbrella and issue-backend branches of Steps 3–11.
+- [`dispatch-brief.md`](dispatch-brief.md): Step 6 brief template.
+- [`file-backend-close.md`](file-backend-close.md): Step 9 on the file backend.
+- [`after-work-qa.md`](after-work-qa.md): Step 12.

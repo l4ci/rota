@@ -2,8 +2,8 @@
 
 Config these steps read (`rota config show`):
 
-- `ship.secondOpinion` — `false` (default); `true` runs a no-prior-context adversarial review after `/rota-review` (Step 3.5), except for round PRs, which never get one.
-- `ship.qa` — `false` (default); `true` runs `/rota-qa run` after the reviews (Step 3.75).
+- `ship.secondOpinion`: `false` (default); `true` runs a no-prior-context adversarial review after `/rota-review` (Step 3.5), except for round PRs, which never get one.
+- `ship.qa`: `false` (default); `true` runs `/rota-qa run` after the reviews (Step 3.75).
 
 ## Step 3.5 — Second-Opinion Gate
 

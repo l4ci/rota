@@ -44,9 +44,9 @@ Copy this checklist and track your progress:
 
 Stop with a one-liner on any failure.
 
-1. **Clean tree** — `git status --porcelain`. Non-empty and `release.requireCleanTree` true: stop, show `git status -s`, suggest commit/stash or `release.requireCleanTree: false`.
-2. **On trunk** — branch must be `main`, `master` or `trunk`.
-3. **HEAD pushed** — `git rev-parse HEAD` vs `@{u}`. When HEAD has unpushed commits, read [`unpushed-commits.md`](unpushed-commits.md) and follow it.
+1. **Clean tree**: `git status --porcelain`. Non-empty and `release.requireCleanTree` true: stop, show `git status -s`, suggest commit/stash or `release.requireCleanTree: false`.
+2. **On trunk**: branch must be `main`, `master` or `trunk`.
+3. **HEAD pushed**: `git rev-parse HEAD` vs `@{u}`. When HEAD has unpushed commits, read [`unpushed-commits.md`](unpushed-commits.md) and follow it.
 
 `--dry-run` (any step): run the read-only verbs and the judgment questions, skip every write, commit, tag and push, and print what would happen instead.
 
@@ -58,8 +58,8 @@ Per-project release steps live in `release.checklistPath`; the skill hardcodes n
 
 **File present.** Every line matching `^\s*-\s+\[\s*\]\s+(.+)$` is a gate, in file order; `- [x]` lines are skipped. Zero gates: say *"Checklist has no open items — continuing."* Per gate:
 
-- `"off"` — ask: header `"Checklist"`, *"Checklist item: \<text\>. Done?"*, options `Yes, continue (Recommended)` / `Fix it now and continue` (pause, re-ask the same item) / `Skip this item` (record `skipped: <text>`) / `Abort release` (*"Release aborted at checklist item: \<text\>. Nothing written."*).
-- `"auto"` — auto-acknowledge items not ending in `(manual)`; ask the `"off"` question for items that do, so sensitive items stay confirmed in unattended runs.
+- `"off"`: ask: header `"Checklist"`, *"Checklist item: \<text\>. Done?"*, options `Yes, continue (Recommended)` / `Fix it now and continue` (pause, re-ask the same item) / `Skip this item` (record `skipped: <text>`) / `Abort release` (*"Release aborted at checklist item: \<text\>. Nothing written."*).
+- `"auto"`: auto-acknowledge items not ending in `(manual)`; ask the `"off"` question for items that do, so sensitive items stay confirmed in unattended runs.
 
 ## Step 3 — Milestone Gate (issue mode)
 
@@ -177,12 +177,12 @@ List skipped checklist items under `Skipped checklist items:`. In `--dry-run`, p
 
 ## References
 
-- [`unpushed-commits.md`](unpushed-commits.md) — Step 1 handling of unpushed HEAD commits.
-- [`milestone-gate.md`](milestone-gate.md) — Issue-mode milestone gate and close-out, umbrella repos (Steps 3, 12).
-- [`publish-failures.md`](publish-failures.md) — Push/publish failure handling and edge cases (Steps 10-11b).
-- [`upstream-issues.md`](upstream-issues.md) — Close shipped upstream issues (Step 13).
-- [`docs-nudge.md`](docs-nudge.md) — After-work docs nudge (Step 14).
-- [`checklist-scaffold.md`](checklist-scaffold.md) — Starter checklist when the file is absent (Step 2).
-- [`references/manual-gates.md`](references/manual-gates.md) — The manual-gate registry (`rota gate list`): gates the verbs enforce with `--confirm`, and the skill-only callouts.
-- [`references/issue-mode.md`](references/issue-mode.md) — Issue-mode milestones and release.
-- [`references/humanizing-prose.md`](references/humanizing-prose.md) — Self-audit for model-written notes.
+- [`unpushed-commits.md`](unpushed-commits.md): Step 1 handling of unpushed HEAD commits.
+- [`milestone-gate.md`](milestone-gate.md): Issue-mode milestone gate, close-out and umbrella repos (Steps 3, 12).
+- [`publish-failures.md`](publish-failures.md): Push/publish failure handling and edge cases (Steps 10-11b).
+- [`upstream-issues.md`](upstream-issues.md): Close shipped upstream issues (Step 13).
+- [`docs-nudge.md`](docs-nudge.md): After-work docs nudge (Step 14).
+- [`checklist-scaffold.md`](checklist-scaffold.md): Starter checklist when the file is absent (Step 2).
+- [`references/manual-gates.md`](references/manual-gates.md): The manual-gate registry (`rota gate list`): gates the verbs enforce with `--confirm`, and the skill-only callouts.
+- [`references/issue-mode.md`](references/issue-mode.md): Issue-mode milestones and release.
+- [`references/humanizing-prose.md`](references/humanizing-prose.md): Self-audit for model-written notes.

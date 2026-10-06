@@ -4,7 +4,7 @@ Loaded by `skills/rota-learn/SKILL.md` Step 8 when a topic is large.
 
 Run `rota knowledge stats --json`; for any topic in `data.topics` with `bullets >= 25` OR `bytes >= 10240`, branch on `autonomy.level` (`.rota/config.json`):
 
-- `"off"` (default) — append a single nudge line per offender to the confirm output:
+- `"off"` (default): append one nudge line per offender to the confirm output:
 
   ```
   Note: `<topic>` is large (<bullets> bullets, <bytes-as-KB-rounded-1dp> KB). Consider splitting it (e.g. `<topic>: <facet-A>` + `<topic>: <facet-B>`) to reduce per-query cost in /rota-work, /rota-debug, /rota-plan.
@@ -12,7 +12,7 @@ Run `rota knowledge stats --json`; for any topic in `data.topics` with `bullets 
 
   KB = `{bytes/1024:.1f}`. The user accepts or declines the split.
 
-- `"auto"` — **perform the split immediately — no prompt, no confirmation, no "want me to" question.** For each offender topic:
+- `"auto"`: **perform the split immediately, with no prompt, confirmation or "want me to" question.** For each offender topic:
 
   1. Read the topic's bullets via `rota knowledge query "<topic>"`.
   2. Group bullets into 2 or 3 cohesive facets by theme. Each facet holds ≥3 bullets; `Misc` / `Other` / `Etc.` facets are forbidden. If no plausible split axis exists, fall back to the `"off"` nudge for that topic and skip steps 3–7.
