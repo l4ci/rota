@@ -27,7 +27,7 @@ func (f *assignFixture) windDown(mod func(*WindDownOpts)) (WoundDown, error) {
 
 func (f *assignFixture) verifyWith(t *testing.T, cmds string) {
 	t.Helper()
-	cfg := `{"refactor":{"verifyCommands":` + cmds + `}}`
+	cfg := `{"test":{"full":` + cmds + `}}`
 	if err := os.WriteFile(filepath.Join(f.root, ".rota", "config.json"), []byte(cfg), 0o644); err != nil {
 		t.Fatal(err)
 	}

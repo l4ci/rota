@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -14,7 +15,7 @@ func verifyRoot(t *testing.T, cmds string) string {
 	if err := os.MkdirAll(filepath.Join(root, ".rota"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	cfg := `{"refactor":{"verifyCommands":` + cmds + `}}`
+	cfg := `{"test":{"full":` + cmds + `}}`
 	if err := os.WriteFile(filepath.Join(root, ".rota", "config.json"), []byte(cfg), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -73,5 +74,41 @@ func TestVerifyRunsThroughTheShellSeam(t *testing.T) {
 	e := Env{Shell: func(_ context.Context, dir, c string) (string, int) { seen = append(seen, dir+":"+c); return "", 0 }}
 	if res, _ := e.Verify(context.Background(), root, "/work"); !res.OK() || len(seen) != 2 || seen[0] != "/work:a" {
 		t.Errorf("Shell seam not used: %v %+v", seen, res)
+	}
+}
+
+func tierRoot(t *testing.T, cfg string) string {
+	t.Helper()
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".rota"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".rota", "config.json"), []byte(cfg), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return root
+}
+
+func TestTierCommandsReadsTestTier(t *testing.T) {
+	root := tierRoot(t, `{"test":{"fast":["echo f"],"full":[" a ","","b"]}}`)
+	if got := TierCommands(root, "full"); !reflect.DeepEqual(got, []string{"a", "b"}) {
+		t.Errorf("full: %v", got)
+	}
+	if got := TierCommands(root, "fast"); !reflect.DeepEqual(got, []string{"echo f"}) {
+		t.Errorf("fast: %v", got)
+	}
+	if got := TierCommands(root, "e2e"); len(got) != 0 {
+		t.Errorf("e2e: %v", got)
+	}
+}
+
+func TestVerifyCommandsFallsBackToLegacyKey(t *testing.T) {
+	root := tierRoot(t, `{"refactor":{"verifyCommands":["old"]}}`)
+	if got := verifyCommandsAt(root); !reflect.DeepEqual(got, []string{"old"}) {
+		t.Errorf("legacy: %v", got)
+	}
+	root = tierRoot(t, `{"test":{"full":["new"]},"refactor":{"verifyCommands":["old"]}}`)
+	if got := verifyCommandsAt(root); !reflect.DeepEqual(got, []string{"new"}) {
+		t.Errorf("test.full wins: %v", got)
 	}
 }

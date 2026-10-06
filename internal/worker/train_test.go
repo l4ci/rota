@@ -23,7 +23,7 @@ func trainWorld(t *testing.T, verify string, branches ...string) *world {
 		slots = append(slots, fmt.Sprintf(`{"name":"%s","branch":"%s"}`, b, b))
 	}
 	os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"), []byte(`{"slots":[`+strings.Join(slots, ",")+`]}`), 0o644)
-	w.setConfig(fmt.Sprintf(`{"refactor":{"verifyCommands":[%q]}}`, verify))
+	w.setConfig(fmt.Sprintf(`{"test":{"full":[%q]}}`, verify))
 	return w
 }
 
@@ -127,7 +127,7 @@ func TestTrainBaseMoved(t *testing.T) {
 	// the base moves while the train verifies: the verified tree is not what would land
 	cmd := fmt.Sprintf("git -c user.name=t -c user.email=t@t -C %s commit -q --allow-empty -m moved", "WDIR")
 	w := trainWorld(t, "true", "b1", "b2")
-	w.setConfig(fmt.Sprintf(`{"refactor":{"verifyCommands":[%q]}}`, strings.Replace(cmd, "WDIR", w.dir, 1)))
+	w.setConfig(fmt.Sprintf(`{"test":{"full":[%q]}}`, strings.Replace(cmd, "WDIR", w.dir, 1)))
 	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}})
 	if err != nil || res.Verdict != GateBaseMoved || len(res.Landed) != 0 || w.onMain("b1.txt") {
 		t.Fatalf("%+v %v", res, err)

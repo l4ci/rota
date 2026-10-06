@@ -13,7 +13,7 @@ mkdir -p "$TPROJ/.rota"
   done
 ) || fail "train fixture repo setup failed"
 printf '{"slots":[{"name":"t1","branch":"t1"},{"name":"t2","branch":"t2"},{"name":"t3","branch":"t3"}]}\n' > "$TPROJ/.rota/workers.json"
-trcfg() { printf '{"refactor":{"verifyCommands":["%s"]}}\n' "$1" > "$TPROJ/.rota/config.json"; }
+trcfg() { printf '{"test":{"full":["%s"]}}\n' "$1" > "$TPROJ/.rota/config.json"; }
 trn() { ( cd "$TPROJ" && PATH="$TESTDIR/fakes:$ROTA_POISON_BIN:$PATH" "$ROTA_BIN" --json "$@" 2>/dev/null ); }
 
 # A red train names the first member that breaks the tree and lands nothing.

@@ -39,6 +39,10 @@ func decodeObject(raw []byte) (*jsonx.Object, bool) {
 // else copied there), the legacy key is deleted and an emptied hv object goes
 // with it. The move counts as filling rota.version, so it is listed and the
 // file is rewritten.
+//
+// It also moves refactor.verifyCommands to test.full: a list there is copied
+// unless test.full already holds commands, and the old key is deleted either
+// way. The move counts as filling test.full when it copied.
 func Fill(root string) ([]string, error) {
 	filled := []string{}
 	path := configPath(root)
@@ -57,8 +61,9 @@ func Fill(root string) ([]string, error) {
 			cfg = obj
 		}
 		cfg, migrated := migrateLegacyVersion(cfg)
+		cfg, copied, moved := migrateLegacyVerify(cfg)
 		for _, k := range Keys {
-			if k.Name == VersionKey && migrated {
+			if (k.Name == VersionKey && migrated) || (k.Name == TestFullKey && copied) {
 				filled = append(filled, k.Name)
 				continue
 			}
@@ -68,7 +73,7 @@ func Fill(root string) ([]string, error) {
 			cfg = fillKey(cfg, "", strings.Split(k.Name, "."), Default(k))
 			filled = append(filled, k.Name)
 		}
-		if len(filled) == 0 {
+		if len(filled) == 0 && !moved {
 			return nil
 		}
 		return fsio.WriteJSONAtomic(path, cfg)
@@ -108,6 +113,45 @@ func migrateLegacyVersion(cfg *jsonx.Object) (*jsonx.Object, bool) {
 		moved = true
 	}
 	return cfg, moved
+}
+
+// TestFullKey and LegacyVerifyKey are the merge-gate command list and the key
+// it replaced.
+const (
+	TestFullKey     = "test.full"
+	LegacyVerifyKey = "refactor.verifyCommands"
+)
+
+// migrateLegacyVerify moves LegacyVerifyKey to TestFullKey in cfg and returns
+// the resulting object, whether it copied the commands (test.full was unset or
+// empty) and whether it removed the old key. Only a list is moved; the
+// refactor object stays, it still holds other keys.
+func migrateLegacyVerify(cfg *jsonx.Object) (*jsonx.Object, bool, bool) {
+	parent, ok := getObject(cfg, "refactor")
+	if !ok {
+		return cfg, false, false
+	}
+	old, ok := parent.Get("verifyCommands")
+	if !ok {
+		return cfg, false, false
+	}
+	list, isList := old.([]any)
+	if !isList {
+		return cfg, false, false
+	}
+	copied := false
+	cur, _ := walk(cfg, TestFullKey)
+	if cur == nil || (len(asList(cur)) == 0 && len(list) > 0) {
+		cfg = fillKey(cfg, "", strings.Split(TestFullKey, "."), list)
+		copied = true
+	}
+	parent.Delete("verifyCommands")
+	return cfg, copied, true
+}
+
+func asList(v any) []any {
+	l, _ := v.([]any)
+	return l
 }
 
 // fillKey sets segs to v under o, whose dotted path is prefix, and returns o

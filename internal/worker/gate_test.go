@@ -71,7 +71,7 @@ func newWorld(t *testing.T, pr string) *world {
 	gitq(t, w.worker, "commit", "-q", "-m", "work")
 	gitq(t, w.worker, "push", "-q", "origin", "w1")
 	os.MkdirAll(filepath.Join(w.dir, ".rota"), 0o755)
-	w.setConfig(`{"refactor":{"verifyCommands":[]}}`)
+	w.setConfig(`{"test":{"full":[]}}`)
 	w.setSlot(pr, "")
 	os.WriteFile(w.log, nil, 0o644)
 	w.forge("origin", w.origin)
@@ -286,12 +286,12 @@ func TestGate(t *testing.T) {
 		{name: "c: PR not open", pr: ghURL, opts: GateOpts{CheckOnly: true}, verdict: GatePRMismatch,
 			setup: func(w *world) { w.forge("state", "MERGED") }},
 		{name: "d: github merge, verified on the merged tree", pr: ghURL, verdict: GatePass, changed: true, files: []string{"work.txt"},
-			setup: func(w *world) { w.setConfig(`{"refactor":{"verifyCommands":["test -f work.txt"]}}`) }},
+			setup: func(w *world) { w.setConfig(`{"test":{"full":["test -f work.txt"]}}`) }},
 		{name: "d: no verify commands", pr: ghURL, verdict: GatePass, changed: true, files: []string{"work.txt"}},
 		{name: "d: --no-verify", pr: ghURL, opts: GateOpts{NoVerify: true}, verdict: GatePass, changed: true, files: []string{"work.txt"},
-			setup: func(w *world) { w.setConfig(`{"refactor":{"verifyCommands":["false"]}}`) }},
+			setup: func(w *world) { w.setConfig(`{"test":{"full":["false"]}}`) }},
 		{name: "d: verify fails after the merge landed", pr: ghURL, verdict: GateVerifyFailed, changed: true, files: []string{"work.txt"},
-			setup: func(w *world) { w.setConfig(`{"refactor":{"verifyCommands":["true","false"]}}`) }},
+			setup: func(w *world) { w.setConfig(`{"test":{"full":["true","false"]}}`) }},
 		{name: "e: merge that merged nothing", pr: glURL, mode: "noop", verdict: GateNotMerged, noFiles: []string{"work.txt"}},
 		{name: "e: merge into another branch", pr: ghURL, mode: "elsewhere", verdict: GateNotOnBase, noFiles: []string{"work.txt"}},
 		{name: "e: refused merge shows the CLI output", pr: ghURL, mode: "fail", verdict: GateMergeFailed, noFiles: []string{"work.txt"}},
@@ -383,7 +383,7 @@ func TestGateResolutionFailures(t *testing.T) {
 
 func TestGateResultShape(t *testing.T) {
 	w := newWorld(t, ghURL)
-	w.setConfig(`{"refactor":{"verifyCommands":["true"," ","echo hi"]}}`)
+	w.setConfig(`{"test":{"full":["true"," ","echo hi"]}}`)
 	res, err := w.gate(false, GateOpts{})
 	if err != nil {
 		t.Fatal(err)
@@ -534,7 +534,7 @@ func (w *world) logText() string { b, _ := os.ReadFile(w.log); return string(b) 
 func TestGateShellRunsUnderTheContext(t *testing.T) {
 	w := newWorld(t, "")
 	gitq(t, w.dir, "fetch", "-q", "origin", "w1:w1")
-	w.setConfig(`{"refactor":{"verifyCommands":["sleep 30"]}}`)
+	w.setConfig(`{"test":{"full":["sleep 30"]}}`)
 	ctx, cancel := context.WithTimeout(bg, 300*time.Millisecond)
 	defer cancel()
 	start := time.Now()
@@ -581,7 +581,7 @@ func TestGateStaleMerge(t *testing.T) {
 	}{
 		{name: "disjoint files merge clean", setup: func(w *world) { advanceMainOn(w, "more.txt") }, verdict: GatePass, changed: true, note: true},
 		{name: "disjoint files are fresh under --check-only", setup: func(w *world) { advanceMainOn(w, "more.txt") }, opts: GateOpts{CheckOnly: true}, verdict: GateFresh, note: true},
-		{name: "the merged tree is still verified", setup: func(w *world) { advanceMainOn(w, "more.txt") }, cfg: `{"refactor":{"verifyCommands":["test -f more.txt && test -f work.txt"]}}`, verdict: GatePass, changed: true, note: true},
+		{name: "the merged tree is still verified", setup: func(w *world) { advanceMainOn(w, "more.txt") }, cfg: `{"test":{"full":["test -f more.txt && test -f work.txt"]}}`, verdict: GatePass, changed: true, note: true},
 		{name: "a shared file goes back", setup: func(w *world) { sharedFile(t, w) }, verdict: GateStale, errHas: "both sides changed seed.txt"},
 		{name: "a shared path under round.sharedPaths is ignored", setup: func(w *world) { sharedFile(t, w) }, cfg: `{"round":{"sharedPaths":["seed.txt"]}}`, verdict: GatePass, changed: true, note: true},
 		{name: "a conflict goes back", setup: func(w *world) { advanceMainOn(w, "work.txt") }, verdict: GateStale, errHas: "the merge conflicts"},
@@ -669,16 +669,16 @@ func TestBounceSameHeadCountsOnce(t *testing.T) {
 }
 
 // The branch lands in the gate checkout before it is verified; a branch that
-// empties refactor.verifyCommands in its own .rota/config.json must not
+// empties test.full in its own .rota/config.json must not
 // switch its own verification off.
 func TestGateVerifyCommandsComeFromBeforeTheMerge(t *testing.T) {
 	w := newWorld(t, "")
-	w.setConfig(`{"refactor":{"verifyCommands":["false"]}}`)
+	w.setConfig(`{"test":{"full":["false"]}}`)
 	gitq(t, w.dir, "add", "-f", ".rota/config.json")
 	gitq(t, w.dir, "commit", "-q", "-m", "config")
 	gitq(t, w.dir, "push", "-q", "origin", "main")
 	gitq(t, w.worker, "pull", "-q", "--no-rebase", "origin", "main")
-	if err := os.WriteFile(filepath.Join(w.worker, ".rota", "config.json"), []byte(`{"refactor":{"verifyCommands":[]}}`), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(w.worker, ".rota", "config.json"), []byte(`{"test":{"full":[]}}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	gitq(t, w.worker, "commit", "-q", "-am", "disable verify")

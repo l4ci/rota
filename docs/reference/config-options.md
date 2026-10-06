@@ -137,7 +137,9 @@ Free text. Default: `""` (auto-detect). Key `git.baseBranch`.
 `rota init` fills these with the silent default; set them only when you want something else:
 
 - `rota.version`: stamp of the rota release that wrote the config. Auto-managed by `rota init` and `rota update`; do not set it by hand. The stamp a project got before the rename to rota is read as a fallback and moved here by `rota init` / `rota config fill`.
-- `refactor.verifyCommands`: array of shell commands run as CI-shape gates by `/rota-refactor --fix` verification. Silent default `[]` (read-only verification). Set via `rota config set refactor.verifyCommands '[...]'`.
+- `test.fast`: array of shell commands for the quick per-task and worker checks. Silent default `[]`. Set via `rota config set test.fast '[...]'`.
+- `test.full`: array of shell commands for the full suite. `rota worker gate` and the merge train run it on the merged tree, and `/rota-refactor --fix` runs it as CI-shape gates in verification. Silent default `[]` (read-only verification, and the gate reports `NO-VERIFY`). Set via `rota config set test.full '[...]'`. It replaces `refactor.verifyCommands`; `rota config fill` moves the old key here.
+- `test.e2e`: array of shell commands for slow end-to-end checks. Reserved: nothing reads it yet. Silent default `[]`.
 - `gate.smokeShards`: how many concurrent shards `bash test/gate.sh` splits the smoke suite into. Integer ≥ 1; silent default `4`. `ROTA_SMOKE_SHARDS` overrides it for one run. Set via `rota config set gate.smokeShards <N>`.
 - `doctor.minFreeDiskPercent`: `rota doctor` warns (`warn disk`, never a failure) when the free share of the disk is below this percent, and names reclaimable rota leftovers. Integer 0-100; silent default `10`; `0` turns the check off. Set via `rota config set doctor.minFreeDiskPercent <N>`.
 - `ship.secondOpinion`: opt-in fresh-eyes adversarial gate in /rota-ship Step 3.5. Silent default `false` (Rule 9). Set via `rota config set ship.secondOpinion true`.

@@ -215,7 +215,7 @@ func TestSlotApprovalThread(t *testing.T) {
 }
 
 func TestWorkerGateApprovalOnIssueThread(t *testing.T) {
-	dir := workerProject(t, gateConfig(t, `{"refactor":{"verifyCommands":["test -f feature.txt"]},"issues":{"provider":"github"}}`, "auto", map[string]any{"mergeApproval": "all"}))
+	dir := workerProject(t, gateConfig(t, `{"test":{"full":["test -f feature.txt"]},"issues":{"provider":"github"}}`, "auto", map[string]any{"mergeApproval": "all"}))
 	rotaInWith(t, testDeps(), dir, "worker", "pool", "init", "--slots", "1", "--base", "main")
 	wt := filepath.Join(dir, ".worktrees", "w1")
 	write(t, filepath.Join(wt, "feature.txt"), "f")

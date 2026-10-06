@@ -9,7 +9,7 @@ Set `round.brief` to this file's path to make the assignment pointer name it as 
 
 ## The gate
 
-The full gate runs once, at merge: `rota worker gate` runs `refactor.verifyCommands` on the merged
+The full gate runs once, at merge: `rota worker gate` runs `test.full` on the merged
 tree through `bash test/gate.sh`: validate-skills, the doc lints (`bash test/doclint.sh`: prose pins, the
 `.worktrees/` decoy check, and that every `rota` verb the docs name exists), `go vet ./...`, `go test -race -timeout 30m ./...`
 and the smoke suite in `gate.smokeShards` (default 4) shards, all at once. The sharded gate takes about 2–3 minutes;

@@ -86,7 +86,7 @@ gt_case() {
   ( cd "$worker" && git checkout -q -b w1 && echo work > work.txt && git add work.txt \
     && gt_git commit -q -m work && git push -q origin w1 ) || fail "gate case $1: worker push failed"
   mkdir -p "$GT_DIR/.rota"
-  printf '{"refactor":{"verifyCommands":[]}}' > "$GT_DIR/.rota/config.json"
+  printf '{"test":{"full":[]}}' > "$GT_DIR/.rota/config.json"
   printf '{"slots":[{"name":"w1","branch":"w1","pr":"%s"}]}' "$2" > "$GT_DIR/.rota/workers.json"
   FORGE_DB="$GT_DIR.forge.json"; FORGE_LOG="$GT_DIR.forge.log"; : > "$FORGE_LOG"
   python3 - "$FORGE_DB" "$origin" "$(git -C "$worker" rev-parse HEAD)" <<'PYEOF'
@@ -150,7 +150,7 @@ pass "PR head SHA, head branch, base and state are checked against the verified 
 
 # (d) github merge: pinned to the verified SHA, confirmed on origin/main, then re-verified
 gt_case d "$GH_URL"
-printf '{"refactor":{"verifyCommands":["test -f work.txt"]}}' > "$GT_DIR/.rota/config.json"
+printf '{"test":{"full":["test -f work.txt"]}}' > "$GT_DIR/.rota/config.json"
 RC="$(gt_gate "$ROTA_BIN" --json worker gate w1 --base main)"
 [ "$RC" = 0 ] && [ "$(gt_verdict)" = pass ] || fail "gate (d): clean github merge must pass (rc=$RC): $(cat "$GT_DIR.out")"
 [ "$(jget data.changed <"$GT_DIR.out")" = true ] && [ "$(jget 'data.verified[0]' <"$GT_DIR.out")" = "test -f work.txt" ] \
@@ -180,7 +180,7 @@ pass "a merge that landed nothing, landed elsewhere, or was refused is reported,
 gt_case f "$GL_URL"
 RC="$(gt_gate env FORGE_MODE=squash "$ROTA_BIN" --json worker gate w1 --base main)"
 [ "$RC" = 0 ] && [ "$(gt_verdict)" = pass ] || fail "gate (f): clean gitlab merge must pass (rc=$RC): $(cat "$GT_DIR.out")"
-[ "$(jget data.verifySkipped <"$GT_DIR.out")" = true ] || fail "gate (f): no verifyCommands must report verifySkipped: $(cat "$GT_DIR.out")"
+[ "$(jget data.verifySkipped <"$GT_DIR.out")" = true ] || fail "gate (f): no test.full must report verifySkipped: $(cat "$GT_DIR.out")"
 grep -q "^glab mr merge 7 --yes --auto-merge=false --sha $(git -C "$GT_WORKER" rev-parse HEAD)$" "$FORGE_LOG" \
   || fail "gate (f): glab merge must disable auto-merge and pin the sha: $(cat "$FORGE_LOG")"
 grep -q "^glab api projects/:id/merge_requests/7" "$FORGE_LOG" || fail "gate (f): glab must read the MR through the API"
@@ -226,7 +226,7 @@ pass "a remote merge whose local fast-forward fails is merged-remotely, not unme
 
 # (g) verify output is kept: the failing command's output reaches stderr and a log survives
 gt_case g "$GH_URL"
-printf '{"refactor":{"verifyCommands":["echo boom-marker; exit 1"]}}' > "$GT_DIR/.rota/config.json"
+printf '{"test":{"full":["echo boom-marker; exit 1"]}}' > "$GT_DIR/.rota/config.json"
 RC="$(gt_gate env TMPDIR="$TMP_GT" "$ROTA_BIN" --json worker gate w1 --base main)"
 [ "$RC" = 1 ] && [ "$(gt_verdict)" = verify-failed ] && [ "$(jget data.changed <"$GT_DIR.out")" = true ] \
   || fail "gate (g): a failed verify must be verify-failed with changed true (rc=$RC): $(cat "$GT_DIR.out")"
