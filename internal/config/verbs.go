@@ -51,26 +51,27 @@ func IsSchemaKey(name string) bool {
 	return false
 }
 
-// layerValue is hv-config-show's lookup: a missing key, a non-object parent
-// or null at any segment is unset.
-func layerValue(cfg any, key string) (any, bool) { return walk(cfg, key) }
-
 // Show lists the effective value of every schema key in schema order, or of
-// the one key given. The source is the first of config.local.json and
-// config.json that sets the key (present and not null), else "default". A key
+// the one key given. Values resolve from the merged runtime config; a missing
+// or null key uses its default, including when a local override replaced its
+// parent. The source names the supplying layer, or "default" on fallback. A key
 // outside the schema is accepted when the merged config holds it, so a
 // hand-edited key stays readable; the old helper rejected it.
 func Show(root string, key string, one bool) ([]Entry, error) {
-	project := fsio.LoadJSON(configPath(root), jsonx.NewObject())
-	local := fsio.LoadJSON(localPath(root), jsonx.NewObject())
+	merged, local := loadLayers(configPath(root))
+	source := func(key string) string {
+		if _, ok := walk(local, key); ok {
+			return "local"
+		}
+		return "project"
+	}
 	row := func(k Key) Entry {
-		if v, ok := layerValue(local, k.Name); ok {
-			return Entry{k.Name, v, "local"}
+		v, configured := effectiveValue(merged, k)
+		src := "default"
+		if configured {
+			src = source(k.Name)
 		}
-		if v, ok := layerValue(project, k.Name); ok {
-			return Entry{k.Name, v, "project"}
-		}
-		return Entry{k.Name, Default(k), "default"}
+		return Entry{k.Name, v, src}
 	}
 	var out []Entry
 	for _, k := range Keys {
@@ -81,12 +82,8 @@ func Show(root string, key string, one bool) ([]Entry, error) {
 	if !one || len(out) > 0 {
 		return out, nil
 	}
-	if v, ok := walk(Load(configPath(root)), key); ok {
-		src := "project"
-		if _, inLocal := layerValue(local, key); inLocal {
-			src = "local"
-		}
-		return []Entry{{key, v, src}}, nil
+	if v, ok := walk(merged, key); ok {
+		return []Entry{{key, v, source(key)}}, nil
 	}
 	return nil, fmt.Errorf("%w %q", ErrUnknownKey, key)
 }
