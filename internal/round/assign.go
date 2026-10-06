@@ -507,6 +507,9 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 				return nil
 			})
 		}},
+		{name: "start the item clock", do: func() error {
+			return worker.RecordItemStart(root, strings.ToUpper(id), e.now())
+		}},
 	}
 	d := &delivery{Slot: agent, Task: id, Branch: func() string { return res.Branch }, Kind: kind, Model: res.Model, Round: rnd,
 		Brief: func() string {
