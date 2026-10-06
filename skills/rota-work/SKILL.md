@@ -123,10 +123,10 @@ Verify silently. Trust the diff, not the subagent's narrative.
 
 **Record proof** (facts about what ran, not acceptance). Per task:
 
-- **PASS:** one row per item the task resolves: `rota proof add <ID> --check "<verify command or grep>" --result PASS --evidence "<output line or path>" [--sha <task-commit>]`.
-- **Persistent FAIL:** record it with `--result FAIL`.
-- **Behavior task** (skip the RED half when `rota config show work.tdd` is `false`; PASS rows stay): first record the subagent's reported RED run: `rota proof add <ID> --check "<test command>" --result FAIL --evidence "<failing line>" --sha <sha before the change>`, then the PASS row after. A subagent that reports no RED gets a fix dispatch (a FAIL above). So does one whose RED evidence is a build, compile or setup failure (`undefined:`, `cannot find`, `no such file`, `command not found`, import or syntax error): the test must fail on an assertion, so the fix agent repairs the test until it does.
-- **Docs or skill-only task:** no RED. Put `no test seam: docs/skill change` in the PASS row's `--check`.
+- **PASS:** one row per item the task resolves, run through the verb so the row is measured: `rota proof record <ID> -- <verify command or grep>` (exit 0 writes PASS, non-zero writes FAIL and exits 1). Never type a PASS you did not run.
+- **Persistent FAIL:** `rota proof record` already wrote the FAIL row.
+- **Behavior task** (skip the RED half when `rota config show work.tdd` is `false`; PASS rows stay): run the new test through `rota proof record <ID> -- <test command>` before the change (the FAIL row is the RED; the verb exits 1, expected), then again after for the PASS row. A subagent that reports no RED gets a fix dispatch (a FAIL above). So does one whose RED evidence is a build, compile or setup failure (`undefined:`, `cannot find`, `no such file`, `command not found`, import or syntax error): the test must fail on an assertion, so the fix agent repairs the test until it does.
+- **Docs or skill-only task:** no RED, and no command to run. Use `rota proof add` with `no test seam: docs/skill change` in the row's `--check`.
 - **Acceptance:** `rota item complete` (Step 9) writes it and exits 4 when an item has no proof. Never pass `--no-proof` on your own; an unproven item stays open and is surfaced.
 
 Issue mode keeps the rows in the item's proof note.
