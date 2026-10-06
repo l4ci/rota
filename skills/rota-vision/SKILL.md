@@ -38,7 +38,7 @@ On ambiguity default to the Recommended option and name it.
 
 ## Step 4 — Research (opt-in)
 
-Skip unless the user asks or the framing leans on outside context (prior art, pitfalls, an unfamiliar space). Ask first: *"Run web research on this? (yes / skip)"*. On yes, split the framing into 3-5 independent angles, run one `standard` subagent per angle in a single batch (`WebSearch` / `WebFetch`), and merge to 3-5 actionable, cited findings. If nothing useful comes back, say so and move on. Keep any finding that contradicts the user's framing for Step 5.
+Skip unless the user asks or the framing leans on outside context (prior art, pitfalls, an unfamiliar space). When it applies, read [`research.md`](research.md).
 
 ## Step 5 — Challenge
 
@@ -104,6 +104,7 @@ If a newly active milestone has no items, offer (default Capture): `/rota-captur
 
 ## References
 
+- [`research.md`](research.md) — opt-in web research procedure; read from Step 4.
 - [`references/context-load-protocol.md`](references/context-load-protocol.md) — shared parallel context load.
 - [`references/knowledge-consult.md`](references/knowledge-consult.md) — the K+D query pattern the load uses.
 - [`references/grilling.md`](references/grilling.md) — the Step 5 challenge rounds.

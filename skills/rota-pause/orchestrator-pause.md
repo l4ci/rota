@@ -1,0 +1,9 @@
+# Pausing an orchestrator
+
+Workers keep running after the session ends. A pause records the round and leaves it running; it never winds down (`rota round wind-down` re-verifies, parks every slot and releases the lease: the end of a round), merges, reclaims or reassigns.
+
+1. Read `rota round status --json`: the host, each slot's issue, state and PR, the `review` list (PRs waiting for gate and merge), open `escalations`, `limits` and the `drift` count. Add `rota round candidates` only if the next session must decide the slate.
+2. Write the handoff note to `.rota/handoff/<base>.md` (`<base>` from `rota git base`), first line `<!-- rota-handoff: orchestrator -->`, the marker the SessionStart hook injects without a lease. Sections: **Round** (host from `rota round status`; the round number from `.rota/workers.json`; the lease holder from `rota keepalive status` when a supervisor runs), **Slots** (one line each: agent, issue, state, PR), **Review queue** (PR numbers in merge order, and why that order), **Waiting on** (escalation ids and what each blocks, slots out of quota with reset time), **Next** (the one concrete call: usually `rota round wait`). Record maintainer decisions no worker brief carries; omit anything `rota round status` reproduces.
+3. Leave the lease alone: a gone holder makes it stale and the next `rota round start` reclaims it, keeping the round. Don't `rota status add`; the registry is `.rota/workers.json`.
+4. Uncommitted work on the base branch: report it and leave it in place; don't WIP-commit onto the base.
+5. Confirm in one block: round number, slots busy and free, PRs in review, what the next session does first. Resume: `rota round start` (keeps the recorded scope), then the handoff note, with `/rota-orchestrate` for judgment calls. Add the Step 6 learn nudge when it applies.
