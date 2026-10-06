@@ -2,7 +2,7 @@
 // moves a project from the hv era to rota. This file keeps the pieces it shares:
 // refusals, the installed-version seam, small JSON getters, file copy and the
 // unified diff.
-package migrate
+package hvmigrate
 
 import (
 	"errors"

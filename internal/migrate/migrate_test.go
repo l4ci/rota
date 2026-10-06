@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -478,5 +479,36 @@ func TestMigrateRemapsRegistryIDs(t *testing.T) {
 	}
 	if got := worker.LoadRegistry(root).Slot("ben").Task(); got != "2" {
 		t.Errorf("rerun task %q", got)
+	}
+}
+
+// A preview must announce what the apply will do: the same Ops on one fixture.
+// The ID a Related rewrite points at is the one thing a preview cannot know
+// ("#?" before, the new ID after), so that target is masked on both sides.
+func TestMigratePreviewAndApplyPlanTheSameOps(t *testing.T) {
+	numRe := regexp.MustCompile(`(→ )(?:#\?|#?[A-Z]?\d+)$`)
+	ops := func(apply bool) []string {
+		root := migProject(t, nil)
+		var f *trackertest.MS
+		if apply {
+			f = &trackertest.MS{Fake: &trackertest.Fake{}}
+		}
+		o, _, _ := newMig(t, root, apply, f)
+		res, err := Run(o)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got []string
+		for _, op := range res.Ops {
+			got = append(got, op.Action+": "+numRe.ReplaceAllString(op.Text, "${1}N"))
+		}
+		return got
+	}
+	preview, applied := ops(false), ops(true)
+	if len(preview) == 0 {
+		t.Fatal("the fixture planned no ops")
+	}
+	if !reflect.DeepEqual(preview, applied) {
+		t.Errorf("preview ops:\n%q\napply ops:\n%q", preview, applied)
 	}
 }
