@@ -337,7 +337,7 @@ The orchestrator's verbs for a [parallel round](../usage/parallel-rounds.md). Al
 | `rota round watch [--heartbeat <seconds>] [--poll <seconds>] [--forge-poll <seconds>] [--settle <seconds>] [--lines <n>] [--autopilot [--base <branch>] [--holder-pid <n>]]` | background watch: exit on a slot, PR or escalation change, or at a heartbeat; `--autopilot` runs a tick on every wake |
 | `rota round tick [--base <branch>] [--holder-pid <n>]` | one autopilot pass: repair safe drift, merge finished PRs behind the gate, assign ready items (`round.autopilot`) |
 | `rota round status` | list the round's slots with host, PR and drift |
-| `rota round reconcile [--apply]` | report drift between registry, host, git and forge; `--apply` repairs the safe kinds |
+| `rota round reconcile [--apply]` | report drift between registry, host, git and forge; `--apply` repairs the safe kinds, including parking slots whose PR merged |
 | `rota round report <slot> --state <done\|blocked\|idle\|dead\|limited> [--evidence <text>] [--pr <url\|number> \| --issues <#a,#b>]` | record a solo worker's result: state and PR (or, for a review item, the issues it filed) |
 | `rota round escalate send <number> [--pr] [--slot <name>] --title <text> --body-file <path\|-> [--timeout <seconds>]` | ask the human on an issue or PR thread |
 | `rota round escalate check [<id>…]` | look for the human's answers |
@@ -456,7 +456,7 @@ Verdicts are `PASS`, `CONCERNS` or `FAIL` (`qa` also takes `INFRA-FAIL`). They l
 | Usage | What it does |
 |---|---|
 | `rota ship body [<branch>]` | build a PR body from a branch's commits: summary, items resolved, and an evidence table from the items' proof rows |
-| `rota ship pr <branch> --title <text> --body-file <path\|-> [--items <ID>[,<ID>…]]` | push a branch and open a PR or MR |
+| `rota ship pr <branch> --title <text> --body-file <path\|-> [--items <ID>[,<ID>…]]` | push a branch and open a PR or MR; never removes a slot, the current directory or a worktree with changes |
 | `rota ship merge <branch> --body-file <path\|-> [--confirm --confirm-note <answer>]` | merge a branch into the base branch with --no-ff; exit 4 when `ship.mergeApproval` needs a human |
 | `rota ship pr-merge <pr> [--items <ID>[,<ID>…]] [--confirm --confirm-note <answer>]` | merge a PR in issue mode; exit 4 when `ship.mergeApproval` needs a human |
 | `rota ship undo [--cycle <hash>] [--allow-post-merge] [--apply]` | roll back the last cycle merge on the base branch |
