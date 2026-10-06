@@ -183,7 +183,59 @@ func stripBullet(content, bullet string) string {
 	return content[:m[0]] + repl + content[m[1]:]
 }
 
-var archiveHeadRe = regexp.MustCompile(`(?m)^## (.+)$`)
+type archiveBullet struct {
+	ID, Section, Line string
+}
+
+var archiveBulletRe = regexp.MustCompile(`\A- (?:~~)?\*\*\[(` + AnyTypeIDPattern + `)\]`)
+
+// archiveBullets reads the flat document Archive writes, including bullets
+// appended to existing sectioned archives. Headings label entries but do not
+// gate recognition; lookup and reference cleanup use the same grammar.
+func archiveBullets(content string) []archiveBullet {
+	var out []archiveBullet
+	name := "Archive"
+	for _, line := range strings.Split(content, "\n") {
+		if strings.HasPrefix(line, "## ") {
+			name = strings.TrimPrefix(line, "## ")
+		}
+		if m := archiveBulletRe.FindStringSubmatch(line); m != nil {
+			out = append(out, archiveBullet{m[1], name, line})
+		}
+	}
+	return out
+}
+
+func findArchiveBullet(content, id string) (sec, line string, ok bool) {
+	for _, b := range archiveBullets(content) {
+		if b.ID == id {
+			return b.Section, b.Line, true
+		}
+	}
+	return "", "", false
+}
+
+func collectArchiveCrossRefs(content, id string) []XRef {
+	var hits []XRef
+	for _, b := range archiveBullets(content) {
+		if b.ID == id {
+			continue
+		}
+		line := b.Line
+		if d, ok := ParseDone(line); ok {
+			// Related belongs to the original bullet, not the completion
+			// suffix or a closure note that happens to mention another ID.
+			inner := removeIDFromRelated(d.Inner, id)
+			line = "- ~~" + inner + line[len("- ~~")+len(d.Inner):]
+		} else {
+			line = removeIDFromRelated(line, id)
+		}
+		if line != b.Line {
+			hits = append(hits, XRef{b.Section, b.Line, line})
+		}
+	}
+	return hits
+}
 
 // activeBranches maps item IDs to the branch of the first active entry of
 // status.json that lists them.
@@ -288,7 +340,7 @@ func (f *File) Remove(ids []string, scrubArchive, apply bool) (RmResult, error) 
 				continue
 			}
 			if archive != "" {
-				if sec, line, ok := findBulletIn(archive, id, allSections); ok {
+				if sec, line, ok := findArchiveBullet(archive, id); ok {
 					infos[id] = RmItem{ID: id, Archive: true, Section: sec, Bullet: line}
 					continue
 				}
@@ -318,13 +370,17 @@ func (f *File) Remove(ids []string, scrubArchive, apply bool) (RmResult, error) 
 		for _, id := range ids {
 			info := infos[id]
 			content, path := newTodo, "BACKLOG.md"
+			find := func(content, id string) (string, string, bool) {
+				return findBulletIn(content, id, allSections)
+			}
 			if info.Archive {
 				if !scrubArchive {
 					continue
 				}
 				content, path = newArchive, "ARCHIVE.md"
+				find = findArchiveBullet
 			}
-			if _, _, found := findBulletIn(content, id, allSections); found {
+			if _, _, found := find(content, id); found {
 				return errf(ErrInvalid, "[%s] remains in .rota/%s after removal; no changes applied", id, path)
 			}
 		}
@@ -335,11 +391,7 @@ func (f *File) Remove(ids []string, scrubArchive, apply bool) (RmResult, error) 
 			newTodo = applyCrossRefs(newTodo, xt)
 			var xa []XRef
 			if scrubArchive && newArchive != "" {
-				var secs []string
-				for _, m := range archiveHeadRe.FindAllStringSubmatch(newArchive, -1) {
-					secs = append(secs, m[1])
-				}
-				xa = collectCrossRefs(newArchive, id, secs)
+				xa = collectArchiveCrossRefs(newArchive, id)
 				newArchive = applyCrossRefs(newArchive, xa)
 			}
 			info.CrossRefs = len(xt) + len(xa)
