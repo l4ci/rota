@@ -49,7 +49,7 @@ import (
 //     before RE-VERIFY runs.
 //  3. RE-VERIFY: on the MERGED tree, never on the branch. This is the only step
 //     that catches the two shapes above. Verification commands come from
-//     refactor.verifyCommands; when that is empty the gate reports
+//     test.full; when that is empty the gate reports
 //     verifySkipped rather than inventing a check it cannot perform.
 //
 // Between 1 and 2 sits a PROVENANCE check: the PR body's `## Approvals`
@@ -516,8 +516,8 @@ func (g *gate) stepVerify() (bool, error) {
 	}
 	if vr.NoCommands {
 		res.Verdict, res.VerifySkipped = GatePass, true
-		res.Notes = append(res.Notes, fmt.Sprintf("NO-VERIFY %s — refactor.verifyCommands is empty; merged tree was NOT gated by a command.", o.Slot),
-			"set refactor.verifyCommands via rota config set to make this gate real")
+		res.Notes = append(res.Notes, fmt.Sprintf("NO-VERIFY %s — test.full is empty; merged tree was NOT gated by a command.", o.Slot),
+			"set test.full via rota config set to make this gate real")
 		return true, nil
 	}
 	res.Verified = vr.Verified

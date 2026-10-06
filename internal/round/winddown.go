@@ -97,7 +97,7 @@ func (e Env) WindDown(ctx context.Context, root string, be Board, o WindDownOpts
 	if !o.NoVerify {
 		if !worker.HasVerifyCommands(root) {
 			res.VerifySkipped = true
-			res.Warnings = append(res.Warnings, "NO-VERIFY: refactor.verifyCommands is empty; the base was NOT checked by a command")
+			res.Warnings = append(res.Warnings, "NO-VERIFY: test.full is empty; the base was NOT checked by a command")
 		} else {
 			if err := e.requireBase(ctx, root); err != nil {
 				return res, err
