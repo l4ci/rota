@@ -125,6 +125,23 @@ func TestTrainRefusesBeforeMerging(t *testing.T) {
 	}
 }
 
+func TestTrainSharedFileCleanMerge(t *testing.T) {
+	// b2 edits the top of a file main edits at the bottom: both sides changed it,
+	// the merge is clean, so the train lands it after verifying the merged tree.
+	w := trainWorld(t, "true", "b1", "b2")
+	lines := "a\n" + strings.Repeat("-\n", 19) + "z\n"
+	trainWrite(t, w, "shared.txt", strings.TrimSuffix(lines, "\n"))
+	gitq(t, w.dir, "checkout", "-q", "b2")
+	gitq(t, w.dir, "merge", "-q", "main", "-m", "sync")
+	trainWrite(t, w, "shared.txt", strings.TrimSuffix("A\n"+lines[2:], "\n"))
+	gitq(t, w.dir, "checkout", "-q", "main")
+	trainWrite(t, w, "shared.txt", strings.TrimSuffix(lines[:len(lines)-2]+"Z\n", "\n"))
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}})
+	if err != nil || res.Verdict != GatePass || strings.Join(res.Landed, ",") != "b1,b2" || !w.onMain("b2.txt") {
+		t.Fatalf("%+v %v", res, err)
+	}
+}
+
 func TestTrainBaseMoved(t *testing.T) {
 	// the base moves while the train verifies: the verified tree is not what would land
 	cmd := fmt.Sprintf("git -c user.name=t -c user.email=t@t -C %s commit -q --allow-empty -m moved", "WDIR")
