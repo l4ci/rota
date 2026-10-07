@@ -201,7 +201,8 @@ const (
 
 // Check is hv-config-schema-check: the state of .rota/config.json against the
 // required schema keys. Missing lists, in schema order, the required keys that
-// are absent or null; it is non-empty only for Stale.
+// are absent or null, then LegacyVerifyKey when it still holds commands that
+// test.full does not; it is non-empty only for Stale.
 func Check(root string) (status string, missing []string) {
 	missing = []string{}
 	raw, err := os.ReadFile(configPath(root))
@@ -220,10 +221,25 @@ func Check(root string) (status string, missing []string) {
 			missing = append(missing, k.Name)
 		}
 	}
+	if legacyVerifyPending(doc) {
+		missing = append(missing, LegacyVerifyKey)
+	}
 	if len(missing) > 0 {
 		return Stale, missing
 	}
 	return UpToDate, missing
+}
+
+// legacyVerifyPending reports whether doc holds commands at LegacyVerifyKey
+// while test.full holds none: the case `config fill` moves and the merge gate
+// only runs with a deprecation warning.
+func legacyVerifyPending(doc *jsonx.Object) bool {
+	old, _ := walk(doc, LegacyVerifyKey)
+	if len(asList(old)) == 0 {
+		return false
+	}
+	cur, _ := walk(doc, TestFullKey)
+	return len(asList(cur)) == 0
 }
 
 // Retired lists the config values rota no longer supports, one message each.
