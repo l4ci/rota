@@ -138,7 +138,7 @@ func configSet(fs *flag.FlagSet) RunFunc {
 		res, err := config.Set(root, args[0], args[1])
 		switch {
 		case err == nil:
-		case errors.Is(err, config.ErrMalformedKey), errors.Is(err, config.ErrNotSchemaKey):
+		case errors.Is(err, config.ErrMalformedKey), errors.Is(err, config.ErrNotSchemaKey), errors.Is(err, config.ErrBadValue):
 			return Result{}, Usage("%s", err.Error())
 		case errors.Is(err, config.ErrNotObject):
 			return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
