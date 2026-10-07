@@ -37,7 +37,7 @@ Work only this task, then stop.
 - Stay in your worktree. Confirm `pwd` before editing and use worktree-rooted
   paths. An absolute path under the main checkout silently edits the WRONG tree.
 - Stage explicit paths. Never `git add -A` or `git add .`.
-- Commit your own work, then open a PR against `<base-branch>`. Never merge.
+- Commit your own work, run `rota worker done <slot>`, then open a PR against `<base-branch>`. Never merge.
 - Run TARGETED verification only: the files you touched. When the project sets
   `test.fast`, that is `rota test run fast`; otherwise pick the checks by hand. The full suite is the
   orchestrator's gate on the merged tree. Several workers running full suites at
@@ -62,6 +62,10 @@ Work only this task, then stop.
      affected package tests. A stale record is the top cause of red PR runs.
   3. File scope: compare `git diff --name-only <base-branch>...HEAD` with the files the
      issue names. Explain every extra or missing file in the PR body.
+  4. Done gate: on your final commit, when `test.fast` is set, run
+     `rota proof record <ID> -- rota test run fast`, then `rota worker done <slot>`. It
+     exits 4 without a PASS row at the current HEAD; a later commit makes the row stale,
+     so record again. Do it before the PR and before `ROTA-DONE`.
 - Escalate rather than guess. If the task leaves a choice a user would notice
   unsettled, and neither the brief nor the code settles it, print
   `ROTA-BLOCKED <slot>: <one question in plain language>` and stop. Ask ONE
