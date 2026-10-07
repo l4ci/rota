@@ -1422,3 +1422,53 @@ func TestHumanDraftBootedPaneIsNotADraft(t *testing.T) {
 		t.Errorf("the placeholder after a no-break space is not a draft, got %q", got)
 	}
 }
+
+func notifyReply(reason string) Result {
+	return Result{Stdout: `{"id":"cli","result":{"type":"notification_show","shown":false,"reason":"` + reason + `"}}`}
+}
+
+// A notification herdr did not show is reported once on stderr; shown and
+// disabled (the user's choice) are silent. No retry.
+func TestHerdrNotifyReportsDroppedAlerts(t *testing.T) {
+	for reason, report := range map[string]bool{
+		"shown": false, "disabled": false,
+		"rate_limited": true, "no_foreground_client": true, "busy": true,
+	} {
+		f := &fake{handler: func(string, []string) Result { return notifyReply(reason) }}
+		var errb strings.Builder
+		d := deps(f, herdrEnv, &clock{})
+		d.Stderr = &errb
+		New("herdr", d).Notify(bg, "rota worker w1: BLOCKED", "B")
+		if f.count("herdr notification show") != 1 {
+			t.Errorf("%s: notify called %d times, want 1", reason, f.count("herdr notification show"))
+		}
+		got := errb.String()
+		if report != (got != "") || (report && !(strings.Contains(got, "rota worker w1: BLOCKED") && strings.Contains(got, reason))) {
+			t.Errorf("%s: stderr = %q", reason, got)
+		}
+	}
+}
+
+func TestHerdrExplain(t *testing.T) {
+	f := &fake{handler: func(_ string, a []string) Result {
+		return Result{Stdout: "agent: claude\nstate: idle\nmanifest: remote:/x/claude.toml 2026.09.11.1\nrule: live_prompt_box (region=prompt_box_body priority=950)\nevidence: \"❯\\n\"\n"}
+	}}
+	h := New("herdr", deps(f, herdrEnv, &clock{})).(Explainer)
+	if got := h.Explain(bg, "w1", "w9:t7"); got != `state: idle / rule: live_prompt_box (region=prompt_box_body priority=950) / evidence: "❯\n"` {
+		t.Errorf("Explain = %q", got)
+	}
+	if !strings.Contains(f.log(), "herdr agent explain rota-w1-w9-t7") {
+		t.Errorf("call = %s", f.log())
+	}
+	f.handler = func(string, []string) Result { return Result{Stdout: "\na\n b\n\nc\nd\n"} }
+	if got := h.Explain(bg, "w1", "w9:t7"); got != "a / b / c" {
+		t.Errorf("fallback Explain = %q", got)
+	}
+	if h.Explain(bg, "w1", "") != "" {
+		t.Error("a never-dispatched slot has nothing to explain")
+	}
+	f.handler = func(string, []string) Result { return Result{ExitCode: 1, Stderr: herdrErr("agent_not_found")} }
+	if got := h.Explain(bg, "w1", "w9:t7"); got != "" {
+		t.Errorf("a failing explain must read empty, got %q", got)
+	}
+}

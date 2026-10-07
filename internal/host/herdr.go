@@ -523,6 +523,68 @@ func processPIDs(doc string) []int {
 	return pids
 }
 
+// Notify raises a herdr notification. herdr answers with why it did or did not
+// show it; anything but `shown` (and `disabled`, the user's own choice) means a
+// blocked or needs-permission alert never reached a human, so it is reported
+// once on stderr. No retry.
 func (h *herdr) Notify(ctx context.Context, title, body string) {
-	h.herdr(ctx, "notification", "show", title, "--body", body, "--sound", "request")
+	r := h.herdr(ctx, "notification", "show", title, "--body", body, "--sound", "request")
+	reason := jget(r.Stdout, "result.reason")
+	if r.ExitCode != 0 {
+		reason = "herdr error"
+	}
+	switch reason {
+	case "", "shown", "disabled":
+		return
+	}
+	fmt.Fprintf(h.d.Stderr, "rota: herdr notification %q was not shown (%s)\n", title, reason)
+}
+
+// explainLines bounds the fallback excerpt of `herdr agent explain`.
+const explainLines = 3
+
+// explainKeys are the lines of `herdr agent explain` that say why herdr
+// classified the agent as it did, in the order kept. `agent:` and `manifest:`
+// only identify it.
+var explainKeys = []string{"state:", "rule:", "evidence:"}
+
+// Explain is the why-lines of `herdr agent explain` for the slot's agent
+// (state, rule, evidence, each clipped), the first few lines when none of
+// those keys appear, "" for a never-dispatched slot or a failing call.
+func (h *herdr) Explain(ctx context.Context, slot, handle string) string {
+	if handle == "" {
+		return ""
+	}
+	r := h.herdr(ctx, "agent", "explain", AgentName(slot, handle))
+	if r.ExitCode != 0 {
+		return ""
+	}
+	var lines []string
+	for _, l := range strings.Split(r.Stdout, "\n") {
+		if l = strings.TrimSpace(l); l != "" {
+			lines = append(lines, l)
+		}
+	}
+	var out []string
+	for _, k := range explainKeys {
+		for _, l := range lines {
+			if strings.HasPrefix(l, k) {
+				out = append(out, clipRunes(l, 80))
+				break
+			}
+		}
+	}
+	if len(out) == 0 {
+		for _, l := range lines[:min(len(lines), explainLines)] {
+			out = append(out, clipRunes(l, 80))
+		}
+	}
+	return strings.Join(out, " / ")
+}
+
+func clipRunes(s string, n int) string {
+	if r := []rune(s); len(r) > n {
+		return string(r[:n])
+	}
+	return s
 }

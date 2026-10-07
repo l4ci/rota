@@ -14,7 +14,7 @@ All three push the branch before moving the slot off it, so no work is lost. `ro
 
 **Default for a stuck worker** (`idle` with no PR and no question, `dead`, or `stalled` past `round.stallMinutes`): read the pane once. If the agent is alive and working, wait. Otherwise `rota round reclaim <slot>`, then `rota round transfer <issue> --to <free slot>`. Use `--to human` only when the next step is a person's call.
 
-**`unknown`.** The host reports a state `rota` can't classify. Never treat it as finished. Wait through one more `wait`; if the slot is still `unknown`, read its pane; if the pane shows a prompt or a stopped agent, run `herdr agent explain` on it, then treat the slot as `dead` or `blocked` accordingly.
+**`unknown`.** The host reports a state `rota` can't classify. Never treat it as finished. Wait through one more `wait`; if the slot is still `unknown`, read its pane; if the pane shows a prompt or a stopped agent, read the explain excerpt in the row's evidence (or run `herdr agent explain` on it for the full text), then treat the slot as `dead` or `blocked` accordingly.
 
 **Red tests.** Before you bounce a PR for a red suite, rerun the failing test alone. Passes alone, fails under load: a flake; note it, don't send the worker back. Fails alone: real. A green suite that surprises you is worth one rerun.
 

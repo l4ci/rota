@@ -26,6 +26,7 @@ type fakeHost struct {
 	killErr    error
 	sendErr    error
 	status     map[string]string
+	explain    map[string]string   // per slot; "" is a failing explain
 	panes      map[string][]string // captures returned in order, per slot
 	calls      []string
 	sent       string
@@ -63,6 +64,10 @@ func (f *fakeHost) Status(_ context.Context, slot, handle string) string { retur
 func (f *fakeHost) Kill(_ context.Context, slot, handle string) error {
 	f.calls = append(f.calls, "kill "+slot+" "+handle)
 	return f.killErr
+}
+func (f *fakeHost) Explain(_ context.Context, slot, handle string) string {
+	f.calls = append(f.calls, "explain "+slot)
+	return f.explain[slot]
 }
 func (f *fakeHost) Notify(_ context.Context, title, body string) {
 	f.calls = append(f.calls, "notify "+title+" | "+body)
