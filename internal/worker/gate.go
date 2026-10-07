@@ -202,7 +202,7 @@ func (e Env) Gate(ctx context.Context, root string, o GateOpts) (GateResult, err
 		e2eCmds:    TierCommands(root, "e2e"),
 	}
 	if in.where, err = FullWhere(in.cfg); err != nil {
-		return res, fail(exitcode.ExitInternal, err.Error())
+		return res, err
 	}
 	res, err = e.gateEnv().gate(ctx, root, o, res, in, t)
 	if err == nil && t.Queued && res.Verdict == GatePass {

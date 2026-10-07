@@ -156,10 +156,23 @@ func (f *fakeForge) PRRequestMerge(_ context.Context, pr int, o tracker.MergeOpt
 // (still running) or skipped (finished, tested nothing); late adds a failing
 // "ci/late" from the second call on. A commit not pushed there has no checks.
 // "ciMoveBase" names a file pushed to the origin's main on the first call, as
-// if someone landed work while CI ran.
+// if someone landed work while CI ran. "ciScript" scripts the answers
+// instead: polls split by "|", each a comma list of name=state, the last
+// repeated once the script runs out.
 func (f *fakeForge) CommitChecks(_ context.Context, sha string) ([]tracker.CheckRun, error) {
 	f.logf("CommitChecks %s", sha[:7])
 	w := f.w
+	if script := w.forgeWord("ciScript"); script != "" {
+		polls := strings.Split(script, "|")
+		n, _ := strconv.Atoi(w.forgeWord("ciScriptN"))
+		w.forge("ciScriptN", strconv.Itoa(n+1))
+		var checks []tracker.CheckRun
+		for _, c := range strings.Split(polls[min(n, len(polls)-1)], ",") {
+			name, state, _ := strings.Cut(c, "=")
+			checks = append(checks, tracker.CheckRun{Name: name, State: state})
+		}
+		return checks, nil
+	}
 	switch w.forgeWord("ci") {
 	case "none":
 		return nil, nil

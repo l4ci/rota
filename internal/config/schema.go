@@ -100,6 +100,7 @@ var Keys = []Key{
 	{"test.e2e", []any{}, true},
 	{"test.fullWhere", "local", false},
 	{"test.ciTimeoutMinutes", json.Number("60"), false},
+	{"test.ciChecks", []any{}, false},
 	// 5.0 keys: not in CONFIG_KEYS.
 	{"ship.mergeApproval", "none", false},
 	{"ship.mergeApprovalPaths", []any{}, false},

@@ -97,16 +97,27 @@ const (
 )
 
 // FullWhere reads test.fullWhere: local (the default) or ci. Any other value
-// is an error, so a typo never falls back to a local run silently.
+// is an error, so a typo never falls back to a local run silently, and so is
+// ci with no test.ciChecks: CI mode only knows a run is green by the checks
+// it names.
 func FullWhere(cfg any) (string, error) {
 	switch w := config.String(cfg, "test.fullWhere"); w {
-	case WhereLocal, WhereCI:
+	case WhereLocal:
+		return w, nil
+	case WhereCI:
+		if len(ciChecks(cfg)) == 0 {
+			return "", fail(exitcode.ExitInternal, "test.fullWhere is ci, but test.ciChecks names no check to wait for").
+				WithHint(`list the CI checks that must pass, e.g. rota config set test.ciChecks '["test"]'`)
+		}
 		return w, nil
 	default:
 		v, _ := config.Lookup(cfg, "test.fullWhere")
-		return "", fmt.Errorf("test.fullWhere must be local or ci (got %v)", v)
+		return "", fail(exitcode.ExitInternal, fmt.Sprintf("test.fullWhere must be local or ci (got %v)", v))
 	}
 }
+
+// ciChecks is test.ciChecks: the names of the CI checks that must all pass.
+func ciChecks(cfg any) []string { return commandList(cfg, "test.ciChecks") }
 
 // ciSettings is how long a CI wait lasts: the poll interval, how long the
 // first check may take to appear, and how long the checks may take to finish.
@@ -135,10 +146,11 @@ func ciSettingsFrom(cfg any, getenv func(string) string) (ciSettings, error) {
 // ciVerifier runs the full tier on CI for one gate or train: it is set up
 // once, before anything merges, so a missing remote or forge is refused first.
 type ciVerifier struct {
-	e     gateEnv
-	root  string
-	forge Forge
-	set   ciSettings
+	e      gateEnv
+	root   string
+	forge  Forge
+	set    ciSettings
+	checks []string // test.ciChecks
 }
 
 // newCIVerifier checks what a CI run needs: an origin to push to and a forge
@@ -151,13 +163,19 @@ func (e gateEnv) newCIVerifier(root string, forge Forge, cfg any) (v *ciVerifier
 	if err != nil {
 		return nil, err.Error()
 	}
-	return &ciVerifier{e: e, root: root, forge: forge, set: set}, ""
+	return &ciVerifier{e: e, root: root, forge: forge, set: set, checks: ciChecks(cfg)}, ""
 }
 
 var ciNameUnsafe = regexp.MustCompile(`[^A-Za-z0-9._-]+`)
 
 // verify pushes sha to origin as rota/ci/<name>, waits for its checks and
 // deletes the branch again. err is a git or forge failure, not a red check.
+//
+// Green is every check in test.ciChecks finished with success (all of them,
+// when several share a name) and no check on the commit failed, holding for
+// two polls in a row. Unlisted checks still running do not hold it up; any
+// failed check ends the run red at once, and so does a listed check that
+// finished without testing anything.
 func (v *ciVerifier) verify(sha, name string) (VerifyResult, error) {
 	ref := ciRefPrefix + strings.Trim(ciNameUnsafe.ReplaceAllString(name, "-"), "-")
 	res := VerifyResult{CI: true, Ref: ref, SHA: sha}
@@ -166,71 +184,105 @@ func (v *ciVerifier) verify(sha, name string) (VerifyResult, error) {
 	}
 	defer v.e.cleanupGit(v.root, "push", "-q", "origin", "--delete", ref)
 	start := v.e.now()
-	green := "" // the checks of the last all-green poll
+	green := "" // the checks of the last green poll
 	for {
 		checks, err := v.forge.CommitChecks(v.e.ctx, sha)
 		if err != nil {
 			return res, fmt.Errorf("could not read the CI checks of %s: %w", short(sha), err)
 		}
 		elapsed := v.e.now().Sub(start)
-		pending, passed, failed := 0, 0, false
-		var names []string
+		pending, failed := 0, false
+		state := map[string]string{} // per name: the worst state seen
+		rank := map[string]int{tracker.CheckSuccess: 1, tracker.CheckPending: 2, tracker.CheckSkipped: 3, tracker.CheckFailure: 4}
+		var sig []string
 		for _, c := range checks {
-			names = append(names, c.Name)
+			sig = append(sig, c.Name)
 			switch c.State {
-			case tracker.CheckSuccess:
-				passed++
-			case tracker.CheckSkipped:
+			case tracker.CheckSuccess, tracker.CheckSkipped:
 			case tracker.CheckFailure:
 				failed = true
 			default:
 				pending++
 			}
+			st := c.State
+			if rank[st] == 0 {
+				st = tracker.CheckPending
+			}
+			if rank[st] > rank[state[c.Name]] {
+				state[c.Name] = st
+			}
 		}
-		done := len(checks) > 0 && pending == 0
-		if done && !failed && passed > 0 {
+		var missing, waiting, untested []string
+		for _, n := range v.checks {
+			switch state[n] {
+			case "":
+				missing = append(missing, n)
+			case tracker.CheckPending:
+				waiting = append(waiting, n)
+			case tracker.CheckSkipped:
+				untested = append(untested, n)
+			}
+		}
+		if !failed && len(untested) == 0 && len(missing) == 0 && len(waiting) == 0 {
 			// A check can appear after the others finished (a later workflow,
 			// a job created only when it starts), so green must hold for two
 			// polls in a row with the same checks.
-			sig := strings.Join(names, "\n")
-			if sig != green {
-				green = sig
+			if s := strings.Join(sig, "\n"); s != green {
+				green = s
 				v.e.sleep(v.set.poll)
 				continue
 			}
+			res.Log = checkLog(checks)
+			res.Verified = append([]string(nil), v.checks...)
+			return res, nil
 		}
 		green = ""
 		switch {
-		case failed || done:
-			// One red check is the verdict; the rest need not finish. Checks
-			// that all skipped tested nothing and pass nothing.
+		case failed || len(untested) > 0:
+			// One red check is the verdict; the rest need not finish.
+			res.Log = checkLog(checks)
 			for _, c := range checks {
-				line := c.State + " " + c.Name
-				if c.URL != "" {
-					line += " " + c.URL
-				}
-				res.Log += line + "\n"
-				switch c.State {
-				case tracker.CheckSuccess:
-					res.Verified = append(res.Verified, c.Name)
-				case tracker.CheckFailure:
+				if c.State == tracker.CheckFailure {
 					res.Failed = append(res.Failed, c.Name)
 				}
 			}
-			if !failed && passed == 0 {
-				res.Failed = append(res.Failed, "every check skipped")
+			for _, n := range untested {
+				res.Failed = append(res.Failed, n+" skipped")
+				res.Log += "listed check " + n + " skipped: it tested nothing\n"
 			}
 			return res, nil
-		case len(checks) == 0 && elapsed >= v.set.start:
-			res.NotRun = true
+		case len(missing) > 0 && pending == 0 && elapsed >= v.set.start:
+			// Nothing on the commit is still running, so a missing check is
+			// not waiting behind another job: it will never come.
+			res.NotRun, res.Missing = true, missing
 			return res, nil
 		case len(checks) > 0 && elapsed >= v.set.timeout:
 			res.TimedOut = true
-			res.Log = fmt.Sprintf("%d of %d check(s) still pending\n", pending, len(checks))
+			res.Log = fmt.Sprintf("%d of %d check(s) still pending", pending, len(checks))
+			if len(waiting) > 0 {
+				res.Log += "; listed check(s) not finished: " + strings.Join(waiting, ", ")
+			}
+			if len(missing) > 0 {
+				res.Log += "; listed check(s) not started: " + strings.Join(missing, ", ")
+			}
+			res.Log += "\n"
 			return res, nil
 		}
 		v.e.sleep(v.set.poll)
 	}
+}
+
+// checkLog lists checks one per line, for a verdict to quote.
+func checkLog(checks []tracker.CheckRun) string {
+	var b strings.Builder
+	for _, c := range checks {
+		b.WriteString(c.State + " " + c.Name)
+		if c.URL != "" {
+			b.WriteString(" " + c.URL)
+		}
+		b.WriteString("\n")
+	}
+	return b.String()
 }
 
 // stopVerdict is the verdict a CI run that gave no answer ends with: ci-not-run
@@ -238,8 +290,8 @@ func (v *ciVerifier) verify(sha, name string) (VerifyResult, error) {
 func (r VerifyResult) stopVerdict(who string) (verdict, msg, hint string) {
 	switch {
 	case r.NotRun:
-		return GateCINotRun, fmt.Sprintf("CI-NOT-RUN %s — no CI check started on %s (%s); nothing landed", who, r.Ref, short(r.SHA)),
-			"make the project's CI run on pushes to " + ciRefPrefix + "** branches, or set test.fullWhere to local"
+		return GateCINotRun, fmt.Sprintf("CI-NOT-RUN %s — listed CI check(s) never ran on %s (%s): %s; nothing landed", who, r.Ref, short(r.SHA), strings.Join(r.Missing, ", ")),
+			"make the project's CI run on pushes to " + ciRefPrefix + "** branches and check that test.ciChecks matches its check names, or set test.fullWhere to local"
 	case r.TimedOut:
 		return GateVerifyTimeout, fmt.Sprintf("VERIFY-TIMEOUT %s — CI on %s (%s) did not finish in time: %s; nothing landed", who, r.Ref, short(r.SHA), strings.TrimSpace(r.Log)),
 			"re-run when CI has caught up, or raise test.ciTimeoutMinutes"
@@ -295,7 +347,7 @@ func (e Env) fullTier(ctx context.Context, root, name string) (verify func(dir s
 	cfg := config.Load(rotatree.Config(root))
 	where, err := FullWhere(cfg)
 	if err != nil {
-		return nil, false, "", fail(exitcode.ExitInternal, err.Error())
+		return nil, false, "", err
 	}
 	if where == WhereLocal {
 		return func(dir string) (VerifyResult, error) { return e.Verify(ctx, root, dir) }, false, "", nil

@@ -520,7 +520,8 @@ def gh_api(db, args):
     rest = m.group(1)
     ci = re.match(r"^commits/[0-9a-f]+/(check-suites|check-runs|status)$", rest)
     if ci and method == "GET":
-        # FAKE_CI: pass, fail, pending, or unset (CI never started).
+        # FAKE_CI: pass, fail, pending, lint (only an unrelated "lint" check
+        # passes), or unset (CI never started).
         state = os.environ.get("FAKE_CI", "")
         if ci.group(1) == "check-suites":
             return emit({"total_count": 0, "check_suites": []})
@@ -528,7 +529,8 @@ def gh_api(db, args):
             return emit({"state": "pending", "statuses": []})
         runs = {"pass": [{"name": "ci/test", "status": "completed", "conclusion": "success"}],
                 "fail": [{"name": "ci/test", "status": "completed", "conclusion": "failure"}],
-                "pending": [{"name": "ci/test", "status": "in_progress", "conclusion": None}]}.get(state, [])
+                "pending": [{"name": "ci/test", "status": "in_progress", "conclusion": None}],
+                "lint": [{"name": "lint", "status": "completed", "conclusion": "success"}]}.get(state, [])
         return emit({"total_count": len(runs), "check_runs": runs})
     gm = lambda x: {"number": x["number"], "title": x["title"],
                     "description": x["description"], "state": x["state"]}
