@@ -1,5 +1,5 @@
 ---
-verified-sha: 3fe9abdb78d41ab20ad0545652af7ca33e1dd786
+verified-sha: f1beaacac6869db9f1dac68ecb4c1674842266c2
 refs:
   - internal/version
   - internal/config
@@ -45,7 +45,7 @@ note: schema values resolve from the same merged configuration as runtime reads.
 rota config set <key> <value>
 repo: scoped
 data: {"key": string, "value": any, "previous"?: any, "changed": bool}
-exit: 2 when `<key>` is not in the schema that `config check` uses (the shared table in `bin/hvlib_config.py`), is a malformed path (empty segment: `""`, `.a`, `a.`), an argument is missing, or `<value>` is one the key cannot hold (`invalid value`: `release.versionFile` takes a project-relative path string that stays inside the project, or `""` to clear it); 70 when `.rota/config.json` exists but is not a JSON object, or the write fails.
+exit: 2 when `<key>` is not in the schema that `config check` uses (the shared `Keys` table in `internal/config/keys.go`), is a malformed path (empty segment: `""`, `.a`, `a.`), an argument is missing, or `<value>` is one the key cannot hold (`invalid value`: `release.versionFile` takes a project-relative path string that stays inside the project, or `""` to clear it); 70 when `.rota/config.json` exists but is not a JSON object, or the write fails.
 old: hv-config-set <key> <value> (both map to the old positionals in order). Writes `.rota/config.json` only, never `config.local.json`. `<value>` is parsed as JSON first (`true`, `42`, `"x"`, `[…]`, `{…}`) and falls back to a raw string (`opus`, empty string). `previous` is the stored value before the write and is absent when the key was unset.
 shim: old accepts any key, so the shim checks `<key>` against the schema table first and exits 2 without calling the helper when it is absent; old stdout is empty; read `.rota/config.json` before and after the call to fill `value`, `previous` and `changed`; old rc 1 with `malformed key path` on stderr becomes exit 2, rc 1 for missing argv becomes exit 2, any other rc 1 becomes exit 70.
 note: the JSON-then-string coercion is kept because `hv-init` and `hv-config` skills depend on it. A string that looks like JSON (`"true"`) still needs shell quoting (`'"true"'`). No `--string` or `--local` flag is added.
