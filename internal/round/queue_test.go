@@ -397,3 +397,32 @@ func TestReportedIssuesOnAnOrdinaryItemDoNotFreeTheSlot(t *testing.T) {
 		t.Errorf("unminted review title: %v", err)
 	}
 }
+
+func TestOverlapSkipsClosedIssues(t *testing.T) {
+	t.Run("target slot's own open unmerged issue still overlaps", func(t *testing.T) {
+		f := newMoveFx(t)
+		f.finish(t, "ben", pr7)
+		if _, err := f.assign("14", "ben"); blockedBy(t, err) != BlockOverlap {
+			t.Fatalf("ben's PR is open, so 12 is still live: %v", err)
+		}
+	})
+	t.Run("closed issue", func(t *testing.T) {
+		f := newMoveFx(t)
+		f.forge.items["12"].Closed = true
+		if _, err := f.assign("14", "dana"); err != nil {
+			t.Fatalf("a closed issue never overlaps: %v", err)
+		}
+	})
+	t.Run("live overlap with another slot", func(t *testing.T) {
+		f := newMoveFx(t)
+		if _, err := f.assign("14", "dana"); blockedBy(t, err) != BlockOverlap {
+			t.Fatalf("12 is live on ben: %v", err)
+		}
+	})
+	t.Run("busy target slot still refused", func(t *testing.T) {
+		f := newMoveFx(t)
+		if _, err := f.assign("14", "ben"); blockedBy(t, err) != BlockSlotBusy {
+			t.Fatalf("ben is mid-work, not parkable: %v", err)
+		}
+	})
+}
