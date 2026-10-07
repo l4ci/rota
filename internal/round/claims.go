@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -21,9 +22,11 @@ var reClaimID = regexp.MustCompile(`^([a-z][a-z0-9-]*)@\d+$`)
 // issue's earliest open claim (gone, or another holds it), and an open claim
 // `<agent>@<round>` on an in-progress issue names a registry slot that does not
 // hold that issue. Only a claim that is gone has a repair (clear the claimId);
-// the tracker is the source of truth and is never edited. Needs the Board and,
-// for the second shape, the labelled issues; file mode has no claims to read.
-func (e Env) claimFindings(ctx context.Context, rep *Report, rows []*Row, slotObj map[string]*worker.Slot, queued []worker.QueuedPR, labelled map[int]bool, labelsOK bool) {
+// the tracker is the source of truth and is never edited. The two attempts of a
+// best-of:2 issue each hold a claim: either is fine while it is among the
+// issue's first two. Needs the Board and, for the second shape, the labelled
+// issues; file mode has no claims to read.
+func (e Env) claimFindings(ctx context.Context, rep *Report, reg worker.Registry, rows []*Row, slotObj map[string]*worker.Slot, queued []worker.QueuedPR, labelled map[int]bool, labelsOK bool) {
 	if e.Board == nil {
 		return
 	}
@@ -36,6 +39,12 @@ func (e Env) claimFindings(ctx context.Context, rep *Report, rows []*Row, slotOb
 			return nil, false
 		}
 		return st, st != nil
+	}
+	// bestOfClaim: the slot is an attempt of its issue's best-of:2 record and
+	// its claim is one of the issue's first two.
+	bestOfClaim := func(issue, slot, want string, st *backlog.Status) bool {
+		b := reg.BestOf(issue)
+		return b != nil && b.Attempt(slot) != nil && slices.Contains(firstClaims(st, 2), want)
 	}
 	held := map[string]bool{}
 	for _, r := range rows {
@@ -53,7 +62,7 @@ func (e Env) claimFindings(ctx context.Context, rep *Report, rows []*Row, slotOb
 			continue
 		}
 		switch {
-		case st.Claim == want:
+		case st.Claim == want, bestOfClaim(r.Issue, r.Name, want, st):
 		case st.Claim == "":
 			rep.add(Finding{Kind: ClaimMismatch, Slot: r.Name, Issue: r.Issue,
 				Detail: fmt.Sprintf("slot records claim %s on #%s, which has no open claim", want, r.Issue), Repair: "clear claimId"})
@@ -79,7 +88,7 @@ func (e Env) claimFindings(ctx context.Context, rep *Report, rows []*Row, slotOb
 			continue
 		}
 		switch {
-		case st.Claim == want:
+		case st.Claim == want, bestOfClaim(id, q.From, want, st):
 		case st.Claim == "":
 			rep.add(Finding{Kind: ClaimMismatch, Issue: id,
 				Detail: fmt.Sprintf("PR in review records claim %s on #%s, which has no open claim", want, id)})
@@ -112,12 +121,33 @@ func (e Env) claimFindings(ctx context.Context, rep *Report, rows []*Row, slotOb
 	}
 }
 
-// openClaimWith returns the earliest open claim on id when its id starts
-// with prefix, else "".
+// firstClaims is the first n open claims of a status, earliest first; a
+// backend that fills only Claim has the one.
+func firstClaims(st *backlog.Status, n int) []string {
+	cl := openClaimsOf(st)
+	return cl[:min(n, len(cl))]
+}
+
+// openClaimsOf is every open claim of a status, earliest first.
+func openClaimsOf(st *backlog.Status) []string {
+	if len(st.Claims) == 0 && st.Claim != "" {
+		return []string{st.Claim}
+	}
+	return st.Claims
+}
+
+// openClaimWith returns the earliest open claim on id whose id starts with
+// prefix, else "". Every open claim counts, not just the earliest: the second
+// attempt of a best-of:2 issue holds the later one.
 func openClaimWith(be Board, id, prefix string) string {
 	st, err := be.Status(id)
-	if err != nil || st == nil || !strings.HasPrefix(st.Claim, prefix) {
+	if err != nil || st == nil {
 		return ""
 	}
-	return st.Claim
+	for _, c := range openClaimsOf(st) {
+		if strings.HasPrefix(c, prefix) {
+			return c
+		}
+	}
+	return ""
 }

@@ -181,6 +181,9 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 		if err != nil {
 			return "", err
 		}
+		if len(res.BestOf) == 2 { // a best-of:2 issue took two slots
+			return res.BestOf[0].Agent + " and " + res.BestOf[1].Agent, nil
+		}
 		return res.Agent, nil
 	}
 	e.Audit = func(a roundtick.Action) {
