@@ -44,7 +44,7 @@ import (
 // herdr adds a native agent state, read before the pane text: working is
 // BUSY; blocked is NEEDS-PERMISSION (a dialog is up) unless the pane carries
 // a ROTA-BLOCKED sentinel; idle/done fall to the text rules; unknown falls to
-// the text rules and ends UNKNOWN, which is surfaced and never treated as
+// the text rules and ends UNKNOWN (with a short `herdr agent explain` excerpt in its evidence), which is surfaced and never treated as
 // finished; gone (no agent) is DEAD. Sentinels, `Retrying in` and LIMITED
 // still outrank the native state, the same as they outrank movement.
 
@@ -511,6 +511,15 @@ func (e Env) classify(ctx context.Context, h host.Host, targets []pollTarget, se
 		native := h.Status(ctx, t.name, t.handle)
 		moved := first[t.name] != second
 		st, ev := Classify(second, moved, lines, native)
+		if st == StateUnknown {
+			// herdr says why it could not classify the agent; a failing or
+			// absent explain leaves the generic evidence as it was.
+			if x, ok := h.(host.Explainer); ok {
+				if why := x.Explain(ctx, t.name, t.handle); why != "" {
+					ev += ": herdr explain: " + clip(why, 200)
+				}
+			}
+		}
 		if st == StateBusy && moved && native != "working" {
 			settling = true
 		}

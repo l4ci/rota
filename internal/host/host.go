@@ -11,6 +11,7 @@ package host
 import (
 	"context"
 	"errors"
+	"io"
 	"net"
 	"os"
 	"os/exec"
@@ -58,9 +59,15 @@ type Deps struct {
 	LookPath func(string) (string, error)
 	// Dial opens the herdr API socket (a unix socket path).
 	Dial func(ctx context.Context, path string) (net.Conn, error)
+	// Stderr receives the one-line reports a host makes about itself (a
+	// notification that never reached a human). Nil means os.Stderr.
+	Stderr io.Writer
 }
 
 func (d *Deps) fill() {
+	if d.Stderr == nil {
+		d.Stderr = os.Stderr
+	}
 	if d.Run == nil {
 		d.Run = ExecRunner
 	}
@@ -125,6 +132,14 @@ type Resubmitter interface {
 	// SubmitPending submits the file's text if it is already on the prompt
 	// line. handled=false: nothing pending, the caller sends as usual.
 	SubmitPending(ctx context.Context, slot, handle, file string) (handled bool, err error)
+}
+
+// Explainer is implemented by a host that can say why it classified a slot's
+// agent as it did (herdr's `agent explain`).
+type Explainer interface {
+	// Explain returns the host's own words for the slot's state, "" when it
+	// has none or the call fails.
+	Explain(ctx context.Context, slot, handle string) string
 }
 
 // Host is one terminal backend.
