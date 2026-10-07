@@ -484,3 +484,24 @@ func TestTrainVerdictRefusal(t *testing.T) {
 		t.Fatalf("no blocking record: %+v %v", res, err)
 	}
 }
+
+// An empty test.full lands nothing: the train is refused before the scratch
+// merge unless --no-verify says so.
+func TestTrainRefusesEmptyTestFull(t *testing.T) {
+	w := trainWorld(t, "true", "b1", "b2")
+	w.setConfig(`{"test":{"full":[]}}`)
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}})
+	if err != nil || res.Verdict != GateNoVerify || res.Changed || len(res.Landed) != 0 || w.onMain("b1.txt") {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if !strings.Contains(res.Err, "test.full") || !strings.Contains(res.Hint, "rota config set test.full") || !strings.Contains(res.Hint, "--no-verify") {
+		t.Errorf("refusal must name the key and the way out: %q / %q", res.Err, res.Hint)
+	}
+	res, err = w.train(TrainOpts{Targets: []string{"b1", "b2"}, NoVerify: true})
+	if err != nil || res.Verdict != GatePass || strings.Join(res.Landed, ",") != "b1,b2" {
+		t.Fatalf("--no-verify: %+v %v", res, err)
+	}
+	if !strings.Contains(strings.Join(res.Notes, "\n"), "NO-VERIFY") {
+		t.Errorf("result must say NO-VERIFY: %v", res.Notes)
+	}
+}

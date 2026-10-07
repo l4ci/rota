@@ -71,7 +71,7 @@ func newWorld(t *testing.T, pr string) *world {
 	gitq(t, w.worker, "commit", "-q", "-m", "work")
 	gitq(t, w.worker, "push", "-q", "origin", "w1")
 	os.MkdirAll(filepath.Join(w.dir, ".rota"), 0o755)
-	w.setConfig(`{"test":{"full":[]}}`)
+	w.setConfig(`{"test":{"full":["true"]}}`)
 	w.setSlot(pr, "")
 	os.WriteFile(w.log, nil, 0o644)
 	w.forge("origin", w.origin)
@@ -287,7 +287,10 @@ func TestGate(t *testing.T) {
 			setup: func(w *world) { w.forge("state", "MERGED") }},
 		{name: "d: github merge, verified on the merged tree", pr: ghURL, verdict: GatePass, changed: true, files: []string{"work.txt"},
 			setup: func(w *world) { w.setConfig(`{"test":{"full":["test -f work.txt"]}}`) }},
-		{name: "d: no verify commands", pr: ghURL, verdict: GatePass, changed: true, files: []string{"work.txt"}},
+		{name: "d: no verify commands", pr: ghURL, verdict: GateNoVerify, noFiles: []string{"work.txt"},
+			setup: func(w *world) { w.setConfig(`{"test":{"full":[]}}`) }},
+		{name: "d: no verify commands with --no-verify", pr: ghURL, opts: GateOpts{NoVerify: true}, verdict: GatePass, changed: true, files: []string{"work.txt"},
+			setup: func(w *world) { w.setConfig(`{"test":{"full":[]}}`) }},
 		{name: "d: --no-verify", pr: ghURL, opts: GateOpts{NoVerify: true}, verdict: GatePass, changed: true, files: []string{"work.txt"},
 			setup: func(w *world) { w.setConfig(`{"test":{"full":["false"]}}`) }},
 		{name: "d: verify fails after the merge landed", pr: ghURL, verdict: GateVerifyFailed, changed: true, files: []string{"work.txt"},
@@ -583,7 +586,7 @@ func TestGateStaleMerge(t *testing.T) {
 		{name: "disjoint files are fresh under --check-only", setup: func(w *world) { advanceMainOn(w, "more.txt") }, opts: GateOpts{CheckOnly: true}, verdict: GateFresh, note: true},
 		{name: "the merged tree is still verified", setup: func(w *world) { advanceMainOn(w, "more.txt") }, cfg: `{"test":{"full":["test -f more.txt && test -f work.txt"]}}`, verdict: GatePass, changed: true, note: true},
 		{name: "a shared file goes back", setup: func(w *world) { sharedFile(t, w) }, verdict: GateStale, errHas: "both sides changed seed.txt"},
-		{name: "a shared path under round.sharedPaths is ignored", setup: func(w *world) { sharedFile(t, w) }, cfg: `{"round":{"sharedPaths":["seed.txt"]}}`, verdict: GatePass, changed: true, note: true},
+		{name: "a shared path under round.sharedPaths is ignored", setup: func(w *world) { sharedFile(t, w) }, cfg: `{"test":{"full":["true"]},"round":{"sharedPaths":["seed.txt"]}}`, verdict: GatePass, changed: true, note: true},
 		{name: "a conflict goes back", setup: func(w *world) { advanceMainOn(w, "work.txt") }, verdict: GateStale, errHas: "the merge conflicts"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
@@ -879,5 +882,23 @@ func TestGateVerdictRefusal(t *testing.T) {
 	w := newWorld(t, ghURL)
 	if res, err := w.gate(false, GateOpts{CheckOnly: true, Verdict: func(string) error { return nil }}); err != nil || !res.OK() {
 		t.Errorf("no blocking record: %+v %v", res, err)
+	}
+}
+
+// An empty test.full refuses before the merge; --no-verify merges and says so.
+func TestGateRefusesEmptyTestFull(t *testing.T) {
+	w := newWorld(t, "")
+	gitq(t, w.dir, "fetch", "-q", "origin", "w1:w1")
+	w.setConfig(`{"test":{"full":[]}}`)
+	res, err := w.gate(false, GateOpts{})
+	if err != nil || res.Verdict != GateNoVerify || res.Changed || w.onMain("work.txt") {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if !strings.Contains(res.Err, "test.full") || !strings.Contains(res.Hint, "rota config set test.full") || !strings.Contains(res.Hint, "--no-verify") {
+		t.Errorf("refusal must name the key and the way out: %q / %q", res.Err, res.Hint)
+	}
+	res, err = w.gate(false, GateOpts{NoVerify: true})
+	if err != nil || res.Verdict != GatePass || !res.VerifySkipped || !strings.Contains(strings.Join(res.Notes, "\n"), "NO-VERIFY") {
+		t.Fatalf("--no-verify: %+v %v", res, err)
 	}
 }

@@ -77,7 +77,17 @@ const (
 	// GateVerdictBlocked: a recorded FAIL verdict (B3) refused before the
 	// merge; the CLI exits 4 with it, blockedBy verdict.
 	GateVerdictBlocked = "verdict-blocked"
+	// GateNoVerify: test.full is empty, so a merge would land unverified; the
+	// CLI exits 4 with it, blockedBy no-verify, unless --no-verify was passed.
+	GateNoVerify = "no-verify"
 )
+
+// noVerifyRefusal is the message and hint of the refusal for an empty
+// test.full under a local verify, shared by the gate and the train.
+func noVerifyRefusal(what string) (msg, hint string) {
+	return fmt.Sprintf("%s refused — test.full is empty (read from config key %s), so nothing would verify the merged tree; nothing landed", what, config.TestFullKey),
+		"set it with `rota config set test.full <command>`, or pass --no-verify to merge unverified on purpose"
+}
 
 // GateOpts are the flags of `rota worker gate`.
 type GateOpts struct {
@@ -511,6 +521,14 @@ func (g *gate) stepMerge() (bool, error) {
 	if cur != g.o.Base {
 		return true, fail(exitcode.ExitResolution, fmt.Sprintf("gate must run with %s checked out (currently on %s)", g.o.Base, cur))
 	}
+	// An empty test.full would merge with nothing verified: refuse before the
+	// merge unless --no-verify says so. CI verification does not read it, and a
+	// test.e2e tier still verifies.
+	if !g.o.NoVerify && g.in.where == WhereLocal && len(g.in.verifyCmds) == 0 && len(g.in.e2eCmds) == 0 {
+		g.verdict(GateNoVerify, "", "")
+		g.res.Err, g.res.Hint = noVerifyRefusal("GATE " + g.o.Slot)
+		return true, nil
+	}
 	var ci *ciVerifier
 	if g.in.where == WhereCI && !g.o.NoVerify {
 		var msg string
@@ -668,6 +686,9 @@ func (g *gate) stepVerify() (bool, error) {
 	res, o := g.res, g.o
 	if o.NoVerify {
 		res.Verdict, res.VerifySkipped = GatePass, true
+		if !o.Train {
+			res.Notes = append(res.Notes, fmt.Sprintf("NO-VERIFY %s — --no-verify: merged tree was NOT gated by a command.", o.Slot))
+		}
 		return true, nil
 	}
 	if g.ciRun != nil {

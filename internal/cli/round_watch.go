@@ -109,7 +109,7 @@ func roundWatch(fs *flag.FlagSet) RunFunc {
 			if err != nil {
 				return Result{}, err
 			}
-			return watchResult(root, cd, lenv, res, nil, ""), nil
+			return watchResult(c, root, cd, lenv, res, nil, ""), nil
 		}
 		return autopilotWatch(c, ctx, env, opts, set, root, cd, lenv, *base, *pid, secs(*poll))
 	}
@@ -142,7 +142,7 @@ func watchForge(ctx context.Context, c *Ctx, root string) map[string]string {
 	return out
 }
 
-func watchResult(root, cd string, lenv roundlease.Env, res roundwatch.Result, tick *roundtick.Result, stopped string) Result {
+func watchResult(c *Ctx, root, cd string, lenv roundlease.Env, res roundwatch.Result, tick *roundtick.Result, stopped string) Result {
 	round := 0
 	if l, _, err := lenv.Read(cd); err == nil {
 		round = l.Round
@@ -181,6 +181,10 @@ func watchResult(root, cd string, lenv roundlease.Env, res roundwatch.Result, ti
 		d.Set("autopilotStopped", stopped)
 		text = append(text, "autopilot\tstopped\t"+stopped)
 	}
+	if f, ok := staleBinaryOncePerRound(c, cd, round); ok {
+		d.Set("staleBinary", staleData(f))
+		text = append(text, "warning\t"+f.Detail()+"; rebuild: "+f.Rebuild)
+	}
 	if len(text) == 0 {
 		text = append(text, res.Reason+"\t"+digest)
 	}
@@ -203,15 +207,15 @@ func autopilotWatch(c *Ctx, ctx context.Context, env roundwatch.Env, opts roundw
 		}
 		switch {
 		case errors.Is(terr, errAutopilotStopped):
-			return watchResult(root, cd, lenv, roundwatch.Result{Reason: "stopped"}, nil, "no round lease: the round wound down or the lease was lost"), nil
+			return watchResult(c, root, cd, lenv, roundwatch.Result{Reason: "stopped"}, nil, "no round lease: the round wound down or the lease was lost"), nil
 		case terr != nil:
-			return watchResult(root, cd, lenv, roundwatch.Result{Reason: roundwatch.ReasonChange}, nil, "tick failed: "+terr.Error()), nil
+			return watchResult(c, root, cd, lenv, roundwatch.Result{Reason: roundwatch.ReasonChange}, nil, "tick failed: "+terr.Error()), nil
 		case ctx.Err() != nil:
-			return watchResult(root, cd, lenv, roundwatch.Result{Reason: roundwatch.ReasonInterrupt}, tp, ""), nil
+			return watchResult(c, root, cd, lenv, roundwatch.Result{Reason: roundwatch.ReasonInterrupt}, tp, ""), nil
 		case len(tr.New) > 0:
-			return watchResult(root, cd, lenv, roundwatch.Result{Reason: roundwatch.ReasonChange}, tp, ""), nil
+			return watchResult(c, root, cd, lenv, roundwatch.Result{Reason: roundwatch.ReasonChange}, tp, ""), nil
 		case left <= 0:
-			return watchResult(root, cd, lenv, roundwatch.Result{Reason: roundwatch.ReasonHeartbeat}, tp, ""), nil
+			return watchResult(c, root, cd, lenv, roundwatch.Result{Reason: roundwatch.ReasonHeartbeat}, tp, ""), nil
 		}
 		o := opts
 		o.Heartbeat = left
@@ -223,7 +227,7 @@ func autopilotWatch(c *Ctx, ctx context.Context, env roundwatch.Env, opts roundw
 			if t2, err := autopilotTick(c, root, set, base, pid); err == nil {
 				tp = &t2
 			}
-			return watchResult(root, cd, lenv, res, tp, ""), nil
+			return watchResult(c, root, cd, lenv, res, tp, ""), nil
 		}
 		// A slot the orchestrator already knows about wakes Run at once: the
 		// pause keeps the loop from spinning on it.

@@ -21,6 +21,7 @@ import (
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/skills"
+	"github.com/l4ci/rota/internal/stalebin"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
@@ -109,6 +110,10 @@ type Input struct {
 	MinFreeDiskPercent int
 	Leftovers          []string
 
+	// StaleBinary is set when the installed rota is behind the rota source
+	// checkout Dir is in (stalebin.Check); nil adds no line.
+	StaleBinary *stalebin.Finding
+
 	Exec Exec
 	// Getenv reads the environment for host detection (HERDR_ENV, TMUX); nil
 	// reads as empty.
@@ -127,6 +132,10 @@ func Run(ctx context.Context, in Input) Report {
 		// Only a volume below the threshold adds a line: a healthy one stays
 		// out of the report, like the legacy-state line below.
 		checks = append(checks, c)
+	}
+	if f := in.StaleBinary; f != nil {
+		// Only a binary behind its own checkout adds a line.
+		checks = append(checks, Check{Name: "binary", Status: Warn, Detail: f.Detail(), Hint: "rebuild: " + f.Rebuild})
 	}
 	if in.LegacyDir != "" {
 		// Only a project that still holds the old state folder gets this line.
