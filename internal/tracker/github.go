@@ -33,18 +33,27 @@ var reNoStateReason = regexp.MustCompile(`Unknown JSON field: "stateReason"`)
 // issueFields is ghFields, minus stateReason once gh has rejected it; the
 // reason of a closed issue is then unknown.
 func (g *GitHub) issueFields() string {
-	if g.noStateReason.Load() {
+	if g.lacksStateReason() {
 		return strings.Replace(ghFields, "stateReason,", "", 1)
 	}
 	return ghFields
+}
+
+// lacksStateReason is whether gh is known to reject the field: this adapter
+// saw it, or another one sharing the read cache did (one gh per process).
+func (g *GitHub) lacksStateReason() bool {
+	return g.noStateReason.Load() || (g.cli.Cache != nil && g.cli.Cache.noStateReason.Load())
 }
 
 // withIssueFields runs call with the --json field list, once more without
 // stateReason when gh does not know that field.
 func (g *GitHub) withIssueFields(call func(fields string) error) error {
 	err := call(g.issueFields())
-	if err != nil && !g.noStateReason.Load() && reNoStateReason.MatchString(err.Error()) {
+	if err != nil && !g.lacksStateReason() && reNoStateReason.MatchString(err.Error()) {
 		g.noStateReason.Store(true)
+		if g.cli.Cache != nil {
+			g.cli.Cache.noStateReason.Store(true)
+		}
 		return call(g.issueFields())
 	}
 	return err
@@ -212,6 +221,12 @@ func (g *GitHub) IssuesInMilestone(ctx context.Context, title, state string) ([]
 }
 
 func (g *GitHub) Get(ctx context.Context, number int, withComments bool) (Issue, error) {
+	if !withComments && g.cli.Cache != nil {
+		// A list this process already made carried the same fields.
+		if is, ok := g.cli.Cache.issue(g.cli.cacheScope(), number); ok {
+			return is, nil
+		}
+	}
 	var d ghIssue
 	err := g.withIssueFields(func(fields string) error {
 		if withComments {
@@ -267,6 +282,9 @@ func (g *GitHub) List(ctx context.Context, f ListFilter) ([]Issue, error) {
 	out := []Issue{}
 	for _, d := range raw {
 		out = append(out, d.norm())
+	}
+	if g.cli.Cache != nil {
+		g.cli.Cache.putIssues(g.cli.cacheScope(), out)
 	}
 	return firstN(out, f.Limit), nil
 }

@@ -50,6 +50,10 @@ type Deps struct {
 	// in a fake executor here.
 	TrackerOptions []tracker.Option
 
+	// ReadCache is shared by every forge adapter this invocation builds, so
+	// the same read is made once. Nil turns it off.
+	ReadCache *tracker.ReadCache
+
 	NewTracker     func(ctx context.Context, root string, cfg any) (backlog.Tracker, error)
 	MigrateTracker func(ctx context.Context, root string, cfg any) (migrate.Tracker, error)
 	MigrateSleep   func(d time.Duration)
@@ -97,6 +101,7 @@ func defaultDeps() *Deps {
 		IsTerminal:       defaultIsTerminal,
 		BareSetup:        defaultBareSetup,
 		Palette:          palette.RunTerminal,
+		ReadCache:        tracker.NewReadCache(),
 	}
 	d.Now, d.Today, d.HolderPID, d.ClockErr = envClock(os.Getenv)
 	d.WorkerAccounts = func() *worker.Accounts { return &worker.Accounts{Now: d.Now} }
@@ -156,12 +161,29 @@ func (d *Deps) orchestrateEnv() orchestrate.Env {
 // forge is the one place a verb builds its forge adapter: settings from cfg,
 // provider resolution and the TrackerOptions a test swaps the executor through.
 func (d *Deps) forge(ctx context.Context, cfg any, provider, dir string) (tracker.Adapter, error) {
-	return tracker.NewFromConfig(ctx, cfg, provider, dir, d.TrackerOptions...)
+	return tracker.NewFromConfig(ctx, cfg, provider, dir, d.trackerOptions()...)
+}
+
+// freshReads drops the invocation's cached forge reads. A loop that reads the
+// forge again inside one process (round watch, the autopilot) calls it at the
+// start of each pass, so a pass sees what changed since the last one.
+func (d *Deps) freshReads() {
+	if d.ReadCache != nil {
+		d.ReadCache.Clear()
+	}
+}
+
+// trackerOptions is TrackerOptions plus the invocation's read cache.
+func (d *Deps) trackerOptions() []tracker.Option {
+	if d.ReadCache == nil {
+		return d.TrackerOptions
+	}
+	return append(append([]tracker.Option(nil), d.TrackerOptions...), tracker.WithReadCache(d.ReadCache))
 }
 
 // forgeOrGitHub is forge falling back to github for an unrecognized origin.
 func (d *Deps) forgeOrGitHub(ctx context.Context, cfg any, provider, dir string) (tracker.Adapter, error) {
-	return tracker.NewFromConfigOrGitHub(ctx, cfg, provider, dir, d.TrackerOptions...)
+	return tracker.NewFromConfigOrGitHub(ctx, cfg, provider, dir, d.trackerOptions()...)
 }
 
 // envClock reads the test overrides of the clock once, at the edge:
