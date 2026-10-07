@@ -30,7 +30,7 @@ Advisory findings come back as `warnings`, never as a failure: an umbrella flag 
 
 ## `rota doctor`
 
-`rota init check` asks whether the project is set up. `rota doctor` asks whether the machine can run a round: git, the terminal host, the tracker login, accounts, the orchestrator hooks, the installed skills and Codex.
+`rota init check` asks whether the project is set up. `rota doctor` asks whether the machine can run a round: git, jq, the terminal host, the tracker login, accounts, the orchestrator hooks, the installed skills and Codex.
 
 ```bash
 rota doctor
@@ -51,6 +51,7 @@ The checks, in the order they run:
 | Check | Passes when | Skipped when |
 |-------|-------------|--------------|
 | `git` | git is on `PATH` and `.worktrees/` is gitignored | never |
+| `jq` | `jq` is on `PATH` (the skills read `rota --json` output with it) | never |
 | `host` | the host a round would run on is usable: `work.dispatch` as named, or with it unset or `subagent`, herdr inside a herdr pane, else tmux inside tmux. herdr on `PATH` and 0.9.x, or tmux on `PATH` | no host is detected (solo) |
 | `tracker` | `gh` or `glab` is on `PATH` and logged in for the project's provider | the project has no remote |
 | `accounts` | every account in `work.accounts` has a `configDir` with a credentials file | no accounts configured |
@@ -60,6 +61,7 @@ The checks, in the order they run:
 | `switch` | with `orchestrator.switchOnUsage` on: two or more accounts have a `configDir` and the Stop hook is installed | `orchestrator.switchOnUsage` is off |
 | `skills` | every installed skills root (user and project, Claude and Codex, including each `work.accounts` config dir) matches the binary's skill set, and has no missing or edited files | no root has a `.rota-manifest.json` (run `rota skills install`) |
 | `codex` | `codex` runs, and the default Codex home (or each `work.codexAccounts` account) is logged in and has the herdr integration | `codex` is not on `PATH` and no `work.codexAccounts` are configured |
+| `agents` | the subagent files `rota agents write` generates are present and current | nothing to report: the line appears only as a `warn`, when a file is missing or stale (fix: `rota agents write`) |
 
 The two hook checks are opt-in. Until something `rota hook install` writes is present, they skip and do not fail a project that never installed the hooks. Once it is, a partial or broken install fails. `skills` follows the same rule: it skips until `rota skills install` has written a manifest.
 
