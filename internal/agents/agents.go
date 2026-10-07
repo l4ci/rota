@@ -237,6 +237,9 @@ func Write(root string) ([]Entry, error) {
 		if e.Status == StatusCurrent {
 			continue
 		}
+		if l := symlinkIn(root, e.Path); l != "" {
+			return es, fmt.Errorf("%w: %s is a symlink; refusing to write through it", ErrForeign, l)
+		}
 		p := filepath.Join(root, filepath.FromSlash(e.Path))
 		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 			return es, err
@@ -246,6 +249,20 @@ func Write(root string) ([]Entry, error) {
 		}
 	}
 	return es, nil
+}
+
+// symlinkIn returns the first path component of rel under root that is a
+// symlink, "" when none is, so a checked-in link cannot send a write outside
+// the project.
+func symlinkIn(root, rel string) string {
+	cur := root
+	for _, part := range strings.Split(rel, "/") {
+		cur = filepath.Join(cur, part)
+		if fi, err := os.Lstat(cur); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+			return filepath.ToSlash(strings.TrimPrefix(cur, root+string(filepath.Separator)))
+		}
+	}
+	return ""
 }
 
 // Problems lists the files that are missing or have drifted, as one line each
