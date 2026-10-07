@@ -206,3 +206,18 @@ func TestSnapFromData(t *testing.T) {
 		t.Fatalf("snap = %+v", got)
 	}
 }
+
+func TestRoundStatusScreenStripsControlCharacters(t *testing.T) {
+	s := fixedSnap()
+	s.Slots[0].PRTitle = "evil\x1b[2Jtitle\x07"
+	s.Slots[0].Evidence = "line\x1b]0;x\x07 two"
+	s.Cands[1].Title = "t\x1b[31mred"
+	s.Notes = []string{"warn\x1bX"}
+	m := newRoundScreen(s, nil, newClock().now, roundRefresh)
+	for _, k := range [][]string{nil, {"j", "j", "j", "j", "j"}} {
+		m2, _ := press(m, k...)
+		if out := m2.Render(rw, rh, tui.Style{}); strings.ContainsRune(out, 0x1b) || strings.ContainsRune(out, 0x07) {
+			t.Fatalf("a control character reached the frame: %q", out)
+		}
+	}
+}
