@@ -74,7 +74,7 @@ Pick a descriptive branch name (`rota/quick-switch`). Step 5 creates the branch 
 
 ## Step 4 — Plan Tasks
 
-**Plan-as-artifact check (first, including resume).** For every item or slice, read [`plan-artifact.md`](plan-artifact.md) and resolve its supported backend key before decomposing. An issue plan needs no milestone. Use the stored tasks, constraints and verify steps when a plan exists; a plan that fails `rota plan check` stops the run before dispatch (see that file).
+**Plan-as-artifact check (first, including resume).** For every item or slice, read [`plan-artifact.md`](plan-artifact.md) and resolve its supported backend key before decomposing. An issue plan needs no milestone. Use the stored tasks, constraints and verify steps when a plan exists; a plan that fails `rota plan check` stops the run before dispatch; the check is skipped on the file backend and for plans with no `Serves:` line (see that file).
 
 **Planning level.** With no stored plan, apply [`references/planning-dial.md`](references/planning-dial.md) and state the level in one line to the user. Level 1 (pointers) decomposes ad hoc as below, unchanged. Level 2 or higher: stop and offer `/rota-brainstorm`, `/rota-spike` or `/rota-plan` first; proceed ad hoc only if the user says so. A round worker (branch `<agent>/<issue>-<slug>`) does not stop: the issue's acceptance criteria are its spec, so it states the level and proceeds, and escalates with `ROTA-BLOCKED` only for an open product question. A stored plan already carries its level; skip this.
 

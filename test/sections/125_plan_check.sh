@@ -53,6 +53,12 @@ TMP_PC="$(mktemp -d "$TMP/plancheck.XXXXXX")"
   eq "unknown" "T1 AC-7" "$(jget data.unknown[0].task <<<"$OUT") $(jget data.unknown[0].ids[0] <<<"$OUT")"
   pass "plan check reports uncovered criteria, orphan tasks, missing Verify and unknown ids (exit 1)"
 
+  PUT '- **T1** — legacy
+  - Verify: go test ./parse'
+  hvj plan show "$KEY" | grep -q "Serves:" && fail "legacy plan should have no Serves line"
+  eq "legacy plan reads as orphans" "1 T1" "$(RC hvj plan check "$KEY") $(jget data.orphans[0] <<<"$(hvj plan check "$KEY" 2>/dev/null)")"
+  pass "legacy plan (no Serves: line) is detectable, so /rota-work skips the check"
+
   eq "no plan" "3" "$(RC hvj plan check "#9999")"
   eq "slice key" "2" "$(RC hvj plan check M01-S01)"
   eq "no arg" "2" "$(RC hvj plan check)"

@@ -12,7 +12,7 @@ Resolve the lookup key using the configured backend:
 
 Run `rota plan show <key>`. Exit 3 means no plan; other failures must be surfaced, not treated as permission to re-decompose. Issue item plans live on their issues, so `rota plan list` cannot substitute for this lookup.
 
-If a plan exists on the issue backend, run `rota plan check <key>` before dispatching anything. Exit 1 means a criterion has no task, a task serves no criterion (or an unknown AC id) or lacks a Verify step: stop, show the failure data and offer `/rota-plan` to fix the plan. Never dispatch on a plan that fails the check. On the file backend the verb exits 1 with `blockedBy: backend`; skip it there.
+If a plan exists, run `rota plan check <key>` before dispatching anything, but only on the issue backend and only when the plan has at least one `Serves:` line (`rota plan show <key> | grep -q "Serves:"`). Otherwise skip it and say so in one line: `plan check skipped: file backend` or `plan check skipped: plan predates Serves lines`. A legacy plan has none, so every task would read as an orphan. When it runs, exit 1 means a criterion has no task, a task serves no criterion (or an unknown AC id) or lacks a Verify step: stop, show the failure data and offer `/rota-plan` to fix the plan. Never dispatch on a plan that fails the check.
 
 If a plan exists, use its decomposition, files, interfaces, constraints, verify steps and assumptions as the dispatch briefs; restate user redlines. Keep its stored `key` and task numbers for the task ledger even when the lookup used an alias. If the conversation contradicts the plan, ask whether to update it first (`/rota-plan`) or proceed and ignore it.
 
