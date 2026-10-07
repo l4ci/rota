@@ -3,7 +3,6 @@ package plan
 import (
 	"errors"
 	"github.com/l4ci/rota/internal/exitcode"
-	"os"
 	"regexp"
 	"strings"
 
@@ -52,10 +51,12 @@ func Uncertain(src Items, id string) (itemID, typ string, reasons []string, err 
 	return it.ID, it.Type, uncertainReasons(it.Line, it.Detail, it.HasDetail), nil
 }
 
-// FileItems reads open items from the file backlog under root.
-func FileItems(root string) Items { return fileItems{root} }
+// FileItems reads open items from the file backlog under root. openSections is
+// the "Bugs|Features|Tasks" list that limits which open sections an item may
+// live in; "" is that default.
+func FileItems(root, openSections string) Items { return fileItems{root, openSections} }
 
-type fileItems struct{ root string }
+type fileItems struct{ root, openSections string }
 
 func (s fileItems) Open(id string) (OpenItem, error) {
 	// File-mode store by definition; it cannot import cli (documented exception to backend_select.go).
@@ -67,10 +68,10 @@ func (s fileItems) Open(id string) (OpenItem, error) {
 		}
 		return OpenItem{}, merr
 	}
-	// ROTA_OPEN_SECTIONS ("Bugs|Features|Tasks", as hv-types.sh exports it)
-	// limits which open sections the item may live in.
+	// The sections list (ROTA_OPEN_SECTIONS, as hv-types.sh exported it) limits
+	// which open sections the item may live in.
 	active := map[string]bool{}
-	sections := os.Getenv("ROTA_OPEN_SECTIONS")
+	sections := s.openSections
 	if sections == "" {
 		sections = "Bugs|Features|Tasks"
 	}

@@ -119,11 +119,11 @@ func TestDuplicateTrackingIssuesWarn(t *testing.T) {
 }
 
 func TestSlicePlansAcrossParts(t *testing.T) {
-	t.Setenv("ROTA_NOTE_LIMIT", "82")
 	f := &trackertest.MS{Fake: &trackertest.Fake{Issues: []tracker.Issue{
 		{Number: 3, Title: "M02 — Sharing", Labels: []string{"milestone-tracker"}, State: "open"},
 	}}}
 	b := msIssues(f)
+	b.NoteLimit = "82"
 	long := strings.Repeat("line of plan text\n", 12)
 	for _, u := range []string{"S10", "S02"} {
 		if _, err := b.SlicePut("M02", u, long+u); err != nil {

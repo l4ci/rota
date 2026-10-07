@@ -53,6 +53,8 @@ type Options struct {
 	Warn    func(string)        // notices (dropped tags and milestones, duplicate tracking issues)
 	Today   func() string       // YYYY-MM-DD; nil is the local date
 	Ctx     context.Context     // for every tracker call; nil is context.Background()
+	// NoteLimit is the ROTA_NOTE_LIMIT value; see backlog.Issues.NoteLimit.
+	NoteLimit string
 }
 
 // Op is one planned or run operation: Action is the first word of the
@@ -377,7 +379,7 @@ func (m *migrator) backend() (*backlog.Issues, error) {
 		return nil, err
 	}
 	m.tr = tr
-	m.be = &backlog.Issues{Cfg: m.o.Cfg, Tracker: tr, Ctx: m.ctx, Warn: m.o.Warn}
+	m.be = &backlog.Issues{Cfg: m.o.Cfg, Tracker: tr, Ctx: m.ctx, Warn: m.o.Warn, NoteLimit: m.o.NoteLimit}
 	return m.be, nil
 }
 
