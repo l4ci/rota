@@ -71,6 +71,18 @@ func (w waitWatch) Next(ctx context.Context) (string, error) {
 }
 func (waitWatch) Close() {}
 
+// doneOnNext runs arm on its first Next, which arm answers with an event.
+type doneOnNext struct {
+	h   *waitHost
+	arm func()
+}
+
+func (d doneOnNext) Next(ctx context.Context) (string, error) {
+	d.arm()
+	return waitWatch{d.h}.Next(ctx)
+}
+func (doneOnNext) Close() {}
+
 // watcherHost adds Watch; tmux-style tests use waitHost alone.
 type watcherHost struct{ *waitHost }
 
@@ -327,13 +339,17 @@ func TestWaitAfterTheLastEventRechecksAPaneThatMovedOnce(t *testing.T) {
 					h.text["w1"] += "." // a working pane moves between captures
 				}
 			}
-			go func() {
-				time.Sleep(20 * time.Millisecond)
-				h.mu.Lock()
-				h.status["w1"], armed = statuses[1], true
-				h.mu.Unlock()
-				h.events <- "w1"
-			}()
+			// The done event arrives only once Wait is blocked on the stream,
+			// i.e. after its first classification read the working pane. A
+			// timer raced that read under load, and the snapshot answered first.
+			h.watchFn = func(int) (host.Watch, error) {
+				return doneOnNext{h, func() {
+					h.mu.Lock()
+					h.status["w1"], armed = statuses[1], true
+					h.mu.Unlock()
+					h.events <- "w1"
+				}}, nil
+			}
 			res, err := envWith(watcherHost{h}).Wait(bg, dir, WaitOpts{Timeout: 2 * time.Second})
 			if err != nil {
 				t.Fatal(err)
