@@ -123,6 +123,7 @@ func secs(f float64) time.Duration { return time.Duration(f * float64(time.Secon
 // which reads as no change.
 func watchForge(ctx context.Context, c *Ctx, root string) map[string]string {
 	out := map[string]string{}
+	c.deps().freshReads()
 	env := c.deps().escalationEnv()
 	if env.Forge == nil {
 		env.Forge = escalationForge(c)

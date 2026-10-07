@@ -74,6 +74,7 @@ func roundTick(fs *flag.FlagSet) RunFunc {
 // autopilotTick runs one tick for the lease holder. The lease is checked on
 // every tick: wind-down or a takeover ends the autopilot cleanly.
 func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride string, pid int) (roundtick.Result, error) {
+	c.deps().freshReads()
 	le := c.deps().WatchEnv()
 	cd, err := rotastate.CommonDir(root)
 	if err != nil {
