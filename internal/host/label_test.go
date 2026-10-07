@@ -33,7 +33,7 @@ func labeler(f *fake, env map[string]string, errw *bytes.Buffer) Labeler {
 func TestHerdrLabelSetsThePaneTitleUnderTheRotaSource(t *testing.T) {
 	f := labelFake("w1:p1", "")
 	labeler(f, nil, &bytes.Buffer{}).Label(context.Background(), "w1", "w1:t1", "w1 · #514 · working")
-	want := "herdr pane report-metadata --source rota w1:p1 --title w1 · #514 · working"
+	want := "herdr pane report-metadata w1:p1 --source rota --title w1 · #514 · working"
 	if !strings.Contains(f.log(), want) {
 		t.Errorf("log = %s\nwant %s", f.log(), want)
 	}
@@ -42,7 +42,7 @@ func TestHerdrLabelSetsThePaneTitleUnderTheRotaSource(t *testing.T) {
 func TestHerdrLabelEmptyTitleClears(t *testing.T) {
 	f := labelFake("w1:p1", "")
 	labeler(f, nil, &bytes.Buffer{}).Label(context.Background(), "w1", "w1:t1", "")
-	want := "herdr pane report-metadata --source rota w1:p1 --clear-title --clear-display-agent"
+	want := "herdr pane report-metadata w1:p1 --source rota --clear-title --clear-display-agent"
 	if !strings.Contains(f.log(), want) {
 		t.Errorf("log = %s\nwant %s", f.log(), want)
 	}
@@ -75,7 +75,7 @@ func TestHerdrLabelFailingSetNotesOnceAndClearIsSilent(t *testing.T) {
 func TestHerdrLabelWorkspaceSetsTheRoundToken(t *testing.T) {
 	f := labelFake("w1:p1", "")
 	labeler(f, map[string]string{"HERDR_WORKSPACE_ID": "w1"}, &bytes.Buffer{}).LabelWorkspace(context.Background(), "r10 3 busy 1 blocked")
-	want := "herdr workspace report-metadata --source rota --token round=r10 3 busy 1 blocked w1"
+	want := "herdr workspace report-metadata w1 --source rota --token round=r10 3 busy 1 blocked"
 	if !strings.Contains(f.log(), want) {
 		t.Errorf("log = %s\nwant %s", f.log(), want)
 	}
