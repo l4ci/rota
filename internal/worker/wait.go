@@ -19,6 +19,11 @@ type WaitOpts struct {
 	Lines   int
 }
 
+// maxResubscribe is how many times in a row the herdr event stream may be lost
+// (or fail to re-open) before Wait gives up on events and polls instead. A
+// delivered event resets the count.
+const maxResubscribe = 3
+
 // Wait sources: what made the slot come back.
 const (
 	SourceSnapshot = "snapshot"
@@ -114,8 +119,11 @@ func (e Env) Wait(ctx context.Context, root string, o WaitOpts) (WaitResult, err
 		return WaitResult{}, fail(exitcode.ExitFailed, "interrupted")
 	}
 	var w host.Watch
-	if wh, ok := h.(host.Watcher); ok {
-		wt := make([]host.WatchTarget, len(targets))
+	var wh host.Watcher
+	var wt []host.WatchTarget
+	if cw, ok := h.(host.Watcher); ok {
+		wh = cw
+		wt = make([]host.WatchTarget, len(targets))
 		for i, t := range targets {
 			wt[i] = host.WatchTarget{Slot: t.name, Handle: t.handle}
 		}
@@ -126,7 +134,33 @@ func (e Env) Wait(ctx context.Context, root string, o WaitOpts) (WaitResult, err
 			}
 			return WaitResult{}, fail(exitcode.ExitUnavailable, err.Error())
 		}
-		defer w.Close()
+		defer func() {
+			if w != nil {
+				w.Close()
+			}
+		}()
+	}
+	// resubscribe replaces a lost stream. The loop's next classification runs
+	// after it, so a change while disconnected is read from current state
+	// (the seen dedupe keeps it from being reported twice). After
+	// maxResubscribe losses in a row it drops to polling and says so once.
+	lost := 0
+	resubscribe := func(cause error) {
+		w.Close()
+		w = nil
+		for lost++; lost <= maxResubscribe; lost++ {
+			nw, err := wh.Watch(ctx, wt)
+			if err == nil {
+				w = nw
+				return
+			}
+			cause = err
+			if ctx.Err() != nil {
+				return
+			}
+			e.Sleep(time.Duration(lost) * time.Second)
+		}
+		fmt.Fprintf(e.Stderr, "rota: herdr event stream lost (%s); polling instead\n", strings.TrimSpace(cause.Error()))
 	}
 
 	// seen is one snapshot of the registry; clears are kept in memory.
@@ -199,8 +233,16 @@ func (e Env) Wait(ctx context.Context, root string, o WaitOpts) (WaitResult, err
 			if ctx.Err() != nil {
 				return stop()
 			}
+			if errors.Is(err, host.ErrStreamLost) {
+				resubscribe(err)
+				if ctx.Err() != nil {
+					return stop()
+				}
+				continue
+			}
 			return WaitResult{}, fail(exitcode.ExitUnavailable, strings.TrimSpace(err.Error()))
 		}
+		lost = 0
 	}
 }
 
