@@ -55,7 +55,8 @@ TMP_PC="$(mktemp -d "$TMP/plancheck.XXXXXX")"
 
   PUT '- **T1** — legacy
   - Verify: go test ./parse'
-  hvj plan show "$KEY" | grep -q "Serves:" && fail "legacy plan should have no Serves line"
+  SHOWN="$(hvj plan show "$KEY")"
+  if grep -q "Serves:" <<<"$SHOWN"; then fail "legacy plan should have no Serves line"; fi
   eq "legacy plan reads as orphans" "1 T1" "$(RC hvj plan check "$KEY") $(jget data.orphans[0] <<<"$(hvj plan check "$KEY" 2>/dev/null)")"
   pass "legacy plan (no Serves: line) is detectable, so /rota-work skips the check"
 
