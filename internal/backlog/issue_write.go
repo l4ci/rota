@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/l4ci/rota/internal/acceptance"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/marker"
 	"github.com/l4ci/rota/internal/notechunk"
@@ -173,6 +174,7 @@ func (b *Issues) Create(in CreateInput) (CreateResult, error) {
 	}
 	if in.HasBody {
 		if body := strings.Trim(string([]rune(string(in.Body))), "\n"); body != "" {
+			body, _ = acceptance.Number(body)
 			parts = append(parts, body)
 		}
 	}
