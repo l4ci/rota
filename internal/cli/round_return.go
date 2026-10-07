@@ -53,7 +53,7 @@ func moveEnv(c *Ctx, root string) (round.Env, round.Board, error) {
 		_, ferr := backlogFail(err)
 		return round.Env{}, nil, ferr
 	}
-	be, ok := raw.(round.Board)
+	be, ok := round.BoardOf(raw)
 	if !ok {
 		return round.Env{}, nil, &Error{Exit: ExitInternal, Message: "the backlog backend has no workflow"}
 	}

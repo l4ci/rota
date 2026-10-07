@@ -127,3 +127,9 @@ func verifyCommandsAt(root string) []string {
 }
 
 var legacyWarn sync.Once
+
+// RunShell runs one command through the Env's shell (sh -c by default) in dir
+// and returns its combined output and exit code.
+func (e Env) RunShell(ctx context.Context, dir, command string) (string, int) {
+	return e.withDefaults().Shell(ctx, dir, command)
+}

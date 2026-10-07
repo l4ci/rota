@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"crypto/sha256"
 	"flag"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -17,6 +19,7 @@ func proofCommands() []*Command {
 	return []*Command{
 		{Name: "proof", Summary: "verification proof rows on items", Subs: []*Command{
 			{Name: "add", Summary: "append a proof row", Verb: proofAdd},
+			{Name: "record", Summary: "run a command and record it as a proof row", Verb: proofRecord},
 			{Name: "show", Summary: "list an item's proof rows", Verb: proofShow},
 		}},
 	}
@@ -54,6 +57,90 @@ func proofAdd(fs *flag.FlagSet) RunFunc {
 		d.Set("changed", changed)
 		return Result{Data: d, Text: w.ID}, nil
 	}
+}
+
+// proofRecord is `rota proof record <ID> [--base <ref>] -- <cmd>...`: it runs
+// the command itself, so the row's check, result and evidence are measured,
+// not typed.
+func proofRecord(fs *flag.FlagSet) RunFunc {
+	base := fs.String("base", "", "ref {files} is diffed against (default: the base branch)")
+	return func(c *Ctx, args []string) (Result, error) {
+		if c.dashAt != 1 {
+			return Result{}, Usage("usage: rota proof record <ID> -- <command> [<arg>...]").
+				WithHint("the command goes after --, e.g. rota proof record B07 -- go test ./...")
+		}
+		if len(args) < 2 || strings.TrimSpace(strings.Join(args[1:], "")) == "" {
+			return Result{}, Usage("missing <command> after --")
+		}
+		id, cmdArgs := args[0], args[1:]
+		root, st, w, err := openProof(c, id)
+		if err != nil {
+			return Result{}, err
+		}
+		// Resolve the item before running anything: an unknown one exits 3
+		// without the command having run.
+		if err := st.Update(id, func(content string) (string, bool, error) { return content, false, nil }); err != nil {
+			return failAny(err)
+		}
+		list := ""
+		if anyContains(cmdArgs, filesPlaceholder) {
+			files, err := changedFiles(c, root, *base)
+			if err != nil {
+				return Result{}, err
+			}
+			quoted := make([]string, len(files))
+			for i, f := range files {
+				quoted[i] = shellQuote(f)
+			}
+			list = strings.Join(quoted, " ")
+		}
+		command := recordedCommand(cmdArgs, list)
+		ctx, stop := workerContext()
+		defer stop()
+		out, code := workerEnvCtx(c, ctx).RunShell(ctx, root, command)
+		result := "PASS"
+		if code != 0 {
+			result = "FAIL"
+		}
+		evidence := fmt.Sprintf("exit=%d output-sha256=%x", code, sha256.Sum256([]byte(out)))
+		row, changed, err := proof.Add(st, root, id, proof.AddOpts{Check: command, Result: result, Evidence: evidence})
+		if err != nil {
+			return failAny(err)
+		}
+		d := typedData(w.ID, w.Type, nil)
+		d.Set("check", row.Check)
+		d.Set("result", row.Result)
+		d.Set("sha", row.Sha)
+		d.Set("evidence", row.Evidence)
+		d.Set("exitCode", code)
+		d.Set("changed", changed)
+		res := Result{Data: d, Text: row.Result + ": " + row.Check}
+		if code != 0 {
+			return res, Failed("%s (exit %d)", command, code)
+		}
+		return res, nil
+	}
+}
+
+// recordedCommand is the shell line that ran: one argument is a shell line
+// already; several are quoted one by one. {files} expands to list, which is
+// already quoted, and stays unquoted when it is a whole argument.
+func recordedCommand(args []string, list string) string {
+	if len(args) == 1 {
+		return strings.ReplaceAll(args[0], filesPlaceholder, list)
+	}
+	parts := make([]string, 0, len(args))
+	for _, a := range args {
+		switch {
+		case a == filesPlaceholder:
+			if list != "" {
+				parts = append(parts, list)
+			}
+		default:
+			parts = append(parts, shellQuote(strings.ReplaceAll(a, filesPlaceholder, list)))
+		}
+	}
+	return strings.Join(parts, " ")
 }
 
 func proofShow(fs *flag.FlagSet) RunFunc {

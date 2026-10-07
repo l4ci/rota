@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"strings"
@@ -63,12 +62,9 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		var gateRes Result
-		var gateErr error
 		approve := func(files func() ([]string, error)) error {
 			req.Thread = func() (approvalThread, error) { return slotApprovalThread(root, args[0]) }
-			gateRes, gateErr = clearMerge(c, policy, "train "+strings.Join(args, ", ")+" into "+*base, conf, req, files, nil)
-			return gateErr
+			return clearMerge(c, policy, "train "+strings.Join(args, ", ")+" into "+*base, conf, req, files, nil)
 		}
 		ctx, stop := workerContext()
 		defer stop()
@@ -77,24 +73,8 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 			issues[i] = gateIssue(root, t)
 		}
 		r, err := workerEnvCtx(c, ctx).Train(ctx, root, worker.TrainOpts{Targets: args, Base: *base, LandGreen: *landGreen, Approve: approve})
-		if gateErr != nil {
-			var e *Error
-			if !errors.As(gateErr, &e) {
-				return Result{}, Unavailable("%v", gateErr) // listing the merge's files failed
-			}
-			d := trainData(r)
-			if g, ok := gateRes.Data.(*jsonx.Object); ok {
-				for _, k := range []string{"blockedBy", "gate", "paths", "changed"} {
-					v, _ := g.Get(k)
-					d.Set(k, v)
-				}
-				for _, k := range []string{"escalation", "status", "answer"} {
-					if v, ok := g.Get(k); ok {
-						d.Set(k, v)
-					}
-				}
-			}
-			return Result{Data: d}, gateErr
+		if err != nil && r.Verdict == worker.GateApprovalRequired {
+			return gateRefusal(err, trainData(r))
 		}
 		if err != nil {
 			return Result{}, err
@@ -106,6 +86,9 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 			if m.Landed && issues[i] != "" {
 				if cerr := worker.ClearBounces(root, issues[i]); cerr != nil {
 					fmt.Fprintln(c.Stderr, "BOUNCE-COUNT "+m.Target+" — "+cerr.Error())
+				}
+				if cerr := worker.ClearItemStart(root, issues[i]); cerr != nil {
+					fmt.Fprintln(c.Stderr, "ITEM-CLOCK "+m.Target+" — "+cerr.Error())
 				}
 			}
 		}

@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# Scripted stub worker for the e2e scenarios (test.e2e, #386). It plays one
+# worker's side of a round on the fake tmux host (test/fakes/tmux): each cue
+# prints what a real agent would put on its pane and updates the fake's state
+# files to match, so rota sees the same pane text, movement and windows it
+# would with a model behind them. No model, no credits, no network.
+#
+#   stub_worker done <slot> <pr-url>   print ROTA-DONE <slot> <pr-url>
+#   stub_worker blocked <slot> <q>     print ROTA-BLOCKED <slot>: <q>
+#   stub_worker limit <slot>           print a usage-limit line
+#   stub_worker slow <slot>            output that keeps changing (reads busy)
+#   stub_worker silent <slot>          working line, then nothing moves
+#   stub_worker exit <slot>            the agent dies: its window goes away
+#   stub_worker commit <slot> <file>   commit <file> in $STUB_ROOT/.worktrees/<slot>
+#
+# Needs $FAKE_TMUX (the fake's state directory); commit also needs $STUB_ROOT. The pane never ends in a
+# prompt line, so a host Send's human-draft check passes. Safe by construction:
+# it only writes under $FAKE_TMUX.
+[ -n "${FAKE_TMUX:-}" ] || { echo "stub_worker: FAKE_TMUX is not set" >&2; exit 98; }
+F="$FAKE_TMUX"
+cue="${1:-}"; [ "$#" -gt 0 ] && shift
+slot="${1:?slot}"
+# The slot's own pane files, so several stubs can run side by side.
+pane="$F/pane.$slot"; tick="$F/tick.$slot"
+say() { printf '%s\n' "$1" | tee "$pane"; }
+case "$cue" in
+  done)    rm -f "$tick"; say "ROTA-DONE $slot ${2:?pr-url}" ;;
+  blocked) rm -f "$tick"; say "ROTA-BLOCKED $slot: ${2:?question}" ;;
+  limit)   rm -f "$tick"; say "You've hit your usage limit. Your limit resets at 5pm" ;;
+  slow)    say "working"; : >"$tick" ;;            # tick: every capture differs
+  silent)  rm -f "$tick"; say "working" ;;         # same text on every capture
+  exit)
+    rm -f "$tick" "$pane"
+    if [ -f "$F/windows" ]; then grep -v "^$slot " "$F/windows" >"$F/windows.new"; mv "$F/windows.new" "$F/windows"; fi
+    if [ -n "${FAKE_TMUX_SNAPSHOT:-}" ] && [ -f "$FAKE_TMUX_SNAPSHOT" ]; then
+      grep -v "^[^	]*:$slot	" "$FAKE_TMUX_SNAPSHOT" >"$FAKE_TMUX_SNAPSHOT.new"; mv "$FAKE_TMUX_SNAPSHOT.new" "$FAKE_TMUX_SNAPSHOT"
+    fi ;;
+  commit)
+    wt="${STUB_ROOT:?STUB_ROOT is not set}/.worktrees/$slot"
+    echo "$slot" >"$wt/${2:?file}"
+    git -C "$wt" add -- "$2" && git -C "$wt" -c user.name=stub -c user.email=stub@stub commit -q -m "stub: $2" ;;
+  *) echo "stub_worker: unknown cue '$cue' (done|blocked|limit|slow|silent|exit|commit)" >&2; exit 2 ;;
+esac

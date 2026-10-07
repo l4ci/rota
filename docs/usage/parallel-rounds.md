@@ -386,6 +386,12 @@ change any file the branch changed (`round.sharedPaths` aside). A conflict, or a
 sides, sends it back as `stale`. Each `stale` or `provenance-fail` bounce is counted per item; at `round.maxBounces` (default
 3) the gate parks the item `needs-human` with a comment instead of sending it back again (the PR stays open; a pass resets the count, and `0` turns the cap off).
 
+### CI and `GITHUB_TOKEN`
+
+Pushes and comments made with the workflow `GITHUB_TOKEN` do not trigger other workflows. If a CI check
+should run on a commit rota pushes, or on a PR rota opens, push and open it with a personal access token or
+a GitHub App token instead.
+
 ### Merge train
 
 When several PRs wait in review, `rota worker train <slot|PR>... --base <branch>` gates them together and

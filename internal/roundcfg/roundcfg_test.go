@@ -173,3 +173,15 @@ func TestAutopilotKeys(t *testing.T) {
 		}
 	}
 }
+
+func TestItemTimeoutMinutes(t *testing.T) {
+	if set, err := Load(project(t, `{}`)); err != nil || set.ItemTimeoutMinutes != 0 {
+		t.Fatalf("default is off: %d %v", set.ItemTimeoutMinutes, err)
+	}
+	if set, err := Load(project(t, `{"work":{"itemTimeoutMinutes":90}}`)); err != nil || set.ItemTimeoutMinutes != 90 {
+		t.Fatalf("set: %d %v", set.ItemTimeoutMinutes, err)
+	}
+	if _, err := Load(project(t, `{"work":{"itemTimeoutMinutes":-1}}`)); err == nil {
+		t.Fatal("a negative limit must be refused")
+	}
+}

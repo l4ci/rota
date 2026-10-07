@@ -1,4 +1,4 @@
-package migrate
+package hvmigrate
 
 // `rota migrate hv`: the one-shot move of a project from the hv era (state in
 // .hv/, markers and blocks spelled hv, skills installed as hv-*) to rota. It
@@ -26,6 +26,7 @@ import (
 	"github.com/l4ci/rota/internal/hook"
 	"github.com/l4ci/rota/internal/initproj"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/legacystate"
 	"github.com/l4ci/rota/internal/repos"
 	"github.com/l4ci/rota/internal/section"
 	"github.com/l4ci/rota/internal/skills"
@@ -100,41 +101,6 @@ type HvReport struct {
 	ManualReview   []string
 	Diffs          []string
 	VersionStamp   string
-}
-
-// LegacyState walks up from start (a physical path). It returns the nearest
-// directory that holds .hv/ and no .rota/ next to it, when no .rota/ is found
-// first: such a project has not been migrated.
-func LegacyState(start string) (dir string, legacy bool) {
-	d := start
-	for {
-		if isDir(filepath.Join(d, stateDir)) {
-			return "", false
-		}
-		if isDir(filepath.Join(d, legacyDir)) {
-			return d, true
-		}
-		p := filepath.Dir(d)
-		if p == d {
-			return "", false
-		}
-		d = p
-	}
-}
-
-// FindState is the nearest directory holding .hv/ or .rota/.
-func FindState(start string) (string, bool) {
-	d := start
-	for {
-		if isDir(filepath.Join(d, stateDir)) || isDir(filepath.Join(d, legacyDir)) {
-			return d, true
-		}
-		p := filepath.Dir(d)
-		if p == d {
-			return "", false
-		}
-		d = p
-	}
 }
 
 func isDir(p string) bool {
@@ -712,7 +678,7 @@ func RunHv(o HvOptions) (*HvReport, error) {
 			return nil, refuse("backup-dir", "cwd is inside %s/migrate-backup/. Run from project root.", d)
 		}
 	}
-	rootDir, ok := FindState(cwd)
+	rootDir, ok := legacystate.FindState(cwd)
 	if !ok {
 		return nil, ErrNoState
 	}

@@ -284,6 +284,31 @@ func TestAssignDispatchFailureKeepsTheMarks(t *testing.T) {
 	}
 }
 
+// A failed dispatch leaves the slot idle on both paths (transfer's twin asserts
+// the same), so the repeated call knows nothing was delivered.
+func TestAssignDispatchFailureMarksTheSlotIdle(t *testing.T) {
+	f := newAssignFixture(t)
+	f.env.Worker.NewHost = func(string) host.Host { return &failingHost{hostFake: f.host} }
+	if _, err := f.assign("12", "ben", nil); err == nil {
+		t.Fatal("dispatch failure must surface")
+	}
+	if st := worker.LoadRegistry(f.root).Slot("ben").State(); st != "idle" {
+		t.Errorf("slot state after a failed dispatch: %q", st)
+	}
+}
+
+func TestAssignUnreadableBodyFileIsRefused(t *testing.T) {
+	f := newAssignFixture(t)
+	_, err := f.assign("12", "ben", func(o *AssignOpts) { o.BodyFile = filepath.Join(f.root, "missing.md") })
+	var we *exitcode.Error
+	if !errors.As(err, &we) || we.Exit != exitcode.ExitUsage {
+		t.Fatalf("want a usage error, got %v", err)
+	}
+	if len(f.be.claims) != 0 {
+		t.Errorf("nothing is claimed: %v", f.be.claims)
+	}
+}
+
 type failingHost struct{ *hostFake }
 
 func (f *failingHost) Send(context.Context, string, string, string) error {

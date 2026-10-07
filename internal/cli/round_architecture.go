@@ -87,7 +87,7 @@ func roundArchitecture(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return backlogFail(err)
 		}
-		be, ok := raw.(round.Board)
+		be, ok := round.BoardOf(raw)
 		if !ok {
 			return Result{}, &Error{Exit: ExitInternal, Message: "the backlog backend has no workflow"}
 		}

@@ -71,12 +71,17 @@ PY
             (control / "release").touch()
             if proc.poll() is None:
                 proc.wait(timeout=30)
-            proc.communicate()
+            # finish() and the early-exit failure below already drained the pipe;
+            # a second communicate() on the closed stream raises ValueError and
+            # masks the runner's own output (#428).
+            if not proc.stdout.closed:
+                proc.communicate()
         self.addCleanup(cleanup)
         deadline = time.monotonic() + 30
         while not (control / "ready").exists():
             if proc.poll() is not None:
-                self.fail("runner stopped before section: " + proc.communicate()[0])
+                self.fail("runner stopped before section (exit %s): %s"
+                          % (proc.wait(), proc.communicate()[0]))
             if time.monotonic() > deadline:
                 self.fail("runner did not reach section")
             time.sleep(0.02)
@@ -137,6 +142,12 @@ PY
                                 if line.startswith("smoke diagnostics: ")))
         self.assertNotEqual(first_diag, second_diag)
         self.assertEqual((second_diag / "before/AGENTS.md").read_bytes(), b"between snapshots\n")
+
+    def test_early_runner_exit_reports_its_output(self):
+        (self.repo / "test/sections/01_wait.sh").unlink()
+        with self.assertRaises(AssertionError) as caught:
+            self.start()
+        self.assertIn("SECTION_LIST entry is not an existing file", str(caught.exception))
 
     def test_test_leak_fails_without_overwriting_later_work(self):
         run = self.start(leak=True)
