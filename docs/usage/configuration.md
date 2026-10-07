@@ -130,7 +130,7 @@ Three tiers of shell commands, each an array defaulting to `[]`:
 
 ### The exclusion ledger
 
-A known-red or flaky test may be passed over by the merge gate and the merge train only through `.rota/test-ledger.json`, a tracked file that starts empty (a missing file or `[]` means no exclusions):
+A known-red or flaky test may be passed over by the merge gate and the merge train only through `.rota/test-ledger.json`, a tracked file you create by hand when the first entry is needed (a missing file or `[]` means no exclusions):
 
 ```json
 [{"test": "TestFlaky", "owner": "dana", "receipt": "#378", "expires": "2026-11-01"}]
