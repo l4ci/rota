@@ -68,7 +68,7 @@ func (e Env) holdsLease(ctx context.Context, root string, pid int, getenv func(s
 	if err != nil {
 		return false, err
 	}
-	le := e.leaseEnv()
+	le := e.Lease
 	_, _, held, err := le.Holds(cd, pid, getenv)
 	return held, err
 }

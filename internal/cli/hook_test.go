@@ -333,3 +333,39 @@ func TestWorkerPromptCheck(t *testing.T) {
 		}
 	}
 }
+
+// The hook reads the lease through Deps.LeaseEnv: a fake process table that
+// knows pid 4242 makes it the orchestrator with no real process behind it.
+func TestHookStopUsesInjectedLeaseEnv(t *testing.T) {
+	dir := orchProject(t, false)
+	t.Setenv("ROTA_TEST_HOLDER_PID", "4242")
+	le := roundlease.DefaultEnv()
+	le.Alive = func(p int) bool { return p == 4242 }
+	le.StartTime = func(p int) (uint64, bool) { return 99, p == 4242 }
+	cd, err := rotastate.CommonDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, err := le.Acquire(cd, dir, roundlease.Holder{PID: 4242, Start: 99}, 1); err != nil {
+		t.Fatal(err)
+	}
+	dumpAt(t, dir, 99)
+	run := func(deps *Deps) string {
+		old, _ := os.Getwd()
+		os.Chdir(dir)
+		defer os.Chdir(old)
+		var so, se strings.Builder
+		if code := mainWith(deps, []string{"hook", "stop"}, strings.NewReader(stopPayload(dir, false)), &so, &se); code != 0 {
+			t.Fatalf("code %d %s", code, se.String())
+		}
+		return so.String()
+	}
+	if out := run(testDeps()); out != "" {
+		t.Errorf("real process table: pid 4242 holds nothing, got %q", out)
+	}
+	d := testDeps()
+	d.LeaseEnv = func() roundlease.Env { return le }
+	if out := run(d); !strings.Contains(out, `"decision":"block"`) {
+		t.Errorf("injected lease env: want a block, got %q", out)
+	}
+}
