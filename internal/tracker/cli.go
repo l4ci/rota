@@ -44,6 +44,9 @@ type CLI struct {
 	Exec     Exec
 	LookPath func(string) (string, error)
 	Sleep    func(time.Duration)
+
+	// Cache, when set, serves repeated reads and is dropped by any other call.
+	Cache *ReadCache
 }
 
 var (
@@ -181,6 +184,27 @@ func ProviderFromURL(url string) string {
 // stdin is read once, and only when an argument takes it (`-`, or ending in
 // `=-` or `@-`).
 func (c *CLI) Run(ctx context.Context, args []string, stdin io.Reader) (Result, error) {
+	if c.Cache == nil || keepsCache(args) {
+		return c.run(ctx, args, stdin)
+	}
+	if !isRead(args) {
+		// Drop before and after: a write that fails midway may still have landed.
+		c.Cache.Clear()
+		defer c.Cache.Clear()
+		return c.run(ctx, args, stdin)
+	}
+	key := cacheKey(c.cacheScope(), args)
+	if r, ok := c.Cache.get(key); ok {
+		return r, nil
+	}
+	r, err := c.run(ctx, args, stdin)
+	if err == nil && r.ExitCode == 0 {
+		c.Cache.put(key, r)
+	}
+	return r, err
+}
+
+func (c *CLI) run(ctx context.Context, args []string, stdin io.Reader) (Result, error) {
 	cli := CLIName(c.Provider)
 	if _, err := c.lookPath(cli); err != nil {
 		return Result{}, unavailable("%s is not installed", cli)
