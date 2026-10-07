@@ -100,12 +100,21 @@ func Dependencies(text string) (refs, unverifiable []string) {
 // text that is a tracked file or the directory (two or more segments) of one.
 // Directories end in "/". shared globs are dropped.
 func Footprint(text string, tracked, shared []string) []string {
+	return footprint(text, "", tracked, shared)
+}
+
+// footprint is Footprint where extra (an item's comments) feeds only the
+// inference fallback: the `## Files` section is read from body alone, so a
+// comment cannot become part of the last section.
+func footprint(body, extra string, tracked, shared []string) []string {
 	var out []string
-	if sec, ok := itembody.Section(text, itembody.FilesHeadRe); ok {
+	if sec, ok := itembody.Section(body, itembody.FilesHeadRe); ok {
 		for _, line := range strings.Split(sec, "\n") {
 			line = strings.TrimSpace(line)
-			line = strings.TrimLeft(line, "-*+ \t")
-			line = strings.TrimSpace(line)
+			if !strings.HasPrefix(line, "- ") && !strings.HasPrefix(line, "* ") {
+				continue
+			}
+			line = strings.TrimSpace(line[2:])
 			if line == "" {
 				continue
 			}
@@ -124,7 +133,7 @@ func Footprint(text string, tracked, shared []string) []string {
 			}
 		}
 		seen := map[string]bool{}
-		for _, tok := range pathTokenRe.FindAllString(text, -1) {
+		for _, tok := range pathTokenRe.FindAllString(body+"\n"+extra, -1) {
 			tok = strings.TrimLeft(strings.Trim(tok, ".,:;"), "./")
 			if tok == "" || seen[tok] {
 				continue
@@ -180,16 +189,29 @@ func Overlaps(a, b []string) []string {
 	return out
 }
 
-// itemText is an item's body and the text of its comments: what a footprint
-// is read from.
+// itemText is an item's body and the text of its comments.
 func itemText(be backlog.Backend, id string) string {
-	text, _, _ := be.Detail(id)
+	body, comments := itemParts(be, id)
+	return body + comments
+}
+
+// itemParts is an item's body and, separately, the text of its comments, each
+// comment on its own line.
+func itemParts(be backlog.Backend, id string) (body, comments string) {
+	body, _, _ = be.Detail(id)
 	if cs, err := be.Comments(id, ""); err == nil {
 		for _, c := range cs {
-			text += "\n" + c.Text
+			comments += "\n" + c.Text
 		}
 	}
-	return text
+	return body, comments
+}
+
+// itemFootprint is the footprint of an item: `## Files` from its body, else
+// path tokens from body and comments.
+func itemFootprint(be backlog.Backend, id string, tracked, shared []string) []string {
+	body, comments := itemParts(be, id)
+	return footprint(body, comments, tracked, shared)
 }
 
 // Assess runs the three readiness checks on one item. inFlight is what other
@@ -240,7 +262,7 @@ func AssessBrief(be backlog.Backend, id string, tracked, shared []string, inFlig
 	}
 	r.Checks = append(r.Checks, dep)
 
-	mine := Footprint(text, tracked, shared)
+	mine := itemFootprint(be, id, tracked, shared)
 	ov := Check{Name: CheckOverlap, OK: true, Detail: []string{}}
 	for _, f := range inFlight {
 		if f.Issue == id {
@@ -281,7 +303,7 @@ func (e Env) InFlightItems(ctx context.Context, root string, be backlog.Backend,
 		if id == "" {
 			continue
 		}
-		paths := Footprint(itemText(be, id), tracked, shared)
+		paths := itemFootprint(be, id, tracked, shared)
 		if wt := s.Worktree(); wt != "" {
 			base := s.Base()
 			if base == "" {
@@ -297,7 +319,7 @@ func (e Env) InFlightItems(ctx context.Context, root string, be backlog.Backend,
 		if id == "" {
 			continue
 		}
-		paths := Footprint(itemText(be, id), tracked, shared)
+		paths := itemFootprint(be, id, tracked, shared)
 		paths = append(paths, e.queuedChanged(ctx, root, q, shared)...)
 		sort.Strings(paths)
 		out = append(out, InFlight{Slot: "queue:" + q.From, Issue: id, Paths: paths})
