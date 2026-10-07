@@ -119,6 +119,16 @@ data: {"key": string, "changed": true}
 exit: 2 when <key> is malformed; 3 when the plan doesn't exist (not an idempotent no-op, because smoke 12/58 expect failure); tracker
 old: hv-plan-rm <key>
 
+### rota plan pass
+rota plan pass <key> <AC-id> --proof <sha>:<check>
+repo: none
+data: {"key": string, "item": string, "ac": string, "proof": string, "changed": bool}
+exit: 2 when <key> is malformed or a slice key, <AC-id> is not `AC-<n>`, the item has no such criterion or repeats an id, or `--proof` lacks a sha or a check; 3 when the item doesn't exist; 4 when no proof row matches `<sha>:<check>` or the latest match is FAIL (data `{"blockedBy": "proof", "changed": false}`), and under the file backend (data `{"blockedBy": "backend", "changed": false}`); tracker
+old: none (new)
+note: the only way to mark an acceptance criterion met. The mark goes in the item's `acceptance` note (`- AC-<n> · <date> · <sha> · <check> · <criterion text>`), never in the body. `--proof` splits on the first `:`, so the check may contain colons; it must equal a `check` that `rota proof show` prints, and the sha matches a row's sha as a prefix either way (4 characters or more). The latest matching row decides, so a FAIL recorded after a PASS refuses. Re-passing a criterion replaces its mark; `changed` is false when nothing differs.
+note: `<key>` names the item (`M01-B07` is B07; `#7` and `B7` also work); the issue backend is required because item notes live there. A body captured without ids is numbered (`AC-1`, `AC-2`, … in order, existing ids kept) in the same call, after the proof check passes. `rota item create` numbers new bodies on the issue backend.
+note: the `acceptance` note kind is reserved: `rota item note show` reads it, `rota item note add` and `rm` exit 2.
+
 ### rota plan validate-docs
 rota plan validate-docs <key>
 repo: none
