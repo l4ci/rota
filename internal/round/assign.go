@@ -496,10 +496,6 @@ func (e Env) assignOne(ctx context.Context, root string, be Board, o AssignOpts,
 	}
 	tracked := e.trackedFiles(ctx, root)
 	inFlight := e.InFlightItems(ctx, root, be, tracked, set.SharedPaths)
-	if queue {
-		// queue parks the slot before the claim, so its held issue is not in flight.
-		inFlight = withoutSlot(inFlight, agent)
-	}
 	r, err := AssessBrief(be, id, tracked, set.SharedPaths, inFlight, o.AcceptOverlap, decisions)
 	if err != nil {
 		return res, err
