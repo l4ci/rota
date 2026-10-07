@@ -238,7 +238,7 @@ func buildLimits(ctx context.Context, c *Ctx, root string, cfg any, set limits.S
 			// signal: it leaves a claim and a branch half-moved otherwise (the
 			// same call would resume it, but nobody is there to make it).
 			_, err = env.Transfer(context.WithoutCancel(ctx), root, be, round.TransferOpts{
-				Issue: issue, To: to, HolderPID: holderPID, Settings: rc, Getenv: os.Getenv,
+				Issue: issue, To: to, HolderPID: holderPID, Settings: rc,
 				Note: "The slot's account hit its usage limit; rota limit watch moved the issue to an idle slot on another account.",
 			})
 			return err
@@ -377,19 +377,15 @@ func limitWatch(fs *flag.FlagSet) RunFunc {
 // from a reused one.
 func ownWatching(c *Ctx, mode string) limits.Watching {
 	pid := os.Getpid()
-	host, start := roundlease.DefaultEnv().Identity(pid)
+	host, start := c.deps().LeaseEnv().Identity(pid)
 	return limits.Watching{PID: pid, Host: host, Start: start, StartedAt: limits.Time(c.deps().Now()), Mode: mode}
 }
 
 // limitWatchGuard refuses a watcher that would act twice or without
 // standing: a live supervisor, another watcher, or a caller without the lease.
 func limitWatchGuard(c *Ctx, root, cd string) (Result, error) {
-	ctx := c.Context()
-	le := c.deps().RoundEnv(ctx, root).Lease
-	if le.Alive == nil {
-		le = roundlease.DefaultEnv()
-	}
-	lease, st, err := le.Read(cd)
+	le := c.deps().LeaseEnv()
+	lease, st, held, err := le.Holds(cd, c.deps().HolderPID(), os.Getenv)
 	if err != nil {
 		return Result{}, &Error{Exit: ExitUnavailable, Message: err.Error()}
 	}
@@ -399,12 +395,11 @@ func limitWatchGuard(c *Ctx, root, cd string) (Result, error) {
 		d.Set("changed", false)
 		return Result{Data: d}, &Error{Exit: ExitRefused, Message: msg, Hint: hint}
 	}
-	live := st == roundlease.Live || st == roundlease.Foreign
-	if ks, found, _ := keepalive.ReadState(keepalive.StatePath(cd)); live && found && ks.Running(le) && lease.PID == ks.PID {
+	if ks, found, _ := keepalive.ReadState(keepalive.StatePath(cd)); st == roundlease.Live && found && ks.Running(le) && lease.PID == ks.PID {
 		return refuse("supervised", fmt.Sprintf("rota keepalive run (pid %d) holds the lease and already watches for usage limits", ks.PID),
 			"run rota limit status, or start the supervisor with --no-limits to watch by hand")
 	}
-	if !live || !le.Discover(c.deps().HolderPID(), os.Getenv).SameAs(lease, le.Host) {
+	if !held {
 		return refuse("no round", "this process holds no round lease: run rota round start first", "a switch moves work, which is the orchestrator's act")
 	}
 	if w, ok := limits.ActiveWatching(le, cd); ok && w.PID != os.Getpid() {
@@ -470,10 +465,7 @@ func limitStatus(c *Ctx, args []string) (Result, error) {
 	list := limits.Load(root)
 	watching := false
 	if cd, err := rotastate.CommonDir(root); err == nil {
-		le := c.deps().RoundEnv(c.Context(), root).Lease
-		if le.Alive == nil {
-			le = roundlease.DefaultEnv()
-		}
+		le := c.deps().LeaseEnv()
 		if _, ok := limits.ActiveWatching(le, cd); ok {
 			watching = true
 		}

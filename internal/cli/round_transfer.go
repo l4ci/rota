@@ -60,7 +60,7 @@ func roundTransfer(fs *flag.FlagSet) RunFunc {
 		}
 		res, err := env.Transfer(c.Context(), root, be, round.TransferOpts{
 			Issue: id, To: *to, Note: text, BodyFile: bf, AcceptOverlap: *accept,
-			Tier: *tier, TierReason: *tierReason, HolderPID: *pid, Settings: set, Getenv: os.Getenv,
+			Tier: *tier, TierReason: *tierReason, HolderPID: *pid, Settings: set,
 		})
 		if err != nil {
 			r, ferr := moveFailure(err, res.Changed)

@@ -273,6 +273,7 @@ func (e Env) Reap(root string, names []string, all bool) (reaped []string, err e
 			continue
 		}
 		reaped = append(reaped, name)
+		e.ClearLabel(context.Background(), root, name)
 		if wt := s.Worktree(); wt != "" {
 			e.git(root, "worktree", "remove", "--force", wt)
 		}

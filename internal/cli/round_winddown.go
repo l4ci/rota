@@ -3,7 +3,6 @@ package cli
 import (
 	"flag"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/l4ci/rota/internal/jsonx"
@@ -65,13 +64,13 @@ func roundWindDown(fs *flag.FlagSet) RunFunc {
 		var cd string
 		var rnd int
 		if d, err := rotastate.CommonDir(root); err == nil {
-			if l, _, err := c.deps().WatchEnv().Read(d); err == nil {
+			if l, _, err := c.deps().LeaseEnv().Read(d); err == nil {
 				cd, rnd = d, l.Round
 				_ = roundtick.SetStopped(cd, rnd, true)
 			}
 		}
 		res, err := env.WindDown(ctx, root, board, round.WindDownOpts{
-			NoVerify: *noVerify, HolderPID: *pid, Settings: set, Getenv: os.Getenv,
+			NoVerify: *noVerify, HolderPID: *pid, Settings: set,
 		})
 		if cd != "" {
 			if err != nil || res.Retained {

@@ -18,7 +18,6 @@ import (
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/marker"
 	"github.com/l4ci/rota/internal/roundcfg"
-	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -64,18 +63,14 @@ func registryRound(root string) int {
 }
 
 // holdsLease: this process is the orchestrator the lease names.
-func (e Env) holdsLease(ctx context.Context, root string, pid int, getenv func(string) string) (bool, error) {
+func (e Env) holdsLease(ctx context.Context, root string, pid int) (bool, error) {
 	cd, err := e.commonDir(ctx, root)
 	if err != nil {
 		return false, err
 	}
-	le := e.leaseEnv()
-	lease, st, err := le.Read(cd)
-	if err != nil {
-		return false, err
-	}
-	holder := le.Discover(pid, getenv)
-	return (st == roundlease.Live || st == roundlease.Foreign) && holder.SameAs(lease, le.Host), nil
+	le := e.Lease
+	_, _, held, err := le.Holds(cd, pid, e.getenv())
+	return held, err
 }
 
 // freeSlot records a slot as idle and parked: no issue, no claim, no PR.
@@ -188,7 +183,6 @@ type ReturnOpts struct {
 	// the caller is the slot's own worker. Otherwise it must hold the lease.
 	InSlot    bool
 	HolderPID int
-	Getenv    func(string) string
 }
 
 // Returned is what Return did.
@@ -218,7 +212,7 @@ func (e Env) Return(ctx context.Context, root string, be Board, o ReturnOpts) (r
 	}
 	res.Slot = o.Slot
 	if !o.InSlot {
-		ok, err := e.holdsLease(ctx, root, o.HolderPID, o.Getenv)
+		ok, err := e.holdsLease(ctx, root, o.HolderPID)
 		if err != nil {
 			return res, wrap(err)
 		}
@@ -317,7 +311,6 @@ type ReclaimOpts struct {
 	Force     bool
 	Note      string
 	HolderPID int
-	Getenv    func(string) string
 }
 
 // Reclaimed is what Reclaim did.
@@ -358,7 +351,7 @@ func (e Env) Reclaim(ctx context.Context, root string, be Board, o ReclaimOpts) 
 		return res, &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("slot %s is not in the pool", o.Slot)}
 	}
 	res.Slot = o.Slot
-	ok, err := e.holdsLease(ctx, root, o.HolderPID, o.Getenv)
+	ok, err := e.holdsLease(ctx, root, o.HolderPID)
 	if err != nil {
 		return res, wrap(err)
 	}
@@ -437,7 +430,6 @@ type TransferOpts struct {
 	// the default needs a reason, as in assign. Unused when To is the human.
 	Tier, TierReason string
 	Settings         roundcfg.Settings
-	Getenv           func(string) string
 }
 
 // Transferred is what Transfer did.
@@ -484,7 +476,7 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 	}
 	id := it.ID
 	res.Issue, res.To = id, o.To
-	ok, err := e.holdsLease(ctx, root, o.HolderPID, o.Getenv)
+	ok, err := e.holdsLease(ctx, root, o.HolderPID)
 	if err != nil {
 		return res, wrap(err)
 	}
@@ -591,7 +583,7 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 	// overlap, the receiver's guard.
 	var brief string
 	if !toHuman {
-		if brief, ok = briefPath(root, set, o.Getenv); !ok {
+		if brief, ok = briefPath(root, set, e.getenv()); !ok {
 			return res, blocked(BlockBriefMissing, "the worker contract (skills/references/worker-contract.md) was not found; set round.brief")
 		}
 		// The receiver is refused as assign would refuse it, before anything moves.

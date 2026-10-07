@@ -130,6 +130,7 @@ func (e Env) Park(ctx context.Context, root, name, verb string) (Parked, error) 
 			return p, unavailable("could not switch %s to %s at %s: %s", name, parkBr, base, errOut)
 		}
 		p.Moved = true
+		e.Worker.ClearLabel(ctx, root, name)
 	}
 	return p, nil
 }

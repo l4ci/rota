@@ -17,14 +17,12 @@ type Who struct {
 // lease's holder, matched the way `rota round start` recorded it. A read error
 // is "not the orchestrator".
 func Identify(env roundlease.Env, getenv func(string) string, holderPID int, commonDir string) Who {
-	l, st, err := env.Read(commonDir)
+	l, st, held, err := env.Holds(commonDir, holderPID, getenv)
 	w := Who{Lease: l, State: st}
 	if err != nil {
 		return w
 	}
 	w.LeaseFree = st == roundlease.None || st == roundlease.Stale
-	if st == roundlease.Live && env.Discover(holderPID, getenv).SameAs(l, env.Host) {
-		w.Orchestrator = true
-	}
+	w.Orchestrator = held
 	return w
 }

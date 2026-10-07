@@ -307,6 +307,8 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 		if w := arrangeNew(ctx, h, root); w != "" {
 			res.Warnings = append(res.Warnings, w)
 		}
+		syncLabel(ctx, h, root, o.Slot)
+		labelWorkspace(ctx, h, root)
 	}
 	round := roundOf(root)
 	signature := fmt.Sprintf("--- ORCHESTRATOR (round %d) ---", round)

@@ -13,7 +13,6 @@ import (
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
-	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/roundtick"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -75,16 +74,16 @@ func roundTick(fs *flag.FlagSet) RunFunc {
 // every tick: wind-down or a takeover ends the autopilot cleanly.
 func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride string, pid int) (roundtick.Result, error) {
 	c.deps().freshReads()
-	le := c.deps().WatchEnv()
+	le := c.deps().LeaseEnv()
 	cd, err := rotastate.CommonDir(root)
 	if err != nil {
 		return roundtick.Result{}, Resolution("%v", err)
 	}
-	lease, st, err := le.Read(cd)
+	lease, _, held, err := le.Holds(cd, pid, os.Getenv)
 	if err != nil {
 		return roundtick.Result{}, err
 	}
-	if (st != roundlease.Live && st != roundlease.Foreign) || !le.Discover(pid, os.Getenv).SameAs(lease, le.Host) {
+	if !held {
 		return roundtick.Result{}, errAutopilotStopped
 	}
 	policy, err := mergePolicy(c)
@@ -180,7 +179,7 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 	// Assign takes no tier, no kind and never accepts overlap: the round's
 	// defaults, and only a candidate that is ready as it stands.
 	e.Assign = func(ctx context.Context, id string) ([]string, error) {
-		res, err := renv.Assign(ctx, root, board, round.AssignOpts{ID: id, HolderPID: pid, Settings: set, Getenv: os.Getenv})
+		res, err := renv.Assign(ctx, root, board, round.AssignOpts{ID: id, HolderPID: pid, Settings: set})
 		for _, w := range res.Warnings {
 			c.Warn("%s", w)
 		}
