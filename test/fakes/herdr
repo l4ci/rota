@@ -65,6 +65,7 @@ case "$1 $2" in
     CH="${CODEX_HOME:-${FAKE_DEFAULT_CODEX_HOME:-}}"; [ -n "$CH" ] || err codex_home_unset
     [ "$3" = "codex" ] || err unknown_method
     : >"$CH/.fake-herdr-codex"; echo '{"id":"cli","result":{"type":"ok"}}' ;;
+  "pane report-metadata"|"workspace report-metadata") echo '{"id":"cli","result":{"type":"ok"}}' ;;  # display-only: logged, no state
   "notification show") echo '{"id":"cli","result":{"type":"notification_show","shown":true,"reason":"shown"}}' ;;
   *) err unknown_method ;;
 esac
