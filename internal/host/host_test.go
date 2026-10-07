@@ -1451,14 +1451,18 @@ func TestHerdrNotifyReportsDroppedAlerts(t *testing.T) {
 
 func TestHerdrExplain(t *testing.T) {
 	f := &fake{handler: func(_ string, a []string) Result {
-		return Result{Stdout: "\nagent is unknown\n  reason: foreground is vim\n\nsee docs\nmore\nmore\n"}
+		return Result{Stdout: "agent: claude\nstate: idle\nmanifest: remote:/x/claude.toml 2026.09.11.1\nrule: live_prompt_box (region=prompt_box_body priority=950)\nevidence: \"❯\\n\"\n"}
 	}}
 	h := New("herdr", deps(f, herdrEnv, &clock{})).(Explainer)
-	if got := h.Explain(bg, "w1", "w9:t7"); got != "agent is unknown / reason: foreground is vim / see docs" {
+	if got := h.Explain(bg, "w1", "w9:t7"); got != `state: idle / rule: live_prompt_box (region=prompt_box_body priority=950) / evidence: "❯\n"` {
 		t.Errorf("Explain = %q", got)
 	}
 	if !strings.Contains(f.log(), "herdr agent explain rota-w1-w9-t7") {
 		t.Errorf("call = %s", f.log())
+	}
+	f.handler = func(string, []string) Result { return Result{Stdout: "\na\n b\n\nc\nd\n"} }
+	if got := h.Explain(bg, "w1", "w9:t7"); got != "a / b / c" {
+		t.Errorf("fallback Explain = %q", got)
 	}
 	if h.Explain(bg, "w1", "") != "" {
 		t.Error("a never-dispatched slot has nothing to explain")
