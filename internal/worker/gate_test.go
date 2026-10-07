@@ -1022,3 +1022,49 @@ func TestGateMergedRemotelyCause(t *testing.T) {
 		})
 	}
 }
+
+// An attempt of a best-of:2 issue is refused until a pick names its PR.
+func TestGateRefusesAnUnpickedBestOfPR(t *testing.T) {
+	cases := []struct {
+		name    string
+		bestOf  string // the registry's bestOf object, "" for none
+		check   bool
+		verdict string
+	}{
+		{name: "unpicked", bestOf: `{"5":{"attempts":[{"slot":"w1"},{"slot":"w2"}],"pick":"","round":1}}`, verdict: GateBestOfUnpicked},
+		{name: "unpicked under check-only", bestOf: `{"5":{"attempts":[{"slot":"w1"},{"slot":"w2"}],"pick":"","round":1}}`, check: true, verdict: GateBestOfUnpicked},
+		{name: "pick names another PR", bestOf: `{"5":{"attempts":[{"slot":"w1"},{"slot":"w2"}],"pick":"#8","round":1}}`, verdict: GateBestOfUnpicked},
+		{name: "pick names this PR", bestOf: `{"5":{"attempts":[{"slot":"w1"},{"slot":"w2"}],"pick":"#7","round":1}}`, verdict: GatePass},
+		{name: "picked by URL", bestOf: `{"5":{"attempts":[{"slot":"w1"},{"slot":"w2"}],"pick":"` + ghURL + `","round":1}}`, check: true, verdict: GateFresh},
+		{name: "another issue is best-of", bestOf: `{"6":{"attempts":[],"pick":"","round":1}}`, verdict: GatePass},
+		{name: "not best-of", verdict: GatePass},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			w := newWorld(t, ghURL)
+			extra := ""
+			if c.bestOf != "" {
+				extra = `,"bestOf":` + c.bestOf
+			}
+			os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
+				[]byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"#5","pr":%q}]%s}`, ghURL, extra)), 0o644)
+			w.forge("body", "Closes #5\n")
+			res, err := w.gate(false, GateOpts{CheckOnly: c.check})
+			if err != nil || res.Verdict != c.verdict {
+				t.Fatalf("verdict = %q (%v), want %q: %+v", res.Verdict, err, c.verdict, res)
+			}
+			if c.verdict != GateBestOfUnpicked {
+				return
+			}
+			if res.Changed || w.onMain("work.txt") {
+				t.Errorf("nothing may land: %+v", res)
+			}
+			if !strings.Contains(res.Hint, "rota round pick 5 --pr") {
+				t.Errorf("hint must name the pick verb: %q", res.Hint)
+			}
+			if strings.Contains(c.name, "another PR") != strings.Contains(res.Err, "this attempt lost") {
+				t.Errorf("loser wording: %q", res.Err)
+			}
+		})
+	}
+}

@@ -90,6 +90,9 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 		if err == nil && r.Verdict == worker.GateNotClosing {
 			return closesRefusal(r.Err, r.Hint, trainData(r))
 		}
+		if err == nil && r.Verdict == worker.GateBestOfUnpicked {
+			return bestOfRefusal(r.Err, r.Hint, trainData(r))
+		}
 		if err != nil {
 			return Result{}, err
 		}
@@ -106,6 +109,9 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 				}
 				if cerr := worker.ClearItemStart(root, issues[i]); cerr != nil {
 					fmt.Fprintln(c.Stderr, "ITEM-CLOCK "+m.Target+" — "+cerr.Error())
+				}
+				if cerr := worker.ClearBestOf(root, issues[i]); cerr != nil {
+					fmt.Fprintln(c.Stderr, "BEST-OF "+m.Target+" — "+cerr.Error())
 				}
 			}
 		}
