@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"flag"
+	"os"
 	"strings"
 	"testing"
 
@@ -189,5 +190,16 @@ func TestDefaultRunViewOffATerminalIsAUsageError(t *testing.T) {
 	err := defaultDeps().RunView(c, stubModel{})
 	if err == nil || asError(err).Exit != 2 {
 		t.Errorf("err = %v", err)
+	}
+}
+
+func TestDefaultIsTerminalRefusesDevNull(t *testing.T) {
+	f, err := os.Open(os.DevNull)
+	if err != nil {
+		t.Skip(err)
+	}
+	defer f.Close()
+	if defaultIsTerminal(f) {
+		t.Error("/dev/null counted as a terminal: --ui would run the verb before refusing")
 	}
 }

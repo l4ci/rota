@@ -145,6 +145,14 @@ old: hv-decisions-query <topic>…    (same positionals)
 shim: stdout is `text`; `missing` is omitted.
 note: unlike `knowledge query`, an unmatched topic emits no warning, as old, and only the port fills `missing`. Zero topics moves from exit 1 to 2.
 
+### rota decisions stats
+rota decisions stats
+repo: none (umbrella `.rota/DECISIONS.md` only)
+data: {"topics": [{"name": string, "bullets": number, "bytes": number}]}
+exit: implied only. A missing DECISIONS.md gives `{"topics": []}`.
+old: none
+note: new in #546 so `--ui` has a topic list to show; same shape as `knowledge stats`. It is one of the verbs with a `--ui` view (see cli-conventions.md).
+
 ### rota glossary read
 rota glossary read <term>…
 repo: scoped (scope S). A sub-repo scope reads umbrella first, then the sub-repo, as before.

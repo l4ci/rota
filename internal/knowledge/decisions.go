@@ -39,3 +39,13 @@ func queryTopics(content string, topics []string) (string, []string, error) {
 	}
 	return section.Matching(content, wanted), missing, nil
 }
+
+// DecisionsStats counts bullets and bytes per topic of DECISIONS.md, the list
+// a reader screen offers before a topic is opened. A missing file has none.
+func (s Store) DecisionsStats() ([]Stat, error) {
+	content, err := ReadFile(s.decisionsPath())
+	if err != nil {
+		return nil, err
+	}
+	return topicStats(content), nil
+}
