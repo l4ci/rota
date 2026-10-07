@@ -2,9 +2,12 @@ package worker
 
 import (
 	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -110,5 +113,56 @@ func TestVerifyCommandsFallsBackToLegacyKey(t *testing.T) {
 	root = tierRoot(t, `{"test":{"full":["new"]},"refactor":{"verifyCommands":["old"]}}`)
 	if got := verifyCommandsAt(root); !reflect.DeepEqual(got, []string{"new"}) {
 		t.Errorf("test.full wins: %v", got)
+	}
+}
+
+// captureStderr returns what fn wrote to os.Stderr.
+func captureStderr(t *testing.T, fn func()) string {
+	t.Helper()
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := os.Stderr
+	os.Stderr = w
+	defer func() { os.Stderr = old }()
+	fn()
+	w.Close()
+	b, _ := io.ReadAll(r)
+	return string(b)
+}
+
+func TestVerifyCommandsAtWarnsOnceForLegacyKey(t *testing.T) {
+	const warning = "refactor.verifyCommands is deprecated"
+	legacy := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(legacy, ".rota"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cfg := `{"refactor":{"verifyCommands":["echo old"]}}`
+	if err := os.WriteFile(filepath.Join(legacy, ".rota", "config.json"), []byte(cfg), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	legacyWarn = sync.Once{}
+	var got []string
+	out := captureStderr(t, func() {
+		verifyCommandsAt(legacy)
+		got = verifyCommandsAt(legacy)
+	})
+	if !reflect.DeepEqual(got, []string{"echo old"}) {
+		t.Errorf("legacy commands = %v", got)
+	}
+	if n := strings.Count(out, warning); n != 1 {
+		t.Errorf("warning printed %d times, want once: %q", n, out)
+	}
+
+	// test.full wins and stays silent, even when the legacy key is present too.
+	cfg = `{"test":{"full":["echo new"]},"refactor":{"verifyCommands":["echo old"]}}`
+	if err := os.WriteFile(filepath.Join(legacy, ".rota", "config.json"), []byte(cfg), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	legacyWarn = sync.Once{}
+	out = captureStderr(t, func() { got = verifyCommandsAt(legacy) })
+	if !reflect.DeepEqual(got, []string{"echo new"}) || out != "" {
+		t.Errorf("test.full set: commands %v, stderr %q", got, out)
 	}
 }
