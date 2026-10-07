@@ -2,7 +2,7 @@
 
 This walks you from a fresh machine to a first parallel round in [herdr](https://herdr.dev) or [tmux](https://github.com/tmux/tmux): an orchestrator in one pane, workers in tabs (tmux: windows), each worker on its own issue. The details behind each step live in [parallel rounds](usage/parallel-rounds.md); this page is the order to do them in.
 
-## 1. Prerequisites
+## 1. 📋 Prerequisites
 
 - A git repo with an `origin`, and the base branch (usually `main`) pushed.
 - `gh` (GitHub) or `glab` (GitLab), logged in.
@@ -10,7 +10,7 @@ This walks you from a fresh machine to a first parallel round in [herdr](https:/
 - `claude` (Claude Code) on your `PATH`.
 - A terminal host: herdr 0.9.x, from [herdr.dev](https://herdr.dev), or [tmux](https://github.com/tmux/tmux). herdr reports each worker's state directly; under tmux rota reads the panes instead.
 
-## 2. Install rota
+## 2. 📦 Install rota
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/l4ci/rota/main/install.sh | sh
@@ -29,7 +29,7 @@ rota skills install --scope project  # this repo only; commit .claude/skills and
 
 Pick user scope for yourself. Pick project scope when a team should run the same pinned version. More in [install](install.md#the-skills).
 
-## 4. Initialize the project
+## 4. ⚙ Initialize the project
 
 At the project root:
 
@@ -49,11 +49,15 @@ Then tell the gate how to check a merge. `test.full` is the command that runs yo
 rota config set test.full "go test ./..."   # your project's own test command
 ```
 
-While `test.full` is empty the gate refuses to merge, because nothing would check the result. `--no-verify` merges anyway, on purpose. Don't use it for a first round.
+> [!IMPORTANT]
+> While `test.full` is empty the gate refuses to merge, because nothing would check the result. `--no-verify` merges anyway, on purpose. Don't use it for a first round.
 
 ## 5. Extra accounts (optional)
 
-Skip this if you have one Claude account. For each additional account, create a config dir and log in once. `rota skills install` copies the skills into every account you list in step 6, so the install in step 6 covers them (it skips a dir that does not exist).
+> [!NOTE]
+> Skip this if you have one Claude account.
+
+For each additional account, create a config dir and log in once. `rota skills install` copies the skills into every account you list in step 6, so the install in step 6 covers them (it skips a dir that does not exist).
 
 ```bash
 mkdir ~/.claude-b
@@ -126,7 +130,7 @@ The orchestrator runs many `rota`, git and forge commands. Allow them in `.claud
 
 For a first round, skip the hooks and keepalive both. Hooks without keepalive means the orchestrator exits at the context threshold and nothing restarts it. Install them together later: [unattended rounds](usage/unattended-rounds.md).
 
-## 11. Run doctor
+## 11. 🩺 Run doctor
 
 ```bash
 rota doctor
@@ -134,7 +138,7 @@ rota doctor
 
 Fix every `fail`; each one prints the command or edit that fixes it. Run it inside the herdr or tmux pane so it sees the host. See [doctor and reap](usage/doctor-and-reap.md).
 
-## 12. Launch the orchestrator
+## 12. 🚀 Launch the orchestrator
 
 In the pane, at the project root:
 
@@ -146,7 +150,7 @@ It runs `rota doctor`, then opens a focused orchestrator tab that runs the agent
 
 The skill runs `rota doctor` again, then `rota round start`. That takes the orchestrator lease, creates the worker slots and lists the ready issues, and it detects herdr or tmux from the pane it runs in. It starts no worker yet. The orchestrator then picks the slate and assigns each issue with `rota round assign`, which cuts a branch and starts a worker in a new tab.
 
-## 13. Watch
+## 13. 👀 Watch
 
 Each worker shows up as a herdr tab or a tmux window. To see all slots with their host, PR and drift:
 
@@ -154,7 +158,8 @@ Each worker shows up as a herdr tab or a tmux window. To see all slots with thei
 rota round status
 ```
 
-You don't need to poll. The orchestrator waits on `rota round wait` and wakes when a slot is done, blocked or dead. A slot is free as soon as its worker opens a PR: the orchestrator gives it the next issue while that PR waits for review.
+> [!TIP]
+> You don't need to poll. The orchestrator waits on `rota round wait` and wakes when a slot is done, blocked or dead. A slot is free as soon as its worker opens a PR: the orchestrator gives it the next issue while that PR waits for review.
 
 ## 14. Merges and escalations
 
@@ -162,7 +167,7 @@ Workers open PRs and never merge. For each finished PR the orchestrator reads th
 
 When a worker or the orchestrator needs a human decision, it posts the question on the issue or PR thread, or asks in the pane. Answer there. A line starting with `m:` typed into a pane counts as a maintainer answer: [details](usage/parallel-rounds.md#maintainer-answers-typed-into-a-pane).
 
-## 15. Wind down
+## 15. 🏁 Wind down
 
 When the slate is done, tell the orchestrator to finish. It runs `rota round wind-down`, which re-verifies the base branch, parks every slot and releases the lease. Then clean up what is left:
 
@@ -173,7 +178,7 @@ rota reap --apply    # remove the leftovers that hold no work
 
 See [doctor and reap](usage/doctor-and-reap.md).
 
-## Next
+## ➡ Next
 
 - [Parallel rounds](usage/parallel-rounds.md): every verb, scope, tiers, solo mode.
 - [Unattended rounds](usage/unattended-rounds.md): hooks, keepalive and usage limits.
