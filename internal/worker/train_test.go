@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -324,5 +325,50 @@ func TestTrainApprovalRefusalCarriesData(t *testing.T) {
 	}
 	if bd, ok := exitcode.DataOf[BlockData](err); !ok || bd.BlockedBy != "manual gate" {
 		t.Errorf("refusal data = %+v, %v (err %v)", bd, ok, err)
+	}
+}
+
+// A train and a gate started together queue on the repo's land lock: their
+// verifies never overlap (the train's scratch worktree is never visible to the
+// gate's verify) and neither lands inside the other's verify-to-land window, so
+// the train never reports base-moved (#427).
+func TestTrainAndGateSerialize(t *testing.T) {
+	log := filepath.Join(t.TempDir(), "verify.log")
+	verify := fmt.Sprintf(`echo start >> %[1]s; n=$(git worktree list | wc -l); echo "worktrees $n" >> %[1]s; sleep 1; echo end >> %[1]s`, log)
+	w := trainWorld(t, verify, "b1", "b2", "b3")
+	var tres TrainResult
+	var gres GateResult
+	var terr, gerr error
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		tres, terr = w.train(TrainOpts{Targets: []string{"b1", "b2"}})
+	}()
+	go func() {
+		defer wg.Done()
+		gres, gerr = w.env(false).Gate(bg, w.dir, GateOpts{Slot: "b3", Base: "main"})
+	}()
+	wg.Wait()
+	if terr != nil || tres.Verdict != GatePass {
+		t.Errorf("train: %+v %v", tres, terr)
+	}
+	if gerr != nil || gres.Verdict != GatePass {
+		t.Errorf("gate: %+v %v", gres, gerr)
+	}
+	data, _ := os.ReadFile(log)
+	var seq []string
+	for _, l := range strings.Split(strings.TrimSpace(string(data)), "\n") {
+		if !strings.HasPrefix(l, "worktrees") {
+			seq = append(seq, l)
+		}
+	}
+	if got := strings.Join(seq, ","); got != "start,end,start,end" {
+		t.Errorf("verifies overlapped: %s\n%s", got, data)
+	}
+	for _, f := range []string{"b1.txt", "b2.txt", "b3.txt"} {
+		if !w.onMain(f) {
+			t.Errorf("%s is not on main", f)
+		}
 	}
 }
