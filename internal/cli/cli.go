@@ -1,5 +1,5 @@
 // Package cli is the rota command dispatcher. It owns the global conventions
-// in docs/design/5.0-cli-conventions.md (global flags, the --json envelope,
+// in docs/contributing/contract/cli-conventions.md (global flags, the --json envelope,
 // the stderr format and the exit codes); verbs return data or an *Error and
 // never print those parts themselves.
 package cli
@@ -143,7 +143,7 @@ func (c *Ctx) RepoList() (root string, list []Repo, err error) {
 	return root, repos.Load(root), nil
 }
 
-// globals are the flags every verb accepts (docs/design/5.0-cli-conventions.md,
+// globals are the flags every verb accepts (docs/contributing/contract/cli-conventions.md,
 // Invocation): before the verb they are the only flags allowed, after it they
 // are parsed together with the verb's own flags.
 type globals struct {

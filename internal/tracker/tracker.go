@@ -42,7 +42,7 @@ const (
 	KindInternal
 )
 
-// Exit is the 5.0 exit code for the kind (docs/design/5.0-cli-conventions.md):
+// Exit is the 5.0 exit code for the kind (docs/contributing/contract/cli-conventions.md):
 // not found is 3 (resolution), a missing or failing forge is 5, a rate limit
 // is 6, an internal failure is 70.
 func (k Kind) Exit() int {
