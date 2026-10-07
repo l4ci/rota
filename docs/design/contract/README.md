@@ -1,3 +1,10 @@
+---
+verified-sha: 5e9b425a84bdc61cedf349412b0aa15c738689eb
+refs:
+  - docs/design/5.0-cli-conventions.md
+  - internal/cli/contract_test.go
+---
+
 # `rota` verb contract
 
 This directory defines every `rota` verb's arguments, flags, `--json` data and exit codes. The black-box smoke suite (A2, #46) tests against it, and the Go port (A3 to A9) implements it. Verbs come from the command tree in the [helper triage](../5.0-helper-triage.md). Global flags, the JSON envelope, stderr format, the exit-code table, write rules and config loading are fixed by the [CLI conventions](../5.0-cli-conventions.md) (A3, #47). Nothing here overrides them: failure `data` on exit 1 and 4, exit 4 for mutating verbs only, and `changed` in failure data all come from the conventions.

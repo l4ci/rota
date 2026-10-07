@@ -1,3 +1,11 @@
+---
+verified-sha: 9586a179cd3a699f5c384c461f704b2e90e8cf3f
+refs:
+  - internal/tracker
+  - internal/ship
+  - internal/cli/git.go
+---
+
 ## A8: tracker, git, review, ship, release
 
 ### rota tracker call

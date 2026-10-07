@@ -1,3 +1,9 @@
+---
+verified-sha: 5e9b425a84bdc61cedf349412b0aa15c738689eb
+refs:
+  - internal/harness/codex.go
+---
+
 ## E: Codex workers
 
 E1 (#68) runs OpenAI's Codex CLI as a round or pool worker beside Claude Code. It adds no verb: `worker dispatch` and `round assign` take `--kind codex`, `doctor` gains a `codex` check. A codex worker is a visible TUI session in a herdr tab, like a claude one; headless `codex exec` stays out (#44).
