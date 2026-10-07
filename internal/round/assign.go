@@ -552,7 +552,7 @@ func (e Env) assignOne(ctx context.Context, root string, be Board, o AssignOpts,
 		claimStep(be, id, claimID, holders, func() {
 			editSlot(root, agent, func(s *worker.Slot) error { s.Unbind(); return nil })
 		}),
-		stateStep(be, id, claimID, resuming, &res.Changed),
+		stateStep(root, be, id, agent, resuming, &res.Changed),
 		{name: "comment", skip: func() bool { return resuming }, do: func() error {
 			_, err := be.AddComment(id, "feedback", fmt.Sprintf("In progress: agent **%s** on branch `%s`.", agent, res.Branch))
 			return err
@@ -644,7 +644,7 @@ func claimStep(be Board, id, claimID string, holders int, unbind func()) step {
 // stateStep marks the issue in-progress and records in changed whether that
 // moved anything; its undo clears the state again, unless another claim (the
 // sibling attempt of a best-of:2 issue) still holds the issue.
-func stateStep(be Board, id, claimID string, resuming bool, changed *bool) step {
+func stateStep(root string, be Board, id, slot string, resuming bool, changed *bool) step {
 	return step{name: "in-progress", do: func() error {
 		c, err := be.SetState(id, "in-progress")
 		if err != nil {
@@ -657,17 +657,22 @@ func stateStep(be Board, id, claimID string, resuming bool, changed *bool) step 
 		return nil
 	}, undo: func() {
 		*changed = false
-		clearState(be, id, claimID)
+		clearState(root, be, id, slot)
 	}}
 }
 
-// clearState resets the issue's state unless a claim other than own still
-// holds it. A Status error counts as no other claim.
-func clearState(be Board, id, own string) (bool, error) {
-	if st, err := be.Status(id); err == nil && st != nil {
-		for _, c := range append([]string{st.Claim}, st.Claims...) {
-			if c != "" && c != own {
-				return false, nil
+// clearState resets the issue's state, unless it is an attempt of a best-of:2
+// issue whose sibling slot still holds an open claim: the sibling is still
+// working. A plain issue is always reset. A Status error counts as no claim.
+func clearState(root string, be Board, id, slot string) (bool, error) {
+	if b := worker.LoadRegistry(root).BestOf(id); b != nil {
+		if sib := b.Sibling(slot); sib != nil {
+			if st, err := be.Status(id); err == nil && st != nil {
+				for _, c := range append([]string{st.Claim}, st.Claims...) {
+					if strings.HasPrefix(c, sib.Slot+"@") {
+						return false, nil
+					}
+				}
 			}
 		}
 	}

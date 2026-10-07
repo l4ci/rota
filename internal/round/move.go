@@ -251,7 +251,7 @@ func (e Env) Return(ctx context.Context, root string, be Board, o ReturnOpts) (r
 	if res.Released, err = releaseClaims(be, id, o.Slot, claimID, false); tolerate("claim release", err) != nil {
 		return res, wrap(err)
 	}
-	if _, err := clearState(be, id, ""); tolerate("state reset", err) != nil {
+	if _, err := clearState(root, be, id, o.Slot); tolerate("state reset", err) != nil {
 		return res, wrap(err)
 	}
 	if err := freeSlot(root, o.Slot, false); err != nil {
@@ -414,7 +414,7 @@ func (e Env) Reclaim(ctx context.Context, root string, be Board, o ReclaimOpts) 
 	if res.Released, err = releaseClaims(be, h.Issue, o.Slot, s.ClaimID(), true); tolerate("claim release", err) != nil {
 		return res, wrap(err)
 	}
-	if _, err := clearState(be, h.Issue, ""); tolerate("state reset", err) != nil {
+	if _, err := clearState(root, be, h.Issue, o.Slot); tolerate("state reset", err) != nil {
 		return res, wrap(err)
 	}
 	if err := freeSlot(root, o.Slot, true); err != nil {
@@ -501,7 +501,8 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 	if b := reg.BestOf(id); b != nil {
 		var holders []string
 		for _, s := range reg.Slots() {
-			if s.HeldID() == strings.ToUpper(id) {
+			// The receiver of a transfer left half done is not a second attempt.
+			if s.HeldID() == strings.ToUpper(id) && s.Name() != o.To {
 				holders = append(holders, s.Name())
 			}
 		}
@@ -673,7 +674,7 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 	if toHuman {
 		steps = append(steps,
 			step{name: "reset the state", do: func() error {
-				_, err := clearState(be, id, "")
+				_, err := clearState(root, be, id, from)
 				return wrap(tolerate("state reset", err))
 			}},
 			step{name: "needs-human label", do: func() error {
