@@ -25,6 +25,7 @@ type hostFake struct {
 	spawned []string
 	launch  string
 	sent    string
+	sents   []string // every brief sent, in order
 	// name is the host's name; "" is tmux.
 	name                 string
 	codexHome, configDir string
@@ -49,6 +50,7 @@ func (h *hostFake) Spawn(_ context.Context, o host.SpawnOpts) (string, error) {
 func (h *hostFake) Send(_ context.Context, slot, handle, file string) error {
 	b, _ := os.ReadFile(file)
 	h.sent = string(b)
+	h.sents = append(h.sents, h.sent)
 	return nil
 }
 func (h *hostFake) Capture(context.Context, string, string, int) string { return "" }

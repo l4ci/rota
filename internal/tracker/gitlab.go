@@ -529,6 +529,14 @@ func (g *GitLab) PRComment(ctx context.Context, pr int, body string) error {
 	return err
 }
 
+func (g *GitLab) PRClose(ctx context.Context, pr int, comment string) error {
+	if err := g.PRComment(ctx, pr, comment); err != nil {
+		return err
+	}
+	_, err := g.run(ctx, []string{"mr", "close", strconv.Itoa(pr)}, "")
+	return err
+}
+
 func (g *GitLab) PRState(ctx context.Context, pr int) (string, error) {
 	var d struct {
 		State string `json:"state"`

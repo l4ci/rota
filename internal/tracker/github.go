@@ -474,6 +474,11 @@ func (g *GitHub) PRComment(ctx context.Context, pr int, body string) error {
 	return err
 }
 
+func (g *GitHub) PRClose(ctx context.Context, pr int, comment string) error {
+	_, err := g.run(ctx, []string{"pr", "close", strconv.Itoa(pr), "--comment", comment}, "")
+	return err
+}
+
 func (g *GitHub) PRState(ctx context.Context, pr int) (string, error) {
 	var d struct {
 		State string `json:"state"`

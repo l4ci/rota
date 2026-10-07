@@ -12,6 +12,12 @@ import (
 // closes the issue (`Closes #N`). One OpenPRs call serves every issue. File
 // mode and a missing forge have no open PRs to read, so the map is nil.
 func (e Env) openPRIssues(ctx context.Context, be backlog.Backend) (map[int]int, error) {
+	return e.openPRIssuesExcept(ctx, be, "")
+}
+
+// openPRIssuesExcept is openPRIssues without the PR whose head is skip ("" for
+// none): an attempt of a best-of:2 issue does not count its sibling's PR.
+func (e Env) openPRIssuesExcept(ctx context.Context, be backlog.Backend, skip string) (map[int]int, error) {
 	if !e.forgeOn(be) {
 		return nil, nil
 	}
@@ -26,6 +32,9 @@ func (e Env) openPRIssues(ctx context.Context, be backlog.Backend) (map[int]int,
 		}
 	}
 	for _, pr := range prs {
+		if skip != "" && pr.Branch == skip {
+			continue
+		}
 		if n, ok := worker.BranchIssue(pr.Branch); ok {
 			note(n, pr.Number)
 		}

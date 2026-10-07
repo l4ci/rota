@@ -270,6 +270,8 @@ type Adapter interface {
 	// merge-approval gate (B1).
 	PRFiles(ctx context.Context, pr int) ([]string, error)
 	PRComment(ctx context.Context, pr int, body string) error
+	// PRClose closes PR pr unmerged, leaving comment on it first.
+	PRClose(ctx context.Context, pr int, comment string) error
 	// CommitChecks lists the CI checks reported on sha, latest run per check.
 	// None reported is an empty list, not an error.
 	CommitChecks(ctx context.Context, sha string) ([]CheckRun, error)
