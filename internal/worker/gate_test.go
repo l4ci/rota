@@ -954,7 +954,7 @@ func TestGateRefusesAPRThatDoesNotCloseItsIssue(t *testing.T) {
 
 // A PR no slot or review record owns (a fix-forward PR, a PR after wind-down)
 // is gated by number like a round PR: it lands when fresh and is refused STALE
-// when it is behind with a shared file.
+// when its merge with the base conflicts.
 func TestGateAnUnrecordedPR(t *testing.T) {
 	for _, c := range []struct {
 		name    string
@@ -965,7 +965,7 @@ func TestGateAnUnrecordedPR(t *testing.T) {
 		{name: "fresh PR lands", arg: "7", verdict: GatePass},
 		{name: "hash ref lands", arg: "#7", verdict: GatePass},
 		{name: "url lands", arg: ghURL, verdict: GatePass},
-		{name: "stale PR is refused", arg: "7", setup: func(w *world) { sharedFile(t, w) }, verdict: GateStale},
+		{name: "conflicting PR is refused", arg: "7", setup: func(w *world) { advanceMainOn(w, "work.txt") }, verdict: GateStale},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			w := newWorld(t, "")
