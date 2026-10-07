@@ -646,10 +646,19 @@ func verdictRefusal(err error, d *jsonx.Object) (Result, error) {
 	return Result{Data: d}, Refused("%s", vb.Error()).WithHint("see: rota verdict show " + vb.Branch)
 }
 
+// noVerifyRefusal is the exit-4 envelope for an empty test.full: d plus
+// blockedBy no-verify, nothing landed.
+func noVerifyRefusal(msg, hint string, d *jsonx.Object) (Result, error) {
+	d.Set("blockedBy", "no-verify")
+	d.Set("key", "test.full")
+	d.Set("changed", false)
+	return Result{Data: d}, Refused("%s", msg).WithHint(hint)
+}
+
 func workerGate(fs *flag.FlagSet) RunFunc {
 	base := fs.String("base", "", "the cycle branch the slot merges into")
 	check := fs.Bool("check-only", false, "judge freshness, PR identity and provenance; merge nothing")
-	noVerify := fs.Bool("no-verify", false, "merge without running test.full")
+	noVerify := fs.Bool("no-verify", false, "merge without running test.full; required when test.full is empty")
 	confirm := approvalFlags(fs)
 	return func(c *Ctx, args []string) (Result, error) {
 		slot, err := oneArg(args, "slot")
@@ -684,6 +693,9 @@ func workerGate(fs *flag.FlagSet) RunFunc {
 		}
 		if err != nil && r.Verdict == worker.GateApprovalRequired {
 			return gateRefusal(err, gateData(r))
+		}
+		if err == nil && r.Verdict == worker.GateNoVerify {
+			return noVerifyRefusal(r.Err, r.Hint, gateData(r))
 		}
 		if err != nil {
 			return Result{}, err
