@@ -37,6 +37,19 @@ Marking a milestone `shipped` immediately unblocks anything that depended on it.
 - `.rota/plans/M01-S01.md` for a slice of milestone work
 - `.rota/plans/M01-B07.md` for a single item that warrants its own plan (a milestone tag is optional; the key is the item ID as given)
 
+Every task also names the acceptance criteria it delivers (`Serves: AC-1`). On the issue backend, `rota plan check <key>` reads the plan against the item's `## Acceptance` list and exits 1 when a criterion has no task, a task serves no criterion or an unknown one, or a task has no verify step. It never writes. `/rota-plan` runs it after saving, and `/rota-work` runs it before it dispatches a plan that has `Serves:` lines. On the file backend it exits 1 with `blockedBy: backend`.
+
+How much planning an item gets is the planning dial. Before it plans, `/rota-plan` (and `/rota-work`, when no plan is stored) rates the item on three questions about a wrong plan: how expensive it is, how hard to undo and how invisible. The ratings pick a level, and the skill says the level in one line. You can override it in a word.
+
+| Level | Adds |
+|---|---|
+| 1. Pointers | Nothing: the plain plan. |
+| 2. Spec | Acceptance written first, the chosen approach and the one you rejected (a `/rota-brainstorm` design). |
+| 3. Research round | Open technical questions answered by trying (`/rota-spike`). |
+| 4. Adversarial pass | A grilling pass and a critic subagent argue against the finished plan. |
+
+When two levels fit, the lower one wins. A round worker never stops on the level: the issue's acceptance criteria are its spec.
+
 On the [issue backend](issue-backend.md) an item plan is a note on the item's issue (key `#42`), and a slice plan lives on the milestone's tracking issue.
 
 Each plan contains: goal in one sentence, approach in 3–6 sentences, tasks with observable behaviors and verify steps, named assumptions, and open questions. Tasks must fit one execution window. If they don't, split the plan. Every task requires a verify step; a task without one is not well-defined.

@@ -7,7 +7,7 @@ Two verbs bracket a [round](parallel-rounds.md). `rota doctor` checks the machin
 
 ```sh
 rota doctor            # one line per check: status, name, detail
-rota doctor --json     # {"ok": bool, "checks": [...]}
+rota doctor --json     # {"ok": true, "data": {"ok": bool, "checks": [...]}}
 ```
 
 It is read-only. It never writes, never calls a usage endpoint (so it spends no quota) and runs
@@ -15,7 +15,7 @@ without `.rota/`, falling back to default config. Each line is `pass`, `fail`, `
 carries a hint: the one command or edit that fixes it.
 
 **Exit codes.** `0` when every check passes, skips or warns. `1` when any check fails; `--json` still prints
-the full result, so a caller reads `ok`. A missing tool is a failed check, not an error, so doctor
+the full result, so a caller reads `data.ok`. A missing tool is a failed check, not an error, so doctor
 never exits 5.
 
 | Check | Looks at | Skips when |
