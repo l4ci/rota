@@ -26,3 +26,23 @@ KNOWLEDGE.md uses a hybrid umbrella+sub-repo model; DECISIONS.md stays permanent
 - Future learnings captured at either scope based on relevance (auto-resolve from cwd inside a sub-repo; ask at umbrella root).
 
 <!-- 2026-05-16 -->
+
+## Rounds: Orchestration
+
+### No harness version pins; Codex uses the default account
+
+rota never pins Codex or Claude CLI versions; it checks the flags a launch line needs in `--help`, and Codex workers use the default Codex account unless `work.codexAccounts` is set.
+
+*Why.* The maintainer ruled this in round 5: a version pin breaks on every harness release and blocks users on newer CLIs, while a `--help` flag probe fails only when a flag the launch line uses is really missing. Codex accounts mirror Claude's `work.accounts`; the slot worktree, not a separate account, is what separates workers.
+
+**Forbids.**
+- Hard-coded minimum or exact Codex/Claude CLI versions in rota code, doctor checks or docs.
+- Refusing to launch a worker because of a version number.
+- Giving each Codex slot its own CODEX_HOME by default.
+
+**Permits.**
+- Probing `codex --help` / `claude --help` for the flags the launch line uses, and refusing when one is missing (exit 4, blockedBy: codex flags).
+- Extra Codex homes when the user sets `work.codexAccounts`.
+- Doctor reporting the installed versions for information.
+
+<!-- 2026-10-07 -->
