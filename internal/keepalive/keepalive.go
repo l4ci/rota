@@ -221,7 +221,7 @@ func Run(env Env, o Options) (Result, error) {
 
 	statePath := StatePath(o.CommonDir)
 	start := env.Now()
-	st := State{PID: env.Holder.PID, StartedAt: ts(start), Command: append([]string{}, o.Command...),
+	st := State{PID: env.Holder.PID, Host: env.Lease.Host, Start: env.Holder.Start, StartedAt: ts(start), Command: append([]string{}, o.Command...),
 		Status: StatusRunning, RunStartedAt: ts(start), Account: o.Account}
 	if h := env.Handoff(); h.Exists {
 		st.LastHandoffSha = h.SHA // the handoff the first run begins with

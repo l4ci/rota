@@ -2,12 +2,11 @@ package limits
 
 import (
 	"encoding/json"
-	"errors"
 	"os"
-	"path/filepath"
 
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/rotastate"
+	"github.com/l4ci/rota/internal/roundlease"
 )
 
 // WatchFileName is the record of a running watcher under <git-common-dir>/rota/,
@@ -18,7 +17,11 @@ const WatchFileName = "limit-watch.json"
 
 // Watching is the content of that file.
 type Watching struct {
-	PID       int    `json:"pid"`
+	PID int `json:"pid"`
+	// Host and Start identify the process, so a reused pid is not mistaken for
+	// the watcher. Records from before they existed carry neither.
+	Host      string `json:"host,omitempty"`
+	Start     uint64 `json:"start,omitempty"`
 	StartedAt string `json:"startedAt"`
 	// Mode is "watch" for `rota limit watch` or "supervisor" for the loop
 	// inside `rota keepalive run`.
@@ -44,24 +47,25 @@ func ReadWatching(commonDir string) (w Watching, found bool) {
 	return w, true
 }
 
+// ActiveWatching is the record of a watcher that is still running: the same
+// liveness rule as the other watcher markers, so a reused pid is not one.
+func ActiveWatching(env roundlease.Env, commonDir string) (Watching, bool) {
+	w, ok := ReadWatching(commonDir)
+	if !ok || !env.Running(w.Host, w.PID, w.Start) {
+		return Watching{}, false
+	}
+	return w, true
+}
+
 // WriteWatching records the running watcher.
 func WriteWatching(commonDir string, w Watching) error {
-	b, err := json.MarshalIndent(w, "", "  ")
-	if err != nil {
-		return err
-	}
-	p := WatchPath(commonDir)
-	if err := os.MkdirAll(filepath.Dir(p), 0o777); err != nil {
-		return err
-	}
-	return fsio.WriteFileAtomic(p, append(b, '\n'))
+	return fsio.WriteMarker(WatchPath(commonDir), w, nil)
 }
 
 // RemoveWatching deletes the record when it is still this process's.
 func RemoveWatching(commonDir string, pid int) {
-	if w, ok := ReadWatching(commonDir); ok && w.PID == pid {
-		if err := os.Remove(WatchPath(commonDir)); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return
-		}
-	}
+	_ = fsio.RemoveMarker(WatchPath(commonDir), func(b []byte) bool {
+		var w Watching
+		return json.Unmarshal(b, &w) == nil && w.PID == pid
+	})
 }
