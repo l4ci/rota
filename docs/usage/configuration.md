@@ -511,6 +511,17 @@ The skill itself stays generic: no release step is hardcoded. Drift like a forgo
 
 Override the path if your project prefers a different location. By default the checklist is tracked at `.rota/RELEASE.md` and shared with the team.
 
+## release.versionFile
+
+- **Type:** string
+- **Default:** empty (auto-detect)
+
+Project-relative path of the version file. Empty means `/rota-release` and `rota release version` search `plugin.json`, `package.json`, `pyproject.toml`, `Cargo.toml` and `VERSION` in that order. Set it when a project has several, or keeps the version somewhere else. `rota config set` refuses absolute paths and paths that leave the project.
+
+```json
+{ "release": { "versionFile": "VERSION" } }
+```
+
 ## release.confirmLargePushCommits
 
 - **Type:** integer

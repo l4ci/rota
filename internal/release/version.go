@@ -202,7 +202,7 @@ func Detect(dir, override string) (file, version, kind string, err error) {
 			return f, v, k.Name, err
 		}
 	}
-	return "", "", "", errors.New("no version file detected (set release.versionFile in .rota/config.json)")
+	return "", "", "", errors.New("no version file detected (run `rota config set release.versionFile <path>`)")
 }
 
 // WriteVersion writes version into the file rel under dir the way the old

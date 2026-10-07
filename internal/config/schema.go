@@ -164,6 +164,7 @@ var Keys = []Key{
 	{"doctor.minFreeDiskPercent", json.Number("10"), false},
 	{"work.itemTimeoutMinutes", json.Number("0"), false}, // 0: no wall-clock cap per item
 	{"test.isolate", true, false},                        // rota test run scrubs host/ssh env and pins HOME/XDG
+	{"release.versionFile", "", false},                   // empty: auto-detect; else a project-relative path (rota config set validates it)
 }
 
 // PythonKeys is how many leading rows of Keys are CONFIG_KEYS.
