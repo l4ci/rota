@@ -30,7 +30,7 @@ pass "no CI check on the pushed train is ci-not-run, nothing lands"
 
 RC=0; OUT=$(FAKE_CI=lint ci worker gate c1 --base main) || RC=$?
 [ "$RC" = "1" ] && [ "$(echo "$OUT" | jget data.verdict)" = "ci-not-run" ] && [ ! -f "$CPROJ/c1.txt" ] \
-  && echo "$OUT" | grep -q 'ci/test' || fail "an unrelated passing check must not stand in for the listed one: rc=$RC $OUT"
+  && grep -q 'ci/test' <<<"$OUT" || fail "an unrelated passing check must not stand in for the listed one: rc=$RC $OUT"
 pass "a listed check that never runs is ci-not-run naming it, even with another check green"
 
 RC=0; OUT=$(FAKE_CI=pending ci worker train c1 c2 --base main) || RC=$?
@@ -55,7 +55,7 @@ pass "a green CI train lands its members"
 
 cicfg ci '[]'
 RC=0; OUT=$(FAKE_CI=pass ci worker train c1 --base main) || RC=$?
-[ "$RC" = "70" ] && echo "$OUT" | grep -q 'test.ciChecks' \
+[ "$RC" = "70" ] && grep -q 'test.ciChecks' <<<"$OUT" \
   || fail "test.fullWhere ci without test.ciChecks should be refused: rc=$RC $OUT"
 pass "test.fullWhere ci with an empty test.ciChecks is refused up front"
 
