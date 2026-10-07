@@ -195,9 +195,13 @@ func (s Store) Stats() ([]Stat, error) {
 	if err != nil {
 		return nil, err
 	}
+	return topicStats(content), nil
+}
+
+func topicStats(content string) []Stat {
 	out := []Stat{}
 	for _, t := range section.Topics(content) {
 		out = append(out, Stat{t.Name, len(bulletLine.FindAllStringIndex(t.Body, -1)), len(t.Body)})
 	}
-	return out, nil
+	return out
 }
