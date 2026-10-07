@@ -118,6 +118,10 @@ type Input struct {
 	// checkout Dir is in (stalebin.Check); nil adds no line.
 	StaleBinary *stalebin.Finding
 
+	// NothingToVerify is set when test.full and test.e2e are both empty under a
+	// local verify, so the merge gate would refuse; false adds no line.
+	NothingToVerify bool
+
 	Exec Exec
 	// Getenv reads the environment for host detection (HERDR_ENV, TMUX); nil
 	// reads as empty.
@@ -143,6 +147,10 @@ func Run(ctx context.Context, in Input) Report {
 	if f := in.StaleBinary; f != nil {
 		// Only a binary behind its own checkout adds a line.
 		checks = append(checks, Check{Name: "binary", Status: Warn, Detail: f.Detail(), Hint: "rebuild: " + f.Rebuild})
+	}
+	if in.NothingToVerify {
+		// Only an unconfigured project adds a line; it warns, never fails.
+		checks = append(checks, Check{Name: "verify", Status: Warn, Detail: "test.full and test.e2e are both empty: the merge gate will refuse until test.full is set", Hint: "run: rota config set test.full '[...]'"})
 	}
 	if in.LegacyDir != "" {
 		// Only a project that still holds the old state folder gets this line.

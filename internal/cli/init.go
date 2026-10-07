@@ -14,6 +14,7 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/projects"
 	"github.com/l4ci/rota/internal/rotatree"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 // The `rota init` group (A9): `init` seeds .rota/, `init check` is the preflight.
@@ -130,6 +131,11 @@ func runInit(c *Ctx, noBlocks bool) (Result, error) {
 	data.Set("changed", changed)
 	if !changed {
 		lines = append(lines, "noop: already initialized")
+	}
+	noVerify := worker.NothingToVerify(dir)
+	data.Set("noVerify", noVerify)
+	if noVerify {
+		lines = append(lines, noVerifyWarning)
 	}
 	return Result{Data: data, Text: strings.Join(lines, "\n")}, nil
 }
