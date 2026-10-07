@@ -540,11 +540,17 @@ func (h *herdr) Notify(ctx context.Context, title, body string) {
 	fmt.Fprintf(h.d.Stderr, "rota: herdr notification %q was not shown (%s)\n", title, reason)
 }
 
-// explainLines bounds the excerpt of `herdr agent explain` kept as evidence.
+// explainLines bounds the fallback excerpt of `herdr agent explain`.
 const explainLines = 3
 
-// Explain is the first few lines of `herdr agent explain` for the slot's agent,
-// "" for a never-dispatched slot or a failing call.
+// explainKeys are the lines of `herdr agent explain` that say why herdr
+// classified the agent as it did, in the order kept. `agent:` and `manifest:`
+// only identify it.
+var explainKeys = []string{"state:", "rule:", "evidence:"}
+
+// Explain is the why-lines of `herdr agent explain` for the slot's agent
+// (state, rule, evidence, each clipped), the first few lines when none of
+// those keys appear, "" for a never-dispatched slot or a failing call.
 func (h *herdr) Explain(ctx context.Context, slot, handle string) string {
 	if handle == "" {
 		return ""
@@ -553,14 +559,32 @@ func (h *herdr) Explain(ctx context.Context, slot, handle string) string {
 	if r.ExitCode != 0 {
 		return ""
 	}
-	var out []string
+	var lines []string
 	for _, l := range strings.Split(r.Stdout, "\n") {
 		if l = strings.TrimSpace(l); l != "" {
-			out = append(out, l)
+			lines = append(lines, l)
 		}
-		if len(out) == explainLines {
-			break
+	}
+	var out []string
+	for _, k := range explainKeys {
+		for _, l := range lines {
+			if strings.HasPrefix(l, k) {
+				out = append(out, clipRunes(l, 80))
+				break
+			}
+		}
+	}
+	if len(out) == 0 {
+		for _, l := range lines[:min(len(lines), explainLines)] {
+			out = append(out, clipRunes(l, 80))
 		}
 	}
 	return strings.Join(out, " / ")
+}
+
+func clipRunes(s string, n int) string {
+	if r := []rune(s); len(r) > n {
+		return string(r[:n])
+	}
+	return s
 }
