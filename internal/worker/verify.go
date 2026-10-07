@@ -21,11 +21,19 @@ type VerifyResult struct {
 	// LogPath is the same log on disk, set only when a command failed. The
 	// caller owns it: report it, or remove it.
 	LogPath string
+	// CI marks a run on the project's CI (see ci.go): Verified and Failed are
+	// check names, Log lists the checks, and Ref and SHA are what was pushed.
+	// NotRun is a listed check never starting (Missing names them), TimedOut
+	// checks still pending at the deadline; neither is OK.
+	CI               bool
+	Ref, SHA         string
+	NotRun, TimedOut bool
+	Missing          []string
 }
 
 // OK is true when every configured command passed (or none was configured;
 // check NoCommands to tell the two apart).
-func (r VerifyResult) OK() bool { return len(r.Failed) == 0 }
+func (r VerifyResult) OK() bool { return len(r.Failed) == 0 && !r.NotRun && !r.TimedOut }
 
 // Verify runs test.full, read from root's config, in dir. Each
 // command goes through Env.Shell, whose default runs it in its own process
