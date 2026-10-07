@@ -62,7 +62,7 @@ If `commitCount` is 0, stop and tell the user.
 
 The spec is what each referenced item promised. Collect one entry per `referencedId`, in parallel:
 
-- **Issue mode** (`backlog.backend: "issues"`, the default path): the issue body is the spec. `rota item field list <ID>` returns it; add `rota item comment list <ID> --kind decision`, because a decision recorded as a comment changes the body's promise. A plan note (`rota item note show <ID> --kind plan`, `exists: false` when absent) is extra detail, not a requirement, except its `## Review Focus` section: lift it out and carry it into the brief verbatim.
+- **Issue mode** (`backlog.backend: "issues"`, the default path): the issue body is the spec. `rota item field list <ID>` returns it; add `rota item comment list <ID> --kind decision`, because a decision recorded as a comment changes the body's promise. A plan note (`rota item note show <ID> --kind plan`, `exists: false` when absent) is extra detail, not a requirement, except its `## Review Focus` section (lift it out and carry it into the brief verbatim) and its `## Relies on` list (lift it out too; Step 4 uses it).
 
 When `backlog.backend` is `"file"`, read [`file-mode-spec.md`](file-mode-spec.md) instead.
 
@@ -70,11 +70,11 @@ An item with no body and no plan contributes only its title; the reviewer says s
 
 ## Step 4 — Consult KNOWLEDGE & DECISIONS
 
-Apply the canonical K+D query pattern (`references/knowledge-consult.md`) with topics that plausibly touch the changed areas, from `touchedFiles` and commit subjects. Infer liberally (a file under `Networking/` → the `Networking` topic).
+Apply the canonical K+D query pattern (`references/knowledge-consult.md`). Pick topics from the plan's `## Relies on` list when Step 3 lifted one with entries (query the topics it names, and read each listed entry in full). With no plan, or a list that says `none`, infer topics that plausibly touch the changed areas from `touchedFiles` and commit subjects, liberally (a file under `Networking/` → the `Networking` topic).
 
-Carry KNOWLEDGE bullets into the reviewer brief. Pass DECISIONS entries under a `**Hard boundaries:**` section; the reviewer must **FAIL** if the diff violates any boundary, even if the change looks otherwise good.
+Carry KNOWLEDGE bullets into the reviewer brief. Pass DECISIONS entries under a `**Hard boundaries:**` section; the reviewer must **FAIL** if the diff violates any boundary, even if the change looks otherwise good. When the plan listed entries, also pass that list under `**Plan relies on:**` (Standards brief): the reviewer checks the diff against each entry and reports one the diff contradicts or ignores as a finding naming the entry.
 
-> **REQUIRED — Register hits on consumed bullets.** After building the reviewer brief, apply the hit-register pattern from `references/knowledge-consult.md` *Hit-register after consumption*: for each bullet that landed in the brief's `**Relevant project conventions (from KNOWLEDGE.md):**` section, call `rota knowledge hit --topic "<T>" --title "<first-line-of-bullet>"` once, issuing all calls as a single parallel batch. Bullets pruned before the brief don't earn credit. Silent on success. Provisional bullets auto-promote to confirmed once `hits >= learn.promoteThreshold` (default 3).
+> **Register hits after the verdicts, not after the brief.** A bullet landing in the brief is not use. Register in Step 8, once the reviewers have reported: for each KNOWLEDGE bullet the diff was checked against (every entry of `**Plan relies on:**`, or every bullet under `**Relevant project conventions (from KNOWLEDGE.md):**` when there was no list) that no finding names, call `rota knowledge hit --topic "<T>" --title "<first-line-of-bullet>"` once, issuing all calls as a single parallel batch. A bullet a finding names (contradicted or ignored) earns no hit; neither does a DECISIONS entry or a bullet that was pruned before the brief. Silent on success. Provisional bullets auto-promote to confirmed once `hits >= learn.promoteThreshold` (default 3).
 
 ## Step 5 — Capture the Diff
 
@@ -119,6 +119,8 @@ rota verdict add <branch> --kind review-quality --verdict <PASS|CONCERNS|FAIL> -
 ```
 
 Record both even when Spec is FAIL: the Standards findings are the author's to-do list too. Order decides the result: `review-quality` stores `combined`, the worse of the two at the same sha. `data.combined` on the second call is the branch's review verdict.
+
+Then register the Step 4 hits (parallel batch) for the entries no finding names.
 
 Exit 2 means the block is malformed or its `verdict` differs from `--verdict`: the message names the field. Ask that reviewer to resend; never guess a verdict.
 
