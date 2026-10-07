@@ -33,6 +33,8 @@ type VerifyResult struct {
 	Ref, SHA         string
 	NotRun, TimedOut bool
 	Missing          []string
+	// Cached marks a passing verdict reused from the train cache: nothing ran.
+	Cached bool
 	// Excluded lists the ledger entries that excused a failing command: its
 	// failing tests all had an unexpired entry (see internal/testledger), so
 	// the command counts as verified.

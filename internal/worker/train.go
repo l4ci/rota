@@ -81,6 +81,11 @@ type TrainResult struct {
 	Err         string
 	Hint        string
 	Notes       []string
+	// CacheHits names each verify answered from the verdict cache instead of
+	// being run; Transient the members earlier named culprit that this train
+	// passed with (#400).
+	CacheHits []string
+	Transient []string
 	// Excluded lists the test-ledger entries that excused a failing command;
 	// Expired the entries past their expiry, which fail the train.
 	Excluded, Expired []testledger.Entry
@@ -94,13 +99,19 @@ func (e Env) Train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 	e = e.withDefaults()
 	var res TrainResult
 	err := e.withLandLock(ctx, root, func() (err error) {
-		res, err = e.train(ctx, root, o)
+		cache := loadTrainCache(root)
+		res, err = e.train(ctx, root, o, cache)
+		if cache.dirty {
+			if serr := cache.save(); serr != nil {
+				res.Notes = append(res.Notes, "TRAIN-CACHE not saved — "+serr.Error())
+			}
+		}
 		return err
 	})
 	return res, err
 }
 
-func (e Env) train(ctx context.Context, root string, o TrainOpts) (TrainResult, error) {
+func (e Env) train(ctx context.Context, root string, o TrainOpts, cache *trainCache) (TrainResult, error) {
 	res := TrainResult{Base: o.Base}
 	if len(o.Targets) == 0 {
 		return res, fail(exitcode.ExitUsage, "a train needs at least one PR or slot")
@@ -243,6 +254,7 @@ func (e Env) train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 			return e.trainBroke(res, fmt.Sprintf("git rev-parse %s exited %d", headRef(m), code))
 		}
 	}
+	cache.retainBase(baseSHA)
 	scratch, err := os.MkdirTemp("", "rota-train-")
 	if err != nil {
 		return res, err
@@ -295,8 +307,36 @@ func (e Env) train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 		}
 		return res, err
 	}
-	full := func() (VerifyResult, error) { return verify(scratch) }
-	vr, err := full()
+	// cached answers a verify of the base plus its first k members from the
+	// cache when the same tier ran on the same base and heads before.
+	cached := func(tier string, run func() (VerifyResult, error)) func(int) (VerifyResult, error) {
+		return func(k int) (VerifyResult, error) {
+			key := trainKey(tier, baseSHA, heads[:k])
+			if v, ok := cache.get(key); ok {
+				res.CacheHits = append(res.CacheHits, fmt.Sprintf("%s: base + first %d member(s)", tier, k))
+				return VerifyResult{Cached: true, Verified: v.Verified}, nil
+			}
+			r, err := run()
+			if err == nil {
+				cache.put(key, r)
+			}
+			return r, err
+		}
+	}
+	// blame remembers the member the bisect named, to recognise it as flaky later.
+	blame := func(tier string) {
+		for i, m := range res.Members {
+			if m.Culprit && res.Verdict == GateVerifyFailed {
+				cache.blame(m.Branch, heads[i], trainKey(tier, baseSHA, heads[:i+1]))
+			}
+		}
+	}
+	fullTierName := "test.full"
+	if onCI {
+		fullTierName = "test.full@ci"
+	}
+	full := cached(fullTierName, func() (VerifyResult, error) { return verify(scratch) })
+	vr, err := full(n)
 	if err != nil {
 		return verifyErr(err)
 	}
@@ -316,7 +356,9 @@ func (e Env) train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 		if !vr.OK() {
 			green = false
 			var stop bool
-			if passing, stop, err = e.bisectTrain(scratch, &res, tips, "test.full", full, vr, o.LandGreen); err != nil {
+			passing, stop, err = e.bisectTrain(scratch, &res, tips, "test.full", full, vr, o.LandGreen)
+			blame(fullTierName)
+			if err != nil {
 				return verifyErr(err)
 			} else if stop {
 				return res, nil
@@ -328,8 +370,8 @@ func (e Env) train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 	// test.full passed. A red e2e bisects the same way a red full does.
 	e2e := TierCommands(root, "e2e")
 	if green && len(e2e) > 0 {
-		run := func() (VerifyResult, error) { return e.RunVerifyWith(ctx, e2e, scratch, led) }
-		er, err := run()
+		run := cached("test.e2e", func() (VerifyResult, error) { return e.RunVerifyWith(ctx, e2e, scratch, led) })
+		er, err := run(n)
 		if err != nil {
 			return res, err
 		}
@@ -340,8 +382,21 @@ func (e Env) train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 		}
 		if !er.OK() {
 			var stop bool
-			if passing, stop, err = e.bisectTrain(scratch, &res, tips, "test.e2e", run, er, o.LandGreen); err != nil || stop {
+			passing, stop, err = e.bisectTrain(scratch, &res, tips, "test.e2e", run, er, o.LandGreen)
+			blame("test.e2e")
+			if err != nil || stop {
 				return res, err
+			}
+		}
+	}
+
+	// A member earlier named culprit that this verified train carries was flaky:
+	// the failure did not reproduce on a different combination.
+	if passing == n && !vr.NoCommands {
+		for i, m := range res.Members {
+			if cache.forgive(m.Branch, heads[i]) {
+				res.Transient = append(res.Transient, m.Target)
+				res.Notes = append(res.Notes, fmt.Sprintf("TRANSIENT %s — named culprit by an earlier train, but this train with it passes verification; treated as flaky, not blamed again", m.Target))
 			}
 		}
 	}
@@ -450,14 +505,14 @@ func (e Env) trainMoved(res TrainResult, culprit, msg string) (TrainResult, erro
 // assumes the base is green: a red base is reported as such. passing is how
 // many leading members may still land (all but the culprit under LandGreen);
 // stop is true when the train must end here with res as the answer.
-func (e Env) bisectTrain(scratch string, res *TrainResult, tips []string, tier string, verify func() (VerifyResult, error), failed VerifyResult, landGreen bool) (passing int, stop bool, err error) {
+func (e Env) bisectTrain(scratch string, res *TrainResult, tips []string, tier string, verify func(int) (VerifyResult, error), failed VerifyResult, landGreen bool) (passing int, stop bool, err error) {
 	broke := func(msg string) (int, bool, error) {
 		*res, _ = e.trainBroke(*res, msg)
 		return 0, true, nil
 	}
 	// run verifies one prefix; done means a CI run gave no answer and res holds it.
-	run := func() (VerifyResult, bool, error) {
-		r, err := verify()
+	run := func(k int) (VerifyResult, bool, error) {
+		r, err := verify(k)
 		if err != nil {
 			return r, true, err
 		}
@@ -474,7 +529,7 @@ func (e Env) bisectTrain(scratch string, res *TrainResult, tips []string, tier s
 		if _, code := e.git(scratch, "checkout", "-q", "--detach", tips[mid]); code != 0 {
 			return broke("git checkout " + tips[mid] + " failed in the scratch tree")
 		}
-		pr, done, err := run()
+		pr, done, err := run(mid)
 		if done {
 			return 0, true, err
 		}
@@ -489,7 +544,7 @@ func (e Env) bisectTrain(scratch string, res *TrainResult, tips []string, tier s
 		if _, code := e.git(scratch, "checkout", "-q", "--detach", tips[0]); code != 0 {
 			return broke("git checkout " + tips[0] + " failed in the scratch tree")
 		}
-		br, done, err := run()
+		br, done, err := run(0)
 		if done {
 			return 0, true, err
 		}
