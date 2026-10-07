@@ -128,6 +128,10 @@ Three tiers of shell commands, each an array defaulting to `[]`:
 - `test.full`: the full suite. The merge gate (`rota worker gate`) and the merge train run it on the merged tree, and [`/rota-refactor`](../reference/slash-commands.md#rota-refactor) runs it in `--fix` verification as CI-shape gates before committing. Empty means read-only verification, and the gate reports `NO-VERIFY`.
 - `test.e2e`: slow end-to-end checks. `rota worker gate` and the merge train run it on the merged tree after `test.full` passes, so a round pays for it at merge instead of once per branch (a train runs it once for all members). A red train run bisects like a red `test.full`. Empty skips the step.
 
+### test.isolate
+
+`rota test run <tier>` isolates the environment of every command by default (`test.isolate`, bool, default `true`): `HERDR_*`, `TMUX*`, `SSH_AUTH_SOCK` and `SSH_AGENT_PID` are removed, and `HOME` and the `XDG_*` dirs point into a temp root that is deleted when the run ends. The Go caches (`GOCACHE`, `GOMODCACHE`, `GOPATH`, `GOENV`) keep their real locations, so an isolated run does not rebuild from cold. A project whose tests need the real home or an ssh-agent opts out with `rota config set test.isolate false`. It applies to `rota test run` only, not to the merge gate or train.
+
 `test.full` replaces `refactor.verifyCommands`. `rota config fill` moves the old key's commands to `test.full` and deletes it. Until then the gate still reads the old key when `test.full` is empty, and warns on stderr that it is deprecated.
 
 When `test.full` is non-empty, the verifier executes each command in order and refuses to PASS unless every command exits zero. This catches formatter drift, import-sort failures, and type errors locally instead of on push. See [rota #9](https://github.com/l4ci/rota/issues/9) for the motivating incident.
