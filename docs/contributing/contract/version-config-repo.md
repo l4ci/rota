@@ -1,5 +1,5 @@
 ---
-verified-sha: 9586a179cd3a699f5c384c461f704b2e90e8cf3f
+verified-sha: 3fe9abdb78d41ab20ad0545652af7ca33e1dd786
 refs:
   - internal/version
   - internal/config
@@ -44,7 +44,7 @@ note: schema values resolve from the same merged configuration as runtime reads.
 rota config set <key> <value>
 repo: scoped
 data: {"key": string, "value": any, "previous"?: any, "changed": bool}
-exit: 2 when `<key>` is not in the schema that `config check` uses (the shared table in `bin/hvlib_config.py`), is a malformed path (empty segment: `""`, `.a`, `a.`), or an argument is missing; 70 when `.rota/config.json` exists but is not a JSON object, or the write fails.
+exit: 2 when `<key>` is not in the schema that `config check` uses (the shared table in `bin/hvlib_config.py`), is a malformed path (empty segment: `""`, `.a`, `a.`), an argument is missing, or `<value>` is one the key cannot hold (`invalid value`: `release.versionFile` takes a project-relative path string that stays inside the project, or `""` to clear it); 70 when `.rota/config.json` exists but is not a JSON object, or the write fails.
 old: hv-config-set <key> <value> (both map to the old positionals in order). Writes `.rota/config.json` only, never `config.local.json`. `<value>` is parsed as JSON first (`true`, `42`, `"x"`, `[…]`, `{…}`) and falls back to a raw string (`opus`, empty string). `previous` is the stored value before the write and is absent when the key was unset.
 shim: old accepts any key, so the shim checks `<key>` against the schema table first and exits 2 without calling the helper when it is absent; old stdout is empty; read `.rota/config.json` before and after the call to fill `value`, `previous` and `changed`; old rc 1 with `malformed key path` on stderr becomes exit 2, rc 1 for missing argv becomes exit 2, any other rc 1 becomes exit 70.
 note: the JSON-then-string coercion is kept because `hv-init` and `hv-config` skills depend on it. A string that looks like JSON (`"true"`) still needs shell quoting (`'"true"'`). No `--string` or `--local` flag is added.
@@ -54,19 +54,21 @@ note: an empty `<value>` is valid and stores the empty string; the old helper re
 ### rota config check
 rota config check
 repo: scoped
-data: {"status": "upToDate"|"fresh"|"stale"|"corrupt", "upToDate": bool, "missing": []string}
+data: {"status": "upToDate"|"fresh"|"stale"|"corrupt", "upToDate": bool, "missing": []string, "removed": []string}
 exit: 1 when `status` is anything but `upToDate` (`fresh`, `stale` or `corrupt`); 3 when no `.rota/` is found. `missing` lists dotted required keys that are absent or null, in schema order, then `refactor.verifyCommands` when it still holds commands and `test.full` holds none (the deprecated key `config fill` moves), and is non-empty only for `stale`. `fresh` means `config.json` does not exist; `corrupt` means it is invalid JSON or not an object (this is a defined verdict, so it does not use exit 70).
 old: hv-config-schema-check (no args).
 shim: map stdout `UP_TO_DATE` to `status: upToDate`, `FRESH` to `fresh`, `CORRUPT` to `corrupt`, and `STALE:a,b` to `stale` with `missing` = the split list; exit 0 for `upToDate`, else 1 (old always exited 0).
 note: old always exited 0, so skills that branch on the four tokens must read `data.status`.
+note: `removed` lists keys older `rota init` runs seeded that nothing reads any more and the file still holds (`issues.filterMineOnly`, `issues.providers.github`, `issues.providers.gitlab`), in that order; `[]` when none. They are inert: they never change `status` or the exit, and text mode adds a `REMOVED: <keys> (nothing reads them; run: rota config fill)` line. `config fill` deletes them.
 
 ### rota config fill
 rota config fill
 repo: scoped
-data: {"filled": []string, "changed": bool}
+data: {"filled": []string, "removed": []string, "changed": bool}
 exit: 3 when no `.rota/` is found; 70 when `.rota/config.json` exists but is invalid JSON or not an object (`config check` status `corrupt`), and nothing is written.
 old: none (A9 addition, G1; replaces the ~20 default `config set` calls the hv-init skill carried as prose).
-note: writes the schema default (`config show`'s `source: default` value) for every required key that `config check` lists in `missing`, so `config check` reports `upToDate` afterwards. `filled` lists those keys in schema order. A missing `config.json` is created holding every required key. Keys already present, keys outside the schema and `config.local.json` are never touched. Nothing missing gives `filled: []`, `changed: false`, and the file is not rewritten.
+note: writes the schema default (`config show`'s `source: default` value) for every required key that `config check` lists in `missing`, so `config check` reports `upToDate` afterwards. `filled` lists those keys in schema order. A missing `config.json` is created holding every required key. Keys already present, keys outside the schema and `config.local.json` are never touched. Nothing missing and nothing to remove gives `filled: []`, `removed: []`, `changed: false`, and the file is not rewritten.
+note: `removed` lists the inert keys `config check` names under `removed`; `fill` deletes them and drops `issues.providers` when that leaves it empty. `changed` is true when anything was filled or removed. Text mode prints `filled: <keys>` and a `removed: <keys>` line.
 note: each added key goes in at its schema position among its siblings: before the first existing sibling that comes later in schema order (an object's position is that of its first schema key), so a file that starts in schema order stays in it (G7). Siblings outside the schema keep their place. The file is written as `config set` writes it (two-space indent).
 note: `umbrella.enabled` and `rota.version` are required, so `fill` writes their defaults (`false`, `""`) when they are missing. Callers that know better set them with `config set`; `config set` on a present key keeps its position. The init skill runs `rota init`, then `rota config fill`, then `config set` for the answered keys, which keeps the file in schema order.
 
