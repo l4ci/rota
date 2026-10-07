@@ -20,6 +20,7 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/repos"
 	"github.com/l4ci/rota/internal/rotatree"
+	"github.com/l4ci/rota/internal/tracker"
 )
 
 // Command is a group (Subs) or a verb (Verb) in the rota tree.
@@ -232,6 +233,10 @@ func Main(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 func run(root *Command, deps *Deps, args []string, stdin io.Reader, stdout, stderr io.Writer) (code int) {
 	// Until the arguments parse, an error answers in JSON if any token
 	// before "--" is exactly --json.
+	if deps != nil && deps.ReadCache != nil {
+		// One invocation's reads are shared; the next starts from the forge.
+		deps.ReadCache = tracker.NewReadCache()
+	}
 	c := &Ctx{Path: "rota", Stdin: stdin, Stdout: stdout, Stderr: stderr, Deps: deps, JSON: containsJSON(args), dashAt: -1}
 	sigCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
