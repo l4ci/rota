@@ -423,3 +423,18 @@ func TestCheckFlagsLegacyVerifyCommands(t *testing.T) {
 		t.Errorf("empty legacy list: %s", st)
 	}
 }
+
+func TestSetVersionFileValidatesProjectPath(t *testing.T) {
+	for _, bad := range []string{"/etc/VERSION", "../VERSION", "a/../../VERSION", "..", "3", "true"} {
+		root := project(t, "", "")
+		if _, err := Set(root, "release.versionFile", bad); !errors.Is(err, ErrBadValue) {
+			t.Errorf("%q: err = %v, want ErrBadValue", bad, err)
+		}
+	}
+	for _, good := range []string{"VERSION", "sub/package.json", `""`} {
+		root := project(t, "", "")
+		if _, err := Set(root, "release.versionFile", good); err != nil {
+			t.Errorf("%q: %v", good, err)
+		}
+	}
+}

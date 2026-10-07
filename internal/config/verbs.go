@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/l4ci/rota/internal/fsio"
@@ -33,6 +34,9 @@ var ErrMalformedKey = errors.New("malformed key path")
 
 // ErrNotSchemaKey is Set's answer for a key outside the schema table.
 var ErrNotSchemaKey = errors.New("not a config key")
+
+// ErrBadValue is Set's answer for a value its key cannot hold.
+var ErrBadValue = errors.New("invalid value")
 
 // ErrNotObject is Set's answer when config.json holds JSON that is not an object.
 var ErrNotObject = errors.New(".rota/config.json is not a JSON object")
@@ -138,6 +142,9 @@ func Set(root, key, raw string) (SetResult, error) {
 		return SetResult{}, fmt.Errorf("%w %q", ErrNotSchemaKey, key)
 	}
 	value := Coerce(raw)
+	if err := validateValue(key, value); err != nil {
+		return SetResult{}, err
+	}
 	var res SetResult
 	res.Value = value
 	err := fsio.UpdateJSON(configPath(root), jsonx.NewObject(), func(doc any) (any, error) {
@@ -168,6 +175,29 @@ func Set(root, key, raw string) (SetResult, error) {
 		return cfg, nil
 	})
 	return res, err
+}
+
+// projectPathKeys hold a path relative to the project root.
+var projectPathKeys = map[string]bool{"release.versionFile": true}
+
+// validateValue rejects a value its key cannot hold. A project path key takes
+// a relative path that stays inside the project, or "" to clear it.
+func validateValue(key string, value any) error {
+	if !projectPathKeys[key] {
+		return nil
+	}
+	s, ok := value.(string)
+	if !ok {
+		return fmt.Errorf("%w for %s: want a project-relative path string", ErrBadValue, key)
+	}
+	if s == "" {
+		return nil
+	}
+	clean := filepath.Clean(s)
+	if filepath.IsAbs(s) || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+		return fmt.Errorf("%w for %s: %q is not inside the project", ErrBadValue, key, s)
+	}
+	return nil
 }
 
 func getObject(o *jsonx.Object, key string) (*jsonx.Object, bool) {
