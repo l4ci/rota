@@ -1,6 +1,7 @@
 package tracker
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -15,7 +16,8 @@ import (
 type ReadCache struct {
 	mu      sync.Mutex
 	results map[string]Result
-	issues  map[string]Issue // issue list rows, by provider+dir+number
+	issues  map[string]Issue   // issue list rows, by provider+dir+number
+	open    map[string][]Issue // whole open lists (no filter), by provider+dir
 
 	// noStateReason is set once gh rejected the stateReason field, so the
 	// adapters sharing this cache do not each fail and retry the same list.
@@ -24,7 +26,7 @@ type ReadCache struct {
 
 // NewReadCache returns an empty cache.
 func NewReadCache() *ReadCache {
-	return &ReadCache{results: map[string]Result{}, issues: map[string]Issue{}}
+	return &ReadCache{results: map[string]Result{}, issues: map[string]Issue{}, open: map[string][]Issue{}}
 }
 
 // WithReadCache makes the adapter's CLI serve repeated reads from rc.
@@ -51,6 +53,37 @@ func (rc *ReadCache) Clear() {
 	defer rc.mu.Unlock()
 	clear(rc.results)
 	clear(rc.issues)
+	clear(rc.open)
+}
+
+// putOpen holds the complete, unfiltered open list of a repository.
+func (rc *ReadCache) putOpen(scope string, list []Issue) {
+	rc.mu.Lock()
+	defer rc.mu.Unlock()
+	rc.open[scope] = list
+}
+
+// openMatching answers a label-filtered open list from the held complete open
+// list. Label names compare case-insensitively, as the forge does; several
+// labels all have to be present.
+func (rc *ReadCache) openMatching(scope string, labels []string) ([]Issue, bool) {
+	rc.mu.Lock()
+	defer rc.mu.Unlock()
+	all, ok := rc.open[scope]
+	if !ok {
+		return nil, false
+	}
+	out := []Issue{}
+next:
+	for _, is := range all {
+		for _, want := range labels {
+			if !slices.ContainsFunc(is.Labels, func(l string) bool { return strings.EqualFold(l, want) }) {
+				continue next
+			}
+		}
+		out = append(out, is)
+	}
+	return out, true
 }
 
 func (rc *ReadCache) putIssues(scope string, list []Issue) {
