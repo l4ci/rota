@@ -127,6 +127,9 @@ func roundAssign(fs *flag.FlagSet) RunFunc {
 		setIf(d, "model", res.Model)
 		setIf(d, "pick", res.Pick.String())
 		setIf(d, "tierReason", res.TierReason)
+		if res.SmokeSection != 0 {
+			d.Set("smokeSection", res.SmokeSection)
+		}
 		if res.Host != "" { // solo: the brief comes back instead of going to a pane
 			d.Set("host", res.Host)
 			d.Set("brief", res.Brief)
