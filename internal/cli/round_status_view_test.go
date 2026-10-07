@@ -28,7 +28,7 @@ func (f *fakeClock) advance(d time.Duration) { f.t = f.t.Add(d) }
 
 func newClock() *fakeClock { return &fakeClock{t: time.Date(2026, 10, 7, 12, 0, 0, 0, time.UTC)} }
 
-// fixedSnap is a round in flight: two working slots, a parked one, a queued
+// fixedSnap is a round in flight: two assigned slots, a parked one, a queued
 // review and three candidates (one ready, two blocked for different reasons).
 func fixedSnap() roundSnap {
 	return roundSnap{
