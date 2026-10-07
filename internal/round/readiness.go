@@ -2,7 +2,6 @@ package round
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"path"
 	"regexp"
@@ -10,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/exitmap"
 	"github.com/l4ci/rota/internal/itembody"
 	"github.com/l4ci/rota/internal/overlap"
 	"github.com/l4ci/rota/internal/worker"
@@ -228,7 +228,7 @@ func AssessBrief(be backlog.Backend, id string, tracked, shared []string, inFlig
 	for _, ref := range refs {
 		it, err := be.Get(ref)
 		switch {
-		case errors.Is(err, backlog.ErrNotFound):
+		case exitmap.IsNotFound(err):
 			dep.OK = false
 			dep.Detail = append(dep.Detail, fmt.Sprintf("cannot verify %s: not found; edit the issue to fix the reference", ref))
 		case err != nil:

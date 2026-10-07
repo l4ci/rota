@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/exitmap"
 	"os"
 	"strconv"
 	"strings"
@@ -127,11 +128,10 @@ func comments(ctx context.Context, f Forge, kind string, number int) ([]tracker.
 }
 
 func fromTracker(err error) *Error {
-	var te *tracker.Error
-	if errors.As(err, &te) {
-		return &Error{Exit: te.Kind.Exit(), Message: te.Message}
-	}
-	return &Error{Exit: 70, Message: err.Error()}
+	_, out := exitmap.Translate(err, exitmap.Options{Classes: exitmap.Tracker, Default: exitcode.ExitInternal})
+	var e *exitcode.Error
+	errors.As(out, &e)
+	return &Error{Exit: e.Exit, Message: e.Message}
 }
 
 // SendOpts are the flags of `rota round escalate send`.

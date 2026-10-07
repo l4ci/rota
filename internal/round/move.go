@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/exitmap"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -12,15 +13,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/escalation"
-	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/marker"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundlease"
-	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -49,22 +47,15 @@ const (
 const HumanTarget = "human"
 
 // wrap maps what a step failed with onto the exit table: a missing item is 3,
-// a busy registry lock is 6, git, the host and the tracker are 5.
+// a busy registry lock is 6, git, the host and the tracker (a tracker 404
+// included) are 5.
 func wrap(err error) error {
-	if err == nil {
-		return nil
-	}
-	var we *exitcode.Error
 	var blk *BlockedError
-	switch {
-	case errors.As(err, &we), errors.As(err, &blk):
+	if errors.As(err, &blk) {
 		return err
-	case errors.Is(err, backlog.ErrNotFound):
-		return &exitcode.Error{Exit: exitcode.ExitResolution, Message: err.Error()}
-	case errors.Is(err, fsio.ErrLockTimeout):
-		return &exitcode.Error{Exit: exitcode.ExitRetry, Message: err.Error()}
 	}
-	return &exitcode.Error{Exit: exitcode.ExitUnavailable, Message: err.Error()}
+	_, out := exitmap.Translate(err, exitmap.Options{Classes: exitmap.BacklogNotFound | exitmap.Lock, Default: exitcode.ExitUnavailable})
+	return out
 }
 
 func registryRound(root string) int {
@@ -342,10 +333,7 @@ type Reclaimed struct {
 // unresolvable says whether err is the tracker not knowing the issue: a slot
 // whose task was minted in file mode (`B31`) and never mapped has no issue to
 // comment on or release a claim from.
-func unresolvable(err error) bool {
-	var te *tracker.Error
-	return errors.Is(err, backlog.ErrNotFound) || (errors.As(err, &te) && te.Kind == tracker.KindNotFound)
-}
+func unresolvable(err error) bool { return exitmap.IsNotFound(err) }
 
 // tolerateMissing returns a func that swallows an unresolvable-issue error from
 // a tracker step on issue, recording a warning instead, so a slot is never
