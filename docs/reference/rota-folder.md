@@ -11,6 +11,9 @@
 | `DECISIONS.md` | Hard-boundary decisions with explicit forbids/permits. Active commitments future work must respect |
 | `MILESTONES.md` | Milestone overview: one short section per milestone, with a vision intro paragraph and an active list |
 | `MAP.md` + `map/<subsystem>.md` | Project map: AI-facing narratives describing one coherent area each. Source-of-truth for the `## Project Map` block in `CLAUDE.md`. Hand-authored; `touched:` auto-bumped by cycle skills (`/rota-work`, `/rota-debug`). |
+| `knowledge-tier.json` | Sidecar for `KNOWLEDGE.md`: each bullet's tier (`provisional`, `confirmed`, `deprecated`) and hit count. Tracked. Written by `rota knowledge`; in umbrella mode each sub-repo keeps its own copy beside its scoped `KNOWLEDGE.md` |
+| `issue-map.json` | Maps old file-backlog IDs to issue numbers. Tracked. Written by `rota migrate issues`, which resumes from it after an interrupted run; `rota round candidates` reads it |
+| `test-ledger.json` | Known-red tests the merge gate and `rota worker train` may pass over. Tracked, created by hand when the first entry is needed (a missing file means no exclusions); an expired entry fails the gate. Check it with `rota test ledger check` ([format](../usage/configuration.md)) |
 | `counters.json` | Auto-incrementing IDs for each item type |
 | `config.json` | Model selection, isolation mode, merge strategy, ship/learn/refactor gates, autonomy level (team-shared defaults) |
 | `config.local.json` | _(gitignored)_ Per-developer config overrides, deep-merged on top of `config.json` by `rota`. Use for `autonomy.level`, model preferences, or any setting that varies per machine. |

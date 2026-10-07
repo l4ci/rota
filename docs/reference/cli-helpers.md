@@ -138,7 +138,7 @@ exit codes and repo scope: [verb contract](../design/contract/README.md).
 
 | Usage | What it does |
 |---|---|
-| `rota status add <branch> --items <csv> [--worktree <path>] [--if-absent]` | record an active work stream |
+| `rota status add <branch> --items <csv> [--worktree <path> \| --repos <csv> --worktrees <csv>] [--if-absent]` | record an active work stream; in umbrella mode `--repos` names the sub-repos and `--worktrees` gives one path per name |
 | `rota status rm <branch>` | end a work stream and drop its handoff note |
 | `rota status show <branch>` | which repo a branch's stream is in |
 | `rota status handoff <branch> [--canonical]` | path of a branch's handoff note |
@@ -236,7 +236,7 @@ exit codes and repo scope: [verb contract](../design/contract/README.md).
 
 | Usage | What it does |
 |---|---|
-| `rota plan add <milestone>-<unit> --title <text> [--design <ID>] [--repos a,b]` | create a plan stub (issue mode: `<#N>` or `<B7>` item key, milestone optional) |
+| `rota plan add <milestone>-<unit> --title <text> [--design <ID>] [--repos a,b] [--milestone <M01> [--slice]]` | create a plan stub (issue mode: `<#N>` or `<B7>` item key, milestone optional); `--slice` with `--milestone` drops the key and mints the next `S<NN>` one |
 | `rota plan list [--milestone M01]` | list plans |
 | `rota plan show <key>` | print a plan |
 | `rota plan put <key> --body-file <path\|->` | replace a plan's text |
@@ -244,6 +244,8 @@ exit codes and repo scope: [verb contract](../design/contract/README.md).
 | `rota plan validate-docs <key>` | check doc-by-path deliverables |
 | `rota plan rename-check <old> [-- <pathspec>…]` | files that mention a name |
 | `rota plan uncertain <ID>` | uncertainty pre-flight for an item |
+| `rota plan check <key>` | issue mode: every acceptance criterion of the item has a task, every task serves a criterion and has a Verify step; exit 1 lists the gaps |
+| `rota plan pass <key> <AC-n> --proof <sha>:<check>` | issue mode: mark one acceptance criterion met by a proof row (as `rota proof show` prints them) |
 
 ## `rota design`
 
@@ -322,10 +324,10 @@ Bare `rota` with no verb does the same in an initialized project and runs `rota 
 
 | Usage | What it does |
 |---|---|
-| `rota skills install [--scope <user\|project>] [--agent <claude\|codex\|all>] [--overwrite]` | write the skills into the agent skill directories |
-| `rota skills status [--scope <user\|project>] [--agent <claude\|codex\|all>]` | compare the installed skills with this binary |
-| `rota skills update [--scope <user\|project>] [--agent <claude\|codex\|all>] [--overwrite]` | refresh the skill directories that already have a manifest |
-| `rota skills uninstall [--scope <user\|project>] [--agent <claude\|codex\|all>] [--overwrite]` | remove what rota installed |
+| `rota skills install [--scope <user\|project>] [--agent <claude\|codex\|all>] [--overwrite] [--current-account]` | write the skills into the agent skill directories |
+| `rota skills status [--scope <user\|project>] [--agent <claude\|codex\|all>] [--current-account]` | compare the installed skills with this binary |
+| `rota skills update [--scope <user\|project>] [--agent <claude\|codex\|all>] [--overwrite] [--current-account]` | refresh the skill directories that already have a manifest |
+| `rota skills uninstall [--scope <user\|project>] [--agent <claude\|codex\|all>] [--overwrite] [--current-account]` | remove what rota installed |
 
 ## `rota round`
 
@@ -346,8 +348,9 @@ The orchestrator's verbs for a [parallel round](../usage/parallel-rounds.md). Al
 | `rota round escalate send <number> [--pr] [--slot <name>] --title <text> --body-file <path\|-> [--timeout <seconds>]` | ask the human on an issue or PR thread |
 | `rota round escalate check [<id>…]` | look for the human's answers |
 | `rota round return <slot> --reason <text> [--note-file <path\|->] [--holder-pid <n>]` | a worker hands its issue back: park, comment, release |
-| `rota round transfer <issue> --to <slot\|human> [--note-file <path\|->] [--body-file <path\|->] [--accept-overlap] [--holder-pid <n>]` | move an assigned issue to another slot or to the human |
+| `rota round transfer <issue> --to <slot\|human> [--tier <light\|standard\|heavy>] [--tier-reason <text>] [--note-file <path\|->] [--body-file <path\|->] [--accept-overlap] [--holder-pid <n>]` | move an assigned issue to another slot or to the human |
 | `rota round reclaim <slot> [--force] [--note-file <path\|->] [--holder-pid <n>]` | free a dead or stalled slot and make its issue assignable |
+| `rota round bounce <ID> [--head <sha>]` | count one by-hand review bounce of an item; the same `--head` twice counts once; exit 4 once the item is at `round.maxBounces`, then transfer it to a higher tier or `--to human` |
 | `rota round pick <ID> --pr <N> --reason-file <path\|-> [--holder-pid <n>]` | `best-of:2` issue: name the winning PR; close the other attempt's PR with the reason, keep its branch |
 | `rota round wind-down [--no-verify] [--holder-pid <n>]` | re-verify the base, park every slot, release the lease |
 
@@ -413,7 +416,7 @@ A statusline command, not a query: it prints nothing of its own, always exits 0 
 
 | Usage | What it does |
 |---|---|
-| `rota keepalive run [--max-restarts <n>] [--breaker <n>] [--backoff <seconds>] [--prompt <text>] [--no-limits] -- <command> [<arg>…]` | run the orchestrator as a supervisor and restart it when it exits with a fresh handoff |
+| `rota keepalive run [--max-restarts <n>] [--breaker <n>] [--backoff <seconds>] [--prompt <text>] [--first-prompt <text>] [--config-dir <path>] [--no-limits] -- <command> [<arg>…]` | run the orchestrator as a supervisor and restart it when it exits with a fresh handoff; `--first-prompt` is appended to the command on the first start only, `--config-dir` sets `CLAUDE_CONFIG_DIR` for it (default: the inherited one) |
 | `rota keepalive status` | show the supervisor state and the round lease |
 
 `run` blocks for the life of the orchestrator. Exit 0 when it stopped on `no-handoff` or `interrupted`, 1 on `max-restarts` or `breaker`, 4 when the lease is held by someone else.
@@ -471,7 +474,7 @@ Verdicts are `PASS`, `CONCERNS` or `FAIL` (`qa` also takes `INFRA-FAIL`). They l
 | `rota ship body [<branch>]` | build a PR body from a branch's commits: summary, items resolved, and an evidence table from the items' proof rows |
 | `rota ship pr <branch> --title <text> --body-file <path\|-> [--items <ID>[,<ID>…]]` | push a branch and open a PR or MR; never removes a slot, the current directory or a worktree with changes |
 | `rota ship merge <branch> --body-file <path\|-> [--confirm --confirm-note <answer>]` | merge a branch into the base branch with --no-ff; exit 4 when `ship.mergeApproval` needs a human |
-| `rota ship pr-merge <pr> [--items <ID>[,<ID>…]] [--confirm --confirm-note <answer>]` | merge a PR in issue mode; exit 4 when `ship.mergeApproval` needs a human |
+| `rota ship pr-merge <pr> [--items <ID>[,<ID>…]] [--confirm --confirm-note <answer> \| --approval <escalation> \| --escalate]` | merge a PR in issue mode; exit 4 when `ship.mergeApproval` needs a human; `--escalate` asks on the approval thread, `--approval` cites the answer; give only one of the three |
 | `rota ship undo [--cycle <hash>] [--allow-post-merge] [--apply]` | roll back the last cycle merge on the base branch |
 
 ## `rota release`
