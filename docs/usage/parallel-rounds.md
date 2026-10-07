@@ -378,12 +378,13 @@ only channel, because there is no host to notify.
 ## Merge approval
 
 `rota worker gate <slot> --base <branch>` is the one merge path in a round. It checks the branch is
-fresh, the PR is the worker's and provenance holds, then re-runs
+fresh, the PR is the worker's, provenance holds and the PR body closes the slot's issue
+(`Closes #N`, unless the issue is labelled `partial-slice`), then re-runs
 `test.full` on the merged tree, then `test.e2e` when set, and merges on a pass.
 
-A branch that is only behind the base is merged as is when the merge is clean and the base did not
-change any file the branch changed (`round.sharedPaths` aside). A conflict, or a file changed on both
-sides, sends it back as `stale`. Each `stale` or `provenance-fail` bounce is counted per item; at `round.maxBounces` (default
+A branch that is only behind the base is merged as is when the merge is clean, even when both sides
+changed a file: the `STALE-MERGE` note names the shared files (`round.sharedPaths` aside) and the gate
+verifies the merged tree. Only a conflict sends it back as `stale`. Each `stale` or `provenance-fail` bounce is counted per item; at `round.maxBounces` (default
 3) the gate parks the item `needs-human` with a comment instead of sending it back again (the PR stays open; a pass resets the count, and `0` turns the cap off).
 
 ### CI and `GITHUB_TOKEN`
