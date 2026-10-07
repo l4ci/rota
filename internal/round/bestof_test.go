@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -262,6 +263,10 @@ func TestOpenClaimWithFindsTheSecondClaim(t *testing.T) {
 func TestReturnOfOneAttemptKeepsTheStateWhileTheSiblingClaims(t *testing.T) {
 	f := newMoveFx(t)
 	f.be.ClaimShared("12", "dana@1", 2)
+	worker.Update(f.root, func(d *worker.Doc) {
+		d.SetBestOf(worker.BestOf{Issue: "12", Attempts: []worker.BestOfAttempt{
+			{Slot: "ben", Branch: "ben/12-x", ClaimID: "ben@1"}, {Slot: "dana", Branch: "dana/12-x", ClaimID: "dana@1"}}})
+	})
 	if _, err := f.ret("ben", "stuck", nil); err != nil {
 		t.Fatal(err)
 	}
@@ -314,5 +319,49 @@ func TestStaleQueuedPRDropsOnlyItsOwnRecord(t *testing.T) {
 	prs := worker.LoadRegistry(f.root).PRs()
 	if len(prs) != 1 || prs[0].PR != "#8" {
 		t.Errorf("only the merged PR's record goes: %+v", prs)
+	}
+}
+
+func TestTransferOfAPickedBestOfResumesAfterAFailedDispatch(t *testing.T) {
+	f := newMoveFx(t)
+	f.finish(t, "ben", pr7)
+	if _, err := f.assign("13", "ben"); err != nil { // the winner's PR waits in review
+		t.Fatal(err)
+	}
+	worker.Update(f.root, func(d *worker.Doc) {
+		d.SetBestOf(worker.BestOf{Issue: "12", Pick: "#7", Attempts: []worker.BestOfAttempt{
+			{Slot: "ben", Branch: f.queued()[0].Branch, ClaimID: "ben@1"}, {Slot: "kit", Branch: "kit/12-x", ClaimID: "kit@1"}}})
+	})
+	f.env.Worker.NewHost = func(string) host.Host { return &failingHost{hostFake: f.host} }
+	if _, err := f.transfer("12", "dana", nil); err == nil {
+		t.Fatal("the dispatch was meant to fail")
+	}
+	f.env.Worker.NewHost = func(string) host.Host { return &killHost{hostFake: f.host, killed: &f.killed} }
+	res, err := f.transfer("12", "dana", nil)
+	if err != nil || !res.Dispatched {
+		t.Fatalf("the receiver is not a second holder; the same call resumes: %v %+v", err, res)
+	}
+}
+
+func TestTransferToHumanResetsAPlainIssueWithAStaleClaim(t *testing.T) {
+	f := newMoveFx(t)
+	f.finish(t, "ben", pr7)
+	if _, err := f.assign("13", "ben"); err != nil {
+		t.Fatal(err)
+	}
+	// A record left by an earlier round: no claimId, and the open claim is that round's.
+	worker.Update(f.root, func(d *worker.Doc) {
+		d.RetargetQueued(func(worker.QueuedPR) (string, bool) { return "12", true })
+		for _, q := range d.PRs() {
+			q.ClaimID = ""
+			d.QueuePR(q)
+		}
+	})
+	f.be.claims["12"] = "ben@0"
+	if _, err := f.transfer("12", HumanTarget, nil); err != nil {
+		t.Fatal(err)
+	}
+	if f.be.bstates["12"] != "" {
+		t.Errorf("a plain issue's state is reset whatever claims stay open: %v", f.be.bstates)
 	}
 }
