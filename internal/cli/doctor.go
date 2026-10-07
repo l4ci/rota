@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/l4ci/rota/internal/agents"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/doctor"
 	"github.com/l4ci/rota/internal/fsio"
@@ -110,6 +111,7 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 		}
 	}
 	in.ProjectRoot = root
+	in.AgentProblems = agents.Problems(root)
 	doctorDiskInput(ctx, &in, cfg, root, d.Git, d.Now())
 	if on, err := config.SwitchOnUsage(cfg); err == nil {
 		in.SwitchOnUsage = on

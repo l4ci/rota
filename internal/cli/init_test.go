@@ -299,3 +299,21 @@ func readCfg(t *testing.T, path string) any {
 	}
 	return v
 }
+
+// Ruling (#405): init writes the agent files; --no-blocks does not.
+func TestInitWritesAgentFiles(t *testing.T) {
+	dir, _ := filepath.EvalSymlinks(t.TempDir())
+	if code, _, e := rotaIn(t, dir, "init"); code != 0 {
+		t.Fatalf("init: %d %s", code, e)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".claude/agents/rota-implementer.md")); err != nil {
+		t.Fatal(err)
+	}
+	bare, _ := filepath.EvalSymlinks(t.TempDir())
+	if code, _, e := rotaIn(t, bare, "init", "--no-blocks"); code != 0 {
+		t.Fatalf("init --no-blocks: %d %s", code, e)
+	}
+	if _, err := os.Stat(filepath.Join(bare, ".claude")); err == nil {
+		t.Fatal("--no-blocks wrote agent files")
+	}
+}
