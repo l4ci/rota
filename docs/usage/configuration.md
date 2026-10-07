@@ -1,6 +1,6 @@
 # Configuration
 
-All settings live in [`.rota/config.json`](../reference/rota-folder.md). Run `rota config show` to list every key with its value and source, `rota config edit` to change keys from a prompt loop (terminal only: booleans toggle, enum keys pick from their choices, other keys take a typed value; it is also the Config entry of the bare-`rota` menu), and `rota config set <key> <value>` to change one from a script (positional arguments; see [config options](../reference/config-options.md)). `rota init` fills any missing key with its default. Don't hand-edit the file. `rota config save-global` saves this project's `config.json` (not `config.local.json`; without `rota.version`, `git.baseBranch` and `umbrella.enabled`) as `config.json` in the rota config dir (`$XDG_CONFIG_HOME/rota`, default `~/.config/rota`), beside `projects.json`. `rota init` and `rota setup` start a new project from those values, and `rota setup` offers each as the question's default. It only seeds: an existing project is never re-seeded, and nothing reads the global file after init.
+All settings live in [`.rota/config.json`](../reference/rota-folder.md). Run `rota config show` to list every key with its value and source, `rota config edit` (or `rota config --ui`) to change keys on [a screen](#the-config-screen) (terminal only; it is also the Config entry of the bare-`rota` menu), and `rota config set <key> <value>` to change one from a script (positional arguments; see [config options](../reference/config-options.md)). `rota init` fills any missing key with its default. Don't hand-edit the file. `rota config save-global` saves this project's `config.json` (not `config.local.json`; without `rota.version`, `git.baseBranch` and `umbrella.enabled`) as `config.json` in the rota config dir (`$XDG_CONFIG_HOME/rota`, default `~/.config/rota`), beside `projects.json`. `rota init` and `rota setup` start a new project from those values, and `rota setup` offers each as the question's default. It only seeds: an existing project is never re-seeded, and nothing reads the global file after init.
 
 For the allowed values and option labels of each key, see [Configuration options](../reference/config-options.md).
 
@@ -595,3 +595,20 @@ Records the rota release (binary version) that `rota init` last ran with. Auto-m
 Re-running `rota init` re-stamps `rota.version`; there are no project files to refresh. A stamp written before the rename to rota is read as a fallback and moved to `rota.version` by `rota init` / `rota config fill`. Distinct from `rota update` (which compares installed vs latest GitHub release): this is *project drift*, visible when `rota` was upgraded under you and the project hasn't been re-stamped yet.
 
 When `rota version --drift` reports drift, re-run `rota init` after an upgrade to clear it.
+
+## The config screen
+
+`rota config edit`, `rota config --ui`, `rota config show --ui` and the Config entry of the bare-`rota` menu open the same screen. It needs a terminal that can take raw mode: off a terminal, with `--json` or under `TERM=dumb`, the verb refuses and points at `rota config set <key> <value>`. There is no line-prompt fallback.
+
+Keys sit under their section (`models`, `work`, `ship`, `round`, ...). Each row reads `key  value  [source]`, where the source is `default`, `project` (`.rota/config.json`) or `local` (`.rota/config.local.json`). A value that differs from the schema default is highlighted, and the group header counts how many do. The pane on the right shows the key's description, type, default, current value, where it is set and, for enum keys, the choices.
+
+| Key | Does |
+| --- | --- |
+| `↑` `↓` / `j` `k` | move; `PgUp` `PgDn` scroll the detail pane |
+| `Enter` | on a key, edit it; on a header, fold or unfold the group (also `←` `→`) |
+| `l` | edit the key and write it to `config.local.json` instead of `config.json` |
+| `r` | reset the key to its default: drops the `config.local.json` entry and sets (a required key) or removes (any other) the `config.json` entry |
+| `/` | filter the rows by any part of the row; `Enter` ends typing, `Esc` clears |
+| `q` / `Esc` | back (`Esc` clears a filter first) |
+
+While editing, a boolean is a toggle (`Space`), a key with choices is a picker (`←` `→`), and any other key is a text field. `Enter` saves and `Esc` cancels. The text is checked as `rota config set` checks it: JSON when it parses, else a string, and a project-relative path key such as `release.versionFile` refuses a path outside the project. Nothing else is checked, so a number key accepts text just as `config set` does. Every save is written at once, through the code behind `config set`, so leaving the screen never loses or half-applies a change. A key set in `config.local.json` still wins on this machine after a project edit; the screen says so.

@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/l4ci/rota/internal/palette"
+	"github.com/l4ci/rota/internal/tui"
 	"github.com/l4ci/rota/internal/version"
 )
 
@@ -101,21 +101,25 @@ func TestPaletteQuitRunsNothingAndExitsZero(t *testing.T) {
 	}
 }
 
-func TestPaletteConfigEntryOpensTheConfigEditor(t *testing.T) {
+func TestPaletteConfigEntryOpensTheConfigScreen(t *testing.T) {
 	deps := testDeps()
 	bareRig(deps)
-	// Config (8) runs `config edit` on a cooked terminal: the next reads are
-	// its lines (toggle ship.review, finish); then a key dismisses the wait
-	// and q quits the palette.
-	raws, restores := new(int), new(int)
-	term := &scriptedKeys{[]string{"8", "ship.review\n", "\n", "x", "q"}}
+	// Config (8) runs `config edit`, which opens the config screen in
+	// process; then q quits the palette.
+	var screens []tui.Model
+	term := &scriptedKeys{[]string{"8", "q"}}
 	deps.IsTerminal = func(any) bool { return true }
+	deps.RunView = func(c *Ctx, m tui.Model) error {
+		screens = append(screens, m)
+		return nil
+	}
 	deps.Palette = func(cfg palette.Config) error {
 		cfg.In = term
-		cfg.MakeRaw = func() (func(), error) { *raws++; return func() { *restores++ }, nil }
+		cfg.MakeRaw = func() (func(), error) { return func() {}, nil }
 		cfg.Width = func() int { return 80 }
 		return palette.Run(cfg)
 	}
+	t.Setenv("TERM", "xterm")
 	r := useLaunchRig(deps, nil)
 	root := trackerProject(t, "")
 	wd, _ := os.Getwd()
@@ -125,18 +129,11 @@ func TestPaletteConfigEntryOpensTheConfigEditor(t *testing.T) {
 	}
 	var outb, errb bytes.Buffer
 	code := mainWith(deps, nil, term, &outb, &errb)
-	out, errs := outb.String(), errb.String()
-	if code != 0 || len(r.execs) != 0 {
-		t.Fatalf("exit %d execs %v: %s", code, r.execs, errs)
+	if code != 0 || len(r.execs) != 0 || len(screens) != 1 {
+		t.Fatalf("exit %d execs %v screens %d: %s", code, r.execs, len(screens), errb.String())
 	}
-	if !strings.Contains(out, "changed: ship.review") || !strings.Contains(out, "press any key") {
-		t.Errorf("editor result or wait missing:\n%s", out)
-	}
-	if b, _ := os.ReadFile(filepath.Join(root, ".rota", "config.json")); !strings.Contains(string(b), `"review": false`) {
-		t.Errorf("config not written: %s", b)
-	}
-	if *raws != 2 || *restores != 2 {
-		t.Errorf("raw %d restore %d, want 2/2", *raws, *restores)
+	if frame := tui.Strip(screens[0].Render(100, 30, tui.Style{})); !strings.Contains(frame, "▾ work (") {
+		t.Errorf("not the config screen:\n%s", frame)
 	}
 }
 
