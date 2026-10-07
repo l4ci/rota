@@ -287,3 +287,17 @@ func TestFailedVerbWithDataStillOpensItsView(t *testing.T) {
 		t.Errorf("exit %d views %d", code, len(r.models))
 	}
 }
+
+func TestViewsDropControlCharactersFromRowsAndBodies(t *testing.T) {
+	data := knObj("bugs", objList(knObj("id", "9", "priority", "P1", "title", "evil \x1b[2J\x1b]0;pwn\x07title", "related", []any{})))
+	b := buildBrowser(t, backlogView, data)
+	b.Load = func(string) (string, error) { return "body \x1b[31mred\x1b[0m\x00 ok", nil }
+	m, _ := viewDrive(t, b, "enter")
+	out := m.Render(vw, vh, tui.Style{})
+	if strings.ContainsAny(out, "\x00\x07") || strings.Contains(out, "\x1b[2J") || strings.Contains(out, "\x1b[31m") || strings.Contains(out, "\x1b]") {
+		t.Errorf("control characters reached the frame: %q", out)
+	}
+	if !strings.Contains(tui.Strip(out), "body [31mred[0m ok") {
+		t.Errorf("body text lost: %q", tui.Strip(out))
+	}
+}
