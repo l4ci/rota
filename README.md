@@ -62,6 +62,7 @@ A round runs in your terminal, not in a cloud dashboard. Start the orchestrator 
 
 - **herdr** reports each agent's state directly (working, blocked, done), and rota waits on those events instead of polling.
 - **tmux** works too: rota reads the panes to tell what each worker is doing.
+- **Split or tabs.** On a wide screen, `rota layout split` folds the workers into the orchestrator's tab as one grid (as in the demo above); `rota layout tabs` gives each its own tab again. Both are in the `rota` palette.
 - **Neither?** The round still runs, with workers as subagents of the orchestrator.
 
 Workers can be Claude Code or Codex, mixed in one round: a `harness:codex` label, or `round.workerKind`, picks per issue or per project.
