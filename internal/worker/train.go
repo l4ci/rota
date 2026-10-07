@@ -21,7 +21,7 @@ import (
 // time pay it N times. A train pays it once. In order:
 //
 //  1. CHECK each target the way `gate --check-only` does (freshness, PR
-//     identity, provenance). Any refusal stops the train, naming that target.
+//     identity, provenance, review verdict). Any refusal stops the train, naming that target.
 //  2. APPROVE once for the whole train (B1 merge approval over the union of the
 //     files the members change), before the expensive step.
 //  3. MERGE the members in order onto the base in a scratch worktree. A conflict
@@ -50,6 +50,8 @@ type TrainOpts struct {
 	// Approve is GateOpts.Approve for the whole train: files lists the union of
 	// the paths the members change.
 	Approve func(files func() ([]string, error)) error
+	// Verdict is GateOpts.Verdict, run for every member's check.
+	Verdict func(branch string) error
 }
 
 // TrainMember is one target of the train, in order.
@@ -137,8 +139,11 @@ func (e Env) train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 	// 1. Check every member.
 	remote := false
 	for _, t := range o.Targets {
-		gr, err := e.Gate(ctx, root, GateOpts{Slot: t, Base: o.Base, CheckOnly: true})
+		gr, err := e.Gate(ctx, root, GateOpts{Slot: t, Base: o.Base, CheckOnly: true, Verdict: o.Verdict})
 		if err != nil {
+			if gr.Verdict == GateVerdictBlocked {
+				res.Verdict, res.Culprit = gr.Verdict, t
+			}
 			return res, err
 		}
 		res.Notes = append(res.Notes, gr.Notes...)
