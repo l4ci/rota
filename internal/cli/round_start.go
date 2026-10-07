@@ -158,7 +158,7 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 		env := c.deps().RoundEnv(ctx, root)
 		st, err := env.Start(ctx, root, round.StartOpts{
 			Scope: sc, Items: pystr.SplitCSV(*items), Slots: *slots, Base: *base, HolderPID: *pid,
-			Settings: set, Getenv: os.Getenv, DefaultNum: def, Dispatch: config.Dispatch(cfg),
+			Settings: set, DefaultNum: def, Dispatch: config.Dispatch(cfg),
 		})
 		for _, w := range st.Warnings {
 			c.Warn("%s", w)

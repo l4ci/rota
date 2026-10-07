@@ -28,7 +28,6 @@ type WindDownOpts struct {
 	NoVerify  bool
 	HolderPID int
 	Settings  roundcfg.Settings
-	Getenv    func(string) string
 }
 
 // SlotOutcome is one slot's part of the summary.
@@ -64,7 +63,7 @@ func (e Env) WindDown(ctx context.Context, root string, be Board, o WindDownOpts
 		return res, err
 	}
 	le := e.Lease
-	lease, _, held, err := le.Holds(cd, o.HolderPID, o.Getenv)
+	lease, _, held, err := le.Holds(cd, o.HolderPID, e.getenv())
 	if err != nil {
 		return res, err
 	}
@@ -191,7 +190,7 @@ func (e Env) WindDown(ctx context.Context, root string, be Board, o WindDownOpts
 	// 3. Release the lease only when the base is green and every slot is parked.
 	if res.Verdict != VerdictVerifyFailed && !res.Retained {
 		res.Verdict = VerdictClean
-		if _, err := le.Release(cd, le.Discover(o.HolderPID, o.Getenv)); err != nil {
+		if _, err := le.Release(cd, le.Discover(o.HolderPID, e.getenv())); err != nil {
 			return res, err
 		}
 		// The round is over, so its host goes with the lease: the worker verbs

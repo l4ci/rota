@@ -3,7 +3,6 @@ package cli
 import (
 	"flag"
 	"fmt"
-	"os"
 
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/round"
@@ -30,7 +29,7 @@ func roundReclaim(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		res, err := env.Reclaim(c.Context(), root, be, round.ReclaimOpts{
-			Slot: args[0], Force: *force, Note: text, HolderPID: *pid, Getenv: os.Getenv,
+			Slot: args[0], Force: *force, Note: text, HolderPID: *pid,
 		})
 		if err != nil {
 			return moveFailure(err, res.Changed)

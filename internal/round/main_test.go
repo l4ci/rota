@@ -33,3 +33,6 @@ func TestMain(m *testing.M) {
 	os.RemoveAll(dir)
 	os.Exit(code)
 }
+
+// noEnv is an empty process environment for Env.Getenv.
+func noEnv(string) string { return "" }
