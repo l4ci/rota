@@ -20,6 +20,7 @@ const (
 	ReposFile       = "repos.json"
 	StatusFile      = "status.json"
 	VerdictsFile    = "verdicts.json"
+	TrainCacheFile  = "train-cache.json"
 	CountersFile    = "counters.json"
 	IssueMapFile    = "issue-map.json"
 	BacklogFile     = "BACKLOG.md"
@@ -63,6 +64,9 @@ func Status(root string) string { return File(root, StatusFile) }
 
 // Verdicts is the review verdict store.
 func Verdicts(root string) string { return File(root, VerdictsFile) }
+
+// TrainCache is the merge train verdict cache (gitignored).
+func TrainCache(root string) string { return File(root, TrainCacheFile) }
 
 // Backlog is BACKLOG.md.
 func Backlog(root string) string { return File(root, BacklogFile) }

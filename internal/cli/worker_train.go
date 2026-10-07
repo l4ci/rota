@@ -23,6 +23,7 @@ func trainData(r worker.TrainResult) *jsonx.Object {
 		}
 		o.Set("landed", m.Landed)
 		o.Set("culprit", m.Culprit)
+		o.Set("transient", containsStr(r.Transient, m.Target))
 		ms = append(ms, o)
 	}
 	d.Set("members", ms)
@@ -32,6 +33,8 @@ func trainData(r worker.TrainResult) *jsonx.Object {
 	d.Set("landed", strList(r.Landed))
 	d.Set("verified", strList(r.Verified))
 	d.Set("e2eVerified", strList(r.E2EVerified))
+	d.Set("cacheHits", strList(r.CacheHits))
+	d.Set("transient", strList(r.Transient))
 	d.Set("changed", r.Changed)
 	if r.SHA != "" {
 		d.Set("sha", r.SHA)
@@ -82,6 +85,9 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 		for _, n := range r.Notes {
 			fmt.Fprintln(c.Stderr, n)
 		}
+		for _, h := range r.CacheHits {
+			fmt.Fprintln(c.Stderr, "CACHE-HIT "+h+" — verdict reused, not re-run")
+		}
 		for i, m := range r.Members {
 			if m.Landed && issues[i] != "" {
 				if cerr := worker.ClearBounces(root, issues[i]); cerr != nil {
@@ -101,4 +107,13 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 		e.Hint = r.Hint
 		return res, e
 	}
+}
+
+func containsStr(list []string, s string) bool {
+	for _, x := range list {
+		if x == s {
+			return true
+		}
+	}
+	return false
 }

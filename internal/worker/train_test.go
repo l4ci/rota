@@ -372,3 +372,96 @@ func TestTrainAndGateSerialize(t *testing.T) {
 		}
 	}
 }
+
+// countingVerify is a test.full command that appends a line to a counter file
+// outside the repo each time it runs, then applies cond.
+func countingVerify(t *testing.T, cond string) (cmd, counter string) {
+	t.Helper()
+	counter = filepath.Join(t.TempDir(), "runs")
+	return fmt.Sprintf("echo x >> %s; %s", counter, cond), counter
+}
+
+func runs(t *testing.T, counter string) int {
+	t.Helper()
+	b, _ := os.ReadFile(counter)
+	return strings.Count(string(b), "x")
+}
+
+func TestTrainCachesVerdicts(t *testing.T) {
+	cmd, counter := countingVerify(t, "test ! -f b2.txt")
+	w := trainWorld(t, cmd, "b1", "b2", "b3", "b4")
+	targets := []string{"b1", "b2", "b3", "b4"}
+	res, err := w.train(TrainOpts{Targets: targets})
+	if err != nil || res.Verdict != GateVerifyFailed || res.Culprit != "b2" || len(res.CacheHits) != 0 {
+		t.Fatalf("%+v %v", res, err)
+	}
+	first := runs(t, counter)
+	if first < 2 {
+		t.Fatalf("the bisect should have verified several prefixes, ran %d", first)
+	}
+	res, err = w.train(TrainOpts{Targets: targets})
+	if err != nil || res.Verdict != GateVerifyFailed || res.Culprit != "b2" {
+		t.Fatalf("re-run: %+v %v", res, err)
+	}
+	if got := runs(t, counter); got != first {
+		t.Errorf("a re-run of the same train must not verify again: %d runs, then %d", first, got)
+	}
+	if len(res.CacheHits) != first {
+		t.Errorf("every verify of the re-run is a hit: %v (first run verified %d)", res.CacheHits, first)
+	}
+	if !strings.Contains(res.Err, "the first 1 member(s) pass") {
+		t.Errorf("message: %s", res.Err)
+	}
+}
+
+func TestTrainCacheMissesOnChangedHeadOrBase(t *testing.T) {
+	cmd, counter := countingVerify(t, "true")
+	w := trainWorld(t, cmd, "b1", "b2")
+	targets := []string{"b1", "b2"}
+	// a red train keeps its verdicts: nothing lands, so base and heads stay put
+	w.setConfig(fmt.Sprintf(`{"test":{"full":[%q]}}`, cmd+"; test ! -f b2.txt"))
+	if res, _ := w.train(TrainOpts{Targets: targets}); res.Verdict != GateVerifyFailed {
+		t.Fatalf("%+v", res)
+	}
+	before := runs(t, counter)
+	if res, _ := w.train(TrainOpts{Targets: targets}); len(res.CacheHits) == 0 || runs(t, counter) != before {
+		t.Fatalf("same key should hit: %+v", res)
+	}
+	gitq(t, w.dir, "checkout", "-q", "b2") // a changed member head
+	trainWrite(t, w, "b2-more.txt", "more")
+	gitq(t, w.dir, "checkout", "-q", "main")
+	w.train(TrainOpts{Targets: targets})
+	afterHead := runs(t, counter)
+	if afterHead == before {
+		t.Fatal("a changed head must verify again")
+	}
+	trainWrite(t, w, "other.txt", "x") // a changed base
+	w.train(TrainOpts{Targets: targets})
+	if runs(t, counter) == afterHead {
+		t.Error("a changed base must verify again")
+	}
+}
+
+func TestTrainNotesFlakyCulpritAsTransient(t *testing.T) {
+	seen := filepath.Join(t.TempDir(), "seen")
+	// b2 fails the first time it is verified in a tree, then passes: a flaky test
+	cmd := fmt.Sprintf("test ! -f b2.txt || test -f %[1]s || { touch %[1]s; exit 1; }", seen)
+	w := trainWorld(t, cmd, "b1", "b2", "b3")
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}})
+	if err != nil || res.Verdict != GateVerifyFailed || res.Culprit != "b2" {
+		t.Fatalf("first train: %+v %v", res, err)
+	}
+	res, err = w.train(TrainOpts{Targets: []string{"b2", "b3"}}) // different key, contains b2
+	if err != nil || res.Verdict != GatePass || res.Culprit != "" {
+		t.Fatalf("second train: %+v %v", res, err)
+	}
+	if strings.Join(res.Transient, ",") != "b2" {
+		t.Errorf("b2 should be noted transient: %+v", res)
+	}
+	if !w.onMain("b2.txt") || !w.onMain("b3.txt") {
+		t.Error("the second train should land")
+	}
+	if c := loadTrainCache(w.dir); len(c.f.Culprits) != 0 {
+		t.Errorf("the culprit record should be cleared: %+v", c.f.Culprits)
+	}
+}
