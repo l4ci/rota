@@ -32,6 +32,17 @@ const (
 // Tiers lists the tiers in order.
 var Tiers = []string{TierLight, TierStandard, TierHeavy}
 
+// Roles are the built-in agent roles, each with the default tier it runs on.
+// `rota agents write` emits one subagent definition per role.
+var Roles = []string{"explorer", "implementer", "reasoner"}
+
+// ClaudeEfforts are the effort values Claude Code accepts for a subagent.
+var ClaudeEfforts = []string{"low", "medium", "high", "xhigh", "max"}
+
+// Role is one agent role's settings: the tier its model comes from and the
+// optional effort ("" leaves the harness default).
+type Role struct{ Tier, Effort string }
+
 // Settings are the round.* keys.
 type Settings struct {
 	Scope       string
@@ -67,6 +78,8 @@ type Settings struct {
 	// the most assigns and the most merges one tick does.
 	Autopilot    bool
 	AutopilotCap int
+	// Roles is roles.<role>.tier and .effort for every name in Roles.
+	Roles map[string]Role
 }
 
 // ValidTier reports whether s is a tier.
@@ -167,7 +180,44 @@ func Load(root string) (Settings, error) {
 	if s.WorkerKind, err = loadWorkerKind(cfg); err != nil {
 		return s, err
 	}
-	return s, loadTiers(cfg, &s)
+	if err := loadTiers(cfg, &s); err != nil {
+		return s, err
+	}
+	return s, loadRoles(cfg, &s)
+}
+
+// loadRoles reads roles.<role>.tier and .effort. The effort is checked against
+// Claude's values here; Codex's narrower set is checked when its files are
+// written, since it only matters then.
+func loadRoles(cfg any, s *Settings) error {
+	s.Roles = map[string]Role{}
+	for _, name := range Roles {
+		var r Role
+		for _, f := range []string{"tier", "effort"} {
+			key := "roles." + name + "." + f
+			v, err := config.Value(cfg, key)
+			if err != nil {
+				return err
+			}
+			str, ok := v.(string)
+			if !ok {
+				return fmt.Errorf("%s must be a string (got %v)", key, v)
+			}
+			if f == "tier" {
+				r.Tier = str
+			} else {
+				r.Effort = str
+			}
+		}
+		if !ValidTier(r.Tier) {
+			return fmt.Errorf("roles.%s.tier must be %s (got %q)", name, strings.Join(Tiers, ", "), r.Tier)
+		}
+		if r.Effort != "" && indexOf(ClaudeEfforts, r.Effort) < 0 {
+			return fmt.Errorf("roles.%s.effort must be %s, or empty (got %q)", name, strings.Join(ClaudeEfforts, ", "), r.Effort)
+		}
+		s.Roles[name] = r
+	}
+	return nil
 }
 
 // loadWorkerKind reads round.workerKind: a harness kind, or "" for unset. A
