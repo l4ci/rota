@@ -14,8 +14,9 @@ import (
 
 // TestRoundStatusReadsTheForgeOnce pins the gh calls of one `round status` on
 // a repo with seven open issues: no identical call is made twice, an issue the
-// list returned is not viewed again, and the total stays small. The same
-// cache serves every verb, so candidates and start get the same saving.
+// list returned is not viewed again, a label-filtered open list is answered
+// from the open list, and the total stays small. The same cache serves every
+// verb, so candidates and start get the same saving.
 func TestRoundStatusReadsTheForgeOnce(t *testing.T) {
 	root := gitRepo(t)
 	if err := os.WriteFile(filepath.Join(root, ".rota", "config.json"),
@@ -53,11 +54,14 @@ func TestRoundStatusReadsTheForgeOnce(t *testing.T) {
 			t.Errorf("call made twice: %s", c)
 		}
 		seen[c] = true
+		if strings.Contains(c, "issue list --state open") && strings.Contains(c, "--label") {
+			t.Errorf("a label-filtered open list went to the forge: %s", c)
+		}
 		if strings.Contains(c, " issue view ") {
 			t.Errorf("a listed issue was viewed again: %s", c)
 		}
 	}
-	if len(calls) > 12 {
-		t.Errorf("%d forge calls, want at most 12:\n%s", len(calls), strings.Join(calls, "\n"))
+	if len(calls) > 10 {
+		t.Errorf("%d forge calls, want at most 10:\n%s", len(calls), strings.Join(calls, "\n"))
 	}
 }
