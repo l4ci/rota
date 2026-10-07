@@ -2,13 +2,17 @@ package worker
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/rotatree"
+	"github.com/l4ci/rota/internal/testledger"
 )
 
 // VerifyResult is one run of test.full. Callers only phrase the
@@ -31,6 +35,10 @@ type VerifyResult struct {
 	Missing          []string
 	// Cached marks a passing verdict reused from the train cache: nothing ran.
 	Cached bool
+	// Excluded lists the ledger entries that excused a failing command: its
+	// failing tests all had an unexpired entry (see internal/testledger), so
+	// the command counts as verified.
+	Excluded []testledger.Entry
 }
 
 // OK is true when every configured command passed (or none was configured;
@@ -41,18 +49,54 @@ func (r VerifyResult) OK() bool { return len(r.Failed) == 0 && !r.NotRun && !r.T
 // command goes through Env.Shell, whose default runs it in its own process
 // group and kills the group on cancel. err is the log file failing to open.
 func (e Env) Verify(ctx context.Context, root, dir string) (VerifyResult, error) {
-	return e.RunVerify(ctx, verifyCommandsAt(root), dir)
+	led, err := LoadLedger(root)
+	if err != nil {
+		return VerifyResult{}, err
+	}
+	return e.RunVerifyWith(ctx, verifyCommandsAt(root), dir, led)
+}
+
+// LoadLedger reads root's exclusion ledger; a malformed one is exit 2.
+func LoadLedger(root string) (testledger.Ledger, error) {
+	led, err := testledger.Load(root)
+	var bad *testledger.MalformedError
+	if errors.As(err, &bad) {
+		return led, fail(exitcode.ExitUsage, bad.Error())
+	}
+	return led, err
+}
+
+// LedgerExpiry is the failure message for expired entries in led at now: each
+// names its test, owner and receipt. "" when none has expired.
+func LedgerExpiry(led testledger.Ledger, now time.Time) string {
+	exp := led.Expired(now)
+	if len(exp) == 0 {
+		return ""
+	}
+	lines := make([]string, len(exp))
+	for i, x := range exp {
+		lines[i] = "  " + x.String()
+	}
+	return "expired test-ledger entries:\n" + strings.Join(lines, "\n")
 }
 
 // RunVerify is Verify with the commands already read. The gate reads them
 // before it merges a branch into root, so the branch's own config cannot
 // change what verifies it.
 func (e Env) RunVerify(ctx context.Context, cmds []string, dir string) (VerifyResult, error) {
-	return runVerifyCmds(ctx, e.withDefaults().Shell, cmds, dir)
+	return e.RunVerifyWith(ctx, cmds, dir, testledger.Ledger{})
+}
+
+// RunVerifyWith is RunVerify under an exclusion ledger: a failing command whose
+// failing tests all have an unexpired entry counts as verified and is listed
+// in Excluded.
+func (e Env) RunVerifyWith(ctx context.Context, cmds []string, dir string, led testledger.Ledger) (VerifyResult, error) {
+	e = e.withDefaults()
+	return runVerifyCmds(ctx, e.Shell, cmds, dir, led, e.Now())
 }
 
 // runVerifyCmds runs cmds through shell, one after another, in dir.
-func runVerifyCmds(ctx context.Context, shell func(ctx context.Context, dir, command string) (string, int), cmds []string, dir string) (VerifyResult, error) {
+func runVerifyCmds(ctx context.Context, shell func(ctx context.Context, dir, command string) (string, int), cmds []string, dir string, led testledger.Ledger, now time.Time) (VerifyResult, error) {
 	var res VerifyResult
 	if len(cmds) == 0 {
 		res.NoCommands = true
@@ -69,9 +113,14 @@ func runVerifyCmds(ctx context.Context, shell func(ctx context.Context, dir, com
 		section := "== " + c + "\n" + out
 		log.WriteString(section)
 		appendFile(logf.Name(), section)
-		if code == 0 {
+		excused, covered := led.Excuses(out, now)
+		switch {
+		case code == 0:
 			res.Verified = append(res.Verified, c)
-		} else {
+		case covered:
+			res.Verified = append(res.Verified, c)
+			res.Excluded = append(res.Excluded, excused...)
+		default:
 			res.Failed = append(res.Failed, c)
 		}
 	}

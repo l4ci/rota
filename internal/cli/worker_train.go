@@ -36,6 +36,7 @@ func trainData(r worker.TrainResult) *jsonx.Object {
 	d.Set("cacheHits", strList(r.CacheHits))
 	d.Set("transient", strList(r.Transient))
 	d.Set("changed", r.Changed)
+	setLedgerData(d, r.Excluded, r.Expired)
 	if r.SHA != "" {
 		d.Set("sha", r.SHA)
 	}
@@ -75,7 +76,10 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 		for i, t := range args {
 			issues[i] = gateIssue(root, t)
 		}
-		r, err := workerEnvCtx(c, ctx).Train(ctx, root, worker.TrainOpts{Targets: args, Base: *base, LandGreen: *landGreen, Approve: approve})
+		r, err := workerEnvCtx(c, ctx).Train(ctx, root, worker.TrainOpts{Targets: args, Base: *base, LandGreen: *landGreen, Approve: approve, Verdict: shipVerdict(c, root, root).Block})
+		if err != nil && r.Verdict == worker.GateVerdictBlocked {
+			return verdictRefusal(err, trainData(r))
+		}
 		if err != nil && r.Verdict == worker.GateApprovalRequired {
 			return gateRefusal(err, trainData(r))
 		}

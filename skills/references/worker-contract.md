@@ -37,7 +37,7 @@ Work only this task, then stop.
 - Stay in your worktree. Confirm `pwd` before editing and use worktree-rooted
   paths. An absolute path under the main checkout silently edits the WRONG tree.
 - Stage explicit paths. Never `git add -A` or `git add .`.
-- Commit your own work, run `rota worker done <slot>`, then open a PR against `<base-branch>`. Never merge.
+- Commit your own work, run `rota worker done <slot>` (from your worktree or the main checkout; it finds the pool through the git common dir and expands `{files}` in the slot's worktree), then open a PR against `<base-branch>`. Never merge.
 - Run TARGETED verification only: the files you touched. When the project sets
   `test.fast`, that is `rota test run fast`; otherwise pick the checks by hand. The full suite is the
   orchestrator's gate on the merged tree. Several workers running full suites at

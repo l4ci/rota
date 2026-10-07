@@ -50,7 +50,7 @@ const (
 const opener = `\A<!-- (?:rota|hv):`
 
 var (
-	noteRe    = regexp.MustCompile(opener + `(proof|design|plan(?::S\p{Nd}+)?)(?: (\p{Nd}+)/(\p{Nd}+))? -->(?:\n|\z)`)
+	noteRe    = regexp.MustCompile(opener + `(proof|design|acceptance|plan(?::S\p{Nd}+)?)(?: (\p{Nd}+)/(\p{Nd}+))? -->(?:\n|\z)`)
 	commentRe = regexp.MustCompile(opener + `comment ([\p{L}\p{N}_]+) -->(?:\n|\z)`)
 	claimRe   = regexp.MustCompile(opener + `(claim|release) ([^` + pystr.SpaceClass + `]+) -->`)
 	fieldsRe  = regexp.MustCompile(`(?s)\n*<!-- (?:rota|hv):fields\n(.*?)\n?-->[ \t]*\n*\z`)
@@ -66,7 +66,7 @@ func NoteHeader(kind string, i, n int) string {
 	return Line(kind, strconv.Itoa(i)+"/"+strconv.Itoa(n)) + "\n"
 }
 
-// Note is a parsed note comment. Kind is proof, design, plan or plan:S<n>.
+// Note is a parsed note comment. Kind is proof, design, acceptance, plan or plan:S<n>.
 // Part is the digits before the slash of an `i/n` header, "" for a note in one
 // comment (the caller owns the integer conversion and its overflow). Rest is
 // the text after the header line.

@@ -1,3 +1,10 @@
+---
+verified-sha: 5e9b425a84bdc61cedf349412b0aa15c738689eb
+refs:
+  - internal/milestone
+  - internal/cli/milestone.go
+---
+
 ## A6: milestones, plans, designs, spikes, proof, debug
 
 ### rota milestone add
@@ -118,6 +125,24 @@ repo: none
 data: {"key": string, "changed": true}
 exit: 2 when <key> is malformed; 3 when the plan doesn't exist (not an idempotent no-op, because smoke 12/58 expect failure); tracker
 old: hv-plan-rm <key>
+
+### rota plan pass
+rota plan pass <key> <AC-id> --proof <sha>:<check>
+repo: none
+data: {"key": string, "item": string, "ac": string, "proof": string, "changed": bool}
+exit: 2 when <key> is malformed or a slice key, <AC-id> is not `AC-<n>`, the item has no such criterion or repeats an id, or `--proof` lacks a sha or a check; 3 when the item doesn't exist; 4 when no proof row matches `<sha>:<check>` or the latest match is FAIL (data `{"blockedBy": "proof", "changed": false}`), and under the file backend (data `{"blockedBy": "backend", "changed": false}`); tracker
+old: none (new)
+note: the only way to mark an acceptance criterion met. The mark goes in the item's `acceptance` note (`- AC-<n> · <date> · <sha> · <check> · <criterion text>`), never in the body. `--proof` splits on the first `:`, so the check may contain colons; it must equal a `check` that `rota proof show` prints, and the sha matches a row's sha as a prefix either way (4 characters or more). The latest matching row decides, so a FAIL recorded after a PASS refuses. Re-passing a criterion replaces its mark; `changed` is false when nothing differs.
+note: `<key>` names the item (`M01-B07` is B07; `#7` and `B7` also work); the issue backend is required because item notes live there. A body captured without ids is numbered (`AC-1`, `AC-2`, … in order, existing ids kept) in the same call, after the proof check passes. `rota item create` numbers new bodies on the issue backend.
+note: the `acceptance` note kind is reserved: `rota item note show` reads it, `rota item note add` and `rm` exit 2.
+
+### rota plan check
+rota plan check <key>
+repo: none
+data: {"key": string, "ok": bool, "criteria": [string], "uncovered": [string], "orphans": [string], "unknown": [{"task": string, "ids": [string]}], "noVerify": [string]}
+exit: 0 when `ok`; 1 when any list is non-empty, and under the file backend (data `{"blockedBy": "backend", "changed": false}`); 2 when <key> is malformed or a slice key; 3 when the plan or item doesn't exist; tracker
+old: none (new)
+note: read-only; never writes and never exits 4. Holds the plan's Tasks against the item's `## Acceptance` ids (a body without ids is read as `rota plan pass` would number it). A task is a top-level `- **T<n>**` bullet; its `Serves: AC-1, AC-2` sub-bullet names the criteria it delivers and its `Verify:` sub-bullet (inline text or nested bullets, not a `_(placeholder)_`) the check. `uncovered`: criteria no task serves; `orphans`: tasks with no `Serves:` id; `unknown`: tasks naming an id the item lacks; `noVerify`: tasks without a Verify step. `<key>` resolves as for `plan pass`. `/rota-work` runs it before dispatch and stops on exit 1, but only on the issue backend and for a plan with at least one `Serves:` line; legacy plans and file-mode projects skip it.
 
 ### rota plan validate-docs
 rota plan validate-docs <key>
