@@ -1,5 +1,5 @@
 ---
-verified-sha: 0ad1f9f4f2f87adf94627bf0bc71eadd1065456d
+verified-sha: 3fe9abdb78d41ab20ad0545652af7ca33e1dd786
 refs:
   - internal/cli
   - internal/exitcode
