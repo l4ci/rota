@@ -43,7 +43,7 @@ Commit `.rota/`, `.claude/agents/`, `AGENTS.md`, `CLAUDE.md` and `.gitignore`. `
 rota config set work.workerSlots 2
 ```
 
-Then tell the gate how to check a merge. `test.full` is the command that runs your whole test suite. The gate runs it on the merged tree before a PR lands:
+Then tell the gate how to check a merge. `test.full` is the command that runs your whole test suite. The gate runs it on a scratch merge of the PR before the PR lands:
 
 ```bash
 rota config set test.full "go test ./..."   # your project's own test command

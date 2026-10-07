@@ -10,7 +10,7 @@ rota is a CLI plus a set of skills (slash commands in Claude Code). Together the
 
 - **Orchestrator**: one agent that picks the next issues, hands them out, answers workers' questions and merges.
 - **Workers**: agents that each take one issue in their own git worktree, build it and open a PR. They never merge.
-- **Gate** (`rota worker gate`): the only merge path. It checks the PR is current and properly signed off, merges it, then runs your full test suite (`test.full`) on the merged tree.
+- **Gate** (`rota worker gate`): the only merge path. It checks the PR is current and properly signed off, runs your full test suite (`test.full`) on a scratch merge of it, then merges on a pass.
 
 Both ways share a memory in `.rota/`: knowledge, decisions and handoff notes.
 

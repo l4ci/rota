@@ -293,7 +293,7 @@ func TestGate(t *testing.T) {
 			setup: func(w *world) { w.setConfig(`{"test":{"full":[]}}`) }},
 		{name: "d: --no-verify", pr: ghURL, opts: GateOpts{NoVerify: true}, verdict: GatePass, changed: true, files: []string{"work.txt"},
 			setup: func(w *world) { w.setConfig(`{"test":{"full":["false"]}}`) }},
-		{name: "d: verify fails after the merge landed", pr: ghURL, verdict: GateVerifyFailed, changed: true, files: []string{"work.txt"},
+		{name: "d: verify fails on the scratch merge, nothing lands", pr: ghURL, verdict: GateVerifyFailed, noFiles: []string{"work.txt"},
 			setup: func(w *world) { w.setConfig(`{"test":{"full":["true","false"]}}`) }},
 		{name: "e: merge that merged nothing", pr: glURL, mode: "noop", verdict: GateNotMerged, noFiles: []string{"work.txt"}},
 		{name: "e: merge into another branch", pr: ghURL, mode: "elsewhere", verdict: GateNotOnBase, noFiles: []string{"work.txt"}},
@@ -843,12 +843,13 @@ func TestGateE2ERedFails(t *testing.T) {
 func TestGateSkipsE2EWhenFullRed(t *testing.T) {
 	w := newWorld(t, "")
 	gitq(t, w.dir, "fetch", "-q", "origin", "w1:w1")
-	w.setConfig(`{"test":{"full":["false"],"e2e":["echo ran >> e2e-ran.txt"]}}`)
+	ran := filepath.Join(t.TempDir(), "e2e-ran.txt") // outside the scratch tree the verify runs in
+	w.setConfig(fmt.Sprintf(`{"test":{"full":["false"],"e2e":["echo ran >> %s"]}}`, ran))
 	res, _ := w.gate(false, GateOpts{})
 	if res.Verdict != GateVerifyFailed || strings.Contains(res.Err, "test.e2e") {
 		t.Fatalf("%+v", res)
 	}
-	if _, err := os.Stat(filepath.Join(w.dir, "e2e-ran.txt")); err == nil {
+	if _, err := os.Stat(ran); err == nil {
 		t.Error("e2e ran after a red test.full")
 	}
 }

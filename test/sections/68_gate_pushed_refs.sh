@@ -229,10 +229,10 @@ pass "a remote merge whose local fast-forward fails is merged-remotely, not unme
 gt_case g "$GH_URL"
 printf '{"test":{"full":["echo boom-marker; exit 1"]}}' > "$GT_DIR/.rota/config.json"
 RC="$(gt_gate env TMPDIR="$TMP_GT" "$ROTA_BIN" --json worker gate w1 --base main)"
-[ "$RC" = 1 ] && [ "$(gt_verdict)" = verify-failed ] && [ "$(jget data.changed <"$GT_DIR.out")" = true ] \
-  || fail "gate (g): a failed verify must be verify-failed with changed true (rc=$RC): $(cat "$GT_DIR.out")"
-[ "$(jget data.sha <"$GT_DIR.out")" = "$(git -C "$GT_DIR" rev-parse --short=7 HEAD)" ] \
-  || fail "gate (g): verify-failed must report the merge commit as data.sha: $(cat "$GT_DIR.out")"
+[ "$RC" = 1 ] && [ "$(gt_verdict)" = verify-failed ] && [ "$(jget data.changed <"$GT_DIR.out")" = false ] \
+  || fail "gate (g): a failed verify of the scratch merge must be verify-failed with changed false (rc=$RC): $(cat "$GT_DIR.out")"
+! git -C "$GT_ORIGIN" merge-base --is-ancestor "$(git -C "$GT_WORKER" rev-parse HEAD)" main \
+  || fail "gate (g): a red verify must land nothing (#494)"
 grep -q "boom-marker" "$GT_DIR.err" || fail "gate (g): a failed verify must show its output: $(cat "$GT_DIR.err")"
 grep -q "boom-marker" "$TMP_GT"/rota-gate-verify-* 2>/dev/null || fail "gate (g): the verify log must be kept on failure"
 pass "verify output is shown on failure and the log is kept"
