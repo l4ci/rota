@@ -180,14 +180,14 @@
       {
         "body": "",
         "broken": false,
-        "changed": true,
+        "changed": false,
         "checkOnly": false,
-        "files": [
+        "files": null,
+        "mode": "",
+        "name": "d: verify fails on the scratch merge, nothing lands",
+        "noFiles": [
           "work.txt"
         ],
-        "mode": "",
-        "name": "d: verify fails after the merge landed",
-        "noFiles": null,
         "noVerify": false,
         "pr": "https://github.com/o/r/pull/7",
         "relays": "",
@@ -438,11 +438,11 @@
       "Local": "merge pr\nseed\nwork",
       "Forge": "github PRView 7\ngithub PRView 7\ngithub PRRequestMerge 7 pin=SHA deleteBranch=false\ngithub PRView 7\n"
     },
-    "d: verify fails after the merge landed": {
+    "d: verify fails on the scratch merge, nothing lands": {
       "Exit": 4,
-      "Origin": "merge pr\nseed\nwork",
-      "Local": "merge pr\nseed\nwork",
-      "Forge": "github PRView 7\ngithub PRView 7\ngithub PRRequestMerge 7 pin=SHA deleteBranch=false\ngithub PRView 7\n"
+      "Origin": "seed",
+      "Local": "seed",
+      "Forge": "github PRView 7\ngithub PRView 7\n"
     },
     "e: a push after the check is refused by the pin": {
       "Exit": 3,
