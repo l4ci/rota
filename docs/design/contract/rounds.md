@@ -1,3 +1,11 @@
+---
+verified-sha: 5e9b425a84bdc61cedf349412b0aa15c738689eb
+refs:
+  - internal/round
+  - internal/roundcfg
+  - internal/cli/round.go
+---
+
 ## C: rounds
 
 The `round` group is the orchestrator layer over the same slot registry (`.rota/workers.json`) and host package as `rota worker`. It adds no second state file. Each verb below owns its entry.

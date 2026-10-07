@@ -1,3 +1,10 @@
+---
+verified-sha: 5e9b425a84bdc61cedf349412b0aa15c738689eb
+refs:
+  - internal/initproj
+  - internal/cli/init.go
+---
+
 ## A9: init
 
 A9 amendments (orchestrator rulings G1 to G7, round 3): `rota init` runs the managed blocks and returns `blocks` (G2), `rota init umbrella --list` (G3), the new `rota config fill` (G1, under `config`), schema key order for the seed `config.json` (G7), `rota version --drift` (G6, entry above), and two decisions recorded here:

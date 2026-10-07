@@ -1,3 +1,11 @@
+---
+verified-sha: 9586a179cd3a699f5c384c461f704b2e90e8cf3f
+refs:
+  - internal/version
+  - internal/config
+  - internal/cli/config.go
+---
+
 ## A3 and A4: version, update, config, repo
 
 `rota version` ports in A3 (#47). `rota update`, `rota config` and `rota repo` were routed to A4 (#48) after the triage; their shapes stay here.

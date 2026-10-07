@@ -1,3 +1,9 @@
+---
+verified-sha: 5e9b425a84bdc61cedf349412b0aa15c738689eb
+refs:
+  - internal/verdict
+---
+
 ## B3: verdict refusals, the Iron Law
 
 B3 (#56) moves two prose rules into the verbs. Orchestrator rulings (round 4, phase B, from the maintainer on 2026-10-03): ship refuses after a recorded review or second-opinion FAIL, except under the advisory codex fallback (#158); the Iron Law is a per-item counter, and a 4th attempt is refused until `rota debug reset <ID>`, a B1 gated verb (`--confirm` plus `--confirm-note`, audited, with a reason).
