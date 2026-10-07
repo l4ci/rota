@@ -1,5 +1,5 @@
 ---
-verified-sha: f1beaacac6869db9f1dac68ecb4c1674842266c2
+verified-sha: 9b275b66dc051091c4a0661f5f011c2ddc571871
 refs:
   - internal/backlog
   - internal/cli/backlog.go
@@ -188,6 +188,7 @@ old: hv-backlog [--grep <pattern>]
 shim: parse the markdown tables (`### In Progress`, `### Bugs`, `### Features`, `### Tasks`) into the lists, `Related` cells `[F3], [B1]` into `["F3","B1"]`, and `### Clusters` bullets into ID arrays; the placeholder lines become all-empty lists. Items active in status.json appear only in `inProgress`. `--grep` is a case-insensitive substring of the raw bullet; `--grep ""` is unfiltered; in-progress rows are never filtered.
 note: Single spelling `--grep <pattern>` (the `--grep=<p>` form still parses under Go `flag`).
 note: `related` entries use the rule-11 `id` spelling, so in issue mode they are bare issue numbers.
+note: `rota backlog list --ui` browses the same lists as rows (id, kind, priority or size, milestone, title). The filter matches the whole row; Enter reads the item's body. Terminal only.
 
 ### rota backlog ids
 rota backlog ids --milestone <id>

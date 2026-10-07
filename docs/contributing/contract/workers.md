@@ -1,5 +1,5 @@
 ---
-verified-sha: f1beaacac6869db9f1dac68ecb4c1674842266c2
+verified-sha: 9b275b66dc051091c4a0661f5f011c2ddc571871
 refs:
   - internal/worker
   - internal/cli/worker.go
@@ -148,6 +148,7 @@ repo: none
 data: {"accounts": [{"name": string, "configDir": string, "verdict": string, "reason": string, "fiveHour"?: number, "sevenDay"?: number, "resetsAt"?: string, "headroom"?: number}]}
 exit: implied only
 old: hv-worker-account list --json
+note: `rota worker account list --ui` shows one row per account: a headroom bar, the verdict and the usage-window reset, with the five-hour and seven-day figures, reason and config dir in the preview. Terminal only.
 shim: wraps the old array as `accounts`; null fields become absent. `verdict` is `free`, `cooling` or `unknown`. No accounts configured gives `{"accounts": []}`. Env `ROTA_ACCOUNT_USAGE_DIR` stays as is.
 
 ### rota worker account pick
