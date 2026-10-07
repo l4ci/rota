@@ -1,5 +1,5 @@
 ---
-verified-sha: c130f0e57540434d01cc4d019f26ac8947a37136
+verified-sha: 3e6f9f8dbaa15ec4713fc22c20884a7c24bc76a4
 refs:
   - docs/contributing/contract/cli-conventions.md
   - internal/cli/contract_test.go
@@ -27,7 +27,7 @@ These rules fill in what the conventions leave to each verb. Every verb below fo
 10. **No test-only flags.** Fixture hooks the old helpers carried as flags (`--fixture`, `--status`) become environment variables named `ROTA_TEST_*`, which the contract lists per verb and which are not part of the CLI.
 11. **Item IDs** are strings in `data`. File mode: `"B07"`. Issue mode: the issue number, `"12"`. Umbrella issue mode: `"<repo>:12"`. Every `data` object that names an item by `id` also has `type` (`"B"`, `"F"` or `"T"`) in both modes, so the type letter is never lost; rows inside the `bugs`, `features` and `tasks` lists of `backlog list` are already grouped by kind and omit it. Lists of bare IDs (`ids`, `items` as `[]string`) use the same `id` spelling and carry no types. Inputs accept every form the old helpers accepted (`B7`, `#7`, `7`, `repo:B7`, `repo#7`). A flag that carries a list of item IDs is always `--items <ID>[,<ID>…]`.
 12. **Data shapes.** A list verb wraps its list in an object keyed by a domain noun (`{"items": […]}`, `{"plans": […]}`). A verb whose subject is one item names it `id`. Every mutating verb reports `changed`.
-13. **Flag names.** No verb flag reuses a global flag's name (`--json`, `-C`/`--cwd`, `--repo`, `-h`/`--help`), as the conventions require.
+13. **Flag names.** No verb flag reuses a global flag's name (`--json`, `--ui`, `-C`/`--cwd`, `--repo`, `-h`/`--help`), as the conventions require.
 
 ## Verb entry format
 
