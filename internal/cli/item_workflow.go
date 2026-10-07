@@ -65,9 +65,13 @@ func itemShow(fs *flag.FlagSet) RunFunc {
 		for _, n := range st.Notes {
 			notes = append(notes, n)
 		}
+		cover, err := acceptanceCoverage(c, wf, args[0], st)
+		if err != nil {
+			return backlogFailRead(err)
+		}
 		data := jsonObj("id", st.ID, "type", st.Type, "title", st.Title, "status", st.Status,
 			"state", nullIfEmpty(st.State), "claimedBy", nullIfEmpty(st.Claim), "assignees", assignees,
-			"milestone", nullIfEmpty(st.Milestone), "notes", notes, "comments", comments)
+			"milestone", nullIfEmpty(st.Milestone), "notes", notes, "acceptance", acceptanceData(cover), "comments", comments)
 		word := map[string]string{"B": "bug", "F": "feature", "T": "task"}[st.Type]
 		lines := []string{
 			fmt.Sprintf("[%s] %s", spellID(st.Type, st.ID), st.Title),
@@ -80,6 +84,7 @@ func itemShow(fs *flag.FlagSet) RunFunc {
 			"notes: " + noneIfEmpty(strings.Join(st.Notes, ", ")),
 			fmt.Sprintf("comments: %d", len(st.Comments)),
 		}
+		lines = append(lines, acceptanceLines(cover)...)
 		return Result{Data: data, Text: strings.Join(append(lines, rows...), "\n")}, nil
 	}
 }
