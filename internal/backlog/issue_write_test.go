@@ -305,8 +305,8 @@ func TestIssuesNotes(t *testing.T) {
 }
 
 func TestIssuesNoteSplit(t *testing.T) {
-	t.Setenv("ROTA_NOTE_LIMIT", "100")
 	b, tr := newIssues(t, `{}`, open(1))
+	b.NoteLimit = "100"
 	long := strings.Repeat("0123456789 abcdefghij\n", 12) + strings.Repeat("x", 250)
 	if _, err := b.NotePut("1", "plan", long); err != nil {
 		t.Fatal(err)
@@ -332,13 +332,11 @@ func TestIssuesNoteSplit(t *testing.T) {
 		t.Fatalf("calls %s", calls(tr))
 	}
 	// a line longer than a part is cut; an unparsable limit falls back to the default
-	t.Setenv("ROTA_NOTE_LIMIT", "abc")
-	if noteLimit() != noteLimitDefault {
-		t.Fatal(noteLimit())
+	if noteLimit("abc") != noteLimitDefault {
+		t.Fatal(noteLimit("abc"))
 	}
-	t.Setenv("ROTA_NOTE_LIMIT", "5")
-	if noteLimit() != 80 {
-		t.Fatal(noteLimit())
+	if noteLimit("5") != 80 {
+		t.Fatal(noteLimit("5"))
 	}
 }
 

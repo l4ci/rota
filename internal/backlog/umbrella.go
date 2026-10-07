@@ -42,6 +42,8 @@ type Umbrella struct {
 	CwdRepo string
 	// CountProof is handed to every sub-repo backend; see Issues.CountProof.
 	CountProof func(text string) int
+	// NoteLimit is handed to every sub-repo backend; see Issues.NoteLimit.
+	NoteLimit string
 
 	subs map[string]*Issues
 }
@@ -91,7 +93,7 @@ func (u *Umbrella) sub(name string) (*Issues, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &Issues{Cfg: u.Cfg, Tracker: tr, Ctx: u.Ctx, Repo: name, CountProof: u.CountProof}
+	s := &Issues{Cfg: u.Cfg, Tracker: tr, Ctx: u.Ctx, Repo: name, CountProof: u.CountProof, NoteLimit: u.NoteLimit}
 	s.OnMissingMilestone = func(mid string) (string, bool, error) { return u.createSubMilestone(s, mid) }
 	if u.subs == nil {
 		u.subs = map[string]*Issues{}

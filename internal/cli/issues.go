@@ -252,7 +252,8 @@ func migrateIssues(fs *flag.FlagSet) RunFunc {
 		var notices []string
 		opts := migrate.Options{Root: root, Apply: *apply, Limit: lim, Cfg: cfg, Ctx: c.Context(),
 			Sleep: c.deps().MigrateSleep, Warn: func(s string) { notices = append(notices, s) },
-			Tracker: func() (migrate.Tracker, error) { return c.deps().MigrateTracker(c.Context(), root, cfg) }}
+			NoteLimit: os.Getenv("ROTA_NOTE_LIMIT"),
+			Tracker:   func() (migrate.Tracker, error) { return c.deps().MigrateTracker(c.Context(), root, cfg) }}
 		res, err := migrate.Run(opts)
 		if err != nil {
 			for _, n := range notices {

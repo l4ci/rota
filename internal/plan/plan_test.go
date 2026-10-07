@@ -375,18 +375,22 @@ func TestUncertainHonoursOpenSections(t *testing.T) {
 	if _, r, err := uncertain(root, "F01"); err != nil || len(r) == 0 {
 		t.Fatalf("default sections: %v %v", r, err)
 	}
-	t.Setenv("ROTA_OPEN_SECTIONS", "Bugs")
-	if _, _, err := uncertain(root, "F01"); exitOf(err) != 3 {
-		t.Errorf("F01 outside ROTA_OPEN_SECTIONS: %v", err)
+	if _, _, err := uncertainIn(root, "F01", "Bugs"); exitOf(err) != 3 {
+		t.Errorf("F01 outside the Bugs-only sections: %v", err)
 	}
-	if _, r, err := uncertain(root, "B07"); err != nil || len(r) == 0 {
+	if _, r, err := uncertainIn(root, "B07", "Bugs"); err != nil || len(r) == 0 {
 		t.Errorf("B07 inside: %v %v", r, err)
 	}
 }
 
-// uncertain is Uncertain on the file backlog without the item's ID.
+// uncertain is Uncertain on the file backlog with the default sections.
 func uncertain(root, id string) (string, []string, error) {
-	_, typ, reasons, err := Uncertain(FileItems(root), id)
+	return uncertainIn(root, id, "")
+}
+
+// uncertainIn is Uncertain on the file backlog with openSections as passed in.
+func uncertainIn(root, id, openSections string) (string, []string, error) {
+	_, typ, reasons, err := Uncertain(FileItems(root, openSections), id)
 	return typ, reasons, err
 }
 
