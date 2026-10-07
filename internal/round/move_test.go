@@ -1054,3 +1054,33 @@ func TestTransferPreflightRefusesBeforeMoving(t *testing.T) {
 		}
 	}
 }
+
+// labelKillHost records the labels cleared on a host that can label.
+type labelKillHost struct {
+	*killHost
+	titles *[]string
+}
+
+func (l labelKillHost) Label(_ context.Context, slot, _, title string) {
+	*l.titles = append(*l.titles, slot+"="+title)
+}
+func (l labelKillHost) LabelWorkspace(context.Context, string) {}
+
+func TestParkClearsTheLabelWhenTheWorktreeMoves(t *testing.T) {
+	f := newMoveFx(t)
+	var titles []string
+	f.env.Worker.NewHost = func(string) host.Host {
+		return labelKillHost{&killHost{hostFake: f.host, killed: &f.killed}, &titles}
+	}
+	p, err := f.env.Park(bg, f.root, "ben", "return")
+	if err != nil || !p.Moved {
+		t.Fatalf("%+v %v", p, err)
+	}
+	if len(titles) != 1 || titles[0] != "ben=" {
+		t.Errorf("titles = %q", titles)
+	}
+	titles = nil
+	if p, err = f.env.Park(bg, f.root, "ben", "return"); err != nil || p.Moved || len(titles) != 0 {
+		t.Errorf("a repeat must not clear again: %+v %v %q", p, err, titles)
+	}
+}

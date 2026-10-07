@@ -217,6 +217,7 @@ func (e Env) Wait(ctx context.Context, root string, o WaitOpts) (WaitResult, err
 				if rowErr != nil {
 					return WaitResult{}, rowErr
 				}
+				syncChanged(ctx, h, root, []PollRow{r}, targets)
 				return WaitResult{Slot: r.Name, State: r.State, Evidence: r.Evidence, Note: notes[r.Name],
 					Source: source, Waited: e.Now().Sub(start)}, nil
 			}

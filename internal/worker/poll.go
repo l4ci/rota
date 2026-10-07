@@ -387,6 +387,7 @@ func (e Env) Poll(ctx context.Context, root string, o PollOpts) (PollResult, err
 	if rowErr != nil {
 		return PollResult{}, rowErr
 	}
+	syncChanged(ctx, h, root, rows, targets)
 	after, _ := os.ReadFile(RegistryPath(root))
 	return PollResult{Slots: rows, Notes: notes, Changed: string(before) != string(after)}, nil
 }
