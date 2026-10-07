@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Doc drift guard (#392): every docs/design/contract/*.md is stamped with the
+"""Doc drift guard (#392): every docs/contributing/contract/*.md is stamped with the
 commit it was last verified against and the repo paths it describes.
 
     ---
@@ -102,9 +102,9 @@ def main():
                     help="fail on drifted refs too (also ROTA_DOC_STAMPS=strict)")
     args = ap.parse_args()
     root = Path(args.root).resolve()
-    docs = sorted((root / "docs/design/contract").glob("*.md"))
+    docs = sorted((root / "docs/contributing/contract").glob("*.md"))
     if not docs:
-        print("docs/design/contract: no contract docs found")
+        print("docs/contributing/contract: no contract docs found")
         return 1
     results = [check_doc(root, d) for d in docs]
     errors = [f for e, _ in results for f in e]

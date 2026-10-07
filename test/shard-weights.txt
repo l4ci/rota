@@ -1,4 +1,4 @@
-# Measured seconds per smoke section (idle 8-core box, docs/design/round-speed.md).
+# Measured seconds per smoke section (idle 8-core box).
 # test/gate.sh deals sections to shards by these weights; unlisted sections count 1.
 92_limits.sh 21
 55_backend.sh 28

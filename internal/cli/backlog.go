@@ -23,7 +23,7 @@ import (
 
 // The backlog views and maintenance verbs, `rota summary`, `rota status` and
 // `rota refactor`. Shapes, flags and exits are the verb contract's
-// (docs/design/contract/); the old helpers named on each verb are
+// (docs/contributing/contract/); the old helpers named on each verb are
 // the behaviour to match.
 
 func backlogCommands() []*Command {

@@ -1,6 +1,6 @@
 // Package fsio holds rota's file primitives: atomic writes and the sidecar
 // advisory lock. Both match bin/hvlib_io.py, so rota and the old helpers can
-// share state files during the port (docs/design/5.0-cli-conventions.md, Writes).
+// share state files during the port (docs/contributing/contract/cli-conventions.md, Writes).
 package fsio
 
 import (
