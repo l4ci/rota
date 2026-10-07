@@ -132,15 +132,31 @@
       {
         "body": "",
         "broken": false,
+        "changed": false,
+        "checkOnly": false,
+        "files": null,
+        "mode": "",
+        "name": "d: no verify commands",
+        "noFiles": [
+          "work.txt"
+        ],
+        "noVerify": false,
+        "pr": "https://github.com/o/r/pull/7",
+        "relays": "",
+        "verdict": "no-verify"
+      },
+      {
+        "body": "",
+        "broken": false,
         "changed": true,
         "checkOnly": false,
         "files": [
           "work.txt"
         ],
         "mode": "",
-        "name": "d: no verify commands",
+        "name": "d: no verify commands with --no-verify",
         "noFiles": null,
-        "noVerify": false,
+        "noVerify": true,
         "pr": "https://github.com/o/r/pull/7",
         "relays": "",
         "verdict": "pass"
@@ -411,6 +427,12 @@
       "Forge": "github PRView 7\ngithub PRView 7\ngithub PRRequestMerge 7 pin=SHA deleteBranch=false\ngithub PRView 7\n"
     },
     "d: no verify commands": {
+      "Exit": -1,
+      "Origin": "seed",
+      "Local": "seed",
+      "Forge": "github PRView 7\ngithub PRView 7\n"
+    },
+    "d: no verify commands with --no-verify": {
       "Exit": 0,
       "Origin": "merge pr\nseed\nwork",
       "Local": "merge pr\nseed\nwork",
