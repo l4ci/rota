@@ -58,10 +58,12 @@ type Deps struct {
 	MigrateTracker func(ctx context.Context, root string, cfg any) (migrate.Tracker, error)
 	MigrateSleep   func(d time.Duration)
 
-	RoundEnv       func(ctx context.Context, root string) round.Env
-	ReapEnv        func(ctx context.Context, root string) (round.Env, reap.HostOps)
-	EscalationEnv  func() escalation.Env
-	WatchEnv       func() roundlease.Env
+	RoundEnv      func(ctx context.Context, root string) round.Env
+	ReapEnv       func(ctx context.Context, root string) (round.Env, reap.HostOps)
+	EscalationEnv func() escalation.Env
+	// LeaseEnv is the one route to the round lease's process and clock reads;
+	// the real machine by default, a fake in tests.
+	LeaseEnv       func() roundlease.Env
 	OrchestrateEnv func() orchestrate.Env
 
 	WorkerEnv      func() worker.Env
@@ -89,7 +91,7 @@ func defaultDeps() *Deps {
 		Proc:             proc.Run,
 		WorkerEnv:        func() worker.Env { return worker.Env{} },
 		EscalationEnv:    func() escalation.Env { return escalation.Env{} },
-		WatchEnv:         func() roundlease.Env { return roundlease.DefaultEnv() },
+		LeaseEnv:         func() roundlease.Env { return roundlease.DefaultEnv() },
 		OrchestrateEnv:   defaultOrchestrateEnv,
 		Host:             func(kind string) host.Host { return host.New(kind, host.Deps{}) },
 		UpdateEnv:        func() update.Env { return update.DefaultEnv(version.Get().Version) },

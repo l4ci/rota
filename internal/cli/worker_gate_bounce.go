@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/l4ci/rota/internal/round"
@@ -65,7 +64,7 @@ func gateBounce(c *Ctx, root, issue string, r worker.GateResult) (n int, parked 
 	}
 	note := fmt.Sprintf("The merge gate sent %s back %d time(s) (round.maxBounces is %d), so it is parked for a human instead of going back to a worker. Last refusal: %s", what, n, set.MaxBounces, why)
 	if _, err = env.Transfer(c.Context(), root, be, round.TransferOpts{
-		Issue: issue, To: round.HumanTarget, Note: note, Settings: set, Getenv: os.Getenv,
+		Issue: issue, To: round.HumanTarget, Note: note, Settings: set,
 	}); err != nil {
 		return n, false, fmt.Errorf("could not park %s as needs-human: %w", issue, err)
 	}

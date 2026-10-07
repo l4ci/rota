@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/roundcfg"
-	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -29,7 +28,6 @@ type WindDownOpts struct {
 	NoVerify  bool
 	HolderPID int
 	Settings  roundcfg.Settings
-	Getenv    func(string) string
 }
 
 // SlotOutcome is one slot's part of the summary.
@@ -64,13 +62,12 @@ func (e Env) WindDown(ctx context.Context, root string, be Board, o WindDownOpts
 	if err != nil {
 		return res, err
 	}
-	le := e.leaseEnv()
-	lease, st, err := le.Read(cd)
+	le := e.Lease
+	lease, _, held, err := le.Holds(cd, o.HolderPID, e.getenv())
 	if err != nil {
 		return res, err
 	}
-	holder := le.Discover(o.HolderPID, o.Getenv)
-	if (st != roundlease.Live && st != roundlease.Foreign) || !holder.SameAs(lease, le.Host) {
+	if !held {
 		return res, &exitcode.Error{Exit: exitcode.ExitResolution, Message: "this process holds no round lease: nothing to wind down", Hint: "run it from the orchestrator that ran rota round start"}
 	}
 	res.Round = lease.Round
@@ -193,7 +190,7 @@ func (e Env) WindDown(ctx context.Context, root string, be Board, o WindDownOpts
 	// 3. Release the lease only when the base is green and every slot is parked.
 	if res.Verdict != VerdictVerifyFailed && !res.Retained {
 		res.Verdict = VerdictClean
-		if _, err := le.Release(cd, holder); err != nil {
+		if _, err := le.Release(cd, le.Discover(o.HolderPID, e.getenv())); err != nil {
 			return res, err
 		}
 		// The round is over, so its host goes with the lease: the worker verbs

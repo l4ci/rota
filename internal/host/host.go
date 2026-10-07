@@ -17,6 +17,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -142,6 +143,17 @@ type Explainer interface {
 	Explain(ctx context.Context, slot, handle string) string
 }
 
+// Labeler is implemented by a host that can show display-only text beside a
+// slot's pane and the round's workspace (herdr's sidebar). It is cosmetic and
+// best effort: nothing is returned, a failure never reaches the caller, and a
+// host that is not a Labeler (tmux) shows nothing.
+type Labeler interface {
+	// Label sets the slot pane's title; "" clears it.
+	Label(ctx context.Context, slot, handle, title string)
+	// LabelWorkspace sets the round token of the caller's own workspace.
+	LabelWorkspace(ctx context.Context, token string)
+}
+
 // Turn is a host's numbered view of an agent: its native status, the sequence
 // number of its latest state change and, when that change was a finished turn,
 // the same number as CompletionSeq. A field the host did not report is 0.
@@ -199,7 +211,7 @@ type Host interface {
 func New(dispatch string, d Deps) Host {
 	d.fill()
 	if dispatch == "herdr" {
-		return &herdr{d: d}
+		return &herdr{d: d, noted: new(atomic.Bool)}
 	}
 	return &tmux{d: d}
 }

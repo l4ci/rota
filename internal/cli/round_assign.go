@@ -89,7 +89,7 @@ func roundAssign(fs *flag.FlagSet) RunFunc {
 			ID: id, Agent: *agent, BodyFile: bf, Siblings: pystr.SplitCSV(*siblings),
 			CheckOnly: *checkOnly, AcceptOverlap: *accept, AcceptOpenPR: *acceptOpenPR, HolderPID: *pid,
 			Tier: *tier, TierReason: *tierReason, Kind: *kind, Model: *model,
-			Settings: set, Getenv: os.Getenv,
+			Settings: set,
 		})
 		for _, w := range res.Warnings {
 			c.Warn("%s", w)

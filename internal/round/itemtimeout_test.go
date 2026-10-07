@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -96,5 +97,34 @@ func TestItemClockSurvivesATransferToAnotherSlot(t *testing.T) {
 	}
 	if !hasKind(kinds(rep.Findings)["dana"], ItemTimeout) {
 		t.Errorf("dana inherits the elapsed time: %+v", rep.Findings)
+	}
+}
+
+// The timeout park resolves the lease holder through Env.Getenv, not the
+// process environment.
+func TestItemTimeoutApplyReadsHolderFromEnvGetenv(t *testing.T) {
+	f := newMoveFx(t)
+	f.env.ItemTimeoutMinutes = 120
+	f.env.Board = f.be
+	f.env.NeedsHuman = "needs-human"
+	f.env.HolderPID = 0 // discover the holder from the environment
+	asked := false
+	f.env.Getenv = func(k string) string {
+		if k == roundlease.HolderPIDEnv {
+			asked = true
+			return "100"
+		}
+		return ""
+	}
+	f.now = f.now.Add(3 * time.Hour)
+	out, err := f.env.Reconcile(bg, f.root, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !asked {
+		t.Error("the transfer must read the holder through Env.Getenv")
+	}
+	if !hasKind(kinds(out.Repaired)["ben"], ItemTimeout) || !slices.Contains(f.forge.labels[12], "needs-human") {
+		t.Fatalf("apply must park it: %+v warnings %v", out, out.Report.Warnings)
 	}
 }

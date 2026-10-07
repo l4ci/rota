@@ -134,6 +134,7 @@ type hookContext struct {
 	set       hook.Settings
 	handoff   string // absolute path
 	now       func() time.Time
+	lease     roundlease.Env
 }
 
 // hookSetup returns false for every reason the hook should pass silently.
@@ -150,7 +151,8 @@ func hookSetup(c *Ctx, needLeaseFree bool) (hc hookContext, ok bool) {
 	}
 	hc.commonDir = cd
 	hc.now = c.deps().Now
-	hc.who = hook.Identify(roundlease.DefaultEnv(), os.Getenv, c.deps().HolderPID(), cd)
+	hc.lease = c.deps().LeaseEnv()
+	hc.who = hook.Identify(hc.lease, os.Getenv, c.deps().HolderPID(), cd)
 	switch {
 	case hc.who.Orchestrator:
 		hc.root = hc.who.Lease.Root
@@ -242,7 +244,7 @@ func stopHandoff(hc hookContext, sid string, active bool) (d hook.StopDecision, 
 	now := hc.now()
 	in := hook.StopIn{StopHookActive: active}
 	if hc.set.SwitchOnUsage {
-		in.Supervised, in.HoldUntil = supervisedHold(hc.commonDir, hc.now())
+		in.Supervised, in.HoldUntil = supervisedHold(hc.lease, hc.commonDir, hc.now())
 	}
 	d = hook.DecideStop(in, st, hc.set, hook.StatHandoff(hc.handoff), hc.handoff, now)
 	if d.Persist {
@@ -271,7 +273,7 @@ func watchBlock(hc hookContext) (reason string, block bool) {
 	if !need {
 		return "", false
 	}
-	if _, armed := roundwatch.Armed(roundlease.DefaultEnv(), hc.commonDir); armed {
+	if _, armed := roundwatch.Armed(hc.lease, hc.commonDir); armed {
 		return "", false
 	}
 	reason = "No `rota round watch` is running, and workers are active: nothing would wake you when one finishes. " +
@@ -303,7 +305,7 @@ func hookPrompt(c *Ctx, args []string) (res Result, _ error) {
 	if need, _ := roundwatch.NeedsWatch(hc.root); !need {
 		return Result{}, nil
 	}
-	_, armed := roundwatch.Armed(roundlease.DefaultEnv(), hc.commonDir)
+	_, armed := roundwatch.Armed(hc.lease, hc.commonDir)
 	out := map[string]any{"hookSpecificOutput": map[string]any{
 		"hookEventName":     "UserPromptSubmit",
 		"additionalContext": roundwatch.Digest(hc.root, hc.who.Lease.Round, armed),
@@ -314,9 +316,9 @@ func hookPrompt(c *Ctx, args []string) (res Result, _ error) {
 // supervisedHold reads keepalive.json the way `rota keepalive status` does: a
 // supervisor is live when the file says running and its pid is alive. The
 // hold is its switchHold when that is still ahead (D4).
-func supervisedHold(commonDir string, now time.Time) (supervised bool, until time.Time) {
+func supervisedHold(le roundlease.Env, commonDir string, now time.Time) (supervised bool, until time.Time) {
 	ks, found, err := keepalive.ReadState(keepalive.StatePath(commonDir))
-	if err != nil || !found || !ks.Running(roundlease.DefaultEnv()) {
+	if err != nil || !found || !ks.Running(le) {
 		return false, time.Time{}
 	}
 	if ks.SwitchHold != nil {

@@ -62,7 +62,7 @@ func roundWatch(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, Resolution("%v", err)
 		}
-		lenv := c.deps().WatchEnv()
+		lenv := c.deps().LeaseEnv()
 		release, err := roundwatch.Arm(lenv, cd, os.Getpid(), secs(*heartbeat))
 		if err != nil {
 			var ae *roundwatch.ArmedError

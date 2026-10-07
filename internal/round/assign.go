@@ -15,7 +15,6 @@ import (
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/roundcfg"
-	"github.com/l4ci/rota/internal/roundlease"
 	secpkg "github.com/l4ci/rota/internal/section"
 	"github.com/l4ci/rota/internal/skills"
 	"github.com/l4ci/rota/internal/worker"
@@ -77,7 +76,6 @@ type AssignOpts struct {
 	AcceptOpenPR bool
 	HolderPID    int
 	Settings     roundcfg.Settings
-	Getenv       func(string) string
 	// Tier, TierReason and Kind are C9: "" means round.tier, no reason, and
 	// the slot's recorded kind, else claude.
 	Tier, TierReason, Kind string
@@ -292,13 +290,12 @@ func (e Env) requireLease(ctx context.Context, root string, o AssignOpts) error 
 	if err != nil {
 		return err
 	}
-	le := e.leaseEnv()
-	lease, st, err := le.Read(cd)
+	le := e.Lease
+	_, _, held, err := le.Holds(cd, o.HolderPID, e.getenv())
 	if err != nil {
 		return err
 	}
-	holder := le.Discover(o.HolderPID, o.Getenv)
-	if (st != roundlease.Live && st != roundlease.Foreign) || !holder.SameAs(lease, le.Host) {
+	if !held {
 		return blocked(BlockNoRound, "this process holds no round lease: run rota round start first")
 	}
 	return nil
@@ -524,7 +521,7 @@ func (e Env) assignOne(ctx context.Context, root string, be Board, o AssignOpts,
 	res.Warnings = append(res.Warnings, warns...)
 
 	// 5. The brief exists before anything is marked.
-	brief, ok := briefPath(root, set, o.Getenv)
+	brief, ok := briefPath(root, set, e.getenv())
 	if !ok {
 		return res, blocked(BlockBriefMissing, "the worker contract (skills/references/worker-contract.md) was not found; set round.brief")
 	}

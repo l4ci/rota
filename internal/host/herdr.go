@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync/atomic"
 
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/shlex"
@@ -25,7 +26,11 @@ import (
 // Every herdr command prints JSON on stdout and, on failure, a JSON error on
 // stderr with exit 1. herdr reports agent state natively, so none of tmux's
 // paste tricks apply: `agent prompt` submits text and Enter as one write.
-type herdr struct{ d Deps }
+type herdr struct {
+	d Deps
+	// noted: the one stderr note a failing label set may write (see Label).
+	noted *atomic.Bool
+}
 
 func (h *herdr) Name() string { return "herdr" }
 

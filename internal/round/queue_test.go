@@ -115,7 +115,7 @@ func TestAssignRefusalMovesNothingBeforeTheClaim(t *testing.T) {
 	}
 	// CheckOnly never parks either.
 	f.set.Brief = ""
-	if _, err := f.env.Assign(bg, f.root, f.be, AssignOpts{ID: "13", Agent: "ben", HolderPID: 100, Settings: f.set, CheckOnly: true, Getenv: func(string) string { return "" }}); err != nil {
+	if _, err := f.env.Assign(bg, f.root, f.be, AssignOpts{ID: "13", Agent: "ben", HolderPID: 100, Settings: f.set, CheckOnly: true}); err != nil {
 		t.Fatal(err)
 	}
 	if len(f.queued()) != 0 || f.slot("ben").Task() != "12" {

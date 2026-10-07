@@ -21,10 +21,9 @@ type StartOpts struct {
 	Base       string
 	HolderPID  int
 	Settings   roundcfg.Settings
-	Getenv     func(string) string
 	DefaultNum int // slots when Slots is 0
 	// Dispatch is work.dispatch and LookPath the PATH probe; together with
-	// Getenv they resolve the round's host (C8). A nil LookPath is exec.LookPath.
+	// the env's Getenv they resolve the round's host (C8). A nil LookPath is exec.LookPath.
 	Dispatch string
 	LookPath func(string) (string, error)
 }
@@ -94,8 +93,8 @@ func (e Env) Start(ctx context.Context, root string, o StartOpts) (Started, erro
 	if err != nil {
 		return res, err
 	}
-	le := e.leaseEnv()
-	holder := le.Discover(o.HolderPID, o.Getenv)
+	le := e.Lease
+	holder := le.Discover(o.HolderPID, e.getenv())
 	prev, _ := worker.LoadRegistry(root).Round()
 	l, out, stale, err := le.Acquire(cd, root, holder, prev+1)
 	if err != nil {
@@ -153,7 +152,7 @@ func (e Env) Start(ctx context.Context, root string, o StartOpts) (Started, erro
 		if rec := doc.Host(); rec != "" && out == roundlease.Renewed {
 			res.Host = rec
 		} else {
-			res.Host = host.Resolve("", o.Dispatch, o.Getenv, o.LookPath)
+			res.Host = host.Resolve("", o.Dispatch, e.getenv(), o.LookPath)
 			doc.SetHost(res.Host)
 		}
 		doc.SetScope(scope)
