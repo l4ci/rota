@@ -86,6 +86,15 @@ func (r TrainResult) OK() bool { return r.Verdict == GatePass }
 // Train runs a merge train (see above). The base must be checked out in root.
 func (e Env) Train(ctx context.Context, root string, o TrainOpts) (TrainResult, error) {
 	e = e.withDefaults()
+	var res TrainResult
+	err := e.withLandLock(ctx, root, func() (err error) {
+		res, err = e.train(ctx, root, o)
+		return err
+	})
+	return res, err
+}
+
+func (e Env) train(ctx context.Context, root string, o TrainOpts) (TrainResult, error) {
 	res := TrainResult{Base: o.Base}
 	if len(o.Targets) == 0 {
 		return res, fail(exitcode.ExitUsage, "a train needs at least one PR or slot")
