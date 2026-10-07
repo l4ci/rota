@@ -2,6 +2,7 @@ package worker
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/l4ci/rota/internal/harness"
@@ -49,7 +50,14 @@ func (s *Slot) Model() string      { return jsonx.Str(s.o, "model") }
 func (s *Slot) TierReason() string { return jsonx.Str(s.o, "tierReason") }
 func (s *Slot) PR() string         { return jsonx.Str(s.o, "pr") }
 func (s *Slot) Account() string    { return jsonx.Str(s.o, "account") }
-func (s *Slot) ConfigDir() string  { return jsonx.Str(s.o, "configDir") }
+
+// SmokeSection is the smoke section number reserved for the slot's issue, 0
+// for none.
+func (s *Slot) SmokeSection() int {
+	n, _ := strconv.Atoi(jsonx.Str(s.o, "smokeSection"))
+	return n
+}
+func (s *Slot) ConfigDir() string { return jsonx.Str(s.o, "configDir") }
 
 // CodexAccount is the work.codexAccounts entry the slot last ran a codex
 // worker under ("" on the default Codex home).
@@ -198,6 +206,8 @@ func (s *Slot) SetAccount(account, configDir string) {
 // Binding is what ties a slot to an issue.
 type Binding struct {
 	Task, ClaimID, Kind, KindSource, Tier, Model, TierReason string
+	// SmokeSection is the reserved test/sections number, 0 for none.
+	SmokeSection int
 }
 
 // Bind records the issue the slot works on. Empty optional fields stay unset.
@@ -205,7 +215,7 @@ func (s *Slot) Bind(b Binding) {
 	s.o.Set("task", b.Task)
 	for _, f := range []struct{ k, v string }{
 		{"claimId", b.ClaimID}, {"kind", b.Kind}, {"kindSource", b.KindSource}, {"tier", b.Tier},
-		{"model", b.Model}, {"tierReason", b.TierReason},
+		{"model", b.Model}, {"tierReason", b.TierReason}, {"smokeSection", smokeStr(b.SmokeSection)},
 	} {
 		if f.v == "" {
 			s.o.Delete(f.k)
@@ -215,13 +225,20 @@ func (s *Slot) Bind(b Binding) {
 	}
 }
 
+func smokeStr(n int) string {
+	if n == 0 {
+		return ""
+	}
+	return strconv.Itoa(n)
+}
+
 // Unbind drops the issue binding: one field set for every verb. The task and
 // PR read null, the optional binding fields (claim, kind, tier, model, tier
 // reason) are removed so a freed slot reports nothing of the last issue.
 func (s *Slot) Unbind() {
 	s.o.Set("task", nil)
 	s.o.Set("pr", nil)
-	for _, k := range []string{"claimId", "kind", "tier", "model", "tierReason", "issues"} {
+	for _, k := range []string{"claimId", "kind", "tier", "model", "tierReason", "smokeSection", "issues"} {
 		s.o.Delete(k)
 	}
 }
