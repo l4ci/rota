@@ -93,6 +93,13 @@ func TestWorkerDone(t *testing.T) {
 			t.Fatalf("exit %d: %s", code, out)
 		}
 	})
+	t.Run("accepts the whole-tier row recorded multi-arg", func(t *testing.T) {
+		dir := doneProject(t, "true")
+		rotaIn(t, dir, "proof", "add", "B07", "--check", "'rota' 'test' 'run' 'fast'", "--result", "PASS", "--evidence", "x", "--sha", headOf(t, dir))
+		if code, out, _ := rotaIn(t, dir, "worker", "done", "ben", "--json"); code != 0 {
+			t.Fatalf("exit %d: %s", code, out)
+		}
+	})
 	t.Run("unset test.fast skips the proof half with a warning", func(t *testing.T) {
 		dir := doneProject(t, "")
 		code, out, errOut := rotaIn(t, dir, "worker", "done", "ben", "--json")
@@ -107,6 +114,51 @@ func TestWorkerDone(t *testing.T) {
 		dir := doneProject(t, "true")
 		if code, _, _ := rotaIn(t, dir, "worker", "done", "nope"); code != 3 {
 			t.Errorf("exit %d, want 3", code)
+		}
+	})
+}
+
+// TestWorkerDoneFromWorktree: the registry lives in the main checkout, and
+// {files} is the slot branch's diff, from whichever directory the verb runs.
+func TestWorkerDoneFromWorktree(t *testing.T) {
+	main := backlogProject(t)
+	os.WriteFile(filepath.Join(main, ".rota", "config.json"), []byte(`{"test":{"fast":["true {files}"]}}`), 0o644)
+	// Proof detail files are untracked noise; ignore them so {files} is stable.
+	os.WriteFile(filepath.Join(main, ".gitignore"), []byte(".rota/*\n!.rota/config.json\n!.rota/BACKLOG.md\n"), 0o644)
+	gitT(t, main, "add", ".gitignore", ".rota/config.json", ".rota/BACKLOG.md")
+	gitT(t, main, "-c", "user.email=a@b", "-c", "user.name=n", "commit", "-q", "-m", "rota")
+	gitT(t, main, "branch", "base0")
+	wt := filepath.Join(main, ".worktrees", "ben")
+	gitT(t, main, "worktree", "add", "-q", "-b", "ben/x", wt, "base0")
+	os.WriteFile(filepath.Join(wt, "a.go"), []byte("package a\n"), 0o644)
+	gitT(t, wt, "add", "a.go")
+	gitT(t, wt, "-c", "user.email=a@b", "-c", "user.name=n", "commit", "-q", "-m", "work")
+	os.WriteFile(filepath.Join(main, ".rota", "workers.json"),
+		[]byte(`{"slots":[{"name":"ben","branch":"ben/x","task":"B07","state":"busy","worktree":"`+wt+`"}]}`), 0o644)
+
+	if code, out, errOut := rotaIn(t, wt, "proof", "record", "B07", "--base", "base0", "--", "true {files}"); code != 0 {
+		t.Fatalf("record: %d %s %s", code, out, errOut)
+	}
+	// The same row, as the main checkout's proof store sees it.
+	sha := headOf(t, wt)
+	if code, out, _ := rotaIn(t, main, "proof", "add", "B07", "--check", "true 'a.go'", "--result", "PASS", "--evidence", "x", "--sha", sha); code != 0 {
+		t.Fatalf("add: %d %s", code, out)
+	}
+
+	t.Run("from the slot worktree", func(t *testing.T) {
+		code, out, errOut := rotaIn(t, wt, "worker", "done", "ben", "--base", "base0", "--json")
+		if code != 0 || data(t, out)["changed"] != true {
+			t.Fatalf("exit %d: %s %s", code, out, errOut)
+		}
+	})
+	// Reset the slot, then dirty the main checkout with an unrelated file.
+	os.WriteFile(filepath.Join(main, ".rota", "workers.json"),
+		[]byte(`{"slots":[{"name":"ben","branch":"ben/x","task":"B07","state":"busy","worktree":"`+wt+`"}]}`), 0o644)
+	os.WriteFile(filepath.Join(main, "unrelated.txt"), []byte("x"), 0o644)
+	t.Run("from the main checkout with a dirty file", func(t *testing.T) {
+		code, out, errOut := rotaIn(t, main, "worker", "done", "ben", "--base", "base0", "--json")
+		if code != 0 || data(t, out)["changed"] != true {
+			t.Fatalf("exit %d: %s %s", code, out, errOut)
 		}
 	})
 }
