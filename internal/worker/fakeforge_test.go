@@ -46,6 +46,27 @@ func (f *fakeForge) PRView(_ context.Context, pr int) (tracker.PRInfo, error) {
 	return info, nil
 }
 
+// PRMergeable answers from the forge DB word "mergeable" (clean, conflict,
+// unknown, or error to fail), "mergeReason" naming why. Unset it is clean and
+// unlogged, so the frozen forge logs of the other cases keep their shape. A
+// fresh "unknownFor" count of unknown answers precedes the real one.
+func (f *fakeForge) PRMergeable(context.Context, int) (tracker.Mergeability, error) {
+	w := f.w
+	word := w.forgeWord("mergeable")
+	if word == "" {
+		return tracker.Mergeability{State: tracker.MergeClean}, nil
+	}
+	f.logf("PRMergeable")
+	if n, _ := strconv.Atoi(w.forgeWord("unknownFor")); n > 0 {
+		w.forge("unknownFor", strconv.Itoa(n-1))
+		return tracker.Mergeability{State: tracker.MergeUnknown, Reason: "UNKNOWN"}, nil
+	}
+	if word == "error" {
+		return tracker.Mergeability{}, errors.New("simulated: gh pr view failed")
+	}
+	return tracker.Mergeability{State: word, Reason: w.forgeWord("mergeReason")}, nil
+}
+
 // OpenPRs lists the world's PR only when the world opted in with listed=1, so
 // the cases that record no PR keep their frozen forge log (a listing is not
 // logged). listError makes the listing fail.

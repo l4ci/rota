@@ -415,7 +415,10 @@ The gate refuses before it merges anything (exit 4, nothing lands) in these case
   one with `rota config set test.full <command>`, or pass `--no-verify` to merge unverified on purpose.
   The train takes the same flag.
 
-A local gate verifies before it merges. It builds a scratch merge of the PR head into the current base
+A local gate verifies before it merges. For a PR it first asks the forge whether the PR merges
+cleanly; a conflict the forge reports (git can miss one, for example after a file move) is
+`merge-failed` at once, before the slow verify. If the forge is still computing or the question fails,
+the gate carries on. It then builds a scratch merge of the PR head into the current base
 (in a scratch worktree under `$TMPDIR`), runs `test.full` there, then `test.e2e` when set. If that
 fails (`verify-failed`), nothing landed and the PR stays open: send the slot back to fix it, then
 gate again. If the base moved while the scratch tree verified, the verdict is `base-moved` and nothing
