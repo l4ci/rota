@@ -595,3 +595,17 @@ func TestBinaryCheck(t *testing.T) {
 		t.Errorf("binary check = %+v", c)
 	}
 }
+
+func TestAgentsCheck(t *testing.T) {
+	find := func(in Input) Check {
+		in.Look = func(string) (string, bool) { return "", false }
+		return statusOf(Run(context.Background(), in), "agents")
+	}
+	if c := find(Input{}); c.Name != "" {
+		t.Fatalf("no problems adds no line: %+v", c)
+	}
+	c := find(Input{AgentProblems: []string{".claude/agents/rota-explorer.md: missing"}})
+	if c.Status != Warn || !strings.Contains(c.Detail, "rota-explorer.md: missing") || !strings.Contains(c.Hint, "rota agents write") {
+		t.Fatalf("%+v", c)
+	}
+}

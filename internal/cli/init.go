@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/l4ci/rota/internal/agents"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/initproj"
 	"github.com/l4ci/rota/internal/jsonx"
@@ -98,6 +99,20 @@ func runInit(c *Ctx, noBlocks bool) (Result, error) {
 		}
 		data.Set("blocks", entries)
 		data.Set("instructions", initInstructionsData(b))
+	}
+	if !noBlocks {
+		// Ruling (#405): init writes the agent files, best effort. A foreign
+		// file or a bad role config must not fail the seed; it warns.
+		es, err := agents.Write(dir)
+		if err != nil {
+			warnings = append(warnings, "agent files not written: "+err.Error())
+		}
+		for _, e := range es {
+			if err == nil && e.Status != agents.StatusCurrent {
+				changed = true
+				lines = append(lines, "agent: "+e.Path)
+			}
+		}
 	}
 	// The machine-wide registry is not the project's state: a failure to write
 	// it warns, and neither it nor a first registration counts as `changed`.

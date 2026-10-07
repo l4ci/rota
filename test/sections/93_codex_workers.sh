@@ -159,7 +159,7 @@ dr
 [ "$(drf status)" = "pass" ] || fail "doctor codex should pass with the default home logged in: $OUT"
 case "$(drf detail)" in *"codex 0.159.2"*"default home"*) ;; *) fail "doctor detail should name the version and the default home: $(drf detail)" ;; esac
 case "$(echo "$OUT" | python3 -c 'import json,sys; print(",".join(c["name"] for c in json.load(sys.stdin)["data"]["checks"]))')" in
-  *",skills,codex") ;; *) fail "codex should come after hook: $OUT" ;; esac
+  *",skills,codex,agents") ;; *) fail "codex should come after skills, before agents: $OUT" ;; esac
 cxc config set work.codexAccounts "[{\"name\":\"a\",\"codexHome\":\"$HOME_A\"},{\"name\":\"b\",\"codexHome\":\"$HOME_B\"}]" >/dev/null
 dr
 case "$(drf detail)" in *"a, b"*) ;; *) fail "doctor detail should name the accounts: $(drf detail)" ;; esac

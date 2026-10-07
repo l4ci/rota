@@ -353,6 +353,14 @@ The orchestrator's verbs for a [parallel round](../usage/parallel-rounds.md). Al
 
 A second `round start` is refused (exit 4) while another orchestrator holds the lease. `round wait` exits 1 on `--timeout` with `data.timedOut: true`, which is an answer, not a fault.
 
+## `rota agents`
+
+| Usage | What it does |
+|---|---|
+| `rota agents write [--check]` | write `.claude/agents/rota-{explorer,implementer,reasoner}.md`, and `.codex/agents/rota-*.toml` when Codex is configured, from the `roles.*` and `round.tiers.*` config |
+
+Idempotent. Exit 4 when a target exists without the generated-by-rota header (nothing is written) or a role's effort is one Codex cannot express. `--check` writes nothing and exits 1 when a file is missing or has drifted. See [configuration](../usage/configuration.md#roles-keys-and-rota-agents-write).
+
 ## `rota doctor`
 
 | Usage | What it does |
