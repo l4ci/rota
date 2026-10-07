@@ -32,6 +32,8 @@ Follow `references/context-load-protocol.md` (parallel, silent): item detail and
 
 **Acceptance in the issue body or design?** Treat it as the goal; go to Step 3. Otherwise draft one (`- [ ]` observable outcomes) as part of the proposal and store it in the design: `rota design add <ID> --title "<title>"` if none exists, then `rota design put <ID> --body-file <file>`.
 
+**Choose the planning level.** Apply [`references/planning-dial.md`](references/planning-dial.md) to the loaded context and state the level in one line to the user. Level 1 (pointers) is today's plain plan: continue to Step 3. A higher level adds its artifact first (design, spike, or a grilling pass before the Step 3 confirm).
+
 **Grep before claims.** Validate quantified claims in the detail (*"≥5 callers"*) with `git grep` before drafting tasks; the codebase is ground truth. `ls -d` any path you cite.
 
 ## Step 3 — One proposal
@@ -89,6 +91,7 @@ Offer `/rota-work` in one line.
 ## References
 
 - [`plan-edge-cases.md`](plan-edge-cases.md): rename/refactor/docs task rules (Step 3); splitting into dependent items and `validate-docs` (Step 4).
+- [`references/planning-dial.md`](references/planning-dial.md): the level rubric Step 2 applies.
 - [`references/dependent-items.md`](references/dependent-items.md): declaring `## Depends on` edges; expand → migrate → contract.
 - [`references/context-load-protocol.md`](references/context-load-protocol.md): shared parallel context load.
 - [`references/knowledge-consult.md`](references/knowledge-consult.md): the K+D query pattern the load uses.
