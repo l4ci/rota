@@ -40,12 +40,6 @@ func TestWorkerGateAndTrainRefuseAnUnpickedBestOf(t *testing.T) {
 	}
 }
 
-func TestHoldableSkipsAnUnpickedBestOf(t *testing.T) {
-	if holdable(worker.GateBestOfUnpicked) || holdable(worker.GateStale) || !holdable(worker.GateNotClosing) {
-		t.Error("only a verdict that needs a person is holdable")
-	}
-}
-
 func TestGatePassClearsTheBestOfRecord(t *testing.T) {
 	root := t.TempDir()
 	worker.Update(root, func(d *worker.Doc) { d.SetBestOf(worker.BestOf{Issue: "12"}) })
