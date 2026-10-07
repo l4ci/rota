@@ -53,13 +53,8 @@ Default config (what `rota init --no-blocks` writes in a fresh repo):
     "enabled": false
   },
   "issues": {
-    "providers": {
-      "github": true,
-      "gitlab": true
-    },
     "label": "in-progress",
-    "autoCreateLabel": true,
-    "filterMineOnly": false
+    "autoCreateLabel": true
   },
   "rota": {
     "version": ""
