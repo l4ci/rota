@@ -3,6 +3,7 @@ package initproj
 import (
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"sort"
@@ -257,5 +258,27 @@ func TestInitChangedWhenOnlyAMigrationWrote(t *testing.T) {
 		if again, _ := Init(dir); again.Changed() {
 			t.Errorf("%s: second run changed", name)
 		}
+	}
+}
+
+// The merge train verdict cache (#400) holds local shas: `rota init` ignores it,
+// and git agrees the file stays untracked.
+func TestInitIgnoresTrainCache(t *testing.T) {
+	dir := t.TempDir()
+	if out, err := exec.Command("git", "-C", dir, "init", "-q").CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v %s", err, out)
+	}
+	if _, err := Init(dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".rota", "train-cache.json"), []byte("{}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := exec.Command("git", "-C", dir, "check-ignore", "-q", ".rota/train-cache.json").CombinedOutput(); err != nil {
+		t.Errorf("train-cache.json is not gitignored: %v %s", err, out)
+	}
+	out, _ := exec.Command("git", "-C", dir, "status", "--porcelain", "--", ".rota/train-cache.json").Output()
+	if len(out) != 0 {
+		t.Errorf("train-cache.json shows in git status: %s", out)
 	}
 }
