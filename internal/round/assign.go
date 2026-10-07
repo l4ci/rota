@@ -101,8 +101,10 @@ type Assigned struct {
 	// round.workerKind, slot or default.
 	KindSource string
 	// Pick is what the item's labels (or file fields) ask for.
-	Pick     Pick
-	Warnings []string
+	Pick Pick
+	// SmokeSection is the test/sections number reserved for the worker, 0 for none.
+	SmokeSection int
+	Warnings     []string
 }
 
 var (
@@ -222,6 +224,8 @@ type tierBrief struct {
 	Table                              map[string]string
 	// Pick is what the issue's labels (file: fields) asked for, "" for none.
 	Pick string
+	// Smoke is the reserved smoke section number, 0 for none.
+	Smoke int
 }
 
 func (t tierBrief) text() string {
@@ -250,6 +254,9 @@ func (t tierBrief) text() string {
 			rows = append(rows, tier+" = "+t.Table[tier])
 		}
 		fmt.Fprintf(&b, "Model tiers for your own subagents (%s): %s. Follow the tier rule in the contract.\n", t.Kind, strings.Join(rows, ", "))
+	}
+	if t.Smoke != 0 {
+		fmt.Fprintf(&b, "Your smoke section, if you add one, is number %d (test/sections/%d_*.sh): it is reserved for you, so use exactly that number.\n", t.Smoke, t.Smoke)
 	}
 	fmt.Fprintf(&b, "Put `Worker tier: %s` in your PR body.\n", own)
 	return b.String()
@@ -488,6 +495,8 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 		return res, blocked(BlockBriefMissing, "the worker contract (skills/references/worker-contract.md) was not found; set round.brief")
 	}
 
+	res.SmokeSection = e.reserveSmokeSection(ctx, root, be, reg, set.Roster, id)
+
 	// 6-9. The marks and the dispatch run as compensating steps (saga.go): a
 	// failure before dispatch undoes the claim and state; the dispatch itself
 	// keeps them, because the pane may already hold the brief.
@@ -519,7 +528,7 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 		}},
 		{name: "bind the slot", do: func() error {
 			return editSlot(root, agent, func(s *worker.Slot) error {
-				s.Bind(worker.Binding{Task: id, ClaimID: claimID, Kind: kind, KindSource: kindSource, Tier: tier, Model: res.Model, TierReason: reason})
+				s.Bind(worker.Binding{Task: id, ClaimID: claimID, Kind: kind, KindSource: kindSource, Tier: tier, Model: res.Model, TierReason: reason, SmokeSection: res.SmokeSection})
 				return nil
 			})
 		}},
@@ -529,7 +538,7 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 	}
 	d := &delivery{Slot: agent, Task: id, Branch: func() string { return res.Branch }, Kind: kind, Model: res.Model, Round: rnd,
 		Brief: func() string {
-			text := pointerBrief(agent, id, res.Branch, brief, o.Siblings, decisions, outOfScope(be, id), tierBrief{Kind: kind, Tier: tier, Model: res.Model, Default: set.Tier, Reason: reason, Table: set.Models[kind], Pick: pick.String()})
+			text := pointerBrief(agent, id, res.Branch, brief, o.Siblings, decisions, outOfScope(be, id), tierBrief{Kind: kind, Tier: tier, Model: res.Model, Default: set.Tier, Reason: reason, Table: set.Models[kind], Pick: pick.String(), Smoke: res.SmokeSection})
 			if hb := latestHandoffBranch(be, id); hb != "" {
 				text += fmt.Sprintf("\nAn earlier worker handed this issue back: read the latest `rota:handoff` comment on it. Its work is pushed on branch %s (origin/%s); fetch it before you start over.\n", hb, hb)
 			}
