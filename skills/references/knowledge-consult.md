@@ -1,6 +1,6 @@
 # Knowledge & decisions consult
 
-Used by `/rota-debug` Step 3+3.5, `/rota-refactor` (Orient step), `/rota-review` Step 3, and indirectly by `references/context-load-protocol.md` (which composes this pattern into a wider load list for `/rota-plan`, `/rota-vision`, `/rota-work`, including `/rota-work --preview`).
+Used by `/rota-debug` Step 3+3.5, `/rota-refactor` (Orient step), `/rota-review` Step 4, and indirectly by `references/context-load-protocol.md` (which composes this pattern into a wider load list for `/rota-plan`, `/rota-vision`, `/rota-work`, including `/rota-work --preview`).
 
 The pattern is one pair of `rota` calls plus carrier semantics, kept here so call-site logic lives in one place.
 
@@ -28,6 +28,8 @@ The two verbs return different *kinds* of content; handle them differently.
 **DECISIONS entries are hard boundaries.** Pass the FULL entry to the consumer (rule, *Why*, **Forbids**, **Permits**), not just the title. The calling skill MUST treat them as constraints, not suggestions. If the planned action would violate a decision, stop and surface it to the user first. Do not reword or scope a violation away.
 
 ## Hit-register after consumption
+
+(`/rota-review` registers differently: see below.)
 
 **This step is mandatory whenever the calling skill carries bullets into a downstream brief.** Skip only when `rota knowledge query` returned nothing or all returned bullets were pruned before the brief was written.
 
@@ -58,6 +60,10 @@ Bash: rota knowledge hit --topic "Architecture" --title "Avoid force-unwrap in p
 Issue all calls **in a single parallel tool-call batch**: each verb serializes its sidecar write behind a per-file lock, so concurrent calls don't lose hits. Silent on success. Provisional bullets auto-promote to confirmed once `hits >= learn.promoteThreshold` (default 3) without a pending contradiction.
 
 **Only register bullets that survived into the brief.** Bullets returned by the query but pruned before they reached a `**Known gotchas:**` / `**Relevant project conventions:**` section don't earn credit; unused queries shouldn't drive promotion.
+
+## `/rota-review` registers on use
+
+`/rota-review` is the exception to the rule above. A bullet landing in the reviewer brief is not use, so review registers after the verdicts, and only for entries the diff was checked against and followed: not contradicted or ignored (a finding names it) and not just present in the brief. With a plan, the entries are its `## Relies on` list; without one, the bullets under `**Relevant project conventions:**`. See `/rota-review` Step 4. Other callers register as described above.
 
 ## Skip silently on empty
 

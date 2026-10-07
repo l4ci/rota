@@ -54,12 +54,16 @@ Shared block, plus:
 **Hard boundaries (from DECISIONS.md):**
 <entries from `rota decisions query`, full rule + forbids/permits>
 
+**Plan relies on:**
+<the plan's `## Relies on` entries, each with its full KNOWLEDGE bullet or DECISIONS entry, or drop this section>
+Check the diff against each entry. One the diff contradicts or ignores is a CONCERN (a FAIL for a DECISIONS entry) that names the entry in the finding's title.
+
 **Possible stale scaffolding (deterministic pre-flight grep):**
 <file:line>: <matched line text>
 
 **Rubric. Return PASS / CONCERN / FAIL per heading, with evidence.**
 
-1. **Convention compliance** — does the diff respect the KNOWLEDGE.md bullets? Any regression on a captured gotcha?
+1. **Convention compliance** — does the diff respect the KNOWLEDGE.md bullets and each `**Plan relies on:**` entry? Any regression on a captured gotcha?
 2. **Code-smell baseline** — dead code, error swallowing, security smells, API contract breaks, performance cliffs, untested new branches. A short baseline, not a full code review; focus on what the user would regret after merge. A documented project standard (a KNOWLEDGE bullet, a DECISIONS entry, the repo's own idiom) overrides the baseline: code that follows it is never a smell.
 3. **Tests** — flag a **tautological** test (the expected value is computed the way the code computes it, so it cannot disagree with the code) and an **implementation-coupled** test (pinned to internals or call order instead of behaviour, so a correct refactor breaks it). Each is a CONCERN with file:line.
 4. **Stale scaffolding** — judge each `**Possible stale scaffolding:**` match: a leftover *Task N* / *placeholder* / *not yet wired* / *added later* / *in flight* annotation that should have gone once the work landed is a CONCERN with file:line; legitimate prose (a markdown placeholder section, a docstring describing user-visible "in flight" semantics, an enum value named `placeholder`, a `Task <N>` in a per-task brief or test name) is a PASS. Many matches are benign.
