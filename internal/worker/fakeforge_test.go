@@ -128,6 +128,9 @@ func (f *fakeForge) PRRequestMerge(_ context.Context, pr int, o tracker.MergeOpt
 		return strings.TrimSpace(string(out))
 	}
 	target, head := w.forgeWord("base"), w.forgeWord("head")
+	if f := w.forgeWord("pushBeforeMerge"); f != "" { // the base moves between the gate's check and the merge
+		w.originCommit(f)
+	}
 	g("clone", "-q", w.forgeWord("origin"), ".")
 	if w.mode == "elsewhere" {
 		target = "stack"
@@ -140,6 +143,68 @@ func (f *fakeForge) PRRequestMerge(_ context.Context, pr int, o tracker.MergeOpt
 		w.forge("merge", g("rev-parse", "HEAD"))
 	}
 	g("push", "-q", "origin", target)
+	if f := w.forgeWord("pushAfterMerge"); f != "" { // someone lands work right after the merge
+		w.originCommit(f)
+	}
 	w.forge("state", "MERGED")
 	return nil
+}
+
+// CommitChecks reports one check, "ci/test", on a commit pushed to the
+// origin's rota/ci/* branches: failure when its tree holds the file named by
+// "ciFail", else success. "ci" overrides it: none (CI never started), pending
+// (still running) or skipped (finished, tested nothing); late adds a failing
+// "ci/late" from the second call on. A commit not pushed there has no checks.
+// "ciMoveBase" names a file pushed to the origin's main on the first call, as
+// if someone landed work while CI ran. "ciScript" scripts the answers
+// instead: polls split by "|", each a comma list of name=state, the last
+// repeated once the script runs out.
+func (f *fakeForge) CommitChecks(_ context.Context, sha string) ([]tracker.CheckRun, error) {
+	f.logf("CommitChecks %s", sha[:7])
+	w := f.w
+	if script := w.forgeWord("ciScript"); script != "" {
+		polls := strings.Split(script, "|")
+		n, _ := strconv.Atoi(w.forgeWord("ciScriptN"))
+		w.forge("ciScriptN", strconv.Itoa(n+1))
+		var checks []tracker.CheckRun
+		for _, c := range strings.Split(polls[min(n, len(polls)-1)], ",") {
+			name, state, _ := strings.Cut(c, "=")
+			checks = append(checks, tracker.CheckRun{Name: name, State: state})
+		}
+		return checks, nil
+	}
+	switch w.forgeWord("ci") {
+	case "none":
+		return nil, nil
+	case "pending":
+		return []tracker.CheckRun{{Name: "ci/test", State: tracker.CheckPending}}, nil
+	case "skipped":
+		return []tracker.CheckRun{{Name: "ci/test", State: tracker.CheckSkipped}}, nil
+	}
+	g := func(args ...string) (string, error) {
+		out, err := exec.Command("git", append([]string{"-C", w.origin}, args...)...).Output()
+		return strings.TrimSpace(string(out)), err
+	}
+	if f := w.forgeWord("ciMoveBase"); f != "" {
+		w.forge("ciMoveBase", "")
+		w.originCommit(f)
+	}
+	refs, _ := g("for-each-ref", "--format=%(objectname)", "refs/heads/rota/ci/")
+	if !slices.Contains(strings.Fields(refs), sha) {
+		return nil, nil
+	}
+	state := tracker.CheckSuccess
+	if bad := w.forgeWord("ciFail"); bad != "" {
+		if _, err := g("cat-file", "-e", sha+":"+bad); err == nil {
+			state = tracker.CheckFailure
+		}
+	}
+	checks := []tracker.CheckRun{{Name: "ci/test", State: state, URL: "https://ci.example/" + sha[:7]}}
+	if w.forgeWord("ci") == "late" {
+		if w.forgeWord("ciCalls") != "" {
+			checks = append(checks, tracker.CheckRun{Name: "ci/late", State: tracker.CheckFailure})
+		}
+		w.forge("ciCalls", "1")
+	}
+	return checks, nil
 }
