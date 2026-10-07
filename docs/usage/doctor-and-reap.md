@@ -32,6 +32,8 @@ never exits 5.
 | `skills` | every installed skills root (user and project, Claude and Codex) matches the binary's skill set, and has no missing or edited files | no root has a `.rota-manifest.json` (run `rota skills install`) |
 | `codex` | `codex` runs, the default Codex home (or each `work.codexAccounts` account) logged in, herdr integration per home | `codex` is not on `PATH` and no `work.codexAccounts` are configured |
 
+`verify` also appears only when something is wrong: it warns when `test.full` and `test.e2e` are both empty under a local verify (`test.fullWhere` is `local`), because the merge gate refuses to merge then (`blockedBy: no-verify`). The hint is `run: rota config set test.full '[...]'`. It never fails the run. `rota init` and `rota round start` print the same warning.
+
 `agents` also appears only when something is wrong: it warns when a generated subagent file (`.claude/agents/rota-*.md`, and `.codex/agents/rota-*.toml` when Codex is configured) is missing or no longer matches the `roles.*` config. The hint is `run: rota agents write`. It never fails the run. See [`roles` keys](configuration.md#roles-keys-and-rota-agents-write).
 
 `binary` also appears only when something is wrong. Run from a checkout of rota's own source (go.mod module `github.com/l4ci/rota`), doctor warns when the installed binary's commit is not the checkout's HEAD and HEAD changed non-test Go files under `cmd/` or `internal/` since it. The hint prints a rebuild command that keeps `Version` equal to `VERSION`, so the `skills` check still passes. `rota round start` prints the same warning, and `rota round watch` repeats it once per round. Anywhere else, nothing changes.
