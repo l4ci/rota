@@ -68,19 +68,19 @@ const failTwo = "=== RUN TestFlaky\n--- FAIL: TestFlaky (0.00s)\n    --- FAIL: T
 
 func TestExcuses(t *testing.T) {
 	l, _ := Parse([]byte(goodLedger))
-	if ex, ok := l.Excuses("--- FAIL: TestFlaky (0.00s)\n    --- FAIL: TestFlaky/sub (0.00s)\nFAIL\tpkg\t0.01s\n", now); !ok || len(ex) != 1 || ex[0].Test != "TestFlaky" {
+	if ex, ok := l.Excuses("--- FAIL: TestFlaky (0.00s)\n    --- FAIL: TestFlaky/sub (0.00s)\nFAIL\nFAIL\tpkg\t0.01s\n", now); !ok || len(ex) != 1 || ex[0].Test != "TestFlaky" {
 		t.Errorf("unexpired entry (and its subtest) should excuse: %v %v", ex, ok)
 	}
 	if _, ok := l.Excuses(failTwo, now); ok {
 		t.Error("a failing test with no entry must still fail")
 	}
-	if _, ok := l.Excuses("--- FAIL: TestOld (0.00s)\n", now); ok {
+	if _, ok := l.Excuses("--- FAIL: TestOld (0.00s)\nFAIL\n", now); ok {
 		t.Error("an expired entry excuses nothing")
 	}
-	if _, ok := (Ledger{}).Excuses("--- FAIL: TestFlaky (0.00s)\n", now); ok {
+	if _, ok := (Ledger{}).Excuses("--- FAIL: TestFlaky (0.00s)\nFAIL\n", now); ok {
 		t.Error("an empty ledger excuses nothing")
 	}
-	for _, out := range []string{"", "something broke\n", "--- FAIL: TestFlaky (0s)\nFAIL\tpkg [build failed]\n", "--- FAIL: TestFlaky (0s)\npanic: boom\n"} {
+	for _, out := range []string{"", "something broke\n", "--- FAIL: TestFlaky (0s)\nFAIL\tpkg [build failed]\n", "--- FAIL: TestFlaky (0s)\npanic: boom\n", "--- FAIL: TestFlaky (0s)\nFAIL\tpkg\t0.01s\n# pkg\nvet: unused variable\n"} {
 		if _, ok := l.Excuses(out, now); ok {
 			t.Errorf("output with an unnamed failure must not be excused: %q", out)
 		}
