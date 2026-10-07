@@ -3,6 +3,7 @@ package cli
 import (
 	"errors"
 	"io"
+	"time"
 
 	"github.com/l4ci/rota/internal/tui"
 )
@@ -49,6 +50,10 @@ func runView(c *Ctx, m tui.Model) error {
 	t, ok := tui.NewTerminal(c.Stdin, c.Stdout)
 	if !ok {
 		return errNeedsTerminal(c)
+	}
+	// A screen that refreshes itself says how often.
+	if tk, ok := m.(interface{ TickEvery() time.Duration }); ok {
+		t.Tick = tk.TickEvery()
 	}
 	if err := tui.Run(t, m); err != nil {
 		if errors.Is(err, tui.ErrNoRaw) {
