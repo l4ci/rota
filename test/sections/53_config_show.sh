@@ -49,5 +49,23 @@ for k in missing:
 ' || fail "T118: config check missing list should name required table keys, got: $V"
 pass "T118: config check names the required keys of the same table"
 
+# The config screen is opt-in and terminal-only (#542): off a terminal every way in refuses
+# before anything is read or written (stdout is a pipe here, since /dev/null counts as a
+# character device), and plain `config show` carries no ANSI.
+printf '{}\n' > "$CS/.rota/config.json"
+RC=0; ERR=$( cd "$CS" && "$ROTA_BIN" config edit 2>&1 ) || RC=$?
+[ "$RC" = "4" ] || fail "config edit off a terminal should exit 4, got $RC: $ERR"
+case "$ERR" in *"rota config set <key> <value>"*) ;; *) fail "config edit should point at config set: $ERR" ;; esac
+for args in "--ui" "show --ui"; do
+  RC=0; ERR=$( cd "$CS" && "$ROTA_BIN" config $args 2>&1 ) || RC=$?
+  [ "$RC" = "2" ] || fail "config $args off a terminal should exit 2, got $RC: $ERR"
+  case "$ERR" in *"hint: run: rota config show"*) ;; *) fail "config $args should hint the plain verb: $ERR" ;; esac
+done
+RC=0; ERR=$( cd "$CS" && "$ROTA_BIN" --json config edit 2>&1 ) || RC=$?
+[ "$RC" = "4" ] || fail "config edit --json should exit 4, got $RC: $ERR"
+case "$( cd "$CS" && "$ROTA_BIN" config show )" in *"$(printf '\033')"*) fail "plain config show carries an ESC byte" ;; esac
+[ "$(cat "$CS/.rota/config.json")" = "{}" ] || fail "a refused screen wrote config.json"
+pass "config edit and config --ui refuse off a terminal and write nothing; plain show carries no ANSI"
+
 trap 'rm -rf "$TMP"' EXIT
 rm -rf "$CS"

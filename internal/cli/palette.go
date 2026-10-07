@@ -138,7 +138,7 @@ func paletteEntries(c *Ctx, out *paletteOutcome) []palette.Entry {
 			out.set(c.deps().BareSetup(c, nil))
 			return nil
 		}},
-		verb("Config", "view and change the config", palette.InProject, "config", "edit"),
+		verb("Config", "view and change the config", palette.InProject, "config", "show"),
 		palette.Entry{Label: "Quit", Hint: "q", Quit: true},
 	)
 }

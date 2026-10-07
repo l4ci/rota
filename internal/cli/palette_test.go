@@ -5,7 +5,6 @@ import (
 	"flag"
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -103,21 +102,20 @@ func TestPaletteQuitRunsNothingAndExitsZero(t *testing.T) {
 	}
 }
 
-func TestPaletteConfigEntryOpensTheConfigEditor(t *testing.T) {
+func TestPaletteConfigEntryOpensTheConfigScreen(t *testing.T) {
 	deps := testDeps()
 	bareRig(deps)
-	// Config (6) runs `config edit` on a cooked terminal: the next reads are
-	// its lines (toggle ship.review, finish); then a key dismisses the wait
-	// and q quits the palette.
-	raws, restores := new(int), new(int)
-	term := &scriptedKeys{[]string{"6", "ship.review\n", "\n", "x", "q"}}
+	// Config (6) opens `config show`'s view inside the palette; q leaves the
+	// screen, the second q quits the palette.
+	term := &scriptedKeys{[]string{"6", "q", "q"}}
 	deps.IsTerminal = func(any) bool { return true }
 	deps.Palette = func(cfg palette.Config) error {
 		cfg.In = term
-		cfg.MakeRaw = func() (func(), error) { *raws++; return func() { *restores++ }, nil }
-		cfg.Width = func() int { return 80 }
+		cfg.MakeRaw = func() (func(), error) { return func() {}, nil }
+		cfg.Width = func() int { return 100 }
 		return palette.Run(cfg)
 	}
+	t.Setenv("TERM", "xterm")
 	r := useLaunchRig(deps, nil)
 	root := trackerProject(t, "")
 	wd, _ := os.Getwd()
@@ -127,18 +125,11 @@ func TestPaletteConfigEntryOpensTheConfigEditor(t *testing.T) {
 	}
 	var outb, errb bytes.Buffer
 	code := mainWith(deps, nil, term, &outb, &errb)
-	out, errs := outb.String(), errb.String()
 	if code != 0 || len(r.execs) != 0 {
-		t.Fatalf("exit %d execs %v: %s", code, r.execs, errs)
+		t.Fatalf("exit %d execs %v: %s", code, r.execs, errb.String())
 	}
-	if !strings.Contains(out, "changed: ship.review") || !strings.Contains(out, "press any key") {
-		t.Errorf("editor result or wait missing:\n%s", out)
-	}
-	if b, _ := os.ReadFile(filepath.Join(root, ".rota", "config.json")); !strings.Contains(string(b), `"review": false`) {
-		t.Errorf("config not written: %s", b)
-	}
-	if *raws != 2 || *restores != 2 {
-		t.Errorf("raw %d restore %d, want 2/2", *raws, *restores)
+	if out := tui.Strip(outb.String()); !strings.Contains(out, "▾ work (") || strings.Contains(out, "press any key") {
+		t.Errorf("config screen not opened in place:\n%s", out)
 	}
 }
 

@@ -23,8 +23,8 @@ import (
 func configCommands() []*Command {
 	return []*Command{
 		{Name: "update", Summary: "check for a newer rota release", Verb: updateVerb},
-		{Name: "config", Summary: "read and write .rota/config.json", Subs: []*Command{
-			{Name: "show", Summary: "effective value and source of config keys", Repo: true, Verb: configShow},
+		{Name: "config", Summary: "read and write .rota/config.json", UISub: "show", Subs: []*Command{
+			{Name: "show", Summary: "effective value and source of config keys", Repo: true, Verb: configShow, View: configView},
 			{Name: "edit", Summary: "change keys interactively (needs a terminal)", Repo: true, Verb: configEdit},
 			{Name: "set", Summary: "set one key in .rota/config.json", Repo: true, Verb: configSet},
 			{Name: "check", Summary: "compare .rota/config.json with the schema", Repo: true, Verb: configCheck},
@@ -86,24 +86,30 @@ func configShow(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, Resolution("unknown config key '%s'", key)
 		}
-		rows := make([]any, 0, len(entries))
-		lines := make([]string, 0, len(entries))
-		for _, e := range entries {
-			row := jsonObj("key", e.Key, "value", e.Value, "source", e.Source)
-			if sk := e.Schema; sk != nil {
-				row.Set("default", config.Default(*sk))
-				row.Set("type", string(sk.Type))
-				row.Set("group", sk.Group)
-				row.Set("desc", sk.Desc)
-				if len(sk.Choices) > 0 {
-					row.Set("choices", strSlice(sk.Choices))
-				}
-			}
-			rows = append(rows, row)
-			lines = append(lines, e.Line())
-		}
+		rows, lines := showRows(entries)
 		return Result{Data: jsonObj("entries", rows), Text: strings.Join(lines, "\n")}, nil
 	}
+}
+
+// showRows is `config show`'s Data rows and text lines for entries.
+func showRows(entries []config.Entry) (rows []any, lines []string) {
+	rows = make([]any, 0, len(entries))
+	lines = make([]string, 0, len(entries))
+	for _, e := range entries {
+		row := jsonObj("key", e.Key, "value", e.Value, "source", e.Source)
+		if sk := e.Schema; sk != nil {
+			row.Set("default", config.Default(*sk))
+			row.Set("type", string(sk.Type))
+			row.Set("group", sk.Group)
+			row.Set("desc", sk.Desc)
+			if len(sk.Choices) > 0 {
+				row.Set("choices", strSlice(sk.Choices))
+			}
+		}
+		rows = append(rows, row)
+		lines = append(lines, e.Line())
+	}
+	return rows, lines
 }
 
 // configSaveGlobal copies the project's config.json keys (not config.local.json)

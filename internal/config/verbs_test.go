@@ -447,3 +447,31 @@ func TestSetVersionFileValidatesProjectPath(t *testing.T) {
 		}
 	}
 }
+
+func TestSetInLocalAndUnsetPruneEmptyParents(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".rota"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := SetIn(root, "work.isolation", "worktree", LayerLocal); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(root, ".rota", "config.local.json")); !strings.Contains(string(b), `"isolation": "worktree"`) {
+		t.Fatalf("local file: %s", b)
+	}
+	if _, err := os.Stat(filepath.Join(root, ".rota", "config.json")); err == nil {
+		t.Errorf("a local write created config.json")
+	}
+	if ok, err := Unset(root, "work.isolation", LayerLocal); err != nil || !ok {
+		t.Fatalf("unset = %v, %v", ok, err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(root, ".rota", "config.local.json")); strings.TrimSpace(string(b)) != "{}" {
+		t.Errorf("empty parent kept: %s", b)
+	}
+	if ok, err := Unset(root, "work.isolation", LayerProject); err != nil || ok {
+		t.Errorf("unset of an absent key = %v, %v", ok, err)
+	}
+	if err := Validate("nope.key", "1"); !errors.Is(err, ErrNotSchemaKey) {
+		t.Errorf("Validate = %v", err)
+	}
+}

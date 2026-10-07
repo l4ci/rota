@@ -9,6 +9,9 @@ type List struct {
 	Filter    string
 	Filtering bool // '/' was pressed: runes go to the filter
 	Typeahead bool // runes type into the filter directly (the palette's mode)
+	// Mark, when set, styles an unselected row: item is its Items index and
+	// text the row cut to the width, still plain.
+	Mark func(item int, text string, st Style) string
 }
 
 // Matches is the Items indexes that contain Filter, in order.
@@ -140,6 +143,8 @@ func (l List) Render(w, h int, st Style) string {
 		text := Fit(l.Items[m[i]], w-2)
 		if i == sel {
 			rows = append(rows, st.Cyan("› ")+st.Bold(text))
+		} else if l.Mark != nil {
+			rows = append(rows, "  "+l.Mark(m[i], text, st))
 		} else {
 			rows = append(rows, "  "+text)
 		}
