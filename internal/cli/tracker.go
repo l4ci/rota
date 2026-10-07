@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"errors"
 	"flag"
 	"io"
 	"os"
@@ -9,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/exitmap"
 	"github.com/l4ci/rota/internal/gate"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/rotatree"
@@ -35,11 +35,8 @@ func trackerSettings(c *Ctx) tracker.Settings {
 
 // trackerErr maps a tracker failure onto the exit table through its kind.
 func trackerErr(err error) *Error {
-	var e *tracker.Error
-	if errors.As(err, &e) {
-		return newErr(e.Kind.Exit(), "", "%s", e.Message)
-	}
-	return newErr(ExitInternal, "", "%v", err)
+	_, out := exitmap.Translate(err, exitmap.Options{Classes: exitmap.Tracker, Default: ExitInternal})
+	return out.(*Error)
 }
 
 func trCall(fs *flag.FlagSet) RunFunc {
