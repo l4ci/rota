@@ -136,13 +136,22 @@ var (
 	unnamed = regexp.MustCompile(`(?m)\[build failed\]|\[setup failed\]|^panic: |^\s*panic: test timed out|^FAIL\s+\S+\s+\[`)
 )
 
+// endsInFail reports that the last line is go test's own `FAIL` summary, so a
+// later step of the same command (`go test ./...; go vet ./...`) that failed
+// with output of its own is not mistaken for the excused tests.
+func endsInFail(output string) bool {
+	lines := strings.Split(strings.TrimRight(output, " \t\r\n"), "\n")
+	last := strings.TrimSpace(lines[len(lines)-1])
+	return last == "FAIL" || strings.HasPrefix(last, "FAIL\t") || strings.HasPrefix(last, "FAIL ")
+}
+
 // FailingTests returns the tests a failed command's output names with go
 // test's `--- FAIL: <name>` lines, deduplicated, in first-seen order. ok is
-// false when the output also shows a failure it does not name (a build or
+// false when the output does not end in go test's `FAIL` line, also shows a failure it does not name (a build or
 // setup failure, a panic, a timeout) or names none at all; such a run cannot
 // be excused by the ledger.
 func FailingTests(output string) (names []string, ok bool) {
-	if unnamed.MatchString(output) {
+	if unnamed.MatchString(output) || !endsInFail(output) {
 		return nil, false
 	}
 	seen := map[string]bool{}
