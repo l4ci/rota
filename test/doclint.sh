@@ -119,10 +119,10 @@ rc=0; OUT="$(python3 "$TESTDIR/check-doc-stamps.py" --root "$SG" 2>&1)" || rc=$?
 echo two > "$SG/src/b.go"; echo two > "$SG/src/a.go"
 git -C "$SG" commit -qam drift
 rc=0; OUT="$(python3 "$TESTDIR/check-doc-stamps.py" --root "$SG" 2>&1)" || rc=$?
-[ "$rc" = 0 ] && grep -qF "WARN ok.md: refs changed since verified-sha $SSHA: src/a.go" <<<"$OUT" && ! grep -qF "src/b.go" <<<"$OUT" \
+[ "$rc" = 0 ] && grep -qF "WARN docs/design/contract/ok.md: refs changed since verified-sha $SSHA: src/a.go" <<<"$OUT" && ! grep -qF "src/b.go" <<<"$OUT" \
   || fail "drift should warn about only the changed path and exit 0 (rc $rc): $OUT"
 rc=0; OUT="$(python3 "$TESTDIR/check-doc-stamps.py" --root "$SG" --strict 2>&1)" || rc=$?
-[ "$rc" = 1 ] && grep -qF "ok.md: refs changed since verified-sha $SSHA: src/a.go" <<<"$OUT" && ! grep -qF "WARN ok.md" <<<"$OUT" \
+[ "$rc" = 1 ] && grep -qF "ok.md: refs changed since verified-sha $SSHA: src/a.go" <<<"$OUT" && ! grep -qF "WARN" <<<"$OUT" \
   || fail "--strict should fail on drift (rc $rc): $OUT"
 rc=0; OUT="$(ROTA_DOC_STAMPS=strict python3 "$TESTDIR/check-doc-stamps.py" --root "$SG" 2>&1)" || rc=$?
 [ "$rc" = 1 ] || fail "ROTA_DOC_STAMPS=strict should fail on drift (rc $rc): $OUT"
