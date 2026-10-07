@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"flag"
 	"io"
 	"os"
 	"path/filepath"
@@ -9,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/palette"
+	"github.com/l4ci/rota/internal/tui"
 	"github.com/l4ci/rota/internal/version"
 )
 
@@ -104,11 +106,11 @@ func TestPaletteQuitRunsNothingAndExitsZero(t *testing.T) {
 func TestPaletteConfigEntryOpensTheConfigEditor(t *testing.T) {
 	deps := testDeps()
 	bareRig(deps)
-	// Config (8) runs `config edit` on a cooked terminal: the next reads are
+	// Config (6) runs `config edit` on a cooked terminal: the next reads are
 	// its lines (toggle ship.review, finish); then a key dismisses the wait
 	// and q quits the palette.
 	raws, restores := new(int), new(int)
-	term := &scriptedKeys{[]string{"8", "ship.review\n", "\n", "x", "q"}}
+	term := &scriptedKeys{[]string{"6", "ship.review\n", "\n", "x", "q"}}
 	deps.IsTerminal = func(any) bool { return true }
 	deps.Palette = func(cfg palette.Config) error {
 		cfg.In = term
@@ -154,3 +156,93 @@ func TestPaletteNotOpenedForPipeOrJSON(t *testing.T) {
 		t.Errorf("--json: exit %d opened %v", code, opened)
 	}
 }
+
+// toggleRig opens the palette in a layoutProject, typing keys.
+func toggleRig(t *testing.T, regHost string, keys ...string) (out string, rig *layoutRig, root string) {
+	t.Helper()
+	root, rig, deps := layoutProject(t, regHost, []string{"ben", "dana"}, "ben", "dana")
+	paletteRig(deps, keys...)
+	wd, _ := os.Getwd()
+	defer os.Chdir(wd)
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	var outb, errb bytes.Buffer
+	if code := mainWith(deps, nil, &scriptedKeys{keys}, &outb, &errb); code != 0 {
+		t.Fatalf("exit %d: %s", code, errb.String())
+	}
+	return outb.String(), rig, root
+}
+
+func TestPaletteLayoutToggleSwitchesAndRelabels(t *testing.T) {
+	out, rig, _ := toggleRig(t, "herdr", "3", "x", "3", "x", "q")
+	if got := strings.Count(out, "View: split ⇄ [tabs]"); got < 2 {
+		t.Errorf("tabs label before the switch:\n%s", out)
+	}
+	if !strings.Contains(out, "View: [split] ⇄ tabs") || !strings.Contains(out, "enter switches to tabs") {
+		t.Errorf("label does not follow the switch:\n%s", out)
+	}
+	if strings.Contains(out, "Split view") || strings.Contains(out, "Tab view") {
+		t.Errorf("old entries remain:\n%s", out)
+	}
+	if len(rig.log) == 0 {
+		t.Fatal("no panes moved")
+	}
+	if tab := rig.panes[1].Tab; tab != "t-ben" {
+		t.Errorf("split then tabs left ben in %q: %v", tab, rig.log)
+	}
+}
+
+func TestPaletteLayoutToggleHidden(t *testing.T) {
+	for _, h := range []string{"tmux", "solo"} {
+		out, _, _ := toggleRig(t, h, "q")
+		if strings.Contains(out, "View:") {
+			t.Errorf("host %s shows the toggle:\n%s", h, out)
+		}
+	}
+	// No round: the project has no worker panes.
+	deps := testDeps()
+	paletteRig(deps, "q")
+	var outb, errb bytes.Buffer
+	wd, _ := os.Getwd()
+	defer os.Chdir(wd)
+	os.Chdir(trackerProject(t, ""))
+	mainWith(deps, nil, &scriptedKeys{[]string{"q"}}, &outb, &errb)
+	if strings.Contains(outb.String(), "View:") {
+		t.Errorf("no round, toggle shown:\n%s", outb.String())
+	}
+}
+
+func TestPaletteEntryWithAViewOpensItInPlace(t *testing.T) {
+	t.Setenv("TERM", "xterm")
+	deps := testDeps()
+	paletteRig(deps)
+	root := &Command{Name: "rota", Subs: []*Command{{
+		Name: "demo", Verb: func(*flag.FlagSet) RunFunc {
+			return func(*Ctx, []string) (Result, error) { return Result{Text: "x"}, nil }
+		},
+		View: func(*Ctx, Result) (tui.Model, error) { return demoScreen{}, nil },
+	}, {
+		Name: "plain", Verb: func(*flag.FlagSet) RunFunc {
+			return func(*Ctx, []string) (Result, error) { return Result{Text: "x"}, nil }
+		},
+	}}}
+	c := &Ctx{Deps: deps, Stdin: strings.NewReader(""), Stdout: io.Discard, Stderr: io.Discard}
+	with := paletteVerb(c, root, "Demo", "", palette.Always, "demo")
+	without := paletteVerb(c, root, "Plain", "", palette.Always, "plain")
+	if with.View == nil || without.View != nil {
+		t.Fatalf("view wiring: with %v without %v", with.View != nil, without.View != nil)
+	}
+	m, err := with.View()
+	if err != nil || m == nil {
+		t.Fatalf("view: %v %v", m, err)
+	}
+	if _, err := paletteView(c, root, []string{"plain"}); err == nil {
+		t.Error("a verb without a view must refuse")
+	}
+}
+
+type demoScreen struct{}
+
+func (demoScreen) Update(tui.Msg) (tui.Model, tui.Cmd) { return demoScreen{}, tui.Cmd{} }
+func (demoScreen) Render(int, int, tui.Style) string   { return "demo screen\n" }
