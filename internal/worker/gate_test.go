@@ -569,8 +569,8 @@ func TestGateLocalMergeNonConflictFailureShowsGitsWords(t *testing.T) {
 }
 
 // A branch behind the base is merged by the gate itself when the merge is
-// clean and the two sides share no changed file; a conflict or a shared file
-// goes back to the worker.
+// clean, even when both sides changed a file; only a conflict goes back to the
+// worker.
 func TestGateStaleMerge(t *testing.T) {
 	for _, c := range []struct {
 		name    string
@@ -581,11 +581,12 @@ func TestGateStaleMerge(t *testing.T) {
 		changed bool
 		errHas  string
 		note    bool
+		noteHas string
 	}{
 		{name: "disjoint files merge clean", setup: func(w *world) { advanceMainOn(w, "more.txt") }, verdict: GatePass, changed: true, note: true},
 		{name: "disjoint files are fresh under --check-only", setup: func(w *world) { advanceMainOn(w, "more.txt") }, opts: GateOpts{CheckOnly: true}, verdict: GateFresh, note: true},
 		{name: "the merged tree is still verified", setup: func(w *world) { advanceMainOn(w, "more.txt") }, cfg: `{"test":{"full":["test -f more.txt && test -f work.txt"]}}`, verdict: GatePass, changed: true, note: true},
-		{name: "a shared file goes back", setup: func(w *world) { sharedFile(t, w) }, verdict: GateStale, errHas: "both sides changed seed.txt"},
+		{name: "a shared file with a clean merge lands after verify", setup: func(w *world) { sharedFile(t, w) }, verdict: GatePass, changed: true, note: true, noteHas: "both sides changed seed.txt"},
 		{name: "a shared path under round.sharedPaths is ignored", setup: func(w *world) { sharedFile(t, w) }, cfg: `{"test":{"full":["true"]},"round":{"sharedPaths":["seed.txt"]}}`, verdict: GatePass, changed: true, note: true},
 		{name: "a conflict goes back", setup: func(w *world) { advanceMainOn(w, "work.txt") }, verdict: GateStale, errHas: "the merge conflicts"},
 	} {
@@ -607,7 +608,12 @@ func TestGateStaleMerge(t *testing.T) {
 			}
 			noted := false
 			for _, n := range res.Notes {
-				noted = noted || strings.HasPrefix(n, "STALE-MERGE")
+				if strings.HasPrefix(n, "STALE-MERGE") {
+					noted = true
+					if c.noteHas != "" && !strings.Contains(n, c.noteHas) {
+						t.Errorf("note %q lacks %q", n, c.noteHas)
+					}
+				}
 			}
 			if noted != c.note {
 				t.Errorf("STALE-MERGE note = %v, want %v: %v", noted, c.note, res.Notes)
