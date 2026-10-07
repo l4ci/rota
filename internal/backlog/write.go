@@ -353,13 +353,8 @@ func (f *File) Complete(ref string, in CompleteInput) (bool, error) {
 			return errf(ErrNotFound, "[%s] not found", ref)
 		}
 		if in.Reason == "done" && !in.NoProof {
-			n, err := f.proofRows(ref)
-			if err != nil {
+			if err := requireProof(ref, func() (int, error) { return f.proofRows(ref) }); err != nil {
 				return err
-			}
-			if n == 0 {
-				return refused("proof missing", ErrProofMissing,
-					"[%s] no proof recorded, pass --no-proof to override", ref)
 			}
 		}
 		line := content[m[0]:m[1]]
