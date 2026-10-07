@@ -133,6 +133,39 @@ func TestPaletteConfigEntryOpensTheConfigScreen(t *testing.T) {
 	}
 }
 
+func TestPaletteProjectsEntryOpensTheProjectsScreen(t *testing.T) {
+	deps := testDeps()
+	bareRig(deps)
+	projectsXDG(t)
+	// Projects (5) opens `projects`'s view inside the palette; q leaves the
+	// screen, the second q quits the palette.
+	term := &scriptedKeys{[]string{"5", "q", "q"}}
+	deps.IsTerminal = func(any) bool { return true }
+	deps.Palette = func(cfg palette.Config) error {
+		cfg.In = term
+		cfg.MakeRaw = func() (func(), error) { return func() {}, nil }
+		cfg.Width = func() int { return 100 }
+		return palette.Run(cfg)
+	}
+	t.Setenv("TERM", "xterm")
+	r := useLaunchRig(deps, nil)
+	root := trackerProject(t, "")
+	wd, _ := os.Getwd()
+	defer os.Chdir(wd)
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	var outb, errb bytes.Buffer
+	code := mainWith(deps, nil, term, &outb, &errb)
+	if code != 0 || len(r.execs) != 0 {
+		t.Fatalf("exit %d execs %v: %s", code, r.execs, errb.String())
+	}
+	out := tui.Strip(outb.String())
+	if !strings.Contains(out, "c cleanup · d remove") || strings.Contains(out, "press any key") || len(term.keys) != 0 {
+		t.Errorf("projects screen not opened in place (keys left %v):\n%s", term.keys, out)
+	}
+}
+
 func TestPaletteNotOpenedForPipeOrJSON(t *testing.T) {
 	deps := testDeps()
 	bareRig(deps)
