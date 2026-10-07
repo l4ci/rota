@@ -17,7 +17,7 @@ import (
 
 // The `rota update`, `rota config show|set|edit|check` and `rota repo which|resolve|
 // umbrella` verbs. Shapes, flags and exits are the verb contract's
-// (docs/design/contract/version-config-repo.md); the old helpers named in
+// (docs/contributing/contract/version-config-repo.md); the old helpers named in
 // each `old:` line are the behaviour to match.
 
 func configCommands() []*Command {

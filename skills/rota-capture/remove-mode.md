@@ -1,6 +1,6 @@
 # Remove Mode (`--remove`)
 
-`rota item rm` handles the BACKLOG entry, `Related:` cross-references, detail file and any plan keyed to the item. It previews by default; only `--apply` writes. ARCHIVE entries stay unless `--scrub-archive`. Counters never decrement. Contract: `docs/design/contract/backlog.md` (*rota item rm*).
+`rota item rm` handles the BACKLOG entry, `Related:` cross-references, detail file and any plan keyed to the item. It previews by default; only `--apply` writes. ARCHIVE entries stay unless `--scrub-archive`. Counters never decrement. Contract: `docs/contributing/contract/backlog.md` (*rota item rm*).
 
 ### Step R1 — Resolve IDs
 
