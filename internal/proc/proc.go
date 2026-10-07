@@ -38,8 +38,11 @@ type Cmd struct {
 	Args []string
 	Dir  string // "" is the process cwd
 	// Env is added to the process environment.
-	Env   []string
-	Stdin []byte // nil gives the process an empty stdin
+	Env []string
+	// Environ, when non-nil, is the whole process environment, replacing
+	// os.Environ and Env. An empty non-nil slice runs with no environment.
+	Environ []string
+	Stdin   []byte // nil gives the process an empty stdin
 	// Timeout bounds the call; 0 is DefaultTimeout, NoTimeout is none.
 	Timeout time.Duration
 	// Combined sends stderr to the same buffer as stdout, returned in Stdout.
@@ -69,7 +72,9 @@ func Run(ctx context.Context, c Cmd) (Result, error) {
 	}
 	cmd := exec.CommandContext(ctx, c.Name, c.Args...)
 	cmd.Dir = c.Dir
-	if len(c.Env) > 0 {
+	if c.Environ != nil {
+		cmd.Env = c.Environ
+	} else if len(c.Env) > 0 {
 		cmd.Env = append(os.Environ(), c.Env...)
 	}
 	if c.Stdin != nil {

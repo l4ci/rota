@@ -150,6 +150,7 @@ var Keys = []Key{
 	// #85 doctor key: rota doctor warns when the free share of the disk is below this percent; 0 turns it off.
 	{"doctor.minFreeDiskPercent", json.Number("10"), false},
 	{"work.itemTimeoutMinutes", json.Number("0"), false}, // 0: no wall-clock cap per item
+	{"test.isolate", true, false},                        // rota test run scrubs host/ssh env and pins HOME/XDG
 }
 
 // PythonKeys is how many leading rows of Keys are CONFIG_KEYS.
