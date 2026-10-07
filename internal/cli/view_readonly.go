@@ -130,7 +130,7 @@ func backlogView(c *Ctx, res Result) (tui.Model, error) {
 		add(o, "task", "")
 	}
 	load := func(id string) (string, error) {
-		body, err := runVerbText(c, true, "item", "field", "get", id, "--name", "detail")
+		body, err := runVerbText(c, true, "item", "field", "get", "--name", "detail", "--", id)
 		if err == nil && strings.TrimSpace(body) == "" {
 			body = "(no body)"
 		}
@@ -160,7 +160,7 @@ func topicRows(data any) []browseRow {
 // knowledgeView lists KNOWLEDGE.md topics; Enter reads one in the reader.
 func knowledgeView(c *Ctx, res Result) (tui.Model, error) {
 	load := func(topic string) (string, error) {
-		return runVerbText(c, true, "knowledge", "query", topic)
+		return runVerbText(c, true, "knowledge", "query", "--", topic)
 	}
 	return newBrowser("knowledge", "no topics in KNOWLEDGE.md", topicRows(res.Data), false, load), nil
 }
@@ -168,7 +168,7 @@ func knowledgeView(c *Ctx, res Result) (tui.Model, error) {
 // decisionsView lists DECISIONS.md topics; Enter reads one in the reader.
 func decisionsView(c *Ctx, res Result) (tui.Model, error) {
 	load := func(topic string) (string, error) {
-		return runVerbText(c, false, "decisions", "query", topic)
+		return runVerbText(c, false, "decisions", "query", "--", topic)
 	}
 	return newBrowser("decisions", "no topics in DECISIONS.md", topicRows(res.Data), false, load), nil
 }

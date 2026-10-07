@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -265,6 +266,10 @@ func TestDecisionsStatsListsTopicsAndTheViewReadsThemThroughTheVerb(t *testing.T
 	if err != nil || !strings.Contains(text, "### Gate first") || strings.Contains(text, "Keep modules small") {
 		t.Errorf("query Build = %q, %v", text, err)
 	}
+	// A heading that looks like a flag is still a topic after "--".
+	if text, err := runVerbText(c, false, "decisions", "query", "--", "--json"); err != nil || strings.Contains(text, `"ok"`) {
+		t.Errorf("a flag-like topic was parsed as a flag: %q, %v", text, err)
+	}
 	if _, err := runVerbText(c, false, "decisions", "query"); err == nil {
 		t.Error("a verb failure should come back as an error")
 	}
@@ -299,5 +304,23 @@ func TestViewsDropControlCharactersFromRowsAndBodies(t *testing.T) {
 	}
 	if !strings.Contains(tui.Strip(out), "body [31mred[0m ok") {
 		t.Errorf("body text lost: %q", tui.Strip(out))
+	}
+}
+
+func TestViewLoadersAcceptDashDashBeforeThePositional(t *testing.T) {
+	dir := knProject(t, false)
+	knWrite(t, filepath.Join(dir, ".rota", "KNOWLEDGE.md"), "# Knowledge\n\n## Build\n\n- **Gate.** runs fast\n")
+	old, _ := os.Getwd()
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chdir(old) })
+	c := &Ctx{Path: "rota knowledge stats", Deps: testDeps()}
+	text, err := runVerbText(c, true, "knowledge", "query", "--", "Build")
+	if err != nil || !strings.Contains(text, "Gate") {
+		t.Errorf("knowledge query = %q, %v", text, err)
+	}
+	if _, err := runVerbText(c, true, "item", "field", "get", "--name", "detail", "--", "nope"); err == nil || strings.Contains(err.Error(), "unknown flag") || strings.Contains(err.Error(), "usage") {
+		t.Errorf("item field get with -- : %v", err)
 	}
 }
