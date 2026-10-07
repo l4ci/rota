@@ -18,7 +18,7 @@ import (
 )
 
 func (f *assignFixture) windDown(mod func(*WindDownOpts)) (WoundDown, error) {
-	o := WindDownOpts{HolderPID: 100, Settings: f.set, Getenv: func(string) string { return "" }}
+	o := WindDownOpts{HolderPID: 100, Settings: f.set}
 	if mod != nil {
 		mod(&o)
 	}
@@ -254,7 +254,7 @@ func TestWindDownVerifyCancelReturnsWhileGrandchildHoldsPipe(t *testing.T) {
 	ctx, cancel := context.WithTimeout(bg, 300*time.Millisecond)
 	defer cancel()
 	start := time.Now()
-	res, err := f.env.WindDown(ctx, f.root, f.be, WindDownOpts{HolderPID: 100, Settings: f.set, Getenv: func(string) string { return "" }})
+	res, err := f.env.WindDown(ctx, f.root, f.be, WindDownOpts{HolderPID: 100, Settings: f.set})
 	if time.Since(start) > 10*time.Second {
 		t.Fatalf("a cancelled wind-down verify hung for %v", time.Since(start))
 	}

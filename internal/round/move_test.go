@@ -82,7 +82,7 @@ func newMoveFx(t *testing.T) *moveFx {
 	sh(t, f.root, "push", "-q", "origin", "main")
 	milestoneDoc(t, f.root, "M01", "active")
 
-	f.env = Env{Git: git.Exec, Base: "main", Lease: fakeLease("h", 100), StallMinutes: 30, Forge: f.forge.asForge(),
+	f.env = Env{Git: git.Exec, Base: "main", Getenv: noEnv, Lease: fakeLease("h", 100), StallMinutes: 30, Forge: f.forge.asForge(),
 		Now: func() time.Time { return f.now }}
 	f.env.Worker = worker.Env{Git: git.Exec, Now: func() time.Time { return f.now }, Sleep: func(time.Duration) {},
 		NewHost: func(string) host.Host { return &killHost{hostFake: f.host, killed: &f.killed} }}
@@ -120,11 +120,11 @@ func (f *moveFx) commit(t *testing.T, slot, file string) {
 }
 
 func (f *moveFx) assign(id, agent string) (Assigned, error) {
-	return f.env.Assign(bg, f.root, f.be, AssignOpts{ID: id, Agent: agent, HolderPID: 100, Settings: f.set, Getenv: func(string) string { return "" }})
+	return f.env.Assign(bg, f.root, f.be, AssignOpts{ID: id, Agent: agent, HolderPID: 100, Settings: f.set})
 }
 
 func (f *moveFx) ret(slot, reason string, mod func(*ReturnOpts)) (Returned, error) {
-	o := ReturnOpts{Slot: slot, Reason: reason, InSlot: true, Getenv: func(string) string { return "" }}
+	o := ReturnOpts{Slot: slot, Reason: reason, InSlot: true}
 	if mod != nil {
 		mod(&o)
 	}
@@ -132,7 +132,7 @@ func (f *moveFx) ret(slot, reason string, mod func(*ReturnOpts)) (Returned, erro
 }
 
 func (f *moveFx) transfer(id, to string, mod func(*TransferOpts)) (Transferred, error) {
-	o := TransferOpts{Issue: id, To: to, HolderPID: 100, Settings: f.set, Getenv: func(string) string { return "" }}
+	o := TransferOpts{Issue: id, To: to, HolderPID: 100, Settings: f.set}
 	if mod != nil {
 		mod(&o)
 	}
@@ -140,7 +140,7 @@ func (f *moveFx) transfer(id, to string, mod func(*TransferOpts)) (Transferred, 
 }
 
 func (f *moveFx) reclaim(slot string, mod func(*ReclaimOpts)) (Reclaimed, error) {
-	o := ReclaimOpts{Slot: slot, HolderPID: 100, Getenv: func(string) string { return "" }}
+	o := ReclaimOpts{Slot: slot, HolderPID: 100}
 	if mod != nil {
 		mod(&o)
 	}
