@@ -1,6 +1,9 @@
 package cli
 
 import (
+	"bytes"
+	"github.com/l4ci/rota/internal/jsonx"
+	"os"
 	"strings"
 	"testing"
 
@@ -123,4 +126,70 @@ func TestPlanPassFileBackendRefused(t *testing.T) {
 	if d := ddata(t, env); code != 4 || d["blockedBy"] != "backend" || d["changed"] != false {
 		t.Fatalf("exit %d data %v", code, d)
 	}
+}
+
+func TestItemShowAcceptance(t *testing.T) {
+	root := trackerProject(t, issuesConfig)
+	fake := acceptFixture()
+	deps := withTracker(t, fake)
+	crit := func() []any {
+		t.Helper()
+		code, env, stderr := issueRunWith(t, deps, root, "item", "show", "7")
+		if code != 0 {
+			t.Fatalf("show: %d %s", code, stderr)
+		}
+		list, _ := ddata(t, env)["acceptance"].([]any)
+		return list
+	}
+	field := func(v any, k string) any { o := v.(*jsonx.Object); x, _ := o.Get(k); return x }
+
+	// A legacy body shows the ids a first pass would give.
+	list := crit()
+	if len(list) != 2 || field(list[0], "id") != "AC-1" || field(list[1], "text") != "second" ||
+		field(list[0], "met") != false || field(list[0], "proof") != nil || field(list[0], "flag") != nil {
+		t.Fatalf("legacy: %v", list)
+	}
+	if code, env, _ := issueRunWith(t, deps, root, "item", "show", "9"); code != 0 {
+		t.Fatalf("show 9: %d", code)
+	} else if l, ok := ddata(t, env)["acceptance"].([]any); !ok || len(l) != 0 {
+		t.Fatalf("no criteria: acceptance = %v", ddata(t, env)["acceptance"])
+	}
+
+	addProof(t, deps, root, "PASS", "abc1234", "go test")
+	if code, _, stderr := issueRunWith(t, deps, root, "plan", "pass", "F7", "AC-2", "--proof", "abc1234:go test"); code != 0 {
+		t.Fatalf("pass: %d %s", code, stderr)
+	}
+	list = crit()
+	if field(list[1], "met") != true || field(list[1], "proof") != "abc1234:go test" || field(list[1], "flag") != nil {
+		t.Fatalf("met: %v", list)
+	}
+
+	// Editing a met criterion's text is flagged on the next read.
+	fake.Issues[0].Body = strings.Replace(fake.Issues[0].Body, "AC-2: second", "AC-2: second, reworded", 1)
+	list = crit()
+	if field(list[1], "met") != false || field(list[1], "flag") != "changed" {
+		t.Fatalf("changed: %v", list)
+	}
+	// A FAIL recorded later makes the mark unproven; text mode names the flag.
+	fake.Issues[0].Body = acceptBody2(fake.Issues[0].Body)
+	addProof(t, deps, root, "FAIL", "abc1234", "go test")
+	if list = crit(); field(list[1], "flag") != "unproven" {
+		t.Fatalf("unproven: %v", list)
+	}
+	wd, _ := os.Getwd()
+	defer os.Chdir(wd)
+	var out, errb bytes.Buffer
+	if code := mainWith(deps, []string{"-C", root, "item", "show", "7"}, strings.NewReader(""), &out, &errb); code != 0 {
+		t.Fatalf("text show: %d", code)
+	}
+	for _, want := range []string{"acceptance: 0/2 met", "AC-2", "unproven"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("text lacks %q:\n%s", want, out.String())
+		}
+	}
+}
+
+// acceptBody2 puts the second criterion's text back to what the mark saw.
+func acceptBody2(body string) string {
+	return strings.Replace(body, "AC-2: second, reworded", "AC-2: second", 1)
 }

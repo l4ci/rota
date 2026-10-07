@@ -136,3 +136,58 @@ func acceptRows(rows []proof.Row) []acceptance.Row {
 	}
 	return out
 }
+
+// acceptanceCoverage is the coverage of the item's criteria: its body against
+// the marks in the acceptance note and the proof rows they rest on. The proof
+// rows are read only when there are marks to check.
+func acceptanceCoverage(c *Ctx, wf backlog.Workflow, ref string, st *backlog.Status) ([]acceptance.Status, error) {
+	note, _, err := wf.NoteGet(ref, "acceptance")
+	if err != nil {
+		return nil, err
+	}
+	marks := acceptance.ParseMarks(note)
+	var rows []acceptance.Row
+	if len(marks) > 0 {
+		_, store, _, err := openProof(c, ref)
+		if err != nil {
+			return nil, err
+		}
+		pr, _, err := proof.Show(store, ref)
+		if err != nil {
+			return nil, err
+		}
+		rows = acceptRows(pr)
+	}
+	return acceptance.Coverage(st.Body, marks, rows), nil
+}
+
+// acceptanceData is data.acceptance of item show: [] when there are no criteria.
+func acceptanceData(cover []acceptance.Status) []any {
+	out := []any{}
+	for _, s := range cover {
+		out = append(out, jsonObj("id", s.ID, "text", s.Text, "met", s.Met,
+			"proof", nullIfEmpty(s.Proof), "flag", nullIfEmpty(s.Flag)))
+	}
+	return out
+}
+
+// acceptanceLines is the text of item show: a count, then a line per
+// criterion that carries a flag.
+func acceptanceLines(cover []acceptance.Status) []string {
+	if len(cover) == 0 {
+		return nil
+	}
+	met := 0
+	for _, s := range cover {
+		if s.Met {
+			met++
+		}
+	}
+	lines := []string{fmt.Sprintf("acceptance: %d/%d met", met, len(cover))}
+	for _, s := range cover {
+		if s.Flag != "" {
+			lines = append(lines, fmt.Sprintf("  %s %s: %s", s.ID, s.Flag, s.Text))
+		}
+	}
+	return lines
+}
