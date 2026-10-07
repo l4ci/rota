@@ -67,7 +67,7 @@ When `backlog.backend` is `"issues"` or `rota repo umbrella` exits 0, read [`mil
 
 ## Step 4 — Version and Bump Level
 
-`rota release version --json` gives `data` `{file, version, kind}`. Exit 3 (no version file or unparsable): surface the message and tell the user to set `release.versionFile` in `.rota/config.json`.
+`rota release version --json` gives `data` `{file, version, kind}`. Exit 3 (no version file or unparsable): surface the message and tell the user to run `rota config set release.versionFile <path>`.
 
 A bump arg may be `major`, `minor`, `patch` or `X.Y.Z`. With none, get the previous tag (`git describe --tags --abbrev=0 2>/dev/null || true`; empty means full history, note it in the summary), run `rota release notes --from commits [--since <prev-tag>]` and read the bucket headings: `Breaking` recommends `major`, `New` recommends `minor`, otherwise `patch`. Ask: header `"Bump type"`, *"Current version: `<current>`. What bump type?"*, options `patch — <current> → <X.Y.Z+1>` / `minor — … → <X.Y+1.0>` / `major — … → <X+1.0.0>` (mark the recommended one) / `Explicit version` (exact string via Other) / `Abort`.
 

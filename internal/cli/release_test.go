@@ -287,6 +287,22 @@ func TestReleaseVersionPriorityAndOverride(t *testing.T) {
 	golden.Check(t, map[string]any{"files": releaseVersionPriorityFiles, "overrides": releaseVersionOverrides}, got)
 }
 
+// TestReleaseVersionFileViaConfigSet sets the override through `config set`
+// (not a hand-written config.json) and sees `release version` read that file.
+func TestReleaseVersionFileViaConfigSet(t *testing.T) {
+	dir := releaseProject(t, releaseVersionPriorityFiles)
+	if o := trRun(t, dir, "", "config", "set", "release.versionFile", "other/version.txt"); o.code != 0 {
+		t.Fatalf("config set: %d %s", o.code, o.stdout)
+	}
+	o := trRun(t, dir, "", "release", "version", "--json")
+	if d := releaseData(t, o); o.code != 0 || d["file"] != "other/version.txt" || d["version"] != "8.0.0" {
+		t.Fatalf("version: %d %v", o.code, d)
+	}
+	if o := trRun(t, dir, "", "config", "set", "release.versionFile", "../x"); o.code != 2 {
+		t.Errorf("outside path: exit %d, want 2", o.code)
+	}
+}
+
 func TestReleaseVersionExits(t *testing.T) {
 	empty := releaseProject(t, nil)
 	if o := trRun(t, empty, "", "release", "version", "--json"); o.code != 3 || !strings.Contains(releaseMsg(t, o), "no version file detected") {
