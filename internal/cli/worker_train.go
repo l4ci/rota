@@ -73,7 +73,10 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 		for i, t := range args {
 			issues[i] = gateIssue(root, t)
 		}
-		r, err := workerEnvCtx(c, ctx).Train(ctx, root, worker.TrainOpts{Targets: args, Base: *base, LandGreen: *landGreen, Approve: approve})
+		r, err := workerEnvCtx(c, ctx).Train(ctx, root, worker.TrainOpts{Targets: args, Base: *base, LandGreen: *landGreen, Approve: approve, Verdict: shipVerdict(c, root, root).Block})
+		if err != nil && r.Verdict == worker.GateVerdictBlocked {
+			return verdictRefusal(err, trainData(r))
+		}
 		if err != nil && r.Verdict == worker.GateApprovalRequired {
 			return gateRefusal(err, trainData(r))
 		}

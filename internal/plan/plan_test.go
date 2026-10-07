@@ -391,3 +391,23 @@ func uncertain(root, id string) (string, []string, error) {
 }
 
 func asErr(err error, ae **exitcode.Error) bool { return errors.As(err, ae) }
+
+// A plan stub carries a `## Relies on` section so /rota-plan lists the
+// KNOWLEDGE and DECISIONS entries the plan depends on and /rota-review can
+// check the diff against them.
+func TestStubHasReliesOnHeading(t *testing.T) {
+	root := project(t)
+	for _, o := range []AddOpts{
+		{Key: "M01-B07", Title: "Item plan"},
+		{Milestone: "M01", Slice: true, Title: "Slice plan"},
+	} {
+		key, _, err := Add(root, Files(root), o)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, _ := os.ReadFile(path(root, key))
+		if n := strings.Count(string(got), "\n## Relies on\n"); n != 1 {
+			t.Errorf("%s has %d `## Relies on` headings, want 1:\n%s", key, n, got)
+		}
+	}
+}
