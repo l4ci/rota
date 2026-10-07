@@ -4,10 +4,13 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"os"
 	"strings"
 
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -58,6 +61,24 @@ func testRun(fs *flag.FlagSet) RunFunc {
 			}
 		}
 		env := workerEnvCtx(c, ctx)
+		isolate, err := config.Bool(config.Load(rotatree.Config(root)), "test.isolate")
+		if err != nil {
+			return Result{}, Resolution("%v", err)
+		}
+		if isolate {
+			// A command may not reach the live round, ssh-agent or the
+			// developer's home (#388); the temp root goes with the run.
+			tmp, err := os.MkdirTemp("", "rota-test-isolate-")
+			if err != nil {
+				return Result{}, err
+			}
+			defer os.RemoveAll(tmp)
+			environ, err := worker.IsolatedEnviron(os.Environ(), tmp)
+			if err != nil {
+				return Result{}, err
+			}
+			env.Shell = worker.IsolatedShell(environ)
+		}
 		var ran, passed, failed []string
 		var lines []string
 		logPath := ""
