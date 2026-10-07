@@ -246,6 +246,10 @@ func AssessBrief(be backlog.Backend, id string, tracked, shared []string, inFlig
 		if f.Issue == id {
 			continue
 		}
+		// Finished work no longer collides: its issue is closed, its PR merged.
+		if it, err := be.Get(f.Issue); err == nil && it.Closed {
+			continue
+		}
 		if paths := Overlaps(mine, f.Paths); len(paths) > 0 {
 			r.Overlaps = append(r.Overlaps, Overlap{With: f.Issue, Slot: f.Slot, Paths: paths})
 			ov.Detail = append(ov.Detail, fmt.Sprintf("%s (held by %s): %s", f.Issue, f.Slot, strings.Join(paths, ", ")))
@@ -367,6 +371,17 @@ func (e Env) changed(ctx context.Context, wt, base string, shared []string) []st
 	var out []string
 	for p := range seen {
 		out = append(out, p)
+	}
+	return out
+}
+
+// withoutSlot drops the items a slot holds from an in-flight list.
+func withoutSlot(in []InFlight, slot string) []InFlight {
+	out := make([]InFlight, 0, len(in))
+	for _, f := range in {
+		if f.Slot != slot {
+			out = append(out, f)
+		}
 	}
 	return out
 }
