@@ -10,7 +10,7 @@
 
 # rota
 
-**Autonomous rounds for coding agents: an orchestrator hands issues to parallel workers, merges what passes the gate, and keeps going. Persistent knowledge, decisions and handoffs make that reliable.**
+**Turn Claude Code or Codex into a small dev team. You write the issues; an orchestrator agent hands them to worker agents, merges their PRs and checks every merge against your tests.**
 
 [![Release](https://img.shields.io/github/v/release/l4ci/rota?color=blue&sort=semver)](https://github.com/l4ci/rota/releases)
 [![License](https://img.shields.io/github/license/l4ci/rota?color=green)](LICENSE)
@@ -18,42 +18,83 @@
 [![Stars](https://img.shields.io/github/stars/l4ci/rota?style=social)](https://github.com/l4ci/rota/stargazers)
 [![For Claude Code](https://img.shields.io/badge/for-Claude%20Code-8A2BE2)](https://claude.com/claude-code)
 
-[Autonomous rounds](#autonomous-rounds) · [Install](#install) · [Skills](#skills) · [Docs](docs/)
+[How it works](#how-it-works) · [Quick start](#quick-start) · [Skills](#skills) · [Docs](docs/)
 
 </div>
 
 ---
 
-## Autonomous rounds
+## How it works
 
-The main reason to adopt rota. One always-on orchestrator drives the `rota` CLI. It starts a round, assigns each issue to a worker agent (Claude Code or Codex) in its own git worktree and herdr or tmux tab, waits on the workers without polling, runs the gate and merges. When it needs you, it notifies you and comments on the issue or PR, then works on other items until you answer. Without herdr or tmux it runs the workers as subagents. [Your first round](docs/first-round.md) goes from install to a finished round in herdr or tmux; [parallel rounds](docs/usage/parallel-rounds.md) has the details.
+rota has two parts: **skills**, slash commands like `/rota-work` that tell the agent how to do a job well, and the **`rota` CLI**, which the skills call to do the bookkeeping and enforce the rules (who holds which issue, what may merge).
 
-Rounds hold up over hours because state persists. `KNOWLEDGE.md` and `DECISIONS.md` carry what earlier work learned and committed to. Handoff notes carry a half-finished task across a `/clear` or a restart. Issues say what work exists; `.rota/` says who is doing it now.
+You can use it two ways. Start with the first; move to the second when you have several issues ready at once.
 
-## Install
+**1. One agent, one item at a time.** You stay in the conversation.
 
-From 0.9.0, `rota` is one binary and the skills ship inside it:
+```text
+/rota-capture  →  /rota-work  →  /rota-ship
+ write it down     build it      review, then PR or merge
+```
+
+**2. A round: several agents in parallel.** You stay available for questions.
+
+```text
+                        ┌─► worker ben  ─► PR ─┐
+issues ─► orchestrator ─┼─► worker dana ─► PR ─┼─► gate ─► main
+                        └─► worker nia  ─► PR ─┘
+```
+
+- **Orchestrator**: one agent that picks the next issues, hands them out, answers workers' questions, and merges. It asks you only for product decisions.
+- **Workers**: agents that each take one issue in their own git worktree and terminal tab, build it, and open a PR. They never merge.
+- **Gate**: the only merge path. It checks the PR is current and properly signed off, merges it, then runs your full test suite on the merged `main`. A red result stops the round until it's fixed. With `test.fullWhere ci` the suite runs in CI before the merge instead.
+
+Both ways share a memory in `.rota/`: what the project has learned (`KNOWLEDGE.md`), the lines it must not cross (`DECISIONS.md`), and handoff notes, so a fresh session picks up where the last one stopped.
+
+## Quick start
+
+You need git and [Claude Code](https://claude.com/claude-code) or Codex. The install script also needs `minisign`. For rounds you'll later want `gh` (or `glab`) and [herdr](https://herdr.dev) or tmux.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/l4ci/rota/main/install.sh | sh   # or: brew install l4ci/tap/rota
-rota skills install     # skills for Claude Code and Codex
-rota init               # once, at the project root
+rota skills install     # adds the /rota-* skills to Claude Code and Codex
+cd your-project && rota init
 ```
 
-The script verifies the binary's minisign signature and `checksums.txt` and refuses a mismatch; it needs `minisign` installed. [Install](docs/install.md) has the options, upgrading, removal and migrating an older install; [getting started](docs/getting-started.md) has the first cycle.
+`rota init` creates `.rota/` with sensible defaults. Commit it. Then, in Claude Code:
+
+```text
+/rota-capture fix the login redirect loop; add a dark mode toggle
+/rota-work      # picks the next item, plans it, builds it in small commits
+/rota-ship      # reviews the branch, then opens a PR or merges
+```
+
+That's the whole loop. [Getting started](docs/getting-started.md) walks through it with the choices `rota init` makes. When you have a few independent issues, [your first round](docs/first-round.md) sets up the orchestrator and workers.
 
 ## Skills
 
-| | |
-|---|---|
-| Plan | `/rota-vision`, `/rota-brainstorm`, `/rota-plan`, `/rota-spike` |
-| Build | `/rota-work`, `/rota-debug`, `/rota-refactor` |
-| Check | `/rota-review`, `/rota-qa` |
-| Rounds | `/rota-orchestrate` |
-| Persist | `/rota-learn`, `/rota-decide`, `/rota-pause` |
-| Intake and release | `/rota-capture`, `/rota-ship`, `/rota-release` |
+In the order you'd usually reach for them:
 
-Skills hold judgment; `rota` verbs enforce the rules. Settings live in `.rota/config.json` ([options](docs/usage/configuration.md)).
+| When | Skill | What it does |
+|---|---|---|
+| Something to do | `/rota-capture` | Turn a brain dump into backlog items or issues |
+| Not sure how | `/rota-brainstorm`, `/rota-spike` | Explore designs; try a risky idea on a throwaway branch |
+| Ready to build | `/rota-plan`, `/rota-work` | Plan a bigger item; build the next one |
+| Something broke | `/rota-debug` | Reproduce, find the cause, fix it |
+| Done | `/rota-review`, `/rota-ship` | Review the branch; open the PR or merge |
+| Many issues at once | `/rota-orchestrate` | Run a round with parallel workers |
+| Worth remembering | `/rota-learn`, `/rota-decide` | Save a lesson; lock in a rule |
+| Out of context | `/rota-pause` | Write a handoff so a fresh session continues |
+| Bigger picture | `/rota-vision`, `/rota-refactor`, `/rota-qa`, `/rota-release` | Milestones, architecture review, product QA, releases |
+
+Every skill: [slash commands](docs/reference/slash-commands.md). Settings: [configuration](docs/usage/configuration.md).
+
+## Docs
+
+- [Getting started](docs/getting-started.md): install and your first item, end to end
+- [Your first round](docs/first-round.md): orchestrator, workers and the gate, step by step
+- [How it works](docs/how-it-works.md): every skill, file and verb, and how they connect
+- [FAQ](docs/faq.md) · [Cheatsheet](docs/cheatsheet.md) · [All docs](docs/)
 
 ## Contributing
 
