@@ -293,7 +293,7 @@ func (e Env) train(ctx context.Context, root string, o TrainOpts, cache *trainCa
 			key := trainKey(tier, baseSHA, heads[:k])
 			if v, ok := cache.get(key); ok {
 				res.CacheHits = append(res.CacheHits, fmt.Sprintf("%s: base + first %d member(s)", tier, k))
-				return VerifyResult{Cached: true, Verified: v.Verified, Failed: v.Failed}, nil
+				return VerifyResult{Cached: true, Verified: v.Verified}, nil
 			}
 			r, err := run()
 			if err == nil {

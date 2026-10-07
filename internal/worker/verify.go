@@ -29,8 +29,7 @@ type VerifyResult struct {
 	Ref, SHA         string
 	NotRun, TimedOut bool
 	Missing          []string
-	// Cached marks a verdict reused from the train cache: nothing ran, so
-	// there is no log.
+	// Cached marks a passing verdict reused from the train cache: nothing ran.
 	Cached bool
 }
 

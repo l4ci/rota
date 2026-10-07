@@ -387,58 +387,57 @@ func runs(t *testing.T, counter string) int {
 	return strings.Count(string(b), "x")
 }
 
-func TestTrainCachesVerdicts(t *testing.T) {
-	cmd, counter := countingVerify(t, "test ! -f b2.txt")
-	w := trainWorld(t, cmd, "b1", "b2", "b3", "b4")
-	targets := []string{"b1", "b2", "b3", "b4"}
+func TestTrainCachesPassingVerdicts(t *testing.T) {
+	cmd, counter := countingVerify(t, "true")
+	w := trainWorld(t, cmd, "b1", "b2")
+	targets := []string{"b1", "b2"}
+	// a red train lands nothing, so base and heads stay put for the re-run
+	w.setConfig(fmt.Sprintf(`{"test":{"full":[%q]}}`, cmd+"; test ! -f b2.txt"))
 	res, err := w.train(TrainOpts{Targets: targets})
 	if err != nil || res.Verdict != GateVerifyFailed || res.Culprit != "b2" || len(res.CacheHits) != 0 {
 		t.Fatalf("%+v %v", res, err)
 	}
 	first := runs(t, counter)
-	if first < 2 {
-		t.Fatalf("the bisect should have verified several prefixes, ran %d", first)
-	}
 	res, err = w.train(TrainOpts{Targets: targets})
 	if err != nil || res.Verdict != GateVerifyFailed || res.Culprit != "b2" {
 		t.Fatalf("re-run: %+v %v", res, err)
 	}
-	if got := runs(t, counter); got != first {
-		t.Errorf("a re-run of the same train must not verify again: %d runs, then %d", first, got)
+	// the red full tree and the red bisect step run again; only the green prefix hits
+	if got := runs(t, counter); got != first+1 {
+		t.Errorf("a red re-verifies, a pass is reused: %d runs, then %d", first, got)
 	}
-	if len(res.CacheHits) != first {
-		t.Errorf("every verify of the re-run is a hit: %v (first run verified %d)", res.CacheHits, first)
-	}
-	if !strings.Contains(res.Err, "the first 1 member(s) pass") {
-		t.Errorf("message: %s", res.Err)
+	if len(res.CacheHits) != 1 || !strings.Contains(res.CacheHits[0], "first 1 member") {
+		t.Errorf("hits: %v", res.CacheHits)
 	}
 }
 
 func TestTrainCacheMissesOnChangedHeadOrBase(t *testing.T) {
 	cmd, counter := countingVerify(t, "true")
-	w := trainWorld(t, cmd, "b1", "b2")
-	targets := []string{"b1", "b2"}
-	// a red train keeps its verdicts: nothing lands, so base and heads stay put
-	w.setConfig(fmt.Sprintf(`{"test":{"full":[%q]}}`, cmd+"; test ! -f b2.txt"))
+	w := trainWorld(t, cmd, "b1", "b2", "b3")
+	targets := []string{"b1", "b2", "b3"}
+	w.setConfig(fmt.Sprintf(`{"test":{"full":[%q]}}`, cmd+"; test ! -f b3.txt"))
 	if res, _ := w.train(TrainOpts{Targets: targets}); res.Verdict != GateVerifyFailed {
 		t.Fatalf("%+v", res)
 	}
 	before := runs(t, counter)
-	if res, _ := w.train(TrainOpts{Targets: targets}); len(res.CacheHits) == 0 || runs(t, counter) != before {
-		t.Fatalf("same key should hit: %+v", res)
+	if res, _ := w.train(TrainOpts{Targets: targets}); len(res.CacheHits) == 0 {
+		t.Fatalf("same key should hit its passing prefix: %+v", res)
 	}
-	gitq(t, w.dir, "checkout", "-q", "b2") // a changed member head
-	trainWrite(t, w, "b2-more.txt", "more")
+	same := runs(t, counter)
+	gitq(t, w.dir, "checkout", "-q", "b1") // a changed member head
+	trainWrite(t, w, "b1-more.txt", "more")
 	gitq(t, w.dir, "checkout", "-q", "main")
-	w.train(TrainOpts{Targets: targets})
+	res, _ := w.train(TrainOpts{Targets: targets})
+	if len(res.CacheHits) != 0 {
+		t.Errorf("a changed head must miss: %v", res.CacheHits)
+	}
 	afterHead := runs(t, counter)
-	if afterHead == before {
-		t.Fatal("a changed head must verify again")
+	if afterHead-same < same-before {
+		t.Errorf("a changed head re-verifies everything: %d runs vs %d", afterHead-same, same-before)
 	}
 	trainWrite(t, w, "other.txt", "x") // a changed base
-	w.train(TrainOpts{Targets: targets})
-	if runs(t, counter) == afterHead {
-		t.Error("a changed base must verify again")
+	if res, _ := w.train(TrainOpts{Targets: targets}); len(res.CacheHits) != 0 {
+		t.Errorf("a changed base must miss: %v", res.CacheHits)
 	}
 }
 
