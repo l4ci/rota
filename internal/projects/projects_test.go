@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/l4ci/rota/internal/repos"
 )
 
 func isolate(t *testing.T) string {
@@ -90,5 +92,45 @@ func TestListEmptyAndCorruptRegistry(t *testing.T) {
 	}
 	if added, err := Register(t.TempDir()); err != nil || !added {
 		t.Fatalf("register over corrupt: %v %v", added, err)
+	}
+}
+
+func TestRemoveDropsOneEntryAndKeepsTheDirectory(t *testing.T) {
+	isolate(t)
+	a, b := t.TempDir(), t.TempDir()
+	Register(a)
+	Register(b)
+	link := filepath.Join(t.TempDir(), "link")
+	os.Symlink(a, link)
+	got, err := Remove(link)
+	if err != nil || len(got) != 1 || got[0].Path != repos.Realpath(a) {
+		t.Fatalf("remove via symlink: %+v %v", got, err)
+	}
+	if _, err := os.Stat(a); err != nil {
+		t.Errorf("the directory must stay: %v", err)
+	}
+	if ps, _ := List(); len(ps) != 1 || ps[0].Path != repos.Realpath(b) {
+		t.Errorf("other entry must stay: %+v", ps)
+	}
+	if got, _ := Remove(a); len(got) != 0 {
+		t.Errorf("second remove should match nothing: %+v", got)
+	}
+}
+
+func TestRemoveFindsAGoneDirectoryAndSkipsAnAbsentRegistry(t *testing.T) {
+	x := isolate(t)
+	if got, err := Remove("/nope"); err != nil || got != nil {
+		t.Fatalf("absent registry: %+v %v", got, err)
+	}
+	if _, err := os.Stat(filepath.Join(x, "rota", "projects.json")); err == nil {
+		t.Error("an absent registry must not be created")
+	}
+	gone := filepath.Join(t.TempDir(), "gone")
+	os.Mkdir(gone, 0o755)
+	Register(gone)
+	os.Remove(gone)
+	got, err := Remove(gone)
+	if err != nil || len(got) != 1 || !got[0].Missing {
+		t.Fatalf("gone dir: %+v %v", got, err)
 	}
 }
