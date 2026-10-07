@@ -4,6 +4,7 @@
 package fsio
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -136,6 +137,39 @@ func Locked(path string, timeout time.Duration, fn func() error) error {
 		time.Sleep(lockPoll)
 	}
 	return fn()
+}
+
+// WriteMarker writes v as indented JSON to path under the path's lock. guard,
+// when non-nil, runs under the lock first and its error aborts the write.
+func WriteMarker(path string, v any, guard func() error) error {
+	b, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o777); err != nil {
+		return err
+	}
+	return Locked(path, LockTimeout, func() error {
+		if guard != nil {
+			if err := guard(); err != nil {
+				return err
+			}
+		}
+		return WriteFileAtomic(path, append(b, '\n'))
+	})
+}
+
+// RemoveMarker deletes path under the path's lock when owned says the
+// contents are the caller's, so a successor's marker is never removed. A
+// missing file is not an error.
+func RemoveMarker(path string, owned func(data []byte) bool) error {
+	return Locked(path, LockTimeout, func() error {
+		b, err := os.ReadFile(path)
+		if err != nil || !owned(b) {
+			return nil
+		}
+		return os.Remove(path)
+	})
 }
 
 // UpdateJSON is a locked read-modify-write: it loads path (def when missing

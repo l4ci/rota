@@ -316,7 +316,7 @@ func hookPrompt(c *Ctx, args []string) (res Result, _ error) {
 // hold is its switchHold when that is still ahead (D4).
 func supervisedHold(commonDir string, now time.Time) (supervised bool, until time.Time) {
 	ks, found, err := keepalive.ReadState(keepalive.StatePath(commonDir))
-	if err != nil || !found || ks.Status != keepalive.StatusRunning || !roundlease.DefaultEnv().Alive(ks.PID) {
+	if err != nil || !found || !ks.Running(roundlease.DefaultEnv()) {
 		return false, time.Time{}
 	}
 	if ks.SwitchHold != nil {
