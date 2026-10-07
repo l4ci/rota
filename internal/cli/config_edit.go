@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"unicode"
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/jsonx"
@@ -400,7 +401,9 @@ func (m configScreen) startEdit(row int, local bool) configScreen {
 		f = tui.Choice{Label: label, Options: r.Choices, Sel: max(slices.Index(r.Choices, cur), 0)}
 	default:
 		text := compact(r.Value)
-		if s, ok := r.Value.(string); ok {
+		// A string with a control character (an ESC from a hand-edited
+		// config.json) is shown as its JSON escape, which Coerce reads back.
+		if s, ok := r.Value.(string); ok && !strings.ContainsFunc(s, unicode.IsControl) {
 			text = s
 		}
 		key := r.Key
