@@ -24,6 +24,7 @@ See KNOWLEDGE.md "Skill Authoring: Prose & References" for when to extract (≥3
 | [`learn-rare-modes.md`](learn-rare-modes.md) | `/rota-learn` manual flags and the contradiction queue. |
 | [`manual-gates.md`](manual-gates.md) | The manual-gate registry: verb-enforced gates and skill-only callouts. |
 | [`persistence-skills.md`](persistence-skills.md) | Shared spine, gate strengths and umbrella scoping for `/rota-learn` and `/rota-decide`. |
+| [`planning-dial.md`](planning-dial.md) | Rubric for how much planning an item earns: pointers, spec, research round, adversarial pass. |
 | [`post-cycle-trigger-gate.md`](post-cycle-trigger-gate.md) | Trigger condition and nudge-or-dispatch sequence for post-cycle steps. |
 | [`refactor-design-approaches.md`](refactor-design-approaches.md) | Competing-design choreography for `/rota-refactor --designs`. |
 | [`review-verdict-routing.md`](review-verdict-routing.md) | Verdict semantics and routing for review consumers. |
