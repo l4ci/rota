@@ -26,7 +26,7 @@ note: a field flag given with an empty value (`--related ""`) exits 2, as old di
 ### rota item show
 rota item show <ID>
 repo: scoped
-data: {"id": string, "type": "B"|"F"|"T", "title": string, "status": string, "state": string|null, "claimedBy": string|null, "assignees": []string, "milestone": string|null, "notes": []string, "acceptance": [{"id": string, "text": string, "met": bool, "proof": string|null, "flag": "changed"|"unproven"|"missing"|null}], "comments": [{"who": string, "kind": string, "text": string}]}
+data: {"id": string, "type": "B"|"F"|"T", "title": string, "status": string, "state": string|null, "claimedBy": string|null, "assignees": []string, "milestone": string|null, "notes": []string, "acceptance": [{"id": string, "text": string, "met": bool, "proof": string|null, "flag": string|null}], "comments": [{"who": string, "kind": string, "text": string}]}
 exit: 3 item unknown; backend (issue-only); tracker
 old: hv-item-show <ID>
 shim: parse the fixed lines (`[id] title`, `type:`, `status:`, `state:`, `claimed by:`, `assignee:`, `milestone:`, `notes:`, `comments: N`) and the comment rows `- <who> · <kind> · <text>`; `none` becomes null and csv values become lists. The old `type:` line is a word (`bug`, `feature`, `task`); `type` is its letter. In issue mode the bracketed id loses its letter (rule 11).
