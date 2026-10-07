@@ -28,9 +28,12 @@ Work only this task, then stop.
 - Size your own subagents by tier, not by model name. Delegate reading, searching
   and discovery to a `light` subagent, writing code and tests to a `standard` one,
   and keep `heavy` for genuinely hard reasoning (design, a tricky debugging
-  hypothesis). If your brief names your tier and a tier table, use that table for
-  the model names; if it names none, use your harness's own defaults. Say which
-  tier you ran on in your PR body when the brief asks for it.
+  hypothesis). The project's agents are `rota-explorer` (light), `rota-implementer`
+  (standard) and `rota-reasoner` (heavy): dispatch them by name when
+  `.claude/agents/rota-*.md` (Claude) or `.codex/agents/rota-*.toml` (Codex) exists.
+  When those files are absent, use the tier table: if your brief names your tier and
+  a tier table, use it for the model names; if it names none, use your harness's own
+  defaults. Say which tier you ran on in your PR body when the brief asks for it.
 - Smoke section number: if the brief names one ("Your smoke section ... is number N"),
   `rota round assign` reserved it for you across every worker; name your
   `test/sections/N_*.sh` file with exactly that number. If it names none, do not

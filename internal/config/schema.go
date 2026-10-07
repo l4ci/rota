@@ -116,6 +116,14 @@ var Keys = []Key{
 	{"round.tiers.codex.light", "", false},
 	{"round.tiers.codex.standard", "", false},
 	{"round.tiers.codex.heavy", "", false},
+	// Agent roles (#405): the tier and effort of the three subagent definitions
+	// `rota agents write` emits. An empty effort leaves the harness default.
+	{"roles.explorer.tier", "light", false},
+	{"roles.explorer.effort", "", false},
+	{"roles.implementer.tier", "standard", false},
+	{"roles.implementer.effort", "", false},
+	{"roles.reasoner.tier", "heavy", false},
+	{"roles.reasoner.effort", "", false},
 	{"round.stallMinutes", json.Number("30"), false},
 	{"round.maxBounces", json.Number("3"), false},
 	{"round.architectureEvery", json.Number("20"), false},
