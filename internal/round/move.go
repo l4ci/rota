@@ -496,8 +496,23 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 	// Who holds it. A receiver that already holds it and was never dispatched
 	// (idle, its new claim recorded) is a transfer left half done: resume it.
 	reg := worker.LoadRegistry(root)
-	if b := reg.BestOf(id); b != nil && len(b.Attempts) == 2 {
-		return res, blocked(BlockBestOf, "%s is a best-of:2 issue built by %s and %s: transfer cannot choose an attempt; return or reclaim one instead", id, b.Attempts[0].Slot, b.Attempts[1].Slot)
+	// Two attempts of a best-of:2 issue still holding it: transfer cannot
+	// choose one. After a pick, return or reclaim one holder is left.
+	if b := reg.BestOf(id); b != nil {
+		var holders []string
+		for _, s := range reg.Slots() {
+			if s.HeldID() == strings.ToUpper(id) {
+				holders = append(holders, s.Name())
+			}
+		}
+		for _, q := range reg.PRs() {
+			if queuedIssue(q) == strings.ToUpper(id) {
+				holders = append(holders, "review:"+q.From)
+			}
+		}
+		if len(holders) > 1 {
+			return res, blocked(BlockBestOf, "%s is a best-of:2 issue held by %s: transfer cannot choose an attempt; pick, return or reclaim one first", id, strings.Join(holders, " and "))
+		}
 	}
 	var sender, receiver *worker.Slot
 	for _, s := range reg.Slots() {
