@@ -166,6 +166,19 @@ func (e Env) Read(commonDir string) (Lease, State, error) {
 	return l, e.Classify(l), nil
 }
 
+// Holds reads the lease and reports whether this process is the orchestrator
+// it names: a Live lease whose recorded holder matches the one Discover finds
+// for holderPID and getenv. A lease on another host (Foreign) is never held
+// here, since SameAs needs the lease's host to be this one. The lease and its
+// state come back too, for callers that report on them.
+func (e Env) Holds(commonDir string, holderPID int, getenv func(string) string) (l Lease, st State, held bool, err error) {
+	l, st, err = e.Read(commonDir)
+	if err != nil {
+		return l, st, false, err
+	}
+	return l, st, st == Live && e.Discover(holderPID, getenv).SameAs(l, e.Host), nil
+}
+
 // SameAs reports whether h is the process or pane that wrote l.
 func (h Holder) SameAs(l Lease, host string) bool {
 	if l.Host != host {
