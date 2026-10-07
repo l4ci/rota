@@ -74,7 +74,7 @@ exit: 3 when the named slot is not in the pool, including when there is no regis
 old: hv-worker-poll [--slot <slot>] [--settle <seconds>] [--lines <n>]
 shim: wraps the old array as `slots` and lowercases `state`. `changed` is true when `.rota/workers.json` differs before and after (slot state or PR recorded). A poll with no slot and no registry gives `{"slots": [], "changed": false}`. Old exit 3 (host failure) becomes 5.
 env: `ROTA_TEST_POLL_FIXTURE=<file>` classifies the file as a static pane, no host, writes nothing (old `--fixture`). `ROTA_TEST_POLL_STATUS=<idle|working|blocked|done|unknown|gone>` sets the host status in fixture mode (old `--status`). Neither is part of the CLI. In fixture mode the slot name is `<slot>` or `fixture`, and a missing fixture file exits 2. The shim passes them as `--fixture "$ROTA_TEST_POLL_FIXTURE" [--status "$ROTA_TEST_POLL_STATUS"]`.
-note: `state` is one of `busy`, `idle`, `blocked`, `done`, `dead`, `limited`, `needs-permission`, `unknown`, lowercased to match what the helper already stores in the registry.
+note: `state` is one of `busy`, `idle`, `blocked`, `done`, `dead`, `limited`, `needs-permission`, `unknown`, lowercased to match what the helper already stores in the registry. On herdr, an `unknown` row's `evidence` ends with `: herdr explain: <first three lines of `herdr agent explain <name>`, joined by ` / `, at most 200 characters>`; a failing explain leaves the evidence without that suffix and never fails the poll.
 
 ### rota worker done
 rota worker done <slot> [--base <ref>]

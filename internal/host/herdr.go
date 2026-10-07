@@ -523,6 +523,44 @@ func processPIDs(doc string) []int {
 	return pids
 }
 
+// Notify raises a herdr notification. herdr answers with why it did or did not
+// show it; anything but `shown` (and `disabled`, the user's own choice) means a
+// blocked or needs-permission alert never reached a human, so it is reported
+// once on stderr. No retry.
 func (h *herdr) Notify(ctx context.Context, title, body string) {
-	h.herdr(ctx, "notification", "show", title, "--body", body, "--sound", "request")
+	r := h.herdr(ctx, "notification", "show", title, "--body", body, "--sound", "request")
+	reason := jget(r.Stdout, "result.reason")
+	if r.ExitCode != 0 {
+		reason = "herdr error"
+	}
+	switch reason {
+	case "", "shown", "disabled":
+		return
+	}
+	fmt.Fprintf(h.d.Stderr, "rota: herdr notification %q was not shown (%s)\n", title, reason)
+}
+
+// explainLines bounds the excerpt of `herdr agent explain` kept as evidence.
+const explainLines = 3
+
+// Explain is the first few lines of `herdr agent explain` for the slot's agent,
+// "" for a never-dispatched slot or a failing call.
+func (h *herdr) Explain(ctx context.Context, slot, handle string) string {
+	if handle == "" {
+		return ""
+	}
+	r := h.herdr(ctx, "agent", "explain", AgentName(slot, handle))
+	if r.ExitCode != 0 {
+		return ""
+	}
+	var out []string
+	for _, l := range strings.Split(r.Stdout, "\n") {
+		if l = strings.TrimSpace(l); l != "" {
+			out = append(out, l)
+		}
+		if len(out) == explainLines {
+			break
+		}
+	}
+	return strings.Join(out, " / ")
 }
