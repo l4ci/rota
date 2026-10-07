@@ -5,6 +5,9 @@ import (
 	"errors"
 	"reflect"
 	"testing"
+
+	"github.com/l4ci/rota/internal/round"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 type fake struct {
@@ -13,11 +16,14 @@ type fake struct {
 	repaired []string
 	drift    []string
 	cands    []Candidate
-	merged   [][]string
+	gated    []string
+	trained  [][]string
 	assigned []string
 	audit    []string
-	mergeOut func(targets []string) []Merged
-	assignFn func(id string) (string, error)
+	gateOut  func(target string) GateOutcome
+	trainOut func(targets []string) TrainOutcome
+	baseOf   func(target string) string
+	assignFn func(id string) ([]string, error)
 }
 
 func (f *fake) env() Env {
@@ -27,24 +33,33 @@ func (f *fake) env() Env {
 		Reconcile: func(context.Context) ([]string, []string, error) {
 			return f.repaired, f.drift, nil
 		},
-		Merge: func(_ context.Context, t []string) ([]Merged, error) {
-			f.merged = append(f.merged, t)
-			if f.mergeOut != nil {
-				return f.mergeOut(t), nil
+		BaseOf: func(t string) string {
+			if f.baseOf != nil {
+				return f.baseOf(t)
 			}
-			var out []Merged
-			for _, x := range t {
-				out = append(out, Merged{Target: x, Landed: true, Detail: "landed"})
+			return "main"
+		},
+		Gate: func(_ context.Context, t, base string) GateOutcome {
+			f.gated = append(f.gated, base+":"+t)
+			if f.gateOut != nil {
+				return f.gateOut(t)
 			}
-			return out, nil
+			return GateOutcome{Landed: true}
+		},
+		Train: func(_ context.Context, t []string, base string) TrainOutcome {
+			f.trained = append(f.trained, append([]string{base}, t...))
+			if f.trainOut != nil {
+				return f.trainOut(t)
+			}
+			return TrainOutcome{Done: true}
 		},
 		Candidates: func(context.Context) ([]Candidate, error) { return f.cands, nil },
-		Assign: func(_ context.Context, id string) (string, error) {
+		Assign: func(_ context.Context, id string) ([]string, error) {
 			if f.assignFn != nil {
 				return f.assignFn(id)
 			}
 			f.assigned = append(f.assigned, id)
-			return "ben", nil
+			return []string{"ben"}, nil
 		},
 		Audit: func(a Action) { f.audit = append(f.audit, a.Action+" "+a.Target) },
 	}
@@ -77,15 +92,15 @@ func TestCapLimitsAssignsAndMerges(t *testing.T) {
 	if _, err := Run(context.Background(), e); err != nil {
 		t.Fatal(err)
 	}
-	if len(f.merged) != 1 || len(f.merged[0]) != 1 {
-		t.Fatalf("merges %v, want one target", f.merged)
+	if want := []string{"main:c"}; !reflect.DeepEqual(f.gated, want) || len(f.trained) != 0 {
+		t.Fatalf("gated %v trained %v, want one gate", f.gated, f.trained)
 	}
 	if len(f.assigned) != 1 {
 		t.Fatalf("assigned %v, want 1", f.assigned)
 	}
 }
 
-func TestMergesDoneSlotsAndQueuedAsOneBatch(t *testing.T) {
+func TestMergesDoneSlotsAndQueuedAsOneTrain(t *testing.T) {
 	f := &fake{
 		slots:  []Slot{{Name: "ben", State: "done", Issue: "#1", PR: "#10"}, {Name: "dana", State: "done", Issue: "#2"}},
 		queued: []string{"#11"},
@@ -94,8 +109,8 @@ func TestMergesDoneSlotsAndQueuedAsOneBatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := [][]string{{"ben", "#11"}}; !reflect.DeepEqual(f.merged, want) {
-		t.Fatalf("merged %v, want %v (done with no PR is not mergeable)", f.merged, want)
+	if want := [][]string{{"main", "ben", "#11"}}; !reflect.DeepEqual(f.trained, want) || len(f.gated) != 0 {
+		t.Fatalf("trained %v gated %v, want %v (done with no PR is not mergeable)", f.trained, f.gated, want)
 	}
 	if len(r.Did) != 2 {
 		t.Fatalf("%+v", r.Did)
@@ -110,8 +125,8 @@ func TestHumanMergePolicyMergesNothing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(f.merged) != 0 || len(r.NeedsYou) != 2 {
-		t.Fatalf("merged %v needsYou %+v", f.merged, r.NeedsYou)
+	if len(f.gated)+len(f.trained) != 0 || len(r.NeedsYou) != 2 {
+		t.Fatalf("gated %v trained %v needsYou %+v", f.gated, f.trained, r.NeedsYou)
 	}
 }
 
@@ -129,18 +144,19 @@ func TestEscalatesAttentionStatesAndDriftWithoutActing(t *testing.T) {
 	if len(r.NeedsYou) != 5 {
 		t.Fatalf("needsYou %+v", r.NeedsYou)
 	}
-	if len(f.assigned) != 0 || len(f.merged) != 0 {
+	if len(f.assigned) != 0 || len(f.gated)+len(f.trained) != 0 {
 		t.Fatal("an attention state must not be answered, merged or reassigned")
 	}
 }
 
 func TestFailedGateIsEscalatedAndVerifyFailureHeld(t *testing.T) {
 	f := &fake{slots: []Slot{{Name: "ben", State: "done", PR: "#10"}, {Name: "dana", State: "done", PR: "#11"}}}
-	f.mergeOut = func(t []string) []Merged {
-		return []Merged{
-			{Target: "ben", Verdict: "verify-failed", Hold: true, Detail: "tests red"},
-			{Target: "dana", Verdict: "stale", Detail: "behind main"},
+	f.baseOf = func(t string) string { return "base-" + t } // two gates, not a train
+	f.gateOut = func(t string) GateOutcome {
+		if t == "ben" {
+			return GateOutcome{Verdict: "verify-failed", Detail: "tests red"}
 		}
+		return GateOutcome{Verdict: "stale", Detail: "behind main"}
 	}
 	r, err := Run(context.Background(), f.env())
 	if err != nil {
@@ -150,15 +166,15 @@ func TestFailedGateIsEscalatedAndVerifyFailureHeld(t *testing.T) {
 		t.Fatalf("needsYou %+v held %v", r.NeedsYou, r.Held)
 	}
 	// The next tick does not re-run a held gate, and keeps escalating it.
-	f.merged = nil
+	f.gated = nil
 	e := f.env()
 	e.Held = r.Held
 	r2, err := Run(context.Background(), e)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := [][]string{{"dana"}}; !reflect.DeepEqual(f.merged, want) {
-		t.Fatalf("second tick gated %v, want only dana", f.merged)
+	if want := []string{"base-dana:dana"}; !reflect.DeepEqual(f.gated, want) {
+		t.Fatalf("second tick gated %v, want only dana", f.gated)
 	}
 	if r2.Held["ben"] == "" {
 		t.Fatal("hold dropped while the slot is still done")
@@ -188,12 +204,12 @@ func TestNewReportsEachItemOnce(t *testing.T) {
 
 func TestAssignRefusalSkipsToNextCandidate(t *testing.T) {
 	f := &fake{slots: []Slot{{Name: "ben", State: "idle"}}, cands: []Candidate{{"#1", true}, {"#2", true}}}
-	f.assignFn = func(id string) (string, error) {
+	f.assignFn = func(id string) ([]string, error) {
 		if id == "#1" {
-			return "", &Refusal{Why: "overlap"}
+			return nil, &round.BlockedError{By: round.BlockNotReady, Msg: "overlap"}
 		}
 		f.assigned = append(f.assigned, id)
-		return "ben", nil
+		return []string{"ben"}, nil
 	}
 	r, err := Run(context.Background(), f.env())
 	if err != nil || !reflect.DeepEqual(f.assigned, []string{"#2"}) || len(r.NeedsYou) != 0 {
@@ -203,7 +219,7 @@ func TestAssignRefusalSkipsToNextCandidate(t *testing.T) {
 
 func TestAssignFailureStopsTheTick(t *testing.T) {
 	f := &fake{slots: []Slot{{Name: "ben", State: "idle"}}, cands: []Candidate{{"#1", true}}}
-	f.assignFn = func(string) (string, error) { return "", errors.New("forge down") }
+	f.assignFn = func(string) ([]string, error) { return nil, errors.New("forge down") }
 	if _, err := Run(context.Background(), f.env()); err == nil {
 		t.Fatal("an unexpected assign failure must surface")
 	}
@@ -276,11 +292,108 @@ func TestReviewFailureIsEscalatedAndTickGoesOn(t *testing.T) {
 
 func TestReviewMintRefusedStaysForLaterTick(t *testing.T) {
 	f := &fake{slots: []Slot{{Name: "ben", State: "idle"}}}
-	f.assignFn = func(id string) (string, error) { return "", &Refusal{Why: "no"} }
+	f.assignFn = func(id string) ([]string, error) { return nil, &round.BlockedError{By: round.BlockNotReady, Msg: "no"} }
 	e := f.env()
 	e.Review = func(context.Context) ([]string, error) { return []string{"#9"}, nil }
 	r, err := Run(context.Background(), e)
 	if err != nil || len(r.Did) != 1 || r.Did[0].Action != "mint" {
 		t.Fatalf("%+v %v", r, err)
+	}
+}
+
+func TestGroupsByBaseGateAloneTrainTogether(t *testing.T) {
+	f := &fake{slots: []Slot{
+		{Name: "a", State: "done", PR: "#1"}, {Name: "b", State: "done", PR: "#2"},
+		{Name: "c", State: "done", PR: "#3"}, {Name: "d", State: "done", PR: "#4"}}}
+	f.baseOf = func(t string) string {
+		if t == "c" {
+			return "cycle"
+		}
+		return "main"
+	}
+	e := f.env()
+	e.Cap = 4
+	if _, err := Run(context.Background(), e); err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"cycle:c"}; !reflect.DeepEqual(f.gated, want) {
+		t.Fatalf("gated %v, want %v", f.gated, want)
+	}
+	if want := [][]string{{"main", "a", "b", "d"}}; !reflect.DeepEqual(f.trained, want) {
+		t.Fatalf("trained %v, want %v", f.trained, want)
+	}
+}
+
+func TestTrainFailureLandsSkipsAndHolds(t *testing.T) {
+	f := &fake{slots: []Slot{
+		{Name: "a", State: "done", PR: "#1"}, {Name: "b", State: "done", PR: "#2"},
+		{Name: "c", State: "done", PR: "#3"}}}
+	f.trainOut = func([]string) TrainOutcome {
+		return TrainOutcome{Landed: []string{"a"}, Culprit: "b", Verdict: "verify-failed", Detail: "red"}
+	}
+	r, err := Run(context.Background(), f.env())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(r.Did) != 1 || r.Did[0].Target != "a" || r.Did[0].Detail != "train into main" {
+		t.Fatalf("did %+v", r.Did)
+	}
+	// c is a skipped bystander: no escalation, no hold. b is the culprit.
+	if len(r.NeedsYou) != 1 || r.NeedsYou[0].Target != "b" || r.Held["b"] == "" || r.Held["c"] != "" {
+		t.Fatalf("needsYou %+v held %v", r.NeedsYou, r.Held)
+	}
+}
+
+func TestTrainBaseMovedSkipsEveryone(t *testing.T) {
+	f := &fake{slots: []Slot{{Name: "a", State: "done", PR: "#1"}, {Name: "b", State: "done", PR: "#2"}}}
+	f.trainOut = func([]string) TrainOutcome { return TrainOutcome{Verdict: "base-moved"} }
+	r, err := Run(context.Background(), f.env())
+	if err != nil || len(r.Did) != 0 || len(r.NeedsYou) != 0 {
+		t.Fatalf("%v %+v", err, r)
+	}
+}
+
+func TestStaleAndProvenanceFailuresAreNotHeld(t *testing.T) {
+	for _, v := range []string{worker.GateStale, worker.GateProvenanceFail, worker.GateBestOfUnpicked} {
+		f := &fake{slots: []Slot{{Name: "a", State: "done", PR: "#1"}}}
+		f.gateOut = func(string) GateOutcome { return GateOutcome{Verdict: v, Detail: "x"} }
+		r, _ := Run(context.Background(), f.env())
+		if len(r.NeedsYou) != 1 || len(r.Held) != 0 {
+			t.Fatalf("%s: needsYou %+v held %v", v, r.NeedsYou, r.Held)
+		}
+	}
+}
+
+func TestGateWithoutVerdictIsAGateErrorAndHeld(t *testing.T) {
+	f := &fake{slots: []Slot{{Name: "a", State: "done", PR: "#1"}}}
+	f.gateOut = func(string) GateOutcome { return GateOutcome{Detail: "boom"} }
+	r, _ := Run(context.Background(), f.env())
+	if len(r.NeedsYou) != 1 || r.NeedsYou[0].Why != "gate-error: boom" || r.Held["a"] == "" {
+		t.Fatalf("needsYou %+v held %v", r.NeedsYou, r.Held)
+	}
+}
+
+func TestBestOfAssignNamesBothSlots(t *testing.T) {
+	f := &fake{slots: []Slot{{Name: "ben", State: "idle"}, {Name: "dana", State: "idle"}}, cands: []Candidate{{"#1", true}}}
+	f.assignFn = func(string) ([]string, error) { return []string{"ben", "dana"}, nil }
+	r, err := Run(context.Background(), f.env())
+	if err != nil || len(r.Did) != 1 || r.Did[0].Detail != "to ben and dana" {
+		t.Fatalf("%v %+v", err, r.Did)
+	}
+}
+
+func TestBlockedByNoRoundIsAFailureNotARefusal(t *testing.T) {
+	f := &fake{slots: []Slot{{Name: "ben", State: "idle"}}, cands: []Candidate{{"#1", true}}}
+	f.assignFn = func(string) ([]string, error) {
+		return nil, &round.BlockedError{By: round.BlockNoRound, Msg: "no round"}
+	}
+	if _, err := Run(context.Background(), f.env()); err == nil {
+		t.Fatal("no round must stop the tick")
+	}
+}
+
+func TestHoldableSkipsAnUnpickedBestOf(t *testing.T) {
+	if holdable(worker.GateBestOfUnpicked) || holdable(worker.GateStale) || !holdable(worker.GateNotClosing) {
+		t.Error("only a verdict that needs a person is holdable")
 	}
 }

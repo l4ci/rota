@@ -133,8 +133,17 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 		}
 		return repaired, drift, nil
 	}
-	e.Merge = func(ctx context.Context, targets []string) ([]roundtick.Merged, error) {
-		return tickMerge(c, root, renv.Base, baseOverride, targets)
+	e.BaseOf = func(target string) string {
+		if baseOverride != "" {
+			return baseOverride
+		}
+		return targetBase(root, target, renv.Base)
+	}
+	e.Gate = func(_ context.Context, target, base string) roundtick.GateOutcome {
+		return gateTarget(c, target, base)
+	}
+	e.Train = func(_ context.Context, targets []string, base string) roundtick.TrainOutcome {
+		return trainTargets(c, targets, base)
 	}
 	be, err := openBacklog(c, root, false, "")
 	if err != nil {
@@ -156,7 +165,7 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 		}
 		var out []roundtick.Candidate
 		for _, cd := range cs {
-			out = append(out, roundtick.Candidate{ID: cd.ID, Ready: cd.Ready() && len(cd.Overlaps) == 0})
+			out = append(out, roundtick.Candidate{ID: cd.ID, Ready: cd.Ready()})
 		}
 		return out, nil
 	}
@@ -169,22 +178,18 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 	}
 	// Assign takes no tier, no kind and never accepts overlap: the round's
 	// defaults, and only a candidate that is ready as it stands.
-	e.Assign = func(ctx context.Context, id string) (string, error) {
+	e.Assign = func(ctx context.Context, id string) ([]string, error) {
 		res, err := renv.Assign(ctx, root, board, round.AssignOpts{ID: id, HolderPID: pid, Settings: set, Getenv: os.Getenv})
 		for _, w := range res.Warnings {
 			c.Warn("%s", w)
 		}
-		var blk *round.BlockedError
-		if errors.As(err, &blk) && blk.By != round.BlockNoRound {
-			return "", &roundtick.Refusal{Why: blk.Msg}
-		}
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 		if len(res.BestOf) == 2 { // a best-of:2 issue took two slots
-			return res.BestOf[0].Agent + " and " + res.BestOf[1].Agent, nil
+			return []string{res.BestOf[0].Agent, res.BestOf[1].Agent}, nil
 		}
-		return res.Agent, nil
+		return []string{res.Agent}, nil
 	}
 	e.Audit = func(a roundtick.Action) {
 		if err := gate.Autopilot(root, "round tick "+a.Action, a.Target, a.Detail); err != nil {
@@ -204,36 +209,6 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 		c.Warn("autopilot state not saved: %v", err)
 	}
 	return r, nil
-}
-
-// tickMerge gates the targets, grouped by the base each merges into: one is a
-// `worker gate`, several a `worker train`. A target that did not land is
-// reported with its verdict; whether it is held for a person is the verdict's
-// call: a stale or provenance bounce goes back to the worker and returns, any
-// other failure waits for a person.
-func tickMerge(c *Ctx, root, defBase, override string, targets []string) ([]roundtick.Merged, error) {
-	var order []string
-	groups := map[string][]string{}
-	for _, t := range targets {
-		b := override
-		if b == "" {
-			b = targetBase(root, t, defBase)
-		}
-		if _, ok := groups[b]; !ok {
-			order = append(order, b)
-		}
-		groups[b] = append(groups[b], t)
-	}
-	var out []roundtick.Merged
-	for _, b := range order {
-		ts := groups[b]
-		if len(ts) == 1 {
-			out = append(out, mergeOne(c, ts[0], b))
-		} else {
-			out = append(out, mergeTrain(c, ts, b)...)
-		}
-	}
-	return out, nil
 }
 
 func targetBase(root, target, def string) string {
@@ -258,43 +233,22 @@ func verdictOf(r Result) string {
 	return ""
 }
 
-// holdable reports whether a refused target waits for a person. A stale or
-// provenance-failed PR goes back to its worker; a best-of:2 attempt no pick
-// names clears itself once the orchestrator picks.
-func holdable(verdict string) bool {
-	return verdict != worker.GateStale && verdict != worker.GateProvenanceFail && verdict != worker.GateBestOfUnpicked
-}
-
-func mergeOne(c *Ctx, target, base string) roundtick.Merged {
+func gateTarget(c *Ctx, target, base string) roundtick.GateOutcome {
 	r, err := callVerb(c, workerGate, "--base", base, target)
 	if err == nil {
-		return roundtick.Merged{Target: target, Landed: true, Detail: "into " + base}
+		return roundtick.GateOutcome{Landed: true}
 	}
-	v := verdictOf(r)
-	if v == "" {
-		v = "gate-error"
-	}
-	return roundtick.Merged{Target: target, Verdict: v, Hold: holdable(v), Detail: firstLine(err.Error())}
+	return roundtick.GateOutcome{Verdict: verdictOf(r), Detail: firstLine(err.Error())}
 }
 
-func mergeTrain(c *Ctx, targets []string, base string) []roundtick.Merged {
+func trainTargets(c *Ctx, targets []string, base string) roundtick.TrainOutcome {
 	args := append([]string{"--base", base}, targets...)
 	r, err := callVerb(c, workerTrain, args...)
 	if err == nil {
-		out := make([]roundtick.Merged, 0, len(targets))
-		for _, t := range targets {
-			out = append(out, roundtick.Merged{Target: t, Landed: true, Detail: "train into " + base})
-		}
-		return out
+		return roundtick.TrainOutcome{Done: true}
 	}
-	v := verdictOf(r)
-	if v == "" {
-		v = "train-error"
-	}
-	d, _ := r.Data.(*jsonx.Object)
-	landed := map[string]bool{}
-	culprit := ""
-	if d != nil {
+	out := roundtick.TrainOutcome{Verdict: verdictOf(r), Detail: firstLine(err.Error())}
+	if d, _ := r.Data.(*jsonx.Object); d != nil {
 		if raw, ok := d.Get("members"); ok {
 			list, _ := raw.([]any)
 			for _, m := range list {
@@ -302,29 +256,14 @@ func mergeTrain(c *Ctx, targets []string, base string) []roundtick.Merged {
 					t, _ := o.Get("target")
 					l, _ := o.Get("landed")
 					if ok, _ := l.(bool); ok {
-						landed[fmt.Sprint(t)] = true
+						out.Landed = append(out.Landed, fmt.Sprint(t))
 					}
 				}
 			}
 		}
 		if cv, ok := d.Get("culprit"); ok {
-			culprit, _ = cv.(string)
+			out.Culprit, _ = cv.(string)
 		}
-	}
-	out := make([]roundtick.Merged, 0, len(targets))
-	for _, t := range targets {
-		m := roundtick.Merged{Target: t}
-		switch {
-		case landed[t]:
-			m.Landed, m.Detail = true, "train into "+base
-		case v == "base-moved":
-			m.Skip = true // nothing landed; the base moved under the train
-		case culprit != "" && t != culprit && !strings.Contains(culprit, t):
-			m.Skip = true // another member broke the train: retried without it
-		default:
-			m.Verdict, m.Hold, m.Detail = v, holdable(v), firstLine(err.Error())
-		}
-		out = append(out, m)
 	}
 	return out
 }
