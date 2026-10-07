@@ -90,8 +90,30 @@ func TestGitHubCommitChecksEmpty(t *testing.T) {
 }
 
 func TestGitLabCommitChecks(t *testing.T) {
+	jobs := map[string]string{
+		"9": `[{"name":"test","status":"success","allow_failure":false,"web_url":"j1"},
+			{"name":"lint","status":"failed","allow_failure":true,"web_url":"j2"},
+			{"name":"deploy","status":"manual","allow_failure":false,"web_url":"j3"}]`,
+		"7": `[{"name":"test","status":"running","allow_failure":false,"web_url":"j4"},
+			{"name":"e2e","status":"failed","allow_failure":false,"web_url":"j5"},
+			{"name":"old","status":"canceled","allow_failure":false,"web_url":"j6"},
+			{"name":"later","status":"created","allow_failure":false,"web_url":"j7"}]`,
+	}
 	s := &scripted{answer: func(name string, args []string) (string, string, int) {
-		if name != "glab" || len(args) < 2 || args[0] != "api" || args[1] != "projects/:id/pipelines?sha=abc123&per_page=100" {
+		if name != "glab" || len(args) < 2 || args[0] != "api" {
+			t.Fatalf("unexpected command: %s %q", name, args)
+		}
+		if id, ok := strings.CutPrefix(args[1], "projects/:id/pipelines/"); ok {
+			id, rest, _ := strings.Cut(id, "/")
+			if rest != "jobs?per_page=100" {
+				t.Fatalf("unexpected jobs call: %q", args)
+			}
+			if j, ok := jobs[id]; ok {
+				return j, "", 0
+			}
+			return "[]", "", 0
+		}
+		if args[1] != "projects/:id/pipelines?sha=abc123&per_page=100" {
 			t.Fatalf("unexpected command: %s %q", name, args)
 		}
 		return `[
@@ -109,7 +131,14 @@ func TestGitLabCommitChecks(t *testing.T) {
 	}
 	want := []CheckRun{
 		{"pipeline #7 (feat)", CheckPending, "f7"},
+		{"test", CheckPending, "j4"},
+		{"e2e", CheckFailure, "j5"},
+		{"old", CheckFailure, "j6"},
+		{"later", CheckPending, "j7"},
 		{"pipeline #9 (main)", CheckSuccess, "m9"},
+		{"test", CheckSuccess, "j1"},
+		{"lint", CheckSkipped, "j2"},   // allowed to fail: tested nothing that counts
+		{"deploy", CheckSkipped, "j3"}, // manual, never ran
 		{"pipeline #4 (man)", CheckFailure, "n4"},
 		{"pipeline #2 (skip)", CheckSkipped, "k2"},
 		{"pipeline #1 (unk)", CheckPending, "u1"},

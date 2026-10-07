@@ -15,7 +15,7 @@ import (
 	"github.com/l4ci/rota/internal/tracker"
 )
 
-const ciCfg = `{"test":{"full":["false"],"fullWhere":"ci"}}` // "false" proves the local tier did not run
+const ciCfg = `{"test":{"full":["false"],"fullWhere":"ci","ciChecks":["ci/test"]}}` // "false" proves the local tier did not run
 
 // ciEnv is w.env with the CI waits ended on the first poll.
 func (w *world) ciEnv() Env {
@@ -182,6 +182,125 @@ func TestTrainCIGreen(t *testing.T) {
 	}
 }
 
+// ciScriptGate runs the gate against scripted checks (see fakeForge.CommitChecks)
+// with the start window and timeout left open, so only the script ends it.
+func ciScriptGate(t *testing.T, cfg, script string) (*world, GateResult, error) {
+	t.Helper()
+	w := newWorld(t, ghURL)
+	w.setConfig(cfg)
+	w.forge("ciScript", script)
+	e := w.ciEnv()
+	e.Getenv = func(k string) string {
+		return map[string]string{"ROTA_GATE_SHA_WAIT": "0", "ROTA_CI_POLL": "0", "ROTA_CI_START_WAIT": "5", "ROTA_CI_TIMEOUT": "5"}[k]
+	}
+	res, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main"})
+	return w, res, err
+}
+
+// A fast unrelated check passing is not green: the gate waits until every
+// listed check has appeared and passed, then settles for one more poll.
+func TestGateCIWaitsForListedChecks(t *testing.T) {
+	cfg := `{"test":{"full":["false"],"fullWhere":"ci","ciChecks":["ci/test","ci/e2e"]}}`
+	w, res, err := ciScriptGate(t, cfg, "lint=success|lint=success|lint=success,ci/test=success,ci/e2e=pending|lint=success,ci/test=success,ci/e2e=pending|lint=success,ci/test=success,ci/e2e=success")
+	if err != nil || res.Verdict != GatePass || !w.onOriginMain("work.txt") {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if n := strings.Count(w.logText(), "CommitChecks"); n != 6 {
+		t.Errorf("CommitChecks calls = %d, want 6 (green on the 5th, settled on the 6th):\n%s", n, w.logText())
+	}
+	if strings.Join(res.Verified, ",") != "ci/test,ci/e2e" {
+		t.Errorf("Verified = %v", res.Verified)
+	}
+}
+
+func TestGateCIListedChecks(t *testing.T) {
+	cases := []struct {
+		name, script, verdict string
+		errHas                []string
+	}{
+		{name: "listed fails", script: "lint=success,ci/test=failure", verdict: GateVerifyFailed, errHas: []string{"failure ci/test"}},
+		{name: "unlisted fails", script: "lint=failure,ci/test=success", verdict: GateVerifyFailed, errHas: []string{"failure lint"}},
+		{name: "listed skipped", script: "ci/test=skipped", verdict: GateVerifyFailed, errHas: []string{"ci/test skipped"}},
+		{name: "unlisted pending", script: "slow=pending,ci/test=success", verdict: GatePass},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			w, res, err := ciScriptGate(t, ciCfg, c.script)
+			if err != nil || res.Verdict != c.verdict {
+				t.Fatalf("%+v %v", res, err)
+			}
+			if w.onOriginMain("work.txt") != (c.verdict == GatePass) {
+				t.Errorf("work.txt on origin/main = %v", !(c.verdict == GatePass))
+			}
+			for _, s := range c.errHas {
+				if !strings.Contains(res.Err, s) {
+					t.Errorf("Err %q lacks %q", res.Err, s)
+				}
+			}
+		})
+	}
+}
+
+// A listed check that never shows up is ci-not-run naming it, once the start
+// window is over and nothing on the commit is still running.
+func TestGateCIMissingListedCheck(t *testing.T) {
+	w := newWorld(t, ghURL)
+	w.setConfig(`{"test":{"full":["false"],"fullWhere":"ci","ciChecks":["ci/test","ci/typo"]}}`)
+	w.forge("ciScript", "lint=success,ci/test=success")
+	res, err := w.ciGate(GateOpts{})
+	if err != nil || res.Verdict != GateCINotRun || !strings.Contains(res.Err, "ci/typo") || strings.Contains(res.Err, "ci/test,") {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if !strings.Contains(res.Hint, "test.ciChecks") || w.onOriginMain("work.txt") {
+		t.Fatalf("hint %q, landed %v", res.Hint, w.onOriginMain("work.txt"))
+	}
+}
+
+// While CI still runs, a missing listed check may yet appear (a job behind
+// needs:), so the start window alone does not end the wait.
+func TestGateCIMissingWhileRunning(t *testing.T) {
+	w := newWorld(t, ghURL)
+	w.setConfig(ciCfg)
+	w.forge("ciScript", "suite GitHub Actions=pending,lint=success")
+	res, err := w.ciGate(GateOpts{})
+	if err != nil || res.Verdict != GateVerifyTimeout || !strings.Contains(res.Err, "ci/test") {
+		t.Fatalf("%+v %v", res, err)
+	}
+}
+
+// test.fullWhere ci with no test.ciChecks is refused before anything runs.
+func TestCIChecksRequired(t *testing.T) {
+	cfg := `{"test":{"full":["false"],"fullWhere":"ci"}}`
+	check := func(t *testing.T, w *world, err error) {
+		t.Helper()
+		we, _ := err.(*exitcode.Error)
+		if we == nil || we.Exit != exitcode.ExitInternal || !strings.Contains(we.Message+we.Hint, "test.ciChecks") {
+			t.Fatalf("want exit %d naming test.ciChecks, got %#v", exitcode.ExitInternal, err)
+		}
+		if strings.Contains(w.logText(), "CommitChecks") || w.ciBranches() != "" {
+			t.Errorf("CI was consulted:\n%s", w.logText())
+		}
+	}
+	t.Run("gate", func(t *testing.T) {
+		w := newWorld(t, ghURL)
+		w.setConfig(cfg)
+		_, err := w.ciGate(GateOpts{})
+		check(t, w, err)
+		if w.onOriginMain("work.txt") {
+			t.Error("work landed")
+		}
+	})
+	t.Run("train", func(t *testing.T) {
+		w := trainWorld(t, "false", "b1")
+		w.setConfig(cfg)
+		_, err := w.ciEnv().Train(bg, w.dir, TrainOpts{Base: "main", Targets: []string{"b1"}})
+		check(t, w, err)
+		if w.onMain("b1.txt") {
+			t.Error("b1 landed")
+		}
+	})
+}
+
 func TestTrainCINotRun(t *testing.T) {
 	w, res := ciTrain(t, "none", "", "b1", "b2")
 	if res.Verdict != GateCINotRun || len(res.Landed) != 0 || len(res.Members) != 2 || w.onMain("b1.txt") || w.onMain("b2.txt") {
@@ -190,13 +309,16 @@ func TestTrainCINotRun(t *testing.T) {
 }
 
 func TestFullWhere(t *testing.T) {
-	for in, want := range map[string]string{`{}`: "local", `{"test":{"fullWhere":"ci"}}`: "ci", `{"test":{"fullWhere":"local"}}`: "local"} {
+	for in, want := range map[string]string{`{}`: "local", `{"test":{"fullWhere":"ci","ciChecks":["t"]}}`: "ci", `{"test":{"fullWhere":"local"}}`: "local"} {
 		if got, err := FullWhere(parseCfg(in)); err != nil || got != want {
 			t.Errorf("%s: %q %v", in, got, err)
 		}
 	}
 	if _, err := FullWhere(parseCfg(`{"test":{"fullWhere":"x"}}`)); err == nil {
 		t.Error("x must be an error")
+	}
+	if _, err := FullWhere(parseCfg(`{"test":{"fullWhere":"ci","ciChecks":[" "]}}`)); err == nil {
+		t.Error("ci with no check names must be an error")
 	}
 }
 
@@ -459,7 +581,7 @@ func TestTrainCICleansUp(t *testing.T) {
 // Under test.fullWhere ci, test.e2e still runs here, on the landed tree.
 func TestGateCIRunsE2ELocally(t *testing.T) {
 	w := newWorld(t, ghURL)
-	w.setConfig(`{"test":{"full":["false"],"fullWhere":"ci","e2e":["false"]}}`)
+	w.setConfig(`{"test":{"full":["false"],"fullWhere":"ci","ciChecks":["ci/test"],"e2e":["false"]}}`)
 	res, err := w.ciGate(GateOpts{})
 	if err != nil || res.Verdict != GateVerifyFailed || !strings.Contains(res.Err, "test.e2e") || !res.Changed {
 		t.Fatalf("%+v %v", res, err)

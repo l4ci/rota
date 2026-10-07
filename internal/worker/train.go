@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/land"
+	"github.com/l4ci/rota/internal/rotatree"
 	"os"
 	"path/filepath"
 	"sort"
@@ -97,6 +99,11 @@ func (e Env) Train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 	}
 	if cur, _ := e.git(root, "rev-parse", "--abbrev-ref", "HEAD"); cur != o.Base {
 		return res, fail(exitcode.ExitResolution, fmt.Sprintf("a train must run with %s checked out (currently on %s)", o.Base, cur))
+	}
+	// A bad test.fullWhere or test.ciChecks is refused before any member is
+	// checked; fullTier reads them again once the members are known.
+	if _, err := FullWhere(config.Load(rotatree.Config(root))); err != nil {
+		return res, err
 	}
 	seen := map[string]bool{}
 	withPR := 0

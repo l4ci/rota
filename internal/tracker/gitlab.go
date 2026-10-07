@@ -543,7 +543,10 @@ func (g *GitLab) PRState(ctx context.Context, pr int) (string, error) {
 	return st, nil
 }
 
-// CommitChecks reports the newest pipeline per ref on sha, ordered by ref.
+// CommitChecks reports the newest pipeline per ref on sha, ordered by ref,
+// each followed by its jobs under their job names (latest attempt only), so
+// test.ciChecks can name a job. A failed job allowed to fail and a manual job
+// that never ran count as skipped: neither tested anything that gates.
 func (g *GitLab) CommitChecks(ctx context.Context, sha string) ([]CheckRun, error) {
 	var d []struct {
 		ID     int    `json:"id"`
@@ -578,6 +581,30 @@ func (g *GitLab) CommitChecks(ctx context.Context, sha string) ([]CheckRun, erro
 			state = CheckFailure
 		}
 		checks = append(checks, CheckRun{Name: fmt.Sprintf("pipeline #%d (%s)", p.ID, ref), State: state, URL: p.WebURL})
+		var jobs []struct {
+			Name         string `json:"name"`
+			Status       string `json:"status"`
+			AllowFailure bool   `json:"allow_failure"`
+			WebURL       string `json:"web_url"`
+		}
+		if err := g.pages(ctx, fmt.Sprintf("projects/:id/pipelines/%d/jobs?per_page=100", p.ID), &jobs); err != nil {
+			return nil, err
+		}
+		for _, j := range jobs {
+			state := CheckPending
+			switch j.Status {
+			case "success":
+				state = CheckSuccess
+			case "skipped", "manual":
+				state = CheckSkipped
+			case "failed", "canceled":
+				state = CheckFailure
+				if j.AllowFailure {
+					state = CheckSkipped
+				}
+			}
+			checks = append(checks, CheckRun{Name: j.Name, State: state, URL: j.WebURL})
+		}
 	}
 	return checks, nil
 }

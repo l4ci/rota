@@ -23,11 +23,12 @@ type VerifyResult struct {
 	LogPath string
 	// CI marks a run on the project's CI (see ci.go): Verified and Failed are
 	// check names, Log lists the checks, and Ref and SHA are what was pushed.
-	// NotRun is no check starting, TimedOut checks still pending at the
-	// deadline; neither is OK.
+	// NotRun is a listed check never starting (Missing names them), TimedOut
+	// checks still pending at the deadline; neither is OK.
 	CI               bool
 	Ref, SHA         string
 	NotRun, TimedOut bool
+	Missing          []string
 }
 
 // OK is true when every configured command passed (or none was configured;
