@@ -1472,3 +1472,53 @@ func TestHerdrExplain(t *testing.T) {
 		t.Errorf("a failing explain must read empty, got %q", got)
 	}
 }
+
+func TestHerdrTurn(t *testing.T) {
+	// The shape herdr 0.9.3 printed for a finished worker in round 10.
+	f := &fake{handler: func(_ string, a []string) Result {
+		return Result{Stdout: `{"id":"cli:agent:get","result":{"agent":{"agent":"claude","agent_status":"done","completion_seq":4231,"name":"rota-w1-w9-t7","state_change_seq":4231}}}`}
+	}}
+	h := New("herdr", deps(f, herdrEnv, &clock{})).(TurnReader)
+	got, ok := h.Turn(bg, "w1", "w9:t7")
+	if want := (Turn{Status: "done", StateSeq: 4231, CompletionSeq: 4231}); !ok || got != want {
+		t.Errorf("Turn = %+v %v, want %+v", got, ok, want)
+	}
+	if !strings.Contains(f.log(), "herdr agent get rota-w1-w9-t7") {
+		t.Errorf("call = %s", f.log())
+	}
+	// Working (and an older herdr): no completion_seq.
+	f.handler = func(string, []string) Result {
+		return Result{Stdout: `{"result":{"agent":{"agent_status":"working","state_change_seq":4230}}}`}
+	}
+	if got, ok := h.Turn(bg, "w1", "w9:t7"); !ok || got != (Turn{Status: "working", StateSeq: 4230}) {
+		t.Errorf("working Turn = %+v %v", got, ok)
+	}
+	if _, ok := h.Turn(bg, "w1", ""); ok {
+		t.Error("a never-dispatched slot has no turn")
+	}
+	f.handler = func(string, []string) Result { return Result{ExitCode: 1, Stderr: herdrErr("agent_not_found")} }
+	if _, ok := h.Turn(bg, "w1", "w9:t7"); ok {
+		t.Error("a failing read must not be ok")
+	}
+}
+
+func TestTurnFinished(t *testing.T) {
+	for _, c := range []struct {
+		t    Turn
+		base int
+		want bool
+	}{
+		{Turn{Status: "done", CompletionSeq: 5}, 4, true},
+		{Turn{Status: "idle", CompletionSeq: 5}, 4, true},
+		{Turn{Status: "idle", CompletionSeq: 4}, 4, false},
+		{Turn{Status: "idle"}, 4, false},
+		{Turn{Status: "done", CompletionSeq: 5}, 0, false},
+		{Turn{Status: "working", CompletionSeq: 5}, 4, false},
+		{Turn{Status: "blocked", CompletionSeq: 5}, 4, false},
+		{Turn{Status: "unknown", CompletionSeq: 5}, 4, false},
+	} {
+		if got := c.t.Finished(c.base); got != c.want {
+			t.Errorf("%+v.Finished(%d) = %v", c.t, c.base, got)
+		}
+	}
+}

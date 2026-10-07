@@ -142,6 +142,32 @@ type Explainer interface {
 	Explain(ctx context.Context, slot, handle string) string
 }
 
+// Turn is a host's numbered view of an agent: its native status, the sequence
+// number of its latest state change and, when that change was a finished turn,
+// the same number as CompletionSeq. A field the host did not report is 0.
+type Turn struct {
+	Status                  string
+	StateSeq, CompletionSeq int
+}
+
+// TurnReader is implemented by a host that numbers its agents' state changes
+// (herdr's `state_change_seq` and `completion_seq`).
+type TurnReader interface {
+	// Turn reads the slot's agent; ok is false for a never-dispatched slot or a
+	// failing call.
+	Turn(ctx context.Context, slot, handle string) (t Turn, ok bool)
+}
+
+// Finished reports whether t is a turn the agent finished after the state
+// change numbered base: herdr says the agent is ready for input (idle or
+// done) and that this idle transition was completed work numbered past base.
+// Startup, a restored conversation and a session switch carry no
+// CompletionSeq, so they never count; neither does a base of 0 (none
+// recorded).
+func (t Turn) Finished(base int) bool {
+	return base > 0 && (t.Status == "idle" || t.Status == "done") && t.CompletionSeq > base
+}
+
 // Host is one terminal backend.
 type Host interface {
 	// Name is "tmux" or "herdr".

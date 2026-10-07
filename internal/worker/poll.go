@@ -22,7 +22,9 @@ import (
 //
 // Liveness is decided by MOVEMENT, not by pattern-matching a spinner: the pane
 // is captured twice, settle seconds apart, and a pane that changed is BUSY. A
-// static pane is then classified by content.
+// static pane is then classified by content. On herdr, a slot whose agent
+// reports a turn finished since its dispatch (completion_seq past the
+// recorded turnSeq, #511) is captured once and taken as static.
 //
 // DONE and BLOCKED come from SENTINELS the worker contract requires it to
 // print, not from inference:
@@ -347,7 +349,7 @@ func (e Env) Poll(ctx context.Context, root string, o PollOpts) (PollResult, err
 	}
 	before, _ := os.ReadFile(RegistryPath(root))
 
-	rows, _ := e.classify(ctx, h, targets, o.Settle, o.Lines)
+	rows, _, _ := e.classify(ctx, h, targets, o.Settle, o.Lines)
 	rows, notes := e.promoteIdleWithPR(ctx, root, rows)
 	for i, r := range rows {
 		// Notify on the transition only: a poll loop re-reading a stuck slot
@@ -483,11 +485,15 @@ func recordRow(s *Slot, r PollRow, now time.Time) error {
 }
 
 // pollTarget is one slot to classify: its name, host handle, the state the
-// registry last recorded for it and the state `round wait` last returned for it.
-type pollTarget struct{ name, handle, prev, seen string }
+// registry last recorded for it, the state `round wait` last returned for it
+// and the turn baseline its last dispatch recorded.
+type pollTarget struct {
+	name, handle, prev, seen string
+	turnSeq                  int
+}
 
 func slotTarget(s *Slot) pollTarget {
-	return pollTarget{s.Name(), s.PaneHandle(), s.State(), s.Seen()}
+	return pollTarget{s.Name(), s.PaneHandle(), s.State(), s.Seen(), s.TurnSeq()}
 }
 
 // classify reads each target's pane twice, settle apart, and classifies it.
@@ -495,18 +501,41 @@ func slotTarget(s *Slot) pollTarget {
 // First capture for every slot, then settle once, then the second capture, so
 // N slots cost one settle interval, not N.
 //
+// A slot whose host numbers its turns (herdr's completion_seq, #511) and
+// reports one finished past the slot's dispatch baseline is read once, with
+// no movement check: the agent is at rest by the host's own count, so a pane
+// that redraws is not a pulse. The text rules still decide its state. When
+// every slot is such a slot, nothing settles and slept is false.
+//
 // settling reports a slot that is BUSY only because its pane moved while the
 // host's own status was not `working` (herdr idle or done, or no native
 // status). The host sends no event when such a pane comes to rest, so a
 // caller woken by events must re-classify it on its own (#211: herdr's
 // scrollback reads differ for a moment after a turn ends).
-func (e Env) classify(ctx context.Context, h host.Host, targets []pollTarget, settle time.Duration, lines int) (rows []PollRow, settling bool) {
+func (e Env) classify(ctx context.Context, h host.Host, targets []pollTarget, settle time.Duration, lines int) (rows []PollRow, settling, slept bool) {
+	tr, _ := h.(host.TurnReader)
 	first := map[string]string{}
+	finished := map[string]string{} // slot -> native status of a finished turn
 	for _, t := range targets {
+		// The turn is read before the capture: a capture taken after the
+		// host counted the turn finished holds all of its output.
+		if tr != nil && t.turnSeq > 0 {
+			if tn, ok := tr.Turn(ctx, t.name, t.handle); ok && tn.Finished(t.turnSeq) {
+				finished[t.name] = tn.Status
+			}
+		}
 		first[t.name] = h.Capture(ctx, t.name, t.handle, lines)
 	}
-	e.Sleep(settle)
+	if len(finished) < len(targets) {
+		e.Sleep(settle)
+		slept = true
+	}
 	for _, t := range targets {
+		if native, ok := finished[t.name]; ok {
+			st, ev := Classify(first[t.name], false, lines, native)
+			rows = append(rows, PollRow{t.name, st, ev})
+			continue
+		}
 		second := h.Capture(ctx, t.name, t.handle, lines)
 		native := h.Status(ctx, t.name, t.handle)
 		moved := first[t.name] != second
@@ -525,7 +554,7 @@ func (e Env) classify(ctx context.Context, h host.Host, targets []pollTarget, se
 		}
 		rows = append(rows, PollRow{t.name, st, ev})
 	}
-	return rows, settling
+	return rows, settling, slept
 }
 
 // IsPRURL reports whether s is a PR or MR URL, the shape `worker poll` stores
