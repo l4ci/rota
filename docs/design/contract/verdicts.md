@@ -1,3 +1,9 @@
+---
+verified-sha: 5e9b425a84bdc61cedf349412b0aa15c738689eb
+refs:
+  - internal/verdict
+---
+
 ## B2: verdicts
 
 B2 (#55) replaces "parse the last line" routing in `/rota-review`, `/rota-qa`, `/rota-ship` and `/rota-debug` with typed verdicts: the skill records each verdict through a verb, which validates it, and the routing from verdict to next step is a tested function in code. B3 (#56) builds on the store: `ship pr` and `ship merge` refuse after a recorded FAIL, and the debug Iron Law counts failed fixes per item.

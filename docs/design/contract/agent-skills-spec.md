@@ -1,3 +1,10 @@
+---
+verified-sha: 5e9b425a84bdc61cedf349412b0aa15c738689eb
+refs:
+  - test/validate-skills.py
+  - internal/skills
+---
+
 ## E2: Agent Skills spec and Codex discovery
 
 E2 (#69) makes the skills load in Codex as well as Claude Code. Maintainer rulings (round 4, phase E, 2026-10-03): `rota init --codex` created the discovery symlinks (superseded by F6a: `rota skills install`, see "F6a: embedded skills"); this repo ships no `.agents/` directory; skill text keeps `/rota-x`; the optional spec keys are allowed; the Claude-only tools in skill bodies and `rota` on PATH in Codex are out of scope.

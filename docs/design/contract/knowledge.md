@@ -1,3 +1,10 @@
+---
+verified-sha: 5e9b425a84bdc61cedf349412b0aa15c738689eb
+refs:
+  - internal/knowledge
+  - internal/cli/knowledge.go
+---
+
 ## A5: knowledge, decisions, glossary, blocks, map, qa
 
 ### rota knowledge query
