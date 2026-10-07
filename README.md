@@ -24,6 +24,9 @@
 
 </div>
 
+<p align="center"><img src="docs/images/rota-round.gif" alt="Animated demo: running rota opens its palette; picking Orchestrate starts a round in herdr's split view, where the orchestrator assigns three issues to Claude and Codex workers, escalates a worker's product question, gates and merges a finished PR, and places the next issue on the account with the most headroom" width="100%"></p>
+<p align="center"><sub>A round in herdr's split view (illustration with a sample project; the palette is rota's real first screen).</sub></p>
+
 ---
 
 ## How it works
@@ -51,9 +54,6 @@ issues ─► orchestrator ─┼─► worker dana ─► PR ─┼─► gate 
 - **Workers**: agents that each take one issue in their own git worktree and terminal tab, build it, and open a PR. They never merge.
 - **Gate**: the only merge path. It checks the PR is current and properly signed off, merges it, then runs your full test suite on the merged `main`. A red result stops the round until it's fixed. With `test.fullWhere ci` the suite runs in CI before the merge instead.
 
-<p align="center"><img src="docs/images/round-herdr.svg" alt="A round in herdr: the orchestrator assigns three issues, gates and merges one PR, and escalates a worker's product question while the other workers keep going" width="900"></p>
-<p align="center"><sub>Illustration of a round in herdr (sample project).</sub></p>
-
 Both ways share a memory in `.rota/`: what the project has learned (`KNOWLEDGE.md`), the lines it must not cross (`DECISIONS.md`), and handoff notes, so a fresh session picks up where the last one stopped.
 
 ## Runs in herdr or tmux
@@ -74,9 +74,6 @@ Long rounds run into usage limits. List your accounts and rota spreads the work 
 - **Limits.** When a worker hits a limit, `rota limit watch` moves its issue to a free slot on another account, continuing from the pushed branch, or waits for the reset if none is free.
 - **The orchestrator** can hand off and restart under another account before it hits its own limit (`orchestrator.switchOnUsage`), and `rota keepalive` restarts it if it stops.
 - **Codex.** `work.codexAccounts` spreads Codex workers over several logins (rota can't read Codex usage, so these aren't balanced by headroom).
-
-<p align="center"><img src="docs/images/workers-accounts.svg" alt="A Codex worker asks a product question and gets the maintainer's answer relayed; the orchestrator lists three accounts and assigns the next issue to the one with the most headroom" width="900"></p>
-<p align="center"><sub>Illustration: a worker's question relayed, and new work placed on the freest account.</sub></p>
 
 Setup: [parallel rounds](docs/usage/parallel-rounds.md#setup) and [unattended rounds](docs/usage/unattended-rounds.md).
 
