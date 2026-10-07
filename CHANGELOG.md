@@ -1,5 +1,58 @@
 # Changelog
 
+## v0.13.0 — 2026-10-07
+
+Stricter merge gate, best-of-2 rounds, generated subagent definitions, and test tiers you can configure.
+
+## Breaking
+
+- `rota worker gate` and `rota worker train` refuse to merge when `test.full` and `test.e2e` are both empty. Pass `--no-verify` to merge without verification. (#474)
+- The gate refuses a round PR whose body has no closing keyword for the slot's issue. Add `Closes #N`, or label a partial slice `partial-slice`. (#477)
+- The gate and the train refuse a PR with a recorded FAIL verdict. (#449)
+
+## New
+
+- **Best-of-2 rounds.** An issue labelled `best-of:2` goes to two workers at once, by default one Claude and one Codex. The orchestrator picks the better PR with `rota round pick`, which closes the other. The gate refuses either attempt until the pick is made. (#489)
+- **Generated subagent definitions.** `rota agents write` writes `.claude/agents/rota-{explorer,implementer,reasoner}.md` from new `roles.*` config, plus `.codex/agents/*.toml` when Codex is configured. `rota init` runs it, and `rota doctor` reports missing or out-of-date files. (#487)
+- **Round setup.** `round.workerKind` sets the project's default worker harness. `rota round assign` reserves smoke section numbers. `work.itemTimeoutMinutes` caps how long one item may run. New slot worktrees run `work.envSetup`. (#472, #475, #439, #450)
+- **Gate and train.**
+  - `rota worker gate <PR>` gates any open PR, not only round PRs.
+  - A stale branch merges when `git merge` is clean, even if both sides changed a file.
+  - Gate and train share one land lock per repo.
+  - With `test.fullWhere ci` they wait for CI checks.
+  - `test.e2e` runs once on a train's merged tree.
+  - The train caches passing verdicts.
+  - An exclusion ledger lists tests known to be red. (#479, #480, #445, #411, #408, #451, #452)
+- **Test tiers and proof.**
+  - Test tiers are declared in config.
+  - Every tier runs in an isolated environment.
+  - `rota proof record` runs a check and records its result.
+  - Acceptance criteria get AC ids that only proof can mark as met.
+  - `rota worker done` refuses a finished slot that has no `test.fast` proof.
+  - `work.tdd` can be turned off. (#379, #441, #420, #442, #440, #407)
+- **Planning.** `rota plan check` checks that every criterion maps to a task and every task has a Verify step. Level-4 items get a critic step. A planning-dial rubric says when an item needs more planning, and plans cite the knowledge they rely on. (#458, #457, #453, #455)
+- **Doctor.** Warns when the installed `rota` is older than its source checkout. (#473)
+
+## Fixed
+
+- `rota worker gate` names the real reason local main cannot fast-forward, and says when it skipped checking the merged tree. (#483)
+- A no-break space after Claude Code's prompt marker no longer breaks parsing of the prompt line, and `rota` refuses to send into a pane that holds a human's draft. (#438, #429)
+- `{files}` expansion includes untracked files and diffs against a remote base that is ahead. (#418, #422)
+- `rota worker done` runs from a slot worktree. (#456)
+- CI: git housekeeping no longer races fixture copies in the scenario tests, and the nightly smoke job installs minisign. (#486)
+
+## Internal
+
+- One mapping from domain errors to exit codes, and one owner for the Claude config folder and skill folders. (#482, #478)
+- Assign and transfer share one worker-delivery module, and the item verbs moved into `backlog`. (#425, #430)
+- Contract docs carry a verified sha, and doclint guards them against drift. (#447)
+
+## Stats
+
+192 commits, 295 files changed, +14,739 −1,349 lines
+
+**Full changelog:** https://github.com/l4ci/rota/compare/v0.12.0...v0.13.0
+
 ## v0.12.0 — 2026-10-06
 
 Codex workers on your own account, per-issue harness and model labels, leaner skills, and a fix for slot worktrees vanishing mid-round.
