@@ -14,7 +14,7 @@ const (
 	BlockNotBestOf      = "not best-of"
 	BlockNotAttempt     = "not an attempt"
 	BlockPicked         = "already picked"
-	BlockAttemptRunning = "attempt in flight"
+	BlockAttemptRunning = "attempt running"
 )
 
 // Attempt states, as pick reports them.
