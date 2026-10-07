@@ -157,6 +157,18 @@ type PRInfo struct {
 	Body     string
 }
 
+// Mergeability is the forge's own answer on whether a PR can be merged cleanly.
+type Mergeability struct {
+	State  string // MergeClean, MergeConflict or MergeUnknown
+	Reason string // the forge's word for it (GitHub mergeStateStatus, GitLab detailed_merge_status)
+}
+
+const (
+	MergeClean    = "clean"
+	MergeConflict = "conflict" // the forge cannot create the merge commit
+	MergeUnknown  = "unknown"  // still computing
+)
+
 // CheckRun is one CI check reported on a commit: a GitHub check run or
 // commit status, or a GitLab pipeline.
 type CheckRun struct {
@@ -258,6 +270,9 @@ type Adapter interface {
 	PRCheckout(ctx context.Context, pr int) error
 	// PRView reads PR pr: branches, head sha, state, merge sha and body.
 	PRView(ctx context.Context, pr int) (PRInfo, error)
+	// PRMergeable asks the forge whether PR pr merges cleanly right now. Only a
+	// conflict is a refusal: branch protection and pending checks are not.
+	PRMergeable(ctx context.Context, pr int) (Mergeability, error)
 	// PRRequestMerge asks the forge to merge PR pr with a merge commit and
 	// returns once it answers; it does not confirm the merge landed (the gate
 	// does that itself). Auto-merge is off on GitLab, which would otherwise
