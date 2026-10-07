@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/exitmap"
 	"github.com/l4ci/rota/internal/frontmatter"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/git"
@@ -144,7 +145,7 @@ func findKnowledge(root string, days int, today time.Time) ([]Entry, error) {
 func findTodo(root string, days int, today time.Time) ([]Entry, error) {
 	// File-mode store by definition; it cannot import cli (documented exception to backend_select.go).
 	md, err := (&backlog.File{Root: root}).Markdown(0)
-	if errors.Is(err, backlog.ErrNotFound) {
+	if exitmap.IsNotFound(err) {
 		return nil, nil
 	}
 	if err != nil {
