@@ -24,6 +24,7 @@ func TestGateQueuedPR(t *testing.T) {
 	for _, arg := range []string{"#7", "7", ghURL} {
 		w := newWorld(t, "")
 		w.setQueued()
+		w.forge("body", "Closes #5\n")
 		if res, err := gateAs(w, arg, GateOpts{CheckOnly: true}); err != nil || res.Verdict != GateFresh || res.Branch != "w1" || res.PR != ghURL {
 			t.Fatalf("%s check-only: %+v %v", arg, res, err)
 		}
