@@ -21,6 +21,7 @@ import (
 	"github.com/l4ci/rota/internal/repos"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/tracker"
+	"github.com/l4ci/rota/internal/tui"
 )
 
 // Command is a group (Subs) or a verb (Verb) in the rota tree.
@@ -32,8 +33,14 @@ type Command struct {
 	// Verb defines the verb's flags on fs and returns the function that
 	// runs with the parsed values. Nil for a group.
 	Verb func(fs *flag.FlagSet) RunFunc
+	// View, when set, opens the verb's terminal screen under --ui: it builds
+	// the screen from the verb's own Result. Nil means --ui is refused.
+	View ViewFunc
 	Subs []*Command
 }
+
+// ViewFunc builds the --ui screen from a verb's Result.
+type ViewFunc func(c *Ctx, res Result) (tui.Model, error)
 
 // RunFunc runs a verb with its positional args.
 type RunFunc func(c *Ctx, args []string) (Result, error)
@@ -148,14 +155,15 @@ func (c *Ctx) RepoList() (root string, list []Repo, err error) {
 // Invocation): before the verb they are the only flags allowed, after it they
 // are parsed together with the verb's own flags.
 type globals struct {
-	json, help, version bool
-	cwd, repo           string
+	json, help, version, ui bool
+	cwd, repo               string
 }
 
 // register adds the globals to fs. preVerb adds --version and --repo, which
 // before the verb are always accepted; after it, --repo only on repo verbs.
 func (g *globals) register(fs *flag.FlagSet, preVerb, repo bool) {
 	fs.BoolVar(&g.json, "json", false, "machine output: one JSON envelope on stdout")
+	fs.BoolVar(&g.ui, "ui", false, "open the verb's terminal view")
 	fs.BoolVar(&g.help, "h", false, "help")
 	fs.BoolVar(&g.help, "help", false, "help")
 	fs.StringVar(&g.cwd, "C", "", "run as if started in `dir`")
@@ -170,6 +178,7 @@ func (g *globals) register(fs *flag.FlagSet, preVerb, repo bool) {
 
 func (g *globals) merge(o globals) {
 	g.json = g.json || o.json
+	g.ui = g.ui || o.ui
 	g.help = g.help || o.help
 	g.version = g.version || o.version
 	if o.cwd != "" {
@@ -322,6 +331,11 @@ func run(root *Command, deps *Deps, args []string, stdin io.Reader, stdout, stde
 	if g.repo != "" && !cmd.Repo {
 		return fail(c, stdout, Usage("unknown flag \"--repo\""))
 	}
+	if g.ui {
+		if err := uiRefuse(c, cmd); err != nil {
+			return fail(c, stdout, err)
+		}
+	}
 	c.Repo = g.repo
 	if g.cwd != "" {
 		if err := os.Chdir(g.cwd); err != nil {
@@ -342,6 +356,9 @@ func run(root *Command, deps *Deps, args []string, stdin io.Reader, stdout, stde
 	res, err := runVerb(c, positional)
 	if err != nil {
 		return failWith(c, stdout, err, res)
+	}
+	if g.ui {
+		return uiFinish(c, stdout, cmd, res)
 	}
 	return ok(c, stdout, res)
 }
@@ -456,7 +473,7 @@ func writeEnvelope(w io.Writer, env *jsonx.Object) error {
 }
 
 // globalNames are left out of a verb's own flag list in help.
-var globalNames = map[string]bool{"json": true, "h": true, "help": true, "C": true, "cwd": true, "repo": true, "version": true}
+var globalNames = map[string]bool{"json": true, "ui": true, "h": true, "help": true, "C": true, "cwd": true, "repo": true, "version": true}
 
 func helpResult(path string, cmd *Command, verbFlags *flag.FlagSet) Result {
 	var b strings.Builder
@@ -494,7 +511,11 @@ func helpResult(path string, cmd *Command, verbFlags *flag.FlagSet) Result {
 		})
 		data.Set("flags", flags)
 	}
-	b.WriteString("\nGlobal flags: --json, -C/--cwd <dir>, --repo <name>, -h/--help\n")
+	b.WriteString("\nGlobal flags: --json, -C/--cwd <dir>, --repo <name>, -h/--help")
+	if cmd.View != nil {
+		b.WriteString(", --ui")
+	}
+	b.WriteString("\n")
 	return Result{Data: data, Text: b.String()}
 }
 

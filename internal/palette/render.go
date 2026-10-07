@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/l4ci/rota/internal/tui"
 )
 
 // Header is the banner's version and the one-line project context.
@@ -32,16 +34,11 @@ type RenderOpts struct {
 	Color bool
 }
 
-func (o RenderOpts) sgr(code, text string) string {
-	if !o.Color || text == "" {
-		return text
-	}
-	return "\x1b[" + code + "m" + text + "\x1b[0m"
-}
+func (o RenderOpts) style() tui.Style { return tui.Style{Color: o.Color} }
 
-func (o RenderOpts) dim(t string) string  { return o.sgr("2", t) }
-func (o RenderOpts) bold(t string) string { return o.sgr("1", t) }
-func (o RenderOpts) tint(t string) string { return o.sgr("36", t) }
+func (o RenderOpts) dim(t string) string  { return o.style().Dim(t) }
+func (o RenderOpts) bold(t string) string { return o.style().Bold(t) }
+func (o RenderOpts) tint(t string) string { return o.style().Cyan(t) }
 
 func versionTag(v string) string {
 	if v == "" {
@@ -81,18 +78,6 @@ func Banner(version string, o RenderOpts) []string {
 	return out
 }
 
-// fit cuts s to w runes, ending in an ellipsis; w <= 0 leaves it alone.
-func fit(s string, w int) string {
-	if w <= 0 || utf8.RuneCountInString(s) <= w {
-		return s
-	}
-	r := []rune(s)
-	if w == 1 {
-		return string(r[:1])
-	}
-	return string(r[:w-1]) + "…"
-}
-
 // Context joins the non-empty parts of the context line.
 func (h Header) Context() string {
 	var p []string
@@ -104,12 +89,17 @@ func (h Header) Context() string {
 	return strings.Join(p, "  ·  ")
 }
 
+var paletteHints = []tui.Hint{
+	{Key: "↑/↓", Desc: "move"}, {Key: "enter", Desc: "run"}, {Key: "1-9", Desc: "jump"},
+	{Key: "type", Desc: "to filter"}, {Key: "q", Desc: "quit"},
+}
+
 // Render draws one frame, without the screen-clearing prefix.
 func Render(s State, h Header, o RenderOpts) string {
 	lines := Banner(h.Version, o)
 	lines = append(lines, "")
 	if c := h.Context(); c != "" {
-		lines = append(lines, o.dim(fit(c, o.Width)))
+		lines = append(lines, o.dim(tui.Fit(c, o.Width)))
 		lines = append(lines, "")
 	}
 	m := s.Matches()
@@ -121,7 +111,7 @@ func Render(s State, h Header, o RenderOpts) string {
 		head := fmt.Sprintf("%d  ", it.N)
 		label, hint := it.Label, it.Hint
 		mark := "  "
-		if i == s.Sel {
+		if i == s.List.Sel {
 			mark = "› "
 		}
 		pad := strings.Repeat(" ", lw-utf8.RuneCountInString(label))
@@ -133,10 +123,10 @@ func Render(s State, h Header, o RenderOpts) string {
 			if hint == "" {
 				pad = ""
 			}
-			label = fit(label, room)
+			label = tui.Fit(label, room)
 		}
 		var row string
-		if i == s.Sel {
+		if i == s.List.Sel {
 			row = o.tint(mark) + o.bold(head+label)
 		} else {
 			row = mark + o.dim(head) + label
@@ -150,10 +140,10 @@ func Render(s State, h Header, o RenderOpts) string {
 		lines = append(lines, o.dim("  no match"))
 	}
 	lines = append(lines, "")
-	if s.Filter != "" {
-		lines = append(lines, fit("filter: "+s.Filter+"_", o.Width))
+	if f := s.List.FilterLine(); f != "" {
+		lines = append(lines, tui.Fit(f, o.Width))
 	} else {
-		lines = append(lines, o.dim(fit("↑/↓ move · enter run · 1-9 jump · type to filter · q quit", o.Width)))
+		lines = append(lines, tui.Hints(paletteHints, o.Width, o.style()))
 	}
 	return strings.Join(lines, "\n") + "\n"
 }

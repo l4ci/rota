@@ -9,6 +9,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/l4ci/rota/internal/tui"
 )
 
 // fakeTerm scripts the terminal: each chunk is one Read, as a real terminal
@@ -48,7 +50,7 @@ func (t *fakeTerm) makeRaw() (func(), error) {
 }
 
 func (t *fakeTerm) frames() []string {
-	parts := strings.Split(t.out.String(), clearScreen)
+	parts := strings.Split(t.out.String(), tui.ClearScreen)
 	return parts[1:]
 }
 
@@ -212,7 +214,7 @@ func TestTerminalRestoredOnEveryExit(t *testing.T) {
 		if ft.raws == 0 || ft.raws != ft.restores {
 			t.Errorf("%s: raw %d, restore %d", name, ft.raws, ft.restores)
 		}
-		if !strings.HasSuffix(strings.TrimRight(ft.out.String(), "\n"), showCursor) && !strings.Contains(ft.out.String(), showCursor) {
+		if !strings.HasSuffix(strings.TrimRight(ft.out.String(), "\n"), tui.ShowCursor) && !strings.Contains(ft.out.String(), tui.ShowCursor) {
 			t.Errorf("%s: cursor left hidden", name)
 		}
 	}
@@ -328,7 +330,7 @@ func TestNumberedFallback(t *testing.T) {
 
 func TestNoColorFramesCarryNoEscapes(t *testing.T) {
 	ft, _, _ := runWith(t, "q")
-	if f := strings.ReplaceAll(ft.frames()[0], showCursor, ""); strings.Contains(f, "\x1b") {
+	if f := strings.ReplaceAll(ft.frames()[0], tui.ShowCursor, ""); strings.Contains(f, "\x1b") {
 		t.Errorf("colorless frame has escapes: %q", f)
 	}
 	c, ft2 := &calls{}, script("q")
@@ -393,23 +395,6 @@ func TestRenderHeaderAndNarrowRows(t *testing.T) {
 		if n := len([]rune(l)); n > 30 {
 			t.Errorf("row of %d runes at width 30: %q", n, l)
 		}
-	}
-}
-
-func TestDecodeKeys(t *testing.T) {
-	got := DecodeKeys([]byte("\x1b[A\x1b[Bj\r\n\x7f\x03\x1b\x1b[C\xc3\xa4"))
-	want := []Key{{Kind: KeyUp}, {Kind: KeyDown}, {Kind: KeyRune, R: 'j'}, {Kind: KeyEnter}, {Kind: KeyEnter},
-		{Kind: KeyBackspace}, {Kind: KeyCtrlC}, {Kind: KeyEsc}, {Kind: KeyRune, R: 'ä'}}
-	if len(got) != len(want) {
-		t.Fatalf("got %v", got)
-	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Errorf("key %d = %v, want %v", i, got[i], want[i])
-		}
-	}
-	if k := DecodeKeys([]byte("\x1bOA")); len(k) != 1 || k[0].Kind != KeyUp {
-		t.Errorf("SS3 up = %v", k)
 	}
 }
 

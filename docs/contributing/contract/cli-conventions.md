@@ -28,7 +28,7 @@ The argument rule, exactly:
 8. An unknown flag is a usage error (exit 2) naming the flag.
 
 - Any flag that takes a file path also accepts `-`, which means stdin. Bodies always come in this way (`--body-file -`), never as positional text.
-- `rota` never prompts and never reads a TTY. A verb that needs a decision fails with usage (exit 2) and names the missing flag. Asking the human is the skill's job. The one exception is `rota setup` (#25), which prompts only on a terminal and never without one.
+- `rota` never prompts and never reads a TTY. A verb that needs a decision fails with usage (exit 2) and names the missing flag. Asking the human is the skill's job. Four things are terminal-only, styled and interactive, and none runs without a terminal: the palette (bare `rota`), `rota setup` (#25), `rota config edit` and the `--ui` views. Plain text with no ANSI codes stays the default output and the machine contract.
 
 ## Global flags
 
@@ -37,9 +37,10 @@ The argument rule, exactly:
 | `--json` | Machine output: one JSON envelope on stdout (below). |
 | `-C <dir>`, `--cwd <dir>` | Run as if started in `<dir>`, like `git -C`. Lets an orchestrator act on a worker's worktree without `cd`. |
 | `--repo <name>` | Umbrella mode: scope the verb to the named sub-repo registered in `.rota/repos.json`. On a verb without repo scope it is an unknown flag (exit 2). Outside umbrella mode (no registered sub-repos), or with a name that isn't registered, the verb exits 3 (`resolution`). |
+| `--ui` | Open the verb's terminal view instead of printing its result. Only verbs that register a view accept it. It is a usage error (exit 2) with `hint: run: rota <verb>`, naming the plain verb, with `--json`, off a terminal, or on a verb without a view. Output never changes because stdout is a terminal: a view opens only when `--ui` is given. |
 | `-h`, `--help` | Help for the group or verb, on stdout, exit 0. |
 
-`rota --version` (before any command word) is an alias for `rota version`. There are no colour, verbosity or quiet flags: output carries no ANSI codes, and stdout is already the quiet channel.
+`rota --version` (before any command word) is an alias for `rota version`. There are no colour, verbosity or quiet flags: plain output carries no ANSI codes, and stdout is already the quiet channel. Only the terminal-only screens listed under Invocation (palette, `rota setup`, `rota config edit`, `--ui` views) are styled.
 
 ## Project root
 

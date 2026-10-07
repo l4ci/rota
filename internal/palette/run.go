@@ -2,14 +2,14 @@ package palette
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"os"
-	"os/signal"
 	"strconv"
 	"strings"
-	"sync"
-	"syscall"
+
+	"github.com/l4ci/rota/internal/tui"
 )
 
 // Config is what Run touches outside its own memory; tests fill it with
@@ -35,25 +35,22 @@ type Config struct {
 	Exit    func(code int)
 }
 
-// lockedWriter serializes the frame writes with the signal handler's.
-type lockedWriter struct {
-	mu sync.Mutex
-	w  io.Writer
+// RunTerminal fills the terminal parts of cfg from the process through
+// tui.NewTerminal: raw mode and width through stty on cfg.In, colors from
+// NO_COLOR and TERM. A dumb or unknown TERM, or an input that is not a
+// terminal file, takes the numbered prompt. cfg.In and cfg.Out are the
+// caller's.
+func RunTerminal(cfg Config) error {
+	t, ok := tui.NewTerminal(cfg.In, cfg.Out)
+	cfg.Color = t.Style.Color
+	if !ok {
+		cfg.Dumb = true
+		return Run(cfg)
+	}
+	cfg.MakeRaw = t.MakeRaw
+	cfg.Width = func() int { w, _ := t.Size(); return w }
+	return Run(cfg)
 }
-
-func (l *lockedWriter) Write(p []byte) (int, error) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	return l.w.Write(p)
-}
-
-// clearScreen starts every frame: cursor home, clear.
-const clearScreen = "\x1b[H\x1b[2J"
-
-const (
-	hideCursor = "\x1b[?25l"
-	showCursor = "\x1b[?25h"
-)
 
 func (c Config) header() Header {
 	if c.Header == nil {
@@ -74,124 +71,63 @@ func (c Config) opts() RenderOpts {
 // do. It stands in for the palette where no person is at a terminal (tests).
 func RunDefault(cfg Config) error {
 	s := New(cfg.Entries, cfg.InProject)
-	if s.Sel < len(s.Items) && !s.Items[s.Sel].Quit && s.Items[s.Sel].Run != nil {
-		return s.Items[s.Sel].Run()
+	if i, ok := s.List.Selected(); ok && !s.Items[i].Quit && s.Items[i].Run != nil {
+		return s.Items[i].Run()
 	}
 	return nil
 }
 
-// Run shows the palette until the person quits or an Ends entry has run. The
-// terminal is restored on every way out: a normal return, a panic (deferred),
-// SIGINT and SIGTERM (restored before exiting 128+signal), and around every
-// action, which runs on a cooked terminal so it can prompt.
-func Run(cfg Config) (err error) {
-	cfg.Out = &lockedWriter{w: cfg.Out} // the signal handler writes too
+// Run shows the palette until the person quits or an Ends entry has run.
+// internal/tui's driver owns the terminal and restores it on every way out.
+// An action runs on a cooked terminal so it can prompt; a terminal that
+// cannot go raw gets the numbered prompt.
+func Run(cfg Config) error {
 	if cfg.Dumb || cfg.MakeRaw == nil {
 		return runLines(cfg)
 	}
-	var leave func()
-	enter := func() error {
-		l, err := cfg.enter()
-		if err != nil {
-			return err
-		}
-		leave = l
-		return nil
+	t := tui.Terminal{
+		In: cfg.In, Out: cfg.Out, MakeRaw: cfg.MakeRaw, Style: tui.Style{Color: cfg.Color},
+		Signals: cfg.Signals, Exit: cfg.Exit,
 	}
-	defer func() {
-		if leave != nil {
-			leave()
-		}
-	}()
-	if enter() != nil {
+	if cfg.Width != nil {
+		t.Size = func() (int, int) { return cfg.Width(), 0 }
+	}
+	err := tui.Run(t, model{s: New(cfg.Entries, cfg.InProject), h: cfg.header()})
+	if errors.Is(err, tui.ErrNoRaw) {
 		return runLines(cfg)
 	}
-
-	s := New(cfg.Entries, cfg.InProject)
-	h := cfg.header()
-	buf := make([]byte, 64)
-	for {
-		fmt.Fprint(cfg.Out, clearScreen, Render(s, h, cfg.opts()))
-		n, rerr := cfg.In.Read(buf)
-		if n == 0 && rerr != nil {
-			return nil
-		}
-		var act Action
-		for _, k := range DecodeKeys(buf[:n]) {
-			s, act = s.Update(k)
-			if act.Kind != None {
-				break
-			}
-		}
-		switch act.Kind {
-		case Quit:
-			return nil
-		case RunItem:
-			leave()
-			leave = nil
-			fmt.Fprint(cfg.Out, clearScreen)
-			var aerr error
-			if act.Item.Run != nil {
-				aerr = act.Item.Run()
-			}
-			if act.Item.Ends {
-				return aerr
-			}
-			if aerr != nil {
-				fmt.Fprintf(cfg.Out, "error: %v\n", aerr)
-			}
-			if err := enter(); err != nil {
-				return err
-			}
-			fmt.Fprint(cfg.Out, "\npress any key")
-			if n, _ := cfg.In.Read(buf); n == 0 {
-				return nil
-			}
-		}
-	}
+	return err
 }
 
-// enter sets raw mode, hides the cursor and arms the signal handler. The
-// returned leave undoes all of it, once.
-func (c Config) enter() (func(), error) {
-	restore, err := c.MakeRaw()
-	if err != nil {
-		return nil, err
+// model is the palette as a tui screen.
+type model struct {
+	s State
+	h Header
+}
+
+func (m model) Update(msg tui.Msg) (tui.Model, tui.Cmd) {
+	k, ok := msg.(tui.Key)
+	if !ok {
+		return m, tui.Cmd{}
 	}
-	fmt.Fprint(c.Out, hideCursor)
-	sigs, stopSigs := c.Signals, func() {}
-	if sigs == nil {
-		ch := make(chan os.Signal, 1)
-		signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
-		sigs, stopSigs = ch, func() { signal.Stop(ch) }
-	}
-	exit := c.Exit
-	if exit == nil {
-		exit = os.Exit
-	}
-	var once sync.Once
-	done := make(chan struct{})
-	leave := func() {
-		once.Do(func() {
-			close(done)
-			stopSigs()
-			fmt.Fprint(c.Out, showCursor)
-			restore()
-		})
-	}
-	go func() {
-		select {
-		case sig := <-sigs:
-			leave()
-			code := 130
-			if s, ok := sig.(syscall.Signal); ok {
-				code = 128 + int(s)
-			}
-			exit(code)
-		case <-done:
+	var act Action
+	m.s, act = m.s.Update(k)
+	switch act.Kind {
+	case Quit:
+		return m, tui.Cmd{Quit: true}
+	case RunItem:
+		run := act.Item.Run
+		if run == nil {
+			run = func() error { return nil }
 		}
-	}()
-	return leave, nil
+		ends := act.Item.Ends
+		return m, tui.Cmd{Exec: run, Cooked: true, Wait: !ends, Quit: ends}
+	}
+	return m, tui.Cmd{}
+}
+
+func (m model) Render(w, _ int, st tui.Style) string {
+	return Render(m.s, m.h, RenderOpts{Width: w, Color: st.Color})
 }
 
 // runLines is the numbered prompt for a terminal that cannot do raw mode.
@@ -264,7 +200,8 @@ func pick(items []Item, ans string) (Item, bool) {
 		}
 		return Item{}, false
 	}
-	s := State{Items: items, Filter: ans}
+	s := newState(items)
+	s.List.Filter = ans
 	m := s.Matches()
 	for _, it := range m {
 		if strings.EqualFold(it.Label, ans) {
