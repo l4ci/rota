@@ -103,9 +103,10 @@ pass "every rota verb in skills/rota-orchestrate/SKILL.md and docs/usage/paralle
 
 # ── contract docs carry a verified-sha stamp and no ref drifted since (#392) ──
 # test/check-doc-stamps.py: `verified-sha:` + `refs:` frontmatter on every
-# docs/design/contract/*.md; a ref changed after the sha flags the doc. Both outcomes
-# run against a throwaway repo so the real history never has to drift.
-OUT="$(python3 "$TESTDIR/check-doc-stamps.py" 2>&1)" || fail "contract docs are unstamped or drifted from their refs: $OUT"
+# docs/design/contract/*.md; a ref changed after the sha is drift: a WARN by default,
+# a failure under --strict / ROTA_DOC_STAMPS=strict. A broken stamp always fails. All
+# outcomes run against a throwaway repo so the real history never has to drift.
+OUT="$(python3 "$TESTDIR/check-doc-stamps.py" 2>&1)" || fail "contract docs have a broken stamp: $OUT"
 SG="$TMP/stamps"; mkdir -p "$SG/docs/design/contract" "$SG/src"
 git -C "$SG" init -q
 git -C "$SG" config user.email t@t; git -C "$SG" config user.name t
@@ -118,8 +119,13 @@ rc=0; OUT="$(python3 "$TESTDIR/check-doc-stamps.py" --root "$SG" 2>&1)" || rc=$?
 echo two > "$SG/src/b.go"; echo two > "$SG/src/a.go"
 git -C "$SG" commit -qam drift
 rc=0; OUT="$(python3 "$TESTDIR/check-doc-stamps.py" --root "$SG" 2>&1)" || rc=$?
-[ "$rc" = 1 ] && grep -qF "ok.md: refs changed since verified-sha $SSHA: src/a.go" <<<"$OUT" && ! grep -qF "src/b.go" <<<"$OUT" \
-  || fail "a drifted ref should flag the doc and only the changed path (rc $rc): $OUT"
+[ "$rc" = 0 ] && grep -qF "WARN ok.md: refs changed since verified-sha $SSHA: src/a.go" <<<"$OUT" && ! grep -qF "src/b.go" <<<"$OUT" \
+  || fail "drift should warn about only the changed path and exit 0 (rc $rc): $OUT"
+rc=0; OUT="$(python3 "$TESTDIR/check-doc-stamps.py" --root "$SG" --strict 2>&1)" || rc=$?
+[ "$rc" = 1 ] && grep -qF "ok.md: refs changed since verified-sha $SSHA: src/a.go" <<<"$OUT" && ! grep -qF "WARN ok.md" <<<"$OUT" \
+  || fail "--strict should fail on drift (rc $rc): $OUT"
+rc=0; OUT="$(ROTA_DOC_STAMPS=strict python3 "$TESTDIR/check-doc-stamps.py" --root "$SG" 2>&1)" || rc=$?
+[ "$rc" = 1 ] || fail "ROTA_DOC_STAMPS=strict should fail on drift (rc $rc): $OUT"
 printf -- '---\nverified-sha: nothex\nrefs:\n  - src/a.go\n---\n' > "$SG/docs/design/contract/ok.md"
 rc=0; OUT="$(python3 "$TESTDIR/check-doc-stamps.py" --root "$SG" 2>&1)" || rc=$?
 [ "$rc" = 1 ] && grep -qF "malformed verified-sha" <<<"$OUT" || fail "a malformed sha should fail (rc $rc): $OUT"
@@ -132,6 +138,6 @@ rc=0; OUT="$(python3 "$TESTDIR/check-doc-stamps.py" --root "$SG" 2>&1)" || rc=$?
 printf '# no frontmatter\n' > "$SG/docs/design/contract/ok.md"
 rc=0; OUT="$(python3 "$TESTDIR/check-doc-stamps.py" --root "$SG" 2>&1)" || rc=$?
 [ "$rc" = 1 ] && grep -qF "no frontmatter" <<<"$OUT" || fail "an unstamped doc should fail (rc $rc): $OUT"
-pass "contract docs are stamped and current; a drifted ref, bad sha, unknown sha, missing ref and missing stamp each fail by name"
+pass "contract doc drift warns by default and fails under strict; a bad sha, unknown sha, missing ref and missing stamp always fail by name"
 
 echo "All doclint checks passed."

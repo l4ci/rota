@@ -9,15 +9,19 @@ commit it was last verified against and the repo paths it describes.
       - internal/cli/gate.go
     ---
 
-A doc fails when its stamp is missing or malformed, the sha is unknown, a ref
-does not exist, or a ref changed between the sha and HEAD (`git diff --quiet
-<sha> HEAD -- <ref>`). The failure names the doc and the changed paths. To clear
-it, re-read the doc against the changed paths, fix what drifted, then set
-`verified-sha:` to the current `git rev-parse HEAD` (docs/contributing/docs-stamps.md).
+A doc has an error when its stamp is missing or malformed, the sha is unknown,
+or a ref does not exist: a mistake in the stamp itself, always exit 1. A doc has
+drift when a ref changed between the sha and HEAD (`git diff --quiet <sha> HEAD
+-- <ref>`). Drift is report-only by default (printed as `WARN`, exit 0) so
+unrelated PRs are not blocked; `--strict` (or ROTA_DOC_STAMPS=strict) fails on it.
+Either way the line names the doc and the changed paths. To clear drift, re-read
+the doc against the changed paths, fix what drifted, then set `verified-sha:` to
+the current `git rev-parse HEAD` (docs/contributing/rounds.md, Contract doc stamps).
 
-Usage: check-doc-stamps.py [--root <repo>]   (default: this checkout)
-Exit:  0 all stamped and current, 1 findings (one line each on stdout)
+Usage: check-doc-stamps.py [--root <repo>] [--strict]   (default root: this checkout)
+Exit:  0 no errors (and no drift when strict), 1 otherwise (one line each on stdout)
 """
+import os
 import argparse
 import re
 import subprocess
@@ -68,12 +72,13 @@ def git(root, *args):
 
 
 def check_doc(root, doc):
+    """Return (errors, drift): lists of finding lines."""
     name = doc.relative_to(root).as_posix()
     sha, refs, err = parse_stamp(doc.read_text())
     if err:
-        return [f"{name}: {err}"]
+        return [f"{name}: {err}"], []
     if git(root, "cat-file", "-e", f"{sha}^{{commit}}").returncode != 0:
-        return [f"{name}: verified-sha {sha} is not a known commit (shallow clone? fetch full history)"]
+        return [f"{name}: verified-sha {sha} is not a known commit (shallow clone? fetch full history)"], []
     findings = []
     for ref in refs:
         if ref.startswith("/") or ".." in Path(ref).parts:
@@ -81,28 +86,38 @@ def check_doc(root, doc):
         elif not (root / ref).exists() and git(root, "cat-file", "-e", f"{sha}:{ref}").returncode != 0:
             findings.append(f"{name}: ref {ref} does not exist")
     if findings:
-        return findings
+        return findings, []
     # A ref that existed at the sha but is gone now is drift too (the diff sees the delete).
     changed = [r for r in refs if git(root, "diff", "--quiet", sha, "HEAD", "--", r).returncode != 0]
     if changed:
-        return [f"{name}: refs changed since verified-sha {sha}: {', '.join(changed)}"]
-    return []
+        return [], [f"{name}: refs changed since verified-sha {sha}: {', '.join(changed)}"]
+    return [], []
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--root", default=str(Path(__file__).resolve().parent.parent))
-    root = Path(ap.parse_args().root).resolve()
+    ap.add_argument("--strict", action="store_true",
+                    default=os.environ.get("ROTA_DOC_STAMPS") == "strict",
+                    help="fail on drifted refs too (also ROTA_DOC_STAMPS=strict)")
+    args = ap.parse_args()
+    root = Path(args.root).resolve()
     docs = sorted((root / "docs/design/contract").glob("*.md"))
     if not docs:
         print("docs/design/contract: no contract docs found")
         return 1
-    findings = [f for d in docs for f in check_doc(root, d)]
-    for f in findings:
+    results = [check_doc(root, d) for d in docs]
+    errors = [f for e, _ in results for f in e]
+    drift = [f for _, d in results for f in d]
+    for f in errors:
         print(f)
-    if not findings:
+    for f in drift:
+        print(f if args.strict else f"WARN {f}")
+    if not errors and not drift:
         print(f"OK {len(docs)} contract docs stamped and current")
-    return 1 if findings else 0
+    elif not errors and not args.strict:
+        print(f"WARN {len(drift)} contract doc(s) drifted from their refs (ROTA_DOC_STAMPS=strict fails on this)")
+    return 1 if errors or (drift and args.strict) else 0
 
 
 if __name__ == "__main__":
