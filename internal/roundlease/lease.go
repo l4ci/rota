@@ -106,18 +106,45 @@ func procAlive(pid int) bool {
 // Path is the lease file under a common dir.
 func Path(commonDir string) string { return rotastate.File(commonDir, FileName) }
 
+// ProcessLive reports whether pid is running and is the process that was
+// recorded: a recorded start time (non-zero) that no longer matches means the
+// pid was reused.
+func (e Env) ProcessLive(pid int, start uint64) bool {
+	if !e.Alive(pid) {
+		return false
+	}
+	if start != 0 {
+		if s, ok := e.StartTime(pid); ok && s != start {
+			return false
+		}
+	}
+	return true
+}
+
+// Running is the one liveness rule of the singleton-watcher markers (round
+// watch, limit watch, keepalive): the owner is on this host, its pid is alive
+// and still the recorded process. A marker from before hosts were recorded
+// (empty host) is taken as local. Nothing can be checked about another host's.
+func (e Env) Running(host string, pid int, start uint64) bool {
+	if pid <= 0 || (host != "" && host != e.Host) {
+		return false
+	}
+	return e.ProcessLive(pid, start)
+}
+
+// Identity is what a marker records so Running can tell pid from impostor.
+func (e Env) Identity(pid int) (host string, start uint64) {
+	start, _ = e.StartTime(pid)
+	return e.Host, start
+}
+
 // Classify says what a lease is, for this Env's host.
 func (e Env) Classify(l Lease) State {
 	if l.Host != e.Host {
 		return Foreign
 	}
-	if !e.Alive(l.PID) {
+	if !e.ProcessLive(l.PID, l.Start) {
 		return Stale
-	}
-	if l.Start != 0 {
-		if s, ok := e.StartTime(l.PID); ok && s != l.Start {
-			return Stale // the pid was reused
-		}
 	}
 	return Live
 }
