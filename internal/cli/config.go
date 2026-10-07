@@ -89,7 +89,17 @@ func configShow(fs *flag.FlagSet) RunFunc {
 		rows := make([]any, 0, len(entries))
 		lines := make([]string, 0, len(entries))
 		for _, e := range entries {
-			rows = append(rows, jsonObj("key", e.Key, "value", e.Value, "source", e.Source))
+			row := jsonObj("key", e.Key, "value", e.Value, "source", e.Source)
+			if sk := e.Schema; sk != nil {
+				row.Set("default", config.Default(*sk))
+				row.Set("type", string(sk.Type))
+				row.Set("group", sk.Group)
+				row.Set("desc", sk.Desc)
+				if len(sk.Choices) > 0 {
+					row.Set("choices", strSlice(sk.Choices))
+				}
+			}
+			rows = append(rows, row)
 			lines = append(lines, e.Line())
 		}
 		return Result{Data: jsonObj("entries", rows), Text: strings.Join(lines, "\n")}, nil

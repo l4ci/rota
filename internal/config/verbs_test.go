@@ -51,13 +51,19 @@ func TestShowSources(t *testing.T) {
 		`{"models": {"worker": "haiku", "orchestrator": null}, "work": {"isolation": "worktree"}}`,
 		`{"work": {"isolation": "branch"}, "docs": {"path": "d"}}`)
 	for key, want := range map[string]Entry{
-		"work.isolation":      {"work.isolation", "branch", "local"},
-		"models.worker":       {"models.worker", "haiku", "project"},
-		"models.orchestrator": {"models.orchestrator", "opus", "default"}, // null counts as unset
-		"docs.path":           {"docs.path", "d", "local"},
-		"docs.afterWork":      {"docs.afterWork", false, "default"},
+		"work.isolation":      {"work.isolation", "branch", "local", nil},
+		"models.worker":       {"models.worker", "haiku", "project", nil},
+		"models.orchestrator": {"models.orchestrator", "opus", "default", nil}, // null counts as unset
+		"docs.path":           {"docs.path", "d", "local", nil},
+		"docs.afterWork":      {"docs.afterWork", false, "default", nil},
 	} {
 		es, err := Show(root, key, true)
+		if err == nil && len(es) == 1 {
+			if es[0].Schema == nil || es[0].Schema.Name != key {
+				t.Errorf("%s: schema row %+v", key, es[0].Schema)
+			}
+			es[0].Schema = nil
+		}
 		if err != nil || len(es) != 1 || !reflect.DeepEqual(es[0], want) {
 			t.Errorf("%s: %+v, %v; want %+v", key, es, err, want)
 		}
@@ -140,12 +146,15 @@ func TestShowDeepMergeSources(t *testing.T) {
 		`{"ship":{"qa":true,"review":false},"issues":{"labels":{"types":{"bug":"defect","task":"chore"}}}}`,
 		`{"ship":{"qa":null},"issues":{"labels":{"types":{"bug":"bug"}}}}`)
 	for key, want := range map[string]Entry{
-		"ship.qa":                  {"ship.qa", false, "default"},
-		"ship.review":              {"ship.review", false, "project"},
-		"issues.labels.types.bug":  {"issues.labels.types.bug", "bug", "local"},
-		"issues.labels.types.task": {"issues.labels.types.task", "chore", "project"},
+		"ship.qa":                  {"ship.qa", false, "default", nil},
+		"ship.review":              {"ship.review", false, "project", nil},
+		"issues.labels.types.bug":  {"issues.labels.types.bug", "bug", "local", nil},
+		"issues.labels.types.task": {"issues.labels.types.task", "chore", "project", nil},
 	} {
 		rows, err := Show(root, key, true)
+		if err == nil && len(rows) == 1 {
+			rows[0].Schema = nil
+		}
 		if err != nil || len(rows) != 1 || !reflect.DeepEqual(rows[0], want) {
 			t.Errorf("%s: %v, %v; want %v", key, rows, err, want)
 		}
@@ -171,7 +180,7 @@ func TestShowUnknownAndHandEditedKeys(t *testing.T) {
 }
 
 func TestShowLine(t *testing.T) {
-	e := Entry{"work.accounts", []any{"a", "b"}, "default"}
+	e := Entry{"work.accounts", []any{"a", "b"}, "default", nil}
 	if got := e.Line(); got != `work.accounts = ["a", "b"]  (source: default)` {
 		t.Errorf("Line = %s", got)
 	}
