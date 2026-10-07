@@ -8,7 +8,7 @@ import (
 	"fmt"
 )
 
-// Exit codes; see docs/design/5.0-cli-conventions.md, Exit codes.
+// Exit codes; see docs/contributing/contract/cli-conventions.md, Exit codes.
 const (
 	ExitOK             = 0
 	ExitFailed         = 1

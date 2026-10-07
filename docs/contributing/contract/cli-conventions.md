@@ -1,6 +1,14 @@
-# 5.0 `rota` CLI conventions
+---
+verified-sha: 0ad1f9f4f2f87adf94627bf0bc71eadd1065456d
+refs:
+  - internal/cli
+  - internal/exitcode
+  - internal/fsio
+---
 
-These rules hold for every `rota` verb. Per-verb flags and `--json` data shapes live in the verb contract (A2, #46) and must fit inside them. The command tree comes from the [helper triage](5.0-helper-triage.md). The Go code that enforces these rules is `internal/cli`.
+# `rota` CLI conventions
+
+These rules hold for every `rota` verb. Per-verb flags and `--json` data shapes live in the verb contract (A2, #46) and must fit inside them. The Go code that enforces these rules is `internal/cli`.
 
 ## Invocation
 
