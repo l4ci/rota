@@ -148,3 +148,30 @@ func TestConfigCheckFailsOnRetiredLoop(t *testing.T) {
 		t.Errorf("auto flagged: %v", env)
 	}
 }
+
+// config show --json carries each schema key's metadata, additively.
+func TestConfigShowJSONMetadata(t *testing.T) {
+	root := trackerProject(t, "{}\n")
+	code, env, _ := rotaRun(t, "--json", "-C", root, "config", "show", "work.mergeStrategy")
+	rows, _ := get(dataOf(env), "entries").([]any)
+	if code != 0 || len(rows) != 1 {
+		t.Fatalf("show: %d %v", code, env)
+	}
+	want := map[string]any{"type": "enum", "group": "work", "default": "direct", "value": "direct", "source": "default"}
+	for k, v := range want {
+		if got := get(rows[0], k); got != v {
+			t.Errorf("%s = %v, want %v", k, got, v)
+		}
+	}
+	if d, _ := get(rows[0], "desc").(string); d == "" {
+		t.Error("desc is empty")
+	}
+	if c, _ := get(rows[0], "choices").([]any); len(c) != 2 || c[0] != "direct" || c[1] != "pr" {
+		t.Errorf("choices = %v", get(rows[0], "choices"))
+	}
+	_, env, _ = rotaRun(t, "--json", "-C", root, "config", "show", "work.workerSlots")
+	rows, _ = get(dataOf(env), "entries").([]any)
+	if has := get(rows[0], "choices"); has != nil {
+		t.Errorf("a non-enum key lists choices: %v", rows[0])
+	}
+}

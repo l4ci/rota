@@ -140,4 +140,16 @@ rc=0; OUT="$(python3 "$TESTDIR/check-doc-stamps.py" --root "$SG" 2>&1)" || rc=$?
 [ "$rc" = 1 ] && grep -qF "no frontmatter" <<<"$OUT" || fail "an unstamped doc should fail (rc $rc): $OUT"
 pass "contract doc drift warns by default and fails under strict; a bad sha, unknown sha, missing ref and missing stamp always fail by name"
 
+# ── the config reference page is generated from the schema (#541) ───────────
+# internal/config/keys.go is the source; a hand edit or a stale page fails.
+GEN="$TMP/config-options.md"
+(cd "$REPO" && go run ./internal/config/genref "$GEN") || fail "go run ./internal/config/genref failed"
+diff -u "$REPO/docs/reference/config-options.md" "$GEN" >"$TMP/config-options.diff" \
+  || fail "docs/reference/config-options.md differs from the schema; run: go generate ./internal/config
+$(head -20 "$TMP/config-options.diff")"
+cp "$REPO/docs/reference/config-options.md" "$TMP/config-options.edited"
+printf 'hand edit\n' >> "$TMP/config-options.edited"
+if diff -q "$TMP/config-options.edited" "$GEN" >/dev/null; then fail "the config page drift check cannot fail"; fi
+pass "docs/reference/config-options.md matches what the config schema generates"
+
 echo "All doclint checks passed."

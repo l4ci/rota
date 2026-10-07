@@ -8,15 +8,6 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 )
 
-// Key is one known .rota/config.json key: its dotted name, the default used
-// when the key is absent, and whether rota init writes it. Defaults use the
-// jsonx value types: string, bool, json.Number and []any.
-type Key struct {
-	Name     string // dotted path, e.g. "work.mergeStrategy"
-	Default  any    // value when the key is missing or null
-	Required bool   // written by rota init; the schema check treats it as present-or-stale
-}
-
 // VersionKey is the stamp of the rota release that wrote a project's config.
 // LegacyVersionKeys are where hv, before the rename to rota (#236), kept it.
 // They are read as fallbacks and moved by Fill. hvSkills.version is only
@@ -36,132 +27,6 @@ func StampedVersion(cfg any) string {
 		}
 	}
 	return ""
-}
-
-// Keys is the table of every known config key. Leaf keys only: object-valued
-// parents are not rows. The first PythonKeys rows are CONFIG_KEYS of the
-// retired bin/hvlib_config.py, in its order, which the parity goldens freeze;
-// keys added in 5.0 follow them.
-var Keys = []Key{
-	{"models.orchestrator", "opus", true},
-	{"models.worker", "sonnet", true},
-	{"work.isolation", "branch", true},
-	{"work.mergeStrategy", "direct", true},
-	{"work.dispatch", "subagent", true},
-	{"work.workerSlots", json.Number("3"), true},
-	{"work.workerCommand", "", true},
-	{"work.accounts", []any{}, true},
-	{"work.operatorCommand", "", true},
-	{"refactor.confirmBeforeExecute", true, true},
-	{"learn.verify", false, true},
-	{"learn.promoteThreshold", json.Number("3"), true},
-	{"ship.review", true, true},
-	{"ship.secondOpinion", false, true},
-	{"ship.secondOpinionRunner", "subagent", true},
-	{"ship.qa", false, true},
-	{"qa.gate", "advisory", true},
-	{"qa.afterWork", false, true},
-	{"autonomy.level", "off", true},
-	{"docs.path", "docs", true},
-	{"docs.autoCreate", false, true},
-	{"docs.afterWork", false, true},
-	{"git.baseBranch", "", true},
-	{"umbrella.enabled", false, true},
-	{VersionKey, "", true},
-	{"issues.label", "in-progress", false},
-	{"backlog.backend", "file", false},
-	{"issues.provider", "auto", false},
-	{"issues.retryWaitSeconds", json.Number("60"), false},
-	{"issues.bulkPaceMs", json.Number("1000"), false},
-	{"issues.labels.inProgress", "in-progress", false},
-	{"issues.labels.needsReview", "needs-review", false},
-	{"issues.labels.changesRequested", "changes-requested", false},
-	{"issues.labels.released", "released", false},
-	{"issues.labels.notPlanned", "not-planned", false},
-	{"issues.labels.blocked", "blocked", false},
-	{"issues.labels.milestoneTracker", "milestone-tracker", false},
-	{"issues.labels.types.bug", "type:bug", false},
-	{"issues.labels.types.feature", "type:feature", false},
-	{"issues.labels.types.task", "type:task", false},
-	{"issues.labels.priorityPrefix", "p", false},
-	{"issues.labels.sizePrefix", "size:", false},
-	{"issues.autoCreateLabel", true, false},
-	{"issues.homeRepo", "", false},
-	{"release.checklistPath", ".rota/RELEASE.md", false},
-	{"release.confirmLargePushCommits", json.Number("10"), false},
-	{"release.nudgeAfterCommits", json.Number("10"), false},
-	{"release.nudgeAfterDays", json.Number("14"), false},
-	// Test tiers (replace refactor.verifyCommands): not in CONFIG_KEYS.
-	{"test.fast", []any{}, true},
-	{"test.full", []any{}, true},
-	{"test.e2e", []any{}, true},
-	{"test.fullWhere", "local", false},
-	{"test.ciTimeoutMinutes", json.Number("60"), false},
-	{"test.ciChecks", []any{}, false},
-	// 5.0 keys: not in CONFIG_KEYS.
-	{"ship.mergeApproval", "none", false},
-	{"ship.mergeApprovalPaths", []any{}, false},
-	{"round.scope", "milestone", false},
-	{"round.roster", []any{"ben", "dana", "nia", "kit"}, false},
-	{"round.brief", "", false},
-	{"round.sharedPaths", []any{}, false},
-	{"round.tier", "standard", false},
-	{"round.workerKind", "", false}, // empty: the slot's recorded kind, else claude
-	{"round.tiers.claude.light", "haiku", false},
-	{"round.tiers.claude.standard", "", false}, // empty: models.worker
-	{"round.tiers.claude.heavy", "opus", false},
-	{"round.tiers.codex.light", "", false},
-	{"round.tiers.codex.standard", "", false},
-	{"round.tiers.codex.heavy", "", false},
-	// Agent roles (#405): the tier and effort of the three subagent definitions
-	// `rota agents write` emits. An empty effort leaves the harness default.
-	{"roles.explorer.tier", "light", false},
-	{"roles.explorer.effort", "", false},
-	{"roles.implementer.tier", "standard", false},
-	{"roles.implementer.effort", "", false},
-	{"roles.reasoner.tier", "heavy", false},
-	{"roles.reasoner.effort", "", false},
-	{"round.stallMinutes", json.Number("30"), false},
-	{"round.maxBounces", json.Number("3"), false},
-	{"round.architectureEvery", json.Number("20"), false},
-	{"round.architectureAreas", []any{}, false},
-	{"round.autopilot", false, false},
-	{"round.autopilotCap", json.Number("3"), false},
-	{"issues.labels.needsHuman", "needs-human", false},
-	{"work.codexAccounts", []any{}, false}, // named Codex homes; empty: the default Codex home
-	{"work.codexCommand", "", false},       // empty: DefaultCodexCommand in internal/harness
-	{"work.envSetup", "", false},           // empty: no setup; else run in each new slot worktree by pool init
-	{"work.tdd", true, false},              // false: no red-first requirement or RED proof row
-
-	{"orchestrator.handoffThreshold", json.Number("75"), false},
-	{"orchestrator.stateMaxAgeSeconds", json.Number("120"), false},
-	{"orchestrator.handoffMaxAgeSeconds", json.Number("900"), false},
-	{"orchestrator.handoffMaxBlocks", json.Number("2"), false},
-	// D2 keepalive keys: silent defaults, read by `rota keepalive run`.
-	{"orchestrator.keepaliveMaxRestarts", json.Number("10"), false},
-	{"orchestrator.keepaliveBreaker", json.Number("3"), false},
-	{"orchestrator.keepaliveBackoffSeconds", json.Number("5"), false},
-	{"orchestrator.restartPrompt", "Continue as orchestrator: read the handoff injected at session start, run rota round status, and resume the round.", false},
-	{"orchestrator.escalateIssue", json.Number("0"), false},
-	// #19 launcher key: read by `rota orchestrate` and bare `rota`.
-	{"orchestrator.harness", "claude", false},
-	// D4 usage-switch keys: silent defaults, read by the Stop hook and `rota keepalive run`.
-	{"orchestrator.switchOnUsage", false, false},
-	{"orchestrator.usageThreshold", json.Number("90"), false},
-	// D3 usage-limit keys: silent defaults, read by `rota limit watch` and the
-	// watcher inside `rota keepalive run`.
-	{"limits.mode", "switch", false},
-	{"limits.resumeMarginSeconds", json.Number("60"), false},
-	{"limits.fallbackSleepSeconds", json.Number("1800"), false},
-	{"limits.maxResumes", json.Number("3"), false},
-	{"limits.resumePrompt", "The usage limit has reset. Continue where you left off.", false},
-	// #82 gate key: smoke shard count read by test/gate.sh (ROTA_SMOKE_SHARDS overrides).
-	{"gate.smokeShards", json.Number("4"), false},
-	// #85 doctor key: rota doctor warns when the free share of the disk is below this percent; 0 turns it off.
-	{"doctor.minFreeDiskPercent", json.Number("10"), false},
-	{"work.itemTimeoutMinutes", json.Number("0"), false}, // 0: no wall-clock cap per item
-	{"test.isolate", true, false},                        // rota test run scrubs host/ssh env and pins HOME/XDG
-	{"release.versionFile", "", false},                   // empty: auto-detect; else a project-relative path (rota config set validates it)
 }
 
 // PythonKeys is how many leading rows of Keys are CONFIG_KEYS.
@@ -330,12 +195,16 @@ type Choice struct {
 	Desc  string
 }
 
-// Prompt is one question of the interactive setup (rota setup). The choices,
-// the help and the default (the schema default of Key) live here and in Keys,
-// so the setup never drifts from the schema; TestPromptsMatchSchema pins that.
+// Prompt is one question of the interactive setup (rota setup). The values, the
+// order and the default come from the schema key (Key.Choices, or true and
+// false for a bool, the default first); Help only words each value for this
+// question. TestPromptsMatchSchema pins that every value has a line.
 type Prompt struct {
-	Key     string
-	Title   string
+	Key   string
+	Title string
+	// Help maps each choice value to the line shown beside it.
+	Help map[string]string
+	// Choices is built from the schema and Help at init.
 	Choices []Choice
 	// IfKey, when set, makes the question conditional: it is asked only when
 	// the answer (or default) for IfKey equals IfValue.
@@ -345,54 +214,83 @@ type Prompt struct {
 	Optional bool
 }
 
-// Prompts is the setup's questions, in the order they are asked. Choice values
-// are hand-listed here, not derived from the schema; TestPromptsMatchSchema
-// catches a value the schema rejects.
+// Prompts is the setup's questions, in the order they are asked.
 var Prompts = []Prompt{
-	{Key: "backlog.backend", Title: "Where does the backlog live?", Choices: []Choice{
-		{"file", "BACKLOG.md in the repo"},
-		{"issues", "GitHub or GitLab issues"},
+	{Key: "backlog.backend", Title: "Where does the backlog live?", Help: map[string]string{
+		"file":   "BACKLOG.md in the repo",
+		"issues": "GitHub or GitLab issues",
 	}},
-	{Key: "issues.provider", Title: "Which tracker holds the issues?", IfKey: "backlog.backend", IfValue: "issues", Choices: []Choice{
-		{"auto", "detect from the git remote"},
-		{"github", "GitHub (gh)"},
-		{"gitlab", "GitLab (glab)"},
+	{Key: "issues.provider", Title: "Which tracker holds the issues?", IfKey: "backlog.backend", IfValue: "issues", Help: map[string]string{
+		"auto":   "detect from the git remote",
+		"github": "GitHub (gh)",
+		"gitlab": "GitLab (glab)",
 	}},
-	{Key: "work.isolation", Title: "How is each piece of work isolated?", Choices: []Choice{
-		{"branch", "a feature branch in this checkout"},
-		{"worktree", "a separate git worktree per item"},
+	{Key: "work.isolation", Title: "How is each piece of work isolated?", Help: map[string]string{
+		"branch":   "a feature branch in this checkout",
+		"worktree": "a separate git worktree per item",
 	}},
-	{Key: "work.mergeStrategy", Title: "How does finished work land?", Choices: []Choice{
-		{"direct", "merge straight into the base branch"},
-		{"pr", "open a pull request"},
+	{Key: "work.mergeStrategy", Title: "How does finished work land?", Help: map[string]string{
+		"direct": "merge straight into the base branch",
+		"pr":     "open a pull request",
 	}},
-	{Key: "work.dispatch", Title: "Where do workers run?", Choices: []Choice{
-		{"subagent", "in-process subagents (rounds detect herdr or tmux)"},
-		{"tmux", "separate Claude Code sessions in tmux"},
-		{"herdr", "separate Claude Code sessions in herdr"},
+	{Key: "work.dispatch", Title: "Where do workers run?", Help: map[string]string{
+		"subagent": "in-process subagents (rounds detect herdr or tmux)",
+		"tmux":     "separate Claude Code sessions in tmux",
+		"herdr":    "separate Claude Code sessions in herdr",
 	}},
-	{Key: "autonomy.level", Title: "How much may rota chain on its own?", Choices: []Choice{
-		{"off", "skills only suggest the next step"},
-		{"auto", "chain one hop, then stop"},
+	{Key: "autonomy.level", Title: "How much may rota chain on its own?", Help: map[string]string{
+		"off":  "skills only suggest the next step",
+		"auto": "chain one hop, then stop",
 	}},
-	{Key: "ship.review", Title: "Review the branch before shipping?", Choices: []Choice{
-		{"true", "yes, run /rota-review"},
-		{"false", "no"},
+	{Key: "ship.review", Title: "Review the branch before shipping?", Help: map[string]string{
+		"true":  "yes, run /rota-review",
+		"false": "no",
 	}},
-	{Key: "ship.qa", Title: "Run QA before shipping?", Choices: []Choice{
-		{"false", "no"},
-		{"true", "yes, run /rota-qa"},
+	{Key: "ship.qa", Title: "Run QA before shipping?", Help: map[string]string{
+		"false": "no",
+		"true":  "yes, run /rota-qa",
 	}},
-	{Key: "round.workerKind", Title: "Which harness do round workers run on?", Optional: true, Choices: []Choice{
-		{"claude", "Claude Code"},
-		{"codex", "Codex"},
+	{Key: "round.workerKind", Title: "Which harness do round workers run on?", Optional: true, Help: map[string]string{
+		"claude": "Claude Code",
+		"codex":  "Codex",
 	}},
-	{Key: "orchestrator.harness", Title: "Which harness runs the round orchestrator?", Optional: true, Choices: []Choice{
-		{"claude", "Claude Code"},
-		{"codex", "Codex"},
-		{"hermes", "Hermes"},
-		{"opencode", "OpenCode"},
+	{Key: "orchestrator.harness", Title: "Which harness runs the round orchestrator?", Optional: true, Help: map[string]string{
+		"claude":   "Claude Code",
+		"codex":    "Codex",
+		"hermes":   "Hermes",
+		"opencode": "OpenCode",
 	}},
+}
+
+func init() {
+	for i := range Prompts {
+		p := &Prompts[i]
+		key, ok := SchemaKey(p.Key)
+		if !ok {
+			panic("config: prompt for unknown key " + p.Key)
+		}
+		values := key.Choices
+		if key.Type == TypeBool {
+			values = []string{"true", "false"}
+			if key.Default == false {
+				values = []string{"false", "true"}
+			}
+		}
+		p.Choices = nil
+		for _, v := range values {
+			p.Choices = append(p.Choices, Choice{v, p.Help[v]})
+		}
+	}
+}
+
+// SchemaKey is the schema row for name.
+func SchemaKey(name string) (Key, bool) {
+	for _, key := range Keys {
+		if key.Name == name {
+			return key, true
+		}
+	}
+	return Key{}, false
 }
 
 // DefaultChoice is the default of p's key as a Choice value: strings as they

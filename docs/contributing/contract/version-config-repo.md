@@ -33,8 +33,9 @@ note: F6b (#230) replaced the plugin-era detection. `currentVersion` is the runn
 ### rota config show
 rota config show [<key>]
 repo: scoped
-data: {"entries": [{"key": string, "value": any, "source": "local"|"project"|"default"}]}
+data: {"entries": [{"key": string, "value": any, "source": "local"|"project"|"default", "default"?: any, "type"?: "bool"|"int"|"string"|"list"|"path"|"enum"|"object", "group"?: string, "desc"?: string, "choices"?: [string]}]}
 exit: 3 when `<key>` is neither a schema key nor present in the merged config; 2 when more than one positional is given. `value` is the raw JSON value (not a JSON string of it). No key: every schema key in schema order. With a key: `entries` holds exactly one element, so both forms share one shape.
+note: `default`, `type`, `group`, `desc` and (enum keys only) `choices` are the schema row's metadata (#541). They are absent for a hand-edited key outside the schema. Text output is unchanged.
 old: hv-config-show [<key>] (new `<key>` maps to the old single positional; unchanged).
 shim: parse each stdout line with `^(\S+) = (.*)  \(source: (local|project|default)\)$` into `key`, `value` (JSON-parsed), `source`; old rc 1 with `unknown key` on stderr becomes exit 3, rc 1 with `usage:` becomes exit 2.
 note: old rejected any key outside the schema table. 5.0 accepts a key that is in the schema or present in the merged config, so a hand-edited key stays readable (`config set` itself is schema-only). The shim cannot do this; it fails with exit 3 as before.

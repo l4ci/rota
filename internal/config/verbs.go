@@ -23,6 +23,7 @@ type Entry struct {
 	Key    string
 	Value  any
 	Source string
+	Schema *Key // the schema row; nil for a hand-edited key outside the schema
 }
 
 // ErrUnknownKey is Show's answer for a key that is neither in the schema nor
@@ -75,7 +76,7 @@ func Show(root string, key string, one bool) ([]Entry, error) {
 		if configured {
 			src = source(k.Name)
 		}
-		return Entry{k.Name, v, src}
+		return Entry{k.Name, v, src, &k}
 	}
 	var out []Entry
 	for _, k := range Keys {
@@ -87,7 +88,7 @@ func Show(root string, key string, one bool) ([]Entry, error) {
 		return out, nil
 	}
 	if v, ok := walk(merged, key); ok {
-		return []Entry{{key, v, source(key)}}, nil
+		return []Entry{{Key: key, Value: v, Source: source(key)}}, nil
 	}
 	return nil, fmt.Errorf("%w %q", ErrUnknownKey, key)
 }
