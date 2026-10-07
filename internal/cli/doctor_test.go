@@ -44,6 +44,8 @@ func doctorData(t *testing.T, out string) (bool, map[string]map[string]any) {
 		byName[c["name"].(string)] = c
 		order += c["name"].(string) + ","
 	}
+	// The agents line appears only in a project whose agent files are stale.
+	order = strings.Replace(order, "agents,", "", 1)
 	if order != "git,jq,host,tracker,accounts,hook,statusline,stop-hook,switch,skills,codex," {
 		t.Errorf("check order %s", order)
 	}
@@ -124,5 +126,26 @@ func TestDoctorSkillsCheck(t *testing.T) {
 	os.WriteFile(filepath.Join(home, ".claude", "skills", "rota-work", "SKILL.md"), []byte("mine\n"), 0o644)
 	if c := skills(); c["status"] != "fail" || c["hint"] != "run: rota skills update --overwrite" {
 		t.Errorf("edited: %v", c)
+	}
+}
+
+// The agents check warns, naming the verb, until rota agents write ran, then
+// disappears.
+func TestDoctorAgentsCheck(t *testing.T) {
+	doctorFakes(t, map[string]string{"git": `case "$1" in remote) exit 2;; esac; exit 0`})
+	dir, _ := filepath.EvalSymlinks(t.TempDir())
+	os.MkdirAll(filepath.Join(dir, ".rota"), 0o755)
+	os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(`{}`), 0o644)
+	_, out, _ := rotaIn(t, dir, "doctor", "--json")
+	_, c := doctorData(t, out)
+	if c["agents"]["status"] != "warn" || !strings.Contains(c["agents"]["hint"].(string), "rota agents write") {
+		t.Fatalf("%v", c["agents"])
+	}
+	if code, o, e := rotaIn(t, dir, "agents", "write"); code != 0 {
+		t.Fatalf("write: %d %s %s", code, o, e)
+	}
+	_, out, _ = rotaIn(t, dir, "doctor", "--json")
+	if _, c := doctorData(t, out); c["agents"] != nil {
+		t.Fatalf("still reported: %v", c["agents"])
 	}
 }

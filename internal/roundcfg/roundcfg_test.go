@@ -201,3 +201,30 @@ func TestWorkerKind(t *testing.T) {
 		}
 	}
 }
+
+func TestRoleDefaultsAndOverrides(t *testing.T) {
+	s, err := Load(project(t, ""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]Role{"explorer": {"light", ""}, "implementer": {"standard", ""}, "reasoner": {"heavy", ""}}
+	if !reflect.DeepEqual(s.Roles, want) {
+		t.Fatalf("%+v", s.Roles)
+	}
+	s, err = Load(project(t, `{"roles":{"explorer":{"tier":"standard","effort":"low"}}}`))
+	if err != nil || s.Roles["explorer"] != (Role{"standard", "low"}) {
+		t.Fatalf("%+v %v", s.Roles, err)
+	}
+}
+
+func TestRoleBadValues(t *testing.T) {
+	for cfg, want := range map[string]string{
+		`{"roles":{"explorer":{"tier":"giant"}}}`:   "roles.explorer.tier",
+		`{"roles":{"reasoner":{"effort":"ultra"}}}`: "roles.reasoner.effort",
+		`{"roles":{"implementer":{"effort":3}}}`:    "roles.implementer.effort",
+	} {
+		if _, err := Load(project(t, cfg)); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: %v", cfg, err)
+		}
+	}
+}

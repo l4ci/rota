@@ -86,6 +86,10 @@ type Input struct {
 	// CodexTiers is whether any round.tiers.codex.<tier> is set.
 	CodexTiers bool
 
+	// AgentProblems are the generated subagent files that are missing or have
+	// drifted from config (agents.Problems); empty adds no line.
+	AgentProblems []string
+
 	// Skills is the state of the installed skill sets (skills.Set.Status);
 	// nil when nothing was read.
 	Skills *skills.Report
@@ -132,6 +136,9 @@ func Run(ctx context.Context, in Input) Report {
 		// Only a volume below the threshold adds a line: a healthy one stays
 		// out of the report, like the legacy-state line below.
 		checks = append(checks, c)
+	}
+	if len(in.AgentProblems) > 0 {
+		checks = append(checks, Check{Name: "agents", Status: Warn, Detail: strings.Join(in.AgentProblems, "; "), Hint: "run: rota agents write"})
 	}
 	if f := in.StaleBinary; f != nil {
 		// Only a binary behind its own checkout adds a line.
