@@ -13,7 +13,7 @@ import (
 // gateIssue is the issue a `worker gate` target stands for: the queued
 // record's, else the one the slot holds. "" when it cannot be told.
 func gateIssue(root, target string) string {
-	t, err := worker.LoadRegistry(root).GateTarget(target)
+	t, err := worker.LoadRegistry(root).GateTargetAny(target)
 	if err != nil {
 		return ""
 	}

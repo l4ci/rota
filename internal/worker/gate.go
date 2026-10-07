@@ -144,8 +144,12 @@ func (r GateResult) OK() bool { return r.Verdict == GateFresh || r.Verdict == Ga
 // GateTarget is what a gate argument resolves to: a slot, or the queued record
 // of a PR whose slot moved on. Both carry the branch, PR, base and relay log the
 // gate reads; Name and Task belong to a slot, Issue to a queued record.
+//
+// External is a PR no slot or review record knows (an orchestrator fix-forward
+// PR, a PR after wind-down): only PR is set, and the gate reads the branch from
+// the forge.
 type GateTarget struct {
-	Queued                              bool
+	Queued, External                    bool
 	Name, Branch, PR, Base, Task, Issue string
 	relays                              []any
 }
@@ -191,6 +195,22 @@ func (r Registry) GateTarget(arg string) (GateTarget, error) {
 	return GateTarget{}, fail(exitcode.ExitResolution, fmt.Sprintf("slot '%s' is not in the pool", arg))
 }
 
+// GateTargetAny is GateTarget for `rota worker gate`, which also gates any open
+// PR of the repo: a PR argument that no slot or review record owns resolves to an
+// External target instead of being refused. A slot name still must exist, and
+// the train keeps GateTarget's refusal.
+func (r Registry) GateTargetAny(arg string) (GateTarget, error) {
+	t, err := r.GateTarget(arg)
+	if err == nil || r.Slot(arg) != nil {
+		return t, err
+	}
+	var ee *exitcode.Error
+	if _, ok := PRRefNumber(arg); ok && errors.As(err, &ee) && ee.Exit == exitcode.ExitResolution {
+		return GateTarget{External: true, PR: arg}, nil
+	}
+	return t, err
+}
+
 // Forge is the part of tracker.Adapter the gate merges through: read the PR,
 // then ask the forge to merge it pinned to the verified head. Provider
 // differences (argv, JSON shape, auto-merge) live behind it in internal/tracker.
@@ -232,7 +252,7 @@ func (e Env) gate(ctx context.Context, root string, o GateOpts) (GateResult, err
 	if !reg.Exists {
 		return res, fail(exitcode.ExitResolution, "no worker pool — run rota worker pool init first")
 	}
-	t, err := reg.GateTarget(o.Slot)
+	t, err := reg.GateTargetAny(o.Slot)
 	if err != nil {
 		return res, err
 	}
@@ -308,6 +328,7 @@ type gateStep func(g *gate) (done bool, err error)
 // gateSteps run in order; see the numbered stages in the file comment.
 var gateSteps = []gateStep{
 	(*gate).stepForge,
+	(*gate).stepExternal,
 	(*gate).stepAdoptPR,
 	(*gate).stepRemote,
 	(*gate).stepRefs,
@@ -342,6 +363,23 @@ func (g *gate) stepForge() (bool, error) {
 	if g.forge, err = g.e.forge(g.provider, g.root, g.in.cfg); err != nil {
 		return g.broke(fmt.Sprintf("cannot reach the %s forge: %v", g.provider, err))
 	}
+	return false, nil
+}
+
+// stepExternal reads the head branch of a PR no slot owns from the forge, so
+// the later steps judge it like a slot's: freshness, identity, provenance,
+// approval, verify and land. Its issue, for the closes check, is the one its
+// branch name leads with (HeldID); a branch with none has nothing to check.
+func (g *gate) stepExternal() (bool, error) {
+	if !g.target.External {
+		return false, nil
+	}
+	g.prNum = prNumText(g.pr)
+	info, ok := g.prInfo()
+	if !ok {
+		return g.broke(fmt.Sprintf("could not read PR %s from %s", g.pr, g.provider))
+	}
+	g.branch, g.target.Branch, g.res.Branch = info.Head, info.Head, info.Head
 	return false, nil
 }
 

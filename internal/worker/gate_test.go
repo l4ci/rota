@@ -945,3 +945,39 @@ func TestGateRefusesAPRThatDoesNotCloseItsIssue(t *testing.T) {
 		})
 	}
 }
+
+// A PR no slot or review record owns (a fix-forward PR, a PR after wind-down)
+// is gated by number like a round PR: it lands when fresh and is refused STALE
+// when it is behind with a shared file.
+func TestGateAnUnrecordedPR(t *testing.T) {
+	for _, c := range []struct {
+		name    string
+		arg     string
+		setup   func(w *world)
+		verdict string
+	}{
+		{name: "fresh PR lands", arg: "7", verdict: GatePass},
+		{name: "hash ref lands", arg: "#7", verdict: GatePass},
+		{name: "url lands", arg: ghURL, verdict: GatePass},
+		{name: "stale PR is refused", arg: "7", setup: func(w *world) { sharedFile(t, w) }, verdict: GateStale},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			w := newWorld(t, "")
+			// the pool records no PR at all: nothing in it owns #7
+			if c.setup != nil {
+				c.setup(w)
+			}
+			res, err := w.env(false).Gate(bg, w.dir, GateOpts{Slot: c.arg, Base: "main"})
+			if err != nil || res.Verdict != c.verdict {
+				t.Fatalf("verdict = %q (%v), want %q: %+v", res.Verdict, err, c.verdict, res)
+			}
+			landed := c.verdict == GatePass
+			if res.Changed != landed || w.onMain("work.txt") != landed {
+				t.Errorf("landed = %v, want %v: %+v", res.Changed, landed, res)
+			}
+			if res.Branch != "w1" {
+				t.Errorf("branch = %q, want the PR's head w1", res.Branch)
+			}
+		})
+	}
+}
