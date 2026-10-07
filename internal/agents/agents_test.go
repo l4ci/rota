@@ -151,3 +151,16 @@ func TestBadRoleConfig(t *testing.T) {
 		}
 	}
 }
+
+func TestWriteRefusesSymlinkedDir(t *testing.T) {
+	root := project(t, "")
+	outside := t.TempDir()
+	os.Symlink(outside, filepath.Join(root, ".claude"))
+	_, err := Write(root)
+	if !errors.Is(err, ErrForeign) || !strings.Contains(err.Error(), "symlink") {
+		t.Fatalf("got %v", err)
+	}
+	if ents, _ := os.ReadDir(outside); len(ents) != 0 {
+		t.Fatalf("wrote through the link: %v", ents)
+	}
+}
