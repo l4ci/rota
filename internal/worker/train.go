@@ -11,7 +11,6 @@ import (
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/testledger"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 )
@@ -265,19 +264,13 @@ func (e Env) train(ctx context.Context, root string, o TrainOpts, cache *trainCa
 		}
 	}
 	cache.retainBase(baseSHA)
-	scratch, err := os.MkdirTemp("", "rota-train-")
+	ge := e.gateEnv()
+	ge.ctx = ctx // cleanup still runs on a context cut loose from it
+	scratch, cleanup, err := ge.scratchTree(root, baseSHA, "rota-train-")
 	if err != nil {
-		return res, err
+		return e.trainBroke(res, err.Error())
 	}
-	scratch = filepath.Join(scratch, "tree")
-	if out, code := e.git(root, "worktree", "add", "--detach", scratch, baseSHA); code != 0 {
-		return e.trainBroke(res, "could not create the scratch worktree: "+out)
-	}
-	defer func() {
-		e.git(root, "worktree", "remove", "--force", scratch)
-		os.RemoveAll(filepath.Dir(scratch))
-		e.git(root, "worktree", "prune")
-	}()
+	defer cleanup()
 	tips := make([]string, len(res.Members)+1) // tips[i]: the scratch tree with the first i members merged
 	tips[0] = baseSHA
 	for i, m := range res.Members {
