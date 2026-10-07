@@ -522,3 +522,30 @@ func TestTrainRefusesEmptyTestFull(t *testing.T) {
 		t.Errorf("result must say NO-VERIFY: %v", res.Notes)
 	}
 }
+
+// A train cancelled mid-merge still deletes its scratch worktree: cleanup runs
+// on a context cut loose from the cancelled one.
+func TestTrainCancelledLeavesNoScratchTree(t *testing.T) {
+	w := trainWorld(t, "true", "b1", "b2")
+	env := w.env(false)
+	real := env.withDefaults().Git
+	ctx, cancel := context.WithCancel(bg)
+	defer cancel()
+	env.Ctx = ctx // production wires the signal context here; the old cleanup ran on it
+	env.Git = func(c context.Context, dir string, args ...string) (git.Result, error) {
+		if strings.Contains(dir, "rota-train-") && len(args) > 0 && args[0] == "merge" {
+			cancel()
+		}
+		return real(c, dir, args...)
+	}
+	res, err := env.Train(ctx, w.dir, TrainOpts{Base: "main", Targets: []string{"b1", "b2"}})
+	if ctx.Err() == nil {
+		t.Fatalf("the train never reached the scratch merge: %+v %v", res, err)
+	}
+	if res.Verdict == GatePass {
+		t.Fatalf("a cancelled train passed: %+v", res)
+	}
+	if extra := w.scratchTrees(); len(extra) != 0 {
+		t.Errorf("scratch worktree left behind: %v", extra)
+	}
+}
