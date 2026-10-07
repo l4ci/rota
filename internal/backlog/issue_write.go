@@ -37,7 +37,11 @@ var StateRoleFor = map[string]string{
 var States = []string{"in-progress", "needs-review", "changes-requested", "none"}
 
 // NoteKinds are the kinds of durable note (NOTE_KINDS).
-var NoteKinds = []string{"proof", "design", "plan"}
+var NoteKinds = []string{"proof", "design", "plan", "acceptance"}
+
+// ReservedNoteKinds are note kinds only a rota verb writes: `rota plan pass`
+// owns "acceptance", so `item note add|rm` refuse it.
+var ReservedNoteKinds = []string{"acceptance"}
 
 // noteLimitDefault is the characters per marker comment (GitHub caps a
 // comment at 65,536).
@@ -778,6 +782,34 @@ func (b *Issues) SetState(ref, state string) (bool, error) {
 	return b.applyState(is, role)
 }
 
+// BodyEditor is a backend that can replace an item's body; `rota plan pass`
+// uses it to write acceptance ids into a body captured without them.
+type BodyEditor interface {
+	// SetBody replaces the body of an open item; false when it already reads so.
+	SetBody(ref, body string) (bool, error)
+}
+
+var _ BodyEditor = (*Issues)(nil)
+
+// SetBody replaces the issue body.
+func (b *Issues) SetBody(ref, body string) (bool, error) {
+	tr, err := b.tracker()
+	if err != nil {
+		return false, err
+	}
+	is, _, err := b.require(ref)
+	if err != nil {
+		return false, err
+	}
+	if is.Body == body {
+		return false, nil
+	}
+	if err := tr.Edit(b.ctx(), is.Number, tracker.IssueEdit{Body: &body}); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 // Status is the read-back of one issue and its comments (IssueBackend.status).
 type Status struct {
 	ID        string // the issue number
@@ -788,6 +820,7 @@ type Status struct {
 	Claim     string // earliest open claim; "" when none
 	Assignees []string
 	Milestone string
+	Body      string   // the issue body, fields block included
 	Notes     []string // note kinds present, in comment order
 	Comments  []Comment
 }
@@ -827,7 +860,7 @@ func (b *Issues) Status(ref string) (*Status, error) {
 	st := &Status{
 		ID: strconv.Itoa(is.Number), Type: b.Letter(is), Title: title, Status: is.State,
 		State: strings.Join(state, ","), Assignees: append([]string{}, is.Assignees...),
-		Milestone: milestone(is, block), Notes: notes, Comments: commentRows(comments, ""),
+		Milestone: milestone(is, block), Body: is.Body, Notes: notes, Comments: commentRows(comments, ""),
 	}
 	if len(held) > 0 {
 		st.Claim = held[0]

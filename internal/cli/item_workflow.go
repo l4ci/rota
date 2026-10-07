@@ -231,6 +231,14 @@ func checkNoteKind(kind string) error {
 	return nil
 }
 
+// checkWritableNoteKind refuses the kinds only a rota verb writes.
+func checkWritableNoteKind(kind string) error {
+	if slices.Contains(backlog.ReservedNoteKinds, kind) {
+		return Usage("the %s note is written by `rota plan pass`; item note add and rm refuse it", kind)
+	}
+	return nil
+}
+
 func itemNoteAdd(fs *flag.FlagSet) RunFunc {
 	kind := fs.String("kind", "", strings.Join(backlog.NoteKinds, "|"))
 	bodyFile := fs.String("body-file", "", "note text, path or - for stdin")
@@ -239,6 +247,9 @@ func itemNoteAdd(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		if err := checkNoteKind(*kind); err != nil {
+			return Result{}, err
+		}
+		if err := checkWritableNoteKind(*kind); err != nil {
 			return Result{}, err
 		}
 		if *bodyFile == "" {
@@ -293,6 +304,9 @@ func itemNoteRm(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		if err := checkNoteKind(*kind); err != nil {
+			return Result{}, err
+		}
+		if err := checkWritableNoteKind(*kind); err != nil {
 			return Result{}, err
 		}
 		_, wf, id, typ, err := itemFlow(c, args[0])
