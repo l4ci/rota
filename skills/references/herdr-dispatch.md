@@ -53,7 +53,7 @@ Agent names are unique per herdr **server**, not per workspace, so a bare `w1` w
 
 ## Polling
 
-`rota worker poll` reads herdr's native agent state, then runs the tmux text classifier on the pane (mapping and registry writes: `docs/design/contract/workers.md` and `rounds.md`, A7 and C1/C2). Sentinels, `Retrying in` and `limited` outrank the native state. What to do with `unknown` is in `rota-orchestrate/SKILL.md` section 4; it is never done. A slot that newly turns `blocked` or `needs-permission` raises a herdr notification, once per transition. An `unknown` row carries a short `herdr agent explain` excerpt in its evidence. A notification herdr does not show (`rate_limited`, `no_foreground_client`, `busy`) is reported once on stderr, naming the slot and the reason: the alert never reached a human, so read the pane yourself.
+`rota worker poll` reads herdr's native agent state, then runs the tmux text classifier on the pane (mapping and registry writes: `docs/contributing/contract/workers.md` and `rounds.md`, A7 and C1/C2). Sentinels, `Retrying in` and `limited` outrank the native state. What to do with `unknown` is in `rota-orchestrate/SKILL.md` section 4; it is never done. A slot that newly turns `blocked` or `needs-permission` raises a herdr notification, once per transition. An `unknown` row carries a short `herdr agent explain` excerpt in its evidence. A notification herdr does not show (`rate_limited`, `no_foreground_client`, `busy`) is reported once on stderr, naming the slot and the reason: the alert never reached a human, so read the pane yourself.
 
 ## Worker contract additions
 

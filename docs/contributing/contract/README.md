@@ -1,13 +1,13 @@
 ---
-verified-sha: 5e9b425a84bdc61cedf349412b0aa15c738689eb
+verified-sha: c130f0e57540434d01cc4d019f26ac8947a37136
 refs:
-  - docs/design/5.0-cli-conventions.md
+  - docs/contributing/contract/cli-conventions.md
   - internal/cli/contract_test.go
 ---
 
 # `rota` verb contract
 
-This directory defines every `rota` verb's arguments, flags, `--json` data and exit codes. The black-box smoke suite (A2, #46) tests against it, and the Go port (A3 to A9) implements it. Verbs come from the command tree in the [helper triage](../5.0-helper-triage.md). Global flags, the JSON envelope, stderr format, the exit-code table, write rules and config loading are fixed by the [CLI conventions](../5.0-cli-conventions.md) (A3, #47). Nothing here overrides them: failure `data` on exit 1 and 4, exit 4 for mutating verbs only, and `changed` in failure data all come from the conventions.
+This directory defines every `rota` verb's arguments, flags, `--json` data and exit codes. The black-box smoke suite (A2, #46) tests against it, and the Go port (A3 to A9) implements it. Global flags, the JSON envelope, stderr format, the exit-code table, write rules and config loading are fixed by the [CLI conventions](cli-conventions.md) (A3, #47). Nothing here overrides them: failure `data` on exit 1 and 4, exit 4 for mutating verbs only, and `changed` in failure data all come from the conventions.
 
 Status: **reviewed by the maintainer on 2026-10-02, who signed off on the defaults pending the changes now applied** (quote: "Defaults + you verify"). Arguments were redesigned on purpose (maintainer, 2026-10-02: "Redesign arguments now"), so many verbs differ from the helper they replace. During the port, `test/hv-shim` translates each new-shape call into the old helper call. The `old:` line under each verb is the shim's mapping.
 

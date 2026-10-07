@@ -20,7 +20,7 @@ import (
 
 // The `rota issues label|imported|close|provider` and `rota migrate
 // issues` verbs. Shapes, flags and exits are the verb contract's
-// (docs/design/contract/); the old helpers named in each `old:`
+// (docs/contributing/contract/); the old helpers named in each `old:`
 // line are the behaviour to match. These verbs exec gh or glab, always
 // through internal/tracker.
 
