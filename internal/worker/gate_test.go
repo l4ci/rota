@@ -981,3 +981,38 @@ func TestGateAnUnrecordedPR(t *testing.T) {
 		})
 	}
 }
+
+// A fast-forward refused by a dirty file the merge touches is not divergence:
+// the verdict names the file, and says the merged tree was not verified.
+func TestGateMergedRemotelyCause(t *testing.T) {
+	for _, c := range []struct {
+		name  string
+		setup func(w *world)
+		want  string
+	}{
+		{"dirty file the merge touches", func(w *world) {
+			os.WriteFile(filepath.Join(w.dir, "work.txt"), []byte("local edit\n"), 0o644)
+		}, "local changes would be overwritten: work.txt"},
+		{"local-only commit", func(w *world) {
+			os.WriteFile(filepath.Join(w.dir, "local.txt"), []byte("local only\n"), 0o644)
+			gitq(t, w.dir, "add", "local.txt")
+			gitq(t, w.dir, "commit", "-q", "-m", "local only commit")
+		}, "diverged: 1 ahead, 2 behind origin/main"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			w := newWorld(t, ghURL)
+			w.mode = "ok"
+			c.setup(w)
+			res, err := w.gate(false, GateOpts{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if res.Verdict != GateMergedRemotely || !res.Changed || !res.VerifySkipped {
+				t.Fatalf("verdict=%s changed=%v verifySkipped=%v: %s", res.Verdict, res.Changed, res.VerifySkipped, res.Err)
+			}
+			if !strings.Contains(res.Err, c.want) || !strings.Contains(res.Hint, "NOT verified") {
+				t.Errorf("err=%q hint=%q, want %q and a not-verified hint", res.Err, res.Hint, c.want)
+			}
+		})
+	}
+}

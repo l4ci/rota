@@ -1100,15 +1100,56 @@ func (g *gate) confirmLanded(sha string) (done bool) {
 	if len(sha) >= 7 {
 		g.res.SHA = sha[:7] // the merge that landed on origin, for the merged-remotely verdicts
 	}
-	if _, code := e.runGit(g.root, "merge", "--ff-only", g.baseRef); code != 0 {
-		g.verdict(GateMergedRemotely, fmt.Sprintf("MERGED-REMOTELY %s — PR %s is on %s but local %s could not fast-forward (diverged); do not re-merge, reconcile %s by hand", o.Slot, g.prNum, g.baseRef, o.Base, o.Base), "")
+	if out, code := e.runGit(g.root, "merge", "--ff-only", g.baseRef); code != 0 {
+		g.mergedRemotely(fmt.Sprintf("local %s could not fast-forward (%s)", o.Base, g.ffFailureCause(out)))
 		return true
 	}
 	if _, code := e.runGit(g.root, "merge-base", "--is-ancestor", sha, "HEAD"); code != 0 {
-		g.verdict(GateMergedRemotely, fmt.Sprintf("MERGED-REMOTELY %s — PR %s is on %s but %s is not in the local %s; do not re-merge, reconcile %s by hand", o.Slot, g.prNum, g.baseRef, sha, o.Base, o.Base), "")
+		g.mergedRemotely(fmt.Sprintf("%s is not in the local %s", sha, o.Base))
 		return true
 	}
 	return false
+}
+
+// mergedRemotely ends the gate on a PR that is on origin but not on the local
+// base. The merged tree was never verified, and the result says so.
+func (g *gate) mergedRemotely(why string) {
+	g.res.VerifySkipped = true
+	g.verdict(GateMergedRemotely, fmt.Sprintf("MERGED-REMOTELY %s — PR %s is on %s but %s; do not re-merge, reconcile %s by hand", g.o.Slot, g.prNum, g.baseRef, why, g.o.Base),
+		fmt.Sprintf("the merged tree was NOT verified: fix the local %s, fast-forward it to %s, then run the full gate on %s", g.o.Base, g.baseRef, g.o.Base))
+}
+
+// ffFailureCause names why `merge --ff-only` failed. Uncommitted changes to
+// files the merge touches are told apart from real divergence: local main can
+// be purely behind and still refuse to move.
+func (g *gate) ffFailureCause(mergeOut string) string {
+	e := g.e
+	incoming, _ := e.runGit(g.root, "diff", "--name-only", "HEAD", g.baseRef)
+	in := map[string]bool{}
+	for _, p := range strings.Split(incoming, "\n") {
+		if p != "" {
+			in[p] = true
+		}
+	}
+	status, _ := e.runGit(g.root, "status", "--porcelain")
+	var clash []string
+	for _, l := range strings.Split(status, "\n") {
+		if len(l) > 3 && in[l[3:]] {
+			clash = append(clash, l[3:])
+		}
+	}
+	if len(clash) > 0 {
+		return "local changes would be overwritten: " + strings.Join(clash, ", ")
+	}
+	if counts, code := e.runGit(g.root, "rev-list", "--left-right", "--count", "HEAD..."+g.baseRef); code == 0 {
+		if f := strings.Fields(counts); len(f) == 2 && f[0] != "0" {
+			return fmt.Sprintf("diverged: %s ahead, %s behind %s", f[0], f[1], g.baseRef)
+		}
+	}
+	if m := tailLines(mergeOut, 3); m != "" {
+		return "merge refused: " + m
+	}
+	return "merge refused, cause not found: no overlapping local changes, not ahead of " + g.baseRef
 }
 
 // releaseClaimLabels drops the in-progress label from every issue the merged PR
