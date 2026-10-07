@@ -431,3 +431,24 @@ func TestClassifyLastSentinelWins(t *testing.T) {
 		t.Errorf("done then blocked: %s %q", st, ev)
 	}
 }
+
+// A slot herdr cannot classify carries herdr's own explanation; a failing
+// explain leaves today's evidence and the poll still succeeds.
+func TestPollUnknownCarriesExplainExcerpt(t *testing.T) {
+	dir, f := pollRegistry(t, "herdr")
+	f.status["w1"], f.status["w2"] = "unknown", "unknown"
+	f.explain = map[string]string{"w1": "no recognised agent process / foreground is vim"}
+	f.panes["w1"] = []string{"x\n", "x\n"}
+	f.panes["w2"] = []string{"x\n", "x\n"}
+	res, err := envWith(f).Poll(bg, dir, PollOpts{Lines: 60})
+	if err != nil {
+		t.Fatal(err)
+	}
+	const base = "herdr cannot classify the agent — inspect the tab; not proof it finished"
+	if got := res.Slots[0]; got.State != StateUnknown || got.Evidence != base+": herdr explain: no recognised agent process / foreground is vim" {
+		t.Errorf("w1 = %+v", got)
+	}
+	if got := res.Slots[1]; got.State != StateUnknown || got.Evidence != base {
+		t.Errorf("a failing explain must leave the evidence unchanged: %+v", got)
+	}
+}
