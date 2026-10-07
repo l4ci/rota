@@ -31,6 +31,10 @@ Work only this task, then stop.
   hypothesis). If your brief names your tier and a tier table, use that table for
   the model names; if it names none, use your harness's own defaults. Say which
   tier you ran on in your PR body when the brief asks for it.
+- Smoke section number: if the brief names one ("Your smoke section ... is number N"),
+  `rota round assign` reserved it for you across every worker; name your
+  `test/sections/N_*.sh` file with exactly that number. If it names none, do not
+  pick one yourself: add no section, or ask (`ROTA-BLOCKED`).
 - Never dispatch a reviewer subagent or run `/rota-review` on your own branch.
   Review is the orchestrator's seat (the merge gate); a worker-side review
   duplicates it. Verify with targeted checks, then open the PR.
