@@ -91,18 +91,25 @@ func TestSchemaMatchesPython(t *testing.T) {
 	// The goldens were recorded over CONFIG_KEYS, which still had
 	// debug.competingHypotheses (removed) and loop.webResearch (removed
 	// in #70). Generate the same random cases from the old table so the
-	// recorded inputs line up, and skip those keys.
+	// recorded inputs line up, and skip those keys. The same goes for the
+	// three seeded keys removed in #501.
 	var py []Key
 	py = append(py, Keys[:10]...)
 	py = append(py, Key{Name: "refactor.verifyCommands"}) // moved to test.full
 	py = append(py, Keys[10:19]...)
 	py = append(py, Key{Name: "debug.competingHypotheses"})
-	py = append(py, Keys[19:27]...)
+	py = append(py, Keys[19:24]...)
+	py = append(py, Key{Name: "issues.providers.github"}, Key{Name: "issues.providers.gitlab"})
+	py = append(py, Keys[24:25]...)
 	py = append(py, Key{Name: "loop.webResearch"})
-	py = append(py, Keys[27:PythonKeys]...)
+	py = append(py, Keys[25:43]...)
+	py = append(py, Key{Name: "issues.filterMineOnly"})
+	py = append(py, Keys[43:PythonKeys]...)
 	add = func(add func(map[string]any, string)) func(map[string]any, string) {
 		return func(tree map[string]any, key string) {
-			if key != "loop.webResearch" && key != "debug.competingHypotheses" {
+			switch key {
+			case "loop.webResearch", "debug.competingHypotheses", "issues.filterMineOnly", "issues.providers.github", "issues.providers.gitlab":
+			default:
 				add(tree, key)
 			}
 		}

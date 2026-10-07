@@ -172,7 +172,7 @@ func TestSeedConfigKeepsSchemaOrder(t *testing.T) {
 	for i, k := range config.Keys {
 		schema[k.Name] = i
 	}
-	seed := []string{"issues.providers.github", "issues.providers.gitlab", "issues.label", "issues.autoCreateLabel", "issues.filterMineOnly"}
+	seed := []string{"issues.label", "issues.autoCreateLabel"}
 	prevSchema, prevText := -1, -1
 	for _, name := range seed {
 		i, ok := schema[name]
@@ -188,6 +188,11 @@ func TestSeedConfigKeepsSchemaOrder(t *testing.T) {
 	var v map[string]any
 	if err := json.Unmarshal([]byte(configSeed), &v); err != nil {
 		t.Fatal(err)
+	}
+	for _, k := range config.RemovedKeys {
+		if strings.Contains(configSeed, `"`+k[strings.LastIndex(k, ".")+1:]+`"`) {
+			t.Errorf("seed holds removed key %s", k)
+		}
 	}
 }
 

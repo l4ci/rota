@@ -282,3 +282,24 @@ func Retired(root string) []string {
 	}
 	return out
 }
+
+// Removed lists the RemovedKeys that .rota/config.json still holds, in
+// RemovedKeys order. They are inert: `config check` names them, `config fill`
+// deletes them, and no verb fails on them.
+func Removed(root string) []string {
+	out := []string{}
+	raw, err := os.ReadFile(configPath(root))
+	if err != nil {
+		return out
+	}
+	doc, ok := decodeObject(raw)
+	if !ok {
+		return out
+	}
+	for _, k := range RemovedKeys {
+		if _, ok := lookupPresent(doc, strings.Split(k, ".")); ok {
+			out = append(out, k)
+		}
+	}
+	return out
+}

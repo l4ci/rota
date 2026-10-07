@@ -73,7 +73,8 @@ func Fill(root string) ([]string, error) {
 			cfg = fillKey(cfg, "", strings.Split(k.Name, "."), Default(k))
 			filled = append(filled, k.Name)
 		}
-		if len(filled) == 0 && !moved {
+		stripped := stripRemoved(cfg)
+		if len(filled) == 0 && !moved && len(stripped) == 0 {
 			return nil
 		}
 		return fsio.WriteJSONAtomic(path, cfg)
@@ -147,6 +148,39 @@ func migrateLegacyVerify(cfg *jsonx.Object) (*jsonx.Object, bool, bool) {
 	}
 	parent.Delete("verifyCommands")
 	return cfg, copied, true
+}
+
+// RemovedKeys are keys older `rota init` runs seeded that nothing reads any
+// more. `config check` names them and `config fill` deletes them.
+var RemovedKeys = []string{"issues.filterMineOnly", "issues.providers.github", "issues.providers.gitlab"}
+
+// stripRemoved deletes every RemovedKeys entry present in cfg, drops a parent
+// object that ends up empty (issues.providers) and returns the keys it removed.
+func stripRemoved(cfg *jsonx.Object) []string {
+	var out []string
+	for _, k := range RemovedKeys {
+		segs := strings.Split(k, ".")
+		if _, ok := lookupPresent(cfg, segs); !ok {
+			continue
+		}
+		parent, ok := getObject(cfg, segs[0])
+		for _, s := range segs[1 : len(segs)-1] {
+			if parent, ok = getObject(parent, s); !ok {
+				break
+			}
+		}
+		if !ok {
+			continue
+		}
+		parent.Delete(segs[len(segs)-1])
+		out = append(out, k)
+	}
+	if issues, ok := getObject(cfg, "issues"); ok {
+		if p, ok := getObject(issues, "providers"); ok && len(p.Keys()) == 0 {
+			issues.Delete("providers")
+		}
+	}
+	return out
 }
 
 func asList(v any) []any {

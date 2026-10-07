@@ -40,19 +40,13 @@ const statusSeed = `{"active":[]}` + "\n"
 
 const reposSeed = `{"repos":[]}` + "\n"
 
-// configSeed is the old issues-only default, with the keys in schema order
-// (G7): the order config.Keys lists them in, which is the order `rota config
-// show` prints. The old helper wrote label, autoCreateLabel, filterMineOnly and
-// then providers.
+// configSeed is the issues-only default, with the keys in schema order (G7):
+// the order config.Keys lists them in, which is the order `rota config show`
+// prints.
 const configSeed = `{
   "issues": {
-    "providers": {
-      "github": true,
-      "gitlab": true
-    },
     "label": "in-progress",
-    "autoCreateLabel": true,
-    "filterMineOnly": false
+    "autoCreateLabel": true
   }
 }
 `
