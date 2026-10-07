@@ -50,8 +50,12 @@ func TestGateQueuedPR(t *testing.T) {
 	if !errors.As(err, &we) || we.Exit != exitcode.ExitUsage || !strings.Contains(we.Hint, "rota worker gate 7`") {
 		t.Errorf("a slot whose PR is queued is refused with a hint: %v", err)
 	}
-	if _, err := gateAs(w, "#99", GateOpts{CheckOnly: true}); exitOf(err) != exitcode.ExitResolution {
+	// The train still refuses a PR nothing records; the gate takes it as an external PR.
+	if _, err := LoadRegistry(w.dir).GateTarget("#99"); exitOf(err) != exitcode.ExitResolution {
 		t.Errorf("unknown PR: %v", err)
+	}
+	if res, err := gateAs(w, "#99", GateOpts{CheckOnly: true}); err != nil || res.Verdict != GateFresh {
+		t.Errorf("unrecorded PR gated by number: %+v %v", res, err)
 	}
 	// A slot recording the PR is found by its number when nothing is queued.
 	w2 := newWorld(t, ghURL)

@@ -402,6 +402,8 @@ while it verified, nothing lands (`base-moved`); the same verdict stops the trai
 
 Gates and trains on one repository queue on a single lock (`<git-common-dir>/rota/land.lock`), held from the scratch worktree through landing. A second gate or train waits instead of running beside the first, so neither sees the other's scratch worktree and neither lands inside the other's verify-to-land window. `--check-only` takes no lock.
 
+`rota worker gate <PR number> --base <branch>` also gates a PR that no slot or review record owns (an orchestrator fix-forward PR, a PR after wind-down), reading its branch from the forge. It runs the same freshness, provenance, approval, verify and land steps. The closes check takes the issue from the branch name and skips a branch that names none. `rota worker train` still takes only recorded PRs.
+
 With `test.fullWhere` set to `ci` the train pushes its merged tree as `rota/ci/train` and waits for CI instead of running `test.full` here (`test.e2e` still runs here, after CI is green); bisect pushes each prefix the same way, one CI run per step. `test.ciChecks` names the checks that must pass and must not be empty. If a listed check never appears or CI does not finish in time the verdict is `ci-not-run` or `verify-timeout`, and nothing lands; a member that changes the CI definition stops it as `ci-config-changed`. See [running the full tier on CI](configuration.md#running-the-full-tier-on-ci).
 
 A red train, from either tier, bisects (up to ceil(log2 n) extra verifies, on the assumption that the base is green; a red base is reported as such): it verifies growing prefixes of the order and names the first member whose merge
