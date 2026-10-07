@@ -1,3 +1,11 @@
+---
+verified-sha: 5e9b425a84bdc61cedf349412b0aa15c738689eb
+refs:
+  - internal/backlog
+  - internal/cli/backlog.go
+  - internal/cli/item.go
+---
+
 ## A4: backlog, capture, IDs, status
 
 ### rota id next

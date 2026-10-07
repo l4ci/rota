@@ -11,7 +11,7 @@ Set `round.brief` to this file's path to make the assignment pointer name it as 
 
 The full gate runs once, at merge: `rota worker gate` runs `test.full` on the merged
 tree through `bash test/gate.sh`: validate-skills, the doc lints (`bash test/doclint.sh`: prose pins, the
-`.worktrees/` decoy check, and that every `rota` verb the docs name exists), `go vet ./...`, `go test -race -timeout 30m ./...`
+`.worktrees/` decoy check, that every `rota` verb the docs name exists, and the contract-doc stamps below), `go vet ./...`, `go test -race -timeout 30m ./...`
 and the smoke suite in `gate.smokeShards` (default 4) shards, all at once. The sharded gate takes about 2–3 minutes;
 running the smoke suite in series is several times slower. It takes a machine-wide lock, so two gates never overlap, and
 keeps one log per check. Every check makes its temp files under one gate-owned root, and the gate fails if
@@ -49,6 +49,30 @@ tests that call `golden.Check`: `go test ./internal/<pkg> -run '^TestX$' -update
 rewrites the changed outputs if the rest of the test passes, and the JSON diff is the review.
 
 There are no servers and no ports in this repo.
+
+## Contract doc stamps
+
+Every `docs/design/contract/*.md` opens with frontmatter naming the commit it was last verified against and the
+repo paths it describes:
+
+```
+---
+verified-sha: <commit sha>
+refs:
+  - internal/gate
+  - internal/cli/gate.go
+---
+```
+
+`test/doclint.sh` runs `test/check-doc-stamps.py`. It fails a doc whose stamp is missing or malformed, whose sha is
+not a known commit, or whose `refs:` path does not exist. It also fails a doc when a ref changed between
+`verified-sha` and `HEAD` (`git diff <sha> HEAD -- <ref>`), and the failure names the doc and the changed paths.
+Other docs under `docs/` need no stamp.
+
+To re-stamp after a ref changed: `git diff <verified-sha> HEAD -- <ref>` for each flagged path, read the doc against
+that diff and fix what drifted, then set `verified-sha:` to `git rev-parse HEAD` (the commit your change sits on is
+fine; a later commit that touches a ref re-flags the doc). Add a path to `refs:` when the doc starts describing
+new code. A new contract doc needs the stamp before it passes.
 
 ## Review, merge and completion
 

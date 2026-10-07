@@ -1,3 +1,10 @@
+---
+verified-sha: 5e9b425a84bdc61cedf349412b0aa15c738689eb
+refs:
+  - internal/milestone
+  - internal/cli/milestone.go
+---
+
 ## A6: milestones, plans, designs, spikes, proof, debug
 
 ### rota milestone add
