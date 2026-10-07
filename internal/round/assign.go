@@ -15,7 +15,6 @@ import (
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/roundcfg"
-	"github.com/l4ci/rota/internal/roundlease"
 	secpkg "github.com/l4ci/rota/internal/section"
 	"github.com/l4ci/rota/internal/skills"
 	"github.com/l4ci/rota/internal/worker"
@@ -293,12 +292,11 @@ func (e Env) requireLease(ctx context.Context, root string, o AssignOpts) error 
 		return err
 	}
 	le := e.leaseEnv()
-	lease, st, err := le.Read(cd)
+	_, _, held, err := le.Holds(cd, o.HolderPID, o.Getenv)
 	if err != nil {
 		return err
 	}
-	holder := le.Discover(o.HolderPID, o.Getenv)
-	if (st != roundlease.Live && st != roundlease.Foreign) || !holder.SameAs(lease, le.Host) {
+	if !held {
 		return blocked(BlockNoRound, "this process holds no round lease: run rota round start first")
 	}
 	return nil

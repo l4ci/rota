@@ -389,7 +389,7 @@ func limitWatchGuard(c *Ctx, root, cd string) (Result, error) {
 	if le.Alive == nil {
 		le = roundlease.DefaultEnv()
 	}
-	lease, st, err := le.Read(cd)
+	lease, st, held, err := le.Holds(cd, c.deps().HolderPID(), os.Getenv)
 	if err != nil {
 		return Result{}, &Error{Exit: ExitUnavailable, Message: err.Error()}
 	}
@@ -399,12 +399,11 @@ func limitWatchGuard(c *Ctx, root, cd string) (Result, error) {
 		d.Set("changed", false)
 		return Result{Data: d}, &Error{Exit: ExitRefused, Message: msg, Hint: hint}
 	}
-	live := st == roundlease.Live || st == roundlease.Foreign
-	if ks, found, _ := keepalive.ReadState(keepalive.StatePath(cd)); live && found && ks.Running(le) && lease.PID == ks.PID {
+	if ks, found, _ := keepalive.ReadState(keepalive.StatePath(cd)); st == roundlease.Live && found && ks.Running(le) && lease.PID == ks.PID {
 		return refuse("supervised", fmt.Sprintf("rota keepalive run (pid %d) holds the lease and already watches for usage limits", ks.PID),
 			"run rota limit status, or start the supervisor with --no-limits to watch by hand")
 	}
-	if !live || !le.Discover(c.deps().HolderPID(), os.Getenv).SameAs(lease, le.Host) {
+	if !held {
 		return refuse("no round", "this process holds no round lease: run rota round start first", "a switch moves work, which is the orchestrator's act")
 	}
 	if w, ok := limits.ActiveWatching(le, cd); ok && w.PID != os.Getpid() {
