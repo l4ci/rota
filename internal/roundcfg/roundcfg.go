@@ -42,6 +42,9 @@ type Settings struct {
 	// every configured kind (a kind with no tier set is absent).
 	Tier   string
 	Models map[string]map[string]string
+	// WorkerKind is round.workerKind: the project's default worker harness,
+	// "" when unset (the slot's recorded kind, else claude, decides).
+	WorkerKind string
 	// StallMinutes is round.stallMinutes: how long a slot may make no progress
 	// before `round reconcile` calls it stalled; 0 turns the check off.
 	StallMinutes int
@@ -161,7 +164,24 @@ func Load(root string) (Settings, error) {
 	if s.AutopilotCap, err = config.Int(cfg, "round.autopilotCap", 0, config.MaxInt); err != nil {
 		return s, err
 	}
+	if s.WorkerKind, err = loadWorkerKind(cfg); err != nil {
+		return s, err
+	}
 	return s, loadTiers(cfg, &s)
+}
+
+// loadWorkerKind reads round.workerKind: a harness kind, or "" for unset. A
+// bad value is an error, never a silent fallback to claude.
+func loadWorkerKind(cfg any) (string, error) {
+	v, err := config.Value(cfg, "round.workerKind")
+	if err != nil {
+		return "", err
+	}
+	k, ok := v.(string)
+	if !ok || (k != "" && !harness.Valid(k)) {
+		return "", fmt.Errorf("round.workerKind must be %s (got %v)", harness.KindList(), v)
+	}
+	return k, nil
 }
 
 // loadTiers reads round.tier and round.tiers.<kind>.<tier>. The claude standard

@@ -104,7 +104,7 @@ func setupVerb(fs *flag.FlagSet) RunFunc {
 		lines := []string{res.Text}
 		for _, p := range config.Prompts {
 			v, ok := answers[p.Key]
-			if !ok {
+			if !ok || (p.Optional && v == "") {
 				continue
 			}
 			if _, err := config.Set(dir, p.Key, v); err != nil {
@@ -164,7 +164,11 @@ func ask(in *bufio.Reader, out io.Writer, p config.Prompt, def string) (string, 
 		fmt.Fprintf(out, "  %d) %s%s: %s\n", i+1, ch.Value, mark, ch.Desc)
 	}
 	for {
-		fmt.Fprintf(out, "Choose [%d]: ", defN)
+		if defN == 0 && p.Optional {
+			fmt.Fprint(out, "Choose, or Enter to leave it unset: ")
+		} else {
+			fmt.Fprintf(out, "Choose [%d]: ", defN)
+		}
 		line, err := in.ReadString('\n')
 		line = strings.TrimSpace(line)
 		if err != nil && line == "" {

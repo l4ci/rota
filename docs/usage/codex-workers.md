@@ -14,7 +14,7 @@ rota round assign 59 --kind codex --check-only    # readiness, and the model it 
 rota round assign 59 --kind codex
 ```
 
-`--kind` is `claude` or `codex`. Without it, the issue's `harness:` label applies (file backend: a `Harness:` field), then the slot's recorded kind, else `claude`. `rota round status` shows each slot's kind. To pick a model per issue, add a `model:<id>` label or pass `--model <id>`; see [assigning](parallel-rounds.md#assigning-an-issue).
+`--kind` is `claude` or `codex`. Without it, the issue's `harness:` label applies (file backend: a `Harness:` field), then the project default `round.workerKind`, then the slot's recorded kind, else `claude`. A Codex-first project sets `rota config set round.workerKind codex` once; autopilot, `rota round architecture` and `rota round transfer` then start Codex workers too. `rota round status` shows each slot's kind and where it came from. To pick a model per issue, add a `model:<id>` label or pass `--model <id>`; see [assigning](parallel-rounds.md#assigning-an-issue).
 
 ## What you need
 
