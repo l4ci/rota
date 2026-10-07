@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/rotatree"
+	"github.com/l4ci/rota/internal/testledger"
 	"os"
 	"slices"
 	"strconv"
@@ -73,6 +74,9 @@ const (
 	// GateApprovalRequired: the merge-approval gate (B1) refused before the
 	// merge; the CLI exits 4 with it.
 	GateApprovalRequired = "approval-required"
+	// GateVerdictBlocked: a recorded FAIL verdict (B3) refused before the
+	// merge; the CLI exits 4 with it, blockedBy verdict.
+	GateVerdictBlocked = "verdict-blocked"
 )
 
 // GateOpts are the flags of `rota worker gate`.
@@ -85,6 +89,10 @@ type GateOpts struct {
 	// merged together and verified once, so a branch behind the base only
 	// because an earlier train member landed is not refused as stale.
 	Train bool
+	// Verdict is the review-verdict gate (B3), run after provenance, also under
+	// CheckOnly. A non-nil error (a recorded FAIL) stops the gate with verdict
+	// verdict-blocked and is returned as is. branch is the worker branch.
+	Verdict func(branch string) error
 	// Approve is the merge-approval gate (B1), run after provenance and right
 	// before the merge, never under CheckOnly. files lists the paths the merge
 	// changes. A non-nil error stops the gate with verdict approval-required
@@ -107,6 +115,9 @@ type GateResult struct {
 	Err           string
 	Hint          string
 	Notes         []string // PROVENANCE-SKIP and NO-VERIFY lines for stderr
+	// Excluded lists the test-ledger entries that excused a failing command.
+	// Expired lists the entries past their expiry, which fail the gate.
+	Excluded, Expired []testledger.Entry
 }
 
 // OK reports a successful verdict.
@@ -217,6 +228,18 @@ func (e Env) gate(ctx context.Context, root string, o GateOpts) (GateResult, err
 	if in.where, err = FullWhere(in.cfg); err != nil {
 		return res, err
 	}
+	if in.ledger, err = LoadLedger(root); err != nil {
+		return res, err
+	}
+	// An expired entry fails a gate that verifies, before anything merges.
+	if !o.CheckOnly && !o.NoVerify {
+		if msg := LedgerExpiry(in.ledger, e.withDefaults().Now()); msg != "" {
+			res.Verdict, res.Expired = GateVerifyFailed, in.ledger.Expired(e.withDefaults().Now())
+			res.Err = fmt.Sprintf("GATE-FAIL %s — %s; nothing landed", o.Slot, msg)
+			res.Hint = "fix the test or renew the entry in .rota/test-ledger.json, then re-gate"
+			return res, nil
+		}
+	}
 	res, err = e.gateEnv().gate(ctx, root, o, res, in, t)
 	if err == nil && t.Queued && res.Verdict == GatePass {
 		if err := RemoveQueuedPR(root, t.PR); err != nil {
@@ -230,8 +253,9 @@ func (e Env) gate(ctx context.Context, root string, o GateOpts) (GateResult, err
 type gateInput struct {
 	cfg        any
 	verifyCmds []string
-	where      string   // test.fullWhere
-	e2eCmds    []string // test.e2e, read before the merge like verifyCmds
+	where      string            // test.fullWhere
+	e2eCmds    []string          // test.e2e, read before the merge like verifyCmds
+	ledger     testledger.Ledger // .rota/test-ledger.json, read before the merge too
 }
 
 // gateEnv is the slice of Env the gate touches.
@@ -272,6 +296,8 @@ var gateSteps = []gateStep{
 	(*gate).stepFreshness,
 	(*gate).stepPRMatches,
 	(*gate).stepProvenance,
+	(*gate).stepVerdict,
+	(*gate).stepCheckOnly,
 	(*gate).stepMerge,
 	(*gate).stepVerify,
 }
@@ -440,8 +466,7 @@ func (g *gate) stepPRMatches() (bool, error) {
 	return false, nil
 }
 
-// stepProvenance runs the approvals check. Under CheckOnly it also ends the
-// gate with verdict fresh.
+// stepProvenance runs the approvals check.
 func (g *gate) stepProvenance() (bool, error) {
 	failMsg, brokeMsg := g.checkProvenance()
 	if brokeMsg != "" {
@@ -452,6 +477,25 @@ func (g *gate) stepProvenance() (bool, error) {
 		g.verdict(GateProvenanceFail, failMsg, "")
 		return true, nil
 	}
+	return false, nil
+}
+
+// stepVerdict refuses a branch with a recorded FAIL verdict (B3), the rule the
+// ship paths apply. It runs under CheckOnly too, so a train member is refused
+// before anything merges.
+func (g *gate) stepVerdict() (bool, error) {
+	if g.o.Verdict == nil {
+		return false, nil
+	}
+	if err := g.o.Verdict(g.branch); err != nil {
+		g.res.Verdict = GateVerdictBlocked
+		return true, err
+	}
+	return false, nil
+}
+
+// stepCheckOnly ends a CheckOnly gate with verdict fresh.
+func (g *gate) stepCheckOnly() (bool, error) {
 	if g.o.CheckOnly {
 		// the checked tip: origin/<branch> when a PR is recorded
 		g.res.SHA, _ = g.e.runGit(g.root, "rev-parse", "--short=7", g.headRef)
@@ -635,10 +679,11 @@ func (g *gate) stepVerify() (bool, error) {
 	}
 	// test.e2e: only after test.full passed, so a gate is a train of one.
 	if len(g.in.e2eCmds) > 0 {
-		er, err := runVerifyCmds(g.ctx, g.e.shell, g.in.e2eCmds, g.root)
+		er, err := runVerifyCmds(g.ctx, g.e.shell, g.in.e2eCmds, g.root, g.in.ledger, g.e.now())
 		if err != nil {
 			return true, err
 		}
+		res.Excluded = append(res.Excluded, er.Excluded...)
 		for _, c := range er.Failed {
 			res.Notes = append(res.Notes, "e2e FAILED: "+c)
 		}
@@ -658,7 +703,7 @@ func (g *gate) stepVerify() (bool, error) {
 // ends the gate with a verdict.
 func (g *gate) verifyFull() (bool, error) {
 	res, o := g.res, g.o
-	vr, err := runVerifyCmds(g.ctx, g.e.shell, g.in.verifyCmds, g.root)
+	vr, err := runVerifyCmds(g.ctx, g.e.shell, g.in.verifyCmds, g.root, g.in.ledger, g.e.now())
 	if err != nil {
 		return true, err
 	}
@@ -668,6 +713,7 @@ func (g *gate) verifyFull() (bool, error) {
 			"set test.full via rota config set to make this gate real")
 	} else {
 		res.Verified = vr.Verified
+		res.Excluded = append(res.Excluded, vr.Excluded...)
 		for _, c := range vr.Failed {
 			res.Notes = append(res.Notes, "verify FAILED: "+c)
 		}

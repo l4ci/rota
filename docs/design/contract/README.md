@@ -1,3 +1,10 @@
+---
+verified-sha: 5e9b425a84bdc61cedf349412b0aa15c738689eb
+refs:
+  - docs/design/5.0-cli-conventions.md
+  - internal/cli/contract_test.go
+---
+
 # `rota` verb contract
 
 This directory defines every `rota` verb's arguments, flags, `--json` data and exit codes. The black-box smoke suite (A2, #46) tests against it, and the Go port (A3 to A9) implements it. Verbs come from the command tree in the [helper triage](../5.0-helper-triage.md). Global flags, the JSON envelope, stderr format, the exit-code table, write rules and config loading are fixed by the [CLI conventions](../5.0-cli-conventions.md) (A3, #47). Nothing here overrides them: failure `data` on exit 1 and 4, exit 4 for mutating verbs only, and `changed` in failure data all come from the conventions.
@@ -95,7 +102,7 @@ The entries live one file per verb group, so a change to one group does not conf
 | [backlog.md](backlog.md) | A4 | `id`, `item`, `backlog`, `summary`, `issues`, `status`, `refactor`, `migrate issues` |
 | [knowledge.md](knowledge.md) | A5 | `knowledge`, `decisions`, `glossary`, `block`, `instructions`, `map`, `qa`, `migrate hv` |
 | [milestones.md](milestones.md) | A6 | `milestone`, `plan`, `design`, `spike`, `proof`, `debug` |
-| [workers.md](workers.md) | A7 | `worker` (pool, dispatch, poll, gate, session, account), `test run` |
+| [workers.md](workers.md) | A7 | `worker` (pool, dispatch, poll, gate, session, account), `test run`, `test ledger check` |
 | [tracker-git-ship.md](tracker-git-ship.md) | A8 | `tracker`, `git`, `review`, `ship`, `release` |
 | [init.md](init.md) | A9 | `init` |
 | [verdicts.md](verdicts.md) | B2 | `verdict` |

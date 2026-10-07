@@ -1,3 +1,10 @@
+---
+verified-sha: 5e9b425a84bdc61cedf349412b0aa15c738689eb
+refs:
+  - internal/gate
+  - internal/cli/gate.go
+---
+
 ## B1: manual gates
 
 B1 (#54) moves the manual gates out of skill prose and into the verbs. Orchestrator rulings (round 4, phase B, from the maintainer on 2026-10-03): a gated verb exits non-zero without `--confirm` at every autonomy level; skills pass `--confirm` only after an `AskUserQuestion` yes; every confirmed pass is appended to an audit log under `.rota/` with the gate, the verb, the time and the quoted human answer (`--confirm-note`, required with `--confirm`). Issue close and issue label are not gated in code. Gated: tag push, release publish, public filing (`tracker suggest-upstream`), and merges where config requires human approval (all merges, or merges touching listed paths, per #44 "Merging").

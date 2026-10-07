@@ -35,6 +35,8 @@ func designPlanCommands() []*Command {
 			{Name: "rm", Summary: "delete a plan", Verb: noFlags(runPlanRm)},
 			{Name: "validate-docs", Summary: "check doc-by-path deliverables", Verb: noFlags(runPlanValidateDocs)},
 			{Name: "rename-check", Summary: "files that mention a name", Verb: noFlags(runPlanRenameCheck)},
+			{Name: "pass", Summary: "mark an acceptance criterion met by a proof row", Verb: planPass},
+			{Name: "check", Summary: "every criterion has a task, every task a verify", Verb: noFlags(runPlanCheck)},
 			{Name: "uncertain", Summary: "uncertainty pre-flight for an item", Verb: noFlags(runPlanUncertain)},
 		}},
 	}

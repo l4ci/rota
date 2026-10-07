@@ -65,9 +65,13 @@ func itemShow(fs *flag.FlagSet) RunFunc {
 		for _, n := range st.Notes {
 			notes = append(notes, n)
 		}
+		cover, err := acceptanceCoverage(c, wf, args[0], st)
+		if err != nil {
+			return backlogFailRead(err)
+		}
 		data := jsonObj("id", st.ID, "type", st.Type, "title", st.Title, "status", st.Status,
 			"state", nullIfEmpty(st.State), "claimedBy", nullIfEmpty(st.Claim), "assignees", assignees,
-			"milestone", nullIfEmpty(st.Milestone), "notes", notes, "comments", comments)
+			"milestone", nullIfEmpty(st.Milestone), "notes", notes, "acceptance", acceptanceData(cover), "comments", comments)
 		word := map[string]string{"B": "bug", "F": "feature", "T": "task"}[st.Type]
 		lines := []string{
 			fmt.Sprintf("[%s] %s", spellID(st.Type, st.ID), st.Title),
@@ -80,6 +84,7 @@ func itemShow(fs *flag.FlagSet) RunFunc {
 			"notes: " + noneIfEmpty(strings.Join(st.Notes, ", ")),
 			fmt.Sprintf("comments: %d", len(st.Comments)),
 		}
+		lines = append(lines, acceptanceLines(cover)...)
 		return Result{Data: data, Text: strings.Join(append(lines, rows...), "\n")}, nil
 	}
 }
@@ -231,6 +236,14 @@ func checkNoteKind(kind string) error {
 	return nil
 }
 
+// checkWritableNoteKind refuses the kinds only a rota verb writes.
+func checkWritableNoteKind(kind string) error {
+	if slices.Contains(backlog.ReservedNoteKinds, kind) {
+		return Usage("the %s note is written by `rota plan pass`; item note add and rm refuse it", kind)
+	}
+	return nil
+}
+
 func itemNoteAdd(fs *flag.FlagSet) RunFunc {
 	kind := fs.String("kind", "", strings.Join(backlog.NoteKinds, "|"))
 	bodyFile := fs.String("body-file", "", "note text, path or - for stdin")
@@ -239,6 +252,9 @@ func itemNoteAdd(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		if err := checkNoteKind(*kind); err != nil {
+			return Result{}, err
+		}
+		if err := checkWritableNoteKind(*kind); err != nil {
 			return Result{}, err
 		}
 		if *bodyFile == "" {
@@ -293,6 +309,9 @@ func itemNoteRm(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		if err := checkNoteKind(*kind); err != nil {
+			return Result{}, err
+		}
+		if err := checkWritableNoteKind(*kind); err != nil {
 			return Result{}, err
 		}
 		_, wf, id, typ, err := itemFlow(c, args[0])

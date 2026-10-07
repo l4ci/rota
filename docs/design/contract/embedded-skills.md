@@ -1,3 +1,10 @@
+---
+verified-sha: 5e9b425a84bdc61cedf349412b0aa15c738689eb
+refs:
+  - embed.go
+  - internal/skills
+---
+
 ## F6a: embedded skills
 
 F6a (#230, part of #44) makes `rota` the only artifact: the binary carries the skills and the `references/` they read, and installs them for Claude Code and Codex. The Claude plugin, the `bin/rota` launcher and `npx skills` go. Rulings (maintainer, 2026-10-04, relayed in round 5): skills ship "Embedded in rota", before the 5.0 tag; the verb names are open to argument. The version lives in the binary's ldflags, set from the tag (lea, F6b, agreed in round 5); F6a reads only `version.Get()`. F6b's root `VERSION` file is only the input to `release bump`, and nothing at runtime reads it.

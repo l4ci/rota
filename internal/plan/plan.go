@@ -170,6 +170,7 @@ _(3–6 sentences — the shape of the implementation, the design choice, why th
 ## Tasks
 
 - **T1** — _(observable behavior)_
+  - Serves: _(AC-n of the item's acceptance criteria; several allowed: AC-1, AC-2)_
   - Files: _(paths the orchestrator will touch or create)_
   - Verify: _(command or manual check that proves T1 done)_
 
@@ -180,6 +181,10 @@ _(3–6 sentences — the shape of the implementation, the design choice, why th
 ## Assumptions
 
 - _(named assumptions made implicit by the approach)_
+
+## Relies on
+
+- _(KNOWLEDGE <Topic>: **<title>**, or DECISIONS <title>: each entry the plan depends on; none if neither)_
 `, key, milestone, unit, unitKind, repoLine, designLine, title, time.Now().Format("2006-01-02"))
 }
 

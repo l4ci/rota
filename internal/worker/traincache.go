@@ -67,7 +67,7 @@ func (c *trainCache) get(key string) (trainCacheVerdict, bool) {
 
 // put records a passing verify. A run with nothing to run proves nothing.
 func (c *trainCache) put(key string, r VerifyResult) {
-	if r.NoCommands || !r.OK() {
+	if r.NoCommands || !r.OK() || len(r.Excluded) > 0 { // a ledger excuse can expire: not a clean pass
 		return
 	}
 	c.f.Verdicts[key] = trainCacheVerdict{Verified: r.Verified}

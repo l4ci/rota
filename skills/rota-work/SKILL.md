@@ -74,7 +74,9 @@ Pick a descriptive branch name (`rota/quick-switch`). Step 5 creates the branch 
 
 ## Step 4 — Plan Tasks
 
-**Plan-as-artifact check (first, including resume).** For every item or slice, read [`plan-artifact.md`](plan-artifact.md) and resolve its supported backend key before decomposing. An issue plan needs no milestone. Use the stored tasks, constraints and verify steps when a plan exists.
+**Plan-as-artifact check (first, including resume).** For every item or slice, read [`plan-artifact.md`](plan-artifact.md) and resolve its supported backend key before decomposing. An issue plan needs no milestone. Use the stored tasks, constraints and verify steps when a plan exists; a plan that fails `rota plan check` stops the run before dispatch; the check is skipped on the file backend and for plans with no `Serves:` line (see that file).
+
+**Planning level.** With no stored plan, apply [`references/planning-dial.md`](references/planning-dial.md) and state the level in one line to the user. Level 1 (pointers) decomposes ad hoc as below, unchanged. Level 2 or higher: stop and offer `/rota-brainstorm`, `/rota-spike` or `/rota-plan` first; proceed ad hoc only if the user says so. A round worker (branch `<agent>/<issue>-<slug>`) does not stop: the issue's acceptance criteria are its spec, so it states the level and proceeds, and escalates with `ROTA-BLOCKED` only for an open product question. A stored plan already carries its level; skip this.
 
 1. **Consult knowledge and decisions** with the canonical K+D pattern (`references/knowledge-consult.md`), topics inferred from the planned work. Run `rota glossary read <terms in the item>…` too; call out drift from a canonical term. Carry matches into Step 6 briefs as `**Known gotchas:**` (relevant bullets only) and `**Hard boundaries:**` (full entries: rule, *Why*, **Forbids**, **Permits**). If a planned task would violate a decision, **stop and surface it** before dispatching. Run `rota map stats --cap` (one-line nudge; never blocks).
 

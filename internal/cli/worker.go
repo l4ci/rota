@@ -17,6 +17,7 @@ import (
 
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/ship"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -626,7 +627,23 @@ func gateData(r worker.GateResult) *jsonx.Object {
 	d.Set("verified", strList(r.Verified))
 	d.Set("verifySkipped", r.VerifySkipped)
 	d.Set("changed", r.Changed)
+	setLedgerData(d, r.Excluded, r.Expired)
 	return d
+}
+
+// verdictRefusal turns a recorded-FAIL refusal from the gate or train into the
+// exit-4 envelope the ship paths give: d plus blockedBy verdict and the record.
+func verdictRefusal(err error, d *jsonx.Object) (Result, error) {
+	var vb *ship.VerdictBlockedError
+	if !errors.As(err, &vb) {
+		return Result{}, err
+	}
+	d.Set("blockedBy", "verdict")
+	d.Set("kind", vb.Record.Kind)
+	d.Set("sha", vb.Record.Sha)
+	d.Set("stale", vb.Stale)
+	d.Set("changed", false)
+	return Result{Data: d}, Refused("%s", vb.Error()).WithHint("see: rota verdict show " + vb.Branch)
 }
 
 func workerGate(fs *flag.FlagSet) RunFunc {
@@ -661,7 +678,10 @@ func workerGate(fs *flag.FlagSet) RunFunc {
 		ctx, stop := workerContext()
 		defer stop()
 		issue := gateIssue(root, slot)
-		r, err := workerEnvCtx(c, ctx).Gate(ctx, root, worker.GateOpts{Slot: slot, Base: *base, CheckOnly: *check, NoVerify: *noVerify, Approve: approve})
+		r, err := workerEnvCtx(c, ctx).Gate(ctx, root, worker.GateOpts{Slot: slot, Base: *base, CheckOnly: *check, NoVerify: *noVerify, Approve: approve, Verdict: shipVerdict(c, root, root).Block})
+		if err != nil && r.Verdict == worker.GateVerdictBlocked {
+			return verdictRefusal(err, gateData(r))
+		}
 		if err != nil && r.Verdict == worker.GateApprovalRequired {
 			return gateRefusal(err, gateData(r))
 		}

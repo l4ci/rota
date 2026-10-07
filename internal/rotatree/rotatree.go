@@ -23,6 +23,7 @@ const (
 	TrainCacheFile  = "train-cache.json"
 	CountersFile    = "counters.json"
 	IssueMapFile    = "issue-map.json"
+	TestLedgerFile  = "test-ledger.json"
 	BacklogFile     = "BACKLOG.md"
 	ArchiveFile     = "ARCHIVE.md"
 	KnowledgeFile   = "KNOWLEDGE.md"
@@ -67,6 +68,9 @@ func Verdicts(root string) string { return File(root, VerdictsFile) }
 
 // TrainCache is the merge train verdict cache (gitignored).
 func TrainCache(root string) string { return File(root, TrainCacheFile) }
+
+// TestLedger is the tracked exclusion ledger of known-red tests.
+func TestLedger(root string) string { return File(root, TestLedgerFile) }
 
 // Backlog is BACKLOG.md.
 func Backlog(root string) string { return File(root, BacklogFile) }
