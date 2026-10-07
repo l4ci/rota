@@ -25,7 +25,7 @@ bad() { printf '\033[31mFAIL\033[0m %s\n' "$1" >&2; fails=$((fails + 1)); }
 OLD_NAME='hv-skills(?!-(?:start|end)\b)'
 OLD_SCOPE=(
   ':(exclude)CHANGELOG.md'
-  ':(exclude)docs/design/'
+  ':(exclude)docs/contributing/contract/'
   ':(exclude).rota/'
   ':(exclude)test/grep-gate.sh'
   # The "Coming from hv-skills" migration section names the predecessor.
@@ -61,8 +61,7 @@ HV_NAME="(?<![\\w.-])hv-(?:${SKILLS})(?![\\w-])|\\.hv/(?!bin\\b)|\\bHV_[A-Z]|\\b
 HV_NAME+="|(?:<|\\\\u003c)!-- hv[:-]|github\\.com/l4ci/hv\\b|\`hv[ \`]|\"hv\"|\\bhv\\.version\\b"
 HV_SCOPE=(
   ':(exclude)CHANGELOG.md'
-  ':(exclude)docs/design/5.0-helper-triage.md'
-  ':(exclude)docs/design/contract/'
+  ':(exclude)docs/contributing/contract/'
   ':(exclude).rota/'
   ':(exclude)AGENTS.md'
   ':(exclude)CLAUDE.md'

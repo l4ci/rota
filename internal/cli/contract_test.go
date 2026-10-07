@@ -15,7 +15,7 @@ import (
 // dropped.
 func contractPaths(t *testing.T) []string {
 	t.Helper()
-	files, err := filepath.Glob(filepath.Join("..", "..", "docs", "design", "contract", "*.md"))
+	files, err := filepath.Glob(filepath.Join("..", "..", "docs", "contributing", "contract", "*.md"))
 	if err != nil || len(files) == 0 {
 		t.Fatalf("no contract files: %v", err)
 	}

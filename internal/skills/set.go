@@ -1,5 +1,5 @@
 // Package skills installs the skill set embedded in the rota binary for Claude
-// Code and Codex (docs/design/contract/, F6a). Each skill becomes a
+// Code and Codex (docs/contributing/contract/, F6a). Each skill becomes a
 // self-contained directory: its markdown files plus the references it cites,
 // so a `references/x.md` link resolves against the skill's own directory.
 // A manifest per root records what rota wrote, and rota touches nothing outside it.

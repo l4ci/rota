@@ -15,7 +15,7 @@ func TestReadOnlySetMatchesContract(t *testing.T) {
 	// The contract covers these verbs in two group files: version/config/repo and backlog.
 	var doc string
 	for _, f := range []string{"version-config-repo.md", "backlog.md"} {
-		raw, err := os.ReadFile(filepath.Join("..", "..", "docs", "design", "contract", f))
+		raw, err := os.ReadFile(filepath.Join("..", "..", "docs", "contributing", "contract", f))
 		if err != nil {
 			t.Fatal(err)
 		}

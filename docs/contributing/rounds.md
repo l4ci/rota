@@ -52,7 +52,7 @@ There are no servers and no ports in this repo.
 
 ## Contract doc stamps
 
-Every `docs/design/contract/*.md` opens with frontmatter naming the commit it was last verified against and the
+Every `docs/contributing/contract/*.md` opens with frontmatter naming the commit it was last verified against and the
 repo paths it describes:
 
 ```
@@ -100,8 +100,8 @@ new code. A new contract doc needs the stamp before it passes.
   `rota knowledge query "<exact ## heading>"`. The topics that bite most: *Architecture: Helper
   conventions & invariants*, *Architecture: Module extraction & migration safety*, *Build &
   Tooling: Smoke testing*.
-- A new verb needs a contract entry and a smoke section. The entry goes in the group file under `docs/design/contract/`
-  that holds its siblings (`docs/design/contract/README.md` maps groups to files); add the verb to the README index too.
+- A new verb needs a contract entry and a smoke section. The entry goes in the group file under `docs/contributing/contract/`
+  that holds its siblings (`docs/contributing/contract/README.md` maps groups to files); add the verb to the README index too.
 - Config keys are documented in three places at once: `docs/reference/config-options.md`,
   `docs/usage/configuration.md` and `internal/config/schema.go`. Touch only the lines about your key; a sibling may be adding
   another key in the same files.
