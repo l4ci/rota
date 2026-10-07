@@ -156,7 +156,7 @@ never deletes the handoff; only the SessionStart hook consumes it.
 
 ### Flags
 
-`--max-restarts`, `--breaker`, `--backoff` and `--prompt` override the config for one run. `--first-prompt` appends a prompt to the first start only (`rota orchestrate` uses it to start `/rota-orchestrate`).
+`--max-restarts`, `--breaker`, `--backoff` and `--prompt` override the config for one run. `--config-dir` sets the `CLAUDE_CONFIG_DIR` the command starts under (default: the one the supervisor inherited), so a supervised orchestrator can run on a chosen account. `--first-prompt` appends a prompt to the first start only (`rota orchestrate` uses it to start `/rota-orchestrate`).
 `--no-limits` leaves out the usage-limit watcher the supervisor otherwise runs beside the command (see
 [usage limits](#usage-limits)). `--json` prints one envelope when the loop ends, not before.
 

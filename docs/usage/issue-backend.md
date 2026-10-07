@@ -23,7 +23,7 @@ An ID is the type letter plus the issue number: `#42` is `F42`, `B42` or `T42`. 
 
 - **Labels** carry type (`type:bug`), priority (`p0`..) and, for features, size (`size:Major`).
 - **Body** holds the description and a fields block (`Related`, `Milestone`, `Repos`, ...).
-- **Notes** are marker comments on the issue, edited in place: `proof`, `design`, `plan`. Read them with `rota item note show <ID> --kind design`, `rota design show`, `rota plan show`.
+- **Notes** are marker comments on the issue, edited in place: `proof`, `design`, `plan`, `acceptance`. Read them with `rota item note show <ID> --kind design`, `rota design show`, `rota plan show`.
 - **Comments** record `question`, `answer`, `decision` and `feedback`. Decisions are binding for later sessions.
 
 ### Claim lock and state labels
@@ -32,7 +32,9 @@ An ID is the type letter plus the issue number: `#42` is `F42`, `B42` or `T42`. 
 
 ### Review and close
 
-`/rota-work`, `/rota-debug` and `/rota-ship` always open a PR / MR in issue mode and never merge. `rota ship pr --closes <IDs>` adds `Closes #<n>` lines. `/rota-review --queue` lists `needs-review` items with their PRs (`rota review queue`), reviews them and merges with `rota ship pr-merge`. Proof comes first: an open linked item with no proof blocks the merge, becomes `changes-requested` and gets a feedback comment (exit 4). Proof rows are added with `rota proof add` into the item's proof note.
+`/rota-work`, `/rota-debug` and `/rota-ship` always open a PR / MR in issue mode and never merge. `rota ship pr --items <IDs>` adds `Closes #<n>` lines. `/rota-review --queue` lists `needs-review` items with their PRs (`rota review queue`), reviews them and merges with `rota ship pr-merge`. Proof comes first: an open linked item with no proof blocks the merge, becomes `changes-requested` and gets a feedback comment (exit 4). Proof rows are added with `rota proof record` (it runs a command and writes the row) or, for a docs-only change with no command, `rota proof add`, into the item's proof note.
+
+In a [round](parallel-rounds.md), `rota worker gate` also wants the PR body to carry `Closes #N` (or `Fixes #N`) for the slot's issue. Without it the merge would leave the issue open and claimed, so the gate refuses (exit 4, `blockedBy: closes`). A PR that lands only part of an issue says `Refs #N` and the issue carries the `partial-slice` label, which exempts it.
 
 `rota item complete <ID> --reason handed-off|blocked|dropped` closes without a merge: `dropped` and `handed-off` close as not planned; `blocked` keeps the issue open with the `blocked` label.
 
