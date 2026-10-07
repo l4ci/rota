@@ -49,9 +49,10 @@ func (e Env) sectionsOn(ctx context.Context, root, ref string) (max int, found b
 // 0 when the issue asks for none or the project has no test/sections. Free
 // means above every number on the base, on every open PR branch and in-flight
 // slot branch (as the local checkout last saw them, `origin/` first), and
-// above every number another slot has reserved but not yet pushed. A slot that
-// already holds id keeps its number, so a resumed assign is stable.
-func (e Env) reserveSmokeSection(ctx context.Context, root string, be Board, reg worker.Registry, roster []string, id string) int {
+// above every number another slot has reserved but not yet pushed. The slot being
+// assigned (agent) keeps its number when it already holds id, so a resumed
+// assign is stable; the other attempt of a best-of:2 issue takes a new one.
+func (e Env) reserveSmokeSection(ctx context.Context, root string, be Board, reg worker.Registry, roster []string, id, agent string) int {
 	text, _, _ := be.Detail(id)
 	if !MentionsSmokeSection(text) {
 		return 0
@@ -62,7 +63,7 @@ func (e Env) reserveSmokeSection(ctx context.Context, root string, be Board, reg
 		if s == nil {
 			continue
 		}
-		if s.HeldID() == strings.ToUpper(id) && s.SmokeSection() != 0 {
+		if s.Name() == agent && s.HeldID() == strings.ToUpper(id) && s.SmokeSection() != 0 {
 			return s.SmokeSection()
 		}
 		if b := s.Branch(); b != "" && !strings.HasPrefix(b, "park/") {

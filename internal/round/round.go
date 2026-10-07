@@ -127,12 +127,17 @@ type Row struct {
 	// Bounces is how often the slot's issue has been sent back (round.maxBounces
 	// caps it); 0 when never.
 	Bounces int
+	// BestOf is the other attempt's slot when the row's issue is built best-of:2.
+	BestOf string
 }
 
 // Finding is one drift. Repair names what Reconcile(apply) would do and is
 // empty for kinds that are never repaired.
 type Finding struct {
 	Kind, Slot, Issue, Detail, Repair string
+	// pr is the registry's ref of the queued PR a pr-stale finding is about,
+	// so its repair drops that record and not the issue's other attempt's.
+	pr string
 }
 
 // Report is the assembled state.
@@ -214,6 +219,11 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 		r.Kind, r.KindSource, r.Tier, r.Model, r.TierReason = s.Kind(), s.KindSource(), s.Tier(), s.Model(), s.TierReason()
 		if r.Issue != "" {
 			r.Bounces = reg.Bounces(r.Issue)
+			if b := reg.BestOf(r.Issue); b != nil && b.Attempt(name) != nil {
+				if sib := b.Sibling(name); sib != nil {
+					r.BestOf = sib.Slot
+				}
+			}
 		}
 		add(r, &view{worktree: wt, base: firstNonEmpty(s.Base(), e.Base)})
 	}
@@ -370,7 +380,7 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 			case err != nil:
 				rep.Warnings = append(rep.Warnings, fmt.Sprintf("PR #%d state: %v", n, err))
 			case st == "merged" || st == "closed":
-				rep.add(Finding{Kind: PRStale, Issue: q.Issue, Detail: fmt.Sprintf("PR #%d in review is %s", n, st), Repair: "drop it from review"})
+				rep.add(Finding{Kind: PRStale, Issue: q.Issue, Detail: fmt.Sprintf("PR #%d in review is %s", n, st), Repair: "drop it from review", pr: q.PR})
 			}
 		}
 	}
@@ -432,7 +442,7 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 			}
 		}
 	}
-	e.claimFindings(ctx, rep, rows, slotObj, reg.PRs(), labelled, labelsOK)
+	e.claimFindings(ctx, rep, reg, rows, slotObj, reg.PRs(), labelled, labelsOK)
 
 	e.leaseFinding(ctx, root, rep)
 

@@ -90,6 +90,9 @@ func (e Env) Candidates(ctx context.Context, root string, be backlog.Backend, o 
 		} else {
 			c.Pick = p
 		}
+		if _, err := BestOfOf(be.Capabilities(), it); err != nil && c.PickErr == "" {
+			c.PickErr = err.Error()
+		}
 		if len(ms) > 0 {
 			c.Milestone = strings.Join(ms, ",")
 		}
