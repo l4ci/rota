@@ -17,8 +17,10 @@
 [![Last commit](https://img.shields.io/github/last-commit/l4ci/rota)](https://github.com/l4ci/rota/commits)
 [![Stars](https://img.shields.io/github/stars/l4ci/rota?style=social)](https://github.com/l4ci/rota/stargazers)
 [![For Claude Code](https://img.shields.io/badge/for-Claude%20Code-8A2BE2)](https://claude.com/claude-code)
+[![For Codex](https://img.shields.io/badge/for-Codex-000000)](https://developers.openai.com/codex)
+[![Runs in herdr or tmux](https://img.shields.io/badge/runs%20in-herdr%20%C2%B7%20tmux-2ea44f)](#runs-in-herdr-or-tmux)
 
-[How it works](#how-it-works) · [Quick start](#quick-start) · [Skills](#skills) · [Docs](docs/)
+[How it works](#how-it-works) · [herdr and tmux](#runs-in-herdr-or-tmux) · [Accounts](#several-accounts-balanced) · [Quick start](#quick-start) · [Skills](#skills) · [Docs](docs/)
 
 </div>
 
@@ -49,7 +51,34 @@ issues ─► orchestrator ─┼─► worker dana ─► PR ─┼─► gate 
 - **Workers**: agents that each take one issue in their own git worktree and terminal tab, build it, and open a PR. They never merge.
 - **Gate**: the only merge path. It checks the PR is current and properly signed off, merges it, then runs your full test suite on the merged `main`. A red result stops the round until it's fixed. With `test.fullWhere ci` the suite runs in CI before the merge instead.
 
+<p align="center"><img src="docs/images/round-herdr.svg" alt="A round in herdr: the orchestrator assigns three issues, gates and merges one PR, and escalates a worker's product question while the other workers keep going" width="900"></p>
+<p align="center"><sub>Illustration of a round in herdr (sample project).</sub></p>
+
 Both ways share a memory in `.rota/`: what the project has learned (`KNOWLEDGE.md`), the lines it must not cross (`DECISIONS.md`), and handoff notes, so a fresh session picks up where the last one stopped.
+
+## Runs in herdr or tmux
+
+A round runs in your terminal, not in a cloud dashboard. Start the orchestrator inside [herdr](https://herdr.dev) or [tmux](https://github.com/tmux/tmux) and rota gives every worker its own tab (tmux: window), so you can watch any agent, or type into one, at any time.
+
+- **herdr** reports each agent's state directly (working, blocked, done), and rota waits on those events instead of polling.
+- **tmux** works too: rota reads the panes to tell what each worker is doing.
+- **Neither?** The round still runs, with workers as subagents of the orchestrator.
+
+Workers can be Claude Code or Codex, mixed in one round: a `harness:codex` label, or `round.workerKind`, picks per issue or per project.
+
+## Several accounts, balanced
+
+Long rounds run into usage limits. List your accounts and rota spreads the work and routes around limits:
+
+- **Load balancing.** With several Claude accounts in `work.accounts`, `rota round assign` puts new work on the account with the most headroom and skips one that is cooling down.
+- **Limits.** When a worker hits a limit, `rota limit watch` moves its issue to a free slot on another account, continuing from the pushed branch, or waits for the reset if none is free.
+- **The orchestrator** can hand off and restart under another account before it hits its own limit (`orchestrator.switchOnUsage`), and `rota keepalive` restarts it if it stops.
+- **Codex.** `work.codexAccounts` spreads Codex workers over several logins (rota can't read Codex usage, so these aren't balanced by headroom).
+
+<p align="center"><img src="docs/images/workers-accounts.svg" alt="A Codex worker asks a product question and gets the maintainer's answer relayed; the orchestrator lists three accounts and assigns the next issue to the one with the most headroom" width="900"></p>
+<p align="center"><sub>Illustration: a worker's question relayed, and new work placed on the freest account.</sub></p>
+
+Setup: [parallel rounds](docs/usage/parallel-rounds.md#setup) and [unattended rounds](docs/usage/unattended-rounds.md).
 
 ## Quick start
 
