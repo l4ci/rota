@@ -18,7 +18,6 @@ import (
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/marker"
 	"github.com/l4ci/rota/internal/roundcfg"
-	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -70,12 +69,8 @@ func (e Env) holdsLease(ctx context.Context, root string, pid int, getenv func(s
 		return false, err
 	}
 	le := e.leaseEnv()
-	lease, st, err := le.Read(cd)
-	if err != nil {
-		return false, err
-	}
-	holder := le.Discover(pid, getenv)
-	return (st == roundlease.Live || st == roundlease.Foreign) && holder.SameAs(lease, le.Host), nil
+	_, _, held, err := le.Holds(cd, pid, getenv)
+	return held, err
 }
 
 // freeSlot records a slot as idle and parked: no issue, no claim, no PR.

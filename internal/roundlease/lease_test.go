@@ -320,3 +320,48 @@ func TestRunningIsTheSharedWatcherLivenessRule(t *testing.T) {
 		t.Errorf("Identity = %q %d", h, s)
 	}
 }
+
+func TestHoldsIsLiveAndSameHolderOnly(t *testing.T) {
+	none := func(string) string { return "" }
+	pane := func(k string) string {
+		if k == "TMUX_PANE" {
+			return "%1"
+		}
+		return ""
+	}
+	cases := []struct {
+		name  string
+		env   Env
+		lease *Lease
+		pid   int
+		genv  func(string) string
+		want  State
+		held  bool
+	}{
+		{"no lease", fakeEnv("h1", procs{10: 100}), nil, 10, none, None, false},
+		{"live, same pid", fakeEnv("h1", procs{10: 100}), &Lease{PID: 10, Start: 100, Host: "h1"}, 10, none, Live, true},
+		{"live, other pid", fakeEnv("h1", procs{10: 100, 20: 200}), &Lease{PID: 10, Start: 100, Host: "h1"}, 20, none, Live, false},
+		{"live, same pane new pid", fakeEnv("h1", procs{10: 100, 20: 200}), &Lease{PID: 10, Start: 100, Host: "h1", Pane: "%1", PaneHost: "tmux"}, 20, pane, Live, true},
+		{"stale", fakeEnv("h1", procs{20: 200}), &Lease{PID: 10, Start: 100, Host: "h1"}, 10, none, Stale, false},
+		{"pid reused", fakeEnv("h1", procs{10: 999}), &Lease{PID: 10, Start: 100, Host: "h1"}, 10, none, Stale, false},
+		{"foreign host is never held", fakeEnv("h1", procs{10: 100}), &Lease{PID: 10, Start: 100, Host: "h2"}, 10, none, Foreign, false},
+		{"foreign host, same pane", fakeEnv("h1", procs{10: 100}), &Lease{PID: 10, Start: 100, Host: "h2", Pane: "%1", PaneHost: "tmux"}, 10, pane, Foreign, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if c.lease != nil {
+				if err := os.MkdirAll(filepath.Dir(Path(dir)), 0o755); err != nil {
+					t.Fatal(err)
+				}
+				if err := write(Path(dir), *c.lease); err != nil {
+					t.Fatal(err)
+				}
+			}
+			_, st, held, err := c.env.Holds(dir, c.pid, c.genv)
+			if err != nil || st != c.want || held != c.held {
+				t.Fatalf("got state=%v held=%v err=%v, want %v %v", st, held, err, c.want, c.held)
+			}
+		})
+	}
+}
