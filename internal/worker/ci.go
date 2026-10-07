@@ -302,9 +302,6 @@ func (r VerifyResult) stopVerdict(who string) (verdict, msg, hint string) {
 // detail is the part of a failed run a verdict message quotes: the local log's
 // last lines, or the CI checks and where to read them.
 func (r VerifyResult) detail() string {
-	if r.Cached {
-		return "cached verdict (no log kept) — failed: " + strings.Join(r.Failed, ", ")
-	}
 	if r.CI {
 		return fmt.Sprintf("CI checks on %s (%s):\n%s", r.Ref, short(r.SHA), indentTail(r.Log, 20))
 	}

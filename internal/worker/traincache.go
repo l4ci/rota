@@ -15,11 +15,11 @@ import (
 // moved base or a changed head misses. It lives in a gitignored file under
 // .rota/ and is only touched under the land lock.
 
-// trainCacheVerdict is one recorded verify.
+// trainCacheVerdict is one recorded passing verify. Failures are never cached: a
+// red can come from the machine (a killed compiler, a load flake), so it always
+// re-verifies.
 type trainCacheVerdict struct {
-	OK       bool     `json:"ok"`
 	Verified []string `json:"verified,omitempty"`
-	Failed   []string `json:"failed,omitempty"`
 }
 
 // trainCacheCulprit remembers a member named as culprit: the head it had and
@@ -65,13 +65,12 @@ func (c *trainCache) get(key string) (trainCacheVerdict, bool) {
 	return v, ok
 }
 
-// put records a verify that gave a real answer. A run with nothing to run, a
-// CI check that never started and a timeout are not verdicts.
+// put records a passing verify. A run with nothing to run proves nothing.
 func (c *trainCache) put(key string, r VerifyResult) {
-	if r.NoCommands || r.NotRun || r.TimedOut || (!r.OK() && len(r.Failed) == 0) {
+	if r.NoCommands || !r.OK() {
 		return
 	}
-	c.f.Verdicts[key] = trainCacheVerdict{OK: r.OK(), Verified: r.Verified, Failed: r.Failed}
+	c.f.Verdicts[key] = trainCacheVerdict{Verified: r.Verified}
 	c.dirty = true
 }
 
