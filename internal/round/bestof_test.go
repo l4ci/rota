@@ -281,13 +281,23 @@ func TestTransferRefusesABestOfIssue(t *testing.T) {
 		d.SetBestOf(worker.BestOf{Issue: "12", Attempts: []worker.BestOfAttempt{
 			{Slot: "ben", Branch: "ben/12-x", ClaimID: "ben@1"}, {Slot: "dana", Branch: "dana/12-x", ClaimID: "dana@1"}}})
 	})
+	// The other attempt's PR waits in review: two holders, refused.
+	worker.Update(f.root, func(d *worker.Doc) {
+		d.QueuePR(worker.QueuedPR{Issue: "12", PR: "#8", From: "kit", Branch: "kit/12-x"})
+	})
 	_, err := f.transfer("12", "dana", nil)
 	var blk *BlockedError
-	if !errors.As(err, &blk) || blk.By != BlockBestOf || !strings.Contains(blk.Msg, "ben and dana") {
+	if !errors.As(err, &blk) || blk.By != BlockBestOf || !strings.Contains(blk.Msg, "ben and review:kit") {
 		t.Fatalf("%v", err)
 	}
 	if f.slot("ben").HeldID() != "12" {
 		t.Errorf("nothing moved")
+	}
+	// After the pick dropped the loser's record one holder is left: the
+	// bounce-cap and item-timeout parks transfer it again.
+	worker.Update(f.root, func(d *worker.Doc) { d.DropQueued(func(worker.QueuedPR) bool { return true }) })
+	if _, err := f.transfer("12", "dana", nil); errors.As(err, &blk) && blk.By == BlockBestOf {
+		t.Errorf("one holder left, still refused: %v", err)
 	}
 }
 
