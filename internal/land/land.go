@@ -3,7 +3,7 @@
 // share. A merge is always pinned to a commit the caller verified, so a push
 // after the check cannot land unreviewed, and a failed local merge gets one abort
 // attempt here. Gates (verdict, approval, proof, provenance, freshness) stay with
-// the callers, who run them before landing.
+// the callers, who run them before landing; Policy names which path runs which.
 package land
 
 import (

@@ -152,6 +152,15 @@ func CLIName(provider string) string {
 	return "gh"
 }
 
+// CheckAuth runs `auth status`; any failure, a missing CLI included, is
+// KindUnavailable.
+func (c *CLI) CheckAuth(ctx context.Context) error {
+	if res, err := c.Run(ctx, []string{"auth", "status"}, nil); err != nil || res.ExitCode != 0 {
+		return unavailable("%s not installed or not authenticated", CLIName(c.Provider))
+	}
+	return nil
+}
+
 // ProviderFromURL classifies a remote URL as hv-issues-provider did: "github"
 // or "gitlab" when the host contains that word, else ProviderUnknown.
 func ProviderFromURL(url string) string {

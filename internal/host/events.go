@@ -15,8 +15,8 @@ import (
 // SupportedHerdr is the herdr minor `rota round wait` is written against.
 // herdr is pre-1.0 and its socket API moves between minors, so any other
 // minor is refused instead of guessed at. Pinned to 0.9.x (0.9.3 was the
-// protocol 22 schema this was built from).
-const SupportedHerdr = "0.9"
+// protocol 22 schema this was built from). A var so a test can move the pin.
+var SupportedHerdr = "0.9"
 
 // ErrUnsupportedHerdr: the installed herdr is not a SupportedHerdr release.
 var ErrUnsupportedHerdr = errors.New("unsupported herdr version")
@@ -43,16 +43,25 @@ type Watch interface {
 
 var reHerdrVersion = regexp.MustCompile(`(\d+)\.(\d+)\.(\d+)`)
 
-// checkHerdrVersion accepts `herdr 0.9.x` output only.
-func checkHerdrVersion(out string) error {
+// HerdrVersion reads the version out of `herdr --version` output. The version
+// is "" when none is readable; a readable one that is not a SupportedHerdr
+// release comes back with ErrUnsupportedHerdr.
+func HerdrVersion(out string) (string, error) {
 	m := reHerdrVersion.FindStringSubmatch(out)
 	if m == nil {
-		return fmt.Errorf("%w: cannot read a version from %q", ErrUnsupportedHerdr, strings.TrimSpace(out))
+		return "", fmt.Errorf("%w: cannot read a version from %q", ErrUnsupportedHerdr, strings.TrimSpace(out))
 	}
+	v := m[0]
 	if m[1]+"."+m[2] != SupportedHerdr {
-		return fmt.Errorf("%w: herdr %s.%s.%s, rota round wait supports %s.x", ErrUnsupportedHerdr, m[1], m[2], m[3], SupportedHerdr)
+		return v, fmt.Errorf("%w: herdr %s, rota round wait supports %s.x", ErrUnsupportedHerdr, v, SupportedHerdr)
 	}
-	return nil
+	return v, nil
+}
+
+// checkHerdrVersion accepts SupportedHerdr output only.
+func checkHerdrVersion(out string) error {
+	_, err := HerdrVersion(out)
+	return err
 }
 
 // socket checks the installed herdr is a SupportedHerdr release and returns

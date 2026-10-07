@@ -9,6 +9,7 @@ import (
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/land"
 	"github.com/l4ci/rota/internal/rotatree"
+	"github.com/l4ci/rota/internal/testledger"
 	"os"
 	"path/filepath"
 	"sort"
@@ -21,7 +22,7 @@ import (
 // time pay it N times. A train pays it once. In order:
 //
 //  1. CHECK each target the way `gate --check-only` does (freshness, PR
-//     identity, provenance). Any refusal stops the train, naming that target.
+//     identity, provenance, review verdict). Any refusal stops the train, naming that target.
 //  2. APPROVE once for the whole train (B1 merge approval over the union of the
 //     files the members change), before the expensive step.
 //  3. MERGE the members in order onto the base in a scratch worktree. A conflict
@@ -50,6 +51,8 @@ type TrainOpts struct {
 	// Approve is GateOpts.Approve for the whole train: files lists the union of
 	// the paths the members change.
 	Approve func(files func() ([]string, error)) error
+	// Verdict is GateOpts.Verdict, run for every member's check.
+	Verdict func(branch string) error
 }
 
 // TrainMember is one target of the train, in order.
@@ -78,6 +81,9 @@ type TrainResult struct {
 	Err         string
 	Hint        string
 	Notes       []string
+	// Excluded lists the test-ledger entries that excused a failing command;
+	// Expired the entries past their expiry, which fail the train.
+	Excluded, Expired []testledger.Entry
 }
 
 // OK reports a train that verified and landed whole.
@@ -86,6 +92,15 @@ func (r TrainResult) OK() bool { return r.Verdict == GatePass }
 // Train runs a merge train (see above). The base must be checked out in root.
 func (e Env) Train(ctx context.Context, root string, o TrainOpts) (TrainResult, error) {
 	e = e.withDefaults()
+	var res TrainResult
+	err := e.withLandLock(ctx, root, func() (err error) {
+		res, err = e.train(ctx, root, o)
+		return err
+	})
+	return res, err
+}
+
+func (e Env) train(ctx context.Context, root string, o TrainOpts) (TrainResult, error) {
 	res := TrainResult{Base: o.Base}
 	if len(o.Targets) == 0 {
 		return res, fail(exitcode.ExitUsage, "a train needs at least one PR or slot")
@@ -128,8 +143,11 @@ func (e Env) Train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 	// 1. Check every member.
 	remote := false
 	for _, t := range o.Targets {
-		gr, err := e.Gate(ctx, root, GateOpts{Slot: t, Base: o.Base, CheckOnly: true})
+		gr, err := e.Gate(ctx, root, GateOpts{Slot: t, Base: o.Base, CheckOnly: true, Verdict: o.Verdict})
 		if err != nil {
+			if gr.Verdict == GateVerdictBlocked {
+				res.Verdict, res.Culprit = gr.Verdict, t
+			}
 			return res, err
 		}
 		res.Notes = append(res.Notes, gr.Notes...)
@@ -139,6 +157,18 @@ func (e Env) Train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 		}
 		res.Members = append(res.Members, TrainMember{Target: t, Branch: gr.Branch, PR: gr.PR})
 		remote = remote || gr.PR != ""
+	}
+	// The ledger is read before anything merges, like the config. An expired
+	// entry fails the train before it builds the scratch tree.
+	led, err := LoadLedger(root)
+	if err != nil {
+		return res, err
+	}
+	if now := e.Now(); LedgerExpiry(led, now) != "" {
+		res.Verdict, res.Expired = GateVerifyFailed, led.Expired(now)
+		res.Err = "TRAIN-FAIL " + LedgerExpiry(led, now) + "; nothing landed"
+		res.Hint = "fix the test or renew the entry in .rota/test-ledger.json, then re-run the train"
+		return res, nil
 	}
 	verify, onCI, brokeMsg, err := e.fullTier(ctx, root, "train")
 	if err != nil {
@@ -279,6 +309,7 @@ func (e Env) Train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 			"set test.full via rota config set to make this gate real")
 	} else {
 		res.Verified = vr.Verified
+		res.Excluded = append(res.Excluded, vr.Excluded...)
 		for _, c := range vr.Failed {
 			res.Notes = append(res.Notes, "verify FAILED: "+c)
 		}
@@ -297,12 +328,13 @@ func (e Env) Train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 	// test.full passed. A red e2e bisects the same way a red full does.
 	e2e := TierCommands(root, "e2e")
 	if green && len(e2e) > 0 {
-		run := func() (VerifyResult, error) { return e.RunVerify(ctx, e2e, scratch) }
+		run := func() (VerifyResult, error) { return e.RunVerifyWith(ctx, e2e, scratch, led) }
 		er, err := run()
 		if err != nil {
 			return res, err
 		}
 		res.E2EVerified = er.Verified
+		res.Excluded = append(res.Excluded, er.Excluded...)
 		for _, c := range er.Failed {
 			res.Notes = append(res.Notes, "e2e FAILED: "+c)
 		}
