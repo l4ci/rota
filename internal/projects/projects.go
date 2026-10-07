@@ -176,3 +176,53 @@ func Cleanup() ([]Project, error) {
 	}
 	return removed, nil
 }
+
+// Remove drops the registry entry for dir, never the directory itself. dir is
+// matched as given (made absolute) or by realpath, so a symlinked path or a
+// directory that is already gone still finds its entry. removed is false when
+// nothing matched. An absent registry removes nothing and is not created.
+func Remove(dir string) ([]Project, error) {
+	path, err := file()
+	if err != nil {
+		return nil, err
+	}
+	if _, err := os.Stat(path); err != nil {
+		return nil, nil
+	}
+	var removed []Project
+	abs, _ := filepath.Abs(dir)
+	real := repos.Realpath(dir)
+	err = fsio.UpdateJSON(path, jsonx.NewObject(), func(v any) (any, error) {
+		doc, ok := v.(*jsonx.Object)
+		if !ok {
+			return v, nil
+		}
+		raw, _ := doc.Get("projects")
+		items, _ := raw.([]any)
+		kept := make([]any, 0, len(items))
+		for _, it := range items {
+			if o, ok := it.(*jsonx.Object); ok {
+				p, _ := o.Get("path")
+				if ps, _ := p.(string); ps != "" && (ps == abs || ps == real) {
+					n, _ := o.Get("name")
+					s, _ := o.Get("lastSeen")
+					ns, _ := n.(string)
+					ls, _ := s.(string)
+					_, statErr := os.Stat(ps)
+					removed = append(removed, Project{Path: ps, Name: ns, LastSeen: ls, Missing: statErr != nil})
+					continue
+				}
+			}
+			kept = append(kept, it)
+		}
+		if len(removed) == 0 {
+			return doc, nil
+		}
+		doc.Set("projects", kept)
+		return doc, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return removed, nil
+}

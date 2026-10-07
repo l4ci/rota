@@ -65,6 +65,17 @@ exit: 70 as `rota projects`. Runs without a `.rota/` root and ignores the workin
 old: none.
 note: deletes at once, no preview (#195): every registry entry whose directory is gone or no longer holds `.rota/`, under the registry's lock. Text mode prints `removed<TAB>name<TAB>path` per entry, or `noop: no stale projects`. An absent registry removes nothing and is not created. Plain `rota projects` still never prunes.
 
+### rota projects remove
+rota projects remove <dir>
+repo: none
+data: {"removed": [{"name": string, "path": string, "lastSeen": string}], "changed": bool}
+exit: 2 unless exactly one directory is given; 70 as `rota projects`. Runs without a `.rota/` root and ignores the working directory.
+old: none.
+note: drops the one registry entry for `<dir>` (#543), under the registry's lock, and never touches the directory. `<dir>` matches as given (made absolute) or by realpath, so a symlinked path and a directory that is already gone both find their entry. Text mode prints `removed<TAB>name<TAB>path`, or `noop: not registered: <dir>` (exit 0, `changed` false). An absent registry removes nothing and is not created. `rota projects --ui` calls this verb for its `d` key.
+
+### rota projects --ui
+note: the only `--ui` view on the projects verbs (#543): the registry from `rota projects` Data, each row with a status (`ok`, `missing directory`, `no .rota/`), and a detail pane with path, last round and round lease. Keys: Enter opens the palette in that project (`rota -C <path>`), `c` runs `projects cleanup`, `d` runs `projects remove` after a confirm, `n` asks for a directory and runs `rota -C <dir> init`, `/` filters, `q`/Esc go back. `cleanup` and `remove` have no view. Terminal only; the palette's Projects entry opens it.
+
 ### rota setup
 rota setup [--yes] [--set <key>=<value>]... | --list
 repo: none
