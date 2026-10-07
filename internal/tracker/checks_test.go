@@ -166,3 +166,22 @@ func TestCommitChecksCLIFailure(t *testing.T) {
 		}
 	}
 }
+
+func TestPRMergeable(t *testing.T) {
+	for _, tc := range []struct {
+		provider, out, want, reason string
+	}{
+		{"github", `{"mergeable":"MERGEABLE","mergeStateStatus":"CLEAN"}`, MergeClean, "CLEAN"},
+		{"github", `{"mergeable":"CONFLICTING","mergeStateStatus":"DIRTY"}`, MergeConflict, "DIRTY"},
+		{"github", `{"mergeable":"UNKNOWN","mergeStateStatus":"UNKNOWN"}`, MergeUnknown, "UNKNOWN"},
+		{"gitlab", `{"has_conflicts":true,"detailed_merge_status":"conflict"}`, MergeConflict, "conflict"},
+		{"gitlab", `{"has_conflicts":false,"detailed_merge_status":"checking"}`, MergeUnknown, "checking"},
+		{"gitlab", `{"has_conflicts":false,"detailed_merge_status":"mergeable"}`, MergeClean, "mergeable"},
+	} {
+		s := &scripted{answer: func(string, []string) (string, string, int) { return tc.out, "", 0 }}
+		m, err := newAdapter(t, tc.provider, s).PRMergeable(context.Background(), 9)
+		if err != nil || m.State != tc.want || m.Reason != tc.reason {
+			t.Errorf("%s %s = %+v, %v; want %s/%s", tc.provider, tc.out, m, err, tc.want, tc.reason)
+		}
+	}
+}

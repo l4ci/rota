@@ -48,6 +48,9 @@ import (
 //     bounces the slot instead of leaving the base to fix forward. The base
 //     must not have moved meanwhile (base-moved). When test.full is empty the
 //     gate reports verifySkipped rather than inventing a check it cannot perform.
+//     Before it, a PR headed for the forge merge is checked for mergeability
+//     there: a conflict the forge sees and local git does not ends the gate as
+//     merge-failed without a verify run (unknown and errors proceed).
 //  3. MERGE: through the forge when the slot recorded a PR (pinned to the
 //     verified head SHA; glab with auto-merge off, since a scheduled merge is
 //     not a merge), else a local `git merge`. A recorded PR with no origin
@@ -224,6 +227,8 @@ func (r Registry) GateTargetAny(arg string) (GateTarget, error) {
 type Forge interface {
 	PRView(ctx context.Context, pr int) (tracker.PRInfo, error)
 	PRRequestMerge(ctx context.Context, pr int, o tracker.MergeOpts) error
+	// PRMergeable asks the forge whether the PR merges cleanly, before the verify.
+	PRMergeable(ctx context.Context, pr int) (tracker.Mergeability, error)
 	// OpenPRs lists the open PRs, so a slot that records none can be matched
 	// to the PR its branch heads.
 	OpenPRs(ctx context.Context) ([]tracker.PR, error)
@@ -673,6 +678,9 @@ func (g *gate) stepMerge() (bool, error) {
 			return true, err
 		}
 	}
+	if g.remote && !g.o.NoVerify && g.forgeRefuses() {
+		return true, nil
+	}
 	if !g.o.NoVerify {
 		check, what := g.verifyLocal, "the gate"
 		if ci != nil {
@@ -695,6 +703,43 @@ func (g *gate) stepMerge() (bool, error) {
 	}
 	g.res.SHA, _ = g.e.runGit(g.root, "rev-parse", "--short=7", "HEAD")
 	return false, nil
+}
+
+// gateMergeableTries bounds the wait for a forge still computing mergeability.
+const gateMergeableTries = 3
+
+// forgeRefuses asks the forge whether the PR merges cleanly before the scratch
+// verify, so a conflict only the forge sees (local git follows renames the
+// forge does not) costs seconds, not a verify run. done is true when the forge
+// reports a conflict: merge-failed, nothing landed. Unknown after a few tries
+// and any error proceed: the post-verify forge merge stays the authority.
+func (g *gate) forgeRefuses() (done bool) {
+	n, err := strconv.Atoi(g.prNum)
+	if err != nil {
+		return false
+	}
+	for i := 0; i < gateMergeableTries; i++ {
+		m, err := g.forge.PRMergeable(g.ctx, n)
+		if err != nil {
+			return false
+		}
+		switch m.State {
+		case tracker.MergeConflict:
+			why := m.Reason
+			if why == "" {
+				why = "the merge commit cannot be cleanly created"
+			}
+			g.verdict(GateMergeFailed, fmt.Sprintf("error: %s merge failed for %s:\n%s reports it is not mergeable (%s); nothing was verified", g.cliName, g.pr, g.provider, why), "")
+			return true
+		case tracker.MergeUnknown:
+			if i < gateMergeableTries-1 {
+				g.e.sleep(time.Second)
+			}
+		default:
+			return false
+		}
+	}
+	return false
 }
 
 // verifyFirst is RE-VERIFY moved before the merge (#494; test.fullWhere ci
