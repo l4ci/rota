@@ -291,7 +291,7 @@ func (e Env) requireLease(ctx context.Context, root string, o AssignOpts) error 
 	if err != nil {
 		return err
 	}
-	le := e.leaseEnv()
+	le := e.Lease
 	_, _, held, err := le.Holds(cd, o.HolderPID, o.Getenv)
 	if err != nil {
 		return err

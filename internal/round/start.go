@@ -94,7 +94,7 @@ func (e Env) Start(ctx context.Context, root string, o StartOpts) (Started, erro
 	if err != nil {
 		return res, err
 	}
-	le := e.leaseEnv()
+	le := e.Lease
 	holder := le.Discover(o.HolderPID, o.Getenv)
 	prev, _ := worker.LoadRegistry(root).Round()
 	l, out, stale, err := le.Acquire(cd, root, holder, prev+1)

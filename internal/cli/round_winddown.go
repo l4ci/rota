@@ -65,7 +65,7 @@ func roundWindDown(fs *flag.FlagSet) RunFunc {
 		var cd string
 		var rnd int
 		if d, err := rotastate.CommonDir(root); err == nil {
-			if l, _, err := c.deps().WatchEnv().Read(d); err == nil {
+			if l, _, err := c.deps().LeaseEnv().Read(d); err == nil {
 				cd, rnd = d, l.Round
 				_ = roundtick.SetStopped(cd, rnd, true)
 			}
