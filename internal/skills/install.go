@@ -49,16 +49,35 @@ type Root struct {
 // says where it lives.
 var ErrNoHome = errors.New("cannot find the home directory (HOME is unset)")
 
-// ClaudeDir is the Claude Code config directory: $CLAUDE_CONFIG_DIR when set,
-// else <home>/.claude; "" when neither is known.
-func ClaudeDir(home string) string {
-	if d := os.Getenv("CLAUDE_CONFIG_DIR"); d != "" {
+// ClaudeDir is the Claude Code config directory: $CLAUDE_CONFIG_DIR (read
+// through getenv) when set, else <home>/.claude; "" when neither is known.
+func ClaudeDir(getenv func(string) string, home string) string {
+	if d := getenv("CLAUDE_CONFIG_DIR"); d != "" {
 		return d
 	}
 	if home == "" {
 		return ""
 	}
 	return filepath.Join(home, ".claude")
+}
+
+// InstalledRoots lists the skill roots rota may have installed into, most
+// specific first: the project's Claude then Codex roots (when top, the project
+// root, is set), then the user's Claude root (ClaudeDir) and Codex root. A root
+// whose base is unknown is left out. HOME comes from getenv.
+func InstalledRoots(getenv func(string) string, top string) []string {
+	home := getenv("HOME")
+	var out []string
+	if top != "" {
+		out = append(out, filepath.Join(top, ".claude", "skills"), filepath.Join(top, ".agents", "skills"))
+	}
+	if d := ClaudeDir(getenv, home); d != "" {
+		out = append(out, filepath.Join(d, "skills"))
+	}
+	if home != "" {
+		out = append(out, filepath.Join(home, ".agents", "skills"))
+	}
+	return out
 }
 
 // Roots lists the roots for a scope ("" for both) and agent ("" or "all" for
