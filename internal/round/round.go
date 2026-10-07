@@ -140,6 +140,10 @@ type Row struct {
 	Bounces int
 	// BestOf is the other attempt's slot when the row's issue is built best-of:2.
 	BestOf string
+	// PRTitle is the open PR's title ("" without one) and Evidence the last
+	// evidence line `round wait` returned for the slot. Neither is in
+	// `round status` Data; the --ui screen reads them.
+	PRTitle, Evidence string
 }
 
 // Finding is one drift. Repair names what Reconcile(apply) would do and is
@@ -227,6 +231,9 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 		}
 		r := &Row{Name: name, Branch: branch, PR: s.PR(), Tab: s.Handle(), Registered: true}
 		r.Issue = worker.HeldID(s.Task(), branch, name)
+		if _, ev, ok := strings.Cut(s.Seen(), "\t"); ok {
+			r.Evidence = ev
+		}
 		r.Kind, r.KindSource, r.Tier, r.Model, r.TierReason = s.Kind(), s.KindSource(), s.Tier(), s.Model(), s.TierReason()
 		if r.Issue != "" {
 			r.Bounces = reg.Bounces(r.Issue)
@@ -353,6 +360,7 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 		if forgeOK && !parked {
 			if pr := prs[r.Branch]; pr != nil {
 				v.openPR = pr
+				r.PRTitle = pr.Title
 				r.PRState = "open"
 				if r.PR == "" {
 					r.PR = pr.URL
