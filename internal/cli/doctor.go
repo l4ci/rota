@@ -120,10 +120,8 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 		}
 	}
 	if len(in.ConfigDirs) == 0 {
-		if d := os.Getenv("CLAUDE_CONFIG_DIR"); d != "" {
+		if d := skills.ClaudeDir(os.Getenv, in.Home); d != "" {
 			in.ConfigDirs = []string{d}
-		} else if in.Home != "" {
-			in.ConfigDirs = []string{filepath.Join(in.Home, ".claude")}
 		}
 	}
 	return in

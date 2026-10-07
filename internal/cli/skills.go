@@ -106,7 +106,7 @@ func skillsEnv(c *Ctx, a skillsArgs) (set *skills.Set, roots []skills.Root, skip
 // worker.SameConfigDir. An account dir that does not exist is returned in
 // skipped, never created.
 func skillsClaudeDirs(home, root string) (dirs, skipped []string) {
-	if cur := skills.ClaudeDir(home); cur != "" {
+	if cur := skills.ClaudeDir(os.Getenv, home); cur != "" {
 		dirs = append(dirs, cur)
 	}
 	if root == "" {
