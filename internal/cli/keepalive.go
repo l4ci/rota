@@ -181,10 +181,7 @@ func keepaliveRun(fs *flag.FlagSet) RunFunc {
 			return Result{}, &Error{Exit: ExitUnavailable, Message: err.Error()}
 		}
 		ctx := c.Context()
-		le := c.deps().RoundEnv(ctx, root).Lease
-		if le.Alive == nil {
-			le = roundlease.DefaultEnv()
-		}
+		le := c.deps().LeaseEnv()
 
 		sigs := make(chan os.Signal, 8)
 		signal.Notify(sigs, os.Interrupt, syscall.SIGTERM)
@@ -347,23 +344,18 @@ func keepaliveStatus(c *Ctx, args []string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	ctx := c.Context()
-	env := c.deps().RoundEnv(ctx, root)
-	l, st, err := env.ReadLease(ctx, root)
-	if err != nil {
-		return Result{}, err
-	}
 	cd, err := rotastate.CommonDir(root)
 	if err != nil {
 		return Result{}, &Error{Exit: ExitUnavailable, Message: err.Error()}
 	}
+	le := c.deps().LeaseEnv()
+	l, st, err := le.Read(cd)
+	if err != nil {
+		return Result{}, err
+	}
 	ks, found, err := keepalive.ReadState(keepalive.StatePath(cd))
 	if err != nil {
 		return Result{}, &Error{Exit: ExitUnavailable, Message: err.Error()}
-	}
-	le := env.Lease
-	if le.Alive == nil {
-		le = roundlease.DefaultEnv()
 	}
 	running := found && ks.Running(le)
 

@@ -27,7 +27,7 @@ import (
 // report it as unavailable instead of failing.
 func defaultRoundEnv(ctx context.Context, root string, d *Deps) round.Env {
 	cfg := config.Load(rotatree.Config(root))
-	e := round.Env{Git: d.Git, Base: "main"}
+	e := round.Env{Git: d.Git, Base: "main", Lease: d.LeaseEnv()}
 	e.Worker.NewHost = func(kind string) host.Host { return d.Host(kind) }
 	if b, ok, err := (git.Repo{Dir: root}).Base(ctx, ""); err == nil && ok {
 		e.Base = b
