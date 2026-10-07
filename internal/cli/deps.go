@@ -162,6 +162,15 @@ func (d *Deps) forge(ctx context.Context, cfg any, provider, dir string) (tracke
 	return tracker.NewFromConfig(ctx, cfg, provider, dir, d.trackerOptions()...)
 }
 
+// freshReads drops the invocation's cached forge reads. A loop that reads the
+// forge again inside one process (round watch, the autopilot) calls it at the
+// start of each pass, so a pass sees what changed since the last one.
+func (d *Deps) freshReads() {
+	if d.ReadCache != nil {
+		d.ReadCache.Clear()
+	}
+}
+
 // trackerOptions is TrackerOptions plus the invocation's read cache.
 func (d *Deps) trackerOptions() []tracker.Option {
 	if d.ReadCache == nil {
