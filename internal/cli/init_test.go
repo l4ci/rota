@@ -317,3 +317,22 @@ func TestInitWritesAgentFiles(t *testing.T) {
 		t.Fatal("--no-blocks wrote agent files")
 	}
 }
+
+// init ends with one line about the empty test.full, and drops it once set (#493).
+func TestInitWarnsEmptyTestFull(t *testing.T) {
+	dir := t.TempDir()
+	code, env, _ := initRun(t, dir, "init")
+	if code != 0 {
+		t.Fatalf("exit %d", code)
+	}
+	if nv, _ := initData(env).Get("noVerify"); nv != true {
+		t.Errorf("noVerify = %v", nv)
+	}
+	if c, _, _ := rotaIn(t, dir, "config", "set", "test.full", `["true"]`); c != 0 {
+		t.Fatal("config set")
+	}
+	_, env, _ = initRun(t, dir, "init")
+	if nv, _ := initData(env).Get("noVerify"); nv != false {
+		t.Errorf("noVerify with test.full set = %v", nv)
+	}
+}

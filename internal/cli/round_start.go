@@ -17,6 +17,7 @@ import (
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundlease"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 // The C3 verbs `rota round start` and `rota round candidates`; the lease,
@@ -214,6 +215,11 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 			d.Set("staleBinary", staleData(stale))
 			c.Warn("%s; rebuild: %s", stale.Detail(), stale.Rebuild)
 		}
+		noVerify := worker.NothingToVerify(root)
+		d.Set("noVerify", noVerify)
+		if noVerify {
+			c.Warn("%s", noVerifyWarning)
+		}
 		d.Set("lease", leaseData(st.Lease, st.LeaseState))
 		d.Set("reclaimed", st.Outcome == roundlease.Reclaimed)
 		d.Set("changed", st.Changed)
@@ -278,3 +284,7 @@ func roundCandidates(fs *flag.FlagSet) RunFunc {
 		return Result{Data: d, Text: strings.Join(lines, "\n")}, nil
 	}
 }
+
+// noVerifyWarning is the early form of the gate's no-verify refusal, shared by
+// `rota init` and `rota round start`.
+const noVerifyWarning = "test.full is empty: the merge gate will refuse to merge until it is set (" + worker.NoVerifyHint + ")"
