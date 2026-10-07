@@ -157,6 +157,21 @@ type PRInfo struct {
 	Body     string
 }
 
+// CheckRun is one CI check reported on a commit: a GitHub check run or
+// commit status, or a GitLab pipeline.
+type CheckRun struct {
+	Name  string
+	State string // CheckPending, CheckSuccess, CheckSkipped or CheckFailure
+	URL   string
+}
+
+const (
+	CheckPending = "pending"
+	CheckSuccess = "success"
+	CheckSkipped = "skipped" // finished without testing anything (skipped, neutral)
+	CheckFailure = "failure"
+)
+
 // MergeOpts shapes a PR merge. HeadSHA pins the merge: the forge refuses it
 // when the PR head is no longer that commit, so a push after the check cannot
 // land unreviewed. "" merges whatever the head is.
@@ -255,6 +270,9 @@ type Adapter interface {
 	// merge-approval gate (B1).
 	PRFiles(ctx context.Context, pr int) ([]string, error)
 	PRComment(ctx context.Context, pr int, body string) error
+	// CommitChecks lists the CI checks reported on sha, latest run per check.
+	// None reported is an empty list, not an error.
+	CommitChecks(ctx context.Context, sha string) ([]CheckRun, error)
 	// PRState is "open", "merged" or "closed".
 	PRState(ctx context.Context, pr int) (string, error)
 
@@ -375,16 +393,7 @@ func (b *base) Provider() string { return b.cli.Provider }
 
 // CheckAuth runs `auth status`; any failure, a missing CLI included, is
 // KindUnavailable.
-func (b *base) CheckAuth(ctx context.Context) error {
-	name := "gh"
-	if b.cli.Provider == "gitlab" {
-		name = "glab"
-	}
-	if res, err := b.cli.Run(ctx, []string{"auth", "status"}, nil); err != nil || res.ExitCode != 0 {
-		return unavailable("%s not installed or not authenticated", name)
-	}
-	return nil
-}
+func (b *base) CheckAuth(ctx context.Context) error { return b.cli.CheckAuth(ctx) }
 
 func (b *base) ClosedNumbers(body string) []int { return b.closing(body) }
 

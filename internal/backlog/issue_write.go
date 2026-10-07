@@ -312,13 +312,8 @@ func (b *Issues) Complete(ref string, in CompleteInput) (bool, error) {
 		return err == nil, err
 	}
 	if in.Reason == "done" && !in.NoProof {
-		count, err := b.proofCount(itemID)
-		if err != nil {
+		if err := requireProof(itemID, func() (int, error) { return b.proofCount(itemID) }); err != nil {
 			return false, err
-		}
-		if count == 0 {
-			return false, refused("proof missing", ErrProofMissing,
-				"[%s] no proof recorded, pass --no-proof to override", itemID)
 		}
 	}
 	var stale []string

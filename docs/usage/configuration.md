@@ -112,6 +112,14 @@ Integer 0 or more, silent default `0` (off). Counted per item from its first ass
 rota config set work.itemTimeoutMinutes 240
 ```
 
+## work.envSetup: install dependencies in new worker worktrees
+
+Free text, silent default `""` (nothing runs). `rota worker pool init` runs it once in each new slot worktree, with that worktree as the working directory, so a JS or Python worker does not start in a tree with no dependencies. It is skipped while the hash of the command and the lockfiles (`package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`, `uv.lock`, `poetry.lock`, `requirements*.txt`, `go.sum`) matches the one stored by the slot's last successful run, so re-running `pool init` is cheap and a changed lockfile or command reruns it. The hash sits in the worktree's git dir, outside tracked files. A non-zero exit stops `pool init` with exit 1 and a message naming the slot and the command; no hash is stored, so the next `pool init` retries.
+
+```bash
+rota config set work.envSetup "npm ci"
+```
+
 ## work.tdd: red-first on or off
 
 `true` (default): a behavior change needs a recorded red run, a FAIL proof row from a test that failed on an assertion, before its PASS row. A FAIL whose evidence is a build, compile or setup failure (missing import, typo, undefined symbol) is not a red run; the task gets a fix dispatch. `false`: `/rota-work` Step 7 and the worker contract require no RED row. PASS rows are still recorded.
@@ -127,6 +135,23 @@ Three tiers of shell commands, each an array defaulting to `[]`:
 - `test.fast`: quick checks for a task or worker to run while working.
 - `test.full`: the full suite. The merge gate (`rota worker gate`) and the merge train run it on the merged tree, and [`/rota-refactor`](../reference/slash-commands.md#rota-refactor) runs it in `--fix` verification as CI-shape gates before committing. Empty means read-only verification, and the gate reports `NO-VERIFY`.
 - `test.e2e`: slow end-to-end checks. `rota worker gate` and the merge train run it on the merged tree after `test.full` passes, so a round pays for it at merge instead of once per branch (a train runs it once for all members). A red train run bisects like a red `test.full`. Empty skips the step.
+
+### The exclusion ledger
+
+A known-red or flaky test may be passed over by the merge gate and the merge train only through `.rota/test-ledger.json`, a tracked file you create by hand when the first entry is needed (a missing file or `[]` means no exclusions):
+
+```json
+[{"test": "TestFlaky", "owner": "dana", "receipt": "#378", "expires": "2026-11-01"}]
+```
+
+- `test`: the top-level Go test name, as `go test` prints it on its `--- FAIL: <name>` line. Its subtests are covered by it.
+- `owner`: who fixes it. `receipt`: the issue or PR tracking the fix. `expires`: `YYYY-MM-DD` (valid through the end of that day, UTC) or an RFC 3339 time. All four are required.
+
+`rota worker gate` and `rota worker train` read the file from the base before merging. A `test.full` or `test.e2e` command that fails still passes the verify when every test it names has an unexpired entry; the result lists them under `excluded`. A failing test with no entry fails as before, and so does a failure the output does not name (a build error, a panic, a timeout) or output that does not end in go test's own `FAIL` line (a later step of the same command failed). Once an entry expires the gate and the train fail with `verify-failed` and nothing lands, naming the test, owner and receipt, whether or not the test still fails: fix the test, or renew the entry in a reviewed commit. A malformed entry is exit 2. `rota test ledger check` reports expired and malformed entries without running anything. The ledger applies to the local run, not to `test.fullWhere ci`, where CI decides.
+
+### test.isolate
+
+`rota test run <tier>` isolates the environment of every command by default (`test.isolate`, bool, default `true`): `HERDR_*`, `TMUX*`, `SSH_AUTH_SOCK` and `SSH_AGENT_PID` are removed, and `HOME` and the `XDG_*` dirs point into a temp root that is deleted when the run ends. The Go caches (`GOCACHE`, `GOMODCACHE`, `GOPATH`, `GOENV`) keep their real locations, so an isolated run does not rebuild from cold. A project whose tests need the real home or an ssh-agent opts out with `rota config set test.isolate false`. It applies to `rota test run` only, not to the merge gate or train.
 
 `test.full` replaces `refactor.verifyCommands`. `rota config fill` moves the old key's commands to `test.full` and deletes it. Until then the gate still reads the old key when `test.full` is empty, and warns on stderr that it is deprecated.
 
@@ -149,6 +174,47 @@ Commands run from the repo root (or, in umbrella mode, the sub-repo's root), one
 ```bash
 rota config set test.full '["uv run ruff check .","uv run ruff format --check ."]'
 ```
+
+### Running the full tier on CI
+
+`test.fullWhere` is `local` (default) or `ci`. With `ci`, `rota worker gate` and `rota worker train` do not run `test.full` here. They build the merge result (base plus PR head, `--no-ff`) in a scratch worktree, push it to `origin` as `rota/ci/<slot>` (`rota/ci/train` for a train, one push per bisect step), and poll the forge's checks on that commit: GitHub check suites, check runs and commit statuses, GitLab the jobs of the newest pipeline for the ref. The branch is deleted after each run. `test.ciTimeoutMinutes` (default `60`, 1-1440) bounds the wait.
+
+`ci` needs `test.ciChecks`, the names of the checks that must pass:
+
+```json
+{
+  "test": {
+    "fullWhere": "ci",
+    "ciChecks": ["test", "lint"]
+  }
+}
+```
+
+or `rota config set test.fullWhere ci` and `rota config set test.ciChecks '["test","lint"]'`. `rota init` does not write it. With `ci` and an empty list, the gate and the train refuse up front (exit 70, the hint names `test.ciChecks`) and never fall back to a local run. The list is read from the base's config before the merge, so a branch cannot change its own required checks.
+
+Only a green result merges: every listed check finished with success and no check on the commit failed, listed or not. Green must hold over two polls in a row, since a later workflow or job can appear after the first ones finish. Unlisted checks still running do not hold the gate up; an unlisted check that fails makes it red. A listed check that finishes skipped or neutral counts as failed, because it tested nothing. If several checks share a name, all of them must succeed.
+
+A GitHub Actions check is named after its job (`test`, or `test (ubuntu-latest)` for a matrix job), without the workflow name the PR page puts in front of it; a commit status is named by its context. `gh api repos/{owner}/{repo}/commits/<sha>/check-runs --jq '.check_runs[].name'` prints the exact names for a commit. On GitLab, list job names. GitLab also reports each pipeline as `pipeline #<id> (<ref>)`, and a failed pipeline makes the run red. A failed job with `allow_failure: true` counts as skipped, and so does a `manual` job that was not run.
+
+This moves verification before the merge. A red result lands nothing and the slot goes back (`verify-failed`, the first red check ends the wait); a local gate verifies after the merge and fixes forward. Before merging, the gate checks the base did not move (`base-moved`, nothing landed); after merging, that the landed tree is the tree CI verified. `--no-verify` skips CI too.
+
+The project's CI must run on pushes to `rota/ci/**`. If a listed check never appears on the pushed commit, the verdict is `ci-not-run` and nothing lands; that is the preflight. It is decided once the 5 minute start window has passed and no check on the commit is still pending, so a job gated behind `needs:` that shows up late is waited for. The message names the missing checks. If CI is still running when `test.ciTimeoutMinutes` runs out with a listed check missing or pending, the verdict is `verify-timeout`, and it names them. A missing `origin` remote is `check-broke`.
+
+CI runs the definition in the pushed tree, so a merge that changes it would choose its own verification. A merge (or any train member) that touches `.github/workflows/`, `.github/actions/`, `.gitlab-ci.yml` or `.gitlab/ci/` is refused as `ci-config-changed` before anything is pushed; review the CI change and land it with `local` or by hand. A pipeline file kept elsewhere is not recognised.
+
+- GitHub Actions: add the branch pattern to the workflow, next to what is already there.
+
+  ```yaml
+  on:
+    push:
+      branches: ['rota/ci/**']
+  ```
+
+- GitLab: pipelines run on branch pushes unless `workflow:rules` exclude them. Make sure `rota/ci/` branches are allowed.
+
+Trade-off: a CI queue can be slower than a 2-3 minute local gate, so `local` stays a fine choice. `ci` saves local or VPS CPU and avoids running the suite twice.
+
+Not covered: the `rota round wind-down` base re-verify and `rota test run full` still run `test.full` locally. Tuning, in seconds: `ROTA_CI_POLL` (default 20), `ROTA_CI_START_WAIT` (300), `ROTA_CI_TIMEOUT` (overrides the config timeout).
 
 ## gate.smokeShards
 
