@@ -1,11 +1,11 @@
 package ship
 
 import (
-	"errors"
 	"strconv"
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/exitmap"
 )
 
 // UnknownItemError is an --items ID the issue tracker does not have.
@@ -25,7 +25,7 @@ func ClosesLines(b backlog.Backend, sub string, ids []string) (string, error) {
 		if err == nil && sub != "" && !strings.HasPrefix(it.ID, sub+":") {
 			err = backlog.ErrNotFound // qualified with another sub-repo
 		}
-		if errors.Is(err, backlog.ErrNotFound) {
+		if exitmap.IsNotFound(err) {
 			return "", &UnknownItemError{Ref: ref}
 		}
 		if err != nil {
