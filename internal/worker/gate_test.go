@@ -902,3 +902,46 @@ func TestGateRefusesEmptyTestFull(t *testing.T) {
 		t.Fatalf("--no-verify: %+v %v", res, err)
 	}
 }
+
+// A PR whose body does not close the slot's issue is refused before the merge,
+// unless the issue is labelled a partial slice.
+func TestGateRefusesAPRThatDoesNotCloseItsIssue(t *testing.T) {
+	cases := []struct {
+		name, body, labels string
+		check              bool
+		verdict            string
+	}{
+		{name: "no keyword", body: "Adds the thing.\n", verdict: GateNotClosing},
+		{name: "refs is not closing", body: "Refs #5\n", verdict: GateNotClosing},
+		{name: "another issue", body: "Closes #6\n", verdict: GateNotClosing},
+		{name: "no keyword under check-only", body: "x", check: true, verdict: GateNotClosing},
+		{name: "closes", body: "Closes #5\n", verdict: GatePass},
+		{name: "fixes", body: "Fixes #5\n", verdict: GatePass},
+		{name: "partial slice", body: "Refs #5\n", labels: "in-progress," + PartialSliceLabel, verdict: GatePass},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			w := newWorld(t, ghURL)
+			os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
+				[]byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"#5","pr":%q}]}`, ghURL)), 0o644)
+			w.forge("body", c.body)
+			w.forge("issueLabels", c.labels)
+			res, err := w.gate(false, GateOpts{CheckOnly: c.check})
+			want := c.verdict
+			if c.check && want == GatePass {
+				want = GateFresh
+			}
+			if err != nil || res.Verdict != want {
+				t.Fatalf("verdict = %q (%v), want %q: %+v", res.Verdict, err, want, res)
+			}
+			if c.verdict == GateNotClosing {
+				if res.Changed || w.onMain("work.txt") {
+					t.Errorf("nothing may land: %+v", res)
+				}
+				if !strings.Contains(res.Hint, "Closes #5") || !strings.Contains(res.Hint, PartialSliceLabel) {
+					t.Errorf("hint must show the line to add: %q", res.Hint)
+				}
+			}
+		})
+	}
+}

@@ -64,7 +64,7 @@ func (f *fakeForge) OpenPRs(context.Context) ([]tracker.PR, error) {
 // separated) live in the forge DB; "issueErr" makes both fail.
 func (f *fakeForge) ClosedNumbers(body string) []int {
 	var out []int
-	for _, m := range regexp.MustCompile(`(?i)closes #(\d+)`).FindAllStringSubmatch(body, -1) {
+	for _, m := range regexp.MustCompile(`(?i)(?:closes|fixes) #(\d+)`).FindAllStringSubmatch(body, -1) {
 		n, _ := strconv.Atoi(m[1])
 		out = append(out, n)
 	}
