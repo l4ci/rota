@@ -387,3 +387,16 @@ func TestConfigScreenWritesTheSameFilesAsConfigSet(t *testing.T) {
 		t.Errorf("config set rewrote the file differently: exit %d\n%s\nvs\n%s", code, readConfig(t, root), cfg)
 	}
 }
+
+func TestConfigScreenNeverDrawsAControlCharacterFromTheConfig(t *testing.T) {
+	rows := fxRows()
+	rows[0].Value = "opus\x1b[2J\x07evil"
+	m, _ := play(newFxScreen(&fakeStore{rows: rows}), cat([]string{"/"}, typedKeys("orchestrator"), []string{"enter", "enter"}))
+	raw := m.Render(100, 30, tui.Style{})
+	if strings.ContainsAny(raw, "\x1b\x07") {
+		t.Errorf("a control character reached the frame: %q", raw)
+	}
+	if !strings.Contains(raw, `\u001b`) {
+		t.Errorf("the escape is not shown as JSON:\n%s", raw)
+	}
+}
