@@ -11,7 +11,7 @@ Set `round.brief` to this file's path to make the assignment pointer name it as 
 
 The full gate runs once, at merge: `rota worker gate` runs `test.full` on the merged
 tree through `bash test/gate.sh`: validate-skills, the doc lints (`bash test/doclint.sh`: prose pins, the
-`.worktrees/` decoy check, that every `rota` verb the docs name exists, and the contract-doc stamps below), `go vet ./...`, `go test -race -timeout 30m ./...`
+`.worktrees/` decoy check, that every `rota` verb the docs name exists, and the contract-doc stamps below), the grep gate (`bash test/grep-gate.sh`), `go vet ./...`, `go test -race -timeout 30m ./...`
 and the smoke suite in `gate.smokeShards` (default 4) shards, all at once. The sharded gate takes about 2–3 minutes;
 running the smoke suite in series is several times slower. It takes a machine-wide lock, so two gates never overlap, and
 keeps one log per check. Every check makes its temp files under one gate-owned root, and the gate fails if
