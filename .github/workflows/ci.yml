@@ -23,6 +23,9 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
+        with:
+          # doclint diffs contract-doc refs against a stamped sha (test/check-doc-stamps.py).
+          fetch-depth: 0
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'

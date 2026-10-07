@@ -1,3 +1,10 @@
+---
+verified-sha: 9586a179cd3a699f5c384c461f704b2e90e8cf3f
+refs:
+  - internal/worker
+  - internal/cli/worker.go
+---
+
 ## A7: workers, hosts, accounts
 
 ### rota worker pool init

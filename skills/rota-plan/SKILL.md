@@ -63,6 +63,8 @@ Rules:
 
 **Self-check before asking** (silent): every Acceptance criterion maps to a task through its `Serves:` line; no placeholders (`TBD`, `...`, `similar to Task N`); names, paths and signatures match across tasks, each Consumes against an earlier Produces. Fix misses, then say in one line what you fixed (omit if nothing).
 
+**Critic (level 4 only).** When the planning dial picked the adversarial pass, follow [`references/plan-critic.md`](references/plan-critic.md): dispatch a fresh `standard` subagent that sees only the item and the proposal, then fold accepted findings into the plan and list rejected ones with a reason under `## Critic findings`, before asking. At levels 1-3 skip this; the flow is unchanged.
+
 Ask once: *"Confirm this plan? (yes / changes)"*. *yes* writes it; *changes* means apply the edits and write; don't loop. Silence is not approval. If the redirect moves the Goal itself, re-propose.
 
 ## Step 4 — Write
@@ -97,6 +99,7 @@ Offer `/rota-work` in one line.
 
 - [`plan-edge-cases.md`](plan-edge-cases.md): rename/refactor/docs task rules (Step 3); splitting into dependent items and `validate-docs` (Step 4).
 - [`references/planning-dial.md`](references/planning-dial.md): the level rubric Step 2 applies.
+- [`references/plan-critic.md`](references/plan-critic.md): the level-4 critic dispatch, brief and fold-in rules (Step 3).
 - [`references/dependent-items.md`](references/dependent-items.md): declaring `## Depends on` edges; expand → migrate → contract.
 - [`references/context-load-protocol.md`](references/context-load-protocol.md): shared parallel context load.
 - [`references/knowledge-consult.md`](references/knowledge-consult.md): the K+D query pattern the load uses.
