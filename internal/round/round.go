@@ -86,6 +86,9 @@ type Env struct {
 	HostErr, ForgeErr string
 	// Now dates timed-out escalations; nil means time.Now.
 	Now func() time.Time
+	// Getenv reads the process environment for the lease, host and brief
+	// lookups; nil means os.Getenv.
+	Getenv func(string) string
 	// Lease reads the orchestrator lease; the zero value is the real process
 	// table and host name.
 	Lease roundlease.Env
@@ -106,6 +109,14 @@ type Env struct {
 	HolderPID int
 	// NeedsHuman is issues.labels.needsHuman; "" means DefaultNeedsHuman.
 	NeedsHuman string
+}
+
+// getenv is the env's environment reader, os.Getenv unless a test swaps it.
+func (e Env) getenv() func(string) string {
+	if e.Getenv != nil {
+		return e.Getenv
+	}
+	return os.Getenv
 }
 
 // Row is one line of `rota round status`.

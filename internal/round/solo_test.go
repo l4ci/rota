@@ -71,7 +71,7 @@ func TestStartRecordsTheResolvedHostAndKeepsItForTheRound(t *testing.T) {
 	}
 	// And honours the environment: herdr in a herdr pane with the binary.
 	f.windDown(nil)
-	o.Getenv = func(k string) string {
+	f.env.Getenv = func(k string) string {
 		if k == "HERDR_ENV" {
 			return "1"
 		}

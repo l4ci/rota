@@ -3,7 +3,6 @@ package cli
 import (
 	"flag"
 	"fmt"
-	"os"
 
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/round"
@@ -39,7 +38,7 @@ func roundPick(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return backlogFail(err)
 		}
-		res, err := env.Pick(c.Context(), root, be, round.PickOpts{ID: id, PR: *pr, Reason: text, HolderPID: *pid, Getenv: os.Getenv})
+		res, err := env.Pick(c.Context(), root, be, round.PickOpts{ID: id, PR: *pr, Reason: text, HolderPID: *pid})
 		if err != nil {
 			return moveFailure(err, res.Changed)
 		}

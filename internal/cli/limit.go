@@ -238,7 +238,7 @@ func buildLimits(ctx context.Context, c *Ctx, root string, cfg any, set limits.S
 			// signal: it leaves a claim and a branch half-moved otherwise (the
 			// same call would resume it, but nobody is there to make it).
 			_, err = env.Transfer(context.WithoutCancel(ctx), root, be, round.TransferOpts{
-				Issue: issue, To: to, HolderPID: holderPID, Settings: rc, Getenv: os.Getenv,
+				Issue: issue, To: to, HolderPID: holderPID, Settings: rc,
 				Note: "The slot's account hit its usage limit; rota limit watch moved the issue to an idle slot on another account.",
 			})
 			return err
