@@ -21,6 +21,10 @@ Work only this task, then stop.
   invisible in the body. Then dispute it before building: if the ticket is wrong,
   already decided or contradicted by the code, say so (`ROTA-BLOCKED`, or in your PR
   if you built a narrower thing) instead of implementing it as written.
+- Best-of. If your brief says the issue is labelled `best-of:2`, another slot builds
+  the same issue at the same time. Do not read, fetch, check out or diff its branch or
+  its PR: your attempt stands on its own. Your PR still says `Closes #<issue>`; the
+  orchestrator picks one PR (`rota round pick`) and closes the other.
 - Stay inside the item's `## Out of scope` section, which the brief repeats when the
   item has one. Never drop part of the ticket as out of scope on your own, and never
   widen into the listed items: if the boundary looks wrong, dispute it (`ROTA-BLOCKED`,
