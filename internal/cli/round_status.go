@@ -120,7 +120,11 @@ func roundStatus(*flag.FlagSet) RunFunc {
 			}
 		}
 		for _, r := range rep.Rows {
-			cols := []string{r.Name, dash(r.Issue), dash(r.Branch), dash(r.PR), dash(r.HostState), dash(strings.Join(r.Drift, ","))}
+			issue := dash(r.Issue)
+			if r.BestOf != "" {
+				issue += " (best-of: " + r.BestOf + ")"
+			}
+			cols := []string{r.Name, issue, dash(r.Branch), dash(r.PR), dash(r.HostState), dash(strings.Join(r.Drift, ","))}
 			if r.Kind != "" {
 				col := strings.TrimSuffix(r.Kind+"/"+r.Model, "/")
 				if r.KindSource != "" {
@@ -211,6 +215,7 @@ func rowList(rows []round.Row) []any {
 		o.Set("name", r.Name)
 		setIf(o, "agent", r.Agent)
 		setIf(o, "issue", r.Issue)
+		setIf(o, "bestOf", r.BestOf)
 		o.Set("branch", r.Branch)
 		setIf(o, "pr", r.PR)
 		setIf(o, "prState", r.PRState)

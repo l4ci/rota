@@ -66,7 +66,7 @@ func TestRunStepsSkippedStepIsStillUndone(t *testing.T) {
 func TestClaimStepUndoReleasesAndUnbinds(t *testing.T) {
 	be := &fakeRemote{}
 	unbound := false
-	s := claimStep(be, "12", "ben@1", func() { unbound = true })
+	s := claimStep(be, "12", "ben@1", 1, func() { unbound = true })
 	if err := s.do(); err != nil || be.claims["12"] != "ben@1" {
 		t.Fatalf("claim: %v %v", err, be.claims)
 	}
@@ -78,7 +78,7 @@ func TestClaimStepUndoReleasesAndUnbinds(t *testing.T) {
 
 func TestClaimStepLostClaimIsBlockedAndUndoesNothingElse(t *testing.T) {
 	be := &fakeRemote{claimedBy: "dana@1"}
-	steps := []step{claimStep(be, "12", "ben@1", func() { t.Error("unbind without a claim") })}
+	steps := []step{claimStep(be, "12", "ben@1", 1, func() { t.Error("unbind without a claim") })}
 	err := runSteps(steps)
 	if blockedBy(t, err) != BlockClaimed {
 		t.Fatalf("got %v", err)
@@ -88,7 +88,7 @@ func TestClaimStepLostClaimIsBlockedAndUndoesNothingElse(t *testing.T) {
 func TestStateStepUndoClearsStateAndChanged(t *testing.T) {
 	be := &fakeRemote{}
 	changed := false
-	s := stateStep(be, "12", false, &changed)
+	s := stateStep(t.TempDir(), be, "12", "ben", false, &changed)
 	if err := s.do(); err != nil || be.bstates["12"] != "in-progress" || !changed {
 		t.Fatalf("state: %v %v %v", err, be.bstates, changed)
 	}
@@ -115,7 +115,7 @@ func (b *failingStateBoard) SetState(ref, state string) (bool, error) {
 func TestStateStepFailureClearsItsOwnPartialWrite(t *testing.T) {
 	be := &failingStateBoard{&fakeRemote{}}
 	changed := false
-	if err := runSteps([]step{stateStep(be, "12", false, &changed)}); err == nil {
+	if err := runSteps([]step{stateStep(t.TempDir(), be, "12", "ben", false, &changed)}); err == nil {
 		t.Fatal("want the failure")
 	}
 	if len(be.bstates) != 0 || changed {

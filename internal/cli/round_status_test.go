@@ -152,3 +152,33 @@ func TestRoundStatusAndReconcileListWaitingLimits(t *testing.T) {
 		}
 	}
 }
+
+// A slot that builds a best-of:2 issue shows its sibling attempt's slot; a
+// row of a single issue has no such field.
+func TestRoundStatusShowsTheBestOfSibling(t *testing.T) {
+	root, deps := roundFixture(t, nil)
+	if code, out, _ := rotaInWith(t, deps, root, "--json", "round", "reconcile", "--apply"); code != 0 {
+		t.Fatalf("reconcile exit %d: %s", code, out)
+	}
+	_, out, _ := rotaInWith(t, deps, root, "--json", "round", "status")
+	for _, r := range data(t, out)["slots"].([]any) {
+		if _, ok := r.(map[string]any)["bestOf"]; ok {
+			t.Fatalf("a single issue has no bestOf: %v", r)
+		}
+	}
+	if err := worker.Update(root, func(d *worker.Doc) {
+		d.SetBestOf(worker.BestOf{Issue: "58", Attempts: []worker.BestOfAttempt{{Slot: "dana", Branch: "dana/58-x"}, {Slot: "ben", Branch: "ben/58-x"}}})
+	}); err != nil {
+		t.Fatal(err)
+	}
+	_, out, _ = rotaInWith(t, deps, root, "--json", "round", "status")
+	for _, r := range data(t, out)["slots"].([]any) {
+		if row := r.(map[string]any); row["name"] == "dana" && row["bestOf"] != "ben" {
+			t.Errorf("dana's sibling attempt: %v", row)
+		}
+	}
+	_, out, _ = rotaInWith(t, deps, root, "round", "status")
+	if !strings.Contains(out, "58 (best-of: ben)") {
+		t.Errorf("the table names the sibling next to the issue:\n%s", out)
+	}
+}

@@ -21,5 +21,6 @@ func roundCommands() *Command {
 		{Name: "bounce", Summary: "count a review bounce of an issue; refuses at round.maxBounces", Verb: roundBounce},
 		{Name: "report", Summary: "record a solo worker's result: state and PR", Verb: roundReport},
 		{Name: "reclaim", Summary: "free a dead or stalled slot and make its issue assignable", Verb: roundReclaim},
+		{Name: "pick", Summary: "best-of:2: name the attempt whose PR may merge, close the other with the reason", Verb: roundPick},
 	}}
 }

@@ -137,9 +137,15 @@ func roundAssign(fs *flag.FlagSet) RunFunc {
 		}
 		d.Set("dispatched", res.Dispatched)
 		d.Set("changed", res.Changed)
+		if len(res.BestOf) > 0 {
+			d.Set("bestOf", bestOfAttempts(res.BestOf))
+		}
 		if *checkOnly {
 			d.Delete("changed")
 			text := fmt.Sprintf("%s\t%s\tready=%v", id, res.Agent, res.Ready())
+			if len(res.BestOf) > 0 {
+				text = fmt.Sprintf("%s\t%s\tready=%v", id, bestOfText(res.BestOf), res.Ready())
+			}
 			if !res.Ready() {
 				d.Set("changed", false)
 				return Result{Data: d, Text: text}, Failed("%s is not ready: %s", id, strings.TrimSpace(readyDetail(res)))
@@ -147,8 +153,43 @@ func roundAssign(fs *flag.FlagSet) RunFunc {
 			d.Set("changed", false)
 			return Result{Data: d, Text: text}, nil
 		}
+		if len(res.BestOf) > 0 {
+			return Result{Data: d, Text: fmt.Sprintf("assigned %s best-of:2 to %s", id, bestOfText(res.BestOf))}, nil
+		}
 		return Result{Data: d, Text: fmt.Sprintf("assigned %s to %s on %s", id, res.Agent, res.Branch)}, nil
 	}
+}
+
+// bestOfAttempts is the `bestOf` list of the JSON: one object per attempt.
+func bestOfAttempts(as []round.Assigned) []any {
+	out := make([]any, 0, len(as))
+	for _, a := range as {
+		o := jsonx.NewObject()
+		o.Set("agent", a.Agent)
+		o.Set("branch", a.Branch)
+		o.Set("kind", a.Kind)
+		o.Set("tier", a.Tier)
+		setIf(o, "model", a.Model)
+		if a.SmokeSection != 0 {
+			o.Set("smokeSection", a.SmokeSection)
+		}
+		o.Set("dispatched", a.Dispatched)
+		out = append(out, o)
+	}
+	return out
+}
+
+// bestOfText names each attempt: slot, kind, branch and smoke section.
+func bestOfText(as []round.Assigned) string {
+	var out []string
+	for _, a := range as {
+		s := fmt.Sprintf("%s (%s) on %s", a.Agent, a.Kind, a.Branch)
+		if a.SmokeSection != 0 {
+			s += fmt.Sprintf(", smoke %d", a.SmokeSection)
+		}
+		out = append(out, s)
+	}
+	return strings.Join(out, " and ")
 }
 
 func readyDetail(r round.Assigned) string {

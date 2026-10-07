@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -415,7 +416,7 @@ func TestIssuesStatus(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := Status{ID: "4", Type: "F", Title: "Do it", Status: "open", State: "in-progress,blocked", Claim: "b",
+	want := Status{ID: "4", Type: "F", Title: "Do it", Status: "open", State: "in-progress,blocked", Claim: "b", Claims: []string{"b"},
 		Assignees: []string{"alice"}, Milestone: "M07", Notes: []string{"design", "plan"},
 		Comments: []Comment{{"eve", "feedback", "nice"}}}
 	if a, w := mustJSON(st), mustJSON(want); a != w {
@@ -485,4 +486,43 @@ func TestHasCriteriaWithAcceptanceIDs(t *testing.T) {
 			t.Errorf("no criteria in %q", body)
 		}
 	}
+}
+
+func TestIssuesClaimShared(t *testing.T) {
+	b, tr := newIssues(t, `{}`, open(1))
+	for _, id := range []string{"a", "b"} {
+		if won, holder, err := b.ClaimShared("1", id, 2); !won || holder != id || err != nil {
+			t.Fatal(id, won, holder, err)
+		}
+	}
+	// a holder claiming again posts nothing
+	tr.Calls = nil
+	if won, _, _ := b.ClaimShared("1", "b", 2); !won {
+		t.Fatal("holder lost its own shared claim")
+	}
+	wantCalls(t, tr, `get[1] comments[1]`)
+	// a third loses to the earliest and posts its release
+	tr.Calls = nil
+	won, holder, err := b.ClaimShared("1", "c", 2)
+	if won || holder != "a" || err != nil {
+		t.Fatal(won, holder, err)
+	}
+	wantCalls(t, tr, `get[1] comments[1] add_comment[1,"<!-- rota:claim c -->\nClaimed by c"] comments[1] add_comment[1,"<!-- rota:release c -->"]`)
+	st, err := b.Status("1")
+	if err != nil || st.Claim != "a" || strings.Join(st.Claims, ",") != "a,b" {
+		t.Fatalf("%+v %v", st, err)
+	}
+	// the label stays until the last claim goes
+	if ok, _ := b.Release("1", "a"); !ok || !slices.Contains(tr.Issues[0].Labels, "in-progress") {
+		t.Fatalf("first release dropped the label: %+v", tr.Issues[0])
+	}
+	if ok, _ := b.Release("1", "b"); !ok || slices.Contains(tr.Issues[0].Labels, "in-progress") {
+		t.Fatalf("last release kept the label: %+v", tr.Issues[0])
+	}
+}
+
+func TestSharedClaimerBackends(t *testing.T) {
+	var _ SharedClaimer = (*Issues)(nil)
+	var _ SharedClaimer = (*Umbrella)(nil)
+	var _ SharedClaimer = (*File)(nil)
 }

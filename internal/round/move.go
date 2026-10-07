@@ -251,7 +251,7 @@ func (e Env) Return(ctx context.Context, root string, be Board, o ReturnOpts) (r
 	if res.Released, err = releaseClaims(be, id, o.Slot, claimID, false); tolerate("claim release", err) != nil {
 		return res, wrap(err)
 	}
-	if _, err := be.SetState(id, "none"); tolerate("state reset", err) != nil {
+	if _, err := clearState(root, be, id, o.Slot); tolerate("state reset", err) != nil {
 		return res, wrap(err)
 	}
 	if err := freeSlot(root, o.Slot, false); err != nil {
@@ -414,7 +414,7 @@ func (e Env) Reclaim(ctx context.Context, root string, be Board, o ReclaimOpts) 
 	if res.Released, err = releaseClaims(be, h.Issue, o.Slot, s.ClaimID(), true); tolerate("claim release", err) != nil {
 		return res, wrap(err)
 	}
-	if _, err := be.SetState(h.Issue, "none"); tolerate("state reset", err) != nil {
+	if _, err := clearState(root, be, h.Issue, o.Slot); tolerate("state reset", err) != nil {
 		return res, wrap(err)
 	}
 	if err := freeSlot(root, o.Slot, true); err != nil {
@@ -496,6 +496,25 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 	// Who holds it. A receiver that already holds it and was never dispatched
 	// (idle, its new claim recorded) is a transfer left half done: resume it.
 	reg := worker.LoadRegistry(root)
+	// Two attempts of a best-of:2 issue still holding it: transfer cannot
+	// choose one. After a pick, return or reclaim one holder is left.
+	if b := reg.BestOf(id); b != nil {
+		var holders []string
+		for _, s := range reg.Slots() {
+			// The receiver of a transfer left half done is not a second attempt.
+			if s.HeldID() == strings.ToUpper(id) && s.Name() != o.To {
+				holders = append(holders, s.Name())
+			}
+		}
+		for _, q := range reg.PRs() {
+			if queuedIssue(q) == strings.ToUpper(id) {
+				holders = append(holders, "review:"+q.From)
+			}
+		}
+		if len(holders) > 1 {
+			return res, blocked(BlockBestOf, "%s is a best-of:2 issue held by %s: transfer cannot choose an attempt; pick, return or reclaim one first", id, strings.Join(holders, " and "))
+		}
+	}
 	var sender, receiver *worker.Slot
 	for _, s := range reg.Slots() {
 		if s.HeldID() != strings.ToUpper(id) {
@@ -655,7 +674,7 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 	if toHuman {
 		steps = append(steps,
 			step{name: "reset the state", do: func() error {
-				_, err := be.SetState(id, "none")
+				_, err := clearState(root, be, id, from)
 				return wrap(tolerate("state reset", err))
 			}},
 			step{name: "needs-human label", do: func() error {

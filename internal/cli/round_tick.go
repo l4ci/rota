@@ -181,6 +181,9 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 		if err != nil {
 			return "", err
 		}
+		if len(res.BestOf) == 2 { // a best-of:2 issue took two slots
+			return res.BestOf[0].Agent + " and " + res.BestOf[1].Agent, nil
+		}
 		return res.Agent, nil
 	}
 	e.Audit = func(a roundtick.Action) {
@@ -255,8 +258,11 @@ func verdictOf(r Result) string {
 	return ""
 }
 
+// holdable reports whether a refused target waits for a person. A stale or
+// provenance-failed PR goes back to its worker; a best-of:2 attempt no pick
+// names clears itself once the orchestrator picks.
 func holdable(verdict string) bool {
-	return verdict != worker.GateStale && verdict != worker.GateProvenanceFail
+	return verdict != worker.GateStale && verdict != worker.GateProvenanceFail && verdict != worker.GateBestOfUnpicked
 }
 
 func mergeOne(c *Ctx, target, base string) roundtick.Merged {

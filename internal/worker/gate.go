@@ -83,6 +83,9 @@ const (
 	// so the merge would leave it open and drifted; the CLI exits 4 with it,
 	// blockedBy closes. An issue labelled PartialSliceLabel is exempt.
 	GateNotClosing = "closes"
+	// GateBestOfUnpicked: the PR is an attempt of a best-of:2 issue and no
+	// `rota round pick` names it; the CLI exits 4 with it, blockedBy best-of-unpicked.
+	GateBestOfUnpicked = "best-of-unpicked"
 )
 
 // PartialSliceLabel marks an issue whose PR lands only a slice of it, so the PR
@@ -329,6 +332,7 @@ var gateSteps = []gateStep{
 	(*gate).stepForge,
 	(*gate).stepExternal,
 	(*gate).stepAdoptPR,
+	(*gate).stepBestOf,
 	(*gate).stepRemote,
 	(*gate).stepRefs,
 	(*gate).stepFreshness,
@@ -539,6 +543,31 @@ func (g *gate) stepProvenance() (bool, error) {
 		return true, nil
 	}
 	return false, nil
+}
+
+// stepBestOf refuses an attempt of a best-of:2 issue until a `rota round pick`
+// names its PR, before any fetch, freshness check or bounce. It runs under
+// CheckOnly too, so a train member is refused before anything merges. The
+// refusal clears itself once the orchestrator picks.
+func (g *gate) stepBestOf() (bool, error) {
+	issue := g.target.Issue
+	if !g.target.Queued {
+		issue = HeldID(g.target.Task, g.target.Branch, g.target.Name)
+	}
+	rec := LoadRegistry(g.root).BestOf(issue)
+	if rec == nil || (g.pr != "" && rec.Picked(g.pr)) {
+		return false, nil
+	}
+	what := "this branch"
+	if g.pr != "" {
+		what = g.pr
+	}
+	msg := fmt.Sprintf("GATE %s refused — #%s is best-of:2 and no pick names %s; nothing landed", g.o.Slot, rec.Issue, what)
+	if rec.Pick != "" {
+		msg = fmt.Sprintf("GATE %s refused — #%s is best-of:2 and the pick chose %s; this attempt lost; nothing landed", g.o.Slot, rec.Issue, rec.Pick)
+	}
+	g.verdict(GateBestOfUnpicked, msg, fmt.Sprintf("compare both attempts and run `rota round pick %s --pr <N> --reason-file <f>`", rec.Issue))
+	return true, nil
 }
 
 // stepCloses refuses a PR whose body does not close the slot's issue (a

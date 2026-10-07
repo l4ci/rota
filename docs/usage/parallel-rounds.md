@@ -444,6 +444,30 @@ every time. Each approval is appended to `.rota/gate-audit.jsonl`. This policy h
 
 `rota worker gate <slot> --check-only` judges freshness, PR identity and provenance and merges nothing.
 
+## Best-of: two workers on one issue
+
+For a hard issue where you want two independent attempts, label it `best-of:2`. It costs twice
+the tokens, so use it only when choosing between attempts is worth that. `rota round assign <ID>`
+then binds two free slots in one call, each with its own claim, branch and smoke section number.
+With fewer than two free slots it refuses (`blockedBy: best-of-slots`) and changes nothing. When
+`round.tiers` configures both `claude` and `codex`, and neither `--kind` nor a `harness:` label
+pins one, the attempts get one of each. Each brief names the other slot and tells the worker not
+to read its branch. Only `best-of:2` is supported; any other `best-of:` label is refused.
+
+`rota round status` shows each attempt with its sibling (`404 (best-of: ben)`). Both PRs say
+`Closes #<ID>`, and `rota worker gate` refuses either one (`blockedBy: best-of-unpicked`) until
+you pick:
+
+```sh
+rota round pick 404 --pr 512 --reason-file why.md
+```
+
+`pick` closes the other PR with a comment naming the winner and your reason, drops it from the
+review list, releases its claim and frees its slot. Its branch stays until `rota reap`. Then gate
+the winner as usual. If one attempt was returned, reclaimed or died without a PR, `pick` takes
+the remaining PR alone; while the other worker is still building, it refuses. The autopilot
+assigns best-of issues but never picks: the pick is yours.
+
 ## Moving an issue that is assigned
 
 ```sh

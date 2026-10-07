@@ -42,7 +42,8 @@ type fakeRemote struct {
 	details   map[string]string
 	comments  map[string][]string
 	ready     map[string][]string // reasons; absent means ready
-	claims    map[string]string   // id -> claim holder
+	claims    map[string]string   // id -> earliest claim holder
+	more      map[string][]string // id -> later claims of a shared (best-of) item
 	claimedBy string              // when set, Claim loses to this holder
 	bstates   map[string]string
 	notes     []string        // "<ref>: <text>" per AddComment
@@ -204,13 +205,42 @@ func (f *fakeRemote) notFound(ref string) error {
 }
 
 func (f *fakeRemote) Claim(ref, claimID string) (bool, string, error) {
+	return f.ClaimShared(ref, claimID, 1)
+}
+
+// held is every open claim on ref, earliest first.
+func (f *fakeRemote) held(ref string) []string {
+	var out []string
+	if c := f.claims[ref]; c != "" {
+		out = append(out, c)
+	}
+	return append(out, f.more[ref]...)
+}
+
+func (f *fakeRemote) ClaimShared(ref, claimID string, holders int) (bool, string, error) {
 	if f.claimedBy != "" {
 		return false, f.claimedBy, nil
+	}
+	held := f.held(ref)
+	for i, c := range held {
+		if c == claimID {
+			return i < max(holders, 1), held[0], nil
+		}
+	}
+	if len(held) >= max(holders, 1) {
+		return false, held[0], nil
 	}
 	if f.claims == nil {
 		f.claims = map[string]string{}
 	}
-	f.claims[ref] = claimID
+	if len(held) == 0 {
+		f.claims[ref] = claimID
+	} else {
+		if f.more == nil {
+			f.more = map[string][]string{}
+		}
+		f.more[ref] = append(f.more[ref], claimID)
+	}
 	return true, claimID, nil
 }
 
@@ -218,8 +248,20 @@ func (f *fakeRemote) Release(ref, claimID string) (bool, error) {
 	if err := f.notFound(ref); err != nil {
 		return false, err
 	}
-	if f.claims[ref] == claimID {
+	held := f.held(ref)
+	for i, c := range held {
+		if c != claimID {
+			continue
+		}
+		held = append(held[:i:i], held[i+1:]...)
 		delete(f.claims, ref)
+		delete(f.more, ref)
+		if len(held) > 0 {
+			f.claims[ref] = held[0]
+		}
+		if len(held) > 1 {
+			f.more[ref] = held[1:]
+		}
 		return true, nil
 	}
 	return false, nil
@@ -245,7 +287,10 @@ func (f *fakeRemote) SetState(ref, state string) (bool, error) {
 }
 
 func (f *fakeRemote) Status(ref string) (*backlog.Status, error) {
-	return &backlog.Status{ID: ref, Claim: f.claims[ref], State: f.bstates[ref]}, nil
+	if err := f.notFound(ref); err != nil {
+		return nil, err
+	}
+	return &backlog.Status{ID: ref, Claim: f.claims[ref], Claims: f.held(ref), State: f.bstates[ref]}, nil
 }
 
 func (f *fakeRemote) AddComment(ref, kind, text string) (string, error) {
