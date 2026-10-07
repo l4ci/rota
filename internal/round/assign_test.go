@@ -522,6 +522,22 @@ func TestAssignCodexResolvesAndStarts(t *testing.T) {
 	}
 }
 
+// round.workerKind is the project default: it beats a slot's stale kind,
+// loses to --kind, and is what autopilot (which passes no kind) gets.
+func TestAssignProjectWorkerKind(t *testing.T) {
+	f := newAssignFixture(t)
+	f.config(t, `{"work":{"dispatch":"herdr"},"round":{"workerKind":"codex","tiers":{"codex":{"light":"c-l","standard":"c-s","heavy":"c-h"}}}}`)
+	worker.UpdateSlot(f.root, "ben", func(s *worker.Slot) { s.Raw().Set("kind", "claude") })
+	res, err := f.assign("12", "ben", func(o *AssignOpts) { o.CheckOnly = true })
+	if err != nil || res.Kind != "codex" || res.KindSource != KindFromConfig || res.Model != "c-s" {
+		t.Fatalf("the project default beats the slot's stale kind: %v %+v", err, res)
+	}
+	res, err = f.assign("12", "ben", func(o *AssignOpts) { o.CheckOnly = true; o.Kind = "claude" })
+	if err != nil || res.Kind != "claude" || res.KindSource != KindFromFlag {
+		t.Fatalf("--kind beats the project default: %v %+v", err, res)
+	}
+}
+
 // An unset codex tier map is no model, not a refusal (#68): the default
 // command drops --model and Codex picks its own. A custom work.codexCommand
 // holding {model} has nothing to fill in, so it is refused before the claim.

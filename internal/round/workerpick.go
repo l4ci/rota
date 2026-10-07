@@ -99,15 +99,26 @@ func (p Pick) String() string {
 	return strings.Join(out, " ")
 }
 
-// resolveKind is the harness: --kind, else the item's label, else the slot's
-// recorded kind, else claude.
-func resolveKind(flag, label, slot string) string {
-	for _, k := range []string{flag, label, slot} {
-		if k != "" {
-			return k
+// Where a worker's kind came from, as resolveKind reports it.
+const (
+	KindFromFlag    = "--kind"
+	KindFromLabel   = "harness label"
+	KindFromConfig  = "round.workerKind"
+	KindFromSlot    = "slot"
+	KindFromDefault = "default"
+)
+
+// resolveKind is the harness and where it came from: --kind, else the item's
+// label, else round.workerKind, else the slot's recorded kind, else claude.
+func resolveKind(flag, label, project, slot string) (kind, source string) {
+	for _, c := range []struct{ k, src string }{
+		{flag, KindFromFlag}, {label, KindFromLabel}, {project, KindFromConfig}, {slot, KindFromSlot},
+	} {
+		if c.k != "" {
+			return c.k, c.src
 		}
 	}
-	return harness.Default
+	return harness.Default, KindFromDefault
 }
 
 // resolveModel is the model: --model, else the item's label, else the tier

@@ -122,6 +122,7 @@ func roundAssign(fs *flag.FlagSet) RunFunc {
 		d.Set("checks", checkList(res.Checks))
 		setIf(d, "account", res.Account)
 		d.Set("kind", res.Kind)
+		setIf(d, "kindSource", res.KindSource)
 		d.Set("tier", res.Tier)
 		setIf(d, "model", res.Model)
 		setIf(d, "pick", res.Pick.String())

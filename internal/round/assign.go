@@ -97,6 +97,9 @@ type Assigned struct {
 	// Kind, Tier and Model are what the worker starts with; Model is "" when a
 	// custom work.workerCommand has no {model} placeholder.
 	Kind, Tier, Model, TierReason string
+	// KindSource is where Kind came from: --kind, harness label,
+	// round.workerKind, slot or default.
+	KindSource string
 	// Pick is what the item's labels (or file fields) ask for.
 	Pick     Pick
 	Warnings []string
@@ -389,7 +392,7 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 		return res, err
 	}
 	res.Pick = pick
-	kind := resolveKind(o.Kind, pick.Harness, slot.Kind())
+	kind, kindSource := resolveKind(o.Kind, pick.Harness, set.WorkerKind, slot.Kind())
 	hz, err := worker.Harness(kind)
 	if err != nil {
 		return res, err
@@ -402,7 +405,7 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 	if model == "" && worker.NeedsModel(root, kind) {
 		return res, blocked(BlockNoTierMap, "round.tiers.%s has no model for the %s tier: set round.tiers.%s.*", kind, tier, kind)
 	}
-	res.Kind, res.Tier, res.TierReason = kind, tier, reason
+	res.Kind, res.KindSource, res.Tier, res.TierReason = kind, kindSource, tier, reason
 	res.Model = model
 	if !worker.ModelAppliesTo(root, kind) {
 		// A model asked for by name must reach the launch line; the tier map's
@@ -516,7 +519,7 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 		}},
 		{name: "bind the slot", do: func() error {
 			return editSlot(root, agent, func(s *worker.Slot) error {
-				s.Bind(worker.Binding{Task: id, ClaimID: claimID, Kind: kind, Tier: tier, Model: res.Model, TierReason: reason})
+				s.Bind(worker.Binding{Task: id, ClaimID: claimID, Kind: kind, KindSource: kindSource, Tier: tier, Model: res.Model, TierReason: reason})
 				return nil
 			})
 		}},
