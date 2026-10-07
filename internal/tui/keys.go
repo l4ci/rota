@@ -1,4 +1,4 @@
-package palette
+package tui
 
 import (
 	"unicode"
@@ -12,6 +12,10 @@ const (
 	KeyRune KeyKind = iota
 	KeyUp
 	KeyDown
+	KeyLeft
+	KeyRight
+	KeyPgUp
+	KeyPgDn
 	KeyEnter
 	KeyEsc
 	KeyBackspace
@@ -24,10 +28,23 @@ type Key struct {
 	R    rune
 }
 
+// Rune is the KeyRune for r.
+func Rune(r rune) Key { return Key{Kind: KeyRune, R: r} }
+
+// Is reports whether k is the rune r.
+func (k Key) Is(r rune) bool { return k.Kind == KeyRune && k.R == r }
+
+// csiKeys are the sequences a screen uses: arrows (ESC [ A, or ESC O A in
+// application mode) and Page Up/Down (ESC [ 5 ~, ESC [ 6 ~).
+var csiKeys = map[string]KeyKind{
+	"A": KeyUp, "B": KeyDown, "C": KeyRight, "D": KeyLeft,
+	"5~": KeyPgUp, "6~": KeyPgDn,
+}
+
 // DecodeKeys turns one terminal read into keys. A read holds a whole escape
 // sequence (ESC [ A) or a lone ESC, so an ESC at the end of the chunk, or
-// followed by something that is not [ or O, is the Esc key. Sequences the
-// palette has no use for (other arrows, Delete, function keys) are dropped.
+// followed by something that is not [ or O, is the Esc key. Sequences no
+// screen uses (Delete, Home, function keys) are dropped.
 func DecodeKeys(b []byte) []Key {
 	var out []Key
 	for i := 0; i < len(b); {
@@ -40,11 +57,8 @@ func DecodeKeys(b []byte) []Key {
 					j++
 				}
 				if j < len(b) {
-					switch {
-					case b[j] == 'A' && j == i+2:
-						out = append(out, Key{Kind: KeyUp})
-					case b[j] == 'B' && j == i+2:
-						out = append(out, Key{Kind: KeyDown})
+					if k, ok := csiKeys[string(b[i+2:j+1])]; ok {
+						out = append(out, Key{Kind: k})
 					}
 					j++
 				}

@@ -1,13 +1,12 @@
 // Package palette is the interactive menu bare `rota` opens in a terminal.
 // The core is pure: State.Update takes a decoded key and returns the next
 // state plus what to do, and Render turns a State into a frame string. The
-// terminal work (raw mode, key reads, signals) is in run.go and tty.go, behind
-// a Config a test fills with fakes. Standard library only.
+// terminal work (raw mode, key reads, signals) is internal/tui's driver, run
+// from run.go behind a Config a test fills with fakes. Standard library only.
 package palette
 
 import (
-	"strings"
-	"unicode/utf8"
+	"github.com/l4ci/rota/internal/tui"
 )
 
 // Scope says where an entry shows: everywhere, only in an initialized
@@ -45,22 +44,30 @@ type Item struct {
 
 // State is everything a frame depends on.
 type State struct {
-	Items  []Item // entries in scope, in table order
-	Filter string
-	Sel    int // index into Matches()
+	Items []Item   // entries in scope, in table order
+	List  tui.List // their labels, typed into; its Filter and Sel are the palette's
 }
 
 // New scopes the entries and preselects the default one.
 func New(entries []Entry, inProject bool) State {
-	var s State
+	var items []Item
 	for _, e := range entries {
 		if (e.Scope == InProject && !inProject) || (e.Scope == NoProject && inProject) {
 			continue
 		}
-		s.Items = append(s.Items, Item{N: len(s.Items) + 1, Entry: e})
+		items = append(items, Item{N: len(items) + 1, Entry: e})
 	}
-	s.Sel = s.defaultSel()
+	s := newState(items)
+	s.List.Sel = s.defaultSel()
 	return s
+}
+
+func newState(items []Item) State {
+	labels := make([]string, len(items))
+	for i, it := range items {
+		labels[i] = it.Label
+	}
+	return State{Items: items, List: tui.List{Items: labels, Typeahead: true}}
 }
 
 func (s State) defaultSel() int {
@@ -74,15 +81,9 @@ func (s State) defaultSel() int {
 
 // Matches are the items whose label contains the filter, ignoring case.
 func (s State) Matches() []Item {
-	if s.Filter == "" {
-		return s.Items
-	}
-	f := strings.ToLower(s.Filter)
 	var out []Item
-	for _, it := range s.Items {
-		if strings.Contains(strings.ToLower(it.Label), f) {
-			out = append(out, it)
-		}
+	for _, i := range s.List.Matches() {
+		out = append(out, s.Items[i])
 	}
 	return out
 }
@@ -109,58 +110,31 @@ func runOrQuit(it Item) Action {
 	return Action{Kind: RunItem, Item: it}
 }
 
-// Update applies one key. With an empty filter j/k move and q quits; once a
-// filter is typing, every letter extends it.
-func (s State) Update(k Key) (State, Action) {
-	m := s.Matches()
-	switch k.Kind {
-	case KeyCtrlC:
+// Update applies one key. A digit runs its entry, even when a filter hides
+// it; the list moves and filters (j/k move and q quits only while the filter
+// is empty); Esc clears the filter, then quits.
+func (s State) Update(k tui.Key) (State, Action) {
+	switch {
+	case k.Kind == tui.KeyCtrlC:
 		return s, Action{Kind: Quit}
-	case KeyUp:
-		s.Sel = wrap(s.Sel-1, len(m))
-	case KeyDown:
-		s.Sel = wrap(s.Sel+1, len(m))
-	case KeyEnter:
-		if s.Sel >= 0 && s.Sel < len(m) {
-			return s, runOrQuit(m[s.Sel])
+	case k.Kind == tui.KeyEnter:
+		if i, ok := s.List.Selected(); ok {
+			return s, runOrQuit(s.Items[i])
 		}
-	case KeyBackspace:
-		if s.Filter != "" {
-			_, n := utf8.DecodeLastRuneInString(s.Filter)
-			s.Filter = s.Filter[:len(s.Filter)-n]
-			s.Sel = 0
-		}
-	case KeyEsc:
-		if s.Filter == "" {
-			return s, Action{Kind: Quit}
-		}
-		s.Filter, s.Sel = "", s.defaultSel()
-	case KeyRune:
-		switch {
-		case k.R >= '1' && k.R <= '9':
-			for _, it := range s.Items {
-				if it.N == int(k.R-'0') {
-					return s, runOrQuit(it)
-				}
+		return s, Action{}
+	case k.Kind == tui.KeyRune && k.R >= '1' && k.R <= '9':
+		for _, it := range s.Items {
+			if it.N == int(k.R-'0') {
+				return s, runOrQuit(it)
 			}
-		case s.Filter == "" && k.R == 'q':
-			return s, Action{Kind: Quit}
-		case s.Filter == "" && k.R == 'k':
-			s.Sel = wrap(s.Sel-1, len(m))
-		case s.Filter == "" && k.R == 'j':
-			s.Sel = wrap(s.Sel+1, len(m))
-		case k.R == ' ' && s.Filter == "":
-		case k.R >= ' ':
-			s.Filter += string(k.R)
-			s.Sel = 0
 		}
+		return s, Action{}
+	case s.List.Filter == "" && (k.Kind == tui.KeyEsc || k.Is('q')):
+		return s, Action{Kind: Quit}
+	}
+	s.List, _ = s.List.Update(k)
+	if k.Kind == tui.KeyEsc {
+		s.List.Sel = s.defaultSel()
 	}
 	return s, Action{}
-}
-
-func wrap(i, n int) int {
-	if n == 0 {
-		return 0
-	}
-	return (i%n + n) % n
 }
