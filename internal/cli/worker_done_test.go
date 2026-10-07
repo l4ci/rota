@@ -93,6 +93,13 @@ func TestWorkerDone(t *testing.T) {
 			t.Fatalf("exit %d: %s", code, out)
 		}
 	})
+	t.Run("accepts the whole-tier row recorded multi-arg", func(t *testing.T) {
+		dir := doneProject(t, "true")
+		rotaIn(t, dir, "proof", "add", "B07", "--check", "'rota' 'test' 'run' 'fast'", "--result", "PASS", "--evidence", "x", "--sha", headOf(t, dir))
+		if code, out, _ := rotaIn(t, dir, "worker", "done", "ben", "--json"); code != 0 {
+			t.Fatalf("exit %d: %s", code, out)
+		}
+	})
 	t.Run("unset test.fast skips the proof half with a warning", func(t *testing.T) {
 		dir := doneProject(t, "")
 		code, out, errOut := rotaIn(t, dir, "worker", "done", "ben", "--json")

@@ -137,7 +137,9 @@ func missingFastProof(rows []proof.Row, head string, want []string) (missing []s
 			passed[r.Check] = true
 		}
 	}
-	if passed[fastTierCheck] {
+	// `proof record -- rota test run fast` stores the quoted multi-arg form;
+	// `-- "rota test run fast"` stores the plain one. Both prove the tier.
+	if passed[fastTierCheck] || passed[recordedCommand(strings.Fields(fastTierCheck), "")] {
 		return nil
 	}
 	for _, w := range want {
