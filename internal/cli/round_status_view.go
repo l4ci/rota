@@ -256,6 +256,23 @@ func (m *roundScreen) entries() []entry {
 
 func dashed(s string) string { return dash(s) }
 
+// plain drops control characters (ESC, C1, DEL) from text that came from the
+// forge or the registry: a PR title or an evidence line must not drive the
+// terminal. Newlines and tabs become spaces or stay newlines as noted.
+func plain(s string, keepNL bool) string {
+	return strings.Map(func(r rune) rune {
+		switch {
+		case r == '\n' && keepNL:
+			return r
+		case r == '\n' || r == '\t':
+			return ' '
+		case r < 0x20 || (r >= 0x7f && r < 0xa0):
+			return -1
+		}
+		return r
+	}, s)
+}
+
 func prLabel(pr, state string) string {
 	if pr == "" {
 		return "-"
@@ -300,7 +317,7 @@ func slotEntry(r round.Row) entry {
 	if r.BestOf != "" {
 		b = append(b, "best-of with "+r.BestOf)
 	}
-	return entry{key: "slot " + r.Name, section: secSlots, line: line, title: r.Name + " · " + issue, body: strings.Join(b, "\n")}
+	return entry{key: "slot " + r.Name, section: secSlots, line: plain(line, false), title: plain(r.Name+" · "+issue, false), body: plain(strings.Join(b, "\n"), true)}
 }
 
 func bounceLabel(n int) string {
@@ -313,7 +330,7 @@ func bounceLabel(n int) string {
 func reviewEntry(q round.QueuedPR) entry {
 	line := fmt.Sprintf("#%-7s %-14s %-30s %s", q.Issue, prLabel(q.PR, ""), dashed(q.Branch), dashed(q.From))
 	body := "PR: " + dashed(q.PR) + "\nbranch: " + dashed(q.Branch) + "\nfrom: " + dashed(q.From)
-	return entry{key: "review " + q.Issue + " " + q.PR, section: secReview, line: line, title: "review · #" + q.Issue, body: body}
+	return entry{key: "review " + q.Issue + " " + q.PR, section: secReview, line: plain(line, false), title: plain("review · #"+q.Issue, false), body: plain(body, true)}
 }
 
 func candEntry(c roundCand) entry {
@@ -326,7 +343,7 @@ func candEntry(c roundCand) entry {
 	if !c.Ready {
 		body = c.Title + "\nblocked:\n- " + strings.Join(c.Why, "\n- ")
 	}
-	return entry{key: "cand " + c.ID, section: secCands, line: line, title: "candidate · #" + strings.TrimPrefix(c.ID, "#"), body: body}
+	return entry{key: "cand " + c.ID, section: secCands, line: plain(line, false), title: plain("candidate · #"+strings.TrimPrefix(c.ID, "#"), false), body: plain(body, true)}
 }
 
 func (m *roundScreen) Update(msg tui.Msg) (tui.Model, tui.Cmd) {
@@ -438,7 +455,7 @@ func (m *roundScreen) Render(w, h int, st tui.Style) string {
 	}
 	head := st.Bold("Round status")
 	if m.snap.Host != "" {
-		head += st.Dim(" · " + m.snap.Host)
+		head += st.Dim(" · " + plain(m.snap.Host, false))
 	}
 	head += st.Dim(" · " + status)
 
@@ -474,16 +491,16 @@ func (m *roundScreen) Render(w, h int, st tui.Style) string {
 		case len(inSec) == 0 && sec == secCands && !m.snap.CandsLoaded:
 			add(st.Dim("  loading…"), -1)
 		case len(inSec) == 0 && sec == secCands && m.snap.CandsErr != "":
-			add(st.Yellow("  "+tui.Fit("candidates: "+m.snap.CandsErr, w-2)), -1)
+			add(st.Yellow("  "+tui.Fit(plain("candidates: "+m.snap.CandsErr, false), w-2)), -1)
 		case len(inSec) == 0:
 			add(st.Dim("  none"), -1)
 		}
 	}
 	for _, n := range m.snap.Notes {
-		add(st.Yellow(tui.Fit("! "+n, w)), -1)
+		add(st.Yellow(tui.Fit("! "+plain(n, false), w)), -1)
 	}
 	if m.err != "" {
-		add(st.Red(tui.Fit("! refresh failed: "+m.err, w)), -1)
+		add(st.Red(tui.Fit("! refresh failed: "+plain(m.err, false), w)), -1)
 	}
 
 	room := len(lines)
