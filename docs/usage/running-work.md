@@ -13,7 +13,7 @@ Items captured in the backlog ([`BACKLOG.md`](../reference/rota-folder.md), or i
 - `/rota-work [B03] [F07]` to implement a batch of items together
 - `/rota-work "add retry logic to the upload pipeline"` takes a brief; run `/rota-capture` first so the work has an ID to close
 
-**Precondition:** refuses to start on a dirty working tree. Commit or stash first.
+**Precondition:** a clean working tree. Files that tools generate beside your work (a lockfile, a codegen output) are swept into a `chore:` commit and the run continues. Any other uncommitted change of yours stops it: commit or stash first.
 
 **Status tracking:** registers in `.rota/status.json` at start so [`/rota-work` (no argument)](picking-work.md) in another session knows those items are in progress.
 
@@ -101,6 +101,15 @@ Pick by **intent**, not by the verb typed:
 When intent is ambiguous, `/rota-capture` is the cheapest path: it only records, so nothing runs until you say so.
 
 See [capturing work](capturing-work.md) for capture details and [picking work](picking-work.md) for how the no-argument `/rota-work` selects and prioritizes.
+
+## Proof: what Step 7 records
+
+After each task, `/rota-work` checks the diff against the brief, then writes proof: rows saying what ran and whether it passed.
+
+- `rota proof record <ID> -- <command>` runs the command and writes the row itself: PASS when it exits 0, FAIL otherwise (and it exits 1 then). A row is measured, never typed. For a docs-only task with no command, `rota proof add` writes the row; its check says `no test seam: docs/skill change`.
+- For a behavior change, run the new test through `rota proof record` before the change. The FAIL row is the red run. Run it again after the change for the PASS row. A test that fails on a build or setup error (missing import, undefined symbol) is not a red run; it has to fail on an assertion. Set [`work.tdd`](configuration.md#worktdd-red-first-on-or-off) to `false` to drop the red-first rule. PASS rows are still recorded.
+- When `test.fast` is set, Step 7 runs `rota test run fast`, and that row is the PASS proof.
+- If the issue's body has a `## Acceptance` list, each line carries an id (`AC-1`, `AC-2`, ...). `rota item complete` closes an item only when it has proof and exits 4 otherwise. On the issue backend, a plan's tasks name the ids they deliver (`Serves: AC-1`), and `rota plan pass <key> <AC-id> --proof <sha>:<check>` marks a criterion met by one proof row. See [vision and plans](vision-and-plans.md#rota-plan-write-the-implementation-plan).
 
 ## Merge or PR
 

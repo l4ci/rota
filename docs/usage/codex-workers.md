@@ -16,6 +16,8 @@ rota round assign 59 --kind codex
 
 `--kind` is `claude` or `codex`. Without it, the issue's `harness:` label applies (file backend: a `Harness:` field), then the project default `round.workerKind`, then the slot's recorded kind, else `claude`. A Codex-first project sets `rota config set round.workerKind codex` once; autopilot, `rota round architecture` and `rota round transfer` then start Codex workers too. `rota round status` shows each slot's kind and where it came from. To pick a model per issue, add a `model:<id>` label or pass `--model <id>`; see [assigning](parallel-rounds.md#assigning-an-issue).
 
+A `best-of:2` issue gets one Claude and one Codex attempt when both `round.tiers.claude` and `round.tiers.codex` are set and neither `--kind` nor a `harness:` label pins a harness. See [best-of](parallel-rounds.md#best-of-two-workers-on-one-issue).
+
 ## What you need
 
 - **herdr.** Codex workers run under `work.dispatch` set to `herdr` (or detected inside a herdr pane).
@@ -138,7 +140,7 @@ brief.
 ## Check it
 
 `rota doctor` has a `codex` check. It skips when Codex isn't installed and no `work.codexAccounts` are
-configured. Otherwise it fails when Codex is missing, its version is unreadable or out of range, or a
+configured. Otherwise it fails when Codex is missing, `codex --version` can't be run (there is no supported version range), or a
 configured account isn't logged in or (under herdr) lacks the integration, each with the command that fixes
 it. With no accounts it checks the default home and only notes a missing login or integration, since a project
 that never runs Codex workers has no reason to log in. See
