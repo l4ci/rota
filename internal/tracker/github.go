@@ -262,6 +262,15 @@ func (g *GitHub) List(ctx context.Context, f ListFilter) ([]Issue, error) {
 	if state == "" {
 		state = "open"
 	}
+	// An open list narrowed by labels alone is a subset of the whole open
+	// list when this invocation already read it. Closed, assignee and
+	// milestone lists are not.
+	wholeOpen := state == "open" && !f.Mine && f.Milestone == ""
+	if wholeOpen && len(f.Labels) > 0 && g.cli.Cache != nil {
+		if out, ok := g.cli.Cache.openMatching(g.cli.cacheScope(), f.Labels); ok {
+			return firstN(out, f.Limit), nil
+		}
+	}
 	var raw []ghIssue
 	err := g.withIssueFields(func(fields string) error {
 		args := []string{"issue", "list", "--state", state, "--json", fields + ",author"}
@@ -285,6 +294,9 @@ func (g *GitHub) List(ctx context.Context, f ListFilter) ([]Issue, error) {
 	}
 	if g.cli.Cache != nil {
 		g.cli.Cache.putIssues(g.cli.cacheScope(), out)
+		if wholeOpen && len(f.Labels) == 0 {
+			g.cli.Cache.putOpen(g.cli.cacheScope(), out)
+		}
 	}
 	return firstN(out, f.Limit), nil
 }

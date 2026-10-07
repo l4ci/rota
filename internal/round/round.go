@@ -314,6 +314,10 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 	labelsOK := false
 	var stale []int // closed issues still carrying the label
 	if forgeOK {
+		// Read the whole open list first: the claim and backlog reads below make
+		// this same call, and the forge's read cache answers the label-filtered
+		// list from it. The error surfaces on the filtered list.
+		_, _ = e.Forge.List(ctx, tracker.ListFilter{State: "open"})
 		if issues, err := e.Forge.List(ctx, tracker.ListFilter{State: "open", Labels: []string{e.Label}}); err != nil {
 			rep.unavailable(SourceForge, err.Error())
 		} else {

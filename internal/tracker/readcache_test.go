@@ -2,6 +2,7 @@ package tracker
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -116,5 +117,68 @@ func TestGetTakesAListedIssueFromTheList(t *testing.T) {
 	}
 	if len(f.calls) != 1 || !strings.Contains(f.last(), "issue view 7") {
 		t.Fatalf("stale listed issue served after a write: %v", f.calls)
+	}
+}
+
+func TestLabelFilteredListComesFromTheCachedOpenList(t *testing.T) {
+	f := &fakeCLI{answer: func(_ int, args []string) (string, string, int) {
+		return `[{"number":1,"title":"a","labels":[{"name":"in-progress"},{"name":"bug"}],"state":"OPEN"},` +
+			`{"number":2,"title":"b","labels":[{"name":"needs-human"}],"state":"OPEN"},` +
+			`{"number":3,"title":"c","labels":[],"state":"OPEN"}]`, "", 0
+	}}
+	c := f.cli("github")
+	c.Cache = NewReadCache()
+	g := &GitHub{base: base{cli: c, closing: closingGH}}
+	ctx := context.Background()
+	if _, err := g.List(ctx, ListFilter{}); err != nil {
+		t.Fatal(err)
+	}
+	nums := func(f ListFilter) string {
+		t.Helper()
+		got, err := g.List(ctx, f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var s []string
+		for _, is := range got {
+			s = append(s, strconv.Itoa(is.Number))
+		}
+		return strings.Join(s, ",")
+	}
+	if got := nums(ListFilter{Labels: []string{"In-Progress"}}); got != "1" {
+		t.Errorf("in-progress = %q", got)
+	}
+	if got := nums(ListFilter{State: "open", Labels: []string{"needs-human"}}); got != "2" {
+		t.Errorf("needs-human = %q", got)
+	}
+	if got := nums(ListFilter{Labels: []string{"in-progress", "needs-human"}}); got != "" {
+		t.Errorf("both labels = %q", got)
+	}
+	if got := nums(ListFilter{Labels: []string{"bug"}, Limit: 1}); got != "1" {
+		t.Errorf("limit = %q", got)
+	}
+	if len(f.calls) != 1 {
+		t.Fatalf("filtered open lists went to the forge: %v", f.calls)
+	}
+	// Closed lists, assignee and milestone filters are not answerable from it.
+	for _, flt := range []ListFilter{{State: "closed", Labels: []string{"in-progress"}}, {Mine: true, Labels: []string{"bug"}}, {Milestone: "m", Labels: []string{"bug"}}} {
+		before := len(f.calls)
+		if _, err := g.List(ctx, flt); err != nil {
+			t.Fatal(err)
+		}
+		if len(f.calls) != before+1 {
+			t.Errorf("%+v did not reach the forge", flt)
+		}
+	}
+	// A write drops the held list.
+	if err := g.Edit(ctx, 1, IssueEdit{AddLabels: []string{"y"}}); err != nil {
+		t.Fatal(err)
+	}
+	before := len(f.calls)
+	if _, err := g.List(ctx, ListFilter{Labels: []string{"bug"}}); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.calls) != before+1 {
+		t.Errorf("stale open list served after a write: %v", f.calls)
 	}
 }
