@@ -20,7 +20,10 @@ func TestSlotApprovalThreadResolvesAQueuedPR(t *testing.T) {
 	if th, err := slotApprovalThread(root, "#9"); err != nil || th.Number != 9 || th.Slot != "b" {
 		t.Errorf("a slot's PR by number: %+v %v", th, err)
 	}
-	if _, err := slotApprovalThread(root, "#77"); err == nil {
-		t.Error("unknown PR")
+	if th, err := slotApprovalThread(root, "#77"); err != nil || th.Kind != "pr" || th.Number != 77 || th.Slot != "" {
+		t.Errorf("an unrecorded PR is gated by number: %+v %v", th, err)
+	}
+	if _, err := slotApprovalThread(root, "w9"); err == nil {
+		t.Error("unknown slot")
 	}
 }
