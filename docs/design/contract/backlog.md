@@ -26,10 +26,11 @@ note: a field flag given with an empty value (`--related ""`) exits 2, as old di
 ### rota item show
 rota item show <ID>
 repo: scoped
-data: {"id": string, "type": "B"|"F"|"T", "title": string, "status": string, "state": string|null, "claimedBy": string|null, "assignees": []string, "milestone": string|null, "notes": []string, "comments": [{"who": string, "kind": string, "text": string}]}
+data: {"id": string, "type": "B"|"F"|"T", "title": string, "status": string, "state": string|null, "claimedBy": string|null, "assignees": []string, "milestone": string|null, "notes": []string, "acceptance": [{"id": string, "text": string, "met": bool, "proof": string|null, "flag": string|null}], "comments": [{"who": string, "kind": string, "text": string}]}
 exit: 3 item unknown; backend (issue-only); tracker
 old: hv-item-show <ID>
 shim: parse the fixed lines (`[id] title`, `type:`, `status:`, `state:`, `claimed by:`, `assignee:`, `milestone:`, `notes:`, `comments: N`) and the comment rows `- <who> · <kind> · <text>`; `none` becomes null and csv values become lists. The old `type:` line is a word (`bug`, `feature`, `task`); `type` is its letter. In issue mode the bracketed id loses its letter (rule 11).
+note: `acceptance` lists the criteria under `## Acceptance` (a body without ids shows the ids `rota plan pass` would give) with their coverage from the `acceptance` note: `met` needs a mark whose text still matches the body and whose proof row is still PASS; `proof` is `<sha>:<check>` of the mark; `flag` says why a marked criterion is not met (`changed`: text edited since, `unproven`: row gone or not PASS, `missing`: the criterion left the body). `[]` when there are none. Text mode adds `acceptance: N/M met` and a line per flagged criterion.
 
 ### rota item claim
 rota item claim <ID> --as <claim-id>
@@ -82,16 +83,17 @@ old: hv-item-comment <ID> --list [--kind <kind>]
 shim: parse rows `- <who> · <kind> · <text>` (continuation lines joined into `text`). `who` is the author in issue mode and the date in file mode.
 
 ### rota item note add
-rota item note add <ID> --kind <proof|design|plan> --body-file <path|->
+rota item note add <ID> --kind <proof|design|plan|acceptance> --body-file <path|->
 repo: scoped
 data: {"id": string, "type": "B"|"F"|"T", "kind": string, "changed": bool}
 exit: 2 for an invalid kind or an empty body; 3 item unknown; backend (issue-only; hint: `rota design` or `rota plan`); tracker
 old: hv-item-note <ID> --kind <kind> --body-file <path|->
 shim: `changed` true (old skips identical writes silently). `ROTA_NOTE_LIMIT` stays an env hook for the split size.
 note: split from the old `--show` and `--rm` action flags (old let the last one win).
+note: `acceptance` is reserved: written by `rota plan pass`, so `add` and `rm` exit 2 for it; `show` reads it.
 
 ### rota item note show
-rota item note show <ID> --kind <proof|design|plan>
+rota item note show <ID> --kind <proof|design|plan|acceptance>
 repo: scoped
 data: {"id": string, "type": "B"|"F"|"T", "kind": string, "exists": bool, "body": string}
 exit: 2 for an invalid kind; 3 item unknown; backend (issue-only; hint: `rota design` or `rota plan`); tracker
@@ -99,7 +101,7 @@ old: hv-item-note <ID> --kind <kind> --show
 shim: `show` prints text, so `exists` is `body != ""` (old cannot tell absent from empty), trailing newlines stripped.
 
 ### rota item note rm
-rota item note rm <ID> --kind <proof|design|plan>
+rota item note rm <ID> --kind <proof|design|plan|acceptance>
 repo: scoped
 data: {"id": string, "type": "B"|"F"|"T", "kind": string, "changed": bool}
 exit: 2 for an invalid kind; 3 item unknown; backend (issue-only; hint: `rota design` or `rota plan`); tracker

@@ -467,6 +467,13 @@ func (u *Umbrella) NotePut(ref, kind, text string) (bool, error) {
 	return viaOwner(u, ref, func(s *Issues, plain string) (bool, error) { return s.NotePut(plain, kind, text) })
 }
 
+// SetBody replaces the item's body.
+func (u *Umbrella) SetBody(ref, body string) (bool, error) {
+	return viaOwner(u, ref, func(s *Issues, plain string) (bool, error) { return s.SetBody(plain, body) })
+}
+
+var _ BodyEditor = (*Umbrella)(nil)
+
 // NoteRm deletes the item's durable note.
 func (u *Umbrella) NoteRm(ref, kind string) (bool, error) {
 	return viaOwner(u, ref, func(s *Issues, plain string) (bool, error) { return s.NoteRm(plain, kind) })
