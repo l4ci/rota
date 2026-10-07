@@ -104,6 +104,10 @@ Each Q1–Q5 option maps to a single `key.path: value` in `.rota/config.json`:
 | Q5 Auto chain | `autonomy.level: "auto"` |
 
 {{KEYS}}
+## Removed keys
+
+`issues.filterMineOnly`, `issues.providers.github` and `issues.providers.gitlab` were seeded by older `rota init` runs but nothing ever read them (use `issues.provider` to pick the tracker). `rota config check` lists any still in `.rota/config.json` as `removed` with a hint and does not fail on them; `rota config fill` deletes them. `rota config set` refuses them as unknown keys.
+
 ## Validation rules
 
 - **`rota config set`** checks only that the key is in the schema. It accepts any value (JSON when it parses, else the string) and checks no enum or range.
