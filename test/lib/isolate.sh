@@ -20,9 +20,13 @@ isolate_env() {
 }
 
 # worktree_snapshot <repo>: the paths of the repo's worktrees, sorted. Paths only,
-# not HEADs: a worker committing in its own slot mid-run is not a leak.
+# not HEADs: a worker committing in its own slot mid-run is not a leak. rota's
+# own scratch trees (a train's rota-train-*/tree, a CI verify's rota-ci-*/tree)
+# are left out: a gate or train running beside this run owns them, and they come
+# and go by design (#427).
 worktree_snapshot() {
-  git -C "$1" worktree list --porcelain 2>/dev/null | sed -n 's/^worktree //p' | sort
+  git -C "$1" worktree list --porcelain 2>/dev/null | sed -n 's/^worktree //p' \
+    | grep -Ev '/rota-(train|ci)-[^/]+/tree$' | sort
 }
 
 # worktree_guard_check <before-file> <repo>: fail, naming the difference, when the

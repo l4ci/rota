@@ -55,7 +55,7 @@ note: an empty `<value>` is valid and stores the empty string; the old helper re
 rota config check
 repo: scoped
 data: {"status": "upToDate"|"fresh"|"stale"|"corrupt", "upToDate": bool, "missing": []string}
-exit: 1 when `status` is anything but `upToDate` (`fresh`, `stale` or `corrupt`); 3 when no `.rota/` is found. `missing` lists dotted required keys that are absent or null, in schema order, and is non-empty only for `stale`. `fresh` means `config.json` does not exist; `corrupt` means it is invalid JSON or not an object (this is a defined verdict, so it does not use exit 70).
+exit: 1 when `status` is anything but `upToDate` (`fresh`, `stale` or `corrupt`); 3 when no `.rota/` is found. `missing` lists dotted required keys that are absent or null, in schema order, then `refactor.verifyCommands` when it still holds commands and `test.full` holds none (the deprecated key `config fill` moves), and is non-empty only for `stale`. `fresh` means `config.json` does not exist; `corrupt` means it is invalid JSON or not an object (this is a defined verdict, so it does not use exit 70).
 old: hv-config-schema-check (no args).
 shim: map stdout `UP_TO_DATE` to `status: upToDate`, `FRESH` to `fresh`, `CORRUPT` to `corrupt`, and `STALE:a,b` to `stale` with `missing` = the split list; exit 0 for `upToDate`, else 1 (old always exited 0).
 note: old always exited 0, so skills that branch on the four tokens must read `data.status`.

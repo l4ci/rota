@@ -81,6 +81,25 @@ OUT=$( cd "$CF" && hvj config fill )
 [ "$(echo "$OUT" | jget data.changed)" = "false" ] || fail "second fill after the move should not change anything: $OUT"
 pass "config fill moves refactor.verifyCommands to test.full and is idempotent"
 
+# check reports the legacy key as stale, even with every required key present, until fill moves it.
+( cd "$CF" && hvj config fill >/dev/null )
+python3 - "$CF/.rota/config.json" <<'PY'
+import json, sys
+p = sys.argv[1]
+cfg = json.load(open(p))
+cfg["test"]["full"] = []
+cfg.setdefault("refactor", {})["verifyCommands"] = ["x"]
+json.dump(cfg, open(p, "w"))
+PY
+RC=0; OUT=$( cd "$CF" && hvj config check ) || RC=$?
+[ "$RC" = "1" ] || fail "config check with only refactor.verifyCommands should exit 1, got $RC: $OUT"
+[ "$(echo "$OUT" | jget data.status)" = "stale" ] || fail "legacy key should make check stale: $OUT"
+[ "$(echo "$OUT" | jget 'data.missing[0]')" = "refactor.verifyCommands" ] || fail "check should name refactor.verifyCommands: $OUT"
+( cd "$CF" && hvj config fill >/dev/null )
+[ "$( cd "$CF" && hvj config check | jget data.status )" = "upToDate" ] \
+  || fail "config check after fill moved the legacy key should be upToDate"
+pass "config check reports a legacy refactor.verifyCommands as stale until fill"
+
 # A non-empty test.full wins over the legacy key, which is still dropped.
 printf '{"test": {"full": ["keep"]}, "refactor": {"verifyCommands": ["old"]}}\n' > "$CF/.rota/config.json"
 ( cd "$CF" && hvj config fill >/dev/null )
