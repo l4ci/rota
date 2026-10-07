@@ -13,7 +13,6 @@ import (
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
-	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/roundtick"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -79,11 +78,11 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 	if err != nil {
 		return roundtick.Result{}, Resolution("%v", err)
 	}
-	lease, st, err := le.Read(cd)
+	lease, _, held, err := le.Holds(cd, pid, os.Getenv)
 	if err != nil {
 		return roundtick.Result{}, err
 	}
-	if (st != roundlease.Live && st != roundlease.Foreign) || !le.Discover(pid, os.Getenv).SameAs(lease, le.Host) {
+	if !held {
 		return roundtick.Result{}, errAutopilotStopped
 	}
 	policy, err := mergePolicy(c)
