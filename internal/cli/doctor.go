@@ -22,6 +22,7 @@ import (
 	"github.com/l4ci/rota/internal/skills"
 	"github.com/l4ci/rota/internal/stalebin"
 	"github.com/l4ci/rota/internal/version"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 // doctorCommand is `rota doctor` (C6): a read-only preflight. It runs without
@@ -111,6 +112,7 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 		}
 	}
 	in.ProjectRoot = root
+	in.NothingToVerify = worker.NothingToVerify(root)
 	in.AgentProblems = agents.Problems(root)
 	doctorDiskInput(ctx, &in, cfg, root, d.Git, d.Now())
 	if on, err := config.SwitchOnUsage(cfg); err == nil {
