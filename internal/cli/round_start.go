@@ -208,6 +208,12 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 			archLine = a.Line()
 		}
 		d.Set("drift", drift)
+		cwd, _ := os.Getwd()
+		stale, isStale := staleBinary(ctx, c.deps().Git, cwd)
+		if isStale {
+			d.Set("staleBinary", staleData(stale))
+			c.Warn("%s; rebuild: %s", stale.Detail(), stale.Rebuild)
+		}
 		d.Set("lease", leaseData(st.Lease, st.LeaseState))
 		d.Set("reclaimed", st.Outcome == roundlease.Reclaimed)
 		d.Set("changed", st.Changed)
