@@ -18,8 +18,10 @@
 __pycache__/
 *.pyc
 
-# Claude Code harness state (scheduled tasks, etc.)
-.claude/
+# Claude Code harness state (scheduled tasks, etc.); the generated
+# subagent definitions (rota agents write) are tracked.
+.claude/*
+!.claude/agents/
 
 # ── rota ──
 .rota/bin/
