@@ -39,7 +39,7 @@ func paletteEntries(c *Ctx, out *paletteOutcome) []palette.Entry {
 		paletteVerb(c, "Tab view", "one tab per worker", palette.Always, "layout", "tabs"),
 		paletteVerb(c, "Doctor", "check git, forge, host and agent", palette.InProject, "doctor"),
 		paletteVerb(c, "Skills update", "refresh the installed skills", palette.Always, "skills", "update"),
-		paletteVerb(c, "Projects", "rota projects on this machine", palette.Always, "projects"),
+		paletteVerb(c, "Projects", "rota projects on this machine", palette.Always, "projects", "--ui"),
 		{Label: "Setup", Hint: "init this directory", Scope: palette.NoProject, Default: true, Ends: true, Run: func() error {
 			out.set(c.deps().BareSetup(c, nil))
 			return nil
