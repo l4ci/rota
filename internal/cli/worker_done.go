@@ -3,6 +3,7 @@ package cli
 import (
 	"flag"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/l4ci/rota/internal/git"
@@ -29,7 +30,14 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		reg := worker.LoadRegistry(root)
+		// The pool registry is gitignored and lives in the main checkout, so a
+		// worker running this from its own worktree resolves it through the
+		// git common dir. Config and proof stay with the nearest root.
+		poolRoot, err := returnRoot(c, slotName)
+		if err != nil {
+			return Result{}, err
+		}
+		reg := worker.LoadRegistry(poolRoot)
 		if !reg.Exists {
 			return Result{}, Resolution("no worker pool — run rota worker pool init first")
 		}
@@ -57,7 +65,8 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 			}
 			want := cmds
 			if anyContains(cmds, filesPlaceholder) {
-				files, err := changedFiles(c, root, *base)
+				// {files} is the slot branch's diff, whatever cwd this runs from.
+				files, err := changedFiles(c, slotDir(sl, root), *base)
 				if err != nil {
 					return Result{}, err
 				}
@@ -90,7 +99,7 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 		}
 
 		changed := false
-		if err := worker.Update(root, func(doc *worker.Doc) {
+		if err := worker.Update(poolRoot, func(doc *worker.Doc) {
 			s := doc.Slot(slotName)
 			if s == nil || s.State() == "done" {
 				return
@@ -104,6 +113,17 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 		d.Set("changed", changed)
 		return Result{Data: d, Text: fmt.Sprintf("%s\tdone", slotName)}, nil
 	}
+}
+
+// slotDir is the slot's worktree when it exists on disk, else fallback: the
+// tree whose HEAD is the slot branch.
+func slotDir(sl *worker.Slot, fallback string) string {
+	if wt := sl.Worktree(); wt != "" {
+		if fi, err := os.Stat(wt); err == nil && fi.IsDir() {
+			return wt
+		}
+	}
+	return fallback
 }
 
 // missingFastProof lists what the PASS rows at head leave unproven: nothing
