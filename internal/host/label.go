@@ -10,6 +10,9 @@ import (
 // it never overwrites what another tool reports for the same pane.
 const LabelSource = "rota"
 
+// herdr 0.9.3 parses the pane or workspace id before the options: with --source
+// first it exits 2 ("unknown option: rota"). Keep the id first in every call.
+
 // Label sets the slot pane's title in herdr's sidebar, "" clears it. It uses
 // --title, the line herdr otherwise fills with the agent's own terminal title;
 // --display-agent only renames the agent-kind label, so it is cleared but never
@@ -20,7 +23,7 @@ func (h *herdr) Label(ctx context.Context, slot, handle, title string) {
 	if pane == "" {
 		return
 	}
-	args := []string{"pane", "report-metadata", "--source", LabelSource, pane}
+	args := []string{"pane", "report-metadata", pane, "--source", LabelSource}
 	if title == "" {
 		args = append(args, "--clear-title", "--clear-display-agent")
 	} else {
@@ -42,5 +45,5 @@ func (h *herdr) LabelWorkspace(ctx context.Context, token string) {
 	if ws == "" || token == "" {
 		return
 	}
-	h.herdr(ctx, "workspace", "report-metadata", "--source", LabelSource, "--token", "round="+token, ws)
+	h.herdr(ctx, "workspace", "report-metadata", ws, "--source", LabelSource, "--token", "round="+token)
 }
