@@ -59,7 +59,14 @@ a round is the same idea with the assignment, waiting and merging done by verbs.
 
 4. **Issues a worker can pick up.** A candidate needs acceptance criteria or a design or plan note,
    closed dependencies and no file overlap with work in flight (see [Picking issues](#picking-issues)).
-5. **Preflight.** `rota doctor` checks all of the above and names the fix for each failure. See
+5. **Subagent definitions.** `rota init` runs `rota agents write`, which writes
+   `.claude/agents/rota-*.md` (and `.codex/agents/rota-*.toml` when Codex is configured): three roles,
+   `explorer`, `implementer` and `reasoner`, each on a model tier. Workers hand reading to the
+   explorer, code to the implementer and hard thinking to the reasoner by name. Change a role's tier
+   or effort with the `roles.*` keys (see [roles keys](configuration.md#roles-keys-and-rota-agents-write)),
+   then run `rota agents write` again. `rota agents write --check` writes nothing and exits 1 when a
+   file is missing or stale.
+6. **Preflight.** `rota doctor` checks all of the above and names the fix for each failure. See
    [doctor and reap](doctor-and-reap.md).
 
 For a round that must survive the orchestrator's context filling or a usage limit, also install the
@@ -194,7 +201,10 @@ rota round assign 59 --agent ben --body-file decisions.md --siblings 58,60,62
 Without `--agent` the first idle roster slot takes it, else the first slot whose worker is done with
 a PR (see [PRs in review](#prs-in-review)). Assign refuses (exit 4, `blockedBy`)
 with `no round`, `out of scope`, `not ready`, `overlap`, `claimed`, `open PR`, `slot busy`,
-`no free slot` or `brief missing`, and marks nothing in those cases. When it goes through it
+`no free slot`, `brief missing`, `no tier map` (`round.tiers.<kind>` has no model for the tier),
+`codex flags` (the Codex launch line uses a flag `codex --help` doesn't list), `harness label`,
+`model label` (a bad `harness:` or `model:` label), `best-of label` or `best-of-slots` (see
+[best-of](#best-of-two-workers-on-one-issue)), and marks nothing in those cases. When it goes through it
 claims the item (`<agent>@<round>`), sets it in progress with a comment, cuts the slot's
 branch `<agent>/<issue>-<slug>`, picks the account and dispatches a short signed brief: a
 pointer to the standing contract (`round.brief`, else `skills/references/worker-contract.md`), the
@@ -220,6 +230,12 @@ issue to read and dispute, the item's `## Out of scope` section when it has one,
   assigns it again for a deliberate redo.
 - **Failure.** A failure before dispatch undoes the claim and state; one at or after dispatch keeps
   them, and repeating the call resumes.
+- **Smoke section.** When the issue's text asks for a smoke section (it says "smoke section" or names
+  `test/sections`) and the project has a `test/sections` directory, assign reserves the next free
+  section number for that worker and names it in the brief ("Your smoke section ... is number N").
+  Free means above every number on the base, on every open PR branch, on every in-flight slot
+  branch and in every other reservation not yet pushed. Two workers in one round never pick the
+  same number. A resumed assign keeps the slot's number.
 
 ## Waiting on workers
 
@@ -377,10 +393,32 @@ only channel, because there is no host to notify.
 
 ## Merge approval
 
+Before a worker opens its PR it runs `rota worker done <slot>`. When `test.fast` is set, the verb
+refuses (exit 4) unless the slot's item has a PASS proof row for it at the branch's current HEAD,
+recorded with `rota proof record <ID> -- rota test run fast`. A later commit makes the row stale, so
+the worker records again. With `test.fast` unset it warns and skips that check. On success the slot is
+marked `done`.
+
 `rota worker gate <slot> --base <branch>` is the one merge path in a round. It checks the branch is
 fresh, the PR is the worker's, provenance holds and the PR body closes the slot's issue
 (`Closes #N`, unless the issue is labelled `partial-slice`), then re-runs
 `test.full` on the merged tree, then `test.e2e` when set, and merges on a pass.
+
+The gate refuses before it merges anything (exit 4, nothing lands) in these cases:
+
+- **A recorded FAIL verdict** on the slot's branch (`blockedBy: verdict`, verdict `verdict-blocked`). A newer
+  PASS of the same kind clears it.
+- **No `Closes #N`** in the PR body (`blockedBy: closes`), unless the issue is labelled `partial-slice`.
+- **An unpicked best-of attempt** (`blockedBy: best-of-unpicked`).
+- **Nothing to verify with.** When `test.full` and `test.e2e` are both empty and `test.fullWhere` is
+  `local`, the gate would merge a tree no command checked, so it stops (`blockedBy: no-verify`). Set
+  one with `rota config set test.full <command>`, or pass `--no-verify` to merge unverified on purpose.
+  The train takes the same flag.
+
+One thing to know about a local gate: it merges first, then runs `test.full` on the merged base. If
+that fails (`verify-failed`), the merge has already landed. Fix forward on the base with a new PR; the
+worker's slot has usually moved on. With `test.fullWhere` set to `ci` the order flips: CI checks the
+merged tree first and nothing lands when it fails.
 
 A branch that is only behind the base is merged as is when the merge is clean, even when both sides
 changed a file: the `STALE-MERGE` note names the shared files (`round.sharedPaths` aside) and the gate
@@ -412,6 +450,14 @@ breaks the tree as the `culprit` (the verdict is `verify-failed`). That can be a
 Nothing lands unless you pass `--land-green`, which lands the verified members before the culprit. A
 member that conflicts with the base plus the ones before it is `merge-failed` with that member named.
 One merge approval covers the whole train. Bounces are not counted.
+
+The train remembers what it has verified. Each passing `test.full` or `test.e2e` run is recorded in
+`.rota/train-cache.json` (per developer, gitignored) under the tier, the base commit and the ordered
+member heads. A re-run of the same train, or a bisect step that repeats a combination, reuses the pass
+instead of paying for it again. A moved base or a pushed head misses the cache. Only passes are
+cached: a red can come from the machine (a killed compiler, a load flake), so a failure always
+re-verifies. The same file notes a member named as culprit at its current head, so a later train that
+passes with that head clears the blame.
 
 Whether a human also has to say yes is `ship.mergeApproval`:
 

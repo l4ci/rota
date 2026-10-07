@@ -4,7 +4,7 @@ All settings live in [`.rota/config.json`](../reference/rota-folder.md). Run `ro
 
 For the allowed values and option labels of each key, see [Configuration options](../reference/config-options.md).
 
-Default config:
+Default config (what `rota init --no-blocks` writes in a fresh repo):
 
 ```json
 {
@@ -14,29 +14,60 @@ Default config:
   },
   "work": {
     "isolation": "branch",
-    "mergeStrategy": "direct"
+    "mergeStrategy": "direct",
+    "dispatch": "subagent",
+    "workerSlots": 3,
+    "workerCommand": "",
+    "accounts": [],
+    "operatorCommand": ""
   },
   "refactor": {
     "confirmBeforeExecute": true
   },
   "learn": {
-    "verify": false
+    "verify": false,
+    "promoteThreshold": 3
   },
   "ship": {
-    "review": true
+    "review": true,
+    "secondOpinion": false,
+    "secondOpinionRunner": "subagent",
+    "qa": false
+  },
+  "qa": {
+    "gate": "advisory",
+    "afterWork": false
   },
   "autonomy": {
     "level": "off"
   },
   "docs": {
     "path": "docs",
-    "autoCreate": false
+    "autoCreate": false,
+    "afterWork": false
   },
   "git": {
     "baseBranch": ""
   },
+  "umbrella": {
+    "enabled": false
+  },
+  "issues": {
+    "providers": {
+      "github": true,
+      "gitlab": true
+    },
+    "label": "in-progress",
+    "autoCreateLabel": true,
+    "filterMineOnly": false
+  },
   "rota": {
     "version": ""
+  },
+  "test": {
+    "fast": [],
+    "full": [],
+    "e2e": []
   }
 }
 ```
@@ -348,7 +379,7 @@ A custom `work.workerCommand` receives the tier's model only through a `{model}`
 
 ## roles keys and rota agents write
 
-`rota agents write` emits one subagent definition per tier role, so a worker can hand work to a subagent by name instead of by model. The roles are fixed: `explorer` (light tier: reading, searching), `implementer` (standard: code and tests) and `reasoner` (heavy: design, hard debugging). All keys are silent defaults; `rota init` does not write them.
+`rota agents write` emits one subagent definition per tier role, so a worker can hand work to a subagent by name instead of by model. The roles are fixed: `explorer` (light tier: reading, searching), `implementer` (standard: code and tests) and `reasoner` (heavy: design, hard debugging). All keys are silent defaults; `rota init` does not write them. It does run `rota agents write` itself (best effort, skipped with `--no-blocks`), so the agent files exist after init.
 
 | Key | Default | Meaning |
 |-----|---------|---------|
