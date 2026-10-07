@@ -67,6 +67,7 @@ Before acting on work that touches a topic listed in `## Project Knowledge`, `##
 Hard boundaries live in `.rota/DECISIONS.md`. Consult them before acting on work that touches these topics:
 
 - Architecture
+- Rounds: Orchestration
 
 <!-- rota-decisions-end -->
 
