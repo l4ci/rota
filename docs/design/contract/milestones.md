@@ -129,6 +129,14 @@ note: the only way to mark an acceptance criterion met. The mark goes in the ite
 note: `<key>` names the item (`M01-B07` is B07; `#7` and `B7` also work); the issue backend is required because item notes live there. A body captured without ids is numbered (`AC-1`, `AC-2`, … in order, existing ids kept) in the same call, after the proof check passes. `rota item create` numbers new bodies on the issue backend.
 note: the `acceptance` note kind is reserved: `rota item note show` reads it, `rota item note add` and `rm` exit 2.
 
+### rota plan check
+rota plan check <key>
+repo: none
+data: {"key": string, "ok": bool, "criteria": [string], "uncovered": [string], "orphans": [string], "unknown": [{"task": string, "ids": [string]}], "noVerify": [string]}
+exit: 0 when `ok`; 1 when any list is non-empty, and under the file backend (data `{"blockedBy": "backend", "changed": false}`); 2 when <key> is malformed or a slice key; 3 when the plan or item doesn't exist; tracker
+old: none (new)
+note: read-only; never writes and never exits 4. Holds the plan's Tasks against the item's `## Acceptance` ids (a body without ids is read as `rota plan pass` would number it). A task is a top-level `- **T<n>**` bullet; its `Serves: AC-1, AC-2` sub-bullet names the criteria it delivers and its `Verify:` sub-bullet (inline text or nested bullets, not a `_(placeholder)_`) the check. `uncovered`: criteria no task serves; `orphans`: tasks with no `Serves:` id; `unknown`: tasks naming an id the item lacks; `noVerify`: tasks without a Verify step. `<key>` resolves as for `plan pass`. `/rota-work` runs it before dispatch and stops on exit 1.
+
 ### rota plan validate-docs
 rota plan validate-docs <key>
 repo: none
