@@ -4,7 +4,7 @@ This page lists every config key with its allowed values. The options below are 
 
 There is no config UI beyond the terminal prompts of `rota setup`. Three verbs cover it:
 
-- **`rota setup`** runs `rota init`, then asks the main choices on a terminal (backlog backend, tracker, isolation, merge strategy, dispatch, autonomy, review, QA). `--yes` takes the defaults; `--list` prints the questions.
+- **`rota setup`** runs `rota init`, then asks the main choices on a terminal (backlog backend, tracker, isolation, merge strategy, dispatch, autonomy, review, QA), then two optional ones: the worker harness (`round.workerKind`) and the orchestrator harness (`orchestrator.harness`). Skip either and the key stays unset. `--yes` takes the defaults; `--list` prints the questions.
 - **`rota init`** writes `.rota/config.json` on first setup, fills any missing keys with the Recommended defaults on later runs, and stamps `rota.version`. It never overwrites a value you set.
 - **`rota config show`** and **`rota config set`** read and change keys later.
 
@@ -20,7 +20,7 @@ The "(Recommended)" tag on each option marks the default `rota init` writes.
 | `rota config show <key>` | Prints one key. |
 | `rota config set <key> <value>` | Writes `.rota/config.json` (never `.rota/config.local.json`) and prints `key = value`. |
 
-Values for list and object keys are JSON (`rota config set work.accounts '[...]'`). A key outside the schema exits 2 and nothing is written. The value is not checked against the allowed values on write; `rota config check` only flags retired values such as `autonomy.level: "loop"`.
+Values for list and object keys are JSON (`rota config set work.accounts '[...]'`). A key outside the schema exits 2 and nothing is written. The value is not checked against the allowed values on write; `rota config check` only flags a missing key, retired values such as `autonomy.level: "loop"`, and a legacy `refactor.verifyCommands` that still holds commands while `test.full` is empty.
 
 ## Q1: Models
 
@@ -129,7 +129,7 @@ Free text. Default: `""` (auto-detect). Key `git.baseBranch`.
 ## Validation rules
 
 - **`rota config set`** checks only that the key is in the schema. It accepts any value (JSON when it parses, else the string) and checks no enum or range.
-- **Enums without a reader check.** `models.*` (`opus`, `sonnet` or `haiku`), `work.isolation` (`branch` or `worktree`), `work.mergeStrategy` (`direct` or `pr`) and `autonomy.level` (`off` or `auto`) are not validated by any verb. The skills and the launch command read them as plain strings, so a bad value surfaces as that skill's or the model's failure. `rota config check` only reports a missing key or the removed `autonomy.level` `"loop"`.
+- **Enums without a reader check.** `models.*` (`opus`, `sonnet` or `haiku`), `work.isolation` (`branch` or `worktree`), `work.mergeStrategy` (`direct` or `pr`) and `autonomy.level` (`off` or `auto`) are not validated by any verb. The skills and the launch command read them as plain strings, so a bad value surfaces as that skill's or the model's failure. `rota config check` only reports a missing key, the removed `autonomy.level` `"loop"`, or a `refactor.verifyCommands` that still holds commands `test.full` lacks (run `rota config fill` to move them).
 - **Checked where a verb reads them.** A bad value exits 70 (`rota round` verbs for the `round.*` keys, `rota keepalive` and `rota limit` for the `orchestrator.*` keepalive and switch keys and the `limits.*` keys, and any verb that reads `backlog.backend`). The checks are these: booleans take `true` or `false`; integers must be in the minimum-to-maximum range stated for the key below; `round.scope` and `limits.mode` take their listed enums; `round.roster` entries are unique lowercase names. `ship.mergeApproval` is also checked at read time, but a bad value there exits 2.
 
 ## Silent-default keys
@@ -177,6 +177,12 @@ Free text. Default: `""` (auto-detect). Key `git.baseBranch`.
 - `issues.retryWaitSeconds`: seconds to wait before the single retry after a primary rate limit. Integer; silent default `60`.
 - `issues.bulkPaceMs`: milliseconds `rota migrate issues` waits between tracker writes, to stay under GitHub's secondary rate limits. Integer; silent default `1000`. Set `0` in tests.
 - `issues.homeRepo`: umbrella mode with `backlog.backend: "issues"` only. Name of the registered sub-repo that holds milestone tracking issues. String; silent default `""` (the first registered sub-repo).
+- `issues.autoCreateLabel`: create a tracker label the first time something asks for it. Boolean; silent default `true`. With `false`, adding a label that does not exist fails (`rota issues label`, the backlog writes).
+- `issues.filterMineOnly`: boolean; silent default `false`. `rota init` seeds it, but no current verb or skill reads it.
+- `issues.providers.github` / `issues.providers.gitlab`: booleans; silent default `true`. `rota init` seeds them, but no current verb or skill reads them; use `issues.provider` to pick the tracker.
 - `issues.labels.*`: tracker label names per role. Defaults: `inProgress` `in-progress`, `needsReview` `needs-review`, `changesRequested` `changes-requested`, `released` `released`, `notPlanned` `not-planned`, `blocked` `blocked`, `needsHuman` `needs-human` (set by `rota round transfer --to human`, skipped by `rota round candidates`; silent default), `milestoneTracker` `milestone-tracker`, `types.bug` `type:bug`, `types.feature` `type:feature`, `types.task` `type:task`, `priorityPrefix` `p`, `sizePrefix` `size:` (feature size labels such as `size:Major`). `issues.label` is the legacy alias of `issues.labels.inProgress` and is used when the new key is unset.
+- `release.checklistPath`: path to the project's release checklist, which `/rota-release` walks before it tags. String; silent default `.rota/RELEASE.md`. If the file is missing, the skill offers to scaffold one (autonomy `off`) or skips the step (`auto`).
+- `release.confirmLargePushCommits`: how many unpushed commits `/rota-release` pushes without asking, under `autonomy.level: "auto"`. At or above it, the skill asks once anyway. Integer; silent default `10`.
+- `release.nudgeAfterCommits` / `release.nudgeAfterDays`: how many commits or days since the last release tag before `rota release pending` sets `shouldNudge`, and the skills print a one-line "consider `/rota-release`". Integers; silent defaults `10` and `14`. Informational only.
 
 For the full per-key behavior (defaults, value semantics, and how each setting affects skill execution), see [`usage/configuration.md`](../usage/configuration.md).
