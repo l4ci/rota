@@ -1,14 +1,18 @@
 package cli
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/l4ci/rota/internal/host"
+	"github.com/l4ci/rota/internal/layout"
 	"github.com/l4ci/rota/internal/palette"
+	"github.com/l4ci/rota/internal/tui"
 	"github.com/l4ci/rota/internal/version"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -19,34 +23,124 @@ import (
 // would, in-process, so their output is the verb's own.
 
 // paletteVerb is an entry that runs one rota verb and returns to the palette.
-func paletteVerb(c *Ctx, label, hint string, scope palette.Scope, verb ...string) palette.Entry {
-	return palette.Entry{Label: label, Hint: hint, Scope: scope, Run: func() error {
+// A verb with a --ui view opens it inside the palette instead: nothing here
+// names a screen, the entry follows the verb's own Command.View.
+func paletteVerb(c *Ctx, root *Command, label, hint string, scope palette.Scope, verb ...string) palette.Entry {
+	e := palette.Entry{Label: label, Hint: hint, Scope: scope, Run: func() error {
 		run(Tree(), c.deps(), verb, c.Stdin, c.Stdout, c.Stderr)
 		return nil
 	}}
+	if cmd := findVerb(root, verb); cmd != nil && cmd.View != nil {
+		e.View = func() (tui.Model, error) { return paletteView(c, root, verb) }
+	}
+	return e
+}
+
+// findVerb is the command at a verb path, nil when there is none.
+func findVerb(root *Command, verb []string) *Command {
+	cmd := root
+	for _, w := range verb {
+		if cmd = cmd.sub(w); cmd == nil {
+			return nil
+		}
+	}
+	return cmd
+}
+
+// paletteView runs `<verb> --ui` in-process and keeps the screen instead of
+// running it: the palette hosts the model, so the verb's own checks (terminal,
+// --json) and its View are the ones a typed --ui would hit.
+func paletteView(c *Ctx, root *Command, verb []string) (tui.Model, error) {
+	var m tui.Model
+	d := *c.deps()
+	d.RunView = func(_ *Ctx, built tui.Model) error { m = built; return nil }
+	var out, errb bytes.Buffer
+	run(root, &d, append(append([]string(nil), verb...), "--ui"), c.Stdin, &out, &errb)
+	if m == nil {
+		msg := strings.TrimSpace(errb.String())
+		if msg == "" {
+			msg = strings.TrimSpace(out.String())
+		}
+		if msg == "" {
+			msg = "no view"
+		}
+		return nil, errors.New(firstLine(msg))
+	}
+	return m, nil
+}
+
+// layoutToggle is the one "View: split ⇄ tabs" entry. It exists only while a
+// herdr round has panes, since `rota layout` has nothing to move under tmux or
+// without a round. The label marks the layout in force, read from the round
+// registry each time, so it follows the switch it just made.
+func layoutToggle(c *Ctx) (palette.Entry, bool) {
+	root, err := c.Root()
+	if err != nil {
+		return palette.Entry{}, false
+	}
+	state := func() (cur string, live bool) {
+		reg := worker.LoadRegistry(root)
+		cur = layout.Tabs
+		if reg.Layout() == layout.Split {
+			cur = layout.Split
+		}
+		return cur, reg.Host() == "herdr" && hasHandle(reg)
+	}
+	if _, live := state(); !live {
+		return palette.Entry{}, false
+	}
+	other := func(cur string) string {
+		if cur == layout.Split {
+			return layout.Tabs
+		}
+		return layout.Split
+	}
+	return palette.Entry{
+		Label: "View: split ⇄ tabs", Scope: palette.InProject,
+		Dynamic: func() (string, string) {
+			cur, _ := state()
+			label := "View: [split] ⇄ tabs"
+			if cur == layout.Tabs {
+				label = "View: split ⇄ [tabs]"
+			}
+			return label, "enter switches to " + other(cur)
+		},
+		Run: func() error {
+			cur, _ := state()
+			run(Tree(), c.deps(), []string{"layout", other(cur), "--project", root}, c.Stdin, c.Stdout, c.Stderr)
+			return nil
+		},
+	}, true
 }
 
 // paletteEntries is the table; one line per action. out receives the result
 // of the entry that ends the palette (Orchestrate, Setup).
 func paletteEntries(c *Ctx, out *paletteOutcome) []palette.Entry {
-	return []palette.Entry{
+	root := Tree()
+	verb := func(label, hint string, scope palette.Scope, v ...string) palette.Entry {
+		return paletteVerb(c, root, label, hint, scope, v...)
+	}
+	entries := []palette.Entry{
 		{Label: "Orchestrate", Hint: "start or attach the round", Scope: palette.InProject, Default: true, Ends: true, Run: func() error {
 			out.set(runOrchestrate(c, false))
 			return nil
 		}},
-		paletteVerb(c, "Round status", "slots, PRs, drift", palette.InProject, "round", "status"),
-		paletteVerb(c, "Split view", "workers beside the orchestrator", palette.Always, "layout", "split"),
-		paletteVerb(c, "Tab view", "one tab per worker", palette.Always, "layout", "tabs"),
-		paletteVerb(c, "Doctor", "check git, forge, host and agent", palette.InProject, "doctor"),
-		paletteVerb(c, "Skills update", "refresh the installed skills", palette.Always, "skills", "update"),
-		paletteVerb(c, "Projects", "rota projects on this machine", palette.Always, "projects"),
-		{Label: "Setup", Hint: "init this directory", Scope: palette.NoProject, Default: true, Ends: true, Run: func() error {
+		verb("Round status", "slots, PRs, drift", palette.InProject, "round", "status"),
+	}
+	if e, ok := layoutToggle(c); ok {
+		entries = append(entries, e)
+	}
+	return append(entries,
+		verb("Doctor", "check git, forge, host and agent", palette.InProject, "doctor"),
+		verb("Skills update", "refresh the installed skills", palette.Always, "skills", "update"),
+		verb("Projects", "rota projects on this machine", palette.Always, "projects"),
+		palette.Entry{Label: "Setup", Hint: "init this directory", Scope: palette.NoProject, Default: true, Ends: true, Run: func() error {
 			out.set(c.deps().BareSetup(c, nil))
 			return nil
 		}},
-		paletteVerb(c, "Config", "view and change the config", palette.InProject, "config", "edit"),
-		{Label: "Quit", Hint: "q", Quit: true},
-	}
+		verb("Config", "view and change the config", palette.InProject, "config", "show"),
+		palette.Entry{Label: "Quit", Hint: "q", Quit: true},
+	)
 }
 
 // paletteOutcome is the Result of the entry that ended the palette.

@@ -34,6 +34,15 @@ type Entry struct {
 	// session); other entries return to the palette after "press any key".
 	Ends bool
 	Run  func() error
+	// View, when set, opens the entry as a screen inside the palette instead
+	// of running it: the palette shows the model until it quits, then lists
+	// the entries again. Run stays the plain run-and-print path, which the
+	// numbered prompt uses. A View error is shown under the list.
+	View func() (tui.Model, error)
+	// Dynamic, when set, gives the entry's current label and hint. The palette
+	// asks when it opens and again after every run, so a toggle can show the
+	// state it just changed.
+	Dynamic func() (label, hint string)
 }
 
 // Item is an entry in scope with its fixed number: the digit that runs it.
@@ -57,8 +66,22 @@ func New(entries []Entry, inProject bool) State {
 		}
 		items = append(items, Item{N: len(items) + 1, Entry: e})
 	}
-	s := newState(items)
+	s := newState(items).refresh()
 	s.List.Sel = s.defaultSel()
+	return s
+}
+
+// refresh re-reads the label and hint of every Dynamic entry.
+func (s State) refresh() State {
+	items := append([]Item(nil), s.Items...)
+	labels := append([]string(nil), s.List.Items...)
+	for i, it := range items {
+		if it.Dynamic != nil {
+			items[i].Label, items[i].Hint = it.Dynamic()
+			labels[i] = items[i].Label
+		}
+	}
+	s.Items, s.List.Items = items, labels
 	return s
 }
 
