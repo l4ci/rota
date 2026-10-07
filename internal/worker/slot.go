@@ -177,6 +177,24 @@ func (s *Slot) Dispatch(handle, task, kind, now string) {
 	}
 }
 
+// TurnSeq is the host's state-change number read just before the last brief
+// went out (herdr's `state_change_seq`), 0 when none was recorded. A turn the
+// agent finished after it carries a larger `completion_seq`.
+func (s *Slot) TurnSeq() int {
+	v, _ := s.o.Get("turnSeq")
+	n, _ := jsonx.Int(v)
+	return n
+}
+
+// SetTurnSeq records the dispatch baseline; 0 clears it.
+func (s *Slot) SetTurnSeq(n int) {
+	if n <= 0 {
+		s.o.Delete("turnSeq")
+		return
+	}
+	s.o.Set("turnSeq", n)
+}
+
 // SetUnsent marks (or clears) a brief that stalled at the prompt line.
 func (s *Slot) SetUnsent(v bool) {
 	if v {

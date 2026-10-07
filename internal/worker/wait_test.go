@@ -431,14 +431,14 @@ func TestDispatchAndPollClearSeen(t *testing.T) {
 		UpdateSlot(dir, "w1", func(s *Slot) { s.MarkState("done", ""); s.SetSeen(seenKey(StateDone, "x")) })
 	}
 	set()
-	if err := recordDispatch(dir, "w1", "w9:t1", "", "", nil, "now"); err != nil {
+	if err := recordDispatch(dir, "w1", "w9:t1", "", "", nil, 0, "now"); err != nil {
 		t.Fatal(err)
 	}
 	if got := seenField(dir, "w1", "seen"); got != "" {
 		t.Errorf("relay kept seen = %q", got)
 	}
 	set()
-	if err := recordDispatch(dir, "w1", "w9:t1", "#5", "", nil, "now"); err != nil {
+	if err := recordDispatch(dir, "w1", "w9:t1", "#5", "", nil, 0, "now"); err != nil {
 		t.Fatal(err)
 	}
 	if got := seenField(dir, "w1", "seen"); got != "" {

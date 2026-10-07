@@ -466,6 +466,26 @@ func (h *herdr) statusOf(ctx context.Context, name string) string {
 	return jget(r.Stdout, "result.agent.agent_status")
 }
 
+// Turn reads the slot's agent from `agent get`: agent_status, state_change_seq
+// and completion_seq. herdr sets completion_seq only while the agent rests
+// after completed work, so it is 0 while working and after startup; a herdr
+// older than 0.9.3 omits both numbers.
+func (h *herdr) Turn(ctx context.Context, slot, handle string) (Turn, bool) {
+	if handle == "" {
+		return Turn{}, false
+	}
+	r := h.herdr(ctx, "agent", "get", AgentName(slot, handle))
+	if r.ExitCode != 0 {
+		return Turn{}, false
+	}
+	num := func(key string) int {
+		n, _ := strconv.Atoi(jget(r.Stdout, "result.agent."+key))
+		return n
+	}
+	return Turn{Status: jget(r.Stdout, "result.agent.agent_status"),
+		StateSeq: num("state_change_seq"), CompletionSeq: num("completion_seq")}, true
+}
+
 // Kill asks the session to exit, closes its tab, and proves it is gone. It
 // records the pane's process PIDs first (claude plus its MCP children) and
 // fails unless `tab get` fails and every recorded PID has exited. Closed tab

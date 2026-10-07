@@ -188,7 +188,7 @@ func (e Env) Wait(ctx context.Context, root string, o WaitOpts) (WaitResult, err
 		return m
 	}
 	for {
-		rows, settling := e.classify(ctx, h, targets, o.Settle, o.Lines)
+		rows, settling, slept := e.classify(ctx, h, targets, o.Settle, o.Lines)
 		if ctx.Err() != nil {
 			return stop()
 		}
@@ -223,8 +223,13 @@ func (e Env) Wait(ctx context.Context, root string, o WaitOpts) (WaitResult, err
 		}
 		if w == nil || settling {
 			source = SourcePoll
-			if o.Settle <= 0 {
+			// The classification's settle is the poll interval; one that
+			// read only finished turns did not settle, so pause here.
+			switch {
+			case o.Settle <= 0:
 				e.Sleep(time.Second)
+			case !slept:
+				e.Sleep(o.Settle)
 			}
 			continue
 		}

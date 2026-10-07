@@ -97,9 +97,9 @@ func clearHandle(root, slot string) {
 }
 
 // recordDispatch writes the handle, state=busy, activeAt (the stall signal of
-// `round reconcile`) and, for a task, the task id (clearing the previous
-// task's PR and relay log).
-func recordDispatch(root, slot, handle, task, kind string, round *int, now string) error {
+// `round reconcile`), the turn baseline (0 clears it) and, for a task, the
+// task id (clearing the previous task's PR and relay log).
+func recordDispatch(root, slot, handle, task, kind string, round *int, turnSeq int, now string) error {
 	return Update(root, func(d *Doc) {
 		if round != nil {
 			d.SetRound(*round)
@@ -107,6 +107,7 @@ func recordDispatch(root, slot, handle, task, kind string, round *int, now strin
 		for _, s := range d.Slots() {
 			if s.Name() == slot {
 				s.Dispatch(handle, task, kind, now)
+				s.SetTurnSeq(turnSeq)
 			}
 		}
 	})
@@ -288,7 +289,16 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 	}
 	res.Handle = handle
 
-	if err := recordDispatch(root, o.Slot, handle, o.Task, recKind, o.Round, stamp(e.Now())); err != nil {
+	// The turn baseline is read before the brief goes out: a turn finished
+	// after it is numbered past it, however fast the worker answers. 0 (no
+	// numbered host, a failing read) records none.
+	turnSeq := 0
+	if tr, ok := h.(host.TurnReader); ok {
+		if t, ok := tr.Turn(ctx, o.Slot, handle); ok {
+			turnSeq = t.StateSeq
+		}
+	}
+	if err := recordDispatch(root, o.Slot, handle, o.Task, recKind, o.Round, turnSeq, stamp(e.Now())); err != nil {
 		return res, err
 	}
 	if !o.Relay {
