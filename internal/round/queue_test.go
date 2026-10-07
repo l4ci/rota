@@ -398,12 +398,12 @@ func TestReportedIssuesOnAnOrdinaryItemDoNotFreeTheSlot(t *testing.T) {
 	}
 }
 
-func TestOverlapSkipsClosedAndTheTargetSlotsOwnIssue(t *testing.T) {
-	t.Run("target slot's own done issue", func(t *testing.T) {
+func TestOverlapSkipsClosedIssues(t *testing.T) {
+	t.Run("target slot's own open unmerged issue still overlaps", func(t *testing.T) {
 		f := newMoveFx(t)
 		f.finish(t, "ben", pr7)
-		if _, err := f.assign("14", "ben"); err != nil {
-			t.Fatalf("assign parks ben first, so 12 is no overlap: %v", err)
+		if _, err := f.assign("14", "ben"); blockedBy(t, err) != BlockOverlap {
+			t.Fatalf("ben's PR is open, so 12 is still live: %v", err)
 		}
 	})
 	t.Run("closed issue", func(t *testing.T) {

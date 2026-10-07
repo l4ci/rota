@@ -374,14 +374,3 @@ func (e Env) changed(ctx context.Context, wt, base string, shared []string) []st
 	}
 	return out
 }
-
-// withoutSlot drops the items a slot holds from an in-flight list.
-func withoutSlot(in []InFlight, slot string) []InFlight {
-	out := make([]InFlight, 0, len(in))
-	for _, f := range in {
-		if f.Slot != slot {
-			out = append(out, f)
-		}
-	}
-	return out
-}
