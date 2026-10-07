@@ -1,5 +1,5 @@
 ---
-verified-sha: f1beaacac6869db9f1dac68ecb4c1674842266c2
+verified-sha: 3e6f9f8dbaa15ec4713fc22c20884a7c24bc76a4
 refs:
   - internal/version
   - internal/config
@@ -39,7 +39,16 @@ note: `default`, `type`, `group`, `desc` and (enum keys only) `choices` are the 
 old: hv-config-show [<key>] (new `<key>` maps to the old single positional; unchanged).
 shim: parse each stdout line with `^(\S+) = (.*)  \(source: (local|project|default)\)$` into `key`, `value` (JSON-parsed), `source`; old rc 1 with `unknown key` on stderr becomes exit 3, rc 1 with `usage:` becomes exit 2.
 note: old rejected any key outside the schema table. 5.0 accepts a key that is in the schema or present in the merged config, so a hand-edited key stays readable (`config set` itself is schema-only). The shim cannot do this; it fails with exit 3 as before.
+note: `--ui` (global flag) opens the config screen over these entries instead of printing them; it exits 2 off a terminal or with `--json`, and the screen's writes are described under `config edit`.
 note: schema values resolve from the same merged configuration as runtime reads. A local null or non-object parent replaces the project value; an absent or null key after merging uses its schema default and reports `source: default`. Otherwise the source is `local` when that layer supplies the key, or `project`.
+
+### rota config edit
+rota config edit
+repo: scoped
+data: {"changed": [string]}
+exit: 4 when `--json` is given, TERM is `dumb`, or stdin or stdout is not a terminal (hint: `run: rota config set <key> <value>`); 3 when no `.rota/` is found; 70 when a config file holds JSON that is not an object.
+old: none (added in #193; the screen is #542).
+note: opens the config screen, the same one `rota config show --ui` and `rota config --ui` open. Keys are grouped by section, with a detail pane built from `config show`'s `default`, `type`, `group`, `desc` and `choices`. A value is checked by the code `config set` runs (`config.Validate`), so the screen rejects exactly what `config set` rejects. Enter edits the project value (`.rota/config.json`), `l` edits the local override (`.rota/config.local.json`), `r` resets a key: it drops the local override, then restores the schema default for a required key or removes the key for an optional one. Every change is written at once, so quitting loses nothing. `changed` lists the keys written, in order; the text is `changed: <keys>` or `no changes`. The earlier numbered prompt loop is gone, with no fallback: its type check was stricter than `config set`'s.
 
 ### rota config set
 rota config set <key> <value>
