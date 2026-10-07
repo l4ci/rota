@@ -563,7 +563,21 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 	}
 
 	// A transferred worker starts on the default tier unless --tier says higher.
-	kind, tier := harness.Claude, firstNonEmpty(o.Tier, o.Settings.Tier)
+	// The kind resolves as in assign, without --kind: the item's label, else
+	// round.workerKind, else the receiver's recorded kind, else claude.
+	kind, kindSource, tier := harness.Claude, "", firstNonEmpty(o.Tier, o.Settings.Tier)
+	if !toHuman {
+		pick, err := PickOf(be.Capabilities(), *it)
+		if err != nil {
+			return res, err
+		}
+		kind, kindSource = resolveKind("", pick.Harness, o.Settings.WorkerKind, to.Kind())
+		hz, err := worker.Harness(kind)
+		if err != nil {
+			return res, err
+		}
+		kind = hz.Kind()
+	}
 	model := o.Settings.Model(kind, tier)
 
 	// Checks before anything moves: the brief, the receiver's launch, the
@@ -728,7 +742,7 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 		}},
 		step{name: "bind the receiver", skip: moved, do: func() error {
 			err := editSlot(root, o.To, func(s *worker.Slot) error {
-				s.Bind(worker.Binding{Task: id, ClaimID: res.ClaimID, Kind: kind, Tier: tier, Model: model, TierReason: reason})
+				s.Bind(worker.Binding{Task: id, ClaimID: res.ClaimID, Kind: kind, KindSource: kindSource, Tier: tier, Model: model, TierReason: reason})
 				s.SetBranch(branch)
 				return nil
 			})

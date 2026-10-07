@@ -43,6 +43,7 @@ func (s *Slot) Issue() string { return jsonx.Str(s.o, "issue") }
 func (s *Slot) Task() string       { return jsonx.Str(s.o, "task") }
 func (s *Slot) ClaimID() string    { return jsonx.Str(s.o, "claimId") }
 func (s *Slot) Kind() string       { return jsonx.Str(s.o, "kind") }
+func (s *Slot) KindSource() string { return jsonx.Str(s.o, "kindSource") }
 func (s *Slot) Tier() string       { return jsonx.Str(s.o, "tier") }
 func (s *Slot) Model() string      { return jsonx.Str(s.o, "model") }
 func (s *Slot) TierReason() string { return jsonx.Str(s.o, "tierReason") }
@@ -196,14 +197,14 @@ func (s *Slot) SetAccount(account, configDir string) {
 
 // Binding is what ties a slot to an issue.
 type Binding struct {
-	Task, ClaimID, Kind, Tier, Model, TierReason string
+	Task, ClaimID, Kind, KindSource, Tier, Model, TierReason string
 }
 
 // Bind records the issue the slot works on. Empty optional fields stay unset.
 func (s *Slot) Bind(b Binding) {
 	s.o.Set("task", b.Task)
 	for _, f := range []struct{ k, v string }{
-		{"claimId", b.ClaimID}, {"kind", b.Kind}, {"tier", b.Tier},
+		{"claimId", b.ClaimID}, {"kind", b.Kind}, {"kindSource", b.KindSource}, {"tier", b.Tier},
 		{"model", b.Model}, {"tierReason", b.TierReason},
 	} {
 		if f.v == "" {
