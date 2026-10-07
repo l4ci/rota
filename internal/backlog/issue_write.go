@@ -675,6 +675,14 @@ func (b *Issues) applyState(is Issue, want string) (bool, error) {
 // marker and changes no labels; the winner gets the in-progress label and the
 // assignment. An unknown or closed item wraps ErrNotFound.
 func (b *Issues) Claim(ref, claimID string) (won bool, holder string, err error) {
+	return b.ClaimShared(ref, claimID, 1)
+}
+
+// ClaimShared is Claim where claimID wins when it is among the first holders
+// open claims (holders < 1 counts as 1); a best-of:2 issue passes 2. On a loss
+// holder is the earliest open claim.
+func (b *Issues) ClaimShared(ref, claimID string, holders int) (won bool, holder string, err error) {
+	holders = max(holders, 1)
 	tr, err := b.tracker()
 	if err != nil {
 		return false, "", err
@@ -691,7 +699,7 @@ func (b *Issues) Claim(ref, claimID string) (won bool, holder string, err error)
 	if err != nil {
 		return false, "", err
 	}
-	if !(len(held) > 0 && held[0] == claimID) {
+	if !slices.Contains(held[:min(holders, len(held))], claimID) {
 		if _, err := tr.AddComment(b.ctx(), n, marker.Claim(claimID)+"\nClaimed by "+claimID); err != nil {
 			return false, "", err
 		}
@@ -701,7 +709,7 @@ func (b *Issues) Claim(ref, claimID string) (won bool, holder string, err error)
 		if len(held) == 0 {
 			return false, "", errors.New("claim comment not visible after posting")
 		}
-		if held[0] != claimID {
+		if !slices.Contains(held[:min(holders, len(held))], claimID) {
 			if _, err := tr.AddComment(b.ctx(), n, marker.Release(claimID)); err != nil {
 				return false, "", err
 			}
@@ -810,9 +818,10 @@ type Status struct {
 	ID        string // the issue number
 	Type      string // B | F | T
 	Title     string
-	Status    string // open | closed
-	State     string // state labels, comma-joined; "" when none
-	Claim     string // earliest open claim; "" when none
+	Status    string   // open | closed
+	State     string   // state labels, comma-joined; "" when none
+	Claim     string   // earliest open claim; "" when none
+	Claims    []string // every open claim, in claim order; Claim is Claims[0]
 	Assignees []string
 	Milestone string
 	Body      string   // the issue body, fields block included
@@ -859,6 +868,7 @@ func (b *Issues) Status(ref string) (*Status, error) {
 	}
 	if len(held) > 0 {
 		st.Claim = held[0]
+		st.Claims = held
 	}
 	return st, nil
 }

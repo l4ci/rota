@@ -28,9 +28,21 @@ type Workflow interface {
 	NoteRm(ref, kind string) (bool, error)
 }
 
+// SharedClaimer is a backend whose item can hold more than one claim at once:
+// a best-of:2 issue is built by two slots, each with its own claim.
+type SharedClaimer interface {
+	// ClaimShared is Claim where claimID wins when it is among the first
+	// holders open claims (holders < 1 counts as 1). On a loss holder is the
+	// earliest open claim.
+	ClaimShared(ref, claimID string, holders int) (won bool, holder string, err error)
+}
+
 var (
-	_ Workflow = (*File)(nil)
-	_ Workflow = (*Issues)(nil)
+	_ Workflow      = (*File)(nil)
+	_ Workflow      = (*Issues)(nil)
+	_ SharedClaimer = (*File)(nil)
+	_ SharedClaimer = (*Issues)(nil)
+	_ SharedClaimer = (*Umbrella)(nil)
 )
 
 // fileNoteHint names where a file-mode project keeps what issue mode keeps in
@@ -55,6 +67,11 @@ func (f *File) exists(ref string) error {
 // Claim is a no-op in file mode: status.json is the lock. The item must exist.
 func (f *File) Claim(ref, claimID string) (bool, string, error) {
 	return true, claimID, f.exists(ref)
+}
+
+// ClaimShared is a no-op in file mode, like Claim.
+func (f *File) ClaimShared(ref, claimID string, _ int) (bool, string, error) {
+	return f.Claim(ref, claimID)
 }
 
 // Release is a no-op in file mode.

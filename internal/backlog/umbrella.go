@@ -434,6 +434,12 @@ func (u *Umbrella) Claim(ref, claimID string) (ok bool, owner string, err error)
 	return
 }
 
+// ClaimShared takes the item for claimID among the first holders claims.
+func (u *Umbrella) ClaimShared(ref, claimID string, holders int) (ok bool, owner string, err error) {
+	err = u.onOwner(ref, func(s *Issues, plain string) (e error) { ok, owner, e = s.ClaimShared(plain, claimID, holders); return })
+	return
+}
+
 // Release gives the item back.
 func (u *Umbrella) Release(ref, claimID string) (bool, error) {
 	return viaOwner(u, ref, func(s *Issues, plain string) (bool, error) { return s.Release(plain, claimID) })

@@ -658,7 +658,17 @@ func noVerifyRefusal(msg, hint string, d *jsonx.Object) (Result, error) {
 // closesRefusal is the exit-4 envelope for a PR body that does not close the
 // slot's issue: d plus blockedBy closes, nothing landed.
 func closesRefusal(msg, hint string, d *jsonx.Object) (Result, error) {
-	d.Set("blockedBy", "closes")
+	return blockedRefusal("closes", msg, hint, d)
+}
+
+// bestOfRefusal is the exit-4 envelope for an attempt of a best-of:2 issue no
+// pick names: d plus blockedBy best-of-unpicked, nothing landed.
+func bestOfRefusal(msg, hint string, d *jsonx.Object) (Result, error) {
+	return blockedRefusal("best-of-unpicked", msg, hint, d)
+}
+
+func blockedRefusal(blockedBy, msg, hint string, d *jsonx.Object) (Result, error) {
+	d.Set("blockedBy", blockedBy)
 	d.Set("changed", false)
 	return Result{Data: d}, Refused("%s", msg).WithHint(hint)
 }
@@ -707,6 +717,9 @@ func workerGate(fs *flag.FlagSet) RunFunc {
 		}
 		if err == nil && r.Verdict == worker.GateNotClosing {
 			return closesRefusal(r.Err, r.Hint, gateData(r))
+		}
+		if err == nil && r.Verdict == worker.GateBestOfUnpicked {
+			return bestOfRefusal(r.Err, r.Hint, gateData(r))
 		}
 		if err != nil {
 			return Result{}, err

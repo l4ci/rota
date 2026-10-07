@@ -216,10 +216,13 @@ func (r Registry) QueuedIssue(id string) *QueuedPR {
 	return nil
 }
 
-// QueuePR appends a record, replacing one for the same issue so a repeated
-// call does not duplicate it.
+// QueuePR appends a record, replacing one for the same issue and slot so a
+// repeated call does not duplicate it. The two attempts of a best-of:2 issue
+// each keep their own record.
 func (d *Doc) QueuePR(rec QueuedPR) {
-	d.dropQueued(func(q *jsonx.Object) bool { return jsonx.Str(q, "issue") == rec.Issue })
+	d.dropQueued(func(q *jsonx.Object) bool {
+		return jsonx.Str(q, "issue") == rec.Issue && jsonx.Str(q, "from") == rec.From
+	})
 	raw, _ := d.doc.Get("prs")
 	l, _ := raw.([]any)
 	d.doc.Set("prs", append(l, rec.object()))

@@ -39,6 +39,9 @@ func gateBounce(c *Ctx, root, issue string, r worker.GateResult) (n int, parked 
 		if err := worker.ClearItemStart(root, issue); err != nil {
 			return 0, false, err
 		}
+		if err := worker.ClearBestOf(root, issue); err != nil {
+			return 0, false, err
+		}
 		return 0, false, worker.ClearBounces(root, issue)
 	case worker.GateStale, worker.GateProvenanceFail:
 	default:
