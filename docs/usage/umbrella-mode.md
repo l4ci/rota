@@ -2,13 +2,14 @@
 
 Umbrella mode lets one rota setup span several independent git repositories that sit side by side under one parent folder. Knowledge, decisions, vision, and the backlog live once at the umbrella; each sub-repo keeps its own history, branches, and remotes.
 
-If you're in single-repo mode, skip this page. Single-repo behavior is unchanged.
+> [!NOTE]
+> If you're in single-repo mode, skip this page. Single-repo behavior is unchanged.
 
-## When to use it
+## 🎯 When to use it
 
 Turn on umbrella mode when you maintain a handful of related repositories (say `~/projects/myorg/` with `web/`, `api/`, and `shared/`) and want one shared `KNOWLEDGE.md`, `DECISIONS.md`, `MILESTONES.md`, and backlog instead of forking them into N copies. The typical signal: "I keep cross-pasting the same gotcha into three repos' notes."
 
-## When NOT to use it
+## 🚫 When NOT to use it
 
 - **Single-repo project.** Don't enable. The single-repo path is simpler and faster.
 - **Monorepo.** Don't enable. A monorepo is one git repo; umbrella mode is for *multiple* repos under a parent.
@@ -156,7 +157,7 @@ The `--repo <name>` flag is also exposed on the underlying verbs when you call t
 - **Never add a sub-repo as a git submodule of the umbrella.** Sub-repos must remain independent. See `.rota/DECISIONS.md` (Architecture).
 - **Symlinked sub-repo paths work,** because `rota` resolves each registry entry with `realpath` at lookup time.
 
-## See also
+## 🔗 See also
 
 - `.rota/DECISIONS.md` (Architecture, "Umbrella mode does not use git submodules")
 - [The `.rota/` folder](../reference/rota-folder.md): what `rota init` writes

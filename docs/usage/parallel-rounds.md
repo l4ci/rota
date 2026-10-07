@@ -30,7 +30,7 @@ well-specified issues that don't touch the same files and you want them merged w
 each one. If you run several `/rota-work` sessions by hand today, see [parallel work](parallel-work.md);
 a round is the same idea with the assignment, waiting and merging done by verbs.
 
-## Setup
+## 🔧 Setup
 
 1. **A host** for the workers' tabs: herdr (pinned to 0.9.x) or tmux. Leave
    `work.dispatch` at the default `rota init` writes (`subagent`) and `rota round start` detects the
@@ -554,7 +554,7 @@ in `<!-- rota:handoff <slot>@<round> -->`.
 drift between the registry, the host, git and the forge, including `stalled` (never repaired),
 `lease-stale` and `claim-mismatch`; `--apply` makes the safe repairs, and never edits the tracker.
 
-## Winding down
+## 🏁 Winding down
 
 ```sh
 rota round wind-down                # verify the base, park every slot, release the lease
@@ -609,7 +609,7 @@ minutes (`BASH_DEFAULT_TIMEOUT_MS`) and is capped at 10 minutes (`BASH_MAX_TIMEO
   pass a matching `timeout` on the Bash call; or
 - loop on a finite `rota round wait --timeout` shorter than the cap.
 
-## See also
+## 🔗 See also
 
 - [Unattended rounds](unattended-rounds.md): hooks, keepalive, usage limits and account switching.
 - [Doctor and reap](doctor-and-reap.md): the preflight checks and what cleanup removes.

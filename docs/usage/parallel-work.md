@@ -8,7 +8,7 @@ If you'd rather have one orchestrator assign issues to standing workers, wait on
 PRs, that is a [parallel round](parallel-rounds.md). Use this page for two or three sessions you are
 watching; use a round for a queue.
 
-## When to use this
+## 🎯 When to use this
 
 - Long-running cycles you don't want to block on while other work proceeds.
 - Independent feature tracks that shouldn't share a branch.
@@ -63,6 +63,7 @@ git state. For more on how `/rota-work` (no argument) reads and updates status, 
 
 ## Caveats
 
-Don't run `rota init` or `rota config set` from inside a worktree. Those write to
-`.rota/` and must run in the main worktree. `/rota-work` runs, with or without an argument, are fine
-in either place.
+> [!IMPORTANT]
+> Don't run `rota init` or `rota config set` from inside a worktree. Those write to
+> `.rota/` and must run in the main worktree. `/rota-work` runs, with or without an argument, are fine
+> in either place.

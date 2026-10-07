@@ -58,13 +58,13 @@ Triggered by `/rota-ship` when `ship.qa: true`. Runs after `/rota-review` and th
 | `"advisory"` (default) | continue silently | surface findings, continue | surface findings, continue (advisory means advisory) |
 | `"blocking"` | continue silently | surface, ask you how to proceed | stop; user fixes via `/rota-work` or `/rota-debug` and reruns `/rota-ship` |
 
-## When to use
+## 🎯 When to use
 
 - *"QA this"*, *"kick the tires"*, *"does this actually work?"*: manual exploratory run after a feature lands.
 - Before opening a PR when you want product-level evidence, not just diff sanity.
 - First-time setup on a new repo or umbrella sub-repo: bootstrap the strategy file once via `first-run`.
 
-## When NOT to use
+## 🚫 When NOT to use
 
 - Diff-level review → `/rota-review`. `/rota-qa` does not read commits.
 - Nothing built yet → finish via `/rota-work` first. QA needs an artifact to probe.
@@ -80,7 +80,7 @@ Triggered by `/rota-ship` when `ship.qa: true`. Runs after `/rota-review` and th
 
 See [configuration](configuration.md#shipqa) for the full block.
 
-## See also
+## 🔗 See also
 
 - [Review and ship](review-and-ship.md): diff-level review and the `/rota-ship` flow that calls `/rota-qa`
 - [Configuration](configuration.md): full key reference

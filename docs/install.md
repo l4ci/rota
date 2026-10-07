@@ -67,7 +67,7 @@ If both exist, Claude Code uses the user copy of a skill over the project copy w
 
 User scope is per Claude Code config directory: rota writes to `$CLAUDE_CONFIG_DIR/skills` when that is set, else `~/.claude/skills`. Inside a rota project, user scope also covers every `work.accounts` `configDir` (install, update, uninstall and status each print one line per root). A configured dir that does not exist is reported and skipped, not created. Pass `--current-account` to touch only the current dir. Project scope is unchanged: one copy serves every account.
 
-## Upgrading
+## 🔧 Upgrading
 
 ```bash
 rota update
@@ -80,7 +80,7 @@ rota update
 
 `rota skills update` refreshes every skill root that has a manifest. In a project, `rota version --drift` compares the version stamped in `.rota/` with the binary.
 
-## Uninstalling
+## 🔧 Uninstalling
 
 ```bash
 rota skills uninstall    # removes what rota installed

@@ -2,7 +2,7 @@
 
 A spike is a throwaway feasibility experiment. `/rota-spike` creates a dedicated git branch and a question record in `.rota/spikes/<name>.md`. The branch never merges. Only the findings come back.
 
-## When to spike
+## 🎯 When to spike
 
 Use a spike when a milestone hinges on a question you cannot answer from the chair:
 
