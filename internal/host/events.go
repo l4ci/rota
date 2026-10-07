@@ -21,6 +21,11 @@ var SupportedHerdr = "0.9"
 // ErrUnsupportedHerdr: the installed herdr is not a SupportedHerdr release.
 var ErrUnsupportedHerdr = errors.New("unsupported herdr version")
 
+// ErrStreamLost: the event stream ended without the caller asking (herdr sent
+// `events_lost`, closed the socket, or restarted). herdr replays nothing, so
+// the caller re-subscribes and re-reads current state.
+var ErrStreamLost = errors.New("herdr event stream lost")
+
 // WatchTarget is one slot a Watcher wakes for.
 type WatchTarget struct{ Slot, Handle string }
 
@@ -36,7 +41,8 @@ type Watcher interface {
 // Watch is a live subscription.
 type Watch interface {
 	// Next blocks until a watched slot's agent status changes and returns the
-	// slot. It fails when ctx ends or the host's event stream closes.
+	// slot. It fails when ctx ends, or with ErrStreamLost when the host's
+	// event stream ends.
 	Next(ctx context.Context) (slot string, err error)
 	Close()
 }
@@ -185,6 +191,10 @@ func (w *herdrWatch) read() {
 		if json.Unmarshal(sc.Bytes(), &f) != nil {
 			continue
 		}
+		if f.Event == "events_lost" || (f.Error != nil && f.Error.Code == "events_lost") {
+			send(watchMsg{err: fmt.Errorf("%w: events_lost", ErrStreamLost)})
+			return
+		}
 		if f.Error != nil {
 			send(watchMsg{err: fmt.Errorf("herdr %s: %s", f.Error.Code, f.Error.Message)})
 			return
@@ -211,7 +221,7 @@ func (w *herdrWatch) read() {
 	if err == nil {
 		err = errors.New("herdr closed the event stream")
 	}
-	send(watchMsg{err: err})
+	send(watchMsg{err: fmt.Errorf("%w: %v", ErrStreamLost, err)})
 }
 
 func (w *herdrWatch) Next(ctx context.Context) (string, error) {
