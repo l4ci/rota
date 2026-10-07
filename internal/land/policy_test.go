@@ -8,8 +8,8 @@ func TestPolicy(t *testing.T) {
 	want := map[string][]Gate{
 		"ship.MergeBranch":     {GateVerdict, GateApproval},
 		"backlog.MergePRGated": {GateVerdict, GateApproval, GateProof},
-		"worker.Gate":          {GateFreshness, GateProvenance, GateApproval},
-		"worker.Train":         {GateFreshness, GateProvenance, GateApproval},
+		"worker.Gate":          {GateFreshness, GateProvenance, GateVerdict, GateApproval},
+		"worker.Train":         {GateFreshness, GateProvenance, GateVerdict, GateApproval},
 	}
 	if len(Policy) != len(want) {
 		t.Fatalf("Policy has %d paths, want %d", len(Policy), len(want))
@@ -52,7 +52,9 @@ func TestPolicyInvariants(t *testing.T) {
 			}
 		}
 	}
-	if Enforces("worker.Gate", GateVerdict) || Enforces("worker.Train", GateVerdict) {
-		t.Error("worker paths gained a verdict gate: update the Policy note and the docs")
+	for _, p := range Policy {
+		if !Enforces(p.Name, GateVerdict) {
+			t.Errorf("%s has no verdict gate", p.Name)
+		}
 	}
 }

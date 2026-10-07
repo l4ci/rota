@@ -24,12 +24,10 @@ type MergePath struct {
 // TestPolicy keeps it honest. Changing a path's gates means changing this
 // table and its caller together.
 //
-// Worker paths enforce no verdict gate. Verdicts (`rota verdict add`) are
-// recorded by /rota-review, /rota-ship and /rota-qa against a branch, and only
-// the ship paths read them. A worker PR is held to the orchestrator's review
-// before `rota worker gate` runs, so a recorded FAIL is not re-checked there.
-// That is the current behaviour; whether worker merges should honour verdicts
-// is a separate decision (raised in the PR for #415).
+// Every path enforces the verdict gate: verdicts (`rota verdict add`) are
+// recorded by /rota-review, /rota-ship and /rota-qa against a branch, and the
+// ship and worker paths all refuse a branch with a recorded FAIL (exit 4,
+// blockedBy verdict).
 var Policy = []MergePath{
 	{
 		Name:  "ship.MergeBranch",
@@ -43,13 +41,13 @@ var Policy = []MergePath{
 	},
 	{
 		Name:  "worker.Gate",
-		Gates: []Gate{GateFreshness, GateProvenance, GateApproval},
+		Gates: []Gate{GateFreshness, GateProvenance, GateVerdict, GateApproval},
 		Note:  "`rota worker gate`: then CI/full verify and land; verification is not a policy gate",
 	},
 	{
 		Name:  "worker.Train",
-		Gates: []Gate{GateFreshness, GateProvenance, GateApproval},
-		Note:  "`rota worker train`: freshness and provenance per member (check-only gate), one approval for the union",
+		Gates: []Gate{GateFreshness, GateProvenance, GateVerdict, GateApproval},
+		Note:  "`rota worker train`: freshness, provenance and verdict per member (check-only gate), one approval for the union",
 	},
 }
 

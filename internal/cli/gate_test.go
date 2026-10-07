@@ -495,3 +495,44 @@ func TestGateList(t *testing.T) {
 		t.Errorf("skill-only gate %+v (verbs must be [], not null)", last)
 	}
 }
+
+// A recorded FAIL verdict on the slot's branch refuses `worker gate` and
+// `worker train` with exit 4, blockedBy verdict, the way the ship paths do; a
+// PASS or an absent record leaves them alone.
+func TestWorkerGateAndTrainRefuseFailVerdict(t *testing.T) {
+	dir := workerProject(t, `{"test":{"full":["test -f feature.txt"]}}`)
+	rotaIn(t, dir, "worker", "pool", "init", "--slots", "1", "--base", "main")
+	wt := filepath.Join(dir, ".worktrees", "w1")
+	write(t, filepath.Join(wt, "feature.txt"), "f")
+	gitT(t, wt, "add", "feature.txt")
+	gitT(t, wt, "commit", "-q", "-m", "feature")
+	branch := strings.TrimSpace(gitT(t, wt, "rev-parse", "--abbrev-ref", "HEAD"))
+	merged := func() bool { _, err := os.Stat(filepath.Join(dir, "feature.txt")); return err == nil }
+
+	if code, _, _ := rotaIn(t, dir, "verdict", "add", branch, "--kind", "review-spec", "--verdict", "FAIL"); code != 0 {
+		t.Fatalf("verdict add: %d", code)
+	}
+	for _, args := range [][]string{
+		{"worker", "gate", "w1", "--base", "main"},
+		{"worker", "gate", "w1", "--base", "main", "--check-only"},
+		{"worker", "train", "w1", "--base", "main"},
+	} {
+		code, out, _ := rotaIn(t, dir, append([]string{"--json"}, args...)...)
+		d := data(t, out)
+		if code != 4 || d["blockedBy"] != "verdict" || d["verdict"] != "verdict-blocked" || d["changed"] != false {
+			t.Fatalf("%v: %d %v", args, code, d)
+		}
+		if merged() {
+			t.Fatalf("%v merged a FAIL-verdict branch", args)
+		}
+	}
+
+	// A newer PASS of the same kind clears it.
+	rotaIn(t, dir, "verdict", "add", branch, "--kind", "review-spec", "--verdict", "PASS")
+	if code, out, _ := rotaIn(t, dir, "--json", "worker", "gate", "w1", "--base", "main"); code != 0 {
+		t.Fatalf("after PASS: %d %s", code, out)
+	}
+	if !merged() {
+		t.Error("the PASS-verdict branch did not merge")
+	}
+}
