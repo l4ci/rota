@@ -109,7 +109,7 @@ Under `backlog.backend: "issues"` this key is ignored: `/rota-work`, `/rota-debu
 |------|-------------------|
 | `"subagent"` (default) | `rota round start` detects the host: herdr inside a herdr pane, tmux inside tmux, otherwise solo. |
 | `"tmux"` | One tmux window per worker. Needs a `tmux` binary and a working `claude` on `PATH`. |
-| `"herdr"` | One herdr tab per worker in the orchestrator's workspace; herdr reports each worker's state and notifies when one needs you. The orchestrator must run inside a herdr pane. |
+| `"herdr"` | One herdr tab per worker in the orchestrator's workspace; herdr reports each worker's state, notifies when one needs you, and rota titles each tab `<slot> · <task> · <state>`. The orchestrator must run inside a herdr pane. |
 
 ```bash
 rota config set work.dispatch tmux

@@ -111,6 +111,11 @@ The agent comes from `orchestrator.harness` (`claude`, `codex`, `hermes` or `ope
 [orchestrator harnesses](orchestrator-harnesses.md)). `rota orchestrate --dry-run`
 shows what would start.
 
+On herdr, each worker's sidebar line reads `<slot> · <task> · <state>` (for example `ben · #494 · working`),
+and your workspace carries a `round` token with the round number and slot counts. Both are display-only
+labels under the source `rota`, updated when rota records a state change and cleared when a slot is parked
+or reaped. If herdr rejects one, rota prints a single note and carries on. tmux shows no labels.
+
 The orchestrator then does the steps below. To drive a round by hand instead:
 
 ```sh
