@@ -11,6 +11,7 @@ import (
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/skills"
+	"github.com/l4ci/rota/internal/stalebin"
 )
 
 func fixture(t *testing.T, name string) string {
@@ -571,5 +572,26 @@ func TestHostFollowsSupportedHerdr(t *testing.T) {
 	c := statusOf(Run(context.Background(), in), "host")
 	if c.Status != Fail || !strings.Contains(c.Detail, "need 0.10.x") || !strings.Contains(c.Hint, "0.10.x") {
 		t.Errorf("0.9.3 under pin 0.10: %+v", c)
+	}
+}
+
+func TestBinaryCheck(t *testing.T) {
+	f := &fake{have: map[string]bool{}, reply: map[string]Result{}}
+	find := func(in Input) *Check {
+		in.Exec, in.Look = f.exec, f.look
+		rep := Run(context.Background(), in)
+		for i := range rep.Checks {
+			if rep.Checks[i].Name == "binary" {
+				return &rep.Checks[i]
+			}
+		}
+		return nil
+	}
+	if c := find(Input{}); c != nil {
+		t.Errorf("no finding must add no line: %+v", c)
+	}
+	c := find(Input{StaleBinary: &stalebin.Finding{Commit: "aaaaaaa", Head: "bbbbbbb", Behind: 2, Rebuild: "go build ./cmd/rota"}})
+	if c == nil || c.Status != Warn || !strings.Contains(c.Detail, "aaaaaaa") || !strings.Contains(c.Hint, "go build ./cmd/rota") {
+		t.Errorf("binary check = %+v", c)
 	}
 }

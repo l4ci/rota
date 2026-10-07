@@ -5,16 +5,21 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/doctor"
+	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/legacystate"
 	"github.com/l4ci/rota/internal/proc"
+	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/skills"
+	"github.com/l4ci/rota/internal/stalebin"
 	"github.com/l4ci/rota/internal/version"
 )
 
@@ -61,6 +66,9 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 	in := doctor.Input{Exec: doctorExec(d.Proc), Getenv: os.Getenv, Look: doctorLook(os.Getenv("ROTA_TEST_DOCTOR_PATH"))}
 	in.Dir, _ = os.Getwd()
 	in.Home, _ = os.UserHomeDir()
+	if f, ok := staleBinary(ctx, d.Git, in.Dir); ok {
+		in.StaleBinary = &f
+	}
 	if abs, err := filepath.EvalSymlinks(in.Dir); err == nil {
 		in.LegacyDir, _ = legacystate.LegacyState(abs)
 	} else {
@@ -121,6 +129,12 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 	return in
 }
 
+// staleBinary asks whether the running rota is behind the rota source checkout
+// dir is in; it finds nothing anywhere else.
+func staleBinary(ctx context.Context, run git.Runner, dir string) (stalebin.Finding, bool) {
+	return stalebin.Check(ctx, run, dir, version.Get().Commit)
+}
+
 // doctorSkills reads the skill roots in both scopes; nil when the embedded set
 // or the roots cannot be resolved (the check then skips).
 func doctorSkills(home, root string) *skills.Report {
@@ -177,4 +191,30 @@ func codexHomes(cfg any) []doctor.CodexHome {
 		homes = []doctor.CodexHome{{}}
 	}
 	return homes
+}
+
+func staleData(f stalebin.Finding) *jsonx.Object {
+	return knObj("commit", f.Commit, "head", f.Head, "behind", f.Behind, "rebuild", f.Rebuild)
+}
+
+// staleBinaryOncePerRound is the round heartbeat's copy of doctor's binary
+// warning: it reports the finding the first time it is asked in a round and
+// stays quiet after, so a watch that wakes every ten minutes does not repeat it.
+// The round it last spoke in lives in a state file next to the lease.
+func staleBinaryOncePerRound(c *Ctx, cd string, round int) (stalebin.Finding, bool) {
+	dir, err := os.Getwd()
+	if err != nil {
+		return stalebin.Finding{}, false
+	}
+	f, ok := staleBinary(c.Context(), c.deps().Git, dir)
+	if !ok {
+		return stalebin.Finding{}, false
+	}
+	path := rotastate.File(cd, "stale-binary-round")
+	if b, err := os.ReadFile(path); err == nil && strings.TrimSpace(string(b)) == strconv.Itoa(round) {
+		return stalebin.Finding{}, false
+	}
+	_ = os.MkdirAll(filepath.Dir(path), 0o755)
+	_ = fsio.WriteFileAtomic(path, []byte(strconv.Itoa(round)+"\n"))
+	return f, true
 }
