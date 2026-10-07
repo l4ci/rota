@@ -28,7 +28,7 @@ import (
 // doctorCommand is `rota doctor` (C6): a read-only preflight. It runs without
 // .rota/ and reads the project config only when one is found.
 func doctorCommand() *Command {
-	return &Command{Name: "doctor", Summary: "preflight: git, host, forge, accounts, herdr hook, orchestrator hooks, skills, codex", Verb: noFlags(runDoctor)}
+	return &Command{Name: "doctor", Summary: "preflight: git, host, forge, accounts, herdr hook, orchestrator hooks, skills, codex", Verb: noFlags(runDoctor), View: doctorView}
 }
 
 // doctorCallTimeout bounds each tool call, so a hung herdr cannot hang the verb.

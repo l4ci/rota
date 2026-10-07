@@ -12,7 +12,23 @@ import (
 func decisionsCommands() *Command {
 	return &Command{Name: "decisions", Summary: "read .rota/DECISIONS.md", Subs: []*Command{
 		{Name: "query", Summary: "print topic sections", Verb: noFlags(decQuery)},
+		{Name: "stats", Summary: "bullet count and size per topic", Verb: noFlags(decStats), View: decisionsView},
 	}}
+}
+
+func decStats(c *Ctx, args []string) (Result, error) {
+	if err := knNoArgs(args); err != nil {
+		return Result{}, err
+	}
+	st, _, err := knStore(c)
+	if err != nil {
+		return Result{}, err
+	}
+	stats, err := st.DecisionsStats()
+	if err != nil {
+		return knFail(err)
+	}
+	return statsResult(stats), nil
 }
 
 func decQuery(c *Ctx, args []string) (Result, error) {

@@ -56,7 +56,7 @@ func workerCommands() *Command {
 		{Name: "train", Summary: "verify several PRs merged together once, then land them", Verb: workerTrain},
 		{Name: "reset", Summary: "refuse a slot that holds work, else cut a fresh task branch", Verb: workerReset},
 		{Name: "account", Summary: "per-account usage headroom and slot assignment", Subs: []*Command{
-			{Name: "list", Summary: "list accounts with their usage verdict", Verb: noFlags(runAccountList)},
+			{Name: "list", Summary: "list accounts with their usage verdict", Verb: noFlags(runAccountList), View: accountsView},
 			{Name: "pick", Summary: "name the account with the most headroom", Verb: accountPick},
 			{Name: "assign", Summary: "put an account's config dir on a slot", Verb: accountAssign},
 		}},

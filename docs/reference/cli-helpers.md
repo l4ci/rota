@@ -182,6 +182,7 @@ exit codes and repo scope: [verb contract](../contributing/contract/README.md).
 | Usage | What it does |
 |---|---|
 | `rota decisions query <topic>…` | print topic sections |
+| `rota decisions stats` | bullet count and size per topic |
 
 ## `rota glossary`
 
