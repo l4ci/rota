@@ -24,6 +24,7 @@ import (
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/roundwatch"
+	"github.com/l4ci/rota/internal/skills"
 	"github.com/l4ci/rota/internal/status"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -360,12 +361,8 @@ func hookSessionStart(c *Ctx, args []string) (res Result, _ error) {
 // settingsPaths maps each scope to its file. Project scopes are "" outside a
 // project root.
 func settingsPaths(root string) map[hook.Scope]string {
-	cfgDir := os.Getenv("CLAUDE_CONFIG_DIR")
-	if cfgDir == "" {
-		if home, err := os.UserHomeDir(); err == nil {
-			cfgDir = filepath.Join(home, ".claude")
-		}
-	}
+	home, _ := os.UserHomeDir()
+	cfgDir := skills.ClaudeDir(os.Getenv, home)
 	m := map[hook.Scope]string{}
 	if cfgDir != "" {
 		m[hook.ScopeUser] = filepath.Join(cfgDir, "settings.json")

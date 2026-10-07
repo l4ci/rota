@@ -17,6 +17,7 @@ import (
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundlease"
 	secpkg "github.com/l4ci/rota/internal/section"
+	"github.com/l4ci/rota/internal/skills"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -145,16 +146,7 @@ func briefPath(root string, set roundcfg.Settings, getenv func(string) string) (
 	} else {
 		cands = append(cands, filepath.Join(root, "skills", "references", "worker-contract.md"))
 		installed := filepath.Join("rota-orchestrate", "references", "worker-contract.md")
-		skillRoots := []string{filepath.Join(root, ".claude", "skills"), filepath.Join(root, ".agents", "skills")}
-		if d := getenv("CLAUDE_CONFIG_DIR"); d != "" {
-			skillRoots = append(skillRoots, filepath.Join(d, "skills"))
-		} else if home := getenv("HOME"); home != "" {
-			skillRoots = append(skillRoots, filepath.Join(home, ".claude", "skills"))
-		}
-		if home := getenv("HOME"); home != "" {
-			skillRoots = append(skillRoots, filepath.Join(home, ".agents", "skills"))
-		}
-		for _, r := range skillRoots {
+		for _, r := range skills.InstalledRoots(getenv, root) {
 			if _, err := os.Stat(filepath.Join(r, ".rota-manifest.json")); err == nil {
 				cands = append(cands, filepath.Join(r, installed))
 				break
