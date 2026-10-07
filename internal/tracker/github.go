@@ -425,6 +425,26 @@ func (g *GitHub) PRView(ctx context.Context, pr int) (PRInfo, error) {
 	return info, nil
 }
 
+// PRMergeable reads `mergeable` (MERGEABLE, CONFLICTING or UNKNOWN while GitHub
+// computes it); mergeStateStatus names the reason.
+func (g *GitHub) PRMergeable(ctx context.Context, pr int) (Mergeability, error) {
+	var d struct {
+		Mergeable        string `json:"mergeable"`
+		MergeStateStatus string `json:"mergeStateStatus"`
+	}
+	if err := g.json(ctx, []string{"pr", "view", strconv.Itoa(pr), "--json", "mergeable,mergeStateStatus"}, &d); err != nil {
+		return Mergeability{}, err
+	}
+	m := Mergeability{State: MergeUnknown, Reason: d.MergeStateStatus}
+	switch d.Mergeable {
+	case "MERGEABLE":
+		m.State = MergeClean
+	case "CONFLICTING":
+		m.State = MergeConflict
+	}
+	return m, nil
+}
+
 func (g *GitHub) PRRequestMerge(ctx context.Context, pr int, o MergeOpts) error {
 	args := []string{"pr", "merge", strconv.Itoa(pr), "--merge"}
 	if o.DeleteBranch {

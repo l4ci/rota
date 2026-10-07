@@ -432,6 +432,26 @@ func (g *GitLab) PRView(ctx context.Context, pr int) (PRInfo, error) {
 	return info, nil
 }
 
+// PRMergeable reads the MR's conflict flag and detailed merge status. GitLab
+// computes both asynchronously: checking and unchecked are unknown.
+func (g *GitLab) PRMergeable(ctx context.Context, pr int) (Mergeability, error) {
+	var d struct {
+		HasConflicts bool   `json:"has_conflicts"`
+		Detailed     string `json:"detailed_merge_status"`
+	}
+	if err := g.json(ctx, []string{"api", fmt.Sprintf("projects/:id/merge_requests/%d", pr)}, &d); err != nil {
+		return Mergeability{}, err
+	}
+	m := Mergeability{State: MergeClean, Reason: d.Detailed}
+	switch {
+	case d.HasConflicts || d.Detailed == "conflict":
+		m.State = MergeConflict
+	case d.Detailed == "checking" || d.Detailed == "unchecked" || d.Detailed == "preparing":
+		m.State = MergeUnknown
+	}
+	return m, nil
+}
+
 // PRRequestMerge runs `glab mr merge` with auto-merge off.
 func (g *GitLab) PRRequestMerge(ctx context.Context, pr int, o MergeOpts) error {
 	args := []string{"mr", "merge", strconv.Itoa(pr), "--yes"}
