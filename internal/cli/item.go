@@ -18,7 +18,7 @@ import (
 
 // The item verbs: `rota id next` and `rota item create|field|complete|reopen|
 // rm|shipped|ready|comment`. Shapes, flags and exits are the verb contract's
-// (docs/design/contract/); the file backend does the work.
+// (docs/contributing/contract/); the file backend does the work.
 
 // newTracker builds the issue tracker the issue backend reads and writes
 // through: the gh or glab adapter for the project's origin, configured by
@@ -37,7 +37,7 @@ func withReadOnly(groups ...[]*Command) []*Command {
 // readOnlyVerbs are the tracker verbs whose contract data carries no "changed".
 // The conventions forbid exit 4 for them, so a refusal (the wrong backend)
 // answers exit 1 with the same failure data (contract: backend). A test checks
-// this set against docs/design/contract/.
+// this set against docs/contributing/contract/.
 var readOnlyVerbs = map[string]bool{
 	"update": true, "config show": true, "config check": true,
 	"repo which": true, "repo resolve": true, "repo umbrella": true,

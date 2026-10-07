@@ -1,6 +1,6 @@
 # Review verdict routing
 
-`/rota-review` ends with one of three verdicts, `PASS`, `CONCERNS` or `FAIL`, and records it with `rota verdict add`, as do the `/rota-ship` second opinion and `/rota-qa` (which adds `INFRA-FAIL`). Callers route on the recorded verdict with `rota verdict route`, never on a report's last line (exit 3 means none was recorded: rerun the producer). Recording flags, the producer JSON block and the refusal rules live in code (`internal/verdict`, contract section "B2: verdicts" in `docs/design/contract/verdicts.md`); this reference holds what the code does not: what each verdict means, the question text, and the labels. Any skill that gates on a pre-merge review consumes the same contract.
+`/rota-review` ends with one of three verdicts, `PASS`, `CONCERNS` or `FAIL`, and records it with `rota verdict add`, as do the `/rota-ship` second opinion and `/rota-qa` (which adds `INFRA-FAIL`). Callers route on the recorded verdict with `rota verdict route`, never on a report's last line (exit 3 means none was recorded: rerun the producer). Recording flags, the producer JSON block and the refusal rules live in code (`internal/verdict`, contract section "B2: verdicts" in `docs/contributing/contract/verdicts.md`); this reference holds what the code does not: what each verdict means, the question text, and the labels. Any skill that gates on a pre-merge review consumes the same contract.
 
 ## Verdict semantics
 

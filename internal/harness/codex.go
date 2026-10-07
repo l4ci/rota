@@ -13,7 +13,7 @@ import (
 )
 
 // Codex workers (E1, #68). The contract is "E: Codex workers" in
-// docs/design/contract/.
+// docs/contributing/contract/.
 
 // DefaultCodexCommand is the launch line of a codex worker. The flag list is
 // the one thing here that may change with the Codex CLI, so it lives only in
