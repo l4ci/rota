@@ -80,7 +80,15 @@ const (
 	// GateNoVerify: test.full is empty, so a merge would land unverified; the
 	// CLI exits 4 with it, blockedBy no-verify, unless --no-verify was passed.
 	GateNoVerify = "no-verify"
+	// GateNotClosing: the PR body has no closing keyword for the slot's issue,
+	// so the merge would leave it open and drifted; the CLI exits 4 with it,
+	// blockedBy closes. An issue labelled PartialSliceLabel is exempt.
+	GateNotClosing = "closes"
 )
+
+// PartialSliceLabel marks an issue whose PR lands only a slice of it, so the PR
+// body must not close it.
+const PartialSliceLabel = "partial-slice"
 
 // noVerifyRefusal is the message and hint of the refusal for an empty
 // test.full under a local verify, shared by the gate and the train.
@@ -306,6 +314,7 @@ var gateSteps = []gateStep{
 	(*gate).stepFreshness,
 	(*gate).stepPRMatches,
 	(*gate).stepProvenance,
+	(*gate).stepCloses,
 	(*gate).stepVerdict,
 	(*gate).stepCheckOnly,
 	(*gate).stepMerge,
@@ -488,6 +497,44 @@ func (g *gate) stepProvenance() (bool, error) {
 		return true, nil
 	}
 	return false, nil
+}
+
+// stepCloses refuses a PR whose body does not close the slot's issue (a
+// closing keyword: `Closes #N`, `Fixes #N`, ...), unless that issue is labelled
+// PartialSliceLabel. Without it the merge leaves the issue open with its claim
+// and in-progress label, which reconcile reports as drift. It runs under
+// CheckOnly too, so a train member is refused before anything merges. A slot
+// with no PR, or holding no numeric issue (file backend), has nothing to check.
+func (g *gate) stepCloses() (bool, error) {
+	issue := g.target.Issue
+	if !g.target.Queued {
+		issue = HeldID(g.target.Task, g.target.Branch, g.target.Name)
+	}
+	n, err := strconv.Atoi(issue)
+	if g.pr == "" || err != nil || n <= 0 {
+		return false, nil
+	}
+	body, err := g.prBody()
+	if err != nil {
+		if tracker.IsKind(err, tracker.KindUnavailable) && strings.Contains(err.Error(), "is not installed") {
+			return false, nil
+		}
+		return g.broke(fmt.Sprintf("could not read the body of %s to check it closes #%d: %v", g.pr, n, err))
+	}
+	if slices.Contains(g.forge.ClosedNumbers(body), n) {
+		return false, nil
+	}
+	is, err := g.forge.Get(g.ctx, n, false)
+	if err != nil {
+		return g.broke(fmt.Sprintf("could not read #%d to check for the %s label: %v", n, PartialSliceLabel, err))
+	}
+	if slices.Contains(is.Labels, PartialSliceLabel) {
+		return false, nil
+	}
+	g.res.SHA, _ = g.e.runGit(g.root, "rev-parse", "--short=7", g.headRef)
+	g.verdict(GateNotClosing, fmt.Sprintf("GATE %s refused — the body of %s does not close #%d, so the merge would leave it open and claimed; nothing landed", g.o.Slot, g.pr, n),
+		fmt.Sprintf("add a line `Closes #%d` to the PR body, or label #%d %s if this PR lands only part of it", n, n, PartialSliceLabel))
+	return true, nil
 }
 
 // stepVerdict refuses a branch with a recorded FAIL verdict (B3), the rule the

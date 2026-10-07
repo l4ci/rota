@@ -655,6 +655,14 @@ func noVerifyRefusal(msg, hint string, d *jsonx.Object) (Result, error) {
 	return Result{Data: d}, Refused("%s", msg).WithHint(hint)
 }
 
+// closesRefusal is the exit-4 envelope for a PR body that does not close the
+// slot's issue: d plus blockedBy closes, nothing landed.
+func closesRefusal(msg, hint string, d *jsonx.Object) (Result, error) {
+	d.Set("blockedBy", "closes")
+	d.Set("changed", false)
+	return Result{Data: d}, Refused("%s", msg).WithHint(hint)
+}
+
 func workerGate(fs *flag.FlagSet) RunFunc {
 	base := fs.String("base", "", "the cycle branch the slot merges into")
 	check := fs.Bool("check-only", false, "judge freshness, PR identity and provenance; merge nothing")
@@ -696,6 +704,9 @@ func workerGate(fs *flag.FlagSet) RunFunc {
 		}
 		if err == nil && r.Verdict == worker.GateNoVerify {
 			return noVerifyRefusal(r.Err, r.Hint, gateData(r))
+		}
+		if err == nil && r.Verdict == worker.GateNotClosing {
+			return closesRefusal(r.Err, r.Hint, gateData(r))
 		}
 		if err != nil {
 			return Result{}, err

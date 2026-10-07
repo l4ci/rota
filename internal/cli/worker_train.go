@@ -87,6 +87,9 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 		if err == nil && r.Verdict == worker.GateNoVerify {
 			return noVerifyRefusal(r.Err, r.Hint, trainData(r))
 		}
+		if err == nil && r.Verdict == worker.GateNotClosing {
+			return closesRefusal(r.Err, r.Hint, trainData(r))
+		}
 		if err != nil {
 			return Result{}, err
 		}
