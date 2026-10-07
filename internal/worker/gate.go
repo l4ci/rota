@@ -185,6 +185,19 @@ type Forge interface {
 // verification commands are read here, once; the steps below take them as
 // given.
 func (e Env) Gate(ctx context.Context, root string, o GateOpts) (GateResult, error) {
+	e = e.withDefaults()
+	if o.CheckOnly || o.Train { // read-only, or already under the train's land lock
+		return e.gate(ctx, root, o)
+	}
+	var res GateResult
+	err := e.withLandLock(ctx, root, func() (err error) {
+		res, err = e.gate(ctx, root, o)
+		return err
+	})
+	return res, err
+}
+
+func (e Env) gate(ctx context.Context, root string, o GateOpts) (GateResult, error) {
 	res := GateResult{Slot: o.Slot, Base: o.Base}
 	reg := LoadRegistry(root)
 	if !reg.Exists {
