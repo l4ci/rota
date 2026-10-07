@@ -5,10 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/rotastate"
+	"github.com/l4ci/rota/internal/roundlease"
 )
 
 // FileName is the state file under <git-common-dir>/rota/, next to the lease.
@@ -32,6 +32,8 @@ type LastExit struct {
 // .rota/workers.json.
 type State struct {
 	PID            int       `json:"pid"`
+	Host           string    `json:"host,omitempty"`
+	Start          uint64    `json:"start,omitempty"`
 	StartedAt      string    `json:"startedAt"`
 	Command        []string  `json:"command"`
 	Status         string    `json:"status"`
@@ -75,14 +77,11 @@ func WriteState(path string, st State) error {
 	if st.Command == nil {
 		st.Command = []string{}
 	}
-	b, err := json.MarshalIndent(st, "", "  ")
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o777); err != nil {
-		return err
-	}
-	return fsio.Locked(path, fsio.LockTimeout, func() error {
-		return fsio.WriteFileAtomic(path, append(b, '\n'))
-	})
+	return fsio.WriteMarker(path, st, nil)
+}
+
+// Running reports whether the supervisor the state names is still alive: the
+// file says running, and its pid passes the shared watcher-liveness rule.
+func (st State) Running(env roundlease.Env) bool {
+	return st.Status == StatusRunning && env.Running(st.Host, st.PID, st.Start)
 }

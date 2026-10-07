@@ -365,7 +365,7 @@ func keepaliveStatus(c *Ctx, args []string) (Result, error) {
 	if le.Alive == nil {
 		le = roundlease.DefaultEnv()
 	}
-	running := found && ks.Status == keepalive.StatusRunning && le.Alive(ks.PID)
+	running := found && ks.Running(le)
 
 	lo := jsonx.NewObject()
 	lo.Set("state", string(st))

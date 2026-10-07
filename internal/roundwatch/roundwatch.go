@@ -16,7 +16,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -52,13 +51,8 @@ func Armed(env roundlease.Env, commonDir string) (Marker, bool) {
 		return Marker{}, false
 	}
 	var m Marker
-	if json.Unmarshal(b, &m) != nil || m.PID <= 0 || m.Host != env.Host || !env.Alive(m.PID) {
+	if json.Unmarshal(b, &m) != nil || !env.Running(m.Host, m.PID, m.Start) {
 		return Marker{}, false
-	}
-	if m.Start != 0 {
-		if s, ok := env.StartTime(m.PID); ok && s != m.Start {
-			return Marker{}, false // the pid was reused
-		}
 	}
 	return m, true
 }
@@ -75,36 +69,22 @@ func (e *ArmedError) Error() string {
 // watch at a time keeps every wake-up a single event.
 func Arm(env roundlease.Env, commonDir string, pid int, heartbeat time.Duration) (release func(), err error) {
 	path := MarkerPath(commonDir)
-	if err := os.MkdirAll(filepath.Dir(path), 0o777); err != nil {
-		return nil, err
-	}
-	m := Marker{PID: pid, Host: env.Host, StartedAt: env.Now().UTC().Format(time.RFC3339), Heartbeat: int(heartbeat.Seconds())}
-	if s, ok := env.StartTime(pid); ok {
-		m.Start = s
-	}
-	err = fsio.Locked(path, fsio.LockTimeout, func() error {
+	m := Marker{PID: pid, StartedAt: env.Now().UTC().Format(time.RFC3339), Heartbeat: int(heartbeat.Seconds())}
+	m.Host, m.Start = env.Identity(pid)
+	err = fsio.WriteMarker(path, m, func() error {
 		if cur, ok := Armed(env, commonDir); ok && cur.PID != pid {
 			return &ArmedError{Marker: cur}
 		}
-		b, err := json.MarshalIndent(m, "", "  ")
-		if err != nil {
-			return err
-		}
-		return fsio.WriteFileAtomic(path, append(b, '\n'))
+		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
 	return func() {
-		_ = fsio.Locked(path, fsio.LockTimeout, func() error {
-			// Only our own marker: a successor may have replaced a dead one.
-			if b, err := os.ReadFile(path); err == nil {
-				var cur Marker
-				if json.Unmarshal(b, &cur) == nil && cur.PID == pid {
-					return os.Remove(path)
-				}
-			}
-			return nil
+		// Only our own marker: a successor may have replaced a dead one.
+		_ = fsio.RemoveMarker(path, func(b []byte) bool {
+			var cur Marker
+			return json.Unmarshal(b, &cur) == nil && cur.PID == pid
 		})
 	}, nil
 }

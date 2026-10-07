@@ -149,6 +149,11 @@ func TestLimitWatchRefusals(t *testing.T) {
 	if code, out, _ = rotaInWith(t, deps, dir, "limit", "watch", "--json"); code != 4 || data(t, out)["blockedBy"] != "watching" {
 		t.Fatalf("watching: %d %s", code, out)
 	}
+	// a record whose pid was reused by another process does not count
+	limits.WriteWatching(cd, limits.Watching{PID: 1, Host: env.Host, Start: mustStart(env, 1) + 1, StartedAt: "x", Mode: limits.ModeWatch})
+	if code, out, _ = rotaInWith(t, deps, dir, "limit", "watch", "--timeout", "1", "--settle", "0.05", "--json"); code == 4 && data(t, out)["blockedBy"] == "watching" {
+		t.Fatalf("a reused pid must not block the watcher: %s", out)
+	}
 	// a bad key is exit 70
 	os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(`{"limits":{"mode":"wait"}}`), 0o644)
 	if code, _, _ = rotaInWith(t, deps, dir, "limit", "watch"); code != 70 {

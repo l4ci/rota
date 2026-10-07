@@ -293,3 +293,30 @@ func TestDiscoverStopsAtTheHostServer(t *testing.T) {
 		t.Errorf("nothing below the server: holder %d, want the parent 4089", h.PID)
 	}
 }
+
+func TestRunningIsTheSharedWatcherLivenessRule(t *testing.T) {
+	e := fakeEnv("h1", procs{10: 100})
+	cases := []struct {
+		name  string
+		host  string
+		pid   int
+		start uint64
+		want  bool
+	}{
+		{"live", "h1", 10, 100, true},
+		{"no start recorded", "h1", 10, 0, true},
+		{"legacy marker without host", "", 10, 100, true},
+		{"pid reused", "h1", 10, 101, false},
+		{"dead", "h1", 11, 100, false},
+		{"other host", "h2", 10, 100, false},
+		{"no pid", "h1", 0, 0, false},
+	}
+	for _, c := range cases {
+		if got := e.Running(c.host, c.pid, c.start); got != c.want {
+			t.Errorf("%s: Running = %v, want %v", c.name, got, c.want)
+		}
+	}
+	if h, s := e.Identity(10); h != "h1" || s != 100 {
+		t.Errorf("Identity = %q %d", h, s)
+	}
+}
