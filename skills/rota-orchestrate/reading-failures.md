@@ -18,4 +18,4 @@ All three push the branch before moving the slot off it, so no work is lost. `ro
 
 **Red tests.** Before you bounce a PR for a red suite, rerun the failing test alone. Passes alone, fails under load: a flake; note it, don't send the worker back. Fails alone: real. A green suite that surprises you is worth one rerun.
 
-**Green branch, red base.** A branch can pass and still break the base once merged: the gate's `verify-failed` verdict. The base is the problem now: stop assigning, find which merge broke it, fix or revert before any other merge. Tell the maintainer.
+**Green branch, red base.** A branch can pass and still break the base once merged: the gate's `verify-failed` verdict. The base is the problem now: stop assigning, find which merge broke it, fix or revert before any other merge. Tell the maintainer. Under `test.fullWhere: ci` the gate verifies before the merge, so `verify-failed` has `data.changed` false: the base is untouched and the slot goes back instead.

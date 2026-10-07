@@ -98,6 +98,9 @@ var Keys = []Key{
 	{"test.fast", []any{}, true},
 	{"test.full", []any{}, true},
 	{"test.e2e", []any{}, true},
+	{"test.fullWhere", "local", false},
+	{"test.ciTimeoutMinutes", json.Number("60"), false},
+	{"test.ciChecks", []any{}, false},
 	// 5.0 keys: not in CONFIG_KEYS.
 	{"ship.mergeApproval", "none", false},
 	{"ship.mergeApprovalPaths", []any{}, false},
@@ -121,6 +124,7 @@ var Keys = []Key{
 	{"issues.labels.needsHuman", "needs-human", false},
 	{"work.codexAccounts", []any{}, false}, // named Codex homes; empty: the default Codex home
 	{"work.codexCommand", "", false},       // empty: DefaultCodexCommand in internal/harness
+	{"work.envSetup", "", false},           // empty: no setup; else run in each new slot worktree by pool init
 	{"work.tdd", true, false},              // false: no red-first requirement or RED proof row
 
 	{"orchestrator.handoffThreshold", json.Number("75"), false},
@@ -150,6 +154,7 @@ var Keys = []Key{
 	// #85 doctor key: rota doctor warns when the free share of the disk is below this percent; 0 turns it off.
 	{"doctor.minFreeDiskPercent", json.Number("10"), false},
 	{"work.itemTimeoutMinutes", json.Number("0"), false}, // 0: no wall-clock cap per item
+	{"test.isolate", true, false},                        // rota test run scrubs host/ssh env and pins HOME/XDG
 }
 
 // PythonKeys is how many leading rows of Keys are CONFIG_KEYS.

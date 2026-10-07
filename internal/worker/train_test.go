@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -290,6 +291,31 @@ func TestTrainSkipsE2EWhenFullFails(t *testing.T) {
 	}
 }
 
+// In local mode a verify run that cannot start is an error, not a verdict:
+// nothing about the train is wrong. TMPDIR turns read-only once the scratch
+// tree exists, so the verify log cannot be created.
+func TestTrainLocalVerifyErrorIsError(t *testing.T) {
+	w := trainWorld(t, "true", "b1")
+	tmp := t.TempDir()
+	t.Setenv("TMPDIR", tmp)
+	t.Cleanup(func() { os.Chmod(tmp, 0o700) })
+	e := w.env(false)
+	e.Git = func(ctx context.Context, dir string, args ...string) (git.Result, error) {
+		r, err := git.Exec(ctx, dir, args...)
+		if len(args) > 1 && args[0] == "worktree" && args[1] == "add" {
+			os.Chmod(tmp, 0o500)
+		}
+		return r, err
+	}
+	res, err := e.Train(bg, w.dir, TrainOpts{Base: "main", Targets: []string{"b1"}})
+	if err == nil || res.Verdict == GateCheckBroke {
+		t.Fatalf("want an error, got %+v %v", res, err)
+	}
+	if w.onMain("b1.txt") {
+		t.Error("b1 landed")
+	}
+}
+
 func TestTrainApprovalRefusalCarriesData(t *testing.T) {
 	w := trainWorld(t, "true", "b1", "b2")
 	want := &exitcode.Error{Exit: exitcode.ExitRefused, Message: "gate", Data: BlockData{BlockedBy: "manual gate"}}
@@ -299,5 +325,70 @@ func TestTrainApprovalRefusalCarriesData(t *testing.T) {
 	}
 	if bd, ok := exitcode.DataOf[BlockData](err); !ok || bd.BlockedBy != "manual gate" {
 		t.Errorf("refusal data = %+v, %v (err %v)", bd, ok, err)
+	}
+}
+
+// A train and a gate started together queue on the repo's land lock: their
+// verifies never overlap (the train's scratch worktree is never visible to the
+// gate's verify) and neither lands inside the other's verify-to-land window, so
+// the train never reports base-moved (#427).
+func TestTrainAndGateSerialize(t *testing.T) {
+	log := filepath.Join(t.TempDir(), "verify.log")
+	verify := fmt.Sprintf(`echo start >> %[1]s; n=$(git worktree list | wc -l); echo "worktrees $n" >> %[1]s; sleep 1; echo end >> %[1]s`, log)
+	w := trainWorld(t, verify, "b1", "b2", "b3")
+	var tres TrainResult
+	var gres GateResult
+	var terr, gerr error
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		tres, terr = w.train(TrainOpts{Targets: []string{"b1", "b2"}})
+	}()
+	go func() {
+		defer wg.Done()
+		gres, gerr = w.env(false).Gate(bg, w.dir, GateOpts{Slot: "b3", Base: "main"})
+	}()
+	wg.Wait()
+	if terr != nil || tres.Verdict != GatePass {
+		t.Errorf("train: %+v %v", tres, terr)
+	}
+	if gerr != nil || gres.Verdict != GatePass {
+		t.Errorf("gate: %+v %v", gres, gerr)
+	}
+	data, _ := os.ReadFile(log)
+	var seq []string
+	for _, l := range strings.Split(strings.TrimSpace(string(data)), "\n") {
+		if !strings.HasPrefix(l, "worktrees") {
+			seq = append(seq, l)
+		}
+	}
+	if got := strings.Join(seq, ","); got != "start,end,start,end" {
+		t.Errorf("verifies overlapped: %s\n%s", got, data)
+	}
+	for _, f := range []string{"b1.txt", "b2.txt", "b3.txt"} {
+		if !w.onMain(f) {
+			t.Errorf("%s is not on main", f)
+		}
+	}
+}
+
+func TestTrainVerdictRefusal(t *testing.T) {
+	w := trainWorld(t, "touch ran-verify", "b1", "b2")
+	block := fmt.Errorf("FAIL recorded")
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}, Verdict: func(b string) error {
+		if b == "b2" {
+			return block
+		}
+		return nil
+	}})
+	if err != block || res.Verdict != GateVerdictBlocked || res.Culprit != "b2" {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if w.onMain("b1.txt") || w.onMain("b2.txt") {
+		t.Error("a train with a FAIL-verdict member merged something")
+	}
+	if res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}, Verdict: func(string) error { return nil }}); err != nil || !res.OK() {
+		t.Fatalf("no blocking record: %+v %v", res, err)
 	}
 }

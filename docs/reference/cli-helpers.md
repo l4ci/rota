@@ -298,9 +298,11 @@ exit codes and repo scope: [verb contract](../design/contract/README.md).
 | `rota worker reset <slot> [--task <id>] [--check-only]` | refuse a slot that holds work, else cut a fresh task branch |
 | `rota worker dispatch <slot> --body-file <path\|-> [--task <id>] [--relay] [--round <n>] [--boot-timeout <s>] [--kind <claude\|codex>]` | send a brief into a slot's session |
 | `rota worker poll [<slot>] [--settle <seconds>] [--lines <n>]` | classify slot states from their panes |
+| `rota worker done <slot> [--base <ref>]` | the step before the PR: exit 4 unless the slot's item has a PASS `test.fast` proof row at the branch HEAD (`rota proof record`), else mark the slot done |
 | `rota worker gate <slot> --base <branch> [--check-only] [--no-verify] [--confirm --confirm-note <answer> \| --approval <escalation> \| --escalate]` | merge gate for one slot's branch or PR; exit 4 when `ship.mergeApproval` needs a human, `--escalate` asks on the thread, `--approval` cites the answer |
 | `rota worker train <slot\|PR>... --base <branch> [--land-green] [--confirm --confirm-note <answer> \| --approval <escalation> \| --escalate]` | merge several PRs in order in a scratch tree, verify once, land them all on a pass; a red train bisects to the first member that breaks it |
 | `rota test run <fast\|full\|e2e> [--base <ref>]` | run `test.<tier>` in order, stopping at the first failure; `{files}` expands to the files changed against base; exit 3 when the tier is empty |
+| `rota test ledger check` | report expired and malformed entries in `.rota/test-ledger.json`; exit 1 when there are any |
 | `rota worker prompt-check [--key <file>]` | Codex UserPromptSubmit hook: pass only signed or maintainer input |
 | `rota worker session check [--session <name>]` | inside a managed host session? (exit 1 when outside) |
 | `rota worker session ensure [--session <name>] [--body-file <path\|->] [--boot-timeout <s>]` | hand the orchestrator off into a host session |

@@ -203,11 +203,11 @@ func (b *Issues) MergePRGated(pr int, items []string, approve MergeApprover) (Me
 		if is.State != "open" {
 			continue
 		}
-		n, err := b.proofCount(id)
+		ok, err := hasProof(func() (int, error) { return b.proofCount(id) })
 		if err != nil {
 			return MergeResult{}, err
 		}
-		if n == 0 {
+		if !ok {
 			unproven = append(unproven, id)
 		}
 	}

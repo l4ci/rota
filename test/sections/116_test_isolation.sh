@@ -35,6 +35,19 @@ git -C "$GR" worktree remove --force "$GR/.worktrees/ben"
 if guard "$IS/before" "$GR" >/dev/null 2>&1; then fail "worktree guard missed a removed worktree"; fi
 pass "worktree guard fails on an added or removed worktree and passes when unchanged"
 
+# rota's own scratch trees (a train's, a CI verify's) come and go beside a run without tripping it (#427).
+bash -c '. "$1"; worktree_snapshot "$2"' _ "$ISO" "$GR" > "$IS/before" || fail "worktree_snapshot failed"
+mkdir -p "$IS/rota-train-abc123" "$IS/rota-ci-def456"
+git -C "$GR" worktree add -q --detach "$IS/rota-train-abc123/tree"
+git -C "$GR" worktree add -q --detach "$IS/rota-ci-def456/tree"
+guard "$IS/before" "$GR" >/dev/null 2>&1 || fail "worktree guard flagged rota's own scratch trees"
+git -C "$GR" worktree add -q --detach "$IS/other-scratch"
+if guard "$IS/before" "$GR" >/dev/null 2>&1; then fail "worktree guard missed a foreign worktree beside the scratch trees"; fi
+git -C "$GR" worktree remove --force "$IS/other-scratch"
+git -C "$GR" worktree remove --force "$IS/rota-train-abc123/tree"
+git -C "$GR" worktree remove --force "$IS/rota-ci-def456/tree"
+pass "worktree guard ignores rota's scratch trees and still flags any other worktree"
+
 python3 "$TESTDIR/runner_leak_test.py" || fail "runner checkout guard regression"
 pass "runner preserves concurrent edits, deletions and merges across overlapping shards"
 
