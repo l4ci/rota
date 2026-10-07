@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/rotatree"
+	"io"
 	"os"
 	"os/exec"
 	"sort"
@@ -401,6 +402,8 @@ type Env struct {
 	NewHost func(dispatch string) host.Host
 	// Sleep defaults to time.Sleep (poll's settle).
 	Sleep func(time.Duration)
+	// Stderr defaults to os.Stderr (round wait's one-line fallback notice).
+	Stderr io.Writer
 	// Now defaults to time.Now (relay timestamps).
 	Now func() time.Time
 	// Getenv defaults to os.Getenv (ROTA_GATE_SHA_WAIT).
@@ -437,6 +440,9 @@ func (e Env) withDefaults() Env {
 	}
 	if e.Sleep == nil {
 		e.Sleep = time.Sleep
+	}
+	if e.Stderr == nil {
+		e.Stderr = os.Stderr
 	}
 	if e.Now == nil {
 		e.Now = time.Now

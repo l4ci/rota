@@ -152,8 +152,30 @@ func TestWatchStreamClosedIsAnError(t *testing.T) {
 	s.conn.Close() // herdr went away
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if _, err := w.Next(ctx); err == nil || ctx.Err() != nil {
-		t.Errorf("Next = %v, want a stream error before the deadline", err)
+	if _, err := w.Next(ctx); !errors.Is(err, ErrStreamLost) || ctx.Err() != nil {
+		t.Errorf("Next = %v, want ErrStreamLost before the deadline", err)
+	}
+}
+
+func TestWatchEventsLostFrameIsAStreamLoss(t *testing.T) {
+	for name, frame := range map[string]string{
+		"event": `{"event":"events_lost","data":{}}`,
+		"error": `{"error":{"code":"events_lost","message":"subscriber lagged"}}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			d, s, _ := pipeDeps(t, "herdr 0.9.3", panes())
+			s.serve(t, ack, frame)
+			w, err := New("herdr", d).(Watcher).Watch(context.Background(), targets)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer w.Close()
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if _, err := w.Next(ctx); !errors.Is(err, ErrStreamLost) {
+				t.Errorf("Next = %v, want ErrStreamLost", err)
+			}
+		})
 	}
 }
 
