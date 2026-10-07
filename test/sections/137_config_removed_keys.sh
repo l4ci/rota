@@ -6,7 +6,7 @@ mkdir -p "$CF/.rota"
 printf '{\n  "issues": {\n    "providers": {\n      "github": true,\n      "gitlab": true\n    },\n    "label": "in-progress",\n    "autoCreateLabel": true,\n    "filterMineOnly": true\n  }\n}\n' > "$CF/.rota/config.json"
 
 OUT=$( cd "$CF" && hvj config check || true )
-echo "$OUT" | grep -q 'issues.filterMineOnly' || fail "config check should name the removed keys: $OUT"
+case "$OUT" in *issues.filterMineOnly*) ;; *) fail "config check should name the removed keys: $OUT" ;; esac
 [ "$(echo "$OUT" | jget 'data.removed[2]')" = "issues.providers.gitlab" ] \
   || fail "data.removed should list the three keys: $OUT"
 
