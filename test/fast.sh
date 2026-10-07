@@ -10,6 +10,8 @@
 # the root package (embed.go), so it runs "."; test infra (test/lib, test/fakes,
 # test/runner.sh, test/lib.sh, test/e2e) runs the "infra" check: bash -n on the shell
 # files, py_compile on the python ones, and test/runner_leak_test.py.
+# A change under test/sections/, test/lib.sh or test/runner.sh also runs section 71
+# (the piped grep -q lint), which scans all of them.
 # FAST_DRY_RUN=1 prints the selected checks as "plan: <check>" and runs nothing;
 # test/sections/120_fast_mapping.sh asserts the mapping through it.
 set -euo pipefail
@@ -24,6 +26,7 @@ fi
 go_all=0
 docs=0
 infra=0
+pipe_lint=0
 pkgs=()
 sections=()
 
@@ -66,7 +69,19 @@ for f in "$@"; do
   case "$f" in
     test/sections/*.sh) [ -f "$f" ] && sections+=("$f") ;;
   esac
+  case "$f" in
+    test/sections/*|test/lib.sh|test/runner.sh) pipe_lint=1 ;;
+  esac
 done
+
+# Section 71 lints every section, lib.sh and runner.sh for piped grep -q, so any
+# change under those paths runs it (#459) instead of leaving it to the gate.
+if [ "$pipe_lint" = 1 ]; then
+  lint=test/sections/71_no_pipe_grep_q.sh
+  have=0
+  for s in ${sections[@]+"${sections[@]}"}; do [ "$s" = "$lint" ] && have=1; done
+  [ "$have" = 1 ] || sections+=("$lint")
+fi
 
 if [ "${FAST_DRY_RUN:-}" = 1 ]; then
   [ "$go_all" = 1 ] && echo "plan: go-all"
