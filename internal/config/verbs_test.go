@@ -372,3 +372,54 @@ func TestRetired(t *testing.T) {
 		t.Errorf("loop: %v", got)
 	}
 }
+
+func TestCheckFlagsLegacyVerifyCommands(t *testing.T) {
+	root := project(t, "", "")
+	write := func(cfg *jsonx.Object) {
+		b, _ := jsonx.Marshal(cfg)
+		os.WriteFile(filepath.Join(root, ".rota", "config.json"), b, 0o644)
+	}
+	legacy := func(cfg *jsonx.Object, cmds []any) {
+		ref, _ := getObject(cfg, "refactor")
+		if ref == nil {
+			ref = jsonx.NewObject()
+			cfg.Set("refactor", ref)
+		}
+		ref.Set("verifyCommands", cmds)
+	}
+	setFull := func(cfg *jsonx.Object, cmds []any) {
+		test, _ := getObject(cfg, "test")
+		test.Set("full", cmds)
+	}
+
+	// All required keys present, test.full empty, legacy key holds commands.
+	cfg := fullConfig()
+	legacy(cfg, []any{"make test"})
+	write(cfg)
+	st, m := Check(root)
+	if st != Stale || !reflect.DeepEqual(m, []string{LegacyVerifyKey}) {
+		t.Errorf("legacy only: %s %v", st, m)
+	}
+	// Fill moves it, so check is up to date afterwards.
+	if _, err := Fill(root); err != nil {
+		t.Fatal(err)
+	}
+	if st, m := Check(root); st != UpToDate || len(m) != 0 {
+		t.Errorf("after fill: %s %v", st, m)
+	}
+
+	// A non-empty test.full makes the legacy key inert, an empty legacy list moves nothing.
+	cfg = fullConfig()
+	setFull(cfg, []any{"make test"})
+	legacy(cfg, []any{"old"})
+	write(cfg)
+	if st, _ := Check(root); st != UpToDate {
+		t.Errorf("test.full set: %s", st)
+	}
+	cfg = fullConfig()
+	legacy(cfg, []any{})
+	write(cfg)
+	if st, _ := Check(root); st != UpToDate {
+		t.Errorf("empty legacy list: %s", st)
+	}
+}
