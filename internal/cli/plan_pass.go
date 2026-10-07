@@ -17,12 +17,12 @@ var acIDRe = regexp.MustCompile(`^AC-\d+$`)
 
 // passItemRef is the item a plan key names: M01-B07 is B07, #7 and B7 stand
 // for themselves. A slice key names no item.
-func passItemRef(key string) (string, error) {
+func passItemRef(verb, key string) (string, error) {
 	switch {
 	case plan.ValidKey(key):
 		unit := key[strings.LastIndex(key, "-")+1:]
 		if strings.HasPrefix(strings.ToUpper(unit), "S") {
-			return "", Usage("plan pass marks an item's criterion; %s is a slice plan", key)
+			return "", Usage("%s works on an item's criteria; %s is a slice plan", verb, key)
 		}
 		return unit, nil
 	case plan.ItemOnlyKey(key):
@@ -40,7 +40,7 @@ func planPass(fs *flag.FlagSet) RunFunc {
 			return Result{}, Usage("plan pass takes a plan key and an AC id")
 		}
 		key, ac := args[0], args[1]
-		ref, err := passItemRef(key)
+		ref, err := passItemRef("plan pass", key)
 		if err != nil {
 			return Result{}, err
 		}

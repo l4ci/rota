@@ -42,7 +42,7 @@ Show the plan as unsaved markdown:
 
 - **Goal**: one sentence
 - **Approach**: 3-6 sentences: the design choice and why
-- **Tasks**: each with **Observable behavior** (true after it ships), **Files**, **Interfaces**, **Verify** (the command or check that proves it done)
+- **Tasks**: each with **Observable behavior** (true after it ships), **Serves** (`Serves: AC-1, AC-2`: the acceptance ids it delivers), **Files**, **Interfaces**, **Verify** (the command or check that proves it done)
 - **Review Focus**: `## Review Focus`, at most 5 lines: risky inputs or edges the spec implies but never names
 - **Open questions**: decisions needed before or during execution
 - **Assumptions**: implicit constraints made explicit
@@ -51,6 +51,7 @@ Show the plan as unsaved markdown:
 Rules:
 
 - **Verify is non-negotiable.** No verify step, no task.
+- **Serves is non-negotiable too.** Every task carries a `Serves: AC-n` sub-bullet (several ids allowed), and every criterion is served by at least one task. A task that serves no criterion is scope creep: drop it or raise the missing criterion first. `rota plan check <key>` enforces this after the write.
 - **Behavior tasks name the RED.** Verify states the failure the new test shows before the change (`RED: <command> fails with <expected message>`). A docs or skill-text task with no test seam writes `no test seam: docs/skill change` instead.
 - **Interfaces** is `Consumes:` (what the task relies on) and `Produces:` (what it creates for later tasks). Write `none` rather than omit a line.
 - **Relies on** lists only entries the plan's approach actually depends on, not every bullet the queries returned. `/rota-review` checks the diff against this list and records a hit only for entries it followed.
@@ -60,7 +61,7 @@ Rules:
 - No stubs: real runnable code.
 - When the work is a rename, a wide refactor, or ships docs, read [`plan-edge-cases.md`](plan-edge-cases.md) for the task-shaping rules.
 
-**Self-check before asking** (silent): every Acceptance criterion maps to a task; no placeholders (`TBD`, `...`, `similar to Task N`); names, paths and signatures match across tasks, each Consumes against an earlier Produces. Fix misses, then say in one line what you fixed (omit if nothing).
+**Self-check before asking** (silent): every Acceptance criterion maps to a task through its `Serves:` line; no placeholders (`TBD`, `...`, `similar to Task N`); names, paths and signatures match across tasks, each Consumes against an earlier Produces. Fix misses, then say in one line what you fixed (omit if nothing).
 
 Ask once: *"Confirm this plan? (yes / changes)"*. *yes* writes it; *changes* means apply the edits and write; don't loop. Silence is not approval. If the redirect moves the Goal itself, re-propose.
 
@@ -73,6 +74,8 @@ KEY=$(rota plan add --json --milestone <MID> --slice --title "<title>" | jq -r .
 ```
 
 Quote `#42`. Pass `--design <ID>` when a design exists; the frontmatter records it. Issue backend: draft in a scratch file and publish with `rota plan put <key> --body-file <file>|-`; file backend: `Edit` the stub's sections, keep the frontmatter. List with `rota plan list [--milestone <M>]`. Record plan-shaping answers with `rota item comment add <ID> --kind decision --body-file -`.
+
+Issue backend: run `rota plan check <key>` (read-only; exit 1 lists uncovered criteria, tasks with no `Serves:` or an unknown AC id, and tasks with no Verify) and fix the plan until it passes. On the file backend it exits 1 with `blockedBy: backend`; rely on the Step 3 self-check there.
 
 When the plan splits into separate items, or after writing, read [`plan-edge-cases.md`](plan-edge-cases.md) for dependent-item filing and the docs-path check.
 
