@@ -59,7 +59,7 @@ Both flags only seed `Rule` and `Why`. You still articulate `Forbids` and `Permi
 
 `.rota/DECISIONS.md` is tracked by default, so decisions travel with the repo alongside `KNOWLEDGE.md`. To keep decisions private, add `.rota/DECISIONS.md` to `.gitignore`.
 
-## 🔗 See also
+## See also
 
 - [`/rota-decide` skill](../../skills/rota-decide/SKILL.md) for the capture flow itself
 - [Knowledge verbs](../reference/cli-helpers.md#rota-knowledge) for the parallel pattern used by `/rota-learn`

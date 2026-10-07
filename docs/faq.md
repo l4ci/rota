@@ -33,7 +33,7 @@ No. Workers in a [parallel round](usage/parallel-rounds.md) get a tab each in he
 
 Run `rota update` (needs `gh`). It detects how you installed rota (Homebrew, the install script, or a dev build) and prints the command, for example `brew update && brew upgrade rota && rota skills update`, or the install script's `curl` line followed by `rota skills update`. It doesn't run the update itself.
 
-`rota skills update` refreshes the installed skills to match the new binary. Nothing else in your projects needs refreshing. Run `rota version --drift` in a project to see whether its stamped version trails the installed one. See [install](install.md#-upgrading).
+`rota skills update` refreshes the installed skills to match the new binary. Nothing else in your projects needs refreshing. Run `rota version --drift` in a project to see whether its stamped version trails the installed one. See [install](install.md#upgrading).
 
 ## Does this work with monorepos?
 

@@ -27,7 +27,7 @@ rota skills install                  # user scope: every project on this machine
 rota skills install --scope project  # this repo only; commit .claude/skills and .agents/skills
 ```
 
-Pick user scope for yourself. Pick project scope when a team should run the same pinned version. More in [install](install.md#the-skills).
+Pick user scope for yourself. Pick project scope when a team should run the same pinned version. More in [install](install.md#-the-skills).
 
 ## 4. ⚙ Initialize the project
 
@@ -146,7 +146,7 @@ In the pane, at the project root:
 rota orchestrate
 ```
 
-It runs `rota doctor`, then opens a focused orchestrator tab that runs the agent under `rota keepalive run` and has already started `/rota-orchestrate`. `rota` alone, in a terminal, opens a small palette (banner, version, the project and round state, and the common actions) with Orchestrate preselected, so `rota` then Enter does the same. In a directory without `.rota/`, Enter runs `rota setup` instead. Tell the orchestrator what you want, for example "run a round on issues 12 and 13". `orchestrator.harness` picks the agent (`claude`, `codex`, `hermes` or `opencode`). A `claude` orchestrator starts under your `CLAUDE_CONFIG_DIR` if set, else under the `work.accounts` entry with the most headroom. See [your first round](usage/parallel-rounds.md#your-first-round) for what happens outside herdr or tmux.
+It runs `rota doctor`, then opens a focused orchestrator tab that runs the agent under `rota keepalive run` and has already started `/rota-orchestrate`. `rota` alone, in a terminal, opens a small palette (banner, version, the project and round state, and the common actions) with Orchestrate preselected, so `rota` then Enter does the same. In a directory without `.rota/`, Enter runs `rota setup` instead. Tell the orchestrator what you want, for example "run a round on issues 12 and 13". `orchestrator.harness` picks the agent (`claude`, `codex`, `hermes` or `opencode`). A `claude` orchestrator starts under your `CLAUDE_CONFIG_DIR` if set, else under the `work.accounts` entry with the most headroom. See [your first round](usage/parallel-rounds.md#-your-first-round) for what happens outside herdr or tmux.
 
 The skill runs `rota doctor` again, then `rota round start`. That takes the orchestrator lease, creates the worker slots and lists the ready issues, and it detects herdr or tmux from the pane it runs in. It starts no worker yet. The orchestrator then picks the slate and assigns each issue with `rota round assign`, which cuts a branch and starts a worker in a new tab.
 
