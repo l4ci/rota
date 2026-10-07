@@ -72,7 +72,7 @@ Long rounds run into usage limits. List your accounts and rota spreads the work 
 - **The orchestrator** can hand off and restart under another account before it hits its own limit (`orchestrator.switchOnUsage`), and `rota keepalive` restarts it if it stops.
 - **Codex.** `work.codexAccounts` spreads Codex workers over several logins (rota can't read Codex usage, so these aren't balanced by headroom).
 
-Setup: [parallel rounds](docs/usage/parallel-rounds.md#setup) and [unattended rounds](docs/usage/unattended-rounds.md).
+Setup: [parallel rounds](docs/usage/parallel-rounds.md#-setup) and [unattended rounds](docs/usage/unattended-rounds.md).
 
 ## 🚀 Quick start
 

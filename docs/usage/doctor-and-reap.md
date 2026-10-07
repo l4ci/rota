@@ -86,6 +86,6 @@ project root. `5` when git fails.
 
 Reap and [`rota round reconcile`](parallel-rounds.md#moving-an-issue-that-is-assigned) split the work:
 reconcile reports drift between the registry, host, git and forge and repairs only the safe kinds;
-reap deletes. After [`rota round wind-down`](parallel-rounds.md#winding-down), which deletes no branch,
+reap deletes. After [`rota round wind-down`](parallel-rounds.md#-winding-down), which deletes no branch,
 run `rota reap`. It is not the verb for a registered slot: `rota worker pool reap` deregisters a named
 slot, and removes its worktree and branch whether or not it holds work.

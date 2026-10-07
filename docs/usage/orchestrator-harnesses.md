@@ -16,7 +16,7 @@ rota orchestrate --dry-run     # shows the command and first prompt
 
 The prompt is the last argument, on the first start and on every keepalive restart, which is why the Hermes and opencode commands end in `-q` and `--prompt`.
 
-## Setup for Hermes and opencode
+## 🔧 Setup for Hermes and opencode
 
 Both read `.agents/skills`, so the Codex install covers them:
 
@@ -37,7 +37,8 @@ The skill asks in plain language. Claude Code renders that as `AskUserQuestion`;
 
 ## Last verified (2026-10-04)
 
-This is a dated snapshot, not a compatibility guarantee. Checked 2026-10-04 on Codex 0.159.2, Hermes v0.21.5 and opencode 1.17.9, in a scratch git repo with one probe skill per location.
+> [!NOTE]
+> This is a dated snapshot, not a compatibility guarantee. Checked 2026-10-04 on Codex 0.159.2, Hermes v0.21.5 and opencode 1.17.9, in a scratch git repo with one probe skill per location.
 
 - **Codex.** See [Codex skills](codex-skills.md). Tab-mode round end to end (herdr, Codex 0.159.2 orchestrator and Codex workers, file backend, no forge): two tasks assigned, built, merged with `rota worker gate` and wound down clean. It needed the worker contract found under `.agents/skills` (`rota round assign` read only Claude roots until this change), and it ran with `approval_policy=never` and `sandbox_mode=danger-full-access` because Codex's sandbox did not initialise on the test machine.
 - **Hermes.** `hermes skills list` shows a `.agents/skills` probe only after `hermes skills trust`; a `.claude/skills` probe never loads. `hermes chat -s <skill> -Q -q <prompt>` resolved the trusted project skill and the model answered; an unknown name fails with `Unknown skill(s)`. Not verified: a full orchestrator round, and whether a literal `/rota-orchestrate` typed as the seed prompt dispatches as a slash command (the launcher avoids it by using `-s`).

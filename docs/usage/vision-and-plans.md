@@ -60,7 +60,7 @@ When `/rota-work` starts its planning step, it checks for a matching plan file a
 
 On the file backend, after `/rota-work` completes an item that had its own plan (e.g. `M01-B07.md`), the plan file is removed automatically. Once the cycle commits, the plan's task decomposition and assumptions are stale, and leaving the file would confuse a future cycle on the same key. Slice plans (`M01-S01.md`) stay through their multi-item lifetime; remove the slice plan with `rota plan rm M01-S01` once the slice is fully shipped.
 
-## When to use /rota-plan vs skipping it
+## 🎯 When to use /rota-plan vs skipping it
 
 For small items (Minor or Cosmetic), the overhead of a plan outweighs the benefit. Capture the item with [capturing work](capturing-work.md) and run `/rota-work` directly.
 

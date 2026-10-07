@@ -10,7 +10,7 @@
 
 With no arguments, `/rota-ship --undo` targets the most recent `merge: ...` commit on the base branch. The skill prints a preview, asks for confirmation, and only writes after you pick *Apply*. To target a specific cycle, invoke the engine directly: `rota ship undo --cycle <hash>` (rare; useful when you've made unrelated commits since and want to roll back further with `--allow-post-merge`).
 
-## Worked example
+## 🧪 Worked example
 
 You finished `[F42]` an hour ago via [`/rota-work`](running-work.md), `/rota-ship` direct-merged it, and the entry is now in `## Completed`:
 
@@ -60,7 +60,7 @@ Preserved untouched: the **git reflog** (the merge commit is still recoverable f
 
 Not restored, by design: **handoff files** (`.rota/handoff/<branch>.md` are gitignored per-developer scratch and were lost when the branch was deleted at merge time), **plan files** (`.rota/plans/<key>.md` are tracked. `/rota-work` removes a milestone-tagged item's plan when the item ships, and `undo` does not bring it back; recover it from the merge's second parent or the reflog), and **the merged branch itself** (direct-merge deletes it at ship time). The dry-run preview prints the literal `git branch …` command needed to recreate the branch from `<merge>^2` if you want to keep iterating on the same line of work.
 
-## Safety semantics
+## 🔒 Safety semantics
 
 `/rota-ship --undo` enforces four guards before it will apply anything.
 
@@ -90,14 +90,14 @@ Either path is destructive on the post-merge commits. They leave the active bran
 
 The confirmation step is asked every time, including when [`autonomy.level`](autonomy.md) is set to `auto`. This mirrors the destructive-gate convention [`/rota-capture --remove`](removing-work.md) uses: `git reset --hard` is recoverable through the reflog only inside the 90-day window, and the gate guarantees a human signed off before the reset runs. No flag suppresses the prompt.
 
-## What `/rota-ship --undo` is NOT for
+## 🚫 What `/rota-ship --undo` is NOT for
 
 - Editing what landed. If the work is fine but needs a tweak, capture a new fix via [`/rota-capture`](capturing-work.md) + [`/rota-work`](running-work.md). Don't roll back just to redo.
 - Partial rollback. `/rota-ship --undo` rolls the entire cycle back as a unit. To revert one task from a multi-task cycle, `git revert <task-commit>` is the right tool.
 - Rolling back more than one cycle at once. Invoke `/rota-ship --undo` twice, confirming each step independently.
 - PR-mode cycles. See *Safety semantics* above; use `gh pr close` or `git revert` instead.
 
-## When to use
+## 🎯 When to use
 
 - A landed cycle conflicts with a milestone constraint or decision that surfaced after the merge.
 - The work shipped against the wrong premise: the implementation is correct, but the item itself was wrong.

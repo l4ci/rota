@@ -12,7 +12,7 @@ It works on the file backend only (`rota item rm` refuses under `backlog.backend
 
 Default mode is a dry run. The skill shows what would change and asks for confirmation before writing anything. Nothing is modified until you say yes.
 
-## Worked example
+## 🧪 Worked example
 
 You captured a feature two days ago:
 
@@ -56,7 +56,7 @@ Counters never decrement. An ID removed today won't be reissued to a different i
 
 Close upstream issues manually. `/rota-capture --remove` never closes them.
 
-## Safety semantics
+## 🔒 Safety semantics
 
 `/rota-capture --remove` refuses to apply until you confirm. The confirmation gate runs even when [`autonomy.level`](autonomy.md) is set to `auto`; removal is always a manual step.
 
@@ -80,7 +80,7 @@ Validation is all-or-nothing. If any ID in the list is unknown or invalid, the e
 
 The dry-run preview lists every item in the batch so you can review the full scope before confirming.
 
-## When to use
+## 🎯 When to use
 
 - Duplicate captures: same item filed twice under different IDs.
 - Wrong-premise items: you captured something that turned out not to be real.
@@ -89,7 +89,7 @@ The dry-run preview lists every item in the batch so you can review the full sco
 
 If an item is done rather than unwanted, use [/rota-work](running-work.md) to complete it. Completed items are archived, not removed.
 
-## What /rota-capture --remove is not
+## 🚫 What /rota-capture --remove is not
 
 `/rota-capture --remove` isn't a soft-delete or an undo mechanism. Once applied, the entry is gone from the active backlog. `ARCHIVE.md` keeps a historical record by default; `--scrub-archive` erases it there too.
 

@@ -18,7 +18,8 @@ When unsure, try articulating **forbids** and **permits**. If you can't, it's a 
 
 Run `/rota-decide` when you've reached a commitment. The skill drafts a four-part entry (rule, why, forbids, permits) from conversation context, classifies it by topic, and asks for confirmation before writing. Nothing is written without your "Write it" answer, even in `autonomy.level: auto`.
 
-If you can't articulate forbids or permits, the skill suggests [`/rota-learn`](learning.md) instead and stops. It does not auto-invoke `/rota-learn`; you re-run it yourself.
+> [!NOTE]
+> If you can't articulate forbids or permits, the skill suggests [`/rota-learn`](learning.md) instead and stops. It does not auto-invoke `/rota-learn`; you re-run it yourself.
 
 The skill also runs a three-gate pre-write check: a candidate must be (a) hard to reverse, where undoing it would mean coordinated edits across many files, retraining habits, or migrating data; (b) surprising without context, where a future contributor wouldn't infer the rule from existing patterns alone; and (c) the result of a real trade-off, where genuine alternatives existed and the project deliberately didn't pick them. If any gate fails, the skill suggests `/rota-learn` (or "leave it inline at the call site") and stops without writing. The gates apply across the default, `--from-learning`, and `--from-spike` modes; all routes through `/rota-decide` go through the same filter.
 
@@ -58,7 +59,7 @@ Both flags only seed `Rule` and `Why`. You still articulate `Forbids` and `Permi
 
 `.rota/DECISIONS.md` is tracked by default, so decisions travel with the repo alongside `KNOWLEDGE.md`. To keep decisions private, add `.rota/DECISIONS.md` to `.gitignore`.
 
-## See also
+## 🔗 See also
 
 - [`/rota-decide` skill](../../skills/rota-decide/SKILL.md) for the capture flow itself
 - [Knowledge verbs](../reference/cli-helpers.md#rota-knowledge) for the parallel pattern used by `/rota-learn`
