@@ -3,6 +3,8 @@ package config
 import (
 	"encoding/json"
 	"math/rand"
+	"os"
+	"slices"
 	"strings"
 	"testing"
 
@@ -195,5 +197,50 @@ func TestPromptsMatchSchema(t *testing.T) {
 				t.Errorf("%s: condition %s=%s does not name a prompt choice", p.Key, p.IfKey, p.IfValue)
 			}
 		}
+	}
+}
+
+// Every key carries the metadata a config screen and the reference page show,
+// and it agrees with the default.
+func TestKeysMetadata(t *testing.T) {
+	for _, k := range Keys {
+		if k.Desc == "" || !strings.HasSuffix(k.Desc, ".") {
+			t.Errorf("%s: Desc must be one or two sentences ending in a period, got %q", k.Name, k.Desc)
+		}
+		if g, _, _ := strings.Cut(k.Name, "."); k.Group != g {
+			t.Errorf("%s: Group %q, want %q", k.Name, k.Group, g)
+		}
+		var ok bool
+		switch k.Type {
+		case TypeBool:
+			_, ok = k.Default.(bool)
+		case TypeInt:
+			_, ok = k.Default.(json.Number)
+		case TypeList:
+			_, ok = k.Default.([]any)
+		case TypeString, TypePath, TypeEnum:
+			_, ok = k.Default.(string)
+		}
+		if !ok {
+			t.Errorf("%s: Type %q does not fit default %#v", k.Name, k.Type, k.Default)
+		}
+		if (k.Type == TypeEnum) != (len(k.Choices) > 0) {
+			t.Errorf("%s: Choices %v only on an enum key", k.Name, k.Choices)
+		}
+		if s, _ := k.Default.(string); k.Type == TypeEnum && s != "" && !slices.Contains(k.Choices, s) {
+			t.Errorf("%s: default %q is not among the choices %v", k.Name, s, k.Choices)
+		}
+	}
+}
+
+// docs/reference/config-options.md is generated from the schema. Regenerate:
+// go generate ./internal/config
+func TestReferencePageIsCurrent(t *testing.T) {
+	got, err := os.ReadFile("../../docs/reference/config-options.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != ReferencePage() {
+		t.Fatal("docs/reference/config-options.md differs from the schema; run: go generate ./internal/config")
 	}
 }

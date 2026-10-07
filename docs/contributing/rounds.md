@@ -102,8 +102,10 @@ new code. A new contract doc needs the stamp before it passes.
   Tooling: Smoke testing*.
 - A new verb needs a contract entry and a smoke section. The entry goes in the group file under `docs/contributing/contract/`
   that holds its siblings (`docs/contributing/contract/README.md` maps groups to files); add the verb to the README index too.
-- Config keys are documented in three places at once: `docs/reference/config-options.md`,
-  `docs/usage/configuration.md` and `internal/config/schema.go`. Touch only the lines about your key; a sibling may be adding
+- Config keys are documented in three places at once: the schema row in `internal/config/keys.go`
+  (name, default, `Type`, `Desc`, `Choices`), the generated `docs/reference/config-options.md`
+  (run `go generate ./internal/config`; `bash test/doclint.sh` fails on drift) and the prose in
+  `docs/usage/configuration.md`. Touch only the lines about your key; a sibling may be adding
   another key in the same files.
 - Stage explicit paths. Commit messages: imperative subject under 72 chars, body says why,
   no `Co-Authored-By` trailer.
