@@ -112,6 +112,14 @@ Integer 0 or more, silent default `0` (off). Counted per item from its first ass
 rota config set work.itemTimeoutMinutes 240
 ```
 
+## work.envSetup: install dependencies in new worker worktrees
+
+Free text, silent default `""` (nothing runs). `rota worker pool init` runs it once in each new slot worktree, with that worktree as the working directory, so a JS or Python worker does not start in a tree with no dependencies. It is skipped while the hash of the command and the lockfiles (`package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`, `uv.lock`, `poetry.lock`, `requirements*.txt`, `go.sum`) matches the one stored by the slot's last successful run, so re-running `pool init` is cheap and a changed lockfile or command reruns it. The hash sits in the worktree's git dir, outside tracked files. A non-zero exit stops `pool init` with exit 1 and a message naming the slot and the command; no hash is stored, so the next `pool init` retries.
+
+```bash
+rota config set work.envSetup "npm ci"
+```
+
 ## work.tdd: red-first on or off
 
 `true` (default): a behavior change needs a recorded red run, a FAIL proof row from a test that failed on an assertion, before its PASS row. A FAIL whose evidence is a build, compile or setup failure (missing import, typo, undefined symbol) is not a red run; the task gets a fix dispatch. `false`: `/rota-work` Step 7 and the worker contract require no RED row. PASS rows are still recorded.

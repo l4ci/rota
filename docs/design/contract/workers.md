@@ -4,11 +4,12 @@
 rota worker pool init --slots <n> [--base <branch>] [--session <name>]
 repo: none
 data: {"session": string, "base": string, "slots": []slot, "changed": bool}
-exit: 2 when --slots is missing or not a positive integer; 3 when the base branch cannot be resolved or does not exist, or a registered slot's worktree belongs to another repository; 5 when git fails
+exit: 1 when `work.envSetup` exits non-zero; 2 when --slots is missing or not a positive integer; 3 when the base branch cannot be resolved or does not exist, or a registered slot's worktree belongs to another repository; 5 when git fails
 old: hv-worker-pool init --slots <n> [--base <branch>] [--session <name>]
 shim: runs the old helper, then reads `.rota/workers.json` for `data`; `changed` is false when the registry file is byte-identical before and after.
 note: --base defaults to the current branch and --session to `rota`, as the old helper does.
 note: `warnings` gets one entry when `.worktrees/` is not gitignored, and one per registered slot outside `.worktrees/` that is kept in place (old `warning:` and `note:` stderr lines).
+note: `work.envSetup` (#398, silent default empty = no-op) is a shell command run in each slot worktree after the slot is registered, with that worktree as cwd. It runs when the hash of the command and the root lockfiles (package-lock.json, pnpm-lock.yaml, yarn.lock, uv.lock, poetry.lock, requirements*.txt, go.sum) differs from `rota-env-setup` in the worktree's git dir (so: on a new slot, and on an existing one whose lockfiles or command changed), and writes that hash only after a zero exit. A non-zero exit stops the verb at that slot with exit 1 and a message naming the slot, the exit code, the command and its output; later slots are not set up, and the failed slot stays registered so the next `pool init` retries it.
 
 ### rota worker pool list
 rota worker pool list

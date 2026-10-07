@@ -7,6 +7,7 @@ import (
 	"github.com/l4ci/rota/internal/rotatree"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/git"
@@ -51,7 +52,9 @@ type InitResult struct {
 	Warnings []string
 }
 
-// PoolInit creates the slots' worktrees and registers them. It is
+// PoolInit creates the slots' worktrees and registers them, then runs
+// work.envSetup in each slot worktree whose lockfile hash differs from the one
+// stored by its last successful setup. It is
 // idempotent: an existing, healthy slot is left alone and only missing slots
 // are created. Re-running with a larger Slots grows the pool and never shrinks
 // one (use reap).
@@ -88,6 +91,8 @@ func (e Env) PoolInit(ctx context.Context, root string, o InitOpts, acc *Account
 	// tmux handles are known now; herdr tab ids exist only after a dispatch.
 	cfg := config.Load(rotatree.Config(root))
 	dispatch := config.Dispatch(cfg)
+
+	envSetup := config.String(cfg, "work.envSetup")
 
 	names, branchOf := o.slotNames()
 	for _, name := range names {
@@ -153,6 +158,13 @@ func (e Env) PoolInit(ctx context.Context, root string, o InitOpts, acc *Account
 		}
 		if err := registerSlot(root, name, branch, abs, base, session, handle); err != nil {
 			return res, err
+		}
+		// Fail fast: a red setup stops the pool here, the slot stays registered
+		// and the next init retries it because no hash was stored.
+		if strings.TrimSpace(envSetup) != "" {
+			if _, err := e.envSetup(ctx, name, abs, envSetup); err != nil {
+				return res, err
+			}
 		}
 	}
 
