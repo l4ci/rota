@@ -195,7 +195,6 @@ func goStep(b *Issues, st wStep) map[string]any {
 
 func goRunScenario(t *testing.T, s wScenario) map[string]any {
 	t.Helper()
-	t.Setenv("ROTA_NOTE_LIMIT", s.Limit)
 	f := &trackertest.Fake{Milestones: s.Milestones}
 	for _, i := range s.Issues {
 		f.Issues = append(f.Issues, tracker.Issue{Number: i.Number, Title: i.Title, Body: i.Body, Labels: append([]string{}, i.Labels...),
@@ -208,7 +207,7 @@ func goRunScenario(t *testing.T, s wScenario) map[string]any {
 		}
 	}
 	f.Calls = nil
-	b := &Issues{Cfg: mustDecode(t, s.Cfg), Tracker: f, CountProof: stubCountProof}
+	b := &Issues{Cfg: mustDecode(t, s.Cfg), Tracker: f, CountProof: stubCountProof, NoteLimit: s.Limit}
 	var steps []any
 	for _, st := range s.Steps {
 		f.Calls = nil

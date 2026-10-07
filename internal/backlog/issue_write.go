@@ -3,7 +3,6 @@ package backlog
 import (
 	"errors"
 	ms "github.com/l4ci/rota/internal/milestone"
-	"os"
 	"regexp"
 	"slices"
 	"sort"
@@ -404,8 +403,10 @@ func (b *Issues) Ready(ref string) ([]string, error) {
 
 // ---- notes -----------------------------------------------------------------
 
-func noteLimit() int {
-	n, err := strconv.Atoi(pystr.Strip(os.Getenv("ROTA_NOTE_LIMIT")))
+// noteLimit is the note part size from the ROTA_NOTE_LIMIT value raw; an unset
+// or unparsable value is the default, and a size under 80 is raised to 80.
+func noteLimit(raw string) int {
+	n, err := strconv.Atoi(pystr.Strip(raw))
 	if err != nil {
 		return noteLimitDefault
 	}
@@ -508,7 +509,7 @@ func (b *Issues) NotePut(ref, kind, text string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	want := notechunk.Parts(kind, text, noteLimit())
+	want := notechunk.Parts(kind, text, noteLimit(b.NoteLimit))
 	changed := false
 	for i, body := range want {
 		if i < len(existing) {
