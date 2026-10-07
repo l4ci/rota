@@ -4,7 +4,9 @@
 
 # rota
 
-**Turn Claude Code or Codex into a small dev team. You write the issues; an orchestrator agent hands them to worker agents, merges their PRs and checks every merge against your tests.**
+**The agent orchestration layer for Claude Code and Codex.**
+
+One orchestrator runs as many workers as your accounts can carry, in herdr or tmux, on Claude, Codex or both, and spreads them across accounts so no session or weekly limit stalls the work. Start from an empty repo or point it at your GitHub or GitLab issues. rota plans, builds, debugs, runs QA and keeps what it learns, and it merges a PR only after your tests pass on the merged code.
 
 [![Release](https://img.shields.io/github/v/release/l4ci/rota?color=blue&sort=semver)](https://github.com/l4ci/rota/releases)
 [![License](https://img.shields.io/github/license/l4ci/rota?color=green)](LICENSE)
