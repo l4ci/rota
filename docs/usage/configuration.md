@@ -128,6 +128,19 @@ Three tiers of shell commands, each an array defaulting to `[]`:
 - `test.full`: the full suite. The merge gate (`rota worker gate`) and the merge train run it on the merged tree, and [`/rota-refactor`](../reference/slash-commands.md#rota-refactor) runs it in `--fix` verification as CI-shape gates before committing. Empty means read-only verification, and the gate reports `NO-VERIFY`.
 - `test.e2e`: slow end-to-end checks. `rota worker gate` and the merge train run it on the merged tree after `test.full` passes, so a round pays for it at merge instead of once per branch (a train runs it once for all members). A red train run bisects like a red `test.full`. Empty skips the step.
 
+### The exclusion ledger
+
+A known-red or flaky test may be passed over by the merge gate and the merge train only through `.rota/test-ledger.json`, a tracked file that starts empty (a missing file or `[]` means no exclusions):
+
+```json
+[{"test": "TestFlaky", "owner": "dana", "receipt": "#378", "expires": "2026-11-01"}]
+```
+
+- `test`: the top-level Go test name, as `go test` prints it on its `--- FAIL: <name>` line. Its subtests are covered by it.
+- `owner`: who fixes it. `receipt`: the issue or PR tracking the fix. `expires`: `YYYY-MM-DD` (valid through the end of that day, UTC) or an RFC 3339 time. All four are required.
+
+`rota worker gate` and `rota worker train` read the file from the base before merging. A `test.full` or `test.e2e` command that fails still passes the verify when every test it names has an unexpired entry; the result lists them under `excluded`. A failing test with no entry fails as before, and so does a failure the output does not name (a build error, a panic, a timeout). Once an entry expires the gate and the train fail with `verify-failed` and nothing lands, naming the test, owner and receipt, whether or not the test still fails: fix the test, or renew the entry in a reviewed commit. A malformed entry is exit 2. `rota test ledger check` reports expired and malformed entries without running anything. The ledger applies to the local run, not to `test.fullWhere ci`, where CI decides.
+
 ### test.isolate
 
 `rota test run <tier>` isolates the environment of every command by default (`test.isolate`, bool, default `true`): `HERDR_*`, `TMUX*`, `SSH_AUTH_SOCK` and `SSH_AGENT_PID` are removed, and `HOME` and the `XDG_*` dirs point into a temp root that is deleted when the run ends. The Go caches (`GOCACHE`, `GOMODCACHE`, `GOPATH`, `GOENV`) keep their real locations, so an isolated run does not rebuild from cold. A project whose tests need the real home or an ssh-agent opts out with `rota config set test.isolate false`. It applies to `rota test run` only, not to the merge gate or train.

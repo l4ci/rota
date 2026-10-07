@@ -9,6 +9,7 @@ import (
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/land"
 	"github.com/l4ci/rota/internal/rotatree"
+	"github.com/l4ci/rota/internal/testledger"
 	"os"
 	"path/filepath"
 	"sort"
@@ -78,6 +79,9 @@ type TrainResult struct {
 	Err         string
 	Hint        string
 	Notes       []string
+	// Excluded lists the test-ledger entries that excused a failing command;
+	// Expired the entries past their expiry, which fail the train.
+	Excluded, Expired []testledger.Entry
 }
 
 // OK reports a train that verified and landed whole.
@@ -148,6 +152,18 @@ func (e Env) train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 		}
 		res.Members = append(res.Members, TrainMember{Target: t, Branch: gr.Branch, PR: gr.PR})
 		remote = remote || gr.PR != ""
+	}
+	// The ledger is read before anything merges, like the config. An expired
+	// entry fails the train before it builds the scratch tree.
+	led, err := LoadLedger(root)
+	if err != nil {
+		return res, err
+	}
+	if now := e.Now(); LedgerExpiry(led, now) != "" {
+		res.Verdict, res.Expired = GateVerifyFailed, led.Expired(now)
+		res.Err = "TRAIN-FAIL " + LedgerExpiry(led, now) + "; nothing landed"
+		res.Hint = "fix the test or renew the entry in .rota/test-ledger.json, then re-run the train"
+		return res, nil
 	}
 	verify, onCI, brokeMsg, err := e.fullTier(ctx, root, "train")
 	if err != nil {
@@ -288,6 +304,7 @@ func (e Env) train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 			"set test.full via rota config set to make this gate real")
 	} else {
 		res.Verified = vr.Verified
+		res.Excluded = append(res.Excluded, vr.Excluded...)
 		for _, c := range vr.Failed {
 			res.Notes = append(res.Notes, "verify FAILED: "+c)
 		}
@@ -306,12 +323,13 @@ func (e Env) train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 	// test.full passed. A red e2e bisects the same way a red full does.
 	e2e := TierCommands(root, "e2e")
 	if green && len(e2e) > 0 {
-		run := func() (VerifyResult, error) { return e.RunVerify(ctx, e2e, scratch) }
+		run := func() (VerifyResult, error) { return e.RunVerifyWith(ctx, e2e, scratch, led) }
 		er, err := run()
 		if err != nil {
 			return res, err
 		}
 		res.E2EVerified = er.Verified
+		res.Excluded = append(res.Excluded, er.Excluded...)
 		for _, c := range er.Failed {
 			res.Notes = append(res.Notes, "e2e FAILED: "+c)
 		}
