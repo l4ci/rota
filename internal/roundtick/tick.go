@@ -12,7 +12,9 @@ package roundtick
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/worker"
 	"slices"
 	"sort"
@@ -31,6 +33,26 @@ type Slot struct{ Name, State, Issue, PR string }
 type Candidate struct {
 	ID    string
 	Ready bool
+}
+
+// GateOutcome is what the gate adapter reports for one target. An empty
+// Verdict on a failure reads as "gate-error".
+type GateOutcome struct {
+	Landed  bool
+	Verdict string
+	Detail  string
+}
+
+// TrainOutcome is what the train adapter reports for several targets. Landed
+// are the members that merged, Culprit the member that broke the train, if
+// the train names one.
+type TrainOutcome struct {
+	Landed  []string
+	Culprit string
+	Verdict string
+	Detail  string
+	// Done is true when the whole train landed.
+	Done bool
 }
 
 // Merged is what the merge step reports for one target.
@@ -62,14 +84,18 @@ type Env struct {
 	// Reconcile applies the safe repairs and returns what it repaired and the
 	// drift it leaves.
 	Reconcile func(ctx context.Context) (repaired, drift []string, err error)
-	// Merge gates the targets (slots or PR refs): one is a gate, several a
-	// train.
-	Merge func(ctx context.Context, targets []string) ([]Merged, error)
+	// BaseOf names the branch a target (a slot or PR ref) merges into. Targets
+	// sharing a base are gated together: one is a gate, several a train.
+	BaseOf func(target string) string
+	// Gate lands one target into base; Train lands several, in order.
+	Gate  func(ctx context.Context, target, base string) GateOutcome
+	Train func(ctx context.Context, targets []string, base string) TrainOutcome
 	// Candidates are the assignable items in backlog order.
 	Candidates func(ctx context.Context) ([]Candidate, error)
-	// Assign hands an item to the first idle slot and returns its name. A
-	// refusal (not ready after all, no slot) is a *Refusal, not a failure.
-	Assign func(ctx context.Context, id string) (agent string, err error)
+	// Assign hands an item to the first idle slot and returns the slot names
+	// (two for a best-of:2 issue). A *round.BlockedError (not ready after all,
+	// no slot) is a refusal, not a failure; "no round" is a failure.
+	Assign func(ctx context.Context, id string) (agents []string, err error)
 	// Review mints the architecture-review items (#53) when a review is due,
 	// at the round.architectureEvery threshold or because a slot is idle with
 	// nothing assignable, and returns their ids. nil means the round has no
@@ -82,11 +108,6 @@ type Env struct {
 	Held     map[string]string
 	Reported map[string]bool
 }
-
-// Refusal is Assign saying no without anything having gone wrong.
-type Refusal struct{ Why string }
-
-func (r *Refusal) Error() string { return r.Why }
 
 // Action is something the tick did.
 type Action struct{ Action, Target, Detail string }
@@ -204,11 +225,7 @@ func (e Env) merge(ctx context.Context, r *Result, targets []string) error {
 	if len(run) == 0 {
 		return nil
 	}
-	out, err := e.Merge(ctx, run)
-	if err != nil {
-		return err
-	}
-	for _, m := range out {
+	for _, m := range e.mergeAll(ctx, run) {
 		switch {
 		case m.Skip:
 		case m.Landed:
@@ -227,6 +244,81 @@ func (e Env) merge(ctx context.Context, r *Result, targets []string) error {
 		}
 	}
 	return nil
+}
+
+// mergeAll groups the targets by the base each merges into, in first-seen
+// order: a lone target is a gate, several a train. A target that did not land
+// is reported with its verdict; whether it is held for a person is the
+// verdict's call: a stale or provenance bounce goes back to the worker and
+// returns, any other failure waits for a person.
+func (e Env) mergeAll(ctx context.Context, targets []string) []Merged {
+	var order []string
+	groups := map[string][]string{}
+	for _, t := range targets {
+		b := e.BaseOf(t)
+		if _, ok := groups[b]; !ok {
+			order = append(order, b)
+		}
+		groups[b] = append(groups[b], t)
+	}
+	var out []Merged
+	for _, b := range order {
+		if ts := groups[b]; len(ts) == 1 {
+			out = append(out, e.gate(ctx, ts[0], b))
+		} else {
+			out = append(out, e.train(ctx, ts, b)...)
+		}
+	}
+	return out
+}
+
+func (e Env) gate(ctx context.Context, target, base string) Merged {
+	g := e.Gate(ctx, target, base)
+	if g.Landed {
+		return Merged{Target: target, Landed: true, Detail: "into " + base}
+	}
+	v := g.Verdict
+	if v == "" {
+		v = "gate-error"
+	}
+	return Merged{Target: target, Verdict: v, Hold: holdable(v), Detail: g.Detail}
+}
+
+func (e Env) train(ctx context.Context, targets []string, base string) []Merged {
+	tr := e.Train(ctx, targets, base)
+	out := make([]Merged, 0, len(targets))
+	if tr.Done {
+		for _, t := range targets {
+			out = append(out, Merged{Target: t, Landed: true, Detail: "train into " + base})
+		}
+		return out
+	}
+	v := tr.Verdict
+	if v == "" {
+		v = "train-error"
+	}
+	for _, t := range targets {
+		m := Merged{Target: t}
+		switch {
+		case slices.Contains(tr.Landed, t):
+			m.Landed, m.Detail = true, "train into "+base
+		case v == "base-moved":
+			m.Skip = true // nothing landed; the base moved under the train
+		case tr.Culprit != "" && t != tr.Culprit && !strings.Contains(tr.Culprit, t):
+			m.Skip = true // another member broke the train: retried without it
+		default:
+			m.Verdict, m.Hold, m.Detail = v, holdable(v), tr.Detail
+		}
+		out = append(out, m)
+	}
+	return out
+}
+
+// holdable reports whether a refused target waits for a person. A stale or
+// provenance-failed PR goes back to its worker; a best-of:2 attempt no pick
+// names clears itself once the orchestrator picks.
+func holdable(verdict string) bool {
+	return verdict != worker.GateStale && verdict != worker.GateProvenanceFail && verdict != worker.GateBestOfUnpicked
 }
 
 // review mints the due architecture reviews. A failed mint is the
@@ -288,13 +380,12 @@ func (e Env) assign(ctx context.Context, r *Result, minted []string) error {
 		if !c.Ready {
 			continue
 		}
-		agent, err := e.Assign(ctx, c.ID)
-		var ref *Refusal
+		agents, err := e.Assign(ctx, c.ID)
 		switch {
 		case err == nil:
-			e.audit(r, Action{"assign", c.ID, "to " + agent})
+			e.audit(r, Action{"assign", c.ID, "to " + strings.Join(agents, " and ")})
 			n--
-		case asRefusal(err, &ref):
+		case isRefusal(err):
 			// Not ready after all, or every slot filled meanwhile: try the next.
 		default:
 			return fmt.Errorf("assign %s: %w", c.ID, err)
@@ -303,12 +394,12 @@ func (e Env) assign(ctx context.Context, r *Result, minted []string) error {
 	return nil
 }
 
-func asRefusal(err error, out **Refusal) bool {
-	r, ok := err.(*Refusal)
-	if ok {
-		*out = r
-	}
-	return ok
+// isRefusal reports whether err is Assign declining without anything having
+// gone wrong: a *round.BlockedError other than "no round", which means the
+// autopilot has no round to work for.
+func isRefusal(err error) bool {
+	var blk *round.BlockedError
+	return errors.As(err, &blk) && blk.By != round.BlockNoRound
 }
 
 func firstNonEmpty(a ...string) string {
