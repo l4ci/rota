@@ -26,7 +26,7 @@ grep -qx "$LINT" <<<"$OUT" || fail "lib.sh should add the piped-grep lint: $OUT"
 OUT=$(fast_plan test/sections/71_no_pipe_grep_q.sh)
 [ "$(grep -cx "$LINT" <<<"$OUT")" = 1 ] || fail "section 71 changed itself must be listed once: $OUT"
 OUT=$(fast_plan test/lib/isolate.sh docs/foo.md)
-grep -q "section" <<<"$OUT" && fail "a file outside the lint paths must not add section 71: $OUT"
+if grep -q "section" <<<"$OUT"; then fail "a file outside the lint paths must not add section 71: $OUT"; fi
 
 OUT=$(fast_plan notes/unmapped.txt)
 [ -z "$OUT" ] || fail "an unmapped file should select nothing: $OUT"
