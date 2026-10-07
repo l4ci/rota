@@ -66,7 +66,7 @@ Handoff note found:
 
 5. You confirm, and `/rota-work` picks up with the handoff note as its brief. The note is deleted.
 
-## 🎯 When to /rota-pause vs just commit and walk away
+## When to /rota-pause vs just commit and walk away
 
 A clean commit is enough when the work sits at a natural stopping point: a passing test, a completed subtask, a checkpoint that git state alone can describe. `/rota-pause` is for the messy middle. The live hypothesis, the half-written test, the "I was about to try X": none of that survives a `/clear` from git state alone. If you'd have to re-read diffs and reconstruct your reasoning to figure out what to do next, pause first.
 
@@ -81,9 +81,9 @@ For a handoff you write yourself, use `/rota-pause` above.
 ## Keepalive
 
 `rota keepalive run` starts the next orchestrator session after a handoff exit. See
-[unattended rounds](unattended-rounds.md#keepalive).
+[unattended rounds](unattended-rounds.md#-keepalive).
 
-## ⏳ Usage limits
+## Usage limits
 
 `rota limit watch` waits out a 5-hour or weekly limit and types the resume prompt. See
 [unattended rounds](unattended-rounds.md#-usage-limits).

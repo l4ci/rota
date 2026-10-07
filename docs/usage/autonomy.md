@@ -28,7 +28,7 @@ Autonomy decides whether to invoke the next skill; the destination skill's own g
 
 Gates that stay manual at every level: public-artifact gates and committed-boundary gates (`rota gate list`). The tag push, release publish and, when `ship.mergeApproval` asks for it, merges are enforced by the verbs themselves: they exit 4 until a human answer is passed with `--confirm`. `/rota-decide` approvals, PR opening and upstream issue closing honor their `**Manual gate: ...**` callout no matter what `autonomy.level` says.
 
-## 🎯 When to flip it on
+## When to flip it on
 
 `"auto"` is good when you want the obvious follow-up step of each cycle (capture learnings, ship the fix) without typing the command yourself. Leave it `"off"` when you are exploring, when items need different judgement calls, or when you want a checkpoint after every step.
 

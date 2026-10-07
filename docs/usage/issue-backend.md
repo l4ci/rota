@@ -2,7 +2,7 @@
 
 With `backlog.backend: "issues"` the tracker (GitHub or GitLab) is the backlog. `.rota/BACKLOG.md` and the `.rota/<kind>/` detail files are not used; items, milestones and design/plan artifacts live on the tracker. File mode is the default and is unchanged. Skills keep their file-mode steps and branch on the backend; the issue-mode differences are listed in `references/issue-mode.md`.
 
-## 🔧 Setup
+## Setup
 
 1. Install and authenticate the CLI for your host: `gh auth status` (GitHub) or `glab auth status` (GitLab). With no CLI or no auth, `rota` exits 5 and does not fall back to files.
 2. Set the backend: `rota config set backlog.backend issues`.

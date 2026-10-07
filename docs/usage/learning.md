@@ -89,7 +89,7 @@ All three operate on `(topic, title)` pairs. The tier sidecar is the source of t
 
 `/rota-learn --retro` looks at the session's mistakes instead of its discoveries. It reads the session transcript (Claude Code under `~/.claude/projects/`, Codex under `~/.codex/sessions/`) and cites the line or entry for each repeated-work, ignored-plan or skipped-step mistake; one with no citable evidence is marked unverified, not filed. With no transcript it falls back to session memory and recent commits and says so. It sorts each into one of four classes: a **guardrail** (lint, test, hook or CI check), a **written standard** (a `KNOWLEDGE.md` bullet or a decision), a **navigation pointer** (a map entry or an `AGENTS.md` line) or a **tool-economy fix**. Guardrail candidates are filed as items with `rota item create` and never built in the same run. The retro also lists bullets that look like no-ops (never hit, or restating code) as removal candidates. It does not delete or deprecate them; you decide, then use `--deprecate`.
 
-## 🎯 When to invoke
+## When to invoke
 
 Invoke `/rota-learn` after a session that surfaced discoveries: two or more
 gotchas resolved in a cycle, a broad change touching many files, or a hard bug
@@ -100,7 +100,7 @@ Skills nudge or auto-invoke `/rota-learn` depending on your
 [autonomy](autonomy.md) level. With `off` you get a one-line nudge; with `auto`,
 `/rota-ship` runs it after integrating. `/rota-work` only nudges.
 
-## ✅ Verification
+## Verification
 
 `learn.verify` in `.rota/config.json` controls a second-opinion pass, off by
 default. Set it to `true`, or pass `--strict` for one run, and `/rota-learn` dispatches a fresh Opus subagent that cold-reads `KNOWLEDGE.md` and the
@@ -134,6 +134,6 @@ review when violated. Use `/rota-decide` for the latter. It captures
 rule + why + forbids + permits and is consulted as a constraint by `/rota-work`,
 [`/rota-debug`](debugging.md), [`/rota-plan`](vision-and-plans.md), [`/rota-refactor`](../reference/slash-commands.md#rota-refactor), [`/rota-review`](review-and-ship.md), and [`/rota-vision`](vision-and-plans.md).
 
-## 🔗 See also
+## See also
 
 - Sibling persistence skill: [`docs/usage/decisions.md`](decisions.md)

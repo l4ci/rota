@@ -73,7 +73,7 @@ For a round that must survive the orchestrator's context filling or a usage limi
 hooks and run the orchestrator under `rota keepalive run`:
 [unattended rounds](unattended-rounds.md). For Codex workers: [Codex workers](codex-workers.md).
 
-## Your first round
+## 🚀 Your first round
 
 ```sh
 rota orchestrate
@@ -554,7 +554,7 @@ in `<!-- rota:handoff <slot>@<round> -->`.
 drift between the registry, the host, git and the forge, including `stalled` (never repaired),
 `lease-stale` and `claim-mismatch`; `--apply` makes the safe repairs, and never edits the tracker.
 
-## 🏁 Winding down
+## Winding down
 
 ```sh
 rota round wind-down                # verify the base, park every slot, release the lease
@@ -609,7 +609,7 @@ minutes (`BASH_DEFAULT_TIMEOUT_MS`) and is capped at 10 minutes (`BASH_MAX_TIMEO
   pass a matching `timeout` on the Bash call; or
 - loop on a finite `rota round wait --timeout` shorter than the cap.
 
-## 🔗 See also
+## See also
 
 - [Unattended rounds](unattended-rounds.md): hooks, keepalive, usage limits and account switching.
 - [Doctor and reap](doctor-and-reap.md): the preflight checks and what cleanup removes.

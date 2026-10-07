@@ -2,7 +2,7 @@
 
 `/rota-brainstorm` fills the gap between [`/rota-capture`](capturing-work.md) (records what to build) and [`/rota-plan`](vision-and-plans.md) (decomposes how to build it). It negotiates *whether this is the right thing and what shape it should take* for a single backlog item. The artifact is stored as the item's design: a note on its issue on the [issue backend](issue-backend.md), `.rota/designs/<ID>.md` on the file backend. It feeds `/rota-plan` as soft input: read when present, never required.
 
-## 🎯 When to run it
+## When to run it
 
 - Right after capturing a `[Major]` feature or a `[P0]` bug, when its design is unclear.
 - When two reasonable approaches need negotiation before you commit to one.
@@ -108,7 +108,7 @@ If `.rota/designs/<ID>.md` already exists, `/rota-brainstorm` asks how to procee
 - **Edit**: load it as the starting draft and revise it.
 - **Replace**: delete it and start from scratch.
 
-## 🚫 What it does not do
+## What it does not do
 
 - Project-level design stays with [`/rota-vision`](vision-and-plans.md): milestones, multi-feature arcs, vision rewrites.
 - Code-touching feasibility experiments stay with [`/rota-spike`](spikes.md): a throwaway branch that proves a thing works before the design hardens.

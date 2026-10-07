@@ -94,7 +94,7 @@ Restarting the orchestrator after the exit is the next section; usage limits fol
 hooks, `/rota-pause` and `/rota-work` (no argument) are the manual route
 ([pausing and resuming](pausing-and-resuming.md)).
 
-## Keepalive
+## 💓 Keepalive
 
 The hooks end an orchestrator session cleanly. `rota keepalive run` starts the next one. Start the
 orchestrator under it, in the pane it will own:

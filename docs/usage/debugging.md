@@ -54,7 +54,7 @@ If the root cause surprised you, the skill ends with a nudge:
 Root cause was non-obvious. Consider running /rota-learn to capture this.
 ```
 
-## 🎯 When to use /rota-debug vs /rota-work
+## When to use /rota-debug vs /rota-work
 
 Use `/rota-debug` when you don't yet know the root cause and need the reproduce, hypothesize, verify loop. The cycle is the point.
 

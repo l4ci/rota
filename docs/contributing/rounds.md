@@ -112,7 +112,7 @@ new code. A new contract doc needs the stamp before it passes.
   section lists your own calls as `<what> — <why> — <cost if wrong>`. Reference the issue so it closes on
   merge, unless the PR is a partial slice.
 
-## 🩹 Tracker CLI gotchas
+## Tracker CLI gotchas
 
 On this repo `gh issue view <N> --comments` and `gh pr edit` fail with a Projects-classic
 GraphQL deprecation error. Read an issue with `gh issue view <N> --json title,body,comments`

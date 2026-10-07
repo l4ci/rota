@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/images/rota-logo.svg" alt="rota" width="308">
+<img src="docs/images/rota-logo.svg" alt="rota" width="309">
 
 # rota
 

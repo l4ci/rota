@@ -16,7 +16,7 @@ rota orchestrate --dry-run     # shows the command and first prompt
 
 The prompt is the last argument, on the first start and on every keepalive restart, which is why the Hermes and opencode commands end in `-q` and `--prompt`.
 
-## 🔧 Setup for Hermes and opencode
+## Setup for Hermes and opencode
 
 Both read `.agents/skills`, so the Codex install covers them:
 

@@ -23,7 +23,7 @@ Then:
 
 Rotating is the same. Order matters: `install.sh` on `main` is what users run, so merge the new public key and cut a release signed with the new key together. A release signed with the old key stops verifying for anyone who fetches the new `install.sh`, and the reverse. Re-sign or re-release the versions people still pin with `--version` if they must stay installable. If the old key leaked, say so in the release notes.
 
-## ✅ Verify by hand
+## Verify by hand
 
 ```bash
 minisign -V -P RWRdi6F6TxVTIW92f3/QsWBl5VHdXm1FABgexyAla0z3A5WT4JzG6/SP \
