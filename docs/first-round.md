@@ -37,11 +37,19 @@ At the project root:
 rota init
 ```
 
-Commit `.rota/`, `AGENTS.md`, `CLAUDE.md` and `.gitignore`. `rota init` sets three worker slots. For a small first round, use two:
+Commit `.rota/`, `.claude/agents/`, `AGENTS.md`, `CLAUDE.md` and `.gitignore`. `rota init` also writes three small subagent definitions, `.claude/agents/rota-{explorer,implementer,reasoner}.md`, which workers use to pick a cheaper or stronger model per job (`rota init --no-blocks` skips them). It sets three worker slots. For a small first round, use two:
 
 ```bash
 rota config set work.workerSlots 2
 ```
+
+Then tell the gate how to check a merge. `test.full` is the command that runs your whole test suite. The gate runs it on the merged tree before a PR lands:
+
+```bash
+rota config set test.full "go test ./..."   # your project's own test command
+```
+
+While `test.full` is empty the gate refuses to merge, because nothing would check the result. `--no-verify` merges anyway, on purpose. Don't use it for a first round.
 
 ## 5. Extra accounts (optional)
 
@@ -134,7 +142,7 @@ In the pane, at the project root:
 rota orchestrate
 ```
 
-It runs `rota doctor`, then opens a focused orchestrator tab that runs the agent under `rota keepalive run` and has already started `/rota-orchestrate`. `rota` alone opens a small palette (banner, version, the project and round state, and the common actions) with Orchestrate preselected, so `rota` then Enter does the same. Tell the orchestrator what you want, for example "run a round on issues 12 and 13". `orchestrator.harness` picks the agent (`claude`, `codex`, `hermes` or `opencode`). A `claude` orchestrator starts under your `CLAUDE_CONFIG_DIR` if set, else under the `work.accounts` entry with the most headroom. See [your first round](usage/parallel-rounds.md#your-first-round) for what happens outside herdr or tmux.
+It runs `rota doctor`, then opens a focused orchestrator tab that runs the agent under `rota keepalive run` and has already started `/rota-orchestrate`. `rota` alone, in a terminal, opens a small palette (banner, version, the project and round state, and the common actions) with Orchestrate preselected, so `rota` then Enter does the same. In a directory without `.rota/`, Enter runs `rota setup` instead. Tell the orchestrator what you want, for example "run a round on issues 12 and 13". `orchestrator.harness` picks the agent (`claude`, `codex`, `hermes` or `opencode`). A `claude` orchestrator starts under your `CLAUDE_CONFIG_DIR` if set, else under the `work.accounts` entry with the most headroom. See [your first round](usage/parallel-rounds.md#your-first-round) for what happens outside herdr or tmux.
 
 The skill runs `rota doctor` again, then `rota round start`. That takes the orchestrator lease, creates the worker slots and lists the ready issues, and it detects herdr or tmux from the pane it runs in. It starts no worker yet. The orchestrator then picks the slate and assigns each issue with `rota round assign`, which cuts a branch and starts a worker in a new tab.
 
@@ -150,7 +158,7 @@ You don't need to poll. The orchestrator waits on `rota round wait` and wakes wh
 
 ## 14. Merges and escalations
 
-Workers open PRs and never merge. For each finished PR the orchestrator reads the diff, runs the gate (`rota worker gate`) on the merged tree and merges on a pass. By default (`ship.mergeApproval` is `none`) a passing gate merges. If you set `all` or `paths`, the gate asks you on the PR thread first and merges only after you reply `approve`, `yes` or `lgtm`. See [merge approval](usage/parallel-rounds.md#merge-approval).
+Workers open PRs and never merge. For each finished PR the orchestrator reads the diff, runs the gate (`rota worker gate`) on the merged tree and merges on a pass. The gate also refuses a PR whose body lacks `Closes #N` for its issue (an issue labelled `partial-slice` is exempt) and a PR with a recorded FAIL review verdict. By default (`ship.mergeApproval` is `none`) a passing gate merges. If you set `all` or `paths`, the gate asks you on the PR thread first and merges only after you reply `approve`, `approved`, `yes`, `lgtm` or `ship it`. See [merge approval](usage/parallel-rounds.md#merge-approval).
 
 When a worker or the orchestrator needs a human decision, it posts the question on the issue or PR thread, or asks in the pane. Answer there. A line starting with `m:` typed into a pane counts as a maintainer answer: [details](usage/parallel-rounds.md#maintainer-answers-typed-into-a-pane).
 

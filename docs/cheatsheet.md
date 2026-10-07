@@ -31,7 +31,7 @@ What each `/rota-*` skill does, one line each. For details: [`reference/slash-co
 - **`/rota-release`**: cut a release.
 
 ## Verbs, not skills
-- **`rota`** (bare, in a terminal): runs `rota setup` in a directory without `.rota/`, launches the orchestrator in an initialized project.
+- **`rota`** (bare, in a terminal): opens a palette. Enter on the preselected entry runs `rota setup` in a directory without `.rota/` and launches the orchestrator in an initialized project. Outside a terminal it prints usage.
 - **`rota orchestrate`**: run `rota doctor`, then start the orchestrator under `rota keepalive run`.
 - **`rota init`** (`rota init umbrella`): scaffold `.rota/` and fill config defaults.
 - **`rota projects`**: list every project `rota init` registered on this machine (`$XDG_CONFIG_HOME/rota/projects.json`, default `~/.config/rota`). Paths that no longer exist are marked `(missing)`. `rota projects cleanup` deletes, at once, every entry whose directory is gone or no longer holds `.rota/`, and prints each.
@@ -41,7 +41,10 @@ What each `/rota-*` skill does, one line each. For details: [`reference/slash-co
 - **`rota migrate issues`**: move the backlog to GitHub or GitLab issues.
 - **`rota skills install` / `update` / `status`**: write the skills for Claude Code and Codex, refresh them after an upgrade, compare with the binary.
 - **`rota round start` / `assign` / `wait` / `status` / `wind-down`**: run a round: take the lease, hand an issue to a slot, block until a worker needs you, list slots, park everything and release the lease.
+- **`rota round pick`**: for a `best-of:2` issue, name the attempt whose PR may merge; the other is closed with the reason.
 - **`rota worker`**: slot registry, worktrees, dispatch, polling and the merge gate (`rota worker gate`).
+- **`rota worker gate <PR>`**: gate any open PR by number, even one no slot owns. It refuses an empty `test.full` (unless `--no-verify`), a body without `Closes #N` (unless `partial-slice`), a recorded FAIL verdict and an unpicked best-of attempt.
+- **`rota agents write`**: write `.claude/agents/rota-*.md` (and `.codex/agents/rota-*.toml` when Codex is configured) from the role config. `rota init` runs it.
 - **`rota doctor`**: preflight for git, jq, host, forge, accounts, hooks, skills and Codex.
 - **`rota reap`**: preview leftovers a round left behind; `--apply` removes those holding no work.
 - **`rota layout split` / `tabs`**: fold a round's herdr panes into one split view for a wide screen, or back into tabs for a narrow one; bare `rota layout` shows which.
