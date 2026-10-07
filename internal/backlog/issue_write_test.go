@@ -477,3 +477,12 @@ func TestIssueItemCarriesLabels(t *testing.T) {
 		t.Errorf("labels = %q", got)
 	}
 }
+
+// Numbered criteria stay criteria: readiness does not care about the ids.
+func TestHasCriteriaWithAcceptanceIDs(t *testing.T) {
+	for _, body := range []string{"## Acceptance\n\n- [ ] AC-1: works\n", "## Acceptance\n\n- [ ] works\n"} {
+		if !HasCriteria(body) {
+			t.Errorf("no criteria in %q", body)
+		}
+	}
+}
