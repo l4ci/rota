@@ -9,7 +9,7 @@ Used by `/rota-plan` (Step 2) and `/rota-work` (Step 4). It picks how much plann
 | 1. Pointers | Nothing beyond today's plan: goal, tasks, files, verify. | The plain plan (`/rota-plan`), or the item brief alone for a one-task change. |
 | 2. Spec | Acceptance written first as observable outcomes, the chosen approach and its rejected alternative. | A design (`/rota-brainstorm`), then the plan mirrors it. |
 | 3. Research round | Open technical questions answered by trying, before the plan commits to an answer. | A finding (`/rota-spike`), or a `light` subagent sweep for read-only questions. |
-| 4. Adversarial pass | Someone argues against the finished plan: failure modes, rollback, what the tests would not catch. | A grilling pass (`references/grilling.md`) before the plan is confirmed. |
+| 4. Adversarial pass | Someone argues against the finished plan: failure modes, rollback, what the tests would not catch. | A grilling pass (`references/grilling.md`), plus the `/rota-plan` critic (`references/plan-critic.md`), before the plan is confirmed. |
 
 Levels stack: 4 includes 2, and includes 3 when a question is open. Level 1 is the default and changes nothing for items that rate lowest.
 
