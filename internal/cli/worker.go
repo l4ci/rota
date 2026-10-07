@@ -626,6 +626,7 @@ func gateData(r worker.GateResult) *jsonx.Object {
 	d.Set("verified", strList(r.Verified))
 	d.Set("verifySkipped", r.VerifySkipped)
 	d.Set("changed", r.Changed)
+	setLedgerData(d, r.Excluded, r.Expired)
 	return d
 }
 
