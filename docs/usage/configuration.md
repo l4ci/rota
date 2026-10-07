@@ -112,6 +112,14 @@ Integer 0 or more, silent default `0` (off). Counted per item from its first ass
 rota config set work.itemTimeoutMinutes 240
 ```
 
+## work.envSetup: install dependencies in new worker worktrees
+
+Free text, silent default `""` (nothing runs). `rota worker pool init` runs it once in each new slot worktree, with that worktree as the working directory, so a JS or Python worker does not start in a tree with no dependencies. It is skipped while the hash of the command and the lockfiles (`package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`, `uv.lock`, `poetry.lock`, `requirements*.txt`, `go.sum`) matches the one stored by the slot's last successful run, so re-running `pool init` is cheap and a changed lockfile or command reruns it. The hash sits in the worktree's git dir, outside tracked files. A non-zero exit stops `pool init` with exit 1 and a message naming the slot and the command; no hash is stored, so the next `pool init` retries.
+
+```bash
+rota config set work.envSetup "npm ci"
+```
+
 ## work.tdd: red-first on or off
 
 `true` (default): a behavior change needs a recorded red run, a FAIL proof row from a test that failed on an assertion, before its PASS row. A FAIL whose evidence is a build, compile or setup failure (missing import, typo, undefined symbol) is not a red run; the task gets a fix dispatch. `false`: `/rota-work` Step 7 and the worker contract require no RED row. PASS rows are still recorded.
@@ -127,6 +135,19 @@ Three tiers of shell commands, each an array defaulting to `[]`:
 - `test.fast`: quick checks for a task or worker to run while working.
 - `test.full`: the full suite. The merge gate (`rota worker gate`) and the merge train run it on the merged tree, and [`/rota-refactor`](../reference/slash-commands.md#rota-refactor) runs it in `--fix` verification as CI-shape gates before committing. Empty means read-only verification, and the gate reports `NO-VERIFY`.
 - `test.e2e`: slow end-to-end checks. `rota worker gate` and the merge train run it on the merged tree after `test.full` passes, so a round pays for it at merge instead of once per branch (a train runs it once for all members). A red train run bisects like a red `test.full`. Empty skips the step.
+
+### The exclusion ledger
+
+A known-red or flaky test may be passed over by the merge gate and the merge train only through `.rota/test-ledger.json`, a tracked file you create by hand when the first entry is needed (a missing file or `[]` means no exclusions):
+
+```json
+[{"test": "TestFlaky", "owner": "dana", "receipt": "#378", "expires": "2026-11-01"}]
+```
+
+- `test`: the top-level Go test name, as `go test` prints it on its `--- FAIL: <name>` line. Its subtests are covered by it.
+- `owner`: who fixes it. `receipt`: the issue or PR tracking the fix. `expires`: `YYYY-MM-DD` (valid through the end of that day, UTC) or an RFC 3339 time. All four are required.
+
+`rota worker gate` and `rota worker train` read the file from the base before merging. A `test.full` or `test.e2e` command that fails still passes the verify when every test it names has an unexpired entry; the result lists them under `excluded`. A failing test with no entry fails as before, and so does a failure the output does not name (a build error, a panic, a timeout) or output that does not end in go test's own `FAIL` line (a later step of the same command failed). Once an entry expires the gate and the train fail with `verify-failed` and nothing lands, naming the test, owner and receipt, whether or not the test still fails: fix the test, or renew the entry in a reviewed commit. A malformed entry is exit 2. `rota test ledger check` reports expired and malformed entries without running anything. The ledger applies to the local run, not to `test.fullWhere ci`, where CI decides.
 
 ### test.isolate
 

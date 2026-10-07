@@ -46,12 +46,14 @@ Show the plan as unsaved markdown:
 - **Review Focus**: `## Review Focus`, at most 5 lines: risky inputs or edges the spec implies but never names
 - **Open questions**: decisions needed before or during execution
 - **Assumptions**: implicit constraints made explicit
+- **Relies on**: `## Relies on`, one line per KNOWLEDGE bullet (`<Topic>: <bold title>`) and DECISIONS entry (title) the plan depends on, taken from the Step 2 queries; `none` when it leans on neither
 
 Rules:
 
 - **Verify is non-negotiable.** No verify step, no task.
 - **Behavior tasks name the RED.** Verify states the failure the new test shows before the change (`RED: <command> fails with <expected message>`). A docs or skill-text task with no test seam writes `no test seam: docs/skill change` instead.
 - **Interfaces** is `Consumes:` (what the task relies on) and `Produces:` (what it creates for later tasks). Write `none` rather than omit a line.
+- **Relies on** lists only entries the plan's approach actually depends on, not every bullet the queries returned. `/rota-review` checks the diff against this list and records a hit only for entries it followed.
 - **Review Focus** entries are each pinned by a test in the owning task's Verify. An edge with no test goes in Open questions instead.
 - Tasks fit one execution window; too big means two tasks.
 - Vertical slivers, not horizontal layers: each task crosses every layer it needs to be observable.
