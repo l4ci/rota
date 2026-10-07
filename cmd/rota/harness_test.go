@@ -87,6 +87,17 @@ func runMain(m *testing.M) int {
 		"ROTA_TEST_DOCTOR_DISK=50:100", // a healthy disk: the real one must not change the goldens (#85)
 		"FAKE_TRACKER_DB=" + filepath.Join(harnessTmp, "tracker.json"),
 		"LC_ALL=C.UTF-8",
+		// No detached housekeeping in any repo a scenario touches: the fixture
+		// repos, their nested and bare repos, and the ones the binary creates.
+		// A background maintenance run deletes .git/objects/maintenance.lock
+		// while copyTree's cp walks the fixture ("cannot stat"), which failed
+		// a random TestFrozen* subtest on CI. gittest.Quiet sets the same keys
+		// per repo; env config reaches the repos Quiet never sees.
+		"GIT_CONFIG_COUNT=4",
+		"GIT_CONFIG_KEY_0=gc.auto", "GIT_CONFIG_VALUE_0=0",
+		"GIT_CONFIG_KEY_1=gc.autoDetach", "GIT_CONFIG_VALUE_1=false",
+		"GIT_CONFIG_KEY_2=maintenance.auto", "GIT_CONFIG_VALUE_2=false",
+		"GIT_CONFIG_KEY_3=receive.autogc", "GIT_CONFIG_VALUE_3=false",
 	}
 	return m.Run()
 }

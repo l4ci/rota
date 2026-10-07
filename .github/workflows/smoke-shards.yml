@@ -17,6 +17,8 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
+      # Section 97 signs fake releases; release.yml pins the same version.
+      - run: go install aead.dev/minisign/cmd/minisign@v0.3.0
       - run: bash test/gate.sh --smoke-only --random
         env:
           ROTA_GATE_LOGS: ${{ runner.temp }}/gate-logs
