@@ -20,6 +20,7 @@ import (
 	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/stale"
 	"github.com/l4ci/rota/internal/tracker"
+	"github.com/l4ci/rota/internal/tui"
 	"github.com/l4ci/rota/internal/update"
 	"github.com/l4ci/rota/internal/version"
 	"github.com/l4ci/rota/internal/worker"
@@ -82,6 +83,8 @@ type Deps struct {
 	BareSetup        RunFunc
 	// Palette is the menu bare `rota` opens; a test swaps in a fake terminal.
 	Palette func(palette.Config) error
+	// RunView runs a --ui screen on the process terminal; a test swaps in a fake.
+	RunView func(c *Ctx, m tui.Model) error
 }
 
 // defaultDeps is the real machine: git, the forge CLIs, tmux or herdr.
@@ -101,6 +104,7 @@ func defaultDeps() *Deps {
 		IsTerminal:       defaultIsTerminal,
 		BareSetup:        defaultBareSetup,
 		Palette:          palette.RunTerminal,
+		RunView:          runView,
 		ReadCache:        tracker.NewReadCache(),
 	}
 	d.Now, d.Today, d.HolderPID, d.ClockErr = envClock(os.Getenv)
