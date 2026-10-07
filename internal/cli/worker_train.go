@@ -46,6 +46,7 @@ func trainData(r worker.TrainResult) *jsonx.Object {
 func workerTrain(fs *flag.FlagSet) RunFunc {
 	base := fs.String("base", "", "the cycle branch the PRs merge into")
 	landGreen := fs.Bool("land-green", false, "when verification fails, still land the verified members before the culprit")
+	noVerify := fs.Bool("no-verify", false, "allow an empty test.full (the train is refused otherwise)")
 	confirm := approvalFlags(fs)
 	return func(c *Ctx, args []string) (Result, error) {
 		if len(args) == 0 {
@@ -76,12 +77,15 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 		for i, t := range args {
 			issues[i] = gateIssue(root, t)
 		}
-		r, err := workerEnvCtx(c, ctx).Train(ctx, root, worker.TrainOpts{Targets: args, Base: *base, LandGreen: *landGreen, Approve: approve, Verdict: shipVerdict(c, root, root).Block})
+		r, err := workerEnvCtx(c, ctx).Train(ctx, root, worker.TrainOpts{Targets: args, Base: *base, LandGreen: *landGreen, NoVerify: *noVerify, Approve: approve, Verdict: shipVerdict(c, root, root).Block})
 		if err != nil && r.Verdict == worker.GateVerdictBlocked {
 			return verdictRefusal(err, trainData(r))
 		}
 		if err != nil && r.Verdict == worker.GateApprovalRequired {
 			return gateRefusal(err, trainData(r))
+		}
+		if err == nil && r.Verdict == worker.GateNoVerify {
+			return noVerifyRefusal(r.Err, r.Hint, trainData(r))
 		}
 		if err != nil {
 			return Result{}, err

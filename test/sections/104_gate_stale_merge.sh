@@ -15,7 +15,7 @@ mkdir -p "$GPROJ/.rota"
     && git remote add origin "$TMP_GS/origin.git" && git push -q origin main
 ) || fail "gate stale-merge fixture repo setup failed"
 printf 'stub worker contract\n' > "$TMP_GS/contract.md"
-printf '{"backlog":{"backend":"issues"},"issues":{"provider":"github","retryWaitSeconds":0},"work":{"dispatch":"tmux"},"round":{"brief":"%s"}}\n' "$TMP_GS/contract.md" > "$GPROJ/.rota/config.json"
+printf '{"backlog":{"backend":"issues"},"issues":{"provider":"github","retryWaitSeconds":0},"work":{"dispatch":"tmux"},"test":{"full":["true"]},"round":{"brief":"%s"}}\n' "$TMP_GS/contract.md" > "$GPROJ/.rota/config.json"
 printf 'Welcome to Claude Code\n' > "$FKG/tmux/pane"
 : > "$FKG/tmux/log"
 
