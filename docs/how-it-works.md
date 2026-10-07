@@ -1,6 +1,22 @@
 # How rota works
 
-rota is a CLI plus a set of skills (slash commands in Claude Code). Together they form a loop: capture, plan, execute with atomic commits, ship behind a review gate, persist the lessons. The diagram below shows how every skill connects to the artifacts it reads or writes, and which skills nudge or consult each other.
+rota is a CLI plus a set of skills (slash commands in Claude Code). Together they form a loop: capture, plan, execute with atomic commits, ship behind a review gate, persist the lessons.
+
+## Two ways to use it
+
+**One agent, one item at a time.** You stay in the conversation: `/rota-capture` writes the work down, `/rota-work` builds it, `/rota-ship` reviews it and opens a PR or merges. Start here.
+
+**A round: several agents in parallel.** For several independent issues, `/rota-orchestrate` starts a round with three roles:
+
+- **Orchestrator**: one agent that picks the next issues, hands them out, answers workers' questions and merges.
+- **Workers**: agents that each take one issue in their own git worktree, build it and open a PR. They never merge.
+- **Gate** (`rota worker gate`): the only merge path. It checks the PR is current and properly signed off, merges it, then runs your full test suite (`test.full`) on the merged tree.
+
+Both ways share a memory in `.rota/`: knowledge, decisions and handoff notes.
+
+## The detailed map
+
+The diagram below shows how every skill connects to the artifacts it reads or writes, and which skills nudge or consult each other.
 
 ```mermaid
 flowchart LR
@@ -76,7 +92,7 @@ Almost everything Claude reads or mutates lives under `.rota/` in your project; 
 
 **Persist.** `/rota-learn` writes durable session learnings to `KNOWLEDGE.md`, with an optional Opus verification pass (`--strict` or `learn.verify`). That includes domain terms via the `--term <name>` flag, which lands the term as a nested-bullet entry under the pinned `## Glossary` topic of the same file. `/rota-decide` captures hard-boundary commitments to `DECISIONS.md` with explicit forbids and permits. The project map (`.rota/map/<name>.md` files describing subsystems) is hand-authored; cycle skills (`/rota-work`, `/rota-debug`) bump `touched:` post-cycle on matched subsystems and regenerate the always-on `## Project Map` block via `rota map index`. `/rota-ship --docs` keeps the public docs in sync with the code (inline at ship time or via the manual `--docs` flag).
 
-**Rounds.** `/rota-orchestrate` runs a parallel round. The `rota round` verbs do the mechanics: take the orchestrator lease, assign issues, wait for workers, wind down. Each worker is an agent in its own git worktree (`rota worker` manages slots, hosts and accounts) that implements one issue and opens a PR; the orchestrator runs the gate and merges. A slot is free as soon as its PR is open, so the next issue starts while the PR waits for review. `rota doctor` checks the machine first and `rota reap` clears leftovers. For unattended runs, `rota hook`, `rota statusline`, `rota keepalive` and `rota limit` hand the orchestrator off before its context fills, restart it and wait out usage limits. See [parallel rounds](usage/parallel-rounds.md) and [unattended rounds](usage/unattended-rounds.md).
+**Rounds.** `/rota-orchestrate` runs a parallel round. The `rota round` verbs do the mechanics: take the orchestrator lease, assign issues, wait for workers, wind down. Each worker is an agent in its own git worktree (`rota worker` manages slots, hosts and accounts) that implements one issue and opens a PR; the orchestrator runs the gate and merges. `rota agents write` (run by `rota init`) writes the subagent definitions workers use. For a hard issue, the label `best-of:2` gives it to two workers at once, and `rota round pick` names the attempt that may merge. The gate refuses an empty `test.full` (unless `--no-verify`), a PR body without `Closes #N` (unless the issue is `partial-slice`), a recorded FAIL verdict and an unpicked best-of attempt. A slot is free as soon as its PR is open, so the next issue starts while the PR waits for review. `rota doctor` checks the machine first and `rota reap` clears leftovers. For unattended runs, `rota hook`, `rota statusline`, `rota keepalive` and `rota limit` hand the orchestrator off before its context fills, restart it and wait out usage limits. See [parallel rounds](usage/parallel-rounds.md) and [unattended rounds](usage/unattended-rounds.md).
 
 **Maintenance.** `rota init` sets up `.rota/` once at the project root (`rota setup` adds a config walkthrough; bare `rota` runs it in an uninitialized project and launches the orchestrator in an initialized one). `rota config set` edits config (never hand-edit JSON). `rota update` checks for newer rota releases and prints the exact upgrade command. `rota skills` installs and refreshes the skills from the binary. `rota doctor` checks git, the forge, accounts and installed skills. `/rota-release` cuts your project's own releases: version bump, categorized notes, tag, push, GitHub/GitLab release.
 

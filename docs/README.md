@@ -1,6 +1,6 @@
 # rota documentation
 
-Public user guide for rota, a zero-dependency dev workflow for Claude Code and Codex: skills plus a CLI.
+Public user guide for rota, a dev workflow for Claude Code and Codex: skills plus a single-binary CLI. You write the issues; an orchestrator agent hands them to worker agents, and a gate checks every merge.
 
 ## Contents
 
@@ -9,7 +9,7 @@ Public user guide for rota, a zero-dependency dev workflow for Claude Code and C
 - [Cheat sheet](cheatsheet.md): one-line summary of every `/rota-*` skill (rapid scan)
 - [Install](install.md): the install script, Homebrew, release binaries, upgrading, uninstalling
 - [Getting started](getting-started.md): install and run your first cycle
-- [How it works](how-it-works.md): system diagram, plus how each skill connects to the artifacts it touches
+- [How it works](how-it-works.md): the two ways to use rota (orchestrator, workers, gate), plus how each skill connects to the artifacts it touches
 
 ### Walkthroughs
 
@@ -62,6 +62,7 @@ Public user guide for rota, a zero-dependency dev workflow for Claude Code and C
 
 ### Reference
 
+- [Architecture](reference/architecture.md): how the CLI, the skills and `.rota/` fit together
 - [Slash commands](reference/slash-commands.md): every `/rota-*` command, alphabetical
 - [The `.rota/` folder](reference/rota-folder.md): files and directories created by `rota init`
 - [`rota` verb reference](reference/cli-helpers.md): every `rota` verb, with conventions and exit codes

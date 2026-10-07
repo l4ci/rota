@@ -29,6 +29,8 @@ Three settings worth a second of thought:
   untouched while agents run, or if you plan to run parallel `/rota-work` sessions.
 - **Merge strategy.** `direct` for fast iteration. `pr` if your team requires GitHub review (the issue backend always opens a PR).
 
+Set `test.full` to your project's test command (`rota config set test.full "npm test"`). The solo loop below doesn't need it. A parallel round does: the gate refuses to merge while `test.full` is empty, unless you pass `--no-verify`.
+
 To change a setting later, run `rota config set <key> <value>` (`rota config show` lists the keys). See [config options](reference/config-options.md). Don't hand-edit the JSON files.
 
 ## Worked examples
@@ -44,7 +46,7 @@ Pick whichever matches where your project is today and follow it skill-by-skill.
 
 **Scale to a round**
 - [Your first round](first-round.md): the next step. Set up herdr, start the orchestrator and run a round on a few issues
-- [Parallel rounds](usage/parallel-rounds.md): when you have several independent issues, let an orchestrator hand them to workers and merge what passes
+- [Parallel rounds](usage/parallel-rounds.md): when you have several independent issues, let an orchestrator hand them to workers and merge what passes. Each round PR must say `Closes #N` (an issue labelled `partial-slice` is exempt) or the gate refuses it
 
 **Capture and backlog**
 - [Capturing work](usage/capturing-work.md)
