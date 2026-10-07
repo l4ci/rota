@@ -1,5 +1,5 @@
 ---
-verified-sha: 5e9b425a84bdc61cedf349412b0aa15c738689eb
+verified-sha: 3e6f9f8dbaa15ec4713fc22c20884a7c24bc76a4
 refs:
   - internal/knowledge
   - internal/cli/knowledge.go
@@ -25,6 +25,7 @@ exit: implied only. A missing KNOWLEDGE.md gives `{"topics": []}`.
 old: hv-knowledge-stats
 shim: stdout JSON passes through unchanged; `topics[].name|bullets|bytes` already match.
 note: the old helper reads only the umbrella file, so the verb has no repo scope and a learn run inside a sub-repo still gets umbrella numbers.
+note: `--ui` opens a read-only topic list over this data; Enter reads the topic. See cli-conventions.md.
 
 ### rota knowledge add
 rota knowledge add --topic <T> --title <S> --body-file <path|-> [--date YYYY-MM-DD]
