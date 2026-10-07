@@ -76,7 +76,6 @@ type AssignOpts struct {
 	AcceptOpenPR bool
 	HolderPID    int
 	Settings     roundcfg.Settings
-	Getenv       func(string) string
 	// Tier, TierReason and Kind are C9: "" means round.tier, no reason, and
 	// the slot's recorded kind, else claude.
 	Tier, TierReason, Kind string
@@ -292,7 +291,7 @@ func (e Env) requireLease(ctx context.Context, root string, o AssignOpts) error 
 		return err
 	}
 	le := e.Lease
-	_, _, held, err := le.Holds(cd, o.HolderPID, o.Getenv)
+	_, _, held, err := le.Holds(cd, o.HolderPID, e.getenv())
 	if err != nil {
 		return err
 	}
@@ -522,7 +521,7 @@ func (e Env) assignOne(ctx context.Context, root string, be Board, o AssignOpts,
 	res.Warnings = append(res.Warnings, warns...)
 
 	// 5. The brief exists before anything is marked.
-	brief, ok := briefPath(root, set, o.Getenv)
+	brief, ok := briefPath(root, set, e.getenv())
 	if !ok {
 		return res, blocked(BlockBriefMissing, "the worker contract (skills/references/worker-contract.md) was not found; set round.brief")
 	}

@@ -178,7 +178,7 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 	// Assign takes no tier, no kind and never accepts overlap: the round's
 	// defaults, and only a candidate that is ready as it stands.
 	e.Assign = func(ctx context.Context, id string) ([]string, error) {
-		res, err := renv.Assign(ctx, root, board, round.AssignOpts{ID: id, HolderPID: pid, Settings: set, Getenv: os.Getenv})
+		res, err := renv.Assign(ctx, root, board, round.AssignOpts{ID: id, HolderPID: pid, Settings: set})
 		for _, w := range res.Warnings {
 			c.Warn("%s", w)
 		}

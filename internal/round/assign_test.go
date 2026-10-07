@@ -78,7 +78,7 @@ func newAssignFixture(t *testing.T) *assignFixture {
 	}
 	h := &hostFake{}
 	f := &assignFixture{root: root, host: h}
-	f.env = Env{Git: git.Exec, Base: "main", Lease: fakeLease("h", 100)}
+	f.env = Env{Git: git.Exec, Base: "main", Getenv: noEnv, Lease: fakeLease("h", 100)}
 	f.env.Worker = worker.Env{Git: git.Exec, NewHost: func(string) host.Host { return h },
 		Sleep: func(time.Duration) {}, Now: time.Now}
 	fb := &fakeRemote{}
@@ -95,7 +95,7 @@ func newAssignFixture(t *testing.T) *assignFixture {
 }
 
 func (f *assignFixture) assign(id, agent string, mod func(*AssignOpts)) (Assigned, error) {
-	o := AssignOpts{ID: id, Agent: agent, HolderPID: 100, Settings: f.set, Getenv: func(string) string { return "" }}
+	o := AssignOpts{ID: id, Agent: agent, HolderPID: 100, Settings: f.set}
 	if mod != nil {
 		mod(&o)
 	}

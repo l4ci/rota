@@ -4,7 +4,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/l4ci/rota/internal/jsonx"
@@ -114,7 +113,7 @@ func roundArchitecture(fs *flag.FlagSet) RunFunc {
 				continue
 			}
 			res, err := env.Assign(ctx, root, be, round.AssignOpts{
-				ID: id, HolderPID: *pid, Settings: set, Getenv: os.Getenv,
+				ID: id, HolderPID: *pid, Settings: set,
 			})
 			var blk *round.BlockedError
 			if errors.As(err, &blk) {

@@ -3,7 +3,6 @@ package round
 import (
 	"context"
 	"fmt"
-	"os"
 	"strconv"
 
 	"github.com/l4ci/rota/internal/worker"
@@ -82,7 +81,7 @@ func (e Env) repair(ctx context.Context, root string, rep *Report, f Finding) er
 			return fmt.Errorf("no backlog to park %s on", f.Issue)
 		}
 		note := fmt.Sprintf("%s has run past work.itemTimeoutMinutes (%d min): %s. Parked for a human; the PR, if any, stays open.", f.Issue, e.ItemTimeoutMinutes, f.Detail)
-		_, err := e.Transfer(ctx, root, e.Board, TransferOpts{Issue: f.Issue, To: HumanTarget, Note: note, HolderPID: e.HolderPID, Getenv: os.Getenv})
+		_, err := e.Transfer(ctx, root, e.Board, TransferOpts{Issue: f.Issue, To: HumanTarget, Note: note, HolderPID: e.HolderPID})
 		return err
 	case ClaimMismatch:
 		return editSlot(root, f.Slot, func(s *worker.Slot) error { s.SetClaimID(""); return nil })

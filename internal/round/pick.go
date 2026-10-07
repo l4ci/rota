@@ -28,7 +28,6 @@ const (
 type PickOpts struct {
 	ID, PR, Reason string
 	HolderPID      int
-	Getenv         func(string) string
 }
 
 // PickAttempt is one best-of attempt as pick found it.
@@ -68,7 +67,7 @@ func (e Env) Pick(ctx context.Context, root string, be Board, o PickOpts) (res P
 	if reason == "" {
 		return res, usage("--reason-file is empty: say why")
 	}
-	ok, err := e.holdsLease(ctx, root, o.HolderPID, o.Getenv)
+	ok, err := e.holdsLease(ctx, root, o.HolderPID)
 	if err != nil {
 		return res, wrap(err)
 	}
