@@ -747,7 +747,7 @@ func workerGate(fs *flag.FlagSet) RunFunc {
 // recorded PR, else the slot's issue. The argument may also be a PR ref, which
 // resolves to a queued PR record. Neither is exit 2.
 func slotApprovalThread(root, slot string) (approvalThread, error) {
-	t, err := worker.LoadRegistry(root).GateTarget(slot)
+	t, err := worker.LoadRegistry(root).GateTargetAny(slot)
 	if err != nil {
 		var we *exitcode.Error
 		if errors.As(err, &we) && we.Exit == exitcode.ExitResolution {
