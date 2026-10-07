@@ -9,6 +9,7 @@ import (
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/harness"
+	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/skills"
 )
 
@@ -552,3 +553,23 @@ func TestSwitchCheck(t *testing.T) {
 }
 
 func one(a []config.Account) []config.Account { return a[:1] }
+
+// The herdr pin lives in host.SupportedHerdr: doctor's verdict follows it.
+func TestHostFollowsSupportedHerdr(t *testing.T) {
+	old := host.SupportedHerdr
+	t.Cleanup(func() { host.SupportedHerdr = old })
+	host.SupportedHerdr = "0.10"
+	f := &fake{
+		have:  map[string]bool{"herdr": true},
+		reply: map[string]Result{"herdr --version": {Stdout: "herdr 0.10.1\n"}},
+	}
+	in := Input{Dispatch: "herdr", Exec: f.exec, Look: f.look}
+	if c := statusOf(Run(context.Background(), in), "host"); c.Status != Pass || !strings.Contains(c.Detail, "0.10.1") {
+		t.Errorf("0.10.1 under pin 0.10: %+v", c)
+	}
+	f.reply["herdr --version"] = Result{Stdout: "herdr 0.9.3\n"}
+	c := statusOf(Run(context.Background(), in), "host")
+	if c.Status != Fail || !strings.Contains(c.Detail, "need 0.10.x") || !strings.Contains(c.Hint, "0.10.x") {
+		t.Errorf("0.9.3 under pin 0.10: %+v", c)
+	}
+}

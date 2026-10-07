@@ -77,11 +77,7 @@ func trCall(fs *flag.FlagSet) RunFunc {
 			c.Stderr.Write(res.Stderr)
 		}
 		if res.ExitCode != 0 {
-			cli := "gh"
-			if cl.Provider == "gitlab" {
-				cli = "glab"
-			}
-			return Result{Data: data}, Failed("%s exited %d", cli, res.ExitCode)
+			return Result{Data: data}, Failed("%s exited %d", tracker.CLIName(cl.Provider), res.ExitCode)
 		}
 		return Result{Data: data}, nil
 	}
@@ -134,7 +130,7 @@ func trSuggest(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, trackerErr(err).WithHint(manual)
 		}
-		if r, err := cl.Run(ctx, []string{"auth", "status"}, nil); err != nil || r.ExitCode != 0 {
+		if err := cl.CheckAuth(ctx); err != nil {
 			return Result{}, Unavailable("gh is not available or not authenticated").WithHint(manual)
 		}
 		r, err := cl.Run(ctx, []string{"issue", "create", "-R", repo, "-t", *title, "-F", "-"}, strings.NewReader(body))
