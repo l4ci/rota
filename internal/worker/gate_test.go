@@ -857,3 +857,27 @@ func TestGateApprovalRefusalCarriesData(t *testing.T) {
 		t.Errorf("refusal data = %+v, %v (err %v)", bd, ok, err)
 	}
 }
+
+// A recorded FAIL (the Verdict port's error) refuses the gate before the merge,
+// also under --check-only; a nil port, a PASS and an absent record pass.
+func TestGateVerdictRefusal(t *testing.T) {
+	block := fmt.Errorf("FAIL recorded")
+	for _, check := range []bool{false, true} {
+		w := newWorld(t, ghURL)
+		var seen string
+		res, err := w.gate(false, GateOpts{CheckOnly: check, Verdict: func(b string) error { seen = b; return block }})
+		if err != block || res.Verdict != GateVerdictBlocked || res.Changed {
+			t.Fatalf("check=%v: %+v %v", check, res, err)
+		}
+		if seen == "" {
+			t.Errorf("check=%v: the port got no branch", check)
+		}
+		if w.onMain("work.txt") {
+			t.Errorf("check=%v: a FAIL-verdict branch merged", check)
+		}
+	}
+	w := newWorld(t, ghURL)
+	if res, err := w.gate(false, GateOpts{CheckOnly: true, Verdict: func(string) error { return nil }}); err != nil || !res.OK() {
+		t.Errorf("no blocking record: %+v %v", res, err)
+	}
+}
