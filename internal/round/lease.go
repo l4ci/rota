@@ -19,13 +19,6 @@ type (
 	LeaseState = roundlease.State
 )
 
-func (e Env) leaseEnv() roundlease.Env {
-	if e.Lease.Alive == nil {
-		return roundlease.DefaultEnv()
-	}
-	return e.Lease
-}
-
 // commonDir is the git common dir of root, through the Env's git.
 func (e Env) commonDir(ctx context.Context, root string) (string, error) {
 	return worker.CommonDir(ctx, e.Git, root)
@@ -37,7 +30,7 @@ func (e Env) ReadLease(ctx context.Context, root string) (Lease, LeaseState, err
 	if err != nil {
 		return Lease{}, roundlease.None, err
 	}
-	return e.leaseEnv().Read(cd)
+	return e.Lease.Read(cd)
 }
 
 // ClearStaleLease removes the lease when its holder is gone and reports what
@@ -48,7 +41,7 @@ func (e Env) ClearStaleLease(ctx context.Context, root string) (Lease, bool, err
 	if err != nil {
 		return Lease{}, false, err
 	}
-	return e.leaseEnv().ClearStale(cd)
+	return e.Lease.ClearStale(cd)
 }
 
 // leaseFinding adds the lease-stale drift when the lease's holder is gone.

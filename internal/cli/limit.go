@@ -377,18 +377,14 @@ func limitWatch(fs *flag.FlagSet) RunFunc {
 // from a reused one.
 func ownWatching(c *Ctx, mode string) limits.Watching {
 	pid := os.Getpid()
-	host, start := roundlease.DefaultEnv().Identity(pid)
+	host, start := c.deps().LeaseEnv().Identity(pid)
 	return limits.Watching{PID: pid, Host: host, Start: start, StartedAt: limits.Time(c.deps().Now()), Mode: mode}
 }
 
 // limitWatchGuard refuses a watcher that would act twice or without
 // standing: a live supervisor, another watcher, or a caller without the lease.
 func limitWatchGuard(c *Ctx, root, cd string) (Result, error) {
-	ctx := c.Context()
-	le := c.deps().RoundEnv(ctx, root).Lease
-	if le.Alive == nil {
-		le = roundlease.DefaultEnv()
-	}
+	le := c.deps().LeaseEnv()
 	lease, st, held, err := le.Holds(cd, c.deps().HolderPID(), os.Getenv)
 	if err != nil {
 		return Result{}, &Error{Exit: ExitUnavailable, Message: err.Error()}
@@ -469,10 +465,7 @@ func limitStatus(c *Ctx, args []string) (Result, error) {
 	list := limits.Load(root)
 	watching := false
 	if cd, err := rotastate.CommonDir(root); err == nil {
-		le := c.deps().RoundEnv(c.Context(), root).Lease
-		if le.Alive == nil {
-			le = roundlease.DefaultEnv()
-		}
+		le := c.deps().LeaseEnv()
 		if _, ok := limits.ActiveWatching(le, cd); ok {
 			watching = true
 		}
