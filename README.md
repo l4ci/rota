@@ -1,12 +1,6 @@
 <div align="center">
 
-```text
-               __
-   _________  / /_____ _
-  / ___/ __ \/ __/ __ `/
- / /  / /_/ / /_/ /_/ /
-/_/   \____/\__/\__,_/
-```
+<img src="docs/images/rota-logo.svg" alt="rota" width="309">
 
 # rota
 
@@ -18,9 +12,9 @@
 [![Stars](https://img.shields.io/github/stars/l4ci/rota?style=social)](https://github.com/l4ci/rota/stargazers)
 [![For Claude Code](https://img.shields.io/badge/for-Claude%20Code-8A2BE2)](https://claude.com/claude-code)
 [![For Codex](https://img.shields.io/badge/for-Codex-000000)](https://developers.openai.com/codex)
-[![Runs in herdr or tmux](https://img.shields.io/badge/runs%20in-herdr%20%C2%B7%20tmux-2ea44f)](#runs-in-herdr-or-tmux)
+[![Runs in herdr or tmux](https://img.shields.io/badge/runs%20in-herdr%20%C2%B7%20tmux-2ea44f)](#-runs-in-herdr-or-tmux)
 
-[How it works](#how-it-works) · [herdr and tmux](#runs-in-herdr-or-tmux) · [Accounts](#several-accounts-balanced) · [Quick start](#quick-start) · [Skills](#skills) · [Docs](docs/)
+[How it works](#-how-it-works) · [herdr and tmux](#-runs-in-herdr-or-tmux) · [Accounts](#-several-accounts-balanced) · [Quick start](#-quick-start) · [Skills](#-skills) · [Docs](docs/)
 
 </div>
 
@@ -29,7 +23,7 @@
 
 ---
 
-## How it works
+## 🔄 How it works
 
 rota has two parts: **skills**, slash commands like `/rota-work` that tell the agent how to do a job well, and the **`rota` CLI**, which the skills call to do the bookkeeping and enforce the rules (who holds which issue, what may merge).
 
@@ -56,18 +50,20 @@ issues ─► orchestrator ─┼─► worker dana ─► PR ─┼─► gate 
 
 Both ways share a memory in `.rota/`: what the project has learned (`KNOWLEDGE.md`), the lines it must not cross (`DECISIONS.md`), and handoff notes, so a fresh session picks up where the last one stopped.
 
-## Runs in herdr or tmux
+## 🪟 Runs in herdr or tmux
 
 A round runs in your terminal, not in a cloud dashboard. Start the orchestrator inside [herdr](https://herdr.dev) or [tmux](https://github.com/tmux/tmux) and rota gives every worker its own tab (tmux: window), so you can watch any agent, or type into one, at any time.
 
 - **herdr** reports each agent's state directly (working, blocked, done), and rota waits on those events instead of polling.
 - **tmux** works too: rota reads the panes to tell what each worker is doing.
-- **Split or tabs.** On a wide screen, `rota layout split` folds the workers into the orchestrator's tab as one grid (as in the demo above); `rota layout tabs` gives each its own tab again. Both are in the `rota` palette.
 - **Neither?** The round still runs, with workers as subagents of the orchestrator.
+
+> [!TIP]
+> On a wide screen, `rota layout split` folds the workers into the orchestrator's tab as one grid (as in the demo above); `rota layout tabs` gives each its own tab again. Both are in the `rota` palette.
 
 Workers can be Claude Code or Codex, mixed in one round: a `harness:codex` label, or `round.workerKind`, picks per issue or per project.
 
-## Several accounts, balanced
+## 🔀 Several accounts, balanced
 
 Long rounds run into usage limits. List your accounts and rota spreads the work and routes around limits:
 
@@ -76,11 +72,12 @@ Long rounds run into usage limits. List your accounts and rota spreads the work 
 - **The orchestrator** can hand off and restart under another account before it hits its own limit (`orchestrator.switchOnUsage`), and `rota keepalive` restarts it if it stops.
 - **Codex.** `work.codexAccounts` spreads Codex workers over several logins (rota can't read Codex usage, so these aren't balanced by headroom).
 
-Setup: [parallel rounds](docs/usage/parallel-rounds.md#setup) and [unattended rounds](docs/usage/unattended-rounds.md).
+Setup: [parallel rounds](docs/usage/parallel-rounds.md#-setup) and [unattended rounds](docs/usage/unattended-rounds.md).
 
-## Quick start
+## 🚀 Quick start
 
-You need git and [Claude Code](https://claude.com/claude-code) or Codex. The install script also needs `minisign`. For rounds you'll later want `gh` (or `glab`) and [herdr](https://herdr.dev) or tmux.
+> [!NOTE]
+> You need git and [Claude Code](https://claude.com/claude-code) or Codex. The install script also needs `minisign`. For rounds you'll later want `gh` (or `glab`) and [herdr](https://herdr.dev) or tmux.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/l4ci/rota/main/install.sh | sh   # or: brew install l4ci/tap/rota
@@ -98,7 +95,7 @@ cd your-project && rota init
 
 That's the whole loop. [Getting started](docs/getting-started.md) walks through it with the choices `rota init` makes. When you have a few independent issues, [your first round](docs/first-round.md) sets up the orchestrator and workers.
 
-## Skills
+## 🧰 Skills
 
 In the order you'd usually reach for them:
 
@@ -116,14 +113,14 @@ In the order you'd usually reach for them:
 
 Every skill: [slash commands](docs/reference/slash-commands.md). Settings: [configuration](docs/usage/configuration.md).
 
-## Docs
+## 📚 Docs
 
 - [Getting started](docs/getting-started.md): install and your first item, end to end
 - [Your first round](docs/first-round.md): orchestrator, workers and the gate, step by step
 - [How it works](docs/how-it-works.md): every skill, file and verb, and how they connect
 - [FAQ](docs/faq.md) · [Cheatsheet](docs/cheatsheet.md) · [All docs](docs/)
 
-## Contributing
+## 🤝 Contributing
 
 Issues and PRs welcome. Run `python3 test/validate-skills.py`, `bash test/doclint.sh` and `bash test/smoke.sh` before a PR; add a smoke assertion when you touch a verb. Running a round on rota itself: [contributing: rounds](docs/contributing/rounds.md).
 

@@ -9,7 +9,8 @@
 - When the item's TODO entry is one sentence but the implementation isn't obvious.
 - When `/rota-capture` or `/rota-work` (no argument) nudges you toward it (`/rota-capture` nudges on a new `[Major]` feature or `[P0]` bug; `/rota-work` on one that doesn't yet have a design).
 
-Skip it when the item is `[Minor]`, `[Cosmetic]`, or a plain task with an obvious shape. Skip it when you already know what you want to build; go straight to [`/rota-plan`](vision-and-plans.md) or [`/rota-work`](running-work.md).
+> [!TIP]
+> Skip it when the item is `[Minor]`, `[Cosmetic]`, or a plain task with an obvious shape. Skip it when you already know what you want to build; go straight to [`/rota-plan`](vision-and-plans.md) or [`/rota-work`](running-work.md).
 
 ## One example end-to-end
 

@@ -2,7 +2,7 @@
 
 Available from 0.9.0. `rota` is a single binary that carries the skills; there is no plugin to enable. Install the binary, install the skills, then run `rota init` in your project.
 
-## The binary
+## 📦 The binary
 
 ### Install script
 
@@ -40,7 +40,7 @@ The Homebrew formula is checked against the tarball sha256 only. Maintainers: [r
 
 Check the result with `rota version`. `rota doctor` checks the machine, including whether the installed skills match the binary.
 
-## The skills
+## 🧰 The skills
 
 ```bash
 rota skills install

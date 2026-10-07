@@ -94,7 +94,7 @@ Restarting the orchestrator after the exit is the next section; usage limits fol
 hooks, `/rota-pause` and `/rota-work` (no argument) are the manual route
 ([pausing and resuming](pausing-and-resuming.md)).
 
-## Keepalive
+## 💓 Keepalive
 
 The hooks end an orchestrator session cleanly. `rota keepalive run` starts the next one. Start the
 orchestrator under it, in the pane it will own:
@@ -158,9 +158,9 @@ never deletes the handoff; only the SessionStart hook consumes it.
 
 `--max-restarts`, `--breaker`, `--backoff` and `--prompt` override the config for one run. `--config-dir` sets the `CLAUDE_CONFIG_DIR` the command starts under (default: the one the supervisor inherited), so a supervised orchestrator can run on a chosen account. `--first-prompt` appends a prompt to the first start only (`rota orchestrate` uses it to start `/rota-orchestrate`).
 `--no-limits` leaves out the usage-limit watcher the supervisor otherwise runs beside the command (see
-[usage limits](#usage-limits)). `--json` prints one envelope when the loop ends, not before.
+[usage limits](#-usage-limits)). `--json` prints one envelope when the loop ends, not before.
 
-## Usage limits
+## ⏳ Usage limits
 
 A 5-hour or weekly usage limit stops a session until the window resets. `rota limit watch` keeps a round
 from stalling on that: it notices the limit, waits for the reset, and types a resume prompt into the pane.
