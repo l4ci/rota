@@ -124,6 +124,7 @@ var Keys = []Key{
 	{"issues.labels.needsHuman", "needs-human", false},
 	{"work.codexAccounts", []any{}, false}, // named Codex homes; empty: the default Codex home
 	{"work.codexCommand", "", false},       // empty: DefaultCodexCommand in internal/harness
+	{"work.envSetup", "", false},           // empty: no setup; else run in each new slot worktree by pool init
 	{"work.tdd", true, false},              // false: no red-first requirement or RED proof row
 
 	{"orchestrator.handoffThreshold", json.Number("75"), false},
