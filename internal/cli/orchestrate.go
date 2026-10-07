@@ -54,7 +54,12 @@ func defaultIsTerminal(f any) bool {
 		return false
 	}
 	fi, err := file.Stat()
-	return err == nil && fi.Mode()&os.ModeCharDevice != 0
+	if err != nil || fi.Mode()&os.ModeCharDevice == 0 {
+		return false
+	}
+	// /dev/null is a character device too; redirecting to it is not a person.
+	null, err := os.Stat(os.DevNull)
+	return err != nil || !os.SameFile(fi, null)
 }
 
 // bareRota is the root's own verb: it opens the palette (#181). Enter on the

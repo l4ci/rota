@@ -29,7 +29,7 @@ import (
 func backlogCommands() []*Command {
 	return []*Command{
 		{Name: "backlog", Summary: "backlog views and upkeep", Subs: []*Command{
-			{Name: "list", Summary: "open items as sorted tables, with clusters", Repo: true, Verb: backlogList},
+			{Name: "list", Summary: "open items as sorted tables, with clusters", Repo: true, Verb: backlogList, View: backlogView},
 			{Name: "ids", Summary: "IDs of the open items tagged with a milestone", Repo: true, Verb: backlogIDs},
 			{Name: "milestones", Summary: "milestones the given items are tagged with", Repo: true, Verb: backlogMilestones},
 			{Name: "drift", Summary: "open items that commits already mention", Repo: true, Verb: backlogDrift},

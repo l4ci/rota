@@ -361,6 +361,14 @@ func run(root *Command, deps *Deps, args []string, stdin io.Reader, stdout, stde
 	}
 	res, err := runVerb(c, positional)
 	if err != nil {
+		if g.ui && cmd.View != nil && res.Data != nil && asError(err).Exit == ExitFailed {
+			// A failed answer is still an answer: doctor's failing checks
+			// are the screen. The exit code stays the plain verb's.
+			if code := uiFinish(c, stdout, cmd, res); code != ExitOK {
+				return code
+			}
+			return ExitFailed
+		}
 		return failWith(c, stdout, err, res)
 	}
 	if g.ui {
