@@ -185,3 +185,19 @@ func TestItemTimeoutMinutes(t *testing.T) {
 		t.Fatal("a negative limit must be refused")
 	}
 }
+
+func TestWorkerKind(t *testing.T) {
+	if s, err := Load(project(t, "")); err != nil || s.WorkerKind != "" {
+		t.Fatalf("unset is empty: %v %q", err, s.WorkerKind)
+	}
+	for _, k := range []string{"claude", "codex"} {
+		if s, err := Load(project(t, `{"round":{"workerKind":"`+k+`"}}`)); err != nil || s.WorkerKind != k {
+			t.Fatalf("%s: %v %q", k, err, s.WorkerKind)
+		}
+	}
+	for _, cfg := range []string{`{"round":{"workerKind":"gemini"}}`, `{"round":{"workerKind":7}}`} {
+		if _, err := Load(project(t, cfg)); err == nil || !strings.Contains(err.Error(), "round.workerKind") {
+			t.Errorf("%s: want a round.workerKind error, got %v", cfg, err)
+		}
+	}
+}

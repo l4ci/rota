@@ -109,6 +109,7 @@ var Keys = []Key{
 	{"round.brief", "", false},
 	{"round.sharedPaths", []any{}, false},
 	{"round.tier", "standard", false},
+	{"round.workerKind", "", false}, // empty: the slot's recorded kind, else claude
 	{"round.tiers.claude.light", "haiku", false},
 	{"round.tiers.claude.standard", "", false}, // empty: models.worker
 	{"round.tiers.claude.heavy", "opus", false},
@@ -333,6 +334,9 @@ type Prompt struct {
 	// IfKey, when set, makes the question conditional: it is asked only when
 	// the answer (or default) for IfKey equals IfValue.
 	IfKey, IfValue string
+	// Optional marks a question whose absence is meaningful: Enter (or --yes)
+	// leaves the key unset, and only an explicit answer is written.
+	Optional bool
 }
 
 // Prompts is the setup's questions, in the order they are asked. Choice values
@@ -373,11 +377,25 @@ var Prompts = []Prompt{
 		{"false", "no"},
 		{"true", "yes, run /rota-qa"},
 	}},
+	{Key: "round.workerKind", Title: "Which harness do round workers run on?", Optional: true, Choices: []Choice{
+		{"claude", "Claude Code"},
+		{"codex", "Codex"},
+	}},
+	{Key: "orchestrator.harness", Title: "Which harness runs the round orchestrator?", Optional: true, Choices: []Choice{
+		{"claude", "Claude Code"},
+		{"codex", "Codex"},
+		{"hermes", "Hermes"},
+		{"opencode", "OpenCode"},
+	}},
 }
 
 // DefaultChoice is the default of p's key as a Choice value: strings as they
 // are, booleans as "true" or "false".
+// An Optional prompt has none: the key stays unset unless answered.
 func (p Prompt) DefaultChoice() string {
+	if p.Optional {
+		return ""
+	}
 	for _, k := range Keys {
 		if k.Name == p.Key {
 			return fmt.Sprint(k.Default)

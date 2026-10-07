@@ -48,15 +48,16 @@ func TestPickOf(t *testing.T) {
 }
 
 func TestResolveKindModel(t *testing.T) {
-	// harness: --kind > label > slot kind > claude
-	for _, c := range []struct{ flag, label, slot, want string }{
-		{"codex", "claude", "claude", "codex"},
-		{"", "codex", "claude", "codex"},
-		{"", "", "codex", "codex"},
-		{"", "", "", "claude"},
+	// harness: --kind > label > round.workerKind > slot kind > claude
+	for _, c := range []struct{ flag, label, project, slot, want, src string }{
+		{"codex", "claude", "claude", "claude", "codex", KindFromFlag},
+		{"", "codex", "claude", "claude", "codex", KindFromLabel},
+		{"", "", "codex", "claude", "codex", KindFromConfig},
+		{"", "", "", "codex", "codex", KindFromSlot},
+		{"", "", "", "", "claude", KindFromDefault},
 	} {
-		if got := resolveKind(c.flag, c.label, c.slot); got != c.want {
-			t.Errorf("resolveKind(%q,%q,%q) = %q, want %q", c.flag, c.label, c.slot, got, c.want)
+		if got, src := resolveKind(c.flag, c.label, c.project, c.slot); got != c.want || src != c.src {
+			t.Errorf("resolveKind(%q,%q,%q,%q) = %q from %q, want %q from %q", c.flag, c.label, c.project, c.slot, got, src, c.want, c.src)
 		}
 	}
 	// model: --model > label > tier map

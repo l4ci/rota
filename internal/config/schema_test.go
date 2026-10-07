@@ -176,7 +176,11 @@ func TestPromptsMatchSchema(t *testing.T) {
 		if !IsSchemaKey(p.Key) {
 			t.Errorf("prompt key %q is not in the schema", p.Key)
 		}
-		if !p.Valid(p.DefaultChoice()) {
+		if p.Optional {
+			if p.DefaultChoice() != "" {
+				t.Errorf("%s: an optional prompt has no default choice", p.Key)
+			}
+		} else if !p.Valid(p.DefaultChoice()) {
 			t.Errorf("%s: schema default %q is not among the choices", p.Key, p.DefaultChoice())
 		}
 		if p.IfKey != "" {

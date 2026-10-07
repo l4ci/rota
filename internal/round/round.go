@@ -123,7 +123,7 @@ type Row struct {
 	// Escalations are the ids of the slot's open escalations.
 	Escalations []string
 	// Kind, Tier, Model and TierReason are the slot's C9 fields.
-	Kind, Tier, Model, TierReason string
+	Kind, KindSource, Tier, Model, TierReason string
 	// Bounces is how often the slot's issue has been sent back (round.maxBounces
 	// caps it); 0 when never.
 	Bounces int
@@ -211,7 +211,7 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 		}
 		r := &Row{Name: name, Branch: branch, PR: s.PR(), Tab: s.Handle(), Registered: true}
 		r.Issue = worker.HeldID(s.Task(), branch, name)
-		r.Kind, r.Tier, r.Model, r.TierReason = s.Kind(), s.Tier(), s.Model(), s.TierReason()
+		r.Kind, r.KindSource, r.Tier, r.Model, r.TierReason = s.Kind(), s.KindSource(), s.Tier(), s.Model(), s.TierReason()
 		if r.Issue != "" {
 			r.Bounces = reg.Bounces(r.Issue)
 		}

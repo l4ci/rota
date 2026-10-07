@@ -37,8 +37,8 @@ func cfgValue(t *testing.T, dir, key string) any {
 func TestSetupInteractiveAppliesAnswers(t *testing.T) {
 	dir := t.TempDir()
 	// 1 file backend (by number), worktree by name, pr by number, default dispatch,
-	// default autonomy, review false, qa true
-	in := "1\nworktree\n2\n\n\nfalse\n2\n"
+	// default autonomy, review false, qa true, worker and orchestrator harness unset
+	in := "1\nworktree\n2\n\n\nfalse\n2\n\n\n"
 	code, _, errOut := setupRun(t, dir, in, true)
 	if code != 0 {
 		t.Fatalf("exit %d: %s", code, errOut)
@@ -59,10 +59,44 @@ func TestSetupInteractiveAppliesAnswers(t *testing.T) {
 	}
 }
 
+// The harness questions write only what was chosen: Enter leaves the key
+// unset, an answer writes it.
+func TestSetupHarnessQuestionsWriteOnlyAnswers(t *testing.T) {
+	skipped := t.TempDir()
+	if code, _, errOut := setupRun(t, skipped, "\n\n\n\n\n\n\n\n\n", true); code != 0 {
+		t.Fatalf("exit %d: %s", code, errOut)
+	}
+	raw, err := os.ReadFile(filepath.Join(skipped, ".rota", "config.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), "workerKind") || strings.Contains(string(raw), "harness") {
+		t.Errorf("an unanswered harness question wrote a key:\n%s", raw)
+	}
+	chosen := t.TempDir()
+	if code, _, errOut := setupRun(t, chosen, "\n\n\n\n\n\n\ncodex\n4\n", true); code != 0 {
+		t.Fatalf("exit %d: %s", code, errOut)
+	}
+	if got := cfgValue(t, chosen, "round.workerKind"); got != "codex" {
+		t.Errorf("round.workerKind = %v", got)
+	}
+	if got := cfgValue(t, chosen, "orchestrator.harness"); got != "opencode" {
+		t.Errorf("orchestrator.harness = %v", got)
+	}
+	// Off a terminal, --yes keeps the defaults and writes neither.
+	yes := t.TempDir()
+	if code, _, errOut := setupRun(t, yes, "", false, "--yes"); code != 0 {
+		t.Fatalf("exit %d: %s", code, errOut)
+	}
+	if raw, _ := os.ReadFile(filepath.Join(yes, ".rota", "config.json")); strings.Contains(string(raw), "workerKind") {
+		t.Errorf("--yes wrote round.workerKind:\n%s", raw)
+	}
+}
+
 func TestSetupIssuesBackendAsksProvider(t *testing.T) {
 	dir := t.TempDir()
 	// backend issues, provider gitlab, then defaults for the rest (6 Enters)
-	code, _, errOut := setupRun(t, dir, "2\n3\n\n\n\n\n\n\n", true)
+	code, _, errOut := setupRun(t, dir, "2\n3\n\n\n\n\n\n\n\n\n", true)
 	if code != 0 {
 		t.Fatalf("exit %d: %s", code, errOut)
 	}
@@ -76,7 +110,7 @@ func TestSetupIssuesBackendAsksProvider(t *testing.T) {
 
 func TestSetupRepromptsOnBadAnswer(t *testing.T) {
 	dir := t.TempDir()
-	code, _, errOut := setupRun(t, dir, "nope\n9\n\n\n\n\n\n\n\n", true)
+	code, _, errOut := setupRun(t, dir, "nope\n9\n\n\n\n\n\n\n\n\n\n", true)
 	if code != 0 {
 		t.Fatalf("exit %d: %s", code, errOut)
 	}
