@@ -73,6 +73,9 @@ const (
 	// GateApprovalRequired: the merge-approval gate (B1) refused before the
 	// merge; the CLI exits 4 with it.
 	GateApprovalRequired = "approval-required"
+	// GateVerdictBlocked: a recorded FAIL verdict (B3) refused before the
+	// merge; the CLI exits 4 with it, blockedBy verdict.
+	GateVerdictBlocked = "verdict-blocked"
 )
 
 // GateOpts are the flags of `rota worker gate`.
@@ -85,6 +88,10 @@ type GateOpts struct {
 	// merged together and verified once, so a branch behind the base only
 	// because an earlier train member landed is not refused as stale.
 	Train bool
+	// Verdict is the review-verdict gate (B3), run after provenance, also under
+	// CheckOnly. A non-nil error (a recorded FAIL) stops the gate with verdict
+	// verdict-blocked and is returned as is. branch is the worker branch.
+	Verdict func(branch string) error
 	// Approve is the merge-approval gate (B1), run after provenance and right
 	// before the merge, never under CheckOnly. files lists the paths the merge
 	// changes. A non-nil error stops the gate with verdict approval-required
@@ -272,6 +279,8 @@ var gateSteps = []gateStep{
 	(*gate).stepFreshness,
 	(*gate).stepPRMatches,
 	(*gate).stepProvenance,
+	(*gate).stepVerdict,
+	(*gate).stepCheckOnly,
 	(*gate).stepMerge,
 	(*gate).stepVerify,
 }
@@ -440,8 +449,7 @@ func (g *gate) stepPRMatches() (bool, error) {
 	return false, nil
 }
 
-// stepProvenance runs the approvals check. Under CheckOnly it also ends the
-// gate with verdict fresh.
+// stepProvenance runs the approvals check.
 func (g *gate) stepProvenance() (bool, error) {
 	failMsg, brokeMsg := g.checkProvenance()
 	if brokeMsg != "" {
@@ -452,6 +460,25 @@ func (g *gate) stepProvenance() (bool, error) {
 		g.verdict(GateProvenanceFail, failMsg, "")
 		return true, nil
 	}
+	return false, nil
+}
+
+// stepVerdict refuses a branch with a recorded FAIL verdict (B3), the rule the
+// ship paths apply. It runs under CheckOnly too, so a train member is refused
+// before anything merges.
+func (g *gate) stepVerdict() (bool, error) {
+	if g.o.Verdict == nil {
+		return false, nil
+	}
+	if err := g.o.Verdict(g.branch); err != nil {
+		g.res.Verdict = GateVerdictBlocked
+		return true, err
+	}
+	return false, nil
+}
+
+// stepCheckOnly ends a CheckOnly gate with verdict fresh.
+func (g *gate) stepCheckOnly() (bool, error) {
 	if g.o.CheckOnly {
 		// the checked tip: origin/<branch> when a PR is recorded
 		g.res.SHA, _ = g.e.runGit(g.root, "rev-parse", "--short=7", g.headRef)
