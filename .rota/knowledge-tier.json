@@ -127,47 +127,47 @@
       "lastSeen": "2026-05-17"
     },
     "Build & Tooling: Helpers & migrations::hv-migrate --apply bumps the version stamp on every path, including nothing_to_do": {
-      "tier": "provisional",
+      "tier": "deprecated",
       "hits": 0,
       "lastSeen": "2026-05-18"
     },
     "Build & Tooling: Helpers & migrations::Bootstrap-stage helpers can't depend on hv-preamble.sh \u2014 keep the canonical exception list": {
-      "tier": "provisional",
+      "tier": "deprecated",
       "hits": 0,
       "lastSeen": "2026-05-18"
     },
     "Build & Tooling: Helpers & migrations::hv-preflight opens a smoke-failure window during major-version transitions": {
-      "tier": "provisional",
+      "tier": "deprecated",
       "hits": 0,
       "lastSeen": "2026-05-18"
     },
     "Build & Tooling: Helpers & migrations::Generic dispatchers accumulate dead-letter keys when typed wrappers grow own parsers": {
-      "tier": "provisional",
+      "tier": "deprecated",
       "hits": 0,
       "lastSeen": "2026-05-18"
     },
     "Build & Tooling: Helpers & migrations::hv-append is the chokepoint for derived BACKLOG fields": {
-      "tier": "provisional",
+      "tier": "deprecated",
       "hits": 0,
       "lastSeen": "2026-05-18"
     },
     "Build & Tooling: Helpers & migrations::TODO field additions require three synchronized edits": {
-      "tier": "provisional",
+      "tier": "deprecated",
       "hits": 0,
       "lastSeen": "2026-05-18"
     },
     "Build & Tooling: Smoke testing::Standalone smoke fixtures for preamble-sourcing helpers need .hv/ in the tempdir": {
-      "tier": "provisional",
+      "tier": "deprecated",
       "hits": 1,
       "lastSeen": "2026-10-01"
     },
     "Build & Tooling: Smoke testing::Smoke fixtures for dirty-tree-refusing helpers redirect stderr into $TMP_*/.hv/": {
-      "tier": "provisional",
+      "tier": "deprecated",
       "hits": 0,
       "lastSeen": "2026-05-18"
     },
     "Build & Tooling: Smoke testing::Smoke sections run only inside the runner; standalone needs an env-prep wrapper": {
-      "tier": "provisional",
+      "tier": "deprecated",
       "hits": 2,
       "lastSeen": "2026-10-01"
     },
@@ -202,32 +202,32 @@
       "lastSeen": "2026-05-19"
     },
     "Architecture: Module extraction & migration safety::Shim re-exports preserve private module-level names across extractions": {
-      "tier": "provisional",
+      "tier": "deprecated",
       "hits": 1,
       "lastSeen": "2026-05-19"
     },
     "Architecture: Module extraction & migration safety::Flat-module extractions place functions by import-DAG, not nominal category": {
-      "tier": "provisional",
+      "tier": "deprecated",
       "hits": 1,
       "lastSeen": "2026-10-01"
     },
     "Architecture: Module extraction & migration safety::Deprecated-managed-block strip uses explicit allowlist, not heuristic 'not in v4 set'": {
-      "tier": "provisional",
+      "tier": "deprecated",
       "hits": 0,
       "lastSeen": "2026-05-18"
     },
     "Architecture: Module extraction & migration safety::Codemod mention/usage safety: code spans + helper-path tokens + structural block deletes": {
-      "tier": "provisional",
+      "tier": "deprecated",
       "hits": 0,
       "lastSeen": "2026-05-18"
     },
     "Architecture: Helper conventions & invariants::Helper preamble naming convention: *-preamble.sh auto-invokes; *-locate.sh stays library": {
-      "tier": "provisional",
+      "tier": "deprecated",
       "hits": 0,
       "lastSeen": "2026-05-18"
     },
     "Architecture: Helper conventions & invariants::Use load_repos() for umbrella detection \u2014 never truthy-test raw repos.json": {
-      "tier": "provisional",
+      "tier": "deprecated",
       "hits": 1,
       "lastSeen": "2026-05-19"
     },
@@ -237,7 +237,7 @@
       "lastSeen": "2026-05-18"
     },
     "Architecture: Helper conventions & invariants::ID-based drift detection must anchor in commit-graph state": {
-      "tier": "provisional",
+      "tier": "deprecated",
       "hits": 0,
       "lastSeen": "2026-05-18"
     },
@@ -252,7 +252,7 @@
       "lastSeen": "2026-05-18"
     },
     "Architecture: Skill authoring::Skill folds need quadruple-update: SKILL.md, smoke assertions, references, plugin.json": {
-      "tier": "provisional",
+      "tier": "deprecated",
       "hits": 0,
       "lastSeen": "2026-05-18"
     },
@@ -272,7 +272,7 @@
       "lastSeen": "2026-05-18"
     },
     "Architecture: Helper conventions & invariants::Sourceable artifact libs (hv-artifact-VERB.sh) are per-verb, not per-kind": {
-      "tier": "provisional",
+      "tier": "deprecated",
       "hits": 0,
       "lastSeen": "2026-05-18"
     },
@@ -282,17 +282,17 @@
       "lastSeen": "2026-05-18"
     },
     "Architecture: Helper conventions & invariants::Field writers co-locate with the read-grammar SoT; order-agnostic parse allows append-at-end": {
-      "tier": "provisional",
+      "tier": "deprecated",
       "hits": 0,
       "lastSeen": "2026-05-19"
     },
     "Architecture: Helper conventions & invariants::Sourced libs needing caller cwd must restore HV_ORIG_PWD (hv-preamble.sh cds first)": {
-      "tier": "provisional",
+      "tier": "deprecated",
       "hits": 0,
       "lastSeen": "2026-05-19"
     },
     "Architecture: Helper conventions & invariants::Scope-axis additions keep the default path byte-identical via literal legacy resolution": {
-      "tier": "provisional",
+      "tier": "deprecated",
       "hits": 1,
       "lastSeen": "2026-10-01"
     },
@@ -307,12 +307,12 @@
       "lastSeen": "2026-10-01"
     },
     "Architecture: Helper conventions & invariants::Optional-value flags use `${PARAM:?$USAGE}` to reject bare trailing flag values": {
-      "tier": "provisional",
+      "tier": "deprecated",
       "hits": 0,
       "lastSeen": "2026-05-19"
     },
     "Architecture: Helper conventions & invariants::Umbrella scope as the degenerate 1-element case of hybrid `file_pairs`": {
-      "tier": "provisional",
+      "tier": "deprecated",
       "hits": 0,
       "lastSeen": "2026-05-19"
     },
@@ -327,17 +327,17 @@
       "lastSeen": "2026-06-11"
     },
     "Build & Tooling: Helpers & migrations::No amend helper exists for design artifacts": {
-      "tier": "provisional",
+      "tier": "deprecated",
       "hits": 0,
       "lastSeen": "2026-06-11"
     },
     "Architecture: Skill authoring::hv-complete callers own the exit-3 proof path": {
-      "tier": "provisional",
+      "tier": "deprecated",
       "hits": 0,
       "lastSeen": "2026-10-01"
     },
     "Architecture: Helper conventions & invariants::Wrappers read stdin only when an argument takes it": {
-      "tier": "provisional",
+      "tier": "deprecated",
       "hits": 0,
       "lastSeen": "2026-10-01"
     },
@@ -347,12 +347,12 @@
       "lastSeen": "2026-10-01"
     },
     "Build & Tooling: Smoke testing::Orchestrator owns the 44 NAMES sync across parallel waves": {
-      "tier": "provisional",
+      "tier": "deprecated",
       "hits": 0,
       "lastSeen": "2026-10-01"
     },
     "Architecture: Module extraction & migration safety::Golden harness proves byte-identical helper moves": {
-      "tier": "provisional",
+      "tier": "deprecated",
       "hits": 0,
       "lastSeen": "2026-10-01"
     },
@@ -432,7 +432,7 @@
       "lastSeen": "2026-10-06"
     },
     "Rounds: Orchestration::No harness version pins; Codex uses the default account": {
-      "tier": "provisional",
+      "tier": "deprecated",
       "hits": 0,
       "lastSeen": "2026-10-06"
     },
