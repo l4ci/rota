@@ -57,7 +57,7 @@ func TestDependencies(t *testing.T) {
 	}
 }
 
-var tracked = []string{"internal/cli/tree.go", "internal/cli/round.go", "internal/worker/pool.go", "docs/design/contract/README.md", "README.md"}
+var tracked = []string{"internal/cli/tree.go", "internal/cli/round.go", "internal/worker/pool.go", "docs/contributing/contract/README.md", "README.md"}
 
 func TestFootprint(t *testing.T) {
 	text := "Touches `internal/cli/round.go` and internal/worker/. Also docs/ (too coarse), README.md and made/up/path.go."
@@ -67,8 +67,8 @@ func TestFootprint(t *testing.T) {
 		t.Errorf("inferred %v want %v", got, want)
 	}
 	// An explicit ## Files section wins over inference, and shared paths drop out.
-	explicit := "mentions internal/cli/tree.go in prose\n\n## Files\n- `internal/worker/pool.go`\n- docs/design/contract/README.md\n- internal/new/*.go\n"
-	got = Footprint(explicit, tracked, []string{"docs/design/contract/README.md"})
+	explicit := "mentions internal/cli/tree.go in prose\n\n## Files\n- `internal/worker/pool.go`\n- docs/contributing/contract/README.md\n- internal/new/*.go\n"
+	got = Footprint(explicit, tracked, []string{"docs/contributing/contract/README.md"})
 	if !reflect.DeepEqual(got, []string{"internal/new/*.go", "internal/worker/pool.go"}) {
 		t.Errorf("explicit %v", got)
 	}

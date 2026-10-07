@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"strings"
@@ -27,6 +28,9 @@ type waitHost struct {
 	events  chan string
 	watched []host.WatchTarget
 	watchOK error
+	// watchFn, when set, supplies the Nth (1-based) subscription.
+	watchFn func(n int) (host.Watch, error)
+	watches int
 	// steps run on each Capture of a slot, to script a pane that changes.
 	onCapture func(slot string)
 }
@@ -58,7 +62,7 @@ func (w waitWatch) Next(ctx context.Context) (string, error) {
 	select {
 	case s, ok := <-w.h.events:
 		if !ok {
-			return "", errors.New("herdr closed the event stream")
+			return "", fmt.Errorf("%w: closed", host.ErrStreamLost)
 		}
 		return s, nil
 	case <-ctx.Done():
@@ -73,6 +77,10 @@ type watcherHost struct{ *waitHost }
 func (h watcherHost) Watch(_ context.Context, t []host.WatchTarget) (host.Watch, error) {
 	h.watched = t
 	h.waitHost.watched = t
+	if h.watchFn != nil {
+		h.waitHost.watches++
+		return h.watchFn(h.waitHost.watches)
+	}
 	return waitWatch{h.waitHost}, h.watchOK
 }
 
@@ -229,12 +237,6 @@ func TestWaitHostFailuresAreUnavailable(t *testing.T) {
 	h.watchOK = host.ErrUnsupportedHerdr
 	if _, err := envWith(watcherHost{h}).Wait(bg, dir, WaitOpts{}); exitOf(err) != exitcode.ExitUnavailable {
 		t.Errorf("watch failure: %v, want exit 5", err)
-	}
-	h = newWaitHost("herdr")
-	h.set("w1", "working\n", "working")
-	close(h.events) // herdr went away mid-wait
-	if _, err := envWith(watcherHost{h}).Wait(bg, dir, WaitOpts{}); exitOf(err) != exitcode.ExitUnavailable {
-		t.Errorf("stream closed: %v, want exit 5", err)
 	}
 	h = newWaitHost("herdr")
 	h.requireErr = errors.New("herdr is not installed")
@@ -503,5 +505,94 @@ func TestWaitIgnoresADoneSlotWhoseRecordedPRIsMerged(t *testing.T) {
 		if got := !res.TimedOut; got != wantNews {
 			t.Errorf("PR %s: news = %v, want %v (%+v)", state, got, wantNews, res)
 		}
+	}
+}
+
+// lostWatch is a subscription whose first Next reports the loss.
+type lostWatch struct {
+	err   error
+	onGap func() // runs as the stream drops
+}
+
+func (w lostWatch) Next(context.Context) (string, error) {
+	if w.onGap != nil {
+		w.onGap()
+	}
+	return "", w.err
+}
+func (lostWatch) Close() {}
+
+// blockWatch never delivers; Next ends with its context.
+type blockWatch struct{}
+
+func (blockWatch) Next(ctx context.Context) (string, error) { <-ctx.Done(); return "", ctx.Err() }
+func (blockWatch) Close()                                   {}
+
+// #510: events_lost and a closed stream re-subscribe instead of ending the
+// wait, and a transition during the gap is read from current state, once.
+func TestWaitResubscribesAfterALostStream(t *testing.T) {
+	for name, cause := range map[string]error{
+		"events_lost": fmt.Errorf("%w: events_lost", host.ErrStreamLost),
+		"eof":         fmt.Errorf("%w: herdr closed the event stream", host.ErrStreamLost),
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
+			h := newWaitHost("herdr")
+			h.set("w1", "working\n", "working")
+			h.watchFn = func(n int) (host.Watch, error) {
+				if n == 1 {
+					return lostWatch{cause, func() { h.set("w1", "ROTA-DONE w1 https://x/pr/1\n", "idle") }}, nil // changes while disconnected
+				}
+				return blockWatch{}, nil
+			}
+			var errBuf strings.Builder
+			e := envWith(watcherHost{h})
+			e.Stderr = &errBuf
+			res, err := e.Wait(bg, dir, WaitOpts{})
+			if err != nil || res.Slot != "w1" || res.State != StateDone {
+				t.Fatalf("%+v %v", res, err)
+			}
+			if h.watches != 2 || errBuf.Len() != 0 {
+				t.Errorf("watches = %d, stderr = %q; want one re-subscribe and silence", h.watches, errBuf.String())
+			}
+			// Reported once: the same state is not news on the next wait.
+			again, err := e.Wait(bg, dir, WaitOpts{Timeout: 50 * time.Millisecond})
+			if err != nil || !again.TimedOut {
+				t.Errorf("second wait = %+v %v, want timed out", again, err)
+			}
+		})
+	}
+}
+
+// Repeated loss falls back to the poll path, says so once, and never spins on
+// the socket.
+func TestWaitFallsBackToPollingAfterRepeatedLoss(t *testing.T) {
+	dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
+	h := newWaitHost("herdr")
+	h.set("w1", "working\n", "working")
+	h.watchFn = func(n int) (host.Watch, error) {
+		if n == 1 {
+			return lostWatch{err: host.ErrStreamLost}, nil
+		}
+		return nil, errors.New("herdr socket: connection refused")
+	}
+	captures := 0
+	h.onCapture = func(string) {
+		if captures++; captures == 8 {
+			h.set("w1", "ROTA-DONE w1 https://x/pr/1\n", "idle")
+		}
+	}
+	var errBuf strings.Builder
+	e := envWith(watcherHost{h})
+	e.Stderr = &errBuf
+	res, err := e.Wait(bg, dir, WaitOpts{})
+	if err != nil || res.State != StateDone || res.Source != SourcePoll {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if h.watches != 1+maxResubscribe {
+		t.Errorf("watches = %d, want %d", h.watches, 1+maxResubscribe)
+	}
+	if n := strings.Count(errBuf.String(), "polling instead"); n != 1 {
+		t.Errorf("fallback notice printed %d times: %q", n, errBuf.String())
 	}
 }
