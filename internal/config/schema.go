@@ -67,8 +67,6 @@ var Keys = []Key{
 	{"docs.afterWork", false, true},
 	{"git.baseBranch", "", true},
 	{"umbrella.enabled", false, true},
-	{"issues.providers.github", true, true},
-	{"issues.providers.gitlab", true, true},
 	{VersionKey, "", true},
 	{"issues.label", "in-progress", false},
 	{"backlog.backend", "file", false},
@@ -88,7 +86,6 @@ var Keys = []Key{
 	{"issues.labels.priorityPrefix", "p", false},
 	{"issues.labels.sizePrefix", "size:", false},
 	{"issues.autoCreateLabel", true, false},
-	{"issues.filterMineOnly", false, false},
 	{"issues.homeRepo", "", false},
 	{"release.checklistPath", ".rota/RELEASE.md", false},
 	{"release.confirmLargePushCommits", json.Number("10"), false},
@@ -168,7 +165,7 @@ var Keys = []Key{
 }
 
 // PythonKeys is how many leading rows of Keys are CONFIG_KEYS.
-const PythonKeys = 51
+const PythonKeys = 48
 
 // backlogBackends are the accepted values of backlog.backend.
 var backlogBackends = []string{"file", "issues"}
