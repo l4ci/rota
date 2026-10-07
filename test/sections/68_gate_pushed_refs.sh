@@ -221,6 +221,7 @@ RC="$(gt_gate "$ROTA_BIN" --json worker gate w1 --base main)"
 [ "$(jget data.changed <"$GT_DIR.out")" = true ] || fail "gate (k): merged-remotely must report changed true: $(cat "$GT_DIR.out")"
 [ "$(jget data.sha <"$GT_DIR.out")" = "$(git -C "$GT_ORIGIN" rev-parse --short=7 main)" ] \
   || fail "gate (k): merged-remotely must report the remote merge as data.sha: $(cat "$GT_DIR.out")"
+[ "$(jget data.verifySkipped <"$GT_DIR.out")" = true ] || fail "gate (k): merged-remotely must say the merged tree was not verified: $(cat "$GT_DIR.out")"
 git -C "$GT_ORIGIN" merge-base --is-ancestor "$(git -C "$GT_WORKER" rev-parse HEAD)" main || fail "gate (k): the PR should be on origin/main"
 pass "a remote merge whose local fast-forward fails is merged-remotely, not unmerged"
 
