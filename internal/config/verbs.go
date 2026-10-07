@@ -126,6 +126,50 @@ type SetResult struct {
 	Changed     bool
 }
 
+// Layer is the file a write lands in.
+type Layer int
+
+const (
+	// LayerProject is .rota/config.json, where `config set` writes.
+	LayerProject Layer = iota
+	// LayerLocal is .rota/config.local.json, the per-developer overlay.
+	LayerLocal
+)
+
+// ErrLocalNotObject is SetIn's and Unset's answer when config.local.json holds
+// JSON that is not an object.
+var ErrLocalNotObject = errors.New(".rota/config.local.json is not a JSON object")
+
+func (l Layer) path(root string) string {
+	if l == LayerLocal {
+		return localPath(root)
+	}
+	return configPath(root)
+}
+
+func (l Layer) notObject() error {
+	if l == LayerLocal {
+		return ErrLocalNotObject
+	}
+	return ErrNotObject
+}
+
+// Validate is the check Set applies before it writes: key must be well formed
+// and in the schema, and raw (JSON when it parses, else the string) a value
+// the key can hold. A screen asks it before it commits, so it rejects exactly
+// what `config set` would.
+func Validate(key, raw string) error {
+	for _, s := range strings.Split(key, ".") {
+		if s == "" {
+			return fmt.Errorf("%w %q", ErrMalformedKey, key)
+		}
+	}
+	if !IsSchemaKey(key) {
+		return fmt.Errorf("%w %q", ErrNotSchemaKey, key)
+	}
+	return validateValue(key, Coerce(raw))
+}
+
 // Set writes value (JSON when it parses, else the raw string) at the dotted
 // key of .rota/config.json and never touches config.local.json. The key must be
 // in the schema. Intermediate objects are created, or replaced when a scalar
@@ -133,25 +177,23 @@ type SetResult struct {
 // any other JSON than an object is ErrNotObject. The file is rewritten as
 // json.dumps(indent=2) whether or not the value changed, as the old helper did.
 func Set(root, key, raw string) (SetResult, error) {
-	segs := strings.Split(key, ".")
-	for _, s := range segs {
-		if s == "" {
-			return SetResult{}, fmt.Errorf("%w %q", ErrMalformedKey, key)
-		}
-	}
-	if !IsSchemaKey(key) {
-		return SetResult{}, fmt.Errorf("%w %q", ErrNotSchemaKey, key)
-	}
-	value := Coerce(raw)
-	if err := validateValue(key, value); err != nil {
+	return SetIn(root, key, raw, LayerProject)
+}
+
+// SetIn is Set on the chosen layer. LayerLocal writes config.local.json, which
+// overrides config.json on this machine.
+func SetIn(root, key, raw string, layer Layer) (SetResult, error) {
+	if err := Validate(key, raw); err != nil {
 		return SetResult{}, err
 	}
+	segs := strings.Split(key, ".")
+	value := Coerce(raw)
 	var res SetResult
 	res.Value = value
-	err := fsio.UpdateJSON(configPath(root), jsonx.NewObject(), func(doc any) (any, error) {
+	err := fsio.UpdateJSON(layer.path(root), jsonx.NewObject(), func(doc any) (any, error) {
 		cfg, ok := doc.(*jsonx.Object)
 		if !ok {
-			return nil, ErrNotObject
+			return nil, layer.notObject()
 		}
 		before, err := jsonx.Marshal(cfg)
 		if err != nil {
@@ -176,6 +218,52 @@ func Set(root, key, raw string) (SetResult, error) {
 		return cfg, nil
 	})
 	return res, err
+}
+
+// Unset removes key from the layer's file, and the objects it leaves empty. It
+// reports whether the key was there; a layer without the key is not rewritten.
+func Unset(root, key string, layer Layer) (removed bool, err error) {
+	segs := strings.Split(key, ".")
+	cur := asObject(fsio.LoadJSON(layer.path(root), nil))
+	if cur == nil {
+		return false, nil
+	}
+	if _, ok := lookupPresent(cur, segs); !ok {
+		return false, nil
+	}
+	err = fsio.UpdateJSON(layer.path(root), jsonx.NewObject(), func(doc any) (any, error) {
+		cfg, ok := doc.(*jsonx.Object)
+		if !ok {
+			return nil, layer.notObject()
+		}
+		removed = deleteIn(cfg, segs)
+		return cfg, nil
+	})
+	return removed, err
+}
+
+func asObject(v any) *jsonx.Object {
+	o, _ := v.(*jsonx.Object)
+	return o
+}
+
+// deleteIn deletes segs below o and any parent object that ends up empty.
+func deleteIn(o *jsonx.Object, segs []string) bool {
+	if len(segs) == 1 {
+		if _, ok := o.Get(segs[0]); !ok {
+			return false
+		}
+		o.Delete(segs[0])
+		return true
+	}
+	child, ok := getObject(o, segs[0])
+	if !ok || !deleteIn(child, segs[1:]) {
+		return false
+	}
+	if child.Len() == 0 {
+		o.Delete(segs[0])
+	}
+	return true
 }
 
 // projectPathKeys hold a path relative to the project root.
