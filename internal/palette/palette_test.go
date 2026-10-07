@@ -406,3 +406,87 @@ func TestRunDefaultRunsThePreselectedEntry(t *testing.T) {
 		t.Errorf("ran %v", c.ran)
 	}
 }
+
+// pager is a one-line screen that quits on q.
+type pager struct{ n int }
+
+func (p pager) Update(m tui.Msg) (tui.Model, tui.Cmd) {
+	if k, ok := m.(tui.Key); ok {
+		if k.Is('q') {
+			return p, tui.Cmd{Quit: true}
+		}
+		p.n++
+	}
+	return p, tui.Cmd{}
+}
+func (p pager) Render(int, int, tui.Style) string { return "PAGER " + strings.Repeat("+", p.n) + "\n" }
+
+func TestEntryViewOpensInPlaceAndQReturnsToTheList(t *testing.T) {
+	ran := 0
+	entries := []Entry{
+		{Label: "Alpha", Run: func() error { ran++; return nil }, View: func() (tui.Model, error) { return pager{}, nil }},
+		{Label: "Beta", Run: func() error { ran++; return nil }},
+		{Label: "Quit", Quit: true},
+	}
+	term := script("1", "x", "q", "2", "x", "q")
+	err := Run(Config{Entries: entries, InProject: true, In: term, Out: &term.out, MakeRaw: term.makeRaw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	all := strings.Join(term.frames(), "\n")
+	if !strings.Contains(all, "PAGER +") {
+		t.Errorf("view keys did not reach the screen:\n%s", all)
+	}
+	if ran != 1 {
+		t.Errorf("Run called %d times, want 1 (Beta only; Alpha opens its view)", ran)
+	}
+	if term.raws != 2 {
+		t.Errorf("raw %d: the view must not leave raw mode, only Beta's run does", term.raws)
+	}
+	f := term.frames()
+	if !strings.Contains(f[len(f)-1], "Alpha") {
+		t.Errorf("last frame is not the list:\n%s", f[len(f)-1])
+	}
+}
+
+func TestEntryViewErrorShowsUnderTheList(t *testing.T) {
+	entries := []Entry{{Label: "Alpha", View: func() (tui.Model, error) { return nil, errors.New("boom") }}}
+	term := script("1", "q")
+	Run(Config{Entries: entries, InProject: true, In: term, Out: &term.out, MakeRaw: term.makeRaw})
+	if !strings.Contains(term.last(), "error: boom") && !strings.Contains(strings.Join(term.frames(), ""), "error: boom") {
+		t.Errorf("error not shown:\n%s", term.out.String())
+	}
+}
+
+func TestDynamicEntryRelabelsAfterRun(t *testing.T) {
+	on := false
+	entries := []Entry{{
+		Dynamic: func() (string, string) {
+			if on {
+				return "Mode: on", ""
+			}
+			return "Mode: off", ""
+		},
+		Run: func() error { on = !on; return nil },
+	}}
+	term := script("1", "x", "q")
+	Run(Config{Entries: entries, InProject: true, In: term, Out: &term.out, MakeRaw: term.makeRaw})
+	f := term.frames()
+	if !strings.Contains(f[0], "Mode: off") || !strings.Contains(f[len(f)-1], "Mode: on") {
+		t.Errorf("label did not follow the run:\n%s", term.out.String())
+	}
+}
+
+func TestNumberedFallbackListsViewAndDynamicEntries(t *testing.T) {
+	entries := []Entry{
+		{Label: "Alpha", Run: func() error { return nil }, View: func() (tui.Model, error) { return pager{}, nil }},
+		{Dynamic: func() (string, string) { return "Mode: off", "hint" }},
+	}
+	var out bytes.Buffer
+	Run(Config{Entries: entries, InProject: true, In: strings.NewReader("q\n"), Out: &out, Dumb: true})
+	for _, want := range []string{"1  Alpha", "2  Mode: off  - hint"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("fallback lacks %q:\n%s", want, out.String())
+		}
+	}
+}
