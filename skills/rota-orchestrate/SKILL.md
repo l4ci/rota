@@ -82,13 +82,13 @@ When a worker is `blocked` on a question, or you relay to a worker or review its
 
 ## 6. Merge
 
-Workers never merge. After `done`, read the PR: does it do what the issue says, and stay inside the files the issue named? Then `rota worker gate <slot> --base <branch>`, or `rota worker gate <PR number> --base <branch>` once the slot has moved on and the PR waits in review. The gate runs the checks on the merged tree, merges on a pass and drops the PR from the review list. Read its verdict; don't re-derive the rules it enforces. Loop per PR: gate, fix or bounce what the verdict names, re-gate; the PR is done only on a merge. What each verdict (`stale`, `merge-failed`, `verify-failed`, `approval-required`) asks of you is in [tmux-dispatch.md](references/tmux-dispatch.md#the-merge-gate).
+Workers never merge. After `done`, read the PR: does it do what the issue says, and stay inside the files the issue named? Then `rota worker gate <slot> --base <branch>`, or `rota worker gate <PR number> --base <branch>` once the slot has moved on and the PR waits in review. The gate runs the checks on a scratch merge, merges on a pass and drops the PR from the review list. Read its verdict; don't re-derive the rules it enforces. Loop per PR: gate, fix or bounce what the verdict names, re-gate; the PR is done only on a merge. What each verdict (`stale`, `merge-failed`, `verify-failed`, `approval-required`) asks of you is in [tmux-dispatch.md](references/tmux-dispatch.md#the-merge-gate).
 
 **Best-of issues.** An issue labelled `best-of:2` is built by two slots at once (`assign` binds both, one Claude and one Codex when both are configured). The gate refuses either PR until you pick. Wait for both PRs, then compare them in this order: acceptance criteria met (each one, against the issue's own words), then the smaller and simpler diff, then the worker's Rulings and their cost. Run `rota round pick <ID> --pr <N> --reason-file <f>` with the comparison as the reason; it closes the other PR and keeps its branch. Then review and gate the winner as usual. If you cannot separate the two on those three tests, escalate to the maintainer (section 5) with both PR links and what you compared; do not toss a coin. A failed attempt (returned, reclaimed, dead) leaves one PR: `pick` takes it alone.
 
 When several PRs wait, or `ship.mergeApproval` requires approval, or you complete items in file mode, read [`merge-train-and-approval.md`](merge-train-and-approval.md).
 
-The merge gate is the only full run: it verified the merged tree, so don't re-run the suite after each merge or before assigning. Re-verify only after a `verify-failed` verdict, once the fix lands. `rota round wind-down` re-verifies once at the end.
+The merge gate is the only full run: it verified the merged tree, so don't re-run the suite after each merge or before assigning. A `verify-failed` verdict normally lands nothing (bounce and re-gate); with `data.changed` true it landed, so fix forward and re-verify once the fix lands. `rota round wind-down` re-verifies once at the end.
 
 ## 7. Bounce or fix
 

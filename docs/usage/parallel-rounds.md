@@ -401,8 +401,8 @@ marked `done`.
 
 `rota worker gate <slot> --base <branch>` is the one merge path in a round. It checks the branch is
 fresh, the PR is the worker's, provenance holds and the PR body closes the slot's issue
-(`Closes #N`, unless the issue is labelled `partial-slice`), then re-runs
-`test.full` on the merged tree, then `test.e2e` when set, and merges on a pass.
+(`Closes #N`, unless the issue is labelled `partial-slice`), then builds a scratch
+merge of the PR into the base, runs `test.full` there, then `test.e2e` when set, and merges on a pass.
 
 The gate refuses before it merges anything (exit 4, nothing lands) in these cases:
 
@@ -415,10 +415,15 @@ The gate refuses before it merges anything (exit 4, nothing lands) in these case
   one with `rota config set test.full <command>`, or pass `--no-verify` to merge unverified on purpose.
   The train takes the same flag.
 
-One thing to know about a local gate: it merges first, then runs `test.full` on the merged base. If
-that fails (`verify-failed`), the merge has already landed. Fix forward on the base with a new PR; the
-worker's slot has usually moved on. With `test.fullWhere` set to `ci` the order flips: CI checks the
-merged tree first and nothing lands when it fails.
+A local gate verifies before it merges. It builds a scratch merge of the PR head into the current base
+(in a scratch worktree under `$TMPDIR`), runs `test.full` there, then `test.e2e` when set. If that
+fails (`verify-failed`), nothing landed and the PR stays open: send the slot back to fix it, then
+gate again. If the base moved while the scratch tree verified, the verdict is `base-moved` and nothing
+landed; gate again. After the merge lands, the gate compares the landed tree with the verified one. When
+they match, that is the pass. When the base moved between the last check and the merge, the gate prints
+`VERIFY-AGAIN` and runs the checks once more on the landed base; a red result there is `verify-failed`
+with `data.changed` true, and you fix forward with a new PR. With `test.fullWhere` set to `ci`, CI
+checks the merge result first and nothing lands when it fails.
 
 A branch that is only behind the base is merged as is when the merge is clean, even when both sides
 changed a file: the `STALE-MERGE` note names the shared files (`round.sharedPaths` aside) and the gate

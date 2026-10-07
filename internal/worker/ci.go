@@ -308,10 +308,11 @@ func (r VerifyResult) detail() string {
 	return fmt.Sprintf("last lines of the verify output (full log: %s):\n%s", r.LogPath, indentTail(r.Log, 20))
 }
 
-// scratchTree checks out sha detached in a temporary worktree of root. The
-// caller runs cleanup.
-func (e gateEnv) scratchTree(root, sha string) (dir string, cleanup func(), err error) {
-	tmp, err := os.MkdirTemp("", "rota-ci-")
+// scratchTree checks out sha detached in a temporary worktree of root, under
+// a <prefix>*/tree path the test harness's worktree guard ignores (rota-ci- or
+// rota-train-, see test/lib/isolate.sh). The caller runs cleanup.
+func (e gateEnv) scratchTree(root, sha, prefix string) (dir string, cleanup func(), err error) {
+	tmp, err := os.MkdirTemp("", prefix)
 	if err != nil {
 		return "", nil, err
 	}
