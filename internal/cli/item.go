@@ -10,9 +10,9 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/exitmap"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/pystr"
-	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -126,47 +126,17 @@ func argCount(c *Ctx, args []string, min, max int, usage string) error {
 }
 
 // backlogFail maps a backlog error to a verb failure and, for a refusal, its
-// failure data.
+// failure data. An unclassified error passes through.
 func backlogFail(err error) (Result, error) {
-	var e *Error
-	var ref *backlog.RefusedError
-	var act *backlog.ActiveError
-	var ex interface{ Exit() int }
-	var te *tracker.Error
-	switch {
-	case errors.As(err, &e):
-		return Result{}, err
-	case errors.As(err, &te):
-		return Result{}, &Error{Exit: te.Kind.Exit(), Message: te.Message}
-	case errors.As(err, &ex):
-		return Result{}, &Error{Exit: ex.Exit(), Message: err.Error()}
-	case errors.As(err, &ref):
-		return Result{Data: jsonObj("blockedBy", ref.BlockedBy, "changed", false)},
-			&Error{Exit: ExitRefused, Message: ref.Msg, Hint: ref.Hint}
-	case errors.As(err, &act):
-		return Result{Data: jsonObj("blockedBy", "active", "id", act.ID, "activeBranch", act.Branch, "changed", false)},
-			&Error{Exit: ExitRefused, Message: act.Error(), Hint: "end the stream first: rota status rm " + act.Branch}
-	case errors.Is(err, backlog.ErrWrongBackend):
-		return Result{Data: jsonObj("blockedBy", "backend", "changed", false)}, Refused("%s", err.Error())
-	case errors.Is(err, backlog.ErrNotFound):
-		return Result{}, Resolution("%s", err.Error())
-	case errors.Is(err, backlog.ErrInvalid):
-		return Result{}, Usage("%s", err.Error())
-	case errors.Is(err, backlog.ErrNotPorted):
-		return Result{}, &Error{Exit: ExitNotImplemented, Message: err.Error()}
-	}
-	return Result{}, err
+	data, ferr := exitmap.Translate(err, exitmap.Options{Classes: exitmap.Backlog})
+	return Result{Data: data}, ferr
 }
 
 // backlogFailRead is backlogFail for a read-only verb: the conventions forbid exit 4
 // there, so a refusal (the wrong backend) becomes exit 1 with the same data.
 func backlogFailRead(err error) (Result, error) {
-	res, ferr := backlogFail(err)
-	var e *Error
-	if errors.As(ferr, &e) && e.Exit == ExitRefused {
-		e.Exit = ExitFailed
-	}
-	return res, ferr
+	data, ferr := exitmap.Translate(err, exitmap.Options{Classes: exitmap.Backlog, ReadOnly: true})
+	return Result{Data: data}, ferr
 }
 
 // resolveItem is the canonical ID and type of the item behind ref (contract rule 11).
