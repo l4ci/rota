@@ -12,8 +12,21 @@ OUT=$(fast_plan "$GOLD")
 OUT=$(fast_plan internal/knowledge/skills_block.md)
 grep -qx "plan: go ./internal/knowledge" <<<"$OUT" || fail "a go:embed asset should select its package: $OUT"
 
-OUT=$(fast_plan test/lib/isolate.sh test/fakes/fake_forge.py test/runner.sh)
+OUT=$(fast_plan test/lib/isolate.sh test/fakes/fake_forge.py)
 [ "$OUT" = "plan: infra" ] || fail "test infra should select the infra check: $OUT"
+
+LINT="plan: section test/sections/71_no_pipe_grep_q.sh"
+OUT=$(fast_plan test/sections/120_fast_mapping.sh)
+grep -qx "$LINT" <<<"$OUT" || fail "a changed section should add the piped-grep lint: $OUT"
+OUT=$(fast_plan test/runner.sh)
+grep -qx "plan: infra" <<<"$OUT" || fail "runner.sh should still select infra: $OUT"
+grep -qx "$LINT" <<<"$OUT" || fail "runner.sh should add the piped-grep lint: $OUT"
+OUT=$(fast_plan test/lib.sh)
+grep -qx "$LINT" <<<"$OUT" || fail "lib.sh should add the piped-grep lint: $OUT"
+OUT=$(fast_plan test/sections/71_no_pipe_grep_q.sh)
+[ "$(grep -cx "$LINT" <<<"$OUT")" = 1 ] || fail "section 71 changed itself must be listed once: $OUT"
+OUT=$(fast_plan test/lib/isolate.sh docs/foo.md)
+if grep -q "section" <<<"$OUT"; then fail "a file outside the lint paths must not add section 71: $OUT"; fi
 
 OUT=$(fast_plan notes/unmapped.txt)
 [ -z "$OUT" ] || fail "an unmapped file should select nothing: $OUT"
