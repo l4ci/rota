@@ -304,7 +304,7 @@ func suiteConfig(t *testing.T) {
 	add(
 		set("key/models.orchestrator", stdFx, "models.orchestrator", "haiku", eqCheck("data.key", "models.orchestrator")),
 		set("key/four-segments", stdFx, "issues.labels.types.bug", "defect", eqCheck("data.key", "issues.labels.types.bug")),
-		set("key/three-segments", stdFx, "issues.providers.github", "false", eqCheck("data.value", false)),
+		set("key/three-segments", stdFx, "issues.labels.inProgress", "x", eqCheck("data.value", "x")),
 		set("key/rota.version", stdFx, "rota.version", "5.0.0", eqCheck("data.value", "5.0.0")),
 		set("previous/scalar", fx{config: `{"models": {"worker": "sonnet"}}`}, "models.worker", "opus",
 			both(eqCheck("data.previous", "sonnet"), eqCheck("data.changed", true))),

@@ -39,17 +39,15 @@ func TestFillCreatesMissingFileInSchemaOrder(t *testing.T) {
 // The seed rota init writes (issues-only keys in schema order) filled out is
 // byte-identical to a full config written in schema order (G7).
 func TestFillCompletesTheSeedInSchemaOrder(t *testing.T) {
-	seed := `{"issues": {"providers": {"github": true, "gitlab": true}, "label": "in-progress", "autoCreateLabel": true, "filterMineOnly": false}}`
+	seed := `{"issues": {"label": "in-progress", "autoCreateLabel": true}}`
 	root := project(t, seed, "")
 	filled, err := Fill(root)
-	if err != nil || len(filled) != len(requiredNames())-2 {
+	if err != nil || len(filled) != len(requiredNames()) {
 		t.Fatalf("filled %v, err %v", filled, err)
 	}
 	full := fullConfig()
-	issues, _ := getObject(full, "issues")
-	issues.Set("label", "in-progress")
-	issues.Set("autoCreateLabel", true)
-	issues.Set("filterMineOnly", false)
+	full = fillKey(full, "", []string{"issues", "label"}, "in-progress")
+	full = fillKey(full, "", []string{"issues", "autoCreateLabel"}, true)
 	want, _ := jsonx.Marshal(full)
 	if got := read(t, root); got != string(want)+"\n" {
 		t.Errorf("file:\n%s\nwant:\n%s", got, want)
@@ -65,7 +63,7 @@ func TestFillKeepsPresentAndUnknownKeys(t *testing.T) {
 	doc, _ := jsonx.Decode([]byte(read(t, root)))
 	o := doc.(*jsonx.Object)
 	// present keys keep their order; added ones go before the first later sibling
-	want := []string{"zzz", "work", "models", "refactor", "learn", "ship", "qa", "autonomy", "docs", "git", "umbrella", "hvSkills", "issues", "rota", "test"}
+	want := []string{"zzz", "work", "models", "refactor", "learn", "ship", "qa", "autonomy", "docs", "git", "umbrella", "hvSkills", "rota", "test"}
 	if got := o.Keys(); !reflect.DeepEqual(got, want) {
 		t.Errorf("top keys %v", got)
 	}
@@ -279,5 +277,41 @@ func TestFillKeepsNonEmptyTestFull(t *testing.T) {
 	}
 	if _, ok := Lookup(o, "refactor.verifyCommands"); ok {
 		t.Error("old key left")
+	}
+}
+
+// A config older `rota init` seeded still holds the removed keys: check names
+// them without failing, fill deletes them (and the emptied providers object)
+// and keeps the rest.
+func TestFillStripsRemovedKeys(t *testing.T) {
+	old := `{"issues": {"providers": {"github": true, "gitlab": true}, "label": "mine", "autoCreateLabel": true, "filterMineOnly": true}}`
+	root := project(t, old, "")
+	want := []string{"issues.filterMineOnly", "issues.providers.github", "issues.providers.gitlab"}
+	if got := Removed(root); !reflect.DeepEqual(got, want) {
+		t.Fatalf("Removed before fill: %v", got)
+	}
+	if _, err := Fill(root); err != nil {
+		t.Fatal(err)
+	}
+	if got := Removed(root); len(got) != 0 {
+		t.Errorf("Removed after fill: %v", got)
+	}
+	doc, _ := jsonx.Decode([]byte(read(t, root)))
+	issues, _ := getObject(doc.(*jsonx.Object), "issues")
+	if got := issues.Keys(); !reflect.DeepEqual(got, []string{"label", "autoCreateLabel"}) {
+		t.Errorf("issues keys %v", got)
+	}
+	if v, _ := issues.Get("label"); v != "mine" {
+		t.Errorf("label %v", v)
+	}
+}
+
+func TestFillRewritesAFileHoldingOnlyRemovedKeys(t *testing.T) {
+	root := project(t, `{"issues": {"filterMineOnly": false}}`, "")
+	if _, err := Fill(root); err != nil {
+		t.Fatal(err)
+	}
+	if got := Removed(root); len(got) != 0 {
+		t.Errorf("Removed after fill: %v", got)
 	}
 }

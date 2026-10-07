@@ -170,7 +170,12 @@ func configCheck(fs *flag.FlagSet) RunFunc {
 		if status == config.Stale {
 			token = "STALE:" + strings.Join(missing, ",")
 		}
+		removed := config.Removed(root)
+		data.Set("removed", anySlice(removed))
 		res := Result{Data: data, Text: token}
+		if len(removed) > 0 {
+			res.Text += "\nREMOVED: " + strings.Join(removed, ", ") + " (nothing reads them; run: rota config fill)"
+		}
 		if status == config.UpToDate || status == config.Stale {
 			if retired := config.Retired(root); len(retired) > 0 {
 				data.Set("retired", anySlice(retired))
@@ -201,6 +206,7 @@ func configFill(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
+		removed := config.Removed(root)
 		filled, err := config.Fill(root)
 		if errors.Is(err, config.ErrCorrupt) {
 			return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
@@ -212,7 +218,15 @@ func configFill(fs *flag.FlagSet) RunFunc {
 		if len(filled) > 0 {
 			text = "filled: " + strings.Join(filled, ", ")
 		}
-		return Result{Data: jsonObj("filled", anySlice(filled), "changed", len(filled) > 0), Text: text}, nil
+		if len(removed) > 0 {
+			if len(filled) == 0 {
+				text = ""
+			} else {
+				text += "\n"
+			}
+			text += "removed: " + strings.Join(removed, ", ")
+		}
+		return Result{Data: jsonObj("filled", anySlice(filled), "removed", anySlice(removed), "changed", len(filled) > 0 || len(removed) > 0), Text: text}, nil
 	}
 }
 

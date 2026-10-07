@@ -9,7 +9,7 @@ RC=0; ( cd "$CF" && hvj config fill >/dev/null 2>&1 ) || RC=$?
   || fail "config check after fill on a fresh project should be upToDate"
 
 # The rota init seed (issues-only keys, schema order) filled out stays in schema order.
-printf '{\n  "issues": {\n    "providers": {\n      "github": true,\n      "gitlab": true\n    },\n    "label": "in-progress",\n    "autoCreateLabel": true,\n    "filterMineOnly": false\n  }\n}\n' > "$CF/.rota/config.json"
+printf '{\n  "issues": {\n    "label": "in-progress",\n    "autoCreateLabel": true\n  }\n}\n' > "$CF/.rota/config.json"
 OUT=$( cd "$CF" && hvj config fill )
 [ "$(echo "$OUT" | jget data.changed)" = "true" ] || fail "fill on the seed should report changed: $OUT"
 [ "$(echo "$OUT" | jget 'data.filled[0]')" = "models.orchestrator" ] \
@@ -17,9 +17,9 @@ OUT=$( cd "$CF" && hvj config fill )
 python3 - "$CF/.rota/config.json" <<'PY' || fail "filled seed is not in schema order"
 import json, sys
 cfg = json.load(open(sys.argv[1]))
-want = ["models", "work", "refactor", "learn", "ship", "qa", "autonomy", "docs", "git", "umbrella", "issues", "rota", "test"]
+want = ["models", "work", "refactor", "learn", "ship", "qa", "autonomy", "docs", "git", "umbrella", "rota", "issues", "test"]
 assert list(cfg) == want, list(cfg)
-assert list(cfg["issues"]) == ["providers", "label", "autoCreateLabel", "filterMineOnly"], list(cfg["issues"])
+assert list(cfg["issues"]) == ["label", "autoCreateLabel"], list(cfg["issues"])
 assert cfg["work"]["isolation"] == "branch" and cfg["work"]["accounts"] == [], cfg["work"]
 PY
 pass "config fill completes a fresh and a seeded config in schema order"
