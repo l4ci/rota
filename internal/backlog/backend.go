@@ -138,6 +138,8 @@ type Options struct {
 	// belongs to the proof package, which imports backlog, so the caller
 	// injects it; a backend without it refuses to complete an item as done.
 	CountProof func(text string) int
+	// NoteLimit is the ROTA_NOTE_LIMIT value; see Issues.NoteLimit.
+	NoteLimit string
 }
 
 // Open returns the backend selected by backlog.backend in cfg, the loaded
@@ -160,6 +162,7 @@ func Open(ctx context.Context, root string, cfg any, opts Options) (Backend, err
 		u := NewUmbrella(root, cfg, func(dir string) (Tracker, error) { return opts.NewTracker(ctx, dir) })
 		u.Ctx = ctx
 		u.CountProof = opts.CountProof
+		u.NoteLimit = opts.NoteLimit
 		u.Scope = opts.Scope
 		if opts.Cwd != "" {
 			u.CwdRepo = CwdSubRepo(opts.Cwd, u.Repos)
@@ -170,7 +173,7 @@ func Open(ctx context.Context, root string, cfg any, opts Options) (Backend, err
 	if err != nil {
 		return nil, err
 	}
-	return &Issues{Cfg: cfg, Tracker: tr, Ctx: ctx, CountProof: opts.CountProof}, nil
+	return &Issues{Cfg: cfg, Tracker: tr, Ctx: ctx, CountProof: opts.CountProof, NoteLimit: opts.NoteLimit}, nil
 }
 
 var (

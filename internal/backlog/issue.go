@@ -62,6 +62,9 @@ type Issues struct {
 	// with a rota milestone ID the tracker has no native milestone for, it
 	// creates it and returns its title; ok false leaves the ID unknown.
 	OnMissingMilestone func(mid string) (title string, ok bool, err error)
+	// NoteLimit is the ROTA_NOTE_LIMIT value as the caller read it; "" is the
+	// default. The cli edge reads the environment and passes it in.
+	NoteLimit string
 }
 
 func (b *Issues) ctx() context.Context {
