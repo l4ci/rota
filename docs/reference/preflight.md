@@ -37,7 +37,7 @@ rota doctor
 rota doctor --json
 ```
 
-It is read-only, spends no usage quota, and runs without `.rota/` (it falls back to default config). Each check reports `pass`, `fail` or `skip`; a `disk` line (`warn`) appears only when free disk space is low and never fails the run. A `fail` carries a `hint` with the one command or edit that fixes it, and `detail` says what was found (`herdr 0.8.2, need 0.9.x`).
+It is read-only, spends no usage quota, and runs without `.rota/` (it falls back to default config). Each check reports `pass`, `fail` or `skip`; a `disk` line (`warn`) appears only when free disk space is low and never fails the run, and a `verify` line (`warn`) only while `test.full` and `test.e2e` are both empty. A `fail` carries a `hint` with the one command or edit that fixes it, and `detail` says what was found (`herdr 0.8.2, need 0.9.x`).
 
 | Exit | Meaning | What to do |
 |------|---------|------------|
@@ -62,6 +62,7 @@ The checks, in the order they run:
 | `skills` | every installed skills root (user and project, Claude and Codex, including each `work.accounts` config dir) matches the binary's skill set, and has no missing or edited files | no root has a `.rota-manifest.json` (run `rota skills install`) |
 | `codex` | `codex` runs, and the default Codex home (or each `work.codexAccounts` account) is logged in and has the herdr integration | `codex` is not on `PATH` and no `work.codexAccounts` are configured |
 | `agents` | the subagent files `rota agents write` generates are present and current | nothing to report: the line appears only as a `warn`, when a file is missing or stale (fix: `rota agents write`) |
+| `verify` | `test.full` or `test.e2e` is set, so the merge gate has something to run | nothing to report: the line appears only as a `warn`, when both are empty under a local verify (fix: `rota config set test.full '[...]'`) |
 
 The two hook checks are opt-in. Until something `rota hook install` writes is present, they skip and do not fail a project that never installed the hooks. Once it is, a partial or broken install fails. `skills` follows the same rule: it skips until `rota skills install` has written a manifest.
 

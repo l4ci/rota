@@ -46,6 +46,8 @@ func doctorData(t *testing.T, out string) (bool, map[string]map[string]any) {
 	}
 	// The agents line appears only in a project whose agent files are stale.
 	order = strings.Replace(order, "agents,", "", 1)
+	// The verify line appears only in a project with no test.full or test.e2e.
+	order = strings.Replace(order, "verify,", "", 1)
 	if order != "git,jq,host,tracker,accounts,hook,statusline,stop-hook,switch,skills,codex," {
 		t.Errorf("check order %s", order)
 	}
@@ -147,5 +149,34 @@ func TestDoctorAgentsCheck(t *testing.T) {
 	_, out, _ = rotaIn(t, dir, "doctor", "--json")
 	if _, c := doctorData(t, out); c["agents"] != nil {
 		t.Fatalf("still reported: %v", c["agents"])
+	}
+}
+
+// The verify check warns, never fails, while test.full and test.e2e are both
+// empty, and disappears once either is set (#493).
+func TestDoctorVerifyCheck(t *testing.T) {
+	doctorFakes(t, map[string]string{"git": `case "$1" in remote) exit 2;; esac; exit 0`})
+	dir, _ := filepath.EvalSymlinks(t.TempDir())
+	if code, out, _ := rotaIn(t, dir, "init"); code != 0 {
+		t.Fatalf("init %d %s", code, out)
+	}
+	verify := func() map[string]any {
+		_, out, _ := rotaIn(t, dir, "doctor", "--json")
+		_, c := doctorData(t, out)
+		return c["verify"]
+	}
+	c := verify()
+	if c["status"] != "warn" || !strings.Contains(c["hint"].(string), "rota config set test.full '[...]'") || !strings.Contains(c["detail"].(string), "merge gate will refuse") {
+		t.Errorf("empty test.full: %v", c)
+	}
+	for _, key := range []string{"test.full", "test.e2e"} {
+		rotaIn(t, dir, "config", "set", "test.full", "[]")
+		rotaIn(t, dir, "config", "set", "test.e2e", "[]")
+		if code, out, _ := rotaIn(t, dir, "config", "set", key, `["true"]`); code != 0 {
+			t.Fatalf("set %s: %d %s", key, code, out)
+		}
+		if c := verify(); c != nil {
+			t.Errorf("%s set still warns: %v", key, c)
+		}
 	}
 }
