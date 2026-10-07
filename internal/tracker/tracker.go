@@ -393,16 +393,7 @@ func (b *base) Provider() string { return b.cli.Provider }
 
 // CheckAuth runs `auth status`; any failure, a missing CLI included, is
 // KindUnavailable.
-func (b *base) CheckAuth(ctx context.Context) error {
-	name := "gh"
-	if b.cli.Provider == "gitlab" {
-		name = "glab"
-	}
-	if res, err := b.cli.Run(ctx, []string{"auth", "status"}, nil); err != nil || res.ExitCode != 0 {
-		return unavailable("%s not installed or not authenticated", name)
-	}
-	return nil
-}
+func (b *base) CheckAuth(ctx context.Context) error { return b.cli.CheckAuth(ctx) }
 
 func (b *base) ClosedNumbers(body string) []int { return b.closing(body) }
 

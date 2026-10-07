@@ -11,8 +11,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"github.com/l4ci/rota/internal/config"
@@ -179,8 +179,6 @@ func (d *runner) jq() Check {
 	return pass("jq", "jq on PATH")
 }
 
-var versionRe = regexp.MustCompile(`(\d+)\.(\d+)\.(\d+)`)
-
 // roundHost is the host a round would run on: the same detection the round
 // verbs use, so doctor checks what `round start` will drive.
 func (d *runner) roundHost() string {
@@ -199,19 +197,19 @@ func (d *runner) roundHost() string {
 func (d *runner) host() Check {
 	switch d.roundHost() {
 	case "herdr":
+		want := host.SupportedHerdr + ".x"
 		bin, ok := d.in.Look("herdr")
 		if !ok {
-			return fail("host", "herdr not found on PATH", "install herdr 0.9.x (https://herdr.dev)")
+			return fail("host", "herdr not found on PATH", "install herdr "+want+" (https://herdr.dev)")
 		}
 		r, ran := d.run(bin, []string{"--version"}, nil)
 		out := strings.TrimSpace(r.Stdout + " " + r.Stderr)
-		m := versionRe.FindStringSubmatch(out)
-		if !ran || r.ExitCode != 0 || m == nil {
-			return fail("host", "herdr version unreadable", "reinstall herdr 0.9.x (https://herdr.dev)")
+		v, err := host.HerdrVersion(out)
+		if !ran || r.ExitCode != 0 || v == "" {
+			return fail("host", "herdr version unreadable", "reinstall herdr "+want+" (https://herdr.dev)")
 		}
-		v := m[0]
-		if m[1] != "0" || m[2] != "9" {
-			return fail("host", fmt.Sprintf("herdr %s, need 0.9.x", v), "install herdr 0.9.x (https://herdr.dev)")
+		if err != nil {
+			return fail("host", fmt.Sprintf("herdr %s, need %s", v, want), "install herdr "+want+" (https://herdr.dev)")
 		}
 		return pass("host", "herdr "+v)
 	case "tmux":
@@ -228,15 +226,26 @@ func (d *runner) host() Check {
 	}
 }
 
+// trackerExec adapts the injected Exec and Look to the tracker's, so the
+// tracker owners (OriginURL, CLI) run through doctor's test seam.
+func (d *runner) trackerExec() tracker.Exec {
+	return func(ctx context.Context, dir, name string, args []string, _ []byte) ([]byte, []byte, int, error) {
+		bin, ok := d.in.Look(name)
+		if !ok {
+			return nil, nil, 0, exec.ErrNotFound
+		}
+		r, err := d.in.Exec(ctx, bin, args, nil, dir)
+		if err != nil {
+			return nil, nil, 0, err
+		}
+		return []byte(r.Stdout), []byte(r.Stderr), r.ExitCode, nil
+	}
+}
+
 // provider is "github", "gitlab" or "": the origin host decides, and
 // issues.provider is only the fallback (as in `rota issues provider`).
 func (d *runner) provider() string {
-	origin := ""
-	if bin, ok := d.in.Look("git"); ok {
-		if r, ran := d.run(bin, []string{"remote", "get-url", "origin"}, nil); ran && r.ExitCode == 0 {
-			origin = strings.TrimRight(r.Stdout, "\n")
-		}
-	}
+	origin := tracker.OriginURL(d.ctx, d.in.Dir, d.trackerExec())
 	if p := tracker.ProviderFromOrigin(origin, d.in.IssuesProvider); p != tracker.ProviderUnknown {
 		return p
 	}
@@ -248,17 +257,18 @@ func (d *runner) tracker() Check {
 	if p == "" {
 		return skip("tracker", "no origin remote naming github or gitlab")
 	}
-	cli, login := "gh", "gh auth login"
-	if p == "gitlab" {
-		cli, login = "glab", "glab auth login"
-	}
-	bin, ok := d.in.Look(cli)
-	if !ok {
+	cli := tracker.CLIName(p)
+	if _, ok := d.in.Look(cli); !ok {
 		return fail("tracker", cli+" not found on PATH", "install "+cli)
 	}
-	r, ran := d.run(bin, []string{"auth", "status"}, nil)
-	if !ran || r.ExitCode != 0 {
-		return fail("tracker", cli+" is not authenticated", login)
+	c := &tracker.CLI{Provider: p, Dir: d.in.Dir, Exec: d.trackerExec(), LookPath: func(n string) (string, error) {
+		if bin, ok := d.in.Look(n); ok {
+			return bin, nil
+		}
+		return "", exec.ErrNotFound
+	}}
+	if err := c.CheckAuth(d.ctx); err != nil {
+		return fail("tracker", cli+" is not authenticated", cli+" auth login")
 	}
 	return pass("tracker", cli+" authenticated ("+p+")")
 }
