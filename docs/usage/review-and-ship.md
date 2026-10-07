@@ -2,7 +2,7 @@
 
 `/rota-ship` integrates completed work into main (or opens a PR), gated by `/rota-review` by default.
 
-## /rota-review
+## 🔍 /rota-review
 
 `/rota-review` is a staff-engineer-level read of a feature branch before it leaves your machine. It is **read-only**: no commits, no mutations. The skill scopes the branch (commits, touched files, referenced item IDs), pulls relevant topics from [`KNOWLEDGE.md`](learning.md) and `DECISIONS.md`, resolves what each item promised, and dispatches two reviewers in parallel: Spec (does the diff do what the items promised, nothing more) and Standards (conventions, code smells, test quality, silent failures). Their reports are shown as separate sections; the overall verdict is the worse of the two. Standards runs on the `standard` model tier (`round.tiers.claude.standard`). The diff is not pasted: `rota review package` writes the commits, `--stat` and full diff (with 10 lines of context) to a gitignored file under `.rota/review/`, and both reviewers read that file, so a large branch needs no file cap. After fixes, `--since <sha>` packages only what changed since the last review.
 
@@ -31,7 +31,7 @@ The report ends with one verdict (`PASS` / `CONCERNS` / `FAIL`) with file:line e
 
 You can run `/rota-review` at any time on a branch, not only before shipping. On the [issue backend](issue-backend.md), `/rota-review --queue` reviews the PRs waiting on `needs-review` items and merges the ones that pass.
 
-## /rota-ship
+## 🚢 /rota-ship
 
 `/rota-ship` bundles a completed feature branch into main. Typical usage after finishing work:
 

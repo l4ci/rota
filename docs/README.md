@@ -4,7 +4,7 @@ Public user guide for rota, a dev workflow for Claude Code and Codex: skills plu
 
 ## Contents
 
-### Getting started
+### 🚀 Getting started
 
 - [Cheat sheet](cheatsheet.md): one-line summary of every `/rota-*` skill (rapid scan)
 - [Install](install.md): the install script, Homebrew, release binaries, upgrading, uninstalling
@@ -16,7 +16,7 @@ Public user guide for rota, a dev workflow for Claude Code and Codex: skills plu
 - [Greenfield: from a brief to a shipped milestone](walkthroughs/greenfield-from-brief.md). Empty repo plus a one-page brief, taken end-to-end through `/rota-vision`, `/rota-plan`, `/rota-work`, `/rota-debug`, `/rota-ship`, `/rota-learn`.
 - [Brownfield: dropping rota into an existing project](walkthroughs/brownfield-existing-project.md). Established codebase with open issues and a mental bug list, walked through `rota init`, `/rota-capture`, then a P0 cycle plus a debug cycle.
 
-### Rounds
+### 🔄 Rounds
 
 - [Your first round](first-round.md): install, skills, herdr or tmux, launching the orchestrator, a first round and wind-down, step by step
 - [Parallel rounds](usage/parallel-rounds.md): an orchestrator, standing workers in worktrees, the merge gate, solo mode
@@ -26,20 +26,20 @@ Public user guide for rota, a dev workflow for Claude Code and Codex: skills plu
 - [Orchestrator harnesses](usage/orchestrator-harnesses.md): run the orchestrator in Claude Code, Codex, Hermes or opencode
 - [Skills in Codex](usage/codex-skills.md): install and call the skills from Codex
 
-### Capture and backlog
+### 📥 Capture and backlog
 
 - [Capturing work](usage/capturing-work.md): `/rota-capture`, mixed input, related links, detail files
 - [Picking work](usage/picking-work.md): `/rota-work` (no argument), `/rota-work --preview`
 - [Removing work](usage/removing-work.md): `/rota-capture --remove`, dry-run preview, batch removal, safety semantics
 
-### Execution
+### 🔨 Execution
 
 - [Running work](usage/running-work.md): `/rota-work` parallel cycles, branch vs worktree isolation, capture then work
 - [Debugging](usage/debugging.md): `/rota-debug` systematic cycle
 - [Pausing and resuming](usage/pausing-and-resuming.md): `/rota-pause`, recovering after `/clear`
 - [Parallel work](usage/parallel-work.md): worktree mode, concurrent `/rota-work` sessions
 
-### Shipping
+### 📦 Shipping
 
 - [Review and ship](usage/review-and-ship.md): `/rota-review` single-pass review and `/rota-ship` gates (second-opinion, QA)
 - [Product QA](usage/qa.md): `/rota-qa` per-target strategy files and the `ship.qa` gate
@@ -53,14 +53,14 @@ Public user guide for rota, a dev workflow for Claude Code and Codex: skills plu
 - [Brainstorming a design](usage/brainstorm.md): per-item design exploration with `/rota-brainstorm`, before `/rota-plan`
 - [Spikes](usage/spikes.md): throwaway feasibility experiments via `/rota-spike`
 
-### Configuration
+### ⚙ Configuration
 
 - [Configuration](usage/configuration.md): every key in `.rota/config.json` and what it does
 - [Autonomy levels](usage/autonomy.md): how `off` / `auto` change skill chaining
 - [Issue backend](usage/issue-backend.md): backlog on GitHub/GitLab issues, setup, labels, milestones, `rota migrate issues`
 - [Umbrella mode](usage/umbrella-mode.md): coordinator at umbrella, work in sub-repos (M02 V1)
 
-### Reference
+### 📖 Reference
 
 - [Architecture](reference/architecture.md): how the CLI, the skills and `.rota/` fit together
 - [Slash commands](reference/slash-commands.md): every `/rota-*` command, alphabetical
@@ -70,7 +70,7 @@ Public user guide for rota, a dev workflow for Claude Code and Codex: skills plu
 - [Upstream issues reference](reference/rota-issues.md): GitHub/GitLab issue backend and round-trip closing
 - [Project check](reference/preflight.md): what `rota init check` verifies, plus exit-code meanings
 
-### Contributing
+### 🤝 Contributing
 
 - [Rounds on rota itself](contributing/rounds.md): the gate, repo rules and roster for contributors
 - [Release signing](contributing/release-signing.md): generating or rotating the minisign key, the Actions secret, verifying by hand

@@ -131,7 +131,7 @@ brief.
 - **herdr only.** No tmux, no solo mode, no Codex subagents.
 - **No usage meter.** `work.accounts` and its headroom meter are Anthropic's, and a Codex slot is skipped
   by them. `work.codexAccounts` spreads slots but cannot measure headroom, so `rota limit watch` has nothing
-  to switch to. Account switching and [usage-limit handling](unattended-rounds.md#usage-limits) apply to Claude slots.
+  to switch to. Account switching and [usage-limit handling](unattended-rounds.md#-usage-limits) apply to Claude slots.
 - **A Codex update can still break a flag.** If a release renames or drops a launch flag, `assign` refuses
   and names it. Fix `work.codexCommand`, or wait for rota to follow.
 - **The prompt check was verified on 0.159.2.** rota does not gate on the version, so it cannot tell a Codex

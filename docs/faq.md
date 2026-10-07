@@ -10,7 +10,8 @@ That's how every workflow starts, and how most of them stay. The places it tends
 
 Yes. Backlog (with the default `file` backend; under `issues` it lives on the tracker), knowledge, decisions, plans, designs, milestones, and per-item detail files all travel with the repo so team members share context from the first clone. These paths stay gitignored: `.rota/status.json` (per-developer active work), `.rota/repos.json` (umbrella registry with absolute paths), `.rota/config.local.json` (per-developer config overrides, deep-merged on top of `.rota/config.json`), `.rota/handoff/` (per-developer scratch notes from `/rota-pause`), `.rota/review/` (per-branch review packages from `rota review package`), `.rota/qa-runs/` (bulky timestamped artifacts from `/rota-qa`), `.rota/verdicts.json` (typed review verdicts), `.rota/gate-audit.jsonl` (the log of manual-gate approvals), `.rota/train-cache.json` (the merge train's verdict cache), `.rota/workers.json` (the worker slot registry), and `.rota/**/*.lock` (transient sidecar lockfiles).
 
-If you'd rather keep the whole backlog private (solo development, or experimentation that isn't ready to share), add a blanket `.rota/` line to `.gitignore` before your first commit. The default assumes you want context to travel.
+> [!TIP]
+> If you'd rather keep the whole backlog private (solo development, or experimentation that isn't ready to share), add a blanket `.rota/` line to `.gitignore` before your first commit. The default assumes you want context to travel.
 
 ## Can I share `.rota/` with my team?
 

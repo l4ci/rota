@@ -2,7 +2,7 @@
 
 Install rota and run your first capture → work → ship cycle in about five minutes.
 
-## Install
+## 📦 Install
 
 From 0.9.0:
 
@@ -13,13 +13,14 @@ rota skills install
 
 The skills land in the Claude Code and Codex skill directories. Options, upgrading and removal are on the [install page](install.md).
 
-## Initialize the project
+## ⚙ Initialize the project
 
 Run `rota init` once at the project root. It scaffolds `.rota/` and writes the Recommended
 config defaults (models, isolation, merge strategy, quality gates, autonomy level). Keep the
 defaults unless you have a reason not to.
 
-`rota setup` does the same and, on a terminal, asks the main choices (backlog backend, isolation, merge strategy, autonomy, review and QA gates); bare `rota` in an uninitialized project runs it.
+> [!TIP]
+> `rota setup` does the same and, on a terminal, asks the main choices (backlog backend, isolation, merge strategy, autonomy, review and QA gates); bare `rota` in an uninitialized project runs it.
 
 Three settings worth a second of thought:
 
@@ -29,11 +30,13 @@ Three settings worth a second of thought:
   untouched while agents run, or if you plan to run parallel `/rota-work` sessions.
 - **Merge strategy.** `direct` for fast iteration. `pr` if your team requires GitHub review (the issue backend always opens a PR).
 
-Set `test.full` to your project's test command (`rota config set test.full "npm test"`). The solo loop below doesn't need it. A parallel round does: the gate refuses to merge while `test.full` is empty, unless you pass `--no-verify`.
+> [!IMPORTANT]
+> Set `test.full` to your project's test command (`rota config set test.full "npm test"`). The solo loop below doesn't need it. A parallel round does: the gate refuses to merge while `test.full` is empty, unless you pass `--no-verify`.
 
-To change a setting later, run `rota config set <key> <value>` (`rota config show` lists the keys). See [config options](reference/config-options.md). Don't hand-edit the JSON files.
+> [!TIP]
+> To change a setting later, run `rota config set <key> <value>` (`rota config show` lists the keys). See [config options](reference/config-options.md). Don't hand-edit the JSON files.
 
-## Worked examples
+## 🧪 Worked examples
 
 Two end-to-end walkthroughs carry one concrete project from brief to shipped milestone:
 
@@ -42,7 +45,7 @@ Two end-to-end walkthroughs carry one concrete project from brief to shipped mil
 
 Pick whichever matches where your project is today and follow it skill-by-skill.
 
-## Where to go next
+## 🧭 Where to go next
 
 **Scale to a round**
 - [Your first round](first-round.md): the next step. Set up herdr, start the orchestrator and run a round on a few issues

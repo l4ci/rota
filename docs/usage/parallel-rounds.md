@@ -30,7 +30,7 @@ well-specified issues that don't touch the same files and you want them merged w
 each one. If you run several `/rota-work` sessions by hand today, see [parallel work](parallel-work.md);
 a round is the same idea with the assignment, waiting and merging done by verbs.
 
-## Setup
+## 🔧 Setup
 
 1. **A host** for the workers' tabs: herdr (pinned to 0.9.x) or tmux. Leave
    `work.dispatch` at the default `rota init` writes (`subagent`) and `rota round start` detects the
@@ -73,7 +73,7 @@ For a round that must survive the orchestrator's context filling or a usage limi
 hooks and run the orchestrator under `rota keepalive run`:
 [unattended rounds](unattended-rounds.md). For Codex workers: [Codex workers](codex-workers.md).
 
-## Your first round
+## 🚀 Your first round
 
 ```sh
 rota orchestrate

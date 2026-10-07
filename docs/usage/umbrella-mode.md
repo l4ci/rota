@@ -2,7 +2,8 @@
 
 Umbrella mode lets one rota setup span several independent git repositories that sit side by side under one parent folder. Knowledge, decisions, vision, and the backlog live once at the umbrella; each sub-repo keeps its own history, branches, and remotes.
 
-If you're in single-repo mode, skip this page. Single-repo behavior is unchanged.
+> [!NOTE]
+> If you're in single-repo mode, skip this page. Single-repo behavior is unchanged.
 
 ## When to use it
 

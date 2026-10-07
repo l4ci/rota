@@ -81,12 +81,12 @@ For a handoff you write yourself, use `/rota-pause` above.
 ## Keepalive
 
 `rota keepalive run` starts the next orchestrator session after a handoff exit. See
-[unattended rounds](unattended-rounds.md#keepalive).
+[unattended rounds](unattended-rounds.md#-keepalive).
 
 ## Usage limits
 
 `rota limit watch` waits out a 5-hour or weekly limit and types the resume prompt. See
-[unattended rounds](unattended-rounds.md#usage-limits).
+[unattended rounds](unattended-rounds.md#-usage-limits).
 
 ## Switching the orchestrator's account
 

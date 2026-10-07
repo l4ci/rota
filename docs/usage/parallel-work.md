@@ -63,6 +63,7 @@ git state. For more on how `/rota-work` (no argument) reads and updates status, 
 
 ## Caveats
 
-Don't run `rota init` or `rota config set` from inside a worktree. Those write to
-`.rota/` and must run in the main worktree. `/rota-work` runs, with or without an argument, are fine
-in either place.
+> [!IMPORTANT]
+> Don't run `rota init` or `rota config set` from inside a worktree. Those write to
+> `.rota/` and must run in the main worktree. `/rota-work` runs, with or without an argument, are fine
+> in either place.
