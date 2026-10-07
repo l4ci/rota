@@ -68,6 +68,13 @@ shim: wraps the old array as `slots` and lowercases `state`. `changed` is true w
 env: `ROTA_TEST_POLL_FIXTURE=<file>` classifies the file as a static pane, no host, writes nothing (old `--fixture`). `ROTA_TEST_POLL_STATUS=<idle|working|blocked|done|unknown|gone>` sets the host status in fixture mode (old `--status`). Neither is part of the CLI. In fixture mode the slot name is `<slot>` or `fixture`, and a missing fixture file exits 2. The shim passes them as `--fixture "$ROTA_TEST_POLL_FIXTURE" [--status "$ROTA_TEST_POLL_STATUS"]`.
 note: `state` is one of `busy`, `idle`, `blocked`, `done`, `dead`, `limited`, `needs-permission`, `unknown`, lowercased to match what the helper already stores in the registry.
 
+### rota worker done
+rota worker done <slot> [--base <ref>]
+repo: none
+data: {"slot": string, "item": string, "head"?: string, "proofSkipped"?: bool, "missing"?: []string, "changed": bool}
+exit: 4 when the slot's item has no PASS proof row at the slot branch's current HEAD for `test.fast` (`data.missing` lists the commands without one, `changed` false, the hint names `rota proof record`); 3 when the pool, slot or its branch is missing or the slot holds no item; 2 on a bad invocation
+note: the step before the PR. A row proves `test.fast` when its result is PASS, its sha is an abbreviation of the branch HEAD (7 or more characters) and its check is either `rota test run fast` or, for each `test.fast` command, that command as `rota proof record` writes it (`{files}` expanded). A FAIL row or a PASS row at an older sha does not count. When `test.fast` is unset the proof half is skipped with a warning and `data.proofSkipped` is true; the verb never refuses on that half. On success the slot's state is recorded as `done` (`changed` is false when it already was); `rota worker poll` records the same state from the pane, so the two agree.
+
 ### rota worker gate
 rota worker gate <slot|PR> --base <branch> [--check-only] [--no-verify] [--confirm --confirm-note <answer> | --approval <escalation> | --escalate]
 repo: none

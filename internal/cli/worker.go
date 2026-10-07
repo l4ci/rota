@@ -50,6 +50,7 @@ func workerCommands() *Command {
 			{Name: "check", Summary: "inside a managed host session? (exit 1 when outside)", Verb: sessionCheck},
 			{Name: "ensure", Summary: "hand the orchestrator off into a host session", Verb: sessionEnsure},
 		}},
+		{Name: "done", Summary: "refuse a finished slot without a test.fast proof row at HEAD, else mark it done", Verb: workerDone},
 		{Name: "gate", Summary: "merge gate for one slot's branch or PR", Verb: workerGate},
 		{Name: "train", Summary: "verify several PRs merged together once, then land them", Verb: workerTrain},
 		{Name: "reset", Summary: "refuse a slot that holds work, else cut a fresh task branch", Verb: workerReset},
