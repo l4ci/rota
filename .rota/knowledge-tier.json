@@ -440,6 +440,11 @@
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-06"
+    },
+    "Build & Tooling: Smoke testing::A verb captured in $(...) aborts the section silently when it exits non-zero": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-07"
     }
   }
 }
