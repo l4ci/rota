@@ -1,5 +1,5 @@
 ---
-verified-sha: 3fe9abdb78d41ab20ad0545652af7ca33e1dd786
+verified-sha: f1beaacac6869db9f1dac68ecb4c1674842266c2
 refs:
   - internal/tracker
   - internal/ship
@@ -17,6 +17,7 @@ old: hv-tracker-call [--provider <p>] -- <cli-arg>...  (flags map 1:1; `--` is r
 shim: runs the old helper from the repo's directory (`-C`, `--repo`), captures stdout and stderr and its exit code. Old exit 1 with a usage message becomes 2; old exit 0 and CLI-own non-zero exits (old passes them through) become 0 and 1; old exit 3 becomes 5; old exit 4 becomes 6. `provider` is the resolved one (the `--provider` value, else `issues.provider`, else the old detection).
 note: debug passthrough; stdin is replayed only when a CLI arg is `-`, `@-` or `=-`, as before. Text mode writes the CLI's stdout to stdout and its stderr to stderr unchanged (exception to rule 8). No `changed`: the verb cannot know whether the call mutated the forge.
 note: a non-zero CLI exit becomes exit 1 with the code in `data.exitCode`, because passing arbitrary codes through would break the exit table.
+note: the tracker adapters of one rota process share an in-memory read cache (never persisted). A repeated read (`issue`/`pr`/`mr` `list`, `ls` or `view`, or a plain `api` GET) is served from it, only a zero exit is cached, and any other call except `auth` drops the whole cache before and after it, so a process never reads data older than its own last write. A single `tracker call` is one process, so it always reaches the forge.
 
 ### rota tracker suggest-upstream
 rota tracker suggest-upstream --title <text> --body-file <path|-> [--upstream-repo <owner/repo>] --confirm --confirm-note <answer>
