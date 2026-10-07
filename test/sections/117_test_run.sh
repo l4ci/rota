@@ -35,3 +35,12 @@ RC=0; OUT=$(ttrun test run fast --base main) || RC=$?
 [ "$RC" = "0" ] && case "$OUT" in *"echo FILES:'a b.txt'"*) ;; *) false ;; esac \
   || fail "{files} should expand to the changed files, quoted: rc=$RC $OUT"
 pass "{files} expands to the files changed against base"
+
+ttcfg '{"test":{"fast":["echo FILES:{files}"]}}'
+( cd "$TTP" && printf '*.log\n' > .gitignore && git add .gitignore && git commit -q -m ignore \
+  && echo u > "untracked one.txt" && echo n > noise.log )
+RC=0; OUT=$(ttrun test run fast --base main) || RC=$?
+[ "$RC" = "0" ] && case "$OUT" in *"'untracked one.txt'"*) ;; *) false ;; esac \
+  && case "$OUT" in *noise.log*) false ;; esac \
+  || fail "{files} should include untracked files but not ignored ones: rc=$RC $OUT"
+pass "{files} includes untracked, non-ignored files"

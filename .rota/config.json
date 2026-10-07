@@ -66,6 +66,8 @@
     "full": [
       "bash test/gate.sh"
     ],
-    "e2e": []
+    "e2e": [
+      "bash test/e2e/run.sh"
+    ]
   }
 }

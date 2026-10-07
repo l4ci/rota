@@ -240,6 +240,7 @@ func TestDispatchRelayLoggingFollowsWhatMayHaveBeenSent(t *testing.T) {
 	}{
 		"never submitted: may have landed, so logged": {host.ErrNotSubmitted, exitcode.ExitRetry, 1},
 		"dialog open: certainly not sent":             {host.ErrDialogOpen, exitcode.ExitUnavailable, 0},
+		"human draft: certainly not sent":             {host.ErrDraftOnPrompt, exitcode.ExitUnavailable, 0},
 	} {
 		t.Run(name, func(t *testing.T) {
 			dir := newProject(t, `{}`)
@@ -270,6 +271,7 @@ func TestDispatchTaskSendFailureExits(t *testing.T) {
 	}{
 		{host.ErrNotSubmitted, exitcode.ExitRetry, "never picked up the brief — inspect the session before resending"},
 		{host.ErrDialogOpen, exitcode.ExitUnavailable, "has a dialog open and refused input — inspect it before resending"},
+		{host.ErrDraftOnPrompt, exitcode.ExitUnavailable, "has a human draft on its prompt line and nothing was sent — resend once it is submitted or cleared"},
 	} {
 		dir := newProject(t, `{}`)
 		goInit(t, dir, InitOpts{Slots: 1, Base: "main"})

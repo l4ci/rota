@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
-	"os"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -484,10 +483,9 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 	if !toHuman && roundcfg.TierRank(o.Tier) > roundcfg.TierRank(set.Tier) && reason == "" {
 		return res, usage("--tier %s is above the default tier %s: say why with --tier-reason", o.Tier, set.Tier)
 	}
-	if o.BodyFile != "" {
-		if _, err := os.Stat(o.BodyFile); err != nil {
-			return res, usage("--body-file %s: %v", o.BodyFile, err)
-		}
+	decisions, err := readBody(o.BodyFile)
+	if err != nil {
+		return res, err
 	}
 	it, err := be.Get(o.Issue)
 	if err != nil {
@@ -560,24 +558,30 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 				queueTo = true
 			}
 		}
-	} else if e.Forge == nil || it.Number == 0 {
+	} else if !e.forgeOn(be) {
 		return res, unavailable("handing %s to the human needs the issue tracker (the %s label); this project has none", id, firstNonEmpty(e.NeedsHuman, DefaultNeedsHuman))
 	}
 
-	// Checks before anything moves: the brief, the overlap, the receiver's guard.
+	// A transferred worker starts on the default tier unless --tier says higher.
+	kind, tier := harness.Claude, firstNonEmpty(o.Tier, o.Settings.Tier)
+	model := o.Settings.Model(kind, tier)
+
+	// Checks before anything moves: the brief, the receiver's launch, the
+	// overlap, the receiver's guard.
 	var brief string
 	if !toHuman {
 		if brief, ok = briefPath(root, set, o.Getenv); !ok {
 			return res, blocked(BlockBriefMissing, "the worker contract (skills/references/worker-contract.md) was not found; set round.brief")
 		}
+		// The receiver is refused as assign would refuse it, before anything moves.
+		warns, err := e.deliveryRefusals(ctx, root, kind, o.To, model)
+		if err != nil {
+			return res, wrap(err)
+		}
+		res.Warnings = append(res.Warnings, warns...)
 		if !resuming {
 			tracked := e.trackedFiles(ctx, root)
-			settled := ""
-			if o.BodyFile != "" {
-				b, _ := os.ReadFile(o.BodyFile)
-				settled = string(b)
-			}
-			r, err := AssessBrief(be, id, tracked, set.SharedPaths, e.InFlightItems(ctx, root, be, tracked, set.SharedPaths), o.AcceptOverlap, settled)
+			r, err := AssessBrief(be, id, tracked, set.SharedPaths, e.InFlightItems(ctx, root, be, tracked, set.SharedPaths), o.AcceptOverlap, decisions)
 			if err != nil {
 				return res, wrap(err)
 			}
@@ -605,7 +609,6 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 	var (
 		branch, oldClaim string
 		p                Parked
-		tmpName, text    string
 	)
 	from := res.From
 	if resuming {
@@ -661,6 +664,9 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 					return wrap(freeSlot(root, from, false))
 				}
 				return wrap(worker.RemoveQueuedPR(root, rec.PR))
+			}},
+			step{name: "stop the item clock", do: func() error {
+				return wrap(worker.ClearItemStart(root, strings.ToUpper(id)))
 			}})
 		if err := runSteps(steps); err != nil {
 			return res, err
@@ -687,10 +693,16 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 		return worker.RemoveQueuedPR(root, pr)
 	}
 
-	solo := isSolo(root)
-	// A transferred worker starts on the default tier unless --tier says higher.
-	kind, tier := harness.Claude, firstNonEmpty(o.Tier, o.Settings.Tier)
-	model := o.Settings.Model(kind, tier)
+	d := &delivery{Slot: o.To, Task: id, Branch: func() string { return branch }, Round: rnd, Kind: kind, Model: model, Wrap: wrap,
+		Brief: func() string {
+			text := pointerBrief(o.To, id, branch, brief, nil, decisions, outOfScope(be, id), tierBrief{Kind: kind, Tier: tier, Model: model, Default: o.Settings.Tier, Reason: reason, Table: o.Settings.Models[kind]})
+			text += fmt.Sprintf("\nThis issue was handed to you by %s. Read its latest rota:handoff comment first (it ends with a `%s` marker), then continue from the pushed work on %s, already checked out in your worktree.\n",
+				res.From, marker.Handoff(res.From, rnd), branch)
+			if rec != nil {
+				text += fmt.Sprintf("Its PR %s is already open: push to the branch to update it instead of opening another.\n", rec.PR)
+			}
+			return text
+		}}
 	steps = append(steps,
 		step{name: "claim", skip: moved, do: func() error {
 			claimID := o.To + "@" + strconv.Itoa(rnd)
@@ -724,62 +736,19 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 				res.Changed = true
 			}
 			return wrap(err)
-		}},
-		step{name: "account", skip: func() bool { return solo || e.Accounts == nil || len(worker.Configured(root)) == 0 }, do: func() error {
-			_, err := e.pickAccount(ctx, root, o.To)
-			return wrap(err)
-		}},
-		step{name: "write the brief", do: func() error {
-			decisions := ""
-			if o.BodyFile != "" {
-				b, _ := os.ReadFile(o.BodyFile)
-				decisions = string(b)
-			}
-			text = pointerBrief(o.To, id, branch, brief, nil, decisions, outOfScope(be, id), tierBrief{Kind: kind, Tier: tier, Model: model, Default: o.Settings.Tier, Reason: reason, Table: o.Settings.Models[kind]})
-			text += fmt.Sprintf("\nThis issue was handed to you by %s. Read its latest rota:handoff comment first (it ends with a `%s` marker), then continue from the pushed work on %s, already checked out in your worktree.\n",
-				res.From, marker.Handoff(res.From, rnd), branch)
-			if rec != nil {
-				text += fmt.Sprintf("Its PR %s is already open: push to the branch to update it instead of opening another.\n", rec.PR)
-			}
-			if solo {
-				return nil
-			}
-			tmp, err := os.CreateTemp("", "rota-round-brief-")
-			if err != nil {
-				return wrap(err)
-			}
-			tmpName = tmp.Name()
-			tmp.WriteString(text)
-			return wrap(tmp.Close())
 		}})
-	if solo {
-		// No pane: mark the receiver busy and hand the brief back.
-		steps = append(steps, step{name: "solo hand-off", do: func() error {
-			b, wt, err := e.soloHandOff(root, o.To, text, rnd)
-			if err != nil {
-				return wrap(err)
-			}
-			res.Host, res.Brief, res.Worktree = host.Solo, b, wt
-			res.Changed = true
-			return nil
-		}})
-	} else {
-		steps = append(steps, step{name: "dispatch", keep: true, do: func() error {
-			if _, err := e.workerEnv().Dispatch(ctx, root, worker.DispatchOpts{Slot: o.To, BodyFile: tmpName, Task: id, Round: &rnd, Branch: branch, Model: model}); err != nil {
-				// The claim and branch stay with the receiver; idle marks the
-				// transfer as not delivered, so the same call resumes it.
-				editSlot(root, o.To, func(s *worker.Slot) error { return s.MarkState("idle", "") })
-				return err
-			}
-			res.Dispatched, res.Changed = true, true
-			return nil
-		}})
+	// The account, the pointer brief and the hand-off.
+	ds, err := d.steps(ctx, e, root)
+	if err != nil {
+		return res, wrap(err)
 	}
+	steps = append(steps, ds...)
 	steps = append(steps, step{name: "adopt the queued PR", do: func() error { return wrap(adopt()) }})
 	err = runSteps(steps)
-	if tmpName != "" {
-		os.Remove(tmpName)
-	}
+	d.cleanup()
+	res.Host, res.Brief, res.Worktree = d.Host, d.BriefText, d.Worktree
+	res.Dispatched = res.Dispatched || d.Dispatched
+	res.Changed = res.Changed || d.Changed
 	return res, err
 }
 

@@ -142,7 +142,7 @@ When the backlog backend is issues, or you are a round worker, skip: read [`roun
 rota item complete <ID> --commit <merge-or-last-commit-hash> [--reason handed-off|blocked|dropped --note <text>]
 ```
 
-Already-completed IDs are a no-op; an unknown ID exits 3. When it exits 4 with `blockedBy: proof missing`, record a `rota proof add <ID> --check … --result PASS …` row and rerun: read [`proof-missing.md`](proof-missing.md).
+Already-completed IDs are a no-op; an unknown ID exits 3. When it exits 4 with `blockedBy: proof missing`, record a row with `rota proof record <ID> -- <command>` (`rota proof add` only for docs-only changes) and rerun: read [`proof-missing.md`](proof-missing.md).
 
 ## Step 8.5 — Learn (Nudge or Auto-Invoke)
 

@@ -31,6 +31,8 @@ OLD_SCOPE=(
   # The "Coming from hv-skills" migration section names the predecessor.
   ':(exclude)docs/install.md'
   ':(exclude)internal/migrate/'
+  ':(exclude)internal/hvmigrate/'
+  ':(exclude)internal/legacystate/'
   # Legacy-format fixtures: a pre-rename block heading or .gitignore header.
   ':(exclude)internal/knowledge/knowledge_test.go'
   ':(exclude)internal/initproj/init_test.go'
@@ -91,6 +93,8 @@ HV_SCOPE=(
   ':(exclude)test/sections/13_helpers.sh'
   ':(exclude)test/sections/66_agents_md.sh'
   ':(exclude)internal/migrate/'
+  ':(exclude)internal/hvmigrate/'
+  ':(exclude)internal/legacystate/'
   # The "Coming from hv-skills" migration section names .hv/ and /hv-*.
   ':(exclude)docs/install.md'
 )

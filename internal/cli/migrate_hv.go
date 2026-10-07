@@ -12,7 +12,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/l4ci/rota/internal/migrate"
+	"github.com/l4ci/rota/internal/hvmigrate"
+	"github.com/l4ci/rota/internal/legacystate"
 	"github.com/l4ci/rota/internal/skills"
 	"github.com/l4ci/rota/internal/version"
 )
@@ -36,29 +37,29 @@ func migrateHv(fs *flag.FlagSet) RunFunc {
 		if home == "" {
 			home, _ = os.UserHomeDir()
 		}
-		o := migrate.HvOptions{Apply: *apply, Verbose: *verbose, SkipSkills: *skip, Cwd: cwd,
+		o := hvmigrate.HvOptions{Apply: *apply, Verbose: *verbose, SkipSkills: *skip, Cwd: cwd,
 			Home: home, ClaudeDir: skills.ClaudeDir(home), Version: version.Get().Version, InstalledVersion: c.deps().InstalledVersion}
 		if !*skip {
 			if set, err := skills.Embedded(); err == nil {
 				o.Skills = set
 			}
 		}
-		here, _ := migrate.FindState(cwd)
+		here, _ := legacystate.FindState(cwd)
 		o.Milestone = func(dir string) func() (bool, error) {
 			if dir != here {
 				return nil
 			}
 			return func() (bool, error) { return initMilestoneIndex(c) }
 		}
-		rep, err := migrate.RunHv(o)
+		rep, err := hvmigrate.RunHv(o)
 		if err != nil {
-			var ref *migrate.Refusal
+			var ref *hvmigrate.Refusal
 			switch {
 			case errors.As(err, &ref):
 				return Result{Data: knObj("blockedBy", ref.Blocked, "changed", false)}, Refused("%s", ref.Message)
-			case errors.Is(err, migrate.ErrNoState):
+			case errors.Is(err, hvmigrate.ErrNoState):
 				return Result{}, Resolution("%s", err.Error())
-			case errors.Is(err, migrate.ErrGit):
+			case errors.Is(err, hvmigrate.ErrGit):
 				return Result{}, Unavailable("%s", strings.TrimPrefix(err.Error(), "git: "))
 			}
 			return Result{}, knErr(err)
@@ -70,7 +71,7 @@ func migrateHv(fs *flag.FlagSet) RunFunc {
 	}
 }
 
-func migrateHvResult(r *migrate.HvReport) Result {
+func migrateHvResult(r *hvmigrate.HvReport) Result {
 	projects := []any{}
 	for _, p := range r.Projects {
 		o := knObj("scope", p.Scope, "dir", p.Dir, "move", p.Move, "files", strSlice(p.Files), "blocks", p.Blocks, "stamp", p.Stamp)
@@ -190,7 +191,7 @@ func legacyStateStop(path string) error {
 	if abs, err := filepath.EvalSymlinks(cwd); err == nil {
 		cwd = abs
 	}
-	if dir, legacy := migrate.LegacyState(cwd); legacy {
+	if dir, legacy := legacystate.LegacyState(cwd); legacy {
 		return Resolution("this project still uses .hv/ (%s); run: rota migrate hv", dir)
 	}
 	return nil

@@ -87,7 +87,7 @@ All three operate on `(topic, title)` pairs. The tier sidecar is the source of t
 
 ### Retrospective: `--retro`
 
-`/rota-learn --retro` looks at the session's mistakes instead of its discoveries and sorts each into one of four classes: a **guardrail** (lint, test, hook or CI check), a **written standard** (a `KNOWLEDGE.md` bullet or a decision), a **navigation pointer** (a map entry or an `AGENTS.md` line) or a **tool-economy fix**. Guardrail candidates are filed as items with `rota item create` and never built in the same run. The retro also lists bullets that look like no-ops (never hit, or restating code) as removal candidates. It does not delete or deprecate them; you decide, then use `--deprecate`.
+`/rota-learn --retro` looks at the session's mistakes instead of its discoveries. It reads the session transcript (Claude Code under `~/.claude/projects/`, Codex under `~/.codex/sessions/`) and cites the line or entry for each repeated-work, ignored-plan or skipped-step mistake; one with no citable evidence is marked unverified, not filed. With no transcript it falls back to session memory and recent commits and says so. It sorts each into one of four classes: a **guardrail** (lint, test, hook or CI check), a **written standard** (a `KNOWLEDGE.md` bullet or a decision), a **navigation pointer** (a map entry or an `AGENTS.md` line) or a **tool-economy fix**. Guardrail candidates are filed as items with `rota item create` and never built in the same run. The retro also lists bullets that look like no-ops (never hit, or restating code) as removal candidates. It does not delete or deprecate them; you decide, then use `--deprecate`.
 
 ## When to invoke
 

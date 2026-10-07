@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
 	"os"
 	"path/filepath"
@@ -311,5 +312,17 @@ func TestTrainLocalVerifyErrorIsError(t *testing.T) {
 	}
 	if w.onMain("b1.txt") {
 		t.Error("b1 landed")
+	}
+}
+
+func TestTrainApprovalRefusalCarriesData(t *testing.T) {
+	w := trainWorld(t, "true", "b1", "b2")
+	want := &exitcode.Error{Exit: exitcode.ExitRefused, Message: "gate", Data: BlockData{BlockedBy: "manual gate"}}
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}, Approve: func(func() ([]string, error)) error { return want }})
+	if res.Verdict != GateApprovalRequired {
+		t.Fatalf("verdict %q", res.Verdict)
+	}
+	if bd, ok := exitcode.DataOf[BlockData](err); !ok || bd.BlockedBy != "manual gate" {
+		t.Errorf("refusal data = %+v, %v (err %v)", bd, ok, err)
 	}
 }
