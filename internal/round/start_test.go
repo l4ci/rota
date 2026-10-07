@@ -492,3 +492,39 @@ func TestItemBodyRoundTrip(t *testing.T) {
 		t.Errorf("files read back %v", got)
 	}
 }
+
+// TestFootprintIgnoresComments: a claim comment must not become part of the
+// body's last ## Files section, and only bullets count as paths.
+func TestFootprintIgnoresComments(t *testing.T) {
+	be := &fakeRemote{comments: map[string][]string{}}
+	files := "## Goal\nx\n\n## Files\n\n- internal/worker/pool.go\n"
+	be.add("20", "claimed", "", false, files)
+	be.add("21", "claimed too", "", false, files+"\nnot a bullet: README.md\n")
+	be.add("22", "other file", "", false, "## Files\n- internal/cli/round.go\n")
+	be.add("23", "no files section", "", false, "prose only")
+	for _, id := range []string{"20", "21", "22"} {
+		be.comments[id] = []string{"In progress: agent **dana** on branch `dana/x`."}
+	}
+	be.comments["23"] = []string{"touches internal/cli/tree.go"}
+
+	if got := itemFootprint(be, "20", tracked, nil); !reflect.DeepEqual(got, []string{"internal/worker/pool.go"}) {
+		t.Errorf("comment leaked into ## Files: %v", got)
+	}
+	if got := itemFootprint(be, "21", tracked, nil); !reflect.DeepEqual(got, []string{"internal/worker/pool.go"}) {
+		t.Errorf("non-bullet line counted: %v", got)
+	}
+	if got := itemFootprint(be, "23", tracked, nil); !reflect.DeepEqual(got, []string{"internal/cli/tree.go"}) {
+		t.Errorf("comments must feed the fallback: %v", got)
+	}
+
+	flight := []InFlight{{Slot: "ben", Issue: "22", Paths: itemFootprint(be, "22", tracked, nil)}}
+	r, _ := Assess(be, "20", tracked, nil, flight, false)
+	if len(r.Overlaps) != 0 {
+		t.Errorf("false overlap from claim comments: %+v", r.Overlaps)
+	}
+	flight = []InFlight{{Slot: "ben", Issue: "21", Paths: itemFootprint(be, "21", tracked, nil)}}
+	r, _ = Assess(be, "20", tracked, nil, flight, false)
+	if len(r.Overlaps) != 1 || r.Overlaps[0].Paths[0] != "internal/worker/pool.go" {
+		t.Errorf("real shared file must overlap: %+v", r.Overlaps)
+	}
+}
