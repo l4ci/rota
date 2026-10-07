@@ -65,11 +65,13 @@ refs:
 ```
 
 `test/doclint.sh` runs `test/check-doc-stamps.py`. It fails a doc whose stamp is missing or malformed, whose sha is
-not a known commit, or whose `refs:` path does not exist. It also fails a doc when a ref changed between
-`verified-sha` and `HEAD` (`git diff <sha> HEAD -- <ref>`), and the failure names the doc and the changed paths.
-Other docs under `docs/` need no stamp.
+not a known commit, or whose `refs:` path does not exist: those are mistakes in the stamp itself. Drift (a ref changed
+between `verified-sha` and `HEAD`, `git diff <sha> HEAD -- <ref>`) only prints a `WARN` naming the doc and the changed
+paths and exits 0, so an unrelated PR is never blocked by it. `ROTA_DOC_STAMPS=strict bash test/doclint.sh` (or
+`python3 test/check-doc-stamps.py --strict`) fails on drift too; run it before `/rota-ship --docs` and the re-stamp
+below. Other docs under `docs/` need no stamp.
 
-To re-stamp after a ref changed: `git diff <verified-sha> HEAD -- <ref>` for each flagged path, read the doc against
+To re-stamp after a ref changed (the strict run lists what to fix): `git diff <verified-sha> HEAD -- <ref>` for each flagged path, read the doc against
 that diff and fix what drifted, then set `verified-sha:` to `git rev-parse HEAD` (the commit your change sits on is
 fine; a later commit that touches a ref re-flags the doc). Add a path to `refs:` when the doc starts describing
 new code. A new contract doc needs the stamp before it passes.
