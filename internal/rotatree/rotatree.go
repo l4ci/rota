@@ -22,6 +22,7 @@ const (
 	VerdictsFile    = "verdicts.json"
 	CountersFile    = "counters.json"
 	IssueMapFile    = "issue-map.json"
+	TestLedgerFile  = "test-ledger.json"
 	BacklogFile     = "BACKLOG.md"
 	ArchiveFile     = "ARCHIVE.md"
 	KnowledgeFile   = "KNOWLEDGE.md"
@@ -63,6 +64,9 @@ func Status(root string) string { return File(root, StatusFile) }
 
 // Verdicts is the review verdict store.
 func Verdicts(root string) string { return File(root, VerdictsFile) }
+
+// TestLedger is the tracked exclusion ledger of known-red tests.
+func TestLedger(root string) string { return File(root, TestLedgerFile) }
 
 // Backlog is BACKLOG.md.
 func Backlog(root string) string { return File(root, BacklogFile) }
