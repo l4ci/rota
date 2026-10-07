@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -121,5 +122,76 @@ func TestTestRunFilesPrefersAheadRemoteBase(t *testing.T) {
 	}
 	if got := run("--base", "main"); !strings.Contains(got, "upstream.txt") {
 		t.Errorf("explicit --base main: files = %q, want it used as given (upstream.txt listed)", got)
+	}
+}
+
+// envReport is a command that writes the variables test.isolate touches to out.txt.
+const envReport = `printf 'herdr=%s\ntmux=%s\nsock=%s\npid=%s\nhome=%s\nxdg=%s\ngocache=%s\n' "$HERDR_PANE_ID" "$TMUX" "$SSH_AUTH_SOCK" "$SSH_AGENT_PID" "$HOME" "$XDG_CONFIG_HOME" "$GOCACHE" > out.txt`
+
+func envOf(t *testing.T, root string) map[string]string {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join(root, "out.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := map[string]string{}
+	for _, l := range strings.Split(strings.TrimSpace(string(b)), "\n") {
+		k, v, _ := strings.Cut(l, "=")
+		m[k] = v
+	}
+	return m
+}
+
+func TestTestRunIsolatesEveryTier(t *testing.T) {
+	realHome := t.TempDir()
+	t.Setenv("HOME", realHome)
+	t.Setenv("HERDR_PANE_ID", "w1:p1")
+	t.Setenv("TMUX", "/s,1,0")
+	t.Setenv("SSH_AUTH_SOCK", "/real/agent")
+	t.Setenv("SSH_AGENT_PID", "42")
+	t.Setenv("GOCACHE", "/real/gocache")
+	for _, tier := range []string{"fast", "full", "e2e"} {
+		for _, isolate := range []bool{true, false} {
+			cfg := fmt.Sprintf(`{"test":{%q:[%q],"isolate":%v}}`, tier, envReport, isolate)
+			root := tierProject(t, cfg)
+			if o := trRun(t, root, "", "test", "run", tier); o.code != 0 {
+				t.Fatalf("%s isolate=%v: exit %d\n%s%s", tier, isolate, o.code, o.stdout, o.stderr)
+			}
+			got := envOf(t, root)
+			if !isolate {
+				want := map[string]string{"herdr": "w1:p1", "tmux": "/s,1,0", "sock": "/real/agent", "pid": "42", "home": realHome, "gocache": "/real/gocache"}
+				for k, v := range want {
+					if got[k] != v {
+						t.Errorf("%s isolate=false: %s = %q, want %q", tier, k, got[k], v)
+					}
+				}
+				continue
+			}
+			for _, k := range []string{"herdr", "tmux", "sock", "pid"} {
+				if got[k] != "" {
+					t.Errorf("%s: %s = %q survived isolation", tier, k, got[k])
+				}
+			}
+			if got["home"] == realHome || got["home"] == "" || !strings.HasPrefix(got["xdg"], filepath.Dir(got["home"])) {
+				t.Errorf("%s: HOME %q / XDG %q not pinned to a temp root", tier, got["home"], got["xdg"])
+			}
+			if got["gocache"] != "/real/gocache" {
+				t.Errorf("%s: GOCACHE = %q, want it kept", tier, got["gocache"])
+			}
+			if _, err := os.Stat(filepath.Dir(got["home"])); !os.IsNotExist(err) {
+				t.Errorf("%s: temp root %s was not removed", tier, filepath.Dir(got["home"]))
+			}
+		}
+	}
+}
+
+func TestTestRunIsolatesByDefault(t *testing.T) {
+	t.Setenv("HERDR_PANE_ID", "w1:p1")
+	root := tierProject(t, fmt.Sprintf(`{"test":{"fast":[%q]}}`, envReport))
+	if o := trRun(t, root, "", "test", "run", "fast"); o.code != 0 {
+		t.Fatalf("exit %d\n%s%s", o.code, o.stdout, o.stderr)
+	}
+	if got := envOf(t, root); got["herdr"] != "" {
+		t.Errorf("HERDR_PANE_ID = %q survived the default", got["herdr"])
 	}
 }

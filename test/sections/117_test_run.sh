@@ -44,3 +44,20 @@ RC=0; OUT=$(ttrun test run fast --base main) || RC=$?
   && case "$OUT" in *noise.log*) false ;; esac \
   || fail "{files} should include untracked files but not ignored ones: rc=$RC $OUT"
 pass "{files} includes untracked, non-ignored files"
+
+# test.isolate (#388): on by default, opt-out with false, for every tier.
+printf 'printf "herdr=%%s tmux=%%s sock=%%s home=%%s\\n" "$HERDR_PANE_ID" "$TMUX" "$SSH_AUTH_SOCK" "$HOME"\n' > "$TTP/envreport.sh"
+ENVCMD='sh envreport.sh'
+for tier in fast full e2e; do
+  ttcfg "{\"test\":{\"$tier\":[\"$ENVCMD > env.txt\"]}}"
+  ( cd "$TTP" && HERDR_PANE_ID=w1:p1 TMUX=/s,1,0 SSH_AUTH_SOCK=/real/agent "$ROTA_BIN" --json test run "$tier" >/dev/null 2>&1 ) \
+    || fail "test run $tier with isolation should pass"
+  [ "$(sed 's/ home=.*//' "$TTP/env.txt")" = "herdr= tmux= sock=" ] || fail "test run $tier left host or ssh env set: $(cat "$TTP/env.txt")"
+  case "$(cat "$TTP/env.txt")" in *"home=$HOME") fail "test run $tier kept the real HOME" ;; esac
+  ttcfg "{\"test\":{\"isolate\":false,\"$tier\":[\"$ENVCMD > env.txt\"]}}"
+  ( cd "$TTP" && HERDR_PANE_ID=w1:p1 TMUX=/s,1,0 SSH_AUTH_SOCK=/real/agent "$ROTA_BIN" --json test run "$tier" >/dev/null 2>&1 ) \
+    || fail "test run $tier without isolation should pass"
+  [ "$(cat "$TTP/env.txt")" = "herdr=w1:p1 tmux=/s,1,0 sock=/real/agent home=$HOME" ] || fail "test.isolate false should pass the env through ($tier): $(cat "$TTP/env.txt")"
+done
+rm -f "$TTP/env.txt" "$TTP/envreport.sh"
+pass "test run isolates fast, full and e2e by default and passes the env through with test.isolate false"
