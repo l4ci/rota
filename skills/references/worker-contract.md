@@ -66,6 +66,11 @@ Work only this task, then stop.
      `rota proof record <ID> -- rota test run fast`, then `rota worker done <slot>`. It
      exits 4 without a PASS row at the current HEAD; a later commit makes the row stale,
      so record again. Do it before the PR and before `ROTA-DONE`.
+  5. Closing keyword: the PR body carries `Closes #<issue>` (or `Fixes #<issue>`) for your
+     issue. `rota worker gate` and `rota worker train` refuse a body without it (exit 4,
+     `blockedBy: closes`), since the merge would leave the issue open and claimed. A PR
+     that lands only part of the issue says `Refs #<issue>` instead, and the issue
+     carries the `partial-slice` label (ask the orchestrator to set it).
 - Escalate rather than guess. If the task leaves a choice a user would notice
   unsettled, and neither the brief nor the code settles it, print
   `ROTA-BLOCKED <slot>: <one question in plain language>` and stop. Ask ONE
