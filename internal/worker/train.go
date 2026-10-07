@@ -48,6 +48,9 @@ type TrainOpts struct {
 	// LandGreen lands the verified prefix before the culprit when the train
 	// fails verification.
 	LandGreen bool
+	// NoVerify lets the train run with an empty test.full (it is refused
+	// otherwise); a set test.full is still run.
+	NoVerify bool
 	// Approve is GateOpts.Approve for the whole train: files lists the union of
 	// the paths the members change.
 	Approve func(files func() ([]string, error)) error
@@ -168,6 +171,13 @@ func (e Env) train(ctx context.Context, root string, o TrainOpts, cache *trainCa
 		}
 		res.Members = append(res.Members, TrainMember{Target: t, Branch: gr.Branch, PR: gr.PR})
 		remote = remote || gr.PR != ""
+	}
+	// An empty test.full would land the train unverified: refuse before the
+	// scratch merge unless --no-verify says so.
+	if where, _ := FullWhere(config.Load(rotatree.Config(root))); !o.NoVerify && where == WhereLocal && len(verifyCommandsAt(root)) == 0 && len(TierCommands(root, "e2e")) == 0 {
+		res.Verdict = GateNoVerify
+		res.Err, res.Hint = noVerifyRefusal("TRAIN")
+		return res, nil
 	}
 	// The ledger is read before anything merges, like the config. An expired
 	// entry fails the train before it builds the scratch tree.
