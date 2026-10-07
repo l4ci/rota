@@ -27,6 +27,7 @@ done
 
 # Verbs with no repo scope reject --repo itself, with a value too (exit 2).
 for v in "knowledge stats" \
+         "decisions stats" \
          "knowledge contradiction list" \
          "knowledge contradiction clear" \
          "knowledge contradiction has --topic Architecture --title t" \

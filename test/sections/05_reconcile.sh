@@ -307,6 +307,16 @@ grep -q "Strict TLS" <<<"$OUT_D" || fail "Networking decision missing from query
 grep -q "No background queues" <<<"$OUT_D" && fail "Architecture decision leaked into query"
 pass "decisions query returns only requested topics"
 
+# decisions stats lists the topics with bullet and byte counts, plain and --json
+[ "$(hvj decisions stats | python3 -c "import json,sys; print(' '.join(t['name'] for t in json.load(sys.stdin)['data']['topics']))")" = "Architecture Testing Networking" ] \
+  || fail "decisions stats should list the three topics"
+TXT_DS=$("$ROTA_BIN" decisions stats)
+case "$TXT_DS" in "Architecture: "*" bullets, "*" bytes"*) ;; *) fail "decisions stats text shape: $TXT_DS" ;; esac
+[ "$(echo "$TXT_DS" | wc -l)" -eq 3 ] || fail "decisions stats text should be one line per topic: $TXT_DS"
+rc=0; "$ROTA_BIN" decisions stats --repo web >/dev/null 2>&1 || rc=$?
+[ "$rc" -eq 2 ] || fail "decisions stats accepted --repo (rc=$rc)"
+pass "decisions stats lists topics with counts, text and --json"
+
 # Forbids/permits content must come through verbatim
 grep -q "Forbids.*Mock DB" <<<"$OUT_D" || fail "Forbids line missing for Testing decision"
 grep -q "Permits.*Cert pinning" <<<"$OUT_D" || fail "Permits line missing for Networking decision"
@@ -314,6 +324,7 @@ pass "decisions query preserves forbids/permits structure"
 
 # Empty/missing file is silent (exit 0, no output)
 rm -f .rota/DECISIONS.md
+[ "$(hvj decisions stats | jget data.topics)" = "[]" ] || fail "decisions stats should be empty when DECISIONS.md missing"
 OUT_EMPTY=$(hvj decisions query "Anything")
 [ "$(echo "$OUT_EMPTY" | jget data.text)" = "" ] || fail "decisions query should be silent when DECISIONS.md missing: $OUT_EMPTY"
 pass "decisions query silent when file missing"
