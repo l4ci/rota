@@ -6,7 +6,7 @@ Loaded by `skills/rota-learn/SKILL.md` Step 5 when `.rota/repos.json` registers 
 - **`--repo umbrella`**: writes to `.rota/KNOWLEDGE.md` (the shared umbrella file).
 - **No `--repo`**: scope auto-resolves from cwd: inside a registered sub-repo's directory the verb writes that sub-repo's scoped file; at the umbrella root it falls back to `.rota/KNOWLEDGE.md`.
 
-**At the umbrella root**, when a learning is clearly repo-local rather than cross-repo, ask once via `AskUserQuestion` before calling `rota knowledge add`:
+**At the umbrella root**, when a learning is clearly repo-local rather than cross-repo, ask once before calling `rota knowledge add`:
 
 - Header: `"Learning scope"`
 - Question: *"Capture this learning as umbrella-shared, or scoped to a specific sub-repo?"*

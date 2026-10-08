@@ -15,7 +15,7 @@ A fresh subagent gets only the diff and the goal:
 rota review brief [--repo "$REPO"] <branch>
 ```
 
-Dispatch the brief verbatim to a fresh `standard` subagent (`Agent` with `subagent_type: "general-purpose"`, `model: "sonnet"`, `description: "Second-opinion review of <branch>"`). It returns a report ending in a fenced `json` verdict block. Save the block to a temp file, then:
+Dispatch the brief verbatim to a fresh `standard` subagent through the harness's dispatch interface (`references/subagent-dispatch.md`), with the brief labelled "Second-opinion review of <branch>". It returns a report ending in a fenced `json` verdict block. Save the block to a temp file, then:
 
 ```bash
 rota verdict add <branch> --kind second-opinion --verdict <PASS|CONCERNS|FAIL> --body-file "$VERDICT" --json
@@ -28,7 +28,7 @@ Exit 2 from `add` names the malformed field: ask the agent to resend; never gues
 
 Skipped for a round worker's PR (`round-worker-and-issue-mode.md`): the merge gate and train run `test.e2e` on the merged tree, and `/rota-qa` runs once on the train result when the orchestrator calls it. Also skipped when `ship.qa` is `false` or `REVIEW_CHOICE == ship-anyway`. If there is no `.rota/qa/` strategy for the scope (single repo: no `.rota/qa/*.md`; umbrella: no `.rota/qa/<REPO>.md`), say *"`ship.qa: true` but no QA strategy for `<scope>`. Run `/rota-qa first-run` to bootstrap, or set `ship.qa: false` to skip."* and continue.
 
-Invoke `Skill(skill="rota-qa", args="run")` (umbrella: `args="run --repo $REPO"`), then:
+Invoke `/rota-qa run` (umbrella: `/rota-qa run --repo $REPO`), then:
 
 ```bash
 rota verdict route <branch> --for ship-qa --json

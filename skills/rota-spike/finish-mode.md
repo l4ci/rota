@@ -20,7 +20,7 @@ Read the spike file for the original question and any notes already written.
 
 Ask for the verbal summary if not already given: what they learned, viable or not, and why.
 
-**If the user stays silent.** Don't pause indefinitely and don't fabricate findings. Pivot to `AskUserQuestion`:
+**If the user stays silent.** Don't pause indefinitely and don't fabricate findings. Ask a structured question:
 
 - Pre-fill **What was tried** from the diff stat and commit log above.
 - Ask one structured question: header `"Decision"`, single-select with options `"viable"`, `"not viable"`, `"depends on X"` (free-text X via "Other"), `"inconclusive"`.
@@ -30,7 +30,7 @@ If even that returns nothing usable (dismissed or empty), write `Decision: incon
 
 ## Step 6 (Finish mode) — Write the Findings
 
-`Edit` `.rota/spikes/<name>.md` to fill in:
+Edit `.rota/spikes/<name>.md` to fill in:
 
 - **What was tried**: concrete commands run, libraries pulled in, files touched (cite the diff stat)
 - **Findings**: 3 to 5 bullets. Bad findings are as valuable as good

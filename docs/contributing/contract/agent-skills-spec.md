@@ -1,5 +1,5 @@
 ---
-verified-sha: 3fe9abdb78d41ab20ad0545652af7ca33e1dd786
+verified-sha: f74a0de6ce6168f29007f05eb4b13947eb334a53
 refs:
   - test/validate-skills.py
   - internal/skills
@@ -14,7 +14,7 @@ E2 (#69) makes the skills load in Codex as well as Claude Code. Maintainer rulin
 - **Discovery.** Codex scans `.agents/skills/<name>/SKILL.md` from the working directory up to the repo root, and follows symlinks. A skill is linked, never copied: skills link `../references/*.md`, which resolves only through a symlink into the checkout. `rota skills install --scope project --agent codex` installs copies under the git toplevel instead of symlinks (F6a replaced `rota init --codex`, which is gone); see "F6a: embedded skills".
 - **Proof.** Verified on Codex 0.159.2 with `codex debug prompt-input`, which renders the model-visible input (skills included) and starts no model session. Run in a mktemp repo with `CODEX_HOME` unset (the maintainer's `~/.codex`, read-only), it lists symlinked and copied skills alike, and `user-invocable` does not stop the load. The smoke runner puts a poison `codex` on PATH, so no section runs the real CLI (E1): the discovery check is manual (steps in `docs/usage/codex-skills.md`), and its result goes in the PR. Section 94 covers the lint and `rota skills`.
 - **Namespace and invocation.** A symlinked skill lists as `hv-skills:rota-pause` and a copied one as `rota-pause`: Codex reads `.claude-plugin/plugin.json` up the symlink target's tree and prefixes the plugin name (confirmed with a neutral-target probe). A bare `$rota-pause` still loads the symlinked skill: one real `codex exec` session on 0.159.2 (maintainer login, CODEX_HOME unset, mktemp repo) took `$rota-pause` and named the skill `hv-skills:rota-pause`. Skill text therefore keeps `/rota-x`, and `$rota-x` is the same invocation in Codex; neither spelling is rewritten. Caveat: the session shows the skill resolved, from the model's own report, not from a hook on the loader.
-- **Out of scope.** Skill bodies still name Claude-only tools (`AskUserQuestion`, `Agent`); E2 does not claim Codex runs the skills end to end. `rota` on PATH in Codex (`go install`, release binary) stays with #44.
+- **Out of scope.** E2 establishes discovery, not live execution of every skill in Codex. #585 makes skill wording harness-neutral and tests preview/capture output contracts with a scripted Codex worker; remaining Claude-only behaviour is listed in `docs/usage/codex-skills.md`. `rota` on PATH in Codex (`go install`, release binary) stays with #44.
 
 ### C8: solo mode
 
