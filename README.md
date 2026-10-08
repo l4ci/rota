@@ -61,7 +61,7 @@ A round runs in your terminal, not in a cloud dashboard. Start the orchestrator 
 - **Neither?** The round still runs, with workers as subagents of the orchestrator.
 
 > [!TIP]
-> On a wide screen, `rota layout split` folds the workers into the orchestrator's tab as one grid (as in the demo above); `rota layout tabs` gives each its own tab again. Both are in the `rota` palette.
+> On a wide screen, `rota layout split` folds the workers into the orchestrator's tab as one grid (as in the demo above); `rota layout tabs` gives each its own tab again. In the `rota` palette, one View entry switches between them.
 
 Workers can be Claude Code or Codex, mixed in one round: a `harness:codex` label, or `round.workerKind`, picks per issue or per project.
 

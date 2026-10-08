@@ -81,8 +81,11 @@ rota orchestrate
 
 Bare `rota` in a terminal opens a palette with Orchestrate preselected, so `rota` then Enter does the
 same. Arrow keys or `j`/`k` move, a digit runs that entry, typing filters by name, `Esc` clears the
-filter or quits, and `q` or Ctrl-C quits. The other entries are round status, split and tab view ([layout](#layout)), doctor, skills update,
-projects and config; their output prints, then any key returns to the palette. Outside an initialized
+filter or quits, and `q` or Ctrl-C quits. The other entries are round status, a View toggle, doctor, skills update,
+projects and config. Round status, doctor, projects and config open their screen inside the palette, and `q` or `Esc`
+returns to the list. Skills update prints its output, then any key returns. The View toggle switches a herdr round
+between split and tabs ([layout](#layout)). Its label marks the layout in force, and it is hidden under tmux or when no
+round is running. Outside an initialized
 project Setup is preselected and the project entries are hidden. A pipe, `--json` or any argument skips the
 palette, so scripts and agents see no extra output. `NO_COLOR` and `TERM=dumb` are honored; a dumb
 terminal gets a numbered `choice:` prompt.
