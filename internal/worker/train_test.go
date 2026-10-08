@@ -630,3 +630,82 @@ func TestTrainConflictUnderEveryOrderStopsBeforeLanding(t *testing.T) {
 		t.Fatalf("%+v %v", res, err)
 	}
 }
+
+func prMembers() ([]TrainMember, []trainFoot) {
+	ms := []TrainMember{
+		{Target: "s9", Branch: "x/9", PR: "https://github.com/o/r/pull/9"},
+		{Target: "s12", Branch: "x/12", PR: "https://github.com/o/r/pull/12"},
+		{Target: "s15", Branch: "x/15", PR: "https://github.com/o/r/pull/15"},
+		{Target: "s3", Branch: "x/3", PR: "https://github.com/o/r/pull/3"},
+		{Target: "s7", Branch: "x/7", PR: "https://github.com/o/r/pull/7"},
+	}
+	foots := []trainFoot{
+		{paths: []string{"a"}, lines: 10},      // #9 shares a with #12
+		{paths: []string{"a"}, lines: 10},      // #12: same size as #9
+		{paths: []string{"b"}, lines: 1},       // #15 isolated
+		{paths: []string{"c"}, lines: 99},      // #3 isolated
+		{paths: []string{"a", "z"}, lines: 40}, // #7 shares a with #9, #12
+	}
+	return ms, foots
+}
+
+func orderedLabels(ms []TrainMember, perm []int) string {
+	var ls []string
+	for _, i := range perm {
+		ls = append(ls, memberLabel(ms[i]))
+	}
+	return strings.Join(ls, ",")
+}
+
+func TestOrderTrainSortsByPRNumberThenDiffSize(t *testing.T) {
+	ms, foots := prMembers()
+	perm, lines, nIso, err := orderTrain(ms, foots, nil)
+	if err != nil || nIso != 2 {
+		t.Fatalf("nIso=%d err=%v", nIso, err)
+	}
+	// isolated by PR number (#3, #15), then shared by size with the tie on #9/#12 broken by PR number.
+	if got := orderedLabels(ms, perm); got != "#3,#15,#9,#12,#7" {
+		t.Errorf("order = %s", got)
+	}
+	if lines[0] != "#9: shares 1 paths with #12, #7" {
+		t.Errorf("report line: %q", lines[0])
+	}
+	if lines[3] != "#3: no shared paths" {
+		t.Errorf("report line: %q", lines[3])
+	}
+}
+
+func TestOrderTrainOverrideAcceptsPRTokens(t *testing.T) {
+	ms, foots := prMembers()
+	for _, tok := range [][]string{
+		{"#7", "#3", "#15", "#12", "#9"},
+		{"7", "3", "15", "12", "9"},
+		{"s7", "s3", "s15", "s12", "s9"},
+		{"x/7", "https://github.com/o/r/pull/3", "15", "#12", "s9"},
+	} {
+		perm, lines, nIso, err := orderTrain(ms, foots, tok)
+		if err != nil || nIso != 0 {
+			t.Fatalf("%v: nIso=%d err=%v", tok, nIso, err)
+		}
+		if got := orderedLabels(ms, perm); got != "#7,#3,#15,#12,#9" {
+			t.Errorf("%v: order = %s", tok, got)
+		}
+		if !strings.HasSuffix(lines[0], "(order given)") {
+			t.Errorf("report line lacks the override mark: %q", lines[0])
+		}
+	}
+}
+
+func TestOrderTrainOverrideRejectsBadTokens(t *testing.T) {
+	ms, foots := prMembers()
+	for _, tok := range [][]string{
+		{"#7", "#3", "#15", "#12", "#99"},
+		{"#7", "#3", "#15", "#12", "#7"},
+		{"#7", "7", "#15", "#12", "#9"},
+		{"#7", "#3"},
+	} {
+		if _, _, _, err := orderTrain(ms, foots, tok); err == nil {
+			t.Errorf("--order %v should be rejected", tok)
+		}
+	}
+}

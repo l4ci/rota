@@ -80,13 +80,16 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 			issues[i] = gateIssue(root, t)
 		}
 		var override []string
-		for _, t := range strings.Split(*order, ",") {
-			if t = strings.TrimSpace(t); t != "" {
+		if *order != "" {
+			seenTok := map[string]bool{}
+			for _, t := range strings.Split(*order, ",") {
+				t = strings.TrimSpace(t)
+				if t == "" || seenTok[t] {
+					return Result{}, Usage("--order needs a comma-separated list of distinct PR numbers or slots, with no empty entries")
+				}
+				seenTok[t] = true
 				override = append(override, t)
 			}
-		}
-		if *order != "" && len(override) == 0 {
-			return Result{}, Usage("--order needs a comma-separated list of PR numbers")
 		}
 		say := func(l string) { fmt.Fprintln(c.Stderr, l) }
 		r, err := workerEnvCtx(c, ctx).Train(ctx, root, worker.TrainOpts{Targets: args, Base: *base, Order: override, Say: say, LandGreen: *landGreen, NoVerify: *noVerify, Approve: approve, Verdict: shipVerdict(c, root, root).Block})

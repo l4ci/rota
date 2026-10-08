@@ -34,10 +34,10 @@ case "$(cat "$TMP_TO/err")" in *"ORDER o3: no shared paths"*"ORDER o2: shares 1 
 [ "$(echo "$OUT" | jget 'data.landed[0]')" = "o3" ] || fail "o3 should land first: $OUT"
 pass "the train orders isolated members first, then the smallest shared diff, and prints the reason"
 
-# A conflict under every order is exit 4, blockedBy order, nothing landed.
+# A shared-path conflict is exit 4, blockedBy order, nothing landed.
 RC=0; OUT=$(tor worker train c1 c2 --base main) || RC=$?
 [ "$RC" = "4" ] && [ "$(echo "$OUT" | jget data.blockedBy)" = "order" ] && [ "$(echo "$OUT" | jget data.changed)" = "false" ] \
-  && [ ! -f "$TOPROJ/clash.txt" ] || fail "an unavoidable conflict should stop with blockedBy order: rc=$RC $OUT"
-pass "a train that conflicts under every order stops before landing"
+  && [ "$(echo "$OUT" | jget data.verdict)" = "order" ] && [ ! -f "$TOPROJ/clash.txt" ] || fail "an unavoidable conflict should stop with blockedBy order: rc=$RC $OUT"
+pass "a train whose shared-path members conflict stops before landing"
 
 rm -rf "${TMP_TO:?}"
