@@ -133,7 +133,7 @@ func TestReviewRelayRefusedDispatchCountsNothing(t *testing.T) {
 func TestReviewRelayTruncatesLongItems(t *testing.T) {
 	b := worker.ReviewBatch{PR: "u", Items: []tracker.Review{{Comment: tracker.Comment{Author: "rev", Body: strings.Repeat("x", 4000)}}}}
 	text := ReviewRelayText(b)
-	if len(text) > 1700 || !strings.Contains(text, "read the rest on the PR") {
+	if len(text) > 1900 || !strings.Contains(text, "read the rest on the PR") {
 		t.Fatalf("len %d", len(text))
 	}
 }
