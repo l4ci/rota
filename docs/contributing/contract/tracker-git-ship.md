@@ -1,8 +1,9 @@
 ---
-verified-sha: 9b275b66dc051091c4a0661f5f011c2ddc571871
+verified-sha: 108ba5d31d2e613557420f59937218ba01cac11d
 refs:
   - internal/tracker
   - internal/ship
+  - internal/config
   - internal/cli/git.go
 ---
 
@@ -90,6 +91,13 @@ shim: `brief` is the old stdout markdown; `branch` defaults to the current branc
 note: text mode prints the brief verbatim, as for `show` verbs, so `> "$BRIEF"` still works.
 note: the triage tree's `brief --fresh` drops the flag, because the verb has no other mode.
 note: `<branch>` is optional (default current branch) to match `scope`, where the old helper required it.
+
+### rota review depth
+rota review depth [<branch>] [--labels <a,b>]
+repo: scoped
+note: reads the labels of the issue behind a `<agent>/<issue>-<slug>` branch from the tracker when the `ship.review` policy has a `labels` map; `--labels` adds to them.
+data: {"branch": string, "base": string, "depth": "full"|"light"|"none", "why": string, "changedLines": number, "labels": [string]}
+exit: 2 at an umbrella root without --repo; 3 when the branch does not exist; 1 when ship.review is malformed or the issue's labels cannot be read
 
 ### rota review scaffolding
 rota review scaffolding [<branch>] [--base <branch>]

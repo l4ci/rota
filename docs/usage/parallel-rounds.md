@@ -437,6 +437,7 @@ The gate refuses before it merges anything (exit 4, nothing lands) in these case
   PASS of the same kind clears it.
 - **No `Closes #N`** in the PR body (`blockedBy: closes`), unless the issue is labelled `partial-slice`.
 - **An unpicked best-of attempt** (`blockedBy: best-of-unpicked`).
+- **A missing review verdict.** The depth `ship.review` resolves for the branch (diff size, the issue's labels) decides what must be on record: `full` both the Spec and Standards verdicts, `light` the Standards verdict, `none` nothing (`blockedBy: review-missing`). Run `/rota-review`, which records them.
 - **Nothing to verify with.** When `test.full` and `test.e2e` are both empty and `test.fullWhere` is
   `local`, the gate would merge a tree no command checked, so it stops (`blockedBy: no-verify`). Set
   one with `rota config set test.full <command>`, or pass `--no-verify` to merge unverified on purpose.

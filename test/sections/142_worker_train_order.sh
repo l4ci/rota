@@ -15,7 +15,7 @@ mkdir -p "$TOPROJ/.rota"
   git checkout -q main
 ) || fail "train order fixture repo setup failed"
 printf '{"slots":[{"name":"o1","branch":"o1"},{"name":"o2","branch":"o2"},{"name":"o3","branch":"o3"},{"name":"c1","branch":"c1"},{"name":"c2","branch":"c2"}]}\n' > "$TOPROJ/.rota/workers.json"
-printf '{"test":{"full":["true"]}}\n' > "$TOPROJ/.rota/config.json"
+printf '{"ship":{"review":"none"},"test":{"full":["true"]}}\n' > "$TOPROJ/.rota/config.json"
 tor() { ( cd "$TOPROJ" && PATH="$TESTDIR/fakes:$ROTA_POISON_BIN:$PATH" "$ROTA_BIN" --json "$@" 2>"$TMP_TO/err" ); }
 
 # --order must name every member exactly once: exit 2, nothing landed.

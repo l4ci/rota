@@ -597,3 +597,77 @@ func TestReviewPackage(t *testing.T) {
 		t.Errorf("umbrella no repo: exit %d", o.code)
 	}
 }
+
+func TestReviewDepth(t *testing.T) {
+	plain, _ := reviewProject(t)
+	depth := func(args ...string) (int, map[string]any) {
+		o := trRun(t, plain, "", append([]string{"review", "depth", "feat/x", "--json"}, args...)...)
+		env := envelope(t, o.stdout)
+		d, _ := env["data"].(map[string]any)
+		return o.code, d
+	}
+	cfg := filepath.Join(plain, ".rota", "config.json")
+
+	if code, d := depth(); code != 0 || d["depth"] != "full" || d["changedLines"].(float64) < 1 {
+		t.Fatalf("no policy: %d %v", code, d)
+	}
+	write(t, cfg, `{"ship":{"review":{"default":"full","lightBelow":100000,"labels":{"partial-slice":"none","risk:high":"full"}}}}`)
+	if code, d := depth(); code != 0 || d["depth"] != "light" || !strings.Contains(d["why"].(string), "lightBelow") {
+		t.Errorf("small diff: %d %v", code, d)
+	}
+	if _, d := depth("--labels", "partial-slice"); d["depth"] != "none" || !strings.Contains(d["why"].(string), "partial-slice") {
+		t.Errorf("label: %v", d)
+	}
+	if _, d := depth("--labels", "partial-slice,risk:high"); d["depth"] != "full" {
+		t.Errorf("risk:high must force full: %v", d)
+	}
+	write(t, cfg, `{"ship":{"review":false}}`)
+	if _, d := depth(); d["depth"] != "none" {
+		t.Errorf("legacy false: %v", d)
+	}
+	write(t, cfg, `{"ship":{"review":{"default":"deep"}}}`)
+	if code, _ := depth(); code == 0 {
+		t.Errorf("a malformed policy must fail")
+	}
+}
+
+// A round branch is `<agent>/<issue>-<slug>`: `review depth` reads that issue's
+// labels from the tracker when the policy has a labels map, so a caller that
+// omits --labels still gets the risk:high override.
+func TestReviewDepthReadsTheIssueLabels(t *testing.T) {
+	root := newRepo(t, t.TempDir(), "proj", "main")
+	gitT(t, root, "checkout", "-q", "-b", "nia/6-small")
+	write(t, filepath.Join(root, "x.txt"), "x\n")
+	gitT(t, root, "add", "x.txt")
+	gitT(t, root, "commit", "-q", "-m", "small change")
+	reads := 0
+	deps := testDeps()
+	deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, _, _ string, args []string, _ []byte) ([]byte, []byte, int, error) {
+		if len(args) > 2 && args[0] == "issue" && args[1] == "view" && args[2] == "6" {
+			reads++
+			return []byte(`{"number":6,"title":"t","state":"OPEN","labels":[{"name":"risk:high"}]}`), nil, 0, nil
+		}
+		return []byte("[]"), nil, 0, nil
+	}, func(n string) (string, error) { return "/fake/" + n, nil })}
+	policy := func(labels string) {
+		write(t, filepath.Join(root, ".rota", "config.json"),
+			`{"backlog":{"backend":"issues"},"issues":{"provider":"github"},"ship":{"review":{"default":"full","lightBelow":100000`+labels+`}}}`)
+	}
+	run := func(args ...string) (int, map[string]any) {
+		o := trRunWith(t, deps, root, "", append([]string{"review", "depth", "nia/6-small", "--json"}, args...)...)
+		d, _ := envelope(t, o.stdout)["data"].(map[string]any)
+		return o.code, d
+	}
+	policy(`,"labels":{"risk:high":"full","partial-slice":"none"}`)
+	if code, d := run(); code != 0 || d["depth"] != "full" || d["why"] != "label risk:high" {
+		t.Errorf("labels from the issue: %d %v", code, d)
+	}
+	if _, d := run("--labels", "partial-slice"); d["depth"] != "full" {
+		t.Errorf("--labels adds to the issue's, strictest wins: %v", d)
+	}
+	policy("")
+	reads = 0
+	if _, d := run(); d["depth"] != "light" || reads != 0 {
+		t.Errorf("no labels map: the issue is not read: %v (%d reads)", d, reads)
+	}
+}

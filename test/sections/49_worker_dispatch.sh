@@ -308,7 +308,7 @@ pass "worker poll reports NEEDS-PERMISSION instead of mistaking a stalled worker
 # files that only exist after a merge.
 python3 - "$TMP_WD/.rota/config.json" <<'PYEOF' || fail "could not write test.full fixture config"
 import json, sys
-json.dump({"test": {"full": [
+json.dump({"ship": {"review": "none"}, "test": {"full": [
     'for f in *.py; do python3 -c "import ${f%.py}" || exit 1; done'
 ]}}, open(sys.argv[1], "w"))
 PYEOF
@@ -369,7 +369,7 @@ pass "worker gate catches a merged-tree break both branches verified green again
 # Empty test.full with --no-verify must say so rather than claim a pass it did not earn.
 python3 - "$TMP_WD/.rota/config.json" <<'PYEOF' || fail "could not clear test.full"
 import json, sys
-json.dump({"test": {"full": []}}, open(sys.argv[1], "w"))
+json.dump({"ship": {"review": "none"}, "test": {"full": []}}, open(sys.argv[1], "w"))
 PYEOF
 ( cd "$TMP_WD" && "$ROTA_BIN" worker pool init --slots 3 --base main ) >/dev/null 2>&1 \
   || fail "could not add slot w3"

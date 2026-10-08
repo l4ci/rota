@@ -75,7 +75,7 @@ git clone -q "$ORIGIN" "$DY" 2>/dev/null
   printf '# TODO\n\n## Bugs\n\n## Features\n\n## Tasks\n\n## Completed\n' > .rota/BACKLOG.md
   printf -- '---\nid: M01\ntitle: "m"\nstatus: active\ndepends: []\n---\n' > .rota/milestones/M01.md
   # Doctor runs on the config a fresh herdr project has: one account, herdr dispatch.
-  printf '{"work":{"dispatch":"herdr","accounts":[{"name":"a","configDir":"%s"}]},"test":{"full":["true"]}}\n' "$TMP_DY/acct" > .rota/config.json
+  printf '{"ship":{"review":"none"},"work":{"dispatch":"herdr","accounts":[{"name":"a","configDir":"%s"}]},"test":{"full":["true"]}}\n' "$TMP_DY/acct" > .rota/config.json
   git add .gitignore skills && git commit -q -m seed && git push -q origin main
 ) || fail "dry round: fixture repo setup failed"
 
@@ -106,7 +106,7 @@ pass "doctor: healthy on the fixture, exit 1 and ok false once herdr is gone"
 # ── 2. start ────────────────────────────────────────────────────────────────
 # The issue goes in before start so start lists it; the config now also names the
 # forge and the merge policy the later steps need.
-printf '{"work":{"dispatch":"herdr","accounts":[{"name":"a","configDir":"%s"}]},"test":{"full":["true"]},"issues":{"provider":"github","retryWaitSeconds":0},"autonomy":{"level":"auto"},"ship":{"mergeApproval":"all"}}\n' "$TMP_DY/acct" > "$DY/.rota/config.json"
+printf '{"work":{"dispatch":"herdr","accounts":[{"name":"a","configDir":"%s"}]},"test":{"full":["true"]},"issues":{"provider":"github","retryWaitSeconds":0},"autonomy":{"level":"auto"},"ship":{"mergeApproval":"all","review":"none"}}\n' "$TMP_DY/acct" > "$DY/.rota/config.json"
 dyj item create --kind features --title First --milestone M01 --body-file - <<<$'## Acceptance\n- [ ] works\nTouches internal/a.go\n\n## Touches\n- POST /items' >/dev/null \
   || fail "dry round: item create failed"
 printf '{"id":"cli","result":{"snapshot":{"agents":[]}}}\n' > "$FK/snapshot.json"
