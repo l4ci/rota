@@ -307,12 +307,12 @@ note: (#239) `--tier` sets the receiver's tier as `assign --tier` does: one abov
 note: if the dispatch fails after the claim moved, the claim and branch stay with `<to>` (the pane may hold the brief), as `assign` keeps them after a failure at dispatch; the failure is exit 5 or 6 and `data` still reports the move.
 
 ### rota round bounce
-rota round bounce <issue> [--head <sha>]
+rota round bounce <issue> [--head <sha>] [--slot <slot>]
 repo: none
 data: {"issue": string, "bounces": number, "max": number, "changed": bool}
 exit: 2 when no issue is given; 4 when the item is already at `round.maxBounces` (nothing counted, `changed` false); 70 when `round.maxBounces` is invalid
 old: none (new in #239)
-note: the orchestrator's count of a bounce it sends by hand (SKILL §7). It shares the per-item `bounces` counter of `.rota/workers.json` with the merge gate, so gate bounces and review bounces add up. `<issue>` may carry a leading `#`. `--head` is the PR head being bounced: the same head twice counts once. Below the cap it counts one and exits 0; at `round.maxBounces` (default 3) it counts nothing and exits 4 with a hint to `round transfer --tier` or `--to human`. `0` turns the cap off. The verb does not move anything: it needs no lease and sends nothing to a worker.
+note: the orchestrator's count of a bounce it sends by hand (SKILL §7). It shares the per-item `bounces` counter of `.rota/workers.json` with the merge gate, so gate bounces and review bounces add up. `<issue>` may carry a leading `#`. `--head` is the PR head being bounced: the same head twice counts once. `--slot` names the slot holding the bounced PR, so the ledger's bounce entry of a best-of:2 attempt lands on that attempt's row. Below the cap it counts one and exits 0; at `round.maxBounces` (default 3) it counts nothing and exits 4 with a hint to `round transfer --tier` or `--to human`. `0` turns the cap off. The verb does not move anything: it needs no lease and sends nothing to a worker.
 
 ### rota round review-relay
 rota round review-relay <slot>

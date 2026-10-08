@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/l4ci/rota/internal/ledger"
 )
 
 func (w *world) setLedger(body string) {
@@ -109,5 +111,26 @@ func TestTrainLedgerExcludesExpiredFailsAndNoEntryFails(t *testing.T) {
 	res, _ = w.train(TrainOpts{Targets: []string{"b1"}})
 	if res.Verdict != GateVerifyFailed || w.onMain("b1.txt") {
 		t.Fatalf("no entry: the train must fail and land nothing: %+v", res)
+	}
+}
+
+// A PR merged on the forge before the gate ran gets a merge entry of its own:
+// the gate did not land it, so the entry says by: remote.
+func TestGateLedgerRecordsARemoteMerge(t *testing.T) {
+	w := newWorld(t, ghURL)
+	w.forge("state", "MERGED")
+	res, err := w.gate(false, GateOpts{})
+	if err != nil || res.Verdict != GatePRMismatch {
+		t.Fatalf("gate: %+v %v", res, err)
+	}
+	var merges []ledger.Entry
+	es, _ := ledger.Load(w.dir)
+	for _, e := range es {
+		if e.Kind == ledger.KindMerge {
+			merges = append(merges, e)
+		}
+	}
+	if len(merges) != 1 || merges[0].DetailStr("by") != "remote" {
+		t.Fatalf("merge entries %+v, want one with by: remote", merges)
 	}
 }

@@ -105,7 +105,7 @@ func TestReviewRelayNothingPending(t *testing.T) {
 func TestReviewRelayAtCapEscalates(t *testing.T) {
 	f, _, o := reviewFx(t)
 	for i := 0; i < 3; i++ {
-		if _, err := worker.RecordBounce(f.root, "12", ""); err != nil {
+		if _, err := worker.RecordBounce(f.root, "12", "", ""); err != nil {
 			t.Fatal(err)
 		}
 	}

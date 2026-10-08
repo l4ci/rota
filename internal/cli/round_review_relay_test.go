@@ -196,7 +196,7 @@ func TestReviewStepAutoAtTheCapIsPendingAndHeld(t *testing.T) {
 		t.Fatal(err)
 	}
 	for i := 0; i < 2; i++ {
-		if _, err := worker.RecordBounce(dir, "577", ""); err != nil {
+		if _, err := worker.RecordBounce(dir, "577", "", ""); err != nil {
 			t.Fatal(err)
 		}
 	}

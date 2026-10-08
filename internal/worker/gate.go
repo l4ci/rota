@@ -143,6 +143,9 @@ type GateResult struct {
 	Verified      []string
 	VerifySkipped bool
 	Changed       bool
+	// AlreadyMerged says the forge reported the PR merged before this gate ran:
+	// the gate landed nothing, but the ledger records the merge as remote.
+	AlreadyMerged bool
 	Err           string
 	Hint          string
 	Notes         []string // PROVENANCE-SKIP and NO-VERIFY lines for stderr
@@ -512,6 +515,7 @@ func (g *gate) stepFreshness() (bool, error) {
 		return g.broke(brokeMsg)
 	}
 	if why != "" {
+		g.noteMergedRemotely()
 		g.res.SHA, _ = e.runGit(g.root, "rev-parse", "--short=7", g.headRef) // bounce accounting keys on the head
 		g.verdict(GateStale, fmt.Sprintf("STALE %s %s — %s commit(s) landed on %s since it branched; %s", o.Slot, g.branch, behind, o.Base, why),
 			fmt.Sprintf("bounce: tell slot %s to `git merge %s`, resolve and re-verify, then re-gate", o.Slot, o.Base))
@@ -549,6 +553,7 @@ func (g *gate) stepPRMatches() (bool, error) {
 	// OPEN, MERGED or CLOSED on both forges.
 	switch {
 	case info.State != "OPEN":
+		g.res.AlreadyMerged = info.State == "MERGED"
 		return mismatch(fmt.Sprintf("PR %s is %s, not open", g.prNum, info.State))
 	case info.Base != g.o.Base:
 		return mismatch(fmt.Sprintf("PR %s targets '%s', the gate's base is '%s' — stacked PR?", g.prNum, info.Base, g.o.Base))
@@ -1107,6 +1112,20 @@ func (g *gate) verdict(v, msg, hint string) {
 func (g *gate) broke(msg string) (bool, error) {
 	g.verdict(GateCheckBroke, fmt.Sprintf("CHECK-BROKE %s — %s", g.o.Slot, msg), "")
 	return true, nil
+}
+
+// noteMergedRemotely marks the result when the forge says the PR is merged: a
+// stale refusal of a head already on the base is that case.
+func (g *gate) noteMergedRemotely() {
+	if !g.remote {
+		return
+	}
+	if _, code := g.e.runGit(g.root, "merge-base", "--is-ancestor", g.headRef, g.baseRef); code != 0 {
+		return // the head is not on the base: nothing says the PR landed
+	}
+	if info, ok := g.prInfo(); ok && info.State == "MERGED" {
+		g.res.AlreadyMerged = true
+	}
 }
 
 // prInfo reads the PR; ok is false when the forge could not be read.

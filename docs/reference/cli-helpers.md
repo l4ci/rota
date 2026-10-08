@@ -353,7 +353,7 @@ The orchestrator's verbs for a [parallel round](../usage/parallel-rounds.md). Al
 | `rota round transfer <issue> --to <slot\|human> [--tier <light\|standard\|heavy>] [--tier-reason <text>] [--note-file <path\|->] [--body-file <path\|->] [--accept-overlap] [--holder-pid <n>]` | move an assigned issue to another slot or to the human |
 | `rota round reclaim <slot> [--force] [--note-file <path\|->] [--holder-pid <n>]` | free a dead or stalled slot and make its issue assignable |
 | `rota round review-relay <slot>` | relay new review input on a done slot's PR to its worker as a counted bounce (`REVIEW` relay); at `round.maxBounces` escalate on the PR instead, exit 4; never gates or merges |
-| `rota round bounce <ID> [--head <sha>]` | count one by-hand review bounce of an item; the same `--head` twice counts once; exit 4 once the item is at `round.maxBounces`, then transfer it to a higher tier or `--to human` |
+| `rota round bounce <ID> [--head <sha>] [--slot <slot>]` | count one by-hand review bounce of an item; the same `--head` twice counts once; `--slot` names the slot holding the bounced PR so a best-of attempt gets its own ledger row; exit 4 once the item is at `round.maxBounces`, then transfer it to a higher tier or `--to human` |
 | `rota round pick <ID> --pr <N> --reason-file <path\|-> [--holder-pid <n>]` | `best-of:2` issue: name the winning PR; close the other attempt's PR with the reason, keep its branch |
 | `rota round wind-down [--no-verify] [--holder-pid <n>]` | re-verify the base, park every slot, release the lease |
 
