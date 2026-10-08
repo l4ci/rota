@@ -24,8 +24,10 @@ import (
 // the process runs inside herdr (rounds are started by hand with `herdr
 // worktree create`, whatever the config says), else tmux.
 // A host or forge that cannot be built or reached is left nil: the verbs
-// report it as unavailable instead of failing.
-func defaultRoundEnv(ctx context.Context, root string, d *Deps) round.Env {
+// report it as unavailable instead of failing. withForge false builds no
+// forge at all (Forge and ForgeErr stay empty), for a caller that reads only
+// the local sources and would not wait on the network.
+func defaultRoundEnv(ctx context.Context, root string, d *Deps, withForge bool) round.Env {
 	cfg := config.Load(rotatree.Config(root))
 	e := round.Env{Git: d.Git, Base: "main", Lease: d.LeaseEnv()}
 	e.Worker.NewHost = func(kind string) host.Host { return d.Host(kind) }
@@ -51,6 +53,9 @@ func defaultRoundEnv(ctx context.Context, root string, d *Deps) round.Env {
 		e.StallMinutes = set.StallMinutes
 		e.AdoptPattern, e.SharedPaths = set.AdoptPattern, set.SharedPaths
 		e.ItemTimeoutMinutes = set.ItemTimeoutMinutes
+	}
+	if !withForge {
+		return e
 	}
 	f, err := d.forge(ctx, cfg, "", root)
 	if err != nil {
