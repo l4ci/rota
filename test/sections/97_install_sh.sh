@@ -70,7 +70,33 @@ mkdir -p "$IS/nomini"
 for t in sh awk cut mkdir mktemp rm mv chmod cat uname curl sha256sum shasum dirname printf; do
   tp=$(command -v "$t" 2>/dev/null || true); [ -z "$tp" ] || [ "${tp#/}" = "$tp" ] || ln -sf "$tp" "$IS/nomini/$t"
 done
-sigfail sigtool "need minisign" PATH="$IS/nomini"
+sigfail sigtool "need minisign" PATH="$IS/nomini" ROTA_STRICT=1
+# --strict flag behaves the same as ROTA_STRICT=1.
+mkdir -p "$IS/q-flag/bin"
+RC=0; OUT=$(PATH="$IS/nomini" ROTA_RELEASE_BASE_URL="file://$IS/sigtool" sh "$INSTALL" --strict --prefix "$IS/q-flag" --version 7.7.7 2>&1) || RC=$?
+[ "$RC" != 0 ] || fail "--strict without minisign should fail"
+case $OUT in *"need minisign"*) ;; *) fail "--strict should say 'need minisign': $OUT" ;; esac
+[ ! -e "$IS/q-flag/bin/rota" ] || fail "--strict without minisign still installed"
+
+# Without minisign and not strict: sha256 verified, loud warning, install completes.
+RC=0; OUT=$(PATH="$IS/nomini" ROTA_RELEASE_BASE_URL="file://$IS/sigtool" sh "$INSTALL" --prefix "$IS/pnm" --version 7.7.7 2>&1) || RC=$?
+[ "$RC" = 0 ] || fail "install without minisign should complete: $OUT"
+case $OUT in *"signature was NOT checked"*) ;; *) fail "should warn the signature was not checked: $OUT" ;; esac
+case $OUT in *"install minisign"*) ;; *) fail "should say how to install minisign: $OUT" ;; esac
+[ "$("$IS/pnm/bin/rota")" = "rota fake 7.7.7" ] || fail "install without minisign did not install the asset"
+# ROTA_STRICT=0 is not strict.
+RC=0; OUT=$(PATH="$IS/nomini" ROTA_STRICT=0 ROTA_RELEASE_BASE_URL="file://$IS/sigtool" sh "$INSTALL" --prefix "$IS/pnm0" --version 7.7.7 2>&1) || RC=$?
+[ "$RC" = 0 ] || fail "ROTA_STRICT=0 without minisign should complete: $OUT"
+# The sha256 check still holds without minisign: a mismatch aborts, nothing installed.
+mkrel "$IS/nmbad/download/v7.7.7" 7.7.7
+printf 'tampered\n' >> "$IS/nmbad/download/v7.7.7/$ASSET"
+RC=0; OUT=$(PATH="$IS/nomini" ROTA_RELEASE_BASE_URL="file://$IS/nmbad" sh "$INSTALL" --prefix "$IS/pnmbad" --version 7.7.7 2>&1) || RC=$?
+[ "$RC" != 0 ] || fail "checksum mismatch without minisign should fail"
+case $OUT in *"checksum mismatch"*) ;; *) fail "mismatch without minisign should say so: $OUT" ;; esac
+[ ! -e "$IS/pnmbad/bin/rota" ] || fail "mismatch without minisign still installed"
+# With minisign on PATH there is no warning.
+OUT=$(sh "$INSTALL" --prefix "$IS/pwm" 2>&1) || fail "install with minisign failed: $OUT"
+case $OUT in *"NOT checked"*) fail "install with minisign should not warn: $OUT" ;; esac
 
 # Checksum mismatch: fails closed, nothing installed, an existing rota is untouched.
 mkrel "$IS/bad/download/v9.9.9" 9.9.9
