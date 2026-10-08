@@ -108,6 +108,7 @@ type Limit struct {
 	ResetsAt   string // empty when unknown
 	Action     string
 	Account    string // the limited slot's account
+	Kind       string // the limited slot's harness kind, "" for Claude
 	To         string // the slot the issue moved to
 	Status     string
 	Cycles     int
@@ -130,7 +131,7 @@ func limitFrom(o *jsonx.Object) Limit {
 	return Limit{
 		ID: jsonx.Str(o, "id"), Session: jsonx.Str(o, "session"), Window: jsonx.Str(o, "window"),
 		Source: jsonx.Str(o, "source"), DetectedAt: jsonx.Str(o, "detectedAt"), ResetsAt: jsonx.Str(o, "resetsAt"),
-		Action: jsonx.Str(o, "action"), Account: jsonx.Str(o, "account"), To: jsonx.Str(o, "to"),
+		Action: jsonx.Str(o, "action"), Account: jsonx.Str(o, "account"), Kind: jsonx.Str(o, "kind"), To: jsonx.Str(o, "to"),
 		Status: jsonx.Str(o, "status"), Cycles: cycles, ResolvedAt: jsonx.Str(o, "resolvedAt"), Note: jsonx.Str(o, "note"),
 	}
 }
@@ -149,6 +150,9 @@ func (l Limit) Object() *jsonx.Object {
 	o.Set("action", l.Action)
 	if l.Account != "" {
 		o.Set("account", l.Account)
+	}
+	if l.Kind != "" {
+		o.Set("kind", l.Kind)
 	}
 	if l.To != "" {
 		o.Set("to", l.To)

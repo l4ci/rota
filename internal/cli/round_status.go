@@ -10,6 +10,7 @@ import (
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/limits"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
@@ -97,7 +98,8 @@ func roundStatus(*flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		ctx := c.Context()
-		rep, err := withBoard(c, root, c.deps().RoundEnv(ctx, root)).Status(ctx, root)
+		renv := withBoard(c, root, c.deps().RoundEnv(ctx, root))
+		rep, err := renv.Status(ctx, root)
 		if err != nil {
 			return Result{}, err
 		}
@@ -118,6 +120,16 @@ func roundStatus(*flag.FlagSet) RunFunc {
 		d.Set("review", queuedRows(rep.Queued))
 		var lines []string
 		if set, err := roundcfg.Load(root); err == nil {
+			renv.Accounts = c.deps().WorkerAccounts()
+			if qc := renv.QuotaCap(ctx, root, set); qc.Reduced() {
+				co := jsonx.NewObject()
+				co.Set("effective", qc.Effective)
+				co.Set("roster", qc.Roster)
+				co.Set("reason", qc.Reason)
+				co.Set("resumesAt", limits.Time(qc.ResumesAt))
+				d.Set("cap", co)
+				lines = append(lines, fmt.Sprintf("cap\t%d/%d\t%s", qc.Effective, qc.Roster, qc.Reason))
+			}
 			if a, err := architectureFor(c, root, set); err == nil {
 				d.Set("architecture", architectureData(a))
 				if l := a.Line(); l != "" {
