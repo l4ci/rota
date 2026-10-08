@@ -24,23 +24,24 @@ const limitMsg = "Claude usage limit reached. Your limit will reset at 3pm.\n"
 // rig is a fake world: a clock, a registry under a temp dir, panes and
 // recorded sends, transfers and escalations.
 type rig struct {
-	mu       sync.Mutex
-	t        *testing.T
-	root     string
-	now      time.Time
-	targets  []Target
-	panes    map[string]string
-	data     Data
-	meters   map[string]Reading
-	pick     string
-	idle     map[string]string // account -> slot
-	sent     []string          // "<session>: <prompt>"
-	xfers    []string
-	xferErr  error
-	escal    []string
-	notified []string
-	set      Settings
-	w        *Watcher
+	mu        sync.Mutex
+	t         *testing.T
+	root      string
+	now       time.Time
+	targets   []Target
+	panes     map[string]string
+	data      Data
+	meters    map[string]Reading
+	pick      string
+	pickKinds []string          // the harness kind each PickAccount call was for
+	idle      map[string]string // account -> slot
+	sent      []string          // "<session>: <prompt>"
+	xfers     []string
+	xferErr   error
+	escal     []string
+	notified  []string
+	set       Settings
+	w         *Watcher
 }
 
 func newRig(t *testing.T) *rig {
@@ -62,10 +63,11 @@ func (r *rig) build() *Watcher {
 		Capture:          func(_ context.Context, t Target) string { return r.panes[t.Session] },
 		OrchestratorData: func(time.Time) Data { return r.data },
 		Meter:            func(_ context.Context, a string) Reading { return r.meters[a] },
-		PickAccount: func(_ context.Context, exclude string) (string, bool) {
+		PickAccount: func(_ context.Context, kind, exclude string) (string, bool) {
+			r.pickKinds = append(r.pickKinds, kind)
 			return r.pick, r.pick != "" && r.pick != exclude
 		},
-		IdleSlot: func(_ context.Context, a string) (string, bool) { s, ok := r.idle[a]; return s, ok },
+		IdleSlot: func(_ context.Context, _, a string) (string, bool) { s, ok := r.idle[a]; return s, ok },
 		Transfer: func(_ context.Context, issue, to string) error {
 			r.xfers = append(r.xfers, issue+"->"+to)
 			for i := range r.targets { // the sender is parked, so idle
@@ -564,5 +566,60 @@ func TestStoreRoundTripKeepsOtherKeys(t *testing.T) {
 	got := Load(root)
 	if len(got) != 1 || got[0].Status != StatusResumed || got[0].Cycles != 1 {
 		t.Fatalf("%+v", got)
+	}
+}
+
+// codexLimitMsg is the usage-limit text Codex prints (recalled from the Codex
+// CLI, not captured live: see the #578 PR rulings). Its reset time is
+// "try again at", not "resets at".
+const codexLimitMsg = "You've hit your usage limit. Upgrade to Pro (https://chatgpt.com/explore/pro), visit https://chatgpt.com/codex/settings/usage to purchase more credits or try again at 3:42 PM.\n"
+
+// codexRig is slotRig for a Codex slot: ben holds #67 on Codex login c1 and
+// dana is idle on c2. Claude account "c1" has headroom: the Claude meter must
+// not be read for a Codex slot.
+func codexRig(t *testing.T) *rig {
+	r := newRig(t)
+	r.targets = append(r.targets,
+		Target{Session: "ben", Pane: "pb", Account: "c1", Kind: "codex", Issue: "67"},
+		Target{Session: "dana", Pane: "pd", Account: "c2", Kind: "codex"})
+	r.panes["ben"] = "working...\n" + codexLimitMsg
+	r.meters["c1"] = Reading{Known: true}
+	r.pick = "c2"
+	r.idle["c2"] = "dana"
+	return r
+}
+
+func TestCodexSlotLimitMovesIssueToOtherCodexLogin(t *testing.T) {
+	r := codexRig(t)
+	r.build()
+	r.step(true)
+	e := r.only()
+	if len(r.xfers) != 1 || r.xfers[0] != "67->dana" {
+		t.Fatalf("transfers %v", r.xfers)
+	}
+	if e.Status != StatusSwitched || e.Account != "c1" || e.Kind != "codex" || e.To != "dana" || e.Session != "ben" {
+		t.Fatalf("entry %+v", e)
+	}
+	if len(r.pickKinds) != 1 || r.pickKinds[0] != "codex" {
+		t.Fatalf("PickAccount kinds %v", r.pickKinds)
+	}
+}
+
+func TestCodexSlotLimitWaitsForResetWithoutAnotherLogin(t *testing.T) {
+	r := codexRig(t)
+	r.pick = ""
+	r.build()
+	r.step(true)
+	e := r.only()
+	if e.Status != StatusWaiting || e.Action != ActionSleep || e.Kind != "codex" {
+		t.Fatalf("entry %+v", e)
+	}
+	if want := Time(time.Date(2026, 10, 3, 15, 42, 0, 0, time.UTC)); e.ResetsAt != want {
+		t.Fatalf("resetsAt %s, want %s", e.ResetsAt, want)
+	}
+	r.now = time.Date(2026, 10, 3, 15, 43, 0, 0, time.UTC)
+	r.step(true)
+	if len(r.sent) != 1 || !strings.HasPrefix(r.sent[0], "ben: The usage limit has reset") {
+		t.Fatalf("sent %v", r.sent)
 	}
 }

@@ -183,6 +183,8 @@ another watcher.
   its reset still ahead is a limit; the later reset wins if both are.
 - **A worker slot:** it reads the account meter (`rota worker account list`), but only after the slot's
   pane shows a limit message, never on a timer.
+- **A Codex slot:** there is no meter, so the pane's limit message is the evidence. The limit counts
+  against the slot's `work.codexAccounts` login, and the reset comes from `try again at <time>` in the text.
 - **The message as fallback:** on herdr 0.9.x the loop subscribes to `pane.output_matched` with the
   phrases `rota worker poll` already uses for LIMITED. On tmux, or if herdr refuses the subscription, it
   captures the panes every `--settle` seconds.
@@ -204,6 +206,19 @@ another watcher.
 - **The orchestrator only sleeps.** A limited session cannot write a handoff, and a restarted one with no
   handoff has nothing to continue from. Moving it to another account is opt-in and happens before the
   limit: see [switching the orchestrator's account](#switching-the-orchestrators-account).
+
+### The slot cap
+
+The round does not keep filling slots into a quota that has run out. When every account a worker could run
+under is cooling down, `rota round tick` (and `rota round watch --autopilot`) mints and assigns nothing and
+prints `capped` with the reason, and `rota round assign` refuses with `blockedBy` `quota`. `rota round
+status` shows `cap <effective>/<roster>` and the reason while the cap is below the roster size. The slots
+already working keep going. Slots fill again by themselves once an account's window resets.
+
+A Claude account is cooling when its meter shows a spent window with a reset ahead (`work.accounts`). A Codex
+login is cooling while the limit log holds a waiting entry for it (`work.codexAccounts`). An unconfigured pool
+never counts as cooling, an account whose usage cannot be read counts as free, and the Claude pool is left out
+when `round.workerKind` is `codex`.
 
 ### Resuming
 
