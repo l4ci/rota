@@ -186,6 +186,9 @@ func TestReportRecordsStateAndPRAndIsIdempotent(t *testing.T) {
 	if s.State() != "done" || s.PR() != url {
 		t.Errorf("slot: %v", s)
 	}
+	if s.ReviewSeen() == "" {
+		t.Error("no review baseline at done")
+	}
 	if v, ok := s.Raw().Get("evidence"); ok {
 		t.Errorf("evidence is echoed, never stored: %v", v)
 	}

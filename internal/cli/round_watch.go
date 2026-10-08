@@ -118,8 +118,9 @@ func roundWatch(fs *flag.FlagSet) RunFunc {
 func secs(f float64) time.Duration { return time.Duration(f * float64(time.Second)) }
 
 // watchForge asks the forge what the registry cannot know: it records answered
-// escalations (as `round escalate check` does) and reads each slot's PR state
-// from `round status`. A forge that cannot be reached leaves the entries out,
+// escalations (as `round escalate check` does), reads each slot's PR state
+// from `round status` and looks for review input on each done slot's PR (under
+// round.reviewLoop auto it relays that input to the worker instead). A forge that cannot be reached leaves the entries out,
 // which reads as no change.
 func watchForge(ctx context.Context, c *Ctx, root string) map[string]string {
 	out := map[string]string{}
@@ -138,6 +139,22 @@ func watchForge(ctx context.Context, c *Ctx, root string) map[string]string {
 			if r.PR != "" && r.PRState != "" {
 				out[roundwatch.PRStateKey(r.Name)] = r.PRState
 			}
+		}
+	}
+	set, err := roundcfg.Load(root)
+	if err != nil {
+		if !c.reviewSkipNoted {
+			c.reviewSkipNoted = true
+			c.Warn("review poll skipped: round config does not load: %v", err)
+		}
+		return out
+	}
+	for _, s := range worker.LoadRegistry(root).Slots() {
+		if s.PR() == "" || !strings.EqualFold(s.State(), "done") {
+			continue
+		}
+		if o := reviewStep(c, root, set, s.Name()); o.Pending {
+			out[roundwatch.ReviewKey(s.Name())] = o.Detail
 		}
 	}
 	return out

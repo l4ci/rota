@@ -124,6 +124,27 @@ type Comment struct {
 	ID     string
 	Body   string
 	Author string
+	// CreatedAt is when the forge recorded the comment; zero when the forge
+	// did not say (the issue-view path of Get).
+	CreatedAt time.Time
+}
+
+// Review states, lowercased from the forge's word.
+const (
+	ReviewApproved         = "approved"
+	ReviewChangesRequested = "changes_requested"
+	ReviewCommented        = "commented"
+)
+
+// Review is one piece of review input on a PR: a submitted review, or an
+// inline comment on the diff (State commented). Comment.ID is the forge's id
+// within its own kind, so ids of a review and an inline comment may collide:
+// order by CreatedAt, not by id.
+type Review struct {
+	Comment
+	State string
+	// Inline is true for an inline diff comment, false for a submitted review.
+	Inline bool
 }
 
 // Milestone is a native milestone. Number is what the forge's milestone API
@@ -247,6 +268,11 @@ type Adapter interface {
 	// merge request notes, system notes excluded; GitHub: the issue comments
 	// of the same number, which is where PR conversation comments live).
 	MRNotes(ctx context.Context, number int) ([]Comment, error)
+	// Reviews lists the review input of PR/MR number beside its conversation
+	// comments: submitted reviews and inline diff comments, oldest first,
+	// pending (unsubmitted) reviews excluded. GitLab keeps both in MRNotes, so
+	// it returns none.
+	Reviews(ctx context.Context, number int) ([]Review, error)
 	// AddMRNote posts a comment on PR/MR number and returns its id.
 	AddMRNote(ctx context.Context, number int, body string) (string, error)
 	// CommentURL is the web URL of comment id on the issue (pr false) or PR/MR

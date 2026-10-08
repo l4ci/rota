@@ -22,6 +22,12 @@ const (
 // Scopes lists the valid scope values.
 var Scopes = []string{ScopeSlate, ScopeMilestone, ScopeNext, ScopeOpen}
 
+// Values of round.reviewLoop.
+const (
+	ReviewLoopManual = "manual"
+	ReviewLoopAuto   = "auto"
+)
+
 // Tiers, light to heavy: the strengths a tier maps a model for, per harness kind.
 const (
 	TierLight    = "light"
@@ -81,6 +87,10 @@ type Settings struct {
 	// the most assigns and the most merges one tick does.
 	Autopilot    bool
 	AutopilotCap int
+	// ReviewLoop is round.reviewLoop: "manual" or "auto" (ReviewLoopManual,
+	// ReviewLoopAuto). Under auto the forge poll relays a done slot's review
+	// input to its worker itself.
+	ReviewLoop string
 	// Roles is roles.<role>.tier and .effort for every name in Roles.
 	Roles map[string]Role
 }
@@ -187,6 +197,13 @@ func Load(root string) (Settings, error) {
 	s.Autopilot = b
 	if s.AutopilotCap, err = config.Int(cfg, "round.autopilotCap", 0, config.MaxInt); err != nil {
 		return s, err
+	}
+	v, err = config.Value(cfg, "round.reviewLoop")
+	if err != nil {
+		return s, err
+	}
+	if s.ReviewLoop, _ = v.(string); s.ReviewLoop != ReviewLoopManual && s.ReviewLoop != ReviewLoopAuto {
+		return s, fmt.Errorf("round.reviewLoop must be %s or %s (got %v)", ReviewLoopManual, ReviewLoopAuto, v)
 	}
 	if s.WorkerKind, err = loadWorkerKind(cfg); err != nil {
 		return s, err

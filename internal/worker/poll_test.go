@@ -452,3 +452,33 @@ func TestPollUnknownCarriesExplainExcerpt(t *testing.T) {
 		t.Errorf("a failing explain must leave the evidence unchanged: %+v", got)
 	}
 }
+
+// The review cursor starts when the slot reports done: comments and bot posts
+// from before the PR was handed back are never review input. A re-done after a
+// relay keeps the cursor the relay moved.
+func TestPollBaselinesTheReviewCursorAtDone(t *testing.T) {
+	dir, f := pollRegistry(t, "tmux")
+	f.panes["w1"] = []string{"x\n", "x\nROTA-DONE w1 https://github.com/o/r/pull/9\n"}
+	f.panes["w2"] = []string{"a\n", "a\n"}
+	if _, err := envWith(f).Poll(bg, dir, PollOpts{Lines: 60}); err != nil {
+		t.Fatal(err)
+	}
+	seen := slotField(t, dir, "w1", "reviewSeen")
+	if seen == "<null>" || seen == "" {
+		t.Fatalf("no baseline at done: %q", seen)
+	}
+	if got := slotField(t, dir, "w2", "reviewSeen"); got != "<null>" {
+		t.Errorf("a busy slot got a baseline: %q", got)
+	}
+	if _, err := UpdateSlot(dir, "w1", func(s *Slot) { s.SetReviewSeen("2026-10-08T10:00:00Z") }); err != nil {
+		t.Fatal(err)
+	}
+	f.panes["w1"] = []string{"y\nROTA-DONE w1 https://github.com/o/r/pull/9\n", "y\nROTA-DONE w1 https://github.com/o/r/pull/9\n"}
+	f.panes["w2"] = []string{"a\n", "a\n"}
+	if _, err := envWith(f).Poll(bg, dir, PollOpts{Lines: 60}); err != nil {
+		t.Fatal(err)
+	}
+	if got := slotField(t, dir, "w1", "reviewSeen"); got != "2026-10-08T10:00:00Z" {
+		t.Errorf("a later poll moved the cursor: %q", got)
+	}
+}

@@ -525,6 +525,27 @@ func RecordBounce(root, issue, head string) (n int, err error) {
 	return n, err
 }
 
+// UnrecordBounce puts an item's bounce count and head back to what prev held,
+// after a RecordBounce whose relay did not go out.
+func UnrecordBounce(root, issue string, prev Registry) error {
+	return Update(root, func(d *Doc) {
+		doc := d.doc
+		b, heads := bouncesOf(doc), bounceHeadsOf(doc)
+		if n := bounceCount(bouncesOf(prev.doc), issue); n > 0 {
+			b.Set(issue, json.Number(strconv.Itoa(n)))
+		} else {
+			b.Delete(issue)
+		}
+		if h, ok := bounceHeadsOf(prev.doc).Get(issue); ok {
+			heads.Set(issue, h)
+		} else {
+			heads.Delete(issue)
+		}
+		doc.Set("bounces", b)
+		doc.Set("bounceHeads", heads)
+	})
+}
+
 // Bounces is how often an item's PR has been sent back so far (0 when never).
 func (r Registry) Bounces(issue string) int {
 	return bounceCount(bouncesOf(r.doc), issue)
