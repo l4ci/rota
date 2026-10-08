@@ -577,7 +577,7 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 		if err != nil {
 			return res, err
 		}
-		kind, kindSource = resolveKind("", pick.Harness, o.Settings.WorkerKind, to.Kind())
+		kind, kindSource = resolveKind("", pick.Harness, o.Settings.WorkerKind, to.HarnessKind())
 		hz, err := worker.Harness(kind)
 		if err != nil {
 			return res, err
