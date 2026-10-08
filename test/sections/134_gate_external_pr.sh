@@ -29,7 +29,7 @@ git init -q --bare -b main "$EXORIGIN"
     && git push -q origin ben/5-thing && git checkout -q main
 ) || fail "external-PR fixture repo setup failed"
 EXSHA="$(git -C "$EXPROJ" rev-parse ben/5-thing)"
-printf '{"test":{"full":["true"]}}\n' > "$EXPROJ/.rota/config.json"
+printf '{"ship":{"review":"none"},"test":{"full":["true"]}}\n' > "$EXPROJ/.rota/config.json"
 printf '{"slots":[{"name":"ben","branch":"park/ben"}]}\n' > "$EXPROJ/.rota/workers.json"
 ex_state() { printf '{"sha":"%s","body":"%s","labels":[%s]}\n' "$EXSHA" "$1" "$2" > "$TMP_EX/state.json"; }
 ex() { ( cd "$EXPROJ" && EX_STATE="$TMP_EX/state.json" ROTA_GATE_SHA_WAIT=0 PATH="$EXBIN:$ROTA_POISON_BIN:$PATH" "$ROTA_BIN" --json "$@" 2>/dev/null ); }

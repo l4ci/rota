@@ -92,7 +92,7 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 			}
 		}
 		say := func(l string) { fmt.Fprintln(c.Stderr, l) }
-		r, err := workerEnvCtx(c, ctx).Train(ctx, root, worker.TrainOpts{Targets: args, Base: *base, Order: override, Say: say, LandGreen: *landGreen, NoVerify: *noVerify, Approve: approve, Verdict: shipVerdict(c, root, root).Block})
+		r, err := workerEnvCtx(c, ctx).Train(ctx, root, worker.TrainOpts{Targets: args, Base: *base, Order: override, Say: say, LandGreen: *landGreen, NoVerify: *noVerify, Approve: approve, Verdict: shipVerdict(c, root, root).Block, Recorded: recordedReviews(root)})
 		if err != nil && r.Verdict == worker.GateVerdictBlocked {
 			return verdictRefusal(err, trainData(r))
 		}
@@ -110,6 +110,9 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 		}
 		if err == nil && r.Verdict == worker.GateBestOfUnpicked {
 			return bestOfRefusal(r.Err, r.Hint, trainData(r))
+		}
+		if err == nil && r.Verdict == worker.GateReviewMissing {
+			return blockedRefusal("review-missing", r.Err, r.Hint, trainData(r))
 		}
 		if err != nil {
 			return Result{}, err
