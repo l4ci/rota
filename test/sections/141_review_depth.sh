@@ -31,7 +31,8 @@ trap 'rm -rf "$RD"' EXIT
   [ "$(echo "$OUT" | jget data.changedLines)" = "3" ] || fail "changedLines should be 3: $OUT"
   [ "$(hvj review depth feat --labels partial-slice | jget data.depth)" = "none" ] || fail "partial-slice label should map to none"
   [ "$(hvj review depth feat --labels partial-slice,risk:high | jget data.depth)" = "full" ] || fail "risk:high should force full"
-  "$ROTA_BIN" review depth feat | grep -q '^REVIEW-DEPTH feat — light' || fail "text mode should print the depth line"
+  TXT=$("$ROTA_BIN" review depth feat)
+  grep -q '^REVIEW-DEPTH feat — light' <<<"$TXT" || fail "text mode should print the depth line: $TXT"
 
   # a malformed policy is refused by set and flagged by config check
   if "$ROTA_BIN" config set ship.review '{"default":"deep"}' >/dev/null 2>&1; then fail "config set accepted default deep"; fi
