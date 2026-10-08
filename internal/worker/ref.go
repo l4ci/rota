@@ -12,6 +12,7 @@ import (
 var (
 	rePRRef       = regexp.MustCompile(`^(?:#|.*/(?:pull|merge_requests)/)?(\d+)/?$`)
 	reIssueBranch = regexp.MustCompile(`^[^/]+/(\d+)-`)
+	reIssueToken  = regexp.MustCompile(`(?:(?:^|[^a-z0-9])issue-(\d+)|#(\d+))`)
 )
 
 // PRRefNumber reads the PR number from `#N`, `N` or a PR URL.
@@ -73,4 +74,23 @@ func prNumText(ref string) string {
 		return strconv.Itoa(n)
 	}
 	return ""
+}
+
+// IssueFromBranch is the issue number a branch name carries: the number leading
+// `<agent>/<issue>-<slug>`, else an `issue-N` or `#N` token. "" when none.
+func IssueFromBranch(name string) string {
+	if m := reIssueBranch.FindStringSubmatch(name); m != nil {
+		return m[1]
+	}
+	if m := reIssueToken.FindStringSubmatch(name); m != nil {
+		return firstNonEmptyStr(m[1], m[2])
+	}
+	return ""
+}
+
+func firstNonEmptyStr(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
 }

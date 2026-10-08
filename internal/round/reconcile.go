@@ -39,7 +39,7 @@ func (e Env) Reconcile(ctx context.Context, root string, apply bool) (Outcome, e
 			continue
 		}
 		if err := e.repair(ctx, root, rep, f); err != nil {
-			rep.Warnings = append(rep.Warnings, fmt.Sprintf("repair %s %s: %v", f.Kind, f.Slot, err))
+			rep.Warnings = append(rep.Warnings, fmt.Sprintf("repair %s %s: %v", f.Kind, firstNonEmpty(f.Slot, f.branch), err))
 			out.Drift = append(out.Drift, f)
 			continue
 		}
@@ -69,6 +69,8 @@ func (e Env) repair(ctx context.Context, root string, rep *Report, f Finding) er
 			}
 		}
 		return registerSlot(root, row, v)
+	case UnregisteredBranch:
+		return e.adoptBranch(ctx, root, f)
 	case PRStale:
 		if f.Slot != "" {
 			return e.parkMerged(ctx, root, f.Slot)

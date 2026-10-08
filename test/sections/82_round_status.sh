@@ -134,3 +134,26 @@ bad = [f for f in fs if f.get("slot") == "ext-1" and f.get("kind") in ("dead-tab
 sys.exit(1 if bad else 0)
 PY
 pass "an external slot reads derived state and draws no host findings"
+
+# round.adoptPattern: a matching branch no slot holds (and not merged) is an
+# unregistered-branch finding naming the issue when the name carries one. The
+# held codex/12-ext and the merged codex/old stay out. Off by default.
+( cd "$RS" && git branch codex/old main \
+    && git worktree add -q -b codex/77-new "$TMP/adopt-77" main \
+    && git -C "$TMP/adopt-77" -c user.email=a@b -c user.name=n commit -q --allow-empty -m work \
+    && git worktree add -q -b codex/nonum "$TMP/adopt-nonum" main \
+    && git -C "$TMP/adopt-nonum" -c user.email=a@b -c user.name=n commit -q --allow-empty -m work ) \
+  || fail "unregistered-branch fixture setup failed"
+OUT=$( cd "$RS" && $RSENV "$ROTA_BIN" --json round reconcile 2>/dev/null )
+grep -q 'unregistered-branch' <<<"$OUT" && fail "no round.adoptPattern: reconcile must not report branches: $OUT"
+( cd "$RS" && "$ROTA_BIN" config set round.adoptPattern 'codex/*' >/dev/null ) || fail "config set round.adoptPattern failed"
+OUT=$( cd "$RS" && $RSENV "$ROTA_BIN" --json round reconcile 2>/dev/null )
+python3 - "$OUT" <<'PY' || fail "unregistered-branch findings wrong: $OUT"
+import json, sys
+fs = [f for f in json.loads(sys.argv[1])["data"]["drift"] if f.get("kind") == "unregistered-branch"]
+by = {f["detail"].split()[0]: f for f in fs}
+assert sorted(by) == ["codex/77-new", "codex/nonum"], sorted(by)
+assert by["codex/77-new"]["issue"] == "77", by
+assert "--issue" in by["codex/nonum"]["detail"], by
+PY
+pass "reconcile reports unregistered branches matching round.adoptPattern"

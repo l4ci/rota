@@ -43,6 +43,7 @@ const (
 	StalledSlot          = "stalled"
 	ItemTimeout          = "item-timeout"
 	ClaimMismatch        = "claim-mismatch"
+	UnregisteredBranch   = "unregistered-branch"
 	// LeaseStale is declared in lease.go.
 )
 
@@ -107,6 +108,11 @@ type Env struct {
 	// HolderPID names the lease holder for the item-timeout park; 0 discovers
 	// it from the process, as the other verbs do.
 	HolderPID int
+	// AdoptPattern is round.adoptPattern: a glob over branch names that no slot
+	// holds and that are not merged; "" turns the unregistered-branch check off.
+	// SharedPaths is round.sharedPaths, for the overlap pass of an adoption.
+	AdoptPattern string
+	SharedPaths  []string
 	// NeedsHuman is issues.labels.needsHuman; "" means DefaultNeedsHuman.
 	NeedsHuman string
 }
@@ -190,6 +196,8 @@ type Finding struct {
 	// pr is the registry's ref of the queued PR a pr-stale finding is about,
 	// so its repair drops that record and not the issue's other attempt's.
 	pr string
+	// branch is the branch an unregistered-branch finding is about.
+	branch string
 }
 
 // Report is the assembled state.
@@ -466,6 +474,8 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 			rep.add(Finding{Kind: LabelOrphan, Issue: strconv.Itoa(n), Detail: fmt.Sprintf("#%d has %s and no slot holds it", n, e.Label)})
 		}
 	}
+
+	e.findUnregisteredBranches(ctx, root, rep, reg)
 
 	now := time.Now
 	if e.Now != nil {
