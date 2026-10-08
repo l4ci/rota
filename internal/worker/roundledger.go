@@ -171,10 +171,12 @@ func trainLedger(root string, res TrainResult, gated map[string]bool) {
 
 // AdoptedBranches is the set of branches `rota worker adopt` took over, read
 // from the ledger. The slot is gone once released, so this is what still says
-// an `issue-N` branch was adopted rather than made by someone else.
-func AdoptedBranches(root string) map[string]bool {
+// an `issue-N` branch was adopted rather than made by someone else. The ledger
+// is per-developer (gitignored), so it only knows the adoptions made from this
+// checkout: on a read error the set is empty and the error says why.
+func AdoptedBranches(root string) (map[string]bool, error) {
 	out := map[string]bool{}
-	entries, _ := ledger.Load(root)
+	entries, err := ledger.Load(root)
 	for _, e := range entries {
 		if e.Kind == ledger.KindAdopt {
 			if b := e.DetailStr("branch"); b != "" {
@@ -182,5 +184,5 @@ func AdoptedBranches(root string) map[string]bool {
 			}
 		}
 	}
-	return out
+	return out, err
 }

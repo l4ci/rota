@@ -24,6 +24,7 @@ import (
 	"github.com/l4ci/rota/internal/worker"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -100,8 +101,11 @@ type Input struct {
 	Lease  LeaseOps
 	// Adopted names the branches `rota worker adopt` took over. A merged
 	// branch is offered for deletion only when it is one of these or leads with
-	// an issue number (`<agent>/<n>-<slug>`, the shape a round cuts).
+	// an issue number under a roster agent (`<agent>/<n>-<slug>`, the shape a round cuts).
 	Adopted map[string]bool
+	// Roster is round.roster: the agent names a round cuts branches for. A
+	// `<agent>/<n>-<slug>` branch is round-made only under one of them.
+	Roster []string
 }
 
 // Result is what Find and Apply report. Warnings are for the caller to print.
@@ -414,7 +418,11 @@ func findBranches(ctx context.Context, s *state) ([]Candidate, error) {
 // `<agent>/<n>-<slug>`; an adopted branch may be named anything, so the adopt
 // record decides. An `issue-N` token in some other name is not enough.
 func (s *state) owned(b string) bool {
-	return s.in.Adopted[b] || worker.RoundBranch(b)
+	if s.in.Adopted[b] {
+		return true
+	}
+	agent, _, _ := strings.Cut(b, "/")
+	return worker.RoundBranch(b) && slices.Contains(s.in.Roster, agent)
 }
 
 // hostOwned: whether a tab or process working in cwd belongs to something

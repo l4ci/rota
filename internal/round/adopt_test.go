@@ -46,7 +46,7 @@ func TestAdoptRegistersExternalSlot(t *testing.T) {
 			t.Errorf("%s: worktree %q vs %q", ref, got, res.Worktree)
 		}
 	}
-	if !worker.AdoptedBranches(root)["codex/12-thing"] {
+	if adopted, err := worker.AdoptedBranches(root); err != nil || !adopted["codex/12-thing"] {
 		t.Error("adopt left no ledger record, so reap cannot tell the branch was adopted")
 	}
 	// A second adoption takes the next free name.
@@ -169,5 +169,38 @@ func TestAdoptValidatesThePRAgainstTheForge(t *testing.T) {
 	}
 	if _, err := e.Adopt(bg, root, be, AdoptOpts{Ref: "codex/12-thing", Issue: "12", PR: "https://x/pull/7"}); err != nil {
 		t.Fatalf("a PR headed by the branch should adopt: %v", err)
+	}
+}
+
+// A forge that fails refuses the adoption (guessing "fine" is what the check is
+// for); a missing forge CLI or no forge at all skips the read and adopts.
+func TestAdoptPRForgeFailurePaths(t *testing.T) {
+	down := &tracker.Error{Kind: tracker.KindUnavailable, Message: "gh: connection refused"}
+	noCLI := &tracker.Error{Kind: tracker.KindUnavailable, Message: "gh is not installed"}
+	for _, c := range []struct {
+		name    string
+		forge   func(*fakeRemote) Forge
+		viewErr error
+		wantErr string
+	}{
+		{"forge down refuses", func(f *fakeRemote) Forge { return f.asForge() }, down, "could not read PR 7 from the forge"},
+		{"missing CLI skips", func(f *fakeRemote) Forge { return f.asForge() }, noCLI, ""},
+		{"no forge skips", func(*fakeRemote) Forge { return nil }, nil, ""},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			root, e, be := adoptFixture(t)
+			fr := &fakeRemote{prViewErr: c.viewErr}
+			e.Forge = c.forge(fr)
+			_, err := e.Adopt(bg, root, be, AdoptOpts{Ref: "codex/12-thing", Issue: "12", PR: "https://x/pull/7"})
+			if c.wantErr == "" {
+				if err != nil || len(worker.LoadRegistry(root).Slots()) != 1 {
+					t.Fatalf("want an adoption, got %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), c.wantErr) || len(worker.LoadRegistry(root).Slots()) != 0 {
+				t.Fatalf("want a refusal naming %q, got %v", c.wantErr, err)
+			}
+		})
 	}
 }

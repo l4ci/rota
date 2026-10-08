@@ -84,8 +84,15 @@ RC=0; OUT=$(ex worker adopt ben/5-thing) || RC=$?
 [ "$RC" = "2" ] || fail "adopt without --issue should be a usage error: rc=$RC $OUT"
 RC=0; OUT=$(ex worker adopt ben/5-thing other --issue 5) || RC=$?
 [ "$RC" = "2" ] || fail "adopt with two refs should be a usage error: rc=$RC $OUT"
+# --pr is read from the forge: the fake gh heads every PR by ben/5-thing, so
+# adopting another branch under it is refused (exit 3) and registers nothing
+git -C "$EXPROJ" branch ben/6-other main
+RC=0; OUT=$(ex worker adopt ben/6-other --issue 6 --pr https://github.com/o/r/pull/7) || RC=$?
+[ "$RC" = "3" ] || fail "adopt --pr headed by another branch should exit 3: rc=$RC $OUT"
+grep -q '"ben/6-other"' "$EXPROJ/.rota/workers.json" \
+  && fail "a refused adopt must not register the branch"
 grep -q '"ext-1"' "$EXPROJ/.rota/workers.json" \
   || fail "a refused verb must leave the adopted slot registered"
-pass "worker reset, round reclaim and worker dispatch refuse an adopted slot; worker adopt refuses a bad call"
+pass "worker reset, round reclaim and worker dispatch refuse an adopted slot; worker adopt refuses a bad call and a PR headed by another branch"
 
 rm -rf "$TMP_EX"

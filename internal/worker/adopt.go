@@ -57,10 +57,16 @@ func RegisterExternal(root, name, branch, worktree, base, task, pr string) error
 // slot: its worktree and branch are not rota's to move, reset or delete.
 const BlockExternal = "external"
 
+// ExternalMessage is the one sentence every external-slot fence refuses with;
+// what finishes "<verb> would ..." and names the part of the checkout at stake.
+func ExternalMessage(name, verb, what string) string {
+	return fmt.Sprintf("slot %s is an adopted external slot: %s would %s rota did not create", name, verb, what)
+}
+
 // ExternalRefusal is the exit-4 refusal of a verb that would move or delete
 // the checkout of the adopted slot name.
 func ExternalRefusal(name, verb string) error {
-	e := fail(exitcode.ExitRefused, fmt.Sprintf("slot %s is an adopted external slot: %s would touch a worktree and branch rota did not create", name, verb))
+	e := fail(exitcode.ExitRefused, ExternalMessage(name, verb, "touch a worktree and branch"))
 	e.Data = BlockData{BlockedBy: BlockExternal}
 	return e
 }

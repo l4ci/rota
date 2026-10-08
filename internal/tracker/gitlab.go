@@ -407,13 +407,14 @@ func (g *GitLab) MergedPRs(ctx context.Context, branch string) ([]PR, error) {
 		Description  string `json:"description"`
 		SourceBranch string `json:"source_branch"`
 		WebURL       string `json:"web_url"`
+		SHA          string `json:"sha"`
 	}
 	if err := g.list(ctx, []string{"mr", "list", "--merged", "--source-branch", branch, "--output", "json"}, glPerPage, glPaging, &raw); err != nil {
 		return nil, err
 	}
 	out := []PR{}
 	for _, d := range raw {
-		out = append(out, PR{Number: d.IID, Title: d.Title, Branch: d.SourceBranch, URL: d.WebURL, Body: d.Description})
+		out = append(out, PR{Number: d.IID, Title: d.Title, Branch: d.SourceBranch, URL: d.WebURL, Body: d.Description, HeadSHA: d.SHA})
 	}
 	return out, nil
 }
