@@ -6,7 +6,7 @@ The critic is a fresh `standard` subagent (`references/subagent-dispatch.md`, *S
 
 ## Dispatch
 
-One `Agent` call, read-only. Pass paths and IDs, not pasted content:
+Dispatch one read-only subagent through the current harness (`references/subagent-dispatch.md`). Pass paths and IDs, not pasted content:
 
 - **Inputs**: the item (`rota item show <ID>`, including its `## Acceptance` and `## Out of scope`), and the proposal saved to a scratch file. Nothing else.
 - **Return**: a short list of findings, at most 7, one per line, under the three headings below. Write `none` under a heading with nothing to report. Word budget 250.

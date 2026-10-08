@@ -2,7 +2,7 @@
 
 Host mechanics for the `rota worker` verbs under tmux, and the judgment they do not enforce. Used by `/rota-orchestrate` rounds; `rota round start` picks the host and `rota round wait` / `assign` / `wind-down` drive the verbs, so a round rarely calls them by hand. `/rota-work` does not use this file: it dispatches in-process subagents.
 
-Each worker is **its own Claude Code session**, in its own `git worktree`, on its own branch, opening a PR. That buys a per-worker context window and a channel a human can talk into. The cost is the failure modes below, each paid for by a real round.
+Each worker is **its own harness session (Claude Code or Codex)**, in its own `git worktree`, on its own branch, opening a PR. That buys a per-worker context window and a channel a human can talk into. The cost is the failure modes below, each paid for by a real round.
 
 Verbs: `rota worker pool`, `rota worker dispatch`, `rota worker poll`, `rota worker gate`. They drive tmux through the `rota` binary's tmux host.
 

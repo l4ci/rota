@@ -9,7 +9,7 @@ The rubric `rota-review` carries is `references/silent-failure-hunter.md`; `SILE
 | `data.next` | Meaning | Do |
 |---|---|---|
 | `continue` | PASS | Go on silently. |
-| `ask` | CONCERNS | Surface each concern, then `AskUserQuestion` with the options in `references/review-verdict-routing.md`: Address via `/rota-work` (Recommended) / Ship anyway / Stop. |
+| `ask` | CONCERNS | Surface each concern, then ask with the options in `references/review-verdict-routing.md`: Address via `/rota-work` (Recommended) / Ship anyway / Stop. |
 | `surface` | Advisory gate (QA under `qa.gate: advisory`, any QA `INFRA-FAIL`, advisory second opinion) | Surface the findings, continue. A missing dev server or credentials never blocks a ship. |
 | `stop` | FAIL | Stop. Surface the findings; the user fixes via `/rota-work` or `/rota-debug` and reruns `/rota-ship`. |
 
