@@ -3,6 +3,7 @@ verified-sha: 9b275b66dc051091c4a0661f5f011c2ddc571871
 refs:
   - internal/worker
   - internal/cli/worker.go
+  - internal/tracker
 ---
 
 ## A7: workers, hosts, accounts
