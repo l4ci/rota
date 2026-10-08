@@ -123,7 +123,10 @@ var (
 type SpawnOpts struct {
 	Slot, Session, Cwd, ConfigDir, Launch string
 	// CodexHome is a codex launch's CODEX_HOME (herdr passes it to the tab).
-	CodexHome   string
+	CodexHome string
+	// Env is KEY=VALUE pairs the agent starts with (herdr: tab create --env;
+	// tmux: a prefix on the launch line).
+	Env         []string
 	BootTimeout int // seconds
 }
 

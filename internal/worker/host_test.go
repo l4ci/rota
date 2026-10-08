@@ -119,6 +119,20 @@ func exitOf(err error) int {
 
 // ── dispatch ────────────────────────────────────────────────────────────────
 
+func TestDispatchTaskSpawnsWithSlotEnv(t *testing.T) {
+	dir := newProject(t, `{"work":{"workerCommand":"claude --model haiku","portBase":31000}}`)
+	goInit(t, dir, InitOpts{Slots: 2, Base: "main"})
+	f := tmuxFake()
+	round := 3
+	if _, err := envWith(f).Dispatch(bg, dir, DispatchOpts{Slot: "w2", BodyFile: writeBrief(t, "x\n"), Task: "T1", Round: &round}); err != nil {
+		t.Fatal(err)
+	}
+	want := "ROTA_SLOT=w2,ROTA_PORT_BASE=31100,ROTA_DB_SUFFIX=_w2"
+	if got := strings.Join(f.spawnOpts.Env, ","); got != want {
+		t.Errorf("spawn env = %q, want %q", got, want)
+	}
+}
+
 func TestDispatchTaskRecreatesTheSession(t *testing.T) {
 	dir := newProject(t, `{"work":{"workerCommand":"claude --model haiku"}}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})

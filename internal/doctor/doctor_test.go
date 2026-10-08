@@ -609,3 +609,49 @@ func TestAgentsCheck(t *testing.T) {
 		t.Fatalf("%+v", c)
 	}
 }
+
+func portsInput(f *fake, cwd map[int]string) Input {
+	return Input{
+		Slots: []SlotBlock{{Name: "w1", Worktree: "/p/.worktrees/w1", Base: 20000, Size: 100}, {Name: "w2", Worktree: "/p/.worktrees/w2", Base: 20100, Size: 100}},
+		CwdOf: func(pid int) string { return cwd[pid] },
+		Exec:  f.exec, Look: f.look,
+	}
+}
+
+const ssOut = `LISTEN 0 511 127.0.0.1:20042 0.0.0.0:* users:(("node",pid=77,fd=19))
+LISTEN 0 511 *:20150 *:* users:(("node",pid=78,fd=19))
+LISTEN 0 128 0.0.0.0:22 0.0.0.0:* users:(("sshd",pid=5,fd=3))
+`
+
+func TestPortsWarnsOnForeignListenerInASlotBlock(t *testing.T) {
+	f := &fake{have: map[string]bool{"ss": true}, reply: map[string]Result{"ss -ltnpH": {Stdout: ssOut}}}
+	// pid 77 runs in w1's own worktree; pid 78 sits in w2's block but lives in w1's worktree.
+	in := portsInput(f, map[int]string{77: "/p/.worktrees/w1/web", 78: "/p/.worktrees/w1"})
+	c := statusOf(Run(context.Background(), in), "ports")
+	if c.Status != Warn || !strings.Contains(c.Detail, "20150") || !strings.Contains(c.Detail, "w2") || strings.Contains(c.Detail, "20042") {
+		t.Errorf("ports = %+v, want one warn naming 20150 in w2 only", c)
+	}
+}
+
+func TestPortsQuietWhenListenersBelongToTheirSlot(t *testing.T) {
+	f := &fake{have: map[string]bool{"ss": true}, reply: map[string]Result{"ss -ltnpH": {Stdout: ssOut}}}
+	in := portsInput(f, map[int]string{77: "/p/.worktrees/w1", 78: "/p/.worktrees/w2/x"})
+	if c := statusOf(Run(context.Background(), in), "ports"); c.Name != "" {
+		t.Errorf("ports line = %+v, want none", c)
+	}
+}
+
+func TestPortsFallsBackToLsofAndTreatsUnknownOwnerAsForeign(t *testing.T) {
+	f := &fake{have: map[string]bool{"lsof": true}, reply: map[string]Result{"lsof -nP -iTCP -sTCP:LISTEN -Fpn": {Stdout: "p91\nn*:20003\n"}}}
+	c := statusOf(Run(context.Background(), portsInput(f, nil)), "ports")
+	if c.Status != Warn || !strings.Contains(c.Detail, "20003") {
+		t.Errorf("ports = %+v, want a warn naming 20003", c)
+	}
+}
+
+func TestPortsSkipsWithoutAScanner(t *testing.T) {
+	f := &fake{have: map[string]bool{}}
+	if c := statusOf(Run(context.Background(), portsInput(f, nil)), "ports"); c.Name != "" {
+		t.Errorf("ports line = %+v, want none", c)
+	}
+}

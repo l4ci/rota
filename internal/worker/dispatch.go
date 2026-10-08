@@ -273,8 +273,13 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 			// The old session was killed and its handle cleared on the way here.
 			return res, resetRefusal(err, true)
 		}
+		portStart, portBlock := PortRange(config.Load(rotatree.Config(root)))
+		portBase, err := EnsurePortBase(root, o.Slot, portStart, portBlock)
+		if err != nil {
+			return res, fail(exitcode.ExitUnavailable, err.Error())
+		}
 		handle, err = h.Spawn(ctx, host.SpawnOpts{Slot: o.Slot, Session: session, Cwd: worktree,
-			ConfigDir: configDir, CodexHome: codexHome, Launch: launch, BootTimeout: timeout})
+			ConfigDir: configDir, CodexHome: codexHome, Env: SlotEnv(o.Slot, portBase), Launch: launch, BootTimeout: timeout})
 		if err != nil {
 			clearHandle(root, o.Slot)
 			return res, fail(exitcode.ExitUnavailable, err.Error())

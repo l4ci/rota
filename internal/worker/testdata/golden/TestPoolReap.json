@@ -1,14 +1,1 @@
-{
-  "inputs": {
-    "config": "{}",
-    "steps": [
-      "init --slots 3 --base main",
-      "reap --slot w2",
-      "reap --all"
-    ]
-  },
-  "outputs": {
-    "after reap --all": "{\n  \"session\": \"rota\",\n  \"slots\": []\n}\n",
-    "after reap w2": "{\n  \"session\": \"rota\",\n  \"slots\": [\n    {\n      \"name\": \"w1\",\n      \"branch\": \"rota-worker/w1\",\n      \"worktree\": \"ROOT/.worktrees/w1\",\n      \"base\": \"main\",\n      \"handle\": \"rota:w1\",\n      \"state\": \"idle\",\n      \"task\": null,\n      \"pr\": null,\n      \"relays\": [],\n      \"configDir\": null\n    },\n    {\n      \"name\": \"w3\",\n      \"branch\": \"rota-worker/w3\",\n      \"worktree\": \"ROOT/.worktrees/w3\",\n      \"base\": \"main\",\n      \"handle\": \"rota:w3\",\n      \"state\": \"idle\",\n      \"task\": null,\n      \"pr\": null,\n      \"relays\": [],\n      \"configDir\": null\n    }\n  ]\n}\n"
-  }
-}
+{"inputs":{"config":"{}","steps":["init --slots 3 --base main","reap --slot w2","reap --all"]},"outputs":{"after reap --all":"{\n  \"session\": \"rota\",\n  \"slots\": []\n}\n","after reap w2":"{\n  \"session\": \"rota\",\n  \"slots\": [\n    {\n      \"name\": \"w1\",\n      \"branch\": \"rota-worker/w1\",\n      \"worktree\": \"ROOT/.worktrees/w1\",\n      \"base\": \"main\",\n      \"handle\": \"rota:w1\",\n      \"state\": \"idle\",\n      \"task\": null,\n      \"pr\": null,\n      \"relays\": [],\n      \"configDir\": null,\n      \"portBase\": 20000\n    },\n    {\n      \"name\": \"w3\",\n      \"branch\": \"rota-worker/w3\",\n      \"worktree\": \"ROOT/.worktrees/w3\",\n      \"base\": \"main\",\n      \"handle\": \"rota:w3\",\n      \"state\": \"idle\",\n      \"task\": null,\n      \"pr\": null,\n      \"relays\": [],\n      \"configDir\": null,\n      \"portBase\": 20200\n    }\n  ]\n}\n"}}

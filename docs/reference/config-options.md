@@ -128,6 +128,8 @@ Every key, by group. Default is what a missing key reads as; Values lists the al
 | `work.codexAccounts` | list | `[]` |  | Codex homes for Codex workers, as {name, codexHome} objects, the counterpart of work.accounts. Empty: the default Codex home. Machine-specific, so set it in config.local.json. |
 | `work.codexCommand` | string | unset |  | Command that starts a Codex worker session. Empty builds the default codex command, with --model from the tier when one is chosen; {model} receives it. |
 | `work.envSetup` | string | unset |  | Shell command rota worker pool init runs in each new slot worktree, for example npm ci. Empty: no setup. |
+| `work.portBase` | int | `20000` |  | First port of the range rota hands out to worker slots. Slot n gets ROTA_PORT_BASE = portBase + n * portBlock. |
+| `work.portBlock` | int | `100` |  | Ports reserved per worker slot, so servers started by two slots never collide. A slot's block is exported as ROTA_PORT_BASE. |
 | `work.tdd` | bool | `true` |  | Whether /rota-work and workers require a recorded red-first run before a behavior change. Off skips the RED requirement. |
 | `work.itemTimeoutMinutes` | int | `0` |  | Minutes one item may run from its first assignment before rota round reconcile reports it as timed out and --apply parks it as needs-human. 0 means no cap. |
 

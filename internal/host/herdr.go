@@ -259,6 +259,9 @@ func (h *herdr) Spawn(ctx context.Context, o SpawnOpts) (string, error) {
 	for _, e := range hz.AccountEnv(harness.Account{ConfigDir: o.ConfigDir, CodexHome: o.CodexHome}) {
 		args = append(args, "--env", e)
 	}
+	for _, e := range o.Env {
+		args = append(args, "--env", e)
+	}
 	r := h.herdr(ctx, args...)
 	if r.ExitCode != 0 {
 		return "", fmt.Errorf("herdr tab create failed for slot '%s': %s", o.Slot, strings.TrimSpace(r.Stderr))

@@ -1,9 +1,10 @@
 ---
-verified-sha: 4d0f319a6726a085f3fc35e8de1d0eaf6940cdfa
+verified-sha: 14c29a1717a61c4824734bd37ee72e6ffe3a32d8
 refs:
   - internal/worker
   - internal/cli/worker.go
   - internal/tracker
+  - internal/host
 ---
 
 ## A7: workers, hosts, accounts
@@ -18,6 +19,8 @@ shim: runs the old helper, then reads `.rota/workers.json` for `data`; `changed`
 note: --base defaults to the current branch and --session to `rota`, as the old helper does.
 note: `warnings` gets one entry when `.worktrees/` is not gitignored, and one per registered slot outside `.worktrees/` that is kept in place (old `warning:` and `note:` stderr lines).
 note: `work.envSetup` (#398, silent default empty = no-op) is a shell command run in each slot worktree after the slot is registered, with that worktree as cwd. It runs when the hash of the command and the root lockfiles (package-lock.json, pnpm-lock.yaml, yarn.lock, uv.lock, poetry.lock, requirements*.txt, go.sum) differs from `rota-env-setup` in the worktree's git dir (so: on a new slot, and on an existing one whose lockfiles or command changed), and writes that hash only after a zero exit. A non-zero exit stops the verb at that slot with exit 1 and a message naming the slot, the exit code, the command and its output; later slots are not set up, and the failed slot stays registered so the next `pool init` retries it.
+
+note: (#576) each slot also reserves a port block: `pool init` records `portBase` on the slot, the lowest `work.portBase` (default 20000) plus a multiple of `work.portBlock` (default 100) that no other registered slot holds, picked under the registry lock. A slot that has one keeps it; `pool reap` frees it with the slot. `work.envSetup` runs with `ROTA_SLOT`, `ROTA_PORT_BASE` and `ROTA_DB_SUFFIX` (`_` plus the slot name, non-alphanumerics as `_`) exported ahead of the command. `rota doctor` adds a `ports` check (`warn`, never `fail`): for each live slot with a block it reads the TCP listeners (`ss -ltnpH`, else `lsof -nP -iTCP -sTCP:LISTEN -Fpn`) and warns on one inside the block whose process working directory is outside the slot's worktree or unreadable. No `ss` and no `lsof`, or no live slot, adds no line.
 
 ### rota worker pool list
 rota worker pool list
@@ -57,6 +60,7 @@ note: `<slot>` replaces the old `--slot`. Fresh-session dispatch is the default;
 note: (#511) on herdr, task and relay dispatch read the agent's `state_change_seq` (`herdr agent get`) just before the brief goes out and record it as the slot's `turnSeq` in `.rota/workers.json` (an optional number). A turn finished after the brief carries a `completion_seq` past it, which `worker poll` and `round wait` read as finished. The baseline is the state number, not `completion_seq`: herdr omits `completion_seq` while the agent works and after startup, so a fresh session has none to record. A failing read, a herdr without the field, or tmux records none and clears an old one.
 note: (#391) before typing, both hosts read the prompt line and wait about 4s (3 reads, 2s apart) for a human draft to clear; if text that is not rota's own unsent brief or a placeholder is still there, dispatch exits 5 (`unavailable`, same as a dialog) and types nothing. A refused relay is not logged in `relays`. The read keeps styling (`herdr agent read --format ansi`, `tmux capture-pane -e`) and drops faint (SGR 2) and gray-foreground runs first, so Claude Code's dim ghost suggestion is not a draft; if the styled read fails, plain text is used.
 note: "never submitted" (safe to resend) and "dialog open" (inspect first) get distinct `error.code` values. The conventions fix `error.code` to the exit-table name, so per-verb codes are not allowed, and the verb uses two exits instead: `retry` (6) for a brief that was never submitted, `unavailable` (5) for an open dialog. The message and hint still say which.
+note: (#576) a task dispatch reserves the slot's port block if it has none, then starts the session with `ROTA_SLOT`, `ROTA_PORT_BASE` and `ROTA_DB_SUFFIX` in its environment: herdr passes them as `--env KEY=VALUE` on `tab create` (verified against `herdr tab create --help`, which lists `--env <KEY=VALUE>`), tmux prefixes them to the launch line typed into the window. A relay changes nothing.
 note: `--kind` (E1, #68) defaults to the slot's recorded `kind`, else `claude`; a relay ignores it. A codex dispatch is specified under "E: Codex workers". hv-codex-verify is not absorbed: #158 retired it.
 
 ### rota worker reply

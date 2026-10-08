@@ -47,6 +47,14 @@ Work only this task, then stop.
 - Never dispatch a reviewer subagent or run `/rota-review` on your own branch.
   Review is the orchestrator's seat (the merge gate); a worker-side review
   duplicates it. Verify with targeted checks, then open the PR.
+- Ports and databases. Your environment carries `ROTA_SLOT`, `ROTA_PORT_BASE` and
+  `ROTA_DB_SUFFIX`. Anything you start that listens (a dev server, a test server, a
+  browser debug port) binds a port from `ROTA_PORT_BASE` up to `ROTA_PORT_BASE + 99`
+  (the block is `work.portBlock` wide), never a fixed default; anything that stores
+  (a database, a cache dir, a queue) takes `${ROTA_DB_SUFFIX}` in its name. Another
+  worker is running beside you on the same machine, and a shared port or database is
+  how two green branches turn each other red. If the project's tooling cannot honour the
+  variables, say so in your PR instead of changing its test suite.
 - Stay in your worktree. Confirm `pwd` before editing and use worktree-rooted
   paths. An absolute path under the main checkout silently edits the WRONG tree.
 - Stage explicit paths. Never `git add -A` or `git add .`.

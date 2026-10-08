@@ -1,14 +1,1 @@
-{
-  "inputs": {
-    "config": "{}",
-    "pool": "init --slots 1 --base main",
-    "steps": [
-      "reset --slot w1 --task T4",
-      "write wip.txt in w1, record task T4 on the slot",
-      "reset --slot w1 --task T4"
-    ]
-  },
-  "outputs": {
-    "workers.json": "{\n  \"session\": \"rota\",\n  \"slots\": [\n    {\n      \"name\": \"w1\",\n      \"branch\": \"rota-worker/w1-t4\",\n      \"worktree\": \"ROOT/.worktrees/w1\",\n      \"base\": \"main\",\n      \"handle\": \"rota:w1\",\n      \"state\": \"idle\",\n      \"task\": \"T4\",\n      \"pr\": null,\n      \"relays\": [],\n      \"configDir\": null\n    }\n  ]\n}\n"
-  }
-}
+{"inputs":{"config":"{}","pool":"init --slots 1 --base main","steps":["reset --slot w1 --task T4","write wip.txt in w1, record task T4 on the slot","reset --slot w1 --task T4"]},"outputs":{"workers.json":"{\n  \"session\": \"rota\",\n  \"slots\": [\n    {\n      \"name\": \"w1\",\n      \"branch\": \"rota-worker/w1-t4\",\n      \"worktree\": \"ROOT/.worktrees/w1\",\n      \"base\": \"main\",\n      \"handle\": \"rota:w1\",\n      \"state\": \"idle\",\n      \"task\": \"T4\",\n      \"pr\": null,\n      \"relays\": [],\n      \"configDir\": null,\n      \"portBase\": 20000\n    }\n  ]\n}\n"}}

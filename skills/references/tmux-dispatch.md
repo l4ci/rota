@@ -66,6 +66,8 @@ The two roles run at different trust levels, on purpose:
 
 **Narrowing it.** Point `work.workerCommand` at a settings file that allowlists just what the contract needs (`claude --settings <file>` with `permissions.allow` covering `git add`, `git commit`, `gh pr create`, and the project's test runner). Workers get autonomy for the operations they were briefed to perform and nothing else, at the cost of maintaining the list.
 
+**Slot environment.** The launch line typed into the window starts with `ROTA_SLOT=<slot> ROTA_PORT_BASE=<n> ROTA_DB_SUFFIX=_<slot>`, so the agent and every process it starts see the slot's port block and database suffix (`work.portBase`, `work.portBlock`). herdr passes the same three as `--env` on `tab create`.
+
 **Multi-account caveat.** Entering skip-permissions mode can itself prompt for confirmation, and that acknowledgement is per config dir. A slot pointed at a **fresh** `CLAUDE_CONFIG_DIR` (see *Accounts*) may therefore stall at boot on a dir where the ambient one is fine. Set `skipDangerousModePermissionPrompt: true` in each account's `settings.json` when provisioning it, or the first dispatch to that slot reports `needs-permission` before doing any work.
 
 ## Accounts
