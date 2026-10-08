@@ -1,9 +1,11 @@
 ---
-verified-sha: 4d0f319a6726a085f3fc35e8de1d0eaf6940cdfa
+verified-sha: 4020f46346bb0bd5e8b9b3ab898c5abd99e72382
 refs:
   - internal/round
   - internal/roundcfg
   - internal/cli/round.go
+  - internal/cli/round_start.go
+  - internal/hook
   - internal/doctor
   - internal/roundtick
   - internal/roundwatch
@@ -155,7 +157,7 @@ note: the account is not chosen here: it is chosen per assignment (see `assign`)
 note: (#29) scope `open` is every open item no slot or review record holds and, in issues mode, nobody outside the round has taken (`candidates` drops an issue carrying `in-progress` or an open claim); readiness and overlap order it, so the round takes newly ready issues without a restart. Without `--scope`, `--items` means `slate`; a start that renews this holder's lease keeps the recorded scope and slate; a new round takes `round.scope`. `--scope` always replaces them, so `--scope slate --items …` re-run is how a slate round adds items.
 note: `noVerify` is true when `test.full` and `test.e2e` are both empty under a local verify; start then warns on stderr that the merge gate will refuse until `test.full` is set (#493).
 note: `--holder-pid` overrides the discovered orchestrator pid for a harness whose process ancestry cannot be read.
-note: `handoff` (#621) is the orchestrator note `/rota-pause` left at `.rota/handoff/<base>.md`, the path the opt-in hooks read, reported on a fresh start and a rejoin alike when its first line is `<!-- rota-handoff: orchestrator -->`; `heading` is its first Markdown heading. The text output adds a `handoff` line. A plain start leaves the note in place; `--consume-handoff` then moves it to `<note>.consumed` (the SessionStart hook's own archive, so a second start reports nothing) and sets `consumed: true`.
+note: `handoff` (#621) is the orchestrator note `/rota-pause` left at `.rota/handoff/<base>.md`, the path the opt-in hooks read, reported on a fresh start and a rejoin alike when its first line is `<!-- rota-handoff: orchestrator -->`; `heading` is its first Markdown heading. The text output adds a `handoff` line. A plain start leaves the note in place; `--consume-handoff` then moves it to `<note>.consumed` (the SessionStart hook's own archive, so a second start reports nothing) and sets `consumed: true`. A note that cannot be read, or cannot be archived under `--consume-handoff`, is reported as a warning on stderr; a failed archive leaves the note in place, omits `consumed` and the text line reads `consume failed: note left in place`.
 note: a round slot is registered with no `handle`, on every host: a nominal tmux handle would read as a `dead-tab` to `reconcile` before anything was dispatched. `dispatch` records the real handle.
 note: `--slots` only grows the pool: roster slots already registered stay, as with `pool init`.
 
