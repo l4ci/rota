@@ -329,22 +329,20 @@ func (t *tmux) SendPane(ctx context.Context, pane, text string) error {
 	return nil
 }
 
-// paneEnv names the variable that holds the current pane id for a host kind.
-var paneEnv = map[string]string{"herdr": "HERDR_PANE_ID", "tmux": "TMUX_PANE"}
-
 // CurrentPane returns the pane this process runs in under the host kind, ""
-// when the environment names none or the kind has no panes.
+// when the environment names none. herdr reads HERDR_PANE_ID; every other kind
+// (tmux, and solo inside tmux) reads TMUX_PANE.
 func CurrentPane(kind string, getenv func(string) string) string {
-	if v, ok := paneEnv[kind]; ok {
-		return getenv(v)
+	if kind == Herdr {
+		return getenv("HERDR_PANE_ID")
 	}
-	return ""
+	return getenv("TMUX_PANE")
 }
 
 // CurrentPaneAny is CurrentPane when the host kind is unknown: herdr first,
 // then tmux. It returns the pane and the kind that named it.
 func CurrentPaneAny(getenv func(string) string) (pane, kind string) {
-	for _, k := range []string{"herdr", "tmux"} {
+	for _, k := range []string{Herdr, Tmux} {
 		if p := CurrentPane(k, getenv); p != "" {
 			return p, k
 		}
