@@ -2,7 +2,7 @@
 
 Loaded by `skills/rota-orchestrate/SKILL.md` section 6 when several PRs wait, or when `ship.mergeApproval` requires approval.
 
-With several PRs waiting, merge them as one train: `rota worker train <slot|PR>... --base <branch>` in landing order. One verify covers all of them. On a red train it names the `culprit`: send that PR back, then re-run the train without it, or pass `--land-green` to land the members that verified before it. `base-moved` means nothing landed; re-run.
+With several PRs waiting, merge them as one train: `rota worker train <slot|PR>... --base <branch>`. The train picks the merge order itself (argument order is ignored): members sharing no path first, then the rest smallest diff first, printed as `ORDER` lines before anything is pushed. Pass `--order 12,15,9` (PR numbers, `#N` or slots) when one PR depends on another and must land first. Exit 4 `blockedBy: order` means the shared-path members conflict: nothing was pushed; have a PR rebased onto the other's merge, or split them into separate trains. One verify covers all of them. On a red train it names the `culprit`: send that PR back, then re-run the train without it, or pass `--land-green` to land the members that verified before it. `base-moved` means nothing landed; re-run.
 
 Merge policy comes from config (`ship.mergeApproval`). With the default, the gate merges a passing PR. When policy requires approval (all PRs, or PRs touching listed paths):
 
