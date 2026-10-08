@@ -80,6 +80,8 @@ type ReviewOutcome struct {
 	// Hold keeps the slot from merging this tick: a Pending outcome under
 	// round.reviewLoop auto (the item is at the cap, the relay or the poll
 	// failed). Under manual a Pending outcome is a report only; the gate runs.
+	// Hold without Pending holds the slot silently: the poll failed, and the
+	// caller has already warned.
 	Hold   bool
 	Detail string
 }
@@ -201,6 +203,8 @@ func Run(ctx context.Context, e Env) (Result, error) {
 					if out.Hold {
 						continue
 					}
+				case out.Hold: // a failed poll: held without an item, the caller warned
+					continue
 				}
 			}
 			targets = append(targets, s.Name)

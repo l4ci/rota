@@ -324,8 +324,8 @@ func tickLines(r roundtick.Result) string {
 // the orchestrator runs review-relay, the gate runs as before. Under auto a
 // relay that cannot go out (the item is at the bounce cap, the host refused) or
 // a poll that failed holds the slot, so the autopilot never merges over review
-// input it could not hand back. A failed poll is an item either way, never a
-// silent pass.
+// input it could not hand back. A failed poll is a warning either way, never a
+// silent pass and never a tick item.
 func reviewStep(c *Ctx, root string, set roundcfg.Settings, slot string) roundtick.ReviewOutcome {
 	ctx := c.Context()
 	auto := set.ReviewLoop == roundcfg.ReviewLoopAuto
@@ -335,13 +335,17 @@ func reviewStep(c *Ctx, root string, set roundcfg.Settings, slot string) roundti
 	}
 	// The detail stays the same from pass to pass, or the watch would wake on it
 	// every time; the error text goes to stderr.
+	pollFailed := func(err error) roundtick.ReviewOutcome {
+		c.Warn("review poll of %s: %v", slot, err)
+		return roundtick.ReviewOutcome{Hold: auto}
+	}
 	failed := func(why string, err error) roundtick.ReviewOutcome {
 		c.Warn("review poll of %s: %v", slot, err)
 		return roundtick.ReviewOutcome{Pending: true, Hold: auto, Detail: fmt.Sprintf("%s %s: run `rota round review-relay %s` for the error", why, pr, slot)}
 	}
 	o, err := reviewOpts(c, root, set, slot)
 	if err != nil {
-		return failed("review poll failed", err)
+		return pollFailed(err)
 	}
 	if !auto {
 		s := worker.LoadRegistry(root).Slot(slot)
@@ -349,13 +353,13 @@ func reviewStep(c *Ctx, root string, set roundcfg.Settings, slot string) roundti
 			return roundtick.ReviewOutcome{}
 		}
 		if info, err := o.Forge.PRView(ctx, mustPRNumber(s.PR())); err != nil {
-			return failed("review poll failed", err)
+			return pollFailed(err)
 		} else if !strings.EqualFold(info.State, "OPEN") {
 			return roundtick.ReviewOutcome{}
 		}
 		b, err := worker.PendingReview(ctx, o.Forge, s, o.Verdict)
 		if err != nil {
-			return failed("review poll failed", err)
+			return pollFailed(err)
 		}
 		if b.Empty() {
 			return roundtick.ReviewOutcome{}
@@ -375,7 +379,7 @@ func reviewStep(c *Ctx, root string, set roundcfg.Settings, slot string) roundti
 		return roundtick.ReviewOutcome{Pending: true, Hold: true, Detail: fmt.Sprintf("%d item(s) waiting on %s; the item is at the bounce cap", res.Items, pr)}
 	}
 	if res.Items == 0 { // the poll itself failed
-		return failed("review poll failed", err)
+		return pollFailed(err)
 	}
 	return failed(fmt.Sprintf("%d item(s) not relayed", res.Items), err)
 }
