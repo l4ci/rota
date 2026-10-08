@@ -1,5 +1,5 @@
 ---
-verified-sha: 4d0f319a6726a085f3fc35e8de1d0eaf6940cdfa
+verified-sha: 7120038c42152f61692d37b8101f7e0556b7217d
 refs:
   - internal/round
   - internal/roundcfg
