@@ -23,7 +23,7 @@ With `CODEX_HOME` unset, run `codex debug prompt-input hi` in a scratch repo. It
 
 ## Skill directories
 
-Install the skills with `rota skills install` as above; that is the supported route for Codex today.
+Install the skills with `rota skills install` as above; that is the route rota keeps up to date. `npx skills add l4ci/rota` also works (below).
 
-- **skills.sh** lists a repo only after someone installs it with the `skills` CLI (`npx skills add <owner/repo>`), which reports anonymous install telemetry. It has no submission form. rota is not listed there yet. Checked on 2026-10-08.
+- **skills.sh** lists a repo once someone installs it with the `skills` CLI. It has no submission form. `npx skills add l4ci/rota` is the common install route and puts the skills in `.agents/skills`, where Codex reads them. It sends anonymous install telemetry, and writes no `.rota-manifest.json`, so `rota skills status` and `update` do not track the copies. rota is listed at [skills.sh/l4ci/rota](https://skills.sh/l4ci/rota) (checked 2026-10-08, after one clean-environment run of that command).
 - **openai/skills** is marked deprecated in its README, which points to [openai/plugins](https://github.com/openai/plugins) and the [Build plugins](https://developers.openai.com/codex/plugins/build) guide. Its `skills/` tree has `.curated` and `.system` and no community tier. Checked on 2026-10-08.
