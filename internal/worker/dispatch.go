@@ -158,6 +158,11 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 	if err := SoloRefusal(root, "rota round assign hands a slot its brief and rota round report records the result"); err != nil {
 		return res, err
 	}
+	if s := LoadRegistry(root).Slot(o.Slot); s != nil && s.IsExternal() {
+		e := fail(exitcode.ExitRefused, "external slot has no host")
+		e.Data = BlockData{BlockedBy: "host"}
+		return res, e
+	}
 	brief, err := os.ReadFile(o.BodyFile)
 	if err != nil {
 		return res, fail(exitcode.ExitResolution, "body file not found: "+o.BodyFile)
