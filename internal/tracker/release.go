@@ -7,6 +7,8 @@ import (
 	"io"
 	"strconv"
 	"strings"
+
+	"github.com/l4ci/rota/internal/strutil"
 )
 
 // PRSpec is a pull request (GitLab: merge request) to open. Base is read only
@@ -61,19 +63,10 @@ func (b *base) lastLine(ctx context.Context, args []string, stdin string, fail f
 	return last, nil
 }
 
-func firstLine(s string) string {
-	for _, l := range strings.Split(s, "\n") {
-		if l = strings.TrimSpace(l); l != "" {
-			return l
-		}
-	}
-	return ""
-}
-
 // prFail words a failed PR create: "<cli> <verb> exited <code>: <first line>".
 func prFail(what string) failWith {
 	return func(code int, stderr string) string {
-		return fmt.Sprintf("%s exited %d: %s", what, code, firstLine(stderr))
+		return fmt.Sprintf("%s exited %d: %s", what, code, strutil.FirstLine(stderr))
 	}
 }
 
