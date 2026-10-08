@@ -463,8 +463,12 @@ func alwaysNews(state string) bool {
 func recordRow(s *Slot, r PollRow, now time.Time) error {
 	// A state change is the registry's only record of activity that is not a
 	// commit or an edit: `round reconcile` reads it as the stall clock.
+	prev := s.State()
 	if err := s.MarkState(r.State, stamp(now)); err != nil {
 		return err
+	}
+	if r.State == StateDone && !strings.EqualFold(prev, "done") {
+		s.BaselineReview(now)
 	}
 	if s.Seen() != seenKey(r.State, r.Evidence) {
 		s.ClearSeen()

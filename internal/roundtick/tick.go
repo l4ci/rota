@@ -77,7 +77,11 @@ type Merged struct {
 // Detail saying why.
 type ReviewOutcome struct {
 	Relayed, Pending bool
-	Detail           string
+	// Hold keeps the slot from merging this tick: a Pending outcome under
+	// round.reviewLoop auto (the item is at the cap, the relay or the poll
+	// failed). Under manual a Pending outcome is a report only; the gate runs.
+	Hold   bool
+	Detail string
 }
 
 // Env is the outside world of a tick.
@@ -112,8 +116,8 @@ type Env struct {
 	// review. The minted items are assigned first, within the same cap.
 	Review func(ctx context.Context) (minted []string, err error)
 	// ReviewLoop checks a done slot's PR for review input (round.reviewLoop);
-	// nil means the round has no review loop. A slot it relays or reports is not
-	// merged this tick.
+	// nil means the round has no review loop. A slot it relays, or holds, is not
+	// merged this tick; one it only reports (manual) is gated as before.
 	ReviewLoop func(ctx context.Context, s Slot) ReviewOutcome
 	// Audit records one action in the audit log.
 	Audit func(Action)
@@ -194,7 +198,9 @@ func Run(ctx context.Context, e Env) (Result, error) {
 					continue
 				case out.Pending:
 					r.NeedsYou = append(r.NeedsYou, Item{"review", s.Name, out.Detail})
-					continue
+					if out.Hold {
+						continue
+					}
 				}
 			}
 			targets = append(targets, s.Name)

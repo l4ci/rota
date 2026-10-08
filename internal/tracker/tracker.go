@@ -143,6 +143,8 @@ const (
 type Review struct {
 	Comment
 	State string
+	// Inline is true for an inline diff comment, false for a submitted review.
+	Inline bool
 }
 
 // Milestone is a native milestone. Number is what the forge's milestone API

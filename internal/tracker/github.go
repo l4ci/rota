@@ -386,7 +386,7 @@ func (g *GitHub) Reviews(ctx context.Context, number int) ([]Review, error) {
 		out = append(out, rv)
 	}
 	for _, c := range inline {
-		rv := Review{Comment: Comment{ID: idText(c.ID), Body: c.Body, CreatedAt: parseTime(c.CreatedAt)}, State: ReviewCommented}
+		rv := Review{Comment: Comment{ID: idText(c.ID), Body: c.Body, CreatedAt: parseTime(c.CreatedAt)}, State: ReviewCommented, Inline: true}
 		if c.User != nil {
 			rv.Author = c.User.Login
 		}

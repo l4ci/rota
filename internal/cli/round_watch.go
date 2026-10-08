@@ -141,14 +141,20 @@ func watchForge(ctx context.Context, c *Ctx, root string) map[string]string {
 			}
 		}
 	}
-	if set, err := roundcfg.Load(root); err == nil {
-		for _, s := range worker.LoadRegistry(root).Slots() {
-			if s.PR() == "" || !strings.EqualFold(s.State(), "done") {
-				continue
-			}
-			if o := reviewStep(c, root, set, s.Name()); o.Pending {
-				out[roundwatch.ReviewKey(s.Name())] = o.Detail
-			}
+	set, err := roundcfg.Load(root)
+	if err != nil {
+		if !c.reviewSkipNoted {
+			c.reviewSkipNoted = true
+			c.Warn("review poll skipped: round config does not load: %v", err)
+		}
+		return out
+	}
+	for _, s := range worker.LoadRegistry(root).Slots() {
+		if s.PR() == "" || !strings.EqualFold(s.State(), "done") {
+			continue
+		}
+		if o := reviewStep(c, root, set, s.Name()); o.Pending {
+			out[roundwatch.ReviewKey(s.Name())] = o.Detail
 		}
 	}
 	return out

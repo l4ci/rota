@@ -32,13 +32,14 @@ func TestWorkerReplyRefusals(t *testing.T) {
 	doneSlot(t, dir)
 	deps := useReviewForge(&reviewForge{})
 	os.WriteFile(filepath.Join(dir, "empty.md"), []byte("  \n"), 0o644)
+	os.WriteFile(filepath.Join(dir, "body.md"), []byte("Fixed.\n"), 0o644)
 	if code, _, _ := rotaInWith(t, deps, dir, "worker", "reply", "nia", "--body-file", "empty.md"); code != 2 {
 		t.Errorf("empty body: %d, want 2", code)
 	}
 	if code, _, _ := rotaInWith(t, deps, dir, "worker", "reply", "nia"); code != 2 {
 		t.Errorf("no body file: %d, want 2", code)
 	}
-	if code, _, _ := rotaInWith(t, deps, dir, "worker", "reply", "zed", "--body-file", "empty.md"); code != 2 && code != 3 {
-		t.Errorf("unknown slot: %d", code)
+	if code, _, _ := rotaInWith(t, deps, dir, "worker", "reply", "zed", "--body-file", "body.md"); code != 3 {
+		t.Errorf("unknown slot: %d, want 3", code)
 	}
 }
