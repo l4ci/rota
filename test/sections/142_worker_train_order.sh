@@ -25,6 +25,21 @@ RC=0; tor worker train o1 o2 o3 --base main --order o1,o2,o2 >/dev/null || RC=$?
 [ "$RC" = "2" ] || fail "--order repeating a member should exit 2: rc=$RC"
 pass "--order that does not name every member once is a usage error"
 
+# An empty token and a #N token naming no member are usage errors too (local slots have no PR).
+RC=0; tor worker train o1 o2 o3 --base main --order o1,,o3 >/dev/null || RC=$?
+[ "$RC" = "2" ] && [ ! -f "$TOPROJ/o3.txt" ] || fail "--order with an empty token should exit 2 and land nothing: rc=$RC"
+case "$(cat "$TMP_TO/err")" in *"no empty entries"*) ;; *) fail "the empty-token error should name the rule: $(cat "$TMP_TO/err")" ;; esac
+RC=0; tor worker train o1 o2 o3 --base main --order '#7,o2,o3' >/dev/null || RC=$?
+[ "$RC" = "2" ] && [ ! -f "$TOPROJ/o3.txt" ] || fail "--order with a #N token matching no member should exit 2: rc=$RC"
+pass "--order rejects empty tokens and #N tokens that match no member"
+
+# --order replaces the computed order (which would put o3 first); reset main afterwards.
+RC=0; OUT=$(tor worker train o1 o2 o3 --base main --order o1,o2,o3) || RC=$?
+[ "$RC" = "0" ] && [ "$(echo "$OUT" | jget 'data.landed[0]')" = "o1" ] && [ "$(echo "$OUT" | jget 'data.landed[2]')" = "o3" ] \
+  || fail "--order o1,o2,o3 should land in that order: rc=$RC $OUT"
+(cd "$TOPROJ" && git reset -q --hard "$(git rev-list --max-parents=0 main)") || fail "resetting main after the override run failed"
+pass "--order overrides the computed order"
+
 # The computed order puts the isolated member first, then the smaller shared diff, and says why.
 RC=0; OUT=$(tor worker train o1 o2 o3 --base main) || RC=$?
 [ "$RC" = "0" ] && [ "$(echo "$OUT" | jget 'data.order[0]')" = "o3: no shared paths" ] \
