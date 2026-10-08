@@ -92,8 +92,8 @@ type Env struct {
 
 // DefaultEnv reads the real host, process table and clock.
 func DefaultEnv() Env {
-	host, _ := os.Hostname()
-	return Env{Host: host, Alive: pidlive.Alive, StartTime: procStart, Now: time.Now}
+	name, _ := os.Hostname()
+	return Env{Host: name, Alive: pidlive.Alive, StartTime: procStart, Now: time.Now}
 }
 
 // Path is the lease file under a common dir.
@@ -118,8 +118,8 @@ func (e Env) ProcessLive(pid int, start uint64) bool {
 // watch, limit watch, keepalive): the owner is on this host, its pid is alive
 // and still the recorded process. A marker from before hosts were recorded
 // (empty host) is taken as local. Nothing can be checked about another host's.
-func (e Env) Running(host string, pid int, start uint64) bool {
-	if pid <= 0 || (host != "" && host != e.Host) {
+func (e Env) Running(hostName string, pid int, start uint64) bool {
+	if pid <= 0 || (hostName != "" && hostName != e.Host) {
 		return false
 	}
 	return e.ProcessLive(pid, start)

@@ -174,7 +174,7 @@ func TestCurrentPaneByKind(t *testing.T) {
 		{"tmux", "tmux", both, "%3"},
 		{"neither", "herdr", none, ""},
 		{"neither tmux", "tmux", none, ""},
-		{"solo has no panes", Solo, both, ""},
+		{"solo falls back to tmux", Solo, both, "%3"},
 	} {
 		if got := CurrentPane(tc.kind, tc.env); got != tc.want {
 			t.Errorf("%s: CurrentPane(%q) = %q, want %q", tc.name, tc.kind, got, tc.want)
