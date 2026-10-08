@@ -20,3 +20,10 @@ Not covered: skill bodies still name Claude Code tools (`AskUserQuestion`, `Agen
 ## Checking discovery
 
 With `CODEX_HOME` unset, run `codex debug prompt-input hi` in a scratch repo. It prints the model-visible input, skills included, without starting a model session. Each `rota-*` skill should appear as `rota-x: <description>`. It reads your own `~/.codex` and writes nothing to the project. `rota doctor` checks that your Codex version is in the supported range, and that installed skills match the binary.
+
+## Skill directories
+
+Install the skills with `rota skills install` as above; that is the supported route for Codex today.
+
+- **skills.sh** lists a repo only after someone installs it with the `skills` CLI (`npx skills add <owner/repo>`), which reports anonymous install telemetry. It has no submission form. rota is not listed there yet. Checked on 2026-10-08.
+- **openai/skills** is marked deprecated in its README, which points to [openai/plugins](https://github.com/openai/plugins) and the [Build plugins](https://developers.openai.com/codex/plugins/build) guide. Its `skills/` tree has `.curated` and `.system` and no community tier. Checked on 2026-10-08.
