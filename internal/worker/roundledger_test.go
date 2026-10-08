@@ -181,3 +181,65 @@ func TestPollDoneOnAPaneHostRecordsHeadroom(t *testing.T) {
 		t.Errorf("headroom = %v %v, want 65", h, ok)
 	}
 }
+
+// A best-of:2 pair holds one issue in two slots: a bounce names the slot that
+// holds the bounced PR instead of landing on the first slot holding the issue.
+func TestBounceEntryNamesTheSlotHoldingThePR(t *testing.T) {
+	dir := ledgerProject(t, `{"name":"ben","task":"12","kind":"claude"},{"name":"dana","task":"12","kind":"claude"}`)
+	if _, err := RecordBounce(dir, "12", "dana", "h1"); err != nil {
+		t.Fatal(err)
+	}
+	es, _ := ledger.Load(dir)
+	if len(es) != 1 || es[0].Kind != ledger.KindBounce || es[0].Slot != "dana" {
+		t.Fatalf("bounce entries %+v, want one for slot dana", es)
+	}
+}
+
+func TestTrainLedgerStampsTheVerdictOnTheCulpritOnly(t *testing.T) {
+	dir := ledgerProject(t, `{"name":"b1","branch":"b1","pr":"https://github.com/o/r/pull/1"},{"name":"b2","branch":"b2","pr":"https://github.com/o/r/pull/2"},{"name":"b3","branch":"b3","pr":"https://github.com/o/r/pull/3"}`)
+	res := TrainResult{Verdict: GateVerifyFailed, Culprit: "b2", Landed: []string{"b1"},
+		Members: []TrainMember{{Target: "b1"}, {Target: "b2", Culprit: true}, {Target: "b3"}}}
+	trainLedger(nil, dir, res, map[string]bool{})
+	verdicts := map[string]string{}
+	es, _ := ledger.Load(dir)
+	for _, e := range es {
+		verdicts[e.Slot] = e.DetailStr("verdict")
+	}
+	if len(es) != 2 || verdicts["b2"] != GateVerifyFailed || verdicts["b3"] != "" {
+		t.Fatalf("entries %+v, want verify-failed on b2 only", es)
+	}
+}
+
+func TestLedgerRoundSaysWhenTheLeaseCannotBeRead(t *testing.T) {
+	dir := ledgerProject(t, "")
+	cd, err := rotastate.CommonDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(roundlease.Path(cd), 0o755); err != nil { // a directory where the lease belongs: unreadable
+		t.Fatal(err)
+	}
+	r, w, _ := os.Pipe()
+	old := os.Stderr
+	os.Stderr = w
+	n := LedgerRound(dir)
+	w.Close()
+	os.Stderr = old
+	out, _ := io.ReadAll(r)
+	if n != 0 || !strings.Contains(string(out), "round lease") || strings.Count(string(out), "\n") != 1 {
+		t.Errorf("round %d, stderr %q, want 0 and one line naming the round lease", n, out)
+	}
+}
+
+// A verb that writes several entries reads the lease once.
+func TestLedgerNotesOfOneVerbReadTheLeaseOnce(t *testing.T) {
+	dir := ledgerProject(t, `{"name":"w1","branch":"w1","pr":"https://github.com/o/r/pull/1"}`)
+	reads := 0
+	env := fakeLeaseEnv(100)
+	leaseEnv = func() roundlease.Env { reads++; return env }
+	t.Cleanup(func() { leaseEnv = roundlease.DefaultEnv })
+	gateLedger(&RoundMemo{}, dir, GateTarget{Name: "w1", Branch: "w1"}, GateResult{Verdict: GatePass})
+	if reads != 1 {
+		t.Errorf("gateLedger read the lease %d times, want 1", reads)
+	}
+}

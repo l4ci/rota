@@ -46,7 +46,7 @@ func gateBounce(c *Ctx, root, issue string, r worker.GateResult) (n int, parked 
 	default:
 		return 0, false, nil
 	}
-	if n, err = worker.RecordBounce(root, issue, r.SHA); err != nil {
+	if n, err = worker.RecordBounceIn(r.Round, root, issue, r.Slot, r.SHA); err != nil {
 		return 0, false, err
 	}
 	set, err := roundcfg.Load(root)
