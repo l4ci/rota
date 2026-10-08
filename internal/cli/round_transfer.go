@@ -16,7 +16,7 @@ func roundTransfer(fs *flag.FlagSet) RunFunc {
 	body := fs.String("body-file", "", "decisions already settled, passed verbatim to the receiver (- for stdin)")
 	tier := fs.String("tier", "", "receiver's tier: light, standard or heavy (default round.tier)")
 	tierReason := fs.String("tier-reason", "", "one line on why; required above the default tier")
-	accept := fs.Bool("accept-overlap", false, "skip the file-overlap check only")
+	accept := fs.Bool("accept-overlap", false, "skip the file and scope overlap checks")
 	pid := fs.Int("holder-pid", 0, "orchestrator pid, when its ancestry cannot be read")
 	return func(c *Ctx, args []string) (Result, error) {
 		if len(args) != 1 {

@@ -194,14 +194,24 @@ func pointerBrief(agent, id, branch, brief string, siblings []string, decisions,
 	return b.String()
 }
 
+// mimicsSentinel reports a line that imitates the brief's signature, a
+// sentinel or the issue-text fence; such lines never ride in a signed brief.
+func mimicsSentinel(l string) bool {
+	for _, m := range []string{"ROTA-", "ORCHESTRATOR", "rota:", "issue-text", "<<<", ">>>"} {
+		if strings.Contains(l, m) {
+			return true
+		}
+	}
+	return false
+}
+
 // outOfScope is the item's "## Out of scope" section, "" when it has none.
 func outOfScope(be backlog.Backend, id string) string {
 	text, _, _ := be.Detail(id)
 	var keep []string
 	for _, l := range strings.Split(secpkg.Body(text, "Out of scope"), "\n") {
 		// Lines that mimic the signature or a sentinel never ride in a signed brief.
-		if strings.Contains(l, "ROTA-") || strings.Contains(l, "ORCHESTRATOR") || strings.Contains(l, "rota:") ||
-			strings.Contains(l, "issue-text") || strings.Contains(l, "<<<") || strings.Contains(l, ">>>") {
+		if mimicsSentinel(l) {
 			continue
 		}
 		keep = append(keep, l)
@@ -229,8 +239,7 @@ func touches(be backlog.Backend, id string) string {
 			continue
 		}
 		l = strings.TrimSpace(l[2:])
-		if l == "" || strings.Contains(l, "ROTA-") || strings.Contains(l, "ORCHESTRATOR") || strings.Contains(l, "rota:") ||
-			strings.Contains(l, "issue-text") || strings.Contains(l, "<<<") || strings.Contains(l, ">>>") {
+		if l == "" || mimicsSentinel(l) {
 			continue
 		}
 		keep = append(keep, "- "+l)

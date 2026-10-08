@@ -51,7 +51,7 @@ func roundAssign(fs *flag.FlagSet) RunFunc {
 	kind := fs.String("kind", "", "harness kind: claude or codex (default the issue's harness: label, then the slot's, else claude)")
 	model := fs.String("model", "", "model id (default the issue's model: label, then the tier map)")
 	acceptCodex := fs.Bool("accept-codex-version", false, "deprecated and ignored: rota no longer checks the Codex version")
-	accept := fs.Bool("accept-overlap", false, "skip the file-overlap check only")
+	accept := fs.Bool("accept-overlap", false, "skip the file and scope overlap checks")
 	acceptOpenPR := fs.Bool("accept-open-pr", false, "assign an issue an open PR already resolves, for a deliberate redo")
 	pid := fs.Int("holder-pid", 0, "orchestrator pid, when its ancestry cannot be read")
 	return func(c *Ctx, args []string) (Result, error) {
@@ -129,6 +129,9 @@ func roundAssign(fs *flag.FlagSet) RunFunc {
 			f := jsonx.NewObject()
 			f.Set("changed", res.Changed)
 			return Result{Data: f}, ferr
+		}
+		for _, o := range res.Overlaps {
+			c.Warn("%s", overlapText(o))
 		}
 		d.Set("agent", res.Agent)
 		d.Set("branch", res.Branch)

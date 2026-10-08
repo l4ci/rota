@@ -56,7 +56,7 @@ func ScopeOverlaps(a, b []string) []string {
 // else, when it carries a Subsystem field, the coarse scope subsystem:<name>.
 // MAP.md is not read.
 func itemScopes(be backlog.Backend, id string) []string {
-	body, _ := itemParts(be, id)
+	body, _, _ := be.Detail(id)
 	if s := Scopes(body); len(s) > 0 {
 		return s
 	}
