@@ -618,7 +618,7 @@ func TestTrainOrderFlagMustNameEveryMemberOnce(t *testing.T) {
 	}
 }
 
-func TestTrainConflictUnderEveryOrderStopsBeforeLanding(t *testing.T) {
+func TestTrainSharedPathConflictStopsBeforeLanding(t *testing.T) {
 	w := trainWorld(t, "true", "b1", "b2")
 	for _, b := range []string{"b1", "b2"} {
 		gitq(t, w.dir, "checkout", "-q", b)
