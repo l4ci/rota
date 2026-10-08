@@ -64,35 +64,35 @@ func TestEnsurePortBaseNeverSharesALiveBlock(t *testing.T) {
 	if err := registerSlot(b, "late", "late/x", filepath.Join(b, ".worktrees", "late"), "main", "", ""); err != nil {
 		t.Fatal(err)
 	}
-	n, err := EnsurePortBase(b, "late", 20000, 100)
+	n, _, err := EnsurePortBase(b, "late", 20000, 100)
 	if err != nil || n != 20200 {
 		t.Fatalf("EnsurePortBase = %d, %v; want 20200", n, err)
 	}
-	if again, _ := EnsurePortBase(b, "late", 20000, 100); again != 20200 {
+	if again, _, _ := EnsurePortBase(b, "late", 20000, 100); again != 20200 {
 		t.Errorf("second call = %d, want the same block", again)
 	}
 }
 
 func TestSlotEnv(t *testing.T) {
-	got := strings.Join(SlotEnv("dana", 20300), " ")
-	want := "ROTA_SLOT=dana ROTA_PORT_BASE=20300 ROTA_DB_SUFFIX=_dana"
+	got := strings.Join(SlotEnv("dana", 20300, 100), " ")
+	want := "ROTA_SLOT=dana ROTA_PORT_BASE=20300 ROTA_PORT_BLOCK=100 ROTA_DB_SUFFIX=_dana"
 	if got != want {
 		t.Errorf("SlotEnv = %q, want %q", got, want)
 	}
-	if got := strings.Join(SlotEnv("w-1.x", 1), " "); !strings.Contains(got, "ROTA_DB_SUFFIX=_w_1_x") {
+	if got := strings.Join(SlotEnv("w-1.x", 1, 1), " "); !strings.Contains(got, "ROTA_DB_SUFFIX=_w_1_x") {
 		t.Errorf("suffix not made identifier-safe: %q", got)
 	}
 }
 
 func TestEnvSetupSeesSlotVariables(t *testing.T) {
 	out := filepath.Join(t.TempDir(), "env.txt")
-	cmd := `printf '%s %s %s' "$ROTA_SLOT" "$ROTA_PORT_BASE" "$ROTA_DB_SUFFIX" >> ` + out
+	cmd := `printf '%s %s %s %s;' "$ROTA_SLOT" "$ROTA_PORT_BASE" "$ROTA_PORT_BLOCK" "$ROTA_DB_SUFFIX" >> ` + out
 	b := newProject(t, `{"work":{"envSetup":`+jsonString(cmd)+`}}`)
 	if _, err := goInit(t, b, InitOpts{Slots: 2, Base: "main"}); err != nil {
 		t.Fatal(err)
 	}
 	got, _ := os.ReadFile(out)
-	if string(got) != "w1 20000 _w1w2 20100 _w2" {
+	if string(got) != "w1 20000 100 _w1;w2 20100 100 _w2;" {
 		t.Errorf("envSetup saw %q", got)
 	}
 }
@@ -108,7 +108,7 @@ func TestEnsurePortBaseNeverOverlapsAfterConfigChange(t *testing.T) {
 		if err := registerSlot(b, name, name+"/x", filepath.Join(b, ".worktrees", name), "main", "", ""); err != nil {
 			t.Fatal(err)
 		}
-		got, err := EnsurePortBase(b, name, c.base, c.block)
+		got, _, err := EnsurePortBase(b, name, c.base, c.block)
 		if err != nil || got != c.want {
 			t.Fatalf("base %d block %d: got %d, %v; want %d", c.base, c.block, got, err, c.want)
 		}
@@ -121,7 +121,7 @@ func TestEnsurePortBaseRefusesPastPortMax(t *testing.T) {
 	if err := registerSlot(b, "far", "far/x", filepath.Join(b, ".worktrees", "far"), "main", "", ""); err != nil {
 		t.Fatal(err)
 	}
-	if got, err := EnsurePortBase(b, "far", 65500, 100); err == nil || got != 0 || !strings.Contains(err.Error(), "65535") {
+	if got, _, err := EnsurePortBase(b, "far", 65500, 100); err == nil || got != 0 || !strings.Contains(err.Error(), "65535") {
 		t.Errorf("got %d, %v; want a refusal naming 65535", got, err)
 	}
 	if portBases(t, b)["far"] != 0 {
@@ -130,7 +130,7 @@ func TestEnsurePortBaseRefusesPastPortMax(t *testing.T) {
 }
 
 func TestExportPrefixQuotesTheSlotName(t *testing.T) {
-	got := exportPrefix("a b'$x", 1)
+	got := exportPrefix("a b'$x", 1, 1)
 	if !strings.Contains(got, `export ROTA_SLOT='a b'\''$x'; `) {
 		t.Errorf("exportPrefix = %q", got)
 	}

@@ -115,10 +115,9 @@ func (d *runner) listeners() (ls []Listener, ok bool) {
 }
 
 // ports warns when a process outside a live slot's worktree listens inside
-// that slot's port block. It reports nothing when no slot holds a block, the
-// every listener belongs to its slot; it reports a skip when the listeners
-// could not be read (neither ss nor lsof ran). A
-// listener whose owner cannot be read counts as foreign: nothing proves it
+// that slot's port block. It reports nothing when no slot holds a block or
+// every listener belongs to its slot, and a skip when the listeners could not
+// be read (neither ss nor lsof ran). A listener whose owner cannot be read counts as foreign: nothing proves it
 // belongs to the slot.
 func (d *runner) ports() (Check, bool) {
 	if len(d.in.Slots) == 0 {

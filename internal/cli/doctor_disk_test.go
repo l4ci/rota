@@ -63,3 +63,16 @@ func TestDoctorDiskInput(t *testing.T) {
 		t.Errorf("leftovers are only scanned when the disk is low: %v", in.Leftovers)
 	}
 }
+
+func TestDoctorSlotBlocksUsesTheStoredWidth(t *testing.T) {
+	root := t.TempDir()
+	os.MkdirAll(filepath.Join(root, ".rota"), 0o755)
+	os.WriteFile(filepath.Join(root, ".rota", "config.json"), []byte(`{"work":{"portBlock":100}}`), 0o644)
+	os.WriteFile(filepath.Join(root, ".rota", "workers.json"), []byte(`{"slots":[
+{"name":"w1","worktree":"/p/w1","handle":"h1","portBase":20000,"portBlock":10},
+{"name":"w2","worktree":"/p/w2","handle":"h2"}]}`), 0o644)
+	got := doctorSlotBlocks(root)
+	if len(got) != 1 || got[0].Name != "w1" || got[0].Base != 20000 || got[0].Size != 10 {
+		t.Errorf("doctorSlotBlocks = %+v, want w1 at 20000 with the stored width 10, not the config's 100", got)
+	}
+}
