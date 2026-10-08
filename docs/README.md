@@ -74,6 +74,7 @@ Public user guide for rota, a dev workflow for Claude Code and Codex: skills plu
 
 - [Rounds on rota itself](contributing/rounds.md): the gate, repo rules and roster for contributors
 - [Release signing](contributing/release-signing.md): generating or rotating the minisign key, the Actions secret, verifying by hand
+- [Market review, October 2026](contributing/market-review-2026-10.md): what comparable orchestrators' users ask for, where rota stands, and the ranked gaps behind issues #574 to #587
 
 ### Other
 
