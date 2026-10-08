@@ -55,6 +55,8 @@ type TrainOpts struct {
 	Approve func(files func() ([]string, error)) error
 	// Verdict is GateOpts.Verdict, run for every member's check.
 	Verdict func(branch string) error
+	// Recorded is GateOpts.Recorded, run for every member's check.
+	Recorded func(branch string) []string
 }
 
 // TrainMember is one target of the train, in order.
@@ -160,7 +162,7 @@ func (e Env) train(ctx context.Context, root string, o TrainOpts, cache *trainCa
 	// 1. Check every member.
 	remote := false
 	for _, t := range o.Targets {
-		gr, err := e.Gate(ctx, root, GateOpts{Slot: t, Base: o.Base, CheckOnly: true, Verdict: o.Verdict})
+		gr, err := e.Gate(ctx, root, GateOpts{Slot: t, Base: o.Base, CheckOnly: true, Verdict: o.Verdict, Recorded: o.Recorded})
 		if err != nil {
 			if gr.Verdict == GateVerdictBlocked {
 				res.Verdict, res.Culprit = gr.Verdict, t

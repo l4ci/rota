@@ -308,7 +308,7 @@ Controls how deep a review `/rota-ship` runs before integrating.
 - `lightBelow`: a diff of fewer changed lines (added plus deleted, against the base) than this gets `light`. It only lowers a `default` of `full`. `0` or omitted turns it off.
 - `labels`: a label on the item's issue or PR maps to a depth and beats the size rule, so `risk:high` forces `full` on a small diff. `best-of:2` and `partial-slice` are ordinary labels here. When several labels match, the strictest depth wins.
 
-`rota review depth [branch] [--labels a,b]` prints the depth and why; `/rota-ship` and `rota worker gate` (as a `REVIEW-DEPTH` note) report it too. The gate still reads the recorded verdict as before. `rota config check` fails on a malformed policy.
+`rota review depth [branch] [--labels a,b]` prints the depth and why. It reads the labels of the issue behind a `<agent>/<issue>-<slug>` branch itself when the policy has a `labels` map; `--labels` adds to them. `/rota-ship` prints it, and `rota worker gate` applies it: the branch must have the verdicts the depth needs on record (`full` both, `light` the Standards one, `none` none) or the gate refuses with `blockedBy: review-missing`. `rota config check` fails on a malformed policy.
 
 See [review and ship](review-and-ship.md) for the full `/rota-ship` workflow.
 

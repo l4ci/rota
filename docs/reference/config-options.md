@@ -97,7 +97,7 @@ Each Q1–Q5 option maps to a single `key.path: value` in `.rota/config.json`:
 | Q2 Worktree | `work.isolation: "worktree"` |
 | Q3 Direct merge | `work.mergeStrategy: "direct"` |
 | Q3 Pull request | `work.mergeStrategy: "pr"` |
-| Q4 includes "Review before ship" | `ship.review: true` (else `false`) |
+| Q4 includes "Review before ship" | `ship.review: "full"` (else `"none"`) |
 | Q4 includes "Verify learnings" | `learn.verify: true` (else `false`) |
 | Q4 includes "Confirm before refactor" | `refactor.confirmBeforeExecute: true` (else `false`) |
 | Q5 Off | `autonomy.level: "off"` |

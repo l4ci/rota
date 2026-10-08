@@ -35,9 +35,12 @@ trap 'rm -rf "$RD"' EXIT
   grep -q '^REVIEW-DEPTH feat — light' <<<"$TXT" || fail "text mode should print the depth line: $TXT"
 
   # a malformed policy is refused by set and flagged by config check
-  if "$ROTA_BIN" config set ship.review '{"default":"deep"}' >/dev/null 2>&1; then fail "config set accepted default deep"; fi
+  ERR=$("$ROTA_BIN" config set ship.review '{"default":"deep"}' 2>&1 >/dev/null) && fail "config set accepted default deep"
+  case "$ERR" in *'"default" must be full, light or none'*) ;; *) fail "config set should name the bad default: $ERR" ;; esac
   printf '{"ship":{"review":{"lightBelow":"many"}}}\n' > .rota/config.json
-  if "$ROTA_BIN" config check >/dev/null 2>&1; then fail "config check passed a malformed ship.review"; fi
-  if "$ROTA_BIN" review depth feat >/dev/null 2>&1; then fail "review depth ran on a malformed policy"; fi
+  OUT=$("$ROTA_BIN" config check 2>&1) && fail "config check passed a malformed ship.review"
+  case "$OUT" in *lightBelow*) ;; *) fail "config check should name lightBelow: $OUT" ;; esac
+  ERR=$("$ROTA_BIN" review depth feat 2>&1 >/dev/null) && fail "review depth ran on a malformed policy"
+  case "$ERR" in *lightBelow*) ;; *) fail "review depth should name lightBelow: $ERR" ;; esac
 ) || exit 1
 pass "ship.review: legacy booleans, depth strings and policy objects resolve; malformed shapes fail"

@@ -67,7 +67,7 @@ Keep the scope JSON (commits, `touchedFiles`, `referencedIds`, `intents`) for la
 
 ## Step 3 — Review (opt-in)
 
-Run `rota review depth <branch> [--labels <labels of the item's issue or PR>] --json` and print its `REVIEW-DEPTH` line (`data.depth`, `data.why`) so the user sees which depth applies and why. `none` skips this step, `light` has `/rota-review` dispatch the Standards reviewer only, `full` is the whole review; a label such as `risk:high` can force `full` over a small diff. Skipped when the depth is `none` and for a round worker's PR (branch `<agent>/<issue>-<slug>`, or the brief says it is a round slot); when either applies, read [`review-gate.md`](review-gate.md) and [`round-worker-and-issue-mode.md`](round-worker-and-issue-mode.md). Otherwise invoke `rota-review` via the `Skill` tool, then route on the recorded verdict (umbrella: add `--repo "$REPO"`):
+Run `rota review depth <branch> --json` (it reads the labels of a round branch's issue itself; add `--labels` only for labels it cannot see, such as a PR's) and print its `REVIEW-DEPTH` line (`data.depth`, `data.why`) so the user sees which depth applies and why. `none` skips this step, `light` has `/rota-review` dispatch the Standards reviewer only, `full` is the whole review; a label such as `risk:high` can force `full` over a small diff. Skipped when the depth is `none` and for a round worker's PR (branch `<agent>/<issue>-<slug>`, or the brief says it is a round slot); when either applies, read [`review-gate.md`](review-gate.md) and [`round-worker-and-issue-mode.md`](round-worker-and-issue-mode.md). Otherwise invoke `rota-review` via the `Skill` tool, then route on the recorded verdict (umbrella: add `--repo "$REPO"`):
 
 ```bash
 rota verdict route <branch> --for ship-review --json

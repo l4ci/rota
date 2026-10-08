@@ -1,4 +1,4 @@
-{"utc":"2026-10-08","local":"2026-10-08"}
+{"utc":"2026-10-03","local":"2026-10-03"}
 {"name":"claim/already-holder","steps":[{"exit":0,"env":{"data":{"changed":true,"claimId":"me","id":"7","type":"T"},"ok":true},"db":"65a31659890ddc93"}]}
 {"name":"claim/arrow-as","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"--as must be a claim ID: non-empty, no whitespace, no -->"},"ok":false},"db":"396d7faf5419e420"}]}
 {"name":"claim/bad-as","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"--as must be a claim ID: non-empty, no whitespace, no -->"},"ok":false},"db":"396d7faf5419e420"}]}
