@@ -32,11 +32,12 @@ What each `/rota-*` skill does, one line each. For details: [`reference/slash-co
 
 ## Verbs, not skills
 - **`rota`** (bare, in a terminal): opens a palette. Enter on the preselected entry runs `rota setup` in a directory without `.rota/` and launches the orchestrator in an initialized project. Outside a terminal it prints usage.
+- **`--ui`**: open a verb's terminal screen instead of printing its result: `rota config --ui`, `rota projects --ui`, `rota round status --ui` (refreshes every 5 s), and read-only views for `rota doctor`, `rota worker account list`, `rota backlog list`, `rota knowledge stats` and `rota decisions stats`. Terminal only; refused with `--json`. Plain output never changes.
 - **`rota orchestrate`**: run `rota doctor`, then start the orchestrator under `rota keepalive run`.
 - **`rota init`** (`rota init umbrella`): scaffold `.rota/` and fill config defaults.
 - **`rota projects`**: list every project `rota init` registered on this machine (`$XDG_CONFIG_HOME/rota/projects.json`, default `~/.config/rota`). Paths that no longer exist are marked `(missing)`. `rota projects cleanup` deletes, at once, every entry whose directory is gone or no longer holds `.rota/`, and prints each. `rota projects remove <dir>` drops one entry (the directory stays). `rota projects --ui` opens a terminal screen over the registry (also the palette's Projects entry).
 - **`rota setup`**: `rota init` plus a short config walkthrough on a terminal. `--yes` takes the defaults, `--set key=value` answers one question, `--list` prints them.
-- **`rota config show` / `rota config set` / `rota config edit`**: read and change settings; `edit` is an interactive editor (terminal only). `rota config save-global` saves this project's config as the defaults for new projects.
+- **`rota config show` / `rota config set` / `rota config edit`**: read and change settings; `edit` opens the config screen (terminal only): keys by section with their description, `Enter` edits, `l` writes to `config.local.json`, `r` resets. `rota config save-global` saves this project's config as the defaults for new projects.
 - **`rota update`**: check for a newer release.
 - **`rota migrate issues`**: move the backlog to GitHub or GitLab issues.
 - **`rota skills install` / `update` / `status`**: write the skills for Claude Code and Codex, refresh them after an upgrade, compare with the binary.
