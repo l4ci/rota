@@ -83,8 +83,8 @@ func TestRoundStatusAndReconcile(t *testing.T) {
 	}
 
 	// A slot's bounce count shows on its row, and only on its row.
-	worker.RecordBounce(root, "58", "")
-	worker.RecordBounce(root, "58", "")
+	worker.RecordBounce(root, "58", "", "")
+	worker.RecordBounce(root, "58", "", "")
 	_, out, _ = rotaInWith(t, deps, root, "--json", "round", "status")
 	for _, r := range data(t, out)["slots"].([]any) {
 		row := r.(map[string]any)

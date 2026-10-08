@@ -20,14 +20,21 @@ var leaseEnv = roundlease.DefaultEnv
 // LedgerRound is the round of the lease the project's git common dir holds,
 // 0 when no lease is held (solo without a lease, no round started). The lease
 // sits in the common dir, so any process of the round reads it, a worker in
-// its own worktree included. A stale lease is nobody's round.
+// its own worktree included. A stale lease is nobody's round. A lease that
+// cannot be read is no round either, and says so on stderr: the entries would
+// land under round 0. A verb that writes several entries reads it once.
 func LedgerRound(root string) int {
 	cd, err := rotastate.CommonDir(root)
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "rota: round lease not read, ledger entries get round 0: %v\n", err)
 		return 0
 	}
 	l, st, err := leaseEnv().Read(cd)
-	if err != nil || (st != roundlease.Live && st != roundlease.Foreign) {
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "rota: round lease not read, ledger entries get round 0: %v\n", err)
+		return 0
+	}
+	if st != roundlease.Live && st != roundlease.Foreign {
 		return 0
 	}
 	return l.Round
@@ -41,6 +48,11 @@ func LedgerNote(root string, e ledger.Entry) {
 	if e.Round == 0 {
 		e.Round = LedgerRound(root)
 	}
+	ledgerAppend(root, e)
+}
+
+// ledgerAppend is LedgerNote for an entry whose round is settled.
+func ledgerAppend(root string, e ledger.Entry) {
 	if e.Account == "" || e.Harness == "" || e.Slot == "" {
 		if s := ledgerSlot(LoadRegistry(root), e); s != nil {
 			e.Slot = cmp.Or(e.Slot, s.Name())
@@ -128,18 +140,23 @@ func gateLedger(root string, t GateTarget, res GateResult) {
 	if !t.Queued {
 		issue = HeldID(t.Task, t.Branch, t.Name)
 	}
-	e := ledger.Entry{Kind: ledger.KindGate, Issue: issue, Slot: t.Name, PR: cmp.Or(res.PR, t.PR), Detail: ledger.Detail("verdict", res.Verdict)}
-	LedgerNote(root, e)
-	if res.Verdict == GatePass {
+	e := ledger.Entry{Kind: ledger.KindGate, Issue: issue, Slot: t.Name, PR: cmp.Or(res.PR, t.PR), Detail: ledger.Detail("verdict", res.Verdict), Round: LedgerRound(root)}
+	ledgerAppend(root, e)
+	switch {
+	case res.Verdict == GatePass:
 		e.Kind, e.Detail = ledger.KindMerge, nil
-		LedgerNote(root, e)
+		ledgerAppend(root, e)
+	case res.AlreadyMerged:
+		e.Kind, e.Detail = ledger.KindMerge, ledger.Detail("by", "remote")
+		ledgerAppend(root, e)
 	}
 }
 
 // trainLedger records the train's verdict for every member it gated that did
 // not get a landing gate of its own: the culprit that failed its check, and
 // members that passed theirs but did not land. Landed members, and the member
-// whose landing gate failed, were recorded by that gate.
+// whose landing gate failed, were recorded by that gate. Only the culprit
+// carries the train's verdict; the others name it as the culprit.
 func trainLedger(root string, res TrainResult, gated map[string]bool) {
 	if res.Verdict == "" {
 		return
@@ -152,6 +169,7 @@ func trainLedger(root string, res TrainResult, gated map[string]bool) {
 		targets = append(targets, res.Culprit)
 	}
 	reg := LoadRegistry(root)
+	round := LedgerRound(root)
 	for _, t := range targets {
 		if gated[t] || slices.Contains(res.Landed, t) {
 			continue
@@ -164,7 +182,11 @@ func trainLedger(root string, res TrainResult, gated map[string]bool) {
 		if !gt.Queued {
 			issue = HeldID(gt.Task, gt.Branch, gt.Name)
 		}
-		LedgerNote(root, ledger.Entry{Kind: ledger.KindGate, Issue: issue, Slot: gt.Name, PR: gt.PR,
-			Detail: ledger.Detail("verdict", res.Verdict, "train", true, "culprit", res.Culprit)})
+		verdict := res.Verdict
+		if res.Culprit != "" && t != res.Culprit {
+			verdict = ""
+		}
+		ledgerAppend(root, ledger.Entry{Kind: ledger.KindGate, Issue: issue, Slot: gt.Name, PR: gt.PR, Round: round,
+			Detail: ledger.Detail("verdict", verdict, "train", true, "culprit", res.Culprit)})
 	}
 }

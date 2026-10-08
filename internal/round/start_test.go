@@ -6,6 +6,7 @@ import (
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/itembody"
+	"github.com/l4ci/rota/internal/ledger"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -526,5 +527,36 @@ func TestFootprintIgnoresComments(t *testing.T) {
 	r, _ = Assess(be, "20", tracked, nil, flight, false)
 	if len(r.Overlaps) != 1 || r.Overlaps[0].Paths[0] != "internal/worker/pool.go" {
 		t.Errorf("real shared file must overlap: %+v", r.Overlaps)
+	}
+}
+
+// A new round trims the ledger to round.ledgerKeep rounds; 0 keeps it all.
+func TestStartTrimsTheLedgerToLedgerKeep(t *testing.T) {
+	root := newRepo(t, nil)
+	for r := 1; r <= 3; r++ {
+		if err := ledger.Append(root, ledger.Entry{Kind: ledger.KindAssign, Round: r, Issue: "12"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	o := startOpts(roundcfg.ScopeMilestone, 100)
+	o.Settings.LedgerKeep = 2
+	e := Env{Git: git.Exec, Base: "main", Getenv: noEnv, Lease: fakeLease("h", 100)}
+	if _, err := e.Start(bg, root, o); err != nil { // takes round 1 of the registry: nothing is old yet
+		t.Fatal(err)
+	}
+	es, _ := ledger.Load(root)
+	if len(es) != 3 {
+		t.Fatalf("round 1 start trimmed %d entries", 3-len(es))
+	}
+	if err := worker.Update(root, func(d *worker.Doc) { d.SetRound(3) }); err != nil {
+		t.Fatal(err)
+	}
+	e = Env{Git: git.Exec, Base: "main", Getenv: noEnv, Lease: fakeLease("h", 300)} // pid 100 is gone: round 4
+	if st, err := e.Start(bg, root, o); err != nil || st.Round != 4 {
+		t.Fatalf("%v %+v", err, st)
+	}
+	es, _ = ledger.Load(root)
+	if len(es) != 1 || es[0].Round != 3 {
+		t.Fatalf("entries %+v, want only round 3 kept: the last 2 rounds are 3 and 4", es)
 	}
 }

@@ -497,12 +497,14 @@ func execShell(ctx context.Context, dir, command string) (string, int) {
 // the new count. Counts live per item, not per slot, so a transfer to another
 // slot does not reset them. head is the PR head the gate refused: the same head
 // seen again (a re-gate before the worker pushed anything) is not a new bounce
-// and returns the count unchanged. head "" always counts.
-func RecordBounce(root, issue, head string) (n int, err error) {
+// and returns the count unchanged. head "" always counts. slot names the slot
+// that holds the bounced PR, so the ledger entry of a best-of attempt lands on
+// its own row; "" falls back to the first slot holding the issue.
+func RecordBounce(root, issue, slot, head string) (n int, err error) {
 	counted := false
 	defer func() {
 		if err == nil && counted {
-			LedgerNote(root, ledger.Entry{Kind: ledger.KindBounce, Issue: issue, Detail: ledger.Detail("count", n)})
+			LedgerNote(root, ledger.Entry{Kind: ledger.KindBounce, Issue: issue, Slot: slot, Detail: ledger.Detail("count", n)})
 		}
 	}()
 	err = Update(root, func(d *Doc) {
