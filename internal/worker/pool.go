@@ -257,6 +257,8 @@ func PoolList(root string) (session any, round any, slots []*jsonx.Object) {
 // (all of them for names == nil), then drops them from the registry. Worker
 // branches are throwaway by construction: they are merged into the cycle
 // branch through the gate, never shipped directly. An unknown slot is a no-op.
+// An adopted (external) slot is only dropped from the registry; its worktree
+// and branch stay.
 func (e Env) Reap(root string, names []string, all bool) (reaped []string, err error) {
 	e = e.withDefaults()
 	reg := LoadRegistry(root)
@@ -273,6 +275,9 @@ func (e Env) Reap(root string, names []string, all bool) (reaped []string, err e
 			continue
 		}
 		reaped = append(reaped, name)
+		if s.IsExternal() { // unregister only: the worktree and branch are not rota's
+			continue
+		}
 		e.ClearLabel(context.Background(), root, name)
 		if wt := s.Worktree(); wt != "" {
 			e.git(root, "worktree", "remove", "--force", wt)

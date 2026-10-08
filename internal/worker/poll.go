@@ -340,7 +340,7 @@ func (e Env) Poll(ctx context.Context, root string, o PollOpts) (PollResult, err
 	}
 	var targets []pollTarget
 	for _, s := range reg.Slots() {
-		if o.Slot != "" && s.Name() != o.Slot {
+		if (o.Slot != "" && s.Name() != o.Slot) || s.IsExternal() { // an adopted slot has no pane
 			continue
 		}
 		targets = append(targets, slotTarget(s))

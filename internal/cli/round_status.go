@@ -49,6 +49,7 @@ func defaultRoundEnv(ctx context.Context, root string, d *Deps) round.Env {
 	e.Label = config.Label(cfg, "inProgress")
 	if set, err := roundcfg.Load(root); err == nil {
 		e.StallMinutes = set.StallMinutes
+		e.AdoptPattern, e.SharedPaths = set.AdoptPattern, set.SharedPaths
 		e.ItemTimeoutMinutes = set.ItemTimeoutMinutes
 	}
 	f, err := d.forge(ctx, cfg, "", root)
@@ -131,6 +132,9 @@ func roundStatus(*flag.FlagSet) RunFunc {
 					col += " (" + r.KindSource + ")"
 				}
 				cols = append(cols, col)
+			}
+			if r.State != "" {
+				cols = append(cols, "state "+r.State)
 			}
 			if r.Bounces > 0 {
 				cols = append(cols, fmt.Sprintf("bounces %d", r.Bounces))
@@ -220,6 +224,7 @@ func rowList(rows []round.Row) []any {
 		setIf(o, "pr", r.PR)
 		setIf(o, "prState", r.PRState)
 		setIf(o, "hostState", r.HostState)
+		setIf(o, "state", r.State)
 		setIf(o, "tab", r.Tab)
 		o.Set("registered", r.Registered)
 		o.Set("drift", strs(r.Drift))

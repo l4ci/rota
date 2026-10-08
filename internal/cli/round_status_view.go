@@ -84,7 +84,8 @@ func snapFromData(d *jsonx.Object) roundSnap {
 		r := round.Row{
 			Name: jsonx.Str(o, "name"), Issue: jsonx.Str(o, "issue"), Branch: jsonx.Str(o, "branch"),
 			PR: jsonx.Str(o, "pr"), PRState: jsonx.Str(o, "prState"), HostState: jsonx.Str(o, "hostState"),
-			Kind: jsonx.Str(o, "kind"), Tier: jsonx.Str(o, "tier"), Model: jsonx.Str(o, "model"),
+			State: jsonx.Str(o, "state"),
+			Kind:  jsonx.Str(o, "kind"), Tier: jsonx.Str(o, "tier"), Model: jsonx.Str(o, "model"),
 			TierReason: jsonx.Str(o, "tierReason"), BestOf: jsonx.Str(o, "bestOf"),
 		}
 		v, _ := o.Get("bounces")
@@ -343,6 +344,15 @@ func prLabel(pr, state string) string {
 	return s
 }
 
+// hostLabel is the host column: an adopted slot shows its derived state after
+// "external", since no host reports one.
+func hostLabel(r round.Row) string {
+	if r.State != "" {
+		return r.HostState + "/" + r.State
+	}
+	return r.HostState
+}
+
 func tierModel(r round.Row) string {
 	s := strings.Trim(strings.Join([]string{r.Tier, r.Model}, " "), " ")
 	if s == "" {
@@ -356,7 +366,7 @@ func slotEntry(r round.Row) entry {
 	if r.Issue != "" {
 		issue = "#" + strings.TrimPrefix(r.Issue, "#")
 	}
-	line := fmt.Sprintf("%-8s %-7s %-10s %-14s %-18s %-7s %s", r.Name, issue, dashed(r.HostState), prLabel(r.PR, r.PRState), tierModel(r), bounceLabel(r.Bounces), burnLabel(r))
+	line := fmt.Sprintf("%-8s %-7s %-10s %-14s %-18s %-7s %s", r.Name, issue, dashed(hostLabel(r)), prLabel(r.PR, r.PRState), tierModel(r), bounceLabel(r.Bounces), burnLabel(r))
 	var b []string
 	b = append(b, "PR: "+firstOf(r.PRTitle, "no title known"))
 	b = append(b, "branch: "+dashed(r.Branch))

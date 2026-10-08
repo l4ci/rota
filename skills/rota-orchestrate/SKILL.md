@@ -48,6 +48,8 @@ One orchestrator per repo. If `start` exits 4 on the lease, someone else holds i
 
 Assign with `rota round assign <ID>`. It marks the item in progress, cuts the branch and starts the worker. Don't do those steps by hand.
 
+Work another tool already started (a Codex worktree, an agent-team branch, a cloud session's branch) joins the round with `rota worker adopt <branch|worktree> --issue <N>`. Adopt it when the maintainer points at it, or when `round reconcile` lists an `unregistered-branch` (`round.adoptPattern` names which branches count). It runs the overlap check; read an exit 4 (`overlap`, `registered`, `held`) as you would on `assign`. The slot has no host: do not dispatch to it, wait on it or reclaim it. `round status` derives its state from the PR, and you gate it like any other (`rota worker gate <slot>`). After the merge it is released and its worktree and branch stay; leave them for the maintainer unless they ask for `--prune`.
+
 ## 3. The loop
 
 **`rota round watch` is how you wait.** Keep one armed: run it as a background command whenever workers are active and re-arm it every time it exits. It wakes you on a slot, PR or escalation change and at a heartbeat, so you stay reachable while you talk to the maintainer. Never use a blocking question picker (`AskUserQuestion`) during a round: ask in prose and keep working. The Stop hook refuses to let you go idle without a watch.

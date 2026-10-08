@@ -113,6 +113,30 @@ func (s *Slot) PaneHandle() string {
 	return s.Window()
 }
 
+// HarnessKind is the harness the slot last ran ("" for none, and for an
+// adopted slot, whose kind field names no harness).
+func (s *Slot) HarnessKind() string {
+	if s.IsExternal() {
+		return ""
+	}
+	return s.Kind()
+}
+
+// KindExternal is the slot kind of work another tool started and rota adopted
+// (`rota worker adopt`): the slot has no host session, so nothing dispatches
+// into it or reads its pane.
+const KindExternal = "external"
+
+// IsExternal reports whether the slot was adopted rather than driven by rota.
+func (s *Slot) IsExternal() bool { return s.Kind() == KindExternal }
+
+// MarkExternal makes the slot an adopted one holding task, with pr when known.
+func (s *Slot) MarkExternal(task, pr string) {
+	s.o.Set("kind", KindExternal)
+	s.o.Set("task", task)
+	s.SetPR(pr)
+}
+
 // NewSlot is a fresh registry entry. Slots are seeded as already-reported idle
 // so a parked slot never fires a spurious "it finished" on the first poll.
 // Only a slot that has gone BUSY re-arms that report. handle "" records none.

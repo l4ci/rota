@@ -80,6 +80,14 @@ because everything it deletes is proven unowned and merged, and anything holding
 - A parked slot. A `park/<agent>` worktree, clean or not, and any `park/*` branch are never candidates.
 - A live or foreign lease. Only a stale one, whose holder is gone on this host.
 
+**Merged branches of adopted work.** A slot adopted with
+[`rota worker adopt`](parallel-rounds.md#adopting-work-another-tool-started) is released after its PR
+merges, and rota keeps the worktree and branch because another tool made them. When that branch is
+merged but still checked out in a worktree outside `.worktrees/`, reap lists it as a `branch` with
+`held: checked out at <path>; remove that worktree first`. Remove the worktree yourself (or let the
+other tool do it), then `rota reap --apply` deletes the branch. `rota worker gate --prune` and
+`rota round wind-down --prune` do both at release time.
+
 **Exit codes.** `0` after a preview or a clean apply. `1` under `--apply` when a deletion failed (the
 rest were still removed; the failures are in the output). `2` for an unknown `--kind`. `3` with no
 project root. `5` when git fails.

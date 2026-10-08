@@ -23,7 +23,7 @@ func (o Outcome) Clean() bool { return len(o.Drift) == 0 && len(o.Repaired) == 0
 // clears the handle of a dead tab, registers an unregistered worktree,
 // records an unrecorded PR, adds a missing in-progress label, removes it from a closed issue and clears a
 // claimId whose claim is gone from the tracker (never the tracker's side) and
-// drops a queued PR record whose PR is merged or closed and parks a slot whose PR is merged. Every other
+// drops a queued PR record whose PR is merged or closed, parks a slot whose PR is merged and releases an adopted slot whose PR is merged (worktree and branch kept). Every other
 // kind is only reported (a tab may be a live worker; opening a PR is the
 // worker's act; resetting a slot and removing a label are the orchestrator's).
 // A repair that fails becomes a warning and leaves its finding in Drift.
@@ -32,6 +32,7 @@ func (e Env) Reconcile(ctx context.Context, root string, apply bool) (Outcome, e
 	if err != nil {
 		return Outcome{}, err
 	}
+	e.findUnregisteredBranches(ctx, root, rep, worker.LoadRegistry(root)) // a branch scan: reconcile and the tick, not every status
 	out := Outcome{Report: rep}
 	for _, f := range rep.Findings {
 		if !apply || f.Repair == "" {
@@ -39,7 +40,7 @@ func (e Env) Reconcile(ctx context.Context, root string, apply bool) (Outcome, e
 			continue
 		}
 		if err := e.repair(ctx, root, rep, f); err != nil {
-			rep.Warnings = append(rep.Warnings, fmt.Sprintf("repair %s %s: %v", f.Kind, f.Slot, err))
+			rep.Warnings = append(rep.Warnings, fmt.Sprintf("repair %s %s: %v", f.Kind, firstNonEmpty(f.Slot, f.branch), err))
 			out.Drift = append(out.Drift, f)
 			continue
 		}
@@ -69,6 +70,10 @@ func (e Env) repair(ctx context.Context, root string, rep *Report, f Finding) er
 			}
 		}
 		return registerSlot(root, row, v)
+	case UnregisteredBranch:
+		return e.adoptBranch(ctx, root, f)
+	case MergedExternal:
+		return e.workerEnv().ReleaseExternal(root, f.Slot, false)
 	case PRStale:
 		if f.Slot != "" {
 			return e.parkMerged(ctx, root, f.Slot)

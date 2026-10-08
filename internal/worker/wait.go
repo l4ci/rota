@@ -279,7 +279,7 @@ func soloWait(root string, o WaitOpts) (WaitResult, error) {
 		}
 	} else {
 		for _, s := range reg.Slots() {
-			if strings.ToLower(s.State()) != "idle" {
+			if !s.IsExternal() && strings.ToLower(s.State()) != "idle" {
 				watched = append(watched, s)
 			}
 		}
