@@ -27,6 +27,7 @@ func trainData(r worker.TrainResult) *jsonx.Object {
 		ms = append(ms, o)
 	}
 	d.Set("members", ms)
+	d.Set("order", strList(r.Order))
 	if r.Culprit != "" {
 		d.Set("culprit", r.Culprit)
 	}
@@ -47,6 +48,7 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 	base := fs.String("base", "", "the cycle branch the PRs merge into")
 	landGreen := fs.Bool("land-green", false, "when verification fails, still land the verified members before the culprit")
 	noVerify := fs.Bool("no-verify", false, "allow an empty test.full (the train is refused otherwise)")
+	order := fs.String("order", "", "merge order as comma-separated PR numbers (or slots); replaces the computed order and must name every member once")
 	confirm := approvalFlags(fs)
 	return func(c *Ctx, args []string) (Result, error) {
 		if len(args) == 0 {
@@ -77,7 +79,20 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 		for i, t := range args {
 			issues[i] = gateIssue(root, t)
 		}
-		r, err := workerEnvCtx(c, ctx).Train(ctx, root, worker.TrainOpts{Targets: args, Base: *base, LandGreen: *landGreen, NoVerify: *noVerify, Approve: approve, Verdict: shipVerdict(c, root, root).Block, Recorded: recordedReviews(root)})
+		var override []string
+		if *order != "" {
+			seenTok := map[string]bool{}
+			for _, t := range strings.Split(*order, ",") {
+				t = strings.TrimSpace(t)
+				if t == "" || seenTok[t] {
+					return Result{}, Usage("--order needs a comma-separated list of distinct PR numbers or slots, with no empty entries")
+				}
+				seenTok[t] = true
+				override = append(override, t)
+			}
+		}
+		say := func(l string) { fmt.Fprintln(c.Stderr, l) }
+		r, err := workerEnvCtx(c, ctx).Train(ctx, root, worker.TrainOpts{Targets: args, Base: *base, Order: override, Say: say, LandGreen: *landGreen, NoVerify: *noVerify, Approve: approve, Verdict: shipVerdict(c, root, root).Block, Recorded: recordedReviews(root)})
 		if err != nil && r.Verdict == worker.GateVerdictBlocked {
 			return verdictRefusal(err, trainData(r))
 		}
@@ -89,6 +104,9 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 		}
 		if err == nil && r.Verdict == worker.GateNotClosing {
 			return closesRefusal(r.Err, r.Hint, trainData(r))
+		}
+		if err == nil && r.Verdict == worker.GateOrder {
+			return blockedRefusal("order", r.Err, r.Hint, trainData(r))
 		}
 		if err == nil && r.Verdict == worker.GateBestOfUnpicked {
 			return bestOfRefusal(r.Err, r.Hint, trainData(r))
