@@ -10,6 +10,8 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/reap"
 	"github.com/l4ci/rota/internal/round"
+	"github.com/l4ci/rota/internal/roundcfg"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 // Deps.ReapEnv builds the round environment reap reads its live set from and
@@ -70,7 +72,15 @@ func reapVerb(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		in := reap.Input{Root: root, Base: env.Base, Git: env.Git, Report: rep, Agents: agents, Host: ops, Lease: env}
+		set, err := roundcfg.Load(root)
+		if err != nil {
+			return Result{}, err
+		}
+		adopted, err := worker.AdoptedBranches(root)
+		if err != nil {
+			c.Warn("round ledger unreadable (%v): adopted branches will not be offered for deletion", err)
+		}
+		in := reap.Input{Root: root, Base: env.Base, Git: env.Git, Report: rep, Agents: agents, Host: ops, Lease: env, Adopted: adopted, Roster: set.Roster}
 		found, err := reap.Find(ctx, in, kinds)
 		if err != nil {
 			return Result{}, err

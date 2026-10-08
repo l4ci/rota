@@ -76,6 +76,10 @@ func prNumText(ref string) string {
 	return ""
 }
 
+// RoundBranch reports whether name has the `<agent>/<issue>-<slug>` shape a
+// round cuts for a worker.
+func RoundBranch(name string) bool { return reIssueBranch.MatchString(name) }
+
 // IssueFromBranch is the issue number a branch name carries: the number leading
 // `<agent>/<issue>-<slug>`, else an `issue-N` or `#N` token. "" when none.
 func IssueFromBranch(name string) string {
