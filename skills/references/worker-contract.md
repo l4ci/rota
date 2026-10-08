@@ -130,6 +130,8 @@ Applies to a bounced worker and to `/rota-work` on a `changes-requested` item, w
 4. Work in order: blocking first, then simple fixes, then complex ones. Test each fix on its own.
 5. Answer in facts: "Fixed in `<sha>`: <what changed>", or the evidence from 3. No "You're absolutely right!", no thanks, no agreement you have not checked.
 
+A relay whose first line after the signature (and the relay note) starts with `REVIEW <pr-url> (<n> items)` is review input on your open PR, one `- <author>: <comment>` per item and, when present, a review verdict. Treat each item by the list above: verify it against the code, fix what holds, push, and answer every item on the PR with `rota worker reply <slot> --body-file <path>` (what you changed in `<sha>`, or the evidence against the comment). Do not resolve the reviewer's conversations and do not merge. Then run `rota worker done <slot>` as before and print `ROTA-DONE <slot> <pr-url>` again as the last line. Each such relay counts as a bounce against `round.maxBounces`.
+
 ## Provenance
 
 The worker writes its own PR body, and an orchestrator relay, a maintainer typing in the pane and stray text all arrive through the same channel. Without a signature the worker cannot tell them apart, and what it cites is permanent once merged.

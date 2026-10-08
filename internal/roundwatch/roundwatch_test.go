@@ -202,3 +202,11 @@ func TestRunNothingToWatchHoldsUntilHeartbeat(t *testing.T) {
 		t.Fatalf("%+v %v", res, err)
 	}
 }
+
+func TestCarryKeepsReviewEntries(t *testing.T) {
+	base := map[string]string{ReviewKey("nia"): "1 from rev", PRStateKey("nia"): "open", "pr/nia": "u"}
+	got := carry(base)
+	if got[ReviewKey("nia")] != "1 from rev" || got[PRStateKey("nia")] != "open" || len(got) != 2 {
+		t.Fatalf("a tick that skips the forge must not read review input as gone: %v", got)
+	}
+}

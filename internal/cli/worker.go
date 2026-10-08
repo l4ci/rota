@@ -45,6 +45,7 @@ func workerCommands() *Command {
 			{Name: "reap", Summary: "remove slots, their worktrees and branches", Verb: poolReap},
 		}},
 		{Name: "dispatch", Summary: "send a brief into a slot's session", Verb: workerDispatch},
+		{Name: "reply", Summary: "answer a reviewer on the slot's PR through the tracker", Verb: workerReply},
 		{Name: "prompt-check", Summary: "Codex UserPromptSubmit hook: pass only signed or maintainer input", Verb: workerPromptCheck},
 		{Name: "poll", Summary: "classify slot states from their panes", Verb: workerPoll},
 		{Name: "session", Summary: "attachable host session guarantee", Subs: []*Command{

@@ -58,6 +58,14 @@ note: (#391) before typing, both hosts read the prompt line and wait about 4s (3
 note: "never submitted" (safe to resend) and "dialog open" (inspect first) get distinct `error.code` values. The conventions fix `error.code` to the exit-table name, so per-verb codes are not allowed, and the verb uses two exits instead: `retry` (6) for a brief that was never submitted, `unavailable` (5) for an open dialog. The message and hint still say which.
 note: `--kind` (E1, #68) defaults to the slot's recorded `kind`, else `claude`; a relay ignores it. A codex dispatch is specified under "E: Codex workers". hv-codex-verify is not absorbed: #158 retired it.
 
+### rota worker reply
+rota worker reply <slot> --body-file <path|->
+repo: none
+data: {"slot": string, "pr": string, "commentId": string, "url": string, "changed": true}
+exit: 2 when `--body-file` is missing or the body is empty; 3 when the slot is not in the pool or has no PR; 5 or 6 as the tracker verbs (forge unavailable, rate limited)
+old: none (new in #577)
+note: a worker answers a reviewer on its slot's PR after a `REVIEW` relay (see `round review-relay`). It posts the body as a PR comment through the tracker (`AddMRNote`, so GitHub and GitLab behave alike) and ends it with `<!-- rota:worker-reply <slot> -->`; the marker is how the review poll tells the worker's comments from review input. `url` is "" when the forge cannot name the comment's link. It resolves nothing on the reviewer's behalf.
+
 ### rota worker prompt-check
 rota worker prompt-check --key <path>
 repo: none

@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/gate"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/rotastate"
@@ -191,6 +192,9 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 		}
 		return []string{res.Agent}, nil
 	}
+	e.ReviewLoop = func(_ context.Context, sl roundtick.Slot) roundtick.ReviewOutcome {
+		return reviewStep(c, root, set, sl.Name)
+	}
 	e.Audit = func(a roundtick.Action) {
 		if err := gate.Autopilot(root, "round tick "+a.Action, a.Target, a.Detail); err != nil {
 			c.Warn("audit line not written: %v", err)
@@ -312,4 +316,60 @@ func tickLines(r roundtick.Result) string {
 		return "nothing to do"
 	}
 	return strings.Join(lines, "\n")
+}
+
+// reviewStep is one pass of the review loop over a done slot with a PR: it
+// looks for review input and, under round.reviewLoop auto, relays it to the
+// worker. A relay that cannot go out (the item is at the bounce cap, the host
+// refused) is Pending, never silently merged over.
+func reviewStep(c *Ctx, root string, set roundcfg.Settings, slot string) roundtick.ReviewOutcome {
+	ctx := c.Context()
+	o, err := reviewOpts(c, root, set, slot)
+	if err != nil {
+		c.Warn("review poll of %s: %v", slot, err)
+		return roundtick.ReviewOutcome{}
+	}
+	if set.ReviewLoop != roundcfg.ReviewLoopAuto {
+		s := worker.LoadRegistry(root).Slot(slot)
+		if s == nil {
+			return roundtick.ReviewOutcome{}
+		}
+		b, err := worker.PendingReview(ctx, o.Forge, s, o.Verdict)
+		if err != nil {
+			c.Warn("review poll of %s: %v", slot, err)
+			return roundtick.ReviewOutcome{}
+		}
+		if b.Empty() {
+			return roundtick.ReviewOutcome{}
+		}
+		return roundtick.ReviewOutcome{Pending: true, Detail: reviewSummary(b)}
+	}
+	env := c.deps().RoundEnv(ctx, root)
+	env.Worker = workerEnvCtx(c, ctx)
+	res, err := env.ReviewRelay(ctx, root, o)
+	switch {
+	case err == nil && res.Nothing:
+		return roundtick.ReviewOutcome{}
+	case err == nil:
+		return roundtick.ReviewOutcome{Relayed: true, Detail: fmt.Sprintf("%d item(s), bounce %d of %s", res.Items, res.Bounces, maxText(set.MaxBounces))}
+	}
+	// The detail stays the same from pass to pass, or the watch would wake on it
+	// every time.
+	if bd, ok := exitcode.DataOf[worker.BlockData](err); ok && bd.BlockedBy == "maxBounces" {
+		return roundtick.ReviewOutcome{Pending: true, Detail: fmt.Sprintf("%d item(s) waiting; the item is at the bounce cap", res.Items)}
+	}
+	return roundtick.ReviewOutcome{Pending: true, Detail: fmt.Sprintf("%d item(s) not relayed: %s", res.Items, firstLine(err.Error()))}
+}
+
+// reviewSummary is "<n> from <authors>", the value of a slot's review key.
+func reviewSummary(b worker.ReviewBatch) string {
+	n := len(b.Items)
+	from := strings.Join(b.Authors(), ", ")
+	if b.Verdict != "" {
+		if n == 0 {
+			return "review verdict FAIL"
+		}
+		from += " and a FAIL verdict"
+	}
+	return fmt.Sprintf("%d from %s", n, from)
 }

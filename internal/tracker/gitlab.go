@@ -50,10 +50,12 @@ type glNote struct {
 	Body   string                     `json:"body"`
 	System bool                       `json:"system"`
 	Author *struct{ Username string } `json:"author"`
+	// CreatedAt is the note's RFC 3339 creation time.
+	CreatedAt string `json:"created_at"`
 }
 
 func (n glNote) comment() Comment {
-	c := Comment{ID: idText(n.ID), Body: n.Body}
+	c := Comment{ID: idText(n.ID), Body: n.Body, CreatedAt: parseTime(n.CreatedAt)}
 	if n.Author != nil {
 		c.Author = n.Author.Username
 	}
@@ -287,6 +289,10 @@ func (g *GitLab) MRNotes(ctx context.Context, number int) ([]Comment, error) {
 	}
 	return out, nil
 }
+
+// Reviews is empty: a merge request's review discussion, diff notes
+// included, is in MRNotes, and a GitLab approval carries no text to relay.
+func (g *GitLab) Reviews(context.Context, int) ([]Review, error) { return []Review{}, nil }
 
 func (g *GitLab) AddMRNote(ctx context.Context, number int, body string) (string, error) {
 	return g.createdID(ctx, []string{"api", "-X", "POST", fmt.Sprintf("projects/:id/merge_requests/%d/notes", number), "-f", "body=" + body})

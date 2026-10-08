@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync/atomic"
+	"time"
 )
 
 // GitHub is the gh adapter.
@@ -330,22 +332,86 @@ func (g *GitHub) Edit(ctx context.Context, number int, e IssueEdit) error {
 // Comments returns the comments oldest first.
 func (g *GitHub) Comments(ctx context.Context, number int) ([]Comment, error) {
 	var raw []struct {
-		ID   json.RawMessage         `json:"id"`
-		Body string                  `json:"body"`
-		User *struct{ Login string } `json:"user"`
+		ID        json.RawMessage         `json:"id"`
+		Body      string                  `json:"body"`
+		User      *struct{ Login string } `json:"user"`
+		CreatedAt string                  `json:"created_at"`
 	}
 	if err := g.pages(ctx, fmt.Sprintf("repos/{owner}/{repo}/issues/%d/comments", number), &raw); err != nil {
 		return nil, err
 	}
 	out := []Comment{}
 	for _, c := range raw {
-		cm := Comment{ID: idText(c.ID), Body: c.Body}
+		cm := Comment{ID: idText(c.ID), Body: c.Body, CreatedAt: parseTime(c.CreatedAt)}
 		if c.User != nil {
 			cm.Author = c.User.Login
 		}
 		out = append(out, cm)
 	}
 	return out, nil
+}
+
+// Reviews returns the PR's submitted reviews and its inline diff comments,
+// oldest first. A pending review has no submission time and is left out.
+func (g *GitHub) Reviews(ctx context.Context, number int) ([]Review, error) {
+	var reviews []struct {
+		ID          json.RawMessage         `json:"id"`
+		Body        string                  `json:"body"`
+		State       string                  `json:"state"`
+		User        *struct{ Login string } `json:"user"`
+		SubmittedAt string                  `json:"submitted_at"`
+	}
+	if err := g.pages(ctx, fmt.Sprintf("repos/{owner}/{repo}/pulls/%d/reviews", number), &reviews); err != nil {
+		return nil, err
+	}
+	var inline []struct {
+		ID        json.RawMessage         `json:"id"`
+		Body      string                  `json:"body"`
+		User      *struct{ Login string } `json:"user"`
+		CreatedAt string                  `json:"created_at"`
+	}
+	if err := g.pages(ctx, fmt.Sprintf("repos/{owner}/{repo}/pulls/%d/comments", number), &inline); err != nil {
+		return nil, err
+	}
+	out := []Review{}
+	for _, r := range reviews {
+		at := parseTime(r.SubmittedAt)
+		if at.IsZero() {
+			continue
+		}
+		rv := Review{Comment: Comment{ID: idText(r.ID), Body: r.Body, CreatedAt: at}, State: reviewState(r.State)}
+		if r.User != nil {
+			rv.Author = r.User.Login
+		}
+		out = append(out, rv)
+	}
+	for _, c := range inline {
+		rv := Review{Comment: Comment{ID: idText(c.ID), Body: c.Body, CreatedAt: parseTime(c.CreatedAt)}, State: ReviewCommented}
+		if c.User != nil {
+			rv.Author = c.User.Login
+		}
+		out = append(out, rv)
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].CreatedAt.Before(out[j].CreatedAt) })
+	return out, nil
+}
+
+// reviewState maps GitHub's review state onto the Review* constants; a state
+// it does not know (DISMISSED) reads as a comment.
+func reviewState(s string) string {
+	switch strings.ToLower(s) {
+	case "approved":
+		return ReviewApproved
+	case "changes_requested":
+		return ReviewChangesRequested
+	}
+	return ReviewCommented
+}
+
+// parseTime reads a forge timestamp; zero when it is empty or unreadable.
+func parseTime(s string) time.Time {
+	t, _ := time.Parse(time.RFC3339, s)
+	return t
 }
 
 func (g *GitHub) AddComment(ctx context.Context, number int, body string) (string, error) {

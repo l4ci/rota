@@ -70,6 +70,16 @@ type Merged struct {
 	Detail  string
 }
 
+// ReviewOutcome is what the review loop did for one done slot. The zero value
+// means no review input was waiting. Relayed means the input went back to the
+// worker, which is busy again; Pending means it waits on the orchestrator (the
+// loop is manual, the item is at the bounce cap, or the relay failed), with
+// Detail saying why.
+type ReviewOutcome struct {
+	Relayed, Pending bool
+	Detail           string
+}
+
 // Env is the outside world of a tick.
 type Env struct {
 	// Cap bounds assigns and merges per tick; <= 0 means DefaultCap.
@@ -101,6 +111,10 @@ type Env struct {
 	// nothing assignable, and returns their ids. nil means the round has no
 	// review. The minted items are assigned first, within the same cap.
 	Review func(ctx context.Context) (minted []string, err error)
+	// ReviewLoop checks a done slot's PR for review input (round.reviewLoop);
+	// nil means the round has no review loop. A slot it relays or reports is not
+	// merged this tick.
+	ReviewLoop func(ctx context.Context, s Slot) ReviewOutcome
 	// Audit records one action in the audit log.
 	Audit func(Action)
 	// Held is the targets a previous tick's merge failed on and a person has
@@ -173,6 +187,16 @@ func Run(ctx context.Context, e Env) (Result, error) {
 			}
 			r.NeedsYou = append(r.NeedsYou, Item{s.State, s.Name, why})
 		case s.State == "done" && s.PR != "":
+			if e.ReviewLoop != nil {
+				switch out := e.ReviewLoop(ctx, s); {
+				case out.Relayed:
+					e.audit(&r, Action{"review-relay", s.Name, out.Detail})
+					continue
+				case out.Pending:
+					r.NeedsYou = append(r.NeedsYou, Item{"review", s.Name, out.Detail})
+					continue
+				}
+			}
 			targets = append(targets, s.Name)
 		}
 	}
