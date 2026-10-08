@@ -108,6 +108,7 @@ Judgment calls:
 - **`--desc`:** what happens, when, what should happen instead (bugs); what, where, why it matters (features); what and why (tasks). One to three sentences.
 - **Behavior, not paths:** descriptions and acceptance criteria state observable behavior. File paths and line numbers go in a `## Pointers` section of the body (`--body-file`), never in the criteria.
 - **`## Out of scope`:** features and Major items get this section in the body (`--body-file`): one to three bullets naming what a worker must not take on, or the line "nothing noted". `rota round assign` copies it into the worker brief, so write it as the contract's boundary. Bugs and tasks may omit it.
+- **`## Touches`:** features and Major items also list the contracts they change, one bullet each: a symbol, endpoint, schema or table, migration, config key or event (`POST /items`, `worker.Slot`, `round.maxBounces`). `rota round candidates` and `assign` flag two in-flight issues that name the same entry, which a file-path check misses. `assign` copies the section into the worker brief. Ask for it the way you ask for out-of-scope bullets; omit it when the item changes no shared contract.
 
 ## Step 7 — Brainstorm Nudge
 

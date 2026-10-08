@@ -15,4 +15,12 @@ Under `backlog.backend: "issues"` the open issues on GitHub or GitLab are the ba
 
 On the file backend, add the `GH: #N` tag by hand when creating an item with `rota item create`; `/rota-ship` then emits `Closes #N` and the direct-push path offers a manual-gated close prompt.
 
+## Body sections rota reads
+
+| Heading | Read by | Content |
+|---------|---------|---------|
+| `## Files` | the `overlap` readiness check | one path or glob per bullet |
+| `## Touches` | the `overlap` readiness check; copied into the worker brief | one symbol, endpoint, schema, migration or config key per bullet |
+| `## Out of scope` | copied into the worker brief | the ticket's boundary |
+
 See `docs/contributing/contract/backlog.md` for verb shapes, flags and exits, and `skills/references/issue-mode.md` for the issue backend.

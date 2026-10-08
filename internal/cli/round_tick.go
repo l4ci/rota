@@ -159,7 +159,7 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 		if scope == "" {
 			scope = set.Scope
 		}
-		cs, err := renv.Candidates(ctx, root, be, round.CandidateOpts{Scope: scope, Slate: slate, Shared: set.SharedPaths})
+		cs, err := renv.Candidates(ctx, root, be, round.CandidateOpts{Scope: scope, Slate: slate, Shared: set.SharedPaths, ScopeOverlap: set.ScopeOverlap})
 		if err != nil {
 			return nil, err
 		}

@@ -31,9 +31,10 @@ type Check struct {
 
 // Overlap says which in-flight item an item's footprint collides with.
 type Overlap struct {
-	With  string
-	Slot  string
-	Paths []string
+	With   string
+	Slot   string
+	Paths  []string
+	Scopes []string
 }
 
 // Readiness is the verdict on one item: ready when every check holds.
@@ -57,6 +58,7 @@ func (r Readiness) Ready() bool {
 type InFlight struct {
 	Slot, Issue string
 	Paths       []string
+	Scopes      []string
 }
 
 var (
@@ -226,6 +228,13 @@ func Assess(be backlog.Backend, id string, tracked, shared []string, inFlight []
 // criteria makes the item startable without a design or plan note, so a round
 // needs no bookkeeping PR before its first assign.
 func AssessBrief(be backlog.Backend, id string, tracked, shared []string, inFlight []InFlight, acceptOverlap bool, brief string) (Readiness, error) {
+	return AssessScoped(be, id, tracked, shared, inFlight, acceptOverlap, brief, false)
+}
+
+// AssessScoped is AssessBrief where a clash on declared scopes (`## Touches`,
+// else the Subsystem field) fails the overlap check when scopeBlock, as a
+// shared path does, and only warns otherwise.
+func AssessScoped(be backlog.Backend, id string, tracked, shared []string, inFlight []InFlight, acceptOverlap bool, brief string, scopeBlock bool) (Readiness, error) {
 	r := Readiness{ID: id}
 	if _, err := be.Get(id); err != nil {
 		return r, err
@@ -263,6 +272,7 @@ func AssessBrief(be backlog.Backend, id string, tracked, shared []string, inFlig
 	r.Checks = append(r.Checks, dep)
 
 	mine := itemFootprint(be, id, tracked, shared)
+	myScopes := itemScopes(be, id)
 	ov := Check{Name: CheckOverlap, OK: true, Detail: []string{}}
 	for _, f := range inFlight {
 		if f.Issue == id {
@@ -272,12 +282,14 @@ func AssessBrief(be backlog.Backend, id string, tracked, shared []string, inFlig
 		if it, err := be.Get(f.Issue); err == nil && it.Closed {
 			continue
 		}
-		if paths := Overlaps(mine, f.Paths); len(paths) > 0 {
-			r.Overlaps = append(r.Overlaps, Overlap{With: f.Issue, Slot: f.Slot, Paths: paths})
-			ov.Detail = append(ov.Detail, fmt.Sprintf("%s (held by %s): %s", f.Issue, f.Slot, strings.Join(paths, ", ")))
-			if !acceptOverlap {
-				ov.OK = false
-			}
+		paths, scopes := Overlaps(mine, f.Paths), ScopeOverlaps(myScopes, f.Scopes)
+		if len(paths) == 0 && len(scopes) == 0 {
+			continue
+		}
+		r.Overlaps = append(r.Overlaps, Overlap{With: f.Issue, Slot: f.Slot, Paths: paths, Scopes: scopes})
+		ov.Detail = append(ov.Detail, overlapDetail(f.Issue, f.Slot, paths, scopes))
+		if !acceptOverlap && (len(paths) > 0 || scopeBlock) {
+			ov.OK = false
 		}
 	}
 	r.Checks = append(r.Checks, ov)
@@ -312,7 +324,7 @@ func (e Env) InFlightItems(ctx context.Context, root string, be backlog.Backend,
 			paths = append(paths, e.changed(ctx, wt, base, shared)...)
 		}
 		sort.Strings(paths)
-		out = append(out, InFlight{Slot: name, Issue: id, Paths: paths})
+		out = append(out, InFlight{Slot: name, Issue: id, Paths: paths, Scopes: itemScopes(be, id)})
 	}
 	for _, q := range reg.PRs() {
 		id := queuedIssue(q)
@@ -322,7 +334,7 @@ func (e Env) InFlightItems(ctx context.Context, root string, be backlog.Backend,
 		paths := itemFootprint(be, id, tracked, shared)
 		paths = append(paths, e.queuedChanged(ctx, root, q, shared)...)
 		sort.Strings(paths)
-		out = append(out, InFlight{Slot: "queue:" + q.From, Issue: id, Paths: paths})
+		out = append(out, InFlight{Slot: "queue:" + q.From, Issue: id, Paths: paths, Scopes: itemScopes(be, id)})
 	}
 	return out
 }

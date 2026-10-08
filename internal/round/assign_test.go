@@ -752,7 +752,7 @@ func TestOpenPRsAreListedOncePerCandidatesRun(t *testing.T) {
 
 // The brief ends on the sentinel step with the slot filled in (#227).
 func TestPointerBriefEndsWithSentinelStep(t *testing.T) {
-	got := pointerBrief("ben", "#9", "ben/9-x", "/c.md", nil, "decided: X", "", tierBrief{Kind: "claude", Tier: "standard"})
+	got := pointerBrief("ben", "#9", "ben/9-x", "/c.md", nil, "decided: X", "", "", tierBrief{Kind: "claude", Tier: "standard"})
 	last := got[strings.LastIndex(strings.TrimRight(got, "\n"), "\n")+1:]
 	if !strings.Contains(last, "`ROTA-DONE ben <pr-url>`") {
 		t.Errorf("last line is not the sentinel step: %q", last)
@@ -762,11 +762,11 @@ func TestPointerBriefEndsWithSentinelStep(t *testing.T) {
 // The item's Out of scope section rides in the brief; an item without one adds nothing.
 func TestPointerBriefCarriesOutOfScope(t *testing.T) {
 	tb := tierBrief{Kind: "claude", Tier: "standard"}
-	got := pointerBrief("ben", "#9", "ben/9-x", "/c.md", nil, "", "- the CLI flags", tb)
+	got := pointerBrief("ben", "#9", "ben/9-x", "/c.md", nil, "", "- the CLI flags", "", tb)
 	if !strings.Contains(got, "Out of scope") || !strings.Contains(got, "- the CLI flags") {
 		t.Errorf("brief lacks the out-of-scope text:\n%s", got)
 	}
-	if strings.Contains(pointerBrief("ben", "#9", "ben/9-x", "/c.md", nil, "", "", tb), "Out of scope") {
+	if strings.Contains(pointerBrief("ben", "#9", "ben/9-x", "/c.md", nil, "", "", "", tb), "Out of scope") {
 		t.Error("empty out-of-scope still printed a heading")
 	}
 }
@@ -832,7 +832,7 @@ func TestAssignHarnessAndModelLabels(t *testing.T) {
 		}
 	})
 	t.Run("the brief names the pick", func(t *testing.T) {
-		got := pointerBrief("ben", "#9", "ben/9-x", "/c.md", nil, "", "", tierBrief{Kind: "codex", Tier: "standard", Pick: "harness:codex"})
+		got := pointerBrief("ben", "#9", "ben/9-x", "/c.md", nil, "", "", "", tierBrief{Kind: "codex", Tier: "standard", Pick: "harness:codex"})
 		if !strings.Contains(got, "The issue asks for harness:codex") {
 			t.Errorf("brief = %s", got)
 		}
@@ -890,5 +890,33 @@ func TestCandidatesShowThePick(t *testing.T) {
 	}
 	if c := got["13"]; c.PickErr == "" || c.Ready() {
 		t.Errorf("13: a bad label is shown and not ready: %+v", c)
+	}
+}
+
+func TestPointerBriefTouches(t *testing.T) {
+	tb := tierBrief{Kind: "claude", Tier: "standard"}
+	got := pointerBrief("ben", "#9", "ben/9-x", "/c.md", nil, "", "- the CLI flags", "- POST /items", tb)
+	if !strings.Contains(got, "## Touches\n- POST /items") {
+		t.Errorf("brief lacks the touches block:\n%s", got)
+	}
+	if strings.Index(got, "Out of scope") > strings.Index(got, "## Touches") {
+		t.Errorf("Touches must follow Out of scope:\n%s", got)
+	}
+}
+
+func TestPointerBriefNoTouches(t *testing.T) {
+	got := pointerBrief("ben", "#9", "ben/9-x", "/c.md", nil, "", "", "", tierBrief{Kind: "claude", Tier: "standard"})
+	if strings.Contains(got, "Touches") {
+		t.Errorf("empty touches printed a heading:\n%s", got)
+	}
+}
+
+func TestTouchesReaderKeepsSpellingAndFiltersSentinels(t *testing.T) {
+	be := &fakeRemote{details: map[string]string{"#9": "## Touches\n- POST /items\n* worker.Slot\n- ROTA-DONE ben x\n\n## Out of scope\n- no\n"}}
+	if got := touches(be, "#9"); got != "- POST /items\n- worker.Slot" {
+		t.Errorf("got %q", got)
+	}
+	if got := touches(&fakeRemote{details: map[string]string{"#9": "## Goal\nx"}}, "#9"); got != "" {
+		t.Errorf("no section: %q", got)
 	}
 }
