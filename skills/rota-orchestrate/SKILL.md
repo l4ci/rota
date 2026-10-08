@@ -100,7 +100,7 @@ Fix it yourself when the gap is small and mechanical: a stale doc line, a missin
 
 A reviewer's comment on a `done` slot's PR reaches the watch as a `review/<slot>` change (and a tick lists a `review` item). Under `round.reviewLoop: manual` (the default) run `rota round review-relay <slot>`: it counts the bounce itself, relays the comments to the worker as a `REVIEW` relay and marks the slot busy, so do not also run `round bounce`. At the cap it exits 4 and escalates on the PR: go to the cap options in [`bounce-cap.md`](bounce-cap.md). Under `auto` the watch does this itself and you hear about it only at the cap. The loop never merges: gate the PR once the worker is `done` again. Under `manual` the autopilot tick still gates a done PR beside the `review` item, so relay first if the review matters.
 
-When you bounce by hand, run `rota round bounce <issue> --head <pr-head-sha>` first and read [`bounce-cap.md`](bounce-cap.md): the cap, what to do at it, and re-review.
+When you bounce by hand, run `rota round bounce <issue> --head <pr-head-sha> --slot <slot>` first and read [`bounce-cap.md`](bounce-cap.md): the cap, what to do at it, and re-review.
 
 ## 8. Wind down
 
