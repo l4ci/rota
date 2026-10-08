@@ -492,3 +492,27 @@ func TestLeaseKindFilter(t *testing.T) {
 		t.Errorf("branch only = %v", got)
 	}
 }
+
+// An adopted slot is released with its worktree kept, and a tool like Codex
+// keeps that worktree outside .worktrees/. Once its PR merged the branch is
+// listed for the user to delete, held while the checkout remains.
+func TestReapListsMergedExternal(t *testing.T) {
+	g := repo(nil, []string{"codex/12-thing", "codex/13-wip"}, "codex/12-thing")
+	g.resp["rev-list --count main..codex/13-wip"] = gitResp{out: "2\n"}
+	g.resp["worktree list --porcelain"] = gitResp{out: g.resp["worktree list --porcelain"].out +
+		"worktree /elsewhere/a\nHEAD abc\nbranch refs/heads/codex/12-thing\n\n" +
+		"worktree /elsewhere/b\nHEAD abc\nbranch refs/heads/codex/13-wip\n\n"}
+	in := input(g, nil, []host.Agent{}, nil)
+	res := find(t, in, KindBranch)
+	want := []string{"branch:codex/12-thing HELD(checked out at /elsewhere/a; remove that worktree first)"}
+	if got := ids(res.Candidates); !reflect.DeepEqual(got, want) {
+		t.Fatalf("candidates = %v, want %v", got, want)
+	}
+	if res.Candidates[0].Reason != "merged into main, held by a worktree outside .worktrees/" {
+		t.Errorf("reason = %q", res.Candidates[0].Reason)
+	}
+	out := Apply(bg, in, res.Candidates)
+	if len(out.Reaped) != 0 || g.ran("branch -D") || g.ran("worktree remove") {
+		t.Errorf("a held external branch was deleted: %v %v", out.Reaped, g.calls)
+	}
+}

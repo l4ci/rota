@@ -122,10 +122,11 @@ type state struct {
 	root       string
 	hostOK     bool
 	checkouts  []checkout
-	checkedOut map[string]bool // branches checked out in any worktree
-	registered map[string]bool // row names with a slot
-	slotBranch map[string]bool // branches registered rows name
-	slotTab    map[string]bool // tab handles registered rows name
+	checkedOut map[string]bool   // branches checked out in any worktree
+	checkedAt  map[string]string // the path of that worktree
+	registered map[string]bool   // row names with a slot
+	slotBranch map[string]bool   // branches registered rows name
+	slotTab    map[string]bool   // tab handles registered rows name
 	warnings   []string
 }
 
@@ -185,7 +186,7 @@ func Find(ctx context.Context, in Input, kinds []string) (Result, error) {
 }
 
 func newState(ctx context.Context, in Input) (*state, error) {
-	s := &state{in: in, root: in.Root, checkedOut: map[string]bool{}, registered: map[string]bool{}, slotBranch: map[string]bool{}, slotTab: map[string]bool{}}
+	s := &state{in: in, root: in.Root, checkedOut: map[string]bool{}, checkedAt: map[string]string{}, registered: map[string]bool{}, slotBranch: map[string]bool{}, slotTab: map[string]bool{}}
 	if real, err := filepath.EvalSymlinks(in.Root); err == nil {
 		s.root = real
 	}
@@ -219,6 +220,7 @@ func newState(ctx context.Context, in Input) (*state, error) {
 			s.checkouts = append(s.checkouts, *cur)
 			if cur.branch != "" {
 				s.checkedOut[cur.branch] = true
+				s.checkedAt[cur.branch] = cur.path
 			}
 		}
 		cur = nil
@@ -380,7 +382,18 @@ func findBranches(ctx context.Context, s *state) ([]Candidate, error) {
 	}
 	var out []Candidate
 	for _, b := range strings.Fields(list) {
-		if protectedBranch(b, s.in.Base) || s.checkedOut[b] || s.slotBranch[b] || !reIssueBranch.MatchString(b) {
+		if protectedBranch(b, s.in.Base) || s.slotBranch[b] || !reIssueBranch.MatchString(b) {
+			continue
+		}
+		if s.checkedOut[b] {
+			// A released adopted slot keeps its checkout, which another tool
+			// may keep outside .worktrees/ (where no worktree is listed). A
+			// merged branch there is shown, held until the checkout goes.
+			if at := s.checkedAt[b]; filepath.Dir(at) != s.wtDir() && at != s.root && s.heldUnmerged(ctx, s.root, b) == "" {
+				out = append(out, Candidate{ID: KindBranch + ":" + b, Kind: KindBranch, Name: b,
+					Reason: "merged into " + s.in.Base + ", held by a worktree outside .worktrees/",
+					Held:   "checked out at " + at + "; remove that worktree first"})
+			}
 			continue
 		}
 		cand := Candidate{ID: KindBranch + ":" + b, Kind: KindBranch, Name: b, Reason: "checked out nowhere"}

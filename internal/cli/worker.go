@@ -679,6 +679,7 @@ func workerGate(fs *flag.FlagSet) RunFunc {
 	base := fs.String("base", "", "the cycle branch the slot merges into")
 	check := fs.Bool("check-only", false, "judge freshness, PR identity and provenance; merge nothing")
 	noVerify := fs.Bool("no-verify", false, "merge without running test.full; required when test.full is empty")
+	prune := fs.Bool("prune", false, "when an adopted slot's PR merges, also delete its worktree and branch")
 	confirm := approvalFlags(fs)
 	return func(c *Ctx, args []string) (Result, error) {
 		slot, err := oneArg(args, "slot")
@@ -707,7 +708,7 @@ func workerGate(fs *flag.FlagSet) RunFunc {
 		ctx, stop := workerContext()
 		defer stop()
 		issue := gateIssue(root, slot)
-		r, err := workerEnvCtx(c, ctx).Gate(ctx, root, worker.GateOpts{Slot: slot, Base: *base, CheckOnly: *check, NoVerify: *noVerify, Approve: approve, Verdict: shipVerdict(c, root, root).Block})
+		r, err := workerEnvCtx(c, ctx).Gate(ctx, root, worker.GateOpts{Slot: slot, Base: *base, CheckOnly: *check, NoVerify: *noVerify, Prune: *prune, Approve: approve, Verdict: shipVerdict(c, root, root).Block})
 		if err != nil && r.Verdict == worker.GateVerdictBlocked {
 			return verdictRefusal(err, gateData(r))
 		}

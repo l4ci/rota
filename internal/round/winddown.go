@@ -22,13 +22,19 @@ const (
 	OutcomeParked    = "parked"
 	OutcomeRetained  = "retained"
 	OutcomeUnchanged = "unchanged"
+	// OutcomeReleased: an adopted slot whose PR merged, unregistered.
+	OutcomeReleased = "released"
+	// OutcomeOpen: an adopted slot whose work is not merged yet.
+	OutcomeOpen = "open"
 )
 
 // WindDownOpts are the flags of `rota round wind-down`.
 type WindDownOpts struct {
 	NoVerify  bool
 	HolderPID int
-	Settings  roundcfg.Settings
+	// Prune also removes the worktree and branch of a released adopted slot.
+	Prune    bool
+	Settings roundcfg.Settings
 }
 
 // SlotOutcome is one slot's part of the summary.
@@ -75,6 +81,7 @@ func (e Env) WindDown(ctx context.Context, root string, be Board, o WindDownOpts
 
 	// What each slot held, before parking clears it.
 	before := map[string]SlotOutcome{}
+	seen := false // the status read, so an absent external row proves a merge
 	if rep, err := e.Status(ctx, root); err == nil {
 		for _, r := range rep.Rows {
 			so := SlotOutcome{Name: r.Name, Issue: r.Issue, PR: r.PR}
@@ -89,6 +96,7 @@ func (e Env) WindDown(ctx context.Context, root string, be Board, o WindDownOpts
 			before[r.Name] = so
 		}
 		res.Warnings = append(res.Warnings, rep.Warnings...)
+		seen = true
 	}
 
 	// 1. Re-verify the base in the project root.
@@ -184,6 +192,28 @@ func (e Env) WindDown(ctx context.Context, root string, be Board, o WindDownOpts
 					res.Warnings = append(res.Warnings, fmt.Sprintf("release claim %s on %s: %v", claim, issue, err))
 				}
 			}
+		}
+		res.Slots = append(res.Slots, so)
+	}
+
+	// Adopted slots are not parked: one whose PR merged (status drops its row)
+	// is unregistered with its checkout kept, any other stays registered.
+	for _, s := range worker.LoadRegistry(root).Slots() {
+		if !s.IsExternal() {
+			continue
+		}
+		name := s.Name()
+		so := before[name]
+		so.Name, so.Outcome = name, OutcomeOpen
+		if _, listed := before[name]; !listed && seen {
+			if err := w.ReleaseExternal(root, name, o.Prune); err != nil {
+				res.Warnings = append(res.Warnings, fmt.Sprintf("release %s: %v", name, err))
+			}
+			so.Outcome = OutcomeReleased
+			so.Issue = firstNonEmpty(so.Issue, s.HeldID())
+			t := true
+			so.Merged = &t
+			res.Changed = true
 		}
 		res.Slots = append(res.Slots, so)
 	}

@@ -262,3 +262,56 @@ func TestWindDownVerifyCancelReturnsWhileGrandchildHoldsPipe(t *testing.T) {
 		t.Errorf("verdict = %q, want %q", res.Verdict, VerdictVerifyFailed)
 	}
 }
+
+// addExternal registers an adopted slot on a fresh branch and worktree.
+func (f *assignFixture) addExternal(t *testing.T, name, branch, pr string) string {
+	t.Helper()
+	wt := filepath.Join(f.root, ".worktrees", name)
+	sh(t, f.root, "worktree", "add", "-q", "-b", branch, wt, "main")
+	if err := worker.RegisterExternal(f.root, name, branch, wt, "main", "12", pr); err != nil {
+		t.Fatal(err)
+	}
+	return wt
+}
+
+func TestWindDownReleasesMergedExternalSlots(t *testing.T) {
+	f := newAssignFixture(t)
+	wt1 := f.addExternal(t, "ext-1", "codex/12-a", "https://github.com/o/r/pull/7")
+	wt2 := f.addExternal(t, "ext-2", "codex/13-b", "https://github.com/o/r/pull/8")
+	f.env.Forge = (&fakeRemote{states: map[int]string{7: "merged", 8: "open"}}).asForge()
+	f.verifyWith(t, `["true"]`)
+	res, err := f.windDown(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := outcomes(res)
+	if got["ext-1"] != OutcomeReleased || got["ext-2"] != OutcomeOpen {
+		t.Fatalf("outcomes: %v", got)
+	}
+	reg := worker.LoadRegistry(f.root)
+	if reg.Slot("ext-1") != nil || reg.Slot("ext-2") == nil {
+		t.Errorf("registry after wind-down: ext-1=%v ext-2=%v", reg.Slot("ext-1"), reg.Slot("ext-2"))
+	}
+	for _, wt := range []string{wt1, wt2} {
+		if _, err := os.Stat(wt); err != nil {
+			t.Errorf("wind-down removed %s: %v", wt, err)
+		}
+	}
+	if s := reg.Slot("ext-2"); s.Branch() != "codex/13-b" || s.Task() != "12" {
+		t.Errorf("an open external slot must not be parked: %v", s)
+	}
+}
+
+func TestWindDownLeavesExternalSlotsAloneWhenStatusIsUnreadable(t *testing.T) {
+	f := newAssignFixture(t)
+	f.addExternal(t, "ext-1", "codex/12-a", "https://github.com/o/r/pull/7")
+	f.env.Forge = nil // PR state unreadable: nothing proves a merge
+	f.verifyWith(t, `["true"]`)
+	res, err := f.windDown(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if outcomes(res)["ext-1"] == OutcomeReleased || worker.LoadRegistry(f.root).Slot("ext-1") == nil {
+		t.Errorf("released without proof of a merge: %v", outcomes(res))
+	}
+}
