@@ -154,8 +154,8 @@ func TestStatusExternalOldMergedPRReachableThroughBaseIsNotOurs(t *testing.T) {
 func TestStatusExternalOldMergedPRReachableThroughOriginBaseIsNotOurs(t *testing.T) {
 	root, e, fr := extFixture(t, "")
 	tree := gitIn(t, root, "rev-parse", "main^{tree}")
-	x := gitIn(t, root, "commit-tree", tree, "-p", "main", "-m", "merged upstream")
-	live := gitIn(t, root, "commit-tree", tree, "-p", x, "-m", "live work")
+	x := gitIn(t, root, "-c", "user.name=t", "-c", "user.email=t@t", "commit-tree", tree, "-p", "main", "-m", "merged upstream")
+	live := gitIn(t, root, "-c", "user.name=t", "-c", "user.email=t@t", "commit-tree", tree, "-p", x, "-m", "live work")
 	gitIn(t, root, "update-ref", "refs/remotes/origin/main", x)
 	gitIn(t, root, "update-ref", "refs/heads/codex/12-thing", live)
 	fr.mergedPRs = map[string][]tracker.PR{"codex/12-thing": {{Number: 3, Branch: "codex/12-thing", URL: "https://github.com/o/r/pull/3", HeadSHA: x}}}
