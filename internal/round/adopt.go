@@ -1,0 +1,154 @@
+package round
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+
+	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/worker"
+)
+
+// Blocked reasons of an adoption (exit 4, `blockedBy`).
+const (
+	// BlockRegistered: a slot already holds the branch.
+	BlockRegistered = "registered"
+	// BlockHeld: a slot already holds the issue.
+	BlockHeld = "held"
+)
+
+// AdoptOpts are the flags of `rota worker adopt`.
+type AdoptOpts struct {
+	// Ref is a local branch name or a worktree path of this repo.
+	Ref string
+	// Issue is the item the work resolves, in the backend's spelling.
+	Issue string
+	// Name is the slot name; "" picks the next free ext-<n>.
+	Name string
+	// PR is the work's PR URL when it already has one.
+	PR            string
+	AcceptOverlap bool
+	// Shared is round.sharedPaths, left out of the overlap footprints.
+	Shared []string
+}
+
+// Adopted is the slot Adopt registered.
+type Adopted struct {
+	Slot, Branch, Worktree, Issue, PR string
+	Overlaps                          []Overlap
+}
+
+// Adopt registers work another tool started as a hostless slot. It runs the
+// overlap check `round assign` runs and refuses a blocking clash unless
+// o.AcceptOverlap. A path outside this repo's worktrees or an unknown branch is
+// exit 2; a branch or an issue a slot already holds is blocked.
+func (e Env) Adopt(ctx context.Context, root string, be backlog.Backend, o AdoptOpts) (Adopted, error) {
+	res := Adopted{Issue: strings.TrimPrefix(strings.TrimSpace(o.Issue), "#"), PR: o.PR}
+	if res.Issue == "" {
+		return res, usage("--issue is required")
+	}
+	if strings.TrimSpace(o.Ref) == "" {
+		return res, usage("adopt takes a branch or a worktree path")
+	}
+	branch, wt, err := e.resolveAdoptRef(ctx, root, o.Ref)
+	if err != nil {
+		return res, err
+	}
+	res.Branch, res.Worktree = branch, wt
+
+	reg := worker.LoadRegistry(root)
+	for _, s := range reg.Slots() {
+		if s.Branch() == branch {
+			return res, blocked(BlockRegistered, "slot %s already holds %s", s.Name(), branch)
+		}
+	}
+	for _, s := range reg.Slots() {
+		if s.HeldID() == strings.ToUpper(res.Issue) {
+			return res, blocked(BlockHeld, "slot %s already holds %s", s.Name(), res.Issue)
+		}
+	}
+	name := o.Name
+	if name == "" {
+		for n := 1; ; n++ {
+			if name = "ext-" + strconv.Itoa(n); reg.Slot(name) == nil {
+				break
+			}
+		}
+	} else if reg.Slot(name) != nil {
+		return res, usage("slot %s already exists", name)
+	}
+	res.Slot = name
+
+	tracked := e.trackedFiles(ctx, root)
+	r, err := Assess(be, res.Issue, tracked, o.Shared, e.InFlightItems(ctx, root, be, tracked, o.Shared), o.AcceptOverlap)
+	if err != nil {
+		return res, err
+	}
+	res.Overlaps = r.Overlaps
+	if len(r.Overlaps) > 0 && !o.AcceptOverlap {
+		blk := blocked(BlockOverlap, "%s overlaps work in flight: %s", res.Issue, strings.Join(r.Checks[len(r.Checks)-1].Detail, "; "))
+		blk.Readiness = &r
+		return res, blk
+	}
+
+	base := e.Base
+	if err := worker.RegisterExternal(root, name, branch, wt, base, res.Issue, o.PR); err != nil {
+		return res, err
+	}
+	return res, nil
+}
+
+// resolveAdoptRef is the branch (and its worktree, "" when none) behind ref: a
+// worktree path of this repo, else a local branch.
+func (e Env) resolveAdoptRef(ctx context.Context, root, ref string) (branch, wt string, err error) {
+	res, gerr := e.Git(ctx, root, "worktree", "list", "--porcelain")
+	if gerr != nil || res.ExitCode != 0 {
+		return "", "", &exitcode.Error{Exit: exitcode.ExitUnavailable, Message: "git worktree list failed"}
+	}
+	type entry struct{ path, branch string }
+	var all []entry
+	for _, l := range strings.Split(res.Stdout, "\n") {
+		switch {
+		case strings.HasPrefix(l, "worktree "):
+			all = append(all, entry{path: realPath(strings.TrimPrefix(l, "worktree "))})
+		case strings.HasPrefix(l, "branch ") && len(all) > 0:
+			all[len(all)-1].branch = strings.TrimPrefix(strings.TrimPrefix(l, "branch "), "refs/heads/")
+		}
+	}
+	if _, serr := os.Stat(ref); serr == nil || strings.HasPrefix(ref, "/") || strings.HasPrefix(ref, ".") {
+		abs := realPath(ref)
+		// all[0] is the main checkout: a project root is not adoptable work.
+		for _, w := range all[min(1, len(all)):] {
+			if w.path != abs {
+				continue
+			}
+			if w.branch == "" {
+				return "", "", usage("worktree %s is detached: adopt a branch", ref)
+			}
+			return w.branch, w.path, nil
+		}
+		return "", "", usage("%s is not a worktree of this repository", ref)
+	}
+	if r, _ := e.Git(ctx, root, "rev-parse", "--verify", "--quiet", "refs/heads/"+ref); r.ExitCode != 0 {
+		return "", "", usage("branch %s not found", ref)
+	}
+	for _, w := range all[min(1, len(all)):] {
+		if w.branch == ref {
+			wt = w.path
+		}
+	}
+	return ref, wt, nil
+}
+
+func realPath(p string) string {
+	if r, err := filepath.EvalSymlinks(p); err == nil {
+		p = r
+	}
+	if a, err := filepath.Abs(p); err == nil {
+		return a
+	}
+	return p
+}
