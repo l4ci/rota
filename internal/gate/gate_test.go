@@ -3,6 +3,7 @@ package gate
 import (
 	"encoding/json"
 	"errors"
+	"github.com/l4ci/rota/internal/jsonx"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -190,5 +191,21 @@ func TestAutopilotAuditLine(t *testing.T) {
 	ls := auditLines(t, root)
 	if len(ls) != 1 || ls[0]["gate"] != "autopilot" || ls[0]["verb"] != "round tick merge" || ls[0]["target"] != "ben" || ls[0]["note"] != "into main" {
 		t.Fatalf("%v", ls)
+	}
+}
+
+func TestReadAudit(t *testing.T) {
+	root := t.TempDir()
+	if got, err := ReadAudit(root); err != nil || got != nil {
+		t.Fatalf("missing log: %v, %v", got, err)
+	}
+	Autopilot(root, "round tick merge", "ben", "into main")
+	Autopilot(root, "round tick assign", "dana", "item 7")
+	got, err := ReadAudit(root)
+	if err != nil || len(got) != 2 {
+		t.Fatalf("%v, %v", got, err)
+	}
+	if jsonx.Str(got[0], "target") != "ben" || jsonx.Str(got[1], "verb") != "round tick assign" {
+		t.Errorf("order or fields: %v", got)
 	}
 }

@@ -15,6 +15,7 @@ import (
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/itembody"
+	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/roundcfg"
 	secpkg "github.com/l4ci/rota/internal/section"
 	"github.com/l4ci/rota/internal/skills"
@@ -644,6 +645,10 @@ func (e Env) assignOne(ctx context.Context, root string, be Board, o AssignOpts,
 	res.Account, res.Host, res.Brief, res.Worktree = d.Account, d.Host, d.BriefText, d.Worktree
 	res.Dispatched = res.Dispatched || d.Dispatched
 	res.Changed = res.Changed || d.Changed
+	if err == nil && !resuming {
+		worker.LedgerNote(root, ledger.Entry{Kind: ledger.KindAssign, Issue: id, Slot: agent, Account: res.Account, Harness: kind,
+			Detail: ledger.Detail("headroom", worker.LedgerHeadroom(ctx, e.Accounts, root, kind, res.Account))})
+	}
 	return res, err
 }
 

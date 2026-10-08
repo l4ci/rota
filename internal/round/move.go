@@ -16,6 +16,7 @@ import (
 	"github.com/l4ci/rota/internal/escalation"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
+	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/marker"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/worker"
@@ -451,6 +452,12 @@ type Transferred struct {
 // label goes on. If the dispatch fails the claim and branch stay with the
 // receiver and the same call resumes it.
 func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts) (res Transferred, err error) {
+	defer func() {
+		if err == nil && res.Changed {
+			worker.LedgerNote(root, ledger.Entry{Kind: ledger.KindTransfer, Issue: res.Issue, Slot: res.To,
+				Detail: ledger.Detail("from", res.From)})
+		}
+	}()
 	set := o.Settings
 	toHuman := o.To == HumanTarget
 	if o.To == "" || (!toHuman && !slices.Contains(set.Roster, o.To)) {

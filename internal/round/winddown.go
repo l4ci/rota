@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -173,6 +174,10 @@ func (e Env) WindDown(ctx context.Context, root string, be Board, o WindDownOpts
 			// A session that could not be killed keeps its handle.
 			if err := editSlot(root, name, func(s *worker.Slot) error { s.Park(!sessionKept); return nil }); err != nil {
 				return res, err
+			}
+			if !wasParked {
+				worker.LedgerNote(root, ledger.Entry{Kind: ledger.KindPark, Round: res.Round, Issue: so.Issue, Slot: name, PR: so.PR,
+					Detail: ledger.Detail("merged", so.Merged)})
 			}
 			if claim != "" && issue != "" && be != nil {
 				if _, err := be.Release(issue, claim); err != nil {
