@@ -1069,3 +1069,33 @@ func TestGateRefusesAnUnpickedBestOfPR(t *testing.T) {
 		})
 	}
 }
+
+// The gate says which review depth the policy expects and why; the recorded
+// verdict is read as before.
+func TestGateReportsTheExpectedReviewDepth(t *testing.T) {
+	policy := `{"ship":{"review":{"default":"full","lightBelow":1000,"labels":{"risk:high":"full","partial-slice":"none"}}},"test":{"full":["true"]}}`
+	for _, c := range []struct {
+		name, cfg, labels, want string
+	}{
+		{"small diff goes light", policy, "in-progress", "REVIEW-DEPTH w1 — light (1 changed lines, under lightBelow 1000)"},
+		{"label beats size", policy, "in-progress,risk:high", "REVIEW-DEPTH w1 — full (label risk:high)"},
+		{"partial slice", policy, "in-progress," + PartialSliceLabel, "REVIEW-DEPTH w1 — none (label partial-slice)"},
+		{"legacy false", `{"ship":{"review":false},"test":{"full":["true"]}}`, "in-progress", "REVIEW-DEPTH w1 — none (ship.review is false)"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			w := newWorld(t, ghURL)
+			w.setConfig(c.cfg)
+			os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
+				[]byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"#5","pr":%q}]}`, ghURL)), 0o644)
+			w.forge("body", "Closes #5\n")
+			w.forge("issueLabels", c.labels)
+			res, err := w.gate(false, GateOpts{CheckOnly: true})
+			if err != nil || res.Verdict != GateFresh {
+				t.Fatalf("%+v %v", res, err)
+			}
+			if got := strings.Join(res.Notes, "\n"); !strings.Contains(got, c.want) {
+				t.Errorf("notes %q lack %q", got, c.want)
+			}
+		})
+	}
+}

@@ -597,3 +597,36 @@ func TestReviewPackage(t *testing.T) {
 		t.Errorf("umbrella no repo: exit %d", o.code)
 	}
 }
+
+func TestReviewDepth(t *testing.T) {
+	plain, _ := reviewProject(t)
+	depth := func(args ...string) (int, map[string]any) {
+		o := trRun(t, plain, "", append([]string{"review", "depth", "feat/x", "--json"}, args...)...)
+		env := envelope(t, o.stdout)
+		d, _ := env["data"].(map[string]any)
+		return o.code, d
+	}
+	cfg := filepath.Join(plain, ".rota", "config.json")
+
+	if code, d := depth(); code != 0 || d["depth"] != "full" || d["changedLines"].(float64) < 1 {
+		t.Fatalf("no policy: %d %v", code, d)
+	}
+	write(t, cfg, `{"ship":{"review":{"default":"full","lightBelow":100000,"labels":{"partial-slice":"none","risk:high":"full"}}}}`)
+	if code, d := depth(); code != 0 || d["depth"] != "light" || !strings.Contains(d["why"].(string), "lightBelow") {
+		t.Errorf("small diff: %d %v", code, d)
+	}
+	if _, d := depth("--labels", "partial-slice"); d["depth"] != "none" || !strings.Contains(d["why"].(string), "partial-slice") {
+		t.Errorf("label: %v", d)
+	}
+	if _, d := depth("--labels", "partial-slice,risk:high"); d["depth"] != "full" {
+		t.Errorf("risk:high must force full: %v", d)
+	}
+	write(t, cfg, `{"ship":{"review":false}}`)
+	if _, d := depth(); d["depth"] != "none" {
+		t.Errorf("legacy false: %v", d)
+	}
+	write(t, cfg, `{"ship":{"review":{"default":"deep"}}}`)
+	if code, _ := depth(); code == 0 {
+		t.Errorf("a malformed policy must fail")
+	}
+}

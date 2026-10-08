@@ -148,7 +148,7 @@ Every key, by group. Default is what a missing key reads as; Values lists the al
 
 | Key | Type | Default | Values | Description |
 |-----|------|---------|--------|-------------|
-| `ship.review` | bool | `true` |  | Whether /rota-ship runs /rota-review first. FAIL blocks, CONCERNS ask, PASS flows through. |
+| `ship.review` | enum | `"full"` | `full`, `light`, `none` | How deep a review /rota-ship runs first: full, light (the Standards reviewer only) or none. FAIL blocks, CONCERNS ask, PASS flows through. An object {default, lightBelow, labels} picks the depth by diff size and label; true and false still mean full and none. |
 | `ship.secondOpinion` | bool | `false` |  | Opt-in fresh-eyes adversarial gate in /rota-ship Step 3.5. |
 | `ship.secondOpinionRunner` | enum | `"subagent"` | `subagent` | Who runs the /rota-ship second-opinion gate. The codex value was removed in 5.0: /rota-ship notes it and runs the subagent in advisory mode. |
 | `ship.qa` | bool | `false` |  | Opt-in product-QA gate: /rota-ship runs /rota-qa run after review and before merge or PR. |

@@ -11,8 +11,11 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/pystr"
+	"github.com/l4ci/rota/internal/rotatree"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 // reviewCommands is the `rota review` group (#52).
@@ -22,6 +25,7 @@ func reviewCommands() *Command {
 		{Name: "brief", Summary: "fresh-eyes second-opinion brief for a branch", Repo: true, Verb: noFlags(reviewBrief)},
 		{Name: "scaffolding", Summary: "added diff lines that look like leftover task scaffolding", Repo: true, Verb: reviewScaffolding},
 		{Name: "package", Summary: "write a branch's commits, stat and diff to a file for the reviewer", Repo: true, Verb: reviewPackage},
+		{Name: "depth", Summary: "review depth (full, light, none) ship.review picks for a branch, and why", Repo: true, Verb: reviewDepth},
 		{Name: "queue", Summary: "open issues waiting for review", Repo: true, Verb: noFlags(reviewQueue)},
 	}}
 }
@@ -430,4 +434,39 @@ func reviewQueue(c *Ctx, args []string) (Result, error) {
 		lines = append(lines, r.Type+strconv.Itoa(r.Number)+" "+r.Title)
 	}
 	return Result{Data: jsonObj("items", items), Text: strings.Join(lines, "\n")}, nil
+}
+
+// reviewDepth is `rota review depth`: the depth ship.review picks for a branch,
+// from its diff size against the base and the labels the caller passes (the
+// issue's or PR's). /rota-ship prints it and runs /rota-review accordingly.
+func reviewDepth(fs *flag.FlagSet) RunFunc {
+	labelsFlag := fs.String("labels", "", "comma-separated labels of the issue or PR the branch belongs to")
+	return func(c *Ctx, args []string) (Result, error) {
+		t, err := reviewTarget(c, args, "review")
+		if err != nil {
+			return Result{}, err
+		}
+		root, err := backlogScope(c)
+		if err != nil {
+			return Result{}, err
+		}
+		policy, err := config.ReviewPolicyOf(config.Load(rotatree.Config(root)))
+		if err != nil {
+			return Result{}, Failed("%v; run rota config check", err)
+		}
+		out, err := reviewGit(c.Context(), t.Dir, "diff", "--numstat", t.Base+"..."+t.Branch)
+		if err != nil {
+			return Result{}, err
+		}
+		changed := worker.ChangedLines(out)
+		var labels []string
+		for _, l := range strings.Split(*labelsFlag, ",") {
+			if l = strings.TrimSpace(l); l != "" {
+				labels = append(labels, l)
+			}
+		}
+		depth, why := policy.Resolve(changed, labels)
+		data := gitObj("branch", t.Branch, "base", t.Base, "depth", string(depth), "why", why, "changedLines", changed, "labels", labels)
+		return Result{Data: data, Text: fmt.Sprintf("REVIEW-DEPTH %s — %s (%s)", t.Branch, depth, why)}, nil
+	}
 }

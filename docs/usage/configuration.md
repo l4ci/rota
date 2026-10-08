@@ -290,12 +290,25 @@ See [learning](learning.md) for the full `/rota-learn` workflow.
 
 ## ship.review
 
-Controls whether `/rota-ship` runs a review pass before integrating.
+Controls how deep a review `/rota-ship` runs before integrating.
 
 | Value | Behavior |
 |-------|----------|
-| `true` (default) | `/rota-ship` runs `/rota-review` before integrating. FAIL blocks, CONCERNS ask, PASS flows through. |
-| `false` | `/rota-ship` integrates directly without a review pass. Use when you want raw speed and already reviewed manually. |
+| `"full"` (default) | `/rota-ship` runs `/rota-review` (Spec and Standards reviewers) before integrating. FAIL blocks, CONCERNS ask, PASS flows through. |
+| `"light"` | `/rota-review` dispatches the Standards reviewer only. |
+| `"none"` | `/rota-ship` integrates directly without a review pass. Use when you want raw speed and already reviewed manually. |
+| `true` / `false` | The old boolean, still read: `true` is `full`, `false` is `none`. |
+| object | Picks the depth per branch, see below. |
+
+```json
+{"ship": {"review": {"default": "full", "lightBelow": 50, "labels": {"risk:high": "full", "best-of:2": "light", "partial-slice": "none"}}}}
+```
+
+- `default`: `full`, `light` or `none`; `full` when omitted.
+- `lightBelow`: a diff of fewer changed lines (added plus deleted, against the base) than this gets `light`. It only lowers a `default` of `full`. `0` or omitted turns it off.
+- `labels`: a label on the item's issue or PR maps to a depth and beats the size rule, so `risk:high` forces `full` on a small diff. `best-of:2` and `partial-slice` are ordinary labels here. When several labels match, the strictest depth wins.
+
+`rota review depth [branch] [--labels a,b]` prints the depth and why; `/rota-ship` and `rota worker gate` (as a `REVIEW-DEPTH` note) report it too. The gate still reads the recorded verdict as before. `rota config check` fails on a malformed policy.
 
 See [review and ship](review-and-ship.md) for the full `/rota-ship` workflow.
 

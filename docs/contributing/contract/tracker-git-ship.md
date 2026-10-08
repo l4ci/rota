@@ -91,6 +91,12 @@ note: text mode prints the brief verbatim, as for `show` verbs, so `> "$BRIEF"` 
 note: the triage tree's `brief --fresh` drops the flag, because the verb has no other mode.
 note: `<branch>` is optional (default current branch) to match `scope`, where the old helper required it.
 
+### rota review depth
+rota review depth [<branch>] [--labels <a,b>]
+repo: scoped
+data: {"branch": string, "base": string, "depth": "full"|"light"|"none", "why": string, "changedLines": number, "labels": [string]}
+exit: 2 at an umbrella root without --repo; 3 when the branch does not exist; 1 when ship.review is malformed
+
 ### rota review scaffolding
 rota review scaffolding [<branch>] [--base <branch>]
 repo: scoped
