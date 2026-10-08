@@ -17,6 +17,7 @@ func knowledgeCommands() *Command {
 	return &Command{Name: "knowledge", Summary: "read and write .rota/KNOWLEDGE.md", Subs: []*Command{
 		{Name: "query", Summary: "print topic sections, tier-aware", Repo: true, Verb: knQuery},
 		{Name: "stats", Summary: "bullet count and size per topic", Verb: noFlags(knStats), View: knowledgeView},
+		{Name: "topics", Summary: "list topic headings with bullet counts", Verb: noFlags(knTopics)},
 		{Name: "add", Summary: "add a bullet under a topic", Repo: true, Verb: knAdd},
 		{Name: "amend", Summary: "append text to an existing bullet", Repo: true, Verb: knAmend},
 		{Name: "replace", Summary: "replace text inside one bullet", Repo: true, Verb: knReplace},
@@ -166,6 +167,32 @@ func knStats(c *Ctx, args []string) (Result, error) {
 		return knFail(err)
 	}
 	return statsResult(stats), nil
+}
+
+func knTopics(c *Ctx, args []string) (Result, error) {
+	if err := knNoArgs(args); err != nil {
+		return Result{}, err
+	}
+	st, _, err := knStore(c)
+	if err != nil {
+		return Result{}, err
+	}
+	stats, err := st.Stats()
+	if err != nil {
+		return knFail(err)
+	}
+	return topicsResult(stats), nil
+}
+
+// topicsResult is the heading list of knowledge topics and decisions topics.
+func topicsResult(stats []knowledge.Stat) Result {
+	topics := []any{}
+	var lines []string
+	for _, s := range stats {
+		topics = append(topics, knObj("name", s.Name, "bullets", s.Bullets))
+		lines = append(lines, fmt.Sprintf("%s: %d bullets", s.Name, s.Bullets))
+	}
+	return Result{Data: knObj("topics", topics), Text: strings.Join(lines, "\n")}
 }
 
 // statsResult is the topic list of knowledge stats and decisions stats.
