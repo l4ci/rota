@@ -525,16 +525,20 @@ func RecordBounce(root, issue, head string) (n int, err error) {
 	return n, err
 }
 
-// UnrecordBounce puts an item's bounce count and head back to what prev held,
-// after a RecordBounce whose relay did not go out.
+// UnrecordBounce undoes one RecordBounce whose relay did not go out: prev is
+// the registry from before it. The count drops by one from what the registry
+// holds now, never to prev's, so a bounce another writer counted meanwhile
+// stays; a count at or below prev's was not counted by that call and stays.
 func UnrecordBounce(root, issue string, prev Registry) error {
 	return Update(root, func(d *Doc) {
 		doc := d.doc
 		b, heads := bouncesOf(doc), bounceHeadsOf(doc)
-		if n := bounceCount(bouncesOf(prev.doc), issue); n > 0 {
-			b.Set(issue, json.Number(strconv.Itoa(n)))
-		} else {
-			b.Delete(issue)
+		if n := bounceCount(b, issue); n > bounceCount(bouncesOf(prev.doc), issue) {
+			if n--; n > 0 {
+				b.Set(issue, json.Number(strconv.Itoa(n)))
+			} else {
+				b.Delete(issue)
+			}
 		}
 		if h, ok := bounceHeadsOf(prev.doc).Get(issue); ok {
 			heads.Set(issue, h)

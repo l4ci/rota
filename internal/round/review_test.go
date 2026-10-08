@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/escalation"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
@@ -271,5 +272,87 @@ func TestReviewRelayCodexSigned(t *testing.T) {
 	}
 	if ok, why := harness.CheckPrompt(key, f.host.sents[0]); !ok || !strings.Contains(f.host.sents[0], "ROTA-SIG") {
 		t.Fatalf("relay is not signed for codex: %v %s\n%s", ok, why, f.host.sents[0])
+	}
+}
+
+// sendHook is a host whose Send runs hook, then refuses the relay.
+type sendHook struct {
+	*hostFake
+	hook func()
+}
+
+func (h *sendHook) Send(context.Context, string, string, string) error {
+	h.hook()
+	return errors.New("pane refused input")
+}
+
+// The rollback after a refused relay undoes this relay's bounce against the
+// registry as it is then, not a snapshot from before the dispatch.
+func TestReviewRelayRollbackKeepsAConcurrentBounce(t *testing.T) {
+	f, _, o := reviewFx(t)
+	f.env.Worker.NewHost = func(string) host.Host {
+		return &sendHook{hostFake: f.host, hook: func() {
+			if _, err := worker.RecordBounce(f.root, "12", ""); err != nil {
+				t.Error(err)
+			}
+		}}
+	}
+	if _, err := f.env.ReviewRelay(bg, f.root, o); err == nil {
+		t.Fatal("want the dispatch failure")
+	}
+	if n := worker.LoadRegistry(f.root).Bounces("12"); n != 1 {
+		t.Fatalf("bounces %d, want the concurrent one kept", n)
+	}
+}
+
+// A rollback that cannot be written is reported, not dropped.
+func TestReviewRelayReportsARollbackError(t *testing.T) {
+	f, _, o := reviewFx(t)
+	f.env.Worker.NewHost = func(string) host.Host {
+		return &sendHook{hostFake: f.host, hook: func() {
+			path := worker.RegistryPath(f.root)
+			if err := os.Remove(path); err != nil {
+				t.Error(err)
+			}
+			if err := os.Mkdir(path, 0o755); err != nil {
+				t.Error(err)
+			}
+		}}
+	}
+	_, err := f.env.ReviewRelay(bg, f.root, o)
+	if err == nil || !strings.Contains(err.Error(), "rollback of the relay failed") {
+		t.Fatalf("want the rollback error, got %v", err)
+	}
+}
+
+func TestReviewRelayTextStripsInvisibleFormatCharacters(t *testing.T) {
+	body := "a\u200bb\u200cc\u200dd\u2060e" + string(rune(0xfeff)) + "\u00adf\U000e0041g\U000e007fh\u2061i"
+	text := ReviewRelayText(worker.ReviewBatch{PR: "u", Items: []tracker.Review{{Comment: tracker.Comment{Author: "rev", Body: body}}}})
+	if !strings.Contains(text, "> abcdefghi\n") {
+		t.Fatalf("zero-width, format or tag characters survived: %q", text)
+	}
+}
+
+// A second pass while the cap escalation is pending posts nothing more.
+func TestReviewRelayAtCapDoesNotEscalateTwice(t *testing.T) {
+	f, _, o := reviewFx(t)
+	for i := 0; i < 3; i++ {
+		if _, err := worker.RecordBounce(f.root, "12", ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	posts := 0
+	o.Escalate = func(_ context.Context, n int, slot, title, body string) error {
+		posts++
+		return worker.UpdateEscalations(f.root, func(list []escalation.Entry) []escalation.Entry {
+			return append(list, escalation.Entry{ID: "e1", Kind: "pr", Number: n, Slot: slot, Status: escalation.StatusPending})
+		})
+	}
+	if got, err := f.env.ReviewRelay(bg, f.root, o); !isBlockedBy(err, "maxBounces") || !got.Escalated {
+		t.Fatalf("first pass: %+v %v", got, err)
+	}
+	got, err := f.env.ReviewRelay(bg, f.root, o)
+	if !isBlockedBy(err, "maxBounces") || got.Escalated || posts != 1 || !strings.Contains(err.Error(), "still open") {
+		t.Fatalf("second pass: %+v %v posts=%d", got, err, posts)
 	}
 }
