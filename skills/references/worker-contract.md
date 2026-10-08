@@ -29,6 +29,8 @@ Work only this task, then stop.
   item has one. Never drop part of the ticket as out of scope on your own, and never
   widen into the listed items: if the boundary looks wrong, dispute it (`ROTA-BLOCKED`,
   or say so in your PR) rather than decide it yourself.
+- Touches. If your brief carries a "Touches, quoted from the issue body" block, it is the issue's declared
+  contract surface. A change to a contract beyond it goes into the PR's Rulings.
 - Size your own subagents by tier, not by model name. Delegate reading, searching
   and discovery to a `light` subagent, writing code and tests to a `standard` one,
   and keep `heavy` for genuinely hard reasoning (design, a tricky debugging

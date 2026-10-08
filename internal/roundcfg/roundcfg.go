@@ -49,6 +49,9 @@ type Settings struct {
 	Roster      []string
 	Brief       string
 	SharedPaths []string
+	// ScopeOverlap is round.scopeOverlap: "warn" (default) or "block". Block
+	// makes a clash on declared scopes fail the overlap check like a shared path.
+	ScopeOverlap string
 	// Tier is the default tier; Models maps kind -> tier -> model name for
 	// every configured kind (a kind with no tier set is absent).
 	Tier   string
@@ -149,6 +152,14 @@ func Load(root string) (Settings, error) {
 	s.Brief, _ = v.(string)
 	if s.SharedPaths, err = list(cfg, "round.sharedPaths"); err != nil {
 		return s, err
+	}
+	v, err = config.Value(cfg, "round.scopeOverlap")
+	if err != nil {
+		return s, err
+	}
+	s.ScopeOverlap, _ = v.(string)
+	if s.ScopeOverlap != "warn" && s.ScopeOverlap != "block" {
+		return s, fmt.Errorf("round.scopeOverlap must be warn or block (got %v)", v)
 	}
 	if s.StallMinutes, err = config.Int(cfg, "round.stallMinutes", 0, config.MaxInt); err != nil {
 		return s, err

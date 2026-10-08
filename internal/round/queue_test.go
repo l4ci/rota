@@ -3,6 +3,7 @@ package round
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -425,4 +426,25 @@ func TestOverlapSkipsClosedIssues(t *testing.T) {
 			t.Fatalf("ben is mid-work, not parkable: %v", err)
 		}
 	})
+}
+
+// A queued PR whose issue has an empty body still carries the issue's
+// Subsystem scope through InFlightItems' queue branch.
+func TestInFlightQueuedEmptyBodyCarriesSubsystem(t *testing.T) {
+	f := newMoveFx(t)
+	f.be.details["12"] = ""
+	f.be.items["12"].Fields.Subsystem = "CLI"
+	f.finish(t, "ben", pr7)
+	if _, err := f.assign("13", "ben"); err != nil {
+		t.Fatal(err)
+	}
+	var got []InFlight
+	for _, x := range f.env.InFlightItems(bg, f.root, f.be, f.env.trackedFiles(bg, f.root), nil) {
+		if x.Slot == "queue:ben" {
+			got = append(got, x)
+		}
+	}
+	if len(got) != 1 || !reflect.DeepEqual(got[0].Scopes, []string{"subsystem:cli"}) {
+		t.Errorf("queued item scopes: %+v", got)
+	}
 }

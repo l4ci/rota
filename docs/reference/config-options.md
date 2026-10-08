@@ -254,6 +254,7 @@ Every key, by group. Default is what a missing key reads as; Values lists the al
 | `round.roster` | list | `["ben", "dana", "nia", "kit"]` |  | Agent names slots are provisioned under, one slot each. Lowercase letters, digits and -, no duplicates. |
 | `round.brief` | path | unset |  | Path of the standing worker contract the assignment pointer names. Empty means skills/references/worker-contract.md in the checkout, else the installed copy. |
 | `round.sharedPaths` | list | `[]` |  | Repo-relative globs the file-overlap readiness check ignores, for files every issue touches. |
+| `round.scopeOverlap` | enum | `"warn"` | `warn`, `block` | What a clash on declared scopes (the ## Touches section, else Subsystem) does to the overlap check. warn: reported, the item stays ready. block: fails the check like a shared path; --accept-overlap skips it. |
 | `round.tier` | enum | `"standard"` | `light`, `standard`, `heavy` | Default worker tier for rota round assign: light for reading, standard for code and tests, heavy for hard reasoning. |
 | `round.workerKind` | enum | unset | `claude`, `codex` | Project default worker harness. Empty: the slot's recorded kind, else claude. --kind and an issue's harness: label beat it. |
 | `round.tiers.claude.light` | string | `"haiku"` |  | Model a light-tier Claude worker starts with. |

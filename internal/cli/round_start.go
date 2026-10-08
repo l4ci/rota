@@ -50,6 +50,9 @@ func candidateList(cs []round.Candidate) []any {
 			o.Set("openPr", c.OpenPR)
 		}
 		o.Set("checks", checkList(c.Checks))
+		if len(c.Overlaps) > 0 {
+			o.Set("overlaps", overlapList(c.Overlaps))
+		}
 		out = append(out, o)
 	}
 	return out
@@ -75,6 +78,9 @@ func candidateLines(cs []round.Candidate) []string {
 		}
 		if p := c.Pick.String(); p != "" {
 			state += " [" + p + "]"
+		}
+		for _, o := range c.Overlaps {
+			state += "; " + overlapText(o)
 		}
 		lines = append(lines, fmt.Sprintf("%s\t%s\t%s", c.ID, state, c.Title))
 	}
@@ -183,7 +189,7 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return backlogFail(err)
 		}
-		cands, err := env.Candidates(ctx, root, be, round.CandidateOpts{Scope: st.Scope, Slate: st.Slate, Shared: set.SharedPaths})
+		cands, err := env.Candidates(ctx, root, be, round.CandidateOpts{Scope: st.Scope, Slate: st.Slate, Shared: set.SharedPaths, ScopeOverlap: set.ScopeOverlap})
 		if err != nil {
 			return backlogFail(err)
 		}
@@ -267,7 +273,7 @@ func roundCandidates(fs *flag.FlagSet) RunFunc {
 			return backlogFail(err)
 		}
 		env := c.deps().RoundEnv(ctx, root)
-		cands, err := env.Candidates(ctx, root, be, round.CandidateOpts{Scope: sc, Slate: slate, Shared: set.SharedPaths})
+		cands, err := env.Candidates(ctx, root, be, round.CandidateOpts{Scope: sc, Slate: slate, Shared: set.SharedPaths, ScopeOverlap: set.ScopeOverlap})
 		if err != nil {
 			return backlogFail(err)
 		}

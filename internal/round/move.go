@@ -594,7 +594,7 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 		res.Warnings = append(res.Warnings, warns...)
 		if !resuming {
 			tracked := e.trackedFiles(ctx, root)
-			r, err := AssessBrief(be, id, tracked, set.SharedPaths, e.InFlightItems(ctx, root, be, tracked, set.SharedPaths), o.AcceptOverlap, decisions)
+			r, err := AssessScoped(be, id, tracked, set.SharedPaths, e.InFlightItems(ctx, root, be, tracked, set.SharedPaths), o.AcceptOverlap, decisions, set.ScopeOverlap == "block")
 			if err != nil {
 				return res, wrap(err)
 			}
@@ -708,7 +708,7 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 
 	d := &delivery{Slot: o.To, Task: id, Branch: func() string { return branch }, Round: rnd, Kind: kind, Model: model, Wrap: wrap,
 		Brief: func() string {
-			text := pointerBrief(o.To, id, branch, brief, nil, decisions, outOfScope(be, id), tierBrief{Kind: kind, Tier: tier, Model: model, Default: o.Settings.Tier, Reason: reason, Table: o.Settings.Models[kind]})
+			text := pointerBrief(o.To, id, branch, brief, nil, decisions, outOfScope(be, id), touches(be, id), tierBrief{Kind: kind, Tier: tier, Model: model, Default: o.Settings.Tier, Reason: reason, Table: o.Settings.Models[kind]})
 			text += fmt.Sprintf("\nThis issue was handed to you by %s. Read its latest rota:handoff comment first (it ends with a `%s` marker), then continue from the pushed work on %s, already checked out in your worktree.\n",
 				res.From, marker.Handoff(res.From, rnd), branch)
 			if rec != nil {
