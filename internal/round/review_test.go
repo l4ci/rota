@@ -323,6 +323,71 @@ func TestReviewRelayReportsARollbackError(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "rollback of the relay failed") {
 		t.Fatalf("want the rollback error, got %v", err)
 	}
+	if strings.HasPrefix(err.Error(), "rollback of the relay failed") {
+		t.Fatalf("the dispatch error was dropped from the join: %v", err)
+	}
+	if n := strings.Count(err.Error(), "rollback of the relay failed"); n != 2 {
+		t.Fatalf("want both the bounce and the cursor rollback reported, got %d: %v", n, err)
+	}
+}
+
+// The cursor goes back only while it is still the one this relay wrote.
+func TestReviewRelayRollbackKeepsAConcurrentCursor(t *testing.T) {
+	f, _, o := reviewFx(t)
+	f.env.Worker.NewHost = func(string) host.Host {
+		return &sendHook{hostFake: f.host, hook: func() {
+			if _, err := worker.UpdateSlot(f.root, "ben", func(s *worker.Slot) { s.SetReviewSeen("2099-01-01T00:00:00Z") }); err != nil {
+				t.Error(err)
+			}
+		}}
+	}
+	if _, err := f.env.ReviewRelay(bg, f.root, o); err == nil {
+		t.Fatal("want the dispatch failure")
+	}
+	if got := worker.LoadRegistry(f.root).Slot("ben").ReviewSeen(); got != "2099-01-01T00:00:00Z" {
+		t.Fatalf("cursor %q, want the concurrent one kept", got)
+	}
+}
+
+// A bounce RecordBounce deduped on the same head was not this relay's, so the
+// rollback leaves it, and a bounce another writer added, alone.
+func TestReviewRelayRollbackLeavesABounceItDidNotCount(t *testing.T) {
+	f, _, o := reviewFx(t)
+	if _, err := worker.RecordBounce(f.root, "12", "abc123"); err != nil {
+		t.Fatal(err)
+	}
+	f.env.Worker.NewHost = func(string) host.Host {
+		return &sendHook{hostFake: f.host, hook: func() {
+			if _, err := worker.RecordBounce(f.root, "12", ""); err != nil {
+				t.Error(err)
+			}
+		}}
+	}
+	if _, err := f.env.ReviewRelay(bg, f.root, o); err == nil {
+		t.Fatal("want the dispatch failure")
+	}
+	if n := worker.LoadRegistry(f.root).Bounces("12"); n != 2 {
+		t.Fatalf("bounces %d, want both kept", n)
+	}
+}
+
+// The bounce head goes back only while it is the one this relay recorded.
+func TestReviewRelayRollbackKeepsAConcurrentBounceHead(t *testing.T) {
+	f, _, o := reviewFx(t)
+	f.env.Worker.NewHost = func(string) host.Host {
+		return &sendHook{hostFake: f.host, hook: func() {
+			if _, err := worker.RecordBounce(f.root, "12", "newer"); err != nil {
+				t.Error(err)
+			}
+		}}
+	}
+	if _, err := f.env.ReviewRelay(bg, f.root, o); err == nil {
+		t.Fatal("want the dispatch failure")
+	}
+	// The same head again is deduped: only a kept head makes it so.
+	if n, err := worker.RecordBounce(f.root, "12", "newer"); err != nil || n != 1 {
+		t.Fatalf("RecordBounce on the kept head = %d, %v; want 1 (deduped)", n, err)
+	}
 }
 
 func TestReviewRelayTextStripsInvisibleFormatCharacters(t *testing.T) {

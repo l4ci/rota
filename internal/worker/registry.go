@@ -525,25 +525,28 @@ func RecordBounce(root, issue, head string) (n int, err error) {
 	return n, err
 }
 
-// UnrecordBounce undoes one RecordBounce whose relay did not go out: prev is
-// the registry from before it. The count drops by one from what the registry
-// holds now, never to prev's, so a bounce another writer counted meanwhile
-// stays; a count at or below prev's was not counted by that call and stays.
-func UnrecordBounce(root, issue string, prev Registry) error {
+// UnrecordBounce undoes one RecordBounce(root, issue, head) whose relay did not
+// go out; prev is the registry from before it. The count drops by one from what
+// the registry holds now, never to prev's, so a bounce another writer counted
+// meanwhile stays. The head goes back to prev's only while it is still the one
+// this call recorded: a newer head from another writer stays. A call that did
+// not count (RecordBounce deduped on the same head) has nothing to undo, so
+// the caller does not call this for it.
+func UnrecordBounce(root, issue, head string, prev Registry) error {
 	return Update(root, func(d *Doc) {
 		doc := d.doc
 		b, heads := bouncesOf(doc), bounceHeadsOf(doc)
-		if n := bounceCount(b, issue); n > bounceCount(bouncesOf(prev.doc), issue) {
-			if n--; n > 0 {
-				b.Set(issue, json.Number(strconv.Itoa(n)))
-			} else {
-				b.Delete(issue)
-			}
-		}
-		if h, ok := bounceHeadsOf(prev.doc).Get(issue); ok {
-			heads.Set(issue, h)
+		if n := bounceCount(b, issue) - 1; n > 0 {
+			b.Set(issue, json.Number(strconv.Itoa(n)))
 		} else {
-			heads.Delete(issue)
+			b.Delete(issue)
+		}
+		if cur, _ := heads.Get(issue); head != "" && cur == any(head) {
+			if h, ok := bounceHeadsOf(prev.doc).Get(issue); ok {
+				heads.Set(issue, h)
+			} else {
+				heads.Delete(issue)
+			}
 		}
 		doc.Set("bounces", b)
 		doc.Set("bounceHeads", heads)
