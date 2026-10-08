@@ -39,7 +39,7 @@ After building the brief, find which KNOWLEDGE bullets landed in it. For each, c
 rota knowledge hit --topic "<T>" --title "<first-line-of-bullet>"
 ```
 
-Where `<T>` is the exact `## Topic` heading from `rota knowledge query`'s output and `<title>` is the bold **title** text on that bullet (the text between `**` and `** —`).
+Where `<T>` is the exact `## Topic` heading from `rota knowledge query`'s output and `<title>` is the bold **title** text on that bullet (the text between `**` and `** —`). For `query`, a partial name returns every heading containing it (case-insensitive) and an exact name returns that topic alone; `rota knowledge topics` lists the headings.
 
 **Worked example.** Suppose `rota knowledge query "Architecture"` returned:
 

@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/l4ci/rota/internal/round"
+	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/worker"
 	"slices"
 	"sort"
@@ -363,17 +364,12 @@ func (e Env) review(ctx context.Context, r *Result) ([]string, error) {
 	}
 	ids, err := e.Review(ctx)
 	if err != nil {
-		r.NeedsYou = append(r.NeedsYou, Item{"architecture-review", "mint", firstNonEmpty(firstLine(err.Error()), "the review could not be minted")})
+		r.NeedsYou = append(r.NeedsYou, Item{"architecture-review", "mint", firstNonEmpty(strutil.FirstLine(err.Error()), "the review could not be minted")})
 	}
 	for _, id := range ids {
 		e.audit(r, Action{"mint", id, "architecture review"})
 	}
 	return ids, nil
-}
-
-func firstLine(s string) string {
-	l, _, _ := strings.Cut(s, "\n")
-	return l
 }
 
 func (e Env) assign(ctx context.Context, r *Result, minted []string) error {

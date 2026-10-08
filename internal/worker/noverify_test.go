@@ -30,3 +30,22 @@ func TestNothingToVerify(t *testing.T) {
 		}
 	}
 }
+
+func TestNoVerifyRule(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		where     string
+		full, e2e []string
+		want      bool
+	}{
+		{"local, both empty", WhereLocal, nil, nil, true},
+		{"local, full set", WhereLocal, []string{"go test"}, nil, false},
+		{"local, e2e only", WhereLocal, nil, []string{"make e2e"}, false},
+		{"ci verifies elsewhere", WhereCI, nil, nil, false},
+		{"unresolved where", "", nil, nil, false},
+	} {
+		if got := noVerifyRule(tc.where, tc.full, tc.e2e); got != tc.want {
+			t.Errorf("%s: noVerifyRule = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}

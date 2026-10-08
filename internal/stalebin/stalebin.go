@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/strutil"
 )
 
 const module = "github.com/l4ci/rota"
@@ -74,10 +75,7 @@ func Check(ctx context.Context, run git.Runner, dir, commit string) (Finding, bo
 	if s, ok := out("rev-list", "--count", commit+"..HEAD"); ok {
 		behind, _ = strconv.Atoi(s)
 	}
-	short := head
-	if len(short) > 7 {
-		short = short[:7]
-	}
+	short := strutil.ShortSHA(head)
 	return Finding{Commit: commit, Head: short, Behind: behind, Rebuild: Rebuild}, true
 }
 

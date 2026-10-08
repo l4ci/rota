@@ -35,24 +35,58 @@ func (s Style) Green(t string) string  { return s.sgr("32", t) }
 func (s Style) Yellow(t string) string { return s.sgr("33", t) }
 func (s Style) Cyan(t string) string   { return s.sgr("36", t) }
 
-// Strip removes the SGR escapes Style writes.
+// CSIEnd reports where the CSI escape starting at s[i] ends: the index just
+// past its final byte (0x40-0x7e), or len(s) when it is unterminated. It
+// returns -1 when s[i:] does not start a CSI sequence. Every terminal-safe
+// text path in rota scans escapes through it.
+func CSIEnd(s string, i int) int {
+	if s[i] != 0x1b || i+1 >= len(s) || s[i+1] != '[' {
+		return -1
+	}
+	j := i + 2
+	for j < len(s) && (s[j] < 0x40 || s[j] > 0x7e) {
+		j++
+	}
+	if j < len(s) {
+		j++
+	}
+	return j
+}
+
+// Strip removes every CSI escape sequence: the SGR Style writes and any other
+// (cursor moves, erases) that text from outside could carry.
 func Strip(s string) string {
 	if !strings.Contains(s, "\x1b[") {
 		return s
 	}
 	var b strings.Builder
-	for i := 0; i < len(s); i++ {
-		if s[i] == 0x1b && i+1 < len(s) && s[i+1] == '[' {
-			j := i + 2
-			for j < len(s) && s[j] != 'm' {
-				j++
-			}
-			i = j
+	for i := 0; i < len(s); {
+		if end := CSIEnd(s, i); end >= 0 {
+			i = end
 			continue
 		}
 		b.WriteByte(s[i])
+		i++
 	}
 	return b.String()
+}
+
+// Sanitize makes text from outside (a forge title, a registry line) safe to
+// print: CSI sequences are removed, then the remaining control characters
+// (C0, DEL, C1). Tabs become spaces; newlines stay with keepNL and become
+// spaces without it.
+func Sanitize(s string, keepNL bool) string {
+	return strings.Map(func(r rune) rune {
+		switch {
+		case r == '\n' && keepNL:
+			return r
+		case r == '\n' || r == '\t':
+			return ' '
+		case r < 0x20 || (r >= 0x7f && r < 0xa0):
+			return -1
+		}
+		return r
+	}, Strip(s))
 }
 
 // Width is the printed width of s in cells: runes, escapes not counted.
