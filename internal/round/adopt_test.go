@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/l4ci/rota/internal/exitcode"
@@ -96,5 +97,46 @@ func TestAdoptRefusesRegisteredBranch(t *testing.T) {
 	}
 	if _, err := e.Adopt(bg, root, be, AdoptOpts{Ref: "codex/12-thing", Issue: "13"}); blockedBy(t, err) != BlockRegistered {
 		t.Fatalf("want registered: %v", err)
+	}
+}
+
+func TestAdoptRefusesTheBaseAndParkBranches(t *testing.T) {
+	root := newRepo(t, map[string]string{"ben": "park/ben", "codex-a": "codex/12-thing"})
+	e, be := Env{Git: git.Exec, Base: "main", Getenv: noEnv}, &fakeRemote{}
+	be.add("12", "Thing", "M01", false, filesBody)
+	for _, ref := range []string{"main", "park/ben", filepath.Join(root, ".worktrees", "ben")} {
+		_, err := e.Adopt(bg, root, be, AdoptOpts{Ref: ref, Issue: "12"})
+		if exitOf(err) != exitcode.ExitUsage {
+			t.Errorf("%s: want exit 2, got %v", ref, err)
+		}
+	}
+	if len(worker.LoadRegistry(root).Slots()) != 0 {
+		t.Error("a refused adoption registered a slot")
+	}
+}
+
+func TestAdoptResolvesALocalBranchBeforeACwdRelativeDir(t *testing.T) {
+	root, e, be := adoptFixture(t)
+	cwd := t.TempDir()
+	old, _ := os.Getwd()
+	if err := os.Chdir(cwd); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chdir(old) })
+	// A directory named like the branch must not turn it into a path.
+	if err := os.MkdirAll(filepath.Join("codex", "12-thing"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	res, err := e.Adopt(bg, root, be, AdoptOpts{Ref: "codex/12-thing", Issue: "12"})
+	if err != nil || res.Branch != "codex/12-thing" {
+		t.Fatalf("branch lost to the directory: %v %+v", err, res)
+	}
+	// A directory that is no branch is read as a path, and is not a worktree.
+	if err := os.MkdirAll("plain-dir", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.Adopt(bg, root, be, AdoptOpts{Ref: "plain-dir", Issue: "13", AcceptOverlap: true}); err == nil || exitOf(err) != exitcode.ExitUsage ||
+		!strings.Contains(err.Error(), "not a worktree") {
+		t.Errorf("plain dir: %v", err)
 	}
 }

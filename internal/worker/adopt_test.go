@@ -92,3 +92,24 @@ func TestSoloWaitIgnoresExternal(t *testing.T) {
 		t.Errorf("solo wait watched the external slot: %+v", res)
 	}
 }
+
+func TestRegisterExternalChecksUniquenessUnderTheLock(t *testing.T) {
+	dir := newProject(t, `{}`)
+	if err := RegisterExternal(dir, "ext-1", "codex/12-x", "", "main", "12", ""); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct{ name, branch, task, kind string }{
+		{"ext-1", "codex/13-y", "13", ConflictName},
+		{"ext-2", "codex/12-x", "13", ConflictBranch},
+		{"ext-2", "codex/14-z", "12", ConflictIssue},
+	} {
+		err := RegisterExternal(dir, c.name, c.branch, "", "main", c.task, "")
+		var rc *RegisterConflict
+		if !errors.As(err, &rc) || rc.Kind != c.kind || rc.Slot != "ext-1" {
+			t.Errorf("%+v: %v", c, err)
+		}
+	}
+	if n := len(LoadRegistry(dir).Slots()); n != 1 {
+		t.Errorf("%d slots after refused registrations", n)
+	}
+}

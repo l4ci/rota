@@ -73,6 +73,9 @@ func (e Env) ResetTo(root, slot, task, newBranch string, checkOnly bool) (ResetR
 	if s == nil {
 		return res, fail(exitcode.ExitResolution, fmt.Sprintf("slot '%s' is not in the pool", slot))
 	}
+	if s.IsExternal() {
+		return res, ExternalRefusal(slot, "reset")
+	}
 	worktree, base, oldBranch, oldTask := s.Worktree(), s.Base(), s.Branch(), s.Task()
 	if !isDir(worktree) {
 		return res, fail(exitcode.ExitResolution, fmt.Sprintf("slot '%s' worktree missing: %s", slot, worktree))

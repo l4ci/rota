@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"errors"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
 	"os"
@@ -259,5 +260,26 @@ func TestResetUnmergedEntriesAreSevenCharSHAAndSubject(t *testing.T) {
 	sha, subject, _ := strings.Cut(res.Unmerged[0], " ")
 	if len(sha) != 7 || subject != "add work.txt" {
 		t.Errorf("entry = %q", res.Unmerged[0])
+	}
+}
+
+func TestResetToRefusesAnExternalSlot(t *testing.T) {
+	b := slotProject(t)
+	if _, err := UpdateSlot(b, "w1", func(s *Slot) { s.MarkExternal("12", "") }); err != nil {
+		t.Fatal(err)
+	}
+	before := gittest.Run(t, wt(b), "symbolic-ref", "--short", "HEAD")
+	for _, check := range []bool{true, false} {
+		_, err := Env{}.ResetTo(b, "w1", "", "park/w1", check)
+		var we *exitcode.Error
+		if !errors.As(err, &we) || we.Exit != exitcode.ExitRefused {
+			t.Fatalf("check=%v: want exit 4, got %v", check, err)
+		}
+		if bd, ok := we.Data.(BlockData); !ok || bd.BlockedBy != "external" {
+			t.Errorf("check=%v: data = %#v", check, we.Data)
+		}
+	}
+	if got := gittest.Run(t, wt(b), "symbolic-ref", "--short", "HEAD"); got != before {
+		t.Errorf("worktree moved from %s to %s", before, got)
 	}
 }

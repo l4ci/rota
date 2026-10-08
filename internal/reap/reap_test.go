@@ -516,3 +516,16 @@ func TestReapListsMergedExternal(t *testing.T) {
 		t.Errorf("a held external branch was deleted: %v %v", out.Reaped, g.calls)
 	}
 }
+
+// An adopted branch need not lead with an issue number: codex/issue-612 is
+// listed like codex/612-x.
+func TestReapListsMergedExternalWithoutALeadingNumber(t *testing.T) {
+	g := repo(nil, []string{"codex/issue-612"}, "codex/issue-612")
+	g.resp["worktree list --porcelain"] = gitResp{out: g.resp["worktree list --porcelain"].out +
+		"worktree /elsewhere/a\nHEAD abc\nbranch refs/heads/codex/issue-612\n\n"}
+	res := find(t, input(g, nil, []host.Agent{}, nil), KindBranch)
+	want := []string{"branch:codex/issue-612 HELD(checked out at /elsewhere/a; remove that worktree first)"}
+	if got := ids(res.Candidates); !reflect.DeepEqual(got, want) {
+		t.Fatalf("candidates = %v, want %v", got, want)
+	}
+}
