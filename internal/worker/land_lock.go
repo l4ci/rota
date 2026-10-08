@@ -21,7 +21,7 @@ const landLockTimeout = 4 * time.Hour
 // verify or landing inside the first's verify-to-land window. The lock is
 // taken outside test/gate.sh's machine-wide lock, never the reverse, so the
 // two cannot deadlock. A train's own landing steps run under the lock it
-// already holds (GateOpts.Train) and do not retake it.
+// already holds (GateOpts.HoldsLandLock) and do not retake it.
 func (e Env) withLandLock(ctx context.Context, root string, fn func() error) error {
 	common, err := rotastate.CommonDirVia(ctx, e.Git, root)
 	if err != nil {

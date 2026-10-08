@@ -236,7 +236,7 @@ func (e Env) train(ctx context.Context, root string, o TrainOpts, cache *trainCa
 	if onCI {
 		var changed []string
 		for _, m := range res.Members {
-			f, err := e.gateEnv().ciDiffFiles(root, baseRef, headRef(m))
+			f, err := e.ciDiffFiles(ctx, root, baseRef, headRef(m))
 			if err != nil {
 				return e.trainBroke(res, err.Error())
 			}
@@ -268,9 +268,7 @@ func (e Env) train(ctx context.Context, root string, o TrainOpts, cache *trainCa
 		}
 	}
 	cache.retainBase(baseSHA)
-	ge := e.gateEnv()
-	ge.ctx = ctx // cleanup still runs on a context cut loose from it
-	scratch, cleanup, err := ge.scratchTree(root, baseSHA, "rota-train-")
+	scratch, cleanup, err := e.scratchTree(ctx, root, baseSHA, "rota-train-")
 	if err != nil {
 		return e.trainBroke(res, err.Error())
 	}
@@ -441,7 +439,7 @@ func (e Env) train(ctx context.Context, root string, o TrainOpts, cache *trainCa
 			}
 		}
 		gated[m.Target] = true
-		gr, err := e.Gate(ctx, root, GateOpts{Slot: m.Target, Base: o.Base, NoVerify: true, Train: true})
+		gr, err := e.Gate(ctx, root, GateOpts{Slot: m.Target, Base: o.Base, NoVerify: true, Train: true, HoldsLandLock: true})
 		res.Notes = append(res.Notes, gr.Notes...)
 		res.Changed = res.Changed || gr.Changed
 		if gr.Changed && gr.Verdict != GatePass { // the PR is on the base but the gate could not finish (merged-remotely)
