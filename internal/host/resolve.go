@@ -10,6 +10,12 @@ import (
 // New never returns it, and no Host is built for it.
 const Solo = "solo"
 
+// The host kinds that have panes.
+const (
+	Herdr = "herdr"
+	Tmux  = "tmux"
+)
+
 // Resolve is the one rule for which host a round runs on (C8). The round's
 // recorded host (registry, "" when no round is in flight) wins. Without one it
 // picks from work.dispatch and the environment. An explicit herdr or tmux is taken as it is, even when it is
