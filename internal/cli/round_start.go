@@ -211,7 +211,10 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 			d.Set("slate", strs(st.Slate))
 		}
 		d.Set("candidates", candidateList(cands))
-		note := orchestratorHandoff(root, cfg, *consume)
+		note, noteWarn := orchestratorHandoff(root, cfg, *consume)
+		if noteWarn != "" {
+			c.Warn("%s", noteWarn)
+		}
 		if note != nil {
 			d.Set("handoff", note.data())
 		}
@@ -308,6 +311,7 @@ const noVerifyWarning = "test.full is empty: the merge gate will refuse to merge
 type handoffNote struct {
 	path, heading string
 	consumed      bool
+	consumeFailed bool
 }
 
 func (n *handoffNote) data() *jsonx.Object {
@@ -328,32 +332,45 @@ func (n *handoffNote) line() string {
 	if n.consumed {
 		return l + "\tconsumed: read " + n.path + ".consumed"
 	}
+	if n.consumeFailed {
+		return l + "\tconsume failed: note left in place"
+	}
 	return l + "\tread it before choosing the slate, then rerun with --consume-handoff"
 }
 
 // orchestratorHandoff finds the note `/rota-pause` left for the orchestrator,
 // at the path the opt-in hook reads (handoffFile). Only a note carrying the
 // orchestrator marker counts; a worker's branch note lives elsewhere. With
-// consume it archives the note the way the SessionStart hook does, and
-// so a second start finds nothing.
-func orchestratorHandoff(root string, cfg any, consume bool) *handoffNote {
+// consume it archives the note the way the SessionStart hook does, so a second
+// start finds nothing. A note that cannot be read or archived comes back as a
+// warning instead of vanishing.
+func orchestratorHandoff(root string, cfg any, consume bool) (note *handoffNote, warn string) {
 	path := handoffFile(root, cfg)
-	if !hook.StatHandoff(path).Exists || strings.TrimSpace(hook.FirstLine(path)) != hook.HandoffMarker {
-		return nil
+	b, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return nil, ""
+	}
+	if err != nil {
+		return nil, fmt.Sprintf("handoff note %s unreadable: %v", path, err)
+	}
+	first, rest, _ := strings.Cut(string(b), "\n")
+	if strings.TrimSpace(first) != hook.HandoffMarker {
+		return nil, ""
 	}
 	n := &handoffNote{path: path}
-	b, err := os.ReadFile(path)
-	if err != nil {
-		return nil
-	}
-	for _, l := range strings.Split(string(b), "\n") {
-		if t := strings.TrimLeft(l, "#"); t != l && strings.HasPrefix(l, "#") {
-			n.heading = strings.TrimSpace(t)
+	for _, l := range strings.Split(rest, "\n") {
+		if strings.HasPrefix(l, "#") {
+			n.heading = strings.TrimSpace(strings.TrimLeft(l, "#"))
 			break
 		}
 	}
 	if consume {
-		_, n.consumed = hook.Consume(path)
+		if err := os.Rename(path, path+".consumed"); err != nil {
+			n.consumeFailed = true
+			warn = fmt.Sprintf("could not archive handoff note %s: %v", path, err)
+		} else {
+			n.consumed = true
+		}
 	}
-	return n
+	return n, warn
 }
