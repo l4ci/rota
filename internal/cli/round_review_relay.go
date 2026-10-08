@@ -15,6 +15,7 @@ import (
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
+	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/verdict"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -87,7 +88,7 @@ func failVerdict(root, branch string) *worker.ReviewVerdict {
 		return nil
 	}
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "%s FAIL at %s", r.Kind, shortSHA(r.Sha))
+	fmt.Fprintf(&sb, "%s FAIL at %s", r.Kind, strutil.ShortSHA(r.Sha))
 	if r.Summary != "" {
 		sb.WriteString(": " + r.Summary)
 	}
@@ -102,13 +103,6 @@ func failVerdict(root, branch string) *worker.ReviewVerdict {
 		}
 	}
 	return &worker.ReviewVerdict{At: at, Text: sb.String()}
-}
-
-func shortSHA(s string) string {
-	if len(s) > 7 {
-		return s[:7]
-	}
-	return s
 }
 
 func reviewRelayResult(res round.Relayed, set roundcfg.Settings, err error) (Result, error) {
