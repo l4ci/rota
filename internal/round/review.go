@@ -2,6 +2,7 @@ package round
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -121,16 +122,23 @@ func (e Env) ReviewRelay(ctx context.Context, root string, o ReviewOpts) (Relaye
 		return out, err
 	}
 	if _, err = worker.UpdateSlot(root, o.Slot, func(s *worker.Slot) { s.SetReviewSeen(batch.Cursor) }); err != nil {
-		worker.UnrecordBounce(root, issue, reg)
-		return out, err
+		return out, errors.Join(err, rollbackErr(worker.UnrecordBounce(root, issue, reg)))
 	}
 	if _, err := e.Worker.Dispatch(ctx, root, worker.DispatchOpts{Slot: o.Slot, BodyFile: body.Name(), Relay: true}); err != nil {
-		worker.UnrecordBounce(root, issue, reg)
-		worker.UpdateSlot(root, o.Slot, func(s *worker.Slot) { s.SetReviewSeen(prevSeen) })
-		out.Bounces = reg.Bounces(issue)
-		return out, err
+		rerr := worker.UnrecordBounce(root, issue, reg)
+		_, serr := worker.UpdateSlot(root, o.Slot, func(s *worker.Slot) { s.SetReviewSeen(prevSeen) })
+		out.Bounces = worker.LoadRegistry(root).Bounces(issue)
+		return out, errors.Join(err, rollbackErr(rerr), rollbackErr(serr))
 	}
 	return out, nil
+}
+
+// rollbackErr labels a failed rollback write; nil stays nil.
+func rollbackErr(err error) error {
+	if err == nil {
+		return nil
+	}
+	return fmt.Errorf("rollback of the relay failed: %w", err)
 }
 
 // reviewCap is the item at round.maxBounces: another resume is not the answer,
@@ -228,10 +236,12 @@ func authorToken(a string) string {
 }
 
 // stripControls drops what a pane could act on instead of print (escape
-// sequences, backspace, bell, DEL); the newlines lineBreaks left and tabs stay.
+// sequences, backspace, bell, DEL) and what hides or reorders text (zero-width,
+// bidi, other format and tag characters); the newlines lineBreaks left and tabs
+// stay.
 func stripControls(s string) string {
 	return strings.Map(func(r rune) rune {
-		if r != '\n' && r != '\t' && (unicode.IsControl(r) || r == '\u200e' || r == '\u200f' || (r >= '\u202a' && r <= '\u202e') || (r >= '\u2066' && r <= '\u2069')) {
+		if r != '\n' && r != '\t' && (unicode.IsControl(r) || unicode.Is(unicode.Cf, r)) {
 			return -1
 		}
 		return r
