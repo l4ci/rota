@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/pidlive"
 	"github.com/l4ci/rota/internal/rotastate"
 )
@@ -327,12 +328,7 @@ const HolderPIDEnv = "ROTA_ROUND_HOLDER_PID"
 // from the environment.
 func (e Env) Discover(pid int, getenv func(string) string) Holder {
 	h := Holder{}
-	switch {
-	case getenv("HERDR_PANE_ID") != "":
-		h.Pane, h.PaneHost = getenv("HERDR_PANE_ID"), "herdr"
-	case getenv("TMUX_PANE") != "":
-		h.Pane, h.PaneHost = getenv("TMUX_PANE"), "tmux"
-	}
+	h.Pane, h.PaneHost = host.CurrentPaneAny(getenv)
 	if pid <= 0 {
 		if n, err := strconv.Atoi(strings.TrimSpace(getenv(HolderPIDEnv))); err == nil && n > 0 {
 			pid = n

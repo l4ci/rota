@@ -141,10 +141,7 @@ func buildLimits(ctx context.Context, c *Ctx, root string, cfg any, set limits.S
 		maxAge = time.Duration(hs.StateMaxAge) * time.Second
 	}
 	accounts := c.deps().WorkerAccounts
-	orchPane := os.Getenv("TMUX_PANE")
-	if kind == "herdr" {
-		orchPane = os.Getenv("HERDR_PANE_ID")
-	}
+	orchPane := host.CurrentPane(kind, os.Getenv)
 
 	var mu sync.Mutex
 	panes := map[string]string{} // slot|handle -> pane

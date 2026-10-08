@@ -159,3 +159,42 @@ func TestTmuxCapturePane(t *testing.T) {
 		t.Errorf("PaneOf = %q", got)
 	}
 }
+
+func TestCurrentPaneByKind(t *testing.T) {
+	both := func(k string) string {
+		return map[string]string{"HERDR_PANE_ID": "w1:p3", "TMUX_PANE": "%3"}[k]
+	}
+	none := func(string) string { return "" }
+	for _, tc := range []struct {
+		name, kind string
+		env        func(string) string
+		want       string
+	}{
+		{"herdr", "herdr", both, "w1:p3"},
+		{"tmux", "tmux", both, "%3"},
+		{"neither", "herdr", none, ""},
+		{"neither tmux", "tmux", none, ""},
+		{"solo has no panes", Solo, both, ""},
+	} {
+		if got := CurrentPane(tc.kind, tc.env); got != tc.want {
+			t.Errorf("%s: CurrentPane(%q) = %q, want %q", tc.name, tc.kind, got, tc.want)
+		}
+	}
+}
+
+func TestCurrentPaneAnyPrefersHerdr(t *testing.T) {
+	env := func(m map[string]string) func(string) string { return func(k string) string { return m[k] } }
+	for _, tc := range []struct {
+		name       string
+		env        map[string]string
+		pane, kind string
+	}{
+		{"both", map[string]string{"HERDR_PANE_ID": "w1:p3", "TMUX_PANE": "%3"}, "w1:p3", "herdr"},
+		{"tmux only", map[string]string{"TMUX_PANE": "%3"}, "%3", "tmux"},
+		{"neither", nil, "", ""},
+	} {
+		if pane, kind := CurrentPaneAny(env(tc.env)); pane != tc.pane || kind != tc.kind {
+			t.Errorf("%s: CurrentPaneAny = %q, %q; want %q, %q", tc.name, pane, kind, tc.pane, tc.kind)
+		}
+	}
+}
