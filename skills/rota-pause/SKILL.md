@@ -92,7 +92,7 @@ Show the `(web)` suffix only when `repo` is non-null.
 - **One handoff note per `(branch, repo)`.** Overwrite on re-pause.
 - **A multi-repo wave is one logical pause.** `cd` into a sub-repo to scope to it.
 - **Never commit `.rota/handoff/`** (gitignored per-developer scratch).
-- **Do not delete the handoff note here.** Resume or abandon removes it; the next session's hook consumes the orchestrator note.
+- **Do not delete the handoff note here.** Resume or abandon removes it; the next session archives the orchestrator note with `rota round start --consume-handoff`.
 - **A paused round is not a finished round.** Never wind down, merge or reclaim from a pause.
 - **No mutation beyond the handoff note, status pin and the chosen wip commit or stash.**
 
