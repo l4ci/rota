@@ -14,7 +14,7 @@ data: text-read, with `missing` always present
 exit: 2 when no topic is given or `--tier` is not one of the three values
 old: hv-knowledge-query [--repo <name>] [--include-deprecated] [--tier <t>] <topic>…    (all new args map 1:1 to the same flag or positional)
 shim: stdout is `text`; each stderr `warning: … no topic heading matches '<x>'` line gives one `missing` entry and one `warnings` entry.
-note: a topic matches by case-insensitive substring of the `## ` heading text, so `Smoke testing` finds `Build & Tooling: Smoke testing`; when the text equals one heading (case-insensitive) that heading is returned alone. `missing` lists only topics that match no heading. Matching is the same for `decisions query`.
+note: a topic matches by case-insensitive substring of the `## ` heading text, so `Smoke testing` finds `Build & Tooling: Smoke testing`; when the text equals one heading (case-insensitive) that heading is returned alone. A bare category such as `Build & Tooling` therefore returns the whole family of headings containing it. `missing` lists only topics that match no heading. Matching is the same for `decisions query`.
 note: zero topics is exit 2, where the old helper exited 0 silently; a topic with no matching heading stays a warning and exit 0.
 note: `text` is the old markdown verbatim, including the ` (provisional)` suffix and `> from:` lines, not a structured bullet list.
 
@@ -34,7 +34,7 @@ repo: none (umbrella `.rota/KNOWLEDGE.md`, like `stats`)
 data: {"topics": [{"name": string, "bullets": number}]}
 exit: 2 on an argument. A missing file gives `{"topics": []}`.
 old: none (new)
-note: text is one `<heading>: <n> bullets` line per topic, in document order. `decisions topics` is the same over `.rota/DECISIONS.md`. Use it to find the heading text to pass to `query`; `stats` adds byte sizes.
+note: text is one `<heading>: <n> bullets` line per topic, in document order. `decisions topics` is the same over `.rota/DECISIONS.md`. Use it to find the heading text to pass to `query`; It is `stats` without the byte sizes.
 
 ### rota knowledge add
 rota knowledge add --topic <T> --title <S> --body-file <path|-> [--date YYYY-MM-DD]
