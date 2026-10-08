@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/pystr"
+	"github.com/l4ci/rota/internal/strutil"
 )
 
 // LogFormat is the `git log --pretty` format CommitNotes parses.
@@ -56,10 +57,7 @@ func CommitNotes(raw string) string {
 			continue
 		}
 		count++
-		short := hash
-		if len(short) > 7 {
-			short = short[:7]
-		}
+		short := strutil.ShortSHA(hash)
 		bucket, desc, scope, skipped := "Other", subject, "", false
 		for _, r := range prefixRules {
 			m := r.re.FindStringSubmatchIndex(subject)

@@ -20,19 +20,20 @@ func (s Store) DecisionsQuery(topics []string) (text string, missing []string, e
 }
 
 func queryTopics(content string, topics []string) (string, []string, error) {
-	wanted := map[string]bool{}
-	for _, t := range topics {
-		wanted[strings.ToLower(strings.TrimSpace(t))] = true
-	}
-	have := map[string]bool{}
+	var names []string
 	for _, t := range section.Topics(content) {
-		have[strings.ToLower(t.Name)] = true
+		names = append(names, t.Name)
 	}
+	wanted := map[string]bool{}
 	var missing []string
 	seen := map[string]bool{}
 	for _, t := range topics {
+		hit := resolveTopic(t, names)
+		for _, n := range hit {
+			wanted[n] = true
+		}
 		k := strings.ToLower(strings.TrimSpace(t))
-		if k != "" && !have[k] && !seen[k] {
+		if k != "" && len(hit) == 0 && !seen[k] {
 			seen[k] = true
 			missing = append(missing, t)
 		}
