@@ -7,7 +7,7 @@ Install rota and run your first capture → work → ship cycle in about five mi
 From 0.9.0:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/l4ci/rota/main/install.sh | sh   # or: brew install l4ci/tap/rota
+brew install l4ci/tap/rota   # or: curl -fsSL https://raw.githubusercontent.com/l4ci/rota/main/install.sh | sh
 rota skills install
 ```
 

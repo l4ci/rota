@@ -10,7 +10,7 @@ Available from 0.9.0. `rota` is a single binary that carries the skills; there i
 brew install l4ci/tap/rota
 ```
 
-Needs [Homebrew](https://brew.sh) (macOS or Linux). The formula is checked against the tarball sha256 only; see [verifying a release](#verifying-a-release).
+Needs [Homebrew](https://brew.sh) (macOS or Linux). See [verifying a release](#verifying-a-release) for what the formula checks.
 
 ### Install script
 
