@@ -147,7 +147,7 @@ func runLayout(c *Ctx, mode, project string) (Result, error) {
 // from when that is a plain shell (no agent) of this project, else the one a
 // split recorded earlier. "" when neither is known.
 func cliPane(c *Ctx, root string, reg worker.Registry, panes []host.LayoutPane) string {
-	if me := os.Getenv("HERDR_PANE_ID"); me != "" {
+	if me := host.CurrentPane("herdr", os.Getenv); me != "" {
 		if mine, err := c.Root(); err == nil && repos.Realpath(mine) == root {
 			for _, p := range panes {
 				if p.ID == me && p.Agent == "" {
