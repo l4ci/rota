@@ -34,7 +34,7 @@ repo: none (umbrella `.rota/KNOWLEDGE.md`, like `stats`)
 data: {"topics": [{"name": string, "bullets": number}]}
 exit: 2 on an argument. A missing file gives `{"topics": []}`.
 old: none (new)
-note: text is one `<heading>: <n> bullets` line per topic, in document order. `decisions topics` is the same over `.rota/DECISIONS.md`. Use it to find the heading text to pass to `query`; It is `stats` without the byte sizes.
+note: text is one `<heading>: <n> bullets` line per topic, in document order. `decisions topics` is the same over `.rota/DECISIONS.md`. Use it to find the heading text to pass to `query`. It is `stats` without the byte sizes.
 
 ### rota knowledge add
 rota knowledge add --topic <T> --title <S> --body-file <path|-> [--date YYYY-MM-DD]
