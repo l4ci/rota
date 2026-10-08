@@ -37,15 +37,15 @@ func cfgValue(t *testing.T, dir, key string) any {
 func TestSetupInteractiveAppliesAnswers(t *testing.T) {
 	dir := t.TempDir()
 	// 1 file backend (by number), worktree by name, pr by number, default dispatch,
-	// default autonomy, review false, qa true, worker and orchestrator harness unset
-	in := "1\nworktree\n2\n\n\nfalse\n2\n\n\n"
+	// default autonomy, review none, qa true, worker and orchestrator harness unset
+	in := "1\nworktree\n2\n\n\nnone\n2\n\n\n"
 	code, _, errOut := setupRun(t, dir, in, true)
 	if code != 0 {
 		t.Fatalf("exit %d: %s", code, errOut)
 	}
 	for k, want := range map[string]any{
 		"backlog.backend": "file", "work.isolation": "worktree", "work.mergeStrategy": "pr",
-		"work.dispatch": "subagent", "autonomy.level": "off", "ship.review": false, "ship.qa": true,
+		"work.dispatch": "subagent", "autonomy.level": "off", "ship.review": "none", "ship.qa": true,
 	} {
 		if got := cfgValue(t, dir, k); got != want {
 			t.Errorf("%s = %v, want %v", k, got, want)

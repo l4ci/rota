@@ -12,7 +12,7 @@ mkdir -p "$NPROJ/.rota"
   done
 ) || fail "no-verify fixture repo setup failed"
 printf '{"slots":[{"name":"n1","branch":"n1"},{"name":"n2","branch":"n2"}]}\n' > "$NPROJ/.rota/workers.json"
-printf '{"test":{"full":[]}}\n' > "$NPROJ/.rota/config.json"
+printf '{"ship":{"review":"none"},"test":{"full":[]}}\n' > "$NPROJ/.rota/config.json"
 nv() { ( cd "$NPROJ" && PATH="$TESTDIR/fakes:$ROTA_POISON_BIN:$PATH" "$ROTA_BIN" --json "$@" 2>/dev/null ); }
 
 RC=0; OUT=$(nv worker gate n1 --base main) || RC=$?
