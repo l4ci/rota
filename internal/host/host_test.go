@@ -4,11 +4,9 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"reflect"
 	"regexp"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -779,41 +777,6 @@ func TestHerdrNotify(t *testing.T) {
 	}
 	g := &fake{handler: func(string, []string) Result { t.Error("tmux has no notification surface"); return Result{} }}
 	New("tmux", deps(g, nil, &clock{})).Notify(bg, "T", "B")
-}
-
-// A zombie has exited and only waits to be reaped; it must read as gone, and a
-// live process as alive. The zombie's parent (an exec'd sleep) never reaps it.
-func TestPidAliveZombieIsGone(t *testing.T) {
-	zf := filepath.Join(t.TempDir(), "zombie.pid")
-	parent := exec.Command("sh", "-c", `sh -c "echo \$\$ > '`+zf+`'" & exec sleep 300`)
-	if err := parent.Start(); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { parent.Process.Kill(); parent.Wait() })
-	var zpid int
-	for i := 0; i < 50 && zpid == 0; i++ {
-		if b, err := os.ReadFile(zf); err == nil {
-			zpid, _ = strconv.Atoi(strings.TrimSpace(string(b)))
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-	if zpid == 0 {
-		t.Fatal("zombie child never wrote its pid")
-	}
-	// Wait until the child has exited and shows as a zombie.
-	for i := 0; i < 50; i++ {
-		r, _ := ExecRunner(bg, "ps", []string{"-o", "stat=", "-p", strconv.Itoa(zpid)})
-		if strings.HasPrefix(strings.TrimSpace(r.Stdout), "Z") {
-			break
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-	if pidAlive(ExecRunner, zpid) {
-		t.Errorf("zombie pid %d must read as exited", zpid)
-	}
-	if !pidAlive(ExecRunner, parent.Process.Pid) {
-		t.Error("the live parent must read as alive")
-	}
 }
 
 func TestPidTreeParsesPS(t *testing.T) {

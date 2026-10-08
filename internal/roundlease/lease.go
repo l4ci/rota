@@ -12,10 +12,10 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/pidlive"
 	"github.com/l4ci/rota/internal/rotastate"
 )
 
@@ -92,15 +92,7 @@ type Env struct {
 // DefaultEnv reads the real host, process table and clock.
 func DefaultEnv() Env {
 	host, _ := os.Hostname()
-	return Env{Host: host, Alive: procAlive, StartTime: procStart, Now: time.Now}
-}
-
-func procAlive(pid int) bool {
-	if pid <= 0 {
-		return false
-	}
-	err := syscall.Kill(pid, 0)
-	return err == nil || errors.Is(err, syscall.EPERM)
+	return Env{Host: host, Alive: pidlive.Alive, StartTime: procStart, Now: time.Now}
 }
 
 // Path is the lease file under a common dir.
