@@ -256,8 +256,12 @@ for prov in github gitlab; do
   rc=$(rcv "$P" issues close 99 --commit HEAD)
   [ "$rc" = "3" ] || fail "$prov issues close on a missing issue should exit 3, got $rc: $(cat "$TMP_EX/out")"
   # another forge failure stays exit 5
-  rc=$(cd "$P" && env PATH="$TESTDIR/fakes:$PATH" FAKE_TRACKER_DB="$TMP_EX/db.json" FAKE_TRACKER_FAIL="issue" FAKE_TRACKER_FAIL_MSG="HTTP 500: server error" "$ROTA_BIN" --json issues close 1 --commit HEAD >/dev/null 2>&1; echo $?)
-  [ "$rc" = "5" ] || fail "$prov issues close with a failing forge should exit 5, got $rc"
+  : > "$TMP_EX/argv.log"
+  rc=0
+  (cd "$P" && env PATH="$TESTDIR/fakes:$PATH" FAKE_TRACKER_DB="$TMP_EX/db.json" \
+    FAKE_TRACKER_LOG="$TMP_EX/argv.log" FAKE_TRACKER_FAIL="issue" FAKE_TRACKER_FAIL_MSG="HTTP 500: server error" \
+    "$ROTA_BIN" --json issues close 1 --commit HEAD) >"$TMP_EX/out" 2>&1 || rc=$?
+  [ "$rc" = "5" ] || fail "$prov issues close with a failing forge should exit 5, got $rc: $(cat "$TMP_EX/out" "$TMP_EX/argv.log")"
 done
 
 # No origin and no issues.provider: exit 3 with a message, never a silent [].
