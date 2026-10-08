@@ -137,6 +137,9 @@ func (d *Deps) workerEnv() worker.Env {
 	if e.NewHost == nil {
 		e.NewHost = func(kind string) host.Host { return d.Host(kind) }
 	}
+	if e.Accounts == nil && d.WorkerAccounts != nil {
+		e.Accounts = d.WorkerAccounts()
+	}
 	return e
 }
 

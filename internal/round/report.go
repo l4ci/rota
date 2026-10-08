@@ -1,6 +1,7 @@
 package round
 
 import (
+	"context"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	"regexp"
@@ -8,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/host"
+	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -31,11 +33,14 @@ type Reported struct {
 	Changed                             bool
 }
 
+// reportKinds maps the reported states that are ledger events to their kind.
+var reportKinds = map[string]string{"done": ledger.KindDone, "blocked": ledger.KindBlocked, "limited": ledger.KindLimited}
+
 // ReportSlot records what a solo worker's result said, writing the two fields
 // a pane poll writes: state (lowercase) and pr. A second writer beside a
 // host's poll would race it, so any other host refuses. Re-reporting the same
 // state and PR changes nothing.
-func ReportSlot(root string, o ReportOpts) (Reported, error) {
+func (e Env) ReportSlot(ctx context.Context, root string, o ReportOpts) (Reported, error) {
 	res := Reported{Slot: o.Slot, Evidence: o.Evidence}
 	state := strings.ToLower(strings.TrimSpace(o.State))
 	if !slices.Contains(ReportStates, state) {
@@ -66,8 +71,9 @@ func ReportSlot(root string, o ReportOpts) (Reported, error) {
 		return res, &exitcode.Error{Exit: exitcode.ExitUsage, Message: fmt.Sprintf("the round host is %s, not solo: the pane is the truth", h),
 			Hint: "rota worker poll records a pane's state; round report would race it"}
 	}
-	found := false
+	found, moved := false, false
 	var stateErr error
+	var held ledger.Entry
 	err := worker.Update(root, func(doc *worker.Doc) {
 		s := doc.Slot(o.Slot)
 		if s == nil {
@@ -75,7 +81,9 @@ func ReportSlot(root string, o ReportOpts) (Reported, error) {
 		}
 		found = true
 		res.Previous = s.State()
+		held = ledger.Entry{Issue: worker.HeldID(s.Task(), s.Branch(), s.Name()), Slot: s.Name(), Account: s.Account(), Harness: s.Kind()}
 		if res.Previous != state {
+			moved = true
 			if stateErr = s.MarkState(state, ""); stateErr != nil {
 				return
 			}
@@ -99,6 +107,13 @@ func ReportSlot(root string, o ReportOpts) (Reported, error) {
 	}
 	if !found {
 		return res, &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("slot '%s' is not in the pool", o.Slot)}
+	}
+	if kind := reportKinds[state]; kind != "" && moved {
+		held.Kind, held.PR = kind, firstNonEmpty(pr, held.PR)
+		if kind == ledger.KindDone {
+			held.Detail = ledger.Detail("headroom", worker.LedgerHeadroom(ctx, e.Accounts, root, held.Harness, held.Account))
+		}
+		worker.LedgerNote(root, held)
 	}
 	return res, nil
 }

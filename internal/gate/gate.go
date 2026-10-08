@@ -137,6 +137,30 @@ func Autopilot(root, verb, target, note string) error {
 	return appendAudit(root, rec)
 }
 
+// ReadAudit returns the audit log's lines in order. A missing log is no lines;
+// a line that is not a JSON object is skipped.
+func ReadAudit(root string) ([]*jsonx.Object, error) {
+	data, err := os.ReadFile(filepath.Join(root, AuditFile))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var out []*jsonx.Object
+	for _, line := range strings.Split(string(data), "\n") {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		if v, err := jsonx.Decode([]byte(line)); err == nil {
+			if o, ok := v.(*jsonx.Object); ok {
+				out = append(out, o)
+			}
+		}
+	}
+	return out, nil
+}
+
 // appendAudit writes one line to the audit log under its lock and syncs it.
 func appendAudit(root string, rec *jsonx.Object) error {
 	line, err := jsonx.MarshalCompact(rec)

@@ -21,6 +21,7 @@ import (
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/tracker"
 )
@@ -425,6 +426,9 @@ type Env struct {
 	Executable func() (string, error)
 	// LookPath reports whether a binary is installed; nil means exec.LookPath.
 	LookPath func(string) (string, error)
+	// Accounts reads the usage meters; poll and wait use it to record the
+	// account's headroom when a pane reports done. Nil records none.
+	Accounts *Accounts
 }
 
 func (e Env) context() context.Context {
@@ -495,6 +499,12 @@ func execShell(ctx context.Context, dir, command string) (string, int) {
 // seen again (a re-gate before the worker pushed anything) is not a new bounce
 // and returns the count unchanged. head "" always counts.
 func RecordBounce(root, issue, head string) (n int, err error) {
+	counted := false
+	defer func() {
+		if err == nil && counted {
+			LedgerNote(root, ledger.Entry{Kind: ledger.KindBounce, Issue: issue, Detail: ledger.Detail("count", n)})
+		}
+	}()
 	err = Update(root, func(d *Doc) {
 		doc := d.doc
 		b := bouncesOf(doc)
@@ -504,6 +514,7 @@ func RecordBounce(root, issue, head string) (n int, err error) {
 			return
 		}
 		n++
+		counted = true
 		b.Set(issue, json.Number(strconv.Itoa(n)))
 		doc.Set("bounces", b)
 		if head != "" {

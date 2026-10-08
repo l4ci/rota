@@ -74,3 +74,37 @@ chmod +x "$RS/downbin/tmux"
 OUT=$( cd "$RS" && env -u HERDR_ENV PATH="$RS/downbin:$PATH" "$ROTA_BIN" --json round status 2>/dev/null ) || fail "status must exit 0 with the host down"
 [ "$(echo "$OUT" | jget data.unavailable)" = '["host","forge"]' ] || fail "unavailable sources should be listed: $OUT"
 pass "unavailable sources degrade to warnings"
+
+# round summary folds .rota/ledger.jsonl: no file is "no ledger yet" at exit 0;
+# a seeded round prints the table with the quota share column and the audit
+# heading; a round the ledger lacks exits 3. Calls end in `|| true`: a verb
+# captured in $(...) that exits non-zero would end the section silently.
+OUT=$( cd "$RS" && $RSENV "$ROTA_BIN" round summary 2>/dev/null ) || fail "round summary must exit 0 with no ledger"
+grep -q 'no ledger yet' <<<"$OUT" || fail "round summary without a ledger should say so: $OUT"
+# A writing verb appends the line itself: `round bounce` records the event with
+# the slot, account and harness read from the registry, not from the caller.
+( cd "$RS" && $RSENV "$ROTA_BIN" round bounce 58 >/dev/null 2>&1 ) || fail "round bounce 58 failed"
+LINE=$(grep -E '"kind": ?"bounce"' "$RS/.rota/ledger.jsonl" || true)
+[ -n "$LINE" ] || fail "round bounce should append a bounce entry to .rota/ledger.jsonl"
+grep -qE '"issue": ?"58"' <<<"$LINE" || fail "the bounce entry should name the issue: $LINE"
+grep -qE '"slot": ?"dana"' <<<"$LINE" || fail "the bounce entry should name the slot holding the issue: $LINE"
+printf '%s\n' \
+  '{"ts":"2026-10-08T09:00:00Z","kind":"assign","round":4,"issue":"58","slot":"dana","account":"work","harness":"claude","detail":{"headroom":80.0}}' \
+  '{"ts":"2026-10-08T09:30:00Z","kind":"done","round":4,"issue":"58","slot":"dana","pr":"#9","detail":{"headroom":60.0}}' \
+  '{"ts":"2026-10-08T09:31:00Z","kind":"gate","round":4,"issue":"58","slot":"dana","pr":"#9","detail":{"verdict":"pass"}}' \
+  '{"ts":"2026-10-08T09:31:00Z","kind":"merge","round":4,"issue":"58","slot":"dana","pr":"#9"}' \
+  '{"ts":"2026-10-08T09:00:00Z","kind":"assign","round":4,"issue":"59","slot":"ben","harness":"codex"}' \
+  > "$RS/.rota/ledger.jsonl"
+OUT=$( cd "$RS" && $RSENV "$ROTA_BIN" round summary 2>/dev/null ) || true
+grep -q 'quota share' <<<"$OUT" || fail "round summary should explain the quota share column: $OUT"
+grep -q 'Gate audit' <<<"$OUT" || fail "round summary should end with the gate audit: $OUT"
+grep -q '20%' <<<"$OUT" || fail "dana spent 20 headroom points: $OUT"
+grep -q 'n/a' <<<"$OUT" || fail "a codex row has no meter, so its quota share is n/a: $OUT"
+OUT=$( cd "$RS" && $RSENV "$ROTA_BIN" --json round summary 2>/dev/null ) || true
+[ "$(echo "$OUT" | jget data.round)" = "4" ] || fail "round summary should default to the highest round: $OUT"
+[ "$(echo "$OUT" | jget data.issues[0].quotaShare)" = "20.0" ] || [ "$(echo "$OUT" | jget data.issues[0].quotaShare)" = "20" ] \
+  || fail "quotaShare should be the headroom delta: $OUT"
+rc=0
+( cd "$RS" && $RSENV "$ROTA_BIN" round summary --round 9 >/dev/null 2>&1 ) || rc=$?
+[ "$rc" = "3" ] || fail "an unknown --round should exit 3, got $rc"
+pass "round summary folds the ledger, says n/a for unmetered rows and exits 3 for an unknown round"

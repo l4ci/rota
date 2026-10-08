@@ -24,7 +24,8 @@ func roundReport(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		res, err := round.ReportSlot(root, round.ReportOpts{Slot: slot, State: *state, Evidence: *evidence, PR: *pr, Issues: *issues})
+		env := round.Env{Accounts: c.deps().WorkerAccounts()}
+		res, err := env.ReportSlot(c.Context(), root, round.ReportOpts{Slot: slot, State: *state, Evidence: *evidence, PR: *pr, Issues: *issues})
 		if err != nil {
 			return Result{}, err
 		}

@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -405,6 +406,8 @@ func (w *Watcher) detect(ctx context.Context, now time.Time, t Target, o obs) {
 		w.warn("limits not recorded: %v", err)
 		return
 	}
+	worker.LedgerNote(w.Root, ledger.Entry{Kind: ledger.KindLimited, Issue: t.Issue, Slot: t.Session, Account: t.Account,
+		Detail: ledger.Detail("resetsAt", e.ResetsAt, "window", e.Window)})
 	if !attempt {
 		return
 	}

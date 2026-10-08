@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/host"
+	"github.com/l4ci/rota/internal/ledger"
 )
 
 // WaitOpts are the flags of `rota round wait`.
@@ -207,12 +208,20 @@ func (e Env) Wait(ctx context.Context, root string, o WaitOpts) (WaitResult, err
 			// shows a different state or evidence; alwaysNews states never are.
 			if r.State != StateBusy && (seen[r.Name] != key || alwaysNews(r.State)) && !settled(r) {
 				var rowErr error
+				var done *ledger.Entry
 				if _, err := UpdateSlot(root, r.Name, func(s *Slot) {
+					prev := s.State()
 					if rowErr = recordRow(s, r, e.Now()); rowErr == nil && !alwaysNews(r.State) {
 						s.SetSeen(key)
 					}
+					if d, ok := paneDone(prev, s, r); ok && rowErr == nil {
+						done = &d
+					}
 				}); err != nil {
 					return WaitResult{}, err
+				}
+				if done != nil {
+					LedgerDone(ctx, e.Accounts, root, *done)
 				}
 				if rowErr != nil {
 					return WaitResult{}, rowErr
