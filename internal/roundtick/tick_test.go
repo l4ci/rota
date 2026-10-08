@@ -397,3 +397,28 @@ func TestHoldableSkipsAnUnpickedBestOf(t *testing.T) {
 		t.Error("only a verdict that needs a person is holdable")
 	}
 }
+
+func TestCappedTickFillsNoSlotAndSaysWhy(t *testing.T) {
+	f := &fake{
+		slots: []Slot{{Name: "ben", State: "idle"}, {Name: "dana", State: "idle"}},
+		cands: []Candidate{{"#1", true}, {"#2", true}},
+	}
+	why := "every work.accounts account is cooling down; slots fill again at 13:00 UTC"
+	e := f.env()
+	e.Capped = func(context.Context) string { return why }
+	minted := 0
+	e.Review = func(context.Context) ([]string, error) { minted++; return []string{"#9"}, nil }
+	r, err := Run(context.Background(), e)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(f.assigned) != 0 || minted != 0 || r.Capped != why {
+		t.Fatalf("assigned %v minted %d capped %q", f.assigned, minted, r.Capped)
+	}
+	// The cap lifts at the reset: the next tick fills the slots.
+	e.Capped = func(context.Context) string { return "" }
+	r, err = Run(context.Background(), e)
+	if err != nil || len(f.assigned) != 2 || r.Capped != "" {
+		t.Fatalf("after the reset: %v assigned %v capped %q", err, f.assigned, r.Capped)
+	}
+}
