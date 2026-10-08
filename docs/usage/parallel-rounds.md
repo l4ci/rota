@@ -151,6 +151,7 @@ slot `wait` named, or gate a PR in review by number (`rota worker gate 61 --base
 | Look | `rota round status`, `rota round reconcile` | the round's rows and drift; `reconcile --apply` repairs what is safe |
 | Cost | `rota round summary` | per-issue, per-slot and per-account totals for a round, from the ledger and the gate audit log |
 | Ask | `rota round escalate send`, `rota round escalate check` | puts a question to the maintainer on the issue or PR thread and reads the answer |
+| Adopt | `rota worker adopt <branch\|worktree> --issue <N>` | registers work another tool started as a hostless slot, after the same overlap check as `assign`; see [adopting](#adopting-work-another-tool-started) |
 | Merge | `rota worker gate <slot\|#PR> --base <branch>` | verifies on the merged tree, merges on a pass; a [merge approval](#merge-approval) policy can require a human first |
 | View | `rota layout split`, `rota layout tabs` | folds the workers' herdr panes and the orchestrator into one `rota` tab, or back into tabs; see [layout](#layout) |
 | Clean | `rota reap` | lists, then with `--apply` removes, what no live slot owns; never kills a running agent |
@@ -580,7 +581,38 @@ in `<!-- rota:handoff <slot>@<round> -->`.
 
 `rota round status` lists the round's slots with host, PR and drift. `rota round reconcile` reports
 drift between the registry, the host, git and the forge, including `stalled` (never repaired),
-`lease-stale` and `claim-mismatch`; `--apply` makes the safe repairs, and never edits the tracker.
+`lease-stale`, `claim-mismatch` and `unregistered-branch`; `--apply` makes the safe repairs, and never
+edits the tracker.
+
+## Adopting work another tool started
+
+A branch or worktree made by another tool (Codex's managed worktrees, a Claude Code agent team, a
+cloud session) can join the round without rota driving the agent:
+
+```sh
+rota worker adopt codex/612-thing --issue 612
+rota worker adopt ../thing-wt --issue 612 --name ext-1 --pr https://github.com/org/repo/pull/9
+```
+
+The argument is a local branch or a worktree of this repo. Adopt runs the overlap check `round assign`
+runs. It exits 4 with `blockedBy` `overlap` (`--accept-overlap` skips only that), `registered` (a slot
+holds the branch) or `held` (a slot holds the issue). The new slot is `ext-<n>` unless you pass
+`--name`. It is `external`: no session handle, so `worker dispatch` refuses it (`blockedBy: host`),
+`round wait` and `worker poll` never read a pane, and `reconcile` reports no dead tab or stall for it.
+
+`round status` shows it as `external/<state>`, worked out from the forge and git: `done` with an open
+PR, `busy` when the branch is ahead of the base with no PR, `idle` otherwise, `unknown` when the forge
+is down. The gate and the train treat its PR as usual and expect no relays. When the PR merges the slot
+is released and its worktree and branch stay, since rota did not make them; `rota reap` lists the
+merged branch. `worker gate --prune` or `round wind-down --prune` deletes both (a dirty worktree is
+left). `wind-down` parks no adopted slot: it reports it `released` or `open`.
+
+Set `round.adoptPattern` to a glob over branch names (`codex/*`; `*` stops at `/`; empty is off) and
+`rota round reconcile` lists each matching branch that no slot holds and that is not merged as
+`unregistered-branch`. `--apply`, and so the autopilot's first step, adopts those whose name yields an
+issue number (`<agent>/<issue>-<slug>`, `issue-N` or `#N`). A blocking overlap becomes a warning and
+the branch stays listed; a name with no number is listed as `needs --issue`. See
+[orchestrator harnesses](orchestrator-harnesses.md#adopting-work-another-tool-started).
 
 ## What a round cost
 

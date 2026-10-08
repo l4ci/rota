@@ -35,6 +35,32 @@ The skill's solo mode needs a subagent that can be pinned to a worktree. Only Cl
 
 The skill asks in plain language. Claude Code renders that as `AskUserQuestion`; elsewhere it is an ordinary message in the session.
 
+## Adopting work another tool started
+
+Some tools make their own branch and worktree: Codex's managed worktrees, Claude Code agent teams, a cloud session that pushes a branch. Rota does not launch these and cannot read their panes, but it can track the branch so the overlap check, status, gate, train and reap see it like round work.
+
+```sh
+rota worker adopt codex/612-thing --issue 612          # a branch
+rota worker adopt ~/work/thing-wt --issue 612 --pr <url>  # a worktree of this repo
+```
+
+The slot is `external`: no host, no session. Rota runs the same file-overlap check as `round assign` and exits 4 with `blockedBy: overlap` on a blocking clash (`--accept-overlap` skips only that). It also refuses a branch or an issue that a slot already holds (`registered`, `held`). The path must be a worktree in `git worktree list` for this repo.
+
+What changes for an adopted slot:
+
+- `rota round status` shows `external` as its host, and a state worked out from the forge and git: `done` when its PR is open, `busy` when the branch is ahead of the base with no PR, `idle` otherwise, `unknown` while the forge cannot be reached. No `ROTA-DONE` is expected; the PR is the signal.
+- `rota worker dispatch` refuses it (`blockedBy: host`). Talk to that agent in its own tool.
+- `rota worker gate <slot>` and `rota worker train` gate its PR like any other. There are no relays to check, so the provenance step passes with `None` for approvals.
+- After the merge the slot is released: the registry entry goes, the worktree and branch stay, because rota did not create them. `rota reap` then lists the merged branch for you to delete. `rota worker gate --prune` or `rota round wind-down --prune` removes the worktree and branch instead, and skips a dirty worktree.
+
+To catch these branches without naming each one, set `round.adoptPattern` to a glob over the branch names:
+
+```sh
+rota config set round.adoptPattern 'codex/*'
+```
+
+`rota round reconcile` then reports an `unregistered-branch` for each matching branch that no slot holds and that is not merged. `--apply` adopts the ones whose name carries an issue number (`<agent>/<issue>-<slug>`, `issue-N`, `#N`); the others stay listed with `needs --issue`. See [parallel rounds](parallel-rounds.md#adopting-work-another-tool-started).
+
 ## Last verified (2026-10-04)
 
 > [!NOTE]
