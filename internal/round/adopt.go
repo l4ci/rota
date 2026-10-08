@@ -3,6 +3,7 @@ package round
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -10,6 +11,8 @@ import (
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/ledger"
+	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -62,6 +65,9 @@ func (e Env) Adopt(ctx context.Context, root string, be backlog.Backend, o Adopt
 		return res, err
 	}
 	res.Branch, res.Worktree = branch, wt
+	if err := e.checkAdoptPR(ctx, branch, o.PR); err != nil {
+		return res, err
+	}
 
 	reg := worker.LoadRegistry(root)
 	for _, s := range reg.Slots() {
@@ -112,7 +118,49 @@ func (e Env) Adopt(ctx context.Context, root string, be backlog.Backend, o Adopt
 		}
 		return res, err
 	}
+	worker.LedgerNote(root, ledger.Entry{Kind: ledger.KindAdopt, Issue: res.Issue, Slot: name, PR: o.PR, Detail: ledger.Detail("branch", branch)})
 	return res, nil
+}
+
+// fenceExternal refuses (blockedBy external) a verb that would act on the
+// worktree and branch of an adopted slot: rota did not create them. The
+// fence on the worker side reads the same predicate, worker.Slot.IsExternal.
+// what finishes "<verb> would ..."; a nil or driven slot passes.
+func fenceExternal(s *worker.Slot, verb, what string) error {
+	if !s.IsExternal() {
+		return nil
+	}
+	return blocked(BlockExternal, "slot %s is an adopted external slot: %s would %s rota did not create", s.Name(), verb, what)
+}
+
+// checkAdoptPR validates the PR an adoption records: it must name a PR, the
+// forge must know it, and the branch must head it. A slot recording a PR that
+// is not its own would be released, gated or reported on someone else's merge.
+// No forge, or no forge CLI to ask, skips the read; any other failure to read
+// it refuses, since guessing "fine" is what this check is for.
+func (e Env) checkAdoptPR(ctx context.Context, branch, pr string) error {
+	if pr == "" {
+		return nil
+	}
+	n, ok := worker.PRRefNumber(pr)
+	if !ok {
+		return usage("--pr %q has no PR number: pass the PR's URL", pr)
+	}
+	if e.Forge == nil {
+		return nil
+	}
+	info, err := e.Forge.PRView(ctx, n)
+	switch {
+	case tracker.IsKind(err, tracker.KindNotFound):
+		return &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("--pr %s: the forge has no PR %d", pr, n)}
+	case tracker.IsKind(err, tracker.KindUnavailable) && strings.Contains(err.Error(), "is not installed"):
+		return nil
+	case err != nil:
+		return fmt.Errorf("--pr %s: could not read PR %d from the forge: %w", pr, n, err)
+	case info.Head != branch:
+		return &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("--pr %s: PR %d is headed by %s, not %s", pr, n, info.Head, branch)}
+	}
+	return nil
 }
 
 // resolveAdoptRef is the branch (and its worktree, "" when none) behind ref: a

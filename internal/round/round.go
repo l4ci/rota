@@ -64,7 +64,9 @@ const DefaultNeedsHuman = "needs-human"
 // label repair, writes. tracker.Adapter satisfies it.
 type Forge interface {
 	OpenPRs(ctx context.Context) ([]tracker.PR, error)
+	MergedPRs(ctx context.Context, branch string) ([]tracker.PR, error)
 	PRState(ctx context.Context, pr int) (string, error)
+	PRView(ctx context.Context, pr int) (tracker.PRInfo, error)
 	ClosedNumbers(body string) []int
 	List(ctx context.Context, f tracker.ListFilter) ([]tracker.Issue, error)
 	Get(ctx context.Context, number int, withComments bool) (tracker.Issue, error)
@@ -190,6 +192,31 @@ func (e Env) ExternalState(ctx context.Context, root string, forgeOK bool, base 
 		return "busy"
 	}
 	return "idle"
+}
+
+// adoptedPRNumber is the number of the PR a row's checks run on: the one it
+// records, else, for an adopted slot that recorded none and has no open PR, the
+// merged PR its branch headed. That PR opened and merged between two looks at
+// the open list, so only a branch lookup finds it; the row then carries it and
+// the merged-external finding releases the slot.
+func (e Env) adoptedPRNumber(ctx context.Context, rep *Report, v *view, r *Row) (int, bool) {
+	if n, ok := worker.PRRefNumber(r.PR); ok {
+		return n, true
+	}
+	if r.HostState != ExternalHost || r.PR != "" {
+		return 0, false
+	}
+	merged, err := e.Forge.MergedPRs(ctx, r.Branch)
+	if err != nil {
+		rep.Warnings = append(rep.Warnings, fmt.Sprintf("merged PRs of %s: %v", r.Branch, err))
+		v.prErr = true
+		return 0, false
+	}
+	if len(merged) == 0 {
+		return 0, false
+	}
+	r.PR = merged[0].URL
+	return merged[0].Number, true
 }
 
 // Finding is one drift. Repair names what Reconcile(apply) would do and is
@@ -435,7 +462,7 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 						rep.add(Finding{Kind: PRUnrecorded, Slot: r.Name, Issue: r.Issue, Detail: fmt.Sprintf("open PR #%d has branch %s as head, slot records none", pr.Number, r.Branch), Repair: "record pr"})
 					}
 				}
-			} else if n, ok := worker.PRRefNumber(r.PR); ok {
+			} else if n, ok := e.adoptedPRNumber(ctx, rep, v, r); ok {
 				st, err := e.Forge.PRState(ctx, n)
 				if err != nil {
 					rep.Warnings = append(rep.Warnings, fmt.Sprintf("PR #%d state: %v", n, err))

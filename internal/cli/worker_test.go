@@ -513,3 +513,17 @@ func TestWorkerDispatchKindFlag(t *testing.T) {
 		t.Errorf("login: %d %s", code, stderr)
 	}
 }
+
+// An adopted slot's checkout is not rota's to reset: the refusal names the
+// fence (external), not the dirty-slot guard.
+func TestWorkerResetRefusesAnAdoptedSlotAsExternal(t *testing.T) {
+	dir := workerProject(t, `{}`)
+	rotaIn(t, dir, "worker", "pool", "init", "--slots", "1", "--base", "main")
+	if found, err := worker.UpdateSlot(dir, "w1", func(s *worker.Slot) { s.MarkExternal("5", "") }); err != nil || !found {
+		t.Fatalf("mark external: %v %v", found, err)
+	}
+	code, out, _ := rotaIn(t, dir, "worker", "reset", "w1", "--json")
+	if d := data(t, out); code != 4 || d["blockedBy"] != "external" {
+		t.Fatalf("reset of an adopted slot: %d %v", code, d)
+	}
+}

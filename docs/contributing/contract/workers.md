@@ -1,5 +1,5 @@
 ---
-verified-sha: 4d0f319a6726a085f3fc35e8de1d0eaf6940cdfa
+verified-sha: 14c29a1717a61c4824734bd37ee72e6ffe3a32d8
 refs:
   - internal/worker
   - internal/cli/worker.go
@@ -78,6 +78,8 @@ note: the argument is a local branch or a path from `git worktree list` for this
 note: an external slot refuses `worker dispatch` (task or relay) with exit 4, `blockedBy: "host"`, `external slot has no host`. `round status` shows it with `hostState` `external` and a `state` derived from the forge and git, since no pane reports one: `done` when its PR is open, `busy` when the branch is ahead of the base with no PR, `idle` otherwise, `unknown` while the forge cannot answer (or fails to read this slot's PR), `merged` once its PR merged. A merged slot stays listed, with a `merged-external` finding, until the gate or `round reconcile --apply` releases it. `worker poll` and `round wait` skip it, and `round reconcile` reports no `dead-tab`, `unclaimed-tab`, `stalled` or `item-timeout` for it.
 note: `worker gate <slot>` and `worker train` gate its PR through the normal steps. The provenance step expects no relays and an Approvals line of `None`, as for an unregistered PR. After a pass the slot is released: the registry entry goes, the worktree and branch stay (rota did not create them). `worker gate --prune` also removes the worktree and branch, but leaves a dirty worktree, and with it the branch, in place. `round wind-down` parks no external slot; it reports each under `slots` with outcome `released` (its PR merged) or `open`, and `--prune` applies to the released ones.
 note: `round reconcile` adopts the same way for branches matching `round.adoptPattern` (see there).
+note: `--pr` is validated against the forge when one is reachable: it must carry a PR number, the forge must know the PR (exit 3 otherwise) and the branch must head it (exit 3). No forge, or no forge CLI, skips the read; any other failure to read the PR refuses. A usage error (exit 2) comes first for a missing `--issue` or an argument count other than one. A successful adoption appends an `adopt` entry (`detail.branch`) to `.rota/ledger.jsonl`, which `rota reap` reads to tell an adopted branch from one nobody adopted.
+note: fences. `worker.Slot.IsExternal` is the one predicate; every fence reads it. Exit 4 with `blockedBy: "external"`: `worker reset`, `round reclaim`, `round transfer` (as sender or receiver) and the park behind `round return`. `worker dispatch` refuses with `blockedBy: "host"` (above). `worker pool reap` only unregisters the slot, and `round pick` leaves a losing adopted slot registered with a warning that names `rota worker pool reap <slot>`.
 
 ### rota worker prompt-check
 rota worker prompt-check --key <path>

@@ -10,6 +10,7 @@ import (
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -44,6 +45,9 @@ func TestAdoptRegistersExternalSlot(t *testing.T) {
 		if got, _ := filepath.EvalSymlinks(s.Worktree()); got == "" || got != res.Worktree {
 			t.Errorf("%s: worktree %q vs %q", ref, got, res.Worktree)
 		}
+	}
+	if !worker.AdoptedBranches(root)["codex/12-thing"] {
+		t.Error("adopt left no ledger record, so reap cannot tell the branch was adopted")
 	}
 	// A second adoption takes the next free name.
 	sh(t, root, "branch", "other-work")
@@ -138,5 +142,32 @@ func TestAdoptResolvesALocalBranchBeforeACwdRelativeDir(t *testing.T) {
 	if _, err := e.Adopt(bg, root, be, AdoptOpts{Ref: "plain-dir", Issue: "13", AcceptOverlap: true}); err == nil || exitOf(err) != exitcode.ExitUsage ||
 		!strings.Contains(err.Error(), "not a worktree") {
 		t.Errorf("plain dir: %v", err)
+	}
+}
+
+// --pr is checked against the forge: a PR that does not exist, or one headed by
+// another branch, would leave the slot waiting on a PR that is not its own.
+func TestAdoptValidatesThePRAgainstTheForge(t *testing.T) {
+	root, e, be := adoptFixture(t)
+	fr := &fakeRemote{prViews: map[int]tracker.PRInfo{
+		7: {Head: "codex/12-thing", State: "OPEN"},
+		8: {Head: "someone/else", State: "OPEN"},
+	}}
+	e.Forge = fr.asForge()
+	for _, c := range []struct{ pr, want string }{
+		{"not-a-pr", "no PR number"},
+		{"https://x/pull/9", "no PR 9"},
+		{"https://x/pull/8", "headed by someone/else"},
+	} {
+		_, err := e.Adopt(bg, root, be, AdoptOpts{Ref: "codex/12-thing", Issue: "12", PR: c.pr})
+		if err == nil || !strings.Contains(err.Error(), c.want) {
+			t.Errorf("--pr %s: want an error naming %q, got %v", c.pr, c.want, err)
+		}
+		if len(worker.LoadRegistry(root).Slots()) != 0 {
+			t.Fatalf("--pr %s: a refused adoption registered a slot", c.pr)
+		}
+	}
+	if _, err := e.Adopt(bg, root, be, AdoptOpts{Ref: "codex/12-thing", Issue: "12", PR: "https://x/pull/7"}); err != nil {
+		t.Fatalf("a PR headed by the branch should adopt: %v", err)
 	}
 }

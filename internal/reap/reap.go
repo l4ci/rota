@@ -98,6 +98,10 @@ type Input struct {
 	Agents []host.Agent
 	Host   HostOps
 	Lease  LeaseOps
+	// Adopted names the branches `rota worker adopt` took over. A merged
+	// branch is offered for deletion only when it is one of these or leads with
+	// an issue number (`<agent>/<n>-<slug>`, the shape a round cuts).
+	Adopted map[string]bool
 }
 
 // Result is what Find and Apply report. Warnings are for the caller to print.
@@ -380,7 +384,7 @@ func findBranches(ctx context.Context, s *state) ([]Candidate, error) {
 	}
 	var out []Candidate
 	for _, b := range strings.Fields(list) {
-		if protectedBranch(b, s.in.Base) || s.slotBranch[b] || worker.IssueFromBranch(b) == "" {
+		if protectedBranch(b, s.in.Base) || s.slotBranch[b] || !s.owned(b) {
 			continue
 		}
 		if s.checkedOut[b] {
@@ -404,6 +408,13 @@ func findBranches(ctx context.Context, s *state) ([]Candidate, error) {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out, nil
+}
+
+// owned: whether a round or an adoption made branch b. A round cuts
+// `<agent>/<n>-<slug>`; an adopted branch may be named anything, so the adopt
+// record decides. An `issue-N` token in some other name is not enough.
+func (s *state) owned(b string) bool {
+	return s.in.Adopted[b] || worker.RoundBranch(b)
 }
 
 // hostOwned: whether a tab or process working in cwd belongs to something

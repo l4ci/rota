@@ -523,9 +523,24 @@ func TestReapListsMergedExternalWithoutALeadingNumber(t *testing.T) {
 	g := repo(nil, []string{"codex/issue-612"}, "codex/issue-612")
 	g.resp["worktree list --porcelain"] = gitResp{out: g.resp["worktree list --porcelain"].out +
 		"worktree /elsewhere/a\nHEAD abc\nbranch refs/heads/codex/issue-612\n\n"}
-	res := find(t, input(g, nil, []host.Agent{}, nil), KindBranch)
+	in := input(g, nil, []host.Agent{}, nil)
+	in.Adopted = map[string]bool{"codex/issue-612": true}
+	res := find(t, in, KindBranch)
 	want := []string{"branch:codex/issue-612 HELD(checked out at /elsewhere/a; remove that worktree first)"}
 	if got := ids(res.Candidates); !reflect.DeepEqual(got, want) {
+		t.Fatalf("candidates = %v, want %v", got, want)
+	}
+}
+
+// A merged branch is offered only when a round or an adoption made it: the
+// issue-N token alone (docs/issue-3-notes) says nothing about who owns it.
+func TestReapSkipsMergedBranchesNobodyAdopted(t *testing.T) {
+	g := repo(nil, []string{"docs/issue-3-notes", "fix/#4-typo", "codex/issue-612", "kit/9-old"},
+		"docs/issue-3-notes", "fix/#4-typo", "codex/issue-612", "kit/9-old")
+	in := input(g, nil, []host.Agent{}, nil)
+	in.Adopted = map[string]bool{"codex/issue-612": true}
+	want := []string{"branch:codex/issue-612", "branch:kit/9-old"}
+	if got := ids(find(t, in, KindBranch).Candidates); !reflect.DeepEqual(got, want) {
 		t.Fatalf("candidates = %v, want %v", got, want)
 	}
 }

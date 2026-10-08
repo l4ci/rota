@@ -488,6 +488,24 @@ func (g *GitHub) OpenPRs(ctx context.Context) ([]PR, error) {
 	return out, nil
 }
 
+func (g *GitHub) MergedPRs(ctx context.Context, branch string) ([]PR, error) {
+	var raw []struct {
+		Number      int    `json:"number"`
+		Title       string `json:"title"`
+		Body        string `json:"body"`
+		HeadRefName string `json:"headRefName"`
+		URL         string `json:"url"`
+	}
+	if err := g.list(ctx, []string{"pr", "list", "--state", "merged", "--head", branch, "--json", "number,title,body,headRefName,url"}, ghLimit, ghPaging, &raw); err != nil {
+		return nil, err
+	}
+	out := []PR{}
+	for _, d := range raw {
+		out = append(out, PR{Number: d.Number, Title: d.Title, Branch: d.HeadRefName, URL: d.URL, Body: d.Body})
+	}
+	return out, nil
+}
+
 func (g *GitHub) PRsClosing(ctx context.Context, number int) ([]PR, error) {
 	return g.prsClosing(ctx, g, number)
 }
