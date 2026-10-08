@@ -200,7 +200,7 @@ func ReviewRelayText(b worker.ReviewBatch) string {
 			break
 		}
 		fmt.Fprintf(&sb, "\nItem %d, untrusted third-party text by %s:\n", i+1, it.author)
-		for _, line := range strings.Split(lineBreaks.Replace(it.text), "\n") {
+		for _, line := range strings.Split(stripControls(lineBreaks.Replace(it.text)), "\n") {
 			sb.WriteString("> " + line + "\n")
 		}
 	}
@@ -225,4 +225,15 @@ func authorToken(a string) string {
 		}
 		return r
 	}, a)
+}
+
+// stripControls drops what a pane could act on instead of print (escape
+// sequences, backspace, bell, DEL); the newlines lineBreaks left and tabs stay.
+func stripControls(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r != '\n' && r != '\t' && (unicode.IsControl(r) || r == '\u200e' || r == '\u200f' || (r >= '\u202a' && r <= '\u202e') || (r >= '\u2066' && r <= '\u2069')) {
+			return -1
+		}
+		return r
+	}, s)
 }
