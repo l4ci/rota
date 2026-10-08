@@ -6,7 +6,7 @@ Env: FAKE_TRACKER_DB   JSON store path (required unless FAKE_TRACKER_DB_DIR; cre
      FAKE_TRACKER_DB_DIR  per-repo stores: <dir>/<basename of the cwd's git toplevel>.json (wins over FAKE_TRACKER_DB)
      FAKE_TRACKER_LOG  if set, each call's argv (space-joined) is appended
      FAKE_TRACKER_FAIL if set, any call whose argv contains it fails (exit 1)
-     FAKE_TRACKER_FAIL_MSG extra stderr text on that failure (e.g. "secondary rate limit" makes rota exit 4)
+     FAKE_TRACKER_FAIL_MSG stderr detail on that failure (argv stays in FAKE_TRACKER_LOG)
 Only the subset rota uses is implemented; anything else exits 2.
 Ids are realistic where rota must not mix them up: gh `issue view --json comments` gives
 GraphQL node ids (the REST id is in the comment url), and glab's global `id` differs from
@@ -811,7 +811,11 @@ def main():
             f.write(line + "\n")
     sub = os.environ.get("FAKE_TRACKER_FAIL")
     if sub and sub in line:
-        sys.stderr.write("fake %s: simulated failure for: %s %s\n" % (tool, line, os.environ.get("FAKE_TRACKER_FAIL_MSG", "")))
+        # Callers classify stderr as a forge error. Echoing argv here lets a
+        # comment's SHA containing 404 (or body text like "not found") change
+        # the injected failure's kind. Keep argv in FAKE_TRACKER_LOG only.
+        message = os.environ.get("FAKE_TRACKER_FAIL_MSG", "")
+        sys.stderr.write("fake %s: simulated failure%s\n" % (tool, ": " + message if message else ""))
         return 1
     try:
         db = load()
