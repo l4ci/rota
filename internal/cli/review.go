@@ -437,10 +437,10 @@ func reviewQueue(c *Ctx, args []string) (Result, error) {
 }
 
 // reviewDepth is `rota review depth`: the depth ship.review picks for a branch,
-// from its diff size against the base and the labels the caller passes (the
-// issue's or PR's). /rota-ship prints it and runs /rota-review accordingly.
+// from its diff size against the base and the labels of the branch's issue
+// (read from the tracker when the policy has a labels map) plus any --labels. /rota-ship prints it and runs /rota-review accordingly.
 func reviewDepth(fs *flag.FlagSet) RunFunc {
-	labelsFlag := fs.String("labels", "", "comma-separated labels of the issue or PR the branch belongs to")
+	labelsFlag := fs.String("labels", "", "extra labels, added to the branch issue's own")
 	return func(c *Ctx, args []string) (Result, error) {
 		t, err := reviewTarget(c, args, "review")
 		if err != nil {
@@ -450,7 +450,8 @@ func reviewDepth(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		policy, err := config.ReviewPolicyOf(config.Load(rotatree.Config(root)))
+		cfg := config.Load(rotatree.Config(root))
+		policy, err := config.ReviewPolicyOf(cfg)
 		if err != nil {
 			return Result{}, Failed("%v; run rota config check", err)
 		}
@@ -463,6 +464,24 @@ func reviewDepth(fs *flag.FlagSet) RunFunc {
 		for _, l := range strings.Split(*labelsFlag, ",") {
 			if l = strings.TrimSpace(l); l != "" {
 				labels = append(labels, l)
+			}
+		}
+		// The issue behind a `<agent>/<issue>-<slug>` branch is read for its labels
+		// only when the policy has a label to match, as the worker gate does, so a
+		// caller that omits --labels still gets a risk:high override.
+		if n, ok := worker.BranchIssue(t.Branch); ok && len(policy.Labels) > 0 {
+			fg, err := c.deps().forge(c.Context(), cfg, "", root)
+			if err != nil {
+				return Result{}, trackerErr(err)
+			}
+			is, err := fg.Get(c.Context(), n, false)
+			if err != nil {
+				return Result{}, Failed("could not read #%d for its labels to pick the review depth: %v", n, err)
+			}
+			for _, l := range is.Labels {
+				if !slices.Contains(labels, l) {
+					labels = append(labels, l)
+				}
 			}
 		}
 		depth, why := policy.Resolve(changed, labels)

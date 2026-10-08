@@ -346,7 +346,7 @@ func TestWorkerSessionVerbs(t *testing.T) {
 }
 
 func TestWorkerGateVerb(t *testing.T) {
-	dir := workerProject(t, `{"test":{"full":["test -f feature.txt"]}}`)
+	dir := workerProject(t, `{"ship":{"review":"none"},"test":{"full":["test -f feature.txt"]}}`)
 	rotaIn(t, dir, "worker", "pool", "init", "--slots", "1", "--base", "main")
 	wt := filepath.Join(dir, ".worktrees", "w1")
 	git := func(d string, args ...string) {

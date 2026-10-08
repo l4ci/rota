@@ -77,7 +77,7 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 		for i, t := range args {
 			issues[i] = gateIssue(root, t)
 		}
-		r, err := workerEnvCtx(c, ctx).Train(ctx, root, worker.TrainOpts{Targets: args, Base: *base, LandGreen: *landGreen, NoVerify: *noVerify, Approve: approve, Verdict: shipVerdict(c, root, root).Block})
+		r, err := workerEnvCtx(c, ctx).Train(ctx, root, worker.TrainOpts{Targets: args, Base: *base, LandGreen: *landGreen, NoVerify: *noVerify, Approve: approve, Verdict: shipVerdict(c, root, root).Block, Recorded: recordedReviews(root)})
 		if err != nil && r.Verdict == worker.GateVerdictBlocked {
 			return verdictRefusal(err, trainData(r))
 		}
@@ -92,6 +92,9 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 		}
 		if err == nil && r.Verdict == worker.GateBestOfUnpicked {
 			return bestOfRefusal(r.Err, r.Hint, trainData(r))
+		}
+		if err == nil && r.Verdict == worker.GateReviewMissing {
+			return blockedRefusal("review-missing", r.Err, r.Hint, trainData(r))
 		}
 		if err != nil {
 			return Result{}, err

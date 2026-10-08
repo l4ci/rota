@@ -19,6 +19,7 @@ import (
 	"github.com/l4ci/rota/internal/overlap"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/tracker"
+	"github.com/l4ci/rota/internal/verdict"
 )
 
 // Merge gate for one worker slot's branch/PR into the cycle branch: the port
@@ -94,6 +95,10 @@ const (
 	// GateBestOfUnpicked: the PR is an attempt of a best-of:2 issue and no
 	// `rota round pick` names it; the CLI exits 4 with it, blockedBy best-of-unpicked.
 	GateBestOfUnpicked = "best-of-unpicked"
+	// GateReviewMissing: the review depth ship.review resolves for the branch
+	// needs a recorded verdict the branch lacks; the CLI exits 4 with it,
+	// blockedBy review-missing.
+	GateReviewMissing = "review-missing"
 )
 
 // PartialSliceLabel marks an issue whose PR lands only a slice of it, so the PR
@@ -124,6 +129,10 @@ type GateOpts struct {
 	// CheckOnly. A non-nil error (a recorded FAIL) stops the gate with verdict
 	// verdict-blocked and is returned as is. branch is the worker branch.
 	Verdict func(branch string) error
+	// Recorded lists the review kinds (verdict.ReviewSpec, verdict.ReviewQuality)
+	// with a verdict recorded for branch. When set, the gate refuses a branch
+	// lacking the verdicts its resolved review depth needs; nil skips that check.
+	Recorded func(branch string) []string
 	// Approve is the merge-approval gate (B1), run after provenance and right
 	// before the merge, never under CheckOnly. files lists the paths the merge
 	// changes. A non-nil error stops the gate with verdict approval-required
@@ -368,8 +377,8 @@ var gateSteps = []gateStep{
 	(*gate).stepPRMatches,
 	(*gate).stepProvenance,
 	(*gate).stepCloses,
-	(*gate).stepReviewDepth,
 	(*gate).stepVerdict,
+	(*gate).stepReviewDepth,
 	(*gate).stepCheckOnly,
 	(*gate).stepMerge,
 	(*gate).stepVerify,
@@ -638,20 +647,34 @@ func (g *gate) stepCloses() (bool, error) {
 	return true, nil
 }
 
-// stepReviewDepth notes the review depth ship.review expects for this branch
-// and why: the diff size against the base, and the labels of the slot's issue.
-// It reports and never refuses; stepVerdict still reads the recorded verdict.
-// An unreadable policy or issue falls back to what is known.
+// reviewKinds are the verdict kinds a review depth needs on record: full both
+// reviewers, light the Standards reviewer, none nothing.
+func reviewKinds(d config.ReviewDepth) []string {
+	switch d {
+	case config.DepthFull:
+		return []string{verdict.ReviewSpec, verdict.ReviewQuality}
+	case config.DepthLight:
+		return []string{verdict.ReviewQuality}
+	}
+	return nil
+}
+
+// stepReviewDepth applies ship.review: it resolves the depth for this branch
+// from the diff size against the base and the labels of the slot's issue, notes
+// it, and refuses a branch that lacks the recorded verdicts that depth needs.
+// A recorded FAIL was already refused by stepVerdict. An unreadable policy,
+// diff or issue is a refusal too: guessing a depth could pass a risk:high
+// branch as light.
 func (g *gate) stepReviewDepth() (bool, error) {
 	policy, err := config.ReviewPolicyOf(g.in.cfg)
 	if err != nil {
-		g.res.Notes = append(g.res.Notes, fmt.Sprintf("REVIEW-DEPTH %s — %v; run rota config check", g.o.Slot, err))
-		return false, nil
+		return g.broke(fmt.Sprintf("%v; run rota config check", err))
 	}
-	changed := -1
-	if out, code := g.e.runGit(g.root, "diff", "--numstat", g.baseRef+"..."+g.headRef); code == 0 {
-		changed = ChangedLines(out)
+	out, code := g.e.runGit(g.root, "diff", "--numstat", g.baseRef+"..."+g.headRef)
+	if code != 0 {
+		return g.broke(fmt.Sprintf("could not diff %s against %s to pick the review depth", g.headRef, g.baseRef))
 	}
+	changed := ChangedLines(out)
 	var labels []string
 	issue := g.target.Issue
 	if !g.target.Queued {
@@ -659,13 +682,31 @@ func (g *gate) stepReviewDepth() (bool, error) {
 	}
 	// the issue is read only when the policy has a label to match it against
 	if n, err := strconv.Atoi(issue); err == nil && n > 0 && len(policy.Labels) > 0 {
-		if is, err := g.forge.Get(g.ctx, n, false); err == nil {
-			labels = is.Labels
+		is, err := g.forge.Get(g.ctx, n, false)
+		if err != nil {
+			return g.broke(fmt.Sprintf("could not read #%d for its labels to pick the review depth: %v", n, err))
 		}
+		labels = is.Labels
 	}
 	depth, why := policy.Resolve(changed, labels)
 	g.res.Notes = append(g.res.Notes, fmt.Sprintf("REVIEW-DEPTH %s — %s (%s)", g.o.Slot, depth, why))
-	return false, nil
+	if g.o.Recorded == nil {
+		return false, nil
+	}
+	have := g.o.Recorded(g.branch)
+	var missing []string
+	for _, k := range reviewKinds(depth) {
+		if !slices.Contains(have, k) {
+			missing = append(missing, k)
+		}
+	}
+	if len(missing) == 0 {
+		return false, nil
+	}
+	g.res.SHA, _ = g.e.runGit(g.root, "rev-parse", "--short=7", g.headRef)
+	g.verdict(GateReviewMissing, fmt.Sprintf("GATE %s refused — review depth %s (%s) needs a recorded %s verdict; nothing landed", g.o.Slot, depth, why, strings.Join(missing, " and ")),
+		fmt.Sprintf("run /rota-review on %s (it records the verdicts), or loosen ship.review", g.branch))
+	return true, nil
 }
 
 // ChangedLines sums the added and deleted lines of `git diff --numstat` output.

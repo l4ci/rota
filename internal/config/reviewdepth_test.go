@@ -1,6 +1,9 @@
 package config
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestReviewPolicyResolve(t *testing.T) {
 	obj := `{"ship":{"review":{"default":"full","lightBelow":50,"labels":{"risk:high":"full","best-of:2":"light","partial-slice":"none"}}}}`
@@ -33,7 +36,7 @@ func TestReviewPolicyResolve(t *testing.T) {
 				t.Fatal(err)
 			}
 			got, why := p.Resolve(c.changed, c.labels)
-			if got != c.want || !containsStr(why, c.whyHas) {
+			if got != c.want || !strings.Contains(why, c.whyHas) {
 				t.Errorf("Resolve(%d, %v) = %s %q, want %s with %q in why", c.changed, c.labels, got, why, c.want, c.whyHas)
 			}
 		})
@@ -58,13 +61,4 @@ func TestReviewPolicyShape(t *testing.T) {
 			t.Errorf("Validate(ship.review, %s) = %v, want ok=%v", in, verr, ok)
 		}
 	}
-}
-
-func containsStr(s, sub string) bool {
-	for i := 0; i+len(sub) <= len(s); i++ {
-		if s[i:i+len(sub)] == sub {
-			return true
-		}
-	}
-	return false
 }

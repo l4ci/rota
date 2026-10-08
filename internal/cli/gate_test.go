@@ -22,9 +22,12 @@ func gateConfig(t *testing.T, base, level string, ship map[string]any) string {
 		}
 	}
 	cfg["autonomy"] = map[string]any{"level": level}
-	if ship != nil {
-		cfg["ship"] = ship
+	// these tests are about the approval gates, not the review depth (#581)
+	merged := map[string]any{"review": "none"}
+	for k, v := range ship {
+		merged[k] = v
 	}
+	cfg["ship"] = merged
 	b, _ := json.Marshal(cfg)
 	return string(b)
 }
@@ -500,7 +503,7 @@ func TestGateList(t *testing.T) {
 // `worker train` with exit 4, blockedBy verdict, the way the ship paths do; a
 // PASS or an absent record leaves them alone.
 func TestWorkerGateAndTrainRefuseFailVerdict(t *testing.T) {
-	dir := workerProject(t, `{"test":{"full":["test -f feature.txt"]}}`)
+	dir := workerProject(t, `{"ship":{"review":"none"},"test":{"full":["test -f feature.txt"]}}`)
 	rotaIn(t, dir, "worker", "pool", "init", "--slots", "1", "--base", "main")
 	wt := filepath.Join(dir, ".worktrees", "w1")
 	write(t, filepath.Join(wt, "feature.txt"), "f")
@@ -534,5 +537,34 @@ func TestWorkerGateAndTrainRefuseFailVerdict(t *testing.T) {
 	}
 	if !merged() {
 		t.Error("the PASS-verdict branch did not merge")
+	}
+}
+
+// ship.review is applied by the gate through the CLI: a default (full) policy
+// refuses a branch without the Spec and Standards verdicts, light needs the
+// Standards one, and the merge lands once they are recorded.
+func TestWorkerGateAppliesReviewDepth(t *testing.T) {
+	dir := workerProject(t, `{"test":{"full":["test -f feature.txt"]}}`)
+	rotaIn(t, dir, "worker", "pool", "init", "--slots", "1", "--base", "main")
+	wt := filepath.Join(dir, ".worktrees", "w1")
+	write(t, filepath.Join(wt, "feature.txt"), "f")
+	gitT(t, wt, "add", "feature.txt")
+	gitT(t, wt, "commit", "-q", "-m", "feature")
+	branch := strings.TrimSpace(gitT(t, wt, "rev-parse", "--abbrev-ref", "HEAD"))
+	gate := func(args ...string) (int, map[string]any) {
+		code, out, _ := rotaIn(t, dir, append([]string{"--json", "worker", "gate", "w1", "--base", "main"}, args...)...)
+		return code, data(t, out)
+	}
+	for _, c := range []struct{ kind, verdict string }{{"", ""}, {"review-quality", "PASS"}} {
+		if c.kind != "" {
+			rotaIn(t, dir, "verdict", "add", branch, "--kind", c.kind, "--verdict", c.verdict)
+		}
+		if code, d := gate("--check-only"); code != 4 || d["blockedBy"] != "review-missing" || d["verdict"] != "review-missing" || d["changed"] != false {
+			t.Fatalf("after %q: %d %v", c.kind, code, d)
+		}
+	}
+	rotaIn(t, dir, "verdict", "add", branch, "--kind", "review-spec", "--verdict", "PASS")
+	if code, d := gate(); code != 0 || d["verdict"] != "pass" {
+		t.Fatalf("both verdicts recorded: %d %v", code, d)
 	}
 }

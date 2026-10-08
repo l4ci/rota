@@ -104,7 +104,7 @@ No `data.findings` → no candidates. Otherwise carry the matches into the brief
 
 **Gate.** If `rota verdict show <branch> --json` has a review record with `verdict` PASS and `stale: false`, skip this step and report that verdict.
 
-**Depth.** Run `rota review depth <branch> [--labels <labels>] --json`. `full` dispatches both reviewers; `light` (a small diff or a labelled attempt, per `ship.review`) dispatches the Standards reviewer only: skip the Spec brief, record only `review-quality` in Step 8, and say in the report that the Spec axis was not run. `none` is `/rota-ship`'s to skip; a direct `/rota-review` is an explicit request and runs `full`. What a full review checks does not change.
+**Depth.** Run `rota review depth <branch> --json`; it reads the labels of a round branch's issue itself, so `risk:high` and `best-of:2` reach it without a flag. `full` dispatches both reviewers; `light` (a small diff or a labelled attempt, per `ship.review`) dispatches the Standards reviewer only: skip the Spec brief, record only `review-quality` in Step 8, and say in the report that the Spec axis was not run. `none` is `/rota-ship`'s to skip; a direct `/rota-review` is an explicit request and runs `full`. What a full review checks does not change.
 
 Dispatch two reviewers **in parallel** (one message, two dispatches), fresh context each, same diff file and same Steps 2-6 context. Two axes, judged apart, so one cannot mask the other:
 
