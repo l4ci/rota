@@ -132,6 +132,9 @@ func roundStatus(*flag.FlagSet) RunFunc {
 				}
 				cols = append(cols, col)
 			}
+			if r.State != "" {
+				cols = append(cols, "state "+r.State)
+			}
 			if r.Bounces > 0 {
 				cols = append(cols, fmt.Sprintf("bounces %d", r.Bounces))
 			}
@@ -220,6 +223,7 @@ func rowList(rows []round.Row) []any {
 		setIf(o, "pr", r.PR)
 		setIf(o, "prState", r.PRState)
 		setIf(o, "hostState", r.HostState)
+		setIf(o, "state", r.State)
 		setIf(o, "tab", r.Tab)
 		o.Set("registered", r.Registered)
 		o.Set("drift", strs(r.Drift))

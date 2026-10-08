@@ -29,3 +29,66 @@ func TestDispatchRefusesExternal(t *testing.T) {
 		}
 	}
 }
+
+func TestPollSkipsExternal(t *testing.T) {
+	dir, f := pollRegistry(t, "tmux")
+	if err := RegisterExternal(dir, "ext-1", "codex/12-x", "", "main", "12", ""); err != nil {
+		t.Fatal(err)
+	}
+	f.panes["w1"] = []string{"a\n", "a\n"}
+	f.panes["w2"] = []string{"a\n", "a\n"}
+	f.panes["ext-1"] = []string{"ROTA-DONE ext-1 https://x/pull/1\n", "ROTA-DONE ext-1 https://x/pull/1\n"}
+	before := slotField(t, dir, "ext-1", "state")
+	res, err := envWith(f).Poll(bg, dir, PollOpts{Lines: 60})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range res.Slots {
+		if r.Name == "ext-1" {
+			t.Errorf("external slot classified: %+v", r)
+		}
+	}
+	for _, c := range f.calls {
+		if c == "capture ext-1" {
+			t.Errorf("pane read for an external slot: %v", f.calls)
+		}
+	}
+	if got := slotField(t, dir, "ext-1", "state"); got != before {
+		t.Errorf("state %s -> %s", before, got)
+	}
+	// Naming it polls nothing.
+	res, err = envWith(f).Poll(bg, dir, PollOpts{Slot: "ext-1", Lines: 60})
+	if err != nil || len(res.Slots) != 0 {
+		t.Errorf("named external: %+v %v", res, err)
+	}
+}
+
+func TestHarnessKindHidesExternal(t *testing.T) {
+	dir := newProject(t, `{}`)
+	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
+	if err := RegisterExternal(dir, "ext-1", "codex/12-x", "", "main", "12", ""); err != nil {
+		t.Fatal(err)
+	}
+	if s := LoadRegistry(dir).Slot("ext-1"); s.HarnessKind() != "" || !s.IsExternal() {
+		t.Errorf("kind %q", s.HarnessKind())
+	}
+}
+
+func TestSoloWaitIgnoresExternal(t *testing.T) {
+	dir := newProject(t, `{}`)
+	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
+	if err := RegisterExternal(dir, "ext-1", "codex/12-x", "", "main", "12", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := UpdateSlots(dir, func(s *Slot) {
+		if s.IsExternal() {
+			_ = s.MarkState("done", "2026-10-02T15:04:05Z")
+		}
+	}); err != nil {
+		t.Fatal(err)
+	}
+	res, err := soloWait(dir, WaitOpts{})
+	if err == nil {
+		t.Errorf("solo wait watched the external slot: %+v", res)
+	}
+}

@@ -268,3 +268,16 @@ func TestFillBurnFromLedger(t *testing.T) {
 		t.Errorf("%d meter fetches for one refresh over three slots, want 1", fetches)
 	}
 }
+
+func TestStatusExternalRowShowsDerivedState(t *testing.T) {
+	r := round.Row{Name: "ext-1", Issue: "12", Branch: "codex/12-x", HostState: round.ExternalHost, State: "done"}
+	if line := tui.Strip(slotEntry(r).line); !strings.Contains(line, "external/done") {
+		t.Errorf("view line = %q", line)
+	}
+	if got := jsonx.Str(rowList([]round.Row{r})[0].(*jsonx.Object), "state"); got != "done" {
+		t.Errorf("json state = %q", got)
+	}
+	if o := rowList([]round.Row{{Name: "ben", HostState: "idle"}})[0].(*jsonx.Object); jsonx.Str(o, "state") != "" {
+		t.Error("a driven slot carries no derived state")
+	}
+}

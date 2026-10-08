@@ -113,6 +113,15 @@ func (s *Slot) PaneHandle() string {
 	return s.Window()
 }
 
+// HarnessKind is the harness the slot last ran ("" for none, and for an
+// adopted slot, whose kind field names no harness).
+func (s *Slot) HarnessKind() string {
+	if s.IsExternal() {
+		return ""
+	}
+	return s.Kind()
+}
+
 // KindExternal is the slot kind of work another tool started and rota adopted
 // (`rota worker adopt`): the slot has no host session, so nothing dispatches
 // into it or reads its pane.

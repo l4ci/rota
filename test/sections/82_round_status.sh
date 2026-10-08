@@ -108,3 +108,29 @@ rc=0
 ( cd "$RS" && $RSENV "$ROTA_BIN" round summary --round 9 >/dev/null 2>&1 ) || rc=$?
 [ "$rc" = "3" ] || fail "an unknown --round should exit 3, got $rc"
 pass "round summary folds the ledger, says n/a for unmetered rows and exits 3 for an unknown round"
+# An adopted (external) slot: no host drives it, so its row says `external`,
+# the state is derived (unknown while the forge is down, as here: no origin),
+# and neither a stale handle nor a missing agent is a dead-tab.
+( cd "$RS" && git worktree add -q -b codex/12-ext .worktrees/ext-1 main \
+    && cd .worktrees/ext-1 && git -c user.email=a@b -c user.name=n commit -q --allow-empty -m work ) \
+  || fail "external fixture setup failed"
+python3 - "$RS/.rota/workers.json" <<'PY' || fail "could not seed an external slot"
+import json, sys
+p = sys.argv[1]
+d = json.load(open(p))
+d["slots"].append({"name": "ext-1", "branch": "codex/12-ext", "worktree": p.rsplit("/.rota", 1)[0] + "/.worktrees/ext-1",
+                   "base": "main", "kind": "external", "task": "12", "handle": "w9:t8", "state": "idle"})
+json.dump(d, open(p, "w"))
+PY
+OUT=$( cd "$RS" && $RSENV "$ROTA_BIN" --json round status 2>/dev/null )
+[ "$(echo "$OUT" | python3 -c 'import json,sys; r=[s for s in json.load(sys.stdin)["data"]["slots"] if s["name"]=="ext-1"][0]; print(r["hostState"], r["state"], r.get("kind",""))')" = "external unknown " ] \
+  || fail "an external slot should read external/unknown with the forge down: $OUT"
+OUT=$( cd "$RS" && $RSENV "$ROTA_BIN" --json round reconcile 2>/dev/null )
+python3 - "$OUT" <<'PY' || fail "reconcile reported a host finding for the external slot: $OUT"
+import json, sys
+d = json.loads(sys.argv[1])["data"]
+fs = [f for k in ("findings", "drift", "repaired") for f in d.get(k, [])]
+bad = [f for f in fs if f.get("slot") == "ext-1" and f.get("kind") in ("dead-tab", "unclaimed-tab", "stalled", "item-timeout")]
+sys.exit(1 if bad else 0)
+PY
+pass "an external slot reads derived state and draws no host findings"
