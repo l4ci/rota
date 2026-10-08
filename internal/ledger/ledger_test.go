@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -116,5 +117,33 @@ func TestLoadReadsOverlongLine(t *testing.T) {
 	got, err := Load(root)
 	if err != nil || len(got) != 3 {
 		t.Fatalf("Load = %d entries, %v", len(got), err)
+	}
+}
+
+func TestTrimDropsRoundsOlderThanKeep(t *testing.T) {
+	root := t.TempDir()
+	os.MkdirAll(filepath.Join(root, ".rota"), 0o755)
+	for _, r := range []int{0, 1, 2, 3, 4, 5} {
+		if err := Append(root, Entry{Kind: KindAssign, Round: r, Issue: "12"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n, err := Trim(root, 5, 0); err != nil || n != 0 { // 0 keeps everything
+		t.Fatalf("keep 0: dropped %d, %v", n, err)
+	}
+	n, err := Trim(root, 5, 2) // rounds 4 and 5 stay, and the unrounded 0
+	if err != nil || n != 3 {
+		t.Fatalf("dropped %d, %v, want 3", n, err)
+	}
+	es, _ := Load(root)
+	var rounds []int
+	for _, e := range es {
+		rounds = append(rounds, e.Round)
+	}
+	if fmt.Sprint(rounds) != "[0 4 5]" {
+		t.Errorf("rounds left %v, want [0 4 5]", rounds)
+	}
+	if n, err := Trim(root, 5, 2); err != nil || n != 0 {
+		t.Errorf("second trim dropped %d, %v", n, err)
 	}
 }

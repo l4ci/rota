@@ -266,6 +266,7 @@ Every key, by group. Default is what a missing key reads as; Values lists the al
 | `round.tiers.codex.heavy` | string | unset |  | Model a heavy-tier Codex worker starts with. Empty: Codex's own default; a configured kind must set all three tiers. |
 | `round.stallMinutes` | int | `30` |  | Minutes a slot with a live agent may show no commit, edit or state change before rota round reconcile reports it stalled. 0 turns the check off. |
 | `round.maxBounces` | int | `3` |  | How often rota worker gate may send one item's PR back before it parks the item as needs-human. 0 turns the cap off. |
+| `round.ledgerKeep` | int | `0` |  | Rounds of the round ledger (.rota/ledger.jsonl) to keep. A new round trims the entries of older rounds. 0 keeps everything. |
 | `round.architectureEvery` | int | `20` |  | Closed non-refactor items between automatic architecture reviews. 0 turns them off. |
 | `round.architectureAreas` | list | `[]` |  | Areas an architecture review is split into, one review item each. Empty means the subsystem map's names, else one whole-repo review. |
 | `round.autopilot` | bool | `false` |  | Lets rota round watch --autopilot and rota round tick assign, gate and merge mechanically. Merges only under ship.mergeApproval none. |
