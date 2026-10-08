@@ -109,6 +109,7 @@ var Keys = []Key{
 	k("round.roster", []any{"ben", "dana", "nia", "kit"}, false, TypeList, "Agent names slots are provisioned under, one slot each. Lowercase letters, digits and -, no duplicates."),
 	k("round.brief", "", false, TypePath, "Path of the standing worker contract the assignment pointer names. Empty means skills/references/worker-contract.md in the checkout, else the installed copy."),
 	k("round.sharedPaths", []any{}, false, TypeList, "Repo-relative globs the file-overlap readiness check ignores, for files every issue touches."),
+	k("round.scopeOverlap", "warn", false, TypeEnum, "What a clash on declared scopes (the ## Touches section, else Subsystem) does to the overlap check. warn: reported, the item stays ready. block: fails the check like a shared path; --accept-overlap skips it.", "warn", "block"),
 	k("round.tier", "standard", false, TypeEnum, "Default worker tier for rota round assign: light for reading, standard for code and tests, heavy for hard reasoning.", "light", "standard", "heavy"),
 	k("round.workerKind", "", false, TypeEnum, "Project default worker harness. Empty: the slot's recorded kind, else claude. --kind and an issue's harness: label beat it.", "claude", "codex"),
 	k("round.tiers.claude.light", "haiku", false, TypeString, "Model a light-tier Claude worker starts with."),

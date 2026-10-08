@@ -193,7 +193,13 @@ Candidates carry three checks:
 - `dependencies`: every `## Depends on` reference is closed. One that cannot be looked up fails the
   check, so fix the issue text.
 - `overlap`: no shared file with an in-flight slot, from a `## Files` section or the paths the issue
-  text names plus the slot's real changes.
+  text names plus the slot's real changes. A `## Touches` section (one bullet per symbol, endpoint,
+  schema, migration or config key) adds a scope check: two issues naming the same entry (compared
+  exactly, ignoring case and surrounding spaces) clash even in different files, and the overlap is
+  listed with a `scopes` field. Without `## Touches` on either side, two issues with the same
+  `Subsystem:` field clash on `subsystem:<name>`. By default a scope clash only warns and the item
+  stays ready; `round.scopeOverlap: block` makes it fail like a shared file. `--accept-overlap` skips
+  both. `assign` copies the issue's `## Touches` into the worker brief after `## Out of scope`.
 
 The overlap check cannot see files an issue will create, paths nobody wrote down, two issues editing
 the same function, generated files every issue touches (list those in `round.sharedPaths`), renames,

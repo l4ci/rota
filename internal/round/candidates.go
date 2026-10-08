@@ -38,6 +38,8 @@ type CandidateOpts struct {
 	Slate []string // the approved items, for slate
 	// Shared are the round.sharedPaths globs the overlap check ignores.
 	Shared []string
+	// ScopeOverlap is round.scopeOverlap: "block" fails the overlap check on a scope clash.
+	ScopeOverlap string
 }
 
 // Candidates lists the open items the scope allows that no slot holds, in
@@ -79,7 +81,7 @@ func (e Env) Candidates(ctx context.Context, root string, be backlog.Backend, o 
 		if taken != nil && taken(it) {
 			continue
 		}
-		r, err := Assess(be, it.ID, tracked, o.Shared, inFlight, false)
+		r, err := AssessScoped(be, it.ID, tracked, o.Shared, inFlight, false, "", o.ScopeOverlap == "block")
 		if err != nil {
 			return nil, err
 		}

@@ -136,7 +136,7 @@ func loadRoundSnap(c *Ctx, root string) (roundSnap, error) {
 	if scope == "" {
 		scope = set.Scope
 	}
-	cands, err := env.Candidates(ctx, root, be, round.CandidateOpts{Scope: scope, Slate: slate, Shared: set.SharedPaths})
+	cands, err := env.Candidates(ctx, root, be, round.CandidateOpts{Scope: scope, Slate: slate, Shared: set.SharedPaths, ScopeOverlap: set.ScopeOverlap})
 	if err != nil {
 		s.CandsErr = err.Error()
 		return s, nil
@@ -159,11 +159,7 @@ func blockedWhy(c round.Candidate) []string {
 		why = append(why, fmt.Sprintf("waiting on open PR #%d", c.OpenPR))
 	}
 	for _, o := range c.Overlaps {
-		w := "overlaps #" + strings.TrimPrefix(o.With, "#")
-		if o.Slot != "" {
-			w += " (" + o.Slot + ")"
-		}
-		why = append(why, w)
+		why = append(why, overlapText(o))
 	}
 	for _, ch := range c.Checks {
 		if ch.OK {

@@ -22,9 +22,23 @@ func overlapList(os []round.Overlap) []any {
 		d.Set("with", o.With)
 		d.Set("slot", o.Slot)
 		d.Set("paths", strs(o.Paths))
+		d.Set("scopes", strs(o.Scopes))
 		out = append(out, d)
 	}
 	return out
+}
+
+// overlapText is one overlap as text: the holder, then the declared scopes
+// the two share ("overlaps #12 (ben): scopes post /items").
+func overlapText(o round.Overlap) string {
+	w := "overlaps #" + strings.TrimPrefix(o.With, "#")
+	if o.Slot != "" {
+		w += " (" + o.Slot + ")"
+	}
+	if len(o.Scopes) > 0 {
+		w += ": scopes " + strings.Join(o.Scopes, ", ")
+	}
+	return w
 }
 
 func roundAssign(fs *flag.FlagSet) RunFunc {
@@ -120,6 +134,9 @@ func roundAssign(fs *flag.FlagSet) RunFunc {
 		d.Set("branch", res.Branch)
 		d.Set("ready", res.Ready())
 		d.Set("checks", checkList(res.Checks))
+		if len(res.Overlaps) > 0 {
+			d.Set("overlaps", overlapList(res.Overlaps))
+		}
 		setIf(d, "account", res.Account)
 		d.Set("kind", res.Kind)
 		setIf(d, "kindSource", res.KindSource)
