@@ -41,7 +41,7 @@ The pause set is the `(branch, repo)` entries to pause: one for a single-repo cy
 
 Check each entry's tree with `git -C <path> status --porcelain` (path from `rota repo resolve <repo> --json`, `data.repos[0].path`; cwd when `repo` is null).
 
-All clean: record `clean tree`. Any dirty: ask once via `AskUserQuestion`:
+All clean: record `clean tree`. Any dirty: ask once:
 
 - **Header:** `"Uncommitted"`
 - **Question:** *"N uncommitted files on `<branch>`. How should I handle them?"* For a wave, name the dirty repos instead of N.

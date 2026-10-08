@@ -4,7 +4,7 @@ Loaded by `/rota-learn` under `--strict` or `learn.verify: true`.
 
 ## Dispatch
 
-Use the `Agent` tool with a `heavy` subagent (`model: "opus"`, the default `round.tiers.claude.heavy`) and `subagent_type: "general-purpose"`. Cold read: don't pre-bias the verifier with your own notes.
+Dispatch a `heavy` subagent through the current harness (`references/subagent-dispatch.md`). Cold read: don't pre-bias the verifier with your own notes.
 
 ## Brief (paste to the agent, substituting today's date)
 
@@ -42,6 +42,6 @@ STRUCTURE: OK | <what's broken>
 ## Applying the verdict
 
 - **PASS** → proceed to the confirmation step.
-- **PASS_WITH_NOTES** → `Edit` each flagged entry: reword weak bullets, remove duplicates, move wrong-topic bullets. Don't re-invoke the verifier; notes are advisory, not a gate.
-- **FAIL** → `Edit` the new entries back out of `KNOWLEDGE.md` and the index block, then tell the user exactly which learnings were rejected and why. Stop.
+- **PASS_WITH_NOTES** → Edit each flagged entry: reword weak bullets, remove duplicates, move wrong-topic bullets. Don't re-invoke the verifier; notes are advisory, not a gate.
+- **FAIL** → Edit the new entries back out of `KNOWLEDGE.md` and the index block, then tell the user exactly which learnings were rejected and why. Stop.
 - **STRUCTURE broken** → fix the specific structural issue regardless of verdict.

@@ -8,14 +8,14 @@ Treat the design as a tree of decisions. The **frontier** is every open decision
 
 1. List the frontier. Decisions that depend on an unsettled one wait for a later round.
 2. Answer what you can without the user (next section). Settled facts leave the frontier with a one-line note on what was found and where.
-3. Ask the rest as one batch, numbered `Q1..Qn`. Each question carries a **recommended answer** and a one-line reason; the user confirms or redirects. Cap a round at 4 questions in a picker (`AskUserQuestion`, one question per decision); in plain prose, number them and say which you recommend.
+3. Ask the rest as one batch, numbered `Q1..Qn`. Each question carries a **recommended answer** and a one-line reason; the user confirms or redirects. Cap a round at 4 questions, fewer when the picker requires it (one question per decision); in plain prose, number them and say which you recommend.
 4. Fold the answers in. New decisions they unlock join the next frontier.
 
 Don't ask a question whose answer changes nothing downstream.
 
 ## Code before user
 
-Facts are not the user's to supply. Before a question reaches the user, try the code (`grep`, `Read`), `rota map query`, git history, `.rota/` state and the item's thread. For a fact that needs broad reading, send a `light` subagent (see also `references/subagent-dispatch.md`). Ask the user only for intent, preference, priority and risk tolerance. If the answer needs a running experiment, say it warrants `/rota-spike` instead of guessing.
+Facts are not the user's to supply. Before a question reaches the user, try the code (`grep`, file reads), `rota map query`, git history, `.rota/` state and the item's thread. For a fact that needs broad reading, send a `light` subagent (see also `references/subagent-dispatch.md`). Ask the user only for intent, preference, priority and risk tolerance. If the answer needs a running experiment, say it warrants `/rota-spike` instead of guessing.
 
 ## Edge-case scenarios
 

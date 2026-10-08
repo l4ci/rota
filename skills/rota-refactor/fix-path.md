@@ -8,7 +8,7 @@ Config read only here:
 
 Before dispatching, run `rota git guard clean --context "/rota-refactor"`.
 
-Fix only the findings the user named, or all filed in this run if they said "all". With `refactor.confirmBeforeExecute` true, confirm the list once with `AskUserQuestion` first.
+Fix only the findings the user named, or all filed in this run if they said "all". With `refactor.confirmBeforeExecute` true, confirm the list once with a question first.
 
 1. **Group.** Independent files run in parallel; one agent per file when files overlap; order real dependencies.
 2. **Dispatch** `standard` subagents. Each brief names the exact files, the problem, the chosen approach (the design from `--designs` for structural items), and the acceptance criteria from the issue. Constraints: read before editing, minimal diff, no unrelated cleanup.

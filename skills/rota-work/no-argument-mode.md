@@ -1,6 +1,6 @@
 # No-Argument Mode (reconcile, suggest, then work)
 
-**1. Reconcile active streams.** `rota status show` lists them; git beats `status.json`. Per stream: a branch that no longer exists is dropped with `rota status rm <branch> [--repo <repo>]`; otherwise note whether it has commits past the base (`rota git base`) and whether `rota status handoff <branch> [--repo <repo>]` returns a `/rota-pause` note (read Stage, Next planned step, Current hypothesis). A paused orchestrator's note carries round state: surface it and point at `/rota-orchestrate` (resumes from `rota round status`). Resolve each stream with `AskUserQuestion`, Recommended first:
+**1. Reconcile active streams.** `rota status show` lists them; git beats `status.json`. Per stream: a branch that no longer exists is dropped with `rota status rm <branch> [--repo <repo>]`; otherwise note whether it has commits past the base (`rota git base`) and whether `rota status handoff <branch> [--repo <repo>]` returns a `/rota-pause` note (read Stage, Next planned step, Current hypothesis). A paused orchestrator's note carries round state: surface it and point at `/rota-orchestrate` (resumes from `rota round status`). Resolve each stream with a question, Recommended first:
 
 - handoff present: resume with the note as the brief (Recommended); leave it for later; abandon.
 - commits, no handoff: ship via `/rota-ship` (Recommended); resume; leave as-is.
@@ -12,6 +12,6 @@ Resume continues on the existing branch. For a stream with commits, read the tas
 
 **3. Suggest one item.** Order: P0 bugs; clusters holding a blocking bug; quick wins (Cosmetic, P2); the highest-impact P1; blocking tasks (`Related:`); Minor features; Major features only when nothing else is pending or the user asks. Milestone bias at every level except P0: items tagged to an active milestone first, then untagged, then non-active milestones. Items labelled `changes-requested` (issue backend) rank right after P0. Skip items already active. Print `Suggested next: <ID> Title (tag)` and one sentence why. For a `[Major]` feature or `[P0]` bug with no design (`rota design show <ID>`), add *"consider `/rota-brainstorm <ID>` before this"*.
 
-**4. Confirm.** `AskUserQuestion`: Start (Recommended); Peek approach first (`--preview`, offered for Major, P0/P1 or a batch); Write a plan first (`/rota-plan`, offered for a Major item with a supported plan key and no plan, using Step 4's backend key rules and `rota plan show` — issue items need no milestone); Pick different items; Stop here. "Other" text is the item spec.
+**4. Confirm.** Ask: Start (Recommended); Peek approach first (`--preview`, offered for Major, P0/P1 or a batch); Write a plan first (`/rota-plan`, offered for a Major item with a supported plan key and no plan, using Step 4's backend key rules and `rota plan show` — issue items need no milestone); Pick different items; Stop here. "Other" text is the item spec.
 
 On a terminal path (Stop here, or an empty backlog) run `rota release pending --json` and, when `shouldNudge` is true, print its `message` as one line. Skip it when work continues or there is no tag yet. Pass the item's text into Step 1.
