@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"fmt"
 	"testing"
 	"time"
 )
@@ -15,7 +16,10 @@ func TestGateTakesLandLockUnlessCallerHoldsIt(t *testing.T) {
 	early := false
 	err := env.withLandLock(bg, w.dir, func() error {
 		go func() {
-			_, err := w.gate(false, GateOpts{Train: true, NoVerify: true})
+			res, err := w.gate(false, GateOpts{Train: true, NoVerify: true})
+			if err == nil && res.Verdict != GatePass {
+				err = fmt.Errorf("verdict %q: %s", res.Verdict, res.Err)
+			}
 			done <- err
 		}()
 		select {
@@ -33,7 +37,10 @@ func TestGateTakesLandLockUnlessCallerHoldsIt(t *testing.T) {
 		return
 	}
 	select {
-	case <-done:
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("gate after the lock was released: %v", err)
+		}
 	case <-time.After(10 * time.Second):
 		t.Fatal("gate did not finish after the lock was released")
 	}
@@ -45,11 +52,17 @@ func TestGateHoldsLandLockSkipsTheLock(t *testing.T) {
 	done := make(chan error, 1)
 	err := env.withLandLock(bg, w.dir, func() error {
 		go func() {
-			_, err := w.gate(false, GateOpts{Train: true, HoldsLandLock: true, NoVerify: true})
+			res, err := w.gate(false, GateOpts{Train: true, HoldsLandLock: true, NoVerify: true})
+			if err == nil && res.Verdict != GatePass {
+				err = fmt.Errorf("verdict %q: %s", res.Verdict, res.Err)
+			}
 			done <- err
 		}()
 		select {
-		case <-done:
+		case err := <-done:
+			if err != nil {
+				t.Errorf("gate with HoldsLandLock: %v", err)
+			}
 		case <-time.After(10 * time.Second):
 			t.Error("gate with HoldsLandLock blocked on the lock")
 		}

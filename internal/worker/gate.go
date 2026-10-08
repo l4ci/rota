@@ -294,7 +294,7 @@ func (e Env) gate(ctx context.Context, root string, o GateOpts) (GateResult, err
 	if in.ledger, err = LoadLedger(root); err != nil {
 		return res, err
 	}
-	g := &gate{e: e, ctx: ctx, root: root, res: &res, o: o, in: in, target: t, branch: t.Branch, pr: t.PR}
+	g := &gate{e: e, ctx: ctx, root: root, res: &res, o: o, in: in, target: t, resolved: t, branch: t.Branch, pr: t.PR}
 	err = g.run()
 	return res, err
 }
@@ -333,7 +333,7 @@ var gateSteps = []gateStep{
 
 // gatePostSteps run after the steps above, however they ended, unless one
 // returned an error: the verdict is final and these record it.
-var gatePostSteps = []gateStep{
+var gatePostSteps = []func(*gate) error{
 	(*gate).stepRecordLedger,
 	(*gate).stepDequeue,
 	(*gate).stepReleaseExternal,
@@ -352,7 +352,7 @@ func (g *gate) run() error {
 		}
 	}
 	for _, step := range gatePostSteps {
-		if _, err := step(g); err != nil {
+		if err := step(g); err != nil {
 			return err
 		}
 	}
@@ -382,23 +382,23 @@ func (g *gate) stepLedgerExpiry() (bool, error) {
 }
 
 // stepRecordLedger appends the verdict to the gate ledger.
-func (g *gate) stepRecordLedger() (bool, error) {
+func (g *gate) stepRecordLedger() error {
 	if !g.o.CheckOnly {
-		gateLedger(g.root, g.target, *g.res)
+		gateLedger(g.root, g.resolved, *g.res)
 	}
-	return false, nil
+	return nil
 }
 
 // stepDequeue drops the record of a queued PR that passed.
-func (g *gate) stepDequeue() (bool, error) {
+func (g *gate) stepDequeue() error {
 	if g.target.Queued && g.res.Verdict == GatePass {
-		return false, RemoveQueuedPR(g.root, g.target.PR)
+		return RemoveQueuedPR(g.root, g.target.PR)
 	}
-	return false, nil
+	return nil
 }
 
 // stepReleaseExternal unregisters a merged adopted slot and keeps its checkout.
-func (g *gate) stepReleaseExternal() (bool, error) {
+func (g *gate) stepReleaseExternal() error {
 	t := g.target
 	if t.External && t.Name != "" && g.res.Verdict == GatePass && !g.o.CheckOnly {
 		// The PR is merged: a release that cannot finish is a note, not a failed gate.
@@ -406,7 +406,7 @@ func (g *gate) stepReleaseExternal() (bool, error) {
 			g.res.Notes = append(g.res.Notes, "RELEASE-KEPT "+t.Name+" — "+rerr.Error())
 		}
 	}
-	return false, nil
+	return nil
 }
 
 // stepForge picks the provider and opens its forge.
@@ -1095,13 +1095,16 @@ func (e Env) detectProvider(ctx context.Context, root, pr string) string {
 }
 
 type gate struct {
-	e        Env // defaulted once, by Env.Gate
-	ctx      context.Context
-	root     string
-	res      *GateResult
-	o        GateOpts
-	in       gateInput
-	target   GateTarget
+	e      Env // defaulted once, by Env.Gate
+	ctx    context.Context
+	root   string
+	res    *GateResult
+	o      GateOpts
+	in     gateInput
+	target GateTarget
+	// resolved is the target as GateTarget returned it. stepExternal rewrites
+	// target.Branch to the forge head; the ledger keeps the resolved one.
+	resolved GateTarget
 	branch   string
 	pr       string
 	prNum    string
