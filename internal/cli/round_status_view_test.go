@@ -9,6 +9,7 @@ import (
 
 	"github.com/l4ci/rota/internal/golden"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/tui"
 )
@@ -219,5 +220,34 @@ func TestRoundStatusScreenStripsControlCharacters(t *testing.T) {
 		if out := m2.Render(rw, rh, tui.Style{}); strings.ContainsRune(out, 0x1b) || strings.ContainsRune(out, 0x07) {
 			t.Fatalf("a control character reached the frame: %q", out)
 		}
+	}
+}
+
+func TestRoundScreenBurnColumn(t *testing.T) {
+	s := fixedSnap()
+	h := 62.0
+	s.Slots[0].Burn = &h
+	m := newRoundScreen(s, nil, newClock().now, roundRefresh)
+	out := strings.Join(roundFrame(t, m), "\n")
+	if !strings.Contains(out, "burn") || !strings.Contains(out, "62%") || !strings.Contains(out, "n/a") {
+		t.Errorf("burn column missing:\n%s", out)
+	}
+}
+
+func TestFillBurnFromLedger(t *testing.T) {
+	dir := workerProject(t, `{}`)
+	for _, e := range []ledger.Entry{
+		{Kind: ledger.KindAssign, Issue: "12", Slot: "ben", Account: "work", Harness: "claude", Detail: ledger.Detail("headroom", 80.0)},
+		{Kind: ledger.KindAssign, Issue: "13", Slot: "dana", Account: "work", Harness: "codex"},
+	} {
+		if err := ledger.Append(dir, e); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rows := []round.Row{{Name: "ben", Issue: "12"}, {Name: "dana", Issue: "13"}, {Name: "kit"}}
+	c := &Ctx{Deps: testDeps()}
+	fillBurn(c, dir, rows)
+	if rows[0].Burn == nil || *rows[0].Burn != 80 || rows[1].Burn != nil || rows[2].Burn != nil {
+		t.Errorf("burn = %v %v %v", rows[0].Burn, rows[1].Burn, rows[2].Burn)
 	}
 }

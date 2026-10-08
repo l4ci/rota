@@ -149,11 +149,12 @@ slot `wait` named, or gate a PR in review by number (`rota worker gate 61 --base
 | Wait | `rota round wait` | blocks until one slot needs the orchestrator, then returns it; never poll |
 | Watch | `rota round watch` | the background form of `wait`: run it as a background command and it exits when a slot, PR or escalation changes, or at a heartbeat |
 | Look | `rota round status`, `rota round reconcile` | the round's rows and drift; `reconcile --apply` repairs what is safe |
+| Cost | `rota round summary` | per-issue, per-slot and per-account totals for a round, from the ledger and the gate audit log |
 | Ask | `rota round escalate send`, `rota round escalate check` | puts a question to the maintainer on the issue or PR thread and reads the answer |
 | Merge | `rota worker gate <slot\|#PR> --base <branch>` | verifies on the merged tree, merges on a pass; a [merge approval](#merge-approval) policy can require a human first |
 | View | `rota layout split`, `rota layout tabs` | folds the workers' herdr panes and the orchestrator into one `rota` tab, or back into tabs; see [layout](#layout) |
 | Clean | `rota reap` | lists, then with `--apply` removes, what no live slot owns; never kills a running agent |
-| End | `rota round wind-down` | re-verifies the base, parks every slot, releases the lease |
+| End | `rota round wind-down` | re-verifies the base, parks every slot, releases the lease, then prints the round's summary |
 
 Each verb's arguments, data and exit codes are in `docs/contributing/contract/`. Every verb
 takes `--json` for a machine-readable envelope.
@@ -571,12 +572,35 @@ in `<!-- rota:handoff <slot>@<round> -->`.
 drift between the registry, the host, git and the forge, including `stalled` (never repaired),
 `lease-stale` and `claim-mismatch`; `--apply` makes the safe repairs, and never edits the tracker.
 
+## What a round cost
+
+Every round event is appended to `.rota/ledger.jsonl`: an assign, a worker's done or blocked
+report, a bounce, a transfer, a best-of pick, a park, each gate verdict and merge, and a usage
+limit hit or reroute. `rota round summary` folds the file, with `.rota/gate-audit.jsonl`, into one
+row per issue (slot, harness, account, assigned and done times, wall time, bounces, gate outcome,
+merged), then totals per slot and per account, then the round's gate audit lines.
+
+```sh
+rota round summary              # the current round, else the highest in the ledger
+rota round summary --round 3
+rota round summary --json
+```
+
+The quota share column is how many points of headroom the account lost between assign and done,
+read from the account meter. No host reports tokens, so this is a share of the account's window,
+not a token count, and it includes whatever other slots on the same account did in that time.
+Codex slots and accounts with no meter reading show `n/a`: unknown is never printed as 0.
+`rota round status --ui` shows the same headroom per slot in a `burn` column.
+
 ## Winding down
 
 ```sh
 rota round wind-down                # verify the base, park every slot, release the lease
 rota round wind-down --no-verify
 ```
+
+After the slot outcomes, wind-down prints the same table as `rota round summary` for the round it
+closed (and `--json` adds it as `summary`). With no ledger it prints nothing extra.
 
 Run it from the orchestrator that holds the lease, with the base checked out and clean in
 the project root. It re-verifies the base (`test.full`), then parks every

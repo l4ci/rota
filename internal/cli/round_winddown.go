@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/l4ci/rota/internal/gate"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
@@ -34,6 +36,22 @@ func slotOutcomeList(slots []round.SlotOutcome) []any {
 		out = append(out, d)
 	}
 	return out
+}
+
+// windDownSummary folds the closed round's ledger into the same table
+// `rota round summary` prints. ok is false when there is no ledger or nothing
+// for that round, so wind-down adds nothing.
+func windDownSummary(root string, rnd int) (obj *jsonx.Object, text string, ok bool) {
+	entries, err := ledger.Load(root)
+	if err != nil || len(entries) == 0 {
+		return nil, "", false
+	}
+	audit, _ := gate.ReadAudit(root)
+	s := ledger.Fold(entries, audit, rnd)
+	if len(s.Issues) == 0 {
+		return nil, "", false
+	}
+	return s.Object(), s.Text(), true
 }
 
 func roundWindDown(fs *flag.FlagSet) RunFunc {
@@ -105,6 +123,10 @@ func roundWindDown(fs *flag.FlagSet) RunFunc {
 			lines = append(lines, fmt.Sprintf("%s\t%s\t%s", s.Name, s.Outcome, dash(s.Issue)))
 		}
 		lines = append(lines, "verdict\t"+res.Verdict)
+		if sum, text, ok := windDownSummary(root, res.Round); ok {
+			d.Set("summary", sum)
+			lines = append(lines, "", text)
+		}
 		out := Result{Data: d, Text: strings.Join(lines, "\n")}
 		switch res.Verdict {
 		case round.VerdictVerifyFailed:

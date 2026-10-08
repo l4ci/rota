@@ -144,6 +144,9 @@ type Row struct {
 	// evidence line `round wait` returned for the slot. Neither is in
 	// `round status` Data; the --ui screen reads them.
 	PRTitle, Evidence string
+	// Burn is the headroom percentage of the slot's account, nil when unknown
+	// (codex, no meter). Only the --ui screen fills it; Data never carries it.
+	Burn *float64
 }
 
 // Finding is one drift. Repair names what Reconcile(apply) would do and is

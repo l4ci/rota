@@ -256,6 +256,7 @@ printf '{"id":"cli","result":{"snapshot":{"agents":[]}}}\n' > "$FK/snapshot.json
 rc=0; OUT="$(dyj round wind-down --holder-pid "$DYHOLD")" || rc=$?
 [ "$rc" = "0" ] || fail "dry round: wind-down exit $rc: $OUT"
 [ "$(jget data.verdict <<<"$OUT")" = "clean" ] || fail "dry round: wind-down should be clean: $OUT"
+[ -n "$(jget data.summary.round <<<"$OUT")" ] || fail "dry round: wind-down --json should carry the round summary: $OUT"
 [ "$(git -C "$DY/.worktrees/ben" symbolic-ref --short HEAD)" = "park/ben" ] || fail "dry round: wind-down should park ben"
 LEASE="$(git -C "$DY" rev-parse --path-format=absolute --git-common-dir)/rota/round-lease.json"
 [ ! -f "$LEASE" ] || fail "dry round: wind-down should release the lease"
