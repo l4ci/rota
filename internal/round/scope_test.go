@@ -122,7 +122,7 @@ func TestAssessSubsystemIgnoredWhenTouches(t *testing.T) {
 	}
 }
 
-func TestInFlightQueuedNoBody(t *testing.T) {
+func TestItemScopesUnknownItem(t *testing.T) {
 	be := &fakeRemote{}
 	if got := itemScopes(be, "404"); len(got) != 0 {
 		t.Errorf("unknown item has no scopes: %v", got)

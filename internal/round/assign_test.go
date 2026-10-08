@@ -226,6 +226,35 @@ func TestAssignOverlapAndAcceptOverlap(t *testing.T) {
 	}
 }
 
+// round.scopeOverlap reaches Assign: a scope-only clash warns by default and
+// fails like a path clash under block; --accept-overlap skips it.
+func TestAssignScopeOverlapBlock(t *testing.T) {
+	f := newAssignFixture(t)
+	f.be.add("30", "Holder", "M01", false, "## Acceptance\n- [ ] x\n\n## Touches\n- POST /items\n")
+	f.be.add("31", "Candidate", "M01", false, "## Acceptance\n- [ ] x\n\n## Touches\n- post /items\n")
+	if _, err := f.assign("30", "ben", nil); err != nil {
+		t.Fatal(err)
+	}
+	res, err := f.assign("31", "dana", func(o *AssignOpts) { o.CheckOnly = true })
+	if err != nil || !res.Ready() || len(res.Overlaps) != 1 {
+		t.Fatalf("warn lists the clash and stays ready: %v %+v", err, res)
+	}
+	block := func(o *AssignOpts) { o.Settings.ScopeOverlap = "block" }
+	_, err = f.assign("31", "dana", block)
+	if by := blockedBy(t, err); by != BlockOverlap {
+		t.Fatalf("block mode refuses a scope-only clash: %v", err)
+	}
+	var b *BlockedError
+	errors.As(err, &b)
+	if len(b.Readiness.Overlaps) != 1 || len(b.Readiness.Overlaps[0].Scopes) != 1 || len(b.Readiness.Overlaps[0].Paths) != 0 {
+		t.Errorf("scope-only overlap: %+v", b.Readiness.Overlaps)
+	}
+	res, err = f.assign("31", "dana", func(o *AssignOpts) { block(o); o.AcceptOverlap = true })
+	if err != nil || !res.Dispatched {
+		t.Fatalf("--accept-overlap skips the scope clash: %v %+v", err, res)
+	}
+}
+
 func TestAssignSlotBusyAndFreeSlot(t *testing.T) {
 	f := newAssignFixture(t)
 	if _, err := f.assign("12", "ben", nil); err != nil {
