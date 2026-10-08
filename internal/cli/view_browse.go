@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/tui"
 )
 
@@ -215,7 +216,7 @@ func runVerbText(c *Ctx, repoScoped bool, args ...string) (string, error) {
 		if msg == "" {
 			msg = "failed"
 		}
-		return "", errors.New(firstLine(msg))
+		return "", errors.New(strutil.FirstLine(msg))
 	}
 	return strings.TrimSuffix(out.String(), "\n"), nil
 }

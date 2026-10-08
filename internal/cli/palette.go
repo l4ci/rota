@@ -12,6 +12,7 @@ import (
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/layout"
 	"github.com/l4ci/rota/internal/palette"
+	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/tui"
 	"github.com/l4ci/rota/internal/version"
 	"github.com/l4ci/rota/internal/worker"
@@ -64,7 +65,7 @@ func paletteView(c *Ctx, root *Command, verb []string) (tui.Model, error) {
 		if msg == "" {
 			msg = "no view"
 		}
-		return nil, errors.New(firstLine(msg))
+		return nil, errors.New(strutil.FirstLine(msg))
 	}
 	return m, nil
 }
