@@ -131,7 +131,7 @@ brief.
 - **herdr only.** No tmux, no solo mode, no Codex subagents.
 - **No usage meter.** `work.accounts` and its headroom meter are Anthropic's, and a Codex slot is skipped
   by them. `work.codexAccounts` spreads slots but cannot measure headroom. `rota limit watch` reads only the
-  limit message in the pane (`You've hit your usage limit ... try again at 3:42 PM`), then parks the slot. It
+  limit message in the pane (the wording, something like `You've hit your usage limit ... try again at 3:42 PM`, is recalled, not captured from a real Codex run), then parks the slot. It
   moves the issue to an idle slot on another Codex login that has no limit waiting, or sleeps until the
   reset when there is none. With every login in `work.codexAccounts` waiting, the round stops filling Codex
   slots (see [usage limits](unattended-rounds.md#-usage-limits)).

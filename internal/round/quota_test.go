@@ -117,3 +117,18 @@ func TestQuotaCapClaudePoolDoesNotCloseCodex(t *testing.T) {
 		t.Fatalf("cap %+v", c)
 	}
 }
+
+// In a mixed config the cap stays open (Codex has logins), so a Claude assign
+// meets the cooling pool as a quota refusal: the tick reports that one.
+func TestMixedConfigClaudeAssignIsRefusedByQuota(t *testing.T) {
+	f := newAssignFixture(t)
+	f.config(t, `{"work":{"dispatch":"herdr","accounts":[{"name":"a","configDir":"/nowhere"}],"codexAccounts":[{"name":"c1","codexHome":"/h1"}]},"round":{"workerKind":"claude"}}`)
+	f.meters(t, map[string]bool{"a": true})
+	if c := f.env.QuotaCap(bg, f.root, f.set); c.Reduced() {
+		t.Fatalf("cap %+v", c)
+	}
+	_, err := f.assign("12", "ben", nil)
+	if by := blockedBy(t, err); by != BlockQuota || !strings.Contains(err.Error(), "work.accounts") {
+		t.Fatalf("assign: %v", err)
+	}
+}
