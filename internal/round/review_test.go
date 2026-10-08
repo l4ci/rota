@@ -292,7 +292,7 @@ func TestReviewRelayRollbackKeepsAConcurrentBounce(t *testing.T) {
 	f, _, o := reviewFx(t)
 	f.env.Worker.NewHost = func(string) host.Host {
 		return &sendHook{hostFake: f.host, hook: func() {
-			if _, err := worker.RecordBounce(f.root, "12", ""); err != nil {
+			if _, err := worker.RecordBounce(f.root, "12", "", ""); err != nil {
 				t.Error(err)
 			}
 		}}
@@ -353,12 +353,12 @@ func TestReviewRelayRollbackKeepsAConcurrentCursor(t *testing.T) {
 // rollback leaves it, and a bounce another writer added, alone.
 func TestReviewRelayRollbackLeavesABounceItDidNotCount(t *testing.T) {
 	f, _, o := reviewFx(t)
-	if _, err := worker.RecordBounce(f.root, "12", "abc123"); err != nil {
+	if _, err := worker.RecordBounce(f.root, "12", "", "abc123"); err != nil {
 		t.Fatal(err)
 	}
 	f.env.Worker.NewHost = func(string) host.Host {
 		return &sendHook{hostFake: f.host, hook: func() {
-			if _, err := worker.RecordBounce(f.root, "12", ""); err != nil {
+			if _, err := worker.RecordBounce(f.root, "12", "", ""); err != nil {
 				t.Error(err)
 			}
 		}}
@@ -376,7 +376,7 @@ func TestReviewRelayRollbackKeepsAConcurrentBounceHead(t *testing.T) {
 	f, _, o := reviewFx(t)
 	f.env.Worker.NewHost = func(string) host.Host {
 		return &sendHook{hostFake: f.host, hook: func() {
-			if _, err := worker.RecordBounce(f.root, "12", "newer"); err != nil {
+			if _, err := worker.RecordBounce(f.root, "12", "", "newer"); err != nil {
 				t.Error(err)
 			}
 		}}
@@ -385,7 +385,7 @@ func TestReviewRelayRollbackKeepsAConcurrentBounceHead(t *testing.T) {
 		t.Fatal("want the dispatch failure")
 	}
 	// The same head again is deduped: only a kept head makes it so.
-	if n, err := worker.RecordBounce(f.root, "12", "newer"); err != nil || n != 1 {
+	if n, err := worker.RecordBounce(f.root, "12", "", "newer"); err != nil || n != 1 {
 		t.Fatalf("RecordBounce on the kept head = %d, %v; want 1 (deduped)", n, err)
 	}
 }
@@ -402,7 +402,7 @@ func TestReviewRelayTextStripsInvisibleFormatCharacters(t *testing.T) {
 func TestReviewRelayAtCapDoesNotEscalateTwice(t *testing.T) {
 	f, _, o := reviewFx(t)
 	for i := 0; i < 3; i++ {
-		if _, err := worker.RecordBounce(f.root, "12", ""); err != nil {
+		if _, err := worker.RecordBounce(f.root, "12", "", ""); err != nil {
 			t.Fatal(err)
 		}
 	}
