@@ -1,5 +1,45 @@
 # Changelog
 
+## v0.14.0 — 2026-10-08
+
+Interactive terminal screens behind `--ui`, a faster `round status`, and a merge gate that checks the merged code before it merges.
+
+### New
+
+- **Terminal screens (`--ui`).** A new global flag opens a command's screen instead of printing its result. Plain and `--json` output are unchanged, and `--ui` is refused off a terminal or with `--json`.
+  - `rota config` (also `config edit`): keys grouped by section with a description, type and choices for each; `Enter` edits, `l` writes to `config.local.json`, `r` resets.
+  - `rota projects`: status of every registered project; `c` cleans up, `d` removes, `n` runs `init` in a new directory.
+  - `rota round status`: live slots, review queue and blocked candidates, refreshed every 5 seconds.
+  - Read-only views for `doctor`, `worker account list`, `backlog list`, `knowledge stats` and `decisions stats`.
+- **The palette is a hub.** Entries with a screen open it in place, and `q` returns to the list. Split and tab view are one View toggle, shown only in a herdr round.
+- **`rota projects remove <dir>`** drops one registry entry and leaves the directory alone.
+- **`rota decisions stats`** lists the decision topics, like `knowledge stats`.
+- **Config key metadata.** `config show --json` gives every key its type, group, description and choices, and `docs/reference/config-options.md` is now generated from the schema.
+- **herdr sidebar labels** show each worker's slot, task and state.
+
+### Changed
+
+- **The merge gate checks the merged code first.** It asks the forge whether a PR is mergeable, then runs your checks on a scratch merge, and merges only if both pass.
+- **`round status` is about three times faster.** Identical forge reads are made once per command (45 calls down to about 16 on this repo). `round watch` and the autopilot start every poll from fresh data.
+- **Rounds hold up better on herdr.** `round wait` survives a dropped event stream, reads a finished turn from herdr's completion counter, and explains states it does not know.
+- `rota doctor` warns early when `test.full` is empty, and `release.versionFile` is now a config key.
+- The `config edit` prompt loop is replaced by the config screen. On a dumb terminal, use `rota config set`.
+
+### Fixed
+
+- Assign and transfer no longer report false overlaps: closed issues are skipped, and an issue's comments are no longer read into its `## Files` list.
+- `/dev/null` is no longer taken for a terminal, so `--ui`, the palette and `setup` refuse it.
+- Removed the unread `issues.filterMineOnly` and `issues.providers.*` keys. `config check` lists them as removed and `config fill` deletes them.
+
+### Docs
+
+The README now leads with what rota is and shows a round in action, and the onboarding, usage and reference pages were updated for these changes. The verb contract moved to `docs/contributing/contract/`.
+
+## Stats
+65 commits, 287 files changed, +12080 −2800 lines
+
+**Full changelog:** https://github.com/l4ci/rota/compare/v0.13.0...v0.14.0
+
 ## v0.13.0 — 2026-10-07
 
 Stricter merge gate, best-of-2 rounds, generated subagent definitions, and test tiers you can configure.
