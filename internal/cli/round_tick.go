@@ -320,24 +320,42 @@ func tickLines(r roundtick.Result) string {
 
 // reviewStep is one pass of the review loop over a done slot with a PR: it
 // looks for review input and, under round.reviewLoop auto, relays it to the
-// worker. A relay that cannot go out (the item is at the bounce cap, the host
-// refused) is Pending, never silently merged over.
+// worker. Under manual the input is only reported and the merge is not held:
+// the orchestrator runs review-relay, the gate runs as before. Under auto a
+// relay that cannot go out (the item is at the bounce cap, the host refused) or
+// a poll that failed holds the slot, so the autopilot never merges over review
+// input it could not hand back. A failed poll is an item either way, never a
+// silent pass.
 func reviewStep(c *Ctx, root string, set roundcfg.Settings, slot string) roundtick.ReviewOutcome {
 	ctx := c.Context()
+	auto := set.ReviewLoop == roundcfg.ReviewLoopAuto
+	pr := ""
+	if s := worker.LoadRegistry(root).Slot(slot); s != nil {
+		pr = s.PR()
+	}
+	// The detail stays the same from pass to pass, or the watch would wake on it
+	// every time; the error text goes to stderr.
+	failed := func(why string, err error) roundtick.ReviewOutcome {
+		c.Warn("review poll of %s: %v", slot, err)
+		return roundtick.ReviewOutcome{Pending: true, Hold: auto, Detail: fmt.Sprintf("%s %s: run `rota round review-relay %s` for the error", why, pr, slot)}
+	}
 	o, err := reviewOpts(c, root, set, slot)
 	if err != nil {
-		c.Warn("review poll of %s: %v", slot, err)
-		return roundtick.ReviewOutcome{}
+		return failed("review poll failed", err)
 	}
-	if set.ReviewLoop != roundcfg.ReviewLoopAuto {
+	if !auto {
 		s := worker.LoadRegistry(root).Slot(slot)
 		if s == nil {
 			return roundtick.ReviewOutcome{}
 		}
+		if info, err := o.Forge.PRView(ctx, mustPRNumber(s.PR())); err != nil {
+			return failed("review poll failed", err)
+		} else if !strings.EqualFold(info.State, "OPEN") {
+			return roundtick.ReviewOutcome{}
+		}
 		b, err := worker.PendingReview(ctx, o.Forge, s, o.Verdict)
 		if err != nil {
-			c.Warn("review poll of %s: %v", slot, err)
-			return roundtick.ReviewOutcome{}
+			return failed("review poll failed", err)
 		}
 		if b.Empty() {
 			return roundtick.ReviewOutcome{}
@@ -351,14 +369,21 @@ func reviewStep(c *Ctx, root string, set roundcfg.Settings, slot string) roundti
 	case err == nil && res.Nothing:
 		return roundtick.ReviewOutcome{}
 	case err == nil:
-		return roundtick.ReviewOutcome{Relayed: true, Detail: fmt.Sprintf("%d item(s), bounce %d of %s", res.Items, res.Bounces, maxText(set.MaxBounces))}
+		return roundtick.ReviewOutcome{Relayed: true, Detail: fmt.Sprintf("%d item(s), bounce %d of %s %s", res.Items, res.Bounces, maxText(set.MaxBounces), pr)}
 	}
-	// The detail stays the same from pass to pass, or the watch would wake on it
-	// every time.
 	if bd, ok := exitcode.DataOf[worker.BlockData](err); ok && bd.BlockedBy == "maxBounces" {
-		return roundtick.ReviewOutcome{Pending: true, Detail: fmt.Sprintf("%d item(s) waiting; the item is at the bounce cap", res.Items)}
+		return roundtick.ReviewOutcome{Pending: true, Hold: true, Detail: fmt.Sprintf("%d item(s) waiting on %s; the item is at the bounce cap", res.Items, pr)}
 	}
-	return roundtick.ReviewOutcome{Pending: true, Detail: fmt.Sprintf("%d item(s) not relayed: %s", res.Items, firstLine(err.Error()))}
+	if res.Items == 0 { // the poll itself failed
+		return failed("review poll failed", err)
+	}
+	return failed(fmt.Sprintf("%d item(s) not relayed", res.Items), err)
+}
+
+// mustPRNumber is the number of a slot's PR; 0 when it has none.
+func mustPRNumber(pr string) int {
+	n, _ := worker.PRRefNumber(pr)
+	return n
 }
 
 // reviewSummary is "<n> from <authors>", the value of a slot's review key.
@@ -367,9 +392,9 @@ func reviewSummary(b worker.ReviewBatch) string {
 	from := strings.Join(b.Authors(), ", ")
 	if b.Verdict != "" {
 		if n == 0 {
-			return "review verdict FAIL"
+			return "review verdict FAIL " + b.PR
 		}
 		from += " and a FAIL verdict"
 	}
-	return fmt.Sprintf("%d from %s", n, from)
+	return fmt.Sprintf("%d from %s %s", n, from, b.PR)
 }

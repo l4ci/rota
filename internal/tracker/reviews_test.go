@@ -35,6 +35,9 @@ func TestGitHubReviews(t *testing.T) {
 			t.Errorf("entry %d = %+v, want %+v", i, got[i], w)
 		}
 	}
+	if got[0].Inline || !got[1].Inline || got[2].Inline {
+		t.Errorf("inline flags: %v %v %v", got[0].Inline, got[1].Inline, got[2].Inline)
+	}
 	if got[0].Body != "please split this" {
 		t.Errorf("body %q", got[0].Body)
 	}

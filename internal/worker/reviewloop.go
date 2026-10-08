@@ -56,7 +56,7 @@ func PendingReview(ctx context.Context, f ReviewForge, s *Slot, v *ReviewVerdict
 	if !ok {
 		return b, nil
 	}
-	after, _ := time.Parse(time.RFC3339Nano, s.ReviewSeen())
+	after, seen := parseCursor(s.ReviewSeen())
 	notes, err := f.MRNotes(ctx, n)
 	if err != nil {
 		return b, err
@@ -65,40 +65,87 @@ func PendingReview(ctx context.Context, f ReviewForge, s *Slot, v *ReviewVerdict
 	if err != nil {
 		return b, err
 	}
-	all := make([]tracker.Review, 0, len(notes)+len(reviews))
-	for _, c := range notes {
-		all = append(all, tracker.Review{Comment: c, State: tracker.ReviewCommented})
+	type entry struct {
+		r   tracker.Review
+		key string // names the item within its kind: the kinds draw ids from separate sequences
 	}
-	all = append(all, reviews...)
-	sort.SliceStable(all, func(i, j int) bool { return all[i].CreatedAt.Before(all[j].CreatedAt) })
+	all := make([]entry, 0, len(notes)+len(reviews))
+	for _, c := range notes {
+		all = append(all, entry{tracker.Review{Comment: c, State: tracker.ReviewCommented}, "n" + c.ID})
+	}
+	for _, r := range reviews {
+		k := "r" + r.ID
+		if r.Inline {
+			k = "i" + r.ID
+		}
+		all = append(all, entry{r, k})
+	}
+	sort.SliceStable(all, func(i, j int) bool { return all[i].r.CreatedAt.Before(all[j].r.CreatedAt) })
 	var newest time.Time
-	for _, r := range all {
+	var keys []string // the consumed keys created at newest
+	take := func(at time.Time, key string) {
 		switch {
-		case r.State == tracker.ReviewApproved, strings.TrimSpace(r.Body) == "", marker.Has(r.Body):
+		case at.After(newest):
+			newest, keys = at, nil
+			fallthrough
+		case at.Equal(newest) && key != "":
+			keys = append(keys, key)
+		}
+	}
+	for _, e := range all {
+		r := e.r
+		bodyless := strings.TrimSpace(r.Body) == ""
+		switch {
+		case r.State == tracker.ReviewApproved, marker.Has(r.Body):
 			continue
-		case !after.IsZero() && !r.CreatedAt.After(after):
+		case bodyless && r.State != tracker.ReviewChangesRequested:
+			continue
+		case !after.IsZero() && r.CreatedAt.Before(after):
+			continue
+		case !after.IsZero() && r.CreatedAt.Equal(after) && slices.Contains(seen, e.key):
 			continue
 		case r.CreatedAt.IsZero() && !after.IsZero():
 			continue
 		}
 		b.Items = append(b.Items, r)
-		if r.CreatedAt.After(newest) {
-			newest = r.CreatedAt
-		}
+		take(r.CreatedAt, e.key)
 	}
 	if v != nil && v.Text != "" && (after.IsZero() || v.At.After(after)) {
 		b.Verdict = v.Text
-		if v.At.After(newest) {
-			newest = v.At
-		}
+		take(v.At, "")
 	}
 	if !b.Empty() {
 		if newest.IsZero() { // a forge that dates nothing: from now on is new
 			newest = time.Now()
 		}
-		b.Cursor = newest.UTC().Format(time.RFC3339Nano)
+		// An item at exactly the old cursor time that was already consumed stays consumed.
+		if newest.Equal(after) {
+			keys = append(slices.Clone(seen), keys...)
+		}
+		b.Cursor = formatCursor(newest, keys)
 	}
 	return b, nil
+}
+
+// The cursor is the newest consumed item's time, then "#" and the keys of the
+// consumed items created at exactly that time. A forge dates to the second, so
+// the time alone would drop an item that lands in the same second as the last
+// consumed one.
+func parseCursor(c string) (time.Time, []string) {
+	ts, keys, _ := strings.Cut(c, "#")
+	t, _ := time.Parse(time.RFC3339Nano, ts)
+	if keys == "" {
+		return t, nil
+	}
+	return t, strings.Split(keys, ",")
+}
+
+func formatCursor(newest time.Time, keys []string) string {
+	c := newest.UTC().Format(time.RFC3339Nano)
+	if len(keys) > 0 {
+		c += "#" + strings.Join(keys, ",")
+	}
+	return c
 }
 
 // Authors lists who the batch's items came from, first appearance first.
@@ -123,4 +170,15 @@ func (s *Slot) SetReviewSeen(c string) {
 		return
 	}
 	s.o.Set("reviewSeen", c)
+}
+
+// BaselineReview starts the review cursor at now when the slot hands its PR
+// back and has none: whatever the PR collected before (bot posts, comments on
+// an earlier push) is not review input. The second after now is skipped too,
+// since a forge dates to the second. A slot that already has a cursor (a relay
+// moved it) keeps it, so input that arrived while the worker reworked stays new.
+func (s *Slot) BaselineReview(now time.Time) {
+	if s.ReviewSeen() == "" {
+		s.SetReviewSeen(formatCursor(now.Truncate(time.Second).Add(time.Second), nil))
+	}
 }

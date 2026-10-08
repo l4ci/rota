@@ -97,3 +97,41 @@ func TestPendingReviewNoPR(t *testing.T) {
 		t.Fatalf("%+v %v", b, err)
 	}
 }
+
+// An item created in the same second as the newest consumed one is new, not lost.
+func TestPendingReviewSameSecondItemIsNotLost(t *testing.T) {
+	s := reviewSlot()
+	f := fakeReviewForge{notes: []tracker.Comment{{ID: "1", Author: "rev", Body: "first", CreatedAt: at(1)}}}
+	b, err := PendingReview(context.Background(), f, s, nil)
+	if err != nil || len(b.Items) != 1 {
+		t.Fatalf("%+v %v", b, err)
+	}
+	s.SetReviewSeen(b.Cursor)
+	f.notes = append(f.notes, tracker.Comment{ID: "2", Author: "rev", Body: "second", CreatedAt: at(1)})
+	f.reviews = []tracker.Review{{Comment: tracker.Comment{ID: "1", Author: "rev", Body: "inline", CreatedAt: at(1)}, Inline: true}}
+	b, err = PendingReview(context.Background(), f, s, nil)
+	if err != nil || len(b.Items) != 2 || b.Items[0].Body != "second" && b.Items[1].Body != "second" {
+		t.Fatalf("same-second items: %+v %v", b.Items, err)
+	}
+	for _, it := range b.Items {
+		if it.Body == "first" {
+			t.Fatalf("a consumed item came back: %+v", b.Items)
+		}
+	}
+	s.SetReviewSeen(b.Cursor)
+	if b, _ = PendingReview(context.Background(), f, s, nil); !b.Empty() {
+		t.Fatalf("consumed batch came back: %+v", b.Items)
+	}
+}
+
+// A CHANGES_REQUESTED review with no text is still a request.
+func TestPendingReviewKeepsBodylessChangesRequested(t *testing.T) {
+	f := fakeReviewForge{reviews: []tracker.Review{
+		{Comment: tracker.Comment{ID: "1", Author: "rev", CreatedAt: at(1)}, State: tracker.ReviewChangesRequested},
+		{Comment: tracker.Comment{ID: "2", Author: "rev", CreatedAt: at(2)}, State: tracker.ReviewCommented},
+	}}
+	b, err := PendingReview(context.Background(), f, reviewSlot(), nil)
+	if err != nil || len(b.Items) != 1 || b.Items[0].State != tracker.ReviewChangesRequested {
+		t.Fatalf("%+v %v", b.Items, err)
+	}
+}
