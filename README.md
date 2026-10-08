@@ -6,7 +6,7 @@
 
 **Capture, build and ship work with Claude Code or Codex, one item or many.**
 
-rota turns a to-do list into reviewed, merged work: capture an item, let your agent build it in small commits, and `/rota-ship` reviews the branch, then merges it (or opens a PR if you set `work.mergeStrategy` to `pr`), with what the project learned kept for the next session.
+rota turns a to-do list into reviewed, merged work. You capture an item, your agent builds it in small commits, and `/rota-ship` reviews the branch and merges it. Set `work.mergeStrategy` to `pr` to open a pull request instead. What the project learned is kept for the next session.
 
 [![Release](https://img.shields.io/github/v/release/l4ci/rota?color=blue&sort=semver)](https://github.com/l4ci/rota/releases)
 [![License](https://img.shields.io/github/license/l4ci/rota?color=green)](LICENSE)
@@ -24,7 +24,7 @@ rota turns a to-do list into reviewed, merged work: capture an item, let your ag
 
 ## 🚀 Quick start
 
-One agent, one item at a time. You need git and [Claude Code](https://claude.com/claude-code) or Codex (the steps below are written for Claude Code; in Codex type `$rota-capture` where it says `/rota-capture`, see [skills in Codex](docs/usage/codex-skills.md)). No herdr, tmux, `gh` or second account.
+One agent, one item at a time. You need git and [Claude Code](https://claude.com/claude-code) or Codex. No herdr, tmux, `gh` or second account. The steps below are written for Claude Code. In Codex, type `$rota-capture` where it says `/rota-capture`; see [skills in Codex](docs/usage/codex-skills.md).
 
 ```bash
 brew install l4ci/tap/rota   # or: curl -fsSL https://raw.githubusercontent.com/l4ci/rota/main/install.sh | sh
