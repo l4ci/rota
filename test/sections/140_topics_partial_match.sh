@@ -28,9 +28,10 @@ OUT=$(tpr --json decisions topics)
 
 # block knowledge writes the block into the instructions files; a query must not change them.
 tpr block knowledge >/dev/null
-B1=$(cat "$TP"/AGENTS.md "$TP"/CLAUDE.md 2>/dev/null)
+B1=$(cat "$TP"/AGENTS.md "$TP"/CLAUDE.md 2>/dev/null || true)
 [ -n "$B1" ] || fail "block knowledge wrote no instructions file"
 tpr knowledge query "tooling" >/dev/null
 tpr block knowledge >/dev/null
-B2=$(cat "$TP"/AGENTS.md "$TP"/CLAUDE.md 2>/dev/null)
+B2=$(cat "$TP"/AGENTS.md "$TP"/CLAUDE.md 2>/dev/null || true)
 [ "$B1" = "$B2" ] || fail "block knowledge output changed across a query"
+pass "partial topic query, topics verbs and block knowledge stability"
