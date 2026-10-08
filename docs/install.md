@@ -61,6 +61,8 @@ With no flags this writes the skills to the user roots for both agents: `~/.clau
 
 The skills are copies, not symlinks, and `install` writes a `.rota-manifest.json` listing what it put there. A file you edited is kept and reported unless you pass `--overwrite`. A project-scope install can be committed so collaborators get the same skills.
 
+Common route: `npx skills add l4ci/rota` installs the skills with the [`skills` CLI](https://skills.sh), for Claude Code, Codex and other agents, and lists rota on [skills.sh](https://skills.sh/l4ci/rota). The CLI sends anonymous install telemetry. It writes no `.rota-manifest.json`, so `rota skills status` and `rota skills update` do not track those copies. You still need the `rota` binary on your `PATH`.
+
 `rota skills status` compares the installed skills with the binary. For Codex, see [skills in Codex](usage/codex-skills.md) and, to run Codex as a round worker, [Codex workers](usage/codex-workers.md).
 
 ### User or project scope
