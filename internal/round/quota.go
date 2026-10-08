@@ -135,7 +135,7 @@ func (e Env) QuotaCap(ctx context.Context, root string, set roundcfg.Settings) C
 
 // coolingWhy is the reason text: which accounts, and when the first resets.
 func coolingWhy(pool string, resumes time.Time) string {
-	return fmt.Sprintf("every %s account is cooling down; slots fill again at %s", pool, resumes.UTC().Format("15:04 MST"))
+	return fmt.Sprintf("every %s account is cooling down; slots fill again at %s", pool, resumes.UTC().Format("2006-01-02 15:04 MST"))
 }
 
 func earliest(ts []time.Time) time.Time {

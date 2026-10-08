@@ -100,7 +100,7 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 	if e.Cap == 0 {
 		e.Cap = roundtick.DefaultCap
 	}
-	e.Capped = func(ctx context.Context) string { return renv.QuotaCap(ctx, root, set).Reason }
+	e.Capped = quotaCapped(renv, root, set)
 	e.Slots = func() []roundtick.Slot {
 		var out []roundtick.Slot
 		for _, s := range worker.LoadRegistry(root).Slots() {
@@ -214,6 +214,11 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 		c.Warn("autopilot state not saved: %v", err)
 	}
 	return r, nil
+}
+
+// quotaCapped is the tick's cap hook: why no slot may fill, "" when one may.
+func quotaCapped(renv round.Env, root string, set roundcfg.Settings) func(context.Context) string {
+	return func(ctx context.Context) string { return renv.QuotaCap(ctx, root, set).Reason }
 }
 
 func targetBase(root, target, def string) string {

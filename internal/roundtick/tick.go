@@ -433,6 +433,12 @@ func (e Env) assign(ctx context.Context, r *Result, minted []string) error {
 			n--
 		case isRefusal(err):
 			// Not ready after all, or every slot filled meanwhile: try the next.
+			// A quota refusal is the cap showing through a pool the cap check
+			// left open (Claude workers beside Codex logins): say why.
+			var blk *round.BlockedError
+			if errors.As(err, &blk) && blk.By == round.BlockQuota && r.Capped == "" {
+				r.Capped = blk.Msg
+			}
 		default:
 			return fmt.Errorf("assign %s: %w", c.ID, err)
 		}

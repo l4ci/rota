@@ -40,3 +40,23 @@ func TestCodexPickSkipsExcludedAndCoolingLogins(t *testing.T) {
 		t.Fatalf("every login spent, picked %q", got)
 	}
 }
+
+// A limit the watcher resolved by moving the issue (StatusSwitched) leaves the
+// login just as spent: it must keep cooling until its reset, or CodexPick hands
+// the next limit back to it and the pool never reads as closed.
+func TestCoolingKeepsASwitchedLoginUntilItsReset(t *testing.T) {
+	r := newRig(t)
+	reset := t0.Add(time.Hour)
+	if _, err := Append(r.root, Entry{Session: "ben", Kind: KindCodex, Account: "c1", Status: StatusSwitched, ResetsAt: Time(reset)}); err != nil {
+		t.Fatal(err)
+	}
+	if got := Cooling(r.root, KindCodex, t0); len(got) != 1 || !got["c1"].Equal(reset) {
+		t.Fatalf("switched login not cooling: %v", got)
+	}
+	if got, ok := CodexPick(r.root, []string{"c1", "c2"}, "", t0); !ok || got != "c2" {
+		t.Fatalf("picked the spent login: %q %v", got, ok)
+	}
+	if got := Cooling(r.root, KindCodex, reset.Add(time.Second)); len(got) != 0 {
+		t.Fatalf("still cooling after the reset: %v", got)
+	}
+}

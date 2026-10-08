@@ -422,3 +422,25 @@ func TestCappedTickFillsNoSlotAndSaysWhy(t *testing.T) {
 		t.Fatalf("after the reset: %v assigned %v capped %q", err, f.assigned, r.Capped)
 	}
 }
+
+// A mixed config (Claude workers, Codex logins set) leaves the cap open, so the
+// Claude pool running dry shows up as a quota refusal from Assign. The tick
+// must say so, not report "nothing to do".
+func TestQuotaRefusalIsReportedAsCapped(t *testing.T) {
+	f := &fake{slots: []Slot{{Name: "ben", State: "idle"}}, cands: []Candidate{{"#1", true}, {"#2", true}}}
+	why := "every work.accounts account is cooling down; slots fill again at 13:00 UTC"
+	f.assignFn = func(string) ([]string, error) {
+		return nil, &round.BlockedError{By: round.BlockQuota, Msg: why}
+	}
+	r, err := Run(context.Background(), f.env())
+	if err != nil || r.Capped != why {
+		t.Fatalf("err %v capped %q", err, r.Capped)
+	}
+	// A refusal for another reason stays quiet.
+	f.assignFn = func(string) ([]string, error) {
+		return nil, &round.BlockedError{By: round.BlockNotReady, Msg: "overlap"}
+	}
+	if r, err = Run(context.Background(), f.env()); err != nil || r.Capped != "" {
+		t.Fatalf("err %v capped %q", err, r.Capped)
+	}
+}
