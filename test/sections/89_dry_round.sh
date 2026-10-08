@@ -259,7 +259,8 @@ rc=0; OUT="$(dyj round wind-down --holder-pid "$DYHOLD")" || rc=$?
 [ "$(jget data.summary.round <<<"$OUT")" = "1" ] || fail "dry round: wind-down --json should carry round 1's summary: $OUT"
 # The entries carry the lease's round (1, the round this section started), read
 # from the lease in the git common dir rather than a registry field.
-grep -E '"kind": ?"assign"' "$DY/.rota/ledger.jsonl" | grep -qE '"round": ?1[,}]' || fail "dry round: the assign entry should carry the lease's round 1: $(cat "$DY/.rota/ledger.jsonl")"
+ASSIGN_LINE=$(grep -E '"kind": ?"assign"' "$DY/.rota/ledger.jsonl" || true)
+grep -qE '"round": ?1[,}]' <<<"$ASSIGN_LINE" || fail "dry round: the assign entry should carry the lease's round 1: $(cat "$DY/.rota/ledger.jsonl")"
 [ "$(git -C "$DY/.worktrees/ben" symbolic-ref --short HEAD)" = "park/ben" ] || fail "dry round: wind-down should park ben"
 LEASE="$(git -C "$DY" rev-parse --path-format=absolute --git-common-dir)/rota/round-lease.json"
 [ ! -f "$LEASE" ] || fail "dry round: wind-down should release the lease"
