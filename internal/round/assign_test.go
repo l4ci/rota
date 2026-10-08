@@ -896,10 +896,10 @@ func TestCandidatesShowThePick(t *testing.T) {
 func TestPointerBriefTouches(t *testing.T) {
 	tb := tierBrief{Kind: "claude", Tier: "standard"}
 	got := pointerBrief("ben", "#9", "ben/9-x", "/c.md", nil, "", "- the CLI flags", "- POST /items", tb)
-	if !strings.Contains(got, "## Touches\n- POST /items") {
+	if !strings.Contains(got, "<<<issue-text\n- POST /items\nissue-text>>>") {
 		t.Errorf("brief lacks the touches block:\n%s", got)
 	}
-	if strings.Index(got, "Out of scope") > strings.Index(got, "## Touches") {
+	if strings.Index(got, "Out of scope") > strings.Index(got, "Touches, quoted") {
 		t.Errorf("Touches must follow Out of scope:\n%s", got)
 	}
 }
