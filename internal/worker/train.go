@@ -50,7 +50,10 @@ const GateOrder = "order"
 // TrainOpts are the flags of `rota worker train`.
 type TrainOpts struct {
 	Targets []string // slot names or PR refs, in merge order
-	Base    string
+	// Round reads the round lease for the train's ledger entries; Train makes
+	// one when nil, so the whole train reads the lease once.
+	Round *RoundMemo
+	Base  string
 	// LandGreen lands the verified prefix before the culprit when the train
 	// fails verification.
 	LandGreen bool
@@ -111,12 +114,15 @@ func (r TrainResult) OK() bool { return r.Verdict == GatePass }
 // Train runs a merge train (see above). The base must be checked out in root.
 func (e Env) Train(ctx context.Context, root string, o TrainOpts) (TrainResult, error) {
 	e = e.withDefaults()
+	if o.Round == nil {
+		o.Round = &RoundMemo{}
+	}
 	var res TrainResult
 	err := e.withLandLock(ctx, root, func() (err error) {
 		cache := loadTrainCache(root)
 		gated := map[string]bool{}
 		res, err = e.train(ctx, root, o, cache, gated)
-		trainLedger(root, res, gated)
+		trainLedger(o.Round, root, res, gated)
 		if cache.dirty {
 			if serr := cache.save(); serr != nil {
 				res.Notes = append(res.Notes, "TRAIN-CACHE not saved — "+serr.Error())
@@ -476,7 +482,7 @@ func (e Env) train(ctx context.Context, root string, o TrainOpts, cache *trainCa
 			}
 		}
 		gated[m.Target] = true
-		gr, err := e.Gate(ctx, root, GateOpts{Slot: m.Target, Base: o.Base, NoVerify: true, Train: true})
+		gr, err := e.Gate(ctx, root, GateOpts{Slot: m.Target, Base: o.Base, NoVerify: true, Train: true, Round: o.Round})
 		res.Notes = append(res.Notes, gr.Notes...)
 		res.Changed = res.Changed || gr.Changed
 		if gr.Changed && gr.Verdict != GatePass { // the PR is on the base but the gate could not finish (merged-remotely)
