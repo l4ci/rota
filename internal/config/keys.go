@@ -138,7 +138,7 @@ var Keys = []Key{
 	k("work.codexAccounts", []any{}, false, TypeList, "Codex homes for Codex workers, as {name, codexHome} objects, the counterpart of work.accounts. Empty: the default Codex home. Machine-specific, so set it in config.local.json."), // named Codex homes; empty: the default Codex home
 	k("work.codexCommand", "", false, TypeString, "Command that starts a Codex worker session. Empty builds the default codex command, with --model from the tier when one is chosen; {model} receives it."),
 	k("work.envSetup", "", false, TypeString, "Shell command rota worker pool init runs in each new slot worktree, for example npm ci. Empty: no setup."),
-	k("work.portBase", num("20000"), false, TypeInt, "First port of the range rota hands out to worker slots. Slot n gets ROTA_PORT_BASE = portBase + n * portBlock."),
+	k("work.portBase", num("20000"), false, TypeInt, "First port of the range rota hands out to worker slots. A new slot takes the lowest range of portBlock ports from here that no other slot holds, exported as ROTA_PORT_BASE; a slot keeps its range until it is reaped or reclaimed."),
 	k("work.portBlock", num("100"), false, TypeInt, "Ports reserved per worker slot, so servers started by two slots never collide. A slot's block is exported as ROTA_PORT_BASE."),
 	k("work.tdd", true, false, TypeBool, "Whether /rota-work and workers require a recorded red-first run before a behavior change. Off skips the RED requirement."),
 

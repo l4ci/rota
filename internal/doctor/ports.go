@@ -44,9 +44,25 @@ func ParseSS(out string) []Listener {
 		if p := ssPID.FindStringSubmatch(line); p != nil {
 			l.PID, _ = strconv.Atoi(p[1])
 		}
-		ls = append(ls, l)
+		dup := false
+		for _, o := range ls {
+			dup = dup || o.Port == l.Port && o.PID == l.PID
+		}
+		if !dup { // one listener per address family
+			ls = append(ls, l)
+		}
 	}
 	return ls
+}
+
+// ParseLsofCwd reads `lsof -a -p PID -d cwd -Fn` output: the directory, or "".
+func ParseLsofCwd(out string) string {
+	for _, line := range strings.Split(out, "\n") {
+		if strings.HasPrefix(line, "n") {
+			return line[1:]
+		}
+	}
+	return ""
 }
 
 // ParseLsof reads `lsof -nP -iTCP -sTCP:LISTEN -Fpn` output.
@@ -60,7 +76,13 @@ func ParseLsof(out string) []Listener {
 		case strings.HasPrefix(line, "n"):
 			if i := strings.LastIndex(line, ":"); i >= 0 {
 				if port, err := strconv.Atoi(line[i+1:]); err == nil {
-					ls = append(ls, Listener{Port: port, PID: pid})
+					dup := false
+					for _, l := range ls {
+						dup = dup || l.Port == port && l.PID == pid
+					}
+					if !dup { // one listener per address family
+						ls = append(ls, Listener{Port: port, PID: pid})
+					}
 				}
 			}
 		}
@@ -94,7 +116,8 @@ func (d *runner) listeners() (ls []Listener, ok bool) {
 
 // ports warns when a process outside a live slot's worktree listens inside
 // that slot's port block. It reports nothing when no slot holds a block, the
-// listeners could not be read or every listener belongs to its slot. A
+// every listener belongs to its slot; it reports a skip when the listeners
+// could not be read (neither ss nor lsof ran). A
 // listener whose owner cannot be read counts as foreign: nothing proves it
 // belongs to the slot.
 func (d *runner) ports() (Check, bool) {
@@ -103,7 +126,7 @@ func (d *runner) ports() (Check, bool) {
 	}
 	ls, ok := d.listeners()
 	if !ok {
-		return Check{}, false
+		return skip("ports", "cannot scan listeners: ss and lsof are missing or failed, so port blocks are not checked"), true
 	}
 	var found []string
 	for _, b := range d.in.Slots {
