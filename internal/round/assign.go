@@ -469,7 +469,7 @@ func (e Env) assignOne(ctx context.Context, root string, be Board, o AssignOpts,
 		return res, err
 	}
 	res.Pick = pick
-	kind, kindSource := resolveKind(o.Kind, pick.Harness, set.WorkerKind, slot.Kind())
+	kind, kindSource := resolveKind(o.Kind, pick.Harness, set.WorkerKind, slot.HarnessKind())
 	if bo != nil {
 		kind, kindSource = bo.kind, bo.kindSource
 	}

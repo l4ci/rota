@@ -127,10 +127,10 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 		}
 		var repaired, drift []string
 		for _, f := range out.Repaired {
-			repaired = append(repaired, f.Kind+" "+firstOf(f.Slot, "#"+f.Issue))
+			repaired = append(repaired, f.Kind+" "+f.Key())
 		}
 		for _, f := range out.Drift {
-			drift = append(drift, f.Kind+" "+firstOf(f.Slot, "#"+f.Issue))
+			drift = append(drift, f.Kind+" "+f.Key())
 		}
 		return repaired, drift, nil
 	}

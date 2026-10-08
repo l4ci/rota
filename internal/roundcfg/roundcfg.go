@@ -3,6 +3,7 @@ package roundcfg
 
 import (
 	"fmt"
+	"path"
 	"regexp"
 	"strings"
 
@@ -91,6 +92,10 @@ type Settings struct {
 	// ReviewLoopAuto). Under auto the forge poll relays a done slot's review
 	// input to its worker itself.
 	ReviewLoop string
+	// AdoptPattern is round.adoptPattern: a glob over branch names `round
+	// reconcile` reports as unregistered-branch when no slot holds them; "" turns
+	// the check off.
+	AdoptPattern string
 	// Roles is roles.<role>.tier and .effort for every name in Roles.
 	Roles map[string]Role
 }
@@ -204,6 +209,14 @@ func Load(root string) (Settings, error) {
 	}
 	if s.ReviewLoop, _ = v.(string); s.ReviewLoop != ReviewLoopManual && s.ReviewLoop != ReviewLoopAuto {
 		return s, fmt.Errorf("round.reviewLoop must be %s or %s (got %v)", ReviewLoopManual, ReviewLoopAuto, v)
+	}
+	if v, err = config.Value(cfg, "round.adoptPattern"); err != nil {
+		return s, err
+	}
+	s.AdoptPattern, _ = v.(string)
+	s.AdoptPattern = strings.TrimSpace(s.AdoptPattern)
+	if _, err := path.Match(s.AdoptPattern, ""); err != nil {
+		return s, fmt.Errorf("round.adoptPattern %q: %v", s.AdoptPattern, err)
 	}
 	if s.WorkerKind, err = loadWorkerKind(cfg); err != nil {
 		return s, err

@@ -71,5 +71,16 @@ OUT="$(rp_run --kind lease)"
 [ "$(printf '%s' "$OUT" | rp_ids)" = "" ] || fail "C6[reap lease]: no lease should remain: $OUT"
 pass "C6[reap lease]: a stale lease is listed and cleared; live, foreign and absent ones are left alone"
 
+# a released adopted slot keeps its checkout, here outside .worktrees/: the merged
+# branch is listed, held by that checkout, and --apply leaves both alone
+rp_git worktree add -q -b codex/7-ext "$TMP_RP/outside" HEAD
+OUT="$(rp_run --kind branch)"
+[ "$(printf '%s' "$OUT" | rp_ids)" = "branch:codex/7-ext!,branch:kit/9-gone" ] || fail "reap[external]: branch candidates were $(printf '%s' "$OUT" | rp_ids)"
+OUT="$(rp_run --kind branch --apply)"
+[ "$(printf '%s' "$OUT" | rp_field reaped)" = '["branch:kit/9-gone"]' ] || fail "reap[external]: reaped was $(printf '%s' "$OUT" | rp_field reaped)"
+rp_git rev-parse -q --verify refs/heads/codex/7-ext >/dev/null || fail "reap[external]: the held external branch was deleted"
+[ -d "$TMP_RP/outside" ] || fail "reap[external]: the external worktree was deleted"
+pass "reap[external]: a merged branch checked out outside .worktrees/ is listed as held, never deleted"
+
 rm -rf "${TMP_RP:?}"
 trap 'rm -rf "$TMP"' EXIT

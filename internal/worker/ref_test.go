@@ -63,3 +63,22 @@ func TestAttentionSets(t *testing.T) {
 		}
 	}
 }
+
+func TestIssueFromBranch(t *testing.T) {
+	for in, want := range map[string]string{
+		"codex/612-thing":       "612",
+		"dana/580-adopt-x":      "580",
+		"feature/issue-77-fix":  "77",
+		"fix-issue-8":           "8",
+		"claude/#31-thing":      "31",
+		"work#45":               "45",
+		"codex/nonumber":        "",
+		"park/ben":              "",
+		"release-2024":          "",
+		"origin-ish/v2-rewrite": "",
+	} {
+		if got := IssueFromBranch(in); got != want {
+			t.Errorf("IssueFromBranch(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

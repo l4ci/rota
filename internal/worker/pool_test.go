@@ -217,3 +217,35 @@ func TestPoolListDropsNullFields(t *testing.T) {
 		t.Errorf("no registry: %v %v", s, sl)
 	}
 }
+
+func TestPoolReapOnlyUnregistersAnExternalSlot(t *testing.T) {
+	b := newProject(t, `{}`)
+	goInit(t, b, InitOpts{Slots: 1, Base: "main"})
+	if _, err := UpdateSlot(b, "w1", func(s *Slot) { s.MarkExternal("12", "") }); err != nil {
+		t.Fatal(err)
+	}
+	branch := LoadRegistry(b).Slot("w1").Branch()
+	for _, all := range []bool{false, true} {
+		reaped, err := Env{}.Reap(b, []string{"w1"}, all)
+		if err != nil || len(reaped) != 1 || reaped[0] != "w1" {
+			t.Fatalf("all=%v reaped = %v, %v", all, reaped, err)
+		}
+		if LoadRegistry(b).Slot("w1") != nil {
+			t.Error("external slot still registered")
+		}
+		if fi, err := os.Stat(wt(b)); err != nil || !fi.IsDir() {
+			t.Fatalf("worktree of an external slot was removed: %v", err)
+		}
+		if out := gittest.Run(t, b, "branch", "--list", branch); out == "" {
+			t.Fatalf("branch %s of an external slot was deleted", branch)
+		}
+		if all {
+			break
+		}
+		// Re-register it for the --all pass.
+		if err := registerSlot(b, "w1", branch, wt(b), "main", "", ""); err != nil {
+			t.Fatal(err)
+		}
+		UpdateSlot(b, "w1", func(s *Slot) { s.MarkExternal("12", "") })
+	}
+}

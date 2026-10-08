@@ -113,6 +113,9 @@ type GateOpts struct {
 	Base      string
 	CheckOnly bool
 	NoVerify  bool
+	// Prune makes a pass that releases an adopted slot also remove its
+	// worktree and branch.
+	Prune bool
 	// Train marks a landing step of a merge train (see Train): the PRs were
 	// merged together and verified once, so a branch behind the base only
 	// because an earlier train member landed is not refused as stale.
@@ -165,6 +168,11 @@ type GateTarget struct {
 }
 
 func gateSlot(s *Slot) GateTarget {
+	// An adopted slot is gated like an unrecorded PR: no relays are expected,
+	// and the PR's head branch is read from the forge.
+	if s.IsExternal() {
+		return GateTarget{External: true, Name: s.Name(), Branch: s.Branch(), PR: s.PR(), Base: s.Base(), Task: s.Task()}
+	}
 	return GateTarget{Name: s.Name(), Branch: s.Branch(), PR: s.PR(), Base: s.Base(), Task: s.Task(), relays: s.Relays()}
 }
 
@@ -300,6 +308,13 @@ func (e Env) gate(ctx context.Context, root string, o GateOpts) (GateResult, err
 			return res, err
 		}
 	}
+	// A merged adopted slot is done: unregister it, keep its checkout.
+	if err == nil && t.External && t.Name != "" && res.Verdict == GatePass && !o.CheckOnly {
+		// The PR is merged: a release that cannot finish is a note, not a failed gate.
+		if rerr := e.ReleaseExternal(root, t.Name, o.Prune); rerr != nil {
+			res.Notes = append(res.Notes, "RELEASE-KEPT "+t.Name+" — "+rerr.Error())
+		}
+	}
 	return res, err
 }
 
@@ -388,7 +403,7 @@ func (g *gate) stepForge() (bool, error) {
 // approval, verify and land. Its issue, for the closes check, is the one its
 // branch name leads with (HeldID); a branch with none has nothing to check.
 func (g *gate) stepExternal() (bool, error) {
-	if !g.target.External {
+	if !g.target.External || g.pr == "" { // an adopted slot may record no PR yet
 		return false, nil
 	}
 	g.prNum = prNumText(g.pr)

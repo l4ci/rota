@@ -44,6 +44,7 @@ func workerCommands() *Command {
 			{Name: "list", Summary: "list the registered slots", Verb: noFlags(runPoolList)},
 			{Name: "reap", Summary: "remove slots, their worktrees and branches", Verb: poolReap},
 		}},
+		{Name: "adopt", Summary: "register a branch or worktree another tool started as a hostless slot", Verb: workerAdopt},
 		{Name: "dispatch", Summary: "send a brief into a slot's session", Verb: workerDispatch},
 		{Name: "reply", Summary: "answer a reviewer on the slot's PR through the tracker", Verb: workerReply},
 		{Name: "prompt-check", Summary: "Codex UserPromptSubmit hook: pass only signed or maintainer input", Verb: workerPromptCheck},
@@ -152,9 +153,22 @@ func poolReap(fs *flag.FlagSet) RunFunc {
 		}
 		ctx, stop := workerContext()
 		defer stop()
+		external := map[string]bool{}
+		for _, s := range worker.LoadRegistry(root).Slots() {
+			if s.IsExternal() {
+				external[s.Name()] = true
+			}
+		}
 		reaped, err := workerEnvCtx(c, ctx).Reap(root, args, *all)
 		if err != nil {
 			return Result{}, err
+		}
+		lines := make([]string, 0, len(reaped))
+		for _, r := range reaped {
+			if external[r] {
+				r += ": external slot released, worktree and branch kept"
+			}
+			lines = append(lines, r)
 		}
 		d := jsonx.NewObject()
 		list := make([]any, 0, len(reaped))
@@ -163,7 +177,7 @@ func poolReap(fs *flag.FlagSet) RunFunc {
 		}
 		d.Set("reaped", list)
 		d.Set("changed", len(reaped) > 0)
-		return Result{Data: d, Text: strings.Join(reaped, "\n")}, nil
+		return Result{Data: d, Text: strings.Join(lines, "\n")}, nil
 	}
 }
 
@@ -678,6 +692,7 @@ func workerGate(fs *flag.FlagSet) RunFunc {
 	base := fs.String("base", "", "the cycle branch the slot merges into")
 	check := fs.Bool("check-only", false, "judge freshness, PR identity and provenance; merge nothing")
 	noVerify := fs.Bool("no-verify", false, "merge without running test.full; required when test.full is empty")
+	prune := fs.Bool("prune", false, "when an adopted slot's PR merges, also delete its worktree and branch")
 	confirm := approvalFlags(fs)
 	return func(c *Ctx, args []string) (Result, error) {
 		slot, err := oneArg(args, "slot")
@@ -706,7 +721,7 @@ func workerGate(fs *flag.FlagSet) RunFunc {
 		ctx, stop := workerContext()
 		defer stop()
 		issue := gateIssue(root, slot)
-		r, err := workerEnvCtx(c, ctx).Gate(ctx, root, worker.GateOpts{Slot: slot, Base: *base, CheckOnly: *check, NoVerify: *noVerify, Approve: approve, Verdict: shipVerdict(c, root, root).Block})
+		r, err := workerEnvCtx(c, ctx).Gate(ctx, root, worker.GateOpts{Slot: slot, Base: *base, CheckOnly: *check, NoVerify: *noVerify, Prune: *prune, Approve: approve, Verdict: shipVerdict(c, root, root).Block})
 		if err != nil && r.Verdict == worker.GateVerdictBlocked {
 			return verdictRefusal(err, gateData(r))
 		}

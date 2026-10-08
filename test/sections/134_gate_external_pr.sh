@@ -56,4 +56,15 @@ pass "train still refuses an unrecorded PR"
 RC=0; OUT=$(ex worker gate nobody --base main --check-only) || RC=$?
 [ "$RC" = "3" ] || fail "an unknown slot name should still exit 3: rc=$RC $OUT"
 pass "an unknown slot name is still refused"
+# an adopted slot (kind external) gates by its slot name with no relays logged;
+# its Approvals line is "None", which passes
+ex_state "Closes #5\\n\\n## Approvals\\nNone" ""
+printf '{"slots":[{"name":"ext-1","kind":"external","branch":"ben/5-thing","base":"main","task":"5","pr":"https://github.com/o/r/pull/7"}]}\n' > "$EXPROJ/.rota/workers.json"
+RC=0; OUT=$(ex worker gate ext-1 --base main --check-only) || RC=$?
+[ "$RC" = "0" ] && [ "$(echo "$OUT" | jget data.verdict)" = "fresh" ] \
+  || fail "an adopted slot should pass the provenance step with no relays: rc=$RC $OUT"
+grep -q '"ext-1"' "$EXPROJ/.rota/workers.json" \
+  || fail "a check-only gate must not release the adopted slot"
+pass "worker gate: an adopted slot gates with an Approvals line of None and stays registered under --check-only"
+
 rm -rf "$TMP_EX"
