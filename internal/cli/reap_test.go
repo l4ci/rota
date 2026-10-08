@@ -200,3 +200,14 @@ func TestDepsHostFactoryFeedsEveryHook(t *testing.T) {
 		t.Errorf("asked = %v, want prefix %v", asked, want)
 	}
 }
+
+func TestDefaultReapEnvBuildsNoForge(t *testing.T) {
+	root := trackerProject(t, "")
+	gitIn(t, root, "init", "-q")
+	d := testDeps()
+	builds := forgeBuilds(d)
+	e, _ := d.ReapEnv(context.Background(), root)
+	if *builds != 0 || e.Forge != nil {
+		t.Errorf("reap env built %d forge(s), Forge %v", *builds, e.Forge)
+	}
+}
