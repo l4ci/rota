@@ -3,6 +3,7 @@ package round
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -66,18 +67,62 @@ func TestStatusExternalDerivedState(t *testing.T) {
 	}
 }
 
-func TestStatusExternalMergedPRLeavesTheList(t *testing.T) {
+func TestStatusExternalMergedPRStaysListedUntilReleased(t *testing.T) {
 	root, e, fr := extFixture(t, "https://github.com/o/r/pull/7")
 	fr.states[7] = "merged"
 	rep, err := e.Status(bg, root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := rowOf(rep, "ext-1"); ok {
-		t.Errorf("merged external slot still listed: %+v", rep.Rows)
+	r, ok := rowOf(rep, "ext-1")
+	if !ok || r.State != "merged" || r.PRState != "merged" {
+		t.Fatalf("a merged external slot stays listed as merged: %+v", rep.Rows)
 	}
-	if k := kinds(rep.Findings)["ext-1"]; len(k) != 0 {
-		t.Errorf("findings for a merged external slot: %v", k)
+	if k := kinds(rep.Findings)["ext-1"]; len(k) != 1 || k[0] != MergedExternal {
+		t.Errorf("want one merged-external finding, got %v", k)
+	}
+}
+
+func TestReconcileApplyReleasesAMergedExternalSlot(t *testing.T) {
+	root, e, fr := extFixture(t, "https://github.com/o/r/pull/7")
+	fr.states[7] = "merged"
+	out, err := e.Reconcile(bg, root, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if k := kinds(out.Drift)["ext-1"]; len(k) != 1 || k[0] != MergedExternal || worker.LoadRegistry(root).Slot("ext-1") == nil {
+		t.Fatalf("report-only: drift %v, slot must stay", k)
+	}
+	out, err = e.Reconcile(bg, root, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if k := kinds(out.Repaired)["ext-1"]; len(k) != 1 || k[0] != MergedExternal {
+		t.Fatalf("apply should repair merged-external: repaired %v drift %v warnings %v", out.Repaired, out.Drift, out.Report.Warnings)
+	}
+	if worker.LoadRegistry(root).Slot("ext-1") != nil {
+		t.Error("slot still registered after apply")
+	}
+	if _, err := os.Stat(filepath.Join(root, ".worktrees", "ext-1")); err != nil {
+		t.Errorf("release must keep the worktree: %v", err)
+	}
+	if gitIn(t, root, "branch", "--list", "codex/12-thing") == "" {
+		t.Error("release must keep the branch")
+	}
+}
+
+func TestStatusExternalOnePRReadFailingIsUnknown(t *testing.T) {
+	root, e, fr := extFixture(t, "https://github.com/o/r/pull/7")
+	fr.stateErrs = map[int]error{7: errors.New("boom")}
+	rep, err := e.Status(bg, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r, ok := rowOf(rep, "ext-1"); !ok || r.State != "unknown" {
+		t.Errorf("one failed PR read must derive unknown, not busy/idle: %+v", r)
+	}
+	if r, ok := rowOf(rep, "ben"); !ok || r.State != "" {
+		t.Errorf("the control row is untouched: %+v", r)
 	}
 }
 

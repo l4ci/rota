@@ -44,6 +44,7 @@ const (
 	ItemTimeout          = "item-timeout"
 	ClaimMismatch        = "claim-mismatch"
 	UnregisteredBranch   = "unregistered-branch"
+	MergedExternal       = "merged-external"
 	// LeaseStale is declared in lease.go.
 )
 
@@ -175,12 +176,14 @@ func inExternal(rows []*Row, views map[string]*view, cwd string) bool {
 }
 
 // ExternalState derives an adopted slot's state from the forge and git, since
-// no pane reports one: done when its PR is open, busy when the branch is ahead
+// no pane reports one: merged when its PR merged (the slot awaits release), done when its PR is open, busy when the branch is ahead
 // of base with no PR, idle otherwise, unknown while the forge cannot answer.
 func (e Env) ExternalState(ctx context.Context, root string, forgeOK bool, base string, r *Row) string {
 	switch {
 	case !forgeOK:
 		return "unknown"
+	case r.PRState == "merged":
+		return "merged"
 	case r.PRState == "open":
 		return "done"
 	case r.PRState == "" && r.Branch != "" && e.ahead(ctx, root, base, r.Branch) > 0:
@@ -198,6 +201,18 @@ type Finding struct {
 	pr string
 	// branch is the branch an unregistered-branch finding is about.
 	branch string
+}
+
+// Key names what the finding is about, for a caller that tells findings apart:
+// the slot, else the branch, else the issue.
+func (f Finding) Key() string {
+	switch {
+	case f.Slot != "":
+		return f.Slot
+	case f.branch != "":
+		return f.branch
+	}
+	return "#" + f.Issue
 }
 
 // Report is the assembled state.
@@ -229,6 +244,7 @@ type view struct {
 	worktree string
 	base     string
 	openPR   *tracker.PR
+	prErr    bool // reading the slot's PR state failed
 }
 
 var ()
@@ -423,8 +439,12 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 				st, err := e.Forge.PRState(ctx, n)
 				if err != nil {
 					rep.Warnings = append(rep.Warnings, fmt.Sprintf("PR #%d state: %v", n, err))
+					v.prErr = true
 				} else {
 					r.PRState = st
+					if st == "merged" && r.HostState == ExternalHost { // the gate releases it; so does reconcile --apply
+						rep.add(Finding{Kind: MergedExternal, Slot: r.Name, Issue: r.Issue, Detail: fmt.Sprintf("PR #%d is merged and the adopted slot is still registered", n), Repair: "release the slot"})
+					}
 					if (st == "merged" || st == "closed") && r.HostState != ExternalHost { // release, not park, ends an external slot
 						f := Finding{Kind: PRStale, Slot: r.Name, Issue: r.Issue, Detail: fmt.Sprintf("PR #%d is %s and the slot still holds %s", n, st, r.Branch)}
 						if st == "merged" && r.Registered { // a closed PR may hold unmerged work: report only
@@ -475,8 +495,6 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 		}
 	}
 
-	e.findUnregisteredBranches(ctx, root, rep, reg)
-
 	now := time.Now
 	if e.Now != nil {
 		now = e.Now
@@ -524,10 +542,8 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 
 	for _, r := range rows {
 		if r.HostState == ExternalHost {
-			if r.PRState == "merged" { // finished: the gate or reap releases the slot
-				continue
-			}
-			r.State = e.ExternalState(ctx, root, forgeOK, rep.views[r.Name].base, r)
+			// Merged stays listed until the gate or reconcile --apply releases it.
+			r.State = e.ExternalState(ctx, root, forgeOK && !rep.views[r.Name].prErr, rep.views[r.Name].base, r)
 		}
 		rep.Rows = append(rep.Rows, *r)
 	}

@@ -29,6 +29,7 @@ type fakeRemote struct {
 	closedLabelled []int        // closed issues still carrying the label
 	closedIssues   []tracker.Issue
 	prsErr         error
+	stateErrs      map[int]error // PR number -> PRState failure
 	addErr         error
 	removeErr      error
 	added          []int // AddLabels targets, in call order
@@ -96,7 +97,12 @@ func (f remoteForge) ClosedNumbers(body string) []int {
 	return out
 }
 
-func (f remoteForge) PRState(_ context.Context, n int) (string, error) { return f.states[n], nil }
+func (f remoteForge) PRState(_ context.Context, n int) (string, error) {
+	if err := f.stateErrs[n]; err != nil {
+		return "", err
+	}
+	return f.states[n], nil
+}
 
 func (f remoteForge) List(_ context.Context, fl tracker.ListFilter) ([]tracker.Issue, error) {
 	if fl.State == "closed" {

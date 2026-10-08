@@ -196,7 +196,7 @@ func (e Env) WindDown(ctx context.Context, root string, be Board, o WindDownOpts
 		res.Slots = append(res.Slots, so)
 	}
 
-	// Adopted slots are not parked: one whose PR merged (status drops its row)
+	// Adopted slots are not parked: one whose PR merged (status reads its PR as merged)
 	// is unregistered with its checkout kept, any other stays registered.
 	for _, s := range worker.LoadRegistry(root).Slots() {
 		if !s.IsExternal() {
@@ -205,7 +205,7 @@ func (e Env) WindDown(ctx context.Context, root string, be Board, o WindDownOpts
 		name := s.Name()
 		so := before[name]
 		so.Name, so.Outcome = name, OutcomeOpen
-		if _, listed := before[name]; !listed && seen {
+		if m := before[name].Merged; m != nil && *m && seen {
 			if err := w.ReleaseExternal(root, name, o.Prune); err != nil {
 				res.Warnings = append(res.Warnings, fmt.Sprintf("release %s: %v", name, err))
 			}
