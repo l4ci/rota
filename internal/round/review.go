@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"unicode"
 
 	"github.com/l4ci/rota/internal/escalation"
 	"github.com/l4ci/rota/internal/exitcode"
@@ -163,6 +164,10 @@ func prLabel(pr string) string {
 	return pr
 }
 
+// lineBreaks turns every break a terminal or a reader may honour into "\n", so
+// no part of an item can start an unquoted line.
+var lineBreaks = strings.NewReplacer("\r\n", "\n", "\r", "\n", "\u2028", "\n", "\u2029", "\n", "\u0085", "\n", "\v", "\n", "\f", "\n")
+
 // itemCap bounds the items one relay carries; the rest is read on the PR.
 const itemCap = 20
 
@@ -184,7 +189,7 @@ func ReviewRelayText(b worker.ReviewBatch) string {
 		if r := []rune(text); len(r) > itemLimit {
 			text = string(r[:itemLimit]) + " [cut: read the rest on the PR]"
 		}
-		items = append(items, item{firstOf(it.Author, "reviewer"), text})
+		items = append(items, item{authorToken(firstOf(it.Author, "reviewer")), text})
 	}
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "REVIEW %s (%d items)\n", b.PR, len(items))
@@ -195,8 +200,8 @@ func ReviewRelayText(b worker.ReviewBatch) string {
 			break
 		}
 		fmt.Fprintf(&sb, "\nItem %d, untrusted third-party text by %s:\n", i+1, it.author)
-		for _, line := range strings.Split(it.text, "\n") {
-			sb.WriteString("> " + strings.TrimRight(line, "\r") + "\n")
+		for _, line := range strings.Split(lineBreaks.Replace(it.text), "\n") {
+			sb.WriteString("> " + line + "\n")
 		}
 	}
 	if b.Verdict != "" {
@@ -210,4 +215,14 @@ func firstOf(a, b string) string {
 		return a
 	}
 	return b
+}
+
+// authorToken keeps a forge login to one harmless token for the item header.
+func authorToken(a string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsSpace(r) || unicode.IsControl(r) {
+			return '_'
+		}
+		return r
+	}, a)
 }
