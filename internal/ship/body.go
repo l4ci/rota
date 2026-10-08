@@ -7,6 +7,7 @@ import (
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/proof"
 	"github.com/l4ci/rota/internal/pystr"
+	"github.com/l4ci/rota/internal/strutil"
 )
 
 var issueRe = regexp.MustCompile(`(?:GH|GL):[` + pystr.SpaceClass + `]*#(\p{Nd}+)`)
@@ -44,7 +45,7 @@ func Body(g Git, base, branch string, titles func() (TitleOf, error), proofs Pro
 		return "", err
 	}
 	if subj.ExitCode != 0 || full.ExitCode != 0 {
-		return "", &GitError{Msg: "git log " + rng + ": " + firstLine(subj.Stderr+full.Stderr)}
+		return "", &GitError{Msg: "git log " + rng + ": " + strutil.FirstLine(subj.Stderr+full.Stderr)}
 	}
 	var subjects []string
 	for _, l := range pystr.Splitlines(subj.Stdout) {

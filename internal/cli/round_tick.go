@@ -15,6 +15,7 @@ import (
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundtick"
+	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -187,6 +188,9 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 		if err != nil {
 			return nil, err
 		}
+		for _, o := range res.Overlaps {
+			c.Warn("#%s %s", id, overlapText(o))
+		}
 		if len(res.BestOf) == 2 { // a best-of:2 issue took two slots
 			return []string{res.BestOf[0].Agent, res.BestOf[1].Agent}, nil
 		}
@@ -242,7 +246,7 @@ func gateTarget(c *Ctx, target, base string) roundtick.GateOutcome {
 	if err == nil {
 		return roundtick.GateOutcome{Landed: true}
 	}
-	return roundtick.GateOutcome{Verdict: verdictOf(r), Detail: firstLine(err.Error())}
+	return roundtick.GateOutcome{Verdict: verdictOf(r), Detail: strutil.FirstLine(err.Error())}
 }
 
 func trainTargets(c *Ctx, targets []string, base string) roundtick.TrainOutcome {
@@ -251,7 +255,7 @@ func trainTargets(c *Ctx, targets []string, base string) roundtick.TrainOutcome 
 	if err == nil {
 		return roundtick.TrainOutcome{Done: true}
 	}
-	out := roundtick.TrainOutcome{Verdict: verdictOf(r), Detail: firstLine(err.Error())}
+	out := roundtick.TrainOutcome{Verdict: verdictOf(r), Detail: strutil.FirstLine(err.Error())}
 	if d, _ := r.Data.(*jsonx.Object); d != nil {
 		if raw, ok := d.Get("members"); ok {
 			list, _ := raw.([]any)
@@ -270,11 +274,6 @@ func trainTargets(c *Ctx, targets []string, base string) roundtick.TrainOutcome 
 		}
 	}
 	return out
-}
-
-func firstLine(s string) string {
-	l, _, _ := strings.Cut(s, "\n")
-	return l
 }
 
 func tickData(r roundtick.Result) *jsonx.Object {
