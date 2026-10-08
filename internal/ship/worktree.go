@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/l4ci/rota/internal/strutil"
 )
 
 // ClearWorktree removes a clean cycle worktree before a local merge. The
@@ -15,7 +17,7 @@ func ClearWorktree(g Git, branch string, check func(path string) error) error {
 		return err
 	}
 	if res.ExitCode != 0 {
-		return &GitError{Msg: "git worktree list: " + firstLine(res.Stderr)}
+		return &GitError{Msg: "git worktree list: " + strutil.FirstLine(res.Stderr)}
 	}
 	wt := linkedWorktree(res.Stdout, branch)
 	if wt == "" {
@@ -41,7 +43,7 @@ func ClearWorktree(g Git, branch string, check func(path string) error) error {
 		return err
 	}
 	if dirty.ExitCode != 0 {
-		return &GitError{Msg: "git status " + wt + ": " + firstLine(dirty.Stderr)}
+		return &GitError{Msg: "git status " + wt + ": " + strutil.FirstLine(dirty.Stderr)}
 	}
 	if strings.TrimSpace(dirty.Stdout) != "" {
 		return &Refusal{By: "worktree", Msg: "worktree has uncommitted or ignored files: " + wt, Hint: "preserve the files before retrying ship merge"}
@@ -51,7 +53,7 @@ func ClearWorktree(g Git, branch string, check func(path string) error) error {
 		return err
 	}
 	if rm.ExitCode != 0 {
-		return &GitError{Msg: "git worktree remove " + wt + ": " + firstLine(rm.Stderr)}
+		return &GitError{Msg: "git worktree remove " + wt + ": " + strutil.FirstLine(rm.Stderr)}
 	}
 	return nil
 }

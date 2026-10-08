@@ -11,6 +11,7 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/proof"
+	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -93,7 +94,7 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 			if len(missing) > 0 {
 				d.Set("head", head)
 				d.Set("missing", strList(missing))
-				e := Refused("%s has no PASS proof row at %s for test.fast: %s", id, shortSha(head), strings.Join(missing, "; "))
+				e := Refused("%s has no PASS proof row at %s for test.fast: %s", id, strutil.ShortSHA(head), strings.Join(missing, "; "))
 				e.Hint = fmt.Sprintf("run `rota proof record %s -- %s` at the current HEAD, then `rota worker done %s` again", id, fastTierCheck, slotName)
 				return Result{Data: d}, e
 			}
@@ -160,13 +161,6 @@ func missingFastProof(rows []proof.Row, head string, want []string) (missing []s
 
 // atHead reports whether a row's (abbreviated) sha names head.
 func atHead(sha, head string) bool { return len(sha) >= 7 && strings.HasPrefix(head, sha) }
-
-func shortSha(s string) string {
-	if len(s) > 7 {
-		return s[:7]
-	}
-	return s
-}
 
 // branchHead is the commit the slot's branch points at.
 func branchHead(c *Ctx, root, branch string) (string, error) {
