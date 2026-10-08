@@ -149,6 +149,27 @@ func TestStatusExternalOldMergedPRReachableThroughBaseIsNotOurs(t *testing.T) {
 	}
 }
 
+// Status never fetches, so origin/main can run ahead of local main. A branch
+// recreated from origin/main holds the old PR head though local main does not.
+func TestStatusExternalOldMergedPRReachableThroughOriginBaseIsNotOurs(t *testing.T) {
+	root, e, fr := extFixture(t, "")
+	tree := gitIn(t, root, "rev-parse", "main^{tree}")
+	x := gitIn(t, root, "commit-tree", tree, "-p", "main", "-m", "merged upstream")
+	live := gitIn(t, root, "commit-tree", tree, "-p", x, "-m", "live work")
+	gitIn(t, root, "update-ref", "refs/remotes/origin/main", x)
+	gitIn(t, root, "update-ref", "refs/heads/codex/12-thing", live)
+	fr.mergedPRs = map[string][]tracker.PR{"codex/12-thing": {{Number: 3, Branch: "codex/12-thing", URL: "https://github.com/o/r/pull/3", HeadSHA: x}}}
+	fr.states[3] = "merged"
+	rep, err := e.Status(bg, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, _ := rowOf(rep, "ext-1")
+	if r.State == "merged" || r.PRState == "merged" || r.PR != "" {
+		t.Fatalf("a PR reachable through origin/base marked the live slot merged: %+v", r)
+	}
+}
+
 // A forge that cannot list merged PRs leaves the row unknown-safe: a warning,
 // no PR attached and no release.
 func TestStatusExternalMergedLookupErrorWarnsAndKeepsTheSlot(t *testing.T) {

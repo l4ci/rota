@@ -243,8 +243,20 @@ func (e Env) ownsMergedPR(ctx context.Context, root, sha, base, branch string) b
 	if err != nil || onBranch.ExitCode != 0 {
 		return false
 	}
-	inBase, err := e.Git(ctx, root, "merge-base", "--is-ancestor", sha, base)
-	return err == nil && inBase.ExitCode == 1
+	// Status never fetches, so origin/<base> can run ahead of local <base>: the
+	// head counts as in base when either holds it.
+	checked := false
+	for _, ref := range []string{base, "origin/" + base} {
+		if ok, _ := e.Git(ctx, root, "rev-parse", "--verify", "-q", ref); ok.ExitCode != 0 {
+			continue
+		}
+		in, err := e.Git(ctx, root, "merge-base", "--is-ancestor", sha, ref)
+		if err != nil || in.ExitCode != 1 {
+			return false
+		}
+		checked = true
+	}
+	return checked
 }
 
 // Finding is one drift. Repair names what Reconcile(apply) would do and is
