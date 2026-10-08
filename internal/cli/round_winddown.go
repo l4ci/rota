@@ -56,6 +56,7 @@ func windDownSummary(root string, rnd int) (obj *jsonx.Object, text string, ok b
 
 func roundWindDown(fs *flag.FlagSet) RunFunc {
 	noVerify := fs.Bool("no-verify", false, "skip the re-verify of the base")
+	prune := fs.Bool("prune", false, "also delete the worktree and branch of a released adopted slot")
 	pid := fs.Int("holder-pid", 0, "orchestrator pid, when its ancestry cannot be read")
 	return func(c *Ctx, args []string) (Result, error) {
 		if err := noArgs(args); err != nil {
@@ -88,7 +89,7 @@ func roundWindDown(fs *flag.FlagSet) RunFunc {
 			}
 		}
 		res, err := env.WindDown(ctx, root, board, round.WindDownOpts{
-			NoVerify: *noVerify, HolderPID: *pid, Settings: set,
+			NoVerify: *noVerify, Prune: *prune, HolderPID: *pid, Settings: set,
 		})
 		if cd != "" {
 			if err != nil || res.Retained {
