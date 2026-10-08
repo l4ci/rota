@@ -81,6 +81,13 @@ pass "unavailable sources degrade to warnings"
 # captured in $(...) that exits non-zero would end the section silently.
 OUT=$( cd "$RS" && $RSENV "$ROTA_BIN" round summary 2>/dev/null ) || fail "round summary must exit 0 with no ledger"
 grep -q 'no ledger yet' <<<"$OUT" || fail "round summary without a ledger should say so: $OUT"
+# A writing verb appends the line itself: `round bounce` records the event with
+# the slot, account and harness read from the registry, not from the caller.
+( cd "$RS" && $RSENV "$ROTA_BIN" round bounce 58 >/dev/null 2>&1 ) || fail "round bounce 58 failed"
+LINE=$(grep -E '"kind": ?"bounce"' "$RS/.rota/ledger.jsonl" || true)
+[ -n "$LINE" ] || fail "round bounce should append a bounce entry to .rota/ledger.jsonl"
+grep -qE '"issue": ?"58"' <<<"$LINE" || fail "the bounce entry should name the issue: $LINE"
+grep -qE '"slot": ?"dana"' <<<"$LINE" || fail "the bounce entry should name the slot holding the issue: $LINE"
 printf '%s\n' \
   '{"ts":"2026-10-08T09:00:00Z","kind":"assign","round":4,"issue":"58","slot":"dana","account":"work","harness":"claude","detail":{"headroom":80.0}}' \
   '{"ts":"2026-10-08T09:30:00Z","kind":"done","round":4,"issue":"58","slot":"dana","pr":"#9","detail":{"headroom":60.0}}' \

@@ -152,16 +152,21 @@ func loadRoundSnap(c *Ctx, root string) (roundSnap, error) {
 	return s, nil
 }
 
-// fillBurn sets Row.Burn for every slot holding an issue: the headroom the
-// slot's latest assign entry recorded, replaced by the account's current meter
-// when that reads. Codex slots and accounts with no reading stay nil (n/a). It
-// runs only for the --ui screen, so plain and --json status never see it.
+// fillBurn sets Row.Burn for every slot holding an issue: the quota it has
+// consumed, in percentage points of its account's headroom. That is the
+// headroom the slot's latest assign entry recorded minus the headroom the
+// meter reads now, floored at 0 (a window that reset in between reads as
+// nothing consumed). Codex slots, accounts with no reading at either end and
+// slots with no assign entry stay nil (n/a). The meters are fetched once, for
+// all accounts, however many slots there are; the --ui screen is the only
+// caller, so plain and --json status never fetch.
 func fillBurn(c *Ctx, root string, rows []round.Row) {
 	entries, _ := ledger.Load(root)
 	if len(entries) == 0 {
 		return
 	}
-	var acc *worker.Accounts
+	var meters []worker.Meter
+	fetched := false
 	for i := range rows {
 		r := &rows[i]
 		if r.Issue == "" {
@@ -169,23 +174,25 @@ func fillBurn(c *Ctx, root string, rows []round.Row) {
 		}
 		var last *ledger.Entry
 		for j := len(entries) - 1; j >= 0; j-- {
-			e := entries[j]
+			e := &entries[j]
 			if e.Kind == ledger.KindAssign && e.Slot == r.Name && strings.TrimPrefix(e.Issue, "#") == strings.TrimPrefix(r.Issue, "#") {
-				last = &e
+				last = e
 				break
 			}
 		}
 		if last == nil || last.Harness == harness.Codex || last.Account == "" {
 			continue
 		}
-		if v, ok := last.DetailFloat("headroom"); ok {
-			r.Burn = &v
+		start, ok := last.DetailFloat("headroom")
+		if !ok {
+			continue
 		}
-		if acc == nil {
-			acc = c.deps().WorkerAccounts()
+		if !fetched {
+			meters, fetched = c.deps().WorkerAccounts().Meters(c.Context(), root), true
 		}
-		if h := acc.Headroom(c.Context(), root, last.Account); h != nil {
-			r.Burn = h
+		if now := worker.HeadroomOf(meters, last.Account); now != nil {
+			burn := max(start-*now, 0)
+			r.Burn = &burn
 		}
 	}
 }

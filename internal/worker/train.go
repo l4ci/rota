@@ -102,7 +102,9 @@ func (e Env) Train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 	var res TrainResult
 	err := e.withLandLock(ctx, root, func() (err error) {
 		cache := loadTrainCache(root)
-		res, err = e.train(ctx, root, o, cache)
+		gated := map[string]bool{}
+		res, err = e.train(ctx, root, o, cache, gated)
+		trainLedger(root, res, gated)
 		if cache.dirty {
 			if serr := cache.save(); serr != nil {
 				res.Notes = append(res.Notes, "TRAIN-CACHE not saved — "+serr.Error())
@@ -113,7 +115,9 @@ func (e Env) Train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 	return res, err
 }
 
-func (e Env) train(ctx context.Context, root string, o TrainOpts, cache *trainCache) (TrainResult, error) {
+// gated collects the members the landing loop ran a real gate on; each of those
+// wrote its own ledger entry.
+func (e Env) train(ctx context.Context, root string, o TrainOpts, cache *trainCache, gated map[string]bool) (TrainResult, error) {
 	res := TrainResult{Base: o.Base}
 	if len(o.Targets) == 0 {
 		return res, fail(exitcode.ExitUsage, "a train needs at least one PR or slot")
@@ -436,6 +440,7 @@ func (e Env) train(ctx context.Context, root string, o TrainOpts, cache *trainCa
 				return e.trainMoved(res, m.Target, fmt.Sprintf("%s changed outside the train after %d landing(s) (tree %s, verified %s)", baseRef, i, short(got), short(want)))
 			}
 		}
+		gated[m.Target] = true
 		gr, err := e.Gate(ctx, root, GateOpts{Slot: m.Target, Base: o.Base, NoVerify: true, Train: true})
 		res.Notes = append(res.Notes, gr.Notes...)
 		res.Changed = res.Changed || gr.Changed

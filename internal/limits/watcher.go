@@ -416,8 +416,6 @@ func (w *Watcher) detect(ctx context.Context, now time.Time, t Target, o obs) {
 		e.Note = strings.TrimSpace(e.Note + fmt.Sprintf(" transfer of %s to %s failed: %v; sleeping instead.", t.Issue, slot, err))
 	} else {
 		e.Status, e.ResolvedAt = StatusSwitched, Time(now)
-		worker.LedgerNote(w.Root, ledger.Entry{Kind: ledger.KindRerouted, Issue: t.Issue, Slot: slot, Account: acct,
-			Detail: ledger.Detail("from", t.Session)})
 		e.Note = strings.TrimSpace(e.Note + fmt.Sprintf(" moved %s to %s on account %s.", t.Issue, slot, acct))
 	}
 	if err := Save(w.Root, e); err != nil {

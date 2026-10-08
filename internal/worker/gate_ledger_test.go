@@ -59,3 +59,30 @@ func TestGateLedgerSkipsCheckOnly(t *testing.T) {
 		t.Error("a read-only gate check wrote the ledger")
 	}
 }
+
+// A train that fails records its verdict for every member it gated, not only
+// for the ones that landed: here none did.
+func TestTrainLedgerRecordsCulpritAndNonLandingMembers(t *testing.T) {
+	w, res := ciTrain(t, "", "b3.txt", "b1", "b2", "b3", "b4")
+	if res.Verdict != GateVerifyFailed || res.Culprit != "b3" {
+		t.Fatalf("%+v", res)
+	}
+	es, err := ledger.Load(w.dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]string{}
+	for _, e := range es {
+		if e.Kind == ledger.KindGate {
+			got[e.Slot] = e.DetailStr("verdict")
+		}
+		if e.Kind == ledger.KindMerge {
+			t.Errorf("a train that landed nothing wrote a merge: %+v", e)
+		}
+	}
+	for _, s := range []string{"b1", "b2", "b3", "b4"} {
+		if got[s] != GateVerifyFailed {
+			t.Errorf("member %s verdict %q, want %s (all: %v)", s, got[s], GateVerifyFailed, got)
+		}
+	}
+}

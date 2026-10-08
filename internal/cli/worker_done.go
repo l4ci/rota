@@ -112,7 +112,7 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		if changed {
-			worker.LedgerNote(poolRoot, ledger.Entry{Kind: ledger.KindDone, Issue: id, Slot: slotName, Account: sl.Account(), Harness: sl.Kind(), PR: sl.PR()})
+			worker.LedgerDone(c.Context(), c.deps().WorkerAccounts(), poolRoot, ledger.Entry{Issue: id, Slot: slotName, Account: sl.Account(), Harness: sl.Kind(), PR: sl.PR()})
 		}
 		d.Set("changed", changed)
 		return Result{Data: d, Text: fmt.Sprintf("%s\tdone", slotName)}, nil

@@ -7,7 +7,9 @@ import (
 	"github.com/l4ci/rota/internal/ledger"
 )
 
-func TestLimitLedgerLimitedAndRerouted(t *testing.T) {
+// A reroute is the limits watcher calling `round transfer`, which records the
+// transfer itself: the watcher adds only the limited entry.
+func TestLimitLedgerLimited(t *testing.T) {
 	r := slotRig(t)
 	r.build()
 	r.step(true)
@@ -15,15 +17,12 @@ func TestLimitLedgerLimitedAndRerouted(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(es) != 2 || es[0].Kind != ledger.KindLimited || es[1].Kind != ledger.KindRerouted {
+	if len(es) != 1 || es[0].Kind != ledger.KindLimited {
 		t.Fatalf("entries %+v", es)
 	}
-	l, rr := es[0], es[1]
+	l := es[0]
 	if l.Slot != "ben" || l.Issue != "67" || l.Account != "a" || l.DetailStr("resetsAt") != Time(t0.Add(2*time.Hour)) {
 		t.Errorf("limited = %+v", l)
-	}
-	if rr.Slot != "dana" || rr.Issue != "67" || rr.DetailStr("from") != "ben" || rr.Account != "b" {
-		t.Errorf("rerouted = %+v", rr)
 	}
 }
 

@@ -1,8 +1,10 @@
 package round
 
 import (
+	"context"
 	"testing"
 
+	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -71,7 +73,7 @@ func TestReportAppendsLedger(t *testing.T) {
 		t.Fatal(err)
 	}
 	url := "https://github.com/o/r/pull/9"
-	if _, err := ReportSlot(f.root, ReportOpts{Slot: "ben", State: "done", PR: url}); err != nil {
+	if _, err := f.env.ReportSlot(bg, f.root, ReportOpts{Slot: "ben", State: "done", PR: url}); err != nil {
 		t.Fatal(err)
 	}
 	e := lastOf(ledgerKinds(t, f.root), ledger.KindDone)
@@ -79,8 +81,8 @@ func TestReportAppendsLedger(t *testing.T) {
 		t.Fatalf("done entry = %+v", e)
 	}
 	// Re-reporting the same state is not a second event; idle is no event.
-	ReportSlot(f.root, ReportOpts{Slot: "ben", State: "done", PR: url})
-	ReportSlot(f.root, ReportOpts{Slot: "ben", State: "idle"})
+	f.env.ReportSlot(bg, f.root, ReportOpts{Slot: "ben", State: "done", PR: url})
+	f.env.ReportSlot(bg, f.root, ReportOpts{Slot: "ben", State: "idle"})
 	n := 0
 	for _, x := range ledgerKinds(t, f.root) {
 		if x.Kind == ledger.KindDone {
@@ -90,7 +92,7 @@ func TestReportAppendsLedger(t *testing.T) {
 	if n != 1 {
 		t.Errorf("%d done entries, want 1", n)
 	}
-	if _, err := ReportSlot(f.root, ReportOpts{Slot: "ben", State: "blocked"}); err != nil {
+	if _, err := f.env.ReportSlot(bg, f.root, ReportOpts{Slot: "ben", State: "blocked"}); err != nil {
 		t.Fatal(err)
 	}
 	if lastOf(ledgerKinds(t, f.root), ledger.KindBlocked) == nil {
@@ -157,5 +159,53 @@ func TestBounceAppendsLedger(t *testing.T) {
 	}
 	if n != 1 {
 		t.Errorf("%d bounce entries, want 1", n)
+	}
+}
+
+type ctxKey struct{}
+
+// A solo done reads the account's headroom through the Env's Accounts and the
+// caller's context, not a private fetcher: a test injects the meter, and a
+// cancelled command cancels the fetch.
+func TestReportHeadroomUsesInjectedAccountsAndContext(t *testing.T) {
+	f := soloAssign(t)
+	if _, err := f.assign("12", "ben", nil); err != nil {
+		t.Fatal(err)
+	}
+	f.config(t, `{"work":{"accounts":[{"name":"work","configDir":"/w"}]}}`)
+	if _, err := worker.UpdateSlot(f.root, "ben", func(s *worker.Slot) { s.SetAccount("work", "/w") }); err != nil {
+		t.Fatal(err)
+	}
+	var seen any
+	f.env.Accounts = &worker.Accounts{Fetch: func(ctx context.Context, _, _ string) (*jsonx.Object, string) {
+		seen = ctx.Value(ctxKey{})
+		v, _ := jsonx.Decode([]byte(`{"five_hour":{"utilization":25,"resets_at":null},"seven_day":{"utilization":5,"resets_at":null}}`))
+		return v.(*jsonx.Object), ""
+	}}
+	ctx := context.WithValue(bg, ctxKey{}, "caller")
+	if _, err := f.env.ReportSlot(ctx, f.root, ReportOpts{Slot: "ben", State: "done", PR: "https://github.com/o/r/pull/9"}); err != nil {
+		t.Fatal(err)
+	}
+	if seen != "caller" {
+		t.Errorf("the meter fetch did not get the caller's context: %v", seen)
+	}
+	e := lastOf(ledgerKinds(t, f.root), ledger.KindDone)
+	if h, ok := e.DetailFloat("headroom"); e == nil || !ok || h != 75 {
+		t.Fatalf("done entry = %+v headroom %v %v, want 75", e, h, ok)
+	}
+}
+
+// `round report --state limited` is a limit event: it writes a limited entry.
+func TestReportLimitedAppendsLedger(t *testing.T) {
+	f := soloAssign(t)
+	if _, err := f.assign("12", "ben", nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.env.ReportSlot(bg, f.root, ReportOpts{Slot: "ben", State: "limited"}); err != nil {
+		t.Fatal(err)
+	}
+	e := lastOf(ledgerKinds(t, f.root), ledger.KindLimited)
+	if e == nil || e.Slot != "ben" || e.Issue != "12" || e.Harness != "claude" {
+		t.Fatalf("limited entry = %+v", e)
 	}
 }

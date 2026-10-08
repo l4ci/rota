@@ -7,6 +7,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/l4ci/rota/internal/fsio"
 )
 
 func TestAppendLoadRoundTrip(t *testing.T) {
@@ -53,27 +55,66 @@ func TestLoadSkipsTornLine(t *testing.T) {
 	}
 }
 
-func TestAppendConcurrent(t *testing.T) {
+// Append writes under the file's sidecar lock: while another holder has it,
+// nothing is written, and the line lands once it is released.
+func TestAppendWaitsForTheLock(t *testing.T) {
+	root := t.TempDir()
+	done := make(chan error, 1)
+	err := fsio.Locked(Path(root), fsio.LockTimeout, func() error {
+		go func() { done <- Append(root, Entry{Kind: KindGate, Issue: "1"}) }()
+		select {
+		case err := <-done:
+			t.Errorf("Append returned while the lock was held: %v", err)
+		case <-time.After(300 * time.Millisecond):
+		}
+		if data, _ := os.ReadFile(Path(root)); len(data) != 0 {
+			t.Errorf("a line was written under another holder's lock: %q", data)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Append did not finish after the lock was released")
+	}
+	if got, err := Load(root); err != nil || len(got) != 1 {
+		t.Fatalf("Load = %v, %v", got, err)
+	}
+}
+
+// A few concurrent appends all land whole.
+func TestAppendConcurrentKeepsLinesWhole(t *testing.T) {
 	root := t.TempDir()
 	var wg sync.WaitGroup
-	for g := 0; g < 10; g++ {
+	for g := 0; g < 4; g++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for i := 0; i < 5; i++ {
-				if err := Append(root, Entry{Kind: KindGate, Issue: fmt.Sprint(g), Detail: Detail("pad", string(bytes.Repeat([]byte("x"), 3000)))}); err != nil {
-					t.Error(err)
-				}
+			if err := Append(root, Entry{Kind: KindGate, Issue: fmt.Sprint(g), Detail: Detail("pad", string(bytes.Repeat([]byte("x"), 3000)))}); err != nil {
+				t.Error(err)
 			}
 		}()
 	}
 	wg.Wait()
-	data, _ := os.ReadFile(Path(root))
-	if n := bytes.Count(data, []byte("\n")); n != 50 {
-		t.Fatalf("%d lines, want 50", n)
+	if got, err := Load(root); err != nil || len(got) != 4 {
+		t.Fatalf("Load = %d entries, %v", len(got), err)
 	}
+}
+
+// A line longer than any scanner buffer does not lose the rest of the log.
+func TestLoadReadsOverlongLine(t *testing.T) {
+	root := t.TempDir()
+	Append(root, Entry{Kind: KindDone, Issue: "1"})
+	Append(root, Entry{Kind: KindGate, Issue: "2", Detail: Detail("pad", string(bytes.Repeat([]byte("x"), 2<<20)))})
+	Append(root, Entry{Kind: KindDone, Issue: "3"})
 	got, err := Load(root)
-	if err != nil || len(got) != 50 {
-		t.Fatalf("Load = %d entries, %v: a line was torn", len(got), err)
+	if err != nil || len(got) != 3 {
+		t.Fatalf("Load = %d entries, %v", len(got), err)
 	}
 }

@@ -33,11 +33,14 @@ type Reported struct {
 	Changed                             bool
 }
 
+// reportKinds maps the reported states that are ledger events to their kind.
+var reportKinds = map[string]string{"done": ledger.KindDone, "blocked": ledger.KindBlocked, "limited": ledger.KindLimited}
+
 // ReportSlot records what a solo worker's result said, writing the two fields
 // a pane poll writes: state (lowercase) and pr. A second writer beside a
 // host's poll would race it, so any other host refuses. Re-reporting the same
 // state and PR changes nothing.
-func ReportSlot(root string, o ReportOpts) (Reported, error) {
+func (e Env) ReportSlot(ctx context.Context, root string, o ReportOpts) (Reported, error) {
 	res := Reported{Slot: o.Slot, Evidence: o.Evidence}
 	state := strings.ToLower(strings.TrimSpace(o.State))
 	if !slices.Contains(ReportStates, state) {
@@ -105,9 +108,11 @@ func ReportSlot(root string, o ReportOpts) (Reported, error) {
 	if !found {
 		return res, &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("slot '%s' is not in the pool", o.Slot)}
 	}
-	if kind := map[string]string{"done": ledger.KindDone, "blocked": ledger.KindBlocked}[state]; kind != "" && moved {
+	if kind := reportKinds[state]; kind != "" && moved {
 		held.Kind, held.PR = kind, firstNonEmpty(pr, held.PR)
-		held.Detail = ledger.Detail("headroom", worker.LedgerHeadroom(context.Background(), &worker.Accounts{}, root, held.Harness, held.Account))
+		if kind == ledger.KindDone {
+			held.Detail = ledger.Detail("headroom", worker.LedgerHeadroom(ctx, e.Accounts, root, held.Harness, held.Account))
+		}
 		worker.LedgerNote(root, held)
 	}
 	return res, nil
