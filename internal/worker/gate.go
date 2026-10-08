@@ -4,21 +4,22 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/land"
+	"github.com/l4ci/rota/internal/overlap"
 	"github.com/l4ci/rota/internal/rotatree"
+	"github.com/l4ci/rota/internal/roundcfg"
+	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/testledger"
+	"github.com/l4ci/rota/internal/tracker"
 	"os"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/l4ci/rota/internal/config"
-	"github.com/l4ci/rota/internal/git"
-	"github.com/l4ci/rota/internal/land"
-	"github.com/l4ci/rota/internal/overlap"
-	"github.com/l4ci/rota/internal/roundcfg"
-	"github.com/l4ci/rota/internal/tracker"
 )
 
 // Merge gate for one worker slot's branch/PR into the cycle branch: the port
@@ -116,6 +117,9 @@ type GateOpts struct {
 	// Prune makes a pass that releases an adopted slot also remove its
 	// worktree and branch.
 	Prune bool
+	// Round reads the round lease for the gate's ledger entries; the gate makes
+	// one when nil. A caller that writes more entries after the gate shares it.
+	Round *RoundMemo
 	// Train marks a landing step of a merge train (see Train): the PRs were
 	// merged together and verified once, so a branch behind the base only
 	// because an earlier train member landed is not refused as stale.
@@ -143,9 +147,15 @@ type GateResult struct {
 	Verified      []string
 	VerifySkipped bool
 	Changed       bool
-	Err           string
-	Hint          string
-	Notes         []string // PROVENANCE-SKIP and NO-VERIFY lines for stderr
+	// AlreadyMerged says the forge reported the PR merged before this gate ran:
+	// the gate landed nothing, but the ledger records the merge as remote.
+	AlreadyMerged bool
+	// Round is the memo the gate's ledger entries read the round lease through;
+	// a caller that records more entries for the same verb reuses it.
+	Round *RoundMemo
+	Err   string
+	Hint  string
+	Notes []string // PROVENANCE-SKIP and NO-VERIFY lines for stderr
 	// Excluded lists the test-ledger entries that excused a failing command.
 	// Expired lists the entries past their expiry, which fail the gate.
 	Excluded, Expired []testledger.Entry
@@ -255,14 +265,20 @@ type Forge interface {
 // given.
 func (e Env) Gate(ctx context.Context, root string, o GateOpts) (GateResult, error) {
 	e = e.withDefaults()
+	if o.Round == nil {
+		o.Round = &RoundMemo{}
+	}
 	if o.CheckOnly || o.Train { // read-only, or already under the train's land lock
-		return e.gate(ctx, root, o)
+		res, err := e.gate(ctx, root, o)
+		res.Round = o.Round
+		return res, err
 	}
 	var res GateResult
 	err := e.withLandLock(ctx, root, func() (err error) {
 		res, err = e.gate(ctx, root, o)
 		return err
 	})
+	res.Round = o.Round
 	return res, err
 }
 
@@ -295,13 +311,13 @@ func (e Env) gate(ctx context.Context, root string, o GateOpts) (GateResult, err
 			res.Verdict, res.Expired = GateVerifyFailed, in.ledger.Expired(e.withDefaults().Now())
 			res.Err = fmt.Sprintf("GATE-FAIL %s — %s; nothing landed", o.Slot, msg)
 			res.Hint = "fix the test or renew the entry in .rota/test-ledger.json, then re-gate"
-			gateLedger(root, t, res)
+			gateLedger(o.Round, root, t, res)
 			return res, nil
 		}
 	}
 	res, err = e.gateEnv().gate(ctx, root, o, res, in, t)
 	if err == nil && !o.CheckOnly {
-		gateLedger(root, t, res)
+		gateLedger(o.Round, root, t, res)
 	}
 	if err == nil && t.Queued && res.Verdict == GatePass {
 		if err := RemoveQueuedPR(root, t.PR); err != nil {
@@ -512,6 +528,7 @@ func (g *gate) stepFreshness() (bool, error) {
 		return g.broke(brokeMsg)
 	}
 	if why != "" {
+		g.noteMergedRemotely()
 		g.res.SHA, _ = e.runGit(g.root, "rev-parse", "--short=7", g.headRef) // bounce accounting keys on the head
 		g.verdict(GateStale, fmt.Sprintf("STALE %s %s — %s commit(s) landed on %s since it branched; %s", o.Slot, g.branch, behind, o.Base, why),
 			fmt.Sprintf("bounce: tell slot %s to `git merge %s`, resolve and re-verify, then re-gate", o.Slot, o.Base))
@@ -549,6 +566,7 @@ func (g *gate) stepPRMatches() (bool, error) {
 	// OPEN, MERGED or CLOSED on both forges.
 	switch {
 	case info.State != "OPEN":
+		g.res.AlreadyMerged = info.State == "MERGED"
 		return mismatch(fmt.Sprintf("PR %s is %s, not open", g.prNum, info.State))
 	case info.Base != g.o.Base:
 		return mismatch(fmt.Sprintf("PR %s targets '%s', the gate's base is '%s' — stacked PR?", g.prNum, info.Base, g.o.Base))
@@ -671,7 +689,7 @@ func (g *gate) stepMerge() (bool, error) {
 	// An empty test.full would merge with nothing verified: refuse before the
 	// merge unless --no-verify says so. CI verification does not read it, and a
 	// test.e2e tier still verifies.
-	if !g.o.NoVerify && g.in.where == WhereLocal && len(g.in.verifyCmds) == 0 && len(g.in.e2eCmds) == 0 {
+	if !g.o.NoVerify && noVerifyRule(g.in.where, g.in.verifyCmds, g.in.e2eCmds) {
 		g.verdict(GateNoVerify, "", "")
 		g.res.Err, g.res.Hint = noVerifyRefusal("GATE " + g.o.Slot)
 		return true, nil
@@ -789,7 +807,7 @@ func (g *gate) verifyFirst(what string, check func(dir, sha string) (bool, error
 	}
 	sha, _ := g.e.runGit(dir, "rev-parse", "HEAD")
 	tree, _ := g.e.runGit(dir, "rev-parse", "HEAD^{tree}")
-	g.res.SHA = short(sha)
+	g.res.SHA = strutil.ShortSHA(sha)
 	if done, err := check(dir, sha); done || err != nil {
 		return true, err
 	}
@@ -799,7 +817,7 @@ func (g *gate) verifyFirst(what string, check func(dir, sha string) (bool, error
 		}
 	}
 	if cur, _ := g.e.runGit(g.root, "rev-parse", g.baseRef); cur != baseSHA {
-		g.verdict(GateBaseMoved, fmt.Sprintf("BASE-MOVED %s — %s moved from %s to %s while %s verified; nothing landed", o.Slot, g.baseRef, short(baseSHA), short(cur), what),
+		g.verdict(GateBaseMoved, fmt.Sprintf("BASE-MOVED %s — %s moved from %s to %s while %s verified; nothing landed", o.Slot, g.baseRef, strutil.ShortSHA(baseSHA), strutil.ShortSHA(cur), what),
 			"re-run the gate on the new base")
 		return true, nil
 	}
@@ -851,7 +869,7 @@ func (g *gate) landedTree() string {
 // a mismatch. false ends the gate with the verdict set.
 func (g *gate) confirmCITree() bool {
 	if tree := g.landedTree(); tree != g.verifiedTree {
-		g.verdict(GateBaseMoved, fmt.Sprintf("BASE-MOVED %s — it landed, but the landed tree %s differs from the tree CI verified (%s); %s changed during the merge", g.o.Slot, short(tree), short(g.verifiedTree), g.o.Base),
+		g.verdict(GateBaseMoved, fmt.Sprintf("BASE-MOVED %s — it landed, but the landed tree %s differs from the tree CI verified (%s); %s changed during the merge", g.o.Slot, strutil.ShortSHA(tree), strutil.ShortSHA(g.verifiedTree), g.o.Base),
 			fmt.Sprintf("do not re-merge; verify %s as it is now", g.o.Base))
 		return false
 	}
@@ -925,7 +943,7 @@ func (g *gate) stepVerify() (bool, error) {
 		return true, nil
 	}
 	if tree := g.landedTree(); tree != g.verifiedTree {
-		res.Notes = append(res.Notes, fmt.Sprintf("VERIFY-AGAIN %s — the landed tree %s differs from the verified scratch merge %s (%s moved before the merge); verifying the landed %s", o.Slot, short(tree), short(g.verifiedTree), o.Base, o.Base))
+		res.Notes = append(res.Notes, fmt.Sprintf("VERIFY-AGAIN %s — the landed tree %s differs from the verified scratch merge %s (%s moved before the merge); verifying the landed %s", o.Slot, strutil.ShortSHA(tree), strutil.ShortSHA(g.verifiedTree), o.Base, o.Base))
 		res.Verified, res.Excluded, res.VerifySkipped = nil, nil, false
 		for _, tier := range []struct {
 			name string
@@ -1109,6 +1127,18 @@ func (g *gate) broke(msg string) (bool, error) {
 	return true, nil
 }
 
+// noteMergedRemotely marks the result when the forge says the PR is merged: a
+// stale refusal of a PR landed elsewhere, by a squash or rebase too, whose head
+// is then not on the base.
+func (g *gate) noteMergedRemotely() {
+	if !g.remote || g.o.CheckOnly { // a check-only gate writes no ledger entry
+		return
+	}
+	if info, ok := g.prInfo(); ok && info.State == "MERGED" {
+		g.res.AlreadyMerged = true
+	}
+}
+
 // prInfo reads the PR; ok is false when the forge could not be read.
 func (g *gate) prInfo() (tracker.PRInfo, bool) {
 	n, err := strconv.Atoi(g.prNum)
@@ -1257,7 +1287,7 @@ func (g *gate) confirmLanded(sha string) (done bool) {
 	}
 	g.res.Changed = true
 	if len(sha) >= 7 {
-		g.res.SHA = sha[:7] // the merge that landed on origin, for the merged-remotely verdicts
+		g.res.SHA = strutil.ShortSHA(sha) // the merge that landed on origin, for the merged-remotely verdicts
 	}
 	if out, code := e.runGit(g.root, "merge", "--ff-only", g.baseRef); code != 0 {
 		g.mergedRemotely(fmt.Sprintf("local %s could not fast-forward (%s)", o.Base, g.ffFailureCause(out)))

@@ -30,7 +30,7 @@ Follow `references/context-load-protocol.md` (parallel, silent), plus `rota item
 
 ## Step 3 — One draft
 
-**Grill first, once.** Run one pass of `references/grilling.md` before drafting when the item is a Major feature or P0 bug, or the invocation has `--grill`. Skip it when the issue body already has `## Acceptance` (`--grill` does not override). For other items ask nothing unless real ambiguity or a decision conflict remains after the item, its thread and the code; then ask the one question that unblocks you (`AskUserQuestion`, ≤ 4 options). Record answers that changed direction in Step 5. If a question needs code-touching evidence (feasibility, library support, performance), say: *"This warrants a spike. Run `/rota-spike <name>` first, then re-invoke `/rota-brainstorm <ID>`."* Don't guess.
+**Grill first, once.** Run one pass of `references/grilling.md` before drafting when the item is a Major feature or P0 bug, or the invocation has `--grill`. Skip it when the issue body already has `## Acceptance` (`--grill` does not override). For other items ask nothing unless real ambiguity or a decision conflict remains after the item, its thread and the code; then ask the one question that unblocks you (≤ 4 options). Record answers that changed direction in Step 5. If a question needs code-touching evidence (feasibility, library support, performance), say: *"This warrants a spike. Run `/rota-spike <name>` first, then re-invoke `/rota-brainstorm <ID>`."* Don't guess.
 
 Write the whole design as one unsaved markdown draft:
 
@@ -54,7 +54,7 @@ rota design add <ID> --title "<title>"                     # mint the stub
 rota design put <ID> --body-file <scratch-file>            # issue backend: publish the approved draft
 ```
 
-On the issue backend the design is a note on the item's issue (`references/issue-mode.md`). On the file backend it is `.rota/designs/<ID>.md`: `Edit` the stub's sections, keep the frontmatter. Post each answer that changed direction with `rota item comment add <ID> --kind decision --body-file -`.
+On the issue backend the design is a note on the item's issue (`references/issue-mode.md`). On the file backend it is `.rota/designs/<ID>.md`: edit the stub's sections, keep the frontmatter. Post each answer that changed direction with `rota item comment add <ID> --kind decision --body-file -`.
 
 Report two lines (artifact, approaches, open questions). On hand-off say *"Run `/rota-plan <ID>` next."*
 

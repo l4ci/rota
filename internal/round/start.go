@@ -8,6 +8,7 @@ import (
 
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/worker"
@@ -111,6 +112,13 @@ func (e Env) Start(ctx context.Context, root string, o StartOpts) (Started, erro
 			who = fmt.Sprintf("pid %d", stale.PID)
 		}
 		res.Warnings = append(res.Warnings, "reclaimed stale lease held by "+who)
+	}
+
+	// A new round ages the ledger out; a renewed one has nothing new to age.
+	if out != roundlease.Renewed {
+		if _, err := ledger.Trim(root, l.Round, set.LedgerKeep); err != nil {
+			res.Warnings = append(res.Warnings, "round ledger not trimmed: "+err.Error())
+		}
 	}
 
 	// A renewed start without --scope keeps the recorded scope and slate; a new

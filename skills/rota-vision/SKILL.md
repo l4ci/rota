@@ -29,7 +29,7 @@ Follow `references/context-load-protocol.md` (parallel, silent), plus `.rota/MIL
 
 ## Step 3 — Frame and discover
 
-Open with 3-4 sentences on what you see: the project's shape, existing milestones, obvious gaps. Then one batched `AskUserQuestion` (see `references/design-exploration.md`):
+Open with 3-4 sentences on what you see: the project's shape, existing milestones, obvious gaps. Then one question batch (see `references/design-exploration.md`):
 
 - **Create** — 2-3 questions: *Scope* (new product / strategic refactor / research / other), *Audience*, *Constraint* (time or scope limit).
 - **Edit** — one question, *Action*: add a milestone (Recommended if the vision feels incomplete), refine one, retire/activate, re-prioritize, or explore a new direction.
@@ -52,7 +52,7 @@ Push back on the framing; a polite review wastes the cycle. Run the rounds, reco
 - **Assumption naming** — name implicit assumptions (*"this assumes single-tenant"*) and force a stance.
 - **Why this order** — for each adjacent pair, why the earlier comes first.
 
-Batch each round into one `AskUserQuestion` (max 3 questions; `multiSelect: true` for choosing trade-offs). Move on when the frontier is empty and the framing has survived honest pushback.
+Batch each round into at most 3 questions (multiple selections for choosing trade-offs). Move on when the frontier is empty and the framing has survived honest pushback.
 
 ## Step 6 — Propose, once
 
@@ -78,7 +78,7 @@ Batch the writes, then refresh the index once.
 MID=$(rota milestone add --json --title "<title>" --summary "<one line>" [--depends M01,M02] | jq -r .data.id)
 ```
 
-Issue mode: creates the native milestone and tracking issue (status `planned`). Draft the full plan (frontmatter `id: <MNN>` required) in a scratch file and publish with `rota milestone put <MNN> --body-file <file>|-`. File mode: mints `MNN`, a stub `.rota/milestones/MNN.md` and an overview block; `Edit` the stub's sections (keep the frontmatter).
+Issue mode: creates the native milestone and tracking issue (status `planned`). Draft the full plan (frontmatter `id: <MNN>` required) in a scratch file and publish with `rota milestone put <MNN> --body-file <file>|-`. File mode: mints `MNN`, a stub `.rota/milestones/MNN.md` and an overview block; edit the stub's sections (keep the frontmatter).
 
 - **Status:** `rota milestone status <MNN> --to <planned|active|shipped|archived>` per changed milestone. Several can be active when independent. `archived` retires one without deleting it, but an archived dependency does not unblock dependents; `shipped` does.
 - **Vision paragraph** (Create only): `rota milestone overview --body-file <file>|-` (file mode: replace the placeholder under `# Milestones`), 2-4 sentences on the why. In Edit mode leave it unless the framing changed.

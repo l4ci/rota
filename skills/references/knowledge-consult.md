@@ -39,7 +39,7 @@ After building the brief, find which KNOWLEDGE bullets landed in it. For each, c
 rota knowledge hit --topic "<T>" --title "<first-line-of-bullet>"
 ```
 
-Where `<T>` is the exact `## Topic` heading from `rota knowledge query`'s output and `<title>` is the bold **title** text on that bullet (the text between `**` and `** —`).
+Where `<T>` is the exact `## Topic` heading from `rota knowledge query`'s output and `<title>` is the bold **title** text on that bullet (the text between `**` and `** —`). For `query`, a partial name returns every heading containing it (case-insensitive) and an exact name returns that topic alone; `rota knowledge topics` lists the headings.
 
 **Worked example.** Suppose `rota knowledge query "Architecture"` returned:
 
@@ -53,8 +53,8 @@ Where `<T>` is the exact `## Topic` heading from `rota knowledge query`'s output
 And both bullets survived into the brief's `**Known gotchas:**` section. Register both in one parallel batch:
 
 ```
-Bash: rota knowledge hit --topic "Architecture" --title "Always route network calls through NetworkClient"
-Bash: rota knowledge hit --topic "Architecture" --title "Avoid force-unwrap in production paths"
+rota knowledge hit --topic "Architecture" --title "Always route network calls through NetworkClient"
+rota knowledge hit --topic "Architecture" --title "Avoid force-unwrap in production paths"
 ```
 
 Issue all calls **in a single parallel tool-call batch**: each verb serializes its sidecar write behind a per-file lock, so concurrent calls don't lose hits. Silent on success. Provisional bullets auto-promote to confirmed once `hits >= learn.promoteThreshold` (default 3) without a pending contradiction.

@@ -215,3 +215,16 @@ func TestSummaryAdoptOpensTheIssueRowNotAnEmptyOne(t *testing.T) {
 		t.Errorf("row = %+v", r)
 	}
 }
+
+// A train member that passed its own step carries no verdict: it must not keep
+// the stale an earlier gate recorded.
+func TestSummaryTrainMemberDropsAnEarlierGateVerdict(t *testing.T) {
+	es := []Entry{
+		{TS: at(0), Kind: KindAssign, Round: 2, Issue: "12", Slot: "ben"},
+		{TS: at(1), Kind: KindGate, Round: 2, Issue: "12", Slot: "ben", Detail: Detail("verdict", "stale")},
+		{TS: at(2), Kind: KindGate, Round: 2, Issue: "12", Slot: "ben", Detail: Detail("verdict", "", "train", true, "culprit", "dana")},
+	}
+	if g := row(t, Fold(es, nil, 2), "12", "ben").Gate; g != "" {
+		t.Errorf("gate = %q, want none for a member the train accepted", g)
+	}
+}
