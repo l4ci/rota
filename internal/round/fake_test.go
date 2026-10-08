@@ -23,9 +23,11 @@ type fakeRemote struct {
 	// Forge side.
 	prs            []tracker.PR
 	mergedPRs      map[string][]tracker.PR // head branch -> merged PRs
-	prViews        map[int]tracker.PRInfo  // PRView answers; a missing number is not found
-	states         map[int]string          // PR number -> state
-	labelled       []int                   // issues List returns whatever the filter
+	mergedErr      error
+	prViewErr      error                  // PRView's failure for a number prViews lacks, instead of not-found
+	prViews        map[int]tracker.PRInfo // PRView answers; a missing number is not found
+	states         map[int]string         // PR number -> state
+	labelled       []int                  // issues List returns whatever the filter
 	labels         map[int][]string
 	closed         map[int]bool // issues Get reports closed
 	closedLabelled []int        // closed issues still carrying the label
@@ -91,12 +93,15 @@ func (f remoteForge) OpenPRs(context.Context) ([]tracker.PR, error) {
 }
 
 func (f remoteForge) MergedPRs(_ context.Context, branch string) ([]tracker.PR, error) {
-	return f.mergedPRs[branch], nil
+	return f.mergedPRs[branch], f.mergedErr
 }
 
 func (f remoteForge) PRView(_ context.Context, n int) (tracker.PRInfo, error) {
 	if info, ok := f.prViews[n]; ok {
 		return info, nil
+	}
+	if f.prViewErr != nil {
+		return tracker.PRInfo{}, f.prViewErr
 	}
 	return tracker.PRInfo{}, &tracker.Error{Kind: tracker.KindNotFound, Message: fmt.Sprintf("no PR %d", n)}
 }

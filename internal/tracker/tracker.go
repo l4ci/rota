@@ -163,6 +163,9 @@ type PR struct {
 	Branch string
 	URL    string
 	Body   string
+	// HeadSHA is the PR's head commit; set by MergedPRs, which callers use to
+	// tell a branch's own PR from an older one that reused the name.
+	HeadSHA string
 }
 
 // PRInfo is one PR/MR as the merge gate reads it. State is OPEN, MERGED or

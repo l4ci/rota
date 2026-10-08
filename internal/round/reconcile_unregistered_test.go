@@ -97,7 +97,9 @@ func TestReconcileApplyAdopts(t *testing.T) {
 	if adopted == nil || !adopted.IsExternal() || adopted.HeldID() != "612" {
 		t.Fatalf("want an external slot holding 612, got %v", adopted)
 	}
-	if r := unregistered(out.Repaired); len(r) != 1 || r[0].Issue != "612" {
+	// The tick audits and reports each finding as "<kind> <key>" (internal/cli/round_tick.go).
+	r := unregistered(out.Repaired)
+	if len(r) != 1 || r[0].Issue != "612" || r[0].Kind+" "+r[0].Key() != "unregistered-branch codex/612-thing" {
 		t.Errorf("repaired: %+v", out.Repaired)
 	}
 	left := unregistered(out.Drift)

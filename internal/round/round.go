@@ -199,7 +199,7 @@ func (e Env) ExternalState(ctx context.Context, root string, forgeOK bool, base 
 // merged PR its branch headed. That PR opened and merged between two looks at
 // the open list, so only a branch lookup finds it; the row then carries it and
 // the merged-external finding releases the slot.
-func (e Env) adoptedPRNumber(ctx context.Context, rep *Report, v *view, r *Row) (int, bool) {
+func (e Env) adoptedPRNumber(ctx context.Context, root string, rep *Report, v *view, r *Row) (int, bool) {
 	if n, ok := worker.PRRefNumber(r.PR); ok {
 		return n, true
 	}
@@ -212,11 +212,25 @@ func (e Env) adoptedPRNumber(ctx context.Context, rep *Report, v *view, r *Row) 
 		v.prErr = true
 		return 0, false
 	}
-	if len(merged) == 0 {
-		return 0, false
+	for _, m := range merged {
+		if e.headOnBranch(ctx, root, m.HeadSHA, r.Branch) {
+			r.PR = m.URL
+			return m.Number, true
+		}
 	}
-	r.PR = merged[0].URL
-	return merged[0].Number, true
+	return 0, false
+}
+
+// headOnBranch says whether a merged PR's head commit is on branch: the forge
+// matches a head branch by name alone, so an older PR from a reused name (or a
+// fork's same-named branch) is told apart by its commits. A PR without a head
+// sha, or a sha git does not have, proves nothing and is not ours.
+func (e Env) headOnBranch(ctx context.Context, root, sha, branch string) bool {
+	if sha == "" {
+		return false
+	}
+	res, err := e.Git(ctx, root, "merge-base", "--is-ancestor", sha, branch)
+	return err == nil && res.ExitCode == 0
 }
 
 // Finding is one drift. Repair names what Reconcile(apply) would do and is
@@ -462,7 +476,7 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 						rep.add(Finding{Kind: PRUnrecorded, Slot: r.Name, Issue: r.Issue, Detail: fmt.Sprintf("open PR #%d has branch %s as head, slot records none", pr.Number, r.Branch), Repair: "record pr"})
 					}
 				}
-			} else if n, ok := e.adoptedPRNumber(ctx, rep, v, r); ok {
+			} else if n, ok := e.adoptedPRNumber(ctx, root, rep, v, r); ok {
 				st, err := e.Forge.PRState(ctx, n)
 				if err != nil {
 					rep.Warnings = append(rep.Warnings, fmt.Sprintf("PR #%d state: %v", n, err))

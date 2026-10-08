@@ -5,6 +5,8 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -87,7 +89,8 @@ func TestStatusExternalMergedPRStaysListedUntilReleased(t *testing.T) {
 // an adopted slot that recorded none is matched to it by branch.
 func TestStatusExternalMergedPRFoundByBranchWhenNoneRecorded(t *testing.T) {
 	root, e, fr := extFixture(t, "")
-	fr.mergedPRs = map[string][]tracker.PR{"codex/12-thing": {{Number: 7, Branch: "codex/12-thing", URL: "https://github.com/o/r/pull/7"}}}
+	tip := gitIn(t, root, "rev-parse", "codex/12-thing")
+	fr.mergedPRs = map[string][]tracker.PR{"codex/12-thing": {{Number: 7, Branch: "codex/12-thing", URL: "https://github.com/o/r/pull/7", HeadSHA: tip}}}
 	fr.states[7] = "merged"
 	rep, err := e.Status(bg, root)
 	if err != nil {
@@ -102,6 +105,46 @@ func TestStatusExternalMergedPRFoundByBranchWhenNoneRecorded(t *testing.T) {
 	}
 	if r, _ := rowOf(rep, "ben"); r.PRState != "" {
 		t.Errorf("the control slot must not be looked up: %+v", r)
+	}
+}
+
+// A branch name reused after an older PR merged: that PR's head is not on the
+// live branch, so it is not this slot's PR and the slot must not read merged.
+func TestStatusExternalOlderMergedPROnTheSameBranchNameIsNotOurs(t *testing.T) {
+	root, e, fr := extFixture(t, "")
+	oldHead := strings.Repeat("a", 40)
+	fr.mergedPRs = map[string][]tracker.PR{"codex/12-thing": {{Number: 3, Branch: "codex/12-thing", URL: "https://github.com/o/r/pull/3", HeadSHA: oldHead}}}
+	fr.states[3] = "merged"
+	rep, err := e.Status(bg, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, _ := rowOf(rep, "ext-1")
+	if r.State == "merged" || r.PRState == "merged" || r.PR != "" {
+		t.Fatalf("an older PR on a reused branch name marked the live slot merged: %+v", r)
+	}
+	if k := kinds(rep.Findings)["ext-1"]; slices.Contains(k, MergedExternal) {
+		t.Errorf("no merged-external finding expected, got %v", k)
+	}
+}
+
+// A forge that cannot list merged PRs leaves the row unknown-safe: a warning,
+// no PR attached and no release.
+func TestStatusExternalMergedLookupErrorWarnsAndKeepsTheSlot(t *testing.T) {
+	root, e, fr := extFixture(t, "")
+	fr.mergedErr = errors.New("forge down")
+	rep, err := e.Status(bg, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, _ := rowOf(rep, "ext-1")
+	if r.PR != "" || r.State == "merged" {
+		t.Errorf("row %+v", r)
+	}
+	if !slices.ContainsFunc(rep.Warnings, func(w string) bool {
+		return strings.Contains(w, "merged PRs of codex/12-thing") && strings.Contains(w, "forge down")
+	}) {
+		t.Errorf("want a merged-PR warning, got %v", rep.Warnings)
 	}
 }
 

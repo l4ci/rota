@@ -233,23 +233,6 @@ func TestReconcileRepairsAreAudited(t *testing.T) {
 	}
 }
 
-// The tick reconciles with --apply, so it adopts a branch matching
-// round.adoptPattern: audited as a repair. A branch reconcile refused to adopt
-// (an overlap, no issue number) stays drift, which waits for the human.
-func TestReconcileAdoptionIsAuditedAndARefusedOneNeedsYou(t *testing.T) {
-	f := &fake{repaired: []string{"unregistered-branch codex/12-thing"}, drift: []string{"unregistered-branch codex/nonumber"}}
-	r, err := Run(context.Background(), f.env())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(f.audit) != 1 || f.audit[0] != "reconcile unregistered-branch codex/12-thing" {
-		t.Fatalf("audit %v", f.audit)
-	}
-	if len(r.NeedsYou) != 1 || r.NeedsYou[0].Target != "unregistered-branch codex/nonumber" {
-		t.Fatalf("needs you: %+v", r.NeedsYou)
-	}
-}
-
 // The #53 trigger runs inside the tick. The hook stands in for both triggers
 // (threshold and idle-with-nothing-assignable): the tick's part is to audit the
 // mint and assign what it minted ahead of the backlog, within the cap.

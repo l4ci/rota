@@ -495,13 +495,14 @@ func (g *GitHub) MergedPRs(ctx context.Context, branch string) ([]PR, error) {
 		Body        string `json:"body"`
 		HeadRefName string `json:"headRefName"`
 		URL         string `json:"url"`
+		HeadRefOid  string `json:"headRefOid"`
 	}
-	if err := g.list(ctx, []string{"pr", "list", "--state", "merged", "--head", branch, "--json", "number,title,body,headRefName,url"}, ghLimit, ghPaging, &raw); err != nil {
+	if err := g.list(ctx, []string{"pr", "list", "--state", "merged", "--head", branch, "--json", "number,title,body,headRefName,headRefOid,url"}, ghLimit, ghPaging, &raw); err != nil {
 		return nil, err
 	}
 	out := []PR{}
 	for _, d := range raw {
-		out = append(out, PR{Number: d.Number, Title: d.Title, Branch: d.HeadRefName, URL: d.URL, Body: d.Body})
+		out = append(out, PR{Number: d.Number, Title: d.Title, Branch: d.HeadRefName, URL: d.URL, Body: d.Body, HeadSHA: d.HeadRefOid})
 	}
 	return out, nil
 }

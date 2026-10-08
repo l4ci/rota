@@ -130,7 +130,7 @@ func fenceExternal(s *worker.Slot, verb, what string) error {
 	if !s.IsExternal() {
 		return nil
 	}
-	return blocked(BlockExternal, "slot %s is an adopted external slot: %s would %s rota did not create", s.Name(), verb, what)
+	return blocked(BlockExternal, "%s", worker.ExternalMessage(s.Name(), verb, what))
 }
 
 // checkAdoptPR validates the PR an adoption records: it must name a PR, the
