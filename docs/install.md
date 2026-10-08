@@ -1,10 +1,20 @@
 # Install
 
-Available from 0.9.0. `rota` is a single binary that carries the skills; there is no plugin to enable. Install the binary, install the skills, then run `rota init` in your project.
+Available from 0.9.0. `rota` is a single binary that carries the skills; there is no plugin to enable. Install the binary (Homebrew, the install script, or a release download), install the skills, then run `rota init` in your project.
 
 ## 📦 The binary
 
+### Homebrew
+
+```bash
+brew install l4ci/tap/rota
+```
+
+Needs [Homebrew](https://brew.sh) (macOS or Linux). See [verifying a release](#verifying-a-release) for what the formula checks.
+
 ### Install script
+
+No Homebrew? This works on any linux or macOS machine.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/l4ci/rota/main/install.sh | sh
@@ -17,12 +27,6 @@ It installs to `~/.local/bin/rota`. It needs no sudo and does not edit your shel
 | `--version X.Y.Z` | `ROTA_VERSION` | install this release instead of the latest |
 | `--prefix DIR` | `ROTA_PREFIX` | install to `DIR/bin` instead of `~/.local/bin` |
 | `--strict` | `ROTA_STRICT=1` | fail when minisign is missing instead of falling back to sha256 only; either one turns it on. `ROTA_STRICT` accepts `1`, `true`, `yes` (on) and `0`, `false`, `no` or empty (off); any other value is an error |
-
-### Homebrew
-
-```bash
-brew install l4ci/tap/rota
-```
 
 ### Release binaries by hand
 
