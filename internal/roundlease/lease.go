@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/pidlive"
 	"github.com/l4ci/rota/internal/rotastate"
 )
@@ -91,8 +92,8 @@ type Env struct {
 
 // DefaultEnv reads the real host, process table and clock.
 func DefaultEnv() Env {
-	host, _ := os.Hostname()
-	return Env{Host: host, Alive: pidlive.Alive, StartTime: procStart, Now: time.Now}
+	name, _ := os.Hostname()
+	return Env{Host: name, Alive: pidlive.Alive, StartTime: procStart, Now: time.Now}
 }
 
 // Path is the lease file under a common dir.
@@ -117,8 +118,8 @@ func (e Env) ProcessLive(pid int, start uint64) bool {
 // watch, limit watch, keepalive): the owner is on this host, its pid is alive
 // and still the recorded process. A marker from before hosts were recorded
 // (empty host) is taken as local. Nothing can be checked about another host's.
-func (e Env) Running(host string, pid int, start uint64) bool {
-	if pid <= 0 || (host != "" && host != e.Host) {
+func (e Env) Running(hostName string, pid int, start uint64) bool {
+	if pid <= 0 || (hostName != "" && hostName != e.Host) {
 		return false
 	}
 	return e.ProcessLive(pid, start)
@@ -327,12 +328,7 @@ const HolderPIDEnv = "ROTA_ROUND_HOLDER_PID"
 // from the environment.
 func (e Env) Discover(pid int, getenv func(string) string) Holder {
 	h := Holder{}
-	switch {
-	case getenv("HERDR_PANE_ID") != "":
-		h.Pane, h.PaneHost = getenv("HERDR_PANE_ID"), "herdr"
-	case getenv("TMUX_PANE") != "":
-		h.Pane, h.PaneHost = getenv("TMUX_PANE"), "tmux"
-	}
+	h.Pane, h.PaneHost = host.CurrentPaneAny(getenv)
 	if pid <= 0 {
 		if n, err := strconv.Atoi(strings.TrimSpace(getenv(HolderPIDEnv))); err == nil && n > 0 {
 			pid = n
