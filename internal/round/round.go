@@ -319,21 +319,7 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 		add(r, &view{worktree: w.path, base: e.Base})
 	}
 
-	// Host.
-	var agents []host.Agent
-	hostOK := false
-	if e.HostName == host.Solo {
-		// No panes to ask: solo is not an unavailable host, and the tab drift
-		// kinds (dead-tab, unclaimed-tab, stalled) have nothing to read.
-		rep.Host = host.Solo
-	} else if e.Snapshot == nil {
-		rep.unavailable(SourceHost, firstNonEmpty(e.HostErr, "no host available"))
-	} else if a, err := e.Snapshot(ctx); err != nil {
-		rep.unavailable(SourceHost, err.Error())
-	} else {
-		agents, hostOK = a, true
-		rep.Host = e.HostName
-	}
+	agents, hostOK := e.readHost(ctx, rep)
 	claimed := map[int]bool{}
 	alive := map[string]bool{} // slots the host shows an agent or window for
 	for _, r := range rows {
@@ -372,44 +358,8 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 		}
 	}
 
-	// Forge: open PRs by head branch, then the labelled issues.
-	prs, labelled := map[string]*tracker.PR{}, map[int]bool{}
-	forgeOK := e.Forge != nil
-	if !forgeOK {
-		rep.unavailable(SourceForge, firstNonEmpty(e.ForgeErr, "no forge available"))
-	} else if list, err := e.Forge.OpenPRs(ctx); err != nil {
-		forgeOK = false
-		rep.unavailable(SourceForge, err.Error())
-	} else {
-		for i := range list {
-			prs[list[i].Branch] = &list[i]
-		}
-	}
-	labelsOK := false
-	var stale []int // closed issues still carrying the label
-	if forgeOK {
-		// Read the whole open list first: the claim and backlog reads below make
-		// this same call, and the forge's read cache answers the label-filtered
-		// list from it. The error surfaces on the filtered list.
-		_, _ = e.Forge.List(ctx, tracker.ListFilter{State: "open"})
-		if issues, err := e.Forge.List(ctx, tracker.ListFilter{State: "open", Labels: []string{e.Label}}); err != nil {
-			rep.unavailable(SourceForge, err.Error())
-		} else {
-			labelsOK = true
-			for _, is := range issues {
-				labelled[is.Number] = true
-			}
-			if closed, err := e.Forge.List(ctx, tracker.ListFilter{State: "closed", Labels: []string{e.Label}}); err != nil {
-				rep.unavailable(SourceForge, err.Error())
-			} else {
-				for _, is := range closed {
-					if is.State == "closed" {
-						stale = append(stale, is.Number)
-					}
-				}
-			}
-		}
-	}
+	fs := e.readForge(ctx, rep)
+	prs, labelled, stale, forgeOK, labelsOK := fs.prs, fs.labelled, fs.stale, fs.ok, fs.labelsOK
 
 	held := map[string]bool{}
 	for _, r := range rows {
@@ -567,6 +517,74 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 	}
 	rep.Limits = limits.Waiting(limits.Load(root))
 	return rep, nil
+}
+
+// readHost is the host source: the live agents, or the reason there are none.
+// It records an unavailable host on rep and sets rep.Host when it answers.
+func (e Env) readHost(ctx context.Context, rep *Report) (agents []host.Agent, ok bool) {
+	if e.HostName == host.Solo {
+		// No panes to ask: solo is not an unavailable host, and the tab drift
+		// kinds (dead-tab, unclaimed-tab, stalled) have nothing to read.
+		rep.Host = host.Solo
+	} else if e.Snapshot == nil {
+		rep.unavailable(SourceHost, firstNonEmpty(e.HostErr, "no host available"))
+	} else if a, err := e.Snapshot(ctx); err != nil {
+		rep.unavailable(SourceHost, err.Error())
+	} else {
+		agents, ok = a, true
+		rep.Host = e.HostName
+	}
+	return agents, ok
+}
+
+// forgeState is what the forge source answered: open PRs by head branch, the
+// open issues carrying the round label, and the closed ones still carrying it.
+type forgeState struct {
+	prs      map[string]*tracker.PR
+	labelled map[int]bool
+	stale    []int
+	// ok says the PR list was read; labelsOK says the label lists were too.
+	ok, labelsOK bool
+}
+
+// readForge is the forge source. An unavailable forge is recorded on rep and
+// leaves ok false; nothing else in Status needs it to answer.
+func (e Env) readForge(ctx context.Context, rep *Report) forgeState {
+	fs := forgeState{prs: map[string]*tracker.PR{}, labelled: map[int]bool{}, ok: e.Forge != nil}
+	if !fs.ok {
+		rep.unavailable(SourceForge, firstNonEmpty(e.ForgeErr, "no forge available"))
+	} else if list, err := e.Forge.OpenPRs(ctx); err != nil {
+		fs.ok = false
+		rep.unavailable(SourceForge, err.Error())
+	} else {
+		for i := range list {
+			fs.prs[list[i].Branch] = &list[i]
+		}
+	}
+	if fs.ok {
+		// Read the whole open list first: the claim and backlog reads below make
+		// this same call, and the forge's read cache answers the label-filtered
+		// list from it. The error surfaces on the filtered list.
+		_, _ = e.Forge.List(ctx, tracker.ListFilter{State: "open"})
+		if issues, err := e.Forge.List(ctx, tracker.ListFilter{State: "open", Labels: []string{e.Label}}); err != nil {
+			rep.unavailable(SourceForge, err.Error())
+		} else {
+			fs.labelsOK = true
+			for _, is := range issues {
+				fs.labelled[is.Number] = true
+			}
+			if closed, err := e.Forge.List(ctx, tracker.ListFilter{State: "closed", Labels: []string{e.Label}}); err != nil {
+				rep.unavailable(SourceForge, err.Error())
+			} else {
+				for _, is := range closed {
+					if is.State == "closed" {
+						fs.stale = append(fs.stale, is.Number)
+					}
+				}
+			}
+		}
+	}
+	return fs
 }
 
 func (r *Report) add(f Finding) { r.Findings = append(r.Findings, f) }
