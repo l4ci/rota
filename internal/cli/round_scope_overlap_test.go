@@ -21,7 +21,6 @@ import (
 type scopeFx struct {
 	root  string
 	deps  *Deps
-	calls []string // forge calls, in order
 	git   []string // git calls, in order
 }
 
@@ -47,8 +46,6 @@ func newScopeFx(t *testing.T, overlap string, extraCfg string) *scopeFx {
 	deps := testDeps()
 	deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, _, name string, args []string, _ []byte) ([]byte, []byte, int, error) {
 		joined := strings.Join(args, " ")
-		fx.calls = append(fx.calls, joined)
-		fmt.Println("CALL", name, joined)
 		switch {
 		case len(args) > 2 && args[0] == "api" && args[1] == "-X" && args[2] == "POST":
 			// A posted comment is visible to the next read, as on a real forge.
