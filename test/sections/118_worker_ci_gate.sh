@@ -16,7 +16,7 @@ mkdir -p "$CPROJ/.rota"
 ) || fail "ci gate fixture repo setup failed"
 printf '{"slots":[{"name":"c1","branch":"c1"},{"name":"c2","branch":"c2"}]}\n' > "$CPROJ/.rota/workers.json"
 # test.full is "false": a local run would fail, so a pass proves CI decided.
-cicfg() { printf '{"issues":{"provider":"github","retryWaitSeconds":0},"test":{"full":["false"],"fullWhere":"%s","ciChecks":%s}}\n' "$1" "${2:-[\"ci/test\"]}" > "$CPROJ/.rota/config.json"; }
+cicfg() { printf '{"ship":{"review":"none"},"issues":{"provider":"github","retryWaitSeconds":0},"test":{"full":["false"],"fullWhere":"%s","ciChecks":%s}}\n' "$1" "${2:-[\"ci/test\"]}" > "$CPROJ/.rota/config.json"; }
 ci() { ( cd "$CPROJ" && PATH="$TESTDIR/fakes:$ROTA_POISON_BIN:$PATH" FAKE_TRACKER_DB="$TMP_CI/db.json" \
   ROTA_CI_POLL=0 ROTA_CI_START_WAIT=0 ROTA_CI_TIMEOUT=0 "$ROTA_BIN" --json "$@" 2>/dev/null ); }
 ciref() { git -C "$TMP_CI/origin.git" for-each-ref --format='%(refname)' refs/heads/rota/ci/; }
