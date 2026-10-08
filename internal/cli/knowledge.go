@@ -144,7 +144,7 @@ func knQuery(fs *flag.FlagSet) RunFunc {
 			return knFail(err)
 		}
 		for _, m := range missing {
-			c.Warn("no topic heading matches %q — topic args must be the exact '## ' heading text", m)
+			c.Warn("no topic heading matches %q — no heading contains that text; run `rota knowledge topics` to list headings", m)
 		}
 		ms := []any{}
 		for _, m := range missing {
