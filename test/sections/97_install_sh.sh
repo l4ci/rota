@@ -87,6 +87,29 @@ case $OUT in *"install minisign"*) ;; *) fail "should say how to install minisig
 # ROTA_STRICT=0 is not strict.
 RC=0; OUT=$(PATH="$IS/nomini" ROTA_STRICT=0 ROTA_RELEASE_BASE_URL="file://$IS/sigtool" sh "$INSTALL" --prefix "$IS/pnm0" --version 7.7.7 2>&1) || RC=$?
 [ "$RC" = 0 ] || fail "ROTA_STRICT=0 without minisign should complete: $OUT"
+# ROTA_STRICT is parsed, not compared to "1": the truthy spellings turn it on, the falsy ones
+# (and empty) leave it off, and an unknown value is an error. Without minisign a read variable
+# changes the outcome, so each spelling proves the parse ran.
+for v in 1 true yes; do
+  sigfail "sigtool" "need minisign" PATH="$IS/nomini" ROTA_STRICT=$v
+done
+for v in 0 false no ""; do
+  RC=0; OUT=$(PATH="$IS/nomini" ROTA_STRICT=$v ROTA_RELEASE_BASE_URL="file://$IS/sigtool" sh "$INSTALL" --prefix "$IS/pnmv" --version 7.7.7 2>&1) || RC=$?
+  [ "$RC" = 0 ] || fail "ROTA_STRICT='$v' should leave strict off: $OUT"
+  rm -rf "$IS/pnmv"
+done
+for v in ture 2 on; do
+  RC=0; OUT=$(PATH="$IS/nomini" ROTA_STRICT=$v ROTA_RELEASE_BASE_URL="file://$IS/sigtool" sh "$INSTALL" --prefix "$IS/pbad" --version 7.7.7 2>&1) || RC=$?
+  [ "$RC" != 0 ] || fail "ROTA_STRICT=$v should be rejected"
+  case $OUT in *"ROTA_STRICT"*"$v"*) ;; *) fail "ROTA_STRICT=$v error should name the variable and value: $OUT" ;; esac
+  [ ! -e "$IS/pbad/bin/rota" ] || fail "ROTA_STRICT=$v still installed"
+done
+# Without minisign the .minisig is never fetched: a release that publishes none still installs (warned).
+mkrel "$IS/nosig/download/v7.7.7" 7.7.7
+rm -f "$IS/nosig/download/v7.7.7/$ASSET.minisig"
+RC=0; OUT=$(PATH="$IS/nomini" ROTA_RELEASE_BASE_URL="file://$IS/nosig" sh "$INSTALL" --prefix "$IS/pnosig" --version 7.7.7 2>&1) || RC=$?
+[ "$RC" = 0 ] || fail "no-minisign install of a release without .minisig should complete: $OUT"
+[ "$("$IS/pnosig/bin/rota")" = "rota fake 7.7.7" ] || fail "release without .minisig did not install"
 # The sha256 check still holds without minisign: a mismatch aborts, nothing installed.
 mkrel "$IS/nmbad/download/v7.7.7" 7.7.7
 printf 'tampered\n' >> "$IS/nmbad/download/v7.7.7/$ASSET"
@@ -97,6 +120,14 @@ case $OUT in *"checksum mismatch"*) ;; *) fail "mismatch without minisign should
 # With minisign on PATH there is no warning.
 OUT=$(sh "$INSTALL" --prefix "$IS/pwm" 2>&1) || fail "install with minisign failed: $OUT"
 case $OUT in *"NOT checked"*) fail "install with minisign should not warn: $OUT" ;; esac
+# ...and the signature path ran: the same install fails once the .minisig is bad (so it was read), and
+# the strict spelling does not trip when minisign is present.
+OUT=$(ROTA_STRICT=true sh "$INSTALL" --prefix "$IS/pwm2" 2>&1) || fail "ROTA_STRICT=true with minisign failed: $OUT"
+mkrel "$IS/badsig/download/v7.7.7" 7.7.7
+printf 'junk\n' > "$IS/badsig/download/v7.7.7/$ASSET.minisig"
+RC=0; OUT=$(ROTA_RELEASE_BASE_URL="file://$IS/badsig" sh "$INSTALL" --prefix "$IS/pbadsig" --version 7.7.7 2>&1) || RC=$?
+[ "$RC" != 0 ] || fail "a corrupt .minisig should fail when minisign is on PATH"
+case $OUT in *"signature check failed"*) ;; *) fail "corrupt .minisig should fail the signature check: $OUT" ;; esac
 
 # Checksum mismatch: fails closed, nothing installed, an existing rota is untouched.
 mkrel "$IS/bad/download/v9.9.9" 9.9.9

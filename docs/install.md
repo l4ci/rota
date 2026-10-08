@@ -16,7 +16,7 @@ It installs to `~/.local/bin/rota`. It needs no sudo and does not edit your shel
 |---|---|---|
 | `--version X.Y.Z` | `ROTA_VERSION` | install this release instead of the latest |
 | `--prefix DIR` | `ROTA_PREFIX` | install to `DIR/bin` instead of `~/.local/bin` |
-| `--strict` | `ROTA_STRICT=1` | fail when minisign is missing instead of falling back to sha256 only; either one turns it on, and `ROTA_STRICT=0` leaves it off |
+| `--strict` | `ROTA_STRICT=1` | fail when minisign is missing instead of falling back to sha256 only; either one turns it on. `ROTA_STRICT` accepts `1`, `true`, `yes` (on) and `0`, `false`, `no` or empty (off); any other value is an error |
 
 ### Homebrew
 
