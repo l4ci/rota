@@ -649,9 +649,32 @@ func TestPortsFallsBackToLsofAndTreatsUnknownOwnerAsForeign(t *testing.T) {
 	}
 }
 
-func TestPortsSkipsWithoutAScanner(t *testing.T) {
-	f := &fake{have: map[string]bool{}}
-	if c := statusOf(Run(context.Background(), portsInput(f, nil)), "ports"); c.Name != "" {
+func TestPortsReportsWhenNoScannerWorks(t *testing.T) {
+	for name, f := range map[string]*fake{
+		"none installed": {have: map[string]bool{}},
+		"ss fails":       {have: map[string]bool{"ss": true}, reply: map[string]Result{"ss -ltnpH": {ExitCode: 1}}},
+	} {
+		c := statusOf(Run(context.Background(), portsInput(f, nil)), "ports")
+		if c.Status != Skip || !strings.Contains(c.Detail, "not checked") {
+			t.Errorf("%s: ports = %+v, want a skip saying blocks were not checked", name, c)
+		}
+	}
+}
+
+func TestParseLsofCwdAndDualStackDedupe(t *testing.T) {
+	if got := ParseLsofCwd("p91\nfcwd\nn/Users/me/p/.worktrees/w1\n"); got != "/Users/me/p/.worktrees/w1" {
+		t.Errorf("ParseLsofCwd = %q", got)
+	}
+	if got := ParseLsof("p91\nn*:20003\nn[::1]:20003\n"); len(got) != 1 {
+		t.Errorf("ParseLsof listed %v, want one entry for the dual-stack port", got)
+	}
+}
+
+func TestPortsUsesEachSlotsOwnBlockWidth(t *testing.T) {
+	f := &fake{have: map[string]bool{"ss": true}, reply: map[string]Result{"ss -ltnpH": {Stdout: ssOut}}}
+	in := portsInput(f, map[int]string{77: "/p/.worktrees/w1", 78: "/p/.worktrees/w1"})
+	in.Slots[1].Size = 10 // w2 holds 20100-20109: 20150 is outside it
+	if c := statusOf(Run(context.Background(), in), "ports"); c.Name != "" {
 		t.Errorf("ports line = %+v, want none", c)
 	}
 }

@@ -1522,7 +1522,7 @@ func TestTmuxSpawnPrefixesSlotEnv(t *testing.T) {
 	if _, err := h.Spawn(bg, SpawnOpts{Slot: "w1", Session: "rota", Cwd: "/wt", Launch: "claude", Env: []string{"ROTA_SLOT=w1", "ROTA_PORT_BASE=20000"}, BootTimeout: 10}); err != nil {
 		t.Fatal(err)
 	}
-	if want := "tmux send-keys -t rota:w1 ROTA_SLOT=w1 ROTA_PORT_BASE=20000 claude C-m"; !strings.Contains(f.log(), want) {
+	if want := "tmux send-keys -t rota:w1 ROTA_SLOT='w1' ROTA_PORT_BASE='20000' claude C-m"; !strings.Contains(f.log(), want) {
 		t.Errorf("missing %q in\n%s", want, f.log())
 	}
 }

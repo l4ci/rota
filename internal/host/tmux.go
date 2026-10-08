@@ -98,7 +98,12 @@ func (t *tmux) Spawn(ctx context.Context, o SpawnOpts) (string, error) {
 		launch = "CLAUDE_CONFIG_DIR=" + o.ConfigDir + " " + launch
 	}
 	if len(o.Env) > 0 {
-		launch = strings.Join(o.Env, " ") + " " + launch
+		var pre []string
+		for _, e := range o.Env {
+			k, v, _ := strings.Cut(e, "=")
+			pre = append(pre, k+"="+"'"+strings.ReplaceAll(v, "'", `'\''`)+"'")
+		}
+		launch = strings.Join(pre, " ") + " " + launch
 	}
 	if t.tmux(ctx, "has-session", "-t", o.Session).ExitCode != 0 {
 		t.tmux(ctx, "new-session", "-d", "-s", o.Session, "-c", o.Cwd)

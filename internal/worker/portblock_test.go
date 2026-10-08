@@ -96,3 +96,42 @@ func TestEnvSetupSeesSlotVariables(t *testing.T) {
 		t.Errorf("envSetup saw %q", got)
 	}
 }
+
+func TestEnsurePortBaseNeverOverlapsAfterConfigChange(t *testing.T) {
+	b := newProject(t, `{}`)
+	goInit(t, b, InitOpts{Slots: 2, Base: "main"}) // 20000-20099, 20100-20199
+	for i, c := range []struct{ base, block, want int }{
+		{20050, 100, 20200}, // portBase moved into a live block
+		{20000, 250, 20300}, // portBlock grew; clears every live range
+	} {
+		name := "late" + string(rune('a'+i))
+		if err := registerSlot(b, name, name+"/x", filepath.Join(b, ".worktrees", name), "main", "", ""); err != nil {
+			t.Fatal(err)
+		}
+		got, err := EnsurePortBase(b, name, c.base, c.block)
+		if err != nil || got != c.want {
+			t.Fatalf("base %d block %d: got %d, %v; want %d", c.base, c.block, got, err, c.want)
+		}
+	}
+}
+
+func TestEnsurePortBaseRefusesPastPortMax(t *testing.T) {
+	b := newProject(t, `{}`)
+	goInit(t, b, InitOpts{Slots: 1, Base: "main"})
+	if err := registerSlot(b, "far", "far/x", filepath.Join(b, ".worktrees", "far"), "main", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := EnsurePortBase(b, "far", 65500, 100); err == nil || got != 0 || !strings.Contains(err.Error(), "65535") {
+		t.Errorf("got %d, %v; want a refusal naming 65535", got, err)
+	}
+	if portBases(t, b)["far"] != 0 {
+		t.Error("a refused slot kept a block")
+	}
+}
+
+func TestExportPrefixQuotesTheSlotName(t *testing.T) {
+	got := exportPrefix("a b'$x", 1)
+	if !strings.Contains(got, `export ROTA_SLOT='a b'\''$x'; `) {
+		t.Errorf("exportPrefix = %q", got)
+	}
+}
