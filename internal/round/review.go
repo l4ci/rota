@@ -2,6 +2,7 @@ package round
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -120,17 +121,41 @@ func (e Env) ReviewRelay(ctx context.Context, root string, o ReviewOpts) (Relaye
 	if out.Bounces, err = worker.RecordBounce(root, issue, pr.HeadSHA); err != nil {
 		return out, err
 	}
+	// A bounce RecordBounce deduped on the same head was not counted here and
+	// is not this dispatch's to undo.
+	counted := out.Bounces > reg.Bounces(issue)
+	unrecord := func() error {
+		if !counted {
+			return nil
+		}
+		return worker.UnrecordBounce(root, issue, pr.HeadSHA, reg)
+	}
+	// The cursor goes back only while it is still the one written here.
+	unseen := func() error {
+		_, err := worker.UpdateSlot(root, o.Slot, func(s *worker.Slot) {
+			if s.ReviewSeen() == batch.Cursor {
+				s.SetReviewSeen(prevSeen)
+			}
+		})
+		return err
+	}
 	if _, err = worker.UpdateSlot(root, o.Slot, func(s *worker.Slot) { s.SetReviewSeen(batch.Cursor) }); err != nil {
-		worker.UnrecordBounce(root, issue, reg)
-		return out, err
+		return out, errors.Join(err, rollbackErr(unrecord()))
 	}
 	if _, err := e.Worker.Dispatch(ctx, root, worker.DispatchOpts{Slot: o.Slot, BodyFile: body.Name(), Relay: true}); err != nil {
-		worker.UnrecordBounce(root, issue, reg)
-		worker.UpdateSlot(root, o.Slot, func(s *worker.Slot) { s.SetReviewSeen(prevSeen) })
-		out.Bounces = reg.Bounces(issue)
-		return out, err
+		rerr, serr := unrecord(), unseen()
+		out.Bounces = worker.LoadRegistry(root).Bounces(issue)
+		return out, errors.Join(err, rollbackErr(rerr), rollbackErr(serr))
 	}
 	return out, nil
+}
+
+// rollbackErr labels a failed rollback write; nil stays nil.
+func rollbackErr(err error) error {
+	if err == nil {
+		return nil
+	}
+	return fmt.Errorf("rollback of the relay failed: %w", err)
 }
 
 // reviewCap is the item at round.maxBounces: another resume is not the answer,
@@ -228,10 +253,14 @@ func authorToken(a string) string {
 }
 
 // stripControls drops what a pane could act on instead of print (escape
-// sequences, backspace, bell, DEL); the newlines lineBreaks left and tabs stay.
+// sequences, backspace, bell, DEL) and what hides or reorders text (zero-width,
+// bidi, other format and tag characters); the newlines lineBreaks left and tabs
+// stay. The format class (Cf) also covers ZWJ/ZWNJ and the soft hyphen, so
+// emoji ZWJ and subdivision-flag sequences render split and Persian/Indic
+// shaping hints are lost: acceptable for pane text.
 func stripControls(s string) string {
 	return strings.Map(func(r rune) rune {
-		if r != '\n' && r != '\t' && (unicode.IsControl(r) || r == '\u200e' || r == '\u200f' || (r >= '\u202a' && r <= '\u202e') || (r >= '\u2066' && r <= '\u2069')) {
+		if r != '\n' && r != '\t' && (unicode.IsControl(r) || unicode.Is(unicode.Cf, r)) {
 			return -1
 		}
 		return r

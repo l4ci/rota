@@ -31,7 +31,7 @@ Copy this checklist and track your progress:
 
 ## 1. Start
 
-Run `rota doctor`. Fix every `fail` with its hint first. Then `rota round start`, and read `data.drift` and `data.candidates`. For a round that keeps going as issues become ready, start it with `--scope open`: every open issue is a candidate and overlap and dependencies decide the order. Re-running `start` keeps the recorded scope unless you pass `--scope`; `--scope slate --items …` replaces the slate without ending the round. Non-zero `drift` is the previous round's mess: `rota round reconcile` shows it, `rota reap` clears the leftovers once you've read the list.
+Run `rota doctor`. Fix every `fail` with its hint first. Then `rota round start`, and read `data.drift` and `data.candidates`. For a round that keeps going as issues become ready, start it with `--scope open`: every open issue is a candidate and overlap and dependencies decide the order. Re-running `start` keeps the recorded scope unless you pass `--scope`; `--scope slate --items …` replaces the slate without ending the round. If `data.handoff` is present, a prior orchestrator paused: read that note (`data.handoff.path`) before choosing the slate, since it holds the review queue, the agreed merge order and the open maintainer questions. Once you have read it, run `rota round start --consume-handoff` (a rejoin, so it changes nothing else) to archive it; never delete it by hand. Non-zero `drift` is the previous round's mess: `rota round reconcile` shows it, `rota reap` clears the leftovers once you've read the list.
 
 One orchestrator per repo. If `start` exits 4 on the lease, someone else holds it. Do not clear their lease; ask.
 
