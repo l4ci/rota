@@ -82,8 +82,34 @@ func TestListDocs(t *testing.T) {
 }
 
 func TestRepos(t *testing.T) {
-	if got := Repos(t.TempDir()); len(got) != 0 {
+	root := t.TempDir()
+	if got := Repos(root); len(got) != 0 {
 		t.Errorf("Repos with no registry = %v, want empty", got)
+	}
+	if err := os.MkdirAll(filepath.Join(root, ".rota"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	reg := `{"repos": [{"name": "api", "path": "services/api"}, {"name": "", "path": "x"}, {"name": "web", "path": "web"}]}`
+	if err := os.WriteFile(filepath.Join(root, ".rota", "repos.json"), []byte(reg), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{
+		"api": filepath.Join(root, "services", "api"),
+		"web": filepath.Join(root, "web"),
+	}
+	got := Repos(root)
+	for name, path := range want {
+		// Paths are realpath-resolved, so compare after resolving the temp root.
+		real, err := filepath.EvalSymlinks(root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if wantPath := filepath.Join(real, strings.TrimPrefix(path, root)); got[name] != wantPath {
+			t.Errorf("Repos[%q] = %q, want %q", name, got[name], wantPath)
+		}
+	}
+	if len(got) != 2 {
+		t.Errorf("Repos = %v, want only api and web", got)
 	}
 }
 

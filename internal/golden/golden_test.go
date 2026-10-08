@@ -3,6 +3,7 @@ package golden
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
@@ -56,17 +57,63 @@ type out struct {
 	Name   string `json:"name"`
 }
 
+// isolate runs the test in a scratch copy of testdata/golden, so neither the
+// failure fixtures nor an update can touch the source tree, and pins the
+// -update-golden flag to upd for the test, restoring the caller's value after.
+func isolate(t *testing.T, upd bool) {
+	t.Helper()
+	src, err := filepath.Abs(filepath.Join("testdata", "golden"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	dst := filepath.Join(t.TempDir(), "testdata", "golden")
+	if err := os.MkdirAll(dst, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := os.ReadDir(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		raw, err := os.ReadFile(filepath.Join(src, e.Name()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dst, e.Name()), raw, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(filepath.Dir(filepath.Dir(dst))); err != nil {
+		t.Fatal(err)
+	}
+	prev := *update
+	*update = upd
+	t.Cleanup(func() {
+		*update = prev
+		if err := os.Chdir(wd); err != nil {
+			t.Fatal(err)
+		}
+	})
+}
+
 func TestCheck(t *testing.T) {
+	isolate(t, false)
 	Check(t, in{N: 2}, out{Double: 4, List: []int{1, 2}, Name: "x"})
 }
 
 // Two Check calls in one test read TestCheckSecond.json, then TestCheckSecond-2.json.
 func TestCheckSecond(t *testing.T) {
+	isolate(t, false)
 	Check(t, in{N: 2}, out{Double: 4, List: []int{1, 2}, Name: "x"})
 	Check(t, map[string]any{"n": 2}, map[string]any{"double": 4, "list": []int{1, 2}, "name": "x"})
 }
 
 func TestCheckFailures(t *testing.T) {
+	isolate(t, false)
 	good := out{Double: 4, List: []int{1, 2}, Name: "x"}
 	tests := []struct {
 		name      string
@@ -110,6 +157,7 @@ func TestCheckFailures(t *testing.T) {
 }
 
 func TestCheckCapsReportedDifferences(t *testing.T) {
+	isolate(t, false)
 	f := &fakeTB{name: "TestCheckOutputDiffers"}
 	got := map[string]any{"double": 0, "list": []int{9, 9}, "name": "y", "a": 1, "b": 2, "c": 3}
 	f.run(func() { Check(f, in{2}, got) })
@@ -141,6 +189,7 @@ func TestGoldenPathSuffixesRepeatCalls(t *testing.T) {
 }
 
 func TestCheckUpdateRewritesOutputsOnly(t *testing.T) {
+	isolate(t, true)
 	const rec = "testdata/golden/TestCheckUpdateScratch.json"
 	orig := `{"inputs":{"n":2},"outputs":{"v":1}}` + "\n"
 	write := func() {
@@ -148,9 +197,6 @@ func TestCheckUpdateRewritesOutputsOnly(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	t.Cleanup(func() { os.Remove(rec) })
-	*update = true
-	t.Cleanup(func() { *update = false })
 
 	// A passing test accepts the new output; the inputs stay as recorded.
 	write()

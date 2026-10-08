@@ -8,10 +8,24 @@ import (
 )
 
 func TestTempDirResolvesSymlinks(t *testing.T) {
+	real := t.TempDir()
+	link := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(real, link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	// t.TempDir lives under TMPDIR; point it at a symlink so the unresolved
+	// path differs from the real one on every platform.
+	t.Setenv("TMPDIR", link)
+	if raw := t.TempDir(); !strings.HasPrefix(raw, link) {
+		t.Skipf("t.TempDir ignores TMPDIR here: %s", raw)
+	}
 	dir := TempDir(t)
-	resolved, err := filepath.EvalSymlinks(dir)
-	if err != nil || resolved != dir {
-		t.Errorf("TempDir = %q, resolved %q (%v)", dir, resolved, err)
+	want, err := filepath.EvalSymlinks(dir)
+	if err != nil || dir != want {
+		t.Errorf("TempDir = %q, want resolved %q (%v)", dir, want, err)
+	}
+	if strings.HasPrefix(dir, link) {
+		t.Errorf("TempDir %q still goes through the symlink %q", dir, link)
 	}
 }
 
