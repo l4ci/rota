@@ -193,7 +193,8 @@ func Fold(entries []Entry, audit []*jsonx.Object, round int) Summary {
 				r.Merged, r.Outcome = true, OutcomeMerged
 			}
 		case KindGate:
-			if v := e.DetailStr("verdict"); v != "" { // a train member that passed has none
+			v := e.DetailStr("verdict")
+			if v != "" || jsonx.Bool(e.Detail, "train") { // a train member that passed has none, and drops an earlier gate's
 				r.Gate = v
 			}
 		case KindMerge:

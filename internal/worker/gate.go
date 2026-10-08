@@ -116,6 +116,9 @@ type GateOpts struct {
 	// Prune makes a pass that releases an adopted slot also remove its
 	// worktree and branch.
 	Prune bool
+	// Round reads the round lease for the gate's ledger entries; the gate makes
+	// one when nil. A caller that writes more entries after the gate shares it.
+	Round *RoundMemo
 	// Train marks a landing step of a merge train (see Train): the PRs were
 	// merged together and verified once, so a branch behind the base only
 	// because an earlier train member landed is not refused as stale.
@@ -146,9 +149,12 @@ type GateResult struct {
 	// AlreadyMerged says the forge reported the PR merged before this gate ran:
 	// the gate landed nothing, but the ledger records the merge as remote.
 	AlreadyMerged bool
-	Err           string
-	Hint          string
-	Notes         []string // PROVENANCE-SKIP and NO-VERIFY lines for stderr
+	// Round is the memo the gate's ledger entries read the round lease through;
+	// a caller that records more entries for the same verb reuses it.
+	Round *RoundMemo
+	Err   string
+	Hint  string
+	Notes []string // PROVENANCE-SKIP and NO-VERIFY lines for stderr
 	// Excluded lists the test-ledger entries that excused a failing command.
 	// Expired lists the entries past their expiry, which fail the gate.
 	Excluded, Expired []testledger.Entry
@@ -258,14 +264,20 @@ type Forge interface {
 // given.
 func (e Env) Gate(ctx context.Context, root string, o GateOpts) (GateResult, error) {
 	e = e.withDefaults()
+	if o.Round == nil {
+		o.Round = &RoundMemo{}
+	}
 	if o.CheckOnly || o.Train { // read-only, or already under the train's land lock
-		return e.gate(ctx, root, o)
+		res, err := e.gate(ctx, root, o)
+		res.Round = o.Round
+		return res, err
 	}
 	var res GateResult
 	err := e.withLandLock(ctx, root, func() (err error) {
 		res, err = e.gate(ctx, root, o)
 		return err
 	})
+	res.Round = o.Round
 	return res, err
 }
 
@@ -298,13 +310,13 @@ func (e Env) gate(ctx context.Context, root string, o GateOpts) (GateResult, err
 			res.Verdict, res.Expired = GateVerifyFailed, in.ledger.Expired(e.withDefaults().Now())
 			res.Err = fmt.Sprintf("GATE-FAIL %s — %s; nothing landed", o.Slot, msg)
 			res.Hint = "fix the test or renew the entry in .rota/test-ledger.json, then re-gate"
-			gateLedger(root, t, res)
+			gateLedger(o.Round, root, t, res)
 			return res, nil
 		}
 	}
 	res, err = e.gateEnv().gate(ctx, root, o, res, in, t)
 	if err == nil && !o.CheckOnly {
-		gateLedger(root, t, res)
+		gateLedger(o.Round, root, t, res)
 	}
 	if err == nil && t.Queued && res.Verdict == GatePass {
 		if err := RemoveQueuedPR(root, t.PR); err != nil {
@@ -1115,13 +1127,11 @@ func (g *gate) broke(msg string) (bool, error) {
 }
 
 // noteMergedRemotely marks the result when the forge says the PR is merged: a
-// stale refusal of a head already on the base is that case.
+// stale refusal of a PR landed elsewhere, by a squash or rebase too, whose head
+// is then not on the base.
 func (g *gate) noteMergedRemotely() {
-	if !g.remote {
+	if !g.remote || g.o.CheckOnly { // a check-only gate writes no ledger entry
 		return
-	}
-	if _, code := g.e.runGit(g.root, "merge-base", "--is-ancestor", g.headRef, g.baseRef); code != 0 {
-		return // the head is not on the base: nothing says the PR landed
 	}
 	if info, ok := g.prInfo(); ok && info.State == "MERGED" {
 		g.res.AlreadyMerged = true

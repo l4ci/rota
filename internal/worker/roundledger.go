@@ -7,6 +7,7 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/ledger"
@@ -40,13 +41,32 @@ func LedgerRound(root string) int {
 	return l.Round
 }
 
+// RoundMemo reads the round lease once for a verb: the verb makes one and hands
+// it to every ledger write it triggers. A nil memo reads the lease each time.
+type RoundMemo struct {
+	once sync.Once
+	n    int
+}
+
+// Round is the lease's round, read on the first call only.
+func (m *RoundMemo) Round(root string) int {
+	if m == nil {
+		return LedgerRound(root)
+	}
+	m.once.Do(func() { m.n = LedgerRound(root) })
+	return m.n
+}
+
 // LedgerNote appends e to the round ledger, stamped with the lease's round
 // unless e names one. Slot, account and harness the caller left empty are read
 // from the registry: the slot named, else the one holding e.Issue. A ledger
 // that cannot be written never fails the verb, but says so on stderr.
-func LedgerNote(root string, e ledger.Entry) {
+func LedgerNote(root string, e ledger.Entry) { LedgerNoteIn(nil, root, e) }
+
+// LedgerNoteIn is LedgerNote reading the round through m.
+func LedgerNoteIn(m *RoundMemo, root string, e ledger.Entry) {
 	if e.Round == 0 {
-		e.Round = LedgerRound(root)
+		e.Round = m.Round(root)
 	}
 	ledgerAppend(root, e)
 }
@@ -135,21 +155,30 @@ func paneDone(prev string, s *Slot, r PollRow) (e ledger.Entry, ok bool) {
 // gateLedger records a gate run: one gate entry with the verdict, and a merge
 // entry when the PR landed. A target no slot owns (queued record, external PR)
 // has no slot name.
-func gateLedger(root string, t GateTarget, res GateResult) {
+func gateLedger(m *RoundMemo, root string, t GateTarget, res GateResult) {
 	issue := t.Issue
 	if !t.Queued {
 		issue = HeldID(t.Task, t.Branch, t.Name)
 	}
-	e := ledger.Entry{Kind: ledger.KindGate, Issue: issue, Slot: t.Name, PR: cmp.Or(res.PR, t.PR), Detail: ledger.Detail("verdict", res.Verdict), Round: LedgerRound(root)}
+	e := ledger.Entry{Kind: ledger.KindGate, Issue: issue, Slot: t.Name, PR: cmp.Or(res.PR, t.PR), Detail: ledger.Detail("verdict", res.Verdict), Round: m.Round(root)}
 	ledgerAppend(root, e)
 	switch {
 	case res.Verdict == GatePass:
 		e.Kind, e.Detail = ledger.KindMerge, nil
 		ledgerAppend(root, e)
-	case res.AlreadyMerged:
+	case res.AlreadyMerged && !mergeRecorded(root, e):
 		e.Kind, e.Detail = ledger.KindMerge, ledger.Detail("by", "remote")
 		ledgerAppend(root, e)
 	}
+}
+
+// mergeRecorded reports a merge entry already on file for e's PR, so a PR
+// merged remotely is noted once however often it is gated again.
+func mergeRecorded(root string, e ledger.Entry) bool {
+	es, _ := ledger.Load(root)
+	return slices.ContainsFunc(es, func(o ledger.Entry) bool {
+		return o.Kind == ledger.KindMerge && o.Issue == e.Issue && o.PR == e.PR
+	})
 }
 
 // trainLedger records the train's verdict for every member it gated that did
@@ -157,7 +186,7 @@ func gateLedger(root string, t GateTarget, res GateResult) {
 // members that passed theirs but did not land. Landed members, and the member
 // whose landing gate failed, were recorded by that gate. Only the culprit
 // carries the train's verdict; the others name it as the culprit.
-func trainLedger(root string, res TrainResult, gated map[string]bool) {
+func trainLedger(m *RoundMemo, root string, res TrainResult, gated map[string]bool) {
 	if res.Verdict == "" {
 		return
 	}
@@ -169,7 +198,7 @@ func trainLedger(root string, res TrainResult, gated map[string]bool) {
 		targets = append(targets, res.Culprit)
 	}
 	reg := LoadRegistry(root)
-	round := LedgerRound(root)
+	round := m.Round(root)
 	for _, t := range targets {
 		if gated[t] || slices.Contains(res.Landed, t) {
 			continue
