@@ -8,25 +8,30 @@ import (
 )
 
 func TestTempDirResolvesSymlinks(t *testing.T) {
-	real := t.TempDir()
-	link := filepath.Join(t.TempDir(), "link")
-	if err := os.Symlink(real, link); err != nil {
+	base := t.TempDir()
+	link := filepath.Join(base, "link")
+	if err := os.Mkdir(filepath.Join(base, "real"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(base, "real"), link); err != nil {
 		t.Skipf("symlinks unavailable: %v", err)
 	}
-	// t.TempDir lives under TMPDIR; point it at a symlink so the unresolved
-	// path differs from the real one on every platform.
-	t.Setenv("TMPDIR", link)
-	if raw := t.TempDir(); !strings.HasPrefix(raw, link) {
-		t.Skipf("t.TempDir ignores TMPDIR here: %s", raw)
-	}
-	dir := TempDir(t)
-	want, err := filepath.EvalSymlinks(dir)
-	if err != nil || dir != want {
-		t.Errorf("TempDir = %q, want resolved %q (%v)", dir, want, err)
-	}
-	if strings.HasPrefix(dir, link) {
-		t.Errorf("TempDir %q still goes through the symlink %q", dir, link)
-	}
+	// A subtest has its own temp dir, created lazily under TMPDIR, so the
+	// unresolved path goes through the symlink on every platform.
+	t.Run("sub", func(t *testing.T) {
+		t.Setenv("TMPDIR", link)
+		if raw := t.TempDir(); !strings.HasPrefix(raw, link) {
+			t.Fatalf("t.TempDir = %q, want it under the symlink %q", raw, link)
+		}
+		dir := TempDir(t)
+		want, err := filepath.EvalSymlinks(dir)
+		if err != nil || dir != want {
+			t.Errorf("TempDir = %q, want resolved %q (%v)", dir, want, err)
+		}
+		if strings.HasPrefix(dir, link) {
+			t.Errorf("TempDir %q still goes through the symlink %q", dir, link)
+		}
+	})
 }
 
 func TestWrite(t *testing.T) {
