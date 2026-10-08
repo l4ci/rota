@@ -83,6 +83,28 @@ func TestStatusExternalMergedPRStaysListedUntilReleased(t *testing.T) {
 	}
 }
 
+// A PR that opened and merged between two passes was never in the open list, so
+// an adopted slot that recorded none is matched to it by branch.
+func TestStatusExternalMergedPRFoundByBranchWhenNoneRecorded(t *testing.T) {
+	root, e, fr := extFixture(t, "")
+	fr.mergedPRs = map[string][]tracker.PR{"codex/12-thing": {{Number: 7, Branch: "codex/12-thing", URL: "https://github.com/o/r/pull/7"}}}
+	fr.states[7] = "merged"
+	rep, err := e.Status(bg, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, ok := rowOf(rep, "ext-1")
+	if !ok || r.State != "merged" || r.PRState != "merged" || r.PR != "https://github.com/o/r/pull/7" {
+		t.Fatalf("a merge outside the gate should be found by branch: %+v", r)
+	}
+	if k := kinds(rep.Findings)["ext-1"]; len(k) != 1 || k[0] != MergedExternal {
+		t.Errorf("want one merged-external finding, got %v", k)
+	}
+	if r, _ := rowOf(rep, "ben"); r.PRState != "" {
+		t.Errorf("the control slot must not be looked up: %+v", r)
+	}
+}
+
 func TestReconcileApplyReleasesAMergedExternalSlot(t *testing.T) {
 	root, e, fr := extFixture(t, "https://github.com/o/r/pull/7")
 	fr.states[7] = "merged"

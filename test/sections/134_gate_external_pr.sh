@@ -67,4 +67,25 @@ grep -q '"ext-1"' "$EXPROJ/.rota/workers.json" \
   || fail "a check-only gate must not release the adopted slot"
 pass "worker gate: an adopted slot gates with an Approvals line of None and stays registered under --check-only"
 
+# the fences and the adopt refusals (#617): a destructive verb on the adopted
+# slot exits 4 blockedBy external, dispatch has no host to reach, and adopt
+# refuses a bad call before it reads the backlog
+RC=0; OUT=$(ex worker reset ext-1) || RC=$?
+[ "$RC" = "4" ] && [ "$(echo "$OUT" | jget data.blockedBy)" = "external" ] \
+  || fail "reset should refuse an adopted slot: rc=$RC $OUT"
+RC=0; OUT=$(ex round reclaim ext-1) || RC=$?
+[ "$RC" = "4" ] && [ "$(echo "$OUT" | jget data.blockedBy)" = "external" ] \
+  || fail "reclaim should refuse an adopted slot: rc=$RC $OUT"
+echo brief > "$TMP_EX/body.txt"
+RC=0; OUT=$(ex worker dispatch ext-1 --task 5 --body-file "$TMP_EX/body.txt") || RC=$?
+[ "$RC" = "4" ] && [ "$(echo "$OUT" | jget data.blockedBy)" = "host" ] \
+  || fail "dispatch should find no host for an adopted slot: rc=$RC $OUT"
+RC=0; OUT=$(ex worker adopt ben/5-thing) || RC=$?
+[ "$RC" = "2" ] || fail "adopt without --issue should be a usage error: rc=$RC $OUT"
+RC=0; OUT=$(ex worker adopt ben/5-thing other --issue 5) || RC=$?
+[ "$RC" = "2" ] || fail "adopt with two refs should be a usage error: rc=$RC $OUT"
+grep -q '"ext-1"' "$EXPROJ/.rota/workers.json" \
+  || fail "a refused verb must leave the adopted slot registered"
+pass "worker reset, round reclaim and worker dispatch refuse an adopted slot; worker adopt refuses a bad call"
+
 rm -rf "$TMP_EX"

@@ -400,6 +400,24 @@ func (g *GitLab) OpenPRs(ctx context.Context) ([]PR, error) {
 	return out, nil
 }
 
+func (g *GitLab) MergedPRs(ctx context.Context, branch string) ([]PR, error) {
+	var raw []struct {
+		IID          int    `json:"iid"`
+		Title        string `json:"title"`
+		Description  string `json:"description"`
+		SourceBranch string `json:"source_branch"`
+		WebURL       string `json:"web_url"`
+	}
+	if err := g.list(ctx, []string{"mr", "list", "--merged", "--source-branch", branch, "--output", "json"}, glPerPage, glPaging, &raw); err != nil {
+		return nil, err
+	}
+	out := []PR{}
+	for _, d := range raw {
+		out = append(out, PR{Number: d.IID, Title: d.Title, Branch: d.SourceBranch, URL: d.WebURL, Body: d.Description})
+	}
+	return out, nil
+}
+
 func (g *GitLab) PRsClosing(ctx context.Context, number int) ([]PR, error) {
 	return g.prsClosing(ctx, g, number)
 }

@@ -168,3 +168,19 @@ func trainLedger(root string, res TrainResult, gated map[string]bool) {
 			Detail: ledger.Detail("verdict", res.Verdict, "train", true, "culprit", res.Culprit)})
 	}
 }
+
+// AdoptedBranches is the set of branches `rota worker adopt` took over, read
+// from the ledger. The slot is gone once released, so this is what still says
+// an `issue-N` branch was adopted rather than made by someone else.
+func AdoptedBranches(root string) map[string]bool {
+	out := map[string]bool{}
+	entries, _ := ledger.Load(root)
+	for _, e := range entries {
+		if e.Kind == ledger.KindAdopt {
+			if b := e.DetailStr("branch"); b != "" {
+				out[b] = true
+			}
+		}
+	}
+	return out
+}
