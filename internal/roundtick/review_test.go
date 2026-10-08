@@ -77,3 +77,18 @@ func TestTickManualPendingReviewStillGates(t *testing.T) {
 		t.Fatalf("needs-you %+v", r.NeedsYou)
 	}
 }
+
+// A held slot with no Pending outcome (a failed poll) is not merged and adds
+// no item: the caller already warned.
+func TestTickHeldWithoutPendingIsSilent(t *testing.T) {
+	f := &fake{slots: []Slot{{Name: "ben", State: "done", Issue: "#1", PR: "u/1"}}}
+	e := f.env()
+	e.ReviewLoop = func(context.Context, Slot) ReviewOutcome { return ReviewOutcome{Hold: true} }
+	r, err := Run(context.Background(), e)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(f.gated) != 0 || len(f.trained) != 0 || len(r.NeedsYou) != 0 {
+		t.Fatalf("merged %v %v or reported %+v", f.gated, f.trained, r.NeedsYou)
+	}
+}

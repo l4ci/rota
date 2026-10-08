@@ -160,13 +160,13 @@ func TestReviewStepManualReportsAndDoesNotHold(t *testing.T) {
 	}
 }
 
-// A poll that fails is an item, never a silent pass: it holds nothing under
-// manual and holds the slot under auto.
+// A poll that fails is a warning, never a silent pass and never an item: it
+// holds nothing under manual and holds the slot under auto.
 func TestReviewStepPollFailureIsReported(t *testing.T) {
 	for loop, hold := range map[string]bool{roundcfg.ReviewLoopManual: false, roundcfg.ReviewLoopAuto: true} {
 		c, dir, errBuf := reviewCtx(t, &reviewForge{failReads: true})
 		got := reviewStep(c, dir, roundcfg.Settings{MaxBounces: 3, ReviewLoop: loop}, "nia")
-		if !got.Pending || got.Hold != hold || got.Relayed || !strings.Contains(got.Detail, "review poll failed") || strings.Contains(got.Detail, "unexpected call") {
+		if got.Pending || got.Hold != hold || got.Relayed || got.Detail != "" {
 			t.Errorf("%s: %+v", loop, got)
 		}
 		if !strings.Contains(errBuf.String(), "review poll of nia") {
