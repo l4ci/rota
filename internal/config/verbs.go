@@ -272,6 +272,12 @@ var projectPathKeys = map[string]bool{"release.versionFile": true}
 // validateValue rejects a value its key cannot hold. A project path key takes
 // a relative path that stays inside the project, or "" to clear it.
 func validateValue(key string, value any) error {
+	if key == ReviewKey {
+		if _, err := ParseReviewPolicy(value); err != nil {
+			return fmt.Errorf("%w for %s: %v", ErrBadValue, key, err)
+		}
+		return nil
+	}
 	if !projectPathKeys[key] {
 		return nil
 	}
@@ -363,11 +369,17 @@ func legacyVerifyPending(doc *jsonx.Object) bool {
 
 // Retired lists the config values rota no longer supports, one message each.
 // `config check` fails on them rather than let a skill quietly ignore the
-// value. autonomy.level "loop" went with loop autonomy (#70).
+// value. autonomy.level "loop" went with loop autonomy (#70). It also holds a
+// malformed ship.review policy, which would otherwise read as the default.
 func Retired(root string) []string {
 	out := []string{}
 	if s, _ := Value(Load(configPath(root)), "autonomy.level"); s == "loop" {
 		out = append(out, `autonomy.level "loop" was removed: set it to "auto" or "off" (rounds and automatic reviews cover unattended work)`)
+	}
+	if v, _ := Value(Load(configPath(root)), ReviewKey); v != nil {
+		if _, err := ParseReviewPolicy(v); err != nil {
+			out = append(out, err.Error())
+		}
 	}
 	return out
 }

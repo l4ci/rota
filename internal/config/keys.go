@@ -59,7 +59,7 @@ var Keys = []Key{
 	k("refactor.confirmBeforeExecute", true, true, TypeBool, "Whether /rota-refactor --fix confirms the candidate list before implementing it. Off means no pause."),
 	k("learn.verify", false, true, TypeBool, "Whether /rota-learn always runs a fresh-context verifier on the entries it just wrote."),
 	k("learn.promoteThreshold", num("3"), true, TypeInt, "Confidence threshold at which the knowledge lifecycle auto-promotes an entry. Integer, 0 or more."),
-	k("ship.review", true, true, TypeBool, "Whether /rota-ship runs /rota-review first. FAIL blocks, CONCERNS ask, PASS flows through."),
+	k("ship.review", "full", true, TypeEnum, "How deep a review /rota-ship runs first: full, light (the Standards reviewer only) or none. FAIL blocks, CONCERNS ask, PASS flows through. An object {default, lightBelow, labels} picks the depth by diff size and label; true and false still mean full and none.", "full", "light", "none"),
 	k("ship.secondOpinion", false, true, TypeBool, "Opt-in fresh-eyes adversarial gate in /rota-ship Step 3.5."),
 	k("ship.secondOpinionRunner", "subagent", true, TypeEnum, "Who runs the /rota-ship second-opinion gate. The codex value was removed in 5.0: /rota-ship notes it and runs the subagent in advisory mode.", "subagent"),
 	k("ship.qa", false, true, TypeBool, "Opt-in product-QA gate: /rota-ship runs /rota-qa run after review and before merge or PR."),

@@ -39,7 +39,7 @@ You can run `/rota-review` at any time on a branch, not only before shipping. On
 /rota-ship
 ```
 
-**Default flow:** branch check → `/rota-review` (if `ship.review` is `true`) → second-opinion gate (if `ship.secondOpinion` is `true`) → `/rota-qa` gate (if `ship.qa` is `true`) → build PR body → open PR or merge → close resolved items (on the issue backend the PR merge closes them).
+**Default flow:** branch check → `/rota-review` (unless `ship.review` is `none`) → second-opinion gate (if `ship.secondOpinion` is `true`) → `/rota-qa` gate (if `ship.qa` is `true`) → build PR body → open PR or merge → close resolved items (on the issue backend the PR merge closes them).
 
 The review gate behaves as follows:
 
@@ -83,12 +83,15 @@ See [configuration](configuration.md) for the full `work` block.
 
 ## What `ship.review` controls
 
-`ship.review` in `.rota/config.json` decides whether `/rota-ship` runs `/rota-review` before integrating:
+`ship.review` in `.rota/config.json` decides how deep a review `/rota-ship` runs before integrating:
 
 | Value | Behavior |
 |-------|---------|
-| `true` (default) | `/rota-review` runs first. `FAIL` blocks, `CONCERNS` surface but you can proceed, `PASS` flows through. |
-| `false` | Skips the review pass. Integration runs immediately. Use when you have already reviewed manually and want to skip the second pass. |
+| `full` (default) | `/rota-review` runs first. `FAIL` blocks, `CONCERNS` surface but you can proceed, `PASS` flows through. |
+| `light` | Only the Standards reviewer runs. |
+| `none` | Skips the review pass. Integration runs immediately. Use when you have already reviewed manually and want to skip the second pass. |
+
+`true` and `false` still work as `full` and `none`. An object picks the depth by diff size and label (for example `risk:high` forces `full`); see [configuration](configuration.md#shipreview). `/rota-ship` prints the chosen depth and why.
 
 The review gate is independent of the autonomy level. A `FAIL` verdict still halts the chain until you fix the branch.
 

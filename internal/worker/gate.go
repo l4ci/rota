@@ -368,6 +368,7 @@ var gateSteps = []gateStep{
 	(*gate).stepPRMatches,
 	(*gate).stepProvenance,
 	(*gate).stepCloses,
+	(*gate).stepReviewDepth,
 	(*gate).stepVerdict,
 	(*gate).stepCheckOnly,
 	(*gate).stepMerge,
@@ -635,6 +636,54 @@ func (g *gate) stepCloses() (bool, error) {
 	g.verdict(GateNotClosing, fmt.Sprintf("GATE %s refused — the body of %s does not close #%d, so the merge would leave it open and claimed; nothing landed", g.o.Slot, g.pr, n),
 		fmt.Sprintf("add a line `Closes #%d` to the PR body, or label #%d %s if this PR lands only part of it", n, n, PartialSliceLabel))
 	return true, nil
+}
+
+// stepReviewDepth notes the review depth ship.review expects for this branch
+// and why: the diff size against the base, and the labels of the slot's issue.
+// It reports and never refuses; stepVerdict still reads the recorded verdict.
+// An unreadable policy or issue falls back to what is known.
+func (g *gate) stepReviewDepth() (bool, error) {
+	policy, err := config.ReviewPolicyOf(g.in.cfg)
+	if err != nil {
+		g.res.Notes = append(g.res.Notes, fmt.Sprintf("REVIEW-DEPTH %s — %v; run rota config check", g.o.Slot, err))
+		return false, nil
+	}
+	changed := -1
+	if out, code := g.e.runGit(g.root, "diff", "--numstat", g.baseRef+"..."+g.headRef); code == 0 {
+		changed = ChangedLines(out)
+	}
+	var labels []string
+	issue := g.target.Issue
+	if !g.target.Queued {
+		issue = HeldID(g.target.Task, g.target.Branch, g.target.Name)
+	}
+	// the issue is read only when the policy has a label to match it against
+	if n, err := strconv.Atoi(issue); err == nil && n > 0 && len(policy.Labels) > 0 {
+		if is, err := g.forge.Get(g.ctx, n, false); err == nil {
+			labels = is.Labels
+		}
+	}
+	depth, why := policy.Resolve(changed, labels)
+	g.res.Notes = append(g.res.Notes, fmt.Sprintf("REVIEW-DEPTH %s — %s (%s)", g.o.Slot, depth, why))
+	return false, nil
+}
+
+// ChangedLines sums the added and deleted lines of `git diff --numstat` output.
+// Binary files, which numstat marks with dashes, count for nothing.
+func ChangedLines(numstat string) int {
+	total := 0
+	for _, l := range strings.Split(numstat, "\n") {
+		f := strings.Fields(l)
+		if len(f) < 2 {
+			continue
+		}
+		a, errA := strconv.Atoi(f[0])
+		d, errD := strconv.Atoi(f[1])
+		if errA == nil && errD == nil {
+			total += a + d
+		}
+	}
+	return total
 }
 
 // stepVerdict refuses a branch with a recorded FAIL verdict (B3), the rule the

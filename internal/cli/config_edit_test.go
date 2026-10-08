@@ -351,12 +351,12 @@ func TestConfigScreenWritesTheSameFilesAsConfigSet(t *testing.T) {
 		t.Helper()
 		m, _ = play(m, cat([]string{"/"}, typedKeys(filter), []string{"enter"}, keys, []string{"esc"}))
 	}
-	pick("ship.review", "enter", " ", "enter") // toggle off
+	pick("ship.qa", "enter", " ", "enter") // toggle on
 	pick("work.dispatch", "enter", "right", "enter")
 	pick("work.workerSlots", "l", "backspace", "7", "enter")
 	pick("work.mergeStrategy", "r") // drops the local override and the project value
 	cfg := readConfig(t, root)
-	for _, want := range []string{`"review": false`, `"dispatch": "tmux"`} {
+	for _, want := range []string{`"qa": true`, `"dispatch": "tmux"`} {
 		if !strings.Contains(cfg, want) {
 			t.Errorf("config.json lacks %s:\n%s", want, cfg)
 		}
@@ -382,7 +382,7 @@ func TestConfigScreenWritesTheSameFilesAsConfigSet(t *testing.T) {
 		}
 	}
 	// What the screen wrote is what `config set` writes: same file, same layout.
-	code, _, _ := rotaRun(t, "--json", "-C", root, "config", "set", "ship.review", "false")
+	code, _, _ := rotaRun(t, "--json", "-C", root, "config", "set", "ship.qa", "true")
 	if code != 0 || readConfig(t, root) != cfg {
 		t.Errorf("config set rewrote the file differently: exit %d\n%s\nvs\n%s", code, readConfig(t, root), cfg)
 	}
