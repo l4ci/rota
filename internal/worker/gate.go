@@ -120,6 +120,10 @@ type GateOpts struct {
 	// merged together and verified once, so a branch behind the base only
 	// because an earlier train member landed is not refused as stale.
 	Train bool
+	// HoldsLandLock says the caller already holds the repository's land lock
+	// (the train does, through its landing steps), so the gate does not retake
+	// it. Without it a gate takes the lock itself unless it is CheckOnly.
+	HoldsLandLock bool
 	// Verdict is the review-verdict gate (B3), run after provenance, also under
 	// CheckOnly. A non-nil error (a recorded FAIL) stops the gate with verdict
 	// verdict-blocked and is returned as is. branch is the worker branch.
@@ -250,12 +254,11 @@ type Forge interface {
 }
 
 // Gate runs the merge gate for a slot or a queued PR (see GateTarget). A
-// passing gate of a queued PR drops its record. The registry, config and
-// verification commands are read here, once; the steps below take them as
-// given.
+// passing gate of a queued PR drops its record. The environment defaults are
+// applied here, once; everything below takes Env as given.
 func (e Env) Gate(ctx context.Context, root string, o GateOpts) (GateResult, error) {
 	e = e.withDefaults()
-	if o.CheckOnly || o.Train { // read-only, or already under the train's land lock
+	if o.CheckOnly || o.HoldsLandLock { // read-only, or the caller already holds the land lock
 		return e.gate(ctx, root, o)
 	}
 	var res GateResult
@@ -266,6 +269,8 @@ func (e Env) Gate(ctx context.Context, root string, o GateOpts) (GateResult, err
 	return res, err
 }
 
+// gate reads the registry, config and verification commands, then runs the
+// step table.
 func (e Env) gate(ctx context.Context, root string, o GateOpts) (GateResult, error) {
 	res := GateResult{Slot: o.Slot, Base: o.Base}
 	reg := LoadRegistry(root)
@@ -289,32 +294,8 @@ func (e Env) gate(ctx context.Context, root string, o GateOpts) (GateResult, err
 	if in.ledger, err = LoadLedger(root); err != nil {
 		return res, err
 	}
-	// An expired entry fails a gate that verifies, before anything merges.
-	if !o.CheckOnly && !o.NoVerify {
-		if msg := LedgerExpiry(in.ledger, e.withDefaults().Now()); msg != "" {
-			res.Verdict, res.Expired = GateVerifyFailed, in.ledger.Expired(e.withDefaults().Now())
-			res.Err = fmt.Sprintf("GATE-FAIL %s — %s; nothing landed", o.Slot, msg)
-			res.Hint = "fix the test or renew the entry in .rota/test-ledger.json, then re-gate"
-			gateLedger(root, t, res)
-			return res, nil
-		}
-	}
-	res, err = e.gateEnv().gate(ctx, root, o, res, in, t)
-	if err == nil && !o.CheckOnly {
-		gateLedger(root, t, res)
-	}
-	if err == nil && t.Queued && res.Verdict == GatePass {
-		if err := RemoveQueuedPR(root, t.PR); err != nil {
-			return res, err
-		}
-	}
-	// A merged adopted slot is done: unregister it, keep its checkout.
-	if err == nil && t.External && t.Name != "" && res.Verdict == GatePass && !o.CheckOnly {
-		// The PR is merged: a release that cannot finish is a note, not a failed gate.
-		if rerr := e.ReleaseExternal(root, t.Name, o.Prune); rerr != nil {
-			res.Notes = append(res.Notes, "RELEASE-KEPT "+t.Name+" — "+rerr.Error())
-		}
-	}
+	g := &gate{e: e, ctx: ctx, root: root, res: &res, o: o, in: in, target: t, branch: t.Branch, pr: t.PR}
+	err = g.run()
 	return res, err
 }
 
@@ -327,37 +308,13 @@ type gateInput struct {
 	ledger     testledger.Ledger // .rota/test-ledger.json, read before the merge too
 }
 
-// gateEnv is the slice of Env the gate touches.
-type gateEnv struct {
-	ctx    context.Context
-	git    git.Runner
-	forge  func(provider, dir string, cfg any) (Forge, error)
-	getenv func(string) string
-	sleep  func(time.Duration)
-	now    func() time.Time
-	shell  func(ctx context.Context, dir, command string) (string, int)
-}
-
-func (e Env) gateEnv() gateEnv {
-	e = e.withDefaults()
-	return gateEnv{ctx: e.context(), git: e.Git, forge: e.Forge, getenv: e.Getenv, sleep: e.Sleep, now: e.Now, shell: e.Shell}
-}
-
-// runGit runs git and trims one trailing newline from stdout, like $(...).
-func (e gateEnv) runGit(dir string, args ...string) (string, int) {
-	res, err := e.git(e.ctx, dir, args...)
-	if err != nil {
-		return "", 127
-	}
-	return strings.TrimRight(res.Stdout, "\n"), res.ExitCode
-}
-
 // gateStep is one stage of the gate. done ends the gate: the verdict is
 // already in g.res, or err says why it could not run.
 type gateStep func(g *gate) (done bool, err error)
 
 // gateSteps run in order; see the numbered stages in the file comment.
 var gateSteps = []gateStep{
+	(*gate).stepLedgerExpiry,
 	(*gate).stepForge,
 	(*gate).stepExternal,
 	(*gate).stepAdoptPR,
@@ -374,25 +331,92 @@ var gateSteps = []gateStep{
 	(*gate).stepVerify,
 }
 
-func (e gateEnv) gate(ctx context.Context, root string, o GateOpts, res GateResult, in gateInput, t GateTarget) (GateResult, error) {
-	e.ctx = ctx
-	res.Branch, res.PR = t.Branch, t.PR
-	g := &gate{e: e, ctx: ctx, root: root, res: &res, o: o, in: in, target: t, branch: t.Branch, pr: t.PR}
+// gatePostSteps run after the steps above, however they ended, unless one
+// returned an error: the verdict is final and these record it.
+var gatePostSteps = []gateStep{
+	(*gate).stepRecordLedger,
+	(*gate).stepDequeue,
+	(*gate).stepReleaseExternal,
+}
+
+// run walks the step table, then the post steps. A step that is done ends the
+// table, not the post steps; an error ends both.
+func (g *gate) run() error {
 	for _, step := range gateSteps {
-		if done, err := step(g); done || err != nil {
-			return res, err
+		done, err := step(g)
+		if err != nil {
+			return err
+		}
+		if done {
+			break
 		}
 	}
-	return res, nil
+	for _, step := range gatePostSteps {
+		if _, err := step(g); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// git runs git on the gate's context.
+func (g *gate) git(dir string, args ...string) (string, int) {
+	return g.e.runGit(g.ctx, dir, args...)
+}
+
+// stepLedgerExpiry refuses, before anything merges, a gate that verifies while
+// a test-ledger entry has expired.
+func (g *gate) stepLedgerExpiry() (bool, error) {
+	if g.o.CheckOnly || g.o.NoVerify {
+		return false, nil
+	}
+	now := g.e.Now()
+	msg := LedgerExpiry(g.in.ledger, now)
+	if msg == "" {
+		return false, nil
+	}
+	g.res.Verdict, g.res.Expired = GateVerifyFailed, g.in.ledger.Expired(now)
+	g.res.Err = fmt.Sprintf("GATE-FAIL %s — %s; nothing landed", g.o.Slot, msg)
+	g.res.Hint = "fix the test or renew the entry in .rota/test-ledger.json, then re-gate"
+	return true, nil
+}
+
+// stepRecordLedger appends the verdict to the gate ledger.
+func (g *gate) stepRecordLedger() (bool, error) {
+	if !g.o.CheckOnly {
+		gateLedger(g.root, g.target, *g.res)
+	}
+	return false, nil
+}
+
+// stepDequeue drops the record of a queued PR that passed.
+func (g *gate) stepDequeue() (bool, error) {
+	if g.target.Queued && g.res.Verdict == GatePass {
+		return false, RemoveQueuedPR(g.root, g.target.PR)
+	}
+	return false, nil
+}
+
+// stepReleaseExternal unregisters a merged adopted slot and keeps its checkout.
+func (g *gate) stepReleaseExternal() (bool, error) {
+	t := g.target
+	if t.External && t.Name != "" && g.res.Verdict == GatePass && !g.o.CheckOnly {
+		// The PR is merged: a release that cannot finish is a note, not a failed gate.
+		if rerr := g.e.ReleaseExternal(g.root, t.Name, g.o.Prune); rerr != nil {
+			g.res.Notes = append(g.res.Notes, "RELEASE-KEPT "+t.Name+" — "+rerr.Error())
+		}
+	}
+	return false, nil
 }
 
 // stepForge picks the provider and opens its forge.
 func (g *gate) stepForge() (bool, error) {
-	g.provider = g.e.detectProvider(g.root, g.pr)
+	g.res.Branch, g.res.PR = g.target.Branch, g.target.PR
+	g.provider = g.e.detectProvider(g.ctx, g.root, g.pr)
 	g.cliName = tracker.CLIName(g.provider)
 	g.label = config.Label(g.in.cfg, "inProgress")
 	var err error
-	if g.forge, err = g.e.forge(g.provider, g.root, g.in.cfg); err != nil {
+	if g.forge, err = g.e.Forge(g.provider, g.root, g.in.cfg); err != nil {
 		return g.broke(fmt.Sprintf("cannot reach the %s forge: %v", g.provider, err))
 	}
 	return false, nil
@@ -449,7 +473,7 @@ func (g *gate) stepRemote() (bool, error) {
 		return false, nil
 	}
 	g.prNum = prNumText(g.pr)
-	if _, code := g.e.runGit(g.root, "remote", "get-url", "origin"); code != 0 {
+	if _, code := g.git(g.root, "remote", "get-url", "origin"); code != 0 {
 		return g.broke(fmt.Sprintf("slot %s has PR %s but this repo has no 'origin' remote; refusing a local merge that would bypass the PR", g.o.Slot, g.pr))
 	}
 	if g.prNum == "" {
@@ -462,27 +486,27 @@ func (g *gate) stepRemote() (bool, error) {
 // stepRefs resolves the refs the later steps judge: fetched origin refs for a
 // remote gate, the local branch otherwise.
 func (g *gate) stepRefs() (bool, error) {
-	e, root, o := g.e, g.root, g.o
-	if _, code := e.runGit(root, "rev-parse", "--verify", "--quiet", o.Base); code != 0 {
+	root, o := g.root, g.o
+	if _, code := g.git(root, "rev-parse", "--verify", "--quiet", o.Base); code != 0 {
 		return true, fail(exitcode.ExitResolution, fmt.Sprintf("base branch '%s' does not exist", o.Base))
 	}
 	if !g.remote {
 		g.headRef, g.baseRef = g.branch, o.Base
 		var code int
 		// The commit the gates below judge is the commit that lands.
-		if g.verified, code = e.runGit(root, "rev-parse", "--verify", "--quiet", g.branch); code != 0 || g.verified == "" {
+		if g.verified, code = g.git(root, "rev-parse", "--verify", "--quiet", g.branch); code != 0 || g.verified == "" {
 			return true, fail(exitcode.ExitResolution, fmt.Sprintf("worker branch '%s' does not exist", g.branch))
 		}
 		return false, nil
 	}
-	if _, code := e.runGit(root, "fetch", "origin", "-q"); code != 0 {
+	if _, code := g.git(root, "fetch", "origin", "-q"); code != 0 {
 		return g.broke("git fetch origin failed")
 	}
 	g.headRef, g.baseRef = "origin/"+g.branch, "origin/"+o.Base
-	if _, code := e.runGit(root, "rev-parse", "--verify", "--quiet", g.headRef+"^{commit}"); code != 0 {
+	if _, code := g.git(root, "rev-parse", "--verify", "--quiet", g.headRef+"^{commit}"); code != 0 {
 		return g.broke(fmt.Sprintf("%s does not exist — has the worker pushed %s?", g.headRef, g.branch))
 	}
-	if _, code := e.runGit(root, "rev-parse", "--verify", "--quiet", g.baseRef+"^{commit}"); code != 0 {
+	if _, code := g.git(root, "rev-parse", "--verify", "--quiet", g.baseRef+"^{commit}"); code != 0 {
 		return g.broke(g.baseRef + " does not exist")
 	}
 	return false, nil
@@ -491,15 +515,15 @@ func (g *gate) stepRefs() (bool, error) {
 // stepFreshness is stage 1. Three-way on the exit code: `&& FRESH || STALE`
 // would call a check that itself errors STALE.
 func (g *gate) stepFreshness() (bool, error) {
-	e, o := g.e, g.o
-	switch _, code := e.runGit(g.root, "merge-base", "--is-ancestor", g.baseRef, g.headRef); code {
+	o := g.o
+	switch _, code := g.git(g.root, "merge-base", "--is-ancestor", g.baseRef, g.headRef); code {
 	case 0:
 		return false, nil
 	case 1:
 	default:
 		return g.broke(fmt.Sprintf("git merge-base --is-ancestor %s %s exited %d", g.baseRef, g.headRef, code))
 	}
-	behind, c := e.runGit(g.root, "rev-list", "--count", g.headRef+".."+g.baseRef)
+	behind, c := g.git(g.root, "rev-list", "--count", g.headRef+".."+g.baseRef)
 	if c != 0 {
 		behind = "?"
 	}
@@ -512,7 +536,7 @@ func (g *gate) stepFreshness() (bool, error) {
 		return g.broke(brokeMsg)
 	}
 	if why != "" {
-		g.res.SHA, _ = e.runGit(g.root, "rev-parse", "--short=7", g.headRef) // bounce accounting keys on the head
+		g.res.SHA, _ = g.git(g.root, "rev-parse", "--short=7", g.headRef) // bounce accounting keys on the head
 		g.verdict(GateStale, fmt.Sprintf("STALE %s %s — %s commit(s) landed on %s since it branched; %s", o.Slot, g.branch, behind, o.Base, why),
 			fmt.Sprintf("bounce: tell slot %s to `git merge %s`, resolve and re-verify, then re-gate", o.Slot, o.Base))
 		return true, nil
@@ -535,7 +559,7 @@ func (g *gate) stepPRMatches() (bool, error) {
 		return false, nil
 	}
 	var code int
-	if g.verified, code = g.e.runGit(g.root, "rev-parse", g.headRef); code != 0 || g.verified == "" {
+	if g.verified, code = g.git(g.root, "rev-parse", g.headRef); code != 0 || g.verified == "" {
 		return g.broke(fmt.Sprintf("git rev-parse %s failed (exit %d)", g.headRef, code))
 	}
 	info, ok := g.prInfo()
@@ -567,7 +591,7 @@ func (g *gate) stepProvenance() (bool, error) {
 		return g.broke(brokeMsg)
 	}
 	if failMsg != "" {
-		g.res.SHA, _ = g.e.runGit(g.root, "rev-parse", "--short=7", g.headRef)
+		g.res.SHA, _ = g.git(g.root, "rev-parse", "--short=7", g.headRef)
 		g.verdict(GateProvenanceFail, failMsg, "")
 		return true, nil
 	}
@@ -631,7 +655,7 @@ func (g *gate) stepCloses() (bool, error) {
 	if slices.Contains(is.Labels, PartialSliceLabel) {
 		return false, nil
 	}
-	g.res.SHA, _ = g.e.runGit(g.root, "rev-parse", "--short=7", g.headRef)
+	g.res.SHA, _ = g.git(g.root, "rev-parse", "--short=7", g.headRef)
 	g.verdict(GateNotClosing, fmt.Sprintf("GATE %s refused — the body of %s does not close #%d, so the merge would leave it open and claimed; nothing landed", g.o.Slot, g.pr, n),
 		fmt.Sprintf("add a line `Closes #%d` to the PR body, or label #%d %s if this PR lands only part of it", n, n, PartialSliceLabel))
 	return true, nil
@@ -655,7 +679,7 @@ func (g *gate) stepVerdict() (bool, error) {
 func (g *gate) stepCheckOnly() (bool, error) {
 	if g.o.CheckOnly {
 		// the checked tip: origin/<branch> when a PR is recorded
-		g.res.SHA, _ = g.e.runGit(g.root, "rev-parse", "--short=7", g.headRef)
+		g.res.SHA, _ = g.git(g.root, "rev-parse", "--short=7", g.headRef)
 		g.res.Verdict = GateFresh
 		return true, nil
 	}
@@ -664,7 +688,7 @@ func (g *gate) stepCheckOnly() (bool, error) {
 
 // stepMerge is stage 2: the approval gate, then the merge itself.
 func (g *gate) stepMerge() (bool, error) {
-	cur, _ := g.e.runGit(g.root, "rev-parse", "--abbrev-ref", "HEAD")
+	cur, _ := g.git(g.root, "rev-parse", "--abbrev-ref", "HEAD")
 	if cur != g.o.Base {
 		return true, fail(exitcode.ExitResolution, fmt.Sprintf("gate must run with %s checked out (currently on %s)", g.o.Base, cur))
 	}
@@ -679,10 +703,10 @@ func (g *gate) stepMerge() (bool, error) {
 	var ci *ciVerifier
 	if g.in.where == WhereCI && !g.o.NoVerify {
 		var msg string
-		if ci, msg = g.e.newCIVerifier(g.root, g.forge, g.in.cfg); msg != "" {
+		if ci, msg = g.e.newCIVerifier(g.ctx, g.root, g.forge, g.in.cfg); msg != "" {
 			return g.broke(msg)
 		}
-		changed, err := g.e.ciDiffFiles(g.root, g.baseRef, g.verified)
+		changed, err := g.e.ciDiffFiles(g.ctx, g.root, g.baseRef, g.verified)
 		if err != nil {
 			return g.broke(err.Error())
 		}
@@ -718,9 +742,9 @@ func (g *gate) stepMerge() (bool, error) {
 	}
 	g.res.Changed = true
 	if !g.remote {
-		g.landed, _ = g.e.runGit(g.root, "rev-parse", "HEAD")
+		g.landed, _ = g.git(g.root, "rev-parse", "HEAD")
 	}
-	g.res.SHA, _ = g.e.runGit(g.root, "rev-parse", "--short=7", "HEAD")
+	g.res.SHA, _ = g.git(g.root, "rev-parse", "--short=7", "HEAD")
 	return false, nil
 }
 
@@ -752,7 +776,7 @@ func (g *gate) forgeRefuses() (done bool) {
 			return true
 		case tracker.MergeUnknown:
 			if i < gateMergeableTries-1 {
-				g.e.sleep(time.Second)
+				g.e.Sleep(time.Second)
 			}
 		default:
 			return false
@@ -769,7 +793,7 @@ func (g *gate) forgeRefuses() (done bool) {
 // (stepVerify). done is true when it ends the gate with a verdict.
 func (g *gate) verifyFirst(what string, check func(dir, sha string) (bool, error)) (bool, error) {
 	o := g.o
-	baseSHA, code := g.e.runGit(g.root, "rev-parse", g.baseRef)
+	baseSHA, code := g.git(g.root, "rev-parse", g.baseRef)
 	if code != 0 {
 		return g.broke(fmt.Sprintf("git rev-parse %s exited %d", g.baseRef, code))
 	}
@@ -779,7 +803,7 @@ func (g *gate) verifyFirst(what string, check func(dir, sha string) (bool, error
 	if g.in.where == WhereCI {
 		prefix = "rota-ci-"
 	}
-	dir, cleanup, err := g.e.scratchTree(g.root, baseSHA, prefix)
+	dir, cleanup, err := g.e.scratchTree(g.ctx, g.root, baseSHA, prefix)
 	if err != nil {
 		return g.broke(err.Error())
 	}
@@ -787,18 +811,18 @@ func (g *gate) verifyFirst(what string, check func(dir, sha string) (bool, error
 	if g.mergeLocal(dir) {
 		return true, nil
 	}
-	sha, _ := g.e.runGit(dir, "rev-parse", "HEAD")
-	tree, _ := g.e.runGit(dir, "rev-parse", "HEAD^{tree}")
+	sha, _ := g.git(dir, "rev-parse", "HEAD")
+	tree, _ := g.git(dir, "rev-parse", "HEAD^{tree}")
 	g.res.SHA = short(sha)
 	if done, err := check(dir, sha); done || err != nil {
 		return true, err
 	}
 	if g.remote {
-		if _, code := g.e.runGit(g.root, "fetch", "origin", "-q"); code != 0 {
+		if _, code := g.git(g.root, "fetch", "origin", "-q"); code != 0 {
 			return g.broke("git fetch origin failed after " + what + " verified")
 		}
 	}
-	if cur, _ := g.e.runGit(g.root, "rev-parse", g.baseRef); cur != baseSHA {
+	if cur, _ := g.git(g.root, "rev-parse", g.baseRef); cur != baseSHA {
 		g.verdict(GateBaseMoved, fmt.Sprintf("BASE-MOVED %s — %s moved from %s to %s while %s verified; nothing landed", o.Slot, g.baseRef, short(baseSHA), short(cur), what),
 			"re-run the gate on the new base")
 		return true, nil
@@ -841,7 +865,7 @@ func (g *gate) verifyLocal(dir, _ string) (bool, error) {
 
 // landedTree is the tree of the commit the merge produced.
 func (g *gate) landedTree() string {
-	tree, _ := g.e.runGit(g.root, "rev-parse", g.landed+"^{tree}")
+	tree, _ := g.git(g.root, "rev-parse", g.landed+"^{tree}")
 	return tree
 }
 
@@ -860,7 +884,7 @@ func (g *gate) confirmCITree() bool {
 
 // changedFiles lists the paths the merge changes, for the approval gate.
 func (g *gate) changedFiles() ([]string, error) {
-	out, code := g.e.runGit(g.root, "diff", "--name-only", g.baseRef+"..."+g.verified)
+	out, code := g.git(g.root, "diff", "--name-only", g.baseRef+"..."+g.verified)
 	if code != 0 {
 		return nil, fmt.Errorf("git diff --name-only %s...%s exited %d", g.baseRef, g.verified, code)
 	}
@@ -877,8 +901,8 @@ func (g *gate) changedFiles() ([]string, error) {
 // gate checkout, or a scratch tree. done is true when it ends the gate with a
 // verdict.
 func (g *gate) mergeLocal(dir string) (done bool) {
-	run := func(args ...string) (git.Result, error) { return g.e.git(g.e.ctx, dir, args...) }
-	err := land.MergeLocal(run, g.verified, fmt.Sprintf("merge: %s into %s", g.branch, g.o.Base), land.RecoveryGit(g.e.ctx, g.e.git, dir))
+	run := func(args ...string) (git.Result, error) { return g.e.Git(g.ctx, dir, args...) }
+	err := land.MergeLocal(run, g.verified, fmt.Sprintf("merge: %s into %s", g.branch, g.o.Base), land.RecoveryGit(g.ctx, g.e.Git, dir))
 	if err == nil {
 		return false
 	}
@@ -951,7 +975,7 @@ func (g *gate) verifyTier(tier string, cmds []string, dir string, landed bool) (
 	if e2e && len(cmds) == 0 {
 		return false, nil
 	}
-	vr, err := runVerifyCmds(g.ctx, g.e.shell, cmds, dir, g.in.ledger, g.e.now())
+	vr, err := runVerifyCmds(g.ctx, g.e.Shell, cmds, dir, g.in.ledger, g.e.Now())
 	if err != nil {
 		return true, err
 	}
@@ -1004,23 +1028,23 @@ func (g *gate) verifyTier(tier string, cmds []string, dir string, landed bool) (
 // refusing. Files matching round.sharedPaths are ignored, as the readiness
 // overlap check ignores them. brokeMsg is set when a git check itself fails.
 func (g *gate) staleReason(cfg any) (why string, shared []string, brokeMsg string) {
-	e, root := g.e, g.root
-	if _, code := e.runGit(root, "merge-base", "--is-ancestor", g.headRef, g.baseRef); code == 0 {
+	root := g.root
+	if _, code := g.git(root, "merge-base", "--is-ancestor", g.headRef, g.baseRef); code == 0 {
 		return fmt.Sprintf("its work is already on %s, nothing to merge", g.o.Base), nil, ""
 	}
-	switch out, code := e.runGit(root, "merge-tree", "--write-tree", "--no-messages", g.baseRef, g.headRef); code {
+	switch out, code := g.git(root, "merge-tree", "--write-tree", "--no-messages", g.baseRef, g.headRef); code {
 	case 0:
 	case 1:
 		return "the merge conflicts", nil, ""
 	default:
 		return "", nil, fmt.Sprintf("git merge-tree %s %s exited %d: %s", g.baseRef, g.headRef, code, out)
 	}
-	mb, code := e.runGit(root, "merge-base", g.baseRef, g.headRef)
+	mb, code := g.git(root, "merge-base", g.baseRef, g.headRef)
 	if code != 0 || mb == "" {
 		return "", nil, fmt.Sprintf("git merge-base %s %s exited %d", g.baseRef, g.headRef, code)
 	}
 	changed := func(ref string) ([]string, bool) {
-		out, code := e.runGit(root, "diff", "--name-only", "--no-renames", mb, ref)
+		out, code := g.git(root, "diff", "--name-only", "--no-renames", mb, ref)
 		if code != 0 {
 			return nil, false
 		}
@@ -1054,14 +1078,14 @@ func indentTail(text string, n int) string {
 // detectProvider reads the provider from the PR URL (a bare number carries
 // none), then origin, and falls back to github, which is what this gate always
 // assumed.
-func (e gateEnv) detectProvider(root, pr string) string {
+func (e Env) detectProvider(ctx context.Context, root, pr string) string {
 	switch {
 	case strings.Contains(pr, "/-/merge_requests/"):
 		return "gitlab"
 	case strings.Contains(pr, "/pull/"):
 		return "github"
 	}
-	url, _ := e.runGit(root, "remote", "get-url", "origin")
+	url, _ := e.runGit(ctx, root, "remote", "get-url", "origin")
 	for _, u := range []string{pr, url} {
 		if p := tracker.ProviderFromURL(u); p != tracker.ProviderUnknown {
 			return p
@@ -1071,7 +1095,7 @@ func (e gateEnv) detectProvider(root, pr string) string {
 }
 
 type gate struct {
-	e        gateEnv
+	e        Env // defaulted once, by Env.Gate
 	ctx      context.Context
 	root     string
 	res      *GateResult
@@ -1124,7 +1148,7 @@ func (g *gate) prInfo() (tracker.PRInfo, bool) {
 // merge stands. Any other failure to ask is a check-broke message: guessing
 // "none" would fail open into a local merge of a branch whose PR may be open.
 func (g *gate) openPRForBranch() (url, brokeMsg string) {
-	if _, code := g.e.runGit(g.root, "remote", "get-url", "origin"); code != 0 {
+	if _, code := g.git(g.root, "remote", "get-url", "origin"); code != 0 {
 		return "", ""
 	}
 	prs, err := g.forge.OpenPRs(g.ctx)
@@ -1206,7 +1230,7 @@ func (g *gate) mergeRemote() (done bool) {
 // the pinned verified SHA, which must then be on the base.
 func (g *gate) awaitMerged() (sha string, done bool) {
 	wait := 2 * time.Second
-	if v := g.e.getenv("ROTA_GATE_SHA_WAIT"); v != "" {
+	if v := g.e.Getenv("ROTA_GATE_SHA_WAIT"); v != "" {
 		if f, err := strconv.ParseFloat(v, 64); err == nil {
 			wait = time.Duration(f * float64(time.Second))
 		}
@@ -1223,7 +1247,7 @@ func (g *gate) awaitMerged() (sha string, done bool) {
 			break
 		}
 		if state != "MERGED" {
-			g.e.sleep(wait)
+			g.e.Sleep(wait)
 		}
 	}
 	if state != "MERGED" {
@@ -1241,12 +1265,12 @@ func (g *gate) awaitMerged() (sha string, done bool) {
 // the local base to it. Past this point the PR IS merged: local trouble is
 // reported distinctly so nobody retries an already-merged PR.
 func (g *gate) confirmLanded(sha string) (done bool) {
-	e, o := g.e, g.o
-	if _, code := e.runGit(g.root, "fetch", "origin", "-q"); code != 0 {
+	o := g.o
+	if _, code := g.git(g.root, "fetch", "origin", "-q"); code != 0 {
 		g.broke("git fetch origin failed after merging")
 		return true
 	}
-	switch _, code := e.runGit(g.root, "merge-base", "--is-ancestor", sha, g.baseRef); code {
+	switch _, code := g.git(g.root, "merge-base", "--is-ancestor", sha, g.baseRef); code {
 	case 0:
 	case 1:
 		g.verdict(GateNotOnBase, fmt.Sprintf("NOT-ON-BASE %s — merge commit %s is not an ancestor of %s (merged into another branch?)", o.Slot, sha, g.baseRef), "")
@@ -1259,11 +1283,11 @@ func (g *gate) confirmLanded(sha string) (done bool) {
 	if len(sha) >= 7 {
 		g.res.SHA = sha[:7] // the merge that landed on origin, for the merged-remotely verdicts
 	}
-	if out, code := e.runGit(g.root, "merge", "--ff-only", g.baseRef); code != 0 {
+	if out, code := g.git(g.root, "merge", "--ff-only", g.baseRef); code != 0 {
 		g.mergedRemotely(fmt.Sprintf("local %s could not fast-forward (%s)", o.Base, g.ffFailureCause(out)))
 		return true
 	}
-	if _, code := e.runGit(g.root, "merge-base", "--is-ancestor", sha, "HEAD"); code != 0 {
+	if _, code := g.git(g.root, "merge-base", "--is-ancestor", sha, "HEAD"); code != 0 {
 		g.mergedRemotely(fmt.Sprintf("%s is not in the local %s", sha, o.Base))
 		return true
 	}
@@ -1282,15 +1306,14 @@ func (g *gate) mergedRemotely(why string) {
 // files the merge touches are told apart from real divergence: local main can
 // be purely behind and still refuse to move.
 func (g *gate) ffFailureCause(mergeOut string) string {
-	e := g.e
-	incoming, _ := e.runGit(g.root, "diff", "--name-only", "HEAD", g.baseRef)
+	incoming, _ := g.git(g.root, "diff", "--name-only", "HEAD", g.baseRef)
 	in := map[string]bool{}
 	for _, p := range strings.Split(incoming, "\n") {
 		if p != "" {
 			in[p] = true
 		}
 	}
-	status, _ := e.runGit(g.root, "status", "--porcelain")
+	status, _ := g.git(g.root, "status", "--porcelain")
 	var clash []string
 	for _, l := range strings.Split(status, "\n") {
 		if len(l) > 3 && in[l[3:]] {
@@ -1300,7 +1323,7 @@ func (g *gate) ffFailureCause(mergeOut string) string {
 	if len(clash) > 0 {
 		return "local changes would be overwritten: " + strings.Join(clash, ", ")
 	}
-	if counts, code := e.runGit(g.root, "rev-list", "--left-right", "--count", "HEAD..."+g.baseRef); code == 0 {
+	if counts, code := g.git(g.root, "rev-list", "--left-right", "--count", "HEAD..."+g.baseRef); code == 0 {
 		if f := strings.Fields(counts); len(f) == 2 && f[0] != "0" {
 			return fmt.Sprintf("diverged: %s ahead, %s behind %s", f[0], f[1], g.baseRef)
 		}

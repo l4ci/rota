@@ -383,12 +383,17 @@ func SlotData(sl *Slot) *jsonx.Object {
 
 // git runs git and trims one trailing newline from stdout, like $(...).
 func (e Env) git(dir string, args ...string) (string, int) {
-	res, err := e.Git(e.context(), dir, args...)
-	out, code := res.Stdout, res.ExitCode
+	return e.runGit(e.context(), dir, args...)
+}
+
+// runGit is the one git adapter of package worker: git on ctx, a failure to
+// start as exit 127, stdout trimmed of one trailing newline.
+func (e Env) runGit(ctx context.Context, dir string, args ...string) (string, int) {
+	res, err := e.Git(ctx, dir, args...)
 	if err != nil {
 		return "", 127
 	}
-	return strings.TrimRight(out, "\n"), code
+	return strings.TrimRight(res.Stdout, "\n"), res.ExitCode
 }
 
 // Env is what the worker operations touch outside their own memory. Every
