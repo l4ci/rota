@@ -64,9 +64,11 @@ func PortRange(cfg any) (base, block int) {
 // range overlaps, picked under the registry lock, so two live slots never
 // share a port even after work.portBase or work.portBlock change (each slot
 // keeps the width it was allocated with). A slot that already has a block
-// keeps it. The range must end at or below 65535.
-func EnsurePortBase(root, name string, base, block int) (int, error) {
-	got := 0
+// keeps it. The range must end at or below 65535. It returns the slot's first
+// port and the width it holds, which is the stored one for a slot that already
+// had a block.
+func EnsurePortBase(root, name string, base, block int) (int, int, error) {
+	got, width := 0, 0
 	var ferr error
 	err := Update(root, func(d *Doc) {
 		s := d.Slot(name)
@@ -74,6 +76,7 @@ func EnsurePortBase(root, name string, base, block int) (int, error) {
 			return
 		}
 		if got = s.PortBase(); got > 0 {
+			width = s.PortBlock()
 			return
 		}
 		got = base
@@ -95,30 +98,33 @@ func EnsurePortBase(root, name string, base, block int) (int, error) {
 		}
 		s.o.Set("portBase", got)
 		s.o.Set("portBlock", block)
+		width = block
 	})
 	if err == nil {
 		err = ferr
 	}
-	return got, err
+	return got, width, err
 }
 
 var notIdent = regexp.MustCompile(`[^A-Za-z0-9]`)
 
 // SlotEnv is the environment a slot's agent and work.envSetup see:
-// the slot name, the first port of its block, and a database-name suffix.
-func SlotEnv(name string, portBase int) []string {
+// the slot name, the first port of its block, that block's width, and a
+// database-name suffix.
+func SlotEnv(name string, portBase, portBlock int) []string {
 	return []string{
 		"ROTA_SLOT=" + name,
 		"ROTA_PORT_BASE=" + strconv.Itoa(portBase),
+		"ROTA_PORT_BLOCK=" + strconv.Itoa(portBlock),
 		"ROTA_DB_SUFFIX=_" + notIdent.ReplaceAllString(name, "_"),
 	}
 }
 
 // exportPrefix is SlotEnv as a shell prefix. Slot names are free text, so
 // each value is single-quoted.
-func exportPrefix(name string, portBase int) string {
+func exportPrefix(name string, portBase, portBlock int) string {
 	p := ""
-	for _, e := range SlotEnv(name, portBase) {
+	for _, e := range SlotEnv(name, portBase, portBlock) {
 		k, v, _ := strings.Cut(e, "=")
 		p += "export " + k + "=" + hook.ShellQuote(v) + "; "
 	}

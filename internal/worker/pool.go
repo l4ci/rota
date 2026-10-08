@@ -162,12 +162,12 @@ func (e Env) PoolInit(ctx context.Context, root string, o InitOpts, acc *Account
 		}
 		// Fail fast: a red setup stops the pool here, the slot stays registered
 		// and the next init retries it because no hash was stored.
-		portBase, err := EnsurePortBase(root, name, portStart, portBlock)
+		portBase, width, err := EnsurePortBase(root, name, portStart, portBlock)
 		if err != nil {
 			return res, fail(exitcode.ExitUnavailable, err.Error())
 		}
 		if strings.TrimSpace(envSetup) != "" {
-			if _, err := e.envSetup(ctx, name, abs, envSetup, portBase); err != nil {
+			if _, err := e.envSetup(ctx, name, abs, envSetup, portBase, width); err != nil {
 				return res, err
 			}
 		}
