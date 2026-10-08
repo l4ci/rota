@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/l4ci/rota/internal/strutil"
 )
 
 // GitLab is the glab adapter. glab has no close reason, so a not-planned
@@ -147,7 +149,7 @@ func (g *GitLab) CreateMilestone(ctx context.Context, title, description string)
 	}
 	n, ok := intOf(d.ID)
 	if !ok {
-		return 0, failed("cannot parse milestone id from: %q", clip(string(d.ID)))
+		return 0, failed("cannot parse milestone id from: %q", strutil.Clip(string(d.ID), clipLen))
 	}
 	return n, nil
 }
