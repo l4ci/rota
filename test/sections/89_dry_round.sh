@@ -107,7 +107,7 @@ pass "doctor: healthy on the fixture, exit 1 and ok false once herdr is gone"
 # The issue goes in before start so start lists it; the config now also names the
 # forge and the merge policy the later steps need.
 printf '{"work":{"dispatch":"herdr","accounts":[{"name":"a","configDir":"%s"}]},"test":{"full":["true"]},"issues":{"provider":"github","retryWaitSeconds":0},"autonomy":{"level":"auto"},"ship":{"mergeApproval":"all"}}\n' "$TMP_DY/acct" > "$DY/.rota/config.json"
-dyj item create --kind features --title First --milestone M01 --body-file - <<<$'## Acceptance\n- [ ] works\nTouches internal/a.go' >/dev/null \
+dyj item create --kind features --title First --milestone M01 --body-file - <<<$'## Acceptance\n- [ ] works\nTouches internal/a.go\n\n## Touches\n- POST /items' >/dev/null \
   || fail "dry round: item create failed"
 printf '{"id":"cli","result":{"snapshot":{"agents":[]}}}\n' > "$FK/snapshot.json"
 rc=0; OUT="$(dyj round start --holder-pid "$DYHOLD" --slots 1)" || rc=$?
@@ -138,6 +138,17 @@ grep -q '^agent start' "$FK/herdr/log" || fail "dry round: assign should have st
 OUT="$(dyj round status)"
 [ "$(jget data.slots[0].tier <<<"$OUT")" = "heavy" ] || fail "dry round: status shows the slot tier: $OUT"
 pass "assign: tier heavy needs a reason, claims F01, cuts ben/f01-first, dispatches through fake herdr"
+
+# A second issue naming the same declared scope (different files) clashes with the
+# slot that holds F01: warned in candidates, still ready under the default round.scopeOverlap.
+dyj item create --kind features --title Second --milestone M01 --body-file - <<<$'## Acceptance\n- [ ] works\n\n## Touches\n- post /items ' >/dev/null \
+  || fail "dry round: second item create failed"
+OUT="$(dyj round candidates || true)"
+case "$OUT" in *'"scopes":["post /items"]'*|*'"scopes": ["post /items"]'*) ;; *) fail "dry round: candidates should report the shared scope post /items: $OUT" ;; esac
+[ "$(jget data.candidates[0].ready <<<"$OUT")" = "true" ] || fail "dry round: a warned scope clash keeps the item ready: $OUT"
+OUT="$(dy "$ROTA_BIN" round candidates 2>/dev/null || true)"
+case "$OUT" in *"overlaps #"*"(ben): scopes post /items"*) ;; *) fail "dry round: candidates text should name the scope clash: $OUT" ;; esac
+pass "candidates: a shared ## Touches scope is reported against the holder and only warns"
 
 # The worker's side, simulated with plain git and the fake forge: it commits,
 # pushes, opens a PR on the fake forge and prints ROTA-DONE. Nothing here is a rota

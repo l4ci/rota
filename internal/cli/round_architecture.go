@@ -43,7 +43,7 @@ func architectureFor(c *Ctx, root string, set roundcfg.Settings) (round.Architec
 		sc = recScope
 	}
 	env := c.deps().RoundEnv(ctx, root)
-	cands, err := env.Candidates(ctx, root, be, round.CandidateOpts{Scope: sc, Slate: slate, Shared: set.SharedPaths})
+	cands, err := env.Candidates(ctx, root, be, round.CandidateOpts{Scope: sc, Slate: slate, Shared: set.SharedPaths, ScopeOverlap: set.ScopeOverlap})
 	if err != nil {
 		return round.Architecture{}, err
 	}

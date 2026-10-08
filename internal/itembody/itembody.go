@@ -15,6 +15,10 @@ var (
 	// FilesHeadRe matches a "Files" or "Files touched" heading.
 	FilesHeadRe = regexp.MustCompile(`(?mi)^#{1,6}[ \t]+files(?:[ \t]+touched)?[ \t]*$`)
 
+	// TouchesHeadRe matches a "Touches" heading: the symbols, endpoints,
+	// schemas, migrations and config keys an item changes.
+	TouchesHeadRe = regexp.MustCompile(`(?mi)^#{1,6}[ \t]+touches[ \t]*$`)
+
 	anyHeadRe = regexp.MustCompile(`(?m)^#{1,6}[ \t]`)
 )
 
