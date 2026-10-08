@@ -199,7 +199,7 @@ func TestTrainLedgerStampsTheVerdictOnTheCulpritOnly(t *testing.T) {
 	dir := ledgerProject(t, `{"name":"b1","branch":"b1","pr":"https://github.com/o/r/pull/1"},{"name":"b2","branch":"b2","pr":"https://github.com/o/r/pull/2"},{"name":"b3","branch":"b3","pr":"https://github.com/o/r/pull/3"}`)
 	res := TrainResult{Verdict: GateVerifyFailed, Culprit: "b2", Landed: []string{"b1"},
 		Members: []TrainMember{{Target: "b1"}, {Target: "b2", Culprit: true}, {Target: "b3"}}}
-	trainLedger(dir, res, map[string]bool{})
+	trainLedger(nil, dir, res, map[string]bool{})
 	verdicts := map[string]string{}
 	es, _ := ledger.Load(dir)
 	for _, e := range es {
@@ -238,7 +238,7 @@ func TestLedgerNotesOfOneVerbReadTheLeaseOnce(t *testing.T) {
 	env := fakeLeaseEnv(100)
 	leaseEnv = func() roundlease.Env { reads++; return env }
 	t.Cleanup(func() { leaseEnv = roundlease.DefaultEnv })
-	gateLedger(dir, GateTarget{Name: "w1", Branch: "w1"}, GateResult{Verdict: GatePass})
+	gateLedger(&RoundMemo{}, dir, GateTarget{Name: "w1", Branch: "w1"}, GateResult{Verdict: GatePass})
 	if reads != 1 {
 		t.Errorf("gateLedger read the lease %d times, want 1", reads)
 	}

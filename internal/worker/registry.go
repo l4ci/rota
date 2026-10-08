@@ -500,11 +500,16 @@ func execShell(ctx context.Context, dir, command string) (string, int) {
 // and returns the count unchanged. head "" always counts. slot names the slot
 // that holds the bounced PR, so the ledger entry of a best-of attempt lands on
 // its own row; "" falls back to the first slot holding the issue.
-func RecordBounce(root, issue, slot, head string) (n int, err error) {
+func RecordBounce(root, issue, slot, head string) (int, error) {
+	return RecordBounceIn(nil, root, issue, slot, head)
+}
+
+// RecordBounceIn is RecordBounce reading the round lease through m.
+func RecordBounceIn(m *RoundMemo, root, issue, slot, head string) (n int, err error) {
 	counted := false
 	defer func() {
 		if err == nil && counted {
-			LedgerNote(root, ledger.Entry{Kind: ledger.KindBounce, Issue: issue, Slot: slot, Detail: ledger.Detail("count", n)})
+			LedgerNoteIn(m, root, ledger.Entry{Kind: ledger.KindBounce, Issue: issue, Slot: slot, Detail: ledger.Detail("count", n)})
 		}
 	}()
 	err = Update(root, func(d *Doc) {

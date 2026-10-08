@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/ledger"
+	"github.com/l4ci/rota/internal/roundlease"
 )
 
 func (w *world) setLedger(body string) {
@@ -132,5 +133,69 @@ func TestGateLedgerRecordsARemoteMerge(t *testing.T) {
 	}
 	if len(merges) != 1 || merges[0].DetailStr("by") != "remote" {
 		t.Fatalf("merge entries %+v, want one with by: remote", merges)
+	}
+}
+
+// A conflicting squash merge is stale and its head is not on the base: the
+// forge's MERGED state still earns the merge entry.
+func TestStaleGateOfAPRMergedRemotelyRecordsTheMerge(t *testing.T) {
+	w := newWorld(t, ghURL)
+	advanceMainOn(w, "work.txt")
+	w.forge("state", "MERGED")
+	res, err := w.gate(false, GateOpts{})
+	if err != nil || res.Verdict != GateStale {
+		t.Fatalf("gate: %+v %v", res, err)
+	}
+	for i := 0; i < 2; i++ { // gating it again adds no second entry
+		if _, err := w.gate(false, GateOpts{}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var merges []ledger.Entry
+	es, _ := ledger.Load(w.dir)
+	for _, e := range es {
+		if e.Kind == ledger.KindMerge {
+			merges = append(merges, e)
+		}
+	}
+	if len(merges) != 1 || merges[0].DetailStr("by") != "remote" {
+		t.Fatalf("merge entries %+v, want one with by: remote", merges)
+	}
+}
+
+// A gate verb that bounces reads the lease once: the gate's entries and the
+// bounce share the memo the result carries.
+func TestGateVerbWithABounceReadsTheLeaseOnce(t *testing.T) {
+	w := newWorld(t, ghURL)
+	advanceMainOn(w, "work.txt")
+	reads := 0
+	env := fakeLeaseEnv(100)
+	leaseEnv = func() roundlease.Env { reads++; return env }
+	t.Cleanup(func() { leaseEnv = roundlease.DefaultEnv })
+	res, err := w.gate(false, GateOpts{})
+	if err != nil || res.Verdict != GateStale {
+		t.Fatalf("gate: %+v %v", res, err)
+	}
+	if _, err := RecordBounceIn(res.Round, w.dir, "12", "w1", res.SHA); err != nil {
+		t.Fatal(err)
+	}
+	if reads != 1 {
+		t.Errorf("gate and bounce read the lease %d times, want 1", reads)
+	}
+}
+
+// A train landing several members reads the lease once, not once per member.
+func TestTrainReadsTheLeaseOnce(t *testing.T) {
+	w := trainWorld(t, "true", "b1", "b2", "b3")
+	reads := 0
+	env := fakeLeaseEnv(100)
+	leaseEnv = func() roundlease.Env { reads++; return env }
+	t.Cleanup(func() { leaseEnv = roundlease.DefaultEnv })
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3"}})
+	if err != nil || len(res.Landed) != 3 {
+		t.Fatalf("train: %+v %v", res, err)
+	}
+	if reads != 1 {
+		t.Errorf("train read the lease %d times, want 1", reads)
 	}
 }
