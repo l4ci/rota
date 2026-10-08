@@ -144,9 +144,10 @@ func TestStatsEmpty(t *testing.T) {
 func TestStatsTouchedFallsBackToGitDate(t *testing.T) {
 	root := gittest.NewRepo(t, "main")
 	gittest.Commit(t, root, "add map", ".rota/map/g.md", "---\nsubsystem: g\n---\nbody\n")
+	want := gittest.Run(t, root, "log", "-1", "--format=%cs", "--", ".rota/map/g.md")
 	got := Stats(root)
-	if len(got) != 1 || len(got[0].Touched) != len("2006-01-02") || got[0].Touched[4] != '-' {
-		t.Errorf("Stats = %+v, want a YYYY-MM-DD touched date from git", got)
+	if len(got) != 1 || got[0].Touched != want || want == "" {
+		t.Errorf("Stats = %+v, want touched %q (git's commit date)", got, want)
 	}
 }
 
