@@ -16,7 +16,8 @@
 #   --version X.Y.Z   ROTA_VERSION   release to install (default: latest)
 #   --prefix DIR      ROTA_PREFIX    install to DIR/bin (default: $HOME/.local)
 #   --strict          ROTA_STRICT=1  require minisign (default: warn and verify sha256 only)
-#                     Either one turns strict on; ROTA_STRICT=0 or unset leaves it off.
+#                     Either one turns strict on. ROTA_STRICT takes 1/true/yes (on) or
+#                     0/false/no/empty (off); anything else is an error.
 #
 # Env:
 #   ROTA_RELEASE_BASE_URL  default https://github.com/l4ci/rota/releases.
@@ -63,7 +64,11 @@ EOF
   version=${ROTA_VERSION:-}
   prefix=${ROTA_PREFIX:-}
   strict=0
-  [ "${ROTA_STRICT:-}" != 1 ] || strict=1
+  case ${ROTA_STRICT:-} in
+    1 | true | yes) strict=1 ;;
+    0 | false | no | "") ;;
+    *) die "invalid ROTA_STRICT value '$ROTA_STRICT'" "use 1, true or yes to turn strict on; 0, false, no or empty to leave it off" ;;
+  esac
   while [ $# -gt 0 ]; do
     case $1 in
       --version) [ $# -ge 2 ] || die "--version needs a value"; version=$2; shift 2 ;;
