@@ -576,7 +576,7 @@ drift between the registry, the host, git and the forge, including `stalled` (ne
 
 Every round event is appended to `.rota/ledger.jsonl`: an assign, a worker's done or blocked
 report, a bounce, a transfer, a best-of pick, a park, each gate verdict and merge, and a usage
-limit hit or reroute. `rota round summary` folds the file, with `.rota/gate-audit.jsonl`, into one
+limit hit (a reroute is the transfer it makes). `rota round summary` folds the file, with `.rota/gate-audit.jsonl`, into one
 row per issue (slot, harness, account, assigned and done times, wall time, bounces, gate outcome,
 merged), then totals per slot and per account, then the round's gate audit lines.
 
@@ -590,7 +590,12 @@ The quota share column is how many points of headroom the account lost between a
 read from the account meter. No host reports tokens, so this is a share of the account's window,
 not a token count, and it includes whatever other slots on the same account did in that time.
 Codex slots and accounts with no meter reading show `n/a`: unknown is never printed as 0.
-`rota round status --ui` shows the same headroom per slot in a `burn` column.
+On a herdr or tmux round the done reading is taken when the pane reports done (`rota worker done`,
+`worker poll` or `round wait`); under solo it is taken by `rota round report`.
+`rota round status --ui` shows the quota each slot's account has lost since the slot's latest
+assign in a `burn` column: the headroom the assign recorded minus the meter now, never below 0.
+It reads the meters once per refresh for all accounts, and shows `n/a` for codex slots and accounts
+with no reading.
 
 ## Winding down
 

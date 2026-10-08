@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -12,6 +13,7 @@ import (
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/tui"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 const rw, rh = 100, 30
@@ -235,19 +237,34 @@ func TestRoundScreenBurnColumn(t *testing.T) {
 }
 
 func TestFillBurnFromLedger(t *testing.T) {
-	dir := workerProject(t, `{}`)
+	dir := workerProject(t, `{"work":{"accounts":[{"name":"work","configDir":"/w"}]}}`)
 	for _, e := range []ledger.Entry{
 		{Kind: ledger.KindAssign, Issue: "12", Slot: "ben", Account: "work", Harness: "claude", Detail: ledger.Detail("headroom", 80.0)},
-		{Kind: ledger.KindAssign, Issue: "13", Slot: "dana", Account: "work", Harness: "codex"},
+		{Kind: ledger.KindAssign, Issue: "13", Slot: "dana", Account: "work", Harness: "codex", Detail: ledger.Detail("headroom", 80.0)},
+		{Kind: ledger.KindAssign, Issue: "14", Slot: "nia", Account: "work", Harness: "claude", Detail: ledger.Detail("headroom", 30.0)},
+		{Kind: ledger.KindAssign, Issue: "15", Slot: "kit", Account: "work", Harness: "claude"},
 	} {
 		if err := ledger.Append(dir, e); err != nil {
 			t.Fatal(err)
 		}
 	}
-	rows := []round.Row{{Name: "ben", Issue: "12"}, {Name: "dana", Issue: "13"}, {Name: "kit"}}
-	c := &Ctx{Deps: testDeps()}
-	fillBurn(c, dir, rows)
-	if rows[0].Burn == nil || *rows[0].Burn != 80 || rows[1].Burn != nil || rows[2].Burn != nil {
-		t.Errorf("burn = %v %v %v", rows[0].Burn, rows[1].Burn, rows[2].Burn)
+	fetches := 0
+	d := testDeps()
+	d.WorkerAccounts = func() *worker.Accounts {
+		return &worker.Accounts{Fetch: func(_ context.Context, name, _ string) (*jsonx.Object, string) {
+			fetches++
+			v, _ := jsonx.Decode([]byte(`{"five_hour":{"utilization":40,"resets_at":null},"seven_day":{"utilization":10,"resets_at":null}}`))
+			return v.(*jsonx.Object), ""
+		}}
+	}
+	rows := []round.Row{{Name: "ben", Issue: "12"}, {Name: "dana", Issue: "13"}, {Name: "nia", Issue: "14"}, {Name: "kit", Issue: "15"}, {Name: "ada"}}
+	fillBurn(&Ctx{Deps: d}, dir, rows)
+	// headroom now is 60: ben burned 80-60; nia's reset window floors at 0; a
+	// codex slot, an assign with no reading and an idle slot are n/a.
+	if rows[0].Burn == nil || *rows[0].Burn != 20 || rows[1].Burn != nil || rows[2].Burn == nil || *rows[2].Burn != 0 || rows[3].Burn != nil || rows[4].Burn != nil {
+		t.Errorf("burn = %v %v %v %v %v", rows[0].Burn, rows[1].Burn, rows[2].Burn, rows[3].Burn, rows[4].Burn)
+	}
+	if fetches != 1 {
+		t.Errorf("%d meter fetches for one refresh over three slots, want 1", fetches)
 	}
 }

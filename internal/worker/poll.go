@@ -13,6 +13,7 @@ import (
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/host"
+	"github.com/l4ci/rota/internal/ledger"
 )
 
 // Worker slot classification: the port of bin/hv-worker-poll.
@@ -365,13 +366,18 @@ func (e Env) Poll(ctx context.Context, root string, o PollOpts) (PollResult, err
 	}
 	openPRs := e.openPRsByHead(ctx, root, reg, byName)
 	var rowErr error
+	var dones []ledger.Entry
 	if err := UpdateSlots(root, func(s *Slot) {
 		r, ok := byName[s.Name()]
 		if !ok {
 			return
 		}
+		prev := s.State()
 		if err := recordRow(s, r, e.Now()); err != nil && rowErr == nil {
 			rowErr = err
+		}
+		if d, ok := paneDone(prev, s, r); ok {
+			dones = append(dones, d)
 		}
 		// A worker can open its PR and never print the sentinel (or print it
 		// without a URL): the slot would stay busy and the gate would not find
@@ -383,6 +389,9 @@ func (e Env) Poll(ctx context.Context, root string, o PollOpts) (PollResult, err
 		}
 	}); err != nil {
 		return PollResult{}, err
+	}
+	for _, d := range dones {
+		LedgerDone(ctx, e.Accounts, root, d)
 	}
 	if rowErr != nil {
 		return PollResult{}, rowErr

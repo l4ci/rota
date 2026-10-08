@@ -175,7 +175,7 @@ func TestReportRecordsStateAndPRAndIsIdempotent(t *testing.T) {
 		t.Fatal(err)
 	}
 	url := "https://github.com/o/r/pull/9"
-	r, err := ReportSlot(f.root, ReportOpts{Slot: "ben", State: "DONE", PR: url, Evidence: "built it"})
+	r, err := f.env.ReportSlot(bg, f.root, ReportOpts{Slot: "ben", State: "DONE", PR: url, Evidence: "built it"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -189,15 +189,15 @@ func TestReportRecordsStateAndPRAndIsIdempotent(t *testing.T) {
 	if v, ok := s.Raw().Get("evidence"); ok {
 		t.Errorf("evidence is echoed, never stored: %v", v)
 	}
-	r, err = ReportSlot(f.root, ReportOpts{Slot: "ben", State: "done", PR: url})
+	r, err = f.env.ReportSlot(bg, f.root, ReportOpts{Slot: "ben", State: "done", PR: url})
 	if err != nil || r.Changed || r.Previous != "done" {
 		t.Errorf("repeat: %+v %v", r, err)
 	}
 	// A PR number is stored as given; state alone leaves the PR.
-	if r, err = ReportSlot(f.root, ReportOpts{Slot: "ben", State: "blocked", PR: "#9"}); err != nil || !r.Changed {
+	if r, err = f.env.ReportSlot(bg, f.root, ReportOpts{Slot: "ben", State: "blocked", PR: "#9"}); err != nil || !r.Changed {
 		t.Errorf("%+v %v", r, err)
 	}
-	if _, err = ReportSlot(f.root, ReportOpts{Slot: "ben", State: "idle"}); err != nil {
+	if _, err = f.env.ReportSlot(bg, f.root, ReportOpts{Slot: "ben", State: "idle"}); err != nil {
 		t.Fatal(err)
 	}
 	if got := worker.LoadRegistry(f.root).Slot("ben").PR(); got != "#9" {
@@ -219,7 +219,7 @@ func TestReportRefusals(t *testing.T) {
 		{"unknown slot", ReportOpts{Slot: "zed", State: "done"}, exitcode.ExitResolution},
 	}
 	for _, c := range cases {
-		if _, err := ReportSlot(f.root, c.o); exitOf(err) != c.want {
+		if _, err := f.env.ReportSlot(bg, f.root, c.o); exitOf(err) != c.want {
 			t.Errorf("%s: %v, want exit %d", c.name, err, c.want)
 		}
 	}
@@ -228,7 +228,7 @@ func TestReportRefusals(t *testing.T) {
 	}
 	for _, h := range []string{"tmux", "herdr", ""} {
 		setHost(t, f.root, h)
-		_, err := ReportSlot(f.root, ReportOpts{Slot: "ben", State: "done"})
+		_, err := f.env.ReportSlot(bg, f.root, ReportOpts{Slot: "ben", State: "done"})
 		if exitOf(err) != exitcode.ExitUsage {
 			t.Errorf("host %q: %v, want exit 2", h, err)
 		}
@@ -319,7 +319,7 @@ func TestReportRearmsWaitForASoloSlot(t *testing.T) {
 	if _, err := f.assign("12", "ben", nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ReportSlot(f.root, ReportOpts{Slot: "ben", State: "done"}); err != nil {
+	if _, err := f.env.ReportSlot(bg, f.root, ReportOpts{Slot: "ben", State: "done"}); err != nil {
 		t.Fatal(err)
 	}
 	var e worker.Env
@@ -336,7 +336,7 @@ func TestReportRearmsWaitForASoloSlot(t *testing.T) {
 	if res := wait(); !res.TimedOut {
 		t.Fatalf("second: %+v, want timed out", res)
 	}
-	if _, err := ReportSlot(f.root, ReportOpts{Slot: "ben", State: "done"}); err != nil {
+	if _, err := f.env.ReportSlot(bg, f.root, ReportOpts{Slot: "ben", State: "done"}); err != nil {
 		t.Fatal(err)
 	}
 	if res := wait(); res.Slot != "ben" {

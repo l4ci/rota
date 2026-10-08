@@ -5,11 +5,10 @@
 // per-account totals.
 //
 // The file is per-developer runtime state (gitignored). A failed append never
-// fails the verb that wrote it: callers drop the error.
+// fails the verb that wrote it: worker.LedgerNote reports it on stderr.
 package ledger
 
 import (
-	"bufio"
 	"bytes"
 	"errors"
 	"os"
@@ -35,12 +34,11 @@ const (
 	KindGate     = "gate"
 	KindMerge    = "merge"
 	KindLimited  = "limited"
-	KindRerouted = "rerouted"
 )
 
 // Entry is one ledger line. Round is 0 when no round was running (solo mode
 // without a lease). Detail holds the per-kind extras: headroom (assign, done),
-// verdict (gate), resetsAt (limited), from and to (transfer, rerouted).
+// verdict (gate), resetsAt (limited), from (transfer).
 type Entry struct {
 	TS                                time.Time
 	Kind                              string
@@ -138,10 +136,8 @@ func Load(root string) ([]Entry, error) {
 		return nil, err
 	}
 	var out []Entry
-	sc := bufio.NewScanner(bytes.NewReader(data))
-	sc.Buffer(nil, 1<<20)
-	for sc.Scan() {
-		v, err := jsonx.Decode(sc.Bytes())
+	for _, line := range bytes.Split(data, []byte{'\n'}) {
+		v, err := jsonx.Decode(line)
 		if err != nil {
 			continue
 		}
@@ -159,7 +155,7 @@ func Load(root string) ([]Entry, error) {
 		}
 		out = append(out, e)
 	}
-	return out, sc.Err()
+	return out, nil
 }
 
 // Exists says whether the ledger file is there.

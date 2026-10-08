@@ -426,6 +426,9 @@ type Env struct {
 	Executable func() (string, error)
 	// LookPath reports whether a binary is installed; nil means exec.LookPath.
 	LookPath func(string) (string, error)
+	// Accounts reads the usage meters; poll and wait use it to record the
+	// account's headroom when a pane reports done. Nil records none.
+	Accounts *Accounts
 }
 
 func (e Env) context() context.Context {
