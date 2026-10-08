@@ -117,6 +117,9 @@ type GateOpts struct {
 	// Prune makes a pass that releases an adopted slot also remove its
 	// worktree and branch.
 	Prune bool
+	// Round reads the round lease for the gate's ledger entries; the gate makes
+	// one when nil. A caller that writes more entries after the gate shares it.
+	Round *RoundMemo
 	// Train marks a landing step of a merge train (see Train): the PRs were
 	// merged together and verified once, so a branch behind the base only
 	// because an earlier train member landed is not refused as stale.
@@ -144,9 +147,15 @@ type GateResult struct {
 	Verified      []string
 	VerifySkipped bool
 	Changed       bool
-	Err           string
-	Hint          string
-	Notes         []string // PROVENANCE-SKIP and NO-VERIFY lines for stderr
+	// AlreadyMerged says the forge reported the PR merged before this gate ran:
+	// the gate landed nothing, but the ledger records the merge as remote.
+	AlreadyMerged bool
+	// Round is the memo the gate's ledger entries read the round lease through;
+	// a caller that records more entries for the same verb reuses it.
+	Round *RoundMemo
+	Err   string
+	Hint  string
+	Notes []string // PROVENANCE-SKIP and NO-VERIFY lines for stderr
 	// Excluded lists the test-ledger entries that excused a failing command.
 	// Expired lists the entries past their expiry, which fail the gate.
 	Excluded, Expired []testledger.Entry
@@ -256,14 +265,20 @@ type Forge interface {
 // given.
 func (e Env) Gate(ctx context.Context, root string, o GateOpts) (GateResult, error) {
 	e = e.withDefaults()
+	if o.Round == nil {
+		o.Round = &RoundMemo{}
+	}
 	if o.CheckOnly || o.Train { // read-only, or already under the train's land lock
-		return e.gate(ctx, root, o)
+		res, err := e.gate(ctx, root, o)
+		res.Round = o.Round
+		return res, err
 	}
 	var res GateResult
 	err := e.withLandLock(ctx, root, func() (err error) {
 		res, err = e.gate(ctx, root, o)
 		return err
 	})
+	res.Round = o.Round
 	return res, err
 }
 
@@ -296,13 +311,13 @@ func (e Env) gate(ctx context.Context, root string, o GateOpts) (GateResult, err
 			res.Verdict, res.Expired = GateVerifyFailed, in.ledger.Expired(e.withDefaults().Now())
 			res.Err = fmt.Sprintf("GATE-FAIL %s — %s; nothing landed", o.Slot, msg)
 			res.Hint = "fix the test or renew the entry in .rota/test-ledger.json, then re-gate"
-			gateLedger(root, t, res)
+			gateLedger(o.Round, root, t, res)
 			return res, nil
 		}
 	}
 	res, err = e.gateEnv().gate(ctx, root, o, res, in, t)
 	if err == nil && !o.CheckOnly {
-		gateLedger(root, t, res)
+		gateLedger(o.Round, root, t, res)
 	}
 	if err == nil && t.Queued && res.Verdict == GatePass {
 		if err := RemoveQueuedPR(root, t.PR); err != nil {
@@ -513,6 +528,7 @@ func (g *gate) stepFreshness() (bool, error) {
 		return g.broke(brokeMsg)
 	}
 	if why != "" {
+		g.noteMergedRemotely()
 		g.res.SHA, _ = e.runGit(g.root, "rev-parse", "--short=7", g.headRef) // bounce accounting keys on the head
 		g.verdict(GateStale, fmt.Sprintf("STALE %s %s — %s commit(s) landed on %s since it branched; %s", o.Slot, g.branch, behind, o.Base, why),
 			fmt.Sprintf("bounce: tell slot %s to `git merge %s`, resolve and re-verify, then re-gate", o.Slot, o.Base))
@@ -550,6 +566,7 @@ func (g *gate) stepPRMatches() (bool, error) {
 	// OPEN, MERGED or CLOSED on both forges.
 	switch {
 	case info.State != "OPEN":
+		g.res.AlreadyMerged = info.State == "MERGED"
 		return mismatch(fmt.Sprintf("PR %s is %s, not open", g.prNum, info.State))
 	case info.Base != g.o.Base:
 		return mismatch(fmt.Sprintf("PR %s targets '%s', the gate's base is '%s' — stacked PR?", g.prNum, info.Base, g.o.Base))
@@ -1108,6 +1125,18 @@ func (g *gate) verdict(v, msg, hint string) {
 func (g *gate) broke(msg string) (bool, error) {
 	g.verdict(GateCheckBroke, fmt.Sprintf("CHECK-BROKE %s — %s", g.o.Slot, msg), "")
 	return true, nil
+}
+
+// noteMergedRemotely marks the result when the forge says the PR is merged: a
+// stale refusal of a PR landed elsewhere, by a squash or rebase too, whose head
+// is then not on the base.
+func (g *gate) noteMergedRemotely() {
+	if !g.remote || g.o.CheckOnly { // a check-only gate writes no ledger entry
+		return
+	}
+	if info, ok := g.prInfo(); ok && info.State == "MERGED" {
+		g.res.AlreadyMerged = true
+	}
 }
 
 // prInfo reads the PR; ok is false when the forge could not be read.
