@@ -130,3 +130,29 @@ func TestReconcileApplySkipsOverlap(t *testing.T) {
 		t.Errorf("want an overlap warning naming the branch: %v", out.Report.Warnings)
 	}
 }
+
+func TestFindingKeyDistinguishesNumberlessBranches(t *testing.T) {
+	root, e, _ := unregFixture(t, "codex/nonum-a", "codex/nonum-b")
+	out, err := e.Reconcile(bg, root, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	keys := map[string]bool{}
+	for _, f := range unregistered(out.Drift) {
+		keys[f.Key()] = true
+	}
+	if len(keys) != 2 || !keys["codex/nonum-a"] || !keys["codex/nonum-b"] {
+		t.Errorf("keys: %v", keys)
+	}
+}
+
+func TestStatusSkipsTheBranchScan(t *testing.T) {
+	root, e, _ := unregFixture(t, "codex/612-thing")
+	rep, err := e.Status(bg, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := unregistered(rep.Findings); len(got) != 0 {
+		t.Errorf("plain status must not scan branches: %+v", got)
+	}
+}
