@@ -6,7 +6,7 @@
 
 **The agent orchestration layer for Claude Code and Codex.**
 
-One orchestrator runs as many workers as your accounts can carry, in herdr or tmux, on Claude, Codex or both, and spreads them across accounts so no session or weekly limit stalls the work. Start from an empty repo or point it at your GitHub or GitLab issues. rota plans, builds, debugs, runs QA and keeps what it learns, and it merges a PR only after your tests pass on the merged code.
+rota turns a to-do list into reviewed, merged work: capture an item, let your agent build it in small commits, and ship it through a review and a PR, with what the project learned kept for the next session.
 
 [![Release](https://img.shields.io/github/v/release/l4ci/rota?color=blue&sort=semver)](https://github.com/l4ci/rota/releases)
 [![License](https://img.shields.io/github/license/l4ci/rota?color=green)](LICENSE)
@@ -16,20 +16,37 @@ One orchestrator runs as many workers as your accounts can carry, in herdr or tm
 [![For Codex](https://img.shields.io/badge/for-Codex-000000)](https://developers.openai.com/codex)
 [![Runs in herdr or tmux](https://img.shields.io/badge/runs%20in-herdr%20%C2%B7%20tmux-2ea44f)](#-runs-in-herdr-or-tmux)
 
-[How it works](#-how-it-works) · [herdr and tmux](#-runs-in-herdr-or-tmux) · [Accounts](#-several-accounts-balanced) · [Quick start](#-quick-start) · [Skills](#-skills) · [Docs](docs/)
+[Quick start](#-quick-start) · [How it works](#-how-it-works) · [Rounds](#-parallel-rounds) · [herdr and tmux](#-runs-in-herdr-or-tmux) · [Accounts](#-several-accounts-balanced) · [Skills](#-skills) · [Docs](docs/)
 
 </div>
 
-<p align="center"><img src="docs/images/rota-round.gif" alt="Animated demo: running rota opens its palette; picking Orchestrate starts a round in herdr's split view, where the orchestrator assigns three issues to Claude and Codex workers, escalates a worker's product question, gates and merges a finished PR, and places the next issue on the account with the most headroom" width="100%"></p>
-<p align="center"><sub>A round in herdr's split view (illustration with a sample project; the palette is rota's real first screen).</sub></p>
-
 ---
+
+## 🚀 Quick start
+
+One agent, one item at a time. You need git and [Claude Code](https://claude.com/claude-code) or Codex. No herdr, tmux, `gh` or second account.
+
+```bash
+brew install l4ci/tap/rota   # or: curl -fsSL https://raw.githubusercontent.com/l4ci/rota/main/install.sh | sh
+rota skills install          # adds the /rota-* skills to Claude Code and Codex
+cd your-project && rota init
+```
+
+`rota init` creates `.rota/` with sensible defaults. Commit it. Then, in Claude Code:
+
+```text
+/rota-capture fix the login redirect loop; add a dark mode toggle
+/rota-work      # picks the next item, plans it, builds it in small commits
+/rota-ship      # reviews the branch, then opens a PR or merges
+```
+
+That's the whole loop. [Install](docs/install.md) lists every way to get the binary (the script checks the sha256 and, if `minisign` is installed, the signature). [Getting started](docs/getting-started.md) walks through the loop with the choices `rota init` makes.
 
 ## 🔄 How it works
 
 rota has two parts: **skills**, slash commands like `/rota-work` that tell the agent how to do a job well, and the **`rota` CLI**, which the skills call to do the bookkeeping and enforce the rules (who holds which issue, what may merge).
 
-You can use it two ways. Start with the first; move to the second when you have several issues ready at once.
+You can use it two ways. The [quick start](#-quick-start) above is the first; move to the second when you have several issues ready at once.
 
 **1. One agent, one item at a time.** You stay in the conversation.
 
@@ -51,6 +68,13 @@ issues ─► orchestrator ─┼─► worker dana ─► PR ─┼─► gate 
 - **Gate**: the only merge path. It checks the PR is current and properly signed off, merges it, then runs your full test suite on the merged `main`. A red result stops the round until it's fixed. With `test.fullWhere ci` the suite runs in CI before the merge instead.
 
 Both ways share a memory in `.rota/`: what the project has learned (`KNOWLEDGE.md`), the lines it must not cross (`DECISIONS.md`), and handoff notes, so a fresh session picks up where the last one stopped.
+
+## 🧵 Parallel rounds
+
+When you have a few independent issues, a round runs them side by side: one orchestrator hands issues to workers, and the gate merges a PR only after your tests pass on the merged code. [Your first round](docs/first-round.md) sets it up; you'll want `gh` (or `glab`) and [herdr](https://herdr.dev) or tmux.
+
+<p align="center"><img src="docs/images/rota-round.gif" alt="Animated demo: running rota opens its palette; picking Orchestrate starts a round in herdr's split view, where the orchestrator assigns three issues to Claude and Codex workers, escalates a worker's product question, gates and merges a finished PR, and places the next issue on the account with the most headroom" width="100%"></p>
+<p align="center"><sub>A round in herdr's split view (illustration with a sample project; the palette is rota's real first screen).</sub></p>
 
 ## 🪟 Runs in herdr or tmux
 
@@ -75,27 +99,6 @@ Long rounds run into usage limits. List your accounts and rota spreads the work 
 - **Codex.** `work.codexAccounts` spreads Codex workers over several logins (rota can't read Codex usage, so these aren't balanced by headroom).
 
 Setup: [parallel rounds](docs/usage/parallel-rounds.md#-setup) and [unattended rounds](docs/usage/unattended-rounds.md).
-
-## 🚀 Quick start
-
-> [!NOTE]
-> You need git and [Claude Code](https://claude.com/claude-code) or Codex. The install script also needs `minisign`. For rounds you'll later want `gh` (or `glab`) and [herdr](https://herdr.dev) or tmux.
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/l4ci/rota/main/install.sh | sh   # or: brew install l4ci/tap/rota
-rota skills install     # adds the /rota-* skills to Claude Code and Codex
-cd your-project && rota init
-```
-
-`rota init` creates `.rota/` with sensible defaults. Commit it. Then, in Claude Code:
-
-```text
-/rota-capture fix the login redirect loop; add a dark mode toggle
-/rota-work      # picks the next item, plans it, builds it in small commits
-/rota-ship      # reviews the branch, then opens a PR or merges
-```
-
-That's the whole loop. [Getting started](docs/getting-started.md) walks through it with the choices `rota init` makes. When you have a few independent issues, [your first round](docs/first-round.md) sets up the orchestrator and workers.
 
 ## 🧰 Skills
 
