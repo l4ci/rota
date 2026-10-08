@@ -164,6 +164,7 @@ exit codes and repo scope: [verb contract](../contributing/contract/README.md).
 |---|---|
 | `rota knowledge query <topic>… [--tier provisional\|confirmed\|deprecated] [--include-deprecated]` | print topic sections, tier-aware |
 | `rota knowledge stats` | bullet count and size per topic |
+| `rota knowledge topics` | list topic headings with bullet counts |
 | `rota knowledge add --topic <T> --title <S> --body-file <path\|-> [--date YYYY-MM-DD]` | add a bullet under a topic |
 | `rota knowledge amend --topic <T> --fragment <F> --mode append --body-file <path\|->` | append text to an existing bullet |
 | `rota knowledge replace --topic <T> --old <text> --new <text>` | replace text inside the one bullet that contains it |
@@ -182,6 +183,7 @@ exit codes and repo scope: [verb contract](../contributing/contract/README.md).
 | Usage | What it does |
 |---|---|
 | `rota decisions query <topic>…` | print topic sections |
+| `rota decisions topics` | list topic headings with bullet counts |
 | `rota decisions stats` | bullet count and size per topic |
 
 ## `rota glossary`
