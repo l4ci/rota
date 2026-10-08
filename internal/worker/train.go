@@ -42,7 +42,7 @@ import (
 // the verified tree is no longer what would land. Nothing landed.
 const GateBaseMoved = "base-moved"
 
-// GateOrder: the members conflict under every order the train tried; the CLI
+// GateOrder: a shared-path member conflicts with the members before it; the CLI
 // exits 4 with it, blockedBy order. Nothing was pushed.
 const GateOrder = "order"
 
@@ -233,38 +233,26 @@ func (e Env) train(ctx context.Context, root string, o TrainOpts, cache *trainCa
 		return res, err
 	}
 	autoOrder := len(o.Order) == 0
-	permute := func(p []int) {
-		ms := make([]TrainMember, len(p))
-		fs := make([]trainFoot, len(p))
-		ls := make([]string, len(p))
-		for i, j := range p {
-			ms[i], fs[i], ls[i] = res.Members[j], foots[j], lines[j]
-		}
-		res.Members, foots, lines = ms, fs, ls
+	ms := make([]TrainMember, len(perm))
+	fs := make([]trainFoot, len(perm))
+	ls := make([]string, len(perm))
+	for i, j := range perm {
+		ms[i], fs[i], ls[i] = res.Members[j], foots[j], lines[j]
 	}
-	permute(perm)
-	report := func() {
-		res.Order = append([]string(nil), lines...)
-		if o.Say != nil {
-			for _, l := range lines {
-				o.Say("ORDER " + l)
-			}
+	res.Members, foots = ms, fs
+	res.Order = ls
+	if o.Say != nil {
+		for _, l := range ls {
+			o.Say("ORDER " + l)
 		}
 	}
-	report()
 
 	// The union of the files the members change.
 	files := func() ([]string, error) {
 		set := map[string]bool{}
-		for _, m := range res.Members {
-			out, code := e.git(root, "diff", "--name-only", baseRef+"..."+headRef(m))
-			if code != 0 {
-				return nil, fmt.Errorf("git diff --name-only %s...%s exited %d", baseRef, headRef(m), code)
-			}
-			for _, l := range strings.Split(out, "\n") {
-				if l != "" {
-					set[l] = true
-				}
+		for _, f := range foots {
+			for _, p := range f.paths {
+				set[p] = true
 			}
 		}
 		list := make([]string, 0, len(set))
@@ -320,39 +308,14 @@ func (e Env) train(ctx context.Context, root string, o TrainOpts, cache *trainCa
 	if brokeMsg != "" {
 		return e.trainBroke(res, brokeMsg)
 	}
-	if merr != nil && autoOrder && failed > 0 && len(res.Members)-nIso > 1 {
-		// A member conflicts with the ones before it: try the shared-path group
-		// in reverse once, since the isolated members cannot be the cause.
-		pair := conflictPair(res.Members, foots, failed)
-		first := orderText(res.Members)
-		if _, code := e.git(scratch, "checkout", "-q", "--detach", baseSHA); code != 0 {
-			return e.trainBroke(res, "git checkout "+baseSHA+" failed in the scratch tree")
-		}
-		rev := make([]int, len(res.Members))
-		for i := range rev {
-			rev[i] = i
-		}
-		for a, b := nIso, len(rev)-1; a < b; a, b = a+1, b-1 {
-			rev[a], rev[b] = rev[b], rev[a]
-		}
-		permute(rev)
-		for a, b := nIso, len(heads)-1; a < b; a, b = a+1, b-1 {
-			heads[a], heads[b] = heads[b], heads[a]
-		}
-		tips, failed, merr, brokeMsg = e.mergeTrain(ctx, scratch, o.Base, res.Members, heads)
-		if brokeMsg != "" {
-			return e.trainBroke(res, brokeMsg)
-		}
-		if merr != nil && failed > 0 {
-			res.Verdict, res.Culprit = GateOrder, res.Members[failed].Target
-			res.Err = fmt.Sprintf("TRAIN-BLOCKED order — %s; the train conflicts under both orders tried (%s; %s); nothing pushed", pair, first, orderText(res.Members))
-			res.Hint = "rebase one of the pair on the other's merge, or land them in separate trains"
-			return res, nil
-		}
-		if merr == nil {
-			res.Notes = append(res.Notes, "ORDER-REVERSED shared-path group — the first order conflicted ("+pair+"), so the train merges "+orderText(res.Members))
-			report()
-		}
+	if merr != nil && autoOrder && failed >= nIso && failed > 0 && errors.As(merr, new(*land.ConflictError)) {
+		// A shared-path member conflicts with the ones before it. Git's pairwise
+		// conflicts do not depend on merge order, so no other order is tried.
+		res.Verdict, res.Culprit = GateOrder, res.Members[failed].Target
+		res.Members[failed].Culprit = true
+		res.Err = fmt.Sprintf("TRAIN-BLOCKED order — %s; the shared-path members conflict in the order tried (%s); nothing pushed", conflictPair(res.Members, foots, failed), orderText(res.Members))
+		res.Hint = "rebase one of the pair on the other's merge, or land them in separate trains, or pass --order to try another"
+		return res, nil
 	}
 	if merr != nil {
 		m := res.Members[failed]
