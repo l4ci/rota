@@ -19,6 +19,7 @@ The skills use neutral instructions for file reads, edits, questions and subagen
 
 ## Remaining Claude-only behaviour — 2026-10-08
 
+- **`rota-work`:** the shared wave-planning guidance names Claude Code's “File has been modified since read” error and retains its retry with a byte-identical `old_string`. That tool-specific error and retry are labelled Claude-only.
 - **`rota-orchestrate`:** solo mode still launches Claude subagents through its `Agent` interface. Codex must use a supported terminal host for rounds; see [Codex workers](codex-workers.md). This restriction applies to standing round workers, not ordinary subagents inside a skill.
 
 Shared authoring guidance retains a Claude-only question-picker adapter and Claude task-title escaping advice. Neither is required for Codex skill execution.

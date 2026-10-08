@@ -48,7 +48,7 @@ Skills size a subagent by **tier**, never by model name. Three tiers, lightest f
 | `standard` | routine reasoning and writing: summarize a file, classify items, write code and tests | `sonnet` | `round.tiers.claude.standard`, which follows `models.worker` until set |
 | `heavy` | judgment: verification, design selection, hypothesis evaluation, hard debugging | `opus` | `round.tiers.claude.heavy` |
 
-`rota round assign --tier` picks the tier of a round worker from the same table; Codex maps tiers through `round.tiers.codex.*` (see `docs/usage/configuration.md`, *Round keys*). The tier is chosen per subagent call; `models.orchestrator` and the Claude defaults above do not select a Codex model. Prefer the project's named agents (`rota-explorer`, `rota-implementer`, `rota-reasoner`) when the harness exposes them. Otherwise resolve the tier through the current harness's config keys. For Codex, an unset `round.tiers.codex.<tier>` means use its own default; never pass a Claude model name. If model selection is unavailable, keep the tier in the brief and use the harness default.
+`rota round assign --tier` picks the tier of a round worker from the same table; Codex maps tiers through `round.tiers.codex.*` (see `docs/usage/configuration.md`, *Round keys*). The tier is chosen per subagent call; the main session's model is `models.orchestrator`, not a tier. A skill that names a subagent model says `light`, `standard` or `heavy`; the model comes from this table. Where the harness's dispatch interface takes a literal `model`, resolve the tier through the config key. Haiku usage is opportunistic: declared inline in the brief, not in config.
 
 ## Parallel fan-out pattern
 

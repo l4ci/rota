@@ -21,7 +21,7 @@ Rename plus link-sweep is the standard case. `rota plan rename-check <old-name> 
 - **Cross-referencing parallel artifacts.** When two parallel subagents author artifacts that cite each other, pre-specify the citation language (path plus named role) in each brief. Serialize when a citation must quote or restate the other artifact.
 - **Docs next to helpers.** A doc subagent running beside the subagents that write the helpers it documents will paraphrase the brief and drift from the code. Pin exact signatures verbatim into the doc brief, or serialize the doc subagent after the helper commit.
 - **Dispatch vs direct.** N near-identical mechanical edits on disjoint files (an 18-site SKILL.md sweep) go faster as parallel file edits from the main session. Litmus: is the task one replacement against uniquely anchored text? Then do it inline.
-- **Edit race.** Parallel subagents editing different ranges of one file may see *"File has been modified since read"*. Read the file again and reapply the intended change against the current content; preserve sibling edits.
+- **Edit race (Claude Code only).** Parallel subagents editing different ranges of one file may see *"File has been modified since read"*. Read the file again and re-run the edit with a byte-identical `old_string`; don't regenerate it.
 
 ## Verifying a completion
 
