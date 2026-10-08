@@ -74,6 +74,8 @@ pass "C6[reap lease]: a stale lease is listed and cleared; live, foreign and abs
 # a released adopted slot keeps its checkout, here outside .worktrees/: the merged
 # branch is listed, held by that checkout, and --apply leaves both alone
 rp_git worktree add -q -b codex/7-ext "$TMP_RP/outside" HEAD
+# the adopt record is what makes a branch outside the roster's shape reap's to list
+printf '%s\n' '{"ts":"2026-01-01T00:00:00Z","kind":"adopt","round":1,"issue":"7","slot":"ext-1","detail":{"branch":"codex/7-ext"}}' >"$RP/.rota/ledger.jsonl"
 OUT="$(rp_run --kind branch)"
 [ "$(printf '%s' "$OUT" | rp_ids)" = "branch:codex/7-ext!,branch:kit/9-gone" ] || fail "reap[external]: branch candidates were $(printf '%s' "$OUT" | rp_ids)"
 OUT="$(rp_run --kind branch --apply)"
