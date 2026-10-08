@@ -345,7 +345,7 @@ def prose_rules():
     for key in ("work.dispatch", "work.workerSlots", "work.workerCommand"):
         r.append(has("docs/reference/config-options.md", key, f"does not document {key}"))
     # multi-repo flow (M03)
-    r += [has("skills/rota-capture/umbrella-tagging.md", r"multiSelect:.*true", "Step 4.6 must declare multiSelect: true for the Repos question", True),
+    r += [has("skills/rota-capture/umbrella-tagging.md", "**Selection:** multiple", "Step 4.6 must allow multiple selections for the Repos question"),
           has("skills/rota-capture/umbrella-tagging.md", "comma-separated list of registered sub-repos", "field-order line must say 'comma-separated list of registered sub-repos'"),
           lacks(sk("capture"), "single name in V1", "must no longer carry the 'single name in V1' qualifier"),
           lacks("skills/rota-capture/umbrella-tagging.md", "single name in V1", "must no longer carry the 'single name in V1' qualifier"),

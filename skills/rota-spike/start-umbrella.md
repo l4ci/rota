@@ -6,7 +6,7 @@ Used by Steps 2 to 4 when `rota repo umbrella` exits 0 (see `references/umbrella
 
 1. The user named a sub-repo (*"spike SSE feasibility in web"*) → use it.
 2. Else `rota repo which --json` from the cwd; on success use `data.name`.
-3. Else ask via `AskUserQuestion`:
+3. Else ask:
    - **Header:** `"Repo"`
    - **Question:** *"Which sub-repo should `spike/<name>` live in?"*
    - **Options:** one per registered sub-repo (names from `.rota/repos.json`, or `rota repo resolve --json`), single-select.
