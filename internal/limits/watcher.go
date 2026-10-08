@@ -32,8 +32,11 @@ type Target struct {
 	Session      string
 	Pane         string
 	Orchestrator bool
-	// Account is the slot's account, "" when none is configured.
+	// Account is the slot's account, "" when none is configured. For a Codex
+	// slot it is the work.codexAccounts entry.
 	Account string
+	// Kind is the slot's harness kind, "" for Claude.
+	Kind string
 	// Issue is the issue the slot holds, "" for an idle slot (nothing to
 	// lose, so its limit is not handled).
 	Issue string
@@ -73,9 +76,10 @@ type Deps struct {
 	Meter func(ctx context.Context, account string) Reading
 	// PickAccount is `worker account pick --exclude <account>`: the account
 	// with the most headroom that is not cooling.
-	PickAccount func(ctx context.Context, exclude string) (string, bool)
-	// IdleSlot finds an idle slot on the account.
-	IdleSlot func(ctx context.Context, account string) (string, bool)
+	// For a Codex slot (kind "codex") it picks among work.codexAccounts.
+	PickAccount func(ctx context.Context, kind, exclude string) (string, bool)
+	// IdleSlot finds an idle slot of the harness kind on the account.
+	IdleSlot func(ctx context.Context, kind, account string) (string, bool)
 	// Transfer is `rota round transfer <issue> --to <slot>`.
 	Transfer func(ctx context.Context, issue, to string) error
 	// Send types the prompt into the target's pane and submits it.
@@ -327,7 +331,9 @@ func (w *Watcher) text(ctx context.Context, now time.Time, targets []Target, m M
 				return
 			}
 		}
-	} else if w.Meter != nil && t.Account != "" {
+	} else if w.Meter != nil && t.Account != "" && t.Kind == "" {
+		// The meter reads Claude accounts only: a Codex login has no usage
+		// numbers, so its limit message alone is the evidence.
 		r := w.Meter(ctx, t.Account)
 		switch {
 		case r.Known && !r.Cooling:
@@ -382,7 +388,7 @@ func (w *Watcher) detect(ctx context.Context, now time.Time, t Target, o obs) {
 	}
 
 	e := Entry{Session: t.Session, Window: o.window, Source: o.source, DetectedAt: Time(now),
-		ResetsAt: Time(o.resetsAt), Account: t.Account, Status: StatusWaiting}
+		ResetsAt: Time(o.resetsAt), Account: t.Account, Kind: t.Kind, Status: StatusWaiting}
 	if !o.hasReset {
 		e.Note = fmt.Sprintf("no reset time found; sleeping the fallback %s", w.Settings.Fallback)
 	}
@@ -454,11 +460,11 @@ func (w *Watcher) decide(ctx context.Context, t Target, e *Entry) (slot, acct st
 	case w.PickAccount == nil || w.IdleSlot == nil || w.Transfer == nil:
 		return sleep("Switching is not available here.")
 	}
-	acct, ok := w.PickAccount(ctx, t.Account)
+	acct, ok := w.PickAccount(ctx, t.Kind, t.Account)
 	if !ok {
 		return sleep("No usable account to switch to.")
 	}
-	slot, ok = w.IdleSlot(ctx, acct)
+	slot, ok = w.IdleSlot(ctx, t.Kind, acct)
 	if !ok {
 		return sleep(fmt.Sprintf("No idle slot on account %s.", acct))
 	}

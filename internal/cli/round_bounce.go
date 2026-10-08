@@ -17,6 +17,7 @@ import (
 // higher tier or the human instead.
 func roundBounce(fs *flag.FlagSet) RunFunc {
 	head := fs.String("head", "", "PR head sha being bounced; the same head twice counts once")
+	slot := fs.String("slot", "", "slot holding the bounced PR; names the ledger row of a best-of attempt")
 	return func(c *Ctx, args []string) (Result, error) {
 		if len(args) != 1 {
 			return Result{}, Usage("round bounce takes one item ID")
@@ -30,7 +31,7 @@ func roundBounce(fs *flag.FlagSet) RunFunc {
 			return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
 		}
 		issue := strings.TrimPrefix(args[0], "#")
-		n, capped, err := recordBounce(root, issue, *head, set.MaxBounces)
+		n, capped, err := recordBounce(root, issue, *slot, *head, set.MaxBounces)
 		if err != nil {
 			return Result{}, err
 		}
@@ -49,11 +50,11 @@ func roundBounce(fs *flag.FlagSet) RunFunc {
 
 // recordBounce counts one bounce unless the item is already at max (0 = no
 // cap). capped reports the refusal; n is then the unchanged count.
-func recordBounce(root, issue, head string, max int) (n int, capped bool, err error) {
+func recordBounce(root, issue, slot, head string, max int) (n int, capped bool, err error) {
 	if n = worker.LoadRegistry(root).Bounces(issue); max > 0 && n >= max {
 		return n, true, nil
 	}
-	n, err = worker.RecordBounce(root, issue, head)
+	n, err = worker.RecordBounce(root, issue, slot, head)
 	return n, false, err
 }
 

@@ -10,6 +10,7 @@ import (
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/limits"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
@@ -24,8 +25,10 @@ import (
 // the process runs inside herdr (rounds are started by hand with `herdr
 // worktree create`, whatever the config says), else tmux.
 // A host or forge that cannot be built or reached is left nil: the verbs
-// report it as unavailable instead of failing.
-func defaultRoundEnv(ctx context.Context, root string, d *Deps) round.Env {
+// report it as unavailable instead of failing. withForge false builds no
+// forge at all (Forge and ForgeErr stay empty), for a caller that reads only
+// the local sources and would not wait on the network.
+func defaultRoundEnv(ctx context.Context, root string, d *Deps, withForge bool) round.Env {
 	cfg := config.Load(rotatree.Config(root))
 	e := round.Env{Git: d.Git, Base: "main", Lease: d.LeaseEnv()}
 	e.Worker.NewHost = func(kind string) host.Host { return d.Host(kind) }
@@ -51,6 +54,9 @@ func defaultRoundEnv(ctx context.Context, root string, d *Deps) round.Env {
 		e.StallMinutes = set.StallMinutes
 		e.AdoptPattern, e.SharedPaths = set.AdoptPattern, set.SharedPaths
 		e.ItemTimeoutMinutes = set.ItemTimeoutMinutes
+	}
+	if !withForge {
+		return e
 	}
 	f, err := d.forge(ctx, cfg, "", root)
 	if err != nil {
@@ -92,7 +98,8 @@ func roundStatus(*flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		ctx := c.Context()
-		rep, err := withBoard(c, root, c.deps().RoundEnv(ctx, root)).Status(ctx, root)
+		renv := withBoard(c, root, c.deps().RoundEnv(ctx, root))
+		rep, err := renv.Status(ctx, root)
 		if err != nil {
 			return Result{}, err
 		}
@@ -113,6 +120,16 @@ func roundStatus(*flag.FlagSet) RunFunc {
 		d.Set("review", queuedRows(rep.Queued))
 		var lines []string
 		if set, err := roundcfg.Load(root); err == nil {
+			renv.Accounts = c.deps().WorkerAccounts()
+			if qc := renv.QuotaCap(ctx, root, set); qc.Reduced() {
+				co := jsonx.NewObject()
+				co.Set("effective", qc.Effective)
+				co.Set("roster", qc.Roster)
+				co.Set("reason", qc.Reason)
+				co.Set("resumesAt", limits.Time(qc.ResumesAt))
+				d.Set("cap", co)
+				lines = append(lines, fmt.Sprintf("cap\t%d/%d\t%s", qc.Effective, qc.Roster, qc.Reason))
+			}
 			if a, err := architectureFor(c, root, set); err == nil {
 				d.Set("architecture", architectureData(a))
 				if l := a.Line(); l != "" {

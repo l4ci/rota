@@ -7,7 +7,7 @@ Gate and registry semantics: `references/umbrella-mode.md`. Ask only when `rota 
 Otherwise ask:
 
 - **Header:** `"Repos"`; **Question:** *"Which sub-repo(s) does this item belong to?"* (with the item's short title)
-- **multiSelect:** true
+- **Selection:** multiple
 - **Options:** one per `name` in `.rota/repos.json` (mark the likely match `(Recommended)` when the item text names a repo), then *"None / unsure — leave untagged"* last.
 
 Two or more repos make a multi-repo item that `/rota-work` branches in each repo. Concrete names beat *"None / unsure"*. An ambiguous reply leaves the item untagged; `/rota-work` then refuses it and points back here.

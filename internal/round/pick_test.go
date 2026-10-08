@@ -104,7 +104,7 @@ func TestPickClosesTheQueuedLoserAndRecordsThePick(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.moveFx.forge.states[7], f.moveFx.forge.states[8] = "open", "open"
-	if _, err := worker.RecordBounce(f.root, "12", "abc"); err != nil {
+	if _, err := worker.RecordBounce(f.root, "12", "", "abc"); err != nil {
 		t.Fatal(err)
 	}
 

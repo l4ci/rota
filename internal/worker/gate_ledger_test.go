@@ -62,8 +62,9 @@ func TestGateLedgerSkipsCheckOnly(t *testing.T) {
 	}
 }
 
-// A train that fails records its verdict for every member it gated, not only
-// for the ones that landed: here none did.
+// A train that fails records an entry for every member it gated, not only for
+// the ones that landed: here none did. Only the culprit carries the verdict;
+// the others name it.
 func TestTrainLedgerRecordsCulpritAndNonLandingMembers(t *testing.T) {
 	w, res := ciTrain(t, "", "b3.txt", "b1", "b2", "b3", "b4")
 	if res.Verdict != GateVerifyFailed || res.Culprit != "b3" {
@@ -77,14 +78,21 @@ func TestTrainLedgerRecordsCulpritAndNonLandingMembers(t *testing.T) {
 	for _, e := range es {
 		if e.Kind == ledger.KindGate {
 			got[e.Slot] = e.DetailStr("verdict")
+			if e.DetailStr("culprit") != "b3" {
+				t.Errorf("member %s entry names culprit %q, want b3", e.Slot, e.DetailStr("culprit"))
+			}
 		}
 		if e.Kind == ledger.KindMerge {
 			t.Errorf("a train that landed nothing wrote a merge: %+v", e)
 		}
 	}
 	for _, s := range []string{"b1", "b2", "b3", "b4"} {
-		if got[s] != GateVerifyFailed {
-			t.Errorf("member %s verdict %q, want %s (all: %v)", s, got[s], GateVerifyFailed, got)
+		want := ""
+		if s == "b3" {
+			want = GateVerifyFailed
+		}
+		if v, ok := got[s]; !ok || v != want {
+			t.Errorf("member %s verdict %q (recorded %v), want %q (all: %v)", s, v, ok, want, got)
 		}
 	}
 }

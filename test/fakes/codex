@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Fake codex for tests. SAFE BY CONSTRUCTION: it prints canned text and reads
-# one marker file, so it stands in for the real binary without ever touching
+# one marker file (or runs the opt-in scripted skill worker), without touching
 # ~/.codex. Never put the real codex on a test's PATH.
 #   --version      prints `codex-cli $ROTA_FAKE_CODEX_VERSION` (default 0.159.2)
 #   --help         lists the launch flags rota uses, minus $ROTA_FAKE_CODEX_LACKS
@@ -8,7 +8,12 @@
 #                  "Not logged in" and exit 1. With CODEX_HOME unset it reads
 #                  $FAKE_DEFAULT_CODEX_HOME (the stand-in for the default
 #                  Codex home); with neither set it is "Not logged in".
+#   exec --json <prompt>  opt-in contract fixture; never invokes a model
 case "$1 $2" in
+  "exec --json")
+    [ "${ROTA_FAKE_CODEX_SKILLS:-}" = 1 ] || { echo "fake codex: skill worker is not enabled" >&2; exit 98; }
+    shift 2
+    exec python3 "$(dirname "$0")/codex_skill_worker.py" "$@" ;;
   "--version"*) echo "codex-cli ${ROTA_FAKE_CODEX_VERSION:-0.159.2}" ;;
   "--help"*)
     echo "Usage: codex [OPTIONS]"

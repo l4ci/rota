@@ -68,7 +68,7 @@ The verb inserts at the top of the topic and stamps the date.
 **Pre-step rules:**
 
 - **New topics:** `## <Topic>` must already exist. Append the heading to `.rota/KNOWLEDGE.md` first (alphabetical, except `Build & Tooling` and `Architecture` may be pinned near the top), then call the verb.
-- **Sharpened wording:** the verb never replaces an older entry. For a sharper version of an existing bullet, `Edit` that bullet and skip `knowledge add`.
+- **Sharpened wording:** the verb never replaces an older entry. For a sharper version of an existing bullet, edit that bullet and skip `knowledge add`.
 
 Exit 0 on insert or idempotent no-op (`changed: false`); exit 3 if the topic doesn't exist.
 
