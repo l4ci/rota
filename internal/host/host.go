@@ -18,9 +18,9 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
-	"syscall"
 	"time"
 
+	"github.com/l4ci/rota/internal/pidlive"
 	"github.com/l4ci/rota/internal/proc"
 )
 
@@ -87,7 +87,7 @@ func (d *Deps) fill() {
 		}
 	}
 	if d.Alive == nil {
-		d.Alive = func(pid int) bool { return pidAlive(d.Run, pid) }
+		d.Alive = pidlive.Alive
 	}
 	if d.Tree == nil {
 		d.Tree = func(pid int) []int { return pidTree(d.Run, pid) }
@@ -214,19 +214,6 @@ func New(dispatch string, d Deps) Host {
 		return &herdr{d: d, noted: new(atomic.Bool)}
 	}
 	return &tmux{d: d}
-}
-
-// pidAlive: kill -0 succeeds for a zombie, so the process state is checked.
-func pidAlive(run Runner, pid int) bool {
-	if err := syscall.Kill(pid, 0); err != nil && !errors.Is(err, syscall.EPERM) {
-		return false
-	}
-	r, err := run(context.Background(), "ps", []string{"-o", "stat=", "-p", strconv.Itoa(pid)})
-	if err != nil {
-		return true
-	}
-	stat := strings.TrimSpace(r.Stdout)
-	return stat != "" && !strings.HasPrefix(stat, "Z")
 }
 
 // pidTree lists pid and its descendants, breadth first.
