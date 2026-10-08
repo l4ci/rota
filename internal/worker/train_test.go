@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
@@ -110,7 +111,8 @@ func TestTrainConflict(t *testing.T) {
 		trainWrite(t, w, "clash.txt", b)
 		gitq(t, w.dir, "checkout", "-q", "main")
 	}
-	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}})
+	// An order the caller chose is not retried: the conflict names the member.
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}, Order: []string{"b1", "b2"}})
 	if err != nil || res.Verdict != GateMergeFailed || res.Culprit != "b2" || w.onMain("b1.txt") {
 		t.Fatalf("%+v %v", res, err)
 	}
@@ -547,5 +549,84 @@ func TestTrainCancelledLeavesNoScratchTree(t *testing.T) {
 	}
 	if extra := w.scratchTrees(); len(extra) != 0 {
 		t.Errorf("scratch worktree left behind: %v", extra)
+	}
+}
+
+// orderWorld adds a 20-line shared.txt to main and gives b1 a large edit at its
+// top and b2 a one-line edit at its bottom (clean merge either way); b3 touches
+// only its own file.
+func orderWorld(t *testing.T) *world {
+	t.Helper()
+	w := trainWorld(t, "true", "b1", "b2", "b3")
+	trainWrite(t, w, "shared.txt", strings.TrimSuffix(strings.Repeat("-\n", 20), "\n"))
+	edit := func(b, body string) {
+		gitq(t, w.dir, "checkout", "-q", b)
+		gitq(t, w.dir, "merge", "-q", "main", "-m", "sync")
+		trainWrite(t, w, "shared.txt", body)
+		gitq(t, w.dir, "checkout", "-q", "main")
+	}
+	edit("b1", strings.Repeat("A\n", 5)+strings.TrimSuffix(strings.Repeat("-\n", 15), "\n"))
+	edit("b2", strings.TrimSuffix(strings.Repeat("-\n", 19)+"Z", "\n"))
+	return w
+}
+
+func memberOrder(res TrainResult) string {
+	var ts []string
+	for _, m := range res.Members {
+		ts = append(ts, m.Target)
+	}
+	return strings.Join(ts, ",")
+}
+
+func TestTrainOrdersIsolatedFirstThenSmallestDiff(t *testing.T) {
+	w := orderWorld(t)
+	var said []string
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3"}, Say: func(s string) { said = append(said, s) }})
+	if err != nil || res.Verdict != GatePass || memberOrder(res) != "b3,b2,b1" || strings.Join(res.Landed, ",") != "b3,b2,b1" {
+		t.Fatalf("%+v %v", res, err)
+	}
+	all := strings.Join(said, "\n")
+	for _, want := range []string{"b3: no shared paths", "b2: shares 1 paths with b1", "b1: shares 1 paths with b2"} {
+		if !strings.Contains(all, want) {
+			t.Errorf("order report lacks %q:\n%s", want, all)
+		}
+	}
+	if len(res.Order) != 3 {
+		t.Errorf("result should carry the order lines: %v", res.Order)
+	}
+}
+
+func TestTrainOrderFlagOverrides(t *testing.T) {
+	w := orderWorld(t)
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3"}, Order: []string{"b1", "b3", "b2"}})
+	if err != nil || res.Verdict != GatePass || strings.Join(res.Landed, ",") != "b1,b3,b2" {
+		t.Fatalf("%+v %v", res, err)
+	}
+}
+
+func TestTrainOrderFlagMustNameEveryMemberOnce(t *testing.T) {
+	w := orderWorld(t)
+	for _, order := range [][]string{{"b1", "b2"}, {"b1", "b2", "b2"}, {"b1", "b2", "b3", "b3"}, {"b1", "b2", "b9"}} {
+		_, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3"}, Order: order})
+		var ee *exitcode.Error
+		if !errors.As(err, &ee) || ee.Exit != exitcode.ExitUsage {
+			t.Errorf("--order %v should be a usage error, got %v", order, err)
+		}
+		if w.onMain("b1.txt") {
+			t.Errorf("--order %v landed something", order)
+		}
+	}
+}
+
+func TestTrainConflictUnderEveryOrderStopsBeforeLanding(t *testing.T) {
+	w := trainWorld(t, "true", "b1", "b2")
+	for _, b := range []string{"b1", "b2"} {
+		gitq(t, w.dir, "checkout", "-q", b)
+		trainWrite(t, w, "clash.txt", b)
+		gitq(t, w.dir, "checkout", "-q", "main")
+	}
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}})
+	if err != nil || res.Verdict != GateOrder || res.Changed || w.onMain("b1.txt") || !strings.Contains(res.Err, "b1") || !strings.Contains(res.Err, "b2") {
+		t.Fatalf("%+v %v", res, err)
 	}
 }

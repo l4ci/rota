@@ -469,9 +469,11 @@ a GitHub App token instead.
 
 When several PRs wait in review, `rota worker train <slot|PR>... --base <branch>` gates them together and
 pays for the verify once instead of once per PR. It checks each member the way `gate --check-only` does,
-merges them in the order given onto the base in a scratch worktree, runs `test.full` on that
+merges them onto the base in a scratch worktree in the order it picks, runs `test.full` on that
 tree, then `test.e2e` when set (the most expensive tier runs once per train, not once per PR), and on a pass lands every member through the gate in order. If the base or a member's head moved
 while it verified, nothing lands (`base-moved`); the same verdict stops the train mid-way if the base changes between landings. Members must be all PRs or all slots without one.
+
+The train orders the members to cut conflicts: PRs that share no path with another candidate go first (lowest PR number first), then the PRs that share paths, smallest diff first. It prints one line per PR with the reason (`no shared paths`, or `shares 2 paths with #12, #15`) before it pushes anything. `--order 12,15,9` replaces that order and must name every PR exactly once. If a member conflicts, the train tries the shared-path group in reverse once; if that conflicts too it names the pair, exits 4 with `blockedBy: order` and pushes nothing. It never rebases a PR for you.
 
 Gates and trains on one repository queue on a single lock (`<git-common-dir>/rota/land.lock`), held from the scratch worktree through landing. A second gate or train waits instead of running beside the first, so neither sees the other's scratch worktree and neither lands inside the other's verify-to-land window. `--check-only` takes no lock.
 
