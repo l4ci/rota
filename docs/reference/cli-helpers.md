@@ -164,6 +164,7 @@ exit codes and repo scope: [verb contract](../contributing/contract/README.md).
 |---|---|
 | `rota knowledge query <topic>… [--tier provisional\|confirmed\|deprecated] [--include-deprecated]` | print topic sections, tier-aware |
 | `rota knowledge stats` | bullet count and size per topic |
+| `rota knowledge topics` | list topic headings with bullet counts |
 | `rota knowledge add --topic <T> --title <S> --body-file <path\|-> [--date YYYY-MM-DD]` | add a bullet under a topic |
 | `rota knowledge amend --topic <T> --fragment <F> --mode append --body-file <path\|->` | append text to an existing bullet |
 | `rota knowledge replace --topic <T> --old <text> --new <text>` | replace text inside the one bullet that contains it |
@@ -182,6 +183,7 @@ exit codes and repo scope: [verb contract](../contributing/contract/README.md).
 | Usage | What it does |
 |---|---|
 | `rota decisions query <topic>…` | print topic sections |
+| `rota decisions topics` | list topic headings with bullet counts |
 | `rota decisions stats` | bullet count and size per topic |
 
 ## `rota glossary`
@@ -337,7 +339,7 @@ The orchestrator's verbs for a [parallel round](../usage/parallel-rounds.md). Al
 
 | Usage | What it does |
 |---|---|
-| `rota round start [--scope <slate\|milestone\|next\|open>] [--items <ID>[,<ID>…]] [--slots <n>] [--base <branch>] [--holder-pid <n>]` | take the orchestrator lease, provision the roster, list candidates |
+| `rota round start [--scope <slate\|milestone\|next\|open>] [--items <ID>[,<ID>…]] [--slots <n>] [--base <branch>] [--holder-pid <n>] [--consume-handoff]` | take the orchestrator lease, provision the roster, list candidates; report the `/rota-pause` orchestrator note (`--consume-handoff` archives it) |
 | `rota round candidates [--scope <slate\|milestone\|next\|open>]` | list the items the round's scope allows, with readiness |
 | `rota round architecture [--check] [--holder-pid <n>]` | show the architecture-review counter; when a review is due, mint one item per area and assign them to idle slots |
 | `rota round assign <ID> [--agent <name>] [--tier <light\|standard\|heavy>] [--tier-reason <text>] [--kind <claude\|codex>] [--model <id>] [--body-file <path\|->] [--siblings <ID>[,<ID>…]] [--check-only] [--accept-overlap] [--accept-open-pr] [--holder-pid <n>]` | check an item's readiness and hand it to a slot; the issue's `harness:`/`model:` labels pick the harness and model; an issue that mentions a smoke section (and a project with `test/sections/`) gets the next free number reserved on the slot and named in the brief; a `best-of:2` issue goes to two slots at once (see `round pick`) |

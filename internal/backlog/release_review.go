@@ -12,6 +12,7 @@ import (
 	"github.com/l4ci/rota/internal/land"
 	"github.com/l4ci/rota/internal/marker"
 	"github.com/l4ci/rota/internal/pystr"
+	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
@@ -239,7 +240,7 @@ func (b *Issues) MergePRGated(pr int, items []string, approve MergeApprover) (Me
 			return MergeResult{}, err
 		}
 		if is.State == "open" {
-			if _, err := b.Complete(id, CompleteInput{Commit: shortSHA(sha), Reason: "done"}); err != nil {
+			if _, err := b.Complete(id, CompleteInput{Commit: strutil.ShortSHA(sha), Reason: "done"}); err != nil {
 				return MergeResult{}, err
 			}
 		} else if _, err := b.applyState(is, ""); err != nil { // the host closed it on merge; it leaves the state label behind
@@ -248,13 +249,6 @@ func (b *Issues) MergePRGated(pr int, items []string, approve MergeApprover) (Me
 		closed = append(closed, id)
 	}
 	return MergeResult{SHA: sha, Closed: itemRefs(closed)}, nil
-}
-
-func shortSHA(sha string) string {
-	if len(sha) > 7 {
-		return sha[:7]
-	}
-	return sha
 }
 
 // itemRefs splits "F12" spellings into ID and type.

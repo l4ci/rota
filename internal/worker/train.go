@@ -9,6 +9,7 @@ import (
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/land"
 	"github.com/l4ci/rota/internal/rotatree"
+	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/testledger"
 	"os"
 	"sort"
@@ -179,7 +180,7 @@ func (e Env) train(ctx context.Context, root string, o TrainOpts, cache *trainCa
 	}
 	// An empty test.full would land the train unverified: refuse before the
 	// scratch merge unless --no-verify says so.
-	if where, _ := FullWhere(config.Load(rotatree.Config(root))); !o.NoVerify && where == WhereLocal && len(verifyCommandsAt(root)) == 0 && len(TierCommands(root, "e2e")) == 0 {
+	if where, _ := FullWhere(config.Load(rotatree.Config(root))); !o.NoVerify && noVerifyRule(where, verifyCommandsAt(root), TierCommands(root, "e2e")) {
 		res.Verdict = GateNoVerify
 		res.Err, res.Hint = noVerifyRefusal("TRAIN")
 		return res, nil
@@ -422,11 +423,11 @@ func (e Env) train(ctx context.Context, root string, o TrainOpts, cache *trainCa
 	}
 	verdict, culprit := res.Verdict, res.Culprit
 	if cur, _ := e.git(root, "rev-parse", baseRef); cur != baseSHA {
-		return e.trainMoved(res, "", fmt.Sprintf("%s moved from %s to %s while the train verified", baseRef, short(baseSHA), short(cur)))
+		return e.trainMoved(res, "", fmt.Sprintf("%s moved from %s to %s while the train verified", baseRef, strutil.ShortSHA(baseSHA), strutil.ShortSHA(cur)))
 	}
 	for i := 0; i < passing; i++ {
 		if cur, _ := e.git(root, "rev-parse", headRef(res.Members[i])); cur != heads[i] {
-			return e.trainMoved(res, res.Members[i].Target, fmt.Sprintf("%s moved from %s to %s while the train verified", headRef(res.Members[i]), short(heads[i]), short(cur)))
+			return e.trainMoved(res, res.Members[i].Target, fmt.Sprintf("%s moved from %s to %s while the train verified", headRef(res.Members[i]), strutil.ShortSHA(heads[i]), strutil.ShortSHA(cur)))
 		}
 	}
 	for i := 0; i < passing; i++ {
@@ -439,7 +440,7 @@ func (e Env) train(ctx context.Context, root string, o TrainOpts, cache *trainCa
 			}
 			got, _ := e.git(root, "rev-parse", baseRef+"^{tree}")
 			if want, _ := e.git(root, "rev-parse", tips[i]+"^{tree}"); got != want {
-				return e.trainMoved(res, m.Target, fmt.Sprintf("%s changed outside the train after %d landing(s) (tree %s, verified %s)", baseRef, i, short(got), short(want)))
+				return e.trainMoved(res, m.Target, fmt.Sprintf("%s changed outside the train after %d landing(s) (tree %s, verified %s)", baseRef, i, strutil.ShortSHA(got), strutil.ShortSHA(want)))
 			}
 		}
 		gated[m.Target] = true
@@ -464,7 +465,7 @@ func (e Env) train(ctx context.Context, root string, o TrainOpts, cache *trainCa
 	res.SHA, _ = e.git(root, "rev-parse", "--short=7", "HEAD")
 	if tree, _ := e.git(root, "rev-parse", "HEAD^{tree}"); tree != "" {
 		if want, _ := e.git(root, "rev-parse", tips[passing]+"^{tree}"); want != tree {
-			return e.trainMoved(res, "", fmt.Sprintf("the landed tree %s differs from the verified scratch tree %s; the forge merged differently than git did", short(tree), short(want)))
+			return e.trainMoved(res, "", fmt.Sprintf("the landed tree %s differs from the verified scratch tree %s; the forge merged differently than git did", strutil.ShortSHA(tree), strutil.ShortSHA(want)))
 		}
 	}
 	res.Verdict, res.Culprit = verdict, culprit
@@ -472,13 +473,6 @@ func (e Env) train(ctx context.Context, root string, o TrainOpts, cache *trainCa
 		res.Verdict = GatePass
 	}
 	return res, nil
-}
-
-func short(sha string) string {
-	if len(sha) > 7 {
-		return sha[:7]
-	}
-	return sha
 }
 
 func (e Env) trainBroke(res TrainResult, msg string) (TrainResult, error) {

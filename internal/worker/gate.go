@@ -4,22 +4,23 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/land"
+	"github.com/l4ci/rota/internal/overlap"
 	"github.com/l4ci/rota/internal/rotatree"
+	"github.com/l4ci/rota/internal/roundcfg"
+	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/testledger"
+	"github.com/l4ci/rota/internal/tracker"
+	"github.com/l4ci/rota/internal/verdict"
 	"os"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/l4ci/rota/internal/config"
-	"github.com/l4ci/rota/internal/git"
-	"github.com/l4ci/rota/internal/land"
-	"github.com/l4ci/rota/internal/overlap"
-	"github.com/l4ci/rota/internal/roundcfg"
-	"github.com/l4ci/rota/internal/tracker"
-	"github.com/l4ci/rota/internal/verdict"
 )
 
 // Merge gate for one worker slot's branch/PR into the cycle branch: the port
@@ -761,7 +762,7 @@ func (g *gate) stepMerge() (bool, error) {
 	// An empty test.full would merge with nothing verified: refuse before the
 	// merge unless --no-verify says so. CI verification does not read it, and a
 	// test.e2e tier still verifies.
-	if !g.o.NoVerify && g.in.where == WhereLocal && len(g.in.verifyCmds) == 0 && len(g.in.e2eCmds) == 0 {
+	if !g.o.NoVerify && noVerifyRule(g.in.where, g.in.verifyCmds, g.in.e2eCmds) {
 		g.verdict(GateNoVerify, "", "")
 		g.res.Err, g.res.Hint = noVerifyRefusal("GATE " + g.o.Slot)
 		return true, nil
@@ -879,7 +880,7 @@ func (g *gate) verifyFirst(what string, check func(dir, sha string) (bool, error
 	}
 	sha, _ := g.e.runGit(dir, "rev-parse", "HEAD")
 	tree, _ := g.e.runGit(dir, "rev-parse", "HEAD^{tree}")
-	g.res.SHA = short(sha)
+	g.res.SHA = strutil.ShortSHA(sha)
 	if done, err := check(dir, sha); done || err != nil {
 		return true, err
 	}
@@ -889,7 +890,7 @@ func (g *gate) verifyFirst(what string, check func(dir, sha string) (bool, error
 		}
 	}
 	if cur, _ := g.e.runGit(g.root, "rev-parse", g.baseRef); cur != baseSHA {
-		g.verdict(GateBaseMoved, fmt.Sprintf("BASE-MOVED %s — %s moved from %s to %s while %s verified; nothing landed", o.Slot, g.baseRef, short(baseSHA), short(cur), what),
+		g.verdict(GateBaseMoved, fmt.Sprintf("BASE-MOVED %s — %s moved from %s to %s while %s verified; nothing landed", o.Slot, g.baseRef, strutil.ShortSHA(baseSHA), strutil.ShortSHA(cur), what),
 			"re-run the gate on the new base")
 		return true, nil
 	}
@@ -941,7 +942,7 @@ func (g *gate) landedTree() string {
 // a mismatch. false ends the gate with the verdict set.
 func (g *gate) confirmCITree() bool {
 	if tree := g.landedTree(); tree != g.verifiedTree {
-		g.verdict(GateBaseMoved, fmt.Sprintf("BASE-MOVED %s — it landed, but the landed tree %s differs from the tree CI verified (%s); %s changed during the merge", g.o.Slot, short(tree), short(g.verifiedTree), g.o.Base),
+		g.verdict(GateBaseMoved, fmt.Sprintf("BASE-MOVED %s — it landed, but the landed tree %s differs from the tree CI verified (%s); %s changed during the merge", g.o.Slot, strutil.ShortSHA(tree), strutil.ShortSHA(g.verifiedTree), g.o.Base),
 			fmt.Sprintf("do not re-merge; verify %s as it is now", g.o.Base))
 		return false
 	}
@@ -1015,7 +1016,7 @@ func (g *gate) stepVerify() (bool, error) {
 		return true, nil
 	}
 	if tree := g.landedTree(); tree != g.verifiedTree {
-		res.Notes = append(res.Notes, fmt.Sprintf("VERIFY-AGAIN %s — the landed tree %s differs from the verified scratch merge %s (%s moved before the merge); verifying the landed %s", o.Slot, short(tree), short(g.verifiedTree), o.Base, o.Base))
+		res.Notes = append(res.Notes, fmt.Sprintf("VERIFY-AGAIN %s — the landed tree %s differs from the verified scratch merge %s (%s moved before the merge); verifying the landed %s", o.Slot, strutil.ShortSHA(tree), strutil.ShortSHA(g.verifiedTree), o.Base, o.Base))
 		res.Verified, res.Excluded, res.VerifySkipped = nil, nil, false
 		for _, tier := range []struct {
 			name string
@@ -1347,7 +1348,7 @@ func (g *gate) confirmLanded(sha string) (done bool) {
 	}
 	g.res.Changed = true
 	if len(sha) >= 7 {
-		g.res.SHA = sha[:7] // the merge that landed on origin, for the merged-remotely verdicts
+		g.res.SHA = strutil.ShortSHA(sha) // the merge that landed on origin, for the merged-remotely verdicts
 	}
 	if out, code := e.runGit(g.root, "merge", "--ff-only", g.baseRef); code != 0 {
 		g.mergedRemotely(fmt.Sprintf("local %s could not fast-forward (%s)", o.Base, g.ffFailureCause(out)))
