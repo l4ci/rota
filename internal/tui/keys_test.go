@@ -173,3 +173,39 @@ func TestTerminalNewTerminal(t *testing.T) {
 		t.Errorf("file: ok %v raw %v size %v", ok, tm.MakeRaw != nil, tm.Size != nil)
 	}
 }
+
+func TestStripHandlesNonSGRCSI(t *testing.T) {
+	for _, tc := range []struct {
+		in, want string
+		width    int
+	}{
+		{"a\x1b[2Kb text\x1b[31mred", "ab textred", 10},
+		{"\x1b[1;5Hx\x1b[?25ly", "xy", 2},
+		{"a\x1b[2K", "a", 1},
+		{"a\x1b[31", "a", 1}, // unterminated: the rest is dropped
+	} {
+		if got := Strip(tc.in); got != tc.want {
+			t.Errorf("Strip(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+		if got := Width(tc.in); got != tc.width {
+			t.Errorf("Width(%q) = %d, want %d", tc.in, got, tc.width)
+		}
+	}
+}
+
+func TestSanitize(t *testing.T) {
+	for _, tc := range []struct {
+		in     string
+		keepNL bool
+		want   string
+	}{
+		{"a\nb\tc", true, "a\nb c"},
+		{"a\nb\tc", false, "a b c"},
+		{"a\x1b[2Kb\x1b[31mc\x07\x7f\u0085d", true, "abcd"},
+		{"ok é ☃", false, "ok é ☃"},
+	} {
+		if got := Sanitize(tc.in, tc.keepNL); got != tc.want {
+			t.Errorf("Sanitize(%q, %v) = %q, want %q", tc.in, tc.keepNL, got, tc.want)
+		}
+	}
+}

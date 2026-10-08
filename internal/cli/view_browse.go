@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/tui"
 )
 
@@ -59,26 +60,9 @@ type browser struct {
 	cache   *bodyCache
 }
 
-// plainText drops control characters, keeping newline and tab as a space run:
-// rows and bodies come from issue text, and an escape sequence in a title
-// must not reach the terminal. tui.Strip removes only styling.
-func plainText(s string) string {
-	return strings.Map(func(r rune) rune {
-		switch {
-		case r == '\n':
-			return r
-		case r == '\t':
-			return ' '
-		case r < ' ' || r == 0x7f || (r >= 0x80 && r < 0xa0):
-			return -1
-		}
-		return r
-	}, s)
-}
-
 func newBrowser(title, empty string, rows []browseRow, stacked bool, load bodyLoader) browser {
 	for i := range rows {
-		rows[i].Label, rows[i].Preview = plainText(strings.ReplaceAll(rows[i].Label, "\n", " ")), plainText(rows[i].Preview)
+		rows[i].Label, rows[i].Preview = tui.Sanitize(strings.ReplaceAll(rows[i].Label, "\n", " "), true), tui.Sanitize(rows[i].Preview, true)
 	}
 	b := browser{Title: title, Empty: empty, Rows: rows, Stacked: stacked, Load: load, cache: &bodyCache{text: map[string]string{}}}
 	for _, r := range rows {
@@ -169,7 +153,7 @@ func (b browser) open() (tui.Model, tui.Cmd) {
 	return b, tui.Cmd{Exec: func() error {
 		text, err := load(key)
 		if err == nil {
-			cache.put(key, plainText(text))
+			cache.put(key, tui.Sanitize(text, true))
 		}
 		return err
 	}}
@@ -232,7 +216,7 @@ func runVerbText(c *Ctx, repoScoped bool, args ...string) (string, error) {
 		if msg == "" {
 			msg = "failed"
 		}
-		return "", errors.New(firstLine(msg))
+		return "", errors.New(strutil.FirstLine(msg))
 	}
 	return strings.TrimSuffix(out.String(), "\n"), nil
 }
