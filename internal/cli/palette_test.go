@@ -2,7 +2,6 @@ package cli
 
 import (
 	"bytes"
-	"context"
 	"flag"
 	"io"
 	"os"
@@ -10,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/palette"
-	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/tui"
 	"github.com/l4ci/rota/internal/version"
 )
@@ -91,23 +89,21 @@ func TestPaletteContextLineShowsTildeRoundAndHost(t *testing.T) {
 	}
 }
 
-// The header asks for the sources it reads. The full factory builds a forge
-// the palette would then drop, so the header must not go through it.
-func TestPaletteHeaderNeverBuildsTheFullRoundEnv(t *testing.T) {
+// The header reads only the local sources, so it must build no forge at all.
+func TestPaletteHeaderBuildsNoForge(t *testing.T) {
 	deps := testDeps()
 	bareRig(deps)
 	paletteRig(deps, "q")
 	useLaunchRig(deps, nil)
-	built := 0
-	deps.RoundEnv = func(context.Context, string) round.Env { built++; return round.Env{} }
+	built := forgeBuilds(deps)
 	dir := trackerProject(t, "")
 	gitT(t, dir, "init", "-q")
 	t.Setenv("HOME", dir)
 	t.Setenv("TMUX", "")
 	t.Setenv("HERDR_ENV", "")
 	_, out, _ := bareIn(t, deps, dir)
-	if built != 0 {
-		t.Errorf("palette header built the full round Env %d time(s)", built)
+	if *built != 0 {
+		t.Errorf("palette header built %d forge(s)", *built)
 	}
 	if !strings.Contains(out, "~  ·  idle  ·  ") {
 		t.Errorf("context line missing:\n%s", out)
