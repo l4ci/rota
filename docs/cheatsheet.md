@@ -42,6 +42,7 @@ What each `/rota-*` skill does, one line each. For details: [`reference/slash-co
 - **`rota migrate issues`**: move the backlog to GitHub or GitLab issues.
 - **`rota skills install` / `update` / `status`**: write the skills for Claude Code and Codex, refresh them after an upgrade, compare with the binary.
 - **`rota round start` / `assign` / `wait` / `status` / `wind-down`**: run a round: take the lease, hand an issue to a slot, block until a worker needs you, list slots, park everything and release the lease.
+- **`rota round summary`**: what a round cost: a row per issue, totals per slot and per account, and the gate audit lines. Wind-down prints it too.
 - **`rota round pick`**: for a `best-of:2` issue, name the attempt whose PR may merge; the other is closed with the reason.
 - **`rota worker`**: slot registry, worktrees, dispatch, polling and the merge gate (`rota worker gate`).
 - **`rota worker gate <PR>`**: gate any open PR by number, even one no slot owns. It refuses an empty `test.full` (unless `--no-verify`), a body without `Closes #N` (unless `partial-slice`), a recorded FAIL verdict and an unpicked best-of attempt.

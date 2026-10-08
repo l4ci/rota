@@ -100,7 +100,7 @@ When you bounce by hand, run `rota round bounce <issue> --head <pr-head-sha>` fi
 
 ## 8. Wind down
 
-When the slate is done or the maintainer calls the round: `rota round wind-down`. It re-verifies the base, parks every slot and releases the lease. If a slot still holds work it exits 4 and parks the rest; read which slot and why before deciding. Then run `rota round reconcile` and `rota reap` for what is left, and run `/rota-learn` and `/rota-ship --docs` once for the whole round (workers skip them per PR). Give the maintainer a short summary: what merged, what bounced, what is open, what drift remains, and the costly worker Rulings (PR, call, cost if wrong).
+When the slate is done or the maintainer calls the round: `rota round wind-down`. It re-verifies the base, parks every slot and releases the lease. If a slot still holds work it exits 4 and parks the rest; read which slot and why before deciding. Then run `rota round reconcile` and `rota reap` for what is left, and run `/rota-learn` and `/rota-ship --docs` once for the whole round (workers skip them per PR). `wind-down` ends with the round's summary table (the same as `rota round summary`; per-issue wall time, bounces, gate outcome and quota share, then per-slot and per-account totals): read it and carry the numbers into your summary, saying `n/a` where a share is unknown rather than guessing. Give the maintainer a short summary: what merged, what bounced, what is open, what drift remains, and the costly worker Rulings (PR, call, cost if wrong).
 
 ## Solo mode
 

@@ -6,7 +6,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/tui"
@@ -59,7 +61,9 @@ func roundStatusView(c *Ctx, res Result) (tui.Model, error) {
 		return nil, err
 	}
 	load := func() (roundSnap, error) { return loadRoundSnap(c, root) }
-	return newRoundScreen(snapFromData(d), load, time.Now, roundRefresh), nil
+	snap := snapFromData(d)
+	fillBurn(c, root, snap.Slots)
+	return newRoundScreen(snap, load, time.Now, roundRefresh), nil
 }
 
 // snapFromData reads the slots, review queue and notes out of round status Data.
@@ -118,6 +122,7 @@ func loadRoundSnap(c *Ctx, root string) (roundSnap, error) {
 		return roundSnap{}, err
 	}
 	s := roundSnap{Slots: rep.Rows, Review: rep.Queued, Host: rep.Host, CandsLoaded: true}
+	fillBurn(c, root, s.Slots)
 	for _, u := range rep.Unavailable {
 		s.Notes = append(s.Notes, u+" unavailable")
 	}
@@ -145,6 +150,61 @@ func loadRoundSnap(c *Ctx, root string) (roundSnap, error) {
 		s.Cands = append(s.Cands, roundCand{ID: cd.ID, Title: cd.Title, Ready: cd.Ready(), Why: blockedWhy(cd)})
 	}
 	return s, nil
+}
+
+// fillBurn sets Row.Burn for every slot holding an issue: the quota it has
+// consumed, in percentage points of its account's headroom. That is the
+// headroom the slot's latest assign entry recorded minus the headroom the
+// meter reads now, floored at 0 (a window that reset in between reads as
+// nothing consumed). Codex slots, accounts with no reading at either end and
+// slots with no assign entry stay nil (n/a). The meters are fetched once, for
+// all accounts, however many slots there are; the --ui screen is the only
+// caller, so plain and --json status never fetch.
+func fillBurn(c *Ctx, root string, rows []round.Row) {
+	entries, _ := ledger.Load(root)
+	if len(entries) == 0 {
+		return
+	}
+	var meters []worker.Meter
+	fetched := false
+	for i := range rows {
+		r := &rows[i]
+		if r.Issue == "" {
+			continue
+		}
+		var last *ledger.Entry
+		for j := len(entries) - 1; j >= 0; j-- {
+			e := &entries[j]
+			if e.Kind == ledger.KindAssign && e.Slot == r.Name && strings.TrimPrefix(e.Issue, "#") == strings.TrimPrefix(r.Issue, "#") {
+				last = e
+				break
+			}
+		}
+		if last == nil || last.Harness == harness.Codex || last.Account == "" {
+			continue
+		}
+		start, ok := last.DetailFloat("headroom")
+		if !ok {
+			continue
+		}
+		if !fetched {
+			meters, fetched = c.deps().WorkerAccounts().Meters(c.Context(), root), true
+		}
+		if now := worker.HeadroomOf(meters, last.Account); now != nil {
+			burn := max(start-*now, 0)
+			r.Burn = &burn
+		}
+	}
+}
+
+func burnLabel(r round.Row) string {
+	switch {
+	case r.Burn != nil:
+		return fmt.Sprintf("%.0f%%", *r.Burn)
+	case r.Issue != "":
+		return "n/a"
+	}
+	return "-"
 }
 
 // blockedWhy says why a candidate cannot be assigned yet: the open PR, the
@@ -296,7 +356,7 @@ func slotEntry(r round.Row) entry {
 	if r.Issue != "" {
 		issue = "#" + strings.TrimPrefix(r.Issue, "#")
 	}
-	line := fmt.Sprintf("%-8s %-7s %-10s %-14s %-18s %s", r.Name, issue, dashed(r.HostState), prLabel(r.PR, r.PRState), tierModel(r), bounceLabel(r.Bounces))
+	line := fmt.Sprintf("%-8s %-7s %-10s %-14s %-18s %-7s %s", r.Name, issue, dashed(r.HostState), prLabel(r.PR, r.PRState), tierModel(r), bounceLabel(r.Bounces), burnLabel(r))
 	var b []string
 	b = append(b, "PR: "+firstOf(r.PRTitle, "no title known"))
 	b = append(b, "branch: "+dashed(r.Branch))
@@ -432,7 +492,7 @@ func (m *roundScreen) keepSelection() {
 }
 
 var roundSections = [...]struct{ title, cols string }{
-	secSlots:  {"SLOTS", fmt.Sprintf("%-8s %-7s %-10s %-14s %-18s %s", "name", "issue", "state", "PR", "tier model", "bounces")},
+	secSlots:  {"SLOTS", fmt.Sprintf("%-8s %-7s %-10s %-14s %-18s %-7s %s", "name", "issue", "state", "PR", "tier model", "bounces", "burn")},
 	secReview: {"REVIEW QUEUE", fmt.Sprintf("%-8s %-14s %-30s %s", "issue", "PR", "branch", "from")},
 	secCands:  {"CANDIDATES", ""},
 }
