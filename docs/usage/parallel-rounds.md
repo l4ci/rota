@@ -386,8 +386,18 @@ whose worker is busy, blocked or has uncommitted files is never taken.
   `rota round status` shows each slot's count. At the cap hand the issue to a stronger worker
   (`rota round transfer <issue> --to <slot> --tier heavy --tier-reason <why>`) or to the human, never
   bounce it again. Re-review the fix with `/rota-review --since <sha of the last review>`.
+  A reviewer's comments on the PR take the same path without you retyping them: see [Review loop](#review-loop).
 - A PR in review still counts as in flight: its issue is not a candidate, and its changes take part
   in the overlap check.
+
+## Review loop
+
+A worker that printed `ROTA-DONE` keeps its PR open for review. When a reviewer comments on it (you, a `/rota-review` FAIL verdict recorded for its branch, or a CI bot), the comments go back to the worker instead of waiting for you to retype them. rota watches each `done` slot's PR for new comments, reviews and inline diff comments, ignoring approvals and the worker's own replies.
+
+- `round.reviewLoop: manual` (the default): `rota round watch` wakes you with a `review/<slot>` change and `rota round tick` lists a `review` item. You run `rota round review-relay <slot>`.
+- `round.reviewLoop: auto`: `round watch` and `round tick` run it themselves, and a tick lists it as `did review-relay`.
+
+`review-relay` counts one bounce on the item (the same counter as the gate and `round bounce`), sends the comments to the worker as a signed `REVIEW` relay and marks the slot `busy`. The worker checks each comment against the code, fixes what holds, pushes, answers on the PR with `rota worker reply`, and prints `ROTA-DONE` again. At `round.maxBounces` nothing is relayed: the slot stays `done`, rota escalates once on the PR, and the tick does not merge it. Hand the item to a stronger worker or to the human, as in [Bounce it](#prs-in-review). The merge stays yours: the loop never gates or merges, and a PR with review input waiting is skipped by the autopilot's merge step.
 
 ## Asking the maintainer
 

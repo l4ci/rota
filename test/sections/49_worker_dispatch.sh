@@ -508,6 +508,42 @@ RC=0
 [ "$RC" = "2" ] || fail "worker pool with an unknown verb: expected exit 2, got $RC"
 pass "worker verbs helpers exit 2 on usage errors"
 
+# ── review loop verbs (#577) ────────────────────────────────────────────────
+# `worker reply` posts through the tracker with a marker; `round review-relay`
+# reads the PR's review input from the forge. A canned gh stands in for the
+# forge: one reviewer comment on PR 9, and a record of every POST. The relay
+# itself (dispatch, bounce count) is covered by the round package tests; here
+# the verbs' refusals and the forge round-trip, through the real binary.
+TMP_RV="$(mktemp -d)"
+mkdir -p "$TMP_RV/.rota" "$TMP_RV/bin"
+( cd "$TMP_RV" && git init -q -b main . && git -c user.email=a@b -c user.name=n commit -q --allow-empty -m init \
+  && printf '{"issues":{"provider":"github"}}\n' > .rota/config.json ) || fail "review-loop fixture setup failed"
+cat > "$TMP_RV/bin/gh" <<'SH'
+#!/usr/bin/env bash
+case "$*" in
+  *"-X POST"*) printf '%s\n' "$*" >> "$RV_POSTS"; echo '{"id":77}' ;;
+  *issues/comments/77*) echo '{"id":77,"html_url":"https://github.com/o/r/pull/9#issuecomment-77"}' ;;
+  *issues/9/comments*) echo '[{"id":1,"body":"please rename x","user":{"login":"rev"},"created_at":"2026-10-08T10:00:00Z"}]' ;;
+  *pulls/9/*) echo '[]' ;;
+  *) echo "unexpected gh call: $*" >&2; exit 2 ;;
+esac
+SH
+chmod +x "$TMP_RV/bin/gh"
+printf '{"slots":[{"name":"nia","task":"577","branch":"nia/577-x","state":"done","pr":"https://github.com/o/r/pull/9","relays":[]},{"name":"ben","task":"578","branch":"ben/578-y","state":"busy","pr":"https://github.com/o/r/pull/9","relays":[]}]}\n' > "$TMP_RV/.rota/workers.json"
+rv() { ( cd "$TMP_RV" && PATH="$TMP_RV/bin:$PATH" RV_POSTS="$TMP_RV/posts" "$ROTA_BIN" "$@" ); }
+printf 'Fixed in abc1234: renamed x.\n' > "$TMP_RV/reply.md"
+OUT="$(rv --json worker reply nia --body-file "$TMP_RV/reply.md")" || fail "worker reply failed: $OUT"
+[ "$(jget data.url <<<"$OUT")" = "https://github.com/o/r/pull/9#issuecomment-77" ] || fail "worker reply should print the comment url: $OUT"
+grep -q 'rota:worker-reply nia' "$TMP_RV/posts" || fail "the reply must carry the worker-reply marker: $(cat "$TMP_RV/posts")"
+RC=0; rv worker reply nia >/dev/null 2>&1 || RC=$?
+[ "$RC" = "2" ] || fail "worker reply without --body-file: expected exit 2, got $RC"
+RC=0; rv round review-relay zed >/dev/null 2>&1 || RC=$?
+[ "$RC" = "3" ] || fail "review-relay on an unknown slot: expected exit 3, got $RC"
+RC=0; OUT="$(rv --json round review-relay ben 2>/dev/null)" || RC=$?
+[ "$RC" = "4" ] && [ "$(jget data.blockedBy <<<"$OUT")" = "state" ] || fail "review-relay on a busy slot: expected exit 4 blockedBy state, got $RC: $OUT"
+pass "worker reply posts a marked comment; round review-relay refuses an unknown or busy slot"
+rm -rf "${TMP_RV:?}"
+
 # ── reap ────────────────────────────────────────────────────────────────────
 ( cd "$TMP_WD" && "$ROTA_BIN" worker pool reap --all ) || fail "worker pool reap --all failed"
 LEFT=$( cd "$TMP_WD" && "$ROTA_BIN" --json worker pool list \

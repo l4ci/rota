@@ -299,6 +299,7 @@ exit codes and repo scope: [verb contract](../contributing/contract/README.md).
 | `rota worker pool list` | list the registered slots |
 | `rota worker pool reap (<slot>... \| --all)` | remove slots, their worktrees and branches |
 | `rota worker reset <slot> [--task <id>] [--check-only]` | refuse a slot that holds work, else cut a fresh task branch |
+| `rota worker reply <slot> --body-file <path\|->` | answer a reviewer on the slot's PR through the tracker; the comment carries a `worker-reply` marker |
 | `rota worker dispatch <slot> --body-file <path\|-> [--task <id>] [--relay] [--round <n>] [--boot-timeout <s>] [--kind <claude\|codex>]` | send a brief into a slot's session |
 | `rota worker poll [<slot>] [--settle <seconds>] [--lines <n>]` | classify slot states from their panes |
 | `rota worker done <slot> [--base <ref>]` | the step before the PR: exit 4 unless the slot's item has a PASS `test.fast` proof row at the branch HEAD (`rota proof record`), else mark the slot done |
@@ -351,6 +352,7 @@ The orchestrator's verbs for a [parallel round](../usage/parallel-rounds.md). Al
 | `rota round return <slot> --reason <text> [--note-file <path\|->] [--holder-pid <n>]` | a worker hands its issue back: park, comment, release |
 | `rota round transfer <issue> --to <slot\|human> [--tier <light\|standard\|heavy>] [--tier-reason <text>] [--note-file <path\|->] [--body-file <path\|->] [--accept-overlap] [--holder-pid <n>]` | move an assigned issue to another slot or to the human |
 | `rota round reclaim <slot> [--force] [--note-file <path\|->] [--holder-pid <n>]` | free a dead or stalled slot and make its issue assignable |
+| `rota round review-relay <slot>` | relay new review input on a done slot's PR to its worker as a counted bounce (`REVIEW` relay); at `round.maxBounces` escalate on the PR instead, exit 4; never gates or merges |
 | `rota round bounce <ID> [--head <sha>]` | count one by-hand review bounce of an item; the same `--head` twice counts once; exit 4 once the item is at `round.maxBounces`, then transfer it to a higher tier or `--to human` |
 | `rota round pick <ID> --pr <N> --reason-file <path\|-> [--holder-pid <n>]` | `best-of:2` issue: name the winning PR; close the other attempt's PR with the reason, keep its branch |
 | `rota round wind-down [--no-verify] [--holder-pid <n>]` | re-verify the base, park every slot, release the lease |
