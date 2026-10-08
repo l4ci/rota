@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -199,6 +200,8 @@ func (e Env) Pick(ctx context.Context, root string, be Board, o PickOpts) (res P
 	if err := worker.ClearBounces(root, o.ID); err != nil {
 		return res, wrap(err)
 	}
+	worker.LedgerNote(root, ledger.Entry{Kind: ledger.KindPick, Issue: id, Slot: res.Winner.Slot, PR: fmt.Sprintf("#%d", want),
+		Detail: ledger.Detail("loser", lv.Slot)})
 	note := fmt.Sprintf("Best-of pick: #%d (%s)", want, res.Winner.Slot)
 	if loser >= 0 {
 		note += fmt.Sprintf(" over %s (%s)", firstNonEmpty(lv.PR, "the other attempt"), lv.Slot)

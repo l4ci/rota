@@ -1,6 +1,7 @@
 package round
 
 import (
+	"context"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	"regexp"
@@ -8,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/host"
+	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -66,8 +68,9 @@ func ReportSlot(root string, o ReportOpts) (Reported, error) {
 		return res, &exitcode.Error{Exit: exitcode.ExitUsage, Message: fmt.Sprintf("the round host is %s, not solo: the pane is the truth", h),
 			Hint: "rota worker poll records a pane's state; round report would race it"}
 	}
-	found := false
+	found, moved := false, false
 	var stateErr error
+	var held ledger.Entry
 	err := worker.Update(root, func(doc *worker.Doc) {
 		s := doc.Slot(o.Slot)
 		if s == nil {
@@ -75,7 +78,9 @@ func ReportSlot(root string, o ReportOpts) (Reported, error) {
 		}
 		found = true
 		res.Previous = s.State()
+		held = ledger.Entry{Issue: worker.HeldID(s.Task(), s.Branch(), s.Name()), Slot: s.Name(), Account: s.Account(), Harness: s.Kind()}
 		if res.Previous != state {
+			moved = true
 			if stateErr = s.MarkState(state, ""); stateErr != nil {
 				return
 			}
@@ -99,6 +104,11 @@ func ReportSlot(root string, o ReportOpts) (Reported, error) {
 	}
 	if !found {
 		return res, &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("slot '%s' is not in the pool", o.Slot)}
+	}
+	if kind := map[string]string{"done": ledger.KindDone, "blocked": ledger.KindBlocked}[state]; kind != "" && moved {
+		held.Kind, held.PR = kind, firstNonEmpty(pr, held.PR)
+		held.Detail = ledger.Detail("headroom", worker.LedgerHeadroom(context.Background(), &worker.Accounts{}, root, held.Harness, held.Account))
+		worker.LedgerNote(root, held)
 	}
 	return res, nil
 }

@@ -287,10 +287,14 @@ func (e Env) gate(ctx context.Context, root string, o GateOpts) (GateResult, err
 			res.Verdict, res.Expired = GateVerifyFailed, in.ledger.Expired(e.withDefaults().Now())
 			res.Err = fmt.Sprintf("GATE-FAIL %s — %s; nothing landed", o.Slot, msg)
 			res.Hint = "fix the test or renew the entry in .rota/test-ledger.json, then re-gate"
+			gateLedger(root, t, res)
 			return res, nil
 		}
 	}
 	res, err = e.gateEnv().gate(ctx, root, o, res, in, t)
+	if err == nil && !o.CheckOnly {
+		gateLedger(root, t, res)
+	}
 	if err == nil && t.Queued && res.Verdict == GatePass {
 		if err := RemoveQueuedPR(root, t.PR); err != nil {
 			return res, err

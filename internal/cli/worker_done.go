@@ -8,6 +8,7 @@ import (
 
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/proof"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -109,6 +110,9 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 			changed = true
 		}); err != nil {
 			return Result{}, err
+		}
+		if changed {
+			worker.LedgerNote(poolRoot, ledger.Entry{Kind: ledger.KindDone, Issue: id, Slot: slotName, Account: sl.Account(), Harness: sl.Kind(), PR: sl.PR()})
 		}
 		d.Set("changed", changed)
 		return Result{Data: d, Text: fmt.Sprintf("%s\tdone", slotName)}, nil
