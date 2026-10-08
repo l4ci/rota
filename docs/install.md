@@ -10,12 +10,13 @@ Available from 0.9.0. `rota` is a single binary that carries the skills; there i
 curl -fsSL https://raw.githubusercontent.com/l4ci/rota/main/install.sh | sh
 ```
 
-It installs to `~/.local/bin/rota`. It needs no sudo and does not edit your shell profile; if the directory is not on your `PATH` it prints the line to add. It needs `curl` (or `wget` as a fallback) and [`minisign`](https://jedisct1.github.io/minisign/) (`brew install minisign`, `apt install minisign`); without minisign it stops rather than install an unverified binary.
+It installs to `~/.local/bin/rota`. It needs no sudo and does not edit your shell profile; if the directory is not on your `PATH` it prints the line to add. It needs `curl` (or `wget` as a fallback). With [`minisign`](https://jedisct1.github.io/minisign/) installed (`brew install minisign`, `apt install minisign`) it checks the signature and the sha256. Without minisign it checks the sha256 only, warns that the signature was not checked and how to install minisign, and finishes the install. `--strict` (or `ROTA_STRICT=1`) makes a missing minisign an error and installs nothing.
 
 | Option | Env var | Meaning |
 |---|---|---|
 | `--version X.Y.Z` | `ROTA_VERSION` | install this release instead of the latest |
 | `--prefix DIR` | `ROTA_PREFIX` | install to `DIR/bin` instead of `~/.local/bin` |
+| `--strict` | `ROTA_STRICT=1` | fail when minisign is missing instead of falling back to sha256 only; either one turns it on, and `ROTA_STRICT=0` leaves it off |
 
 ### Homebrew
 
@@ -29,7 +30,7 @@ Download `rota_<os>_<arch>` from the [releases](https://github.com/l4ci/rota/rel
 
 ### Verifying a release
 
-Every release asset has a detached [minisign](https://jedisct1.github.io/minisign/) signature, `<asset>.minisig`, made in the release workflow. `install.sh` verifies the binary against the public key embedded in the script, then against `checksums.txt`, and installs nothing if either check fails. The signature proves the file was signed with the release key (id `2153154F7AA18B5D`); the checksum alone only shows the download is intact, because `checksums.txt` comes from the same release. To check by hand:
+Every release asset has a detached [minisign](https://jedisct1.github.io/minisign/) signature, `<asset>.minisig`, made in the release workflow. With minisign installed, `install.sh` verifies the binary against the public key embedded in the script, then against `checksums.txt`, and installs nothing if either check fails. Without minisign it verifies `checksums.txt` only and warns (use `--strict` to refuse instead). The signature proves the file was signed with the release key (id `2153154F7AA18B5D`); the checksum alone only shows the download is intact, because `checksums.txt` comes from the same release. To check by hand:
 
 ```bash
 minisign -V -P RWRdi6F6TxVTIW92f3/QsWBl5VHdXm1FABgexyAla0z3A5WT4JzG6/SP \

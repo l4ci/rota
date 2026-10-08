@@ -1,6 +1,6 @@
 # Release signing
 
-Release assets are signed with [minisign](https://jedisct1.github.io/minisign/). `install.sh` verifies `rota_<os>_<arch>` against `rota_<os>_<arch>.minisig` using the public key embedded in the script, then checks the sha256 as before. Without a valid signature nothing is installed.
+Release assets are signed with [minisign](https://jedisct1.github.io/minisign/). `install.sh` verifies `rota_<os>_<arch>` against `rota_<os>_<arch>.minisig` using the public key embedded in the script, then checks the sha256 as before. With minisign installed, nothing is installed without a valid signature. Without minisign, `install.sh` verifies the sha256 only and warns that the signature was not checked; `--strict` or `ROTA_STRICT=1` restores the fail-closed behaviour (see [install](../install.md)).
 
 The release workflow (`.github/workflows/release.yml`) signs every uploaded file (binaries, tarballs, `checksums.txt`) through the `signs:` block in `.goreleaser.yaml`. It reads the key from the Actions secret `MINISIGN_SECRET_KEY`.
 
