@@ -21,9 +21,9 @@ import (
 	"context"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/worker"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -107,8 +107,6 @@ type Result struct {
 	Failed     []Failure
 	Warnings   []string
 }
-
-var reIssueBranch = regexp.MustCompile(`^[^/]+/\d+-`)
 
 // checkout is one entry of `git worktree list`.
 type checkout struct {
@@ -382,7 +380,7 @@ func findBranches(ctx context.Context, s *state) ([]Candidate, error) {
 	}
 	var out []Candidate
 	for _, b := range strings.Fields(list) {
-		if protectedBranch(b, s.in.Base) || s.slotBranch[b] || !reIssueBranch.MatchString(b) {
+		if protectedBranch(b, s.in.Base) || s.slotBranch[b] || worker.IssueFromBranch(b) == "" {
 			continue
 		}
 		if s.checkedOut[b] {

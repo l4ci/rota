@@ -262,6 +262,10 @@ func (e Env) resolveAttempt(root string, reg worker.Registry, id string, a worke
 // worktree is clean (the branch stays); any other slot is left for reclaim.
 func (e Env) retireSlot(ctx context.Context, root string, v pickView, id string, warnings *[]string) error {
 	st := v.slot.State()
+	if v.slot.IsExternal() { // an adopted checkout is never parked
+		*warnings = append(*warnings, fmt.Sprintf("slot %s is an adopted external slot holding #%s: release it with rota worker pool reap %s", v.Slot, id, v.Slot))
+		return nil
+	}
 	if st == "done" || st == "idle" {
 		if dirty, err := e.dirtyPaths(ctx, v.slot.Worktree()); err == nil && len(dirty) == 0 {
 			if _, err := e.Park(ctx, root, v.Slot, "pick"); err != nil {

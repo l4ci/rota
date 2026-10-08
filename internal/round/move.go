@@ -352,6 +352,9 @@ func (e Env) Reclaim(ctx context.Context, root string, be Board, o ReclaimOpts) 
 		return res, &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("slot %s is not in the pool", o.Slot)}
 	}
 	res.Slot = o.Slot
+	if s.IsExternal() {
+		return res, blocked(BlockExternal, "slot %s is an adopted external slot: reclaim would move a worktree rota did not create", o.Slot)
+	}
 	ok, err := e.holdsLease(ctx, root, o.HolderPID)
 	if err != nil {
 		return res, wrap(err)
@@ -549,11 +552,17 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 		res.From = o.To
 	}
 
+	if sender != nil && sender.IsExternal() {
+		return res, blocked(BlockExternal, "slot %s is an adopted external slot: transfer would move a worktree rota did not create", sender.Name())
+	}
 	var to *worker.Slot
 	queueTo := false // the receiver holds a PR that can wait in the queue
 	if !toHuman {
 		if to = reg.Slot(o.To); to == nil {
 			return res, &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("slot %s is not provisioned: run rota round start", o.To)}
+		}
+		if to.IsExternal() {
+			return res, blocked(BlockExternal, "slot %s is an adopted external slot: transfer would check a branch out in a worktree rota did not create", o.To)
 		}
 		if !resuming {
 			if h := to.HeldID(); h != "" {

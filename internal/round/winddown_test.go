@@ -268,7 +268,7 @@ func (f *assignFixture) addExternal(t *testing.T, name, branch, pr string) strin
 	t.Helper()
 	wt := filepath.Join(f.root, ".worktrees", name)
 	sh(t, f.root, "worktree", "add", "-q", "-b", branch, wt, "main")
-	if err := worker.RegisterExternal(f.root, name, branch, wt, "main", "12", pr); err != nil {
+	if err := worker.RegisterExternal(f.root, name, branch, wt, "main", worker.IssueFromBranch(branch), pr); err != nil {
 		t.Fatal(err)
 	}
 	return wt
@@ -297,7 +297,7 @@ func TestWindDownReleasesMergedExternalSlots(t *testing.T) {
 			t.Errorf("wind-down removed %s: %v", wt, err)
 		}
 	}
-	if s := reg.Slot("ext-2"); s.Branch() != "codex/13-b" || s.Task() != "12" {
+	if s := reg.Slot("ext-2"); s.Branch() != "codex/13-b" || s.Task() != "13" {
 		t.Errorf("an open external slot must not be parked: %v", s)
 	}
 }

@@ -1084,3 +1084,41 @@ func TestParkClearsTheLabelWhenTheWorktreeMoves(t *testing.T) {
 		t.Errorf("a repeat must not clear again: %+v %v %q", p, err, titles)
 	}
 }
+
+func TestReclaimRefusesAnExternalSlot(t *testing.T) {
+	f := newMoveFx(t)
+	rawSlot(f.root, "ben", func(s *jsonx.Object) { s.Set("kind", "external"); s.Set("state", "dead") })
+	branch := f.slot("ben").Branch()
+	_, err := f.reclaim("ben", func(o *ReclaimOpts) { o.Force = true })
+	if blockedBy(t, err) != "external" {
+		t.Fatalf("want exit 4 external: %v", err)
+	}
+	if got := gittest.Run(t, f.slot("ben").Worktree(), "symbolic-ref", "--short", "HEAD"); got != branch {
+		t.Errorf("worktree moved to %s", got)
+	}
+	if f.be.claims["12"] != "ben@1" || f.slot("ben").Task() != "12" {
+		t.Error("a refusal changes nothing")
+	}
+}
+
+func TestTransferRefusesAnExternalSlot(t *testing.T) {
+	f := newMoveFx(t)
+	rawSlot(f.root, "ben", func(s *jsonx.Object) { s.Set("kind", "external") })
+	branch := f.slot("ben").Branch()
+	_, err := f.transfer("12", "dana", nil)
+	if blockedBy(t, err) != "external" {
+		t.Fatalf("sender: want exit 4 external: %v", err)
+	}
+	if got := gittest.Run(t, f.slot("ben").Worktree(), "symbolic-ref", "--short", "HEAD"); got != branch {
+		t.Errorf("worktree moved to %s", got)
+	}
+	// An external receiver is refused too.
+	rawSlot(f.root, "ben", func(s *jsonx.Object) { s.Set("kind", "") })
+	rawSlot(f.root, "dana", func(s *jsonx.Object) { s.Set("kind", "external") })
+	if _, err := f.transfer("12", "dana", nil); blockedBy(t, err) != "external" {
+		t.Fatalf("receiver: want exit 4 external: %v", err)
+	}
+	if f.be.claims["12"] != "ben@1" || f.slot("ben").Task() != "12" {
+		t.Error("a refusal changes nothing")
+	}
+}

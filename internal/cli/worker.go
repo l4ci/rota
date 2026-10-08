@@ -153,9 +153,22 @@ func poolReap(fs *flag.FlagSet) RunFunc {
 		}
 		ctx, stop := workerContext()
 		defer stop()
+		external := map[string]bool{}
+		for _, s := range worker.LoadRegistry(root).Slots() {
+			if s.IsExternal() {
+				external[s.Name()] = true
+			}
+		}
 		reaped, err := workerEnvCtx(c, ctx).Reap(root, args, *all)
 		if err != nil {
 			return Result{}, err
+		}
+		lines := make([]string, 0, len(reaped))
+		for _, r := range reaped {
+			if external[r] {
+				r += ": external slot released, worktree and branch kept"
+			}
+			lines = append(lines, r)
 		}
 		d := jsonx.NewObject()
 		list := make([]any, 0, len(reaped))
@@ -164,7 +177,7 @@ func poolReap(fs *flag.FlagSet) RunFunc {
 		}
 		d.Set("reaped", list)
 		d.Set("changed", len(reaped) > 0)
-		return Result{Data: d, Text: strings.Join(reaped, "\n")}, nil
+		return Result{Data: d, Text: strings.Join(lines, "\n")}, nil
 	}
 }
 

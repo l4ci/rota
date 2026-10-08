@@ -2,6 +2,7 @@ package round
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -18,6 +19,9 @@ const (
 	BlockRegistered = "registered"
 	// BlockHeld: a slot already holds the issue.
 	BlockHeld = "held"
+	// BlockExternal: a destructive verb was pointed at an adopted slot, whose
+	// worktree and branch rota did not create.
+	BlockExternal = worker.BlockExternal
 )
 
 // AdoptOpts are the flags of `rota worker adopt`.
@@ -96,6 +100,16 @@ func (e Env) Adopt(ctx context.Context, root string, be backlog.Backend, o Adopt
 
 	base := e.Base
 	if err := worker.RegisterExternal(root, name, branch, wt, base, res.Issue, o.PR); err != nil {
+		var rc *worker.RegisterConflict
+		if errors.As(err, &rc) { // lost a race: the registry changed since the checks above
+			switch rc.Kind {
+			case worker.ConflictName:
+				return res, usage("slot %s already exists", name)
+			case worker.ConflictBranch:
+				return res, blocked(BlockRegistered, "slot %s already holds %s", rc.Slot, branch)
+			}
+			return res, blocked(BlockHeld, "slot %s already holds %s", rc.Slot, res.Issue)
+		}
 		return res, err
 	}
 	return res, nil
@@ -118,29 +132,52 @@ func (e Env) resolveAdoptRef(ctx context.Context, root, ref string) (branch, wt 
 			all[len(all)-1].branch = strings.TrimPrefix(strings.TrimPrefix(l, "branch "), "refs/heads/")
 		}
 	}
-	if _, serr := os.Stat(ref); serr == nil || strings.HasPrefix(ref, "/") || strings.HasPrefix(ref, ".") {
+	isBranch := func() bool {
+		r, _ := e.Git(ctx, root, "rev-parse", "--verify", "--quiet", "refs/heads/"+ref)
+		return r.ExitCode == 0
+	}
+	// A path starts with . or /; otherwise a local branch wins over a
+	// cwd-relative directory of the same name (branches like codex/12-x contain
+	// slashes, so a slash proves nothing).
+	asPath := strings.HasPrefix(ref, "/") || strings.HasPrefix(ref, ".")
+	if !asPath {
+		if fi, serr := os.Stat(ref); serr == nil && fi.IsDir() && !isBranch() {
+			asPath = true
+		}
+	}
+	// all[0] is the main checkout: a project root is not adoptable work.
+	adoptable := all[min(1, len(all)):]
+	if asPath {
 		abs := realPath(ref)
-		// all[0] is the main checkout: a project root is not adoptable work.
-		for _, w := range all[min(1, len(all)):] {
+		for _, w := range adoptable {
 			if w.path != abs {
 				continue
 			}
 			if w.branch == "" {
 				return "", "", usage("worktree %s is detached: adopt a branch", ref)
 			}
-			return w.branch, w.path, nil
+			return e.adoptable(w.branch, w.path)
 		}
 		return "", "", usage("%s is not a worktree of this repository", ref)
 	}
-	if r, _ := e.Git(ctx, root, "rev-parse", "--verify", "--quiet", "refs/heads/"+ref); r.ExitCode != 0 {
+	if !isBranch() {
 		return "", "", usage("branch %s not found", ref)
 	}
-	for _, w := range all[min(1, len(all)):] {
+	for _, w := range adoptable {
 		if w.branch == ref {
 			wt = w.path
 		}
 	}
-	return ref, wt, nil
+	return e.adoptable(ref, wt)
+}
+
+// adoptable refuses the base branch and the park/* branches: they are rota's
+// own resting places, never someone's work.
+func (e Env) adoptable(branch, wt string) (string, string, error) {
+	if branch == e.Base || strings.HasPrefix(branch, "park/") {
+		return "", "", usage("%s is the base or a parked branch: adopt a work branch", branch)
+	}
+	return branch, wt, nil
 }
 
 func realPath(p string) string {
