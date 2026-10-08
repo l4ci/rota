@@ -18,13 +18,13 @@ At every autonomy level the verb exits 4 with `data.blockedBy: "manual gate"` an
 
 The skill's side:
 
-- **Ask first, in an `AskUserQuestion` that is never auto-picked.** An earlier question counts when it names the action: `/rota-release` Step 6 asks about the notes *and* says yes pushes and publishes, so Steps 10 and 11 reuse its answer.
+- **Ask first, and wait for an explicit answer; never auto-pick it.** Use the host's question interface or prose (`references/authoring-conventions.md`). An earlier question counts when it names the action: `/rota-release` Step 6 asks about the notes *and* says yes pushes and publishes, so Steps 10 and 11 reuse its answer.
 - **Pass the answer verbatim** in `--confirm-note`. Never invent one, and never pass `--confirm` without a human answer behind it.
 - **On exit 4 with `blockedBy: "manual gate"`, ask and re-run.** Nothing changed on the refusal, so the re-run is safe.
 
 ### Merge approval in an unattended round
 
-With nobody at the prompt, `merge-approval` goes through the escalation channel (`--escalate`) instead of `AskUserQuestion`; `/rota-orchestrate` owns the mechanics (its merge-train file).
+With nobody at the prompt, `merge-approval` goes through the escalation channel (`--escalate`) instead of an interactive question; `/rota-orchestrate` owns the mechanics (its merge-train file).
 
 Call sites show the flags and the exit-4 handling; the verb enforces the rule, so they don't restate it.
 
@@ -47,11 +47,11 @@ Sites with multi-paragraph prose may use the *inline* form, a `**always manual**
 | `issue-close` | `/rota-ship` | Step 6c (Direct-push close) | Posts a tracking comment and closes upstream issues after a direct merge. |
 | `issue-close` | `/rota-release` | Step 13 | Closes upstream issues still open for shipped items. |
 
-`/rota-ship` Step 3's *"Ship anyway"* option (in the CONCERNS-routing AskUserQuestion) is manual-shaped too and never auto-picked; `references/review-verdict-routing.md` owns why.
+`/rota-ship` Step 3's *"Ship anyway"* option (in the CONCERNS-routing question) is manual-shaped too and never auto-picked; `references/review-verdict-routing.md` owns why.
 
 ## One enforcement point
 
-Enforce a gate at exactly ONE point: the skill that owns the question. No other skill dispatches the gated skill via `Skill`, and a confirmation check inside a skill other skills can invoke breaks the contract under autonomy.
+Enforce a gate at exactly ONE point: the skill that owns the question. No other skill dispatches the gated skill, and a confirmation check inside a skill other skills can invoke breaks the contract under autonomy.
 
 ## The skip-route
 

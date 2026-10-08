@@ -306,7 +306,7 @@ exit codes and repo scope: [verb contract](../contributing/contract/README.md).
 | `rota worker poll [<slot>] [--settle <seconds>] [--lines <n>]` | classify slot states from their panes |
 | `rota worker done <slot> [--base <ref>]` | the step before the PR: exit 4 unless the slot's item has a PASS `test.fast` proof row at the branch HEAD (`rota proof record`), else mark the slot done |
 | `rota worker gate <slot> --base <branch> [--check-only] [--no-verify] [--confirm --confirm-note <answer> \| --approval <escalation> \| --escalate]` | merge gate for one slot's branch or PR; exit 4 when `ship.mergeApproval` needs a human or `test.full` is empty (`blockedBy no-verify`, unless `--no-verify`) or the PR body does not close the slot's issue (`blockedBy closes`, unless the issue is labelled `partial-slice`), `--escalate` asks on the thread, `--approval` cites the answer |
-| `rota worker train <slot\|PR>... --base <branch> [--land-green] [--no-verify] [--confirm --confirm-note <answer> \| --approval <escalation> \| --escalate]` | merge several PRs in order in a scratch tree, verify once, land them all on a pass; a red train bisects to the first member that breaks it |
+| `rota worker train <slot\|PR>... --base <branch> [--order <list>] [--land-green] [--no-verify] [--confirm --confirm-note <answer> \| --approval <escalation> \| --escalate]` | merge several PRs in a conflict-minimising order (or `--order`) in a scratch tree, verify once, land them all on a pass; a red train bisects to the first member that breaks it |
 | `rota test run <fast\|full\|e2e> [--base <ref>]` | run `test.<tier>` in order, stopping at the first failure; `{files}` expands to the files changed against base; exit 3 when the tier is empty |
 | `rota test ledger check` | report expired and malformed entries in `.rota/test-ledger.json`; exit 1 when there are any |
 | `rota worker prompt-check [--key <file>]` | Codex UserPromptSubmit hook: pass only signed or maintainer input |
@@ -355,7 +355,7 @@ The orchestrator's verbs for a [parallel round](../usage/parallel-rounds.md). Al
 | `rota round transfer <issue> --to <slot\|human> [--tier <light\|standard\|heavy>] [--tier-reason <text>] [--note-file <path\|->] [--body-file <path\|->] [--accept-overlap] [--holder-pid <n>]` | move an assigned issue to another slot or to the human |
 | `rota round reclaim <slot> [--force] [--note-file <path\|->] [--holder-pid <n>]` | free a dead or stalled slot and make its issue assignable |
 | `rota round review-relay <slot>` | relay new review input on a done slot's PR to its worker as a counted bounce (`REVIEW` relay); at `round.maxBounces` escalate on the PR instead, exit 4; never gates or merges |
-| `rota round bounce <ID> [--head <sha>]` | count one by-hand review bounce of an item; the same `--head` twice counts once; exit 4 once the item is at `round.maxBounces`, then transfer it to a higher tier or `--to human` |
+| `rota round bounce <ID> [--head <sha>] [--slot <slot>]` | count one by-hand review bounce of an item; the same `--head` twice counts once; `--slot` names the slot holding the bounced PR so a best-of attempt gets its own ledger row; exit 4 once the item is at `round.maxBounces`, then transfer it to a higher tier or `--to human` |
 | `rota round pick <ID> --pr <N> --reason-file <path\|-> [--holder-pid <n>]` | `best-of:2` issue: name the winning PR; close the other attempt's PR with the reason, keep its branch |
 | `rota round wind-down [--no-verify] [--holder-pid <n>]` | re-verify the base, park every slot, release the lease |
 

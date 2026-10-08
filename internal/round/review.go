@@ -118,7 +118,7 @@ func (e Env) ReviewRelay(ctx context.Context, root string, o ReviewOpts) (Relaye
 	// that fails afterwards cannot leave a relayed batch unconsumed, which the
 	// next pass would send again. A dispatch that fails puts both back.
 	prevSeen := s.ReviewSeen()
-	if out.Bounces, err = worker.RecordBounce(root, issue, pr.HeadSHA); err != nil {
+	if out.Bounces, err = worker.RecordBounce(root, issue, o.Slot, pr.HeadSHA); err != nil {
 		return out, err
 	}
 	// A bounce RecordBounce deduped on the same head was not counted here and

@@ -67,7 +67,7 @@ Keep the scope JSON (commits, `touchedFiles`, `referencedIds`, `intents`) for la
 
 ## Step 3 — Review (opt-in)
 
-Skipped when `ship.review` is `false` and for a round worker's PR (branch `<agent>/<issue>-<slug>`, or the brief says it is a round slot); when either applies, read [`review-gate.md`](review-gate.md) and [`round-worker-and-issue-mode.md`](round-worker-and-issue-mode.md). Otherwise invoke `rota-review` via the `Skill` tool, then route on the recorded verdict (umbrella: add `--repo "$REPO"`):
+Skipped when `ship.review` is `false` and for a round worker's PR (branch `<agent>/<issue>-<slug>`, or the brief says it is a round slot); when either applies, read [`review-gate.md`](review-gate.md) and [`round-worker-and-issue-mode.md`](round-worker-and-issue-mode.md). Otherwise invoke `rota-review` by reading and following its instructions, then route on the recorded verdict (umbrella: add `--repo "$REPO"`):
 
 ```bash
 rota verdict route <branch> --for ship-review --json
@@ -149,7 +149,7 @@ Already-completed IDs are a no-op; an unknown ID exits 3. When it exits 4 with `
 Round workers skip Steps 8.5 and 8.6 (`round-worker-and-issue-mode.md`). Otherwise run `references/post-cycle-trigger-gate.md` with:
 
 - **Nudge (`"off"`):** append to the Step 9 report *"Capture learnings before context fades? Run `/rota-learn` — this cycle has the fresh session context."*
-- **Target (`"auto"`):** dispatch `rota-learn` via `Skill` immediately, no prompt.
+- **Target (`"auto"`):** dispatch `rota-learn` by reading and following its instructions immediately, no prompt.
 - **Brief:** the resolved IDs and touched files.
 
 ## Step 8.6 — Docs After-Work (inline)

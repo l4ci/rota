@@ -52,7 +52,7 @@ Work another tool already started (a Codex worktree, an agent-team branch, a clo
 
 ## 3. The loop
 
-**`rota round watch` is how you wait.** Keep one armed: run it as a background command whenever workers are active and re-arm it every time it exits. It wakes you on a slot, PR or escalation change and at a heartbeat, so you stay reachable while you talk to the maintainer. Never use a blocking question picker (`AskUserQuestion`) during a round: ask in prose and keep working. The Stop hook refuses to let you go idle without a watch.
+**`rota round watch` is how you wait.** Keep one armed: run it as a background command whenever workers are active and re-arm it every time it exits. It wakes you on a slot, PR or escalation change and at a heartbeat, so you stay reachable while you talk to the maintainer. Never use a blocking question picker during a round: ask in prose and keep working. The Stop hook refuses to let you go idle without a watch.
 
 `rota round wait` is the blocking form, for when you have nothing else to do. It returns the slot that needs you with its state and evidence, and records what it returned. A slot comes back once per change: the next `wait` skips it until its worker moves again. Never poll in your own context: no sleep loops, no repeated `status`, no tailing panes. When `watch` or `wait` returns, act, then wait again. If your shell cuts commands short, loop on a finite `--timeout`.
 
@@ -100,7 +100,7 @@ Fix it yourself when the gap is small and mechanical: a stale doc line, a missin
 
 A reviewer's comment on a `done` slot's PR reaches the watch as a `review/<slot>` change (and a tick lists a `review` item). Under `round.reviewLoop: manual` (the default) run `rota round review-relay <slot>`: it counts the bounce itself, relays the comments to the worker as a `REVIEW` relay and marks the slot busy, so do not also run `round bounce`. At the cap it exits 4 and escalates on the PR: go to the cap options in [`bounce-cap.md`](bounce-cap.md). Under `auto` the watch does this itself and you hear about it only at the cap. The loop never merges: gate the PR once the worker is `done` again. Under `manual` the autopilot tick still gates a done PR beside the `review` item, so relay first if the review matters.
 
-When you bounce by hand, run `rota round bounce <issue> --head <pr-head-sha>` first and read [`bounce-cap.md`](bounce-cap.md): the cap, what to do at it, and re-review.
+When you bounce by hand, run `rota round bounce <issue> --head <pr-head-sha> --slot <slot>` first and read [`bounce-cap.md`](bounce-cap.md): the cap, what to do at it, and re-review.
 
 ## 8. Wind down
 

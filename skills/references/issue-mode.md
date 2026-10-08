@@ -24,7 +24,7 @@ An item ID is `#42` or a bare `42`; the legacy `F42` / `B42` / `T42` forms (type
 | Merge a reviewed PR / MR | `rota ship pr-merge <pr> [--items <ID[,ID...]>]` (checks proof first, then merges and closes what the host left open; exit 4 = an item unproven) |
 | Close | `rota item complete <ID> [--commit <hash>] [--reason done\|handed-off\|blocked\|dropped] [--note <text>]`; reopen with `rota item reopen` |
 
-**Post every `AskUserQuestion` answer that changes an item's direction** as a `decision` (or `answer`) comment with `rota item comment add`, so later sessions, which share no memory with this one, see why the item took its shape.
+**Post every user answer that changes an item's direction** as a `decision` (or `answer`) comment with `rota item comment add`, so later sessions, which share no memory with this one, see why the item took its shape.
 
 ## State labels
 
