@@ -128,6 +128,27 @@ func TestStatusExternalOlderMergedPROnTheSameBranchNameIsNotOurs(t *testing.T) {
 	}
 }
 
+// A branch recreated from main under an old name contains the old PR's head
+// (rota merges with merge commits, so that head is reachable from main): being
+// on the branch proves nothing, and the live slot must not read merged.
+func TestStatusExternalOldMergedPRReachableThroughBaseIsNotOurs(t *testing.T) {
+	root, e, fr := extFixture(t, "")
+	oldHead := gitIn(t, root, "rev-parse", "main")
+	fr.mergedPRs = map[string][]tracker.PR{"codex/12-thing": {{Number: 3, Branch: "codex/12-thing", URL: "https://github.com/o/r/pull/3", HeadSHA: oldHead}}}
+	fr.states[3] = "merged"
+	rep, err := e.Status(bg, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, _ := rowOf(rep, "ext-1")
+	if r.State == "merged" || r.PRState == "merged" || r.PR != "" {
+		t.Fatalf("an old PR reachable through the base marked the live slot merged: %+v", r)
+	}
+	if k := kinds(rep.Findings)["ext-1"]; slices.Contains(k, MergedExternal) {
+		t.Errorf("no merged-external finding expected, got %v", k)
+	}
+}
+
 // A forge that cannot list merged PRs leaves the row unknown-safe: a warning,
 // no PR attached and no release.
 func TestStatusExternalMergedLookupErrorWarnsAndKeepsTheSlot(t *testing.T) {
