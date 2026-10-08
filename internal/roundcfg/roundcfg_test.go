@@ -242,3 +242,17 @@ func TestScopeOverlap(t *testing.T) {
 		t.Errorf("invalid value: %v", err)
 	}
 }
+
+func TestReviewLoop(t *testing.T) {
+	if s, err := Load(project(t, "")); err != nil || s.ReviewLoop != ReviewLoopManual {
+		t.Fatalf("default is manual: %v %+v", err, s)
+	}
+	if s, err := Load(project(t, `{"round":{"reviewLoop":"auto"}}`)); err != nil || s.ReviewLoop != ReviewLoopAuto {
+		t.Fatalf("%v %+v", err, s)
+	}
+	for _, bad := range []string{`{"round":{"reviewLoop":"always"}}`, `{"round":{"reviewLoop":true}}`} {
+		if _, err := Load(project(t, bad)); err == nil {
+			t.Errorf("%s should be refused", bad)
+		}
+	}
+}

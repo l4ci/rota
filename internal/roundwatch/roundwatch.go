@@ -97,6 +97,7 @@ const (
 	ReasonInterrupt  = "interrupt"   // the context ended
 	changeKeySlotPR  = "pr/"         // snapshot key prefixes
 	changeKeyEscalat = "escalation/" //
+	changeKeyReview  = "review/"     //
 )
 
 // SlotNews is what the slot wait found.
@@ -190,7 +191,7 @@ func Run(ctx context.Context, env Env, o Opts) (Result, error) {
 func carry(base map[string]string) map[string]string {
 	out := map[string]string{}
 	for k, v := range base {
-		if strings.HasPrefix(k, changeKeySlotPR+"state/") || strings.HasPrefix(k, changeKeyEscalat+"status/") {
+		if strings.HasPrefix(k, changeKeySlotPR+"state/") || strings.HasPrefix(k, changeKeyEscalat+"status/") || strings.HasPrefix(k, changeKeyReview) {
 			out[k] = v
 		}
 	}
@@ -251,6 +252,11 @@ func LocalSnapshot(root string) map[string]string {
 
 // PRStateKey is the snapshot key of a slot's PR state, which only the forge knows.
 func PRStateKey(slot string) string { return changeKeySlotPR + "state/" + slot }
+
+// ReviewKey is the snapshot key of the review input waiting on a done slot's
+// PR; its value says how much and from whom. It moves when a new batch arrives
+// and when the batch is consumed.
+func ReviewKey(slot string) string { return changeKeyReview + slot }
 
 // EscalationStatusKey is the snapshot key of the forge-checked escalation status.
 func EscalationStatusKey(id string) string { return changeKeyEscalat + "status/" + id }

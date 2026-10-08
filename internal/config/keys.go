@@ -132,6 +132,7 @@ var Keys = []Key{
 	k("round.architectureAreas", []any{}, false, TypeList, "Areas an architecture review is split into, one review item each. Empty means the subsystem map's names, else one whole-repo review."),
 	k("round.autopilot", false, false, TypeBool, "Lets rota round watch --autopilot and rota round tick assign, gate and merge mechanically. Merges only under ship.mergeApproval none."),
 	k("round.autopilotCap", num("3"), false, TypeInt, "Most assigns, and most merges, one autopilot tick does. 0 means the default."),
+	k("round.reviewLoop", "manual", false, TypeEnum, "What happens when a reviewer comments on a finished worker's PR. manual reports it and leaves rota round review-relay to the orchestrator; auto relays it to the worker as a counted bounce (round.maxBounces) from rota round watch and rota round tick.", "manual", "auto"),
 	k("issues.labels.needsHuman", "needs-human", false, TypeString, "Label rota round transfer --to human puts on an issue handed to the human. rota round candidates skips an issue that carries it."),
 	k("work.codexAccounts", []any{}, false, TypeList, "Codex homes for Codex workers, as {name, codexHome} objects, the counterpart of work.accounts. Empty: the default Codex home. Machine-specific, so set it in config.local.json."), // named Codex homes; empty: the default Codex home
 	k("work.codexCommand", "", false, TypeString, "Command that starts a Codex worker session. Empty builds the default codex command, with --model from the tier when one is chosen; {model} receives it."),

@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/ledger"
@@ -88,6 +89,9 @@ func (e Env) ReportSlot(ctx context.Context, root string, o ReportOpts) (Reporte
 				return
 			}
 			res.Changed = true
+			if state == "done" {
+				s.BaselineReview(time.Now())
+			}
 		}
 		s.ClearSeen() // a report is news to `round wait`, even of the same state
 		if pr != "" && s.PR() != pr {
