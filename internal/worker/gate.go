@@ -671,7 +671,7 @@ func (g *gate) stepMerge() (bool, error) {
 	// An empty test.full would merge with nothing verified: refuse before the
 	// merge unless --no-verify says so. CI verification does not read it, and a
 	// test.e2e tier still verifies.
-	if !g.o.NoVerify && g.in.where == WhereLocal && len(g.in.verifyCmds) == 0 && len(g.in.e2eCmds) == 0 {
+	if !g.o.NoVerify && noVerifyRule(g.in.where, g.in.verifyCmds, g.in.e2eCmds) {
 		g.verdict(GateNoVerify, "", "")
 		g.res.Err, g.res.Hint = noVerifyRefusal("GATE " + g.o.Slot)
 		return true, nil

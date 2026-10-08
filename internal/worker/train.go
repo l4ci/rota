@@ -177,7 +177,7 @@ func (e Env) train(ctx context.Context, root string, o TrainOpts, cache *trainCa
 	}
 	// An empty test.full would land the train unverified: refuse before the
 	// scratch merge unless --no-verify says so.
-	if where, _ := FullWhere(config.Load(rotatree.Config(root))); !o.NoVerify && where == WhereLocal && len(verifyCommandsAt(root)) == 0 && len(TierCommands(root, "e2e")) == 0 {
+	if where, _ := FullWhere(config.Load(rotatree.Config(root))); !o.NoVerify && noVerifyRule(where, verifyCommandsAt(root), TierCommands(root, "e2e")) {
 		res.Verdict = GateNoVerify
 		res.Err, res.Hint = noVerifyRefusal("TRAIN")
 		return res, nil
