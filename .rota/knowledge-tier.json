@@ -445,6 +445,26 @@
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-07"
+    },
+    "Architecture: Helper conventions & invariants::A per-invocation cache must reset per pass in long-running verbs": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-08"
+    },
+    "Rounds: Orchestration::Cite a transfer brief as a transfer note, not a relay": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-08"
+    },
+    "Architecture: Helper conventions & invariants::Palette entries name the verb that registers the View": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-08"
+    },
+    "Build & Tooling: Smoke testing::Host CLI argv needs one real-host run": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-08"
     }
   }
 }
