@@ -118,6 +118,20 @@ func TestWorkerDone(t *testing.T) {
 	})
 }
 
+// TestWorkerDoneBaselinesReviewCursor: the contract runs `rota worker done`
+// before the PR is opened, so the poll never sees the edge; the verb itself
+// must start the review cursor or every earlier comment counts as review input.
+func TestWorkerDoneBaselinesReviewCursor(t *testing.T) {
+	dir := doneProject(t, "")
+	if code, out, _ := rotaIn(t, dir, "worker", "done", "ben", "--json"); code != 0 {
+		t.Fatalf("exit %d: %s", code, out)
+	}
+	b, _ := os.ReadFile(filepath.Join(dir, ".rota", "workers.json"))
+	if !strings.Contains(string(b), "reviewSeen") {
+		t.Fatalf("review cursor not baselined: %s", b)
+	}
+}
+
 // TestWorkerDoneFromWorktree: the registry lives in the main checkout, and
 // {files} is the slot branch's diff, from whichever directory the verb runs.
 func TestWorkerDoneFromWorktree(t *testing.T) {
