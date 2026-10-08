@@ -2,7 +2,7 @@
 
 ## Step 3 — Milestone Gate (issue mode)
 
-**Issue mode** (`backlog.backend: "issues"`; `references/issue-mode.md`): pick the milestone. `--milestone MNN` wins; else the single one from `rota milestone active`. Several active: `AskUserQuestion`. Then `rota release milestone-check <MNN> --json`.
+**Issue mode** (`backlog.backend: "issues"`; `references/issue-mode.md`): pick the milestone. `--milestone MNN` wins; else the single one from `rota milestone active`. Several active: ask the user. Then `rota release milestone-check <MNN> --json`.
 
 Exit 1 means blocked: show each `data.blocked` entry (open issues labelled `in-progress`, `needs-review` or `changes-requested`) and stop. `data.stillOpen` entries do not block; show them and continue. Other exits (2, 3, 4, 5, 6): stop and report the verb's message.
 

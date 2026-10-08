@@ -14,7 +14,7 @@ Every persistence skill (and `/rota-learn`'s `--term` mode) follows:
 4. **Merges via a writer verb** that owns insertion, deduplication, and the date stamp:
    - `/rota-learn` (topic bullets) → `rota knowledge add`
    - `/rota-learn --term` → `rota glossary write`
-   - `/rota-decide` → `Edit` directly on `.rota/DECISIONS.md` (no writer verb)
+   - `/rota-decide` → edit `.rota/DECISIONS.md` directly (no writer verb)
 5. **Regenerates the managed index block** in the instructions file (`AGENTS.md` when it exists, else `CLAUDE.md`; the verb resolves it) via `rota block`. The block is the always-on signal to read-side skills:
    - `/rota-learn` (both modes) → `rota block knowledge` (`--term` runs it internally via `rota glossary write`; Glossary surfaces as a topic name in the Knowledge index automatically)
    - `/rota-decide` → `rota block decisions`
@@ -62,7 +62,7 @@ How KNOWLEDGE.md, DECISIONS.md and the Glossary behave in an umbrella project (a
 **Scope resolution**, highest priority first:
 
 1. `--repo umbrella|<name>` always wins.
-2. cwd inside a registered sub-repo selects that sub-repo. At the umbrella root, skills ask once via `AskUserQuestion` (umbrella-shared vs a specific sub-repo).
+2. cwd inside a registered sub-repo selects that sub-repo. At the umbrella root, skills ask once (umbrella-shared vs a specific sub-repo).
 3. Single-repo projects always resolve to `umbrella`.
 
 The scoped `rota knowledge` and `rota glossary` verbs resolve the target file and tier sidecar from the global `--repo` flag or the cwd.
