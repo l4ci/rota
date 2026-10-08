@@ -12,14 +12,15 @@ import (
 // likely a misread than a limit.
 const maxResetAhead = 8 * 24 * time.Hour
 
-var resetRe = regexp.MustCompile(`(?i)\bresets?\s+(?:at\s+|on\s+)?` +
+var resetRe = regexp.MustCompile(`(?i)\b(?:resets?|try again)\s+(?:at\s+|on\s+)?` +
 	`(?:(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(?:at\s+)?)?` +
 	`(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b(?:\s*\(([A-Za-z_]+(?:/[A-Za-z_+\-0-9]+)*)\))?`)
 
 var months = map[string]time.Month{"jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
 	"jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12}
 
-// ParseReset reads a reset time out of limit text: `resets 3pm`, `resets at
+// ParseReset reads a reset time out of limit text: `resets 3pm`, Codex's
+// `try again at 3:42 PM`, `resets at
 // 3:30pm (Europe/Berlin)`, `resets at 15:00`, `resets Oct 5, 3pm`. A bare
 // time is the next such time after now in loc (or the zone the text names); a
 // date is the next such date. It is false when the text has no time, or the

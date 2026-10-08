@@ -66,7 +66,7 @@ Every decision entry has four parts:
 3. **Forbids** — concrete patterns, files, approaches ruled out
 4. **Permits** — what this still allows (keeps the boundary from over-applying)
 
-**Draft all four from conversation context.** One `AskUserQuestion` only when a part is genuinely ambiguous; otherwise show the draft and let Step 5 handle approval. In source-prefill modes Step 3 is the user's chance to redline.
+**Draft all four from conversation context.** One question only when a part is genuinely ambiguous; otherwise show the draft and let Step 5 handle approval. In source-prefill modes Step 3 is the user's chance to redline.
 
 ## Step 4 — Classify by Topic
 
@@ -74,7 +74,7 @@ Reuse existing `## Topic` headings in `.rota/DECISIONS.md`, then `KNOWLEDGE.md` 
 
 ## Step 5 — Confirmation Gate
 
-Present the assembled entry to the user via `AskUserQuestion`:
+Present the assembled entry to the user with a question:
 
 - **Header:** `"Decide"`
 - **Question:** *"Lock in this decision?"*
@@ -111,7 +111,7 @@ Hard boundaries for this project. Each entry is a commitment, not a preference �
 
 **Merge rules:**
 
-- Never rewrite sections you didn't change; use `Edit`, not `Write`.
+- Never rewrite sections you didn't change; make targeted edits rather than replacing the whole file.
 - Insert new `### Decision title` blocks at the **top** of their topic (newest first).
 - Stamp today's absolute date as `<!-- YYYY-MM-DD -->`.
 - New topics go alphabetically, except `Architecture` and `Build & Tooling` may be pinned near the top (as in `KNOWLEDGE.md`).

@@ -15,6 +15,7 @@ import (
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/escalation"
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/hook"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
@@ -168,7 +169,8 @@ func buildLimits(ctx context.Context, c *Ctx, root string, cfg any, set limits.S
 				panes[key] = pane
 				mu.Unlock()
 			}
-			out = append(out, limits.Target{Session: name, Pane: pane, Account: s.Account(),
+			kind, account := limitKind(s)
+			out = append(out, limits.Target{Session: name, Pane: pane, Account: account, Kind: kind,
 				Issue: s.HeldID()})
 		}
 		return out
@@ -203,17 +205,24 @@ func buildLimits(ctx context.Context, c *Ctx, root string, cfg any, set limits.S
 			}
 			return limits.Reading{}
 		},
-		PickAccount: func(ctx context.Context, exclude string) (string, bool) {
+		PickAccount: func(ctx context.Context, kind, exclude string) (string, bool) {
+			if kind == limits.KindCodex {
+				var logins []string
+				for _, a := range config.CodexAccounts(config.Load(rotatree.Config(root))) {
+					logins = append(logins, a.Name)
+				}
+				return limits.CodexPick(root, logins, exclude, c.deps().Now())
+			}
 			return accounts().Pick(ctx, root, []string{exclude})
 		},
-		IdleSlot: func(ctx context.Context, account string) (string, bool) {
+		IdleSlot: func(ctx context.Context, kind, account string) (string, bool) {
 			rc, err := roundcfg.Load(root)
 			if err != nil {
 				return "", false
 			}
 			for _, s := range worker.LoadRegistry(root).Slots() {
 				name := s.Name()
-				if s.Account() != account || !slices.Contains(rc.Roster, name) {
+				if k, a := limitKind(s); k != kind || a != account || !slices.Contains(rc.Roster, name) {
 					continue
 				}
 				if s.HeldID() == "" && s.State() != "busy" {
@@ -492,4 +501,14 @@ func limitStatusRows(list []limits.Entry) ([]any, []string) {
 		lines = append(lines, limitLine(e))
 	}
 	return limitRows(list), lines
+}
+
+// limitKind is the harness kind the usage-limit watcher files a slot under
+// ("" for Claude) and the account its limit counts against: a Codex slot's is
+// its work.codexAccounts login.
+func limitKind(s *worker.Slot) (kind, account string) {
+	if s.Kind() == harness.Codex {
+		return limits.KindCodex, s.CodexAccount()
+	}
+	return "", s.Account()
 }

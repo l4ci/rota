@@ -302,7 +302,7 @@ func TestViewsDropControlCharactersFromRowsAndBodies(t *testing.T) {
 	if strings.ContainsAny(out, "\x00\x07") || strings.Contains(out, "\x1b[2J") || strings.Contains(out, "\x1b[31m") || strings.Contains(out, "\x1b]") {
 		t.Errorf("control characters reached the frame: %q", out)
 	}
-	if !strings.Contains(tui.Strip(out), "body [31mred[0m ok") {
+	if !strings.Contains(tui.Strip(out), "body red ok") {
 		t.Errorf("body text lost: %q", tui.Strip(out))
 	}
 }

@@ -86,16 +86,23 @@ func (s Store) Query(scope string, topics []string, o QueryOpts) (text string, m
 			// Like the old helper: no file, no output and no warnings.
 			return "", nil, nil
 		}
+		all := section.Topics(content)
+		names := headingNames(all)
 		wanted := map[string]bool{}
 		for _, t := range topics {
-			wanted[strings.ToLower(strings.TrimSpace(t))] = true
+			hit := resolveTopic(t, names)
+			for _, n := range hit {
+				wanted[n] = true
+			}
+			if len(hit) > 0 {
+				matched[strings.ToLower(strings.TrimSpace(t))] = true
+			}
 		}
 		first := true
-		for _, t := range section.Topics(content) {
+		for _, t := range all {
 			if !wanted[strings.ToLower(t.Name)] {
 				continue
 			}
-			matched[strings.ToLower(t.Name)] = true
 			if !first {
 				b.WriteString("\n")
 			}
@@ -114,34 +121,42 @@ func (s Store) Query(scope string, topics []string, o QueryOpts) (text string, m
 				}
 			}
 		}
+		var names []string
+		for i := range pairs {
+			if exists[i] {
+				names = append(names, headingNames(section.Topics(contents[i]))...)
+			}
+		}
 		first := true
 		for _, w := range topics {
 			wl := strings.ToLower(strings.TrimSpace(w))
-			printed := false
-			for i, p := range pairs {
-				if !exists[i] {
-					continue
-				}
-				for _, t := range section.Topics(contents[i]) {
-					if strings.ToLower(t.Name) != wl {
+			for _, hl := range resolveTopic(w, names) {
+				matched[wl] = true
+				printed := false
+				for i, p := range pairs {
+					if !exists[i] {
 						continue
 					}
-					matched[wl] = true
-					lines := filter(t.Body, t.Name, p.tiers)
-					if len(lines) == 0 {
+					for _, t := range section.Topics(contents[i]) {
+						if strings.ToLower(t.Name) != hl {
+							continue
+						}
+						lines := filter(t.Body, t.Name, p.tiers)
+						if len(lines) == 0 {
+							break
+						}
+						if !printed {
+							if !first {
+								b.WriteString("\n")
+							}
+							b.WriteString("## " + t.Name + "\n")
+							first = false
+							printed = true
+						}
+						b.WriteString("> from: " + p.label + "\n")
+						b.WriteString(strings.TrimRight(strings.Join(lines, "\n"), " \t\n\r\f\v") + "\n")
 						break
 					}
-					if !printed {
-						if !first {
-							b.WriteString("\n")
-						}
-						b.WriteString("## " + t.Name + "\n")
-						first = false
-						printed = true
-					}
-					b.WriteString("> from: " + p.label + "\n")
-					b.WriteString(strings.TrimRight(strings.Join(lines, "\n"), " \t\n\r\f\v") + "\n")
-					break
 				}
 			}
 		}
@@ -202,6 +217,14 @@ func topicStats(content string) []Stat {
 	out := []Stat{}
 	for _, t := range section.Topics(content) {
 		out = append(out, Stat{t.Name, len(bulletLine.FindAllStringIndex(t.Body, -1)), len(t.Body)})
+	}
+	return out
+}
+
+func headingNames(ts []section.Topic) []string {
+	out := make([]string, len(ts))
+	for i, t := range ts {
+		out[i] = t.Name
 	}
 	return out
 }

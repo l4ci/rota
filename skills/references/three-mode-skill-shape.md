@@ -8,7 +8,7 @@ The pair shares the **mode skeleton** but diverges wherever the artifact's audie
 
 Every three-mode skill in this family has:
 
-1. **First-run mode** — interactive scaffold of the canonical artifact. The skill detects an empty or missing target (`<docs.path>/` absent or empty; `.rota/qa/<target>.md` missing), inspects the project to form a hypothesis, proposes a structure, and writes only after explicit user approval (`AskUserQuestion` with a `(Recommended)` option). Never auto-scaffolds.
+1. **First-run mode** — interactive scaffold of the canonical artifact. The skill detects an empty or missing target (`<docs.path>/` absent or empty; `.rota/qa/<target>.md` missing), inspects the project to form a hypothesis, proposes a structure, and writes only after explicit user approval (a question with a `(Recommended)` option). Never auto-scaffolds.
 2. **After-work / run mode** — for Docs Mode, auto-invoked from `/rota-ship` post-cycle when the cycle's diff touches user-facing surface; reads what changed, maps changes to entries in the artifact, and either proposes edits behind an approval gate or writes them directly. For `/rota-qa`, `run` mode executes the strategy declared in `.rota/qa/<target>.md` and emits a verdict; it does not edit the artifact itself.
 3. **Audit/restructure mode** — interactive on-demand reorganization. Surfaces staleness, duplicates, broken commands, and dead strategies; proposes merges, archives, or fixes; applies only on user confirmation.
 

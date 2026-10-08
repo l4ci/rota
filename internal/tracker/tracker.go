@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/strutil"
 )
 
 // Kind classifies a tracker failure for the CLI exit table.
@@ -512,7 +513,7 @@ func (b *base) json(ctx context.Context, args []string, v any) error {
 		return err
 	}
 	if err := json.Unmarshal([]byte(out), v); err != nil {
-		return failed("unparseable tracker output: %q", clip(out))
+		return failed("unparseable tracker output: %q", strutil.Clip(out, clipLen))
 	}
 	return nil
 }
@@ -529,13 +530,13 @@ func (b *base) pages(ctx context.Context, path string, v any) error {
 	for dec.More() {
 		var page []json.RawMessage
 		if err := dec.Decode(&page); err != nil {
-			return failed("unparseable tracker output: %q", clip(out))
+			return failed("unparseable tracker output: %q", strutil.Clip(out, clipLen))
 		}
 		all = append(all, page...)
 	}
 	joined, _ := json.Marshal(all)
 	if err := json.Unmarshal(joined, v); err != nil {
-		return failed("unparseable tracker output: %q", clip(out))
+		return failed("unparseable tracker output: %q", strutil.Clip(out, clipLen))
 	}
 	return nil
 }
@@ -547,17 +548,13 @@ func (b *base) createdID(ctx context.Context, args []string) (string, error) {
 	}
 	n, ok := intOf(d.ID)
 	if !ok {
-		return "", failed("cannot parse comment id from: %q", clip(string(d.ID)))
+		return "", failed("cannot parse comment id from: %q", strutil.Clip(string(d.ID), clipLen))
 	}
 	return strconv.Itoa(n), nil
 }
 
-func clip(s string) string {
-	if len(s) > 200 {
-		return s[:200]
-	}
-	return s
-}
+// clipLen caps the tracker output quoted in a parse error.
+const clipLen = 200
 
 // intOf reads a JSON number, or a string holding a decimal integer, as int
 // (Python's int(v)).
@@ -654,11 +651,11 @@ func numberFromURL(out string) (int, error) {
 		i--
 	}
 	if i == len(last) || i == 0 || last[i-1] != '/' {
-		return 0, failed("cannot parse issue number from: %q", clip(strings.TrimSpace(out)))
+		return 0, failed("cannot parse issue number from: %q", strutil.Clip(strings.TrimSpace(out), clipLen))
 	}
 	n, err := strconv.Atoi(last[i:])
 	if err != nil {
-		return 0, failed("cannot parse issue number from: %q", clip(strings.TrimSpace(out)))
+		return 0, failed("cannot parse issue number from: %q", strutil.Clip(strings.TrimSpace(out), clipLen))
 	}
 	return n, nil
 }

@@ -3,17 +3,17 @@ package worker
 import (
 	"context"
 	"fmt"
+
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/host"
+	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/rotatree"
+	"github.com/l4ci/rota/internal/strutil"
 	"os"
 	"regexp"
 	"strings"
 	"time"
-	"unicode/utf8"
-
-	"github.com/l4ci/rota/internal/config"
-	"github.com/l4ci/rota/internal/host"
-	"github.com/l4ci/rota/internal/ledger"
 )
 
 // Worker slot classification: the port of bin/hv-worker-poll.
@@ -134,14 +134,6 @@ func compileAll(prefix string, pats []string) []*regexp.Regexp {
 	return out
 }
 
-// clip is Python's s[:n] on characters.
-func clip(s string, n int) string {
-	if utf8.RuneCountInString(s) <= n {
-		return s
-	}
-	return string([]rune(s)[:n])
-}
-
 // reRelayHead opens an orchestrator relay or brief echoed into the pane.
 var reRelayHead = regexp.MustCompile(`^\s*--- ORCHESTRATOR \(round \d+\) ---\s*$`)
 
@@ -209,7 +201,7 @@ func Classify(text string, moved bool, lines int, native string) (state, evidenc
 			if reFunds.MatchString(tail) {
 				return StateLimited, "usage limit reached; pane offers 'Add funds' — needs a human, do NOT answer"
 			}
-			return StateLimited, clip(strings.TrimSpace(m), 120)
+			return StateLimited, strutil.Clip(strings.TrimSpace(m), 120)
 		}
 	}
 	if native == "working" {
@@ -226,7 +218,7 @@ func Classify(text string, moved bool, lines int, native string) (state, evidenc
 	}
 	// Static pane from here down.
 	if m := reAPIErr.FindStringSubmatch(tail); m != nil {
-		return StateDead, clip(strings.TrimSpace(m[1]), 120)
+		return StateDead, strutil.Clip(strings.TrimSpace(m[1]), 120)
 	}
 	if reResume.MatchString(tail) {
 		return StateDead, "crashed session offering resume"
@@ -559,7 +551,7 @@ func (e Env) classify(ctx context.Context, h host.Host, targets []pollTarget, se
 			// absent explain leaves the generic evidence as it was.
 			if x, ok := h.(host.Explainer); ok {
 				if why := x.Explain(ctx, t.name, t.handle); why != "" {
-					ev += ": herdr explain: " + clip(why, 200)
+					ev += ": herdr explain: " + strutil.Clip(why, 200)
 				}
 			}
 		}

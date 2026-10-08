@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
@@ -110,7 +111,8 @@ func TestTrainConflict(t *testing.T) {
 		trainWrite(t, w, "clash.txt", b)
 		gitq(t, w.dir, "checkout", "-q", "main")
 	}
-	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}})
+	// An order the caller chose is not retried: the conflict names the member.
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}, Order: []string{"b1", "b2"}})
 	if err != nil || res.Verdict != GateMergeFailed || res.Culprit != "b2" || w.onMain("b1.txt") {
 		t.Fatalf("%+v %v", res, err)
 	}
@@ -547,5 +549,163 @@ func TestTrainCancelledLeavesNoScratchTree(t *testing.T) {
 	}
 	if extra := w.scratchTrees(); len(extra) != 0 {
 		t.Errorf("scratch worktree left behind: %v", extra)
+	}
+}
+
+// orderWorld adds a 20-line shared.txt to main and gives b1 a large edit at its
+// top and b2 a one-line edit at its bottom (clean merge either way); b3 touches
+// only its own file.
+func orderWorld(t *testing.T) *world {
+	t.Helper()
+	w := trainWorld(t, "true", "b1", "b2", "b3")
+	trainWrite(t, w, "shared.txt", strings.TrimSuffix(strings.Repeat("-\n", 20), "\n"))
+	edit := func(b, body string) {
+		gitq(t, w.dir, "checkout", "-q", b)
+		gitq(t, w.dir, "merge", "-q", "main", "-m", "sync")
+		trainWrite(t, w, "shared.txt", body)
+		gitq(t, w.dir, "checkout", "-q", "main")
+	}
+	edit("b1", strings.Repeat("A\n", 5)+strings.TrimSuffix(strings.Repeat("-\n", 15), "\n"))
+	edit("b2", strings.TrimSuffix(strings.Repeat("-\n", 19)+"Z", "\n"))
+	return w
+}
+
+func memberOrder(res TrainResult) string {
+	var ts []string
+	for _, m := range res.Members {
+		ts = append(ts, m.Target)
+	}
+	return strings.Join(ts, ",")
+}
+
+func TestTrainOrdersIsolatedFirstThenSmallestDiff(t *testing.T) {
+	w := orderWorld(t)
+	var said []string
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3"}, Say: func(s string) { said = append(said, s) }})
+	if err != nil || res.Verdict != GatePass || memberOrder(res) != "b3,b2,b1" || strings.Join(res.Landed, ",") != "b3,b2,b1" {
+		t.Fatalf("%+v %v", res, err)
+	}
+	all := strings.Join(said, "\n")
+	for _, want := range []string{"b3: no shared paths", "b2: shares 1 paths with b1", "b1: shares 1 paths with b2"} {
+		if !strings.Contains(all, want) {
+			t.Errorf("order report lacks %q:\n%s", want, all)
+		}
+	}
+	if len(res.Order) != 3 {
+		t.Errorf("result should carry the order lines: %v", res.Order)
+	}
+}
+
+func TestTrainOrderFlagOverrides(t *testing.T) {
+	w := orderWorld(t)
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3"}, Order: []string{"b1", "b3", "b2"}})
+	if err != nil || res.Verdict != GatePass || strings.Join(res.Landed, ",") != "b1,b3,b2" {
+		t.Fatalf("%+v %v", res, err)
+	}
+}
+
+func TestTrainOrderFlagMustNameEveryMemberOnce(t *testing.T) {
+	w := orderWorld(t)
+	for _, order := range [][]string{{"b1", "b2"}, {"b1", "b2", "b2"}, {"b1", "b2", "b3", "b3"}, {"b1", "b2", "b9"}} {
+		_, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3"}, Order: order})
+		var ee *exitcode.Error
+		if !errors.As(err, &ee) || ee.Exit != exitcode.ExitUsage {
+			t.Errorf("--order %v should be a usage error, got %v", order, err)
+		}
+		if w.onMain("b1.txt") {
+			t.Errorf("--order %v landed something", order)
+		}
+	}
+}
+
+func TestTrainConflictUnderEveryOrderStopsBeforeLanding(t *testing.T) {
+	w := trainWorld(t, "true", "b1", "b2")
+	for _, b := range []string{"b1", "b2"} {
+		gitq(t, w.dir, "checkout", "-q", b)
+		trainWrite(t, w, "clash.txt", b)
+		gitq(t, w.dir, "checkout", "-q", "main")
+	}
+	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}})
+	if err != nil || res.Verdict != GateOrder || res.Changed || w.onMain("b1.txt") || !strings.Contains(res.Err, "b1") || !strings.Contains(res.Err, "b2") {
+		t.Fatalf("%+v %v", res, err)
+	}
+}
+
+func prMembers() ([]TrainMember, []trainFoot) {
+	ms := []TrainMember{
+		{Target: "s9", Branch: "x/9", PR: "https://github.com/o/r/pull/9"},
+		{Target: "s12", Branch: "x/12", PR: "https://github.com/o/r/pull/12"},
+		{Target: "s15", Branch: "x/15", PR: "https://github.com/o/r/pull/15"},
+		{Target: "s3", Branch: "x/3", PR: "https://github.com/o/r/pull/3"},
+		{Target: "s7", Branch: "x/7", PR: "https://github.com/o/r/pull/7"},
+	}
+	foots := []trainFoot{
+		{paths: []string{"a"}, lines: 10},      // #9 shares a with #12
+		{paths: []string{"a"}, lines: 10},      // #12: same size as #9
+		{paths: []string{"b"}, lines: 1},       // #15 isolated
+		{paths: []string{"c"}, lines: 99},      // #3 isolated
+		{paths: []string{"a", "z"}, lines: 40}, // #7 shares a with #9, #12
+	}
+	return ms, foots
+}
+
+func orderedLabels(ms []TrainMember, perm []int) string {
+	var ls []string
+	for _, i := range perm {
+		ls = append(ls, memberLabel(ms[i]))
+	}
+	return strings.Join(ls, ",")
+}
+
+func TestOrderTrainSortsByPRNumberThenDiffSize(t *testing.T) {
+	ms, foots := prMembers()
+	perm, lines, nIso, err := orderTrain(ms, foots, nil)
+	if err != nil || nIso != 2 {
+		t.Fatalf("nIso=%d err=%v", nIso, err)
+	}
+	// isolated by PR number (#3, #15), then shared by size with the tie on #9/#12 broken by PR number.
+	if got := orderedLabels(ms, perm); got != "#3,#15,#9,#12,#7" {
+		t.Errorf("order = %s", got)
+	}
+	if lines[0] != "#9: shares 1 paths with #12, #7" {
+		t.Errorf("report line: %q", lines[0])
+	}
+	if lines[3] != "#3: no shared paths" {
+		t.Errorf("report line: %q", lines[3])
+	}
+}
+
+func TestOrderTrainOverrideAcceptsPRTokens(t *testing.T) {
+	ms, foots := prMembers()
+	for _, tok := range [][]string{
+		{"#7", "#3", "#15", "#12", "#9"},
+		{"7", "3", "15", "12", "9"},
+		{"s7", "s3", "s15", "s12", "s9"},
+		{"x/7", "https://github.com/o/r/pull/3", "15", "#12", "s9"},
+	} {
+		perm, lines, nIso, err := orderTrain(ms, foots, tok)
+		if err != nil || nIso != 0 {
+			t.Fatalf("%v: nIso=%d err=%v", tok, nIso, err)
+		}
+		if got := orderedLabels(ms, perm); got != "#7,#3,#15,#12,#9" {
+			t.Errorf("%v: order = %s", tok, got)
+		}
+		if !strings.HasSuffix(lines[0], "(order given)") {
+			t.Errorf("report line lacks the override mark: %q", lines[0])
+		}
+	}
+}
+
+func TestOrderTrainOverrideRejectsBadTokens(t *testing.T) {
+	ms, foots := prMembers()
+	for _, tok := range [][]string{
+		{"#7", "#3", "#15", "#12", "#99"},
+		{"#7", "#3", "#15", "#12", "#7"},
+		{"#7", "7", "#15", "#12", "#9"},
+		{"#7", "#3"},
+	} {
+		if _, _, _, err := orderTrain(ms, foots, tok); err == nil {
+			t.Errorf("--order %v should be rejected", tok)
+		}
 	}
 }

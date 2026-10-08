@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strconv"
 
+	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
@@ -68,7 +69,7 @@ func OpenPR(ctx context.Context, p PRPorts, r PRRequest) (PR, error) {
 		return PR{}, err
 	}
 	if push.ExitCode != 0 {
-		return PR{}, &GitError{Msg: "git push -u origin " + r.Branch + " failed: " + firstLine(push.Stderr)}
+		return PR{}, &GitError{Msg: "git push -u origin " + r.Branch + " failed: " + strutil.FirstLine(push.Stderr)}
 	}
 	url, err := p.Forge.PRCreate(ctx, tracker.PRSpec{Title: r.Title, Body: body, Head: r.Branch, Base: base})
 	if err != nil {

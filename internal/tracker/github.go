@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/l4ci/rota/internal/strutil"
 )
 
 // GitHub is the gh adapter.
@@ -196,7 +198,7 @@ func (g *GitHub) CreateMilestone(ctx context.Context, title, description string)
 	}
 	n, ok := intOf(d.Number)
 	if !ok {
-		return 0, failed("cannot parse milestone number from: %q", clip(string(d.Number)))
+		return 0, failed("cannot parse milestone number from: %q", strutil.Clip(string(d.Number), clipLen))
 	}
 	return n, nil
 }
@@ -663,7 +665,7 @@ func (g *GitHub) CommitChecks(ctx context.Context, sha string) ([]CheckRun, erro
 		for dec.More() {
 			var p page
 			if err := dec.Decode(&p); err != nil {
-				return nil, failed("unparseable tracker output: %q", clip(out))
+				return nil, failed("unparseable tracker output: %q", strutil.Clip(out, clipLen))
 			}
 			all.CheckSuites = append(all.CheckSuites, p.CheckSuites...)
 			all.CheckRuns = append(all.CheckRuns, p.CheckRuns...)

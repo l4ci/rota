@@ -15,7 +15,7 @@
 `data.next` from `rota verdict route` says what to do:
 
 - **`continue`** (PASS): proceed to the next step silently.
-- **`ask`** (CONCERNS): surface each concern inline, then use `AskUserQuestion`:
+- **`ask`** (CONCERNS): surface each concern inline, then ask:
     - **Header:** `"Concerns"`
     - **Question:** *"Review surfaced N concerns on `<branch>`. How should I proceed?"*
     - **Options** (single-select):
