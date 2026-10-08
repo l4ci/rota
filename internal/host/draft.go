@@ -9,6 +9,8 @@ import (
 	"time"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/l4ci/rota/internal/tui"
 )
 
 // ErrDraftOnPrompt: the slot's prompt line holds text rota did not type (a
@@ -77,15 +79,11 @@ func stripDim(s string) string {
 	var b strings.Builder
 	dim := false
 	for i := 0; i < len(s); {
-		if s[i] == 0x1b && i+1 < len(s) && s[i+1] == '[' {
-			j := i + 2
-			for j < len(s) && (s[j] < 0x40 || s[j] > 0x7e) {
-				j++
+		if end := tui.CSIEnd(s, i); end >= 0 {
+			if end > i+2 && s[end-1] == 'm' {
+				dim = sgrDim(s[i+2:end-1], dim)
 			}
-			if j < len(s) && s[j] == 'm' {
-				dim = sgrDim(s[i+2:j], dim)
-			}
-			i = j + 1
+			i = end
 			continue
 		}
 		r, size := utf8.DecodeRuneInString(s[i:])
