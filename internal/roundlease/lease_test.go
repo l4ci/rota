@@ -5,6 +5,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -363,5 +365,37 @@ func TestHoldsIsLiveAndSameHolderOnly(t *testing.T) {
 				t.Fatalf("got state=%v held=%v err=%v, want %v %v", st, held, err, c.want, c.held)
 			}
 		})
+	}
+}
+
+func TestDefaultEnvTreatsZombieHolderAsStale(t *testing.T) {
+	cmd := exec.Command("sh", "-c", "sh -c 'echo $$ >&2' & exec sleep 30")
+	errp, _ := cmd.StderrPipe()
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { cmd.Process.Kill(); cmd.Wait() })
+	buf := make([]byte, 32)
+	n, _ := errp.Read(buf)
+	zpid, err := strconv.Atoi(strings.TrimSpace(string(buf[:n])))
+	if err != nil {
+		t.Fatalf("zombie pid: %v", err)
+	}
+	for i := 0; i < 50; i++ {
+		out, _ := exec.Command("ps", "-o", "stat=", "-p", strconv.Itoa(zpid)).Output()
+		if strings.HasPrefix(strings.TrimSpace(string(out)), "Z") {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	e := DefaultEnv()
+	if e.ProcessLive(zpid, 0) {
+		t.Errorf("zombie pid %d holds the lease as live", zpid)
+	}
+	if got := e.Classify(Lease{PID: zpid, Host: e.Host}); got != Stale {
+		t.Errorf("Classify = %s, want stale", got)
+	}
+	if !e.ProcessLive(cmd.Process.Pid, 0) {
+		t.Error("live holder must stay live")
 	}
 }
