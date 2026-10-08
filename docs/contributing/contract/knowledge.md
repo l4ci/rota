@@ -1,5 +1,5 @@
 ---
-verified-sha: 7461ef0794dbc3c26bc5886907cb1f92310987e5
+verified-sha: 2f0a0d5989f9c812af37fc22ffc5a5924785bed3
 refs:
   - internal/knowledge
   - internal/cli/knowledge.go
