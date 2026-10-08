@@ -267,57 +267,7 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 	}
 	reg := worker.LoadRegistry(root)
 
-	// Rows: registry slots first, then worktrees the registry lacks.
-	byWT := map[string]worktree{}
-	for _, w := range wts {
-		byWT[w.name] = w
-	}
-	seen := map[string]bool{}
-	var rows []*Row
-	add := func(r *Row, v *view) {
-		rows = append(rows, r)
-		rep.views[r.Name] = v
-		seen[r.Name] = true
-	}
-	var slotObj = map[string]*worker.Slot{}
-	for _, s := range reg.Slots() {
-		name := s.Name()
-		if name == "" || seen[name] {
-			continue
-		}
-		slotObj[name] = s
-		branch, wt := s.Branch(), s.Worktree()
-		if w, ok := byWT[name]; ok { // the checkout is the truth about the branch
-			branch, wt = w.branch, w.path
-		}
-		r := &Row{Name: name, Branch: branch, PR: s.PR(), Tab: s.Handle(), Registered: true}
-		r.Issue = worker.HeldID(s.Task(), branch, name)
-		if s.IsExternal() {
-			r.HostState = ExternalHost
-		}
-		if _, ev, ok := strings.Cut(s.Seen(), "\t"); ok {
-			r.Evidence = ev
-		}
-		r.Kind, r.KindSource, r.Tier, r.Model, r.TierReason = s.HarnessKind(), s.KindSource(), s.Tier(), s.Model(), s.TierReason()
-		if r.Issue != "" {
-			r.Bounces = reg.Bounces(r.Issue)
-			if b := reg.BestOf(r.Issue); b != nil && b.Attempt(name) != nil {
-				if sib := b.Sibling(name); sib != nil {
-					r.BestOf = sib.Slot
-				}
-			}
-		}
-		add(r, &view{worktree: wt, base: firstNonEmpty(s.Base(), e.Base)})
-	}
-	sort.Slice(wts, func(i, j int) bool { return wts[i].name < wts[j].name })
-	for _, w := range wts {
-		if seen[w.name] {
-			continue
-		}
-		r := &Row{Name: w.name, Branch: w.branch}
-		r.Issue = worker.HeldID("", w.branch, w.name)
-		add(r, &view{worktree: w.path, base: e.Base})
-	}
+	rows, slotObj := e.readRows(wts, reg, rep)
 
 	agents, hostOK := e.readHost(ctx, rep)
 	claimed := map[int]bool{}
@@ -517,6 +467,64 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 	}
 	rep.Limits = limits.Waiting(limits.Load(root))
 	return rep, nil
+}
+
+// readRows is the worktree and registry source: registry slots first, then
+// the worktrees the registry lacks. It records each row's view on rep and
+// returns the rows with the registry's slot objects by name.
+func (e Env) readRows(wts []worktree, reg worker.Registry, rep *Report) ([]*Row, map[string]*worker.Slot) {
+	// Rows: registry slots first, then worktrees the registry lacks.
+	byWT := map[string]worktree{}
+	for _, w := range wts {
+		byWT[w.name] = w
+	}
+	seen := map[string]bool{}
+	var rows []*Row
+	add := func(r *Row, v *view) {
+		rows = append(rows, r)
+		rep.views[r.Name] = v
+		seen[r.Name] = true
+	}
+	var slotObj = map[string]*worker.Slot{}
+	for _, s := range reg.Slots() {
+		name := s.Name()
+		if name == "" || seen[name] {
+			continue
+		}
+		slotObj[name] = s
+		branch, wt := s.Branch(), s.Worktree()
+		if w, ok := byWT[name]; ok { // the checkout is the truth about the branch
+			branch, wt = w.branch, w.path
+		}
+		r := &Row{Name: name, Branch: branch, PR: s.PR(), Tab: s.Handle(), Registered: true}
+		r.Issue = worker.HeldID(s.Task(), branch, name)
+		if s.IsExternal() {
+			r.HostState = ExternalHost
+		}
+		if _, ev, ok := strings.Cut(s.Seen(), "\t"); ok {
+			r.Evidence = ev
+		}
+		r.Kind, r.KindSource, r.Tier, r.Model, r.TierReason = s.HarnessKind(), s.KindSource(), s.Tier(), s.Model(), s.TierReason()
+		if r.Issue != "" {
+			r.Bounces = reg.Bounces(r.Issue)
+			if b := reg.BestOf(r.Issue); b != nil && b.Attempt(name) != nil {
+				if sib := b.Sibling(name); sib != nil {
+					r.BestOf = sib.Slot
+				}
+			}
+		}
+		add(r, &view{worktree: wt, base: firstNonEmpty(s.Base(), e.Base)})
+	}
+	sort.Slice(wts, func(i, j int) bool { return wts[i].name < wts[j].name })
+	for _, w := range wts {
+		if seen[w.name] {
+			continue
+		}
+		r := &Row{Name: w.name, Branch: w.branch}
+		r.Issue = worker.HeldID("", w.branch, w.name)
+		add(r, &view{worktree: w.path, base: e.Base})
+	}
+	return rows, slotObj
 }
 
 // readHost is the host source: the live agents, or the reason there are none.
