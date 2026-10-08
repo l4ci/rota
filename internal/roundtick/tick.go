@@ -122,6 +122,11 @@ type Env struct {
 	// nil means the round has no review loop. A slot it relays, or holds, is not
 	// merged this tick; one it only reports (manual) is gated as before.
 	ReviewLoop func(ctx context.Context, s Slot) ReviewOutcome
+	// Capped returns why the round may not fill slots now (every account is
+	// cooling down), "" when it may. nil means no quota cap. A capped tick
+	// mints and assigns nothing and says why in Result.Capped; it merges and
+	// repairs as usual, and fills again once Capped returns "".
+	Capped func(ctx context.Context) string
 	// Audit records one action in the audit log.
 	Audit func(Action)
 	// Held is the targets a previous tick's merge failed on and a person has
@@ -143,7 +148,9 @@ func (i Item) Key() string { return i.Kind + " " + i.Target }
 // earlier tick: the watch wakes the orchestrator for those, not for the same
 // blocked slot every pass.
 type Result struct {
-	Did      []Action
+	Did []Action
+	// Capped is why the tick filled no slot: the quota cap (Env.Capped).
+	Capped   string
 	NeedsYou []Item
 	New      []Item
 	// Held and Reported are the state the next tick starts from.
@@ -218,12 +225,17 @@ func Run(ctx context.Context, e Env) (Result, error) {
 	if err := e.merge(ctx, &r, targets); err != nil {
 		return r, err
 	}
-	minted, err := e.review(ctx, &r)
-	if err != nil {
-		return r, err
+	if e.Capped != nil {
+		r.Capped = e.Capped(ctx)
 	}
-	if err := e.assign(ctx, &r, minted); err != nil {
-		return r, err
+	if r.Capped == "" { // capped: a slot filled now would park at once
+		minted, err := e.review(ctx, &r)
+		if err != nil {
+			return r, err
+		}
+		if err := e.assign(ctx, &r, minted); err != nil {
+			return r, err
+		}
 	}
 
 	sort.SliceStable(r.NeedsYou, func(i, j int) bool { return r.NeedsYou[i].Key() < r.NeedsYou[j].Key() })
@@ -417,6 +429,12 @@ func (e Env) assign(ctx context.Context, r *Result, minted []string) error {
 			n--
 		case isRefusal(err):
 			// Not ready after all, or every slot filled meanwhile: try the next.
+			// A quota refusal is the cap showing through a pool the cap check
+			// left open (Claude workers beside Codex logins): say why.
+			var blk *round.BlockedError
+			if errors.As(err, &blk) && blk.By == round.BlockQuota && r.Capped == "" {
+				r.Capped = blk.Msg
+			}
 		default:
 			return fmt.Errorf("assign %s: %w", c.ID, err)
 		}

@@ -358,7 +358,8 @@ Off by default. With `round.autopilot` on, `rota round watch --autopilot` (or on
    (`round.architectureEvery` 0 never mints), one audit line per mint;
 4. assign the first ready candidate of the round's scope to each idle slot, at most
    `round.autopilotCap`, at the default tier and never with `--accept-overlap`. Review items
-   minted in the same tick go first, and count against the same cap.
+   minted in the same tick go first, and count against the same cap. While every account is cooling
+   down from a usage limit, steps 3 and 4 are skipped and the tick says why (`capped`).
 
 It never answers a worker, approves a permission, picks a higher tier, reclaims a slot or merges
 without a passing gate. A blocked, limited or dead slot, a failed gate, drift it will not repair and
@@ -469,9 +470,11 @@ a GitHub App token instead.
 
 When several PRs wait in review, `rota worker train <slot|PR>... --base <branch>` gates them together and
 pays for the verify once instead of once per PR. It checks each member the way `gate --check-only` does,
-merges them in the order given onto the base in a scratch worktree, runs `test.full` on that
+merges them onto the base in a scratch worktree in the order it picks, runs `test.full` on that
 tree, then `test.e2e` when set (the most expensive tier runs once per train, not once per PR), and on a pass lands every member through the gate in order. If the base or a member's head moved
 while it verified, nothing lands (`base-moved`); the same verdict stops the train mid-way if the base changes between landings. Members must be all PRs or all slots without one.
+
+The train orders the members to cut conflicts: PRs that share no path with another candidate go first (lowest PR number first), then the PRs that share paths, smallest diff first. It prints one line per PR with the reason (`no shared paths`, or `shares 2 paths with #12, #15`) before it pushes anything. `--order 12,15,9` replaces that order and must name every PR exactly once. If a shared-path member conflicts with the ones before it, the train names the pair, exits 4 with `blockedBy: order` and pushes nothing; a conflict under `--order` is `merge-failed`. It never rebases a PR for you.
 
 Gates and trains on one repository queue on a single lock (`<git-common-dir>/rota/land.lock`), held from the scratch worktree through landing. A second gate or train waits instead of running beside the first, so neither sees the other's scratch worktree and neither lands inside the other's verify-to-land window. `--check-only` takes no lock.
 
