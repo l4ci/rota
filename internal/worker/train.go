@@ -8,11 +8,13 @@ import (
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/land"
+	"github.com/l4ci/rota/internal/overlap"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/testledger"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -41,6 +43,10 @@ import (
 // the verified tree is no longer what would land. Nothing landed.
 const GateBaseMoved = "base-moved"
 
+// GateOrder: a shared-path member conflicts with the members before it; the CLI
+// exits 4 with it, blockedBy order. Nothing was pushed.
+const GateOrder = "order"
+
 // TrainOpts are the flags of `rota worker train`.
 type TrainOpts struct {
 	Targets []string // slot names or PR refs, in merge order
@@ -59,6 +65,10 @@ type TrainOpts struct {
 	Approve func(files func() ([]string, error)) error
 	// Verdict is GateOpts.Verdict, run for every member's check.
 	Verdict func(branch string) error
+	// Order replaces the computed merge order; see orderTrain.
+	Order []string
+	// Say receives each line of the order report before the scratch merge.
+	Say func(string)
 }
 
 // TrainMember is one target of the train, in order.
@@ -87,6 +97,7 @@ type TrainResult struct {
 	Err         string
 	Hint        string
 	Notes       []string
+	Order       []string // one line per member, in merge order, with the reason
 	// CacheHits names each verify answered from the verdict cache instead of
 	// being run; Transient the members earlier named culprit that this train
 	// passed with (#400).
@@ -219,18 +230,36 @@ func (e Env) train(ctx context.Context, root string, o TrainOpts, cache *trainCa
 		return m.Branch
 	}
 
+	// Order the members to minimise predicted conflicts, or take --order.
+	foots, err := e.trainFootprints(root, baseRef, res.Members, headRef)
+	if err != nil {
+		return e.trainBroke(res, err.Error())
+	}
+	perm, lines, nIso, err := orderTrain(res.Members, foots, o.Order)
+	if err != nil {
+		return res, err
+	}
+	autoOrder := len(o.Order) == 0
+	ms := make([]TrainMember, len(perm))
+	fs := make([]trainFoot, len(perm))
+	ls := make([]string, len(perm))
+	for i, j := range perm {
+		ms[i], fs[i], ls[i] = res.Members[j], foots[j], lines[j]
+	}
+	res.Members, foots = ms, fs
+	res.Order = ls
+	if o.Say != nil {
+		for _, l := range ls {
+			o.Say("ORDER " + l)
+		}
+	}
+
 	// The union of the files the members change.
 	files := func() ([]string, error) {
 		set := map[string]bool{}
-		for _, m := range res.Members {
-			out, code := e.git(root, "diff", "--name-only", baseRef+"..."+headRef(m))
-			if code != 0 {
-				return nil, fmt.Errorf("git diff --name-only %s...%s exited %d", baseRef, headRef(m), code)
-			}
-			for _, l := range strings.Split(out, "\n") {
-				if l != "" {
-					set[l] = true
-				}
+		for _, f := range foots {
+			for _, p := range f.paths {
+				set[p] = true
 			}
 		}
 		list := make([]string, 0, len(set))
@@ -282,32 +311,37 @@ func (e Env) train(ctx context.Context, root string, o TrainOpts, cache *trainCa
 		return e.trainBroke(res, err.Error())
 	}
 	defer cleanup()
-	tips := make([]string, len(res.Members)+1) // tips[i]: the scratch tree with the first i members merged
-	tips[0] = baseSHA
-	for i, m := range res.Members {
-		run := func(args ...string) (git.Result, error) { return e.Git(ctx, scratch, args...) }
-		if merr := land.MergeLocal(run, heads[i], fmt.Sprintf("train: %s into %s", m.Branch, o.Base), land.RecoveryGit(ctx, e.Git, scratch)); merr != nil {
-			res.Culprit = m.Target
-			res.Members[i].Culprit = true
-			res.Verdict = GateMergeFailed
-			var me *land.MergeError
-			switch {
-			case errors.As(merr, new(*land.CleanupError)):
-				res.Err = fmt.Sprintf("TRAIN-FAIL %s — merging %s into the scratch tree failed: %s", m.Target, m.Branch, merr)
-			case errors.As(merr, new(*land.ConflictError)):
-				res.Err = fmt.Sprintf("TRAIN-FAIL %s — %s does not merge onto %s with the %d member(s) before it: conflict", m.Target, m.Branch, o.Base, i)
-				res.Hint = fmt.Sprintf("send %s back to merge %s, or run the train without it", m.Target, o.Base)
-			case errors.As(merr, &me):
-				res.Err = fmt.Sprintf("TRAIN-FAIL %s — merging %s into the scratch tree failed (exit %d): %s", m.Target, m.Branch, me.Code, strings.TrimSpace(me.Out))
-			default:
-				res.Err = fmt.Sprintf("TRAIN-FAIL %s — merging %s into the scratch tree failed (exit 127): %s", m.Target, m.Branch, merr)
-			}
-			return res, nil
+	tips, failed, merr, brokeMsg := e.mergeTrain(ctx, scratch, o.Base, res.Members, heads)
+	if brokeMsg != "" {
+		return e.trainBroke(res, brokeMsg)
+	}
+	if merr != nil && autoOrder && failed >= nIso && failed > 0 && errors.As(merr, new(*land.ConflictError)) {
+		// A shared-path member conflicts with the ones before it. Git's pairwise
+		// conflicts do not depend on merge order, so no other order is tried.
+		res.Verdict, res.Culprit = GateOrder, res.Members[failed].Target
+		res.Members[failed].Culprit = true
+		res.Err = fmt.Sprintf("TRAIN-BLOCKED order — %s; the shared-path members conflict in the order tried (%s); nothing pushed", conflictPair(res.Members, foots, failed), orderText(res.Members))
+		res.Hint = "rebase one of the pair on the other's merge, or land them in separate trains, or pass --order to try another"
+		return res, nil
+	}
+	if merr != nil {
+		m := res.Members[failed]
+		res.Culprit = m.Target
+		res.Members[failed].Culprit = true
+		res.Verdict = GateMergeFailed
+		var me *land.MergeError
+		switch {
+		case errors.As(merr, new(*land.CleanupError)):
+			res.Err = fmt.Sprintf("TRAIN-FAIL %s — merging %s into the scratch tree failed: %s", m.Target, m.Branch, merr)
+		case errors.As(merr, new(*land.ConflictError)):
+			res.Err = fmt.Sprintf("TRAIN-FAIL %s — %s does not merge onto %s with the %d member(s) before it: conflict", m.Target, m.Branch, o.Base, failed)
+			res.Hint = fmt.Sprintf("send %s back to merge %s, or run the train without it", m.Target, o.Base)
+		case errors.As(merr, &me):
+			res.Err = fmt.Sprintf("TRAIN-FAIL %s — merging %s into the scratch tree failed (exit %d): %s", m.Target, m.Branch, me.Code, strings.TrimSpace(me.Out))
+		default:
+			res.Err = fmt.Sprintf("TRAIN-FAIL %s — merging %s into the scratch tree failed (exit 127): %s", m.Target, m.Branch, merr)
 		}
-		var code int
-		if tips[i+1], code = e.git(scratch, "rev-parse", "HEAD"); code != 0 {
-			return e.trainBroke(res, "git rev-parse HEAD failed in the scratch tree")
-		}
+		return res, nil
 	}
 
 	// 4. Verify once: test.full, then test.e2e on the same tree.
@@ -479,6 +513,25 @@ func (e Env) train(ctx context.Context, root string, o TrainOpts, cache *trainCa
 	return res, nil
 }
 
+// mergeTrain merges heads in order onto the scratch tree. tips[i] is the tree
+// with the first i members merged. A failed merge returns its error and the
+// member's position; brokeMsg is set when git itself failed.
+func (e Env) mergeTrain(ctx context.Context, scratch, base string, ms []TrainMember, heads []string) (tips []string, failed int, merr error, brokeMsg string) {
+	tips = make([]string, len(ms)+1)
+	tips[0], _ = e.git(scratch, "rev-parse", "HEAD")
+	for i, m := range ms {
+		run := func(args ...string) (git.Result, error) { return e.Git(ctx, scratch, args...) }
+		if err := land.MergeLocal(run, heads[i], fmt.Sprintf("train: %s into %s", m.Branch, base), land.RecoveryGit(ctx, e.Git, scratch)); err != nil {
+			return tips, i, err, ""
+		}
+		var code int
+		if tips[i+1], code = e.git(scratch, "rev-parse", "HEAD"); code != 0 {
+			return tips, 0, nil, "git rev-parse HEAD failed in the scratch tree"
+		}
+	}
+	return tips, 0, nil, ""
+}
+
 func (e Env) trainBroke(res TrainResult, msg string) (TrainResult, error) {
 	res.Verdict, res.Err = GateCheckBroke, "CHECK-BROKE train — "+msg
 	return res, nil
@@ -576,4 +629,146 @@ func (e Env) bisectTrain(scratch string, res *TrainResult, tips []string, tier s
 	}
 	res.Hint += fmt.Sprintf("; the verified first %d member(s) landed (--land-green)", lo)
 	return lo, false, nil
+}
+
+// trainFoot is what one member changes against the base: the paths (read as the
+// overlap check reads them, `git diff --name-only base...head`) and the number
+// of changed lines.
+type trainFoot struct {
+	paths []string
+	lines int
+}
+
+func (e Env) trainFootprints(root, baseRef string, ms []TrainMember, headRef func(TrainMember) string) ([]trainFoot, error) {
+	foots := make([]trainFoot, len(ms))
+	for i, m := range ms {
+		span := baseRef + "..." + headRef(m)
+		out, code := e.git(root, "diff", "--name-only", span)
+		if code != 0 {
+			return nil, fmt.Errorf("git diff --name-only %s exited %d", span, code)
+		}
+		for _, l := range strings.Split(out, "\n") {
+			if l != "" {
+				foots[i].paths = append(foots[i].paths, l)
+			}
+		}
+		out, code = e.git(root, "diff", "--numstat", span)
+		if code != 0 {
+			return nil, fmt.Errorf("git diff --numstat %s exited %d", span, code)
+		}
+		for _, l := range strings.Split(out, "\n") {
+			f := strings.Fields(l)
+			if len(f) < 2 {
+				continue
+			}
+			a, _ := strconv.Atoi(f[0]) // "-" for a binary file counts 0
+			d, _ := strconv.Atoi(f[1])
+			foots[i].lines += a + d
+		}
+	}
+	return foots, nil
+}
+
+// memberLabel names a member in the order report: its PR number, else its target.
+func memberLabel(m TrainMember) string {
+	if n := prNumText(m.PR); n != "" {
+		return "#" + n
+	}
+	return m.Target
+}
+
+func orderText(ms []TrainMember) string {
+	ls := make([]string, len(ms))
+	for i, m := range ms {
+		ls[i] = memberLabel(m)
+	}
+	return strings.Join(ls, ", ")
+}
+
+// orderTrain picks the merge order. perm lists positions of ms in merge order;
+// lines[i] is the report line of ms[i]; nIso is how many leading members of the
+// order share no path with another (the rest are the shared-path group).
+//
+// Without an override, members sharing no path with any other go first in PR
+// number order, then the rest by ascending changed lines. With one, order names
+// every member exactly once, by target, branch or PR (`12`, `#12`, URL).
+func orderTrain(ms []TrainMember, foots []trainFoot, override []string) (perm []int, lines []string, nIso int, err error) {
+	lines = make([]string, len(ms))
+	var iso, shared []int
+	for i := range ms {
+		var peers []string
+		n := map[string]bool{}
+		for j := range ms {
+			if j == i {
+				continue
+			}
+			both := overlap.Both(foots[i].paths, foots[j].paths, nil)
+			if len(both) > 0 {
+				peers = append(peers, memberLabel(ms[j]))
+				for _, p := range both {
+					n[p] = true
+				}
+			}
+		}
+		if len(peers) == 0 {
+			lines[i] = memberLabel(ms[i]) + ": no shared paths"
+			iso = append(iso, i)
+		} else {
+			lines[i] = fmt.Sprintf("%s: shares %d paths with %s", memberLabel(ms[i]), len(n), strings.Join(peers, ", "))
+			shared = append(shared, i)
+		}
+	}
+	prNum := func(i int) int {
+		n, _ := strconv.Atoi(prNumText(ms[i].PR))
+		return n
+	}
+	if len(override) > 0 {
+		if len(override) != len(ms) {
+			return nil, nil, 0, fail(exitcode.ExitUsage, fmt.Sprintf("--order names %d of the %d members; it must name each exactly once", len(override), len(ms)))
+		}
+		used := map[int]bool{}
+		for _, tok := range override {
+			at := -1
+			for i, m := range ms {
+				if tok == m.Target || tok == m.Branch || (prNum(i) != 0 && prNumText(tok) == prNumText(m.PR)) {
+					at = i
+					break
+				}
+			}
+			switch {
+			case at < 0:
+				return nil, nil, 0, fail(exitcode.ExitUsage, fmt.Sprintf("--order names %s, which is not a member of the train", tok))
+			case used[at]:
+				return nil, nil, 0, fail(exitcode.ExitUsage, fmt.Sprintf("--order names %s twice", tok))
+			}
+			used[at] = true
+			perm = append(perm, at)
+		}
+		for i := range lines {
+			lines[i] += " (order given)"
+		}
+		return perm, lines, 0, nil
+	}
+	byPR := func(s []int) {
+		sort.SliceStable(s, func(a, b int) bool { return prNum(s[a]) < prNum(s[b]) })
+	}
+	byPR(iso)
+	sort.SliceStable(shared, func(a, b int) bool {
+		if la, lb := foots[shared[a]].lines, foots[shared[b]].lines; la != lb {
+			return la < lb
+		}
+		return prNum(shared[a]) < prNum(shared[b])
+	})
+	return append(iso, shared...), lines, len(iso), nil
+}
+
+// conflictPair names the member at failed and the earlier member it shares a
+// path with, the likeliest cause of its conflict.
+func conflictPair(ms []TrainMember, foots []trainFoot, failed int) string {
+	for k := 0; k < failed; k++ {
+		if len(overlap.Both(foots[failed].paths, foots[k].paths, nil)) > 0 {
+			return fmt.Sprintf("%s conflicts with %s", memberLabel(ms[failed]), memberLabel(ms[k]))
+		}
+	}
+	return fmt.Sprintf("%s conflicts with the members before it", memberLabel(ms[failed]))
 }

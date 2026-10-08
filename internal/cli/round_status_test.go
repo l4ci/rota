@@ -182,3 +182,27 @@ func TestRoundStatusShowsTheBestOfSibling(t *testing.T) {
 		t.Errorf("the table names the sibling next to the issue:\n%s", out)
 	}
 }
+
+// When every account the roster could run under is cooling down, round status
+// shows the effective cap and why; with headroom it adds nothing.
+func TestRoundStatusShowsTheEffectiveCapWhenBelowTheRoster(t *testing.T) {
+	root, deps := roundFixture(t, []host.Agent{})
+	if err := os.WriteFile(filepath.Join(root, ".rota", "config.json"), []byte(`{"work":{"codexAccounts":[{"name":"c1","codexHome":"/h1"}]},"round":{"workerKind":"codex"}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, out, _ := rotaInWith(t, deps, root, "--json", "round", "status")
+	if _, ok := data(t, out)["cap"]; ok {
+		t.Fatalf("a round with headroom shows no cap: %s", out)
+	}
+	addLimit(t, root, limits.Entry{Session: "ben", Kind: limits.KindCodex, Account: "c1", Source: limits.SourceText, Window: limits.WindowUnknown,
+		DetectedAt: limits.Time(time.Now()), ResetsAt: limits.Time(time.Now().Add(time.Hour)), Action: limits.ActionSleep, Status: limits.StatusWaiting})
+	_, out, _ = rotaInWith(t, deps, root, "--json", "round", "status")
+	cp, _ := data(t, out)["cap"].(map[string]any)
+	if cp == nil || cp["effective"] != float64(0) || cp["roster"].(float64) < 1 || !strings.Contains(cp["reason"].(string), "work.codexAccounts account is cooling down") {
+		t.Fatalf("cap = %v", cp)
+	}
+	_, text, _ := rotaInWith(t, deps, root, "round", "status")
+	if !strings.Contains(text, "cap\t0/") || !strings.Contains(text, "cooling down") {
+		t.Errorf("text: %q", text)
+	}
+}

@@ -59,7 +59,10 @@ type Deps struct {
 	MigrateTracker func(ctx context.Context, root string, cfg any) (migrate.Tracker, error)
 	MigrateSleep   func(d time.Duration)
 
-	RoundEnv      func(ctx context.Context, root string) round.Env
+	RoundEnv func(ctx context.Context, root string) round.Env
+	// RoundEnvLocal is RoundEnv without a forge, for a caller that reads only
+	// the host and worktree sources and must not build one.
+	RoundEnvLocal func(ctx context.Context, root string) round.Env
 	ReapEnv       func(ctx context.Context, root string) (round.Env, reap.HostOps)
 	EscalationEnv func() escalation.Env
 	// LeaseEnv is the one route to the round lease's process and clock reads;
@@ -115,7 +118,8 @@ func defaultDeps() *Deps {
 	d.MigrateTracker = func(ctx context.Context, root string, cfg any) (migrate.Tracker, error) {
 		return d.forge(ctx, cfg, "", root)
 	}
-	d.RoundEnv = func(ctx context.Context, root string) round.Env { return defaultRoundEnv(ctx, root, d) }
+	d.RoundEnv = func(ctx context.Context, root string) round.Env { return defaultRoundEnv(ctx, root, d, true) }
+	d.RoundEnvLocal = func(ctx context.Context, root string) round.Env { return defaultRoundEnv(ctx, root, d, false) }
 	d.ReapEnv = func(ctx context.Context, root string) (round.Env, reap.HostOps) {
 		return defaultReapEnv(ctx, root, d)
 	}

@@ -89,6 +89,27 @@ func TestPaletteContextLineShowsTildeRoundAndHost(t *testing.T) {
 	}
 }
 
+// The header reads only the local sources, so it must build no forge at all.
+func TestPaletteHeaderBuildsNoForge(t *testing.T) {
+	deps := testDeps()
+	bareRig(deps)
+	paletteRig(deps, "q")
+	useLaunchRig(deps, nil)
+	built := forgeBuilds(deps)
+	dir := trackerProject(t, "")
+	gitT(t, dir, "init", "-q")
+	t.Setenv("HOME", dir)
+	t.Setenv("TMUX", "")
+	t.Setenv("HERDR_ENV", "")
+	_, out, _ := bareIn(t, deps, dir)
+	if *built != 0 {
+		t.Errorf("palette header built %d forge(s)", *built)
+	}
+	if !strings.Contains(out, "~  ·  idle  ·  ") {
+		t.Errorf("context line missing:\n%s", out)
+	}
+}
+
 func TestPaletteQuitRunsNothingAndExitsZero(t *testing.T) {
 	for _, key := range []string{"q", "\x03", "\x1b"} {
 		deps := testDeps()
