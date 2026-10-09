@@ -82,7 +82,7 @@ func (e Env) Park(ctx context.Context, root, name, verb string) (Parked, error) 
 		return p, &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("slot %s worktree missing: %s", name, wt)}
 	}
 	base := firstNonEmpty(s.Base(), e.Base)
-	parkBr := "park/" + name
+	parkBr := worker.ParkBranch(name)
 	cur, _, _ := e.gitOut(ctx, wt, "symbolic-ref", "--short", "-q", "HEAD")
 	branch := firstNonEmpty(s.Branch(), cur)
 	p.Branch = branch

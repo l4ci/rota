@@ -127,7 +127,7 @@ func (e Env) parkMerged(ctx context.Context, root, name string) error {
 		return fmt.Errorf("slot %s has uncommitted changes", name)
 	}
 	base := firstNonEmpty(s.Base(), e.Base)
-	if _, errOut, code := e.gitOut(ctx, s.Worktree(), "switch", "-q", "-C", "park/"+name, base); code != 0 {
+	if _, errOut, code := e.gitOut(ctx, s.Worktree(), "switch", "-q", "-C", worker.ParkBranch(name), base); code != 0 {
 		return fmt.Errorf("could not switch %s to park/%s: %s", name, name, errOut)
 	}
 	held := s.HeldID()

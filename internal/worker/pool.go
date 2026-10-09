@@ -27,7 +27,7 @@ type InitOpts struct {
 	Base    string // "" means the current branch
 	Session string // "" means "rota"
 	// Names provisions these slots instead of w1..wSlots, each on the branch
-	// BranchPrefix+name (a round roster parks on "park/<agent>", #79).
+	// BranchPrefix+name (a round roster parks on ParkBranch(<agent>), #79).
 	Names        []string
 	BranchPrefix string
 }
