@@ -222,7 +222,7 @@ func (e Env) resolveAdoptRef(ctx context.Context, root, ref string) (branch, wt 
 // adoptable refuses the base branch and the park/* branches: they are rota's
 // own resting places, never someone's work.
 func (e Env) adoptable(branch, wt string) (string, string, error) {
-	if branch == e.Base || strings.HasPrefix(branch, "park/") {
+	if branch == e.Base || worker.IsPark(branch) {
 		return "", "", usage("%s is the base or a parked branch: adopt a work branch", branch)
 	}
 	return branch, wt, nil

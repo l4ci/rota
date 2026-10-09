@@ -292,7 +292,7 @@ func (s *Slot) Unbind() {
 func (s *Slot) Park(dropHandle bool) {
 	s.Unbind()
 	s.o.Set("state", "idle")
-	s.o.Set("branch", "park/"+s.Name())
+	s.o.Set("branch", ParkBranch(s.Name()))
 	if dropHandle {
 		s.o.Set("handle", nil)
 	}

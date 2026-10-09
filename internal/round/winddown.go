@@ -141,7 +141,7 @@ func (e Env) WindDown(ctx context.Context, root string, be Board, o WindDownOpts
 		}
 		so := before[name]
 		so.Name = name
-		park := "park/" + name
+		park := worker.ParkBranch(name)
 		wasParked := s.Branch() == park && s.Task() == ""
 		claim := s.ClaimID()
 		issue := s.HeldID()

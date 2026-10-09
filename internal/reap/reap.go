@@ -286,7 +286,7 @@ func (s *state) rowAgent(name string) bool {
 }
 
 func protectedBranch(b, base string) bool {
-	return b == base || strings.HasPrefix(b, "park/")
+	return b == base || worker.IsPark(b)
 }
 
 func (s *state) git(ctx context.Context, dir string, args ...string) (string, int, error) {

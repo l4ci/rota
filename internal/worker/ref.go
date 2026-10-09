@@ -32,7 +32,7 @@ func HeldID(task, branch, name string) string {
 	if t := strings.TrimPrefix(strings.TrimSpace(task), "#"); t != "" {
 		return strings.ToUpper(t)
 	}
-	if branch == "park/"+name {
+	if IsOwnPark(branch, name) {
 		return ""
 	}
 	if m := reIssueBranch.FindStringSubmatch(branch); m != nil {

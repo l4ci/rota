@@ -260,7 +260,7 @@ func (e Env) promoteIdleWithPR(ctx context.Context, root string, rows []PollRow)
 	openPRs := e.openPRsByHead(ctx, root, reg, idle)
 	for i, r := range rows {
 		s := reg.Slot(r.Name)
-		if _, ok := idle[r.Name]; !ok || s == nil || s.Branch() == "" || s.Branch() == "park/"+s.Name() {
+		if _, ok := idle[r.Name]; !ok || s == nil || s.Branch() == "" || IsOwnPark(s.Branch(), s.Name()) {
 			continue
 		}
 		if url := openPRs[s.Branch()]; url != "" {
@@ -374,7 +374,7 @@ func (e Env) Poll(ctx context.Context, root string, o PollOpts) (PollResult, err
 		// A worker can open its PR and never print the sentinel (or print it
 		// without a URL): the slot would stay busy and the gate would not find
 		// the PR. The open PR headed by the slot's own branch is the record.
-		if s.PR() == "" && s.Branch() != "" && s.Branch() != "park/"+s.Name() {
+		if s.PR() == "" && s.Branch() != "" && !IsOwnPark(s.Branch(), s.Name()) {
 			if url := openPRs[s.Branch()]; url != "" {
 				s.SetPR(url)
 			}
@@ -400,7 +400,7 @@ func (e Env) Poll(ctx context.Context, root string, o PollOpts) (PollResult, err
 func (e Env) openPRsByHead(ctx context.Context, root string, reg Registry, polled map[string]PollRow) map[string]string {
 	need := false
 	for _, s := range reg.Slots() {
-		if _, ok := polled[s.Name()]; ok && s.PR() == "" && s.Branch() != "" && s.Branch() != "park/"+s.Name() {
+		if _, ok := polled[s.Name()]; ok && s.PR() == "" && s.Branch() != "" && !IsOwnPark(s.Branch(), s.Name()) {
 			need = true
 		}
 	}
