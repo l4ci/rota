@@ -78,9 +78,9 @@ func newAssignFixture(t *testing.T) *assignFixture {
 	}
 	h := &hostFake{}
 	f := &assignFixture{root: root, host: h}
-	f.env = Env{Git: git.Exec, Base: "main", Getenv: noEnv, Lease: fakeLease("h", 100)}
+	f.env = Env{Git: git.Exec, Base: "main", Worker: worker.Env{Getenv: noEnv}, Lease: fakeLease("h", 100)}
 	f.env.Worker = worker.Env{Git: git.Exec, NewHost: func(string) host.Host { return h },
-		Sleep: func(time.Duration) {}, Now: time.Now}
+		Sleep: func(time.Duration) {}, Now: time.Now, Getenv: noEnv}
 	fb := &fakeRemote{}
 	fb.add("12", "Add the round assign verb now please", "M01", false, "## Acceptance\n- [ ] works\n\nedits internal/cli/round.go")
 	fb.add("13", "Second issue", "M01", false, "## Acceptance\n- [ ] ok\n\nalso edits internal/cli/round.go")
@@ -662,7 +662,7 @@ func TestAssignCodexSkipsAccounts(t *testing.T) {
 	(&codexRig{version: "codex-cli 0.159.2\n", loggedIn: true}).install(f)
 	f.host.name = "herdr"
 	fetched := 0
-	f.env.Accounts = &worker.Accounts{Fetch: func(context.Context, string, string) (*jsonx.Object, string) {
+	f.env.Worker.Accounts = &worker.Accounts{Fetch: func(context.Context, string, string) (*jsonx.Object, string) {
 		fetched++
 		return nil, "fake: no network in tests"
 	}}

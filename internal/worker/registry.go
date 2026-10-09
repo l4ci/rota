@@ -443,6 +443,24 @@ func (e Env) context() context.Context {
 	return context.Background()
 }
 
+// Clock is the env's clock, time.Now unless a test or Deps swaps it. It is the
+// one nil fallback: round.Env and Accounts read the clock through here.
+func (e Env) Clock() func() time.Time {
+	if e.Now != nil {
+		return e.Now
+	}
+	return time.Now
+}
+
+// Environ is the env's environment reader, os.Getenv unless swapped; the one
+// getenv fallback, shared the same way as Clock.
+func (e Env) Environ() func(string) string {
+	if e.Getenv != nil {
+		return e.Getenv
+	}
+	return os.Getenv
+}
+
 func (e Env) withDefaults() Env {
 	if e.Git == nil {
 		e.Git = git.Exec
@@ -453,12 +471,8 @@ func (e Env) withDefaults() Env {
 	if e.Stderr == nil {
 		e.Stderr = os.Stderr
 	}
-	if e.Now == nil {
-		e.Now = time.Now
-	}
-	if e.Getenv == nil {
-		e.Getenv = os.Getenv
-	}
+	e.Now = e.Clock()
+	e.Getenv = e.Environ()
 	if e.Forge == nil {
 		e.Forge = func(provider, dir string, cfg any) (Forge, error) {
 			return tracker.NewFromConfig(e.context(), cfg, provider, dir)

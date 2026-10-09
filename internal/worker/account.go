@@ -62,32 +62,19 @@ type Meter struct {
 // Fetcher returns the usage payload for an account, or a reason it has none.
 type Fetcher func(ctx context.Context, name, configDir string) (payload *jsonx.Object, reason string)
 
-// Accounts reads and assigns accounts.
+// Accounts reads and assigns accounts. Its clock and environment come from Env
+// (Env.Clock, Env.Environ), the same source as the worker env that holds it.
 type Accounts struct {
 	Env Env
 	// Fetch defaults to the fixture dir or the OAuth endpoint.
 	Fetch Fetcher
-	// Now defaults to time.Now.
-	Now func() time.Time
-	// Getenv defaults to os.Getenv.
-	Getenv func(string) string
 	// HTTP is the client for the usage endpoint; nil means a 5s-timeout client.
 	HTTP *http.Client
 }
 
-func (a *Accounts) now() time.Time {
-	if a.Now != nil {
-		return a.Now().UTC()
-	}
-	return time.Now().UTC()
-}
+func (a *Accounts) now() time.Time { return a.Env.Clock()().UTC() }
 
-func (a *Accounts) getenv(k string) string {
-	if a.Getenv != nil {
-		return a.Getenv(k)
-	}
-	return os.Getenv(k)
-}
+func (a *Accounts) getenv(k string) string { return a.Env.Environ()(k) }
 
 type acct struct{ name, configDir string }
 

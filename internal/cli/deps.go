@@ -47,6 +47,10 @@ type Deps struct {
 	HolderPID func() int
 	ClockErr  error
 
+	// Getenv is the one environment reader; the clock overrides, the worker
+	// env and the accounts all read through it. A test swaps it.
+	Getenv func(string) string
+
 	// TrackerOptions apply to every forge CLI the verbs build; a test swaps
 	// in a fake executor here.
 	TrackerOptions []tracker.Option
@@ -95,6 +99,7 @@ func defaultDeps() *Deps {
 	d := &Deps{
 		Git:              git.Exec,
 		Proc:             proc.Run,
+		Getenv:           os.Getenv,
 		WorkerEnv:        func() worker.Env { return worker.Env{} },
 		EscalationEnv:    func() escalation.Env { return escalation.Env{} },
 		LeaseEnv:         func() roundlease.Env { return roundlease.DefaultEnv() },
@@ -110,8 +115,8 @@ func defaultDeps() *Deps {
 		RunView:          runView,
 		ReadCache:        tracker.NewReadCache(),
 	}
-	d.Now, d.Today, d.HolderPID, d.ClockErr = envClock(os.Getenv)
-	d.WorkerAccounts = func() *worker.Accounts { return &worker.Accounts{Now: d.Now} }
+	d.Now, d.Today, d.HolderPID, d.ClockErr = envClock(d.Getenv)
+	d.WorkerAccounts = func() *worker.Accounts { return &worker.Accounts{Env: worker.Env{Now: d.Now, Getenv: d.Getenv}} }
 	d.NewTracker = func(ctx context.Context, root string, cfg any) (backlog.Tracker, error) {
 		return d.forge(ctx, cfg, "", root)
 	}
@@ -140,6 +145,12 @@ func (d *Deps) workerEnv() worker.Env {
 	e := d.WorkerEnv()
 	if e.NewHost == nil {
 		e.NewHost = func(kind string) host.Host { return d.Host(kind) }
+	}
+	if e.Now == nil {
+		e.Now = d.Now
+	}
+	if e.Getenv == nil {
+		e.Getenv = d.Getenv
 	}
 	if e.Accounts == nil && d.WorkerAccounts != nil {
 		e.Accounts = d.WorkerAccounts()
