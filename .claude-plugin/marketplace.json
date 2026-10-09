@@ -7,7 +7,11 @@
   "plugins": [
     {
       "name": "rota",
-      "source": "./",
+      "source": {
+        "source": "github",
+        "repo": "l4ci/rota",
+        "ref": "v0.14.0"
+      },
       "description": "Backlog, planning and parallel-round skills for Claude Code; /rota:rota-install fetches the matching rota binary."
     }
   ]

@@ -8,9 +8,10 @@ import (
 	"testing"
 )
 
-// The Claude Code plugin is the repo root (#602). Its version is VERSION's, so
-// /rota:rota-install and the session-start hook ask for the binary this tree
-// builds; every skill reaches the shared references through its own
+// The Claude Code plugin is the repo root (#602), served from the release tag.
+// plugin.json's version, the marketplace ref and VERSION agree, so
+// /rota:rota-install and the session-start hook ask for the binary whose
+// embedded skills are the plugin's; every skill reaches the shared references through its own
 // references/ link, as an installed skill does; and /rota:rota-install lives
 // outside skills/, so the embedded set (rota skills install, Codex) never
 // carries it.
@@ -37,8 +38,14 @@ func TestPluginManifest(t *testing.T) {
 		Plugins []map[string]any
 	}
 	readJSON(t, ".claude-plugin/marketplace.json", &market)
-	if len(market.Plugins) != 1 || market.Plugins[0]["name"] != plugin.Name || market.Plugins[0]["source"] != "./" {
-		t.Errorf("marketplace plugins %v", market.Plugins)
+	if len(market.Plugins) != 1 || market.Plugins[0]["name"] != plugin.Name {
+		t.Fatalf("marketplace plugins %v", market.Plugins)
+	}
+	// The plugin comes from the release tag, so its skills are the ones the
+	// release binary embeds: main's skills would read as stale in doctor.
+	src, _ := market.Plugins[0]["source"].(map[string]any)
+	if want := "v" + strings.TrimSpace(string(ver)); src["source"] != "github" || src["repo"] != "l4ci/rota" || src["ref"] != want {
+		t.Errorf("marketplace source %v, want github l4ci/rota at ref %s", market.Plugins[0]["source"], want)
 	}
 	if _, ok := market.Plugins[0]["version"]; ok {
 		t.Error("marketplace entry sets a version: plugin.json's wins and the validator warns; keep it in plugin.json only")

@@ -85,7 +85,9 @@ The third install path works in Claude Code only. In a Claude Code session:
 
 On Claude Code 2.1.275 or later, `/plugin install rota --marketplace l4ci/rota` does both in one step.
 
-Then run `/rota:rota-install`. It installs the `rota` binary at the plugin's version (Homebrew when `brew` is on your `PATH`, the install script otherwise) and runs `rota doctor`. It does not run `rota skills install`: the plugin already carries the skills. Run `rota init` in your project as usual.
+The marketplace serves the latest release, not `main`: the plugin is fetched from the release tag, so its skills are the ones that release's binary carries. The first release that ships the plugin is the one after 0.14.0.
+
+Then run `/rota:rota-install`. It installs the `rota` binary at the plugin's version and runs `rota doctor`. It tries Homebrew first when `brew` is on your `PATH`, and uses the install script when there is no `brew` or the tap serves another version. It does not run `rota skills install`: the plugin already carries the skills. Run `rota init` in your project as usual.
 
 Plugin skills are namespaced: `/rota:rota-work`, `/rota:rota-ship` and so on. When the binary is missing or its version differs from the plugin's, a new session opens with one line pointing at `/rota:rota-install`. A `dev` build is left alone.
 

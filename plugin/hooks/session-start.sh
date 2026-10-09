@@ -3,7 +3,9 @@
 # the rota binary is missing or is not the plugin's version, nothing otherwise.
 # A dev build (no X.Y.Z version) is someone's own binary and is left alone.
 root=${CLAUDE_PLUGIN_ROOT:-$(dirname "$0")/../..}
-want=$(sed -n 's/^[[:space:]]*"version":[[:space:]]*"\([^"]*\)".*/\1/p' "$root/.claude-plugin/plugin.json" | head -n 1)
+# plugin.json on one line, so its layout does not matter; unreadable means silent.
+want=$(tr -d '\n\r' 2>/dev/null < "$root/.claude-plugin/plugin.json" |
+  sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
 [ -n "$want" ] || exit 0
 if command -v rota >/dev/null 2>&1; then
   have=$(rota --version 2>/dev/null | awk '{print $2; exit}')
