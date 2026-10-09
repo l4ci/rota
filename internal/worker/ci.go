@@ -12,7 +12,6 @@ import (
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/exitcode"
-	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/tracker"
 )
@@ -345,14 +344,12 @@ func (e Env) cleanupGit(ctx context.Context, dir string, args ...string) {
 // checked out in dir, with test.full here or on CI under test.fullWhere ci.
 // brokeMsg refuses the run before anything merges; err is a bad config.
 // onCI says the tier runs on CI.
-func (e Env) fullTier(ctx context.Context, root, name string) (verify func(dir string) (VerifyResult, error), onCI bool, brokeMsg string, err error) {
-	cfg := config.Load(rotatree.Config(root))
-	where, err := FullWhere(cfg)
-	if err != nil {
-		return nil, false, "", err
-	}
-	if where == WhereLocal {
-		return func(dir string) (VerifyResult, error) { return e.Verify(ctx, root, dir) }, false, "", nil
+func (e Env) fullTier(ctx context.Context, root, name string, in gateInput) (verify func(dir string) (VerifyResult, error), onCI bool, brokeMsg string, err error) {
+	cfg := in.cfg
+	if in.where == WhereLocal {
+		return func(dir string) (VerifyResult, error) {
+			return e.RunVerifyWith(ctx, in.verifyCmds, dir, in.ledger)
+		}, false, "", nil
 	}
 	provider := e.detectProvider(ctx, root, "")
 	forge, ferr := e.Forge(provider, root, cfg)

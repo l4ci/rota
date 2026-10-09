@@ -29,7 +29,7 @@ func unregFixture(t *testing.T, branches ...string) (string, Env, *fakeRemote) {
 	fb.add("612", "Thing", "M01", false, filesBody)
 	fb.add("613", "Other", "M01", false, "## Acceptance\n- [ ] ok\n\n## Files\n- docs/other.md\n")
 	e := env(nil, fb.asForge())
-	e.Board, e.Getenv, e.AdoptPattern = fb, noEnv, "codex/*"
+	e.Board, e.Worker.Getenv, e.AdoptPattern = fb, noEnv, "codex/*"
 	return root, e, fb
 }
 

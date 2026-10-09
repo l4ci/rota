@@ -208,13 +208,6 @@ func (e Env) cachedClosed(root, since string) (int, bool) {
 	return c.Count, true
 }
 
-func (e Env) now() time.Time {
-	if e.Now != nil {
-		return e.Now()
-	}
-	return time.Now()
-}
-
 func numOf(v any) int {
 	switch t := v.(type) {
 	case json.Number:

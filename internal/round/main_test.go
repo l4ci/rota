@@ -34,5 +34,5 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-// noEnv is an empty process environment for Env.Getenv.
+// noEnv is an empty process environment for Env.Worker.Getenv.
 func noEnv(string) string { return "" }

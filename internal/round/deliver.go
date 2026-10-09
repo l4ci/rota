@@ -97,7 +97,7 @@ func (d *delivery) steps(ctx context.Context, e Env, root string) ([]step, error
 		// work.accounts is Anthropic's: a codex slot's CODEX_HOME is its account.
 		// Under solo every subagent runs on the orchestrator's own account.
 		{name: "account", skip: func() bool {
-			return solo || !hz.WorkAccounts() || e.Accounts == nil || len(worker.Configured(root)) == 0
+			return solo || !hz.WorkAccounts() || e.Worker.Accounts == nil || len(worker.Configured(root)) == 0
 		}, do: func() error {
 			name, err := e.pickAccount(ctx, root, d.Slot)
 			d.Account = name
