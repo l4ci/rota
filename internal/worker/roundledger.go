@@ -137,9 +137,14 @@ func LedgerHeadroom(ctx context.Context, a *Accounts, root, kind, account string
 // Call it after the registry write: the usage fetch must not run under the
 // registry lock.
 func LedgerDone(ctx context.Context, a *Accounts, root string, e ledger.Entry) {
+	LedgerDoneIn(nil, ctx, a, root, e)
+}
+
+// LedgerDoneIn is LedgerDone reading the round through m.
+func LedgerDoneIn(m *RoundMemo, ctx context.Context, a *Accounts, root string, e ledger.Entry) {
 	e.Kind = ledger.KindDone
 	e.Detail = ledger.Detail("headroom", LedgerHeadroom(ctx, a, root, e.Harness, e.Account))
-	LedgerNote(root, e)
+	LedgerNoteIn(m, root, e)
 }
 
 // paneDone is the ledger entry for a slot a pane row just moved to done; ok is
