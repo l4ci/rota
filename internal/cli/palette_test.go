@@ -43,7 +43,7 @@ func TestPaletteEnterOnTheDefaultLaunchesTheOrchestrator(t *testing.T) {
 	deps := testDeps()
 	setups := bareRig(deps)
 	raws, restores := paletteRig(deps, "\r")
-	passingDoctor(t)
+	passingDoctor(t, deps)
 	r := useLaunchRig(deps, nil)
 	code, out, errs := bareIn(t, deps, trackerProject(t, ""))
 	if code != 0 || *setups != 0 || len(r.execs) != 1 || r.execs[0][2] != "keepalive" {

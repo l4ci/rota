@@ -63,10 +63,10 @@ func runDoctor(c *Ctx, args []string) (Result, error) {
 	return res, nil
 }
 
-// doctorInput gathers the real environment: ROTA_TEST_DOCTOR_PATH replaces PATH
-// for tool lookup (a test hook, not part of the CLI).
+// doctorInput gathers the real environment: Deps.DoctorPath replaces PATH for
+// tool lookup (a test hook, not part of the CLI).
 func doctorInput(ctx context.Context, d *Deps) doctor.Input {
-	in := doctor.Input{Exec: doctorExec(d.Proc), Getenv: os.Getenv, Look: doctorLook(os.Getenv("ROTA_TEST_DOCTOR_PATH"))}
+	in := doctor.Input{Exec: doctorExec(d.Proc), Getenv: d.Getenv, Look: doctorLook(d.DoctorPath)}
 	in.Dir, _ = os.Getwd()
 	in.Home, _ = os.UserHomeDir()
 	if f, ok := staleBinary(ctx, d.Git, in.Dir); ok {
@@ -91,7 +91,7 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 	}
 	in.Skills = doctorSkills(in.Home, root)
 	if root == "" {
-		doctorDiskInput(ctx, &in, nil, "", d.Git, d.Now())
+		doctorDiskInput(ctx, &in, nil, "", d.Git, d.Now(), d.DoctorDisk)
 		return in
 	}
 	cfg := config.Load(rotatree.Config(root))
@@ -116,7 +116,7 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 	in.Slots, in.CwdOf = doctorSlotBlocks(root), procCwd
 	in.NothingToVerify = worker.NothingToVerify(root)
 	in.AgentProblems = agents.Problems(root)
-	doctorDiskInput(ctx, &in, cfg, root, d.Git, d.Now())
+	doctorDiskInput(ctx, &in, cfg, root, d.Git, d.Now(), d.DoctorDisk)
 	if on, err := config.SwitchOnUsage(cfg); err == nil {
 		in.SwitchOnUsage = on
 	}
@@ -126,7 +126,7 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 		}
 	}
 	if len(in.ConfigDirs) == 0 {
-		if d := skills.ClaudeDir(os.Getenv, in.Home); d != "" {
+		if d := skills.ClaudeDir(d.Getenv, in.Home); d != "" {
 			in.ConfigDirs = []string{d}
 		}
 	}

@@ -8,8 +8,10 @@ import (
 	"testing"
 )
 
-// doctorFakes writes fake tools into a fresh dir and points the tool lookup at it.
-func doctorFakes(t *testing.T, tools map[string]string) {
+// doctorFakes writes fake tools into a fresh dir and points the tool lookup at
+// it, returning the dir. defaultDeps reads the env once, so only a Deps built
+// after this call sees it; an earlier one takes the dir as DoctorPath.
+func doctorFakes(t *testing.T, tools map[string]string) string {
 	t.Helper()
 	dir := t.TempDir()
 	// jq is a doctor check too; every fake PATH carries one unless a test sets its own.
@@ -25,6 +27,7 @@ func doctorFakes(t *testing.T, tools map[string]string) {
 	t.Setenv("ROTA_TEST_DOCTOR_PATH", dir)
 	t.Setenv("HOME", t.TempDir()) // no skills, plugin or settings of the real user
 	t.Setenv("CLAUDE_CONFIG_DIR", "")
+	return dir
 }
 
 func doctorData(t *testing.T, out string) (bool, map[string]map[string]any) {
