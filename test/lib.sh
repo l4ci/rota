@@ -27,7 +27,12 @@ vfail() {
   # A multi-line capture reports its closing line; walk back to the line that
   # opens the `$(` so the message names the verb.
   local first=$line
-  while [ "$first" -gt 1 ] && ! sed -n "${first}p" "$file" | grep -qE '^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*="?\$\('; do first=$((first - 1)); done
+  local opener='^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*="?\$\(' src
+  while [ "$first" -gt 1 ]; do
+    src=$(sed -n "${first}p" "$file")
+    grep -qE "$opener" <<<"$src" && break # here-string: a piped grep -q is SIGPIPE-flaky (section 71)
+    first=$((first - 1))
+  done
   text=$(sed -n "${first},${line}p" "$file" 2>/dev/null | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*|| vfail.*$//' | tr '\n' ' ' | sed -e 's/ \\ / /g')
   fail "verb exited $rc at ${file##*/}:$first-$line: $text"
 }
