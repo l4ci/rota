@@ -24,6 +24,7 @@ type reviewForgeFake struct {
 	reviews []tracker.Review
 	head    string
 	state   string // the PR state; "" is OPEN
+	onView  func() // runs inside PRView, after the relay loaded its registry
 }
 
 func (f *reviewForgeFake) MRNotes(context.Context, int) ([]tracker.Comment, error) {
@@ -33,6 +34,9 @@ func (f *reviewForgeFake) Reviews(context.Context, int) ([]tracker.Review, error
 	return f.reviews, nil
 }
 func (f *reviewForgeFake) PRView(context.Context, int) (tracker.PRInfo, error) {
+	if f.onView != nil {
+		f.onView()
+	}
 	if f.state != "" {
 		return tracker.PRInfo{HeadSHA: f.head, State: f.state}, nil
 	}
@@ -419,5 +423,26 @@ func TestReviewRelayAtCapDoesNotEscalateTwice(t *testing.T) {
 	got, err := f.env.ReviewRelay(bg, f.root, o)
 	if !isBlockedBy(err, "maxBounces") || got.Escalated || posts != 1 || !strings.Contains(err.Error(), "still open") {
 		t.Fatalf("second pass: %+v %v posts=%d", got, err, posts)
+	}
+}
+
+// A bounce the gate counts on the same head after the relay loaded its registry
+// makes this relay's RecordBounce dedupe: it counted nothing, so a failed
+// dispatch must not undo the gate's bounce.
+func TestReviewRelayRollbackLeavesABounceCountedAfterTheSnapshot(t *testing.T) {
+	f, fg, o := reviewFx(t)
+	fg.onView = func() {
+		if _, err := worker.RecordBounce(f.root, "12", "", "abc123"); err != nil {
+			t.Error(err)
+		}
+	}
+	f.env.Worker.NewHost = func(string) host.Host {
+		return &sendHook{hostFake: f.host, hook: func() {}}
+	}
+	if _, err := f.env.ReviewRelay(bg, f.root, o); err == nil {
+		t.Fatal("want the dispatch failure")
+	}
+	if n := worker.LoadRegistry(f.root).Bounces("12"); n != 1 {
+		t.Fatalf("bounces %d, want the gate's bounce kept", n)
 	}
 }
