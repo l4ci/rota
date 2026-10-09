@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -26,7 +27,7 @@ func TestPluginRoots(t *testing.T) {
 	    {"scope":"local","projectPath":"`+other+`","installPath":"/c/rota/3"},
 	    {"scope":"user","installPath":"/c/rota/1"}],
 	  "other@mkt":[{"scope":"user","installPath":"/c/other/1"}]}}`)
-	got := PluginRoots([]string{plugins}, top)
+	got, _ := PluginRoots([]string{plugins}, top)
 	want := []Root{
 		{Path: "/c/rota/1/skills", Agent: Claude, Scope: User, Plugin: true},
 		{Path: "/c/rota/2/skills", Agent: Claude, Scope: Project, Plugin: true},
@@ -34,12 +35,12 @@ func TestPluginRoots(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("with top: %+v", got)
 	}
-	if got := PluginRoots([]string{plugins}, ""); len(got) != 1 || got[0].Path != "/c/rota/1/skills" {
+	if got, _ := PluginRoots([]string{plugins}, ""); len(got) != 1 || got[0].Path != "/c/rota/1/skills" {
 		t.Errorf("no top: %+v", got)
 	}
 	writeFile(t, filepath.Join(plugins, "installed_plugins.json"), `{broken`)
-	if got := PluginRoots([]string{plugins, filepath.Join(plugins, "nope")}, top); len(got) != 0 {
-		t.Errorf("broken: %+v", got)
+	if got, errs := PluginRoots([]string{plugins, filepath.Join(plugins, "nope")}, top); len(got) != 0 || len(errs) != 0 {
+		t.Errorf("broken: %+v %v", got, errs)
 	}
 }
 
@@ -96,5 +97,21 @@ func TestStatusPluginRoot(t *testing.T) {
 	root.Path = filepath.Join(dir, "gone", "skills")
 	if st := status(); st.Installed {
 		t.Errorf("absent: %+v", st)
+	}
+}
+
+func TestPluginRootsUnreadable(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root reads anything")
+	}
+	plugins := t.TempDir()
+	f := filepath.Join(plugins, "installed_plugins.json")
+	writeFile(t, f, `{"plugins":{"rota@rota":[{"scope":"user","installPath":"/c/rota/1"}]}}`)
+	if err := os.Chmod(f, 0); err != nil {
+		t.Fatal(err)
+	}
+	got, errs := PluginRoots([]string{plugins}, "")
+	if len(got) != 0 || len(errs) != 1 || !strings.Contains(errs[0].Error(), f) {
+		t.Errorf("%+v %v", got, errs)
 	}
 }

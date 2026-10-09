@@ -4,7 +4,9 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -32,13 +34,18 @@ func PluginsDirs(getenv func(string) string, claudeDirs []string) []string {
 // PluginRoots lists the skill roots of the rota plugin installs recorded in
 // each plugins root's installed_plugins.json. User installs always count;
 // project and local ones only when their projectPath is top. The file's shape
-// is undocumented, so anything unreadable yields no roots.
-func PluginRoots(pluginDirs []string, top string) []Root {
+// is undocumented, so a missing file or one that does not parse yields no
+// roots silently; any other read error is returned alongside.
+func PluginRoots(pluginDirs []string, top string) ([]Root, []error) {
 	var out []Root
+	var errs []error
 	seen := map[string]bool{}
 	for _, dir := range pluginDirs {
 		b, err := os.ReadFile(filepath.Join(dir, "installed_plugins.json"))
 		if err != nil {
+			if !errors.Is(err, fs.ErrNotExist) {
+				errs = append(errs, err)
+			}
 			continue
 		}
 		var f struct {
@@ -83,7 +90,7 @@ func PluginRoots(pluginDirs []string, top string) []Root {
 			}
 		}
 	}
-	return out
+	return out, errs
 }
 
 func sameDir(a, b string) bool {

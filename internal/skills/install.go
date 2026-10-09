@@ -525,6 +525,8 @@ type Report struct {
 	Version string
 	Digest  string
 	Roots   []RootStatus
+	// Warnings are problems reading plugin state that do not fail a root.
+	Warnings []string
 }
 
 // Status reads the roots; it writes nothing.

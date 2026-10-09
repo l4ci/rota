@@ -190,6 +190,60 @@ func TestDoctorSkillsPlugin(t *testing.T) {
 	}
 }
 
+// pluginsFile writes HOME's installed_plugins.json with body.
+func pluginsFile(t *testing.T, body string) string {
+	t.Helper()
+	f := filepath.Join(os.Getenv("HOME"), ".claude", "plugins", "installed_plugins.json")
+	if err := os.MkdirAll(filepath.Dir(f), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(f, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return f
+}
+
+// An unreadable installed_plugins.json is reported as a warning by skills
+// status, not swallowed.
+func TestSkillsStatusPluginWarning(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root reads anything")
+	}
+	doctorFakes(t, nil)
+	t.Setenv("CLAUDE_CODE_PLUGIN_CACHE_DIR", "")
+	dir, _ := filepath.EvalSymlinks(t.TempDir())
+	f := pluginsFile(t, `{"plugins":{}}`)
+	if err := os.Chmod(f, 0); err != nil {
+		t.Fatal(err)
+	}
+	code, env, errOut := skillsRun(t, os.Getenv("HOME"), dir, "skills", "status")
+	if code != 0 {
+		t.Fatalf("status %d %s", code, errOut)
+	}
+	w, _ := skData(env)["warnings"].([]any)
+	if len(w) != 1 || !strings.Contains(w[0].(string), f) {
+		t.Errorf("warnings: %v", skData(env))
+	}
+}
+
+// With only a plugin installed, skills update points at Claude Code's updater.
+func TestSkillsUpdatePluginOnlyHint(t *testing.T) {
+	doctorFakes(t, nil)
+	t.Setenv("CLAUDE_CODE_PLUGIN_CACHE_DIR", "")
+	dir, _ := filepath.EvalSymlinks(t.TempDir())
+	skillsRun(t, os.Getenv("HOME"), dir, "skills", "status") // keep HOME stable
+	pluginsFile(t, `{"plugins":{"rota@rota":[{"scope":"user","installPath":"`+filepath.Join(os.Getenv("HOME"), "nowhere")+`"}]}}`)
+	code, _, errOut := skillsRun(t, os.Getenv("HOME"), dir, "skills", "update")
+	if code == 0 || !strings.Contains(errOut, "claude plugin update rota@rota") || strings.Contains(errOut, "rota skills install") {
+		t.Errorf("plugin only: %d %s", code, errOut)
+	}
+	pluginsFile(t, `{"plugins":{}}`)
+	code, _, errOut = skillsRun(t, os.Getenv("HOME"), dir, "skills", "update")
+	if code == 0 || !strings.Contains(errOut, "rota skills install") {
+		t.Errorf("nothing installed: %d %s", code, errOut)
+	}
+}
+
 // The agents check warns, naming the verb, until rota agents write ran, then
 // disappears.
 func TestDoctorAgentsCheck(t *testing.T) {
