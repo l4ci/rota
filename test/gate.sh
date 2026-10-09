@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The full merge gate, run concurrently: validate-skills, the doc lints
-# (test/doclint.sh), the grep gate (test/grep-gate.sh), go vet, go test -race and the smoke suite split into N shards, all at once (#82). One serial gate
+# (test/doclint.sh), the grep gate (test/grep-gate.sh), gofmt, go vet, go test -race and the smoke suite split into N shards, all at once (#82). One serial gate
 # is several times slower; this takes about 2-3 minutes.
 #
 # Usage: bash test/gate.sh [--smoke-only] [--random] [--shards N]
@@ -128,6 +128,7 @@ if [ "$SMOKE_ONLY" = 0 ]; then
   launch validate python3 test/validate-skills.py
   launch doclint bash test/doclint.sh
   launch grepgate bash test/grep-gate.sh
+  launch gofmt bash test/gofmt.sh
   launch vet go vet ./...
   launch gotest go test -race -timeout 30m ./...
 fi

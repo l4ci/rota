@@ -2,6 +2,7 @@
 # The fast test tier (test.fast): map changed files to the targeted checks a
 # worker runs before a PR. Called as `bash test/fast.sh <files...>` via
 # `rota test run fast` ({files} = files changed against the base branch).
+# Go changes also run test/gofmt.sh on the changed files (the check CI runs).
 # Anything not mapped here is left to the merge gate (test/gate.sh).
 #
 # Mapping: a .go file runs its package; a file under <pkg>/testdata/ (goldens,
@@ -90,6 +91,11 @@ if [ "${FAST_DRY_RUN:-}" = 1 ]; then
   [ "$infra" = 1 ] && echo "plan: infra"
   for s in ${sections[@]+"${sections[@]}"}; do echo "plan: section $s"; done
   exit 0
+fi
+
+if [ "$go_all" = 1 ] || [ "${#pkgs[@]}" -gt 0 ]; then
+  echo "fast: gofmt"
+  bash test/gofmt.sh "$@"
 fi
 
 if [ "$go_all" = 1 ]; then
