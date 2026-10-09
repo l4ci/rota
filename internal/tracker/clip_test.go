@@ -10,7 +10,7 @@ import (
 // The tracker output echoed into a parse error is cut to clipLen and quoted
 // with %q; the cut must not land inside a multi-byte rune.
 func TestUnparseableOutputKeepsRunesWhole(t *testing.T) {
-	bad := strings.Repeat("a", clipLen-1) + "é"
+	bad := strings.Repeat("a", clipLen-1) + "éé"
 	s := &scripted{answer: func(string, []string) (string, string, int) { return bad, "", 0 }}
 	_, err := newAdapter(t, "gitlab", s).PRFiles(context.Background(), 12)
 	if err == nil || !strings.Contains(err.Error(), "unparseable tracker output") {
