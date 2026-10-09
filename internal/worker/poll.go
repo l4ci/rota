@@ -365,7 +365,7 @@ func (e Env) Poll(ctx context.Context, root string, o PollOpts) (PollResult, err
 			return
 		}
 		prev := s.State()
-		if err := recordRow(s, r, e.Now()); err != nil && rowErr == nil {
+		if err := recordRow(s, r, e.Now(), reg); err != nil && rowErr == nil {
 			rowErr = err
 		}
 		if d, ok := paneDone(prev, s, r); ok {
@@ -461,7 +461,7 @@ func alwaysNews(state string) bool {
 // recordRow writes one classified row into its slot, the way every writer of
 // a pane's state does (Poll, Wait). A row different from `seen` drops it: the
 // slot moved on, so its next arrival is news again.
-func recordRow(s *Slot, r PollRow, now time.Time) error {
+func recordRow(s *Slot, r PollRow, now time.Time, queued Registry) error {
 	// A state change is the registry's only record of activity that is not a
 	// commit or an edit: `round reconcile` reads it as the stall clock.
 	prev := s.State()
@@ -477,7 +477,10 @@ func recordRow(s *Slot, r PollRow, now time.Time) error {
 	// Only a URL-shaped ROTA-DONE argument becomes slot.pr. The contract
 	// allows a bare branch name there, and handing a branch to `gh pr
 	// merge` fails where the gate's local merge would have worked.
-	if r.State == StateDone && rePRURL.MatchString(r.Evidence) {
+	// A PR a queued record already holds is the previous issue's: the pane's
+	// last ROTA-DONE outlives it, and recording it would pair it with this
+	// slot's next issue and branch.
+	if r.State == StateDone && rePRURL.MatchString(r.Evidence) && queued.QueuedPR(r.Evidence) == nil {
 		s.SetPR(r.Evidence)
 	}
 	// A review item reports the issues it filed instead; `round assign` frees
