@@ -147,11 +147,11 @@ func Run(ctx context.Context, in Input) Report {
 		// out of the report, like the legacy-state line below.
 		checks = append(checks, c)
 	}
-	if c, ok := d.ports(); ok {
-		checks = append(checks, c)
-	}
 	if len(in.AgentProblems) > 0 {
 		checks = append(checks, Check{Name: "agents", Status: Warn, Detail: strings.Join(in.AgentProblems, "; "), Hint: "run: rota agents write"})
+	}
+	if c, ok := d.ports(); ok {
+		checks = append(checks, c)
 	}
 	if f := in.StaleBinary; f != nil {
 		// Only a binary behind its own checkout adds a line.
