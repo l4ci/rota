@@ -16,7 +16,7 @@ cat > .rota/BACKLOG.md <<'EOF'
 
 ## Completed
 EOF
-OUT=$(hvj backlog list) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
+OUT=$(hvj backlog list) || vfail
 [ "$(echo "$OUT" | jget 'data.bugs[0].id')" = "B11" ] || fail "P0 not sorted before P2: $OUT"
 [ "$(echo "$OUT" | jget 'data.bugs[0].priority')" = "P0" ] || fail "B11 priority should be P0: $OUT"
 [ "$(echo "$OUT" | jget 'data.bugs[1].id')" = "B10" ] || fail "B10 should follow B11: $OUT"
@@ -45,7 +45,7 @@ cat > .rota/BACKLOG.md <<'EOF'
 
 ## Completed
 EOF
-OUT=$(hvj backlog list) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
+OUT=$(hvj backlog list) || vfail
 [ "$(echo "$OUT" | jget data.clusters)" = '[["F90","F91","T90"]]' ] \
   || fail "triple cluster not reported as one component: $(echo "$OUT" | jget data.clusters)"
 pass "backlog reports 3+ member clusters as one component"
@@ -63,7 +63,7 @@ cat > .rota/BACKLOG.md <<'EOF'
 
 ## Completed
 EOF
-OUT=$(hvj backlog list) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
+OUT=$(hvj backlog list) || vfail
 [ "$(echo "$OUT" | jget data.clusters)" = '[]' ] \
   || fail "clusters reported with no related items: $OUT"
 pass "backlog reports no clusters when nothing is related"
@@ -88,7 +88,7 @@ EOF
 
 # Active items should move to In Progress
 "$ROTA_BIN" status add rota/real-branch --items F20 >/dev/null
-OUT=$(hvj backlog list) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
+OUT=$(hvj backlog list) || vfail
 [ "$(echo "$OUT" | jget 'data.inProgress[0].id')" = "F20" ] || fail "In Progress should list F20: $OUT"
 # F20 should no longer appear in the features list
 if echo "$OUT" | jget data.features | grep "F20" >/dev/null; then fail "active F20 leaked into features"; fi
@@ -112,25 +112,25 @@ cat > .rota/BACKLOG.md <<'EOF'
 EOF
 echo '{"active":[]}' > .rota/status.json
 
-OUT=$(hvj backlog list --grep dashboard) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
+OUT=$(hvj backlog list --grep dashboard) || vfail
 [ "$(echo "$OUT" | jget 'data.features[0].id')" = "F70" ] || fail "F70 (matches 'dashboard') missing: $OUT"
 [ "$(echo "$OUT" | jget 'data.features[1].id')" = "F71" ] || fail "F71 (matches 'dashboard') missing: $OUT"
 [ "$(echo "$OUT" | jget data.bugs)" = "[]" ] || fail "B70 (no match) leaked: $OUT"
 pass "backlog list --grep filters by title/description substring"
 
 echo "backlog list --grep case-insensitive"
-OUT=$(hvj backlog list --grep DASHBOARD) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
+OUT=$(hvj backlog list --grep DASHBOARD) || vfail
 [ "$(echo "$OUT" | jget 'data.features[0].id')" = "F70" ] || fail "case-insensitive 'DASHBOARD' should match: $OUT"
 pass "backlog list --grep is case-insensitive"
 
 echo "backlog list --grep matches ID"
-OUT=$(hvj backlog list --grep B70) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
+OUT=$(hvj backlog list --grep B70) || vfail
 [ "$(echo "$OUT" | jget 'data.bugs[0].id')" = "B70" ] || fail "ID match B70 missing: $OUT"
 [ "$(echo "$OUT" | jget data.features)" = "[]" ] || fail "F70 leaked when grepping B70: $OUT"
 pass "backlog list --grep matches by ID"
 
 echo "backlog list --grep no matches"
-OUT=$(hvj backlog list --grep nonexistent_xyz) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
+OUT=$(hvj backlog list --grep nonexistent_xyz) || vfail
 for k in inProgress bugs features tasks clusters; do
   [ "$(echo "$OUT" | jget "data.$k")" = "[]" ] || fail "data.$k should be empty on no-match: $OUT"
 done
@@ -151,7 +151,7 @@ cat > .rota/BACKLOG.md <<'EOF'
 
 ## Completed
 EOF
-OUT=$(hvj backlog list --grep "Auth refactor") || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
+OUT=$(hvj backlog list --grep "Auth refactor") || vfail
 [ "$(echo "$OUT" | jget 'data.features[0].id')" = "F80" ] || fail "F80 missing in filtered output: $OUT"
 # The cluster keeps both members, even though only F80 matched
 [ "$(echo "$OUT" | jget data.clusters)" = '[["F80","F81"]]' ] || fail "cluster should preserve both members: $OUT"
@@ -159,8 +159,8 @@ if echo "$OUT" | jget data.features | grep "F82" >/dev/null; then fail "F82 (no 
 pass "backlog list --grep filters clusters but preserves all members"
 
 echo "backlog list no-flag regression"
-OUT_FILTERED=$(hvj backlog list --grep "") || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
-OUT_PLAIN=$(hvj backlog list) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
+OUT_FILTERED=$(hvj backlog list --grep "") || vfail
+OUT_PLAIN=$(hvj backlog list) || vfail
 [ "$OUT_FILTERED" = "$OUT_PLAIN" ] || fail "empty --grep should equal no-flag output"
 pass "backlog list --grep '' equals unfiltered output"
 

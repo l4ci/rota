@@ -53,12 +53,12 @@ grep -A2 "^## Architecture$" "$TMP_KR/.rota/KNOWLEDGE.md" | grep "Bar rule" >/de
 pass "per-bullet move: bullet relocated, siblings untouched"
 
 # Sidecar re-keyed: Foundations carries confirmed/2-hits state, old key gone.
-OUT=$(hvj -C "$TMP_KR" knowledge tier get --topic "Architecture: Foundations" --title "Foo rule") || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
+OUT=$(hvj -C "$TMP_KR" knowledge tier get --topic "Architecture: Foundations" --title "Foo rule") || vfail
 TIER="$(jget data.tier <<<"$OUT")/$(jget data.hits <<<"$OUT")"
 [ "$TIER" = "confirmed/2" ] || fail "Foo rule sidecar lost tier/hits after move: $TIER"
 pass "per-bullet move: sidecar tier+hits follow to new key"
 
-OLD=$(hvj -C "$TMP_KR" knowledge tier get --topic "Architecture" --title "Foo rule") || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
+OLD=$(hvj -C "$TMP_KR" knowledge tier get --topic "Architecture" --title "Foo rule") || vfail
 [ "$(jget data.found <<<"$OLD")" = "false" ] || fail "old sidecar key 'Architecture::Foo rule' not cleared: $OLD"
 pass "per-bullet move: old sidecar key removed"
 
@@ -88,9 +88,9 @@ grep -A2 "^## Tooling & Build$" "$TMP_KR/.rota/KNOWLEDGE.md" | grep "Baz rule" >
   || fail "Baz rule did not follow whole-topic rename"
 pass "whole-topic rename: heading renamed, bullets follow"
 
-NEW=$(hvj -C "$TMP_KR" knowledge tier get --topic "Tooling & Build" --title "Baz rule" | jget data.tier || echo missing)
+NEW=$(hvj -C "$TMP_KR" knowledge tier get --topic "Tooling & Build" --title "Baz rule" | jget data.tier || echo missing) || vfail
 [ "$NEW" = "provisional" ] || fail "Baz rule sidecar entry missing under new topic: $NEW"
-OLD=$(hvj -C "$TMP_KR" knowledge tier get --topic "Build & Tooling" --title "Baz rule") || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
+OLD=$(hvj -C "$TMP_KR" knowledge tier get --topic "Build & Tooling" --title "Baz rule") || vfail
 [ "$(jget data.found <<<"$OLD")" = "false" ] || fail "old 'Build & Tooling::Baz rule' sidecar key not cleared: $OLD"
 pass "whole-topic rename: sidecar entries follow to new topic prefix"
 
@@ -160,9 +160,9 @@ hvj -C "$TMP_KR" knowledge rename-topic --from "Networking" --to "Networking: Re
 hvj -C "$TMP_KR" knowledge rename-topic --from "Networking" --to "Networking: Security" --title "TLS rule" >/dev/null
 
 # All three sidecar keys re-anchored under the new facets.
-T1=$(hvj -C "$TMP_KR" knowledge tier get --topic "Networking: Reliability" --title "Retry rule" | jget data.tier || echo missing)
-T2=$(hvj -C "$TMP_KR" knowledge tier get --topic "Networking: Reliability" --title "Timeout rule" | jget data.tier || echo missing)
-T3=$(hvj -C "$TMP_KR" knowledge tier get --topic "Networking: Security" --title "TLS rule" | jget data.tier || echo missing)
+T1=$(hvj -C "$TMP_KR" knowledge tier get --topic "Networking: Reliability" --title "Retry rule" | jget data.tier || echo missing) || vfail
+T2=$(hvj -C "$TMP_KR" knowledge tier get --topic "Networking: Reliability" --title "Timeout rule" | jget data.tier || echo missing) || vfail
+T3=$(hvj -C "$TMP_KR" knowledge tier get --topic "Networking: Security" --title "TLS rule" | jget data.tier || echo missing) || vfail
 [ "$T1" = "provisional" ] && [ "$T2" = "provisional" ] && [ "$T3" = "provisional" ] \
   || fail "auto-split flow lost sidecar entries: T1=$T1 T2=$T2 T3=$T3"
 pass "auto-split flow: 3 bullets across 2 facets, all sidecar entries follow"
@@ -171,7 +171,7 @@ pass "auto-split flow: 3 bullets across 2 facets, all sidecar entries follow"
 COUNT=$(hvj -C "$TMP_KR" knowledge tier list | jget data.entries | python3 -c '
 import json, sys
 data = json.load(sys.stdin)
-print(sum(1 for e in data if e["topic"] == "Networking"))')
+print(sum(1 for e in data if e["topic"] == "Networking"))') || vfail
 [ "$COUNT" = "0" ] || fail "auto-split flow left $COUNT orphan 'Networking::*' keys"
 pass "auto-split flow: no orphan sidecar entries under old topic"
 

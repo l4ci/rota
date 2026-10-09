@@ -58,7 +58,7 @@ trap 'rm -rf "$TMP_ADD"' EXIT
 "$ROTA_BIN" -C "$TMP_ADD" init >/dev/null
 out=$(hvj -C "$TMP_ADD" glossary write backlog \
     --def "The canonical project queue (.rota/BACKLOG.md). Items are zero-padded IDs." \
-    --alias "task list,todo list")
+    --alias "task list,todo list") || vfail
 [ "$(jget data.term <<<"$out")" = "backlog" ] || fail "glossary write term wrong: $out"
 [ "$(jget data.changed <<<"$out")" = "true" ] || fail "glossary write new term should report changed: $out"
 grep -q "^- \*\*backlog\*\* — " "$TMP_ADD/.rota/KNOWLEDGE.md" || fail "missing backlog entry"

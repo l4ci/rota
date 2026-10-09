@@ -229,7 +229,7 @@ print(next(i["body"] for i in db["issues"] if i["number"] == int(sys.argv[1])))'
     eq() { [ "$2" = "$3" ] || fail "$prov migrate limit $1: expected [$2] got [$3]"; }
     has() { case "$3" in *"$2"*) ;; *) fail "$prov migrate limit $1: [$3] lacks [$2]";; esac; }
     KEYS() { python3 -c 'import json;print(" ".join(json.load(open(".rota/issue-map.json"))))'; }
-    OUT="$(hvj migrate issues --apply --limit 2 2>/dev/null)"
+    OUT="$(hvj migrate issues --apply --limit 2 2>/dev/null)" || vfail
     eq "limit keys" "M07 B1 B2" "$(KEYS)"
     eq "limit migrated" "2" "$(echo "$OUT" | jget data.migrated)"
     eq "limit total" "5" "$(echo "$OUT" | jget data.total)"

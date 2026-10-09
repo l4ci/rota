@@ -3,6 +3,7 @@ package round
 import (
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -11,7 +12,7 @@ func traced(log *[]string, name string, err error) step {
 	return step{
 		name: name,
 		do:   func() error { *log = append(*log, "do "+name); return err },
-		undo: func() { *log = append(*log, "undo "+name) },
+		undo: func() error { *log = append(*log, "undo "+name); return nil },
 	}
 }
 
@@ -66,7 +67,7 @@ func TestRunStepsSkippedStepIsStillUndone(t *testing.T) {
 func TestClaimStepUndoReleasesAndUnbinds(t *testing.T) {
 	be := &fakeRemote{}
 	unbound := false
-	s := claimStep(be, "12", "ben@1", 1, func() { unbound = true })
+	s := claimStep(be, "12", "ben@1", 1, func() error { unbound = true; return nil })
 	if err := s.do(); err != nil || be.claims["12"] != "ben@1" {
 		t.Fatalf("claim: %v %v", err, be.claims)
 	}
@@ -78,7 +79,7 @@ func TestClaimStepUndoReleasesAndUnbinds(t *testing.T) {
 
 func TestClaimStepLostClaimIsBlockedAndUndoesNothingElse(t *testing.T) {
 	be := &fakeRemote{claimedBy: "dana@1"}
-	steps := []step{claimStep(be, "12", "ben@1", 1, func() { t.Error("unbind without a claim") })}
+	steps := []step{claimStep(be, "12", "ben@1", 1, func() error { t.Error("unbind without a claim"); return nil })}
 	err := runSteps(steps)
 	if blockedBy(t, err) != BlockClaimed {
 		t.Fatalf("got %v", err)
@@ -120,5 +121,19 @@ func TestStateStepFailureClearsItsOwnPartialWrite(t *testing.T) {
 	}
 	if len(be.bstates) != 0 || changed {
 		t.Errorf("a failed state step must clear its partial write: %v %v", be.bstates, changed)
+	}
+}
+
+func TestRunStepsReportsAnUndoThatFailed(t *testing.T) {
+	var log []string
+	boom := errors.New("boom")
+	a := traced(&log, "a", nil)
+	a.undo = func() error { return errors.New("release refused") }
+	err := runSteps([]step{a, traced(&log, "b", boom)})
+	if !errors.Is(err, boom) {
+		t.Fatalf("the step's own error must stay the cause: %v", err)
+	}
+	if err == nil || !strings.Contains(err.Error(), "rollback incomplete") || !strings.Contains(err.Error(), "a: release refused") {
+		t.Errorf("a failed rollback must be named in the error: %v", err)
 	}
 }

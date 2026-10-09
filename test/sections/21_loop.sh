@@ -23,11 +23,11 @@ EOF
 echo "no frontmatter here" > .rota/map/broken.md
 
 # --- map query -----------------------------------------------------
-out="$(hvj map query capture | jget data.text)"
+out="$(hvj map query capture | jget data.text)" || vfail
 [[ "$out" == *"## Purpose"* ]] || { echo "FAIL: map query body missing"; exit 1; }
-out="$(hvj map query capture plan | jget data.text)"
+out="$(hvj map query capture plan | jget data.text)" || vfail
 [[ "$out" == *"## Purpose"* && "$out" == *"body"* ]] || { echo "FAIL: map query multi"; exit 1; }
-out="$(hvj map query nonexistent | jget data.text)"
+out="$(hvj map query nonexistent | jget data.text)" || vfail
 [[ -z "$out" ]] || { echo "FAIL: map query missing should be empty, got: $out"; exit 1; }
 rc=0; hvj map query >/dev/null 2>&1 || rc=$?
 [ "$rc" = 2 ] || { echo "FAIL: map query with no name must exit 2, got $rc"; exit 1; }
@@ -72,7 +72,7 @@ echo "ok map stats"
 
 # --- map index -----------------------------------------------------
 [ -f CLAUDE.md ] || : > CLAUDE.md
-OUT="$(hvj map index)"
+OUT="$(hvj map index)" || vfail
 [ "$(jget data.key <<<"$OUT")" = "map" ] || { echo "FAIL: map index data.key: $OUT"; exit 1; }
 [ "$(jget data.changed <<<"$OUT")" = "true" ] || { echo "FAIL: first map index must report changed: $OUT"; exit 1; }
 grep -q '<!-- rota-map-start -->' CLAUDE.md || { echo "FAIL: map block not in CLAUDE.md"; exit 1; }
@@ -80,7 +80,7 @@ grep -q '## Project Map' CLAUDE.md || { echo "FAIL: heading missing"; exit 1; }
 grep -q '\*\*capture\*\* — Captures items into BACKLOG.md' CLAUDE.md || { echo "FAIL: capture summary missing"; exit 1; }
 # Idempotence
 sha1=$(sha1sum CLAUDE.md | cut -d' ' -f1)
-OUT="$(hvj map index)"
+OUT="$(hvj map index)" || vfail
 sha2=$(sha1sum CLAUDE.md | cut -d' ' -f1)
 [ "$sha1" = "$sha2" ] || { echo "FAIL: map index not idempotent"; exit 1; }
 [ "$(jget data.status <<<"$OUT")" = "unchanged" ] || { echo "FAIL: repeat map index must be unchanged: $OUT"; exit 1; }
@@ -97,14 +97,14 @@ echo "ok map index"
 # --- backlog stale -------------------------------------------------
 # Plan (touched 2026-04-01) is older than 30 days from "today=2026-05-09";
 # work is touched 2026-05-09 and should not be flagged at days=30.
-out="$(ROTA_TEST_TODAY=2026-05-09 hvj backlog stale --kind map --days 30 | jget data.entries)"
+out="$(ROTA_TEST_TODAY=2026-05-09 hvj backlog stale --kind map --days 30 | jget data.entries)" || vfail
 grep -q '"name":"plan"' <<<"$out" || { echo "FAIL: plan should be stale"; exit 1; }
 if grep -q '"name":"work"' <<<"$out"; then echo "FAIL: work should NOT be stale"; exit 1; fi
 # days=0 lists all
 ROTA_TEST_TODAY=2026-05-09 hvj backlog stale --kind map --days 0 | jget 'data.entries[1].name' >/dev/null \
   || { echo "FAIL: days=0 should list all"; exit 1; }
 # Nothing is stale when the window is huge (silence, not an empty report)
-out="$(ROTA_TEST_TODAY=2026-05-09 hvj backlog stale --kind map --days 999999 | jget data.entries)"
+out="$(ROTA_TEST_TODAY=2026-05-09 hvj backlog stale --kind map --days 999999 | jget data.entries)" || vfail
 [ "$out" = "[]" ] || { echo "FAIL: backlog stale should be empty when nothing is stale (got: $out)"; exit 1; }
 # Knowledge: KNOWLEDGE.md exists from bootstrap-style fixture; should not error
 hvj backlog stale --kind knowledge --days 0 >/dev/null
@@ -166,10 +166,10 @@ p.write_text(text)
 PY
   grep -q "touched: 2026-05-10" .rota/map/capture.md || { echo "FAIL: after-work bump"; exit 1; }
 
-  out="$(ROTA_TEST_TODAY=2026-05-10 hvj backlog stale --kind map --days 30 | jget data.entries)"
+  out="$(ROTA_TEST_TODAY=2026-05-10 hvj backlog stale --kind map --days 30 | jget data.entries)" || vfail
   grep -q '"name":"work"' <<<"$out" || { echo "FAIL: work should be stale at days=30"; exit 1; }
 
-  count=$(hvj map stats | jget data.count) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
+  count=$(hvj map stats | jget data.count) || vfail
   [ "$count" = "2" ] || { echo "FAIL: stats count $count != 2"; exit 1; }
 
   hvj map index >/dev/null

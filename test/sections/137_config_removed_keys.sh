@@ -13,7 +13,7 @@ case "$OUT" in *issues.filterMineOnly*) ;; *) fail "config check should name the
 # A verb that reads config still works with the removed keys present.
 ( cd "$CF" && "$ROTA_BIN" config show issues.label >/dev/null 2>&1 ) || fail "config show fails on a config holding removed keys"
 
-OUT=$( cd "$CF" && hvj config fill ) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
+OUT=$( cd "$CF" && hvj config fill ) || vfail
 [ "$(echo "$OUT" | jget 'data.removed[0]')" = "issues.filterMineOnly" ] || fail "fill should report what it removed: $OUT"
 python3 - "$CF/.rota/config.json" <<'PY' || fail "fill did not strip the removed keys"
 import json, sys

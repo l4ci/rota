@@ -267,6 +267,9 @@ func PoolList(root string) (session any, round any, slots []*jsonx.Object) {
 func (e Env) Reap(root string, names []string, all bool) (reaped []string, err error) {
 	var failed []string
 	e = e.withDefaults()
+	if err := CheckRegistry(root); err != nil {
+		return nil, fail(exitcode.ExitUnavailable, "reap refused: "+err.Error())
+	}
 	reg := LoadRegistry(root)
 	if !reg.Exists {
 		return nil, nil

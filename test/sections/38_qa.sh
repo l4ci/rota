@@ -47,7 +47,7 @@ Web UI (Next.js, deployed at staging.example.com).
 EOF
 
 # qa query prints body of named target.
-QA_OUT=$(hvj qa query web | jget data.text) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
+QA_OUT=$(hvj qa query web | jget data.text) || vfail
 grep -q "^## Executable checks" <<<"$QA_OUT" || fail "qa query body missing Executable checks heading"
 grep -q "^## Audit checks" <<<"$QA_OUT" || fail "qa query body missing Audit checks heading"
 grep -q "^---" <<<"$QA_OUT" && fail "qa query leaked frontmatter into the body"
@@ -78,13 +78,13 @@ touched: 2026-05-15
 
 HTTP API.
 EOF
-QA_MULTI=$(hvj qa query api web | jget data.text) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
+QA_MULTI=$(hvj qa query api web | jget data.text) || vfail
 FIRST_HEAD=$(grep -m1 "^## " <<<"$QA_MULTI")
 [ "$FIRST_HEAD" = "## Surface" ] || fail "qa query order not preserved"
 pass "qa query preserves argument order"
 
 # qa index regenerates the managed block.
-QA_IDX=$(hvj qa index) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
+QA_IDX=$(hvj qa index) || vfail
 [ "$(jget data.key <<<"$QA_IDX")" = "qa" ] || fail "qa index data.key wrong: $QA_IDX"
 [ "$(jget data.changed <<<"$QA_IDX")" = "true" ] || fail "first qa index must report changed: $QA_IDX"
 grep -q "<!-- rota-qa-start -->" CLAUDE.md || fail "rota-qa managed block not in CLAUDE.md"
@@ -94,7 +94,7 @@ grep -q "\*\*api\*\*" CLAUDE.md || fail "api target bullet missing from index"
 pass "qa index seeds Project QA block"
 
 # Re-running is idempotent (no duplicate markers).
-QA_IDX=$(hvj qa index) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
+QA_IDX=$(hvj qa index) || vfail
 [ "$(jget data.status <<<"$QA_IDX")" = "unchanged" ] || fail "repeat qa index must be unchanged: $QA_IDX"
 [ "$(jget data.changed <<<"$QA_IDX")" = "false" ] || fail "repeat qa index must report changed=false: $QA_IDX"
 COUNT_START=$(grep -c "rota-qa-start" CLAUDE.md)

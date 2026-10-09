@@ -596,8 +596,8 @@ func (e Env) assignOne(ctx context.Context, root string, be Board, o AssignOpts,
 		{name: "queue the slot's PR", skip: func() bool { return !queue }, do: func() error {
 			return wrap(e.queuePR(ctx, root, be, agent))
 		}},
-		claimStep(be, id, claimID, holders, func() {
-			editSlot(root, agent, func(s *worker.Slot) error { s.Unbind(); return nil })
+		claimStep(be, id, claimID, holders, func() error {
+			return editSlot(root, agent, func(s *worker.Slot) error { s.Unbind(); return nil })
 		}),
 		stateStep(root, be, id, agent, resuming, &res.Changed),
 		{name: "comment", skip: func() bool { return resuming }, do: func() error {
@@ -663,7 +663,7 @@ func (e Env) assignOne(ctx context.Context, root string, be Board, o AssignOpts,
 // for an attempt of a best-of:2 issue); its undo gives the claim back and
 // clears the slot's binding. A lost claim is a refusal and leaves nothing to
 // undo.
-func claimStep(be Board, id, claimID string, holders int, unbind func()) step {
+func claimStep(be Board, id, claimID string, holders int, unbind func() error) step {
 	return step{name: "claim", do: func() error {
 		var (
 			won    bool
@@ -686,9 +686,15 @@ func claimStep(be Board, id, claimID string, holders int, unbind func()) step {
 			return blocked(BlockClaimed, "%s is claimed by %s", id, holder)
 		}
 		return nil
-	}, undo: func() {
-		be.Release(id, claimID)
-		unbind()
+	}, undo: func() error {
+		var errs []error
+		if _, err := be.Release(id, claimID); err != nil {
+			errs = append(errs, fmt.Errorf("claim %s not released: %w", claimID, err))
+		}
+		if err := unbind(); err != nil {
+			errs = append(errs, fmt.Errorf("slot not unbound: %w", err))
+		}
+		return errors.Join(errs...)
 	}}
 }
 
@@ -701,14 +707,17 @@ func stateStep(root string, be Board, id, slot string, resuming bool, changed *b
 		if err != nil {
 			// The write may have landed partly (a label added, the old one
 			// not removed): clear it, since a failed step is not undone.
-			be.SetState(id, "none")
+			if _, cerr := be.SetState(id, "none"); cerr != nil {
+				return fmt.Errorf("%w (and clearing the state failed: %v)", err, cerr)
+			}
 			return err
 		}
 		*changed = c || !resuming
 		return nil
-	}, undo: func() {
+	}, undo: func() error {
 		*changed = false
-		clearState(root, be, id, slot)
+		_, err := clearState(root, be, id, slot)
+		return err
 	}}
 }
 
