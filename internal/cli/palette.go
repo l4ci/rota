@@ -58,14 +58,7 @@ func paletteView(c *Ctx, root *Command, verb []string) (tui.Model, error) {
 	var out, errb bytes.Buffer
 	run(root, &d, append(append([]string(nil), verb...), "--ui"), c.Stdin, &out, &errb)
 	if m == nil {
-		msg := strings.TrimSpace(errb.String())
-		if msg == "" {
-			msg = strings.TrimSpace(out.String())
-		}
-		if msg == "" {
-			msg = "no view"
-		}
-		return nil, errors.New(strutil.FirstLine(msg))
+		return nil, errors.New(firstText("no view", errb.String(), out.String()))
 	}
 	return m, nil
 }
@@ -228,4 +221,17 @@ func tildePath(p string) string {
 		return "~" + p[len(home):]
 	}
 	return p
+}
+
+// firstText is the first line with text across the streams, in order, or
+// fallback when none has any. FirstLine strips Python whitespace, which Go's
+// TrimSpace does not (\x1c-\x1f), so a stream is judged by FirstLine itself:
+// a blank-looking message can never become an empty error.
+func firstText(fallback string, streams ...string) string {
+	for _, s := range streams {
+		if l := strutil.FirstLine(s); l != "" {
+			return l
+		}
+	}
+	return fallback
 }
