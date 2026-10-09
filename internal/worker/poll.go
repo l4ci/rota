@@ -410,7 +410,7 @@ func (e Env) openPRsByHead(ctx context.Context, root string, reg Registry, polle
 		return nil
 	}
 	cfg := config.Load(rotatree.Config(root))
-	f, err := e.Forge(e.gateEnv().detectProvider(root, ""), root, cfg)
+	f, err := e.Forge(e.detectProvider(ctx, root, ""), root, cfg)
 	if err != nil {
 		return nil
 	}
@@ -436,7 +436,7 @@ func (e Env) prMerged(ctx context.Context, root string, s *Slot) bool {
 		return false
 	}
 	cfg := config.Load(rotatree.Config(root))
-	f, err := e.Forge(e.gateEnv().detectProvider(root, ""), root, cfg)
+	f, err := e.Forge(e.detectProvider(ctx, root, ""), root, cfg)
 	if err != nil {
 		return false
 	}
