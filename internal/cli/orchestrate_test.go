@@ -63,14 +63,14 @@ func useLaunchRig(d *Deps, env map[string]string, installed ...string) *launchRi
 	return r
 }
 
-func passingDoctor(t *testing.T) {
+func passingDoctor(t *testing.T, d *Deps) {
 	t.Helper()
-	doctorFakes(t, map[string]string{"git": `case "$1" in remote) exit 2;; esac; exit 0`})
+	d.DoctorPath = doctorFakes(t, map[string]string{"git": `case "$1" in remote) exit 2;; esac; exit 0`})
 }
 
 func TestOrchestrateDryRunPlansWithoutStarting(t *testing.T) {
 	deps := testDeps()
-	passingDoctor(t)
+	passingDoctor(t, deps)
 	r := useLaunchRig(deps, nil)
 	dir := trackerProject(t, "")
 	code, env, errs := rotaRunWith(t, deps, "--json", "-C", dir, "orchestrate", "--dry-run")
@@ -88,7 +88,7 @@ func TestOrchestrateDryRunPlansWithoutStarting(t *testing.T) {
 
 func TestOrchestrateOpensATabInsideHerdr(t *testing.T) {
 	deps := testDeps()
-	passingDoctor(t)
+	passingDoctor(t, deps)
 	r := useLaunchRig(deps, map[string]string{"HERDR_ENV": "1", "HERDR_WORKSPACE_ID": "w1"}, "herdr")
 	dir := trackerProject(t, "")
 	code, env, errs := rotaRunWith(t, deps, "--json", "-C", dir, "orchestrate")
@@ -111,7 +111,7 @@ func TestOrchestrateRecordsItsPlainPaneAsTheCLIPane(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			deps := testDeps()
-			passingDoctor(t)
+			passingDoctor(t, deps)
 			r := useLaunchRig(deps, map[string]string{"HERDR_ENV": "1", "HERDR_WORKSPACE_ID": "w1", "HERDR_PANE_ID": tc.pane}, "herdr")
 			r.panes = `{"result":{"panes":[{"pane_id":"w1:p1","tab_id":"w1:t1","workspace_id":"w1","agent":"` + tc.agent + `"}]}}`
 			dir := trackerProject(t, "")
@@ -127,7 +127,7 @@ func TestOrchestrateRecordsItsPlainPaneAsTheCLIPane(t *testing.T) {
 
 func TestOrchestrateHarnessComesFromConfig(t *testing.T) {
 	deps := testDeps()
-	passingDoctor(t)
+	passingDoctor(t, deps)
 	useLaunchRig(deps, nil)
 	dir := trackerProject(t, `{"orchestrator":{"harness":"codex"}}`)
 	code, env, _ := rotaRunWith(t, deps, "--json", "-C", dir, "orchestrate", "--dry-run")
@@ -143,7 +143,7 @@ func TestOrchestrateHarnessComesFromConfig(t *testing.T) {
 
 func TestOrchestrateStopsOnADoctorFailureBeforeAnySession(t *testing.T) {
 	deps := testDeps()
-	doctorFakes(t, map[string]string{"herdr": `echo "herdr 0.8.2"`}) // too old; no git on PATH
+	deps.DoctorPath = doctorFakes(t, map[string]string{"herdr": `echo "herdr 0.8.2"`}) // too old; no git on PATH
 	r := useLaunchRig(deps, map[string]string{"HERDR_ENV": "1", "HERDR_WORKSPACE_ID": "w1"}, "herdr")
 	dir := trackerProject(t, `{"work":{"dispatch":"herdr"}}`)
 	code, out, errs := rotaInWith(t, deps, dir, "orchestrate")
@@ -157,7 +157,7 @@ func TestOrchestrateStopsOnADoctorFailureBeforeAnySession(t *testing.T) {
 
 func TestOrchestrateOutsideAMultiplexerAttachesARotaHerdrSession(t *testing.T) {
 	deps := testDeps()
-	doctorFakes(t, map[string]string{"git": `case "$1" in remote) exit 2;; esac; exit 0`, "herdr": `echo "herdr 0.9.3"`})
+	deps.DoctorPath = doctorFakes(t, map[string]string{"git": `case "$1" in remote) exit 2;; esac; exit 0`, "herdr": `echo "herdr 0.9.3"`})
 	r := useLaunchRig(deps, nil, "herdr", "tmux")
 	dir := trackerProject(t, `{"work":{"dispatch":"herdr"}}`)
 	// The fake herdr answers `status server`, so the session counts as running
@@ -207,7 +207,7 @@ func TestBareRotaWithoutRotaDirRunsSetup(t *testing.T) {
 func TestBareRotaInAnInitializedProjectLaunchesTheOrchestrator(t *testing.T) {
 	deps := testDeps()
 	setups := bareRig(deps)
-	passingDoctor(t)
+	passingDoctor(t, deps)
 	r := useLaunchRig(deps, nil)
 	code, _, errs := bareIn(t, deps, trackerProject(t, ""))
 	if code != 0 || *setups != 0 {
@@ -242,7 +242,7 @@ func TestBareRotaNeverLaunchesWithoutATerminalOrWithJSON(t *testing.T) {
 func TestBareRotaTakesGlobalFlagsBeforeNothing(t *testing.T) {
 	deps := testDeps()
 	bareRig(deps)
-	passingDoctor(t)
+	passingDoctor(t, deps)
 	r := useLaunchRig(deps, nil)
 	if code, _, errs := bareIn(t, deps, t.TempDir(), "-C", trackerProject(t, "")); code != 0 || len(r.execs) != 1 {
 		t.Errorf("exit %d execs %v: %s", code, r.execs, errs)

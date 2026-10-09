@@ -87,8 +87,13 @@ func TestStatuses(t *testing.T) {
 }
 
 func TestLatestFromTestVariable(t *testing.T) {
-	t.Setenv("ROTA_TEST_LATEST_VERSION", "7.8.9")
-	if got := ghLatest(); got != "7.8.9" {
+	getenv := func(k string) string {
+		if k == "ROTA_TEST_LATEST_VERSION" {
+			return "7.8.9"
+		}
+		return ""
+	}
+	if got := ghLatest(getenv); got != "7.8.9" {
 		t.Errorf("ghLatest = %q", got)
 	}
 }
@@ -104,7 +109,7 @@ func TestGhLookupStaysInFakes(t *testing.T) {
 		t.Fatalf("gh = %s", p)
 	}
 	t.Setenv("FAKE_TRACKER_DB", filepath.Join(t.TempDir(), "db.json"))
-	if got := ghLatest(); got != "" {
+	if got := ghLatest(os.Getenv); got != "" {
 		t.Errorf("fake gh returned release %q", got)
 	}
 }
@@ -118,5 +123,5 @@ func TestGuardRefusesForeignGh(t *testing.T) {
 			t.Error("a gh outside test/fakes was not refused")
 		}
 	}()
-	ghLatest()
+	ghLatest(os.Getenv)
 }

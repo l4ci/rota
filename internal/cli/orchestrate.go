@@ -27,16 +27,16 @@ func orchestrateCommand() *Command {
 // defaultOrchestrateEnv is what the launcher touches outside its own memory.
 // Tests replace Deps.OrchestrateEnv: a real launch opens tabs in the herdr or
 // tmux a round runs in.
-func defaultOrchestrateEnv() orchestrate.Env {
+func defaultOrchestrateEnv(d *Deps) orchestrate.Env {
 	self, err := os.Executable()
 	if err != nil {
 		self = "rota"
 	}
 	return orchestrate.Env{
-		Getenv:   os.Getenv,
+		Getenv:   d.Getenv,
 		LookPath: exec.LookPath,
 		Exec:     syscall.Exec,
-		Env:      os.Environ(),
+		Env:      d.Environ(),
 		Self:     self,
 	}
 }

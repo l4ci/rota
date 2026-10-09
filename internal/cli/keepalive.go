@@ -82,7 +82,7 @@ func signalName(s syscall.Signal) string {
 func keepaliveSpawn(c *Ctx, configDir string) func(argv, extraEnv []string) (keepalive.Child, error) {
 	return func(argv, extraEnv []string) (keepalive.Child, error) {
 		cmd := exec.Command(argv[0], argv[1:]...)
-		cmd.Env = os.Environ()
+		cmd.Env = c.deps().Environ()
 		if configDir != "" {
 			cmd.Env = append(cmd.Env, "CLAUDE_CONFIG_DIR="+configDir)
 		}
@@ -191,7 +191,7 @@ func keepaliveRun(fs *flag.FlagSet) RunFunc {
 			Spawn:    keepaliveSpawn(c, *configDir),
 			Signals:  sigs,
 			Lease:    le,
-			Holder:   le.Discover(os.Getpid(), os.Getenv),
+			Holder:   le.Discover(os.Getpid(), c.deps().Getenv),
 			Handoff:  func() keepalive.HandoffRead { return readHandoff(handoffFile(root, cfg)) },
 			Escalate: escalateFunc(ctx, c, root),
 			Notify:   func(title, body string) { keepaliveNotify(context.WithoutCancel(ctx), c, root, title, body) },
@@ -205,7 +205,7 @@ func keepaliveRun(fs *flag.FlagSet) RunFunc {
 		}
 		if set.SwitchOnUsage {
 			opts.SwitchOnUsage, opts.UsageThreshold, opts.HoldFallback = true, set.UsageThreshold, set.HoldFallback
-			opts.ConfigDir = os.Getenv("CLAUDE_CONFIG_DIR")
+			opts.ConfigDir = c.deps().Getenv("CLAUDE_CONFIG_DIR")
 			if *configDir != "" {
 				opts.ConfigDir = *configDir
 			}
