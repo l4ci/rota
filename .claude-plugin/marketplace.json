@@ -10,7 +10,7 @@
       "source": {
         "source": "github",
         "repo": "l4ci/rota",
-        "ref": "v0.14.0"
+        "ref": "v0.15.0"
       },
       "description": "Backlog, planning and parallel-round skills for Claude Code; /rota:rota-install fetches the matching rota binary."
     }
