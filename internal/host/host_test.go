@@ -1274,6 +1274,9 @@ func TestStripDim(t *testing.T) {
 		"❯ \x1b[38;5;232mtyped\x1b[0m":         "❯ typed",
 		"❯ \x1b[38;5;250mghost\x1b[0m":         "❯ ",
 		"\x1b[31mred\x1b[0m":                   "red",
+		"a\x1b[2Kmore":                         "amore",
+		"a\x1b[31":                             "a",
+		"\x1b[2mghost\x1b[2Kmore\x1b[0mtyped":  "typed",
 	} {
 		if got := stripDim(in); got != want {
 			t.Errorf("stripDim(%q) = %q, want %q", in, got, want)
