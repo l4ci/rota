@@ -36,7 +36,11 @@ If the merge gate fails, the orchestrator first runs it on `origin/main` in a th
 triaging your branch"). A failure that main shares pre-exists the PR and is captured as its own bug; otherwise the
 orchestrator bounces the PR with the failing check.
 New smoke sections take the number your dispatch assigns; do not pick one yourself, siblings are
-numbering theirs at the same time.
+numbering theirs at the same time. Start from `test/section-template.sh`.
+Sections run under `set -euo pipefail`, so a bare `OUT=$(rota ...)` aborts the section silently when the
+verb exits non-zero. Follow every capture of a rota call with `|| vfail` (defined in `test/lib.sh`), which
+names the verb and its exit code. `python3 test/lint-sections.py test/sections` lists the bare captures,
+quoted and multi-line ones included; `--fix` appends the handler.
 
 Most of `cmd/rota`'s test time is the `TestFrozen*` scenario suites: each scenario runs the Go
 binary and compares what it did with its record in `cmd/rota/testdata/frozen/`. A deliberate

@@ -90,9 +90,15 @@ merged but still checked out in a worktree outside `.worktrees/`, reap lists it 
 other tool do it), then `rota reap --apply` deletes the branch. `rota worker gate --prune` and
 `rota round wind-down --prune` do both at release time.
 
+**An unreadable registry.** `rota reap` and `rota worker pool reap` read `.rota/workers.json` to learn which
+worktrees a slot owns. If the file exists but is not a JSON object, they refuse with `reap refused: ...
+fix or remove it` and exit `5`, before listing or deleting anything. Reading it as an empty pool would
+treat every slot worktree as unowned. `pool reap` also keeps a slot registered when git cannot remove its
+worktree, and names the failure.
+
 **Exit codes.** `0` after a preview or a clean apply. `1` under `--apply` when a deletion failed (the
 rest were still removed; the failures are in the output). `2` for an unknown `--kind`. `3` with no
-project root. `5` when git fails.
+project root. `5` when git fails or `workers.json` is unreadable.
 
 Reap and [`rota round reconcile`](parallel-rounds.md#moving-an-issue-that-is-assigned) split the work:
 reconcile reports drift between the registry, host, git and forge and repairs only the safe kinds;
