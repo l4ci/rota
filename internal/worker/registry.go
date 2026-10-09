@@ -7,6 +7,7 @@ package worker
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/rotatree"
@@ -50,6 +51,26 @@ func LoadRegistry(root string) Registry {
 		return Registry{doc: o, Exists: true}
 	}
 	return Registry{doc: slotsDefault()}
+}
+
+// CheckRegistry is nil when the registry is missing or a JSON object, and an
+// error when it exists but cannot be read or parsed. LoadRegistry reads such a
+// file as an empty pool; a verb that would delete on the strength of "no slot
+// owns this" calls CheckRegistry first and refuses (#579).
+func CheckRegistry(root string) error {
+	p := RegistryPath(root)
+	raw, err := os.ReadFile(p)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("%w: %s: %v", fsio.ErrUnreadable, p, err)
+	}
+	v, err := jsonx.Decode(raw)
+	if _, ok := v.(*jsonx.Object); err != nil || !ok {
+		return fmt.Errorf("%w: %s does not parse as a JSON object; fix or remove it", fsio.ErrUnreadable, p)
+	}
+	return nil
 }
 
 // Slots lists the slot objects of the registry.

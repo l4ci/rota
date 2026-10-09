@@ -87,7 +87,7 @@ MD
   # backlog list
   IDS() { hvj backlog list "${@:2}" | jget "data.$1" | python3 -c 'import json,sys; print(",".join(r["id"] for r in json.load(sys.stdin)))'; }
   eq "backlog in progress" "B02" "$(IDS inProgress)"
-  OUT="$(hvj backlog list)"
+  OUT="$(hvj backlog list)" || vfail
   eq "in progress row" "B|fix/b02|2026-01-01T00:00:00Z" "$(echo "$OUT" | jget 'data.inProgress[0].type')|$(echo "$OUT" | jget 'data.inProgress[0].branch')|$(echo "$OUT" | jget 'data.inProgress[0].startedAt')"
   eq "backlog bugs" "B01" "$(IDS bugs)"
   eq "backlog bug row" "P1|First bug|[\"F01\"]|M01" "$(echo "$OUT" | jget 'data.bugs[0].priority')|$(echo "$OUT" | jget 'data.bugs[0].title')|$(echo "$OUT" | jget 'data.bugs[0].related')|$(echo "$OUT" | jget 'data.bugs[0].milestone')"
@@ -161,7 +161,7 @@ MD
   cnt() { python3 -c 'import json;d=json.load(open(".rota/counters.json"))["since_refactor"];print(d["features"],d["bugs"])'; }
 
   # complete: proof row present, default Done line, counter bumped
-  OUT="$(hvj item complete B01 --commit "$C1")"
+  OUT="$(hvj item complete B01 --commit "$C1")" || vfail
   eq "complete data" "B|done|$C1|true" "$(echo "$OUT" | jget data.type)|$(echo "$OUT" | jget data.reason)|$(echo "$OUT" | jget data.commit)|$(echo "$OUT" | jget data.changed)"
   eq "complete line" "- ~~**[B01] [P1] First bug.** Desc one.~~ Done $TODAY [\`$C1\`]" "$(grep -F '[B01]' .rota/BACKLOG.md)"
   eq "complete counter" "3 4" "$(cnt)"
@@ -235,7 +235,7 @@ EOF
 
   # file mode: file-only verbs still work
   rm .rota/config.json
-  OUT="$(hvj id next --kind bugs)"
+  OUT="$(hvj id next --kind bugs)" || vfail
   eq "id next file mode" "B06:true" "$(echo "$OUT" | jget data.id):$(echo "$OUT" | jget data.changed)"
   pass "id next unchanged in file mode"
 )
@@ -285,7 +285,7 @@ for prov in github gitlab; do
 
     # backlog list
     IDS() { echo "$OUT" | jget "data.$1" | python3 -c 'import json,sys; print(",".join(sorted(r["id"] for r in json.load(sys.stdin))))'; }
-    OUT="$(hvj backlog list)"
+    OUT="$(hvj backlog list)" || vfail
     eq "list bugs" "1" "$(IDS bugs)"
     eq "list bug row" "P1|Crash on start|[]" "$(echo "$OUT" | jget 'data.bugs[0].priority')|$(echo "$OUT" | jget 'data.bugs[0].title')|$(echo "$OUT" | jget 'data.bugs[0].related')"
     eq "list features" "2,3" "$(IDS features)"
@@ -325,7 +325,7 @@ PY
     pass "$prov: item field get resolves F2/#2/2, rejects type mismatch and tracker issues"
 
     # summary, milestone readers
-    OUT="$(hvj summary)"
+    OUT="$(hvj summary)" || vfail
     eq "summary counts" '{"bugs":1,"features":2,"tasks":2}' "$(echo "$OUT" | jget data.backlog)"
     eq "summary recent" "7|T|dropped|6|B" "$(echo "$OUT" | jget 'data.recent[0].id')|$(echo "$OUT" | jget 'data.recent[0].type')|$(echo "$OUT" | jget 'data.recent[0].reason')|$(echo "$OUT" | jget 'data.recent[1].id')|$(echo "$OUT" | jget 'data.recent[1].type')"
     eq "ids by milestone" '{"milestone":"M07","ids":["2"]}' "$(hvj backlog ids --milestone M07 | jget data)"
@@ -471,9 +471,9 @@ print(",".join(sorted(v)) if isinstance(v, list) else (v if v is not None else "
     [ "$(rcof hvj item create --kind bugs --title Nope --milestone "M07, M08")" != 0 ] || fail "$prov item create: two milestones should fail"
 
     printf 'Detail for {ID}.\n' > "$P/body.md"
-    B="$(hvj item create --kind bugs --title "Crash on start" --tag P1 --desc "It crashes." --related 'F1, B2' --repos web --milestone M07)"
-    F="$(hvj item create --kind features --title "Big thing" --tag Major --desc "Does stuff." --body-file "$P/body.md" --subsystem core)"
-    T="$(hvj item create --kind tasks --title "Chore")"
+    B="$(hvj item create --kind bugs --title "Crash on start" --tag P1 --desc "It crashes." --related 'F1, B2' --repos web --milestone M07)" || vfail
+    F="$(hvj item create --kind features --title "Big thing" --tag Major --desc "Does stuff." --body-file "$P/body.md" --subsystem core)" || vfail
+    T="$(hvj item create --kind tasks --title "Chore")" || vfail
     eq "ids" "1 2 3" "$(echo "$B" | jget data.id) $(echo "$F" | jget data.id) $(echo "$T" | jget data.id)"
     eq "types" "B F T" "$(echo "$B" | jget data.type) $(echo "$F" | jget data.type) $(echo "$T" | jget data.type)"
     eq "bug labels" "p1,type:bug" "$(IV 1 labels)"
@@ -487,7 +487,7 @@ print(",".join(sorted(v)) if isinstance(v, list) else (v if v is not None else "
     eq "task body" "" "$(IV 3 body)"
     FG() { hvj item field get "$1" --name "$2" | jget data.value; }
     eq "field get" "M07|[F1], [B2]|web|core" "$(FG B1 milestone)|$(FG '#1' related)|$(FG B1 repos)|$(FG F2 subsystem)"
-    OUT="$(hvj backlog list)"
+    OUT="$(hvj backlog list)" || vfail
     eq "list ids" "1|2|3" "$(echo "$OUT" | jget 'data.bugs[0].id')|$(echo "$OUT" | jget 'data.features[0].id')|$(echo "$OUT" | jget 'data.tasks[0].id')"
     rc=0; OUT="$(echo '- **[B9] x.**' | hvj item create --kind bugs --raw-file - 2>/dev/null)" || rc=$?
     eq "raw-file refused" "4:refused:backend" "$rc:$(echo "$OUT" | jget error.code):$(echo "$OUT" | jget data.blockedBy)"

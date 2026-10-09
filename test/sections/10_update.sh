@@ -55,7 +55,7 @@ trap 'rm -rf "$XX_TMP"' EXIT
   cat > .rota/config.json <<'EOF2'
 {"hv":{"version":"1.0.0"}}
 EOF2
-  OUT=$("$ROTA_BIN" --json version --drift) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
+  OUT=$("$ROTA_BIN" --json version --drift) || vfail
   [ "$(echo "$OUT" | jget data.stamped)" = "1.0.0" ] || fail "drift: wrong stamped: $OUT"
   [ "$(echo "$OUT" | jget data.installed)" = "$EXPECTED" ] || fail "drift: wrong installed: $OUT"
   [ "$(echo "$OUT" | jget data.version)" = "$EXPECTED" ] || fail "drift: version != installed: $OUT"
@@ -67,7 +67,7 @@ EOF2
 
   # Test 3: match when the stamp is the binary's own version.
   printf '{"rota":{"version":"%s"}}\n' "$EXPECTED" > .rota/config.json
-  OUT=$("$ROTA_BIN" --json version --drift) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
+  OUT=$("$ROTA_BIN" --json version --drift) || vfail
   [ "$(echo "$OUT" | jget data.status)" = "match" ] || fail "match: expected status match: $OUT"
   [ "$(echo "$OUT" | jget data.drift)" = "false" ] || fail "match: expected drift false: $OUT"
   pass "version --drift reports match when stamped == installed"

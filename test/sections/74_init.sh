@@ -6,7 +6,7 @@ jfield() { python3 -c 'import json,sys; d=json.load(sys.stdin)["data"]; print(js
 
 # (a) clean dir: seeded, blocks written, AGENTS.md is the instructions file
 mkdir -p "$TMP_IN/fresh"
-OUT="$(hvj -C "$TMP_IN/fresh" init)"
+OUT="$(hvj -C "$TMP_IN/fresh" init)" || vfail
 for f in BACKLOG KNOWLEDGE DECISIONS MAP MILESTONES; do
   [ -f "$TMP_IN/fresh/.rota/$f.md" ] || fail "A9[a]: .rota/$f.md not seeded"
 done
@@ -22,14 +22,14 @@ grep -qx '@AGENTS.md' "$TMP_IN/fresh/CLAUDE.md" || fail "A9[a]: CLAUDE.md does n
 pass "A9[a]: rota init seeds .rota/ and writes the six blocks"
 
 # (b) a second run is a no-op
-OUT="$(hvj -C "$TMP_IN/fresh" init)"
+OUT="$(hvj -C "$TMP_IN/fresh" init)" || vfail
 [ "$(printf '%s' "$OUT" | jfield changed)" = "false" ] || fail "A9[b]: second run changed something"
 [ "$(printf '%s' "$OUT" | jfield created)" = "[]" ] || fail "A9[b]: second run created paths"
 pass "A9[b]: rota init is idempotent"
 
 # (c) --no-blocks seeds only
 mkdir -p "$TMP_IN/nb"
-OUT="$(hvj -C "$TMP_IN/nb" init --no-blocks)"
+OUT="$(hvj -C "$TMP_IN/nb" init --no-blocks)" || vfail
 [ "$(printf '%s' "$OUT" | jfield blocks)" = '"ABSENT"' ] || fail "A9[c]: blocks reported under --no-blocks"
 [ ! -e "$TMP_IN/nb/AGENTS.md" ] || fail "A9[c]: AGENTS.md written under --no-blocks"
 [ -f "$TMP_IN/nb/.rota/config.json" ] || fail "A9[c]: .rota/config.json not seeded"

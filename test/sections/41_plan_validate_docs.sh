@@ -160,7 +160,7 @@ created: 2026-05-20
   - Files: runlog/docs/NN-compliance.md
   - Verify: tests
 PLAN
-  OUT=$(hvj plan validate-docs M01-B08) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
+  OUT=$(hvj plan validate-docs M01-B08) || vfail
   [ "$(jget 'data.mismatches[0].path' <<<"$OUT")" = "runlog/docs/NN-compliance.md" ] || {
     echo "FAIL: umbrella-relative path not recognized: $OUT"; exit 1;
   }
@@ -190,7 +190,7 @@ created: 2026-05-20
   - Files: docs/x.md
   - Verify: build
 PLAN
-  OUT=$(hvj plan validate-docs M01-F09) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
+  OUT=$(hvj plan validate-docs M01-F09) || vfail
   [ "$(jget 'data.mismatches[0].targetRepo' <<<"$OUT")" = "runlog" ] || {
     echo "FAIL: should warn runlog (no docs/): $OUT"; exit 1;
   }
@@ -218,7 +218,7 @@ created: 2026-05-20
   - Files: docs/x.md
   - Verify: nope
 PLAN
-  OUT=$(hvj plan validate-docs M01-T01) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
+  OUT=$(hvj plan validate-docs M01-T01) || vfail
   FIELD=$(jget 'data.mismatches[0].issue' <<<"$OUT")
   grep -q "sub-repo 'ghost' is not registered" <<<"$FIELD" || {
     echo "FAIL: unregistered repo should be flagged: $OUT"; exit 1;

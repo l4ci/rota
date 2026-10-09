@@ -21,7 +21,7 @@ done
 wait
 
 HITS=$(hvj -C "$TMP_LCK" knowledge tier get \
-          --topic "Concurrency" --title "Lock rule" | jget data.hits)
+          --topic "Concurrency" --title "Lock rule" | jget data.hits) || vfail
 [ "$HITS" = "8" ] || fail "concurrent knowledge hit lost increments: expected hits=8, got $HITS"
 pass "8 concurrent knowledge hit calls record exactly 8 hits (no lost increments)"
 
@@ -33,7 +33,7 @@ for i in 1 2 3 4 5 6; do
 done
 wait
 
-QLEN=$(hvj -C "$TMP_LCK" knowledge contradiction list | jget data.items | python3 -c 'import json,sys;print(len(json.load(sys.stdin)))') || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
+QLEN=$(hvj -C "$TMP_LCK" knowledge contradiction list | jget data.items | python3 -c 'import json,sys;print(len(json.load(sys.stdin)))') || vfail
 [ "$QLEN" = "6" ] || fail "concurrent contradiction add lost entries: expected 6 pending, got $QLEN"
 pass "6 concurrent knowledge contradiction add calls keep all 6 entries"
 

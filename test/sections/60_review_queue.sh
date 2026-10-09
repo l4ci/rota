@@ -31,7 +31,7 @@ for prov in github gitlab; do
 
     # PR A via ship pr --items (base main); B and C base dev (host does not auto-close); D "Closes #40" must not link F4
     git checkout -q -b feat/a; git commit -q --allow-empty -m a
-    A="$(printf 'Summary' | hvj ship pr feat/a --title "PR a" --body-file - --items F1 2>/dev/null | jget data.number)"
+    A="$(printf 'Summary' | hvj ship pr feat/a --title "PR a" --body-file - --items F1 2>/dev/null | jget data.number)" || vfail
     git checkout -q main
     B="$(prnum "$(pr_open feat/b 'Resolves: #2' dev)")"
     git checkout -q main

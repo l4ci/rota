@@ -255,7 +255,7 @@ printf "You've reached your usage limit\n" > "$FX/limited.txt"
 check_map() {
   local fx="$1" status="$2" want="$3" got
   got="$( cd "$TMP_HD/repo" && ROTA_TEST_POLL_FIXTURE="$FX/$fx" ROTA_TEST_POLL_STATUS="$status" \
-          "$ROTA_BIN" --json worker poll w1 | jget 'data.slots[0].state' )"
+          "$ROTA_BIN" --json worker poll w1 | jget 'data.slots[0].state' )" || vfail
   [ "$got" = "$want" ] || fail "herdr $status + $fx: expected $want, got $got"
 }
 check_map plain.txt   working busy

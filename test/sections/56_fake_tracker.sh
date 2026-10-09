@@ -173,7 +173,7 @@ py() { printf '%s' "$1" | python3 -c "import json,sys; d=json.load(sys.stdin); s
   gh label create t >/dev/null
   gh issue create --title A --body b --label t >/dev/null
   : > "$TMP_FT/tc.log"
-  out="$(hvj tracker call --provider github -- issue list --json number </dev/null)"
+  out="$(hvj tracker call --provider github -- issue list --json number </dev/null)" || vfail
   py "$(echo "$out" | jget data.stdout)" "d==[{'number':1}]" || fail "tracker call over fake gh: $out"
   [ "$(cat "$TMP_FT/tc.log")" = "issue list --json number --limit 1000" ] || fail "tracker-call should inject --limit 1000 (log: $(cat "$TMP_FT/tc.log"))"
   pass "tracker call works against the fakes"

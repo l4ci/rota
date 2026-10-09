@@ -52,7 +52,7 @@ cat > .rota/BACKLOG.md <<'EOF'
 
 ## Completed
 EOF
-OUT=$(hvj backlog list) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
+OUT=$(hvj backlog list) || vfail
 echo "$OUT" | jget data.features[0].title | grep "Add v1.2 support" >/dev/null || fail "title with period was truncated: $OUT"
 pass "backlog keeps mid-title periods intact"
 
@@ -68,7 +68,7 @@ cat > .rota/BACKLOG.md <<'EOF'
 
 ## Completed
 EOF
-OUT=$(hvj backlog archive --days 5) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
+OUT=$(hvj backlog archive --days 5) || vfail
 [ "$(echo "$OUT" | jget data.moved)" = "0" ] || fail "expected moved 0 when nothing to archive, got: $OUT"
 [ "$(echo "$OUT" | jget data.changed)" = "false" ] || fail "nothing archived should report changed=false: $OUT"
 pass "backlog archive reports 0 when no items to move"
@@ -90,7 +90,7 @@ cat > .rota/BACKLOG.md <<EOF
 - ~~**[B01] Fix login crash.**~~ Done ${OLD_DATE} [\`${FAKE_HASH}\`]
 - Note: see issue [B05] which was Done 2024-01-01 by accident.
 EOF
-OUT=$(hvj backlog archive --days 1) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
+OUT=$(hvj backlog archive --days 1) || vfail
 [ "$(echo "$OUT" | jget data.moved)" = "1" ] || fail "expected 1 item archived, got: $OUT"
 [ "$(echo "$OUT" | jget data.changed)" = "true" ] || fail "archiving should report changed=true: $OUT"
 grep -q "Fix login crash" .rota/ARCHIVE.md || fail "canonical bullet not found in ARCHIVE.md"
@@ -120,7 +120,7 @@ echo ship1 > ship1.txt && git add ship1.txt && git commit -q -m "fix: badge inva
 echo ship2 > ship2.txt && git add ship2.txt && git commit -q -m "feat: overlay [F70]"
 git checkout -q main
 
-BODY=$(hvj ship body rota/ship-demo | jget data.body) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
+BODY=$(hvj ship body rota/ship-demo | jget data.body) || vfail
 grep -q "^## Summary" <<<"$BODY" || fail "ship body missing Summary section"
 grep -q "^## Items resolved" <<<"$BODY" || fail "ship body missing Items resolved section"
 grep -q "\[B70\] Ship demo bug" <<<"$BODY" || fail "ship body missing B70 title"
@@ -153,7 +153,7 @@ git checkout -q -b rota/ship-gh-closes
 echo g1 > g1.txt && git add g1.txt && git commit -q -m "fix: thing [B71]"
 echo g2 > g2.txt && git add g2.txt && git commit -q -m "feat: thing [F71]"
 git checkout -q main
-BODY=$(hvj ship body rota/ship-gh-closes | jget data.body) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
+BODY=$(hvj ship body rota/ship-gh-closes | jget data.body) || vfail
 grep -q "^Closes #42$" <<<"$BODY" || fail "ship body missing Closes #42 line: $BODY"
 GH_LINES=$(echo "$BODY" | grep -c "^Closes #" || true)
 [ "$GH_LINES" = "1" ] || fail "ship body expected 1 Closes line, got $GH_LINES: $BODY"
@@ -180,7 +180,7 @@ git add -A && git commit -q -m "seed gh-closes negative" || true
 git checkout -q -b rota/ship-gh-noclose
 echo g3 > g3.txt && git add g3.txt && git commit -q -m "fix: thing [B72]"
 git checkout -q main
-BODY=$(hvj ship body rota/ship-gh-noclose | jget data.body) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
+BODY=$(hvj ship body rota/ship-gh-noclose | jget data.body) || vfail
 if grep -q "^Closes #" <<<"$BODY"; then fail "ship body emitted Closes line with no GH refs: $BODY"; fi
 pass "ship body emits no Closes lines when no GH refs present"
 git checkout -q main
@@ -206,7 +206,7 @@ git checkout -q -b rota/ship-gh-dedup
 echo g4 > g4.txt && git add g4.txt && git commit -q -m "fix: thing one [B73]"
 echo g5 > g5.txt && git add g5.txt && git commit -q -m "fix: thing two [B73]"
 git checkout -q main
-BODY=$(hvj ship body rota/ship-gh-dedup | jget data.body) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
+BODY=$(hvj ship body rota/ship-gh-dedup | jget data.body) || vfail
 DEDUP_LINES=$(echo "$BODY" | grep -c "^Closes #99$" || true)
 [ "$DEDUP_LINES" = "1" ] || fail "ship body expected 1 Closes #99 line (dedup), got $DEDUP_LINES: $BODY"
 pass "ship body dedups Closes #N across multiple commits referencing same ID"
@@ -231,7 +231,7 @@ EOF
 git add -A && git commit -q -m "restore ship demo TODO" || true
 
 echo "review scope"
-OUT=$(hvj review scope rota/ship-demo) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
+OUT=$(hvj review scope rota/ship-demo) || vfail
 [ "$(echo "$OUT" | jget data.commitCount)" = "2" ] || fail "review scope commitCount != 2: $OUT"
 [ "$(echo "$OUT" | jget data.base)" = "main" ] || fail "review scope base != main: $OUT"
 [ "$(echo "$OUT" | jget data.referencedIds)" = '["F70","B70"]' ] || fail "review scope referencedIds: $OUT"
@@ -275,7 +275,7 @@ git add -A && git commit -q -m "seed related-link test" || true
 git checkout -q -b rota/scope-regression
 echo r > r.txt && git add r.txt && git commit -q -m "fix: badge [B70]"
 git checkout -q main
-OUT=$(hvj review scope rota/scope-regression) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
+OUT=$(hvj review scope rota/scope-regression) || vfail
 [ "$(echo "$OUT" | jget data.intents[0].title)" = "Ship demo bug" ] || fail "review scope picked wrong bullet for B70 (Related-link regression): $OUT"
 pass "review scope picks origin bullet, ignores Related-link references"
 git branch -D rota/scope-regression >/dev/null 2>&1 || true
@@ -305,7 +305,7 @@ git add -A && git commit -q -m "seed ship-body related-link test" || true
 git checkout -q -b rota/ship-body-regression
 echo r > r2.txt && git add r2.txt && git commit -q -m "fix: badge [B70]"
 git checkout -q main
-BODY=$(hvj ship body rota/ship-body-regression | jget data.body) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
+BODY=$(hvj ship body rota/ship-body-regression | jget data.body) || vfail
 grep -q "\[B70\] Ship demo bug" <<<"$BODY" || fail "ship body picked wrong bullet for B70 (Related-link regression): $BODY"
 pass "ship body picks origin bullet, ignores Related-link references"
 git checkout -q main
@@ -338,7 +338,7 @@ echo so1 > so1.txt && git add so1.txt && git commit -q -m "fix: badge invalidati
 echo so2 > so2.txt && git add so2.txt && git commit -q -m "feat: overlay [F70]"
 git checkout -q main
 
-BRIEF_ENV=$(hvj review brief rota/second-opinion-demo) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
+BRIEF_ENV=$(hvj review brief rota/second-opinion-demo) || vfail
 [ "$(echo "$BRIEF_ENV" | jget data.commitCount)" = "2" ] && [ "$(echo "$BRIEF_ENV" | jget data.base)" = "main" ] \
   || fail "review brief commitCount/base: $BRIEF_ENV"
 BRIEF=$(echo "$BRIEF_ENV" | jget data.brief)
@@ -381,8 +381,8 @@ git branch -D rota/second-opinion-empty >/dev/null 2>&1 || true
 
 # Schema parity — brief's commit count matches review scope's commitCount.
 # Catches silent drift if the scope schema changes without the brief noticing.
-SCOPE_COUNT=$(hvj review scope rota/second-opinion-demo | jget data.commitCount) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
-BRIEF_COMMITS=$(hvj review brief rota/second-opinion-demo | jget data.brief | grep -cE '^- `[a-f0-9]+` ') || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
+SCOPE_COUNT=$(hvj review scope rota/second-opinion-demo | jget data.commitCount) || vfail
+BRIEF_COMMITS=$(hvj review brief rota/second-opinion-demo | jget data.brief | grep -cE '^- `[a-f0-9]+` ') || vfail
 [ "$SCOPE_COUNT" = "$BRIEF_COMMITS" ] || fail "schema drift: review scope reports $SCOPE_COUNT commits but review brief lists $BRIEF_COMMITS"
 pass "review brief commit count matches review scope (schema parity)"
 

@@ -83,7 +83,10 @@ func (e Env) Park(ctx context.Context, root, name, verb string) (Parked, error) 
 	}
 	base := firstNonEmpty(s.Base(), e.Base)
 	parkBr := worker.ParkBranch(name)
-	cur, _, _ := e.gitOut(ctx, wt, "symbolic-ref", "--short", "-q", "HEAD")
+	cur, curErr, curCode := e.gitOut(ctx, wt, "symbolic-ref", "--short", "-q", "HEAD")
+	if curCode > 1 { // 1 is a detached HEAD; anything else is a read that failed, so the slot is not freed on a guess
+		return p, unavailable("could not read HEAD of slot %s (git exit %d): %s", name, curCode, curErr)
+	}
 	branch := firstNonEmpty(s.Branch(), cur)
 	p.Branch = branch
 	headOf := func(ref string) string {

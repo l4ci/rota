@@ -11,7 +11,7 @@ TMP_PC="$(mktemp -d "$TMP/plancheck.XXXXXX")"
   RC() { local rc=0; "$@" >/dev/null 2>&1 || rc=$?; echo "$rc"; }
 
   printf 'Why.\n\n## Acceptance\n\n- [ ] it parses\n- [ ] it prints\n' > "$P/body.md"
-  ID="$(hvj item create --kind features --title "Export" --tag Minor --body-file "$P/body.md" | jget data.id)"
+  ID="$(hvj item create --kind features --title "Export" --tag Minor --body-file "$P/body.md" | jget data.id)" || vfail
   KEY="#$ID"
   hvj plan add "$KEY" --title "Export plan" > /dev/null || fail "plan add"
   PUT() { printf '## Goal\n\ng\n\n## Tasks\n\n%s\n' "$1" > "$P/plan.md"; hvj plan put "$KEY" --body-file "$P/plan.md" > /dev/null || fail "plan put"; }
@@ -55,7 +55,7 @@ TMP_PC="$(mktemp -d "$TMP/plancheck.XXXXXX")"
 
   PUT '- **T1** — legacy
   - Verify: go test ./parse'
-  SHOWN="$(hvj plan show "$KEY")"
+  SHOWN="$(hvj plan show "$KEY")" || vfail
   if grep -q "Serves:" <<<"$SHOWN"; then fail "legacy plan should have no Serves line"; fi
   eq "legacy plan reads as orphans" "1 T1" "$(RC hvj plan check "$KEY") $(jget data.orphans[0] <<<"$(hvj plan check "$KEY" 2>/dev/null)")"
   pass "legacy plan (no Serves: line) is detectable, so /rota-work skips the check"

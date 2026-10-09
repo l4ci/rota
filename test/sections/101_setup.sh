@@ -26,9 +26,9 @@ mkdir -p "$SU/set"
 RC=0; su "$SU/set" --yes --set work.isolation=worktree --set work.mergeStrategy=pr >/dev/null 2>&1 || RC=$?
 [ $RC -eq 0 ] || fail "setup --yes --set should exit 0, got $RC"
 [ -d "$SU/set/.rota" ] || fail "setup --yes did not create .rota/"
-GOT="$(cd "$SU/set" && "$ROTA_BIN" config show work.isolation 2>&1)"
+GOT="$(cd "$SU/set" && "$ROTA_BIN" config show work.isolation 2>&1)" || vfail
 case "$GOT" in *worktree*) ;; *) fail "work.isolation not set to worktree: $GOT" ;; esac
-GOT="$(cd "$SU/set" && "$ROTA_BIN" config show work.mergeStrategy 2>&1)"
+GOT="$(cd "$SU/set" && "$ROTA_BIN" config show work.mergeStrategy 2>&1)" || vfail
 case "$GOT" in *pr*) ;; *) fail "work.mergeStrategy not set to pr: $GOT" ;; esac
 
 echo "  second run on an initialized project exits 4"

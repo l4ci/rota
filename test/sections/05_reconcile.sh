@@ -23,7 +23,7 @@ EOF
   git config user.email t@t && git config user.name t
   git checkout -q -b main 2>/dev/null || git branch -m main
   git commit -q --allow-empty -m "fix: do thing [B07]"
-  OUT=$(hvj backlog drift) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
+  OUT=$(hvj backlog drift) || vfail
   [ "$(echo "$OUT" | drift_ids)" = "B07" ] || fail "drift missing B07: $OUT"
   [ "$(echo "$OUT" | jget 'data.drift[0].type')" = "B" ] || fail "drift entry lost its type: $OUT"
   pass "backlog drift detects shipped-but-open ID"
@@ -41,7 +41,7 @@ EOF
 ## Completed
 - ~~**[B07] [P1] Pretend bug.**~~ Done 2026-05-07 [`abc1234`]
 EOF
-  OUT2=$(hvj backlog drift) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
+  OUT2=$(hvj backlog drift) || vfail
   [ -z "$(echo "$OUT2" | drift_ids)" ] || fail "drift should not flag completed B07: $OUT2"
   pass "backlog drift ignores completed IDs"
 )
@@ -76,14 +76,14 @@ SA_TMP="$(mktemp -d)"
 
 ## Completed
 EOF
-  OUT=$(hvj backlog drift) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
+  OUT=$(hvj backlog drift) || vfail
   [ -z "$(echo "$OUT" | drift_ids)" ] || fail "drift should NOT flag pre-anchor commit for new [B07]: $OUT"
   pass "backlog drift skips commits older than Since: anchor"
 
   # Scenario B: a NEW commit referencing the same ID, AFTER the anchor,
   # MUST still trigger drift (the anchor is a floor, not a mute).
   git commit -q --allow-empty -m "feat: real shipment [B07]"
-  OUT_B=$(hvj backlog drift) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
+  OUT_B=$(hvj backlog drift) || vfail
   [ "$(echo "$OUT_B" | drift_ids)" = "B07" ] || fail "drift missed post-anchor commit: $OUT_B"
   pass "backlog drift detects commits newer than Since: anchor"
 
@@ -100,7 +100,7 @@ EOF
 
 ## Completed
 EOF
-  OUT_C=$(hvj backlog drift) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
+  OUT_C=$(hvj backlog drift) || vfail
   [ "$(echo "$OUT_C" | drift_ids)" = "B07" ] || fail "legacy (no Since) should still drift: $OUT_C"
   pass "backlog drift legacy entries keep full-log behavior"
 
@@ -118,7 +118,7 @@ EOF
 EOF
   HEAD_AT_CAP="$(git rev-parse --short HEAD)"
   echo '{"bugs":7,"features":0,"tasks":0,"milestones":0}' > .rota/counters.json
-  OUT_D=$(hvj item create --kind bugs --title "Auto-stamp." --desc "Body." --tag P2) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
+  OUT_D=$(hvj item create --kind bugs --title "Auto-stamp." --desc "Body." --tag P2) || vfail
   [ "$(echo "$OUT_D" | jget data.id)" = "B08" ] || fail "item create minted the wrong ID: $OUT_D"
   grep -q "Since: $HEAD_AT_CAP" .rota/BACKLOG.md || { cat .rota/BACKLOG.md; fail "item create did not auto-stamp Since"; }
   pass "item create auto-stamps Since: <HEAD> on fresh bullets"
@@ -138,7 +138,7 @@ EOF
 ## Completed
 - ~~**[B07] [P1] Completed item.**~~ Done 2026-05-07 [`abc1234`]
 EOF
-  OUT_E=$(hvj backlog backfill) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
+  OUT_E=$(hvj backlog backfill) || vfail
   [ "$(echo "$OUT_E" | jget data.stamped)" = "1" ] || fail "backfill should report 1 stamped, got: $OUT_E"
   [ "$(echo "$OUT_E" | jget data.changed)" = "true" ] || fail "backfill should report changed: $OUT_E"
   HEAD_BF="$(git rev-parse --short HEAD)"
@@ -146,7 +146,7 @@ EOF
   # Completed items must NOT be touched
   grep -q "Since:.*Completed item" .rota/BACKLOG.md && fail "backfill touched ## Completed entry"
   pass "backlog backfill stamps open bullets lacking Since:"
-  OUT_E2=$(hvj backlog backfill) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
+  OUT_E2=$(hvj backlog backfill) || vfail
   [ "$(echo "$OUT_E2" | jget data.stamped)" = "0" ] || fail "backfill not idempotent — re-ran with: $OUT_E2"
   [ "$(echo "$OUT_E2" | jget data.changed)" = "false" ] || fail "idempotent backfill should report changed false: $OUT_E2"
   pass "backlog backfill is idempotent"
@@ -191,7 +191,7 @@ EOF
   echo "def widget_transcribe_pipeline(): pass" > pipeline.py
   git add -A && git commit -q -m "refactor: rework pipeline internals"
 
-  OUT=$(hvj backlog drift) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
+  OUT=$(hvj backlog drift) || vfail
 
   # Commit-subject drift must be empty — no [B20]/[B21] in any subject.
   DRIFT_IDS=$(echo "$OUT" | drift_ids)
@@ -226,7 +226,7 @@ cat > .rota/KNOWLEDGE.md <<'EOF'
 ## Networking
 - net bullet
 EOF
-OUT=$(hvj knowledge query "Testing" "Networking" | jget data.text) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
+OUT=$(hvj knowledge query "Testing" "Networking" | jget data.text) || vfail
 grep -q "testing bullet" <<<"$OUT" || fail "testing topic missing from query"
 grep -q "net bullet" <<<"$OUT" || fail "networking topic missing from query"
 grep -q "arch bullet" <<<"$OUT" && fail "architecture topic leaked into query"
@@ -250,7 +250,7 @@ trap 'rm -rf "$KS_TMP"' EXIT
 EOF
   # Append 30 bullets to ## Big so it crosses the threshold.
   for i in $(seq 1 30); do echo "- bullet $i" >> .rota/KNOWLEDGE.md; done
-  OUT=$(hvj knowledge stats) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
+  OUT=$(hvj knowledge stats) || vfail
   [ "$(echo "$OUT" | python3 -c "import json,sys; print(' '.join(t['name'] for t in json.load(sys.stdin)['data']['topics']))")" = "Tiny Big" ] \
     || fail "stats should list Tiny and Big: $OUT"
   BIG_BULLETS=$(echo "$OUT" | python3 -c "import json,sys; d=json.load(sys.stdin)['data']; print(next(t['bullets'] for t in d['topics'] if t['name']=='Big'))")
@@ -268,7 +268,7 @@ trap 'rm -rf "$KS2_TMP"' EXIT
 (
   cd "$KS2_TMP"
   mkdir -p .rota
-  OUT=$(hvj knowledge stats) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
+  OUT=$(hvj knowledge stats) || vfail
   [ "$(echo "$OUT" | jget data.topics)" = "[]" ] || fail "missing-file should yield empty: $OUT"
   pass "knowledge stats silent-empty on missing KNOWLEDGE.md"
 )
@@ -301,7 +301,7 @@ Only TLS 1.3+.
 **Forbids.** TLS 1.2 fallback.
 **Permits.** Cert pinning.
 EOF
-OUT_D=$(hvj decisions query "Testing" "Networking" | jget data.text) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
+OUT_D=$(hvj decisions query "Testing" "Networking" | jget data.text) || vfail
 grep -q "No mocked DB" <<<"$OUT_D" || fail "Testing decision missing from query"
 grep -q "Strict TLS" <<<"$OUT_D" || fail "Networking decision missing from query"
 grep -q "No background queues" <<<"$OUT_D" && fail "Architecture decision leaked into query"
@@ -310,7 +310,7 @@ pass "decisions query returns only requested topics"
 # decisions stats lists the topics with bullet and byte counts, plain and --json
 [ "$(hvj decisions stats | python3 -c "import json,sys; print(' '.join(t['name'] for t in json.load(sys.stdin)['data']['topics']))")" = "Architecture Testing Networking" ] \
   || fail "decisions stats should list the three topics"
-TXT_DS=$("$ROTA_BIN" decisions stats) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
+TXT_DS=$("$ROTA_BIN" decisions stats) || vfail
 case "$TXT_DS" in "Architecture: "*" bullets, "*" bytes"*) ;; *) fail "decisions stats text shape: $TXT_DS" ;; esac
 [ "$(echo "$TXT_DS" | wc -l)" -eq 3 ] || fail "decisions stats text should be one line per topic: $TXT_DS"
 rc=0; "$ROTA_BIN" decisions stats --repo web >/dev/null 2>&1 || rc=$?
@@ -325,7 +325,7 @@ pass "decisions query preserves forbids/permits structure"
 # Empty/missing file is silent (exit 0, no output)
 rm -f .rota/DECISIONS.md
 [ "$(hvj decisions stats | jget data.topics)" = "[]" ] || fail "decisions stats should be empty when DECISIONS.md missing"
-OUT_EMPTY=$(hvj decisions query "Anything") || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
+OUT_EMPTY=$(hvj decisions query "Anything") || vfail
 [ "$(echo "$OUT_EMPTY" | jget data.text)" = "" ] || fail "decisions query should be silent when DECISIONS.md missing: $OUT_EMPTY"
 pass "decisions query silent when file missing"
 

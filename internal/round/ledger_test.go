@@ -2,6 +2,8 @@ package round
 
 import (
 	"context"
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/l4ci/rota/internal/jsonx"
@@ -207,5 +209,24 @@ func TestReportLimitedAppendsLedger(t *testing.T) {
 	e := lastOf(ledgerKinds(t, f.root), ledger.KindLimited)
 	if e == nil || e.Slot != "ben" || e.Issue != "12" || e.Harness != "claude" {
 		t.Fatalf("limited entry = %+v", e)
+	}
+}
+
+// The slot state is written, but the ledger row is not: report exits non-zero
+// and says which half landed (#579).
+func TestReportFailsWhenTheLedgerRowIsNotWritten(t *testing.T) {
+	f := soloAssign(t)
+	if _, err := f.assign("12", "ben", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(ledger.Path(f.root)); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(ledger.Path(f.root), 0o755); err != nil { // a directory cannot be appended to
+		t.Fatal(err)
+	}
+	_, err := f.env.ReportSlot(bg, f.root, ReportOpts{Slot: "ben", State: "done", PR: "https://github.com/o/r/pull/9"})
+	if err == nil || !strings.Contains(err.Error(), "ledger row was not written") {
+		t.Fatalf("want a ledger failure, got %v", err)
 	}
 }

@@ -116,7 +116,9 @@ func (e Env) ReportSlot(ctx context.Context, root string, o ReportOpts) (Reporte
 		if kind == ledger.KindDone {
 			held.Detail = ledger.Detail("headroom", worker.LedgerHeadroom(ctx, e.Worker.Accounts, root, held.Harness, held.Account))
 		}
-		worker.LedgerNote(root, held)
+		if err := worker.LedgerAppendErr(root, held); err != nil {
+			return res, fmt.Errorf("slot %s is now %s, but the round ledger row was not written: %w", o.Slot, state, err)
+		}
 	}
 	return res, nil
 }
