@@ -290,3 +290,23 @@ func TestBlocking(t *testing.T) {
 		}
 	}
 }
+
+func TestAtHead(t *testing.T) {
+	full := "bbbbbbb0123456789012345678901234567890a"
+	for _, c := range []struct {
+		name, rec, head string
+		want            bool
+	}{
+		{"short record, full head", "bbbbbbb", full, true},
+		{"full record, short head", full, "bbbbbbb", true},
+		{"equal", "bbbbbbb", "bbbbbbb", true},
+		{"other commit", "aaaaaaa", full, false},
+		{"empty record sha", "", full, false},
+		{"empty head", "bbbbbbb", "", false},
+		{"both empty", "", "", false},
+	} {
+		if got := AtHead(Record{Sha: c.rec}, c.head); got != c.want {
+			t.Errorf("%s: AtHead(%q, %q) = %v, want %v", c.name, c.rec, c.head, got, c.want)
+		}
+	}
+}
