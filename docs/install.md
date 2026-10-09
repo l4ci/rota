@@ -1,6 +1,6 @@
 # Install
 
-Available from 0.9.0. `rota` is a single binary that carries the skills; there is no plugin to enable. Install the binary (Homebrew, the install script, or a release download), install the skills, then run `rota init` in your project.
+Available from 0.9.0. `rota` is a single binary that carries the skills. Install the binary (Homebrew, the install script, or a release download), install the skills, then run `rota init` in your project. Claude Code users can instead start from the [plugin marketplace](#-plugin-marketplace), which brings the skills and installs the binary for them.
 
 ## 📦 The binary
 
@@ -74,6 +74,27 @@ If both exist, Claude Code uses the user copy of a skill over the project copy w
 
 User scope is per Claude Code config directory: rota writes to `$CLAUDE_CONFIG_DIR/skills` when that is set, else `~/.claude/skills`. Inside a rota project, user scope also covers every `work.accounts` `configDir` (install, update, uninstall and status each print one line per root). A configured dir that does not exist is reported and skipped, not created. Pass `--current-account` to touch only the current dir. Project scope is unchanged: one copy serves every account.
 
+## 🔌 Plugin marketplace
+
+The third install path works in Claude Code only. In a Claude Code session:
+
+```
+/plugin marketplace add l4ci/rota
+/plugin install rota@rota
+```
+
+On Claude Code 2.1.275 or later, `/plugin install rota --marketplace l4ci/rota` does both in one step.
+
+The marketplace serves the latest release, not `main`: the plugin is fetched from the release tag, so its skills are the ones that release's binary carries. The first release that ships the plugin is the one after 0.14.0.
+
+Then run `/rota:rota-install`. It installs the `rota` binary at the plugin's version and runs `rota doctor`. It tries Homebrew first when `brew` is on your `PATH`, and uses the install script when there is no `brew` or the tap serves another version. It does not run `rota skills install`: the plugin already carries the skills. Run `rota init` in your project as usual.
+
+Plugin skills are namespaced: `/rota:rota-work`, `/rota:rota-ship` and so on. When the binary is missing or its version differs from the plugin's, a new session opens with one line pointing at `/rota:rota-install`. A `dev` build is left alone.
+
+`rota doctor` and `rota skills status` count the plugin's copy as a skill root. It matches when its files are the ones the binary carries, so a plugin install with the right binary reports healthy. On a mismatch, either run `/rota:rota-install` (binary to the plugin's version) or `claude plugin update rota@rota` (plugin to the binary's).
+
+Pick one way per machine. A plugin plus a `rota skills install` user copy shows every skill twice, once as `/rota-work` and once as `/rota:rota-work`; `rota skills uninstall` removes the second. Codex has no plugin: it keeps `rota skills install`.
+
 ## Upgrading
 
 ```bash
@@ -85,7 +106,7 @@ rota update
 - Homebrew: `brew update && brew upgrade rota && rota skills update`
 - install script: the `curl` line above, then `rota skills update`
 
-`rota skills update` refreshes every skill root that has a manifest. In a project, `rota version --drift` compares the version stamped in `.rota/` with the binary.
+`rota skills update` refreshes every skill root that has a manifest. A plugin install skips it: `claude plugin update rota@rota`, then `/rota:rota-install` for the binary. In a project, `rota version --drift` compares the version stamped in `.rota/` with the binary.
 
 ## Uninstalling
 

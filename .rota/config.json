@@ -81,5 +81,8 @@
       "kit",
       "sam"
     ]
+  },
+  "release": {
+    "versionFile": "VERSION"
   }
 }

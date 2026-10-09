@@ -89,7 +89,7 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 			break
 		}
 	}
-	in.Skills = doctorSkills(in.Home, root)
+	in.Skills = doctorSkills(d.Getenv, in.Home, root)
 	if root == "" {
 		doctorDiskInput(ctx, &in, nil, "", d.Git, d.Now(), d.DoctorDisk)
 		return in
@@ -141,20 +141,24 @@ func staleBinary(ctx context.Context, run git.Runner, dir string) (stalebin.Find
 
 // doctorSkills reads the skill roots in both scopes; nil when the embedded set
 // or the roots cannot be resolved (the check then skips).
-func doctorSkills(home, root string) *skills.Report {
+func doctorSkills(getenv func(string) string, home, root string) *skills.Report {
 	set, err := skills.Embedded()
 	if err != nil {
 		return nil
 	}
 	dirs, _ := skillsClaudeDirs(home, root)
-	roots, err := skills.RootsFor("", "all", home, dirs, gitToplevel())
+	top := gitToplevel()
+	roots, err := skills.RootsFor("", "all", home, dirs, top)
 	if err != nil {
 		return nil
 	}
+	pluginRoots, pluginErrs := skillsPluginRoots(getenv, dirs, "", "all", top)
+	roots = append(roots, pluginRoots...)
 	rep, err := set.Status(roots, version.Get().Version)
 	if err != nil {
 		return nil
 	}
+	rep.Warnings = errStrings(pluginErrs)
 	return &rep
 }
 
