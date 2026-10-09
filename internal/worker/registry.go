@@ -434,6 +434,9 @@ type Env struct {
 	// Accounts reads the usage meters; poll and wait use it to record the
 	// account's headroom when a pane reports done. Nil records none.
 	Accounts *Accounts
+	// GateInput loads what the gate and the train verify with: config, verify
+	// and e2e commands, test ledger. Defaults to reading root's .rota.
+	GateInput func(root string) (gateInput, error)
 }
 
 func (e Env) context() context.Context {
@@ -475,6 +478,9 @@ func (e Env) withDefaults() Env {
 	}
 	if e.LookPath == nil {
 		e.LookPath = exec.LookPath
+	}
+	if e.GateInput == nil {
+		e.GateInput = loadGateInput
 	}
 	return e
 }
