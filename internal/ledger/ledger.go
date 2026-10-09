@@ -34,6 +34,8 @@ const (
 	KindGate     = "gate"
 	KindMerge    = "merge"
 	KindLimited  = "limited"
+	// KindAdopt records `rota worker adopt`: detail.branch is the branch taken over.
+	KindAdopt = "adopt"
 )
 
 // Entry is one ledger line. Round is 0 when no round was running (solo mode

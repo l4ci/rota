@@ -1122,3 +1122,14 @@ func TestTransferRefusesAnExternalSlot(t *testing.T) {
 		t.Error("a refusal changes nothing")
 	}
 }
+
+func TestParkRefusesAnExternalSlot(t *testing.T) {
+	f := newMoveFx(t)
+	rawSlot(f.root, "ben", func(s *jsonx.Object) { s.Set("kind", "external") })
+	branch := f.slot("ben").Branch()
+	_, err := f.env.Park(bg, f.root, "ben", "return")
+	wantBlocked(t, err, "external")
+	if got := gittest.Run(t, f.wt("ben"), "symbolic-ref", "--short", "HEAD"); got != branch {
+		t.Errorf("worktree moved to %s", got)
+	}
+}
