@@ -1,5 +1,48 @@
 # Changelog
 
+## v0.15.0 — 2026-10-09
+
+rota now installs as a Claude Code plugin, rounds keep a ledger you can summarise, and review depth and state writes are stricter.
+
+### New
+
+- **Claude Code plugin.** `/plugin marketplace add l4ci/rota`, then `/plugin install rota@rota`. The plugin serves this release's skills and adds `/rota:rota-install`, which installs the matching binary (Homebrew, else the install script) and runs `rota doctor`. A session-start line points at it when the binary is missing or the wrong version. `rota doctor` and `rota skills status` count the plugin cache as a skill root. (#602)
+- **Round ledger.** Every assign, done, bounce, gate and merge goes to `.rota/ledger.jsonl`; `rota round summary` (also printed by `wind-down`) shows wall time, bounces, gate outcome and quota share per issue, slot and account. (#574, #613)
+- **Review depth policy.** `ship.review` takes `full`, `light`, `none` or a policy by diff size and labels; `rota review depth` shows the result. `rota worker gate` refuses a branch without the verdicts its depth needs, recorded at the current head. (#581, #642, #662)
+- **More round tooling:**
+  - worker-side PR review loop: `rota round review-relay` (#577, #611)
+  - `rota worker adopt` for worktrees another tool started (#580, #617)
+  - scope overlap on declared `## Touches`, not only files (#575)
+  - conflict-minimising merge order in trains (#583)
+  - quota-aware slot cap and Codex limit detection (#578)
+  - per-slot port ranges and a doctor `ports` check (#576)
+  - the orchestrator's handoff note surfaces on `round start` (#621)
+- Partial topic matching and topic listing for `rota knowledge` and `rota decisions`. (#582)
+
+### Fixes
+
+- **State writes fail loud.** Registry writes are re-read and verified. A corrupt `workers.json` is refused instead of reset. `rota reap` refuses when the registry cannot be read, and `reconcile --apply` skips repairs whose host or forge read failed. `assign`, `transfer` and `report` exit non-zero when the ledger row is not written. (#579)
+- `install.sh` no longer stops when `minisign` is missing: it verifies the sha256 and warns; `ROTA_STRICT=1` keeps the old fail-closed behaviour, with tighter parsing. (#599, #612)
+- `rota worker gate <PR>` gates the PR's own branch after the slot has moved on. (#648)
+- Process liveness handles zombies, and the herdr pane id is resolved in one place. (#593, #594)
+- The no-verify refusal (empty `test.full` and `test.e2e`) uses one rule in the gate, the train and doctor. (#590)
+
+### Docs
+
+- The README and install page lead with the single-agent path and Homebrew. (#600)
+- rota skills are listed for Codex, skills.sh, the Hermes hub and `llms.txt`. (#605)
+- Round 11 and 12 behaviour is documented; contract docs re-stamped. (#671)
+
+### Internal
+
+- Env and Deps seams for the gate, train, accounts and CLI env reads (#591, #652, #653, #654). One owner each for the park branch name and the first-line helpers (#651, #596). Terminal escape stripping was rewritten (#592).
+- The merge gate now runs `gofmt`, and a test that only passed with a developer's Claude config was fixed. (#672)
+
+## Stats
+196 commits, 465 files changed, +16776 −1839 lines
+
+**Full changelog:** https://github.com/l4ci/rota/compare/v0.14.0...v0.15.0
+
 ## v0.14.0 — 2026-10-08
 
 Interactive terminal screens behind `--ui`, a faster `round status`, and a merge gate that checks the merged code before it merges.
