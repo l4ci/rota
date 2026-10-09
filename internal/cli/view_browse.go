@@ -7,7 +7,6 @@ import (
 	"sync"
 
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/tui"
 )
 
@@ -209,14 +208,7 @@ func runVerbText(c *Ctx, repoScoped bool, args ...string) (string, error) {
 	}
 	var out, errb bytes.Buffer
 	if code := run(Tree(), c.deps(), args, strings.NewReader(""), &out, &errb); code != ExitOK {
-		msg := strings.TrimSpace(errb.String())
-		if msg == "" {
-			msg = strings.TrimSpace(out.String())
-		}
-		if msg == "" {
-			msg = "failed"
-		}
-		return "", errors.New(strutil.FirstLine(msg))
+		return "", errors.New(firstText("failed", errb.String(), out.String()))
 	}
 	return strings.TrimSuffix(out.String(), "\n"), nil
 }
