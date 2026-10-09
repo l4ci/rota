@@ -20,7 +20,7 @@
     "promoteThreshold": 3
   },
   "ship": {
-    "review": true,
+    "review": "light",
     "secondOpinion": false,
     "secondOpinionRunner": "subagent",
     "qa": false
