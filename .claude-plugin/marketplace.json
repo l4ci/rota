@@ -1,0 +1,14 @@
+{
+  "name": "rota",
+  "description": "rota, the backlog and parallel-round toolkit, as a Claude Code plugin.",
+  "owner": {
+    "name": "Volker Otto"
+  },
+  "plugins": [
+    {
+      "name": "rota",
+      "source": "./",
+      "description": "Backlog, planning and parallel-round skills for Claude Code; /rota:rota-install fetches the matching rota binary."
+    }
+  ]
+}
