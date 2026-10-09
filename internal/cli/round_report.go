@@ -3,10 +3,10 @@ package cli
 import (
 	"flag"
 	"fmt"
-	"github.com/l4ci/rota/internal/worker"
 
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/round"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 // The C8 verb `rota round report`: a solo round's stand-in for the pane poll
