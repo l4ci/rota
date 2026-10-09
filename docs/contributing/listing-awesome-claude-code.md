@@ -21,7 +21,7 @@ Form read on 2026-10-09: `hesreallyhim/awesome-claude-code`, `.github/ISSUE_TEMP
 | Display Name | rota |
 | Category | Agent Orchestration |
 | Link | https://github.com/l4ci/rota |
-| Author Name | l4ci |
+| Author Name | Volker Otto |
 | Author Link | https://github.com/l4ci |
 | Description | see below |
 
