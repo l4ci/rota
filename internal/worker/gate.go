@@ -748,7 +748,14 @@ func (g *gate) stepReviewDepth() (bool, error) {
 	if g.o.Recorded == nil {
 		return false, nil
 	}
-	head, _ := g.git(g.root, "rev-parse", g.headRef)
+	// stepPRMatches resolved the head when the slot has a remote; otherwise resolve it here
+	head := g.verified
+	if head == "" {
+		var code int
+		if head, code = g.git(g.root, "rev-parse", g.headRef); code != 0 || strings.TrimSpace(head) == "" {
+			return g.broke(fmt.Sprintf("git rev-parse %s failed (exit %d); cannot tell whether the review verdicts are at head", g.headRef, code))
+		}
+	}
 	have := g.o.Recorded(g.branch, strings.TrimSpace(head))
 	var missing []string
 	for _, k := range reviewKinds(depth) {

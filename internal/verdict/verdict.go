@@ -414,6 +414,14 @@ func Latest(list []Record, kind string) (Record, bool) {
 	return Record{}, false
 }
 
+// AtHead reports whether rec was recorded at head. Records hold a short sha and
+// head may be short or full, so either may be the prefix of the other. A record
+// with no sha, or an unknown head, is never at head.
+func AtHead(rec Record, head string) bool {
+	return rec.Sha != "" && head != "" &&
+		(strings.HasPrefix(head, rec.Sha) || strings.HasPrefix(rec.Sha, head))
+}
+
 // EffectiveReview is a branch's review verdict: the latest review-quality
 // record's combined verdict, unless a review-spec record is newer (a
 // spec-only review, or a spec FAIL that skipped Stage 2). The record
