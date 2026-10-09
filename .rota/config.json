@@ -69,5 +69,17 @@
     "e2e": [
       "bash test/e2e/run.sh"
     ]
+  },
+  "round": {
+    "sharedPaths": [
+      "docs/contributing/market-review-2026-10.md"
+    ],
+    "roster": [
+      "ben",
+      "dana",
+      "nia",
+      "kit",
+      "sam"
+    ]
   }
 }

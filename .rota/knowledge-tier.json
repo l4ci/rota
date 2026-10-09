@@ -298,13 +298,13 @@
     },
     "Build & Tooling: Smoke testing::Behavior-changing tasks must sweep smoke sections asserting the old behavior": {
       "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-05-19"
+      "hits": 2,
+      "lastSeen": "2026-10-08"
     },
     "Build & Tooling: Smoke testing::Inverted grep assertion (grep && fail) aborts the section under set -e": {
       "tier": "provisional",
-      "hits": 1,
-      "lastSeen": "2026-10-01"
+      "hits": 2,
+      "lastSeen": "2026-10-08"
     },
     "Architecture: Helper conventions & invariants::Optional-value flags use `${PARAM:?$USAGE}` to reject bare trailing flag values": {
       "tier": "deprecated",
@@ -393,8 +393,8 @@
     },
     "Rounds: Orchestration::Record maintainer answers by their real channel, never as a relay": {
       "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-05"
+      "hits": 1,
+      "lastSeen": "2026-10-08"
     },
     "Rounds: Orchestration::Workers often skip the ROTA-DONE sentinel": {
       "tier": "provisional",
@@ -403,8 +403,8 @@
     },
     "Rounds: Orchestration::Rebuild the installed rota after merging round-verb fixes": {
       "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-05"
+      "hits": 1,
+      "lastSeen": "2026-10-08"
     },
     "Rounds: Orchestration::gh pr edit fails silently on this repo": {
       "tier": "provisional",
@@ -443,8 +443,8 @@
     },
     "Build & Tooling: Smoke testing::A verb captured in $(...) aborts the section silently when it exits non-zero": {
       "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-07"
+      "hits": 2,
+      "lastSeen": "2026-10-08"
     },
     "Architecture: Helper conventions & invariants::A per-invocation cache must reset per pass in long-running verbs": {
       "tier": "provisional",
@@ -453,7 +453,7 @@
     },
     "Rounds: Orchestration::Cite a transfer brief as a transfer note, not a relay": {
       "tier": "provisional",
-      "hits": 0,
+      "hits": 1,
       "lastSeen": "2026-10-08"
     },
     "Architecture: Helper conventions & invariants::Palette entries name the verb that registers the View": {
