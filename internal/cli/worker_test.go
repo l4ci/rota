@@ -313,14 +313,13 @@ func TestWorkerPollVerb(t *testing.T) {
 
 	fx := filepath.Join(t.TempDir(), "pane.txt")
 	os.WriteFile(fx, []byte("ROTA-BLOCKED w1: which?\n"), 0o644)
-	t.Setenv("ROTA_TEST_POLL_FIXTURE", fx)
-	t.Setenv("ROTA_TEST_POLL_STATUS", "working")
+	deps.PollFixture, deps.PollStatus = fx, "working"
 	code, out, _ = rotaInWith(t, deps, dir, "worker", "poll", "--json")
 	rows = data(t, out)["slots"].([]any)
 	if code != 0 || rows[0].(map[string]any)["state"] != "blocked" || rows[0].(map[string]any)["name"] != "fixture" {
 		t.Errorf("fixture mode: %d %v", code, rows)
 	}
-	t.Setenv("ROTA_TEST_POLL_FIXTURE", "/no/such")
+	deps.PollFixture = "/no/such"
 	if code, _, _ := rotaInWith(t, deps, dir, "worker", "poll"); code != 2 {
 		t.Errorf("missing fixture: %d", code)
 	}

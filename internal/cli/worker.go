@@ -513,10 +513,10 @@ func workerPoll(fs *flag.FlagSet) RunFunc {
 		}
 		var res worker.PollResult
 		var err error
-		// ROTA_TEST_POLL_FIXTURE classifies a file as a static pane: no host, no
-		// registry writes. Test hooks, not part of the CLI.
-		if fx := os.Getenv("ROTA_TEST_POLL_FIXTURE"); fx != "" {
-			res, err = worker.PollFixture(fx, slot, os.Getenv("ROTA_TEST_POLL_STATUS"), *lines)
+		// Deps.PollFixture classifies a file as a static pane: no host, no
+		// registry writes. A test hook, not part of the CLI.
+		if fx := c.deps().PollFixture; fx != "" {
+			res, err = worker.PollFixture(fx, slot, c.deps().PollStatus, *lines)
 		} else {
 			var root string
 			if root, err = c.Root(); err != nil {

@@ -44,10 +44,10 @@ type Env struct {
 	Latest func() string
 }
 
-// DefaultEnv is the real machine. Latest reads ROTA_TEST_LATEST_VERSION first
-// (no network) and otherwise runs `gh api repos/<repo>/releases/latest`, which
-// only reads.
-func DefaultEnv(current string) Env {
+// DefaultEnv is the real machine. Latest reads ROTA_TEST_LATEST_VERSION through
+// getenv first (no network) and otherwise runs `gh api repos/<repo>/releases/latest`,
+// which only reads.
+func DefaultEnv(current string, getenv func(string) string) Env {
 	var dir string
 	if exe, err := os.Executable(); err == nil {
 		if real, err := filepath.EvalSymlinks(exe); err == nil {
@@ -55,7 +55,7 @@ func DefaultEnv(current string) Env {
 		}
 		dir = filepath.Dir(exe)
 	}
-	return Env{ExeDir: dir, Current: current, Latest: ghLatest}
+	return Env{ExeDir: dir, Current: current, Latest: func() string { return ghLatest(getenv) }}
 }
 
 // lookPath finds gh. It is a variable so tests can refuse any gh that is not
@@ -64,8 +64,8 @@ var lookPath = exec.LookPath
 
 // ghLatest reads ROTA_TEST_LATEST_VERSION (no network) first; without gh or on
 // any failure it is "".
-func ghLatest() string {
-	if v := os.Getenv("ROTA_TEST_LATEST_VERSION"); v != "" {
+func ghLatest(getenv func(string) string) string {
+	if v := getenv("ROTA_TEST_LATEST_VERSION"); v != "" {
 		return v
 	}
 	gh, err := lookPath("gh")
