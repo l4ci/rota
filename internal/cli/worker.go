@@ -687,14 +687,17 @@ func bestOfRefusal(msg, hint string, d *jsonx.Object) (Result, error) {
 	return blockedRefusal("best-of-unpicked", msg, hint, d)
 }
 
-// recordedReviews lists the review kinds with a verdict recorded for a branch,
-// for the gate's review-depth check.
-func recordedReviews(root string) func(string) []string {
+// recordedReviews lists the review kinds with a verdict recorded for a branch
+// at head, for the gate's review-depth check. A record on another commit is
+// stale and does not count, as /rota-review treats it. Records hold a short
+// sha, head is the full one, so either may be the prefix.
+func recordedReviews(root string) func(branch, head string) []string {
 	store := verdict.Load(root)
-	return func(branch string) []string {
+	return func(branch, head string) []string {
 		var kinds []string
 		for _, k := range []string{verdict.ReviewSpec, verdict.ReviewQuality} {
-			if _, ok := verdict.Latest(store.Branches[verdict.BranchKey("", branch)], k); ok {
+			if r, ok := verdict.Latest(store.Branches[verdict.BranchKey("", branch)], k); ok && r.Sha != "" && head != "" &&
+				(strings.HasPrefix(head, r.Sha) || strings.HasPrefix(r.Sha, head)) {
 				kinds = append(kinds, k)
 			}
 		}
