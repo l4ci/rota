@@ -108,7 +108,7 @@ echo "do the task" > "$TMP_HD/brief.md"
 : >"$FAKE/log"
 OUT="$(hd "$ROTA_BIN" worker dispatch w1 --body-file "$TMP_HD/brief.md" --task T1)" \
   || fail "herdr dispatch failed: $OUT"
-grep -q "^tab create --workspace w9 --cwd $WT1 --label w1 --no-focus --env CLAUDE_CONFIG_DIR=/acct/one\$" "$FAKE/log" \
+grep -q "^tab create --workspace w9 --cwd $WT1 --label w1 --no-focus --env CLAUDE_CONFIG_DIR=/acct/one --env ROTA_SLOT=w1 --env ROTA_PORT_BASE=[0-9]* --env ROTA_PORT_BLOCK=[0-9]* --env ROTA_DB_SUFFIX=_w1\$" "$FAKE/log" \
   || fail "tab create must adopt the slot worktree with the account env; log: $(cat "$FAKE/log")"
 grep -q '^agent start rota-w1-w9-t7 --kind claude --pane w9:p17 --timeout 60000 -- --model sonnet --dangerously-skip-permissions$' "$FAKE/log" \
   || fail "agent start must run claude in the new pane with the worker args; log: $(cat "$FAKE/log")"
@@ -189,7 +189,7 @@ printf '{"work":{"dispatch":"herdr","workerCommand":"FOO=1 claude --model haiku 
 : >"$FAKE/log"
 hd "$ROTA_BIN" worker dispatch w1 --body-file "$TMP_HD/brief.md" >/dev/null \
   || fail "dispatch with a custom workerCommand failed"
-grep -q -- '--env FOO=1 --env CLAUDE_CONFIG_DIR=/acct/one$' "$FAKE/log" \
+grep -q -- '--env FOO=1 --env CLAUDE_CONFIG_DIR=/acct/one --env ROTA_SLOT=w1 --env ROTA_PORT_BASE=[0-9]* --env ROTA_PORT_BLOCK=[0-9]* --env ROTA_DB_SUFFIX=_w1$' "$FAKE/log" \
   || fail "leading env assignments in workerCommand must become tab --env; log: $(cat "$FAKE/log")"
 grep -q -- '-- --model haiku --settings s.json$' "$FAKE/log" \
   || fail "workerCommand args must pass through to agent start; log: $(cat "$FAKE/log")"

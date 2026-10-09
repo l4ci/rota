@@ -1,13 +1,1 @@
-{
-  "inputs": {
-    "config": "{\"work\":{\"dispatch\":\"herdr\"}}",
-    "steps": [
-      "init --slots 2 --base main",
-      "slot 1 handle w9:t4, slot 2 window rota:w2",
-      "init --slots 2 --base main"
-    ]
-  },
-  "outputs": {
-    "workers.json": "{\n  \"session\": \"rota\",\n  \"slots\": [\n    {\n      \"name\": \"w1\",\n      \"branch\": \"rota-worker/w1\",\n      \"worktree\": \"ROOT/.worktrees/w1\",\n      \"base\": \"main\",\n      \"handle\": \"w9:t4\",\n      \"state\": \"idle\",\n      \"task\": null,\n      \"pr\": null,\n      \"relays\": [],\n      \"configDir\": null\n    },\n    {\n      \"name\": \"w2\",\n      \"branch\": \"rota-worker/w2\",\n      \"worktree\": \"ROOT/.worktrees/w2\",\n      \"base\": \"main\",\n      \"state\": \"idle\",\n      \"task\": null,\n      \"pr\": null,\n      \"relays\": [],\n      \"configDir\": null,\n      \"handle\": \"rota:w2\"\n    }\n  ]\n}\n"
-  }
-}
+{"inputs":{"config":"{\"work\":{\"dispatch\":\"herdr\"}}","steps":["init --slots 2 --base main","slot 1 handle w9:t4, slot 2 window rota:w2","init --slots 2 --base main"]},"outputs":{"workers.json":"{\n  \"session\": \"rota\",\n  \"slots\": [\n    {\n      \"name\": \"w1\",\n      \"branch\": \"rota-worker/w1\",\n      \"worktree\": \"ROOT/.worktrees/w1\",\n      \"base\": \"main\",\n      \"handle\": \"w9:t4\",\n      \"state\": \"idle\",\n      \"task\": null,\n      \"pr\": null,\n      \"relays\": [],\n      \"configDir\": null,\n      \"portBase\": 20000,\n      \"portBlock\": 100\n    },\n    {\n      \"name\": \"w2\",\n      \"branch\": \"rota-worker/w2\",\n      \"worktree\": \"ROOT/.worktrees/w2\",\n      \"base\": \"main\",\n      \"state\": \"idle\",\n      \"task\": null,\n      \"pr\": null,\n      \"relays\": [],\n      \"configDir\": null,\n      \"portBase\": 20100,\n      \"portBlock\": 100,\n      \"handle\": \"rota:w2\"\n    }\n  ]\n}\n"}}

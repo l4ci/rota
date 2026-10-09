@@ -1485,3 +1485,44 @@ func TestTurnFinished(t *testing.T) {
 		}
 	}
 }
+
+func TestHerdrSpawnPassesSlotEnv(t *testing.T) {
+	f := &fake{handler: func(_ string, a []string) Result {
+		if a[0] == "tab" {
+			return Result{Stdout: tabCreated}
+		}
+		return Result{Stdout: agentJSON("idle")}
+	}}
+	h := New("herdr", deps(f, herdrEnv, &clock{}))
+	if _, err := h.Spawn(bg, SpawnOpts{Slot: "w1", Cwd: "/wt", Launch: "claude", Env: []string{"ROTA_SLOT=w1", "ROTA_PORT_BASE=20000"}, BootTimeout: 60}); err != nil {
+		t.Fatal(err)
+	}
+	want := "herdr tab create --workspace w9 --cwd /wt --label w1 --no-focus --env ROTA_SLOT=w1 --env ROTA_PORT_BASE=20000"
+	if f.calls[0] != want {
+		t.Errorf("tab create = %q, want %q", f.calls[0], want)
+	}
+}
+
+func TestTmuxSpawnPrefixesSlotEnv(t *testing.T) {
+	booted := false
+	f := &fake{handler: func(name string, a []string) Result {
+		switch a[0] {
+		case "has-session":
+			return Result{ExitCode: 1}
+		case "capture-pane":
+			if booted {
+				return Result{Stdout: "? for shortcuts"}
+			}
+			booted = true
+			return Result{Stdout: "$ "}
+		}
+		return Result{}
+	}}
+	h := New("tmux", deps(f, nil, &clock{}))
+	if _, err := h.Spawn(bg, SpawnOpts{Slot: "w1", Session: "rota", Cwd: "/wt", Launch: "claude", Env: []string{"ROTA_SLOT=w1", "ROTA_PORT_BASE=20000"}, BootTimeout: 10}); err != nil {
+		t.Fatal(err)
+	}
+	if want := "tmux send-keys -t rota:w1 ROTA_SLOT='w1' ROTA_PORT_BASE='20000' claude C-m"; !strings.Contains(f.log(), want) {
+		t.Errorf("missing %q in\n%s", want, f.log())
+	}
+}

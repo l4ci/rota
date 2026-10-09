@@ -52,7 +52,7 @@ func envSetupHash(dir, command string) string {
 // envSetup runs work.envSetup in a slot worktree unless the stored hash
 // already matches, and stores the hash only after a zero exit. ran reports
 // whether the command ran. A red command is an error naming slot and command.
-func (e Env) envSetup(ctx context.Context, slot, dir, command string) (ran bool, err error) {
+func (e Env) envSetup(ctx context.Context, slot, dir, command string, portBase, portBlock int) (ran bool, err error) {
 	gitDir, code := e.git(dir, "rev-parse", "--absolute-git-dir")
 	if code != 0 || gitDir == "" {
 		return false, fail(exitcode.ExitUnavailable, fmt.Sprintf("slot %s: cannot find the git dir of %s to store the env setup hash", slot, dir))
@@ -64,7 +64,7 @@ func (e Env) envSetup(ctx context.Context, slot, dir, command string) (ran bool,
 	}
 	// A stale stamp must not survive a red rerun.
 	os.Remove(stamp)
-	out, code := e.Shell(ctx, dir, command)
+	out, code := e.Shell(ctx, dir, exportPrefix(slot, portBase, portBlock)+command)
 	if code != 0 {
 		msg := fmt.Sprintf("slot %s: work.envSetup failed (exit %d): %s", slot, code, command)
 		if t := strings.TrimSpace(out); t != "" {

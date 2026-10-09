@@ -146,6 +146,24 @@ Free text, silent default `""` (nothing runs). `rota worker pool init` runs it o
 rota config set work.envSetup "npm ci"
 ```
 
+## work.portBase and work.portBlock: a port range per worker slot
+
+Integers, silent defaults `20000` and `100`. Each slot reserves one block of `work.portBlock` ports starting at the lowest range from `work.portBase` that no other slot's range overlaps; `pool init` records it as `portBase` and `portBlock` on the slot in `.rota/workers.json`. The slot keeps its block until `rota worker pool reap` or `rota round reclaim` drops it (the next dispatch picks a new one), and two live slots never share a port. A range that would pass 65535 is refused. Every slot's agent, and `work.envSetup` in its worktree, get four variables:
+
+| Variable | Value |
+|---|---|
+| `ROTA_SLOT` | the slot name, for example `dana` |
+| `ROTA_PORT_BASE` | the first port of the slot's block |
+| `ROTA_PORT_BLOCK` | how many ports the block holds: the width the slot was allocated with |
+| `ROTA_DB_SUFFIX` | `_` plus the slot name with anything but letters and digits turned into `_` |
+
+A worker starts servers on `ROTA_PORT_BASE` up to `ROTA_PORT_BASE + ROTA_PORT_BLOCK - 1` and names databases `<name>${ROTA_DB_SUFFIX}`. rota does not rewrite a project's test suites to read them. `rota doctor` warns when a process outside a live slot's worktree listens inside its block. Changing `work.portBase` or `work.portBlock` moves blocks only for slots created afterwards; a registered slot keeps the one it has, with the width it was allocated with, and later slots are placed around it.
+
+```bash
+rota config set work.portBase 30000
+rota config set work.portBlock 200
+```
+
 ## work.tdd: red-first on or off
 
 `true` (default): a behavior change needs a recorded red run, a FAIL proof row from a test that failed on an assertion, before its PASS row. A FAIL whose evidence is a build, compile or setup failure (missing import, typo, undefined symbol) is not a red run; the task gets a fix dispatch. `false`: `/rota-work` Step 7 and the worker contract require no RED row. PASS rows are still recorded.
