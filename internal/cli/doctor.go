@@ -147,10 +147,12 @@ func doctorSkills(home, root string) *skills.Report {
 		return nil
 	}
 	dirs, _ := skillsClaudeDirs(home, root)
-	roots, err := skills.RootsFor("", "all", home, dirs, gitToplevel())
+	top := gitToplevel()
+	roots, err := skills.RootsFor("", "all", home, dirs, top)
 	if err != nil {
 		return nil
 	}
+	roots = append(roots, skillsPluginRoots(dirs, "", "all", top)...)
 	rep, err := set.Status(roots, version.Get().Version)
 	if err != nil {
 		return nil

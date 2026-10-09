@@ -43,6 +43,8 @@ type Root struct {
 	Path  string `json:"root"`
 	Agent string `json:"agent"`
 	Scope string `json:"scope"`
+	// Plugin marks a rota Claude Code plugin install (read only: no manifest).
+	Plugin bool `json:"plugin,omitempty"`
 }
 
 // ErrNoHome: a user root was asked for but neither HOME nor CLAUDE_CONFIG_DIR
@@ -530,6 +532,11 @@ func (s *Set) Status(roots []Root, version string) (Report, error) {
 	rep := Report{Version: version, Digest: s.digest}
 	for _, r := range roots {
 		st := RootStatus{Root: r, Edited: []string{}, Missing: []string{}}
+		if r.Plugin {
+			s.pluginStatus(&st)
+			rep.Roots = append(rep.Roots, st)
+			continue
+		}
 		if m, ok := ReadManifest(r.Path); ok {
 			st.Installed, st.Version, st.Digest = true, m.Version, m.Digest
 			st.Current = m.Digest == s.digest
