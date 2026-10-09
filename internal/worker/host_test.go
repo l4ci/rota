@@ -119,6 +119,38 @@ func exitOf(err error) int {
 
 // ── dispatch ────────────────────────────────────────────────────────────────
 
+func TestDispatchTaskSpawnsWithSlotEnv(t *testing.T) {
+	dir := newProject(t, `{"work":{"workerCommand":"claude --model haiku","portBase":31000}}`)
+	goInit(t, dir, InitOpts{Slots: 2, Base: "main"})
+	f := tmuxFake()
+	round := 3
+	if _, err := envWith(f).Dispatch(bg, dir, DispatchOpts{Slot: "w2", BodyFile: writeBrief(t, "x\n"), Task: "T1", Round: &round}); err != nil {
+		t.Fatal(err)
+	}
+	want := "ROTA_SLOT=w2,ROTA_PORT_BASE=31100,ROTA_PORT_BLOCK=100,ROTA_DB_SUFFIX=_w2"
+	if got := strings.Join(f.spawnOpts.Env, ","); got != want {
+		t.Errorf("spawn env = %q, want %q", got, want)
+	}
+}
+
+func TestDispatchTaskExportsTheStoredBlockWidth(t *testing.T) {
+	dir := newProject(t, `{"work":{"workerCommand":"claude --model haiku","portBase":31000,"portBlock":200}}`)
+	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
+	// The config shrinks after w1 was allocated: the env keeps the width w1 holds.
+	if err := os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(`{"work":{"workerCommand":"claude --model haiku","portBase":31000,"portBlock":100}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	f := tmuxFake()
+	round := 3
+	if _, err := envWith(f).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "x\n"), Task: "T1", Round: &round}); err != nil {
+		t.Fatal(err)
+	}
+	want := "ROTA_SLOT=w1,ROTA_PORT_BASE=31000,ROTA_PORT_BLOCK=200,ROTA_DB_SUFFIX=_w1"
+	if got := strings.Join(f.spawnOpts.Env, ","); got != want {
+		t.Errorf("spawn env = %q, want %q", got, want)
+	}
+}
+
 func TestDispatchTaskRecreatesTheSession(t *testing.T) {
 	dir := newProject(t, `{"work":{"workerCommand":"claude --model haiku"}}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})

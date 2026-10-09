@@ -789,7 +789,7 @@ func TestReclaimDeadSlotParksReleasesAndClearsTheHandle(t *testing.T) {
 	f := newMoveFx(t)
 	branch := f.slot("ben").Branch()
 	f.agents() // the host has no agent for ben's recorded tab
-	rawSlot(f.root, "ben", func(s *jsonx.Object) { s.Set("handle", "w1:ben") })
+	rawSlot(f.root, "ben", func(s *jsonx.Object) { s.Set("handle", "w1:ben"); s.Set("portBase", 20000); s.Set("portBlock", 100) })
 	os.WriteFile(filepath.Join(f.wt("ben"), "half.txt"), []byte("wip"), 0o644)
 
 	res, err := f.reclaim("ben", nil)
@@ -806,7 +806,7 @@ func TestReclaimDeadSlotParksReleasesAndClearsTheHandle(t *testing.T) {
 		t.Errorf("released, state cleared, branch pushed: %v %v", f.be.claims, f.be.bstates)
 	}
 	s := f.slot("ben")
-	if s.Task() != "" || s.Handle() != "" || s.State() != "idle" || s.ClaimID() != "" {
+	if s.Task() != "" || s.Handle() != "" || s.State() != "idle" || s.ClaimID() != "" || s.PortBase() != 0 || s.PortBlock() != 0 {
 		t.Errorf("slot: %v", s)
 	}
 	last := f.be.comments["12"][len(f.be.comments["12"])-1]

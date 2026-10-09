@@ -41,8 +41,8 @@ func TestEnvSetupRunsOncePerNewSlotInItsWorktree(t *testing.T) {
 		t.Fatalf("runs = %v, want one per new slot", r.runs)
 	}
 	for i, name := range []string{"w1", "w2"} {
-		want := realPath(filepath.Join(b, ".worktrees", name)) + "|npm ci"
-		if r.runs[i] != want {
+		want := realPath(filepath.Join(b, ".worktrees", name)) + "|npm ci" // the command follows the slot's exports
+		if !strings.HasPrefix(r.runs[i], strings.TrimSuffix(want, "npm ci")) || !strings.HasSuffix(r.runs[i], "; npm ci") {
 			t.Errorf("run %d = %q, want %q", i, r.runs[i], want)
 		}
 	}

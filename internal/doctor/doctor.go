@@ -122,6 +122,12 @@ type Input struct {
 	// local verify, so the merge gate would refuse; false adds no line.
 	NothingToVerify bool
 
+	// Slots are the live worker slots with a reserved port block; empty skips
+	// the ports check. CwdOf answers a process's working directory ("" when
+	// unknown); nil reads every directory as unknown.
+	Slots []SlotBlock
+	CwdOf func(pid int) string
+
 	Exec Exec
 	// Getenv reads the environment for host detection (HERDR_ENV, TMUX); nil
 	// reads as empty.
@@ -143,6 +149,9 @@ func Run(ctx context.Context, in Input) Report {
 	}
 	if len(in.AgentProblems) > 0 {
 		checks = append(checks, Check{Name: "agents", Status: Warn, Detail: strings.Join(in.AgentProblems, "; "), Hint: "run: rota agents write"})
+	}
+	if c, ok := d.ports(); ok {
+		checks = append(checks, c)
 	}
 	if f := in.StaleBinary; f != nil {
 		// Only a binary behind its own checkout adds a line.

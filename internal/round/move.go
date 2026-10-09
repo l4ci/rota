@@ -414,7 +414,8 @@ func (e Env) Reclaim(ctx context.Context, root string, be Board, o ReclaimOpts) 
 	if _, err := clearState(root, be, h.Issue, o.Slot); tolerate("state reset", err) != nil {
 		return res, wrap(err)
 	}
-	if err := freeSlot(root, o.Slot, true); err != nil {
+	// The reclaimed slot gives its port block back; the next dispatch picks one.
+	if err := editSlot(root, o.Slot, func(s *worker.Slot) error { s.Park(true); s.ReleasePort(); return nil }); err != nil {
 		return res, wrap(err)
 	}
 	res.Changed = true

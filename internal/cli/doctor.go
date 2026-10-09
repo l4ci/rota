@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -112,6 +113,7 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 		}
 	}
 	in.ProjectRoot = root
+	in.Slots, in.CwdOf = doctorSlotBlocks(root), procCwd
 	in.NothingToVerify = worker.NothingToVerify(root)
 	in.AgentProblems = agents.Problems(root)
 	doctorDiskInput(ctx, &in, cfg, root, d.Git, d.Now())
@@ -219,4 +221,30 @@ func staleBinaryOncePerRound(c *Ctx, cd string, round int) (stalebin.Finding, bo
 	_ = os.MkdirAll(filepath.Dir(path), 0o755)
 	_ = fsio.WriteFileAtomic(path, []byte(strconv.Itoa(round)+"\n"))
 	return f, true
+}
+
+// doctorSlotBlocks lists the live slots (a session or a task) that hold a
+// port block, each with the width it was allocated with.
+func doctorSlotBlocks(root string) []doctor.SlotBlock {
+	var out []doctor.SlotBlock
+	for _, s := range worker.LoadRegistry(root).Slots() {
+		if s.PortBase() > 0 && (s.PaneHandle() != "" || s.Task() != "") {
+			out = append(out, doctor.SlotBlock{Name: s.Name(), Worktree: s.Worktree(), Base: s.PortBase(), Size: s.PortBlock()})
+		}
+	}
+	return out
+}
+
+// procCwd is a process's working directory: /proc on Linux, lsof where /proc
+// is absent (macOS); "" when neither can say (someone else's process).
+func procCwd(pid int) string {
+	if p, err := os.Readlink(fmt.Sprintf("/proc/%d/cwd", pid)); err == nil {
+		return p
+	}
+	bin, err := exec.LookPath("lsof")
+	if err != nil {
+		return ""
+	}
+	out, _ := exec.Command(bin, "-a", "-p", strconv.Itoa(pid), "-d", "cwd", "-Fn").Output()
+	return doctor.ParseLsofCwd(string(out))
 }
