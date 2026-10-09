@@ -712,7 +712,7 @@ func (g *gate) stepReviewDepth() (bool, error) {
 	if err != nil {
 		return g.broke(fmt.Sprintf("%v; run rota config check", err))
 	}
-	out, code := g.e.runGit(g.root, "diff", "--numstat", g.baseRef+"..."+g.headRef)
+	out, code := g.git(g.root, "diff", "--numstat", g.baseRef+"..."+g.headRef)
 	if code != 0 {
 		return g.broke(fmt.Sprintf("could not diff %s against %s to pick the review depth", g.headRef, g.baseRef))
 	}
@@ -745,7 +745,7 @@ func (g *gate) stepReviewDepth() (bool, error) {
 	if len(missing) == 0 {
 		return false, nil
 	}
-	g.res.SHA, _ = g.e.runGit(g.root, "rev-parse", "--short=7", g.headRef)
+	g.res.SHA, _ = g.git(g.root, "rev-parse", "--short=7", g.headRef)
 	g.verdict(GateReviewMissing, fmt.Sprintf("GATE %s refused — review depth %s (%s) needs a recorded %s verdict; nothing landed", g.o.Slot, depth, why, strings.Join(missing, " and ")),
 		fmt.Sprintf("run /rota-review on %s (it records the verdicts), or loosen ship.review", g.branch))
 	return true, nil
