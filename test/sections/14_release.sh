@@ -7,14 +7,14 @@ trap 'rm -rf "$TMP_DV"' EXIT
   cd "$DV1"
   mkdir -p .rota .claude-plugin
   printf '{"version":"1.0.0"}\n' > .claude-plugin/plugin.json
-  OUT=$(hvj release version)
+  OUT=$(hvj release version) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
   [ "$(echo "$OUT" | jget data.version)" = "1.0.0" ] || { echo "FAIL: version wrong: $OUT"; exit 1; }
   [ "$(echo "$OUT" | jget data.kind)" = "plugin-json" ] || { echo "FAIL: kind wrong: $OUT"; exit 1; }
   [ "$(echo "$OUT" | jget data.file)" = ".claude-plugin/plugin.json" ] || { echo "FAIL: file wrong: $OUT"; exit 1; }
   # --level and --to compute next read-only
-  OUT=$(hvj release version --level minor)
+  OUT=$(hvj release version --level minor) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
   [ "$(echo "$OUT" | jget data.next)" = "1.1.0" ] || { echo "FAIL: next for --level minor wrong: $OUT"; exit 1; }
-  OUT=$(hvj release version --to 3.0.0)
+  OUT=$(hvj release version --to 3.0.0) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
   [ "$(echo "$OUT" | jget data.next)" = "3.0.0" ] || { echo "FAIL: next for --to wrong: $OUT"; exit 1; }
   grep -q '"1.0.0"' .claude-plugin/plugin.json || { echo "FAIL: version --level wrote the file"; exit 1; }
   rc=0; hvj release version --to 1.0.0 >/dev/null 2>&1 || rc=$?
@@ -29,7 +29,7 @@ pass "release version detects plugin.json and computes next read-only"
   cd "$DV1"
   printf '{"release":{"versionFile":"package.json"}}\n' > .rota/config.json
   printf '{"version":"2.5.0"}\n' > package.json
-  OUT=$(hvj release version)
+  OUT=$(hvj release version) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
   [ "$(echo "$OUT" | jget data.file)" = "package.json" ] || { echo "FAIL: file wrong: $OUT"; exit 1; }
   [ "$(echo "$OUT" | jget data.version)" = "2.5.0" ] || { echo "FAIL: version wrong: $OUT"; exit 1; }
 )
@@ -43,7 +43,7 @@ TMP_DV="$DV2"
   cd "$DV2"
   mkdir -p .rota
   printf '[project]\nversion = "0.1.2"\n' > pyproject.toml
-  OUT=$(hvj release version)
+  OUT=$(hvj release version) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
   [ "$(echo "$OUT" | jget data.kind)" = "pyproject" ] || { echo "FAIL: kind wrong: $OUT"; exit 1; }
   [ "$(echo "$OUT" | jget data.version)" = "0.1.2" ] || { echo "FAIL: version wrong: $OUT"; exit 1; }
 )
@@ -57,7 +57,7 @@ TMP_DV="$DV3"
   cd "$DV3"
   mkdir -p .rota
   printf '[package]\nversion = "3.4.5"\n' > Cargo.toml
-  OUT=$(hvj release version)
+  OUT=$(hvj release version) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
   [ "$(echo "$OUT" | jget data.kind)" = "cargo" ] || { echo "FAIL: kind wrong: $OUT"; exit 1; }
   [ "$(echo "$OUT" | jget data.version)" = "3.4.5" ] || { echo "FAIL: version wrong: $OUT"; exit 1; }
 )
@@ -71,7 +71,7 @@ TMP_DV="$DV4"
   cd "$DV4"
   mkdir -p .rota
   printf '9.9.9\n' > VERSION
-  OUT=$(hvj release version)
+  OUT=$(hvj release version) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
   [ "$(echo "$OUT" | jget data.kind)" = "plain" ] || { echo "FAIL: kind wrong: $OUT"; exit 1; }
   [ "$(echo "$OUT" | jget data.version)" = "9.9.9" ] || { echo "FAIL: version wrong: $OUT"; exit 1; }
 )
@@ -101,7 +101,7 @@ TMP_DV="$BV1"
   cd "$BV1"
   mkdir -p .rota
   printf '{"version":"1.0.0"}\n' > package.json
-  OUT=$(hvj release bump --level patch)
+  OUT=$(hvj release bump --level patch) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
   [ "$(echo "$OUT" | jget data.to)" = "1.0.1" ] || { echo "FAIL: expected 1.0.1: $OUT"; exit 1; }
   [ "$(echo "$OUT" | jget data.from)" = "1.0.0" ] || { echo "FAIL: from wrong: $OUT"; exit 1; }
   [ "$(echo "$OUT" | jget data.kind)" = "package-json" ] || { echo "FAIL: kind wrong: $OUT"; exit 1; }
@@ -113,9 +113,9 @@ pass "release bump bumps package.json patch"
 # Case 2: minor and major bumps
 (
   cd "$BV1"
-  NEW=$(hvj release bump --level minor | jget data.to)
+  NEW=$(hvj release bump --level minor | jget data.to) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
   [ "$NEW" = "1.1.0" ] || { echo "FAIL: expected 1.1.0, got $NEW"; exit 1; }
-  NEW=$(hvj release bump --level major | jget data.to)
+  NEW=$(hvj release bump --level major | jget data.to) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
   [ "$NEW" = "2.0.0" ] || { echo "FAIL: expected 2.0.0, got $NEW"; exit 1; }
 )
 pass "release bump bumps minor and major"
@@ -123,7 +123,7 @@ pass "release bump bumps minor and major"
 # Case 3: explicit version bump; a lower version is refused (exit 4)
 (
   cd "$BV1"
-  NEW=$(hvj release bump --to 5.0.0 | jget data.to)
+  NEW=$(hvj release bump --to 5.0.0 | jget data.to) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
   [ "$NEW" = "5.0.0" ] || { echo "FAIL: expected 5.0.0, got $NEW"; exit 1; }
   rc=0
   OUT=$(hvj release bump --to 1.0.0 2>/dev/null) || rc=$?
@@ -145,7 +145,7 @@ TMP_DV="$BV2"
   cd "$BV2"
   mkdir -p .rota
   printf '[project]\nversion = "0.1.0"\nname = "x"\n\n[tool.foo]\nversion = "9.9.9"\n' > pyproject.toml
-  NEW=$(hvj release bump --level patch --file pyproject.toml | jget data.to)
+  NEW=$(hvj release bump --level patch --file pyproject.toml | jget data.to) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
   [ "$NEW" = "0.1.1" ] || { echo "FAIL: expected 0.1.1, got $NEW"; exit 1; }
   grep -q 'version = "0.1.1"' pyproject.toml || { echo "FAIL: [project] version not updated"; exit 1; }
   grep -q 'version = "9.9.9"' pyproject.toml || { echo "FAIL: [tool.foo] version was modified"; exit 1; }
@@ -160,7 +160,7 @@ TMP_DV="$BV3"
   cd "$BV3"
   mkdir -p .rota
   printf '[package]\nversion = "1.2.3"\n' > Cargo.toml
-  OUT=$(hvj release bump --level major --file Cargo.toml)
+  OUT=$(hvj release bump --level major --file Cargo.toml) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
   [ "$(echo "$OUT" | jget data.to)" = "2.0.0" ] || { echo "FAIL: expected 2.0.0: $OUT"; exit 1; }
   [ "$(echo "$OUT" | jget data.kind)" = "cargo" ] || { echo "FAIL: kind wrong: $OUT"; exit 1; }
 )
@@ -174,7 +174,7 @@ TMP_DV="$BV4"
   cd "$BV4"
   mkdir -p .rota
   printf '0.0.1\n' > VERSION
-  NEW=$(hvj release bump --level minor --file VERSION | jget data.to)
+  NEW=$(hvj release bump --level minor --file VERSION | jget data.to) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
   [ "$NEW" = "0.1.0" ] || { echo "FAIL: expected 0.1.0, got $NEW"; exit 1; }
   CONTENT=$(cat VERSION)
   [ "$CONTENT" = "0.1.0" ] || { echo "FAIL: plain file content wrong: '$CONTENT'"; exit 1; }
@@ -203,7 +203,7 @@ TMP_DV="$CL1"
   git commit --allow-empty -q -m "perf: speed up parser"
   git commit --allow-empty -q -m "plain commit no prefix"
 
-  OUT=$(hvj release notes --from commits --since v_cl1_base)
+  OUT=$(hvj release notes --from commits --since v_cl1_base) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
   MD=$(echo "$OUT" | jget data.markdown)
   [ "$(echo "$OUT" | jget data.empty)" = "false" ] || { echo "FAIL: empty should be false: $OUT"; exit 1; }
   for h in New Fixed Performance Changed Documentation Other Stats; do
@@ -218,7 +218,7 @@ pass "release notes --from commits emits expected sections, skips test commits"
 (
   cd "$CL1"
   git commit --allow-empty -q -m "feat: breaking change" -m "BREAKING CHANGE: api removed"
-  MD=$(hvj release notes --from commits --since v_cl1_base | jget data.markdown)
+  MD=$(hvj release notes --from commits --since v_cl1_base | jget data.markdown) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
   grep -q "^### Breaking" <<<"$MD" || { echo "FAIL: ### Breaking missing"; exit 1; }
 )
 pass "release notes --from commits emits ### Breaking for BREAKING CHANGE body"
@@ -248,7 +248,7 @@ TODAY=$(date +%Y-%m-%d)
   cd "$UC1"
   mkdir -p .rota
   printf '### Highlights\n\n- thing 1\n' > notes.md
-  OUT=$(hvj release changelog 1.0.0 --body-file notes.md)
+  OUT=$(hvj release changelog 1.0.0 --body-file notes.md) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
   [ "$(echo "$OUT" | jget data.changed)" = "true" ] || { echo "FAIL: changed not true: $OUT"; exit 1; }
   [ "$(echo "$OUT" | jget data.path)" = "CHANGELOG.md" ] || { echo "FAIL: path wrong: $OUT"; exit 1; }
   [ -f CHANGELOG.md ] || { echo "FAIL: CHANGELOG.md not created"; exit 1; }
@@ -283,7 +283,7 @@ pass "release changelog refuses duplicate version"
 (
   cd "$UC1"
   mkdir -p docs
-  OUT=$(hvj release changelog 0.0.1 --body-file notes.md --path docs/CHANGELOG.md)
+  OUT=$(hvj release changelog 0.0.1 --body-file notes.md --path docs/CHANGELOG.md) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
   [ "$(echo "$OUT" | jget data.path)" = "docs/CHANGELOG.md" ] || { echo "FAIL: path wrong: $OUT"; exit 1; }
   [ -f docs/CHANGELOG.md ] || { echo "FAIL: docs/CHANGELOG.md not created"; exit 1; }
 )
@@ -312,7 +312,7 @@ TMP_DV="$DH1"
   git config user.email t@t && git config user.name t
 
   # No origin -> none
-  OUT=$(hvj release host | jget data.host)
+  OUT=$(hvj release host | jget data.host) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
   [ "$OUT" = "none" ] || { echo "FAIL: expected 'none' with no origin, got '$OUT'"; exit 1; }
 )
 pass "release host returns none with no origin"
@@ -321,32 +321,32 @@ pass "release host returns none with no origin"
   cd "$DH1"
   # SSH github.com -> github
   git remote add origin git@github.com:foo/bar.git
-  OUT=$(hvj release host | jget data.host)
+  OUT=$(hvj release host | jget data.host) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
   [ "$OUT" = "github" ] || { echo "FAIL: expected 'github' for git@github.com, got '$OUT'"; exit 1; }
 
   # HTTPS github.com -> github
   git remote set-url origin https://github.com/foo/bar.git
-  OUT=$(hvj release host | jget data.host)
+  OUT=$(hvj release host | jget data.host) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
   [ "$OUT" = "github" ] || { echo "FAIL: expected 'github' for https://github.com, got '$OUT'"; exit 1; }
 
   # gitlab.com -> gitlab
   git remote set-url origin git@gitlab.com:foo/bar.git
-  OUT=$(hvj release host | jget data.host)
+  OUT=$(hvj release host | jget data.host) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
   [ "$OUT" = "gitlab" ] || { echo "FAIL: expected 'gitlab', got '$OUT'"; exit 1; }
 
   # self-hosted gitlab -> gitlab-self-hosted
   git remote set-url origin https://gitlab.example.com/foo/bar.git
-  OUT=$(hvj release host | jget data.host)
+  OUT=$(hvj release host | jget data.host) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
   [ "$OUT" = "gitlab-self-hosted" ] || { echo "FAIL: expected 'gitlab-self-hosted', got '$OUT'"; exit 1; }
 
   # GitHub Enterprise -> github-enterprise
   git remote set-url origin https://github.example.com/foo/bar.git
-  OUT=$(hvj release host | jget data.host)
+  OUT=$(hvj release host | jget data.host) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
   [ "$OUT" = "github-enterprise" ] || { echo "FAIL: expected 'github-enterprise', got '$OUT'"; exit 1; }
 
   # Bitbucket (unrecognised) -> none
   git remote set-url origin https://bitbucket.org/foo/bar.git
-  OUT=$(hvj release host | jget data.host)
+  OUT=$(hvj release host | jget data.host) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
   [ "$OUT" = "none" ] || { echo "FAIL: expected 'none' for bitbucket.org, got '$OUT'"; exit 1; }
 )
 rm -rf "$DH1"

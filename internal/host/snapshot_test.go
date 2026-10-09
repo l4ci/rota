@@ -50,3 +50,20 @@ func TestTmuxSnapshotListsWindows(t *testing.T) {
 		t.Errorf("agents = %+v", got)
 	}
 }
+
+// Valid JSON of another shape is not an empty round: every tab would read dead.
+func TestHerdrSnapshotWithoutAgentsKeyIsAnError(t *testing.T) {
+	for _, reply := range []string{`{}`, `{"result":{"snapshot":{}}}`, `{"error":{"message":"busy"}}`} {
+		f := &fake{handler: func(string, []string) Result { return Result{Stdout: reply} }}
+		if _, err := New("herdr", deps(f, nil, &clock{})).(Snapshotter).Snapshot(bg); err == nil {
+			t.Errorf("reply %s must be an error", reply)
+		}
+	}
+	f := &fake{handler: func(string, []string) Result {
+		return Result{Stdout: `{"result":{"snapshot":{"agents":[]}}}`}
+	}}
+	got, err := New("herdr", deps(f, nil, &clock{})).(Snapshotter).Snapshot(bg)
+	if err != nil || len(got) != 0 {
+		t.Errorf("an explicit empty agents list is a real empty round: %v %v", got, err)
+	}
+}

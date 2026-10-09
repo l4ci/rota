@@ -283,3 +283,22 @@ func TestReconcileSkipsExternal(t *testing.T) {
 		}
 	}
 }
+
+func TestUnreadSourceGatesRepairs(t *testing.T) {
+	rep := &Report{Unavailable: []string{SourceHost}}
+	if got := unreadSource(rep, DeadTab); got != SourceHost {
+		t.Errorf("dead-tab with host down = %q", got)
+	}
+	if got := unreadSource(rep, PRStale); got != "" {
+		t.Errorf("pr-stale needs the forge, which answered: %q", got)
+	}
+	rep = &Report{Unavailable: []string{SourceForge}}
+	for _, k := range []string{PRUnrecorded, MergedExternal, PRStale, LabelMissing, LabelStale} {
+		if got := unreadSource(rep, k); got != SourceForge {
+			t.Errorf("%s with forge down = %q", k, got)
+		}
+	}
+	if got := unreadSource(rep, DeadTab); got != "" {
+		t.Errorf("dead-tab does not read the forge: %q", got)
+	}
+}

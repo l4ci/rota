@@ -7,6 +7,7 @@ package worker
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/rotatree"
 	"io"
@@ -346,18 +347,19 @@ func (d *Doc) SortSlots() {
 	})
 }
 
-// Update is a locked read-modify-write of the registry; a missing or corrupt
-// file starts from {"slots": []}.
+// Update is a locked read-modify-write of the registry; a missing file starts
+// from {"slots": []}. A file that exists but does not parse is an error: the
+// slots in it are the only record of who holds what (#579).
 func Update(root string, mutate func(d *Doc)) error {
 	return update(root, slotsDefault(), mutate)
 }
 
 // update is Update with the document a missing or corrupt file starts from.
 func update(root string, def *jsonx.Object, mutate func(d *Doc)) error {
-	return fsio.UpdateJSON(RegistryPath(root), def, func(v any) (any, error) {
+	return fsio.UpdateJSONStrict(RegistryPath(root), def, func(v any) (any, error) {
 		doc, ok := v.(*jsonx.Object)
 		if !ok {
-			doc = def
+			return nil, fmt.Errorf("%w: %s is not a JSON object; fix or remove it, rota will not overwrite it", fsio.ErrUnreadable, RegistryPath(root))
 		}
 		mutate(&Doc{Registry{doc: doc}})
 		return doc, nil
