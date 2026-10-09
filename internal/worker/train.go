@@ -66,7 +66,7 @@ type TrainOpts struct {
 	// Verdict is GateOpts.Verdict, run for every member's check.
 	Verdict func(branch string) error
 	// Recorded is GateOpts.Recorded, run for every member's check.
-	Recorded func(branch string) []string
+	Recorded func(branch, head string) []string
 	// Order replaces the computed merge order; see orderTrain.
 	Order []string
 	// Say receives each line of the order report before the scratch merge.

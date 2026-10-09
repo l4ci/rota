@@ -665,6 +665,18 @@ func TestReviewDepthReadsTheIssueLabels(t *testing.T) {
 	if _, d := run("--labels", "partial-slice"); d["depth"] != "full" {
 		t.Errorf("--labels adds to the issue's, strictest wins: %v", d)
 	}
+	// an unreadable issue fails the verb: a guessed depth could pass risk:high as light
+	failing := testDeps()
+	failing.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, _, _ string, args []string, _ []byte) ([]byte, []byte, int, error) {
+		if len(args) > 1 && args[0] == "issue" && args[1] == "view" {
+			return nil, []byte("HTTP 500: server error"), 1, nil
+		}
+		return []byte("[]"), nil, 0, nil
+	}, func(n string) (string, error) { return "/fake/" + n, nil })}
+	o := trRunWith(t, failing, root, "", "review", "depth", "nia/6-small", "--json")
+	if o.code == 0 || !strings.Contains(o.stdout+o.stderr, "could not read #6 for its labels") {
+		t.Errorf("label read failure: %d %s %s", o.code, o.stdout, o.stderr)
+	}
 	policy("")
 	reads = 0
 	if _, d := run(); d["depth"] != "light" || reads != 0 {
