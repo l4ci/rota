@@ -3,6 +3,7 @@ package cli
 import (
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/worker"
 
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/round"
@@ -24,7 +25,7 @@ func roundReport(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		env := round.Env{Accounts: c.deps().WorkerAccounts()}
+		env := round.Env{Worker: worker.Env{Accounts: c.deps().WorkerAccounts()}}
 		res, err := env.ReportSlot(c.Context(), root, round.ReportOpts{Slot: slot, State: *state, Evidence: *evidence, PR: *pr, Issues: *issues})
 		if err != nil {
 			return Result{}, err

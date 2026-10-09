@@ -20,8 +20,8 @@ const twoAccounts = `{"work":{"dispatch":"herdr","accounts":[{"name":"a","config
 // with a reset an hour ahead, or free.
 func (f *assignFixture) meters(t *testing.T, spent map[string]bool) {
 	t.Helper()
-	f.env.Now = func() time.Time { return quotaNow }
-	f.env.Accounts = &worker.Accounts{Now: func() time.Time { return quotaNow },
+	f.env.Worker.Now = func() time.Time { return quotaNow }
+	f.env.Worker.Accounts = &worker.Accounts{Env: worker.Env{Now: func() time.Time { return quotaNow }},
 		Fetch: func(_ context.Context, name, _ string) (*jsonx.Object, string) {
 			util, reset := 10, "null"
 			if spent[name] {
@@ -88,7 +88,7 @@ func TestAssignResumesAtTheReset(t *testing.T) {
 func TestQuotaCapCodexLoginsCoolByTheirLimitLog(t *testing.T) {
 	f := newAssignFixture(t)
 	f.config(t, `{"work":{"dispatch":"herdr","codexAccounts":[{"name":"c1","codexHome":"/h1"},{"name":"c2","codexHome":"/h2"}]},"round":{"workerKind":"codex"}}`)
-	f.env.Now = func() time.Time { return quotaNow }
+	f.env.Worker.Now = func() time.Time { return quotaNow }
 	spent := func(session, login string) {
 		t.Helper()
 		if _, err := limits.Append(f.root, limits.Entry{Session: session, Kind: limits.KindCodex, Account: login, Status: limits.StatusWaiting,

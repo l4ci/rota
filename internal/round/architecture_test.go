@@ -23,7 +23,7 @@ func archFixture(t *testing.T, every int, closed []tracker.Issue) (string, Env, 
 	writeRegistry(t, root, slot(root, "ben", "park/ben", nil))
 	r := &fakeRemote{closedIssues: closed}
 	e := env(nil, r.asForge())
-	e.Now = func() time.Time { return time.Date(2026, 10, 4, 12, 0, 0, 0, time.UTC) }
+	e.Worker.Now = func() time.Time { return time.Date(2026, 10, 4, 12, 0, 0, 0, time.UTC) }
 	set := roundcfg.Settings{Roster: []string{"ben"}, ArchitectureEvery: every, ArchitectureAreas: []string{"cli", "worker"}}
 	return root, e, r, set
 }
@@ -91,7 +91,7 @@ func TestArchitectureThresholdMintsPerAreaAndRestartsCount(t *testing.T) {
 	}
 	// Once the review items close, only items closed after it count.
 	be.items, be.order = nil, nil
-	e.Now = func() time.Time { return time.Date(2026, 10, 6, 0, 0, 0, 0, time.UTC) } // past the cache
+	e.Worker.Now = func() time.Time { return time.Date(2026, 10, 6, 0, 0, 0, 0, time.UTC) } // past the cache
 	be.closedIssues = append(closed, closedIssue(3, "c", "2026-10-05T00:00:00Z"))
 	a, _ = e.Architecture(ctx, root, be, set, []Candidate{{ID: "9"}})
 	if a.Count != 1 || a.Due {
@@ -119,7 +119,7 @@ func TestArchitectureQueueEmptyNeedsIdleSlotNoReadyCandidateAndNewWork(t *testin
 	// Nothing closed since the last review: an empty queue has nothing to review.
 	writeRegistry(t, root, slot(root, "ben", "park/ben", nil))
 	be.closedIssues = nil
-	e.Now = func() time.Time { return time.Date(2026, 10, 4, 13, 0, 0, 0, time.UTC) } // past the cache
+	e.Worker.Now = func() time.Time { return time.Date(2026, 10, 4, 13, 0, 0, 0, time.UTC) } // past the cache
 	if a, _ = e.Architecture(ctx, root, be, set, nil); a.Due {
 		t.Fatal("an empty queue with no new closed work must not loop reviews")
 	}
@@ -192,7 +192,7 @@ func TestArchitectureCachesClosedCount(t *testing.T) {
 	if be.closedLists != 1 {
 		t.Fatalf("closed issues fetched %d times, want 1", be.closedLists)
 	}
-	e.Now = func() time.Time { return time.Date(2026, 10, 4, 12, 10, 0, 0, time.UTC) }
+	e.Worker.Now = func() time.Time { return time.Date(2026, 10, 4, 12, 10, 0, 0, time.UTC) }
 	e.Architecture(ctx, root, be, set, []Candidate{{ID: "9"}})
 	if be.closedLists != 2 {
 		t.Fatalf("an expired cache should refetch, fetched %d times", be.closedLists)

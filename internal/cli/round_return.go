@@ -59,7 +59,7 @@ func moveEnv(c *Ctx, root string) (round.Env, round.Board, error) {
 	}
 	env := c.deps().RoundEnv(ctx, root)
 	env.Worker = workerEnvCtx(c, ctx)
-	env.Accounts = c.deps().WorkerAccounts()
+	env.Worker.Accounts = c.deps().WorkerAccounts()
 	env.Board = be
 	return env, be, nil
 }

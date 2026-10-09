@@ -48,12 +48,12 @@ func usageDir(t *testing.T) string {
 
 func goMeters(t *testing.T, dir, usage string) []Meter {
 	t.Helper()
-	acc := &Accounts{Getenv: func(k string) string {
+	acc := &Accounts{Env: Env{Getenv: func(k string) string {
 		if k == "ROTA_ACCOUNT_USAGE_DIR" {
 			return usage
 		}
 		return ""
-	}}
+	}}}
 	return acc.Meters(bg, dir)
 }
 
@@ -99,12 +99,12 @@ func TestAccountListWithoutAccounts(t *testing.T) {
 
 func TestAccountPick(t *testing.T) {
 	dir, usage := newProject(t, acctConfig), usageDir(t)
-	acc := &Accounts{Getenv: func(k string) string {
+	acc := &Accounts{Env: Env{Getenv: func(k string) string {
 		if k == "ROTA_ACCOUNT_USAGE_DIR" {
 			return usage
 		}
 		return ""
-	}}
+	}}}
 	excludes := []string{"", "gamma", "gamma,alpha", " gamma , alpha ", "gamma,alpha,epsilon,zeta", "alpha,beta,gamma,delta,epsilon,zeta"}
 	picks := []string{} // "" where nothing was eligible
 	for _, excl := range excludes {
@@ -121,7 +121,7 @@ func TestAccountPick(t *testing.T) {
 func TestAccountPickRotatesWhenNoMeterIsReadable(t *testing.T) {
 	dir := newProject(t, acctConfig)
 	empty := t.TempDir()
-	acc := &Accounts{Getenv: func(string) string { return empty }}
+	acc := &Accounts{Env: Env{Getenv: func(string) string { return empty }}}
 	name, ok := acc.Pick(bg, dir, nil)
 	if !ok || name != "alpha" {
 		t.Errorf("unknown meters must stay eligible: go %q", name)
@@ -133,12 +133,12 @@ func TestAccountAssign(t *testing.T) {
 	goInit(t, b, InitOpts{Slots: 2, Base: "main"})
 	got := map[string]string{} // workers.json after each assign
 	usage := usageDir(t)
-	acc := &Accounts{Getenv: func(k string) string {
+	acc := &Accounts{Env: Env{Getenv: func(k string) string {
 		if k == "ROTA_ACCOUNT_USAGE_DIR" {
 			return usage
 		}
 		return ""
-	}}
+	}}}
 
 	name, changed, err := acc.Assign(bg, b, "w1", "beta")
 	if err != nil || name != "beta" || !changed {
@@ -183,12 +183,12 @@ func TestAccountAssignWithEveryAccountCoolingIsRefused(t *testing.T) {
 	cfg := `{"work":{"accounts":[{"name":"beta","configDir":"/acct/beta"}]}}`
 	dir := newProject(t, cfg)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
-	acc := &Accounts{Getenv: func(k string) string {
+	acc := &Accounts{Env: Env{Getenv: func(k string) string {
 		if k == "ROTA_ACCOUNT_USAGE_DIR" {
 			return usageDir(t)
 		}
 		return ""
-	}}
+	}}}
 	_, _, err := acc.Assign(bg, dir, "w1", "")
 	if we, ok := err.(*exitcode.Error); !ok || we.Exit != exitcode.ExitRefused {
 		t.Errorf("err = %v, want exit 4", err)
@@ -200,12 +200,12 @@ func TestAccountAssignWithEveryAccountCoolingIsRefused(t *testing.T) {
 func TestPoolInitSpreadsAccounts(t *testing.T) {
 	b := newProject(t, acctConfig)
 	usage := usageDir(t)
-	acc := &Accounts{Getenv: func(k string) string {
+	acc := &Accounts{Env: Env{Getenv: func(k string) string {
 		if k == "ROTA_ACCOUNT_USAGE_DIR" {
 			return usage
 		}
 		return ""
-	}}
+	}}}
 	if _, err := (Env{}).PoolInit(bg, b, InitOpts{Slots: 5, Base: "main"}, acc); err != nil {
 		t.Fatal(err)
 	}
@@ -245,12 +245,12 @@ func TestExpiredTokenReportsUnknownWithoutNetwork(t *testing.T) {
 
 func TestOrchestratorTarget(t *testing.T) {
 	dir, usage := newProject(t, acctConfig), usageDir(t)
-	acc := &Accounts{Getenv: func(k string) string {
+	acc := &Accounts{Env: Env{Getenv: func(k string) string {
 		if k == "ROTA_ACCOUNT_USAGE_DIR" {
 			return usage
 		}
 		return ""
-	}}
+	}}}
 	// From alpha: gamma has the most headroom (80). beta and delta cool, epsilon
 	// has none, zeta has no reading and so is not a candidate.
 	m, ok, others := acc.OrchestratorTarget(bg, dir, "/acct/alpha", 90)

@@ -89,19 +89,15 @@ type Env struct {
 	Label string
 	// HostErr and ForgeErr say why Snapshot or Forge is nil.
 	HostErr, ForgeErr string
-	// Now dates timed-out escalations; nil means time.Now.
-	Now func() time.Time
-	// Getenv reads the process environment for the lease, host and brief
-	// lookups; nil means os.Getenv.
-	Getenv func(string) string
 	// Lease reads the orchestrator lease; the zero value is the real process
 	// table and host name.
 	Lease roundlease.Env
 	// Worker is the worker env assign resets and dispatches with; the zero
-	// value is a Git-only env. Accounts, when set, balances slots across
-	// work.accounts at assignment.
-	Worker   worker.Env
-	Accounts *worker.Accounts
+	// value is a Git-only env. It is the one owner of the clock (Now, which
+	// dates timed-out escalations), the environment reader (Getenv, for the
+	// lease, host and brief lookups) and Accounts, which when set balances
+	// slots across work.accounts at assignment.
+	Worker worker.Env
 	// Board is the backlog's claim side; claim-mismatch drift needs it, and
 	// without it (file mode) that kind is skipped.
 	Board Board
@@ -121,13 +117,11 @@ type Env struct {
 	NeedsHuman string
 }
 
-// getenv is the env's environment reader, os.Getenv unless a test swaps it.
-func (e Env) getenv() func(string) string {
-	if e.Getenv != nil {
-		return e.Getenv
-	}
-	return os.Getenv
-}
+// getenv is the env's environment reader, from the worker env.
+func (e Env) getenv() func(string) string { return e.Worker.Environ() }
+
+// now is the env's clock, from the worker env.
+func (e Env) now() time.Time { return e.Worker.Clock()() }
 
 // Row is one line of `rota round status`.
 type Row struct {
@@ -468,10 +462,7 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 		}
 	}
 
-	now := time.Now
-	if e.Now != nil {
-		now = e.Now
-	}
+	now := e.Worker.Clock()
 	waiting := map[string]bool{}
 	for _, x := range escalation.Load(root) {
 		if x.Status == escalation.StatusPending && x.Slot != "" {

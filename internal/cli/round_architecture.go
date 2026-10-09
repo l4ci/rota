@@ -92,7 +92,7 @@ func roundArchitecture(fs *flag.FlagSet) RunFunc {
 		}
 		env := c.deps().RoundEnv(ctx, root)
 		env.Worker = workerEnvCtx(c, ctx)
-		env.Accounts = c.deps().WorkerAccounts()
+		env.Worker.Accounts = c.deps().WorkerAccounts()
 		ids, err := env.MintReview(ctx, root, be, a, round.Current(root))
 		if err != nil {
 			_, ferr := backlogFail(err)

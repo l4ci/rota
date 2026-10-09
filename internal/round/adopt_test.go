@@ -22,7 +22,7 @@ func adoptFixture(t *testing.T) (string, Env, *fakeRemote) {
 	fb := &fakeRemote{}
 	fb.add("12", "Thing", "M01", false, filesBody)
 	fb.add("13", "Other", "M01", false, filesBody)
-	return root, Env{Git: git.Exec, Base: "main", Getenv: noEnv}, fb
+	return root, Env{Git: git.Exec, Base: "main", Worker: worker.Env{Getenv: noEnv}}, fb
 }
 
 func TestAdoptRegistersExternalSlot(t *testing.T) {
@@ -106,7 +106,7 @@ func TestAdoptRefusesRegisteredBranch(t *testing.T) {
 
 func TestAdoptRefusesTheBaseAndParkBranches(t *testing.T) {
 	root := newRepo(t, map[string]string{"ben": "park/ben", "codex-a": "codex/12-thing"})
-	e, be := Env{Git: git.Exec, Base: "main", Getenv: noEnv}, &fakeRemote{}
+	e, be := Env{Git: git.Exec, Base: "main", Worker: worker.Env{Getenv: noEnv}}, &fakeRemote{}
 	be.add("12", "Thing", "M01", false, filesBody)
 	for _, ref := range []string{"main", "park/ben", filepath.Join(root, ".worktrees", "ben")} {
 		_, err := e.Adopt(bg, root, be, AdoptOpts{Ref: ref, Issue: "12"})

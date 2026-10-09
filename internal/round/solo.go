@@ -3,7 +3,6 @@ package round
 import (
 	"fmt"
 	"path/filepath"
-	"time"
 
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/worker"
@@ -30,10 +29,7 @@ func soloBrief(text string, round int) string {
 // launches the subagent with the one as its prompt and the other as its
 // working directory.
 func (e Env) soloHandOff(root, agent, text string, round int) (brief, worktree string, err error) {
-	now := time.Now
-	if e.Now != nil {
-		now = e.Now
-	}
+	now := e.Worker.Clock()
 	stamp := now().UTC().Format("2006-01-02T15:04:05Z")
 	if s := worker.LoadRegistry(root).Slot(agent); s != nil {
 		worktree = s.Worktree()
