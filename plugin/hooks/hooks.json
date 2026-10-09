@@ -1,0 +1,16 @@
+{
+  "description": "Point at /rota:rota-install when the rota binary is missing or not the plugin's version",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/plugin/hooks/session-start.sh\""
+          }
+        ]
+      }
+    ]
+  }
+}

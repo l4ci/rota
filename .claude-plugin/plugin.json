@@ -1,0 +1,14 @@
+{
+  "name": "rota",
+  "version": "0.14.0",
+  "description": "Backlog, planning and parallel-round skills for Claude Code; /rota:rota-install fetches the matching rota binary.",
+  "author": {
+    "name": "Volker Otto"
+  },
+  "homepage": "https://github.com/l4ci/rota",
+  "repository": "https://github.com/l4ci/rota",
+  "license": "MIT",
+  "keywords": ["backlog", "planning", "workflow", "orchestration", "skills"],
+  "skills": ["./plugin/skills/"],
+  "hooks": "./plugin/hooks/hooks.json"
+}
