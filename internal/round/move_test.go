@@ -15,6 +15,7 @@ import (
 
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -1130,5 +1131,22 @@ func TestParkRefusesAnExternalSlot(t *testing.T) {
 	wantBlocked(t, err, "external")
 	if got := gittest.Run(t, f.wt("ben"), "symbolic-ref", "--short", "HEAD"); got != branch {
 		t.Errorf("worktree moved to %s", got)
+	}
+}
+
+// A HEAD that cannot be read is not "no branch": Park must fail so the caller
+// does not free the slot on a guess (#579).
+func TestParkFailsWhenHEADCannotBeRead(t *testing.T) {
+	f := newMoveFx(t)
+	git := f.env.Git
+	f.env.Git = func(ctx context.Context, dir string, args ...string) (proc.Result, error) {
+		if len(args) > 0 && args[0] == "symbolic-ref" {
+			return proc.Result{ExitCode: 128, Stderr: "fatal: unable to read"}, nil
+		}
+		return git(ctx, dir, args...)
+	}
+	_, err := f.env.Park(bg, f.root, "ben", "return")
+	if exitOf(err) != exitcode.ExitUnavailable || !strings.Contains(err.Error(), "could not read HEAD") {
+		t.Fatalf("want exit 5 naming HEAD: %v", err)
 	}
 }

@@ -71,8 +71,23 @@ func LedgerNoteIn(m *RoundMemo, root string, e ledger.Entry) {
 	ledgerAppend(root, e)
 }
 
+// LedgerAppendErr is LedgerNote that returns the failure instead of warning,
+// for a verb that must exit non-zero when its ledger row is not written.
+func LedgerAppendErr(root string, e ledger.Entry) error {
+	if e.Round == 0 {
+		e.Round = (*RoundMemo)(nil).Round(root)
+	}
+	return ledgerAppendErr(root, e)
+}
+
 // ledgerAppend is LedgerNote for an entry whose round is settled.
 func ledgerAppend(root string, e ledger.Entry) {
+	if err := ledgerAppendErr(root, e); err != nil {
+		fmt.Fprintf(os.Stderr, "rota: round ledger not written (%s): %v\n", ledger.Path(root), err)
+	}
+}
+
+func ledgerAppendErr(root string, e ledger.Entry) error {
 	if e.Account == "" || e.Harness == "" || e.Slot == "" {
 		if s := ledgerSlot(LoadRegistry(root), e); s != nil {
 			e.Slot = cmp.Or(e.Slot, s.Name())
@@ -80,9 +95,7 @@ func ledgerAppend(root string, e ledger.Entry) {
 			e.Harness = cmp.Or(e.Harness, s.Kind())
 		}
 	}
-	if err := ledger.Append(root, e); err != nil {
-		fmt.Fprintf(os.Stderr, "rota: round ledger not written (%s): %v\n", ledger.Path(root), err)
-	}
+	return ledger.Append(root, e)
 }
 
 // ledgerSlot is the slot an entry belongs to: the one it names, else the first

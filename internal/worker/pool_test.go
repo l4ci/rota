@@ -249,3 +249,36 @@ func TestPoolReapOnlyUnregistersAnExternalSlot(t *testing.T) {
 		UpdateSlot(b, "w1", func(s *Slot) { s.MarkExternal("12", "") })
 	}
 }
+
+// A worktree git will not remove stays on disk: its slot must stay registered
+// and the verb must say so, not drop the only record of it (#579).
+func TestPoolReapKeepsTheSlotWhenTheWorktreeStays(t *testing.T) {
+	b := newProject(t, `{}`)
+	goInit(t, b, InitOpts{Slots: 2, Base: "main"})
+	gittest.Run(t, b, "worktree", "lock", filepath.Join(b, ".worktrees", "w2"))
+
+	reaped, err := Env{}.Reap(b, []string{"w1", "w2"}, false)
+	if err == nil || !strings.Contains(err.Error(), "w2") {
+		t.Fatalf("want an error naming w2, got %v (reaped %v)", err, reaped)
+	}
+	reg := LoadRegistry(b)
+	if reg.Slot("w2") == nil {
+		t.Error("w2 dropped from the registry while its worktree is still on disk")
+	}
+	if reg.Slot("w1") != nil {
+		t.Error("w1 was removed cleanly and should be gone")
+	}
+}
+
+func TestPoolReapRefusesACorruptRegistry(t *testing.T) {
+	b := newProject(t, `{}`)
+	goInit(t, b, InitOpts{Slots: 1, Base: "main"})
+	os.WriteFile(RegistryPath(b), []byte(`{"slots": [`), 0o644)
+	reaped, err := Env{}.Reap(b, nil, true)
+	if err == nil || len(reaped) != 0 {
+		t.Fatalf("want a refusal, got %v %v", reaped, err)
+	}
+	if _, serr := os.Stat(filepath.Join(b, ".worktrees", "w1")); serr != nil {
+		t.Errorf("worktree removed on a corrupt registry: %v", serr)
+	}
+}

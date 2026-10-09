@@ -16,7 +16,7 @@ trap 'rm -rf "$RD"' EXIT
 
   # legacy booleans and depth strings
   "$ROTA_BIN" config set ship.review false >/dev/null || fail "config set ship.review false"
-  OUT=$(hvj review depth feat)
+  OUT=$(hvj review depth feat) || vfail
   [ "$(echo "$OUT" | jget data.depth)" = "none" ] || fail "legacy false should map to none: $OUT"
   "$ROTA_BIN" config set ship.review true >/dev/null
   [ "$(hvj review depth feat | jget data.depth)" = "full" ] || fail "legacy true should map to full"
@@ -26,12 +26,12 @@ trap 'rm -rf "$RD"' EXIT
   # policy object: size rule, label override, strictest label wins
   "$ROTA_BIN" config set ship.review '{"default":"full","lightBelow":50,"labels":{"risk:high":"full","partial-slice":"none"}}' >/dev/null \
     || fail "config set rejected a valid policy object"
-  OUT=$(hvj review depth feat)
+  OUT=$(hvj review depth feat) || vfail
   [ "$(echo "$OUT" | jget data.depth)" = "light" ] || fail "3 changed lines under lightBelow 50 should be light: $OUT"
   [ "$(echo "$OUT" | jget data.changedLines)" = "3" ] || fail "changedLines should be 3: $OUT"
   [ "$(hvj review depth feat --labels partial-slice | jget data.depth)" = "none" ] || fail "partial-slice label should map to none"
   [ "$(hvj review depth feat --labels partial-slice,risk:high | jget data.depth)" = "full" ] || fail "risk:high should force full"
-  TXT=$("$ROTA_BIN" review depth feat)
+  TXT=$("$ROTA_BIN" review depth feat) || vfail
   grep -q '^REVIEW-DEPTH feat — light' <<<"$TXT" || fail "text mode should print the depth line: $TXT"
 
   # a malformed policy is refused by set and flagged by config check

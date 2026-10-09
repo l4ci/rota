@@ -34,7 +34,7 @@ func (h *herdr) Snapshot(ctx context.Context) ([]Agent, error) {
 	var doc struct {
 		Result struct {
 			Snapshot struct {
-				Agents []struct {
+				Agents *[]struct {
 					Name   string `json:"name"`
 					TabID  string `json:"tab_id"`
 					Cwd    string `json:"cwd"`
@@ -46,8 +46,11 @@ func (h *herdr) Snapshot(ctx context.Context) ([]Agent, error) {
 	if err := json.Unmarshal([]byte(r.Stdout), &doc); err != nil {
 		return nil, fmt.Errorf("herdr api snapshot: unreadable reply: %w", err)
 	}
+	if doc.Result.Snapshot.Agents == nil { // valid JSON of another shape is not "no agents": every tab would read dead
+		return nil, fmt.Errorf("herdr api snapshot: reply has no result.snapshot.agents")
+	}
 	out := []Agent{}
-	for _, a := range doc.Result.Snapshot.Agents {
+	for _, a := range *doc.Result.Snapshot.Agents {
 		out = append(out, Agent{Tab: a.TabID, Name: a.Name, Cwd: a.Cwd, Status: a.Status})
 	}
 	return out, nil

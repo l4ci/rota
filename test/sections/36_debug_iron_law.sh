@@ -55,21 +55,21 @@ assert d['attempts'] == [], f\"attempts={d['attempts']}\"
 
   # ── (c) record-attempt reports the attempt number and (d) fail marks outcome ───
   # Pattern: record → fail → record → fail → record → fail (one pending at a time)
-  n1="$(hvj debug counter record-attempt --hypothesis "hyp-one" --commit "abc1111" | jget data.attempt)"
+  n1="$(hvj debug counter record-attempt --hypothesis "hyp-one" --commit "abc1111" | jget data.attempt)" || vfail
   [ "$n1" = "1" ] || { echo "FAIL: first attempt number expected 1, got $n1"; exit 1; }
-  f1="$(hvj debug counter fail | jget data.failedFixes)"
+  f1="$(hvj debug counter fail | jget data.failedFixes)" || vfail
   [ "$f1" = "1" ] || { echo "FAIL: fail#1 expected 1, got $f1"; exit 1; }
   [ "$(sget attempts[0].outcome)" = "failed" ] || { echo "FAIL: attempt[0] not marked failed"; exit 1; }
   [ -n "$(sget attempts[0].endedAt)" ] || { echo "FAIL: attempt[0] has no endedAt"; exit 1; }
 
-  n2="$(hvj debug counter record-attempt --hypothesis "hyp-two" --commit "abc2222" | jget data.attempt)"
+  n2="$(hvj debug counter record-attempt --hypothesis "hyp-two" --commit "abc2222" | jget data.attempt)" || vfail
   [ "$n2" = "2" ] || { echo "FAIL: second attempt number expected 2, got $n2"; exit 1; }
-  f2="$(hvj debug counter fail | jget data.failedFixes)"
+  f2="$(hvj debug counter fail | jget data.failedFixes)" || vfail
   [ "$f2" = "2" ] || { echo "FAIL: fail#2 expected 2, got $f2"; exit 1; }
 
-  n3="$(hvj debug counter record-attempt --hypothesis "hyp-three" --commit "abc3333" | jget data.attempt)"
+  n3="$(hvj debug counter record-attempt --hypothesis "hyp-three" --commit "abc3333" | jget data.attempt)" || vfail
   [ "$n3" = "3" ] || { echo "FAIL: third attempt number expected 3, got $n3"; exit 1; }
-  f3="$(hvj debug counter fail | jget data.failedFixes)"
+  f3="$(hvj debug counter fail | jget data.failedFixes)" || vfail
   [ "$f3" = "3" ] || { echo "FAIL: fail#3 expected 3, got $f3"; exit 1; }
 
   # verify attempts array has 3 entries all failed
@@ -94,7 +94,7 @@ assert d['failedFixes'] == 3, f\"failedFixes={d['failedFixes']}\"
   [ "$rc" = "2" ] || { echo "FAIL: record-attempt without --commit should exit 2, got $rc"; exit 1; }
 
   # ── (e) summary renders Iron Law markdown ─────────────────────────────────
-  SUMMARY="$(hvj debug counter summary | jget data.markdown)"
+  SUMMARY="$(hvj debug counter summary | jget data.markdown)" || vfail
   grep -q "Iron Law triggered for \[F02\]" <<<"$SUMMARY" || { echo "FAIL: summary missing Iron Law header"; exit 1; }
   grep -q "abc1111" <<<"$SUMMARY" || { echo "FAIL: summary missing commit abc1111"; exit 1; }
   grep -q "abc2222" <<<"$SUMMARY" || { echo "FAIL: summary missing commit abc2222"; exit 1; }
@@ -134,7 +134,7 @@ assert d['failedFixes'] == 3, f\"failedFixes={d['failedFixes']}\"
   # ── (i) inc-cycle is separate from failed_fixes ───────────────────────────
   hvj debug counter init F02 >/dev/null || { echo "FAIL: init before inc-cycle failed"; exit 1; }
   hvj debug counter inc-cycle >/dev/null
-  c2="$(hvj debug counter inc-cycle | jget data.hypothesisCycles)"
+  c2="$(hvj debug counter inc-cycle | jget data.hypothesisCycles)" || vfail
   [ "$c2" = "2" ] || { echo "FAIL: inc-cycle second call expected 2, got $c2"; exit 1; }
   python3 -c "
 import json

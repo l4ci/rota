@@ -15,11 +15,11 @@ import json, sys
 print(next(i for i in json.load(open(sys.argv[2]))["issues"] if i["number"] == int(sys.argv[1]))["body"])' "$1" "$P/db.json"; }
 
   printf 'Why.\n\n## Acceptance\n\n- [ ] it parses\n- [ ] it prints\n' > "$P/body.md"
-  ID="$(hvj item create --kind features --title "Export" --tag Minor --body-file "$P/body.md" | jget data.id)"
+  ID="$(hvj item create --kind features --title "Export" --tag Minor --body-file "$P/body.md" | jget data.id)" || vfail
   case "$(BODY_OF "$ID")" in *"- [ ] AC-1: it parses"*"- [ ] AC-2: it prints"*) ;; *) fail "create should number the criteria: $(BODY_OF "$ID")" ;; esac
   pass "item create numbers acceptance criteria"
 
-  OUT="$(hvj item show "$ID")"
+  OUT="$(hvj item show "$ID")" || vfail
   eq "show ids" "AC-1 AC-2 false" "$(jget data.acceptance[0].id <<<"$OUT") $(jget data.acceptance[1].id <<<"$OUT") $(jget data.acceptance[1].met <<<"$OUT")"
 
   eq "no proof row refuses" "4" "$(RC hvj plan pass "#$ID" AC-1 --proof "abc1234:echo ok")"
@@ -31,7 +31,7 @@ print(next(i for i in json.load(open(sys.argv[2]))["issues"] if i["number"] == i
   hvj proof add "$ID" --check "echo ok" --result PASS --evidence e --sha abc1234 > /dev/null
   OUT="$(hvj plan pass "#$ID" AC-2 --proof "abc1234:echo ok")" || fail "plan pass after a PASS row failed: $OUT"
   eq "pass data" "AC-2 true" "$(jget data.ac <<<"$OUT") $(jget data.changed <<<"$OUT")"
-  OUT="$(hvj item show "$ID")"
+  OUT="$(hvj item show "$ID")" || vfail
   eq "met with proof" "true abc1234:echo ok" "$(jget data.acceptance[1].met <<<"$OUT") $(jget data.acceptance[1].proof <<<"$OUT")"
   case "$(hvj item note show "$ID" --kind acceptance | jget data.body)" in "- AC-2 · "*" · abc1234 · echo ok · it prints") ;; *) fail "acceptance note should hold the mark" ;; esac
   case "$(BODY_OF "$ID")" in *"[x]"*) fail "pass must not tick the body" ;; esac
@@ -45,7 +45,7 @@ for i in db["issues"]:
         i["body"] = i["body"].replace("it prints", "it prints twice")
 json.dump(db, open(sys.argv[1], "w"))
 PY
-  OUT="$(hvj item show "$ID")"
+  OUT="$(hvj item show "$ID")" || vfail
   eq "drift" "false changed" "$(jget data.acceptance[1].met <<<"$OUT") $(jget data.acceptance[1].flag <<<"$OUT")"
   pass "editing a met criterion is flagged on the next read"
 )
