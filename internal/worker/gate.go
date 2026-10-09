@@ -296,8 +296,7 @@ func (e Env) Gate(ctx context.Context, root string, o GateOpts) (GateResult, err
 	return res, err
 }
 
-// gate reads the registry, config and verification commands, then runs the
-// step table.
+// gate reads the registry and the gate input, then runs the step table.
 func (e Env) gate(ctx context.Context, root string, o GateOpts) (GateResult, error) {
 	res := GateResult{Slot: o.Slot, Base: o.Base}
 	reg := LoadRegistry(root)
@@ -308,17 +307,8 @@ func (e Env) gate(ctx context.Context, root string, o GateOpts) (GateResult, err
 	if err != nil {
 		return res, err
 	}
-	in := gateInput{
-		cfg: config.Load(rotatree.Config(root)),
-		// Read before the merge: the branch lands in root and may carry its own
-		// .rota/config.json, which must not decide how it is verified.
-		verifyCmds: verifyCommandsAt(root),
-		e2eCmds:    TierCommands(root, "e2e"),
-	}
-	if in.where, err = FullWhere(in.cfg); err != nil {
-		return res, err
-	}
-	if in.ledger, err = LoadLedger(root); err != nil {
+	in, err := e.GateInput(root)
+	if err != nil {
 		return res, err
 	}
 	g := &gate{e: e, ctx: ctx, root: root, res: &res, o: o, in: in, target: t, resolved: t, branch: t.Branch, pr: t.PR}
@@ -326,13 +316,34 @@ func (e Env) gate(ctx context.Context, root string, o GateOpts) (GateResult, err
 	return res, err
 }
 
-// gateInput is what the gate reads from disk before it starts.
+// gateInput is what the gate and the train read before they start: the config,
+// the commands it names and the test ledger. Env.GateInput supplies it, so one
+// loader decides what is read and tests hand over a value instead of a .rota
+// tree. The registry is not part of it: it resolves the target, not how the
+// target is verified.
 type gateInput struct {
 	cfg        any
 	verifyCmds []string
 	where      string            // test.fullWhere
-	e2eCmds    []string          // test.e2e, read before the merge like verifyCmds
-	ledger     testledger.Ledger // .rota/test-ledger.json, read before the merge too
+	e2eCmds    []string          // test.e2e
+	ledger     testledger.Ledger // .rota/test-ledger.json
+}
+
+// loadGateInput is the disk default of Env.GateInput.
+//
+// Read before the merge: the branch lands in root and may carry its own
+// .rota/config.json or test-ledger.json, which must not decide how it is
+// verified. The gate and the train both call this ahead of any merge and carry
+// the value through, never re-reading root afterwards.
+func loadGateInput(root string) (gateInput, error) {
+	cfg := config.Load(rotatree.Config(root))
+	in := gateInput{cfg: cfg, verifyCmds: verifyCommandsAt(root), e2eCmds: TierCommands(root, "e2e")}
+	var err error
+	if in.where, err = FullWhere(cfg); err != nil {
+		return in, err
+	}
+	in.ledger, err = LoadLedger(root)
+	return in, err
 }
 
 // gateStep is one stage of the gate. done ends the gate: the verdict is

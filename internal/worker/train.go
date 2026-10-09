@@ -4,12 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/land"
 	"github.com/l4ci/rota/internal/overlap"
-	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/testledger"
 	"os"
@@ -152,9 +150,10 @@ func (e Env) train(ctx context.Context, root string, o TrainOpts, cache *trainCa
 	if cur, _ := e.git(root, "rev-parse", "--abbrev-ref", "HEAD"); cur != o.Base {
 		return res, fail(exitcode.ExitResolution, fmt.Sprintf("a train must run with %s checked out (currently on %s)", o.Base, cur))
 	}
-	// A bad test.fullWhere or test.ciChecks is refused before any member is
-	// checked; fullTier reads them again once the members are known.
-	if _, err := FullWhere(config.Load(rotatree.Config(root))); err != nil {
+	// A bad test.fullWhere, test.ciChecks or ledger is refused before any
+	// member is checked, and the train carries this read through.
+	in, err := e.GateInput(root)
+	if err != nil {
 		return res, err
 	}
 	seen := map[string]bool{}
@@ -197,24 +196,19 @@ func (e Env) train(ctx context.Context, root string, o TrainOpts, cache *trainCa
 	}
 	// An empty test.full would land the train unverified: refuse before the
 	// scratch merge unless --no-verify says so.
-	if where, _ := FullWhere(config.Load(rotatree.Config(root))); !o.NoVerify && noVerifyRule(where, verifyCommandsAt(root), TierCommands(root, "e2e")) {
+	if !o.NoVerify && noVerifyRule(in.where, in.verifyCmds, in.e2eCmds) {
 		res.Verdict = GateNoVerify
 		res.Err, res.Hint = noVerifyRefusal("TRAIN")
 		return res, nil
 	}
-	// The ledger is read before anything merges, like the config. An expired
-	// entry fails the train before it builds the scratch tree.
-	led, err := LoadLedger(root)
-	if err != nil {
-		return res, err
-	}
-	if now := e.Now(); LedgerExpiry(led, now) != "" {
-		res.Verdict, res.Expired = GateVerifyFailed, led.Expired(now)
-		res.Err = "TRAIN-FAIL " + LedgerExpiry(led, now) + "; nothing landed"
+	// An expired ledger entry fails the train before it builds the scratch tree.
+	if now := e.Now(); LedgerExpiry(in.ledger, now) != "" {
+		res.Verdict, res.Expired = GateVerifyFailed, in.ledger.Expired(now)
+		res.Err = "TRAIN-FAIL " + LedgerExpiry(in.ledger, now) + "; nothing landed"
 		res.Hint = "fix the test or renew the entry in .rota/test-ledger.json, then re-run the train"
 		return res, nil
 	}
-	verify, onCI, brokeMsg, err := e.fullTier(ctx, root, "train")
+	verify, onCI, brokeMsg, err := e.fullTier(ctx, root, "train", in)
 	if err != nil {
 		return res, err
 	}
@@ -416,9 +410,9 @@ func (e Env) train(ctx context.Context, root string, o TrainOpts, cache *trainCa
 
 	// 4b. E2E: the most expensive tier runs once, on the train result, after
 	// test.full passed. A red e2e bisects the same way a red full does.
-	e2e := TierCommands(root, "e2e")
+	e2e := in.e2eCmds
 	if green && len(e2e) > 0 {
-		run := cached("test.e2e", func() (VerifyResult, error) { return e.RunVerifyWith(ctx, e2e, scratch, led) })
+		run := cached("test.e2e", func() (VerifyResult, error) { return e.RunVerifyWith(ctx, e2e, scratch, in.ledger) })
 		er, err := run(n)
 		if err != nil {
 			return res, err
