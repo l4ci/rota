@@ -19,9 +19,9 @@ import (
 // scopeFx is an issues-backed repo where #1 is held by slot ben and #2 clashes
 // with it on a declared scope only (`## Touches` names the same route, no file).
 type scopeFx struct {
-	root  string
-	deps  *Deps
-	git   []string // git calls, in order
+	root string
+	deps *Deps
+	git  []string // git calls, in order
 }
 
 func newScopeFx(t *testing.T, overlap string, extraCfg string) *scopeFx {
@@ -201,6 +201,10 @@ func TestRoundTickWarnsEachScopeOverlap(t *testing.T) {
 // assign is attempted at all. Assign refuses the same clash on its own, so the
 // outcome alone cannot tell the two apart; an attempt shows as the lease
 // check Assign opens with (`git rev-parse --git-common-dir` through Deps.Git).
+// Forge calls and workers.json are identical with and without the tick's
+// ScopeOverlap wiring (Assign refuses block and the tick swallows it), so the
+// lease check is the one signal that separates them; dropping the wiring at
+// round_tick.go fails this test.
 func TestRoundTickBlocksScopeOverlap(t *testing.T) {
 	attempts := func(overlap string) int {
 		f := newScopeFx(t, overlap, `,"autopilot":true`)
