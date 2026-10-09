@@ -199,3 +199,20 @@ func TestTrainReadsTheLeaseOnce(t *testing.T) {
 		t.Errorf("train read the lease %d times, want 1", reads)
 	}
 }
+
+// A poll turning several slots done reads the lease once, not once per slot.
+func TestPollReadsTheLeaseOnce(t *testing.T) {
+	dir, f := pollRegistry(t, "tmux")
+	f.panes["w1"] = []string{"static\n", "static\nROTA-DONE w1 https://github.com/o/r/pull/9\n"}
+	f.panes["w2"] = []string{"static\n", "static\nROTA-DONE w2 https://github.com/o/r/pull/10\n"}
+	reads := 0
+	env := fakeLeaseEnv(100)
+	leaseEnv = func() roundlease.Env { reads++; return env }
+	t.Cleanup(func() { leaseEnv = roundlease.DefaultEnv })
+	if _, err := envWith(f).Poll(bg, dir, PollOpts{Lines: 60}); err != nil {
+		t.Fatal(err)
+	}
+	if reads != 1 {
+		t.Errorf("poll of two done slots read the lease %d times, want 1", reads)
+	}
+}

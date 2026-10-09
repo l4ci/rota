@@ -382,8 +382,9 @@ func (e Env) Poll(ctx context.Context, root string, o PollOpts) (PollResult, err
 	}); err != nil {
 		return PollResult{}, err
 	}
+	memo := &RoundMemo{}
 	for _, d := range dones {
-		LedgerDone(ctx, e.Accounts, root, d)
+		LedgerDoneIn(memo, ctx, e.Accounts, root, d)
 	}
 	if rowErr != nil {
 		return PollResult{}, rowErr
