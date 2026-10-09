@@ -32,7 +32,7 @@ func (e Env) findUnregisteredBranches(ctx context.Context, root string, rep *Rep
 	seen := map[string]bool{}
 	for _, ref := range strings.Fields(res.Stdout) {
 		name := strings.TrimPrefix(strings.TrimPrefix(ref, "refs/heads/"), "refs/remotes/origin/")
-		if name == "HEAD" || seen[name] || held[name] || name == e.Base || strings.HasPrefix(name, "park/") {
+		if name == "HEAD" || seen[name] || held[name] || name == e.Base || worker.IsPark(name) {
 			continue
 		}
 		if ok, _ := path.Match(e.AdoptPattern, name); !ok {
