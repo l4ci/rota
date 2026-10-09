@@ -19,9 +19,9 @@ import (
 // scopeFx is an issues-backed repo where #1 is held by slot ben and #2 clashes
 // with it on a declared scope only (`## Touches` names the same route, no file).
 type scopeFx struct {
-	root  string
-	deps  *Deps
-	git   []string // git calls, in order
+	root string
+	deps *Deps
+	git  []string // git calls, in order
 }
 
 func newScopeFx(t *testing.T, overlap string, extraCfg string) *scopeFx {
