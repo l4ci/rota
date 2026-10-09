@@ -24,8 +24,12 @@ fail() { printf '  \033[31mFAIL\033[0m %s\n' "$1"; exit 1; }
 # verb's own text, so the message names which call broke without a hand-written string.
 vfail() {
   local rc=$? file="${BASH_SOURCE[1]}" line="${BASH_LINENO[0]}" text
-  text=$(sed -n "${line}p" "$file" 2>/dev/null | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*|| vfail.*$//')
-  fail "verb exited $rc at ${file##*/}:$line: $text"
+  # A multi-line capture reports its closing line; walk back to the line that
+  # opens the `$(` so the message names the verb.
+  local first=$line
+  while [ "$first" -gt 1 ] && ! sed -n "${first}p" "$file" | grep -qE '^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*="?\$\('; do first=$((first - 1)); done
+  text=$(sed -n "${first},${line}p" "$file" 2>/dev/null | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*|| vfail.*$//' | tr '\n' ' ' | sed -e 's/ \\ / /g')
+  fail "verb exited $rc at ${file##*/}:$first-$line: $text"
 }
 
 # Black-box helpers (#46). Callers check the exit code themselves:
