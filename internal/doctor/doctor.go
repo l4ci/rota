@@ -595,6 +595,7 @@ func (d *runner) resolve(word string) (string, bool) {
 func (d *runner) skills() Check {
 	const name = "skills"
 	const installHint = "run: rota skills install"
+	const pluginHint = "run /rota:rota-install in Claude Code (binary to the plugin's version) or claude plugin update rota@rota"
 	var have []skills.RootStatus
 	if rep := d.in.Skills; rep != nil {
 		for _, r := range rep.Roots {
@@ -609,20 +610,42 @@ func (d *runner) skills() Check {
 	rep := d.in.Skills
 	var problems []string
 	hint := "run: rota skills update"
+	var manifestBad, pluginBad bool
 	for _, r := range have {
+		if r.Plugin {
+			if !r.Current {
+				pluginBad = true
+				problems = append(problems, fmt.Sprintf("%s (plugin): skills %s, rota %s", r.Path, versionOrDigest(r.Version, r.Digest), versionOrDigest(rep.Version, rep.Digest)))
+			}
+			if len(r.Missing) > 0 {
+				pluginBad = true
+				problems = append(problems, fmt.Sprintf("%s (plugin): %d missing (%s)", r.Path, len(r.Missing), first(r.Missing)))
+			}
+			continue
+		}
 		if !r.Current {
+			manifestBad = true
 			problems = append(problems, fmt.Sprintf("%s: skills %s, rota %s", r.Path, versionOrDigest(r.Version, r.Digest), versionOrDigest(rep.Version, rep.Digest)))
 		}
 		if len(r.Missing) > 0 {
+			manifestBad = true
 			problems = append(problems, fmt.Sprintf("%s: %d missing (%s)", r.Path, len(r.Missing), first(r.Missing)))
 		}
 		if len(r.Edited) > 0 {
+			manifestBad = true
 			problems = append(problems, fmt.Sprintf("%s: %d edited (%s)", r.Path, len(r.Edited), first(r.Edited)))
 			hint = "run: rota skills update --overwrite"
 		}
 	}
 	if len(problems) > 0 {
-		return fail(name, strings.Join(problems, "; "), hint)
+		var hints []string
+		if manifestBad {
+			hints = append(hints, hint)
+		}
+		if pluginBad {
+			hints = append(hints, pluginHint)
+		}
+		return fail(name, strings.Join(problems, "; "), strings.Join(hints, "; "))
 	}
 	return pass(name, fmt.Sprintf("%d roots match rota %s", len(have), versionOrDigest(rep.Version, rep.Digest)))
 }

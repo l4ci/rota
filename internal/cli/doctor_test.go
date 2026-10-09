@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/l4ci/rota/internal/skills"
 )
 
 // doctorFakes writes fake tools into a fresh dir and points the tool lookup at
@@ -131,6 +133,60 @@ func TestDoctorSkillsCheck(t *testing.T) {
 	os.WriteFile(filepath.Join(home, ".claude", "skills", "rota-work", "SKILL.md"), []byte("mine\n"), 0o644)
 	if c := skills(); c["status"] != "fail" || c["hint"] != "run: rota skills update --overwrite" {
 		t.Errorf("edited: %v", c)
+	}
+}
+
+// An installed rota plugin counts as a skill root: doctor passes, and skills
+// status reports it as a plugin row.
+func TestDoctorSkillsPlugin(t *testing.T) {
+	doctorFakes(t, map[string]string{"git": `case "$1" in remote) exit 2;; esac; exit 0`})
+	t.Setenv("CLAUDE_CODE_PLUGIN_CACHE_DIR", "")
+	dir, _ := filepath.EvalSymlinks(t.TempDir())
+	home := os.Getenv("HOME")
+	set, err := skills.Embedded()
+	if err != nil {
+		t.Fatal(err)
+	}
+	install := filepath.Join(home, ".claude", "plugins", "cache", "rota", "rota", "0.14.0")
+	write := func(p, body string) {
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, p := range set.Paths() {
+		b, _ := set.File(p)
+		write(filepath.Join(install, "skills", filepath.FromSlash(p)), string(b))
+	}
+	write(filepath.Join(install, ".claude-plugin", "plugin.json"), `{"version":"0.14.0"}`)
+	write(filepath.Join(home, ".claude", "plugins", "installed_plugins.json"),
+		`{"version":2,"plugins":{"rota@rota":[{"scope":"user","installPath":"`+install+`"}]}}`)
+
+	_, out, _ := rotaIn(t, dir, "doctor", "--json")
+	_, c := doctorData(t, out)
+	if c["skills"]["status"] != "pass" {
+		t.Errorf("plugin install: %v", c["skills"])
+	}
+	code, env, errOut := skillsRun(t, home, dir, "skills", "status")
+	if code != 0 {
+		t.Fatalf("status %d %s", code, errOut)
+	}
+	found := false
+	for _, r := range skData(env)["roots"].([]any) {
+		row := r.(map[string]any)
+		if row["plugin"] == true {
+			found = true
+			if row["installed"] != true || row["current"] != true || row["version"] != "0.14.0" {
+				t.Errorf("plugin row: %v", row)
+			}
+		} else if row["plugin"] != false {
+			t.Errorf("row without plugin field: %v", row)
+		}
+	}
+	if !found {
+		t.Errorf("no plugin row: %v", env)
 	}
 }
 

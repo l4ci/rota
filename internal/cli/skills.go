@@ -75,15 +75,7 @@ func skillsEnv(c *Ctx, a skillsArgs) (set *skills.Set, roots []skills.Root, skip
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	home := os.Getenv("HOME")
-	if home == "" {
-		home, _ = os.UserHomeDir()
-	}
-	root := ""
-	if !a.currentAccount {
-		root, _ = c.Root()
-	}
-	claudeDirs, skipped := skillsClaudeDirs(home, root)
+	home, claudeDirs, skipped := skillsDirs(c, a)
 	top := ""
 	if a.scope != skills.User {
 		top = gitToplevel()
@@ -98,6 +90,37 @@ func skillsEnv(c *Ctx, a skillsArgs) (set *skills.Set, roots []skills.Root, skip
 		return nil, nil, nil, Resolution("%v", err)
 	}
 	return set, roots, skipped, nil
+}
+
+// skillsDirs is the home and the Claude config dirs (see skillsClaudeDirs) a
+// verb works on.
+func skillsDirs(c *Ctx, a skillsArgs) (home string, claudeDirs, skipped []string) {
+	home = os.Getenv("HOME")
+	if home == "" {
+		home, _ = os.UserHomeDir()
+	}
+	root := ""
+	if !a.currentAccount {
+		root, _ = c.Root()
+	}
+	claudeDirs, skipped = skillsClaudeDirs(home, root)
+	return home, claudeDirs, skipped
+}
+
+// skillsPluginRoots are the installed rota plugin roots of the Claude config
+// dirs that fit the scope ("" for both) and agent filters; top is the project
+// root, "" outside a work tree.
+func skillsPluginRoots(claudeDirs []string, scope, agent, top string) []skills.Root {
+	if agent != "" && agent != "all" && agent != skills.Claude {
+		return nil
+	}
+	var out []skills.Root
+	for _, r := range skills.PluginRoots(skills.PluginsDirs(os.Getenv, claudeDirs), top) {
+		if scope == "" || scope == r.Scope {
+			out = append(out, r)
+		}
+	}
+	return out
 }
 
 // skillsClaudeDirs is the Claude config dirs user-scope skills go to: the
@@ -293,6 +316,12 @@ func skillsStatus(c *Ctx, a skillsArgs) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
+	_, claudeDirs, _ := skillsDirs(c, a)
+	top := ""
+	if a.scope != skills.User {
+		top = gitToplevel()
+	}
+	roots = append(roots, skillsPluginRoots(claudeDirs, a.scope, a.agent, top)...)
 	rep, err := set.Status(roots, version.Get().Version)
 	if err != nil {
 		return Result{}, skillsErr(err)
@@ -300,8 +329,11 @@ func skillsStatus(c *Ctx, a skillsArgs) (Result, error) {
 	rootsData := []any{}
 	text := []string{fmt.Sprintf("rota %s, skills %s", rep.Version, short(rep.Digest))}
 	for _, r := range rep.Roots {
-		o := knObj("root", r.Path, "agent", r.Agent, "scope", r.Scope, "installed", r.Installed)
+		o := knObj("root", r.Path, "agent", r.Agent, "scope", r.Scope, "plugin", r.Plugin, "installed", r.Installed)
 		line := fmt.Sprintf("%s (%s, %s): ", r.Path, r.Agent, r.Scope)
+		if r.Plugin {
+			line = fmt.Sprintf("%s (%s, %s, plugin): ", r.Path, r.Agent, r.Scope)
+		}
 		if !r.Installed {
 			line += "not installed"
 		} else {
