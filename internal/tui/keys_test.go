@@ -181,8 +181,19 @@ func TestStripHandlesNonSGRCSI(t *testing.T) {
 	}{
 		{"a\x1b[2Kb text\x1b[31mred", "ab textred", 10},
 		{"\x1b[1;5Hx\x1b[?25ly", "xy", 2},
-		{"a\x1b[2K", "a", 1},
-		{"a\x1b[31", "a", 1}, // unterminated: the rest is dropped
+		// Text after a non-SGR CSI holds an 'm': the old first-m rule would eat up to it.
+		{"a\x1b[2Kmore", "amore", 5},
+		{"\x1b[Hmmm\x1b[Jm", "mmm" + "m", 4},
+		// Unterminated: the rest is dropped from Strip and from Width's count (as stripDim did).
+		{"a\x1b[31", "a", 1},
+		{"a\x1b[31 12", "a", 1},
+		// Width counts runes, not bytes.
+		{"é☃日\x1b[31m本", "é☃日本", 4},
+		// ESC not starting a CSI passes through: bare, OSC, charset select.
+		{"a\x1bb", "a\x1bb", 3},
+		{"a\x1b", "a\x1b", 2},
+		{"\x1b]0;t\x07x", "\x1b]0;t\x07x", 7},
+		{"\x1b(Bx", "\x1b(Bx", 4},
 	} {
 		if got := Strip(tc.in); got != tc.want {
 			t.Errorf("Strip(%q) = %q, want %q", tc.in, got, tc.want)
