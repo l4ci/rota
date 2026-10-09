@@ -506,12 +506,25 @@ func execShell(ctx context.Context, dir, command string) (string, int) {
 // that holds the bounced PR, so the ledger entry of a best-of attempt lands on
 // its own row; "" falls back to the first slot holding the issue.
 func RecordBounce(root, issue, slot, head string) (int, error) {
-	return RecordBounceIn(nil, root, issue, slot, head)
+	n, _, err := RecordBounceCounted(root, issue, slot, head)
+	return n, err
+}
+
+// RecordBounceCounted is RecordBounce that also says whether this call counted
+// the bounce (false when it deduped on the same head), decided under the same
+// registry lock as the write, so a caller that may roll it back never undoes a
+// bounce another writer counted.
+func RecordBounceCounted(root, issue, slot, head string) (int, bool, error) {
+	return recordBounce(nil, root, issue, slot, head)
 }
 
 // RecordBounceIn is RecordBounce reading the round lease through m.
-func RecordBounceIn(m *RoundMemo, root, issue, slot, head string) (n int, err error) {
-	counted := false
+func RecordBounceIn(m *RoundMemo, root, issue, slot, head string) (int, error) {
+	n, _, err := recordBounce(m, root, issue, slot, head)
+	return n, err
+}
+
+func recordBounce(m *RoundMemo, root, issue, slot, head string) (n int, counted bool, err error) {
 	defer func() {
 		if err == nil && counted {
 			LedgerNoteIn(m, root, ledger.Entry{Kind: ledger.KindBounce, Issue: issue, Slot: slot, Detail: ledger.Detail("count", n)})
@@ -534,7 +547,7 @@ func RecordBounceIn(m *RoundMemo, root, issue, slot, head string) (n int, err er
 			doc.Set("bounceHeads", heads)
 		}
 	})
-	return n, err
+	return n, counted, err
 }
 
 // UnrecordBounce undoes one RecordBounce(root, issue, head) whose relay did not
