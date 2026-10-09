@@ -586,7 +586,14 @@ in `<!-- rota:handoff <slot>@<round> -->`.
 `rota round status` lists the round's slots with host, PR and drift. `rota round reconcile` reports
 drift between the registry, the host, git and the forge, including `stalled` (never repaired),
 `lease-stale`, `claim-mismatch` and `unregistered-branch`; `--apply` makes the safe repairs, and never
-edits the tracker.
+edits the tracker. A repair whose evidence could not be read this run (the host for a `dead-tab`, the
+forge for a PR, merge or label finding) is skipped with a warning and stays in `drift`; run it again once
+the host or forge answers.
+
+If `.rota/workers.json` exists but does not parse, every verb that writes it refuses (`fix or remove it,
+rota will not overwrite it`) instead of starting from an empty pool. A verb that records a round event
+(`round assign`, `round transfer`, `round report`) exits non-zero when its `.rota/ledger.jsonl` row cannot
+be written, and the message says the assign, transfer or report itself did happen.
 
 ## Adopting work another tool started
 

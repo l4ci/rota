@@ -1,5 +1,5 @@
 ---
-verified-sha: 108ba5d31d2e613557420f59937218ba01cac11d
+verified-sha: c535c4cf9bd5b3b92d47e1d1df0c0014b4bfe750
 refs:
   - internal/tracker
   - internal/ship

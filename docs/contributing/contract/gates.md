@@ -1,5 +1,5 @@
 ---
-verified-sha: 5e9b425a84bdc61cedf349412b0aa15c738689eb
+verified-sha: c535c4cf9bd5b3b92d47e1d1df0c0014b4bfe750
 refs:
   - internal/gate
   - internal/cli/gate.go
