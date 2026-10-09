@@ -482,3 +482,21 @@ func TestPollBaselinesTheReviewCursorAtDone(t *testing.T) {
 		t.Errorf("a later poll moved the cursor: %q", got)
 	}
 }
+
+// The pane's last ROTA-DONE outlives its issue: a slot that took the next issue
+// would read the previous PR back as its own while that PR waits in `prs` (#648).
+func TestPollDoesNotRecordAPRAnotherRecordHolds(t *testing.T) {
+	dir, f := pollRegistry(t, "tmux")
+	const url = "https://github.com/o/r/pull/9"
+	if err := Update(dir, func(d *Doc) { d.QueuePR(QueuedPR{Issue: "12", PR: url, From: "w1", Branch: "w1/12-x"}) }); err != nil {
+		t.Fatal(err)
+	}
+	f.panes["w1"] = []string{"x\nROTA-DONE w1 " + url + "\n", "x\nROTA-DONE w1 " + url + "\n"}
+	f.panes["w2"] = []string{"a\n", "a\n"}
+	if _, err := envWith(f).Poll(bg, dir, PollOpts{Lines: 60}); err != nil {
+		t.Fatal(err)
+	}
+	if got := slotField(t, dir, "w1", "pr"); got != "<null>" {
+		t.Errorf("a queued PR is not the slot's: pr = %s", got)
+	}
+}

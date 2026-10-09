@@ -45,6 +45,7 @@ const (
 	ClaimMismatch        = "claim-mismatch"
 	UnregisteredBranch   = "unregistered-branch"
 	MergedExternal       = "merged-external"
+	QueuedBranchMismatch = "queued-branch-mismatch"
 	// LeaseStale is declared in lease.go.
 )
 
@@ -442,6 +443,11 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 				rep.Warnings = append(rep.Warnings, fmt.Sprintf("PR #%d state: %v", n, err))
 			case st == "merged" || st == "closed":
 				rep.add(Finding{Kind: PRStale, Issue: q.Issue, Detail: fmt.Sprintf("PR #%d in review is %s", n, st), Repair: "drop it from review", pr: q.PR})
+			case q.Branch != "":
+				// A record can pair a PR with another issue's branch (#648); the gate would read the wrong head.
+				if info, err := e.Forge.PRView(ctx, n); err == nil && info.Head != "" && info.Head != q.Branch {
+					rep.add(Finding{Kind: QueuedBranchMismatch, Issue: q.Issue, Detail: fmt.Sprintf("queued record names branch %s but PR #%d is headed by %s; drop the record and re-queue it with the right branch", q.Branch, n, info.Head)})
+				}
 			}
 		}
 	}
