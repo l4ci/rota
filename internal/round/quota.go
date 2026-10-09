@@ -52,10 +52,10 @@ type pool struct {
 // usage cannot be read count as free.
 func (e Env) claudePool(ctx context.Context, root string) pool {
 	var p pool
-	if e.Accounts == nil {
+	if e.Worker.Accounts == nil {
 		return p
 	}
-	meters := e.Accounts.Meters(ctx, root)
+	meters := e.Worker.Accounts.Meters(ctx, root)
 	for _, m := range meters {
 		if m.Verdict == worker.VerdictCooling && m.ResetsAt != nil {
 			p.resets = append(p.resets, *m.ResetsAt)

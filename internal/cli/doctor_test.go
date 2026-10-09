@@ -9,7 +9,8 @@ import (
 )
 
 // doctorFakes writes fake tools into a fresh dir and points the tool lookup at
-// it, returning the dir. A Deps built before this call takes it as DoctorPath.
+// it, returning the dir. defaultDeps reads the env once, so only a Deps built
+// after this call sees it; an earlier one takes the dir as DoctorPath.
 func doctorFakes(t *testing.T, tools map[string]string) string {
 	t.Helper()
 	dir := t.TempDir()

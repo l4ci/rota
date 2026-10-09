@@ -48,10 +48,10 @@ type Deps struct {
 	HolderPID func() int
 	ClockErr  error
 
-	// Getenv and Environ are the one route to the process environment: every
-	// verb reads env through them, so a test sets values here instead of in
-	// the process. defaultDeps also reads the remaining ROTA_TEST_* hooks once,
-	// at this edge, into PollFixture, PollStatus, DoctorPath and DoctorDisk.
+	// Getenv is the one environment reader; the clock overrides, the worker
+	// env, the accounts and every cli env read go through it. A test swaps it.
+	// defaultDeps also reads the remaining ROTA_TEST_* hooks once, at this
+	// edge, into PollFixture, PollStatus, DoctorPath and DoctorDisk.
 	Getenv  func(string) string
 	Environ func() []string
 
@@ -112,12 +112,12 @@ func defaultDeps() *Deps {
 	d := &Deps{
 		Git:              git.Exec,
 		Proc:             proc.Run,
+		Getenv:           os.Getenv,
 		WorkerEnv:        func() worker.Env { return worker.Env{} },
 		EscalationEnv:    func() escalation.Env { return escalation.Env{} },
 		LeaseEnv:         func() roundlease.Env { return roundlease.DefaultEnv() },
 		Host:             func(kind string) host.Host { return host.New(kind, host.Deps{}) },
 		InstalledVersion: installedVersion,
-		Getenv:           os.Getenv,
 		Environ:          os.Environ,
 		SeedBase:         seedProject,
 		SetupIsTTY:       defaultSetupIsTTY,
@@ -133,7 +133,7 @@ func defaultDeps() *Deps {
 	d.DoctorDisk = doctorDisk(d.Getenv("ROTA_TEST_DOCTOR_DISK"))
 	d.UpdateEnv = func() update.Env { return update.DefaultEnv(version.Get().Version, d.Getenv) }
 	d.OrchestrateEnv = func() orchestrate.Env { return defaultOrchestrateEnv(d) }
-	d.WorkerAccounts = func() *worker.Accounts { return &worker.Accounts{Now: d.Now} }
+	d.WorkerAccounts = func() *worker.Accounts { return &worker.Accounts{Env: worker.Env{Now: d.Now, Getenv: d.Getenv}} }
 	d.NewTracker = func(ctx context.Context, root string, cfg any) (backlog.Tracker, error) {
 		return d.forge(ctx, cfg, "", root)
 	}
@@ -162,6 +162,12 @@ func (d *Deps) workerEnv() worker.Env {
 	e := d.WorkerEnv()
 	if e.NewHost == nil {
 		e.NewHost = func(kind string) host.Host { return d.Host(kind) }
+	}
+	if e.Now == nil {
+		e.Now = d.Now
+	}
+	if e.Getenv == nil {
+		e.Getenv = d.Getenv
 	}
 	if e.Accounts == nil && d.WorkerAccounts != nil {
 		e.Accounts = d.WorkerAccounts()

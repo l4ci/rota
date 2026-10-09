@@ -100,7 +100,7 @@ func TestItemClockSurvivesATransferToAnotherSlot(t *testing.T) {
 	}
 }
 
-// The timeout park resolves the lease holder through Env.Getenv, not the
+// The timeout park resolves the lease holder through Env.Worker.Getenv, not the
 // process environment.
 func TestItemTimeoutApplyReadsHolderFromEnvGetenv(t *testing.T) {
 	f := newMoveFx(t)
@@ -109,7 +109,7 @@ func TestItemTimeoutApplyReadsHolderFromEnvGetenv(t *testing.T) {
 	f.env.NeedsHuman = "needs-human"
 	f.env.HolderPID = 0 // discover the holder from the environment
 	asked := false
-	f.env.Getenv = func(k string) string {
+	f.env.Worker.Getenv = func(k string) string {
 		if k == roundlease.HolderPIDEnv {
 			asked = true
 			return "100"
@@ -122,7 +122,7 @@ func TestItemTimeoutApplyReadsHolderFromEnvGetenv(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !asked {
-		t.Error("the transfer must read the holder through Env.Getenv")
+		t.Error("the transfer must read the holder through Env.Worker.Getenv")
 	}
 	if !hasKind(kinds(out.Repaired)["ben"], ItemTimeout) || !slices.Contains(f.forge.labels[12], "needs-human") {
 		t.Fatalf("apply must park it: %+v warnings %v", out, out.Report.Warnings)
