@@ -39,6 +39,13 @@ func (e Env) Reconcile(ctx context.Context, root string, apply bool) (Outcome, e
 			out.Drift = append(out.Drift, f)
 			continue
 		}
+		if src := unreadSource(rep, f.Kind); src != "" {
+			// A finding computed without its source is a guess, and repairing
+			// on a guess releases or parks a slot that may be fine (#579).
+			rep.Warnings = append(rep.Warnings, fmt.Sprintf("repair %s %s skipped: %s was unreadable this run", f.Kind, firstNonEmpty(f.Slot, f.branch), src))
+			out.Drift = append(out.Drift, f)
+			continue
+		}
 		if err := e.repair(ctx, root, rep, f); err != nil {
 			rep.Warnings = append(rep.Warnings, fmt.Sprintf("repair %s %s: %v", f.Kind, firstNonEmpty(f.Slot, f.branch), err))
 			out.Drift = append(out.Drift, f)
@@ -47,6 +54,25 @@ func (e Env) Reconcile(ctx context.Context, root string, apply bool) (Outcome, e
 		out.Repaired = append(out.Repaired, f)
 	}
 	return out, nil
+}
+
+// unreadSource names the source a repair of kind depends on when the report
+// could not read it: the host for a tab-derived finding, the forge for the
+// PR, merge and label ones. "" when the source answered or the kind needs none.
+func unreadSource(rep *Report, kind string) string {
+	need := ""
+	switch kind {
+	case DeadTab:
+		need = SourceHost
+	case PRUnrecorded, MergedExternal, PRStale, LabelMissing, LabelStale:
+		need = SourceForge
+	}
+	for _, u := range rep.Unavailable {
+		if u == need {
+			return need
+		}
+	}
+	return ""
 }
 
 func (e Env) repair(ctx context.Context, root string, rep *Report, f Finding) error {

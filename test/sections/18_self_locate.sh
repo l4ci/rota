@@ -51,7 +51,7 @@ mkdir -p subdir
 BEFORE_BUGS=$(python3 -c 'import json; print(json.load(open(".rota/counters.json"))["bugs"])')
 (
   cd subdir
-  ID=$(hvj id next --kind bugs | jget data.id)
+  ID=$(hvj id next --kind bugs | jget data.id) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
   [ -n "$ID" ] || { echo "FAIL: id next from subdir produced empty"; exit 1; }
   # The new ID lands in the umbrella's counters.json, not the subdir's.
   [ ! -f .rota/counters.json ] || { echo "FAIL: id next created subdir/.rota/"; exit 1; }
@@ -118,7 +118,7 @@ mkdir -p "$F42_TMP/.rota" "$F42_TMP/repo-a"
 echo '{"bugs":7,"features":0,"tasks":0,"milestones":0}' > "$F42_TMP/.rota/counters.json"
 (
   cd "$F42_TMP/repo-a"
-  ID=$(hvj id next --kind bugs | jget data.id)
+  ID=$(hvj id next --kind bugs | jget data.id) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
   [ "$ID" = "B08" ] || { echo "FAIL: F42: id next from sub-cwd: expected B08 (test umbrella), got '$ID'"; exit 1; }
 )
 AFTER_BUGS=$(python3 -c 'import json; print(json.load(open("'"$F42_TMP/.rota/counters.json"'"))["bugs"])')

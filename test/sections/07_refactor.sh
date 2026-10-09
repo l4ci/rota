@@ -24,25 +24,25 @@ EOF
   hvj item complete B40 --no-proof >/dev/null
   echo "r1" > r1.txt && git add r1.txt && git commit -q -m "refactor: clean up"
   hvj item complete F41 --no-proof >/dev/null
-  OUT=$(hvj refactor age)
+  OUT=$(hvj refactor age) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
   [ "$(echo "$OUT" | jget data.features)" = "1" ] || fail "expected 1 non-refactor feature, got: $OUT"
   [ "$(echo "$OUT" | jget data.bugs)" = "1" ] || fail "expected 1 non-refactor bug, got: $OUT"
   pass "refactor age counts non-refactor completions only"
 
   # Re-completing an already-completed item must not re-bump.
-  OUT=$(hvj item complete F40 --no-proof)
+  OUT=$(hvj item complete F40 --no-proof) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
   [ "$(echo "$OUT" | jget data.changed)" = "false" ] || fail "re-completion should report changed false: $OUT"
-  OUT=$(hvj refactor age)
+  OUT=$(hvj refactor age) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
   [ "$(echo "$OUT" | jget data.features)" = "1" ] || fail "idempotent re-completion bumped counter, got: $OUT"
   pass "item complete is idempotent (no double-bump)"
 
   # refactor reset zeros the counters.
-  OUT=$(hvj refactor reset)
+  OUT=$(hvj refactor reset) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
   [ "$(echo "$OUT" | jget data.changed)" = "true" ] || fail "reset of non-zero counters should report changed true: $OUT"
-  OUT=$(hvj refactor age)
+  OUT=$(hvj refactor age) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
   [ "$(echo "$OUT" | jget data.features)" = "0" ] || fail "reset failed, features != 0: $OUT"
   [ "$(echo "$OUT" | jget data.bugs)" = "0" ] || fail "reset failed, bugs != 0: $OUT"
-  OUT=$(hvj refactor reset)
+  OUT=$(hvj refactor reset) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
   [ "$(echo "$OUT" | jget data.changed)" = "false" ] || fail "reset of zeroed counters should report changed false: $OUT"
   pass "refactor reset zeros the counters"
 
@@ -52,7 +52,7 @@ EOF
 EOF
   echo "r2" > r2.txt && git add r2.txt && git commit -q -m "refactor(hosts): consolidate"
   hvj item complete F42 --no-proof >/dev/null
-  OUT=$(hvj refactor age)
+  OUT=$(hvj refactor age) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
   [ "$(echo "$OUT" | jget data.features)" = "0" ] || fail "scoped refactor(scope): subject bumped counter, got: $OUT"
   pass "item complete recognises scoped refactor(scope): subjects"
 

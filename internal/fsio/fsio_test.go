@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"testing"
@@ -157,5 +158,48 @@ func TestReadTextNormalizesNewlines(t *testing.T) {
 	}
 	if _, err := ReadText(filepath.Join(t.TempDir(), "none")); !os.IsNotExist(err) {
 		t.Errorf("missing file: %v", err)
+	}
+}
+
+func TestUpdateJSONStrictRefusesUnparseableFile(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "state.json")
+	if err := os.WriteFile(p, []byte(`{"slots": [trunc`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	err := UpdateJSONStrict(p, jsonx.NewObject(), func(v any) (any, error) { return v, nil })
+	if !errors.Is(err, ErrUnreadable) {
+		t.Fatalf("err = %v, want ErrUnreadable", err)
+	}
+	if b, _ := os.ReadFile(p); string(b) != `{"slots": [trunc` {
+		t.Errorf("the unreadable file was overwritten: %q", b)
+	}
+}
+
+func TestUpdateJSONStrictStartsFromDefWhenMissing(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "state.json")
+	err := UpdateJSONStrict(p, jsonx.NewObject(), func(v any) (any, error) {
+		v.(*jsonx.Object).Set("k", "v")
+		return v, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(p); !strings.Contains(string(b), `"k": "v"`) {
+		t.Errorf("file = %q", b)
+	}
+}
+
+func TestWriteJSONVerifiedReportsAWriteThatDidNotLand(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "state.json")
+	orig := dirSync
+	defer func() { dirSync = orig }()
+	// the directory sync runs after the rename and before the re-read: a
+	// writer that clobbers the file there makes the verified write fail.
+	dirSync = func(d *os.File) error { return os.WriteFile(p, []byte("{}\n"), 0o644) }
+	o := jsonx.NewObject()
+	o.Set("k", "v")
+	err := writeJSONVerified(p, o)
+	if !errors.Is(err, ErrNotLanded) {
+		t.Fatalf("err = %v, want ErrNotLanded", err)
 	}
 }

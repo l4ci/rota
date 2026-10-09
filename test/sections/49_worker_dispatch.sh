@@ -373,7 +373,7 @@ json.dump({"ship": {"review": "none"}, "test": {"full": []}}, open(sys.argv[1], 
 PYEOF
 ( cd "$TMP_WD" && "$ROTA_BIN" worker pool init --slots 3 --base main ) >/dev/null 2>&1 \
   || fail "could not add slot w3"
-GATE_OUT=$( cd "$TMP_WD" && "$ROTA_BIN" --json worker gate w3 --base main --no-verify 2>/dev/null )
+GATE_OUT=$( cd "$TMP_WD" && "$ROTA_BIN" --json worker gate w3 --base main --no-verify 2>/dev/null ) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
 [ "$(jget data.verifySkipped <<<"$GATE_OUT")" = "true" ] \
   || fail "worker gate with empty test.full must report verifySkipped, got: $GATE_OUT"
 pass "worker gate reports verifySkipped rather than a pass it cannot back"

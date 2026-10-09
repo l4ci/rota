@@ -169,7 +169,7 @@ PY
   out="$(ROTA_TEST_TODAY=2026-05-10 hvj backlog stale --kind map --days 30 | jget data.entries)"
   grep -q '"name":"work"' <<<"$out" || { echo "FAIL: work should be stale at days=30"; exit 1; }
 
-  count=$(hvj map stats | jget data.count)
+  count=$(hvj map stats | jget data.count) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
   [ "$count" = "2" ] || { echo "FAIL: stats count $count != 2"; exit 1; }
 
   hvj map index >/dev/null

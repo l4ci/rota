@@ -19,34 +19,34 @@ cat > .rota/KNOWLEDGE.md <<'EOF'
 EOF
 
 # --- knowledge tier subcommands ---
-OUT=$(hvj knowledge tier get --topic "Architecture" --title "Nonexistent")
+OUT=$(hvj knowledge tier get --topic "Architecture" --title "Nonexistent") || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
 [ "$(jget data.found <<<"$OUT")" = "false" ] || fail "knowledge tier get on missing should be found:false: $OUT"
 pass "knowledge tier get on missing entry reports found:false"
 
 # A tier read registers every titled bullet as provisional/0 (lazy init, #174),
 # so the get above has already tracked "Foo rule".
-OUT=$(hvj knowledge tier get --topic "Architecture" --title "Foo rule")
+OUT=$(hvj knowledge tier get --topic "Architecture" --title "Foo rule") || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
 [ "$(jget data.tier <<<"$OUT")/$(jget data.hits <<<"$OUT")" = "provisional/0" ] || fail "tier get should backfill a bullet as provisional/0: $OUT"
 pass "knowledge tier get backfills untracked bullets as provisional/0"
 
 # Setting an entry with no bullet and no sidecar row creates it with hits 0.
-OUT=$(hvj knowledge tier set --topic "Architecture" --title "Ghost rule" --tier provisional)
+OUT=$(hvj knowledge tier set --topic "Architecture" --title "Ghost rule" --tier provisional) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
 [ "$(jget data.changed <<<"$OUT")" = "true" ] || fail "tier set on untracked entry should change: $OUT"
 if jget data.previousTier <<<"$OUT" >/dev/null 2>&1; then fail "untracked entry should have no previousTier: $OUT"; fi
-OUT=$(hvj knowledge tier get --topic "Architecture" --title "Ghost rule")
+OUT=$(hvj knowledge tier get --topic "Architecture" --title "Ghost rule") || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
 [ "$(jget data.tier <<<"$OUT")/$(jget data.hits <<<"$OUT")" = "provisional/0" ] || fail "tier set on untracked entry wrong shape: $OUT"
 pass "knowledge tier set creates an untracked entry as provisional/0"
 
 hvj knowledge hit --topic "Architecture" --title "Foo rule" >/dev/null 2>&1
-OUT=$(hvj knowledge hit --topic "Architecture" --title "Foo rule" 2>/dev/null)
+OUT=$(hvj knowledge hit --topic "Architecture" --title "Foo rule" 2>/dev/null) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
 [ "$(jget data.hits <<<"$OUT")" = "2" ] || fail "knowledge hit twice; expected hits=2: $OUT"
-HITS=$(hvj knowledge tier get --topic "Architecture" --title "Foo rule" | jget data.hits)
+HITS=$(hvj knowledge tier get --topic "Architecture" --title "Foo rule" | jget data.hits) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
 [ "$HITS" = "2" ] || fail "knowledge hit twice; expected stored hits=2, got $HITS"
 pass "knowledge hit increments hits"
 
-OUT=$(hvj knowledge tier set --topic "Architecture" --title "Foo rule" --tier confirmed)
+OUT=$(hvj knowledge tier set --topic "Architecture" --title "Foo rule" --tier confirmed) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
 [ "$(jget data.previousTier <<<"$OUT")" = "provisional" ] || fail "tier set should report previousTier: $OUT"
-TIER=$(hvj knowledge tier get --topic "Architecture" --title "Foo rule" | jget data.tier)
+TIER=$(hvj knowledge tier get --topic "Architecture" --title "Foo rule" | jget data.tier) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
 [ "$TIER" = "confirmed" ] || fail "knowledge tier set didn't update tier; got $TIER"
 pass "knowledge tier set updates tier"
 
@@ -61,23 +61,23 @@ rm -f .rota/knowledge-tier.json
 echo '{"learn":{"verify":true,"promoteThreshold":3}}' > .rota/config.json
 
 hvj knowledge hit --topic "Architecture" --title "Bar rule" >/dev/null 2>&1
-OUT=$(hvj knowledge hit --topic "Architecture" --title "Bar rule" 2>/dev/null)
+OUT=$(hvj knowledge hit --topic "Architecture" --title "Bar rule" 2>/dev/null) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
 [ "$(jget data.promoted <<<"$OUT")" = "false" ] || fail "second hit should not promote: $OUT"
-TIER=$(hvj knowledge tier get --topic "Architecture" --title "Bar rule" | jget data.tier)
+TIER=$(hvj knowledge tier get --topic "Architecture" --title "Bar rule" | jget data.tier) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
 [ "$TIER" = "provisional" ] || fail "Bar rule should stay provisional at 2 hits; got $TIER"
 pass "knowledge hit doesn't promote below threshold"
 
-OUT=$(hvj knowledge hit --topic "Architecture" --title "Bar rule" 2>/dev/null)
+OUT=$(hvj knowledge hit --topic "Architecture" --title "Bar rule" 2>/dev/null) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
 [ "$(jget data.promoted <<<"$OUT")" = "true" ] || fail "third hit should report promoted: $OUT"
 [ "$(jget data.tier <<<"$OUT")" = "confirmed" ] || fail "third hit should report tier confirmed: $OUT"
-TIER=$(hvj knowledge tier get --topic "Architecture" --title "Bar rule" | jget data.tier)
+TIER=$(hvj knowledge tier get --topic "Architecture" --title "Bar rule" | jget data.tier) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
 [ "$TIER" = "confirmed" ] || fail "third hit should auto-promote to confirmed; got $TIER"
 pass "knowledge hit auto-promotes at threshold"
 
 # --- knowledge contradiction ---
-OUT=$(hvj knowledge contradiction add --topic "Build and Tooling" --title "Baz rule" --text "user said baz is wrong")
+OUT=$(hvj knowledge contradiction add --topic "Build and Tooling" --title "Baz rule" --text "user said baz is wrong") || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
 [ "$(jget data.pending <<<"$OUT")" = "1" ] || fail "contradiction add should leave 1 pending: $OUT"
-LIST=$(hvj knowledge contradiction list | jget data.items | python3 -c 'import json,sys;print(len(json.load(sys.stdin)))')
+LIST=$(hvj knowledge contradiction list | jget data.items | python3 -c 'import json,sys;print(len(json.load(sys.stdin)))') || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
 [ "$LIST" = "1" ] || fail "expected 1 contradiction, got $LIST"
 pass "knowledge contradiction add records a candidate"
 
@@ -94,17 +94,17 @@ pass "knowledge contradiction has exits 1 for missing entry"
 # --- auto-promote skips when contradiction pending ---
 # Hit Baz rule three times; should NOT auto-promote because contradiction is pending.
 for i in 1 2 3; do
-  OUT=$(hvj knowledge hit --topic "Build and Tooling" --title "Baz rule" 2>/dev/null)
+  OUT=$(hvj knowledge hit --topic "Build and Tooling" --title "Baz rule" 2>/dev/null) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
 done
 [ "$(jget data.promotionBlocked <<<"$OUT")" = "true" ] || fail "third hit on Baz rule should report promotionBlocked: $OUT"
-TIER=$(hvj knowledge tier get --topic "Build and Tooling" --title "Baz rule" | jget data.tier)
+TIER=$(hvj knowledge tier get --topic "Build and Tooling" --title "Baz rule" | jget data.tier) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
 [ "$TIER" = "provisional" ] || fail "Baz rule should stay provisional under contradiction; got $TIER"
 pass "knowledge hit skips auto-promote when contradiction pending"
 
 # --- knowledge contradiction clear ---
-OUT=$(hvj knowledge contradiction clear)
+OUT=$(hvj knowledge contradiction clear) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
 [ "$(jget data.cleared <<<"$OUT")" = "1" ] || fail "contradiction clear should report 1 cleared: $OUT"
-LIST=$(hvj knowledge contradiction list | jget data.items | python3 -c 'import json,sys;print(len(json.load(sys.stdin)))')
+LIST=$(hvj knowledge contradiction list | jget data.items | python3 -c 'import json,sys;print(len(json.load(sys.stdin)))') || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
 [ "$LIST" = "0" ] || fail "queue should be empty after clear; got $LIST"
 pass "knowledge contradiction clear wipes the queue"
 
@@ -114,36 +114,36 @@ hvj knowledge tier set --topic "Architecture" --title "Foo rule" --tier confirme
 hvj knowledge tier set --topic "Architecture" --title "Bar rule" --tier deprecated >/dev/null
 hvj knowledge tier set --topic "Build and Tooling" --title "Baz rule" --tier provisional >/dev/null
 
-OUT=$(hvj knowledge query Architecture | jget data.text)
+OUT=$(hvj knowledge query Architecture | jget data.text) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
 grep -q "Foo rule" <<<"$OUT" || fail "confirmed Foo rule should appear in default query"
 if grep -q "Bar rule" <<<"$OUT"; then
   fail "deprecated Bar rule should be hidden in default query: $OUT"
 fi
 pass "knowledge query hides deprecated bullets by default"
 
-OUT=$(hvj knowledge query --include-deprecated Architecture | jget data.text)
+OUT=$(hvj knowledge query --include-deprecated Architecture | jget data.text) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
 grep -q "Bar rule" <<<"$OUT" || fail "--include-deprecated should surface Bar rule"
 pass "knowledge query --include-deprecated re-surfaces hidden bullets"
 
-OUT=$(hvj knowledge query "Build and Tooling" | jget data.text)
+OUT=$(hvj knowledge query "Build and Tooling" | jget data.text) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
 grep -q "(provisional)" <<<"$OUT" || fail "provisional Baz rule should carry suffix: $OUT"
 pass "knowledge query suffixes (provisional) on probation bullets"
 
-OUT=$(hvj knowledge query --tier confirmed Architecture | jget data.text)
+OUT=$(hvj knowledge query --tier confirmed Architecture | jget data.text) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
 grep -q "Foo rule" <<<"$OUT" || fail "--tier confirmed should keep Foo rule"
 if grep -q "Bar rule" <<<"$OUT"; then
   fail "--tier confirmed should drop deprecated Bar rule: $OUT"
 fi
 pass "knowledge query --tier filter works"
 
-OUT=$(hvj knowledge tier list --tier deprecated | jget data.entries)
+OUT=$(hvj knowledge tier list --tier deprecated | jget data.entries) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
 grep -q "Bar rule" <<<"$OUT" || fail "tier list --tier deprecated should include Bar rule: $OUT"
 if grep -q "Foo rule" <<<"$OUT"; then fail "tier list --tier deprecated should drop Foo rule: $OUT"; fi
 pass "knowledge tier list --tier filters entries"
 
 # --- knowledge add initializes sidecar on new bullet ---
 hvj knowledge add --topic "Architecture" --title "Qux rule" --body-file - <<<"Body of qux rule" >/dev/null
-TIER=$(hvj knowledge tier get --topic "Architecture" --title "Qux rule" | jget data.tier)
+TIER=$(hvj knowledge tier get --topic "Architecture" --title "Qux rule" | jget data.tier) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
 [ "$TIER" = "provisional" ] || fail "new bullet from add should be provisional in sidecar; got $TIER"
 pass "knowledge add initializes new bullet as provisional"
 

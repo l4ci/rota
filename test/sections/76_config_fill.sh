@@ -10,7 +10,7 @@ RC=0; ( cd "$CF" && hvj config fill >/dev/null 2>&1 ) || RC=$?
 
 # The rota init seed (issues-only keys, schema order) filled out stays in schema order.
 printf '{\n  "issues": {\n    "label": "in-progress",\n    "autoCreateLabel": true\n  }\n}\n' > "$CF/.rota/config.json"
-OUT=$( cd "$CF" && hvj config fill )
+OUT=$( cd "$CF" && hvj config fill ) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
 [ "$(echo "$OUT" | jget data.changed)" = "true" ] || fail "fill on the seed should report changed: $OUT"
 [ "$(echo "$OUT" | jget 'data.filled[0]')" = "models.orchestrator" ] \
   || fail "filled should list keys in schema order: $OUT"
@@ -27,7 +27,7 @@ pass "config fill completes a fresh and a seeded config in schema order"
 # Present values are kept, a second fill writes nothing.
 ( cd "$CF" && "$ROTA_BIN" config set models.worker haiku >/dev/null )
 BEFORE="$(cat "$CF/.rota/config.json")"
-OUT=$( cd "$CF" && hvj config fill )
+OUT=$( cd "$CF" && hvj config fill ) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
 [ "$(echo "$OUT" | jget data.changed)" = "false" ] || fail "second fill should not change anything: $OUT"
 [ "$(echo "$OUT" | jget data.filled)" = "[]" ] || fail "second fill should fill nothing: $OUT"
 [ "$(cat "$CF/.rota/config.json")" = "$BEFORE" ] || fail "second fill rewrote config.json"
@@ -47,7 +47,7 @@ CF="$(mktemp -d)"
 trap 'rm -rf "$CF"' EXIT
 mkdir -p "$CF/.rota"
 printf '{"hv": {"version": "4.2.0"}}\n' > "$CF/.rota/config.json"
-OUT=$( cd "$CF" && hvj config fill )
+OUT=$( cd "$CF" && hvj config fill ) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
 [ "$(echo "$OUT" | jget data.changed)" = "true" ] || fail "fill should migrate the legacy stamp: $OUT"
 python3 - "$CF/.rota/config.json" <<'PY' || fail "legacy hv.version was not moved to rota.version"
 import json, sys
@@ -67,7 +67,7 @@ CF="$(mktemp -d)"
 trap 'rm -rf "$CF"' EXIT
 mkdir -p "$CF/.rota"
 printf '{"refactor": {"verifyCommands": ["x"]}}\n' > "$CF/.rota/config.json"
-OUT=$( cd "$CF" && hvj config fill )
+OUT=$( cd "$CF" && hvj config fill ) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
 [ "$(echo "$OUT" | jget data.changed)" = "true" ] || fail "fill should move refactor.verifyCommands: $OUT"
 echo "$OUT" | python3 -c 'import json, sys; sys.exit("test.full" not in json.load(sys.stdin)["data"]["filled"])' \
   || fail "filled should list test.full: $OUT"
@@ -77,7 +77,7 @@ cfg = json.load(open(sys.argv[1]))
 assert cfg["test"]["full"] == ["x"], cfg.get("test")
 assert "verifyCommands" not in cfg["refactor"], cfg["refactor"]
 PY
-OUT=$( cd "$CF" && hvj config fill )
+OUT=$( cd "$CF" && hvj config fill ) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
 [ "$(echo "$OUT" | jget data.changed)" = "false" ] || fail "second fill after the move should not change anything: $OUT"
 pass "config fill moves refactor.verifyCommands to test.full and is idempotent"
 

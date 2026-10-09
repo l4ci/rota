@@ -25,7 +25,7 @@ cat > .rota/KNOWLEDGE.md <<'EOF'
 ## Testing
 - t
 EOF
-OUT=$(hvj summary)
+OUT=$(hvj summary) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
 [ "$(echo "$OUT" | jget data.backlog.bugs)" = "1" ] || fail "bug count wrong: $OUT"
 [ "$(echo "$OUT" | jget data.backlog.features)" = "2" ] || fail "feature count wrong: $OUT"
 [ "$(echo "$OUT" | jget data.backlog.tasks)" = "0" ] || fail "task count wrong: $OUT"

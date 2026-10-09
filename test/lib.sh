@@ -78,6 +78,18 @@ check_section_conventions() {
     fi
   done
 
+  # #579 — a bare `VAR=$(rota ...)` aborts the section silently under set -e
+  # when the verb fails (#461 hid a failure this way). Capture the exit code
+  # explicitly: `VAR=$(...) || fail "..."` or `VAR=$(...) || rc=$?`.
+  matches=$(grep -nE '^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*=\$\(.*(ROTA_BIN|hvj|rota )' "$sections_dir"/*.sh 2>/dev/null \
+    | grep -vE '\|\||[[:space:]]if[[:space:]]|local |:[[:space:]]*#' \
+    | grep -E '\)[[:space:]]*(2>[^[:space:]]+)?[[:space:]]*$' || true)
+  if [ -n "$matches" ]; then
+    printf '\033[31merror: bare verb capture under set -e (add `|| fail ...` or `|| rc=$?`; see test/section-template.sh):\033[0m\n' >&2
+    echo "$matches" >&2
+    violations=$((violations + 1))
+  fi
+
   if [ "$violations" -gt 0 ]; then
     printf '\033[31merror: %d convention violation(s) in test/sections/ — fix before re-running smoke\033[0m\n' "$violations" >&2
     return 1

@@ -18,27 +18,27 @@ trap 'rm -rf "$TMP_PROV"; trap '"'"'rm -rf "$TMP"'"'"' EXIT' EXIT
 
   # Test 1: github.com SSH
   git remote add origin "git@github.com:foo/bar.git"
-  out=$("$ROTA_BIN" --json issues provider | jget data.provider)
+  out=$("$ROTA_BIN" --json issues provider | jget data.provider) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
   [ "$out" = "github" ] || { echo "github.com SSH → $out, expected github"; exit 1; }
 
   # Test 2: gitlab.com HTTPS
   git remote set-url origin "https://gitlab.com/foo/bar.git"
-  out=$("$ROTA_BIN" --json issues provider | jget data.provider)
+  out=$("$ROTA_BIN" --json issues provider | jget data.provider) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
   [ "$out" = "gitlab" ] || { echo "gitlab.com HTTPS → $out, expected gitlab"; exit 1; }
 
   # Test 3: self-hosted GitLab SSH
   git remote set-url origin "git@gitlab.example.com:foo/bar.git"
-  out=$("$ROTA_BIN" --json issues provider | jget data.provider)
+  out=$("$ROTA_BIN" --json issues provider | jget data.provider) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
   [ "$out" = "gitlab" ] || { echo "self-hosted gitlab SSH → $out, expected gitlab"; exit 1; }
 
   # Test 4: GitHub Enterprise HTTPS
   git remote set-url origin "https://github.company.com/foo/bar.git"
-  out=$("$ROTA_BIN" --json issues provider | jget data.provider)
+  out=$("$ROTA_BIN" --json issues provider | jget data.provider) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
   [ "$out" = "github" ] || { echo "GH Enterprise HTTPS → $out, expected github"; exit 1; }
 
   # Test 5: no origin at all
   git remote remove origin
-  out=$("$ROTA_BIN" --json issues provider | jget data.provider)
+  out=$("$ROTA_BIN" --json issues provider | jget data.provider) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
   [ "$out" = "unknown" ] || { echo "no origin → $out, expected unknown"; exit 1; }
 ) || fail "issues provider classification failed (see subshell output above)"
 
@@ -97,7 +97,7 @@ cat > "$TMP_IMP/.rota/BACKLOG.md" <<'EOF'
 ## Completed
 EOF
 
-out2=$(cd "$TMP_IMP" && hvj issues imported)
+out2=$(cd "$TMP_IMP" && hvj issues imported) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
 count2=$(echo "$out2" | jq '.data.entries | length')
 [ "$count2" = "1" ] || fail "issues imported expected 1 entry after removing GH bullet, got $count2"
 

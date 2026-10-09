@@ -33,7 +33,7 @@ for i in 1 2 3 4 5 6; do
 done
 wait
 
-QLEN=$(hvj -C "$TMP_LCK" knowledge contradiction list | jget data.items | python3 -c 'import json,sys;print(len(json.load(sys.stdin)))')
+QLEN=$(hvj -C "$TMP_LCK" knowledge contradiction list | jget data.items | python3 -c 'import json,sys;print(len(json.load(sys.stdin)))') || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
 [ "$QLEN" = "6" ] || fail "concurrent contradiction add lost entries: expected 6 pending, got $QLEN"
 pass "6 concurrent knowledge contradiction add calls keep all 6 entries"
 

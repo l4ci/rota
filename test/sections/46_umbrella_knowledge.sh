@@ -25,7 +25,7 @@ trap 'rm -rf "$TMP_UK"' EXIT
 
 # ── 1. Scoped write: from web subdir, merge lands in sub-repo KNOWLEDGE.md ──
 echo "F21: scoped write — knowledge add from sub-repo"
-OUT=$( cd "$TMP_UK/web" && hvj knowledge add --topic Architecture --title "web rule" --body-file - <<<"web-local" )
+OUT=$( cd "$TMP_UK/web" && hvj knowledge add --topic Architecture --title "web rule" --body-file - <<<"web-local" ) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
 [ "$(jget data.changed <<<"$OUT")" = "true" ] || fail "F21[1]: add from web must report changed: $OUT"
 grep -q "web rule" "$TMP_UK/.rota/knowledge/web/KNOWLEDGE.md" \
   || fail "F21[1]: 'web rule' must appear in .rota/knowledge/web/KNOWLEDGE.md"
@@ -55,7 +55,7 @@ pass "F21[2]: hybrid query shows correct provenance per scope"
 
 # ── 3. Per-file tier sidecar ────────────────────────────────────────────────
 echo "F21: per-file tier sidecar"
-OUT=$( cd "$TMP_UK/web" && hvj knowledge tier set --topic Architecture --title "web rule" --tier confirmed )
+OUT=$( cd "$TMP_UK/web" && hvj knowledge tier set --topic Architecture --title "web rule" --tier confirmed ) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
 [ "$(jget data.tier <<<"$OUT")" = "confirmed" ] || fail "F21[3]: tier set must report the new tier: $OUT"
 [ "$(cd "$TMP_UK/web" && hvj knowledge tier get --topic Architecture --title "web rule" | jget data.tier)" = "confirmed" ] \
   || fail "F21[3]: tier get from web must read back confirmed"
@@ -85,7 +85,7 @@ grep -q -- "--repo" <<<"$AMEND_OUT" \
   || fail "F21[4]: amend error must hint at --repo; got: $AMEND_OUT"
 
 # With --repo web: unambiguous → exit 0, amends only web file
-OUT=$( cd "$TMP_UK/web" && hvj knowledge amend --topic Architecture --fragment "shared rule" --mode append --body-file - --repo web <<<"(x)" )
+OUT=$( cd "$TMP_UK/web" && hvj knowledge amend --topic Architecture --fragment "shared rule" --mode append --body-file - --repo web <<<"(x)" ) || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
 [ "$(jget data.changed <<<"$OUT")" = "true" ] || fail "F21[4]: --repo web amend must report changed: $OUT"
 grep -q "(x)" "$TMP_UK/.rota/knowledge/web/KNOWLEDGE.md" \
   || fail "F21[4]: --repo web amend must append to web file"

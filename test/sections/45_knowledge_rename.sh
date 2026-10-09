@@ -53,12 +53,12 @@ grep -A2 "^## Architecture$" "$TMP_KR/.rota/KNOWLEDGE.md" | grep "Bar rule" >/de
 pass "per-bullet move: bullet relocated, siblings untouched"
 
 # Sidecar re-keyed: Foundations carries confirmed/2-hits state, old key gone.
-OUT=$(hvj -C "$TMP_KR" knowledge tier get --topic "Architecture: Foundations" --title "Foo rule")
+OUT=$(hvj -C "$TMP_KR" knowledge tier get --topic "Architecture: Foundations" --title "Foo rule") || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
 TIER="$(jget data.tier <<<"$OUT")/$(jget data.hits <<<"$OUT")"
 [ "$TIER" = "confirmed/2" ] || fail "Foo rule sidecar lost tier/hits after move: $TIER"
 pass "per-bullet move: sidecar tier+hits follow to new key"
 
-OLD=$(hvj -C "$TMP_KR" knowledge tier get --topic "Architecture" --title "Foo rule")
+OLD=$(hvj -C "$TMP_KR" knowledge tier get --topic "Architecture" --title "Foo rule") || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
 [ "$(jget data.found <<<"$OLD")" = "false" ] || fail "old sidecar key 'Architecture::Foo rule' not cleared: $OLD"
 pass "per-bullet move: old sidecar key removed"
 
@@ -90,7 +90,7 @@ pass "whole-topic rename: heading renamed, bullets follow"
 
 NEW=$(hvj -C "$TMP_KR" knowledge tier get --topic "Tooling & Build" --title "Baz rule" | jget data.tier || echo missing)
 [ "$NEW" = "provisional" ] || fail "Baz rule sidecar entry missing under new topic: $NEW"
-OLD=$(hvj -C "$TMP_KR" knowledge tier get --topic "Build & Tooling" --title "Baz rule")
+OLD=$(hvj -C "$TMP_KR" knowledge tier get --topic "Build & Tooling" --title "Baz rule") || fail "verb call failed at ${BASH_SOURCE[0]##*/}:$LINENO"
 [ "$(jget data.found <<<"$OLD")" = "false" ] || fail "old 'Build & Tooling::Baz rule' sidecar key not cleared: $OLD"
 pass "whole-topic rename: sidecar entries follow to new topic prefix"
 
