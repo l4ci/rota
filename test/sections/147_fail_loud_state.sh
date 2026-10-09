@@ -57,4 +57,5 @@ msg=$( ( f() { false || vfail; }; f ) 2>&1 ) || rc=$?
 case "$msg" in *"verb exited 1"*) ;; *) fail "vfail message: $msg" ;; esac
 pass "vfail reports the exit code"
 
+rm -rf "$TMP_FL"
 trap 'rm -rf "$TMP"' EXIT

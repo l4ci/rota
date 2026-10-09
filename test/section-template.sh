@@ -22,5 +22,8 @@ rc=0
 OUT=$(cd "$TMP_EXAMPLE" && "$ROTA_BIN" --json config show 2>/dev/null) || rc=$?
 [ "$rc" -eq 0 ] || fail "config show exited $rc"
 
+# Clean up what this section made, then restore the runner's trap ($TMP is the
+# runner's shared dir; a section run on its own by the runner always has it).
+rm -rf "$TMP_EXAMPLE"
 trap 'rm -rf "$TMP"' EXIT
 pass "template example"

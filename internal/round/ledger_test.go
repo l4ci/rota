@@ -230,3 +230,33 @@ func TestReportFailsWhenTheLedgerRowIsNotWritten(t *testing.T) {
 		t.Fatalf("want a ledger failure, got %v", err)
 	}
 }
+
+func blockLedger(t *testing.T, root string) {
+	t.Helper()
+	_ = os.Remove(ledger.Path(root))
+	if err := os.MkdirAll(ledger.Path(root), 0o755); err != nil { // a directory cannot be appended to
+		t.Fatal(err)
+	}
+}
+
+func TestAssignAndTransferFailWhenTheLedgerRowIsNotWritten(t *testing.T) {
+	t.Run("assign", func(t *testing.T) {
+		f := soloAssign(t)
+		blockLedger(t, f.root)
+		_, err := f.assign("12", "ben", nil)
+		if err == nil || !strings.Contains(err.Error(), "is assigned to ben, but the round ledger row was not written") {
+			t.Fatalf("want a ledger failure naming the landed half, got %v", err)
+		}
+	})
+	t.Run("transfer", func(t *testing.T) {
+		f := newMoveFx(t)
+		blockLedger(t, f.root)
+		res, err := f.transfer("12", "dana", nil)
+		if err == nil || !strings.Contains(err.Error(), "is transferred to dana, but the round ledger row was not written") {
+			t.Fatalf("want a ledger failure naming the landed half, got %v", err)
+		}
+		if !res.Changed {
+			t.Error("the transfer landed; Changed must say so")
+		}
+	})
+}

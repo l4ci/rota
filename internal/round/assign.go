@@ -653,8 +653,10 @@ func (e Env) assignOne(ctx context.Context, root string, be Board, o AssignOpts,
 	res.Dispatched = res.Dispatched || d.Dispatched
 	res.Changed = res.Changed || d.Changed
 	if err == nil && !resuming {
-		worker.LedgerNote(root, ledger.Entry{Kind: ledger.KindAssign, Issue: id, Slot: agent, Account: res.Account, Harness: kind,
-			Detail: ledger.Detail("headroom", worker.LedgerHeadroom(ctx, e.Worker.Accounts, root, kind, res.Account))})
+		if lerr := worker.LedgerAppendErr(root, ledger.Entry{Kind: ledger.KindAssign, Issue: id, Slot: agent, Account: res.Account, Harness: kind,
+			Detail: ledger.Detail("headroom", worker.LedgerHeadroom(ctx, e.Worker.Accounts, root, kind, res.Account))}); lerr != nil {
+			return res, fmt.Errorf("%s is assigned to %s, but the round ledger row was not written: %w", id, agent, lerr)
+		}
 	}
 	return res, err
 }
