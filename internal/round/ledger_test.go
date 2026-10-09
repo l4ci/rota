@@ -177,7 +177,7 @@ func TestReportHeadroomUsesInjectedAccountsAndContext(t *testing.T) {
 		t.Fatal(err)
 	}
 	var seen any
-	f.env.Accounts = &worker.Accounts{Fetch: func(ctx context.Context, _, _ string) (*jsonx.Object, string) {
+	f.env.Worker.Accounts = &worker.Accounts{Fetch: func(ctx context.Context, _, _ string) (*jsonx.Object, string) {
 		seen = ctx.Value(ctxKey{})
 		v, _ := jsonx.Decode([]byte(`{"five_hour":{"utilization":25,"resets_at":null},"seven_day":{"utilization":5,"resets_at":null}}`))
 		return v.(*jsonx.Object), ""

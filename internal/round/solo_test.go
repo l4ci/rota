@@ -71,7 +71,7 @@ func TestStartRecordsTheResolvedHostAndKeepsItForTheRound(t *testing.T) {
 	}
 	// And honours the environment: herdr in a herdr pane with the binary.
 	f.windDown(nil)
-	f.env.Getenv = func(k string) string {
+	f.env.Worker.Getenv = func(k string) string {
 		if k == "HERDR_ENV" {
 			return "1"
 		}
@@ -159,7 +159,7 @@ func TestAssignUnderSoloRefusesACodexWorker(t *testing.T) {
 
 func TestAssignUnderSoloSkipsTheAccountPick(t *testing.T) {
 	f := soloAssign(t)
-	f.env.Accounts = &worker.Accounts{}
+	f.env.Worker.Accounts = &worker.Accounts{}
 	f.config(t, `{"work":{"accounts":[{"name":"a","configDir":"/nonexistent"}]}}`)
 	if _, err := f.assign("12", "ben", nil); err != nil {
 		t.Fatalf("no account is picked under solo: %v", err)

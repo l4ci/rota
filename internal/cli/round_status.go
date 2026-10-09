@@ -32,6 +32,7 @@ func defaultRoundEnv(ctx context.Context, root string, d *Deps, withForge bool) 
 	cfg := config.Load(rotatree.Config(root))
 	e := round.Env{Git: d.Git, Base: "main", Lease: d.LeaseEnv()}
 	e.Worker.NewHost = func(kind string) host.Host { return d.Host(kind) }
+	e.Worker.Now, e.Worker.Getenv = d.Now, d.Getenv
 	if b, ok, err := (git.Repo{Dir: root}).Base(ctx, ""); err == nil && ok {
 		e.Base = b
 	}
@@ -120,7 +121,7 @@ func roundStatus(*flag.FlagSet) RunFunc {
 		d.Set("review", queuedRows(rep.Queued))
 		var lines []string
 		if set, err := roundcfg.Load(root); err == nil {
-			renv.Accounts = c.deps().WorkerAccounts()
+			renv.Worker.Accounts = c.deps().WorkerAccounts()
 			if qc := renv.QuotaCap(ctx, root, set); qc.Reduced() {
 				co := jsonx.NewObject()
 				co.Set("effective", qc.Effective)
