@@ -11,7 +11,7 @@ Set `round.brief` to this file's path to make the assignment pointer name it as 
 
 The full gate runs once, at merge: `rota worker gate` runs `test.full` on the merged
 tree through `bash test/gate.sh`: validate-skills, the doc lints (`bash test/doclint.sh`: prose pins, the
-`.worktrees/` decoy check, that every `rota` verb the docs name exists, and the contract-doc stamps below), the grep gate (`bash test/grep-gate.sh`), `go vet ./...`, `go test -race -timeout 30m ./...`
+`.worktrees/` decoy check, that every `rota` verb the docs name exists, and the contract-doc stamps below), the grep gate (`bash test/grep-gate.sh`), the gofmt check (`bash test/gofmt.sh`, the same `gofmt -l` CI runs), `go vet ./...`, `go test -race -timeout 30m ./...`
 and the smoke suite in `gate.smokeShards` (default 4) shards, all at once. The sharded gate takes about 2–3 minutes;
 running the smoke suite in series is several times slower. It takes a machine-wide lock, so two gates never overlap, and
 keeps one log per check. Every check makes its temp files under one gate-owned root, and the gate fails if
@@ -22,6 +22,16 @@ GitHub CI (`.github/workflows/ci.yml`: gofmt, `go vet`, `go test`, validate-skil
 the merge gate. It runs on pushes to `main`, on PRs once they are ready for review (opened non-draft,
 reopened, or marked ready; drafts are skipped) and on manual dispatch, not on every push to an open PR. A
 newer run on the same ref cancels the older one. The local gate above decides whether a PR merges.
+
+To reproduce CI's `go test` locally, run it with no developer state reachable. A test that only passes
+with a real `HOME` or `CLAUDE_CONFIG_DIR` (for example by finding the installed rota skills) fails on CI:
+
+```sh
+env -i PATH="$(dirname "$(command -v go)"):/usr/bin:/bin" HOME=/nonexistent \
+  GOCACHE="$(go env GOCACHE)" GOPATH="$(go env GOPATH)" go test ./... -count=1
+```
+
+A fixture that assigns a worker must carry its own `skills/references/worker-contract.md`; see `newScopeFx`.
 
 Before a PR, a worker runs targeted checks only, as the [worker contract](../../skills/references/worker-contract.md)
 says: `rota test run fast`. In this repo that runs `test/fast.sh`, which maps the changed files to
