@@ -1,5 +1,5 @@
 ---
-verified-sha: 3e6f9f8dbaa15ec4713fc22c20884a7c24bc76a4
+verified-sha: c535c4cf9bd5b3b92d47e1d1df0c0014b4bfe750
 refs:
   - internal/version
   - internal/config
@@ -54,7 +54,7 @@ note: opens the config screen, the same one `rota config show --ui` and `rota co
 rota config set <key> <value>
 repo: scoped
 data: {"key": string, "value": any, "previous"?: any, "changed": bool}
-exit: 2 when `<key>` is not in the schema that `config check` uses (the shared `Keys` table in `internal/config/keys.go`), is a malformed path (empty segment: `""`, `.a`, `a.`), an argument is missing, or `<value>` is one the key cannot hold (`invalid value`: `release.versionFile` takes a project-relative path string that stays inside the project, or `""` to clear it); 70 when `.rota/config.json` exists but is not a JSON object, or the write fails.
+exit: 2 when `<key>` is not in the schema that `config check` uses (the shared `Keys` table in `internal/config/keys.go`), is a malformed path (empty segment: `""`, `.a`, `a.`), an argument is missing, or `<value>` is one the key cannot hold (`invalid value`: `release.versionFile` takes a project-relative path string that stays inside the project, or `""` to clear it; `ship.review` takes `true`, `false`, `full`, `light`, `none` or a `{default, lightBelow, labels}` object, anything else is `invalid value`); 70 when `.rota/config.json` exists but is not a JSON object, or the write fails.
 old: hv-config-set <key> <value> (both map to the old positionals in order). Writes `.rota/config.json` only, never `config.local.json`. `<value>` is parsed as JSON first (`true`, `42`, `"x"`, `[…]`, `{…}`) and falls back to a raw string (`opus`, empty string). `previous` is the stored value before the write and is absent when the key was unset.
 shim: old accepts any key, so the shim checks `<key>` against the schema table first and exits 2 without calling the helper when it is absent; old stdout is empty; read `.rota/config.json` before and after the call to fill `value`, `previous` and `changed`; old rc 1 with `malformed key path` on stderr becomes exit 2, rc 1 for missing argv becomes exit 2, any other rc 1 becomes exit 70.
 note: the JSON-then-string coercion is kept because `hv-init` and `hv-config` skills depend on it. A string that looks like JSON (`"true"`) still needs shell quoting (`'"true"'`). No `--string` or `--local` flag is added.
@@ -70,6 +70,8 @@ old: hv-config-schema-check (no args).
 shim: map stdout `UP_TO_DATE` to `status: upToDate`, `FRESH` to `fresh`, `CORRUPT` to `corrupt`, and `STALE:a,b` to `stale` with `missing` = the split list; exit 0 for `upToDate`, else 1 (old always exited 0).
 note: old always exited 0, so skills that branch on the four tokens must read `data.status`.
 note: `removed` lists keys older `rota init` runs seeded that nothing reads any more and the file still holds (`issues.filterMineOnly`, `issues.providers.github`, `issues.providers.gitlab`), in that order; `[]` when none. They are inert: they never change `status` or the exit, and text mode adds a `REMOVED: <keys> (nothing reads them; run: rota config fill)` line. `config fill` deletes them.
+
+note: a malformed `ship.review` value (it would read as the default) fails the check like a retired value: exit 1, listed in `data.retired` and as `RETIRED: …` in text, when `status` is `upToDate` or `stale`.
 
 ### rota config fill
 rota config fill

@@ -1,5 +1,5 @@
 ---
-verified-sha: 3fe9abdb78d41ab20ad0545652af7ca33e1dd786
+verified-sha: c535c4cf9bd5b3b92d47e1d1df0c0014b4bfe750
 refs:
   - internal/initproj
   - internal/cli/init.go
