@@ -510,6 +510,21 @@
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-09"
+    },
+    "Rounds: Orchestration::Architecture-review issues can propose seams that already exist": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-09"
+    },
+    "Rounds: Orchestration::Serialize sibling refactors that share a seam": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-09"
+    },
+    "Build & Tooling: Git & isolation::Reviewer subagents export with git archive, never worktree add": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-09"
     }
   }
 }
