@@ -25,7 +25,7 @@ Form read on 2026-10-09: `hesreallyhim/awesome-claude-code`, `.github/ISSUE_TEMP
 | Author Link | https://github.com/l4ci |
 | Description | see below |
 
-Description (10-500 characters, 2 sentences, 238 characters):
+Description (10-500 characters, 2 sentences, 213 characters):
 
 ```
 rota turns a to-do list into reviewed, merged work. Skills for Claude Code and Codex capture items, build them in small commits, review the branch and merge it, with parallel multi-agent rounds for larger batches.
