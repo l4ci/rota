@@ -9,6 +9,7 @@ import (
 
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/roundcfg"
+	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -446,5 +447,55 @@ func TestInFlightQueuedEmptyBodyCarriesSubsystem(t *testing.T) {
 	}
 	if len(got) != 1 || !reflect.DeepEqual(got[0].Scopes, []string{"subsystem:cli"}) {
 		t.Errorf("queued item scopes: %+v", got)
+	}
+}
+
+// A slot's pr can be re-recorded stale: poll reads the last ROTA-DONE in the
+// pane, which is still the previous issue's while the new issue runs. The queue
+// must not pair that PR with the slot's newer issue and branch (#648).
+func TestQueueKeepsARecordWhenTheSlotRecordsItsPRAgain(t *testing.T) {
+	f := newMoveFx(t)
+	branchA := f.slot("ben").Branch()
+	f.finish(t, "ben", pr7)
+	if _, err := f.assign("13", "ben"); err != nil {
+		t.Fatal(err)
+	}
+	f.finish(t, "ben", pr7) // the stale sentinel of issue 12, now on issue 13's slot
+	f.be.add("15", "Fourth issue", "M01", false, "## Acceptance\n- [ ] ok\n\nedits internal/fourth.go")
+	f.be.items["15"].Number = 15
+	if _, err := f.assign("15", "ben"); blockedBy(t, err) != BlockSlotBusy || !strings.Contains(err.Error(), "already queued") {
+		t.Errorf("a PR queued for another issue is not this slot's PR: %v", err)
+	}
+	q := f.queued()
+	if len(q) != 1 || q[0].Issue != "12" || q[0].Branch != branchA || q[0].PR != pr7 {
+		t.Errorf("the record for PR 7 keeps its issue and branch: %v", q)
+	}
+}
+
+func TestReconcileReportsAQueuedRecordWhoseBranchDoesNotHeadItsPR(t *testing.T) {
+	f := newAssignFixture(t)
+	worker.Update(f.root, func(d *worker.Doc) {
+		d.QueuePR(worker.QueuedPR{Issue: "13", PR: pr7, From: "ben", Branch: "ben/13-x"})
+		d.QueuePR(worker.QueuedPR{Issue: "14", PR: "https://github.com/o/r/pull/8", From: "dana", Branch: "dana/14-x"})
+	})
+	f.env.Forge = (&fakeRemote{
+		states:  map[int]string{7: "open", 8: "open"},
+		prViews: map[int]tracker.PRInfo{7: {Head: "ben/12-x"}, 8: {Head: "dana/14-x"}},
+	}).asForge()
+	out, err := f.env.Reconcile(bg, f.root, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []Finding
+	for _, d := range out.Drift {
+		if d.Kind == QueuedBranchMismatch {
+			got = append(got, d)
+		}
+	}
+	if len(got) != 1 || got[0].Issue != "13" || !strings.Contains(got[0].Detail, "ben/12-x") {
+		t.Errorf("only the mismatched record is reported: %+v", out.Drift)
+	}
+	if len(worker.LoadRegistry(f.root).PRs()) != 2 {
+		t.Error("reported, not repaired")
 	}
 }

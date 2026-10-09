@@ -67,6 +67,12 @@ func (e Env) queuePR(ctx context.Context, root string, be Board, name string) er
 	if s.PR() == "" {
 		return e.closeReview(ctx, root, be, s)
 	}
+	// A PR another issue's record already holds is not this slot's: the pane's
+	// last ROTA-DONE is the previous issue's until the new worker prints its own.
+	// Queuing it would pair that PR with this issue and branch.
+	if q := reg.QueuedPR(s.PR()); q != nil && queuedIssue(*q) != strings.ToUpper(strings.TrimPrefix(s.HeldID(), "#")) {
+		return blocked(BlockSlotBusy, "%s", busyMsg(name, s.HeldID(), fmt.Sprintf("its recorded PR %s is already queued for %s", s.PR(), q.Issue)))
+	}
 	p, err := e.Park(ctx, root, name, "assign")
 	if err != nil {
 		return err
