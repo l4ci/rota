@@ -20,6 +20,7 @@ class RunnerLeakTest(unittest.TestCase):
         shutil.copy(source / "runner.sh", self.repo / "test/runner.sh")
         shutil.copy(source / "gate.sh", self.repo / "test/gate.sh")
         shutil.copy(source / "lib.sh", self.repo / "test/lib.sh")
+        shutil.copy(source / "lint-sections.py", self.repo / "test/lint-sections.py")
         shutil.copytree(source / "lib", self.repo / "test/lib")
         (self.repo / ".rota").mkdir()
         self.paths = ["CLAUDE.md", "AGENTS.md", ".rota/KNOWLEDGE.md"]
