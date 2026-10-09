@@ -211,7 +211,7 @@ func (e Env) Wait(ctx context.Context, root string, o WaitOpts) (WaitResult, err
 				var done *ledger.Entry
 				if _, err := UpdateSlot(root, r.Name, func(s *Slot) {
 					prev := s.State()
-					if rowErr = recordRow(s, r, e.Now()); rowErr == nil && !alwaysNews(r.State) {
+					if rowErr = recordRow(s, r, e.Now(), LoadRegistry(root)); rowErr == nil && !alwaysNews(r.State) {
 						s.SetSeen(key)
 					}
 					if d, ok := paneDone(prev, s, r); ok && rowErr == nil {
