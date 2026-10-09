@@ -810,7 +810,7 @@ func (e Env) headLine(ctx context.Context, wt, ref string) string {
 // usual branch from the base instead.
 func (e Env) checkout(ctx context.Context, root string, to *worker.Slot, id, title string, branch *string) error {
 	name, wt := to.Name(), to.Worktree()
-	if *branch == "" || strings.HasPrefix(*branch, "park/") || *branch == to.Base() {
+	if *branch == "" || worker.IsPark(*branch) || *branch == to.Base() {
 		*branch = BranchName(name, id, title)
 		_, err := e.workerEnv().ResetTo(root, name, id, *branch, false)
 		return err

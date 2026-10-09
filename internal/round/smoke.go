@@ -66,7 +66,7 @@ func (e Env) reserveSmokeSection(ctx context.Context, root string, be Board, reg
 		if s.Name() == agent && s.HeldID() == strings.ToUpper(id) && s.SmokeSection() != 0 {
 			return s.SmokeSection()
 		}
-		if b := s.Branch(); b != "" && !strings.HasPrefix(b, "park/") {
+		if b := s.Branch(); b != "" && !worker.IsPark(b) {
 			refs = append(refs, b, "origin/"+b)
 		}
 	}

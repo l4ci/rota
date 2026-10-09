@@ -344,7 +344,7 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 		wt := rep.views[r.Name].worktree
 		// A parked slot owns no agent: one still running in its worktree is a
 		// leftover, reported as unclaimed rather than absorbed by the slot.
-		if r.Tab == "" && (r.Branch == "" || r.Branch == "park/"+r.Name) {
+		if r.Tab == "" && (r.Branch == "" || worker.IsOwnPark(r.Branch, r.Name)) {
 			wt = ""
 		}
 		if i := matchAgent(agents, r.Name, r.Tab, wt); i >= 0 {
@@ -379,7 +379,7 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 		if v == nil { // unclaimed tab
 			continue
 		}
-		parked := r.Branch == "" || r.Branch == "park/"+r.Name || r.Branch == v.base
+		parked := r.Branch == "" || worker.IsOwnPark(r.Branch, r.Name) || r.Branch == v.base
 		if r.Issue != "" {
 			held[r.Issue] = true
 		}
