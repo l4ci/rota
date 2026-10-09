@@ -150,7 +150,7 @@ func verdictShow(c *Ctx, args []string) (Result, error) {
 			continue
 		}
 		o := r.Object()
-		o.Set("stale", r.Sha != t.head)
+		o.Set("stale", !verdict.AtHead(r, t.head))
 		records = append(records, o)
 		lines = append(lines, kind+" "+r.Verdict+" @ "+r.Sha)
 	}
@@ -194,7 +194,7 @@ func verdictRoute(fs *flag.FlagSet) RunFunc {
 		d.Set("kind", r.Kind)
 		d.Set("verdict", r.Verdict)
 		d.Set("sha", r.Sha)
-		d.Set("stale", r.Sha != t.head)
+		d.Set("stale", !verdict.AtHead(r, t.head))
 		d.Set("advisory", verdict.Advisory(*consumer, s))
 		d.Set("next", next)
 		return Result{Data: d, Text: next}, nil

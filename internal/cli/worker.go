@@ -696,8 +696,7 @@ func recordedReviews(root string) func(branch, head string) []string {
 	return func(branch, head string) []string {
 		var kinds []string
 		for _, k := range []string{verdict.ReviewSpec, verdict.ReviewQuality} {
-			if r, ok := verdict.Latest(store.Branches[verdict.BranchKey("", branch)], k); ok && r.Sha != "" && head != "" &&
-				(strings.HasPrefix(head, r.Sha) || strings.HasPrefix(r.Sha, head)) {
+			if r, ok := verdict.Latest(store.Branches[verdict.BranchKey("", branch)], k); ok && verdict.AtHead(r, head) {
 				kinds = append(kinds, k)
 			}
 		}
