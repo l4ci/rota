@@ -164,6 +164,9 @@ type PR struct {
 	Branch string
 	URL    string
 	Body   string
+	// HeadSHA is the PR's head commit; set by MergedPRs, which callers use to
+	// tell a branch's own PR from an older one that reused the name.
+	HeadSHA string
 }
 
 // PRInfo is one PR/MR as the merge gate reads it. State is OPEN, MERGED or
@@ -293,6 +296,9 @@ type Adapter interface {
 	// closing keyword, in order of first appearance.
 	ClosedNumbers(body string) []int
 	OpenPRs(ctx context.Context) ([]PR, error)
+	// MergedPRs lists the merged PRs headed by branch, for a branch whose PR
+	// opened and merged between two looks at the open list.
+	MergedPRs(ctx context.Context, branch string) ([]PR, error)
 	PRsClosing(ctx context.Context, number int) ([]PR, error)
 	PRCheckout(ctx context.Context, pr int) error
 	// PRView reads PR pr: branches, head sha, state, merge sha and body.

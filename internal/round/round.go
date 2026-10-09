@@ -64,7 +64,9 @@ const DefaultNeedsHuman = "needs-human"
 // label repair, writes. tracker.Adapter satisfies it.
 type Forge interface {
 	OpenPRs(ctx context.Context) ([]tracker.PR, error)
+	MergedPRs(ctx context.Context, branch string) ([]tracker.PR, error)
 	PRState(ctx context.Context, pr int) (string, error)
+	PRView(ctx context.Context, pr int) (tracker.PRInfo, error)
 	ClosedNumbers(body string) []int
 	List(ctx context.Context, f tracker.ListFilter) ([]tracker.Issue, error)
 	Get(ctx context.Context, number int, withComments bool) (tracker.Issue, error)
@@ -190,6 +192,71 @@ func (e Env) ExternalState(ctx context.Context, root string, forgeOK bool, base 
 		return "busy"
 	}
 	return "idle"
+}
+
+// adoptedPRNumber is the number of the PR a row's checks run on: the one it
+// records, else, for an adopted slot that recorded none and has no open PR, the
+// merged PR its branch headed. That PR opened and merged between two looks at
+// the open list, so only a branch lookup finds it; the row then carries it and
+// the merged-external finding releases the slot.
+func (e Env) adoptedPRNumber(ctx context.Context, root string, rep *Report, v *view, r *Row) (int, bool) {
+	if n, ok := worker.PRRefNumber(r.PR); ok {
+		return n, true
+	}
+	if r.HostState != ExternalHost || r.PR != "" {
+		return 0, false
+	}
+	merged, err := e.Forge.MergedPRs(ctx, r.Branch)
+	if err != nil {
+		rep.Warnings = append(rep.Warnings, fmt.Sprintf("merged PRs of %s: %v", r.Branch, err))
+		v.prErr = true
+		return 0, false
+	}
+	for _, m := range merged {
+		if e.ownsMergedPR(ctx, root, m.HeadSHA, v.base, r.Branch) {
+			r.PR = m.URL
+			return m.Number, true
+		}
+	}
+	return 0, false
+}
+
+// ownsMergedPR says whether a merged PR is this slot's: the forge matches a
+// head branch by name alone, so an older PR from a reused name (or a fork's
+// same-named branch) is told apart by its commits. Being reachable from the
+// branch is not enough: a branch recreated from base contains every PR base
+// ever merged. The PR is ours when the branch tip is its head, or its head is
+// on the branch but not yet in base (a squash merge leaves it out). A PR without
+// a head sha, or a sha git does not have, proves nothing and is not ours.
+func (e Env) ownsMergedPR(ctx context.Context, root, sha, base, branch string) bool {
+	if sha == "" {
+		return false
+	}
+	tip, err := e.Git(ctx, root, "rev-parse", "--verify", "--quiet", branch+"^{commit}")
+	if err != nil || tip.ExitCode != 0 {
+		return false
+	}
+	if strings.TrimSpace(tip.Stdout) == sha {
+		return true
+	}
+	onBranch, err := e.Git(ctx, root, "merge-base", "--is-ancestor", sha, branch)
+	if err != nil || onBranch.ExitCode != 0 {
+		return false
+	}
+	// Status never fetches, so origin/<base> can run ahead of local <base>: the
+	// head counts as in base when either holds it.
+	checked := false
+	for _, ref := range []string{base, "origin/" + base} {
+		if ok, _ := e.Git(ctx, root, "rev-parse", "--verify", "-q", ref); ok.ExitCode != 0 {
+			continue
+		}
+		in, err := e.Git(ctx, root, "merge-base", "--is-ancestor", sha, ref)
+		if err != nil || in.ExitCode != 1 {
+			return false
+		}
+		checked = true
+	}
+	return checked
 }
 
 // Finding is one drift. Repair names what Reconcile(apply) would do and is
@@ -335,7 +402,7 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 						rep.add(Finding{Kind: PRUnrecorded, Slot: r.Name, Issue: r.Issue, Detail: fmt.Sprintf("open PR #%d has branch %s as head, slot records none", pr.Number, r.Branch), Repair: "record pr"})
 					}
 				}
-			} else if n, ok := worker.PRRefNumber(r.PR); ok {
+			} else if n, ok := e.adoptedPRNumber(ctx, root, rep, v, r); ok {
 				st, err := e.Forge.PRState(ctx, n)
 				if err != nil {
 					rep.Warnings = append(rep.Warnings, fmt.Sprintf("PR #%d state: %v", n, err))

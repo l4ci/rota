@@ -128,7 +128,8 @@ func (s *Slot) HarnessKind() string {
 const KindExternal = "external"
 
 // IsExternal reports whether the slot was adopted rather than driven by rota.
-func (s *Slot) IsExternal() bool { return s.Kind() == KindExternal }
+// It is the one predicate every fence reads; a nil slot is not external.
+func (s *Slot) IsExternal() bool { return s != nil && s.Kind() == KindExternal }
 
 // MarkExternal makes the slot an adopted one holding task, with pr when known.
 func (s *Slot) MarkExternal(task, pr string) {
