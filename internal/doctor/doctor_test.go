@@ -315,6 +315,31 @@ func TestSkillsCheck(t *testing.T) {
 	}
 }
 
+func TestSkillsCheckPluginExtras(t *testing.T) {
+	const bin = "aaaaaaaaaaaaaaaa"
+	f := &fake{have: map[string]bool{}}
+	manifest := skills.RootStatus{Root: skills.Root{Path: "/h/.claude/skills", Agent: "claude", Scope: "user"}, Installed: true, Version: "5.0.0", Digest: bin, Current: true}
+	plugin := skills.RootStatus{Root: skills.Root{Path: "/p/skills", Agent: "claude", Scope: "user", Plugin: true}}
+	run := func(rep *skills.Report) Check {
+		return statusOf(Run(context.Background(), Input{Skills: rep, Exec: f.exec, Look: f.look}), "skills")
+	}
+	warns := []string{"read /p/installed_plugins.json: permission denied"}
+	if c := run(&skills.Report{Version: "5.0.0", Digest: bin, Roots: []skills.RootStatus{manifest}, Warnings: warns}); c.Status != Warn || !strings.Contains(c.Detail, "permission denied") || !strings.Contains(c.Detail, "1 roots match") || c.Hint == "" {
+		t.Errorf("warning beside a passing root: %+v", c)
+	}
+	stale := manifest
+	stale.Current, stale.Digest = false, "bbbb"
+	if c := run(&skills.Report{Version: "5.0.0", Digest: bin, Roots: []skills.RootStatus{stale}, Warnings: warns}); c.Status != Fail || !strings.Contains(c.Detail, "permission denied") || c.Hint != "run: rota skills update" {
+		t.Errorf("warning beside a failing root: %+v", c)
+	}
+	if c := run(&skills.Report{Version: "5.0.0", Digest: bin, Roots: []skills.RootStatus{plugin}}); c.Status != Skip || !strings.Contains(c.Detail, "claude plugin update rota@rota") || strings.Contains(c.Detail, "rota skills install") {
+		t.Errorf("plugin recorded, dir missing: %+v", c)
+	}
+	if c := run(&skills.Report{Version: "5.0.0", Digest: bin, Roots: []skills.RootStatus{{Root: skills.Root{Path: "/h/.claude/skills"}}}}); c.Status != Skip || !strings.Contains(c.Detail, "rota skills install") {
+		t.Errorf("nothing recorded: %+v", c)
+	}
+}
+
 func TestCodexCheck(t *testing.T) {
 	// the claude fixtures carry a codex line of their own, so build these here
 	codexCur := "claude: current (v10)\ncodex: current (v8) (/x)\n"

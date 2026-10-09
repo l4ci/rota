@@ -593,6 +593,20 @@ func (d *runner) resolve(word string) (string, bool) {
 // something is installed (the repo's opt-in rule) and fails only on a broken
 // install: another digest, or missing or edited files.
 func (d *runner) skills() Check {
+	c := d.skillsCheck()
+	rep := d.in.Skills
+	if rep == nil || len(rep.Warnings) == 0 {
+		return c
+	}
+	// A plugin read problem never fails the check on its own.
+	c.Detail += "; " + strings.Join(rep.Warnings, "; ")
+	if c.Status == Pass {
+		c.Status, c.Hint = Warn, "make the plugin state file readable, or check the Claude Code plugins directory"
+	}
+	return c
+}
+
+func (d *runner) skillsCheck() Check {
 	const name = "skills"
 	const installHint = "run: rota skills install"
 	const pluginHint = "run /rota:rota-install in Claude Code (binary to the plugin's version) or claude plugin update rota@rota"
@@ -605,6 +619,13 @@ func (d *runner) skills() Check {
 		}
 	}
 	if len(have) == 0 {
+		if rep := d.in.Skills; rep != nil {
+			for _, r := range rep.Roots {
+				if r.Plugin {
+					return skip(name, "rota plugin recorded but its skills are not on disk: claude plugin update rota@rota")
+				}
+			}
+		}
 		return skip(name, "not installed (opt-in): "+installHint)
 	}
 	rep := d.in.Skills
