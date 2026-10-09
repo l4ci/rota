@@ -9,6 +9,8 @@ func TestFirstLine(t *testing.T) {
 		"\n  \n  two \nx": "two",
 		"a\r\nb":          "a",
 		" pad \nb":        "pad",
+		"\n \t\n\r\n":     "",
+		"\x1f":            "",
 	} {
 		if got := FirstLine(in); got != want {
 			t.Errorf("FirstLine(%q) = %q, want %q", in, got, want)
