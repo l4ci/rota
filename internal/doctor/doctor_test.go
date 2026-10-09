@@ -268,6 +268,15 @@ func TestSkillsCheck(t *testing.T) {
 		}
 		return r
 	}
+	plugin := func(mod func(*skills.RootStatus)) skills.RootStatus {
+		return root(func(r *skills.RootStatus) {
+			r.Path, r.Version, r.Plugin = "/h/.claude/plugins/cache/rota/rota/5.0.0/skills", "5.0.0", true
+			if mod != nil {
+				mod(r)
+			}
+		})
+	}
+	const pluginHint = "run /rota:rota-install in Claude Code (binary to the plugin's version) or claude plugin update rota@rota"
 	rep := func(roots ...skills.RootStatus) *skills.Report {
 		return &skills.Report{Version: "5.0.0", Digest: bin, Roots: roots}
 	}
@@ -291,6 +300,10 @@ func TestSkillsCheck(t *testing.T) {
 		{"edited", rep(root(func(r *skills.RootStatus) { r.Edited = []string{"rota-work/SKILL.md"} })), Fail, "1 edited (rota-work/SKILL.md)", "run: rota skills update --overwrite"},
 		{"missing", rep(root(func(r *skills.RootStatus) { r.Missing = []string{"rota-work/SKILL.md", "rota-ship/SKILL.md"} })), Fail, "2 missing", "run: rota skills update"},
 		{"second root only", rep(root(func(r *skills.RootStatus) { r.Installed = false }), root(func(r *skills.RootStatus) { r.Path = "/h/.agents/skills" })), Pass, "1 roots", ""},
+		{"plugin current", rep(plugin(nil)), Pass, "1 roots match rota 5.0.0", ""},
+		{"plugin stale", rep(plugin(func(r *skills.RootStatus) { r.Digest, r.Current = "bbbb", false })), Fail, "rota/5.0.0/skills (plugin)", pluginHint},
+		{"plugin missing", rep(plugin(func(r *skills.RootStatus) { r.Missing = []string{"rota-work/SKILL.md"} })), Fail, "(plugin): 1 missing", pluginHint},
+		{"plugin and manifest stale", rep(root(func(r *skills.RootStatus) { r.Current = false }), plugin(func(r *skills.RootStatus) { r.Current = false })), Fail, "(plugin)", "run: rota skills update; " + pluginHint},
 	} {
 		c := statusOf(Run(context.Background(), Input{Skills: tc.in, Exec: f.exec, Look: f.look}), "skills")
 		if c.Status != tc.status || !strings.Contains(c.Detail, tc.detail) || (tc.hint != "" && c.Hint != tc.hint) {
@@ -299,6 +312,31 @@ func TestSkillsCheck(t *testing.T) {
 		if tc.status == Fail && c.Hint == "" {
 			t.Errorf("%s: a fail needs a hint", tc.name)
 		}
+	}
+}
+
+func TestSkillsCheckPluginExtras(t *testing.T) {
+	const bin = "aaaaaaaaaaaaaaaa"
+	f := &fake{have: map[string]bool{}}
+	manifest := skills.RootStatus{Root: skills.Root{Path: "/h/.claude/skills", Agent: "claude", Scope: "user"}, Installed: true, Version: "5.0.0", Digest: bin, Current: true}
+	plugin := skills.RootStatus{Root: skills.Root{Path: "/p/skills", Agent: "claude", Scope: "user", Plugin: true}}
+	run := func(rep *skills.Report) Check {
+		return statusOf(Run(context.Background(), Input{Skills: rep, Exec: f.exec, Look: f.look}), "skills")
+	}
+	warns := []string{"read /p/installed_plugins.json: permission denied"}
+	if c := run(&skills.Report{Version: "5.0.0", Digest: bin, Roots: []skills.RootStatus{manifest}, Warnings: warns}); c.Status != Warn || !strings.Contains(c.Detail, "permission denied") || !strings.Contains(c.Detail, "1 roots match") || c.Hint == "" {
+		t.Errorf("warning beside a passing root: %+v", c)
+	}
+	stale := manifest
+	stale.Current, stale.Digest = false, "bbbb"
+	if c := run(&skills.Report{Version: "5.0.0", Digest: bin, Roots: []skills.RootStatus{stale}, Warnings: warns}); c.Status != Fail || !strings.Contains(c.Detail, "permission denied") || c.Hint != "run: rota skills update" {
+		t.Errorf("warning beside a failing root: %+v", c)
+	}
+	if c := run(&skills.Report{Version: "5.0.0", Digest: bin, Roots: []skills.RootStatus{plugin}}); c.Status != Skip || !strings.Contains(c.Detail, "claude plugin update rota@rota") || strings.Contains(c.Detail, "rota skills install") {
+		t.Errorf("plugin recorded, dir missing: %+v", c)
+	}
+	if c := run(&skills.Report{Version: "5.0.0", Digest: bin, Roots: []skills.RootStatus{{Root: skills.Root{Path: "/h/.claude/skills"}}}}); c.Status != Skip || !strings.Contains(c.Detail, "rota skills install") {
+		t.Errorf("nothing recorded: %+v", c)
 	}
 }
 

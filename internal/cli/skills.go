@@ -75,15 +75,7 @@ func skillsEnv(c *Ctx, a skillsArgs) (set *skills.Set, roots []skills.Root, skip
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	home := os.Getenv("HOME")
-	if home == "" {
-		home, _ = os.UserHomeDir()
-	}
-	root := ""
-	if !a.currentAccount {
-		root, _ = c.Root()
-	}
-	claudeDirs, skipped := skillsClaudeDirs(home, root)
+	home, claudeDirs, skipped := skillsDirs(c, a)
 	top := ""
 	if a.scope != skills.User {
 		top = gitToplevel()
@@ -98,6 +90,38 @@ func skillsEnv(c *Ctx, a skillsArgs) (set *skills.Set, roots []skills.Root, skip
 		return nil, nil, nil, Resolution("%v", err)
 	}
 	return set, roots, skipped, nil
+}
+
+// skillsDirs is the home and the Claude config dirs (see skillsClaudeDirs) a
+// verb works on.
+func skillsDirs(c *Ctx, a skillsArgs) (home string, claudeDirs, skipped []string) {
+	home = c.deps().Getenv("HOME")
+	if home == "" {
+		home, _ = os.UserHomeDir()
+	}
+	root := ""
+	if !a.currentAccount {
+		root, _ = c.Root()
+	}
+	claudeDirs, skipped = skillsClaudeDirs(home, root)
+	return home, claudeDirs, skipped
+}
+
+// skillsPluginRoots are the installed rota plugin roots of the Claude config
+// dirs that fit the scope ("" for both) and agent filters; top is the project
+// root, "" outside a work tree.
+func skillsPluginRoots(getenv func(string) string, claudeDirs []string, scope, agent, top string) ([]skills.Root, []error) {
+	if agent != "" && agent != "all" && agent != skills.Claude {
+		return nil, nil
+	}
+	var out []skills.Root
+	all, errs := skills.PluginRoots(skills.PluginsDirs(getenv, claudeDirs), top)
+	for _, r := range all {
+		if scope == "" || scope == r.Scope {
+			out = append(out, r)
+		}
+	}
+	return out, errs
 }
 
 // skillsClaudeDirs is the Claude config dirs user-scope skills go to: the
@@ -191,8 +215,17 @@ func skillsUpdate(c *Ctx, a skillsArgs) (Result, error) {
 		return Result{}, skillsErr(err)
 	}
 	if len(res) == 0 {
+		hint := "run: rota skills install"
+		_, claudeDirs, _ := skillsDirs(c, a)
+		top := ""
+		if a.scope != skills.User {
+			top = gitToplevel()
+		}
+		if plugin, _ := skillsPluginRoots(c.deps().Getenv, claudeDirs, a.scope, a.agent, top); len(plugin) > 0 {
+			hint = "the rota plugin is updated by Claude Code: claude plugin update rota@rota"
+		}
 		return withSkipped(Result{Data: knObj("roots", []any{}, "changed", false)}, skipped),
-			Failed("no skills install found in scope").WithHint("run: rota skills install")
+			Failed("no skills install found in scope").WithHint(hint)
 	}
 	out, err := skillsInstallResult(c, "update", res)
 	return withSkipped(out, skipped), err
@@ -293,15 +326,26 @@ func skillsStatus(c *Ctx, a skillsArgs) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
+	_, claudeDirs, _ := skillsDirs(c, a)
+	top := ""
+	if a.scope != skills.User {
+		top = gitToplevel()
+	}
+	pluginRoots, pluginErrs := skillsPluginRoots(c.deps().Getenv, claudeDirs, a.scope, a.agent, top)
+	roots = append(roots, pluginRoots...)
 	rep, err := set.Status(roots, version.Get().Version)
 	if err != nil {
 		return Result{}, skillsErr(err)
 	}
+	warnings := errStrings(pluginErrs)
 	rootsData := []any{}
 	text := []string{fmt.Sprintf("rota %s, skills %s", rep.Version, short(rep.Digest))}
 	for _, r := range rep.Roots {
-		o := knObj("root", r.Path, "agent", r.Agent, "scope", r.Scope, "installed", r.Installed)
+		o := knObj("root", r.Path, "agent", r.Agent, "scope", r.Scope, "plugin", r.Plugin, "installed", r.Installed)
 		line := fmt.Sprintf("%s (%s, %s): ", r.Path, r.Agent, r.Scope)
+		if r.Plugin {
+			line = fmt.Sprintf("%s (%s, %s, plugin): ", r.Path, r.Agent, r.Scope)
+		}
 		if !r.Installed {
 			line += "not installed"
 		} else {
@@ -325,7 +369,32 @@ func skillsStatus(c *Ctx, a skillsArgs) (Result, error) {
 		rootsData = append(rootsData, o)
 	}
 	data := knObj("version", rep.Version, "digest", rep.Digest, "roots", rootsData)
-	return withSkipped(Result{Data: data, Text: strings.Join(text, "\n")}, skipped), nil
+	return withWarnings(withSkipped(Result{Data: data, Text: strings.Join(text, "\n")}, skipped), warnings), nil
+}
+
+// errStrings renders errors as their messages.
+func errStrings(errs []error) []string {
+	var out []string
+	for _, e := range errs {
+		out = append(out, e.Error())
+	}
+	return out
+}
+
+// withWarnings reports problems that did not stop the verb.
+func withWarnings(res Result, warnings []string) Result {
+	if len(warnings) == 0 {
+		return res
+	}
+	if o, ok := res.Data.(*jsonx.Object); ok {
+		o.Set("warnings", strs(warnings))
+	}
+	lines := []string{res.Text}
+	for _, w := range warnings {
+		lines = append(lines, "warning: "+w)
+	}
+	res.Text = strings.Join(lines, "\n")
+	return res
 }
 
 func short(digest string) string {
