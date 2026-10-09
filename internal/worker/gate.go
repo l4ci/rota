@@ -138,9 +138,11 @@ type GateOpts struct {
 	// verdict-blocked and is returned as is. branch is the worker branch.
 	Verdict func(branch string) error
 	// Recorded lists the review kinds (verdict.ReviewSpec, verdict.ReviewQuality)
-	// with a verdict recorded for branch. When set, the gate refuses a branch
-	// lacking the verdicts its resolved review depth needs; nil skips that check.
-	Recorded func(branch string) []string
+	// with a verdict recorded for branch at head (the checked tip's full sha;
+	// a record on an older commit is stale and does not count, as in
+	// /rota-review). When set, the gate refuses a branch lacking the verdicts
+	// its resolved review depth needs; nil skips that check.
+	Recorded func(branch, head string) []string
 	// Approve is the merge-approval gate (B1), run after provenance and right
 	// before the merge, never under CheckOnly. files lists the paths the merge
 	// changes. A non-nil error stops the gate with verdict approval-required
@@ -735,7 +737,8 @@ func (g *gate) stepReviewDepth() (bool, error) {
 	if g.o.Recorded == nil {
 		return false, nil
 	}
-	have := g.o.Recorded(g.branch)
+	head, _ := g.git(g.root, "rev-parse", g.headRef)
+	have := g.o.Recorded(g.branch, strings.TrimSpace(head))
 	var missing []string
 	for _, k := range reviewKinds(depth) {
 		if !slices.Contains(have, k) {

@@ -1099,7 +1099,7 @@ func TestGateAppliesTheReviewDepth(t *testing.T) {
 				[]byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"#5","pr":%q}]}`, ghURL)), 0o644)
 			w.forge("body", "Closes #5\n")
 			w.forge("issueLabels", c.labels)
-			res, err := w.gate(false, GateOpts{CheckOnly: true, Recorded: func(string) []string { return c.recorded }})
+			res, err := w.gate(false, GateOpts{CheckOnly: true, Recorded: func(string, string) []string { return c.recorded }})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1132,5 +1132,81 @@ func TestGateReviewDepthUnresolvable(t *testing.T) {
 	w.setConfig(`{"ship":{"review":{"default":"deep"}},"test":{"full":["true"]}}`)
 	if res, err := w.gate(false, GateOpts{CheckOnly: true}); err != nil || res.Verdict != GateCheckBroke {
 		t.Errorf("malformed policy: %+v %v", res, err)
+	}
+}
+
+// A label-read failure is a check-broke, never a guessed depth: guessing could
+// pass a risk:high branch as light. The recorded verdicts are passed for every
+// kind, so only the failed read can refuse.
+func TestGateReviewDepthLabelReadFailureIsCheckBroke(t *testing.T) {
+	w := newWorld(t, ghURL)
+	w.setConfig(`{"ship":{"review":{"default":"full","labels":{"risk:high":"full"}}},"test":{"full":["true"]}}`)
+	os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
+		[]byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"#5","pr":%q}]}`, ghURL)), 0o644)
+	w.forge("body", "Closes #5\n")
+	w.forge("issueErr", "HTTP 500: server error")
+	all := func(string, string) []string { return []string{verdict.ReviewSpec, verdict.ReviewQuality} }
+	res, err := w.gate(false, GateOpts{CheckOnly: true, Recorded: all})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Verdict != GateCheckBroke || !strings.Contains(res.Err, "could not read #5 for its labels") {
+		t.Errorf("label read failure: %s (%s)", res.Verdict, res.Err)
+	}
+}
+
+// An unreadable diff is a check-broke too: the size rule needs it.
+func TestGateReviewDepthDiffReadFailureIsCheckBroke(t *testing.T) {
+	w := newWorld(t, ghURL)
+	w.setConfig(`{"ship":{"review":{"default":"full","lightBelow":100}},"test":{"full":["true"]}}`)
+	os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
+		[]byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"#5","pr":%q}]}`, ghURL)), 0o644)
+	w.forge("body", "Closes #5\n")
+	e := w.env(false)
+	realGit := e.Git
+	if realGit == nil {
+		realGit = git.Exec
+	}
+	e.Git = func(ctx context.Context, dir string, args ...string) (git.Result, error) {
+		if len(args) > 1 && args[0] == "diff" && args[1] == "--numstat" {
+			return git.Result{ExitCode: 128}, nil
+		}
+		return realGit(ctx, dir, args...)
+	}
+	all := func(string, string) []string { return []string{verdict.ReviewSpec, verdict.ReviewQuality} }
+	res, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main", CheckOnly: true, Recorded: all})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Verdict != GateCheckBroke || !strings.Contains(res.Err, "could not diff") {
+		t.Errorf("diff read failure: %s (%s)", res.Verdict, res.Err)
+	}
+}
+
+// A verdict recorded on an older commit does not satisfy the depth check: the
+// Recorded port is asked about the checked tip, and a port that answers only
+// for another sha leaves the branch review-missing.
+func TestGateReviewDepthAsksForTheCheckedHead(t *testing.T) {
+	w := newWorld(t, ghURL)
+	w.setConfig(`{"ship":{"review":{"default":"light"}},"test":{"full":["true"]}}`)
+	os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
+		[]byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"#5","pr":%q}]}`, ghURL)), 0o644)
+	w.forge("body", "Closes #5\n")
+	var asked string
+	res, err := w.gate(false, GateOpts{CheckOnly: true, Recorded: func(_, head string) []string {
+		asked = head
+		if head == "oldsha" {
+			return []string{verdict.ReviewQuality}
+		}
+		return nil
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := gitq(t, w.worker, "rev-parse", "HEAD"); asked != want {
+		t.Errorf("asked about %q, want the tip %q", asked, want)
+	}
+	if res.Verdict != GateReviewMissing {
+		t.Errorf("a stale verdict must not pass: %+v", res)
 	}
 }

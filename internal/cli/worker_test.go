@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/host"
+	"github.com/l4ci/rota/internal/verdict"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -525,5 +526,26 @@ func TestWorkerResetRefusesAnAdoptedSlotAsExternal(t *testing.T) {
 	code, out, _ := rotaIn(t, dir, "worker", "reset", "w1", "--json")
 	if d := data(t, out); code != 4 || d["blockedBy"] != "external" {
 		t.Fatalf("reset of an adopted slot: %d %v", code, d)
+	}
+}
+
+// recordedReviews counts a verdict only at the branch head: a record on an
+// older commit is stale, as /rota-review treats it. Records hold a short sha.
+func TestRecordedReviewsIgnoreStaleVerdicts(t *testing.T) {
+	root := t.TempDir()
+	for _, r := range []verdict.Record{
+		{Kind: verdict.ReviewSpec, Verdict: verdict.Pass, Sha: "aaaaaaa"},
+		{Kind: verdict.ReviewQuality, Verdict: verdict.Pass, Sha: "bbbbbbb"},
+	} {
+		if _, err := verdict.AddBranch(root, "w1", r); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got := recordedReviews(root)("w1", "bbbbbbb0123456789012345678901234567890a")
+	if len(got) != 1 || got[0] != verdict.ReviewQuality {
+		t.Errorf("only the quality record is at head: %v", got)
+	}
+	if got := recordedReviews(root)("w1", ""); len(got) != 0 {
+		t.Errorf("an unknown head matches nothing: %v", got)
 	}
 }
