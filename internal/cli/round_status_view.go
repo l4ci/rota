@@ -311,25 +311,6 @@ func (m *roundScreen) entries() []entry {
 	return out
 }
 
-func dashed(s string) string { return dash(s) }
-
-// plain drops control characters (ESC, C1, DEL) from text that came from the
-// forge or the registry: a PR title or an evidence line must not drive the
-// terminal. Newlines and tabs become spaces or stay newlines as noted.
-func plain(s string, keepNL bool) string {
-	return strings.Map(func(r rune) rune {
-		switch {
-		case r == '\n' && keepNL:
-			return r
-		case r == '\n' || r == '\t':
-			return ' '
-		case r < 0x20 || (r >= 0x7f && r < 0xa0):
-			return -1
-		}
-		return r
-	}, s)
-}
-
 func prLabel(pr, state string) string {
 	if pr == "" {
 		return "-"
@@ -358,18 +339,18 @@ func tierModel(r round.Row) string {
 	if s == "" {
 		s = strings.TrimSuffix(r.Kind+"/"+r.Model, "/")
 	}
-	return dashed(s)
+	return dash(s)
 }
 
 func slotEntry(r round.Row) entry {
-	issue := dashed(r.Issue)
+	issue := dash(r.Issue)
 	if r.Issue != "" {
 		issue = "#" + strings.TrimPrefix(r.Issue, "#")
 	}
-	line := fmt.Sprintf("%-8s %-7s %-10s %-14s %-18s %-7s %s", r.Name, issue, dashed(hostLabel(r)), prLabel(r.PR, r.PRState), tierModel(r), bounceLabel(r.Bounces), burnLabel(r))
+	line := fmt.Sprintf("%-8s %-7s %-10s %-14s %-18s %-7s %s", r.Name, issue, dash(hostLabel(r)), prLabel(r.PR, r.PRState), tierModel(r), bounceLabel(r.Bounces), burnLabel(r))
 	var b []string
 	b = append(b, "PR: "+firstOf(r.PRTitle, "no title known"))
-	b = append(b, "branch: "+dashed(r.Branch))
+	b = append(b, "branch: "+dash(r.Branch))
 	if r.PR != "" {
 		b = append(b, "url: "+r.PR)
 	}
@@ -383,7 +364,7 @@ func slotEntry(r round.Row) entry {
 	if r.BestOf != "" {
 		b = append(b, "best-of with "+r.BestOf)
 	}
-	return entry{key: "slot " + r.Name, section: secSlots, line: plain(line, false), title: plain(r.Name+" · "+issue, false), body: plain(strings.Join(b, "\n"), true)}
+	return entry{key: "slot " + r.Name, section: secSlots, line: tui.Sanitize(line, false), title: tui.Sanitize(r.Name+" · "+issue, false), body: tui.Sanitize(strings.Join(b, "\n"), true)}
 }
 
 func bounceLabel(n int) string {
@@ -394,9 +375,9 @@ func bounceLabel(n int) string {
 }
 
 func reviewEntry(q round.QueuedPR) entry {
-	line := fmt.Sprintf("#%-7s %-14s %-30s %s", q.Issue, prLabel(q.PR, ""), dashed(q.Branch), dashed(q.From))
-	body := "PR: " + dashed(q.PR) + "\nbranch: " + dashed(q.Branch) + "\nfrom: " + dashed(q.From)
-	return entry{key: "review " + q.Issue + " " + q.PR, section: secReview, line: plain(line, false), title: plain("review · #"+q.Issue, false), body: plain(body, true)}
+	line := fmt.Sprintf("#%-7s %-14s %-30s %s", q.Issue, prLabel(q.PR, ""), dash(q.Branch), dash(q.From))
+	body := "PR: " + dash(q.PR) + "\nbranch: " + dash(q.Branch) + "\nfrom: " + dash(q.From)
+	return entry{key: "review " + q.Issue + " " + q.PR, section: secReview, line: tui.Sanitize(line, false), title: tui.Sanitize("review · #"+q.Issue, false), body: tui.Sanitize(body, true)}
 }
 
 func candEntry(c roundCand) entry {
@@ -409,7 +390,7 @@ func candEntry(c roundCand) entry {
 	if !c.Ready {
 		body = c.Title + "\nblocked:\n- " + strings.Join(c.Why, "\n- ")
 	}
-	return entry{key: "cand " + c.ID, section: secCands, line: plain(line, false), title: plain("candidate · #"+strings.TrimPrefix(c.ID, "#"), false), body: plain(body, true)}
+	return entry{key: "cand " + c.ID, section: secCands, line: tui.Sanitize(line, false), title: tui.Sanitize("candidate · #"+strings.TrimPrefix(c.ID, "#"), false), body: tui.Sanitize(body, true)}
 }
 
 func (m *roundScreen) Update(msg tui.Msg) (tui.Model, tui.Cmd) {
@@ -521,7 +502,7 @@ func (m *roundScreen) Render(w, h int, st tui.Style) string {
 	}
 	head := st.Bold("Round status")
 	if m.snap.Host != "" {
-		head += st.Dim(" · " + plain(m.snap.Host, false))
+		head += st.Dim(" · " + tui.Sanitize(m.snap.Host, false))
 	}
 	head += st.Dim(" · " + status)
 
@@ -557,16 +538,16 @@ func (m *roundScreen) Render(w, h int, st tui.Style) string {
 		case len(inSec) == 0 && sec == secCands && !m.snap.CandsLoaded:
 			add(st.Dim("  loading…"), -1)
 		case len(inSec) == 0 && sec == secCands && m.snap.CandsErr != "":
-			add(st.Yellow("  "+tui.Fit(plain("candidates: "+m.snap.CandsErr, false), w-2)), -1)
+			add(st.Yellow("  "+tui.Fit(tui.Sanitize("candidates: "+m.snap.CandsErr, false), w-2)), -1)
 		case len(inSec) == 0:
 			add(st.Dim("  none"), -1)
 		}
 	}
 	for _, n := range m.snap.Notes {
-		add(st.Yellow(tui.Fit("! "+plain(n, false), w)), -1)
+		add(st.Yellow(tui.Fit("! "+tui.Sanitize(n, false), w)), -1)
 	}
 	if m.err != "" {
-		add(st.Red(tui.Fit("! refresh failed: "+plain(m.err, false), w)), -1)
+		add(st.Red(tui.Fit("! refresh failed: "+tui.Sanitize(m.err, false), w)), -1)
 	}
 
 	room := len(lines)

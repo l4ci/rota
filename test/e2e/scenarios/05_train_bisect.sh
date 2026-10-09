@@ -3,7 +3,7 @@
 # verified prefix only.
 e2e_fixture t1 t2 t3
 for s in t1 t2 t3; do stub commit $s "$s.txt"; done
-printf '{"git":{"baseBranch":"main"},"work":{"dispatch":"tmux"},"test":{"full":["test ! -f t2.txt"]}}\n' >"$E2E_ROOT/.rota/config.json"
+printf '{"git":{"baseBranch":"main"},"work":{"dispatch":"tmux"},"ship":{"review":"none"},"test":{"full":["test ! -f t2.txt"]}}\n' >"$E2E_ROOT/.rota/config.json"
 
 RC=0; OUT="$(rota_j worker train t1 t2 t3 --base main)" || RC=$?
 expect "$RC" 1 "a red train exits 1"

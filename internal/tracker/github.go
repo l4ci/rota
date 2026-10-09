@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/l4ci/rota/internal/strutil"
 )
 
 // GitHub is the gh adapter.
@@ -196,7 +198,7 @@ func (g *GitHub) CreateMilestone(ctx context.Context, title, description string)
 	}
 	n, ok := intOf(d.Number)
 	if !ok {
-		return 0, failed("cannot parse milestone number from: %q", clip(string(d.Number)))
+		return 0, failed("cannot parse milestone number from: %q", strutil.Clip(string(d.Number), clipLen))
 	}
 	return n, nil
 }
@@ -488,6 +490,25 @@ func (g *GitHub) OpenPRs(ctx context.Context) ([]PR, error) {
 	return out, nil
 }
 
+func (g *GitHub) MergedPRs(ctx context.Context, branch string) ([]PR, error) {
+	var raw []struct {
+		Number      int    `json:"number"`
+		Title       string `json:"title"`
+		Body        string `json:"body"`
+		HeadRefName string `json:"headRefName"`
+		URL         string `json:"url"`
+		HeadRefOid  string `json:"headRefOid"`
+	}
+	if err := g.list(ctx, []string{"pr", "list", "--state", "merged", "--head", branch, "--json", "number,title,body,headRefName,headRefOid,url"}, ghLimit, ghPaging, &raw); err != nil {
+		return nil, err
+	}
+	out := []PR{}
+	for _, d := range raw {
+		out = append(out, PR{Number: d.Number, Title: d.Title, Branch: d.HeadRefName, URL: d.URL, Body: d.Body, HeadSHA: d.HeadRefOid})
+	}
+	return out, nil
+}
+
 func (g *GitHub) PRsClosing(ctx context.Context, number int) ([]PR, error) {
 	return g.prsClosing(ctx, g, number)
 }
@@ -644,7 +665,7 @@ func (g *GitHub) CommitChecks(ctx context.Context, sha string) ([]CheckRun, erro
 		for dec.More() {
 			var p page
 			if err := dec.Decode(&p); err != nil {
-				return nil, failed("unparseable tracker output: %q", clip(out))
+				return nil, failed("unparseable tracker output: %q", strutil.Clip(out, clipLen))
 			}
 			all.CheckSuites = append(all.CheckSuites, p.CheckSuites...)
 			all.CheckRuns = append(all.CheckRuns, p.CheckRuns...)

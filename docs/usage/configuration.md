@@ -308,12 +308,25 @@ See [learning](learning.md) for the full `/rota-learn` workflow.
 
 ## ship.review
 
-Controls whether `/rota-ship` runs a review pass before integrating.
+Controls how deep a review `/rota-ship` runs before integrating.
 
 | Value | Behavior |
 |-------|----------|
-| `true` (default) | `/rota-ship` runs `/rota-review` before integrating. FAIL blocks, CONCERNS ask, PASS flows through. |
-| `false` | `/rota-ship` integrates directly without a review pass. Use when you want raw speed and already reviewed manually. |
+| `"full"` (default) | `/rota-ship` runs `/rota-review` (Spec and Standards reviewers) before integrating. FAIL blocks, CONCERNS ask, PASS flows through. |
+| `"light"` | `/rota-review` dispatches the Standards reviewer only. |
+| `"none"` | `/rota-ship` integrates directly without a review pass. Use when you want raw speed and already reviewed manually. |
+| `true` / `false` | The old boolean, still read: `true` is `full`, `false` is `none`. |
+| object | Picks the depth per branch, see below. |
+
+```json
+{"ship": {"review": {"default": "full", "lightBelow": 50, "labels": {"risk:high": "full", "best-of:2": "light", "partial-slice": "none"}}}}
+```
+
+- `default`: `full`, `light` or `none`; `full` when omitted.
+- `lightBelow`: a diff of fewer changed lines (added plus deleted, against the base) than this gets `light`. It only lowers a `default` of `full`. `0` or omitted turns it off.
+- `labels`: a label on the item's issue or PR maps to a depth and beats the size rule, so `risk:high` forces `full` on a small diff. `best-of:2` and `partial-slice` are ordinary labels here. When several labels match, the strictest depth wins.
+
+`rota review depth [branch] [--labels a,b]` prints the depth and why. It reads the labels of the issue behind a `<agent>/<issue>-<slug>` branch itself when the policy has a `labels` map; `--labels` adds to them. `/rota-ship` prints it, and `rota worker gate` applies it: the branch must have the verdicts the depth needs on record (`full` both, `light` the Standards one, `none` none) or the gate refuses with `blockedBy: review-missing`. `rota config check` fails on a malformed policy.
 
 See [review and ship](review-and-ship.md) for the full `/rota-ship` workflow.
 
@@ -379,6 +392,7 @@ Settings for `rota round` (parallel rounds; see [the rounds guide](parallel-roun
 | `round.adoptPattern` | `""` | Glob over branch names, for work another tool starts (`codex/*`, `claude/*`; `*` stops at `/`). `rota round reconcile` reports a matching local or remote branch that no slot holds and that is not merged into the base as `unregistered-branch`. `--apply` adopts those whose name carries an issue number (`<agent>/<issue>-<slug>`, `issue-N` or `#N`) as an external slot, after the overlap check; a blocking overlap becomes a warning and the branch stays listed. The rest are listed with `needs --issue`. Empty turns the check off. |
 | `round.stallMinutes` | `30` | Minutes without a commit, an uncommitted edit or a state change before `rota round reconcile` reports a slot that holds an issue and has a live agent as `stalled`. `0` turns the check off. A slot waiting on an escalation is never stalled; a dead agent is `dead`, not stalled. |
 | `round.maxBounces` | `3` | How often `rota worker gate` may send one item's PR back to its worker (a `stale` or `provenance-fail` verdict on a real run, never `--check-only`) before it parks the item: the slot is freed, the issue gets the `needs-human` label and a comment, and the PR stays open. The count is per item and resets on a pass or a park. `rota round bounce` adds the orchestrator's own bounces to it and refuses at the cap. `0` turns the cap off. |
+| `round.ledgerKeep` | `0` | Rounds of the round ledger (`.rota/ledger.jsonl`) to keep. `rota round start` on a new round drops the entries of rounds older than the last N; a renewed start trims nothing. Entries with no round (solo, no lease) stay. `0` keeps everything. |
 | `round.architectureEvery` | `20` | Closed non-refactor items between automatic architecture reviews; `0` turns them off. A review also fires when a slot is idle and nothing is assignable. See `rota round architecture`. |
 | `round.architectureAreas` | `[]` | The areas an architecture review is split into, one review item each. Empty means the subsystem map's names, else one whole-repo review. |
 | `round.autopilot` | `false` | Lets `rota round watch --autopilot` and `rota round tick` assign ready items to idle slots, gate and merge finished PRs and repair safe drift, so the orchestrator spends judgment on what is left. Merges only under `ship.mergeApproval: none`. See [Autopilot](parallel-rounds.md#autopilot). |

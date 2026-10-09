@@ -18,6 +18,6 @@ Loaded by `skills/rota-qa/SKILL.md` when `.rota/qa/` is empty for the active sco
    - **Audit checks** — usability rubric for hand or LLM inspection (empty states, error recovery, copy clarity, first-run flow). No commands.
    - **Infra requirements** — what must be running for `run` (e.g. `npm run dev` on `:3000`, staging URL, sandbox creds). `run` refuses to start without them.
    - **Out of scope** — explicit non-goals.
-5. **Approve & write.** `AskUserQuestion` with `Approve as drafted (Recommended)` / `Edit before writing` / `Cancel`. On approval, write `.rota/qa/<target>.md` with frontmatter (`target`, `surface`, `summary`, `created`, `touched`, `watch-globs`) and the five body sections.
+5. **Approve & write.** Ask with `Approve as drafted (Recommended)` / `Edit before writing` / `Cancel`. On approval, write `.rota/qa/<target>.md` with frontmatter (`target`, `surface`, `summary`, `created`, `touched`, `watch-globs`) and the five body sections.
 6. **Index.** `rota qa index` regenerates the `## Project QA` block in `CLAUDE.md`.
 7. **Commit.** `chore(qa): scaffold QA strategy for <target> (.rota/qa/, ## Project QA block)`.

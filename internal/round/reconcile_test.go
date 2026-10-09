@@ -5,6 +5,8 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -80,6 +82,111 @@ func TestStatusExternalMergedPRStaysListedUntilReleased(t *testing.T) {
 	}
 	if k := kinds(rep.Findings)["ext-1"]; len(k) != 1 || k[0] != MergedExternal {
 		t.Errorf("want one merged-external finding, got %v", k)
+	}
+}
+
+// A PR that opened and merged between two passes was never in the open list, so
+// an adopted slot that recorded none is matched to it by branch.
+func TestStatusExternalMergedPRFoundByBranchWhenNoneRecorded(t *testing.T) {
+	root, e, fr := extFixture(t, "")
+	tip := gitIn(t, root, "rev-parse", "codex/12-thing")
+	fr.mergedPRs = map[string][]tracker.PR{"codex/12-thing": {{Number: 7, Branch: "codex/12-thing", URL: "https://github.com/o/r/pull/7", HeadSHA: tip}}}
+	fr.states[7] = "merged"
+	rep, err := e.Status(bg, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, ok := rowOf(rep, "ext-1")
+	if !ok || r.State != "merged" || r.PRState != "merged" || r.PR != "https://github.com/o/r/pull/7" {
+		t.Fatalf("a merge outside the gate should be found by branch: %+v", r)
+	}
+	if k := kinds(rep.Findings)["ext-1"]; len(k) != 1 || k[0] != MergedExternal {
+		t.Errorf("want one merged-external finding, got %v", k)
+	}
+	if r, _ := rowOf(rep, "ben"); r.PRState != "" {
+		t.Errorf("the control slot must not be looked up: %+v", r)
+	}
+}
+
+// A branch name reused after an older PR merged: that PR's head is not on the
+// live branch, so it is not this slot's PR and the slot must not read merged.
+func TestStatusExternalOlderMergedPROnTheSameBranchNameIsNotOurs(t *testing.T) {
+	root, e, fr := extFixture(t, "")
+	oldHead := strings.Repeat("a", 40)
+	fr.mergedPRs = map[string][]tracker.PR{"codex/12-thing": {{Number: 3, Branch: "codex/12-thing", URL: "https://github.com/o/r/pull/3", HeadSHA: oldHead}}}
+	fr.states[3] = "merged"
+	rep, err := e.Status(bg, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, _ := rowOf(rep, "ext-1")
+	if r.State == "merged" || r.PRState == "merged" || r.PR != "" {
+		t.Fatalf("an older PR on a reused branch name marked the live slot merged: %+v", r)
+	}
+	if k := kinds(rep.Findings)["ext-1"]; slices.Contains(k, MergedExternal) {
+		t.Errorf("no merged-external finding expected, got %v", k)
+	}
+}
+
+// A branch recreated from main under an old name contains the old PR's head
+// (rota merges with merge commits, so that head is reachable from main): being
+// on the branch proves nothing, and the live slot must not read merged.
+func TestStatusExternalOldMergedPRReachableThroughBaseIsNotOurs(t *testing.T) {
+	root, e, fr := extFixture(t, "")
+	oldHead := gitIn(t, root, "rev-parse", "main")
+	fr.mergedPRs = map[string][]tracker.PR{"codex/12-thing": {{Number: 3, Branch: "codex/12-thing", URL: "https://github.com/o/r/pull/3", HeadSHA: oldHead}}}
+	fr.states[3] = "merged"
+	rep, err := e.Status(bg, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, _ := rowOf(rep, "ext-1")
+	if r.State == "merged" || r.PRState == "merged" || r.PR != "" {
+		t.Fatalf("an old PR reachable through the base marked the live slot merged: %+v", r)
+	}
+	if k := kinds(rep.Findings)["ext-1"]; slices.Contains(k, MergedExternal) {
+		t.Errorf("no merged-external finding expected, got %v", k)
+	}
+}
+
+// Status never fetches, so origin/main can run ahead of local main. A branch
+// recreated from origin/main holds the old PR head though local main does not.
+func TestStatusExternalOldMergedPRReachableThroughOriginBaseIsNotOurs(t *testing.T) {
+	root, e, fr := extFixture(t, "")
+	tree := gitIn(t, root, "rev-parse", "main^{tree}")
+	x := gitIn(t, root, "-c", "user.name=t", "-c", "user.email=t@t", "commit-tree", tree, "-p", "main", "-m", "merged upstream")
+	live := gitIn(t, root, "-c", "user.name=t", "-c", "user.email=t@t", "commit-tree", tree, "-p", x, "-m", "live work")
+	gitIn(t, root, "update-ref", "refs/remotes/origin/main", x)
+	gitIn(t, root, "update-ref", "refs/heads/codex/12-thing", live)
+	fr.mergedPRs = map[string][]tracker.PR{"codex/12-thing": {{Number: 3, Branch: "codex/12-thing", URL: "https://github.com/o/r/pull/3", HeadSHA: x}}}
+	fr.states[3] = "merged"
+	rep, err := e.Status(bg, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, _ := rowOf(rep, "ext-1")
+	if r.State == "merged" || r.PRState == "merged" || r.PR != "" {
+		t.Fatalf("a PR reachable through origin/base marked the live slot merged: %+v", r)
+	}
+}
+
+// A forge that cannot list merged PRs leaves the row unknown-safe: a warning,
+// no PR attached and no release.
+func TestStatusExternalMergedLookupErrorWarnsAndKeepsTheSlot(t *testing.T) {
+	root, e, fr := extFixture(t, "")
+	fr.mergedErr = errors.New("forge down")
+	rep, err := e.Status(bg, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, _ := rowOf(rep, "ext-1")
+	if r.PR != "" || r.State == "merged" {
+		t.Errorf("row %+v", r)
+	}
+	if !slices.ContainsFunc(rep.Warnings, func(w string) bool {
+		return strings.Contains(w, "merged PRs of codex/12-thing") && strings.Contains(w, "forge down")
+	}) {
+		t.Errorf("want a merged-PR warning, got %v", rep.Warnings)
 	}
 }
 

@@ -15,7 +15,7 @@ Rules for authoring new rota skills or new behavior in existing ones. Consult th
 - Gates carry a Thought → Reality table
 - References over 100 lines open with a Contents list
 - Adjective thresholds in skill prose erode at the runtime model — bake the number at authoring time
-- `AskUserQuestion` option list capped at 4
+- Question option lists respect the host limit
 - Ask in the user's terms, and name the default
 - Nudges on terminal/idle paths only
 - The verb contract is the contract — SKILL.md prose paraphrasing drifts
@@ -27,11 +27,11 @@ Rules for authoring new rota skills or new behavior in existing ones. Consult th
 
 Each skill owns its rules inline. A shared contract file is a smell when every rule has a single owner: audit the cross-refs, and if each rule is already mirrored at its call site, the central file is vestigial pointer-chasing. Build one only when N≥3 callers need the same long rule verbatim.
 
-Steps that branch on `autonomy.level` (off/auto) and dispatch the next skill via `Skill` ("no prompt, no confirmation, no 'want me to' question") repeat that directive verbatim beside each `Skill` invocation. Readers don't chase cross-refs, and the harness drifts toward asking when only the rule's name is at the dispatch site. Redundancy is cheaper than scattered authority.
+Steps that branch on `autonomy.level` (off/auto) and dispatch the next skill by reading and following its instructions ("no prompt, no confirmation, no 'want me to' question") repeat that directive verbatim beside each skill invocation. Readers don't chase cross-refs, and the harness drifts toward asking when only the rule's name is at the dispatch site. Redundancy is cheaper than scattered authority.
 
 ## Don't ask what the code can answer
 
-Before a skill calls `AskUserQuestion`, check whether the answer is derivable from the codebase, git history, or `.rota/` state — `grep`, `Read`, `git log`, `BACKLOG.md`, `KNOWLEDGE.md`, `status.json`, helper output. If it is, derive the answer (with a one-line note inline about what was found and where) and skip the question. `AskUserQuestion` is for genuine ambiguity (open requirements, opposing reasonable interpretations, the user's risk tolerance on a destructive op), not a forced-yes ritual confirming state the skill could discover.
+Before a skill asks a question, check whether the answer is derivable from the codebase, git history, or `.rota/` state — `grep`, file reads, `git log`, `BACKLOG.md`, `KNOWLEDGE.md`, `status.json`, helper output. If it is, derive the answer (with a one-line note inline about what was found and where) and skip the question. Questions are for genuine ambiguity (open requirements, opposing reasonable interpretations, the user's risk tolerance on a destructive op), not a forced-yes ritual confirming state the skill could discover.
 
 ## No ceremony: banners, per-site ask fallbacks
 
@@ -39,7 +39,7 @@ Skills print no banner and require no task-list tool: no `ToolSearch` load, no p
 
 ## Open each workflow with a copyable step checklist
 
-The skills guide ("Workflows and feedback loops") asks for a checklist Claude can copy into its response and tick off. Every skill with step headings opens its workflow with one, before the first step heading:
+The skills guide ("Workflows and feedback loops") asks for a checklist the agent can copy into its response and tick off. Every skill with step headings opens its workflow with one, before the first step heading:
 
 ````markdown
 Copy this checklist and track your progress:
@@ -56,7 +56,11 @@ Copy this checklist and track your progress:
 - A step that runs a validator (tests, gate, `validate-skills`, a review verdict, smoke) states the loop in its body: run, fix what fails, re-run, and continue only on a pass. The checklist line stays one line; the loop lives in the step.
 - Do not add a "Task list" step or a "Track these phases with the host's task tool" line; the checklist replaces both.
 
-When a skill asks the user a question, ask in prose with the options listed and a recommended default when the host has no option picker. `AskUserQuestion` is the Claude Code example of such a picker; a skill names it only to describe the question shape. A free-text reply to a picker is mapped to the nearest option. Ask once, and on an ambiguous reply take the site's stated default and say which one landed. Destructive operations and opt-in flags default to the safe side (cancel, `false`). Skills do not carry per-site "Plain-text fallback" lines.
+Question instructions describe the header, prompt, options and whether several selections are allowed; they are not tool arguments. Use the host's available question interface within its limits. If it is unavailable or cannot represent the question, ask in prose (in Codex this includes modes without a picker, approval questions the picker forbids, and missing multi-select or preview fields), number the options and accept the selected numbers or text; show previews above the question. A missing picker never skips a question. Skills do not carry per-site fallback lines.
+
+**Claude Code only:** its picker is `AskUserQuestion`; map the question shape to its supported fields.
+
+Map free-text replies to the nearest option only when the intent is clear. For non-gated choices, use the site's stated default on an ambiguous reply and say which one landed. Destructive operations and opt-in flags default to cancel or `false`. Manual gates require an explicit answer authorizing the action: wait for it or stop; silence, a timeout or an unavailable tool is never approval.
 
 Phase outcomes, where a skill names them, stay mechanically verifiable (a file exists, a command exits 0, a commit landed, a recorded user answer), not subjective states.
 
@@ -74,7 +78,7 @@ When adding a new boolean config flag whose purpose is to enable additional skil
 
 - **Default `false`** in the config defaults `rota init` writes (fresh and re-stamped projects alike).
 - **Never silently flip to `true`** anywhere — not on first detection, not on first invocation, not via cwd-inferred heuristics.
-- The owning skill flips the flag to `true` only via explicit user approval: first-run scaffold approval (the user opted in by approving), or `AskUserQuestion` on existing state with default "Leave off".
+- The owning skill flips the flag to `true` only via explicit user approval: first-run scaffold approval (the user opted in by approving), or a question on existing state with default "Leave off".
 - `rota config set` edits the flag explicitly (the flag is never read-only).
 - **Exempt:** standard-on settings with opt-out semantics (e.g. `ship.review: true`) — these are not opt-in flags. Mode switches inside an already-enabled feature (e.g. `docs.autoCreate: false→true`) are also exempt.
 
@@ -105,13 +109,13 @@ A reference longer than 100 lines starts with a `## Contents` section, within it
 
 Prose like "a few", "many", "high X", "ambiguous", "might/may" forces the runtime LLM to invent a threshold every invocation. Test each one: if two competent readers could read it in opposite directions, replace it with (a) a number, (b) a conditional (*"when X happens, Y"*) or (c) an assertive verb. Normative rules never hedge with "might", "may" or "could" where the runtime needs a binary answer. Descriptive prose where no rule fires off the adjective (*"a typical day"*) and genuinely open situations the rule flags as a known unknown are exempt.
 
-## `AskUserQuestion` option list capped at 4
+## Question option lists respect the host limit
 
-The host rejects an option list longer than 4, and the skill degrades to free text (the user types names back). Never design a 5+ option question on the assumption the host will scroll, and never merge unrelated categories to fit 4. Chunk instead: several sequential calls with ≤4 options each (`multiSelect: true` to pick across batches), or two stages (pick categories first, then drill into the keys of each chosen category).
+Use at most 4 options, or fewer when the host's interface requires it. Never assume the host will scroll, and never merge unrelated categories to fit. Chunk into sequential questions within the host limit, use two stages (categories, then keys), or list the numbered options in prose. For multiple selections, collect the chosen numbers when the picker cannot represent them.
 
 ## Ask in the user's terms, and name the default
 
-Write every `AskUserQuestion` for someone who does not have the file open. Name the choice in the vocabulary of what the user observes — the behavior, the artifact, the outcome — not in the vocabulary of the code that implements it, and say what the skill will do by default if the answer turns out not to matter. *"Should a finished game still show the training row, or only live ones?"* beats *"confirm expected `inGameMenuActions` behaviour for `replayClosable && mode === 'bot'`"*: same decision, but only the first can be answered without a file open.
+Write every question for someone who does not have the file open. Name the choice in the vocabulary of what the user observes — the behavior, the artifact, the outcome — not in the vocabulary of the code that implements it, and say what the skill will do by default if the answer turns out not to matter. *"Should a finished game still show the training row, or only live ones?"* beats *"confirm expected `inGameMenuActions` behaviour for `replayClosable && mode === 'bot'`"*: same decision, but only the first can be answered without a file open.
 
 The skill holds the context, so translating is its job. A question phrased in implementation terms hands that work to the user and usually gets a guess back, which reads like an answer and is acted on as one. Stating the default converts a question the user does not care about into one they can decline cheaply.
 
@@ -121,10 +125,10 @@ The skill holds the context, so translating is its job. A question phrased in im
 - Leaving the no-preference path unstated, so that "either is fine" produces another round-trip instead of a decision.
 
 **Permits.**
-- Several questions in one `AskUserQuestion` call — the host renders each separately and returns an answer per question, so batching does not produce the partial answers that a free-text channel would. `/rota-work` Step 2's 1–3 question batch stays correct.
+- Several questions in one batch when the host supports it, within its question limit. In prose, number them and track which answers are still needed. `/rota-work` Step 2's 1–3 question batch stays correct.
 - Implementation vocabulary in the `description` field of an option, where it disambiguates for a user who *does* have the file open.
 
-The companion rule *ask one question at a time* does not apply: it is a property of a free-text channel where a batch gets a partial reply, and `AskUserQuestion` is not that channel.
+A partial reply settles only the answered questions; never infer an approval for an unanswered one.
 
 ## Nudges on terminal/idle paths only
 
@@ -168,4 +172,4 @@ Claude Code's TUI HTML-escapes task titles but never decodes them, so `&` shows 
 
 ## `/rota-x` and `$rota-x` are the same invocation
 
-Codex invokes a skill as `$rota-x`; Claude Code as `/rota-x`. Skill text keeps `/rota-x` everywhere and does not branch on the harness: read `$rota-x` as the same call. A skill installed with `rota skills install` lists in Codex as `rota-x`, and `$rota-x` invokes it. Never write both spellings in one sentence, and never rewrite an existing `/rota-x` to `$rota-x`.
+Codex invokes a skill as `$rota-x`; Claude Code as `/rota-x`. Skill text keeps `/rota-x` everywhere and does not branch on the harness: read `$rota-x` as the same call. A skill installed with `rota skills install` lists in Codex as `rota-x`, and `$rota-x` invokes it. Never write both spellings in one sentence, and never rewrite an existing `/rota-x` to `$rota-x`. When the harness has no skill-invocation tool, read the target skill's `SKILL.md` and follow it with the stated arguments and brief; a slash command is not a shell command.

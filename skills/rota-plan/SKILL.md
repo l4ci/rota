@@ -75,7 +75,7 @@ KEY=$(rota plan add --json '#42' --title "<title>" --repos web,api | jq -r .data
 KEY=$(rota plan add --json --milestone <MID> --slice --title "<title>" | jq -r .data.key) # slice
 ```
 
-Quote `#42`. Pass `--design <ID>` when a design exists; the frontmatter records it. Issue backend: draft in a scratch file and publish with `rota plan put <key> --body-file <file>|-`; file backend: `Edit` the stub's sections, keep the frontmatter. List with `rota plan list [--milestone <M>]`. Record plan-shaping answers with `rota item comment add <ID> --kind decision --body-file -`.
+Quote `#42`. Pass `--design <ID>` when a design exists; the frontmatter records it. Issue backend: draft in a scratch file and publish with `rota plan put <key> --body-file <file>|-`; file backend: edit the stub's sections, keep the frontmatter. List with `rota plan list [--milestone <M>]`. Record plan-shaping answers with `rota item comment add <ID> --kind decision --body-file -`.
 
 Issue backend: run `rota plan check <key>` (read-only; exit 1 lists uncovered criteria, tasks with no `Serves:` or an unknown AC id, and tasks with no Verify) and fix the plan until it passes. On the file backend it exits 1 with `blockedBy: backend`; rely on the Step 3 self-check there.
 

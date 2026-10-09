@@ -1,5 +1,5 @@
 ---
-verified-sha: 3e6f9f8dbaa15ec4713fc22c20884a7c24bc76a4
+verified-sha: 2f0a0d5989f9c812af37fc22ffc5a5924785bed3
 refs:
   - internal/knowledge
   - internal/cli/knowledge.go
@@ -14,6 +14,7 @@ data: text-read, with `missing` always present
 exit: 2 when no topic is given or `--tier` is not one of the three values
 old: hv-knowledge-query [--repo <name>] [--include-deprecated] [--tier <t>] <topic>…    (all new args map 1:1 to the same flag or positional)
 shim: stdout is `text`; each stderr `warning: … no topic heading matches '<x>'` line gives one `missing` entry and one `warnings` entry.
+note: a topic matches by case-insensitive substring of the `## ` heading text, so `Smoke testing` finds `Build & Tooling: Smoke testing`; when the text equals one heading (case-insensitive) that heading is returned alone. A bare category such as `Build & Tooling` therefore returns the whole family of headings containing it. `missing` lists only topics that match no heading. Matching is the same for `decisions query`.
 note: zero topics is exit 2, where the old helper exited 0 silently; a topic with no matching heading stays a warning and exit 0.
 note: `text` is the old markdown verbatim, including the ` (provisional)` suffix and `> from:` lines, not a structured bullet list.
 
@@ -26,6 +27,14 @@ old: hv-knowledge-stats
 shim: stdout JSON passes through unchanged; `topics[].name|bullets|bytes` already match.
 note: the old helper reads only the umbrella file, so the verb has no repo scope and a learn run inside a sub-repo still gets umbrella numbers.
 note: `--ui` opens a read-only topic list over this data; Enter reads the topic. See cli-conventions.md.
+
+### rota knowledge topics
+rota knowledge topics
+repo: none (umbrella `.rota/KNOWLEDGE.md`, like `stats`)
+data: {"topics": [{"name": string, "bullets": number}]}
+exit: 2 on an argument. A missing file gives `{"topics": []}`.
+old: none (new)
+note: text is one `<heading>: <n> bullets` line per topic, in document order. `decisions topics` is the same over `.rota/DECISIONS.md`. Use it to find the heading text to pass to `query`. It is `stats` without the byte sizes.
 
 ### rota knowledge add
 rota knowledge add --topic <T> --title <S> --body-file <path|-> [--date YYYY-MM-DD]
@@ -145,6 +154,14 @@ exit: 2 when no topic is given
 old: hv-decisions-query <topic>…    (same positionals)
 shim: stdout is `text`; `missing` is omitted.
 note: unlike `knowledge query`, an unmatched topic emits no warning, as old, and only the port fills `missing`. Zero topics moves from exit 1 to 2.
+
+### rota decisions topics
+rota decisions topics
+repo: none (umbrella `.rota/DECISIONS.md` only)
+data: {"topics": [{"name": string, "bullets": number}]}
+exit: 2 on an argument. A missing DECISIONS.md gives `{"topics": []}`.
+old: none (new)
+note: same shape and text as `knowledge topics`.
 
 ### rota decisions stats
 rota decisions stats

@@ -68,7 +68,7 @@ Anything missing: record an `INFRA-FAIL` verdict (Step 6's `rota verdict add`, m
 
 #### Step 4 — Execute Checks
 
-Dispatch one subagent per check group (per pillar per target) in parallel via the Agent tool; see `references/subagent-dispatch.md`. The orchestrator does not run checks itself. Each subagent:
+Dispatch one subagent per check group (per pillar per target) in parallel through the current harness; see `references/subagent-dispatch.md`. The orchestrator does not run checks itself. Each subagent:
 
 - Runs the commands from its assigned `Executable checks` entries.
 - Captures stdout, exit code and artifact paths under `.rota/qa-runs/<timestamp>/<target>/<check>/`.

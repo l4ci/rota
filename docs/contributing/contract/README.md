@@ -60,8 +60,8 @@ Field types use JSON names (`string`, `number`, `bool`, `object`, `[]string`). `
 | status | `add`, `rm`, `show`, `handoff` | A4 |
 | refactor | `age`, `reset`, `targets` | A4 |
 | migrate | `issues` (A4), `hv` (#236) | A4 |
-| knowledge | `query`, `stats`, `add`, `amend`, `rename-topic`, `hit`, `tier get`, `tier set`, `tier list`, `contradiction add`, `contradiction list`, `contradiction clear`, `contradiction has` | A5 |
-| decisions | `query` | A5 |
+| knowledge | `query`, `stats`, `topics`, `add`, `amend`, `rename-topic`, `hit`, `tier get`, `tier set`, `tier list`, `contradiction add`, `contradiction list`, `contradiction clear`, `contradiction has` | A5 |
+| decisions | `query`, `topics` | A5 |
 | glossary | `read`, `write`, `import` | A5 |
 | block | `<key>`, `skills` | A5 |
 | instructions | `init` | A5 |
@@ -77,7 +77,7 @@ Field types use JSON names (`string`, `number`, `bool`, `object`, `[]string`). `
 | worker | `pool init`, `pool list`, `pool reap`, `reset`, `dispatch`, `poll`, `gate` (B1 gates its merge), `session check`, `session ensure`, `account list`, `account pick`, `account assign` | A7 |
 | tracker | `call`, `suggest-upstream` (B1 adds the gate) | A8, B1 |
 | git | `base`, `guard clean`, `guard feature-branch`, `branch`, `worktree-path` | A8 |
-| review | `scope`, `brief`, `scaffolding`, `package`, `queue` | A8 |
+| review | `scope`, `brief`, `scaffolding`, `package`, `queue`, `depth` | A8 |
 | ship | `body`, `pr`, `merge`, `pr-merge`, `undo` (B1 gates `merge` and `pr-merge`) | A8, B1 |
 | release | `version`, `bump`, `host`, `notes`, `changelog`, `pending`, `milestone-check`, `close-milestone` (A8), `push`, `publish` (B1) | A8, B1 |
 | init | `init`, `init check`, `init umbrella`, `projects` (#24) | A9 |

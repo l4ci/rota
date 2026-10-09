@@ -12,6 +12,7 @@ import (
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/layout"
 	"github.com/l4ci/rota/internal/palette"
+	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/tui"
 	"github.com/l4ci/rota/internal/version"
 	"github.com/l4ci/rota/internal/worker"
@@ -64,7 +65,7 @@ func paletteView(c *Ctx, root *Command, verb []string) (tui.Model, error) {
 		if msg == "" {
 			msg = "no view"
 		}
-		return nil, errors.New(firstLine(msg))
+		return nil, errors.New(strutil.FirstLine(msg))
 	}
 	return m, nil
 }
@@ -189,9 +190,7 @@ func paletteHeader(c *Ctx, inProject bool) palette.Header {
 	h.Host = worker.ResolveHost(root, nil, nil)
 	ctx, cancel := context.WithTimeout(c.Context(), 3*time.Second)
 	defer cancel()
-	env := c.deps().RoundEnv(ctx, root)
-	env.Forge, env.ForgeErr = nil, ""
-	if rep, err := env.Status(ctx, root); err == nil {
+	if rep, err := c.deps().RoundEnvLocal(ctx, root).Status(ctx, root); err == nil {
 		active := 0
 		for _, r := range rep.Rows {
 			if r.Issue != "" {

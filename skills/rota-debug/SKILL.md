@@ -153,7 +153,7 @@ Nudge one line, only when it applies: cause not obvious from the code, *"Run `/r
 |---|---|
 | "The cause is obvious, skip the reproducer." | Step 4 starts only on a red, deterministic reproducer. An unreproduced bug has no proof row to write. |
 | "One more fix attempt, it's close." | Three failed committed fixes is the stop. `rota debug counter` exits 4 and the count survives a new branch or session. |
-| "Reset the counter so I can keep going." | `rota debug reset` is a manual gate: an `AskUserQuestion` yes and `--confirm-note`, never your own call. |
+| "Reset the counter so I can keep going." | `rota debug reset` is a manual gate: explicit user approval and `--confirm-note`, never your own call. |
 | "The fix works, keep the partial one while I try another." | `hypothesize` means the fix failed. Drop it before the next hypothesis. |
 | "No seam for a test, so no proof." | The reproducer re-run is the proof row. Say no seam existed and link the `refactor` item. |
 | "`--no-proof` to close it." | A missing row means Step 6 was skipped. Go back and run it. |

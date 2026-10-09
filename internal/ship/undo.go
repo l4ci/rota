@@ -9,6 +9,7 @@ import (
 
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/pystr"
+	"github.com/l4ci/rota/internal/strutil"
 )
 
 // Git is the one git call the undo rules need. A non-zero exit is a Result;
@@ -200,18 +201,9 @@ func ApplyUndo(g Git, p UndoPlan, restore func(ids []string) error) error {
 func out(g Git, args ...string) (string, error) {
 	res, err := g.Run(args...)
 	if err == nil && res.ExitCode != 0 {
-		err = &GitError{Msg: fmt.Sprintf("git %s: %s", strings.Join(args, " "), firstLine(res.Stderr))}
+		err = &GitError{Msg: fmt.Sprintf("git %s: %s", strings.Join(args, " "), strutil.FirstLine(res.Stderr))}
 	}
 	return line(res.Stdout), err
 }
 
 func line(s string) string { return strings.TrimRight(s, "\n") }
-
-func firstLine(s string) string {
-	for _, l := range pystr.Splitlines(s) {
-		if l = pystr.Strip(l); l != "" {
-			return l
-		}
-	}
-	return ""
-}

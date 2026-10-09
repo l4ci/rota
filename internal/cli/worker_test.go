@@ -346,7 +346,7 @@ func TestWorkerSessionVerbs(t *testing.T) {
 }
 
 func TestWorkerGateVerb(t *testing.T) {
-	dir := workerProject(t, `{"test":{"full":["test -f feature.txt"]}}`)
+	dir := workerProject(t, `{"ship":{"review":"none"},"test":{"full":["test -f feature.txt"]}}`)
 	rotaIn(t, dir, "worker", "pool", "init", "--slots", "1", "--base", "main")
 	wt := filepath.Join(dir, ".worktrees", "w1")
 	git := func(d string, args ...string) {
@@ -511,5 +511,19 @@ func TestWorkerDispatchKindFlag(t *testing.T) {
 	code, _, stderr = rotaInWith(t, deps, dir, "worker", "dispatch", "w1", "--body-file", brief, "--task", "T3", "--kind", "codex")
 	if code != 5 || !strings.Contains(stderr, "codex login") {
 		t.Errorf("login: %d %s", code, stderr)
+	}
+}
+
+// An adopted slot's checkout is not rota's to reset: the refusal names the
+// fence (external), not the dirty-slot guard.
+func TestWorkerResetRefusesAnAdoptedSlotAsExternal(t *testing.T) {
+	dir := workerProject(t, `{}`)
+	rotaIn(t, dir, "worker", "pool", "init", "--slots", "1", "--base", "main")
+	if found, err := worker.UpdateSlot(dir, "w1", func(s *worker.Slot) { s.MarkExternal("5", "") }); err != nil || !found {
+		t.Fatalf("mark external: %v %v", found, err)
+	}
+	code, out, _ := rotaIn(t, dir, "worker", "reset", "w1", "--json")
+	if d := data(t, out); code != 4 || d["blockedBy"] != "external" {
+		t.Fatalf("reset of an adopted slot: %d %v", code, d)
 	}
 }

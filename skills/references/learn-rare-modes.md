@@ -124,7 +124,7 @@ Rewrites the body of one bullet while preserving its tier and hits in the sideca
 `rota knowledge amend` only APPENDS to the bullet body. To correct stale wording in place, use `rota knowledge replace --topic "<topic>" --old "<text>" --new "<text>"`: it swaps an exact substring inside the one bullet that contains it, refuses (exit 4) when the text sits in several bullets, and re-keys the tier entry if the bold title changes. This flow stays append-only.
 
 Flow:
-1. Prompt the user via `AskUserQuestion` for the new body suffix:
+1. Ask the user for the new body suffix:
    - Header: `"Amend bullet"`
    - Question: *"Enter the text to append to `<topic> :: <title>` (appended to the existing body):"*
    - Free-text field (single-line or multi-line).
@@ -153,7 +153,7 @@ rota knowledge contradiction list --json
 
 Read `data.items`. If empty, skip this step silently.
 
-For each candidate `{topic, title, correctionText, loggedAt}`, surface via `AskUserQuestion`:
+For each candidate `{topic, title, correctionText, loggedAt}`, ask:
 
 - **Header:** `"Demote?"`
 - **Question:** *"This learning was implicated by user feedback during the session: `<correctionText>`. Demote `<topic> :: <title>` to `deprecated`?"*

@@ -164,6 +164,7 @@ exit codes and repo scope: [verb contract](../contributing/contract/README.md).
 |---|---|
 | `rota knowledge query <topic>… [--tier provisional\|confirmed\|deprecated] [--include-deprecated]` | print topic sections, tier-aware |
 | `rota knowledge stats` | bullet count and size per topic |
+| `rota knowledge topics` | list topic headings with bullet counts |
 | `rota knowledge add --topic <T> --title <S> --body-file <path\|-> [--date YYYY-MM-DD]` | add a bullet under a topic |
 | `rota knowledge amend --topic <T> --fragment <F> --mode append --body-file <path\|->` | append text to an existing bullet |
 | `rota knowledge replace --topic <T> --old <text> --new <text>` | replace text inside the one bullet that contains it |
@@ -182,6 +183,7 @@ exit codes and repo scope: [verb contract](../contributing/contract/README.md).
 | Usage | What it does |
 |---|---|
 | `rota decisions query <topic>…` | print topic sections |
+| `rota decisions topics` | list topic headings with bullet counts |
 | `rota decisions stats` | bullet count and size per topic |
 
 ## `rota glossary`
@@ -304,7 +306,7 @@ exit codes and repo scope: [verb contract](../contributing/contract/README.md).
 | `rota worker poll [<slot>] [--settle <seconds>] [--lines <n>]` | classify slot states from their panes |
 | `rota worker done <slot> [--base <ref>]` | the step before the PR: exit 4 unless the slot's item has a PASS `test.fast` proof row at the branch HEAD (`rota proof record`), else mark the slot done |
 | `rota worker gate <slot> --base <branch> [--check-only] [--no-verify] [--confirm --confirm-note <answer> \| --approval <escalation> \| --escalate]` | merge gate for one slot's branch or PR; exit 4 when `ship.mergeApproval` needs a human or `test.full` is empty (`blockedBy no-verify`, unless `--no-verify`) or the PR body does not close the slot's issue (`blockedBy closes`, unless the issue is labelled `partial-slice`), `--escalate` asks on the thread, `--approval` cites the answer |
-| `rota worker train <slot\|PR>... --base <branch> [--land-green] [--no-verify] [--confirm --confirm-note <answer> \| --approval <escalation> \| --escalate]` | merge several PRs in order in a scratch tree, verify once, land them all on a pass; a red train bisects to the first member that breaks it |
+| `rota worker train <slot\|PR>... --base <branch> [--order <list>] [--land-green] [--no-verify] [--confirm --confirm-note <answer> \| --approval <escalation> \| --escalate]` | merge several PRs in a conflict-minimising order (or `--order`) in a scratch tree, verify once, land them all on a pass; a red train bisects to the first member that breaks it |
 | `rota test run <fast\|full\|e2e> [--base <ref>]` | run `test.<tier>` in order, stopping at the first failure; `{files}` expands to the files changed against base; exit 3 when the tier is empty |
 | `rota test ledger check` | report expired and malformed entries in `.rota/test-ledger.json`; exit 1 when there are any |
 | `rota worker prompt-check [--key <file>]` | Codex UserPromptSubmit hook: pass only signed or maintainer input |
@@ -337,7 +339,7 @@ The orchestrator's verbs for a [parallel round](../usage/parallel-rounds.md). Al
 
 | Usage | What it does |
 |---|---|
-| `rota round start [--scope <slate\|milestone\|next\|open>] [--items <ID>[,<ID>…]] [--slots <n>] [--base <branch>] [--holder-pid <n>]` | take the orchestrator lease, provision the roster, list candidates |
+| `rota round start [--scope <slate\|milestone\|next\|open>] [--items <ID>[,<ID>…]] [--slots <n>] [--base <branch>] [--holder-pid <n>] [--consume-handoff]` | take the orchestrator lease, provision the roster, list candidates; report the `/rota-pause` orchestrator note (`--consume-handoff` archives it) |
 | `rota round candidates [--scope <slate\|milestone\|next\|open>]` | list the items the round's scope allows, with readiness |
 | `rota round architecture [--check] [--holder-pid <n>]` | show the architecture-review counter; when a review is due, mint one item per area and assign them to idle slots |
 | `rota round assign <ID> [--agent <name>] [--tier <light\|standard\|heavy>] [--tier-reason <text>] [--kind <claude\|codex>] [--model <id>] [--body-file <path\|->] [--siblings <ID>[,<ID>…]] [--check-only] [--accept-overlap] [--accept-open-pr] [--holder-pid <n>]` | check an item's readiness and hand it to a slot; the issue's `harness:`/`model:` labels pick the harness and model; an issue that mentions a smoke section (and a project with `test/sections/`) gets the next free number reserved on the slot and named in the brief; a `best-of:2` issue goes to two slots at once (see `round pick`) |
@@ -353,7 +355,7 @@ The orchestrator's verbs for a [parallel round](../usage/parallel-rounds.md). Al
 | `rota round transfer <issue> --to <slot\|human> [--tier <light\|standard\|heavy>] [--tier-reason <text>] [--note-file <path\|->] [--body-file <path\|->] [--accept-overlap] [--holder-pid <n>]` | move an assigned issue to another slot or to the human |
 | `rota round reclaim <slot> [--force] [--note-file <path\|->] [--holder-pid <n>]` | free a dead or stalled slot and make its issue assignable |
 | `rota round review-relay <slot>` | relay new review input on a done slot's PR to its worker as a counted bounce (`REVIEW` relay); at `round.maxBounces` escalate on the PR instead, exit 4; never gates or merges |
-| `rota round bounce <ID> [--head <sha>]` | count one by-hand review bounce of an item; the same `--head` twice counts once; exit 4 once the item is at `round.maxBounces`, then transfer it to a higher tier or `--to human` |
+| `rota round bounce <ID> [--head <sha>] [--slot <slot>]` | count one by-hand review bounce of an item; the same `--head` twice counts once; `--slot` names the slot holding the bounced PR so a best-of attempt gets its own ledger row; exit 4 once the item is at `round.maxBounces`, then transfer it to a higher tier or `--to human` |
 | `rota round pick <ID> --pr <N> --reason-file <path\|-> [--holder-pid <n>]` | `best-of:2` issue: name the winning PR; close the other attempt's PR with the reason, keep its branch |
 | `rota round wind-down [--no-verify] [--holder-pid <n>]` | re-verify the base, park every slot, release the lease |
 
@@ -468,6 +470,7 @@ Verdicts are `PASS`, `CONCERNS` or `FAIL` (`qa` also takes `INFRA-FAIL`). They l
 | `rota review brief [<branch>]` | fresh-eyes second-opinion brief for a branch |
 | `rota review scaffolding [<branch>] [--base <branch>]` | added diff lines that look like leftover task scaffolding |
 | `rota review package [<branch>] [--base <ref>] [--since <sha>]` | write a branch's commits, `--stat` and full diff (`-U10`) to `.rota/review/<branch>.md` and print the path; `--since` packages only the commits after a sha |
+| `rota review depth [<branch>] [--labels <a,b>]` | review depth `ship.review` picks for a branch (`full`, `light`, `none`) from its diff size and the labels given, and why |
 | `rota review queue` | open issues waiting for review |
 
 ## `rota ship`

@@ -31,5 +31,5 @@ The self-audit is silent. The user sees one draft, the post-audit one. Don't nar
 ## What this reference does NOT cover
 
 - **Commit messages.** Commit subjects and bodies follow the project's existing `git log` style and stay terse by construction; they are not user-facing artifacts.
-- **AskUserQuestion option text.** Each skill writes its own prompts; this reference is for generated artifacts, not UX prompts.
+- **Question option text.** Each skill writes its own prompts; this reference is for generated artifacts, not UX prompts.
 - **KNOWLEDGE.md / DECISIONS.md content.** Their structure is encoded in `references/persistence-skills.md`. The prose rules above apply to the bullet text but the structural shape stays as defined there.

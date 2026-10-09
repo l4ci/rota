@@ -145,10 +145,10 @@ func TestWindDownAppendsParkLedger(t *testing.T) {
 
 func TestBounceAppendsLedger(t *testing.T) {
 	f := newAssignFixture(t)
-	if _, err := worker.RecordBounce(f.root, "12", "abc"); err != nil {
+	if _, err := worker.RecordBounce(f.root, "12", "", "abc"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := worker.RecordBounce(f.root, "12", "abc"); err != nil { // same head: not counted
+	if _, err := worker.RecordBounce(f.root, "12", "", "abc"); err != nil { // same head: not counted
 		t.Fatal(err)
 	}
 	var n int
