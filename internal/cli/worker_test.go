@@ -544,6 +544,12 @@ func TestRecordedReviewsIgnoreStaleVerdicts(t *testing.T) {
 	if len(got) != 1 || got[0] != verdict.ReviewQuality {
 		t.Errorf("only the quality record is at head: %v", got)
 	}
+	if _, err := verdict.AddBranch(root, "w2", verdict.Record{Kind: verdict.ReviewSpec, Verdict: verdict.Pass}); err != nil {
+		t.Fatal(err)
+	}
+	if got := recordedReviews(root)("w2", "bbbbbbb0123456789012345678901234567890a"); len(got) != 0 {
+		t.Errorf("a record with no sha is never at head: %v", got)
+	}
 	if got := recordedReviews(root)("w1", ""); len(got) != 0 {
 		t.Errorf("an unknown head matches nothing: %v", got)
 	}
