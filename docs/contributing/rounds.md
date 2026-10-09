@@ -97,7 +97,7 @@ new code. A new contract doc needs the stamp before it passes.
 - Edit canonical sources only: `cmd/`, `internal/`, `skills/` (`rota-*/SKILL.md`, `references/`), `docs/`, `test/`.
 - Never hand-edit tracked `.rota/` content. This repo uses the issue backend ([issue backend](../usage/issue-backend.md)), so the merge closes your issue and there is no backlog row to update.
 - Before touching a verb, pull the matching `.rota/KNOWLEDGE.md` topics with
-  `rota knowledge query "<exact ## heading>"`. The topics that bite most: *Architecture: Helper
+  `rota knowledge query "<heading text>"`; a partial name returns every heading containing it, an exact name returns that topic alone (`rota knowledge topics` lists them). The topics that bite most: *Architecture: Helper
   conventions & invariants*, *Architecture: Module extraction & migration safety*, *Build &
   Tooling: Smoke testing*.
 - A new verb needs a contract entry and a smoke section. The entry goes in the group file under `docs/contributing/contract/`

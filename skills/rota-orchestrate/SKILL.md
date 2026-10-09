@@ -31,7 +31,7 @@ Copy this checklist and track your progress:
 
 ## 1. Start
 
-Run `rota doctor`. Fix every `fail` with its hint first. Then `rota round start`, and read `data.drift` and `data.candidates`. For a round that keeps going as issues become ready, start it with `--scope open`: every open issue is a candidate and overlap and dependencies decide the order. Re-running `start` keeps the recorded scope unless you pass `--scope`; `--scope slate --items …` replaces the slate without ending the round. Non-zero `drift` is the previous round's mess: `rota round reconcile` shows it, `rota reap` clears the leftovers once you've read the list.
+Run `rota doctor`. Fix every `fail` with its hint first. Then `rota round start`, and read `data.drift` and `data.candidates`. For a round that keeps going as issues become ready, start it with `--scope open`: every open issue is a candidate and overlap and dependencies decide the order. Re-running `start` keeps the recorded scope unless you pass `--scope`; `--scope slate --items …` replaces the slate without ending the round. If `data.handoff` is present, a prior orchestrator paused: read that note (`data.handoff.path`) before choosing the slate, since it holds the review queue, the agreed merge order and the open maintainer questions. Once you have read it, run `rota round start --consume-handoff` (a rejoin, so it changes nothing else) to archive it; never delete it by hand. Non-zero `drift` is the previous round's mess: `rota round reconcile` shows it, `rota reap` clears the leftovers once you've read the list.
 
 One orchestrator per repo. If `start` exits 4 on the lease, someone else holds it. Do not clear their lease; ask.
 
@@ -52,7 +52,7 @@ Work another tool already started (a Codex worktree, an agent-team branch, a clo
 
 ## 3. The loop
 
-**`rota round watch` is how you wait.** Keep one armed: run it as a background command whenever workers are active and re-arm it every time it exits. It wakes you on a slot, PR or escalation change and at a heartbeat, so you stay reachable while you talk to the maintainer. Never use a blocking question picker (`AskUserQuestion`) during a round: ask in prose and keep working. The Stop hook refuses to let you go idle without a watch.
+**`rota round watch` is how you wait.** Keep one armed: run it as a background command whenever workers are active and re-arm it every time it exits. It wakes you on a slot, PR or escalation change and at a heartbeat, so you stay reachable while you talk to the maintainer. Never use a blocking question picker during a round: ask in prose and keep working. The Stop hook refuses to let you go idle without a watch.
 
 `rota round wait` is the blocking form, for when you have nothing else to do. It returns the slot that needs you with its state and evidence, and records what it returned. A slot comes back once per change: the next `wait` skips it until its worker moves again. Never poll in your own context: no sleep loops, no repeated `status`, no tailing panes. When `watch` or `wait` returns, act, then wait again. If your shell cuts commands short, loop on a finite `--timeout`.
 
@@ -86,6 +86,8 @@ When a worker is `blocked` on a question, or you relay to a worker or review its
 
 Workers never merge. After `done`, read the PR: does it do what the issue says, and stay inside the files the issue named? Then `rota worker gate <slot> --base <branch>`, or `rota worker gate <PR number> --base <branch>` once the slot has moved on and the PR waits in review. The gate runs the checks on a scratch merge, merges on a pass and drops the PR from the review list. Read its verdict; don't re-derive the rules it enforces. Loop per PR: gate, fix or bounce what the verdict names, re-gate; the PR is done only on a merge. What each verdict (`stale`, `merge-failed`, `verify-failed`, `approval-required`) asks of you is in [tmux-dispatch.md](references/tmux-dispatch.md#the-merge-gate).
 
+**Review depth.** Before you review a PR, run `rota review depth <branch> --json`: it reads the labels of the issue behind the branch itself, so `risk:high`, `best-of:2` and `partial-slice` count without a flag. Run `/rota-review` at that depth (`full` both reviewers, `light` the Standards reviewer only, `none` none), and record the verdicts; `rota worker gate` resolves the same depth and refuses (`blockedBy: review-missing`) a branch without the verdicts it needs.
+
 **Best-of issues.** An issue labelled `best-of:2` is built by two slots at once (`assign` binds both, one Claude and one Codex when both are configured). The gate refuses either PR until you pick. Wait for both PRs, then compare them in this order: acceptance criteria met (each one, against the issue's own words), then the smaller and simpler diff, then the worker's Rulings and their cost. Run `rota round pick <ID> --pr <N> --reason-file <f>` with the comparison as the reason; it closes the other PR and keeps its branch. Then review and gate the winner as usual. If you cannot separate the two on those three tests, escalate to the maintainer (section 5) with both PR links and what you compared; do not toss a coin. A failed attempt (returned, reclaimed, dead) leaves one PR: `pick` takes it alone.
 
 When several PRs wait, or `ship.mergeApproval` requires approval, or you complete items in file mode, read [`merge-train-and-approval.md`](merge-train-and-approval.md).
@@ -100,7 +102,7 @@ Fix it yourself when the gap is small and mechanical: a stale doc line, a missin
 
 A reviewer's comment on a `done` slot's PR reaches the watch as a `review/<slot>` change (and a tick lists a `review` item). Under `round.reviewLoop: manual` (the default) run `rota round review-relay <slot>`: it counts the bounce itself, relays the comments to the worker as a `REVIEW` relay and marks the slot busy, so do not also run `round bounce`. At the cap it exits 4 and escalates on the PR: go to the cap options in [`bounce-cap.md`](bounce-cap.md). Under `auto` the watch does this itself and you hear about it only at the cap. The loop never merges: gate the PR once the worker is `done` again. Under `manual` the autopilot tick still gates a done PR beside the `review` item, so relay first if the review matters.
 
-When you bounce by hand, run `rota round bounce <issue> --head <pr-head-sha>` first and read [`bounce-cap.md`](bounce-cap.md): the cap, what to do at it, and re-review.
+When you bounce by hand, run `rota round bounce <issue> --head <pr-head-sha> --slot <slot>` first and read [`bounce-cap.md`](bounce-cap.md): the cap, what to do at it, and re-review.
 
 ## 8. Wind down
 

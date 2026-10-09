@@ -25,7 +25,7 @@ Otherwise ask:
 
 ### Step R4 — Confirmation Gate
 
-Show the preview, then one `AskUserQuestion`. Header `"Apply"`, question *"Apply this removal plan for <IDS>?"*:
+Show the preview, then one question. Header `"Apply"`, question *"Apply this removal plan for <IDS>?"*:
 
 1. *"Apply (Recommended)"* — `rota item rm --apply <IDS>`; ARCHIVE entries stay as the historical record.
 2. *"Apply + scrub ARCHIVE"* — `rota item rm --apply --scrub-archive <IDS>`; also removes the ARCHIVE entry and its cross-references.

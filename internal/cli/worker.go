@@ -18,6 +18,7 @@ import (
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/ship"
+	"github.com/l4ci/rota/internal/verdict"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -233,7 +234,11 @@ func workerReset(fs *flag.FlagSet) RunFunc {
 			var we *exitcode.Error
 			if errors.As(err, &we) && we.Data != nil {
 				if we.Exit == ExitRefused { // exit 4 failure data names what blocked it
-					res.Data.(*jsonx.Object).Set("blockedBy", "slot holds work")
+					by := "slot holds work"
+					if bd, ok := we.Data.(worker.BlockData); ok && bd.BlockedBy != "" {
+						by = bd.BlockedBy // a fence, not the dirty-slot guard
+					}
+					res.Data.(*jsonx.Object).Set("blockedBy", by)
 				}
 				return res, err
 			}
@@ -682,6 +687,21 @@ func bestOfRefusal(msg, hint string, d *jsonx.Object) (Result, error) {
 	return blockedRefusal("best-of-unpicked", msg, hint, d)
 }
 
+// recordedReviews lists the review kinds with a verdict recorded for a branch,
+// for the gate's review-depth check.
+func recordedReviews(root string) func(string) []string {
+	store := verdict.Load(root)
+	return func(branch string) []string {
+		var kinds []string
+		for _, k := range []string{verdict.ReviewSpec, verdict.ReviewQuality} {
+			if _, ok := verdict.Latest(store.Branches[verdict.BranchKey("", branch)], k); ok {
+				kinds = append(kinds, k)
+			}
+		}
+		return kinds
+	}
+}
+
 func blockedRefusal(blockedBy, msg, hint string, d *jsonx.Object) (Result, error) {
 	d.Set("blockedBy", blockedBy)
 	d.Set("changed", false)
@@ -721,7 +741,7 @@ func workerGate(fs *flag.FlagSet) RunFunc {
 		ctx, stop := workerContext()
 		defer stop()
 		issue := gateIssue(root, slot)
-		r, err := workerEnvCtx(c, ctx).Gate(ctx, root, worker.GateOpts{Slot: slot, Base: *base, CheckOnly: *check, NoVerify: *noVerify, Prune: *prune, Approve: approve, Verdict: shipVerdict(c, root, root).Block})
+		r, err := workerEnvCtx(c, ctx).Gate(ctx, root, worker.GateOpts{Slot: slot, Base: *base, CheckOnly: *check, NoVerify: *noVerify, Prune: *prune, Approve: approve, Verdict: shipVerdict(c, root, root).Block, Recorded: recordedReviews(root)})
 		if err != nil && r.Verdict == worker.GateVerdictBlocked {
 			return verdictRefusal(err, gateData(r))
 		}
@@ -736,6 +756,9 @@ func workerGate(fs *flag.FlagSet) RunFunc {
 		}
 		if err == nil && r.Verdict == worker.GateBestOfUnpicked {
 			return bestOfRefusal(r.Err, r.Hint, gateData(r))
+		}
+		if err == nil && r.Verdict == worker.GateReviewMissing {
+			return blockedRefusal("review-missing", r.Err, r.Hint, gateData(r))
 		}
 		if err != nil {
 			return Result{}, err

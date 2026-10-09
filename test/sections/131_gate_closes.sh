@@ -29,7 +29,7 @@ git init -q --bare -b main "$CLORIGIN"
     && git push -q origin ben/5-thing && git checkout -q main
 ) || fail "closes fixture repo setup failed"
 CLSHA="$(git -C "$CLPROJ" rev-parse ben/5-thing)"
-printf '{"test":{"full":["true"]}}\n' > "$CLPROJ/.rota/config.json"
+printf '{"ship":{"review":"none"},"test":{"full":["true"]}}\n' > "$CLPROJ/.rota/config.json"
 printf '{"slots":[{"name":"ben","branch":"ben/5-thing","task":"#5","pr":"https://github.com/o/r/pull/7"}]}\n' > "$CLPROJ/.rota/workers.json"
 cl_state() { printf '{"sha":"%s","body":"%s","labels":[%s]}\n' "$CLSHA" "$1" "$2" > "$TMP_CL/state.json"; }
 cl() { ( cd "$CLPROJ" && CL_STATE="$TMP_CL/state.json" ROTA_GATE_SHA_WAIT=0 PATH="$CLBIN:$ROTA_POISON_BIN:$PATH" "$ROTA_BIN" --json "$@" 2>/dev/null ); }

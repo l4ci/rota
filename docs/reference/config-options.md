@@ -97,7 +97,7 @@ Each Q1–Q5 option maps to a single `key.path: value` in `.rota/config.json`:
 | Q2 Worktree | `work.isolation: "worktree"` |
 | Q3 Direct merge | `work.mergeStrategy: "direct"` |
 | Q3 Pull request | `work.mergeStrategy: "pr"` |
-| Q4 includes "Review before ship" | `ship.review: true` (else `false`) |
+| Q4 includes "Review before ship" | `ship.review: "full"` (else `"none"`) |
 | Q4 includes "Verify learnings" | `learn.verify: true` (else `false`) |
 | Q4 includes "Confirm before refactor" | `refactor.confirmBeforeExecute: true` (else `false`) |
 | Q5 Off | `autonomy.level: "off"` |
@@ -150,7 +150,7 @@ Every key, by group. Default is what a missing key reads as; Values lists the al
 
 | Key | Type | Default | Values | Description |
 |-----|------|---------|--------|-------------|
-| `ship.review` | bool | `true` |  | Whether /rota-ship runs /rota-review first. FAIL blocks, CONCERNS ask, PASS flows through. |
+| `ship.review` | enum | `"full"` | `full`, `light`, `none` | How deep a review /rota-ship runs first: full, light (the Standards reviewer only) or none. FAIL blocks, CONCERNS ask, PASS flows through. An object {default, lightBelow, labels} picks the depth by diff size and label; true and false still mean full and none. |
 | `ship.secondOpinion` | bool | `false` |  | Opt-in fresh-eyes adversarial gate in /rota-ship Step 3.5. |
 | `ship.secondOpinionRunner` | enum | `"subagent"` | `subagent` | Who runs the /rota-ship second-opinion gate. The codex value was removed in 5.0: /rota-ship notes it and runs the subagent in advisory mode. |
 | `ship.qa` | bool | `false` |  | Opt-in product-QA gate: /rota-ship runs /rota-qa run after review and before merge or PR. |
@@ -268,6 +268,7 @@ Every key, by group. Default is what a missing key reads as; Values lists the al
 | `round.tiers.codex.heavy` | string | unset |  | Model a heavy-tier Codex worker starts with. Empty: Codex's own default; a configured kind must set all three tiers. |
 | `round.stallMinutes` | int | `30` |  | Minutes a slot with a live agent may show no commit, edit or state change before rota round reconcile reports it stalled. 0 turns the check off. |
 | `round.maxBounces` | int | `3` |  | How often rota worker gate may send one item's PR back before it parks the item as needs-human. 0 turns the cap off. |
+| `round.ledgerKeep` | int | `0` |  | Rounds of the round ledger (.rota/ledger.jsonl) to keep. A new round trims the entries of older rounds. 0 keeps everything. |
 | `round.architectureEvery` | int | `20` |  | Closed non-refactor items between automatic architecture reviews. 0 turns them off. |
 | `round.architectureAreas` | list | `[]` |  | Areas an architecture review is split into, one review item each. Empty means the subsystem map's names, else one whole-repo review. |
 | `round.autopilot` | bool | `false` |  | Lets rota round watch --autopilot and rota round tick assign, gate and merge mechanically. Merges only under ship.mergeApproval none. |

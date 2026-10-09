@@ -13,6 +13,7 @@ import (
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/rotatree"
+	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
@@ -180,7 +181,7 @@ func (v *ciVerifier) verify(sha, name string) (VerifyResult, error) {
 	ref := ciRefPrefix + strings.Trim(ciNameUnsafe.ReplaceAllString(name, "-"), "-")
 	res := VerifyResult{CI: true, Ref: ref, SHA: sha}
 	if out, code := v.e.runGit(v.root, "push", "-q", "--force", "origin", sha+":refs/heads/"+ref); code != 0 {
-		return res, fmt.Errorf("git push of %s to origin %s failed (exit %d): %s", short(sha), ref, code, strings.TrimSpace(out))
+		return res, fmt.Errorf("git push of %s to origin %s failed (exit %d): %s", strutil.ShortSHA(sha), ref, code, strings.TrimSpace(out))
 	}
 	defer v.e.cleanupGit(v.root, "push", "-q", "origin", "--delete", ref)
 	start := v.e.now()
@@ -188,7 +189,7 @@ func (v *ciVerifier) verify(sha, name string) (VerifyResult, error) {
 	for {
 		checks, err := v.forge.CommitChecks(v.e.ctx, sha)
 		if err != nil {
-			return res, fmt.Errorf("could not read the CI checks of %s: %w", short(sha), err)
+			return res, fmt.Errorf("could not read the CI checks of %s: %w", strutil.ShortSHA(sha), err)
 		}
 		elapsed := v.e.now().Sub(start)
 		pending, failed := 0, false
@@ -290,10 +291,10 @@ func checkLog(checks []tracker.CheckRun) string {
 func (r VerifyResult) stopVerdict(who string) (verdict, msg, hint string) {
 	switch {
 	case r.NotRun:
-		return GateCINotRun, fmt.Sprintf("CI-NOT-RUN %s — listed CI check(s) never ran on %s (%s): %s; nothing landed", who, r.Ref, short(r.SHA), strings.Join(r.Missing, ", ")),
+		return GateCINotRun, fmt.Sprintf("CI-NOT-RUN %s — listed CI check(s) never ran on %s (%s): %s; nothing landed", who, r.Ref, strutil.ShortSHA(r.SHA), strings.Join(r.Missing, ", ")),
 			"make the project's CI run on pushes to " + ciRefPrefix + "** branches and check that test.ciChecks matches its check names, or set test.fullWhere to local"
 	case r.TimedOut:
-		return GateVerifyTimeout, fmt.Sprintf("VERIFY-TIMEOUT %s — CI on %s (%s) did not finish in time: %s; nothing landed", who, r.Ref, short(r.SHA), strings.TrimSpace(r.Log)),
+		return GateVerifyTimeout, fmt.Sprintf("VERIFY-TIMEOUT %s — CI on %s (%s) did not finish in time: %s; nothing landed", who, r.Ref, strutil.ShortSHA(r.SHA), strings.TrimSpace(r.Log)),
 			"re-run when CI has caught up, or raise test.ciTimeoutMinutes"
 	}
 	return "", "", ""
@@ -303,7 +304,7 @@ func (r VerifyResult) stopVerdict(who string) (verdict, msg, hint string) {
 // last lines, or the CI checks and where to read them.
 func (r VerifyResult) detail() string {
 	if r.CI {
-		return fmt.Sprintf("CI checks on %s (%s):\n%s", r.Ref, short(r.SHA), indentTail(r.Log, 20))
+		return fmt.Sprintf("CI checks on %s (%s):\n%s", r.Ref, strutil.ShortSHA(r.SHA), indentTail(r.Log, 20))
 	}
 	return fmt.Sprintf("last lines of the verify output (full log: %s):\n%s", r.LogPath, indentTail(r.Log, 20))
 }

@@ -43,14 +43,16 @@ func (e Env) forgeOn(be backlog.Backend) bool {
 
 // Blocked reasons of an assignment (exit 4, `blockedBy`).
 const (
-	BlockNoRound      = "no round"
-	BlockOutOfScope   = "out of scope"
-	BlockNotReady     = "not ready"
-	BlockOverlap      = "overlap"
-	BlockClaimed      = "claimed"
-	BlockOpenPR       = "open PR"
-	BlockSlotBusy     = "slot busy"
-	BlockNoFreeSlot   = "no free slot"
+	BlockNoRound    = "no round"
+	BlockOutOfScope = "out of scope"
+	BlockNotReady   = "not ready"
+	BlockOverlap    = "overlap"
+	BlockClaimed    = "claimed"
+	BlockOpenPR     = "open PR"
+	BlockSlotBusy   = "slot busy"
+	BlockNoFreeSlot = "no free slot"
+	// BlockQuota: every account the worker kind could run under is cooling down.
+	BlockQuota        = "quota"
 	BlockBriefMissing = "brief missing"
 	BlockNoTierMap    = "no tier map"
 	// BlockCodexFlags: `codex --help` does not list a flag the launch line uses.
@@ -487,6 +489,11 @@ func (e Env) assignOne(ctx context.Context, root string, be Board, o AssignOpts,
 	}
 	res.Kind, res.KindSource, res.Tier, res.TierReason = kind, kindSource, tier, reason
 	res.Model = model
+	if !resuming {
+		if why := e.Headroom(ctx, root, kind); why != "" {
+			return res, blocked(BlockQuota, "%s", why)
+		}
+	}
 	if !worker.ModelAppliesTo(root, kind) {
 		// A model asked for by name must reach the launch line; the tier map's
 		// is a default and only warns.

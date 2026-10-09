@@ -37,4 +37,4 @@ Present designs sequentially, then compare them in prose. Give an opinionated re
 
 ## Where the result goes
 
-In a findings run, put the recommended interface and the rejected alternatives in the filed issue's **Solution** section. On the `--fix` path, hand the chosen design to the `standard` subagent brief. With `--interactive` or `refactor.confirmBeforeExecute` true, gate with `AskUserQuestion` per finding (batch up to 4): one option per design, recommended first, `preview` showing the signature and usage example.
+In a findings run, put the recommended interface and the rejected alternatives in the filed issue's **Solution** section. On the `--fix` path, hand the chosen design to the `standard` subagent brief. With `--interactive` or `refactor.confirmBeforeExecute` true, gate with a question per finding (batch up to 4): one option per design, recommended first, with a preview showing the signature and usage example.

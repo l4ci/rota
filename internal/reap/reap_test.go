@@ -111,7 +111,7 @@ func (h *fakeHost) StopProcess(_ context.Context, pid int) error {
 }
 
 func input(g *fakeGit, rows []round.Row, agents []host.Agent, h HostOps) Input {
-	return Input{Root: root, Base: "main", Git: g.run, Report: &round.Report{Rows: rows}, Agents: agents, Host: h}
+	return Input{Root: root, Base: "main", Git: g.run, Report: &round.Report{Rows: rows}, Agents: agents, Host: h, Roster: []string{"ben", "dana", "nia", "kit"}}
 }
 
 func ids(cs []Candidate) []string {
@@ -503,6 +503,7 @@ func TestReapListsMergedExternal(t *testing.T) {
 		"worktree /elsewhere/a\nHEAD abc\nbranch refs/heads/codex/12-thing\n\n" +
 		"worktree /elsewhere/b\nHEAD abc\nbranch refs/heads/codex/13-wip\n\n"}
 	in := input(g, nil, []host.Agent{}, nil)
+	in.Adopted = map[string]bool{"codex/12-thing": true, "codex/13-wip": true}
 	res := find(t, in, KindBranch)
 	want := []string{"branch:codex/12-thing HELD(checked out at /elsewhere/a; remove that worktree first)"}
 	if got := ids(res.Candidates); !reflect.DeepEqual(got, want) {
@@ -523,9 +524,25 @@ func TestReapListsMergedExternalWithoutALeadingNumber(t *testing.T) {
 	g := repo(nil, []string{"codex/issue-612"}, "codex/issue-612")
 	g.resp["worktree list --porcelain"] = gitResp{out: g.resp["worktree list --porcelain"].out +
 		"worktree /elsewhere/a\nHEAD abc\nbranch refs/heads/codex/issue-612\n\n"}
-	res := find(t, input(g, nil, []host.Agent{}, nil), KindBranch)
+	in := input(g, nil, []host.Agent{}, nil)
+	in.Adopted = map[string]bool{"codex/issue-612": true}
+	res := find(t, in, KindBranch)
 	want := []string{"branch:codex/issue-612 HELD(checked out at /elsewhere/a; remove that worktree first)"}
 	if got := ids(res.Candidates); !reflect.DeepEqual(got, want) {
+		t.Fatalf("candidates = %v, want %v", got, want)
+	}
+}
+
+// A merged branch is offered only when a round or an adoption made it: the
+// issue-N token alone (docs/issue-3-notes) or a number after a slash
+// (feature/42-login) says nothing about who owns it; only a roster agent's prefix does.
+func TestReapSkipsMergedBranchesNobodyAdopted(t *testing.T) {
+	g := repo(nil, []string{"docs/issue-3-notes", "fix/#4-typo", "feature/42-login", "docs/3-notes", "codex/issue-612", "kit/9-old"},
+		"docs/issue-3-notes", "fix/#4-typo", "feature/42-login", "docs/3-notes", "codex/issue-612", "kit/9-old")
+	in := input(g, nil, []host.Agent{}, nil)
+	in.Adopted = map[string]bool{"codex/issue-612": true}
+	want := []string{"branch:codex/issue-612", "branch:kit/9-old"}
+	if got := ids(find(t, in, KindBranch).Candidates); !reflect.DeepEqual(got, want) {
 		t.Fatalf("candidates = %v, want %v", got, want)
 	}
 }

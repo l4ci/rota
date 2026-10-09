@@ -1,6 +1,6 @@
 # herdr worker dispatch
 
-What herdr changes versus tmux, for `/rota-orchestrate` rounds. Each worker is its own Claude Code session in its own `git worktree`, as under tmux; the difference is where the session lives: a **herdr tab** in the orchestrator's own workspace instead of a tmux window. herdr recognises the agent in each tab and reports its state natively, which removes most of the guesswork tmux needs.
+What herdr changes versus tmux, for `/rota-orchestrate` rounds. Each worker is its own harness session (Claude Code or Codex) in its own `git worktree`, as under tmux; the difference is where the session lives: a **herdr tab** in the orchestrator's own workspace instead of a tmux window. herdr recognises the agent in each tab and reports its state natively, which removes most of the guesswork tmux needs.
 
 Everything about the *workers* rather than the *host* lives in [`worker-contract.md`](worker-contract.md) (standing contract and [provenance](worker-contract.md#provenance)) and [`tmux-dispatch.md`](tmux-dispatch.md): [polling](tmux-dispatch.md#polling), [escalating and relaying](tmux-dispatch.md#escalating-and-relaying), [the merge gate](tmux-dispatch.md#the-merge-gate), [permissions](tmux-dispatch.md#permissions) and [accounts](tmux-dispatch.md#accounts). This file does not repeat them; `/rota-orchestrate` cites all three directly.
 
@@ -14,7 +14,7 @@ The orchestrator must run in a herdr-managed pane. herdr injects `HERDR_ENV=1` a
 rota worker session check     # exit 0 inside herdr, exit 1 outside
 ```
 
-**Outside herdr there is no handoff.** Under tmux, `ensure` creates a session and moves the cycle into it. Under herdr it refuses with exit 4 and tells the user to start Claude Code from a herdr pane. Outside herdr there is no workspace to open an operator tab in, and driving a herdr server from outside a managed pane is what herdr's own guide forbids: commands then land wherever a human happens to have focus.
+**Outside herdr there is no handoff.** Under tmux, `ensure` creates a session and moves the cycle into it. Under herdr it refuses with exit 4 and tells the user to start the harness from a herdr pane. Outside herdr there is no workspace to open an operator tab in, and driving a herdr server from outside a managed pane is what herdr's own guide forbids: commands then land wherever a human happens to have focus.
 
 ## Slots are tabs
 

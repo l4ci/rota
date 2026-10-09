@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -104,7 +105,7 @@ func TestPickClosesTheQueuedLoserAndRecordsThePick(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.moveFx.forge.states[7], f.moveFx.forge.states[8] = "open", "open"
-	if _, err := worker.RecordBounce(f.root, "12", "abc"); err != nil {
+	if _, err := worker.RecordBounce(f.root, "12", "", "abc"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -243,4 +244,27 @@ func TestPickRepeatIsANoOpAndAnotherPRIsRefused(t *testing.T) {
 	}
 	_, err = f.pick("#8", "changed my mind")
 	wantBlocked(t, err, BlockPicked)
+}
+
+// An adopted loser's checkout is not rota's to park: the pick closes its PR,
+// warns, and leaves the slot for `rota worker pool reap`.
+func TestPickLeavesAnExternalLoserSlotAndWarns(t *testing.T) {
+	f := newPickFx(t)
+	f.bothHavePRs(t)
+	if err := rawSlot(f.root, "dana", func(s *jsonx.Object) { s.Set("kind", "external") }); err != nil {
+		t.Fatal(err)
+	}
+	res, err := f.pick("7", "ben's is smaller")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Warnings) != 1 || !strings.Contains(res.Warnings[0], "adopted external slot") || !strings.Contains(res.Warnings[0], "rota worker pool reap dana") {
+		t.Fatalf("want the release warning: %+v", res)
+	}
+	if s := f.slot("dana"); s.Branch() != f.danaBr || s.HeldID() != "12" {
+		t.Errorf("an adopted slot is never parked: %v", s)
+	}
+	if got := gittest.Run(t, f.danaWT, "symbolic-ref", "--short", "HEAD"); got != f.danaBr {
+		t.Errorf("worktree moved to %s", got)
+	}
 }

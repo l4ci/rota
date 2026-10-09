@@ -4,21 +4,23 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/land"
+	"github.com/l4ci/rota/internal/overlap"
 	"github.com/l4ci/rota/internal/rotatree"
+	"github.com/l4ci/rota/internal/roundcfg"
+	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/testledger"
+	"github.com/l4ci/rota/internal/tracker"
+	"github.com/l4ci/rota/internal/verdict"
 	"os"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/l4ci/rota/internal/config"
-	"github.com/l4ci/rota/internal/git"
-	"github.com/l4ci/rota/internal/land"
-	"github.com/l4ci/rota/internal/overlap"
-	"github.com/l4ci/rota/internal/roundcfg"
-	"github.com/l4ci/rota/internal/tracker"
 )
 
 // Merge gate for one worker slot's branch/PR into the cycle branch: the port
@@ -94,6 +96,10 @@ const (
 	// GateBestOfUnpicked: the PR is an attempt of a best-of:2 issue and no
 	// `rota round pick` names it; the CLI exits 4 with it, blockedBy best-of-unpicked.
 	GateBestOfUnpicked = "best-of-unpicked"
+	// GateReviewMissing: the review depth ship.review resolves for the branch
+	// needs a recorded verdict the branch lacks; the CLI exits 4 with it,
+	// blockedBy review-missing.
+	GateReviewMissing = "review-missing"
 )
 
 // PartialSliceLabel marks an issue whose PR lands only a slice of it, so the PR
@@ -116,6 +122,9 @@ type GateOpts struct {
 	// Prune makes a pass that releases an adopted slot also remove its
 	// worktree and branch.
 	Prune bool
+	// Round reads the round lease for the gate's ledger entries; the gate makes
+	// one when nil. A caller that writes more entries after the gate shares it.
+	Round *RoundMemo
 	// Train marks a landing step of a merge train (see Train): the PRs were
 	// merged together and verified once, so a branch behind the base only
 	// because an earlier train member landed is not refused as stale.
@@ -124,6 +133,10 @@ type GateOpts struct {
 	// CheckOnly. A non-nil error (a recorded FAIL) stops the gate with verdict
 	// verdict-blocked and is returned as is. branch is the worker branch.
 	Verdict func(branch string) error
+	// Recorded lists the review kinds (verdict.ReviewSpec, verdict.ReviewQuality)
+	// with a verdict recorded for branch. When set, the gate refuses a branch
+	// lacking the verdicts its resolved review depth needs; nil skips that check.
+	Recorded func(branch string) []string
 	// Approve is the merge-approval gate (B1), run after provenance and right
 	// before the merge, never under CheckOnly. files lists the paths the merge
 	// changes. A non-nil error stops the gate with verdict approval-required
@@ -143,9 +156,15 @@ type GateResult struct {
 	Verified      []string
 	VerifySkipped bool
 	Changed       bool
-	Err           string
-	Hint          string
-	Notes         []string // PROVENANCE-SKIP and NO-VERIFY lines for stderr
+	// AlreadyMerged says the forge reported the PR merged before this gate ran:
+	// the gate landed nothing, but the ledger records the merge as remote.
+	AlreadyMerged bool
+	// Round is the memo the gate's ledger entries read the round lease through;
+	// a caller that records more entries for the same verb reuses it.
+	Round *RoundMemo
+	Err   string
+	Hint  string
+	Notes []string // PROVENANCE-SKIP and NO-VERIFY lines for stderr
 	// Excluded lists the test-ledger entries that excused a failing command.
 	// Expired lists the entries past their expiry, which fail the gate.
 	Excluded, Expired []testledger.Entry
@@ -255,14 +274,20 @@ type Forge interface {
 // given.
 func (e Env) Gate(ctx context.Context, root string, o GateOpts) (GateResult, error) {
 	e = e.withDefaults()
+	if o.Round == nil {
+		o.Round = &RoundMemo{}
+	}
 	if o.CheckOnly || o.Train { // read-only, or already under the train's land lock
-		return e.gate(ctx, root, o)
+		res, err := e.gate(ctx, root, o)
+		res.Round = o.Round
+		return res, err
 	}
 	var res GateResult
 	err := e.withLandLock(ctx, root, func() (err error) {
 		res, err = e.gate(ctx, root, o)
 		return err
 	})
+	res.Round = o.Round
 	return res, err
 }
 
@@ -295,13 +320,13 @@ func (e Env) gate(ctx context.Context, root string, o GateOpts) (GateResult, err
 			res.Verdict, res.Expired = GateVerifyFailed, in.ledger.Expired(e.withDefaults().Now())
 			res.Err = fmt.Sprintf("GATE-FAIL %s — %s; nothing landed", o.Slot, msg)
 			res.Hint = "fix the test or renew the entry in .rota/test-ledger.json, then re-gate"
-			gateLedger(root, t, res)
+			gateLedger(o.Round, root, t, res)
 			return res, nil
 		}
 	}
 	res, err = e.gateEnv().gate(ctx, root, o, res, in, t)
 	if err == nil && !o.CheckOnly {
-		gateLedger(root, t, res)
+		gateLedger(o.Round, root, t, res)
 	}
 	if err == nil && t.Queued && res.Verdict == GatePass {
 		if err := RemoveQueuedPR(root, t.PR); err != nil {
@@ -369,6 +394,7 @@ var gateSteps = []gateStep{
 	(*gate).stepProvenance,
 	(*gate).stepCloses,
 	(*gate).stepVerdict,
+	(*gate).stepReviewDepth,
 	(*gate).stepCheckOnly,
 	(*gate).stepMerge,
 	(*gate).stepVerify,
@@ -512,6 +538,7 @@ func (g *gate) stepFreshness() (bool, error) {
 		return g.broke(brokeMsg)
 	}
 	if why != "" {
+		g.noteMergedRemotely()
 		g.res.SHA, _ = e.runGit(g.root, "rev-parse", "--short=7", g.headRef) // bounce accounting keys on the head
 		g.verdict(GateStale, fmt.Sprintf("STALE %s %s — %s commit(s) landed on %s since it branched; %s", o.Slot, g.branch, behind, o.Base, why),
 			fmt.Sprintf("bounce: tell slot %s to `git merge %s`, resolve and re-verify, then re-gate", o.Slot, o.Base))
@@ -549,6 +576,7 @@ func (g *gate) stepPRMatches() (bool, error) {
 	// OPEN, MERGED or CLOSED on both forges.
 	switch {
 	case info.State != "OPEN":
+		g.res.AlreadyMerged = info.State == "MERGED"
 		return mismatch(fmt.Sprintf("PR %s is %s, not open", g.prNum, info.State))
 	case info.Base != g.o.Base:
 		return mismatch(fmt.Sprintf("PR %s targets '%s', the gate's base is '%s' — stacked PR?", g.prNum, info.Base, g.o.Base))
@@ -637,6 +665,86 @@ func (g *gate) stepCloses() (bool, error) {
 	return true, nil
 }
 
+// reviewKinds are the verdict kinds a review depth needs on record: full both
+// reviewers, light the Standards reviewer, none nothing.
+func reviewKinds(d config.ReviewDepth) []string {
+	switch d {
+	case config.DepthFull:
+		return []string{verdict.ReviewSpec, verdict.ReviewQuality}
+	case config.DepthLight:
+		return []string{verdict.ReviewQuality}
+	}
+	return nil
+}
+
+// stepReviewDepth applies ship.review: it resolves the depth for this branch
+// from the diff size against the base and the labels of the slot's issue, notes
+// it, and refuses a branch that lacks the recorded verdicts that depth needs.
+// A recorded FAIL was already refused by stepVerdict. An unreadable policy,
+// diff or issue is a refusal too: guessing a depth could pass a risk:high
+// branch as light.
+func (g *gate) stepReviewDepth() (bool, error) {
+	policy, err := config.ReviewPolicyOf(g.in.cfg)
+	if err != nil {
+		return g.broke(fmt.Sprintf("%v; run rota config check", err))
+	}
+	out, code := g.e.runGit(g.root, "diff", "--numstat", g.baseRef+"..."+g.headRef)
+	if code != 0 {
+		return g.broke(fmt.Sprintf("could not diff %s against %s to pick the review depth", g.headRef, g.baseRef))
+	}
+	changed := ChangedLines(out)
+	var labels []string
+	issue := g.target.Issue
+	if !g.target.Queued {
+		issue = HeldID(g.target.Task, g.target.Branch, g.target.Name)
+	}
+	// the issue is read only when the policy has a label to match it against
+	if n, err := strconv.Atoi(issue); err == nil && n > 0 && len(policy.Labels) > 0 {
+		is, err := g.forge.Get(g.ctx, n, false)
+		if err != nil {
+			return g.broke(fmt.Sprintf("could not read #%d for its labels to pick the review depth: %v", n, err))
+		}
+		labels = is.Labels
+	}
+	depth, why := policy.Resolve(changed, labels)
+	g.res.Notes = append(g.res.Notes, fmt.Sprintf("REVIEW-DEPTH %s — %s (%s)", g.o.Slot, depth, why))
+	if g.o.Recorded == nil {
+		return false, nil
+	}
+	have := g.o.Recorded(g.branch)
+	var missing []string
+	for _, k := range reviewKinds(depth) {
+		if !slices.Contains(have, k) {
+			missing = append(missing, k)
+		}
+	}
+	if len(missing) == 0 {
+		return false, nil
+	}
+	g.res.SHA, _ = g.e.runGit(g.root, "rev-parse", "--short=7", g.headRef)
+	g.verdict(GateReviewMissing, fmt.Sprintf("GATE %s refused — review depth %s (%s) needs a recorded %s verdict; nothing landed", g.o.Slot, depth, why, strings.Join(missing, " and ")),
+		fmt.Sprintf("run /rota-review on %s (it records the verdicts), or loosen ship.review", g.branch))
+	return true, nil
+}
+
+// ChangedLines sums the added and deleted lines of `git diff --numstat` output.
+// Binary files, which numstat marks with dashes, count for nothing.
+func ChangedLines(numstat string) int {
+	total := 0
+	for _, l := range strings.Split(numstat, "\n") {
+		f := strings.Fields(l)
+		if len(f) < 2 {
+			continue
+		}
+		a, errA := strconv.Atoi(f[0])
+		d, errD := strconv.Atoi(f[1])
+		if errA == nil && errD == nil {
+			total += a + d
+		}
+	}
+	return total
+}
+
 // stepVerdict refuses a branch with a recorded FAIL verdict (B3), the rule the
 // ship paths apply. It runs under CheckOnly too, so a train member is refused
 // before anything merges.
@@ -671,7 +779,7 @@ func (g *gate) stepMerge() (bool, error) {
 	// An empty test.full would merge with nothing verified: refuse before the
 	// merge unless --no-verify says so. CI verification does not read it, and a
 	// test.e2e tier still verifies.
-	if !g.o.NoVerify && g.in.where == WhereLocal && len(g.in.verifyCmds) == 0 && len(g.in.e2eCmds) == 0 {
+	if !g.o.NoVerify && noVerifyRule(g.in.where, g.in.verifyCmds, g.in.e2eCmds) {
 		g.verdict(GateNoVerify, "", "")
 		g.res.Err, g.res.Hint = noVerifyRefusal("GATE " + g.o.Slot)
 		return true, nil
@@ -789,7 +897,7 @@ func (g *gate) verifyFirst(what string, check func(dir, sha string) (bool, error
 	}
 	sha, _ := g.e.runGit(dir, "rev-parse", "HEAD")
 	tree, _ := g.e.runGit(dir, "rev-parse", "HEAD^{tree}")
-	g.res.SHA = short(sha)
+	g.res.SHA = strutil.ShortSHA(sha)
 	if done, err := check(dir, sha); done || err != nil {
 		return true, err
 	}
@@ -799,7 +907,7 @@ func (g *gate) verifyFirst(what string, check func(dir, sha string) (bool, error
 		}
 	}
 	if cur, _ := g.e.runGit(g.root, "rev-parse", g.baseRef); cur != baseSHA {
-		g.verdict(GateBaseMoved, fmt.Sprintf("BASE-MOVED %s — %s moved from %s to %s while %s verified; nothing landed", o.Slot, g.baseRef, short(baseSHA), short(cur), what),
+		g.verdict(GateBaseMoved, fmt.Sprintf("BASE-MOVED %s — %s moved from %s to %s while %s verified; nothing landed", o.Slot, g.baseRef, strutil.ShortSHA(baseSHA), strutil.ShortSHA(cur), what),
 			"re-run the gate on the new base")
 		return true, nil
 	}
@@ -851,7 +959,7 @@ func (g *gate) landedTree() string {
 // a mismatch. false ends the gate with the verdict set.
 func (g *gate) confirmCITree() bool {
 	if tree := g.landedTree(); tree != g.verifiedTree {
-		g.verdict(GateBaseMoved, fmt.Sprintf("BASE-MOVED %s — it landed, but the landed tree %s differs from the tree CI verified (%s); %s changed during the merge", g.o.Slot, short(tree), short(g.verifiedTree), g.o.Base),
+		g.verdict(GateBaseMoved, fmt.Sprintf("BASE-MOVED %s — it landed, but the landed tree %s differs from the tree CI verified (%s); %s changed during the merge", g.o.Slot, strutil.ShortSHA(tree), strutil.ShortSHA(g.verifiedTree), g.o.Base),
 			fmt.Sprintf("do not re-merge; verify %s as it is now", g.o.Base))
 		return false
 	}
@@ -925,7 +1033,7 @@ func (g *gate) stepVerify() (bool, error) {
 		return true, nil
 	}
 	if tree := g.landedTree(); tree != g.verifiedTree {
-		res.Notes = append(res.Notes, fmt.Sprintf("VERIFY-AGAIN %s — the landed tree %s differs from the verified scratch merge %s (%s moved before the merge); verifying the landed %s", o.Slot, short(tree), short(g.verifiedTree), o.Base, o.Base))
+		res.Notes = append(res.Notes, fmt.Sprintf("VERIFY-AGAIN %s — the landed tree %s differs from the verified scratch merge %s (%s moved before the merge); verifying the landed %s", o.Slot, strutil.ShortSHA(tree), strutil.ShortSHA(g.verifiedTree), o.Base, o.Base))
 		res.Verified, res.Excluded, res.VerifySkipped = nil, nil, false
 		for _, tier := range []struct {
 			name string
@@ -1109,6 +1217,18 @@ func (g *gate) broke(msg string) (bool, error) {
 	return true, nil
 }
 
+// noteMergedRemotely marks the result when the forge says the PR is merged: a
+// stale refusal of a PR landed elsewhere, by a squash or rebase too, whose head
+// is then not on the base.
+func (g *gate) noteMergedRemotely() {
+	if !g.remote || g.o.CheckOnly { // a check-only gate writes no ledger entry
+		return
+	}
+	if info, ok := g.prInfo(); ok && info.State == "MERGED" {
+		g.res.AlreadyMerged = true
+	}
+}
+
 // prInfo reads the PR; ok is false when the forge could not be read.
 func (g *gate) prInfo() (tracker.PRInfo, bool) {
 	n, err := strconv.Atoi(g.prNum)
@@ -1257,7 +1377,7 @@ func (g *gate) confirmLanded(sha string) (done bool) {
 	}
 	g.res.Changed = true
 	if len(sha) >= 7 {
-		g.res.SHA = sha[:7] // the merge that landed on origin, for the merged-remotely verdicts
+		g.res.SHA = strutil.ShortSHA(sha) // the merge that landed on origin, for the merged-remotely verdicts
 	}
 	if out, code := e.runGit(g.root, "merge", "--ff-only", g.baseRef); code != 0 {
 		g.mergedRemotely(fmt.Sprintf("local %s could not fast-forward (%s)", o.Base, g.ffFailureCause(out)))

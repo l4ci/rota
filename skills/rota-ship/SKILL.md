@@ -38,7 +38,7 @@ When `--undo` is present, read [`undo-mode.md`](undo-mode.md) and follow it; ter
 Read `.rota/config.json` (`rota config show`):
 
 - `work.mergeStrategy`: `"pr"` or `"direct"`; unset means ask (Step 5)
-- `ship.review`: `true` (default) runs `/rota-review` first; `false` skips it
+- `ship.review`: review depth, `full` (default), `light` or `none`, or a policy object that picks one by diff size and label; `true` and `false` still mean `full` and `none`
 - `autonomy.level`: `"off"` (default), `"auto"`: whether Step 8.5 nudges or invokes directly
 
 `ship.secondOpinion` and `ship.qa` are read by [`opt-in-gates.md`](opt-in-gates.md); `docs.path`, `docs.afterWork` and `docs.autoCreate` by [`docs-mode.md`](docs-mode.md).
@@ -67,7 +67,7 @@ Keep the scope JSON (commits, `touchedFiles`, `referencedIds`, `intents`) for la
 
 ## Step 3 — Review (opt-in)
 
-Skipped when `ship.review` is `false` and for a round worker's PR (branch `<agent>/<issue>-<slug>`, or the brief says it is a round slot); when either applies, read [`review-gate.md`](review-gate.md) and [`round-worker-and-issue-mode.md`](round-worker-and-issue-mode.md). Otherwise invoke `rota-review` via the `Skill` tool, then route on the recorded verdict (umbrella: add `--repo "$REPO"`):
+Run `rota review depth <branch> --json` (it reads the labels of a round branch's issue itself; add `--labels` only for labels it cannot see, such as a PR's) and print its `REVIEW-DEPTH` line (`data.depth`, `data.why`) so the user sees which depth applies and why. `none` skips this step, `light` has `/rota-review` dispatch the Standards reviewer only, `full` is the whole review; a label such as `risk:high` can force `full` over a small diff. Skipped when the depth is `none` and for a round worker's PR (branch `<agent>/<issue>-<slug>`, or the brief says it is a round slot); when either applies, read [`review-gate.md`](review-gate.md) and [`round-worker-and-issue-mode.md`](round-worker-and-issue-mode.md). Otherwise invoke `rota-review` by reading and following its instructions, then route on the recorded verdict (umbrella: add `--repo "$REPO"`):
 
 ```bash
 rota verdict route <branch> --for ship-review --json
@@ -149,7 +149,7 @@ Already-completed IDs are a no-op; an unknown ID exits 3. When it exits 4 with `
 Round workers skip Steps 8.5 and 8.6 (`round-worker-and-issue-mode.md`). Otherwise run `references/post-cycle-trigger-gate.md` with:
 
 - **Nudge (`"off"`):** append to the Step 9 report *"Capture learnings before context fades? Run `/rota-learn` — this cycle has the fresh session context."*
-- **Target (`"auto"`):** dispatch `rota-learn` via `Skill` immediately, no prompt.
+- **Target (`"auto"`):** dispatch `rota-learn` by reading and following its instructions immediately, no prompt.
 - **Brief:** the resolved IDs and touched files.
 
 ## Step 8.6 — Docs After-Work (inline)

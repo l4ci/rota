@@ -199,3 +199,32 @@ func TestSummaryObjectShape(t *testing.T) {
 		t.Errorf("unknown quota share must be null: %s", b)
 	}
 }
+
+// An adopt entry names the issue and slot it took over, so it opens that
+// issue's row rather than an empty one; the merge that follows folds into it.
+func TestSummaryAdoptOpensTheIssueRowNotAnEmptyOne(t *testing.T) {
+	es := []Entry{
+		{TS: at(0), Kind: KindAdopt, Round: 1, Issue: "12", Slot: "ext-1", PR: "https://h/o/r/pull/7", Detail: Detail("branch", "codex/12-thing")},
+		{TS: at(5), Kind: KindMerge, Round: 1, Issue: "12", Slot: "ext-1", PR: "https://h/o/r/pull/7"},
+	}
+	s := Fold(es, nil, 1)
+	if len(s.Issues) != 1 {
+		t.Fatalf("want one row, got %+v", s.Issues)
+	}
+	if r := row(t, s, "12", "ext-1"); !r.Merged || r.PR != "https://h/o/r/pull/7" {
+		t.Errorf("row = %+v", r)
+	}
+}
+
+// A train member that passed its own step carries no verdict: it must not keep
+// the stale an earlier gate recorded.
+func TestSummaryTrainMemberDropsAnEarlierGateVerdict(t *testing.T) {
+	es := []Entry{
+		{TS: at(0), Kind: KindAssign, Round: 2, Issue: "12", Slot: "ben"},
+		{TS: at(1), Kind: KindGate, Round: 2, Issue: "12", Slot: "ben", Detail: Detail("verdict", "stale")},
+		{TS: at(2), Kind: KindGate, Round: 2, Issue: "12", Slot: "ben", Detail: Detail("verdict", "", "train", true, "culprit", "dana")},
+	}
+	if g := row(t, Fold(es, nil, 2), "12", "ben").Gate; g != "" {
+		t.Errorf("gate = %q, want none for a member the train accepted", g)
+	}
+}

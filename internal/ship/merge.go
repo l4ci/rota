@@ -7,6 +7,7 @@ import (
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/land"
 	"github.com/l4ci/rota/internal/pystr"
+	"github.com/l4ci/rota/internal/strutil"
 )
 
 // MergePorts are what MergeBranch leaves to its caller. Verdict is the B3
@@ -34,7 +35,7 @@ func MergeBranch(p MergePorts, branch, base, msg string) (string, error) {
 		return "", err
 	}
 	if pin.ExitCode != 0 {
-		return "", &GitError{Msg: "git rev-parse " + branch + ": " + firstLine(pin.Stderr)}
+		return "", &GitError{Msg: "git rev-parse " + branch + ": " + strutil.FirstLine(pin.Stderr)}
 	}
 	if err := p.Verdict(branch); err != nil {
 		return "", err
@@ -50,7 +51,7 @@ func MergeBranch(p MergePorts, branch, base, msg string) (string, error) {
 		return "", err
 	}
 	if co.ExitCode != 0 {
-		return "", &GitError{Msg: "git checkout " + base + ": " + firstLine(co.Stderr)}
+		return "", &GitError{Msg: "git checkout " + base + ": " + strutil.FirstLine(co.Stderr)}
 	}
 	recover := p.Recover
 	if recover == nil {
@@ -65,7 +66,7 @@ func MergeBranch(p MergePorts, branch, base, msg string) (string, error) {
 	default:
 		var me *land.MergeError
 		if errors.As(err, &me) {
-			return "", &GitError{Msg: "git merge " + branch + ": " + firstLine(me.Out)}
+			return "", &GitError{Msg: "git merge " + branch + ": " + strutil.FirstLine(me.Out)}
 		}
 		return "", err
 	}
@@ -74,7 +75,7 @@ func MergeBranch(p MergePorts, branch, base, msg string) (string, error) {
 		return "", err
 	}
 	if del.ExitCode != 0 {
-		return "", &GitError{Msg: "git branch -d " + branch + ": " + firstLine(del.Stderr)}
+		return "", &GitError{Msg: "git branch -d " + branch + ": " + strutil.FirstLine(del.Stderr)}
 	}
 	sha, err := p.Git.Run("log", "-1", "--format=%h")
 	if err != nil {
@@ -91,7 +92,7 @@ func ChangedFiles(g Git, rng string) ([]string, error) {
 		return nil, err
 	}
 	if res.ExitCode != 0 {
-		return nil, &GitError{Msg: "git diff " + rng + ": " + firstLine(res.Stderr)}
+		return nil, &GitError{Msg: "git diff " + rng + ": " + strutil.FirstLine(res.Stderr)}
 	}
 	return pystr.Splitlines(strings.TrimSpace(res.Stdout)), nil
 }

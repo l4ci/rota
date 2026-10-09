@@ -17,6 +17,7 @@ import (
 	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/golden"
 	"github.com/l4ci/rota/internal/tracker"
+	"github.com/l4ci/rota/internal/verdict"
 )
 
 // The gate tests rebuild smoke section 68's world: a bare origin, a gate
@@ -649,17 +650,17 @@ func TestBounceCount(t *testing.T) {
 	root := t.TempDir()
 	os.MkdirAll(filepath.Join(root, ".rota"), 0o755)
 	for want := 1; want <= 3; want++ {
-		if n, err := RecordBounce(root, "31", ""); err != nil || n != want {
+		if n, err := RecordBounce(root, "31", "", ""); err != nil || n != want {
 			t.Fatalf("bounce %d: got %d, %v", want, n, err)
 		}
 	}
-	if n, _ := RecordBounce(root, "32", ""); n != 1 {
+	if n, _ := RecordBounce(root, "32", "", ""); n != 1 {
 		t.Errorf("counts are per item, got %d for another", n)
 	}
 	if err := ClearBounces(root, "31"); err != nil {
 		t.Fatal(err)
 	}
-	if n, _ := RecordBounce(root, "31", ""); n != 1 {
+	if n, _ := RecordBounce(root, "31", "", ""); n != 1 {
 		t.Errorf("cleared count restarts, got %d", n)
 	}
 }
@@ -668,11 +669,11 @@ func TestBounceSameHeadCountsOnce(t *testing.T) {
 	root := t.TempDir()
 	os.MkdirAll(filepath.Join(root, ".rota"), 0o755)
 	for i := 0; i < 3; i++ {
-		if n, _ := RecordBounce(root, "31", "aaa"); n != 1 {
+		if n, _ := RecordBounce(root, "31", "", "aaa"); n != 1 {
 			t.Fatalf("same head re-gated: got %d, want 1", n)
 		}
 	}
-	if n, _ := RecordBounce(root, "31", "bbb"); n != 2 {
+	if n, _ := RecordBounce(root, "31", "", "bbb"); n != 2 {
 		t.Errorf("new head counts, got %d", n)
 	}
 }
@@ -1067,5 +1068,69 @@ func TestGateRefusesAnUnpickedBestOfPR(t *testing.T) {
 				t.Errorf("loser wording: %q", res.Err)
 			}
 		})
+	}
+}
+
+// The gate applies ship.review: the resolved depth decides which recorded
+// review verdicts it requires (full both, light the Standards one, none no
+// verdict), and it refuses a branch that lacks them. The depth is noted either way.
+func TestGateAppliesTheReviewDepth(t *testing.T) {
+	policy := `{"ship":{"review":{"default":"full","lightBelow":1000,"labels":{"risk:high":"full","partial-slice":"none"}}},"test":{"full":["true"]}}`
+	spec, quality := verdict.ReviewSpec, verdict.ReviewQuality
+	for _, c := range []struct {
+		name, cfg, labels, note string
+		recorded                []string
+		refused                 string // the missing kinds the refusal names; "" passes
+	}{
+		{"small diff is light, standards verdict passes", policy, "in-progress", "REVIEW-DEPTH w1 — light (1 changed lines, under lightBelow 1000)", []string{quality}, ""},
+		{"light without a verdict is refused", policy, "in-progress", "light", nil, quality},
+		{"light with only a spec verdict is refused", policy, "in-progress", "light", []string{spec}, quality},
+		{"risk:high forces full, both verdicts pass", policy, "in-progress,risk:high", "REVIEW-DEPTH w1 — full (label risk:high)", []string{spec, quality}, ""},
+		{"full with a standards verdict only is refused", policy, "in-progress,risk:high", "full", []string{quality}, spec},
+		{"full with no verdict is refused", policy, "in-progress,risk:high", "full", nil, spec + " and " + quality},
+		{"none needs no verdict", policy, "in-progress," + PartialSliceLabel, "REVIEW-DEPTH w1 — none (label partial-slice)", nil, ""},
+		{"legacy false needs no verdict", `{"ship":{"review":false},"test":{"full":["true"]}}`, "in-progress", "REVIEW-DEPTH w1 — none (ship.review is false)", nil, ""},
+		{"default full with no verdict is refused", `{"test":{"full":["true"]}}`, "in-progress", "full", nil, spec + " and " + quality},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			w := newWorld(t, ghURL)
+			w.setConfig(c.cfg)
+			os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
+				[]byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"#5","pr":%q}]}`, ghURL)), 0o644)
+			w.forge("body", "Closes #5\n")
+			w.forge("issueLabels", c.labels)
+			res, err := w.gate(false, GateOpts{CheckOnly: true, Recorded: func(string) []string { return c.recorded }})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if c.refused == "" {
+				if res.Verdict != GateFresh {
+					t.Fatalf("%+v", res)
+				}
+			} else if res.Verdict != GateReviewMissing || !strings.Contains(res.Err, "needs a recorded "+c.refused+" verdict") || res.Changed {
+				t.Fatalf("verdict %s (%s), want review-missing naming %s", res.Verdict, res.Err, c.refused)
+			}
+			if got := strings.Join(res.Notes, "\n"); !strings.Contains(got, c.note) {
+				t.Errorf("notes %q lack %q", got, c.note)
+			}
+		})
+	}
+}
+
+// Without the Recorded port the gate only reports the depth, as the file
+// backend and the tests that never wire it expect; a failed label read or a
+// malformed policy is a check-broke, never a guessed depth.
+func TestGateReviewDepthUnresolvable(t *testing.T) {
+	w := newWorld(t, ghURL)
+	w.setConfig(`{"ship":{"review":{"default":"full","labels":{"risk:high":"full"}}},"test":{"full":["true"]}}`)
+	os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
+		[]byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"#5","pr":%q}]}`, ghURL)), 0o644)
+	w.forge("body", "Closes #5\n")
+	if res, err := w.gate(false, GateOpts{CheckOnly: true}); err != nil || res.Verdict != GateFresh {
+		t.Fatalf("no port: %+v %v", res, err)
+	}
+	w.setConfig(`{"ship":{"review":{"default":"deep"}},"test":{"full":["true"]}}`)
+	if res, err := w.gate(false, GateOpts{CheckOnly: true}); err != nil || res.Verdict != GateCheckBroke {
+		t.Errorf("malformed policy: %+v %v", res, err)
 	}
 }

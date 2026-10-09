@@ -41,7 +41,7 @@ The pause set is the `(branch, repo)` entries to pause: one for a single-repo cy
 
 Check each entry's tree with `git -C <path> status --porcelain` (path from `rota repo resolve <repo> --json`, `data.repos[0].path`; cwd when `repo` is null).
 
-All clean: record `clean tree`. Any dirty: ask once via `AskUserQuestion`:
+All clean: record `clean tree`. Any dirty: ask once:
 
 - **Header:** `"Uncommitted"`
 - **Question:** *"N uncommitted files on `<branch>`. How should I handle them?"* For a wave, name the dirty repos instead of N.
@@ -92,7 +92,7 @@ Show the `(web)` suffix only when `repo` is non-null.
 - **One handoff note per `(branch, repo)`.** Overwrite on re-pause.
 - **A multi-repo wave is one logical pause.** `cd` into a sub-repo to scope to it.
 - **Never commit `.rota/handoff/`** (gitignored per-developer scratch).
-- **Do not delete the handoff note here.** Resume or abandon removes it; the next session's hook consumes the orchestrator note.
+- **Do not delete the handoff note here.** Resume or abandon removes it; the next session archives the orchestrator note with `rota round start --consume-handoff`.
 - **A paused round is not a finished round.** Never wind down, merge or reclaim from a pause.
 - **No mutation beyond the handoff note, status pin and the chosen wip commit or stash.**
 

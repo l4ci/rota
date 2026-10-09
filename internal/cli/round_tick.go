@@ -15,6 +15,7 @@ import (
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundtick"
+	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -100,6 +101,7 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 	if e.Cap == 0 {
 		e.Cap = roundtick.DefaultCap
 	}
+	e.Capped = quotaCapped(renv, root, set)
 	e.Slots = func() []roundtick.Slot {
 		var out []roundtick.Slot
 		for _, s := range worker.LoadRegistry(root).Slots() {
@@ -187,6 +189,9 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 		if err != nil {
 			return nil, err
 		}
+		for _, o := range res.Overlaps {
+			c.Warn("#%s %s", id, overlapText(o))
+		}
 		if len(res.BestOf) == 2 { // a best-of:2 issue took two slots
 			return []string{res.BestOf[0].Agent, res.BestOf[1].Agent}, nil
 		}
@@ -213,6 +218,11 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 		c.Warn("autopilot state not saved: %v", err)
 	}
 	return r, nil
+}
+
+// quotaCapped is the tick's cap hook: why no slot may fill, "" when one may.
+func quotaCapped(renv round.Env, root string, set roundcfg.Settings) func(context.Context) string {
+	return func(ctx context.Context) string { return renv.QuotaCap(ctx, root, set).Reason }
 }
 
 func targetBase(root, target, def string) string {
@@ -242,7 +252,7 @@ func gateTarget(c *Ctx, target, base string) roundtick.GateOutcome {
 	if err == nil {
 		return roundtick.GateOutcome{Landed: true}
 	}
-	return roundtick.GateOutcome{Verdict: verdictOf(r), Detail: firstLine(err.Error())}
+	return roundtick.GateOutcome{Verdict: verdictOf(r), Detail: strutil.FirstLine(err.Error())}
 }
 
 func trainTargets(c *Ctx, targets []string, base string) roundtick.TrainOutcome {
@@ -251,7 +261,7 @@ func trainTargets(c *Ctx, targets []string, base string) roundtick.TrainOutcome 
 	if err == nil {
 		return roundtick.TrainOutcome{Done: true}
 	}
-	out := roundtick.TrainOutcome{Verdict: verdictOf(r), Detail: firstLine(err.Error())}
+	out := roundtick.TrainOutcome{Verdict: verdictOf(r), Detail: strutil.FirstLine(err.Error())}
 	if d, _ := r.Data.(*jsonx.Object); d != nil {
 		if raw, ok := d.Get("members"); ok {
 			list, _ := raw.([]any)
@@ -272,11 +282,6 @@ func trainTargets(c *Ctx, targets []string, base string) roundtick.TrainOutcome 
 	return out
 }
 
-func firstLine(s string) string {
-	l, _, _ := strings.Cut(s, "\n")
-	return l
-}
-
 func tickData(r roundtick.Result) *jsonx.Object {
 	d := jsonx.NewObject()
 	did := make([]any, 0, len(r.Did))
@@ -288,6 +293,7 @@ func tickData(r roundtick.Result) *jsonx.Object {
 		did = append(did, o)
 	}
 	d.Set("did", did)
+	setIf(d, "capped", r.Capped)
 	items := func(l []roundtick.Item) []any {
 		out := make([]any, 0, len(l))
 		for _, it := range l {
@@ -311,6 +317,9 @@ func tickLines(r roundtick.Result) string {
 	}
 	for _, it := range r.NeedsYou {
 		lines = append(lines, fmt.Sprintf("needs-you\t%s\t%s\t%s", it.Kind, it.Target, it.Why))
+	}
+	if r.Capped != "" {
+		lines = append(lines, "capped\t"+r.Capped)
 	}
 	if len(lines) == 0 {
 		return "nothing to do"

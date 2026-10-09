@@ -4,7 +4,7 @@ Used by `/rota-work` Steps 4 and 6: how to split tasks into waves without collis
 
 ## Wave-internal file collisions
 
-Before grouping into waves, scan task pairs for **any two tasks whose modified-file sets intersect**. Under `work.isolation: "branch"` two write-only subagents editing one file race on disk (the second subagent's `Edit` reads sibling-mutated content). Resolve every intersecting pair by one of:
+Before grouping into waves, scan task pairs for **any two tasks whose modified-file sets intersect**. Under `work.isolation: "branch"` two write-only subagents editing one file race on disk (the second subagent edits sibling-mutated content). Resolve every intersecting pair by one of:
 
 - **Absorption (preferred).** Fold one task's same-file portion into the other task's brief. The absorbed task then touches only files no other task writes, and both run in parallel.
 - **Split ownership.** Each task owns a disjoint range, with the boundary named in both briefs.
@@ -20,8 +20,8 @@ Rename plus link-sweep is the standard case. `rota plan rename-check <old-name> 
 - **Enumerate the brief's falsifiable claims.** A brief precise enough to execute (line numbers, call-site counts, "the only adopter is X") is precise enough to be wrong, and a subagent implements a wrong instruction faithfully. List the claims the task depends on in `**Claims to verify before building on them:**`. Stale plans are the usual source (`KNOWLEDGE.md`, *Re-grep the actual surface before executing a stored plan*). Leave the section out when the brief has no such claim (a new file, a grep-derived sweep).
 - **Cross-referencing parallel artifacts.** When two parallel subagents author artifacts that cite each other, pre-specify the citation language (path plus named role) in each brief. Serialize when a citation must quote or restate the other artifact.
 - **Docs next to helpers.** A doc subagent running beside the subagents that write the helpers it documents will paraphrase the brief and drift from the code. Pin exact signatures verbatim into the doc brief, or serialize the doc subagent after the helper commit.
-- **Dispatch vs direct.** N near-identical mechanical edits on disjoint files (an 18-site SKILL.md sweep) go faster as parallel `Edit` calls from the main session. Litmus: is the task one `Edit` against a uniquely anchored `old_string`? Then do it inline.
-- **Edit race.** Parallel subagents editing different ranges of one file may see *"File has been modified since read"*. Re-`Read` and re-run the `Edit` with a byte-identical `old_string`; don't regenerate it.
+- **Dispatch vs direct.** N near-identical mechanical edits on disjoint files (an 18-site SKILL.md sweep) go faster as parallel file edits from the main session. Litmus: is the task one replacement against uniquely anchored text? Then do it inline.
+- **Edit race (Claude Code only).** Parallel subagents editing different ranges of one file may see *"File has been modified since read"*. Read the file again and re-run the edit with a byte-identical `old_string`; don't regenerate it.
 
 ## Verifying a completion
 

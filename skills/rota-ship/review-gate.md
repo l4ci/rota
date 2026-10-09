@@ -1,15 +1,15 @@
 # Review gate routing (Step 3, and the table Steps 3.5 and 3.75 reuse)
 
-Loaded by `SKILL.md` Step 3 when the verdict does not route `continue`, or when `ship.review` is `false`.
+Loaded by `SKILL.md` Step 3 when the verdict does not route `continue`, or when the review depth is `none`.
 
-`ship.review: false` skips Step 3 and `REVIEW_CHOICE` stays unset.
+Depth `none` (`ship.review: none`, legacy `false`, or a policy label mapped to `none`) skips Step 3 and `REVIEW_CHOICE` stays unset. A `light` review records only the Standards verdict; route it the same way.
 
 The rubric `rota-review` carries is `references/silent-failure-hunter.md`; `SILENT-FAIL` flags arrive as CONCERNS. The gate is a loop: review, fix via `/rota-work` on a stop, rerun, and go on only once the verdict routes `continue`, `surface` or an accepted `ask`. Act on `data.next`:
 
 | `data.next` | Meaning | Do |
 |---|---|---|
 | `continue` | PASS | Go on silently. |
-| `ask` | CONCERNS | Surface each concern, then `AskUserQuestion` with the options in `references/review-verdict-routing.md`: Address via `/rota-work` (Recommended) / Ship anyway / Stop. |
+| `ask` | CONCERNS | Surface each concern, then ask with the options in `references/review-verdict-routing.md`: Address via `/rota-work` (Recommended) / Ship anyway / Stop. |
 | `surface` | Advisory gate (QA under `qa.gate: advisory`, any QA `INFRA-FAIL`, advisory second opinion) | Surface the findings, continue. A missing dev server or credentials never blocks a ship. |
 | `stop` | FAIL | Stop. Surface the findings; the user fixes via `/rota-work` or `/rota-debug` and reruns `/rota-ship`. |
 

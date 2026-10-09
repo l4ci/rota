@@ -19,6 +19,7 @@ for n in a b c; do
 done
 printf 'stub worker contract\n' > "$CR/contract.md"
 cr config set round.brief "$CR/contract.md" >/dev/null
+cr config set ship.review none >/dev/null
 HOLD=$$
 
 # Scope open: no milestone exists, and every open item is a candidate.

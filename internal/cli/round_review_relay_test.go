@@ -196,7 +196,7 @@ func TestReviewStepAutoAtTheCapIsPendingAndHeld(t *testing.T) {
 		t.Fatal(err)
 	}
 	for i := 0; i < 2; i++ {
-		if _, err := worker.RecordBounce(dir, "577", ""); err != nil {
+		if _, err := worker.RecordBounce(dir, "577", "", ""); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -233,6 +233,38 @@ func TestFailVerdictReadsAFailReview(t *testing.T) {
 	}
 	v := failVerdict(dir, "nia/577-x")
 	if v == nil || !strings.Contains(v.Text, verdict.ReviewSpec+" FAIL at abcdef1: bad") || !strings.Contains(v.Text, "[major] no test (a.go:3)") {
+		t.Fatalf("%+v", v)
+	}
+}
+
+// Under auto a relay that goes out is the Relayed outcome, not pending or held.
+func TestReviewStepAutoRelayedMapsToRelayed(t *testing.T) {
+	f := &reviewForge{comments: []string{"please rename x"}}
+	c, dir, errBuf := reviewCtx(t, f)
+	useHost(c.Deps, &cliHost{})
+	wt := filepath.Join(dir, "nia-wt")
+	if err := os.Mkdir(wt, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := worker.UpdateSlot(dir, "nia", func(s *worker.Slot) { s.SetHandle("w1:t1"); s.Raw().Set("worktree", wt) }); err != nil {
+		t.Fatal(err)
+	}
+	got := reviewStep(c, dir, roundcfg.Settings{MaxBounces: 3, ReviewLoop: roundcfg.ReviewLoopAuto}, "nia")
+	if !got.Relayed || got.Pending || got.Hold || got.Detail != "1 item(s), bounce 1 of 3 "+prURL {
+		t.Fatalf("%+v: %s", got, errBuf)
+	}
+}
+
+// A FAIL verdict whose timestamp does not parse cannot be ordered against the
+// review cursor, so it is not relayed.
+func TestFailVerdictIgnoresAnUnparseableTimestamp(t *testing.T) {
+	dir := workerProject(t, ghCfg)
+	rec := verdict.NewRecord(verdict.ReviewSpec, verdict.Fail, "abcdef1234", verdict.Body{Summary: "bad"})
+	rec.RecordedAt = "yesterday"
+	if _, err := verdict.AddBranch(dir, verdict.BranchKey("", "nia/577-x"), rec); err != nil {
+		t.Fatal(err)
+	}
+	if v := failVerdict(dir, "nia/577-x"); v != nil {
 		t.Fatalf("%+v", v)
 	}
 }

@@ -5,7 +5,7 @@ description: Use when backlog items already exist and need implementation ("impl
 
 # rota-work
 
-Main-session-driven implementation with per-task verification and commits. Subagents are in-process `Agent` calls that write files; the main session commits.
+Main-session-driven implementation with per-task verification and commits. Subagents use the current harness's dispatch interface to write files (`references/subagent-dispatch.md`); the main session commits.
 
 **Rounds are not this skill** (standing workers, merge gate, relays: `/rota-orchestrate` and the `rota round` verbs). If `work.dispatch` is `"tmux"` or `"herdr"`, this skill still dispatches subagents; say so once and continue, or point the user at `/rota-orchestrate` for a multi-issue round.
 
@@ -13,8 +13,8 @@ Main-session-driven implementation with per-task verification and commits. Subag
 
 Read `.rota/config.json`:
 
-- `models.orchestrator`: main session model: planning and verification (default `opus`)
-- `models.worker`: the `standard` tier: implementation subagents (default `sonnet`)
+- `models.orchestrator`: main session model: planning and verification (Claude default `opus`)
+- `models.worker`: the `standard` tier: implementation subagents (Claude default `sonnet`; Codex uses `round.tiers.codex.standard` or its harness default)
 - `work.isolation`: `"branch"` (default) or `"worktree"`
 - `work.mergeStrategy`: `"direct"` (default) or `"pr"`
 
@@ -60,9 +60,9 @@ Exit 0: continue. Exit 3: not a repo, surface and stop. Exit 1 (dirty tree): whe
 
 ## Step 2 — Clarify Ambiguous Briefs (only when needed)
 
-Only when the brief is too thin to plan concrete tasks (scope hits 2+ incompatible areas, a requirement could yield opposite implementations, captured items imply different orderings), ask one `AskUserQuestion` of 1-3 questions before touching code. Otherwise proceed. Don't ask to confirm understanding, for preferences inferable from `KNOWLEDGE.md` or the codebase, or for style inside an agreed scope.
+Only when the brief is too thin to plan concrete tasks (scope hits 2+ incompatible areas, a requirement could yield opposite implementations, captured items imply different orderings), ask one batch of 1-3 questions before touching code. Otherwise proceed. Don't ask to confirm understanding, for preferences inferable from `KNOWLEDGE.md` or the codebase, or for style inside an agreed scope.
 
-Each question gets a short `header`, options that map to concrete plans with the likeliest marked `(Recommended)`, and `multiSelect: true` for conflicting items. On ambiguity, default to Recommended and state it in the dispatch brief.
+Each question gets a short `header`, options that map to concrete plans with the likeliest marked `(Recommended)`. Allow multiple selections for conflicting items. Use the host question interface or numbered prose (`references/authoring-conventions.md`). On ambiguity, default to Recommended and state it in the dispatch brief.
 
 ## Step 2.5 — Detect Knowledge-vs-Correction Contradictions
 

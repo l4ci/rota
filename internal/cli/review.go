@@ -11,8 +11,11 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/pystr"
+	"github.com/l4ci/rota/internal/rotatree"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 // reviewCommands is the `rota review` group (#52).
@@ -22,6 +25,7 @@ func reviewCommands() *Command {
 		{Name: "brief", Summary: "fresh-eyes second-opinion brief for a branch", Repo: true, Verb: noFlags(reviewBrief)},
 		{Name: "scaffolding", Summary: "added diff lines that look like leftover task scaffolding", Repo: true, Verb: reviewScaffolding},
 		{Name: "package", Summary: "write a branch's commits, stat and diff to a file for the reviewer", Repo: true, Verb: reviewPackage},
+		{Name: "depth", Summary: "review depth (full, light, none) ship.review picks for a branch, and why", Repo: true, Verb: reviewDepth},
 		{Name: "queue", Summary: "open issues waiting for review", Repo: true, Verb: noFlags(reviewQueue)},
 	}}
 }
@@ -430,4 +434,58 @@ func reviewQueue(c *Ctx, args []string) (Result, error) {
 		lines = append(lines, r.Type+strconv.Itoa(r.Number)+" "+r.Title)
 	}
 	return Result{Data: jsonObj("items", items), Text: strings.Join(lines, "\n")}, nil
+}
+
+// reviewDepth is `rota review depth`: the depth ship.review picks for a branch,
+// from its diff size against the base and the labels of the branch's issue
+// (read from the tracker when the policy has a labels map) plus any --labels. /rota-ship prints it and runs /rota-review accordingly.
+func reviewDepth(fs *flag.FlagSet) RunFunc {
+	labelsFlag := fs.String("labels", "", "extra labels, added to the branch issue's own")
+	return func(c *Ctx, args []string) (Result, error) {
+		t, err := reviewTarget(c, args, "review")
+		if err != nil {
+			return Result{}, err
+		}
+		root, err := backlogScope(c)
+		if err != nil {
+			return Result{}, err
+		}
+		cfg := config.Load(rotatree.Config(root))
+		policy, err := config.ReviewPolicyOf(cfg)
+		if err != nil {
+			return Result{}, Failed("%v; run rota config check", err)
+		}
+		out, err := reviewGit(c.Context(), t.Dir, "diff", "--numstat", t.Base+"..."+t.Branch)
+		if err != nil {
+			return Result{}, err
+		}
+		changed := worker.ChangedLines(out)
+		var labels []string
+		for _, l := range strings.Split(*labelsFlag, ",") {
+			if l = strings.TrimSpace(l); l != "" {
+				labels = append(labels, l)
+			}
+		}
+		// The issue behind a `<agent>/<issue>-<slug>` branch is read for its labels
+		// only when the policy has a label to match, as the worker gate does, so a
+		// caller that omits --labels still gets a risk:high override.
+		if n, ok := worker.BranchIssue(t.Branch); ok && len(policy.Labels) > 0 {
+			fg, err := c.deps().forge(c.Context(), cfg, "", root)
+			if err != nil {
+				return Result{}, trackerErr(err)
+			}
+			is, err := fg.Get(c.Context(), n, false)
+			if err != nil {
+				return Result{}, Failed("could not read #%d for its labels to pick the review depth: %v", n, err)
+			}
+			for _, l := range is.Labels {
+				if !slices.Contains(labels, l) {
+					labels = append(labels, l)
+				}
+			}
+		}
+		depth, why := policy.Resolve(changed, labels)
+		data := gitObj("branch", t.Branch, "base", t.Base, "depth", string(depth), "why", why, "changedLines", changed, "labels", labels)
+		return Result{Data: data, Text: fmt.Sprintf("REVIEW-DEPTH %s — %s (%s)", t.Branch, depth, why)}, nil
+	}
 }

@@ -34,6 +34,8 @@ const (
 	KindGate     = "gate"
 	KindMerge    = "merge"
 	KindLimited  = "limited"
+	// KindAdopt records `rota worker adopt`: detail.branch is the branch taken over.
+	KindAdopt = "adopt"
 )
 
 // Entry is one ledger line. Round is 0 when no round was running (solo mode
@@ -188,4 +190,55 @@ func (e Entry) DetailFloat(key string) (float64, bool) {
 		return f, err == nil
 	}
 	return 0, false
+}
+
+// Trim drops the entries of rounds older than the last keep rounds up to
+// current, and returns how many it dropped. keep 0 keeps everything, and
+// round 0 (solo, no lease) has no age, so those entries stay.
+func Trim(root string, current, keep int) (dropped int, err error) {
+	if keep <= 0 {
+		return 0, nil
+	}
+	p := Path(root)
+	err = fsio.Locked(p, fsio.LockTimeout, func() error {
+		data, err := os.ReadFile(p)
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		var kept bytes.Buffer
+		for _, line := range bytes.Split(data, []byte{'\n'}) {
+			if len(line) == 0 {
+				continue
+			}
+			if r, ok := lineRound(line); ok && r > 0 && r <= current-keep {
+				dropped++
+				continue
+			}
+			kept.Write(line)
+			kept.WriteByte('\n')
+		}
+		if dropped == 0 {
+			return nil
+		}
+		return fsio.WriteFileAtomic(p, kept.Bytes())
+	})
+	return dropped, err
+}
+
+// lineRound is the round of one ledger line; ok is false for a line that does
+// not parse, which Trim leaves alone.
+func lineRound(line []byte) (int, bool) {
+	v, err := jsonx.Decode(line)
+	if err != nil {
+		return 0, false
+	}
+	o, ok := v.(*jsonx.Object)
+	if !ok {
+		return 0, false
+	}
+	rv, _ := o.Get("round")
+	return jsonx.Int(rv)
 }

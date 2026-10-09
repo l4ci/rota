@@ -74,8 +74,8 @@ func (e Env) Park(ctx context.Context, root, name, verb string) (Parked, error) 
 	if s == nil {
 		return p, &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("slot %s is not in the pool", name)}
 	}
-	if s.IsExternal() {
-		return p, blocked(BlockExternal, "slot %s is an adopted external slot: %s would move a worktree rota did not create", name, verb)
+	if err := fenceExternal(s, verb, "move a worktree"); err != nil {
+		return p, err
 	}
 	wt := s.Worktree()
 	if fi, err := os.Stat(wt); wt == "" || err != nil || !fi.IsDir() {
