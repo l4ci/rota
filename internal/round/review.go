@@ -118,12 +118,12 @@ func (e Env) ReviewRelay(ctx context.Context, root string, o ReviewOpts) (Relaye
 	// that fails afterwards cannot leave a relayed batch unconsumed, which the
 	// next pass would send again. A dispatch that fails puts both back.
 	prevSeen := s.ReviewSeen()
-	if out.Bounces, err = worker.RecordBounce(root, issue, o.Slot, pr.HeadSHA); err != nil {
-		return out, err
-	}
 	// A bounce RecordBounce deduped on the same head was not counted here and
 	// is not this dispatch's to undo.
-	counted := out.Bounces > reg.Bounces(issue)
+	var counted bool
+	if out.Bounces, counted, err = worker.RecordBounceCounted(root, issue, o.Slot, pr.HeadSHA); err != nil {
+		return out, err
+	}
 	unrecord := func() error {
 		if !counted {
 			return nil
@@ -140,7 +140,9 @@ func (e Env) ReviewRelay(ctx context.Context, root string, o ReviewOpts) (Relaye
 		return err
 	}
 	if _, err = worker.UpdateSlot(root, o.Slot, func(s *worker.Slot) { s.SetReviewSeen(batch.Cursor) }); err != nil {
-		return out, errors.Join(err, rollbackErr(unrecord()))
+		rerr := unrecord()
+		out.Bounces = worker.LoadRegistry(root).Bounces(issue)
+		return out, errors.Join(err, rollbackErr(rerr))
 	}
 	if _, err := e.Worker.Dispatch(ctx, root, worker.DispatchOpts{Slot: o.Slot, BodyFile: body.Name(), Relay: true}); err != nil {
 		rerr, serr := unrecord(), unseen()
