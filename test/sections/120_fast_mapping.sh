@@ -31,3 +31,12 @@ if grep -q "section" <<<"$OUT"; then fail "a file outside the lint paths must no
 OUT=$(fast_plan notes/unmapped.txt)
 [ -z "$OUT" ] || fail "an unmapped file should select nothing: $OUT"
 pass "fast.sh selects package, testdata, embed and infra checks; unmapped files select none"
+
+# #672: the gofmt check CI runs fails the gate and the fast tier on an unformatted file.
+GF=$(mktemp -d)/bad.go
+printf 'package x\nfunc  f( ) {}\n' > "$GF"
+if bash "$TESTDIR/gofmt.sh" "$GF" >/dev/null 2>&1; then fail "gofmt.sh must exit 1 on an unformatted file"; fi
+printf 'package x\n\nfunc f() {}\n' > "$GF"
+bash "$TESTDIR/gofmt.sh" "$GF" || fail "gofmt.sh must pass a formatted file"
+rm -rf "$(dirname "$GF")"
+pass "gofmt.sh fails an unformatted Go file and passes a formatted one"
