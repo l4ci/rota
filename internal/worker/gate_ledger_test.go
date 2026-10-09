@@ -1,6 +1,8 @@
 package worker
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/l4ci/rota/internal/ledger"
@@ -91,6 +93,32 @@ func TestTrainLedgerRecordsCulpritAndNonLandingMembers(t *testing.T) {
 		}
 		if v, ok := got[s]; !ok || v != want {
 			t.Errorf("member %s verdict %q (recorded %v), want %q (all: %v)", s, v, ok, want, got)
+		}
+	}
+}
+
+// A PR no slot owns has no issue of its own: the ledger records the target as
+// resolved, not the issue its forge head branch names, which only the closes
+// check reads.
+func TestGateLedgerExternalPRKeepsResolvedTarget(t *testing.T) {
+	w := newWorld(t, "")
+	if err := os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"), []byte(`{"slots":[]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitq(t, w.worker, "push", "-q", "origin", "w1:dana/7-x")
+	w.forge("head", "dana/7-x")
+	w.forge("body", "Closes #7")
+	res, err := w.env(false).Gate(bg, w.dir, GateOpts{Slot: ghURL, Base: "main", NoVerify: true})
+	if err != nil || res.Verdict != GatePass {
+		t.Fatalf("gate = %+v, %v", res, err)
+	}
+	es, err := ledger.Load(w.dir)
+	if err != nil || len(es) == 0 {
+		t.Fatalf("ledger %v, %v", es, err)
+	}
+	for _, e := range es {
+		if e.Issue != "" {
+			t.Errorf("%s entry records issue %q for an unowned external PR, want none", e.Kind, e.Issue)
 		}
 	}
 }

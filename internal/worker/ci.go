@@ -62,8 +62,8 @@ func ciConfigChanges(changed []string) []string {
 // ciDiffFiles lists every path the merge of head onto base touches, for
 // ciConfigChanges: NUL-separated so no path comes back quoted, and without
 // rename detection so a workflow moved away counts by its old path too.
-func (e gateEnv) ciDiffFiles(root, base, head string) ([]string, error) {
-	out, code := e.runGit(root, "diff", "--no-renames", "--name-only", "-z", base+"..."+head)
+func (e Env) ciDiffFiles(ctx context.Context, root, base, head string) ([]string, error) {
+	out, code := e.runGit(ctx, root, "diff", "--no-renames", "--name-only", "-z", base+"..."+head)
 	if code != 0 {
 		return nil, fmt.Errorf("git diff --name-only %s...%s exited %d", base, head, code)
 	}
@@ -147,7 +147,8 @@ func ciSettingsFrom(cfg any, getenv func(string) string) (ciSettings, error) {
 // ciVerifier runs the full tier on CI for one gate or train: it is set up
 // once, before anything merges, so a missing remote or forge is refused first.
 type ciVerifier struct {
-	e      gateEnv
+	e      Env
+	ctx    context.Context
 	root   string
 	forge  Forge
 	set    ciSettings
@@ -156,15 +157,15 @@ type ciVerifier struct {
 
 // newCIVerifier checks what a CI run needs: an origin to push to and a forge
 // to read checks from. brokeMsg says what is missing.
-func (e gateEnv) newCIVerifier(root string, forge Forge, cfg any) (v *ciVerifier, brokeMsg string) {
-	if _, code := e.runGit(root, "remote", "get-url", "origin"); code != 0 {
+func (e Env) newCIVerifier(ctx context.Context, root string, forge Forge, cfg any) (v *ciVerifier, brokeMsg string) {
+	if _, code := e.runGit(ctx, root, "remote", "get-url", "origin"); code != 0 {
 		return nil, "test.fullWhere is ci, but this repo has no 'origin' remote to push the merge result to"
 	}
-	set, err := ciSettingsFrom(cfg, e.getenv)
+	set, err := ciSettingsFrom(cfg, e.Getenv)
 	if err != nil {
 		return nil, err.Error()
 	}
-	return &ciVerifier{e: e, root: root, forge: forge, set: set, checks: ciChecks(cfg)}, ""
+	return &ciVerifier{e: e, ctx: ctx, root: root, forge: forge, set: set, checks: ciChecks(cfg)}, ""
 }
 
 var ciNameUnsafe = regexp.MustCompile(`[^A-Za-z0-9._-]+`)
@@ -180,18 +181,18 @@ var ciNameUnsafe = regexp.MustCompile(`[^A-Za-z0-9._-]+`)
 func (v *ciVerifier) verify(sha, name string) (VerifyResult, error) {
 	ref := ciRefPrefix + strings.Trim(ciNameUnsafe.ReplaceAllString(name, "-"), "-")
 	res := VerifyResult{CI: true, Ref: ref, SHA: sha}
-	if out, code := v.e.runGit(v.root, "push", "-q", "--force", "origin", sha+":refs/heads/"+ref); code != 0 {
+	if out, code := v.e.runGit(v.ctx, v.root, "push", "-q", "--force", "origin", sha+":refs/heads/"+ref); code != 0 {
 		return res, fmt.Errorf("git push of %s to origin %s failed (exit %d): %s", strutil.ShortSHA(sha), ref, code, strings.TrimSpace(out))
 	}
-	defer v.e.cleanupGit(v.root, "push", "-q", "origin", "--delete", ref)
-	start := v.e.now()
+	defer v.e.cleanupGit(v.ctx, v.root, "push", "-q", "origin", "--delete", ref)
+	start := v.e.Now()
 	green := "" // the checks of the last green poll
 	for {
-		checks, err := v.forge.CommitChecks(v.e.ctx, sha)
+		checks, err := v.forge.CommitChecks(v.ctx, sha)
 		if err != nil {
 			return res, fmt.Errorf("could not read the CI checks of %s: %w", strutil.ShortSHA(sha), err)
 		}
-		elapsed := v.e.now().Sub(start)
+		elapsed := v.e.Now().Sub(start)
 		pending, failed := 0, false
 		state := map[string]string{} // per name: the worst state seen
 		rank := map[string]int{tracker.CheckSuccess: 1, tracker.CheckPending: 2, tracker.CheckSkipped: 3, tracker.CheckFailure: 4}
@@ -230,7 +231,7 @@ func (v *ciVerifier) verify(sha, name string) (VerifyResult, error) {
 			// polls in a row with the same checks.
 			if s := strings.Join(sig, "\n"); s != green {
 				green = s
-				v.e.sleep(v.set.poll)
+				v.e.Sleep(v.set.poll)
 				continue
 			}
 			res.Log = checkLog(checks)
@@ -269,7 +270,7 @@ func (v *ciVerifier) verify(sha, name string) (VerifyResult, error) {
 			res.Log += "\n"
 			return res, nil
 		}
-		v.e.sleep(v.set.poll)
+		v.e.Sleep(v.set.poll)
 	}
 }
 
@@ -312,20 +313,20 @@ func (r VerifyResult) detail() string {
 // scratchTree checks out sha detached in a temporary worktree of root, under
 // a <prefix>*/tree path the test harness's worktree guard ignores (rota-ci- or
 // rota-train-, see test/lib/isolate.sh). The caller runs cleanup.
-func (e gateEnv) scratchTree(root, sha, prefix string) (dir string, cleanup func(), err error) {
+func (e Env) scratchTree(ctx context.Context, root, sha, prefix string) (dir string, cleanup func(), err error) {
 	tmp, err := os.MkdirTemp("", prefix)
 	if err != nil {
 		return "", nil, err
 	}
 	dir = filepath.Join(tmp, "tree")
-	if out, code := e.runGit(root, "worktree", "add", "--detach", dir, sha); code != 0 {
+	if out, code := e.runGit(ctx, root, "worktree", "add", "--detach", dir, sha); code != 0 {
 		os.RemoveAll(tmp)
 		return "", nil, fmt.Errorf("could not create the scratch worktree: %s", out)
 	}
 	return dir, func() {
-		e.cleanupGit(root, "worktree", "remove", "--force", dir)
+		e.cleanupGit(ctx, root, "worktree", "remove", "--force", dir)
 		os.RemoveAll(tmp)
-		e.cleanupGit(root, "worktree", "prune")
+		e.cleanupGit(ctx, root, "worktree", "prune")
 	}, nil
 }
 
@@ -334,11 +335,10 @@ const cleanupTimeout = 30 * time.Second
 
 // cleanupGit runs git for cleanup on a fresh context, so a cancelled or
 // interrupted run still deletes its CI branch and scratch worktree.
-func (e gateEnv) cleanupGit(dir string, args ...string) {
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(e.ctx), cleanupTimeout)
+func (e Env) cleanupGit(ctx context.Context, dir string, args ...string) {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), cleanupTimeout)
 	defer cancel()
-	e.ctx = ctx
-	e.runGit(dir, args...)
+	e.runGit(ctx, dir, args...)
 }
 
 // fullTier is the train's seam for the full tier: verify runs it on the tree
@@ -354,19 +354,17 @@ func (e Env) fullTier(ctx context.Context, root, name string) (verify func(dir s
 	if where == WhereLocal {
 		return func(dir string) (VerifyResult, error) { return e.Verify(ctx, root, dir) }, false, "", nil
 	}
-	ge := e.gateEnv()
-	ge.ctx = ctx
-	provider := ge.detectProvider(root, "")
-	forge, ferr := ge.forge(provider, root, cfg)
+	provider := e.detectProvider(ctx, root, "")
+	forge, ferr := e.Forge(provider, root, cfg)
 	if ferr != nil {
 		return nil, true, fmt.Sprintf("cannot reach the %s forge to read CI checks: %v", provider, ferr), nil
 	}
-	ci, msg := ge.newCIVerifier(root, forge, cfg)
+	ci, msg := e.newCIVerifier(ctx, root, forge, cfg)
 	if msg != "" {
 		return nil, true, msg, nil
 	}
 	return func(dir string) (VerifyResult, error) {
-		sha, code := ge.runGit(dir, "rev-parse", "HEAD")
+		sha, code := e.runGit(ctx, dir, "rev-parse", "HEAD")
 		if code != 0 {
 			return VerifyResult{}, fmt.Errorf("git rev-parse HEAD exited %d in %s", code, dir)
 		}
