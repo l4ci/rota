@@ -1,9 +1,5 @@
 ---
-<<<<<<< ours
-verified-sha: 14c29a1717a61c4824734bd37ee72e6ffe3a32d8
-=======
 verified-sha: 108ba5d31d2e613557420f59937218ba01cac11d
->>>>>>> theirs
 refs:
   - internal/worker
   - internal/cli/worker.go
