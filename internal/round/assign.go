@@ -654,7 +654,7 @@ func (e Env) assignOne(ctx context.Context, root string, be Board, o AssignOpts,
 	res.Changed = res.Changed || d.Changed
 	if err == nil && !resuming {
 		worker.LedgerNote(root, ledger.Entry{Kind: ledger.KindAssign, Issue: id, Slot: agent, Account: res.Account, Harness: kind,
-			Detail: ledger.Detail("headroom", worker.LedgerHeadroom(ctx, e.Accounts, root, kind, res.Account))})
+			Detail: ledger.Detail("headroom", worker.LedgerHeadroom(ctx, e.Worker.Accounts, root, kind, res.Account))})
 	}
 	return res, err
 }
@@ -736,17 +736,17 @@ func (e Env) pickAccount(ctx context.Context, root, agent string) (string, error
 		cur = s.Account()
 	}
 	if cur != "" {
-		for _, m := range e.Accounts.Meters(ctx, root) {
+		for _, m := range e.Worker.Accounts.Meters(ctx, root) {
 			if m.Name == cur && m.Verdict != worker.VerdictCooling {
 				return cur, nil
 			}
 		}
 	}
-	name, ok := e.Accounts.Pick(ctx, root, nil)
+	name, ok := e.Worker.Accounts.Pick(ctx, root, nil)
 	if !ok {
 		return "", &exitcode.Error{Exit: exitcode.ExitUnavailable, Message: "no work.accounts account has headroom: every configured account is cooling down"}
 	}
-	if _, _, err := e.Accounts.Assign(ctx, root, agent, name); err != nil {
+	if _, _, err := e.Worker.Accounts.Assign(ctx, root, agent, name); err != nil {
 		return "", err
 	}
 	return name, nil

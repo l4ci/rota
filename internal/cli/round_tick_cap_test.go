@@ -27,14 +27,14 @@ func TestTickWithEveryAccountCoolingFillsNothingAndSaysWhy(t *testing.T) {
 		t.Fatal(err)
 	}
 	now := time.Date(2026, 10, 8, 12, 0, 0, 0, time.UTC)
-	renv := round.Env{Now: func() time.Time { return now }, Accounts: &worker.Accounts{Now: func() time.Time { return now },
+	renv := round.Env{Worker: worker.Env{Now: func() time.Time { return now }, Accounts: &worker.Accounts{Env: worker.Env{Now: func() time.Time { return now }},
 		Fetch: func(context.Context, string, string) (*jsonx.Object, string) {
 			v, err := jsonx.Decode([]byte(fmt.Sprintf(`{"five_hour":{"utilization":100,"resets_at":"%s"}}`, now.Add(time.Hour).Format(time.RFC3339))))
 			if err != nil {
 				t.Fatal(err)
 			}
 			return v.(*jsonx.Object), ""
-		}}}
+		}}}}
 
 	assigned := 0
 	e := roundtick.Env{

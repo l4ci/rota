@@ -82,9 +82,8 @@ func newMoveFx(t *testing.T) *moveFx {
 	sh(t, f.root, "push", "-q", "origin", "main")
 	milestoneDoc(t, f.root, "M01", "active")
 
-	f.env = Env{Git: git.Exec, Base: "main", Getenv: noEnv, Lease: fakeLease("h", 100), StallMinutes: 30, Forge: f.forge.asForge(),
-		Now: func() time.Time { return f.now }}
-	f.env.Worker = worker.Env{Git: git.Exec, Now: func() time.Time { return f.now }, Sleep: func(time.Duration) {},
+	f.env = Env{Git: git.Exec, Base: "main", Worker: worker.Env{Getenv: noEnv}, Lease: fakeLease("h", 100), StallMinutes: 30, Forge: f.forge.asForge()}
+	f.env.Worker = worker.Env{Git: git.Exec, Getenv: noEnv, Now: func() time.Time { return f.now }, Sleep: func(time.Duration) {},
 		NewHost: func(string) host.Host { return &killHost{hostFake: f.host, killed: &f.killed} }}
 
 	fb := f.be

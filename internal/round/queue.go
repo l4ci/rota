@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	"strings"
-	"time"
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/worker"
@@ -116,10 +115,7 @@ func (e Env) closeReview(ctx context.Context, root string, be Board, s *worker.S
 	if _, err := e.Park(ctx, root, name, "assign"); err != nil {
 		return err
 	}
-	now := time.Now
-	if e.Now != nil {
-		now = e.Now
-	}
+	now := e.Worker.Clock()
 	note := "filed " + strings.Join(s.Issues(), ", ")
 	// The close note is dropped by the file backend, so the list also goes in a comment.
 	if _, err := be.AddComment(it.ID, "feedback", "Review done: "+note+"."); err != nil {
