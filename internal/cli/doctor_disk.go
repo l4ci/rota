@@ -20,17 +20,24 @@ import (
 // that is still going owns a younger one.
 const leakAge = time.Hour
 
-// doctorDisk reads the free space of the volume holding dir. ROTA_TEST_DOCTOR_DISK
-// ("<free>:<total>" bytes) replaces the read (a test hook, like
+// doctorDisk is the disk reader: it reads the free space of the volume holding
+// dir. A non-empty override ("<free>:<total>" bytes, from ROTA_TEST_DOCTOR_DISK
+// at the defaultDeps edge) replaces the read (a test hook, like
 // ROTA_TEST_DOCTOR_PATH, not part of the CLI).
-func doctorDisk(dir string) *doctor.Disk {
-	if v := os.Getenv("ROTA_TEST_DOCTOR_DISK"); v != "" {
+func doctorDisk(override string) func(dir string) *doctor.Disk {
+	if override == "" {
+		return statDisk
+	}
+	return func(dir string) *doctor.Disk {
 		var free, total uint64
-		if _, err := fmt.Sscanf(v, "%d:%d", &free, &total); err != nil {
+		if _, err := fmt.Sscanf(override, "%d:%d", &free, &total); err != nil {
 			return nil
 		}
 		return &doctor.Disk{Path: dir, Free: free, Total: total}
 	}
+}
+
+func statDisk(dir string) *doctor.Disk {
 	var st syscall.Statfs_t
 	if err := syscall.Statfs(dir, &st); err != nil {
 		return nil
@@ -101,7 +108,7 @@ func prunableWorktrees(ctx context.Context, run git.Runner, root string) int {
 // doctorDiskInput fills the disk fields of in: the threshold from config
 // (doctor.minFreeDiskPercent, default 10) and, when the volume is under it,
 // the leftovers worth naming. A non-numeric threshold falls back to the default.
-func doctorDiskInput(ctx context.Context, in *doctor.Input, cfg any, root string, run git.Runner, now time.Time) {
+func doctorDiskInput(ctx context.Context, in *doctor.Input, cfg any, root string, run git.Runner, now time.Time, disk func(string) *doctor.Disk) {
 	min := 10
 	if cfg != nil {
 		if v, ok := config.Lookup(cfg, "doctor.minFreeDiskPercent"); ok {
@@ -117,7 +124,7 @@ func doctorDiskInput(ctx context.Context, in *doctor.Input, cfg any, root string
 	if dir == "" {
 		dir = in.Dir
 	}
-	in.Disk = doctorDisk(dir)
+	in.Disk = disk(dir)
 	if in.Disk != nil && in.Disk.Total > 0 && min > 0 &&
 		float64(in.Disk.Free)/float64(in.Disk.Total)*100 < float64(min) {
 		in.Leftovers = doctorLeftovers(ctx, run, root, now)

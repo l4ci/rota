@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/doctor"
 	"github.com/l4ci/rota/internal/escalation"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/host"
@@ -46,6 +47,22 @@ type Deps struct {
 	Today     func() time.Time
 	HolderPID func() int
 	ClockErr  error
+
+	// Getenv and Environ are the one route to the process environment: every
+	// verb reads env through them, so a test sets values here instead of in
+	// the process. defaultDeps also reads the remaining ROTA_TEST_* hooks once,
+	// at this edge, into PollFixture, PollStatus, DoctorPath and DoctorDisk.
+	Getenv  func(string) string
+	Environ func() []string
+
+	// PollFixture, when set, makes `worker poll` classify that file as a static
+	// pane (no host, no registry writes); PollStatus is the agent status it
+	// reports. DoctorPath replaces PATH for doctor's tool lookup when set.
+	// DoctorDisk reads the free space of the volume holding a directory.
+	PollFixture string
+	PollStatus  string
+	DoctorPath  string
+	DoctorDisk  func(dir string) *doctor.Disk
 
 	// TrackerOptions apply to every forge CLI the verbs build; a test swaps
 	// in a fake executor here.
@@ -98,10 +115,10 @@ func defaultDeps() *Deps {
 		WorkerEnv:        func() worker.Env { return worker.Env{} },
 		EscalationEnv:    func() escalation.Env { return escalation.Env{} },
 		LeaseEnv:         func() roundlease.Env { return roundlease.DefaultEnv() },
-		OrchestrateEnv:   defaultOrchestrateEnv,
 		Host:             func(kind string) host.Host { return host.New(kind, host.Deps{}) },
-		UpdateEnv:        func() update.Env { return update.DefaultEnv(version.Get().Version) },
 		InstalledVersion: installedVersion,
+		Getenv:           os.Getenv,
+		Environ:          os.Environ,
 		SeedBase:         seedProject,
 		SetupIsTTY:       defaultSetupIsTTY,
 		IsTerminal:       defaultIsTerminal,
@@ -110,7 +127,12 @@ func defaultDeps() *Deps {
 		RunView:          runView,
 		ReadCache:        tracker.NewReadCache(),
 	}
-	d.Now, d.Today, d.HolderPID, d.ClockErr = envClock(os.Getenv)
+	d.Now, d.Today, d.HolderPID, d.ClockErr = envClock(d.Getenv)
+	d.PollFixture, d.PollStatus = d.Getenv("ROTA_TEST_POLL_FIXTURE"), d.Getenv("ROTA_TEST_POLL_STATUS")
+	d.DoctorPath = d.Getenv("ROTA_TEST_DOCTOR_PATH")
+	d.DoctorDisk = doctorDisk(d.Getenv("ROTA_TEST_DOCTOR_DISK"))
+	d.UpdateEnv = func() update.Env { return update.DefaultEnv(version.Get().Version, d.Getenv) }
+	d.OrchestrateEnv = func() orchestrate.Env { return defaultOrchestrateEnv(d) }
 	d.WorkerAccounts = func() *worker.Accounts { return &worker.Accounts{Now: d.Now} }
 	d.NewTracker = func(ctx context.Context, root string, cfg any) (backlog.Tracker, error) {
 		return d.forge(ctx, cfg, "", root)

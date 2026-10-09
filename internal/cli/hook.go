@@ -78,7 +78,7 @@ func statuslineDump(fs *flag.FlagSet) RunFunc {
 			c.JSON = false // stdout belongs to the wrapped command: no envelope, not even for this error
 			return Result{}, Usage("statusline dump does not take --json: stdout belongs to the wrapped command")
 		}
-		debug := os.Getenv("ROTA_STATUSLINE_DEBUG") != ""
+		debug := c.deps().Getenv("ROTA_STATUSLINE_DEBUG") != ""
 		input := readInput(c)
 		if err := dumpState(input, c.deps().Now()); err != nil && debug {
 			fmt.Fprintf(c.Stderr, "rota statusline dump: %v\n", err)
@@ -152,7 +152,7 @@ func hookSetup(c *Ctx, needLeaseFree bool) (hc hookContext, ok bool) {
 	hc.commonDir = cd
 	hc.now = c.deps().Now
 	hc.lease = c.deps().LeaseEnv()
-	hc.who = hook.Identify(hc.lease, os.Getenv, c.deps().HolderPID(), cd)
+	hc.who = hook.Identify(hc.lease, c.deps().Getenv, c.deps().HolderPID(), cd)
 	switch {
 	case hc.who.Orchestrator:
 		hc.root = hc.who.Lease.Root
@@ -362,9 +362,9 @@ func hookSessionStart(c *Ctx, args []string) (res Result, _ error) {
 
 // settingsPaths maps each scope to its file. Project scopes are "" outside a
 // project root.
-func settingsPaths(root string) map[hook.Scope]string {
+func settingsPaths(root string, getenv func(string) string) map[hook.Scope]string {
 	home, _ := os.UserHomeDir()
-	cfgDir := skills.ClaudeDir(os.Getenv, home)
+	cfgDir := skills.ClaudeDir(getenv, home)
 	m := map[hook.Scope]string{}
 	if cfgDir != "" {
 		m[hook.ScopeUser] = filepath.Join(cfgDir, "settings.json")
@@ -387,7 +387,7 @@ func settingsTarget(c *Ctx, scopeFlag string) (hook.Scope, string, map[hook.Scop
 	if rerr != nil && scope != hook.ScopeUser {
 		return "", "", nil, rerr
 	}
-	paths := settingsPaths(root)
+	paths := settingsPaths(root, c.deps().Getenv)
 	p := paths[scope]
 	if p == "" {
 		return "", "", nil, Resolution("no settings path for scope %s (CLAUDE_CONFIG_DIR and HOME unset)", scope)
