@@ -201,6 +201,10 @@ func TestRoundTickWarnsEachScopeOverlap(t *testing.T) {
 // assign is attempted at all. Assign refuses the same clash on its own, so the
 // outcome alone cannot tell the two apart; an attempt shows as the lease
 // check Assign opens with (`git rev-parse --git-common-dir` through Deps.Git).
+// Forge calls and workers.json are identical with and without the tick's
+// ScopeOverlap wiring (Assign refuses block and the tick swallows it), so the
+// lease check is the one signal that separates them; dropping the wiring at
+// round_tick.go fails this test.
 func TestRoundTickBlocksScopeOverlap(t *testing.T) {
 	attempts := func(overlap string) int {
 		f := newScopeFx(t, overlap, `,"autopilot":true`)
