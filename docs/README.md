@@ -7,7 +7,7 @@ Public user guide for rota, a dev workflow for Claude Code and Codex: skills plu
 ### 🚀 Getting started
 
 - [Cheat sheet](cheatsheet.md): one-line summary of every `/rota-*` skill (rapid scan)
-- [Install](install.md): Homebrew, the install script, release binaries, upgrading, uninstalling
+- [Install](install.md): Homebrew, the install script, release binaries, the Claude Code plugin, upgrading, uninstalling
 - [Getting started](getting-started.md): install and run your first cycle
 - [How it works](how-it-works.md): the two ways to use rota (orchestrator, workers, gate), plus how each skill connects to the artifacts it touches
 
