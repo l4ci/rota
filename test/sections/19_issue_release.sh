@@ -97,7 +97,7 @@ trap 'rm -rf "$RP_TMP"' EXIT
   mkdir -p .rota
   git init -q && git config user.email t@t && git config user.name t
   git commit -q --allow-empty -m "seed"
-  OUT=$(hvj release pending)
+  OUT=$(hvj release pending) || vfail
   [ "$(echo "$OUT" | jget data.lastTag)" = "" ] || fail "no-tag case lastTag: $OUT"
   [ "$(echo "$OUT" | jget data.commits)" = "0" ] || fail "no-tag case commits: $OUT"
   [ "$(echo "$OUT" | jget data.shouldNudge)" = "false" ] || fail "no-tag case shouldNudge: $OUT"
@@ -115,7 +115,7 @@ pass "release pending: no tag -> no nudge"
   git commit -q --allow-empty -m "seed"
   git tag v0.0.1
   for i in 1 2 3; do git commit -q --allow-empty -m "c$i"; done
-  OUT=$(hvj release pending)
+  OUT=$(hvj release pending) || vfail
   [ "$(echo "$OUT" | jget data.lastTag)" = "v0.0.1" ] || fail "below-threshold lastTag: $OUT"
   [ "$(echo "$OUT" | jget data.commits)" = "3" ] || fail "below-threshold commits: $OUT"
   [ "$(echo "$OUT" | jget data.shouldNudge)" = "false" ] || fail "below-threshold shouldNudge: $OUT"
@@ -133,7 +133,7 @@ pass "release pending: 3 commits past tag -> no nudge"
   git commit -q --allow-empty -m "seed"
   git tag v0.0.1
   for i in $(seq 1 11); do git commit -q --allow-empty -m "c$i"; done
-  OUT=$(hvj release pending)
+  OUT=$(hvj release pending) || vfail
   [ "$(echo "$OUT" | jget data.lastTag)" = "v0.0.1" ] || fail "above-threshold lastTag: $OUT"
   [ "$(echo "$OUT" | jget data.commits)" = "11" ] || fail "above-threshold commits: $OUT"
   [ "$(echo "$OUT" | jget data.shouldNudge)" = "true" ] || fail "above-threshold shouldNudge: $OUT"
@@ -152,7 +152,7 @@ pass "release pending: 11 commits past tag -> nudge (reason=commits)"
   for i in $(seq 1 6); do git commit -q --allow-empty -m "c$i"; done
   mkdir -p .rota
   echo '{"release":{"nudgeAfterCommits":5}}' > .rota/config.json
-  OUT=$(hvj release pending)
+  OUT=$(hvj release pending) || vfail
   [ "$(echo "$OUT" | jget data.thresholdCommits)" = "5" ] || fail "custom-threshold thresholdCommits: $OUT"
   [ "$(echo "$OUT" | jget data.commits)" = "6" ] || fail "custom-threshold commits: $OUT"
   [ "$(echo "$OUT" | jget data.shouldNudge)" = "true" ] || fail "custom-threshold shouldNudge: $OUT"

@@ -22,7 +22,7 @@ printf '{"id":"cli","result":{"snapshot":{"agents":[{"agent":"claude","agent_sta
 RSENV="env HERDR_ENV=1 PATH=$RS/fakebin:$PATH"
 
 # Empty registry: rows come from the worktrees, matched to the snapshot by cwd.
-OUT=$( cd "$RS" && $RSENV "$ROTA_BIN" --json round status 2>/dev/null )
+OUT=$( cd "$RS" && $RSENV "$ROTA_BIN" --json round status 2>/dev/null ) || vfail
 [ "$(echo "$OUT" | jget data.host)" = "herdr" ] || fail "status should name the host: $OUT"
 [ "$(echo "$OUT" | jget data.slots[1].name)" = "dana" ] || fail "second row should be dana: $OUT"
 [ "$(echo "$OUT" | jget data.slots[1].issue)" = "58" ] || fail "dana's issue should come from the branch: $OUT"
@@ -33,7 +33,7 @@ OUT=$( cd "$RS" && $RSENV "$ROTA_BIN" --json round status 2>/dev/null )
 pass "status derives rows from worktrees and matches the host snapshot"
 
 # Reconcile reports and writes nothing.
-OUT=$( cd "$RS" && $RSENV "$ROTA_BIN" --json round reconcile 2>/dev/null )
+OUT=$( cd "$RS" && $RSENV "$ROTA_BIN" --json round reconcile 2>/dev/null ) || vfail
 [ "$(echo "$OUT" | jget data.changed)" = "false" ] \
   || fail "reconcile without --apply must not change anything: $OUT"
 grep -q 'unclaimed-tab' <<<"$OUT" || fail "reconcile should report the unclaimed tab: $OUT"
@@ -41,11 +41,11 @@ grep -q 'unregistered-worktree' <<<"$OUT" || fail "reconcile should report unreg
 [ ! -e "$RS/.rota/workers.json" ] || fail "reconcile without --apply wrote .rota/workers.json"
 
 # --apply registers the worktrees and leaves the unclaimed tab alone.
-OUT=$( cd "$RS" && $RSENV "$ROTA_BIN" --json round reconcile --apply 2>/dev/null )
+OUT=$( cd "$RS" && $RSENV "$ROTA_BIN" --json round reconcile --apply 2>/dev/null ) || vfail
 [ -f "$RS/.rota/workers.json" ] || fail "--apply should register the worktrees"
 grep -q '"dana/58-thing"' "$RS/.rota/workers.json" || fail "dana's slot should record its branch"
 grep -q 'unclaimed-tab' <<<"$OUT" || fail "an unclaimed tab is never repaired: $OUT"
-OUT=$( cd "$RS" && $RSENV "$ROTA_BIN" --json round status 2>/dev/null )
+OUT=$( cd "$RS" && $RSENV "$ROTA_BIN" --json round status 2>/dev/null ) || vfail
 [ "$(echo "$OUT" | jget data.slots[1].registered)" = "true" ] \
   || fail "dana should be registered after --apply: $OUT"
 pass "reconcile reports by default and --apply registers worktrees only"
@@ -61,7 +61,7 @@ for s in d["slots"]:
         s["handle"] = "w9:t9"
 json.dump(d, open(p, "w"))
 PY
-OUT=$( cd "$RS" && $RSENV "$ROTA_BIN" --json round reconcile --apply 2>/dev/null )
+OUT=$( cd "$RS" && $RSENV "$ROTA_BIN" --json round reconcile --apply 2>/dev/null ) || vfail
 grep -q 'dead-tab' <<<"$OUT" || fail "a handle the host lacks should be a dead-tab: $OUT"
 grep -q '"state": *"dead"' "$RS/.rota/workers.json" || fail "--apply should mark the dead slot"
 pass "a dead tab is detected and its slot marked dead"
@@ -122,10 +122,10 @@ d["slots"].append({"name": "ext-1", "branch": "codex/12-ext", "worktree": p.rspl
                    "base": "main", "kind": "external", "task": "12", "handle": "w9:t8", "state": "idle"})
 json.dump(d, open(p, "w"))
 PY
-OUT=$( cd "$RS" && $RSENV "$ROTA_BIN" --json round status 2>/dev/null )
+OUT=$( cd "$RS" && $RSENV "$ROTA_BIN" --json round status 2>/dev/null ) || vfail
 [ "$(echo "$OUT" | python3 -c 'import json,sys; r=[s for s in json.load(sys.stdin)["data"]["slots"] if s["name"]=="ext-1"][0]; print(r["hostState"], r["state"], r.get("kind",""))')" = "external unknown " ] \
   || fail "an external slot should read external/unknown with the forge down: $OUT"
-OUT=$( cd "$RS" && $RSENV "$ROTA_BIN" --json round reconcile 2>/dev/null )
+OUT=$( cd "$RS" && $RSENV "$ROTA_BIN" --json round reconcile 2>/dev/null ) || vfail
 python3 - "$OUT" <<'PY' || fail "reconcile reported a host finding for the external slot: $OUT"
 import json, sys
 d = json.loads(sys.argv[1])["data"]
@@ -144,10 +144,10 @@ pass "an external slot reads derived state and draws no host findings"
     && git worktree add -q -b codex/nonum "$TMP/adopt-nonum" main \
     && git -C "$TMP/adopt-nonum" -c user.email=a@b -c user.name=n commit -q --allow-empty -m work ) \
   || fail "unregistered-branch fixture setup failed"
-OUT=$( cd "$RS" && $RSENV "$ROTA_BIN" --json round reconcile 2>/dev/null )
+OUT=$( cd "$RS" && $RSENV "$ROTA_BIN" --json round reconcile 2>/dev/null ) || vfail
 grep -q 'unregistered-branch' <<<"$OUT" && fail "no round.adoptPattern: reconcile must not report branches: $OUT"
 ( cd "$RS" && "$ROTA_BIN" config set round.adoptPattern 'codex/*' >/dev/null ) || fail "config set round.adoptPattern failed"
-OUT=$( cd "$RS" && $RSENV "$ROTA_BIN" --json round reconcile 2>/dev/null )
+OUT=$( cd "$RS" && $RSENV "$ROTA_BIN" --json round reconcile 2>/dev/null ) || vfail
 python3 - "$OUT" <<'PY' || fail "unregistered-branch findings wrong: $OUT"
 import json, sys
 fs = [f for f in json.loads(sys.argv[1])["data"]["drift"] if f.get("kind") == "unregistered-branch"]

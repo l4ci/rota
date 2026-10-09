@@ -7,6 +7,8 @@ package worker
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/rotatree"
 	"io"
@@ -49,6 +51,26 @@ func LoadRegistry(root string) Registry {
 		return Registry{doc: o, Exists: true}
 	}
 	return Registry{doc: slotsDefault()}
+}
+
+// CheckRegistry is nil when the registry is missing or a JSON object, and an
+// error when it exists but cannot be read or parsed. LoadRegistry reads such a
+// file as an empty pool; a verb that would delete on the strength of "no slot
+// owns this" calls CheckRegistry first and refuses (#579).
+func CheckRegistry(root string) error {
+	p := RegistryPath(root)
+	raw, err := os.ReadFile(p)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("%w: %s: %v", fsio.ErrUnreadable, p, err)
+	}
+	v, err := jsonx.Decode(raw)
+	if _, ok := v.(*jsonx.Object); err != nil || !ok {
+		return fmt.Errorf("%w: %s does not parse as a JSON object; fix or remove it", fsio.ErrUnreadable, p)
+	}
+	return nil
 }
 
 // Slots lists the slot objects of the registry.
@@ -346,18 +368,19 @@ func (d *Doc) SortSlots() {
 	})
 }
 
-// Update is a locked read-modify-write of the registry; a missing or corrupt
-// file starts from {"slots": []}.
+// Update is a locked read-modify-write of the registry; a missing file starts
+// from {"slots": []}. A file that exists but does not parse is an error: the
+// slots in it are the only record of who holds what (#579).
 func Update(root string, mutate func(d *Doc)) error {
 	return update(root, slotsDefault(), mutate)
 }
 
 // update is Update with the document a missing or corrupt file starts from.
 func update(root string, def *jsonx.Object, mutate func(d *Doc)) error {
-	return fsio.UpdateJSON(RegistryPath(root), def, func(v any) (any, error) {
+	return fsio.UpdateJSONStrict(RegistryPath(root), def, func(v any) (any, error) {
 		doc, ok := v.(*jsonx.Object)
 		if !ok {
-			doc = def
+			return nil, fmt.Errorf("%w: %s is not a JSON object; fix or remove it, rota will not overwrite it", fsio.ErrUnreadable, RegistryPath(root))
 		}
 		mutate(&Doc{Registry{doc: doc}})
 		return doc, nil

@@ -21,10 +21,10 @@ RC=0; ( cd "$VD" && hvj verdict route --for ship-review >/dev/null 2>&1 ) || RC=
 [ "$RC" = "3" ] || fail "route with no recorded verdict should exit 3, got $RC"
 
 # Spec CONCERNS then quality PASS combines to CONCERNS; ship asks (the retired loop level routes like off).
-OUT=$( cd "$VD" && hvj verdict add --kind review-spec --verdict CONCERNS )
+OUT=$( cd "$VD" && hvj verdict add --kind review-spec --verdict CONCERNS ) || vfail
 [ "$(echo "$OUT" | jget data.next)" = "quality" ] || fail "spec CONCERNS should route to quality: $OUT"
 printf '{"verdict": "PASS", "summary": "ok", "findings": [{"severity": "minor", "title": "nit", "file": "a.go", "line": 2}]}' > "$VD/q.json"
-OUT=$( cd "$VD" && hvj verdict add --kind review-quality --verdict PASS --body-file q.json )
+OUT=$( cd "$VD" && hvj verdict add --kind review-quality --verdict PASS --body-file q.json ) || vfail
 [ "$(echo "$OUT" | jget data.combined)" = "CONCERNS" ] || fail "combined should be the worse stage: $OUT"
 [ "$( cd "$VD" && hvj verdict route --for ship-review | jget data.next )" = "ask" ] \
   || fail "CONCERNS should route to ask"
@@ -34,7 +34,7 @@ printf '{"autonomy": {"level": "loop"}}\n' > "$VD/.rota/config.json"
 pass "review stages combine worst-of and route by autonomy"
 
 # A spec FAIL short-circuits and stops the ship.
-OUT=$( cd "$VD" && hvj verdict add --kind review-spec --verdict FAIL )
+OUT=$( cd "$VD" && hvj verdict add --kind review-spec --verdict FAIL ) || vfail
 [ "$(echo "$OUT" | jget data.next)" = "report" ] || fail "spec FAIL should route to report: $OUT"
 [ "$( cd "$VD" && hvj verdict route --for ship-review | jget data.next )" = "stop" ] \
   || fail "a newer spec FAIL should stop the ship"
@@ -55,7 +55,7 @@ pass "spec FAIL stops the ship; qa routes per qa.gate"
 
 # Debug: three failed fixes on one item halt; another item counts alone.
 for want in hypothesize hypothesize halt; do
-  OUT=$( cd "$VD" && hvj debug verdict B07 --verdict FAIL )
+  OUT=$( cd "$VD" && hvj debug verdict B07 --verdict FAIL ) || vfail
   [ "$(echo "$OUT" | jget data.next)" = "$want" ] || fail "debug verdict should route to $want: $OUT"
 done
 [ "$( cd "$VD" && hvj debug verdict B07 --verdict FAIL | jget data.failedFixes )" = "4" ] \

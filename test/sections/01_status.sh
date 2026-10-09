@@ -1,17 +1,17 @@
 echo "id next"
-ID=$(hvj id next --kind bugs | jget data.id)
+ID=$(hvj id next --kind bugs | jget data.id) || vfail
 [ "$ID" = "B01" ] || fail "expected B01, got $ID"
 pass "first bug id = B01"
 
-ID2=$(hvj id next --kind bugs | jget data.id)
+ID2=$(hvj id next --kind bugs | jget data.id) || vfail
 [ "$ID2" = "B02" ] || fail "expected B02, got $ID2"
 pass "second bug id = B02"
 
-ID3=$(hvj id next --kind features | jget data.id)
+ID3=$(hvj id next --kind features | jget data.id) || vfail
 [ "$ID3" = "F01" ] || fail "expected F01, got $ID3"
 pass "first feature id = F01"
 
-ID4=$(hvj id next --kind milestones | jget data.id)
+ID4=$(hvj id next --kind milestones | jget data.id) || vfail
 [ "$ID4" = "M01" ] || fail "expected M01, got $ID4"
 pass "first milestone id = M01"
 
@@ -34,7 +34,7 @@ cat > .rota/BACKLOG.md <<'EOF'
 
 ## Completed
 EOF
-ID5=$(hvj id next --kind bugs | jget data.id)
+ID5=$(hvj id next --kind bugs | jget data.id) || vfail
 [ "$ID5" = "B08" ] || fail "self-heal: expected B08 (max(2,7)+1), got $ID5"
 pass "id next self-heals when TODO has higher IDs than counter"
 
@@ -44,12 +44,12 @@ cat > .rota/ARCHIVE.md <<'EOF'
 
 - ~~**[B15] [P1] Old bug.** Desc.~~ Done 2026-01-01 [`abc1234`]
 EOF
-ID6=$(hvj id next --kind bugs | jget data.id)
+ID6=$(hvj id next --kind bugs | jget data.id) || vfail
 [ "$ID6" = "B16" ] || fail "self-heal: expected B16 (ARCHIVE max=15), got $ID6"
 pass "id next scans ARCHIVE.md for self-heal"
 
 # Self-heal is per-prefix: features counter is unaffected by bugs traffic.
-ID7=$(hvj id next --kind features | jget data.id)
+ID7=$(hvj id next --kind features | jget data.id) || vfail
 [ "$ID7" = "F02" ] || fail "self-heal per-prefix: expected F02 (features counter still=1), got $ID7"
 pass "id next self-heal is per-prefix"
 
@@ -229,7 +229,7 @@ mkdir -p .rota/handoff/rota
 # Single-repo: handoff at .rota/handoff/<branch>.md is swept on remove
 "$ROTA_BIN" status add rota/sw-single --items B01 >/dev/null
 echo "stale" > .rota/handoff/rota/sw-single.md
-OUT=$(hvj status rm rota/sw-single)
+OUT=$(hvj status rm rota/sw-single) || vfail
 [ ! -f .rota/handoff/rota/sw-single.md ] || fail "status rm did not sweep single-repo handoff"
 [ "$(echo "$OUT" | jget data.handoffRemoved)" = "true" ] || fail "status rm should report handoffRemoved=true: $OUT"
 pass "status rm sweeps single-repo handoff at .rota/handoff/<branch>.md"
@@ -272,7 +272,7 @@ recent = (date.today() - timedelta(days=1)).strftime("%Y-%m-%d")
 c = c.rstrip() + f"\n- ~~**[B99] Old bug.**~~ Done {old} [`aaa`]\n- ~~**[F99] Recent feature.**~~ Done {recent} [`bbb`]\n"
 p.write_text(c)
 PY
-OUT=$(hvj backlog archive --days 5)
+OUT=$(hvj backlog archive --days 5) || vfail
 [ "$(echo "$OUT" | jget data.moved)" = "1" ] || fail "expected 1 archived: $OUT"
 [ "$(echo "$OUT" | jget data.changed)" = "true" ] || fail "archive should report changed=true: $OUT"
 grep -q "B99" .rota/ARCHIVE.md || fail "B99 not in ARCHIVE.md"

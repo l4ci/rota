@@ -31,7 +31,7 @@ mkdir -p prev-py/.rota && cd prev-py
 echo '{"release":{"versionFile":"pyproject.toml"}}' > .rota/config.json
 printf '[project]\nname = "foo"\nversion = "0.5.0"\n' > pyproject.toml
 ORIG_HASH=$(sha256sum pyproject.toml | cut -c1-16)
-OUT=$(hvj release version --level patch)
+OUT=$(hvj release version --level patch) || vfail
 [ "$(echo "$OUT" | jget data.next)" = "0.5.1" ] && [ "$(echo "$OUT" | jget data.version)" = "0.5.0" ] && [ "$(echo "$OUT" | jget data.kind)" = "pyproject" ] \
   || fail "pyproject preview: expected 0.5.0 -> 0.5.1, kind pyproject: $OUT"
 [ "$(sha256sum pyproject.toml | cut -c1-16)" = "$ORIG_HASH" ] || fail "pyproject preview should not modify the file"
@@ -77,7 +77,7 @@ cat > pyproject.toml <<'TOML'
 name = "foo"
 version = "0.5.0"
 TOML
-OUT=$(hvj release bump --file pyproject.toml --kind pyproject --level minor)
+OUT=$(hvj release bump --file pyproject.toml --kind pyproject --level minor) || vfail
 [ "$(echo "$OUT" | jget data.from)" = "0.5.0" ] && [ "$(echo "$OUT" | jget data.to)" = "0.6.0" ] || fail "pyproject minor: expected 0.5.0 -> 0.6.0: $OUT"
 grep -q '"0.6.0"' pyproject.toml || fail "pyproject bump should write 0.6.0"
 pass "release bump reads and writes pyproject.toml"

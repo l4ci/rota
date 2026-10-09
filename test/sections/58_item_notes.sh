@@ -25,12 +25,12 @@ print(next(i["number"] for i in json.load(open(sys.argv[2]))["issues"] if i["tit
     # RC <cmd…>: the command's exit code
     RC() { local rc=0; "$@" >/dev/null 2>&1 || rc=$?; echo "$rc"; }
 
-    T1="$(hvj item create --kind tasks --title "First" | jget data.id)"
-    T2="$(hvj item create --kind tasks --title "Second" | jget data.id)"
+    T1="$(hvj item create --kind tasks --title "First" | jget data.id)" || vfail
+    T2="$(hvj item create --kind tasks --title "Second" | jget data.id)" || vfail
     eq "ids" "1 2" "$T1 $T2"
 
     # --- note put / get / idempotence / rm
-    OUT="$(hvj item note show T1 --kind design)"
+    OUT="$(hvj item note show T1 --kind design)" || vfail
     eq "show absent" "false|" "$(jget data.exists <<<"$OUT")|$(jget data.body <<<"$OUT")"
     printf 'line one\nline two\n' > "$P/n.md"
     hvj item note add T1 --kind design --body-file "$P/n.md" >/dev/null
@@ -73,10 +73,10 @@ print(next(i["number"] for i in json.load(open(sys.argv[2]))["issues"] if i["tit
     eq "unknown item" "3" "$(RC hvj item note show T99 --kind plan)"
 
     # --- comments
-    OUT="$(printf 'Which db?\nSecond line\n' | hvj item comment add T1 --kind question --body-file -)"
+    OUT="$(printf 'Which db?\nSecond line\n' | hvj item comment add T1 --kind question --body-file -)" || vfail
     eq "comment add changed" "true" "$(jget data.changed <<<"$OUT")"
     printf 'Postgres\n' > "$P/a.md"
-    id="$(hvj item comment add T1 --kind answer --body-file "$P/a.md" | jget data.commentId)"
+    id="$(hvj item comment add T1 --kind answer --body-file "$P/a.md" | jget data.commentId)" || vfail
     case "$id" in ''|*[!0-9]*) fail "$prov comment id not numeric: $id" ;; esac
     eq "comment markers" "<!-- rota:comment question -->|<!-- rota:comment answer -->" "$(MARKERS 1)"
     eq "comment bad kind" "2" "$(RC hvj item comment add T1 --kind bogus --body-file "$P/a.md")"
@@ -86,11 +86,11 @@ print(next(i["number"] for i in json.load(open(sys.argv[2]))["issues"] if i["tit
     hvj proof add T1 --check smoke --result PASS --evidence "all green" --sha abc1234 >/dev/null
     hvj proof add T1 --check lint --result FAIL --evidence "2 errors" --sha abc1234 >/dev/null
     : > "$P/log"
-    OUT="$(hvj proof add T1 --check smoke --result PASS --evidence "all green" --sha abc1234)"
+    OUT="$(hvj proof add T1 --check smoke --result PASS --evidence "all green" --sha abc1234)" || vfail
     eq "proof idempotent" "0|false" "$(WRITES)|$(jget data.changed <<<"$OUT")"
     eq "proof count" "2" "$(hvj proof show T1 | jget data.count)"
     d="$(date +%Y-%m-%d)"
-    OUT="$(hvj proof show '#1')"
+    OUT="$(hvj proof show '#1')" || vfail
     eq "proof rows" "$d|smoke|PASS|abc1234|all green;$d|lint|FAIL|abc1234|2 errors" "$(python3 -c '
 import json, sys
 rows = json.load(sys.stdin)["data"]["rows"]
@@ -108,20 +108,20 @@ print(";".join("|".join(r[k] for k in ("date", "check", "result", "sha", "eviden
     # --- item designs and plans as notes (design/plan add/show/rm/put, list verbs)
     F1="F$(hvj item create --kind features --title "Big" | jget data.id)"
     eq "feature ref" "F3" "$F1"
-    OUT="$(hvj design add "$F1" --title "Big design")"
+    OUT="$(hvj design add "$F1" --title "Big design")" || vfail
     eq "design add" "3|F|true" "$(jget data.id <<<"$OUT")|$(jget data.type <<<"$OUT")|$(jget data.changed <<<"$OUT")"
     eq "design marker" "<!-- rota:design -->" "$(MARKERS 3)"
-    OUT="$("$ROTA_BIN" design show "$F1")"
+    OUT="$("$ROTA_BIN" design show "$F1")" || vfail
     grep "^# $F1 — Big design" >/dev/null <<<"$OUT" || fail "$prov design show stub"
     grep "^status: draft" >/dev/null <<<"$OUT" || fail "$prov design show frontmatter"
-    OUT="$(RC hvj design add "$F1" --title "again")"
+    OUT="$(RC hvj design add "$F1" --title "again")" || vfail
     eq "design add twice refused" "4" "$OUT"
     eq "design add leaves one note" "<!-- rota:design -->" "$(MARKERS 3)"
     printf '%s\n' '---' "id: $F1" 'title: Big design' 'status: final' '---' '' 'new text' > "$P/d.md"
     hvj design put "$F1" --body-file "$P/d.md" >/dev/null
     eq "design put shows" "$(cat "$P/d.md")" "$("$ROTA_BIN" design show "$F1")"
     : > "$P/log"
-    OUT="$(cat "$P/d.md" | hvj design put "$F1" --body-file -)"
+    OUT="$(cat "$P/d.md" | hvj design put "$F1" --body-file -)" || vfail
     eq "design put idempotent" "0|false" "$(WRITES)|$(jget data.changed <<<"$OUT")"
     eq "design put needs existing" "3" "$(RC hvj design put T1 --body-file "$P/d.md")"
     eq "design put did not create" "false" "$(hvj item note show T1 --kind design | jget data.exists)"
@@ -132,12 +132,12 @@ print(";".join("|".join(r[k] for k in ("date", "check", "result", "sha", "eviden
     eq "design list unsupported exit" "1|backend" "$rc|$(jget data.blockedBy <<<"$OUT")"
 
     # item plan with a --design pointer -> note:design; no plan file written
-    MID="$(hvj milestone add --title "Seven" --summary "Tracking issue" | jget data.id)"
+    MID="$(hvj milestone add --title "Seven" --summary "Tracking issue" | jget data.id)" || vfail
     TRK="$(TRACKER_OF "$MID")"
     eq "plan add" "$MID-$F1" "$(hvj plan add "$MID-$F1" --title "Big plan" --design "$F1" | jget data.key)"
     [ ! -e ".rota/plans/$MID-$F1.md" ] || fail "$prov item plan wrote a file"
     eq "plan marker" "<!-- rota:design -->|<!-- rota:plan -->" "$(MARKERS 3)"
-    OUT="$("$ROTA_BIN" plan show "$MID-$F1")"
+    OUT="$("$ROTA_BIN" plan show "$MID-$F1")" || vfail
     grep "^design: note:design$" >/dev/null <<<"$OUT" || fail "$prov plan show design pointer"
     grep "^key: $MID-$F1$" >/dev/null <<<"$OUT" || fail "$prov plan show key"
     eq "plan add twice refused" "4" "$(RC hvj plan add "$MID-$F1" --title "again")"

@@ -67,7 +67,7 @@ grep -q '"decision": *"block"' "$KD/hook.1.out" && grep -q 'Usage is at 95%' "$K
 [ "$(swlim 'd["limits"][0]["action"]')" = "switch" ] && [ "$(swlim 'd["limits"][0]["status"]')" = "switched" ] && [ "$(swlim 'd["limits"][0]["session"]')" = "orchestrator" ] || fail "D4: limits entry: $(cat "$SWREG")"
 NOTE="$(swlim 'd["limits"][0]["note"]')"
 [ "$(swlim 'd["limits"][0]["account"]')" = "a" ] && grep -q 'switched to b' <<<"$NOTE" || fail "D4: the entry names both accounts: $(cat "$SWREG")"
-OUT="$(cd "$SWP" && "$ROTA_BIN" --json limit status)"
+OUT="$(cd "$SWP" && "$ROTA_BIN" --json limit status)" || vfail
 [ "$(jget 'data.limits[0].action' <<<"$OUT")" = "switch" ] || fail "D4: rota limit status must show the switch: $OUT"
 pass "D4: above the threshold the hook blocks, and the restart moves to account b and logs it"
 

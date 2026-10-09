@@ -265,7 +265,11 @@ func PoolList(root string) (session any, round any, slots []*jsonx.Object) {
 // An adopted (external) slot is only dropped from the registry; its worktree
 // and branch stay.
 func (e Env) Reap(root string, names []string, all bool) (reaped []string, err error) {
+	var failed []string
 	e = e.withDefaults()
+	if err := CheckRegistry(root); err != nil {
+		return nil, fail(exitcode.ExitUnavailable, "reap refused: "+err.Error())
+	}
 	reg := LoadRegistry(root)
 	if !reg.Exists {
 		return nil, nil
@@ -279,14 +283,24 @@ func (e Env) Reap(root string, names []string, all bool) (reaped []string, err e
 		if !all && !want[name] {
 			continue
 		}
-		reaped = append(reaped, name)
 		if s.IsExternal() { // unregister only: the worktree and branch are not rota's
+			reaped = append(reaped, name)
 			continue
 		}
 		e.ClearLabel(context.Background(), root, name)
+		removed := true
 		if wt := s.Worktree(); wt != "" {
-			e.git(root, "worktree", "remove", "--force", wt)
+			if out, code := e.git(root, "worktree", "remove", "--force", wt); code != 0 {
+				if _, err := os.Stat(wt); err == nil { // still on disk: keep the slot registered so it is not orphaned
+					removed = false
+					failed = append(failed, fmt.Sprintf("%s: git worktree remove %s: %s", name, wt, strings.TrimSpace(out)))
+				}
+			}
 		}
+		if !removed {
+			continue
+		}
+		reaped = append(reaped, name)
 		if br := s.Branch(); br != "" {
 			e.git(root, "branch", "-D", br)
 		}
@@ -309,5 +323,8 @@ func (e Env) Reap(root string, names []string, all bool) (reaped []string, err e
 		}
 		d.SetSlots(keep)
 	})
+	if err == nil && len(failed) > 0 {
+		err = fail(exitcode.ExitUnavailable, "could not remove: "+strings.Join(failed, "; ")+" (slot kept in the registry)")
+	}
 	return reaped, err
 }

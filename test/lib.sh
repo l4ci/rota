@@ -19,6 +19,24 @@
 pass() { printf '  \033[32mOK\033[0m  %s\n' "$1"; }
 fail() { printf '  \033[31mFAIL\033[0m %s\n' "$1"; exit 1; }
 
+# vfail is the handler for a captured verb call (#579): `OUT=$(hvj item show X) || vfail`.
+# It reads the failing status, finds the source line of the call and fails with the
+# verb's own text, so the message names which call broke without a hand-written string.
+vfail() {
+  local rc=$? file="${BASH_SOURCE[1]}" line="${BASH_LINENO[0]}" text
+  # A multi-line capture reports its closing line; walk back to the line that
+  # opens the `$(` so the message names the verb.
+  local first=$line
+  local opener='^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*="?\$\(' src
+  while [ "$first" -gt 1 ]; do
+    src=$(sed -n "${first}p" "$file")
+    grep -qE "$opener" <<<"$src" && break # here-string: a piped grep -q is SIGPIPE-flaky (section 71)
+    first=$((first - 1))
+  done
+  text=$(sed -n "${first},${line}p" "$file" 2>/dev/null | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*|| vfail.*$//' | tr '\n' ' ' | sed -e 's/ \\ / /g')
+  fail "verb exited $rc at ${file##*/}:$first-$line: $text"
+}
+
 # Black-box helpers (#46). Callers check the exit code themselves:
 #   rc=0; out=$(hvj item show B01) || rc=$?
 # hvj runs `"$ROTA_BIN" --json "$@"`, prints the envelope and returns the verb's
@@ -77,6 +95,16 @@ check_section_conventions() {
       violations=$((violations + 1))
     fi
   done
+
+  # #579 — a bare `VAR=$(rota ...)` aborts the section silently under set -e
+  # when the verb fails (#461 hid a failure this way). Capture the exit code
+  # explicitly: `|| vfail`, `|| fail "..."` or `|| rc=$?`. The linter handles
+  # quoted and multi-line captures; see test/section-template.sh.
+  matches=$(python3 "$(dirname "${BASH_SOURCE[0]}")/lint-sections.py" "$sections_dir" 2>&1) || {
+    printf '\033[31merror: bare verb capture under set -e (add `|| vfail`; see test/section-template.sh):\033[0m\n' >&2
+    echo "$matches" >&2
+    violations=$((violations + 1))
+  }
 
   if [ "$violations" -gt 0 ]; then
     printf '\033[31merror: %d convention violation(s) in test/sections/ — fix before re-running smoke\033[0m\n' "$violations" >&2

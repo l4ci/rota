@@ -25,7 +25,7 @@ trap 'rm -rf "$TMP_UK"' EXIT
 
 # ── 1. Scoped write: from web subdir, merge lands in sub-repo KNOWLEDGE.md ──
 echo "F21: scoped write — knowledge add from sub-repo"
-OUT=$( cd "$TMP_UK/web" && hvj knowledge add --topic Architecture --title "web rule" --body-file - <<<"web-local" )
+OUT=$( cd "$TMP_UK/web" && hvj knowledge add --topic Architecture --title "web rule" --body-file - <<<"web-local" ) || vfail
 [ "$(jget data.changed <<<"$OUT")" = "true" ] || fail "F21[1]: add from web must report changed: $OUT"
 grep -q "web rule" "$TMP_UK/.rota/knowledge/web/KNOWLEDGE.md" \
   || fail "F21[1]: 'web rule' must appear in .rota/knowledge/web/KNOWLEDGE.md"
@@ -36,7 +36,7 @@ pass "F21[1]: scoped write lands in sub-repo KNOWLEDGE.md only"
 # ── 2. Hybrid query: sub-repo scope shows both files with > from:; umbrella shows only its own ──
 echo "F21: hybrid query"
 # The `> from:` provenance lines are part of the verb's body (contract: text is the old markdown verbatim).
-QUERY_WEB="$( cd "$TMP_UK/web" && hvj knowledge query Architecture | jget data.text )"
+QUERY_WEB="$( cd "$TMP_UK/web" && hvj knowledge query Architecture | jget data.text )" || vfail
 grep -q "umbrella rule" <<<"$QUERY_WEB" \
   || fail "F21[2]: hybrid query from web must include 'umbrella rule'"
 grep -q "web rule" <<<"$QUERY_WEB" \
@@ -44,7 +44,7 @@ grep -q "web rule" <<<"$QUERY_WEB" \
 grep -q "> from:" <<<"$QUERY_WEB" \
   || fail "F21[2]: hybrid query from web must include a '> from:' provenance line"
 
-QUERY_UMBRELLA="$( cd "$TMP_UK" && hvj knowledge query Architecture | jget data.text )"
+QUERY_UMBRELLA="$( cd "$TMP_UK" && hvj knowledge query Architecture | jget data.text )" || vfail
 grep -q "umbrella rule" <<<"$QUERY_UMBRELLA" \
   || fail "F21[2]: umbrella-scope query must include 'umbrella rule'"
 grep -q "web rule" <<<"$QUERY_UMBRELLA" \
@@ -55,7 +55,7 @@ pass "F21[2]: hybrid query shows correct provenance per scope"
 
 # ── 3. Per-file tier sidecar ────────────────────────────────────────────────
 echo "F21: per-file tier sidecar"
-OUT=$( cd "$TMP_UK/web" && hvj knowledge tier set --topic Architecture --title "web rule" --tier confirmed )
+OUT=$( cd "$TMP_UK/web" && hvj knowledge tier set --topic Architecture --title "web rule" --tier confirmed ) || vfail
 [ "$(jget data.tier <<<"$OUT")" = "confirmed" ] || fail "F21[3]: tier set must report the new tier: $OUT"
 [ "$(cd "$TMP_UK/web" && hvj knowledge tier get --topic Architecture --title "web rule" | jget data.tier)" = "confirmed" ] \
   || fail "F21[3]: tier get from web must read back confirmed"
@@ -85,7 +85,7 @@ grep -q -- "--repo" <<<"$AMEND_OUT" \
   || fail "F21[4]: amend error must hint at --repo; got: $AMEND_OUT"
 
 # With --repo web: unambiguous → exit 0, amends only web file
-OUT=$( cd "$TMP_UK/web" && hvj knowledge amend --topic Architecture --fragment "shared rule" --mode append --body-file - --repo web <<<"(x)" )
+OUT=$( cd "$TMP_UK/web" && hvj knowledge amend --topic Architecture --fragment "shared rule" --mode append --body-file - --repo web <<<"(x)" ) || vfail
 [ "$(jget data.changed <<<"$OUT")" = "true" ] || fail "F21[4]: --repo web amend must report changed: $OUT"
 grep -q "(x)" "$TMP_UK/.rota/knowledge/web/KNOWLEDGE.md" \
   || fail "F21[4]: --repo web amend must append to web file"
@@ -98,7 +98,7 @@ echo "F21: glossary parity"
 ( cd "$TMP_UK/web" && hvj glossary write webterm --def "a web term" >/dev/null )
 grep -q "webterm" "$TMP_UK/.rota/knowledge/web/KNOWLEDGE.md" \
   || fail "F21[5]: webterm must land in .rota/knowledge/web/KNOWLEDGE.md Glossary"
-GLOSS_READ="$( cd "$TMP_UK/web" && hvj glossary read webterm | jget data.text )"
+GLOSS_READ="$( cd "$TMP_UK/web" && hvj glossary read webterm | jget data.text )" || vfail
 grep -q "a web term" <<<"$GLOSS_READ" \
   || fail "F21[5]: glossary read must print the term definition"
 grep -q "> from: .rota/knowledge/web/KNOWLEDGE.md (## Glossary)" <<<"$GLOSS_READ" \

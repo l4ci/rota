@@ -40,7 +40,7 @@ PYEOF
   || fail "worker pool init failed"
 
 ROWS=$( cd "$TMP_WD" && "$ROTA_BIN" --json worker pool list \
-        | python3 -c 'import json,sys; print(len(json.load(sys.stdin)["data"]["slots"]))' )
+        | python3 -c 'import json,sys; print(len(json.load(sys.stdin)["data"]["slots"]))' ) || vfail
 [ "$ROWS" = "2" ] || fail "worker pool list: expected 2 slots, got $ROWS"
 
 [ -d "$TMP_WD/.worktrees/w1" ] \
@@ -108,7 +108,7 @@ done
 pass "worker poll classifies all 7 pane states (bare Overloaded=DEAD, Retrying in=BUSY)"
 
 EVID=$( ( cd "$TMP_WD" && ROTA_TEST_POLL_FIXTURE="$FX/blocked.txt" "$ROTA_BIN" --json worker poll w2 ) \
-        | jget 'data.slots[0].evidence' )
+        | jget 'data.slots[0].evidence' ) || vfail
 case "$EVID" in
   *"badge on finished games"*) : ;;
   *) fail "worker poll did not carry the BLOCKED question into evidence: '$EVID'" ;;
@@ -124,7 +124,7 @@ pass "worker poll surfaces the blocking question as evidence for relay"
 LONGQ="Should finished games show the training row, or only live ones, and does that also apply to replays of ranked matches?"
 printf 'ROTA-BLOCKED w4: %s\n' "$LONGQ" > "$FX/blocked_long.txt"
 EVID=$( ( cd "$TMP_WD" && ROTA_TEST_POLL_FIXTURE="$FX/blocked_long.txt" "$ROTA_BIN" --json worker poll w4 ) \
-        | jget 'data.slots[0].evidence' )
+        | jget 'data.slots[0].evidence' ) || vfail
 [ "$EVID" = "$LONGQ" ] \
   || fail "worker poll truncated a long BLOCKED question: got ${#EVID} chars, expected ${#LONGQ}"
 pass "worker poll preserves questions longer than the pane is wide"
@@ -280,7 +280,7 @@ printf 'reading src/limits.py: MAX_LIMIT reached the cap here\n'                
 [ "$( classify_fixture "$FX/limit_false_positive.txt" )" = "idle" ] \
   || fail "worker poll false-positived LIMITED on source text mentioning limits"
 FUNDS=$( ( cd "$TMP_WD" && ROTA_TEST_POLL_FIXTURE="$FX/limited_funds.txt" "$ROTA_BIN" --json worker poll t ) \
-         | jget 'data.slots[0].evidence' )
+         | jget 'data.slots[0].evidence' ) || vfail
 case "$FUNDS" in
   *"Add funds"*) : ;;
   *) fail "an 'Add funds' prompt must be flagged in the evidence (it spends money): '$FUNDS'" ;;
@@ -373,7 +373,7 @@ json.dump({"ship": {"review": "none"}, "test": {"full": []}}, open(sys.argv[1], 
 PYEOF
 ( cd "$TMP_WD" && "$ROTA_BIN" worker pool init --slots 3 --base main ) >/dev/null 2>&1 \
   || fail "could not add slot w3"
-GATE_OUT=$( cd "$TMP_WD" && "$ROTA_BIN" --json worker gate w3 --base main --no-verify 2>/dev/null )
+GATE_OUT=$( cd "$TMP_WD" && "$ROTA_BIN" --json worker gate w3 --base main --no-verify 2>/dev/null ) || vfail
 [ "$(jget data.verifySkipped <<<"$GATE_OUT")" = "true" ] \
   || fail "worker gate with empty test.full must report verifySkipped, got: $GATE_OUT"
 pass "worker gate reports verifySkipped rather than a pass it cannot back"
@@ -547,7 +547,7 @@ rm -rf "${TMP_RV:?}"
 # ── reap ────────────────────────────────────────────────────────────────────
 ( cd "$TMP_WD" && "$ROTA_BIN" worker pool reap --all ) || fail "worker pool reap --all failed"
 LEFT=$( cd "$TMP_WD" && "$ROTA_BIN" --json worker pool list \
-        | python3 -c 'import json,sys; print(len(json.load(sys.stdin)["data"]["slots"]))' )
+        | python3 -c 'import json,sys; print(len(json.load(sys.stdin)["data"]["slots"]))' ) || vfail
 [ "$LEFT" = "0" ] || fail "reap --all left $LEFT slots in the registry"
 BRANCHES=$( git -C "$TMP_WD" branch --list 'rota-worker/*' | wc -l | tr -d ' ' )
 [ "$BRANCHES" = "0" ] || fail "reap --all left $BRANCHES rota-worker/* branches behind"

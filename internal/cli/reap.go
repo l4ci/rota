@@ -58,6 +58,11 @@ func reapVerb(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
+		// An unreadable registry reads as an empty pool, which strips the
+		// shield from every slot worktree: refuse before listing or deleting.
+		if err := worker.CheckRegistry(root); err != nil {
+			return Result{}, &Error{Exit: ExitUnavailable, Message: "reap refused: " + err.Error()}
+		}
 		ctx := c.Context()
 		env, ops := c.deps().ReapEnv(ctx, root)
 		var agents []host.Agent

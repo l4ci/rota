@@ -283,3 +283,57 @@ func TestReconcileSkipsExternal(t *testing.T) {
 		}
 	}
 }
+
+func TestUnreadSourceGatesRepairs(t *testing.T) {
+	rep := &Report{Unavailable: []string{SourceHost}}
+	if got := unreadSource(rep, DeadTab); got != SourceHost {
+		t.Errorf("dead-tab with host down = %q", got)
+	}
+	if got := unreadSource(rep, PRStale); got != "" {
+		t.Errorf("pr-stale needs the forge, which answered: %q", got)
+	}
+	rep = &Report{Unavailable: []string{SourceForge}}
+	for _, k := range []string{PRUnrecorded, MergedExternal, PRStale, LabelMissing, LabelStale} {
+		if got := unreadSource(rep, k); got != SourceForge {
+			t.Errorf("%s with forge down = %q", k, got)
+		}
+	}
+	if got := unreadSource(rep, DeadTab); got != "" {
+		t.Errorf("dead-tab does not read the forge: %q", got)
+	}
+}
+
+// closedListFails reads the open lists fine and fails the closed-issue list,
+// so a finding is computed from one forge call while another one failed.
+type closedListFails struct{ Forge }
+
+func (c closedListFails) List(ctx context.Context, f tracker.ListFilter) ([]tracker.Issue, error) {
+	if f.State == "closed" {
+		return nil, errors.New("closed list flaked")
+	}
+	return c.Forge.List(ctx, f)
+}
+
+// A finding computed while the forge was partly unreadable is a guess: apply
+// must warn and leave the slot registered (#579).
+func TestReconcileApplySkipsARepairWhoseSourceWasUnreadable(t *testing.T) {
+	root, e, fr := extFixture(t, "https://github.com/o/r/pull/7")
+	fr.states[7] = "merged"
+	e.Forge = closedListFails{e.Forge}
+	out, err := e.Reconcile(bg, root, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(out.Report.Unavailable, SourceForge) {
+		t.Fatalf("fixture must leave the forge unavailable: %v", out.Report.Unavailable)
+	}
+	if k := kinds(out.Drift)["ext-1"]; len(k) != 1 || k[0] != MergedExternal {
+		t.Fatalf("the merged-external finding must stay in drift: drift %v repaired %v", out.Drift, out.Repaired)
+	}
+	if worker.LoadRegistry(root).Slot("ext-1") == nil {
+		t.Error("slot released on a forge read that failed")
+	}
+	if !slices.ContainsFunc(out.Report.Warnings, func(w string) bool { return strings.Contains(w, "skipped") && strings.Contains(w, "forge") }) {
+		t.Errorf("want a skipped-repair warning: %v", out.Report.Warnings)
+	}
+}

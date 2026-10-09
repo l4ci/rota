@@ -20,7 +20,7 @@ echo "real work"
 EOF
   git add b.sh && git commit -q -m "feat: add b.sh"
 
-  OUT=$(hvj review scaffolding feat --base main)
+  OUT=$(hvj review scaffolding feat --base main) || vfail
   [ "$(echo "$OUT" | jget data.findings[0].file)" = "b.sh" ] || fail "scaffolding scan missed b.sh: $OUT"
   echo "$OUT" | jget data.findings[0].text | grep "Task 7" >/dev/null || fail "scaffolding scan missed 'Task 7' in b.sh: $OUT"
   [ "$(echo "$OUT" | jget data.findings[0].line)" = "2" ] || fail "scaffolding finding should sit on line 2: $OUT"
@@ -29,7 +29,7 @@ EOF
 
   # Add a clean-only commit; the verb should still surface the existing match
   echo "more" >> a.txt && git add a.txt && git commit -q -m "feat: tweak a"
-  OUT2=$(hvj review scaffolding feat --base main)
+  OUT2=$(hvj review scaffolding feat --base main) || vfail
   echo "$OUT2" | jget data.findings[0].text | grep "Task 7" >/dev/null || fail "scaffolding scan lost match after benign commit: $OUT2"
 
   # Empty diff (branch == base) -> no findings, exit 0
@@ -46,7 +46,7 @@ EOF
 
   # review package: diff goes to a file, not the caller's context
   git checkout -q feat
-  OUT=$(hvj review package feat --base main)
+  OUT=$(hvj review package feat --base main) || vfail
   PKG=$(echo "$OUT" | jget data.path)
   [ -f "$PKG" ] || fail "review package wrote no file: $OUT"
   [ "$(echo "$OUT" | jget data.files)" = "$(git diff --name-only main...feat | wc -l | tr -d ' ')" ] || fail "review package file count differs from git: $OUT"
