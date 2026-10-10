@@ -43,6 +43,8 @@ The gate strengths are by design. This is where the active/passive distinction l
 | Confirmation gate | conditional (only on existing-term conflict — alias collision is the gate; same-name updates are silent) | **none** — Step 4 explicitly auto-writes | **manual gate**, always |
 | Verifier | none | Opus opt-in (`--strict` or `learn.verify`) | none |
 | Source-prefill flags | `--def`, `--alias`, `--not`, `--touch` | none | `--from-learning`, `--from-spike` |
+| Lifecycle flags | none | `--deprecate`, `--amend` (tier / body edit via `rota knowledge`) | `--supersede`, `--retire` (status line edit; no writer verb) |
+| Retire gate | n/a | none | **manual gate**; a superseding entry also passes the three gates |
 | Active vs passive | vocabulary (low-risk additive) | passive ("remember if relevant") | active commitment (forbids + permits) |
 
 These divergences are **not bugs to file**: the gate strength encodes what the user *must* approve. A forbids/permits entry constrains future work, so `/rota-decide` always asks; passive bullets are cheap to amend and a fresh term is additive.
