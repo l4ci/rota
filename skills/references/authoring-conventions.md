@@ -23,6 +23,7 @@ Rules for authoring new rota skills or new behavior in existing ones. Consult th
 - Inventory table beside a citation when ≥4 sibling rules extracted
 - Avoid `&` in `TaskCreate`/`TodoWrite` payloads
 - `/rota-x` and `$rota-x` are the same invocation
+- Write instructions the model needs, nothing else
 
 ## Skills are self-contained, with autonomy rules inline
 
@@ -182,3 +183,15 @@ Claude Code's TUI HTML-escapes task titles but never decodes them, so `&` shows 
 ## `/rota-x` and `$rota-x` are the same invocation
 
 Codex invokes a skill as `$rota-x`; Claude Code as `/rota-x`. Skill text keeps `/rota-x` everywhere and does not branch on the harness: read `$rota-x` as the same call. A skill installed with `rota skills install` lists in Codex as `rota-x`, and `$rota-x` invokes it. Never write both spellings in one sentence, and never rewrite an existing `/rota-x` to `$rota-x`. When the harness has no skill-invocation tool, read the target skill's `SKILL.md` and follow it with the stated arguments and brief; a slash command is not a shell command.
+
+## Write instructions the model needs, nothing else
+
+Three rules for every sentence added to a skill.
+
+- **Pair a ban with the target action.** "Don't summarize the diff" leaves the model guessing; "Don't summarize the diff; list each changed verb" gives it something to do.
+- **Delete a sentence that changes nothing against the model default.** Strike it and ask whether the output would differ. If not, cut it.
+- **Don't restate what the environment answers.** A validator, verb contract or tool schema already says it; point at it or stay silent.
+
+**Forbids.**
+- A bare prohibition with no replacement action.
+- Instructions that repeat model defaults or something a validator already enforces.

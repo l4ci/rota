@@ -71,7 +71,7 @@ No guardrail: check command `bash test/gate.sh` runs in no CI workflow or hook; 
 
 ### `--term <name>`
 
-Captures a domain term into the pinned `## Glossary` topic of `.rota/KNOWLEDGE.md`.
+Captures a domain term into the pinned `## Glossary` topic of `.rota/KNOWLEDGE.md`. Admit only project-specific terms: no general programming concepts (cache, retry), no implementation detail (a function or file name).
 
 **Required:** `--def "<text>"` — one-paragraph canonical definition (single paragraph, no nested headings).
 **Optional:** `--alias "a,b,c"` (comma-separated synonyms), `--not "x,y"` (near-miss disambiguators), `--touch` (force-bump the date stamp on an existing-term update).

@@ -11,6 +11,8 @@ Treat the design as a tree of decisions. The **frontier** is every open decision
 3. Ask the rest as one batch, numbered `Q1..Qn`. Each question carries a **recommended answer** and a one-line reason; the user confirms or redirects. Cap a round at 4 questions, fewer when the picker requires it (one question per decision); in plain prose, number them and say which you recommend.
 4. Fold the answers in. New decisions they unlock join the next frontier.
 
+Word each question so a bare "yes" accepts the recommended answer. While a fact lookup runs, ask the rest of the frontier instead of waiting. Check what the user says about how something works against the code; a claim is a lead, not a fact.
+
 Don't ask a question whose answer changes nothing downstream.
 
 ## Code before user
@@ -24,7 +26,7 @@ When a decision looks settled, test it with one concrete scenario that stresses 
 ## Terms
 
 - **Conflict.** If the user's wording collides with a glossary entry (`rota glossary read <term>`), name it: *"Glossary has Worker as X; you mean Y. Which?"*. Don't carry both meanings forward.
-- **Sharpening.** A vague or overloaded term gets pinned to one meaning in the user's words. When the user defines or confirms one (*"by X I mean…"*), write it inline, without a separate step: `rota glossary write "<name>" --def "<text>" [--alias "a,b"] [--not "x,y"]` (exit 4 on an alias collision: surface it, don't retry).
+- **Sharpening.** A vague or overloaded term gets pinned to one meaning in the user's words. Only project-specific terms qualify: no general programming concepts, no implementation detail. When the user defines or confirms one (*"by X I mean…"*), write it inline, without a separate step: `rota glossary write "<name>" --def "<text>" [--alias "a,b"] [--not "x,y"]` (exit 4 on an alias collision: surface it, don't retry).
 
 ## Stop condition
 
