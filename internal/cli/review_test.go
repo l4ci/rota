@@ -683,3 +683,30 @@ func TestReviewDepthReadsTheIssueLabels(t *testing.T) {
 		t.Errorf("no labels map: the issue is not read: %v (%d reads)", d, reads)
 	}
 }
+
+// A branch of manual commits cites no items: /rota-review Step 3 keys off the
+// empty list to skip the Spec axis, so it must be [] and not null or absent.
+func TestReviewScopeManualCommits(t *testing.T) {
+	root := newRepo(t, t.TempDir(), "proj", "main")
+	write(t, filepath.Join(root, ".rota", "config.json"), issuesConfig)
+	write(t, filepath.Join(root, "a.txt"), "a\n")
+	gitT(t, root, "add", "a.txt")
+	gitT(t, root, "commit", "-q", "-m", "base")
+	gitT(t, root, "checkout", "-q", "-b", "tidy-up")
+	write(t, filepath.Join(root, "a.txt"), "b\n")
+	gitT(t, root, "add", "a.txt")
+	gitT(t, root, "commit", "-q", "-m", "Tidy a by hand")
+	deps := withTracker(t, issueFixture())
+
+	o := trRunWith(t, deps, root, "", "review", "scope", "--json")
+	if o.code != 0 {
+		t.Fatalf("exit %d %s%s", o.code, o.stdout, o.stderr)
+	}
+	d := envelope(t, o.stdout)["data"].(map[string]any)
+	if !reflect.DeepEqual(d["referencedIds"], []any{}) {
+		t.Errorf("referencedIds %#v, want []", d["referencedIds"])
+	}
+	if !reflect.DeepEqual(d["intents"], []any{}) {
+		t.Errorf("intents %#v, want []", d["intents"])
+	}
+}
