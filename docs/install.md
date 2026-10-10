@@ -93,7 +93,26 @@ Plugin skills are namespaced: `/rota:rota-work`, `/rota:rota-ship` and so on. Wh
 
 `rota doctor` and `rota skills status` count the plugin's copy as a skill root. It matches when its files are the ones the binary carries, so a plugin install with the right binary reports healthy. On a mismatch, either run `/rota:rota-install` (binary to the plugin's version) or `claude plugin update rota@rota` (plugin to the binary's).
 
-Pick one way per machine. A plugin plus a `rota skills install` user copy shows every skill twice, once as `/rota-work` and once as `/rota:rota-work`; `rota skills uninstall` removes the second. Codex has no plugin: it keeps `rota skills install`.
+Pick one way per machine. A plugin plus a `rota skills install` user copy shows every skill twice, once as `/rota-work` and once as `/rota:rota-work`; `rota skills uninstall` removes the second. Codex: use `rota skills install`, not the plugin (see below).
+
+### Codex and Copilot CLI
+
+Tested on Codex 0.161.0 in a throwaway `CODEX_HOME`. The plugin route breaks in three places, so Codex stays on `rota skills install`:
+
+- Codex does not read `.claude-plugin/marketplace.json`. It lists no plugin from the repo until a `.agents/plugins/marketplace.json` exists.
+- Given such a marketplace, Codex honours the manifest's `skills` list and does not auto-discover the root `skills/`. Only `/rota:rota-install` loads. Listing `./skills/` as well loads all 17 skills.
+- Codex drops symlinks when it copies a plugin into its cache. Every skill's `references/` is a symlink, so the extra skills would load without their references.
+
+Copilot CLI was not installed on the test machine and is untested.
+
+Per route, does it update itself?
+
+| Route | Updates itself? | Update with |
+|---|---|---|
+| Claude Code plugin | No | `claude plugin update rota@rota`, then `/rota:rota-install` |
+| `rota skills install` (Claude Code, Codex) | No | `rota skills update` |
+| `npx skills add l4ci/rota` | No | run the command again |
+| Homebrew or install script (binary) | No | `rota update` prints the command |
 
 ## Upgrading
 
