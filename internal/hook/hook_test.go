@@ -330,12 +330,36 @@ func TestInstallFreshAndUninstall(t *testing.T) {
 	if err != nil || out.Statusline != SLInstalled || !out.Changed || out.Blocked {
 		t.Fatalf("%+v %v", out, err)
 	}
-	if e := MarkedEvents(o); len(e) != 3 {
+	if e := MarkedEvents(o); len(e) != 4 {
 		t.Errorf("events %v", e)
 	}
 	Uninstall(o)
 	if dump(t, o) != "{}\n" {
 		t.Errorf("left %s", dump(t, o))
+	}
+}
+
+func TestInstallGuardEntry(t *testing.T) {
+	o := jsonx.NewObject()
+	if _, err := Install(InstallIn{Scope: ScopeProject, Files: map[Scope]*jsonx.Object{ScopeProject: o}}); err != nil {
+		t.Fatal(err)
+	}
+	got := dump(t, o)
+	if !strings.Contains(got, `"PreToolUse"`) || !strings.Contains(got, `"matcher": "Bash"`) || !strings.Contains(got, GuardCommand) {
+		t.Errorf("guard entry missing:\n%s", got)
+	}
+	if MarkedEvents(o)[EventGuard] != GuardCommand {
+		t.Errorf("MarkedEvents: %v", MarkedEvents(o))
+	}
+	if out, _ := Install(InstallIn{Scope: ScopeProject, Files: map[Scope]*jsonx.Object{ScopeProject: o}}); out.Changed {
+		t.Error("second install changed the file")
+	}
+	// A user's own PreToolUse hook is kept through install and uninstall.
+	own := parse(t, `{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"mine.sh"}]}]}}`)
+	Install(InstallIn{Scope: ScopeProject, Files: map[Scope]*jsonx.Object{ScopeProject: own}})
+	Uninstall(own)
+	if !strings.Contains(dump(t, own), "mine.sh") || strings.Contains(dump(t, own), Marker) {
+		t.Errorf("uninstall:\n%s", dump(t, own))
 	}
 }
 

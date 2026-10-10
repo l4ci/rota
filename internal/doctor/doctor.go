@@ -140,7 +140,7 @@ type Input struct {
 func Run(ctx context.Context, in Input) Report {
 	d := &runner{in: in, ctx: ctx}
 	checks := []Check{
-		d.git(), d.jq(), d.host(), d.tracker(), d.accounts(), d.hook(), d.statusline(), d.stopHook(), d.switchCheck(), d.skills(), d.codex(),
+		d.git(), d.jq(), d.host(), d.tracker(), d.accounts(), d.hook(), d.statusline(), d.stopHook(), d.guardHook(), d.switchCheck(), d.skills(), d.codex(),
 	}
 	if c, ok := d.disk(); ok {
 		// Only a volume below the threshold adds a line: a healthy one stays
@@ -382,6 +382,7 @@ func (d *runner) hook() Check {
 const (
 	statuslineHint = "rota hook install --wrap-statusline"
 	stopHookHint   = "rota hook install"
+	guardHookHint  = "rota hook install --scope project (or --scope user)"
 )
 
 // projectFiles reads the project's two settings files, in precedence order.
@@ -577,6 +578,47 @@ func (d *runner) stopHook() Check {
 		}
 	}
 	return pass(name, "Stop and SessionStart hooks run rota")
+}
+
+// guardHook checks the worker guard (#702). It must sit in project or user
+// scope: project-local is untracked, so a worker worktree never reads it.
+func (d *runner) guardHook() Check {
+	const name = "guard-hook"
+	if d.in.ProjectRoot == "" {
+		return skip(name, "not inside a rota project")
+	}
+	if in, bad := d.optIn(); !in {
+		return notInstalled(name, bad)
+	}
+	files := d.projectFiles()[1:] // settings.json; settings.local.json never reaches a worktree
+	for _, dir := range d.in.ConfigDirs {
+		files = append(files, d.userFile(dir))
+	}
+	var unreadable []string
+	cmd := ""
+	for _, f := range files {
+		if f.err != nil {
+			unreadable = append(unreadable, f.path)
+		}
+		if c, ok := f.events[hook.EventGuard]; ok && cmd == "" {
+			cmd = c
+		}
+	}
+	if cmd == "" {
+		detail := "no # rota-hook PreToolUse entry in project or user scope (project-local does not reach worker worktrees)"
+		if len(unreadable) > 0 {
+			detail += " (cannot read " + strings.Join(unreadable, ", ") + ")"
+		}
+		return fail(name, detail, guardHookHint)
+	}
+	first := strings.Fields(cmd)[0]
+	if _, ok := d.resolve(first); !ok {
+		return fail(name, "PreToolUse hook runs "+first+", which is not found", guardHookHint)
+	}
+	if d.in.CodexTiers {
+		return Check{Name: name, Status: Warn, Detail: "PreToolUse guard covers Claude workers only; Codex workers are not guarded"}
+	}
+	return pass(name, "PreToolUse guard runs rota")
 }
 
 // resolve finds the executable a hook command starts with.
