@@ -11,13 +11,13 @@ rota is a small tool for capturing, building and shipping work with a coding age
 
 ## What rota does not do
 
-- Other harnesses (Cursor, Aider, Gemini CLI and the like).
-- Trackers beyond GitHub and GitLab (Jira, Linear and the like).
+- Harnesses beyond Claude Code and Codex, not yet. Some are tracked in open issues.
+- Trackers beyond GitHub and GitLab, not yet. Some are tracked in open issues.
 - Hosted dashboards, cloud runners or any service that holds your work. It runs in your terminal and your repo.
 - Replace your CI, your review process or your judgment about what to merge.
 
 ## How issues are judged
 
-An issue is in scope when it names something that went wrong or got in the way, and fixing it fits the lists above. Bugs need a way to reproduce. Ideas should say which failure you hit and what the idea would change; a request with no observed failure behind it is likely to wait or be declined. Each issue gets a reason, whatever the answer.
+An issue is in scope when it names something that went wrong or got in the way, and fixing it fits the lists above. Bugs need a way to reproduce. Ideas work best when they say which failure you hit and what the idea would change. Ideas without one are still read. Each issue gets a reason, whatever the answer.
 
 Use the issue templates. For a pull request, run the checks in the README's Contributing section first.
