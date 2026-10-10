@@ -32,6 +32,7 @@ See KNOWLEDGE.md "Skill Authoring: Prose & References" for when to extract (≥3
 | [`source-prefill.md`](source-prefill.md) | `/rota-decide --from-learning` and `--from-spike` prefill. |
 | [`subagent-dispatch.md`](subagent-dispatch.md) | When and how skills push work into subagents; the tier table. |
 | [`task-ledger.md`](task-ledger.md) | `Task:` commit trailer, read on resume to skip finished tasks. |
+| [`test-quality.md`](test-quality.md) | Tautological and implementation-coupled tests, mock boundaries, one test per slice. |
 | [`three-mode-skill-shape.md`](three-mode-skill-shape.md) | First-run / after-work / restructure shape for `/rota-ship --docs` and `/rota-qa`. |
 | [`tmux-dispatch.md`](tmux-dispatch.md) | Judgment the `rota worker` verbs do not enforce; shared by both hosts. |
 | [`umbrella-mode.md`](umbrella-mode.md) | Umbrella registry, `Repos:` field and resolution verbs. |

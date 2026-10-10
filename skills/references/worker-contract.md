@@ -72,7 +72,7 @@ Work only this task, then stop.
   change. Record every check through `rota proof record` so a row is measured, not
   typed; `rota proof add` is for docs-only rows with no command. A test that passes before the change
   proves nothing: fix the test. So does one that fails on a build, compile or setup
-  error (missing import, typo, undefined symbol): the RED must be a failed assertion. Docs and skill-only changes have no RED: say
+  error (missing import, typo, undefined symbol): the RED must be a failed assertion. Write tests to `references/test-quality.md`. Docs and skill-only changes have no RED: say
   `no test seam: docs/skill change` in the proof row's check.
 - Before opening a PR, run this deterministic checklist on your own branch. It is
   commands only, no model reviewer, so the no-reviewer rule above stands:
