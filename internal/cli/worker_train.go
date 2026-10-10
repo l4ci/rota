@@ -93,26 +93,8 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 		}
 		say := func(l string) { fmt.Fprintln(c.Stderr, l) }
 		r, err := workerEnvCtx(c, ctx).Train(ctx, root, worker.TrainOpts{Targets: args, Base: *base, Order: override, Say: say, LandGreen: *landGreen, NoVerify: *noVerify, Approve: approve, Verdict: shipVerdict(c, root, root).Block, Recorded: recordedReviews(root)})
-		if err != nil && r.Verdict == worker.GateVerdictBlocked {
-			return verdictRefusal(err, trainData(r))
-		}
-		if err != nil && r.Verdict == worker.GateApprovalRequired {
-			return gateRefusal(err, trainData(r))
-		}
-		if err == nil && r.Verdict == worker.GateNoVerify {
-			return noVerifyRefusal(r.Err, r.Hint, trainData(r))
-		}
-		if err == nil && r.Verdict == worker.GateNotClosing {
-			return closesRefusal(r.Err, r.Hint, trainData(r))
-		}
-		if err == nil && r.Verdict == worker.GateOrder {
-			return blockedRefusal("order", r.Err, r.Hint, trainData(r))
-		}
-		if err == nil && r.Verdict == worker.GateBestOfUnpicked {
-			return bestOfRefusal(r.Err, r.Hint, trainData(r))
-		}
-		if err == nil && r.Verdict == worker.GateReviewMissing {
-			return blockedRefusal("review-missing", r.Err, r.Hint, trainData(r))
+		if res, ok, rerr := verdictRefusal(r.Verdict, err, r.Err, r.Hint, trainData(r)); ok {
+			return res, rerr
 		}
 		if err != nil {
 			return Result{}, err

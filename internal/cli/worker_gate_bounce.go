@@ -36,8 +36,8 @@ func gateBounce(c *Ctx, root, issue string, r worker.GateResult) (n int, parked 
 	if issue == "" {
 		return 0, false, nil
 	}
-	switch r.Verdict {
-	case worker.GatePass:
+	switch m := worker.ClassifyVerdict(r.Verdict); {
+	case r.OK():
 		// The PR lands: the item's wall-clock (work.itemTimeoutMinutes) ends too.
 		if err := worker.ClearItemStart(root, issue); err != nil {
 			return 0, false, err
@@ -46,7 +46,7 @@ func gateBounce(c *Ctx, root, issue string, r worker.GateResult) (n int, parked 
 			return 0, false, err
 		}
 		return 0, false, worker.ClearBounces(root, issue)
-	case worker.GateStale, worker.GateProvenanceFail:
+	case m.Bounce:
 	default:
 		return 0, false, nil
 	}
