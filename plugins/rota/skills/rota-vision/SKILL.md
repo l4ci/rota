@@ -1,0 +1,118 @@
+---
+name: rota-vision
+description: Use on "let's plan", "what's the bigger picture", "create a roadmap", "brainstorm milestones".
+---
+
+# rota-vision — Project Vision & Milestones
+
+Milestones are optional structure; nothing else in rota requires one. On the issue backend a milestone is a native tracker milestone `MNN — <title>` plus a tracking issue (`references/issue-mode.md`), and the list you write mirrors that. `.rota/MILESTONES.md` holds a short vision paragraph and the Active list; each milestone's plan is its tracking-issue body (file backend: `.rota/milestones/MNN.md`).
+
+Copy this checklist and track your progress:
+```
+- [ ] Step 1 — Mode
+- [ ] Step 2 — Load context
+- [ ] Step 3 — Frame and discover
+- [ ] Step 4 — Research (opt-in)
+- [ ] Step 5 — Challenge
+- [ ] Step 6 — Propose, once
+- [ ] Step 7 — Write
+- [ ] Step 8 — Report
+```
+
+## Step 1 — Mode
+
+`rota milestone list --json`: `data.milestones` empty → **Create**; non-empty → **Edit** (extend, refine, retire, re-prioritize). Don't announce it.
+
+## Step 2 — Load context
+
+Follow `references/context-load-protocol.md` (parallel, silent), plus `.rota/MILESTONES.md`, `rota milestone show <MNN>` for each existing milestone, the root stack file (`README.md`, `package.json`, …) and `rota glossary read <term>` for the user's terms. Definitional signals (*"by X I mean…"*) trigger `rota glossary write`. Issue mode: never read `.rota/milestones/*.md`. DECISIONS matches constrain what milestones can promise; surface conflicts before proposing.
+
+## Step 3 — Frame and discover
+
+Open with 3-4 sentences on what you see: the project's shape, existing milestones, obvious gaps. Then one question batch (see `references/design-exploration.md`):
+
+- **Create** — 2-3 questions: *Scope* (new product / strategic refactor / research / other), *Audience*, *Constraint* (time or scope limit).
+- **Edit** — one question, *Action*: add a milestone (Recommended if the vision feels incomplete), refine one, retire/activate, re-prioritize, or explore a new direction.
+
+In Edit mode, read each milestone's Not yet specified and Out of scope sections before proposing. Move a Not-yet-specified item that is now sharp into Acceptance (or a new milestone if it outgrew this one) and delete it from the section. Record an idea the user rules out under Out of scope with a one-line reason, so the next edit doesn't re-propose it; don't re-raise anything already listed there unless the user reopens it.
+
+On ambiguity default to the Recommended option and name it.
+
+## Step 4 — Research (opt-in)
+
+Skip unless the user asks or the framing leans on outside context (prior art, pitfalls, an unfamiliar space). When it applies, read [`research.md`](research.md).
+
+## Step 5 — Challenge
+
+Push back on the framing; a polite review wastes the cycle. Run the rounds, recommended answers, code-first lookups, edge-case scenarios, term handling and stop condition of `references/grilling.md`, with these tactics as the lens:
+
+- **Scope check** — *"M02 has 12 acceptance criteria. What's the smaller version that ships in two weeks?"*
+- **Risk frontloading** — *"M01 assumes auth is straightforward; session storage is the bigger risk. Frontload it?"*
+- **Overlap detection** — *"M02 and M03 touch the same code 60%. One milestone in two phases?"*
+- **Cut tradeoff** — *"What would you cut to ship in half the time?"*
+- **Dependency surfacing** — *"You said M03 is independent, but it needs M01's auth. Mark it, or change M03's scope?"*
+- **Assumption naming** — name implicit assumptions (*"this assumes single-tenant"*) and force a stance.
+- **Why this order** — for each adjacent pair, why the earlier comes first.
+
+Batch each round into at most 3 questions (multiple selections for choosing trade-offs). Move on when the frontier is empty and the framing has survived honest pushback.
+
+## Step 6 — Propose, once
+
+Show the milestone list as plain markdown, not yet saved, one block per milestone:
+
+```
+### M01 — <title>   [ready · no deps]
+**Goal:** <one sentence>
+**Acceptance:**
+- <checkable bullet>
+- <checkable bullet>
+**Rationale:** <why this one, why now>
+**Open risks:** <at least one; if you can't name one it isn't thought through>
+**Not yet specified:** <optional: in-scope work too unsharp to write as Acceptance yet>
+**Out of scope:** <optional: ruled-out ideas, each with a one-line reason>
+```
+
+Both sections are optional; omit a line with nothing to put in it. In the milestone body they are `## Not yet specified` and `## Out of scope` sections (bullets), after Open risks.
+
+The tag is `[ready · no deps]` or `[blocked · depends M01]`. No cap on count, but don't slice everything upfront: park unsharp in-scope work under Not yet specified instead of inventing Acceptance bullets for it. Order by dependency layer and make parallel-able milestones visible. Apply the user's redlines (merge, cut, retire, add, re-order) and ask for one explicit confirmation before writing; silence is not confirmation.
+
+## Step 7 — Write
+
+Batch the writes, then refresh the index once.
+
+```bash
+MID=$(rota milestone add --json --title "<title>" --summary "<one line>" [--depends M01,M02] | jq -r .data.id)
+```
+
+Issue mode: creates the native milestone and tracking issue (status `planned`). Draft the full plan (frontmatter `id: <MNN>` required) in a scratch file and publish with `rota milestone put <MNN> --body-file <file>|-`. File mode: mints `MNN`, a stub `.rota/milestones/MNN.md` and an overview block; edit the stub's sections (keep the frontmatter).
+
+- **Status:** `rota milestone status <MNN> --to <planned|active|shipped|archived>` per changed milestone. Several can be active when independent. `archived` retires one without deleting it, but an archived dependency does not unblock dependents; `shipped` does.
+- **Vision paragraph** (Create only): `rota milestone overview --body-file <file>|-` (file mode: replace the placeholder under `# Milestones`), 2-4 sentences on the why. In Edit mode leave it unless the framing changed.
+- **Index:** `rota milestone index` regenerates the Active list and the managed instructions block. Never hand-edit the Active list.
+
+## Step 8 — Report
+
+```
+Vision updated.
+- M01 — Auth foundation   [active · ready]
+- M02 — Multi-tenant      [planned · blocked by M01]
+Active: M01. Run /rota-capture to fill items, or /rota-work to pick from the backlog.
+```
+
+If a newly active milestone has no items, offer (default Capture): `/rota-capture` to file items, `/rota-plan` in slice mode for a first slice plan, or skip. Don't recap discovery, research or the challenge.
+
+## Key principles
+
+- **Challenge, don't transcribe.** Surface assumptions, frontload risks, force tradeoffs before anything lands.
+- **Research is grounding.** A finding that doesn't change a milestone's shape doesn't belong.
+- **Dependencies are explicit.** `ready` vs `blocked` is computed.
+- **Thin by design.** The tracker's milestone is the source of truth; don't duplicate it in prose.
+
+## References
+
+- [`research.md`](research.md): opt-in web research; read from Step 4.
+- [`references/context-load-protocol.md`](references/context-load-protocol.md): shared parallel context load.
+- [`references/knowledge-consult.md`](references/knowledge-consult.md): the K+D query pattern the load uses.
+- [`references/grilling.md`](references/grilling.md): the Step 5 challenge rounds.
+- [`references/subagent-dispatch.md`](references/subagent-dispatch.md): the `light` subagent that grilling sends for broad reads.
+- [`references/design-exploration.md`](references/design-exploration.md): shared spine with `/rota-brainstorm`.
