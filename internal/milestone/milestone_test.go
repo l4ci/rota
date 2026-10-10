@@ -287,3 +287,20 @@ func TestIDGrammarUnicodeDigits(t *testing.T) {
 		}
 	}
 }
+
+// Optional plan sections (Not yet specified, Out of scope) are free-form body
+// text: Put validates frontmatter only.
+func TestPutAcceptsOptionalPlanSections(t *testing.T) {
+	root := t.TempDir()
+	if _, err := Add(root, "First", "Summary line.", ""); err != nil {
+		t.Fatal(err)
+	}
+	text := "---\nid: M01\nstatus: planned\n---\n\n## Goal\n\ng\n\n## Not yet specified\n\n- sync engine\n\n## Out of scope\n\n- SSO: ruled out, no demand\n"
+	if changed, err := Put(root, "M01", text); err != nil || !changed {
+		t.Fatalf("put with optional sections: %v %v", changed, err)
+	}
+	got, err := Show(root, "M01")
+	if err != nil || !strings.Contains(got, "## Not yet specified") || !strings.Contains(got, "## Out of scope") {
+		t.Errorf("sections not kept: %v\n%s", err, got)
+	}
+}
