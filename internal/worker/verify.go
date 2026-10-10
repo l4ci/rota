@@ -3,15 +3,11 @@ package worker
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
 	"strings"
-	"sync"
 	"time"
 
-	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/exitcode"
-	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/testledger"
 )
 
@@ -45,15 +41,15 @@ type VerifyResult struct {
 // check NoCommands to tell the two apart).
 func (r VerifyResult) OK() bool { return len(r.Failed) == 0 && !r.NotRun && !r.TimedOut }
 
-// Verify runs test.full, read from root's config, in dir. Each
+// Verify runs test.full from cfg, in dir. Each
 // command goes through Env.Shell, whose default runs it in its own process
 // group and kills the group on cancel. err is the log file failing to open.
-func (e Env) Verify(ctx context.Context, root, dir string) (VerifyResult, error) {
+func (e Env) Verify(ctx context.Context, cfg GateConfig, root, dir string) (VerifyResult, error) {
 	led, err := LoadLedger(root)
 	if err != nil {
 		return VerifyResult{}, err
 	}
-	return e.RunVerifyWith(ctx, verifyCommandsAt(root), dir, led)
+	return e.RunVerifyWith(ctx, cfg.FullCommands(), dir, led)
 }
 
 // LoadLedger reads root's exclusion ledger; a malformed one is exit 2.
@@ -132,53 +128,6 @@ func runVerifyCmds(ctx context.Context, shell func(ctx context.Context, dir, com
 	}
 	return res, nil
 }
-
-// HasVerifyCommands reports whether Verify has anything to run, for a caller
-// that must check preconditions before it does.
-func HasVerifyCommands(root string) bool { return len(verifyCommandsAt(root)) > 0 }
-
-// GateCommands is what the merge gate runs for test.full: test.full, or the
-// deprecated refactor.verifyCommands while a config still holds only that.
-func GateCommands(root string) []string { return verifyCommandsAt(root) }
-
-// TierCommands is test.<tier> (fast, full or e2e) from root's config: the
-// non-blank entries, trimmed.
-func TierCommands(root, tier string) []string {
-	return commandList(config.Load(rotatree.Config(root)), "test."+tier)
-}
-
-func commandList(cfg any, key string) []string {
-	var cmds []string
-	if v, ok := config.Lookup(cfg, key); ok {
-		if list, ok := v.([]any); ok {
-			for _, c := range list {
-				if t := strings.TrimSpace(fmt.Sprint(c)); t != "" {
-					cmds = append(cmds, t)
-				}
-			}
-		}
-	}
-	return cmds
-}
-
-// verifyCommandsAt is test.full, the merge-gate tier and the only place Verify
-// reads. While a config still holds refactor.verifyCommands and test.full is
-// empty, those commands run instead, with one deprecation warning.
-func verifyCommandsAt(root string) []string {
-	cfg := config.Load(rotatree.Config(root))
-	if cmds := commandList(cfg, config.TestFullKey); len(cmds) > 0 {
-		return cmds
-	}
-	cmds := commandList(cfg, config.LegacyVerifyKey)
-	if len(cmds) > 0 {
-		legacyWarn.Do(func() {
-			fmt.Fprintln(os.Stderr, "rota: refactor.verifyCommands is deprecated; run rota config fill to move it to test.full")
-		})
-	}
-	return cmds
-}
-
-var legacyWarn sync.Once
 
 // RunShell runs one command through the Env's shell (sh -c by default) in dir
 // and returns its combined output and exit code.

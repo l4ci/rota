@@ -308,16 +308,16 @@ func TestTrainCINotRun(t *testing.T) {
 	}
 }
 
-func TestFullWhere(t *testing.T) {
+func TestGateConfigWhere(t *testing.T) {
 	for in, want := range map[string]string{`{}`: "local", `{"test":{"fullWhere":"ci","ciChecks":["t"]}}`: "ci", `{"test":{"fullWhere":"local"}}`: "local"} {
-		if got, err := FullWhere(parseCfg(in)); err != nil || got != want {
+		if got, err := ParseGateConfig(parseCfg(in)).Where(); err != nil || got != want {
 			t.Errorf("%s: %q %v", in, got, err)
 		}
 	}
-	if _, err := FullWhere(parseCfg(`{"test":{"fullWhere":"x"}}`)); err == nil {
+	if _, err := ParseGateConfig(parseCfg(`{"test":{"fullWhere":"x"}}`)).Where(); err == nil {
 		t.Error("x must be an error")
 	}
-	if _, err := FullWhere(parseCfg(`{"test":{"fullWhere":"ci","ciChecks":[" "]}}`)); err == nil {
+	if _, err := ParseGateConfig(parseCfg(`{"test":{"fullWhere":"ci","ciChecks":[" "]}}`)).Where(); err == nil {
 		t.Error("ci with no check names must be an error")
 	}
 }
@@ -338,7 +338,7 @@ func TestCISettings(t *testing.T) {
 			return ""
 		}, 7 * time.Second},
 	} {
-		s, err := ciSettingsFrom(parseCfg(c.cfg), c.env)
+		s, err := ParseGateConfig(parseCfg(c.cfg)).CISettings(c.env)
 		if err != nil || s.timeout != c.want {
 			t.Errorf("%s: %v %v", c.cfg, s, err)
 		}

@@ -60,7 +60,7 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 		d.Set("item", id)
 		d.Set("changed", false)
 
-		cmds := worker.TierCommands(root, "fast")
+		cmds := worker.LoadGateConfig(root).Tier("fast")
 		if len(cmds) == 0 {
 			c.Warn("test.fast is unset: the proof check is skipped for %s", slotName)
 			d.Set("proofSkipped", true)

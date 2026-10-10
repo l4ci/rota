@@ -7,10 +7,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -40,10 +38,8 @@ func testRun(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		cmds := worker.TierCommands(root, tier)
-		if tier == "full" {
-			cmds = worker.GateCommands(root) // the gate's lookup, legacy key included
-		}
+		gc := worker.LoadGateConfig(root)
+		cmds := append([]string(nil), gc.Tier(tier)...) // full is the gate's lookup, legacy key included
 		if len(cmds) == 0 {
 			return Result{}, Resolution("test.%s is empty", tier).WithHint(fmt.Sprintf("set it with: rota config set test.%s '[\"<command>\"]'", tier))
 		}
@@ -64,7 +60,7 @@ func testRun(fs *flag.FlagSet) RunFunc {
 			}
 		}
 		env := workerEnvCtx(c, ctx)
-		isolate, err := config.Bool(config.Load(rotatree.Config(root)), "test.isolate")
+		isolate, err := gc.IsolateEnabled()
 		if err != nil {
 			return Result{}, Resolution("%v", err)
 		}
