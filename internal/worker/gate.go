@@ -63,8 +63,8 @@ import (
 //     there is fixed forward.
 //
 // The pre-merge refusals (ledger expiry, no-verify, CI-config, approval) are
-// shared with the train and live in premerge.go; the gate runs each as its own
-// step of gateSteps, and stage 3 is the merge alone.
+// shared with the train and live in premerge.go; the gate runs them as one
+// stepPremerge, and stage 3 is the merge alone.
 //
 // Between 1 and 2 sits a PROVENANCE check: the PR body's `## Approvals`
 // section is cross-checked against the slot's relays[] log. A relay cited as
@@ -356,7 +356,6 @@ type gateStep func(g *gate) (done bool, err error)
 
 // gateSteps run in order; see the numbered stages in the file comment.
 var gateSteps = []gateStep{
-	(*gate).stepLedgerExpiry,
 	(*gate).stepForge,
 	(*gate).stepExternal,
 	(*gate).stepAdoptPR,
@@ -371,9 +370,8 @@ var gateSteps = []gateStep{
 	(*gate).stepReviewDepth,
 	(*gate).stepCheckOnly,
 	(*gate).stepOnBase,
-	(*gate).stepNoVerify,
-	(*gate).stepCIConfig,
-	(*gate).stepApprove,
+	(*gate).stepCIVerifier,
+	(*gate).stepPremerge,
 	(*gate).stepForgeMergeable,
 	(*gate).stepVerifyFirst,
 	(*gate).stepMerge,
@@ -411,21 +409,6 @@ func (g *gate) run() error {
 // git runs git on the gate's context.
 func (g *gate) git(dir string, args ...string) (string, int) {
 	return g.e.runGit(g.ctx, dir, args...)
-}
-
-// stepLedgerExpiry refuses, before anything merges, a gate that verifies while
-// a test-ledger entry has expired.
-func (g *gate) stepLedgerExpiry() (bool, error) {
-	if g.o.CheckOnly || g.o.NoVerify {
-		return false, nil
-	}
-	r := ledgerRefusal(gateSubject(g.o.Slot), g.in.ledger, g.e.Now())
-	if r == nil {
-		return false, nil
-	}
-	g.res.Expired = r.Expired
-	g.verdict(r.Verdict, r.Err, r.Hint)
-	return true, nil
 }
 
 // stepRecordLedger appends the verdict to the gate ledger.
@@ -832,23 +815,8 @@ func (g *gate) stepOnBase() (bool, error) {
 	return false, nil
 }
 
-// stepNoVerify refuses a merge with nothing to verify it unless --no-verify
-// says so. CI verification does not read test.full, and a test.e2e tier still
-// verifies.
-func (g *gate) stepNoVerify() (bool, error) {
-	if g.o.NoVerify {
-		return false, nil
-	}
-	if r := noVerifyRefusalFor(gateSubject(g.o.Slot), g.in); r != nil {
-		g.verdict(r.Verdict, r.Err, r.Hint)
-		return true, nil
-	}
-	return false, nil
-}
-
-// stepCIConfig builds the CI verifier of a test.fullWhere ci gate and refuses a
-// merge that changes the CI definition.
-func (g *gate) stepCIConfig() (bool, error) {
+// stepCIVerifier builds the CI verifier of a test.fullWhere ci gate.
+func (g *gate) stepCIVerifier() (bool, error) {
 	if g.in.where != WhereCI || g.o.NoVerify {
 		return false, nil
 	}
@@ -857,25 +825,37 @@ func (g *gate) stepCIConfig() (bool, error) {
 		return g.broke(msg)
 	}
 	g.ci = ci
-	changed, err := g.e.ciDiffFiles(g.ctx, g.root, g.baseRef, g.verified)
-	if err != nil {
-		return g.broke(err.Error())
-	}
-	if r := ciConfigCheck(gateSubject(g.o.Slot), changed); r != nil {
-		g.verdict(r.Verdict, r.Err, r.Hint)
-		return true, nil
-	}
 	return false, nil
 }
 
-// stepApprove runs the merge-approval gate (B1) on the files the merge changes.
-func (g *gate) stepApprove() (bool, error) {
-	if g.o.Approve == nil {
-		return false, nil
+// stepPremerge runs the pre-merge sequence the train shares (premerge.go):
+// ledger expiry, no-verify, CI-config and the merge-approval gate (B1).
+func (g *gate) stepPremerge() (bool, error) {
+	run := premergeRun{
+		Subject:      gateSubject(g.o.Slot),
+		In:           g.in,
+		Now:          g.e.Now(),
+		SkipLedger:   g.o.CheckOnly || g.o.NoVerify,
+		SkipNoVerify: g.o.NoVerify,
+		Files:        g.changedFiles,
 	}
-	if err := g.o.Approve(g.changedFiles); err != nil {
+	if g.ci != nil {
+		run.CIChanged = func() ([]string, error) {
+			return g.e.ciDiffFiles(g.ctx, g.root, g.baseRef, g.verified)
+		}
+	}
+	run.Approve = g.o.Approve
+	r, approval, err := run.run()
+	switch {
+	case approval:
 		g.res.Verdict = GateApprovalRequired
 		return true, err
+	case err != nil:
+		return g.broke(err.Error())
+	case r != nil:
+		g.res.Expired = r.Expired
+		g.verdict(r.Verdict, r.Err, r.Hint)
+		return true, nil
 	}
 	return false, nil
 }
