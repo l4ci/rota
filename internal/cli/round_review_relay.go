@@ -62,7 +62,11 @@ func reviewOpts(c *Ctx, root string, set roundcfg.Settings, slot string) (round.
 		return round.ReviewOpts{}, trackerErr(err)
 	}
 	o := round.ReviewOpts{Slot: slot, Forge: fg, MaxBounces: set.MaxBounces}
-	if s := worker.LoadRegistry(root).Slot(slot); s != nil {
+	reg, err := worker.LoadRegistry(root)
+	if err != nil {
+		return round.ReviewOpts{}, err
+	}
+	if s := reg.Slot(slot); s != nil {
 		o.Verdict = failVerdict(root, s.Branch())
 	}
 	o.Escalate = func(ctx context.Context, number int, slot, title, body string) error {

@@ -110,7 +110,7 @@ func TestReadRowsRegistryFirstThenUnregisteredWorktrees(t *testing.T) {
 		t.Fatal(err)
 	}
 	rep := &Report{views: map[string]*view{}}
-	rows, slots := e.readRows(wts, worker.LoadRegistry(root), rep)
+	rows, slots := e.readRows(wts, worker.LoadRegistryTolerant(root), rep)
 	var got []string
 	for _, r := range rows {
 		got = append(got, r.Name+"|"+r.Branch+"|"+r.Issue+"|"+strconv.FormatBool(r.Registered))

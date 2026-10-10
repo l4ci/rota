@@ -160,7 +160,7 @@ func TestLayoutSplitKeepsTheLaunchingCLIOnTop(t *testing.T) {
 	if got := strings.Join(rig.log, "|"); got != want {
 		t.Errorf("moves = %s", got)
 	}
-	if got := worker.LoadRegistry(root).CLIPane(); got != "pc" {
+	if got := worker.LoadRegistryTolerant(root).CLIPane(); got != "pc" {
 		t.Errorf("recorded cli pane = %q", got)
 	}
 	cli, _ := rows[0].Get("cli")
@@ -262,19 +262,19 @@ func TestLayoutRefusesADirectoryWithoutRota(t *testing.T) {
 // join the grid; the bare report does not change it.
 func TestLayoutSplitAndTabsRecordOnTheRound(t *testing.T) {
 	root, _, deps := layoutProject(t, "herdr", []string{"ben"}, "ben")
-	if got := worker.LoadRegistry(root).Layout(); got != "" {
+	if got := worker.LoadRegistryTolerant(root).Layout(); got != "" {
 		t.Fatalf("fresh round layout = %q", got)
 	}
 	rotaRunWith(t, deps, "--json", "layout", "split", "--project", root)
-	if got := worker.LoadRegistry(root).Layout(); got != "split" {
+	if got := worker.LoadRegistryTolerant(root).Layout(); got != "split" {
 		t.Errorf("after split: %q", got)
 	}
 	rotaRunWith(t, deps, "--json", "layout", "--project", root)
-	if got := worker.LoadRegistry(root).Layout(); got != "split" {
+	if got := worker.LoadRegistryTolerant(root).Layout(); got != "split" {
 		t.Errorf("report changed it: %q", got)
 	}
 	rotaRunWith(t, deps, "--json", "layout", "tabs", "--project", root)
-	if got := worker.LoadRegistry(root).Layout(); got != "" {
+	if got := worker.LoadRegistryTolerant(root).Layout(); got != "" {
 		t.Errorf("after tabs: %q", got)
 	}
 }

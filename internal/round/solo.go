@@ -31,7 +31,11 @@ func soloBrief(text string, round int) string {
 func (e Env) soloHandOff(root, agent, text string, round int) (brief, worktree string, err error) {
 	now := e.Worker.Clock()
 	stamp := now().UTC().Format("2006-01-02T15:04:05Z")
-	if s := worker.LoadRegistry(root).Slot(agent); s != nil {
+	reg, err := worker.LoadRegistry(root)
+	if err != nil {
+		return "", "", err
+	}
+	if s := reg.Slot(agent); s != nil {
 		worktree = s.Worktree()
 	}
 	if worktree != "" && !filepath.IsAbs(worktree) {

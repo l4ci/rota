@@ -10,7 +10,7 @@ import (
 func portBases(t *testing.T, root string) map[string]int {
 	t.Helper()
 	out := map[string]int{}
-	for _, s := range LoadRegistry(root).Slots() {
+	for _, s := range LoadRegistryTolerant(root).Slots() {
 		out[s.Name()] = s.PortBase()
 	}
 	return out

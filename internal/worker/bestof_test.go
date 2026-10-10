@@ -19,14 +19,14 @@ func sampleBestOf() BestOf {
 
 func TestBestOfRoundTrip(t *testing.T) {
 	root := t.TempDir()
-	if LoadRegistry(root).BestOf("404") != nil {
+	if LoadRegistryTolerant(root).BestOf("404") != nil {
 		t.Fatal("no record yet")
 	}
 	if err := Update(root, func(d *Doc) { d.SetBestOf(sampleBestOf()) }); err != nil {
 		t.Fatal(err)
 	}
 	for _, id := range []string{"404", "#404", " #404 "} {
-		b := LoadRegistry(root).BestOf(id)
+		b := LoadRegistryTolerant(root).BestOf(id)
 		if b == nil || b.Issue != "404" || b.Round != 8 || len(b.Attempts) != 2 || b.Pick != "" {
 			t.Fatalf("%q: %+v", id, b)
 		}
@@ -44,14 +44,14 @@ func TestBestOfRoundTrip(t *testing.T) {
 	if err := Update(root, func(d *Doc) { b := sampleBestOf(); b.Issue = "#b07"; d.SetBestOf(b) }); err != nil {
 		t.Fatal(err)
 	}
-	if LoadRegistry(root).BestOf("B07") == nil {
+	if LoadRegistryTolerant(root).BestOf("B07") == nil {
 		t.Error("B07 not found")
 	}
 	// SetBestOf replaces the record
 	if err := Update(root, func(d *Doc) { b := sampleBestOf(); b.Round = 9; d.SetBestOf(b) }); err != nil {
 		t.Fatal(err)
 	}
-	if b := LoadRegistry(root).BestOf("404"); b == nil || b.Round != 9 {
+	if b := LoadRegistryTolerant(root).BestOf("404"); b == nil || b.Round != 9 {
 		t.Errorf("replace: %+v", b)
 	}
 }
@@ -71,7 +71,7 @@ func TestBestOfPickAndClear(t *testing.T) {
 	if err := SetBestOfPick(root, "#404", "https://github.com/o/r/pull/7"); err != nil {
 		t.Fatal(err)
 	}
-	b := LoadRegistry(root).BestOf("404")
+	b := LoadRegistryTolerant(root).BestOf("404")
 	if b == nil || b.Pick != "https://github.com/o/r/pull/7" {
 		t.Fatalf("%+v", b)
 	}
@@ -86,7 +86,7 @@ func TestBestOfPickAndClear(t *testing.T) {
 	if err := ClearBestOf(root, "404"); err != nil {
 		t.Fatal(err)
 	}
-	if LoadRegistry(root).BestOf("404") != nil {
+	if LoadRegistryTolerant(root).BestOf("404") != nil {
 		t.Error("record survived ClearBestOf")
 	}
 }
@@ -98,7 +98,7 @@ func TestQueuePRKeepsOneRecordPerAttempt(t *testing.T) {
 		d.QueuePR(QueuedPR{Issue: "404", PR: "#8", From: "ben"})
 		d.QueuePR(QueuedPR{Issue: "404", PR: "#9", From: "dana"}) // same slot again: replaces
 	})
-	got := LoadRegistry(root).PRs()
+	got := LoadRegistryTolerant(root).PRs()
 	if len(got) != 2 {
 		t.Fatalf("want 2 records, got %+v", got)
 	}

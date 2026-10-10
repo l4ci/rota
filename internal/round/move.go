@@ -59,7 +59,7 @@ func wrap(err error) error {
 }
 
 func registryRound(root string) int {
-	n, _ := worker.LoadRegistry(root).Round()
+	n, _ := worker.LoadRegistryTolerant(root).Round() // no error return; the verbs read the registry strictly themselves
 	return n
 }
 
@@ -203,7 +203,11 @@ func (e Env) Return(ctx context.Context, root string, be Board, o ReturnOpts) (r
 	if strings.TrimSpace(o.Reason) == "" {
 		return res, usage("--reason is required")
 	}
-	s := worker.LoadRegistry(root).Slot(o.Slot)
+	reg, err := worker.LoadRegistry(root)
+	if err != nil {
+		return res, err
+	}
+	s := reg.Slot(o.Slot)
 	if s == nil {
 		return res, &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("slot %s is not in the pool", o.Slot)}
 	}
@@ -347,7 +351,11 @@ func tolerateMissing(warnings *[]string, issue string) func(step string, err err
 // every claim of the slot, clears the issue's state and frees the slot with its
 // handle. It does not reassign.
 func (e Env) Reclaim(ctx context.Context, root string, be Board, o ReclaimOpts) (res Reclaimed, err error) {
-	s := worker.LoadRegistry(root).Slot(o.Slot)
+	reg, err := worker.LoadRegistry(root)
+	if err != nil {
+		return res, err
+	}
+	s := reg.Slot(o.Slot)
 	if s == nil {
 		return res, &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("slot %s is not in the pool", o.Slot)}
 	}
@@ -497,7 +505,10 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 
 	// Who holds it. A receiver that already holds it and was never dispatched
 	// (idle, its new claim recorded) is a transfer left half done: resume it.
-	reg := worker.LoadRegistry(root)
+	reg, err := worker.LoadRegistry(root)
+	if err != nil {
+		return res, err
+	}
 	// Two attempts of a best-of:2 issue still holding it: transfer cannot
 	// choose one. After a pick, return or reclaim one holder is left.
 	if b := reg.BestOf(id); b != nil {

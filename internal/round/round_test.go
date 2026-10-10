@@ -242,7 +242,7 @@ func TestReconcileApplyRepairsOnlyTheSafeKinds(t *testing.T) {
 	if !reflect.DeepEqual(forge.added, []int{58}) {
 		t.Errorf("labels added = %v", forge.added)
 	}
-	reg := worker.LoadRegistry(root)
+	reg := worker.LoadRegistryTolerant(root)
 	if b := reg.Slot("ben"); b.State() != "dead" || b.Handle() != "" {
 		t.Errorf("ben = %v", b)
 	}

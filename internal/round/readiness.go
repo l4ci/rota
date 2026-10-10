@@ -307,7 +307,7 @@ func nonNil(s []string) []string {
 // touches: the item's own footprint plus the slot's real changes.
 func (e Env) InFlightItems(ctx context.Context, root string, be backlog.Backend, tracked, shared []string) []InFlight {
 	var out []InFlight
-	reg := worker.LoadRegistry(root)
+	reg := worker.LoadRegistryTolerant(root) // no error return; the verbs that call this read the registry strictly themselves
 	for _, s := range reg.Slots() {
 		name := s.Name()
 		branch := s.Branch()

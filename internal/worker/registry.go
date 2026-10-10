@@ -44,9 +44,32 @@ type Registry struct {
 // writes. Keys it does not know are left alone.
 type Doc struct{ Registry }
 
-// LoadRegistry reads the registry; a missing or corrupt file reads as
-// {"slots": []} with Exists false, like hvlib_io.load_json.
-func LoadRegistry(root string) Registry {
+// LoadRegistry reads the registry strictly. A missing file is an empty pool
+// ({"slots": []}, Exists false, like hvlib_io.load_json); a file that exists
+// but cannot be read or is not a JSON object is an error wrapping
+// fsio.ErrUnreadable, never an empty pool, so no verb acts on "no slot owns
+// this" off a corrupt registry (#579, #712). Display and diagnostic paths that
+// cannot fail use LoadRegistryTolerant.
+func LoadRegistry(root string) (Registry, error) {
+	p := RegistryPath(root)
+	raw, err := os.ReadFile(p)
+	if errors.Is(err, os.ErrNotExist) {
+		return Registry{doc: slotsDefault()}, nil
+	}
+	if err != nil {
+		return Registry{}, fmt.Errorf("%w: %s: %v", fsio.ErrUnreadable, p, err)
+	}
+	v, err := jsonx.Decode(raw)
+	if o, ok := v.(*jsonx.Object); err == nil && ok {
+		return Registry{doc: o, Exists: true}, nil
+	}
+	return Registry{}, fmt.Errorf("%w: %s does not parse as a JSON object; fix or remove it", fsio.ErrUnreadable, p)
+}
+
+// LoadRegistryTolerant is the explicit opt-out of LoadRegistry: a missing or
+// corrupt file reads as {"slots": []} with Exists false. For display and
+// diagnostic readers that cannot refuse.
+func LoadRegistryTolerant(root string) Registry {
 	if o, ok := fsio.LoadJSON(RegistryPath(root), nil).(*jsonx.Object); ok {
 		return Registry{doc: o, Exists: true}
 	}
@@ -54,23 +77,10 @@ func LoadRegistry(root string) Registry {
 }
 
 // CheckRegistry is nil when the registry is missing or a JSON object, and an
-// error when it exists but cannot be read or parsed. LoadRegistry reads such a
-// file as an empty pool; a verb that would delete on the strength of "no slot
-// owns this" calls CheckRegistry first and refuses (#579).
+// error when it exists but cannot be read or parsed.
 func CheckRegistry(root string) error {
-	p := RegistryPath(root)
-	raw, err := os.ReadFile(p)
-	if errors.Is(err, os.ErrNotExist) {
-		return nil
-	}
-	if err != nil {
-		return fmt.Errorf("%w: %s: %v", fsio.ErrUnreadable, p, err)
-	}
-	v, err := jsonx.Decode(raw)
-	if _, ok := v.(*jsonx.Object); err != nil || !ok {
-		return fmt.Errorf("%w: %s does not parse as a JSON object; fix or remove it", fsio.ErrUnreadable, p)
-	}
-	return nil
+	_, err := LoadRegistry(root)
+	return err
 }
 
 // Slots lists the slot objects of the registry.
@@ -698,7 +708,11 @@ func (r Registry) ItemStart(issue string) (time.Time, bool) {
 func ClearItemStart(root, issue string) error {
 	// Update rewrites the file, so look first: no entry means no write (and no
 	// workers.json created where there was none).
-	if _, ok := itemStartsOf(LoadRegistry(root).doc).Get(issue); !ok {
+	reg, err := LoadRegistry(root)
+	if err != nil {
+		return err
+	}
+	if _, ok := itemStartsOf(reg.doc).Get(issue); !ok {
 		return nil
 	}
 	return Update(root, func(d *Doc) {

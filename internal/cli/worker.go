@@ -126,7 +126,10 @@ func runPoolList(c *Ctx, args []string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	session, round, slots := worker.PoolList(root)
+	session, round, slots, err := worker.PoolList(root)
+	if err != nil {
+		return Result{}, err
+	}
 	d := jsonx.NewObject()
 	if session != nil {
 		d.Set("session", session)
@@ -155,7 +158,8 @@ func poolReap(fs *flag.FlagSet) RunFunc {
 		ctx, stop := workerContext()
 		defer stop()
 		external := map[string]bool{}
-		for _, s := range worker.LoadRegistry(root).Slots() {
+		// Tolerant: Reap below (and the CheckRegistry guard) refuse a corrupt registry.
+		for _, s := range worker.LoadRegistryTolerant(root).Slots() {
 			if s.IsExternal() {
 				external[s.Name()] = true
 			}
@@ -801,7 +805,11 @@ func workerGate(fs *flag.FlagSet) RunFunc {
 // recorded PR, else the slot's issue. The argument may also be a PR ref, which
 // resolves to a queued PR record. Neither is exit 2.
 func slotApprovalThread(root, slot string) (approvalThread, error) {
-	t, err := worker.LoadRegistry(root).GateTargetAny(slot)
+	reg, err := worker.LoadRegistry(root)
+	if err != nil {
+		return approvalThread{}, err
+	}
+	t, err := reg.GateTargetAny(slot)
 	if err != nil {
 		var we *exitcode.Error
 		if errors.As(err, &we) && we.Exit == exitcode.ExitResolution {

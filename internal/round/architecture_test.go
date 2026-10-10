@@ -175,7 +175,7 @@ func TestArchitectureFirstSightSeedsInsteadOfTriggering(t *testing.T) {
 	if got := ReviewSince(root); got != a.Since {
 		t.Fatalf("seed not saved: %q", got)
 	}
-	if !worker.LoadRegistry(root).Review().Seeded {
+	if !worker.LoadRegistryTolerant(root).Review().Seeded {
 		t.Fatal("the seeded timestamp should be marked unratified")
 	}
 }

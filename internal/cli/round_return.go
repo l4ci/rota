@@ -135,7 +135,8 @@ func roundReturn(fs *flag.FlagSet) RunFunc {
 // inSlot: the working directory is inside the slot's worktree, which makes the
 // caller the slot's own worker.
 func inSlot(root, slot string) bool {
-	s := worker.LoadRegistry(root).Slot(slot)
+	// Tolerant: a bool probe; the return verb reads the registry strictly.
+	s := worker.LoadRegistryTolerant(root).Slot(slot)
 	if s == nil {
 		return false
 	}
@@ -162,8 +163,15 @@ func inSlot(root, slot string) bool {
 // know the slot, the main checkout (the parent of the git common dir) is tried.
 func returnRoot(c *Ctx, slot string) (string, error) {
 	root, err := c.Root()
-	if err != nil || worker.LoadRegistry(root).Slot(slot) != nil {
+	if err != nil {
 		return root, err
+	}
+	reg, err := worker.LoadRegistry(root)
+	if err != nil {
+		return root, err
+	}
+	if reg.Slot(slot) != nil {
+		return root, nil
 	}
 	common, err := rotastate.CommonDirVia(c.Context(), c.deps().Git, root)
 	if err != nil {
@@ -173,8 +181,14 @@ func returnRoot(c *Ctx, slot string) (string, error) {
 	if !ok {
 		return root, nil
 	}
-	if main != root && worker.LoadRegistry(main).Slot(slot) != nil {
-		return main, nil
+	if main != root {
+		mreg, err := worker.LoadRegistry(main)
+		if err != nil {
+			return root, err
+		}
+		if mreg.Slot(slot) != nil {
+			return main, nil
+		}
 	}
 	return root, nil
 }

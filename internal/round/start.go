@@ -96,7 +96,11 @@ func (e Env) Start(ctx context.Context, root string, o StartOpts) (Started, erro
 	}
 	le := e.Lease
 	holder := le.Discover(o.HolderPID, e.getenv())
-	prev, _ := worker.LoadRegistry(root).Round()
+	reg, err := worker.LoadRegistry(root)
+	if err != nil {
+		return res, err
+	}
+	prev, _ := reg.Round()
 	l, out, stale, err := le.Acquire(cd, root, holder, prev+1)
 	if err != nil {
 		if held, ok := err.(*roundlease.HeldError); ok {
@@ -178,7 +182,11 @@ func (e Env) Start(ctx context.Context, root string, o StartOpts) (Started, erro
 	for _, name := range set.Roster {
 		want[name] = true
 	}
-	for _, s := range worker.LoadRegistry(root).Slots() {
+	reg, err = worker.LoadRegistry(root)
+	if err != nil {
+		return res, err
+	}
+	for _, s := range reg.Slots() {
 		if want[s.Name()] {
 			res.Slots = append(res.Slots, worker.SlotData(s))
 		}
@@ -188,7 +196,7 @@ func (e Env) Start(ctx context.Context, root string, o StartOpts) (Started, erro
 
 // SlateOf is the recorded slate and scope of the round, "" and nil when none.
 func SlateOf(root string) (scope string, slate []string) {
-	reg := worker.LoadRegistry(root)
+	reg := worker.LoadRegistryTolerant(root) // a display and slate-guard read; round start reads the registry strictly
 	return reg.Scope(), reg.Slate()
 }
 

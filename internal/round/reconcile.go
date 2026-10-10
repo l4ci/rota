@@ -32,7 +32,13 @@ func (e Env) Reconcile(ctx context.Context, root string, apply bool) (Outcome, e
 	if err != nil {
 		return Outcome{}, err
 	}
-	e.findUnregisteredBranches(ctx, root, rep, worker.LoadRegistry(root)) // a branch scan: reconcile and the tick, not every status
+	// A corrupt registry is not an empty pool: refuse rather than report every
+	// adoptable branch as unregistered (#712).
+	reg, err := worker.LoadRegistry(root)
+	if err != nil {
+		return Outcome{}, err
+	}
+	e.findUnregisteredBranches(ctx, root, rep, reg) // a branch scan: reconcile and the tick, not every status
 	out := Outcome{Report: rep}
 	for _, f := range rep.Findings {
 		if !apply || f.Repair == "" {
@@ -138,7 +144,11 @@ func (e Env) repair(ctx context.Context, root string, rep *Report, f Finding) er
 // base) and nothing is salvaged: a worker still running, or a dirty worktree,
 // is left alone.
 func (e Env) parkMerged(ctx context.Context, root, name string) error {
-	s := worker.LoadRegistry(root).Slot(name)
+	reg, err := worker.LoadRegistry(root)
+	if err != nil {
+		return err
+	}
+	s := reg.Slot(name)
 	if s == nil {
 		return fmt.Errorf("slot %s is not in the registry", name)
 	}

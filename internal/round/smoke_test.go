@@ -43,7 +43,7 @@ func TestAssignReservesDistinctSmokeSections(t *testing.T) {
 	if err != nil || first.SmokeSection != 126 {
 		t.Fatalf("first reservation: %v %+v", err, first)
 	}
-	if got := worker.LoadRegistry(f.root).Slot("ben").SmokeSection(); got != 126 {
+	if got := worker.LoadRegistryTolerant(f.root).Slot("ben").SmokeSection(); got != 126 {
 		t.Errorf("the number is recorded on the slot: %d", got)
 	}
 	if !strings.Contains(f.host.sent, "number 126") {

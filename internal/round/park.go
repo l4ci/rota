@@ -70,7 +70,11 @@ func (e Env) dirtyPaths(ctx context.Context, wt string) ([]string, error) {
 // slot with no work branch is a no-op.
 func (e Env) Park(ctx context.Context, root, name, verb string) (Parked, error) {
 	var p Parked
-	s := worker.LoadRegistry(root).Slot(name)
+	reg, err := worker.LoadRegistry(root)
+	if err != nil {
+		return p, err
+	}
+	s := reg.Slot(name)
 	if s == nil {
 		return p, &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("slot %s is not in the pool", name)}
 	}

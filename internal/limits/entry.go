@@ -59,8 +59,10 @@ type Entry = worker.Limit
 // Time renders t as RFC 3339 UTC.
 func Time(t time.Time) string { return t.UTC().Format(time.RFC3339) }
 
-// Load reads the limits list; a missing or malformed list reads as empty.
-func Load(root string) []Entry { return worker.LoadRegistry(root).Limits() }
+// Load reads the limits list; a missing or malformed list reads as empty. It
+// tolerates a corrupt registry: it feeds display and the tick's passive reads,
+// and the verbs that write the list refuse a corrupt registry themselves.
+func Load(root string) []Entry { return worker.LoadRegistryTolerant(root).Limits() }
 
 // Waiting are the entries still waiting, in list order.
 func Waiting(list []Entry) []Entry {

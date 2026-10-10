@@ -103,7 +103,10 @@ func (e Env) Architecture(ctx context.Context, root string, be backlog.Backend, 
 			a.Pending = append(a.Pending, it.ID)
 		}
 	}
-	reg := worker.LoadRegistry(root)
+	reg, err := worker.LoadRegistry(root)
+	if err != nil {
+		return a, err
+	}
 	for _, name := range set.Roster {
 		if s := reg.Slot(name); s != nil && s.HeldID() == "" {
 			a.Idle++
@@ -197,7 +200,7 @@ const closedCacheTTL = 5 * time.Minute
 // cachedClosed is the saved closed-item count for the review recorded at since,
 // when it is younger than closedCacheTTL.
 func (e Env) cachedClosed(root, since string) (int, bool) {
-	c := worker.LoadRegistry(root).Review().Closed
+	c := worker.LoadRegistryTolerant(root).Review().Closed // a cache read: a corrupt registry is a miss
 	if c == nil || c.Since != since {
 		return 0, false
 	}
@@ -242,7 +245,8 @@ func reviewAreas(root string, set roundcfg.Settings) []string {
 // can file an issue could name one.
 func MintedReviews(root string) map[string]bool {
 	out := map[string]bool{}
-	for _, id := range worker.LoadRegistry(root).Review().Items {
+	// Read-only: the verbs that mint or assign read the registry strictly.
+	for _, id := range worker.LoadRegistryTolerant(root).Review().Items {
 		out[strings.ToUpper(id)] = true
 	}
 	return out
@@ -250,7 +254,7 @@ func MintedReviews(root string) map[string]bool {
 
 // ReviewSince is the time the last review was minted, "" when none was.
 func ReviewSince(root string) string {
-	return worker.LoadRegistry(root).Review().At
+	return worker.LoadRegistryTolerant(root).Review().At // display; Architecture reads the registry strictly right after
 }
 
 // MintReview creates one review item per area, labels them refactor in issue

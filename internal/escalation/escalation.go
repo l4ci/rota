@@ -81,7 +81,9 @@ func (e Env) withDefaults() Env {
 func Time(t time.Time) string { return t.UTC().Format(time.RFC3339) }
 
 // Load reads the escalations list; a missing or malformed list reads as empty.
-func Load(root string) []Entry { return worker.LoadRegistry(root).Escalations() }
+// It tolerates a corrupt registry: it feeds display and the tick's passive
+// reads, and Send refuses a corrupt registry itself.
+func Load(root string) []Entry { return worker.LoadRegistryTolerant(root).Escalations() }
 
 // NextID is e<N>, N one more than the highest in the list.
 func NextID(list []Entry) string {
@@ -158,8 +160,14 @@ type SendResult struct {
 func Send(ctx context.Context, env Env, root string, o SendOpts) (SendResult, error) {
 	env = env.withDefaults()
 	var res SendResult
-	if o.Slot != "" && worker.LoadRegistry(root).Slot(o.Slot) == nil {
-		return res, &Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("--slot %s is not a registered slot", o.Slot)}
+	if o.Slot != "" {
+		reg, err := worker.LoadRegistry(root)
+		if err != nil {
+			return res, err
+		}
+		if reg.Slot(o.Slot) == nil {
+			return res, &Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("--slot %s is not a registered slot", o.Slot)}
+		}
 	}
 	kind := kindOf(o.PR)
 	// The pending check and NextID below read the registry outside its lock.

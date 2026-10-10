@@ -151,7 +151,8 @@ func buildLimits(ctx context.Context, c *Ctx, root string, cfg any, set limits.S
 		if orchPane != "" {
 			out = append(out, limits.Target{Session: limits.Orchestrator, Pane: orchPane, Orchestrator: true})
 		}
-		for _, s := range worker.LoadRegistry(root).Slots() {
+		// Tolerant: a limit-watch target list is rebuilt every tick and cannot refuse.
+		for _, s := range worker.LoadRegistryTolerant(root).Slots() {
 			name, handle := s.Name(), s.Handle()
 			if name == "" || handle == "" {
 				continue
@@ -220,7 +221,8 @@ func buildLimits(ctx context.Context, c *Ctx, root string, cfg any, set limits.S
 			if err != nil {
 				return "", false
 			}
-			for _, s := range worker.LoadRegistry(root).Slots() {
+			// Tolerant: no idle slot is found in a corrupt registry (callback, no error return).
+			for _, s := range worker.LoadRegistryTolerant(root).Slots() {
 				name := s.Name()
 				if k, a := limitKind(s); k != kind || a != account || !slices.Contains(rc.Roster, name) {
 					continue
