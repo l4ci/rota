@@ -55,6 +55,10 @@ def check_frontmatter(path, text, issues):
 # left to excuse fails the check, so the sets can only shrink.
 SPEC_KEYS = {"name", "description", "license", "compatibility", "metadata", "allowed-tools"}
 NAME_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
+# Claude Code's own frontmatter key, outside the spec. A skill that sets it true
+# is manual-only on Claude Code, and must carry agents/openai.yaml with
+# policy.allow_implicit_invocation: false so it is manual-only on Codex too (#677).
+CLAUDE_KEYS = {"disable-model-invocation"}
 PENDING_KEYS = set()
 PENDING_LONG = set()
 # A description says when to use the skill, not how it works: a long one
@@ -153,11 +157,43 @@ def check_spec_frontmatter(path, text, issues):
                       f"use a folded block (>-) or quote it")
     if len(fm.get("compatibility", "")) > 500:
         issues.append(f"{rel}: compatibility is over 500 chars")
-    extra = sorted(set(fm) - SPEC_KEYS)
+    extra = sorted(set(fm) - SPEC_KEYS - CLAUDE_KEYS)
     bad = [k for k in extra if k not in pending_keys]
     if bad:
         issues.append(f"{rel}: frontmatter key(s) {', '.join(bad)} are not in the Agent Skills spec "
                       f"(allowed: {', '.join(sorted(SPEC_KEYS))})")
+
+
+def check_manual_only(path, text, issues):
+    """disable-model-invocation: true and agents/openai.yaml go together."""
+    fm = spec_fields(text) or {}
+    flag = fm.get("disable-model-invocation")
+    yaml_path = Path(path).parent / "agents" / "openai.yaml"
+    rel = Path(path).as_posix()
+    if flag not in (None, "true", "false"):
+        issues.append(f"{rel}: disable-model-invocation must be true or false, not '{flag}'")
+    manual = flag == "true"
+    if not manual:
+        if yaml_path.exists():
+            issues.append(f"{yaml_path.as_posix()}: skill is model-invocable; remove the file or set disable-model-invocation: true")
+        return
+    if not yaml_path.is_file():
+        issues.append(f"{rel}: disable-model-invocation is true but {yaml_path.as_posix()} is missing")
+        return
+    # Parse with PyYAML when present; else the one shape rota writes.
+    body = yaml_path.read_text(encoding="utf-8")
+    try:
+        import yaml
+        try:
+            val = ((yaml.safe_load(body) or {}).get("policy") or {}).get("allow_implicit_invocation")
+        except (yaml.YAMLError, AttributeError) as exc:
+            issues.append(f"{yaml_path.as_posix()}: does not parse as YAML: {exc}")
+            return
+    except ImportError:
+        m = re.search(r"(?m)^policy:[ \t]*\n[ \t]+allow_implicit_invocation:[ \t]*(true|false)[ \t]*$", body)
+        val = None if not m else m.group(1) == "true"
+    if val is not False:
+        issues.append(f"{yaml_path.as_posix()}: needs policy.allow_implicit_invocation: false")
 
 
 def check_pending_spec(skill_files, issues):
@@ -442,6 +478,7 @@ def main():
         text = skill_path.read_text(encoding="utf-8")
         check_frontmatter(skill_path, text, issues)
         check_spec_frontmatter(skill_path, text, issues)
+        check_manual_only(skill_path, text, issues)
         check_references(skill_path, text, issues)
         check_skill_files(skill_path, text, issues)
         check_checklist(skill_path, text, issues)

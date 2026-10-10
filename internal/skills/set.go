@@ -99,6 +99,19 @@ func Load(fsys fs.FS) (*Set, error) {
 		if _, ok := files["SKILL.md"]; !ok {
 			continue
 		}
+		// agents/*.yaml is Codex's per-skill policy (allow_implicit_invocation).
+		if ay, err := fs.ReadDir(fsys, path.Join(d.Name(), "agents")); err == nil {
+			for _, f := range ay {
+				if f.IsDir() || path.Ext(f.Name()) != ".yaml" {
+					continue
+				}
+				b, err := fs.ReadFile(fsys, path.Join(d.Name(), "agents", f.Name()))
+				if err != nil {
+					return nil, fmt.Errorf("skills: %w", err)
+				}
+				files["agents/"+f.Name()] = b
+			}
+		}
 		for name := range closure(files, refs) {
 			files["references/"+name] = refs[name]
 		}
