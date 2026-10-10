@@ -19,7 +19,7 @@ rota item create --json --kind tasks --title "Move callers to the new helper" --
 
 IDs are minted on creation, so create items in dependency order within a batch: prerequisites first, then capture the dependants with the IDs just printed. Several prerequisites: `--depends-on "#12,#13"`. `--depends-on` and a `## Depends on` section in the `--body-file` are mutually exclusive.
 
-Report each edge in the closing summary (`#14 depends on #13`) so the user can veto one.
+Report each edge in the closing summary (`#14 depends on #13`) so the user can veto one. `/rota-plan` confirms the breakdown before filing three or more items, so for it the summary is a record, not the veto point.
 
 ## Wide rename-style refactors
 
