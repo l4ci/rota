@@ -15,8 +15,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/l4ci/rota/internal/gate"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/postgate"
 	"github.com/l4ci/rota/internal/ship"
 	"github.com/l4ci/rota/internal/verdict"
 	"github.com/l4ci/rota/internal/worker"
@@ -661,7 +663,7 @@ func gateData(r worker.GateResult) *jsonx.Object {
 // and the caller carries on.
 func verdictRefusal(verdict string, err error, msg, hint string, d *jsonx.Object) (res Result, ok bool, rerr error) {
 	m := worker.ClassifyVerdict(verdict)
-	if !m.Refusal || m.ViaError != (err != nil) {
+	if !isRefusal(m, err) {
 		return Result{}, false, nil
 	}
 	switch {
@@ -724,6 +726,60 @@ func blockedRefusal(blockedBy, msg, hint string, d *jsonx.Object) (Result, error
 	return Result{Data: d}, Refused("%s", msg).WithHint(hint)
 }
 
+// isRefusal reports whether a gate or train verdict, with the error it came
+// with, is one the CLI turns into an exit-4 refusal.
+func isRefusal(m worker.VerdictMeaning, err error) bool {
+	return m.Refusal && m.ViaError == (err != nil)
+}
+
+// gateRunOpts is what one gate run needs: the verb's flags, without the verb.
+type gateRunOpts struct {
+	Slot, Base                 string
+	CheckOnly, NoVerify, Prune bool
+	Confirm                    gate.Confirm
+	Approval                   approvalReq
+}
+
+// gateRun is one gate run and the bookkeeping that followed it.
+type gateRun struct {
+	Result worker.GateResult
+	Err    error
+	// Issue is the item the slot held, read before a landing drops its record.
+	Issue string
+	// Refused: the verdict is an exit-4 refusal; nothing landed and no
+	// bookkeeping ran.
+	Refused bool
+	// Book is what the post-gate bookkeeping did; BookErr why it failed. The
+	// verdict stands either way.
+	Book    postgate.Outcome
+	BookErr error
+}
+
+// runGate runs the merge gate for one slot and does the item bookkeeping after
+// a real run. `worker gate` and the round autopilot both go through it, so the
+// autopilot reads the result, not a verb's JSON.
+func runGate(c *Ctx, root string, o gateRunOpts) gateRun {
+	policy, err := mergePolicy(c)
+	if err != nil {
+		return gateRun{Err: err}
+	}
+	approve := func(files func() ([]string, error)) error {
+		req := o.Approval
+		req.Thread = func() (approvalThread, error) { return slotApprovalThread(root, o.Slot) }
+		return clearMerge(c, policy, o.Slot+" into "+o.Base, o.Confirm, req, files, nil)
+	}
+	ctx, stop := workerContext()
+	defer stop()
+	issue := gateIssue(root, o.Slot)
+	r, err := workerEnvCtx(c, ctx).Gate(ctx, root, worker.GateOpts{Slot: o.Slot, Base: o.Base, CheckOnly: o.CheckOnly, NoVerify: o.NoVerify, Prune: o.Prune, Approve: approve, Verdict: shipVerdict(c, root, root).Block, Recorded: recordedReviews(root)})
+	run := gateRun{Result: r, Err: err, Issue: issue, Refused: isRefusal(worker.ClassifyVerdict(r.Verdict), err)}
+	if run.Refused || err != nil || o.CheckOnly {
+		return run
+	}
+	run.Book, run.BookErr = postgate.Gate(root, issue, r, parkNeedsHuman(c, root))
+	return run
+}
+
 func workerGate(fs *flag.FlagSet) RunFunc {
 	base := fs.String("base", "", "the cycle branch the slot merges into")
 	check := fs.Bool("check-only", false, "judge freshness, PR identity and provenance; merge nothing")
@@ -746,19 +802,10 @@ func workerGate(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		policy, err := mergePolicy(c)
-		if err != nil {
-			return Result{}, err
-		}
-		approve := func(files func() ([]string, error)) error {
-			req.Thread = func() (approvalThread, error) { return slotApprovalThread(root, slot) }
-			return clearMerge(c, policy, slot+" into "+*base, conf, req, files, nil)
-		}
-		ctx, stop := workerContext()
-		defer stop()
-		issue := gateIssue(root, slot)
-		r, err := workerEnvCtx(c, ctx).Gate(ctx, root, worker.GateOpts{Slot: slot, Base: *base, CheckOnly: *check, NoVerify: *noVerify, Prune: *prune, Approve: approve, Verdict: shipVerdict(c, root, root).Block, Recorded: recordedReviews(root)})
-		if res, ok, rerr := verdictRefusal(r.Verdict, err, r.Err, r.Hint, gateData(r)); ok {
+		run := runGate(c, root, gateRunOpts{Slot: slot, Base: *base, CheckOnly: *check, NoVerify: *noVerify, Prune: *prune, Confirm: conf, Approval: req})
+		r, err := run.Result, run.Err
+		if run.Refused {
+			res, _, rerr := verdictRefusal(r.Verdict, err, r.Err, r.Hint, gateData(r))
 			return res, rerr
 		}
 		if err != nil {
@@ -769,17 +816,16 @@ func workerGate(fs *flag.FlagSet) RunFunc {
 		}
 		res := Result{Data: gateData(r)}
 		if !*check {
-			n, parked, berr := gateBounce(c, root, issue, r)
-			if berr != nil {
-				fmt.Fprintln(c.Stderr, "BOUNCE-COUNT "+slot+" — "+berr.Error())
+			if run.BookErr != nil {
+				fmt.Fprintln(c.Stderr, "BOUNCE-COUNT "+slot+" — "+run.BookErr.Error())
 			}
-			if n > 0 {
+			if n := run.Book.Bounces; n > 0 {
 				d := res.Data.(*jsonx.Object)
 				d.Set("bounces", n)
-				d.Set("parked", parked)
+				d.Set("parked", run.Book.Parked)
 			}
-			if parked {
-				r.Hint = fmt.Sprintf("parked: %s bounced %d times, labelled needs-human; do not re-dispatch it until a human clears the label", issue, n)
+			if run.Book.Parked {
+				r.Hint = fmt.Sprintf("parked: %s bounced %d times, labelled needs-human; do not re-dispatch it until a human clears the label", run.Issue, run.Book.Bounces)
 			}
 		}
 		if r.OK() {

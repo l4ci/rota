@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/l4ci/rota/internal/gate"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/postgate"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -44,6 +46,54 @@ func trainData(r worker.TrainResult) *jsonx.Object {
 	return d
 }
 
+// trainRunOpts is what one merge train needs: the verb's flags, without the verb.
+type trainRunOpts struct {
+	Targets             []string
+	Base                string
+	Order               []string
+	LandGreen, NoVerify bool
+	Confirm             gate.Confirm
+	Approval            approvalReq
+}
+
+// trainRun is one train run and the bookkeeping that followed it.
+type trainRun struct {
+	Result  worker.TrainResult
+	Err     error
+	Refused bool
+	// Book lists the bookkeeping steps that failed; the verdict stands.
+	Book []postgate.Failure
+}
+
+// runTrain verifies and lands several PRs as one train and does the item
+// bookkeeping after it, as runGate does for one slot. `worker train` and the
+// round autopilot both go through it.
+func runTrain(c *Ctx, root string, o trainRunOpts) trainRun {
+	policy, err := mergePolicy(c)
+	if err != nil {
+		return trainRun{Err: err}
+	}
+	approve := func(files func() ([]string, error)) error {
+		req := o.Approval
+		req.Thread = func() (approvalThread, error) { return slotApprovalThread(root, o.Targets[0]) }
+		return clearMerge(c, policy, "train "+strings.Join(o.Targets, ", ")+" into "+o.Base, o.Confirm, req, files, nil)
+	}
+	ctx, stop := workerContext()
+	defer stop()
+	issues := make(map[string]string, len(o.Targets)) // a landed PR drops its queued record, so read before
+	for _, t := range o.Targets {
+		issues[t] = gateIssue(root, t)
+	}
+	round := &worker.RoundMemo{}
+	r, err := workerEnvCtx(c, ctx).Train(ctx, root, worker.TrainOpts{Targets: o.Targets, Base: o.Base, Order: o.Order, Say: func(l string) { fmt.Fprintln(c.Stderr, l) }, LandGreen: o.LandGreen, NoVerify: o.NoVerify, Approve: approve, Verdict: shipVerdict(c, root, root).Block, Recorded: recordedReviews(root), Round: round})
+	run := trainRun{Result: r, Err: err, Refused: isRefusal(worker.ClassifyVerdict(r.Verdict), err)}
+	if run.Refused || err != nil {
+		return run
+	}
+	run.Book = postgate.Train(round, root, issues, r, parkNeedsHuman(c, root))
+	return run
+}
+
 func workerTrain(fs *flag.FlagSet) RunFunc {
 	base := fs.String("base", "", "the cycle branch the PRs merge into")
 	landGreen := fs.Bool("land-green", false, "when verification fails, still land the verified members before the culprit")
@@ -65,20 +115,6 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		policy, err := mergePolicy(c)
-		if err != nil {
-			return Result{}, err
-		}
-		approve := func(files func() ([]string, error)) error {
-			req.Thread = func() (approvalThread, error) { return slotApprovalThread(root, args[0]) }
-			return clearMerge(c, policy, "train "+strings.Join(args, ", ")+" into "+*base, conf, req, files, nil)
-		}
-		ctx, stop := workerContext()
-		defer stop()
-		issues := make([]string, len(args)) // a landed PR drops its queued record, so read before
-		for i, t := range args {
-			issues[i] = gateIssue(root, t)
-		}
 		var override []string
 		if *order != "" {
 			seenTok := map[string]bool{}
@@ -91,9 +127,10 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 				override = append(override, t)
 			}
 		}
-		say := func(l string) { fmt.Fprintln(c.Stderr, l) }
-		r, err := workerEnvCtx(c, ctx).Train(ctx, root, worker.TrainOpts{Targets: args, Base: *base, Order: override, Say: say, LandGreen: *landGreen, NoVerify: *noVerify, Approve: approve, Verdict: shipVerdict(c, root, root).Block, Recorded: recordedReviews(root)})
-		if res, ok, rerr := verdictRefusal(r.Verdict, err, r.Err, r.Hint, trainData(r)); ok {
+		run := runTrain(c, root, trainRunOpts{Targets: args, Base: *base, Order: override, LandGreen: *landGreen, NoVerify: *noVerify, Confirm: conf, Approval: req})
+		r, err := run.Result, run.Err
+		if run.Refused {
+			res, _, rerr := verdictRefusal(r.Verdict, err, r.Err, r.Hint, trainData(r))
 			return res, rerr
 		}
 		if err != nil {
@@ -105,18 +142,8 @@ func workerTrain(fs *flag.FlagSet) RunFunc {
 		for _, h := range r.CacheHits {
 			fmt.Fprintln(c.Stderr, "CACHE-HIT "+h+" — verdict reused, not re-run")
 		}
-		for i, m := range r.Members {
-			if m.Landed && issues[i] != "" {
-				if cerr := worker.ClearBounces(root, issues[i]); cerr != nil {
-					fmt.Fprintln(c.Stderr, "BOUNCE-COUNT "+m.Target+" — "+cerr.Error())
-				}
-				if cerr := worker.ClearItemStart(root, issues[i]); cerr != nil {
-					fmt.Fprintln(c.Stderr, "ITEM-CLOCK "+m.Target+" — "+cerr.Error())
-				}
-				if cerr := worker.ClearBestOf(root, issues[i]); cerr != nil {
-					fmt.Fprintln(c.Stderr, "BEST-OF "+m.Target+" — "+cerr.Error())
-				}
-			}
+		for _, f := range run.Book {
+			fmt.Fprintln(c.Stderr, "BOUNCE-COUNT "+f.Target+" — "+f.Err.Error())
 		}
 		res := Result{Data: trainData(r)}
 		if r.OK() {
