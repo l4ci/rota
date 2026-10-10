@@ -112,7 +112,7 @@ func trSuggest(fs *flag.FlagSet) RunFunc {
 		body := strings.TrimRight(string(raw), "\n")
 		repo := *upstream
 		if repo == "" {
-			repo = os.Getenv("ROTA_UPSTREAM_REPO")
+			repo = c.deps().Getenv("ROTA_UPSTREAM_REPO")
 		}
 		if repo == "" {
 			repo = "l4ci/rota"
