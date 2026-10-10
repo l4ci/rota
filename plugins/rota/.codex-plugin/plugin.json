@@ -1,0 +1,19 @@
+{
+  "name": "rota",
+  "version": "0.15.0",
+  "description": "Backlog, planning and parallel-round skills for Codex. Install the rota binary separately.",
+  "author": {
+    "name": "Volker Otto"
+  },
+  "homepage": "https://github.com/l4ci/rota",
+  "repository": "https://github.com/l4ci/rota",
+  "license": "MIT",
+  "keywords": [
+    "backlog",
+    "planning",
+    "workflow",
+    "orchestration",
+    "skills"
+  ],
+  "skills": "./skills/"
+}
