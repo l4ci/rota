@@ -30,6 +30,7 @@ type scanner struct {
 type heredoc struct {
 	delim string
 	strip bool // <<- strips leading tabs from body lines
+	raw   bool // a quoted delimiter: the body is literal, nothing expands
 }
 
 func parseScript(s string) (parsed, error) {
@@ -51,7 +52,9 @@ func parseScript(s string) (parsed, error) {
 		case c == '\n':
 			sc.i++
 			flush()
-			sc.skipHeredocs()
+			if err := sc.skipHeredocs(); err != nil {
+				return p, err
+			}
 		case c == ';' || c == '(' || c == ')':
 			sc.i++
 			flush()
@@ -160,20 +163,29 @@ func (sc *scanner) heredocHeader() error {
 	for sc.i < len(sc.s) && (sc.s[sc.i] == ' ' || sc.s[sc.i] == '\t') {
 		sc.i++
 	}
+	start := sc.i
 	w, err := sc.word()
 	if err != nil {
 		return err
 	}
 	h.delim = w
+	h.raw = strings.ContainsAny(sc.s[start:sc.i], `'"\\`)
 	sc.pending = append(sc.pending, h)
 	return nil
 }
 
 // skipHeredocs drops the body lines of every queued here-document; text in a
-// body (a commit message) is data, not commands.
-func (sc *scanner) skipHeredocs() {
-	for _, h := range sc.pending {
+// body (a commit message) is data, not commands. An unquoted body still
+// expands, so its $(...) and backtick substitutions are queued as nested
+// scripts.
+func (sc *scanner) skipHeredocs() error {
+	pending := sc.pending
+	sc.pending = nil
+	for _, h := range pending {
+		bodyStart := sc.i
+		bodyEnd := len(sc.s)
 		for sc.i < len(sc.s) {
+			lineStart := sc.i
 			end := strings.IndexByte(sc.s[sc.i:], '\n')
 			var line string
 			if end < 0 {
@@ -185,11 +197,42 @@ func (sc *scanner) skipHeredocs() {
 				line = strings.TrimLeft(line, "\t")
 			}
 			if line == h.delim {
+				bodyEnd = lineStart
 				break
 			}
 		}
+		if h.raw {
+			continue
+		}
+		if err := sc.expandBody(sc.s[bodyStart:bodyEnd]); err != nil {
+			return err
+		}
 	}
-	sc.pending = nil
+	return nil
+}
+
+// expandBody collects the command substitutions of an unquoted here-document
+// body, which bash expands like a double-quoted string.
+func (sc *scanner) expandBody(body string) error {
+	sub := &scanner{s: body}
+	for sub.i < len(sub.s) {
+		switch {
+		case sub.s[sub.i] == '\\':
+			sub.i += 2
+		case sub.s[sub.i] == '`':
+			if err := sub.backtick(); err != nil {
+				return err
+			}
+		case sub.s[sub.i] == '$' && sub.peek(1) == '(':
+			if err := sub.substitution(); err != nil {
+				return err
+			}
+		default:
+			sub.i++
+		}
+	}
+	sc.nested = append(sc.nested, sub.nested...)
+	return nil
 }
 
 // word reads one shell word, resolving quotes and escapes and collecting
