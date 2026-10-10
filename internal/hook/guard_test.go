@@ -9,6 +9,9 @@ import (
 const (
 	gWork   = "/repo/.worktrees/dana"
 	gBranch = "dana/702-guard"
+
+	gOther       = "/repo/.worktrees/kit"
+	gOtherBranch = "kit/703-other"
 )
 
 func guardEnv() GuardEnv {
@@ -18,6 +21,9 @@ func guardEnv() GuardEnv {
 		Branch: func(dir string) (string, error) {
 			if inWork(dir) {
 				return gBranch, nil
+			}
+			if dir == gOther {
+				return gOtherBranch, nil
 			}
 			return "main", nil
 		},
@@ -30,6 +36,9 @@ func guardEnv() GuardEnv {
 		Upstream: func(dir string) (string, error) {
 			if inWork(dir) {
 				return "origin/" + gBranch, nil
+			}
+			if dir == gOther {
+				return "origin/" + gOtherBranch, nil
 			}
 			return "origin/main", nil
 		},
@@ -89,6 +98,17 @@ func TestGuardDenies(t *testing.T) {
 		"FOO=1 gh pr merge 12",
 		"cd x && gh pr merge",
 		"git commit -m x 2>&1 && git push -f origin main",
+		"bash -o pipefail -c 'git push --force origin main'",
+		"bash -eo pipefail -c 'git push --force origin main'",
+		"sh +e -c 'git push -f origin main'",
+		"bash --norc -c 'git push -f origin main'",
+		"cat <<EOF\n$(git push -f origin main)\nEOF",
+		"cat <<EOF\n`git push -f origin main`\nEOF",
+		"cat <<-EOF\n\t$(git add -A)\n\tEOF",
+		"git -C " + gOther + " push --force origin " + gOtherBranch,
+		"git -C " + gOther + " push --force origin HEAD",
+		"git -C " + gOther + " push --force-with-lease",
+		"cd " + gOther + " && git push -f origin " + gOtherBranch,
 	} {
 		t.Run(line, func(t *testing.T) {
 			if got := Guard(line, guardEnv()); got == "" {
@@ -128,6 +148,12 @@ func TestGuardAllows(t *testing.T) {
 		"git commit -m 'run git push --force later'",
 		"git commit -m \"$(cat <<'EOF'\nmsg\n\ngit push --force origin main\nEOF\n)\"",
 		"cat <<EOF\ngit add -A\nEOF\nls",
+		"cat <<'EOF'\n$(git push -f origin main)\nEOF\nls",
+		"cat <<\"EOF\"\n$(git push -f origin main)\nEOF\nls",
+		"cat <<\\EOF\n`git push -f origin main`\nEOF\nls",
+		"cat <<EOF\n\\$(git push -f origin main)\nEOF\nls",
+		"bash -o pipefail -c 'git push origin " + gBranch + "'",
+		"bash -o pipefail -c 'echo hi'",
 		"go test ./... 2>&1 | tail -5",
 		"ls > /dev/null; # git push -f origin main",
 		"make build && rota worker done dana",
