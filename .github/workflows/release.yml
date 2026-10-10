@@ -68,6 +68,7 @@ jobs:
   # references in for real, and the result replaces the `codex` branch that
   # .agents/plugins/marketplace.json installs from.
   codex-plugin:
+    needs: goreleaser
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
