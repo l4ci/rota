@@ -52,7 +52,7 @@ Rules:
 
 - **Verify is non-negotiable.** No verify step, no task.
 - **Serves is non-negotiable too.** Every task carries a `Serves: AC-n` sub-bullet (several ids allowed), and every criterion is served by at least one task. A task that serves no criterion is scope creep: drop it or raise the missing criterion first. `rota plan check <key>` enforces this after the write.
-- **Behavior tasks name the RED.** Verify states the failure the new test shows before the change (`RED: <command> fails with <expected message>`). A docs or skill-text task with no test seam writes `no test seam: docs/skill change` instead.
+- **Behavior tasks name the RED.** Verify states the failure the new test shows before the change (`RED: <command> fails with <expected message>`). The test follows [`references/test-quality.md`](references/test-quality.md). A docs or skill-text task with no test seam writes `no test seam: docs/skill change` instead.
 - **Interfaces** is `Consumes:` (what the task relies on) and `Produces:` (what it creates for later tasks). Write `none` rather than omit a line.
 - **Relies on** lists only entries the plan's approach actually depends on, not every bullet the queries returned. `/rota-review` checks the diff against this list and records a hit only for entries it followed.
 - **Review Focus** entries are each pinned by a test in the owning task's Verify. An edge with no test goes in Open questions instead.
