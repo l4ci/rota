@@ -70,6 +70,8 @@ When `backlog.backend` is `"file"`, read [`file-mode-spec.md`](file-mode-spec.md
 
 An item with no body and no plan contributes only its title; the reviewer says so when a spec is too thin to check against.
 
+**No referenced items.** `referencedIds` empty (manual commits, no `#N`) leaves nothing to collect. Do not dispatch the Spec reviewer with an empty items block. Ask once for an item ID or a spec file path. An ID or path becomes the spec (a path's text stands in for the issue body), and the review runs `full` as usual. No answer, or no way to ask (called from `/rota-ship` or a round worker's gate): run `light`, Standards only, and say in the report that the Spec axis was not run because the branch references no items. This overrides Step 7's depth for this review; the recorded verdict carries the note (Step 8).
+
 ## Step 4 — Consult KNOWLEDGE & DECISIONS
 
 Apply the canonical K+D query pattern (`references/knowledge-consult.md`). Pick topics from the plan's `## Relies on` list when Step 3 lifted one with entries (query the topics it names, and read each listed entry in full). With no plan, or a list that says `none`, infer topics that plausibly touch the changed areas from `touchedFiles` and commit subjects, liberally (a file under `Networking/` → the `Networking` topic).
@@ -121,6 +123,8 @@ Save each reviewer's JSON block to its own temp file. Record **spec first, then 
 rota verdict add <branch> --kind review-spec --verdict <PASS|CONCERNS|FAIL> --body-file "$SPEC" --json
 rota verdict add <branch> --kind review-quality --verdict <PASS|CONCERNS|FAIL> --body-file "$STANDARDS" --json
 ```
+
+With no spec (Step 3, no referenced items), record only `review-quality`, and start its `summary` with `Spec axis not run: no referenced items.` so `rota verdict show` carries the gap. The same applies to a `light` depth review.
 
 Record both even when Spec is FAIL: the Standards findings are the author's to-do list too. Order decides the result: `review-quality` stores `combined`, the worse of the two at the same sha. `data.combined` on the second call is the branch's review verdict.
 
