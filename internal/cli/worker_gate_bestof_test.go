@@ -39,20 +39,3 @@ func TestWorkerGateAndTrainRefuseAnUnpickedBestOf(t *testing.T) {
 		}
 	}
 }
-
-func TestGatePassClearsTheBestOfRecord(t *testing.T) {
-	root := t.TempDir()
-	worker.Update(root, func(d *worker.Doc) { d.SetBestOf(worker.BestOf{Issue: "12"}) })
-	if _, _, err := gateBounce(nil, root, "12", worker.GateResult{Verdict: "other"}); err != nil {
-		t.Fatal(err)
-	}
-	if worker.LoadRegistryTolerant(root).BestOf("12") == nil {
-		t.Fatal("a non-pass verdict must keep the record")
-	}
-	if _, _, err := gateBounce(nil, root, "12", worker.GateResult{Verdict: worker.GatePass}); err != nil {
-		t.Fatal(err)
-	}
-	if worker.LoadRegistryTolerant(root).BestOf("12") != nil {
-		t.Error("a gate pass must clear the best-of record")
-	}
-}

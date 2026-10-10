@@ -26,17 +26,6 @@ import (
 // gone (wind-down released it, or another orchestrator took it).
 var errAutopilotStopped = errors.New("this process holds no round lease: the autopilot stops")
 
-// callVerb runs another verb in-process. Flags go first: the flag package stops
-// at the first positional argument.
-func callVerb(c *Ctx, verb func(*flag.FlagSet) RunFunc, args ...string) (Result, error) {
-	fs := newFlagSet(c.Path)
-	run := verb(fs)
-	if err := fs.Parse(args); err != nil {
-		return Result{}, Usage("%v", err)
-	}
-	return run(c, fs.Args())
-}
-
 func roundTick(fs *flag.FlagSet) RunFunc {
 	base := fs.String("base", "", "the cycle branch PRs merge into (default each PR's recorded base)")
 	pid := fs.Int("holder-pid", 0, "orchestrator pid for the lease, when its ancestry cannot be read")
@@ -143,10 +132,10 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 		return targetBase(root, target, renv.Base)
 	}
 	e.Gate = func(_ context.Context, target, base string) roundtick.GateOutcome {
-		return gateTarget(c, target, base)
+		return gateTarget(c, root, target, base)
 	}
 	e.Train = func(_ context.Context, targets []string, base string) roundtick.TrainOutcome {
-		return trainTargets(c, targets, base)
+		return trainTargets(c, root, targets, base)
 	}
 	be, err := openBacklog(c, root, false, "")
 	if err != nil {
@@ -240,50 +229,63 @@ func targetBase(root, target, def string) string {
 	return def
 }
 
-// verdictOf reads the verdict a gate or train result carries.
-func verdictOf(r Result) string {
-	if d, ok := r.Data.(*jsonx.Object); ok {
-		if v, ok := d.Get("verdict"); ok {
-			s, _ := v.(string)
-			return s
+// gateTarget gates one target for the tick through the same run `worker gate`
+// does, bookkeeping included, and reads the verdict off the result.
+func gateTarget(c *Ctx, root, target, base string) roundtick.GateOutcome {
+	run := runGate(c, root, gateRunOpts{Slot: target, Base: base})
+	if run.Err == nil && !run.Refused {
+		if run.BookErr != nil {
+			fmt.Fprintln(c.Stderr, "BOUNCE-COUNT "+target+" — "+run.BookErr.Error())
 		}
+		if run.Result.OK() {
+			return roundtick.GateOutcome{Landed: true}
+		}
+		return roundtick.GateOutcome{Verdict: run.Result.Verdict, Detail: strutil.FirstLine(run.Result.Err)}
 	}
-	return ""
+	return roundtick.GateOutcome{Verdict: failedVerdict(run.Result.Verdict, run.Err, run.Refused), Detail: failureDetail(run.Err, run.Result.Err)}
 }
 
-func gateTarget(c *Ctx, target, base string) roundtick.GateOutcome {
-	r, err := callVerb(c, workerGate, "--base", base, target)
-	if err == nil {
-		return roundtick.GateOutcome{Landed: true}
-	}
-	return roundtick.GateOutcome{Verdict: verdictOf(r), Detail: strutil.FirstLine(err.Error())}
-}
-
-func trainTargets(c *Ctx, targets []string, base string) roundtick.TrainOutcome {
-	args := append([]string{"--base", base}, targets...)
-	r, err := callVerb(c, workerTrain, args...)
-	if err == nil {
-		return roundtick.TrainOutcome{Done: true}
-	}
-	out := roundtick.TrainOutcome{Verdict: verdictOf(r), Detail: strutil.FirstLine(err.Error())}
-	if d, _ := r.Data.(*jsonx.Object); d != nil {
-		if raw, ok := d.Get("members"); ok {
-			list, _ := raw.([]any)
-			for _, m := range list {
-				if o, ok := m.(*jsonx.Object); ok {
-					t, _ := o.Get("target")
-					l, _ := o.Get("landed")
-					if ok, _ := l.(bool); ok {
-						out.Landed = append(out.Landed, fmt.Sprint(t))
-					}
-				}
-			}
+// trainTargets lands several targets for the tick through the same run
+// `worker train` does, bookkeeping included.
+func trainTargets(c *Ctx, root string, targets []string, base string) roundtick.TrainOutcome {
+	run := runTrain(c, root, trainRunOpts{Targets: targets, Base: base})
+	r := run.Result
+	if run.Err == nil && !run.Refused {
+		for _, f := range run.Book {
+			fmt.Fprintln(c.Stderr, "BOUNCE-COUNT "+f.Target+" — "+f.Err.Error())
 		}
-		if cv, ok := d.Get("culprit"); ok {
-			out.Culprit, _ = cv.(string)
+		if r.OK() {
+			return roundtick.TrainOutcome{Done: true}
+		}
+	}
+	out := roundtick.TrainOutcome{Verdict: failedVerdict(r.Verdict, run.Err, run.Refused), Detail: failureDetail(run.Err, r.Err)}
+	if run.Err != nil && !run.Refused {
+		return out // died on an error: nothing of the result is reported
+	}
+	out.Culprit = r.Culprit
+	for _, m := range r.Members {
+		if m.Landed {
+			out.Landed = append(out.Landed, m.Target)
 		}
 	}
 	return out
+}
+
+// failedVerdict is the verdict a failed gate or train reports to the tick: the
+// run's own, unless it died with an error that is no refusal.
+func failedVerdict(verdict string, err error, refused bool) string {
+	if err != nil && !refused {
+		return ""
+	}
+	return verdict
+}
+
+// failureDetail is the first line of why a gate or train failed.
+func failureDetail(err error, msg string) string {
+	if err != nil {
+		return strutil.FirstLine(err.Error())
+	}
+	return strutil.FirstLine(msg)
 }
 
 func tickData(r roundtick.Result) *jsonx.Object {
