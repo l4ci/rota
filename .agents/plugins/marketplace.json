@@ -1,0 +1,20 @@
+{
+  "name": "rota",
+  "interface": {
+    "displayName": "rota"
+  },
+  "plugins": [
+    {
+      "name": "rota",
+      "source": {
+        "source": "local",
+        "path": "./plugins/rota"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}
