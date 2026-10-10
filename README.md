@@ -12,6 +12,7 @@ rota turns a to-do list into reviewed, merged work. You capture an item, your ag
 [![License](https://img.shields.io/github/license/l4ci/rota?color=green)](LICENSE)
 [![Last commit](https://img.shields.io/github/last-commit/l4ci/rota)](https://github.com/l4ci/rota/commits)
 [![Stars](https://img.shields.io/github/stars/l4ci/rota?style=social)](https://github.com/l4ci/rota/stargazers)
+[![skills.sh](https://img.shields.io/badge/skills.sh-l4ci%2Frota-black)](https://skills.sh/l4ci/rota)
 [![For Claude Code](https://img.shields.io/badge/for-Claude%20Code-8A2BE2)](https://claude.com/claude-code)
 [![For Codex](https://img.shields.io/badge/for-Codex-000000)](https://developers.openai.com/codex)
 [![Runs in herdr or tmux](https://img.shields.io/badge/runs%20in-herdr%20%C2%B7%20tmux-2ea44f)](#-runs-in-herdr-or-tmux)
@@ -41,6 +42,22 @@ cd your-project && rota init
 ```
 
 That's the whole loop. [Install](docs/install.md) lists every way to get the binary (the script checks the sha256 and, if `minisign` is installed, the signature). [Getting started](docs/getting-started.md) walks through the loop with the choices `rota init` makes.
+
+Other install routes, and whether each updates itself:
+
+| Route | Updates itself? |
+|---|---|
+| Claude Code plugin | No: `claude plugin update rota@rota` |
+| `rota skills install` | No: `rota skills update` |
+| `npx skills add l4ci/rota` | No: run it again |
+| Homebrew or install script | No: `rota update` prints the command |
+
+## 🩹 Problems this fixes
+
+- Agents start building before the task is clear. `/rota-brainstorm` and `/rota-plan` settle it first.
+- A session ends and the next one starts blind. `.rota/` and `/rota-pause` carry state across.
+- Parallel agents collide or merge red. Each gets a worktree, and the gate tests the merged `main`.
+- Lessons get lost. `/rota-learn` and `/rota-decide` keep them where the next session reads them.
 
 ## 🔄 How it works
 

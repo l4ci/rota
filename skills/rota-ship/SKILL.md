@@ -89,7 +89,7 @@ When `ship.qa` is `true`, read `opt-in-gates.md` (Step 3.75: skip conditions and
 rota ship body <branch>
 ```
 
-Capture the output (`## Summary`, `## Items resolved`, `## Evidence` when items carry proof rows) and append `## Test plan`: 2-5 checkboxes, one per meaningful area (not per file), from the touched files, each naming the most visible behavior change. No generic checks.
+Capture the output (`## Summary`, `## Items resolved`, `## Evidence` when items carry proof rows) and append `## Test plan`: 2-5 checkboxes, one per meaningful area (not per file), from the touched files, each naming the most visible behavior change. No generic checks. For a structural PR (files moved, split or renamed, or a call path rewired), add a fenced `diff` block under Summary showing the file tree or call tree before and after (idea from Dex Horthy).
 
 End the body with one line written from the diff: `Door: one-way|two-way. Blast radius: <surfaces a mistake reaches>.` One-way: a mistake outlives a revert (migration, published format, released API, deleted data); two-way: reverting the PR undoes it. Name surfaces (CLI verbs, skills, docs, file formats), not files. Run the self-audit in `references/humanizing-prose.md` silently and show the post-audit draft.
 
