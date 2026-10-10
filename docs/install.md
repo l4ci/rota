@@ -59,7 +59,7 @@ With no flags this writes the skills to the user roots for both agents: `~/.clau
 | `--scope user\|project` | `user` (default), or `project` for `.claude/skills` and `.agents/skills` in the current repo |
 | `--overwrite` | replace files you edited or rota did not write |
 
-The skills are copies, not symlinks, and `install` writes a `.rota-manifest.json` listing what it put there. A file you edited is kept and reported unless you pass `--overwrite`. A project-scope install can be committed so collaborators get the same skills.
+The skills are copies, not symlinks, and `install` writes a `.rota-manifest.json` listing what it put there. A file you edited is kept and reported unless you pass `--overwrite`. A project-scope install can be committed so collaborators get the same skills. `rota-decide` and `rota-release` are manual-only: they carry `disable-model-invocation: true` for Claude Code and an `agents/openai.yaml` (`allow_implicit_invocation: false`) for Codex, so only you start them, by typing `/rota-decide` or `$rota-decide`.
 
 Common route: `npx skills add l4ci/rota` installs the skills with the [`skills` CLI](https://skills.sh), for Claude Code, Codex and other agents, and lists rota on [skills.sh](https://skills.sh/l4ci/rota). The CLI sends anonymous install telemetry. It writes no `.rota-manifest.json`, so `rota skills status` and `rota skills update` do not track those copies. You still need the `rota` binary on your `PATH`.
 

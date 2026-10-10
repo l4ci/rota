@@ -543,3 +543,62 @@ func TestUninstallRemovesLockSidecar(t *testing.T) {
 		t.Error("lock sidecar left behind")
 	}
 }
+
+// A skill's agents/openai.yaml (Codex invocation policy, #677) ships with the
+// skill to every root, beside the SKILL.md whose frontmatter carries the Claude flag.
+func TestAgentsYamlShips(t *testing.T) {
+	s := loadFake(t, map[string]string{
+		"rota-a/agents/openai.yaml":      "policy:\n  allow_implicit_invocation: false\n",
+		"rota-a/agents/notes.txt":        "not yaml, skipped\n",
+		"rota-b/agents/nested/deep.yaml": "nested, skipped\n",
+	})
+	if _, ok := s.File("rota-a/agents/openai.yaml"); !ok {
+		t.Fatalf("agents/openai.yaml missing from set: %v", s.Paths())
+	}
+	for _, p := range s.Paths() {
+		if strings.HasSuffix(p, "notes.txt") || strings.HasSuffix(p, "deep.yaml") {
+			t.Errorf("unexpected %s in set", p)
+		}
+	}
+	home := t.TempDir()
+	roots, err := Roots(User, "all", home, filepath.Join(home, ".claude"), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Install(roots, Options{}); err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range roots {
+		b, err := os.ReadFile(filepath.Join(r.Path, "rota-a", "agents", "openai.yaml"))
+		if err != nil || !strings.Contains(string(b), "allow_implicit_invocation: false") {
+			t.Errorf("%s: agents/openai.yaml not installed: %v", r.Path, err)
+		}
+	}
+}
+
+// Every skill that opts out of model invocation on Claude Code opts out on
+// Codex too, and the embedded set carries the yaml for it.
+func TestManualOnlySkillsCarryBothFlags(t *testing.T) {
+	s, err := Embedded()
+	if err != nil {
+		t.Fatal(err)
+	}
+	manual := 0
+	for _, name := range s.Skills() {
+		skill, _ := s.File(name + "/SKILL.md")
+		flagged := regexp.MustCompile(`(?m)^disable-model-invocation: true$`).Match(skill)
+		y, hasYaml := s.File(name + "/agents/openai.yaml")
+		if flagged != hasYaml {
+			t.Errorf("%s: disable-model-invocation=%v but agents/openai.yaml present=%v", name, flagged, hasYaml)
+		}
+		if flagged {
+			manual++
+			if !strings.Contains(string(y), "allow_implicit_invocation: false") {
+				t.Errorf("%s: openai.yaml lacks allow_implicit_invocation: false", name)
+			}
+		}
+	}
+	if manual == 0 {
+		t.Error("no manual-only skill found, the check proves nothing")
+	}
+}
