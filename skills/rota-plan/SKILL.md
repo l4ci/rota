@@ -46,6 +46,7 @@ Show the plan as unsaved markdown:
 - **Review Focus**: `## Review Focus`, at most 5 lines: risky inputs or edges the spec implies but never names
 - **Open questions**: decisions needed before or during execution
 - **Assumptions**: implicit constraints made explicit
+- **Test seam**: mirror the design's `Test seam:` line, or name where a test can observe the change; `none: docs/skill change` for docs and skill text
 - **Relies on**: `## Relies on`, one line per KNOWLEDGE bullet (`<Topic>: <bold title>`) and DECISIONS entry (title) the plan depends on, taken from the Step 2 queries; `none` when it leans on neither
 
 Rules:
