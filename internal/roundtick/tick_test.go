@@ -393,7 +393,7 @@ func TestBlockedByNoRoundIsAFailureNotARefusal(t *testing.T) {
 }
 
 func TestHoldableSkipsAnUnpickedBestOf(t *testing.T) {
-	if holdable(worker.GateBestOfUnpicked) || holdable(worker.GateStale) || !holdable(worker.GateNotClosing) {
+	if worker.ClassifyVerdict(worker.GateBestOfUnpicked).Hold || worker.ClassifyVerdict(worker.GateStale).Hold || !worker.ClassifyVerdict(worker.GateNotClosing).Hold {
 		t.Error("only a verdict that needs a person is holdable")
 	}
 }

@@ -328,7 +328,7 @@ func (e Env) gate(ctx context.Context, target, base string) Merged {
 	if v == "" {
 		v = "gate-error"
 	}
-	return Merged{Target: target, Verdict: v, Hold: holdable(v), Detail: g.Detail}
+	return Merged{Target: target, Verdict: v, Hold: worker.ClassifyVerdict(v).Hold, Detail: g.Detail}
 }
 
 func (e Env) train(ctx context.Context, targets []string, base string) []Merged {
@@ -354,18 +354,11 @@ func (e Env) train(ctx context.Context, targets []string, base string) []Merged 
 		case tr.Culprit != "" && t != tr.Culprit && !strings.Contains(tr.Culprit, t):
 			m.Skip = true // another member broke the train: retried without it
 		default:
-			m.Verdict, m.Hold, m.Detail = v, holdable(v), tr.Detail
+			m.Verdict, m.Hold, m.Detail = v, worker.ClassifyVerdict(v).Hold, tr.Detail
 		}
 		out = append(out, m)
 	}
 	return out
-}
-
-// holdable reports whether a refused target waits for a person. A stale or
-// provenance-failed PR goes back to its worker; a best-of:2 attempt no pick
-// names clears itself once the orchestrator picks.
-func holdable(verdict string) bool {
-	return verdict != worker.GateStale && verdict != worker.GateProvenanceFail && verdict != worker.GateBestOfUnpicked
 }
 
 // review mints the due architecture reviews. A failed mint is the
