@@ -194,18 +194,15 @@ func (e Env) train(ctx context.Context, root string, o TrainOpts, cache *trainCa
 		res.Members = append(res.Members, TrainMember{Target: t, Branch: gr.Branch, PR: gr.PR})
 		remote = remote || gr.PR != ""
 	}
-	// An empty test.full would land the train unverified: refuse before the
-	// scratch merge unless --no-verify says so.
-	if !o.NoVerify && noVerifyRule(in.where, in.verifyCmds, in.e2eCmds) {
-		res.Verdict = GateNoVerify
-		res.Err, res.Hint = noVerifyRefusal("TRAIN")
-		return res, nil
+	// The pre-merge policy the gate shares (premerge.go): an empty test.full
+	// would land the train unverified, an expired ledger entry fails it, and
+	// either refuses before the scratch tree is built.
+	refusal := ledgerRefusal(trainSubject, in.ledger, e.Now())
+	if refusal == nil && !o.NoVerify {
+		refusal = noVerifyRefusalFor(trainSubject, in)
 	}
-	// An expired ledger entry fails the train before it builds the scratch tree.
-	if now := e.Now(); LedgerExpiry(in.ledger, now) != "" {
-		res.Verdict, res.Expired = GateVerifyFailed, in.ledger.Expired(now)
-		res.Err = "TRAIN-FAIL " + LedgerExpiry(in.ledger, now) + "; nothing landed"
-		res.Hint = "fix the test or renew the entry in .rota/test-ledger.json, then re-run the train"
+	if refusal != nil {
+		res.Verdict, res.Err, res.Hint, res.Expired = refusal.Verdict, refusal.Err, refusal.Hint, refusal.Expired
 		return res, nil
 	}
 	verify, onCI, brokeMsg, err := e.fullTier(ctx, root, "train", in)
@@ -274,8 +271,8 @@ func (e Env) train(ctx context.Context, root string, o TrainOpts, cache *trainCa
 			}
 			changed = append(changed, f...)
 		}
-		if msg, hint := ciConfigRefusal("train", changed); msg != "" {
-			res.Verdict, res.Err, res.Hint = GateCIConfigChanged, msg, hint
+		if r := ciConfigCheck(trainSubject, changed); r != nil {
+			res.Verdict, res.Err, res.Hint = r.Verdict, r.Err, r.Hint
 			return res, nil
 		}
 	}
@@ -323,18 +320,11 @@ func (e Env) train(ctx context.Context, root string, o TrainOpts, cache *trainCa
 		res.Culprit = m.Target
 		res.Members[failed].Culprit = true
 		res.Verdict = GateMergeFailed
-		var me *land.MergeError
-		switch {
-		case errors.As(merr, new(*land.CleanupError)):
-			res.Err = fmt.Sprintf("TRAIN-FAIL %s — merging %s into the scratch tree failed: %s", m.Target, m.Branch, merr)
-		case errors.As(merr, new(*land.ConflictError)):
-			res.Err = fmt.Sprintf("TRAIN-FAIL %s — %s does not merge onto %s with the %d member(s) before it: conflict", m.Target, m.Branch, o.Base, failed)
-			res.Hint = fmt.Sprintf("send %s back to merge %s, or run the train without it", m.Target, o.Base)
-		case errors.As(merr, &me):
-			res.Err = fmt.Sprintf("TRAIN-FAIL %s — merging %s into the scratch tree failed (exit %d): %s", m.Target, m.Branch, me.Code, strings.TrimSpace(me.Out))
-		default:
-			res.Err = fmt.Sprintf("TRAIN-FAIL %s — merging %s into the scratch tree failed (exit 127): %s", m.Target, m.Branch, merr)
-		}
+		res.Err, res.Hint = mergeRefusal(merr, mergeWords{
+			Failed:       fmt.Sprintf("TRAIN-FAIL %s — merging %s into the scratch tree failed", m.Target, m.Branch),
+			Conflict:     fmt.Sprintf("TRAIN-FAIL %s — %s does not merge onto %s with the %d member(s) before it: conflict", m.Target, m.Branch, o.Base, failed),
+			ConflictHint: fmt.Sprintf("send %s back to merge %s, or run the train without it", m.Target, o.Base),
+		})
 		return res, nil
 	}
 

@@ -62,6 +62,10 @@ import (
 //     merged, the landed base is verified again (VERIFY-AGAIN) and a red result
 //     there is fixed forward.
 //
+// The pre-merge refusals (ledger expiry, no-verify, CI-config, approval) are
+// shared with the train and live in premerge.go; the gate runs each as its own
+// step of gateSteps, and stage 3 is the merge alone.
+//
 // Between 1 and 2 sits a PROVENANCE check: the PR body's `## Approvals`
 // section is cross-checked against the slot's relays[] log. A relay cited as
 // the maintainer, a relay round cited that was never sent, or no section at all
@@ -366,6 +370,12 @@ var gateSteps = []gateStep{
 	(*gate).stepVerdict,
 	(*gate).stepReviewDepth,
 	(*gate).stepCheckOnly,
+	(*gate).stepOnBase,
+	(*gate).stepNoVerify,
+	(*gate).stepCIConfig,
+	(*gate).stepApprove,
+	(*gate).stepForgeMergeable,
+	(*gate).stepVerifyFirst,
 	(*gate).stepMerge,
 	(*gate).stepVerify,
 }
@@ -409,14 +419,12 @@ func (g *gate) stepLedgerExpiry() (bool, error) {
 	if g.o.CheckOnly || g.o.NoVerify {
 		return false, nil
 	}
-	now := g.e.Now()
-	msg := LedgerExpiry(g.in.ledger, now)
-	if msg == "" {
+	r := ledgerRefusal(gateSubject(g.o.Slot), g.in.ledger, g.e.Now())
+	if r == nil {
 		return false, nil
 	}
-	g.res.Verdict, g.res.Expired = GateVerifyFailed, g.in.ledger.Expired(now)
-	g.res.Err = fmt.Sprintf("GATE-FAIL %s — %s; nothing landed", g.o.Slot, msg)
-	g.res.Hint = "fix the test or renew the entry in .rota/test-ledger.json, then re-gate"
+	g.res.Expired = r.Expired
+	g.verdict(r.Verdict, r.Err, r.Hint)
 	return true, nil
 }
 
@@ -815,53 +823,88 @@ func (g *gate) stepCheckOnly() (bool, error) {
 	return false, nil
 }
 
-// stepMerge is stage 2: the approval gate, then the merge itself.
-func (g *gate) stepMerge() (bool, error) {
+// stepOnBase refuses a gate run with another branch than the base checked out.
+func (g *gate) stepOnBase() (bool, error) {
 	cur, _ := g.git(g.root, "rev-parse", "--abbrev-ref", "HEAD")
 	if cur != g.o.Base {
 		return true, fail(exitcode.ExitResolution, fmt.Sprintf("gate must run with %s checked out (currently on %s)", g.o.Base, cur))
 	}
-	// An empty test.full would merge with nothing verified: refuse before the
-	// merge unless --no-verify says so. CI verification does not read it, and a
-	// test.e2e tier still verifies.
-	if !g.o.NoVerify && noVerifyRule(g.in.where, g.in.verifyCmds, g.in.e2eCmds) {
-		g.verdict(GateNoVerify, "", "")
-		g.res.Err, g.res.Hint = noVerifyRefusal("GATE " + g.o.Slot)
+	return false, nil
+}
+
+// stepNoVerify refuses a merge with nothing to verify it unless --no-verify
+// says so. CI verification does not read test.full, and a test.e2e tier still
+// verifies.
+func (g *gate) stepNoVerify() (bool, error) {
+	if g.o.NoVerify {
+		return false, nil
+	}
+	if r := noVerifyRefusalFor(gateSubject(g.o.Slot), g.in); r != nil {
+		g.verdict(r.Verdict, r.Err, r.Hint)
 		return true, nil
 	}
-	var ci *ciVerifier
-	if g.in.where == WhereCI && !g.o.NoVerify {
-		var msg string
-		if ci, msg = g.e.newCIVerifier(g.ctx, g.root, g.forge, g.in.cfg); msg != "" {
-			return g.broke(msg)
-		}
-		changed, err := g.e.ciDiffFiles(g.ctx, g.root, g.baseRef, g.verified)
-		if err != nil {
-			return g.broke(err.Error())
-		}
-		if msg, hint := ciConfigRefusal(g.o.Slot, changed); msg != "" {
-			g.verdict(GateCIConfigChanged, msg, hint)
-			return true, nil
-		}
+	return false, nil
+}
+
+// stepCIConfig builds the CI verifier of a test.fullWhere ci gate and refuses a
+// merge that changes the CI definition.
+func (g *gate) stepCIConfig() (bool, error) {
+	if g.in.where != WhereCI || g.o.NoVerify {
+		return false, nil
 	}
-	if g.o.Approve != nil {
-		if err := g.o.Approve(g.changedFiles); err != nil {
-			g.res.Verdict = GateApprovalRequired
-			return true, err
-		}
+	ci, msg := g.e.newCIVerifier(g.ctx, g.root, g.forge, g.in.cfg)
+	if msg != "" {
+		return g.broke(msg)
 	}
-	if g.remote && !g.o.NoVerify && g.forgeRefuses() {
+	g.ci = ci
+	changed, err := g.e.ciDiffFiles(g.ctx, g.root, g.baseRef, g.verified)
+	if err != nil {
+		return g.broke(err.Error())
+	}
+	if r := ciConfigCheck(gateSubject(g.o.Slot), changed); r != nil {
+		g.verdict(r.Verdict, r.Err, r.Hint)
 		return true, nil
 	}
-	if !g.o.NoVerify {
-		check, what := g.verifyLocal, "the gate"
-		if ci != nil {
-			check, what = func(dir, sha string) (bool, error) { return g.verifyOnCI(ci, sha) }, "CI"
-		}
-		if done, err := g.verifyFirst(what, check); done || err != nil {
-			return true, err
-		}
+	return false, nil
+}
+
+// stepApprove runs the merge-approval gate (B1) on the files the merge changes.
+func (g *gate) stepApprove() (bool, error) {
+	if g.o.Approve == nil {
+		return false, nil
 	}
+	if err := g.o.Approve(g.changedFiles); err != nil {
+		g.res.Verdict = GateApprovalRequired
+		return true, err
+	}
+	return false, nil
+}
+
+// stepForgeMergeable asks the forge about mergeability before the scratch verify.
+func (g *gate) stepForgeMergeable() (bool, error) {
+	if g.remote && !g.o.NoVerify {
+		return g.forgeRefuses(), nil
+	}
+	return false, nil
+}
+
+// stepVerifyFirst verifies the merge result in a scratch tree, before anything
+// lands (stage 2).
+func (g *gate) stepVerifyFirst() (bool, error) {
+	if g.o.NoVerify {
+		return false, nil
+	}
+	check, what := g.verifyLocal, "the gate"
+	if g.ci != nil {
+		ci := g.ci
+		check, what = func(dir, sha string) (bool, error) { return g.verifyOnCI(ci, sha) }, "CI"
+	}
+	done, err := g.verifyFirst(what, check)
+	return done || err != nil, err
+}
+
+// stepMerge is stage 3: the merge itself, through the forge or locally.
+func (g *gate) stepMerge() (bool, error) {
 	if g.remote {
 		if g.mergeRemote() {
 			return true, nil
@@ -1035,20 +1078,11 @@ func (g *gate) mergeLocal(dir string) (done bool) {
 	if err == nil {
 		return false
 	}
-	// Only a real conflict is called one. Anything else (no committer
-	// identity, a hook, a locked index) is reported with git's own words,
-	// so it is not mistaken for work to resolve with the slot.
-	var me *land.MergeError
-	switch {
-	case errors.As(err, new(*land.CleanupError)):
-		g.verdict(GateMergeFailed, fmt.Sprintf("error: merge of %s into %s failed: %s", g.branch, g.o.Base, err), "")
-	case errors.As(err, new(*land.ConflictError)):
-		g.verdict(GateMergeFailed, fmt.Sprintf("error: merge of %s into %s conflicted — resolve with the slot that owns the context", g.branch, g.o.Base), "")
-	case errors.As(err, &me):
-		g.verdict(GateMergeFailed, fmt.Sprintf("error: merge of %s into %s failed (exit %d): %s", g.branch, g.o.Base, me.Code, strings.TrimSpace(me.Out)), "")
-	default:
-		g.verdict(GateMergeFailed, fmt.Sprintf("error: merge of %s into %s failed (exit 127): %s", g.branch, g.o.Base, err), "")
-	}
+	msg, hint := mergeRefusal(err, mergeWords{
+		Failed:   fmt.Sprintf("error: merge of %s into %s failed", g.branch, g.o.Base),
+		Conflict: fmt.Sprintf("error: merge of %s into %s conflicted — resolve with the slot that owns the context", g.branch, g.o.Base),
+	})
+	g.verdict(GateMergeFailed, msg, hint)
 	return true
 }
 
@@ -1245,6 +1279,8 @@ type gate struct {
 	headRef  string
 	baseRef  string
 	verified string
+	// ci is the CI verifier of a test.fullWhere ci gate, built by stepCIConfig.
+	ci *ciVerifier
 	// ciRun is the CI run of the merge result when test.fullWhere is ci.
 	ciRun *VerifyResult
 	// verifiedTree is the tree of the scratch merge verifyFirst verified: what
