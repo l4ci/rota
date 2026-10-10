@@ -18,10 +18,10 @@ import (
 //  3. CI-config      (ciConfigCheck)
 //  4. approval       (the caller's Approve hook: verdict approval-required)
 //
-// The gate runs each as its own step of gateSteps (ledger expiry first in the
-// table, the rest at the merge stage); the train runs them in sequence before
-// its scratch merge. What differs between them is only the wording, carried by
-// a premergeSubject. A merge failure maps to a message in mergeRefusal.
+// Both run the sequence through premergeRun.run, the gate at its stepPremerge
+// and the train before its scratch merge. What differs between them is only the
+// wording, carried by a premergeSubject, and the inputs each has. A merge
+// failure maps to a message in mergeRefusal.
 
 // premergeSubject words the refusals for whoever runs the checks.
 type premergeSubject struct {
@@ -82,6 +82,55 @@ func ciConfigCheck(s premergeSubject, changed []string) *premergeRefusal {
 		return nil
 	}
 	return &premergeRefusal{Verdict: GateCIConfigChanged, Err: msg, Hint: hint}
+}
+
+// premergeRun is one run of the shared pre-merge sequence.
+type premergeRun struct {
+	Subject premergeSubject
+	In      gateInput
+	Now     time.Time
+	// SkipLedger skips the ledger-expiry check: the gate does not verify under
+	// --no-verify or --check-only, so an expired entry does not matter to it.
+	SkipLedger bool
+	// SkipNoVerify skips the no-verify check, which --no-verify answers.
+	SkipNoVerify bool
+	// CIChanged lists the paths the merge changes for the CI-config check. Nil
+	// skips the check: the merge is not verified on CI.
+	CIChanged func() ([]string, error)
+	// Approve is the merge-approval gate (B1), asked with Files. Nil skips it.
+	Approve func(files func() ([]string, error)) error
+	Files   func() ([]string, error)
+}
+
+// run walks the sequence and stops at the first refusal. A refusal is returned
+// as such; an error is a check that could not run (CIChanged) or the approval
+// gate's own refusal, with approval true.
+func (p premergeRun) run() (r *premergeRefusal, approval bool, err error) {
+	if !p.SkipLedger {
+		if r := ledgerRefusal(p.Subject, p.In.ledger, p.Now); r != nil {
+			return r, false, nil
+		}
+	}
+	if !p.SkipNoVerify {
+		if r := noVerifyRefusalFor(p.Subject, p.In); r != nil {
+			return r, false, nil
+		}
+	}
+	if p.CIChanged != nil {
+		changed, err := p.CIChanged()
+		if err != nil {
+			return nil, false, err
+		}
+		if r := ciConfigCheck(p.Subject, changed); r != nil {
+			return r, false, nil
+		}
+	}
+	if p.Approve != nil {
+		if err := p.Approve(p.Files); err != nil {
+			return nil, true, err
+		}
+	}
+	return nil, false, nil
 }
 
 // mergeWords is how a caller words a failed merge.

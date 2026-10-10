@@ -194,17 +194,6 @@ func (e Env) train(ctx context.Context, root string, o TrainOpts, cache *trainCa
 		res.Members = append(res.Members, TrainMember{Target: t, Branch: gr.Branch, PR: gr.PR})
 		remote = remote || gr.PR != ""
 	}
-	// The pre-merge policy the gate shares (premerge.go): an empty test.full
-	// would land the train unverified, an expired ledger entry fails it, and
-	// either refuses before the scratch tree is built.
-	refusal := ledgerRefusal(trainSubject, in.ledger, e.Now())
-	if refusal == nil && !o.NoVerify {
-		refusal = noVerifyRefusalFor(trainSubject, in)
-	}
-	if refusal != nil {
-		res.Verdict, res.Err, res.Hint, res.Expired = refusal.Verdict, refusal.Err, refusal.Hint, refusal.Expired
-		return res, nil
-	}
 	verify, onCI, brokeMsg, err := e.fullTier(ctx, root, "train", in)
 	if err != nil {
 		return res, err
@@ -262,27 +251,41 @@ func (e Env) train(ctx context.Context, root string, o TrainOpts, cache *trainCa
 		sort.Strings(list)
 		return list, nil
 	}
+	// 2. The pre-merge policy the gate shares (premerge.go): an expired ledger
+	// entry fails the train, an empty test.full would land it unverified, a CI
+	// definition change needs a human, and one approval covers the train. Each
+	// refuses before the scratch tree is built.
+	pre := premergeRun{
+		Subject:      trainSubject,
+		In:           in,
+		Now:          e.Now(),
+		SkipNoVerify: o.NoVerify,
+		Files:        files,
+	}
 	if onCI {
-		var changed []string
-		for _, m := range res.Members {
-			f, err := e.ciDiffFiles(ctx, root, baseRef, headRef(m))
-			if err != nil {
-				return e.trainBroke(res, err.Error())
+		pre.CIChanged = func() ([]string, error) {
+			var changed []string
+			for _, m := range res.Members {
+				f, err := e.ciDiffFiles(ctx, root, baseRef, headRef(m))
+				if err != nil {
+					return nil, err
+				}
+				changed = append(changed, f...)
 			}
-			changed = append(changed, f...)
-		}
-		if r := ciConfigCheck(trainSubject, changed); r != nil {
-			res.Verdict, res.Err, res.Hint = r.Verdict, r.Err, r.Hint
-			return res, nil
+			return changed, nil
 		}
 	}
-
-	// 2. One approval for the train.
-	if o.Approve != nil {
-		if err := o.Approve(files); err != nil {
-			res.Verdict = GateApprovalRequired
-			return res, err
-		}
+	pre.Approve = o.Approve
+	r, approval, perr := pre.run()
+	switch {
+	case approval:
+		res.Verdict = GateApprovalRequired
+		return res, perr
+	case perr != nil:
+		return e.trainBroke(res, perr.Error())
+	case r != nil:
+		res.Verdict, res.Err, res.Hint, res.Expired = r.Verdict, r.Err, r.Hint, r.Expired
+		return res, nil
 	}
 
 	// 3. Merge in order in a scratch worktree.
