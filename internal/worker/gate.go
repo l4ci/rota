@@ -10,8 +10,6 @@ import (
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/land"
 	"github.com/l4ci/rota/internal/overlap"
-	"github.com/l4ci/rota/internal/rotatree"
-	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/testledger"
 	"github.com/l4ci/rota/internal/tracker"
@@ -329,11 +327,8 @@ func (e Env) gate(ctx context.Context, root string, o GateOpts) (GateResult, err
 // tree. The registry is not part of it: it resolves the target, not how the
 // target is verified.
 type gateInput struct {
-	cfg        any
-	verifyCmds []string
-	where      string            // test.fullWhere
-	e2eCmds    []string          // test.e2e
-	ledger     testledger.Ledger // .rota/test-ledger.json
+	cfg    GateConfig
+	ledger testledger.Ledger // .rota/test-ledger.json
 }
 
 // loadGateInput is the disk default of Env.GateInput.
@@ -343,10 +338,10 @@ type gateInput struct {
 // verified. The gate and the train both call this ahead of any merge and carry
 // the value through, never re-reading root afterwards.
 func loadGateInput(root string) (gateInput, error) {
-	cfg := config.Load(rotatree.Config(root))
-	in := gateInput{cfg: cfg, verifyCmds: verifyCommandsAt(root), e2eCmds: TierCommands(root, "e2e")}
+	in := gateInput{cfg: LoadGateConfig(root)}
+	in.cfg.FullCommands() // the legacy-key warning, once per run
 	var err error
-	if in.where, err = FullWhere(cfg); err != nil {
+	if _, err = in.cfg.Where(); err != nil {
 		return in, err
 	}
 	in.ledger, err = LoadLedger(root)
@@ -447,9 +442,9 @@ func (g *gate) stepForge() (bool, error) {
 	g.res.Branch, g.res.PR = g.target.Branch, g.target.PR
 	g.provider = g.e.detectProvider(g.ctx, g.root, g.pr)
 	g.cliName = tracker.CLIName(g.provider)
-	g.label = config.Label(g.in.cfg, "inProgress")
+	g.label = g.in.cfg.InProgressLabel
 	var err error
-	if g.forge, err = g.e.Forge(g.provider, g.root, g.in.cfg); err != nil {
+	if g.forge, err = g.e.Forge(g.provider, g.root, g.in.cfg.Tracker); err != nil {
 		return g.broke(fmt.Sprintf("cannot reach the %s forge: %v", g.provider, err))
 	}
 	return false, nil
@@ -563,7 +558,7 @@ func (g *gate) stepFreshness() (bool, error) {
 	var why, brokeMsg string
 	var shared []string
 	if !o.Train { // a train already merged every PR cleanly, in order, in its scratch tree
-		why, shared, brokeMsg = g.staleReason(g.in.cfg)
+		why, shared, brokeMsg = g.staleReason()
 	}
 	if brokeMsg != "" {
 		return g.broke(brokeMsg)
@@ -719,7 +714,7 @@ func reviewKinds(d config.ReviewDepth) []string {
 // diff or issue is a refusal too: guessing a depth could pass a risk:high
 // branch as light.
 func (g *gate) stepReviewDepth() (bool, error) {
-	policy, err := config.ReviewPolicyOf(g.in.cfg)
+	policy, err := g.in.cfg.ReviewPolicy()
 	if err != nil {
 		return g.broke(fmt.Sprintf("%v; run rota config check", err))
 	}
@@ -824,7 +819,7 @@ func (g *gate) stepOnBase() (bool, error) {
 
 // stepCIVerifier builds the CI verifier of a test.fullWhere ci gate.
 func (g *gate) stepCIVerifier() (bool, error) {
-	if g.in.where != WhereCI || g.o.NoVerify {
+	if g.in.cfg.where != WhereCI || g.o.NoVerify {
 		return false, nil
 	}
 	ci, msg := g.e.newCIVerifier(g.ctx, g.root, g.forge, g.in.cfg)
@@ -959,7 +954,7 @@ func (g *gate) verifyFirst(what string, check func(dir, sha string) (bool, error
 	// The train's scratch shape: a gate is a train of one. The CI verify keeps
 	// its own prefix; the worktree guard ignores both.
 	prefix := "rota-train-"
-	if g.in.where == WhereCI {
+	if g.in.cfg.where == WhereCI {
 		prefix = "rota-ci-"
 	}
 	dir, cleanup, err := g.e.scratchTree(g.ctx, g.root, baseSHA, prefix)
@@ -1016,10 +1011,10 @@ func (g *gate) verifyOnCI(ci *ciVerifier, sha string) (bool, error) {
 
 // verifyLocal runs test.full, then test.e2e, on the scratch merge in dir.
 func (g *gate) verifyLocal(dir, _ string) (bool, error) {
-	if done, err := g.verifyTier("test.full", g.in.verifyCmds, dir, false); done || err != nil {
+	if done, err := g.verifyTier("test.full", g.in.cfg.Full, dir, false); done || err != nil {
 		return true, err
 	}
-	return g.verifyTier("test.e2e", g.in.e2eCmds, dir, false)
+	return g.verifyTier("test.e2e", g.in.cfg.E2E, dir, false)
 }
 
 // landedTree is the tree of the commit the merge produced.
@@ -1092,7 +1087,7 @@ func (g *gate) stepVerify() (bool, error) {
 		if !g.confirmCITree() {
 			return true, nil
 		}
-		if done, err := g.verifyTier("test.e2e", g.in.e2eCmds, g.root, true); done || err != nil {
+		if done, err := g.verifyTier("test.e2e", g.in.cfg.E2E, g.root, true); done || err != nil {
 			return true, err
 		}
 		res.Verdict = GatePass
@@ -1104,7 +1099,7 @@ func (g *gate) stepVerify() (bool, error) {
 		for _, tier := range []struct {
 			name string
 			cmds []string
-		}{{"test.full", g.in.verifyCmds}, {"test.e2e", g.in.e2eCmds}} {
+		}{{"test.full", g.in.cfg.Full}, {"test.e2e", g.in.cfg.E2E}} {
 			if done, err := g.verifyTier(tier.name, tier.cmds, g.root, true); done || err != nil {
 				return true, err
 			}
@@ -1177,7 +1172,7 @@ func (g *gate) verifyTier(tier string, cmds []string, dir string, landed bool) (
 // catches that, so shared lists those files for the verdict note instead of
 // refusing. Files matching round.sharedPaths are ignored, as the readiness
 // overlap check ignores them. brokeMsg is set when a git check itself fails.
-func (g *gate) staleReason(cfg any) (why string, shared []string, brokeMsg string) {
+func (g *gate) staleReason() (why string, shared []string, brokeMsg string) {
 	root := g.root
 	if _, code := g.git(root, "merge-base", "--is-ancestor", g.headRef, g.baseRef); code == 0 {
 		return fmt.Sprintf("its work is already on %s, nothing to merge", g.o.Base), nil, ""
@@ -1205,7 +1200,7 @@ func (g *gate) staleReason(cfg any) (why string, shared []string, brokeMsg strin
 	if !ok1 || !ok2 {
 		return "", nil, fmt.Sprintf("git diff --name-only against %s failed", mb)
 	}
-	return "", overlap.Both(onBase, onHead, roundcfg.SharedPaths(cfg)), ""
+	return "", overlap.Both(onBase, onHead, g.in.cfg.SharedPaths), ""
 }
 
 func appendFile(path, text string) {

@@ -4,11 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/ledger"
-	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/strutil"
 	"os"
 	"regexp"
@@ -418,8 +416,7 @@ func (e Env) openPRsByHead(ctx context.Context, root string, reg Registry, polle
 	if _, code := e.git(root, "remote", "get-url", "origin"); code != 0 {
 		return nil
 	}
-	cfg := config.Load(rotatree.Config(root))
-	f, err := e.Forge(e.detectProvider(ctx, root, ""), root, cfg)
+	f, err := e.Forge(e.detectProvider(ctx, root, ""), root, LoadGateConfig(root).Tracker)
 	if err != nil {
 		return nil
 	}
@@ -444,8 +441,7 @@ func (e Env) prMerged(ctx context.Context, root string, s *Slot) bool {
 	if _, code := e.git(root, "remote", "get-url", "origin"); code != 0 {
 		return false
 	}
-	cfg := config.Load(rotatree.Config(root))
-	f, err := e.Forge(e.detectProvider(ctx, root, ""), root, cfg)
+	f, err := e.Forge(e.detectProvider(ctx, root, ""), root, LoadGateConfig(root).Tracker)
 	if err != nil {
 		return false
 	}

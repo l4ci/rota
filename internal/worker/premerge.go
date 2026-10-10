@@ -68,7 +68,7 @@ func ledgerRefusal(s premergeSubject, led testledger.Ledger, now time.Time) *pre
 // noVerifyRefusalFor refuses a run whose merge would land with nothing
 // verifying it (see noVerifyRule), or returns nil.
 func noVerifyRefusalFor(s premergeSubject, in gateInput) *premergeRefusal {
-	if !noVerifyRule(in.where, in.verifyCmds, in.e2eCmds) {
+	if !noVerifyRule(in.cfg.where, in.cfg.Full, in.cfg.E2E) {
 		return nil
 	}
 	msg, hint := noVerifyRefusal(s.What)
