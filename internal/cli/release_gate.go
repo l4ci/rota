@@ -1,9 +1,9 @@
 package cli
 
 import (
+	"context"
 	"flag"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/l4ci/rota/internal/gate"
@@ -48,105 +48,48 @@ func releasePush(fs *flag.FlagSet) RunFunc {
 		if *tagOnly && *branchOnly {
 			return Result{}, Usage("--tag-only and --branch-only are mutually exclusive")
 		}
-		dir0, err := releaseDir(c)
+		dir, err := releaseDir(c)
 		if err != nil {
 			return Result{}, err
 		}
-		if cfg := releaseGoreleaser(dir0); cfg != "" && !*tagOnly && !*branchOnly {
-			// One push would put the new plugin version on the branch before
-			// the workflow has built the binaries it names.
-			return Result{Data: gitObj("blockedBy", "release order", "changed", false)},
-				Refused("%s builds releases here, so the branch must not be pushed with the tag", cfg).
-					WithHint("push the tag with --tag-only, wait for the release workflow and publish, then push with --branch-only")
+		mode := release.PushBoth
+		switch {
+		case *tagOnly:
+			mode = release.PushTagOnly
+		case *branchOnly:
+			mode = release.PushBranchOnly
+		}
+		if err := release.CheckPushMode(dir, mode); err != nil {
+			return Result{Data: err.(*Error).Data}, err
 		}
 		conf, err := confirm()
 		if err != nil {
 			return Result{}, err
 		}
-		dir, err := releaseDir(c)
+		plan, err := release.PlanPush(c.Context(), release.PushPorts{
+			Git: releaseGit{c, dir},
+			Forge: func(provider string) (release.Forge, error) {
+				cl, err := c.deps().forge(c.Context(), releaseConfig(dir), provider, dir)
+				if err != nil {
+					return nil, trackerErr(err)
+				}
+				return releaseForgeAdapter{cl}, nil
+			},
+		}, release.PushRequest{Dir: dir, Tag: tag, Branch: *branchFlag, Mode: mode})
 		if err != nil {
 			return Result{}, err
-		}
-		sha, ok, err := releaseGitOK(c, dir, "rev-parse", "-q", "--verify", "refs/tags/"+tag+"^{commit}")
-		if err != nil {
-			return Result{}, err
-		}
-		if !ok {
-			return Result{}, Resolution("tag %s does not exist", tag)
-		}
-		branch := *branchFlag
-		if branch == "" {
-			cur, ok, err := releaseGitOK(c, dir, "symbolic-ref", "-q", "--short", "HEAD")
-			if err != nil {
-				return Result{}, err
-			}
-			if !ok {
-				return Result{}, Resolution("HEAD is detached; pass --branch")
-			}
-			branch = cur
-		} else if _, ok, err := releaseGitOK(c, dir, "rev-parse", "-q", "--verify", "refs/heads/"+branch); err != nil {
-			return Result{}, err
-		} else if !ok {
-			return Result{}, Resolution("branch %s does not exist", branch)
-		}
-		if _, ok, err := releaseGitOK(c, dir, "remote", "get-url", "origin"); err != nil {
-			return Result{}, err
-		} else if !ok {
-			return Result{}, Resolution("no 'origin' remote")
-		}
-		if *branchOnly {
-			// The plugin version on the branch points at the tag's binaries,
-			// so the branch follows the tag, never leads it.
-			remote, ok, err := releaseGitOK(c, dir, "ls-remote", "--tags", "origin", "refs/tags/"+tag)
-			if err != nil {
-				return Result{}, err
-			}
-			if !ok {
-				return Result{}, Unavailable("git ls-remote origin failed")
-			}
-			if remote == "" {
-				return Result{}, Resolution("tag %s is not on origin", tag).WithHint("push the tag first: rota release push " + strings.TrimPrefix(tag, "v") + " --tag-only")
-			}
-			// On GitHub the tag alone is not enough: the release must be
-			// published, so the binaries resolve for the version the branch names.
-			url, _, err := releaseGitOK(c, dir, "remote", "get-url", "origin")
-			if err != nil {
-				return Result{}, err
-			}
-			if p := releaseRemoteForge(url); p != "" {
-				cl, err := c.deps().forge(c.Context(), releaseConfig(dir), p, dir)
-				if err != nil {
-					return Result{}, trackerErr(err)
-				}
-				rel, checked, err := cl.ReleaseView(c.Context(), tag)
-				if err != nil {
-					return Result{}, trackerErr(err)
-				}
-				if checked && (!rel.Found || rel.IsDraft) {
-					return Result{}, Resolution("the release for %s is not published", tag).
-						WithHint("finish it first: rota release publish " + strings.TrimPrefix(tag, "v"))
-				}
-			}
 		}
 		if res, err := clearGate(c, gate.TagPush, tag, conf, nil, nil); err != nil {
 			return res, err
 		}
-		// The default is one push, so the commit and the tag land together.
-		refs, scope, text := []string{branch, tag}, "both", "pushed "+branch+" and "+tag+" to origin"
-		switch {
-		case *tagOnly:
-			refs, scope, text = []string{tag}, "tag", "pushed "+tag+" to origin"
-		case *branchOnly:
-			refs, scope, text = []string{branch}, "branch", "pushed "+branch+" to origin"
-		}
-		res, err := shipGit(c, dir, append([]string{"push", "origin"}, refs...)...)
+		res, err := shipGit(c, dir, append([]string{"push", "origin"}, plan.Refs...)...)
 		if err != nil {
 			return Result{}, err
 		}
 		if res.ExitCode != 0 {
-			return Result{}, Unavailable("git push origin %s: %s (tag %s is at %s)", strings.Join(refs, " "), strutil.FirstLine(res.Stderr), tag, sha)
+			return Result{}, Unavailable("git push origin %s: %s (tag %s is at %s)", strings.Join(plan.Refs, " "), strutil.FirstLine(res.Stderr), tag, plan.SHA)
 		}
-		return Result{Data: gitObj("tag", tag, "branch", branch, "remote", "origin", "scope", scope, "changed", true), Text: text}, nil
+		return Result{Data: gitObj("tag", tag, "branch", plan.Branch, "remote", "origin", "scope", plan.Scope, "changed", true), Text: plan.Text}, nil
 	}
 }
 
@@ -183,7 +126,7 @@ func releasePublish(fs *flag.FlagSet) RunFunc {
 		data := func(url string, changed bool) any {
 			return gitObj("tag", tag, "host", host, "url", url, "draft", *draft, "changed", changed)
 		}
-		provider := releaseRemoteForge(url)
+		provider := release.RemoteForge(url)
 		if provider == "" {
 			c.Warn("no recognized remote; nothing published")
 			return Result{Data: data("", false)}, nil
@@ -193,28 +136,9 @@ func releasePublish(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, trackerErr(err)
 		}
-		if *draft && !cl.ReleaseDrafts() {
-			return Result{}, Usage("--draft: GitLab has no draft releases")
-		}
-		remote, ok, err := releaseGitOK(c, dir, "ls-remote", "--tags", "origin", "refs/tags/"+tag)
+		existing, err := release.PlanPublish(ctx, releaseGit{c, dir}, releaseForgeAdapter{cl}, release.PublishRequest{Dir: dir, Tag: tag, Draft: *draft})
 		if err != nil {
 			return Result{}, err
-		}
-		if !ok {
-			return Result{}, Unavailable("git ls-remote origin failed")
-		}
-		if remote == "" {
-			return Result{}, Resolution("tag %s is not on origin", tag).WithHint("push it first: rota release push " + strings.TrimPrefix(tag, "v"))
-		}
-		// Look before the gate, so a wait for the workflow (exit 3) does not
-		// spend the maintainer's approval.
-		existing := false
-		if rel, checked, err := cl.ReleaseView(ctx, tag); err != nil {
-			return Result{}, trackerErr(err)
-		} else if checked {
-			if existing, err = releaseUsable(rel, dir, tag); err != nil {
-				return Result{}, err
-			}
 		}
 		if res, err := clearGate(c, gate.ReleasePublish, tag, conf, nil, nil); err != nil {
 			return res, err
@@ -245,84 +169,24 @@ func releasePublish(fs *flag.FlagSet) RunFunc {
 	}
 }
 
-// releaseAssets is what the release workflow must attach before a draft is
-// finished: one bare binary per platform (the names bin/rota downloads) and the
-// checksums. The tarballs are not part of that contract, but every asset that
-// is attached, tarballs included, must carry a minisign signature (see
-// releaseMissing).
-var releaseAssets = []string{
-	"rota_linux_amd64", "rota_linux_arm64", "rota_darwin_amd64", "rota_darwin_arm64", "checksums.txt",
+// releaseGit adapts git in dir to release.Git.
+type releaseGit struct {
+	c   *Ctx
+	dir string
 }
 
-// releaseGoreleaser is the goreleaser config in dir, or "".
-func releaseGoreleaser(dir string) string {
-	for _, f := range []string{".goreleaser.yaml", ".goreleaser.yml"} {
-		if _, err := os.Stat(filepath.Join(dir, f)); err == nil {
-			return f
-		}
-	}
-	return ""
+func (g releaseGit) Query(args ...string) (string, bool, error) {
+	return releaseGitOK(g.c, g.dir, args...)
 }
 
-// releaseMissing lists what a draft still lacks: each required asset, then the
-// <name>.minisig of every required or attached asset. install.sh refuses an
-// unsigned binary, so a release without its signatures breaks every install.
-func releaseMissing(assets []string) []string {
-	have := map[string]bool{}
-	for _, a := range assets {
-		have[a] = true
-	}
-	const sig = ".minisig"
-	var signed []string
-	signed = append(signed, releaseAssets...)
-	for _, a := range assets {
-		if !strings.HasSuffix(a, sig) {
-			signed = append(signed, a)
-		}
-	}
-	var missing []string
-	seen := map[string]bool{}
-	for _, want := range releaseAssets {
-		if !have[want] {
-			missing = append(missing, want)
-		}
-	}
-	for _, a := range signed {
-		if !seen[a] && !have[a+sig] {
-			missing = append(missing, a+sig)
-		}
-		seen[a] = true
-	}
-	return missing
-}
+// releaseForgeAdapter adapts the tracker client to release.Forge, mapping a tracker
+// failure onto the exit table.
+type releaseForgeAdapter struct{ tracker.Adapter }
 
-// releaseUsable reports whether publish should edit an existing release. A
-// draft must carry every binary, the checksums and a signature for each asset
-// before it is finished; and where goreleaser builds the repo, no release at
-// all means the workflow has not run, so creating one here would put the plugin
-// version ahead of its binaries.
-func releaseUsable(rel tracker.Release, dir, tag string) (bool, error) {
-	if !rel.Found {
-		if cfg := releaseGoreleaser(dir); cfg != "" {
-			return false, Resolution("no release for %s yet, and %s builds releases", tag, cfg).
-				WithHint("wait for the release workflow to create the draft with the binaries")
-		}
-		return false, nil
+func (f releaseForgeAdapter) ReleaseView(ctx context.Context, tag string) (tracker.Release, bool, error) {
+	rel, checked, err := f.Adapter.ReleaseView(ctx, tag)
+	if err != nil {
+		return rel, checked, trackerErr(err)
 	}
-	if rel.IsDraft {
-		missing := releaseMissing(rel.Assets)
-		if len(missing) > 0 {
-			return false, Resolution("the draft release for %s lacks %s", tag, strings.Join(missing, ", ")).
-				WithHint("wait for the release workflow to attach them")
-		}
-	}
-	return true, nil
-}
-
-// releaseRemoteForge is the forge a remote runs ("" for none we publish to).
-func releaseRemoteForge(url string) string {
-	if p := tracker.ProviderFromURL(url); p != tracker.ProviderUnknown {
-		return p
-	}
-	return ""
+	return rel, checked, nil
 }
