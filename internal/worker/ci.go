@@ -10,8 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/l4ci/rota/internal/config"
-	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/tracker"
 )
@@ -96,43 +94,15 @@ const (
 	WhereCI    = "ci"
 )
 
-// FullWhere reads test.fullWhere: local (the default) or ci. Any other value
-// is an error, so a typo never falls back to a local run silently, and so is
-// ci with no test.ciChecks: CI mode only knows a run is green by the checks
-// it names.
-func FullWhere(cfg any) (string, error) {
-	switch w := config.String(cfg, "test.fullWhere"); w {
-	case WhereLocal:
-		return w, nil
-	case WhereCI:
-		if len(ciChecks(cfg)) == 0 {
-			return "", fail(exitcode.ExitInternal, "test.fullWhere is ci, but test.ciChecks names no check to wait for").
-				WithHint(`list the CI checks that must pass, e.g. rota config set test.ciChecks '["test"]'`)
-		}
-		return w, nil
-	default:
-		v, _ := config.Lookup(cfg, "test.fullWhere")
-		return "", fail(exitcode.ExitInternal, fmt.Sprintf("test.fullWhere must be local or ci (got %v)", v))
-	}
-}
-
-// ciChecks is test.ciChecks: the names of the CI checks that must all pass.
-func ciChecks(cfg any) []string { return commandList(cfg, "test.ciChecks") }
-
 // ciSettings is how long a CI wait lasts: the poll interval, how long the
 // first check may take to appear, and how long the checks may take to finish.
 type ciSettings struct {
 	poll, start, timeout time.Duration
 }
 
-// ciSettingsFrom reads test.ciTimeoutMinutes, and ROTA_CI_POLL,
-// ROTA_CI_START_WAIT and ROTA_CI_TIMEOUT (seconds) over the built-in values.
-func ciSettingsFrom(cfg any, getenv func(string) string) (ciSettings, error) {
-	mins, err := config.Int(cfg, "test.ciTimeoutMinutes", 1, 24*60)
-	if err != nil {
-		return ciSettings{}, err
-	}
-	s := ciSettings{poll: 20 * time.Second, start: 5 * time.Minute, timeout: time.Duration(mins) * time.Minute}
+// applyEnv overrides the built-in values with ROTA_CI_POLL, ROTA_CI_START_WAIT
+// and ROTA_CI_TIMEOUT (seconds).
+func (s *ciSettings) applyEnv(getenv func(string) string) {
 	for env, d := range map[string]*time.Duration{"ROTA_CI_POLL": &s.poll, "ROTA_CI_START_WAIT": &s.start, "ROTA_CI_TIMEOUT": &s.timeout} {
 		if v := getenv(env); v != "" {
 			if f, err := strconv.ParseFloat(v, 64); err == nil && f >= 0 {
@@ -140,7 +110,6 @@ func ciSettingsFrom(cfg any, getenv func(string) string) (ciSettings, error) {
 			}
 		}
 	}
-	return s, nil
 }
 
 // ciVerifier runs the full tier on CI for one gate or train: it is set up
@@ -156,15 +125,15 @@ type ciVerifier struct {
 
 // newCIVerifier checks what a CI run needs: an origin to push to and a forge
 // to read checks from. brokeMsg says what is missing.
-func (e Env) newCIVerifier(ctx context.Context, root string, forge Forge, cfg any) (v *ciVerifier, brokeMsg string) {
+func (e Env) newCIVerifier(ctx context.Context, root string, forge Forge, cfg GateConfig) (v *ciVerifier, brokeMsg string) {
 	if _, code := e.runGit(ctx, root, "remote", "get-url", "origin"); code != 0 {
 		return nil, "test.fullWhere is ci, but this repo has no 'origin' remote to push the merge result to"
 	}
-	set, err := ciSettingsFrom(cfg, e.Getenv)
+	set, err := cfg.CISettings(e.Getenv)
 	if err != nil {
 		return nil, err.Error()
 	}
-	return &ciVerifier{e: e, ctx: ctx, root: root, forge: forge, set: set, checks: ciChecks(cfg)}, ""
+	return &ciVerifier{e: e, ctx: ctx, root: root, forge: forge, set: set, checks: cfg.CIChecks}, ""
 }
 
 var ciNameUnsafe = regexp.MustCompile(`[^A-Za-z0-9._-]+`)
@@ -346,13 +315,13 @@ func (e Env) cleanupGit(ctx context.Context, dir string, args ...string) {
 // onCI says the tier runs on CI.
 func (e Env) fullTier(ctx context.Context, root, name string, in gateInput) (verify func(dir string) (VerifyResult, error), onCI bool, brokeMsg string, err error) {
 	cfg := in.cfg
-	if in.where == WhereLocal {
+	if cfg.where == WhereLocal {
 		return func(dir string) (VerifyResult, error) {
-			return e.RunVerifyWith(ctx, in.verifyCmds, dir, in.ledger)
+			return e.RunVerifyWith(ctx, cfg.Full, dir, in.ledger)
 		}, false, "", nil
 	}
 	provider := e.detectProvider(ctx, root, "")
-	forge, ferr := e.Forge(provider, root, cfg)
+	forge, ferr := e.Forge(provider, root, cfg.Tracker)
 	if ferr != nil {
 		return nil, true, fmt.Sprintf("cannot reach the %s forge to read CI checks: %v", provider, ferr), nil
 	}

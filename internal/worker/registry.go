@@ -450,7 +450,7 @@ type Env struct {
 	// Forge returns the forge a provider ("github" or "gitlab") runs in dir.
 	// Every forge call goes through internal/tracker, never an exec of gh or
 	// glab from here. Tests inject a fake Forge.
-	Forge func(provider, dir string, cfg any) (Forge, error)
+	Forge func(provider, dir string, s tracker.Settings) (Forge, error)
 	// Shell runs one verification command through `sh -c` in dir and returns
 	// its combined output and exit code.
 	Shell func(ctx context.Context, dir, command string) (output string, code int)
@@ -510,8 +510,8 @@ func (e Env) withDefaults() Env {
 	e.Now = e.Clock()
 	e.Getenv = e.Environ()
 	if e.Forge == nil {
-		e.Forge = func(provider, dir string, cfg any) (Forge, error) {
-			return tracker.NewFromConfig(e.context(), cfg, provider, dir)
+		e.Forge = func(provider, dir string, s tracker.Settings) (Forge, error) {
+			return tracker.New(e.context(), s, provider, dir)
 		}
 	}
 	if e.Shell == nil {
