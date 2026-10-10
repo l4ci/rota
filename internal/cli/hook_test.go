@@ -369,3 +369,55 @@ func TestHookStopUsesInjectedLeaseEnv(t *testing.T) {
 		t.Errorf("injected lease env: want a block, got %q", out)
 	}
 }
+
+func guardPayload(dir, tool, command string) string {
+	b, _ := json.Marshal(map[string]any{"tool_name": tool, "cwd": dir, "tool_input": map[string]any{"command": command}})
+	return string(b)
+}
+
+// The guard is a no-op without ROTA_SLOT (the orchestrator) and denies a worker
+// with exit 2 and one line on stderr (#702).
+func TestHookGuard(t *testing.T) {
+	dir := gitRepo(t)
+	t.Setenv("ROTA_SLOT", "")
+	if code, out, errOut := rotaStdin(t, dir, guardPayload(dir, "Bash", "git push --force origin main"), "hook", "guard"); code != 0 || out != "" || errOut != "" {
+		t.Fatalf("orchestrator: %d %q %q", code, out, errOut)
+	}
+	t.Setenv("ROTA_SLOT", "dana")
+	code, out, errOut := rotaStdin(t, dir, guardPayload(dir, "Bash", "git push --force origin main"), "hook", "guard")
+	if code != 2 || out != "" || !strings.Contains(errOut, "force-push to main") || strings.Count(strings.TrimSpace(errOut), "\n") != 0 {
+		t.Fatalf("worker force-push: %d %q %q", code, out, errOut)
+	}
+	for _, line := range []string{"git add -A", "gh pr merge 3", "git -C " + dir + " branch -D x"} {
+		if code, _, _ := rotaStdin(t, dir, guardPayload(dir, "Bash", line), "hook", "guard"); code != 2 {
+			t.Errorf("%q: exit %d, want 2", line, code)
+		}
+	}
+	for name, payload := range map[string]string{
+		"plain command": guardPayload(dir, "Bash", "git status && git add main.go"),
+		"other tool":    guardPayload(dir, "Edit", "git push --force origin main"),
+		"not json":      "nope",
+		"empty":         "",
+	} {
+		if code, out, errOut := rotaStdin(t, dir, payload, "hook", "guard"); code != 0 || out != "" || errOut != "" {
+			t.Errorf("%s: %d %q %q", name, code, out, errOut)
+		}
+	}
+	// reset --hard inside the repo is outside the slot's worktree here.
+	if code, _, errOut := rotaStdin(t, dir, guardPayload(dir, "Bash", "git reset --hard"), "hook", "guard"); code != 2 {
+		t.Errorf("reset --hard outside a .worktrees/dana: %d %q", code, errOut)
+	}
+}
+
+func TestHookInstallWarnsWhenGuardOnlyProjectLocal(t *testing.T) {
+	dir := orchProject(t, false)
+	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
+	code, out, errOut := rotaIn(t, dir, "hook", "install", "--json")
+	if code != 0 || !strings.Contains(errOut, "worker guard") || !strings.Contains(out, "PreToolUse") {
+		t.Fatalf("project-local: %d %s | %s", code, out, errOut)
+	}
+	code, _, errOut = rotaIn(t, dir, "hook", "install", "--scope", "project", "--json")
+	if code != 0 || strings.Contains(errOut, "worker guard") {
+		t.Fatalf("project scope warned: %d %s", code, errOut)
+	}
+}

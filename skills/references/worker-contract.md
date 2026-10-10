@@ -57,7 +57,11 @@ Work only this task, then stop.
   variables, say so in your PR instead of changing its test suite.
 - Stay in your worktree. Confirm `pwd` before editing and use worktree-rooted
   paths. An absolute path under the main checkout silently edits the WRONG tree.
-- Stage explicit paths. Never `git add -A` or `git add .`.
+- Stage explicit paths. Never `git add -A` or `git add .`. A `PreToolUse` guard (`rota hook guard`,
+  installed by `rota hook install` in project or user scope) refuses these and the other forbidden
+  commands (`gh pr merge`, force-push to another branch, `git reset --hard` outside your worktree,
+  `git branch -D`, `git clean -f`) when `ROTA_SLOT` is set. It is a guardrail, not a boundary: do not
+  route around a refusal, and Codex workers are not guarded.
 - Commit your own work, run `rota worker done <slot>` (from your worktree or the main checkout; it finds the pool through the git common dir and expands `{files}` in the slot's worktree), then open a PR against `<base-branch>`. Never merge.
 - Run TARGETED verification only: the files you touched. When the project sets
   `test.fast`, that is `rota test run fast`; otherwise pick the checks by hand. The full suite is the

@@ -288,6 +288,34 @@ orchestrator go idle while workers are active and no watch is running, and the p
 one-line digest of the round (and a reminder when no watch is armed) to every message you send.
 Neither applies to a solo round, which has no panes to watch.
 
+### Worker guard
+
+`rota hook install` also adds a `PreToolUse` hook on `Bash` (`rota hook guard`). It reads `ROTA_SLOT`,
+which every worker tab has and the orchestrator and your own sessions do not, and does nothing without
+it. For a worker it refuses (exit 2, one-line reason) the commands the worker contract forbids:
+
+- `gh pr merge`
+- a force-push (`--force`, `-f`, `--force-with-lease`, `+ref`) to any branch but the worker's own,
+  `git push --delete`, `:ref` and `--mirror`; pushing the current branch, with or without
+  `--force-with-lease`, is fine
+- `git reset --hard` outside the slot's own worktree
+- `git branch -D` and `-d -f`
+- `git clean -f`
+- `git add -A`, `--all` and `.`
+
+It parses the command line, so `git -C <dir> push -f`, `/usr/bin/git`, `sudo`, `env`, `timeout`, `xargs`,
+`bash -c '…'`, `$(…)` and `a && b` chains are all seen; text inside an argument or a commit message is not.
+When the line mentions `git` or `gh` and the guard cannot parse it, or cannot read the branch or worktree
+it needs, it refuses and asks for the plain command.
+
+Install it in `project` or `user` scope (`rota hook install --scope project`): a worker's worktree does
+not read the untracked `.claude/settings.local.json`. `install` warns when the guard sits only there, and
+`rota doctor` fails its `guard-hook` check.
+
+Limits: this is a guardrail against a mistaken agent, not a security boundary. A script or `python -c`
+that calls git, or a binary that shells out, is not seen, and `gh api …/merge` is not blocked. Codex
+workers have no guard (`doctor` warns when Codex tiers are set); a Codex guard is a separate piece of work.
+
 ## Layout
 
 On herdr, `round assign` opens each worker as a tab. That suits a phone or a narrow window; on a wide
