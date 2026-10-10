@@ -37,7 +37,7 @@ rota doctor
 rota doctor --json
 ```
 
-It is read-only, spends no usage quota, and runs without `.rota/` (it falls back to default config). Each check reports `pass`, `fail` or `skip`; a `disk` line (`warn`) appears only when free disk space is low and never fails the run, and a `verify` line (`warn`) only while `test.full` and `test.e2e` are both empty. A `fail` carries a `hint` with the one command or edit that fixes it, and `detail` says what was found (`herdr 0.8.2, need 0.9.x`).
+It is read-only, spends no usage quota, and runs without `.rota/` (it falls back to default config). Each check reports `pass`, `fail` or `skip`; a `disk` line and a `go-cache-disk` line (both `warn`) appear only when free disk space is low (on the project volume, and on the volume holding the Go build cache) and never fail the run, and a `verify` line (`warn`) only while `test.full` and `test.e2e` are both empty. A `fail` carries a `hint` with the one command or edit that fixes it, and `detail` says what was found (`herdr 0.8.2, need 0.9.x`).
 
 | Exit | Meaning | What to do |
 |------|---------|------------|
