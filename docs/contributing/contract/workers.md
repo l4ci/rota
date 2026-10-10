@@ -1,5 +1,5 @@
 ---
-verified-sha: c535c4cf9bd5b3b92d47e1d1df0c0014b4bfe750
+verified-sha: 41a20d1f3536b4b0b394a6113dedce633d22b0fa
 refs:
   - internal/worker
   - internal/cli/worker.go
@@ -8,6 +8,8 @@ refs:
 ---
 
 ## A7: workers, hosts, accounts
+
+**Corrupt registry (#712).** Every verb that writes `.rota/workers.json` refuses when the file exists but does not parse as a JSON object (exit 5, `fix or remove it, rota will not overwrite it`), before it changes anything, instead of starting from an empty pool. `worker pool reap` below states the same for its own exit list.
 
 ### rota worker pool init
 rota worker pool init --slots <n> [--base <branch>] [--session <name>]

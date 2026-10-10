@@ -270,7 +270,7 @@ rota config set gate.smokeShards 6
 
 ## doctor.minFreeDiskPercent
 
-Free-disk threshold for `rota doctor`, as a percent of the volume holding the project. Integer 0-100, default `10`; `0` turns the check off. Below it doctor adds a `warn disk` line (the run still passes) whose hint names the rota leftovers that would give space back: leaked temp dirs and worktrees whose directory is gone. A parallel round writes worktrees, builds and logs, and a full disk fails it halfway.
+Free-disk threshold for `rota doctor`, as a percent of the volume holding the project. Integer 0-100, default `10`; `0` turns the check off. Below it doctor adds a `warn disk` line (the run still passes) whose hint names the rota leftovers that would give space back: leaked temp dirs and worktrees whose directory is gone. The same threshold gates a `warn go-cache-disk` line when the volume holding the Go build cache is that low; its hint is `go clean -cache`. A parallel round writes worktrees, builds and logs, and a full disk fails it halfway.
 
 ```bash
 rota config set doctor.minFreeDiskPercent 5

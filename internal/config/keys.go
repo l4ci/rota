@@ -168,7 +168,7 @@ var Keys = []Key{
 	// #82 gate key: smoke shard count read by test/gate.sh (ROTA_SMOKE_SHARDS overrides).
 	k("gate.smokeShards", num("4"), false, TypeInt, "Concurrent shards bash test/gate.sh splits the smoke suite into, 1 or more. ROTA_SMOKE_SHARDS overrides it for one run."),
 	// #85 doctor key: rota doctor warns when the free share of the disk is below this percent; 0 turns it off.
-	k("doctor.minFreeDiskPercent", num("10"), false, TypeInt, "rota doctor warns when the free share of the disk falls below this percent, 0 to 100. 0 turns the check off."),
+	k("doctor.minFreeDiskPercent", num("10"), false, TypeInt, "rota doctor warns when the free share of the disk falls below this percent, 0 to 100. 0 turns the check off. The same threshold drives the go-cache-disk warning for the volume holding GOCACHE."),
 	k("work.itemTimeoutMinutes", num("0"), false, TypeInt, "Minutes one item may run from its first assignment before rota round reconcile reports it as timed out and --apply parks it as needs-human. 0 means no cap."),
 	k("test.isolate", true, false, TypeBool, "Whether rota test run scrubs HERDR_*, TMUX*, ssh-agent variables and pins HOME and XDG_* to a temp root. The merge gate and train do not read it."),
 	k("release.versionFile", "", false, TypePath, "Project-relative file /rota-release and rota release version read and bump. Empty auto-detects; a path outside the project is refused."),
