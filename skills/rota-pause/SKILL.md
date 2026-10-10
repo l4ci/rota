@@ -89,6 +89,7 @@ Show the `(web)` suffix only when `repo` is non-null.
 ## Rules
 
 - **Write what you know.** The note is a state snapshot, not a task spec.
+- **Redact secrets.** The note is injected into a new session and quotes probe output (Current hypothesis). Replace credentials and PII (tokens, auth and cookie headers, passwords, private keys, secret env vars, emails) with `[REDACTED]`; quote the line that matters, not the capture.
 - **One handoff note per `(branch, repo)`.** Overwrite on re-pause.
 - **A multi-repo wave is one logical pause.** `cd` into a sub-repo to scope to it.
 - **Never commit `.rota/handoff/`** (gitignored per-developer scratch).
