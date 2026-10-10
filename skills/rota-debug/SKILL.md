@@ -67,6 +67,8 @@ The first deliverable, non-negotiable: a command that shows the bug and that you
 
 **Flaky bugs.** When the bug is intermittent, read [`flaky-bugs.md`](flaky-bugs.md).
 
+**Slow or regressed behaviour.** The red signal is a measurement: record a baseline (the last good commit, or a median of N runs), set a threshold, and assert against it (`elapsed <= baseline * 1.2`). Measure before the fix, then again after, on the same input. Prefer a debugger or profiler to log spam: one profile names the hot path, and print probes shift timing.
+
 **Minimise.** Shrink the reproducer while it stays red, re-running after each cut, until any further removal turns it green. It becomes the regression test in Step 5.
 
 If no rung produces a red run, stop and ask: *"Can't reproduce — need [X] from you (repro steps, environment, seed data)."*
@@ -92,16 +94,18 @@ Probe in rank order, before touching production code. Tag every temporary probe 
 
 **Probe cleanup gate.** Remove every probe, then run `git grep -n "\[DEBUG-<id>\]"`. Any hit: remove and re-run. Don't commit or finish the cycle while it prints anything.
 
-Commit one atomic fix with explicit paths (`git add <files>`, never `-A`):
+Commit one atomic fix with explicit paths (`git add <files>`, never `-A`). The body carries the verified hypothesis as a `Root cause:` line:
 
 ```bash
-git commit -m "fix: <short imperative> <ID>"
+git commit -m "fix: <short imperative> <ID>" -m "Root cause: <the confirmed hypothesis, one line>"
 rota debug counter record-attempt --hypothesis "<one-line hypothesis>" --commit "$(git rev-parse --short HEAD)"
 ```
 
 Legitimate toolchain siblings (e.g. Godot `.gd.uid`) go in a separate `chore:` commit.
 
 **Regression test, or the missing seam.** Turn the Step 3 reproducer into a test at the bug's seam, in the same commit. It must fail without the fix. If the only test you can write mocks the thing under test or asserts implementation details (call order, private state, internal strings), it pins nothing: don't commit it. That means no seam exists: keep the reproducer as the proof and file the missing seam (Step 7).
+
+**Redact before you publish.** Captured output (curl, HAR, env dumps, logs, stack traces) goes public in `rota proof add --evidence`, the PR body and issue comments. Before any of them, replace credentials and PII with `[REDACTED]`: auth and cookie headers, bearer and API tokens, passwords, private keys, secret env vars, emails, personal data. Quote the one line that shows the symptom, not the whole capture. `rota proof` does not scrub for you.
 
 ## Step 6 — Verify the fix
 
@@ -119,7 +123,7 @@ When Step 2 or Step 6 routes here, read [`iron-law-stop.md`](iron-law-stop.md).
 
 ## Step 7 — Proof, PR, cleanup
 
-Record the reproducer re-run as the proof row:
+Record the reproducer re-run as the proof row (evidence redacted, see Step 5):
 
 ```bash
 rota debug counter clear
@@ -128,7 +132,7 @@ rota proof add <ID> --check "<reproducer command>" --result PASS --evidence "<ou
 
 **No seam.** When Step 5 found no seam, read [`no-seam.md`](no-seam.md) for filing the item and wording the proof row.
 
-Re-run `git grep -n "\[DEBUG-<id>\]"` once more; it must print nothing. Open a PR and hand it to review; never merge directly. The issue closes when the PR merges:
+Re-run `git grep -n "\[DEBUG-<id>\]"` once more; it must print nothing. Open a PR and hand it to review; never merge directly. The PR body carries the same `Root cause:` line as the commit, plus `Closes #N`. The issue closes when the PR merges:
 
 ```bash
 printf '%s' "$BODY" | rota ship pr <branch> --title "<short title>" --body-file - --items <ID>
