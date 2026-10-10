@@ -37,7 +37,7 @@ func TestDoctorDiskInput(t *testing.T) {
 	cfg := config.Load(filepath.Join(t.TempDir(), "absent.json"))
 	t.Setenv("TMPDIR", t.TempDir())
 	in := doctor.Input{Dir: t.TempDir()}
-	doctorDiskInput(context.Background(), &in, cfg, "", git.Exec, time.Now(), doctorDisk("1000:100000")) // 1% free
+	doctorDiskInput(context.Background(), &in, cfg, "", git.Exec, time.Now(), doctorDisk("1000:100000"), os.Getenv) // 1% free
 	if in.MinFreeDiskPercent != 10 || in.Disk == nil || in.Disk.Free != 1000 {
 		t.Fatalf("default threshold / disk not read: %+v", in)
 	}
@@ -56,7 +56,7 @@ func TestDoctorDiskInput(t *testing.T) {
 		t.Errorf("no disk warning in %+v", rep.Checks)
 	}
 	in = doctor.Input{Dir: t.TempDir()}
-	doctorDiskInput(context.Background(), &in, cfg, "", git.Exec, time.Now(), doctorDisk("50000:100000"))
+	doctorDiskInput(context.Background(), &in, cfg, "", git.Exec, time.Now(), doctorDisk("50000:100000"), os.Getenv)
 	if len(in.Leftovers) != 0 {
 		t.Errorf("leftovers are only scanned when the disk is low: %v", in.Leftovers)
 	}
@@ -72,5 +72,38 @@ func TestDoctorSlotBlocksUsesTheStoredWidth(t *testing.T) {
 	got := doctorSlotBlocks(root)
 	if len(got) != 1 || got[0].Name != "w1" || got[0].Base != 20000 || got[0].Size != 10 {
 		t.Errorf("doctorSlotBlocks = %+v, want w1 at 20000 with the stored width 10, not the config's 100", got)
+	}
+}
+
+func TestDoctorDiskInputWarnsOnTheGoCacheVolume(t *testing.T) {
+	cfg := config.Load(filepath.Join(t.TempDir(), "absent.json"))
+	t.Setenv("TMPDIR", t.TempDir())
+	cache := t.TempDir()
+	in := doctor.Input{Dir: t.TempDir()}
+	// Same device as Dir: the repo-volume check already covers it.
+	doctorDiskInput(context.Background(), &in, cfg, "", git.Exec, time.Now(), doctorDisk("1000:100000"), func(string) string { return cache })
+	if in.CacheDisk != nil {
+		t.Errorf("cache on the repo volume duplicated the disk check: %+v", in.CacheDisk)
+	}
+	rep := doctor.Run(context.Background(), doctor.Input{
+		CacheDisk: &doctor.Disk{Path: cache, Free: 1000, Total: 100000}, MinFreeDiskPercent: 10,
+		Exec: func(context.Context, string, []string, []string, string) (doctor.Result, error) {
+			return doctor.Result{}, nil
+		},
+		Look: func(string) (string, bool) { return "", false }})
+	for _, c := range rep.Checks {
+		if c.Name == "go-cache-disk" && c.Status == doctor.Warn && strings.Contains(c.Detail, "Go build cache") && strings.Contains(c.Hint, "go clean -cache") {
+			return
+		}
+	}
+	t.Errorf("no go-cache-disk warning in %+v", rep.Checks)
+}
+
+func TestGoCacheDir(t *testing.T) {
+	if got := goCacheDir(func(string) string { return "/x/gc" }); got != "/x/gc" {
+		t.Errorf("GOCACHE ignored: %q", got)
+	}
+	if got := goCacheDir(func(string) string { return "off" }); got == "off" {
+		t.Errorf("GOCACHE=off is not a path")
 	}
 }
