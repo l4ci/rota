@@ -43,6 +43,7 @@ func hookCommands() *Command {
 	return &Command{Name: "hook", Summary: "Claude Code hooks that hand the orchestrator off before its context runs out", Subs: []*Command{
 		{Name: "stop", Summary: "Stop hook: block above the context threshold until a handoff is written, or while workers run with no watch armed", Verb: noFlags(hookStop)},
 		{Name: "prompt", Summary: "UserPromptSubmit hook: one-line round digest and a missing-watch reminder", Verb: noFlags(hookPrompt)},
+		{Name: "guard", Summary: "PreToolUse hook: deny destructive git and gh pr merge for workers (ROTA_SLOT set); no-op otherwise", Verb: noFlags(hookGuard)},
 		{Name: "session-start", Summary: "SessionStart hook: inject and consume the handoff", Verb: noFlags(hookSessionStart)},
 		{Name: "install", Summary: "merge the hooks and the statusline into a Claude Code settings file", Verb: hookInstall},
 		{Name: "uninstall", Summary: "remove what install wrote and restore a wrapped statusline", Verb: hookUninstall},
@@ -360,6 +361,88 @@ func hookSessionStart(c *Ctx, args []string) (res Result, _ error) {
 	return hookPrint(out), nil
 }
 
+// hookGuard is the PreToolUse hook for Bash (#702): exit 2 with a one-line reason
+// when a worker runs a command its contract forbids. Silent and exit 0 for
+// everyone without ROTA_SLOT (the orchestrator, a human) and for any payload it
+// cannot read, so it never blocks a build step.
+func hookGuard(c *Ctx, args []string) (res Result, _ error) {
+	c.JSON = false
+	slot := c.deps().Getenv("ROTA_SLOT")
+	if slot == "" {
+		return Result{}, nil
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			res = Result{}
+		}
+	}()
+	var p struct {
+		Tool  string `json:"tool_name"`
+		Input struct {
+			Command string `json:"command"`
+		} `json:"tool_input"`
+		Cwd string `json:"cwd"`
+	}
+	if json.Unmarshal(readInput(c), &p) != nil || (p.Tool != "" && p.Tool != "Bash") || p.Input.Command == "" {
+		return Result{}, nil
+	}
+	cwd := p.Cwd
+	if cwd == "" {
+		cwd, _ = os.Getwd()
+	}
+	gitOut := func(dir string, a ...string) (string, error) {
+		r, err := git.Exec(c.Context(), dir, a...)
+		if err != nil {
+			return "", err
+		}
+		if r.ExitCode != 0 {
+			return "", fmt.Errorf("git %s: exit %d", strings.Join(a, " "), r.ExitCode)
+		}
+		return strings.TrimSpace(r.Stdout), nil
+	}
+	env := hook.GuardEnv{
+		Cwd:      cwd,
+		Worktree: slotWorktree(cwd, slot, gitOut),
+		Branch: func(dir string) (string, error) {
+			return gitOut(dir, "branch", "--show-current")
+		},
+		Toplevel: func(dir string) (string, error) {
+			return gitOut(dir, "rev-parse", "--show-toplevel")
+		},
+		Upstream: func(dir string) (string, error) {
+			up, err := gitOut(dir, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}")
+			if err != nil {
+				return "", nil // no upstream is not an error
+			}
+			return up, nil
+		},
+	}
+	if reason := hook.Guard(p.Input.Command, env); reason != "" {
+		return Result{}, &Error{Exit: ExitUsage, Message: "rota guard: " + reason}
+	}
+	return Result{}, nil
+}
+
+// slotWorktree is the slot's own worktree: the `.worktrees/<slot>` ancestor of
+// cwd, else the entry of `git worktree list` with that name. "" when neither.
+func slotWorktree(cwd, slot string, gitOut func(dir string, a ...string) (string, error)) string {
+	for d := cwd; d != "" && d != filepath.Dir(d); d = filepath.Dir(d) {
+		if filepath.Base(d) == slot && filepath.Base(filepath.Dir(d)) == ".worktrees" {
+			return d
+		}
+	}
+	out, err := gitOut(cwd, "worktree", "list", "--porcelain")
+	if err != nil {
+		return ""
+	}
+	for _, line := range strings.Split(out, "\n") {
+		if p, ok := strings.CutPrefix(line, "worktree "); ok && filepath.Base(p) == slot {
+			return p
+		}
+	}
+	return ""
+}
+
 // settingsPaths maps each scope to its file. Project scopes are "" outside a
 // project root.
 func settingsPaths(root string, getenv func(string) string) map[hook.Scope]string {
@@ -450,8 +533,22 @@ func hookInstall(fs *flag.FlagSet) RunFunc {
 		if !out.Changed {
 			text = path + ": already installed"
 		}
+		if !guardReachesWorkers(files) {
+			c.Warn("the worker guard (PreToolUse) sits only in project-local scope, which worker worktrees do not read: run rota hook install --scope project (or --scope user)")
+		}
 		return Result{Data: d, Text: text}, nil
 	}
+}
+
+// guardReachesWorkers reports whether a marked PreToolUse entry sits in a scope
+// a worker worktree reads: project or user. Project-local is untracked.
+func guardReachesWorkers(files map[hook.Scope]*jsonx.Object) bool {
+	for _, sc := range []hook.Scope{hook.ScopeProject, hook.ScopeUser} {
+		if _, ok := hook.MarkedEvents(files[sc])[hook.EventGuard]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 func hookUninstall(fs *flag.FlagSet) RunFunc {
