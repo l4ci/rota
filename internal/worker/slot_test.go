@@ -88,7 +88,7 @@ func TestSlotFileUnchangedOnDisk(t *testing.T) {
 	if err != nil || !found {
 		t.Fatal(found, err)
 	}
-	reg := LoadRegistry(root)
+	reg := LoadRegistryTolerant(root)
 	got := render(t, reg.Slot("ben"))
 	want := `{"name": "ben", "branch": "park/ben", "worktree": "/wt", "base": "main", "handle": null, "state": "busy", "task": "#1", "pr": null, "relays": [], "configDir": null, "claimId": "ben@1"}`
 	if got != want {

@@ -118,7 +118,7 @@ func TestOrchestrateRecordsItsPlainPaneAsTheCLIPane(t *testing.T) {
 			if code, env, errs := rotaRunWith(t, deps, "--json", "-C", dir, "orchestrate"); code != 0 {
 				t.Fatalf("exit %d: %v %s", code, env, errs)
 			}
-			if got := worker.LoadRegistry(dir).CLIPane(); got != tc.want {
+			if got := worker.LoadRegistryTolerant(dir).CLIPane(); got != tc.want {
 				t.Errorf("cliPane = %q, want %q", got, tc.want)
 			}
 		})

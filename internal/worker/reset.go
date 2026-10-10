@@ -65,7 +65,10 @@ func (e Env) Reset(root, slot, task string, checkOnly bool) (ResetResult, error)
 func (e Env) ResetTo(root, slot, task, newBranch string, checkOnly bool) (ResetResult, error) {
 	e = e.withDefaults()
 	res := ResetResult{Slot: slot}
-	reg := LoadRegistry(root)
+	reg, err := LoadRegistry(root)
+	if err != nil {
+		return res, err
+	}
 	if !reg.Exists {
 		return res, fail(exitcode.ExitResolution, "no worker pool — run rota worker pool init first")
 	}

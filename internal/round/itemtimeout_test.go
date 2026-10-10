@@ -70,14 +70,14 @@ func TestItemTimeoutApplyParksNeedsHuman(t *testing.T) {
 	if s := f.slot("ben"); s.Task() != "" || s.State() != "idle" {
 		t.Errorf("slot freed: %v", s)
 	}
-	if _, ok := worker.LoadRegistry(f.root).ItemStart("12"); ok {
+	if _, ok := worker.LoadRegistryTolerant(f.root).ItemStart("12"); ok {
 		t.Error("parking stops the clock")
 	}
 }
 
 func TestItemClockSurvivesATransferToAnotherSlot(t *testing.T) {
 	f := newMoveFx(t)
-	first, ok := worker.LoadRegistry(f.root).ItemStart("12")
+	first, ok := worker.LoadRegistryTolerant(f.root).ItemStart("12")
 	if !ok {
 		t.Fatal("assign must start the clock")
 	}
@@ -85,7 +85,7 @@ func TestItemClockSurvivesATransferToAnotherSlot(t *testing.T) {
 	if _, err := f.transfer("12", "dana", nil); err != nil {
 		t.Fatal(err)
 	}
-	again, ok := worker.LoadRegistry(f.root).ItemStart("12")
+	again, ok := worker.LoadRegistryTolerant(f.root).ItemStart("12")
 	if !ok || !again.Equal(first) {
 		t.Fatalf("clock moved: %v -> %v", first, again)
 	}

@@ -120,7 +120,11 @@ func (d *Doc) DropBestOf(issue string) {
 // SetBestOfPick records the PR the orchestrator picked for an issue; an error
 // when the issue has no best-of record.
 func SetBestOfPick(root, issue, pr string) error {
-	if LoadRegistry(root).BestOf(issue) == nil {
+	reg, err := LoadRegistry(root)
+	if err != nil {
+		return err
+	}
+	if reg.BestOf(issue) == nil {
 		return fmt.Errorf("%s has no best-of record", issue)
 	}
 	return Update(root, func(d *Doc) {
@@ -134,7 +138,11 @@ func SetBestOfPick(root, issue, pr string) error {
 // ClearBestOf forgets an issue's record: its PR landed or the issue was handed
 // over. No record means no write.
 func ClearBestOf(root, issue string) error {
-	if LoadRegistry(root).BestOf(issue) == nil {
+	reg, err := LoadRegistry(root)
+	if err != nil {
+		return err
+	}
+	if reg.BestOf(issue) == nil {
 		return nil
 	}
 	return Update(root, func(d *Doc) { d.DropBestOf(issue) })

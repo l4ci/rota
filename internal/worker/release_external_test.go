@@ -36,7 +36,7 @@ func exists(p string) bool { _, err := os.Stat(p); return err == nil }
 
 func TestGateAdoptedSlotProvenance(t *testing.T) {
 	w, _ := adoptedWorld(t, "Closes #5\n\n## Approvals\nNone\n")
-	tg, err := LoadRegistry(w.dir).GateTarget("ext-1")
+	tg, err := LoadRegistryTolerant(w.dir).GateTarget("ext-1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,7 +55,7 @@ func TestGateReleasesAnAdoptedSlotAndKeepsItsCheckout(t *testing.T) {
 	if err != nil || res.Verdict != GatePass {
 		t.Fatalf("verdict %q (%v): %+v", res.Verdict, err, res)
 	}
-	if LoadRegistry(w.dir).Slot("ext-1") != nil {
+	if LoadRegistryTolerant(w.dir).Slot("ext-1") != nil {
 		t.Error("the slot is still registered after its PR merged")
 	}
 	if !exists(wt) || gitq(t, w.dir, "branch", "--list", "w1") == "" {
@@ -68,7 +68,7 @@ func TestGateCheckOnlyKeepsAnAdoptedSlot(t *testing.T) {
 	if _, err := w.gateExt(GateOpts{CheckOnly: true}); err != nil {
 		t.Fatal(err)
 	}
-	if LoadRegistry(w.dir).Slot("ext-1") == nil {
+	if LoadRegistryTolerant(w.dir).Slot("ext-1") == nil {
 		t.Error("check-only released the slot")
 	}
 }
@@ -89,7 +89,7 @@ func TestReleaseExternalKeepsWorktree(t *testing.T) {
 	if err := w.env(false).ReleaseExternal(w.dir, "ext-1", false); err != nil {
 		t.Fatal(err)
 	}
-	if LoadRegistry(w.dir).Slot("ext-1") != nil {
+	if LoadRegistryTolerant(w.dir).Slot("ext-1") != nil {
 		t.Error("slot still registered")
 	}
 	if !exists(wt) {
@@ -119,7 +119,7 @@ func TestReleaseExternalRefusesARoundSlot(t *testing.T) {
 	if !errors.As(err, &xe) || xe.Exit != exitcode.ExitRefused {
 		t.Fatalf("err = %v", err)
 	}
-	if LoadRegistry(w.dir).Slot("w1") == nil {
+	if LoadRegistryTolerant(w.dir).Slot("w1") == nil {
 		t.Error("a round slot was released")
 	}
 }

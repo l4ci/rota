@@ -231,7 +231,8 @@ func staleBinaryOncePerRound(c *Ctx, cd string, round int) (stalebin.Finding, bo
 // port block, each with the width it was allocated with.
 func doctorSlotBlocks(root string) []doctor.SlotBlock {
 	var out []doctor.SlotBlock
-	for _, s := range worker.LoadRegistry(root).Slots() {
+	// Tolerant: a diagnostic listing; a corrupt registry reads as no slots.
+	for _, s := range worker.LoadRegistryTolerant(root).Slots() {
 		if s.PortBase() > 0 && (s.PaneHandle() != "" || s.Task() != "") {
 			out = append(out, doctor.SlotBlock{Name: s.Name(), Worktree: s.Worktree(), Base: s.PortBase(), Size: s.PortBlock()})
 		}

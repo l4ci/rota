@@ -55,7 +55,10 @@ func busyMsg(name, held, why string) string {
 // is in; any other forge answer, or none, keeps it. The issue's claim and
 // in-progress state stay: it is still taken. No handoff comment.
 func (e Env) queuePR(ctx context.Context, root string, be Board, name string) error {
-	reg := worker.LoadRegistry(root)
+	reg, err := worker.LoadRegistry(root)
+	if err != nil {
+		return err
+	}
 	s := reg.Slot(name)
 	if s == nil {
 		return &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("slot %s is not in the pool", name)}

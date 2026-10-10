@@ -158,7 +158,9 @@ func (f *moveFx) agents(slots ...string) {
 	}
 }
 
-func (f *moveFx) slot(name string) *worker.Slot { return worker.LoadRegistry(f.root).Slot(name) }
+func (f *moveFx) slot(name string) *worker.Slot {
+	return worker.LoadRegistryTolerant(f.root).Slot(name)
+}
 
 func (f *moveFx) remoteHas(t *testing.T, branch string) bool {
 	t.Helper()

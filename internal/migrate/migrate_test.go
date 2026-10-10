@@ -463,7 +463,7 @@ func TestMigrateRemapsRegistryIDs(t *testing.T) {
 	if err != nil || !res.Done {
 		t.Fatalf("%v %+v", err, res)
 	}
-	reg := worker.LoadRegistry(root)
+	reg := worker.LoadRegistryTolerant(root)
 	if got := reg.Slot("ben").Task(); got != "2" {
 		t.Errorf("task %q", got)
 	}
@@ -477,7 +477,7 @@ func TestMigrateRemapsRegistryIDs(t *testing.T) {
 	if _, err := Run(o); err != nil {
 		t.Fatal(err)
 	}
-	if got := worker.LoadRegistry(root).Slot("ben").Task(); got != "2" {
+	if got := worker.LoadRegistryTolerant(root).Slot("ben").Task(); got != "2" {
 		t.Errorf("rerun task %q", got)
 	}
 }

@@ -130,10 +130,10 @@ func TestPickClosesTheQueuedLoserAndRecordsThePick(t *testing.T) {
 	if f.be.claims["12"] != "ben@1" {
 		t.Errorf("the winner's claim must stay: %v", f.be.claims)
 	}
-	if b := worker.LoadRegistry(f.root).BestOf("12"); b == nil || !b.Picked("#7") || b.Picked("#8") {
+	if b := worker.LoadRegistryTolerant(f.root).BestOf("12"); b == nil || !b.Picked("#7") || b.Picked("#8") {
 		t.Errorf("pick not recorded: %+v", b)
 	}
-	if n := worker.LoadRegistry(f.root).Bounces("12"); n != 0 {
+	if n := worker.LoadRegistryTolerant(f.root).Bounces("12"); n != 0 {
 		t.Errorf("bounces restart at the pick: %d", n)
 	}
 	if got := f.be.comments["12"]; len(got) == 0 || !strings.Contains(got[len(got)-1], "Best-of pick: #7 (ben) over #8 (dana)") || strings.Contains(got[len(got)-1], "second line") {
@@ -183,7 +183,7 @@ func TestPickLeavesAWorkingLoserSlotAndWarns(t *testing.T) {
 func TestPickRefusals(t *testing.T) {
 	f := newPickFx(t)
 	f.bothHavePRs(t)
-	snap := func() string { return worker.LoadRegistry(f.root).BestOf("12").Pick + "|" + f.be.claims["12"] }
+	snap := func() string { return worker.LoadRegistryTolerant(f.root).BestOf("12").Pick + "|" + f.be.claims["12"] }
 	before := snap()
 
 	_, err := f.pick("#9", "why")
@@ -213,7 +213,7 @@ func TestPickAcceptsTheRemainingPRWhenTheOtherAttemptIsGone(t *testing.T) {
 	if res.Loser.State != AttemptGone || res.Closed || !res.Changed || res.Winner.Slot != "ben" {
 		t.Fatalf("%+v", res)
 	}
-	if b := worker.LoadRegistry(f.root).BestOf("12"); b == nil || !b.Picked("#7") {
+	if b := worker.LoadRegistryTolerant(f.root).BestOf("12"); b == nil || !b.Picked("#7") {
 		t.Errorf("pick not recorded: %+v", b)
 	}
 }
@@ -225,7 +225,7 @@ func TestPickRefusesWhileTheOtherAttemptIsStillBuilding(t *testing.T) {
 		f.hold(t, "dana", st, "")
 		_, err := f.pick("#7", "why")
 		wantBlocked(t, err, BlockAttemptRunning)
-		if b := worker.LoadRegistry(f.root).BestOf("12"); b.Pick != "" {
+		if b := worker.LoadRegistryTolerant(f.root).BestOf("12"); b.Pick != "" {
 			t.Errorf("state %q: nothing may be recorded", st)
 		}
 	}

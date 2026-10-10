@@ -1,11 +1,13 @@
 package round
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -54,7 +56,7 @@ func TestReconcileUnregisteredBranch(t *testing.T) {
 	if len(got) != 1 || got[0].Issue != "612" || !strings.Contains(got[0].Detail, "codex/612-thing") {
 		t.Fatalf("want one finding for 612, got %+v", got)
 	}
-	if len(worker.LoadRegistry(root).Slots()) != 0 {
+	if len(worker.LoadRegistryTolerant(root).Slots()) != 0 {
 		t.Fatal("a report-only reconcile registered a slot")
 	}
 	e.AdoptPattern = ""
@@ -86,7 +88,7 @@ func TestReconcileApplyAdopts(t *testing.T) {
 		t.Fatal(err)
 	}
 	var adopted *worker.Slot
-	for _, s := range worker.LoadRegistry(root).Slots() {
+	for _, s := range worker.LoadRegistryTolerant(root).Slots() {
 		if s.Branch() == "codex/612-thing" {
 			adopted = s
 		}
@@ -116,7 +118,7 @@ func TestReconcileApplySkipsOverlap(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, s := range worker.LoadRegistry(root).Slots() {
+	for _, s := range worker.LoadRegistryTolerant(root).Slots() {
 		if s.IsExternal() || s.Branch() == "codex/612-thing" {
 			t.Fatalf("a blocking overlap adopted %s", s.Name())
 		}
@@ -156,5 +158,24 @@ func TestStatusSkipsTheBranchScan(t *testing.T) {
 	}
 	if got := unregistered(rep.Findings); len(got) != 0 {
 		t.Errorf("plain status must not scan branches: %+v", got)
+	}
+}
+
+// A corrupt registry is not an empty pool: Reconcile refuses instead of
+// reporting every adoptable branch as unregistered (#712).
+func TestReconcileRefusesACorruptRegistry(t *testing.T) {
+	root, e, _ := unregFixture(t, "codex/612-thing")
+	if err := os.WriteFile(worker.RegistryPath(root), []byte("{not json"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, err := e.Reconcile(bg, root, false)
+	if err == nil {
+		t.Fatalf("want an error on a corrupt registry, got findings %+v", unregistered(out.Drift))
+	}
+	if !errors.Is(err, fsio.ErrUnreadable) {
+		t.Errorf("want fsio.ErrUnreadable, got %v", err)
+	}
+	if got := unregistered(out.Drift); len(got) != 0 {
+		t.Errorf("no unregistered findings off a corrupt registry: %+v", got)
 	}
 }

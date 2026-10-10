@@ -299,7 +299,10 @@ func (e Env) Gate(ctx context.Context, root string, o GateOpts) (GateResult, err
 // gate reads the registry and the gate input, then runs the step table.
 func (e Env) gate(ctx context.Context, root string, o GateOpts) (GateResult, error) {
 	res := GateResult{Slot: o.Slot, Base: o.Base}
-	reg := LoadRegistry(root)
+	reg, err := LoadRegistry(root)
+	if err != nil {
+		return res, err
+	}
 	if !reg.Exists {
 		return res, fail(exitcode.ExitResolution, "no worker pool — run rota worker pool init first")
 	}
@@ -648,7 +651,11 @@ func (g *gate) stepBestOf() (bool, error) {
 	if !g.target.Queued {
 		issue = HeldID(g.target.Task, g.target.Branch, g.target.Name)
 	}
-	rec := LoadRegistry(g.root).BestOf(issue)
+	reg, err := LoadRegistry(g.root)
+	if err != nil {
+		return false, err
+	}
+	rec := reg.BestOf(issue)
 	if rec == nil || (g.pr != "" && rec.Picked(g.pr)) {
 		return false, nil
 	}

@@ -56,7 +56,10 @@ func dispatchSetting(root string) string {
 
 // RegistryHost is the round host `round start` recorded (C8), "" when no
 // round is in flight.
-func RegistryHost(root string) string { return LoadRegistry(root).Host() }
+//
+// It tolerates a corrupt registry (reads as no host): callers pick a host to
+// talk to and cannot refuse; the verbs that write the registry refuse it.
+func RegistryHost(root string) string { return LoadRegistryTolerant(root).Host() }
 
 // ResolveHost is the host the project's round runs on: host.Resolve over the
 // round's recorded host, work.dispatch and the environment. Every verb that
@@ -115,7 +118,7 @@ func recordDispatch(root, slot, handle, task, kind string, round *int, turnSeq i
 
 // roundOf is the registry's round, else 1.
 func roundOf(root string) int {
-	if n, ok := LoadRegistry(root).Round(); ok && n != 0 {
+	if n, ok := LoadRegistryTolerant(root).Round(); ok && n != 0 {
 		return n
 	}
 	return 1
@@ -158,7 +161,11 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 	if err := SoloRefusal(root, "rota round assign hands a slot its brief and rota round report records the result"); err != nil {
 		return res, err
 	}
-	if s := LoadRegistry(root).Slot(o.Slot); s != nil && s.IsExternal() {
+	pre, err := LoadRegistry(root)
+	if err != nil {
+		return res, err
+	}
+	if s := pre.Slot(o.Slot); s != nil && s.IsExternal() {
 		e := fail(exitcode.ExitRefused, "external slot has no host")
 		e.Data = BlockData{BlockedBy: "host"}
 		return res, e
@@ -177,7 +184,10 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 	if h.Name() == "herdr" && !h.InSession() {
 		return res, fail(exitcode.ExitUnavailable, "work.dispatch=herdr must run from inside a herdr pane (HERDR_ENV=1)")
 	}
-	reg := LoadRegistry(root)
+	reg, err := LoadRegistry(root)
+	if err != nil {
+		return res, err
+	}
 	if !reg.Exists {
 		return res, fail(exitcode.ExitResolution, "no worker pool — run rota worker pool init first")
 	}
@@ -444,7 +454,11 @@ func stamp(t time.Time) string { return t.UTC().Format("2006-01-02T15:04:05Z") }
 // parked: the host failing to close it is exit 5.
 func (e Env) KillSlot(ctx context.Context, root, slot string) error {
 	e = e.withDefaults()
-	s := LoadRegistry(root).Slot(slot)
+	reg, err := LoadRegistry(root)
+	if err != nil {
+		return err
+	}
+	s := reg.Slot(slot)
 	if s == nil {
 		return fail(exitcode.ExitResolution, fmt.Sprintf("slot '%s' is not in the pool", slot))
 	}
@@ -468,7 +482,7 @@ func (e Env) KillSlot(ctx context.Context, root, slot string) error {
 // that stays is a stray window, not a reason to refuse a reclaim.
 func (e Env) SweepSlot(ctx context.Context, root, slot string) {
 	e = e.withDefaults()
-	s := LoadRegistry(root).Slot(slot)
+	s := LoadRegistryTolerant(root).Slot(slot) // best effort: a corrupt registry leaves the stray panes
 	if s == nil || RegistryHost(root) == host.Solo {
 		return
 	}
@@ -492,7 +506,7 @@ func sweepShells(ctx context.Context, h host.Host, worktree string) {
 // failure is a warning, never a failed dispatch.
 func arrangeNew(ctx context.Context, h host.Host, root string) string {
 	l, ok := h.(host.Layouter)
-	reg := LoadRegistry(root)
+	reg := LoadRegistryTolerant(root) // a warning-only rearrange after a spawn; cannot fail the dispatch
 	if !ok || reg.Layout() != layout.Split {
 		return ""
 	}

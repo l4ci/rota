@@ -716,7 +716,7 @@ func TestGateFindsTheOpenPROfAnUnrecordedSlot(t *testing.T) {
 	if got := gitq(t, w.origin, "log", "--format=%s", "main"); !strings.Contains(got, "merge pr") {
 		t.Errorf("nothing reached origin/main:\n%s", got)
 	}
-	if got := LoadRegistry(w.dir).Slot("w1").PR(); got != ghURL {
+	if got := LoadRegistryTolerant(w.dir).Slot("w1").PR(); got != ghURL {
 		t.Errorf("the slot still records no PR: %q", got)
 	}
 }
@@ -728,7 +728,7 @@ func TestGateCheckOnlyAdoptsTheOpenPRWithoutRecordingIt(t *testing.T) {
 	if err != nil || res.Verdict != GateFresh || res.PR != ghURL {
 		t.Fatalf("%+v %v", res, err)
 	}
-	if got := LoadRegistry(w.dir).Slot("w1").PR(); got != "" {
+	if got := LoadRegistryTolerant(w.dir).Slot("w1").PR(); got != "" {
 		t.Errorf("a check-only gate recorded %q", got)
 	}
 }

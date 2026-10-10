@@ -28,7 +28,7 @@ func TestAdoptVerb(t *testing.T) {
 	if code != 0 || out != "adopted ext-1 codex/b01-a #B01\n" {
 		t.Fatalf("%d %q", code, out)
 	}
-	s := worker.LoadRegistry(dir).Slot("ext-1")
+	s := worker.LoadRegistryTolerant(dir).Slot("ext-1")
 	if s == nil || !s.IsExternal() || s.Handle() != "" || s.Task() != "B01" || s.PR() != "https://x/pull/3" {
 		t.Fatalf("slot %v", s)
 	}
@@ -54,7 +54,7 @@ func TestAdoptVerbUsageAndForeignPath(t *testing.T) {
 			t.Errorf("%v: exit %d, want 2", args, code)
 		}
 	}
-	if worker.LoadRegistry(dir).Slot("ext-1") != nil {
+	if worker.LoadRegistryTolerant(dir).Slot("ext-1") != nil {
 		t.Error("a refused adopt registered a slot")
 	}
 }

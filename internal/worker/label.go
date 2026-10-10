@@ -43,12 +43,15 @@ func labelSlot(ctx context.Context, h host.Host, name, handle, title string) {
 	}
 }
 
+// The label helpers read the registry with LoadRegistryTolerant: a pane title
+// is cosmetic, so a corrupt registry just skips it (the verbs that matter refuse).
+
 // syncLabel labels a slot's pane from what the registry holds for it now.
 func syncLabel(ctx context.Context, h host.Host, root, name string) {
 	if _, ok := h.(host.Labeler); !ok {
 		return
 	}
-	if s := LoadRegistry(root).Slot(name); s != nil && s.State() != "" {
+	if s := LoadRegistryTolerant(root).Slot(name); s != nil && s.State() != "" {
 		labelSlot(ctx, h, name, s.PaneHandle(), slotTitle(name, s.Task(), s.State(), s.PR()))
 	}
 }
@@ -78,7 +81,7 @@ func syncChanged(ctx context.Context, h host.Host, root string, rows []PollRow, 
 // workspaceToken is the round token: `r10 3 slots: 2 working, 1 blocked, 0 done`.
 func workspaceToken(root string) string {
 	var n, working, blocked, done int
-	for _, s := range LoadRegistry(root).Slots() {
+	for _, s := range LoadRegistryTolerant(root).Slots() {
 		n++
 		switch strings.ToUpper(s.State()) {
 		case StateBusy:
@@ -105,7 +108,7 @@ func (e Env) ClearLabel(ctx context.Context, root, slot string) {
 	if e.NewHost == nil || RegistryHost(root) == host.Solo {
 		return
 	}
-	s := LoadRegistry(root).Slot(slot)
+	s := LoadRegistryTolerant(root).Slot(slot)
 	if s == nil || s.PaneHandle() == "" {
 		return
 	}

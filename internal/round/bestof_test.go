@@ -65,12 +65,12 @@ func TestAssignBestOfBindsTwoSlots(t *testing.T) {
 	if f.be.claims["12"] != "ben@1" || strings.Join(f.be.more["12"], ",") != "dana@1" || f.be.bstates["12"] != "in-progress" {
 		t.Errorf("both claims on one in-progress issue: %v %v %v", f.be.claims, f.be.more, f.be.bstates)
 	}
-	rec := worker.LoadRegistry(f.root).BestOf("12")
+	rec := worker.LoadRegistryTolerant(f.root).BestOf("12")
 	if rec == nil || len(rec.Attempts) != 2 || rec.Attempts[0] != (worker.BestOfAttempt{Slot: "ben", Branch: a.Branch, ClaimID: "ben@1"}) ||
 		rec.Attempts[1] != (worker.BestOfAttempt{Slot: "dana", Branch: b.Branch, ClaimID: "dana@1"}) {
 		t.Errorf("record: %+v", rec)
 	}
-	reg := worker.LoadRegistry(f.root)
+	reg := worker.LoadRegistryTolerant(f.root)
 	if reg.Slot("ben").HeldID() != "12" || reg.Slot("dana").HeldID() != "12" {
 		t.Errorf("both slots hold the issue")
 	}
@@ -95,14 +95,14 @@ func TestAssignBestOfNeedsTwoFreeSlots(t *testing.T) {
 	if _, err := f.assign("13", "ben", func(o *AssignOpts) { o.AcceptOverlap = true }); err != nil {
 		t.Fatal(err)
 	}
-	before := worker.LoadRegistry(f.root).Slot("dana").HeldID()
+	before := worker.LoadRegistryTolerant(f.root).Slot("dana").HeldID()
 	claims := len(f.be.claims)
 	_, err := f.assign("12", "", nil)
 	var blk *BlockedError
 	if !errors.As(err, &blk) || blk.By != BlockBestOfSlots || !strings.Contains(blk.Msg, "needs two free slots; 1 free") {
 		t.Fatalf("%v", err)
 	}
-	reg := worker.LoadRegistry(f.root)
+	reg := worker.LoadRegistryTolerant(f.root)
 	if reg.BestOf("12") != nil || reg.Slot("dana").HeldID() != before || len(f.be.claims) != claims || f.be.claims["12"] != "" || f.be.bstates["12"] != "" {
 		t.Errorf("nothing changed: %v %v %v", f.be.claims, f.be.bstates, reg.BestOf("12"))
 	}
@@ -146,7 +146,7 @@ func TestAssignBestOfCheckOnlyChangesNothing(t *testing.T) {
 	if err != nil || !res.Ready() || res.Dispatched {
 		t.Fatalf("%v %+v", err, res)
 	}
-	if worker.LoadRegistry(f.root).BestOf("12") != nil || len(f.be.claims) != 0 || len(f.be.bstates) != 0 {
+	if worker.LoadRegistryTolerant(f.root).BestOf("12") != nil || len(f.be.claims) != 0 || len(f.be.bstates) != 0 {
 		t.Errorf("check-only wrote something")
 	}
 }
@@ -160,7 +160,7 @@ func TestAssignBestOfRefusesOtherLabels(t *testing.T) {
 		if !errors.As(err, &blk) || blk.By != BlockBestOfLabel || !strings.Contains(blk.Msg, labels[len(labels)-1]) {
 			t.Fatalf("%v: %v", labels, err)
 		}
-		if len(f.be.claims) != 0 || worker.LoadRegistry(f.root).Slot("ben").HeldID() != "" {
+		if len(f.be.claims) != 0 || worker.LoadRegistryTolerant(f.root).Slot("ben").HeldID() != "" {
 			t.Errorf("a refusal marks nothing")
 		}
 	}
@@ -189,7 +189,7 @@ func TestAssignSinglyDropsAStaleBestOfRecord(t *testing.T) {
 	if _, err := f.assign("12", "ben", nil); err != nil {
 		t.Fatal(err)
 	}
-	if worker.LoadRegistry(f.root).BestOf("12") != nil {
+	if worker.LoadRegistryTolerant(f.root).BestOf("12") != nil {
 		t.Errorf("a singly assigned issue keeps no best-of record")
 	}
 }
@@ -316,7 +316,7 @@ func TestStaleQueuedPRDropsOnlyItsOwnRecord(t *testing.T) {
 	if _, err := f.env.Reconcile(bg, f.root, true); err != nil {
 		t.Fatal(err)
 	}
-	prs := worker.LoadRegistry(f.root).PRs()
+	prs := worker.LoadRegistryTolerant(f.root).PRs()
 	if len(prs) != 1 || prs[0].PR != "#8" {
 		t.Errorf("only the merged PR's record goes: %+v", prs)
 	}

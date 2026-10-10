@@ -122,7 +122,7 @@ func TestAssignUnderSoloReturnsTheBriefAndDispatchesNothing(t *testing.T) {
 	if res.Worktree != wt || !filepath.IsAbs(res.Worktree) {
 		t.Errorf("worktree = %q, want %q", res.Worktree, wt)
 	}
-	s := worker.LoadRegistry(f.root).Slot("ben")
+	s := worker.LoadRegistryTolerant(f.root).Slot("ben")
 	if s.State() != "busy" || s.Task() != "12" || s.ClaimID() != "ben@1" {
 		t.Errorf("slot: %v", s)
 	}
@@ -164,7 +164,7 @@ func TestAssignUnderSoloSkipsTheAccountPick(t *testing.T) {
 	if _, err := f.assign("12", "ben", nil); err != nil {
 		t.Fatalf("no account is picked under solo: %v", err)
 	}
-	if v := worker.LoadRegistry(f.root).Slot("ben").Account(); v != "" {
+	if v := worker.LoadRegistryTolerant(f.root).Slot("ben").Account(); v != "" {
 		t.Errorf("account = %q", v)
 	}
 }
@@ -182,7 +182,7 @@ func TestReportRecordsStateAndPRAndIsIdempotent(t *testing.T) {
 	if r.State != "done" || r.Previous != "busy" || r.PR != url || r.Evidence != "built it" || !r.Changed {
 		t.Fatalf("%+v", r)
 	}
-	s := worker.LoadRegistry(f.root).Slot("ben")
+	s := worker.LoadRegistryTolerant(f.root).Slot("ben")
 	if s.State() != "done" || s.PR() != url {
 		t.Errorf("slot: %v", s)
 	}
@@ -203,7 +203,7 @@ func TestReportRecordsStateAndPRAndIsIdempotent(t *testing.T) {
 	if _, err = f.env.ReportSlot(bg, f.root, ReportOpts{Slot: "ben", State: "idle"}); err != nil {
 		t.Fatal(err)
 	}
-	if got := worker.LoadRegistry(f.root).Slot("ben").PR(); got != "#9" {
+	if got := worker.LoadRegistryTolerant(f.root).Slot("ben").PR(); got != "#9" {
 		t.Errorf("pr = %q", got)
 	}
 }
@@ -226,7 +226,7 @@ func TestReportRefusals(t *testing.T) {
 			t.Errorf("%s: %v, want exit %d", c.name, err, c.want)
 		}
 	}
-	if got := worker.LoadRegistry(f.root).Slot("ben").State(); got != "idle" {
+	if got := worker.LoadRegistryTolerant(f.root).Slot("ben").State(); got != "idle" {
 		t.Errorf("a refusal writes nothing, state = %q", got)
 	}
 	for _, h := range []string{"tmux", "herdr", ""} {

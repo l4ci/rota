@@ -149,7 +149,8 @@ func watchForge(ctx context.Context, c *Ctx, root string) map[string]string {
 		}
 		return out
 	}
-	for _, s := range worker.LoadRegistry(root).Slots() {
+	// Tolerant: the watch poll cannot refuse; a corrupt registry reads as no slots.
+	for _, s := range worker.LoadRegistryTolerant(root).Slots() {
 		if s.PR() == "" || !strings.EqualFold(s.State(), "done") {
 			continue
 		}

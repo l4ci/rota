@@ -40,7 +40,10 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		reg := worker.LoadRegistry(poolRoot)
+		reg, err := worker.LoadRegistry(poolRoot)
+		if err != nil {
+			return Result{}, err
+		}
 		if !reg.Exists {
 			return Result{}, Resolution("no worker pool — run rota worker pool init first")
 		}

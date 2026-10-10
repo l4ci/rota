@@ -140,7 +140,10 @@ func (e Env) train(ctx context.Context, root string, o TrainOpts, cache *trainCa
 	if len(o.Targets) == 0 {
 		return res, fail(exitcode.ExitUsage, "a train needs at least one PR or slot")
 	}
-	reg := LoadRegistry(root)
+	reg, err := LoadRegistry(root)
+	if err != nil {
+		return res, err
+	}
 	if !reg.Exists {
 		return res, fail(exitcode.ExitResolution, "no worker pool — run rota worker pool init first")
 	}

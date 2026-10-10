@@ -140,7 +140,7 @@ func heldIDs(root string) map[string]bool {
 			}
 		}
 	}
-	reg := worker.LoadRegistry(root)
+	reg := worker.LoadRegistryTolerant(root) // no error return; assign and adopt read the registry strictly before they claim
 	for _, s := range reg.Slots() {
 		hold(s.HeldID())
 	}

@@ -345,7 +345,7 @@ func TestPollRecordsIssuesDone(t *testing.T) {
 	if _, err := envWith(f).Poll(bg, dir, PollOpts{Lines: 60}); err != nil {
 		t.Fatal(err)
 	}
-	if got := LoadRegistry(dir).Slot("w1").Issues(); strings.Join(got, ",") != "#139,#140" {
+	if got := LoadRegistryTolerant(dir).Slot("w1").Issues(); strings.Join(got, ",") != "#139,#140" {
 		t.Errorf("issues = %v", got)
 	}
 	if got := slotField(t, dir, "w1", "pr"); got != "<null>" {
@@ -361,7 +361,7 @@ func TestPollRecordsIssuesDone(t *testing.T) {
 func TestOpenPRsByHeadRecordsOnlyUnrecordedSlots(t *testing.T) {
 	w := newWorld(t, "")
 	w.forge("listed", "1")
-	reg := LoadRegistry(w.dir)
+	reg := LoadRegistryTolerant(w.dir)
 	polled := map[string]PollRow{"w1": {Name: "w1", State: StateIdle}}
 	if got := w.env(false).withDefaults().openPRsByHead(bg, w.dir, reg, polled)["w1"]; got != ghURL {
 		t.Errorf("w1 -> %q", got)
@@ -372,7 +372,7 @@ func TestOpenPRsByHeadRecordsOnlyUnrecordedSlots(t *testing.T) {
 		t.Errorf("unpolled: %v", got)
 	}
 	w.setSlot(ghURL, "")
-	if got := w.env(false).withDefaults().openPRsByHead(bg, w.dir, LoadRegistry(w.dir), polled); got != nil {
+	if got := w.env(false).withDefaults().openPRsByHead(bg, w.dir, LoadRegistryTolerant(w.dir), polled); got != nil {
 		t.Errorf("recorded: %v", got)
 	}
 }

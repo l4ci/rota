@@ -407,7 +407,10 @@ func (a *Accounts) OrchestratorTarget(ctx context.Context, root, currentDir stri
 // that slot under it. An empty account means "pick one". ok is false when no
 // account was usable (exit 4 for the verb).
 func (a *Accounts) Assign(ctx context.Context, root, slot, account string) (name string, changed bool, err error) {
-	reg := LoadRegistry(root)
+	reg, err := LoadRegistry(root)
+	if err != nil {
+		return "", false, err
+	}
 	if !reg.Exists {
 		return "", false, fail(exitcode.ExitResolution, "no worker pool — run rota worker pool init first")
 	}

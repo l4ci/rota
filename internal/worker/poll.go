@@ -256,7 +256,7 @@ func (e Env) promoteIdleWithPR(ctx context.Context, root string, rows []PollRow)
 	if len(idle) == 0 {
 		return rows, nil
 	}
-	reg := LoadRegistry(root)
+	reg := LoadRegistryTolerant(root) // Wait already read the registry strictly; this only adds notes
 	openPRs := e.openPRsByHead(ctx, root, reg, idle)
 	for i, r := range rows {
 		s := reg.Slot(r.Name)
@@ -326,7 +326,10 @@ func (e Env) Poll(ctx context.Context, root string, o PollOpts) (PollResult, err
 	if err := h.Require(); err != nil {
 		return PollResult{}, fail(exitcode.ExitUnavailable, err.Error())
 	}
-	reg := LoadRegistry(root)
+	reg, err := LoadRegistry(root)
+	if err != nil {
+		return PollResult{}, err
+	}
 	if o.Slot != "" && reg.Slot(o.Slot) == nil {
 		return PollResult{}, fail(exitcode.ExitResolution, fmt.Sprintf("slot '%s' is not in the pool", o.Slot))
 	}

@@ -214,7 +214,11 @@ func shipWorktreeCheck(c *Ctx, dir, branch string) func(string) error {
 			return filepath.Join(root, path)
 		}
 		for _, root := range roots {
-			for _, slot := range worker.LoadRegistry(root).Slots() {
+			reg, err := worker.LoadRegistry(root)
+			if err != nil {
+				return Unavailable("cannot read round slots: %v", err)
+			}
+			for _, slot := range reg.Slots() {
 				if path := slot.Worktree(); path != "" && ship.PathContains(resolve(root, path), wt) {
 					return &ship.Refusal{By: "worktree", Msg: "worktree belongs to round slot " + slot.Name() + ": " + wt, Hint: "leave slot cleanup to the round orchestrator"}
 				}

@@ -362,7 +362,7 @@ func TestWaitAfterTheLastEventRechecksAPaneThatMovedOnce(t *testing.T) {
 }
 
 func seenField(dir, slot, key string) string {
-	return jsonx.Str(LoadRegistry(dir).Slot(slot).Raw(), key)
+	return jsonx.Str(LoadRegistryTolerant(dir).Slot(slot).Raw(), key)
 }
 
 func TestWaitRecordsWhatItReturned(t *testing.T) {

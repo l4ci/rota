@@ -141,7 +141,7 @@ func TestAssignMarksResetsAndDispatches(t *testing.T) {
 	if f.be.claims["12"] != "ben@1" || f.be.bstates["12"] != "in-progress" || len(f.be.notes) != 1 || !strings.Contains(f.be.notes[0], "ben") {
 		t.Errorf("claim, state and comment: %+v %+v %v", f.be.claims, f.be.bstates, f.be.notes)
 	}
-	s := worker.LoadRegistry(f.root).Slot("ben")
+	s := worker.LoadRegistryTolerant(f.root).Slot("ben")
 	if s.Task() != "12" || s.ClaimID() != "ben@1" || s.Branch() != res.Branch || s.State() != "busy" {
 		t.Errorf("slot: %v", s)
 	}
@@ -323,7 +323,7 @@ func TestAssignDispatchFailureMarksTheSlotIdle(t *testing.T) {
 	if _, err := f.assign("12", "ben", nil); err == nil {
 		t.Fatal("dispatch failure must surface")
 	}
-	if st := worker.LoadRegistry(f.root).Slot("ben").State(); st != "idle" {
+	if st := worker.LoadRegistryTolerant(f.root).Slot("ben").State(); st != "idle" {
 		t.Errorf("slot state after a failed dispatch: %q", st)
 	}
 }
@@ -358,7 +358,7 @@ func TestAssignUndoesWhenNothingWasSent(t *testing.T) {
 	if len(f.be.claims) != 0 || len(f.be.bstates) != 0 {
 		t.Errorf("a failure before dispatch undoes claim and state: %+v %+v", f.be.claims, f.be.bstates)
 	}
-	if s := worker.LoadRegistry(f.root).Slot("ben"); s.Task() != "" || s.ClaimID() != "" {
+	if s := worker.LoadRegistryTolerant(f.root).Slot("ben"); s.Task() != "" || s.ClaimID() != "" {
 		t.Errorf("and the slot: %v", s)
 	}
 }
@@ -395,7 +395,7 @@ func TestAssignDefaultTierStartsTheWorkerOnItsModel(t *testing.T) {
 	if !strings.Contains(f.host.launch, "--model sonnet") {
 		t.Errorf("the worker must launch on the standard model: %q", f.host.launch)
 	}
-	s := worker.LoadRegistry(f.root).Slot("ben")
+	s := worker.LoadRegistryTolerant(f.root).Slot("ben")
 	if s.Tier() != "standard" || s.Model() != "sonnet" || s.Kind() != "claude" {
 		t.Errorf("slot fields: %v", s)
 	}
@@ -439,7 +439,7 @@ func TestAssignAboveDefaultNeedsAReasonAndRecordsIt(t *testing.T) {
 	if err != nil || res.Tier != "heavy" || res.Model != "opus" || res.TierReason != "touches the lease protocol" {
 		t.Fatalf("%v %+v", err, res)
 	}
-	s := worker.LoadRegistry(f.root).Slot("ben")
+	s := worker.LoadRegistryTolerant(f.root).Slot("ben")
 	if s.TierReason() != "touches the lease protocol" || !strings.Contains(f.host.launch, "--model opus") {
 		t.Errorf("reason recorded and model applied: %v %q", s, f.host.launch)
 	}
@@ -538,7 +538,7 @@ func TestAssignCodexResolvesAndStarts(t *testing.T) {
 	if f.host.codexHome != "" || f.host.configDir != "" {
 		t.Errorf("the default home sets no CODEX_HOME: home %q configDir %q", f.host.codexHome, f.host.configDir)
 	}
-	if s := worker.LoadRegistry(f.root).Slot("ben"); s.Kind() != "codex" {
+	if s := worker.LoadRegistryTolerant(f.root).Slot("ben"); s.Kind() != "codex" {
 		t.Errorf("the kind is recorded: %v", s)
 	}
 	// A slot's recorded kind is the default.
@@ -634,7 +634,7 @@ func TestAssignCodexPreflightRefusesBeforeMarking(t *testing.T) {
 			if len(f.be.claims) != 0 || len(f.be.bstates) != 0 || len(f.be.notes) != 0 || len(f.host.spawned) != 0 {
 				t.Fatalf("nothing is marked before the refusal: %+v %+v %v", f.be.claims, f.be.bstates, f.host.spawned)
 			}
-			if s := worker.LoadRegistry(f.root).Slot("ben"); s.Task() != "" || s.Kind() != "" {
+			if s := worker.LoadRegistryTolerant(f.root).Slot("ben"); s.Task() != "" || s.Kind() != "" {
 				t.Errorf("the slot stays untouched: %v", s)
 			}
 		})
@@ -682,7 +682,7 @@ func TestAssignCustomWorkerCommandModelPlaceholder(t *testing.T) {
 	if strings.Contains(f.host.launch, "sonnet") || f.host.launch != "mywrap --dangerously-skip-permissions" {
 		t.Errorf("the command runs as written: %q", f.host.launch)
 	}
-	if s := worker.LoadRegistry(f.root).Slot("ben"); s.Tier() != "standard" || s.Model() != "" {
+	if s := worker.LoadRegistryTolerant(f.root).Slot("ben"); s.Tier() != "standard" || s.Model() != "" {
 		t.Errorf("tier recorded, model left out: %v", s)
 	}
 
@@ -702,7 +702,7 @@ func TestWindDownClearsTheTierFields(t *testing.T) {
 	if _, err := f.windDown(nil); err != nil {
 		t.Fatal(err)
 	}
-	s := worker.LoadRegistry(f.root).Slot("ben")
+	s := worker.LoadRegistryTolerant(f.root).Slot("ben")
 	for _, k := range []string{"kind", "tier", "model", "tierReason"} {
 		if jsonx.Str(s.Raw(), k) != "" {
 			t.Errorf("%s must be cleared on park: %v", k, s)

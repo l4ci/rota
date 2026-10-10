@@ -90,7 +90,10 @@ func (e Env) assignBestOf(ctx context.Context, root string, be Board, o AssignOp
 		return res, err
 	}
 
-	reg := worker.LoadRegistry(root)
+	reg, err := worker.LoadRegistry(root)
+	if err != nil {
+		return res, err
+	}
 	rec := reg.BestOf(id)
 	want := strings.ToUpper(id)
 	var slots []*worker.Slot
@@ -201,7 +204,8 @@ func (e Env) assignBestOf(ctx context.Context, root string, be Board, o AssignOp
 		}
 		if i == 0 {
 			// The first attempt undid itself: no record is left for a gate to refuse on.
-			if rec == nil && worker.LoadRegistry(root).Slot(slots[0].Name()).HeldID() != want {
+			// Rollback path: the registry was read strictly above.
+			if rec == nil && worker.LoadRegistryTolerant(root).Slot(slots[0].Name()).HeldID() != want {
 				worker.ClearBestOf(root, id)
 			}
 			return done[0], err

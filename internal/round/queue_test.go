@@ -26,7 +26,7 @@ func (f *moveFx) finish(t *testing.T, slot, pr string) {
 	}
 }
 
-func (f *moveFx) queued() []worker.QueuedPR { return worker.LoadRegistry(f.root).PRs() }
+func (f *moveFx) queued() []worker.QueuedPR { return worker.LoadRegistryTolerant(f.root).PRs() }
 
 func TestAssignOntoDoneSlotQueuesItsPR(t *testing.T) {
 	f := newMoveFx(t)
@@ -495,7 +495,7 @@ func TestReconcileReportsAQueuedRecordWhoseBranchDoesNotHeadItsPR(t *testing.T) 
 	if len(got) != 1 || got[0].Issue != "13" || !strings.Contains(got[0].Detail, "ben/12-x") {
 		t.Errorf("only the mismatched record is reported: %+v", out.Drift)
 	}
-	if len(worker.LoadRegistry(f.root).PRs()) != 2 {
+	if len(worker.LoadRegistryTolerant(f.root).PRs()) != 2 {
 		t.Error("reported, not repaired")
 	}
 }
