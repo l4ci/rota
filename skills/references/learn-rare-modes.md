@@ -16,11 +16,11 @@
 
 Each flag skips discovery (Steps 2 to 7 of the skill) and exits after its one report line.
 
-### `--retro`
+### `--retro [<session-id|path>]`
 
 Turns the session's mistakes into the right artifact, not a knowledge bullet by default. Mechanical mistakes become deterministic checks; judgement calls become written standards.
 
-**1. Collect mistakes.** Locate the current session transcript and read it: Claude Code keeps JSONL files under `~/.claude/projects/<project-dir>/` (or `$CLAUDE_CONFIG_DIR/projects/` when set), Codex under `~/.codex/sessions/`. Pick the newest file whose cwd matches this worktree. If none is found, say so in one line (`No transcript found; retro runs from session memory and recent commits.`) and fall back to session memory plus recent commits. Scan it for: user corrections, reverted or redone work, failed gates or tests that a check would have caught, wrong-file or wrong-tree edits, and wasted tool calls. One line per mistake: what went wrong, what would have prevented it.
+**1. Collect mistakes.** Locate the current session transcript and read it: Claude Code keeps JSONL files under `~/.claude/projects/<project-dir>/` (or `$CLAUDE_CONFIG_DIR/projects/` when set), Codex under `~/.codex/sessions/`. With an argument, `<session-id|path>` selects the transcript: a path is read as given, a session id matches the JSONL file name (or the id inside it) under the directories above; an argument that matches no file is reported in one line and stops, never falling back to another transcript. With no argument, pick the newest file whose cwd matches this worktree. If none is found, say so in one line (`No transcript found; retro runs from session memory and recent commits.`) and fall back to session memory plus recent commits. Scan it for: user corrections, reverted or redone work, failed gates or tests that a check would have caught, wrong-file or wrong-tree edits, and wasted tool calls. One line per mistake: what went wrong, what would have prevented it.
 
 Every repeated-work, ignored-plan or skipped-step mistake must cite transcript evidence (file plus line or entry number) before it is classified or filed. A mistake with no citable evidence is dropped, or listed as `unverified` in the report and never filed as a guardrail. With no transcript, no mistake can cite one: mark those `unverified` too. No mistakes: say so and stop.
 
@@ -32,20 +32,25 @@ Every repeated-work, ignored-plan or skipped-step mistake must cite transcript e
 | Written standard | Needs judgement; no mechanical check exists | `rota knowledge add` (Step 5 of the skill), or `/rota-decide` when it is a hard boundary |
 | Navigation pointer | The agent looked in the wrong place or missed a file | A `rota map` entry or a line in `AGENTS.md`/`CLAUDE.md` |
 | Tool-economy fix | A tool or command was used wastefully (full suite per task, broad search, repeated reads) | A skill or brief edit, or a config default; file an item when it spans files |
+| Information access | The agent lacked a signal it needed (dev-server or test logs not captured, no read-only access to a service, an unreadable error source) | A new item, like a guardrail (tee the logs to a file, add read-only access). Never implemented inline. |
 
 When a mistake is both mechanical and judgement-heavy, prefer the guardrail: a check cannot be forgotten.
 
-**3. File guardrails.** One item per guardrail candidate:
+**3. File guardrails.** One item per guardrail or information-access candidate:
 
 ```bash
 printf '%s' "$BODY" | rota item create --kind tasks --title "<check> guards against <mistake>" --desc "<one line>" --body-file -
 ```
 
-The body names the mistake, quotes its transcript citation (file and line or entry number), the check that would catch it, and where it would run (lint, test, hook, CI). Dedup against open items first (`rota backlog list`). Do not write the check in this run.
+The body names the mistake (or the missing signal), quotes its transcript citation (file and line or entry number), the check that would catch it, and where it would run (lint, test, hook, CI). Dedup against open items first (`rota backlog list`). Do not write the check in this run.
 
 **4. Write the rest.** Written standards, navigation pointers and tool-economy fixes that need no new item go through their normal verbs. Apply the skill's *Skip* list from Step 2: no restating code, no transient state.
 
 **5. Flag no-op bullets.** Run `rota knowledge tier list --json` and read `data.entries`. Candidates: entries with `hits: 0` and a `lastSeen` older than 30 days, and bullets whose body only restates code or docs (read the bullet via `rota knowledge query "<topic>"` to judge). List them as removal candidates with the reason. **Never delete, deprecate or edit them**: removal is the user's call (`/rota-learn --deprecate` once they agree).
+
+**5b. Audit steering files (report only).** Read `AGENTS.md`, `CLAUDE.md` and the user-global instructions file (`~/.claude/CLAUDE.md` or `$CLAUDE_CONFIG_DIR/CLAUDE.md`). They load every turn, so list: lines that restate code or docs (the agent can read the source instead), dead lines (naming a file, flag or command that no longer exists; check with `ls` or `grep`), and each file's size in lines. Never edit them: the user decides.
+
+**5c. Check for guardrails that do not exist.** Read the repo's own check command first (`rota config show test`, the Makefile, `package.json` scripts, `test/gate.sh` or equivalent). Then look for a CI workflow (`.github/workflows/`, `.gitlab-ci.yml`) and a pre-commit hook (`.githooks/`, `.pre-commit-config.yaml`, `.husky/`, `core.hooksPath`). If the repo has a check command but neither runs it, report a **no-guardrail finding** and file one guardrail item for it, even with no observed mistake. If the repo has no check command, say that and file nothing. If one exists, report nothing.
 
 **6. Report** one compact block:
 
@@ -55,8 +60,12 @@ Retro: 5 mistakes
   Standard (1): Build & Tooling :: <title>
   Navigation (1): AGENTS.md line added
   Tool economy (1): filed #303
+  Information access (1): filed #304
 No-op bullet candidates (not touched): 2
   <topic> :: <title> — 0 hits since <date>
+Steering files (not touched): AGENTS.md 212 lines, CLAUDE.md 4 lines
+  AGENTS.md:57 restates code (<one-line reason>)
+No guardrail: check command `bash test/gate.sh` runs in no CI workflow or hook; filed #305
 ```
 
 
