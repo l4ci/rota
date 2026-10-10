@@ -34,6 +34,8 @@ Open with 3-4 sentences on what you see: the project's shape, existing milestone
 - **Create** — 2-3 questions: *Scope* (new product / strategic refactor / research / other), *Audience*, *Constraint* (time or scope limit).
 - **Edit** — one question, *Action*: add a milestone (Recommended if the vision feels incomplete), refine one, retire/activate, re-prioritize, or explore a new direction.
 
+In Edit mode, read each milestone's Not yet specified and Out of scope sections before proposing. Move a Not-yet-specified item that is now sharp into Acceptance (or a new milestone if it outgrew this one) and delete it from the section. Record an idea the user rules out under Out of scope with a one-line reason, so the next edit doesn't re-propose it; don't re-raise anything already listed there unless the user reopens it.
+
 On ambiguity default to the Recommended option and name it.
 
 ## Step 4 — Research (opt-in)
@@ -66,9 +68,13 @@ Show the milestone list as plain markdown, not yet saved, one block per mileston
 - <checkable bullet>
 **Rationale:** <why this one, why now>
 **Open risks:** <at least one; if you can't name one it isn't thought through>
+**Not yet specified:** <optional: in-scope work too unsharp to write as Acceptance yet>
+**Out of scope:** <optional: ruled-out ideas, each with a one-line reason>
 ```
 
-The tag is `[ready · no deps]` or `[blocked · depends M01]`. No cap on count. Order by dependency layer and make parallel-able milestones visible. Apply the user's redlines (merge, cut, retire, add, re-order) and ask for one explicit confirmation before writing; silence is not confirmation.
+Both sections are optional; omit a line with nothing to put in it. In the milestone body they are `## Not yet specified` and `## Out of scope` sections (bullets), after Open risks.
+
+The tag is `[ready · no deps]` or `[blocked · depends M01]`. No cap on count, but don't slice everything upfront: park unsharp in-scope work under Not yet specified instead of inventing Acceptance bullets for it. Order by dependency layer and make parallel-able milestones visible. Apply the user's redlines (merge, cut, retire, add, re-order) and ask for one explicit confirmation before writing; silence is not confirmation.
 
 ## Step 7 — Write
 
