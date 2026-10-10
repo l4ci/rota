@@ -1,8 +1,6 @@
 package cli
 
 import (
-	"os"
-
 	"github.com/l4ci/rota/internal/artifact"
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/design"
@@ -89,7 +87,7 @@ func openItems(c *Ctx, id string) (plan.Items, error) {
 		return nil, err
 	}
 	if !issue {
-		return plan.FileItems(root, os.Getenv("ROTA_OPEN_SECTIONS")), nil
+		return plan.FileItems(root, c.deps().Getenv("ROTA_OPEN_SECTIONS")), nil
 	}
 	return plan.NewIssueItems(func() (backlog.Backend, error) {
 		be, _, _, _, err := itemFlow(c, id)
