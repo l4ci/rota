@@ -12,7 +12,7 @@ Copy this checklist and track your progress:
 - [ ] Step 1 — Mode Dispatch
 - [ ] Step 2 — Parse & Classify
 - [ ] Step 2.5 — Audit Against Code State (milestone-spec capture only)
-- [ ] Step 3 — Gather Context
+- [ ] Step 3 — Gather Context (incl. duplicate, shipped and decision check)
 - [ ] Step 4 — Assign Priority / Size
 - [ ] Step 4.5 — Tag Active Milestone (when applicable)
 - [ ] Step 4.6 — Tag Sub-Repo (when umbrella mode is on)
@@ -57,6 +57,8 @@ When the input captures from a milestone spec, read [`milestone-spec-audit.md`](
 - **Tasks:** goal, area of the codebase, deadline or dependency, relevant context (error output, PR link).
 
 Code reads supply recommended answers; they never add questions.
+
+**Check before creating.** For each item, read [`duplicate-check.md`](duplicate-check.md) and run it: it searches open and archived items, shipped code and `rota decisions query`, and asks only on a hit. No hit adds no question.
 
 ## Step 4 — Assign Priority / Size
 
@@ -128,7 +130,7 @@ Read [`remove-mode.md`](remove-mode.md) when the first arg is `--remove` and fol
 
 ## Rules
 
-- Capture only creates items: never remove or reorder existing ones, never investigate now.
+- Capture only creates items: never remove or reorder existing ones, never investigate now. A duplicate, shipped or decided hit creates nothing without the user's answer.
 - Print every new ID with its title.
 - Remove: preview is the default; the de-tag gate (Step R3) and apply gate (Step R4) always ask.
 
@@ -137,6 +139,7 @@ Read [`remove-mode.md`](remove-mode.md) when the first arg is `--remove` and fol
 | Reference | Purpose |
 |-----------|---------|
 | [`milestone-spec-audit.md`](milestone-spec-audit.md) | Step 2.5: drop items already shipped when capturing from a milestone spec. |
+| [`duplicate-check.md`](duplicate-check.md) | Step 3: search items, code and decisions before creating. |
 | [`milestone-tagging.md`](milestone-tagging.md) | Step 4.5: tag the active or named milestone. |
 | [`umbrella-tagging.md`](umbrella-tagging.md) | Step 4.6: pick sub-repos for `--repos`. |
 | [`glossary-terms.md`](glossary-terms.md) | Step 6: write canonical glossary terms. |
