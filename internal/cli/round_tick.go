@@ -104,7 +104,8 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 	e.Capped = quotaCapped(renv, root, set)
 	e.Slots = func() []roundtick.Slot {
 		var out []roundtick.Slot
-		for _, s := range worker.LoadRegistry(root).Slots() {
+		// Tolerant: a tick callback with no error return; the tick reconciles strictly.
+		for _, s := range worker.LoadRegistryTolerant(root).Slots() {
 			out = append(out, roundtick.Slot{
 				Name: s.Name(), State: strings.ToLower(s.State()),
 				Issue: s.HeldID(),
@@ -115,7 +116,7 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 	}
 	e.Queued = func() []string {
 		var out []string
-		for _, q := range worker.LoadRegistry(root).PRs() {
+		for _, q := range worker.LoadRegistryTolerant(root).PRs() { // tolerant, as Slots above
 			if q.PR != "" {
 				out = append(out, q.PR)
 			}
@@ -226,7 +227,11 @@ func quotaCapped(renv round.Env, root string, set roundcfg.Settings) func(contex
 }
 
 func targetBase(root, target, def string) string {
-	t, err := worker.LoadRegistry(root).GateTarget(target)
+	reg, err := worker.LoadRegistry(root)
+	if err != nil {
+		return def // the gate refuses a corrupt registry itself; this only picks a base for it
+	}
+	t, err := reg.GateTarget(target)
 	if err != nil {
 		return def
 	}
@@ -339,7 +344,8 @@ func reviewStep(c *Ctx, root string, set roundcfg.Settings, slot string) roundti
 	ctx := c.Context()
 	auto := set.ReviewLoop == roundcfg.ReviewLoopAuto
 	pr := ""
-	if s := worker.LoadRegistry(root).Slot(slot); s != nil {
+	// Tolerant: a failed read is a failed poll below (reviewOpts reads strictly).
+	if s := worker.LoadRegistryTolerant(root).Slot(slot); s != nil {
 		pr = s.PR()
 	}
 	// The detail stays the same from pass to pass, or the watch would wake on it
@@ -357,7 +363,7 @@ func reviewStep(c *Ctx, root string, set roundcfg.Settings, slot string) roundti
 		return pollFailed(err)
 	}
 	if !auto {
-		s := worker.LoadRegistry(root).Slot(slot)
+		s := worker.LoadRegistryTolerant(root).Slot(slot) // reviewOpts above read it strictly
 		if s == nil {
 			return roundtick.ReviewOutcome{}
 		}

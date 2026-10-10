@@ -37,7 +37,7 @@ func TestAdoptRegistersExternalSlot(t *testing.T) {
 		if res.Slot != "ext-1" || res.Branch != "codex/12-thing" || res.Issue != "12" {
 			t.Fatalf("%s: %+v", ref, res)
 		}
-		s := worker.LoadRegistry(root).Slot("ext-1")
+		s := worker.LoadRegistryTolerant(root).Slot("ext-1")
 		if s == nil || !s.IsExternal() || s.Handle() != "" || s.Task() != "12" || s.PR() != "https://x/pull/7" ||
 			s.Branch() != "codex/12-thing" || s.Base() != "main" {
 			t.Fatalf("%s: slot %v", ref, s)
@@ -63,7 +63,7 @@ func TestAdoptRefusesOverlap(t *testing.T) {
 	if by := blockedBy(t, err); by != BlockOverlap {
 		t.Fatalf("want overlap: %v", err)
 	}
-	if worker.LoadRegistry(root).Slot("ext-1") != nil {
+	if worker.LoadRegistryTolerant(root).Slot("ext-1") != nil {
 		t.Fatal("a refused adopt registered a slot")
 	}
 	res, err := e.Adopt(bg, root, be, AdoptOpts{Ref: "codex/12-thing", Issue: "12", AcceptOverlap: true})
@@ -81,7 +81,7 @@ func TestAdoptRejectsForeignPath(t *testing.T) {
 			t.Errorf("%s: want exit 2, got %v", ref, err)
 		}
 	}
-	if worker.LoadRegistry(root).Slot("ext-1") != nil {
+	if worker.LoadRegistryTolerant(root).Slot("ext-1") != nil {
 		t.Fatal("a rejected adopt registered a slot")
 	}
 }
@@ -114,7 +114,7 @@ func TestAdoptRefusesTheBaseAndParkBranches(t *testing.T) {
 			t.Errorf("%s: want exit 2, got %v", ref, err)
 		}
 	}
-	if len(worker.LoadRegistry(root).Slots()) != 0 {
+	if len(worker.LoadRegistryTolerant(root).Slots()) != 0 {
 		t.Error("a refused adoption registered a slot")
 	}
 }
@@ -163,7 +163,7 @@ func TestAdoptValidatesThePRAgainstTheForge(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), c.want) {
 			t.Errorf("--pr %s: want an error naming %q, got %v", c.pr, c.want, err)
 		}
-		if len(worker.LoadRegistry(root).Slots()) != 0 {
+		if len(worker.LoadRegistryTolerant(root).Slots()) != 0 {
 			t.Fatalf("--pr %s: a refused adoption registered a slot", c.pr)
 		}
 	}
@@ -193,12 +193,12 @@ func TestAdoptPRForgeFailurePaths(t *testing.T) {
 			e.Forge = c.forge(fr)
 			_, err := e.Adopt(bg, root, be, AdoptOpts{Ref: "codex/12-thing", Issue: "12", PR: "https://x/pull/7"})
 			if c.wantErr == "" {
-				if err != nil || len(worker.LoadRegistry(root).Slots()) != 1 {
+				if err != nil || len(worker.LoadRegistryTolerant(root).Slots()) != 1 {
 					t.Fatalf("want an adoption, got %v", err)
 				}
 				return
 			}
-			if err == nil || !strings.Contains(err.Error(), c.wantErr) || len(worker.LoadRegistry(root).Slots()) != 0 {
+			if err == nil || !strings.Contains(err.Error(), c.wantErr) || len(worker.LoadRegistryTolerant(root).Slots()) != 0 {
 				t.Fatalf("want a refusal naming %q, got %v", c.wantErr, err)
 			}
 		})

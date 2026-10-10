@@ -99,7 +99,7 @@ func writeBrief(t *testing.T, text string) string {
 
 func slotField(t *testing.T, dir, slot, key string) string {
 	t.Helper()
-	s := LoadRegistry(dir).Slot(slot)
+	s := LoadRegistryTolerant(dir).Slot(slot)
 	if s == nil {
 		t.Fatalf("no slot %s", slot)
 	}
@@ -179,7 +179,7 @@ func TestDispatchTaskRecreatesTheSession(t *testing.T) {
 			t.Errorf("slot.%s = %s, want %s", k, got, want)
 		}
 	}
-	if n, ok := LoadRegistry(dir).Round(); !ok || n != 3 {
+	if n, ok := LoadRegistryTolerant(dir).Round(); !ok || n != 3 {
 		t.Errorf("round = %v", n)
 	}
 }
@@ -249,7 +249,7 @@ func TestDispatchRelayGoesIntoTheRunningSession(t *testing.T) {
 		!strings.Contains(f.sent, "attribute it as 'orchestrator relay round 2'") || !strings.HasSuffix(f.sent, "sign-off in your session.]\n\n\n  the maintainer says use B  \nmore\n") {
 		t.Errorf("payload = %q", f.sent)
 	}
-	relays, _ := LoadRegistry(dir).Slot("w1").Raw().Get("relays")
+	relays, _ := LoadRegistryTolerant(dir).Slot("w1").Raw().Get("relays")
 	if len(relays.([]any)) != 1 {
 		t.Fatalf("relays = %v", relays)
 	}
@@ -290,7 +290,7 @@ func TestDispatchRelayLoggingFollowsWhatMayHaveBeenSent(t *testing.T) {
 			if exitOf(err) != tc.exit {
 				t.Fatalf("err = %v, want exit %d", err, tc.exit)
 			}
-			relays, _ := LoadRegistry(dir).Slot("w1").Raw().Get("relays")
+			relays, _ := LoadRegistryTolerant(dir).Slot("w1").Raw().Get("relays")
 			if len(relays.([]any)) != tc.logged {
 				t.Errorf("relays logged = %d, want %d", len(relays.([]any)), tc.logged)
 			}

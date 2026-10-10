@@ -62,7 +62,10 @@ const itemLimit = 1500
 // dispatch leaves both as they were. A PR that is not open is skipped. It never
 // gates or merges: the orchestrator still owns the merge.
 func (e Env) ReviewRelay(ctx context.Context, root string, o ReviewOpts) (Relayed, error) {
-	reg := worker.LoadRegistry(root)
+	reg, err := worker.LoadRegistry(root)
+	if err != nil {
+		return Relayed{}, err
+	}
 	s := reg.Slot(o.Slot)
 	if s == nil {
 		return Relayed{}, &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("slot '%s' is not in the pool", o.Slot)}
@@ -141,12 +144,12 @@ func (e Env) ReviewRelay(ctx context.Context, root string, o ReviewOpts) (Relaye
 	}
 	if _, err = worker.UpdateSlot(root, o.Slot, func(s *worker.Slot) { s.SetReviewSeen(batch.Cursor) }); err != nil {
 		rerr := unrecord()
-		out.Bounces = worker.LoadRegistry(root).Bounces(issue)
+		out.Bounces = worker.LoadRegistryTolerant(root).Bounces(issue) // rollback path: the registry was read strictly above
 		return out, errors.Join(err, rollbackErr(rerr))
 	}
 	if _, err := e.Worker.Dispatch(ctx, root, worker.DispatchOpts{Slot: o.Slot, BodyFile: body.Name(), Relay: true}); err != nil {
 		rerr, serr := unrecord(), unseen()
-		out.Bounces = worker.LoadRegistry(root).Bounces(issue)
+		out.Bounces = worker.LoadRegistryTolerant(root).Bounces(issue) // rollback path: the registry was read strictly above
 		return out, errors.Join(err, rollbackErr(rerr), rollbackErr(serr))
 	}
 	return out, nil

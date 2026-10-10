@@ -51,7 +51,11 @@ func roundBounce(fs *flag.FlagSet) RunFunc {
 // recordBounce counts one bounce unless the item is already at max (0 = no
 // cap). capped reports the refusal; n is then the unchanged count.
 func recordBounce(root, issue, slot, head string, max int) (n int, capped bool, err error) {
-	if n = worker.LoadRegistry(root).Bounces(issue); max > 0 && n >= max {
+	reg, err := worker.LoadRegistry(root)
+	if err != nil {
+		return 0, false, err
+	}
+	if n = reg.Bounces(issue); max > 0 && n >= max {
 		return n, true, nil
 	}
 	n, err = worker.RecordBounce(root, issue, slot, head)

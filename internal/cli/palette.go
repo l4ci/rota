@@ -73,7 +73,7 @@ func layoutToggle(c *Ctx) (palette.Entry, bool) {
 		return palette.Entry{}, false
 	}
 	state := func() (cur string, live bool) {
-		reg := worker.LoadRegistry(root)
+		reg := worker.LoadRegistryTolerant(root) // palette state label: cannot refuse
 		cur = layout.Tabs
 		if reg.Layout() == layout.Split {
 			cur = layout.Split

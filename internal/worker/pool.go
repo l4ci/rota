@@ -104,7 +104,10 @@ func (e Env) PoolInit(ctx context.Context, root string, o InitOpts, acc *Account
 		// while that worktree is healthy. Re-adding it here would fail on the
 		// branch it already has checked out; moving it is `git worktree move`,
 		// done by hand while the slot is idle.
-		reg := LoadRegistry(root)
+		reg, err := LoadRegistry(root)
+		if err != nil {
+			return res, err
+		}
 		regWT := ""
 		if s := reg.Slot(name); s != nil {
 			regWT = s.Worktree()
@@ -148,7 +151,7 @@ func (e Env) PoolInit(ctx context.Context, root string, o InitOpts, acc *Account
 		// already holds for the slot, else the init-time name.
 		if cur, code := e.git(abs, "symbolic-ref", "--short", "-q", "HEAD"); code == 0 && cur != "" {
 			branch = cur
-		} else if s := LoadRegistry(root).Slot(name); s != nil && s.Branch() != "" {
+		} else if s := reg.Slot(name); s != nil && s.Branch() != "" {
 			branch = s.Branch()
 		}
 		handle := session + ":" + name
@@ -198,7 +201,11 @@ func (e Env) PoolInit(ctx context.Context, root string, o InitOpts, acc *Account
 
 	after, _ := os.ReadFile(RegistryPath(root))
 	res.Changed = string(before) != string(after)
-	for _, s := range LoadRegistry(root).Slots() {
+	reg, err := LoadRegistry(root)
+	if err != nil {
+		return res, err
+	}
+	for _, s := range reg.Slots() {
 		res.Slots = append(res.Slots, SlotData(s))
 	}
 	return res, nil
@@ -244,8 +251,11 @@ func registerSlot(root, name, branch, worktree, base, session, handle string) er
 }
 
 // PoolList returns the registry for `pool list`; ok is false when there is none.
-func PoolList(root string) (session any, round any, slots []*jsonx.Object) {
-	reg := LoadRegistry(root)
+func PoolList(root string) (session any, round any, slots []*jsonx.Object, err error) {
+	reg, err := LoadRegistry(root)
+	if err != nil {
+		return nil, nil, nil, err
+	}
 	if s := reg.Session(); s != "" {
 		session = s
 	}
@@ -267,10 +277,10 @@ func PoolList(root string) (session any, round any, slots []*jsonx.Object) {
 func (e Env) Reap(root string, names []string, all bool) (reaped []string, err error) {
 	var failed []string
 	e = e.withDefaults()
-	if err := CheckRegistry(root); err != nil {
+	reg, err := LoadRegistry(root)
+	if err != nil {
 		return nil, fail(exitcode.ExitUnavailable, "reap refused: "+err.Error())
 	}
-	reg := LoadRegistry(root)
 	if !reg.Exists {
 		return nil, nil
 	}

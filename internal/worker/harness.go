@@ -94,7 +94,10 @@ func (e Env) Preflight(ctx context.Context, root, kind, slot, model string) (har
 		return harness.Setup{}, err
 	}
 	wt, current := "", ""
-	reg := LoadRegistry(root)
+	reg, err := LoadRegistry(root)
+	if err != nil {
+		return harness.Setup{}, err
+	}
 	if s := reg.Slot(slot); s != nil {
 		wt, current = s.Worktree(), s.CodexAccount()
 	}

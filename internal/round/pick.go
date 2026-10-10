@@ -75,7 +75,10 @@ func (e Env) Pick(ctx context.Context, root string, be Board, o PickOpts) (res P
 	if !ok {
 		return res, blocked(BlockNoRound, "this process holds no round lease: run rota round start first")
 	}
-	reg := worker.LoadRegistry(root)
+	reg, err := worker.LoadRegistry(root)
+	if err != nil {
+		return res, err
+	}
 	rec := reg.BestOf(o.ID)
 	if rec == nil {
 		return res, blocked(BlockNotBestOf, "#%s has no best-of attempts in this round's registry", strings.TrimPrefix(o.ID, "#"))

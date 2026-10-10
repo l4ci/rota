@@ -33,7 +33,7 @@ func TestGateLocalRedVerifyLandsNothing(t *testing.T) {
 	if !strings.Contains(res.Hint, "send w1 back") {
 		t.Errorf("hint %q does not bounce the slot", res.Hint)
 	}
-	if s := LoadRegistry(w.dir).Slot("w1"); s == nil || s.PR() != ghURL {
+	if s := LoadRegistryTolerant(w.dir).Slot("w1"); s == nil || s.PR() != ghURL {
 		t.Errorf("slot w1 lost its PR: %+v", s)
 	}
 	if extra := w.scratchTrees(); len(extra) != 0 {
@@ -52,7 +52,7 @@ func TestGateLocalRedVerifyKeepsTheReviewRecord(t *testing.T) {
 	if err != nil || res.Verdict != GateVerifyFailed || res.Changed {
 		t.Fatalf("%+v %v", res, err)
 	}
-	if LoadRegistry(w.dir).QueuedPR(ghURL) == nil {
+	if LoadRegistryTolerant(w.dir).QueuedPR(ghURL) == nil {
 		t.Error("the review record was dropped")
 	}
 }

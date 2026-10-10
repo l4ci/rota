@@ -13,7 +13,7 @@ func TestDispatchRefusesExternal(t *testing.T) {
 	if err := RegisterExternal(dir, "ext-1", "codex/12-x", "", "main", "12", ""); err != nil {
 		t.Fatal(err)
 	}
-	s := LoadRegistry(dir).Slot("ext-1")
+	s := LoadRegistryTolerant(dir).Slot("ext-1")
 	if !s.IsExternal() || s.Handle() != "" || s.Task() != "12" || s.Kind() != KindExternal {
 		t.Fatalf("slot: %v", s.Raw())
 	}
@@ -69,7 +69,7 @@ func TestHarnessKindHidesExternal(t *testing.T) {
 	if err := RegisterExternal(dir, "ext-1", "codex/12-x", "", "main", "12", ""); err != nil {
 		t.Fatal(err)
 	}
-	if s := LoadRegistry(dir).Slot("ext-1"); s.HarnessKind() != "" || !s.IsExternal() {
+	if s := LoadRegistryTolerant(dir).Slot("ext-1"); s.HarnessKind() != "" || !s.IsExternal() {
 		t.Errorf("kind %q", s.HarnessKind())
 	}
 }
@@ -109,7 +109,7 @@ func TestRegisterExternalChecksUniquenessUnderTheLock(t *testing.T) {
 			t.Errorf("%+v: %v", c, err)
 		}
 	}
-	if n := len(LoadRegistry(dir).Slots()); n != 1 {
+	if n := len(LoadRegistryTolerant(dir).Slots()); n != 1 {
 		t.Errorf("%d slots after refused registrations", n)
 	}
 }

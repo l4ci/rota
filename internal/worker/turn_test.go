@@ -42,7 +42,7 @@ func TestDispatchRecordsTheTurnBaselineBeforeSending(t *testing.T) {
 	if _, err := e.Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "task\n"), Task: "T1"}); err != nil {
 		t.Fatal(err)
 	}
-	if got := LoadRegistry(dir).Slot("w1").TurnSeq(); got != 40 {
+	if got := LoadRegistryTolerant(dir).Slot("w1").TurnSeq(); got != 40 {
 		t.Errorf("task dispatch: turnSeq = %d, want 40", got)
 	}
 	turn, send := -1, -1
@@ -63,7 +63,7 @@ func TestDispatchRecordsTheTurnBaselineBeforeSending(t *testing.T) {
 	if _, err := e.Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "answer\n"), Relay: true}); err != nil {
 		t.Fatal(err)
 	}
-	if got := LoadRegistry(dir).Slot("w1").TurnSeq(); got != 57 {
+	if got := LoadRegistryTolerant(dir).Slot("w1").TurnSeq(); got != 57 {
 		t.Errorf("relay: turnSeq = %d, want 57", got)
 	}
 

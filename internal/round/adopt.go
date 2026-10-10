@@ -69,7 +69,10 @@ func (e Env) Adopt(ctx context.Context, root string, be backlog.Backend, o Adopt
 		return res, err
 	}
 
-	reg := worker.LoadRegistry(root)
+	reg, err := worker.LoadRegistry(root)
+	if err != nil {
+		return res, err
+	}
 	for _, s := range reg.Slots() {
 		if s.Branch() == branch {
 			return res, blocked(BlockRegistered, "slot %s already holds %s", s.Name(), branch)
