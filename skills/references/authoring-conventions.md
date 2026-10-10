@@ -100,11 +100,11 @@ The `description` frontmatter is the trigger: the situations and phrases that sh
 
 ## Manual-only skills use the flag, not the description
 
-A skill the model must never start on its own sets `disable-model-invocation: true` in its frontmatter (Claude Code) and ships `agents/openai.yaml` with `policy:` / `allow_implicit_invocation: false` (Codex). Neither costs description characters, and prose like "manual only" stops nothing. `test/validate-skills.py` requires the two together. The set is `rota-decide` (a hard boundary is the maintainer's call) and `rota-release` (tags and publishes). `rota-ship` and `rota-orchestrate` stay model-invocable: `AGENTS.md` tells a model to invoke `rota-orchestrate` on "you are the orchestrator", and `rota-ship` is reached from `rota-work` and on "ship it". A flagged skill is also hidden from the Skill tool, so another skill cannot chain into it; it can only offer `/rota-decide` for the user to type.
+A skill the model must never start on its own sets `disable-model-invocation: true` in its frontmatter (Claude Code) and ships `agents/openai.yaml` with `policy:` / `allow_implicit_invocation: false` (Codex). Neither costs description characters, and prose like "manual only" stops nothing. `test/validate-skills.py` requires the two together. The set is `rota-decide` (a hard boundary is the maintainer's call) and `rota-release` (tags and publishes). `rota-ship` and `rota-orchestrate` stay model-invocable: `AGENTS.md` tells a model to invoke `rota-orchestrate` on "you are the orchestrator", and `rota-ship` is reached from `rota-work` and on "ship it". A flagged skill is also closed to model-initiated calls, so another skill cannot chain into it; it can only offer `/rota-decide` for the user to type.
 
 **Forbids.**
 - Writing "manual only" in a description in place of the flag.
-- Flagging a skill that `AGENTS.md` or another skill invokes through the Skill tool.
+- Flagging a skill that `AGENTS.md` or another skill invokes by name.
 
 ## Gates carry a Thought → Reality table
 
