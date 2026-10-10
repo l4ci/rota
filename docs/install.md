@@ -97,14 +97,14 @@ Pick one way per machine. A plugin plus a `rota skills install` user copy shows 
 
 ### Codex
 
-Codex reads `.agents/plugins/marketplace.json`, which points at `plugins/rota`: a generated copy of the skills with each skill's `references/` as real files, because Codex drops symlinks when it caches a plugin. In a terminal:
+Codex reads `.agents/plugins/marketplace.json`. It points at the `codex` branch, which the release workflow rebuilds on every tag: a copy of the skills with each skill's `references/` as real files, because Codex drops symlinks when it caches a plugin. The tree is built, not committed to `main`. In a terminal:
 
 ```
 codex plugin marketplace add l4ci/rota
 codex plugin add rota@rota
 ```
 
-Verified on Codex 0.161.0 in a throwaway `CODEX_HOME`: the install holds 16 skills, each with its 33 reference files and no symlinks. 14 show up for implicit invocation; `rota-decide` and `rota-release` are manual-only (`$rota-decide`). The marketplace follows the repo's default branch, so add `l4ci/rota@v0.15.0` to pin a release. The Codex plugin carries no `rota-install` skill and no session hook; install the `rota` binary with Homebrew or the install script. Pick one way per machine: a plugin plus `rota skills install` lists every skill twice.
+Verified on Codex 0.161.0 in a throwaway `CODEX_HOME`, with the repo's marketplace file and a tree built by `scripts/codex-plugin.sh`: 16 skills, 33 reference files each, no symlinks. 14 show up for implicit invocation; `rota-decide` and `rota-release` are manual-only (`$rota-decide`). The plugin carries no `rota-install` skill and no session hook; install the `rota` binary with Homebrew or the install script. Pick one way per machine: a plugin plus `rota skills install` lists every skill twice.
 
 Copilot CLI was not installed on the test machine and is untested.
 
@@ -113,7 +113,7 @@ Per route, does it update itself?
 | Route | Updates itself? | Update with |
 |---|---|---|
 | Claude Code plugin | No | `claude plugin update rota@rota`, then `/rota:rota-install` |
-| Codex plugin | No | `codex plugin marketplace upgrade rota`, then `codex plugin add rota@rota` |
+| Codex plugin | No | `codex plugin add rota@rota` again (re-fetches the `codex` branch) |
 | `rota skills install` (Claude Code, Codex) | No | `rota skills update` |
 | `npx skills add l4ci/rota` | No | run the command again |
 | Homebrew or install script (binary) | No | `rota update` prints the command |

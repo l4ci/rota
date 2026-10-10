@@ -7,8 +7,10 @@
     {
       "name": "rota",
       "source": {
-        "source": "local",
-        "path": "./plugins/rota"
+        "source": "git-subdir",
+        "url": "https://github.com/l4ci/rota.git",
+        "ref": "codex",
+        "path": "plugins/rota"
       },
       "policy": {
         "installation": "AVAILABLE",
