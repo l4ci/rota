@@ -1,6 +1,6 @@
 # Third-party notices
 
-Parts of `rota-refactor/SKILL.md` (the architecture vocabulary, the deletion-test heuristics and the candidate format) are adapted from the `improve-codebase-architecture` skill in [mattpocock/skills](https://github.com/mattpocock/skills), used under the MIT License:
+Parts of `rota-refactor/SKILL.md` (the architecture vocabulary, the deletion-test heuristics and the candidate format) are adapted from the `improve-codebase-architecture` skill and `codebase-design/DEEPENING.md` (the dependency categories and test strategy) in [mattpocock/skills](https://github.com/mattpocock/skills), used under the MIT License:
 
 ```
 MIT License
