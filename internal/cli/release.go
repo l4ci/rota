@@ -20,6 +20,7 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/release"
+	"github.com/l4ci/rota/internal/strutil"
 )
 
 // releaseCommands is the `rota release` group (#52).
@@ -221,16 +222,6 @@ func releaseHost(c *Ctx, args []string) (Result, error) {
 
 var releaseRevErr = regexp.MustCompile(`unknown revision|bad revision|ambiguous argument`)
 
-// releaseFirstLine is the first non-blank line of s, trimmed.
-func releaseFirstLine(s string) string {
-	for _, l := range pystr.Splitlines(s) {
-		if l = pystr.Strip(l); l != "" {
-			return l
-		}
-	}
-	return ""
-}
-
 func releaseNotes(fs *flag.FlagSet) RunFunc {
 	from := fs.String("from", "", "source: commits|issues")
 	since := fs.String("since", "", "only changes after `ref`")
@@ -267,7 +258,7 @@ func releaseNotes(fs *flag.FlagSet) RunFunc {
 			return Result{}, gitErr(err)
 		}
 		if res.ExitCode != 0 {
-			msg := releaseFirstLine(res.Stderr)
+			msg := strutil.FirstLine(res.Stderr)
 			if msg == "" {
 				msg = "git log failed"
 			}
@@ -397,7 +388,7 @@ func releaseGitCount(ctx context.Context, r git.Repo, args ...string) (int64, er
 		return 0, gitErr(err)
 	}
 	if res.ExitCode != 0 {
-		msg := releaseFirstLine(res.Stderr)
+		msg := strutil.FirstLine(res.Stderr)
 		if msg == "" {
 			msg = "git " + args[0] + " failed"
 		}
