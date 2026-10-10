@@ -323,7 +323,7 @@ Every key, by group. Default is what a missing key reads as; Values lists the al
 
 | Key | Type | Default | Values | Description |
 |-----|------|---------|--------|-------------|
-| `doctor.minFreeDiskPercent` | int | `10` |  | rota doctor warns when the free share of the disk falls below this percent, 0 to 100. 0 turns the check off. |
+| `doctor.minFreeDiskPercent` | int | `10` |  | rota doctor warns when the free share of the disk falls below this percent, 0 to 100. 0 turns the check off. The same threshold drives the go-cache-disk warning for the volume holding GOCACHE. |
 
 ## Removed keys
 
