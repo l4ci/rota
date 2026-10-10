@@ -12,6 +12,7 @@ Rules for authoring new rota skills or new behavior in existing ones. Consult th
 - Helper-centric surface extension
 - Opt-in feature flags default to `false`
 - Descriptions say when to use a skill, not how it works
+- Manual-only skills use the flag, not the description
 - Gates carry a Thought → Reality table
 - References over 100 lines open with a Contents list
 - Adjective thresholds in skill prose erode at the runtime model — bake the number at authoring time
@@ -96,6 +97,14 @@ The `description` frontmatter is the trigger: the situations and phrases that sh
 
 **Permits.**
 - Trigger phrases in quotes, a flag with its own trigger (`--undo` on "roll back the last cycle"), and one sentence routing a confusable request to the right skill.
+
+## Manual-only skills use the flag, not the description
+
+A skill the model must never start on its own sets `disable-model-invocation: true` in its frontmatter (Claude Code) and ships `agents/openai.yaml` with `policy:` / `allow_implicit_invocation: false` (Codex). Neither costs description characters, and prose like "manual only" stops nothing. `test/validate-skills.py` requires the two together. The set is `rota-decide` (a hard boundary is the maintainer's call) and `rota-release` (tags and publishes). `rota-ship` and `rota-orchestrate` stay model-invocable: `AGENTS.md` tells a model to invoke `rota-orchestrate` on "you are the orchestrator", and `rota-ship` is reached from `rota-work` and on "ship it". A flagged skill is also hidden from the Skill tool, so another skill cannot chain into it; it can only offer `/rota-decide` for the user to type.
+
+**Forbids.**
+- Writing "manual only" in a description in place of the flag.
+- Flagging a skill that `AGENTS.md` or another skill invokes through the Skill tool.
 
 ## Gates carry a Thought → Reality table
 

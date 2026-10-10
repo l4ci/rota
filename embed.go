@@ -5,9 +5,10 @@ package rota
 
 import "embed"
 
-// FS holds every skill's markdown (skills/rota-*/*.md) and the shared
+// FS holds every skill's markdown (skills/rota-*/*.md), its Codex invocation
+// policy (skills/rota-*/agents/*.yaml) and the shared
 // references (skills/references/*.md). Consumers that expect rota-* and
 // references/ at the tree root use fs.Sub(FS, "skills").
 //
-//go:embed skills/rota-*/*.md skills/references/*.md
+//go:embed skills/rota-*/*.md skills/rota-*/agents/*.yaml skills/references/*.md
 var FS embed.FS

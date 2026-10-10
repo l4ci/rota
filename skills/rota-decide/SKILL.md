@@ -1,6 +1,7 @@
 ---
 name: rota-decide
-description: Use on "decide on X", "we're committing to X", "lock in the boundary that Y", or when a session has produced a constraint future work must respect. Manual only, never auto-invoked.
+description: Use on "decide on X", "we're committing to X", "lock in the boundary that Y", or when a session has produced a constraint future work must respect.
+disable-model-invocation: true
 ---
 
 # rota-decide — Capture Hard-Boundary Decisions
