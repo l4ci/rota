@@ -46,8 +46,12 @@ func (s Store) BlockInputs(key, scope string) (topics []string, target string, e
 		if err != nil {
 			return nil
 		}
+		text := string(raw)
+		if key == "decisions" {
+			text = ActiveDecisions(text)
+		}
 		var out []string
-		for _, t := range section.Topics(string(raw)) {
+		for _, t := range section.Topics(text) {
 			out = append(out, t.Name)
 		}
 		return out

@@ -38,6 +38,19 @@ Both flags only seed `Rule` and `Why`. You still articulate `Forbids` and `Permi
 
 `/rota-spike`'s Finish mode also nudges this flow: when a spike concludes `viable`, `not viable`, or `depends-on-X`, it prints a one-line pointer to `/rota-decide --from-spike <name>`. It does not ask or dispatch it. See [spikes](spikes.md) for the full Finish-mode flow.
 
+## Lifting a decision
+
+A decision stays active until you say otherwise, and `DECISIONS.md` is never hand-edited. Two flags mark an entry instead of deleting it:
+
+| Flag | Use when | Result |
+|------|----------|--------|
+| `/rota-decide --retire <topic> "<title>"` | the boundary is lifted, nothing replaces it | the entry gets `*Status.* Retired <date>. <reason>` |
+| `/rota-decide --supersede <topic> "<title>"` | a new decision replaces it | the replacement is drafted and passes the same three gates; the old entry gets `*Status.* Superseded <date> by "<new title>"` |
+
+Retiring asks for the same manual confirmation as a new decision, even in `autonomy.level: auto`. A superseding decision that fails a gate is not written and the old one stays active.
+
+Retired and superseded entries stay in the file as history but are skipped by `rota decisions query`, `topics` and `stats`, and by the decisions index block. A topic with no active entry drops out of the index. Read the file directly to see the history.
+
 ## Where decisions are consulted
 
 | Skill | When |
