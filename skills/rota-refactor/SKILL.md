@@ -48,6 +48,7 @@ Use these terms in every finding (not "component", "service", "API", "boundary")
 - **Leaks across seams.** Modules reaching into each other's internals or sharing hidden state.
 - **Hard to test through the interface.** Needs mocks of its own internals, or no test at its seam.
 - **Concept sprawl.** One idea takes bouncing between many small modules.
+- **Do not widen the interface for tests.** A function exported only so a test can reach it is a leak, not a seam. Test through the existing interface, or find the deeper seam.
 
 ## Flow
 
@@ -75,9 +76,9 @@ Use the glossary's names for domain concepts. Do not re-suggest what a recorded 
 
 ### Step 2 — Explore
 
-Dispatch one exploration subagent on `models.orchestrator` (`light` is enough for a small area), scoped to the area. Rank files by inbound imports, then size, then recent change; read the top fifth in full plus one hop of callers and importers; sample the rest. Stop at 8 to 12 findings, or after 30+ files with no new kind of friction in the last 5. Do not pad.
+Dispatch one exploration subagent on `models.orchestrator` (`light` is enough for a small area), scoped to the area. With an `<area>`, rank files by inbound imports, then size, then recent change. With none, rank by churn first (`git log --since=90.days --name-only --pretty=format: | sort | uniq -c | sort -rn`), then inbound imports, then size; read the top fifth in full plus one hop of callers and importers; sample the rest. Stop at 8 to 12 findings, or after 30+ files with no new kind of friction in the last 5. Do not pad.
 
-Per finding it reports files with line ranges, the friction in vocabulary terms, the deletion-test result and what is hard to test today. No interface proposals.
+Per finding it reports files with line ranges, the friction in vocabulary terms, the deletion-test result, what is hard to test today and the dependency category (Step 3). No interface proposals.
 
 ### Step 3 — Rank
 
@@ -86,6 +87,13 @@ Assign each finding a strength:
 - **Strong**: deletion test concentrates complexity, a real seam exists, tests would get simpler.
 - **Worth exploring**: plausible depth gain, but a design choice or a missing second adapter is unsettled.
 - **Speculative**: a hunch the code does not yet back.
+
+Tag each finding with a **dependency category**, which sets the test approach at its seam:
+
+- **In-process**: pure computation or in-memory state. Test through the interface directly; no adapter.
+- **Local-substitutable**: has a local stand-in (temp dir, in-memory DB, fake clock). Test with the stand-in running.
+- **Remote-owned**: a service the project owns across a network boundary. Put a port at the seam; test with an in-memory adapter, and the real one with a contract test.
+- **True external**: a third party the project does not control. Put a port at the seam; mock only at that adapter.
 
 Mark one **top recommendation** and say why it goes first. One-line fixes with no design choice are *simple*: file them like the rest, labelled in the body. With `--designs`, run the competing-design step now for structural ones.
 
@@ -121,8 +129,9 @@ Body sections:
 - **Solution**: what would change, in plain words. No signatures unless `--designs` ran.
 - **Benefits**: locality, leverage, test improvement.
 - **Strength**: Strong / Worth exploring / Speculative, and whether it is the top recommendation.
+- **Dependencies**: the category (in-process, local-substitutable, remote-owned, true external) and the test approach it implies.
 - **Conflicts**: the recorded decision it contradicts, if any, and why it is worth reopening.
-- **## Acceptance**: checkable boxes: the interface the callers use afterwards, which duplicated logic is gone, which tests cross the seam. Include "existing tests still pass".
+- **## Acceptance**: checkable boxes: the interface the callers use afterwards, which duplicated logic is gone, which tests cross the seam. Include "existing tests still pass" and "unit tests superseded by seam-level tests are removed, not kept alongside".
 - **## Out of scope**: one to three bullets on what the fix must not touch, or "nothing noted". `rota round assign` copies it into the worker brief.
 
 Report: table of filed issues (number, title, strength), skipped duplicates with the matched issue, the top recommendation. Zero filed is valid.
