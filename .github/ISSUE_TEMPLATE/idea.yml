@@ -1,0 +1,26 @@
+name: Idea
+description: A change that would make rota work better for you.
+labels: [idea]
+body:
+  - type: markdown
+    attributes:
+      value: Check [SCOPE.md](https://github.com/l4ci/rota/blob/main/SCOPE.md) first. An idea needs a failure you actually hit.
+  - type: textarea
+    id: failure
+    attributes:
+      label: Observed failure
+      description: What went wrong or got in the way when you used rota, and what you were doing. Commands, output or a link help.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: Idea
+      description: What would you change, and how would it have prevented that failure?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you do today
+      description: Any workaround, or other options you considered.
