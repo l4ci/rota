@@ -85,10 +85,13 @@ type TrainMember struct {
 // provenance-fail, ...), merge-failed, verify-failed, approval-required,
 // base-moved. Culprit names the member the verdict is about, when one.
 type TrainResult struct {
-	Base        string
-	Verdict     string
-	Members     []TrainMember
-	Culprit     string
+	Base    string
+	Verdict string
+	Members []TrainMember
+	Culprit string
+	// CulpritGate is the gate result that named the culprit, for the bookkeeping
+	// that follows (its head SHA, PR and branch). Zero when none did.
+	CulpritGate GateResult
 	Verified    []string // test.full commands that passed
 	E2EVerified []string // test.e2e commands that passed
 	Landed      []string
@@ -191,7 +194,7 @@ func (e Env) train(ctx context.Context, root string, o TrainOpts, cache *trainCa
 		}
 		res.Notes = append(res.Notes, gr.Notes...)
 		if !gr.OK() {
-			res.Verdict, res.Culprit, res.Err, res.Hint = gr.Verdict, t, gr.Err, gr.Hint
+			res.Verdict, res.Culprit, res.CulpritGate, res.Err, res.Hint = gr.Verdict, t, gr, gr.Err, gr.Hint
 			return res, nil
 		}
 		res.Members = append(res.Members, TrainMember{Target: t, Branch: gr.Branch, PR: gr.PR})
@@ -483,7 +486,7 @@ func (e Env) train(ctx context.Context, root string, o TrainOpts, cache *trainCa
 			return res, err
 		}
 		if !gr.OK() {
-			res.Verdict, res.Culprit, res.Err, res.Hint = gr.Verdict, m.Target, gr.Err, gr.Hint
+			res.Verdict, res.Culprit, res.CulpritGate, res.Err, res.Hint = gr.Verdict, m.Target, gr, gr.Err, gr.Hint
 			res.Hint = strings.TrimSpace(fmt.Sprintf("landed %d of %d member(s) before this; %s", len(res.Landed), n, res.Hint))
 			return res, nil
 		}
