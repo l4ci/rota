@@ -13,6 +13,7 @@ import (
 
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/shlex"
+	"github.com/l4ci/rota/internal/strutil"
 )
 
 // herdr ports bin/hv-host-herdr.sh. A herdr slot is a TAB in the current
@@ -597,22 +598,15 @@ func (h *herdr) Explain(ctx context.Context, slot, handle string) string {
 	for _, k := range explainKeys {
 		for _, l := range lines {
 			if strings.HasPrefix(l, k) {
-				out = append(out, clipRunes(l, 80))
+				out = append(out, strutil.Clip(l, 80))
 				break
 			}
 		}
 	}
 	if len(out) == 0 {
 		for _, l := range lines[:min(len(lines), explainLines)] {
-			out = append(out, clipRunes(l, 80))
+			out = append(out, strutil.Clip(l, 80))
 		}
 	}
 	return strings.Join(out, " / ")
-}
-
-func clipRunes(s string, n int) string {
-	if r := []rune(s); len(r) > n {
-		return string(r[:n])
-	}
-	return s
 }
