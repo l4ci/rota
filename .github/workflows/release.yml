@@ -63,3 +63,22 @@ jobs:
       - name: Remove signing key
         if: always()
         run: rm -f "$RUNNER_TEMP/minisign.key"
+  # Codex drops symlinks when it caches a plugin, so the Codex tree is built
+  # here, not committed: scripts/codex-plugin.sh copies each skill's
+  # references in for real, and the result replaces the `codex` branch that
+  # .agents/plugins/marketplace.json installs from.
+  codex-plugin:
+    needs: goreleaser
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: Publish the codex branch
+        run: |
+          bash scripts/codex-plugin.sh "$RUNNER_TEMP/codex"
+          cd "$RUNNER_TEMP/codex"
+          git init -q -b codex
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add plugins
+          git commit -qm "Codex plugin for $GITHUB_REF_NAME"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" codex
