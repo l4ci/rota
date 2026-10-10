@@ -1152,3 +1152,79 @@ func TestParkFailsWhenHEADCannotBeRead(t *testing.T) {
 		t.Fatalf("want exit 5 naming HEAD: %v", err)
 	}
 }
+
+// ---- the shared release-slot sequence ----------------------------------------
+
+// Return and Reclaim run one sequence (releaseSteps). A failure mid-sequence
+// compensates: the claim and the in-progress state come back, and the registry
+// (which binds the issue until the last step) agrees with the tracker.
+func TestReleaseSlotFailureCompensatesForBothVerbs(t *testing.T) {
+	verbs := map[string]func(f *moveFx) error{
+		"return": func(f *moveFx) error { _, err := f.ret("ben", "stuck", nil); return err },
+		"reclaim": func(f *moveFx) error {
+			f.agents()
+			rawSlot(f.root, "ben", func(s *jsonx.Object) { s.Set("handle", "w1:ben") })
+			_, err := f.reclaim("ben", nil)
+			return err
+		},
+	}
+	for name, run := range verbs {
+		t.Run(name+" state reset fails", func(t *testing.T) {
+			f := newMoveFx(t)
+			f.be.failState = errors.New("tracker down")
+			if err := run(f); exitOf(err) != exitcode.ExitUnavailable {
+				t.Fatalf("a tracker failure is exit 5: %v", err)
+			}
+			if f.be.claims["12"] != "ben@1" || f.be.bstates["12"] != "in-progress" || f.slot("ben").Task() != "12" {
+				t.Errorf("claim, state and registry must agree: %v %v %v", f.be.claims, f.be.bstates, f.slot("ben"))
+			}
+		})
+		t.Run(name+" freeing the slot fails", func(t *testing.T) {
+			f := newMoveFx(t)
+			r := slotRelease{root: f.root, be: f.be, slot: "ben", id: "12", verb: name, round: 1, reason: "x",
+				claimID: "ben@1", sweep: name == "reclaim", gone: name == "reclaim", tolerate: tolerateMissing(new([]string), "12")}
+			steps := f.env.releaseSteps(bg, r, &released{})
+			last := len(steps) - 1 // the failure lands where freeing the slot would
+			steps[last] = step{name: "boom", do: func() error { return errors.New("boom") }}
+			if err := runSteps(steps); err == nil || strings.Contains(err.Error(), "rollback incomplete") {
+				t.Fatalf("the failure rolls back cleanly: %v", err)
+			}
+			if f.be.claims["12"] != "ben@1" || f.be.bstates["12"] != "in-progress" || f.slot("ben").Task() != "12" {
+				t.Errorf("claim, state and registry must agree: %v %v %v", f.be.claims, f.be.bstates, f.slot("ben"))
+			}
+		})
+	}
+}
+
+// The two deliberate differences: only Reclaim sweeps claims the registry lost,
+// and only Reclaim drops the handle and the port block (its worker is gone).
+func TestReturnAndReclaimDifferOnPortBlockAndClaimSweepOnPurpose(t *testing.T) {
+	prep := func(f *moveFx) {
+		rawSlot(f.root, "ben", func(s *jsonx.Object) { s.Set("handle", "w1:ben"); s.Set("portBase", 20000); s.Set("portBlock", 100) })
+		f.be.more = map[string][]string{"12": {"ben@9"}} // a stray claim the registry does not know
+	}
+	f := newMoveFx(t)
+	prep(f)
+	if _, err := f.ret("ben", "x", nil); err != nil {
+		t.Fatal(err)
+	}
+	if s := f.slot("ben"); s.Handle() != "w1:ben" || s.PortBase() != 20000 || s.PortBlock() != 100 {
+		t.Errorf("return keeps the handle and the port block: %v", s)
+	}
+	if len(f.be.held("12")) != 1 {
+		t.Errorf("return releases only the recorded claim: %v", f.be.held("12"))
+	}
+
+	f = newMoveFx(t)
+	prep(f)
+	f.agents()
+	if _, err := f.reclaim("ben", nil); err != nil {
+		t.Fatal(err)
+	}
+	if s := f.slot("ben"); s.Handle() != "" || s.PortBase() != 0 || s.PortBlock() != 0 {
+		t.Errorf("reclaim drops the handle and the port block: %v", s)
+	}
+	if len(f.be.held("12")) != 0 {
+		t.Errorf("reclaim sweeps every claim of the slot: %v", f.be.held("12"))
+	}
+}

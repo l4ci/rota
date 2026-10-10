@@ -406,8 +406,9 @@ herdr only; a tmux or solo round is skipped. Moves live panes without restarting
 | `rota hook stop` | Stop hook: block above the context threshold until a handoff is written, or while workers run with no watch armed |
 | `rota hook prompt` | UserPromptSubmit hook: one-line round digest and a missing-watch reminder |
 | `rota hook session-start` | SessionStart hook: inject and consume the handoff |
+| `rota hook guard` | PreToolUse hook on `Bash`: deny destructive git and `gh pr merge` for a worker (`ROTA_SLOT` set), exit 2 with a one-line reason; no-op otherwise |
 
-`install` and `uninstall` are the ones you run; `stop`, `prompt` and `session-start` are what Claude Code calls. Default scope is `project-local` (`.claude/settings.local.json`). `install` exits 4 rather than replace a statusline you already have unless you pass `--wrap-statusline`. The three hooks always exit 0.
+`install` and `uninstall` are the ones you run; `stop`, `prompt`, `session-start` and `guard` are what Claude Code calls. Default scope is `project-local` (`.claude/settings.local.json`). `install` exits 4 rather than replace a statusline you already have unless you pass `--wrap-statusline`. `stop`, `prompt` and `session-start` always exit 0; `guard` exits 2 to refuse a worker's command. `install` warns when the guard sits only in `project-local` scope, which worker worktrees do not read. See [the worker guard](../usage/parallel-rounds.md#worker-guard).
 
 ## `rota statusline`
 

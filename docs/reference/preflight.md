@@ -58,13 +58,14 @@ The checks, in the order they run:
 | `hook` | herdr's agent integration is installed for each configured account (`herdr integration install claude`) | the host is not herdr, or no account is configured |
 | `statusline` | the effective statusline runs `rota statusline dump` | the orchestrator hooks are not installed (opt-in) |
 | `stop-hook` | a Stop and a SessionStart hook installed by `rota hook install` exist and their command resolves | the orchestrator hooks are not installed (opt-in) |
+| `guard-hook` | a `PreToolUse` hook installed by `rota hook install` sits in project or user scope (project-local never reaches a worker worktree) and its command resolves | the orchestrator hooks are not installed (opt-in) |
 | `switch` | with `orchestrator.switchOnUsage` on: two or more accounts have a `configDir` and the Stop hook is installed | `orchestrator.switchOnUsage` is off |
 | `skills` | every installed skills root (user and project, Claude and Codex, including each `work.accounts` config dir) matches the binary's skill set, and has no missing or edited files | no root has a `.rota-manifest.json` (run `rota skills install`) |
 | `codex` | `codex` runs, and the default Codex home (or each `work.codexAccounts` account) is logged in and has the herdr integration | `codex` is not on `PATH` and no `work.codexAccounts` are configured |
 | `agents` | the subagent files `rota agents write` generates are present and current | nothing to report: the line appears only as a `warn`, when a file is missing or stale (fix: `rota agents write`) |
 | `verify` | `test.full` or `test.e2e` is set, so the merge gate has something to run | nothing to report: the line appears only as a `warn`, when both are empty under a local verify (fix: `rota config set test.full '[...]'`) |
 
-The two hook checks are opt-in. Until something `rota hook install` writes is present, they skip and do not fail a project that never installed the hooks. Once it is, a partial or broken install fails. `skills` follows the same rule: it skips until `rota skills install` has written a manifest.
+The three hook checks are opt-in. Until something `rota hook install` writes is present, they skip and do not fail a project that never installed the hooks. Once it is, a partial or broken install fails. `skills` follows the same rule: it skips until `rota skills install` has written a manifest.
 
 See [unattended rounds](../usage/unattended-rounds.md) for the hooks and [parallel rounds](../usage/parallel-rounds.md) for what a round does after a clean `rota doctor`.
 

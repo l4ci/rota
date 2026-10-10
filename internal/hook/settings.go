@@ -90,6 +90,8 @@ const (
 	StartCommand     = "rota hook session-start " + Marker
 	StartMatcher     = "^(startup|clear)$"
 	PromptCommand    = "rota hook prompt " + Marker
+	GuardCommand     = "rota hook guard " + Marker
+	GuardMatcher     = "Bash"
 	StatuslineCmd    = "rota statusline dump"
 	keyWrapped       = "rotaWrapped"
 	keyWrappedScope  = "rotaWrappedFrom"
@@ -98,6 +100,7 @@ const (
 	eventStop        = "Stop"
 	eventSessionBeg  = "SessionStart"
 	eventPrompt      = "UserPromptSubmit"
+	eventPreTool     = "PreToolUse"
 	hookEntryType    = "command"
 	statusLineType   = "command"
 	statusLinePadKey = "padding"
@@ -158,8 +161,11 @@ func IsOurStatusLine(command string) bool {
 // HasMarker reports whether a hook command carries the rota marker.
 func HasMarker(command string) bool { return strings.Contains(command, Marker) }
 
-// MarkedEvents lists the events (Stop, SessionStart) that hold a marked hook
-// command, with that command.
+// EventGuard is the event the worker guard (`rota hook guard`) runs on.
+const EventGuard = eventPreTool
+
+// MarkedEvents lists the events (Stop, SessionStart, UserPromptSubmit,
+// PreToolUse) that hold a marked hook command, with that command.
 func MarkedEvents(o *jsonx.Object) map[string]string {
 	out := map[string]string{}
 	if o == nil {
@@ -170,7 +176,7 @@ func MarkedEvents(o *jsonx.Object) map[string]string {
 	if hooks == nil {
 		return out
 	}
-	for _, ev := range []string{eventStop, eventSessionBeg, eventPrompt} {
+	for _, ev := range []string{eventStop, eventSessionBeg, eventPrompt, eventPreTool} {
 		arr, _ := getAny(hooks, ev).([]any)
 		for _, g := range arr {
 			for _, h := range groupHooks(g) {
@@ -235,7 +241,7 @@ type InstallOut struct {
 // Install merges the hooks and the statusline into Files[Scope]. It never
 // removes or replaces an entry rota did not write.
 func Install(in InstallIn) (InstallOut, error) {
-	out := InstallOut{Hooks: []string{eventStop, eventSessionBeg, eventPrompt}}
+	out := InstallOut{Hooks: []string{eventStop, eventSessionBeg, eventPrompt, eventPreTool}}
 	target := in.Files[in.Scope]
 	if target == nil {
 		return out, errors.New("no target settings object")
@@ -318,7 +324,11 @@ func Install(in InstallIn) (InstallOut, error) {
 	if err != nil {
 		return out, err
 	}
-	out.Changed = c1 || c2 || c3
+	c4, err := ensureHook(hooks, eventPreTool, GuardMatcher, GuardCommand)
+	if err != nil {
+		return out, err
+	}
+	out.Changed = c1 || c2 || c3 || c4
 	if apply != nil {
 		apply()
 		out.Changed = true
@@ -393,7 +403,7 @@ func Uninstall(o *jsonx.Object) []string {
 	}
 	if rota, ok := o.Get(hooksKey); ok {
 		if hooks, isObj := rota.(*jsonx.Object); isObj {
-			for _, ev := range []string{eventStop, eventSessionBeg, eventPrompt} {
+			for _, ev := range []string{eventStop, eventSessionBeg, eventPrompt, eventPreTool} {
 				arr, isArr := getAny(hooks, ev).([]any)
 				if !isArr {
 					continue

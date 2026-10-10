@@ -367,6 +367,11 @@ func (e Env) Poll(ctx context.Context, root string, o PollOpts) (PollResult, err
 		if !ok {
 			return
 		}
+		// A dispatch since the snapshot replaced the session this row was
+		// read from: its verdict (a killed pane reads dead) is not the slot's.
+		if s.PaneHandle() != handleOf(targets, s.Name()) {
+			return
+		}
 		prev := s.State()
 		if err := recordRow(s, r, e.Now(), reg); err != nil && rowErr == nil {
 			rowErr = err
