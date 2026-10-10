@@ -91,7 +91,7 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 	}
 	in.Skills = doctorSkills(d.Getenv, in.Home, root)
 	if root == "" {
-		doctorDiskInput(ctx, &in, nil, "", d.Git, d.Now(), d.DoctorDisk)
+		doctorDiskInput(ctx, &in, nil, "", d.Git, d.Now(), d.DoctorDisk, d.Getenv)
 		return in
 	}
 	cfg := config.Load(rotatree.Config(root))
@@ -116,7 +116,7 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 	in.Slots, in.CwdOf = doctorSlotBlocks(root), procCwd
 	in.NothingToVerify = worker.NothingToVerify(root)
 	in.AgentProblems = agents.Problems(root)
-	doctorDiskInput(ctx, &in, cfg, root, d.Git, d.Now(), d.DoctorDisk)
+	doctorDiskInput(ctx, &in, cfg, root, d.Git, d.Now(), d.DoctorDisk, d.Getenv)
 	if on, err := config.SwitchOnUsage(cfg); err == nil {
 		in.SwitchOnUsage = on
 	}

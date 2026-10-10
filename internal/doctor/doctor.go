@@ -112,7 +112,10 @@ type Input struct {
 	// worktrees, leaked temp dirs): lines for the warning, nothing when clean.
 	Disk               *Disk
 	MinFreeDiskPercent int
-	Leftovers          []string
+	// CacheDisk is the volume holding the Go build cache when it is not the
+	// one Disk reads (the gate's builds grow it); nil adds no line.
+	CacheDisk *Disk
+	Leftovers []string
 
 	// StaleBinary is set when the installed rota is behind the rota source
 	// checkout Dir is in (stalebin.Check); nil adds no line.
@@ -145,6 +148,9 @@ func Run(ctx context.Context, in Input) Report {
 	if c, ok := d.disk(); ok {
 		// Only a volume below the threshold adds a line: a healthy one stays
 		// out of the report, like the legacy-state line below.
+		checks = append(checks, c)
+	}
+	if c, ok := d.cacheDisk(); ok {
 		checks = append(checks, c)
 	}
 	if len(in.AgentProblems) > 0 {
@@ -750,6 +756,22 @@ func (d *runner) disk() (Check, bool) {
 		hint = "reclaimable rota leftovers: " + strings.Join(d.in.Leftovers, "; ")
 	}
 	return Check{Name: "disk", Status: Warn, Detail: detail, Hint: hint}, true
+}
+
+// cacheDisk warns when the volume holding the Go build cache is under the same
+// threshold: a full cache volume fails a gate with "no space left on device".
+func (d *runner) cacheDisk() (Check, bool) {
+	disk, min := d.in.CacheDisk, d.in.MinFreeDiskPercent
+	if disk == nil || disk.Total == 0 || min <= 0 {
+		return Check{}, false
+	}
+	pct := float64(disk.Free) / float64(disk.Total) * 100
+	if pct >= float64(min) {
+		return Check{}, false
+	}
+	return Check{Name: "go-cache-disk", Status: Warn,
+		Detail: fmt.Sprintf("%s (the Go build cache) has %s free (%.0f%%), under the %d%% threshold", disk.Path, HumanBytes(disk.Free), pct, min),
+		Hint:   "run: go clean -cache; set doctor.minFreeDiskPercent to change the threshold"}, true
 }
 
 // HumanBytes is a size in the largest unit that keeps it above 1.

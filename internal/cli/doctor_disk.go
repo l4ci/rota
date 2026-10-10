@@ -108,7 +108,7 @@ func prunableWorktrees(ctx context.Context, run git.Runner, root string) int {
 // doctorDiskInput fills the disk fields of in: the threshold from config
 // (doctor.minFreeDiskPercent, default 10) and, when the volume is under it,
 // the leftovers worth naming. A non-numeric threshold falls back to the default.
-func doctorDiskInput(ctx context.Context, in *doctor.Input, cfg any, root string, run git.Runner, now time.Time, disk func(string) *doctor.Disk) {
+func doctorDiskInput(ctx context.Context, in *doctor.Input, cfg any, root string, run git.Runner, now time.Time, disk func(string) *doctor.Disk, getenv func(string) string) {
 	min := 10
 	if cfg != nil {
 		if v, ok := config.Lookup(cfg, "doctor.minFreeDiskPercent"); ok {
@@ -125,8 +125,33 @@ func doctorDiskInput(ctx context.Context, in *doctor.Input, cfg any, root string
 		dir = in.Dir
 	}
 	in.Disk = disk(dir)
+	if cache := goCacheDir(getenv); cache != "" && !sameVolume(cache, dir) {
+		in.CacheDisk = disk(cache)
+	}
 	if in.Disk != nil && in.Disk.Total > 0 && min > 0 &&
 		float64(in.Disk.Free)/float64(in.Disk.Total)*100 < float64(min) {
 		in.Leftovers = doctorLeftovers(ctx, run, root, now)
 	}
+}
+
+// goCacheDir is where the Go build cache lives: $GOCACHE, else go-build under
+// the user cache dir, as the go tool resolves it. "" when neither is known.
+func goCacheDir(getenv func(string) string) string {
+	if c := getenv("GOCACHE"); c != "" && c != "off" {
+		return c
+	}
+	if d, err := os.UserCacheDir(); err == nil {
+		return filepath.Join(d, "go-build")
+	}
+	return ""
+}
+
+// sameVolume says whether a and b are on one device, or a does not exist (the
+// cache may not have been created yet, and then it has nothing to warn about).
+func sameVolume(a, b string) bool {
+	var sa, sb syscall.Stat_t
+	if syscall.Stat(a, &sa) != nil {
+		return true
+	}
+	return syscall.Stat(b, &sb) == nil && sa.Dev == sb.Dev
 }
