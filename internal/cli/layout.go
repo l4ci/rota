@@ -80,7 +80,10 @@ func runLayout(c *Ctx, mode, project string) (Result, error) {
 	}
 	for _, root := range roots {
 		o := layoutOut{root: root, name: filepath.Base(root)}
-		reg := worker.LoadRegistry(root)
+		reg, err := worker.LoadRegistry(root)
+		if err != nil {
+			return Result{}, err
+		}
 		explicit := project != ""
 		switch rh := reg.Host(); {
 		case rh == host.Solo || rh == "tmux":

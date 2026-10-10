@@ -134,7 +134,11 @@ func (e Env) WindDown(ctx context.Context, root string, be Board, o WindDownOpts
 	for _, n := range o.Settings.Roster {
 		want[n] = true
 	}
-	for _, s := range worker.LoadRegistry(root).Slots() {
+	reg, err := worker.LoadRegistry(root)
+	if err != nil {
+		return res, err
+	}
+	for _, s := range reg.Slots() {
 		name := s.Name()
 		if !want[name] {
 			continue
@@ -198,7 +202,11 @@ func (e Env) WindDown(ctx context.Context, root string, be Board, o WindDownOpts
 
 	// Adopted slots are not parked: one whose PR merged (status reads its PR as merged)
 	// is unregistered with its checkout kept, any other stays registered.
-	for _, s := range worker.LoadRegistry(root).Slots() {
+	reg, err = worker.LoadRegistry(root)
+	if err != nil {
+		return res, err
+	}
+	for _, s := range reg.Slots() {
 		if !s.IsExternal() {
 			continue
 		}

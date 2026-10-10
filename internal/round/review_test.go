@@ -72,7 +72,7 @@ func TestReviewRelayBounces(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	reg := worker.LoadRegistry(f.root)
+	reg := worker.LoadRegistryTolerant(f.root)
 	s := reg.Slot("ben")
 	if got.Items != 1 || got.Bounces != 1 || reg.Bounces("12") != 1 {
 		t.Fatalf("relayed %+v, bounces %d", got, reg.Bounces("12"))
@@ -102,7 +102,7 @@ func TestReviewRelayNothingPending(t *testing.T) {
 	if err != nil || !got.Nothing || len(f.host.sents) > 0 && strings.Contains(f.host.sents[len(f.host.sents)-1], "REVIEW") {
 		t.Fatalf("%+v %v", got, err)
 	}
-	if worker.LoadRegistry(f.root).Bounces("12") != 0 {
+	if worker.LoadRegistryTolerant(f.root).Bounces("12") != 0 {
 		t.Fatal("a bounce was counted")
 	}
 }
@@ -126,9 +126,9 @@ func TestReviewRelayAtCapEscalates(t *testing.T) {
 	if !strings.Contains(posts[0], "please rename x") || !strings.Contains(posts[0], "12") {
 		t.Errorf("escalation %q", posts[0])
 	}
-	s := worker.LoadRegistry(f.root).Slot("ben")
-	if s.State() != "done" || s.ReviewSeen() != "" || worker.LoadRegistry(f.root).Bounces("12") != 3 {
-		t.Fatalf("state %s seen %q bounces %d", s.State(), s.ReviewSeen(), worker.LoadRegistry(f.root).Bounces("12"))
+	s := worker.LoadRegistryTolerant(f.root).Slot("ben")
+	if s.State() != "done" || s.ReviewSeen() != "" || worker.LoadRegistryTolerant(f.root).Bounces("12") != 3 {
+		t.Fatalf("state %s seen %q bounces %d", s.State(), s.ReviewSeen(), worker.LoadRegistryTolerant(f.root).Bounces("12"))
 	}
 }
 
@@ -138,7 +138,7 @@ func TestReviewRelayRefusedDispatchCountsNothing(t *testing.T) {
 	if _, err := f.env.ReviewRelay(bg, f.root, o); err == nil {
 		t.Fatal("want the dispatch failure")
 	}
-	reg := worker.LoadRegistry(f.root)
+	reg := worker.LoadRegistryTolerant(f.root)
 	if reg.Bounces("12") != 0 || reg.Slot("ben").ReviewSeen() != "" {
 		t.Fatalf("bounces %d seen %q", reg.Bounces("12"), reg.Slot("ben").ReviewSeen())
 	}
@@ -172,7 +172,7 @@ func TestReviewRelaySkipsAPRThatIsNotOpen(t *testing.T) {
 		if err != nil || !got.Nothing || got.PRState != state || len(f.host.sents) != 0 {
 			t.Fatalf("%s: %+v %v sent %d", state, got, err, len(f.host.sents))
 		}
-		reg := worker.LoadRegistry(f.root)
+		reg := worker.LoadRegistryTolerant(f.root)
 		if reg.Bounces("12") != 0 || reg.Slot("ben").ReviewSeen() != "" || reg.Slot("ben").State() != "done" {
 			t.Fatalf("%s: bounces %d seen %q state %s", state, reg.Bounces("12"), reg.Slot("ben").ReviewSeen(), reg.Slot("ben").State())
 		}
@@ -242,7 +242,7 @@ func TestReviewRelayWithoutAHandleIsRefused(t *testing.T) {
 	if !isBlockedBy(err, "handle") {
 		t.Fatalf("want exit 4 blockedBy handle: %v", err)
 	}
-	reg := worker.LoadRegistry(f.root)
+	reg := worker.LoadRegistryTolerant(f.root)
 	if reg.Bounces("12") != 0 || reg.Slot("ben").ReviewSeen() != "" {
 		t.Fatalf("bounces %d seen %q", reg.Bounces("12"), reg.Slot("ben").ReviewSeen())
 	}
@@ -304,7 +304,7 @@ func TestReviewRelayRollbackKeepsAConcurrentBounce(t *testing.T) {
 	if _, err := f.env.ReviewRelay(bg, f.root, o); err == nil {
 		t.Fatal("want the dispatch failure")
 	}
-	if n := worker.LoadRegistry(f.root).Bounces("12"); n != 1 {
+	if n := worker.LoadRegistryTolerant(f.root).Bounces("12"); n != 1 {
 		t.Fatalf("bounces %d, want the concurrent one kept", n)
 	}
 }
@@ -348,7 +348,7 @@ func TestReviewRelayRollbackKeepsAConcurrentCursor(t *testing.T) {
 	if _, err := f.env.ReviewRelay(bg, f.root, o); err == nil {
 		t.Fatal("want the dispatch failure")
 	}
-	if got := worker.LoadRegistry(f.root).Slot("ben").ReviewSeen(); got != "2099-01-01T00:00:00Z" {
+	if got := worker.LoadRegistryTolerant(f.root).Slot("ben").ReviewSeen(); got != "2099-01-01T00:00:00Z" {
 		t.Fatalf("cursor %q, want the concurrent one kept", got)
 	}
 }
@@ -370,7 +370,7 @@ func TestReviewRelayRollbackLeavesABounceItDidNotCount(t *testing.T) {
 	if _, err := f.env.ReviewRelay(bg, f.root, o); err == nil {
 		t.Fatal("want the dispatch failure")
 	}
-	if n := worker.LoadRegistry(f.root).Bounces("12"); n != 2 {
+	if n := worker.LoadRegistryTolerant(f.root).Bounces("12"); n != 2 {
 		t.Fatalf("bounces %d, want both kept", n)
 	}
 }
@@ -442,7 +442,7 @@ func TestReviewRelayRollbackLeavesABounceCountedAfterTheSnapshot(t *testing.T) {
 	if _, err := f.env.ReviewRelay(bg, f.root, o); err == nil {
 		t.Fatal("want the dispatch failure")
 	}
-	if n := worker.LoadRegistry(f.root).Bounces("12"); n != 1 {
+	if n := worker.LoadRegistryTolerant(f.root).Bounces("12"); n != 1 {
 		t.Fatalf("bounces %d, want the gate's bounce kept", n)
 	}
 }

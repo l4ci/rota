@@ -362,7 +362,7 @@ func TestWaitAfterTheLastEventRechecksAPaneThatMovedOnce(t *testing.T) {
 }
 
 func seenField(dir, slot, key string) string {
-	return jsonx.Str(LoadRegistry(dir).Slot(slot).Raw(), key)
+	return jsonx.Str(LoadRegistryTolerant(dir).Slot(slot).Raw(), key)
 }
 
 func TestWaitRecordsWhatItReturned(t *testing.T) {
@@ -640,7 +640,7 @@ func TestWaitIgnoresADeathReadFromAReplacedHandle(t *testing.T) {
 	if !res.TimedOut {
 		t.Fatalf("a replaced session's death was reported: %+v", res)
 	}
-	if s := LoadRegistry(dir).Slot("w1"); s.State() != "busy" || s.Handle() != "w9:new" {
+	if s := LoadRegistryTolerant(dir).Slot("w1"); s.State() != "busy" || s.Handle() != "w9:new" {
 		t.Errorf("slot = %s on %s, want busy on w9:new", s.State(), s.Handle())
 	}
 }
@@ -660,7 +660,7 @@ func TestPollIgnoresADeathReadFromAReplacedHandle(t *testing.T) {
 	if _, err := envWith(watcherHost{h}).Poll(bg, dir, PollOpts{}); err != nil {
 		t.Fatal(err)
 	}
-	if s := LoadRegistry(dir).Slot("w1"); s.State() != "busy" || s.Handle() != "w9:new" {
+	if s := LoadRegistryTolerant(dir).Slot("w1"); s.State() != "busy" || s.Handle() != "w9:new" {
 		t.Errorf("slot = %s on %s, want busy on w9:new", s.State(), s.Handle())
 	}
 }
@@ -673,7 +673,7 @@ type spawnProbe struct {
 }
 
 func (p spawnProbe) Spawn(ctx context.Context, o host.SpawnOpts) (string, error) {
-	*p.handle = LoadRegistry(p.dir).Slot(o.Slot).Handle()
+	*p.handle = LoadRegistryTolerant(p.dir).Slot(o.Slot).Handle()
 	return p.fakeHost.Spawn(ctx, o)
 }
 
@@ -689,7 +689,7 @@ func TestDispatchDropsTheKilledHandleBeforeSpawning(t *testing.T) {
 	if seen != "" {
 		t.Errorf("handle during spawn = %q, want none", seen)
 	}
-	if got := LoadRegistry(dir).Slot("w1").Handle(); got != "w9:t7" {
+	if got := LoadRegistryTolerant(dir).Slot("w1").Handle(); got != "w9:t7" {
 		t.Errorf("handle after dispatch = %q, want w9:t7", got)
 	}
 }

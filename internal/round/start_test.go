@@ -324,10 +324,10 @@ func TestStartReclaimsStaleLeaseAndBumpsRound(t *testing.T) {
 	if err != nil || got.Outcome != roundlease.Reclaimed || got.Round != 2 || got.Reclaimed.PID != 100 || len(got.Warnings) == 0 {
 		t.Fatalf("reclaim: %v %+v", err, got)
 	}
-	if l := worker.LoadRegistry(root).Layout(); l != "" {
+	if l := worker.LoadRegistryTolerant(root).Layout(); l != "" {
 		t.Errorf("a new round starts in tabs, layout = %q (#205)", l)
 	}
-	if p := worker.LoadRegistry(root).CLIPane(); p != "pc" {
+	if p := worker.LoadRegistryTolerant(root).CLIPane(); p != "pc" {
 		t.Errorf("round start must keep the pane rota orchestrate recorded, cliPane = %q (#223)", p)
 	}
 }
@@ -459,7 +459,7 @@ func TestStartNumbersALeaseTakenUnnumberedByTheSameHolder(t *testing.T) {
 	if l, _, _ := e.ReadLease(bg, root); l.Round != 1 {
 		t.Fatalf("lease must carry the number: %+v", l)
 	}
-	if r, _ := worker.LoadRegistry(root).Round(); r != 1 {
+	if r, _ := worker.LoadRegistryTolerant(root).Round(); r != 1 {
 		t.Fatalf("registry round: %v", r)
 	}
 	// A restart of the orchestrator renews: the number survives.

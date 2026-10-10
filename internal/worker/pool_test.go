@@ -195,7 +195,7 @@ func TestPoolReapWithoutRegistryIsANoop(t *testing.T) {
 func TestPoolListDropsNullFields(t *testing.T) {
 	dir := newProject(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
-	session, round, slots := PoolList(dir)
+	session, round, slots, _ := PoolList(dir)
 	if session != "rota" || round != nil || len(slots) != 1 {
 		t.Fatalf("%v %v %v", session, round, slots)
 	}
@@ -213,7 +213,7 @@ func TestPoolListDropsNullFields(t *testing.T) {
 		t.Error("relays must stay (an empty array)")
 	}
 	dir2 := newProject(t, `{}`)
-	if s, _, sl := PoolList(dir2); s != nil || len(sl) != 0 {
+	if s, _, sl, _ := PoolList(dir2); s != nil || len(sl) != 0 {
 		t.Errorf("no registry: %v %v", s, sl)
 	}
 }
@@ -224,13 +224,13 @@ func TestPoolReapOnlyUnregistersAnExternalSlot(t *testing.T) {
 	if _, err := UpdateSlot(b, "w1", func(s *Slot) { s.MarkExternal("12", "") }); err != nil {
 		t.Fatal(err)
 	}
-	branch := LoadRegistry(b).Slot("w1").Branch()
+	branch := LoadRegistryTolerant(b).Slot("w1").Branch()
 	for _, all := range []bool{false, true} {
 		reaped, err := Env{}.Reap(b, []string{"w1"}, all)
 		if err != nil || len(reaped) != 1 || reaped[0] != "w1" {
 			t.Fatalf("all=%v reaped = %v, %v", all, reaped, err)
 		}
-		if LoadRegistry(b).Slot("w1") != nil {
+		if LoadRegistryTolerant(b).Slot("w1") != nil {
 			t.Error("external slot still registered")
 		}
 		if fi, err := os.Stat(wt(b)); err != nil || !fi.IsDir() {
@@ -261,7 +261,7 @@ func TestPoolReapKeepsTheSlotWhenTheWorktreeStays(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "w2") {
 		t.Fatalf("want an error naming w2, got %v (reaped %v)", err, reaped)
 	}
-	reg := LoadRegistry(b)
+	reg := LoadRegistryTolerant(b)
 	if reg.Slot("w2") == nil {
 		t.Error("w2 dropped from the registry while its worktree is still on disk")
 	}

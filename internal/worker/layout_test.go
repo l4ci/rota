@@ -117,7 +117,7 @@ func TestDispatchInTabsMovesNothing(t *testing.T) {
 	// Flipping back to tabs forgets the split.
 	Update(dir, func(d *Doc) { d.SetLayout("split") })
 	Update(dir, func(d *Doc) { d.SetLayout("tabs") })
-	if got := LoadRegistry(dir).Layout(); got != "" {
+	if got := LoadRegistryTolerant(dir).Layout(); got != "" {
 		t.Errorf("layout = %q", got)
 	}
 }

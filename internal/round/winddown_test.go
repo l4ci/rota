@@ -67,7 +67,7 @@ func TestWindDownParksReleasesAndSummarises(t *testing.T) {
 	if got := out[:len(out)-1]; got != "park/ben" {
 		t.Errorf("ben must be parked, on %q", got)
 	}
-	s := worker.LoadRegistry(f.root).Slot("ben")
+	s := worker.LoadRegistryTolerant(f.root).Slot("ben")
 	if s.Task() != "" || s.ClaimID() != "" || s.State() != "idle" {
 		t.Errorf("a parked slot holds nothing: %v", s)
 	}
@@ -84,14 +84,14 @@ func TestWindDownClearsHandleSoReconcileSeesNoDeadTab(t *testing.T) {
 	if _, err := f.assign("12", "ben", nil); err != nil {
 		t.Fatal(err)
 	}
-	if worker.LoadRegistry(f.root).Slot("ben").Handle() == "" {
+	if worker.LoadRegistryTolerant(f.root).Slot("ben").Handle() == "" {
 		t.Fatal("the fixture must dispatch ben into a tab")
 	}
 	f.verifyWith(t, `["true"]`)
 	if _, err := f.windDown(nil); err != nil {
 		t.Fatal(err)
 	}
-	if h := worker.LoadRegistry(f.root).Slot("ben").Handle(); h != "" {
+	if h := worker.LoadRegistryTolerant(f.root).Slot("ben").Handle(); h != "" {
 		t.Errorf("a parked slot keeps no handle, got %q", h)
 	}
 	// The worker's tab closes after the round.
@@ -141,7 +141,7 @@ func TestWindDownRefusesWhileASlotHoldsWork(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(killed) != 0 || worker.LoadRegistry(f.root).Slot("ben").Handle() == "" {
+	if len(killed) != 0 || worker.LoadRegistryTolerant(f.root).Slot("ben").Handle() == "" {
 		t.Errorf("a retained slot keeps its session and handle: killed %v", killed)
 	}
 	if res.Verdict != VerdictHoldsWork || !res.Retained || res.Lease == nil {
@@ -156,7 +156,7 @@ func TestWindDownRefusesWhileASlotHoldsWork(t *testing.T) {
 			t.Errorf("the dirty file is reported: %+v", s)
 		}
 	}
-	if s := worker.LoadRegistry(f.root).Slot("ben"); s.Task() != "12" {
+	if s := worker.LoadRegistryTolerant(f.root).Slot("ben"); s.Task() != "12" {
 		t.Errorf("a retained slot keeps its task: %v", s)
 	}
 	if _, held := f.be.claims["12"]; !held {
@@ -234,7 +234,7 @@ func TestWindDownKeepsHandleWhenTheKillIsNotProved(t *testing.T) {
 	if err != nil || res.Verdict != VerdictClean || outcomes(res)["ben"] != OutcomeParked {
 		t.Fatalf("still parks: %v %+v", err, res)
 	}
-	if worker.LoadRegistry(f.root).Slot("ben").Handle() == "" {
+	if worker.LoadRegistryTolerant(f.root).Slot("ben").Handle() == "" {
 		t.Error("an unproved kill keeps the handle")
 	}
 	found := false
@@ -288,7 +288,7 @@ func TestWindDownReleasesMergedExternalSlots(t *testing.T) {
 	if got["ext-1"] != OutcomeReleased || got["ext-2"] != OutcomeOpen {
 		t.Fatalf("outcomes: %v", got)
 	}
-	reg := worker.LoadRegistry(f.root)
+	reg := worker.LoadRegistryTolerant(f.root)
 	if reg.Slot("ext-1") != nil || reg.Slot("ext-2") == nil {
 		t.Errorf("registry after wind-down: ext-1=%v ext-2=%v", reg.Slot("ext-1"), reg.Slot("ext-2"))
 	}
@@ -311,7 +311,7 @@ func TestWindDownLeavesExternalSlotsAloneWhenStatusIsUnreadable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if outcomes(res)["ext-1"] == OutcomeReleased || worker.LoadRegistry(f.root).Slot("ext-1") == nil {
+	if outcomes(res)["ext-1"] == OutcomeReleased || worker.LoadRegistryTolerant(f.root).Slot("ext-1") == nil {
 		t.Errorf("released without proof of a merge: %v", outcomes(res))
 	}
 }

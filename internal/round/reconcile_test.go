@@ -197,7 +197,7 @@ func TestReconcileApplyReleasesAMergedExternalSlot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if k := kinds(out.Drift)["ext-1"]; len(k) != 1 || k[0] != MergedExternal || worker.LoadRegistry(root).Slot("ext-1") == nil {
+	if k := kinds(out.Drift)["ext-1"]; len(k) != 1 || k[0] != MergedExternal || worker.LoadRegistryTolerant(root).Slot("ext-1") == nil {
 		t.Fatalf("report-only: drift %v, slot must stay", k)
 	}
 	out, err = e.Reconcile(bg, root, true)
@@ -207,7 +207,7 @@ func TestReconcileApplyReleasesAMergedExternalSlot(t *testing.T) {
 	if k := kinds(out.Repaired)["ext-1"]; len(k) != 1 || k[0] != MergedExternal {
 		t.Fatalf("apply should repair merged-external: repaired %v drift %v warnings %v", out.Repaired, out.Drift, out.Report.Warnings)
 	}
-	if worker.LoadRegistry(root).Slot("ext-1") != nil {
+	if worker.LoadRegistryTolerant(root).Slot("ext-1") != nil {
 		t.Error("slot still registered after apply")
 	}
 	if _, err := os.Stat(filepath.Join(root, ".worktrees", "ext-1")); err != nil {
@@ -330,7 +330,7 @@ func TestReconcileApplySkipsARepairWhoseSourceWasUnreadable(t *testing.T) {
 	if k := kinds(out.Drift)["ext-1"]; len(k) != 1 || k[0] != MergedExternal {
 		t.Fatalf("the merged-external finding must stay in drift: drift %v repaired %v", out.Drift, out.Repaired)
 	}
-	if worker.LoadRegistry(root).Slot("ext-1") == nil {
+	if worker.LoadRegistryTolerant(root).Slot("ext-1") == nil {
 		t.Error("slot released on a forge read that failed")
 	}
 	if !slices.ContainsFunc(out.Report.Warnings, func(w string) bool { return strings.Contains(w, "skipped") && strings.Contains(w, "forge") }) {

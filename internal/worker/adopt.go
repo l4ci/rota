@@ -77,7 +77,11 @@ func ExternalRefusal(name, verb string) error {
 // drives is refused.
 func (e Env) ReleaseExternal(root, name string, prune bool) error {
 	e = e.withDefaults()
-	s := LoadRegistry(root).Slot(name)
+	reg, err := LoadRegistry(root)
+	if err != nil {
+		return err
+	}
+	s := reg.Slot(name)
 	if s == nil {
 		return fail(exitcode.ExitResolution, fmt.Sprintf("slot '%s' is not in the pool", name))
 	}
@@ -85,7 +89,7 @@ func (e Env) ReleaseExternal(root, name string, prune bool) error {
 		return fail(exitcode.ExitRefused, fmt.Sprintf("slot %s is not an adopted slot; release only unregisters adopted work", name))
 	}
 	wt, br := s.Worktree(), s.Branch()
-	err := Update(root, func(d *Doc) {
+	err = Update(root, func(d *Doc) {
 		var keep []*Slot
 		for _, x := range d.Slots() {
 			if x.Name() != name {

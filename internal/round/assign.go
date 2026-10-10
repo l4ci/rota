@@ -412,7 +412,10 @@ func (e Env) assignOne(ctx context.Context, root string, be Board, o AssignOpts,
 	// first whose PR can be queued. queue marks a slot that holds another
 	// issue but is done with a PR: it is parked right before the claim, so a
 	// refusal on the way moves nothing.
-	reg := worker.LoadRegistry(root)
+	reg, err := worker.LoadRegistry(root)
+	if err != nil {
+		return res, err
+	}
 	var slot *worker.Slot
 	resuming, queue := false, false
 	if o.Agent != "" {
@@ -727,7 +730,11 @@ func stateStep(root string, be Board, id, slot string, resuming bool, changed *b
 // issue whose sibling slot still holds an open claim: the sibling is still
 // working. A plain issue is always reset. A Status error counts as no claim.
 func clearState(root string, be Board, id, slot string) (bool, error) {
-	if b := worker.LoadRegistry(root).BestOf(id); b != nil {
+	reg, err := worker.LoadRegistry(root)
+	if err != nil {
+		return false, err
+	}
+	if b := reg.BestOf(id); b != nil {
 		if sib := b.Sibling(slot); sib != nil {
 			if st, err := be.Status(id); err == nil && st != nil {
 				for _, c := range append([]string{st.Claim}, st.Claims...) {
@@ -743,7 +750,11 @@ func clearState(root string, be Board, id, slot string) (bool, error) {
 
 func (e Env) pickAccount(ctx context.Context, root, agent string) (string, error) {
 	cur := ""
-	if s := worker.LoadRegistry(root).Slot(agent); s != nil {
+	reg, err := worker.LoadRegistry(root)
+	if err != nil {
+		return "", err
+	}
+	if s := reg.Slot(agent); s != nil {
 		cur = s.Account()
 	}
 	if cur != "" {

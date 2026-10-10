@@ -13,7 +13,7 @@ func TestTypedRowsRoundTrip(t *testing.T) {
 	if err := UpdateLimits(root, func(l []Limit) []Limit { return append(l, lim) }); err != nil {
 		t.Fatal(err)
 	}
-	reg := LoadRegistry(root)
+	reg := LoadRegistryTolerant(root)
 	if got := reg.Escalations(); len(got) != 1 || got[0] != esc {
 		t.Errorf("escalations = %+v, want [%+v]", got, esc)
 	}

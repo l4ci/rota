@@ -45,7 +45,11 @@ func workerReply(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		s := worker.LoadRegistry(root).Slot(slot)
+		reg, err := worker.LoadRegistry(root)
+		if err != nil {
+			return Result{}, err
+		}
+		s := reg.Slot(slot)
 		if s == nil {
 			return Result{}, Resolution("slot '%s' is not in the pool", slot)
 		}

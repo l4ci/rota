@@ -327,7 +327,10 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 	if err != nil {
 		return nil, err
 	}
-	reg := worker.LoadRegistry(root)
+	reg, err := worker.LoadRegistry(root)
+	if err != nil {
+		return nil, err
+	}
 
 	rows, slotObj := e.readRows(wts, reg, rep)
 

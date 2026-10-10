@@ -55,7 +55,7 @@ func NotImplemented(path string) *Error {
 	return newErr(ExitNotImplemented, "", "%s is not ported yet", path)
 }
 
-// asError maps any error to an *Error: lock timeouts become retry, and
+// asError maps any error to an *Error: lock timeouts become retry, an unreadable state file is unavailable, and
 // anything unclassified is an internal error.
 func asError(err error) *Error {
 	var e *Error
@@ -64,6 +64,10 @@ func asError(err error) *Error {
 	}
 	if errors.Is(err, fsio.ErrLockTimeout) {
 		return &Error{Exit: ExitRetry, Message: err.Error()}
+	}
+	if errors.Is(err, fsio.ErrUnreadable) {
+		// A state file rota refuses to read as empty: the user's file, not a rota bug.
+		return &Error{Exit: ExitUnavailable, Message: err.Error()}
 	}
 	return &Error{Exit: ExitInternal, Message: err.Error(), Hint: "this is a bug in rota; please report it"}
 }

@@ -239,7 +239,8 @@ func Diff(prev, cur map[string]string) []Change {
 // the watch it just armed.
 func LocalSnapshot(root string) map[string]string {
 	out := map[string]string{}
-	for _, s := range worker.LoadRegistry(root).Slots() {
+	// Tolerant: a hook digest cannot refuse; a corrupt registry reads as no slots.
+	for _, s := range worker.LoadRegistryTolerant(root).Slots() {
 		if pr := s.PR(); pr != "" {
 			out[changeKeySlotPR+s.Name()] = pr
 		}
@@ -265,7 +266,8 @@ func EscalationStatusKey(id string) string { return changeKeyEscalat + "status/"
 // slot with its issue and PR, the open escalations and whether a watch is armed.
 func Digest(root string, round int, armed bool) string {
 	var parts []string
-	for _, s := range worker.LoadRegistry(root).Slots() {
+	// Tolerant: a hook digest cannot refuse; a corrupt registry reads as no slots.
+	for _, s := range worker.LoadRegistryTolerant(root).Slots() {
 		st := strings.ToLower(s.State())
 		if st == "" || st == "idle" {
 			continue
@@ -317,7 +319,8 @@ func Digest(root string, round int, armed bool) string {
 func NeedsWatch(root string) (bool, []string) {
 	var attn []string
 	need := false
-	for _, s := range worker.LoadRegistry(root).Slots() {
+	// Tolerant: a hook digest cannot refuse; a corrupt registry reads as no slots.
+	for _, s := range worker.LoadRegistryTolerant(root).Slots() {
 		st := strings.ToLower(s.State())
 		if st == "" || st == "idle" {
 			continue

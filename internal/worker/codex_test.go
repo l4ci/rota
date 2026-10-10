@@ -509,8 +509,8 @@ func TestDispatchCodexAccountSpawnsWithItsHome(t *testing.T) {
 	if _, err := rig.env(f).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "go\n"), Task: "T1", Kind: "codex"}); err != nil {
 		t.Fatal(err)
 	}
-	if f.spawnOpts.CodexHome != "/h/a" || LoadRegistry(dir).Slot("w1").CodexAccount() != "a" {
-		t.Errorf("spawn %+v, account %q", f.spawnOpts, LoadRegistry(dir).Slot("w1").CodexAccount())
+	if f.spawnOpts.CodexHome != "/h/a" || LoadRegistryTolerant(dir).Slot("w1").CodexAccount() != "a" {
+		t.Errorf("spawn %+v, account %q", f.spawnOpts, LoadRegistryTolerant(dir).Slot("w1").CodexAccount())
 	}
 	if _, err := os.Stat(filepath.Join(dir, ".git", "rota", "codex", "w1", harness.PromptKeyFile)); err != nil {
 		t.Errorf("the prompt key lives in the slot state dir: %v", err)

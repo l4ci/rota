@@ -73,7 +73,11 @@ func (e Env) Wait(ctx context.Context, root string, o WaitOpts) (WaitResult, err
 	if err := h.Require(); err != nil {
 		return WaitResult{}, fail(exitcode.ExitUnavailable, err.Error())
 	}
-	targets, err := waitTargets(LoadRegistry(root), o.Slots)
+	reg, err := LoadRegistry(root)
+	if err != nil {
+		return WaitResult{}, err
+	}
+	targets, err := waitTargets(reg, o.Slots)
 	if err != nil {
 		return WaitResult{}, err
 	}
@@ -154,7 +158,7 @@ func (e Env) Wait(ctx context.Context, root string, o WaitOpts) (WaitResult, err
 		}
 		m, asked := merged[r.Name]
 		if !asked {
-			s := LoadRegistry(root).Slot(r.Name)
+			s := LoadRegistryTolerant(root).Slot(r.Name) // Wait read the registry strictly up front; the closure cannot fail
 			m = s != nil && e.prMerged(ctx, root, s)
 			merged[r.Name] = m
 		}
@@ -192,7 +196,8 @@ wait:
 						return
 					}
 					prev := s.State()
-					if rowErr = recordRow(s, r, e.Now(), LoadRegistry(root)); rowErr == nil && !alwaysNews(r.State) {
+					// UpdateSlot reads the registry strictly; this is a read inside its closure.
+					if rowErr = recordRow(s, r, e.Now(), LoadRegistryTolerant(root)); rowErr == nil && !alwaysNews(r.State) {
 						s.SetSeen(key)
 					}
 					if d, ok := paneDone(prev, s, r); ok && rowErr == nil {
@@ -202,7 +207,7 @@ wait:
 					return WaitResult{}, err
 				}
 				if stale {
-					if targets, err = waitTargets(LoadRegistry(root), o.Slots); err != nil {
+					if targets, err = waitTargets(LoadRegistryTolerant(root), o.Slots); err != nil {
 						return WaitResult{}, err
 					}
 					if w != nil {
@@ -261,7 +266,10 @@ wait:
 // are the named ones, or every registered slot that is not idle; a solo slot
 // has no handle to require.
 func soloWait(root string, o WaitOpts) (WaitResult, error) {
-	reg := LoadRegistry(root)
+	reg, err := LoadRegistry(root)
+	if err != nil {
+		return WaitResult{}, err
+	}
 	var watched []*Slot
 	if len(o.Slots) > 0 {
 		for _, name := range o.Slots {

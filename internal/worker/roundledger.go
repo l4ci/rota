@@ -89,7 +89,8 @@ func ledgerAppend(root string, e ledger.Entry) {
 
 func ledgerAppendErr(root string, e ledger.Entry) error {
 	if e.Account == "" || e.Harness == "" || e.Slot == "" {
-		if s := ledgerSlot(LoadRegistry(root), e); s != nil {
+		// Only fills missing fields: a corrupt registry must not lose the entry.
+		if s := ledgerSlot(LoadRegistryTolerant(root), e); s != nil {
 			e.Slot = cmp.Or(e.Slot, s.Name())
 			e.Account = cmp.Or(e.Account, s.Account())
 			e.Harness = cmp.Or(e.Harness, s.Kind())
@@ -215,7 +216,7 @@ func trainLedger(m *RoundMemo, root string, res TrainResult, gated map[string]bo
 	if res.Culprit != "" && !slices.Contains(targets, res.Culprit) {
 		targets = append(targets, res.Culprit)
 	}
-	reg := LoadRegistry(root)
+	reg := LoadRegistryTolerant(root) // best-effort ledger notes; the train already read the registry strictly
 	round := m.Round(root)
 	for _, t := range targets {
 		if gated[t] || slices.Contains(res.Landed, t) {

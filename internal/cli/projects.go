@@ -157,7 +157,8 @@ func projectState(path string, missing bool, lease roundlease.Env) (status, roun
 		return "no .rota/", "-", "-"
 	}
 	round = "none"
-	if n, ok := worker.LoadRegistry(path).Round(); ok && n > 0 {
+	// Tolerant: a projects listing shows "none" for a registry it cannot read.
+	if n, ok := worker.LoadRegistryTolerant(path).Round(); ok && n > 0 {
 		round = fmt.Sprint(n)
 	}
 	held = "none"

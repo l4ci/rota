@@ -123,7 +123,7 @@ func (e Env) QuotaCap(ctx context.Context, root string, set roundcfg.Settings) C
 	c.ResumesAt = earliest(resets)
 	c.Reason = coolingWhy(strings.Join(pools, " and "), c.ResumesAt)
 	held := 0
-	reg := worker.LoadRegistry(root)
+	reg := worker.LoadRegistryTolerant(root) // no error return: a cap is advisory, the assign verb reads the registry strictly
 	for _, name := range set.Roster {
 		if s := reg.Slot(name); s != nil && s.HeldID() != "" {
 			held++
