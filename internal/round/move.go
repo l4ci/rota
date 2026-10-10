@@ -174,6 +174,93 @@ func releaseClaims(be Board, id, slot, claimID string, sweep bool) (bool, error)
 	return released, nil
 }
 
+// ---- release a slot ---------------------------------------------------------
+
+// slotRelease is the one release-slot sequence Return and Reclaim share: park
+// the worktree, post the handoff comment, give the claim back, reset the
+// issue's state, free the slot. The two verbs differ in two places, both on
+// purpose:
+//
+//   - gone: Reclaim's worker is dead or killed, so the slot also drops its pane
+//     handle and gives its port block back (the next dispatch picks one). Return's
+//     worker is alive and keeps working the pool, so the slot keeps both.
+//   - sweep: Reclaim runs because the registry may be wrong about the slot, so it
+//     releases every open claim of `<slot>@`, not only the recorded one. Return
+//     trusts the registry's claim, which the slot's own worker (or the lease
+//     holder) wrote.
+type slotRelease struct {
+	root, slot, id, verb string
+	be                   Board
+	round                int
+	reason, note         string
+	claimID              string
+	sweep, gone          bool
+	tolerate             func(step string, err error) error
+}
+
+// released is what the sequence did, filled in as its steps run.
+type released struct {
+	Park      Parked
+	CommentID string
+	Released  bool
+}
+
+// releaseSteps is the sequence as steps for runSteps. Park and the handoff
+// comment have no undo: the branch is pushed and the comment is deduplicated, so
+// a repeated call finishes the rest. A later failure gives the claim back and
+// restores the in-progress state, so the registry (which still binds the issue
+// until the last step) and the tracker agree.
+func (e Env) releaseSteps(ctx context.Context, r slotRelease, out *released) []step {
+	stateCleared := false
+	return []step{
+		{name: "park", do: func() (err error) {
+			out.Park, err = e.Park(ctx, r.root, r.slot, r.verb)
+			return wrap(err)
+		}},
+		{name: "handoff comment", do: func() error {
+			h := handoff{verb: r.verb, from: r.slot, round: r.round, branch: out.Park.Branch, head: out.Park.Head,
+				salvaged: out.Park.Salvaged, reason: r.reason, note: r.note}
+			cid, _, err := h.post(r.be, r.id)
+			if err = r.tolerate("handoff comment", err); err != nil {
+				return wrap(err)
+			}
+			out.CommentID = cid
+			return nil
+		}},
+		{name: "release the claim", do: func() (err error) {
+			out.Released, err = releaseClaims(r.be, r.id, r.slot, r.claimID, r.sweep)
+			return wrap(r.tolerate("claim release", err))
+		}, undo: func() error {
+			// Only the recorded claim can be taken back; a swept claim the registry
+			// never knew has no id to restore.
+			if !out.Released || r.claimID == "" {
+				return nil
+			}
+			_, _, err := r.be.Claim(r.id, r.claimID)
+			return err
+		}},
+		{name: "reset the state", do: func() (err error) {
+			stateCleared, err = clearState(r.root, r.be, r.id, r.slot)
+			return wrap(r.tolerate("state reset", err))
+		}, undo: func() error {
+			if !stateCleared {
+				return nil
+			}
+			_, err := r.be.SetState(r.id, "in-progress")
+			return err
+		}},
+		{name: "free the slot", do: func() error {
+			return wrap(editSlot(r.root, r.slot, func(s *worker.Slot) error {
+				s.Park(r.gone)
+				if r.gone {
+					s.ReleasePort()
+				}
+				return nil
+			}))
+		}},
+	}
+}
+
 // ---- return -----------------------------------------------------------------
 
 // ReturnOpts are the flags of `rota round return`.
@@ -229,28 +316,18 @@ func (e Env) Return(ctx context.Context, root string, be Board, o ReturnOpts) (r
 		res.Issue = it.ID
 	}
 
-	p, err := e.Park(ctx, root, o.Slot, "return")
-	if err != nil {
-		return res, wrap(err)
-	}
-	res.Branch, res.Head, res.Salvaged = p.Branch, p.Head, p.Salvaged
 	rnd := registryRound(root)
-	h := handoff{verb: "return", from: o.Slot, round: rnd, branch: p.Branch, head: p.Head, salvaged: p.Salvaged, reason: o.Reason, note: o.Note}
-	cid, _, err := h.post(be, id)
-	if tolerate("handoff comment", err) != nil {
-		return res, wrap(err)
-	}
-	res.CommentID = cid
-
-	claimID := firstNonEmpty(s.ClaimID(), o.Slot+"@"+strconv.Itoa(rnd))
-	if res.Released, err = releaseClaims(be, id, o.Slot, claimID, false); tolerate("claim release", err) != nil {
-		return res, wrap(err)
-	}
-	if _, err := clearState(root, be, id, o.Slot); tolerate("state reset", err) != nil {
-		return res, wrap(err)
-	}
-	if err := freeSlot(root, o.Slot, false); err != nil {
-		return res, wrap(err)
+	var out released
+	err = runSteps(e.releaseSteps(ctx, slotRelease{
+		root: root, be: be, slot: o.Slot, id: id, verb: "return", round: rnd,
+		reason: o.Reason, note: o.Note,
+		claimID:  firstNonEmpty(s.ClaimID(), o.Slot+"@"+strconv.Itoa(rnd)),
+		tolerate: tolerate,
+	}, &out))
+	res.Branch, res.Head, res.Salvaged = out.Park.Branch, out.Park.Head, out.Park.Salvaged
+	res.CommentID, res.Released = out.CommentID, out.Released
+	if err != nil {
+		return res, err
 	}
 	res.Changed = true
 	return res, nil
@@ -394,26 +471,18 @@ func (e Env) Reclaim(ctx context.Context, root string, be Board, o ReclaimOpts) 
 			}
 		}
 	}
-	p, err := e.Park(ctx, root, o.Slot, "reclaim")
-	if err != nil {
-		return res, wrap(err)
-	}
-	res.Branch, res.Head, res.Salvaged, res.Parked = p.Branch, p.Head, p.Salvaged, p.Moved
 	rnd := registryRound(root)
-	hf := handoff{verb: "reclaim", from: o.Slot, round: rnd, branch: p.Branch, head: p.Head, salvaged: p.Salvaged, reason: "reclaimed, " + reason, note: o.Note}
-	tolerate := tolerateMissing(&res.Warnings, h.Issue)
-	if _, _, err := hf.post(be, h.Issue); tolerate("handoff comment", err) != nil {
-		return res, wrap(err)
-	}
-	if res.Released, err = releaseClaims(be, h.Issue, o.Slot, s.ClaimID(), true); tolerate("claim release", err) != nil {
-		return res, wrap(err)
-	}
-	if _, err := clearState(root, be, h.Issue, o.Slot); tolerate("state reset", err) != nil {
-		return res, wrap(err)
-	}
-	// The reclaimed slot gives its port block back; the next dispatch picks one.
-	if err := editSlot(root, o.Slot, func(s *worker.Slot) error { s.Park(true); s.ReleasePort(); return nil }); err != nil {
-		return res, wrap(err)
+	var out released
+	err = runSteps(e.releaseSteps(ctx, slotRelease{
+		root: root, be: be, slot: o.Slot, id: h.Issue, verb: "reclaim", round: rnd,
+		reason: "reclaimed, " + reason, note: o.Note,
+		claimID: s.ClaimID(), sweep: true, gone: true,
+		tolerate: tolerateMissing(&res.Warnings, h.Issue),
+	}, &out))
+	res.Branch, res.Head, res.Salvaged, res.Parked = out.Park.Branch, out.Park.Head, out.Park.Salvaged, out.Park.Moved
+	res.Released = out.Released
+	if err != nil {
+		return res, err
 	}
 	res.Changed = true
 	return res, nil
