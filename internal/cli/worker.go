@@ -655,9 +655,31 @@ func gateData(r worker.GateResult) *jsonx.Object {
 	return d
 }
 
-// verdictRefusal turns a recorded-FAIL refusal from the gate or train into the
+// verdictRefusal turns a gate or train verdict that worker classifies as a
+// refusal into its exit-4 envelope. ok is false when the verdict is no refusal,
+// or travels with the wrong error state (see worker.VerdictMeaning.ViaError),
+// and the caller carries on.
+func verdictRefusal(verdict string, err error, msg, hint string, d *jsonx.Object) (res Result, ok bool, rerr error) {
+	m := worker.ClassifyVerdict(verdict)
+	if !m.Refusal || m.ViaError != (err != nil) {
+		return Result{}, false, nil
+	}
+	switch {
+	case m.BlockedBy == worker.BlockedByVerdict:
+		res, rerr = recordedFailRefusal(err, d)
+	case m.ViaError:
+		res, rerr = gateRefusal(err, d)
+	case m.BlockedBy == worker.BlockedByNoVerify:
+		res, rerr = noVerifyRefusal(msg, hint, d)
+	default:
+		res, rerr = blockedRefusal(m.BlockedBy, msg, hint, d)
+	}
+	return res, true, rerr
+}
+
+// recordedFailRefusal turns a recorded-FAIL refusal from the gate or train into the
 // exit-4 envelope the ship paths give: d plus blockedBy verdict and the record.
-func verdictRefusal(err error, d *jsonx.Object) (Result, error) {
+func recordedFailRefusal(err error, d *jsonx.Object) (Result, error) {
 	var vb *ship.VerdictBlockedError
 	if !errors.As(err, &vb) {
 		return Result{}, err
@@ -677,18 +699,6 @@ func noVerifyRefusal(msg, hint string, d *jsonx.Object) (Result, error) {
 	d.Set("key", "test.full")
 	d.Set("changed", false)
 	return Result{Data: d}, Refused("%s", msg).WithHint(hint)
-}
-
-// closesRefusal is the exit-4 envelope for a PR body that does not close the
-// slot's issue: d plus blockedBy closes, nothing landed.
-func closesRefusal(msg, hint string, d *jsonx.Object) (Result, error) {
-	return blockedRefusal("closes", msg, hint, d)
-}
-
-// bestOfRefusal is the exit-4 envelope for an attempt of a best-of:2 issue no
-// pick names: d plus blockedBy best-of-unpicked, nothing landed.
-func bestOfRefusal(msg, hint string, d *jsonx.Object) (Result, error) {
-	return blockedRefusal("best-of-unpicked", msg, hint, d)
 }
 
 // recordedReviews lists the review kinds with a verdict recorded for a branch
@@ -748,23 +758,8 @@ func workerGate(fs *flag.FlagSet) RunFunc {
 		defer stop()
 		issue := gateIssue(root, slot)
 		r, err := workerEnvCtx(c, ctx).Gate(ctx, root, worker.GateOpts{Slot: slot, Base: *base, CheckOnly: *check, NoVerify: *noVerify, Prune: *prune, Approve: approve, Verdict: shipVerdict(c, root, root).Block, Recorded: recordedReviews(root)})
-		if err != nil && r.Verdict == worker.GateVerdictBlocked {
-			return verdictRefusal(err, gateData(r))
-		}
-		if err != nil && r.Verdict == worker.GateApprovalRequired {
-			return gateRefusal(err, gateData(r))
-		}
-		if err == nil && r.Verdict == worker.GateNoVerify {
-			return noVerifyRefusal(r.Err, r.Hint, gateData(r))
-		}
-		if err == nil && r.Verdict == worker.GateNotClosing {
-			return closesRefusal(r.Err, r.Hint, gateData(r))
-		}
-		if err == nil && r.Verdict == worker.GateBestOfUnpicked {
-			return bestOfRefusal(r.Err, r.Hint, gateData(r))
-		}
-		if err == nil && r.Verdict == worker.GateReviewMissing {
-			return blockedRefusal("review-missing", r.Err, r.Hint, gateData(r))
+		if res, ok, rerr := verdictRefusal(r.Verdict, err, r.Err, r.Hint, gateData(r)); ok {
+			return res, rerr
 		}
 		if err != nil {
 			return Result{}, err
