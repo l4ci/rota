@@ -1,0 +1,44 @@
+name: Bug
+description: Something in rota does not work as documented.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Check [SCOPE.md](https://github.com/l4ci/rota/blob/main/SCOPE.md) first. Fill in every required field; they save a round trip.
+  - type: input
+    id: version
+    attributes:
+      label: rota version
+      description: Output of `rota version`.
+      placeholder: rota 0.15.0 (113a09b, 2026-10-09T20:22:13Z)
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: rota doctor output
+      description: Paste the full output of `rota doctor`.
+      render: text
+    validations:
+      required: true
+  - type: input
+    id: harness
+    attributes:
+      label: Harness and its version
+      description: Claude Code or Codex, with the output of `claude --version` or `codex --version`.
+      placeholder: Claude Code 2.1.0
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The commands or skills you ran, in order.
+    validations:
+      required: true
+  - type: textarea
+    id: expected-actual
+    attributes:
+      label: Expected and actual behavior
+    validations:
+      required: true

@@ -127,7 +127,7 @@ Every skill: [slash commands](docs/reference/slash-commands.md). Settings: [conf
 
 ## 🤝 Contributing
 
-Issues and PRs welcome. Run `python3 test/validate-skills.py`, `bash test/doclint.sh` and `bash test/smoke.sh` before a PR; add a smoke assertion when you touch a verb. Running a round on rota itself: [contributing: rounds](docs/contributing/rounds.md).
+Issues and PRs welcome; [SCOPE.md](SCOPE.md) says what rota does and how issues are judged. Run `python3 test/validate-skills.py`, `bash test/doclint.sh` and `bash test/smoke.sh` before a PR; add a smoke assertion when you touch a verb. Running a round on rota itself: [contributing: rounds](docs/contributing/rounds.md).
 
 ## License
 
