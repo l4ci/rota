@@ -316,7 +316,7 @@ func TestWrapRoundTripIsByteExact(t *testing.T) {
 	if dump(t, again) != original {
 		t.Errorf("not restored:\n%s", dump(t, again))
 	}
-	if len(rm) != 4 {
+	if len(rm) != 5 {
 		t.Errorf("removed %v", rm)
 	}
 	if rm2 := Uninstall(again); len(rm2) != 0 {
