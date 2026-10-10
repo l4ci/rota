@@ -28,6 +28,7 @@ never exits 5.
 | `hook` | herdr's agent integration for each account (`herdr integration status`) | the host is not herdr, or no account is configured |
 | `statusline` | the effective statusline runs `rota statusline dump` | hooks not installed (opt-in) |
 | `stop-hook` | a `Stop` and a `SessionStart` entry marked `# rota-hook`, and the command resolves | hooks not installed (opt-in) |
+| `guard-hook` | a `PreToolUse` entry marked `# rota-hook` in project (`.claude/settings.json`) or user scope, and the command resolves; warns when Codex tiers are set (Codex workers are not guarded) | hooks not installed (opt-in) |
 | `switch` | with `orchestrator.switchOnUsage` on: the Stop hook and two accounts with a `configDir` | the key is off |
 | `skills` | every installed skills root (user and project, Claude and Codex) matches the binary's skill set, and has no missing or edited files | no root has a `.rota-manifest.json` (run `rota skills install`) |
 | `codex` | `codex` runs, the default Codex home (or each `work.codexAccounts` account) logged in, herdr integration per home | `codex` is not on `PATH` and no `work.codexAccounts` are configured |
@@ -42,7 +43,7 @@ never exits 5.
 
 `disk` is the one line that appears only when something is wrong. When the free share of the volume holding the project (else the working directory) is under `doctor.minFreeDiskPercent` (default 10; `0` turns it off), doctor prints `warn disk`, which never fails the run, and its hint names what rota left behind that would give space back: temp dirs a smoke or gate run leaked (`rota-smoke.*`, `rota-gate-logs-*`, older than an hour, in the temp root) and git worktrees whose directory is gone. `rota reap` lists the rest of the stale scratch worktrees. See [`doctor.minFreeDiskPercent`](configuration.md#doctorminfreediskpercent).
 
-The hooks are opt-in, so `statusline` and `stop-hook` skip until `rota hook install` has written
+The hooks are opt-in, so `statusline`, `stop-hook` and `guard-hook` skip until `rota hook install` has written
 something, and fail only on a partial or broken install. `skills` is opt-in the same way: it skips until `rota skills install` has written a manifest. `switch` cannot tell whether the orchestrator
 runs under `rota keepalive run`. See [unattended rounds](unattended-rounds.md). For `codex`, see
 [Codex workers](codex-workers.md).
