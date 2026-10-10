@@ -25,7 +25,9 @@ Copy this checklist and track your progress:
 - **`--from-learning <topic>`** — Source-Prefill Mode (Learning): Step 2 seeds the draft from `.rota/KNOWLEDGE.md`.
 - **`--from-spike <name>`** — Source-Prefill Mode (Spike): Step 2 seeds the draft from `.rota/spikes/<name>.md`.
 
-Both flags together is invalid: error with *"`/rota-decide` accepts at most one of `--from-learning <topic>` or `--from-spike <name>` per invocation."* and stop.
+- **`--supersede <topic> "<title>"`** / **`--retire <topic> "<title>"`** — Lifecycle Mode: mark an existing decision superseded or retired instead of adding one. Read [`retire-modes.md`](retire-modes.md) and follow it instead of Steps 2–8.
+
+The two source flags together are invalid: error with *"`/rota-decide` accepts at most one of `--from-learning <topic>` or `--from-spike <name>` per invocation."* and stop. A lifecycle flag combined with a source flag is invalid too.
 
 ## Step 2 — Identify the Candidate Decision
 
@@ -148,4 +150,5 @@ If the entry created a new topic, prepend a line: *"New topic: `<topic>`."*
 - [`references/subagent-dispatch.md`](references/subagent-dispatch.md) — the `light` subagent that grilling sends for broad reads.
 - [`references/persistence-skills.md`](references/persistence-skills.md) — Shared spine and divergence axes for the persistence duo (`/rota-learn`, `/rota-decide`), including `/rota-learn --term` for Glossary entries.
 - [`references/source-prefill.md`](references/source-prefill.md) — Source-prefill / promote-between-artifacts semantics for `/rota-decide`.
+- [`retire-modes.md`](retire-modes.md) — `--supersede` / `--retire` flow, status line format and gate.
 - [`source-prefill-modes.md`](source-prefill-modes.md) — Source-prefill seeding rules and mode-to-section table.
