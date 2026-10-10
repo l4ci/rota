@@ -57,6 +57,14 @@ func TestPluginManifest(t *testing.T) {
 	if _, err := os.Stat("skills/rota-install"); err == nil {
 		t.Error("skills/rota-install would be embedded and installed for Codex too")
 	}
+	// Codex honours only the listed paths and drops symlinks when it caches a
+	// plugin (docs/install.md, #676): listing skills/ would expose skills whose
+	// references/ link is gone. Lift this when the references are real files.
+	for _, s := range plugin.Skills {
+		if filepath.Clean(s) == "skills" {
+			t.Errorf("plugin.json lists %q: Codex would load the skills without their references/ symlinks", s)
+		}
+	}
 	dirs, _ := filepath.Glob("skills/rota-*")
 	if len(dirs) == 0 {
 		t.Fatal("no skills")
