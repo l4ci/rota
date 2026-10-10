@@ -94,7 +94,7 @@ func openBacklog(c *Ctx, root string, fileOnly bool, hint string) (backlog.Backe
 		Scope:      c.Repo,
 		Cwd:        cwd,
 		CountProof: proof.CountRows,
-		NoteLimit:  os.Getenv("ROTA_NOTE_LIMIT"),
+		NoteLimit:  c.deps().Getenv("ROTA_NOTE_LIMIT"),
 		NewTracker: func(ctx context.Context, dir string) (backlog.Tracker, error) {
 			return c.deps().NewTracker(ctx, dir, cfg)
 		},

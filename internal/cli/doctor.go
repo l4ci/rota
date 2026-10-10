@@ -146,7 +146,7 @@ func doctorSkills(getenv func(string) string, home, root string) *skills.Report 
 	if err != nil {
 		return nil
 	}
-	dirs, _ := skillsClaudeDirs(home, root)
+	dirs, _ := skillsClaudeDirs(getenv, home, root)
 	top := gitToplevel()
 	roots, err := skills.RootsFor("", "all", home, dirs, top)
 	if err != nil {
