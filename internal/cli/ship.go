@@ -22,6 +22,7 @@ import (
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/ship"
 	"github.com/l4ci/rota/internal/status"
+	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/verdict"
 	"github.com/l4ci/rota/internal/worker"
@@ -47,16 +48,6 @@ func shipGit(c *Ctx, dir string, args ...string) (git.Result, error) {
 
 // shipLine is s without its trailing newlines, as bash `$(...)` returns it.
 func shipLine(s string) string { return strings.TrimRight(s, "\n") }
-
-// shipFirstLine is the first non-blank line of git's or a CLI's stderr.
-func shipFirstLine(s string) string {
-	for _, l := range pystr.Splitlines(s) {
-		if l = pystr.Strip(l); l != "" {
-			return l
-		}
-	}
-	return ""
-}
 
 // shipBlocked is a refusal carrying {blockedBy, changed: false}.
 func shipBlocked(by, format string, a ...any) (Result, error) {
@@ -203,7 +194,7 @@ func shipWorktreeCheck(c *Ctx, dir, branch string) func(string) error {
 			return err
 		}
 		if listing.ExitCode != 0 {
-			return Unavailable("cannot read worktree ownership: %s", shipFirstLine(listing.Stderr))
+			return Unavailable("cannot read worktree ownership: %s", strutil.FirstLine(listing.Stderr))
 		}
 		primary := strings.TrimPrefix(strings.SplitN(listing.Stdout, "\n", 2)[0], "worktree ")
 		roots := []string{shipRoot(primary), primary, shipRoot(dir)}
