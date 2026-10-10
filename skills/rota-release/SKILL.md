@@ -1,6 +1,7 @@
 ---
 name: rota-release
 description: Use on "release", "cut a release", "tag a release", "ship X.Y.Z".
+disable-model-invocation: true
 ---
 
 # rota-release — Cut a Release
