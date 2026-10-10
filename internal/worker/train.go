@@ -406,7 +406,7 @@ func (e Env) train(ctx context.Context, root string, o TrainOpts, cache *trainCa
 
 	// 4b. E2E: the most expensive tier runs once, on the train result, after
 	// test.full passed. A red e2e bisects the same way a red full does.
-	e2e := in.e2eCmds
+	e2e := in.cfg.E2E
 	if green && len(e2e) > 0 {
 		run := cached("test.e2e", func() (VerifyResult, error) { return e.RunVerifyWith(ctx, e2e, scratch, in.ledger) })
 		er, err := run(n)

@@ -513,7 +513,7 @@ func TestWaitIgnoresADoneSlotWhoseRecordedPRIsMerged(t *testing.T) {
 		h := newWaitHost("herdr")
 		h.set("w1", "ROTA-DONE w1 https://github.com/o/r/pull/9\n", "done")
 		e := envWith(watcherHost{h})
-		e.Forge = func(string, string, any) (Forge, error) { return stateForge{state: state}, nil }
+		e.Forge = func(string, string, tracker.Settings) (Forge, error) { return stateForge{state: state}, nil }
 		res, err := e.Wait(bg, dir, WaitOpts{Timeout: 30 * time.Millisecond})
 		if err != nil {
 			t.Fatal(err)

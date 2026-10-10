@@ -6,15 +6,12 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-
-	"github.com/l4ci/rota/internal/config"
-	"github.com/l4ci/rota/internal/rotatree"
 )
 
 // memInput is a gateInput with no config, ledger or verify files behind it.
 func memInput(verify ...string) func(string) (gateInput, error) {
 	return func(root string) (gateInput, error) {
-		return gateInput{cfg: config.Load(rotatree.Config("/nonexistent")), where: WhereLocal, verifyCmds: verify}, nil
+		return gateInput{cfg: GateConfig{where: WhereLocal, Full: verify}}, nil
 	}
 }
 
