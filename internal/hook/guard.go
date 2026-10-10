@@ -172,18 +172,27 @@ func skipWrapped(args []string, withArg map[string]bool, pos int) []string {
 	return nil
 }
 
-// shellScript finds the script of `sh -c '<script>'`, with options like -lc.
+// shellScript finds the script of `sh -c '<script>'`, with options like -lc
+// or `-o pipefail` before the -c.
 func shellScript(args []string) (string, bool) {
 	for i := 0; i < len(args); i++ {
 		a := args[i]
-		if strings.HasPrefix(a, "-") && !strings.HasPrefix(a, "--") && strings.Contains(a, "c") {
+		isOpt := (strings.HasPrefix(a, "-") || strings.HasPrefix(a, "+")) && len(a) > 1
+		if !isOpt {
+			return "", false
+		}
+		switch {
+		case strings.HasPrefix(a, "--"):
+			if a == "--rcfile" || a == "--init-file" {
+				i++
+			}
+		case strings.HasPrefix(a, "-") && strings.Contains(a, "c"):
 			if i+1 < len(args) {
 				return args[i+1], true
 			}
 			return "", false
-		}
-		if !strings.HasPrefix(a, "-") {
-			return "", false
+		case strings.HasSuffix(a, "o") || strings.HasSuffix(a, "O"):
+			i++ // -o / -O take an option name
 		}
 	}
 	return "", false
@@ -441,9 +450,9 @@ func (g *guard) push(c gitCall) error {
 	if !needBranch {
 		return nil
 	}
-	cur, err := g.env.Branch(c.dir)
-	if err != nil || cur == "" {
-		return guardErr("could not read the current branch for a forced push")
+	cur, own, err := g.branches(c.dir)
+	if err != nil {
+		return err
 	}
 	for _, spec := range pos {
 		forced := force || strings.HasPrefix(spec, "+")
@@ -459,20 +468,38 @@ func (g *guard) push(c gitCall) error {
 		if dst == "HEAD" || (src == "HEAD" && !hasDst) {
 			dst = cur
 		}
-		if dst == "main" || dst == "master" || dst != cur {
-			g.deny("force-push to %s: a worker may force only its own branch (%s)", dst, cur)
+		if dst == "main" || dst == "master" || dst != own {
+			g.deny("force-push to %s: a worker may force only its own branch (%s)", dst, own)
 			return nil
 		}
 	}
 	return nil
 }
 
+// branches returns the branch checked out at dir and the worker's own branch,
+// the one checked out in its worktree. They differ when -C or a cd points at
+// another worktree, so a force from there must not pass as the worker's own.
+func (g *guard) branches(dir string) (cur, own string, err error) {
+	cur, err = g.env.Branch(dir)
+	if err != nil || cur == "" {
+		return "", "", guardErr("could not read the current branch for a forced push")
+	}
+	own = cur
+	if g.env.Worktree != "" {
+		own, err = g.env.Branch(g.env.Worktree)
+		if err != nil || own == "" {
+			return "", "", guardErr("could not read the worker's own branch for a forced push")
+		}
+	}
+	return cur, own, nil
+}
+
 // forceUpstream: `git push --force[-with-lease]` with no refspec pushes the
 // current branch to its upstream; only allow it when that is the same name.
 func (g *guard) forceUpstream(c gitCall) error {
-	cur, err := g.env.Branch(c.dir)
-	if err != nil || cur == "" {
-		return guardErr("could not read the current branch for a forced push")
+	cur, own, err := g.branches(c.dir)
+	if err != nil {
+		return err
 	}
 	up, err := g.env.Upstream(c.dir)
 	if err != nil {
@@ -485,8 +512,8 @@ func (g *guard) forceUpstream(c gitCall) error {
 	if _, after, ok := strings.Cut(up, "/"); ok {
 		name = after
 	}
-	if name == "main" || name == "master" || name != cur {
-		g.deny("force-push to upstream %s: a worker may force only its own branch (%s)", up, cur)
+	if name == "main" || name == "master" || name != cur || cur != own {
+		g.deny("force-push to upstream %s: a worker may force only its own branch (%s)", up, own)
 	}
 	return nil
 }
