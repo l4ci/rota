@@ -8,6 +8,7 @@ import (
 
 	"github.com/l4ci/rota/internal/gate"
 	"github.com/l4ci/rota/internal/release"
+	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
@@ -143,7 +144,7 @@ func releasePush(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		if res.ExitCode != 0 {
-			return Result{}, Unavailable("git push origin %s: %s (tag %s is at %s)", strings.Join(refs, " "), shipFirstLine(res.Stderr), tag, sha)
+			return Result{}, Unavailable("git push origin %s: %s (tag %s is at %s)", strings.Join(refs, " "), strutil.FirstLine(res.Stderr), tag, sha)
 		}
 		return Result{Data: gitObj("tag", tag, "branch", branch, "remote", "origin", "scope", scope, "changed", true), Text: text}, nil
 	}

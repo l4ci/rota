@@ -77,33 +77,9 @@ func (e Env) Wait(ctx context.Context, root string, o WaitOpts) (WaitResult, err
 	if err != nil {
 		return WaitResult{}, err
 	}
-	var targets []pollTarget
-	if len(o.Slots) > 0 {
-		for _, name := range o.Slots {
-			s := reg.Slot(name)
-			if s == nil {
-				return WaitResult{}, fail(exitcode.ExitResolution, fmt.Sprintf("slot '%s' is not in the pool", name))
-			}
-			t := slotTarget(s)
-			if t.handle == "" {
-				return WaitResult{}, fail(exitcode.ExitResolution, fmt.Sprintf("slot '%s' has no session to watch", name))
-			}
-			targets = append(targets, t)
-		}
-	} else {
-		// Pool init seeds every slot idle, and gives a tmux slot a nominal
-		// handle (`rota:w1`) before anything runs in it. A recorded `idle` is
-		// "already reported or never started" (see Poll), so it is not
-		// watched, or a parked slot would end every wait at once. Dispatch
-		// records busy, which arms the slot.
-		for _, s := range reg.Slots() {
-			if t := slotTarget(s); t.handle != "" && strings.ToLower(t.prev) != "idle" {
-				targets = append(targets, t)
-			}
-		}
-	}
-	if len(targets) == 0 {
-		return WaitResult{}, fail(exitcode.ExitResolution, "no slot with a session to watch")
+	targets, err := waitTargets(reg, o.Slots)
+	if err != nil {
+		return WaitResult{}, err
 	}
 
 	if o.Timeout > 0 {
@@ -127,10 +103,7 @@ func (e Env) Wait(ctx context.Context, root string, o WaitOpts) (WaitResult, err
 	var wt []host.WatchTarget
 	if cw, ok := h.(host.Watcher); ok {
 		wh = cw
-		wt = make([]host.WatchTarget, len(targets))
-		for i, t := range targets {
-			wt[i] = host.WatchTarget{Slot: t.name, Handle: t.handle}
-		}
+		wt = watchTargets(targets)
 		var err error
 		if w, err = wh.Watch(ctx, wt); err != nil {
 			if ctx.Err() != nil {
@@ -191,6 +164,7 @@ func (e Env) Wait(ctx context.Context, root string, o WaitOpts) (WaitResult, err
 		}
 		return m
 	}
+wait:
 	for {
 		rows, settling, slept := e.classify(ctx, h, targets, o.Settle, o.Lines)
 		if ctx.Err() != nil {
@@ -212,7 +186,15 @@ func (e Env) Wait(ctx context.Context, root string, o WaitOpts) (WaitResult, err
 			if r.State != StateBusy && (seen[r.Name] != key || alwaysNews(r.State)) && !settled(r) {
 				var rowErr error
 				var done *ledger.Entry
+				stale := false
 				if _, err := UpdateSlot(root, r.Name, func(s *Slot) {
+					// The row was read from the handle this wait started with.
+					// A dispatch since then moved the slot to a new session,
+					// and the old pane's death says nothing about it (#707).
+					if s.PaneHandle() != handleOf(targets, r.Name) {
+						stale = true
+						return
+					}
 					prev := s.State()
 					// UpdateSlot reads the registry strictly; this is a read inside its closure.
 					if rowErr = recordRow(s, r, e.Now(), LoadRegistryTolerant(root)); rowErr == nil && !alwaysNews(r.State) {
@@ -223,6 +205,19 @@ func (e Env) Wait(ctx context.Context, root string, o WaitOpts) (WaitResult, err
 					}
 				}); err != nil {
 					return WaitResult{}, err
+				}
+				if stale {
+					if targets, err = waitTargets(LoadRegistryTolerant(root), o.Slots); err != nil {
+						return WaitResult{}, err
+					}
+					if w != nil {
+						wt = watchTargets(targets)
+						resubscribe(nil)
+						if ctx.Err() != nil {
+							return stop()
+						}
+					}
+					continue wait
 				}
 				if done != nil {
 					LedgerDone(ctx, e.Accounts, root, *done)
@@ -312,4 +307,56 @@ func soloWait(root string, o WaitOpts) (WaitResult, error) {
 		rows = append(rows, PollRow{s.Name(), st, ""})
 	}
 	return WaitResult{TimedOut: true, Slots: rows}, nil
+}
+
+// waitTargets picks the slots a wait classifies, from one registry snapshot.
+// Named slots must exist and hold a session. Otherwise every slot with a
+// session that is not recorded idle: pool init seeds every slot idle and gives
+// a tmux slot a nominal handle (`rota:w1`) before anything runs in it, and a
+// recorded `idle` is "already reported or never started" (see Poll), so it is
+// not watched, or a parked slot would end every wait at once. Dispatch records
+// busy, which arms the slot.
+func waitTargets(reg Registry, names []string) ([]pollTarget, error) {
+	var targets []pollTarget
+	if len(names) > 0 {
+		for _, name := range names {
+			s := reg.Slot(name)
+			if s == nil {
+				return nil, fail(exitcode.ExitResolution, fmt.Sprintf("slot '%s' is not in the pool", name))
+			}
+			t := slotTarget(s)
+			if t.handle == "" {
+				return nil, fail(exitcode.ExitResolution, fmt.Sprintf("slot '%s' has no session to watch", name))
+			}
+			targets = append(targets, t)
+		}
+	} else {
+		for _, s := range reg.Slots() {
+			if t := slotTarget(s); t.handle != "" && strings.ToLower(t.prev) != "idle" {
+				targets = append(targets, t)
+			}
+		}
+	}
+	if len(targets) == 0 {
+		return nil, fail(exitcode.ExitResolution, "no slot with a session to watch")
+	}
+	return targets, nil
+}
+
+func watchTargets(targets []pollTarget) []host.WatchTarget {
+	wt := make([]host.WatchTarget, len(targets))
+	for i, t := range targets {
+		wt[i] = host.WatchTarget{Slot: t.name, Handle: t.handle}
+	}
+	return wt
+}
+
+// handleOf is the handle a slot was classified through.
+func handleOf(targets []pollTarget, name string) string {
+	for _, t := range targets {
+		if t.name == name {
+			return t.handle
+		}
+	}
+	return ""
 }

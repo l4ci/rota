@@ -612,3 +612,84 @@ func TestWaitFallsBackToPollingAfterRepeatedLoss(t *testing.T) {
 		t.Errorf("fallback notice printed %d times: %q", n, errBuf.String())
 	}
 }
+
+// #707: a dispatch that replaces a slot's session while a wait is classifying
+// it must not leave the old pane's death on the new session.
+func TestWaitIgnoresADeathReadFromAReplacedHandle(t *testing.T) {
+	dir := waitProject(t, 1, map[string]string{"w1": "w9:old"})
+	h := newWaitHost("herdr")
+	h.set("w1", "", "gone") // the killed pane
+	captures := 0
+	h.onCapture = func(string) {
+		captures++
+		switch captures {
+		case 1: // dispatch lands mid-classification: new handle, same pane read
+			if err := recordDispatch(dir, "w1", "w9:new", "42", "", nil, 0, "2026-10-02T15:04:05Z"); err != nil {
+				t.Error(err)
+			}
+		case 3: // the next classification reads the new, live session
+			h.mu.Lock()
+			h.text["w1"], h.status["w1"] = "working...\n", "working"
+			h.mu.Unlock()
+		}
+	}
+	res, err := envWith(watcherHost{h}).Wait(bg, dir, WaitOpts{Timeout: 30 * time.Millisecond})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.TimedOut {
+		t.Fatalf("a replaced session's death was reported: %+v", res)
+	}
+	if s := LoadRegistryTolerant(dir).Slot("w1"); s.State() != "busy" || s.Handle() != "w9:new" {
+		t.Errorf("slot = %s on %s, want busy on w9:new", s.State(), s.Handle())
+	}
+}
+
+func TestPollIgnoresADeathReadFromAReplacedHandle(t *testing.T) {
+	dir := waitProject(t, 1, map[string]string{"w1": "w9:old"})
+	h := newWaitHost("herdr")
+	h.set("w1", "", "gone")
+	var once sync.Once
+	h.onCapture = func(string) {
+		once.Do(func() {
+			if err := recordDispatch(dir, "w1", "w9:new", "42", "", nil, 0, "2026-10-02T15:04:05Z"); err != nil {
+				t.Error(err)
+			}
+		})
+	}
+	if _, err := envWith(watcherHost{h}).Poll(bg, dir, PollOpts{}); err != nil {
+		t.Fatal(err)
+	}
+	if s := LoadRegistryTolerant(dir).Slot("w1"); s.State() != "busy" || s.Handle() != "w9:new" {
+		t.Errorf("slot = %s on %s, want busy on w9:new", s.State(), s.Handle())
+	}
+}
+
+// spawnProbe reads the registry at the moment the new session is spawned.
+type spawnProbe struct {
+	*fakeHost
+	dir    string
+	handle *string
+}
+
+func (p spawnProbe) Spawn(ctx context.Context, o host.SpawnOpts) (string, error) {
+	*p.handle = LoadRegistryTolerant(p.dir).Slot(o.Slot).Handle()
+	return p.fakeHost.Spawn(ctx, o)
+}
+
+// #707: between the kill and the new session's record, the registry must not
+// hold the killed pane's handle, or a watch tick reads it as a dead slot.
+func TestDispatchDropsTheKilledHandleBeforeSpawning(t *testing.T) {
+	dir := waitProject(t, 1, map[string]string{"w1": "w9:old"})
+	seen := "unset"
+	h := spawnProbe{tmuxFake(), dir, &seen}
+	if _, err := envWith(h).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "task\n"), Task: "T1"}); err != nil {
+		t.Fatal(err)
+	}
+	if seen != "" {
+		t.Errorf("handle during spawn = %q, want none", seen)
+	}
+	if got := LoadRegistryTolerant(dir).Slot("w1").Handle(); got != "w9:t7" {
+		t.Errorf("handle after dispatch = %q, want w9:t7", got)
+	}
+}

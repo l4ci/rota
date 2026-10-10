@@ -206,7 +206,7 @@ func TestOrderAndOK(t *testing.T) {
 	for _, c := range r.Checks {
 		names = append(names, c.Name)
 	}
-	if got := strings.Join(names, ","); got != "git,jq,host,tracker,accounts,hook,statusline,stop-hook,switch,skills,codex" {
+	if got := strings.Join(names, ","); got != "git,jq,host,tracker,accounts,hook,statusline,stop-hook,guard-hook,switch,skills,codex" {
 		t.Errorf("order %s", got)
 	}
 	if r.OK() {
@@ -540,6 +540,45 @@ func TestStopHookCheck(t *testing.T) {
 	o2.write(t, filepath.Join(o2.root, ".claude", "settings.json"), `{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"rota hook stop"}]}]}}`)
 	if c := o2.check(t, map[string]bool{"rota": true}, "stop-hook"); c.Status != Skip {
 		t.Fatalf("unmarked: %+v", c)
+	}
+}
+
+func TestGuardHookCheck(t *testing.T) {
+	guard := `{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"rota hook guard # rota-hook"}]}]}}`
+	have := map[string]bool{"rota": true}
+	o := newOrch(t)
+	if c := o.check(t, have, "guard-hook"); c.Status != Skip || !strings.Contains(c.Detail, "opt-in") {
+		t.Fatalf("not installed: %+v", c)
+	}
+	// Opted in through the Stop hook, but no guard (an install from before #702).
+	o.write(t, filepath.Join(o.a, "settings.json"), `{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"rota hook stop # rota-hook"}]}]}}`)
+	if c := o.check(t, have, "guard-hook"); c.Status != Fail || !strings.Contains(c.Hint, "rota hook install --scope") {
+		t.Fatalf("missing: %+v", c)
+	}
+	// Project-local alone does not reach a worker worktree.
+	o.write(t, filepath.Join(o.root, ".claude", "settings.local.json"), guard)
+	if c := o.check(t, have, "guard-hook"); c.Status != Fail || !strings.Contains(c.Detail, "project-local") {
+		t.Fatalf("local only: %+v", c)
+	}
+	// Project scope counts.
+	o.write(t, filepath.Join(o.root, ".claude", "settings.json"), guard)
+	if c := o.check(t, have, "guard-hook"); c.Status != Pass {
+		t.Fatalf("project: %+v", c)
+	}
+	if c := o.check(t, nil, "guard-hook"); c.Status != Fail || !strings.Contains(c.Detail, "not found") {
+		t.Fatalf("unresolved: %+v", c)
+	}
+	// User scope counts too.
+	o2 := newOrch(t)
+	o2.write(t, filepath.Join(o2.b, "settings.json"), guard)
+	if c := o2.check(t, have, "guard-hook"); c.Status != Pass {
+		t.Fatalf("user: %+v", c)
+	}
+	// Codex workers are not guarded: warn.
+	f := &fake{have: have, reply: map[string]Result{}}
+	r := Run(context.Background(), Input{Exec: f.exec, Look: f.look, ProjectRoot: o2.root, ConfigDirs: []string{o2.a, o2.b}, CodexTiers: true})
+	if c := statusOf(r, "guard-hook"); c.Status != Warn || !strings.Contains(c.Detail, "Codex") {
+		t.Fatalf("codex: %+v", c)
 	}
 }
 

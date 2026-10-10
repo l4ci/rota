@@ -6,7 +6,7 @@ import (
 )
 
 // step is one unit of a saga: a change plus the compensation that takes it
-// back. Assign and Transfer are ordered lists of steps run by runSteps, so each
+// back. Assign, Transfer, Return and Reclaim are ordered lists of steps run by runSteps, so each
 // step carries its own resume check and undo instead of the flow doing it inline.
 type step struct {
 	name string

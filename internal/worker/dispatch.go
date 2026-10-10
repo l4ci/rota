@@ -275,6 +275,10 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 		if err := h.Kill(ctx, o.Slot, handle); err != nil {
 			return res, fail(exitcode.ExitUnavailable, err.Error())
 		}
+		// The old handle names a pane that is gone. Drop it now, not at
+		// recordDispatch after the boot: a watch ticking in between would
+		// read the dead pane and report the slot dead (#707).
+		clearHandle(root, o.Slot)
 		// Re-check: the old session may have written between the check and its
 		// exit. The old session is dead from here on, so a failure must not
 		// leave its handle in the registry for a poll or relay to chase.
