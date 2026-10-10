@@ -38,6 +38,7 @@ Write the whole design as one unsaved markdown draft:
 - **Design**: 3-8 sentences: chosen shape, moving parts, where they live
 - **Approaches considered**: 2-3 candidates, each with shape, pros, cons, deciding factor; mark the pick. A simple item may have one approach and a two-line design.
 - **Acceptance**: a `- [ ]` checklist, observable outcomes (skip when the issue body already has one)
+- **Test seam**: where a test can observe the change (the function, verb or command it runs through), or `none: docs/skill change`
 - **Open questions**: what must be answered before or during `/rota-plan`; mark spike candidates
 - **Assumptions**: implicit constraints made explicit
 
