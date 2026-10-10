@@ -28,7 +28,7 @@ You are implementing Task N of [total].
 **Critical constraints:**
 [Behavior preservation, patterns to follow, things NOT to touch]
 
-**RED before GREEN:** [behavior change: write the new test first, run it against the unchanged code and report the command plus the failing output line before touching production code; a test that already passes proves nothing, so fix the test. Docs, skill-text or other no-test-seam change: write `no test seam: docs/skill change` and skip.]
+**RED before GREEN:** [behavior change: write the new test first, run it against the unchanged code and report the command plus the failing output line before touching production code; a test that already passes proves nothing, so fix the test. Write the test to `references/test-quality.md`. Docs, skill-text or other no-test-seam change: write `no test seam: docs/skill change` and skip.]
 
 **Claims to verify before building on them:**
 [Every factual claim this brief rests on: a line number, a call-site count, "function X already returns Y". Check each first. If one is false, STOP and report which claim and what is actually there; do not implement around it.]
