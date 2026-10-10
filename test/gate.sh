@@ -64,6 +64,11 @@ SMOKE_DIAGNOSTICS="$(cd "$LOGS" && pwd -P)"
 # countable: the root must be empty once the checks have exited (#85).
 GATE_TMP="$(mktemp -d "$LOGS/tmp.XXXXXX")" || exit 1  # fresh: LOGS may be shared, and GATE_TMP is rm -rf'd
 export TMPDIR="$GATE_TMP"
+# The gate runs in a fresh scratch worktree each time. Without -trimpath the Go
+# build cache keys every compile on the source directory, so each path adds a
+# full copy (~210 MB measured, 85 GB over a round, #709); with it, entries are
+# reused across paths. Covers go vet, go test and the smoke runner's go build.
+case " ${GOFLAGS:-} " in *" -trimpath "*) ;; *) export GOFLAGS="${GOFLAGS:+$GOFLAGS }-trimpath" ;; esac
 # Every check runs scrubbed (#320): no live herdr/tmux identity, no ssh-agent, and
 # HOME/XDG pinned to a gate-owned dir, since go test, grep-gate and doclint run
 # rota verbs outside the smoke runner's own scrub. The worktree list of this repo
