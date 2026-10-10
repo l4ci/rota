@@ -103,7 +103,7 @@ func skillsDirs(c *Ctx, a skillsArgs) (home string, claudeDirs, skipped []string
 	if !a.currentAccount {
 		root, _ = c.Root()
 	}
-	claudeDirs, skipped = skillsClaudeDirs(home, root)
+	claudeDirs, skipped = skillsClaudeDirs(c.deps().Getenv, home, root)
 	return home, claudeDirs, skipped
 }
 
@@ -129,8 +129,8 @@ func skillsPluginRoots(getenv func(string) string, claudeDirs []string, scope, a
 // configDir of the project at root ("" for none), de-duplicated with
 // worker.SameConfigDir. An account dir that does not exist is returned in
 // skipped, never created.
-func skillsClaudeDirs(home, root string) (dirs, skipped []string) {
-	if cur := skills.ClaudeDir(os.Getenv, home); cur != "" {
+func skillsClaudeDirs(getenv func(string) string, home, root string) (dirs, skipped []string) {
+	if cur := skills.ClaudeDir(getenv, home); cur != "" {
 		dirs = append(dirs, cur)
 	}
 	if root == "" {

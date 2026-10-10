@@ -177,7 +177,7 @@ func paletteHeader(c *Ctx, inProject bool) palette.Header {
 	}
 	h.Dir = tildePath(dir)
 	if !inProject || err != nil {
-		h.Host = host.Resolve("", "", os.Getenv, nil)
+		h.Host = host.Resolve("", "", c.deps().Getenv, nil)
 		return h
 	}
 	h.Host = worker.ResolveHost(root, nil, nil)
