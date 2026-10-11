@@ -158,7 +158,7 @@ func hookSetup(c *Ctx, needLeaseFree bool) (hc hookContext, ok bool) {
 	case hc.who.Orchestrator:
 		hc.root = hc.who.Lease.Root
 	case needLeaseFree && hc.who.LeaseFree:
-		hc.root = findHvRoot(cwd)
+		hc.root, _ = rotatree.Find(cwd)
 	}
 	if hc.root == "" {
 		return hc, false
@@ -169,20 +169,6 @@ func hookSetup(c *Ctx, needLeaseFree bool) (hc hookContext, ok bool) {
 	}
 	hc.handoff = handoffFile(hc.root, hc.cfg)
 	return hc, true
-}
-
-func findHvRoot(dir string) string {
-	for d := dir; d != ""; {
-		if rotatree.Exists(d) {
-			return d
-		}
-		p := filepath.Dir(d)
-		if p == d {
-			break
-		}
-		d = p
-	}
-	return ""
 }
 
 // handoffFile is the absolute `.rota/handoff/<base>.md`, the path
