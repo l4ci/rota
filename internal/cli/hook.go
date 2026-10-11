@@ -376,20 +376,6 @@ func hookGuard(c *Ctx, args []string) (res Result, _ error) {
 			res = Result{}
 		}
 	}()
-	var p struct {
-		Tool  string `json:"tool_name"`
-		Input struct {
-			Command string `json:"command"`
-		} `json:"tool_input"`
-		Cwd string `json:"cwd"`
-	}
-	if json.Unmarshal(readInput(c), &p) != nil || (p.Tool != "" && p.Tool != "Bash") || p.Input.Command == "" {
-		return Result{}, nil
-	}
-	cwd := p.Cwd
-	if cwd == "" {
-		cwd, _ = os.Getwd()
-	}
 	gitOut := func(dir string, a ...string) (string, error) {
 		r, err := git.Exec(c.Context(), dir, a...)
 		if err != nil {
@@ -400,47 +386,11 @@ func hookGuard(c *Ctx, args []string) (res Result, _ error) {
 		}
 		return strings.TrimSpace(r.Stdout), nil
 	}
-	env := hook.GuardEnv{
-		Cwd:      cwd,
-		Worktree: slotWorktree(cwd, slot, gitOut),
-		Branch: func(dir string) (string, error) {
-			return gitOut(dir, "branch", "--show-current")
-		},
-		Toplevel: func(dir string) (string, error) {
-			return gitOut(dir, "rev-parse", "--show-toplevel")
-		},
-		Upstream: func(dir string) (string, error) {
-			up, err := gitOut(dir, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}")
-			if err != nil {
-				return "", nil // no upstream is not an error
-			}
-			return up, nil
-		},
-	}
-	if reason := hook.Guard(p.Input.Command, env); reason != "" {
+	wd, _ := os.Getwd()
+	if reason := hook.DecideGuard(hook.GuardRequest{Payload: readInput(c), Slot: slot, DefaultCwd: wd, Git: gitOut}); reason != "" {
 		return Result{}, &Error{Exit: ExitUsage, Message: "rota guard: " + reason}
 	}
 	return Result{}, nil
-}
-
-// slotWorktree is the slot's own worktree: the `.worktrees/<slot>` ancestor of
-// cwd, else the entry of `git worktree list` with that name. "" when neither.
-func slotWorktree(cwd, slot string, gitOut func(dir string, a ...string) (string, error)) string {
-	for d := cwd; d != "" && d != filepath.Dir(d); d = filepath.Dir(d) {
-		if filepath.Base(d) == slot && filepath.Base(filepath.Dir(d)) == ".worktrees" {
-			return d
-		}
-	}
-	out, err := gitOut(cwd, "worktree", "list", "--porcelain")
-	if err != nil {
-		return ""
-	}
-	for _, line := range strings.Split(out, "\n") {
-		if p, ok := strings.CutPrefix(line, "worktree "); ok && filepath.Base(p) == slot {
-			return p
-		}
-	}
-	return ""
 }
 
 // settingsPaths maps each scope to its file. Project scopes are "" outside a
