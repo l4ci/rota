@@ -102,7 +102,9 @@ func (g *GitLab) Create(ctx context.Context, title, body string, labels []string
 	return numberFromURL(out)
 }
 
-// EnsureLabels is a no-op: GitLab creates labels on first use.
+// EnsureLabels is a no-op by design, not an unsupported capability: GitLab
+// creates labels on first use, so the postcondition (the labels exist once
+// they are applied) holds without a call.
 func (g *GitLab) EnsureLabels(ctx context.Context, names []string, autoCreate bool) error { return nil }
 
 func (g *GitLab) AddLabels(ctx context.Context, number int, labels []string, autoCreate bool) error {
@@ -292,8 +294,10 @@ func (g *GitLab) MRNotes(ctx context.Context, number int) ([]Comment, error) {
 	return out, nil
 }
 
-// Reviews is empty: a merge request's review discussion, diff notes
-// included, is in MRNotes, and a GitLab approval carries no text to relay.
+// Reviews is empty by design, not an unsupported capability: a merge
+// request's review discussion, diff notes included, is in MRNotes, and a
+// GitLab approval carries no text to relay. PendingReview reads both, so an
+// empty result here loses no review signal.
 func (g *GitLab) Reviews(context.Context, int) ([]Review, error) { return []Review{}, nil }
 
 func (g *GitLab) AddMRNote(ctx context.Context, number int, body string) (string, error) {
