@@ -47,10 +47,30 @@ Other install routes, and whether each updates itself:
 
 | Route | Updates itself? |
 |---|---|
-| Claude Code plugin | No: `claude plugin update rota@rota` |
+| [Claude Code plugin](#claude-code-plugin) | No: `claude plugin update rota@rota` |
 | `rota skills install` | No: `rota skills update` |
 | `npx skills add l4ci/rota` | No: run it again |
 | Homebrew or install script | No: `rota update` prints the command |
+
+### Claude Code plugin
+
+Install it from the marketplace in one line (Claude Code 2.1.275 or later):
+
+```text
+/plugin install rota --marketplace l4ci/rota
+```
+
+On older versions, run `/plugin marketplace add l4ci/rota`, then `/plugin install rota@rota`.
+
+The plugin carries the skills, not the `rota` binary. Run `/rota:rota-install` to get it:
+
+- It installs the binary at the plugin's version. It uses Homebrew when `brew` is on your `PATH`, and otherwise downloads and runs [`install.sh`](https://raw.githubusercontent.com/l4ci/rota/main/install.sh) from this repo.
+- It runs `rota doctor` and reports the result.
+- It never uses `sudo`, edits your shell profile or runs `rota skills install`.
+
+The plugin downloads nothing on its own. At session start it prints a one-line hint when the binary is missing or has another version.
+
+Then run `rota init` in your project. [Install](docs/install.md#-plugin-marketplace) has the details.
 
 ## 🩹 Problems this fixes
 
