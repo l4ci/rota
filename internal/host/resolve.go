@@ -9,13 +9,38 @@ import (
 // Solo is the round host of a round with no terminal: workers are in-harness
 // subagents, so there is no pane to drive. It is a round-level value only:
 // New never returns it, and no Host is built for it.
-const Solo = "solo"
+const Solo Kind = "solo"
+
+// Kind names a host backend. It is a string on the wire (the registry, the
+// round report); the constants below are its only spellings.
+type Kind string
 
 // The host kinds that have panes.
 const (
-	Herdr = "herdr"
-	Tmux  = "tmux"
+	Herdr Kind = "herdr"
+	Tmux  Kind = "tmux"
 )
+
+// KindOf is the kind a config or registry string names: "herdr", "tmux" and "solo",
+// anything else (including "subagent" and "") the zero Kind.
+func KindOf(s string) Kind {
+	switch k := Kind(s); k {
+	case Herdr, Tmux, Solo:
+		return k
+	}
+	return ""
+}
+
+// String is the kind's wire spelling.
+func (k Kind) String() string { return string(k) }
+
+// Binary is the executable that runs the kind ("" for Solo).
+func (k Kind) Binary() string {
+	if k == Herdr || k == Tmux {
+		return string(k)
+	}
+	return ""
+}
 
 // Resolve is the rule for which host a round runs on (C8), the in-session one:
 // it never opens a session (see ResolveLaunch for the launcher that may). The round's
@@ -25,7 +50,7 @@ const (
 // silent fallback from a host the config named. Unset or "subagent" detects:
 // herdr inside a herdr pane with the binary on PATH, else tmux inside tmux,
 // else solo. getenv and lookPath default to the process's own.
-func Resolve(registry, dispatch string, getenv func(string) string, lookPath func(string) (string, error)) string {
+func Resolve(registry, dispatch Kind, getenv func(string) string, lookPath func(string) (string, error)) Kind {
 	if getenv == nil {
 		getenv = os.Getenv
 	}
@@ -36,23 +61,23 @@ func Resolve(registry, dispatch string, getenv func(string) string, lookPath fun
 		return registry
 	}
 	switch dispatch {
-	case "herdr", "tmux":
+	case Herdr, Tmux:
 		return dispatch
 	}
 	if getenv("HERDR_ENV") == "1" {
-		if _, err := lookPath("herdr"); err == nil {
-			return "herdr"
+		if _, err := lookPath(Herdr.Binary()); err == nil {
+			return Herdr
 		}
 	}
 	if getenv("TMUX") != "" {
-		return "tmux"
+		return Tmux
 	}
 	return Solo
 }
 
 // Launch is where a launcher that may open its own session puts itself.
 type Launch struct {
-	Kind string // Herdr, Tmux or Solo
+	Kind Kind // Herdr, Tmux or Solo
 	// NewSession: the caller is in no pane of Kind, so the launcher opens a
 	// session of its own (named, never the user's default) instead of a tab.
 	NewSession bool
@@ -76,7 +101,7 @@ type Launch struct {
 //   - There is no registry: the launcher starts before any round exists.
 //
 // getenv and lookPath default to the process's own.
-func ResolveLaunch(dispatch string, getenv func(string) string, lookPath func(string) (string, error)) (Launch, error) {
+func ResolveLaunch(dispatch Kind, getenv func(string) string, lookPath func(string) (string, error)) (Launch, error) {
 	d := Deps{Getenv: getenv, LookPath: lookPath}
 	herdr, tmux := New(Herdr, d), New(Tmux, d)
 	switch {

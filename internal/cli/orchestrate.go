@@ -112,14 +112,14 @@ func runOrchestrate(c *Ctx, dry bool) (Result, error) {
 	}
 	d := jsonx.NewObject()
 	d.Set("harness", plan.Harness)
-	d.Set("host", plan.Host)
+	d.Set("host", plan.Host.String())
 	d.Set("mode", plan.Mode)
 	d.Set("cwd", plan.Cwd)
 	setIf(d, "session", plan.Session)
 	setIf(d, "account", plan.Account)
 	setIf(d, "configDir", plan.ConfigDir)
 	d.Set("command", strs(plan.Supervisor))
-	text := plan.Harness + " in " + plan.Host + " (" + plan.Mode + "): " + strings.Join(plan.Supervisor, " ")
+	text := plan.Harness + " in " + plan.Host.String() + " (" + plan.Mode + "): " + strings.Join(plan.Supervisor, " ")
 	if plan.Account != "" {
 		text += " [account " + plan.Account + "]"
 	}
@@ -136,7 +136,7 @@ func runOrchestrate(c *Ctx, dry bool) (Result, error) {
 	// Reached only by ModeTab: the other modes replace this process.
 	setIf(d, "tab", got.Handle)
 	d.Set("changed", true)
-	return Result{Data: d, Text: "orchestrator started in " + plan.Host + " tab " + got.Handle}, nil
+	return Result{Data: d, Text: "orchestrator started in " + plan.Host.String() + " tab " + got.Handle}, nil
 }
 
 // recordLaunchingPane remembers the plain herdr pane `rota orchestrate` runs in
@@ -145,11 +145,11 @@ func runOrchestrate(c *Ctx, dry bool) (Result, error) {
 // at once and keeps it. Outside herdr, or from an agent pane, nothing changes.
 func recordLaunchingPane(c *Ctx, env orchestrate.Env, root string, plan orchestrate.Plan) {
 	me := host.CurrentPane(host.Herdr, env.Getenv)
-	if me == "" || plan.Host != "herdr" || plan.Mode != orchestrate.ModeTab {
+	if me == "" || plan.Host != host.Herdr || plan.Mode != orchestrate.ModeTab {
 		return
 	}
-	l, ok := env.Host("herdr").(host.Layouter)
-	if !ok {
+	l := env.Host(host.Herdr).Capabilities().Layouter
+	if l == nil {
 		return
 	}
 	panes, err := l.LayoutPanes(c.Context())

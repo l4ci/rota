@@ -55,7 +55,7 @@ func newRig(t *testing.T, kind string) *hostRig {
 	r.hostEnv = map[string]string{"HERDR_ENV": "1", "HERDR_WORKSPACE_ID": "w9"}
 	run := fakeBinRunner(t, r.herdrDir, r.tmuxDir)
 	r.goEnv = Env{
-		NewHost: func(d string) host.Host { return host.New(d, hostDeps(run, r.hostEnv)) },
+		NewHost: func(d host.Kind) host.Host { return host.New(d, hostDeps(run, r.hostEnv)) },
 		Sleep:   func(time.Duration) {},
 	}
 	return r

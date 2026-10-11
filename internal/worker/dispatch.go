@@ -48,10 +48,10 @@ type DispatchResult struct {
 }
 
 // dispatchSetting is work.dispatch from the project config, "" when unset.
-func dispatchSetting(root string) string {
+func dispatchSetting(root string) host.Kind {
 	v, _ := config.Lookup(config.Load(rotatree.Config(root)), "work.dispatch")
 	s, _ := v.(string)
-	return s
+	return host.KindOf(s)
 }
 
 // RegistryHost is the round host `round start` recorded (C8), "" when no
@@ -59,29 +59,29 @@ func dispatchSetting(root string) string {
 //
 // It tolerates a corrupt registry (reads as no host): callers pick a host to
 // talk to and cannot refuse; the verbs that write the registry refuse it.
-func RegistryHost(root string) string { return LoadRegistryTolerant(root).Host() }
+func RegistryHost(root string) host.Kind { return LoadRegistryTolerant(root).Host() }
 
 // ResolveHost is the host the project's round runs on: host.Resolve over the
 // round's recorded host, work.dispatch and the environment. Every verb that
 // needs the host asks here. getenv and lookPath default to the process's own.
-func ResolveHost(root string, getenv func(string) string, lookPath func(string) (string, error)) string {
+func ResolveHost(root string, getenv func(string) string, lookPath func(string) (string, error)) host.Kind {
 	return host.Resolve(RegistryHost(root), dispatchSetting(root), getenv, lookPath)
 }
 
 // ResolvePaneHost is ResolveHost for a verb that must drive a pane host even
 // with no round recorded: a bare environment reads as tmux, which reports
 // unavailable if it is absent. A recorded solo round stays solo.
-func ResolvePaneHost(root string, getenv func(string) string, lookPath func(string) (string, error)) string {
+func ResolvePaneHost(root string, getenv func(string) string, lookPath func(string) (string, error)) host.Kind {
 	k := ResolveHost(root, getenv, lookPath)
 	if k == host.Solo && RegistryHost(root) == "" {
-		return "tmux"
+		return host.Tmux
 	}
 	return k
 }
 
 // hostKind is the host a pane verb drives. Never pass "solo" on to host.New:
 // callers refuse it first (SoloRefusal), and New maps it to tmux anyway.
-func (e Env) hostKind(root string) string {
+func (e Env) hostKind(root string) host.Kind {
 	return ResolveHost(root, e.Getenv, e.LookPath)
 }
 
@@ -181,7 +181,7 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 	// herdr tabs are created in the caller's own workspace. Outside herdr there
 	// is none, and driving the server anyway lands tabs wherever a human is
 	// focused.
-	if h.Name() == "herdr" && !h.InSession() {
+	if h.Kind() == host.Herdr && !h.InSession() {
 		return res, fail(exitcode.ExitUnavailable, "work.dispatch=herdr must run from inside a herdr pane (HERDR_ENV=1)")
 	}
 	reg, err := LoadRegistry(root)
@@ -237,7 +237,7 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 		}
 		// Under herdr the launch binary decides `agent start --kind`, so it
 		// must be the kind's own: refuse before anything is killed.
-		if h.Name() == "herdr" {
+		if h.Kind() == host.Herdr {
 			if lk, _, _, lerr := host.LaunchArgs(launch); lerr != nil || lk != kind {
 				return res, fail(exitcode.ExitUnavailable, fmt.Sprintf("work.dispatch=herdr starts a %s worker, but %s does not run %s: %s", kind, key, kind, launch))
 			}
@@ -317,7 +317,7 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 	// after it is numbered past it, however fast the worker answers. 0 (no
 	// numbered host, a failing read) records none.
 	turnSeq := 0
-	if tr, ok := h.(host.TurnReader); ok {
+	if tr := h.Capabilities().TurnReader; tr != nil {
 		if t, ok := tr.Turn(ctx, o.Slot, handle); ok {
 			turnSeq = t.StateSeq
 		}
@@ -370,7 +370,7 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 	// task dispatch starts a fresh session and has nothing pending.
 	var sendErr error
 	handled := false
-	if rs, ok := h.(host.Resubmitter); ok && o.Relay && s.Unsent() {
+	if rs := h.Capabilities().Resubmitter; rs != nil && o.Relay && s.Unsent() {
 		handled, sendErr = rs.SubmitPending(ctx, o.Slot, handle, tmp.Name())
 	}
 	if !handled {
@@ -499,7 +499,7 @@ func (e Env) SweepSlot(ctx context.Context, root, slot string) {
 // sweepShells closes the bare-shell panes left in the worktree, on a host that
 // can list them. Best effort: Kill still proves the session gone.
 func sweepShells(ctx context.Context, h host.Host, worktree string) {
-	if sw, ok := h.(host.PaneSweeper); ok && worktree != "" {
+	if sw := h.Capabilities().PaneSweeper; sw != nil && worktree != "" {
 		sw.SweepShells(ctx, worktree)
 	}
 }
@@ -509,9 +509,9 @@ func sweepShells(ctx context.Context, h host.Host, worktree string) {
 // arrange panes, or a round in tabs, is a no-op. The worker is already up, so a
 // failure is a warning, never a failed dispatch.
 func arrangeNew(ctx context.Context, h host.Host, root string) string {
-	l, ok := h.(host.Layouter)
+	l := h.Capabilities().Layouter
 	reg := LoadRegistryTolerant(root) // a warning-only rearrange after a spawn; cannot fail the dispatch
-	if !ok || reg.Layout() != layout.Split {
+	if l == nil || reg.Layout() != layout.Split {
 		return ""
 	}
 	_, _, found, err := layout.Arrange(ctx, l, root, layout.Split, reg.CLIPane(), LiveWorkers(ctx, l, reg))

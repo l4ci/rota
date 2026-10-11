@@ -206,15 +206,17 @@ type cliHost struct {
 	calls     []string
 }
 
-func (h *cliHost) Name() string {
+func (h *cliHost) Kind() host.Kind {
 	if h.herdr {
-		return "herdr"
+		return host.Herdr
 	}
-	return "tmux"
+	return host.Tmux
 }
-func (h *cliHost) Require() error  { return nil }
-func (h *cliHost) InSession() bool { return h.inSession }
-func (h *cliHost) Where() string   { return "main" }
+
+func (h *cliHost) Capabilities() host.Capabilities { return host.CapabilitiesOf(h) }
+func (h *cliHost) Require() error                  { return nil }
+func (h *cliHost) InSession() bool                 { return h.inSession }
+func (h *cliHost) Where() string                   { return "main" }
 func (h *cliHost) Spawn(_ context.Context, o host.SpawnOpts) (string, error) {
 	h.calls = append(h.calls, "spawn")
 	return "rota:" + o.Slot, nil
@@ -234,7 +236,7 @@ func (h *cliHost) Notify(context.Context, string, string) {}
 
 func useHost(d *Deps, h host.Host) {
 	d.WorkerEnv = func() worker.Env {
-		return worker.Env{NewHost: func(string) host.Host { return h }, Sleep: func(time.Duration) {}}
+		return worker.Env{NewHost: func(host.Kind) host.Host { return h }, Sleep: func(time.Duration) {}}
 	}
 }
 
@@ -449,7 +451,7 @@ func useCodex(d *Deps, h host.Host, version string, loggedIn bool) {
 func useCodexLacking(d *Deps, h host.Host, version string, loggedIn bool, lacks string) {
 	d.WorkerEnv = func() worker.Env {
 		return worker.Env{
-			NewHost:  func(string) host.Host { return h },
+			NewHost:  func(host.Kind) host.Host { return h },
 			Sleep:    func(time.Duration) {},
 			LookPath: func(n string) (string, error) { return "/fake/" + n, nil },
 			Run: func(_ context.Context, name string, args, _ []string) (host.Result, error) {

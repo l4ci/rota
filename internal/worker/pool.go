@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/rotatree"
 	"os"
 	"path/filepath"
@@ -90,7 +91,7 @@ func (e Env) PoolInit(ctx context.Context, root string, o InitOpts, acc *Account
 
 	// tmux handles are known now; herdr tab ids exist only after a dispatch.
 	cfg := config.Load(rotatree.Config(root))
-	dispatch := config.Dispatch(cfg)
+	dispatch := host.KindOf(config.Dispatch(cfg))
 
 	envSetup := config.String(cfg, "work.envSetup")
 	portStart, portBlock := PortRange(cfg)
@@ -157,7 +158,7 @@ func (e Env) PoolInit(ctx context.Context, root string, o InitOpts, acc *Account
 		handle := session + ":" + name
 		// A round slot has no session until its first dispatch, whatever the
 		// host: a nominal handle would read as a dead tab to reconcile.
-		if dispatch == "herdr" || len(o.Names) > 0 {
+		if dispatch == host.Herdr || len(o.Names) > 0 {
 			handle = ""
 		}
 		if err := registerSlot(root, name, branch, abs, base, session, handle); err != nil {

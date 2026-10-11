@@ -67,7 +67,7 @@ func TestMain(m *testing.M) {
 // tests.
 func testDeps() *Deps {
 	d := defaultDeps()
-	d.Host = func(kind string) host.Host {
+	d.Host = func(kind host.Kind) host.Host {
 		if kind == "herdr" {
 			return &absentHerdr{}
 		}
@@ -80,8 +80,10 @@ func testDeps() *Deps {
 // that need it report it unavailable instead of reaching a real one.
 type absentHerdr struct{ cliHost }
 
-func (*absentHerdr) Name() string   { return "herdr" }
-func (*absentHerdr) Require() error { return errors.New("herdr is not installed") }
+func (*absentHerdr) Kind() host.Kind { return host.Herdr }
+
+func (a *absentHerdr) Capabilities() host.Capabilities { return host.CapabilitiesOf(a) }
+func (*absentHerdr) Require() error                    { return errors.New("herdr is not installed") }
 
 // mainWith is Main with the given Deps.
 func mainWith(d *Deps, args []string, stdin io.Reader, stdout, stderr io.Writer) int {

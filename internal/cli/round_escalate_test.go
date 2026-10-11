@@ -429,3 +429,5 @@ func TestEscalateCheckForgeFailureAndDeletedComment(t *testing.T) {
 		t.Errorf("deleted comment: %d %v %s", code, d, errOut)
 	}
 }
+
+func (h *escHost) Capabilities() host.Capabilities { return host.CapabilitiesOf(h) }

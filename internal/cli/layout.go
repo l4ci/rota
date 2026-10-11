@@ -30,12 +30,12 @@ func layoutCommand() *Command {
 
 // layoutHost is herdr, when it is installed.
 func layoutHost(d *Deps) (host.Layouter, error) {
-	h := d.Host("herdr")
+	h := d.Host(host.Herdr)
 	if err := h.Require(); err != nil {
 		return nil, err
 	}
-	l, ok := h.(host.Layouter)
-	if !ok {
+	l := h.Capabilities().Layouter
+	if l == nil {
 		return nil, fmt.Errorf("herdr host cannot arrange panes")
 	}
 	return l, nil
@@ -86,12 +86,12 @@ func runLayout(c *Ctx, mode, project string) (Result, error) {
 		}
 		explicit := project != ""
 		switch rh := reg.Host(); {
-		case rh == host.Solo || rh == "tmux":
+		case rh == host.Solo || rh == host.Tmux:
 			// A stale registry of an old tmux round is not worth a line.
 			if !explicit && !hasHandle(reg) {
 				continue
 			}
-			o.skipped = "host is " + rh + ": layout needs herdr"
+			o.skipped = "host is " + rh.String() + ": layout needs herdr"
 		case herr != nil:
 			if !explicit {
 				continue

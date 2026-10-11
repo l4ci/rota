@@ -27,20 +27,22 @@ type hostFake struct {
 	sent    string
 	sents   []string // every brief sent, in order
 	// name is the host's name; "" is tmux.
-	name                 string
+	name                 host.Kind
 	codexHome, configDir string
 	swept                []string // worktrees whose shell panes were swept
 }
 
-func (h *hostFake) Name() string {
+func (h *hostFake) Kind() host.Kind {
 	if h.name != "" {
 		return h.name
 	}
-	return "tmux"
+	return host.Tmux
 }
-func (h *hostFake) Require() error  { return nil }
-func (h *hostFake) InSession() bool { return true }
-func (h *hostFake) Where() string   { return "main" }
+
+func (h *hostFake) Capabilities() host.Capabilities { return host.CapabilitiesOf(h) }
+func (h *hostFake) Require() error                  { return nil }
+func (h *hostFake) InSession() bool                 { return true }
+func (h *hostFake) Where() string                   { return "main" }
 func (h *hostFake) Spawn(_ context.Context, o host.SpawnOpts) (string, error) {
 	h.spawned = append(h.spawned, o.Slot+" "+o.Cwd)
 	h.launch = o.Launch
@@ -79,7 +81,7 @@ func newAssignFixture(t *testing.T) *assignFixture {
 	h := &hostFake{}
 	f := &assignFixture{root: root, host: h}
 	f.env = Env{Git: git.Exec, Base: "main", Worker: worker.Env{Getenv: noEnv}, Lease: fakeLease("h", 100)}
-	f.env.Worker = worker.Env{Git: git.Exec, NewHost: func(string) host.Host { return h },
+	f.env.Worker = worker.Env{Git: git.Exec, NewHost: func(host.Kind) host.Host { return h },
 		Sleep: func(time.Duration) {}, Now: time.Now, Getenv: noEnv}
 	fb := &fakeRemote{}
 	fb.add("12", "Add the round assign verb now please", "M01", false, "## Acceptance\n- [ ] works\n\nedits internal/cli/round.go")
@@ -300,7 +302,7 @@ func TestAssignResumesWithoutDuplicatingTheComment(t *testing.T) {
 
 func TestAssignDispatchFailureKeepsTheMarks(t *testing.T) {
 	f := newAssignFixture(t)
-	f.env.Worker.NewHost = func(string) host.Host { return &failingHost{hostFake: f.host} }
+	f.env.Worker.NewHost = func(host.Kind) host.Host { return &failingHost{hostFake: f.host} }
 	_, err := f.assign("12", "ben", nil)
 	if err == nil {
 		t.Fatal("dispatch failure must surface")
@@ -314,7 +316,7 @@ func TestAssignDispatchFailureKeepsTheMarks(t *testing.T) {
 // the same), so the repeated call knows nothing was delivered.
 func TestAssignDispatchFailureMarksTheSlotIdle(t *testing.T) {
 	f := newAssignFixture(t)
-	f.env.Worker.NewHost = func(string) host.Host { return &failingHost{hostFake: f.host} }
+	f.env.Worker.NewHost = func(host.Kind) host.Host { return &failingHost{hostFake: f.host} }
 	if _, err := f.assign("12", "ben", nil); err == nil {
 		t.Fatal("dispatch failure must surface")
 	}
@@ -372,7 +374,7 @@ func (f *assignFixture) config(t *testing.T, cfg string) {
 	// wins, so a config that names a host re-records it, as a new round would.
 	if dv, _ := config.Lookup(config.Load(filepath.Join(f.root, ".rota", "config.json")), "work.dispatch"); dv == "herdr" || dv == "tmux" {
 		d := dv.(string)
-		if err := worker.Update(f.root, func(doc *worker.Doc) { doc.SetHost(d) }); err != nil {
+		if err := worker.Update(f.root, func(doc *worker.Doc) { doc.SetHost(host.KindOf(d)) }); err != nil {
 			t.Fatal(err)
 		}
 	}

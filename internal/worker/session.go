@@ -102,16 +102,16 @@ func (e Env) SessionEnsure(ctx context.Context, root string, o SessionOpts) (Ses
 	if h.InSession() {
 		return SessionState{Inside: true, Where: h.Where()}, nil
 	}
-	if h.Name() == "herdr" {
+	if h.Kind() == host.Herdr {
 		cwd, _ := os.Getwd()
 		err := fail(exitcode.ExitRefused, "work.dispatch=herdr needs /rota-work to run inside a herdr pane")
 		err.Data = BlockData{BlockedBy: "outside herdr"}
 		err.Hint = fmt.Sprintf("open herdr, start Claude Code in a pane at %s, and run /rota-work there; worker tabs then open in that workspace, beside the orchestrator", cwd)
 		return SessionState{}, err
 	}
-	op, ok := h.(host.Operator)
-	if !ok {
-		return SessionState{}, fail(exitcode.ExitUnavailable, h.Name()+" host cannot open an operator window")
+	op := h.Capabilities().Operator
+	if op == nil {
+		return SessionState{}, fail(exitcode.ExitUnavailable, h.Kind().String()+" host cannot open an operator window")
 	}
 	if o.BodyFile != "" {
 		if _, err := os.Stat(o.BodyFile); err != nil {

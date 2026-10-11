@@ -114,7 +114,7 @@ func (r Registry) Round() (int, bool) {
 }
 
 // Host is the round host `round start` recorded, "" when none.
-func (r Registry) Host() string { return jsonx.Str(r.doc, "host") }
+func (r Registry) Host() host.Kind { return host.KindOf(jsonx.Str(r.doc, "host")) }
 
 // Layout is the pane layout `rota layout split|tabs` recorded for the round:
 // "split" or "", where "" means tabs (the default of a new round).
@@ -309,7 +309,7 @@ func RemoveQueuedPR(root, ref string) error {
 func (d *Doc) SetRound(n int) { d.doc.Set("round", n) }
 
 // SetHost records the round host.
-func (d *Doc) SetHost(h string) { d.doc.Set("host", h) }
+func (d *Doc) SetHost(h host.Kind) { d.doc.Set("host", h.String()) }
 
 // ClearHost forgets the round host.
 func (d *Doc) ClearHost() { d.doc.Delete("host") }
@@ -437,8 +437,8 @@ type Env struct {
 	// CLI. Nil means context.Background().
 	Ctx context.Context
 	Git git.Runner
-	// NewHost returns the host for a work.dispatch value.
-	NewHost func(dispatch string) host.Host
+	// NewHost returns the host for a kind.
+	NewHost func(kind host.Kind) host.Host
 	// Sleep defaults to time.Sleep (poll's settle).
 	Sleep func(time.Duration)
 	// Stderr defaults to os.Stderr (round wait's one-line fallback notice).
