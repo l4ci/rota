@@ -22,8 +22,12 @@ func PRRefNumber(ref string) (int, bool) {
 	if p, ok := tracker.ParsePRURL(ref); ok {
 		return p.Number, true
 	}
-	n, err := strconv.Atoi(strings.TrimPrefix(ref, "#"))
-	return n, err == nil && n >= 0 && !strings.HasPrefix(ref, "+") && !strings.HasPrefix(ref, "-")
+	digits := strings.TrimPrefix(strings.TrimSuffix(ref, "/"), "#")
+	if digits == "" || strings.Trim(digits, "0123456789") != "" {
+		return 0, false
+	}
+	n, err := strconv.Atoi(digits)
+	return n, err == nil
 }
 
 // HeldID is the item a slot holds, in the backend's spelling: the task when

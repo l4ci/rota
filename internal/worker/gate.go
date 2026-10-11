@@ -1226,10 +1226,8 @@ func (e Env) detectProvider(ctx context.Context, root, pr string) string {
 		return p.Provider
 	}
 	url, _ := e.runGit(ctx, root, "remote", "get-url", "origin")
-	for _, u := range []string{pr, url} {
-		if p := tracker.ProviderFromURL(u); p != tracker.ProviderUnknown {
-			return p
-		}
+	if p := tracker.ProviderFromURL(url); p != tracker.ProviderUnknown {
+		return p
 	}
 	return "github"
 }
