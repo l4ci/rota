@@ -657,10 +657,10 @@ func TestAssignCodexSkipsAccounts(t *testing.T) {
 	(&codexRig{version: "codex-cli 0.159.2\n", loggedIn: true}).install(f)
 	f.host.name = "herdr"
 	fetched := 0
-	f.env.Worker.Accounts = &worker.Accounts{Fetch: func(context.Context, string, string) (*jsonx.Object, string) {
+	f.env = f.env.WithAccounts(&worker.Accounts{Fetch: func(context.Context, string, string) (*jsonx.Object, string) {
 		fetched++
 		return nil, "fake: no network in tests"
-	}}
+	}})
 	res, err := f.assign("12", "ben", func(o *AssignOpts) { o.Kind = "codex" })
 	if err != nil || !res.Dispatched || res.Account != "" || f.host.configDir != "" || fetched != 0 {
 		t.Fatalf("%v %+v configDir=%q meter calls=%d", err, res, f.host.configDir, fetched)
@@ -939,5 +939,33 @@ func TestTouchesReaderKeepsSpellingAndFiltersSentinels(t *testing.T) {
 	}
 	if got := touches(&fakeRemote{details: map[string]string{"#9": "## Goal\nx"}}, "#9"); got != "" {
 		t.Errorf("no section: %q", got)
+	}
+}
+
+// The account step follows AccountPicking, not Worker.Accounts: a meter reader
+// alone never picks, and WithAccounts turns the step on.
+func TestAssignAccountStepFollowsAccountPicking(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		picking  bool
+		wantAcct string
+	}{{"meter reader only skips the step", false, ""}, {"WithAccounts picks", true, "a"}} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newAssignFixture(t)
+			f.config(t, `{"work":{"dispatch":"herdr","accounts":[{"name":"a","configDir":"/nowhere"}]}}`)
+			f.host.name = "herdr"
+			acc := &worker.Accounts{Fetch: func(context.Context, string, string) (*jsonx.Object, string) {
+				return nil, "fake: no network in tests"
+			}}
+			if tc.picking {
+				f.env = f.env.WithAccounts(acc)
+			} else {
+				f.env.Worker.Accounts = acc
+			}
+			res, err := f.assign("12", "ben", nil)
+			if err != nil || !res.Dispatched || res.Account != tc.wantAcct {
+				t.Fatalf("%v %+v: want account %q", err, res, tc.wantAcct)
+			}
+		})
 	}
 }

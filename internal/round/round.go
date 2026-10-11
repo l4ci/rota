@@ -95,9 +95,14 @@ type Env struct {
 	// Worker is the worker env assign resets and dispatches with; the zero
 	// value is a Git-only env. It is the one owner of the clock (Now, which
 	// dates timed-out escalations), the environment reader (Getenv, for the
-	// lease, host and brief lookups) and Accounts, which when set balances
-	// slots across work.accounts at assignment.
+	// lease, host and brief lookups) and Accounts, the meter reader that quota
+	// and the ledger read; picking an account is AccountPicking's job.
 	Worker worker.Env
+	// AccountPicking turns the delivery's account step on: keep the slot's own
+	// work.accounts account while it has headroom, else pick. Off is the zero
+	// value; WithAccounts is the one way to turn it on, so a verb opts in by
+	// name and Worker.Accounts alone (the meter read) never picks.
+	AccountPicking bool
 	// Board is the backlog's claim side; claim-mismatch drift needs it, and
 	// without it (file mode) that kind is skipped.
 	Board Board
@@ -115,6 +120,16 @@ type Env struct {
 	SharedPaths  []string
 	// NeedsHuman is issues.labels.needsHuman; "" means DefaultNeedsHuman.
 	NeedsHuman string
+}
+
+// WithAccounts is the env with account picking on, reading the meters through
+// a. It is the single owner of the choice: build the env this way before use,
+// never flip it afterwards. A nil a leaves picking off, since the pick would
+// have no meters to read.
+func (e Env) WithAccounts(a *worker.Accounts) Env {
+	e.Worker.Accounts = a
+	e.AccountPicking = a != nil
+	return e
 }
 
 // getenv is the env's environment reader, from the worker env.

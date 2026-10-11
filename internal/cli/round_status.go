@@ -24,8 +24,8 @@ import (
 // the round recorded (C8); with none it is herdr when work.dispatch says so or
 // the process runs inside herdr (rounds are started by hand with `herdr
 // worktree create`, whatever the config says), else tmux.
-// Worker.Accounts stays nil: quota and account picking are opt-in (accountedRoundEnv),
-// so start, status and the other read verbs never take those paths by accident.
+// Account picking stays off: it is opt-in (accountedRoundEnv), so start, status
+// and the other verbs never take that path by accident.
 // A host or forge that cannot be built or reached is left nil: the verbs
 // report it as unavailable instead of failing. withForge false builds no
 // forge at all (Forge and ForgeErr stay empty), for a caller that reads only
@@ -33,7 +33,7 @@ import (
 func defaultRoundEnv(ctx context.Context, root string, d *Deps, withForge bool) round.Env {
 	cfg := config.Load(rotatree.Config(root))
 	e := d.baseRoundEnv()
-	e.Worker.Accounts = nil
+	e.Worker.Accounts, e.AccountPicking = nil, false
 	e.Base = "main"
 	if b, ok, err := (git.Repo{Dir: root}).Base(ctx, ""); err == nil && ok {
 		e.Base = b
@@ -70,13 +70,14 @@ func defaultRoundEnv(ctx context.Context, root string, d *Deps, withForge bool) 
 	return e
 }
 
-// accountedRoundEnv is RoundEnv with the worker env's accounts, for a verb that
-// reads quota or picks an account. The worker env comes from the one
-// constructor (Deps.workerEnv), so Git, host and clock match baseRoundEnv.
+// accountedRoundEnv is RoundEnv with account picking on, for a verb that reads
+// quota or picks an account: the one place a verb opts in, chosen when the env
+// is built. The worker env comes from the one constructor (Deps.workerEnv), so
+// Git, host and clock match baseRoundEnv.
 func accountedRoundEnv(c *Ctx, ctx context.Context, root string) round.Env {
 	env := c.deps().RoundEnv(ctx, root)
 	env.Worker = workerEnvCtx(c, ctx)
-	return env
+	return env.WithAccounts(c.deps().WorkerAccounts())
 }
 
 // withBoard gives the env the backlog's claim side, which claim-mismatch drift
@@ -132,8 +133,8 @@ func roundStatus(*flag.FlagSet) RunFunc {
 		d.Set("review", queuedRows(rep.Queued))
 		var lines []string
 		if set, err := roundcfg.Load(root); err == nil {
-			renv.Worker.Accounts = c.deps().WorkerAccounts() // only the quota read, after Status ran without
-			if qc := renv.QuotaCap(ctx, root, set); qc.Reduced() {
+			// Status ran without accounts; the quota read gets its own accounted env.
+			if qc := accountedRoundEnv(c, ctx, root).QuotaCap(ctx, root, set); qc.Reduced() {
 				co := jsonx.NewObject()
 				co.Set("effective", qc.Effective)
 				co.Set("roster", qc.Roster)
