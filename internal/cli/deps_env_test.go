@@ -2,6 +2,12 @@ package cli
 
 import (
 	"context"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/l4ci/rota/internal/git"
@@ -46,8 +52,8 @@ func TestRoundEnvAccountsAndGit(t *testing.T) {
 	}
 	root := t.TempDir()
 	env := d.RoundEnv(context.Background(), root)
-	if env.Worker.Accounts != nil {
-		t.Error("RoundEnv: Worker.Accounts must stay nil")
+	if env.Worker.Accounts != nil || env.AccountPicking {
+		t.Error("RoundEnv: account picking must stay off")
 	}
 	if env.Worker.Git == nil {
 		t.Fatal("RoundEnv: Worker.Git is nil")
@@ -57,7 +63,67 @@ func TestRoundEnvAccountsAndGit(t *testing.T) {
 		t.Error("RoundEnv: Worker.Git did not reach the faked Deps.Git")
 	}
 	c := &Ctx{Deps: d}
-	if got := accountedRoundEnv(c, context.Background(), root); got.Worker.Accounts == nil {
-		t.Error("accountedRoundEnv: Worker.Accounts is nil")
+	if got := accountedRoundEnv(c, context.Background(), root); !got.AccountPicking || got.Worker.Accounts == nil {
+		t.Error("accountedRoundEnv: account picking is not on")
 	}
+	// The verbs that build RoundEnv plus workerEnvCtx (adopt, review relay,
+	// winddown) get the meter reader but never pick.
+	plain := d.RoundEnv(context.Background(), root)
+	plain.Worker = workerEnvCtx(c, context.Background())
+	if plain.AccountPicking {
+		t.Error("RoundEnv + workerEnvCtx: account picking must stay off")
+	}
+}
+
+// Account picking is chosen where the env is built (accountedRoundEnv): no verb
+// sets the flag or Worker.Accounts on a round env itself, and the accounting
+// verbs (assign, tick, architecture, return, status's quota read) go through
+// the constructor. Only defaultRoundEnv may switch it off and only
+// accountedRoundEnv may call WithAccounts.
+func TestAccountPickingChosenOnlyInTheConstructor(t *testing.T) {
+	files, err := filepath.Glob("*.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]bool{"round_assign.go": true, "round_tick.go": true, "round_architecture.go": true, "round_return.go": true, "round_status.go": true}
+	for _, f := range files {
+		if strings.HasSuffix(f, "_test.go") {
+			continue
+		}
+		b, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		src := string(b)
+		for _, fn := range []string{"defaultRoundEnv", "accountedRoundEnv"} {
+			src = cutFunc(t, f, src, fn)
+		}
+		for _, bad := range []string{".Worker.Accounts =", "AccountPicking =", ".WithAccounts("} {
+			if strings.Contains(src, bad) {
+				t.Errorf("%s uses %q outside defaultRoundEnv/accountedRoundEnv; use accountedRoundEnv", f, bad)
+			}
+		}
+		if want[f] && !strings.Contains(string(b), "accountedRoundEnv(") {
+			t.Errorf("%s must build its env with accountedRoundEnv", f)
+		}
+		if !want[f] && strings.Contains(src, "accountedRoundEnv(") {
+			t.Errorf("%s uses accountedRoundEnv but is not an accounting verb", f)
+		}
+	}
+}
+
+// cutFunc removes the top-level function name from src.
+func cutFunc(t *testing.T, file, src, name string) string {
+	t.Helper()
+	fs := token.NewFileSet()
+	af, err := parser.ParseFile(fs, file, src, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range af.Decls {
+		if fd, ok := d.(*ast.FuncDecl); ok && fd.Recv == nil && fd.Name.Name == name {
+			return src[:fs.Position(fd.Pos()).Offset] + src[fs.Position(fd.End()).Offset:]
+		}
+	}
+	return src
 }

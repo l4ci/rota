@@ -81,9 +81,7 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 		return roundtick.Result{}, err
 	}
 	ctx := c.Context()
-	renv := withBoard(c, root, c.deps().RoundEnv(ctx, root))
-	renv.Worker = workerEnvCtx(c, ctx)
-	renv.Worker.Accounts = c.deps().WorkerAccounts()
+	renv := withBoard(c, root, accountedRoundEnv(c, ctx, root))
 
 	e := roundtick.Env{Cap: set.AutopilotCap, HumanMerge: policy.Mode != gate.MergeNone}
 	if e.Cap == 0 {

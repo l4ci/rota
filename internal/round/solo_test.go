@@ -159,7 +159,7 @@ func TestAssignUnderSoloRefusesACodexWorker(t *testing.T) {
 
 func TestAssignUnderSoloSkipsTheAccountPick(t *testing.T) {
 	f := soloAssign(t)
-	f.env.Worker.Accounts = &worker.Accounts{}
+	f.env = f.env.WithAccounts(&worker.Accounts{})
 	f.config(t, `{"work":{"accounts":[{"name":"a","configDir":"/nonexistent"}]}}`)
 	if _, err := f.assign("12", "ben", nil); err != nil {
 		t.Fatalf("no account is picked under solo: %v", err)
