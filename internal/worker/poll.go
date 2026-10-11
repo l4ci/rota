@@ -528,7 +528,7 @@ func slotTarget(s *Slot) pollTarget {
 // caller woken by events must re-classify it on its own (#211: herdr's
 // scrollback reads differ for a moment after a turn ends).
 func (e Env) classify(ctx context.Context, h host.Host, targets []pollTarget, settle time.Duration, lines int) (rows []PollRow, settling, slept bool) {
-	tr, _ := h.(host.TurnReader)
+	tr := h.Capabilities().TurnReader
 	first := map[string]string{}
 	finished := map[string]string{} // slot -> native status of a finished turn
 	for _, t := range targets {
@@ -558,7 +558,7 @@ func (e Env) classify(ctx context.Context, h host.Host, targets []pollTarget, se
 		if st == StateUnknown {
 			// herdr says why it could not classify the agent; a failing or
 			// absent explain leaves the generic evidence as it was.
-			if x, ok := h.(host.Explainer); ok {
+			if x := h.Capabilities().Explainer; x != nil {
 				if why := x.Explain(ctx, t.name, t.handle); why != "" {
 					ev += ": herdr explain: " + strutil.Clip(why, 200)
 				}

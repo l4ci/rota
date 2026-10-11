@@ -26,7 +26,9 @@ import (
 // is against hard-wrapped text and long lines read as changed when they are not.
 type tmux struct{ d Deps }
 
-func (t *tmux) Name() string { return "tmux" }
+func (t *tmux) Kind() Kind { return Tmux }
+
+func (t *tmux) Capabilities() Capabilities { return CapabilitiesOf(t) }
 
 func (t *tmux) Require() error {
 	if _, err := t.d.LookPath("tmux"); err != nil {

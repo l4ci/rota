@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/rotatree"
 
 	"github.com/l4ci/rota/internal/config"
@@ -118,7 +119,7 @@ func (e Env) Preflight(ctx context.Context, root, kind, slot, model string) (har
 		return harness.Setup{}, err
 	}
 	set, err := h.Preflight(ctx, e.probe(), harness.PreflightOpts{
-		Slot: slot, Launch: launch, Herdr: e.hostKind(root) == "herdr", Worktree: wt,
+		Slot: slot, Launch: launch, Herdr: e.hostKind(root) == host.Herdr, Worktree: wt,
 		CommonDir: func() (string, error) { return CommonDir(ctx, e.Git, root) },
 		Accounts:  accts, Account: current, Load: load,
 	})

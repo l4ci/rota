@@ -69,8 +69,9 @@ type delivery struct {
 	Wrap func(error) error
 
 	// Out: filled as the steps run.
-	Account, Host, BriefText, Worktree string
-	Dispatched, Changed                bool
+	Host                         host.Kind
+	Account, BriefText, Worktree string
+	Dispatched, Changed          bool
 
 	tmpName string
 }

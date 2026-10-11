@@ -27,8 +27,10 @@ type limFake struct {
 	panes map[string]string
 }
 
-func (f *limFake) Name() string   { return "tmux" }
-func (f *limFake) Require() error { return nil }
+func (f *limFake) Kind() host.Kind { return host.Tmux }
+
+func (f *limFake) Capabilities() host.Capabilities { return host.CapabilitiesOf(f) }
+func (f *limFake) Require() error                  { return nil }
 func (f *limFake) PaneOf(_ context.Context, slot, handle string) string {
 	return handle
 }
@@ -47,7 +49,7 @@ func (f *limFake) SendPane(_ context.Context, pane, text string) error {
 func limDeps() (*Deps, *limFake) {
 	f := &limFake{panes: map[string]string{}}
 	d := testDeps()
-	d.Host = func(string) host.Host { return f }
+	d.Host = func(host.Kind) host.Host { return f }
 	return d, f
 }
 

@@ -54,11 +54,11 @@ const (
 
 // Plan is what Launch will do.
 type Plan struct {
-	Harness string `json:"harness"`
-	Host    string `json:"host"` // herdr, tmux or solo
-	Mode    string `json:"mode"`
-	Cwd     string `json:"cwd"`
-	Session string `json:"session,omitempty"` // ModeSession, ModeHerdrSession: the session name
+	Harness string    `json:"harness"`
+	Host    host.Kind `json:"host"` // herdr, tmux or solo
+	Mode    string    `json:"mode"`
+	Cwd     string    `json:"cwd"`
+	Session string    `json:"session,omitempty"` // ModeSession, ModeHerdrSession: the session name
 	// Account names the work.accounts entry the agent starts under; ConfigDir is
 	// its CLAUDE_CONFIG_DIR. Both empty when the agent keeps the default account.
 	Account   string `json:"account,omitempty"`
@@ -79,7 +79,7 @@ type Env struct {
 	Getenv   func(string) string
 	LookPath func(string) (string, error)
 	// Host builds the host for a kind, "herdr" or "tmux".
-	Host func(kind string) host.Host
+	Host func(kind host.Kind) host.Host
 	// Exec replaces this process, as syscall.Exec does. It returns only on failure.
 	Exec func(path string, argv, env []string) error
 	Env  []string // the environment Exec passes on
@@ -118,7 +118,7 @@ func (e Env) Resolve(root string, cfg any) (Plan, error) {
 	// Outside any multiplexer herdr is preferred: it is what rounds use, so the
 	// orchestrator's workers open beside it. The session is rota's own, never
 	// the user's default one.
-	l, err := host.ResolveLaunch(config.Dispatch(cfg), e.Getenv, e.LookPath)
+	l, err := host.ResolveLaunch(host.KindOf(config.Dispatch(cfg)), e.Getenv, e.LookPath)
 	if err != nil {
 		return p, &Error{Code: "unavailable", Msg: err.Error()}
 	}
@@ -195,9 +195,9 @@ func (e Env) Launch(ctx context.Context, p Plan) (Launched, error) {
 	line := shlex.Join(p.Supervisor)
 	switch p.Mode {
 	case ModeTab:
-		o, ok := e.Host(p.Host).(host.TabOpener)
-		if !ok {
-			return Launched{}, &Error{Code: "unavailable", Msg: p.Host + " host cannot open a tab"}
+		o := e.Host(p.Host).Capabilities().TabOpener
+		if o == nil {
+			return Launched{}, &Error{Code: "unavailable", Msg: p.Host.String() + " host cannot open a tab"}
 		}
 		tab, err := o.OpenTab(ctx, host.TabOpts{Label: Label, Cwd: p.Cwd, Command: line})
 		if err != nil {
@@ -205,27 +205,27 @@ func (e Env) Launch(ctx context.Context, p Plan) (Launched, error) {
 		}
 		return Launched{Handle: tab}, nil
 	case ModeHerdrSession:
-		st, ok := e.Host("herdr").(host.SessionStarter)
-		if !ok {
+		st := e.Host(host.Herdr).Capabilities().SessionStarter
+		if st == nil {
 			return Launched{}, &Error{Code: "unavailable", Msg: "herdr host cannot start a session"}
 		}
 		if _, err := st.StartSession(ctx, p.Session, host.TabOpts{Label: Label, Cwd: p.Cwd, Command: line}); err != nil {
 			return Launched{}, &Error{Code: "unavailable", Msg: err.Error()}
 		}
-		herdr, err := e.LookPath("herdr")
+		herdr, err := e.LookPath(host.Herdr.Binary())
 		if err != nil {
 			return Launched{}, &Error{Code: "unavailable", Msg: "herdr is not installed"}
 		}
-		return Launched{}, e.exec(herdr, []string{"herdr", "session", "attach", p.Session})
+		return Launched{}, e.exec(herdr, []string{host.Herdr.Binary(), "session", "attach", p.Session})
 	case ModeSession:
-		tmux, err := e.LookPath("tmux")
+		tmux, err := e.LookPath(host.Tmux.Binary())
 		if err != nil {
 			return Launched{}, &Error{Code: "unavailable", Msg: "tmux is not installed"}
 		}
 		// -A attaches when the session exists; its command is then ignored, and
 		// the keepalive lease refuses a second orchestrator if one asks for it.
 		// The shell after the command keeps a failure message on screen.
-		argv := []string{"tmux", "new-session", "-A", "-s", p.Session, "-c", p.Cwd, "-n", Label, line + `; exec "${SHELL:-sh}"`}
+		argv := []string{host.Tmux.Binary(), "new-session", "-A", "-s", p.Session, "-c", p.Cwd, "-n", Label, line + `; exec "${SHELL:-sh}"`}
 		return Launched{}, e.exec(tmux, argv)
 	default:
 		return Launched{}, e.exec(p.Supervisor[0], p.Supervisor)

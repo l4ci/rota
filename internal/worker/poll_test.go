@@ -3,6 +3,7 @@ package worker
 import (
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/host"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -93,7 +94,7 @@ func TestPollFixtureMode(t *testing.T) {
 	}
 }
 
-func pollRegistry(t *testing.T, kind string) (string, *fakeHost) {
+func pollRegistry(t *testing.T, kind host.Kind) (string, *fakeHost) {
 	dir := newProject(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 2, Base: "main"})
 	f := &fakeHost{name: kind, inSession: true, panes: map[string][]string{}, status: map[string]string{}}

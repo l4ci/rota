@@ -4,6 +4,8 @@ import (
 	"context"
 	"strings"
 	"testing"
+
+	"github.com/l4ci/rota/internal/host"
 )
 
 // labelHost adds host.Labeler to fakeHost and records every title set.
@@ -154,3 +156,5 @@ func TestReapClearsTheLabelBeforeDropping(t *testing.T) {
 		t.Errorf("titles = %q", got)
 	}
 }
+
+func (l *labelHost) Capabilities() host.Capabilities { return host.CapabilitiesOf(l) }

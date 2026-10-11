@@ -82,7 +82,7 @@ type Env struct {
 	// Snapshot lists the host's live agents; HostName is "herdr" or "tmux", or
 	// "solo" with no Snapshot when the round has no terminal host.
 	Snapshot func(ctx context.Context) ([]host.Agent, error)
-	HostName string
+	HostName host.Kind
 	Forge    Forge
 	// Base is the branch slots are cut from when a slot records none.
 	Base  string
@@ -298,7 +298,7 @@ type Report struct {
 	Findings    []Finding
 	Unavailable []string
 	Warnings    []string
-	Host        string
+	Host        host.Kind
 	// Escalations are the open ones (pending or timed-out), read from the
 	// registry without a forge call; `rota round escalate check` looks for answers.
 	Escalations []escalation.Report

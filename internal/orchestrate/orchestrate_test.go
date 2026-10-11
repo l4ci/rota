@@ -60,7 +60,7 @@ func (r *rig) launcher() Env {
 	return Env{
 		Getenv:   func(k string) string { return r.env[k] },
 		LookPath: look,
-		Host: func(kind string) host.Host {
+		Host: func(kind host.Kind) host.Host {
 			return host.New(kind, host.Deps{Run: run, Getenv: func(k string) string { return r.env[k] }, LookPath: look})
 		},
 		Exec: func(path string, argv, _ []string) error {
@@ -97,7 +97,7 @@ func TestResolveByWhereTheCallerIs(t *testing.T) {
 		env       map[string]string
 		installed []string
 		cfg       map[string]any
-		host      string
+		host      host.Kind
 		mode      string
 		code      string // expected Error.Code, "" for none
 	}{

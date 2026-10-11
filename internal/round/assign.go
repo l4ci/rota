@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -13,7 +12,9 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/harness"
+	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/itembody"
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/roundcfg"
@@ -95,8 +96,9 @@ type Assigned struct {
 	Dispatched bool
 	// Host, Brief and Worktree are set under solo (C8) in place of a dispatch:
 	// the brief to launch the subagent with, and its absolute working directory.
-	Host, Brief, Worktree string
-	Changed               bool
+	Host            host.Kind
+	Brief, Worktree string
+	Changed         bool
 	// Kind, Tier and Model are what the worker starts with; Model is "" when a
 	// custom work.workerCommand has no {model} placeholder.
 	Kind, Tier, Model, TierReason string

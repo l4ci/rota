@@ -25,7 +25,7 @@ func TestHerdrSnapshotReadsAgents(t *testing.T) {
 }
 
 func TestSnapshotFailuresAreErrors(t *testing.T) {
-	for _, kind := range []string{"herdr", "tmux"} {
+	for _, kind := range []Kind{Herdr, Tmux} {
 		f := &fake{handler: func(string, []string) Result { return Result{ExitCode: 1, Stderr: "not running"} }}
 		if _, err := New(kind, deps(f, nil, &clock{})).(Snapshotter).Snapshot(bg); err == nil {
 			t.Errorf("%s: a failing host must be an error, not an empty round", kind)

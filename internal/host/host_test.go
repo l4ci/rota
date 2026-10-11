@@ -14,11 +14,39 @@ import (
 
 var bg = context.Background()
 
-func TestNewSelectsByDispatch(t *testing.T) {
-	for dispatch, want := range map[string]string{"herdr": "herdr", "tmux": "tmux", "subagent": "tmux", "": "tmux"} {
-		if got := New(dispatch, Deps{}).Name(); got != want {
-			t.Errorf("New(%q) = %s, want %s", dispatch, got, want)
+func TestNewSelectsByKind(t *testing.T) {
+	for kind, want := range map[Kind]Kind{Herdr: Herdr, Tmux: Tmux, Solo: Tmux, "": Tmux} {
+		if got := New(kind, Deps{}).Kind(); got != want {
+			t.Errorf("New(%q) = %s, want %s", kind, got, want)
 		}
+	}
+}
+
+func TestKindOf(t *testing.T) {
+	for in, want := range map[string]Kind{"herdr": Herdr, "tmux": Tmux, "solo": Solo, "subagent": "", "": "", "zellij": ""} {
+		if got := KindOf(in); got != want {
+			t.Errorf("KindOf(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// Capabilities is the one place a host's optional sides are discovered: herdr
+// has the pane-event and label sides, tmux the operator window, and neither
+// claims the other's.
+func TestCapabilities(t *testing.T) {
+	h := New(Herdr, Deps{}).Capabilities()
+	if h.Labeler == nil || h.TurnReader == nil || h.OutputWatcher == nil || h.Layouter == nil || h.SessionStarter == nil {
+		t.Errorf("herdr lacks a side it implements: %+v", h)
+	}
+	if h.Operator != nil {
+		t.Error("herdr has no operator window")
+	}
+	tm := New(Tmux, Deps{}).Capabilities()
+	if tm.Operator == nil || tm.Snapshotter == nil || tm.PaneHost == nil {
+		t.Errorf("tmux lacks a side it implements: %+v", tm)
+	}
+	if tm.Labeler != nil || tm.TurnReader != nil || tm.OutputWatcher != nil || tm.Layouter != nil {
+		t.Errorf("tmux claims a herdr-only side: %+v", tm)
 	}
 }
 
@@ -26,7 +54,7 @@ func TestInSession(t *testing.T) {
 	f := &fake{}
 	c := &clock{}
 	cases := []struct {
-		dispatch string
+		dispatch Kind
 		env      map[string]string
 		want     bool
 	}{
@@ -370,7 +398,7 @@ func TestTmuxKillSurvivingPidIsAnError(t *testing.T) {
 
 func TestKillEmptyHandleIsNoop(t *testing.T) {
 	f := &fake{handler: func(string, []string) Result { t.Error("ran a command"); return Result{} }}
-	for _, d := range []string{"tmux", "herdr"} {
+	for _, d := range []Kind{Tmux, Herdr} {
 		if err := New(d, deps(f, nil, &clock{})).Kill(bg, "w1", ""); err != nil {
 			t.Errorf("%s Kill with no handle = %v", d, err)
 		}
@@ -1318,7 +1346,7 @@ func TestGhostSuggestionIsNotADraft(t *testing.T) {
 		{"herdr dim then typed", "herdr", "w9:t7", "❯ " + ghost + "my words\n", "my words"},
 	} {
 		f := ghostPaneFake(tc.pane, nil)
-		if d := New(tc.host, deps(f, herdrEnv, &clock{})).(Drafter).Draft(bg, "w1", tc.handle, file); d != tc.want {
+		if d := New(Kind(tc.host), deps(f, herdrEnv, &clock{})).(Drafter).Draft(bg, "w1", tc.handle, file); d != tc.want {
 			t.Errorf("%s: Draft = %q, want %q", tc.name, d, tc.want)
 		}
 	}
@@ -1327,8 +1355,8 @@ func TestGhostSuggestionIsNotADraft(t *testing.T) {
 func TestSendIgnoresGhostAndRefusesTypedAfterIt(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "p.md")
 	os.WriteFile(file, []byte("sig\nthe last line of the brief\n"), 0o644)
-	for _, hostName := range []string{"tmux", "herdr"} {
-		handle := map[string]string{"tmux": "rota:w1", "herdr": "w9:t7"}[hostName]
+	for _, hostName := range []Kind{Tmux, Herdr} {
+		handle := map[Kind]string{Tmux: "rota:w1", Herdr: "w9:t7"}[hostName]
 		ok := ghostPaneFake("❯ "+ghost+"\n", nil)
 		if err := New(hostName, deps(ok, herdrEnv, &clock{})).Send(bg, "w1", handle, file); hostName == "herdr" && err != nil {
 			t.Errorf("%s: Send over a ghost = %v", hostName, err)
@@ -1339,7 +1367,7 @@ func TestSendIgnoresGhostAndRefusesTypedAfterIt(t *testing.T) {
 		if err := New(hostName, deps(bad, herdrEnv, &clock{})).Send(bg, "w1", handle, file); err != ErrDraftOnPrompt {
 			t.Errorf("%s: Send over typed text = %v, want ErrDraftOnPrompt", hostName, err)
 		}
-		if bad.count(hostName+" agent prompt")+bad.count("tmux paste-buffer")+bad.count("tmux send-keys") != 0 {
+		if bad.count(string(hostName)+" agent prompt")+bad.count("tmux paste-buffer")+bad.count("tmux send-keys") != 0 {
 			t.Errorf("%s: keys reached the pane:\n%s", hostName, bad.log())
 		}
 	}
@@ -1349,7 +1377,7 @@ func TestSendIgnoresGhostAndRefusesTypedAfterIt(t *testing.T) {
 func TestDraftFallsBackToPlainWhenStyledReadFails(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "p.md")
 	os.WriteFile(file, []byte("sig\nthe last line of the brief\n"), 0o644)
-	for _, hostName := range []string{"tmux", "herdr"} {
+	for _, hostName := range []Kind{Tmux, Herdr} {
 		f := &fake{handler: func(_ string, a []string) Result {
 			for _, x := range a {
 				if x == "-pJe" || x == "ansi" {
@@ -1358,7 +1386,7 @@ func TestDraftFallsBackToPlainWhenStyledReadFails(t *testing.T) {
 			}
 			return Result{Stdout: "❯ my own words\n"}
 		}}
-		handle := map[string]string{"tmux": "rota:w1", "herdr": "w9:t7"}[hostName]
+		handle := map[Kind]string{Tmux: "rota:w1", Herdr: "w9:t7"}[hostName]
 		if d := New(hostName, deps(f, herdrEnv, &clock{})).(Drafter).Draft(bg, "w1", handle, file); d != "my own words" {
 			t.Errorf("%s: Draft = %q", hostName, d)
 		}

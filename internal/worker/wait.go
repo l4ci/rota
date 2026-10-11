@@ -101,7 +101,7 @@ func (e Env) Wait(ctx context.Context, root string, o WaitOpts) (WaitResult, err
 	var w host.Watch
 	var wh host.Watcher
 	var wt []host.WatchTarget
-	if cw, ok := h.(host.Watcher); ok {
+	if cw := h.Capabilities().Watcher; cw != nil {
 		wh = cw
 		wt = watchTargets(targets)
 		var err error

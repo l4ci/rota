@@ -9,7 +9,7 @@ import (
 )
 
 // recordHost marks the project's registry as a round on the given host.
-func recordHost(t *testing.T, dir, h string) {
+func recordHost(t *testing.T, dir string, h host.Kind) {
 	t.Helper()
 	if err := Update(dir, func(d *Doc) { d.SetHost(h) }); err != nil {
 		t.Fatal(err)
@@ -27,7 +27,7 @@ func setState(t *testing.T, dir, slot, state string) {
 // may build a host, so none may drive one.
 func soloEnv(t *testing.T) Env {
 	e := envWith(nil)
-	e.NewHost = func(d string) host.Host {
+	e.NewHost = func(d host.Kind) host.Host {
 		t.Fatalf("a solo round reached host.New(%q)", d)
 		return nil
 	}
@@ -78,7 +78,7 @@ func TestPaneVerbsRefuseUnderSolo(t *testing.T) {
 func TestSoloRefusalIsNilWithoutASoloHost(t *testing.T) {
 	dir := newProject(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
-	for _, h := range []string{"", "tmux", "herdr"} {
+	for _, h := range []host.Kind{"", host.Tmux, host.Herdr} {
 		if h != "" {
 			recordHost(t, dir, h)
 		}
@@ -89,9 +89,9 @@ func TestSoloRefusalIsNilWithoutASoloHost(t *testing.T) {
 }
 
 func TestRecordedHostOverridesWorkDispatchAndNoneKeepsIt(t *testing.T) {
-	var got []string
+	var got []host.Kind
 	e := envWith(tmuxFake())
-	e.NewHost = func(d string) host.Host {
+	e.NewHost = func(d host.Kind) host.Host {
 		got = append(got, d)
 		return tmuxFake()
 	}

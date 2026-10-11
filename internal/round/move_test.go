@@ -85,7 +85,7 @@ func newMoveFx(t *testing.T) *moveFx {
 
 	f.env = Env{Git: git.Exec, Base: "main", Worker: worker.Env{Getenv: noEnv}, Lease: fakeLease("h", 100), StallMinutes: 30, Forge: f.forge.asForge()}
 	f.env.Worker = worker.Env{Git: git.Exec, Getenv: noEnv, Now: func() time.Time { return f.now }, Sleep: func(time.Duration) {},
-		NewHost: func(string) host.Host { return &killHost{hostFake: f.host, killed: &f.killed} }}
+		NewHost: func(host.Kind) host.Host { return &killHost{hostFake: f.host, killed: &f.killed} }}
 
 	fb := f.be
 	fb.add("12", "Add the round assign verb now please", "M01", false, "## Acceptance\n- [ ] works\n\nedits internal/cli/round.go")
@@ -712,7 +712,7 @@ func TestTransferOverlapIsCheckedForTheReceiverAgainstOtherSlots(t *testing.T) {
 func TestTransferDispatchFailureKeepsTheMoveAndResumes(t *testing.T) {
 	f := newMoveFx(t)
 	branch := f.slot("ben").Branch()
-	f.env.Worker.NewHost = func(string) host.Host { return &failingHost{hostFake: f.host} }
+	f.env.Worker.NewHost = func(host.Kind) host.Host { return &failingHost{hostFake: f.host} }
 	res, err := f.transfer("12", "dana", nil)
 	if err == nil || res.Dispatched || !res.Changed || res.ClaimID != "dana@1" {
 		t.Fatalf("the move is reported though the dispatch failed: %v %+v", err, res)
@@ -723,7 +723,7 @@ func TestTransferDispatchFailureKeepsTheMoveAndResumes(t *testing.T) {
 	if st := f.slot("dana").State(); st != "idle" {
 		t.Errorf("slot state after a failed dispatch: %q", st)
 	}
-	f.env.Worker.NewHost = func(string) host.Host { return &killHost{hostFake: f.host, killed: &f.killed} }
+	f.env.Worker.NewHost = func(host.Kind) host.Host { return &killHost{hostFake: f.host, killed: &f.killed} }
 	res, err = f.transfer("12", "dana", nil)
 	if err != nil || !res.Dispatched {
 		t.Fatalf("the same call resumes: %v %+v", err, res)
@@ -1071,7 +1071,7 @@ func (l labelKillHost) LabelWorkspace(context.Context, string) {}
 func TestParkClearsTheLabelWhenTheWorktreeMoves(t *testing.T) {
 	f := newMoveFx(t)
 	var titles []string
-	f.env.Worker.NewHost = func(string) host.Host {
+	f.env.Worker.NewHost = func(host.Kind) host.Host {
 		return labelKillHost{&killHost{hostFake: f.host, killed: &f.killed}, &titles}
 	}
 	p, err := f.env.Park(bg, f.root, "ben", "return")
@@ -1228,3 +1228,7 @@ func TestReturnAndReclaimDifferOnPortBlockAndClaimSweepOnPurpose(t *testing.T) {
 		t.Errorf("reclaim sweeps every claim of the slot: %v", f.be.held("12"))
 	}
 }
+
+func (k *killHost) Capabilities() host.Capabilities { return host.CapabilitiesOf(k) }
+
+func (l labelKillHost) Capabilities() host.Capabilities { return host.CapabilitiesOf(l) }

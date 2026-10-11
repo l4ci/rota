@@ -5,12 +5,13 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/worker"
 )
 
 func recordRoundHost(t *testing.T, dir, h string) {
 	t.Helper()
-	if err := worker.Update(dir, func(d *worker.Doc) { d.SetHost(h) }); err != nil {
+	if err := worker.Update(dir, func(d *worker.Doc) { d.SetHost(host.KindOf(h)) }); err != nil {
 		t.Fatal(err)
 	}
 }
