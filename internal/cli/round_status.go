@@ -134,7 +134,7 @@ func roundStatus(*flag.FlagSet) RunFunc {
 		var lines []string
 		if set, err := roundcfg.Load(root); err == nil {
 			// Status ran without accounts; the quota read gets its own accounted env.
-			if qc := withBoard(c, root, accountedRoundEnv(c, ctx, root)).QuotaCap(ctx, root, set); qc.Reduced() {
+			if qc := accountedRoundEnv(c, ctx, root).QuotaCap(ctx, root, set); qc.Reduced() {
 				co := jsonx.NewObject()
 				co.Set("effective", qc.Effective)
 				co.Set("roster", qc.Roster)
