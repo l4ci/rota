@@ -51,3 +51,63 @@ func TestResolve(t *testing.T) {
 		})
 	}
 }
+
+// TestResolveAndResolveLaunchOnOneTable runs both modes over the same
+// no-pane, TMUX, HERDR_ENV and work.dispatch combinations, so where they part
+// is written down: the registry-less in-session rule (Resolve) answers solo
+// outside a pane where the launcher (ResolveLaunch) opens a session.
+func TestResolveAndResolveLaunchOnOneTable(t *testing.T) {
+	has := func(names ...string) func(string) (string, error) {
+		return func(n string) (string, error) {
+			for _, h := range names {
+				if h == n {
+					return "/bin/" + n, nil
+				}
+			}
+			return "", errors.New("not found")
+		}
+	}
+	herdrPane := map[string]string{"HERDR_ENV": "1", "HERDR_WORKSPACE_ID": "w1"}
+	tmuxPane := map[string]string{"TMUX": "/tmp/t,1,0"}
+	cases := []struct {
+		name      string
+		dispatch  string
+		env       map[string]string
+		installed []string
+		resolve   string // Resolve("", dispatch, ...)
+		launch    Launch // ResolveLaunch(dispatch, ...)
+		fails     bool   // ResolveLaunch errors
+	}{
+		{"no pane, herdr installed", "", nil, []string{"herdr"}, Solo, Launch{Herdr, true}, false},
+		{"no pane, tmux installed", "", nil, []string{"tmux"}, Solo, Launch{Tmux, true}, false},
+		{"no pane, both installed", "", nil, []string{"herdr", "tmux"}, Solo, Launch{Herdr, true}, false},
+		{"no pane, nothing installed", "", nil, nil, Solo, Launch{Solo, false}, false},
+		{"no pane, subagent, herdr installed", "subagent", nil, []string{"herdr"}, Solo, Launch{Herdr, true}, false},
+		{"no pane, dispatch tmux, both installed", "tmux", nil, []string{"herdr", "tmux"}, Tmux, Launch{Tmux, true}, false},
+		{"no pane, dispatch herdr, both installed", "herdr", nil, []string{"herdr", "tmux"}, Herdr, Launch{Herdr, true}, false},
+		{"no pane, dispatch herdr, not installed", "herdr", nil, []string{"tmux"}, Herdr, Launch{}, true},
+		{"no pane, dispatch tmux, not installed", "tmux", nil, nil, Tmux, Launch{}, true},
+		{"TMUX", "", tmuxPane, []string{"tmux"}, Tmux, Launch{Tmux, false}, false},
+		{"TMUX, dispatch herdr", "herdr", tmuxPane, []string{"herdr", "tmux"}, Herdr, Launch{Tmux, false}, false},
+		{"herdr pane", "", herdrPane, []string{"herdr", "tmux"}, Herdr, Launch{Herdr, false}, false},
+		{"herdr pane, dispatch tmux", "tmux", herdrPane, []string{"herdr", "tmux"}, Tmux, Launch{Herdr, false}, false},
+		{"herdr pane, binary missing, tmux installed", "", herdrPane, []string{"tmux"}, Solo, Launch{Tmux, true}, false},
+		{"HERDR_ENV without workspace id", "", map[string]string{"HERDR_ENV": "1"}, []string{"herdr"}, Herdr, Launch{Herdr, true}, false},
+		{"herdr and tmux panes", "", map[string]string{"HERDR_ENV": "1", "HERDR_WORKSPACE_ID": "w1", "TMUX": "x"}, []string{"herdr", "tmux"}, Herdr, Launch{Herdr, false}, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			getenv := func(k string) string { return c.env[k] }
+			if got := Resolve("", c.dispatch, getenv, has(c.installed...)); got != c.resolve {
+				t.Errorf("Resolve = %q, want %q", got, c.resolve)
+			}
+			got, err := ResolveLaunch(c.dispatch, getenv, has(c.installed...))
+			if (err != nil) != c.fails {
+				t.Fatalf("ResolveLaunch err = %v, want failure %v", err, c.fails)
+			}
+			if err == nil && got != c.launch {
+				t.Errorf("ResolveLaunch = %+v, want %+v", got, c.launch)
+			}
+		})
+	}
+}
