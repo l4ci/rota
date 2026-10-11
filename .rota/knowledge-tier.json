@@ -221,26 +221,6 @@
       "hits": 0,
       "lastSeen": "2026-05-18"
     },
-    "Architecture: Helper conventions & invariants::Helper preamble naming convention: *-preamble.sh auto-invokes; *-locate.sh stays library": {
-      "tier": "deprecated",
-      "hits": 0,
-      "lastSeen": "2026-05-18"
-    },
-    "Architecture: Helper conventions & invariants::Use load_repos() for umbrella detection \u2014 never truthy-test raw repos.json": {
-      "tier": "deprecated",
-      "hits": 1,
-      "lastSeen": "2026-05-19"
-    },
-    "Architecture: Helper conventions & invariants::Atomic-batch helpers validate the whole batch before any write": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-05-18"
-    },
-    "Architecture: Helper conventions & invariants::ID-based drift detection must anchor in commit-graph state": {
-      "tier": "deprecated",
-      "hits": 0,
-      "lastSeen": "2026-05-18"
-    },
     "Architecture: Skill authoring::Composite-fold deletion scope: orphan helpers + public docs are the predictable miss": {
       "tier": "provisional",
       "hits": 0,
@@ -271,30 +251,10 @@
       "hits": 0,
       "lastSeen": "2026-05-18"
     },
-    "Architecture: Helper conventions & invariants::Sourceable artifact libs (hv-artifact-VERB.sh) are per-verb, not per-kind": {
-      "tier": "deprecated",
-      "hits": 0,
-      "lastSeen": "2026-05-18"
-    },
     "Build & Tooling: Smoke testing::Pre-existing smoke failures: check main before triaging your branch": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-05-18"
-    },
-    "Architecture: Helper conventions & invariants::Field writers co-locate with the read-grammar SoT; order-agnostic parse allows append-at-end": {
-      "tier": "deprecated",
-      "hits": 0,
-      "lastSeen": "2026-05-19"
-    },
-    "Architecture: Helper conventions & invariants::Sourced libs needing caller cwd must restore HV_ORIG_PWD (hv-preamble.sh cds first)": {
-      "tier": "deprecated",
-      "hits": 0,
-      "lastSeen": "2026-05-19"
-    },
-    "Architecture: Helper conventions & invariants::Scope-axis additions keep the default path byte-identical via literal legacy resolution": {
-      "tier": "deprecated",
-      "hits": 1,
-      "lastSeen": "2026-10-01"
     },
     "Build & Tooling: Smoke testing::Behavior-changing tasks must sweep smoke sections asserting the old behavior": {
       "tier": "provisional",
@@ -305,16 +265,6 @@
       "tier": "provisional",
       "hits": 2,
       "lastSeen": "2026-10-08"
-    },
-    "Architecture: Helper conventions & invariants::Optional-value flags use `${PARAM:?$USAGE}` to reject bare trailing flag values": {
-      "tier": "deprecated",
-      "hits": 0,
-      "lastSeen": "2026-05-19"
-    },
-    "Architecture: Helper conventions & invariants::Umbrella scope as the degenerate 1-element case of hybrid `file_pairs`": {
-      "tier": "deprecated",
-      "hits": 0,
-      "lastSeen": "2026-05-19"
     },
     "Build & Tooling: Helpers & migrations::hv-knowledge-query matches exact full topic headings only": {
       "tier": "provisional",
@@ -332,11 +282,6 @@
       "lastSeen": "2026-06-11"
     },
     "Architecture: Skill authoring::hv-complete callers own the exit-3 proof path": {
-      "tier": "deprecated",
-      "hits": 0,
-      "lastSeen": "2026-10-01"
-    },
-    "Architecture: Helper conventions & invariants::Wrappers read stdin only when an argument takes it": {
       "tier": "deprecated",
       "hits": 0,
       "lastSeen": "2026-10-01"
@@ -446,19 +391,9 @@
       "hits": 2,
       "lastSeen": "2026-10-08"
     },
-    "Architecture: Helper conventions & invariants::A per-invocation cache must reset per pass in long-running verbs": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-08"
-    },
     "Rounds: Orchestration::Cite a transfer brief as a transfer note, not a relay": {
       "tier": "provisional",
       "hits": 1,
-      "lastSeen": "2026-10-08"
-    },
-    "Architecture: Helper conventions & invariants::Palette entries name the verb that registers the View": {
-      "tier": "provisional",
-      "hits": 0,
       "lastSeen": "2026-10-08"
     },
     "Build & Tooling: Smoke testing::Host CLI argv needs one real-host run": {
@@ -530,6 +465,86 @@
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-11"
+    },
+    "Rounds: Orchestration::Refactor reviews need an old-vs-new input table": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-11"
+    },
+    "Rounds: Orchestration::Mutation-check source-grep guard tests": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-11"
+    },
+    "Architecture: Helper conventions & invariants: Go verbs & fakes::Embedding host fakes must redeclare Capabilities": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-11"
+    },
+    "Architecture: Helper conventions & invariants: Go verbs & fakes::Palette entries name the verb that registers the View": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-08"
+    },
+    "Architecture: Helper conventions & invariants: Go verbs & fakes::A per-invocation cache must reset per pass in long-running verbs": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-08"
+    },
+    "Architecture: Helper conventions & invariants: Go verbs & fakes::Wrappers read stdin only when an argument takes it": {
+      "tier": "deprecated",
+      "hits": 0,
+      "lastSeen": "2026-10-01"
+    },
+    "Architecture: Helper conventions & invariants: Shell helpers::Umbrella scope as the degenerate 1-element case of hybrid `file_pairs`": {
+      "tier": "deprecated",
+      "hits": 0,
+      "lastSeen": "2026-05-19"
+    },
+    "Architecture: Helper conventions & invariants: Shell helpers::Optional-value flags use `${PARAM:?$USAGE}` to reject bare trailing flag values": {
+      "tier": "deprecated",
+      "hits": 0,
+      "lastSeen": "2026-05-19"
+    },
+    "Architecture: Helper conventions & invariants: Shell helpers::Scope-axis additions keep the default path byte-identical via literal legacy resolution": {
+      "tier": "deprecated",
+      "hits": 1,
+      "lastSeen": "2026-10-01"
+    },
+    "Architecture: Helper conventions & invariants: Shell helpers::Sourced libs needing caller cwd must restore HV_ORIG_PWD (hv-preamble.sh cds first)": {
+      "tier": "deprecated",
+      "hits": 0,
+      "lastSeen": "2026-05-19"
+    },
+    "Architecture: Helper conventions & invariants: Shell helpers::Field writers co-locate with the read-grammar SoT; order-agnostic parse allows append-at-end": {
+      "tier": "deprecated",
+      "hits": 0,
+      "lastSeen": "2026-05-19"
+    },
+    "Architecture: Helper conventions & invariants: Shell helpers::Sourceable artifact libs (hv-artifact-VERB.sh) are per-verb, not per-kind": {
+      "tier": "deprecated",
+      "hits": 0,
+      "lastSeen": "2026-05-18"
+    },
+    "Architecture: Helper conventions & invariants: Shell helpers::Helper preamble naming convention: *-preamble.sh auto-invokes; *-locate.sh stays library": {
+      "tier": "deprecated",
+      "hits": 0,
+      "lastSeen": "2026-05-18"
+    },
+    "Architecture: Helper conventions & invariants: Shell helpers::Use load_repos() for umbrella detection \u2014 never truthy-test raw repos.json": {
+      "tier": "deprecated",
+      "hits": 1,
+      "lastSeen": "2026-05-19"
+    },
+    "Architecture: Helper conventions & invariants: Shell helpers::Atomic-batch helpers validate the whole batch before any write": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-05-18"
+    },
+    "Architecture: Helper conventions & invariants: Shell helpers::ID-based drift detection must anchor in commit-graph state": {
+      "tier": "deprecated",
+      "hits": 0,
+      "lastSeen": "2026-05-18"
     }
   }
 }
