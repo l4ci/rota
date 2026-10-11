@@ -264,16 +264,12 @@ func FindRoot(start string, registered func(root string) []string) (string, erro
 		dir = start
 	}
 	var cands []string
-	for {
-		if rotatree.Exists(dir) {
-			cands = append(cands, dir)
+	rotatree.Ascend(dir, func(d string) bool {
+		if rotatree.Exists(d) {
+			cands = append(cands, d)
 		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			break
-		}
-		dir = parent
-	}
+		return false
+	})
 	if len(cands) == 0 {
 		return "", ErrNoRoot
 	}

@@ -8,46 +8,40 @@ package legacystate
 import (
 	"os"
 	"path/filepath"
+
+	"github.com/l4ci/rota/internal/rotatree"
 )
 
 const (
 	legacyDir = ".hv"
-	stateDir  = ".rota"
 )
 
 // LegacyState walks up from start (a physical path). It returns the nearest
 // directory that holds .hv/ and no .rota/ next to it, when no .rota/ is found
 // first: such a project has not been migrated.
 func LegacyState(start string) (dir string, legacy bool) {
-	d := start
-	for {
-		if isDir(filepath.Join(d, stateDir)) {
-			return "", false
+	rotatree.Ascend(start, func(d string) bool {
+		if rotatree.Exists(d) {
+			return true
 		}
 		if isDir(filepath.Join(d, legacyDir)) {
-			return d, true
+			dir, legacy = d, true
+			return true
 		}
-		p := filepath.Dir(d)
-		if p == d {
-			return "", false
-		}
-		d = p
-	}
+		return false
+	})
+	return dir, legacy
 }
 
 // FindState is the nearest directory holding .hv/ or .rota/.
-func FindState(start string) (string, bool) {
-	d := start
-	for {
-		if isDir(filepath.Join(d, stateDir)) || isDir(filepath.Join(d, legacyDir)) {
-			return d, true
+func FindState(start string) (dir string, ok bool) {
+	rotatree.Ascend(start, func(d string) bool {
+		if rotatree.Exists(d) || isDir(filepath.Join(d, legacyDir)) {
+			dir, ok = d, true
 		}
-		p := filepath.Dir(d)
-		if p == d {
-			return "", false
-		}
-		d = p
-	}
+		return ok
+	})
+	return dir, ok
 }
 
 func isDir(p string) bool {

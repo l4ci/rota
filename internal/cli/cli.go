@@ -12,7 +12,6 @@ import (
 	"io"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"sort"
 	"strings"
 	"syscall"
@@ -100,16 +99,10 @@ func (c *Ctx) Root() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	for {
-		if rotatree.Exists(dir) {
-			return dir, nil
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return "", Resolution("no .rota/ directory here or in any parent").WithHint("run: rota init")
-		}
-		dir = parent
+	if root, ok := rotatree.Find(dir); ok {
+		return root, nil
 	}
+	return "", Resolution("no .rota/ directory here or in any parent").WithHint("run: rota init")
 }
 
 // RepoPath resolves --repo to the sub-repo's absolute path through
