@@ -68,8 +68,8 @@ This is the **bump the marketplace listing** step in `.rota/RELEASE.md`.
 
 From the checklist and the validator, not a live submission. None blocks, but a reviewer may hold the version.
 
-- `plugin.json` lists `./plugin/hooks/hooks.json` in its `hooks` field. The checklist warns on this. Dropping the field alone is not safe: Claude Code 2.1.296 loads hooks only from `hooks/hooks.json` at the plugin root, and a probe plugin with the file at `plugin/hooks/hooks.json` and no `hooks` field never fired its `SessionStart` hook (with the field it did). Clearing the warning means moving the hook files to `hooks/`, which changes the plugin's hooks. Follow-up: #744.
-- The `session-start.sh` hook runs `sh "${CLAUDE_PLUGIN_ROOT}/plugin/hooks/session-start.sh"`, a full path from `${CLAUDE_PLUGIN_ROOT}` as the checklist requires.
+- Hooks live in `hooks/hooks.json` at the plugin root, where Claude Code 2.1.296 loads them (a probe with the file under `plugin/hooks/` and no `hooks` field never fired, #744). `plugin.json` has no `hooks` field, so the checklist warning is cleared.
+- The `session-start.sh` hook runs `sh "${CLAUDE_PLUGIN_ROOT}/hooks/session-start.sh"`, a full path from `${CLAUDE_PLUGIN_ROOT}` as the checklist requires.
 - Known gap: the README does not describe the `rota-install` skill's binary download. The checklist requires the README to describe everything the plugin fetches, and the security scan flags undisclosed behavior. The README also lacks the one-line marketplace install command that `claude plugin validate` advises. Follow-up: #743.
 
 ## Record of submissions

@@ -14,7 +14,7 @@ import (
 // a matching or dev binary, nor when plugin.json cannot be read. plugin.json's
 // layout must not matter, and the hook never writes to stderr.
 func TestPluginSessionStartHook(t *testing.T) {
-	script, err := filepath.Abs("plugin/hooks/session-start.sh")
+	script, err := filepath.Abs("hooks/session-start.sh")
 	if err != nil {
 		t.Fatal(err)
 	}
