@@ -119,7 +119,7 @@ func verdictAdd(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		r := verdict.NewRecord(*kind, *v, t.head, b)
+		r := verdict.NewRecord(*kind, *v, t.head, b, c.deps().Now())
 		r.Branch, r.Repo = t.branch, t.repo
 		if r, err = verdict.AddBranch(t.root, t.key, r); err != nil {
 			return Result{}, err
@@ -236,7 +236,7 @@ func debugVerdict(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		r := verdict.NewRecord(verdict.DebugFix, *v, strings.TrimSpace(out), b)
+		r := verdict.NewRecord(verdict.DebugFix, *v, strings.TrimSpace(out), b, c.deps().Now())
 		bug, err = debugItem(c, bug)
 		if err != nil {
 			return backlogFail(err)
@@ -349,7 +349,7 @@ func debugReset(fs *flag.FlagSet) RunFunc {
 		if out, err := reviewGit(c.Context(), root, "rev-parse", "--short", "HEAD"); err == nil {
 			sha = strings.TrimSpace(out)
 		}
-		r := verdict.NewRecord(verdict.DebugReset, verdict.Reset, sha, verdict.Body{Summary: strings.TrimSpace(*reason)})
+		r := verdict.NewRecord(verdict.DebugReset, verdict.Reset, sha, verdict.Body{Summary: strings.TrimSpace(*reason)}, c.deps().Now())
 		cleared, err := verdict.ResetItem(root, bug, r)
 		if err != nil {
 			return Result{}, err

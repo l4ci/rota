@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
@@ -112,7 +111,7 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 			}
 			// The PR is opened after this verb, so the poll never sees the
 			// busy-to-done edge that baselines the review cursor elsewhere.
-			s.BaselineReview(time.Now())
+			s.BaselineReview(c.deps().Now())
 			_ = s.MarkState("done", "")
 			s.ClearSeen()
 			changed = true

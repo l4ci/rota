@@ -81,6 +81,9 @@ func signalName(s syscall.Signal) string {
 // A configDir, when set, is the child's CLAUDE_CONFIG_DIR from the first start.
 func keepaliveSpawn(c *Ctx, configDir string) func(argv, extraEnv []string) (keepalive.Child, error) {
 	return func(argv, extraEnv []string) (keepalive.Child, error) {
+		// Raw exec on purpose: the child owns the terminal for its whole life
+		// (inherited stdio, own process group), which proc.Run's buffered
+		// capture cannot express.
 		cmd := exec.Command(argv[0], argv[1:]...)
 		cmd.Env = c.deps().Environ()
 		if configDir != "" {

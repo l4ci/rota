@@ -87,7 +87,7 @@ func (e Env) ReviewRelay(ctx context.Context, root string, o ReviewOpts) (Relaye
 		out.Nothing, out.PRState = true, strings.ToUpper(pr.State)
 		return out, nil
 	}
-	batch, err := worker.PendingReview(ctx, o.Forge, s, o.Verdict)
+	batch, err := worker.PendingReview(ctx, o.Forge, s, o.Verdict, e.Worker.Now())
 	if err != nil {
 		return out, err
 	}
