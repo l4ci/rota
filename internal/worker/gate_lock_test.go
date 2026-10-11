@@ -93,3 +93,18 @@ func TestGateLandVerifiedLandsWithoutFreshnessOrNoVerifyNote(t *testing.T) {
 		t.Error("a landing gate runs no verify tier")
 	}
 }
+
+// A landing gate does not refuse a branch the base moved past: the train merged
+// every member in order already. Without LandVerified the same branch is stale.
+func TestGateLandVerifiedSkipsTheFreshnessRefusal(t *testing.T) {
+	w := newWorld(t, ghURL)
+	advanceMainOn(w, "work.txt") // conflicts with the branch's work.txt
+	res, err := w.gate(false, GateOpts{CheckOnly: true})
+	if err != nil || res.Verdict != GateStale {
+		t.Fatalf("control: want stale, got %q err %v", res.Verdict, err)
+	}
+	res, err = w.gate(false, GateOpts{CheckOnly: true, LandVerified: true})
+	if res.Verdict == GateStale {
+		t.Errorf("a landing gate must not run the freshness check: %q (%v)", res.Err, err)
+	}
+}
