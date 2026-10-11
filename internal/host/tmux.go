@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/l4ci/rota/internal/shlex"
 )
 
 // tmux ports bin/hv-host-tmux.sh. A slot's handle is its window target,
@@ -101,7 +103,7 @@ func (t *tmux) Spawn(ctx context.Context, o SpawnOpts) (string, error) {
 		var pre []string
 		for _, e := range o.Env {
 			k, v, _ := strings.Cut(e, "=")
-			pre = append(pre, k+"="+"'"+strings.ReplaceAll(v, "'", `'\''`)+"'")
+			pre = append(pre, k+"="+shlex.QuoteAlways(v))
 		}
 		launch = strings.Join(pre, " ") + " " + launch
 	}

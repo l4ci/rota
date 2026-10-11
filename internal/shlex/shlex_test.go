@@ -32,3 +32,19 @@ func TestSplit(t *testing.T) {
 		}
 	}
 }
+
+func TestQuote(t *testing.T) {
+	for in, want := range map[string]string{"abc/d-e.f": "abc/d-e.f", "": "''", "a b": "'a b'", "it's": `'it'\''s'`, "$x": "'$x'"} {
+		if got := Quote(in); got != want {
+			t.Errorf("Quote(%q) = %s, want %s", in, got, want)
+		}
+	}
+}
+
+func TestQuoteAlways(t *testing.T) {
+	for in, want := range map[string]string{"abc": "'abc'", "": "''", "it's": `'it'\''s'`} {
+		if got := QuoteAlways(in); got != want {
+			t.Errorf("QuoteAlways(%q) = %s, want %s", in, got, want)
+		}
+	}
+}

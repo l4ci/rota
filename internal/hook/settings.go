@@ -15,6 +15,7 @@ import (
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/shlex"
 )
 
 // Settings are the orchestrator.* config keys (the contract's Config section).
@@ -209,9 +210,6 @@ func groupHooks(g any) []*jsonx.Object {
 	return out
 }
 
-// ShellQuote single-quotes s for sh -c.
-func ShellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }
-
 // Statusline results of Install.
 const (
 	SLInstalled = "installed"
@@ -289,7 +287,7 @@ func Install(in InstallIn) (InstallOut, error) {
 			return out, nil
 		}
 		out.Statusline = SLWrapped
-		wrapper := StatuslineCmd + " --then " + ShellQuote(origCmd)
+		wrapper := StatuslineCmd + " --then " + shlex.QuoteAlways(origCmd)
 		apply = func() {
 			if from == in.Scope {
 				oo.Set("command", wrapper)
