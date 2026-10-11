@@ -127,10 +127,12 @@ type GateOpts struct {
 	// Round reads the round lease for the gate's ledger entries; the gate makes
 	// one when nil. A caller that writes more entries after the gate shares it.
 	Round *RoundMemo
-	// Train marks a landing step of a merge train (see Train): the PRs were
-	// merged together and verified once, so a branch behind the base only
-	// because an earlier train member landed is not refused as stale.
-	Train bool
+	// LandVerified marks a landing step of a merge train (see Train): the
+	// train merged the PRs together and verified that tree once, so this gate
+	// only lands. It does not verify (no NO-VERIFY note either: the train
+	// reports its own) and does not refuse a branch behind the base only
+	// because an earlier train member landed.
+	LandVerified bool
 	// HoldsLandLock says the caller already holds the repository's land lock
 	// (the train does, through its landing steps), so the gate does not retake
 	// it. Without it a gate takes the lock itself unless it is CheckOnly.
@@ -151,6 +153,10 @@ type GateOpts struct {
 	// and is returned as is.
 	Approve func(files func() ([]string, error)) error
 }
+
+// skipsVerify says the gate runs no verify tier: --no-verify, or a train's
+// landing step whose tree the train already verified.
+func (o GateOpts) skipsVerify() bool { return o.NoVerify || o.LandVerified }
 
 // GateResult is the gate's answer. Err is the message for a non-success
 // verdict, Hint what to do about it.
@@ -557,7 +563,7 @@ func (g *gate) stepFreshness() (bool, error) {
 	}
 	var why, brokeMsg string
 	var shared []string
-	if !o.Train { // a train already merged every PR cleanly, in order, in its scratch tree
+	if !o.LandVerified { // a train already merged every PR cleanly, in order, in its scratch tree
 		why, shared, brokeMsg = g.staleReason()
 	}
 	if brokeMsg != "" {
@@ -570,7 +576,7 @@ func (g *gate) stepFreshness() (bool, error) {
 			fmt.Sprintf("bounce: tell slot %s to `git merge %s`, resolve and re-verify, then re-gate", o.Slot, o.Base))
 		return true, nil
 	}
-	if !o.Train {
+	if !o.LandVerified {
 		detail := "none touch its files and the merge is clean, merging as is"
 		if len(shared) > 0 {
 			detail = "both sides changed " + strings.Join(shared, ", ") + " but the merge is clean, merging and verifying the merged tree"
@@ -819,7 +825,7 @@ func (g *gate) stepOnBase() (bool, error) {
 
 // stepCIVerifier builds the CI verifier of a test.fullWhere ci gate.
 func (g *gate) stepCIVerifier() (bool, error) {
-	if g.in.cfg.where != WhereCI || g.o.NoVerify {
+	if g.in.cfg.where != WhereCI || g.o.skipsVerify() {
 		return false, nil
 	}
 	ci, msg := g.e.newCIVerifier(g.ctx, g.root, g.forge, g.in.cfg)
@@ -837,8 +843,8 @@ func (g *gate) stepPremerge() (bool, error) {
 		Subject:      gateSubject(g.o.Slot),
 		In:           g.in,
 		Now:          g.e.Now(),
-		SkipLedger:   g.o.CheckOnly || g.o.NoVerify,
-		SkipNoVerify: g.o.NoVerify,
+		SkipLedger:   g.o.CheckOnly || g.o.skipsVerify(),
+		SkipNoVerify: g.o.skipsVerify(),
 		Files:        g.changedFiles,
 	}
 	if g.ci != nil {
@@ -864,7 +870,7 @@ func (g *gate) stepPremerge() (bool, error) {
 
 // stepForgeMergeable asks the forge about mergeability before the scratch verify.
 func (g *gate) stepForgeMergeable() (bool, error) {
-	if g.remote && !g.o.NoVerify {
+	if g.remote && !g.o.skipsVerify() {
 		return g.forgeRefuses(), nil
 	}
 	return false, nil
@@ -873,7 +879,7 @@ func (g *gate) stepForgeMergeable() (bool, error) {
 // stepVerifyFirst verifies the merge result in a scratch tree, before anything
 // lands (stage 2).
 func (g *gate) stepVerifyFirst() (bool, error) {
-	if g.o.NoVerify {
+	if g.o.skipsVerify() {
 		return false, nil
 	}
 	check, what := g.verifyLocal, "the gate"
@@ -1011,10 +1017,10 @@ func (g *gate) verifyOnCI(ci *ciVerifier, sha string) (bool, error) {
 
 // verifyLocal runs test.full, then test.e2e, on the scratch merge in dir.
 func (g *gate) verifyLocal(dir, _ string) (bool, error) {
-	if done, err := g.verifyTier("test.full", g.in.cfg.Full, dir, false); done || err != nil {
+	if done, err := g.verifyTier(tierFull, g.in.cfg.Full, dir, false); done || err != nil {
 		return true, err
 	}
-	return g.verifyTier("test.e2e", g.in.cfg.E2E, dir, false)
+	return g.verifyTier(tierE2E, g.in.cfg.E2E, dir, false)
 }
 
 // landedTree is the tree of the commit the merge produced.
@@ -1076,10 +1082,10 @@ func (g *gate) mergeLocal(dir string) (done bool) {
 // on the landed tree.
 func (g *gate) stepVerify() (bool, error) {
 	res, o := g.res, g.o
-	if o.NoVerify {
+	if o.skipsVerify() {
 		res.Verdict, res.VerifySkipped = GatePass, true
-		if !o.Train {
-			res.Notes = append(res.Notes, fmt.Sprintf("NO-VERIFY %s — --no-verify: merged tree was NOT gated by a command.", o.Slot))
+		if !o.LandVerified {
+			res.Notes = append(res.Notes, noVerifyFlagNote(o.Slot))
 		}
 		return true, nil
 	}
@@ -1087,7 +1093,7 @@ func (g *gate) stepVerify() (bool, error) {
 		if !g.confirmCITree() {
 			return true, nil
 		}
-		if done, err := g.verifyTier("test.e2e", g.in.cfg.E2E, g.root, true); done || err != nil {
+		if done, err := g.verifyTier(tierE2E, g.in.cfg.E2E, g.root, true); done || err != nil {
 			return true, err
 		}
 		res.Verdict = GatePass
@@ -1099,7 +1105,7 @@ func (g *gate) stepVerify() (bool, error) {
 		for _, tier := range []struct {
 			name string
 			cmds []string
-		}{{"test.full", g.in.cfg.Full}, {"test.e2e", g.in.cfg.E2E}} {
+		}{{tierFull, g.in.cfg.Full}, {tierE2E, g.in.cfg.E2E}} {
 			if done, err := g.verifyTier(tier.name, tier.cmds, g.root, true); done || err != nil {
 				return true, err
 			}
@@ -1116,7 +1122,7 @@ func (g *gate) stepVerify() (bool, error) {
 // done is true when it ends the gate with a verdict.
 func (g *gate) verifyTier(tier string, cmds []string, dir string, landed bool) (bool, error) {
 	res, o := g.res, g.o
-	e2e := tier == "test.e2e"
+	e2e := tier == tierE2E
 	if e2e && len(cmds) == 0 {
 		return false, nil
 	}
@@ -1124,23 +1130,17 @@ func (g *gate) verifyTier(tier string, cmds []string, dir string, landed bool) (
 	if err != nil {
 		return true, err
 	}
-	if vr.NoCommands {
+	out := tierOutcomeOf(tier, o.Slot, vr)
+	res.Notes = append(res.Notes, out.Notes...)
+	if out.NoCommands {
 		res.VerifySkipped = true
-		res.Notes = append(res.Notes, fmt.Sprintf("NO-VERIFY %s — test.full is empty; merged tree was NOT gated by a command.", o.Slot),
-			"set test.full via rota config set to make this gate real")
 		return false, nil
 	}
-	label := "verify"
-	if e2e {
-		label = "e2e"
-	} else {
-		res.Verified = vr.Verified
+	if !e2e {
+		res.Verified = out.Verified
 	}
-	res.Excluded = append(res.Excluded, vr.Excluded...)
-	for _, c := range vr.Failed {
-		res.Notes = append(res.Notes, label+" FAILED: "+c)
-	}
-	if vr.OK() {
+	res.Excluded = append(res.Excluded, out.Excluded...)
+	if out.OK {
 		if e2e {
 			res.VerifySkipped = false
 		}

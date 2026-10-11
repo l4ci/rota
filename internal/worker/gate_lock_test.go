@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// Lock ownership is an explicit gate option, not inferred from Train: a gate
+// Lock ownership is an explicit gate option, not inferred from LandVerified: a gate
 // that does not say it already holds the land lock takes it, even when it is
 // a train's landing step.
 func TestGateTakesLandLockUnlessCallerHoldsIt(t *testing.T) {
@@ -16,7 +16,7 @@ func TestGateTakesLandLockUnlessCallerHoldsIt(t *testing.T) {
 	early := false
 	err := env.withLandLock(bg, w.dir, func() error {
 		go func() {
-			res, err := w.gate(false, GateOpts{Train: true, NoVerify: true})
+			res, err := w.gate(false, GateOpts{LandVerified: true})
 			if err == nil && res.Verdict != GatePass {
 				err = fmt.Errorf("verdict %q: %s", res.Verdict, res.Err)
 			}
@@ -52,7 +52,7 @@ func TestGateHoldsLandLockSkipsTheLock(t *testing.T) {
 	done := make(chan error, 1)
 	err := env.withLandLock(bg, w.dir, func() error {
 		go func() {
-			res, err := w.gate(false, GateOpts{Train: true, HoldsLandLock: true, NoVerify: true})
+			res, err := w.gate(false, GateOpts{LandVerified: true, HoldsLandLock: true})
 			if err == nil && res.Verdict != GatePass {
 				err = fmt.Errorf("verdict %q: %s", res.Verdict, res.Err)
 			}
