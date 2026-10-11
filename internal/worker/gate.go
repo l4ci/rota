@@ -1222,11 +1222,8 @@ func indentTail(text string, n int) string {
 // none), then origin, and falls back to github, which is what this gate always
 // assumed.
 func (e Env) detectProvider(ctx context.Context, root, pr string) string {
-	switch {
-	case strings.Contains(pr, "/-/merge_requests/"):
-		return "gitlab"
-	case strings.Contains(pr, "/pull/"):
-		return "github"
+	if p, ok := tracker.ParsePRURL(pr); ok {
+		return p.Provider
 	}
 	url, _ := e.runGit(ctx, root, "remote", "get-url", "origin")
 	for _, u := range []string{pr, url} {
