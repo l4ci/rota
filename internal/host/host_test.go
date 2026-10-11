@@ -30,23 +30,30 @@ func TestKindOf(t *testing.T) {
 	}
 }
 
-// Capabilities is the one place a host's optional sides are discovered: herdr
-// has the pane-event and label sides, tmux the operator window, and neither
-// claims the other's.
+// Capabilities is the one place a host's optional sides are discovered. The
+// full set is asserted for each kind, so a side dropped from CapabilitiesOf or
+// added to a host fails here instead of silently turning a feature off.
 func TestCapabilities(t *testing.T) {
-	h := New(Herdr, Deps{}).Capabilities()
-	if h.Labeler == nil || h.TurnReader == nil || h.OutputWatcher == nil || h.Layouter == nil || h.SessionStarter == nil {
-		t.Errorf("herdr lacks a side it implements: %+v", h)
+	type sides struct {
+		Resubmitter, Explainer, Labeler, TurnReader, Watcher, PaneSweeper, Layouter,
+		TabOpener, SessionStarter, TabLister, PaneHost, OutputWatcher, Operator, Snapshotter bool
 	}
-	if h.Operator != nil {
-		t.Error("herdr has no operator window")
+	of := func(c Capabilities) sides {
+		return sides{c.Resubmitter != nil, c.Explainer != nil, c.Labeler != nil, c.TurnReader != nil,
+			c.Watcher != nil, c.PaneSweeper != nil, c.Layouter != nil, c.TabOpener != nil,
+			c.SessionStarter != nil, c.TabLister != nil, c.PaneHost != nil, c.OutputWatcher != nil,
+			c.Operator != nil, c.Snapshotter != nil}
 	}
-	tm := New(Tmux, Deps{}).Capabilities()
-	if tm.Operator == nil || tm.Snapshotter == nil || tm.PaneHost == nil {
-		t.Errorf("tmux lacks a side it implements: %+v", tm)
+	want := map[Kind]sides{
+		Herdr: {Resubmitter: true, Explainer: true, Labeler: true, TurnReader: true, Watcher: true,
+			PaneSweeper: true, Layouter: true, TabOpener: true, SessionStarter: true, TabLister: true,
+			PaneHost: true, OutputWatcher: true, Snapshotter: true},
+		Tmux: {TabOpener: true, PaneHost: true, Operator: true, Snapshotter: true},
 	}
-	if tm.Labeler != nil || tm.TurnReader != nil || tm.OutputWatcher != nil || tm.Layouter != nil {
-		t.Errorf("tmux claims a herdr-only side: %+v", tm)
+	for kind, w := range want {
+		if got := of(New(kind, Deps{}).Capabilities()); got != w {
+			t.Errorf("%s capabilities = %+v, want %+v", kind, got, w)
+		}
 	}
 }
 

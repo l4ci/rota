@@ -21,7 +21,7 @@ const (
 	Tmux  Kind = "tmux"
 )
 
-// KindOf is the kind a config or registry string names: "herdr" and "tmux",
+// KindOf is the kind a config or registry string names: "herdr", "tmux" and "solo",
 // anything else (including "subagent" and "") the zero Kind.
 func KindOf(s string) Kind {
 	switch k := Kind(s); k {
