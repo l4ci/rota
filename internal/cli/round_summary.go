@@ -5,7 +5,6 @@ import (
 
 	"github.com/l4ci/rota/internal/gate"
 	"github.com/l4ci/rota/internal/ledger"
-	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundlease"
 )
 
@@ -35,7 +34,7 @@ func roundSummaryVerb(fs *flag.FlagSet) RunFunc {
 			for _, e := range entries {
 				n = max(n, e.Round)
 			}
-			env := round.Env{Git: c.deps().Git, Lease: c.deps().LeaseEnv()}
+			env := c.deps().baseRoundEnv()
 			if l, st, err := env.ReadLease(c.Context(), root); err == nil && (st == roundlease.Live || st == roundlease.Foreign) {
 				n = l.Round
 			}
