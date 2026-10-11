@@ -9,6 +9,7 @@ import (
 
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/shlex"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -52,7 +53,7 @@ func testRun(fs *flag.FlagSet) RunFunc {
 			}
 			quoted := make([]string, len(files))
 			for i, f := range files {
-				quoted[i] = shellQuote(f)
+				quoted[i] = shlex.QuoteAlways(f)
 			}
 			list := strings.Join(quoted, " ")
 			for i, cmd := range cmds {
@@ -124,11 +125,6 @@ func anyContains(list []string, sub string) bool {
 		}
 	}
 	return false
-}
-
-// shellQuote wraps s in single quotes, escaping embedded single quotes.
-func shellQuote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 // remoteBase prefers origin/<base> over a local base it is strictly ahead of,

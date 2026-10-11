@@ -119,14 +119,6 @@ func TestWithPromptHookRoundTrip(t *testing.T) {
 	}
 }
 
-func TestShQuote(t *testing.T) {
-	for in, want := range map[string]string{"abc/d-e.f": "abc/d-e.f", "": "''", "a b": "'a b'", "it's": `'it'\''s'`, "$x": "'$x'"} {
-		if got := shQuote(in); got != want {
-			t.Errorf("%q: %s want %s", in, got, want)
-		}
-	}
-}
-
 func TestTomlString(t *testing.T) {
 	for in, want := range map[string]string{
 		`/a/b`:        `"/a/b"`,

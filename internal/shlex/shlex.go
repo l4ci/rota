@@ -75,16 +75,23 @@ func Split(s string) ([]string, error) {
 func Join(words []string) string {
 	out := make([]string, len(words))
 	for i, w := range words {
-		out[i] = quote(w)
+		out[i] = Quote(w)
 	}
 	return strings.Join(out, " ")
 }
 
-func quote(w string) string {
+// Quote quotes w for a POSIX shell; a word of only safe characters stays bare.
+func Quote(w string) string {
 	if w != "" && strings.IndexFunc(w, func(r rune) bool {
 		return !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || strings.ContainsRune("@%+=:,./-_", r))
 	}) < 0 {
 		return w
 	}
+	return QuoteAlways(w)
+}
+
+// QuoteAlways single-quotes w, escaping embedded single quotes, even when w
+// is safe bare.
+func QuoteAlways(w string) string {
 	return "'" + strings.ReplaceAll(w, "'", `'\''`) + "'"
 }
