@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
@@ -112,7 +111,7 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 			}
 			// The PR is opened after this verb, so the poll never sees the
 			// busy-to-done edge that baselines the review cursor elsewhere.
-			s.BaselineReview(time.Now())
+			s.BaselineReview(c.deps().Now())
 			_ = s.MarkState("done", "")
 			s.ClearSeen()
 			changed = true
@@ -120,7 +119,7 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		if changed {
-			worker.LedgerDone(c.Context(), c.deps().WorkerAccounts(), poolRoot, ledger.Entry{Issue: id, Slot: slotName, Account: sl.Account(), Harness: sl.Kind(), PR: sl.PR()})
+			worker.LedgerDone(c.Context(), c.deps().WorkerAccounts(), poolRoot, ledger.Entry{TS: c.deps().Now(), Issue: id, Slot: slotName, Account: sl.Account(), Harness: sl.Kind(), PR: sl.PR()})
 		}
 		d.Set("changed", changed)
 		return Result{Data: d, Text: fmt.Sprintf("%s\tdone", slotName)}, nil

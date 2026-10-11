@@ -41,7 +41,7 @@ func TestFileDoneRequiresProof(t *testing.T) {
 		t.Fatalf("without proof: %v", err)
 	}
 	o := AddOpts{Check: "unit tests", Result: "PASS", Evidence: "go test ok", Sha: "abc1234"}
-	if _, _, err := Add(Files(root), root, "B07", o); err != nil {
+	if _, _, err := Add(Files(root), root, "B07", proofDay, o); err != nil {
 		t.Fatal(err)
 	}
 	if changed, err := be.Complete("B07", in); err != nil || !changed {

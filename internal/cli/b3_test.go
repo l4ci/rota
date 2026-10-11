@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/l4ci/rota/internal/verdict"
 )
@@ -15,7 +16,7 @@ import (
 // b3Record stores one verdict for a branch key under root.
 func b3Record(t *testing.T, root, key, kind, v, sha string) {
 	t.Helper()
-	if _, err := verdict.AddBranch(root, key, verdict.NewRecord(kind, v, sha, verdict.Body{})); err != nil {
+	if _, err := verdict.AddBranch(root, key, verdict.NewRecord(kind, v, sha, verdict.Body{}, testNow)); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -138,7 +139,7 @@ func TestShipPRMergeNoHeadBranchWarns(t *testing.T) {
 func b3Fails(t *testing.T, root, bug string, n int) {
 	t.Helper()
 	for i := 0; i < n; i++ {
-		if _, err := verdict.AddItem(root, bug, verdict.NewRecord(verdict.DebugFix, verdict.Fail, "abc1234", verdict.Body{})); err != nil {
+		if _, err := verdict.AddItem(root, bug, verdict.NewRecord(verdict.DebugFix, verdict.Fail, "abc1234", verdict.Body{}, testNow)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -249,5 +250,20 @@ func TestAutoLoopFlagRemoved(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, ".rota", "designs", "B07.md")); err == nil {
 		t.Error("a refused design add wrote the file")
+	}
+}
+
+// verdict add stamps the record from Deps.Now, not the wall clock.
+func TestVerdictAddUsesInjectedClock(t *testing.T) {
+	dir := gitRepo(t)
+	gitT(t, dir, "branch", "main")
+	d := testDeps()
+	d.Now = func() time.Time { return testNow }
+	code, out, errOut := rotaInWith(t, d, dir, "verdict", "add", "--kind", "review-spec", "--verdict", "PASS", "--json")
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, errOut)
+	}
+	if got := data(t, out)["recordedAt"]; got != "2026-03-04T09:05:06Z" {
+		t.Fatalf("recordedAt = %v, want the injected clock; out %s", got, out)
 	}
 }
