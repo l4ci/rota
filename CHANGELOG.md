@@ -1,5 +1,49 @@
 # Changelog
 
+## v0.16.0 — 2026-10-11
+
+A git guardrail hook for workers, a Codex plugin built at release, and a sturdier merge gate.
+
+### New
+
+- **`rota hook guard`**: a PreToolUse hook that stops a round worker's agent from running git commands outside its own worktree and branch. Three bypasses are closed.
+- **Codex plugin**: release now builds a symlink-free Codex plugin and marketplace and publishes it to the `codex` branch, but only after the binary release succeeds.
+- **Skills**:
+  - `/rota-decide --supersede` and `--retire`; readers skip retired decisions.
+  - `/rota-learn --retro <session-id|path>` audits how a past session found information and was steered.
+  - `/rota-capture` checks for duplicates, shipped work and decisions before filing.
+  - `/rota-debug` and `/rota-pause` redact secrets in evidence and handoffs.
+  - Manual-only skills are now enforced on both Claude Code and Codex.
+- `SCOPE.md` and issue templates for bugs and ideas.
+
+### Changed
+
+- **Claude Code plugin**: hooks moved from `plugin/hooks/` to `hooks/` at the plugin root, and `plugin.json` drops its `hooks` field. This clears the plugin directory's checklist warning; the SessionStart hook still fires.
+- **Corrupt worker registry fails closed.** If `.rota/workers.json` doesn't parse, verbs that write it refuse instead of treating it as an empty pool.
+- **`round transfer` runs the same preflight as `round assign`.** It now honours `model:` labels and refuses on a missing tier model, exhausted quota or an out-of-scope item.
+- **PR URLs** are parsed in one place. A self-hosted GitLab merge request URL without `/-/` now resolves to GitLab. Suffixes like `/files` and `?query` are accepted.
+
+### Fixed
+
+- `round reconcile --apply` parks a slot whose PR merged even when its tab is dead, instead of leaving it as drift that needed `round reclaim`.
+- `round watch` and `worker poll` no longer report a freshly dispatched slot as dead.
+- The merge train no longer reports a failed e2e tier as skipped.
+- Gate runs no longer grow `GOCACHE` without bound; `rota doctor` warns when its disk is low (`go-cache-disk`).
+- The gate pins the invoking worktree's HEAD across pass, fail and interrupt.
+
+### Internal
+
+Two architecture reviews' worth of refactors, with no behaviour change: one pre-merge sequence and one verify-tier runner shared by the gate and the train, `round.Env` built from one constructor with explicit account picking, one upward root walk, clock and exec calls behind seams, host kinds and capabilities owned by `internal/host`, shell quoting through `shlex`.
+
+### Docs
+
+README section on the Claude Code plugin; prep guides for the Anthropic plugin directory and awesome-claude-code listings.
+
+## Stats
+78 commits (129 with merges), 298 files changed, +7736 −1969 lines
+
+**Full changelog:** https://github.com/l4ci/rota/compare/v0.15.0...v0.16.0
+
 ## v0.15.0 — 2026-10-09
 
 rota now installs as a Claude Code plugin, rounds keep a ledger you can summarise, and review depth and state writes are stricter.
