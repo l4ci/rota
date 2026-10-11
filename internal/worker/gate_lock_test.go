@@ -2,6 +2,7 @@ package worker
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 )
@@ -70,5 +71,25 @@ func TestGateHoldsLandLockSkipsTheLock(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+// LandVerified is what a train's landing gate says. It is not NoVerify plus
+// HoldsLandLock: it also skips the freshness check (the train merged every PR
+// in order) and the NO-VERIFY note (the train reports its own).
+func TestGateLandVerifiedLandsWithoutFreshnessOrNoVerifyNote(t *testing.T) {
+	w := newWorld(t, ghURL)
+	advanceMainOn(w, "more.txt") // the branch is behind the base, as after an earlier train member landed
+	res, err := w.gate(false, GateOpts{LandVerified: true, HoldsLandLock: true})
+	if err != nil || res.Verdict != GatePass {
+		t.Fatalf("verdict %q err %v: %s", res.Verdict, err, res.Err)
+	}
+	for _, n := range res.Notes {
+		if strings.HasPrefix(n, "STALE-MERGE") || strings.HasPrefix(n, "NO-VERIFY") {
+			t.Errorf("a landing gate must not note %q", n)
+		}
+	}
+	if !res.VerifySkipped {
+		t.Error("a landing gate runs no verify tier")
 	}
 }

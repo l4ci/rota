@@ -3,7 +3,6 @@ package worker
 import (
 	"context"
 	"reflect"
-	"strings"
 	"testing"
 
 	"github.com/l4ci/rota/internal/testledger"
@@ -14,8 +13,12 @@ func TestTierOutcomeOfEmptyFullSaysNoVerify(t *testing.T) {
 	if !out.NoCommands || !out.OK || len(out.Verified) != 0 {
 		t.Fatalf("empty tier: %+v", out)
 	}
-	if len(out.Notes) != 2 || out.Notes[0] != noVerifyNote("s1") || !strings.HasPrefix(out.Notes[0], "NO-VERIFY s1 —") {
-		t.Errorf("notes %q", out.Notes)
+	want := []string{
+		"NO-VERIFY s1 — test.full is empty; the merged tree was NOT gated by a command.",
+		"set test.full via rota config set to make this gate real",
+	}
+	if !reflect.DeepEqual(out.Notes, want) {
+		t.Errorf("notes %q, want %q", out.Notes, want)
 	}
 }
 
@@ -72,10 +75,48 @@ func TestVerifyStageEmptyFullNotesNoVerifyAndStillRunsE2E(t *testing.T) {
 	if done, err := tr.verifyStage(); done || err != nil {
 		t.Fatalf("done=%v err=%v", done, err)
 	}
-	if len(tr.res.Notes) < 1 || tr.res.Notes[0] != noVerifyNote("train") || len(tr.res.Verified) != 0 {
+	if len(tr.res.Notes) < 1 || tr.res.Notes[0] != "NO-VERIFY train — test.full is empty; the merged tree was NOT gated by a command." || len(tr.res.Verified) != 0 {
 		t.Errorf("notes %q verified %v", tr.res.Notes, tr.res.Verified)
 	}
 	if !reflect.DeepEqual(ran, []string{"e2e-cmd"}) {
 		t.Errorf("e2e ran %v", ran)
+	}
+}
+
+func TestNoteTextIsPinned(t *testing.T) {
+	if got, want := noVerifyFlagNote("s1"), "NO-VERIFY s1 — --no-verify: merged tree was NOT gated by a command."; got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+	if got, want := noE2ENote(2), "NO-E2E land-green — the verified first 2 member(s) land without test.e2e; it never ran on that prefix."; got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestVerifyTiersSequence(t *testing.T) {
+	cfg := GateConfig{Full: []string{"f"}, E2E: []string{"e"}}
+	for _, c := range []struct {
+		name  string
+		cfg   GateConfig
+		first string
+		red   string
+		want  []string
+		ok    bool
+	}{
+		{"full then e2e", cfg, tierFull, "", []string{tierFull, tierE2E}, true},
+		{"empty e2e is skipped", GateConfig{Full: []string{"f"}}, tierFull, "", []string{tierFull}, true},
+		{"empty full is still visited", GateConfig{E2E: []string{"e"}}, tierFull, "", []string{tierFull, tierE2E}, true},
+		{"a red full skips e2e", cfg, tierFull, tierFull, []string{tierFull}, false},
+		{"first e2e skips full", cfg, tierE2E, "", []string{tierE2E}, true},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			var seen []string
+			ok, err := verifyTiers(c.cfg, c.first, func(tier string, _ []string) (bool, error) {
+				seen = append(seen, tier)
+				return tier != c.red, nil
+			})
+			if err != nil || ok != c.ok || !reflect.DeepEqual(seen, c.want) {
+				t.Errorf("ok=%v err=%v seen=%v, want ok=%v %v", ok, err, seen, c.ok, c.want)
+			}
+		})
 	}
 }

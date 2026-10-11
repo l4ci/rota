@@ -1002,11 +1002,10 @@ func (g *gate) verifyOnCI(ci *ciVerifier, sha string) (bool, error) {
 		g.verdict(v, msg, hint)
 		return true, nil
 	}
-	g.res.Verified = vr.Verified
-	for _, c := range vr.Failed {
-		g.res.Notes = append(g.res.Notes, "verify FAILED: "+c)
-	}
-	if !vr.OK() {
+	out := tierOutcomeOf(tierFull, o.Slot, vr)
+	g.res.Verified = out.Verified
+	g.res.Notes = append(g.res.Notes, out.Notes...)
+	if !out.OK {
 		g.verdict(GateVerifyFailed, fmt.Sprintf("GATE-FAIL %s — the merge result of %s does not pass CI; nothing landed\n%s", o.Slot, g.branch, vr.detail()),
 			fmt.Sprintf("send %s back to fix it, then re-gate", o.Slot))
 		return true, nil
@@ -1017,10 +1016,17 @@ func (g *gate) verifyOnCI(ci *ciVerifier, sha string) (bool, error) {
 
 // verifyLocal runs test.full, then test.e2e, on the scratch merge in dir.
 func (g *gate) verifyLocal(dir, _ string) (bool, error) {
-	if done, err := g.verifyTier(tierFull, g.in.cfg.Full, dir, false); done || err != nil {
-		return true, err
-	}
-	return g.verifyTier(tierE2E, g.in.cfg.E2E, dir, false)
+	return g.verifyTiers(tierFull, dir, false)
+}
+
+// verifyTiers walks the tiers from first in dir through the shared runner,
+// ending at the first that fails. done is true when it ends the gate.
+func (g *gate) verifyTiers(first, dir string, landed bool) (bool, error) {
+	ok, err := verifyTiers(g.in.cfg, first, func(tier string, cmds []string) (bool, error) {
+		done, err := g.verifyTier(tier, cmds, dir, landed)
+		return !done && err == nil, err
+	})
+	return !ok || err != nil, err
 }
 
 // landedTree is the tree of the commit the merge produced.
@@ -1093,7 +1099,7 @@ func (g *gate) stepVerify() (bool, error) {
 		if !g.confirmCITree() {
 			return true, nil
 		}
-		if done, err := g.verifyTier(tierE2E, g.in.cfg.E2E, g.root, true); done || err != nil {
+		if done, err := g.verifyTiers(tierE2E, g.root, true); done || err != nil {
 			return true, err
 		}
 		res.Verdict = GatePass
@@ -1102,13 +1108,8 @@ func (g *gate) stepVerify() (bool, error) {
 	if tree := g.landedTree(); tree != g.verifiedTree {
 		res.Notes = append(res.Notes, fmt.Sprintf("VERIFY-AGAIN %s — the landed tree %s differs from the verified scratch merge %s (%s moved before the merge); verifying the landed %s", o.Slot, strutil.ShortSHA(tree), strutil.ShortSHA(g.verifiedTree), o.Base, o.Base))
 		res.Verified, res.Excluded, res.VerifySkipped = nil, nil, false
-		for _, tier := range []struct {
-			name string
-			cmds []string
-		}{{tierFull, g.in.cfg.Full}, {tierE2E, g.in.cfg.E2E}} {
-			if done, err := g.verifyTier(tier.name, tier.cmds, g.root, true); done || err != nil {
-				return true, err
-			}
+		if done, err := g.verifyTiers(tierFull, g.root, true); done || err != nil {
+			return true, err
 		}
 	}
 	res.Verdict = GatePass
@@ -1123,9 +1124,6 @@ func (g *gate) stepVerify() (bool, error) {
 func (g *gate) verifyTier(tier string, cmds []string, dir string, landed bool) (bool, error) {
 	res, o := g.res, g.o
 	e2e := tier == tierE2E
-	if e2e && len(cmds) == 0 {
-		return false, nil
-	}
 	vr, err := runVerifyCmds(g.ctx, g.e.Shell, cmds, dir, g.in.ledger, g.e.Now())
 	if err != nil {
 		return true, err
