@@ -337,3 +337,87 @@ func TestReconcileApplySkipsARepairWhoseSourceWasUnreadable(t *testing.T) {
 		t.Errorf("want a skipped-repair warning: %v", out.Report.Warnings)
 	}
 }
+
+// finnDead drops finn's live agent so the host reports a dead tab beside
+// finn's PR.
+func finnDead(t *testing.T, state string) (string, Env) {
+	root, e, forge := fixture(t)
+	forge.states[9] = state
+	snap := e.Snapshot
+	e.Snapshot = func(ctx context.Context) ([]host.Agent, error) {
+		all, err := snap(ctx)
+		return slices.DeleteFunc(all, func(a host.Agent) bool { return a.Name == "finn" }), err
+	}
+	return root, e
+}
+
+// A dead tab and a merged PR on one slot: the dead-tab repair marks it dead,
+// and the park must still follow in the same run.
+func TestReconcileApplyParksADeadSlotWhoseMergedPR(t *testing.T) {
+	root, e := finnDead(t, "merged")
+	out, err := e.Reconcile(bg, root, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := kinds(out.Repaired)["finn"]; !slices.Equal(got, []string{DeadTab, PRStale}) {
+		t.Errorf("finn repaired = %v, warnings %v", got, out.Report.Warnings)
+	}
+	if got := kinds(out.Drift)["finn"]; len(got) != 0 {
+		t.Errorf("finn still drifts: %v", got)
+	}
+	if f := worker.LoadRegistryTolerant(root).Slot("finn"); f.Branch() != "park/finn" || f.PR() != "" || f.State() != "idle" {
+		t.Errorf("finn not parked: branch %q pr %q state %q", f.Branch(), f.PR(), f.State())
+	}
+}
+
+// A closed PR may hold unmerged work: the slot is marked dead and stays put.
+func TestReconcileApplyKeepsADeadSlotWhoseClosedPR(t *testing.T) {
+	root, e := finnDead(t, "closed")
+	out, err := e.Reconcile(bg, root, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := kinds(out.Repaired)["finn"]; !slices.Equal(got, []string{DeadTab}) {
+		t.Errorf("finn repaired = %v", got)
+	}
+	f := worker.LoadRegistryTolerant(root).Slot("finn")
+	if f.State() != "dead" || f.Branch() != "finn/57-baz" {
+		t.Errorf("finn = state %q branch %q", f.State(), f.Branch())
+	}
+}
+
+// A slot marked dead by an earlier run (a tick) is parked once its PR merges.
+func TestReconcileApplyParksAnEarlierDeadSlotWhoseMergedPR(t *testing.T) {
+	root, e := finnDead(t, "merged")
+	if _, err := worker.UpdateSlot(root, "finn", func(s *worker.Slot) { s.SetHandle(""); _ = s.MarkState("dead", "") }); err != nil {
+		t.Fatal(err)
+	}
+	out, err := e.Reconcile(bg, root, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := kinds(out.Repaired)["finn"]; !slices.Equal(got, []string{PRStale}) {
+		t.Errorf("finn repaired = %v, warnings %v", got, out.Report.Warnings)
+	}
+	if f := worker.LoadRegistryTolerant(root).Slot("finn"); f.Branch() != "park/finn" || f.State() != "idle" {
+		t.Errorf("finn not parked: branch %q state %q", f.Branch(), f.State())
+	}
+}
+
+// Dead plus a merged PR still refuses a dirty worktree.
+func TestReconcileApplyKeepsADeadDirtySlotWhoseMergedPR(t *testing.T) {
+	root, e := finnDead(t, "merged")
+	if err := os.WriteFile(filepath.Join(root, ".worktrees", "finn", "wip.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, err := e.Reconcile(bg, root, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(kinds(out.Drift)["finn"], PRStale) || !slices.ContainsFunc(out.Report.Warnings, func(w string) bool { return strings.Contains(w, "uncommitted") }) {
+		t.Errorf("want pr-stale drift and an uncommitted warning: drift %v warnings %v", out.Drift, out.Report.Warnings)
+	}
+	if f := worker.LoadRegistryTolerant(root).Slot("finn"); f.Branch() != "finn/57-baz" {
+		t.Errorf("dirty slot was parked: %q", f.Branch())
+	}
+}
