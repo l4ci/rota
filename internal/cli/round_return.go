@@ -57,9 +57,7 @@ func moveEnv(c *Ctx, root string) (round.Env, round.Board, error) {
 	if !ok {
 		return round.Env{}, nil, &Error{Exit: ExitInternal, Message: "the backlog backend has no workflow"}
 	}
-	env := c.deps().RoundEnv(ctx, root)
-	env.Worker = workerEnvCtx(c, ctx)
-	env.Worker.Accounts = c.deps().WorkerAccounts()
+	env := accountedRoundEnv(c, ctx, root)
 	env.Board = be
 	return env, be, nil
 }
