@@ -396,6 +396,12 @@ func (t *trainRun) plan() (bool, error) {
 	return false, nil
 }
 
+// trainEnd is the error a tier visit returns to end the verify stage: the
+// train is over, with err (nil when t.res already holds the answer).
+type trainEnd struct{ err error }
+
+func (trainEnd) Error() string { return "train ended" }
+
 // verifyStage is stage 4: test.full, then test.e2e on the same tree, with a
 // bisect on a red tier. It sets t.passing. The tier policy (what a result means,
 // the note text) is tierOutcomeOf's; this stage owns the cache and the bisect.
@@ -444,28 +450,25 @@ func (t *trainRun) verifyStage() (bool, error) {
 	full := cached(fullTierName, func() (VerifyResult, error) { return t.verify(scratch) })
 	e2e := cached(tierE2E, func() (VerifyResult, error) { return e.RunVerifyWith(ctx, t.in.cfg.E2E, scratch, t.in.ledger) })
 	var vr VerifyResult
-	var ended bool // the stage ends here with endDone, endErr
-	var endDone bool
-	var endErr error
-	end := func(done bool, err error) (bool, error) {
-		ended, endDone, endErr = true, done, err
-		return false, nil
-	}
+	fullRed := false // test.full failed, so test.e2e did not run on the train
+	// ends carries the stage's answer out of the tier walk: the train is over.
+	ends := func(err error) (bool, error) { return false, trainEnd{err} }
 	// bisect names the culprit of a red tier; it reports whether the train ends.
 	bisect := func(tier string, run func(int) (VerifyResult, error), failed VerifyResult, key string) (stop bool, err error) {
 		passing, stop, err = e.bisectTrain(scratch, res, tips, tier, run, failed, o.LandGreen)
 		blame(key)
 		return stop, err
 	}
-	green, _ := verifyTiers(t.in.cfg, tierFull, func(tier string, _ []string) (bool, error) {
+	_, werr := verifyTiers(t.in.cfg, tierFull, func(tier string, _ []string) (bool, error) {
 		if tier == tierFull {
 			var err error
 			if vr, err = full(n); err != nil {
-				return end(verifyErr(err))
+				_, err = verifyErr(err)
+				return ends(err)
 			}
 			if r, done := trainStopped(*res, vr); done {
 				t.res = r
-				return end(true, nil)
+				return ends(nil)
 			}
 			out := tierOutcomeOf(tierFull, trainSubject.CIWho, vr)
 			res.Notes = append(res.Notes, out.Notes...)
@@ -477,10 +480,12 @@ func (t *trainRun) verifyStage() (bool, error) {
 			if out.OK {
 				return true, nil
 			}
+			fullRed = true
 			if stop, err := bisect(tierFull, full, vr, fullTierName); err != nil {
-				return end(verifyErr(err))
+				_, err = verifyErr(err)
+				return ends(err)
 			} else if stop {
-				return end(true, nil)
+				return ends(nil)
 			}
 			return false, nil
 		}
@@ -488,23 +493,24 @@ func (t *trainRun) verifyStage() (bool, error) {
 		// test.full passed. A red e2e bisects the same way a red full does.
 		er, err := e2e(n)
 		if err != nil {
-			return end(true, err)
+			return ends(err)
 		}
 		eo := tierOutcomeOf(tierE2E, trainSubject.CIWho, er)
 		res.E2EVerified = eo.Verified
 		res.Excluded = append(res.Excluded, eo.Excluded...)
 		res.Notes = append(res.Notes, eo.Notes...)
-		if eo.OK {
-			return true, nil
+		if !eo.OK {
+			if stop, err := bisect(tierE2E, e2e, er, tierE2E); err != nil || stop {
+				return ends(err)
+			}
 		}
-		if stop, err := bisect(tierE2E, e2e, er, tierE2E); err != nil || stop {
-			return end(true, err)
-		}
-		return false, nil
+		return true, nil
 	})
-	if ended {
-		return endDone, endErr
+	var te trainEnd
+	if errors.As(werr, &te) {
+		return true, te.err
 	}
+	green := !fullRed
 
 	// A member earlier named culprit that this verified train carries was flaky:
 	// the failure did not reproduce on a different combination.
