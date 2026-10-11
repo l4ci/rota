@@ -57,6 +57,13 @@ func TestTrainLandsAll(t *testing.T) {
 	if len(res.Verified) != 1 {
 		t.Errorf("verified once, got %v", res.Verified)
 	}
+	// Members 2 and 3 are behind the base once the first lands, and the landing
+	// gates run no verify of their own: they are LandVerified, not --no-verify.
+	for _, n := range res.Notes {
+		if strings.HasPrefix(n, "NO-VERIFY") || strings.HasPrefix(n, "STALE-MERGE") {
+			t.Errorf("a train's landing gate must stay quiet, noted %q", n)
+		}
+	}
 	for _, f := range []string{"b1.txt", "b2.txt", "b3.txt"} {
 		if !w.onMain(f) {
 			t.Errorf("%s is not on main", f)
@@ -299,6 +306,10 @@ func TestTrainE2ELandGreen(t *testing.T) {
 	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3"}, LandGreen: true})
 	if err != nil || res.Culprit != "b3" || strings.Join(res.Landed, ",") != "b1,b2" {
 		t.Fatalf("%+v %v", res, err)
+	}
+	notes := strings.Join(res.Notes, "\n")
+	if !strings.Contains(notes, "e2e FAILED: test ! -f b3.txt") || strings.Contains(notes, "NO-E2E") {
+		t.Errorf("a red e2e is not a skipped one; notes:\n%s", notes)
 	}
 }
 
