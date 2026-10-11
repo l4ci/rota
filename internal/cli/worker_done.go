@@ -10,6 +10,7 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/proof"
+	"github.com/l4ci/rota/internal/shlex"
 	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -77,7 +78,7 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 				}
 				quoted := make([]string, len(files))
 				for i, f := range files {
-					quoted[i] = shellQuote(f)
+					quoted[i] = shlex.QuoteAlways(f)
 				}
 				want = make([]string, len(cmds))
 				for i, cmd := range cmds {

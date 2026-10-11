@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/config"
-	"github.com/l4ci/rota/internal/hook"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/shlex"
 )
 
 // Default work.portBase and work.portBlock: a slot owns portBlock ports from
@@ -126,7 +126,7 @@ func exportPrefix(name string, portBase, portBlock int) string {
 	p := ""
 	for _, e := range SlotEnv(name, portBase, portBlock) {
 		k, v, _ := strings.Cut(e, "=")
-		p += "export " + k + "=" + hook.ShellQuote(v) + "; "
+		p += "export " + k + "=" + shlex.QuoteAlways(v) + "; "
 	}
 	return p
 }
