@@ -24,15 +24,17 @@ import (
 // the round recorded (C8); with none it is herdr when work.dispatch says so or
 // the process runs inside herdr (rounds are started by hand with `herdr
 // worktree create`, whatever the config says), else tmux.
+// Worker.Accounts stays nil: quota and account picking are opt-in (accountedRoundEnv),
+// so start, status and the other read verbs never take those paths by accident.
 // A host or forge that cannot be built or reached is left nil: the verbs
 // report it as unavailable instead of failing. withForge false builds no
 // forge at all (Forge and ForgeErr stay empty), for a caller that reads only
 // the local sources and would not wait on the network.
 func defaultRoundEnv(ctx context.Context, root string, d *Deps, withForge bool) round.Env {
 	cfg := config.Load(rotatree.Config(root))
-	e := round.Env{Git: d.Git, Base: "main", Lease: d.LeaseEnv()}
-	e.Worker.NewHost = func(kind string) host.Host { return d.Host(kind) }
-	e.Worker.Now, e.Worker.Getenv = d.Now, d.Getenv
+	e := d.baseRoundEnv()
+	e.Worker.Accounts = nil
+	e.Base = "main"
 	if b, ok, err := (git.Repo{Dir: root}).Base(ctx, ""); err == nil && ok {
 		e.Base = b
 	}
@@ -66,6 +68,15 @@ func defaultRoundEnv(ctx context.Context, root string, d *Deps, withForge bool) 
 		e.Forge = f
 	}
 	return e
+}
+
+// accountedRoundEnv is RoundEnv with the worker env's accounts, for a verb that
+// reads quota or picks an account. The worker env comes from the one
+// constructor (Deps.workerEnv), so Git, host and clock match baseRoundEnv.
+func accountedRoundEnv(c *Ctx, ctx context.Context, root string) round.Env {
+	env := c.deps().RoundEnv(ctx, root)
+	env.Worker = workerEnvCtx(c, ctx)
+	return env
 }
 
 // withBoard gives the env the backlog's claim side, which claim-mismatch drift
@@ -121,7 +132,7 @@ func roundStatus(*flag.FlagSet) RunFunc {
 		d.Set("review", queuedRows(rep.Queued))
 		var lines []string
 		if set, err := roundcfg.Load(root); err == nil {
-			renv.Worker.Accounts = c.deps().WorkerAccounts()
+			renv.Worker.Accounts = c.deps().WorkerAccounts() // only the quota read, after Status ran without
 			if qc := renv.QuotaCap(ctx, root, set); qc.Reduced() {
 				co := jsonx.NewObject()
 				co.Set("effective", qc.Effective)
