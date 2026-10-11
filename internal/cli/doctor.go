@@ -77,18 +77,7 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 	} else {
 		in.LegacyDir, _ = legacystate.LegacyState(in.Dir)
 	}
-	root := ""
-	for d := in.Dir; d != ""; {
-		if rotatree.Exists(d) {
-			root = d
-			break
-		}
-		if p := filepath.Dir(d); p != d {
-			d = p
-		} else {
-			break
-		}
-	}
+	root, _ := rotatree.Find(in.Dir)
 	in.Skills = doctorSkills(d.Getenv, in.Home, root)
 	if root == "" {
 		doctorDiskInput(ctx, &in, nil, "", d.Git, d.Now(), d.DoctorDisk, d.Getenv)
