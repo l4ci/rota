@@ -115,26 +115,23 @@ func (e Env) Resolve(root string, cfg any) (Plan, error) {
 	}
 	p.Supervisor = append(append(sup, "--"), agent...)
 
-	herdr, tmux := e.Host("herdr"), e.Host("tmux")
 	// Outside any multiplexer herdr is preferred: it is what rounds use, so the
 	// orchestrator's workers open beside it. The session is rota's own, never
 	// the user's default one.
-	dispatch := config.Dispatch(cfg)
+	l, err := host.ResolveLaunch(config.Dispatch(cfg), e.Getenv, e.LookPath)
+	if err != nil {
+		return p, &Error{Code: "unavailable", Msg: err.Error()}
+	}
+	p.Host = l.Kind
 	switch {
-	case herdr.InSession() && herdr.Require() == nil:
-		p.Host, p.Mode = "herdr", ModeTab
-	case tmux.InSession():
-		p.Host, p.Mode = "tmux", ModeTab
-	case dispatch == "herdr" && herdr.Require() != nil:
-		return p, &Error{Code: "unavailable", Msg: "work.dispatch=herdr but herdr is not installed"}
-	case dispatch == "tmux" && tmux.Require() != nil:
-		return p, &Error{Code: "unavailable", Msg: "work.dispatch=tmux but tmux is not installed"}
-	case dispatch != "tmux" && herdr.Require() == nil:
-		p.Host, p.Mode, p.Session = "herdr", ModeHerdrSession, "rota-"+sessionName(root)
-	case tmux.Require() == nil:
-		p.Host, p.Mode, p.Session = "tmux", ModeSession, "rota-"+sessionName(root)
+	case l.Kind == host.Solo:
+		p.Mode = ModeInPlace
+	case !l.NewSession:
+		p.Mode = ModeTab
+	case l.Kind == host.Herdr:
+		p.Mode, p.Session = ModeHerdrSession, "rota-"+sessionName(root)
 	default:
-		p.Host, p.Mode = host.Solo, ModeInPlace
+		p.Mode, p.Session = ModeSession, "rota-"+sessionName(root)
 	}
 	return p, nil
 }
