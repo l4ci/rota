@@ -40,7 +40,6 @@ func (e Env) Reconcile(ctx context.Context, root string, apply bool) (Outcome, e
 	}
 	e.findUnregisteredBranches(ctx, root, rep, reg) // a branch scan: reconcile and the tick, not every status
 	out := Outcome{Report: rep}
-	deadNow := map[string]bool{} // slots this run's dead-tab repair marked dead
 	for _, f := range rep.Findings {
 		if !apply || f.Repair == "" {
 			out.Drift = append(out.Drift, f)
@@ -53,13 +52,10 @@ func (e Env) Reconcile(ctx context.Context, root string, apply bool) (Outcome, e
 			out.Drift = append(out.Drift, f)
 			continue
 		}
-		if err := e.repair(ctx, root, rep, f, deadNow); err != nil {
+		if err := e.repair(ctx, root, rep, f); err != nil {
 			rep.Warnings = append(rep.Warnings, fmt.Sprintf("repair %s %s: %v", f.Kind, firstNonEmpty(f.Slot, f.branch), err))
 			out.Drift = append(out.Drift, f)
 			continue
-		}
-		if f.Kind == DeadTab {
-			deadNow[f.Slot] = true
 		}
 		out.Repaired = append(out.Repaired, f)
 	}
@@ -85,7 +81,7 @@ func unreadSource(rep *Report, kind string) string {
 	return ""
 }
 
-func (e Env) repair(ctx context.Context, root string, rep *Report, f Finding, deadNow map[string]bool) error {
+func (e Env) repair(ctx context.Context, root string, rep *Report, f Finding) error {
 	v := rep.views[f.Slot]
 	switch f.Kind {
 	case DeadTab:
@@ -112,7 +108,7 @@ func (e Env) repair(ctx context.Context, root string, rep *Report, f Finding, de
 		return e.workerEnv().ReleaseExternal(root, f.Slot, false)
 	case PRStale:
 		if f.Slot != "" {
-			return e.parkMerged(ctx, root, f.Slot, deadNow[f.Slot])
+			return e.parkMerged(ctx, root, f.Slot)
 		}
 		return worker.Update(root, func(doc *worker.Doc) {
 			doc.DropQueued(func(q worker.QueuedPR) bool { return q.Issue == f.Issue && (f.pr == "" || q.PR == f.pr) })
@@ -146,10 +142,9 @@ func (e Env) repair(ctx context.Context, root string, rep *Report, f Finding, de
 // `assign` would: the worktree moves to park/<agent> at the base and the
 // registry drops the issue, claim and PR. Nothing is pushed (the work is in the
 // base) and nothing is salvaged: a worker still running, or a dirty worktree,
-// is left alone. A slot the same run marked dead (allowDead) is parked too: its
-// tab is gone and the merged PR means nothing is lost. A slot that was already
-// dead is not, since nothing this run vouches for it.
-func (e Env) parkMerged(ctx context.Context, root, name string, allowDead bool) error {
+// is left alone. A dead slot is parked too, whenever it was marked: its tab is
+// gone and the merged PR means nothing is lost.
+func (e Env) parkMerged(ctx context.Context, root, name string) error {
 	reg, err := worker.LoadRegistry(root)
 	if err != nil {
 		return err
@@ -158,8 +153,8 @@ func (e Env) parkMerged(ctx context.Context, root, name string, allowDead bool) 
 	if s == nil {
 		return fmt.Errorf("slot %s is not in the registry", name)
 	}
-	if st := s.State(); st != "done" && st != "idle" && !(allowDead && st == "dead") {
-		return fmt.Errorf("slot %s is %s, not done or idle", name, firstNonEmpty(st, "busy"))
+	if st := s.State(); st != "done" && st != "idle" && st != "dead" {
+		return fmt.Errorf("slot %s is %s, not done, idle or dead", name, firstNonEmpty(st, "busy"))
 	}
 	dirty, err := e.dirtyPaths(ctx, s.Worktree())
 	if err != nil {
