@@ -47,12 +47,15 @@ func (e *MaskedError) Error() string {
 func FindUmbrella(start string) (string, error) {
 	var cands []string
 	dir := Realpath(start)
-	for dir != "/" && dir != filepath.Dir(dir) {
-		if rotatree.Exists(dir) {
-			cands = append(cands, dir)
+	rotatree.Ascend(dir, func(d string) bool {
+		if d == "/" {
+			return true
 		}
-		dir = filepath.Dir(dir)
-	}
+		if rotatree.Exists(d) {
+			cands = append(cands, d)
+		}
+		return false
+	})
 	if len(cands) == 0 {
 		return "", ErrNoUmbrella
 	}
