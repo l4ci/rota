@@ -220,6 +220,7 @@ wait:
 					continue wait
 				}
 				if done != nil {
+					done.TS = e.Now()
 					LedgerDone(ctx, e.Accounts, root, *done)
 				}
 				if rowErr != nil {

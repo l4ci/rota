@@ -66,6 +66,7 @@ func goCaches(environ []string) []string {
 		}
 	}
 	if len(missing) > 0 {
+		// context.Background: IsolatedEnviron has no ctx to pass.
 		if res, err := proc.Run(context.Background(), proc.Cmd{Name: "go", Args: append([]string{"env"}, missing...), Environ: environ}); err == nil && res.ExitCode == 0 {
 			lines := strings.Split(strings.TrimRight(res.Stdout, "\n"), "\n")
 			if len(lines) == len(missing) {
