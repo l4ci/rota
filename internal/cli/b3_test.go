@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/l4ci/rota/internal/verdict"
 )
@@ -249,5 +250,20 @@ func TestAutoLoopFlagRemoved(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, ".rota", "designs", "B07.md")); err == nil {
 		t.Error("a refused design add wrote the file")
+	}
+}
+
+// verdict add stamps the record from Deps.Now, not the wall clock.
+func TestVerdictAddUsesInjectedClock(t *testing.T) {
+	dir := gitRepo(t)
+	gitT(t, dir, "branch", "main")
+	d := testDeps()
+	d.Now = func() time.Time { return testNow }
+	code, out, errOut := rotaInWith(t, d, dir, "verdict", "add", "--kind", "review-spec", "--verdict", "PASS", "--json")
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, errOut)
+	}
+	if got := data(t, out)["recordedAt"]; got != "2026-03-04T09:05:06Z" {
+		t.Fatalf("recordedAt = %v, want the injected clock; out %s", got, out)
 	}
 }
