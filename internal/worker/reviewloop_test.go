@@ -135,3 +135,19 @@ func TestPendingReviewKeepsBodylessChangesRequested(t *testing.T) {
 		t.Fatalf("%+v %v", b.Items, err)
 	}
 }
+
+// A provider with no review API (GitLab) returns an empty Reviews and carries
+// the whole discussion in MRNotes: review input must still reach the worker.
+func TestPendingReviewProviderWithoutReviews(t *testing.T) {
+	f := fakeReviewForge{notes: []tracker.Comment{{ID: "1", Author: "rev", Body: "rename this", CreatedAt: at(1)}}}
+	b, err := PendingReview(context.Background(), f, reviewSlot(), nil)
+	if err != nil || len(b.Items) != 1 || b.Items[0].Body != "rename this" {
+		t.Fatalf("notes-only provider: %+v %v", b, err)
+	}
+	if b.Items[0].State != tracker.ReviewCommented {
+		t.Fatalf("state = %q", b.Items[0].State)
+	}
+	if b, _ = PendingReview(context.Background(), fakeReviewForge{}, reviewSlot(), nil); !b.Empty() {
+		t.Fatalf("nothing posted must be empty: %+v", b)
+	}
+}
