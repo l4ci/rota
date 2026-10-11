@@ -36,36 +36,38 @@ func TestDecideGuard(t *testing.T) {
 		name    string
 		payload []byte
 		cwd     string
-		deny    bool
+		deny    string // substring of the expected reason; "" means the call passes
 	}{
-		{"bad json passes", []byte("{"), gWork, false},
-		{"non-bash tool passes", payload("Edit", "git push --force origin main", gWork), gWork, false},
-		{"empty command passes", payload("Bash", "", gWork), gWork, false},
-		{"force push denied", payload("Bash", "git push --force origin main", gWork), gWork, true},
-		{"merge denied", payload("Bash", "gh pr merge 1", gWork), gWork, true},
-		{"plain command passes", payload("Bash", "go test ./...", gWork), gWork, false},
-		{"own branch push passes", payload("Bash", "git push origin HEAD", gWork), gWork, false},
-		{"missing cwd uses default", payload("Bash", "git push --force origin main", ""), gWork, true},
+		{"bad json passes", []byte("{"), gWork, ""},
+		{"non-bash tool passes", payload("Edit", "git push --force origin main", gWork), gWork, ""},
+		{"empty command passes", payload("Bash", "", gWork), gWork, ""},
+		{"force push denied", payload("Bash", "git push --force origin main", gWork), gWork, "force"},
+		{"merge denied", payload("Bash", "gh pr merge 1", gWork), gWork, "merge"},
+		{"plain command passes", payload("Bash", "go test ./...", gWork), gWork, ""},
+		{"own branch push passes", payload("Bash", "git push origin HEAD", gWork), gWork, ""},
+		{"missing cwd uses default", payload("Bash", "git reset --hard", ""), gWork, ""},
+		{"missing cwd, default outside worktree", payload("Bash", "git reset --hard", ""), "/repo", "outside this worktree"},
+		{"payload cwd beats default", payload("Bash", "git reset --hard", "/repo"), gWork, "outside this worktree"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			got := DecideGuard(GuardRequest{Payload: tc.payload, Slot: "dana", DefaultCwd: tc.cwd, Git: fakeGit})
-			if (got != "") != tc.deny {
-				t.Fatalf("reason = %q, deny want %v", got, tc.deny)
+			if (tc.deny == "" && got != "") || !strings.Contains(got, tc.deny) {
+				t.Fatalf("reason = %q, want substring %q", got, tc.deny)
 			}
 		})
 	}
 }
 
-func TestSlotWorktree(t *testing.T) {
+func TestslotWorktree(t *testing.T) {
 	git := func(string, ...string) (string, error) { return "", errors.New("no git") }
-	if got := SlotWorktree(gWork+"/internal", "dana", git); got != gWork {
+	if got := slotWorktree(gWork+"/internal", "dana", git); got != gWork {
 		t.Errorf("ancestor: got %q", got)
 	}
-	if got := SlotWorktree("/elsewhere", "dana", git); got != "" {
+	if got := slotWorktree("/elsewhere", "dana", git); got != "" {
 		t.Errorf("git failure: got %q", got)
 	}
-	if got := SlotWorktree("/elsewhere", "dana", fakeGit); got != gWork {
+	if got := slotWorktree("/elsewhere", "dana", fakeGit); got != gWork {
 		t.Errorf("worktree list: got %q", got)
 	}
 }
