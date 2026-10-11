@@ -25,14 +25,14 @@ const FileName = "round-lease.json"
 
 // Lease is the lease document.
 type Lease struct {
-	PID       int    `json:"pid"`
-	Start     uint64 `json:"start,omitempty"`
-	Host      string `json:"host"`
-	Pane      string `json:"pane,omitempty"`
-	PaneHost  string `json:"paneHost,omitempty"`
-	Root      string `json:"root"`
-	Round     int    `json:"round"`
-	StartedAt string `json:"startedAt"`
+	PID       int       `json:"pid"`
+	Start     uint64    `json:"start,omitempty"`
+	Host      string    `json:"host"`
+	Pane      string    `json:"pane,omitempty"`
+	PaneHost  host.Kind `json:"paneHost,omitempty"`
+	Root      string    `json:"root"`
+	Round     int       `json:"round"`
+	StartedAt string    `json:"startedAt"`
 }
 
 // State is how a lease reads right now.
@@ -60,7 +60,7 @@ type Holder struct {
 	PID      int
 	Start    uint64
 	Pane     string
-	PaneHost string
+	PaneHost host.Kind
 }
 
 // HeldError is returned by Acquire when a live or foreign lease belongs to
@@ -304,7 +304,7 @@ func realProc(pid int) (int, string, bool) {
 // (whose server and client rename themselves "tmux: server" and "tmux: client").
 // Every pane on it shares that ancestor, so it can never be the holder (#205).
 func hostServer(comm string) bool {
-	return comm == "herdr" || comm == "tmux" || strings.HasPrefix(comm, "tmux:")
+	return comm == host.Herdr.Binary() || comm == host.Tmux.Binary() || strings.HasPrefix(comm, host.Tmux.Binary()+":")
 }
 
 // transient are the processes between rota and the orchestrator that exit with

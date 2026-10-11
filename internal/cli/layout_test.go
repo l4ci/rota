@@ -85,7 +85,7 @@ func layoutProject(t *testing.T, regHost string, slots []string, live ...string)
 		rig.panes = append(rig.panes, host.LayoutPane{ID: id, Tab: "t-" + s, TabLabel: s, Cwd: filepath.Join(root, ".worktrees", s), Agent: "claude"})
 	}
 	deps := testDeps()
-	deps.Host = func(string) host.Host { return rig }
+	deps.Host = func(host.Kind) host.Host { return rig }
 	return root, rig, deps
 }
 
@@ -235,7 +235,7 @@ func TestLayoutAllProjectsDefaultsToTheOnesOpenInHerdr(t *testing.T) {
 	// nothing arranged the verb says so.
 	other, _, deps2 := layoutProject(t, "herdr", []string{"ben"}, "ben")
 	empty := &layoutRig{cliHost: cliHost{herdr: true}, agent: map[string]string{}}
-	deps2.Host = func(string) host.Host { return empty }
+	deps2.Host = func(host.Kind) host.Host { return empty }
 	code, _, errs = rotaRunWith(t, deps2, "--json", "-C", other, "layout", "split")
 	if code != ExitResolution || !strings.Contains(errs, "no rota project has a round open in herdr") {
 		t.Errorf("exit %d, stderr %q", code, errs)
@@ -278,3 +278,5 @@ func TestLayoutSplitAndTabsRecordOnTheRound(t *testing.T) {
 		t.Errorf("after tabs: %q", got)
 	}
 }
+
+func (r *layoutRig) Capabilities() host.Capabilities { return host.CapabilitiesOf(r) }

@@ -93,7 +93,7 @@ type Deps struct {
 	// Host is the one place a verb gets a pane host: it builds the host for a
 	// kind ("herdr", "tmux"). The env hooks above leave their host fields nil
 	// and are filled from it, so a test swaps this one field to fake every host.
-	Host func(kind string) host.Host
+	Host func(kind host.Kind) host.Host
 
 	UpdateEnv        func() update.Env
 	InstalledVersion func() string
@@ -116,7 +116,7 @@ func defaultDeps() *Deps {
 		WorkerEnv:        func() worker.Env { return worker.Env{} },
 		EscalationEnv:    func() escalation.Env { return escalation.Env{} },
 		LeaseEnv:         func() roundlease.Env { return roundlease.DefaultEnv() },
-		Host:             func(kind string) host.Host { return host.New(kind, host.Deps{}) },
+		Host:             func(kind host.Kind) host.Host { return host.New(kind, host.Deps{}) },
 		InstalledVersion: installedVersion,
 		Environ:          os.Environ,
 		SeedBase:         seedProject,
@@ -164,7 +164,7 @@ func (d *Deps) workerEnv() worker.Env {
 		e.Git = d.Git
 	}
 	if e.NewHost == nil {
-		e.NewHost = func(kind string) host.Host { return d.Host(kind) }
+		e.NewHost = func(kind host.Kind) host.Host { return d.Host(kind) }
 	}
 	if e.Now == nil {
 		e.Now = d.Now
@@ -189,7 +189,7 @@ func (d *Deps) baseRoundEnv() round.Env {
 func (d *Deps) escalationEnv() escalation.Env {
 	e := d.EscalationEnv()
 	if e.Host == nil {
-		e.Host = func() host.Host { return d.Host("herdr") }
+		e.Host = func() host.Host { return d.Host(host.Herdr) }
 	}
 	if e.Now == nil {
 		e.Now = d.Now
@@ -201,7 +201,7 @@ func (d *Deps) escalationEnv() escalation.Env {
 func (d *Deps) orchestrateEnv() orchestrate.Env {
 	e := d.OrchestrateEnv()
 	if e.Host == nil {
-		e.Host = func(kind string) host.Host { return d.Host(kind) }
+		e.Host = func(kind host.Kind) host.Host { return d.Host(kind) }
 	}
 	return e
 }

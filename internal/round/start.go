@@ -36,7 +36,7 @@ type Started struct {
 	Base       string
 	Slots      []*jsonx.Object
 	Slate      []string
-	Host       string // the round's host: herdr, tmux or solo
+	Host       host.Kind // the round's host: herdr, tmux or solo
 	Lease      Lease
 	LeaseState LeaseState
 	Reclaimed  Lease // the stale lease replaced, zero when none
@@ -164,7 +164,7 @@ func (e Env) Start(ctx context.Context, root string, o StartOpts) (Started, erro
 		if rec := doc.Host(); rec != "" && out == roundlease.Renewed {
 			res.Host = rec
 		} else {
-			res.Host = host.Resolve("", o.Dispatch, e.getenv(), o.LookPath)
+			res.Host = host.Resolve("", host.KindOf(o.Dispatch), e.getenv(), o.LookPath)
 			doc.SetHost(res.Host)
 		}
 		doc.SetScope(scope)

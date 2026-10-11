@@ -78,7 +78,7 @@ func layoutToggle(c *Ctx) (palette.Entry, bool) {
 		if reg.Layout() == layout.Split {
 			cur = layout.Split
 		}
-		return cur, reg.Host() == "herdr" && hasHandle(reg)
+		return cur, reg.Host() == host.Herdr && hasHandle(reg)
 	}
 	if _, live := state(); !live {
 		return palette.Entry{}, false
@@ -177,10 +177,10 @@ func paletteHeader(c *Ctx, inProject bool) palette.Header {
 	}
 	h.Dir = tildePath(dir)
 	if !inProject || err != nil {
-		h.Host = host.Resolve("", "", c.deps().Getenv, nil)
+		h.Host = host.Resolve("", "", c.deps().Getenv, nil).String()
 		return h
 	}
-	h.Host = worker.ResolveHost(root, nil, nil)
+	h.Host = worker.ResolveHost(root, nil, nil).String()
 	ctx, cancel := context.WithTimeout(c.Context(), 3*time.Second)
 	defer cancel()
 	if rep, err := c.deps().RoundEnvLocal(ctx, root).Status(ctx, root); err == nil {
@@ -192,7 +192,7 @@ func paletteHeader(c *Ctx, inProject bool) palette.Header {
 		}
 		h.Round = roundSummary(active)
 		if rep.Host != "" {
-			h.Host = rep.Host
+			h.Host = rep.Host.String()
 		}
 	}
 	return h

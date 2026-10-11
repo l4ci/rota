@@ -18,11 +18,11 @@ func TestResolve(t *testing.T) {
 	}
 	cases := []struct {
 		name     string
-		registry string
-		dispatch string
+		registry Kind
+		dispatch Kind
 		env      map[string]string
 		path     func(string) (string, error)
-		want     string
+		want     Kind
 	}{
 		{"explicit herdr, nothing present", "", "herdr", nil, has(), "herdr"},
 		{"explicit tmux inside herdr", "", "tmux", map[string]string{"HERDR_ENV": "1"}, has("herdr"), "tmux"},
@@ -71,10 +71,10 @@ func TestResolveAndResolveLaunchOnOneTable(t *testing.T) {
 	tmuxPane := map[string]string{"TMUX": "/tmp/t,1,0"}
 	cases := []struct {
 		name      string
-		dispatch  string
+		dispatch  Kind
 		env       map[string]string
 		installed []string
-		resolve   string // Resolve("", dispatch, ...)
+		resolve   Kind   // Resolve("", dispatch, ...)
 		launch    Launch // ResolveLaunch(dispatch, ...)
 		fails     bool   // ResolveLaunch errors
 	}{

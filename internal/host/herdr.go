@@ -33,7 +33,9 @@ type herdr struct {
 	noted *atomic.Bool
 }
 
-func (h *herdr) Name() string { return "herdr" }
+func (h *herdr) Kind() Kind { return Herdr }
+
+func (h *herdr) Capabilities() Capabilities { return CapabilitiesOf(h) }
 
 func (h *herdr) Require() error {
 	if _, err := h.d.LookPath("herdr"); err != nil {

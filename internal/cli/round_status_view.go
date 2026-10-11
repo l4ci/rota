@@ -122,7 +122,7 @@ func loadRoundSnap(c *Ctx, root string) (roundSnap, error) {
 	if err != nil {
 		return roundSnap{}, err
 	}
-	s := roundSnap{Slots: rep.Rows, Review: rep.Queued, Host: rep.Host, CandsLoaded: true}
+	s := roundSnap{Slots: rep.Rows, Review: rep.Queued, Host: rep.Host.String(), CandsLoaded: true}
 	fillBurn(c, root, s.Slots)
 	for _, u := range rep.Unavailable {
 		s.Notes = append(s.Notes, u+" unavailable")

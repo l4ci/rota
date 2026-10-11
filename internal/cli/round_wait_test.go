@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/l4ci/rota/internal/host"
 )
 
 func TestRoundWaitVerb(t *testing.T) {
@@ -75,3 +77,5 @@ func (h *movingHost) Capture(context.Context, string, string, int) string {
 	h.n++
 	return string(rune('a' + h.n%26))
 }
+
+func (h *movingHost) Capabilities() host.Capabilities { return host.CapabilitiesOf(h) }

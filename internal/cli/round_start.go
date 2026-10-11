@@ -118,7 +118,7 @@ func leaseData(l round.Lease, st round.LeaseState) *jsonx.Object {
 	}
 	o.Set("host", l.Host)
 	setIf(o, "pane", l.Pane)
-	setIf(o, "paneHost", l.PaneHost)
+	setIf(o, "paneHost", l.PaneHost.String())
 	o.Set("root", l.Root)
 	o.Set("round", l.Round)
 	o.Set("startedAt", l.StartedAt)

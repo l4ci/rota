@@ -38,7 +38,7 @@ func slotTitle(slot, task, state, pr string) string {
 
 // labelSlot asks a host that can label to set the slot pane's title, "" clears.
 func labelSlot(ctx context.Context, h host.Host, name, handle, title string) {
-	if l, ok := h.(host.Labeler); ok && handle != "" {
+	if l := h.Capabilities().Labeler; l != nil && handle != "" {
 		l.Label(ctx, name, handle, title)
 	}
 }
@@ -48,7 +48,7 @@ func labelSlot(ctx context.Context, h host.Host, name, handle, title string) {
 
 // syncLabel labels a slot's pane from what the registry holds for it now.
 func syncLabel(ctx context.Context, h host.Host, root, name string) {
-	if _, ok := h.(host.Labeler); !ok {
+	if h.Capabilities().Labeler == nil {
 		return
 	}
 	if s := LoadRegistryTolerant(root).Slot(name); s != nil && s.State() != "" {
@@ -59,7 +59,7 @@ func syncLabel(ctx context.Context, h host.Host, root, name string) {
 // syncChanged relabels the slots of rows whose state differs from the one the
 // poll started from, then the workspace token.
 func syncChanged(ctx context.Context, h host.Host, root string, rows []PollRow, targets []pollTarget) {
-	if _, ok := h.(host.Labeler); !ok {
+	if h.Capabilities().Labeler == nil {
 		return
 	}
 	prev := map[string]string{}
@@ -96,7 +96,7 @@ func workspaceToken(root string) string {
 }
 
 func labelWorkspace(ctx context.Context, h host.Host, root string) {
-	if l, ok := h.(host.Labeler); ok {
+	if l := h.Capabilities().Labeler; l != nil {
 		l.LabelWorkspace(ctx, workspaceToken(root))
 	}
 }

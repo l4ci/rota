@@ -187,16 +187,16 @@ func (o *recordingReapOps) StopProcess(_ context.Context, pid int) error {
 // One swap of Deps.Host reaches every hook that builds a host.
 func TestDepsHostFactoryFeedsEveryHook(t *testing.T) {
 	d := defaultDeps()
-	var asked []string
+	var asked []host.Kind
 	fake := &cliHost{}
-	d.Host = func(kind string) host.Host { asked = append(asked, kind); return fake }
+	d.Host = func(kind host.Kind) host.Host { asked = append(asked, kind); return fake }
 	if d.workerEnv().NewHost("tmux") != host.Host(fake) ||
 		d.escalationEnv().Host() != host.Host(fake) ||
 		d.orchestrateEnv().Host("herdr") != host.Host(fake) ||
 		d.RoundEnv(context.Background(), t.TempDir()).Worker.NewHost("tmux") != host.Host(fake) {
 		t.Fatal("a hook built its own host instead of asking Deps.Host")
 	}
-	if want := []string{"tmux", "herdr", "herdr", "tmux"}; !reflect.DeepEqual(asked[:4], want) {
+	if want := []host.Kind{host.Tmux, host.Herdr, host.Herdr, host.Tmux}; !reflect.DeepEqual(asked[:4], want) {
 		t.Errorf("asked = %v, want prefix %v", asked, want)
 	}
 }

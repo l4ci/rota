@@ -147,3 +147,5 @@ func TestDispatchSplitWithoutOrchestratorPaneWarns(t *testing.T) {
 		t.Errorf("warnings: %v", res.Warnings)
 	}
 }
+
+func (g *gridHost) Capabilities() host.Capabilities { return host.CapabilitiesOf(g) }

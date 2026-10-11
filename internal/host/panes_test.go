@@ -166,9 +166,10 @@ func TestCurrentPaneByKind(t *testing.T) {
 	}
 	none := func(string) string { return "" }
 	for _, tc := range []struct {
-		name, kind string
-		env        func(string) string
-		want       string
+		name string
+		kind Kind
+		env  func(string) string
+		want string
 	}{
 		{"herdr", "herdr", both, "w1:p3"},
 		{"tmux", "tmux", both, "%3"},
@@ -185,9 +186,10 @@ func TestCurrentPaneByKind(t *testing.T) {
 func TestCurrentPaneAnyPrefersHerdr(t *testing.T) {
 	env := func(m map[string]string) func(string) string { return func(k string) string { return m[k] } }
 	for _, tc := range []struct {
-		name       string
-		env        map[string]string
-		pane, kind string
+		name string
+		env  map[string]string
+		pane string
+		kind Kind
 	}{
 		{"both", map[string]string{"HERDR_PANE_ID": "w1:p3", "TMUX_PANE": "%3"}, "w1:p3", "herdr"},
 		{"tmux only", map[string]string{"TMUX_PANE": "%3"}, "%3", "tmux"},

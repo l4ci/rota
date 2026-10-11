@@ -3,6 +3,8 @@ package worker
 import (
 	"errors"
 	"testing"
+
+	"github.com/l4ci/rota/internal/host"
 )
 
 // TestResolveHostCrossesTheSeam is the one table for "which host does this
@@ -11,10 +13,12 @@ func TestResolveHostCrossesTheSeam(t *testing.T) {
 	herdrBin := func(string) (string, error) { return "/bin/herdr", nil }
 	noBin := func(string) (string, error) { return "", errors.New("not found") }
 	cases := []struct {
-		name, registry, dispatch string
-		env                      map[string]string
-		look                     func(string) (string, error)
-		want, wantPane           string
+		name           string
+		registry       host.Kind
+		dispatch       string
+		env            map[string]string
+		look           func(string) (string, error)
+		want, wantPane host.Kind
 	}{
 		{"recorded herdr beats tmux dispatch", "herdr", "tmux", nil, noBin, "herdr", "herdr"},
 		{"recorded tmux beats herdr pane", "tmux", "", map[string]string{"HERDR_ENV": "1"}, herdrBin, "tmux", "tmux"},
