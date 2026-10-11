@@ -168,10 +168,14 @@ type trainRun struct {
 // wrote its own ledger entry.
 func (e Env) train(ctx context.Context, root string, o TrainOpts, cache *trainCache, gated map[string]bool) (TrainResult, error) {
 	t := &trainRun{e: e, ctx: ctx, root: root, o: o, cache: cache, gated: gated, res: TrainResult{Base: o.Base}}
+	defer func() { // set once plan builds the scratch tree; runs on every exit, a panic included
+		if t.cleanup != nil {
+			t.cleanup()
+		}
+	}()
 	if done, err := t.plan(); done || err != nil {
 		return t.res, err
 	}
-	defer t.cleanup()
 	if done, err := t.verifyStage(); done || err != nil {
 		return t.res, err
 	}
@@ -185,8 +189,8 @@ func (t *trainRun) broke(msg string) (bool, error) {
 }
 
 // plan is stages 1 to 3: check every member, order them, run the pre-merge
-// policy and merge them in a scratch worktree. On done the scratch tree is
-// already cleaned up; otherwise the caller owns t.cleanup.
+// policy and merge them in a scratch worktree. The caller runs t.cleanup, once
+// it is set, on every exit.
 func (t *trainRun) plan() (bool, error) {
 	e, ctx, root, o, res := t.e, t.ctx, t.root, t.o, &t.res
 	if len(o.Targets) == 0 {
@@ -366,13 +370,11 @@ func (t *trainRun) plan() (bool, error) {
 	tips, failed, merr, brokeMsg := e.mergeTrain(ctx, scratch, o.Base, res.Members, t.heads)
 	t.tips = tips
 	if brokeMsg != "" {
-		cleanup()
 		return t.broke(brokeMsg)
 	}
 	if merr != nil && autoOrder && failed >= nIso && failed > 0 && errors.As(merr, new(*land.ConflictError)) {
 		// A shared-path member conflicts with the ones before it. Git's pairwise
 		// conflicts do not depend on merge order, so no other order is tried.
-		cleanup()
 		res.Verdict, res.Culprit = GateOrder, res.Members[failed].Target
 		res.Members[failed].Culprit = true
 		res.Err = fmt.Sprintf("TRAIN-BLOCKED order — %s; the shared-path members conflict in the order tried (%s); nothing pushed", conflictPair(res.Members, foots, failed), orderText(res.Members))
@@ -380,7 +382,6 @@ func (t *trainRun) plan() (bool, error) {
 		return true, nil
 	}
 	if merr != nil {
-		cleanup()
 		m := res.Members[failed]
 		res.Culprit = m.Target
 		res.Members[failed].Culprit = true
@@ -441,54 +442,68 @@ func (t *trainRun) verifyStage() (bool, error) {
 		fullTierName = tierFull + "@ci"
 	}
 	full := cached(fullTierName, func() (VerifyResult, error) { return t.verify(scratch) })
-	vr, err := full(n)
-	if err != nil {
-		return verifyErr(err)
+	e2e := cached(tierE2E, func() (VerifyResult, error) { return e.RunVerifyWith(ctx, t.in.cfg.E2E, scratch, t.in.ledger) })
+	var vr VerifyResult
+	var ended bool // the stage ends here with endDone, endErr
+	var endDone bool
+	var endErr error
+	end := func(done bool, err error) (bool, error) {
+		ended, endDone, endErr = true, done, err
+		return false, nil
 	}
-	if r, done := trainStopped(*res, vr); done {
-		t.res = r
-		return true, nil
+	// bisect names the culprit of a red tier; it reports whether the train ends.
+	bisect := func(tier string, run func(int) (VerifyResult, error), failed VerifyResult, key string) (stop bool, err error) {
+		passing, stop, err = e.bisectTrain(scratch, res, tips, tier, run, failed, o.LandGreen)
+		blame(key)
+		return stop, err
 	}
-	green := true // test.full passed (or had nothing to run), so test.e2e may run
-	out := tierOutcomeOf(tierFull, trainSubject.CIWho, vr)
-	res.Notes = append(res.Notes, out.Notes...)
-	if !out.NoCommands {
-		res.Verified = out.Verified
-		res.Excluded = append(res.Excluded, out.Excluded...)
-		if !out.OK {
-			green = false
-			var stop bool
-			passing, stop, err = e.bisectTrain(scratch, res, tips, tierFull, full, vr, o.LandGreen)
-			blame(fullTierName)
-			if err != nil {
-				return verifyErr(err)
-			} else if stop {
+	green, _ := verifyTiers(t.in.cfg, tierFull, func(tier string, _ []string) (bool, error) {
+		if tier == tierFull {
+			var err error
+			if vr, err = full(n); err != nil {
+				return end(verifyErr(err))
+			}
+			if r, done := trainStopped(*res, vr); done {
+				t.res = r
+				return end(true, nil)
+			}
+			out := tierOutcomeOf(tierFull, trainSubject.CIWho, vr)
+			res.Notes = append(res.Notes, out.Notes...)
+			if out.NoCommands {
+				return true, nil // nothing ran; test.e2e may
+			}
+			res.Verified = out.Verified
+			res.Excluded = append(res.Excluded, out.Excluded...)
+			if out.OK {
 				return true, nil
 			}
+			if stop, err := bisect(tierFull, full, vr, fullTierName); err != nil {
+				return end(verifyErr(err))
+			} else if stop {
+				return end(true, nil)
+			}
+			return false, nil
 		}
-	}
-
-	// 4b. E2E: the most expensive tier runs once, on the train result, after
-	// test.full passed. A red e2e bisects the same way a red full does.
-	e2e := t.in.cfg.E2E
-	if green && len(e2e) > 0 {
-		run := cached(tierE2E, func() (VerifyResult, error) { return e.RunVerifyWith(ctx, e2e, scratch, t.in.ledger) })
-		er, err := run(n)
+		// 4b. E2E: the most expensive tier runs once, on the train result, after
+		// test.full passed. A red e2e bisects the same way a red full does.
+		er, err := e2e(n)
 		if err != nil {
-			return true, err
+			return end(true, err)
 		}
 		eo := tierOutcomeOf(tierE2E, trainSubject.CIWho, er)
 		res.E2EVerified = eo.Verified
 		res.Excluded = append(res.Excluded, eo.Excluded...)
 		res.Notes = append(res.Notes, eo.Notes...)
-		if !eo.OK {
-			var stop bool
-			passing, stop, err = e.bisectTrain(scratch, res, tips, tierE2E, run, er, o.LandGreen)
-			blame(tierE2E)
-			if err != nil || stop {
-				return true, err
-			}
+		if eo.OK {
+			return true, nil
 		}
+		if stop, err := bisect(tierE2E, e2e, er, tierE2E); err != nil || stop {
+			return end(true, err)
+		}
+		return false, nil
+	})
+	if ended {
+		return endDone, endErr
 	}
 
 	// A member earlier named culprit that this verified train carries was flaky:
@@ -502,7 +517,7 @@ func (t *trainRun) verifyStage() (bool, error) {
 		}
 	}
 
-	if !green && passing > 0 && len(e2e) > 0 {
+	if !green && passing > 0 && len(t.in.cfg.E2E) > 0 {
 		res.Notes = append(res.Notes, noE2ENote(passing))
 	}
 	t.passing = passing
