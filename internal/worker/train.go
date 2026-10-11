@@ -136,42 +136,96 @@ func (e Env) Train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 	return res, err
 }
 
+// trainRun is one train's state across its three stages: plan (check, order,
+// pre-merge policy, scratch merge), verify (test.full, test.e2e, bisect) and
+// land. Each stage returns done when res already holds the train's answer.
+type trainRun struct {
+	e     Env
+	ctx   context.Context
+	root  string
+	o     TrainOpts
+	cache *trainCache
+	gated map[string]bool // members the landing loop ran a real gate on
+	res   TrainResult
+
+	in      gateInput
+	remote  bool
+	onCI    bool
+	verify  func(dir string) (VerifyResult, error) // test.full on dir, local or on CI
+	baseRef string
+	baseSHA string
+	headRef func(TrainMember) string
+	heads   []string // each member's head sha, in merge order
+	tips    []string // tips[i] is the scratch tree with the first i members merged
+	scratch string
+	cleanup func()
+	// passing is how many leading members may land: all of them, or the
+	// verified prefix before the culprit under LandGreen. Set by the verify stage.
+	passing int
+}
+
 // gated collects the members the landing loop ran a real gate on; each of those
 // wrote its own ledger entry.
 func (e Env) train(ctx context.Context, root string, o TrainOpts, cache *trainCache, gated map[string]bool) (TrainResult, error) {
-	res := TrainResult{Base: o.Base}
+	t := &trainRun{e: e, ctx: ctx, root: root, o: o, cache: cache, gated: gated, res: TrainResult{Base: o.Base}}
+	defer func() { // set once plan builds the scratch tree; runs on every exit, a panic included
+		if t.cleanup != nil {
+			t.cleanup()
+		}
+	}()
+	if done, err := t.plan(); done || err != nil {
+		return t.res, err
+	}
+	if done, err := t.verifyStage(); done || err != nil {
+		return t.res, err
+	}
+	return t.land()
+}
+
+// broke ends the train with CHECK-BROKE: nothing has landed.
+func (t *trainRun) broke(msg string) (bool, error) {
+	t.res, _ = t.e.trainBroke(t.res, msg)
+	return true, nil
+}
+
+// plan is stages 1 to 3: check every member, order them, run the pre-merge
+// policy and merge them in a scratch worktree. The caller runs t.cleanup, once
+// it is set, on every exit.
+func (t *trainRun) plan() (bool, error) {
+	e, ctx, root, o, res := t.e, t.ctx, t.root, t.o, &t.res
 	if len(o.Targets) == 0 {
-		return res, fail(exitcode.ExitUsage, "a train needs at least one PR or slot")
+		return true, fail(exitcode.ExitUsage, "a train needs at least one PR or slot")
 	}
 	reg, err := LoadRegistry(root)
 	if err != nil {
-		return res, err
+		return true, err
 	}
 	if !reg.Exists {
-		return res, fail(exitcode.ExitResolution, "no worker pool — run rota worker pool init first")
+		return true, fail(exitcode.ExitResolution, "no worker pool — run rota worker pool init first")
 	}
 	if _, code := e.git(root, "rev-parse", "--verify", "--quiet", o.Base); code != 0 {
-		return res, fail(exitcode.ExitResolution, fmt.Sprintf("base branch '%s' does not exist", o.Base))
+		return true, fail(exitcode.ExitResolution, fmt.Sprintf("base branch '%s' does not exist", o.Base))
 	}
 	if cur, _ := e.git(root, "rev-parse", "--abbrev-ref", "HEAD"); cur != o.Base {
-		return res, fail(exitcode.ExitResolution, fmt.Sprintf("a train must run with %s checked out (currently on %s)", o.Base, cur))
+		return true, fail(exitcode.ExitResolution, fmt.Sprintf("a train must run with %s checked out (currently on %s)", o.Base, cur))
 	}
 	// A bad test.fullWhere, test.ciChecks or ledger is refused before any
 	// member is checked, and the train carries this read through.
 	in, err := e.GateInput(root)
 	if err != nil {
-		return res, err
+		return true, err
 	}
+	t.in = in
 	seen := map[string]bool{}
 	withPR := 0
-	for _, t := range o.Targets {
-		gt, err := reg.GateTarget(t)
+	for _, tg := range o.Targets {
+		gt, err := reg.GateTarget(tg)
 		if err != nil {
-			return res, err
+			return true, err
 		}
 		key := gt.Branch + "|" + gt.PR
 		if seen[key] {
-			return res, fail(exitcode.ExitUsage, fmt.Sprintf("%s names a PR already in the train", t))
+			return true, fail(exitcode.ExitUsage, fmt.Sprintf("%s names a PR already in the train", tg))
 		}
 		seen[key] = true
 		if gt.PR != "" {
@@ -179,53 +233,54 @@ func (e Env) train(ctx context.Context, root string, o TrainOpts, cache *trainCa
 		}
 	}
 	if withPR != 0 && withPR != len(o.Targets) {
-		return res, fail(exitcode.ExitUsage, fmt.Sprintf("a train is all PRs or all slots without one, not a mix: PRs merge onto origin/%s and slots onto the local %s", o.Base, o.Base))
+		return true, fail(exitcode.ExitUsage, fmt.Sprintf("a train is all PRs or all slots without one, not a mix: PRs merge onto origin/%s and slots onto the local %s", o.Base, o.Base))
 	}
 
 	// 1. Check every member.
-	remote := false
-	for _, t := range o.Targets {
-		gr, err := e.Gate(ctx, root, GateOpts{Slot: t, Base: o.Base, CheckOnly: true, Verdict: o.Verdict, Recorded: o.Recorded})
+	for _, tg := range o.Targets {
+		gr, err := e.Gate(ctx, root, GateOpts{Slot: tg, Base: o.Base, CheckOnly: true, Verdict: o.Verdict, Recorded: o.Recorded})
 		if err != nil {
 			if gr.Verdict == GateVerdictBlocked {
-				res.Verdict, res.Culprit = gr.Verdict, t
+				res.Verdict, res.Culprit = gr.Verdict, tg
 			}
-			return res, err
+			return true, err
 		}
 		res.Notes = append(res.Notes, gr.Notes...)
 		if !gr.OK() {
-			res.Verdict, res.Culprit, res.CulpritGate, res.Err, res.Hint = gr.Verdict, t, gr, gr.Err, gr.Hint
-			return res, nil
+			res.Verdict, res.Culprit, res.CulpritGate, res.Err, res.Hint = gr.Verdict, tg, gr, gr.Err, gr.Hint
+			return true, nil
 		}
-		res.Members = append(res.Members, TrainMember{Target: t, Branch: gr.Branch, PR: gr.PR})
-		remote = remote || gr.PR != ""
+		res.Members = append(res.Members, TrainMember{Target: tg, Branch: gr.Branch, PR: gr.PR})
+		t.remote = t.remote || gr.PR != ""
 	}
 	verify, onCI, brokeMsg, err := e.fullTier(ctx, root, "train", in)
 	if err != nil {
-		return res, err
+		return true, err
 	}
 	if brokeMsg != "" {
-		return e.trainBroke(res, brokeMsg)
+		return t.broke(brokeMsg)
 	}
-	baseRef := o.Base
-	if remote {
-		baseRef = "origin/" + o.Base
+	t.verify, t.onCI = verify, onCI
+	t.baseRef = o.Base
+	if t.remote {
+		t.baseRef = "origin/" + o.Base
 	}
-	headRef := func(m TrainMember) string {
+	t.headRef = func(m TrainMember) string {
 		if m.PR != "" {
 			return "origin/" + m.Branch
 		}
 		return m.Branch
 	}
+	baseRef, headRef := t.baseRef, t.headRef
 
 	// Order the members to minimise predicted conflicts, or take --order.
 	foots, err := e.trainFootprints(root, baseRef, res.Members, headRef)
 	if err != nil {
-		return e.trainBroke(res, err.Error())
+		return t.broke(err.Error())
 	}
 	perm, lines, nIso, err := orderTrain(res.Members, foots, o.Order)
 	if err != nil {
-		return res, err
+		return true, err
 	}
 	autoOrder := len(o.Order) == 0
 	ms := make([]TrainMember, len(perm))
@@ -286,34 +341,36 @@ func (e Env) train(ctx context.Context, root string, o TrainOpts, cache *trainCa
 	switch {
 	case approval:
 		res.Verdict = GateApprovalRequired
-		return res, perr
+		return true, perr
 	case perr != nil:
-		return e.trainBroke(res, perr.Error())
+		return t.broke(perr.Error())
 	case r != nil:
 		res.Verdict, res.Err, res.Hint, res.Expired = r.Verdict, r.Err, r.Hint, r.Expired
-		return res, nil
+		return true, nil
 	}
 
 	// 3. Merge in order in a scratch worktree.
 	baseSHA, code := e.git(root, "rev-parse", baseRef)
 	if code != 0 {
-		return e.trainBroke(res, fmt.Sprintf("git rev-parse %s exited %d", baseRef, code))
+		return t.broke(fmt.Sprintf("git rev-parse %s exited %d", baseRef, code))
 	}
-	heads := make([]string, len(res.Members))
+	t.baseSHA = baseSHA
+	t.heads = make([]string, len(res.Members))
 	for i, m := range res.Members {
-		if heads[i], code = e.git(root, "rev-parse", headRef(m)); code != 0 {
-			return e.trainBroke(res, fmt.Sprintf("git rev-parse %s exited %d", headRef(m), code))
+		if t.heads[i], code = e.git(root, "rev-parse", headRef(m)); code != 0 {
+			return t.broke(fmt.Sprintf("git rev-parse %s exited %d", headRef(m), code))
 		}
 	}
-	cache.retainBase(baseSHA)
+	t.cache.retainBase(baseSHA)
 	scratch, cleanup, err := e.scratchTree(ctx, root, baseSHA, "rota-train-")
 	if err != nil {
-		return e.trainBroke(res, err.Error())
+		return t.broke(err.Error())
 	}
-	defer cleanup()
-	tips, failed, merr, brokeMsg := e.mergeTrain(ctx, scratch, o.Base, res.Members, heads)
+	t.scratch, t.cleanup = scratch, cleanup
+	tips, failed, merr, brokeMsg := e.mergeTrain(ctx, scratch, o.Base, res.Members, t.heads)
+	t.tips = tips
 	if brokeMsg != "" {
-		return e.trainBroke(res, brokeMsg)
+		return t.broke(brokeMsg)
 	}
 	if merr != nil && autoOrder && failed >= nIso && failed > 0 && errors.As(merr, new(*land.ConflictError)) {
 		// A shared-path member conflicts with the ones before it. Git's pairwise
@@ -322,7 +379,7 @@ func (e Env) train(ctx context.Context, root string, o TrainOpts, cache *trainCa
 		res.Members[failed].Culprit = true
 		res.Err = fmt.Sprintf("TRAIN-BLOCKED order — %s; the shared-path members conflict in the order tried (%s); nothing pushed", conflictPair(res.Members, foots, failed), orderText(res.Members))
 		res.Hint = "rebase one of the pair on the other's merge, or land them in separate trains, or pass --order to try another"
-		return res, nil
+		return true, nil
 	}
 	if merr != nil {
 		m := res.Members[failed]
@@ -334,19 +391,33 @@ func (e Env) train(ctx context.Context, root string, o TrainOpts, cache *trainCa
 			Conflict:     fmt.Sprintf("TRAIN-FAIL %s — %s does not merge onto %s with the %d member(s) before it: conflict", m.Target, m.Branch, o.Base, failed),
 			ConflictHint: fmt.Sprintf("send %s back to merge %s, or run the train without it", m.Target, o.Base),
 		})
-		return res, nil
+		return true, nil
 	}
+	return false, nil
+}
 
-	// 4. Verify once: test.full, then test.e2e on the same tree.
+// trainEnd is the error a tier visit returns to end the verify stage: the
+// train is over, with err (nil when t.res already holds the answer).
+type trainEnd struct{ err error }
+
+func (trainEnd) Error() string { return "train ended" }
+
+// verifyStage is stage 4: test.full, then test.e2e on the same tree, with a
+// bisect on a red tier. It sets t.passing. The tier policy (what a result means,
+// the note text) is tierOutcomeOf's; this stage owns the cache and the bisect.
+func (t *trainRun) verifyStage() (bool, error) {
+	e, ctx, o, res, scratch, tips, heads := t.e, t.ctx, t.o, &t.res, t.scratch, t.tips, t.heads
+	cache, baseSHA := t.cache, t.baseSHA
 	n := len(res.Members)
 	passing := n
+	t.passing = n
 	// A local run that cannot start is an error, as before; a CI push or
 	// forge read that fails is CHECK-BROKE, since nothing has landed.
-	verifyErr := func(err error) (TrainResult, error) {
-		if onCI {
-			return e.trainBroke(res, err.Error())
+	verifyErr := func(err error) (bool, error) {
+		if t.onCI {
+			return t.broke(err.Error())
 		}
-		return res, err
+		return true, err
 	}
 	// cached answers a verify of the base plus its first k members from the
 	// cache when the same tier ran on the same base and heads before.
@@ -372,64 +443,74 @@ func (e Env) train(ctx context.Context, root string, o TrainOpts, cache *trainCa
 			}
 		}
 	}
-	fullTierName := "test.full"
-	if onCI {
-		fullTierName = "test.full@ci"
+	fullTierName := tierFull
+	if t.onCI {
+		fullTierName = tierFull + "@ci"
 	}
-	full := cached(fullTierName, func() (VerifyResult, error) { return verify(scratch) })
-	vr, err := full(n)
-	if err != nil {
-		return verifyErr(err)
+	full := cached(fullTierName, func() (VerifyResult, error) { return t.verify(scratch) })
+	e2e := cached(tierE2E, func() (VerifyResult, error) { return e.RunVerifyWith(ctx, t.in.cfg.E2E, scratch, t.in.ledger) })
+	var vr VerifyResult
+	fullRed := false // test.full failed, so test.e2e did not run on the train
+	// ends carries the stage's answer out of the tier walk: the train is over.
+	ends := func(err error) (bool, error) { return false, trainEnd{err} }
+	// bisect names the culprit of a red tier; it reports whether the train ends.
+	bisect := func(tier string, run func(int) (VerifyResult, error), failed VerifyResult, key string) (stop bool, err error) {
+		passing, stop, err = e.bisectTrain(scratch, res, tips, tier, run, failed, o.LandGreen)
+		blame(key)
+		return stop, err
 	}
-	if r, done := trainStopped(res, vr); done {
-		return r, nil
-	}
-	green := true // test.full passed (or had nothing to run), so test.e2e may run
-	if vr.NoCommands {
-		res.Notes = append(res.Notes, "NO-VERIFY train — test.full is empty; the merged tree was NOT gated by a command.",
-			"set test.full via rota config set to make this gate real")
-	} else {
-		res.Verified = vr.Verified
-		res.Excluded = append(res.Excluded, vr.Excluded...)
-		for _, c := range vr.Failed {
-			res.Notes = append(res.Notes, "verify FAILED: "+c)
-		}
-		if !vr.OK() {
-			green = false
-			var stop bool
-			passing, stop, err = e.bisectTrain(scratch, &res, tips, "test.full", full, vr, o.LandGreen)
-			blame(fullTierName)
-			if err != nil {
-				return verifyErr(err)
+	_, werr := verifyTiers(t.in.cfg, tierFull, func(tier string, _ []string) (bool, error) {
+		if tier == tierFull {
+			var err error
+			if vr, err = full(n); err != nil {
+				_, err = verifyErr(err)
+				return ends(err)
+			}
+			if r, done := trainStopped(*res, vr); done {
+				t.res = r
+				return ends(nil)
+			}
+			out := tierOutcomeOf(tierFull, trainSubject.CIWho, vr)
+			res.Notes = append(res.Notes, out.Notes...)
+			if out.NoCommands {
+				return true, nil // nothing ran; test.e2e may
+			}
+			res.Verified = out.Verified
+			res.Excluded = append(res.Excluded, out.Excluded...)
+			if out.OK {
+				return true, nil
+			}
+			fullRed = true
+			if stop, err := bisect(tierFull, full, vr, fullTierName); err != nil {
+				_, err = verifyErr(err)
+				return ends(err)
 			} else if stop {
-				return res, nil
+				return ends(nil)
 			}
+			return false, nil
 		}
-	}
-
-	// 4b. E2E: the most expensive tier runs once, on the train result, after
-	// test.full passed. A red e2e bisects the same way a red full does.
-	e2e := in.cfg.E2E
-	if green && len(e2e) > 0 {
-		run := cached("test.e2e", func() (VerifyResult, error) { return e.RunVerifyWith(ctx, e2e, scratch, in.ledger) })
-		er, err := run(n)
+		// 4b. E2E: the most expensive tier runs once, on the train result, after
+		// test.full passed. A red e2e bisects the same way a red full does.
+		er, err := e2e(n)
 		if err != nil {
-			return res, err
+			return ends(err)
 		}
-		res.E2EVerified = er.Verified
-		res.Excluded = append(res.Excluded, er.Excluded...)
-		for _, c := range er.Failed {
-			res.Notes = append(res.Notes, "e2e FAILED: "+c)
-		}
-		if !er.OK() {
-			var stop bool
-			passing, stop, err = e.bisectTrain(scratch, &res, tips, "test.e2e", run, er, o.LandGreen)
-			blame("test.e2e")
-			if err != nil || stop {
-				return res, err
+		eo := tierOutcomeOf(tierE2E, trainSubject.CIWho, er)
+		res.E2EVerified = eo.Verified
+		res.Excluded = append(res.Excluded, eo.Excluded...)
+		res.Notes = append(res.Notes, eo.Notes...)
+		if !eo.OK {
+			if stop, err := bisect(tierE2E, e2e, er, tierE2E); err != nil || stop {
+				return ends(err)
 			}
 		}
+		return true, nil
+	})
+	var te trainEnd
+	if errors.As(werr, &te) {
+		return true, te.err
 	}
+	green := !fullRed
 
 	// A member earlier named culprit that this verified train carries was flaky:
 	// the failure did not reproduce on a different combination.
@@ -442,12 +523,19 @@ func (e Env) train(ctx context.Context, root string, o TrainOpts, cache *trainCa
 		}
 	}
 
-	if !green && passing > 0 && len(e2e) > 0 {
-		res.Notes = append(res.Notes, fmt.Sprintf("NO-E2E land-green — the verified first %d member(s) land without test.e2e; it never ran on that prefix.", passing))
+	if !green && passing > 0 && len(t.in.cfg.E2E) > 0 {
+		res.Notes = append(res.Notes, noE2ENote(passing))
 	}
+	t.passing = passing
+	return false, nil
+}
 
-	// 5. Land. The tree that was verified must still be the one that lands.
-	if remote {
+// land is stage 5. The tree that was verified must still be the one that lands.
+func (t *trainRun) land() (TrainResult, error) {
+	e, ctx, root, o, tips, heads := t.e, t.ctx, t.root, t.o, t.tips, t.heads
+	res, baseRef, baseSHA, headRef, passing := t.res, t.baseRef, t.baseSHA, t.headRef, t.passing
+	n := len(res.Members)
+	if t.remote {
 		if _, code := e.git(root, "fetch", "origin", "-q"); code != 0 {
 			return e.trainBroke(res, "git fetch origin failed before landing")
 		}
@@ -464,7 +552,7 @@ func (e Env) train(ctx context.Context, root string, o TrainOpts, cache *trainCa
 	for i := 0; i < passing; i++ {
 		m := res.Members[i]
 		if i > 0 { // each landing must start from exactly the tree the scratch merge had at that point
-			if remote {
+			if t.remote {
 				if _, code := e.git(root, "fetch", "origin", "-q"); code != 0 {
 					return e.trainBroke(res, "git fetch origin failed between landings")
 				}
@@ -474,8 +562,8 @@ func (e Env) train(ctx context.Context, root string, o TrainOpts, cache *trainCa
 				return e.trainMoved(res, m.Target, fmt.Sprintf("%s changed outside the train after %d landing(s) (tree %s, verified %s)", baseRef, i, strutil.ShortSHA(got), strutil.ShortSHA(want)))
 			}
 		}
-		gated[m.Target] = true
-		gr, err := e.Gate(ctx, root, GateOpts{Slot: m.Target, Base: o.Base, NoVerify: true, Train: true, HoldsLandLock: true, Round: o.Round})
+		t.gated[m.Target] = true
+		gr, err := e.Gate(ctx, root, GateOpts{Slot: m.Target, Base: o.Base, LandVerified: true, HoldsLandLock: true, Round: o.Round})
 		res.Notes = append(res.Notes, gr.Notes...)
 		res.Changed = res.Changed || gr.Changed
 		if gr.Changed && gr.Verdict != GatePass { // the PR is on the base but the gate could not finish (merged-remotely)
