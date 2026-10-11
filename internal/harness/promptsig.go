@@ -29,7 +29,6 @@ var (
 	promptHeaderRe = regexp.MustCompile(`^--- ORCHESTRATOR \(round \d+\) ---$`)
 	promptSigRe    = regexp.MustCompile(`^--- ROTA-SIG ([0-9a-f]{64}) ---$`)
 	envAssignRe    = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*=`)
-	shSafeRe       = regexp.MustCompile(`^[A-Za-z0-9_@%+=:,./-]+$`)
 )
 
 // newPromptKey writes a fresh 32-byte key (hex, 0600) into home, replacing
@@ -141,20 +140,12 @@ func CheckPrompt(key []byte, prompt string) (ok bool, reason string) {
 	return true, ""
 }
 
-// shQuote quotes s for a POSIX shell; a token of safe characters stays bare.
-func shQuote(s string) string {
-	if shSafeRe.MatchString(s) {
-		return s
-	}
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
-}
-
 // CodexHookArgs are the codex flags that install the prompt-check hook. The
 // wrapper turns every failure of the check (not only its own exit 2) into a
 // block: Codex lets a hook that errors with another code through. The check's
 // own exit 2 already carries its reason, so only other codes get one added.
 func CodexHookArgs(rotaBin, keyPath string) []string {
-	cmd := shQuote(rotaBin) + " worker prompt-check --key " + shQuote(keyPath) +
+	cmd := shlex.Quote(rotaBin) + " worker prompt-check --key " + shlex.Quote(keyPath) +
 		"; rc=$?; [ $rc -eq 0 ] && exit 0; [ $rc -eq 2 ] || echo 'rota: the prompt check could not run, so this input was blocked' >&2; exit 2"
 	return []string{"-c", "features.hooks=true",
 		"-c", "hooks.UserPromptSubmit=[{hooks=[{type=\"command\",command=" + tomlString(cmd) + ",timeout=30}]}]"}
@@ -175,7 +166,7 @@ func withPromptHook(launch string, extra []string) (string, error) {
 	}
 	out := append(append(append([]string{}, toks[:i+1]...), extra...), toks[i+1:]...)
 	for j, t := range out {
-		out[j] = shQuote(t)
+		out[j] = shlex.Quote(t)
 	}
 	return strings.Join(out, " "), nil
 }

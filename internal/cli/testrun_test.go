@@ -91,12 +91,6 @@ func TestTestRunFilesIncludesUntrackedNotIgnored(t *testing.T) {
 	}
 }
 
-func TestShellQuote(t *testing.T) {
-	if got := shellQuote("it's"); got != `'it'\''s'` {
-		t.Errorf("shellQuote = %s", got)
-	}
-}
-
 // A local main that lags origin/main must not pull the upstream commits into
 // {files}: the default base is the remote-tracking ref when it is ahead.
 func TestTestRunFilesPrefersAheadRemoteBase(t *testing.T) {

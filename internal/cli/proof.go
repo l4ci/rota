@@ -10,6 +10,7 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/plan"
 	"github.com/l4ci/rota/internal/proof"
+	"github.com/l4ci/rota/internal/shlex"
 )
 
 // Glue for the proof group and plan uncertain, which read items through
@@ -90,7 +91,7 @@ func proofRecord(fs *flag.FlagSet) RunFunc {
 			}
 			quoted := make([]string, len(files))
 			for i, f := range files {
-				quoted[i] = shellQuote(f)
+				quoted[i] = shlex.QuoteAlways(f)
 			}
 			list = strings.Join(quoted, " ")
 		}
@@ -137,7 +138,7 @@ func recordedCommand(args []string, list string) string {
 				parts = append(parts, list)
 			}
 		default:
-			parts = append(parts, shellQuote(strings.ReplaceAll(a, filesPlaceholder, list)))
+			parts = append(parts, shlex.QuoteAlways(strings.ReplaceAll(a, filesPlaceholder, list)))
 		}
 	}
 	return strings.Join(parts, " ")
