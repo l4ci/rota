@@ -616,7 +616,8 @@ drift between the registry, the host, git and the forge, including `stalled` (ne
 `lease-stale`, `claim-mismatch` and `unregistered-branch`; `--apply` makes the safe repairs, and never
 edits the tracker. A repair whose evidence could not be read this run (the host for a `dead-tab`, the
 forge for a PR, merge or label finding) is skipped with a warning and stays in `drift`; run it again once
-the host or forge answers.
+the host or forge answers. A slot whose PR has merged is parked, even one already marked `dead` because its
+tab is gone; a slot whose worktree has uncommitted changes is left alone.
 
 If `.rota/workers.json` exists but does not parse, every verb that writes it refuses (`fix or remove it,
 rota will not overwrite it`) instead of starting from an empty pool. A verb that records a round event
