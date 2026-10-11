@@ -525,6 +525,11 @@
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-09"
+    },
+    "Rounds: Orchestration::Renamed Go tests can silently stop running": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-11"
     }
   }
 }
