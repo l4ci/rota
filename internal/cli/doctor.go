@@ -102,7 +102,7 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 		}
 	}
 	in.ProjectRoot = root
-	in.Slots, in.CwdOf = doctorSlotBlocks(root), procCwd
+	in.Slots, in.CwdOf = doctorSlotBlocks(root), procCwd(ctx, d.Proc)
 	in.NothingToVerify = worker.NothingToVerify(root)
 	in.AgentProblems = agents.Problems(root)
 	doctorDiskInput(ctx, &in, cfg, root, d.Git, d.Now(), d.DoctorDisk, d.Getenv)
@@ -231,14 +231,17 @@ func doctorSlotBlocks(root string) []doctor.SlotBlock {
 
 // procCwd is a process's working directory: /proc on Linux, lsof where /proc
 // is absent (macOS); "" when neither can say (someone else's process).
-func procCwd(pid int) string {
+func procCwd(ctx context.Context, run proc.Runner) func(pid int) string {
+	return func(pid int) string { return procCwdOf(ctx, run, pid) }
+}
+
+func procCwdOf(ctx context.Context, run proc.Runner, pid int) string {
 	if p, err := os.Readlink(fmt.Sprintf("/proc/%d/cwd", pid)); err == nil {
 		return p
 	}
-	bin, err := exec.LookPath("lsof")
+	res, err := run(ctx, proc.Cmd{Name: "lsof", Args: []string{"-a", "-p", strconv.Itoa(pid), "-d", "cwd", "-Fn"}})
 	if err != nil {
 		return ""
 	}
-	out, _ := exec.Command(bin, "-a", "-p", strconv.Itoa(pid), "-d", "cwd", "-Fn").Output()
-	return doctor.ParseLsofCwd(string(out))
+	return doctor.ParseLsofCwd(res.Stdout)
 }

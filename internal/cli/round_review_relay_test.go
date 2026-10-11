@@ -227,7 +227,7 @@ func TestFailVerdictReadsAFailReview(t *testing.T) {
 	if failVerdict(dir, "nia/577-x") != nil {
 		t.Fatal("a verdict from nowhere")
 	}
-	rec := verdict.NewRecord(verdict.ReviewSpec, verdict.Fail, "abcdef1234", verdict.Body{Summary: "bad", Findings: []verdict.Finding{{Severity: "major", Title: "no test", File: "a.go", Line: 3}}})
+	rec := verdict.NewRecord(verdict.ReviewSpec, verdict.Fail, "abcdef1234", verdict.Body{Summary: "bad", Findings: []verdict.Finding{{Severity: "major", Title: "no test", File: "a.go", Line: 3}}}, testNow)
 	if _, err := verdict.AddBranch(dir, verdict.BranchKey("", "nia/577-x"), rec); err != nil {
 		t.Fatal(err)
 	}
@@ -259,7 +259,7 @@ func TestReviewStepAutoRelayedMapsToRelayed(t *testing.T) {
 // review cursor, so it is not relayed.
 func TestFailVerdictIgnoresAnUnparseableTimestamp(t *testing.T) {
 	dir := workerProject(t, ghCfg)
-	rec := verdict.NewRecord(verdict.ReviewSpec, verdict.Fail, "abcdef1234", verdict.Body{Summary: "bad"})
+	rec := verdict.NewRecord(verdict.ReviewSpec, verdict.Fail, "abcdef1234", verdict.Body{Summary: "bad"}, testNow)
 	rec.RecordedAt = "yesterday"
 	if _, err := verdict.AddBranch(dir, verdict.BranchKey("", "nia/577-x"), rec); err != nil {
 		t.Fatal(err)

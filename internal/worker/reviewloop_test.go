@@ -42,7 +42,7 @@ func TestPendingReviewFiltersOwnAndApprovals(t *testing.T) {
 			{Comment: tracker.Comment{ID: "6", Author: "rev", Body: "split this file", CreatedAt: at(6)}, State: tracker.ReviewChangesRequested},
 		},
 	}
-	b, err := PendingReview(context.Background(), f, reviewSlot(), nil)
+	b, err := PendingReview(context.Background(), f, reviewSlot(), nil, testNow)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +58,7 @@ func TestPendingReviewCursorUnchanged(t *testing.T) {
 	f := fakeReviewForge{notes: []tracker.Comment{{ID: "1", Author: "rev", Body: "fix", CreatedAt: at(1)}}}
 	s := reviewSlot()
 	for i := 0; i < 2; i++ { // polling twice never moves the cursor
-		b, err := PendingReview(context.Background(), f, s, nil)
+		b, err := PendingReview(context.Background(), f, s, nil, testNow)
 		if err != nil || len(b.Items) != 1 {
 			t.Fatalf("poll %d: %+v %v", i, b, err)
 		}
@@ -66,14 +66,14 @@ func TestPendingReviewCursorUnchanged(t *testing.T) {
 	if s.ReviewSeen() != "" {
 		t.Fatalf("cursor moved to %q", s.ReviewSeen())
 	}
-	b, _ := PendingReview(context.Background(), f, s, nil)
+	b, _ := PendingReview(context.Background(), f, s, nil, testNow)
 	s.SetReviewSeen(b.Cursor)
-	b, err := PendingReview(context.Background(), f, s, nil)
+	b, err := PendingReview(context.Background(), f, s, nil, testNow)
 	if err != nil || len(b.Items) != 0 || !b.Empty() {
 		t.Fatalf("after consuming: %+v %v", b, err)
 	}
 	f.notes = append(f.notes, tracker.Comment{ID: "2", Author: "rev", Body: "and this", CreatedAt: at(9)})
-	if b, _ = PendingReview(context.Background(), f, s, nil); len(b.Items) != 1 || b.Items[0].ID != "2" {
+	if b, _ = PendingReview(context.Background(), f, s, nil, testNow); len(b.Items) != 1 || b.Items[0].ID != "2" {
 		t.Fatalf("new comment: %+v", b)
 	}
 }
@@ -81,19 +81,19 @@ func TestPendingReviewCursorUnchanged(t *testing.T) {
 func TestPendingReviewVerdict(t *testing.T) {
 	s := reviewSlot()
 	v := &ReviewVerdict{At: at(3), Text: "review FAIL: missing test"}
-	b, err := PendingReview(context.Background(), fakeReviewForge{}, s, v)
+	b, err := PendingReview(context.Background(), fakeReviewForge{}, s, v, testNow)
 	if err != nil || b.Verdict != v.Text || b.Empty() {
 		t.Fatalf("%+v %v", b, err)
 	}
 	s.SetReviewSeen(b.Cursor)
-	if b, _ = PendingReview(context.Background(), fakeReviewForge{}, s, v); !b.Empty() {
+	if b, _ = PendingReview(context.Background(), fakeReviewForge{}, s, v, testNow); !b.Empty() {
 		t.Fatalf("verdict reported twice: %+v", b)
 	}
 }
 
 func TestPendingReviewNoPR(t *testing.T) {
 	s := NewSlot("nia", "b", "/wt", "main", "")
-	if b, err := PendingReview(context.Background(), fakeReviewForge{}, s, nil); err != nil || !b.Empty() {
+	if b, err := PendingReview(context.Background(), fakeReviewForge{}, s, nil, testNow); err != nil || !b.Empty() {
 		t.Fatalf("%+v %v", b, err)
 	}
 }
@@ -102,14 +102,14 @@ func TestPendingReviewNoPR(t *testing.T) {
 func TestPendingReviewSameSecondItemIsNotLost(t *testing.T) {
 	s := reviewSlot()
 	f := fakeReviewForge{notes: []tracker.Comment{{ID: "1", Author: "rev", Body: "first", CreatedAt: at(1)}}}
-	b, err := PendingReview(context.Background(), f, s, nil)
+	b, err := PendingReview(context.Background(), f, s, nil, testNow)
 	if err != nil || len(b.Items) != 1 {
 		t.Fatalf("%+v %v", b, err)
 	}
 	s.SetReviewSeen(b.Cursor)
 	f.notes = append(f.notes, tracker.Comment{ID: "2", Author: "rev", Body: "second", CreatedAt: at(1)})
 	f.reviews = []tracker.Review{{Comment: tracker.Comment{ID: "1", Author: "rev", Body: "inline", CreatedAt: at(1)}, Inline: true}}
-	b, err = PendingReview(context.Background(), f, s, nil)
+	b, err = PendingReview(context.Background(), f, s, nil, testNow)
 	if err != nil || len(b.Items) != 2 || b.Items[0].Body != "second" && b.Items[1].Body != "second" {
 		t.Fatalf("same-second items: %+v %v", b.Items, err)
 	}
@@ -119,7 +119,7 @@ func TestPendingReviewSameSecondItemIsNotLost(t *testing.T) {
 		}
 	}
 	s.SetReviewSeen(b.Cursor)
-	if b, _ = PendingReview(context.Background(), f, s, nil); !b.Empty() {
+	if b, _ = PendingReview(context.Background(), f, s, nil, testNow); !b.Empty() {
 		t.Fatalf("consumed batch came back: %+v", b.Items)
 	}
 }
@@ -130,7 +130,7 @@ func TestPendingReviewKeepsBodylessChangesRequested(t *testing.T) {
 		{Comment: tracker.Comment{ID: "1", Author: "rev", CreatedAt: at(1)}, State: tracker.ReviewChangesRequested},
 		{Comment: tracker.Comment{ID: "2", Author: "rev", CreatedAt: at(2)}, State: tracker.ReviewCommented},
 	}}
-	b, err := PendingReview(context.Background(), f, reviewSlot(), nil)
+	b, err := PendingReview(context.Background(), f, reviewSlot(), nil, testNow)
 	if err != nil || len(b.Items) != 1 || b.Items[0].State != tracker.ReviewChangesRequested {
 		t.Fatalf("%+v %v", b.Items, err)
 	}
@@ -140,14 +140,28 @@ func TestPendingReviewKeepsBodylessChangesRequested(t *testing.T) {
 // the whole discussion in MRNotes: review input must still reach the worker.
 func TestPendingReviewProviderWithoutReviews(t *testing.T) {
 	f := fakeReviewForge{notes: []tracker.Comment{{ID: "1", Author: "rev", Body: "rename this", CreatedAt: at(1)}}}
-	b, err := PendingReview(context.Background(), f, reviewSlot(), nil)
+	b, err := PendingReview(context.Background(), f, reviewSlot(), nil, testNow)
 	if err != nil || len(b.Items) != 1 || b.Items[0].Body != "rename this" {
 		t.Fatalf("notes-only provider: %+v %v", b, err)
 	}
 	if b.Items[0].State != tracker.ReviewCommented {
 		t.Fatalf("state = %q", b.Items[0].State)
 	}
-	if b, _ = PendingReview(context.Background(), fakeReviewForge{}, reviewSlot(), nil); !b.Empty() {
+	if b, _ = PendingReview(context.Background(), fakeReviewForge{}, reviewSlot(), nil, testNow); !b.Empty() {
 		t.Fatalf("nothing posted must be empty: %+v", b)
+	}
+}
+
+var testNow = time.Date(2026, 3, 4, 9, 5, 6, 0, time.UTC)
+
+// A forge that dates nothing: the cursor is the injected clock, not wall time.
+func TestPendingReviewUndatedItemCursorIsInjectedNow(t *testing.T) {
+	f := fakeReviewForge{notes: []tracker.Comment{{ID: "1", Author: "rev", Body: "fix"}}}
+	b, err := PendingReview(context.Background(), f, reviewSlot(), nil, testNow)
+	if err != nil || len(b.Items) != 1 {
+		t.Fatalf("%+v %v", b, err)
+	}
+	if want := formatCursor(testNow, []string{"n1"}); b.Cursor != want {
+		t.Fatalf("cursor = %q, want %q", b.Cursor, want)
 	}
 }

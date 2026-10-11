@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 func exitOf(err error) int {
@@ -75,7 +76,7 @@ func TestAddAndShowMatchOldHelpers(t *testing.T) {
 		{"B05", AddOpts{"archived", "PASS", "x", "222"}, true},
 	}
 	for _, s := range steps {
-		if _, changed, err := Add(Files(root), root, s.id, s.o); err != nil || changed != s.ch {
+		if _, changed, err := Add(Files(root), root, s.id, proofDay, s.o); err != nil || changed != s.ch {
 			t.Fatalf("Add(%s %+v) = %v %v, want changed=%v", s.id, s.o, changed, err, s.ch)
 		}
 	}
@@ -119,7 +120,7 @@ func TestAddExits(t *testing.T) {
 		{"B07", AddOpts{"c", "", "e", "s"}, 2},
 		{"B99", ok, 3},
 	} {
-		if _, _, err := Add(Files(root), root, c.id, c.o); exitOf(err) != c.exit {
+		if _, _, err := Add(Files(root), root, c.id, proofDay, c.o); exitOf(err) != c.exit {
 			t.Errorf("Add(%s %+v) = %v, want exit %d", c.id, c.o, err, c.exit)
 		}
 	}
@@ -135,13 +136,13 @@ func TestDefaultShaFromGit(t *testing.T) {
 		c.Dir = root
 		c.Run()
 	}
-	row, _, err := Add(Files(root), root, "B07", AddOpts{Check: "c", Result: "PASS", Evidence: "e"})
+	row, _, err := Add(Files(root), root, "B07", proofDay, AddOpts{Check: "c", Result: "PASS", Evidence: "e"})
 	if err != nil || len(row.Sha) < 7 || row.Sha == "-" {
 		t.Fatalf("sha = %q %v", row.Sha, err)
 	}
 	// No repository: "-".
 	root2 := project(t)
-	if row, _, _ := Add(Files(root2), root2, "B07", AddOpts{Check: "c", Result: "PASS", Evidence: "e"}); row.Sha != "-" {
+	if row, _, _ := Add(Files(root2), root2, "B07", proofDay, AddOpts{Check: "c", Result: "PASS", Evidence: "e"}); row.Sha != "-" {
 		t.Errorf("no-git sha = %q", row.Sha)
 	}
 }
@@ -150,7 +151,7 @@ func TestAddCRLFDetailFile(t *testing.T) {
 	root := project(t)
 	p := filepath.Join(root, ".rota/tasks/T03.md")
 	os.WriteFile(p, []byte("# T03\r\n\r\n## Proof\r\n\r\n- 2026-01-01 · a · PASS · s · e\r\n"), 0o644)
-	if _, changed, err := Add(Files(root), root, "T03", AddOpts{"b", "PASS", "e", "s"}); err != nil || !changed {
+	if _, changed, err := Add(Files(root), root, "T03", proofDay, AddOpts{"b", "PASS", "e", "s"}); err != nil || !changed {
 		t.Fatal(err)
 	}
 	got, _ := os.ReadFile(p)
@@ -168,7 +169,7 @@ func TestAddConcurrentIdenticalRows(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, ch, err := Add(Files(root), root, "B07", AddOpts{"c", "PASS", "e", "s"})
+			_, ch, err := Add(Files(root), root, "B07", proofDay, AddOpts{"c", "PASS", "e", "s"})
 			if err != nil {
 				t.Error(err)
 			}
@@ -192,7 +193,7 @@ func TestUnreadableDetailFileIsExit70(t *testing.T) {
 	if err := os.MkdirAll(p, 0o777); err != nil { // a directory: ReadFile fails with EISDIR
 		t.Fatal(err)
 	}
-	if _, _, err := Add(Files(root), root, "B07", AddOpts{"c", "PASS", "e", "s"}); exitOf(err) != 70 {
+	if _, _, err := Add(Files(root), root, "B07", proofDay, AddOpts{"c", "PASS", "e", "s"}); exitOf(err) != 70 {
 		t.Errorf("add: %v", err)
 	}
 	if _, _, err := Show(Files(root), "B07"); exitOf(err) != 70 {
@@ -200,5 +201,15 @@ func TestUnreadableDetailFileIsExit70(t *testing.T) {
 	}
 	if fi, err := os.Stat(p); err != nil || !fi.IsDir() {
 		t.Error("the unreadable path was replaced")
+	}
+}
+
+var proofDay = time.Date(2026, 3, 4, 9, 0, 0, 0, time.UTC)
+
+func TestAddDatesRowWithTheGivenDay(t *testing.T) {
+	root := project(t)
+	row, _, err := Add(Files(root), root, "B07", proofDay, AddOpts{Check: "c", Result: "PASS", Evidence: "e", Sha: "abc1234"})
+	if err != nil || row.Date != "2026-03-04" {
+		t.Fatalf("row = %+v %v", row, err)
 	}
 }

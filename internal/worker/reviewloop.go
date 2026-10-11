@@ -50,7 +50,8 @@ func (b ReviewBatch) Empty() bool { return len(b.Items) == 0 && b.Verdict == "" 
 // It reads and never writes: the cursor moves only when the batch is consumed
 // (SetReviewSeen), so a restarted watch reports an unrelayed batch again.
 // A slot with no PR has nothing to read.
-func PendingReview(ctx context.Context, f ReviewForge, s *Slot, v *ReviewVerdict) (ReviewBatch, error) {
+// now stamps the cursor when the forge dates nothing.
+func PendingReview(ctx context.Context, f ReviewForge, s *Slot, v *ReviewVerdict, now time.Time) (ReviewBatch, error) {
 	b := ReviewBatch{Slot: s.Name(), PR: s.PR()}
 	n, ok := PRRefNumber(s.PR())
 	if !ok {
@@ -116,7 +117,7 @@ func PendingReview(ctx context.Context, f ReviewForge, s *Slot, v *ReviewVerdict
 	}
 	if !b.Empty() {
 		if newest.IsZero() { // a forge that dates nothing: from now on is new
-			newest = time.Now()
+			newest = now
 		}
 		// An item at exactly the old cursor time that was already consumed stays consumed.
 		if newest.Equal(after) {

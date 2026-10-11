@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -20,6 +19,7 @@ import (
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/keepalive"
+	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/roundlease"
@@ -85,10 +85,13 @@ func statuslineDump(fs *flag.FlagSet) RunFunc {
 			fmt.Fprintf(c.Stderr, "rota statusline dump: %v\n", err)
 		}
 		if *then != "" {
-			cmd := exec.CommandContext(c.Context(), "sh", "-c", *then)
-			cmd.Stdin = bytes.NewReader(input)
-			cmd.Stdout, cmd.Stderr = c.Stdout, c.Stderr
-			if err := cmd.Run(); err != nil && debug {
+			res, err := c.deps().Proc(c.Context(), proc.Cmd{Name: "sh", Args: []string{"-c", *then}, Stdin: input, Timeout: proc.NoTimeout})
+			io.WriteString(c.Stdout, res.Stdout)
+			io.WriteString(c.Stderr, res.Stderr)
+			if err == nil && res.ExitCode != 0 {
+				err = fmt.Errorf("exit status %d", res.ExitCode)
+			}
+			if err != nil && debug {
 				fmt.Fprintf(c.Stderr, "rota statusline dump: --then: %v\n", err)
 			}
 		}

@@ -15,7 +15,7 @@ import (
 // b3Record stores one verdict for a branch key under root.
 func b3Record(t *testing.T, root, key, kind, v, sha string) {
 	t.Helper()
-	if _, err := verdict.AddBranch(root, key, verdict.NewRecord(kind, v, sha, verdict.Body{})); err != nil {
+	if _, err := verdict.AddBranch(root, key, verdict.NewRecord(kind, v, sha, verdict.Body{}, testNow)); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -138,7 +138,7 @@ func TestShipPRMergeNoHeadBranchWarns(t *testing.T) {
 func b3Fails(t *testing.T, root, bug string, n int) {
 	t.Helper()
 	for i := 0; i < n; i++ {
-		if _, err := verdict.AddItem(root, bug, verdict.NewRecord(verdict.DebugFix, verdict.Fail, "abc1234", verdict.Body{})); err != nil {
+		if _, err := verdict.AddItem(root, bug, verdict.NewRecord(verdict.DebugFix, verdict.Fail, "abc1234", verdict.Body{}, testNow)); err != nil {
 			t.Fatal(err)
 		}
 	}

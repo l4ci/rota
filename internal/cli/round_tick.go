@@ -373,7 +373,7 @@ func reviewStep(c *Ctx, root string, set roundcfg.Settings, slot string) roundti
 		} else if !strings.EqualFold(info.State, "OPEN") {
 			return roundtick.ReviewOutcome{}
 		}
-		b, err := worker.PendingReview(ctx, o.Forge, s, o.Verdict)
+		b, err := worker.PendingReview(ctx, o.Forge, s, o.Verdict, c.deps().Now())
 		if err != nil {
 			return pollFailed(err)
 		}

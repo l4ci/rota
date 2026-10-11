@@ -100,7 +100,9 @@ func (e Entry) object() *jsonx.Object {
 }
 
 // Append writes e as one line under the file's lock and syncs it. A zero TS is
-// stamped with the current time.
+// stamped with the current time. That clock stays raw: this leaf package has no
+// Env and its many callers would each need one; a caller that must pin the
+// time sets Entry.TS.
 func Append(root string, e Entry) error {
 	if e.TS.IsZero() {
 		e.TS = time.Now()

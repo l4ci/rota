@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/l4ci/rota/internal/debugctr"
 	"github.com/l4ci/rota/internal/jsonx"
@@ -85,7 +86,7 @@ func TestDebugLegacyAliases(t *testing.T) {
 	b3Fails(t, root, "9", 1)
 	b3Fails(t, root, "#9", 1)
 	b3Fails(t, root, "B09", 1)
-	if _, err := verdict.ResetItem(root, "B09", verdict.NewRecord(verdict.DebugReset, verdict.Reset, "s", verdict.Body{})); err != nil {
+	if _, err := verdict.ResetItem(root, "B09", verdict.NewRecord(verdict.DebugReset, verdict.Reset, "s", verdict.Body{}, testNow)); err != nil {
 		t.Fatal(err)
 	}
 	b3Fails(t, root, "B09", 1)
@@ -160,3 +161,5 @@ func TestDebugLegacyHistoryBeyondCap(t *testing.T) {
 	}
 	debugIssueRun(t, deps, root, 0, "counter", "init", "9")
 }
+
+var testNow = time.Date(2026, 3, 4, 9, 5, 6, 0, time.UTC)

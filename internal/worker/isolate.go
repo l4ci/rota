@@ -3,7 +3,6 @@ package worker
 import (
 	"context"
 	"os"
-	"os/exec"
 	"strings"
 
 	"github.com/l4ci/rota/internal/proc"
@@ -67,15 +66,11 @@ func goCaches(environ []string) []string {
 		}
 	}
 	if len(missing) > 0 {
-		if gobin, err := exec.LookPath("go"); err == nil {
-			cmd := exec.Command(gobin, append([]string{"env"}, missing...)...)
-			cmd.Env = environ
-			if out, err := cmd.Output(); err == nil {
-				lines := strings.Split(strings.TrimRight(string(out), "\n"), "\n")
-				if len(lines) == len(missing) {
-					for i, v := range missing {
-						have[v] = lines[i]
-					}
+		if res, err := proc.Run(context.Background(), proc.Cmd{Name: "go", Args: append([]string{"env"}, missing...), Environ: environ}); err == nil && res.ExitCode == 0 {
+			lines := strings.Split(strings.TrimRight(res.Stdout, "\n"), "\n")
+			if len(lines) == len(missing) {
+				for i, v := range missing {
+					have[v] = lines[i]
 				}
 			}
 		}
