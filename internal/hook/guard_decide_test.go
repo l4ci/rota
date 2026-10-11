@@ -59,7 +59,7 @@ func TestDecideGuard(t *testing.T) {
 	}
 }
 
-func TestslotWorktree(t *testing.T) {
+func TestSlotWorktree(t *testing.T) {
 	git := func(string, ...string) (string, error) { return "", errors.New("no git") }
 	if got := slotWorktree(gWork+"/internal", "dana", git); got != gWork {
 		t.Errorf("ancestor: got %q", got)
