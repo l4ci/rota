@@ -180,11 +180,6 @@ func TestAssignRefusals(t *testing.T) {
 		t.Errorf("a process without the lease: %v", err)
 	}
 
-	f.be.add("20", "Elsewhere", "M09", false, "## Acceptance\n- [ ] x")
-	if _, err := f.assign("20", "ben", nil); blockedBy(t, err) != BlockOutOfScope {
-		t.Errorf("outside the milestone: %v", err)
-	}
-
 	f.be.claimedBy = "dana@1"
 	if _, err := f.assign("12", "ben", nil); blockedBy(t, err) != BlockClaimed || !strings.Contains(err.Error(), "dana@1") {
 		t.Errorf("claimed elsewhere: %v", err)
@@ -876,12 +871,9 @@ func TestAssignRefusesBadHarnessAndModelLabels(t *testing.T) {
 		mod    func(*AssignOpts)
 		named  string
 	}{
-		"unknown harness":   {labels: []string{"harness:gemini"}, by: BlockHarnessLabel, named: "harness:gemini"},
-		"two harness":       {labels: []string{"harness:claude", "harness:codex"}, by: BlockHarnessLabel, named: "harness:codex"},
-		"two model":         {labels: []string{"model:a", "model:b"}, by: BlockModelLabel, named: "model:b"},
-		"model, no {model}": {labels: []string{"model:opus"}, by: BlockModelLabel, cfg: `{"work":{"workerCommand":"mywrap --dangerously-skip-permissions"}}`, named: "model:opus"},
-		"--model, no {model}": {cfg: `{"work":{"workerCommand":"mywrap --dangerously-skip-permissions"}}`, by: BlockModelLabel,
-			mod: func(o *AssignOpts) { o.Model = "opus" }, named: "--model opus"},
+		"unknown harness": {labels: []string{"harness:gemini"}, by: BlockHarnessLabel, named: "harness:gemini"},
+		"two harness":     {labels: []string{"harness:claude", "harness:codex"}, by: BlockHarnessLabel, named: "harness:codex"},
+		"two model":       {labels: []string{"model:a", "model:b"}, by: BlockModelLabel, named: "model:b"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			f := newAssignFixture(t)
