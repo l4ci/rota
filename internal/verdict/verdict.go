@@ -267,15 +267,15 @@ type Record struct {
 	Declined   []Declined    `json:"declined,omitempty"`
 }
 
-// NewRecord stamps a record with the current UTC time.
-func NewRecord(kind, v, sha string, body Body) Record {
+// NewRecord stamps a record with now in UTC.
+func NewRecord(kind, v, sha string, body Body, now time.Time) Record {
 	findings := body.Findings
 	if findings == nil {
 		findings = []Finding{}
 	}
 	return Record{
 		Kind: kind, Verdict: v, Sha: sha,
-		RecordedAt: time.Now().UTC().Format("2006-01-02T15:04:05Z"),
+		RecordedAt: now.UTC().Format("2006-01-02T15:04:05Z"),
 		Summary:    body.Summary, Findings: findings, Items: body.Items, Declined: body.Declined,
 	}
 }

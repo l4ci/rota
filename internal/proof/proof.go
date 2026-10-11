@@ -42,7 +42,7 @@ type AddOpts struct{ Check, Result, Evidence, Sha string }
 // HEAD when o.Sha is empty. changed is false when an identical row (check,
 // result, sha, evidence; date ignored) already exists. The returned Row
 // carries the whitespace-collapsed values that were stored.
-func Add(s Store, dir, id string, o AddOpts) (row Row, changed bool, err error) {
+func Add(s Store, dir, id string, today time.Time, o AddOpts) (row Row, changed bool, err error) {
 	check, evidence := one(o.Check), one(o.Evidence)
 	if check == "" || evidence == "" {
 		return row, false, exitcode.Errf(exitcode.ExitUsage, "--check and --evidence must not be empty")
@@ -54,7 +54,7 @@ func Add(s Store, dir, id string, o AddOpts) (row Row, changed bool, err error) 
 	if sha == "" {
 		sha = headSha(dir)
 	}
-	row = Row{time.Now().Format("2006-01-02"), check, o.Result, sha, evidence}
+	row = Row{today.Format("2006-01-02"), check, o.Result, sha, evidence}
 	line := "- " + strings.Join([]string{row.Date, row.Check, row.Result, row.Sha, row.Evidence}, sep)
 	key := strings.SplitN(line, sep, 2)[1]
 

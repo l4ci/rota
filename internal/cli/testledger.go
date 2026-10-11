@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/testledger"
@@ -62,7 +61,7 @@ func testLedgerCheck(c *Ctx, args []string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	now := time.Now()
+	now := c.deps().Now()
 	expired := led.Expired(now)
 	d.Set("entries", len(led.Entries))
 	d.Set("expired", ledgerEntries(expired))

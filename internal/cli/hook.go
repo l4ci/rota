@@ -85,6 +85,9 @@ func statuslineDump(fs *flag.FlagSet) RunFunc {
 			fmt.Fprintf(c.Stderr, "rota statusline dump: %v\n", err)
 		}
 		if *then != "" {
+			// Raw exec on purpose: the statusline runs on every redraw and
+			// proc.Run's buffering and 5s WaitDelay would stall it when the
+			// wrapped script backgrounds a job.
 			cmd := exec.CommandContext(c.Context(), "sh", "-c", *then)
 			cmd.Stdin = bytes.NewReader(input)
 			cmd.Stdout, cmd.Stderr = c.Stdout, c.Stderr

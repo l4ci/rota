@@ -100,7 +100,9 @@ func (e Entry) object() *jsonx.Object {
 }
 
 // Append writes e as one line under the file's lock and syncs it. A zero TS is
-// stamped with the current time.
+// stamped with the current time. Callers that hold a clock (Deps or Env) set TS
+// from it; the zero default stays raw only for writers with none: bounce, gate
+// and train rows deep in package worker, and the limits watcher.
 func Append(root string, e Entry) error {
 	if e.TS.IsZero() {
 		e.TS = time.Now()

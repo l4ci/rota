@@ -12,6 +12,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/l4ci/rota/internal/proof"
 )
@@ -341,7 +342,7 @@ func TestUncertainMatchesOldHelper(t *testing.T) {
 		return os.WriteFile(filepath.Join(rota, rel), b, 0o644)
 	})
 	// The recorded run did uncertain after its proof adds, so B07 has the detail file they create.
-	if _, _, err := proof.Add(proof.Files(root), root, "B07", proof.AddOpts{Check: "unit  tests", Result: "PASS", Evidence: "go test ./... ok", Sha: "abc1234"}); err != nil {
+	if _, _, err := proof.Add(proof.Files(root), root, "B07", time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC), proof.AddOpts{Check: "unit  tests", Result: "PASS", Evidence: "go test ./... ok", Sha: "abc1234"}); err != nil {
 		t.Fatal(err)
 	}
 	gold := filepath.Join("..", "proof", "testdata", "golden")

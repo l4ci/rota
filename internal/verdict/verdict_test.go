@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestParseBodyAccepts(t *testing.T) {
@@ -39,11 +40,11 @@ func TestParseBodyDeclined(t *testing.T) {
 			t.Errorf("%s: err %v, want %q", in, err, want)
 		}
 	}
-	r := NewRecord(ReviewQuality, Pass, "s", b)
+	r := NewRecord(ReviewQuality, Pass, "s", b, recAt)
 	if len(r.Declined) != 1 {
 		t.Errorf("record dropped declined: %+v", r)
 	}
-	if o, _ := NewRecord(ReviewQuality, Pass, "s", Body{}).Object().Get("declined"); o != nil {
+	if o, _ := NewRecord(ReviewQuality, Pass, "s", Body{}, recAt).Object().Get("declined"); o != nil {
 		t.Errorf("empty declined should be omitted, got %v", o)
 	}
 }
@@ -108,7 +109,7 @@ func TestWorst(t *testing.T) {
 	}
 }
 
-func rec(kind, v, sha string) Record { return NewRecord(kind, v, sha, Body{}) }
+func rec(kind, v, sha string) Record { return NewRecord(kind, v, sha, Body{}, recAt) }
 
 func TestAddBranchCombines(t *testing.T) {
 	root := t.TempDir()
@@ -148,7 +149,7 @@ func TestStoreCapsAndRoundTrips(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	r := NewRecord(QA, Fail, "s", Body{Summary: "é <x>", Findings: []Finding{{Severity: "info", Title: "t", Line: 2}}})
+	r := NewRecord(QA, Fail, "s", Body{Summary: "é <x>", Findings: []Finding{{Severity: "info", Title: "t", Line: 2}}}, recAt)
 	if _, err := AddBranch(root, "b", r); err != nil {
 		t.Fatal(err)
 	}
@@ -308,5 +309,13 @@ func TestAtHead(t *testing.T) {
 		if got := AtHead(Record{Sha: c.rec}, c.head); got != c.want {
 			t.Errorf("%s: AtHead(%q, %q) = %v, want %v", c.name, c.rec, c.head, got, c.want)
 		}
+	}
+}
+
+var recAt = time.Date(2026, 3, 4, 9, 5, 6, 0, time.UTC)
+
+func TestNewRecordStampsTheGivenTime(t *testing.T) {
+	if got := NewRecord(QA, Pass, "s", Body{}, recAt).RecordedAt; got != "2026-03-04T09:05:06Z" {
+		t.Fatalf("RecordedAt = %q", got)
 	}
 }
