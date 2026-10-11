@@ -110,7 +110,7 @@ func roundStatus(*flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		ctx := c.Context()
-		renv := withBoard(c, root, accountedRoundEnv(c, ctx, root))
+		renv := withBoard(c, root, c.deps().RoundEnv(ctx, root))
 		rep, err := renv.Status(ctx, root)
 		if err != nil {
 			return Result{}, err
@@ -132,6 +132,7 @@ func roundStatus(*flag.FlagSet) RunFunc {
 		d.Set("review", queuedRows(rep.Queued))
 		var lines []string
 		if set, err := roundcfg.Load(root); err == nil {
+			renv.Worker.Accounts = c.deps().WorkerAccounts() // only the quota read, after Status ran without
 			if qc := renv.QuotaCap(ctx, root, set); qc.Reduced() {
 				co := jsonx.NewObject()
 				co.Set("effective", qc.Effective)
