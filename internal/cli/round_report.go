@@ -6,7 +6,6 @@ import (
 
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/round"
-	"github.com/l4ci/rota/internal/worker"
 )
 
 // The C8 verb `rota round report`: a solo round's stand-in for the pane poll
@@ -25,7 +24,7 @@ func roundReport(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		env := round.Env{Worker: worker.Env{Accounts: c.deps().WorkerAccounts()}}
+		env := c.deps().baseRoundEnv()
 		res, err := env.ReportSlot(c.Context(), root, round.ReportOpts{Slot: slot, State: *state, Evidence: *evidence, PR: *pr, Issues: *issues})
 		if err != nil {
 			return Result{}, err

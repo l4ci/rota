@@ -30,9 +30,8 @@ import (
 // the local sources and would not wait on the network.
 func defaultRoundEnv(ctx context.Context, root string, d *Deps, withForge bool) round.Env {
 	cfg := config.Load(rotatree.Config(root))
-	e := round.Env{Git: d.Git, Base: "main", Lease: d.LeaseEnv()}
-	e.Worker.NewHost = func(kind string) host.Host { return d.Host(kind) }
-	e.Worker.Now, e.Worker.Getenv = d.Now, d.Getenv
+	e := d.baseRoundEnv()
+	e.Base = "main"
 	if b, ok, err := (git.Repo{Dir: root}).Base(ctx, ""); err == nil && ok {
 		e.Base = b
 	}

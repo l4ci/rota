@@ -160,6 +160,9 @@ func (c *Ctx) deps() *Deps {
 // workerEnv is the WorkerEnv hook with its host filled from Host.
 func (d *Deps) workerEnv() worker.Env {
 	e := d.WorkerEnv()
+	if e.Git == nil {
+		e.Git = d.Git
+	}
 	if e.NewHost == nil {
 		e.NewHost = func(kind string) host.Host { return d.Host(kind) }
 	}
@@ -173,6 +176,12 @@ func (d *Deps) workerEnv() worker.Env {
 		e.Accounts = d.WorkerAccounts()
 	}
 	return e
+}
+
+// baseRoundEnv is the round.Env every round verb starts from: the one Git, the
+// lease and the worker env, all read off Deps so a swapped fake reaches them.
+func (d *Deps) baseRoundEnv() round.Env {
+	return round.Env{Git: d.Git, Lease: d.LeaseEnv(), Worker: d.workerEnv()}
 }
 
 // escalationEnv is the EscalationEnv hook with its host (always herdr, the
