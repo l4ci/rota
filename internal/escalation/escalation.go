@@ -242,7 +242,7 @@ func notify(ctx context.Context, env Env, root, id string, o SendOpts, warns []s
 	switch worker.ResolveHost(root, env.Getenv, env.LookPath) {
 	case host.Solo: // the PR comment is the only channel
 		return false, append(warns, "no notification: the round is solo, there is no herdr")
-	case "herdr":
+	case host.Herdr:
 	default:
 		return false, append(warns, "no notification: the host is not herdr (the round, work.dispatch and the environment do not name herdr)")
 	}

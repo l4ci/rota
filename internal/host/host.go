@@ -183,10 +183,54 @@ func (t Turn) Finished(base int) bool {
 	return base > 0 && (t.Status == "idle" || t.Status == "done") && t.CompletionSeq > base
 }
 
+// Capabilities is the optional surface of a Host, one field per side. A nil
+// field means the host lacks that side (tmux has no Labeler, herdr no
+// Operator). It is the one place the optional interfaces are discovered.
+type Capabilities struct {
+	Resubmitter    Resubmitter
+	Explainer      Explainer
+	Labeler        Labeler
+	TurnReader     TurnReader
+	Watcher        Watcher
+	PaneSweeper    PaneSweeper
+	Layouter       Layouter
+	TabOpener      TabOpener
+	SessionStarter SessionStarter
+	TabLister      TabLister
+	PaneHost       PaneHost
+	OutputWatcher  OutputWatcher
+	Operator       Operator
+	Snapshotter    Snapshotter
+}
+
+// CapabilitiesOf reads the optional sides h implements. Real hosts return it
+// from Capabilities; a test fake does the same to declare what it supports.
+func CapabilitiesOf(h any) Capabilities {
+	var c Capabilities
+	c.Resubmitter, _ = h.(Resubmitter)
+	c.Explainer, _ = h.(Explainer)
+	c.Labeler, _ = h.(Labeler)
+	c.TurnReader, _ = h.(TurnReader)
+	c.Watcher, _ = h.(Watcher)
+	c.PaneSweeper, _ = h.(PaneSweeper)
+	c.Layouter, _ = h.(Layouter)
+	c.TabOpener, _ = h.(TabOpener)
+	c.SessionStarter, _ = h.(SessionStarter)
+	c.TabLister, _ = h.(TabLister)
+	c.PaneHost, _ = h.(PaneHost)
+	c.OutputWatcher, _ = h.(OutputWatcher)
+	c.Operator, _ = h.(Operator)
+	c.Snapshotter, _ = h.(Snapshotter)
+	return c
+}
+
 // Host is one terminal backend.
 type Host interface {
-	// Name is "tmux" or "herdr".
-	Name() string
+	// Kind is the backend this host drives (Herdr or Tmux).
+	Kind() Kind
+	// Capabilities names the optional sides this host supports; a field is
+	// nil for a side it lacks. Callers ask here instead of type-asserting.
+	Capabilities() Capabilities
 	// Require fails when the backend's binary is missing.
 	Require() error
 	// InSession: this process runs inside a managed pane of the backend.
@@ -208,12 +252,12 @@ type Host interface {
 	Notify(ctx context.Context, title, body string)
 }
 
-// New returns the host for work.dispatch: "herdr" selects herdr, anything
-// else, including the default "subagent", selects tmux (the worker helpers
+// New returns the host for a kind: Herdr selects herdr, anything else,
+// including Solo, selects tmux (the worker helpers
 // predate work.dispatch=herdr and have always driven tmux).
-func New(dispatch string, d Deps) Host {
+func New(kind Kind, d Deps) Host {
 	d.fill()
-	if dispatch == "herdr" {
+	if kind == Herdr {
 		return &herdr{d: d, noted: new(atomic.Bool)}
 	}
 	return &tmux{d: d}

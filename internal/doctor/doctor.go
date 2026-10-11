@@ -220,12 +220,12 @@ func (d *runner) jq() Check {
 
 // roundHost is the host a round would run on: the same detection the round
 // verbs use, so doctor checks what `round start` will drive.
-func (d *runner) roundHost() string {
+func (d *runner) roundHost() host.Kind {
 	getenv := d.in.Getenv
 	if getenv == nil {
 		getenv = func(string) string { return "" }
 	}
-	return host.Resolve("", d.in.Dispatch, getenv, func(name string) (string, error) {
+	return host.Resolve("", host.KindOf(d.in.Dispatch), getenv, func(name string) (string, error) {
 		if p, ok := d.in.Look(name); ok {
 			return p, nil
 		}
@@ -235,9 +235,9 @@ func (d *runner) roundHost() string {
 
 func (d *runner) host() Check {
 	switch d.roundHost() {
-	case "herdr":
+	case host.Herdr:
 		want := host.SupportedHerdr + ".x"
-		bin, ok := d.in.Look("herdr")
+		bin, ok := d.in.Look(host.Herdr.Binary())
 		if !ok {
 			return fail("host", "herdr not found on PATH", "install herdr "+want+" (https://herdr.dev)")
 		}
@@ -251,8 +251,8 @@ func (d *runner) host() Check {
 			return fail("host", fmt.Sprintf("herdr %s, need %s", v, want), "install herdr "+want+" (https://herdr.dev)")
 		}
 		return pass("host", "herdr "+v)
-	case "tmux":
-		if _, ok := d.in.Look("tmux"); !ok {
+	case host.Tmux:
+		if _, ok := d.in.Look(host.Tmux.Binary()); !ok {
 			return fail("host", "tmux not found on PATH", "install tmux")
 		}
 		return pass("host", "tmux on PATH")
@@ -354,13 +354,13 @@ func (d *runner) accounts() Check {
 const hookHint = "herdr integration install claude"
 
 func (d *runner) hook() Check {
-	if d.roundHost() != "herdr" {
+	if d.roundHost() != host.Herdr {
 		return skip("hook", "host is not herdr")
 	}
 	if len(d.in.Accounts) == 0 {
 		return skip("hook", "no accounts in work.accounts")
 	}
-	bin, ok := d.in.Look("herdr")
+	bin, ok := d.in.Look(host.Herdr.Binary())
 	if !ok {
 		return skip("hook", "herdr not on PATH (see host)")
 	}

@@ -18,7 +18,7 @@ import (
 
 // fakeHost is a scripted host.Host.
 type fakeHost struct {
-	name       string
+	name       host.Kind
 	inSession  bool
 	where      string
 	requireErr error
@@ -33,10 +33,11 @@ type fakeHost struct {
 	spawnOpts  host.SpawnOpts
 }
 
-func (f *fakeHost) Name() string    { return f.name }
-func (f *fakeHost) Require() error  { return f.requireErr }
-func (f *fakeHost) InSession() bool { return f.inSession }
-func (f *fakeHost) Where() string   { return f.where }
+func (f *fakeHost) Kind() host.Kind                 { return f.name }
+func (f *fakeHost) Capabilities() host.Capabilities { return host.CapabilitiesOf(f) }
+func (f *fakeHost) Require() error                  { return f.requireErr }
+func (f *fakeHost) InSession() bool                 { return f.inSession }
+func (f *fakeHost) Where() string                   { return f.where }
 func (f *fakeHost) Spawn(_ context.Context, o host.SpawnOpts) (string, error) {
 	f.calls = append(f.calls, "spawn "+o.Slot)
 	f.spawnOpts = o
@@ -84,7 +85,7 @@ func (s *sweepHost) SweepShells(_ context.Context, cwd string) (int, error) {
 }
 
 func envWith(h host.Host) Env {
-	return Env{NewHost: func(string) host.Host { return h }, Sleep: func(time.Duration) {}, Now: func() time.Time {
+	return Env{NewHost: func(host.Kind) host.Host { return h }, Sleep: func(time.Duration) {}, Now: func() time.Time {
 		return time.Date(2026, 10, 2, 15, 4, 5, 0, time.UTC)
 	}}
 }
@@ -635,3 +636,7 @@ func TestDispatchSweepsLeftoverShellPanesBeforeKill(t *testing.T) {
 		t.Errorf("want sweep before kill: %s", got)
 	}
 }
+
+func (s *sweepHost) Capabilities() host.Capabilities { return host.CapabilitiesOf(s) }
+
+func (r *resubHost) Capabilities() host.Capabilities { return host.CapabilitiesOf(r) }

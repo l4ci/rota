@@ -123,15 +123,15 @@ type limitRig struct {
 func buildLimits(ctx context.Context, c *Ctx, root string, cfg any, set limits.Settings, holderPID int, tick time.Duration, gap *atomic.Bool, warn func(string, ...any)) (*limitRig, error) {
 	kind := worker.ResolvePaneHost(root, nil, nil)
 	if kind == host.Solo {
-		kind = "tmux" // New maps solo to tmux; say so for the error text
+		kind = host.Tmux // New maps solo to tmux; say so for the error text
 	}
 	h := c.deps().Host(kind)
 	if err := h.Require(); err != nil {
 		return nil, &Error{Exit: ExitUnavailable, Message: err.Error()}
 	}
-	ph, ok := h.(host.PaneHost)
-	if !ok {
-		return nil, &Error{Exit: ExitUnavailable, Message: kind + " cannot address panes"}
+	ph := h.Capabilities().PaneHost
+	if ph == nil {
+		return nil, &Error{Exit: ExitUnavailable, Message: kind.String() + " cannot address panes"}
 	}
 	cd, err := rotastate.CommonDir(root)
 	if err != nil {
@@ -260,9 +260,9 @@ func buildLimits(ctx context.Context, c *Ctx, root string, cfg any, set limits.S
 	rig := &limitRig{Cancel: func() {}}
 
 	var feed *limits.Feed
-	if kind == "herdr" {
-		ow, ok := h.(host.OutputWatcher)
-		if !ok {
+	if kind == host.Herdr {
+		ow := h.Capabilities().OutputWatcher
+		if ow == nil {
 			return nil, &Error{Exit: ExitUnavailable, Message: "herdr cannot watch pane output"}
 		}
 		f, err := limits.NewFeed(ctx, ow, targets, worker.LimitRegex(), tick)

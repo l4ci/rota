@@ -96,7 +96,7 @@ func (h watcherHost) Watch(_ context.Context, t []host.WatchTarget) (host.Watch,
 	return waitWatch{h.waitHost}, h.watchOK
 }
 
-func newWaitHost(name string) *waitHost {
+func newWaitHost(name host.Kind) *waitHost {
 	f := tmuxFake()
 	f.name = name
 	f.status = map[string]string{}
@@ -693,3 +693,7 @@ func TestDispatchDropsTheKilledHandleBeforeSpawning(t *testing.T) {
 		t.Errorf("handle after dispatch = %q, want w9:t7", got)
 	}
 }
+
+func (h watcherHost) Capabilities() host.Capabilities { return host.CapabilitiesOf(h) }
+
+func (p spawnProbe) Capabilities() host.Capabilities { return host.CapabilitiesOf(p) }

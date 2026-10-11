@@ -519,7 +519,8 @@ type Transferred struct {
 	Dispatched, Changed           bool
 	Warnings                      []string
 	// Host, Brief and Worktree are set under solo (C8) in place of a dispatch.
-	Host, Brief, Worktree string
+	Host            host.Kind
+	Brief, Worktree string
 }
 
 // Transfer is the orchestrator's verb to move an issue from the slot holding it

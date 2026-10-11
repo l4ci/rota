@@ -47,8 +47,8 @@ func defaultRoundEnv(ctx context.Context, root string, d *Deps, withForge bool) 
 		h := d.Host(hostKind)
 		if err := h.Require(); err != nil {
 			e.HostErr = err.Error()
-		} else if s, ok := h.(host.Snapshotter); ok {
-			e.Snapshot, e.HostName = s.Snapshot, h.Name()
+		} else if s := h.Capabilities().Snapshotter; s != nil {
+			e.Snapshot, e.HostName = s.Snapshot, h.Kind()
 		}
 	}
 	e.NeedsHuman = config.Label(cfg, "needsHuman")
@@ -124,7 +124,7 @@ func roundStatus(*flag.FlagSet) RunFunc {
 		d.Set("drift", len(rep.Findings))
 		d.Set("unavailable", strs(rep.Unavailable))
 		if rep.Host != "" {
-			d.Set("host", rep.Host)
+			d.Set("host", rep.Host.String())
 		}
 		esc, escLines := escalationRows(rep.Escalations)
 		d.Set("escalations", esc)

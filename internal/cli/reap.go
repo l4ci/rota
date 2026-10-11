@@ -22,8 +22,8 @@ import (
 func defaultReapEnv(ctx context.Context, root string, d *Deps) (round.Env, reap.HostOps) {
 	e := d.RoundEnvLocal(ctx, root)
 	var ops reap.HostOps
-	if e.Snapshot != nil && e.HostName == "herdr" {
-		if tl, ok := d.Host("herdr").(host.TabLister); ok {
+	if e.Snapshot != nil && e.HostName == host.Herdr {
+		if tl := d.Host(host.Herdr).Capabilities().TabLister; tl != nil {
 			ops = herdrReapOps{tl}
 		}
 	}

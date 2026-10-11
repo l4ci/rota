@@ -90,7 +90,7 @@ func newScopeFx(t *testing.T, overlap string, extraCfg string) *scopeFx {
 		return realGit(ctx, dir, args...)
 	}
 	h := &cliHost{inSession: true}
-	deps.Host = func(string) host.Host { return h }
+	deps.Host = func(host.Kind) host.Host { return h }
 	useHost(deps, h)
 	deps.LeaseEnv = func() roundlease.Env { return le }
 	fx.deps = deps

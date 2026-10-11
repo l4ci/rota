@@ -54,7 +54,9 @@ func useLaunchRig(d *Deps, env map[string]string, installed ...string) *launchRi
 		}
 		get := func(k string) string { return r.env[k] }
 		return orchestrate.Env{Getenv: get, LookPath: look, Self: "/bin/rota",
-			Host: func(kind string) host.Host { return host.New(kind, host.Deps{Run: run, Getenv: get, LookPath: look}) },
+			Host: func(kind host.Kind) host.Host {
+				return host.New(kind, host.Deps{Run: run, Getenv: get, LookPath: look})
+			},
 			Exec: func(path string, argv, _ []string) error {
 				r.execs = append(r.execs, append([]string{path}, argv...))
 				return nil

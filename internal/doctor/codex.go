@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/harness"
+	"github.com/l4ci/rota/internal/host"
 )
 
 // CodexHome is one CODEX_HOME a worker can run under: a work.codexAccounts
@@ -70,8 +71,8 @@ func (d *runner) codex() Check {
 		return pass("codex", head+tiers)
 	}
 	herdr := ""
-	if d.in.Dispatch == "herdr" {
-		herdr, _ = look("herdr")
+	if host.KindOf(d.in.Dispatch) == host.Herdr {
+		herdr, _ = look(host.Herdr.Binary())
 	}
 	var bad, notes []string
 	var hint string

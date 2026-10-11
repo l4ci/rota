@@ -15,13 +15,13 @@ import (
 	"github.com/l4ci/rota/internal/worker"
 )
 
-func registryHost(root string) string { return worker.RegistryHost(root) }
+func registryHost(root string) host.Kind { return worker.RegistryHost(root) }
 
 // noHost makes any host construction fail the test: under solo a round verb
 // must not build, ask or drive a host.
 func noHost(t *testing.T, e *Env) {
 	t.Helper()
-	e.Worker.NewHost = func(d string) host.Host {
+	e.Worker.NewHost = func(d host.Kind) host.Host {
 		t.Fatalf("solo round reached host.New(%q)", d)
 		return nil
 	}
@@ -31,7 +31,7 @@ func noHost(t *testing.T, e *Env) {
 	}
 }
 
-func setHost(t *testing.T, root, h string) {
+func setHost(t *testing.T, root string, h host.Kind) {
 	t.Helper()
 	if err := worker.Update(root, func(d *worker.Doc) { d.SetHost(h) }); err != nil {
 		t.Fatal(err)
@@ -98,7 +98,7 @@ func soloAssign(t *testing.T) *assignFixture {
 	t.Helper()
 	f := newAssignFixture(t)
 	setHost(t, f.root, host.Solo)
-	f.env.Worker.NewHost = func(d string) host.Host {
+	f.env.Worker.NewHost = func(d host.Kind) host.Host {
 		t.Fatalf("solo assign reached host.New(%q)", d)
 		return nil
 	}
@@ -229,7 +229,7 @@ func TestReportRefusals(t *testing.T) {
 	if got := worker.LoadRegistryTolerant(f.root).Slot("ben").State(); got != "idle" {
 		t.Errorf("a refusal writes nothing, state = %q", got)
 	}
-	for _, h := range []string{"tmux", "herdr", ""} {
+	for _, h := range []host.Kind{host.Tmux, host.Herdr, ""} {
 		setHost(t, f.root, h)
 		_, err := f.env.ReportSlot(bg, f.root, ReportOpts{Slot: "ben", State: "done"})
 		if exitOf(err) != exitcode.ExitUsage {

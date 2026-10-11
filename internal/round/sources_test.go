@@ -24,7 +24,7 @@ func TestReadHostAnswersSoloUnavailableAndErrorAlone(t *testing.T) {
 		env    Env
 		want   []host.Agent
 		ok     bool
-		host   string
+		host   host.Kind
 		unavai []string
 	}{
 		{"snapshot", Env{HostName: "herdr", Snapshot: func(context.Context) ([]host.Agent, error) { return agents, nil }}, agents, true, "herdr", nil},

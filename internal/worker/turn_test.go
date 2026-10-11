@@ -276,3 +276,9 @@ func (h turnPollHost) Turn(_ context.Context, slot, _ string) (host.Turn, bool) 
 	defer h.mu.Unlock()
 	return host.Turn{Status: h.status[slot], StateSeq: h.done, CompletionSeq: h.done}, true
 }
+
+func (h turnHost) Capabilities() host.Capabilities { return host.CapabilitiesOf(h) }
+
+func (h turnPollHost) Capabilities() host.Capabilities { return host.CapabilitiesOf(h) }
+
+func (h turnWatcher) Capabilities() host.Capabilities { return host.CapabilitiesOf(h) }
