@@ -8,7 +8,7 @@ The maintainer submits by hand. Nothing in this repo calls the portal.
 
 1. From the repo root, run `claude plugin validate .`. On 2026-10-09 it passed with two findings:
    - Warning: `CLAUDE.md` at the plugin root is not loaded as project context. The plugin root is the repo root, so the repo's own `CLAUDE.md` triggers this. Not blocking.
-   - Advice: the README has no one-line marketplace install command. Not blocking. Adding one is a plugin change, so it belongs in a follow-up issue.
+   - Advice: the README has no one-line marketplace install command. Not blocking. Follow-up: #743.
 2. Confirm the repo is public (it must be before the listing goes live) and that the GitHub account on claude.ai has push access to `l4ci/rota`.
 3. Confirm `.claude-plugin/plugin.json` `version` matches the release you are submitting. The directory reads the version from that file.
 
@@ -26,6 +26,8 @@ A submission is one plugin folder. The repository and folder cannot change after
 
 The listing name, description, author, version and license come from `plugin.json`, not from portal fields. Edit the file, push, and validate again to change them.
 
+The directory reads `plugin.json` from the default-branch head, but installs fetch the plugin from the tag that `.claude-plugin/marketplace.json` pins (`ref: v<VERSION>`). A version bump merged before its tag therefore skews the two briefly. Tag promptly after the bump.
+
 | Field | Value |
 | :- | :- |
 | Submission type | Plugin bundle |
@@ -33,7 +35,7 @@ The listing name, description, author, version and license come from `plugin.jso
 | Plugin path | empty (the plugin is the repo root) |
 | Branch or tag | empty (follows the default branch) |
 | Listing name | `rota` (from `plugin.json` `name`) |
-| Listing description | from `plugin.json` `description` (see the PR draft) |
+| Listing description | copy `description` from `.claude-plugin/plugin.json` verbatim |
 | Version | from `plugin.json` `version` |
 | Update delivery | GitHub push webhook |
 | Auto-publish new versions | off for the first submission |
@@ -66,12 +68,12 @@ This is the **bump the marketplace listing** step in `.rota/RELEASE.md`.
 
 From the checklist and the validator, not a live submission. None blocks, but a reviewer may hold the version.
 
-- `plugin.json` lists `./plugin/hooks/hooks.json` in its `hooks` field. The checklist warns on this. Dropping the field clears it. That edits `plugin.json`, a plugin change, so it goes to a follow-up issue.
+- `plugin.json` lists `./plugin/hooks/hooks.json` in its `hooks` field. The checklist warns on this. Dropping the field is the suggested fix, but it edits `plugin.json`, a plugin change. Follow-up: #744.
 - The `session-start.sh` hook runs `sh "${CLAUDE_PLUGIN_ROOT}/plugin/hooks/session-start.sh"`, a full path from `${CLAUDE_PLUGIN_ROOT}` as the checklist requires.
-- The `rota-install` skill downloads a binary. The checklist requires the README to describe everything the plugin fetches, and the security scan flags undisclosed behavior. Check the README covers the download before submitting.
+- Known gap: the README does not describe the `rota-install` skill's binary download. The checklist requires the README to describe everything the plugin fetches, and the security scan flags undisclosed behavior. The README also lacks the one-line marketplace install command that `claude plugin validate` advises. Follow-up: #743.
 
 ## Record of submissions
 
 Add one line per submission and per review outcome. The maintainer writes these.
 
-- None yet. The first submission waits on the maintainer's review of this draft.
+- Submitted: not yet
