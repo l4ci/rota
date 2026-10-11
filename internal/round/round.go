@@ -95,8 +95,8 @@ type Env struct {
 	// Worker is the worker env assign resets and dispatches with; the zero
 	// value is a Git-only env. It is the one owner of the clock (Now, which
 	// dates timed-out escalations), the environment reader (Getenv, for the
-	// lease, host and brief lookups) and Accounts, which when set balances
-	// slots across work.accounts at assignment.
+	// lease, host and brief lookups) and Accounts, the meter reader that quota
+	// and the ledger read; picking an account is AccountPicking's job.
 	Worker worker.Env
 	// AccountPicking turns the delivery's account step on: keep the slot's own
 	// work.accounts account while it has headroom, else pick. Off is the zero
@@ -124,10 +124,11 @@ type Env struct {
 
 // WithAccounts is the env with account picking on, reading the meters through
 // a. It is the single owner of the choice: build the env this way before use,
-// never flip it afterwards.
+// never flip it afterwards. A nil a leaves picking off, since the pick would
+// have no meters to read.
 func (e Env) WithAccounts(a *worker.Accounts) Env {
 	e.Worker.Accounts = a
-	e.AccountPicking = true
+	e.AccountPicking = a != nil
 	return e
 }
 
