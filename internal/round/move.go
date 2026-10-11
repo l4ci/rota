@@ -658,22 +658,21 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 	}
 
 	// A transferred worker starts on the default tier unless --tier says higher.
-	// The kind resolves as in assign, without --kind: the item's label, else
-	// round.workerKind, else the receiver's recorded kind, else claude.
+	// The preflight is assign's, without --kind or --model: the kind resolves
+	// from the item's label, else round.workerKind, else the receiver's
+	// recorded kind, else claude; the model from the item's label, else the
+	// tier map. Headroom and scope are not asked of a receiver that resumes.
 	kind, kindSource, tier := harness.Claude, "", firstNonEmpty(o.Tier, o.Settings.Tier)
+	var model, appliedModel string
 	if !toHuman {
-		pick, err := PickOf(be.Capabilities(), *it)
+		pf, err := e.preflight(ctx, root, be, preflightIn{Item: it, Settings: set, Tier: tier,
+			SlotKind: to.HarnessKind(), Resuming: resuming})
+		res.Warnings = append(res.Warnings, pf.Warnings...)
 		if err != nil {
 			return res, err
 		}
-		kind, kindSource = resolveKind("", pick.Harness, o.Settings.WorkerKind, to.HarnessKind())
-		hz, err := worker.Harness(kind)
-		if err != nil {
-			return res, err
-		}
-		kind = hz.Kind()
+		kind, kindSource, model, appliedModel = pf.Kind, pf.KindSource, pf.Model, pf.AppliedModel
 	}
-	model := o.Settings.Model(kind, tier)
 
 	// Checks before anything moves: the brief, the receiver's launch, the
 	// overlap, the receiver's guard.
@@ -802,9 +801,9 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 		return worker.RemoveQueuedPR(root, pr)
 	}
 
-	d := &delivery{Slot: o.To, Task: id, Branch: func() string { return branch }, Round: rnd, Kind: kind, Model: model, Wrap: wrap,
+	d := &delivery{Slot: o.To, Task: id, Branch: func() string { return branch }, Round: rnd, Kind: kind, Model: appliedModel, Wrap: wrap,
 		Brief: func() string {
-			text := pointerBrief(o.To, id, branch, brief, nil, decisions, outOfScope(be, id), touches(be, id), tierBrief{Kind: kind, Tier: tier, Model: model, Default: o.Settings.Tier, Reason: reason, Table: o.Settings.Models[kind]})
+			text := pointerBrief(o.To, id, branch, brief, nil, decisions, outOfScope(be, id), touches(be, id), tierBrief{Kind: kind, Tier: tier, Model: appliedModel, Default: o.Settings.Tier, Reason: reason, Table: o.Settings.Models[kind]})
 			text += fmt.Sprintf("\nThis issue was handed to you by %s. Read its latest rota:handoff comment first (it ends with a `%s` marker), then continue from the pushed work on %s, already checked out in your worktree.\n",
 				res.From, marker.Handoff(res.From, rnd), branch)
 			if rec != nil {
@@ -837,7 +836,7 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 		}},
 		step{name: "bind the receiver", skip: moved, do: func() error {
 			err := editSlot(root, o.To, func(s *worker.Slot) error {
-				s.Bind(worker.Binding{Task: id, ClaimID: res.ClaimID, Kind: kind, KindSource: kindSource, Tier: tier, Model: model, TierReason: reason})
+				s.Bind(worker.Binding{Task: id, ClaimID: res.ClaimID, Kind: kind, KindSource: kindSource, Tier: tier, Model: appliedModel, TierReason: reason})
 				s.SetBranch(branch)
 				return nil
 			})

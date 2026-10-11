@@ -468,63 +468,19 @@ func (e Env) assignOne(ctx context.Context, root string, be Board, o AssignOpts,
 	}
 	res.Branch = BranchName(agent, id, it.Title)
 
-	// Kind, tier and model (C9): the model is the tier's entry for the kind.
-	pick, err := PickOf(be.Capabilities(), *it)
+	// Kind, tier, model, headroom and scope (C9): the shared preflight.
+	pf, err := e.preflight(ctx, root, be, preflightIn{Item: it, Settings: set, Tier: tier,
+		FlagKind: o.Kind, FlagModel: o.Model, SlotKind: slot.HarnessKind(), Fixed: bo, Resuming: resuming})
+	res.Pick = pf.Pick
+	if pf.Kind != "" {
+		res.Kind, res.KindSource, res.Tier, res.TierReason = pf.Kind, pf.KindSource, tier, reason
+		res.Model = pf.AppliedModel
+		res.Warnings = append(res.Warnings, pf.Warnings...)
+	}
 	if err != nil {
 		return res, err
 	}
-	res.Pick = pick
-	kind, kindSource := resolveKind(o.Kind, pick.Harness, set.WorkerKind, slot.HarnessKind())
-	if bo != nil {
-		kind, kindSource = bo.kind, bo.kindSource
-	}
-	hz, err := worker.Harness(kind)
-	if err != nil {
-		return res, err
-	}
-	kind = hz.Kind()
-	// An unset codex tier map is allowed: the default codex command drops
-	// --model and Codex picks its own. A custom work.codexCommand holding
-	// {model} would fail at dispatch, after the claim, so it is refused here.
-	model := resolveModel(o.Model, pick.Model, set.Model(kind, tier))
-	if model == "" && worker.NeedsModel(root, kind) {
-		return res, blocked(BlockNoTierMap, "round.tiers.%s has no model for the %s tier: set round.tiers.%s.*", kind, tier, kind)
-	}
-	res.Kind, res.KindSource, res.Tier, res.TierReason = kind, kindSource, tier, reason
-	res.Model = model
-	if !resuming {
-		if why := e.Headroom(ctx, root, kind); why != "" {
-			return res, blocked(BlockQuota, "%s", why)
-		}
-	}
-	if !worker.ModelAppliesTo(root, kind) {
-		// A model asked for by name must reach the launch line; the tier map's
-		// is a default and only warns.
-		if o.Model != "" || pick.Model != "" {
-			by, src := BlockModelLabel, "model:"+pick.Model+" label"
-			if o.Model != "" {
-				src = "--model " + o.Model
-			}
-			return res, blocked(by, "%s cannot apply: %s has no {model} placeholder", src, hz.CommandKey())
-		}
-		res.Model = ""
-		res.Warnings = append(res.Warnings, "tier model not applied: "+hz.CommandKey()+" has no {model} placeholder")
-	}
-
-	// 3. The scope allows it.
-	scope, slate := SlateOf(root)
-	if scope == "" {
-		scope = set.Scope
-	}
-	if !resuming {
-		ok, err := InScope(root, be, scope, slate, id)
-		if err != nil {
-			return res, err
-		}
-		if !ok {
-			return res, blocked(BlockOutOfScope, "%s is outside the round's scope (%s)", id, scope)
-		}
-	}
+	pick, kind, kindSource, model := pf.Pick, pf.Kind, pf.KindSource, pf.Model
 
 	if q := inReview(reg, id, bo); q != nil && !resuming {
 		return res, blocked(BlockClaimed, "%s has PR %s in review (from %s): rota round transfer %s --to <slot> picks it up", id, q.PR, q.From, id)
