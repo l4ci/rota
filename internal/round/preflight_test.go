@@ -1,6 +1,11 @@
 package round
 
 import (
+	"context"
+	"time"
+
+	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/worker"
 	"os"
 	"path/filepath"
 	"strings"
@@ -30,7 +35,7 @@ func TestPreflight(t *testing.T) {
 		"label, no {model}":                 {labels: []string{"model:opus"}, cfg: noModelPlaceholder, by: BlockModelLabel, named: "model:opus"},
 		"--model, no {model}":               {cfg: noModelPlaceholder, in: func(i *preflightIn) { i.FlagModel = "opus" }, by: BlockModelLabel, named: "--model opus"},
 		"tier model, no {model} only warns": {cfg: noModelPlaceholder, model: "sonnet", applied: "", warnings: 1},
-		"outside the scope":                 {id: "20", by: BlockOutOfScope},
+		"outside the scope":                 {id: "20", by: BlockOutOfScope, named: "outside the round's scope"},
 		"outside the scope, resuming":       {id: "20", in: func(i *preflightIn) { i.Resuming = true }, model: "sonnet", applied: "sonnet"},
 		"every account cooling":             {cfg: twoAccounts, meters: map[string]bool{"a": true, "b": true}, by: BlockQuota},
 		"every account cooling, resuming": {cfg: twoAccounts, meters: map[string]bool{"a": true, "b": true},
@@ -103,6 +108,28 @@ func TestTransferPreflightMatchesAssign(t *testing.T) {
 		f.be.items["12"].Fields.Milestone = "M09"
 		_, err := f.transfer("12", "dana", nil)
 		if by := blockedBy(t, err); by != BlockOutOfScope {
+			t.Fatalf("got %v", err)
+		}
+		if f.be.claims["12"] != "ben@1" || f.slot("dana").Task() != "" {
+			t.Errorf("a refusal moves nothing: %v", f.be.claims)
+		}
+	})
+	t.Run("an account out of headroom is refused", func(t *testing.T) {
+		f := newMoveFx(t)
+		if err := os.WriteFile(filepath.Join(f.root, ".rota", "config.json"), []byte(twoAccounts), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		f.env.Worker.Now = func() time.Time { return quotaNow }
+		f.env.Worker.Accounts = &worker.Accounts{Env: worker.Env{Now: func() time.Time { return quotaNow }},
+			Fetch: func(_ context.Context, _, _ string) (*jsonx.Object, string) {
+				v, err := jsonx.Decode([]byte(`{"five_hour":{"utilization":100,"resets_at":"` + quotaNow.Add(time.Hour).Format(time.RFC3339) + `"}}`))
+				if err != nil {
+					t.Fatal(err)
+				}
+				return v.(*jsonx.Object), ""
+			}}
+		_, err := f.transfer("12", "dana", nil)
+		if by := blockedBy(t, err); by != BlockQuota {
 			t.Fatalf("got %v", err)
 		}
 		if f.be.claims["12"] != "ben@1" || f.slot("dana").Task() != "" {

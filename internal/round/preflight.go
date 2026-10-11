@@ -37,7 +37,6 @@ type preflightOut struct {
 	Model            string // resolved: what the delivery refusals check
 	AppliedModel     string // Model, or "" when the launch command has no {model}
 	Warnings         []string
-	Scope            string
 }
 
 // preflight answers "can this item go to this slot" for assign and transfer:
@@ -91,7 +90,6 @@ func (e Env) preflight(ctx context.Context, root string, be backlog.Backend, in 
 	if scope == "" {
 		scope = set.Scope
 	}
-	out.Scope = scope
 	if !in.Resuming {
 		ok, err := InScope(root, be, scope, slate, id)
 		if err != nil {
