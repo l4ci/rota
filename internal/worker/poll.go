@@ -8,6 +8,7 @@ import (
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/strutil"
+	"github.com/l4ci/rota/internal/tracker"
 	"os"
 	"regexp"
 	"strings"
@@ -104,7 +105,6 @@ var (
 		`No, and tell Claude what to do differently`,
 		`Allow .{0,40}\bto run\b`,
 	})
-	rePRURL = regexp.MustCompile(`^https?://\S+/(?:pull|merge_requests)/\d+\S*$`)
 	// An architecture-review item produces issues, not code: its done line
 	// names them in place of a PR, `issues:#139,#140`.
 	reIssuesDone = regexp.MustCompile(`^issues:\s*#?\d+(?:\s*,\s*#?\d+)*$`)
@@ -486,7 +486,7 @@ func recordRow(s *Slot, r PollRow, now time.Time, queued Registry) error {
 	// A PR a queued record already holds is the previous issue's: the pane's
 	// last ROTA-DONE outlives it, and recording it would pair it with this
 	// slot's next issue and branch.
-	if r.State == StateDone && rePRURL.MatchString(r.Evidence) && queued.QueuedPR(r.Evidence) == nil {
+	if r.State == StateDone && IsPRURL(r.Evidence) && queued.QueuedPR(r.Evidence) == nil {
 		s.SetPR(r.Evidence)
 	}
 	// A review item reports the issues it filed instead; `round assign` frees
@@ -574,4 +574,7 @@ func (e Env) classify(ctx context.Context, h host.Host, targets []pollTarget, se
 
 // IsPRURL reports whether s is a PR or MR URL, the shape `worker poll` stores
 // in slot.pr.
-func IsPRURL(s string) bool { return rePRURL.MatchString(s) }
+func IsPRURL(s string) bool {
+	_, ok := tracker.ParsePRURL(s)
+	return ok
+}
