@@ -36,6 +36,22 @@ func TestPRRefNumber(t *testing.T) {
 	}
 }
 
+func TestPRRefNumberShapes(t *testing.T) {
+	for in, want := range map[string]int{
+		"12/": 12, "#12/": 12, " 12 ": 12,
+		"https://github.com/o/r/pull/9/files":      9,
+		"https://github.com/o/r/pull/9?x=1":        9,
+		"https://github.com/o/r/pull/9#discussion": 9,
+		"HTTPS://GitHub.com/o/r/PULL/9":            9,
+		"#+5":                                      0, "+5": 0, "-5": 0, "#": 0, "": 0, "1x": 0, "//": 0,
+	} {
+		n, ok := PRRefNumber(in)
+		if n != want || ok != (want != 0) {
+			t.Errorf("PRRefNumber(%q) = %d,%v, want %d", in, n, ok, want)
+		}
+	}
+}
+
 func TestBranchIssue(t *testing.T) {
 	if n, ok := BranchIssue("nia/288-x"); !ok || n != 288 {
 		t.Errorf("BranchIssue = %d,%v", n, ok)

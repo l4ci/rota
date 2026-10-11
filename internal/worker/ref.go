@@ -4,24 +4,29 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/l4ci/rota/internal/tracker"
 )
 
 // The one grammar for naming a PR and for naming the issue a slot holds.
 // round, roundwatch, roundtick and cli call these rather than re-parse.
 
 var (
-	rePRRef       = regexp.MustCompile(`^(?:#|.*/(?:pull|merge_requests)/)?(\d+)/?$`)
 	reIssueBranch = regexp.MustCompile(`^[^/]+/(\d+)-`)
 	reIssueToken  = regexp.MustCompile(`(?:(?:^|[^a-z0-9])issue-(\d+)|#(\d+))`)
 )
 
 // PRRefNumber reads the PR number from `#N`, `N` or a PR URL.
 func PRRefNumber(ref string) (int, bool) {
-	m := rePRRef.FindStringSubmatch(strings.TrimSpace(ref))
-	if m == nil {
+	ref = strings.TrimSpace(ref)
+	if p, ok := tracker.ParsePRURL(ref); ok {
+		return p.Number, true
+	}
+	digits := strings.TrimPrefix(strings.TrimSuffix(ref, "/"), "#")
+	if digits == "" || strings.Trim(digits, "0123456789") != "" {
 		return 0, false
 	}
-	n, err := strconv.Atoi(m[1])
+	n, err := strconv.Atoi(digits)
 	return n, err == nil
 }
 
