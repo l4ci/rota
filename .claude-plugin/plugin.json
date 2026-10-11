@@ -17,6 +17,5 @@
   ],
   "skills": [
     "./plugin/skills/"
-  ],
-  "hooks": "./plugin/hooks/hooks.json"
+  ]
 }

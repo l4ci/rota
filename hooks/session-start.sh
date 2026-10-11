@@ -2,7 +2,7 @@
 # SessionStart hook of the rota Claude Code plugin: one line for the user when
 # the rota binary is missing or is not the plugin's version, nothing otherwise.
 # A dev build (no X.Y.Z version) is someone's own binary and is left alone.
-root=${CLAUDE_PLUGIN_ROOT:-$(dirname "$0")/../..}
+root=${CLAUDE_PLUGIN_ROOT:-$(dirname "$0")/..}
 # plugin.json on one line, so its layout does not matter; unreadable means silent.
 want=$(tr -d '\n\r' 2>/dev/null < "$root/.claude-plugin/plugin.json" |
   sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
