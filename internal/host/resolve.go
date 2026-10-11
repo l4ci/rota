@@ -62,12 +62,14 @@ type Launch struct {
 // session (`rota orchestrate`): the same kinds, a different question. Resolve
 // asks which host a round's workers run on, so it answers solo when the caller
 // is in no pane. ResolveLaunch asks where to start, so with no pane it opens a
-// session rather than falling back to solo. Three differences follow, all
+// session rather than falling back to solo. Four differences follow, all
 // deliberate:
 //
 //   - Being in a pane (herdr: HERDR_ENV=1 and HERDR_WORKSPACE_ID, with the binary
 //     on PATH; tmux: TMUX) beats work.dispatch, which Resolve checks first: you
 //     cannot start a tab in a host you are not in.
+//   - A herdr pane needs HERDR_WORKSPACE_ID too (herdr.InSession); Resolve takes
+//     HERDR_ENV=1 with the binary on PATH as a herdr pane.
 //   - Outside any pane, an explicit dispatch picks the kind and must be installed
 //     (an error otherwise); unset or "subagent" prefers herdr, then tmux, then
 //     solo with no session.
