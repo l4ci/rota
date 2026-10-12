@@ -130,6 +130,9 @@ func anyContains(list []string, sub string) bool {
 // remoteBase prefers origin/<base> over a local base it is strictly ahead of,
 // so a lagging local branch does not pull upstream commits into {files}. It
 // returns base when there is no such remote ref or local is not behind it.
+// It stays apart from git.RemoteBase on purpose: that one takes origin/<base>
+// whenever it exists, which suits "how far ahead is this branch" counts but
+// would widen {files} with commits the local base already holds.
 func remoteBase(ctx context.Context, repo git.Repo, base string) string {
 	remote := "origin/" + base
 	if found, err := repo.Verify(ctx, "refs/remotes/"+remote); err != nil || !found {

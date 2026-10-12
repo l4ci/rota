@@ -1,12 +1,12 @@
 package ship
 
 import (
+	"context"
 	"errors"
-	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/land"
-	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/strutil"
 )
 
@@ -87,14 +87,13 @@ func MergeBranch(p MergePorts, branch, base, msg string) (string, error) {
 // ChangedFiles lists the files a merge range changes, for the merge-approval
 // gate.
 func ChangedFiles(g Git, rng string) ([]string, error) {
-	res, err := g.Run("diff", "--name-only", rng)
-	if err != nil {
-		return nil, err
+	run := func(_ context.Context, _ string, args ...string) (git.Result, error) { return g.Run(args...) }
+	paths, err := git.ChangedPaths(context.Background(), run, "", rng)
+	var ee *git.ExitError
+	if errors.As(err, &ee) {
+		return nil, &GitError{Msg: "git diff " + rng + ": " + strutil.FirstLine(ee.Stderr)}
 	}
-	if res.ExitCode != 0 {
-		return nil, &GitError{Msg: "git diff " + rng + ": " + strutil.FirstLine(res.Stderr)}
-	}
-	return pystr.Splitlines(strings.TrimSpace(res.Stdout)), nil
+	return paths, err
 }
 
 // PRMerger is the issue backend's gated PR merge.

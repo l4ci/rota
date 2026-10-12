@@ -88,12 +88,12 @@ func reviewScan(c *Ctx, t branchTarget) (reviewInfo, error) {
 			info.Commits = append(info.Commits, reviewCommit{h, s})
 		}
 	}
-	filesOut, err := reviewGit(ctx, t.Dir, "diff", "--name-only", t.Base+"..."+t.Branch)
+	files, err := git.Repo{Dir: t.Dir}.ChangedPaths(ctx, t.Base+"..."+t.Branch)
 	if err != nil {
-		return info, err
+		return info, diffErr(err)
 	}
 	set := map[string]bool{}
-	for _, f := range nonBlankLines(filesOut) {
+	for _, f := range files {
 		set[f] = true
 	}
 	for f := range set {
@@ -455,11 +455,10 @@ func reviewDepth(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, Failed("%v; run rota config check", err)
 		}
-		out, err := reviewGit(c.Context(), t.Dir, "diff", "--numstat", t.Base+"..."+t.Branch)
+		changed, err := git.Repo{Dir: t.Dir}.ChangedLines(c.Context(), t.Base+"..."+t.Branch)
 		if err != nil {
-			return Result{}, err
+			return Result{}, diffErr(err)
 		}
-		changed := worker.ChangedLines(out)
 		var labels []string
 		for _, l := range strings.Split(*labelsFlag, ",") {
 			if l = strings.TrimSpace(l); l != "" {

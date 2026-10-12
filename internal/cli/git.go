@@ -44,6 +44,21 @@ func gitErr(err error) error {
 	return err
 }
 
+// diffErr maps an error from a git diff helper: a non-zero exit is
+// Unavailable with git's stderr (as reviewGit reports it), a missing git is
+// gitErr's.
+func diffErr(err error) error {
+	var ee *git.ExitError
+	if errors.As(err, &ee) {
+		msg := strings.TrimSpace(ee.Stderr)
+		if msg == "" {
+			msg = fmt.Sprintf("exit %d", ee.ExitCode)
+		}
+		return Unavailable("git diff failed: %s", msg)
+	}
+	return gitErr(err)
+}
+
 // gitDir is where a scoped git verb runs: the --repo sub-repo, else the
 // working directory, which must not be an umbrella root (exit 2).
 func gitDir(c *Ctx) (string, error) {

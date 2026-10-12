@@ -3,6 +3,7 @@ package round
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/git"
 	"path"
 	"regexp"
 	"sort"
@@ -351,20 +352,9 @@ func (e Env) queuedChanged(ctx context.Context, root string, q worker.QueuedPR, 
 	if res, err := e.Git(ctx, root, "rev-parse", "--verify", "-q", "refs/remotes/origin/"+branch); err == nil && res.ExitCode == 0 {
 		head = "origin/" + branch
 	}
-	ref := base
-	if res, err := e.Git(ctx, root, "rev-parse", "--verify", "-q", "origin/"+base); err == nil && res.ExitCode == 0 {
-		ref = "origin/" + base
-	}
-	res, err := e.Git(ctx, root, "diff", "--name-only", ref+"..."+head)
-	out, code := res.Stdout, res.ExitCode
-	if err != nil || code != 0 {
+	paths, err := git.ChangedPaths(ctx, e.Git, root, git.RemoteBase(ctx, e.Git, root, base)+"..."+head)
+	if err != nil {
 		return nil
-	}
-	var paths []string
-	for _, l := range strings.Split(out, "\n") {
-		if l = strings.TrimSpace(l); l != "" {
-			paths = append(paths, l)
-		}
 	}
 	return overlap.Filter(paths, shared)
 }
@@ -378,16 +368,9 @@ func (e Env) changed(ctx context.Context, wt, base string, shared []string) []st
 			seen[p] = true
 		}
 	}
-	ref := base
-	if res, err := e.Git(ctx, wt, "rev-parse", "--verify", "-q", "origin/"+base); err == nil && res.ExitCode == 0 {
-		ref = "origin/" + base
-	}
-	if res, err := e.Git(ctx, wt, "diff", "--name-only", ref+"...HEAD"); err == nil && res.ExitCode == 0 {
-		out := res.Stdout
-		for _, l := range strings.Split(out, "\n") {
-			if l = strings.TrimSpace(l); l != "" {
-				add(l)
-			}
+	if paths, err := git.ChangedPaths(ctx, e.Git, wt, git.RemoteBase(ctx, e.Git, wt, base)+"...HEAD"); err == nil {
+		for _, p := range paths {
+			add(p)
 		}
 	}
 	if res, err := e.Git(ctx, wt, "status", "--porcelain"); err == nil && res.ExitCode == 0 {

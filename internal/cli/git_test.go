@@ -1,12 +1,14 @@
 package cli
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/gittest"
 )
 
@@ -242,4 +244,15 @@ func TestGitWorktreePath(t *testing.T) {
 		{name: "unknown repo", dir: u, args: []string{"git", "worktree-path", "--repo", "nope", "feat/x"}, code: 3},
 		{name: "no branch", dir: u, args: []string{"git", "worktree-path", "--repo", "svc"}, code: 2},
 	})
+}
+
+func TestDiffErrKeepsExitClassAndStderr(t *testing.T) {
+	err := diffErr(&git.ExitError{Args: "diff --numstat x", ExitCode: 128, Stderr: "fatal: bad revision 'x'\n"})
+	var ce *Error
+	if !errors.As(err, &ce) || ce.Exit != ExitUnavailable || !strings.Contains(ce.Error(), "git diff failed: fatal: bad revision 'x'") {
+		t.Fatalf("got %#v", err)
+	}
+	if err := diffErr(&git.ExitError{ExitCode: 1}); !strings.Contains(err.Error(), "git diff failed: exit 1") {
+		t.Fatalf("got %v", err)
+	}
 }
