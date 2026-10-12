@@ -762,11 +762,7 @@ func (e Env) ahead(ctx context.Context, root, base, branch string) int {
 	if base == "" {
 		return 0
 	}
-	ref := base
-	if res, err := e.Git(ctx, root, "rev-parse", "--verify", "-q", "origin/"+base); err == nil && res.ExitCode == 0 {
-		ref = "origin/" + base
-	}
-	res, err := e.Git(ctx, root, "rev-list", "--count", ref+".."+branch)
+	res, err := e.Git(ctx, root, "rev-list", "--count", git.RemoteBase(ctx, e.Git, root, base)+".."+branch)
 	out, code := res.Stdout, res.ExitCode
 	if err != nil || code != 0 {
 		return 0

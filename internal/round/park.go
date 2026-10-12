@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/git"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -181,10 +182,7 @@ func (e Env) Stalled(ctx context.Context, in StallInput, now time.Time) Stall {
 		}
 	}
 	if in.Worktree != "" {
-		ref := in.Base
-		if _, _, code := e.gitOut(ctx, in.Worktree, "rev-parse", "--verify", "-q", "origin/"+in.Base); in.Base != "" && code == 0 {
-			ref = "origin/" + in.Base
-		}
+		ref := git.RemoteBase(ctx, e.Git, in.Worktree, in.Base)
 		if ref != "" {
 			if n, _, code := e.gitOut(ctx, in.Worktree, "rev-list", "--count", ref+"..HEAD"); code == 0 && n != "0" && n != "" {
 				if ts, _, code := e.gitOut(ctx, in.Worktree, "log", "-1", "--format=%ct", "HEAD"); code == 0 {
