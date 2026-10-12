@@ -545,6 +545,21 @@
       "tier": "deprecated",
       "hits": 0,
       "lastSeen": "2026-05-18"
+    },
+    "Build & Tooling: Smoke testing::Failing-verify tests must own their TMPDIR": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-12"
+    },
+    "Architecture: Helper conventions & invariants: Go verbs & fakes::Gate target fields change mid-run": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-12"
+    },
+    "Rounds: Orchestration::Overlap counts the held issue's pointers until merge": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-12"
     }
   }
 }
