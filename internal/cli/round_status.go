@@ -180,7 +180,7 @@ func roundStatus(*flag.FlagSet) RunFunc {
 		for _, l := range limLines {
 			lines = append(lines, "limit\t"+l)
 		}
-		return Result{Data: d, Text: strings.Join(lines, "\n")}, nil
+		return Result{Data: d, Text: strings.Join(lines, "\n"), Source: rep}, nil
 	}
 }
 
