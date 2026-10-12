@@ -305,8 +305,8 @@ func (s *state) git(ctx context.Context, dir string, args ...string) (string, in
 // and, when it exists, origin/base. Either keeps the commits.
 func (s *state) refs(ctx context.Context) []string {
 	refs := []string{s.in.Base}
-	if _, code, err := s.git(ctx, s.root, "rev-parse", "--verify", "-q", "origin/"+s.in.Base); err == nil && code == 0 {
-		refs = append(refs, "origin/"+s.in.Base)
+	if ref, ok := git.RemoteRef(ctx, s.in.Git, s.root, s.in.Base); ok {
+		refs = append(refs, ref)
 	}
 	return refs
 }

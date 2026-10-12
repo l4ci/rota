@@ -724,28 +724,15 @@ func (e Env) trainFootprints(root, baseRef string, ms []TrainMember, headRef fun
 	foots := make([]trainFoot, len(ms))
 	for i, m := range ms {
 		span := baseRef + "..." + headRef(m)
-		out, code := e.git(root, "diff", "--name-only", span)
-		if code != 0 {
-			return nil, fmt.Errorf("git diff --name-only %s exited %d", span, code)
+		paths, err := git.ChangedPaths(e.context(), e.Git, root, span)
+		if err != nil {
+			return nil, err
 		}
-		for _, l := range strings.Split(out, "\n") {
-			if l != "" {
-				foots[i].paths = append(foots[i].paths, l)
-			}
+		lines, err := git.ChangedLines(e.context(), e.Git, root, span)
+		if err != nil {
+			return nil, err
 		}
-		out, code = e.git(root, "diff", "--numstat", span)
-		if code != 0 {
-			return nil, fmt.Errorf("git diff --numstat %s exited %d", span, code)
-		}
-		for _, l := range strings.Split(out, "\n") {
-			f := strings.Fields(l)
-			if len(f) < 2 {
-				continue
-			}
-			a, _ := strconv.Atoi(f[0]) // "-" for a binary file counts 0
-			d, _ := strconv.Atoi(f[1])
-			foots[i].lines += a + d
-		}
+		foots[i] = trainFoot{paths: paths, lines: lines}
 	}
 	return foots, nil
 }

@@ -724,11 +724,10 @@ func (g *gate) stepReviewDepth() (bool, error) {
 	if err != nil {
 		return g.broke(fmt.Sprintf("%v; run rota config check", err))
 	}
-	out, code := g.git(g.root, "diff", "--numstat", g.baseRef+"..."+g.headRef)
-	if code != 0 {
+	changed, err := git.ChangedLines(g.ctx, g.e.Git, g.root, g.baseRef+"..."+g.headRef)
+	if err != nil {
 		return g.broke(fmt.Sprintf("could not diff %s against %s to pick the review depth", g.headRef, g.baseRef))
 	}
-	changed := ChangedLines(out)
 	var labels []string
 	issue := g.target.Issue
 	if !g.target.Queued {
@@ -769,24 +768,6 @@ func (g *gate) stepReviewDepth() (bool, error) {
 	g.verdict(GateReviewMissing, fmt.Sprintf("GATE %s refused — review depth %s (%s) needs a recorded %s verdict; nothing landed", g.o.Slot, depth, why, strings.Join(missing, " and ")),
 		fmt.Sprintf("run /rota-review on %s (it records the verdicts), or loosen ship.review", g.branch))
 	return true, nil
-}
-
-// ChangedLines sums the added and deleted lines of `git diff --numstat` output.
-// Binary files, which numstat marks with dashes, count for nothing.
-func ChangedLines(numstat string) int {
-	total := 0
-	for _, l := range strings.Split(numstat, "\n") {
-		f := strings.Fields(l)
-		if len(f) < 2 {
-			continue
-		}
-		a, errA := strconv.Atoi(f[0])
-		d, errD := strconv.Atoi(f[1])
-		if errA == nil && errD == nil {
-			total += a + d
-		}
-	}
-	return total
 }
 
 // stepVerdict refuses a branch with a recorded FAIL verdict (B3), the rule the
@@ -1050,17 +1031,7 @@ func (g *gate) confirmCITree() bool {
 
 // changedFiles lists the paths the merge changes, for the approval gate.
 func (g *gate) changedFiles() ([]string, error) {
-	out, code := g.git(g.root, "diff", "--name-only", g.baseRef+"..."+g.verified)
-	if code != 0 {
-		return nil, fmt.Errorf("git diff --name-only %s...%s exited %d", g.baseRef, g.verified, code)
-	}
-	var list []string
-	for _, l := range strings.Split(out, "\n") {
-		if l != "" {
-			list = append(list, l)
-		}
-	}
-	return list, nil
+	return git.ChangedPaths(g.ctx, g.e.Git, g.root, g.baseRef+"..."+g.verified)
 }
 
 // mergeLocal merges the verified head into the base checked out in dir: the
