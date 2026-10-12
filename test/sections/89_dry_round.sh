@@ -56,7 +56,7 @@ esac
 SH
 chmod +x "$FK/doctor/herdr"
 mkdir -p "$TMP_DY/acct"
-echo '{}' > "$TMP_DY/acct/.credentials.json"
+echo '{"claudeAiOauth":{"accessToken":"t"}}' > "$TMP_DY/acct/.credentials.json"
 
 # ── fixture repo: bare origin, project clone, one milestone, one item ──────
 # The standing brief `round assign` hands over by pointer: assign refuses
