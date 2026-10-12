@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/harness"
-	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
@@ -52,63 +51,28 @@ type roundLoader func() (roundSnap, error)
 
 // roundStatusView is round status's ViewFunc.
 func roundStatusView(c *Ctx, res Result) (tui.Model, error) {
-	d, ok := res.Data.(*jsonx.Object)
+	rep, ok := res.Source.(*round.Report)
 	if !ok {
-		return nil, &Error{Exit: ExitInternal, Message: "round status data has an unexpected shape"}
+		return nil, &Error{Exit: ExitInternal, Message: "round status result carries no report"}
 	}
 	root, err := c.Root()
 	if err != nil {
 		return nil, err
 	}
 	load := func() (roundSnap, error) { return loadRoundSnap(c, root) }
-	snap := snapFromData(d)
+	snap := snapFromReport(rep)
 	fillBurn(c, root, snap.Slots)
 	return newRoundScreen(snap, load, time.Now, roundRefresh), nil
 }
 
-// snapFromData reads the slots, review queue and notes out of round status Data.
-func snapFromData(d *jsonx.Object) roundSnap {
-	s := roundSnap{Host: jsonx.Str(d, "host")}
-	list := func(key string) []*jsonx.Object {
-		v, _ := d.Get(key)
-		items, _ := v.([]any)
-		var out []*jsonx.Object
-		for _, it := range items {
-			if o, ok := it.(*jsonx.Object); ok {
-				out = append(out, o)
-			}
-		}
-		return out
+// snapFromReport is the snapshot of a status pass, without candidates. Every
+// frame starts here, the first included.
+func snapFromReport(rep *round.Report) roundSnap {
+	s := roundSnap{Slots: rep.Rows, Review: rep.Queued, Host: rep.Host.String()}
+	for _, u := range rep.Unavailable {
+		s.Notes = append(s.Notes, u+" unavailable")
 	}
-	for _, o := range list("slots") {
-		r := round.Row{
-			Name: jsonx.Str(o, "name"), Issue: jsonx.Str(o, "issue"), Branch: jsonx.Str(o, "branch"),
-			PR: jsonx.Str(o, "pr"), PRState: jsonx.Str(o, "prState"), HostState: jsonx.Str(o, "hostState"),
-			State: jsonx.Str(o, "state"),
-			Kind:  jsonx.Str(o, "kind"), Tier: jsonx.Str(o, "tier"), Model: jsonx.Str(o, "model"),
-			TierReason: jsonx.Str(o, "tierReason"), BestOf: jsonx.Str(o, "bestOf"),
-		}
-		v, _ := o.Get("bounces")
-		r.Bounces, _ = jsonx.Int(v)
-		v, _ = o.Get("drift")
-		ds, _ := v.([]any)
-		for _, x := range ds {
-			if str, ok := x.(string); ok {
-				r.Drift = append(r.Drift, str)
-			}
-		}
-		s.Slots = append(s.Slots, r)
-	}
-	for _, o := range list("review") {
-		s.Review = append(s.Review, round.QueuedPR{Issue: jsonx.Str(o, "issue"), PR: jsonx.Str(o, "pr"), Branch: jsonx.Str(o, "branch"), From: jsonx.Str(o, "from")})
-	}
-	v, _ := d.Get("unavailable")
-	us, _ := v.([]any)
-	for _, x := range us {
-		if str, ok := x.(string); ok {
-			s.Notes = append(s.Notes, str+" unavailable")
-		}
-	}
+	s.Notes = append(s.Notes, rep.Warnings...)
 	return s
 }
 
@@ -122,12 +86,9 @@ func loadRoundSnap(c *Ctx, root string) (roundSnap, error) {
 	if err != nil {
 		return roundSnap{}, err
 	}
-	s := roundSnap{Slots: rep.Rows, Review: rep.Queued, Host: rep.Host.String(), CandsLoaded: true}
+	s := snapFromReport(rep)
+	s.CandsLoaded = true
 	fillBurn(c, root, s.Slots)
-	for _, u := range rep.Unavailable {
-		s.Notes = append(s.Notes, u+" unavailable")
-	}
-	s.Notes = append(s.Notes, rep.Warnings...)
 	set, err := roundcfg.Load(root)
 	if err != nil {
 		s.CandsErr = err.Error()

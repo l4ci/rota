@@ -52,6 +52,9 @@ type RunFunc func(c *Ctx, args []string) (Result, error)
 type Result struct {
 	Data any
 	Text string
+	// Source is the typed value Data was built from, for a verb whose --ui
+	// view wants more than the envelope carries. Never encoded.
+	Source any
 }
 
 // Ctx is what a verb sees of the invocation.
