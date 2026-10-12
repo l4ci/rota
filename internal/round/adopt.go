@@ -156,7 +156,7 @@ func (e Env) checkAdoptPR(ctx context.Context, branch, pr string) error {
 	switch {
 	case tracker.IsKind(err, tracker.KindNotFound):
 		return &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("--pr %s: the forge has no PR %d", pr, n)}
-	case tracker.IsKind(err, tracker.KindUnavailable) && strings.Contains(err.Error(), "is not installed"):
+	case tracker.IsCLIMissing(err):
 		return nil
 	case err != nil:
 		return fmt.Errorf("--pr %s: could not read PR %d from the forge: %w", pr, n, err)

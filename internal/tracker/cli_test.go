@@ -227,6 +227,9 @@ func TestRunRateLimits(t *testing.T) {
 		if !errors.As(err, &e) || e.Kind != c.kind || e.Code != c.code || (c.msg != "" && e.Message != c.msg) {
 			t.Errorf("%s: err %#v, want kind %d code %d %q", c.name, err, c.kind, c.code, c.msg)
 		}
+		if IsCLIMissing(err) {
+			t.Errorf("%s: a CLI that ran is not a missing CLI: %v", c.name, err)
+		}
 	}
 }
 
@@ -244,7 +247,7 @@ func TestRunMissingCLI(t *testing.T) {
 		c := f.cli(p)
 		c.LookPath = func(string) (string, error) { return "", exec.ErrNotFound }
 		_, err := c.Run(context.Background(), []string{"issue", "list"}, nil)
-		if !IsKind(err, KindUnavailable) || err.Error() != cli+" is not installed" || len(f.calls) != 0 {
+		if !IsKind(err, KindUnavailable) || !IsCLIMissing(err) || err.Error() != cli+" is not installed" || len(f.calls) != 0 {
 			t.Errorf("%s: %v", p, err)
 		}
 	}
