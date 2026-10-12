@@ -744,7 +744,7 @@ type gateRunOpts struct {
 type gateRun struct {
 	Result worker.GateResult
 	Err    error
-	// Issue is the item the slot held, read before a landing drops its record.
+	// Issue is the item the gate acted on, as the result names it.
 	Issue string
 	// Refused: the verdict is an exit-4 refusal; nothing landed and no
 	// bookkeeping ran.
@@ -763,20 +763,19 @@ func runGate(c *Ctx, root string, o gateRunOpts) gateRun {
 	if err != nil {
 		return gateRun{Err: err}
 	}
-	approve := func(files func() ([]string, error)) error {
+	approve := func(t worker.GateTarget, files func() ([]string, error)) error {
 		req := o.Approval
-		req.Thread = func() (approvalThread, error) { return slotApprovalThread(root, o.Slot) }
+		req.Thread = func() (approvalThread, error) { return targetApprovalThread(t) }
 		return clearMerge(c, policy, o.Slot+" into "+o.Base, o.Confirm, req, files, nil)
 	}
 	ctx, stop := workerContext()
 	defer stop()
-	issue := gateIssue(root, o.Slot)
 	r, err := workerEnvCtx(c, ctx).Gate(ctx, root, worker.GateOpts{Slot: o.Slot, Base: o.Base, CheckOnly: o.CheckOnly, NoVerify: o.NoVerify, Prune: o.Prune, Approve: approve, Verdict: shipVerdict(c, root, root).Block, Recorded: recordedReviews(root)})
-	run := gateRun{Result: r, Err: err, Issue: issue, Refused: isRefusal(worker.ClassifyVerdict(r.Verdict), err)}
+	run := gateRun{Result: r, Err: err, Issue: r.Issue, Refused: isRefusal(worker.ClassifyVerdict(r.Verdict), err)}
 	if run.Refused || err != nil || o.CheckOnly {
 		return run
 	}
-	run.Book, run.BookErr = postgate.Gate(workerEnvCtx(c, ctx), root, issue, r, parkNeedsHuman(c, root))
+	run.Book, run.BookErr = postgate.Gate(workerEnvCtx(c, ctx), root, r.Issue, r, parkNeedsHuman(c, root))
 	return run
 }
 
@@ -858,15 +857,19 @@ func slotApprovalThread(root, slot string) (approvalThread, error) {
 		}
 		return approvalThread{}, err
 	}
-	// The arg may have been a PR ref. A queued record's slot has moved on, so
-	// its thread names none.
-	slot = t.Name
-	branch := t.Branch
+	return targetApprovalThread(t)
+}
+
+// targetApprovalThread is the approval thread of a resolved gate target: its
+// recorded PR, else its issue. A queued record's slot has moved on, so its
+// thread names none.
+func targetApprovalThread(t worker.GateTarget) (approvalThread, error) {
+	slot := t.Name
 	if n, ok := worker.PRRefNumber(t.PR); ok {
 		return approvalThread{Kind: "pr", Number: n, Slot: slot, Title: fmt.Sprintf("Merge approval: PR #%d", n)}, nil
 	}
-	if n, err := strconv.Atoi(worker.HeldID(t.Task, branch, slot)); err == nil {
-		return approvalThread{Kind: "issue", Number: n, Slot: slot, Title: fmt.Sprintf("Merge approval: %s (%s)", slot, branch)}, nil
+	if n, err := strconv.Atoi(t.Issue); err == nil {
+		return approvalThread{Kind: "issue", Number: n, Slot: slot, Title: fmt.Sprintf("Merge approval: %s (%s)", slot, t.Branch)}, nil
 	}
 	return approvalThread{}, Usage("--approval and --escalate need an approval thread: slot %s has no PR and no issue number", slot)
 }

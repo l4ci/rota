@@ -175,11 +175,7 @@ func paneDone(prev string, s *Slot, r PollRow) (e ledger.Entry, ok bool) {
 // entry when the PR landed. A target no slot owns (queued record, external PR)
 // has no slot name.
 func gateLedger(env Env, m *RoundMemo, root string, t GateTarget, res GateResult) {
-	issue := t.Issue
-	if !t.Queued {
-		issue = HeldID(t.Task, t.Branch, t.Name)
-	}
-	e := ledger.Entry{Kind: ledger.KindGate, Issue: issue, Slot: t.Name, PR: cmp.Or(res.PR, t.PR), Detail: ledger.Detail("verdict", res.Verdict), Round: m.Round(env, root)}
+	e := ledger.Entry{Kind: ledger.KindGate, Issue: t.Issue, Slot: t.Name, PR: cmp.Or(res.PR, t.PR), Detail: ledger.Detail("verdict", res.Verdict), Round: m.Round(env, root)}
 	ledgerAppend(env, root, e)
 	switch {
 	case res.Verdict == GatePass:
@@ -226,15 +222,11 @@ func trainLedger(env Env, m *RoundMemo, root string, res TrainResult, gated map[
 		if err != nil {
 			continue
 		}
-		issue := gt.Issue
-		if !gt.Queued {
-			issue = HeldID(gt.Task, gt.Branch, gt.Name)
-		}
 		verdict := res.Verdict
 		if res.Culprit != "" && t != res.Culprit {
 			verdict = ""
 		}
-		ledgerAppend(env, root, ledger.Entry{Kind: ledger.KindGate, Issue: issue, Slot: gt.Name, PR: gt.PR, Round: round,
+		ledgerAppend(env, root, ledger.Entry{Kind: ledger.KindGate, Issue: gt.Issue, Slot: gt.Name, PR: gt.PR, Round: round,
 			Detail: ledger.Detail("verdict", verdict, "train", true, "culprit", res.Culprit)})
 	}
 }
