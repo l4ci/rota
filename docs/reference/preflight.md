@@ -54,7 +54,7 @@ The checks, in the order they run:
 | `jq` | `jq` is on `PATH` (the skills read `rota --json` output with it) | never |
 | `host` | the host a round would run on is usable: `work.dispatch` as named, or with it unset or `subagent`, herdr inside a herdr pane, else tmux inside tmux. herdr on `PATH` and 0.9.x, or tmux on `PATH` | no host is detected (solo) |
 | `tracker` | `gh` or `glab` is on `PATH` and logged in for the project's provider | the project has no remote |
-| `accounts` | every account in `work.accounts` has a `configDir` with a credentials file | no accounts configured |
+| `accounts` | every account in `work.accounts` has a `configDir` whose credentials file holds an access token | no accounts configured |
 | `hook` | herdr's agent integration is installed for each configured account (`herdr integration install claude`) | the host is not herdr, or no account is configured |
 | `statusline` | the effective statusline runs `rota statusline dump` | the orchestrator hooks are not installed (opt-in) |
 | `stop-hook` | a Stop and a SessionStart hook installed by `rota hook install` exist and their command resolves | the orchestrator hooks are not installed (opt-in) |
