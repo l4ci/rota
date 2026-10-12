@@ -52,7 +52,7 @@ func (e Env) claimFindings(ctx context.Context, rep *Report, reg worker.Registry
 		if s == nil || r.Issue == "" {
 			continue
 		}
-		held[r.Issue] = true
+		held[worker.NormID(r.Issue)] = true
 		want := s.ClaimID()
 		if want == "" {
 			continue // adopted or pre-C3 slot: no claim to compare
@@ -78,7 +78,7 @@ func (e Env) claimFindings(ctx context.Context, rep *Report, reg worker.Registry
 		if id == "" {
 			continue
 		}
-		held[id] = true
+		held[worker.NormID(id)] = true
 		want := q.ClaimID
 		if want == "" {
 			continue

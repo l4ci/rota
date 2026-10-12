@@ -275,7 +275,7 @@ func AssessScoped(be backlog.Backend, id string, tracked, shared []string, inFli
 	myScopes := itemScopes(be, id)
 	ov := Check{Name: CheckOverlap, OK: true, Detail: []string{}}
 	for _, f := range inFlight {
-		if f.Issue == id {
+		if worker.NormID(f.Issue) == worker.NormID(id) {
 			continue
 		}
 		// Finished work no longer collides: its issue is closed, its PR merged.

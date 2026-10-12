@@ -111,7 +111,9 @@ func (e Env) repair(ctx context.Context, root string, rep *Report, f Finding) er
 			return e.parkMerged(ctx, root, f.Slot)
 		}
 		return worker.Update(root, func(doc *worker.Doc) {
-			doc.DropQueued(func(q worker.QueuedPR) bool { return q.Issue == f.Issue && (f.pr == "" || q.PR == f.pr) })
+			doc.DropQueued(func(q worker.QueuedPR) bool {
+				return worker.NormID(q.Issue) == worker.NormID(f.Issue) && (f.pr == "" || q.PR == f.pr)
+			})
 		})
 	case ItemTimeout:
 		if e.Board == nil {

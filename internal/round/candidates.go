@@ -128,14 +128,14 @@ func heldIDs(root string) map[string]bool {
 		if id == "" {
 			return
 		}
-		held[id] = true
+		held[worker.NormID(id)] = true
 		if imap == nil {
 			return
 		}
 		if e, ok := imap.Get(id); ok {
 			if eo, ok := e.(*jsonx.Object); ok {
 				if n, ok := eo.Get("number"); ok && n != nil {
-					held[fmt.Sprint(n)] = true
+					held[worker.NormID(fmt.Sprint(n))] = true
 				}
 			}
 		}
@@ -157,7 +157,7 @@ func scopeSet(root string, items []backlog.Item, held map[string]bool, scope str
 		var out []backlog.Item
 		for _, it := range items {
 			// A review item is the round's own work: every scope offers it.
-			if !it.Closed && !held[it.ID] && (in(it) || reviews[worker.NormID(it.ID)] && IsReviewTitle(it.Title)) {
+			if !it.Closed && !held[worker.NormID(it.ID)] && (in(it) || reviews[worker.NormID(it.ID)] && IsReviewTitle(it.Title)) {
 				out = append(out, it)
 			}
 		}
@@ -292,7 +292,7 @@ func InScope(root string, be backlog.Backend, scope string, slate []string, id s
 			return false, err
 		}
 		for _, it := range set {
-			if strings.EqualFold(it.ID, id) {
+			if worker.NormID(it.ID) == worker.NormID(id) {
 				return true, nil
 			}
 		}

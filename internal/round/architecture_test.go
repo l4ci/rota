@@ -215,3 +215,16 @@ func TestMintReviewRecordsCreatedItemsOnError(t *testing.T) {
 		t.Fatalf("the created item should show as a review in flight, not be re-minted: %+v", a)
 	}
 }
+
+// A review item recorded as `#101` or `b7` is found by its backend spelling.
+func TestMintedReviewsNormalisesRecordedSpelling(t *testing.T) {
+	root, _, _, _ := archFixture(t, 1, nil)
+	seedReview(t, root)
+	if err := worker.Update(root, func(d *worker.Doc) { d.RecordReviewItems([]string{"#101", " b7 "}) }); err != nil {
+		t.Fatal(err)
+	}
+	got := MintedReviews(root)
+	if !got["101"] || !got["B7"] {
+		t.Fatalf("minted reviews = %v, want 101 and B7", got)
+	}
+}
