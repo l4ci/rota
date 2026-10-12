@@ -107,11 +107,7 @@ func (e Env) Architecture(ctx context.Context, root string, be backlog.Backend, 
 	if err != nil {
 		return a, err
 	}
-	for _, name := range set.Roster {
-		if s := reg.Slot(name); s != nil && s.HeldID() == "" {
-			a.Idle++
-		}
-	}
+	a.Idle = CountIdle(reg, set.Roster)
 	a.Areas = reviewAreas(root, set)
 
 	a.Count, a.Unavailable = e.closedSinceReview(ctx, root, be, &a.Since)
