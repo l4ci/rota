@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/rotatree"
+	"github.com/l4ci/rota/internal/roundlease"
 	"io"
 	"os"
 	"os/exec"
@@ -443,8 +444,11 @@ type Env struct {
 	Sleep func(time.Duration)
 	// Stderr defaults to os.Stderr (round wait's one-line fallback notice).
 	Stderr io.Writer
-	// Now defaults to time.Now (relay timestamps).
+	// Now defaults to time.Now (relay timestamps, ledger rows).
 	Now func() time.Time
+	// Lease reads the round lease the ledger stamps its rows with; nil means
+	// roundlease.DefaultEnv.
+	Lease func() roundlease.Env
 	// Getenv defaults to os.Getenv (ROTA_GATE_SHA_WAIT).
 	Getenv func(string) string
 	// Forge returns the forge a provider ("github" or "gitlab") runs in dir.
@@ -495,6 +499,22 @@ func (e Env) Environ() func(string) string {
 		return e.Getenv
 	}
 	return os.Getenv
+}
+
+// errWriter is where ledger warnings go: Stderr, os.Stderr when unset.
+func (e Env) errWriter() io.Writer {
+	if e.Stderr != nil {
+		return e.Stderr
+	}
+	return os.Stderr
+}
+
+// leaseEnv is the env's round-lease reader, roundlease.DefaultEnv unless swapped.
+func (e Env) leaseEnv() roundlease.Env {
+	if e.Lease != nil {
+		return e.Lease()
+	}
+	return roundlease.DefaultEnv()
 }
 
 func (e Env) withDefaults() Env {
@@ -558,8 +578,8 @@ func execShell(ctx context.Context, dir, command string) (string, int) {
 // and returns the count unchanged. head "" always counts. slot names the slot
 // that holds the bounced PR, so the ledger entry of a best-of attempt lands on
 // its own row; "" falls back to the first slot holding the issue.
-func RecordBounce(root, issue, slot, head string) (int, error) {
-	n, _, err := RecordBounceCounted(root, issue, slot, head)
+func RecordBounce(env Env, root, issue, slot, head string) (int, error) {
+	n, _, err := RecordBounceCounted(env, root, issue, slot, head)
 	return n, err
 }
 
@@ -567,20 +587,20 @@ func RecordBounce(root, issue, slot, head string) (int, error) {
 // the bounce (false when it deduped on the same head), decided under the same
 // registry lock as the write, so a caller that may roll it back never undoes a
 // bounce another writer counted.
-func RecordBounceCounted(root, issue, slot, head string) (int, bool, error) {
-	return recordBounce(nil, root, issue, slot, head)
+func RecordBounceCounted(env Env, root, issue, slot, head string) (int, bool, error) {
+	return recordBounce(env, nil, root, issue, slot, head)
 }
 
 // RecordBounceIn is RecordBounce reading the round lease through m.
-func RecordBounceIn(m *RoundMemo, root, issue, slot, head string) (int, error) {
-	n, _, err := recordBounce(m, root, issue, slot, head)
+func RecordBounceIn(env Env, m *RoundMemo, root, issue, slot, head string) (int, error) {
+	n, _, err := recordBounce(env, m, root, issue, slot, head)
 	return n, err
 }
 
-func recordBounce(m *RoundMemo, root, issue, slot, head string) (n int, counted bool, err error) {
+func recordBounce(env Env, m *RoundMemo, root, issue, slot, head string) (n int, counted bool, err error) {
 	defer func() {
 		if err == nil && counted {
-			LedgerNoteIn(m, root, ledger.Entry{Kind: ledger.KindBounce, Issue: issue, Slot: slot, Detail: ledger.Detail("count", n)})
+			LedgerNoteIn(env, m, root, ledger.Entry{Kind: ledger.KindBounce, Issue: issue, Slot: slot, Detail: ledger.Detail("count", n)})
 		}
 	}()
 	err = Update(root, func(d *Doc) {

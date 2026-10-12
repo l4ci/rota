@@ -176,7 +176,7 @@ func buildLimits(ctx context.Context, c *Ctx, root string, cfg any, set limits.S
 	}
 
 	d := limits.Deps{
-		Root: root, Settings: set, Now: c.deps().Now, Tick: tick,
+		Root: root, Settings: set, Now: c.deps().Now, Worker: c.deps().workerEnv(), Tick: tick,
 		Targets: targets,
 		Capture: func(ctx context.Context, t limits.Target) string {
 			if t.Orchestrator && inGap(gap) {

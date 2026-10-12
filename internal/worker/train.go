@@ -125,7 +125,7 @@ func (e Env) Train(ctx context.Context, root string, o TrainOpts) (TrainResult, 
 		cache := loadTrainCache(root)
 		gated := map[string]bool{}
 		res, err = e.train(ctx, root, o, cache, gated)
-		trainLedger(o.Round, root, res, gated)
+		trainLedger(e, o.Round, root, res, gated)
 		if cache.dirty {
 			if serr := cache.save(); serr != nil {
 				res.Notes = append(res.Notes, "TRAIN-CACHE not saved — "+serr.Error())

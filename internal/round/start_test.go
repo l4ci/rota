@@ -534,7 +534,7 @@ func TestFootprintIgnoresComments(t *testing.T) {
 func TestStartTrimsTheLedgerToLedgerKeep(t *testing.T) {
 	root := newRepo(t, nil)
 	for r := 1; r <= 3; r++ {
-		if err := ledger.Append(root, ledger.Entry{Kind: ledger.KindAssign, Round: r, Issue: "12"}); err != nil {
+		if err := ledger.Append(root, ledger.Entry{TS: time.Now(), Kind: ledger.KindAssign, Round: r, Issue: "12"}); err != nil {
 			t.Fatal(err)
 		}
 	}

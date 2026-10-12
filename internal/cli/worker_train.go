@@ -90,7 +90,7 @@ func runTrain(c *Ctx, root string, o trainRunOpts) trainRun {
 	if run.Refused || err != nil {
 		return run
 	}
-	run.Book = postgate.Train(round, root, issues, r, parkNeedsHuman(c, root))
+	run.Book = postgate.Train(workerEnvCtx(c, ctx), round, root, issues, r, parkNeedsHuman(c, root))
 	return run
 }
 

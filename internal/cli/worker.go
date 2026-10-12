@@ -776,7 +776,7 @@ func runGate(c *Ctx, root string, o gateRunOpts) gateRun {
 	if run.Refused || err != nil || o.CheckOnly {
 		return run
 	}
-	run.Book, run.BookErr = postgate.Gate(root, issue, r, parkNeedsHuman(c, root))
+	run.Book, run.BookErr = postgate.Gate(workerEnvCtx(c, ctx), root, issue, r, parkNeedsHuman(c, root))
 	return run
 }
 

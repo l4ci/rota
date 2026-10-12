@@ -91,14 +91,11 @@ func (r *Refused) Hint() string {
 	return `ask the user, then re-run with --confirm --confirm-note "<their answer>"`
 }
 
-// now is the audit clock; tests replace it.
-var now = time.Now
-
 // Clear lets a gated action through or refuses it. Without --confirm it
 // returns *Refused, whatever autonomy.level says. With it, it appends the
 // approval to the audit log before the caller acts. paths travels into the
 // refusal for merge-approval.
-func Clear(root, name, verb, target string, c Confirm, paths []string) error {
+func Clear(root string, now time.Time, name, verb, target string, c Confirm, paths []string) error {
 	if !c.Given {
 		if paths == nil {
 			paths = []string{}
@@ -112,7 +109,7 @@ func Clear(root, name, verb, target string, c Confirm, paths []string) error {
 		}
 	}
 	rec := jsonx.NewObject()
-	rec.Set("ts", now().UTC().Format(time.RFC3339))
+	rec.Set("ts", now.UTC().Format(time.RFC3339))
 	rec.Set("gate", name)
 	rec.Set("verb", verb)
 	rec.Set("target", target)
@@ -127,9 +124,9 @@ func Clear(root, name, verb, target string, c Confirm, paths []string) error {
 // Autopilot appends an autopilot action to the audit log, one line per assign,
 // merge or repair. These are not human approvals: gate is "autopilot" and the
 // note says what was done.
-func Autopilot(root, verb, target, note string) error {
+func Autopilot(root string, now time.Time, verb, target, note string) error {
 	rec := jsonx.NewObject()
-	rec.Set("ts", now().UTC().Format(time.RFC3339))
+	rec.Set("ts", now.UTC().Format(time.RFC3339))
 	rec.Set("gate", "autopilot")
 	rec.Set("verb", verb)
 	rec.Set("target", target)

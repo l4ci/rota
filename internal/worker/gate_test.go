@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/roundlease"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -42,6 +43,8 @@ type world struct {
 	forgeDB string
 	log     string
 	mode    string
+	// lease, when set, is the round lease the world's env reads.
+	lease func() roundlease.Env
 }
 
 func gitq(t *testing.T, dir string, args ...string) string {
@@ -125,6 +128,7 @@ func (w *world) forgeWord(key string) string {
 // env builds the Go Env around a fake Forge over the world's bare origin.
 func (w *world) env(brokenMergeBase bool) Env {
 	return Env{
+		Lease:  w.lease,
 		Sleep:  func(time.Duration) {},
 		Getenv: func(k string) string { return map[string]string{"ROTA_GATE_SHA_WAIT": "0"}[k] },
 	}.withForge(func(provider, dir string) Forge { return &fakeForge{w: w, provider: provider} }, brokenMergeBase)
@@ -650,17 +654,17 @@ func TestBounceCount(t *testing.T) {
 	root := t.TempDir()
 	os.MkdirAll(filepath.Join(root, ".rota"), 0o755)
 	for want := 1; want <= 3; want++ {
-		if n, err := RecordBounce(root, "31", "", ""); err != nil || n != want {
+		if n, err := RecordBounce(Env{}, root, "31", "", ""); err != nil || n != want {
 			t.Fatalf("bounce %d: got %d, %v", want, n, err)
 		}
 	}
-	if n, _ := RecordBounce(root, "32", "", ""); n != 1 {
+	if n, _ := RecordBounce(Env{}, root, "32", "", ""); n != 1 {
 		t.Errorf("counts are per item, got %d for another", n)
 	}
 	if err := ClearBounces(root, "31"); err != nil {
 		t.Fatal(err)
 	}
-	if n, _ := RecordBounce(root, "31", "", ""); n != 1 {
+	if n, _ := RecordBounce(Env{}, root, "31", "", ""); n != 1 {
 		t.Errorf("cleared count restarts, got %d", n)
 	}
 }
@@ -669,11 +673,11 @@ func TestBounceSameHeadCountsOnce(t *testing.T) {
 	root := t.TempDir()
 	os.MkdirAll(filepath.Join(root, ".rota"), 0o755)
 	for i := 0; i < 3; i++ {
-		if n, _ := RecordBounce(root, "31", "", "aaa"); n != 1 {
+		if n, _ := RecordBounce(Env{}, root, "31", "", "aaa"); n != 1 {
 			t.Fatalf("same head re-gated: got %d, want 1", n)
 		}
 	}
-	if n, _ := RecordBounce(root, "31", "", "bbb"); n != 2 {
+	if n, _ := RecordBounce(Env{}, root, "31", "", "bbb"); n != 2 {
 		t.Errorf("new head counts, got %d", n)
 	}
 }

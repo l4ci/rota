@@ -87,18 +87,20 @@ func TestConfirmValidate(t *testing.T) {
 	}
 }
 
+// fixedNow is the audit clock of these tests, in a non-UTC zone so the UTC
+// conversion is checked.
+var fixedNow = time.Date(2026, 10, 3, 12, 0, 0, 0, time.FixedZone("x", 7200))
+
 // Every enforced gate refuses without --confirm at every autonomy level, and
 // a confirmed pass is audited with the level in force.
 func TestClearAtEveryAutonomyLevel(t *testing.T) {
-	now = func() time.Time { return time.Date(2026, 10, 3, 12, 0, 0, 0, time.FixedZone("x", 7200)) }
-	t.Cleanup(func() { now = time.Now })
 	for _, level := range []string{"off", "auto"} {
 		for _, g := range Registry {
 			if !g.Enforced() {
 				continue
 			}
 			root := project(t, `{"autonomy": {"level": "`+level+`"}}`)
-			err := Clear(root, g.Name, g.Verbs[0], "v1.2.3", Confirm{}, nil)
+			err := Clear(root, fixedNow, g.Name, g.Verbs[0], "v1.2.3", Confirm{}, nil)
 			var r *Refused
 			if !errors.As(err, &r) || r.Gate != g.Name || r.Paths == nil {
 				t.Fatalf("%s/%s: no confirm gave %v", level, g.Name, err)
@@ -106,7 +108,7 @@ func TestClearAtEveryAutonomyLevel(t *testing.T) {
 			if lines := auditLines(t, root); lines != nil {
 				t.Fatalf("%s/%s: a refusal audited %v", level, g.Name, lines)
 			}
-			if err := Clear(root, g.Name, g.Verbs[0], "v1.2.3", Confirm{Given: true, Note: `"yes" – go`}, nil); err != nil {
+			if err := Clear(root, fixedNow, g.Name, g.Verbs[0], "v1.2.3", Confirm{Given: true, Note: `"yes" – go`}, nil); err != nil {
 				t.Fatalf("%s/%s: confirmed: %v", level, g.Name, err)
 			}
 			want := map[string]any{"ts": "2026-10-03T10:00:00Z", "gate": g.Name, "verb": g.Verbs[0], "target": "v1.2.3",
@@ -121,7 +123,7 @@ func TestClearAtEveryAutonomyLevel(t *testing.T) {
 func TestClearAppends(t *testing.T) {
 	root := project(t, "")
 	for i := 0; i < 3; i++ {
-		if err := Clear(root, TagPush, "release push", "v1", Confirm{Given: true, Note: "ok"}, nil); err != nil {
+		if err := Clear(root, fixedNow, TagPush, "release push", "v1", Confirm{Given: true, Note: "ok"}, nil); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -162,10 +164,10 @@ func TestMergePolicy(t *testing.T) {
 
 func TestClearRecordsEscalation(t *testing.T) {
 	root := project(t, "")
-	if err := Clear(root, MergeApproval, "ship pr-merge", "PR 7", Confirm{Given: true, Note: "Approve.", Escalation: "e3"}, []string{}); err != nil {
+	if err := Clear(root, fixedNow, MergeApproval, "ship pr-merge", "PR 7", Confirm{Given: true, Note: "Approve.", Escalation: "e3"}, []string{}); err != nil {
 		t.Fatal(err)
 	}
-	if err := Clear(root, MergeApproval, "ship pr-merge", "PR 7", Confirm{Given: true, Note: "ok"}, []string{}); err != nil {
+	if err := Clear(root, fixedNow, MergeApproval, "ship pr-merge", "PR 7", Confirm{Given: true, Note: "ok"}, []string{}); err != nil {
 		t.Fatal(err)
 	}
 	lines := auditLines(t, root)
@@ -185,7 +187,7 @@ func TestValidateIgnoresEscalation(t *testing.T) {
 
 func TestAutopilotAuditLine(t *testing.T) {
 	root := t.TempDir()
-	if err := Autopilot(root, "round tick merge", "ben", "into main"); err != nil {
+	if err := Autopilot(root, fixedNow, "round tick merge", "ben", "into main"); err != nil {
 		t.Fatal(err)
 	}
 	ls := auditLines(t, root)
@@ -199,8 +201,8 @@ func TestReadAudit(t *testing.T) {
 	if got, err := ReadAudit(root); err != nil || got != nil {
 		t.Fatalf("missing log: %v, %v", got, err)
 	}
-	Autopilot(root, "round tick merge", "ben", "into main")
-	Autopilot(root, "round tick assign", "dana", "item 7")
+	Autopilot(root, fixedNow, "round tick merge", "ben", "into main")
+	Autopilot(root, fixedNow, "round tick assign", "dana", "item 7")
 	got, err := ReadAudit(root)
 	if err != nil || len(got) != 2 {
 		t.Fatalf("%v, %v", got, err)
