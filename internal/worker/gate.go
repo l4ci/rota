@@ -680,7 +680,7 @@ func (g *gate) stepCloses() (bool, error) {
 	}
 	body, err := g.prBody()
 	if err != nil {
-		if tracker.IsKind(err, tracker.KindUnavailable) && strings.Contains(err.Error(), "is not installed") {
+		if tracker.IsCLIMissing(err) {
 			return false, nil
 		}
 		return g.broke(fmt.Sprintf("could not read the body of %s to check it closes #%d: %v", g.pr, n, err))
@@ -1279,7 +1279,7 @@ func (g *gate) openPRForBranch() (url, brokeMsg string) {
 	}
 	prs, err := g.forge.OpenPRs(g.ctx)
 	if err != nil {
-		if tracker.IsKind(err, tracker.KindUnavailable) && strings.Contains(err.Error(), "is not installed") {
+		if tracker.IsCLIMissing(err) {
 			return "", ""
 		}
 		return "", fmt.Sprintf("slot %s records no PR and the open PRs of %s could not be listed to look for one headed by %s: %v", g.o.Slot, g.provider, g.branch, err)
@@ -1317,7 +1317,7 @@ func (g *gate) checkProvenance() (failMsg, brokeMsg string) {
 	}
 	body, err := g.prBody()
 	if err != nil {
-		if tracker.IsKind(err, tracker.KindUnavailable) && strings.Contains(err.Error(), "is not installed") {
+		if tracker.IsCLIMissing(err) {
 			g.res.Notes = append(g.res.Notes, fmt.Sprintf("PROVENANCE-SKIP %s — no %s to read approvals from", g.o.Slot, g.cliName))
 			return "", ""
 		}

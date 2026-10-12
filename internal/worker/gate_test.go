@@ -493,7 +493,7 @@ func TestGateProvenanceFailsClosedWhenTheBodyCannotBeRead(t *testing.T) {
 	inner := e.Forge
 	e.Forge = func(p, d string, r tracker.Settings) (Forge, error) {
 		f, err := inner(p, d, r)
-		return &flakyForge{Forge: f, from: 1, err: &tracker.Error{Kind: tracker.KindUnavailable, Code: 3, Message: "gh is not installed"}}, err
+		return &flakyForge{Forge: f, from: 1, err: &tracker.Error{Kind: tracker.KindUnavailable, Code: 3, CLIMissing: true, Message: "gh is not installed"}}, err
 	}
 	res, _ := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main", CheckOnly: true})
 	if res.Verdict != GateCheckBroke {
