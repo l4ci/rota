@@ -23,6 +23,7 @@ import (
 	"github.com/l4ci/rota/internal/skills"
 	"github.com/l4ci/rota/internal/stalebin"
 	"github.com/l4ci/rota/internal/tracker"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 // Check statuses.
@@ -312,12 +313,7 @@ func (d *runner) tracker() Check {
 	return pass("tracker", cli+" authenticated ("+p+")")
 }
 
-func (d *runner) expand(dir string) string {
-	if strings.HasPrefix(dir, "~/") && d.in.Home != "" {
-		return filepath.Join(d.in.Home, dir[2:])
-	}
-	return dir
-}
+func (d *runner) expand(dir string) string { return worker.ExpandConfigDirIn(dir, d.in.Home) }
 
 func (d *runner) accounts() Check {
 	if len(d.in.Accounts) == 0 {
@@ -326,17 +322,16 @@ func (d *runner) accounts() Check {
 	var bad []string
 	var hint string
 	for _, a := range d.in.Accounts {
-		dir := d.expand(a.ConfigDir)
-		var why string
-		if dir == "" {
+		var dir, why string
+		if a.ConfigDir == "" {
 			why = "no configDir"
 			if hint == "" {
 				hint = "set configDir for account " + a.Name + " in work.accounts"
 			}
-		} else if fi, err := os.Stat(dir); err != nil || !fi.IsDir() {
+		} else if dir = worker.ExpandConfigDirIn(a.ConfigDir, d.in.Home); !isDir(dir) {
 			why = "configDir " + dir + " does not exist"
-		} else if fi, err := os.Stat(filepath.Join(dir, ".credentials.json")); err != nil || !fi.Mode().IsRegular() {
-			why = "no credentials file in " + dir
+		} else if p := worker.CredentialsProblem(dir); p != "" {
+			why = p + " in " + dir
 		}
 		if why != "" {
 			bad = append(bad, a.Name+": "+why)
@@ -349,6 +344,11 @@ func (d *runner) accounts() Check {
 		return fail("accounts", strings.Join(bad, "; "), hint)
 	}
 	return pass("accounts", fmt.Sprintf("%d accounts with credentials", len(d.in.Accounts)))
+}
+
+func isDir(p string) bool {
+	fi, err := os.Stat(p)
+	return err == nil && fi.IsDir()
 }
 
 const hookHint = "herdr integration install claude"

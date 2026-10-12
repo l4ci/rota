@@ -43,7 +43,7 @@ dr_run() { # dr_run <dir>: doctor in <dir> against the fakes; prints the envelop
 
 # (a) a herdr project with one account and the hook installed: all pass or skip
 mkdir -p "$TMP_DR/acct" "$TMP_DR/proj/.rota"
-echo '{}' >"$TMP_DR/acct/.credentials.json"
+echo '{"claudeAiOauth":{"accessToken":"t"}}' >"$TMP_DR/acct/.credentials.json"
 : >"$TMP_DR/acct/installed"
 printf '.worktrees/\n' >"$TMP_DR/proj/.gitignore"
 printf '{"work":{"dispatch":"herdr","accounts":[{"name":"a","configDir":"%s"}]}}\n' "$TMP_DR/acct" >"$TMP_DR/proj/.rota/config.json"
@@ -94,6 +94,14 @@ rc=0; OUT="$(dr_run "$TMP_DR/proj")" || rc=$?
 [ "$(printf '%s' "$OUT" | dr_field accounts status)" = "fail" ] || fail "C6[e]: accounts did not fail: $OUT"
 pass "C6[e]: an account with no credentials file fails"
 
+# (e2) credentials without an access token fail too: dispatch would reject them
+echo '{}' >"$TMP_DR/acct/.credentials.json"
+rc=0; OUT="$(dr_run "$TMP_DR/proj")" || rc=$?
+[ "$rc" -eq 1 ] || fail "C6[e2]: tokenless credentials exited $rc, not 1"
+[ "$(printf '%s' "$OUT" | dr_field accounts status)" = "fail" ] || fail "C6[e2]: accounts did not fail: $OUT"
+case "$OUT" in *"no access token"*) ;; *) fail "C6[e2]: reason missing: $OUT" ;; esac
+pass "C6[e2]: credentials without an access token fail"
+
 # (f) no .rota/ at all: runs on defaults; no host, accounts or hook to check
 mkdir -p "$TMP_DR/bare"
 printf '.worktrees/\n' >"$TMP_DR/bare/.gitignore"
@@ -112,7 +120,7 @@ pass "C6[g]: doctor rejects --repo"
 
 # (h) host detection (#236): init's default work.dispatch=subagent still gets the herdr checks inside a herdr pane
 printf '{"work":{"dispatch":"subagent","accounts":[{"name":"a","configDir":"%s"}]}}\n' "$TMP_DR/acct" >"$TMP_DR/proj/.rota/config.json"
-echo '{}' >"$TMP_DR/acct/.credentials.json"
+echo '{"claudeAiOauth":{"accessToken":"t"}}' >"$TMP_DR/acct/.credentials.json"
 rc=0; OUT="$(dr_run "$TMP_DR/proj")" || rc=$?
 [ "$(printf '%s' "$OUT" | dr_field host status)" = "skip" ] || fail "C6[h]: subagent outside a pane did not skip host: $OUT"
 [ "$(printf '%s' "$OUT" | dr_field hook status)" = "skip" ] || fail "C6[h]: subagent outside a pane did not skip hook: $OUT"
