@@ -81,8 +81,11 @@ func runTrain(c *Ctx, root string, o trainRunOpts) trainRun {
 	ctx, stop := workerContext()
 	defer stop()
 	issues := make(map[string]string, len(o.Targets)) // a landed PR drops its queued record, so read before
+	reg, _ := worker.LoadRegistry(root)               // the train refuses a corrupt registry itself
 	for _, t := range o.Targets {
-		issues[t] = gateIssue(root, t)
+		if gt, err := reg.GateTargetAny(t); err == nil {
+			issues[t] = gt.Issue
+		}
 	}
 	round := &worker.RoundMemo{}
 	r, err := workerEnvCtx(c, ctx).Train(ctx, root, worker.TrainOpts{Targets: o.Targets, Base: o.Base, Order: o.Order, Say: func(l string) { fmt.Fprintln(c.Stderr, l) }, LandGreen: o.LandGreen, NoVerify: o.NoVerify, Approve: approve, Verdict: shipVerdict(c, root, root).Block, Recorded: recordedReviews(root), Round: round})

@@ -35,6 +35,9 @@ func TestGateQueuedPR(t *testing.T) {
 		if err != nil || res.Verdict != GatePass {
 			t.Fatalf("%s: %+v %v", arg, res, err)
 		}
+		if res.Issue != "5" {
+			t.Errorf("%s: result issue = %q, want the queued record's 5", arg, res.Issue)
+		}
 		if _, err := os.Stat(filepath.Join(w.dir, "work.txt")); err != nil {
 			t.Errorf("%s: the PR's work is not on main", arg)
 		}
