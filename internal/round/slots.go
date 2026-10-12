@@ -14,10 +14,11 @@ import (
 // limit watcher all read it from here.
 
 // SlotIdle says whether a roster slot can take an issue now: it holds nothing
-// and rota drives it. An adopted (external) slot has no session to dispatch
-// into, so Transfer and assign refuse it; it is never idle.
+// and is not busy (a live session is working in its pane). An adopted
+// (external) slot has no session to dispatch into, so Transfer and assign
+// refuse it; it is never idle.
 func SlotIdle(s *worker.Slot) bool {
-	return s != nil && s.HeldID() == "" && !s.IsExternal()
+	return s != nil && s.HeldID() == "" && s.State() != "busy" && !s.IsExternal()
 }
 
 // SlotAccount is the harness kind ("codex", or "" for Claude) and the account

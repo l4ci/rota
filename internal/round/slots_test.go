@@ -16,9 +16,10 @@ func TestIdleSlotMatchesKindAndAccountAndSkipsHeldAndExternal(t *testing.T) {
 		slot(root, "cy", "park/cy", func(o *jsonx.Object) { o.Set("kind", harness.Codex); o.Set("codexAccount", "work") }),
 		slot(root, "dana", "park/dana", func(o *jsonx.Object) { o.Set("account", "b") }),
 		slot(root, "eli", "park/eli", func(o *jsonx.Object) { o.Set("account", "b") }),
+		slot(root, "fay", "park/fay", func(o *jsonx.Object) { o.Set("account", "b"); o.Set("state", "busy") }),
 	)
 	reg := worker.LoadRegistryTolerant(root)
-	roster := []string{"ext", "ben", "cy", "dana", "eli", "gone"}
+	roster := []string{"ext", "ben", "cy", "dana", "eli", "fay", "gone"}
 	for _, c := range []struct{ kind, account, want string }{
 		{"", "b", "dana"},
 		{harness.Codex, "work", "cy"},
@@ -30,7 +31,7 @@ func TestIdleSlotMatchesKindAndAccountAndSkipsHeldAndExternal(t *testing.T) {
 		}
 	}
 	if got := CountIdle(reg, roster); got != 3 {
-		t.Errorf("idle count = %d, want 3 (cy, dana, eli)", got)
+		t.Errorf("idle count = %d, want 3 (cy, dana, eli; fay is busy)", got)
 	}
 }
 

@@ -10,12 +10,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/hook"
 	"github.com/l4ci/rota/internal/host"
+	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/keepalive"
 	"github.com/l4ci/rota/internal/limits"
 	"github.com/l4ci/rota/internal/rotastate"
+	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/roundlease"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 // limFake is a host that records what the watcher types and reads nothing:
@@ -247,5 +251,47 @@ func TestOrchestratorDataIsTheNewestSessionFileOfTheRoot(t *testing.T) {
 	}
 	if d := read(now.Add(10 * time.Minute)); d.Known {
 		t.Fatalf("a stale file that shows no limit is no data: %+v", d)
+	}
+}
+
+// The watcher hands its receiver straight to round.Transfer. Through the
+// IdleSlot callback buildLimits wires, a busy slot, an adopted slot and a slot
+// outside the roster must never be picked, and the idle one on the account is.
+func TestLimitWatcherIdleSlotNeverPicksASlotTransferRefuses(t *testing.T) {
+	dir := limProject(t)
+	cfg := `{"git":{"baseBranch":"feat/x"},"round":{"roster":["ext","busy","held","dana"]}}`
+	if err := os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(cfg), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	mk := func(name, branch string, mod func(*jsonx.Object)) *worker.Slot {
+		s := worker.NewSlot(name, branch, filepath.Join(dir, ".worktrees", name), "main", "")
+		s.Raw().Set("account", "b")
+		if mod != nil {
+			mod(s.Raw())
+		}
+		return s
+	}
+	slots := []*worker.Slot{
+		mk("ext", "park/ext", func(o *jsonx.Object) { o.Set("kind", worker.KindExternal) }),
+		mk("busy", "park/busy", func(o *jsonx.Object) { o.Set("state", "busy") }),
+		mk("held", "held/5-x", nil),
+		mk("out", "park/out", nil), // idle, but not on the roster
+		mk("dana", "park/dana", nil),
+	}
+	if err := worker.Update(dir, func(d *worker.Doc) { d.SetSlots(slots) }); err != nil {
+		t.Fatal(err)
+	}
+	deps, _ := limDeps()
+	c := &Ctx{Deps: deps}
+	rig, err := buildLimits(context.Background(), c, dir, config.Load(rotatree.Config(dir)), limits.Settings{}, os.Getpid(), time.Second, nil, func(string, ...any) {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rig.Cancel()
+	if got, ok := rig.W.IdleSlot(context.Background(), "", "b"); !ok || got != "dana" {
+		t.Fatalf("receiver = %q, %v; want dana", got, ok)
+	}
+	if got, ok := rig.W.IdleSlot(context.Background(), "", "c"); ok {
+		t.Fatalf("no slot is idle on account c, got %q", got)
 	}
 }
