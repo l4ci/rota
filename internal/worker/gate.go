@@ -149,9 +149,9 @@ type GateOpts struct {
 	Recorded func(branch, head string) []string
 	// Approve is the merge-approval gate (B1), run after provenance and right
 	// before the merge, never under CheckOnly. files lists the paths the merge
-	// changes. A non-nil error stops the gate with verdict approval-required
+	// changes; t is the resolved target. A non-nil error stops the gate with verdict approval-required
 	// and is returned as is.
-	Approve func(files func() ([]string, error)) error
+	Approve func(t GateTarget, files func() ([]string, error)) error
 }
 
 // skipsVerify says the gate runs no verify tier: --no-verify, or a train's
@@ -161,9 +161,12 @@ func (o GateOpts) skipsVerify() bool { return o.NoVerify || o.LandVerified }
 // GateResult is the gate's answer. Err is the message for a non-success
 // verdict, Hint what to do about it.
 type GateResult struct {
-	Slot          string
-	Verdict       string
-	Base          string
+	Slot    string
+	Verdict string
+	Base    string
+	// Issue is the item the gate acted on, resolved once from the target: the
+	// queued record's, else the one the slot held. "" when it cannot be told.
+	Issue         string
 	Branch        string
 	SHA           string
 	PR            string
@@ -189,7 +192,8 @@ func (r GateResult) OK() bool { return r.Verdict == GateFresh || r.Verdict == Ga
 
 // GateTarget is what a gate argument resolves to: a slot, or the queued record
 // of a PR whose slot moved on. Both carry the branch, PR, base and relay log the
-// gate reads; Name and Task belong to a slot, Issue to a queued record.
+// gate reads; Name and Task belong to a slot. Issue is the item the target
+// stands for: the queued record's, else the one the slot holds ("" when unknown).
 //
 // External is a PR no slot or review record knows (an orchestrator fix-forward
 // PR, a PR after wind-down): only PR is set, and the gate reads the branch from
@@ -204,9 +208,9 @@ func gateSlot(s *Slot) GateTarget {
 	// An adopted slot is gated like an unrecorded PR: no relays are expected,
 	// and the PR's head branch is read from the forge.
 	if s.IsExternal() {
-		return GateTarget{External: true, Name: s.Name(), Branch: s.Branch(), PR: s.PR(), Base: s.Base(), Task: s.Task()}
+		return GateTarget{External: true, Name: s.Name(), Branch: s.Branch(), PR: s.PR(), Base: s.Base(), Task: s.Task(), Issue: HeldID(s.Task(), s.Branch(), s.Name())}
 	}
-	return GateTarget{Name: s.Name(), Branch: s.Branch(), PR: s.PR(), Base: s.Base(), Task: s.Task(), relays: s.Relays()}
+	return GateTarget{Name: s.Name(), Branch: s.Branch(), PR: s.PR(), Base: s.Base(), Task: s.Task(), Issue: HeldID(s.Task(), s.Branch(), s.Name()), relays: s.Relays()}
 }
 
 func gateQueued(q QueuedPR) GateTarget {
@@ -322,6 +326,7 @@ func (e Env) gate(ctx context.Context, root string, o GateOpts) (GateResult, err
 	if err != nil {
 		return res, err
 	}
+	res.Issue = t.Issue
 	g := &gate{e: e, ctx: ctx, root: root, res: &res, o: o, in: in, target: t, resolved: t, branch: t.Branch, pr: t.PR}
 	err = g.run()
 	return res, err
@@ -640,9 +645,6 @@ func (g *gate) stepProvenance() (bool, error) {
 // refusal clears itself once the orchestrator picks.
 func (g *gate) stepBestOf() (bool, error) {
 	issue := g.target.Issue
-	if !g.target.Queued {
-		issue = HeldID(g.target.Task, g.target.Branch, g.target.Name)
-	}
 	reg, err := LoadRegistry(g.root)
 	if err != nil {
 		return false, err
@@ -671,9 +673,6 @@ func (g *gate) stepBestOf() (bool, error) {
 // with no PR, or holding no numeric issue (file backend), has nothing to check.
 func (g *gate) stepCloses() (bool, error) {
 	issue := g.target.Issue
-	if !g.target.Queued {
-		issue = HeldID(g.target.Task, g.target.Branch, g.target.Name)
-	}
 	n, err := strconv.Atoi(issue)
 	if g.pr == "" || err != nil || n <= 0 {
 		return false, nil
@@ -730,9 +729,6 @@ func (g *gate) stepReviewDepth() (bool, error) {
 	}
 	var labels []string
 	issue := g.target.Issue
-	if !g.target.Queued {
-		issue = HeldID(g.target.Task, g.target.Branch, g.target.Name)
-	}
 	// the issue is read only when the policy has a label to match it against
 	if n, err := strconv.Atoi(issue); err == nil && n > 0 && len(policy.Labels) > 0 {
 		is, err := g.forge.Get(g.ctx, n, false)
@@ -833,7 +829,9 @@ func (g *gate) stepPremerge() (bool, error) {
 			return g.e.ciDiffFiles(g.ctx, g.root, g.baseRef, g.verified)
 		}
 	}
-	run.Approve = g.o.Approve
+	if g.o.Approve != nil {
+		run.Approve = func(files func() ([]string, error)) error { return g.o.Approve(g.target, files) }
+	}
 	r, approval, err := run.run()
 	switch {
 	case approval:

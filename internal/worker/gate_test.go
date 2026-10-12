@@ -405,6 +405,22 @@ func TestGateResultShape(t *testing.T) {
 	}
 }
 
+// The result names the issue the gate acted on: the slot's task, "" when the
+// slot holds none. The issue is resolved before any step, so a refusal carries it.
+func TestGateResultNamesTheSlotsIssue(t *testing.T) {
+	for _, c := range []struct{ name, slot, want string }{
+		{"task", `{"name":"w1","branch":"w1","task":"12"}`, "12"},
+		{"neither", `{"name":"w1","branch":"w1","pr":"` + ghURL + `"}`, ""},
+	} {
+		w := newWorld(t, ghURL)
+		os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"), []byte(`{"slots":[`+c.slot+`]}`), 0o644)
+		res, err := w.gate(false, GateOpts{CheckOnly: true})
+		if res.Issue != c.want {
+			t.Errorf("%s: issue %q (%v), want %q", c.name, res.Issue, err, c.want)
+		}
+	}
+}
+
 func (e Env) withForge(f func(provider, dir string) Forge, brokenMergeBase bool) Env {
 	e.Forge = func(provider, dir string, _ tracker.Settings) (Forge, error) { return f(provider, dir), nil }
 	if brokenMergeBase {
@@ -864,7 +880,7 @@ func TestGateSkipsE2EWhenFullRed(t *testing.T) {
 func TestGateApprovalRefusalCarriesData(t *testing.T) {
 	w := newWorld(t, ghURL)
 	want := &exitcode.Error{Exit: exitcode.ExitRefused, Message: "gate", Data: BlockData{BlockedBy: "manual gate"}}
-	res, err := w.gate(false, GateOpts{Approve: func(func() ([]string, error)) error { return want }})
+	res, err := w.gate(false, GateOpts{Approve: func(GateTarget, func() ([]string, error)) error { return want }})
 	if res.Verdict != GateApprovalRequired {
 		t.Fatalf("verdict %q", res.Verdict)
 	}
