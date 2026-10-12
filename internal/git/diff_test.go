@@ -2,7 +2,10 @@ package git
 
 import (
 	"context"
+	"errors"
 	"reflect"
+	"sort"
+	"strings"
 	"testing"
 
 	"github.com/l4ci/rota/internal/gittest"
@@ -64,5 +67,62 @@ func TestRemoteBase(t *testing.T) {
 	}
 	if ref, ok := RemoteRef(ctx, Exec, dir, "main"); !ok || ref != "origin/main" {
 		t.Fatalf("RemoteRef = %q, %v", ref, ok)
+	}
+}
+
+func TestExitErrorCarriesStderr(t *testing.T) {
+	dir := newRepo(t)
+	_, err := Repo{dir}.ChangedPaths(context.Background(), "nope...main")
+	var ee *ExitError
+	if !errors.As(err, &ee) || ee.ExitCode == 0 || !strings.Contains(ee.Stderr, "nope") {
+		t.Fatalf("err = %#v, want ExitError with git's stderr", err)
+	}
+	_, err = Repo{dir}.ChangedLines(context.Background(), "nope...main")
+	if !errors.As(err, &ee) || ee.Stderr == "" {
+		t.Fatalf("lines err = %#v", err)
+	}
+}
+
+func TestChangedPathsRenameBinaryEmpty(t *testing.T) {
+	dir := newRepo(t)
+	ctx := context.Background()
+	repo := Repo{dir}
+	if p, err := repo.ChangedPaths(ctx, "main...main"); err != nil || len(p) != 0 {
+		t.Fatalf("empty diff: %v, %v", p, err)
+	}
+	if n, err := repo.ChangedLines(ctx, "main...main"); err != nil || n != 0 {
+		t.Fatalf("empty lines: %d, %v", n, err)
+	}
+	mustGit(t, dir, "checkout", "-q", "-b", "feat")
+	mustGit(t, dir, "mv", "a.txt", "renamed.txt")
+	gittest.Write(t, dir, "img.bin", "a\x00b\x00\x01")
+	mustGit(t, dir, "add", "-A")
+	mustGit(t, dir, "commit", "-q", "-m", "rename and binary")
+	paths, err := repo.ChangedPaths(ctx, "main...feat")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sort.Strings(paths)
+	if want := []string{"img.bin", "renamed.txt"}; !reflect.DeepEqual(paths, want) {
+		t.Fatalf("paths = %v, want %v", paths, want)
+	}
+	// the rename is a pure move (0 lines); the binary file counts for nothing
+	if n, err := repo.ChangedLines(ctx, "main...feat"); err != nil || n != 0 {
+		t.Fatalf("lines = %d, %v; want 0", n, err)
+	}
+}
+
+func TestRemoteBaseSpellings(t *testing.T) {
+	dir := newRepo(t)
+	ctx := context.Background()
+	mustGit(t, dir, "update-ref", "refs/remotes/origin/release/1.x", "HEAD")
+	mustGit(t, dir, "update-ref", "refs/remotes/origin/main", "HEAD")
+	if got := RemoteBase(ctx, Exec, dir, "release/1.x"); got != "origin/release/1.x" {
+		t.Fatalf("slash base: got %q", got)
+	}
+	// a base already spelled origin/x asks for origin/origin/x, which is absent,
+	// so it comes back unchanged
+	if got := RemoteBase(ctx, Exec, dir, "origin/main"); got != "origin/main" {
+		t.Fatalf("origin-spelled base: got %q", got)
 	}
 }

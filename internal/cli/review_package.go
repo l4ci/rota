@@ -86,11 +86,11 @@ func reviewPackage(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		names, err := reviewGit(ctx, t.Dir, "diff", "--name-only", diffSpan)
+		paths, err := git.Repo{Dir: t.Dir}.ChangedPaths(ctx, diffSpan)
 		if err != nil {
-			return Result{}, err
+			return Result{}, diffErr(err)
 		}
-		files := len(nonBlankLines(names))
+		files := len(paths)
 
 		var b strings.Builder
 		fmt.Fprintf(&b, "# Review package: %s vs %s\n\n", t.Branch, from)

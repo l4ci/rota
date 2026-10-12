@@ -10,6 +10,18 @@ import (
 // The helpers below take a Runner, not a Repo, so a layer that fakes git (the
 // gate, the round env) keeps its seam. Repo's methods run them on Exec.
 
+// ExitError is a git call that ran and exited non-zero. Callers map it to
+// their own exit class and message; Stderr is what git said.
+type ExitError struct {
+	Args     string
+	ExitCode int
+	Stderr   string
+}
+
+func (e *ExitError) Error() string {
+	return fmt.Sprintf("git %s exited %d", e.Args, e.ExitCode)
+}
+
 // RemoteRef returns origin/<base> and true when that remote-tracking branch
 // resolves in dir. A failure to run git counts as absent.
 func RemoteRef(ctx context.Context, run Runner, dir, base string) (string, bool) {
@@ -42,7 +54,7 @@ func ChangedPaths(ctx context.Context, run Runner, dir, span string) ([]string, 
 		return nil, err
 	}
 	if res.ExitCode != 0 {
-		return nil, fmt.Errorf("git diff --name-only %s exited %d", span, res.ExitCode)
+		return nil, &ExitError{"diff --name-only " + span, res.ExitCode, res.Stderr}
 	}
 	var paths []string
 	for _, l := range strings.Split(res.Stdout, "\n") {
@@ -61,7 +73,7 @@ func ChangedLines(ctx context.Context, run Runner, dir, span string) (int, error
 		return 0, err
 	}
 	if res.ExitCode != 0 {
-		return 0, fmt.Errorf("git diff --numstat %s exited %d", span, res.ExitCode)
+		return 0, &ExitError{"diff --numstat " + span, res.ExitCode, res.Stderr}
 	}
 	return CountLines(res.Stdout), nil
 }
