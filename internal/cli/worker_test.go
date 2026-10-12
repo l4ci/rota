@@ -603,6 +603,8 @@ func TestWorkerGateAndTrainLedgerRowsTakeROTA_TEST_NOW(t *testing.T) {
 	t.Run("train", func(t *testing.T) {
 		// A failing verify makes the slot the culprit, which only the train's
 		// own ledger row records.
+		// A failed verify keeps its rota-gate-verify-* log: keep it in the test's tmp.
+		t.Setenv("TMPDIR", t.TempDir())
 		dir := setup("test ! -f bad.txt", "bad.txt")
 		if code, out, _ := rotaIn(t, dir, "--json", "worker", "train", "w1", "--base", "main"); code == 0 {
 			t.Fatalf("train should fail its verify: %s", out)
