@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/ledger"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -554,5 +555,80 @@ func TestRecordedReviewsIgnoreStaleVerdicts(t *testing.T) {
 	}
 	if got := recordedReviews(root)("w1", ""); len(got) != 0 {
 		t.Errorf("an unknown head matches nothing: %v", got)
+	}
+}
+
+// ROTA_TEST_NOW pins the ledger rows a real `worker gate` and `worker train`
+// write: it reaches them through Deps.workerEnv, not a hand-built Env.
+func TestWorkerGateAndTrainLedgerRowsTakeROTA_TEST_NOW(t *testing.T) {
+	const pinned = "2026-10-03T12:00:00Z"
+	t.Setenv("ROTA_TEST_NOW", pinned)
+	rowTimes := func(dir string) map[string][]string {
+		t.Helper()
+		es, err := ledger.Load(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := map[string][]string{}
+		for _, e := range es {
+			out[e.Kind] = append(out[e.Kind], e.TS.UTC().Format(time.RFC3339))
+		}
+		return out
+	}
+	setup := func(verify, file string) string {
+		dir := workerProject(t, `{"ship":{"review":"none"},"test":{"full":["`+verify+`"]}}`)
+		rotaIn(t, dir, "worker", "pool", "init", "--slots", "1", "--base", "main")
+		wt := filepath.Join(dir, ".worktrees", "w1")
+		write(t, filepath.Join(wt, file), "f")
+		gitT(t, wt, "add", file)
+		gitT(t, wt, "commit", "-q", "-m", "work")
+		return dir
+	}
+
+	t.Run("gate", func(t *testing.T) {
+		dir := setup("true", "feature.txt")
+		if code, out, _ := rotaIn(t, dir, "--json", "worker", "gate", "w1", "--base", "main"); code != 0 {
+			t.Fatalf("gate: %d %s", code, out)
+		}
+		rows := rowTimes(dir)
+		if len(rows[ledger.KindGate]) != 1 || len(rows[ledger.KindMerge]) != 1 {
+			t.Fatalf("rows %v", rows)
+		}
+		for kind, ts := range rows {
+			if ts[0] != pinned {
+				t.Errorf("%s row ts = %s, want %s", kind, ts[0], pinned)
+			}
+		}
+	})
+	t.Run("train", func(t *testing.T) {
+		// A failing verify makes the slot the culprit, which only the train's
+		// own ledger row records.
+		dir := setup("test ! -f bad.txt", "bad.txt")
+		if code, out, _ := rotaIn(t, dir, "--json", "worker", "train", "w1", "--base", "main"); code == 0 {
+			t.Fatalf("train should fail its verify: %s", out)
+		}
+		rows := rowTimes(dir)
+		if len(rows[ledger.KindGate]) != 1 || rows[ledger.KindGate][0] != pinned {
+			t.Fatalf("train gate row: %v, want one at %s", rows, pinned)
+		}
+	})
+}
+
+// The merge-approval audit line a confirmed `worker gate` writes is stamped
+// from ROTA_TEST_NOW, beside the gate's own ledger rows.
+func TestMergeApprovalAuditLineTakesROTA_TEST_NOW(t *testing.T) {
+	t.Setenv("ROTA_TEST_NOW", "2026-10-03T12:00:00Z")
+	dir := workerProject(t, gateConfig(t, `{"test":{"full":["true"]}}`, "off", map[string]any{"mergeApproval": "all"}))
+	rotaIn(t, dir, "worker", "pool", "init", "--slots", "1", "--base", "main")
+	wt := filepath.Join(dir, ".worktrees", "w1")
+	write(t, filepath.Join(wt, "feature.txt"), "f")
+	gitT(t, wt, "add", "feature.txt")
+	gitT(t, wt, "commit", "-q", "-m", "feature")
+	if code, out, _ := rotaIn(t, dir, "--json", "worker", "gate", "w1", "--base", "main", "--confirm", "--confirm-note", "ok"); code != 0 {
+		t.Fatalf("gate: %d %s", code, out)
+	}
+	a := gateAudit(t, dir)
+	if len(a) != 1 || a[0]["gate"] != "merge-approval" || a[0]["ts"] != "2026-10-03T12:00:00Z" {
+		t.Fatalf("audit %v", a)
 	}
 }
