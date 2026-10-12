@@ -14,11 +14,11 @@ import (
 // gate and Approve the merge-approval gate (B1); both run before anything
 // changes and their errors pass through unchanged.
 type MergePorts struct {
-	Git           Git
-	Recover       land.Git // optional recovery runner, independent of caller cancellation
-	Verdict       func(branch string) error
-	Approve       func() error
-	WorktreeCheck func(path string) error
+	Git      Git
+	Recover  land.Git // optional recovery runner, independent of caller cancellation
+	Verdict  func(branch string) error
+	Approve  func() error
+	Checkout Checkout // where the merge runs; scopes worktree cleanup
 }
 
 // MergeBranch merges branch into base with --no-ff and deletes it, returning
@@ -43,7 +43,7 @@ func MergeBranch(p MergePorts, branch, base, msg string) (string, error) {
 	if err := p.Approve(); err != nil {
 		return "", err
 	}
-	if err := ClearWorktree(p.Git, branch, p.WorktreeCheck); err != nil {
+	if err := ClearWorktree(p.Git, branch, p.Checkout); err != nil {
 		return "", err
 	}
 	co, err := p.Git.Run("checkout", "-q", base)

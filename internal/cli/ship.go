@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -21,11 +20,8 @@ import (
 	"github.com/l4ci/rota/internal/repos"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/ship"
-	"github.com/l4ci/rota/internal/status"
-	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/verdict"
-	"github.com/l4ci/rota/internal/worker"
 )
 
 // shipCommands is the `rota ship` group (#52). The flow itself is
@@ -183,57 +179,6 @@ func shipExistingBranch(c *Ctx, branch string) (string, error) {
 		return "", Resolution("branch '%s' not found", branch)
 	}
 	return dir, nil
-}
-
-// shipWorktreeCheck recognizes /rota-work's status registration. A branch
-// match or a familiar directory name alone never authorizes deletion.
-func shipWorktreeCheck(c *Ctx, dir, branch string) func(string) error {
-	return func(wt string) error {
-		listing, err := shipGit(c, dir, "worktree", "list", "--porcelain")
-		if err != nil {
-			return err
-		}
-		if listing.ExitCode != 0 {
-			return Unavailable("cannot read worktree ownership: %s", strutil.FirstLine(listing.Stderr))
-		}
-		primary := strings.TrimPrefix(strings.SplitN(listing.Stdout, "\n", 2)[0], "worktree ")
-		roots := []string{shipRoot(primary), primary, shipRoot(dir)}
-		resolve := func(root, path string) string {
-			if filepath.IsAbs(path) {
-				return path
-			}
-			return filepath.Join(root, path)
-		}
-		for _, root := range roots {
-			reg, err := worker.LoadRegistry(root)
-			if err != nil {
-				return Unavailable("cannot read round slots: %v", err)
-			}
-			for _, slot := range reg.Slots() {
-				if path := slot.Worktree(); path != "" && ship.PathContains(resolve(root, path), wt) {
-					return &ship.Refusal{By: "worktree", Msg: "worktree belongs to round slot " + slot.Name() + ": " + wt, Hint: "leave slot cleanup to the round orchestrator"}
-				}
-			}
-		}
-		repo := c.Repo
-		if repo == "" {
-			if r, err := repos.Which(dir); err == nil {
-				repo = r.Name
-			}
-		}
-		for _, root := range roots {
-			for _, entry := range status.Entries(root) {
-				if entry.Branch != branch || entry.Repo != repo || entry.Worktree == "" {
-					continue
-				}
-				path := resolve(root, entry.Worktree)
-				if ship.PathContains(path, wt) && ship.PathContains(wt, path) {
-					return nil
-				}
-			}
-		}
-		return &ship.Refusal{By: "worktree", Msg: "worktree is not registered as cycle work: " + wt, Hint: "preserve this worktree; use the owning workflow to manage it"}
-	}
 }
 
 // shipBase is the base branch of dir; none resolving is exit 3.
@@ -435,6 +380,10 @@ func shipMerge(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
+		cwd, err := os.Getwd()
+		if err != nil {
+			return Result{}, err
+		}
 		g := shipGitRunner{c, dir}
 		sha, err := ship.MergeBranch(ship.MergePorts{
 			Git:     g,
@@ -450,7 +399,7 @@ func shipMerge(fs *flag.FlagSet) RunFunc {
 				}
 				return clearMerge(c, policy, branch, conf, approvalReq{}, files, nil)
 			},
-			WorktreeCheck: shipWorktreeCheck(c, dir, branch),
+			Checkout: ship.Checkout{Cwd: cwd, Dir: dir, Repo: c.Repo},
 		}, branch, base, msg)
 		if err != nil {
 			if d := refusalData(err); d != nil { // clearMerge's refusal carries its own envelope
