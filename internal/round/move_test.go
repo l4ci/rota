@@ -1232,3 +1232,18 @@ func TestReturnAndReclaimDifferOnPortBlockAndClaimSweepOnPurpose(t *testing.T) {
 func (k *killHost) Capabilities() host.Capabilities { return host.CapabilitiesOf(k) }
 
 func (l labelKillHost) Capabilities() host.Capabilities { return host.CapabilitiesOf(l) }
+
+// A slot holding `12` is the sender when the caller spells the issue `#12`.
+func TestTransferFindsHolderAcrossIDSpellings(t *testing.T) {
+	f := newMoveFx(t)
+	if got := f.slot("ben").HeldID(); got != "12" {
+		t.Fatalf("fixture: ben holds %q, want 12", got)
+	}
+	res, err := f.transfer("#12", "dana", func(o *TransferOpts) { o.Note = "carry on" })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.From != "ben" || f.slot("dana").HeldID() != "12" {
+		t.Errorf("transfer(#12): from %q, dana holds %q; want ben -> dana holding 12", res.From, f.slot("dana").HeldID())
+	}
+}

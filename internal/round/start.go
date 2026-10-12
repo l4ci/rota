@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
-	"strings"
 
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
@@ -204,7 +203,7 @@ func normaliseSlate(items []string) []string {
 	var out []string
 	seen := map[string]bool{}
 	for _, it := range items {
-		it = strings.ToUpper(strings.TrimPrefix(strings.TrimSpace(it), "#"))
+		it = worker.NormID(it)
 		if it != "" && !seen[it] {
 			seen[it] = true
 			out = append(out, it)

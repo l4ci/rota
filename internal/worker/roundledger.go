@@ -105,7 +105,7 @@ func ledgerSlot(reg Registry, e ledger.Entry) *Slot {
 	if e.Slot != "" {
 		return reg.Slot(e.Slot)
 	}
-	id := strings.TrimPrefix(strings.TrimSpace(e.Issue), "#")
+	id := NormID(e.Issue)
 	if id == "" {
 		return nil
 	}

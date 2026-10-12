@@ -63,7 +63,7 @@ func (e Env) reserveSmokeSection(ctx context.Context, root string, be Board, reg
 		if s == nil {
 			continue
 		}
-		if s.Name() == agent && s.HeldID() == strings.ToUpper(id) && s.SmokeSection() != 0 {
+		if s.Name() == agent && s.HeldID() == worker.NormID(id) && s.SmokeSection() != 0 {
 			return s.SmokeSection()
 		}
 		if b := s.Branch(); b != "" && !worker.IsPark(b) {

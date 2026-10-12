@@ -2,7 +2,6 @@ package worker
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/l4ci/rota/internal/exitcode"
 )
@@ -35,7 +34,7 @@ func RegisterExternal(root, name, branch, worktree, base, task, pr string) error
 				conflict = &RegisterConflict{ConflictName, x.Name()}
 			case x.Branch() == branch:
 				conflict = &RegisterConflict{ConflictBranch, x.Name()}
-			case task != "" && x.HeldID() == strings.ToUpper(task):
+			case task != "" && x.HeldID() == NormID(task):
 				conflict = &RegisterConflict{ConflictIssue, x.Name()}
 			}
 			if conflict != nil {
