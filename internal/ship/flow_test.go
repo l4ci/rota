@@ -12,8 +12,10 @@ import (
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/proof"
+	"github.com/l4ci/rota/internal/status"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/verdict"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 func TestBody(t *testing.T) {
@@ -261,26 +263,65 @@ func TestVerdictCheck(t *testing.T) {
 	}
 }
 
-func TestClearWorktree(t *testing.T) {
-	list := "worktree /repo\nbranch refs/heads/main\n\nworktree /wt/feat\nbranch refs/heads/feat\n"
-	g := &fakeGit{out: map[string]string{"worktree list --porcelain": list, "worktree remove /wt/feat": "", "-C /wt/feat status --porcelain --untracked-files=all --ignored": ""}}
-	if err := ClearWorktree(g, "feat", func(string) error { return nil }); err != nil {
+// worktreeProject is a primary checkout with a .rota/ and a feat worktree.
+func worktreeProject(t *testing.T) (root string, g *fakeGit) {
+	t.Helper()
+	root = t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".rota"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if !contains(g.calls, "worktree remove /wt/feat") {
-		t.Errorf("calls %v", g.calls)
+	list := "worktree " + root + "\nbranch refs/heads/main\n\nworktree /wt/feat\nbranch refs/heads/feat\n"
+	g = &fakeGit{out: map[string]string{"worktree list --porcelain": list, "worktree remove /wt/feat": "", "-C /wt/feat status --porcelain --untracked-files=all --ignored": ""}}
+	return root, g
+}
+
+func TestClearWorktree(t *testing.T) {
+	removed := func(g *fakeGit) bool { return contains(g.calls, "worktree remove /wt/feat") }
+
+	root, g := worktreeProject(t)
+	at := Checkout{Cwd: root, Dir: root, Repo: "app"}
+	if _, err := status.Add(root, "feat", "app", []string{"B1"}, "/wt/feat", false); err != nil {
+		t.Fatal(err)
 	}
+	if err := ClearWorktree(g, "feat", at); err != nil || !removed(g) {
+		t.Errorf("registered worktree: err %v calls %v", err, g.calls)
+	}
+
 	// No worktree for the branch: nothing is removed.
-	g = &fakeGit{out: map[string]string{"worktree list --porcelain": list}}
-	if err := ClearWorktree(g, "nope", nil); err != nil || len(g.calls) != 1 {
+	_, g = worktreeProject(t)
+	if err := ClearWorktree(g, "nope", at); err != nil || len(g.calls) != 1 {
 		t.Errorf("err %v calls %v", err, g.calls)
 	}
-	// Unknown ownership refuses instead of removing an arbitrary worktree.
-	g = &fakeGit{out: map[string]string{"worktree list --porcelain": list}}
-	var refusal *Refusal
-	if err := ClearWorktree(g, "feat", nil); !errors.As(err, &refusal) || contains(g.calls, "worktree remove /wt/feat") {
-		t.Errorf("err %v calls %v", err, g.calls)
+
+	refused := func(name string, g *fakeGit, at Checkout, want string) {
+		t.Helper()
+		var refusal *Refusal
+		if err := ClearWorktree(g, "feat", at); !errors.As(err, &refusal) || !strings.Contains(refusal.Msg, want) || removed(g) {
+			t.Errorf("%s: err %v calls %v", name, err, g.calls)
+		}
 	}
+
+	// Unregistered worktree, or one registered for another repo, is refused.
+	root, g = worktreeProject(t)
+	at = Checkout{Cwd: root, Dir: root, Repo: "app"}
+	refused("untracked", g, at, "not registered")
+	if _, err := status.Add(root, "feat", "other", []string{"B1"}, "/wt/feat", false); err != nil {
+		t.Fatal(err)
+	}
+	refused("other repo", g, at, "not registered")
+
+	// A round slot's worktree is refused even when status tracks it.
+	if _, err := status.Add(root, "feat", "app", []string{"B1"}, "/wt/feat", false); err != nil {
+		t.Fatal(err)
+	}
+	if err := worker.Update(root, func(d *worker.Doc) { d.AppendSlot(worker.NewSlot("kit", "feat", "/wt/feat", "main", "")) }); err != nil {
+		t.Fatal(err)
+	}
+	refused("round slot", g, at, "round slot kit")
+
+	// The caller's own working directory is never removed.
+	root, g = worktreeProject(t)
+	refused("cwd inside", g, Checkout{Cwd: "/wt/feat/sub", Dir: root, Repo: "app"}, "current directory")
 }
 
 type fakeBackend struct {
