@@ -56,8 +56,10 @@ pass "round.autopilot is off by default: tick and watch --autopilot refuse"
 # ── assign: ready items to idle slots, bounded by the cap, audited ─────────
 ap config set round.autopilot true >/dev/null
 ap config set round.autopilotCap 1 >/dev/null
-RC=0; OUT=$(ap round tick) || RC=$?
+RC=0; OUT=$(ROTA_TEST_NOW=2026-10-03T12:00:00Z ap round tick) || RC=$?
 [ "$RC" = "0" ] && [ "$(apdid <<<"$OUT")" = "assign:1" ] || fail "first tick should assign exactly one item (cap 1): rc=$RC $OUT"
+grep '"verb": "round tick assign"' "$APROJ/.rota/gate-audit.jsonl" | head -1 | grep -q '"ts": "2026-10-03T12:00:00Z"' \
+  || fail "ROTA_TEST_NOW should pin the autopilot audit line: $(cat "$APROJ/.rota/gate-audit.jsonl")"
 OUT=$(ap round tick)
 [ "$(apdid <<<"$OUT")" = "assign:2" ] || fail "second tick should assign the next item: $OUT"
 OUT=$(ap round tick)
