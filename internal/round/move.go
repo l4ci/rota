@@ -585,12 +585,12 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 		var holders []string
 		for _, s := range reg.Slots() {
 			// The receiver of a transfer left half done is not a second attempt.
-			if s.HeldID() == strings.ToUpper(id) && s.Name() != o.To {
+			if s.HeldID() == worker.NormID(id) && s.Name() != o.To {
 				holders = append(holders, s.Name())
 			}
 		}
 		for _, q := range reg.PRs() {
-			if queuedIssue(q) == strings.ToUpper(id) {
+			if queuedIssue(q) == worker.NormID(id) {
 				holders = append(holders, "review:"+q.From)
 			}
 		}
@@ -600,7 +600,7 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 	}
 	var sender, receiver *worker.Slot
 	for _, s := range reg.Slots() {
-		if s.HeldID() != strings.ToUpper(id) {
+		if s.HeldID() != worker.NormID(id) {
 			continue
 		}
 		if s.Name() == o.To {
@@ -775,7 +775,7 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 				return wrap(worker.RemoveQueuedPR(root, rec.PR))
 			}},
 			step{name: "stop the item clock", do: func() error {
-				return wrap(worker.ClearItemStart(root, strings.ToUpper(id)))
+				return wrap(worker.ClearItemStart(root, worker.NormID(id)))
 			}})
 		if err := runSteps(steps); err != nil {
 			return res, err

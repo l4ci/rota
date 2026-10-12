@@ -240,9 +240,9 @@ func (r Registry) queuedByRef(ref string) *jsonx.Object {
 // QueuedIssue finds the queued record holding an issue (backend spelling,
 // compared case-insensitively, `#` ignored).
 func (r Registry) QueuedIssue(id string) *QueuedPR {
-	want := strings.ToUpper(strings.TrimPrefix(strings.TrimSpace(id), "#"))
+	want := NormID(id)
 	for _, o := range r.queued() {
-		if want != "" && strings.ToUpper(strings.TrimPrefix(jsonx.Str(o, "issue"), "#")) == want {
+		if want != "" && NormID(jsonx.Str(o, "issue")) == want {
 			q := queuedFrom(o)
 			return &q
 		}

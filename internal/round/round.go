@@ -399,7 +399,7 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 		}
 		parked := r.Branch == "" || worker.IsOwnPark(r.Branch, r.Name) || r.Branch == v.base
 		if r.Issue != "" {
-			held[r.Issue] = true
+			held[worker.NormID(r.Issue)] = true
 		}
 		if !r.Registered {
 			rep.add(Finding{Kind: UnregisteredWorktree, Slot: r.Name, Detail: fmt.Sprintf("%s has no slot in .rota/workers.json", v.worktree), Repair: "register the slot"})
@@ -446,7 +446,7 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 	for _, q := range reg.PRs() {
 		rep.Queued = append(rep.Queued, QueuedPR{Issue: q.Issue, PR: q.PR, Branch: q.Branch, From: q.From})
 		if id := queuedIssue(q); id != "" {
-			held[id] = true
+			held[worker.NormID(id)] = true
 		}
 		if n, ok := worker.PRRefNumber(q.PR); ok && forgeOK {
 			st, err := e.Forge.PRState(ctx, n)

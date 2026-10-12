@@ -99,7 +99,7 @@ func (e Env) Architecture(ctx context.Context, root string, be backlog.Backend, 
 	}
 	minted := MintedReviews(root)
 	for _, it := range items {
-		if IsReviewTitle(it.Title) && minted[strings.ToUpper(it.ID)] {
+		if IsReviewTitle(it.Title) && minted[worker.NormID(it.ID)] {
 			a.Pending = append(a.Pending, it.ID)
 		}
 	}
@@ -247,7 +247,7 @@ func MintedReviews(root string) map[string]bool {
 	out := map[string]bool{}
 	// Read-only: the verbs that mint or assign read the registry strictly.
 	for _, id := range worker.LoadRegistryTolerant(root).Review().Items {
-		out[strings.ToUpper(id)] = true
+		out[worker.NormID(id)] = true
 	}
 	return out
 }
