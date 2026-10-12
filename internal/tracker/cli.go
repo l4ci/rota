@@ -159,7 +159,9 @@ func CLIName(provider string) string {
 // KindUnavailable.
 func (c *CLI) CheckAuth(ctx context.Context) error {
 	if res, err := c.Run(ctx, []string{"auth", "status"}, nil); err != nil || res.ExitCode != 0 {
-		return unavailable("%s not installed or not authenticated", CLIName(c.Provider))
+		e := unavailable("%s not installed or not authenticated", CLIName(c.Provider))
+		e.CLIMissing = IsCLIMissing(err)
+		return e
 	}
 	return nil
 }
@@ -207,7 +209,7 @@ func (c *CLI) Run(ctx context.Context, args []string, stdin io.Reader) (Result, 
 func (c *CLI) run(ctx context.Context, args []string, stdin io.Reader) (Result, error) {
 	cli := CLIName(c.Provider)
 	if _, err := c.lookPath(cli); err != nil {
-		return Result{}, unavailable("%s is not installed", cli)
+		return Result{}, cliMissing(cli)
 	}
 	args, limit := c.inject(append([]string(nil), args...))
 
@@ -234,7 +236,7 @@ func (c *CLI) run(ctx context.Context, args []string, stdin io.Reader) (Result, 
 		case actx.Err() != nil:
 			return Result{}, unavailable("%s timed out after %s", cli, c.timeout())
 		case errors.Is(err, exec.ErrNotFound):
-			return Result{}, unavailable("%s is not installed", cli)
+			return Result{}, cliMissing(cli)
 		}
 		return Result{}, internal("cannot run %s: %v", cli, err)
 	}

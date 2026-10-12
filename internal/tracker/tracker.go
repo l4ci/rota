@@ -66,12 +66,22 @@ type Error struct {
 	Kind    Kind
 	Code    int
 	Message string
+	// CLIMissing marks a KindUnavailable failure whose cause is a forge CLI
+	// that is not installed, as opposed to one that is unauthenticated or
+	// timed out. Read it with IsCLIMissing.
+	CLIMissing bool
 }
 
 func (e *Error) Error() string { return e.Message }
 
 func unavailable(format string, a ...any) *Error {
 	return &Error{Kind: KindUnavailable, Code: 3, Message: fmt.Sprintf(format, a...)}
+}
+
+func cliMissing(cli string) *Error {
+	e := unavailable("%s is not installed", cli)
+	e.CLIMissing = true
+	return e
 }
 
 func rateLimited(format string, a ...any) *Error {
@@ -100,6 +110,14 @@ var (
 func IsKind(err error, k Kind) bool {
 	var e *Error
 	return errors.As(err, &e) && e.Kind == k
+}
+
+// IsCLIMissing reports whether err is a tracker failure because the forge CLI
+// is not installed. It is KindUnavailable too; callers that skip a forge check
+// on a missing CLI but fail closed on an auth failure ask this, not the text.
+func IsCLIMissing(err error) bool {
+	var e *Error
+	return errors.As(err, &e) && e.CLIMissing
 }
 
 // Issue is the normalized issue. Empty Milestone, StateReason and ClosedAt

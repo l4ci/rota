@@ -176,7 +176,7 @@ func TestAdoptValidatesThePRAgainstTheForge(t *testing.T) {
 // for); a missing forge CLI or no forge at all skips the read and adopts.
 func TestAdoptPRForgeFailurePaths(t *testing.T) {
 	down := &tracker.Error{Kind: tracker.KindUnavailable, Message: "gh: connection refused"}
-	noCLI := &tracker.Error{Kind: tracker.KindUnavailable, Message: "gh is not installed"}
+	noCLI := &tracker.Error{Kind: tracker.KindUnavailable, CLIMissing: true, Message: "gh is not installed"}
 	for _, c := range []struct {
 		name    string
 		forge   func(*fakeRemote) Forge
