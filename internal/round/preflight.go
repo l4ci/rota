@@ -86,10 +86,7 @@ func (e Env) preflight(ctx context.Context, root string, be backlog.Backend, in 
 		out.Warnings = append(out.Warnings, "tier model not applied: "+hz.CommandKey()+" has no {model} placeholder")
 	}
 
-	scope, slate := SlateOf(root)
-	if scope == "" {
-		scope = set.Scope
-	}
+	scope, slate := ScopeOf(root, set, "")
 	if !in.Resuming {
 		ok, err := InScope(root, be, scope, slate, id)
 		if err != nil {

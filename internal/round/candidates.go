@@ -42,6 +42,29 @@ type CandidateOpts struct {
 	ScopeOverlap string
 }
 
+// ScopeOf is the scope and slate the round's candidates are drawn from: an
+// explicit override, else the scope the registry recorded, else round.scope.
+// The slate is the recorded one whatever the scope came from. This is the only
+// place the fallback is spelled.
+func ScopeOf(root string, set roundcfg.Settings, override string) (scope string, slate []string) {
+	scope, slate = SlateOf(root)
+	if override != "" {
+		scope = override
+	}
+	if scope == "" {
+		scope = set.Scope
+	}
+	return scope, slate
+}
+
+// RoundCandidates is Candidates for the round as configured: the scope from
+// ScopeOf, the shared paths and overlap mode from set. Callers pass only an
+// explicit scope override ("" for none).
+func (e Env) RoundCandidates(ctx context.Context, root string, be backlog.Backend, set roundcfg.Settings, override string) ([]Candidate, error) {
+	scope, slate := ScopeOf(root, set, override)
+	return e.Candidates(ctx, root, be, CandidateOpts{Scope: scope, Slate: slate, Shared: set.SharedPaths, ScopeOverlap: set.ScopeOverlap})
+}
+
 // Candidates lists the open items the scope allows that no slot holds, in
 // backlog order, each with its readiness. Scope slate is the slate and
 // nothing else. Milestone is the items of the active milestones. Next is the

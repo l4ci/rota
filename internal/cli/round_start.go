@@ -191,7 +191,7 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return backlogFail(err)
 		}
-		cands, err := env.Candidates(ctx, root, be, round.CandidateOpts{Scope: st.Scope, Slate: st.Slate, Shared: set.SharedPaths, ScopeOverlap: set.ScopeOverlap})
+		cands, err := env.RoundCandidates(ctx, root, be, set, "")
 		if err != nil {
 			return backlogFail(err)
 		}
@@ -268,14 +268,7 @@ func roundCandidates(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
 		}
-		recScope, slate := round.SlateOf(root)
-		sc := set.Scope
-		if recScope != "" {
-			sc = recScope
-		}
-		if *scope != "" {
-			sc = *scope
-		}
+		sc, slate := round.ScopeOf(root, set, *scope)
 		if !roundcfg.ValidScope(sc) {
 			return Result{}, Usage("--scope must be one of %s", strings.Join(roundcfg.Scopes, ", "))
 		}
@@ -285,7 +278,7 @@ func roundCandidates(fs *flag.FlagSet) RunFunc {
 			return backlogFail(err)
 		}
 		env := c.deps().RoundEnv(ctx, root)
-		cands, err := env.Candidates(ctx, root, be, round.CandidateOpts{Scope: sc, Slate: slate, Shared: set.SharedPaths, ScopeOverlap: set.ScopeOverlap})
+		cands, err := env.RoundCandidates(ctx, root, be, set, *scope)
 		if err != nil {
 			return backlogFail(err)
 		}
