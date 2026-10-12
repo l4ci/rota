@@ -124,7 +124,7 @@ func (e Env) ReviewRelay(ctx context.Context, root string, o ReviewOpts) (Relaye
 	// A bounce RecordBounce deduped on the same head was not counted here and
 	// is not this dispatch's to undo.
 	var counted bool
-	if out.Bounces, counted, err = worker.RecordBounceCounted(root, issue, o.Slot, pr.HeadSHA); err != nil {
+	if out.Bounces, counted, err = worker.RecordBounceCounted(e.Worker, root, issue, o.Slot, pr.HeadSHA); err != nil {
 		return out, err
 	}
 	unrecord := func() error {

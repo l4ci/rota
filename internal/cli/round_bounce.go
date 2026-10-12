@@ -30,7 +30,7 @@ func roundBounce(fs *flag.FlagSet) RunFunc {
 			return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
 		}
 		issue := worker.NormID(args[0])
-		n, capped, err := recordBounce(root, issue, *slot, *head, set.MaxBounces)
+		n, capped, err := recordBounce(c.deps().workerEnv(), root, issue, *slot, *head, set.MaxBounces)
 		if err != nil {
 			return Result{}, err
 		}
@@ -49,7 +49,7 @@ func roundBounce(fs *flag.FlagSet) RunFunc {
 
 // recordBounce counts one bounce unless the item is already at max (0 = no
 // cap). capped reports the refusal; n is then the unchanged count.
-func recordBounce(root, issue, slot, head string, max int) (n int, capped bool, err error) {
+func recordBounce(env worker.Env, root, issue, slot, head string, max int) (n int, capped bool, err error) {
 	reg, err := worker.LoadRegistry(root)
 	if err != nil {
 		return 0, false, err
@@ -57,7 +57,7 @@ func recordBounce(root, issue, slot, head string, max int) (n int, capped bool, 
 	if n = reg.Bounces(issue); max > 0 && n >= max {
 		return n, true, nil
 	}
-	n, err = worker.RecordBounce(root, issue, slot, head)
+	n, err = worker.RecordBounce(env, root, issue, slot, head)
 	return n, false, err
 }
 

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/git"
@@ -280,7 +281,7 @@ func TestClearWorktree(t *testing.T) {
 
 	root, g := worktreeProject(t)
 	at := Checkout{Cwd: root, Dir: root, Repo: "app"}
-	if _, err := status.Add(root, "feat", "app", []string{"B1"}, "/wt/feat", false); err != nil {
+	if _, err := status.Add(root, time.Now(), "feat", "app", []string{"B1"}, "/wt/feat", false); err != nil {
 		t.Fatal(err)
 	}
 	if err := ClearWorktree(g, "feat", at); err != nil || !removed(g) {
@@ -305,13 +306,13 @@ func TestClearWorktree(t *testing.T) {
 	root, g = worktreeProject(t)
 	at = Checkout{Cwd: root, Dir: root, Repo: "app"}
 	refused("untracked", g, at, "not registered")
-	if _, err := status.Add(root, "feat", "other", []string{"B1"}, "/wt/feat", false); err != nil {
+	if _, err := status.Add(root, time.Now(), "feat", "other", []string{"B1"}, "/wt/feat", false); err != nil {
 		t.Fatal(err)
 	}
 	refused("other repo", g, at, "not registered")
 
 	// A round slot's worktree is refused even when status tracks it.
-	if _, err := status.Add(root, "feat", "app", []string{"B1"}, "/wt/feat", false); err != nil {
+	if _, err := status.Add(root, time.Now(), "feat", "app", []string{"B1"}, "/wt/feat", false); err != nil {
 		t.Fatal(err)
 	}
 	if err := worker.Update(root, func(d *worker.Doc) { d.AppendSlot(worker.NewSlot("kit", "feat", "/wt/feat", "main", "")) }); err != nil {

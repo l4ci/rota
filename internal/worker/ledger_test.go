@@ -170,13 +170,12 @@ func TestGateVerbWithABounceReadsTheLeaseOnce(t *testing.T) {
 	advanceMainOn(w, "work.txt")
 	reads := 0
 	env := fakeLeaseEnv(100)
-	leaseEnv = func() roundlease.Env { reads++; return env }
-	t.Cleanup(func() { leaseEnv = roundlease.DefaultEnv })
+	w.lease = func() roundlease.Env { reads++; return env }
 	res, err := w.gate(false, GateOpts{})
 	if err != nil || res.Verdict != GateStale {
 		t.Fatalf("gate: %+v %v", res, err)
 	}
-	if _, err := RecordBounceIn(res.Round, w.dir, "12", "w1", res.SHA); err != nil {
+	if _, err := RecordBounceIn(w.env(false), res.Round, w.dir, "12", "w1", res.SHA); err != nil {
 		t.Fatal(err)
 	}
 	if reads != 1 {
@@ -189,8 +188,7 @@ func TestTrainReadsTheLeaseOnce(t *testing.T) {
 	w := trainWorld(t, "true", "b1", "b2", "b3")
 	reads := 0
 	env := fakeLeaseEnv(100)
-	leaseEnv = func() roundlease.Env { reads++; return env }
-	t.Cleanup(func() { leaseEnv = roundlease.DefaultEnv })
+	w.lease = func() roundlease.Env { reads++; return env }
 	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2", "b3"}})
 	if err != nil || len(res.Landed) != 3 {
 		t.Fatalf("train: %+v %v", res, err)
@@ -207,9 +205,9 @@ func TestPollReadsTheLeaseOnce(t *testing.T) {
 	f.panes["w2"] = []string{"static\n", "static\nROTA-DONE w2 https://github.com/o/r/pull/10\n"}
 	reads := 0
 	env := fakeLeaseEnv(100)
-	leaseEnv = func() roundlease.Env { reads++; return env }
-	t.Cleanup(func() { leaseEnv = roundlease.DefaultEnv })
-	if _, err := envWith(f).Poll(bg, dir, PollOpts{Lines: 60}); err != nil {
+	e := envWith(f)
+	e.Lease = func() roundlease.Env { reads++; return env }
+	if _, err := e.Poll(bg, dir, PollOpts{Lines: 60}); err != nil {
 		t.Fatal(err)
 	}
 	if reads != 1 {

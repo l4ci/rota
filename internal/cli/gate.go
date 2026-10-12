@@ -71,7 +71,7 @@ func clearGate(c *Ctx, name, target string, conf gate.Confirm, paths []string, e
 		}
 	}
 	verb := strings.TrimPrefix(c.Path, "rota ")
-	err := gate.Clear(root, name, verb, target, conf, paths)
+	err := gate.Clear(root, c.deps().Now(), name, verb, target, conf, paths)
 	var r *gate.Refused
 	switch {
 	case errors.As(err, &r):

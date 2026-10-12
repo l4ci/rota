@@ -37,7 +37,7 @@ type Failure struct {
 // ends its clocks. A stale or provenance-fail verdict sends the PR back to its
 // worker: it counts, and at round.maxBounces the item is parked instead (the PR
 // stays open) so it is never re-dispatched silently.
-func Gate(root, issue string, r worker.GateResult, park Park) (Outcome, error) {
+func Gate(env worker.Env, root, issue string, r worker.GateResult, park Park) (Outcome, error) {
 	if issue == "" {
 		return Outcome{}, nil
 	}
@@ -45,7 +45,7 @@ func Gate(root, issue string, r worker.GateResult, park Park) (Outcome, error) {
 	case r.OK():
 		return Outcome{}, landed(root, issue)
 	case m.Bounce:
-		return bounce(root, issue, r, park)
+		return bounce(env, root, issue, r, park)
 	}
 	return Outcome{}, nil
 }
@@ -54,7 +54,7 @@ func Gate(root, issue string, r worker.GateResult, park Park) (Outcome, error) {
 // names. issues maps a train target to its item; a target with none (a slot
 // without one) is skipped. A landed member ends its item's clocks and count. A
 // culprit whose verdict bounces counts like a gate bounce.
-func Train(round *worker.RoundMemo, root string, issues map[string]string, r worker.TrainResult, park Park) []Failure {
+func Train(env worker.Env, round *worker.RoundMemo, root string, issues map[string]string, r worker.TrainResult, park Park) []Failure {
 	var fails []Failure
 	for _, m := range r.Members {
 		if issue := issues[m.Target]; m.Landed && issue != "" {
@@ -66,7 +66,7 @@ func Train(round *worker.RoundMemo, root string, issues map[string]string, r wor
 	if issue := issues[r.Culprit]; issue != "" && worker.ClassifyVerdict(r.Verdict).Bounce {
 		g := r.CulpritGate
 		g.Slot, g.Verdict, g.Err, g.Round = r.Culprit, r.Verdict, r.Err, round
-		if _, err := bounce(root, issue, g, park); err != nil {
+		if _, err := bounce(env, root, issue, g, park); err != nil {
 			fails = append(fails, Failure{r.Culprit, err})
 		}
 	}
@@ -87,8 +87,8 @@ func landed(root, issue string) error {
 
 // bounce counts one bounce for the item and parks it at round.maxBounces. A
 // failure to park is returned, the count stands.
-func bounce(root, issue string, r worker.GateResult, park Park) (Outcome, error) {
-	n, err := worker.RecordBounceIn(r.Round, root, issue, r.Slot, r.SHA)
+func bounce(env worker.Env, root, issue string, r worker.GateResult, park Park) (Outcome, error) {
+	n, err := worker.RecordBounceIn(env, r.Round, root, issue, r.Slot, r.SHA)
 	if err != nil {
 		return Outcome{}, err
 	}

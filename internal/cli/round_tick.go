@@ -184,7 +184,7 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 		return reviewStep(c, root, set, sl.Name)
 	}
 	e.Audit = func(a roundtick.Action) {
-		if err := gate.Autopilot(root, "round tick "+a.Action, a.Target, a.Detail); err != nil {
+		if err := gate.Autopilot(root, c.deps().Now(), "round tick "+a.Action, a.Target, a.Detail); err != nil {
 			c.Warn("audit line not written: %v", err)
 		}
 	}

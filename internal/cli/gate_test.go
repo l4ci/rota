@@ -568,3 +568,17 @@ func TestWorkerGateAppliesReviewDepth(t *testing.T) {
 		t.Fatalf("both verdicts recorded: %d %v", code, d)
 	}
 }
+
+// ROTA_TEST_NOW reaches the manual-gate audit line, not only Env.Now.
+func TestGateAuditLineTakesROTA_TEST_NOW(t *testing.T) {
+	t.Setenv("ROTA_TEST_NOW", "2026-10-03T12:00:00Z")
+	dir := gitRepo(t)
+	b3Fails(t, dir, "B07", 3)
+	if code, out, errs := rotaIn(t, dir, "debug", "reset", "B07", "--reason", "r", "--confirm", "--confirm-note", "go", "--json"); code != 0 {
+		t.Fatalf("reset: %d %s %s", code, out, errs)
+	}
+	b, err := os.ReadFile(filepath.Join(dir, ".rota", "gate-audit.jsonl"))
+	if err != nil || !strings.Contains(string(b), `"ts": "2026-10-03T12:00:00Z"`) {
+		t.Errorf("audit line not pinned: %s %v", b, err)
+	}
+}

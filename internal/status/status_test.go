@@ -32,29 +32,29 @@ func read(t *testing.T, root string) string {
 	return string(b)
 }
 
-func fixedClock(t *testing.T, s string) {
+// testNow is the clock Add stamps startedAt from in these tests.
+var testNow = time.Date(2026, 10, 2, 12, 0, 0, 0, time.UTC)
+
+func fixedClock(t *testing.T, s string) time.Time {
 	t.Helper()
 	at, err := time.Parse(time.RFC3339, s)
 	if err != nil {
 		t.Fatal(err)
 	}
-	old := Now
-	Now = func() time.Time { return at }
-	t.Cleanup(func() { Now = old })
+	return at
 }
 
 func TestStamp(t *testing.T) {
 	// A zone offset is converted to UTC and the sub-second part dropped.
-	fixedClock(t, "2026-10-02T14:05:09.987+02:00")
-	if got := Stamp(); got != "2026-10-02T12:05:09Z" {
+	at := fixedClock(t, "2026-10-02T14:05:09.987+02:00")
+	if got := Stamp(at); got != "2026-10-02T12:05:09Z" {
 		t.Errorf("Stamp = %q", got)
 	}
 }
 
 func TestAddWritesPythonBytes(t *testing.T) {
-	fixedClock(t, "2026-10-02T12:00:00Z")
 	root := project(t, "")
-	changed, err := Add(root, "feat/x", "", []string{"B01", "F02"}, "", false)
+	changed, err := Add(root, testNow, "feat/x", "", []string{"B01", "F02"}, "", false)
 	if err != nil || !changed {
 		t.Fatalf("Add = %v, %v", changed, err)
 	}
@@ -79,7 +79,6 @@ func TestAddWritesPythonBytes(t *testing.T) {
 }
 
 func TestAddReplaceIfAbsentAndPairs(t *testing.T) {
-	fixedClock(t, "2026-10-02T12:00:00Z")
 	root := project(t, `{"loopStartedAt": "2026-01-01T00:00:00Z"}`)
 	must := func(changed bool, err error) bool {
 		t.Helper()
@@ -88,22 +87,22 @@ func TestAddReplaceIfAbsentAndPairs(t *testing.T) {
 		}
 		return changed
 	}
-	if !must(Add(root, "b", "", []string{"B01"}, "wt", false)) {
+	if !must(Add(root, testNow, "b", "", []string{"B01"}, "wt", false)) {
 		t.Error("first add reports no change")
 	}
-	if must(Add(root, "b", "", []string{"B02"}, "", true)) {
+	if must(Add(root, testNow, "b", "", []string{"B02"}, "", true)) {
 		t.Error("--if-absent replaced an existing entry")
 	}
 	if e, _ := Find(root, "b", ""); !reflect.DeepEqual(e.Items, []string{"B01"}) || e.Worktree != "wt" {
 		t.Errorf("entry after if-absent = %+v", e)
 	}
 	// (b, web) is a different pair from (b, none).
-	must(Add(root, "b", "web", []string{"B03"}, "", false))
+	must(Add(root, testNow, "b", "web", []string{"B03"}, "", false))
 	if n := len(Entries(root)); n != 2 {
 		t.Fatalf("%d entries, want 2", n)
 	}
 	// Replacing moves the entry to the end.
-	must(Add(root, "b", "", []string{"B09"}, "", false))
+	must(Add(root, testNow, "b", "", []string{"B09"}, "", false))
 	es := Entries(root)
 	if len(es) != 2 || es[0].Repo != "web" || es[1].Items[0] != "B09" {
 		t.Errorf("entries after replace: %+v", es)
@@ -116,16 +115,16 @@ func TestAddReplaceIfAbsentAndPairs(t *testing.T) {
 
 func TestAddRejectsMalformedDocument(t *testing.T) {
 	root := project(t, `[1, 2]`)
-	if _, err := Add(root, "b", "", nil, "", false); err == nil {
+	if _, err := Add(root, testNow, "b", "", nil, "", false); err == nil {
 		t.Error("a status.json that is a list was accepted")
 	}
 	root = project(t, `{"active": null}`)
-	if _, err := Add(root, "b", "", nil, "", false); err == nil {
+	if _, err := Add(root, testNow, "b", "", nil, "", false); err == nil {
 		t.Error(`"active": null was accepted`)
 	}
 	// A corrupt file is replaced, as the helpers do.
 	root = project(t, `{oops`)
-	if _, err := Add(root, "b", "", []string{"B01"}, "", false); err != nil {
+	if _, err := Add(root, testNow, "b", "", []string{"B01"}, "", false); err != nil {
 		t.Errorf("corrupt file: %v", err)
 	}
 }
@@ -239,7 +238,7 @@ func TestConcurrentAdds(t *testing.T) {
 	done := make(chan error, 8)
 	for i := 0; i < 8; i++ {
 		go func(i int) {
-			_, err := Add(root, "b"+string(rune('a'+i)), "", []string{"B01"}, "", false)
+			_, err := Add(root, testNow, "b"+string(rune('a'+i)), "", []string{"B01"}, "", false)
 			done <- err
 		}(i)
 	}

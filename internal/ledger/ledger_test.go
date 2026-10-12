@@ -12,6 +12,9 @@ import (
 	"github.com/l4ci/rota/internal/fsio"
 )
 
+// at is the timestamp these tests stamp their rows with: Append takes none of its own.
+var rowTS = time.Date(2026, 10, 8, 9, 0, 0, 0, time.UTC)
+
 func TestAppendLoadRoundTrip(t *testing.T) {
 	root := t.TempDir()
 	ts := time.Date(2026, 10, 8, 9, 0, 0, 0, time.UTC)
@@ -45,11 +48,11 @@ func TestLoadMissing(t *testing.T) {
 
 func TestLoadSkipsTornLine(t *testing.T) {
 	root := t.TempDir()
-	Append(root, Entry{Kind: KindDone, Issue: "1"})
+	Append(root, Entry{TS: rowTS, Kind: KindDone, Issue: "1"})
 	f, _ := os.OpenFile(Path(root), os.O_APPEND|os.O_WRONLY, 0o644)
 	f.WriteString("{\"kind\":\n")
 	f.Close()
-	Append(root, Entry{Kind: KindDone, Issue: "2"})
+	Append(root, Entry{TS: rowTS, Kind: KindDone, Issue: "2"})
 	got, _ := Load(root)
 	if len(got) != 2 {
 		t.Fatalf("got %d entries, want 2", len(got))
@@ -62,7 +65,7 @@ func TestAppendWaitsForTheLock(t *testing.T) {
 	root := t.TempDir()
 	done := make(chan error, 1)
 	err := fsio.Locked(Path(root), fsio.LockTimeout, func() error {
-		go func() { done <- Append(root, Entry{Kind: KindGate, Issue: "1"}) }()
+		go func() { done <- Append(root, Entry{TS: rowTS, Kind: KindGate, Issue: "1"}) }()
 		select {
 		case err := <-done:
 			t.Errorf("Append returned while the lock was held: %v", err)
@@ -97,7 +100,7 @@ func TestAppendConcurrentKeepsLinesWhole(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if err := Append(root, Entry{Kind: KindGate, Issue: fmt.Sprint(g), Detail: Detail("pad", string(bytes.Repeat([]byte("x"), 3000)))}); err != nil {
+			if err := Append(root, Entry{TS: rowTS, Kind: KindGate, Issue: fmt.Sprint(g), Detail: Detail("pad", string(bytes.Repeat([]byte("x"), 3000)))}); err != nil {
 				t.Error(err)
 			}
 		}()
@@ -111,9 +114,9 @@ func TestAppendConcurrentKeepsLinesWhole(t *testing.T) {
 // A line longer than any scanner buffer does not lose the rest of the log.
 func TestLoadReadsOverlongLine(t *testing.T) {
 	root := t.TempDir()
-	Append(root, Entry{Kind: KindDone, Issue: "1"})
-	Append(root, Entry{Kind: KindGate, Issue: "2", Detail: Detail("pad", string(bytes.Repeat([]byte("x"), 2<<20)))})
-	Append(root, Entry{Kind: KindDone, Issue: "3"})
+	Append(root, Entry{TS: rowTS, Kind: KindDone, Issue: "1"})
+	Append(root, Entry{TS: rowTS, Kind: KindGate, Issue: "2", Detail: Detail("pad", string(bytes.Repeat([]byte("x"), 2<<20)))})
+	Append(root, Entry{TS: rowTS, Kind: KindDone, Issue: "3"})
 	got, err := Load(root)
 	if err != nil || len(got) != 3 {
 		t.Fatalf("Load = %d entries, %v", len(got), err)
@@ -124,7 +127,7 @@ func TestTrimDropsRoundsOlderThanKeep(t *testing.T) {
 	root := t.TempDir()
 	os.MkdirAll(filepath.Join(root, ".rota"), 0o755)
 	for _, r := range []int{0, 1, 2, 3, 4, 5} {
-		if err := Append(root, Entry{Kind: KindAssign, Round: r, Issue: "12"}); err != nil {
+		if err := Append(root, Entry{TS: rowTS, Kind: KindAssign, Round: r, Issue: "12"}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -145,5 +148,15 @@ func TestTrimDropsRoundsOlderThanKeep(t *testing.T) {
 	}
 	if n, err := Trim(root, 5, 2); err != nil || n != 0 {
 		t.Errorf("second trim dropped %d, %v", n, err)
+	}
+}
+
+func TestAppendRefusesAZeroTimestamp(t *testing.T) {
+	root := t.TempDir()
+	if err := Append(root, Entry{Kind: KindAssign}); err == nil {
+		t.Fatal("a row with no TS must be refused, not stamped from the wall clock")
+	}
+	if _, err := os.Stat(Path(root)); err == nil {
+		t.Error("a refused row created the ledger")
 	}
 }
