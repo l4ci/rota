@@ -192,17 +192,7 @@ func buildLimits(ctx context.Context, c *Ctx, root string, cfg any, set limits.S
 				if m.Name != account {
 					continue
 				}
-				r := limits.Reading{Known: m.Verdict != worker.VerdictUnknown, Cooling: m.Verdict == worker.VerdictCooling, Window: limits.WindowUnknown}
-				if m.ResetsAt != nil {
-					r.ResetsAt = m.ResetsAt.UTC()
-				}
-				switch {
-				case m.SevenDay != nil && *m.SevenDay >= 100:
-					r.Window = limits.WindowSevenDay
-				case m.FiveHour != nil && *m.FiveHour >= 100:
-					r.Window = limits.WindowFiveHour
-				}
-				return r
+				return limits.ReadingOf(m)
 			}
 			return limits.Reading{}
 		},

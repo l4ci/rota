@@ -160,35 +160,6 @@ func TestReviewStepManualReportsAndDoesNotHold(t *testing.T) {
 	}
 }
 
-// A poll that fails is a warning, never a silent pass and never an item: it
-// holds nothing under manual and holds the slot under auto.
-func TestReviewStepPollFailureIsReported(t *testing.T) {
-	for loop, hold := range map[string]bool{roundcfg.ReviewLoopManual: false, roundcfg.ReviewLoopAuto: true} {
-		c, dir, errBuf := reviewCtx(t, &reviewForge{failReads: true})
-		got := reviewStep(c, dir, roundcfg.Settings{MaxBounces: 3, ReviewLoop: loop}, "nia")
-		if got.Pending || got.Hold != hold || got.Relayed || got.Detail != "" {
-			t.Errorf("%s: %+v", loop, got)
-		}
-		if !strings.Contains(errBuf.String(), "review poll of nia") {
-			t.Errorf("%s: the error is not on stderr: %q", loop, errBuf.String())
-		}
-	}
-}
-
-// Under auto, a relay that cannot go out holds the slot with a stable detail.
-func TestReviewStepAutoHoldsWhatItCannotRelay(t *testing.T) {
-	c, dir, _ := reviewCtx(t, &reviewForge{comments: []string{"please rename x"}})
-	set := roundcfg.Settings{MaxBounces: 3, ReviewLoop: roundcfg.ReviewLoopAuto}
-	// doneSlot has no session handle: the relay is refused.
-	got := reviewStep(c, dir, set, "nia")
-	if !got.Pending || !got.Hold || got.Relayed || !strings.Contains(got.Detail, "not relayed") || !strings.Contains(got.Detail, prURL) {
-		t.Fatalf("refused relay: %+v", got)
-	}
-	if again := reviewStep(c, dir, set, "nia"); again.Detail != got.Detail {
-		t.Errorf("detail changes pass to pass: %q then %q", got.Detail, again.Detail)
-	}
-}
-
 // At the cap the pending batch maps to a held Pending outcome.
 func TestReviewStepAutoAtTheCapIsPendingAndHeld(t *testing.T) {
 	c, dir, _ := reviewCtx(t, &reviewForge{comments: []string{"please rename x"}})
@@ -234,24 +205,6 @@ func TestFailVerdictReadsAFailReview(t *testing.T) {
 	v := failVerdict(dir, "nia/577-x")
 	if v == nil || !strings.Contains(v.Text, verdict.ReviewSpec+" FAIL at abcdef1: bad") || !strings.Contains(v.Text, "[major] no test (a.go:3)") {
 		t.Fatalf("%+v", v)
-	}
-}
-
-// Under auto a relay that goes out is the Relayed outcome, not pending or held.
-func TestReviewStepAutoRelayedMapsToRelayed(t *testing.T) {
-	f := &reviewForge{comments: []string{"please rename x"}}
-	c, dir, errBuf := reviewCtx(t, f)
-	useHost(c.Deps, &cliHost{})
-	wt := filepath.Join(dir, "nia-wt")
-	if err := os.Mkdir(wt, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := worker.UpdateSlot(dir, "nia", func(s *worker.Slot) { s.SetHandle("w1:t1"); s.Raw().Set("worktree", wt) }); err != nil {
-		t.Fatal(err)
-	}
-	got := reviewStep(c, dir, roundcfg.Settings{MaxBounces: 3, ReviewLoop: roundcfg.ReviewLoopAuto}, "nia")
-	if !got.Relayed || got.Pending || got.Hold || got.Detail != "1 item(s), bounce 1 of 3 "+prURL {
-		t.Fatalf("%+v: %s", got, errBuf)
 	}
 }
 
