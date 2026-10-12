@@ -50,19 +50,16 @@ func file() (string, error) {
 	return filepath.Join(d, "projects.json"), nil
 }
 
-// now is a seam for tests.
-var now = func() time.Time { return time.Now().UTC() }
-
 // Register adds root to the registry, or refreshes its lastSeen when it is
 // already there. It is keyed by realpath, so a symlinked checkout does not
 // register twice. added says whether the entry is new.
-func Register(root string) (added bool, err error) {
+func Register(root string, now time.Time) (added bool, err error) {
 	path, err := file()
 	if err != nil {
 		return false, err
 	}
 	abs := repos.Realpath(root)
-	stamp := now().Format(time.RFC3339)
+	stamp := now.UTC().Format(time.RFC3339)
 	err = fsio.UpdateJSON(path, jsonx.NewObject(), func(v any) (any, error) {
 		doc, ok := v.(*jsonx.Object)
 		if !ok {

@@ -32,13 +32,10 @@ func TestDirHonoursXDGAndFallsBackToHome(t *testing.T) {
 func TestRegisterIsIdempotentAndRefreshesLastSeen(t *testing.T) {
 	isolate(t)
 	proj := t.TempDir()
-	now = func() time.Time { return time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC) }
-	t.Cleanup(func() { now = func() time.Time { return time.Now().UTC() } })
-	if added, err := Register(proj); err != nil || !added {
+	if added, err := Register(proj, time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)); err != nil || !added {
 		t.Fatalf("first: %v %v", added, err)
 	}
-	now = func() time.Time { return time.Date(2026, 2, 2, 0, 0, 0, 0, time.UTC) }
-	if added, err := Register(proj); err != nil || added {
+	if added, err := Register(proj, time.Date(2026, 2, 2, 0, 0, 0, 0, time.UTC)); err != nil || added {
 		t.Fatalf("second: %v %v", added, err)
 	}
 	ps, _ := List()
@@ -54,8 +51,8 @@ func TestRegisterResolvesSymlinks(t *testing.T) {
 	if err := os.Symlink(proj, link); err != nil {
 		t.Skip(err)
 	}
-	Register(proj)
-	Register(link)
+	Register(proj, time.Now())
+	Register(link, time.Now())
 	if ps, _ := List(); len(ps) != 1 {
 		t.Fatalf("%+v", ps)
 	}
@@ -66,8 +63,8 @@ func TestListFlagsMissingPathsAndKeepsThem(t *testing.T) {
 	gone := filepath.Join(t.TempDir(), "gone")
 	os.Mkdir(gone, 0o755)
 	live := t.TempDir()
-	Register(gone)
-	Register(live)
+	Register(gone, time.Now())
+	Register(live, time.Now())
 	os.Remove(gone)
 	ps, _ := List()
 	if len(ps) != 2 {
@@ -90,7 +87,7 @@ func TestListEmptyAndCorruptRegistry(t *testing.T) {
 	if ps, err := List(); err != nil || len(ps) != 0 {
 		t.Fatalf("%v %v", ps, err)
 	}
-	if added, err := Register(t.TempDir()); err != nil || !added {
+	if added, err := Register(t.TempDir(), time.Now()); err != nil || !added {
 		t.Fatalf("register over corrupt: %v %v", added, err)
 	}
 }
@@ -98,8 +95,8 @@ func TestListEmptyAndCorruptRegistry(t *testing.T) {
 func TestRemoveDropsOneEntryAndKeepsTheDirectory(t *testing.T) {
 	isolate(t)
 	a, b := t.TempDir(), t.TempDir()
-	Register(a)
-	Register(b)
+	Register(a, time.Now())
+	Register(b, time.Now())
 	link := filepath.Join(t.TempDir(), "link")
 	os.Symlink(a, link)
 	got, err := Remove(link)
@@ -127,7 +124,7 @@ func TestRemoveFindsAGoneDirectoryAndSkipsAnAbsentRegistry(t *testing.T) {
 	}
 	gone := filepath.Join(t.TempDir(), "gone")
 	os.Mkdir(gone, 0o755)
-	Register(gone)
+	Register(gone, time.Now())
 	os.Remove(gone)
 	got, err := Remove(gone)
 	if err != nil || len(got) != 1 || !got[0].Missing {

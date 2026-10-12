@@ -524,14 +524,14 @@ func statusAdd(fs *flag.FlagSet) RunFunc {
 				if wt != nil {
 					w = pystr.Strip(wt[i])
 				}
-				ch, err := status.Add(root, branch, name, list, w, *ifAbsent)
+				ch, err := status.Add(root, c.deps().Now(), branch, name, list, w, *ifAbsent)
 				if err != nil {
 					return backlogFail(err)
 				}
 				changed = changed || ch
 			}
 		} else {
-			ch, err := status.Add(root, branch, c.Repo, list, *worktree, *ifAbsent)
+			ch, err := status.Add(root, c.deps().Now(), branch, c.Repo, list, *worktree, *ifAbsent)
 			if err != nil {
 				return backlogFail(err)
 			}

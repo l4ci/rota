@@ -418,7 +418,7 @@ func (g *gate) git(dir string, args ...string) (string, int) {
 // stepRecordLedger appends the verdict to the gate ledger.
 func (g *gate) stepRecordLedger() error {
 	if !g.o.CheckOnly {
-		gateLedger(g.o.Round, g.root, g.resolved, *g.res)
+		gateLedger(g.e, g.o.Round, g.root, g.resolved, *g.res)
 	}
 	return nil
 }

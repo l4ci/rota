@@ -21,12 +21,9 @@ import (
 	"github.com/l4ci/rota/internal/rotatree"
 )
 
-// Now is the clock stamps are taken from; tests replace it.
-var Now = time.Now
-
 // Stamp is the timestamp format the helpers write: UTC, second precision,
 // trailing "Z" (datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")).
-func Stamp() string { return Now().UTC().Format("2006-01-02T15:04:05Z") }
+func Stamp(now time.Time) string { return now.UTC().Format("2006-01-02T15:04:05Z") }
 
 // Path is the status.json of the project rooted at root.
 func Path(root string) string { return rotatree.Status(root) }
@@ -150,7 +147,7 @@ func isEntry(v any, branch, repo string) bool {
 // same pair. With ifAbsent an existing entry is left alone and changed is
 // false. The new entry is {branch, repo, items, worktree, startedAt}, the
 // helpers' key order, with null for an empty repo or worktree.
-func Add(root, branch, repo string, items []string, worktree string, ifAbsent bool) (changed bool, err error) {
+func Add(root string, now time.Time, branch, repo string, items []string, worktree string, ifAbsent bool) (changed bool, err error) {
 	err = update(root, func(doc *jsonx.Object) (bool, error) {
 		arr, err := activeList(doc)
 		if err != nil {
@@ -171,7 +168,7 @@ func Add(root, branch, repo string, items []string, worktree string, ifAbsent bo
 		e.Set("repo", nullable(repo))
 		e.Set("items", append([]string{}, items...))
 		e.Set("worktree", nullable(worktree))
-		e.Set("startedAt", Stamp())
+		e.Set("startedAt", Stamp(now))
 		doc.Set("active", append(keep, e))
 		changed = true
 		return true, nil

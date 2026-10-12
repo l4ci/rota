@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/l4ci/rota/internal/status"
 )
@@ -78,7 +79,7 @@ func TestShipMergeProtectsWorktrees(t *testing.T) {
 			gitT(t, work, "worktree", "add", "-q", wt, branch)
 			if kind != "unregistered" {
 				rel, _ := filepath.Rel(work, wt)
-				if _, err := status.Add(work, branch, "", nil, rel, false); err != nil {
+				if _, err := status.Add(work, time.Now(), branch, "", nil, rel, false); err != nil {
 					t.Fatal(err)
 				}
 			}

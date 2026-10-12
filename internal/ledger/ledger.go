@@ -99,13 +99,12 @@ func (e Entry) object() *jsonx.Object {
 	return o
 }
 
-// Append writes e as one line under the file's lock and syncs it. A zero TS is
-// stamped with the current time. Callers that hold a clock (Deps or Env) set TS
-// from it; the zero default stays raw only for writers with none: bounce, gate
-// and train rows deep in package worker, and the limits watcher.
+// Append writes e as one line under the file's lock and syncs it. The caller
+// stamps TS from its own clock: a zero TS is refused, so no row reads the wall
+// clock behind the caller's back.
 func Append(root string, e Entry) error {
 	if e.TS.IsZero() {
-		e.TS = time.Now()
+		return errors.New("ledger entry has no timestamp")
 	}
 	line, err := jsonx.MarshalCompact(e.object())
 	if err != nil {
