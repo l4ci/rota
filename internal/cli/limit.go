@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -15,7 +14,6 @@ import (
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/escalation"
-	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/hook"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
@@ -170,7 +168,7 @@ func buildLimits(ctx context.Context, c *Ctx, root string, cfg any, set limits.S
 				panes[key] = pane
 				mu.Unlock()
 			}
-			kind, account := limitKind(s)
+			kind, account := round.SlotAccount(s)
 			out = append(out, limits.Target{Session: name, Pane: pane, Account: account, Kind: kind,
 				Issue: s.HeldID()})
 		}
@@ -212,16 +210,7 @@ func buildLimits(ctx context.Context, c *Ctx, root string, cfg any, set limits.S
 				return "", false
 			}
 			// Tolerant: no idle slot is found in a corrupt registry (callback, no error return).
-			for _, s := range worker.LoadRegistryTolerant(root).Slots() {
-				name := s.Name()
-				if k, a := limitKind(s); k != kind || a != account || !slices.Contains(rc.Roster, name) {
-					continue
-				}
-				if s.HeldID() == "" && s.State() != "busy" {
-					return name, true
-				}
-			}
-			return "", false
+			return round.IdleSlot(worker.LoadRegistryTolerant(root), rc.Roster, kind, account)
 		},
 		Transfer: func(ctx context.Context, issue, to string) error {
 			rc, err := roundcfg.Load(root)
@@ -493,14 +482,4 @@ func limitStatusRows(list []limits.Entry) ([]any, []string) {
 		lines = append(lines, limitLine(e))
 	}
 	return limitRows(list), lines
-}
-
-// limitKind is the harness kind the usage-limit watcher files a slot under
-// ("" for Claude) and the account its limit counts against: a Codex slot's is
-// its work.codexAccounts login.
-func limitKind(s *worker.Slot) (kind, account string) {
-	if s.Kind() == harness.Codex {
-		return limits.KindCodex, s.CodexAccount()
-	}
-	return "", s.Account()
 }

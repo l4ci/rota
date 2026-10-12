@@ -426,34 +426,11 @@ func (e Env) assignOne(ctx context.Context, root string, be Board, o AssignOpts,
 			return res, &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("slot %s is not provisioned: run rota round start", o.Agent)}
 		}
 	} else {
-		for _, name := range set.Roster {
-			s := reg.Slot(name)
-			if s != nil && s.HeldID() == worker.NormID(id) {
-				slot, resuming = s, true
-				break
-			}
-		}
-		for _, name := range set.Roster {
-			if slot != nil {
-				break
-			}
-			if s := reg.Slot(name); s != nil && s.HeldID() == "" {
-				slot = s
-			}
-		}
-		for _, name := range set.Roster {
-			if slot != nil {
-				break
-			}
-			if s := reg.Slot(name); s != nil {
-				if ok, _ := e.parkable(ctx, s); ok {
-					slot = s
-				}
-			}
-		}
-		if slot == nil {
+		picked := e.pickSlots(ctx, reg, set.Roster, worker.NormID(id), 1)
+		if len(picked) == 0 {
 			return res, blocked(BlockNoFreeSlot, "every roster slot is busy")
 		}
+		slot = picked[0]
 	}
 	agent := slot.Name()
 	res.Agent = agent
