@@ -187,25 +187,22 @@ func TestRoundStatusScreenRefreshKeepsSelectionAndShowsFailure(t *testing.T) {
 	}
 }
 
-func TestSnapFromData(t *testing.T) {
-	slot := jsonx.NewObject()
-	slot.Set("name", "ben")
-	slot.Set("issue", "542")
-	slot.Set("pr", "https://github.com/l4ci/rota/pull/561")
-	slot.Set("model", "sonnet")
-	slot.Set("bounces", 2)
-	slot.Set("drift", []any{"pr-stale"})
-	rev := jsonx.NewObject()
-	rev.Set("issue", "544")
-	rev.Set("from", "nia")
-	d := jsonx.NewObject()
-	d.Set("slots", []any{slot})
-	d.Set("review", []any{rev})
-	d.Set("host", "herdr")
-	d.Set("unavailable", []any{"forge"})
-	got := snapFromData(d)
-	if len(got.Slots) != 1 || got.Slots[0].Name != "ben" || got.Slots[0].Bounces != 2 || got.Slots[0].Drift[0] != "pr-stale" ||
-		len(got.Review) != 1 || got.Review[0].From != "nia" || got.Host != "herdr" || got.Notes[0] != "forge unavailable" {
+func TestSnapFromReportKeepsEveryRowField(t *testing.T) {
+	rep := &round.Report{
+		Rows: []round.Row{{
+			Name: "ben", Agent: "ben", Issue: "542", PR: "https://github.com/l4ci/rota/pull/561",
+			Model: "sonnet", Bounces: 2, Drift: []string{"pr-stale"}, Escalations: []string{"e1"},
+			KindSource: "config", Registered: true,
+		}},
+		Queued:      []round.QueuedPR{{Issue: "544", From: "nia"}},
+		Unavailable: []string{"forge"},
+		Warnings:    []string{"slow"},
+		Host:        "herdr",
+	}
+	got := snapFromReport(rep)
+	r := got.Slots[0]
+	if r.Agent != "ben" || len(r.Escalations) != 1 || r.KindSource != "config" || !r.Registered || r.Bounces != 2 || r.Drift[0] != "pr-stale" ||
+		len(got.Review) != 1 || got.Review[0].From != "nia" || got.Host != "herdr" || got.Notes[0] != "forge unavailable" || got.Notes[1] != "slow" {
 		t.Fatalf("snap = %+v", got)
 	}
 }
