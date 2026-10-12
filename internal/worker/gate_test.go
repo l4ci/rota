@@ -741,6 +741,34 @@ func TestGateFindsTheOpenPROfAnUnrecordedSlot(t *testing.T) {
 	}
 }
 
+// Approve is handed the PR the gate adopted, so the approval thread is the
+// PR's, not the issue's.
+func TestGateApproveSeesTheAdoptedPR(t *testing.T) {
+	w := newWorld(t, "")
+	w.forge("listed", "1")
+	var got GateTarget
+	res, err := w.gate(false, GateOpts{Approve: func(t GateTarget, _ func() ([]string, error)) error { got = t; return nil }})
+	if err != nil || res.Verdict != GatePass {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if got.PR != ghURL {
+		t.Errorf("Approve saw PR %q, want the adopted %q", got.PR, ghURL)
+	}
+}
+
+// An unrecorded external PR takes its issue from the head branch the forge
+// reports, so the closes check still applies to it.
+func TestGateExternalPRIssueComesFromItsHead(t *testing.T) {
+	w := newWorld(t, "")
+	gitq(t, w.worker, "push", "-q", "origin", "w1:dana/5-x")
+	w.forge("head", "dana/5-x")
+	w.forge("body", "Adds the thing.\n")
+	res, _ := w.env(false).Gate(bg, w.dir, GateOpts{Slot: "7", Base: "main", CheckOnly: true})
+	if res.Issue != "5" || res.Verdict != GateNotClosing {
+		t.Errorf("issue %q verdict %q, want 5 and %s: %+v", res.Issue, res.Verdict, GateNotClosing, res)
+	}
+}
+
 func TestGateCheckOnlyAdoptsTheOpenPRWithoutRecordingIt(t *testing.T) {
 	w := newWorld(t, "")
 	w.forge("listed", "1")
