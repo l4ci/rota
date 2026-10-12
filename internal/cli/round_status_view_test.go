@@ -235,11 +235,12 @@ func TestRoundScreenBurnColumn(t *testing.T) {
 
 func TestFillBurnFromLedger(t *testing.T) {
 	dir := workerProject(t, `{"work":{"accounts":[{"name":"work","configDir":"/w"}]}}`)
+	now := time.Now()
 	for _, e := range []ledger.Entry{
-		{Kind: ledger.KindAssign, Issue: "12", Slot: "ben", Account: "work", Harness: "claude", Detail: ledger.Detail("headroom", 80.0)},
-		{Kind: ledger.KindAssign, Issue: "13", Slot: "dana", Account: "work", Harness: "codex", Detail: ledger.Detail("headroom", 80.0)},
-		{Kind: ledger.KindAssign, Issue: "14", Slot: "nia", Account: "work", Harness: "claude", Detail: ledger.Detail("headroom", 30.0)},
-		{Kind: ledger.KindAssign, Issue: "15", Slot: "kit", Account: "work", Harness: "claude"},
+		{TS: now, Kind: ledger.KindAssign, Issue: "12", Slot: "ben", Account: "work", Harness: "claude", Detail: ledger.Detail("headroom", 80.0)},
+		{TS: now, Kind: ledger.KindAssign, Issue: "13", Slot: "dana", Account: "work", Harness: "codex", Detail: ledger.Detail("headroom", 80.0)},
+		{TS: now, Kind: ledger.KindAssign, Issue: "14", Slot: "nia", Account: "work", Harness: "claude", Detail: ledger.Detail("headroom", 30.0)},
+		{TS: now, Kind: ledger.KindAssign, Issue: "15", Slot: "kit", Account: "work", Harness: "claude"},
 	} {
 		if err := ledger.Append(dir, e); err != nil {
 			t.Fatal(err)
