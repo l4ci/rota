@@ -267,34 +267,45 @@ func (a *Accounts) defaultFetch(ctx context.Context, name, configDir string) (*j
 	return o, ""
 }
 
-// token reads the access token without refreshing it.
-func (a *Accounts) token(configDir string) (string, string) {
-	dir := configDir
-	if strings.HasPrefix(dir, "~/") {
-		if home, err := os.UserHomeDir(); err == nil {
-			dir = filepath.Join(home, dir[2:])
-		}
-	}
+// CredentialsProblem reports why the account whose config dir is dir (already
+// expanded) has no usable credentials: no file, unreadable, or no access
+// token. "" means usable. Expiry is not checked: Claude Code refreshes a
+// stale token itself, and this code never does.
+func CredentialsProblem(dir string) string {
+	_, _, why := readCredentials(dir)
+	return why
+}
+
+func readCredentials(dir string) (*jsonx.Object, string, string) {
 	b, err := os.ReadFile(filepath.Join(dir, ".credentials.json"))
 	if err != nil {
 		if os.IsNotExist(err) {
-			return "", "no credentials file"
+			return nil, "", "no credentials file"
 		}
-		return "", "unreadable credentials"
+		return nil, "", "unreadable credentials"
 	}
 	v, err := jsonx.Decode(b)
 	blob, ok := v.(*jsonx.Object)
 	if err != nil || !ok {
-		return "", "unreadable credentials"
+		return nil, "", "unreadable credentials"
 	}
 	ov, _ := blob.Get("claudeAiOauth")
 	oauth, _ := ov.(*jsonx.Object)
 	if oauth == nil {
-		return "", "no access token"
+		return nil, "", "no access token"
 	}
 	tok := jsonx.Str(oauth, "accessToken")
 	if tok == "" {
-		return "", "no access token"
+		return nil, "", "no access token"
+	}
+	return oauth, tok, ""
+}
+
+// token reads the access token without refreshing it.
+func (a *Accounts) token(configDir string) (string, string) {
+	oauth, tok, why := readCredentials(ExpandConfigDir(configDir))
+	if why != "" {
+		return "", why
 	}
 	if exp, ok := oauth.Get("expiresAt"); ok && truthy(exp) {
 		if n, ok := exp.(json.Number); ok {
@@ -345,6 +356,12 @@ func SameConfigDir(a, b string) bool { return ExpandConfigDir(a) == ExpandConfig
 // ExpandConfigDir is the cleaned absolute form of a configDir.
 func ExpandConfigDir(d string) string {
 	home, _ := os.UserHomeDir()
+	return ExpandConfigDirIn(d, home)
+}
+
+// ExpandConfigDirIn is ExpandConfigDir against an explicit home. An empty home
+// leaves a leading ~/ unexpanded.
+func ExpandConfigDirIn(d, home string) string {
 	if d == "" {
 		d = "~/.claude"
 	}

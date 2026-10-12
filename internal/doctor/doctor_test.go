@@ -58,7 +58,10 @@ func TestRunTable(t *testing.T) {
 	home := t.TempDir()
 	good := filepath.Join(home, "good")
 	os.MkdirAll(good, 0o755)
-	os.WriteFile(filepath.Join(good, ".credentials.json"), []byte("{}"), 0o600)
+	os.WriteFile(filepath.Join(good, ".credentials.json"), []byte(`{"claudeAiOauth":{"accessToken":"t"}}`), 0o600)
+	notoken := filepath.Join(home, "notoken")
+	os.MkdirAll(notoken, 0o755)
+	os.WriteFile(filepath.Join(notoken, ".credentials.json"), []byte("{}"), 0o600)
 	nocred := filepath.Join(home, "nocred")
 	os.MkdirAll(nocred, 0o755)
 	cur, miss := fixture(t, "integration_status_current.txt"), fixture(t, "integration_status_missing.txt")
@@ -151,6 +154,7 @@ func TestRunTable(t *testing.T) {
 		{"accounts tilde", Input{Home: home, Accounts: []config.Account{{Name: "a", ConfigDir: "~/good"}}}, all, with(nil), "accounts", Pass, "", ""},
 		{"accounts no dir", Input{Accounts: []config.Account{{Name: "a", ConfigDir: filepath.Join(home, "gone")}}}, all, with(nil), "accounts", Fail, "does not exist", "claude /login"},
 		{"accounts no creds", Input{Accounts: []config.Account{{Name: "a", ConfigDir: nocred}}}, all, with(nil), "accounts", Fail, "no credentials file", "CLAUDE_CONFIG_DIR="},
+		{"accounts no access token", Input{Accounts: []config.Account{{Name: "a", ConfigDir: notoken}}}, all, with(nil), "accounts", Fail, "no access token", "CLAUDE_CONFIG_DIR="},
 		{"accounts no configDir", Input{Accounts: []config.Account{{Name: "a", ConfigDir: ""}}}, all, with(nil), "accounts", Fail, "no configDir", "work.accounts"},
 
 		{"hook ok", herdrIn, all, with(nil), "hook", Pass, "a: current", ""},
