@@ -289,3 +289,25 @@ func TestSameConfigDirAndAccountOf(t *testing.T) {
 		t.Error("AccountOf")
 	}
 }
+
+func TestCredentialsProblem(t *testing.T) {
+	for _, tc := range []struct{ name, body, want string }{
+		{"usable", `{"claudeAiOauth":{"accessToken":"t"}}`, ""},
+		{"empty object", `{}`, "no access token"},
+		{"empty token", `{"claudeAiOauth":{"accessToken":""}}`, "no access token"},
+		{"not json", `nope`, "unreadable credentials"},
+	} {
+		dir := t.TempDir()
+		os.WriteFile(filepath.Join(dir, ".credentials.json"), []byte(tc.body), 0o600)
+		if got := CredentialsProblem(dir); got != tc.want {
+			t.Errorf("%s: CredentialsProblem = %q, want %q", tc.name, got, tc.want)
+		}
+		tok, why := (&Accounts{}).token(dir)
+		if (tok == "") != (tc.want != "") || (tc.want != "" && why != tc.want) {
+			t.Errorf("%s: token = %q, %q disagrees with CredentialsProblem %q", tc.name, tok, why, tc.want)
+		}
+	}
+	if got := CredentialsProblem(t.TempDir()); got != "no credentials file" {
+		t.Errorf("missing file: %q", got)
+	}
+}
