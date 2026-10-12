@@ -113,3 +113,19 @@ func TestRegisterExternalChecksUniquenessUnderTheLock(t *testing.T) {
 		t.Errorf("%d slots after refused registrations", n)
 	}
 }
+
+// A slot holding `12` conflicts with an adoption whose task is spelled `#12`.
+func TestRegisterExternalConflictsAcrossIDSpellings(t *testing.T) {
+	for _, task := range []string{"#12", " 12 "} {
+		dir := newProject(t, `{}`)
+		goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
+		if err := RegisterExternal(dir, "ext-1", "codex/12-x", "", "main", "12", ""); err != nil {
+			t.Fatal(err)
+		}
+		err := RegisterExternal(dir, "ext-2", "codex/other", "", "main", task, "")
+		var c *RegisterConflict
+		if !errors.As(err, &c) || c.Kind != ConflictIssue || c.Slot != "ext-1" {
+			t.Errorf("RegisterExternal(task %q) = %v, want an issue conflict with ext-1", task, err)
+		}
+	}
+}

@@ -3,7 +3,6 @@ package cli
 import (
 	"flag"
 	"fmt"
-	"strings"
 
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/roundcfg"
@@ -30,7 +29,7 @@ func roundBounce(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
 		}
-		issue := strings.TrimPrefix(args[0], "#")
+		issue := worker.NormID(args[0])
 		n, capped, err := recordBounce(root, issue, *slot, *head, set.MaxBounces)
 		if err != nil {
 			return Result{}, err
