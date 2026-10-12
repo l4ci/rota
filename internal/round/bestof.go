@@ -3,7 +3,6 @@ package round
 import (
 	"context"
 	"fmt"
-	"slices"
 	"strconv"
 	"strings"
 
@@ -96,48 +95,24 @@ func (e Env) assignBestOf(ctx context.Context, root string, be Board, o AssignOp
 	}
 	rec := reg.BestOf(id)
 	want := worker.NormID(id)
-	var slots []*worker.Slot
-	add := func(s *worker.Slot) {
-		if s != nil && len(slots) < 2 && !slices.ContainsFunc(slots, func(p *worker.Slot) bool { return p.Name() == s.Name() }) {
-			slots = append(slots, s)
-		}
-	}
+	var pre []*worker.Slot
 	if o.Agent != "" {
 		s := reg.Slot(o.Agent)
 		if s == nil {
 			return res, &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("slot %s is not provisioned: run rota round start", o.Agent)}
 		}
-		add(s)
+		pre = append(pre, s)
 	}
-	// Slots that hold the issue resume (the record's order first), then idle
-	// ones, then those whose PR can be queued: the order single assign uses.
+	// The record's attempts that still hold the issue resume first; the rest
+	// is single assign's order.
 	if rec != nil {
 		for _, a := range rec.Attempts {
 			if s := reg.Slot(a.Slot); s != nil && s.HeldID() == want {
-				add(s)
+				pre = append(pre, s)
 			}
 		}
 	}
-	for _, name := range set.Roster {
-		if s := reg.Slot(name); s != nil && s.HeldID() == want {
-			add(s)
-		}
-	}
-	for _, name := range set.Roster {
-		if s := reg.Slot(name); s != nil && s.HeldID() == "" {
-			add(s)
-		}
-	}
-	for _, name := range set.Roster {
-		if len(slots) == 2 {
-			break
-		}
-		if s := reg.Slot(name); s != nil {
-			if ok, _ := e.parkable(ctx, s); ok {
-				add(s)
-			}
-		}
-	}
+	slots := e.pickSlots(ctx, reg, set.Roster, want, 2, pre...)
 	if len(slots) < 2 {
 		return res, blocked(BlockBestOfSlots, "%s is best-of:2 and needs two free slots; %d free", id, len(slots))
 	}
