@@ -105,7 +105,7 @@ func ledgerSlot(reg Registry, e ledger.Entry) *Slot {
 	if e.Slot != "" {
 		return reg.Slot(e.Slot)
 	}
-	id := strings.TrimPrefix(strings.TrimSpace(e.Issue), "#")
+	id := NormID(e.Issue)
 	if id == "" {
 		return nil
 	}
@@ -196,7 +196,7 @@ func gateLedger(m *RoundMemo, root string, t GateTarget, res GateResult) {
 func mergeRecorded(root string, e ledger.Entry) bool {
 	es, _ := ledger.Load(root)
 	return slices.ContainsFunc(es, func(o ledger.Entry) bool {
-		return o.Kind == ledger.KindMerge && o.Issue == e.Issue && o.PR == e.PR
+		return o.Kind == ledger.KindMerge && NormID(o.Issue) == NormID(e.Issue) && o.PR == e.PR
 	})
 }
 

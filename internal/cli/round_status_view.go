@@ -176,7 +176,7 @@ func fillBurn(c *Ctx, root string, rows []round.Row) {
 		var last *ledger.Entry
 		for j := len(entries) - 1; j >= 0; j-- {
 			e := &entries[j]
-			if e.Kind == ledger.KindAssign && e.Slot == r.Name && strings.TrimPrefix(e.Issue, "#") == strings.TrimPrefix(r.Issue, "#") {
+			if e.Kind == ledger.KindAssign && e.Slot == r.Name && worker.NormID(e.Issue) == worker.NormID(r.Issue) {
 				last = e
 				break
 			}

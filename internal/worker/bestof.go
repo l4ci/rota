@@ -2,7 +2,6 @@ package worker
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/l4ci/rota/internal/jsonx"
 )
@@ -21,7 +20,7 @@ type BestOf struct {
 // bestOfKey is the registry key of an issue: upper case, no `#`, no spaces,
 // the spelling QueuedIssue compares by.
 func bestOfKey(issue string) string {
-	return strings.ToUpper(strings.TrimPrefix(strings.TrimSpace(issue), "#"))
+	return NormID(issue)
 }
 
 func bestOfsOf(doc *jsonx.Object) *jsonx.Object {

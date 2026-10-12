@@ -79,11 +79,11 @@ func (e Env) Pick(ctx context.Context, root string, be Board, o PickOpts) (res P
 	if err != nil {
 		return res, err
 	}
-	rec := reg.BestOf(o.ID)
+	id := worker.NormID(o.ID)
+	rec := reg.BestOf(id)
 	if rec == nil {
-		return res, blocked(BlockNotBestOf, "#%s has no best-of attempts in this round's registry", strings.TrimPrefix(o.ID, "#"))
+		return res, blocked(BlockNotBestOf, "#%s has no best-of attempts in this round's registry", id)
 	}
-	id := strings.TrimPrefix(o.ID, "#")
 	res.ID = id
 	want, ok := worker.PRRefNumber(o.PR)
 	if !ok {
@@ -180,7 +180,7 @@ func (e Env) Pick(ctx context.Context, root string, be Board, o PickOpts) (res P
 	if loser >= 0 {
 		if hasPR {
 			for _, q := range reg.PRs() {
-				if n, ok := worker.PRRefNumber(q.PR); ok && n == loserN && strings.EqualFold(queuedIssue(q), id) {
+				if n, ok := worker.PRRefNumber(q.PR); ok && n == loserN && queuedIssue(q) == worker.NormID(id) {
 					if err := worker.RemoveQueuedPR(root, q.PR); err != nil {
 						return res, wrap(err)
 					}
@@ -226,7 +226,7 @@ func (e Env) Pick(ctx context.Context, root string, be Board, o PickOpts) (res P
 // slot or branch, else an open forge PR from the branch.
 func (e Env) resolveAttempt(root string, reg worker.Registry, id string, a worker.BestOfAttempt, forgeOpen func() ([]tracker.PR, error)) (pickView, error) {
 	v := pickView{PickAttempt: PickAttempt{Slot: a.Slot, Branch: a.Branch}, claimID: a.ClaimID}
-	if s := reg.Slot(a.Slot); s != nil && strings.EqualFold(s.HeldID(), id) && s.Branch() == a.Branch {
+	if s := reg.Slot(a.Slot); s != nil && s.HeldID() == worker.NormID(id) && s.Branch() == a.Branch {
 		v.slot = s
 		v.claimID = firstNonEmpty(a.ClaimID, s.ClaimID())
 		if n, ok := worker.PRRefNumber(s.PR()); ok {
@@ -235,7 +235,7 @@ func (e Env) resolveAttempt(root string, reg worker.Registry, id string, a worke
 		}
 	}
 	for _, q := range reg.PRs() {
-		if !strings.EqualFold(queuedIssue(q), id) || (q.From != a.Slot && q.Branch != a.Branch) {
+		if queuedIssue(q) != worker.NormID(id) || (q.From != a.Slot && q.Branch != a.Branch) {
 			continue
 		}
 		if n, ok := worker.PRRefNumber(q.PR); ok {

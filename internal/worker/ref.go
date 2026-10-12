@@ -30,12 +30,21 @@ func PRRefNumber(ref string) (int, bool) {
 	return n, err == nil
 }
 
+// NormID is the one spelling item IDs are compared and keyed by: trimmed, no
+// leading `#`, upper case. `#12`, ` 12 `, `b07` and `B07` normalise to `12`,
+// `12`, `B07` and `B07`. Never hand-roll this at a call site.
+func NormID(id string) string {
+	id = strings.TrimSpace(id)
+	id = strings.TrimSpace(strings.TrimPrefix(id, "#"))
+	return strings.ToUpper(id)
+}
+
 // HeldID is the item a slot holds, in the backend's spelling: the task when
 // set (`#12`, `12`, `B07`), else the number leading `<agent>/<issue>-<slug>`.
 // A parked slot (`park/<name>`) with no task holds none.
 func HeldID(task, branch, name string) string {
-	if t := strings.TrimPrefix(strings.TrimSpace(task), "#"); t != "" {
-		return strings.ToUpper(t)
+	if t := NormID(task); t != "" {
+		return t
 	}
 	if IsOwnPark(branch, name) {
 		return ""

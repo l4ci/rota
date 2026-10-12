@@ -53,7 +53,7 @@ type Adopted struct {
 // o.AcceptOverlap. A path outside this repo's worktrees or an unknown branch is
 // exit 2; a branch or an issue a slot already holds is blocked.
 func (e Env) Adopt(ctx context.Context, root string, be backlog.Backend, o AdoptOpts) (Adopted, error) {
-	res := Adopted{Issue: strings.TrimPrefix(strings.TrimSpace(o.Issue), "#"), PR: o.PR}
+	res := Adopted{Issue: worker.NormID(o.Issue), PR: o.PR}
 	if res.Issue == "" {
 		return res, usage("--issue is required")
 	}
@@ -79,7 +79,7 @@ func (e Env) Adopt(ctx context.Context, root string, be backlog.Backend, o Adopt
 		}
 	}
 	for _, s := range reg.Slots() {
-		if s.HeldID() == strings.ToUpper(res.Issue) {
+		if s.HeldID() == worker.NormID(res.Issue) {
 			return res, blocked(BlockHeld, "slot %s already holds %s", s.Name(), res.Issue)
 		}
 	}
