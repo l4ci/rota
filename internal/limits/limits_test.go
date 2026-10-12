@@ -13,6 +13,7 @@ import (
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 var t0 = time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC)
@@ -621,5 +622,24 @@ func TestCodexSlotLimitWaitsForResetWithoutAnotherLogin(t *testing.T) {
 	r.step(true)
 	if len(r.sent) != 1 || !strings.HasPrefix(r.sent[0], "ben: The usage limit has reset") {
 		t.Fatalf("sent %v", r.sent)
+	}
+}
+
+func TestReadingOfMapsAMeter(t *testing.T) {
+	f := func(v float64) *float64 { return &v }
+	reset := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	for _, tc := range []struct {
+		name string
+		m    worker.Meter
+		want Reading
+	}{
+		{"unknown", worker.Meter{Verdict: worker.VerdictUnknown}, Reading{Window: WindowUnknown}},
+		{"under", worker.Meter{FiveHour: f(99), SevenDay: f(50)}, Reading{Known: true, Window: WindowUnknown}},
+		{"five hour spent", worker.Meter{Verdict: worker.VerdictCooling, FiveHour: f(100), ResetsAt: &reset}, Reading{Known: true, Cooling: true, ResetsAt: reset, Window: WindowFiveHour}},
+		{"seven day wins", worker.Meter{FiveHour: f(100), SevenDay: f(100)}, Reading{Known: true, Window: WindowSevenDay}},
+	} {
+		if got := ReadingOf(tc.m); got != tc.want {
+			t.Errorf("%s: got %+v want %+v", tc.name, got, tc.want)
+		}
 	}
 }

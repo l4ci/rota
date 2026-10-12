@@ -549,3 +549,19 @@ func firstNonEmpty(a, b string) string {
 	}
 	return b
 }
+
+// ReadingOf maps an account meter to a Reading: a window at or past 100% is
+// spent, the seven-day one first.
+func ReadingOf(m worker.Meter) Reading {
+	r := Reading{Known: m.Verdict != worker.VerdictUnknown, Cooling: m.Verdict == worker.VerdictCooling, Window: WindowUnknown}
+	if m.ResetsAt != nil {
+		r.ResetsAt = m.ResetsAt.UTC()
+	}
+	switch {
+	case m.SevenDay != nil && *m.SevenDay >= 100:
+		r.Window = WindowSevenDay
+	case m.FiveHour != nil && *m.FiveHour >= 100:
+		r.Window = WindowFiveHour
+	}
+	return r
+}

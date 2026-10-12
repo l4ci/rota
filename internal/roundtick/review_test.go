@@ -2,6 +2,8 @@ package roundtick
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"slices"
 	"testing"
 )
@@ -90,5 +92,76 @@ func TestTickHeldWithoutPendingIsSilent(t *testing.T) {
 	}
 	if len(f.gated) != 0 || len(f.trained) != 0 || len(r.NeedsYou) != 0 {
 		t.Fatalf("merged %v %v or reported %+v", f.gated, f.trained, r.NeedsYou)
+	}
+}
+
+func reviewSrc(auto bool) (ReviewSources, *[]string) {
+	var warned []string
+	return ReviewSources{
+		Slot: "nia", PR: "u/9", Auto: auto, MaxBounces: "3",
+		Warn: func(f string, a ...any) { warned = append(warned, fmt.Sprintf(f, a...)) },
+	}, &warned
+}
+
+func TestReviewStepManual(t *testing.T) {
+	boom := errors.New("boom")
+	for _, tc := range []struct {
+		name    string
+		open    bool
+		openErr error
+		pending string
+		pendErr error
+		want    ReviewOutcome
+		warned  bool
+	}{
+		{name: "closed pr", want: ReviewOutcome{}},
+		{name: "nothing waiting", open: true, want: ReviewOutcome{}},
+		{name: "reports without holding", open: true, pending: "1 from rev u/9", want: ReviewOutcome{Pending: true, Detail: "1 from rev u/9"}},
+		{name: "view failure holds nothing", openErr: boom, want: ReviewOutcome{}, warned: true},
+		{name: "poll failure holds nothing", open: true, pendErr: boom, want: ReviewOutcome{}, warned: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, warned := reviewSrc(false)
+			s.Open = func(context.Context) (bool, error) { return tc.open, tc.openErr }
+			s.Pending = func(context.Context) (string, error) { return tc.pending, tc.pendErr }
+			if got := ReviewStep(context.Background(), s); got != tc.want {
+				t.Fatalf("got %+v want %+v", got, tc.want)
+			}
+			if (len(*warned) > 0) != tc.warned {
+				t.Fatalf("warned %v", *warned)
+			}
+		})
+	}
+}
+
+func TestReviewStepAuto(t *testing.T) {
+	boom := errors.New("boom")
+	for _, tc := range []struct {
+		name   string
+		setup  error
+		res    RelayResult
+		err    error
+		want   ReviewOutcome
+		warned bool
+	}{
+		{name: "nothing", res: RelayResult{Nothing: true}, want: ReviewOutcome{}},
+		{name: "relayed", res: RelayResult{Items: 2, Bounces: 1}, want: ReviewOutcome{Relayed: true, Detail: "2 item(s), bounce 1 of 3 u/9"}},
+		{name: "at the cap", res: RelayResult{Items: 2, AtCap: true}, err: boom, want: ReviewOutcome{Pending: true, Hold: true, Detail: "2 item(s) waiting on u/9; the item is at the bounce cap"}},
+		{name: "poll failed", err: boom, want: ReviewOutcome{Hold: true}, warned: true},
+		{name: "setup failed", setup: boom, want: ReviewOutcome{Hold: true}, warned: true},
+		{name: "relay refused", res: RelayResult{Items: 1}, err: boom, want: ReviewOutcome{Pending: true, Hold: true, Detail: "1 item(s) not relayed u/9: run `rota round review-relay nia` for the error"}, warned: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, warned := reviewSrc(true)
+			s.SetupErr = tc.setup
+			s.Relay = func(context.Context) (RelayResult, error) { return tc.res, tc.err }
+			got := ReviewStep(context.Background(), s)
+			if got != tc.want {
+				t.Fatalf("got %+v want %+v", got, tc.want)
+			}
+			if (len(*warned) > 0) != tc.warned {
+				t.Fatalf("warned %v", *warned)
+			}
+		})
 	}
 }
