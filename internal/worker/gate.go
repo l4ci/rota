@@ -322,11 +322,11 @@ func (e Env) gate(ctx context.Context, root string, o GateOpts) (GateResult, err
 	if err != nil {
 		return res, err
 	}
+	res.Issue = t.Issue
 	in, err := e.GateInput(root)
 	if err != nil {
 		return res, err
 	}
-	res.Issue = t.Issue
 	g := &gate{e: e, ctx: ctx, root: root, res: &res, o: o, in: in, target: t, resolved: t, branch: t.Branch, pr: t.PR}
 	err = g.run()
 	return res, err
@@ -475,6 +475,9 @@ func (g *gate) stepExternal() (bool, error) {
 		return g.broke(fmt.Sprintf("could not read PR %s from %s", g.pr, g.provider))
 	}
 	g.branch, g.target.Branch, g.res.Branch = info.Head, info.Head, info.Head
+	// the head branch names the issue of a PR no slot or record owns
+	g.target.Issue = HeldID(g.target.Task, info.Head, g.target.Name)
+	g.res.Issue = g.target.Issue
 	return false, nil
 }
 
@@ -493,7 +496,7 @@ func (g *gate) stepAdoptPR() (bool, error) {
 	if adopted == "" {
 		return false, nil
 	}
-	g.pr, g.res.PR = adopted, adopted
+	g.pr, g.target.PR, g.res.PR = adopted, adopted, adopted
 	g.res.Notes = append(g.res.Notes, fmt.Sprintf("PR-ADOPTED %s — the slot recorded no PR; open PR %s is headed by %s", g.o.Slot, adopted, g.branch))
 	if !g.o.CheckOnly {
 		UpdateSlot(g.root, g.o.Slot, func(s *Slot) { s.SetPR(adopted) })
