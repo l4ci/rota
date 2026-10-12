@@ -405,6 +405,22 @@ func TestGateResultShape(t *testing.T) {
 	}
 }
 
+// The result names the issue the gate acted on: the slot's task, "" when the
+// slot holds none. The issue is resolved before any step, so a refusal carries it.
+func TestGateResultNamesTheSlotsIssue(t *testing.T) {
+	for _, c := range []struct{ name, slot, want string }{
+		{"task", `{"name":"w1","branch":"w1","task":"12"}`, "12"},
+		{"neither", `{"name":"w1","branch":"w1","pr":"` + ghURL + `"}`, ""},
+	} {
+		w := newWorld(t, ghURL)
+		os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"), []byte(`{"slots":[`+c.slot+`]}`), 0o644)
+		res, err := w.gate(false, GateOpts{CheckOnly: true})
+		if res.Issue != c.want {
+			t.Errorf("%s: issue %q (%v), want %q", c.name, res.Issue, err, c.want)
+		}
+	}
+}
+
 func (e Env) withForge(f func(provider, dir string) Forge, brokenMergeBase bool) Env {
 	e.Forge = func(provider, dir string, _ tracker.Settings) (Forge, error) { return f(provider, dir), nil }
 	if brokenMergeBase {
@@ -725,6 +741,34 @@ func TestGateFindsTheOpenPROfAnUnrecordedSlot(t *testing.T) {
 	}
 }
 
+// Approve is handed the PR the gate adopted, so the approval thread is the
+// PR's, not the issue's.
+func TestGateApproveSeesTheAdoptedPR(t *testing.T) {
+	w := newWorld(t, "")
+	w.forge("listed", "1")
+	var got GateTarget
+	res, err := w.gate(false, GateOpts{Approve: func(t GateTarget, _ func() ([]string, error)) error { got = t; return nil }})
+	if err != nil || res.Verdict != GatePass {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if got.PR != ghURL {
+		t.Errorf("Approve saw PR %q, want the adopted %q", got.PR, ghURL)
+	}
+}
+
+// An unrecorded external PR takes its issue from the head branch the forge
+// reports, so the closes check still applies to it.
+func TestGateExternalPRIssueComesFromItsHead(t *testing.T) {
+	w := newWorld(t, "")
+	gitq(t, w.worker, "push", "-q", "origin", "w1:dana/5-x")
+	w.forge("head", "dana/5-x")
+	w.forge("body", "Adds the thing.\n")
+	res, _ := w.env(false).Gate(bg, w.dir, GateOpts{Slot: "7", Base: "main", CheckOnly: true})
+	if res.Issue != "5" || res.Verdict != GateNotClosing {
+		t.Errorf("issue %q verdict %q, want 5 and %s: %+v", res.Issue, res.Verdict, GateNotClosing, res)
+	}
+}
+
 func TestGateCheckOnlyAdoptsTheOpenPRWithoutRecordingIt(t *testing.T) {
 	w := newWorld(t, "")
 	w.forge("listed", "1")
@@ -864,7 +908,7 @@ func TestGateSkipsE2EWhenFullRed(t *testing.T) {
 func TestGateApprovalRefusalCarriesData(t *testing.T) {
 	w := newWorld(t, ghURL)
 	want := &exitcode.Error{Exit: exitcode.ExitRefused, Message: "gate", Data: BlockData{BlockedBy: "manual gate"}}
-	res, err := w.gate(false, GateOpts{Approve: func(func() ([]string, error)) error { return want }})
+	res, err := w.gate(false, GateOpts{Approve: func(GateTarget, func() ([]string, error)) error { return want }})
 	if res.Verdict != GateApprovalRequired {
 		t.Fatalf("verdict %q", res.Verdict)
 	}
