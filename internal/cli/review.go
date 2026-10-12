@@ -455,11 +455,10 @@ func reviewDepth(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, Failed("%v; run rota config check", err)
 		}
-		out, err := reviewGit(c.Context(), t.Dir, "diff", "--numstat", t.Base+"..."+t.Branch)
+		changed, err := git.Repo{Dir: t.Dir}.ChangedLines(c.Context(), t.Base+"..."+t.Branch)
 		if err != nil {
-			return Result{}, err
+			return Result{}, gitErr(err)
 		}
-		changed := worker.ChangedLines(out)
 		var labels []string
 		for _, l := range strings.Split(*labelsFlag, ",") {
 			if l = strings.TrimSpace(l); l != "" {
