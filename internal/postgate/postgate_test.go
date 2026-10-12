@@ -27,14 +27,14 @@ func TestGatePassEndsTheItemClockAndBestOf(t *testing.T) {
 	}
 	worker.Update(root, func(d *worker.Doc) { d.SetBestOf(worker.BestOf{Issue: "12"}) })
 	// A verdict nobody bounces or lands on keeps the item running.
-	if _, err := Gate(root, "12", worker.GateResult{Verdict: "other"}, nil); err != nil {
+	if _, err := Gate(worker.Env{}, root, "12", worker.GateResult{Verdict: "other"}, nil); err != nil {
 		t.Fatal(err)
 	}
 	reg := worker.LoadRegistryTolerant(root)
 	if _, ok := reg.ItemStart("12"); !ok || reg.BestOf("12") == nil {
 		t.Fatal("a non-pass verdict must keep the clock and the best-of record")
 	}
-	if _, err := Gate(root, "12", worker.GateResult{Verdict: worker.GatePass}, nil); err != nil {
+	if _, err := Gate(worker.Env{}, root, "12", worker.GateResult{Verdict: worker.GatePass}, nil); err != nil {
 		t.Fatal(err)
 	}
 	reg = worker.LoadRegistryTolerant(root)
@@ -47,7 +47,7 @@ func TestGateBouncesAreParkedAtMaxBounces(t *testing.T) {
 	root := t.TempDir() // round.maxBounces defaults to 3
 	p := &parked{}
 	for i := 1; i <= 3; i++ {
-		o, err := Gate(root, "7", worker.GateResult{Verdict: worker.GateStale, Slot: "w1", SHA: "sha" + string(rune('a'+i))}, p.park)
+		o, err := Gate(worker.Env{}, root, "7", worker.GateResult{Verdict: worker.GateStale, Slot: "w1", SHA: "sha" + string(rune('a'+i))}, p.park)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -65,9 +65,9 @@ func TestGateBouncesAreParkedAtMaxBounces(t *testing.T) {
 
 func TestParkFailureIsReportedAndTheCountStands(t *testing.T) {
 	root := t.TempDir()
-	worker.RecordBounceIn(nil, root, "7", "w1", "a")
-	worker.RecordBounceIn(nil, root, "7", "w1", "b")
-	o, err := Gate(root, "7", worker.GateResult{Verdict: worker.GateProvenanceFail, SHA: "c"}, func(string, string, roundcfg.Settings) error { return errors.New("no lease") })
+	worker.RecordBounceIn(worker.Env{}, nil, root, "7", "w1", "a")
+	worker.RecordBounceIn(worker.Env{}, nil, root, "7", "w1", "b")
+	o, err := Gate(worker.Env{}, root, "7", worker.GateResult{Verdict: worker.GateProvenanceFail, SHA: "c"}, func(string, string, roundcfg.Settings) error { return errors.New("no lease") })
 	if err == nil || o.Parked || o.Bounces != 3 {
 		t.Fatalf("%+v %v", o, err)
 	}
@@ -87,7 +87,7 @@ func TestTrainBouncesTheCulpritAndEndsLandedItems(t *testing.T) {
 		CulpritGate: worker.GateResult{SHA: "abc1234"},
 	}
 	issues := map[string]string{"w1": "1", "w2": "2"}
-	if fails := Train(nil, root, issues, r, (&parked{}).park); len(fails) != 0 {
+	if fails := Train(worker.Env{}, nil, root, issues, r, (&parked{}).park); len(fails) != 0 {
 		t.Fatal(fails)
 	}
 	if _, ok := worker.LoadRegistryTolerant(root).ItemStart("1"); ok {
@@ -97,7 +97,7 @@ func TestTrainBouncesTheCulpritAndEndsLandedItems(t *testing.T) {
 		t.Errorf("bounces: culprit %d, landed %d", bounces(root, "2"), bounces(root, "1"))
 	}
 	// The same head again is the same refusal, not a second bounce.
-	Train(nil, root, issues, r, (&parked{}).park)
+	Train(worker.Env{}, nil, root, issues, r, (&parked{}).park)
 	if bounces(root, "2") != 1 {
 		t.Errorf("a repeat on the same head counted again: %d", bounces(root, "2"))
 	}

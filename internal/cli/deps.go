@@ -172,6 +172,9 @@ func (d *Deps) workerEnv() worker.Env {
 	if e.Getenv == nil {
 		e.Getenv = d.Getenv
 	}
+	if e.Lease == nil {
+		e.Lease = d.LeaseEnv
+	}
 	if e.Accounts == nil && d.WorkerAccounts != nil {
 		e.Accounts = d.WorkerAccounts()
 	}

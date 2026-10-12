@@ -63,6 +63,8 @@ type Deps struct {
 	Root     string
 	Settings Settings
 	Now      func() time.Time
+	// Worker is the env the limited entry is ledgered through (clock, stderr, lease).
+	Worker worker.Env
 	// Loc is the zone a bare reset time in limit text is read in.
 	Loc *time.Location
 	// Targets lists the sessions now: the orchestrator's pane and every
@@ -412,7 +414,7 @@ func (w *Watcher) detect(ctx context.Context, now time.Time, t Target, o obs) {
 		w.warn("limits not recorded: %v", err)
 		return
 	}
-	worker.LedgerNote(w.Root, ledger.Entry{Kind: ledger.KindLimited, Issue: t.Issue, Slot: t.Session, Account: t.Account,
+	worker.LedgerNote(w.Worker, w.Root, ledger.Entry{Kind: ledger.KindLimited, Issue: t.Issue, Slot: t.Session, Account: t.Account,
 		Detail: ledger.Detail("resetsAt", e.ResetsAt, "window", e.Window)})
 	if !attempt {
 		return
