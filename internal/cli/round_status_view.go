@@ -99,11 +99,7 @@ func loadRoundSnap(c *Ctx, root string) (roundSnap, error) {
 		s.CandsErr = err.Error()
 		return s, nil
 	}
-	scope, slate := round.SlateOf(root)
-	if scope == "" {
-		scope = set.Scope
-	}
-	cands, err := env.Candidates(ctx, root, be, round.CandidateOpts{Scope: scope, Slate: slate, Shared: set.SharedPaths, ScopeOverlap: set.ScopeOverlap})
+	cands, err := env.RoundCandidates(ctx, root, be, set, "")
 	if err != nil {
 		s.CandsErr = err.Error()
 		return s, nil
