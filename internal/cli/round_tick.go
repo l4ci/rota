@@ -331,71 +331,53 @@ func tickLines(r roundtick.Result) string {
 	return strings.Join(lines, "\n")
 }
 
-// reviewStep is one pass of the review loop over a done slot with a PR: it
-// looks for review input and, under round.reviewLoop auto, relays it to the
-// worker. Under manual the input is only reported and the merge is not held:
-// the orchestrator runs review-relay, the gate runs as before. Under auto a
-// relay that cannot go out (the item is at the bounce cap, the host refused) or
-// a poll that failed holds the slot, so the autopilot never merges over review
-// input it could not hand back. A failed poll is a warning either way, never a
-// silent pass and never a tick item.
+// reviewStep wires the forge, registry and config into roundtick.ReviewStep,
+// which owns the manual/auto decision and the holds.
 func reviewStep(c *Ctx, root string, set roundcfg.Settings, slot string) roundtick.ReviewOutcome {
 	ctx := c.Context()
-	auto := set.ReviewLoop == roundcfg.ReviewLoopAuto
 	pr := ""
-	// Tolerant: a failed read is a failed poll below (reviewOpts reads strictly).
+	// Tolerant: a failed read is a failed poll (reviewOpts reads strictly).
 	if s := worker.LoadRegistryTolerant(root).Slot(slot); s != nil {
 		pr = s.PR()
 	}
-	// The detail stays the same from pass to pass, or the watch would wake on it
-	// every time; the error text goes to stderr.
-	pollFailed := func(err error) roundtick.ReviewOutcome {
-		c.Warn("review poll of %s: %v", slot, err)
-		return roundtick.ReviewOutcome{Hold: auto}
-	}
-	failed := func(why string, err error) roundtick.ReviewOutcome {
-		c.Warn("review poll of %s: %v", slot, err)
-		return roundtick.ReviewOutcome{Pending: true, Hold: auto, Detail: fmt.Sprintf("%s %s: run `rota round review-relay %s` for the error", why, pr, slot)}
-	}
 	o, err := reviewOpts(c, root, set, slot)
+	src := roundtick.ReviewSources{
+		Slot: slot, PR: pr, Auto: set.ReviewLoop == roundcfg.ReviewLoopAuto,
+		MaxBounces: maxText(set.MaxBounces), SetupErr: err, Warn: c.Warn,
+	}
 	if err != nil {
-		return pollFailed(err)
+		return roundtick.ReviewStep(ctx, src)
 	}
-	if !auto {
-		s := worker.LoadRegistryTolerant(root).Slot(slot) // reviewOpts above read it strictly
+	var s *worker.Slot
+	src.Open = func(ctx context.Context) (bool, error) {
+		s = worker.LoadRegistryTolerant(root).Slot(slot) // reviewOpts above read it strictly
 		if s == nil {
-			return roundtick.ReviewOutcome{}
+			return false, nil
 		}
-		if info, err := o.Forge.PRView(ctx, mustPRNumber(s.PR())); err != nil {
-			return pollFailed(err)
-		} else if !strings.EqualFold(info.State, "OPEN") {
-			return roundtick.ReviewOutcome{}
-		}
-		b, err := worker.PendingReview(ctx, o.Forge, s, o.Verdict, c.deps().Now())
+		info, err := o.Forge.PRView(ctx, mustPRNumber(s.PR()))
 		if err != nil {
-			return pollFailed(err)
+			return false, err
 		}
-		if b.Empty() {
-			return roundtick.ReviewOutcome{}
+		return strings.EqualFold(info.State, "OPEN"), nil
+	}
+	src.Pending = func(ctx context.Context) (string, error) {
+		b, err := worker.PendingReview(ctx, o.Forge, s, o.Verdict, c.deps().Now())
+		if err != nil || b.Empty() {
+			return "", err
 		}
-		return roundtick.ReviewOutcome{Pending: true, Detail: reviewSummary(b)}
+		return reviewSummary(b), nil
 	}
-	env := c.deps().RoundEnv(ctx, root)
-	env.Worker = workerEnvCtx(c, ctx)
-	res, err := env.ReviewRelay(ctx, root, o)
-	switch {
-	case err == nil && res.Nothing:
-		return roundtick.ReviewOutcome{}
-	case err == nil:
-		return roundtick.ReviewOutcome{Relayed: true, Detail: fmt.Sprintf("%d item(s), bounce %d of %s %s", res.Items, res.Bounces, maxText(set.MaxBounces), pr)}
+	src.Relay = func(ctx context.Context) (roundtick.RelayResult, error) {
+		env := c.deps().RoundEnv(ctx, root)
+		env.Worker = workerEnvCtx(c, ctx)
+		res, err := env.ReviewRelay(ctx, root, o)
+		out := roundtick.RelayResult{Nothing: res.Nothing, Items: res.Items, Bounces: res.Bounces}
+		if bd, ok := exitcode.DataOf[worker.BlockData](err); ok && bd.BlockedBy == "maxBounces" {
+			out.AtCap = true
+		}
+		return out, err
 	}
-	if bd, ok := exitcode.DataOf[worker.BlockData](err); ok && bd.BlockedBy == "maxBounces" {
-		return roundtick.ReviewOutcome{Pending: true, Hold: true, Detail: fmt.Sprintf("%d item(s) waiting on %s; the item is at the bounce cap", res.Items, pr)}
-	}
-	if res.Items == 0 { // the poll itself failed
-		return pollFailed(err)
-	}
-	return failed(fmt.Sprintf("%d item(s) not relayed", res.Items), err)
+	return roundtick.ReviewStep(ctx, src)
 }
 
 // mustPRNumber is the number of a slot's PR; 0 when it has none.
