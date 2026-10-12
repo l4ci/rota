@@ -145,11 +145,7 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 		return roundtick.Result{}, &Error{Exit: ExitInternal, Message: "the backlog backend has no workflow"}
 	}
 	e.Candidates = func(ctx context.Context) ([]roundtick.Candidate, error) {
-		scope, slate := round.SlateOf(root)
-		if scope == "" {
-			scope = set.Scope
-		}
-		cs, err := renv.Candidates(ctx, root, be, round.CandidateOpts{Scope: scope, Slate: slate, Shared: set.SharedPaths, ScopeOverlap: set.ScopeOverlap})
+		cs, err := renv.RoundCandidates(ctx, root, be, set, "")
 		if err != nil {
 			return nil, err
 		}
