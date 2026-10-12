@@ -428,7 +428,7 @@ func (e Env) assignOne(ctx context.Context, root string, be Board, o AssignOpts,
 	} else {
 		for _, name := range set.Roster {
 			s := reg.Slot(name)
-			if s != nil && s.HeldID() == strings.ToUpper(id) {
+			if s != nil && s.HeldID() == worker.NormID(id) {
 				slot, resuming = s, true
 				break
 			}
@@ -458,7 +458,7 @@ func (e Env) assignOne(ctx context.Context, root string, be Board, o AssignOpts,
 	agent := slot.Name()
 	res.Agent = agent
 	if h := worker.HeldID(slot.Task(), slot.Branch(), agent); h != "" {
-		if h != strings.ToUpper(id) {
+		if h != worker.NormID(id) {
 			ok, why := e.parkable(ctx, slot)
 			if !ok {
 				return res, blocked(BlockSlotBusy, "%s", busyMsg(agent, h, why))
@@ -591,7 +591,7 @@ func (e Env) assignOne(ctx context.Context, root string, be Board, o AssignOpts,
 			return nil
 		}},
 		{name: "start the item clock", do: func() error {
-			return worker.RecordItemStart(root, strings.ToUpper(id), e.now())
+			return worker.RecordItemStart(root, worker.NormID(id), e.now())
 		}},
 	}
 	d := &delivery{Slot: agent, Task: id, Branch: func() string { return res.Branch }, Kind: kind, Model: res.Model, Round: rnd,

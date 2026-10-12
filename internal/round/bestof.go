@@ -61,7 +61,7 @@ func inReview(reg worker.Registry, id string, bo *bestOfRun) *worker.QueuedPR {
 	if bo == nil {
 		return reg.QueuedIssue(id)
 	}
-	want := strings.ToUpper(strings.TrimPrefix(strings.TrimSpace(id), "#"))
+	want := worker.NormID(id)
 	for _, q := range reg.PRs() {
 		if queuedIssue(q) == want && q.From != bo.sibling {
 			return &q
@@ -95,7 +95,7 @@ func (e Env) assignBestOf(ctx context.Context, root string, be Board, o AssignOp
 		return res, err
 	}
 	rec := reg.BestOf(id)
-	want := strings.ToUpper(id)
+	want := worker.NormID(id)
 	var slots []*worker.Slot
 	add := func(s *worker.Slot) {
 		if s != nil && len(slots) < 2 && !slices.ContainsFunc(slots, func(p *worker.Slot) bool { return p.Name() == s.Name() }) {

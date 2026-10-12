@@ -157,7 +157,7 @@ func scopeSet(root string, items []backlog.Item, held map[string]bool, scope str
 		var out []backlog.Item
 		for _, it := range items {
 			// A review item is the round's own work: every scope offers it.
-			if !it.Closed && !held[it.ID] && (in(it) || reviews[strings.ToUpper(it.ID)] && IsReviewTitle(it.Title)) {
+			if !it.Closed && !held[it.ID] && (in(it) || reviews[worker.NormID(it.ID)] && IsReviewTitle(it.Title)) {
 				out = append(out, it)
 			}
 		}
@@ -182,9 +182,9 @@ func scopeSet(root string, items []backlog.Item, held map[string]bool, scope str
 	case roundcfg.ScopeSlate:
 		in := map[string]bool{}
 		for _, id := range slate {
-			in[strings.ToUpper(strings.TrimPrefix(id, "#"))] = true
+			in[worker.NormID(id)] = true
 		}
-		chosen = pick(func(it backlog.Item) bool { return in[strings.ToUpper(it.ID)] })
+		chosen = pick(func(it backlog.Item) bool { return in[worker.NormID(it.ID)] })
 	case roundcfg.ScopeMilestone, roundcfg.ScopeNext:
 		active, planned, fellBack, err := milestoneScope(root, scope)
 		if err != nil {

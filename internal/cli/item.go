@@ -528,7 +528,7 @@ func itemReopen(fs *flag.FlagSet) RunFunc {
 			res, err := reopenItem(be, args[0])
 			if err == nil {
 				// A reopened item starts a fresh wall-clock (work.itemTimeoutMinutes).
-				if id := strings.ToUpper(strings.TrimPrefix(args[0], "#")); id != "" {
+				if id := worker.NormID(args[0]); id != "" {
 					_ = worker.ClearItemStart(root, id)
 				}
 			}

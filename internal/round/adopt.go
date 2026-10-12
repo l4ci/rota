@@ -79,7 +79,7 @@ func (e Env) Adopt(ctx context.Context, root string, be backlog.Backend, o Adopt
 		}
 	}
 	for _, s := range reg.Slots() {
-		if s.HeldID() == strings.ToUpper(res.Issue) {
+		if s.HeldID() == worker.NormID(res.Issue) {
 			return res, blocked(BlockHeld, "slot %s already holds %s", s.Name(), res.Issue)
 		}
 	}

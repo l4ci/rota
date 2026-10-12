@@ -16,7 +16,7 @@ import (
 
 // queuedIssue is the issue a queued record holds, in the backend's spelling.
 func queuedIssue(q worker.QueuedPR) string {
-	return strings.ToUpper(strings.TrimPrefix(strings.TrimSpace(q.Issue), "#"))
+	return worker.NormID(q.Issue)
 }
 
 // parkable says whether a slot's PR can be queued so the slot takes new work:
@@ -72,7 +72,7 @@ func (e Env) queuePR(ctx context.Context, root string, be Board, name string) er
 	// A PR another issue's record already holds is not this slot's: the pane's
 	// last ROTA-DONE is the previous issue's until the new worker prints its own.
 	// Queuing it would pair that PR with this issue and branch.
-	if q := reg.QueuedPR(s.PR()); q != nil && queuedIssue(*q) != strings.ToUpper(strings.TrimPrefix(s.HeldID(), "#")) {
+	if q := reg.QueuedPR(s.PR()); q != nil && queuedIssue(*q) != s.HeldID() {
 		return blocked(BlockSlotBusy, "%s", busyMsg(name, s.HeldID(), fmt.Sprintf("its recorded PR %s is already queued for %s", s.PR(), q.Issue)))
 	}
 	p, err := e.Park(ctx, root, name, "assign")
@@ -112,7 +112,7 @@ func (e Env) closeReview(ctx context.Context, root string, be Board, s *worker.S
 	if err != nil {
 		return wrap(err)
 	}
-	if !IsReviewTitle(it.Title) || !MintedReviews(root)[strings.ToUpper(it.ID)] {
+	if !IsReviewTitle(it.Title) || !MintedReviews(root)[worker.NormID(it.ID)] {
 		return blocked(BlockSlotBusy, "%s", busyMsg(name, id, "reported issues, but it is not an architecture review item; it needs a PR"))
 	}
 	if _, err := e.Park(ctx, root, name, "assign"); err != nil {

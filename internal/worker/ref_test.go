@@ -98,3 +98,14 @@ func TestIssueFromBranch(t *testing.T) {
 		}
 	}
 }
+
+func TestNormID(t *testing.T) {
+	for in, want := range map[string]string{
+		"12": "12", "#12": "12", " 12 ": "12", " #12 ": "12", "# 12": "12",
+		"b07": "B07", "B07": "B07", "#b07": "B07", "": "", "#": "",
+	} {
+		if got := NormID(in); got != want {
+			t.Errorf("NormID(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
