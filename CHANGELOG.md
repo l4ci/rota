@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.16.1 — 2026-10-14
+
+One owner per rule across round, gate and doctor; tests own their clocks
+
+### Changed
+
+- **Internal refactors from the round-17 architecture review (#772–#783).** Each scattered rule now has a single owner: item-ID comparisons go through `worker.NormID`; git changed-paths and remote-base reads go through `git.ChangedPaths`; candidate scope and roster slot selection live in `round`; review-loop and limit-reading policy moved out of `cli`; worktree-ownership rules moved into `ship`. The unused `land.Policy` table is gone.
+- **Gate targets:** a gate target's issue is resolved once and returned on the result. It stays correct when the gate rewrites an external PR's branch or adopts an existing PR.
+- **Idle rule:** a busy slot or an adopted (external) slot is no longer idle. Implicit assign, best-of and the limit watcher all skip them, and quota counts an adopted slot as held.
+- **`rota doctor` accounts check:** it uses the worker's credential rule, so a credentials file with no access token now fails the check.
+- **Clocks:** ledger, audit and status clocks go through the caller's `Env`, so tests can pin timestamps end to end.
+- **Forge CLI:** a missing forge CLI is reported as a tracker error kind, not just message text.
+- **Status TUI:** the round status TUI builds its first frame from the report.
+
+## Stats
+
+22 commits, 113 files changed, +1722 −994 lines
+
+**Full changelog:** https://github.com/l4ci/rota/compare/v0.16.0...v0.16.1
+
 ## v0.16.0 — 2026-10-11
 
 A git guardrail hook for workers, a Codex plugin built at release, and a sturdier merge gate.
