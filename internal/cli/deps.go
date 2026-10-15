@@ -196,6 +196,17 @@ func (d *Deps) workerEnv() worker.Env {
 	if e.Accounts == nil && d.WorkerAccounts != nil {
 		e.Accounts = d.WorkerAccounts()
 	}
+	if e.Issues == nil {
+		// the gate's issue source gets the TrackerOptions too (a jira test
+		// points its connection at a fake site).
+		e.Issues = func(dir string, s tracker.Settings) (worker.Issues, error) {
+			it, err := tracker.NewIssueTracker(context.Background(), s, "", dir, d.trackerOptions()...)
+			if err != nil {
+				return nil, err
+			}
+			return it, nil
+		}
+	}
 	return e
 }
 
