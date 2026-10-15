@@ -944,3 +944,82 @@ func (j *Jira) IssuesInMilestone(ctx context.Context, title, state string) ([]Is
 	}
 	return j.List(ctx, ListFilter{State: state, Milestone: title})
 }
+
+// ---- claims (issue properties) ----------------------------------------------
+
+var _ ClaimStore = (*Jira)(nil)
+
+// propClaim prefixes the property of one claim: rota.claim.<claim id>, the id
+// path-escaped so a "/" cannot split the URL. The value is the id itself and
+// the time of the claim; the earliest claim wins, equal times by id. The time
+// is the claimer's clock: Jira keeps no write time on a property.
+const propClaim = "rota.claim."
+
+type claimProp struct {
+	ID string `json:"id"`
+	At string `json:"at"`
+}
+
+func (j *Jira) claimPath(key IssueKey, id string) (string, error) {
+	return j.path(key, "/properties/"+url.PathEscape(propClaim+url.PathEscape(id)))
+}
+
+// Claims reads the issue's claim properties, earliest first.
+func (j *Jira) Claims(ctx context.Context, key IssueKey) ([]string, error) {
+	d, err := j.issue(ctx, key)
+	if err != nil {
+		return nil, err
+	}
+	type held struct {
+		id string
+		at time.Time
+	}
+	var hs []held
+	for k, raw := range d.Properties {
+		var v claimProp
+		if !strings.HasPrefix(k, propClaim) || json.Unmarshal(raw, &v) != nil || v.ID == "" {
+			continue
+		}
+		at, _ := time.Parse(time.RFC3339Nano, v.At)
+		hs = append(hs, held{v.ID, at})
+	}
+	slices.SortFunc(hs, func(a, b held) int {
+		if c := a.at.Compare(b.at); c != 0 {
+			return c
+		}
+		return strings.Compare(a.id, b.id)
+	})
+	out := make([]string, len(hs))
+	for i, h := range hs {
+		out[i] = h.id
+	}
+	return out, nil
+}
+
+// PutClaim writes id's claim property stamped now, unless it already exists:
+// a repeated claim keeps its first time and so its place.
+func (j *Jira) PutClaim(ctx context.Context, key IssueKey, id string) error {
+	p, err := j.claimPath(key, id)
+	if err != nil {
+		return err
+	}
+	switch err := j.rest.Do(ctx, "GET", p, nil, nil); {
+	case err == nil:
+		return nil
+	case !IsKind(err, KindNotFound):
+		return err
+	}
+	return j.rest.Do(ctx, "PUT", p, claimProp{ID: id, At: j.rest.now().UTC().Format(time.RFC3339Nano)}, nil)
+}
+
+// DropClaim deletes id's claim property; none is a no-op.
+func (j *Jira) DropClaim(ctx context.Context, key IssueKey, id string) error {
+	p, err := j.claimPath(key, id)
+	if err != nil {
+		return err
+	}
+	if err := j.rest.Do(ctx, "DELETE", p, nil, nil); err != nil && !IsKind(err, KindNotFound) {
+		return err
+	}
+	return nil
+}

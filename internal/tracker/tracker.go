@@ -308,6 +308,19 @@ type IssueTracker interface {
 	IssuesInMilestone(ctx context.Context, title, state string) ([]Issue, error)
 }
 
+// ClaimStore is an issue tracker that keeps claims out of comment bodies: one
+// record per claimer, read back earliest first. A tracker that implements it
+// (Jira, in issue properties) takes claims this way instead of as claim and
+// release marker comments.
+type ClaimStore interface {
+	// Claims lists the claim ids held on key, earliest first.
+	Claims(ctx context.Context, key IssueKey) ([]string, error)
+	// PutClaim records id's claim on key; a claim already held keeps its place.
+	PutClaim(ctx context.Context, key IssueKey, id string) error
+	// DropClaim removes id's claim; one not held is a no-op.
+	DropClaim(ctx context.Context, key IssueKey, id string) error
+}
+
 // ClosingSource is the text of a PR that can name the issues it closes.
 type ClosingSource struct {
 	Body   string
@@ -518,7 +531,11 @@ func NewIssueTracker(ctx context.Context, s Settings, source, dir string, opts .
 	case config.SourceFile, "":
 		return nil, ErrNoIssueTracker
 	case config.SourceJira:
-		return newJiraTracker(ctx, newCLI(s, dir, opts...), s)
+		j, err := newJiraTracker(ctx, newCLI(s, dir, opts...), s)
+		if err != nil {
+			return nil, err // never a nil *Jira inside a non-nil IssueTracker
+		}
+		return j, nil
 	case config.SourceLinear:
 		return nil, notImplemented(source)
 	case config.SourceIssues:
