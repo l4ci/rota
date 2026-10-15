@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"github.com/l4ci/rota/internal/tracker"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -21,12 +22,12 @@ func umbrellaProject(t *testing.T) (root string, deps *Deps, fakes map[string]*t
 	root, _ = filepath.EvalSymlinks(root)
 	fakes = map[string]*trackertest.Fake{
 		"web": {Issues: []backlog.Issue{
-			{Number: 1, Title: "Web feat", Labels: []string{"type:feature"}, State: "open"},
-			{Number: 2, Title: "Web bug", Labels: []string{"type:bug"}, State: "open"},
-			{Number: 9, Title: "M07 — Title", Labels: []string{"milestone-tracker"}, State: "open"},
+			{Key: tracker.NumKey(1), Title: "Web feat", Labels: []string{"type:feature"}, State: "open"},
+			{Key: tracker.NumKey(2), Title: "Web bug", Labels: []string{"type:bug"}, State: "open"},
+			{Key: tracker.NumKey(9), Title: "M07 — Title", Labels: []string{"milestone-tracker"}, State: "open"},
 		}, Milestones: []string{"M07 — Title"}},
 		"api": {Issues: []backlog.Issue{
-			{Number: 1, Title: "Api feat", Labels: []string{"type:feature"}, State: "open"},
+			{Key: tracker.NumKey(1), Title: "Api feat", Labels: []string{"type:feature"}, State: "open"},
 		}},
 	}
 	built = map[string]int{}

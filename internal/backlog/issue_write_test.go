@@ -38,7 +38,7 @@ func wantCalls(t *testing.T, tr *fakeTracker, want string) {
 }
 
 func open(n int, labels ...string) Issue {
-	return Issue{Number: n, Title: "Item", State: "open", Labels: labels}
+	return Issue{Key: tracker.NumKey(n), Title: "Item", State: "open", Labels: labels}
 }
 
 func TestIssuesCreate(t *testing.T) {
@@ -96,8 +96,8 @@ func TestIssuesCreateErrors(t *testing.T) {
 }
 
 func TestIssuesSetField(t *testing.T) {
-	blocked := Issue{Number: 2, Title: "T", State: "open", Body: "text\n\n<!-- rota:fields\nRelated: B1\nRepos: web\n-->", Milestone: "M07 — Title"}
-	closed := Issue{Number: 3, Title: "T", State: "closed"}
+	blocked := Issue{Key: tracker.NumKey(2), Title: "T", State: "open", Body: "text\n\n<!-- rota:fields\nRelated: B1\nRepos: web\n-->", Milestone: "M07 — Title"}
+	closed := Issue{Key: tracker.NumKey(3), Title: "T", State: "closed"}
 	for _, c := range []struct {
 		name, ref, field, value string
 		changed                 bool
@@ -130,8 +130,8 @@ func TestIssuesSetField(t *testing.T) {
 
 func TestIssuesComplete(t *testing.T) {
 	stale := open(1, "in-progress", "blocked", "keep")
-	proof := Issue{Number: 2, Title: "T", State: "open"}
-	b, tr := newIssues(t, `{}`, stale, proof, Issue{Number: 3, State: "closed"}, open(4, "blocked"))
+	proof := Issue{Key: tracker.NumKey(2), Title: "T", State: "open"}
+	b, tr := newIssues(t, `{}`, stale, proof, Issue{Key: tracker.NumKey(3), State: "closed"}, open(4, "blocked"))
 	tr.Issues[1].Comments = nil
 	// done, no proof
 	_, err := b.Complete("1", CompleteInput{Commit: "abc", Reason: "done"})
@@ -180,7 +180,7 @@ func TestIssuesComplete(t *testing.T) {
 	wantCalls(t, tr, `get[6]`)
 
 	// already closed, unknown, wrong letter
-	b, tr = newIssues(t, `{}`, Issue{Number: 3, State: "closed"})
+	b, tr = newIssues(t, `{}`, Issue{Key: tracker.NumKey(3), State: "closed"})
 	if ok, err := b.Complete("3", CompleteInput{Reason: "done"}); ok || err != nil {
 		t.Fatal(ok, err)
 	}
@@ -192,7 +192,7 @@ func TestIssuesComplete(t *testing.T) {
 }
 
 func TestIssuesReopen(t *testing.T) {
-	b, tr := newIssues(t, `{}`, Issue{Number: 1, State: "closed", Labels: []string{"not-planned", "blocked", "x"}},
+	b, tr := newIssues(t, `{}`, Issue{Key: tracker.NumKey(1), State: "closed", Labels: []string{"not-planned", "blocked", "x"}},
 		open(2, "blocked"), open(3, "x"))
 	for _, c := range []struct {
 		ref     string
@@ -215,7 +215,7 @@ func TestIssuesReopen(t *testing.T) {
 }
 
 func TestIssuesReady(t *testing.T) {
-	crit := Issue{Number: 1, State: "open", Body: "## Acceptance\n- [ ] ok"}
+	crit := Issue{Key: tracker.NumKey(1), State: "open", Body: "## Acceptance\n- [ ] ok"}
 	bare := open(2)
 	noted := open(3)
 	noted.Comments = []tracker.Comment{{ID: "1", Body: "<!-- rota:plan -->\nsteps"}}
@@ -341,7 +341,7 @@ func TestIssuesNoteSplit(t *testing.T) {
 }
 
 func TestIssuesClaimReleaseState(t *testing.T) {
-	b, tr := newIssues(t, `{}`, open(1, "needs-review", "keep"), Issue{Number: 2, State: "closed"})
+	b, tr := newIssues(t, `{}`, open(1, "needs-review", "keep"), Issue{Key: tracker.NumKey(2), State: "closed"})
 	won, holder, err := b.Claim("1", "alice")
 	if !won || holder != "alice" || err != nil {
 		t.Fatal(won, holder, err)
@@ -398,7 +398,7 @@ func TestIssuesClaimReleaseState(t *testing.T) {
 }
 
 func TestIssuesStatus(t *testing.T) {
-	is := Issue{Number: 4, Title: "**Do** it", State: "open", Labels: []string{"type:feature", "in-progress", "blocked"},
+	is := Issue{Key: tracker.NumKey(4), Title: "**Do** it", State: "open", Labels: []string{"type:feature", "in-progress", "blocked"},
 		Milestone: "M07 — Title", Assignees: []string{"alice"}}
 	b, tr := newIssues(t, `{}`, is)
 	tr.Issues[0].Comments = []tracker.Comment{
@@ -467,7 +467,7 @@ func TestWorkflowFileMode(t *testing.T) {
 // An issue's labels ride on its Item, so a round can read harness:/model:
 // off GitHub and GitLab alike (both trackers fill Issue.Labels verbatim).
 func TestIssueItemCarriesLabels(t *testing.T) {
-	b, _ := newIssues(t, `{}`, Issue{Number: 5, Title: "T", State: "open", Labels: []string{"type:task", "harness:codex", "model:gpt-5.5-codex"}})
+	b, _ := newIssues(t, `{}`, Issue{Key: tracker.NumKey(5), Title: "T", State: "open", Labels: []string{"type:task", "harness:codex", "model:gpt-5.5-codex"}})
 	it, err := b.Get("5")
 	if err != nil {
 		t.Fatal(err)
@@ -523,4 +523,30 @@ func TestSharedClaimerBackends(t *testing.T) {
 	var _ SharedClaimer = (*Issues)(nil)
 	var _ SharedClaimer = (*Umbrella)(nil)
 	var _ SharedClaimer = (*File)(nil)
+}
+
+// AC-2: the issue backend claims, labels and reads an issue named by a
+// key-based tracker's key (PROJ-123) the way it does a numbered one; the claim
+// marker is the claimant's, not the issue's.
+func TestIssuesClaimByTrackerKey(t *testing.T) {
+	b, tr := newIssues(t, `{}`, Issue{Key: "PROJ-123", Title: "Widen", State: "open"}, open(7))
+	it, err := b.Get("proj-123")
+	if err != nil || it.ID != "PROJ-123" || it.Number != 0 || it.Key() != "PROJ-123" {
+		t.Fatalf("get by key: %+v %v", it, err)
+	}
+	if it.IssueKey() != "PROJ-123" {
+		t.Errorf("IssueKey = %q", it.IssueKey())
+	}
+	won, holder, err := b.Claim("PROJ-123", "ben@18")
+	if !won || holder != "ben@18" || err != nil {
+		t.Fatal(won, holder, err)
+	}
+	wantCalls(t, tr, `get["PROJ-123"] get["PROJ-123"] comments["PROJ-123"] add_comment["PROJ-123","<!-- rota:claim ben@18 -->\nClaimed by ben@18"] comments["PROJ-123"] `+
+		`ensure_labels[["in-progress"],true] edit["PROJ-123",{"add_labels":["in-progress"]}] assign_self["PROJ-123"]`)
+	if st, err := b.Status("PROJ-123"); err != nil || st.Claim != "ben@18" {
+		t.Errorf("status: %+v %v", st, err)
+	}
+	if n := (Item{Type: "F", ID: "PROJ-123"}).Key(); n != "PROJ-123" {
+		t.Errorf("a key item spells itself: %q", n)
+	}
 }

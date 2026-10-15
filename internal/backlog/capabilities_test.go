@@ -2,6 +2,7 @@ package backlog
 
 import (
 	"errors"
+	"github.com/l4ci/rota/internal/tracker"
 	"testing"
 )
 
@@ -14,7 +15,7 @@ func TestBackendBehavior(t *testing.T) {
 		return f, "B01"
 	}
 	issues := func(t *testing.T) (Backend, string) {
-		b, _ := newIssues(t, `{}`, Issue{Number: 1, Title: "First", State: "open", Labels: []string{"type:bug"}})
+		b, _ := newIssues(t, `{}`, Issue{Key: tracker.NumKey(1), Title: "First", State: "open", Labels: []string{"type:bug"}})
 		return b, "1"
 	}
 	for _, c := range []struct {

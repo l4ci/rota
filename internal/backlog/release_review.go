@@ -83,14 +83,14 @@ func (b *Issues) ReviewQueue() ([]QueueEntry, error) {
 			byIssue[n] = append(byIssue[n], pr)
 		}
 	}
-	sort.SliceStable(issues, func(i, j int) bool { return issues[i].Number < issues[j].Number })
+	sort.SliceStable(issues, func(i, j int) bool { return issues[i].Num() < issues[j].Num() })
 	out := make([]QueueEntry, 0, len(issues))
 	for _, is := range issues {
-		linked := byIssue[is.Number]
+		linked := byIssue[is.Num()]
 		if linked == nil {
 			linked = []tracker.PR{}
 		}
-		out = append(out, QueueEntry{ID: strconv.Itoa(is.Number), Type: b.Letter(is), Number: is.Number, Title: is.Title, PRs: linked})
+		out = append(out, QueueEntry{ID: is.Key.String(), Type: b.Letter(is), Number: is.Num(), Title: is.Title, PRs: linked})
 	}
 	return out, nil
 }
@@ -175,7 +175,7 @@ func (b *Issues) MergePRGated(pr int, items []string, approve MergeApprover) (Me
 			return MergeResult{}, err
 		}
 		if ok {
-			linked = append(linked, b.Letter(is)+strconv.Itoa(is.Number))
+			linked = append(linked, refTag(b.Letter(is), is))
 		}
 	}
 	// The contract makes a PR that is not open exit 3 with --items too. The
@@ -296,11 +296,11 @@ func (b *Issues) releaseIssuesOpt(mid string, optional bool) ([]Issue, error) {
 	}
 	var out []Issue
 	for _, is := range all {
-		if (tracking.Number == 0 || is.Number != tracking.Number) && !b.IsMilestoneTracker(is) {
+		if (tracking.Num() == 0 || is.Num() != tracking.Num()) && !b.IsMilestoneTracker(is) {
 			out = append(out, is)
 		}
 	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].Number < out[j].Number })
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Num() < out[j].Num() })
 	return out, nil
 }
 
@@ -378,7 +378,7 @@ func (b *Issues) releaseNotes(mid string, optional bool) ([]NoteSection, error) 
 		case "B":
 			i = 1
 		}
-		out[i].Rows = append(out[i].Rows, NoteRow{oneLine(is.Title), is.Number})
+		out[i].Rows = append(out[i].Rows, NoteRow{oneLine(is.Title), is.Num()})
 	}
 	return out, nil
 }
@@ -389,34 +389,34 @@ type writeCounter struct {
 	n int
 }
 
-func (w *writeCounter) Edit(ctx context.Context, number int, e tracker.IssueEdit) error {
+func (w *writeCounter) Edit(ctx context.Context, key tracker.IssueKey, e tracker.IssueEdit) error {
 	w.n++
-	return w.MilestoneTracker.Edit(ctx, number, e)
+	return w.MilestoneTracker.Edit(ctx, key, e)
 }
 
-func (w *writeCounter) AddLabels(ctx context.Context, number int, labels []string, auto bool) error {
+func (w *writeCounter) AddLabels(ctx context.Context, key tracker.IssueKey, labels []string, auto bool) error {
 	w.n++
-	return w.MilestoneTracker.AddLabels(ctx, number, labels, auto)
+	return w.MilestoneTracker.AddLabels(ctx, key, labels, auto)
 }
 
-func (w *writeCounter) RemoveLabels(ctx context.Context, number int, labels []string) error {
+func (w *writeCounter) RemoveLabels(ctx context.Context, key tracker.IssueKey, labels []string) error {
 	w.n++
-	return w.MilestoneTracker.RemoveLabels(ctx, number, labels)
+	return w.MilestoneTracker.RemoveLabels(ctx, key, labels)
 }
 
-func (w *writeCounter) Close(ctx context.Context, number int, reason, comment string) error {
+func (w *writeCounter) Close(ctx context.Context, key tracker.IssueKey, reason, comment string) error {
 	w.n++
-	return w.MilestoneTracker.Close(ctx, number, reason, comment)
+	return w.MilestoneTracker.Close(ctx, key, reason, comment)
 }
 
-func (w *writeCounter) Reopen(ctx context.Context, number int) error {
+func (w *writeCounter) Reopen(ctx context.Context, key tracker.IssueKey) error {
 	w.n++
-	return w.MilestoneTracker.Reopen(ctx, number)
+	return w.MilestoneTracker.Reopen(ctx, key)
 }
 
-func (w *writeCounter) AddComment(ctx context.Context, number int, body string) (string, error) {
+func (w *writeCounter) AddComment(ctx context.Context, key tracker.IssueKey, body string) (string, error) {
 	w.n++
-	return w.MilestoneTracker.AddComment(ctx, number, body)
+	return w.MilestoneTracker.AddComment(ctx, key, body)
 }
 
 func (w *writeCounter) EditMilestone(ctx context.Context, number int, e tracker.MilestoneEdit) error {
@@ -480,11 +480,11 @@ func (b *Issues) labelReleased(mid, tag string, optional bool) (issues int, err 
 		}
 		issues++
 		if !slices.Contains(is.Labels, label) {
-			if err := b.Tracker.AddLabels(b.ctx(), is.Number, []string{label}, b.AutoCreate()); err != nil {
+			if err := b.Tracker.AddLabels(b.ctx(), is.Key, []string{label}, b.AutoCreate()); err != nil {
 				return issues, err
 			}
 		}
-		comments, err := b.Tracker.Comments(b.ctx(), is.Number)
+		comments, err := b.Tracker.Comments(b.ctx(), is.Key)
 		if err != nil {
 			return issues, err
 		}
@@ -494,7 +494,7 @@ func (b *Issues) labelReleased(mid, tag string, optional bool) (issues int, err 
 			seen = seen || got == text || got == pystr.Strip(body)
 		}
 		if !seen {
-			if _, err := b.Tracker.AddComment(b.ctx(), is.Number, body); err != nil {
+			if _, err := b.Tracker.AddComment(b.ctx(), is.Key, body); err != nil {
 				return issues, err
 			}
 		}

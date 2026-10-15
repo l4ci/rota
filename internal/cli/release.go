@@ -418,12 +418,12 @@ func releaseMilestoneCheck(c *Ctx, args []string) (Result, error) {
 	}
 	bl, still, lines := []any{}, []any{}, []string{}
 	for _, b := range blocked {
-		bl = append(bl, jsonObj("number", b.Issue.Number, "title", b.Issue.Title, "label", b.Label))
-		lines = append(lines, "blocked: #"+strconv.Itoa(b.Issue.Number)+" "+b.Issue.Title+" ["+b.Label+"]")
+		bl = append(bl, jsonObj("number", b.Issue.Num(), "title", b.Issue.Title, "label", b.Label))
+		lines = append(lines, "blocked: #"+strconv.Itoa(b.Issue.Num())+" "+b.Issue.Title+" ["+b.Label+"]")
 	}
 	for _, is := range warn {
-		still = append(still, jsonObj("number", is.Number, "title", is.Title))
-		lines = append(lines, "warning: #"+strconv.Itoa(is.Number)+" "+is.Title+" (still open)")
+		still = append(still, jsonObj("number", is.Num(), "title", is.Title))
+		lines = append(lines, "warning: "+is.Key.Ref()+" "+is.Title+" (still open)")
 	}
 	res := Result{Data: jsonObj("clear", len(blocked) == 0, "blocked", bl, "stillOpen", still), Text: strings.Join(lines, "\n")}
 	if len(blocked) > 0 {

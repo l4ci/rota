@@ -6,11 +6,10 @@ import (
 	"fmt"
 	"regexp"
 	"slices"
-	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -26,7 +25,7 @@ var reClaimID = regexp.MustCompile(`^([a-z][a-z0-9-]*)@\d+$`)
 // best-of:2 issue each hold a claim: either is fine while it is among the
 // issue's first two. Needs the Board and, for the second shape, the labelled
 // issues; file mode has no claims to read.
-func (e Env) claimFindings(ctx context.Context, rep *Report, reg worker.Registry, rows []*Row, slotObj map[string]*worker.Slot, queued []worker.QueuedPR, labelled map[int]bool, labelsOK bool) {
+func (e Env) claimFindings(ctx context.Context, rep *Report, reg worker.Registry, rows []*Row, slotObj map[string]*worker.Slot, queued []worker.QueuedPR, labelled map[tracker.IssueKey]bool, labelsOK bool) {
 	if e.Board == nil {
 		return
 	}
@@ -100,15 +99,15 @@ func (e Env) claimFindings(ctx context.Context, rep *Report, reg worker.Registry
 	if !labelsOK {
 		return
 	}
-	var nums []int
+	var nums []tracker.IssueKey
 	for n := range labelled {
-		if !held[strconv.Itoa(n)] {
+		if !held[n.String()] {
 			nums = append(nums, n)
 		}
 	}
-	sort.Ints(nums)
+	tracker.SortKeys(nums)
 	for _, n := range nums {
-		st, ok := status(strconv.Itoa(n))
+		st, ok := status(n.String())
 		if !ok {
 			continue
 		}
@@ -116,8 +115,8 @@ func (e Env) claimFindings(ctx context.Context, rep *Report, reg worker.Registry
 		if m == nil || slotObj[m[1]] == nil {
 			continue
 		}
-		rep.add(Finding{Kind: ClaimMismatch, Slot: m[1], Issue: strconv.Itoa(n),
-			Detail: fmt.Sprintf("open claim %s on #%d names slot %s, which does not hold it", st.Claim, n, m[1])})
+		rep.add(Finding{Kind: ClaimMismatch, Slot: m[1], Issue: n.String(),
+			Detail: fmt.Sprintf("open claim %s on %s names slot %s, which does not hold it", st.Claim, n.Ref(), m[1])})
 	}
 }
 

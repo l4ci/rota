@@ -766,7 +766,7 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 				return wrap(tolerate("state reset", err))
 			}},
 			step{name: "needs-human label", do: func() error {
-				return wrap(e.Forge.AddLabels(ctx, it.Number, []string{firstNonEmpty(e.NeedsHuman, DefaultNeedsHuman)}, true))
+				return wrap(e.Forge.AddLabels(ctx, it.IssueKey(), []string{firstNonEmpty(e.NeedsHuman, DefaultNeedsHuman)}, true))
 			}},
 			step{name: "free the sender", do: func() error {
 				if sender != nil {

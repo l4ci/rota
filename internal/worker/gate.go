@@ -291,8 +291,11 @@ type Forge interface {
 // label a landed PR releases. It is the issue source (issues.source), not the
 // forge; a file source has none.
 type Issues interface {
-	Get(ctx context.Context, number int, withComments bool) (tracker.Issue, error)
-	RemoveLabels(ctx context.Context, number int, labels []string) error
+	Get(ctx context.Context, key tracker.IssueKey, withComments bool) (tracker.Issue, error)
+	RemoveLabels(ctx context.Context, key tracker.IssueKey, labels []string) error
+	// ClosesIssue is the tracker's own closing convention: a keyword in the PR
+	// body (GitHub, GitLab) or the issue key in the branch or title.
+	ClosesIssue(key tracker.IssueKey, c tracker.ClosingSource) bool
 }
 
 // Gate runs the merge gate for a slot or a queued PR (see GateTarget). A
@@ -695,37 +698,42 @@ func (g *gate) stepBestOf() (bool, error) {
 }
 
 // stepCloses refuses a PR whose body does not close the slot's issue (a
-// closing keyword: `Closes #N`, `Fixes #N`, ...), unless that issue is labelled
+// closing keyword: `Closes #N`, `Fixes #N`, ...; a key-based tracker: the key in
+// the branch or PR title), unless that issue is labelled
 // PartialSliceLabel. Without it the merge leaves the issue open with its claim
 // and in-progress label, which reconcile reports as drift. It runs under
 // CheckOnly too, so a train member is refused before anything merges. A slot
 // with no PR, or holding no numeric issue (file backend), has nothing to check.
 func (g *gate) stepCloses() (bool, error) {
-	issue := g.target.Issue
-	n, err := strconv.Atoi(issue)
-	if g.pr == "" || g.issues == nil || err != nil || n <= 0 {
+	key, ok := tracker.ParseKey(g.target.Issue)
+	if g.pr == "" || g.issues == nil || !ok {
 		return false, nil
 	}
-	body, err := g.prBody()
+	info, err := g.prView()
 	if err != nil {
 		if tracker.IsCLIMissing(err) {
 			return false, nil
 		}
-		return g.broke(fmt.Sprintf("could not read the body of %s to check it closes #%d: %v", g.pr, n, err))
+		return g.broke(fmt.Sprintf("could not read %s to check it closes %s: %v", g.pr, key.Ref(), err))
 	}
-	if slices.Contains(g.forge.ClosedNumbers(body), n) {
+	if g.issues.ClosesIssue(key, tracker.ClosingSource{Body: info.Body, Title: info.Title, Branch: info.Head}) {
 		return false, nil
 	}
-	is, err := g.issues.Get(g.ctx, n, false)
+	is, err := g.issues.Get(g.ctx, key, false)
 	if err != nil {
-		return g.broke(fmt.Sprintf("could not read #%d to check for the %s label: %v", n, PartialSliceLabel, err))
+		return g.broke(fmt.Sprintf("could not read %s to check for the %s label: %v", key.Ref(), PartialSliceLabel, err))
 	}
 	if slices.Contains(is.Labels, PartialSliceLabel) {
 		return false, nil
 	}
 	g.res.SHA, _ = g.git(g.root, "rev-parse", "--short=7", g.headRef)
-	g.verdict(GateNotClosing, fmt.Sprintf("GATE %s refused — the body of %s does not close #%d, so the merge would leave it open and claimed; nothing landed", g.o.Slot, g.pr, n),
-		fmt.Sprintf("add a line `Closes #%d` to the PR body, or label #%d %s if this PR lands only part of it", n, n, PartialSliceLabel))
+	if _, numbered := key.Number(); numbered {
+		g.verdict(GateNotClosing, fmt.Sprintf("GATE %s refused — the body of %s does not close %s, so the merge would leave it open and claimed; nothing landed", g.o.Slot, g.pr, key.Ref()),
+			fmt.Sprintf("add a line `Closes %s` to the PR body, or label %s %s if this PR lands only part of it", key.Ref(), key.Ref(), PartialSliceLabel))
+	} else {
+		g.verdict(GateNotClosing, fmt.Sprintf("GATE %s refused — the branch and title of %s do not name %s, so the merge would leave it open and claimed; nothing landed", g.o.Slot, g.pr, key.Ref()),
+			fmt.Sprintf("put %s in the PR title or branch, or label %s %s if this PR lands only part of it", key.Ref(), key.Ref(), PartialSliceLabel))
+	}
 	return true, nil
 }
 
@@ -759,10 +767,10 @@ func (g *gate) stepReviewDepth() (bool, error) {
 	var labels []string
 	issue := g.target.Issue
 	// the issue is read only when the policy has a label to match it against
-	if n, err := strconv.Atoi(issue); err == nil && n > 0 && len(policy.Labels) > 0 && g.issues != nil {
-		is, err := g.issues.Get(g.ctx, n, false)
+	if key, ok := tracker.ParseKey(issue); ok && len(policy.Labels) > 0 && g.issues != nil {
+		is, err := g.issues.Get(g.ctx, key, false)
 		if err != nil {
-			return g.broke(fmt.Sprintf("could not read #%d for its labels to pick the review depth: %v", n, err))
+			return g.broke(fmt.Sprintf("could not read %s for its labels to pick the review depth: %v", key.Ref(), err))
 		}
 		labels = is.Labels
 	}
@@ -1358,12 +1366,16 @@ func (g *gate) openPRForBranch() (url, brokeMsg string) {
 
 // prBody is the PR/MR description. An error means it could not be read.
 func (g *gate) prBody() (string, error) {
+	info, err := g.prView()
+	return info.Body, err
+}
+
+func (g *gate) prView() (tracker.PRInfo, error) {
 	n, ok := PRRefNumber(g.pr)
 	if !ok {
-		return "", fmt.Errorf("no PR number in %q", g.pr)
+		return tracker.PRInfo{}, fmt.Errorf("no PR number in %q", g.pr)
 	}
-	info, err := g.forge.PRView(g.ctx, n)
-	return info.Body, err
+	return g.forge.PRView(g.ctx, n)
 }
 
 // checkProvenance cross-checks the PR body's approvals against the slot's
@@ -1425,14 +1437,14 @@ func (g *gate) awaitMerged() (sha string, done bool) {
 			wait = time.Duration(f * float64(time.Second))
 		}
 	}
-	var state, body string
+	var state, body, title, head string
 	for i := 0; i < 5; i++ {
 		info, ok := g.prInfo()
 		if !ok {
 			g.broke(fmt.Sprintf("could not re-read PR %s after merging", g.prNum))
 			return "", true
 		}
-		state, sha, body = info.State, info.MergeSHA, info.Body
+		state, sha, body, title, head = info.State, info.MergeSHA, info.Body, info.Title, info.Head
 		if state == "MERGED" && sha != "" {
 			break
 		}
@@ -1444,7 +1456,7 @@ func (g *gate) awaitMerged() (sha string, done bool) {
 		g.verdict(GateNotMerged, fmt.Sprintf("NOT-MERGED %s — PR %s is %s after the merge call; nothing is on %s", g.o.Slot, g.prNum, state, g.o.Base), "")
 		return "", true
 	}
-	g.releaseClaimLabels(body)
+	g.releaseClaimLabels(tracker.ClosingSource{Body: body, Title: title, Branch: head})
 	if sha == "" {
 		sha = g.verified
 	}
@@ -1530,21 +1542,29 @@ func (g *gate) ffFailureCause(mergeOut string) string {
 // other than the default, or the forge has not closed it yet) keeps its label.
 // Best effort: the PR is already merged, so a failure is a note, and
 // `rota round reconcile --apply` clears whatever this missed.
-func (g *gate) releaseClaimLabels(body string) {
+func (g *gate) releaseClaimLabels(src tracker.ClosingSource) {
 	if g.label == "" || g.issues == nil {
 		return
 	}
-	for _, n := range g.forge.ClosedNumbers(body) {
-		is, err := g.issues.Get(g.ctx, n, false)
+	var keys []tracker.IssueKey
+	for _, n := range g.forge.ClosedNumbers(src.Body) {
+		keys = append(keys, tracker.NumKey(n))
+	}
+	// a key-based tracker names the issue in the branch or title, not a keyword
+	if key, ok := tracker.ParseKey(g.target.Issue); ok && !slices.Contains(keys, key) && g.issues.ClosesIssue(key, src) {
+		keys = append(keys, key)
+	}
+	for _, key := range keys {
+		is, err := g.issues.Get(g.ctx, key, false)
 		if err != nil {
-			g.res.Notes = append(g.res.Notes, fmt.Sprintf("LABEL-KEPT %s — cannot read #%d to release %s: %v", g.o.Slot, n, g.label, err))
+			g.res.Notes = append(g.res.Notes, fmt.Sprintf("LABEL-KEPT %s — cannot read %s to release %s: %v", g.o.Slot, key.Ref(), g.label, err))
 			continue
 		}
 		if is.State != "closed" || !slices.Contains(is.Labels, g.label) {
 			continue
 		}
-		if err := g.issues.RemoveLabels(g.ctx, n, []string{g.label}); err != nil {
-			g.res.Notes = append(g.res.Notes, fmt.Sprintf("LABEL-KEPT %s — cannot remove %s from #%d: %v", g.o.Slot, g.label, n, err))
+		if err := g.issues.RemoveLabels(g.ctx, key, []string{g.label}); err != nil {
+			g.res.Notes = append(g.res.Notes, fmt.Sprintf("LABEL-KEPT %s — cannot remove %s from %s: %v", g.o.Slot, g.label, key.Ref(), err))
 		}
 	}
 }

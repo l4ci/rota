@@ -90,7 +90,7 @@ func TestGetTakesAListedIssueFromTheList(t *testing.T) {
 	if _, err := g.List(ctx, ListFilter{}); err != nil {
 		t.Fatal(err)
 	}
-	is, err := g.Get(ctx, 7, false)
+	is, err := g.Get(ctx, NumKey(7), false)
 	if err != nil || is.Body != "b" {
 		t.Fatalf("Get(7) = %+v, %v", is, err)
 	}
@@ -98,21 +98,21 @@ func TestGetTakesAListedIssueFromTheList(t *testing.T) {
 		t.Fatalf("Get re-fetched a listed issue: %v", f.calls)
 	}
 	// Unlisted issues and comment reads still go to the forge.
-	if _, err := g.Get(ctx, 9, false); err != nil {
+	if _, err := g.Get(ctx, NumKey(9), false); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := g.Get(ctx, 7, true); err != nil {
+	if _, err := g.Get(ctx, NumKey(7), true); err != nil {
 		t.Fatal(err)
 	}
 	if len(f.calls) != 3 {
 		t.Fatalf("calls %d, want 3: %v", len(f.calls), f.calls)
 	}
 	// A write drops the listed copy.
-	if err := g.Edit(ctx, 7, IssueEdit{AddLabels: []string{"y"}}); err != nil {
+	if err := g.Edit(ctx, NumKey(7), IssueEdit{AddLabels: []string{"y"}}); err != nil {
 		t.Fatal(err)
 	}
 	f.calls = nil
-	if _, err := g.Get(ctx, 7, false); err != nil {
+	if _, err := g.Get(ctx, NumKey(7), false); err != nil {
 		t.Fatal(err)
 	}
 	if len(f.calls) != 1 || !strings.Contains(f.last(), "issue view 7") {
@@ -141,7 +141,7 @@ func TestLabelFilteredListComesFromTheCachedOpenList(t *testing.T) {
 		}
 		var s []string
 		for _, is := range got {
-			s = append(s, strconv.Itoa(is.Number))
+			s = append(s, strconv.Itoa(is.Num()))
 		}
 		return strings.Join(s, ",")
 	}
@@ -171,7 +171,7 @@ func TestLabelFilteredListComesFromTheCachedOpenList(t *testing.T) {
 		}
 	}
 	// A write drops the held list.
-	if err := g.Edit(ctx, 1, IssueEdit{AddLabels: []string{"y"}}); err != nil {
+	if err := g.Edit(ctx, NumKey(1), IssueEdit{AddLabels: []string{"y"}}); err != nil {
 		t.Fatal(err)
 	}
 	before := len(f.calls)

@@ -258,12 +258,6 @@ type bothSides struct {
 
 func (b bothSides) Provider() string                    { return b.Forge.Provider() }
 func (b bothSides) CheckAuth(ctx context.Context) error { return b.Forge.CheckAuth(ctx) }
-func (b bothSides) CommentURL(ctx context.Context, pr bool, number int, id string) (string, error) {
-	if pr {
-		return b.Forge.CommentURL(ctx, true, number, id)
-	}
-	return b.IssueTracker.CommentURL(ctx, false, number, id)
-}
 
 // forgeAndIssues builds both seams for a consumer that needs them. A forge
 // failure (a local forge included) fails it; the file source's issue side is

@@ -38,7 +38,7 @@ func seedReview(t *testing.T, root string) {
 }
 
 func closedIssue(n int, title, at string, labels ...string) tracker.Issue {
-	return tracker.Issue{Number: n, Title: title, State: "closed", ClosedAt: at, Labels: labels, StateReason: "completed"}
+	return tracker.Issue{Key: tracker.NumKey(n), Title: title, State: "closed", ClosedAt: at, Labels: labels, StateReason: "completed"}
 }
 
 func TestArchitectureCountSkipsRefactorWork(t *testing.T) {
@@ -46,7 +46,7 @@ func TestArchitectureCountSkipsRefactorWork(t *testing.T) {
 		closedIssue(1, "a feature", "2026-10-01T00:00:00Z"),
 		closedIssue(2, "labelled", "2026-10-01T00:00:00Z", RefactorLabel),
 		closedIssue(3, "arch(cli): split the verbs", "2026-10-01T00:00:00Z"),
-		{Number: 4, Title: "dropped", State: "closed", StateReason: "not_planned", ClosedAt: "2026-10-01T00:00:00Z"},
+		{Key: tracker.NumKey(4), Title: "dropped", State: "closed", StateReason: "not_planned", ClosedAt: "2026-10-01T00:00:00Z"},
 		closedIssue(5, "another", "2026-10-02T00:00:00Z"),
 	})
 	seedReview(t, root)

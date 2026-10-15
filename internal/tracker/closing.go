@@ -3,6 +3,7 @@ package tracker
 import (
 	"regexp"
 	"strconv"
+	"strings"
 	"unicode"
 	"unicode/utf8"
 )
@@ -54,4 +55,28 @@ func startsWithWord(s string) bool {
 // isPySpace is Python's str.isspace for one rune.
 func isPySpace(r rune) bool {
 	return (r >= '\t' && r <= '\r') || (r >= 0x1c && r <= 0x1f) || r == 0x85 || unicode.In(r, unicode.Z)
+}
+
+// ClosesByKey is the closing convention of a key-based tracker (Jira, Linear):
+// a PR closes the issue its key names in the head branch or the title,
+// compared without case and not inside a longer key (PROJ-12 is not PROJ-123).
+func ClosesByKey(key IssueKey, c ClosingSource) bool {
+	if key == "" {
+		return false
+	}
+	return hasKey(c.Branch, key) || hasKey(c.Title, key)
+}
+
+// reKeyToken finds key-shaped tokens (PROJ-12) not inside a longer word; `-`
+// and `_` may precede one (fix-PROJ-12), so the leading boundary is any
+// character but a letter or digit.
+var reKeyToken = regexp.MustCompile(`(?:^|[^A-Za-z0-9])([A-Za-z][A-Za-z0-9_]*-[0-9]+)`)
+
+func hasKey(text string, key IssueKey) bool {
+	for _, m := range reKeyToken.FindAllStringSubmatch(text, -1) {
+		if strings.EqualFold(m[1], string(key)) {
+			return true
+		}
+	}
+	return false
 }

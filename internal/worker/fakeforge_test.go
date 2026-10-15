@@ -39,7 +39,7 @@ func (f *fakeForge) PRView(_ context.Context, pr int) (tracker.PRInfo, error) {
 	f.logf("PRView %d", pr)
 	w := f.w
 	info := tracker.PRInfo{Head: w.forgeWord("head"), HeadSHA: w.forgeWord("sha"), Base: w.forgeWord("base"),
-		State: w.forgeWord("state"), MergeSHA: w.forgeWord("merge"), Body: w.forgeWord("body")}
+		State: w.forgeWord("state"), MergeSHA: w.forgeWord("merge"), Title: w.forgeWord("title"), Body: w.forgeWord("body")}
 	if w.mode == "ff" {
 		info.MergeSHA = "" // a fast-forward merge has no merge commit
 	}
@@ -92,8 +92,14 @@ func (f *fakeForge) ClosedNumbers(body string) []int {
 	return out
 }
 
-func (f *fakeForge) Get(_ context.Context, n int, _ bool) (tracker.Issue, error) {
-	f.logf("Get %d", n)
+// ClosesIssue is the keyword convention of the forge's own tracker.
+func (f *fakeForge) ClosesIssue(key tracker.IssueKey, c tracker.ClosingSource) bool {
+	n, ok := key.Number()
+	return ok && slices.Contains(f.ClosedNumbers(c.Body), n)
+}
+
+func (f *fakeForge) Get(_ context.Context, n tracker.IssueKey, _ bool) (tracker.Issue, error) {
+	f.logf("Get %s", n)
 	if msg := f.w.forgeWord("issueErr"); msg != "" {
 		return tracker.Issue{}, errors.New(msg)
 	}
@@ -101,15 +107,15 @@ func (f *fakeForge) Get(_ context.Context, n int, _ bool) (tracker.Issue, error)
 	if state == "" {
 		state = "open"
 	}
-	is := tracker.Issue{Number: n, State: state}
+	is := tracker.Issue{Key: n, State: state}
 	if l := f.w.forgeWord("issueLabels"); l != "" {
 		is.Labels = strings.Split(l, ",")
 	}
 	return is, nil
 }
 
-func (f *fakeForge) RemoveLabels(_ context.Context, n int, labels []string) error {
-	f.logf("RemoveLabels %d %s", n, strings.Join(labels, ","))
+func (f *fakeForge) RemoveLabels(_ context.Context, n tracker.IssueKey, labels []string) error {
+	f.logf("RemoveLabels %s %s", n, strings.Join(labels, ","))
 	if f.w.forgeWord("removeErr") != "" {
 		return errors.New(f.w.forgeWord("removeErr"))
 	}

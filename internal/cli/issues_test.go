@@ -133,9 +133,9 @@ type msStub struct {
 func (s *msStub) Milestones(context.Context, string) ([]tracker.Milestone, error) { return nil, nil }
 func (s *msStub) CreateMilestone(context.Context, string, string) (int, error)    { return 1, nil }
 func (s *msStub) EditMilestone(context.Context, int, tracker.MilestoneEdit) error { return nil }
-func (s *msStub) Create(ctx context.Context, title, body string, labels []string, ms string) (int, error) {
+func (s *msStub) Create(ctx context.Context, title, body string, labels []string, ms string) (tracker.IssueKey, error) {
 	if s.fail != nil {
-		return 0, s.fail
+		return "", s.fail
 	}
 	return s.Fake.Create(ctx, title, body, labels, ms)
 }

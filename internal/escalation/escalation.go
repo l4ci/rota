@@ -48,11 +48,12 @@ type Entry = worker.Escalation
 
 // Forge is the part of tracker.Adapter the verbs use.
 type Forge interface {
-	Comments(ctx context.Context, number int) ([]tracker.Comment, error)
-	AddComment(ctx context.Context, number int, body string) (string, error)
+	Comments(ctx context.Context, key tracker.IssueKey) ([]tracker.Comment, error)
+	AddComment(ctx context.Context, key tracker.IssueKey, body string) (string, error)
 	MRNotes(ctx context.Context, number int) ([]tracker.Comment, error)
 	AddMRNote(ctx context.Context, number int, body string) (string, error)
-	CommentURL(ctx context.Context, pr bool, number int, commentID string) (string, error)
+	CommentURL(ctx context.Context, key tracker.IssueKey, commentID string) (string, error)
+	PRCommentURL(ctx context.Context, pr int, commentID string) (string, error)
 }
 
 // Env is what the verbs touch outside their own memory; tests replace it.
@@ -126,7 +127,7 @@ func comments(ctx context.Context, f Forge, kind string, number int) ([]tracker.
 	if kind == "pr" {
 		return f.MRNotes(ctx, number)
 	}
-	return f.Comments(ctx, number)
+	return f.Comments(ctx, tracker.NumKey(number))
 }
 
 func fromTracker(err error) *Error {
@@ -191,7 +192,7 @@ func Send(ctx context.Context, env Env, root string, o SendOpts) (SendResult, er
 	if o.PR {
 		cid, err = f.AddMRNote(ctx, o.Number, text)
 	} else {
-		cid, err = f.AddComment(ctx, o.Number, text)
+		cid, err = f.AddComment(ctx, tracker.NumKey(o.Number), text)
 	}
 	if err != nil {
 		te := fromTracker(err)
@@ -200,7 +201,13 @@ func Send(ctx context.Context, env Env, root string, o SendOpts) (SendResult, er
 		}
 		return res, te
 	}
-	if u, err := f.CommentURL(ctx, o.PR, o.Number, cid); err != nil {
+	var u string
+	if o.PR {
+		u, err = f.PRCommentURL(ctx, o.Number, cid)
+	} else {
+		u, err = f.CommentURL(ctx, tracker.NumKey(o.Number), cid)
+	}
+	if err != nil {
 		res.Warnings = append(res.Warnings, "comment posted but its url could not be read: "+err.Error())
 	} else {
 		res.URL = u

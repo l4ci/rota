@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -135,14 +136,21 @@ func TestGateInvalidForgeProviderIsACorruptConfig(t *testing.T) {
 // labels it was given and records what it was asked.
 type issueStub struct {
 	labels []string
-	gets   []int
+	gets   []tracker.IssueKey
+	keyed  bool // closes by key in the branch or title (Jira, Linear), not by keyword
 }
 
-func (s *issueStub) Get(_ context.Context, n int, _ bool) (tracker.Issue, error) {
+func (s *issueStub) Get(_ context.Context, n tracker.IssueKey, _ bool) (tracker.Issue, error) {
 	s.gets = append(s.gets, n)
-	return tracker.Issue{Number: n, State: "open", Labels: s.labels}, nil
+	return tracker.Issue{Key: n, State: "open", Labels: s.labels}, nil
 }
-func (s *issueStub) RemoveLabels(context.Context, int, []string) error { return nil }
+func (s *issueStub) RemoveLabels(context.Context, tracker.IssueKey, []string) error { return nil }
+func (s *issueStub) ClosesIssue(k tracker.IssueKey, c tracker.ClosingSource) bool {
+	if s.keyed {
+		return tracker.ClosesByKey(k, c)
+	}
+	return slices.Contains(strings.Split(c.Body, "\n"), "Closes #"+k.String())
+}
 
 // The closing check reads the issue source, not the forge: with issues on a
 // tracker other than the forge's own, the PR body "Refs #5" passes only
@@ -174,8 +182,46 @@ func TestGateClosingCheckReadsTheIssueSource(t *testing.T) {
 			if err != nil || res.Verdict != c.verdict {
 				t.Fatalf("verdict = %q (%v), want %q: %+v", res.Verdict, err, c.verdict, res)
 			}
-			if gotSource != "gitlab" || len(stub.gets) == 0 || stub.gets[0] != 5 {
+			if gotSource != "gitlab" || len(stub.gets) == 0 || stub.gets[0] != tracker.NumKey(5) {
 				t.Errorf("tracker built for %q, asked %v", gotSource, stub.gets)
+			}
+		})
+	}
+}
+
+// AC-2/AC-3: the gate works with a key-based tracker (PROJ-123): the closing
+// check accepts the key in the PR title or branch, not a `Closes #N` keyword.
+func TestGateClosesByKeyOnAKeyBasedTracker(t *testing.T) {
+	for _, c := range []struct {
+		name, title, head, body string
+		labels                  []string
+		verdict                 string
+	}{
+		{name: "key in the title", title: "PROJ-123 widen the seam", head: "w1", verdict: GatePass},
+		{name: "keyword alone does not close a key", title: "widen the seam", head: "w1", body: "Closes #123\n", verdict: GateNotClosing},
+		{name: "a longer key is another issue", title: "PROJ-1234 widen", head: "w1", verdict: GateNotClosing},
+		{name: "partial slice", title: "widen", head: "w1", labels: []string{PartialSliceLabel}, verdict: GatePass},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			w := newWorld(t, ghURL)
+			w.setConfig(`{"issues":{"source":"jira"},"test":{"full":["true"]}}`)
+			os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
+				[]byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"PROJ-123","pr":%q}]}`, ghURL)), 0o644)
+			w.forge("body", c.body)
+			w.forge("title", c.title)
+			w.forge("head", c.head)
+			stub := &issueStub{labels: c.labels, keyed: true}
+			e := w.env(false)
+			e.Issues = func(string, tracker.Settings) (Issues, error) { return stub, nil }
+			res, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main"})
+			if err != nil || res.Verdict != c.verdict {
+				t.Fatalf("verdict = %q (%v), want %q: %+v", res.Verdict, err, c.verdict, res)
+			}
+			if res.Issue != "PROJ-123" {
+				t.Errorf("issue = %q", res.Issue)
+			}
+			if c.verdict == GateNotClosing && !strings.Contains(res.Hint, "PROJ-123") {
+				t.Errorf("hint names the key: %q", res.Hint)
 			}
 		})
 	}
