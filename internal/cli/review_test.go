@@ -342,13 +342,13 @@ func (f *a8Forge) IssuesInMilestone(_ context.Context, title, state string) ([]t
 func a8Fixture() *a8Forge {
 	m := "M01 — One"
 	issue := func(n int, title string, labels []string, milestone, state, reason string) tracker.Issue {
-		return tracker.Issue{Number: n, Title: title, Labels: labels, Milestone: milestone, State: state, StateReason: reason,
+		return tracker.Issue{Key: tracker.NumKey(n), Title: title, Labels: labels, Milestone: milestone, State: state, StateReason: reason,
 			URL: "https://example.test/issues/" + strconv.Itoa(n)}
 	}
 	f := &a8Forge{MS: &trackertest.MS{Fake: &trackertest.Fake{Issues: []tracker.Issue{
 		issue(1, "One", []string{"type:feature", "needs-review"}, m, "open", ""),
 		issue(2, "Two", []string{"type:bug", "needs-review"}, m, "open", ""),
-		{Number: 3, Title: m, Body: "---\nid: M01\ntitle: One\nstatus: active\n---\n\n# M01\n",
+		{Key: tracker.NumKey(3), Title: m, Body: "---\nid: M01\ntitle: One\nstatus: active\n---\n\n# M01\n",
 			Labels: []string{"milestone-tracker", "status:active"}, Milestone: m, State: "open"},
 		issue(4, "Old", []string{"type:task"}, m, "closed", "completed"),
 		issue(5, "Wip", []string{"type:feature", "in-progress"}, m, "open", ""),
@@ -356,7 +356,7 @@ func a8Fixture() *a8Forge {
 		issue(7, "Fix crash", []string{"type:bug"}, m, "closed", "completed"),
 		issue(8, "Dropped", []string{"type:feature"}, m, "closed", "not_planned"),
 	}}, Native: []tracker.Milestone{{Number: 1, Title: m, State: "open"}}}}
-	if _, err := f.Fake.AddComment(context.Background(), 1, "<!-- rota:proof -->\n## Proof\n- unit \u00b7 PASS \u00b7 ok"); err != nil {
+	if _, err := f.Fake.AddComment(context.Background(), tracker.NumKey(1), "<!-- rota:proof -->\n## Proof\n- unit \u00b7 PASS \u00b7 ok"); err != nil {
 		panic(err)
 	}
 	f.prs = []tracker.PR{

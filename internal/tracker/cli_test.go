@@ -375,9 +375,9 @@ func TestAdapterParseErrors(t *testing.T) {
 	}}
 	f2 := &fakeCLI{answer: func(int, []string) (string, string, int) { return "[{}] {}", "", 0 }}
 	gh := &GitHub{base: base{cli: f.cli("github"), closing: closingGH}}
-	_, err1 := gh.Get(context.Background(), 1, false)
+	_, err1 := gh.Get(context.Background(), NumKey(1), false)
 	_, err2 := gh.Create(context.Background(), "t", "b", nil, "")
-	_, err3 := (&GitHub{base: base{cli: f2.cli("github"), closing: closingGH}}).Comments(context.Background(), 1)
+	_, err3 := (&GitHub{base: base{cli: f2.cli("github"), closing: closingGH}}).Comments(context.Background(), NumKey(1))
 	for i, err := range []error{err1, err2, err3} {
 		var e *Error
 		if !errors.As(err, &e) || e.Kind != KindFailed || e.Code != 1 {
@@ -390,7 +390,7 @@ func TestPagesConcatenates(t *testing.T) {
 	f := &fakeCLI{answer: func(int, []string) (string, string, int) {
 		return `[{"id":1,"body":"a","user":{"login":"x"}}]` + "\n" + `[{"id":"IC_2","body":"b"}]` + "\n", "", 0
 	}}
-	cs, err := (&GitHub{base: base{cli: f.cli("github"), closing: closingGH}}).Comments(context.Background(), 5)
+	cs, err := (&GitHub{base: base{cli: f.cli("github"), closing: closingGH}}).Comments(context.Background(), NumKey(5))
 	want := []Comment{{ID: "1", Body: "a", Author: "x"}, {ID: "IC_2", Body: "b"}}
 	if err != nil || !reflect.DeepEqual(cs, want) {
 		t.Fatalf("%+v, %v", cs, err)

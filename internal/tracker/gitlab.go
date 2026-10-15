@@ -65,7 +65,7 @@ func (n glNote) comment() Comment {
 }
 
 func (g *GitLab) norm(d glIssue) Issue {
-	is := Issue{Number: d.IID, Title: d.Title, Body: d.Description, State: "open", ClosedAt: d.ClosedAt, URL: d.WebURL,
+	is := Issue{Key: NumKey(d.IID), Title: d.Title, Body: d.Description, State: "open", ClosedAt: d.ClosedAt, URL: d.WebURL,
 		Labels: append([]string{}, d.Labels...), Assignees: []string{}}
 	if d.Milestone != nil {
 		is.Milestone = d.Milestone.Title
@@ -87,7 +87,7 @@ func (g *GitLab) norm(d glIssue) Issue {
 	return is
 }
 
-func (g *GitLab) Create(ctx context.Context, title, body string, labels []string, milestone string) (int, error) {
+func (g *GitLab) Create(ctx context.Context, title, body string, labels []string, milestone string) (IssueKey, error) {
 	args := []string{"issue", "create", "--title", title, "--description", body}
 	if len(labels) > 0 {
 		args = append(args, "--label", strings.Join(labels, ","))
@@ -97,9 +97,10 @@ func (g *GitLab) Create(ctx context.Context, title, body string, labels []string
 	}
 	out, err := g.run(ctx, append(args, "-y"), "")
 	if err != nil {
-		return 0, err
+		return "", err
 	}
-	return numberFromURL(out)
+	n, err := numberFromURL(out)
+	return NumKey(n), err
 }
 
 // EnsureLabels is a no-op by design, not an unsupported capability: GitLab
@@ -107,12 +108,12 @@ func (g *GitLab) Create(ctx context.Context, title, body string, labels []string
 // they are applied) holds without a call.
 func (g *GitLab) EnsureLabels(ctx context.Context, names []string, autoCreate bool) error { return nil }
 
-func (g *GitLab) AddLabels(ctx context.Context, number int, labels []string, autoCreate bool) error {
-	return g.addLabels(ctx, g, number, labels, autoCreate)
+func (g *GitLab) AddLabels(ctx context.Context, key IssueKey, labels []string, autoCreate bool) error {
+	return g.addLabels(ctx, g, key, labels, autoCreate)
 }
 
-func (g *GitLab) RemoveLabels(ctx context.Context, number int, labels []string) error {
-	return g.removeLabels(ctx, g, number, labels)
+func (g *GitLab) RemoveLabels(ctx context.Context, key IssueKey, labels []string) error {
+	return g.removeLabels(ctx, g, key, labels)
 }
 
 func (g *GitLab) FindMilestone(ctx context.Context, rotaID string) (string, bool, error) {
@@ -182,7 +183,11 @@ func (g *GitLab) IssuesInMilestone(ctx context.Context, title, state string) ([]
 	return g.List(ctx, ListFilter{State: state, Milestone: title})
 }
 
-func (g *GitLab) Get(ctx context.Context, number int, withComments bool) (Issue, error) {
+func (g *GitLab) Get(ctx context.Context, key IssueKey, withComments bool) (Issue, error) {
+	number, err := numOf(key)
+	if err != nil {
+		return Issue{}, err
+	}
 	args := []string{"issue", "view", strconv.Itoa(number), "--output", "json"}
 	if withComments {
 		args = append(args, "--comments")
@@ -236,7 +241,11 @@ func (g *GitLab) List(ctx context.Context, f ListFilter) ([]Issue, error) {
 	return firstN(out, f.Limit), nil
 }
 
-func (g *GitLab) Edit(ctx context.Context, number int, e IssueEdit) error {
+func (g *GitLab) Edit(ctx context.Context, key IssueKey, e IssueEdit) error {
+	number, err := numOf(key)
+	if err != nil {
+		return err
+	}
 	args := []string{"issue", "update", strconv.Itoa(number)}
 	if e.Title != nil {
 		args = append(args, "--title", *e.Title)
@@ -256,12 +265,16 @@ func (g *GitLab) Edit(ctx context.Context, number int, e IssueEdit) error {
 		// glab has no remove flag; an empty title clears the milestone.
 		args = append(args, "--milestone", "")
 	}
-	_, err := g.run(ctx, args, "")
+	_, err = g.run(ctx, args, "")
 	return err
 }
 
 // Comments returns the comments oldest first, system notes excluded.
-func (g *GitLab) Comments(ctx context.Context, number int) ([]Comment, error) {
+func (g *GitLab) Comments(ctx context.Context, key IssueKey) ([]Comment, error) {
+	number, err := numOf(key)
+	if err != nil {
+		return nil, err
+	}
 	var raw []glNote
 	if err := g.pages(ctx, fmt.Sprintf("projects/:id/issues/%d/notes?sort=asc&order_by=created_at", number), &raw); err != nil {
 		return nil, err
@@ -275,7 +288,11 @@ func (g *GitLab) Comments(ctx context.Context, number int) ([]Comment, error) {
 	return out, nil
 }
 
-func (g *GitLab) AddComment(ctx context.Context, number int, body string) (string, error) {
+func (g *GitLab) AddComment(ctx context.Context, key IssueKey, body string) (string, error) {
+	number, err := numOf(key)
+	if err != nil {
+		return "", err
+	}
 	return g.createdID(ctx, []string{"api", "-X", "POST", fmt.Sprintf("projects/:id/issues/%d/notes", number), "-f", "body=" + body})
 }
 
@@ -306,11 +323,19 @@ func (g *GitLab) AddMRNote(ctx context.Context, number int, body string) (string
 
 // CommentURL: a note has no URL of its own in the API, so it is the thread's
 // web_url plus the #note_<id> anchor GitLab renders.
-func (g *GitLab) CommentURL(ctx context.Context, pr bool, number int, commentID string) (string, error) {
-	kind := "issue"
-	if pr {
-		kind = "mr"
+func (g *GitLab) CommentURL(ctx context.Context, key IssueKey, commentID string) (string, error) {
+	number, err := numOf(key)
+	if err != nil {
+		return "", err
 	}
+	return g.noteURL(ctx, "issue", number, commentID)
+}
+
+func (g *GitLab) PRCommentURL(ctx context.Context, pr int, commentID string) (string, error) {
+	return g.noteURL(ctx, "mr", pr, commentID)
+}
+
+func (g *GitLab) noteURL(ctx context.Context, kind string, number int, commentID string) (string, error) {
 	var d struct {
 		WebURL string `json:"web_url"`
 	}
@@ -323,43 +348,63 @@ func (g *GitLab) CommentURL(ctx context.Context, pr bool, number int, commentID 
 	return d.WebURL + "#note_" + commentID, nil
 }
 
-func (g *GitLab) EditComment(ctx context.Context, number int, commentID, body string) error {
-	_, err := g.run(ctx, []string{"api", "-X", "PUT", fmt.Sprintf("projects/:id/issues/%d/notes/%s", number, commentID), "-f", "body=" + body}, "")
+func (g *GitLab) EditComment(ctx context.Context, key IssueKey, commentID, body string) error {
+	number, err := numOf(key)
+	if err != nil {
+		return err
+	}
+	_, err = g.run(ctx, []string{"api", "-X", "PUT", fmt.Sprintf("projects/:id/issues/%d/notes/%s", number, commentID), "-f", "body=" + body}, "")
 	return err
 }
 
-func (g *GitLab) DeleteComment(ctx context.Context, number int, commentID string) error {
-	_, err := g.run(ctx, []string{"api", "-X", "DELETE", fmt.Sprintf("projects/:id/issues/%d/notes/%s", number, commentID)}, "")
+func (g *GitLab) DeleteComment(ctx context.Context, key IssueKey, commentID string) error {
+	number, err := numOf(key)
+	if err != nil {
+		return err
+	}
+	_, err = g.run(ctx, []string{"api", "-X", "DELETE", fmt.Sprintf("projects/:id/issues/%d/notes/%s", number, commentID)}, "")
 	return err
 }
 
-func (g *GitLab) Close(ctx context.Context, number int, reason, comment string) error {
+func (g *GitLab) Close(ctx context.Context, key IssueKey, reason, comment string) error {
+	number, err := numOf(key)
+	if err != nil {
+		return err
+	}
 	n := strconv.Itoa(number)
 	if comment != "" {
-		if _, err := g.run(ctx, []string{"issue", "note", n, "-m", comment}, ""); err != nil {
+		if _, err = g.run(ctx, []string{"issue", "note", n, "-m", comment}, ""); err != nil {
 			return err
 		}
 	}
 	if reason == "not_planned" {
-		if err := g.AddLabels(ctx, number, []string{g.NotPlannedLabel}, true); err != nil {
+		if err := g.AddLabels(ctx, key, []string{g.NotPlannedLabel}, true); err != nil {
 			return err
 		}
 	}
-	_, err := g.run(ctx, []string{"issue", "close", n}, "")
+	_, err = g.run(ctx, []string{"issue", "close", n}, "")
 	return err
 }
 
-func (g *GitLab) Reopen(ctx context.Context, number int) error {
-	if _, err := g.run(ctx, []string{"issue", "reopen", strconv.Itoa(number)}, ""); err != nil {
+func (g *GitLab) Reopen(ctx context.Context, key IssueKey) error {
+	number, err := numOf(key)
+	if err != nil {
 		return err
 	}
-	return g.RemoveLabels(ctx, number, []string{g.NotPlannedLabel})
+	if _, err = g.run(ctx, []string{"issue", "reopen", strconv.Itoa(number)}, ""); err != nil {
+		return err
+	}
+	return g.RemoveLabels(ctx, key, []string{g.NotPlannedLabel})
 }
 
 // AssignSelf adds the authenticated user without replacing other assignees.
 // glab documents --assignee as usernames (no @me), so the username is
 // resolved once per adapter.
-func (g *GitLab) AssignSelf(ctx context.Context, number int) error {
+func (g *GitLab) AssignSelf(ctx context.Context, key IssueKey) error {
+	number, err := numOf(key)
+	if err != nil {
+		return err
+	}
 	me, err := g.username(ctx)
 	if err != nil {
 		return err
@@ -440,6 +485,7 @@ func (g *GitLab) PRView(ctx context.Context, pr int) (PRInfo, error) {
 		SHA         string `json:"sha"`
 		Target      string `json:"target_branch"`
 		State       string `json:"state"`
+		Title       string `json:"title"`
 		Description string `json:"description"`
 		Merge       string `json:"merge_commit_sha"`
 		Squash      string `json:"squash_commit_sha"`
@@ -450,7 +496,7 @@ func (g *GitLab) PRView(ctx context.Context, pr int) (PRInfo, error) {
 	if d.Source == "" && d.SHA == "" {
 		return PRInfo{}, failed("cannot read MR %d", pr)
 	}
-	info := PRInfo{Head: d.Source, HeadSHA: d.SHA, Base: d.Target, State: "CLOSED", Body: d.Description, MergeSHA: d.Merge}
+	info := PRInfo{Head: d.Source, HeadSHA: d.SHA, Base: d.Target, State: "CLOSED", Title: d.Title, Body: d.Description, MergeSHA: d.Merge}
 	switch d.State {
 	case "opened":
 		info.State = "OPEN"

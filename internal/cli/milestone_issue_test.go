@@ -18,10 +18,10 @@ const msTrackerBody = "---\nid: M02\ntitle: Sharing\nstatus: planned\ndepends: [
 func msFixture() *trackertest.MS {
 	return &trackertest.MS{
 		Fake: &trackertest.Fake{Issues: []backlog.Issue{
-			{Number: 7, Title: "Add export", Labels: []string{"type:feature", "size:Major"}, Milestone: "M02 — Sharing", State: "open"},
-			{Number: 2, Title: "M01 — Core", Body: "---\nid: M01\ntitle: Core\nstatus: shipped\ndepends: []\n---\n\n# M01 — Core\n",
+			{Key: tracker.NumKey(7), Title: "Add export", Labels: []string{"type:feature", "size:Major"}, Milestone: "M02 — Sharing", State: "open"},
+			{Key: tracker.NumKey(2), Title: "M01 — Core", Body: "---\nid: M01\ntitle: Core\nstatus: shipped\ndepends: []\n---\n\n# M01 — Core\n",
 				Labels: []string{"milestone-tracker", "status:shipped"}, Milestone: "M01 — Core", State: "closed", StateReason: "completed"},
-			{Number: 3, Title: "M02 — Sharing", Body: msTrackerBody, Labels: []string{"milestone-tracker", "status:planned"},
+			{Key: tracker.NumKey(3), Title: "M02 — Sharing", Body: msTrackerBody, Labels: []string{"milestone-tracker", "status:planned"},
 				Milestone: "M02 — Sharing", State: "open"},
 		}},
 		Native: []tracker.Milestone{{Number: 1, Title: "M01 — Core", State: "closed"}, {Number: 2, Title: "M02 — Sharing", State: "open"}},
@@ -127,7 +127,7 @@ func TestIssueModeMilestones(t *testing.T) {
 
 func issueByNumber(f *trackertest.MS, n int) backlog.Issue {
 	for _, is := range f.Issues {
-		if is.Number == n {
+		if is.Num() == n {
 			return is
 		}
 	}

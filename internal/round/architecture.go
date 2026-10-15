@@ -281,7 +281,7 @@ func (e Env) MintReview(ctx context.Context, root string, be backlog.Backend, a 
 			return fail(err)
 		}
 		ids = append(ids, res.ID)
-		if n := issueNumber(be, res.ID); n != 0 && e.Forge != nil {
+		if n := issueNumber(be, res.ID); n != "" && e.Forge != nil {
 			if err := e.Forge.AddLabels(ctx, n, []string{RefactorLabel}, true); err != nil {
 				return fail(err)
 			}
@@ -298,12 +298,12 @@ func (e Env) MintReview(ctx context.Context, root string, be backlog.Backend, a 
 	return ids, err
 }
 
-func issueNumber(be backlog.Backend, id string) int {
+func issueNumber(be backlog.Backend, id string) tracker.IssueKey {
 	it, err := be.Get(id)
 	if err != nil || it == nil {
-		return 0
+		return ""
 	}
-	return it.Number
+	return it.IssueKey()
 }
 
 func reviewBody(area string, a Architecture) string {

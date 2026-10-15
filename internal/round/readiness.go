@@ -66,6 +66,7 @@ var (
 	pathTokenRe  = regexp.MustCompile("[A-Za-z0-9_./*@+-]+")
 	foreignRefRe = regexp.MustCompile(`https?://\S+|[\w.-]+/[\w.-]+#\d+`)
 	issueRefRe   = regexp.MustCompile(`#(\d+)`)
+	keyRefRe     = regexp.MustCompile(`\b([A-Z][A-Z0-9_]*-\d+)\b`) // a key-based tracker's PROJ-123
 	itemRefRe    = regexp.MustCompile(`\b(` + backlog.IDPattern(backlog.FileIDDigits) + `)\b`)
 )
 
@@ -83,6 +84,12 @@ func Dependencies(text string) (refs, unverifiable []string) {
 		}
 		line = foreignRefRe.ReplaceAllString(line, " ")
 		for _, m := range issueRefRe.FindAllStringSubmatch(line, -1) {
+			if !seen[m[1]] {
+				seen[m[1]] = true
+				refs = append(refs, m[1])
+			}
+		}
+		for _, m := range keyRefRe.FindAllStringSubmatch(line, -1) {
 			if !seen[m[1]] {
 				seen[m[1]] = true
 				refs = append(refs, m[1])

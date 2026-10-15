@@ -83,7 +83,7 @@ func (f *rrFake) PRMerge(_ context.Context, pr int, o tracker.MergeOpts) (string
 	if f.HostCloses {
 		for _, n := range f.ClosedNumbers(body) {
 			for j := range f.Fake.Issues {
-				if is := &f.Fake.Issues[j]; is.Number == n && is.State == "open" {
+				if is := &f.Fake.Issues[j]; is.Num() == n && is.State == "open" {
 					is.State, is.StateReason = "closed", "completed"
 				}
 			}
@@ -255,12 +255,12 @@ func rrBackend(t *testing.T, s rrSeed) (*Issues, *rrFake) {
 	ms := &trackertest.MS{Fake: &trackertest.Fake{}}
 	f := &rrFake{MS: ms, HostCloses: s.HostCloses}
 	for _, i := range s.Issues {
-		f.Fake.Issues = append(f.Fake.Issues, tracker.Issue{Number: i.Number, Title: i.Title, Body: i.Body, Labels: slices.Clone(i.Labels),
+		f.Fake.Issues = append(f.Fake.Issues, tracker.Issue{Key: tracker.NumKey(i.Number), Title: i.Title, Body: i.Body, Labels: slices.Clone(i.Labels),
 			Milestone: i.Milestone, State: i.State, StateReason: i.StateReason, Assignees: slices.Clone(i.Assignees),
 			URL: fmt.Sprintf("https://example.test/issues/%d", i.Number)})
 	}
 	for _, c := range s.Comments {
-		if _, err := f.Fake.AddComment(context.Background(), c.Issue, c.Body); err != nil {
+		if _, err := f.Fake.AddComment(context.Background(), tracker.NumKey(c.Issue), c.Body); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -320,10 +320,10 @@ func rrStepGo(b *Issues, st rrStep) map[string]any {
 		}
 		bl, w := []any{}, []any{}
 		for _, x := range blocked {
-			bl = append(bl, []any{x.Issue.Number, x.Label})
+			bl = append(bl, []any{x.Issue.Num(), x.Label})
 		}
 		for _, is := range warn {
-			w = append(w, is.Number)
+			w = append(w, is.Num())
 		}
 		return ok([]any{bl, w})
 	case "notes":
@@ -369,7 +369,7 @@ func rrRun(t *testing.T, s rrSeed) map[string]any {
 		for _, c := range i.Comments {
 			cs = append(cs, []any{c.ID, c.Body})
 		}
-		final = append(final, []any{i.Number, i.Title, i.Body, i.Labels, i.Milestone, i.State, i.StateReason, append([]string{}, i.Assignees...), cs})
+		final = append(final, []any{i.Num(), i.Title, i.Body, i.Labels, i.Milestone, i.State, i.StateReason, append([]string{}, i.Assignees...), cs})
 	}
 	native, prs := []any{}, []any{}
 	for _, n := range f.MS.Native {
@@ -401,7 +401,7 @@ func rrOne(t *testing.T) (*Issues, *rrFake) {
 
 func rrIssue(f *rrFake, n int) tracker.Issue {
 	for _, is := range f.Fake.Issues {
-		if is.Number == n {
+		if is.Num() == n {
 			return is
 		}
 	}
@@ -519,11 +519,11 @@ func TestIssuesReleaseGate(t *testing.T) {
 	}
 	var bl []string
 	for _, x := range blocked {
-		bl = append(bl, fmt.Sprintf("%d:%s", x.Issue.Number, x.Label))
+		bl = append(bl, fmt.Sprintf("%d:%s", x.Issue.Num(), x.Label))
 	}
 	var w []int
 	for _, is := range warn {
-		w = append(w, is.Number)
+		w = append(w, is.Num())
 	}
 	if !reflect.DeepEqual(bl, []string{"1:needs-review", "2:needs-review", "7:in-progress", "12:changes-requested"}) || !reflect.DeepEqual(w, []int{8}) {
 		t.Fatalf("blocked %v warn %v", bl, w)

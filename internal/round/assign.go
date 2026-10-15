@@ -20,6 +20,7 @@ import (
 	"github.com/l4ci/rota/internal/roundcfg"
 	secpkg "github.com/l4ci/rota/internal/section"
 	"github.com/l4ci/rota/internal/skills"
+	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -119,8 +120,8 @@ var (
 	slugNonWord = regexp.MustCompile(`[^a-z0-9]+`)
 )
 
-// BranchName is `<agent>/<issue>-<slug>`: the issue number (file mode: the
-// lowercased ID), then the title lowercased with non-alphanumerics collapsed
+// BranchName is `<agent>/<issue>-<slug>`: the issue number or tracker key
+// (PROJ-123, kept upper case; file mode: the lowercased ID), then the title lowercased with non-alphanumerics collapsed
 // to `-`, cut to five words and 40 characters.
 func BranchName(agent, id, title string) string {
 	slug := strings.Trim(slugNonWord.ReplaceAllString(strings.ToLower(title), "-"), "-")
@@ -130,11 +131,23 @@ func BranchName(agent, id, title string) string {
 	if len(slug) > 40 {
 		slug = strings.TrimRight(slug[:40], "-")
 	}
-	name := agent + "/" + strings.ToLower(id)
+	name := agent + "/" + branchID(id)
 	if slug != "" {
 		name += "-" + slug
 	}
 	return name
+}
+
+// branchID is the issue part of a branch name: a tracker key keeps its case so
+// the key reads in the branch as the tracker spells it, anything else is
+// lowercased.
+func branchID(id string) string {
+	if k, ok := tracker.ParseKey(id); ok {
+		if _, numbered := k.Number(); !numbered {
+			return string(k)
+		}
+	}
+	return strings.ToLower(id)
 }
 
 // briefPath is the standing worker contract the pointer names: round.brief,
@@ -471,7 +484,7 @@ func (e Env) assignOne(ctx context.Context, root string, be Board, o AssignOpts,
 		if err != nil {
 			return res, err
 		}
-		if n := openPR[it.Number]; n != 0 {
+		if n := openPR[it.IssueKey()]; n != 0 {
 			return res, blocked(BlockOpenPR, "%s has open PR #%d: not ready; --accept-open-pr assigns it again for a deliberate redo", id, n)
 		}
 	}

@@ -550,7 +550,7 @@ func (m *migrator) run() (bool, error) {
 				if err != nil {
 					return err
 				}
-				return m.setEntry(mid, mid, jn(is.Number), is.URL)
+				return m.setEntry(mid, mid, jn(is.Num()), is.URL)
 			})
 			if err != nil {
 				return false, err
@@ -636,7 +636,7 @@ func (m *migrator) run() (bool, error) {
 				return err
 			}
 			n, _ := strconv.Atoi(res.ID)
-			got, err := be.Tracker.Get(m.ctx, n, false)
+			got, err := be.Tracker.Get(m.ctx, tracker.NumKey(n), false)
 			if err != nil {
 				return err
 			}
@@ -763,7 +763,7 @@ func (m *migrator) run() (bool, error) {
 				if err != nil {
 					return err
 				}
-				if _, err := be.NotePut(strconv.Itoa(is.Number), step, m.rewrite(s.text, true)); err != nil {
+				if _, err := be.NotePut(is.Key.String(), step, m.rewrite(s.text, true)); err != nil {
 					return err
 				}
 				return m.stepDone(mid, step)
@@ -791,14 +791,14 @@ func (m *migrator) adopt(it *migItem) error {
 		if err != nil {
 			return err
 		}
-		got, err := be.Tracker.Get(m.ctx, n, false)
+		got, err := be.Tracker.Get(m.ctx, tracker.NumKey(n), false)
 		if err != nil {
 			return err
 		}
 		if err := be.Tracker.EnsureLabels(m.ctx, labels, be.AutoCreate()); err != nil {
 			return err
 		}
-		if err := be.Tracker.AddLabels(m.ctx, n, labels, be.AutoCreate()); err != nil {
+		if err := be.Tracker.AddLabels(m.ctx, tracker.NumKey(n), labels, be.AutoCreate()); err != nil {
 			return err
 		}
 		return m.setEntry(old, old[:1]+strconv.Itoa(n), jn(n), got.URL)

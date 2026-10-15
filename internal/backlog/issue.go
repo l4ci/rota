@@ -21,24 +21,33 @@ import (
 // Issue is the tracker's view of one issue (hvlib_tracker _norm).
 type Issue = tracker.Issue
 
+// refTag is how a bullet spells an issue: the type letter and number of a
+// numbered issue (F12), the bare key of a key-based tracker's (PROJ-123).
+func refTag(letter string, is Issue) string {
+	if n := is.Num(); n > 0 {
+		return letter + strconv.Itoa(n)
+	}
+	return is.Key.String()
+}
+
 // Tracker is the part of internal/tracker's Adapter the issue backend calls:
 // exactly those methods, with the Adapter's own signatures. A missing issue is
 // a *tracker.Error of KindNotFound, never an error message to parse.
 type Tracker interface {
-	Get(ctx context.Context, number int, withComments bool) (tracker.Issue, error)
+	Get(ctx context.Context, key tracker.IssueKey, withComments bool) (tracker.Issue, error)
 	List(ctx context.Context, f tracker.ListFilter) ([]tracker.Issue, error)
-	Create(ctx context.Context, title, body string, labels []string, milestone string) (int, error)
-	Edit(ctx context.Context, number int, e tracker.IssueEdit) error
+	Create(ctx context.Context, title, body string, labels []string, milestone string) (tracker.IssueKey, error)
+	Edit(ctx context.Context, key tracker.IssueKey, e tracker.IssueEdit) error
 	EnsureLabels(ctx context.Context, names []string, autoCreate bool) error
-	AddLabels(ctx context.Context, number int, labels []string, autoCreate bool) error
-	RemoveLabels(ctx context.Context, number int, labels []string) error
-	Close(ctx context.Context, number int, reason, comment string) error
-	Reopen(ctx context.Context, number int) error
-	AssignSelf(ctx context.Context, number int) error
-	Comments(ctx context.Context, number int) ([]tracker.Comment, error)
-	AddComment(ctx context.Context, number int, body string) (string, error)
-	EditComment(ctx context.Context, number int, commentID, body string) error
-	DeleteComment(ctx context.Context, number int, commentID string) error
+	AddLabels(ctx context.Context, key tracker.IssueKey, labels []string, autoCreate bool) error
+	RemoveLabels(ctx context.Context, key tracker.IssueKey, labels []string) error
+	Close(ctx context.Context, key tracker.IssueKey, reason, comment string) error
+	Reopen(ctx context.Context, key tracker.IssueKey) error
+	AssignSelf(ctx context.Context, key tracker.IssueKey) error
+	Comments(ctx context.Context, key tracker.IssueKey) ([]tracker.Comment, error)
+	AddComment(ctx context.Context, key tracker.IssueKey, body string) (string, error)
+	EditComment(ctx context.Context, key tracker.IssueKey, commentID, body string) error
+	DeleteComment(ctx context.Context, key tracker.IssueKey, commentID string) error
 	FindMilestone(ctx context.Context, rotaID string) (title string, ok bool, err error)
 }
 
@@ -229,7 +238,7 @@ func (b *Issues) bulletInner(is Issue) string {
 	if last, _ := utf8.DecodeLastRuneInString(title); !strings.ContainsRune(".!?", last) {
 		title += "."
 	}
-	head := "**[" + letter + strconv.Itoa(is.Number) + "] "
+	head := "**[" + refTag(letter, is) + "] "
 	if tag := b.tag(is, letter); tag != "" {
 		head += "[" + tag + "] "
 	}
@@ -277,7 +286,7 @@ func (b *Issues) doneLine(is Issue) string {
 	if is.StateReason == "not_planned" {
 		suffix = " (dropped)"
 	}
-	return "- ~~" + b.bulletInner(is) + "~~ Done " + date + " [`#" + strconv.Itoa(is.Number) + "`]" + suffix
+	return "- ~~" + b.bulletInner(is) + "~~ Done " + date + " [`" + is.Key.Ref() + "`]" + suffix
 }
 
 // openByLetter is the open item bullets by type letter, each section sorted by
@@ -316,7 +325,7 @@ func (b *Issues) openIssues() ([]Issue, error) {
 	if err != nil {
 		return nil, err
 	}
-	sort.SliceStable(items, func(i, j int) bool { return items[i].Number < items[j].Number })
+	sort.SliceStable(items, func(i, j int) bool { return items[i].Num() < items[j].Num() })
 	return items, nil
 }
 
@@ -331,7 +340,7 @@ func (b *Issues) closedIssues() ([]Issue, error) {
 		if items[i].ClosedAt != items[j].ClosedAt {
 			return items[i].ClosedAt > items[j].ClosedAt
 		}
-		return items[i].Number > items[j].Number
+		return items[i].Num() > items[j].Num()
 	})
 	return items, nil
 }
@@ -398,7 +407,7 @@ func (b *Issues) lookup(ref string) (Issue, bool, error) {
 	if b.Tracker == nil {
 		return Issue{}, false, errors.New("issues backend has no tracker")
 	}
-	n, letter, err := resolveItemRef(ref)
+	n, letter, err := resolveKey(ref)
 	if err != nil {
 		return Issue{}, false, nil
 	}
@@ -465,12 +474,12 @@ func (b *Issues) item(is Issue) *Item {
 	_, block, _ := ParseFieldsBlock(is.Body)
 	letter := b.Letter(is)
 	it := &Item{
-		ID:     strconv.Itoa(is.Number),
+		ID:     is.Key.String(),
 		Type:   letter,
 		Tag:    b.tag(is, letter),
 		Title:  pystr.Strip(strings.TrimRight(oneLine(strings.ReplaceAll(is.Title, "*", "")), ".")),
 		Closed: is.State == "closed",
-		Number: is.Number,
+		Number: is.Num(),
 		URL:    is.URL,
 		Labels: is.Labels,
 	}

@@ -154,7 +154,7 @@ func (u *Umbrella) closed() ([]closedEntry, error) {
 		}
 		for _, is := range closed {
 			it := s.item(is)
-			out = append(out, closedEntry{is.ClosedAt, is.Number, u.qualify(name, *it), it.Line})
+			out = append(out, closedEntry{is.ClosedAt, is.Num(), u.qualify(name, *it), it.Line})
 		}
 		return nil
 	})
@@ -279,7 +279,7 @@ func (u *Umbrella) pick(ref string) (*Issues, string, error) {
 		}
 		if ok {
 			hits = append(hits, s)
-			cands = append(cands, fmt.Sprintf("%s:%d", name, is.Number))
+			cands = append(cands, fmt.Sprintf("%s:%d", name, is.Num()))
 		}
 	}
 	if len(hits) > 1 {
@@ -527,7 +527,7 @@ func trackerBefore(a, b Issue) bool {
 	if (a.State == "open") != (b.State == "open") {
 		return a.State == "open"
 	}
-	return a.Number < b.Number
+	return a.Num() < b.Num()
 }
 
 // createSubMilestone is _create_sub_milestone: the first use of mid in sub

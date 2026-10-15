@@ -1,6 +1,7 @@
 package backlog
 
 import (
+	"github.com/l4ci/rota/internal/tracker"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -68,9 +69,9 @@ func TestOpenRowsFile(t *testing.T) {
 
 func TestOpenRowsIssues(t *testing.T) {
 	tr := &fakeTracker{Issues: []Issue{
-		{Number: 12, Title: "Crash", State: "open", Labels: []string{"type:bug"}},
-		{Number: 3, Title: "Idea", State: "open", Labels: []string{"type:feature"}},
-		{Number: 7, Title: "Closed", State: "closed", Labels: []string{"type:bug"}},
+		{Key: tracker.NumKey(12), Title: "Crash", State: "open", Labels: []string{"type:bug"}},
+		{Key: tracker.NumKey(3), Title: "Idea", State: "open", Labels: []string{"type:feature"}},
+		{Key: tracker.NumKey(7), Title: "Closed", State: "closed", Labels: []string{"type:bug"}},
 	}}
 	b := &Issues{Cfg: mustDecode(t, `{}`), Tracker: tr}
 	rows, _, ok, err := OpenRows(b)
@@ -232,8 +233,8 @@ func TestBuildListingActiveAndGrep(t *testing.T) {
 
 func TestBuildListingIssuesKeepSpellings(t *testing.T) {
 	tr := &fakeTracker{Issues: []Issue{
-		{Number: 12, Title: "Crash", State: "open", Labels: []string{"type:bug"}, Body: "<!-- rota:fields\nRelated: F3\n-->"},
-		{Number: 3, Title: "Idea", State: "open", Labels: []string{"type:feature"}, Body: "<!-- rota:fields\nRelated: B12\n-->"},
+		{Key: tracker.NumKey(12), Title: "Crash", State: "open", Labels: []string{"type:bug"}, Body: "<!-- rota:fields\nRelated: F3\n-->"},
+		{Key: tracker.NumKey(3), Title: "Idea", State: "open", Labels: []string{"type:feature"}, Body: "<!-- rota:fields\nRelated: B12\n-->"},
 	}}
 	rows, md, _, err := OpenRows(&Issues{Cfg: mustDecode(t, `{}`), Tracker: tr})
 	if err != nil {

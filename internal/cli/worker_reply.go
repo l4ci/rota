@@ -66,7 +66,7 @@ func workerReply(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, trackerErr(err)
 		}
-		url, err := fg.CommentURL(ctx, true, n, id)
+		url, err := fg.PRCommentURL(ctx, n, id)
 		if err != nil {
 			url = "" // posted; the link is a nicety
 		}

@@ -18,19 +18,19 @@ import (
 // in-memory Fake the Go tests inject, and the stateful test/fakes/gh (Python)
 // that the real GitHub adapter and the cmd/rota scenarios talk to.
 type issueAPI interface {
-	Create(ctx context.Context, title, body string, labels []string, milestone string) (int, error)
-	Get(ctx context.Context, n int, withComments bool) (tracker.Issue, error)
+	Create(ctx context.Context, title, body string, labels []string, milestone string) (tracker.IssueKey, error)
+	Get(ctx context.Context, n tracker.IssueKey, withComments bool) (tracker.Issue, error)
 	List(ctx context.Context, f tracker.ListFilter) ([]tracker.Issue, error)
-	Edit(ctx context.Context, n int, e tracker.IssueEdit) error
+	Edit(ctx context.Context, n tracker.IssueKey, e tracker.IssueEdit) error
 	EnsureLabels(ctx context.Context, names []string, autoCreate bool) error
-	AddLabels(ctx context.Context, n int, labels []string, autoCreate bool) error
-	RemoveLabels(ctx context.Context, n int, labels []string) error
-	Close(ctx context.Context, n int, reason, comment string) error
-	Reopen(ctx context.Context, n int) error
-	Comments(ctx context.Context, n int) ([]tracker.Comment, error)
-	AddComment(ctx context.Context, n int, body string) (string, error)
-	EditComment(ctx context.Context, n int, id, body string) error
-	DeleteComment(ctx context.Context, n int, id string) error
+	AddLabels(ctx context.Context, n tracker.IssueKey, labels []string, autoCreate bool) error
+	RemoveLabels(ctx context.Context, n tracker.IssueKey, labels []string) error
+	Close(ctx context.Context, n tracker.IssueKey, reason, comment string) error
+	Reopen(ctx context.Context, n tracker.IssueKey) error
+	Comments(ctx context.Context, n tracker.IssueKey) ([]tracker.Comment, error)
+	AddComment(ctx context.Context, n tracker.IssueKey, body string) (string, error)
+	EditComment(ctx context.Context, n tracker.IssueKey, id, body string) error
+	DeleteComment(ctx context.Context, n tracker.IssueKey, id string) error
 }
 
 // pyFake is the real GitHub adapter driving test/fakes/gh over a fresh store.
@@ -73,7 +73,7 @@ type view struct {
 // observe flattens an issue; a nil list and an empty one are the same to a
 // caller, and label order is the forge's business.
 func observe(i tracker.Issue) view {
-	v := view{Number: i.Number, Title: i.Title, Body: i.Body, Labels: append([]string{}, i.Labels...), Milestone: i.Milestone,
+	v := view{Number: i.Num(), Title: i.Title, Body: i.Body, Labels: append([]string{}, i.Labels...), Milestone: i.Milestone,
 		State: i.State, StateReason: i.StateReason, Assignees: append([]string{}, i.Assignees...), Comments: []string{}}
 	sort.Strings(v.Labels)
 	for _, c := range i.Comments {
@@ -103,7 +103,7 @@ func ok(t *testing.T, err error) {
 	}
 }
 
-func get(t *testing.T, ctx context.Context, a issueAPI, n int) view {
+func get(t *testing.T, ctx context.Context, a issueAPI, n tracker.IssueKey) view {
 	t.Helper()
 	return observe(must[tracker.Issue](t)(a.Get(ctx, n, true)))
 }
@@ -111,15 +111,15 @@ func get(t *testing.T, ctx context.Context, a issueAPI, n int) view {
 var scenarios = map[string]scenario{
 	"create then get": func(t *testing.T, ctx context.Context, a issueAPI) []any {
 		ok(t, a.EnsureLabels(ctx, []string{"bug", "p1"}, true))
-		n1 := must[int](t)(a.Create(ctx, "first", "body one", []string{"bug", "p1"}, ""))
-		n2 := must[int](t)(a.Create(ctx, "second", "", nil, ""))
+		n1 := must[tracker.IssueKey](t)(a.Create(ctx, "first", "body one", []string{"bug", "p1"}, ""))
+		n2 := must[tracker.IssueKey](t)(a.Create(ctx, "second", "", nil, ""))
 		return []any{n1, n2, get(t, ctx, a, n1), get(t, ctx, a, n2)}
 	},
 	"edit title body labels": func(t *testing.T, ctx context.Context, a issueAPI) []any {
 		// A forge rejects a label that does not exist, the Fake does not model
 		// that: a test must create labels first on either.
 		ok(t, a.EnsureLabels(ctx, []string{"a", "b", "c", "d"}, true))
-		n := must[int](t)(a.Create(ctx, "t", "b", []string{"a", "b"}, ""))
+		n := must[tracker.IssueKey](t)(a.Create(ctx, "t", "b", []string{"a", "b"}, ""))
 		title, body := "t2", "b2"
 		ok(t, a.Edit(ctx, n, tracker.IssueEdit{Title: &title, Body: &body, AddLabels: []string{"c"}, RemoveLabels: []string{"a"}}))
 		ok(t, a.AddLabels(ctx, n, []string{"b", "d"}, true))
@@ -127,7 +127,7 @@ var scenarios = map[string]scenario{
 		return []any{get(t, ctx, a, n)}
 	},
 	"close reopen": func(t *testing.T, ctx context.Context, a issueAPI) []any {
-		n := must[int](t)(a.Create(ctx, "t", "b", nil, ""))
+		n := must[tracker.IssueKey](t)(a.Create(ctx, "t", "b", nil, ""))
 		ok(t, a.Close(ctx, n, "", ""))
 		done := get(t, ctx, a, n)
 		ok(t, a.Reopen(ctx, n))
@@ -136,23 +136,23 @@ var scenarios = map[string]scenario{
 		return []any{done, reopened, get(t, ctx, a, n)}
 	},
 	"list filters by state in number order": func(t *testing.T, ctx context.Context, a issueAPI) []any {
-		var ns []int
+		var ns []tracker.IssueKey
 		for _, title := range []string{"a", "b", "c"} {
-			ns = append(ns, must[int](t)(a.Create(ctx, title, "", nil, "")))
+			ns = append(ns, must[tracker.IssueKey](t)(a.Create(ctx, title, "", nil, "")))
 		}
 		ok(t, a.Close(ctx, ns[1], "", ""))
 		var out []any
 		for _, st := range []string{"", "open", "closed", "all"} {
 			var titles []string
 			for _, i := range must[[]tracker.Issue](t)(a.List(ctx, tracker.ListFilter{State: st})) {
-				titles = append(titles, fmt.Sprintf("%d:%s:%s", i.Number, i.Title, i.State))
+				titles = append(titles, fmt.Sprintf("%d:%s:%s", i.Num(), i.Title, i.State))
 			}
 			out = append(out, titles)
 		}
 		return out
 	},
 	"comments add edit delete": func(t *testing.T, ctx context.Context, a issueAPI) []any {
-		n := must[int](t)(a.Create(ctx, "t", "b", nil, ""))
+		n := must[tracker.IssueKey](t)(a.Create(ctx, "t", "b", nil, ""))
 		id1 := must[string](t)(a.AddComment(ctx, n, "one"))
 		id2 := must[string](t)(a.AddComment(ctx, n, "two"))
 		ok(t, a.EditComment(ctx, n, id1, "one!"))
@@ -166,10 +166,10 @@ var scenarios = map[string]scenario{
 	"unknown issue is not found": func(t *testing.T, ctx context.Context, a issueAPI) []any {
 		var out []any
 		for _, err := range []error{
-			func() error { _, e := a.Get(ctx, 99, false); return e }(),
-			a.Edit(ctx, 99, tracker.IssueEdit{AddLabels: []string{"x"}}),
-			a.Close(ctx, 99, "", ""),
-			a.Reopen(ctx, 99),
+			func() error { _, e := a.Get(ctx, tracker.NumKey(99), false); return e }(),
+			a.Edit(ctx, tracker.NumKey(99), tracker.IssueEdit{AddLabels: []string{"x"}}),
+			a.Close(ctx, tracker.NumKey(99), "", ""),
+			a.Reopen(ctx, tracker.NumKey(99)),
 		} {
 			out = append(out, tracker.IsKind(err, tracker.KindNotFound))
 		}

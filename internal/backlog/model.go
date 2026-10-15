@@ -8,6 +8,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/l4ci/rota/internal/pystr"
+	"github.com/l4ci/rota/internal/tracker"
 )
 
 // Item is one backlog item as every backend presents it.
@@ -37,6 +38,19 @@ func (it Item) Key() string {
 		return it.Type + strconv.Itoa(it.Number)
 	}
 	return it.ID
+}
+
+// IssueKey is the tracker key behind an issue-mode item: its number when
+// numbered (also under an umbrella, whose ID is qualified), else its ID. "" for
+// a file-mode item.
+func (it Item) IssueKey() tracker.IssueKey {
+	if it.Number > 0 {
+		return tracker.NumKey(it.Number)
+	}
+	if k, ok := tracker.ParseKey(it.ID); ok {
+		return k
+	}
+	return ""
 }
 
 // Ref is a parsed item reference.
@@ -105,6 +119,19 @@ func resolveItemRef(ref string) (n int, letter string, err error) {
 		letter = string(upper(m[2][0]))
 	}
 	return n, letter, nil
+}
+
+// resolveKey is resolveItemRef widened to a key-based tracker: a ref the item
+// grammar reads ("#42", "F42") gives the numbered key, and a tracker key
+// ("PROJ-123", "proj-123") gives itself. letter is "" for a key.
+func resolveKey(ref string) (key tracker.IssueKey, letter string, err error) {
+	if n, letter, err := resolveItemRef(ref); err == nil {
+		return tracker.NumKey(n), letter, nil
+	}
+	if k, ok := tracker.ParseKey(pystr.Strip(ref)); ok {
+		return k, "", nil
+	}
+	return "", "", fmt.Errorf("not an item reference: %q", pystr.Strip(ref))
 }
 
 func upper(b byte) byte {

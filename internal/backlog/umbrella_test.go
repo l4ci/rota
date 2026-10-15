@@ -33,7 +33,7 @@ func newUmbrella(t *testing.T, cfg string, subs map[string][]Issue, order ...str
 }
 
 func typed(n int, typ string, title string, extra ...string) Issue {
-	return Issue{Number: n, Title: title, State: "open", Labels: append([]string{"type:" + typ}, extra...),
+	return Issue{Key: tracker.NumKey(n), Title: title, State: "open", Labels: append([]string{"type:" + typ}, extra...),
 		URL: fmt.Sprintf("https://example.test/%d", n)}
 }
 
@@ -455,7 +455,7 @@ func TestUmbrellaTrackerFailureDuringProbe(t *testing.T) {
 }
 
 func milestoneTracker(n int, title, state string) Issue {
-	return Issue{Number: n, Title: title, State: state, Labels: []string{"milestone-tracker"}}
+	return Issue{Key: tracker.NumKey(n), Title: title, State: state, Labels: []string{"milestone-tracker"}}
 }
 
 func TestUmbrellaMilestoneCreatedOnFirstUse(t *testing.T) {

@@ -98,7 +98,7 @@ func (e Env) Candidates(ctx context.Context, root string, be backlog.Backend, o 
 	inFlight := e.InFlightItems(ctx, root, be, tracked, o.Shared)
 	var out []Candidate
 	for _, it := range chosen {
-		if handed[it.Number] {
+		if handed[it.IssueKey()] {
 			continue
 		}
 		if taken != nil && taken(it) {
@@ -109,7 +109,7 @@ func (e Env) Candidates(ctx context.Context, root string, be backlog.Backend, o 
 			return nil, err
 		}
 		ms := backlog.ParseMilestones(it.Fields.Get("milestone"))
-		c := Candidate{ID: it.ID, Title: it.Title, OpenPR: openPR[it.Number], Readiness: r}
+		c := Candidate{ID: it.ID, Title: it.Title, OpenPR: openPR[it.IssueKey()], Readiness: r}
 		if p, err := PickOf(be.Capabilities(), it); err != nil {
 			c.PickErr = err.Error()
 		} else {
@@ -336,13 +336,13 @@ func (e Env) takenOutside(ctx context.Context, be backlog.Backend) (func(backlog
 	if err != nil {
 		return nil, err
 	}
-	labelled := map[int]bool{}
+	labelled := map[tracker.IssueKey]bool{}
 	for _, is := range issues {
-		labelled[is.Number] = true
+		labelled[is.Key] = true
 	}
 	wf, _ := backlog.WorkflowOf(be)
 	return func(it backlog.Item) bool {
-		if labelled[it.Number] {
+		if labelled[it.IssueKey()] {
 			return true
 		}
 		if wf == nil {
@@ -355,7 +355,7 @@ func (e Env) takenOutside(ctx context.Context, be backlog.Backend) (func(backlog
 
 // handedToHuman is the open issues carrying the needs-human label (C10): the
 // human holds them, so a round does not offer them. File mode has no labels.
-func (e Env) handedToHuman(ctx context.Context, be backlog.Backend) (map[int]bool, error) {
+func (e Env) handedToHuman(ctx context.Context, be backlog.Backend) (map[tracker.IssueKey]bool, error) {
 	if !e.forgeOn(be) {
 		return nil, nil
 	}
@@ -363,9 +363,9 @@ func (e Env) handedToHuman(ctx context.Context, be backlog.Backend) (map[int]boo
 	if err != nil {
 		return nil, err
 	}
-	out := map[int]bool{}
+	out := map[tracker.IssueKey]bool{}
 	for _, is := range issues {
-		out[is.Number] = true
+		out[is.Key] = true
 	}
 	return out, nil
 }
