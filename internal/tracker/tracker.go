@@ -401,7 +401,8 @@ type Settings struct {
 // SettingsFromConfig reads forge.provider, issues.source,
 // issues.retryWaitSeconds and issues.labels.notPlanned, with the schema
 // defaults for absent or null keys. An invalid forge.provider or issues.source
-// reads as its default here; rota doctor reports it.
+// reads as its default here; ValidateConfig (and the *FromConfig constructors)
+// fail on it instead.
 func SettingsFromConfig(cfg any) Settings {
 	s := Settings{Provider: config.ForgeAuto, Source: config.SourceFile, RetryWait: 60 * time.Second, NotPlannedLabel: "not-planned"}
 	if p, err := config.ForgeProvider(cfg); err == nil {
@@ -419,6 +420,19 @@ func SettingsFromConfig(cfg any) Settings {
 		s.NotPlannedLabel = fmt.Sprint(v)
 	}
 	return s
+}
+
+// ValidateConfig is the corrupt-config check of the keys SettingsFromConfig
+// reads: an invalid forge.provider or issues.source is a KindInternal error
+// (exit 70), as an invalid issues.source is for every backlog verb.
+func ValidateConfig(cfg any) error {
+	if _, err := config.ForgeProvider(cfg); err != nil {
+		return internal("%s", err.Error())
+	}
+	if _, err := config.IssueSource(cfg); err != nil {
+		return internal("%s", err.Error())
+	}
+	return nil
 }
 
 // ErrLocalForge is what NewForge, New and NewCLI answer when the forge is
@@ -468,7 +482,8 @@ func NewForge(ctx context.Context, s Settings, forgeProvider, dir string, opts .
 // NewIssueTracker returns the issue tracker for source ("" falls back to
 // s.Source). file is ErrNoIssueTracker; jira and linear are an unavailable
 // "not implemented" error; github and gitlab build their adapter whatever the
-// origin says (rota doctor flags a mismatch). The legacy config.SourceIssues,
+// origin says (rota doctor flags a mismatch); forge resolves the tracker from
+// dir's own forge, per sub-repo. The legacy config.SourceIssues,
 // an unmigrated "issues backend" with no named provider, resolves from the
 // origin like the old issues.provider auto.
 func NewIssueTracker(ctx context.Context, s Settings, source, dir string, opts ...Option) (IssueTracker, error) {
@@ -483,6 +498,19 @@ func NewIssueTracker(ctx context.Context, s Settings, source, dir string, opts .
 		return nil, notImplemented(source)
 	case config.SourceIssues:
 		provider = config.ForgeAuto
+	case config.SourceForge:
+		// The issues live on dir's own forge: the repo's forge resolution
+		// (forge.provider, else its origin) names the tracker.
+		c := newCLI(s, dir, opts...)
+		p, err := c.resolveForge(ctx, config.ForgeAuto, s.Provider)
+		if err != nil {
+			return nil, err
+		}
+		if p == config.ForgeLocal {
+			return nil, unavailable("issues.source is forge, but the forge of %s is local (no origin remote): there is no tracker to read", dirLabel(dir))
+		}
+		c.Provider = p
+		return adapterFor(c, s), nil
 	case config.SourceGitHub, config.SourceGitLab:
 	default:
 		return nil, unavailable("unknown issues.source %q", source)
@@ -496,19 +524,35 @@ func NewIssueTracker(ctx context.Context, s Settings, source, dir string, opts .
 	return adapterFor(c, s), nil
 }
 
+func dirLabel(dir string) string {
+	if dir == "" {
+		return "the working directory"
+	}
+	return dir
+}
+
 // NewFromConfig is New with the settings read from cfg (SettingsFromConfig),
 // the recipe every verb that holds a loaded config repeats.
 func NewFromConfig(ctx context.Context, cfg any, provider, dir string, opts ...Option) (Adapter, error) {
+	if err := ValidateConfig(cfg); err != nil {
+		return nil, err
+	}
 	return New(ctx, SettingsFromConfig(cfg), provider, dir, opts...)
 }
 
 // NewIssueTrackerFromConfig is NewIssueTracker with the settings read from cfg.
 func NewIssueTrackerFromConfig(ctx context.Context, cfg any, dir string, opts ...Option) (IssueTracker, error) {
+	if err := ValidateConfig(cfg); err != nil {
+		return nil, err
+	}
 	return NewIssueTracker(ctx, SettingsFromConfig(cfg), "", dir, opts...)
 }
 
 // NewForgeFromConfig is NewForge with the settings read from cfg.
 func NewForgeFromConfig(ctx context.Context, cfg any, provider, dir string, opts ...Option) (Forge, error) {
+	if err := ValidateConfig(cfg); err != nil {
+		return nil, err
+	}
 	return NewForge(ctx, SettingsFromConfig(cfg), provider, dir, opts...)
 }
 
@@ -518,7 +562,7 @@ func NewForgeFromConfig(ctx context.Context, cfg any, provider, dir string, opts
 // A local forge is not a failure to resolve: it stays ErrLocalForge.
 func NewFromConfigOrGitHub(ctx context.Context, cfg any, provider, dir string, opts ...Option) (Adapter, error) {
 	a, err := NewFromConfig(ctx, cfg, provider, dir, opts...)
-	if err != nil && !errors.Is(err, ErrLocalForge) {
+	if err != nil && !errors.Is(err, ErrLocalForge) && !IsKind(err, KindInternal) {
 		return NewFromConfig(ctx, cfg, "github", dir, opts...)
 	}
 	return a, err

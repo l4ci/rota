@@ -71,7 +71,7 @@
 {"name":"create/cwd=web","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"web:6","kind":"tasks","type":"T"},"ok":true},"db":"2830faa865bad928"}]}
 {"name":"create/cwd=web_src_deep","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"web:6","kind":"tasks","type":"T"},"ok":true},"db":"2830faa865bad928"}]}
 {"name":"create/empty-repos","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"--repos needs a value"},"ok":false},"db":"b531f6a20b50548c"}]}
-{"name":"create/forge-unavailable","steps":[{"exit":5,"env":{"error":{"code":"unavailable","exit":5,"message":"cannot determine the issue tracker provider (set issues.source to github or gitlab, or forge.provider)"},"ok":false},"db":"b531f6a20b50548c"}]}
+{"name":"create/forge-unavailable","steps":[{"exit":5,"env":{"error":{"code":"unavailable","exit":5,"message":"issues.source is forge, but the forge of <T>/web is local (no origin remote): there is no tracker to read"},"ok":false},"db":"b531f6a20b50548c"}]}
 {"name":"create/milestone-missing","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"milestone M99 not found on the tracker — create it with /rota-vision (M07-S05)"},"ok":false},"db":"b531f6a20b50548c"}]}
 {"name":"create/no-target","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"umbrella issue mode needs a target sub-repo — pass --repo <name> or --repos <name> (registered: api, web) or run from inside one"},"ok":false},"db":"b531f6a20b50548c"}]}
 {"name":"create/no-title","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"--title is required"},"ok":false},"db":"b531f6a20b50548c"}]}
@@ -97,7 +97,7 @@
 {"name":"fieldget/ambiguous-number","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"[1] is ambiguous across sub-repos — qualify it: api:1, web:1"},"ok":false},"db":"b531f6a20b50548c"}]}
 {"name":"fieldget/bad-field","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"unknown field nope; pick one of title, detail, related, milestone, repos, subsystem, since, reason, note"},"ok":false},"db":"b531f6a20b50548c"}]}
 {"name":"fieldget/bare-hash-unique","steps":[{"exit":0,"env":{"data":{"field":"title","id":"api:4","type":"B","value":"Api bug"},"ok":true},"db":"b531f6a20b50548c"}]}
-{"name":"fieldget/bare-needs-every-forge","steps":[{"exit":5,"env":{"error":{"code":"unavailable","exit":5,"message":"cannot determine the issue tracker provider (set issues.source to github or gitlab, or forge.provider)"},"ok":false},"db":"b531f6a20b50548c"}]}
+{"name":"fieldget/bare-needs-every-forge","steps":[{"exit":5,"env":{"error":{"code":"unavailable","exit":5,"message":"issues.source is forge, but the forge of <T>/web is local (no origin remote): there is no tracker to read"},"ok":false},"db":"b531f6a20b50548c"}]}
 {"name":"fieldget/bare-number-unique","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"[6] not found in the issue tracker"},"ok":false},"db":"b531f6a20b50548c"}]}
 {"name":"fieldget/bare-unique-B4","steps":[{"exit":0,"env":{"data":{"field":"title","id":"api:4","type":"B","value":"Api bug"},"ok":true},"db":"b531f6a20b50548c"}]}
 {"name":"fieldget/bare-unique-F5","steps":[{"exit":0,"env":{"data":{"field":"title","id":"api:5","type":"F","value":"Api held"},"ok":true},"db":"b531f6a20b50548c"}]}
@@ -121,7 +121,7 @@
 {"name":"fieldget/cwd-qualified/cwd=web_src_deep","steps":[{"exit":0,"env":{"data":{"field":"title","id":"api:1","type":"F","value":"Api feat"},"ok":true},"db":"b531f6a20b50548c"}]}
 {"name":"fieldget/detail-url","steps":[{"exit":0,"env":{"data":{"field":"detail","id":"web:1","type":"F","value":"https://github.com/fake/repo/issues/1"},"ok":true},"db":"b531f6a20b50548c"}]}
 {"name":"fieldget/empty-field","steps":[{"exit":0,"env":{"data":{"field":"milestone","id":"api:3","type":"T","value":""},"ok":true},"db":"b531f6a20b50548c"}]}
-{"name":"fieldget/forge-down-one-repo","steps":[{"exit":5,"env":{"error":{"code":"unavailable","exit":5,"message":"cannot determine the issue tracker provider (set issues.source to github or gitlab, or forge.provider)"},"ok":false},"db":"b531f6a20b50548c"}]}
+{"name":"fieldget/forge-down-one-repo","steps":[{"exit":5,"env":{"error":{"code":"unavailable","exit":5,"message":"issues.source is forge, but the forge of <T>/web is local (no origin remote): there is no tracker to read"},"ok":false},"db":"b531f6a20b50548c"}]}
 {"name":"fieldget/junk","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"[zzz] not found in the issue tracker"},"ok":false},"db":"b531f6a20b50548c"}]}
 {"name":"fieldget/malformed","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"[web:] not found in the issue tracker"},"ok":false},"db":"b531f6a20b50548c"}]}
 {"name":"fieldget/milestone","steps":[{"exit":0,"env":{"data":{"field":"milestone","id":"web:1","type":"F","value":"M07"},"ok":true},"db":"b531f6a20b50548c"}]}

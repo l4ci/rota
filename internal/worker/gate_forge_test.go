@@ -2,9 +2,14 @@ package worker
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
@@ -112,5 +117,66 @@ func TestDetectProvider(t *testing.T) {
 		if c.origin == "" {
 			gitq(t, w.dir, "remote", "add", "origin", w.origin)
 		}
+	}
+}
+
+// A corrupt forge.provider stops the gate with exit 70 instead of reading as auto.
+func TestGateInvalidForgeProviderIsACorruptConfig(t *testing.T) {
+	w := newWorld(t, "7")
+	w.setConfig(`{"forge":{"provider":"bitbucket"},"test":{"full":["true"]}}`)
+	_, err := w.gate(false, GateOpts{})
+	var ee *exitcode.Error
+	if !errors.As(err, &ee) || ee.Exit != exitcode.ExitInternal || !strings.Contains(err.Error(), "invalid forge.provider") {
+		t.Fatalf("%v", err)
+	}
+}
+
+// issueStub is an issue tracker that is not the forge: it answers Get with the
+// labels it was given and records what it was asked.
+type issueStub struct {
+	labels []string
+	gets   []int
+}
+
+func (s *issueStub) Get(_ context.Context, n int, _ bool) (tracker.Issue, error) {
+	s.gets = append(s.gets, n)
+	return tracker.Issue{Number: n, State: "open", Labels: s.labels}, nil
+}
+func (s *issueStub) RemoveLabels(context.Context, int, []string) error { return nil }
+
+// The closing check reads the issue source, not the forge: with issues on a
+// tracker other than the forge's own, the PR body "Refs #5" passes only
+// because that tracker says #5 carries the partial-slice label.
+func TestGateClosingCheckReadsTheIssueSource(t *testing.T) {
+	for _, c := range []struct {
+		name    string
+		labels  []string
+		verdict string
+	}{
+		{"partial slice on the tracker", []string{PartialSliceLabel}, GatePass},
+		{"no partial slice on the tracker", nil, GateNotClosing},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			w := newWorld(t, ghURL)
+			w.setConfig(`{"issues":{"source":"gitlab"},"test":{"full":["true"]}}`) // a github forge, issues elsewhere
+			os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
+				[]byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"#5","pr":%q}]}`, ghURL)), 0o644)
+			w.forge("body", "Refs #5\n")
+			w.forge("issueErr", "the forge must not be asked for the issue") // the forge's own Get fails
+			stub := &issueStub{labels: c.labels}
+			var gotSource string
+			e := w.env(false)
+			e.Issues = func(_ string, s tracker.Settings) (Issues, error) {
+				gotSource = s.Source
+				return stub, nil
+			}
+			res, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main"})
+			if err != nil || res.Verdict != c.verdict {
+				t.Fatalf("verdict = %q (%v), want %q: %+v", res.Verdict, err, c.verdict, res)
+			}
+			if gotSource != "gitlab" || len(stub.gets) == 0 || stub.gets[0] != 5 {
+				t.Errorf("tracker built for %q, asked %v", gotSource, stub.gets)
+			}
+		})
 	}
 }

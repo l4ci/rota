@@ -386,6 +386,22 @@ BRIEF_COMMITS=$(hvj review brief rota/second-opinion-demo | jget data.brief | gr
 [ "$SCOPE_COUNT" = "$BRIEF_COMMITS" ] || fail "schema drift: review scope reports $SCOPE_COUNT commits but review brief lists $BRIEF_COMMITS"
 pass "review brief commit count matches review scope (schema parity)"
 
+# ship strategy: a local forge (no origin remote, or forge.provider local) lands
+# directly whatever work.mergeStrategy says; any other forge echoes the config.
+OUT=$(cd "$TMP" && "$ROTA_BIN" --json config set work.mergeStrategy pr >/dev/null && "$ROTA_BIN" --json ship strategy) || vfail
+if git remote get-url origin >/dev/null 2>&1; then
+  [ "$(echo "$OUT" | jget data.strategy)" = "pr" ] || fail "ship strategy should echo work.mergeStrategy with a forge: $OUT"
+else
+  [ "$(echo "$OUT" | jget data.strategy)" = "direct" ] && [ "$(echo "$OUT" | jget data.forge)" = "local" ] \
+    || fail "ship strategy should be direct on a local forge: $OUT"
+fi
+"$ROTA_BIN" --json config set forge.provider local >/dev/null || vfail
+OUT=$("$ROTA_BIN" --json ship strategy) || vfail
+[ "$(echo "$OUT" | jget data.strategy)" = "direct" ] || fail "forge.provider local should force direct: $OUT"
+"$ROTA_BIN" --json config set forge.provider auto >/dev/null || vfail
+"$ROTA_BIN" --json config set work.mergeStrategy direct >/dev/null || vfail
+pass "ship strategy answers direct on a local forge and echoes work.mergeStrategy otherwise"
+
 # Cleanup
 git branch -D rota/second-opinion-demo >/dev/null 2>&1 || true
 rm -f so1.txt so2.txt

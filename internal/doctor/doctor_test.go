@@ -163,6 +163,7 @@ func TestRunTable(t *testing.T) {
 		{"tracker explicit local", Input{IssueSource: "file", ForgeProvider: "local"}, all, with(nil), "tracker", Skip, "forge local (forge.provider)", ""},
 		{"tracker jira issues on a github forge", Input{IssueSource: "jira"}, all, with(nil), "tracker", Pass, "forge github (from origin), issues jira", ""},
 		{"tracker unknown host and github source fails", Input{IssueSource: "github"}, all, with(map[string]Result{"git remote get-url origin": {Stdout: "https://git.example.com/a/b"}}), "tracker", Fail, "the forge is unknown", "forge.provider github"},
+		{"tracker forge source needs no match", Input{IssueSource: "forge"}, all, with(map[string]Result{"git remote get-url origin": {Stdout: "https://gitlab.com/a/b"}}), "tracker", Pass, "issues forge", ""},
 		{"tracker legacy keys are named", Input{IssueSource: "issues"}, all, with(nil), "tracker", Pass, "rota migrate source", ""},
 		{"tracker invalid config fails", Input{SourceProblem: "invalid issues.source 'svn'"}, all, with(nil), "tracker", Fail, "invalid issues.source", "rota config set"},
 		{"tracker outside a project says the forge", Input{}, all, with(noRemote), "tracker", Skip, "forge local", ""},

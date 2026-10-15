@@ -43,6 +43,9 @@ func TestMigrateSource(t *testing.T) {
 		{"file backlog keeps its explicit forge", `{"backlog":{"backend":"file"},"issues":{"provider":"github"}}`, `{"issues":{"source":"file"},"forge":{"provider":"github"}}`, detects(""), false, "github"},
 		{"provider only, backend defaults to file", `{"issues":{"provider":"auto","retryWaitSeconds":5}}`, `{"issues":{"retryWaitSeconds":5,"source":"file"}}`, nil, false, ""},
 		{"source already set wins, legacy dropped", `{"backlog":{"backend":"file"},"issues":{"source":"github"}}`, `{"issues":{"source":"github"}}`, nil, false, ""},
+		{"source already set, provider the origin misses pins the forge", `{"issues":{"source":"gitlab","provider":"gitlab"}}`, `{"issues":{"source":"gitlab"},"forge":{"provider":"gitlab"}}`, detects(""), false, "gitlab"},
+		{"source already set, provider the origin agrees with", `{"issues":{"source":"gitlab","provider":"gitlab"}}`, `{"issues":{"source":"gitlab"}}`, detects("gitlab"), false, ""},
+		{"umbrella whose sub-repos disagree is forge", `{"backlog":{"backend":"issues"},"issues":{"provider":"auto"}}`, `{"issues":{"source":"forge"}}`, detects("forge"), false, ""},
 		{"other keys stay", `{"models":{"worker":"sonnet"},"backlog":{"backend":"file","x":1}}`, `{"models":{"worker":"sonnet"},"backlog":{"x":1},"issues":{"source":"file"}}`, nil, false, ""},
 		{"nothing legacy", `{"models":{"worker":"sonnet"}}`, `{"models":{"worker":"sonnet"}}`, nil, false, ""},
 		{"garbage backend left alone", `{"backlog":{"backend":"git"}}`, `{"backlog":{"backend":"git"}}`, nil, true, ""},
@@ -69,5 +72,15 @@ func TestMigrateSource(t *testing.T) {
 				t.Errorf("second run changed the config: %s changed=%v", s, m2.Changed)
 			}
 		})
+	}
+}
+
+// Origin detection runs once per migration, however many branches read it.
+func TestMigrateSourceDetectsOnce(t *testing.T) {
+	calls := 0
+	detect := func() string { calls++; return "github" }
+	MigrateSource(decodeCfg(t, `{"backlog":{"backend":"issues"}}`), detect)
+	if calls > 1 {
+		t.Errorf("detect ran %d times", calls)
 	}
 }

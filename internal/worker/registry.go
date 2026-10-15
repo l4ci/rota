@@ -455,6 +455,10 @@ type Env struct {
 	// Every forge call goes through internal/tracker, never an exec of gh or
 	// glab from here. Tests inject a fake Forge.
 	Forge func(provider, dir string, s tracker.Settings) (Forge, error)
+	// Issues returns the issue tracker issues.source names when it is not the
+	// forge's own (jira, linear, or github on a gitlab forge). Nil builds it with
+	// tracker.NewIssueTracker; tests inject a fake.
+	Issues func(dir string, s tracker.Settings) (Issues, error)
 	// Shell runs one verification command through `sh -c` in dir and returns
 	// its combined output and exit code.
 	Shell func(ctx context.Context, dir, command string) (output string, code int)

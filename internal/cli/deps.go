@@ -280,6 +280,16 @@ func (d *Deps) forgeAndIssues(ctx context.Context, cfg any, dir string) (bothSid
 	return bothSides{f, it}, nil
 }
 
+// trackerExec is the executor TrackerOptions install (nil: the real one), for a
+// verb that reads the origin through tracker.ResolveProvider.
+func (d *Deps) trackerExec() tracker.Exec {
+	cl := &tracker.CLI{}
+	for _, o := range d.trackerOptions() {
+		o(cl)
+	}
+	return cl.Exec
+}
+
 // freshReads drops the invocation's cached forge reads. A loop that reads the
 // forge again inside one process (round watch, the autopilot) calls it at the
 // start of each pass, so a pass sees what changed since the last one.

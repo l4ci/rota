@@ -27,6 +27,9 @@ import (
 func backendMode(root string) (name string, cfg any, err error) {
 	cfg = config.Load(rotatree.Config(root))
 	name, err = config.Backend(cfg)
+	if err == nil {
+		_, err = config.ForgeProvider(cfg)
+	}
 	if err != nil {
 		return "", nil, &Error{Exit: ExitInternal, Message: err.Error()}
 	}

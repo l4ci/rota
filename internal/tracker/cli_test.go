@@ -464,8 +464,39 @@ func TestNewForgeAndNewIssueTracker(t *testing.T) {
 	if it, err := NewIssueTracker(ctx, Settings{Source: "issues"}, "", "/repo", origin("https://gitlab.com/o/r", 0)); err != nil || it.Provider() != "gitlab" {
 		t.Errorf("legacy issues: %v, %v", it, err)
 	}
+	// issues.source forge: each repo's own forge, resolved from its own origin.
+	if it, err := NewIssueTracker(ctx, Settings{Source: "forge", Provider: "auto"}, "", "/repo", origin("https://gitlab.com/o/r", 0)); err != nil || it.Provider() != "gitlab" {
+		t.Errorf("forge source, gitlab origin: %v, %v", it, err)
+	}
+	if it, err := NewIssueTracker(ctx, Settings{Source: "forge", Provider: "auto"}, "", "/repo", origin("git@github.com:o/r.git", 0)); err != nil || it.Provider() != "github" {
+		t.Errorf("forge source, github origin: %v, %v", it, err)
+	}
+	if _, err := NewIssueTracker(ctx, Settings{Source: "forge", Provider: "auto"}, "", "/repo", origin("", 2)); !IsKind(err, KindUnavailable) {
+		t.Errorf("forge source, no remote: %v", err)
+	}
 	// a file backlog with a github forge still has a forge.
 	if f, err := NewForge(ctx, Settings{Source: "file", Provider: "github"}, "", "/repo", origin("", 2)); err != nil || f.Provider() != "github" {
 		t.Errorf("file source, github forge: %v, %v", f, err)
+	}
+}
+
+// An invalid forge.provider or issues.source is a corrupt config (exit 70),
+// not a silent default.
+func TestFromConfigConstructorsRejectAnInvalidSource(t *testing.T) {
+	ctx := context.Background()
+	for _, raw := range []string{`{"forge":{"provider":"bitbucket"}}`, `{"issues":{"source":"svn"}}`} {
+		cfg, _ := jsonx.Decode([]byte(raw))
+		if err := ValidateConfig(cfg); !IsKind(err, KindInternal) {
+			t.Errorf("%s: ValidateConfig %v", raw, err)
+		}
+		if _, err := NewForgeFromConfig(ctx, cfg, "", "/repo"); !IsKind(err, KindInternal) {
+			t.Errorf("%s: NewForgeFromConfig %v", raw, err)
+		}
+		if _, err := NewIssueTrackerFromConfig(ctx, cfg, "/repo"); !IsKind(err, KindInternal) {
+			t.Errorf("%s: NewIssueTrackerFromConfig %v", raw, err)
+		}
+		if _, err := NewFromConfigOrGitHub(ctx, cfg, "", "/repo"); !IsKind(err, KindInternal) {
+			t.Errorf("%s: NewFromConfigOrGitHub fell back: %v", raw, err)
+		}
 	}
 }

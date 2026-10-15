@@ -155,8 +155,9 @@ func TestInitWritesAnExplicitIssueSource(t *testing.T) {
 }
 
 // An umbrella has no origin of its own: the provider is what every sub-repo's
-// origin agrees on, and none when they differ, so a mixed GitHub/GitLab
-// umbrella keeps its legacy keys (each tracker resolved from its own origin).
+// origin agrees on, "forge" when they differ (a mixed GitHub/GitLab umbrella
+// keeps each tracker on its own repo's forge), and none when a sub-repo has no
+// recognizable origin.
 func TestOriginProviderOfAnUmbrella(t *testing.T) {
 	root := umbrella(t) // sub-repos svc, web (and a registered ghost with no checkout)
 	byDir := func(urls map[string]string) *Deps {
@@ -176,11 +177,41 @@ func TestOriginProviderOfAnUmbrella(t *testing.T) {
 		want string
 	}{
 		{"all github", map[string]string{"svc": "git@github.com:o/a.git", "web": "https://github.com/o/b", "ghost": "git@github.com:o/c.git"}, "github"},
-		{"mixed", map[string]string{"svc": "git@github.com:o/a.git", "web": "https://gitlab.com/o/b", "ghost": "git@github.com:o/c.git"}, ""},
+		{"mixed", map[string]string{"svc": "git@github.com:o/a.git", "web": "https://gitlab.com/o/b", "ghost": "git@github.com:o/c.git"}, "forge"},
 		{"one without a remote", map[string]string{"svc": "git@github.com:o/a.git", "ghost": "git@github.com:o/c.git"}, ""},
 	} {
 		if got := byDir(c.urls).originProvider(ctx, root)(); got != c.want {
 			t.Errorf("%s: %q, want %q", c.name, got, c.want)
 		}
+	}
+}
+
+// A mixed-host umbrella migrates to issues.source forge, not to one provider
+// and not to the unresolved legacy keys.
+func TestMigrateSourceMixedUmbrellaIsForge(t *testing.T) {
+	root := umbrella(t)
+	write(t, filepath.Join(root, ".rota", "config.json"), `{"backlog":{"backend":"issues"},"issues":{"provider":"auto"}}`)
+	urls := map[string]string{"svc": "git@github.com:o/a.git", "web": "https://gitlab.com/o/b", "ghost": "git@github.com:o/c.git"}
+	d := testDeps()
+	d.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, dir, _ string, _ []string, _ []byte) ([]byte, []byte, int, error) {
+		if u := urls[filepath.Base(dir)]; u != "" {
+			return []byte(u + "\n"), nil, 0, nil
+		}
+		return nil, nil, 2, nil
+	}, func(n string) (string, error) { return "/fake/" + n, nil })}
+	code, env, _ := rotaRunWith(t, d, "--json", "-C", root, "migrate", "source", "--apply")
+	if code != 0 || get(dataOf(env), "source") != "forge" || get(dataOf(env), "unresolved") != false {
+		t.Fatalf("%d %v", code, env)
+	}
+	if got := config.Legacy(root); len(got) != 0 {
+		t.Errorf("legacy keys left: %v", got)
+	}
+}
+
+func TestInvalidForgeProviderExits70(t *testing.T) {
+	root := trackerProject(t, `{"forge":{"provider":"bitbucket"}}`)
+	code, _, stderr := rotaRunWith(t, testDeps(), "--json", "-C", root, "backlog", "list")
+	if code != ExitInternal || !strings.Contains(stderr, "invalid forge.provider") {
+		t.Fatalf("%d %s", code, stderr)
 	}
 }
