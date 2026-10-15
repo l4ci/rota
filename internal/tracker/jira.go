@@ -248,6 +248,9 @@ func chunks(s string) []string {
 		for cut > 0 && !utf8.RuneStart(s[cut]) {
 			cut--
 		}
+		if cut == 0 { // no rune start: invalid UTF-8, cut anywhere
+			cut = propChunk
+		}
 		out = append(out, s[:cut])
 		s = s[cut:]
 	}
@@ -646,20 +649,24 @@ func (j *Jira) transition(ctx context.Context, key IssueKey, want ...string) err
 	return failed("%s has no transition to a status in category %s from its current status (check the project's workflow)", key, strings.Join(want, " or "))
 }
 
-// Close posts comment, labels a not-planned close, and moves the issue to a
-// done-category status.
+// Close moves the issue to a done-category status, then labels a not-planned
+// close and posts comment. The transition comes first, so a retry after it
+// failed posts no second comment.
 func (j *Jira) Close(ctx context.Context, key IssueKey, reason, comment string) error {
-	if comment != "" {
-		if _, err := j.AddComment(ctx, key, comment); err != nil {
-			return err
-		}
+	if err := j.transition(ctx, key, "done"); err != nil {
+		return err
 	}
 	if reason == "not_planned" {
 		if err := j.AddLabels(ctx, key, []string{j.notPlanned}, true); err != nil {
 			return err
 		}
 	}
-	return j.transition(ctx, key, "done")
+	if comment != "" {
+		if _, err := j.AddComment(ctx, key, comment); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Reopen moves the issue back to a to-do status (else an in-progress one) and
@@ -814,7 +821,11 @@ func (j *Jira) DeleteComment(ctx context.Context, key IssueKey, commentID string
 
 // CommentURL is the browse link that focuses the comment; it costs no call.
 func (j *Jira) CommentURL(_ context.Context, key IssueKey, commentID string) (string, error) {
-	return j.site + "/browse/" + string(key) + "?focusedCommentId=" + url.QueryEscape(commentID), nil
+	if _, err := j.path(key, ""); err != nil {
+		return "", err
+	}
+	k, _ := ParseKey(string(key))
+	return j.site + "/browse/" + url.PathEscape(string(k)) + "?focusedCommentId=" + url.QueryEscape(commentID), nil
 }
 
 // putState writes body into the comment's properties, then drops parts an
