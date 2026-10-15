@@ -71,6 +71,12 @@ func (s *Secrets) Save(ctx context.Context, name, secret string) (Saved, error) 
 			return Saved{Store: StoreKeychain}, nil
 		}
 		note = "keychain not used: " + err.Error()
+		// Stored prefers the keychain: an old entry there would shadow the new
+		// file secret. Remove it, or fail rather than leave it.
+		_ = s.Keychain.Delete(ctx, name)
+		if _, stale, _ := s.Keychain.Get(ctx, name); stale {
+			return Saved{}, fmt.Errorf("keychain refused the new secret (%v) and still holds an old one for %q; remove it with your keychain tool, then retry", err, name)
+		}
 	} else {
 		note = "no keychain on this machine"
 	}
@@ -183,18 +189,22 @@ func (f fileStore) update(mutate func(*jsonx.Object)) error {
 		if err != nil {
 			return err
 		}
-		tmp := f.path + ".tmp"
-		if err := os.WriteFile(tmp, data, 0o600); err != nil {
+		// CreateTemp creates exclusively, mode 0600, under a random name.
+		tf, err := os.CreateTemp(filepath.Dir(f.path), "secrets-*.tmp")
+		if err != nil {
 			return err
 		}
-		if err := os.Chmod(tmp, 0o600); err != nil {
+		tmp := tf.Name()
+		_, err = tf.Write(data)
+		if cerr := tf.Close(); err == nil {
+			err = cerr
+		}
+		if err == nil {
+			err = os.Rename(tmp, f.path)
+		}
+		if err != nil {
 			os.Remove(tmp)
-			return err
 		}
-		if err := os.Rename(tmp, f.path); err != nil {
-			os.Remove(tmp)
-			return err
-		}
-		return nil
+		return err
 	})
 }

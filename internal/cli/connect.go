@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -58,23 +59,22 @@ func connectAddVerb(fs *flag.FlagSet) RunFunc {
 	kind := fs.String("kind", "", "connection kind: jira or linear")
 	site := fs.String("site", "", "site URL, e.g. https://acme.atlassian.net (required for jira)")
 	user := fs.String("user", "", "account name or email the token belongs to")
-	token := fs.String("token", "", "API token; prefer --token-stdin, an argument shows in shell history and ps")
-	stdin := fs.Bool("token-stdin", false, "read the API token from stdin")
+	stdin := fs.Bool("token-stdin", false, "read the API token from stdin (the default when stdin is not a terminal)")
 	replace := fs.Bool("replace", false, "replace an existing connection of this name")
 	return func(c *Ctx, args []string) (Result, error) {
 		if len(args) != 1 {
 			return Result{}, Usage("connect add takes one connection name").WithHint("run: rota connect add <name> --kind jira --site <url> --token-stdin")
 		}
-		secret := strings.TrimSpace(*token)
-		if *stdin {
-			raw, err := io.ReadAll(c.Stdin)
-			if err != nil {
-				return Result{}, &Error{Exit: ExitInternal, Message: "reading the token: " + err.Error()}
-			}
-			secret = strings.TrimSpace(string(raw))
+		if !*stdin && c.deps().IsTerminal(c.Stdin) {
+			return Result{}, Usage("connect add reads the token from stdin").WithHint("pipe it in: echo \"$TOKEN\" | rota connect add <name> ... --token-stdin")
 		}
+		raw, err := io.ReadAll(c.Stdin)
+		if err != nil {
+			return Result{}, &Error{Exit: ExitInternal, Message: "reading the token: " + err.Error()}
+		}
+		secret := strings.TrimSpace(string(raw))
 		if secret == "" {
-			return Result{}, Usage("connect add needs a token").WithHint("pipe it in: rota connect add <name> ... --token-stdin")
+			return Result{}, Usage("connect add needs a token on stdin").WithHint("pipe it in: echo \"$TOKEN\" | rota connect add <name> ... --token-stdin")
 		}
 		dir, sec, err := c.connectEnv()
 		if err != nil {
@@ -84,15 +84,30 @@ func connectAddVerb(fs *flag.FlagSet) RunFunc {
 		if err := conn.Validate(); err != nil {
 			return Result{}, Usage("%s", err.Error())
 		}
-		if err := connections.Add(dir, conn, *replace); err != nil {
-			if strings.Contains(err.Error(), connections.ErrExists.Error()) {
-				return Result{}, Refused("%s", err.Error()).WithHint("pass --replace to overwrite it")
-			}
+		_, ok, err := connections.Get(dir, conn.Name)
+		if err != nil {
 			return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
 		}
+		if ok && !*replace {
+			return Result{}, Refused("%s: %s", connections.ErrExists, conn.Name).WithHint("pass --replace to overwrite it")
+		}
+		// Secret first, record second: a failed save never leaves a record
+		// without its secret. A failed record write restores the old secret.
+		oldSecret, _, _ := sec.Stored(c.Context(), conn.Name)
 		saved, err := sec.Save(c.Context(), conn.Name, secret)
 		if err != nil {
 			return Result{}, &Error{Exit: ExitInternal, Message: "storing the secret: " + err.Error()}
+		}
+		if err := connections.Add(dir, conn, *replace); err != nil {
+			if oldSecret != "" {
+				sec.Save(c.Context(), conn.Name, oldSecret)
+			} else {
+				sec.Delete(c.Context(), conn.Name)
+			}
+			if errors.Is(err, connections.ErrExists) || errors.Is(err, connections.ErrEnvCollision) {
+				return Result{}, Refused("%s", err.Error())
+			}
+			return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
 		}
 		text := fmt.Sprintf("added\t%s\t%s\tsecret in %s", conn.Name, conn.Kind, saved.Store)
 		if saved.Note != "" {
@@ -119,15 +134,19 @@ func runConnectList(c *Ctx, args []string) (Result, error) {
 	var lines []string
 	for _, cn := range cs {
 		_, store, err := sec.Stored(c.Context(), cn.Name)
+		errMsg := ""
 		if err != nil {
-			store = "error"
+			store, errMsg = "error", err.Error()
 		}
 		if store == "" {
 			store = "none"
 		}
 		override := sec.Getenv != nil && strings.TrimSpace(sec.Getenv(connections.EnvVar(cn.Name))) != ""
-		rows = append(rows, knObj("name", cn.Name, "kind", cn.Kind, "site", cn.Site, "user", cn.User, "store", store, "envOverride", override))
+		rows = append(rows, knObj("name", cn.Name, "kind", cn.Kind, "site", cn.Site, "user", cn.User, "store", store, "storeError", errMsg, "envOverride", override))
 		line := fmt.Sprintf("%s\t%s\t%s\t%s\t%s", cn.Name, cn.Kind, cn.Site, cn.User, store)
+		if errMsg != "" {
+			line += ": " + errMsg
+		}
 		if override {
 			line += "\t(" + connections.EnvVar(cn.Name) + " set)"
 		}
