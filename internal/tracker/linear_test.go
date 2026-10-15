@@ -388,3 +388,21 @@ func TestLinearTeamAndTester(t *testing.T) {
 		t.Errorf("Tester with a wrong key = %v, want unavailable", err)
 	}
 }
+
+// Linear documents no limit on attachment metadata, so rota caps a state
+// body at 64 KiB and fails above it, leaving no half-written comment.
+func TestLinearStateOverTheCapFailsLoudly(t *testing.T) {
+	ctx := context.Background()
+	l, s := fakeLinear(t, lineartest.Options{})
+	k := linearCreate(t, l, "t", "")
+	big := "<!-- rota:proof -->\n" + strings.Repeat("x", 64<<10)
+	if _, err := l.AddComment(ctx, k, big); err == nil || !strings.Contains(err.Error(), "caps") {
+		t.Fatalf("oversized state: %v, want a failure naming the cap", err)
+	}
+	if got := s.CommentBodies(string(k)); len(got) != 0 {
+		t.Errorf("comments left behind: %d", len(got))
+	}
+	if got := s.Attachments(string(k)); len(got) != 0 {
+		t.Errorf("attachments left behind: %v", got)
+	}
+}

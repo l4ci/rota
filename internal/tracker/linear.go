@@ -54,6 +54,11 @@ const LinearAPI = "https://api.linear.app"
 // .invalid name never resolves, so no one follows it anywhere.
 const linearStateURL = "https://rota.invalid/state/"
 
+// linearStateMax caps the body one state attachment holds. Linear's schema
+// documents no limit on attachment metadata, so rota sets its own and fails
+// above it rather than split a body across attachments.
+const linearStateMax = 64 << 10
+
 // linearPage is the page size of every list read; with nested lists of the
 // same size a page stays far under Linear's query complexity limit.
 const linearPage = 50
@@ -1044,6 +1049,9 @@ func (l *Linear) CommentURL(ctx context.Context, key IssueKey, commentID string)
 // comment/<id>): attachmentCreate replaces an attachment with the same URL on
 // the same issue.
 func (l *Linear) putState(ctx context.Context, issueID, name, body string) error {
+	if len(body) > linearStateMax {
+		return failed("rota state for %s is %d bytes, over the %d a Linear attachment takes here (Linear documents no metadata limit, so rota caps it): shorten the note or fields block", name, len(body), linearStateMax)
+	}
 	var d struct {
 		AttachmentCreate struct {
 			Success bool `json:"success"`
