@@ -11,9 +11,9 @@ import (
 	"github.com/l4ci/rota/internal/tracker/jiratest"
 )
 
-// On Jira, claims are issue properties (tracker.ClaimStore) and every other
-// marker comment keeps its markers in properties: the comment bodies people
-// read carry none.
+// On Jira, claims are plain "Claimed by" comments (tracker.ClaimStore) and
+// every other marker comment keeps its markers in properties: the comment
+// bodies people read carry none.
 func TestIssuesOnJiraKeepMarkersOutOfComments(t *testing.T) {
 	s := jiratest.New(t, jiratest.Options{})
 	j := tracker.NewJira(connections.Connection{Name: "work", Kind: connections.KindJira, Site: s.URL, User: "me@example.com"}, "tok", "PROJ", "")
@@ -27,8 +27,15 @@ func TestIssuesOnJiraKeepMarkersOutOfComments(t *testing.T) {
 	if won, holder, err := b.Claim(ref, "ben@18"); !won || holder != "ben@18" || err != nil {
 		t.Fatal(won, holder, err)
 	}
-	if _, ok := s.Property(ref, "rota.claim.ben@18"); !ok || len(s.CommentBodies(ref)) != 0 {
-		t.Fatalf("a claim is one property, not a comment: %v", s.CommentBodies(ref))
+	claims := func() []string {
+		cs, err := j.Claims(b.ctx(), key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return cs
+	}
+	if got := claims(); !slices.Equal(got, []string{"ben@18"}) || len(s.CommentBodies(ref)) != 1 {
+		t.Fatalf("a claim is one plain comment: %v %v", got, s.CommentBodies(ref))
 	}
 	if won, holder, err := b.Claim(ref, "nia@18"); won || holder != "ben@18" || err != nil {
 		t.Fatalf("second claimer: %v %q %v", won, holder, err)
@@ -36,8 +43,8 @@ func TestIssuesOnJiraKeepMarkersOutOfComments(t *testing.T) {
 	if won, _, _ := b.Claim(ref, "ben@18"); !won {
 		t.Fatal("holder lost its own claim")
 	}
-	if _, ok := s.Property(ref, "rota.claim.nia@18"); ok {
-		t.Fatal("the losing claim left its property")
+	if got := claims(); !slices.Equal(got, []string{"ben@18"}) {
+		t.Fatalf("the losing claim was left: %v", got)
 	}
 	if _, err := b.NotePut(ref, "proof", "- row one"); err != nil {
 		t.Fatal(err)
@@ -67,8 +74,8 @@ func TestIssuesOnJiraKeepMarkersOutOfComments(t *testing.T) {
 	if ok, err := b.Release(ref, "ben@18"); !ok || err != nil {
 		t.Fatal(ok, err)
 	}
-	if _, ok := s.Property(ref, "rota.claim.ben@18"); ok {
-		t.Fatal("release left the claim property")
+	if got := claims(); len(got) != 0 {
+		t.Fatalf("release left the claim comment: %v", got)
 	}
 	if st, _ := b.Status(ref); st.Claim != "" || strings.Contains(st.State, "in-progress") {
 		t.Fatalf("after release: %+v", st)

@@ -436,8 +436,8 @@ func TestJiraNoMarkerInCommentBodies(t *testing.T) {
 			t.Fatal(err)
 		}
 		raws := append(s.CommentBodies(string(k)), s.Description(string(k)))
-		if len(raws) != 7 {
-			t.Fatalf("got %d raw bodies, want 6 comments and a description", len(raws))
+		if len(raws) != 8 {
+			t.Fatalf("got %d raw bodies, want 7 comments (a claim among them) and a description", len(raws))
 		}
 		for _, raw := range raws {
 			if strings.Contains(raw, "<!--") || strings.Contains(raw, "rota:") {
