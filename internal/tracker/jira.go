@@ -945,81 +945,78 @@ func (j *Jira) IssuesInMilestone(ctx context.Context, title, state string) ([]Is
 	return j.List(ctx, ListFilter{State: state, Milestone: title})
 }
 
-// ---- claims (issue properties) ----------------------------------------------
+// ---- claims (plain comments) -----------------------------------------------
 
 var _ ClaimStore = (*Jira)(nil)
 
-// propClaim prefixes the property of one claim: rota.claim.<claim id>, the id
-// path-escaped so a "/" cannot split the URL. The value is the id itself and
-// the time of the claim; the earliest claim wins, equal times by id. The time
-// is the claimer's clock: Jira keeps no write time on a property.
-const propClaim = "rota.claim."
+// claimText opens a claim comment: "Claimed by <claim id>", with no marker,
+// so people read it as written. Claims order by the server's created time,
+// then comment id, never the claimer's clock: a write that a retry delays
+// lands, and counts, after one the server took in between.
+const claimText = "Claimed by "
 
-type claimProp struct {
-	ID string `json:"id"`
-	At string `json:"at"`
+// claimOf is the claim id of a claim comment; ok is false for any other.
+func claimOf(body string) (string, bool) {
+	id, ok := strings.CutPrefix(strings.TrimSpace(body), claimText)
+	if !ok || id == "" || strings.IndexFunc(id, unicode.IsSpace) >= 0 {
+		return "", false
+	}
+	return id, true
 }
 
-func (j *Jira) claimPath(key IssueKey, id string) (string, error) {
-	return j.path(key, "/properties/"+url.PathEscape(propClaim+url.PathEscape(id)))
-}
-
-// Claims reads the issue's claim properties, earliest first.
-func (j *Jira) Claims(ctx context.Context, key IssueKey) ([]string, error) {
-	d, err := j.issue(ctx, key)
+// claimComments is the issue's claim comments, earliest first.
+func (j *Jira) claimComments(ctx context.Context, key IssueKey) ([]Comment, error) {
+	cs, err := j.comments(ctx, key, nil)
 	if err != nil {
 		return nil, err
 	}
-	type held struct {
-		id string
-		at time.Time
-	}
-	var hs []held
-	for k, raw := range d.Properties {
-		var v claimProp
-		if !strings.HasPrefix(k, propClaim) || json.Unmarshal(raw, &v) != nil || v.ID == "" {
-			continue
-		}
-		at, _ := time.Parse(time.RFC3339Nano, v.At)
-		hs = append(hs, held{v.ID, at})
-	}
-	slices.SortFunc(hs, func(a, b held) int {
-		if c := a.at.Compare(b.at); c != 0 {
+	out := slices.DeleteFunc(cs, func(c Comment) bool { _, ok := claimOf(c.Body); return !ok })
+	slices.SortStableFunc(out, func(a, b Comment) int {
+		if c := a.CreatedAt.Compare(b.CreatedAt); c != 0 {
 			return c
 		}
-		return strings.Compare(a.id, b.id)
+		if c := len(a.ID) - len(b.ID); c != 0 { // numeric ids: shorter is smaller
+			return c
+		}
+		return strings.Compare(a.ID, b.ID)
 	})
-	out := make([]string, len(hs))
-	for i, h := range hs {
-		out[i] = h.id
+	return out, nil
+}
+
+// Claims lists the claim ids on key, earliest first, each once.
+func (j *Jira) Claims(ctx context.Context, key IssueKey) ([]string, error) {
+	cs, err := j.claimComments(ctx, key)
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for _, c := range cs {
+		if id, _ := claimOf(c.Body); !slices.Contains(out, id) {
+			out = append(out, id)
+		}
 	}
 	return out, nil
 }
 
-// PutClaim writes id's claim property stamped now, unless it already exists:
-// a repeated claim keeps its first time and so its place.
+// PutClaim posts id's claim comment. A second one changes nothing: the
+// earliest comment of an id holds its place.
 func (j *Jira) PutClaim(ctx context.Context, key IssueKey, id string) error {
-	p, err := j.claimPath(key, id)
-	if err != nil {
-		return err
-	}
-	switch err := j.rest.Do(ctx, "GET", p, nil, nil); {
-	case err == nil:
-		return nil
-	case !IsKind(err, KindNotFound):
-		return err
-	}
-	return j.rest.Do(ctx, "PUT", p, claimProp{ID: id, At: j.rest.now().UTC().Format(time.RFC3339Nano)}, nil)
+	_, err := j.AddComment(ctx, key, claimText+id)
+	return err
 }
 
-// DropClaim deletes id's claim property; none is a no-op.
+// DropClaim deletes every claim comment of id; none is a no-op.
 func (j *Jira) DropClaim(ctx context.Context, key IssueKey, id string) error {
-	p, err := j.claimPath(key, id)
+	cs, err := j.claimComments(ctx, key)
 	if err != nil {
 		return err
 	}
-	if err := j.rest.Do(ctx, "DELETE", p, nil, nil); err != nil && !IsKind(err, KindNotFound) {
-		return err
+	for _, c := range cs {
+		if got, _ := claimOf(c.Body); got == id {
+			if err := j.DeleteComment(ctx, key, c.ID); err != nil && !IsKind(err, KindNotFound) {
+				return err
+			}
+		}
 	}
 	return nil
 }

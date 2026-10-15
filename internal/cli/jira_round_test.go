@@ -28,6 +28,11 @@ type jiraFx struct {
 	conn tracker.Option
 }
 
+// claims reads the claim comments of key on the fake.
+func (f *jiraFx) claims(key string) ([]string, error) {
+	return f.it.(tracker.ClaimStore).Claims(context.Background(), tracker.IssueKey(key))
+}
+
 func newJiraFx(t *testing.T, slots ...string) *jiraFx {
 	t.Helper()
 	fx := newScopeFx(t, "warn", "")
@@ -115,10 +120,8 @@ func TestJiraRoundAssignClaimsByProperty(t *testing.T) {
 	if s := worker.LoadRegistryTolerant(f.root).Slot("dana"); s.Task() != "PROJ-1" {
 		t.Errorf("slot task %q", s.Task())
 	}
-	if raw, ok := f.s.Property("PROJ-1", "rota.claim.dana@0"); !ok {
-		t.Errorf("no claim property; requests:\n%s", strings.Join(f.s.Requests(), "\n"))
-	} else {
-		t.Logf("claim %s", raw)
+	if cs, err := f.claims("PROJ-1"); err != nil || !slices.Equal(cs, []string{"dana@0"}) {
+		t.Errorf("claims %v, %v; requests:\n%s", cs, err, strings.Join(f.s.Requests(), "\n"))
 	}
 	is, err := f.it.Get(context.Background(), "PROJ-1", false)
 	if err != nil {
@@ -154,8 +157,8 @@ func TestJiraRoundAssignOverlapBlocks(t *testing.T) {
 	if code == 0 || !strings.Contains(out+errOut, "overlap") || !strings.Contains(out+errOut, "PROJ-1") {
 		t.Fatalf("second should be blocked by PROJ-1: %d %s %s", code, out, errOut)
 	}
-	if _, ok := f.s.Property("PROJ-2", "rota.claim.kit@0"); ok {
-		t.Error("the blocked issue was claimed")
+	if cs, _ := f.claims("PROJ-2"); len(cs) != 0 {
+		t.Errorf("the blocked issue was claimed: %v", cs)
 	}
 }
 
