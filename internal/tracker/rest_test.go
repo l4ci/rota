@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -318,5 +319,34 @@ func TestRESTClassifyReadsTheErrorBody(t *testing.T) {
 	}
 	if err := r.Query(context.Background(), "/other", nil, nil); !IsKind(err, KindFailed) {
 		t.Errorf("unclassified body: %v, want the status mapping's KindFailed", err)
+	}
+}
+
+// Query is for reads only: a GraphQL document whose operation is a mutation
+// is refused before it is sent, so a write can never take the 5xx retry path.
+func TestRESTQueryRefusesAMutation(t *testing.T) {
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		w.WriteHeader(http.StatusBadGateway)
+	}))
+	defer srv.Close()
+	var waits []time.Duration
+	for _, doc := range []string{
+		"mutation CommentCreate($input: CommentCreateInput!) { commentCreate(input: $input) { success } }",
+		"  # a comment first\n mutation { issueDelete(id: \"x\") { success } }",
+		"mutation\nIssueUpdate { issueUpdate(id: \"x\") { success } }",
+	} {
+		err := restFor(srv, &waits).Query(context.Background(), "/graphql", map[string]any{"query": doc}, nil)
+		if !IsKind(err, KindInternal) || !strings.Contains(err.Error(), "mutation") {
+			t.Errorf("%q: err %v, want a refusal naming the mutation", doc, err)
+		}
+	}
+	if calls != 0 {
+		t.Errorf("%d requests sent, want none", calls)
+	}
+	// a query whose name starts with the word is still a query
+	if err := restFor(srv, &waits).Query(context.Background(), "/graphql", map[string]any{"query": "query mutationLog { viewer { id } }"}, nil); IsKind(err, KindInternal) {
+		t.Errorf("a query was refused: %v", err)
 	}
 }

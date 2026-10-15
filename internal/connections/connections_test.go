@@ -73,6 +73,8 @@ func TestAddValidates(t *testing.T) {
 		{Name: "bad name", Kind: KindJira, Site: "https://x"},
 		{Name: "a", Kind: "github"},
 		{Name: "a", Kind: KindJira, Site: "acme"},
+		{Name: "a", Kind: KindLinear, Site: "api.linear.app"},
+		{Name: "a", Kind: KindLinear, Deployment: DeploymentCloud},
 	} {
 		if err := Add(t.TempDir(), c, false); err == nil {
 			t.Errorf("accepted %+v", c)

@@ -1,6 +1,6 @@
 # Issue backend
 
-With `issues.source` set to `github`, `gitlab` or `jira` the tracker is the backlog. `.rota/BACKLOG.md` and the `.rota/<kind>/` detail files are not used; items, milestones and design/plan artifacts live on the tracker. `issues.source: file` is the default and is unchanged. Skills keep their file-mode steps and branch on the source; the issue-mode differences are listed in `references/issue-mode.md`.
+With `issues.source` set to `github`, `gitlab`, `jira` or `linear` the tracker is the backlog. `.rota/BACKLOG.md` and the `.rota/<kind>/` detail files are not used; items, milestones and design/plan artifacts live on the tracker. `issues.source: file` is the default and is unchanged. Skills keep their file-mode steps and branch on the source; the issue-mode differences are listed in `references/issue-mode.md`.
 
 ## Issue source and forge
 
@@ -64,6 +64,33 @@ How rota uses Jira:
 - **Rate limits.** A 429 waits its `Retry-After` (up to two minutes) and retries, at most three times. A 5xx is retried only for reads and other idempotent calls, never for a create or a comment.
 
 Out of scope: Jira Service Management, boards and sprints.
+
+## Linear
+
+`issues.source: linear` keeps the issues in one Linear team and the code on your forge (GitHub or GitLab). rota talks to Linear's GraphQL API directly; Linear ships no official CLI.
+
+1. Create a personal API key under Settings → Account → Security & access in Linear.
+2. Add a connection. It lives on your machine, never in the repo (see [Tracker connections](configuration.md#tracker-connections)). It needs no `--site`; rota talks to `https://api.linear.app`:
+
+   ```sh
+   echo "$LINEAR_API_KEY" | rota connect add linear --kind linear --token-stdin
+   rota connect test linear
+   ```
+
+3. Point the project at it: `rota config set issues.source linear`, `rota config set issues.connection linear`, `rota config set issues.linear.team ENG` (the team's key, the prefix of its identifiers). `rota doctor` checks the connection and that the key can see the team.
+
+How rota uses Linear:
+
+- **Keys.** Items are named by their identifier (`ENG-42`), and so are branches (`ben/ENG-42-...`). A `## Depends on` line counts identifiers of the team's own key, as on Jira.
+- **Hidden state.** Linear keeps no hidden text in Markdown and has no issue properties, so rota keeps its state in issue attachments titled `rota state`, with the body in the attachment's metadata (`{"v": 1, "body": ...}`; a missing `v` reads as 1). A marker comment (proof, design and plan notes, feedback, handoff) is posted without its markers and kept whole in the attachment at `https://rota.invalid/state/comment/<comment id>`; the fields block of an issue body is at `https://rota.invalid/state/fields`. Every marker comment therefore adds one visible `rota state` attachment to the issue. Do not remove them. Deleting such a comment in Linear's UI leaves its attachment behind (rota's own deletes remove both); the leftover is harmless and can be removed by hand. Linear documents no size limit on attachment metadata, so rota caps each at 64 KiB and refuses the write, before changing anything, above it.
+- **Claims.** A claim is a plain comment, `Claimed by <claim id>`. The earliest one wins by the time Linear recorded it (then by comment id), and a release deletes that claimer's comment.
+- **Status.** Close and reopen pick the team's workflow state by type, never by name: close moves the issue to a `completed` state, a not-planned close to a `canceled` one, and reopen to an `unstarted` state (else a `started` one).
+- **Labels.** Labels are workspace labels or the team's own, matched without case; a missing one is created on the team. Another team's label is never used.
+- **Milestones.** None: Linear projects and cycles are not rota milestones, and the milestone verbs fail on a Linear source.
+- **Closing PRs.** A PR counts as closing a Linear issue when its head branch or title names the identifier. rota does not rely on Linear's GitHub or GitLab integration: `rota worker gate` moves the issue to a completed state after the merge and comments with the PR, unless the issue is labelled `partial-slice`. A PR merged any other way leaves the issue open (unless the integration closes it): run `rota issues close ENG-42 --commit <sha>`.
+- **Rate limits and errors.** Linear answers some failures with HTTP 200 and a GraphQL `errors` list; rota reads those like HTTP errors (a rate limit is exit 6, a bad key or an unknown team is exit 5). Reads are retried on a 5xx, writes never are.
+
+Out of scope: Linear projects and cycles as milestones, and OAuth (personal API keys only).
 
 ## How items map to issues
 

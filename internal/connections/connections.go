@@ -77,6 +77,9 @@ func (c Connection) Validate() error {
 	if c.Kind == KindJira && !strings.HasPrefix(c.Site, "https://") && !strings.HasPrefix(c.Site, "http://") {
 		return fmt.Errorf("a jira connection needs --site, an http(s) URL such as https://acme.atlassian.net")
 	}
+	if c.Kind == KindLinear && c.Site != "" && !strings.HasPrefix(c.Site, "https://") && !strings.HasPrefix(c.Site, "http://") {
+		return fmt.Errorf("a linear connection's --site is an http(s) URL; leave it out for https://api.linear.app")
+	}
 	if c.Kind != KindJira {
 		if c.Deployment != "" {
 			return fmt.Errorf("--deployment is for jira connections only")

@@ -78,15 +78,14 @@ type Server struct {
 	nextNum int
 	clock   time.Time
 	reqs    []string
+	last    map[string]sent
 	nextAt  time.Time // SetNextCommentTime
 	nextN   int
 	limitN  int
 	limitSt int
 	failN   int
 	failSt  int
-	errN    int
-	errCode string
-	errMsg  string
+	errs    []queued
 }
 
 var me = user{"user-me", "Me"}
@@ -102,7 +101,7 @@ func New(t testing.TB, o Options) *Server {
 	if o.PageSize == 0 {
 		o.PageSize = 50
 	}
-	s := &Server{t: t, o: o, users: map[string]user{me.id: me}, clock: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
+	s := &Server{t: t, o: o, users: map[string]user{me.id: me}, last: map[string]sent{}, clock: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
 	for i, st := range [][2]string{{"Triage", "triage"}, {"Backlog", "backlog"}, {"Todo", "unstarted"}, {"In Progress", "started"},
 		{"Done", "completed"}, {"Canceled", "canceled"}, {"Duplicate", "canceled"}} {
 		s.states = append(s.states, &state{"state-" + strconv.Itoa(i), st[0], st[1], i})
@@ -111,9 +110,6 @@ func New(t testing.TB, o Options) *Server {
 	t.Cleanup(s.Close)
 	return s
 }
-
-// Team is the team key the fake serves.
-func (s *Server) Team() string { return s.o.Team }
 
 func (s *Server) teamID() string { return "team-" + strings.ToLower(s.o.Team) }
 
@@ -133,11 +129,26 @@ func (s *Server) FailNext(n, status int) {
 	s.failN, s.failSt = n, status
 }
 
-// ErrorNext makes the next n requests answer HTTP 200 with one GraphQL error.
-func (s *Server) ErrorNext(n int, code, message string) {
+type queued struct{ op, code, msg string }
+
+// ErrorOn makes the next request for op (any op when "") answer HTTP 200 with
+// one GraphQL error, before it changes anything. Calls queue: each error
+// answers one request.
+func (s *Server) ErrorOn(op, code, message string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.errN, s.errCode, s.errMsg = n, code, message
+	s.errs = append(s.errs, queued{op, code, message})
+}
+
+// queuedError takes the first queued error for op, if any.
+func (s *Server) queuedError(op string) (queued, bool) {
+	for i, q := range s.errs {
+		if q.op == "" || q.op == op {
+			s.errs = slices.Delete(s.errs, i, i+1)
+			return q, true
+		}
+	}
+	return queued{}, false
 }
 
 // SetNextCommentTime gives the next n comments createdAt t, to test tie-breaks.
@@ -145,6 +156,21 @@ func (s *Server) SetNextCommentTime(t time.Time, n int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.nextAt, s.nextN = t, n
+}
+
+type sent struct {
+	doc  string
+	vars obj
+}
+
+// Last is the document and variables of the latest request for op, the
+// document with its whitespace collapsed to single spaces, so a test can
+// assert the query shape the fake does not parse; "" if op was never sent.
+func (s *Server) Last(op string) (string, map[string]any) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	l := s.last[op]
+	return strings.Join(strings.Fields(l.doc), " "), l.vars
 }
 
 // Requests is the operationName of every request, in order.
@@ -188,11 +214,6 @@ func (s *Server) read(key string, f func(*issue)) {
 
 func (s *Server) StateType(key string) (v string) {
 	s.read(key, func(i *issue) { v = i.state.typ })
-	return
-}
-
-func (s *Server) StateName(key string) (v string) {
-	s.read(key, func(i *issue) { v = i.state.name })
 	return
 }
 
@@ -441,6 +462,7 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.reqs = append(s.reqs, req.Op)
+	s.last[req.Op] = sent{req.Query, req.Vars}
 	switch {
 	case s.failN > 0:
 		s.failN--
@@ -453,12 +475,12 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 		}
 		reply(w, s.limitSt, (&fault{status: s.limitSt, code: "RATELIMITED", typ: "ratelimited", msg: "Rate limit exceeded"}).body())
 		return
-	case s.errN > 0:
-		s.errN--
-		reply(w, 200, (&fault{status: 200, code: s.errCode, msg: s.errMsg}).body())
-		return
 	case r.Header.Get("Authorization") != s.o.Key:
 		reply(w, 400, (&fault{status: 400, code: "AUTHENTICATION_ERROR", typ: "authentication error", msg: "Authentication required, not authenticated"}).body())
+		return
+	}
+	if q, ok := s.queuedError(req.Op); ok {
+		reply(w, 200, (&fault{status: 200, code: q.code, msg: q.msg}).body())
 		return
 	}
 	kind, known := kinds[req.Op]

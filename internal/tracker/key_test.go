@@ -45,6 +45,18 @@ func TestParseKeyAndSpelling(t *testing.T) {
 	}
 }
 
+// Keys of one project sort by number, not spelling: ENG-9 before ENG-10.
+func TestSortKeysOrdersAProjectByNumber(t *testing.T) {
+	keys := []IssueKey{"ENG-10", "PROJ-2", "ENG-9", "ENG-42", "3"}
+	SortKeys(keys)
+	want := []IssueKey{"3", "ENG-9", "ENG-10", "ENG-42", "PROJ-2"}
+	for i := range want {
+		if keys[i] != want[i] {
+			t.Fatalf("sorted = %v want %v", keys, want)
+		}
+	}
+}
+
 func TestSortKeysNumbersFirstThenKeys(t *testing.T) {
 	keys := []IssueKey{"PROJ-2", "10", "9", "ENG-42"}
 	SortKeys(keys)

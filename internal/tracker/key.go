@@ -88,7 +88,7 @@ func (i Issue) Num() int {
 }
 
 // CompareKeys orders keys for display: numbered issues by number, then the
-// rest by spelling.
+// rest by project and, within one project, by number (ENG-9 before ENG-10).
 func CompareKeys(a, b IssueKey) int {
 	na, oka := a.Number()
 	nb, okb := b.Number()
@@ -99,6 +99,13 @@ func CompareKeys(a, b IssueKey) int {
 		return -1
 	case okb:
 		return 1
+	}
+	if pa, pb := a.Project(), b.Project(); pa != "" && pa == pb {
+		sa, _ := a.Seq()
+		sb, _ := b.Seq()
+		if sa != sb {
+			return sa - sb
+		}
 	}
 	return strings.Compare(string(a), string(b))
 }
@@ -114,4 +121,15 @@ func (k IssueKey) Project() string {
 	}
 	p, _, _ := strings.Cut(string(k), "-")
 	return p
+}
+
+// Seq is the number of a key-based tracker's key (123 of PROJ-123); ok is
+// false for a numbered key or anything that is not a key.
+func (k IssueKey) Seq() (int, bool) {
+	if !reKey.MatchString(string(k)) {
+		return 0, false
+	}
+	_, n, _ := strings.Cut(string(k), "-")
+	v, err := strconv.Atoi(n)
+	return v, err == nil
 }

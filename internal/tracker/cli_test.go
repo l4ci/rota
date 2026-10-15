@@ -455,8 +455,8 @@ func TestNewForgeAndNewIssueTracker(t *testing.T) {
 	if _, err := NewIssueTracker(ctx, Settings{Source: "file"}, "", "/repo"); !errors.Is(err, ErrNoIssueTracker) {
 		t.Errorf("file source: %v", err)
 	}
-	if _, err := NewIssueTracker(ctx, Settings{Source: "linear"}, "", "/repo"); !IsKind(err, KindUnavailable) || !strings.Contains(err.Error(), "not implemented") {
-		t.Errorf("linear source: %v", err)
+	if _, err := NewIssueTracker(ctx, Settings{Source: "linear", LinearTeam: "ENG"}, "", "/repo"); !IsKind(err, KindUnavailable) || !strings.Contains(err.Error(), "issues.connection") {
+		t.Errorf("linear source, no connection: %v", err)
 	}
 	if _, err := NewIssueTracker(ctx, Settings{Source: "jira", JiraProject: "PROJ"}, "", "/repo"); !IsKind(err, KindUnavailable) || !strings.Contains(err.Error(), "issues.connection") {
 		t.Errorf("jira source, no connection: %v", err)
