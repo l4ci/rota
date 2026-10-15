@@ -270,3 +270,53 @@ func TestRESTRateLimitExhaustsTheRetries(t *testing.T) {
 		t.Fatalf("calls=%d waits=%v err=%v, want %d attempts then KindRateLimited", calls, waits, err, restRetries+1)
 	}
 }
+
+// Query is a POST that only reads, so a 5xx is retried as for a GET; Do's
+// POST still is not (TestRESTDoesNotResendAPostOn5xx).
+func TestRESTQueryResendsAReadOnlyPostOn5xx(t *testing.T) {
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if r.Method != http.MethodPost {
+			t.Errorf("method %s, want POST", r.Method)
+		}
+		if calls == 1 {
+			w.WriteHeader(http.StatusBadGateway)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]string{"ok": "yes"})
+	}))
+	defer srv.Close()
+	var waits []time.Duration
+	var out struct{ OK string }
+	if err := restFor(srv, &waits).Query(context.Background(), "/graphql", map[string]string{"query": "{ viewer { id } }"}, &out); err != nil {
+		t.Fatal(err)
+	}
+	if calls != 2 || out.OK != "yes" || len(waits) != 1 {
+		t.Fatalf("calls=%d waits=%v out=%+v, want one retry that succeeds", calls, waits, out)
+	}
+}
+
+// Classify reads a tracker's own error body on a non-2xx answer; a nil
+// result keeps the status mapping.
+func TestRESTClassifyReadsTheErrorBody(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(r.URL.Path))
+	}))
+	defer srv.Close()
+	var waits []time.Duration
+	r := restFor(srv, &waits)
+	r.Classify = func(_, _ string, status int, raw []byte) *Error {
+		if string(raw) == "/limited" && status == http.StatusBadRequest {
+			return rateLimited("limited")
+		}
+		return nil
+	}
+	if err := r.Query(context.Background(), "/limited", nil, nil); !IsKind(err, KindRateLimited) {
+		t.Errorf("classified body: %v, want KindRateLimited", err)
+	}
+	if err := r.Query(context.Background(), "/other", nil, nil); !IsKind(err, KindFailed) {
+		t.Errorf("unclassified body: %v, want the status mapping's KindFailed", err)
+	}
+}
