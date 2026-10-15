@@ -370,19 +370,19 @@
       "Exit": 3,
       "Origin": "main moves\nseed",
       "Local": "seed",
-      "Forge": ""
+      "Forge": "github PRView 7\n"
     },
     "b2: a failed fetch is check-broke": {
       "Exit": 5,
       "Origin": "seed",
       "Local": "seed",
-      "Forge": ""
+      "Forge": "github PRView 7\n"
     },
     "b: a merge-base that dies is check-broke, not stale": {
       "Exit": 5,
       "Origin": "seed",
       "Local": "seed",
-      "Forge": ""
+      "Forge": "github PRView 7\n"
     },
     "c: PR not open": {
       "Exit": 3,
@@ -490,7 +490,7 @@
       "Exit": 5,
       "Origin": "seed",
       "Local": "seed",
-      "Forge": ""
+      "Forge": "github PRView 7\n"
     },
     "h: local merge without a PR": {
       "Exit": 0,
