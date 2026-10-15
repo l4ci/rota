@@ -384,3 +384,32 @@ func TestDoctorWarnsWhenKindHasNoTestRead(t *testing.T) {
 		t.Errorf("connect test exit %d", code)
 	}
 }
+
+func TestConnectAddRejectsControlCharsInToken(t *testing.T) {
+	e := newConnectEnv(t)
+	for _, tok := range []string{"abc\ndelete-generic-password -s rota", "abc\rdef", "ab\tc", "ab\x00c"} {
+		if code, _, _ := e.run(tok, "connect", "add", "w", "--kind", "jira", "--site", "https://a.example", "--token-stdin"); code != ExitUsage {
+			t.Errorf("%q: exit %d", tok, code)
+		}
+	}
+	if len(e.kc.vals) != 0 {
+		t.Errorf("a rejected token was stored: %v", e.kc.vals)
+	}
+	if _, env, _ := e.run("", "connect", "list"); true {
+		if rows, _ := connData(env).Get("connections"); len(rows.([]any)) != 0 {
+			t.Errorf("record left: %v", rows)
+		}
+	}
+}
+
+func TestConnectAddReportsFailedRollback(t *testing.T) {
+	e := newConnectEnv(t)
+	kc := &failDeleteKeychain{fakeKeychain{vals: map[string]string{}}}
+	e.d.Keychain = func() connections.Store { return kc }
+	e.run("t", "connect", "add", "a-b", "--kind", "linear", "--token-stdin")
+	// a_b collides on its env var: the record is refused after its secret was saved
+	code, _, errOut := e.run("t", "connect", "add", "a_b", "--kind", "linear", "--token-stdin")
+	if code == 0 || !strings.Contains(errOut, "rolling back the secret also failed") || !strings.Contains(errOut, "locked") {
+		t.Errorf("%d %q", code, errOut)
+	}
+}

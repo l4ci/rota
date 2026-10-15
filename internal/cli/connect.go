@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"unicode"
 
 	"github.com/l4ci/rota/internal/connections"
 	"github.com/l4ci/rota/internal/doctor"
@@ -76,6 +77,10 @@ func connectAddVerb(fs *flag.FlagSet) RunFunc {
 		if secret == "" {
 			return Result{}, Usage("connect add needs a token on stdin").WithHint("pipe it in: echo \"$TOKEN\" | rota connect add <name> ... --token-stdin")
 		}
+		if strings.IndexFunc(secret, unicode.IsControl) >= 0 {
+			// A newline would start a second `security -i` command on macOS.
+			return Result{}, Usage("the token contains a control character (newline, tab, ...)").WithHint("pass the bare token on one line")
+		}
 		dir, sec, err := c.connectEnv()
 		if err != nil {
 			return Result{}, err
@@ -99,15 +104,20 @@ func connectAddVerb(fs *flag.FlagSet) RunFunc {
 			return Result{}, &Error{Exit: ExitInternal, Message: "storing the secret: " + err.Error()}
 		}
 		if err := connections.Add(dir, conn, *replace); err != nil {
+			var rerr error
 			if oldSecret != "" {
-				sec.Save(c.Context(), conn.Name, oldSecret)
+				_, rerr = sec.Save(c.Context(), conn.Name, oldSecret)
 			} else {
-				sec.Delete(c.Context(), conn.Name)
+				rerr = sec.Delete(c.Context(), conn.Name)
+			}
+			msg := err.Error()
+			if rerr != nil {
+				msg += "; rolling back the secret also failed (" + rerr.Error() + "): check " + conn.Name + " with rota connect list"
 			}
 			if errors.Is(err, connections.ErrExists) || errors.Is(err, connections.ErrEnvCollision) {
-				return Result{}, Refused("%s", err.Error())
+				return Result{}, Refused("%s", msg)
 			}
-			return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
+			return Result{}, &Error{Exit: ExitInternal, Message: msg}
 		}
 		text := fmt.Sprintf("added\t%s\t%s\tsecret in %s", conn.Name, conn.Kind, saved.Store)
 		if saved.Note != "" {
