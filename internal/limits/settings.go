@@ -2,6 +2,7 @@ package limits
 
 import (
 	"fmt"
+	"github.com/l4ci/rota/internal/tracker"
 	"strings"
 	"time"
 
@@ -16,12 +17,12 @@ const (
 
 // Settings are the limits.* keys plus the issue the failure escalates on.
 type Settings struct {
-	Mode          string        // limits.mode
-	Margin        time.Duration // limits.resumeMarginSeconds, 0 or more
-	Fallback      time.Duration // limits.fallbackSleepSeconds, 1 or more
-	MaxResumes    int           // limits.maxResumes, 1 or more
-	Prompt        string        // limits.resumePrompt
-	EscalateIssue int           // orchestrator.escalateIssue (D2), 0 means unset
+	Mode          string           // limits.mode
+	Margin        time.Duration    // limits.resumeMarginSeconds, 0 or more
+	Fallback      time.Duration    // limits.fallbackSleepSeconds, 1 or more
+	MaxResumes    int              // limits.maxResumes, 1 or more
+	Prompt        string           // limits.resumePrompt
+	EscalateIssue tracker.IssueKey // orchestrator.escalateIssue (D2), empty means unset
 }
 
 // LoadSettings reads and validates the keys from a merged config. An error is
@@ -50,8 +51,16 @@ func LoadSettings(cfg any) (Settings, error) {
 	if s.MaxResumes, err = config.Int(cfg, "limits.maxResumes", 1, config.MaxInt); err != nil {
 		return s, err
 	}
-	if s.EscalateIssue, err = config.EscalateIssue(cfg); err != nil {
+	raw, err := config.EscalateIssue(cfg)
+	if err != nil {
 		return s, err
+	}
+	if raw != "" {
+		k, ok := tracker.ParseKey(raw)
+		if !ok {
+			return s, fmt.Errorf("orchestrator.escalateIssue must be an issue number or a key like PROJ-123 (got %q)", raw)
+		}
+		s.EscalateIssue = k
 	}
 	p, err := config.Value(cfg, "limits.resumePrompt")
 	if err != nil {

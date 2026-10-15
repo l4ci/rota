@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"errors"
+	"github.com/l4ci/rota/internal/issues"
 	"io"
 	"os"
 	"runtime"
@@ -71,6 +72,9 @@ type Deps struct {
 	// TrackerOptions apply to every forge CLI the verbs build; a test swaps
 	// in a fake executor here.
 	TrackerOptions []tracker.Option
+	// IssuesForge, when set, stands in for the forge `rota issues` verbs build;
+	// a test uses it for a key-based tracker.
+	IssuesForge func(ctx context.Context, provider, dir string) (issues.Forge, error)
 
 	// ReadCache is shared by every forge adapter this invocation builds, so
 	// the same read is made once. Nil turns it off.

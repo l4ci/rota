@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/tracker"
 
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/round"
@@ -80,6 +81,6 @@ func workerAdopt(fs *flag.FlagSet) RunFunc {
 			d.Set("overlaps", overlapList(res.Overlaps))
 		}
 		d.Set("changed", true)
-		return Result{Data: d, Text: fmt.Sprintf("adopted %s %s #%s", res.Slot, res.Branch, res.Issue)}, nil
+		return Result{Data: d, Text: fmt.Sprintf("adopted %s %s %s", res.Slot, res.Branch, tracker.RefOf(res.Issue))}, nil
 	}
 }

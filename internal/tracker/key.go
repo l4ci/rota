@@ -60,6 +60,16 @@ func (k IssueKey) Ref() string {
 	return string(k)
 }
 
+// RefOf is Ref for an issue id as the registry and reports hold it: `#603`
+// for `603` or `#603`, `PROJ-123` for a key. Text that is no key (an item id
+// like B07) keeps its `#` prefix as before.
+func RefOf(id string) string {
+	if k, ok := ParseKey(id); ok {
+		return k.Ref()
+	}
+	return "#" + strings.TrimPrefix(strings.TrimSpace(id), "#")
+}
+
 // numOf is the issue number a numbered adapter (GitHub, GitLab) sends to its
 // CLI. A key like PROJ-123 is not an issue there: KindNotFound.
 func numOf(k IssueKey) (int, error) {
@@ -77,20 +87,21 @@ func (i Issue) Num() int {
 	return n
 }
 
-// SortKeys orders keys for display: numbered issues by number, then the rest
-// by spelling.
-func SortKeys(keys []IssueKey) {
-	slices.SortFunc(keys, func(a, b IssueKey) int {
-		na, oka := a.Number()
-		nb, okb := b.Number()
-		switch {
-		case oka && okb:
-			return na - nb
-		case oka:
-			return -1
-		case okb:
-			return 1
-		}
-		return strings.Compare(string(a), string(b))
-	})
+// CompareKeys orders keys for display: numbered issues by number, then the
+// rest by spelling.
+func CompareKeys(a, b IssueKey) int {
+	na, oka := a.Number()
+	nb, okb := b.Number()
+	switch {
+	case oka && okb:
+		return na - nb
+	case oka:
+		return -1
+	case okb:
+		return 1
+	}
+	return strings.Compare(string(a), string(b))
 }
+
+// SortKeys sorts keys by CompareKeys.
+func SortKeys(keys []IssueKey) { slices.SortFunc(keys, CompareKeys) }

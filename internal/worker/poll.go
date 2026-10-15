@@ -107,19 +107,23 @@ var (
 	})
 	// An architecture-review item produces issues, not code: its done line
 	// names them in place of a PR, `issues:#139,#140`.
-	reIssuesDone = regexp.MustCompile(`^issues:\s*#?\d+(?:\s*,\s*#?\d+)*$`)
-	reDigits     = regexp.MustCompile(`\d+`)
+	// An entry is a number (`#139`) or a key-based tracker's key (`PROJ-123`).
+	reIssuesDone = regexp.MustCompile(`^issues:\s*(?:#?\d+|[A-Z][A-Z0-9_]*-\d+)(?:\s*,\s*(?:#?\d+|[A-Z][A-Z0-9_]*-\d+))*$`)
+	reIssueRef   = regexp.MustCompile(`#?\d+|[A-Z][A-Z0-9_]*-\d+`)
 )
 
 // ParseIssuesDone reads the evidence of `ROTA-DONE <slot> issues:#a,#b` into
-// the issue refs (`#a`, `#b`). ok is false for any other evidence.
+// the issue refs (`#a`, `PROJ-123`). ok is false for any other evidence.
 func ParseIssuesDone(evidence string) (refs []string, ok bool) {
 	ev := strings.TrimSpace(evidence)
 	if !reIssuesDone.MatchString(ev) {
 		return nil, false
 	}
-	for _, n := range reDigits.FindAllString(ev, -1) {
-		refs = append(refs, "#"+n)
+	for _, r := range reIssueRef.FindAllString(strings.TrimPrefix(ev, "issues:"), -1) {
+		refs = append(refs, "#"+strings.TrimPrefix(r, "#"))
+		if strings.Contains(r, "-") {
+			refs[len(refs)-1] = r
+		}
 	}
 	return refs, true
 }

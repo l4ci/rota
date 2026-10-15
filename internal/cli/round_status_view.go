@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"github.com/l4ci/rota/internal/tracker"
 	"strings"
 	"sync"
 	"time"
@@ -302,7 +303,7 @@ func tierModel(r round.Row) string {
 func slotEntry(r round.Row) entry {
 	issue := dash(r.Issue)
 	if r.Issue != "" {
-		issue = "#" + strings.TrimPrefix(r.Issue, "#")
+		issue = tracker.RefOf(r.Issue)
 	}
 	line := fmt.Sprintf("%-8s %-7s %-10s %-14s %-18s %-7s %s", r.Name, issue, dash(hostLabel(r)), prLabel(r.PR, r.PRState), tierModel(r), bounceLabel(r.Bounces), burnLabel(r))
 	var b []string

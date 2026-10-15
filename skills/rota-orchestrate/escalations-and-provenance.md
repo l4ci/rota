@@ -4,7 +4,7 @@ Loaded by `skills/rota-orchestrate/SKILL.md` section 5 when a worker is `blocked
 
 **What to escalate.** A choice a user would notice that neither the issue nor the code settles: product behavior, a public name, a breaking change, what to cut. Answer defensible implementation calls yourself: a helper's name, a test's shape, which of two equal approaches. When a worker asks the first kind, you ask the human.
 
-`rota round escalate send <number> --title … --body-file …` posts the question on the issue or PR and notifies the maintainer. It returns at once; keep working the other slots. `rota round escalate check` reads the thread for an answer. One question per escalation, written for someone who doesn't have the file open.
+`rota round escalate send <number|key> --title … --body-file …` posts the question on the issue or PR and notifies the maintainer. It returns at once; keep working the other slots. `rota round escalate check` reads the thread for an answer. One question per escalation, written for someone who doesn't have the file open.
 
 **Provenance.** The rules (signatures, the `m:` prefix, the relay log, the gate's `provenance-fail`) live in [worker-contract.md](references/worker-contract.md#provenance). What you do with them:
 

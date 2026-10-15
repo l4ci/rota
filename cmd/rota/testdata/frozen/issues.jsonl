@@ -3,8 +3,8 @@
 {"name":"close/already-closed/gitlab","steps":[{"exit":0,"env":{"data":{"changed":false,"commit":"1a6cd05","issue":3},"ok":true},"db":"c7ec7d64d1f5c1d8"}]}
 {"name":"close/auth-fails/github","steps":[{"exit":5,"env":{"error":{"code":"unavailable","exit":5,"message":"gh not installed or not authenticated"},"ok":false},"db":"c7ec7d64d1f5c1d8"}]}
 {"name":"close/auth-fails/gitlab","steps":[{"exit":5,"env":{"error":{"code":"unavailable","exit":5,"message":"glab not installed or not authenticated"},"ok":false},"db":"c7ec7d64d1f5c1d8"}]}
-{"name":"close/bad-number/github","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"rota issues close: issue must be a number, got \"x1\""},"ok":false},"db":"c7ec7d64d1f5c1d8"}]}
-{"name":"close/bad-number/gitlab","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"rota issues close: issue must be a number, got \"x1\""},"ok":false},"db":"c7ec7d64d1f5c1d8"}]}
+{"name":"close/bad-number/github","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"rota issues close: issue must be a number or a key like PROJ-123, got \"x1\""},"ok":false},"db":"c7ec7d64d1f5c1d8"}]}
+{"name":"close/bad-number/gitlab","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"rota issues close: issue must be a number or a key like PROJ-123, got \"x1\""},"ok":false},"db":"c7ec7d64d1f5c1d8"}]}
 {"name":"close/commit-unknown/github","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"commit 'deadbeef' not found in current repository"},"ok":false},"db":"c7ec7d64d1f5c1d8"}]}
 {"name":"close/commit-unknown/gitlab","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"commit 'deadbeef' not found in current repository"},"ok":false},"db":"c7ec7d64d1f5c1d8"}]}
 {"name":"close/empty-item/github","steps":[{"exit":0,"env":{"data":{"changed":true,"commit":"1a6cd05","issue":1},"ok":true},"db":"2c16f96520134968"}]}
@@ -17,8 +17,8 @@
 {"name":"close/missing-commit/gitlab","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"rota issues close: --commit is required"},"ok":false},"db":"c7ec7d64d1f5c1d8"}]}
 {"name":"close/missing-issue/github","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"issue #99 not found"},"ok":false},"db":"c7ec7d64d1f5c1d8"}]}
 {"name":"close/missing-issue/gitlab","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"issue #99 not found"},"ok":false},"db":"c7ec7d64d1f5c1d8"}]}
-{"name":"close/no-number/github","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"issues close takes one issue number"},"ok":false},"db":"c7ec7d64d1f5c1d8"}]}
-{"name":"close/no-number/gitlab","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"issues close takes one issue number"},"ok":false},"db":"c7ec7d64d1f5c1d8"}]}
+{"name":"close/no-number/github","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"issues close takes one issue number or key"},"ok":false},"db":"c7ec7d64d1f5c1d8"}]}
+{"name":"close/no-number/gitlab","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"issues close takes one issue number or key"},"ok":false},"db":"c7ec7d64d1f5c1d8"}]}
 {"name":"close/plain/github","steps":[{"exit":0,"env":{"data":{"changed":true,"commit":"1a6cd05","issue":1},"ok":true},"db":"2c16f96520134968"}]}
 {"name":"close/plain/gitlab","steps":[{"exit":0,"env":{"data":{"changed":true,"commit":"1a6cd05","issue":1},"ok":true},"db":"0256be862e1548a7"}]}
 {"name":"close/rate-limited/github","steps":[{"exit":6,"env":{"error":{"code":"retry","exit":6,"message":"github secondary rate limit — stopped; wait several minutes before retrying"},"ok":false},"db":"c7ec7d64d1f5c1d8"}]}
@@ -70,8 +70,8 @@
 {"name":"label/autocreate-off-existing/gitlab","steps":[{"exit":0,"env":{"data":{"action":"add","changed":true,"issue":1,"label":"existing"},"ok":true},"db":"a3d27d276c77c3b5"}]}
 {"name":"label/autocreate-off/github","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"label 'brand-new' does not exist (issues.autoCreateLabel is off)"},"ok":false},"db":"c7ec7d64d1f5c1d8"}]}
 {"name":"label/autocreate-off/gitlab","steps":[{"exit":0,"env":{"data":{"action":"add","changed":true,"issue":1,"label":"brand-new"},"ok":true},"db":"2afe56d1eb4a0d15"}]}
-{"name":"label/bad-number/github","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"rota issues label: issue must be a number, got \"abc\""},"ok":false},"db":"c7ec7d64d1f5c1d8"}]}
-{"name":"label/bad-number/gitlab","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"rota issues label: issue must be a number, got \"abc\""},"ok":false},"db":"c7ec7d64d1f5c1d8"}]}
+{"name":"label/bad-number/github","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"rota issues label: issue must be a number or a key like PROJ-123, got \"abc\""},"ok":false},"db":"c7ec7d64d1f5c1d8"}]}
+{"name":"label/bad-number/gitlab","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"rota issues label: issue must be a number or a key like PROJ-123, got \"abc\""},"ok":false},"db":"c7ec7d64d1f5c1d8"}]}
 {"name":"label/both-flags/github","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"rota issues label: pass exactly one of --add and --remove"},"ok":false},"db":"c7ec7d64d1f5c1d8"}]}
 {"name":"label/both-flags/gitlab","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"rota issues label: pass exactly one of --add and --remove"},"ok":false},"db":"c7ec7d64d1f5c1d8"}]}
 {"name":"label/empty-label/github","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"rota issues label: --add needs a label name"},"ok":false},"db":"c7ec7d64d1f5c1d8"}]}
@@ -84,8 +84,8 @@
 {"name":"label/missing-issue/gitlab","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"issue #99 not found"},"ok":false},"db":"c7ec7d64d1f5c1d8"}]}
 {"name":"label/neither-flag/github","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"rota issues label: pass exactly one of --add and --remove"},"ok":false},"db":"c7ec7d64d1f5c1d8"}]}
 {"name":"label/neither-flag/gitlab","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"rota issues label: pass exactly one of --add and --remove"},"ok":false},"db":"c7ec7d64d1f5c1d8"}]}
-{"name":"label/no-number/github","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"issues label takes one issue number"},"ok":false},"db":"c7ec7d64d1f5c1d8"}]}
-{"name":"label/no-number/gitlab","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"issues label takes one issue number"},"ok":false},"db":"c7ec7d64d1f5c1d8"}]}
+{"name":"label/no-number/github","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"issues label takes one issue number or key"},"ok":false},"db":"c7ec7d64d1f5c1d8"}]}
+{"name":"label/no-number/gitlab","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"issues label takes one issue number or key"},"ok":false},"db":"c7ec7d64d1f5c1d8"}]}
 {"name":"label/rate-limited-remove/github","steps":[{"exit":6,"env":{"error":{"code":"retry","exit":6,"message":"github secondary rate limit — stopped; wait several minutes before retrying"},"ok":false},"db":"c7ec7d64d1f5c1d8"}]}
 {"name":"label/rate-limited-remove/gitlab","steps":[{"exit":6,"env":{"error":{"code":"retry","exit":6,"message":"gitlab secondary rate limit — stopped; wait several minutes before retrying"},"ok":false},"db":"c7ec7d64d1f5c1d8"}]}
 {"name":"label/rate-limited/github","steps":[{"exit":6,"env":{"error":{"code":"retry","exit":6,"message":"github secondary rate limit — stopped; wait several minutes before retrying"},"ok":false},"db":"c7ec7d64d1f5c1d8"}]}
@@ -97,8 +97,8 @@
 {"name":"label/repo-unknown","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"--repo nope is not registered in .rota/repos.json"},"ok":false},"db":"c7ec7d64d1f5c1d8"}]}
 {"name":"label/spaced-label/github","steps":[{"exit":0,"env":{"data":{"action":"add","changed":true,"issue":5,"label":"needs review"},"ok":true},"db":"79e476090ec4c99d"}]}
 {"name":"label/spaced-label/gitlab","steps":[{"exit":0,"env":{"data":{"action":"add","changed":true,"issue":5,"label":"needs review"},"ok":true},"db":"79e476090ec4c99d"}]}
-{"name":"label/two-numbers/github","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"issues label takes one issue number"},"ok":false},"db":"c7ec7d64d1f5c1d8"}]}
-{"name":"label/two-numbers/gitlab","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"issues label takes one issue number"},"ok":false},"db":"c7ec7d64d1f5c1d8"}]}
+{"name":"label/two-numbers/github","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"issues label takes one issue number or key"},"ok":false},"db":"c7ec7d64d1f5c1d8"}]}
+{"name":"label/two-numbers/gitlab","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"issues label takes one issue number or key"},"ok":false},"db":"c7ec7d64d1f5c1d8"}]}
 {"name":"label/umbrella-api","steps":[{"exit":0,"env":{"data":{"action":"add","changed":true,"issue":1,"label":"fresh"},"ok":true},"db":"119225b5180c87c4"}]}
 {"name":"label/umbrella-web","steps":[{"exit":0,"env":{"data":{"action":"add","changed":false,"issue":1,"label":"bug"},"ok":true},"db":"c7ec7d64d1f5c1d8"}]}
 {"name":"label/unicode-label/github","steps":[{"exit":0,"env":{"data":{"action":"add","changed":true,"issue":5,"label":"prioé"},"ok":true},"db":"f404d215b7e3e563"}]}

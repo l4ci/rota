@@ -23,11 +23,14 @@ type Issue = tracker.Issue
 
 // refTag is how a bullet spells an issue: the type letter and number of a
 // numbered issue (F12), the bare key of a key-based tracker's (PROJ-123).
-func refTag(letter string, is Issue) string {
-	if n := is.Num(); n > 0 {
+func refTag(letter string, is Issue) string { return KeyTag(letter, is.Key) }
+
+// KeyTag is the item id of an issue: the type letter and number of a numbered issue, the bare key otherwise.
+func KeyTag(letter string, k tracker.IssueKey) string {
+	if n, ok := k.Number(); ok {
 		return letter + strconv.Itoa(n)
 	}
-	return is.Key.String()
+	return k.String()
 }
 
 // Tracker is the part of internal/tracker's Adapter the issue backend calls:
@@ -325,7 +328,7 @@ func (b *Issues) openIssues() ([]Issue, error) {
 	if err != nil {
 		return nil, err
 	}
-	sort.SliceStable(items, func(i, j int) bool { return items[i].Num() < items[j].Num() })
+	sort.SliceStable(items, func(i, j int) bool { return tracker.CompareKeys(items[i].Key, items[j].Key) < 0 })
 	return items, nil
 }
 
@@ -340,7 +343,7 @@ func (b *Issues) closedIssues() ([]Issue, error) {
 		if items[i].ClosedAt != items[j].ClosedAt {
 			return items[i].ClosedAt > items[j].ClosedAt
 		}
-		return items[i].Num() > items[j].Num()
+		return tracker.CompareKeys(items[i].Key, items[j].Key) > 0
 	})
 	return items, nil
 }

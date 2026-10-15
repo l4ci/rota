@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/exitmap"
+	"github.com/l4ci/rota/internal/tracker"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -454,7 +455,7 @@ func (e Env) Reclaim(ctx context.Context, root string, be Board, o ReclaimOpts) 
 		return res, nil
 	}
 	if h.Health == HealthHealthy && !o.Force {
-		return res, blocked(BlockHealthy, "slot %s is healthy (an agent is working on #%s); --force reclaims it anyway", o.Slot, h.Issue)
+		return res, blocked(BlockHealthy, "slot %s is healthy (an agent is working on %s); --force reclaims it anyway", o.Slot, tracker.RefOf(h.Issue))
 	}
 	reason := "forced"
 	switch h.Health {

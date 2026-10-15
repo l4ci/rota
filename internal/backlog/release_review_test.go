@@ -43,6 +43,11 @@ func (f *rrFake) OpenPRs(context.Context) ([]tracker.PR, error) {
 	return slices.Clone(f.PRs), nil
 }
 
+func (f *rrFake) ClosesIssue(key tracker.IssueKey, c tracker.ClosingSource) bool {
+	n, ok := key.Number()
+	return ok && slices.Contains(f.ClosedNumbers(c.Body), n)
+}
+
 func (f *rrFake) ClosedNumbers(body string) []int {
 	var out []int
 	for _, m := range rrClosing.FindAllStringSubmatch(body, -1) {
@@ -544,9 +549,9 @@ func TestIssuesReleaseNotes(t *testing.T) {
 		got[s.Name] = s.Rows
 	}
 	if names := []string{secs[0].Name, secs[1].Name, secs[2].Name}; !reflect.DeepEqual(names, []string{"New", "Fixed", "Changed"}) ||
-		!reflect.DeepEqual(got["New"], []NoteRow{{"Multi spaced title", 10}}) ||
-		!reflect.DeepEqual(got["Fixed"], []NoteRow{{"Fixed bug", 6}}) ||
-		!reflect.DeepEqual(got["Changed"], []NoteRow{{"Old task", 4}}) {
+		!reflect.DeepEqual(got["New"], []NoteRow{{"Multi spaced title", 10, "#10"}}) ||
+		!reflect.DeepEqual(got["Fixed"], []NoteRow{{"Fixed bug", 6, "#6"}}) ||
+		!reflect.DeepEqual(got["Changed"], []NoteRow{{"Old task", 4, "#4"}}) {
 		t.Fatalf("notes %+v", secs)
 	}
 }

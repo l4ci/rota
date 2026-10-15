@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/tracker"
 	"strings"
 
 	"github.com/l4ci/rota/internal/config"
@@ -172,7 +173,7 @@ func roundStatus(*flag.FlagSet) RunFunc {
 			lines = append(lines, strings.Join(cols, "\t"))
 		}
 		for _, q := range rep.Queued {
-			lines = append(lines, fmt.Sprintf("review\t#%s\t%s\t%s\tfrom %s", q.Issue, dash(q.PR), dash(q.Branch), dash(q.From)))
+			lines = append(lines, fmt.Sprintf("review\t%s\t%s\t%s\tfrom %s", tracker.RefOf(q.Issue), dash(q.PR), dash(q.Branch), dash(q.From)))
 		}
 		for _, l := range escLines {
 			lines = append(lines, "escalation\t"+l)
@@ -227,10 +228,10 @@ func roundReconcile(fs *flag.FlagSet) RunFunc {
 		d.Set("limits", lim)
 		var lines []string
 		for _, f := range out.Drift {
-			lines = append(lines, fmt.Sprintf("drift\t%s\t%s\t%s", f.Kind, dash(firstOf(f.Slot, "#"+f.Issue)), f.Detail))
+			lines = append(lines, fmt.Sprintf("drift\t%s\t%s\t%s", f.Kind, dash(firstOf(f.Slot, tracker.RefOf(f.Issue))), f.Detail))
 		}
 		for _, f := range out.Repaired {
-			lines = append(lines, fmt.Sprintf("repaired\t%s\t%s\t%s", f.Kind, dash(firstOf(f.Slot, "#"+f.Issue)), f.Repair))
+			lines = append(lines, fmt.Sprintf("repaired\t%s\t%s\t%s", f.Kind, dash(firstOf(f.Slot, tracker.RefOf(f.Issue))), f.Repair))
 		}
 		for _, l := range escLines {
 			lines = append(lines, "escalation\t"+l)

@@ -1,6 +1,10 @@
 package config
 
-import "fmt"
+import (
+	"fmt"
+	"strconv"
+	"strings"
+)
 
 // MaxInt is the upper bound of every unbounded integer setting.
 const MaxInt = 1 << 30
@@ -56,9 +60,23 @@ func StringIfSet(cfg any, key string) string {
 // Keys shared by more than one concern. Each is read here so its range is
 // defined once.
 
-// EscalateIssue is orchestrator.escalateIssue; 0 means unset.
-func EscalateIssue(cfg any) (int, error) {
-	return Int(cfg, "orchestrator.escalateIssue", 0, MaxInt)
+// EscalateIssue is orchestrator.escalateIssue as text: an issue number, or a
+// key like PROJ-123 on a key-based tracker. "" means unset (0 or empty). A
+// string is not checked against the key grammar here; tracker.ParseKey does.
+func EscalateIssue(cfg any) (string, error) {
+	const key = "orchestrator.escalateIssue"
+	v, err := Value(cfg, key)
+	if err != nil {
+		return "", err
+	}
+	if s, ok := v.(string); ok {
+		return strings.TrimSpace(s), nil
+	}
+	n, err := Int(cfg, key, 0, MaxInt)
+	if err != nil || n == 0 {
+		return "", err
+	}
+	return strconv.Itoa(n), nil
 }
 
 // HandoffMaxAgeSeconds is orchestrator.handoffMaxAgeSeconds.
