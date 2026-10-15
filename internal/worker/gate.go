@@ -385,6 +385,7 @@ var gateSteps = []gateStep{
 	(*gate).stepAdoptPR,
 	(*gate).stepBestOf,
 	(*gate).stepRemote,
+	(*gate).stepSlotHead,
 	(*gate).stepRefs,
 	(*gate).stepFreshness,
 	(*gate).stepPRMatches,
@@ -536,6 +537,36 @@ func (g *gate) stepAdoptPR() (bool, error) {
 	return false, nil
 }
 
+// stepSlotHead follows a slot's PR to its head branch when the two disagree.
+// An issue split into stacked PRs ends with a second PR from a new branch, and
+// the slot still records the first (merged) one. The head is taken only when
+// it leads with the issue the slot holds, so a PR of another issue's branch
+// stays a mismatch. A real gate records it on the slot, so the next one starts
+// from the right branch.
+func (g *gate) stepSlotHead() (bool, error) {
+	t := g.target
+	if t.External || t.Queued || !g.remote || g.pr == "" || g.branch == "" {
+		return false, nil
+	}
+	info, ok := g.prInfo()
+	if !ok {
+		return false, nil
+	}
+	g.viewed = &info // stepPRMatches reads the same PR next: one forge call
+	if info.State != "OPEN" || info.Head == "" || info.Head == g.branch {
+		return false, nil
+	}
+	if held := HeldID(t.Task, g.branch, t.Name); held == "" || HeldID("", info.Head, t.Name) != held {
+		return false, nil
+	}
+	g.res.Notes = append(g.res.Notes, fmt.Sprintf("BRANCH-FOLLOWED %s — PR %s is headed by %s, not the recorded %s", t.Name, g.pr, info.Head, g.branch))
+	g.branch, g.target.Branch, g.res.Branch = info.Head, info.Head, info.Head
+	if !g.o.CheckOnly && t.Name != "" { // o.Slot is a PR ref when gated by number
+		UpdateSlot(g.root, t.Name, func(s *Slot) { s.SetBranch(info.Head) })
+	}
+	return false, nil
+}
+
 // stepRemote decides whether the gate reads origin/* refs. A PR merges what was
 // PUSHED, so with a PR and an origin remote the gate reads origin/* refs.
 // Without a PR the local merge takes the local branch, and local refs are the
@@ -637,7 +668,14 @@ func (g *gate) stepPRMatches() (bool, error) {
 	if g.verified, code = g.git(g.root, "rev-parse", g.headRef); code != 0 || g.verified == "" {
 		return g.broke(fmt.Sprintf("git rev-parse %s failed (exit %d)", g.headRef, code))
 	}
-	info, ok := g.prInfo()
+	info, ok := g.viewed, true
+	g.viewed = nil
+	if info == nil {
+		var v tracker.PRInfo
+		if v, ok = g.prInfo(); ok {
+			info = &v
+		}
+	}
 	if !ok {
 		return g.broke(fmt.Sprintf("could not read PR %s from %s", g.prNum, g.provider))
 	}
@@ -1287,6 +1325,8 @@ type gate struct {
 	// resolved is the target as GateTarget returned it. stepExternal rewrites
 	// target.Branch to the forge head; the ledger keeps the resolved one.
 	resolved GateTarget
+	// viewed is the PR stepSlotHead read, for stepPRMatches to reuse once.
+	viewed   *tracker.PRInfo
 	branch   string
 	pr       string
 	prNum    string
