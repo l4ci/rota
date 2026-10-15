@@ -560,6 +560,31 @@
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-12"
+    },
+    "Rounds: Orchestration::Label a split issue partial-slice before its first slice merges": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-15"
+    },
+    "Build & Tooling: Smoke testing::Fixtures that expect issue or forge reads must pin the source and forge": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-15"
+    },
+    "Build & Tooling: Smoke testing::A config key change regenerates the frozen config record": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-15"
+    },
+    "Architecture: Helper conventions & invariants: Go verbs & fakes::Gate steps read the forge only after stepRemote": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-15"
+    },
+    "Architecture: Helper conventions & invariants: Go verbs & fakes::The tracker REST layer never resends a POST after a 5xx": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-15"
     }
   }
 }
