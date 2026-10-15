@@ -163,3 +163,29 @@ func TestADFToMarkdownNonDocument(t *testing.T) {
 		t.Error("trailing newline not trimmed")
 	}
 }
+
+// TestADFLiteralTextSurvivesReadModifyWrite reads ADF whose plain text looks
+// like Markdown, writes the result back and expects the same document: a
+// read-modify-write must not turn a person's `*x*` into emphasis.
+func TestADFLiteralTextSurvivesReadModifyWrite(t *testing.T) {
+	text := func(s string) map[string]any { return map[string]any{"type": "text", "text": s} }
+	para := func(nodes ...any) map[string]any { return map[string]any{"type": "paragraph", "content": nodes} }
+	doc := map[string]any{"type": "doc", "version": 1, "content": []any{
+		para(text("a *x* and _y_ and **z**")),
+		para(text("# hi")),
+		para(text("see [a](b) and `c` and a\\*b")),
+		para(text("- not a list"), map[string]any{"type": "hardBreak"}, text("1. nor this"), map[string]any{"type": "hardBreak"}, text("> nor a quote")),
+		para(text("---")),
+		para(text("```")),
+		para(text("- [ ] AC-1: plain checkbox text")),
+		map[string]any{"type": "codeBlock", "content": []any{text("```inner\nfence\n```")}},
+	}}
+	md := adfToMarkdown(adfJSON(t, doc))
+	back := adfJSON(t, markdownToADF(md))
+	if want := adfJSON(t, doc); string(back) != string(want) {
+		t.Fatalf("read-modify-write changed the document\nmarkdown:\n%s\ngot:  %s\nwant: %s", md, back, want)
+	}
+	if again := adfToMarkdown(back); again != md {
+		t.Fatalf("second read differs:\n%s\nvs\n%s", again, md)
+	}
+}

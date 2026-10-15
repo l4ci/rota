@@ -211,6 +211,17 @@ func TestRateLimit(t *testing.T) {
 	}
 }
 
+func TestFailNextRefusesBeforeHandling(t *testing.T) {
+	s := New(t, Options{})
+	s.FailNext(1, 503)
+	c, _, _ := call(t, s, "POST", "/version", `{"name":"1.0","project":"PROJ"}`)
+	want(t, c, 503)
+	c, _, _ = call(t, s, "GET", "/project/PROJ/versions", "")
+	want(t, c, 200)
+	c, _, _ = call(t, s, "POST", "/version", `{"name":"1.0","project":"PROJ"}`)
+	want(t, c, 201) // the failed POST created nothing, so the name is free
+}
+
 func TestVersionsAndLabels(t *testing.T) {
 	s := New(t, Options{})
 	c, _, v := call(t, s, "POST", "/version", `{"name":"1.0","project":"PROJ"}`)

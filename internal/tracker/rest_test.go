@@ -12,7 +12,10 @@ import (
 
 // restFor is a REST client on srv whose waits are recorded, not slept.
 func restFor(srv *httptest.Server, waits *[]time.Duration) *REST {
-	return &REST{Base: srv.URL, Sleep: func(d time.Duration) { *waits = append(*waits, d) }}
+	return &REST{Base: srv.URL, Sleep: func(_ context.Context, d time.Duration) error {
+		*waits = append(*waits, d)
+		return nil
+	}}
 }
 
 func TestRESTRetriesA429AfterRetryAfter(t *testing.T) {
@@ -142,5 +145,128 @@ func TestPagesStopsOnARepeatedCursor(t *testing.T) {
 	})
 	if err == nil || calls != 2 {
 		t.Fatalf("calls=%d err=%v, want a failure once a cursor repeats", calls, err)
+	}
+}
+
+func TestRESTDoesNotResendAPostOn5xx(t *testing.T) {
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer srv.Close()
+	var waits []time.Duration
+	err := restFor(srv, &waits).Do(context.Background(), "POST", "/comment", map[string]string{"body": "x"}, nil)
+	if !IsKind(err, KindFailed) || calls != 1 || len(waits) != 0 {
+		t.Fatalf("calls=%d waits=%v err=%v, want one POST and no retry: the server may have made the comment", calls, waits, err)
+	}
+}
+
+func TestRESTRetriesAPostOn429(t *testing.T) {
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if calls == 1 {
+			w.Header().Set("Retry-After", "1")
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+		w.WriteHeader(http.StatusCreated)
+	}))
+	defer srv.Close()
+	var waits []time.Duration
+	if err := restFor(srv, &waits).Do(context.Background(), "POST", "/comment", nil, nil); err != nil || calls != 2 {
+		t.Fatalf("calls=%d err=%v, want a 429 POST retried", calls, err)
+	}
+}
+
+func TestRESTWaitStopsWhenTheContextEnds(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Retry-After", "60")
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer srv.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	err := (&REST{Base: srv.URL}).Do(ctx, "GET", "/x", nil, nil)
+	if !IsKind(err, KindInternal) || time.Since(start) > 5*time.Second {
+		t.Fatalf("err=%v after %s, want a cancelled wait that returns at once", err, time.Since(start))
+	}
+}
+
+func TestRESTFailsOnAnOversizedResponse(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(make([]byte, 2048))
+	}))
+	defer srv.Close()
+	var waits []time.Duration
+	c := restFor(srv, &waits)
+	c.MaxBody = 1024
+	if err := c.Do(context.Background(), "GET", "/x", nil, nil); !IsKind(err, KindFailed) {
+		t.Fatalf("err=%v, want KindFailed for a body past MaxBody", err)
+	}
+}
+
+func TestRESTRetryAfterForms(t *testing.T) {
+	now := time.Date(2026, 10, 15, 12, 0, 0, 0, time.UTC)
+	for _, tc := range []struct {
+		header string
+		want   time.Duration // the one wait slept before the retry
+	}{
+		{now.Add(30 * time.Second).Format(http.TimeFormat), 30 * time.Second},
+		{now.Add(-time.Minute).Format(http.TimeFormat), 0},
+		{"soon", restBackoff},
+		{"-5", restBackoff},
+		{"120", 120 * time.Second}, // exactly the cap still waits
+	} {
+		calls := 0
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			calls++
+			if calls == 1 {
+				w.Header().Set("Retry-After", tc.header)
+				w.WriteHeader(http.StatusTooManyRequests)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+		}))
+		var waits []time.Duration
+		c := restFor(srv, &waits)
+		c.Now = func() time.Time { return now }
+		c.MaxWait = 120 * time.Second
+		err := c.Do(context.Background(), "GET", "/x", nil, nil)
+		srv.Close()
+		if err != nil || len(waits) != 1 || waits[0] != tc.want {
+			t.Errorf("Retry-After %q: waits=%v err=%v, want [%s]", tc.header, waits, err, tc.want)
+		}
+	}
+}
+
+func TestRESTGivesUpOneSecondPastTheCap(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Retry-After", "121")
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer srv.Close()
+	var waits []time.Duration
+	c := restFor(srv, &waits)
+	c.MaxWait = 120 * time.Second
+	if err := c.Do(context.Background(), "GET", "/x", nil, nil); !IsKind(err, KindRateLimited) || len(waits) != 0 {
+		t.Fatalf("waits=%v err=%v, want an immediate rate-limit failure", waits, err)
+	}
+}
+
+func TestRESTRateLimitExhaustsTheRetries(t *testing.T) {
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		w.Header().Set("Retry-After", "1")
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer srv.Close()
+	var waits []time.Duration
+	err := restFor(srv, &waits).Do(context.Background(), "GET", "/x", nil, nil)
+	if !IsKind(err, KindRateLimited) || calls != restRetries+1 || len(waits) != restRetries {
+		t.Fatalf("calls=%d waits=%v err=%v, want %d attempts then KindRateLimited", calls, waits, err, restRetries+1)
 	}
 }
