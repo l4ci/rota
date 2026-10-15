@@ -490,7 +490,7 @@
       "Exit": 5,
       "Origin": "seed",
       "Local": "seed",
-      "Forge": "github PRView 7\n"
+      "Forge": ""
     },
     "h: local merge without a PR": {
       "Exit": 0,

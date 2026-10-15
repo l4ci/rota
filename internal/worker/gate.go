@@ -383,9 +383,9 @@ var gateSteps = []gateStep{
 	(*gate).stepForge,
 	(*gate).stepExternal,
 	(*gate).stepAdoptPR,
-	(*gate).stepSlotHead,
 	(*gate).stepBestOf,
 	(*gate).stepRemote,
+	(*gate).stepSlotHead,
 	(*gate).stepRefs,
 	(*gate).stepFreshness,
 	(*gate).stepPRMatches,
@@ -545,10 +545,9 @@ func (g *gate) stepAdoptPR() (bool, error) {
 // from the right branch.
 func (g *gate) stepSlotHead() (bool, error) {
 	t := g.target
-	if t.External || t.Queued || g.local || g.pr == "" || g.branch == "" {
+	if t.External || t.Queued || !g.remote || g.pr == "" || g.branch == "" {
 		return false, nil
 	}
-	g.prNum = prNumText(g.pr)
 	info, ok := g.prInfo()
 	if !ok {
 		return false, nil
