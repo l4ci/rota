@@ -39,13 +39,13 @@ Older configs used `backlog.backend` (`file` or `issues`) and `issues.provider`.
 `issues.source: jira` keeps the issues in one Jira project and the code on your forge (GitHub or GitLab). rota talks to the Jira REST API directly, so it needs no CLI: Cloud through REST v3, Data Center through REST v2.
 
 1. Create a token. On Jira Cloud, make an API token at <https://id.atlassian.com/manage-profile/security/api-tokens>; rota sends it with your account email. On Data Center, create a personal access token under your profile.
-2. Add a connection. It lives on your machine, never in the repo (see [Tracker connections](configuration.md#tracker-connections)):
+2. Add a connection. It lives on your machine, never in the repo (see [Tracker connections](configuration.md#tracker-connections)). `--deployment` says Cloud or Data Center; an `*.atlassian.net` site defaults to `cloud`, and any other site must pass it:
 
    ```sh
    # Cloud: --user is the account email the API token belongs to
    echo "$JIRA_TOKEN" | rota connect add work --kind jira --site https://acme.atlassian.net --user me@acme.com --token-stdin
-   # Data Center: no --user; the token is a personal access token
-   echo "$JIRA_PAT" | rota connect add work --kind jira --site https://jira.acme.com --token-stdin
+   # Data Center: the token is a personal access token
+   echo "$JIRA_PAT" | rota connect add work --kind jira --site https://jira.acme.com --deployment datacenter --token-stdin
    rota connect test work
    ```
 

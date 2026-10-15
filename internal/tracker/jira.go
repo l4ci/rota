@@ -26,8 +26,8 @@ import (
 
 // Jira is the issue tracker of issues.source jira, over the REST API of a
 // `rota connect` connection: Cloud (REST v3, email plus API token, ADF
-// bodies) when the connection names a user, Data Center (REST v2, personal
-// access token, plain-text bodies) when it does not.
+// bodies) or Data Center (REST v2, personal access token, plain-text bodies),
+// as the connection's deployment says.
 //
 // rota's hidden state never goes into a body, since Jira keeps no HTML
 // comment through ADF: a comment rota writes with a marker is posted with the
@@ -101,6 +101,9 @@ func newJiraTracker(ctx context.Context, c *CLI, s Settings) (*Jira, error) {
 	if conn.Kind != connections.KindJira {
 		return nil, unavailable("connection %q is kind %s, not jira", conn.Name, conn.Kind)
 	}
+	if err := conn.Validate(); err != nil {
+		return nil, unavailable("%v (run: rota connect add %s --replace ...)", err, conn.Name)
+	}
 	if secret == "" {
 		return nil, unavailable("connection %q has no secret (run: rota connect add %s --replace, or set %s)", conn.Name, conn.Name, connections.EnvVar(conn.Name))
 	}
@@ -115,9 +118,11 @@ func newJiraTracker(ctx context.Context, c *CLI, s Settings) (*Jira, error) {
 }
 
 // NewJira is the adapter for project on connection c, authenticated by secret.
+// The connection's deployment (cloud unless it says datacenter) picks the API.
 func NewJira(c connections.Connection, secret, project, notPlannedLabel string) *Jira {
 	site := strings.TrimRight(c.Site, "/")
-	j := &Jira{site: site, project: strings.ToUpper(project), cloud: c.User != "", notPlanned: notPlannedLabel}
+	cloud := c.WithDefaults().Deployment != connections.DeploymentDataCenter
+	j := &Jira{site: site, project: strings.ToUpper(project), cloud: cloud, notPlanned: notPlannedLabel}
 	if j.notPlanned == "" {
 		j.notPlanned = "not-planned"
 	}
@@ -134,6 +139,9 @@ func NewJira(c connections.Connection, secret, project, notPlannedLabel string) 
 type JiraTester struct{}
 
 func (JiraTester) Test(ctx context.Context, c connections.Connection, secret string) error {
+	if err := c.Validate(); err != nil {
+		return err
+	}
 	return NewJira(c, secret, "", "").CheckAuth(ctx)
 }
 

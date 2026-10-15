@@ -373,7 +373,7 @@ func TestLabelCloseOnJiraSource(t *testing.T) {
 	ctx := context.Background()
 	s := jiratest.New(t, jiratest.Options{})
 	conn := tracker.WithConnections(func(_ context.Context, name string) (connections.Connection, string, error) {
-		return connections.Connection{Name: name, Kind: connections.KindJira, Site: s.URL, User: "me@example.com"}, "tok", nil
+		return connections.Connection{Name: name, Kind: connections.KindJira, Site: s.URL, User: "me@example.com", Deployment: connections.DeploymentCloud}, "tok", nil
 	})
 	f := &forge{origin: gh}
 	env := f.env(t)
