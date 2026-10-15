@@ -604,6 +604,9 @@ Skills that use the base branch (including `/rota-ship`, `/rota-review` and `/ro
 | `issues.retryWaitSeconds` | `60` | Seconds to wait before the single retry after a primary rate limit. |
 | `issues.bulkPaceMs` | `1000` | Milliseconds `rota migrate issues` waits between tracker writes. `0` disables the pause. |
 | `issues.homeRepo` | `""` | Umbrella mode only: sub-repo holding milestone tracking issues. Empty means the first registered sub-repo. |
+| `issues.connection` | `""` | Name of the machine-wide tracker connection (Jira, Linear) added with `rota connect add`. A name only, never a secret. A teammate whose connection has another name overrides it in `config.local.json`. See [Tracker connections](#tracker-connections). |
+| `issues.jira.project` | `""` | Jira project key the connection reads from and writes to. |
+| `issues.linear.team` | `""` | Linear team key the connection reads from and writes to. |
 | `issues.labels.inProgress` | `"in-progress"` | Label name. |
 | `issues.labels.needsReview` | `"needs-review"` | Label name. |
 | `issues.labels.changesRequested` | `"changes-requested"` | Label name. |
@@ -615,6 +618,21 @@ Skills that use the base branch (including `/rota-ship`, `/rota-review` and `/ro
 | `issues.labels.types.bug` / `.feature` / `.task` | `"type:bug"` / `"type:feature"` / `"type:task"` | Label names per item type. |
 | `issues.labels.priorityPrefix` | `"p"` | Prefix for priority labels. |
 | `issues.labels.sizePrefix` | `"size:"` | Prefix for feature size labels (`size:Major`). |
+
+### Tracker connections
+
+Credentials and sites belong to you, not the repo, so they never go in `.rota/`. `rota connect` keeps named connections in `connections.json` under the global rota config dir (`~/.config/rota`, beside `projects.json`); a project only names one with `issues.connection`. GitHub and GitLab keep their own login through `gh` and `glab`; this is for trackers rota reaches over HTTP.
+
+```sh
+echo "$JIRA_TOKEN" | rota connect add work --kind jira --site https://acme.atlassian.net --user me@acme.com --token-stdin
+rota connect list          # name, kind, site, user and which store holds the secret; never the secret
+rota connect test work     # one authenticated read
+rota connect remove work   # drops the connection and its secret
+```
+
+The secret goes to the OS keychain (`security` on macOS, `secret-tool` on Linux) and, where there is none (headless Linux), to a `0600` `secrets.json` beside `connections.json`. `rota connect add` says which store it used and why it fell back; `rota connect list` shows it per connection. `ROTA_<NAME>_TOKEN` (the name upper-cased, other characters as `_`, so `work` reads `ROTA_WORK_TOKEN`) overrides the stored secret, for CI. `rota connect add` takes the token on stdin only, so it never reaches your shell history or a process list; on macOS the keychain write goes through `security -i`, again over stdin. Adding a name whose `ROTA_<NAME>_TOKEN` equals another connection's (`a-b` and `a_b`) is refused. OAuth is not supported: API tokens only.
+
+`rota doctor` checks the project's `issues.connection`: it fails with a hint when the connection is unknown, has no secret, or its test read fails. A kind with no test read yet in your build shows as a warning.
 
 `issues.label` is the legacy alias of `issues.labels.inProgress`. It is used when the new key is unset. `rota config show` lists all of these keys with their effective value and source.
 

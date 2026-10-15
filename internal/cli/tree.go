@@ -30,6 +30,7 @@ func Tree() *Command {
 			initCommands(),
 			setupCommand(),
 			projectsCommand(),
+			connectCommand(),
 			skillsCommands(),
 		},
 	}
