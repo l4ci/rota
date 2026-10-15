@@ -90,3 +90,19 @@ func TestAssignKeyedDependsOnReadsOnlyItsProject(t *testing.T) {
 		t.Fatalf("prose blocked the assign: %v", err)
 	}
 }
+
+// A list item in Depends on that starts with another project's key names a
+// dependency rota cannot read: the item is not ready.
+func TestAssignKeyedDependsOnAnotherProjectIsUnverifiable(t *testing.T) {
+	text := "## Depends on\n- OTHER-3\n* ops-9 rollout\n- stored as UTF-8\n- PROJ-12, OTHER-4 too\n"
+	refs, unverifiable := dependencies(text, "PROJ")
+	if strings.Join(refs, ",") != "PROJ-12" || strings.Join(unverifiable, ",") != "OTHER-3,OPS-9" {
+		t.Fatalf("refs %v, unverifiable %v", refs, unverifiable)
+	}
+	f := newAssignFixture(t)
+	f.be.add("PROJ-126", "Cross", "M01", false, "## Acceptance\n- [ ] ok\n\n## Depends on\n- OTHER-3\n")
+	_, err := f.assign("PROJ-126", "ben", nil)
+	if err == nil || !strings.Contains(err.Error(), "cannot verify OTHER-3") || !strings.Contains(err.Error(), "PROJ-N") {
+		t.Fatalf("another project's dependency passed: %v", err)
+	}
+}
