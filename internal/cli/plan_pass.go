@@ -57,7 +57,7 @@ func planPass(fs *flag.FlagSet) RunFunc {
 		}
 		if !issue {
 			return Result{Data: jsonObj("blockedBy", "backend", "changed", false)},
-				Refused("%s needs item notes, which only the issue backend has (backlog.backend is not \"issues\")", c.Path)
+				Refused("%s needs item notes, which only the issue backend has (issues.source is file)", c.Path)
 		}
 		_, wf, id, _, err := itemFlow(c, ref)
 		if err != nil {

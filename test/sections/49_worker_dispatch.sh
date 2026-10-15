@@ -517,7 +517,7 @@ pass "worker verbs helpers exit 2 on usage errors"
 TMP_RV="$(mktemp -d)"
 mkdir -p "$TMP_RV/.rota" "$TMP_RV/bin"
 ( cd "$TMP_RV" && git init -q -b main . && git -c user.email=a@b -c user.name=n commit -q --allow-empty -m init \
-  && printf '{"issues":{"provider":"github"}}\n' > .rota/config.json ) || fail "review-loop fixture setup failed"
+  && printf '{"forge":{"provider":"github"}}\n' > .rota/config.json ) || fail "review-loop fixture setup failed"
 cat > "$TMP_RV/bin/gh" <<'SH'
 #!/usr/bin/env bash
 case "$*" in

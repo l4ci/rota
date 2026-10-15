@@ -15,7 +15,7 @@ import (
 
 // Glue for the design and plan groups. Add, show, put and rm run on
 // whichever store the backend gives them (artifact_stores.go); list, amend and the
-// plan checks work on the files and refuse under backlog.backend "issues".
+// plan checks work on the files and refuse when issues.source is a tracker.
 
 func designPlanCommands() []*Command {
 	return []*Command{
@@ -61,7 +61,7 @@ func fileRoot(c *Ctx, readOnly bool) (string, Result, error) {
 	d := jsonx.NewObject()
 	d.Set("blockedBy", "backend")
 	d.Set("changed", false)
-	msg := "%s works on the file backend only (backlog.backend is \"issues\")"
+	msg := "%s works on the file backend only (issues.source is a tracker)"
 	if readOnly {
 		return "", Result{Data: d}, Failed(msg, c.Path)
 	}

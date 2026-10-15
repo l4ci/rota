@@ -176,12 +176,15 @@ const stdCounters = `{
 `
 
 const stdConfig = `{
-  "backlog": {
-    "backend": "file"
+  "issues": {
+    "source": "file"
   }
 }
 `
 
+// issuesConfig is an unmigrated config: issues on the tracker (legacy
+// backlog.backend), the provider left to the origin remote. No origin here, so
+// the tracker cannot resolve; the legacy keys keep deciding (#797).
 const issuesConfig = `{
   "backlog": {
     "backend": "issues"

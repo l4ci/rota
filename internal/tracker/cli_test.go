@@ -273,13 +273,17 @@ func TestResolveProvider(t *testing.T) {
 		{"", "github", gh, "github"},
 		{"", "auto", gh, "github"},
 		{"", "bogus", origin("https://gitlab.example.com/o/r", 0), "gitlab"},
-		{"", "auto", origin("", 2), ""},
+		{"", "auto", origin("", 2), "local"}, // no remote: local
+		{"", "auto", origin("", 0), "local"},
+		{"", "local", gh, "local"},
+		{"local", "github", gh, "local"},
+		{"auto", "local", gh, "local"},
 		{"", "auto", origin("https://example.com/o/r", 0), ""},
 	} {
 		p, err := ResolveProvider(context.Background(), c.want, c.configured, "/repo", c.x)
 		if c.out == "" {
 			var te *Error
-			if !IsKind(err, KindUnavailable) || err.Error() != "cannot determine provider (set issues.provider)" ||
+			if !IsKind(err, KindUnavailable) || !strings.Contains(err.Error(), "cannot determine the forge from origin https://example.com/o/r (set forge.provider)") ||
 				!errors.As(err, &te) || te.Code != 3 {
 				t.Errorf("%+v: %q, %v", c, p, err)
 			}
@@ -340,16 +344,19 @@ func TestSettingsFromConfig(t *testing.T) {
 		}
 		return v
 	}
-	def := Settings{Provider: "auto", RetryWait: 60 * time.Second, NotPlannedLabel: "not-planned"}
+	def := Settings{Provider: "auto", Source: "file", RetryWait: 60 * time.Second, NotPlannedLabel: "not-planned"}
 	for _, c := range []struct {
 		cfg  any
 		want Settings
 	}{
 		{nil, def},
 		{parse(`{}`), def},
-		{parse(`{"issues":{"provider":null,"retryWaitSeconds":null}}`), def},
-		{parse(`{"issues":{"provider":"gitlab","retryWaitSeconds":0.5,"labels":{"notPlanned":"wontfix"}}}`),
-			Settings{Provider: "gitlab", RetryWait: 500 * time.Millisecond, NotPlannedLabel: "wontfix"}},
+		{parse(`{"forge":{"provider":null},"issues":{"source":null,"retryWaitSeconds":null}}`), def},
+		{parse(`{"forge":{"provider":"gitlab"},"issues":{"source":"jira","retryWaitSeconds":0.5,"labels":{"notPlanned":"wontfix"}}}`),
+			Settings{Provider: "gitlab", Source: "jira", RetryWait: 500 * time.Millisecond, NotPlannedLabel: "wontfix"}},
+		// an unmigrated legacy config keeps deciding
+		{parse(`{"backlog":{"backend":"issues"},"issues":{"provider":"gitlab"}}`),
+			Settings{Provider: "gitlab", Source: "gitlab", RetryWait: 60 * time.Second, NotPlannedLabel: "not-planned"}},
 	} {
 		if got := SettingsFromConfig(c.cfg); got != c.want {
 			t.Errorf("%v: %+v, want %+v", c.cfg, got, c.want)
@@ -413,5 +420,83 @@ func TestNewFromConfigOrGitHubFallsBack(t *testing.T) {
 	a, err = NewFromConfigOrGitHub(context.Background(), cfg, "", "", opts...)
 	if err != nil || a.Provider() != "gitlab" {
 		t.Fatalf("configured provider = %v, %v; want gitlab, no fallback", a, err)
+	}
+}
+
+// The two constructors of the seam: the forge resolves from forge.provider and
+// origin (no remote is local), the issue tracker from issues.source.
+func TestNewForgeAndNewIssueTracker(t *testing.T) {
+	origin := func(url string, code int) Option {
+		return WithExec(func(_ context.Context, _, name string, args []string, _ []byte) ([]byte, []byte, int, error) {
+			return []byte(url + "\n"), nil, code, nil
+		}, func(string) (string, error) { return "/bin/x", nil })
+	}
+	ctx := context.Background()
+
+	// forge: auto resolves from origin; no remote is local; local is the sentinel.
+	if f, err := NewForge(ctx, Settings{Provider: "auto"}, "", "/repo", origin("git@github.com:o/r.git", 0)); err != nil || f.Provider() != "github" {
+		t.Errorf("auto+github origin: %v, %v", f, err)
+	}
+	if _, err := NewForge(ctx, Settings{Provider: "auto"}, "", "/repo", origin("", 2)); !errors.Is(err, ErrLocalForge) {
+		t.Errorf("auto, no remote: %v, want ErrLocalForge", err)
+	}
+	if _, err := NewForge(ctx, Settings{Provider: "local"}, "", "/repo", origin("git@github.com:o/r.git", 0)); !errors.Is(err, ErrLocalForge) {
+		t.Errorf("local: %v, want ErrLocalForge", err)
+	}
+	if f, err := NewForge(ctx, Settings{Provider: "gitlab"}, "", "/repo", origin("", 2)); err != nil || f.Provider() != "gitlab" {
+		t.Errorf("explicit gitlab, no remote: %v, %v", f, err)
+	}
+
+	// issue tracker: source decides, whatever the origin or forge says.
+	if it, err := NewIssueTracker(ctx, Settings{Source: "gitlab", Provider: "github"}, "", "/repo", origin("git@github.com:o/r.git", 0)); err != nil || it.Provider() != "gitlab" {
+		t.Errorf("gitlab source: %v, %v", it, err)
+	}
+	if _, err := NewIssueTracker(ctx, Settings{Source: "file"}, "", "/repo"); !errors.Is(err, ErrNoIssueTracker) {
+		t.Errorf("file source: %v", err)
+	}
+	for _, src := range []string{"jira", "linear"} {
+		_, err := NewIssueTracker(ctx, Settings{Source: src}, "", "/repo")
+		if !IsKind(err, KindUnavailable) || !strings.Contains(err.Error(), "not implemented") {
+			t.Errorf("%s source: %v", src, err)
+		}
+	}
+	// a legacy "issues backend" with no named provider resolves from origin.
+	if it, err := NewIssueTracker(ctx, Settings{Source: "issues"}, "", "/repo", origin("https://gitlab.com/o/r", 0)); err != nil || it.Provider() != "gitlab" {
+		t.Errorf("legacy issues: %v, %v", it, err)
+	}
+	// issues.source forge: each repo's own forge, resolved from its own origin.
+	if it, err := NewIssueTracker(ctx, Settings{Source: "forge", Provider: "auto"}, "", "/repo", origin("https://gitlab.com/o/r", 0)); err != nil || it.Provider() != "gitlab" {
+		t.Errorf("forge source, gitlab origin: %v, %v", it, err)
+	}
+	if it, err := NewIssueTracker(ctx, Settings{Source: "forge", Provider: "auto"}, "", "/repo", origin("git@github.com:o/r.git", 0)); err != nil || it.Provider() != "github" {
+		t.Errorf("forge source, github origin: %v, %v", it, err)
+	}
+	if _, err := NewIssueTracker(ctx, Settings{Source: "forge", Provider: "auto"}, "", "/repo", origin("", 2)); !IsKind(err, KindUnavailable) {
+		t.Errorf("forge source, no remote: %v", err)
+	}
+	// a file backlog with a github forge still has a forge.
+	if f, err := NewForge(ctx, Settings{Source: "file", Provider: "github"}, "", "/repo", origin("", 2)); err != nil || f.Provider() != "github" {
+		t.Errorf("file source, github forge: %v, %v", f, err)
+	}
+}
+
+// An invalid forge.provider or issues.source is a corrupt config (exit 70),
+// not a silent default.
+func TestFromConfigConstructorsRejectAnInvalidSource(t *testing.T) {
+	ctx := context.Background()
+	for _, raw := range []string{`{"forge":{"provider":"bitbucket"}}`, `{"issues":{"source":"svn"}}`} {
+		cfg, _ := jsonx.Decode([]byte(raw))
+		if err := ValidateConfig(cfg); !IsKind(err, KindInternal) {
+			t.Errorf("%s: ValidateConfig %v", raw, err)
+		}
+		if _, err := NewForgeFromConfig(ctx, cfg, "", "/repo"); !IsKind(err, KindInternal) {
+			t.Errorf("%s: NewForgeFromConfig %v", raw, err)
+		}
+		if _, err := NewIssueTrackerFromConfig(ctx, cfg, "/repo"); !IsKind(err, KindInternal) {
+			t.Errorf("%s: NewIssueTrackerFromConfig %v", raw, err)
+		}
+		if _, err := NewFromConfigOrGitHub(ctx, cfg, "", "/repo"); !IsKind(err, KindInternal) {
+			t.Errorf("%s: NewFromConfigOrGitHub fell back: %v", raw, err)
+		}
 	}
 }

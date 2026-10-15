@@ -8,7 +8,7 @@ import (
 	"github.com/l4ci/rota/internal/proof"
 )
 
-// The one place the design, plan and proof verbs meet backlog.backend: each
+// The one place the design, plan and proof verbs meet issues.source: each
 // opens the store of its kind (files, or notes on the issue backend) and the
 // verb then calls the kind's module without asking which backend it is.
 // Stores that need the tracker connect on first use, so a verb that fails

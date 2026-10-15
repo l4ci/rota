@@ -5,7 +5,7 @@ trap 'rm -rf "$TMP_CL"' EXIT
 
 for prov in github gitlab; do
   P="$TMP_CL/$prov"; mkdir -p "$P/.rota"
-  echo "{\"backlog\":{\"backend\":\"issues\"},\"issues\":{\"provider\":\"$prov\",\"retryWaitSeconds\":0}}" > "$P/.rota/config.json"
+  echo "{\"issues\":{\"source\":\"$prov\",\"retryWaitSeconds\":0}}" > "$P/.rota/config.json"
   (
     cd "$P"
     git init -q && git config user.email t@t && git config user.name t && git commit -q --allow-empty -m seed

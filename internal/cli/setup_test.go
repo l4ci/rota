@@ -44,7 +44,7 @@ func TestSetupInteractiveAppliesAnswers(t *testing.T) {
 		t.Fatalf("exit %d: %s", code, errOut)
 	}
 	for k, want := range map[string]any{
-		"backlog.backend": "file", "work.isolation": "worktree", "work.mergeStrategy": "pr",
+		"issues.source": "file", "work.isolation": "worktree", "work.mergeStrategy": "pr",
 		"work.dispatch": "subagent", "autonomy.level": "off", "ship.review": "none", "ship.qa": true,
 	} {
 		if got := cfgValue(t, dir, k); got != want {
@@ -54,7 +54,7 @@ func TestSetupInteractiveAppliesAnswers(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, "AGENTS.md")); err != nil {
 		t.Error("init did not run the blocks:", err)
 	}
-	if !strings.Contains(errOut, "Where does the backlog live?") || !strings.Contains(errOut, "(default)") {
+	if !strings.Contains(errOut, "Where do the issues live?") || !strings.Contains(errOut, "(default)") {
 		t.Errorf("prompts missing:\n%s", errOut)
 	}
 }
@@ -93,18 +93,18 @@ func TestSetupHarnessQuestionsWriteOnlyAnswers(t *testing.T) {
 	}
 }
 
-func TestSetupIssuesBackendAsksProvider(t *testing.T) {
+func TestSetupIssueSourceNamesTheTracker(t *testing.T) {
 	dir := t.TempDir()
-	// backend issues, provider gitlab, then defaults for the rest (6 Enters)
-	code, _, errOut := setupRun(t, dir, "2\n3\n\n\n\n\n\n\n\n\n", true)
+	// issues.source gitlab (3rd choice), then defaults for the rest
+	code, _, errOut := setupRun(t, dir, "3\n\n\n\n\n\n\n\n\n", true)
 	if code != 0 {
 		t.Fatalf("exit %d: %s", code, errOut)
 	}
-	if got := cfgValue(t, dir, "issues.provider"); got != "gitlab" {
-		t.Errorf("issues.provider = %v", got)
+	if got := cfgValue(t, dir, "issues.source"); got != "gitlab" {
+		t.Errorf("issues.source = %v", got)
 	}
-	if !strings.Contains(errOut, "Which tracker holds the issues?") {
-		t.Error("provider question not asked")
+	if strings.Contains(errOut, "Which tracker holds the issues?") {
+		t.Error("the provider question is gone: issues.source names the tracker")
 	}
 }
 
@@ -174,7 +174,7 @@ func TestSetupRejectsBadSetBeforeWriting(t *testing.T) {
 		{"--yes", "--set", "work.isolation=sideways"},
 		{"--yes", "--set", "models.worker=opus"},
 		{"--yes", "--set", "nokey"},
-		{"--yes", "--set", "issues.provider=github"}, // backend is file
+		{"--yes", "--set", "issues.provider=github"}, // replaced by issues.source
 	} {
 		dir := t.TempDir()
 		code, _, errOut := setupRun(t, dir, "", false, args...)

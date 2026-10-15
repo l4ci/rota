@@ -4,7 +4,7 @@ TMP_UI="$(mktemp -d)"
 trap 'rm -rf "$TMP_UI"' EXIT
 
 U="$TMP_UI/umb"; mkdir -p "$U/.rota" "$TMP_UI/db"
-echo '{"backlog":{"backend":"issues"},"issues":{"retryWaitSeconds":0}}' > "$U/.rota/config.json"
+echo '{"issues":{"source":"forge","retryWaitSeconds":0}}' > "$U/.rota/config.json"
 echo '{"repos":[{"name":"ghrepo","path":"ghrepo"},{"name":"glrepo","path":"glrepo"}]}' > "$U/.rota/repos.json"
 for pair in "ghrepo:https://github.com/o/ghrepo.git" "glrepo:https://gitlab.com/o/glrepo.git"; do
   r="${pair%%:*}"; mkdir -p "$U/$r"

@@ -54,7 +54,7 @@ const (
 
 func fileIssueOnly(what, hint string) error {
 	return &RefusedError{BlockedBy: "backend", Err: ErrWrongBackend, Hint: hint,
-		Msg: what + ` is not available with backlog.backend "file"`}
+		Msg: what + ` is not available when issues.source is file`}
 }
 
 func (f *File) exists(ref string) error {

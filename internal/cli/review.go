@@ -15,6 +15,7 @@ import (
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/rotatree"
+	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -469,17 +470,19 @@ func reviewDepth(fs *flag.FlagSet) RunFunc {
 		// only when the policy has a label to match, as the worker gate does, so a
 		// caller that omits --labels still gets a risk:high override.
 		if n, ok := worker.BranchIssue(t.Branch); ok && len(policy.Labels) > 0 {
-			fg, err := c.deps().forge(c.Context(), cfg, "", root)
+			it, err := c.deps().issuesOrNone(c.Context(), cfg, root)
 			if err != nil {
 				return Result{}, trackerErr(err)
 			}
-			is, err := fg.Get(c.Context(), n, false)
-			if err != nil {
-				return Result{}, Failed("could not read #%d for its labels to pick the review depth: %v", n, err)
-			}
-			for _, l := range is.Labels {
-				if !slices.Contains(labels, l) {
-					labels = append(labels, l)
+			if _, none := it.(tracker.NoIssues); !none { // the file source has no issue labels to read
+				is, err := it.Get(c.Context(), n, false)
+				if err != nil {
+					return Result{}, Failed("could not read #%d for its labels to pick the review depth: %v", n, err)
+				}
+				for _, l := range is.Labels {
+					if !slices.Contains(labels, l) {
+						labels = append(labels, l)
+					}
 				}
 			}
 		}

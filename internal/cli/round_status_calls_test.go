@@ -20,7 +20,7 @@ import (
 func TestRoundStatusReadsTheForgeOnce(t *testing.T) {
 	root := gitRepo(t)
 	if err := os.WriteFile(filepath.Join(root, ".rota", "config.json"),
-		[]byte(`{"backlog":{"backend":"issues"},"issues":{"provider":"github"}}`), 0o666); err != nil {
+		[]byte(`{"forge": {"provider": "github"}, "issues": {"source": "github"}}`), 0o666); err != nil {
 		t.Fatal(err)
 	}
 	var issues []string

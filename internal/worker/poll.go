@@ -416,7 +416,12 @@ func (e Env) openPRsByHead(ctx context.Context, root string, reg Registry, polle
 	if _, code := e.git(root, "remote", "get-url", "origin"); code != 0 {
 		return nil
 	}
-	f, err := e.Forge(e.detectProvider(ctx, root, ""), root, LoadGateConfig(root).Tracker)
+	cfg := LoadGateConfig(root)
+	provider := e.detectProvider(ctx, root, "", cfg.Tracker.Provider)
+	if provider == tracker.ProviderLocal {
+		return nil
+	}
+	f, err := e.Forge(provider, root, cfg.Tracker)
 	if err != nil {
 		return nil
 	}
@@ -441,7 +446,12 @@ func (e Env) prMerged(ctx context.Context, root string, s *Slot) bool {
 	if _, code := e.git(root, "remote", "get-url", "origin"); code != 0 {
 		return false
 	}
-	f, err := e.Forge(e.detectProvider(ctx, root, ""), root, LoadGateConfig(root).Tracker)
+	cfg := LoadGateConfig(root)
+	provider := e.detectProvider(ctx, root, "", cfg.Tracker.Provider)
+	if provider == tracker.ProviderLocal {
+		return false
+	}
+	f, err := e.Forge(provider, root, cfg.Tracker)
 	if err != nil {
 		return false
 	}

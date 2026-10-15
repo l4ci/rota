@@ -30,7 +30,7 @@ Alphabetical reference of every `/rota-*` command.
 
 ## /rota-capture
 
-Captures bugs, features, and tasks into the backlog with `rota item create`. Where the item lands depends on `backlog.backend`. On the file backend (default) it goes into [`BACKLOG.md`](rota-folder.md) under the correct section with a zero-padded auto-incrementing ID (`[B01]`, `[F01]`, `[T01]`). On the issue backend it becomes a GitHub or GitLab issue with type, priority and size labels, and the ID is the issue number (`#42`); see [issue backend](../usage/issue-backend.md). Either way it auto-classifies each item and assigns priority (P0/P1/P2) for bugs and size (Major/Minor/Cosmetic) for features. See [capturing work](../usage/capturing-work.md) for the full flow.
+Captures bugs, features, and tasks into the backlog with `rota item create`. Where the item lands depends on `issues.source`. On the file backend (default) it goes into [`BACKLOG.md`](rota-folder.md) under the correct section with a zero-padded auto-incrementing ID (`[B01]`, `[F01]`, `[T01]`). On the issue backend it becomes a GitHub or GitLab issue with type, priority and size labels, and the ID is the issue number (`#42`); see [issue backend](../usage/issue-backend.md). Either way it auto-classifies each item and assigns priority (P0/P1/P2) for bugs and size (Major/Minor/Cosmetic) for features. See [capturing work](../usage/capturing-work.md) for the full flow.
 
 ## /rota-debug
 

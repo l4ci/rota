@@ -1,16 +1,33 @@
 # Issue backend
 
-With `backlog.backend: "issues"` the tracker (GitHub or GitLab) is the backlog. `.rota/BACKLOG.md` and the `.rota/<kind>/` detail files are not used; items, milestones and design/plan artifacts live on the tracker. File mode is the default and is unchanged. Skills keep their file-mode steps and branch on the backend; the issue-mode differences are listed in `references/issue-mode.md`.
+With `issues.source` set to `github` or `gitlab` the tracker is the backlog. `.rota/BACKLOG.md` and the `.rota/<kind>/` detail files are not used; items, milestones and design/plan artifacts live on the tracker. `issues.source: file` is the default and is unchanged. Skills keep their file-mode steps and branch on the source; the issue-mode differences are listed in `references/issue-mode.md`.
+
+## Issue source and forge
+
+Two settings, two questions:
+
+| Key | Question | Values |
+|-----|----------|--------|
+| `issues.source` | Where do the issues live? | `file` (default), `github`, `gitlab`, `forge`, `jira`, `linear` |
+| `forge.provider` | Where does code land? | `auto` (default), `github`, `gitlab`, `local` |
+
+`forge.provider: auto` reads the forge from the `origin` remote; with no remote at all it resolves to `local`. `local` means direct merge: no PR is opened and the merge gate never looks for one, and `rota ship strategy` (which `/rota-ship` and `/rota-work` read to choose between `rota ship merge` and `rota ship pr`) answers `direct` whatever `work.mergeStrategy` says. Issues on a tracker still need a PR to close them, so `issues.source: github` or `gitlab` with a local forge is an error (`rota doctor` fails it, `rota ship strategy` exits 3). The two are independent: a file backlog with PRs on a GitHub or GitLab forge works as before (`issues.source: file`, forge from `origin`), and a repo with no remote can keep a file backlog and merge directly.
+
+`issues.source: github` or `gitlab` must name the forge the repo resolves to. When it does not (say `issues.source: gitlab` with a GitHub `origin`), `rota doctor` fails the `tracker` check with the hint to change `issues.source` or set `forge.provider`. Verbs that need a tracker with no resolvable provider exit 5 with `cannot determine the issue tracker provider (set issues.source to github or gitlab, or forge.provider)`. `issues.source: forge` is for an umbrella whose sub-repos sit on different hosts (one on GitHub, one on GitLab): each sub-repo's issues live on that sub-repo's own forge, resolved from its `origin` (or `forge.provider`). `rota migrate source` picks it for such an umbrella; a single repo never gets it. `rota doctor` does not compare it with the forge. `jira` and `linear` use a machine-wide connection instead; see [Tracker connections](configuration.md#tracker-connections).
+
+Verbs that exist for one source only refuse the other with `not available when issues.source is a tracker` (file-only verbs) or `not available when issues.source is file` (tracker-only verbs).
+
+Older configs used `backlog.backend` (`file` or `issues`) and `issues.provider`. They keep working until you run `rota migrate source` (preview) and `rota migrate source --apply`; `rota config fill` and `rota update` run the same migration. See [Configuration](configuration.md#issues-backend-keys).
 
 ## Setup
 
 1. Install and authenticate the CLI for your host: `gh auth status` (GitHub) or `glab auth status` (GitLab). With no CLI or no auth, `rota` exits 5 and does not fall back to files.
-2. Set the backend: `rota config set backlog.backend issues`.
+2. Set the source: `rota config set issues.source github` (or `gitlab`).
 3. Optional keys (all in `.rota/config.json`, full list in [Configuration](configuration.md#issues-backend-keys)):
 
 | Key | Default | Use |
 |-----|---------|-----|
-| `issues.provider` | `"auto"` | `"auto"` detects from `origin`; or `"github"` / `"gitlab"`. |
+| `forge.provider` | `"auto"` | `"auto"` detects from `origin` (no remote is `local`); or `"github"` / `"gitlab"` / `"local"`. Set it when detection is wrong. |
 | `issues.labels.*` | `in-progress`, `needs-review`, `changes-requested`, `released`, `not-planned`, `blocked`, `milestone-tracker`, `type:bug` / `type:feature` / `type:task`, prefix `p`, prefix `size:` | Rename any label role. |
 | `issues.autoCreateLabel` | `true` | Create a missing label on first use. When off, a missing label is an error. |
 | `issues.homeRepo` | `""` | Umbrella only: sub-repo holding milestone tracking issues; empty is the first registered sub-repo. |
@@ -57,11 +74,11 @@ Exit 5 means the tracker is unavailable; exit 6 means rate-limited. Both stop th
 ```
 rota migrate issues            # dry run: planned operations and would-be map
 rota migrate issues --apply    # create everything
-rota config set backlog.backend issues
+rota config set issues.source github   # or gitlab
 ```
 
 Open items, their detail files, proof rows, design and plan artifacts, and planned/active milestones with their slice plans move to the tracker. Completed items, `ARCHIVE.md` and shipped/archived milestones stay in the files as history, so after the flip `rota milestone list` shows only the planned and active milestones. `Related:` fields and old IDs in migrated text are rewritten to the new IDs after every item exists; `Related:` IDs that are not migrated (completed items) are dropped from the field and listed in the issue body as `Related before migration (not migrated): F79, F80`. A bullet's `Since:` anchor is kept in the issue's fields block.
 
 The run is resumable: `.rota/issue-map.json` records each old ID, its new ID and URL. Commit it. A rate limit (exit 6) stops the run with the map saved; wait and re-run. `--limit N` creates at most N items per run. Writes are paced by `issues.bulkPaceMs`.
 
-`--apply` never changes `backlog.backend`. When everything is migrated it adds a "Frozen" banner to `.rota/BACKLOG.md` and prints `Next: rota config set backlog.backend issues`. Old IDs are not resolved through the map after the flip; an old `F82` and a new issue `F82` can both exist. Umbrella projects migrate each sub-repo separately.
+`--apply` never changes `issues.source`. When everything is migrated it adds a "Frozen" banner to `.rota/BACKLOG.md` and prints `Next: rota config set issues.source github` (or `gitlab`). Old IDs are not resolved through the map after the flip; an old `F82` and a new issue `F82` can both exist. Umbrella projects migrate each sub-repo separately.

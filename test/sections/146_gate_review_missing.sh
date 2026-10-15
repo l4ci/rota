@@ -31,7 +31,7 @@ git init -q --bare -b main "$RMORIGIN"
     && git push -q origin ben/5-thing && git checkout -q main
 ) || fail "review-missing fixture repo setup failed"
 RMSHA="$(git -C "$RMPROJ" rev-parse ben/5-thing)"
-printf '{"ship":{"review":{"default":"light","labels":{"risk:high":"full"}}},"test":{"full":["true"]}}\n' > "$RMPROJ/.rota/config.json"
+printf '{"issues":{"source":"github"},"forge":{"provider":"github"},"ship":{"review":{"default":"light","labels":{"risk:high":"full"}}},"test":{"full":["true"]}}\n' > "$RMPROJ/.rota/config.json"
 printf '{"slots":[{"name":"ben","branch":"ben/5-thing","task":"#5","pr":"https://github.com/o/r/pull/7"}]}\n' > "$RMPROJ/.rota/workers.json"
 rm_state() { printf '{"sha":"%s","labels":[%s]}\n' "$RMSHA" "$1" > "$TMP_RM/state.json"; }
 rm_gate() { ( cd "$RMPROJ" && RM_STATE="$TMP_RM/state.json" RM_LOG="$TMP_RM/log" ROTA_GATE_SHA_WAIT=0 PATH="$RMBIN:$ROTA_POISON_BIN:$PATH" "$ROTA_BIN" --json worker gate ben --base main --check-only 2>/dev/null ); }

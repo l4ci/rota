@@ -76,7 +76,7 @@ func shipFixture(t *testing.T, cfg string) string {
 	gitT(t, base, "init", "-q", "--bare", origin)
 	gitT(t, base, "init", "-q", "-b", "main", work)
 	if cfg == "" {
-		cfg = `{"backlog":{"backend":"file"},"issues":{"provider":"github","retryWaitSeconds":0}}`
+		cfg = `{"forge": {"provider": "github"}, "issues": {"source": "file","retryWaitSeconds":0}}`
 	}
 	write(t, filepath.Join(work, ".rota", "config.json"), cfg+"\n")
 	write(t, filepath.Join(work, ".rota", "BACKLOG.md"), `# TODO
@@ -200,7 +200,7 @@ func TestShipBody(t *testing.T) {
 // corpus; an ID the tracker does not know is listed bare.
 func TestShipBodyIssueMode(t *testing.T) {
 	shipDeterministic(t)
-	cfg := `{"backlog":{"backend":"issues"},"issues":{"provider":"github","retryWaitSeconds":0}}`
+	cfg := `{"forge": {"provider": "github"}, "issues": {"source": "github","retryWaitSeconds":0}}`
 	work := shipFixture(t, cfg)
 	shipBranchOf(t, work, "feat/t",
 		[3]string{"a.txt", "feat: export [F07]", ""},
@@ -308,7 +308,7 @@ func TestShipPRFileMode(t *testing.T) {
 		{"gitlab", "https://gitlab.com/fake/repo/-/merge_requests/1"},
 	} {
 		t.Run(tc.prov, func(t *testing.T) {
-			cfg := `{"backlog":{"backend":"file"},"issues":{"provider":"` + tc.prov + `","retryWaitSeconds":0}}`
+			cfg := `{"forge":{"provider":"` + tc.prov + `"},"issues":{"source":"file","retryWaitSeconds":0}}`
 			work := shipFixture(t, cfg)
 			shipBranchOf(t, work, "feat/x", [3]string{"x.txt", "work", ""})
 			f := shipPRForge(tc.url)
@@ -397,13 +397,14 @@ func TestShipPRTrackerFailures(t *testing.T) {
 
 func TestShipPRProviderDetection(t *testing.T) {
 	shipDeterministic(t)
-	// no issues.provider: the origin host decides, an unknown host means github
+	// forge.provider auto: the origin host decides, an unknown host means
+	// github, and no origin at all is the local forge: there is no PR to open.
 	for _, tc := range []struct{ url, want string }{
 		{"git@gitlab.example.com:g/r.git", "gitlab"},
 		{"https://github.example.com/g/r.git", "github"},
-		{"", "github"},
+		{"", "local"},
 	} {
-		work := shipFixture(t, `{"backlog":{"backend":"file"}}`)
+		work := shipFixture(t, `{"issues": {"source": "file"}}`)
 		shipBranchOf(t, work, "feat/p", [3]string{"p.txt", "work", ""})
 		if tc.url != "" {
 			// fetch URL names the host, pushes still reach the bare repo
@@ -425,6 +426,12 @@ func TestShipPRProviderDetection(t *testing.T) {
 		}
 		deps := useForge(t, f)
 		n := trRunWith(t, deps, work, "b", "ship", "pr", "feat/p", "--title", "T", "--body-file", "-", "--json")
+		if tc.want == "local" {
+			if n.code != ExitUnavailable || !strings.Contains(n.stderr, "the forge is local") || len(f.calls) != 1 || f.calls[0] != "git remote get-url origin" {
+				t.Errorf("no origin: %+v calls %q", n, f.calls)
+			}
+			continue
+		}
 		if n.code != 0 {
 			t.Fatalf("%s: %+v", tc.url, n)
 		}
@@ -438,7 +445,7 @@ func TestShipPRIssueMode(t *testing.T) {
 	shipDeterministic(t)
 	for _, prov := range []string{"github", "gitlab"} {
 		t.Run(prov, func(t *testing.T) {
-			cfg := `{"backlog":{"backend":"issues"},"issues":{"provider":"` + prov + `","retryWaitSeconds":0}}`
+			cfg := `{"forge": {"provider": "` + prov + `"}, "issues": {"source": "` + prov + `","retryWaitSeconds":0}}`
 			work := shipFixture(t, cfg)
 			shipBranchOf(t, work, "feat/i", [3]string{"i.txt", "work", ""})
 			f := shipPRForge("https://x.test/pr/5")
@@ -481,7 +488,7 @@ func TestShipPRIssueMode(t *testing.T) {
 func TestShipPRIssueModeUmbrella(t *testing.T) {
 	shipDeterministic(t)
 	u := umbrella(t)
-	write(t, filepath.Join(u, ".rota", "config.json"), `{"backlog":{"backend":"issues"},"issues":{"provider":"github"}}`)
+	write(t, filepath.Join(u, ".rota", "config.json"), `{"forge": {"provider": "github"}, "issues": {"source": "github"}}`)
 	svc := filepath.Join(u, "svc")
 	shipBranchOf(t, svc, "feat/u", [3]string{"u.txt", "work", ""})
 	deps := useForge(t, shipPRForge("https://x.test/pr/1"))
@@ -642,7 +649,7 @@ func TestShipPRMergeBackend(t *testing.T) {
 	if o := trRun(t, umb, "", "ship", "pr-merge", "1", "--repo", "svc"); o.code != 4 {
 		t.Errorf("file-backend umbrella --repo: exit %d, want 4 (backend)", o.code)
 	}
-	write(t, filepath.Join(umb, ".rota", "config.json"), `{"backlog":{"backend":"issues"}}`)
+	write(t, filepath.Join(umb, ".rota", "config.json"), `{"backlog":{"backend":"issues"}}`) // legacy keys: with no origin the tracker cannot resolve
 	if o := trRun(t, umb, "", "ship", "pr-merge", "1", "--repo", "svc"); o.code != 5 {
 		t.Errorf("umbrella --repo, no forge: exit %d, want 5", o.code)
 	}

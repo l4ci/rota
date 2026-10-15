@@ -79,15 +79,53 @@ func osExec(ctx context.Context, dir, name string, args []string, stdin []byte) 
 	return []byte(res.Stdout), []byte(res.Stderr), res.ExitCode, nil
 }
 
-// ResolveProvider picks the provider: want (a --provider value) unless it is
-// "" or "auto", then configured (issues.provider) on the same terms, then
-// origin-URL detection in dir. It is KindUnavailable when none resolves.
+// ResolveProvider picks the forge: want (a --provider value) unless it is ""
+// or "auto", then configured (forge.provider) on the same terms, then
+// origin-URL detection in dir. The answer is "github", "gitlab" or "local": a
+// local forge is chosen by configuration, or by auto with no origin remote at
+// all. An origin that names no forge is KindUnavailable (set forge.provider).
 func ResolveProvider(ctx context.Context, want, configured, dir string, x Exec) (string, error) {
 	c := &CLI{Dir: dir, Exec: x}
-	return c.resolve(ctx, want, configured)
+	return c.resolveForge(ctx, want, configured)
 }
 
+// resolve is resolveForge for a caller that needs a forge CLI: a local forge
+// is ErrLocalForge.
 func (c *CLI) resolve(ctx context.Context, want, configured string) (string, error) {
+	p, err := c.resolveForge(ctx, want, configured)
+	if err != nil {
+		return "", err
+	}
+	if p == "local" {
+		return "", ErrLocalForge
+	}
+	return p, nil
+}
+
+func (c *CLI) resolveForge(ctx context.Context, want, configured string) (string, error) {
+	p := want
+	if p == "" || p == "auto" {
+		p = configured
+	}
+	switch p {
+	case "github", "gitlab", "local":
+		return p, nil
+	}
+	origin := c.originURL(ctx)
+	if p = ProviderFromURL(origin); p == ProviderUnknown {
+		if origin == "" {
+			return "local", nil
+		}
+		return "", unavailable("cannot determine the forge from origin %s (set forge.provider)", origin)
+	}
+	return p, nil
+}
+
+// resolveIssues picks the provider of an issue tracker: want unless it is
+// "" or "auto", then configured when it names github or gitlab (a local or auto
+// forge says nothing about the tracker), then origin-URL detection. A repo
+// with no origin cannot tell.
+func (c *CLI) resolveIssues(ctx context.Context, want, configured string) (string, error) {
 	p := want
 	if p == "" || p == "auto" {
 		p = configured
@@ -96,7 +134,7 @@ func (c *CLI) resolve(ctx context.Context, want, configured string) (string, err
 		p = ProviderFromURL(c.originURL(ctx))
 	}
 	if p != "github" && p != "gitlab" {
-		return "", unavailable("cannot determine provider (set issues.provider)")
+		return "", unavailable("cannot determine the issue tracker provider (set issues.source to github or gitlab, or forge.provider)")
 	}
 	return p, nil
 }
@@ -105,6 +143,10 @@ func (c *CLI) resolve(ctx context.Context, want, configured string) (string, err
 // pick their own policy for it: skip (doctor), fall back to github (the gate),
 // or report it (rota issues provider).
 const ProviderUnknown = "unknown"
+
+// ProviderLocal is the answer for a forge with no remote: forge.provider local,
+// or auto with no origin. It names no CLI and has no PRs.
+const ProviderLocal = "local"
 
 // reHost takes the hostname out of an SSH shorthand, SSH or HTTPS remote URL.
 var reHost = regexp.MustCompile(`(?i)^(https?://|ssh://)?(git@)?([^:/\n]+)[:/].*`)
@@ -135,7 +177,7 @@ func (c *CLI) originURL(ctx context.Context) string {
 }
 
 // ProviderFromOrigin classifies origin and falls back to configured
-// (issues.provider) when origin is empty or names no forge. The origin host
+// (forge.provider) when origin is empty or names no forge. The origin host
 // decides, as in hv-issues-provider. ProviderUnknown when neither resolves.
 func ProviderFromOrigin(origin, configured string) string {
 	if p := ProviderFromURL(origin); p != ProviderUnknown {

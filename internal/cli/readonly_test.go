@@ -51,7 +51,7 @@ func TestReadOnlySetMatchesContract(t *testing.T) {
 	}
 }
 
-const fileConfig = `{"backlog": {"backend": "file"}}`
+const fileConfig = `{"issues": {"source": "file"}}`
 
 // A read-only verb under the wrong backend exits 1 with {blockedBy: backend,
 // changed: false}; a mutating one exits 4 with the same data (contract:

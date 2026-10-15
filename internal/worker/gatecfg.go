@@ -40,6 +40,7 @@ type GateConfig struct {
 	whereErr   error
 	ciMinutes  int
 	ciErr      error
+	sourceErr  error // an invalid forge.provider or issues.source: a corrupt config
 	review     config.ReviewPolicy
 	reviewErr  error
 	isolate    bool
@@ -68,6 +69,7 @@ func ParseGateConfig(cfg any) GateConfig {
 		c.legacy = len(c.Full) > 0
 	}
 	c.where, c.whereErr = parseFullWhere(cfg, c.CIChecks)
+	c.sourceErr = tracker.ValidateConfig(cfg)
 	c.ciMinutes, c.ciErr = config.Int(cfg, "test.ciTimeoutMinutes", 1, 24*60)
 	c.review, c.reviewErr = config.ReviewPolicyOf(cfg)
 	c.isolate, c.isolateErr = config.Bool(cfg, "test.isolate")

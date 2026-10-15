@@ -147,7 +147,7 @@ func registryDoc(t *testing.T, dir string) map[string]any {
 	return doc
 }
 
-const ghCfg = `{"issues":{"provider":"github"}}`
+const ghCfg = `{"forge":{"provider": "github"}, "issues":{"source": "github"}}`
 
 func TestEscalateSendRecordsAndPosts(t *testing.T) {
 	dir := escProject(t, ghCfg)
@@ -284,9 +284,9 @@ func TestEscalateSendNotifyRules(t *testing.T) {
 		notified       bool
 	}{
 		{"HERDR_ENV", ghCfg, "1", nil, true},
-		{"work.dispatch herdr", `{"issues":{"provider":"github"},"work":{"dispatch":"herdr"}}`, "", nil, true},
+		{"work.dispatch herdr", `{"forge":{"provider": "github"}, "issues":{"source": "github"},"work":{"dispatch":"herdr"}}`, "", nil, true},
 		{"neither", ghCfg, "", nil, false},
-		{"tmux dispatch", `{"issues":{"provider":"github"},"work":{"dispatch":"tmux"}}`, "", nil, false},
+		{"tmux dispatch", `{"forge":{"provider": "github"}, "issues":{"source": "github"},"work":{"dispatch":"tmux"}}`, "", nil, false},
 		{"herdr not installed", ghCfg, "1", errors.New("herdr is not installed"), false},
 	} {
 		dir := escProject(t, c.cfg)
@@ -309,7 +309,7 @@ func TestEscalateSendNotifyRules(t *testing.T) {
 }
 
 func TestEscalateSendSlotAndGitLabPR(t *testing.T) {
-	dir := workerProject(t, `{"issues":{"provider":"gitlab"}}`)
+	dir := workerProject(t, `{"forge":{"provider": "gitlab"}, "issues":{"source": "gitlab"}}`)
 	os.WriteFile(filepath.Join(dir, "body.md"), []byte("q\n"), 0o644)
 	if code, _, _ := rotaIn(t, dir, "worker", "pool", "init", "--slots", "1", "--base", "main"); code != 0 {
 		t.Fatal("pool init")

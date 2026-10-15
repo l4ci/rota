@@ -223,17 +223,17 @@ func TestIssueModeProofAndUncertain(t *testing.T) {
 	}
 }
 
-// An invalid backlog.backend is a corrupt config for every verb: design and
+// An invalid issues.source is a corrupt config for every verb: design and
 // milestone verbs exit 70 rather than quietly running in file mode.
 func TestInvalidBackendExits70(t *testing.T) {
-	root := trackerProject(t, `{"backlog": {"backend": "isssues"}}`)
+	root := trackerProject(t, `{"issues": {"source": "isssues"}}`)
 	for _, argv := range [][]string{
 		{"design", "add", "B01", "--title", "T"},
 		{"milestone", "list"},
 		{"item", "show", "B01"},
 	} {
 		code, env, stderr := rotaRun(t, append([]string{"--json", "-C", root}, argv...)...)
-		if code != ExitInternal || env["ok"] != false || !strings.Contains(stderr, "invalid backlog.backend") {
+		if code != ExitInternal || env["ok"] != false || !strings.Contains(stderr, "invalid issues.source") {
 			t.Errorf("%v: code=%d env=%v stderr=%s", argv, code, env, stderr)
 		}
 	}

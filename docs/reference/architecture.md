@@ -1,6 +1,6 @@
 # Architecture
 
-Everything Claude reads or mutates lives under `.rota/` in your project. Git is the source of truth; `status.json` is just a cache, and `/rota-work` (no argument) reconciles drift between the two whenever it runs. The layout below is the file backend (`backlog.backend: "file"`, the default). Under `"issues"` the backlog, milestones and item designs and plans live on GitHub or GitLab instead; see [issue backend](../usage/issue-backend.md).
+Everything Claude reads or mutates lives under `.rota/` in your project. Git is the source of truth; `status.json` is just a cache, and `/rota-work` (no argument) reconciles drift between the two whenever it runs. The layout below is the file backend (`issues.source` is `file`, the default). Under `"issues"` the backlog, milestones and item designs and plans live on GitHub or GitLab instead; see [issue backend](../usage/issue-backend.md).
 
 ## `.rota/` layout
 

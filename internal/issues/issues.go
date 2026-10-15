@@ -21,8 +21,8 @@ import (
 // ErrCommitNotFound: the commit is not in the repository (exit 3).
 var ErrCommitNotFound = errors.New("commit not found")
 
-// ErrNoProvider: neither the origin remote nor issues.provider names a forge
-// (exit 3).
+// ErrNoProvider: neither issues.source, the origin remote nor forge.provider
+// names a tracker host (exit 3).
 var ErrNoProvider = errors.New("no issue provider")
 
 // Env is what every call runs with.
@@ -34,15 +34,21 @@ type Env struct {
 }
 
 // Provider is "github", "gitlab" or "unknown" for dir ("" is the process
-// cwd). The origin host decides, as in hv-issues-provider; issues.provider
-// is only the fallback when origin is missing or names no forge.
+// cwd). An issues.source of github or gitlab names the tracker outright. A
+// file source (or an unmigrated config) falls back to the origin host, as in
+// hv-issues-provider; forge.provider is only the fallback when origin is
+// missing or names no forge.
 func Provider(ctx context.Context, env Env, dir string) string {
+	s := tracker.SettingsFromConfig(env.Config)
+	if s.Source == "github" || s.Source == "gitlab" {
+		return s.Source
+	}
 	origin := tracker.OriginURL(ctx, dir, execOf(env))
-	return tracker.ProviderFromOrigin(origin, tracker.SettingsFromConfig(env.Config).Provider)
+	return tracker.ProviderFromOrigin(origin, s.Provider)
 }
 
 func noProvider(verb string) error {
-	return fmt.Errorf("%w: cannot %s (no origin remote naming github or gitlab, and issues.provider is not set)", ErrNoProvider, verb)
+	return fmt.Errorf("%w: cannot %s (issues.source does not name a tracker, no origin remote names github or gitlab, and forge.provider is not set)", ErrNoProvider, verb)
 }
 
 // execOf is the executor the env's options install, or nil for the real one.

@@ -28,7 +28,7 @@ func newScopeFx(t *testing.T, overlap string, extraCfg string) *scopeFx {
 	t.Helper()
 	root := gitRepo(t)
 	write(t, filepath.Join(root, ".rota", "config.json"),
-		`{"backlog":{"backend":"issues"},"issues":{"provider":"github"},"round":{"scope":"open","scopeOverlap":"`+overlap+`"`+extraCfg+`}}`)
+		`{"forge": {"provider": "github"}, "issues": {"source": "github"},"round":{"scope":"open","scopeOverlap":"`+overlap+`"`+extraCfg+`}}`)
 	// The worker contract the brief points at lives in the fixture, so assign
 	// never falls back to the skills installed under the developer's HOME.
 	write(t, filepath.Join(root, "skills", "references", "worker-contract.md"), "contract")

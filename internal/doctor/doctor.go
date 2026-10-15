@@ -83,10 +83,15 @@ type Input struct {
 	Home string // expands a leading "~/" in a configDir
 
 	// From the project config when .rota/ exists; zero values otherwise.
-	Dispatch       string // work.dispatch
-	IssuesProvider string // issues.provider
-	Accounts       []config.Account
-	SwitchOnUsage  bool // orchestrator.switchOnUsage (D4)
+	Dispatch      string // work.dispatch
+	ForgeProvider string // forge.provider (auto, github, gitlab or local; "" reads as auto)
+	// IssueSource is issues.source, "" outside a rota project. An unmigrated
+	// legacy config reads as config.SourceIssues. SourceProblem is the reason
+	// forge.provider or issues.source holds an invalid value ("" when valid).
+	IssueSource   string
+	SourceProblem string
+	Accounts      []config.Account
+	SwitchOnUsage bool // orchestrator.switchOnUsage (D4)
 	// CodexHomes are the Codex homes a worker can run under: the accounts of
 	// work.codexAccounts, else the default Codex home (a zero CodexHome).
 	CodexHomes []CodexHome
@@ -313,26 +318,76 @@ func (d *runner) trackerExec() tracker.Exec {
 	}
 }
 
-// provider is "github", "gitlab" or "": the origin host decides, and
-// issues.provider is only the fallback (as in `rota issues provider`).
-func (d *runner) provider() string {
-	origin := tracker.OriginURL(d.ctx, d.in.Dir, d.trackerExec())
-	if p := tracker.ProviderFromOrigin(origin, d.in.IssuesProvider); p != tracker.ProviderUnknown {
-		return p
+// resolveForge is the forge doctor resolves the way the verbs do
+// (tracker.ResolveProvider): forge.provider when it names github, gitlab or
+// local, else the origin host; no origin remote at all is local. "" when the
+// origin names no forge.
+func (d *runner) resolveForge() string {
+	p, err := tracker.ResolveProvider(d.ctx, "", d.in.ForgeProvider, d.in.Dir, d.trackerExec())
+	if err != nil {
+		return ""
 	}
-	return ""
+	return p
 }
 
-func (d *runner) tracker() Check {
-	p := d.provider()
-	if p == "" {
-		return skip("tracker", "no origin remote naming github or gitlab")
+// forgeLine says which forge doctor resolved and how, and what issues.source
+// is: "forge github (from origin), issues file". An empty source (outside a
+// rota project) leaves the issues half out.
+func (d *runner) forgeLine(f string) string {
+	how := "from origin"
+	switch {
+	case f == "":
+		how = "origin names neither github nor gitlab"
+	case d.in.ForgeProvider == "github" || d.in.ForgeProvider == "gitlab" || d.in.ForgeProvider == "local":
+		how = "forge.provider"
+	case f == "local":
+		how = "no origin remote"
 	}
-	cli := tracker.CLIName(p)
+	shown := f
+	if shown == "" {
+		shown = "unknown"
+	}
+	line := "forge " + shown + " (" + how + ")"
+	switch src := d.in.IssueSource; src {
+	case "":
+	case config.SourceIssues:
+		line += ", issues on the tracker (legacy backlog.backend, run: rota migrate source --apply)"
+	default:
+		line += ", issues " + src
+	}
+	return line
+}
+
+// tracker checks the forge and the issue source together: it reports the
+// detected forge (no remote with forge.provider auto is local) and the issue
+// source, fails when issues.source names github or gitlab but the forge is
+// something else (the issues and the code would live on different hosts), and
+// otherwise checks that the forge CLI is installed and authenticated.
+func (d *runner) tracker() Check {
+	if d.in.SourceProblem != "" {
+		return fail("tracker", d.in.SourceProblem, "run: rota config set forge.provider auto, and rota config set issues.source file|github|gitlab")
+	}
+	f := d.resolveForge()
+	line := d.forgeLine(f)
+	if src := d.in.IssueSource; (src == config.SourceGitHub || src == config.SourceGitLab) && f != src {
+		shown := f
+		if shown == "" {
+			shown = "unknown"
+		}
+		return fail("tracker", "issues.source is "+src+" but the forge is "+shown+": "+line,
+			"set issues.source "+orDefault(f, "file")+", or forge.provider "+src+" if detection is wrong")
+	}
+	switch f {
+	case "local":
+		return skip("tracker", "no pull requests: "+line)
+	case "":
+		return skip("tracker", "no origin remote naming github or gitlab (set forge.provider): "+line)
+	}
+	cli := tracker.CLIName(f)
 	if _, ok := d.in.Look(cli); !ok {
 		return fail("tracker", cli+" not found on PATH", "install "+cli)
 	}
-	c := &tracker.CLI{Provider: p, Dir: d.in.Dir, Exec: d.trackerExec(), LookPath: func(n string) (string, error) {
+	c := &tracker.CLI{Provider: f, Dir: d.in.Dir, Exec: d.trackerExec(), LookPath: func(n string) (string, error) {
 		if bin, ok := d.in.Look(n); ok {
 			return bin, nil
 		}
@@ -341,7 +396,14 @@ func (d *runner) tracker() Check {
 	if err := c.CheckAuth(d.ctx); err != nil {
 		return fail("tracker", cli+" is not authenticated", cli+" auth login")
 	}
-	return pass("tracker", cli+" authenticated ("+p+")")
+	return pass("tracker", cli+" authenticated ("+line+")")
+}
+
+func orDefault(s, def string) string {
+	if s == "" {
+		return def
+	}
+	return s
 }
 
 func (d *runner) expand(dir string) string { return worker.ExpandConfigDirIn(dir, d.in.Home) }

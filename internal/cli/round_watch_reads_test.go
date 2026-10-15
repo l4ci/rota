@@ -20,7 +20,7 @@ import (
 // cache or a merge is never seen after the first tick.
 func TestWatchForgeSeesAChangeBetweenPasses(t *testing.T) {
 	root := gitRepo(t)
-	write(t, filepath.Join(root, ".rota", "config.json"), `{"backlog":{"backend":"issues"},"issues":{"provider":"github"}}`)
+	write(t, filepath.Join(root, ".rota", "config.json"), `{"forge": {"provider": "github"}, "issues": {"source": "github"}}`)
 	write(t, filepath.Join(root, ".rota", "workers.json"), `{"slots":[{"name":"dana","branch":"dana/58-x","pr":"https://github.com/o/r/pull/42"}]}`)
 	state := "OPEN"
 	deps := testDeps()
@@ -31,7 +31,7 @@ func TestWatchForgeSeesAChangeBetweenPasses(t *testing.T) {
 		return []byte("[]"), nil, 0, nil
 	}, func(n string) (string, error) { return "/fake/" + n, nil })}
 	deps.RoundEnv = func(ctx context.Context, root string) round.Env {
-		f, err := deps.forge(ctx, config.Load(rotatree.Config(root)), "", root)
+		f, err := deps.forgeAndIssues(ctx, config.Load(rotatree.Config(root)), root)
 		if err != nil {
 			t.Fatal(err)
 		}
