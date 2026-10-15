@@ -20,15 +20,23 @@ var reKey = regexp.MustCompile(`^[A-Z][A-Z0-9_]*-[0-9]+$`)
 // NumKey is the key of numbered issue n.
 func NumKey(n int) IssueKey { return IssueKey(strconv.Itoa(n)) }
 
+// NormRef is the one spelling issue and item ids are compared and keyed by:
+// trimmed, no leading `#`, upper case. worker.NormID is this rule.
+func NormRef(id string) string {
+	id = strings.TrimSpace(id)
+	id = strings.TrimSpace(strings.TrimPrefix(id, "#"))
+	return strings.ToUpper(id)
+}
+
 // ParseKey reads a key from `603`, `#603`, `proj-123` or `PROJ-123`; ok is
 // false for anything else.
 func ParseKey(s string) (IssueKey, bool) {
-	s = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(s), "#"))
+	s = NormRef(s)
 	if n, err := strconv.Atoi(s); err == nil && n > 0 {
 		return NumKey(n), true
 	}
-	if u := strings.ToUpper(s); reKey.MatchString(u) {
-		return IssueKey(u), true
+	if reKey.MatchString(s) {
+		return IssueKey(s), true
 	}
 	return "", false
 }

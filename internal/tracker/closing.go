@@ -3,6 +3,7 @@ package tracker
 import (
 	"regexp"
 	"strconv"
+	"strings"
 	"unicode"
 	"unicode/utf8"
 )
@@ -63,6 +64,19 @@ func ClosesByKey(key IssueKey, c ClosingSource) bool {
 	if key == "" {
 		return false
 	}
-	re := regexp.MustCompile(`(?i)(?:^|[^A-Za-z0-9_-])` + regexp.QuoteMeta(string(key)) + `(?:$|[^A-Za-z0-9_])`)
-	return re.MatchString(c.Branch) || re.MatchString(c.Title)
+	return hasKey(c.Branch, key) || hasKey(c.Title, key)
+}
+
+// reKeyToken finds key-shaped tokens (PROJ-12) not inside a longer word; `-`
+// and `_` may precede one (fix-PROJ-12), so the leading boundary is any
+// character but a letter or digit.
+var reKeyToken = regexp.MustCompile(`(?:^|[^A-Za-z0-9])([A-Za-z][A-Za-z0-9_]*-[0-9]+)`)
+
+func hasKey(text string, key IssueKey) bool {
+	for _, m := range reKeyToken.FindAllStringSubmatch(text, -1) {
+		if strings.EqualFold(m[1], string(key)) {
+			return true
+		}
+	}
+	return false
 }
