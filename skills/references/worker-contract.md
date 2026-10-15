@@ -96,6 +96,12 @@ Work only this task, then stop.
      `blockedBy: closes`), since the merge would leave the issue open and claimed. A PR
      that lands only part of the issue says `Refs #<issue>` instead, and the issue
      carries the `partial-slice` label (ask the orchestrator to set it).
+- Second PR of a split issue. When the issue lands as stacked PRs, open the second from
+  a new branch named `<agent>/<issue>-<slug>` (same agent and issue number as the first),
+  with `Closes #<issue>`; the first says `Refs #<issue>`. Print `ROTA-DONE <slot> <pr-url>`
+  for the second as usual. `rota worker gate` follows the PR to its head branch when that
+  branch leads with the slot's issue, records it on the slot and judges the PR with the
+  slot's relay log, so cite relays in its `## Approvals` as in the first.
 - Escalate rather than guess. If the task leaves a choice a user would notice
   unsettled, and neither the brief nor the code settles it, print
   `ROTA-BLOCKED <slot>: <one question in plain language>` and stop. Ask ONE

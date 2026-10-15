@@ -1264,3 +1264,64 @@ func TestGateReviewDepthAsksForTheCheckedHead(t *testing.T) {
 		t.Errorf("a stale verdict must not pass: %+v", res)
 	}
 }
+
+// secondPR sets up a split issue: the slot still records the branch of its
+// first (partial-slice) PR, gone from origin, while PR 7 is headed by the
+// branch of the second slice. head is that branch.
+func secondPR(t *testing.T, head string) *world {
+	t.Helper()
+	w := newWorld(t, ghURL)
+	gitq(t, w.worker, "push", "-q", "origin", "w1:refs/heads/"+head)
+	w.forge("head", head)
+	w.forge("body", "Closes #5\n\n## Approvals\n- use the shared cache: orchestrator relay round 2\n")
+	relays := `[{"round":2,"ts":"2026-10-02T10:00:00Z","summary":"use the shared cache for the lookup"}]`
+	os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
+		[]byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"dana/5-first-slice","task":"#5","pr":%q,"relays":%s}]}`, ghURL, relays)), 0o644)
+	return w
+}
+
+// A slot that merged a partial-slice PR and reports a second PR from a new
+// branch gates that PR with the slot's relays, by slot name and by PR number,
+// and records the new branch on the slot.
+func TestGateSecondPROfASplitIssueUsesTheSlotsRelays(t *testing.T) {
+	for _, arg := range []string{"w1", "7"} {
+		t.Run(arg, func(t *testing.T) {
+			w := secondPR(t, "dana/5-second-slice")
+			res, err := w.env(false).Gate(bg, w.dir, GateOpts{Slot: arg, Base: "main"})
+			if err != nil || res.Verdict != GatePass {
+				t.Fatalf("verdict = %q (%v): %+v", res.Verdict, err, res)
+			}
+			if res.Branch != "dana/5-second-slice" || !w.onMain("work.txt") {
+				t.Errorf("branch = %q, landed = %v", res.Branch, w.onMain("work.txt"))
+			}
+		})
+	}
+}
+
+func TestGateRecordsTheHeadBranchOfTheSecondPR(t *testing.T) {
+	w := secondPR(t, "dana/5-second-slice")
+	if res, err := w.gate(false, GateOpts{CheckOnly: true}); err != nil || res.Verdict != GateFresh {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if got := LoadRegistryTolerant(w.dir).Slot("w1").Branch(); got != "dana/5-first-slice" {
+		t.Errorf("check-only recorded %q", got)
+	}
+	if res, err := w.gate(false, GateOpts{}); err != nil || res.Verdict != GatePass {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if got := LoadRegistryTolerant(w.dir).Slot("w1").Branch(); got != "dana/5-second-slice" {
+		t.Errorf("slot branch = %q, want the second PR's head", got)
+	}
+}
+
+// A recorded PR headed by a branch of another issue is still a mismatch: only
+// the slot's own issue's branches are adopted.
+func TestGateKeepsRefusingAPRFromAnotherIssuesBranch(t *testing.T) {
+	w := secondPR(t, "dana/6-other-issue")
+	os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
+		[]byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"#5","pr":%q}]}`, ghURL)), 0o644)
+	res, err := w.gate(false, GateOpts{CheckOnly: true})
+	if err != nil || res.Verdict != GatePRMismatch {
+		t.Fatalf("verdict = %q (%v): %+v", res.Verdict, err, res)
+	}
+}
