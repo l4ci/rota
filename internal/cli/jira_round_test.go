@@ -38,7 +38,7 @@ func newJiraFx(t *testing.T, slots ...string) *jiraFx {
 	fx := newScopeFx(t, "warn", "")
 	s := jiratest.New(t, jiratest.Options{})
 	conn := tracker.WithConnections(func(_ context.Context, name string) (connections.Connection, string, error) {
-		return connections.Connection{Name: name, Kind: connections.KindJira, Site: s.URL, User: "me@example.com"}, "tok", nil
+		return connections.Connection{Name: name, Kind: connections.KindJira, Site: s.URL, User: "me@example.com", Deployment: connections.DeploymentCloud}, "tok", nil
 	})
 	fx.deps.TrackerOptions = append(fx.deps.TrackerOptions, conn)
 	write(t, filepath.Join(fx.root, ".rota", "config.json"), jiraRoundCfg)
@@ -200,7 +200,7 @@ func TestJiraWorkerGate(t *testing.T) {
 
 	s := jiratest.New(t, jiratest.Options{})
 	conn := tracker.WithConnections(func(_ context.Context, name string) (connections.Connection, string, error) {
-		return connections.Connection{Name: name, Kind: connections.KindJira, Site: s.URL, User: "me@example.com"}, "tok", nil
+		return connections.Connection{Name: name, Kind: connections.KindJira, Site: s.URL, User: "me@example.com", Deployment: connections.DeploymentCloud}, "tok", nil
 	})
 	deps.TrackerOptions = append(deps.TrackerOptions, conn)
 	cfg, err := jsonx.Decode([]byte(`{"issues":{"source":"jira","connection":"work","jira":{"project":"PROJ"}}}`))

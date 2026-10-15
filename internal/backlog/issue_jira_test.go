@@ -16,7 +16,7 @@ import (
 // bodies people read carry none.
 func TestIssuesOnJiraKeepMarkersOutOfComments(t *testing.T) {
 	s := jiratest.New(t, jiratest.Options{})
-	j := tracker.NewJira(connections.Connection{Name: "work", Kind: connections.KindJira, Site: s.URL, User: "me@example.com"}, "tok", "PROJ", "")
+	j := tracker.NewJira(connections.Connection{Name: "work", Kind: connections.KindJira, Site: s.URL, User: "me@example.com", Deployment: connections.DeploymentCloud}, "tok", "PROJ", "")
 	b := &Issues{Cfg: mustDecode(t, `{}`), Tracker: j, CountProof: stubCountProof}
 	key, err := j.Create(b.ctx(), "Widen", "body", nil, "")
 	if err != nil {

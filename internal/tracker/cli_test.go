@@ -462,7 +462,7 @@ func TestNewForgeAndNewIssueTracker(t *testing.T) {
 		t.Errorf("jira source, no connection: %v", err)
 	}
 	jiraConn := WithConnections(func(_ context.Context, name string) (connections.Connection, string, error) {
-		return connections.Connection{Name: name, Kind: "jira", Site: "https://acme.example", User: "me@acme.example"}, "tok", nil
+		return connections.Connection{Name: name, Kind: "jira", Site: "https://acme.example", User: "me@acme.example", Deployment: connections.DeploymentCloud}, "tok", nil
 	})
 	if it, err := NewIssueTracker(ctx, Settings{Source: "jira", Connection: "work", JiraProject: "PROJ"}, "", "/repo", jiraConn); err != nil || it.Provider() != "jira" {
 		t.Errorf("jira source: %v, %v", it, err)
