@@ -90,8 +90,12 @@ type Input struct {
 	// forge.provider or issues.source holds an invalid value ("" when valid).
 	IssueSource   string
 	SourceProblem string
-	Accounts      []config.Account
-	SwitchOnUsage bool // orchestrator.switchOnUsage (D4)
+	// JiraProject and IssuesConnection are issues.jira.project and
+	// issues.connection, which issues.source jira needs.
+	JiraProject      string
+	IssuesConnection string
+	Accounts         []config.Account
+	SwitchOnUsage    bool // orchestrator.switchOnUsage (D4)
 	// CodexHomes are the Codex homes a worker can run under: the accounts of
 	// work.codexAccounts, else the default Codex home (a zero CodexHome).
 	CodexHomes []CodexHome
@@ -366,6 +370,14 @@ func (d *runner) forgeLine(f string) string {
 func (d *runner) tracker() Check {
 	if d.in.SourceProblem != "" {
 		return fail("tracker", d.in.SourceProblem, "run: rota config set forge.provider auto, and rota config set issues.source file|github|gitlab")
+	}
+	if d.in.IssueSource == config.SourceJira {
+		switch {
+		case d.in.JiraProject == "":
+			return fail("tracker", "issues.source is jira but issues.jira.project is not set", "run: rota config set issues.jira.project <KEY>")
+		case d.in.IssuesConnection == "":
+			return fail("tracker", "issues.source is jira but issues.connection is not set", "run: rota connect add <name> --kind jira ..., then rota config set issues.connection <name>")
+		}
 	}
 	f := d.resolveForge()
 	line := d.forgeLine(f)
