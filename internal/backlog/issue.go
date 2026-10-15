@@ -23,11 +23,14 @@ type Issue = tracker.Issue
 
 // refTag is how a bullet spells an issue: the type letter and number of a
 // numbered issue (F12), the bare key of a key-based tracker's (PROJ-123).
-func refTag(letter string, is Issue) string {
-	if n := is.Num(); n > 0 {
+func refTag(letter string, is Issue) string { return keyTag(letter, is.Key) }
+
+// keyTag is refTag for a bare key.
+func keyTag(letter string, k tracker.IssueKey) string {
+	if n, ok := k.Number(); ok {
 		return letter + strconv.Itoa(n)
 	}
-	return is.Key.String()
+	return k.String()
 }
 
 // Tracker is the part of internal/tracker's Adapter the issue backend calls:

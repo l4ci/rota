@@ -20,6 +20,7 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/postgate"
 	"github.com/l4ci/rota/internal/ship"
+	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/verdict"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -868,8 +869,14 @@ func targetApprovalThread(t worker.GateTarget) (approvalThread, error) {
 	if n, ok := worker.PRRefNumber(t.PR); ok {
 		return approvalThread{Kind: "pr", Number: n, Slot: slot, Title: fmt.Sprintf("Merge approval: PR #%d", n)}, nil
 	}
-	if n, err := strconv.Atoi(t.Issue); err == nil {
-		return approvalThread{Kind: "issue", Number: n, Slot: slot, Title: fmt.Sprintf("Merge approval: %s (%s)", slot, t.Branch)}, nil
+	if k, ok := tracker.ParseKey(t.Issue); ok {
+		th := approvalThread{Kind: "issue", Slot: slot, Title: fmt.Sprintf("Merge approval: %s (%s)", slot, t.Branch)}
+		if n, isNum := k.Number(); isNum {
+			th.Number = n
+		} else {
+			th.Key = k
+		}
+		return th, nil
 	}
-	return approvalThread{}, Usage("--approval and --escalate need an approval thread: slot %s has no PR and no issue number", slot)
+	return approvalThread{}, Usage("--approval and --escalate need an approval thread: slot %s has no PR and no issue number or key", slot)
 }

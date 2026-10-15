@@ -1,9 +1,11 @@
 package worker
 
 import (
+	"strconv"
 	"time"
 
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/tracker"
 )
 
 // Escalation statuses. StatusTimedOut is derived on read and never stored.
@@ -22,7 +24,8 @@ type EscalationAnswer struct {
 type Escalation struct {
 	ID        string
 	Kind      string // issue | pr
-	Number    int
+	Number    int    // the PR, or a numbered issue; 0 for a key issue
+	Key       string // a key-based tracker's issue (PROJ-123); empty otherwise
 	Slot      string
 	Title     string
 	CommentID string
@@ -37,7 +40,7 @@ func escalationFrom(o *jsonx.Object) Escalation {
 	nv, _ := o.Get("number")
 	n, _ := jsonx.Int(nv)
 	e := Escalation{
-		ID: jsonx.Str(o, "id"), Kind: jsonx.Str(o, "kind"), Number: n,
+		ID: jsonx.Str(o, "id"), Kind: jsonx.Str(o, "kind"), Number: n, Key: jsonx.Str(o, "key"),
 		Slot: jsonx.Str(o, "slot"), Title: jsonx.Str(o, "title"), CommentID: jsonx.Str(o, "commentId"),
 		SentAt: jsonx.Str(o, "sentAt"), Deadline: jsonx.Str(o, "deadline"), Status: jsonx.Str(o, "status"),
 	}
@@ -68,7 +71,11 @@ func (e Escalation) Object() *jsonx.Object {
 	o := jsonx.NewObject()
 	o.Set("id", e.ID)
 	o.Set("kind", e.Kind)
-	o.Set("number", e.Number)
+	if e.Key != "" {
+		o.Set("key", e.Key)
+	} else {
+		o.Set("number", e.Number)
+	}
 	if e.Slot != "" {
 		o.Set("slot", e.Slot)
 	}
@@ -84,6 +91,23 @@ func (e Escalation) Object() *jsonx.Object {
 		o.Set("answer", e.Answer.Object())
 	}
 	return o
+}
+
+// Ref is the thread's number as users read it: `#12` for a PR or a numbered
+// issue, the key itself (PROJ-123) for a key issue.
+func (e Escalation) Ref() string {
+	if e.Key != "" {
+		return e.Key
+	}
+	return "#" + strconv.Itoa(e.Number)
+}
+
+// IssueKey is the key of an issue thread's issue.
+func (e Escalation) IssueKey() tracker.IssueKey {
+	if e.Key != "" {
+		return tracker.IssueKey(e.Key)
+	}
+	return tracker.NumKey(e.Number)
 }
 
 // Derived is the status as reported: a stored pending escalation past its

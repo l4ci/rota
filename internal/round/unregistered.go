@@ -3,6 +3,7 @@ package round
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/tracker"
 	"path"
 	"strings"
 
@@ -44,7 +45,7 @@ func (e Env) findUnregisteredBranches(ctx context.Context, root string, rep *Rep
 		}
 		f := Finding{Kind: UnregisteredBranch, Issue: worker.IssueFromBranch(name), branch: name}
 		if f.Issue != "" {
-			f.Detail = fmt.Sprintf("%s matches round.adoptPattern and no slot holds it (#%s)", name, f.Issue)
+			f.Detail = fmt.Sprintf("%s matches round.adoptPattern and no slot holds it (%s)", name, tracker.RefOf(f.Issue))
 			f.Repair = "adopt as an external slot"
 		} else {
 			f.Detail = fmt.Sprintf("%s matches round.adoptPattern and no slot holds it: needs --issue (rota worker adopt %s --issue N)", name, name)

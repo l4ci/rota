@@ -279,7 +279,7 @@ func (u *Umbrella) pick(ref string) (*Issues, string, error) {
 		}
 		if ok {
 			hits = append(hits, s)
-			cands = append(cands, fmt.Sprintf("%s:%d", name, is.Num()))
+			cands = append(cands, name+":"+is.Key.String())
 		}
 	}
 	if len(hits) > 1 {

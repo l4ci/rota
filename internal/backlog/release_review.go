@@ -347,7 +347,8 @@ func (b *Issues) releaseGate(mid string, optional bool) (blocked []Blocker, warn
 // NoteRow is one release-notes line: an issue title and number.
 type NoteRow struct {
 	Title  string
-	Number int
+	Number int    // 0 for a key issue
+	Ref    string // the issue as users read it: #12, PROJ-123
 }
 
 // NoteSection is one release-notes heading and its rows.
@@ -378,7 +379,7 @@ func (b *Issues) releaseNotes(mid string, optional bool) ([]NoteSection, error) 
 		case "B":
 			i = 1
 		}
-		out[i].Rows = append(out[i].Rows, NoteRow{oneLine(is.Title), is.Num()})
+		out[i].Rows = append(out[i].Rows, NoteRow{oneLine(is.Title), is.Num(), is.Key.Ref()})
 	}
 	return out, nil
 }

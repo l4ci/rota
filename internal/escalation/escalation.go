@@ -98,9 +98,10 @@ func NextID(list []Entry) string {
 }
 
 // PendingOn finds the stored-pending entry on a thread (one per thread).
-func PendingOn(list []Entry, kind string, number int) (Entry, bool) {
+// ref is the thread's Entry.Ref spelling: `#12`, or the key PROJ-123.
+func PendingOn(list []Entry, kind, ref string) (Entry, bool) {
 	for _, e := range list {
-		if e.Kind == kind && e.Number == number && e.Status == StatusPending {
+		if e.Kind == kind && e.Ref() == ref && e.Status == StatusPending {
 			return e, true
 		}
 	}
@@ -123,11 +124,11 @@ func kindOf(pr bool) string {
 	return "issue"
 }
 
-func comments(ctx context.Context, f Forge, kind string, number int) ([]tracker.Comment, error) {
-	if kind == "pr" {
-		return f.MRNotes(ctx, number)
+func comments(ctx context.Context, f Forge, e Entry) ([]tracker.Comment, error) {
+	if e.Kind == "pr" {
+		return f.MRNotes(ctx, e.Number)
 	}
-	return f.Comments(ctx, tracker.NumKey(number))
+	return f.Comments(ctx, e.IssueKey())
 }
 
 func fromTracker(err error) *Error {
@@ -140,11 +141,29 @@ func fromTracker(err error) *Error {
 // SendOpts are the flags of `rota round escalate send`.
 type SendOpts struct {
 	Number  int
+	Key     tracker.IssueKey // an issue thread's key; empty means issue Number
 	PR      bool
 	Slot    string
 	Title   string
 	Body    string
 	Timeout time.Duration
+}
+
+// issueKey is the key of an issue thread.
+func (o SendOpts) issueKey() tracker.IssueKey {
+	if o.Key != "" {
+		return o.Key
+	}
+	return tracker.NumKey(o.Number)
+}
+
+// Ref is the thread's number as users read it: `#12` for a PR or a numbered
+// issue, the key for a key issue.
+func (o SendOpts) Ref() string {
+	if o.PR {
+		return "#" + strconv.Itoa(o.Number)
+	}
+	return o.issueKey().Ref()
 }
 
 // SendResult is what a send did.
@@ -175,8 +194,8 @@ func Send(ctx context.Context, env Env, root string, o SendOpts) (SendResult, er
 	// That is safe only while one orchestrator sends escalations at a time
 	// (ratified by the orchestrator, round 4).
 	list := Load(root)
-	if p, ok := PendingOn(list, kind, o.Number); ok {
-		return res, &Error{Exit: exitcode.ExitRefused, Message: fmt.Sprintf("escalation %s is still pending on %s #%d", p.ID, kind, o.Number),
+	if p, ok := PendingOn(list, kind, o.Ref()); ok {
+		return res, &Error{Exit: exitcode.ExitRefused, Message: fmt.Sprintf("escalation %s is still pending on %s %s", p.ID, kind, o.Ref()),
 			Data: pendingData(p.ID)}
 	}
 	if env.Forge == nil {
@@ -192,12 +211,12 @@ func Send(ctx context.Context, env Env, root string, o SendOpts) (SendResult, er
 	if o.PR {
 		cid, err = f.AddMRNote(ctx, o.Number, text)
 	} else {
-		cid, err = f.AddComment(ctx, tracker.NumKey(o.Number), text)
+		cid, err = f.AddComment(ctx, o.issueKey(), text)
 	}
 	if err != nil {
 		te := fromTracker(err)
 		if te.Exit == exitcode.ExitResolution {
-			te.Message = fmt.Sprintf("no such %s #%d: %s", kind, o.Number, te.Message)
+			te.Message = fmt.Sprintf("no such %s %s: %s", kind, o.Ref(), te.Message)
 		}
 		return res, te
 	}
@@ -205,7 +224,7 @@ func Send(ctx context.Context, env Env, root string, o SendOpts) (SendResult, er
 	if o.PR {
 		u, err = f.PRCommentURL(ctx, o.Number, cid)
 	} else {
-		u, err = f.CommentURL(ctx, tracker.NumKey(o.Number), cid)
+		u, err = f.CommentURL(ctx, o.issueKey(), cid)
 	}
 	if err != nil {
 		res.Warnings = append(res.Warnings, "comment posted but its url could not be read: "+err.Error())
@@ -220,6 +239,14 @@ func Send(ctx context.Context, env Env, root string, o SendOpts) (SendResult, er
 		SentAt: Time(now), Notified: res.Notified, Status: StatusPending}
 	if o.Timeout > 0 {
 		e.Deadline = Time(now.Add(o.Timeout))
+	}
+	if !o.PR {
+		e.Number = 0
+		if n, ok := o.issueKey().Number(); ok {
+			e.Number = n
+		} else {
+			e.Key = o.issueKey().String()
+		}
 	}
 	res.Entry = e
 	err = worker.UpdateEscalations(root, func(list []Entry) []Entry {
@@ -257,7 +284,7 @@ func notify(ctx context.Context, env Env, root, id string, o SendOpts, warns []s
 	if err := h.Require(); err != nil {
 		return false, append(warns, "no notification: "+err.Error())
 	}
-	h.Notify(ctx, "rota escalation "+id, fmt.Sprintf("%s (#%d)", o.Title, o.Number))
+	h.Notify(ctx, "rota escalation "+id, fmt.Sprintf("%s (%s)", o.Title, o.Ref()))
 	return true, warns
 }
 
@@ -320,14 +347,14 @@ func Check(ctx context.Context, env Env, root string, ids []string) (CheckResult
 			}
 			forge = f
 		}
-		cs, err := comments(ctx, forge, e.Kind, e.Number)
+		cs, err := comments(ctx, forge, e)
 		if err != nil {
-			res.Warnings = append(res.Warnings, fmt.Sprintf("%s: cannot read %s #%d: %v", e.ID, e.Kind, e.Number, err))
+			res.Warnings = append(res.Warnings, fmt.Sprintf("%s: cannot read %s %s: %v", e.ID, e.Kind, e.Ref(), err))
 			continue
 		}
 		a, ok, escFound := FindAnswer(cs, e.CommentID)
 		if !escFound {
-			res.Warnings = append(res.Warnings, fmt.Sprintf("%s: escalation comment %s is gone from %s #%d, cannot tell what answers it", e.ID, e.CommentID, e.Kind, e.Number))
+			res.Warnings = append(res.Warnings, fmt.Sprintf("%s: escalation comment %s is gone from %s %s, cannot tell what answers it", e.ID, e.CommentID, e.Kind, e.Ref()))
 			continue
 		}
 		if ok {

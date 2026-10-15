@@ -289,7 +289,7 @@ func (f Finding) Key() string {
 	case f.branch != "":
 		return f.branch
 	}
-	return "#" + f.Issue
+	return tracker.RefOf(f.Issue)
 }
 
 // Report is the assembled state.
