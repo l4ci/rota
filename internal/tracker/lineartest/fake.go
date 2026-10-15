@@ -85,9 +85,7 @@ type Server struct {
 	limitSt int
 	failN   int
 	failSt  int
-	errN    int
-	errCode string
-	errMsg  string
+	errs    []queued
 }
 
 var me = user{"user-me", "Me"}
@@ -131,11 +129,26 @@ func (s *Server) FailNext(n, status int) {
 	s.failN, s.failSt = n, status
 }
 
-// ErrorNext makes the next n requests answer HTTP 200 with one GraphQL error.
-func (s *Server) ErrorNext(n int, code, message string) {
+type queued struct{ op, code, msg string }
+
+// ErrorOn makes the next request for op (any op when "") answer HTTP 200 with
+// one GraphQL error, before it changes anything. Calls queue: each error
+// answers one request.
+func (s *Server) ErrorOn(op, code, message string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.errN, s.errCode, s.errMsg = n, code, message
+	s.errs = append(s.errs, queued{op, code, message})
+}
+
+// queuedError takes the first queued error for op, if any.
+func (s *Server) queuedError(op string) (queued, bool) {
+	for i, q := range s.errs {
+		if q.op == "" || q.op == op {
+			s.errs = slices.Delete(s.errs, i, i+1)
+			return q, true
+		}
+	}
+	return queued{}, false
 }
 
 // SetNextCommentTime gives the next n comments createdAt t, to test tie-breaks.
@@ -462,12 +475,12 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 		}
 		reply(w, s.limitSt, (&fault{status: s.limitSt, code: "RATELIMITED", typ: "ratelimited", msg: "Rate limit exceeded"}).body())
 		return
-	case s.errN > 0:
-		s.errN--
-		reply(w, 200, (&fault{status: 200, code: s.errCode, msg: s.errMsg}).body())
-		return
 	case r.Header.Get("Authorization") != s.o.Key:
 		reply(w, 400, (&fault{status: 400, code: "AUTHENTICATION_ERROR", typ: "authentication error", msg: "Authentication required, not authenticated"}).body())
+		return
+	}
+	if q, ok := s.queuedError(req.Op); ok {
+		reply(w, 200, (&fault{status: 200, code: q.code, msg: q.msg}).body())
 		return
 	}
 	kind, known := kinds[req.Op]

@@ -357,7 +357,7 @@ func TestLinearErrors(t *testing.T) {
 	if err := linearAt(s, "wrong", "ENG").CheckAuth(ctx); !IsKind(err, KindUnavailable) {
 		t.Errorf("wrong key = %v, want unavailable", err)
 	}
-	s.ErrorNext(1, "RATELIMITED", "slow down")
+	s.ErrorOn("", "RATELIMITED", "slow down")
 	if _, err := l.Get(ctx, k, false); !IsKind(err, KindRateLimited) {
 		t.Errorf("RATELIMITED error = %v", err)
 	}
