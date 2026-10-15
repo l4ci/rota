@@ -2,7 +2,8 @@
 // label, close and the open-only filter of the cross-reference index. It
 // ports bin/hv-issues-{provider,list,label,close,imported}; every forge call
 // here goes through tracker.Adapter, so what differs between gh and glab
-// lives in one place.
+// lives in one place. With issues.source jira, label and close go through the
+// Jira tracker instead.
 package issues
 
 import (
@@ -12,6 +13,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/marker"
 	"github.com/l4ci/rota/internal/pystr"
@@ -84,6 +86,22 @@ func (e Env) adapter(ctx context.Context, provider, dir string) (Forge, error) {
 	return tracker.NewFromConfig(ctx, e.Config, provider, dir, e.Opts...)
 }
 
+// tracker is what label and close act on: issues.source's own tracker when it
+// is not a forge (jira), else the forge adapter of the resolved provider.
+func (e Env) tracker(ctx context.Context, verb, dir string) (Forge, error) {
+	if s := tracker.SettingsFromConfig(e.Config); s.Source == config.SourceJira {
+		if e.Forge != nil {
+			return e.Forge(ctx, s.Source, dir)
+		}
+		return tracker.NewIssueTracker(ctx, s, "", dir, e.Opts...)
+	}
+	provider := Provider(ctx, e, dir)
+	if provider == "unknown" {
+		return nil, noProvider(verb)
+	}
+	return e.adapter(ctx, provider, dir)
+}
+
 // ---- label ----------------------------------------------------------------
 
 // Label adds or removes one label on an upstream issue and reports whether it
@@ -91,11 +109,7 @@ func (e Env) adapter(ctx context.Context, provider, dir string) (Forge, error) {
 // changed is read from the issue first, and a failed read leaves it true.
 // autoCreate lets a missing label be created on the forge.
 func Label(ctx context.Context, env Env, dir string, key tracker.IssueKey, label string, add, autoCreate bool) (bool, error) {
-	provider := Provider(ctx, env, dir)
-	if provider == "unknown" {
-		return false, noProvider("label upstream issue")
-	}
-	a, err := env.adapter(ctx, provider, dir)
+	a, err := env.tracker(ctx, "label upstream issue", dir)
 	if err != nil {
 		return false, err
 	}
@@ -129,11 +143,7 @@ func Close(ctx context.Context, env Env, dir string, key tracker.IssueKey, commi
 		body += " ([" + item + "])"
 	}
 	body += "\n\n" + marker.Line("shipped")
-	provider := Provider(ctx, env, dir)
-	if provider == "unknown" {
-		return false, noProvider("close upstream issue")
-	}
-	a, err := env.adapter(ctx, provider, dir)
+	a, err := env.tracker(ctx, "close upstream issue", dir)
 	if err != nil {
 		return false, err
 	}
