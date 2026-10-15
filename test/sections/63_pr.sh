@@ -12,8 +12,9 @@ for prov in github gitlab; do
     P="$TMP_PR/$prov-$mode"; mkdir -p "$P"
     git init -q --bare "$P/origin.git"
     git clone -q "$P/origin.git" "$P/work" 2>/dev/null; mkdir -p "$P/work/.rota"
-    printf '{"backlog":{"backend":"%s"},"issues":{"provider":"%s","retryWaitSeconds":0}}\n' \
-      "$([ "$mode" = issues ] && echo issues || echo file)" "$prov" > "$P/work/.rota/config.json"
+    # file mode: PRs on the forge with the backlog in files; issues mode: the tracker is the source
+    printf '{"forge":{"provider":"%s"},"issues":{"source":"%s","retryWaitSeconds":0}}\n' \
+      "$prov" "$([ "$mode" = issues ] && echo "$prov" || echo file)" > "$P/work/.rota/config.json"
     (
       cd "$P/work"
       git config user.email t@t; git config user.name t

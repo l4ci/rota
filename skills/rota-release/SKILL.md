@@ -64,7 +64,7 @@ Per-project release steps live in `release.checklistPath`; the skill hardcodes n
 
 ## Step 3 — Milestone Gate (issue mode)
 
-When `backlog.backend` is `"issues"` or `rota repo umbrella` exits 0, read [`milestone-gate.md`](milestone-gate.md), *Step 3*, and follow it. Otherwise skip.
+When `issues.source` is `github` or `gitlab` or `rota repo umbrella` exits 0, read [`milestone-gate.md`](milestone-gate.md), *Step 3*, and follow it. Otherwise skip.
 
 ## Step 4 — Version and Bump Level
 

@@ -192,6 +192,10 @@ func configCheck(fs *flag.FlagSet) RunFunc {
 		if len(removed) > 0 {
 			res.Text += "\nREMOVED: " + strings.Join(removed, ", ") + " (nothing reads them; run: rota config fill)"
 		}
+		if legacy := config.Legacy(root); len(legacy) > 0 {
+			data.Set("legacy", anySlice(legacy))
+			res.Text += "\nLEGACY: " + strings.Join(legacy, ", ") + " (replaced by issues.source and forge.provider; run: rota migrate source --apply, or rota config fill)"
+		}
 		if status == config.UpToDate || status == config.Stale {
 			if retired := config.Retired(root); len(retired) > 0 {
 				data.Set("retired", anySlice(retired))
@@ -223,7 +227,7 @@ func configFill(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		removed := config.Removed(root)
-		filled, err := config.Fill(root)
+		filled, sm, err := config.FillDetect(root, c.deps().originProvider(c.Context(), root))
 		if errors.Is(err, config.ErrCorrupt) {
 			return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
 		}
@@ -242,7 +246,22 @@ func configFill(fs *flag.FlagSet) RunFunc {
 			}
 			text += "removed: " + strings.Join(removed, ", ")
 		}
-		return Result{Data: jsonObj("filled", anySlice(filled), "removed", anySlice(removed), "changed", len(filled) > 0 || len(removed) > 0), Text: text}, nil
+		data := jsonObj("filled", anySlice(filled), "removed", anySlice(removed), "changed", len(filled) > 0 || len(removed) > 0 || sm.Changed)
+		if sm.Changed {
+			data.Set("migrated", jsonObj("source", sm.Source, "forge", sm.Forge, "removed", anySlice(sm.Removed)))
+			if text == "config up to date; nothing to fill" {
+				text = ""
+			} else {
+				text += "\n"
+			}
+			text += "migrated: " + strings.Join(sm.Removed, ", ") + " -> issues.source " + sm.Source
+			if sm.Forge != "" {
+				text += ", forge.provider " + sm.Forge
+			}
+		} else if sm.Unresolved {
+			c.Warn("backlog.backend is issues and issues.provider is auto, but the origin remote names neither github nor gitlab: set issues.source by hand")
+		}
+		return Result{Data: data, Text: text}, nil
 	}
 }
 

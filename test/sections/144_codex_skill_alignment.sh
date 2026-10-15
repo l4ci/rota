@@ -6,7 +6,7 @@ cp "$TESTDIR/fakes/codex" "$TESTDIR/fakes/codex_skill_worker.py" "$TMP_CSA/bin/"
 (
   cd "$TMP_CSA/project"
   git init -q -b main
-  printf '{"backlog":{"backend":"file"}}\n' > .rota/config.json
+  printf '{"issues":{"source":"file"}}\n' > .rota/config.json
   printf '# Backlog\n\n## Bugs\n\n## Features\n\n## Tasks\n\n## Completed\n' > .rota/BACKLOG.md
   git add .rota/config.json .rota/BACKLOG.md
   git commit -qm seed

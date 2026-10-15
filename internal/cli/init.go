@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 
@@ -187,7 +188,7 @@ func initConfig(c *Ctx, root string, freshConfig bool) (initConfigResult, error)
 			r.warnings = append(r.warnings, "could not seed from the global config: "+err.Error())
 		}
 	}
-	filled, err := config.Fill(root)
+	filled, sm, err := config.FillDetect(root, c.deps().originProvider(c.Context(), root))
 	if errors.Is(err, config.ErrCorrupt) {
 		return r, &Error{Exit: ExitInternal, Message: err.Error()}
 	}
@@ -195,6 +196,12 @@ func initConfig(c *Ctx, root string, freshConfig bool) (initConfigResult, error)
 		return r, err
 	}
 	r.filled = filled
+	if sm.Changed {
+		r.warnings = append(r.warnings, "migrated backlog.backend and issues.provider to issues.source "+sm.Source)
+	}
+	if err := initIssueSource(c, root); err != nil {
+		return r, err
+	}
 	if v := c.deps().InstalledVersion(); v != "" {
 		if config.StampedVersion(config.Load(rotatree.Config(root))) != v {
 			if _, err := config.Set(root, config.VersionKey, v); err != nil {
@@ -251,4 +258,24 @@ func initCheck(c *Ctx, args []string) (Result, error) {
 		c.Warn("%s", w)
 	}
 	return Result{Data: data, Text: "initialized"}, nil
+}
+
+// initIssueSource writes an explicit issues.source when the project has none:
+// the origin's provider for a backlog already moved onto the tracker (it holds
+// .rota/issue-map.json), else file. forge.provider stays auto, and jira and
+// linear are never detected. A config that still carries the legacy keys, or
+// already names a source, is left alone.
+func initIssueSource(c *Ctx, root string) error {
+	cfg := config.Load(rotatree.Config(root))
+	if _, set := config.Lookup(cfg, "issues.source"); set || len(config.Legacy(root)) > 0 {
+		return nil
+	}
+	source := config.SourceFile
+	if _, err := os.Stat(filepath.Join(rotatree.Dir(root), "issue-map.json")); err == nil {
+		if p := c.deps().originProvider(c.Context(), root)(); p != "" {
+			source = p
+		}
+	}
+	_, err := config.Set(root, "issues.source", source)
+	return err
 }

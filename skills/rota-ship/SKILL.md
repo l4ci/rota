@@ -95,9 +95,11 @@ End the body with one line written from the diff: `Door: one-way|two-way. Blast 
 
 ## Step 5 — Pick Strategy
 
-When the backlog backend is issues, read [`round-worker-and-issue-mode.md`](round-worker-and-issue-mode.md): no question, go to Step 6a.
+Run `rota ship strategy [--repo <name>]`; its `strategy` answers how the branch lands:
 
-If `work.mergeStrategy` is `"direct"` or `"pr"` and the user has not said otherwise this session, use it silently. If unset or the user hinted otherwise, ask (single-select, header `"Strategy"`, *"How should I integrate `<branch>`?"*):
+- `pr` when issues live on a tracker (`issues.source` is github or gitlab): read [`round-worker-and-issue-mode.md`](round-worker-and-issue-mode.md); no question, go to Step 6a.
+- `direct` with a local forge (`forge` is `local`: no origin remote, or `forge.provider: local`): no question, go to Step 6b. There is no PR to open, so `work.mergeStrategy` is ignored. Say so in one line.
+- Otherwise it echoes `work.mergeStrategy`. If it is `"direct"` or `"pr"` and the user has not said otherwise this session, use it silently. If `unset` or the user hinted otherwise, ask (single-select, header `"Strategy"`, *"How should I integrate `<branch>`?"*):
 
 - `"Direct merge"` — *"Merge into the base with `--no-ff` and delete the branch."*
 - `"PR"` — *"Push and open a PR with the body."*

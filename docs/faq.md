@@ -17,7 +17,7 @@ Yes. Backlog (with the default `file` backend; under `issues` it lives on the tr
 
 You already are; sharing is the default. A few things to know: on the file backend, item ID counters in `counters.json` are shared, so coordinating ID numbering matters; `KNOWLEDGE.md` accumulates team learnings; `DECISIONS.md` becomes a team contract. Per-developer settings (autonomy level, model preferences) go in the gitignored `.rota/config.local.json` to avoid stepping on each other.
 
-This works well for small teams. For larger ones, set `backlog.backend` to `issues` so GitHub or GitLab issues hold the backlog and get the tracker's conflict resolution and permissions; see the [issue backend](usage/issue-backend.md).
+This works well for small teams. For larger ones, set `issues.source` to `github` or `gitlab` so GitHub or GitLab issues hold the backlog and get the tracker's conflict resolution and permissions; see the [issue backend](usage/issue-backend.md).
 
 ## What if I'm not using Claude Code?
 

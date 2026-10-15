@@ -191,7 +191,7 @@ The output:
 [F05] tally list command                          Feature, Minor, Milestone: M01
 ```
 
-Each gets a row in `BACKLOG.md` under `## Features`, tagged `Milestone: M01`. Detail files live at `.rota/features/F01.md` … `F05.md` (auto-created when the description is long enough to overflow the BACKLOG row). With `backlog.backend: "issues"` each item is an issue on the tracker instead; see the [issue backend](../usage/issue-backend.md).
+Each gets a row in `BACKLOG.md` under `## Features`, tagged `Milestone: M01`. Detail files live at `.rota/features/F01.md` … `F05.md` (auto-created when the description is long enough to overflow the BACKLOG row). With `issues.source` set to `github` or `gitlab` each item is an issue on the tracker instead; see the [issue backend](../usage/issue-backend.md).
 
 If any of these had been size-Major instead of Minor, `/rota-capture` would have nudged you toward `/rota-brainstorm` before plan to negotiate the design first. Minor items skip that layer.
 

@@ -238,19 +238,19 @@ func TestIssuesScopeFollowsWorkingDirectory(t *testing.T) {
 }
 
 func TestIssuesNoProviderAndMissingIssue(t *testing.T) {
-	// no origin, no issues.provider: label exits 3 instead of an empty list
+	// no origin, no forge.provider: label exits 3 instead of an empty list
 	deps := testDeps()
 	root := issuesRepo(t, "")
 	issuesForge(t, deps, "", nil)
 	for _, argv := range [][]string{{"issues", "label", "3", "--add", "x"}} {
 		code, env, _ := rotaRunWith(t, deps, append([]string{"--json", "-C", root}, argv...)...)
-		if msg, _ := get(env, "error", "message").(string); code != ExitResolution || !strings.Contains(msg, "issues.provider") {
+		if msg, _ := get(env, "error", "message").(string); code != ExitResolution || !strings.Contains(msg, "forge.provider") {
 			t.Errorf("%v: %d %v", argv, code, env)
 		}
 	}
-	// issues.provider stands in for a missing origin
+	// forge.provider stands in for a missing origin
 	root = issuesRepo(t, "")
-	os.WriteFile(filepath.Join(root, ".rota", "config.json"), []byte(`{"issues": {"provider": "github"}}`), 0o644)
+	os.WriteFile(filepath.Join(root, ".rota", "config.json"), []byte(`{"forge": {"provider": "github"}}`), 0o644)
 	issuesForge(t, deps, "", nil)
 	if code, env, _ := rotaRunWith(t, deps, "--json", "-C", root, "issues", "provider"); code != 0 || get(dataOf(env), "provider") != "github" {
 		t.Errorf("config fallback: %d %v", code, env)

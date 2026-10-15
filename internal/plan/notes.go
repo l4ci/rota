@@ -221,7 +221,7 @@ func (s notes) List(milestone string) ([]Entry, error) {
 		return nil, err
 	}
 	if s.warn != nil {
-		s.warn("item plans live on their issues (backlog.backend \"issues\"); listing slice plans from the milestone tracking issues only")
+		s.warn("item plans live on their issues (issues.source is a tracker); listing slice plans from the milestone tracking issues only")
 	}
 	plans, err := sl.SlicePlans(milestone)
 	if err != nil {

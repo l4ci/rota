@@ -404,3 +404,24 @@ func Removed(root string) []string {
 	}
 	return out
 }
+
+// Legacy lists the LegacyKeys that .rota/config.json still holds. They still
+// mean something until `rota migrate source` (or `config fill`) rewrites them
+// into issues.source and forge.provider; `config check` names them.
+func Legacy(root string) []string {
+	out := []string{}
+	raw, err := os.ReadFile(configPath(root))
+	if err != nil {
+		return out
+	}
+	doc, ok := decodeObject(raw)
+	if !ok {
+		return out
+	}
+	for _, k := range LegacyKeys {
+		if _, ok := lookupPresent(doc, strings.Split(k, ".")); ok {
+			out = append(out, k)
+		}
+	}
+	return out
+}

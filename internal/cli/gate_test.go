@@ -142,7 +142,7 @@ func gateCases() []gateCase {
 		}},
 		{gate.MergeApproval, "ship merge", func(t *testing.T, level string) (string, []string, string, func() bool, *Deps) {
 			work := newRepo(t, t.TempDir(), "proj", "main")
-			write(t, filepath.Join(work, ".rota", "config.json"), gateConfig(t, `{"backlog":{"backend":"file"}}`, level, map[string]any{"mergeApproval": "all"}))
+			write(t, filepath.Join(work, ".rota", "config.json"), gateConfig(t, `{"issues": {"source": "file"}}`, level, map[string]any{"mergeApproval": "all"}))
 			shipBranchOf(t, work, "rota/x", [3]string{"x.txt", "feat: x", ""})
 			return work, []string{"ship", "merge", "rota/x", "--body-file", "-"}, "merge: x",
 				func() bool { return gitT(t, work, "branch", "--list", "rota/x") != "" }, testDeps()
@@ -216,7 +216,7 @@ func TestGatedVerbsRejectHalfAConfirmation(t *testing.T) {
 
 func TestMergeApprovalPaths(t *testing.T) {
 	work := newRepo(t, t.TempDir(), "proj", "main")
-	write(t, filepath.Join(work, ".rota", "config.json"), gateConfig(t, `{"backlog":{"backend":"file"}}`, "auto",
+	write(t, filepath.Join(work, ".rota", "config.json"), gateConfig(t, `{"issues": {"source": "file"}}`, "auto",
 		map[string]any{"mergeApproval": "paths", "mergeApprovalPaths": []any{"rota-release", "*.md"}}))
 	shipBranchOf(t, work, "rota/code", [3]string{"main.go", "feat: code", ""})
 	shipBranchOf(t, work, "rota/skill", [3]string{"rota-release/SKILL.md", "docs: skill", ""})

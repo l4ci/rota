@@ -18,7 +18,7 @@ mkdir -p "$PROJ/.rota"
     && git remote add origin "$ORIGIN" && git push -q origin main
 ) || fail "round return fixture repo setup failed"
 printf 'stub worker contract\n' > "$TMP_RR/contract.md"
-printf '{"backlog":{"backend":"issues"},"issues":{"provider":"github","retryWaitSeconds":0},"work":{"dispatch":"tmux"},"round":{"brief":"%s"}}\n' "$TMP_RR/contract.md" > "$PROJ/.rota/config.json"
+printf '{"forge":{"provider":"github"},"issues":{"source":"github","retryWaitSeconds":0},"work":{"dispatch":"tmux"},"round":{"brief":"%s"}}\n' "$TMP_RR/contract.md" > "$PROJ/.rota/config.json"
 printf 'Welcome to Claude Code\n' > "$FK/tmux/pane"
 : > "$FK/tmux/log"
 

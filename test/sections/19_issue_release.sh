@@ -44,7 +44,7 @@ trap 'rm -rf "$HI3_TMP"' EXIT
 (
   cd "$HI3_TMP"
   mkdir -p .rota
-  echo '{"issues":{"provider":"github","retryWaitSeconds":0}}' > .rota/config.json
+  echo '{"forge":{"provider":"github"},"issues":{"retryWaitSeconds":0}}' > .rota/config.json
   export PATH="$TESTDIR/fakes:$PATH" FAKE_TRACKER_DB="$HI3_TMP/db.json" FAKE_TRACKER_LOG="$HI3_TMP/log"
   [ "$(command -v gh)" = "$TESTDIR/fakes/gh" ] || fail "fake gh not first on PATH"
   # The fake store is the forge's own state: no verb reads back the repo an issue landed in.

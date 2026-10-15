@@ -126,6 +126,9 @@ type ciVerifier struct {
 // newCIVerifier checks what a CI run needs: an origin to push to and a forge
 // to read checks from. brokeMsg says what is missing.
 func (e Env) newCIVerifier(ctx context.Context, root string, forge Forge, cfg GateConfig) (v *ciVerifier, brokeMsg string) {
+	if forge == nil {
+		return nil, "test.fullWhere is ci, but the forge is local (forge.provider is local, or auto with no origin remote): there are no CI checks to read"
+	}
 	if _, code := e.runGit(ctx, root, "remote", "get-url", "origin"); code != 0 {
 		return nil, "test.fullWhere is ci, but this repo has no 'origin' remote to push the merge result to"
 	}
@@ -320,7 +323,10 @@ func (e Env) fullTier(ctx context.Context, root, name string, in gateInput) (ver
 			return e.RunVerifyWith(ctx, cfg.Full, dir, in.ledger)
 		}, false, "", nil
 	}
-	provider := e.detectProvider(ctx, root, "")
+	provider := e.detectProvider(ctx, root, "", cfg.Tracker.Provider)
+	if provider == tracker.ProviderLocal {
+		return nil, true, "test.fullWhere is ci, but the forge is local (forge.provider is local, or auto with no origin remote): there are no CI checks to read", nil
+	}
 	forge, ferr := e.Forge(provider, root, cfg.Tracker)
 	if ferr != nil {
 		return nil, true, fmt.Sprintf("cannot reach the %s forge to read CI checks: %v", provider, ferr), nil

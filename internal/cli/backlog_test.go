@@ -33,8 +33,9 @@ func dataOf(env map[string]any) *jsonx.Object {
 	return d
 }
 
-// Issue mode with no resolvable forge (no origin, no issues.provider) is the
-// tracker's unavailable: exit 5, before any read.
+// An unmigrated config (backlog.backend issues, issues.provider auto) with no
+// origin to resolve the tracker from is the tracker's unavailable: exit 5,
+// before any read. The legacy keys still decide until rota migrate source.
 func TestBacklogIssueModeWithoutProviderExits5(t *testing.T) {
 	root := trackerProject(t, `{"backlog": {"backend": "issues"}}`)
 	for _, argv := range [][]string{{"backlog", "list"}, {"backlog", "ids", "--milestone", "M01"}, {"backlog", "milestones", "12"}, {"summary"}} {
@@ -46,7 +47,7 @@ func TestBacklogIssueModeWithoutProviderExits5(t *testing.T) {
 }
 
 func TestBacklogFileOnlyVerbsAreRefusedUnderIssues(t *testing.T) {
-	root := trackerProject(t, `{"backlog": {"backend": "issues"}}`)
+	root := trackerProject(t, `{"forge": {"provider": "github"}, "issues": {"source": "github"}}`)
 	// drift is read-only, so its refusal is exit 1 (contract: backend).
 	for _, c := range []struct {
 		argv []string
@@ -62,7 +63,7 @@ func TestBacklogFileOnlyVerbsAreRefusedUnderIssues(t *testing.T) {
 }
 
 func TestBacklogViewsInIssueMode(t *testing.T) {
-	root := trackerProject(t, `{"backlog": {"backend": "issues"}}`)
+	root := trackerProject(t, `{"forge": {"provider": "github"}, "issues": {"source": "github"}}`)
 	deps := withTracker(t, &trackertest.Fake{Issues: []backlog.Issue{
 		{Number: 12, Title: "Crash on save", State: "open", Labels: []string{"type:bug"}, Milestone: "M02 — Next",
 			Body: "<!-- rota:fields\nRelated: F3\n-->"},

@@ -12,7 +12,7 @@ import (
 	"github.com/l4ci/rota/internal/rotatree"
 )
 
-// Backend selection: the one place in cli that reads backlog.backend, builds a
+// Backend selection: the one place in cli that reads issues.source, builds a
 // file backend, or asks a backend for a tracker capability. Verbs state what
 // they need (any backend, file-only, issue-only) and get the refusal policy,
 // the warn wiring and the capability lookup from here.
@@ -21,19 +21,22 @@ import (
 // backlog.File{Root:} themselves; they are file stores by definition and
 // cannot import cli.
 
-// backendMode reads backlog.backend of the project at root: the mode name
-// ("file" or "issues") and the loaded config. An invalid value is a corrupt
+// backendMode reads issues.source of the project at root: the mode name
+// ("file", or "issues" for any tracker) and the loaded config. An invalid value is a corrupt
 // config (contract, shared definitions): exit 70, never a quiet fall back.
 func backendMode(root string) (name string, cfg any, err error) {
 	cfg = config.Load(rotatree.Config(root))
 	name, err = config.Backend(cfg)
+	if err == nil {
+		_, err = config.ForgeProvider(cfg)
+	}
 	if err != nil {
 		return "", nil, &Error{Exit: ExitInternal, Message: err.Error()}
 	}
 	return name, cfg, nil
 }
 
-// issueBackend reports whether backlog.backend is "issues".
+// issueBackend reports whether issues.source is a tracker.
 func issueBackend(root string) (bool, error) {
 	name, _, err := backendMode(root)
 	if err != nil {
@@ -42,7 +45,7 @@ func issueBackend(root string) (bool, error) {
 	return name == "issues", nil
 }
 
-// modeRoot is the project root and whether backlog.backend is "issues".
+// modeRoot is the project root and whether issues.source is a tracker.
 func modeRoot(c *Ctx) (root string, issue bool, err error) {
 	root, err = c.Root()
 	if err != nil {
@@ -74,7 +77,7 @@ func backlogScope(c *Ctx) (string, error) {
 	return root, nil
 }
 
-// openBacklog selects the backlog backend from backlog.backend. A file-only verb
+// openBacklog selects the backlog backend from issues.source. A file-only verb
 // under issues is refused (exit 4, backend) before the tracker is built. In an
 // umbrella, issue mode opens one tracker per sub-repo, built on first use;
 // --repo narrows reads and bare references to one sub-repo and names the
@@ -87,7 +90,7 @@ func openBacklog(c *Ctx, root string, fileOnly bool, hint string) (backlog.Backe
 	}
 	if name != "file" && fileOnly {
 		return nil, &backlog.RefusedError{BlockedBy: "backend", Hint: hint, Err: backlog.ErrWrongBackend,
-			Msg: `not available with backlog.backend "issues"`}
+			Msg: `not available when issues.source is a tracker`}
 	}
 	cwd, _ := os.Getwd()
 	return backlog.Open(c.Context(), root, cfg, backlog.Options{
@@ -132,7 +135,7 @@ func openIssueBackend(c *Ctx, hint string, perRepo bool) (backlog.IssueBackend, 
 	}
 	if name == "file" {
 		return nil, &backlog.RefusedError{BlockedBy: "backend", Hint: hint, Err: backlog.ErrWrongBackend,
-			Msg: c.Path + ` is not available with backlog.backend "file"`}
+			Msg: c.Path + ` is not available when issues.source is file`}
 	}
 	if perRepo && c.Repo == "" && repos.Umbrella(root) {
 		// Scope S: inside a sub-repo the verb acts on it; only the umbrella

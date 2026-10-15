@@ -27,7 +27,7 @@ func runPlanCheck(c *Ctx, args []string) (Result, error) {
 	}
 	if !issue {
 		return Result{Data: jsonObj("blockedBy", "backend", "changed", false)},
-			Failed("%s needs item criteria, which only the issue backend has (backlog.backend is not \"issues\")", c.Path)
+			Failed("%s needs item criteria, which only the issue backend has (issues.source is file)", c.Path)
 	}
 	_, st, err := openPlans(c)
 	if err != nil {

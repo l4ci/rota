@@ -407,7 +407,7 @@ func trRunIn(t *testing.T, f *a8Forge, stdin string, args ...string) trOut {
 func a8FileProject(t *testing.T) string {
 	t.Helper()
 	root := newRepo(t, t.TempDir(), "proj", "main")
-	write(t, filepath.Join(root, ".rota", "config.json"), `{"backlog":{"backend":"file"}}`)
+	write(t, filepath.Join(root, ".rota", "config.json"), `{"issues": {"source": "file"}}`)
 	return root
 }
 
@@ -494,7 +494,7 @@ func TestReviewQueueUmbrella(t *testing.T) {
 	if o := trRun(t, umb, "", "review", "queue", "--repo", "nope"); o.code != 3 {
 		t.Errorf("unknown --repo: exit %d, want 3\n%s%s", o.code, o.stdout, o.stderr)
 	}
-	write(t, filepath.Join(umb, ".rota", "config.json"), `{"backlog":{"backend":"issues"}}`)
+	write(t, filepath.Join(umb, ".rota", "config.json"), `{"backlog":{"backend":"issues"}}`) // legacy keys: with no origin the tracker cannot resolve
 	// Past the checks it reaches the sub-repos' trackers; with no forge here that is exit 5.
 	if o := trRun(t, umb, "", "review", "queue"); o.code != 5 {
 		t.Errorf("exit %d, want 5\n%s%s", o.code, o.stdout, o.stderr)
@@ -651,7 +651,7 @@ func TestReviewDepthReadsTheIssueLabels(t *testing.T) {
 	}, func(n string) (string, error) { return "/fake/" + n, nil })}
 	policy := func(labels string) {
 		write(t, filepath.Join(root, ".rota", "config.json"),
-			`{"backlog":{"backend":"issues"},"issues":{"provider":"github"},"ship":{"review":{"default":"full","lightBelow":100000`+labels+`}}}`)
+			`{"forge": {"provider": "github"}, "issues": {"source": "github"},"ship":{"review":{"default":"full","lightBelow":100000`+labels+`}}}`)
 	}
 	run := func(args ...string) (int, map[string]any) {
 		o := trRunWith(t, deps, root, "", append([]string{"review", "depth", "nia/6-small", "--json"}, args...)...)

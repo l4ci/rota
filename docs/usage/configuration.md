@@ -99,7 +99,7 @@ Controls how [`/rota-ship`](review-and-ship.md) integrates completed work.
 | `"direct"` | Merge to main, delete branch | Solo work, fast iteration |
 | `"pr"` | Push branch, open a PR (GitHub) or MR (GitLab) | Team work, code review required |
 
-Under `backlog.backend: "issues"` this key is ignored: `/rota-work`, `/rota-debug` and `/rota-ship` always open a PR or MR and never merge. See [issue backend](issue-backend.md).
+With `issues.source` set to `github` or `gitlab` this key is ignored: `/rota-work`, `/rota-debug` and `/rota-ship` always open a PR or MR and never merge. See [issue backend](issue-backend.md).
 
 ## work.dispatch: subagent, tmux or herdr
 
@@ -594,13 +594,14 @@ Skills that use the base branch (including `/rota-ship`, `/rota-review` and `/ro
 
 ## Issues backend keys
 
-- **Keys:** `backlog.backend`, `issues.provider`, `issues.retryWaitSeconds`, `issues.bulkPaceMs`, `issues.homeRepo`, `issues.labels.*`
+- **Keys:** `issues.source`, `forge.provider`, `issues.retryWaitSeconds`, `issues.bulkPaceMs`, `issues.homeRepo`, `issues.labels.*`
 - **Required:** no. Existing configs stay valid without them.
+- **Legacy keys:** `backlog.backend` and `issues.provider` were replaced by `issues.source` and `forge.provider`. Run `rota migrate source --apply` (or `rota config fill`) to convert; until then the old keys keep deciding.
 
 | Key | Default | Values |
 |-----|---------|--------|
-| `backlog.backend` | `"file"` | `"file"` or `"issues"`. `"issues"` puts the backlog on the tracker; see [issue backend](issue-backend.md). |
-| `issues.provider` | `"auto"` | `"auto"`, `"github"` or `"gitlab"`. |
+| `issues.source` | `"file"` | Where the issues live: `"file"`, `"github"`, `"gitlab"`, `"forge"`, `"jira"` or `"linear"`. `github` and `gitlab` put the backlog on the tracker and must match the forge; `forge` puts each sub-repo of an umbrella on its own forge (mixed hosts); see [issue backend](issue-backend.md). |
+| `forge.provider` | `"auto"` | Where code lands: `"auto"` (from `origin`; no remote is `local`), `"github"`, `"gitlab"` or `"local"`. `local` means direct merge: no PR, the gate never looks for one, and `rota ship strategy` answers `direct`. |
 | `issues.retryWaitSeconds` | `60` | Seconds to wait before the single retry after a primary rate limit. |
 | `issues.bulkPaceMs` | `1000` | Milliseconds `rota migrate issues` waits between tracker writes. `0` disables the pause. |
 | `issues.homeRepo` | `""` | Umbrella mode only: sub-repo holding milestone tracking issues. Empty means the first registered sub-repo. |

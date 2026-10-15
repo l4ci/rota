@@ -263,11 +263,13 @@ type MilestoneEdit struct {
 	State       *string // open | closed
 }
 
-// Adapter is the normalized API both forges implement.
-type Adapter interface {
+// IssueTracker is the issue side of the seam: where issues, their comments,
+// labels and milestones live (issues.source). GitHub and GitLab implement it;
+// Jira and Linear will, later. Issue numbers stay ints.
+type IssueTracker interface {
 	Provider() string
-	// CheckAuth fails with KindUnavailable unless the forge CLI is installed
-	// and logged in.
+	// CheckAuth fails with KindUnavailable unless the tracker's CLI is
+	// installed and logged in.
 	CheckAuth(ctx context.Context) error
 
 	Create(ctx context.Context, title, body string, labels []string, milestone string) (int, error)
@@ -286,6 +288,30 @@ type Adapter interface {
 	AddComment(ctx context.Context, number int, body string) (string, error)
 	EditComment(ctx context.Context, number int, commentID, body string) error
 	DeleteComment(ctx context.Context, number int, commentID string) error
+	// CommentURL is the web URL of comment id on the issue (pr false) or PR/MR
+	// number; it costs one call.
+	CommentURL(ctx context.Context, pr bool, number int, commentID string) (string, error)
+
+	// FindMilestone returns the title of the milestone whose leading token is
+	// rotaID, preferring open ones; ok is false when none matches.
+	FindMilestone(ctx context.Context, rotaID string) (title string, ok bool, err error)
+	// Milestones lists by state "open", "closed" or "all" (or "").
+	Milestones(ctx context.Context, state string) ([]Milestone, error)
+	CreateMilestone(ctx context.Context, title, description string) (int, error)
+	EditMilestone(ctx context.Context, number int, e MilestoneEdit) error
+	IssuesInMilestone(ctx context.Context, title, state string) ([]Issue, error)
+}
+
+// Forge is the code side of the seam: where code lands (forge.provider), with
+// its pull requests, checks and releases. GitHub and GitLab implement it. The
+// local forge has no implementation: NewForge answers ErrLocalForge, and the
+// gate merges directly.
+type Forge interface {
+	Provider() string
+	// CheckAuth fails with KindUnavailable unless the forge CLI is installed
+	// and logged in.
+	CheckAuth(ctx context.Context) error
+
 	// MRNotes lists the comments of PR/MR number oldest first (GitLab: the
 	// merge request notes, system notes excluded; GitHub: the issue comments
 	// of the same number, which is where PR conversation comments live).
@@ -301,17 +327,9 @@ type Adapter interface {
 	// number; it costs one forge call.
 	CommentURL(ctx context.Context, pr bool, number int, commentID string) (string, error)
 
-	// FindMilestone returns the title of the milestone whose leading token is
-	// rotaID, preferring open ones; ok is false when none matches.
-	FindMilestone(ctx context.Context, rotaID string) (title string, ok bool, err error)
-	// Milestones lists by state "open", "closed" or "all" (or "").
-	Milestones(ctx context.Context, state string) ([]Milestone, error)
-	CreateMilestone(ctx context.Context, title, description string) (int, error)
-	EditMilestone(ctx context.Context, number int, e MilestoneEdit) error
-	IssuesInMilestone(ctx context.Context, title, state string) ([]Issue, error)
-
 	// ClosedNumbers returns the issue numbers a PR body closes through a
-	// closing keyword, in order of first appearance.
+	// closing keyword, in order of first appearance. It parses the forge's
+	// keyword syntax; reading the issues it names is the issue source's job.
 	ClosedNumbers(body string) []int
 	OpenPRs(ctx context.Context) ([]PR, error)
 	// MergedPRs lists the merged PRs headed by branch, for a branch whose PR
@@ -361,20 +379,37 @@ type Adapter interface {
 	ReleaseEdit(ctx context.Context, s ReleaseSpec) (string, error)
 }
 
-// Settings are the issues.* config values the tracker reads.
+// Adapter is what the GitHub and GitLab implementations are: an issue tracker
+// and a forge in one value. Code that needs one side takes IssueTracker or
+// Forge; the concrete types satisfy both.
+type Adapter interface {
+	IssueTracker
+	Forge
+}
+
+// Settings are the config values the tracker reads.
 type Settings struct {
-	Provider        string // auto | github | gitlab
+	// Provider is forge.provider: auto | github | gitlab | local.
+	Provider string
+	// Source is issues.source (file | github | gitlab | jira | linear), or
+	// config.SourceIssues for a legacy config that has not named its tracker.
+	Source          string
 	RetryWait       time.Duration
 	NotPlannedLabel string
 }
 
-// SettingsFromConfig reads issues.provider, issues.retryWaitSeconds and
-// issues.labels.notPlanned, with the hvlib_config defaults for absent or
-// null keys.
+// SettingsFromConfig reads forge.provider, issues.source,
+// issues.retryWaitSeconds and issues.labels.notPlanned, with the schema
+// defaults for absent or null keys. An invalid forge.provider or issues.source
+// reads as its default here; ValidateConfig (and the *FromConfig constructors)
+// fail on it instead.
 func SettingsFromConfig(cfg any) Settings {
-	s := Settings{Provider: "auto", RetryWait: 60 * time.Second, NotPlannedLabel: "not-planned"}
-	if v, ok := config.Lookup(cfg, "issues.provider"); ok && v != nil {
-		s.Provider = fmt.Sprint(v)
+	s := Settings{Provider: config.ForgeAuto, Source: config.SourceFile, RetryWait: 60 * time.Second, NotPlannedLabel: "not-planned"}
+	if p, err := config.ForgeProvider(cfg); err == nil {
+		s.Provider = p
+	}
+	if src, err := config.IssueSource(cfg); err == nil {
+		s.Source = src
 	}
 	if v, ok := config.Lookup(cfg, "issues.retryWaitSeconds"); ok && v != nil {
 		if f, err := strconv.ParseFloat(fmt.Sprint(v), 64); err == nil {
@@ -387,49 +422,170 @@ func SettingsFromConfig(cfg any) Settings {
 	return s
 }
 
-// New returns the adapter for provider ("" or "auto" falls back to
-// s.Provider, then to origin-URL detection in dir). Every CLI call runs in
-// dir ("" is the process cwd); in umbrella mode that is the sub-repo.
+// ValidateConfig is the corrupt-config check of the keys SettingsFromConfig
+// reads: an invalid forge.provider or issues.source is a KindInternal error
+// (exit 70), as an invalid issues.source is for every backlog verb.
+func ValidateConfig(cfg any) error {
+	if _, err := config.ForgeProvider(cfg); err != nil {
+		return internal("%s", err.Error())
+	}
+	if _, err := config.IssueSource(cfg); err != nil {
+		return internal("%s", err.Error())
+	}
+	return nil
+}
+
+// ErrLocalForge is what NewForge, New and NewCLI answer when the forge is
+// local: forge.provider is local, or auto with no origin remote. A local forge
+// has no pull requests, checks or releases; code lands by direct merge.
+// Callers test it with errors.Is and take their no-PR path.
+var ErrLocalForge error = &Error{Kind: KindUnavailable, Code: 3, Message: "the forge is local (forge.provider is local, or auto with no origin remote): there are no pull requests"}
+
+// ErrNoIssueTracker is what NewIssueTracker answers for issues.source file:
+// the issues live in BACKLOG.md, not on a tracker.
+var ErrNoIssueTracker error = &Error{Kind: KindUnavailable, Code: 3, Message: "issues.source is file: the issues live in BACKLOG.md, not on a tracker"}
+
+func notImplemented(source string) *Error {
+	return unavailable("issues.source %s is not implemented yet (use file, github or gitlab)", source)
+}
+
+// New returns the adapter, issue tracker and forge in one, for provider ("" or
+// "auto" falls back to s.Provider, then to origin-URL detection in dir). It is
+// the forge resolution, so a local forge is ErrLocalForge. Every CLI call runs
+// in dir ("" is the process cwd); in umbrella mode that is the sub-repo.
 func New(ctx context.Context, s Settings, provider, dir string, opts ...Option) (Adapter, error) {
 	c, err := NewCLI(ctx, s, provider, dir, opts...)
 	if err != nil {
 		return nil, err
 	}
+	return adapterFor(c, s), nil
+}
+
+func adapterFor(c *CLI, s Settings) Adapter {
 	if c.Provider == "github" {
-		return &GitHub{base: base{cli: c, closing: closingGH}}, nil
+		return &GitHub{base: base{cli: c, closing: closingGH}}
 	}
-	return &GitLab{base: base{cli: c, closing: closingGL}, NotPlannedLabel: s.NotPlannedLabel}, nil
+	return &GitLab{base: base{cli: c, closing: closingGL}, NotPlannedLabel: s.NotPlannedLabel}
+}
+
+// NewForge returns the forge for forgeProvider ("" or "auto" falls back to
+// s.Provider, then to origin detection in dir; no origin remote is local).
+// A local forge is ErrLocalForge.
+func NewForge(ctx context.Context, s Settings, forgeProvider, dir string, opts ...Option) (Forge, error) {
+	a, err := New(ctx, s, forgeProvider, dir, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return a, nil
+}
+
+// NewIssueTracker returns the issue tracker for source ("" falls back to
+// s.Source). file is ErrNoIssueTracker; jira and linear are an unavailable
+// "not implemented" error; github and gitlab build their adapter whatever the
+// origin says (rota doctor flags a mismatch); forge resolves the tracker from
+// dir's own forge, per sub-repo. The legacy config.SourceIssues,
+// an unmigrated "issues backend" with no named provider, resolves from the
+// origin like the old issues.provider auto.
+func NewIssueTracker(ctx context.Context, s Settings, source, dir string, opts ...Option) (IssueTracker, error) {
+	if source == "" {
+		source = s.Source
+	}
+	provider := source
+	switch source {
+	case config.SourceFile, "":
+		return nil, ErrNoIssueTracker
+	case config.SourceJira, config.SourceLinear:
+		return nil, notImplemented(source)
+	case config.SourceIssues:
+		provider = config.ForgeAuto
+	case config.SourceForge:
+		// The issues live on dir's own forge: the repo's forge resolution
+		// (forge.provider, else its origin) names the tracker.
+		c := newCLI(s, dir, opts...)
+		p, err := c.resolveForge(ctx, config.ForgeAuto, s.Provider)
+		if err != nil {
+			return nil, err
+		}
+		if p == config.ForgeLocal {
+			return nil, unavailable("issues.source is forge, but the forge of %s is local (no origin remote): there is no tracker to read", dirLabel(dir))
+		}
+		c.Provider = p
+		return adapterFor(c, s), nil
+	case config.SourceGitHub, config.SourceGitLab:
+	default:
+		return nil, unavailable("unknown issues.source %q", source)
+	}
+	c := newCLI(s, dir, opts...)
+	p, err := c.resolveIssues(ctx, provider, s.Provider)
+	if err != nil {
+		return nil, err
+	}
+	c.Provider = p
+	return adapterFor(c, s), nil
+}
+
+func dirLabel(dir string) string {
+	if dir == "" {
+		return "the working directory"
+	}
+	return dir
 }
 
 // NewFromConfig is New with the settings read from cfg (SettingsFromConfig),
 // the recipe every verb that holds a loaded config repeats.
 func NewFromConfig(ctx context.Context, cfg any, provider, dir string, opts ...Option) (Adapter, error) {
+	if err := ValidateConfig(cfg); err != nil {
+		return nil, err
+	}
 	return New(ctx, SettingsFromConfig(cfg), provider, dir, opts...)
+}
+
+// NewIssueTrackerFromConfig is NewIssueTracker with the settings read from cfg.
+func NewIssueTrackerFromConfig(ctx context.Context, cfg any, dir string, opts ...Option) (IssueTracker, error) {
+	if err := ValidateConfig(cfg); err != nil {
+		return nil, err
+	}
+	return NewIssueTracker(ctx, SettingsFromConfig(cfg), "", dir, opts...)
+}
+
+// NewForgeFromConfig is NewForge with the settings read from cfg.
+func NewForgeFromConfig(ctx context.Context, cfg any, provider, dir string, opts ...Option) (Forge, error) {
+	if err := ValidateConfig(cfg); err != nil {
+		return nil, err
+	}
+	return NewForge(ctx, SettingsFromConfig(cfg), provider, dir, opts...)
 }
 
 // NewFromConfigOrGitHub is NewFromConfig that falls back to github when the
 // provider cannot be resolved, e.g. an origin that is neither GitHub nor
 // GitLab. A fresh clone with no recognizable remote still opens a PR that way.
+// A local forge is not a failure to resolve: it stays ErrLocalForge.
 func NewFromConfigOrGitHub(ctx context.Context, cfg any, provider, dir string, opts ...Option) (Adapter, error) {
 	a, err := NewFromConfig(ctx, cfg, provider, dir, opts...)
-	if err != nil {
+	if err != nil && !errors.Is(err, ErrLocalForge) && !IsKind(err, KindInternal) {
 		return NewFromConfig(ctx, cfg, "github", dir, opts...)
 	}
-	return a, nil
+	return a, err
 }
 
-// NewCLI returns the forge CLI runner for provider, resolved as in New.
+// NewCLI returns the forge CLI runner for provider, resolved as in New. A
+// local forge is ErrLocalForge.
 func NewCLI(ctx context.Context, s Settings, provider, dir string, opts ...Option) (*CLI, error) {
-	c := &CLI{Dir: dir, RetryWait: s.RetryWait}
-	for _, o := range opts {
-		o(c)
-	}
+	c := newCLI(s, dir, opts...)
 	p, err := c.resolve(ctx, provider, s.Provider)
 	if err != nil {
 		return nil, err
 	}
 	c.Provider = p
 	return c, nil
+}
+
+func newCLI(s Settings, dir string, opts ...Option) *CLI {
+	c := &CLI{Dir: dir, RetryWait: s.RetryWait}
+	for _, o := range opts {
+		o(c)
+	}
+	return c
 }
 
 // Option adjusts the CLI an adapter runs through (tests swap the executor).

@@ -45,7 +45,7 @@ func rotaRunWith(t *testing.T, deps *Deps, args ...string) (int, map[string]any,
 	return code, env, errb.String()
 }
 
-const issuesConfig = `{"backlog": {"backend": "issues"}}`
+const issuesConfig = `{"forge": {"provider": "github"}, "issues": {"source": "github"}}`
 
 func issueFixture() *trackertest.Fake {
 	return &trackertest.Fake{Issues: []backlog.Issue{
@@ -146,7 +146,7 @@ func TestIssueModeFileOnly(t *testing.T) {
 // Without an injected tracker the real one is built; a project with no
 // origin remote has no provider to pick, which is exit 5.
 func TestIssueModeWithoutTracker(t *testing.T) {
-	root := trackerProject(t, issuesConfig)
+	root := trackerProject(t, `{"backlog": {"backend": "issues"}}`) // legacy: no origin, so no tracker
 	if code, _, _ := rotaRun(t, "--json", "-C", root, "item", "field", "get", "7", "--name", "title"); code != ExitUnavailable {
 		t.Fatalf("exit %d, want %d", code, ExitUnavailable)
 	}

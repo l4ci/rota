@@ -1,6 +1,6 @@
 # Issue backend
 
-The issue backend (`backlog.backend` is `"issues"` in `.rota/config.json`; check with `rota config show backlog.backend`) is the primary backlog: the tracker (GitHub or GitLab) holds the items, and every verb branches on the backend. `.rota/BACKLOG.md` and `.rota/<kind>/` detail files belong to the legacy file backend, where skills keep their file-backend steps. Item IDs read `#N` (or a bare `N`) here and `[B07]` in file mode. This page covers the issue backend and notes where the file backend differs.
+The issue backend (`issues.source` is `github` or `gitlab` in `.rota/config.json`; check with `rota config show issues.source`) is the primary backlog: the tracker (GitHub or GitLab) holds the items, and every verb branches on the backend. `.rota/BACKLOG.md` and `.rota/<kind>/` detail files belong to the legacy file backend, where skills keep their file-backend steps. Item IDs read `#N` (or a bare `N`) here and `[B07]` in file mode. This page covers the issue backend and notes where the file backend differs.
 
 ## IDs
 

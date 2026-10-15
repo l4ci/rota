@@ -49,7 +49,11 @@ type isc struct {
 func yes() *bool { b := true; return &b }
 func no() *bool  { b := false; return &b }
 
-const issueCfg = `{"backlog": {"backend": "issues"}, "issues": {"retryWaitSeconds": 0}}`
+// issueCfgLegacy is the unmigrated form of issueCfg: issues on the tracker, the
+// provider left to the origin remote (#797).
+const issueCfgLegacy = `{"backlog": {"backend": "issues"}, "issues": {"retryWaitSeconds": 0}}`
+
+const issueCfg = `{"forge": {"provider": "github"}, "issues": {"source": "github", "retryWaitSeconds": 0}}`
 
 func cm(id int, body string) map[string]any {
 	return map[string]any{"id": id, "body": body, "author": "fake-user"}
@@ -169,8 +173,16 @@ func (s isc) fixture(t *testing.T) (base string, in info) {
 	} else {
 		f.noBacklog = true
 	}
-	if s.cfg != "" {
+	switch {
+	case s.cfg != "":
 		f.config = s.cfg
+	case s.file:
+	case s.remote == "gitlab":
+		f.config = strings.ReplaceAll(issueCfg, "github", "gitlab")
+	case s.remote == "none":
+		// no origin to resolve the tracker from: an unmigrated config, whose
+		// legacy keys leave the provider to the origin, finds none
+		f.config = issueCfgLegacy
 	}
 	base, in = f.build(t)
 	remote := map[string]string{"": "https://github.com/example/repo.git", "gitlab": "https://gitlab.com/example/repo.git"}[s.remote]
@@ -289,7 +301,7 @@ func suiteItemIssue(t *testing.T) {
 				eq(t, e, "data.id", "12")
 				eq(t, e, "data.type", "T")
 			}},
-		isc{name: "create/custom-labels", cfg: `{"backlog":{"backend":"issues"},"issues":{"retryWaitSeconds":0,"labels":{"types":{"bug":"kind/bug","feature":"kind/feature","task":"kind/task"},"priorityPrefix":"prio-","sizePrefix":"effort:"}}}`,
+		isc{name: "create/custom-labels", cfg: `{"forge": {"provider": "github"}, "issues": {"source": "github", "retryWaitSeconds":0,"labels":{"types":{"bug":"kind/bug","feature":"kind/feature","task":"kind/task"},"priorityPrefix":"prio-","sizePrefix":"effort:"}}}`,
 			argv: j("item", "create", "--kind", "bugs", "--title", "Custom", "--tag", "P1"), want: 0, changed: yes()},
 	)
 	both(cr("gitlab-feature", 0, "--kind", "features", "--title", "New thing", "--tag", "Minor", "--milestone", "M07"))

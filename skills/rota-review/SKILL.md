@@ -62,11 +62,11 @@ If `commitCount` is 0, stop and tell the user.
 
 The spec is what each referenced item promised. Collect one entry per `referencedId`, in parallel:
 
-- **Issue mode** (`backlog.backend: "issues"`, the default path): the issue body is the spec. `rota item field list <ID>` returns it; add `rota item comment list <ID> --kind decision`, because a decision recorded as a comment changes the body's promise. A plan note (`rota item note show <ID> --kind plan`, `exists: false` when absent) is extra detail, not a requirement, except its `## Review Focus` section (lift it out and carry it into the brief verbatim) and its `## Relies on` list (lift it out too; Step 4 uses it).
+- **Issue mode** (`issues.source` is `github` or `gitlab`, the default path): the issue body is the spec. `rota item field list <ID>` returns it; add `rota item comment list <ID> --kind decision`, because a decision recorded as a comment changes the body's promise. A plan note (`rota item note show <ID> --kind plan`, `exists: false` when absent) is extra detail, not a requirement, except its `## Review Focus` section (lift it out and carry it into the brief verbatim) and its `## Relies on` list (lift it out too; Step 4 uses it).
 
 Take each criterion's coverage from `rota item show <ID> --json` → `data.acceptance` (`id`, `text`, `met`, `proof`, `flag`). A criterion is met only with a proof reference (`sha:check`); `flag` `changed` (text edited after the mark), `unproven` (proof row gone or not PASS) or `missing` counts as unmet. Pass the list to the Spec reviewer and report it per item.
 
-When `backlog.backend` is `"file"`, read [`file-mode-spec.md`](file-mode-spec.md) instead.
+When `issues.source` is `file`, read [`file-mode-spec.md`](file-mode-spec.md) instead.
 
 An item with no body and no plan contributes only its title; the reviewer says so when a spec is too thin to check against.
 

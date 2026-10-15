@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"io"
 	"os"
 	"runtime"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/connections"
 	"github.com/l4ci/rota/internal/doctor"
 	"github.com/l4ci/rota/internal/escalation"
@@ -143,10 +145,13 @@ func defaultDeps() *Deps {
 	d.OrchestrateEnv = func() orchestrate.Env { return defaultOrchestrateEnv(d) }
 	d.WorkerAccounts = func() *worker.Accounts { return &worker.Accounts{Env: worker.Env{Now: d.Now, Getenv: d.Getenv}} }
 	d.NewTracker = func(ctx context.Context, root string, cfg any) (backlog.Tracker, error) {
-		return d.forge(ctx, cfg, "", root)
+		return d.issueTracker(ctx, cfg, root)
 	}
+	// migrate issues runs while issues.source is still file, so the tracker it
+	// fills is not named yet: it is the host forge.provider or the origin names
+	// (the legacy "issues, provider auto" resolution).
 	d.MigrateTracker = func(ctx context.Context, root string, cfg any) (migrate.Tracker, error) {
-		return d.forge(ctx, cfg, "", root)
+		return tracker.NewIssueTracker(ctx, tracker.SettingsFromConfig(cfg), config.SourceIssues, root, d.trackerOptions()...)
 	}
 	d.RoundEnv = func(ctx context.Context, root string) round.Env { return defaultRoundEnv(ctx, root, d, true) }
 	d.RoundEnvLocal = func(ctx context.Context, root string) round.Env { return defaultRoundEnv(ctx, root, d, false) }
@@ -217,10 +222,72 @@ func (d *Deps) orchestrateEnv() orchestrate.Env {
 	return e
 }
 
-// forge is the one place a verb builds its forge adapter: settings from cfg,
-// provider resolution and the TrackerOptions a test swaps the executor through.
-func (d *Deps) forge(ctx context.Context, cfg any, provider, dir string) (tracker.Adapter, error) {
-	return tracker.NewFromConfig(ctx, cfg, provider, dir, d.trackerOptions()...)
+// forge is the one place a verb builds its forge (pull requests, checks,
+// releases): settings from cfg, forge.provider resolution (a local forge is
+// tracker.ErrLocalForge) and the TrackerOptions a test swaps the executor
+// through.
+func (d *Deps) forge(ctx context.Context, cfg any, provider, dir string) (tracker.Forge, error) {
+	return tracker.NewForgeFromConfig(ctx, cfg, provider, dir, d.trackerOptions()...)
+}
+
+// issueTracker is the one place a verb builds its issue tracker: issues.source
+// from cfg (file is tracker.ErrNoIssueTracker; jira and linear are not
+// implemented), with the same TrackerOptions.
+func (d *Deps) issueTracker(ctx context.Context, cfg any, dir string) (tracker.IssueTracker, error) {
+	return tracker.NewIssueTrackerFromConfig(ctx, cfg, dir, d.trackerOptions()...)
+}
+
+// issuesOrNone is issueTracker with the file source answered by
+// tracker.NoIssues, for a verb that reads issues when there are any and works
+// without. Any other failure is returned.
+func (d *Deps) issuesOrNone(ctx context.Context, cfg any, dir string) (tracker.IssueTracker, error) {
+	it, err := d.issueTracker(ctx, cfg, dir)
+	if errors.Is(err, tracker.ErrNoIssueTracker) {
+		return tracker.NoIssues{}, nil
+	}
+	return it, err
+}
+
+// bothSides is a forge and an issue tracker handed to a consumer that needs
+// both (the round and the escalations read PRs and claim labels). The methods
+// both sides have are routed by what they mean.
+type bothSides struct {
+	tracker.Forge
+	tracker.IssueTracker
+}
+
+func (b bothSides) Provider() string                    { return b.Forge.Provider() }
+func (b bothSides) CheckAuth(ctx context.Context) error { return b.Forge.CheckAuth(ctx) }
+func (b bothSides) CommentURL(ctx context.Context, pr bool, number int, id string) (string, error) {
+	if pr {
+		return b.Forge.CommentURL(ctx, true, number, id)
+	}
+	return b.IssueTracker.CommentURL(ctx, false, number, id)
+}
+
+// forgeAndIssues builds both seams for a consumer that needs them. A forge
+// failure (a local forge included) fails it; the file source's issue side is
+// tracker.NoIssues.
+func (d *Deps) forgeAndIssues(ctx context.Context, cfg any, dir string) (bothSides, error) {
+	f, err := d.forge(ctx, cfg, "", dir)
+	if err != nil {
+		return bothSides{}, err
+	}
+	it, err := d.issuesOrNone(ctx, cfg, dir)
+	if err != nil {
+		return bothSides{}, err
+	}
+	return bothSides{f, it}, nil
+}
+
+// trackerExec is the executor TrackerOptions install (nil: the real one), for a
+// verb that reads the origin through tracker.ResolveProvider.
+func (d *Deps) trackerExec() tracker.Exec {
+	cl := &tracker.CLI{}
+	for _, o := range d.trackerOptions() {
+		o(cl)
+	}
+	return cl.Exec
 }
 
 // freshReads drops the invocation's cached forge reads. A loop that reads the
@@ -241,7 +308,7 @@ func (d *Deps) trackerOptions() []tracker.Option {
 }
 
 // forgeOrGitHub is forge falling back to github for an unrecognized origin.
-func (d *Deps) forgeOrGitHub(ctx context.Context, cfg any, provider, dir string) (tracker.Adapter, error) {
+func (d *Deps) forgeOrGitHub(ctx context.Context, cfg any, provider, dir string) (tracker.Forge, error) {
 	return tracker.NewFromConfigOrGitHub(ctx, cfg, provider, dir, d.trackerOptions()...)
 }
 

@@ -24,7 +24,7 @@ done
 PROJ="$TMP_ES/proj"
 mkdir -p "$PROJ/.rota"
 git -C "$PROJ" init -q -b main
-echo '{"issues":{"provider":"github","retryWaitSeconds":0}}' > "$PROJ/.rota/config.json"
+echo '{"forge":{"provider":"github"},"issues":{"source":"github","retryWaitSeconds":0}}' > "$PROJ/.rota/config.json"
 printf 'Which of the two options do you want?\n' > "$TMP_ES/body.md"
 
 # es <env-prefix-free command...>: run in the project with the fakes first on PATH.

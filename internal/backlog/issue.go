@@ -42,8 +42,8 @@ type Tracker interface {
 	FindMilestone(ctx context.Context, rotaID string) (title string, ok bool, err error)
 }
 
-// A change to tracker.Adapter that breaks the subset fails the build here.
-var _ Tracker = tracker.Adapter(nil)
+// A change to tracker.IssueTracker that breaks the subset fails the build here.
+var _ Tracker = tracker.IssueTracker(nil)
 
 // Issues is the backlog served from an issue tracker (IssueBackend in
 // hvlib_backend.py). Rendered bullets keep the letter

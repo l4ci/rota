@@ -15,7 +15,7 @@ pass "gate list prints the registry with the five enforced gates"
 # A project whose origin is a local bare repo, with a release tag to push.
 mg_project() { # mg_project <dir> <autonomy level> [<ship json>]
   mkdir -p "$1/.rota"
-  printf '{"backlog":{"backend":"file"},"autonomy":{"level":"%s"}%s}\n' "$2" "${3:+,\"ship\":$3}" > "$1/.rota/config.json"
+  printf '{"issues":{"source":"file"},"autonomy":{"level":"%s"}%s}\n' "$2" "${3:+,\"ship\":$3}" > "$1/.rota/config.json"
   ( cd "$1" && git init -q -b main . && git config user.email t@t && git config user.name t \
     && printf '.rota/gate-audit.jsonl\n.rota/**/*.lock\n' > .gitignore && echo seed > seed.txt && git add seed.txt .gitignore .rota/config.json \
     && git commit -q -m seed && git init -q --bare ../"$(basename "$1")-origin.git" \

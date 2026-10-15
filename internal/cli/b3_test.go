@@ -63,7 +63,7 @@ func TestShipPRRefusedByVerdict(t *testing.T) {
 
 func TestShipPRSecondOpinionAdvisoryUnderCodex(t *testing.T) {
 	shipDeterministic(t)
-	cfg := `{"backlog":{"backend":"file"},"issues":{"provider":"github","retryWaitSeconds":0},"ship":{"secondOpinionRunner":"codex"}}`
+	cfg := `{"forge": {"provider": "github"}, "issues": {"source": "file","retryWaitSeconds":0},"ship":{"secondOpinionRunner":"codex"}}`
 	work := shipFixture(t, cfg)
 	shipBranchOf(t, work, "feat/x", [3]string{"x.txt", "work", ""})
 	deps := useForge(t, shipPRForge("https://github.com/fake/repo/pull/1"))
@@ -239,7 +239,7 @@ func TestDebugReset(t *testing.T) {
 // --auto-loop was removed with loop autonomy: cobra rejects it as unknown.
 func TestAutoLoopFlagRemoved(t *testing.T) {
 	dir := gitRepo(t)
-	write(t, filepath.Join(dir, ".rota", "config.json"), `{"backlog":{"backend":"file"}}`)
+	write(t, filepath.Join(dir, ".rota", "config.json"), `{"issues": {"source": "file"}}`)
 	for _, args := range [][]string{
 		{"design", "add", "B07", "--title", "T", "--auto-loop"},
 		{"plan", "add", "M01-B07", "--title", "T", "--auto-loop"},

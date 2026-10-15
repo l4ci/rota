@@ -3,7 +3,7 @@ echo "plan check: criteria map to tasks, tasks carry a Verify (#396)"
 TMP_PC="$(mktemp -d "$TMP/plancheck.XXXXXX")"
 (
   P="$TMP_PC/proj"; mkdir -p "$P/.rota"
-  echo '{"backlog":{"backend":"issues"},"issues":{"provider":"github","retryWaitSeconds":0}}' > "$P/.rota/config.json"
+  echo '{"issues":{"source":"github","retryWaitSeconds":0}}' > "$P/.rota/config.json"
   cd "$P"
   git init -q && git config user.email t@t && git config user.name t && git commit -q --allow-empty -m seed
   export PATH="$TESTDIR/fakes:$PATH" FAKE_TRACKER_DB="$P/db.json" FAKE_TRACKER_LOG="$P/log"
@@ -69,7 +69,7 @@ TMP_PC="$(mktemp -d "$TMP/plancheck.XXXXXX")"
   pass "plan check: missing plan 3, slice key 2, never writes"
 
   F="$TMP_PC/filemode"; mkdir -p "$F/.rota"
-  echo '{"backlog":{"backend":"file"}}' > "$F/.rota/config.json"
+  echo '{"issues":{"source":"file"}}' > "$F/.rota/config.json"
   cd "$F"
   git init -q && git config user.email t@t && git config user.name t && git commit -q --allow-empty -m seed
   OUT="$(hvj plan check "#1" 2>/dev/null)" && fail "file backend should fail"

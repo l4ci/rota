@@ -17,7 +17,7 @@ import (
 // directory the tracker is built for).
 func umbrellaProject(t *testing.T) (root string, deps *Deps, fakes map[string]*trackertest.Fake, built map[string]int) {
 	t.Helper()
-	root = trackerProject(t, `{"backlog": {"backend": "issues"}, "issues": {"homeRepo": "web"}}`)
+	root = trackerProject(t, `{"forge": {"provider": "github"}, "issues": {"source": "github", "homeRepo": "web"}}`)
 	root, _ = filepath.EvalSymlinks(root)
 	fakes = map[string]*trackertest.Fake{
 		"web": {Issues: []backlog.Issue{

@@ -1,6 +1,6 @@
 # Queue mode (`/rota-review --queue`, issue mode)
 
-Works through every `needs-review` item's open PR / MR. Issue mode only (`backlog.backend: "issues"`; label lifecycle in `references/issue-mode.md`). In file mode say *"`--queue` needs the issue backend; use `/rota-ship` and `rota ship merge` here"* and stop.
+Works through every `needs-review` item's open PR / MR. Issue mode only (`issues.source` is `github` or `gitlab`; label lifecycle in `references/issue-mode.md`). In file mode say *"`--queue` needs the issue backend; use `/rota-ship` and `rota ship merge` here"* and stop.
 
 **Who merges.** Whoever runs the queue owns the merge: you, outside a round. Inside a round the orchestrator merges through `rota worker gate` (rota-orchestrate section 6) and workers never run `--queue`, so don't run it against round PRs.
 

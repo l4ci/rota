@@ -181,10 +181,10 @@ func (g releaseGit) Query(args ...string) (string, bool, error) {
 
 // releaseForgeAdapter adapts the tracker client to release.Forge, mapping a tracker
 // failure onto the exit table.
-type releaseForgeAdapter struct{ tracker.Adapter }
+type releaseForgeAdapter struct{ tracker.Forge }
 
 func (f releaseForgeAdapter) ReleaseView(ctx context.Context, tag string) (tracker.Release, bool, error) {
-	rel, checked, err := f.Adapter.ReleaseView(ctx, tag)
+	rel, checked, err := f.Forge.ReleaseView(ctx, tag)
 	if err != nil {
 		return rel, checked, trackerErr(err)
 	}
