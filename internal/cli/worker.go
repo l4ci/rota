@@ -814,6 +814,9 @@ func workerGate(fs *flag.FlagSet) RunFunc {
 		for _, n := range r.Notes {
 			fmt.Fprintln(c.Stderr, n)
 		}
+		for _, w := range r.Warnings {
+			c.Warn("%s", w)
+		}
 		res := Result{Data: gateData(r)}
 		if !*check {
 			if run.BookErr != nil {
