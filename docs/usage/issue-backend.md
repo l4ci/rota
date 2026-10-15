@@ -1,6 +1,6 @@
 # Issue backend
 
-With `issues.source` set to `github` or `gitlab` the tracker is the backlog. `.rota/BACKLOG.md` and the `.rota/<kind>/` detail files are not used; items, milestones and design/plan artifacts live on the tracker. `issues.source: file` is the default and is unchanged. Skills keep their file-mode steps and branch on the source; the issue-mode differences are listed in `references/issue-mode.md`.
+With `issues.source` set to `github`, `gitlab` or `jira` the tracker is the backlog. `.rota/BACKLOG.md` and the `.rota/<kind>/` detail files are not used; items, milestones and design/plan artifacts live on the tracker. `issues.source: file` is the default and is unchanged. Skills keep their file-mode steps and branch on the source; the issue-mode differences are listed in `references/issue-mode.md`.
 
 ## Issue source and forge
 
@@ -33,6 +33,37 @@ Older configs used `backlog.backend` (`file` or `issues`) and `issues.provider`.
 | `issues.homeRepo` | `""` | Umbrella only: sub-repo holding milestone tracking issues; empty is the first registered sub-repo. |
 | `issues.bulkPaceMs` | `1000` | Pause between writes in `rota migrate issues`. |
 | `issues.retryWaitSeconds` | `60` | Seconds to wait before the one retry after a primary rate limit. |
+
+## Jira
+
+`issues.source: jira` keeps the issues in one Jira project and the code on your forge (GitHub or GitLab). rota talks to the Jira REST API directly, so it needs no CLI: Cloud through REST v3, Data Center through REST v2.
+
+1. Create a token. On Jira Cloud, make an API token at <https://id.atlassian.com/manage-profile/security/api-tokens>; rota sends it with your account email. On Data Center, create a personal access token under your profile.
+2. Add a connection. It lives on your machine, never in the repo (see [Tracker connections](configuration.md#tracker-connections)). `--deployment` says Cloud or Data Center; an `*.atlassian.net` site defaults to `cloud`, and any other site must pass it:
+
+   ```sh
+   # Cloud: --user is the account email the API token belongs to
+   echo "$JIRA_TOKEN" | rota connect add work --kind jira --site https://acme.atlassian.net --user me@acme.com --token-stdin
+   # Data Center: the token is a personal access token
+   echo "$JIRA_PAT" | rota connect add work --kind jira --site https://jira.acme.com --deployment datacenter --token-stdin
+   rota connect test work
+   ```
+
+3. Point the project at it: `rota config set issues.source jira`, `rota config set issues.connection work`, `rota config set issues.jira.project PROJ`.
+
+Organization admins on Jira Cloud can block API tokens for managed accounts. When they do, `rota connect test` fails with HTTP 401 or 403 even though the token is correct; ask an admin to allow API tokens for your account. OAuth is not supported.
+
+How rota uses Jira:
+
+- **Keys.** Items are named by their key (`PROJ-123`), and so are branches (`ben/PROJ-123-...`). A `## Depends on` line counts keys of the project's own prefix; other key-shaped words (`UTF-8`, `ISO-8601`) are prose.
+- **Hidden state.** rota keeps its markers in issue properties, never in text people read: a marker comment (proof, design and plan notes, feedback, handoff) is posted without its markers and kept whole in `rota.comment.<comment id>`, and the fields block of an issue body is `rota.fields`.
+- **Claims.** A claim is a plain comment, `Claimed by <claim id>`. The earliest one wins by the time Jira recorded it (then by comment id), never by the claimer's clock, and a release deletes that claimer's comment.
+- **Status.** Close and reopen pick the workflow transition by status category (to do, in progress, done), never by status name, so translated or renamed statuses work. A workflow with no transition into the wanted category fails with a hint. A not-planned close also adds the `not-planned` label.
+- **Labels and milestones.** Labels are Jira labels, created on first use; a label with a space is refused. Milestones are project versions (`fixVersions`); closing a milestone releases its version.
+- **Closing PRs.** A PR counts as closing a Jira issue when its head branch or title names the key; `rota worker gate` refuses one that names neither. Jira closes nothing on a merge by itself, so `rota worker gate` moves the issue to a done status after the merge and comments with the PR, unless the issue is labelled `partial-slice`. A PR merged any other way (`rota ship pr-merge`, the forge UI) leaves the issue open: run `rota issues close PROJ-123 --commit <sha>`, or let Jira's GitHub or GitLab integration transition it.
+- **Rate limits.** A 429 waits its `Retry-After` (up to two minutes) and retries, at most three times. A 5xx is retried only for reads and other idempotent calls, never for a create or a comment.
+
+Out of scope: Jira Service Management, boards and sprints.
 
 ## How items map to issues
 

@@ -13,6 +13,7 @@ import (
 	"github.com/l4ci/rota/internal/exitmap"
 	"github.com/l4ci/rota/internal/itembody"
 	"github.com/l4ci/rota/internal/overlap"
+	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -67,25 +68,37 @@ var (
 	foreignRefRe = regexp.MustCompile(`https?://\S+|[\w.-]+/[\w.-]+#\d+`)
 	issueRefRe   = regexp.MustCompile(`#(\d+)`)
 	keyRefRe     = regexp.MustCompile(`\b([A-Z][A-Z0-9_]*-\d+)\b`) // a key-based tracker's PROJ-123
-	itemRefRe    = regexp.MustCompile(`\b(` + backlog.IDPattern(backlog.FileIDDigits) + `)\b`)
+	// listKeyRe is a key heading a list item (`- OTHER-7`): a dependency, even
+	// of another project, where a key-shaped word inside a sentence is prose.
+	listKeyRe = regexp.MustCompile(`^\s*(?:[-*+]|\d+[.)])\s+([A-Za-z][A-Za-z0-9_]*-\d+)\b`)
+	itemRefRe = regexp.MustCompile(`\b(` + backlog.IDPattern(backlog.FileIDDigits) + `)\b`)
 )
 
-func keyMatches(line string, keyed bool) [][]string {
-	if !keyed {
+// keyMatches is the PROJ-123 refs of project on line; none when project is "".
+// Another prefix (UTF-8, ISO-8601, another project) is prose, not a ref.
+func keyMatches(line, project string) [][]string {
+	if project == "" {
 		return nil
 	}
-	return keyRefRe.FindAllStringSubmatch(line, -1)
+	var out [][]string
+	for _, m := range keyRefRe.FindAllStringSubmatch(line, -1) {
+		if tracker.IssueKey(m[1]).Project() == project {
+			out = append(out, m)
+		}
+	}
+	return out
 }
 
 // Dependencies parses the `## Depends on` section into item references (in
 // the item's own spelling) and references that cannot be looked up.
 func Dependencies(text string) (refs, unverifiable []string) {
-	return dependencies(text, false)
+	return dependencies(text, "")
 }
 
-// dependencies is Dependencies; keyed also reads a key-based tracker's
-// PROJ-123 refs. A numbered tracker's prose (UTF-8, SHA-256) is not a ref.
-func dependencies(text string, keyed bool) (refs, unverifiable []string) {
+// dependencies is Dependencies; a project key also reads a key-based
+// tracker's refs of that project (PROJ-123). A list item headed by another
+// project's key is unverifiable; such a word inside a sentence (UTF-8) is prose.
+func dependencies(text, project string) (refs, unverifiable []string) {
 	sec, ok := itembody.Section(text, itembody.DependsHeadRe)
 	if !ok {
 		return nil, nil
@@ -96,13 +109,18 @@ func dependencies(text string, keyed bool) (refs, unverifiable []string) {
 			unverifiable = append(unverifiable, strings.TrimRight(f, ".,;:)"))
 		}
 		line = foreignRefRe.ReplaceAllString(line, " ")
+		if m := listKeyRe.FindStringSubmatch(line); project != "" && m != nil {
+			if k := tracker.IssueKey(strings.ToUpper(m[1])); k.Project() != project {
+				unverifiable = append(unverifiable, string(k))
+			}
+		}
 		for _, m := range issueRefRe.FindAllStringSubmatch(line, -1) {
 			if !seen[m[1]] {
 				seen[m[1]] = true
 				refs = append(refs, m[1])
 			}
 		}
-		for _, m := range keyMatches(line, keyed) {
+		for _, m := range keyMatches(line, project) {
 			if !seen[m[1]] {
 				seen[m[1]] = true
 				refs = append(refs, m[1])
@@ -272,12 +290,16 @@ func AssessScoped(be backlog.Backend, id string, tracked, shared []string, inFli
 	r.Checks = append(r.Checks, Check{CheckCriteria, len(reasons) == 0, nonNil(reasons)})
 
 	text := itemText(be, id)
-	_, numbered := self.IssueKey().Number()
-	refs, unverifiable := dependencies(text, self.IssueKey() != "" && !numbered)
+	project := self.IssueKey().Project()
+	refs, unverifiable := dependencies(text, project)
 	dep := Check{Name: CheckDependencies, OK: true, Detail: []string{}}
 	for _, ref := range unverifiable {
 		dep.OK = false
-		dep.Detail = append(dep.Detail, fmt.Sprintf("cannot verify %s: edit the issue to name the dependency as #N, or drop it from Depends on", ref))
+		as := "#N"
+		if project != "" {
+			as = project + "-N"
+		}
+		dep.Detail = append(dep.Detail, fmt.Sprintf("cannot verify %s: edit the issue to name the dependency as %s, or drop it from Depends on", ref, as))
 	}
 	for _, ref := range refs {
 		it, err := be.Get(ref)

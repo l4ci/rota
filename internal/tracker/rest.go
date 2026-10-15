@@ -198,8 +198,10 @@ func restError(method, path string, status int, raw []byte) *Error {
 		msg += ": " + strutil.Clip(detail, clipLen)
 	}
 	switch {
-	case status == http.StatusUnauthorized || status == http.StatusForbidden:
+	case status == http.StatusUnauthorized:
 		return unavailable("%s (check the connection's token: rota connect test)", msg)
+	case status == http.StatusForbidden:
+		return unavailable("%s (check the connection's token or its permission on this issue: rota connect test)", msg)
 	case status == http.StatusNotFound:
 		return &Error{Kind: KindNotFound, Code: 1, Message: msg}
 	case status == http.StatusTooManyRequests:

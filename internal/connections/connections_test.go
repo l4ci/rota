@@ -375,3 +375,39 @@ func TestFileStoreLeavesNoTempFiles(t *testing.T) {
 		}
 	}
 }
+
+// A jira connection says whether it is Cloud or Data Center; only an
+// *.atlassian.net site defaults to cloud, and Cloud needs the account email.
+func TestJiraDeployment(t *testing.T) {
+	for _, tc := range []struct {
+		c    Connection
+		want string // "" means refused
+	}{
+		{Connection{Name: "a", Kind: KindJira, Site: "https://acme.atlassian.net", User: "me@acme.com"}, DeploymentCloud},
+		{Connection{Name: "a", Kind: KindJira, Site: "https://ACME.Atlassian.net/", User: "me@acme.com"}, DeploymentCloud},
+		{Connection{Name: "a", Kind: KindJira, Site: "https://jira.acme.com", Deployment: DeploymentDataCenter}, DeploymentDataCenter},
+		{Connection{Name: "a", Kind: KindJira, Site: "https://jira.acme.com", User: "me", Deployment: DeploymentCloud}, DeploymentCloud},
+		{Connection{Name: "a", Kind: KindJira, Site: "https://jira.acme.com", User: "me@acme.com"}, ""},
+		{Connection{Name: "a", Kind: KindJira, Site: "https://evil-atlassian.net.example.com", User: "me"}, ""},
+		{Connection{Name: "a", Kind: KindJira, Site: "https://acme.atlassian.net"}, ""},
+		{Connection{Name: "a", Kind: KindJira, Site: "https://jira.acme.com", Deployment: "server"}, ""},
+		{Connection{Name: "a", Kind: KindLinear, Deployment: DeploymentCloud}, ""},
+	} {
+		c := tc.c.WithDefaults()
+		err := c.Validate()
+		switch {
+		case tc.want == "" && err == nil:
+			t.Errorf("%+v: accepted as %q", tc.c, c.Deployment)
+		case tc.want != "" && (err != nil || c.Deployment != tc.want):
+			t.Errorf("%+v: %q, %v; want %q", tc.c, c.Deployment, err, tc.want)
+		}
+	}
+	dir := t.TempDir()
+	dc := Connection{Name: "dc", Kind: KindJira, Site: "https://jira.acme.com", Deployment: DeploymentDataCenter}
+	if err := Add(dir, dc, false); err != nil {
+		t.Fatal(err)
+	}
+	if got, _, _ := Get(dir, "dc"); got != dc {
+		t.Errorf("stored %+v, want %+v", got, dc)
+	}
+}

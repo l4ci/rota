@@ -7,11 +7,14 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/l4ci/rota/internal/backlog/trackertest"
+	"github.com/l4ci/rota/internal/connections"
 	"github.com/l4ci/rota/internal/tracker"
+	"github.com/l4ci/rota/internal/tracker/jiratest"
 )
 
 // forge is a scripted gh and glab: calls records every argument list; reply
@@ -361,5 +364,47 @@ func TestKeyIssueLabelCloseStillOpen(t *testing.T) {
 	}
 	if _, err := Label(ctx, env, "", "PROJ-999", "x", true, false); !tracker.IsKind(err, tracker.KindNotFound) {
 		t.Errorf("unknown key: %v", err)
+	}
+}
+
+// With issues.source jira, label and close act on the Jira issue through
+// issues.connection, whatever the origin remote is.
+func TestLabelCloseOnJiraSource(t *testing.T) {
+	ctx := context.Background()
+	s := jiratest.New(t, jiratest.Options{})
+	conn := tracker.WithConnections(func(_ context.Context, name string) (connections.Connection, string, error) {
+		return connections.Connection{Name: name, Kind: connections.KindJira, Site: s.URL, User: "me@example.com", Deployment: connections.DeploymentCloud}, "tok", nil
+	})
+	f := &forge{origin: gh}
+	env := f.env(t)
+	cfg, err := jsonx.Decode([]byte(`{"issues": {"source": "jira", "connection": "work", "jira": {"project": "PROJ"}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	env.Config = cfg
+	env.Opts = append(env.Opts, conn)
+	it, err := tracker.NewIssueTrackerFromConfig(ctx, env.Config, "", conn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, err := it.Create(ctx, "Widen", "", nil, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changed, err := Label(ctx, env, "", key, "ready", true, false); err != nil || !changed {
+		t.Fatalf("label: %v %v", changed, err)
+	}
+	if is, _ := it.Get(ctx, key, false); !slices.Contains(is.Labels, "ready") {
+		t.Fatalf("labels %v", is.Labels)
+	}
+	dir, sha := gitProject(t)
+	if changed, err := Close(ctx, env, dir, key, sha, ""); err != nil || !changed {
+		t.Fatalf("close: %v %v", changed, err)
+	}
+	if st := s.StatusOf(string(key)); st != "Done" {
+		t.Errorf("status %q", st)
+	}
+	if len(f.calls) != 0 {
+		t.Errorf("a forge CLI ran: %q", f.calls)
 	}
 }

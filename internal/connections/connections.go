@@ -9,6 +9,7 @@ package connections
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -39,6 +40,25 @@ var nameRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]*$`)
 // Connection is one named tracker connection. Nothing here is secret.
 type Connection struct {
 	Name, Kind, Site, User string
+	// Deployment is a jira connection's cloud or datacenter.
+	Deployment string
+}
+
+// The deployments of a jira connection.
+const (
+	DeploymentCloud      = "cloud"
+	DeploymentDataCenter = "datacenter"
+)
+
+// WithDefaults is c with the deployment an *.atlassian.net jira site implies;
+// any other site must say it.
+func (c Connection) WithDefaults() Connection {
+	if c.Kind == KindJira && c.Deployment == "" {
+		if u, err := url.Parse(c.Site); err == nil && strings.HasSuffix(strings.ToLower(u.Hostname()), ".atlassian.net") {
+			c.Deployment = DeploymentCloud
+		}
+	}
+	return c
 }
 
 // Path is the connections file under dir, the global rota config dir.
@@ -56,6 +76,23 @@ func (c Connection) Validate() error {
 	}
 	if c.Kind == KindJira && !strings.HasPrefix(c.Site, "https://") && !strings.HasPrefix(c.Site, "http://") {
 		return fmt.Errorf("a jira connection needs --site, an http(s) URL such as https://acme.atlassian.net")
+	}
+	if c.Kind != KindJira {
+		if c.Deployment != "" {
+			return fmt.Errorf("--deployment is for jira connections only")
+		}
+		return nil
+	}
+	switch c.WithDefaults().Deployment {
+	case DeploymentCloud:
+		if c.User == "" {
+			return fmt.Errorf("a Jira Cloud connection needs --user, the account email the API token belongs to")
+		}
+	case DeploymentDataCenter:
+	case "":
+		return fmt.Errorf("jira connection %q on %s needs --deployment cloud or datacenter (only *.atlassian.net sites default to cloud)", c.Name, c.Site)
+	default:
+		return fmt.Errorf("unknown --deployment %q (expected cloud or datacenter)", c.Deployment)
 	}
 	return nil
 }
@@ -124,6 +161,9 @@ func Add(dir string, c Connection, replace bool) error {
 		o.Set("kind", c.Kind)
 		o.Set("site", c.Site)
 		o.Set("user", c.User)
+		if c.Deployment != "" {
+			o.Set("deployment", c.Deployment)
+		}
 		doc := jsonx.NewObject()
 		doc.Set("connections", append(kept, o))
 		return doc, nil
@@ -172,7 +212,7 @@ func decode(v any) []Connection {
 	var out []Connection
 	for _, it := range decodeRaw(v) {
 		if o, ok := it.(*jsonx.Object); ok {
-			out = append(out, Connection{Name: jsonx.Str(o, "name"), Kind: jsonx.Str(o, "kind"), Site: jsonx.Str(o, "site"), User: jsonx.Str(o, "user")})
+			out = append(out, Connection{Name: jsonx.Str(o, "name"), Kind: jsonx.Str(o, "kind"), Site: jsonx.Str(o, "site"), User: jsonx.Str(o, "user"), Deployment: jsonx.Str(o, "deployment")})
 		}
 	}
 	return out

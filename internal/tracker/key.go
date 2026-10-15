@@ -105,3 +105,13 @@ func CompareKeys(a, b IssueKey) int {
 
 // SortKeys sorts keys by CompareKeys.
 func SortKeys(keys []IssueKey) { slices.SortFunc(keys, CompareKeys) }
+
+// Project is the project prefix of a key-based tracker's key (PROJ of
+// PROJ-123); "" for a numbered key or anything that is not a key.
+func (k IssueKey) Project() string {
+	if !reKey.MatchString(string(k)) {
+		return ""
+	}
+	p, _, _ := strings.Cut(string(k), "-")
+	return p
+}

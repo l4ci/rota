@@ -141,6 +141,7 @@ func defaultDeps() *Deps {
 		ReadCache:        tracker.NewReadCache(),
 	}
 	d.Keychain = func() connections.Store { return connections.OSKeychain(d.Proc, runtime.GOOS) }
+	d.ConnTesters = map[string]connections.Tester{connections.KindJira: tracker.JiraTester{}}
 	d.Now, d.Today, d.HolderPID, d.ClockErr = envClock(d.Getenv)
 	d.PollFixture, d.PollStatus = d.Getenv("ROTA_TEST_POLL_FIXTURE"), d.Getenv("ROTA_TEST_POLL_STATUS")
 	d.DoctorPath = d.Getenv("ROTA_TEST_DOCTOR_PATH")
@@ -195,6 +196,17 @@ func (d *Deps) workerEnv() worker.Env {
 	if e.Accounts == nil && d.WorkerAccounts != nil {
 		e.Accounts = d.WorkerAccounts()
 	}
+	if e.Issues == nil {
+		// the gate's issue source gets the TrackerOptions too (a jira test
+		// points its connection at a fake site).
+		e.Issues = func(dir string, s tracker.Settings) (worker.Issues, error) {
+			it, err := tracker.NewIssueTracker(context.Background(), s, "", dir, d.trackerOptions()...)
+			if err != nil {
+				return nil, err
+			}
+			return it, nil
+		}
+	}
 	return e
 }
 
@@ -235,8 +247,8 @@ func (d *Deps) forge(ctx context.Context, cfg any, provider, dir string) (tracke
 }
 
 // issueTracker is the one place a verb builds its issue tracker: issues.source
-// from cfg (file is tracker.ErrNoIssueTracker; jira and linear are not
-// implemented), with the same TrackerOptions.
+// from cfg (file is tracker.ErrNoIssueTracker; linear is not implemented),
+// with the same TrackerOptions.
 func (d *Deps) issueTracker(ctx context.Context, cfg any, dir string) (tracker.IssueTracker, error) {
 	return tracker.NewIssueTrackerFromConfig(ctx, cfg, dir, d.trackerOptions()...)
 }

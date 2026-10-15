@@ -13,6 +13,7 @@ import (
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/connections"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/tracker/jiratest"
 )
 
 // fakeKeychain is the secret store tests use in place of the OS keychain.
@@ -133,7 +134,7 @@ func TestConnectAddFallsBackToFile0600AndListSaysSo(t *testing.T) {
 		t.Fatalf("%v %v", fi, err)
 	}
 	// the fallback is reported on add, never silent
-	_, env, _ = e.run("tok2", "connect", "add", "work", "--kind", "jira", "--site", "https://acme.atlassian.net", "--token-stdin", "--replace")
+	_, env, _ = e.run("tok2", "connect", "add", "work", "--kind", "jira", "--site", "https://acme.atlassian.net", "--user", "me@acme.com", "--token-stdin", "--replace")
 	if st := jsonx.Str(connData(env), "store"); st != "file" || jsonx.Str(connData(env), "note") == "" {
 		t.Errorf("%v", connData(env))
 	}
@@ -170,11 +171,11 @@ func TestConnectTestFailureAndUnknown(t *testing.T) {
 func TestConnectAddRefusesDuplicateWithoutReplace(t *testing.T) {
 	e := newConnectEnv(t)
 	e.addWork()
-	code, _, _ := e.run("x", "connect", "add", "work", "--kind", "jira", "--site", "https://a.example", "--token-stdin")
+	code, _, _ := e.run("x", "connect", "add", "work", "--kind", "jira", "--site", "https://a.example", "--deployment", "datacenter", "--token-stdin")
 	if code == 0 {
 		t.Error("overwrote an existing connection")
 	}
-	if code, _, _ := e.run("", "connect", "add", "w2", "--kind", "jira", "--site", "https://a.example", "--token-stdin"); code == 0 {
+	if code, _, _ := e.run("", "connect", "add", "w2", "--kind", "jira", "--site", "https://a.example", "--deployment", "datacenter", "--token-stdin"); code == 0 {
 		t.Error("an empty token was accepted")
 	}
 }
@@ -291,14 +292,14 @@ func TestNoSecretUnderDotRota(t *testing.T) {
 
 func TestConnectAddTokenFlagIsGone(t *testing.T) {
 	e := newConnectEnv(t)
-	if code, _, _ := e.run("", "connect", "add", "w", "--kind", "jira", "--site", "https://a.example", "--token", "x"); code == 0 {
+	if code, _, _ := e.run("", "connect", "add", "w", "--kind", "jira", "--site", "https://a.example", "--deployment", "datacenter", "--token", "x"); code == 0 {
 		t.Error("--token still accepted")
 	}
 }
 
 func TestConnectAddReadsStdinWithoutFlag(t *testing.T) {
 	e := newConnectEnv(t)
-	if code, _, _ := e.run("tok\n", "connect", "add", "w", "--kind", "jira", "--site", "https://a.example"); code != 0 || e.kc.vals["w"] != "tok" {
+	if code, _, _ := e.run("tok\n", "connect", "add", "w", "--kind", "jira", "--site", "https://a.example", "--deployment", "datacenter"); code != 0 || e.kc.vals["w"] != "tok" {
 		t.Errorf("%d %v", code, e.kc.vals)
 	}
 }
@@ -309,7 +310,7 @@ func TestConnectAddFailedSaveLeavesNoRecord(t *testing.T) {
 	// the file store cannot be written: its dir path is a regular file
 	os.MkdirAll(e.xdg, 0o755)
 	os.WriteFile(filepath.Join(e.xdg, "rota"), []byte("file, not dir"), 0o644)
-	if code, _, _ := e.run("tok", "connect", "add", "w", "--kind", "jira", "--site", "https://a.example", "--token-stdin"); code == 0 {
+	if code, _, _ := e.run("tok", "connect", "add", "w", "--kind", "jira", "--site", "https://a.example", "--deployment", "datacenter", "--token-stdin"); code == 0 {
 		t.Fatal("add succeeded with nowhere to store the secret")
 	}
 	os.Remove(filepath.Join(e.xdg, "rota"))
@@ -388,7 +389,7 @@ func TestDoctorWarnsWhenKindHasNoTestRead(t *testing.T) {
 func TestConnectAddRejectsControlCharsInToken(t *testing.T) {
 	e := newConnectEnv(t)
 	for _, tok := range []string{"abc\ndelete-generic-password -s rota", "abc\rdef", "ab\tc", "ab\x00c"} {
-		if code, _, _ := e.run(tok, "connect", "add", "w", "--kind", "jira", "--site", "https://a.example", "--token-stdin"); code != ExitUsage {
+		if code, _, _ := e.run(tok, "connect", "add", "w", "--kind", "jira", "--site", "https://a.example", "--deployment", "datacenter", "--token-stdin"); code != ExitUsage {
 			t.Errorf("%q: exit %d", tok, code)
 		}
 	}
@@ -411,5 +412,49 @@ func TestConnectAddReportsFailedRollback(t *testing.T) {
 	code, _, errOut := e.run("t", "connect", "add", "a_b", "--kind", "linear", "--token-stdin")
 	if code == 0 || !strings.Contains(errOut, "rolling back the secret also failed") || !strings.Contains(errOut, "locked") {
 		t.Errorf("%d %q", code, errOut)
+	}
+}
+
+// The real build tests a jira connection with one authenticated read of the
+// site; here the site is the fake.
+func TestConnectTestJiraByDefault(t *testing.T) {
+	e := newConnectEnv(t)
+	e.d.ConnTesters = defaultDeps().ConnTesters
+	s := jiratest.New(t, jiratest.Options{})
+	if code, env, _ := e.run("tok\n", "connect", "add", "work", "--kind", "jira", "--site", s.URL, "--deployment", "cloud", "--user", "me@example.com", "--token-stdin"); code != 0 {
+		t.Fatalf("add: %v", env)
+	}
+	if code, env, _ := e.run("", "connect", "test", "work"); code != 0 || jsonx.Str(connData(env), "state") != "ok" {
+		t.Fatalf("test: %d %v", code, connData(env))
+	}
+	if code, _, _ := e.run("bad\n", "connect", "add", "work", "--kind", "jira", "--site", s.URL, "--deployment", "cloud", "--user", "me@example.com", "--token-stdin", "--replace"); code != 0 {
+		t.Fatal("replace")
+	}
+	if code, env, _ := e.run("", "connect", "test", "work"); code == 0 {
+		t.Fatalf("a bad token passed: %v", connData(env))
+	}
+}
+
+// A jira connection says Cloud or Data Center: *.atlassian.net defaults to
+// cloud, any other site must pass --deployment, and list shows it.
+func TestConnectAddDeployment(t *testing.T) {
+	e := newConnectEnv(t)
+	e.addWork()
+	code, env, _ := e.run("t\n", "connect", "add", "dc", "--kind", "jira", "--site", "https://jira.acme.com", "--token-stdin")
+	errObj, _ := env.Get("error")
+	if eo, _ := errObj.(*jsonx.Object); code != ExitUsage || eo == nil || !strings.Contains(jsonx.Str(eo, "message"), "--deployment") {
+		t.Fatalf("an unsaid deployment was accepted: %d %v", code, errObj)
+	}
+	if code, env, _ := e.run("t\n", "connect", "add", "dc", "--kind", "jira", "--site", "https://jira.acme.com", "--deployment", "datacenter", "--token-stdin"); code != 0 {
+		t.Fatalf("datacenter: %v", env)
+	}
+	_, env, _ = e.run("", "connect", "list")
+	rows, _ := connData(env).Get("connections")
+	got := map[string]string{}
+	for _, r := range rows.([]any) {
+		got[jsonx.Str(r.(*jsonx.Object), "name")] = jsonx.Str(r.(*jsonx.Object), "deployment")
+	}
+	if got["dc"] != "datacenter" || got["work"] != "cloud" {
+		t.Errorf("deployments %v", got)
 	}
 }
