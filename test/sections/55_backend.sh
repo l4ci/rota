@@ -1,17 +1,17 @@
-echo "backlog.backend config keys and accessors"
+echo "issues.source config keys and accessors"
 
 TMP_BK="$(mktemp -d)"
 trap 'rm -rf "$TMP_BK"' EXIT
 mkdir -p "$TMP_BK/proj/.rota"
 (
   cd "$TMP_BK/proj"
-  CS() { hvj config show backlog.backend | jget "data.entries[0].$1"; }
-  [ "$(CS value):$(CS source)" = "file:default" ] || fail "default backlog.backend: got '$(CS value):$(CS source)'"
-  echo '{"backlog":{"backend":"issues"}}' > .rota/config.json
-  [ "$(CS value):$(CS source)" = "issues:project" ] || fail "project backlog.backend: got '$(CS value):$(CS source)'"
-  echo '{"backlog":{"backend":"file"}}' > .rota/config.local.json
-  [ "$(CS value):$(CS source)" = "file:local" ] || fail "local backlog.backend: got '$(CS value):$(CS source)'"
-  pass "config show reports backlog.backend default/project/local"
+  CS() { hvj config show issues.source | jget "data.entries[0].$1"; }
+  [ "$(CS value):$(CS source)" = "file:default" ] || fail "default issues.source: got '$(CS value):$(CS source)'"
+  echo '{"issues":{"source":"github"}}' > .rota/config.json
+  [ "$(CS value):$(CS source)" = "github:project" ] || fail "project issues.source: got '$(CS value):$(CS source)'"
+  echo '{"issues":{"source":"file"}}' > .rota/config.local.json
+  [ "$(CS value):$(CS source)" = "file:local" ] || fail "local issues.source: got '$(CS value):$(CS source)'"
+  pass "config show reports issues.source default/project/local"
 )
 
 echo "FileBackend: create/read verbs byte-identical"
@@ -99,8 +99,8 @@ MD
   eq "backlog bad arg" "2" "$(rcof hvj backlog list --bogus)"
   pass "backlog list golden"
 
-  # backlog.backend = issues: item create --raw-file refuses (exit 4), BACKLOG.md untouched
-  echo '{"backlog":{"backend":"issues"}}' > .rota/config.json
+  # issues.source = github: item create --raw-file refuses (exit 4), BACKLOG.md untouched
+  echo '{"issues":{"source":"github"}}' > .rota/config.json
   rc=0; OUT="$(echo '- **[B10] x.**' | hvj item create --kind bugs --raw-file - 2>/dev/null)" || rc=$?
   eq "raw-file issues refusal" "4:refused" "$rc:$(echo "$OUT" | jget error.code)"
   eq "raw-file refusal data" "false" "$(echo "$OUT" | jget data.changed)"
@@ -108,13 +108,13 @@ MD
   pass "issues backend refused by item create --raw-file (exit 4, file unchanged)"
 
   # bogus backend: the verb fails, nothing is written
-  echo '{"backlog":{"backend":"bogus"}}' > .rota/config.json
+  echo '{"issues":{"source":"bogus"}}' > .rota/config.json
   eq "bogus raw-file" "1" "$(echo '- **[B10] x.**' | hvj item create --kind bugs --raw-file - >/dev/null 2>&1 && echo 0 || echo 1)"
   eq "bogus field get" "1" "$(hvj item field get B01 --name title >/dev/null 2>&1 && echo 0 || echo 1)"
   eq "bogus field set" "1" "$(hvj item field set B01 --name milestone --value M09 >/dev/null 2>&1 && echo 0 || echo 1)"
   eq "bogus backlog list" "1" "$(hvj backlog list >/dev/null 2>&1 && echo 0 || echo 1)"
   cmp -s .rota/BACKLOG.md "$TMP_GB/orig.md" || fail "bogus backend wrote BACKLOG.md"
-  pass "bogus backlog.backend fails for create, field get/set and list"
+  pass "bogus issues.source fails for create, field get/set and list"
 )
 trap 'rm -rf "$TMP_BK" "$TMP_GB"' EXIT
 
@@ -203,9 +203,9 @@ MD
   eq "reopen unknown" "3" "$(rcof hvj item reopen B99)"
   pass "item reopen golden"
 
-  # backlog.backend = issues from here on
+  # issues.source = github from here on
   cp orig.md .rota/BACKLOG.md; cp orig.arch .rota/ARCHIVE.md; cp orig.cnt .rota/counters.json
-  echo '{"backlog":{"backend":"issues"}}' > .rota/config.json
+  echo '{"issues":{"source":"github"}}' > .rota/config.json
 
   # file-only verbs refuse in issue mode (exit 4, backend), writing nothing
   # (a mutating verb exits 4; a read-only one, backlog drift, exits 1)
@@ -224,14 +224,14 @@ EOF
   pass "file-only verbs refuse under issues backend (exit 4, read-only drift 1, no writes)"
 
   # bogus backend: every verb fails, nothing is written
-  echo '{"backlog":{"backend":"bogus"}}' > .rota/config.json
+  echo '{"issues":{"source":"bogus"}}' > .rota/config.json
   for call in "item complete B01 --commit $C1" "item reopen B03" "id next --kind bugs" "item rm B01 --apply" "backlog archive --days 0" "backlog backfill" "backlog drift"; do
     # shellcheck disable=SC2086
     rc=0; hvj $call >/dev/null 2>&1 || rc=$?
-    [ "$rc" != 0 ] || fail "rota $call succeeded under a bogus backlog.backend"
+    [ "$rc" != 0 ] || fail "rota $call succeeded under a bogus issues.source"
   done
   cmp -s .rota/BACKLOG.md orig.md && cmp -s .rota/counters.json orig.cnt || fail "bogus backend wrote"
-  pass "bogus backlog.backend fails for all seven verbs"
+  pass "bogus issues.source fails for all seven verbs"
 
   # file mode: file-only verbs still work
   rm .rota/config.json
@@ -248,7 +248,7 @@ trap 'rm -rf "$TMP_BK" "$TMP_GB" "$TMP_CU" "$TMP_IB"' EXIT
 
 for prov in github gitlab; do
   P="$TMP_IB/$prov"; mkdir -p "$P/.rota"
-  echo "{\"backlog\":{\"backend\":\"issues\"},\"issues\":{\"provider\":\"$prov\",\"retryWaitSeconds\":0}}" > "$P/.rota/config.json"
+  echo "{\"forge\":{\"provider\":\"$prov\"},\"issues\":{\"source\":\"$prov\",\"retryWaitSeconds\":0}}" > "$P/.rota/config.json"
   (
     cd "$P"
     git init -q && git config user.email t@t && git config user.name t
@@ -437,7 +437,7 @@ pass "item create validates tag/fields/title/body-file without writing"
 # --- issue mode -------------------------------------------------------------
 for prov in github gitlab; do
   P="$TMP_IC/$prov"; mkdir -p "$P/.rota"
-  CFG() { echo "{\"backlog\":{\"backend\":\"issues\"},\"issues\":{\"provider\":\"$prov\",\"retryWaitSeconds\":0$1}}" > "$P/.rota/config.json"; }
+  CFG() { echo "{\"forge\":{\"provider\":\"$prov\"},\"issues\":{\"source\":\"$prov\",\"retryWaitSeconds\":0$1}}" > "$P/.rota/config.json"; }
   CFG ""
   (
     cd "$P"
@@ -532,7 +532,7 @@ TMP_IL="$(mktemp -d)"
 trap 'rm -rf "$TMP_BK" "$TMP_GB" "$TMP_CU" "$TMP_IB" "$TMP_IC" "$TMP_IL"' EXIT
 for prov in github gitlab; do
   P="$TMP_IL/$prov"; mkdir -p "$P/.rota"
-  echo "{\"backlog\":{\"backend\":\"issues\"},\"issues\":{\"provider\":\"$prov\",\"retryWaitSeconds\":0}}" > "$P/.rota/config.json"
+  echo "{\"forge\":{\"provider\":\"$prov\"},\"issues\":{\"source\":\"$prov\",\"retryWaitSeconds\":0}}" > "$P/.rota/config.json"
   (
     cd "$P"
     git init -q && git config user.email t@t && git config user.name t && git commit -q --allow-empty -m seed
@@ -621,7 +621,7 @@ print(",".join(c["body"].rsplit("\n", 1)[-1] for c in i["comments"] if not c["bo
     eq "recomplete" "closed|completed|type:task|Done in \`abc1234\` // Done in \`def5678\`" "$(IV 1)"
 
     # custom blocked label name
-    echo "{\"backlog\":{\"backend\":\"issues\"},\"issues\":{\"provider\":\"$prov\",\"retryWaitSeconds\":0,\"labels\":{\"blocked\":\"stuck\"}}}" > "$P/.rota/config.json"
+    echo "{\"forge\":{\"provider\":\"$prov\"},\"issues\":{\"source\":\"$prov\",\"retryWaitSeconds\":0,\"labels\":{\"blocked\":\"stuck\"}}}" > "$P/.rota/config.json"
     DONE T6 --commit abc1234 --reason blocked >/dev/null
     eq "custom blocked label" "open||in-progress,stuck,type:task|Blocked // Blocked" "$(IV 6)"
     pass "$prov: item complete / reopen close reasons, labels, gate, idempotency"

@@ -5,7 +5,7 @@ description: Use when the user brain-dumps work, says "capture", "add to backlog
 
 # rota-capture — Capture & Manage Work Items
 
-Quick-capture bugs, features and tasks with just enough context to act on later. Items are created with `rota item create` on the configured backend (`backlog.backend`): a tracker issue (`#N`) or a `.rota/BACKLOG.md` entry (`[B07]`). Handles several items and mixed types in one pass. `--remove <ID>` deletes an item.
+Quick-capture bugs, features and tasks with just enough context to act on later. Items are created with `rota item create` on the configured issue source (`issues.source`): a tracker issue (`#N`) or a `.rota/BACKLOG.md` entry (`[B07]`). Handles several items and mixed types in one pass. `--remove <ID>` deletes an item.
 
 Copy this checklist and track your progress:
 ```

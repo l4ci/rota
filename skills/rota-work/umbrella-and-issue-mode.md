@@ -1,6 +1,6 @@
 # Umbrella and issue-mode branches
 
-Loaded by `SKILL.md` when the repo is an umbrella (`rota repo umbrella` exits 0, items carry `Repos:`) or `backlog.backend` is `"issues"`. Registry shape and `Repos:` semantics: [`references/umbrella-mode.md`](references/umbrella-mode.md). Issue-mode verbs: [`references/issue-mode.md`](references/issue-mode.md). Step 4.5 is cited by `umbrella-mode.md`: keep the heading.
+Loaded by `SKILL.md` when the repo is an umbrella (`rota repo umbrella` exits 0, items carry `Repos:`) or `issues.source` is `github` or `gitlab`. Registry shape and `Repos:` semantics: [`references/umbrella-mode.md`](references/umbrella-mode.md). Issue-mode verbs: [`references/issue-mode.md`](references/issue-mode.md). Step 4.5 is cited by `umbrella-mode.md`: keep the heading.
 
 ## Step 3 — Name the Branch (umbrella)
 

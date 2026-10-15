@@ -1,6 +1,6 @@
 # Upstream issues
 
-Under `backlog.backend: "issues"` the open issues on GitHub or GitLab are the backlog: nothing is imported. `/rota-capture` creates items with `rota item create`, and `/rota-ship` closes them with `Closes #N` in the PR body.
+Under `issues.source` set to `github` or `gitlab` the open issues on GitHub or GitLab are the backlog: nothing is imported. `/rota-capture` creates items with `rota item create`, and `/rota-ship` closes them with `Closes #N` in the PR body.
 
 `/rota-capture --from-github` / `--from-gitlab` and `rota issues list` were removed (#69): importing duplicated issues once already.
 

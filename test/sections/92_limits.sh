@@ -35,7 +35,7 @@ mkdir -p "$PROJ/.rota"
 ) || fail "D3 fixture repo setup failed"
 printf 'stub worker contract\n' > "$TMP_LM/contract.md"
 lm_cfg() { # lm_cfg [<extra top-level json members, with a leading comma>]
-  printf '{"backlog":{"backend":"issues"},"issues":{"provider":"github","retryWaitSeconds":0},"work":{"dispatch":"tmux","accounts":[{"name":"a","configDir":"%s/cfg-a"},{"name":"b","configDir":"%s/cfg-b"}]},"round":{"brief":"%s"}%s}\n' \
+  printf '{"forge":{"provider":"github"},"issues":{"source":"github","retryWaitSeconds":0},"work":{"dispatch":"tmux","accounts":[{"name":"a","configDir":"%s/cfg-a"},{"name":"b","configDir":"%s/cfg-b"}]},"round":{"brief":"%s"}%s}\n' \
     "$TMP_LM" "$TMP_LM" "$TMP_LM/contract.md" "${1:-}" > "$PROJ/.rota/config.json"
 }
 lm_cfg

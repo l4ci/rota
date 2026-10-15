@@ -33,7 +33,7 @@
     {
       "id": "ship-round-worker",
       "query": "/rota-ship",
-      "situation": "You are a round worker on branch `nia/279-evals`. Config: ship.review = true, ship.secondOpinion = true, work.mergeStrategy = pr, backlog.backend = issues. The scope JSON lists 6 commits and referencedIds [\"#279\"]. The user's go-ahead to open the PR is given. Simulated results: every verb exits 0 with plausible output.",
+      "situation": "You are a round worker on branch `nia/279-evals`. Config: ship.review = true, ship.secondOpinion = true, work.mergeStrategy = pr, issues.source = github. The scope JSON lists 6 commits and referencedIds [\"#279\"]. The user's go-ahead to open the PR is given. Simulated results: every verb exits 0 with plausible output.",
       "expected": "A worker skips /rota-review, the second opinion, learn and docs nudges. Opens a PR with --items 279, then marks needs-review.",
       "must": [
         "rota ship pr",

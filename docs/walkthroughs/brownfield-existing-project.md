@@ -82,7 +82,7 @@ Run `rota map index` once after writing the files; it pulls each file's `summary
 
 ## Step 3: open issues (optional)
 
-If your project already tracks work in GitHub or GitLab issues, use the issue backend: `rota config set backlog.backend issues`. The open issues already are the backlog, so there is nothing to import. See [issue backend](../usage/issue-backend.md). If you have no tracker, or want the backlog in the repo, stay on the file backend and capture what you care about with `/rota-capture` (Step 4).
+If your project already tracks work in GitHub or GitLab issues, use the issue backend: `rota config set issues.source github`. The open issues already are the backlog, so there is nothing to import. See [issue backend](../usage/issue-backend.md). If you have no tracker, or want the backlog in the repo, stay on the file backend and capture what you care about with `/rota-capture` (Step 4).
 
 Pinpoint stays on the file backend for this walkthrough, so the IDs read `[B01]` instead of `#N`. The five issues worth tracking went in with one `/rota-capture` call, the way Step 4 does it; they became `B01` to `B05`.
 

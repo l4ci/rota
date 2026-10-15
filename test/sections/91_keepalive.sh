@@ -16,7 +16,7 @@ mkdir -p "$FK/bin" "$P/.rota/milestones"
 printf '#!/usr/bin/env bash\nexec bash "%s/fakes/gh" "$@"\n' "$TESTDIR" > "$FK/bin/gh"
 printf '#!/bin/sh\necho "no server running" >&2\nexit 1\n' > "$FK/bin/tmux"
 chmod +x "$FK/bin/gh" "$FK/bin/tmux"
-KA_BASE='{"git":{"baseBranch":"main"},"issues":{"provider":"github","retryWaitSeconds":0},"orchestrator":{"keepaliveBackoffSeconds":0%s}}'
+KA_BASE='{"git":{"baseBranch":"main"},"forge":{"provider":"github"},"issues":{"source":"github","retryWaitSeconds":0},"orchestrator":{"keepaliveBackoffSeconds":0%s}}'
 ka_cfg() { printf "$KA_BASE\n" "${1:-}" > "$P/.rota/config.json"; } # ka_cfg [',"escalateIssue":1']
 (
   cd "$P" && git init -q -b main . && git -c user.email=a@b -c user.name=n commit -q --allow-empty -m init \

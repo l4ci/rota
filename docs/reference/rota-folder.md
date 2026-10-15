@@ -6,7 +6,7 @@
 
 | File | Purpose |
 |------|---------|
-| `BACKLOG.md` | File-backend backlog: bugs, features, tasks, and recent completions. Under `backlog.backend: "issues"` the tracker holds the backlog instead and this file is unused ([issue backend](../usage/issue-backend.md)) |
+| `BACKLOG.md` | File-backend backlog: bugs, features, tasks, and recent completions. Under `issues.source` set to `github` or `gitlab` the tracker holds the backlog instead and this file is unused ([issue backend](../usage/issue-backend.md)) |
 | `KNOWLEDGE.md` | Durable learnings grouped by topic: gotchas, conventions, constraints |
 | `DECISIONS.md` | Hard-boundary decisions with explicit forbids/permits. Active commitments future work must respect |
 | `MILESTONES.md` | Milestone overview: one short section per milestone, with a vision intro paragraph and an active list |
@@ -39,7 +39,7 @@
 
 ## BACKLOG.md: active backlog
 
-On the file backend (`backlog.backend: "file"`, the default) `BACKLOG.md` is the source of truth for everything in flight. It holds open bugs, features, and tasks organised by type, plus a "recently completed" section at the bottom. [`/rota-capture`](../usage/capturing-work.md) appends new items, and [`/rota-work` (no argument)](../usage/picking-work.md) reads it to suggest what to work on next. With `backlog.backend: "issues"` the open issues on GitHub or GitLab are the backlog and `BACKLOG.md` stays unused; see [issue backend](../usage/issue-backend.md).
+On the file backend (`issues.source` is `file`, the default) `BACKLOG.md` is the source of truth for everything in flight. It holds open bugs, features, and tasks organised by type, plus a "recently completed" section at the bottom. [`/rota-capture`](../usage/capturing-work.md) appends new items, and [`/rota-work` (no argument)](../usage/picking-work.md) reads it to suggest what to work on next. With `issues.source` set to `github` or `gitlab` the open issues on GitHub or GitLab are the backlog and `BACKLOG.md` stays unused; see [issue backend](../usage/issue-backend.md).
 
 A typical entry looks like:
 

@@ -34,7 +34,7 @@
     {
       "id": "work-issue-backend-finish",
       "query": "/rota-work implement 42",
-      "situation": "Config: backlog.backend = issues, work.mergeStrategy = direct. Item #42 is claimed, both tasks are committed and verified, proof rows are recorded, branch is `rota/queue-skip-claimed`. You are at Step 9/10. List every remaining command through the end of the cycle. Simulated results: every verb exits 0. Use `Fix queue skip` as the PR title and a one-line body; do not ask for them.",
+      "situation": "Config: issues.source = github, work.mergeStrategy = direct. Item #42 is claimed, both tasks are committed and verified, proof rows are recorded, branch is `rota/queue-skip-claimed`. You are at Step 9/10. List every remaining command through the end of the cycle. Simulated results: every verb exits 0. Use `Fix queue skip` as the PR title and a one-line body; do not ask for them.",
       "expected": "Issue backend skips Step 9 and forces the PR path: `rota ship pr` with --items, then `rota item state 42 --to needs-review`. It does not merge, complete or release the claim.",
       "must": [
         "rota ship pr",

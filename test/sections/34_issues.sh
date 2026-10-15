@@ -176,11 +176,11 @@ trap 'rm -rf "$TMP_IV"; trap '"'"'rm -rf "$TMP"'"'"' EXIT' EXIT
 
 for prov in github gitlab; do
   P="$TMP_IV/$prov"; mkdir -p "$P/.rota"
-  echo "{\"issues\":{\"provider\":\"$prov\",\"retryWaitSeconds\":0}}" > "$P/.rota/config.json"
+  echo "{\"forge\":{\"provider\":\"$prov\"},\"issues\":{\"retryWaitSeconds\":0}}" > "$P/.rota/config.json"
   (
     cd "$P"
     git init -q && git config user.email t@t && git config user.name t && git commit -q --allow-empty -m seed
-    # issues label/close detect the provider from origin, not from issues.provider
+    # issues label/close detect the provider from origin, not from forge.provider
     git remote add origin "https://$prov.com/o/r.git"
     SHA=$(git rev-parse HEAD)
     export PATH="$TESTDIR/fakes:$PATH" FAKE_TRACKER_DB="$P/db.json" FAKE_TRACKER_LOG="$P/log"
@@ -264,21 +264,21 @@ for prov in github gitlab; do
   [ "$rc" = "5" ] || fail "$prov issues close with a failing forge should exit 5, got $rc: $(cat "$TMP_EX/out" "$TMP_EX/argv.log")"
 done
 
-# No origin and no issues.provider: exit 3 with a message, never a silent [].
+# No origin and no issues.source or forge.provider: exit 3 with a message, never a silent [].
 P="$TMP_EX/none"
 mkexit "$P" "" '{"issues":{"retryWaitSeconds":0}}'
 for argv in "issues label 1 --add bug" "issues close 1 --commit HEAD"; do
   rc=$(rcv "$P" $argv)
   [ "$rc" = "3" ] || fail "no provider: rota $argv should exit 3, got $rc: $(cat "$TMP_EX/out")"
-  grep -q "issues.provider" "$TMP_EX/out" || fail "no provider: rota $argv message should name issues.provider: $(cat "$TMP_EX/out")"
+  { grep -q "issues.source" "$TMP_EX/out" && grep -q "forge.provider" "$TMP_EX/out"; } || fail "no provider: rota $argv message should name issues.source and forge.provider: $(cat "$TMP_EX/out")"
 done
 
-# issues.provider stands in when origin names no forge; an origin that does wins.
+# forge.provider stands in when origin names no forge; an origin that does wins.
 P="$TMP_EX/fallback"
-mkexit "$P" "" '{"issues":{"provider":"github","retryWaitSeconds":0}}'
-[ "$(cd "$P" && "$ROTA_BIN" --json issues provider | jget data.provider)" = "github" ] || fail "issues provider should answer from issues.provider with no origin"
+mkexit "$P" "" '{"forge":{"provider":"github"},"issues":{"retryWaitSeconds":0}}'
+[ "$(cd "$P" && "$ROTA_BIN" --json issues provider | jget data.provider)" = "github" ] || fail "issues provider should answer from forge.provider with no origin"
 git -C "$P" remote add origin "https://gitlab.com/o/r.git"
-[ "$(cd "$P" && "$ROTA_BIN" --json issues provider | jget data.provider)" = "gitlab" ] || fail "an origin naming a forge should beat issues.provider"
+[ "$(cd "$P" && "$ROTA_BIN" --json issues provider | jget data.provider)" = "gitlab" ] || fail "an origin naming a forge should beat forge.provider"
 
 trap 'rm -rf "$TMP"' EXIT
-pass "issues label/close exit 3 for a missing issue and for no provider; issues.provider is the fallback"
+pass "issues label/close exit 3 for a missing issue and for no provider; forge.provider is the fallback"

@@ -2,7 +2,7 @@
 
 Gate and registry semantics: `references/umbrella-mode.md`. Ask only when `rota repo umbrella` exits 0 and `.rota/repos.json` registers at least one sub-repo. Otherwise skip silently.
 
-**Issue mode** (`backlog.backend: "issues"`; `references/issue-mode.md`): pick exactly one repo (single-select) and pass `--repos <name>`. `rota item create` refuses multi-repo items: for work spanning repos, capture one item per repo and link with `Related:`.
+**Issue mode** (`issues.source` is `github` or `gitlab`; `references/issue-mode.md`): pick exactly one repo (single-select) and pass `--repos <name>`. `rota item create` refuses multi-repo items: for work spanning repos, capture one item per repo and link with `Related:`.
 
 Otherwise ask:
 
