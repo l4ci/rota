@@ -291,7 +291,7 @@ var Prompts = []Prompt{
 		"gitlab": "GitLab issues (glab)",
 		"forge":  "each repo's own forge (umbrellas on mixed hosts)",
 		"jira":   "Jira (needs a rota connect connection)",
-		"linear": "Linear (not implemented yet)",
+		"linear": "Linear (needs a rota connect connection)",
 	}},
 	{Key: "work.isolation", Title: "How is each piece of work isolated?", Help: map[string]string{
 		"branch":   "a feature branch in this checkout",

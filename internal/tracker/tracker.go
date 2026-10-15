@@ -266,8 +266,8 @@ type MilestoneEdit struct {
 }
 
 // IssueTracker is the issue side of the seam: where issues, their comments,
-// labels and milestones live (issues.source). GitHub, GitLab and Jira
-// implement it; Linear will, later. Issues are named by IssueKey; PR numbers stay ints.
+// labels and milestones live (issues.source). GitHub, GitLab, Jira and
+// Linear implement it. Issues are named by IssueKey; PR numbers stay ints.
 type IssueTracker interface {
 	Provider() string
 	// CheckAuth fails with KindUnavailable unless the tracker's CLI is
@@ -308,10 +308,10 @@ type IssueTracker interface {
 	IssuesInMilestone(ctx context.Context, title, state string) ([]Issue, error)
 }
 
-// ClaimStore is an issue tracker that keeps claims out of comment bodies: one
-// record per claimer, read back earliest first. A tracker that implements it
-// (Jira, in issue properties) takes claims this way instead of as claim and
-// release marker comments.
+// ClaimStore is an issue tracker that keeps claims out of comment markers:
+// one record per claimer, read back earliest first. A tracker that implements
+// it (Jira and Linear, as plain `Claimed by` comments) takes claims this way
+// instead of as claim and release marker comments.
 type ClaimStore interface {
 	// Claims lists the claim ids held on key, earliest first.
 	Claims(ctx context.Context, key IssueKey) ([]string, error)
@@ -322,7 +322,7 @@ type ClaimStore interface {
 }
 
 // MergeCloser is an issue tracker a merged PR does not close by itself
-// (Jira): whoever merges the PR closes the issue it names, as GitHub and
+// (Jira, Linear): whoever merges the PR closes the issue it names, as GitHub and
 // GitLab do on a closing keyword.
 type MergeCloser interface {
 	// CloseAfterMerge closes key as completed, naming the merged PR; an issue
@@ -432,14 +432,16 @@ type Settings struct {
 	RetryWait       time.Duration
 	NotPlannedLabel string
 	// Connection is issues.connection, the `rota connect` connection an HTTP
-	// tracker (jira) reaches its site through; JiraProject is issues.jira.project.
+	// tracker (jira, linear) reaches its site through; JiraProject is
+	// issues.jira.project, LinearTeam issues.linear.team.
 	Connection  string
 	JiraProject string
+	LinearTeam  string
 }
 
 // SettingsFromConfig reads forge.provider, issues.source,
-// issues.retryWaitSeconds, issues.labels.notPlanned, issues.connection and
-// issues.jira.project, with the schema
+// issues.retryWaitSeconds, issues.labels.notPlanned, issues.connection,
+// issues.jira.project and issues.linear.team, with the schema
 // defaults for absent or null keys. An invalid forge.provider or issues.source
 // reads as its default here; ValidateConfig (and the *FromConfig constructors)
 // fail on it instead.
@@ -459,7 +461,7 @@ func SettingsFromConfig(cfg any) Settings {
 	if v, ok := config.Lookup(cfg, "issues.labels.notPlanned"); ok && v != nil {
 		s.NotPlannedLabel = fmt.Sprint(v)
 	}
-	for key, dst := range map[string]*string{"issues.connection": &s.Connection, "issues.jira.project": &s.JiraProject} {
+	for key, dst := range map[string]*string{"issues.connection": &s.Connection, "issues.jira.project": &s.JiraProject, "issues.linear.team": &s.LinearTeam} {
 		if v, ok := config.Lookup(cfg, key); ok && v != nil {
 			*dst = strings.TrimSpace(fmt.Sprint(v))
 		}
@@ -489,10 +491,6 @@ var ErrLocalForge error = &Error{Kind: KindUnavailable, Code: 3, Message: "the f
 // ErrNoIssueTracker is what NewIssueTracker answers for issues.source file:
 // the issues live in BACKLOG.md, not on a tracker.
 var ErrNoIssueTracker error = &Error{Kind: KindUnavailable, Code: 3, Message: "issues.source is file: the issues live in BACKLOG.md, not on a tracker"}
-
-func notImplemented(source string) *Error {
-	return unavailable("issues.source %s is not implemented yet (use file, github, gitlab or jira)", source)
-}
 
 // New returns the adapter, issue tracker and forge in one, for provider ("" or
 // "auto" falls back to s.Provider, then to origin-URL detection in dir). It is
@@ -525,8 +523,8 @@ func NewForge(ctx context.Context, s Settings, forgeProvider, dir string, opts .
 }
 
 // NewIssueTracker returns the issue tracker for source ("" falls back to
-// s.Source). file is ErrNoIssueTracker; jira is the REST adapter of
-// issues.connection; linear is an unavailable "not implemented" error; github and gitlab build their adapter whatever the
+// s.Source). file is ErrNoIssueTracker; jira and linear are the HTTP adapters
+// of issues.connection; github and gitlab build their adapter whatever the
 // origin says (rota doctor flags a mismatch); forge resolves the tracker from
 // dir's own forge, per sub-repo. The legacy config.SourceIssues,
 // an unmigrated "issues backend" with no named provider, resolves from the
@@ -546,7 +544,11 @@ func NewIssueTracker(ctx context.Context, s Settings, source, dir string, opts .
 		}
 		return j, nil
 	case config.SourceLinear:
-		return nil, notImplemented(source)
+		l, err := newLinearTracker(ctx, newCLI(s, dir, opts...), s)
+		if err != nil {
+			return nil, err // never a nil *Linear inside a non-nil IssueTracker
+		}
+		return l, nil
 	case config.SourceIssues:
 		provider = config.ForgeAuto
 	case config.SourceForge:

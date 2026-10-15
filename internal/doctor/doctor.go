@@ -90,10 +90,14 @@ type Input struct {
 	// forge.provider or issues.source holds an invalid value ("" when valid).
 	IssueSource   string
 	SourceProblem string
-	// JiraProject and IssuesConnection are issues.jira.project and
-	// issues.connection, which issues.source jira needs.
+	// JiraProject, LinearTeam and IssuesConnection are issues.jira.project,
+	// issues.linear.team and issues.connection, which issues.source jira and
+	// linear need. TeamProblem is why the Linear team could not be read
+	// through a working connection ("" when it was, or was not tried).
 	JiraProject      string
+	LinearTeam       string
 	IssuesConnection string
+	TeamProblem      string
 	Accounts         []config.Account
 	SwitchOnUsage    bool // orchestrator.switchOnUsage (D4)
 	// CodexHomes are the Codex homes a worker can run under: the accounts of
@@ -377,6 +381,16 @@ func (d *runner) tracker() Check {
 			return fail("tracker", "issues.source is jira but issues.jira.project is not set", "run: rota config set issues.jira.project <KEY>")
 		case d.in.IssuesConnection == "":
 			return fail("tracker", "issues.source is jira but issues.connection is not set", "run: rota connect add <name> --kind jira ..., then rota config set issues.connection <name>")
+		}
+	}
+	if d.in.IssueSource == config.SourceLinear {
+		switch {
+		case d.in.LinearTeam == "":
+			return fail("tracker", "issues.source is linear but issues.linear.team is not set", "run: rota config set issues.linear.team <KEY>")
+		case d.in.IssuesConnection == "":
+			return fail("tracker", "issues.source is linear but issues.connection is not set", "run: rota connect add <name> --kind linear --token-stdin, then rota config set issues.connection <name>")
+		case d.in.TeamProblem != "":
+			return fail("tracker", d.in.TeamProblem, "check issues.linear.team against the team's key in Linear, and the API key's access")
 		}
 	}
 	f := d.resolveForge()

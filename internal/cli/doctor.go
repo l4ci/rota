@@ -12,6 +12,7 @@ import (
 
 	"github.com/l4ci/rota/internal/agents"
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/connections"
 	"github.com/l4ci/rota/internal/doctor"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/git"
@@ -92,6 +93,7 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 	in.Dispatch = config.Dispatch(cfg)
 	in.ForgeProvider, in.IssueSource, in.SourceProblem = doctorSourceInput(cfg)
 	in.JiraProject, in.IssuesConnection = strings.TrimSpace(str("issues.jira.project")), strings.TrimSpace(str("issues.connection"))
+	in.LinearTeam = strings.TrimSpace(str("issues.linear.team"))
 	in.CodexHomes = codexHomes(cfg)
 	for _, t := range []string{"light", "standard", "heavy"} {
 		if strings.TrimSpace(str("round.tiers.codex."+t)) != "" {
@@ -106,6 +108,9 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 	in.ProjectRoot = root
 	if name := strings.TrimSpace(str("issues.connection")); name != "" {
 		in.Connection = doctorConnection(ctx, d, name)
+		if in.IssueSource == config.SourceLinear && in.LinearTeam != "" && in.Connection.State == string(connections.StateOK) {
+			in.TeamProblem = linearTeamProblem(ctx, d, cfg, root)
+		}
 	}
 	in.Slots, in.CwdOf = doctorSlotBlocks(root), procCwd(ctx, d.Proc)
 	in.NothingToVerify = worker.NothingToVerify(root)

@@ -12,7 +12,7 @@ The subject must start `merge: ` (undo recognizes cycles by it). Share the hash 
 
 ## Step 6c — Close Upstream Issues (direct-merge path only)
 
-Skip on the PR path (`rota ship body` already emits `Closes #N`) and on the issue backend (the tracker issues close when the PR merges; on Jira, `rota worker gate` closes them).
+Skip on the PR path (`rota ship body` already emits `Closes #N`) and on the issue backend (the tracker issues close when the PR merges; on Jira and Linear, `rota worker gate` closes them).
 
 `rota issues imported --json --open-only`; keep `data.entries` whose `itemId` is in the shipped IDs from Step 2. None: skip silently.
 

@@ -15,6 +15,7 @@ import (
 	"github.com/l4ci/rota/internal/connections"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/tracker/jiratest"
+	"github.com/l4ci/rota/internal/tracker/lineartest"
 )
 
 // forge is a scripted gh and glab: calls records every argument list; reply
@@ -403,6 +404,49 @@ func TestLabelCloseOnJiraSource(t *testing.T) {
 	}
 	if st := s.StatusOf(string(key)); st != "Done" {
 		t.Errorf("status %q", st)
+	}
+	if len(f.calls) != 0 {
+		t.Errorf("a forge CLI ran: %q", f.calls)
+	}
+}
+
+// With issues.source linear, label and close act on the Linear issue through
+// issues.connection, whatever the origin remote is.
+func TestLabelCloseOnLinearSource(t *testing.T) {
+	ctx := context.Background()
+	s := lineartest.New(t, lineartest.Options{})
+	s.AddLabel("ready", "")
+	conn := tracker.WithConnections(func(_ context.Context, name string) (connections.Connection, string, error) {
+		return connections.Connection{Name: name, Kind: connections.KindLinear, Site: s.URL}, "lin_api_test", nil
+	})
+	f := &forge{origin: gh}
+	env := f.env(t)
+	cfg, err := jsonx.Decode([]byte(`{"issues": {"source": "linear", "connection": "work", "linear": {"team": "ENG"}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	env.Config = cfg
+	env.Opts = append(env.Opts, conn)
+	it, err := tracker.NewIssueTrackerFromConfig(ctx, env.Config, "", conn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, err := it.Create(ctx, "Widen", "", nil, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changed, err := Label(ctx, env, "", key, "ready", true, false); err != nil || !changed {
+		t.Fatalf("label: %v %v", changed, err)
+	}
+	if got := s.Labels(string(key)); !slices.Contains(got, "ready") {
+		t.Fatalf("labels %v", got)
+	}
+	dir, sha := gitProject(t)
+	if changed, err := Close(ctx, env, dir, key, sha, ""); err != nil || !changed {
+		t.Fatalf("close: %v %v", changed, err)
+	}
+	if st := s.StateType(string(key)); st != "completed" {
+		t.Errorf("state type %q", st)
 	}
 	if len(f.calls) != 0 {
 		t.Errorf("a forge CLI ran: %q", f.calls)
