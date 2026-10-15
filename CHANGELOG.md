@@ -1,5 +1,30 @@
 # Changelog
 
+## v0.17.0 — 2026-10-15
+
+Jira and Linear as issue sources, machine-wide tracker connections, and the issue source split from the forge
+
+### New
+
+- **`rota connect`**: tracker connections are set up once per machine, not per project. Secrets go to the OS keychain and never pass through argv, `.rota/`, logs or URLs. `rota connect add|list|test|remove`.
+- **Jira as an issue source** (`issues.source: jira`), over the REST API, for both Cloud and Data Center. A connection has to say which one it is (`--deployment cloud|datacenter`); `*.atlassian.net` sites are assumed to be Cloud. Claims are `Claimed by <id>` comments, ordered by the time the server recorded them. Proof and handoff state live in issue properties. The gate closes the issue after the merge. If that close fails, the claim stays and the gate warns.
+- **Linear as an issue source** (`issues.source: linear`), over the GraphQL API. Rota's hidden state is kept in issue attachments, which Linear shows as "rota state" links.
+- **Tracker keys as issue IDs**: `PROJ-123` works anywhere a number did: `Depends on`, escalations, approvals, `rota issues` verbs and round assignment.
+- **`rota ship strategy`** reports how a branch lands: `direct`, `pr` or unset. A local forge always lands direct.
+
+### Changed
+
+- **`issues.source` and `forge.provider` replace `backlog.backend` and `issues.provider`.** The issue source (`file|github|gitlab|jira|linear|forge`) is now separate from where PRs go (`auto|github|gitlab|local`), so issues can live in Jira while PRs go to GitHub. `issues.source: forge` covers umbrellas whose sub-repos are split across GitHub and GitLab. A project that hasn't migrated keeps working: the legacy keys still decide. `rota migrate source --apply` rewrites them.
+- **Gate:** it can now merge the second PR of a split issue, following the slot's registered branch. An issue labelled `partial-slice` stays open when its first slice merges. Gate steps that read the forge are skipped when there is no `origin` remote.
+- **Tracker REST layer:** a POST that gets a 5xx back is never sent again, because the mutation may already have landed. Read-only GraphQL goes through a path that retries but refuses to run mutations.
+- **`rota doctor`** fails when a Jira source has no project or connection configured.
+
+## Stats
+
+41 commits, 272 files changed, +14952 −1253 lines
+
+**Full changelog:** https://github.com/l4ci/rota/compare/v0.16.1...v0.17.0
+
 ## v0.16.1 — 2026-10-14
 
 One owner per rule across round, gate and doctor; tests own their clocks
