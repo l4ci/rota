@@ -154,7 +154,7 @@ var Keys = []Key{
 	k("orchestrator.keepaliveBreaker", num("3"), false, TypeInt, "How many restarts in a row may leave no new handoff before the breaker trips. 1 or more."),
 	k("orchestrator.keepaliveBackoffSeconds", num("5"), false, TypeInt, "Seconds rota keepalive run waits before a restart. 0 or more."),
 	k("orchestrator.restartPrompt", "Continue as orchestrator: read the handoff injected at session start, run rota round status, and resume the round.", false, TypeString, "Text appended as the last argument of a restart. Must not be empty."),
-	k("orchestrator.escalateIssue", num("0"), false, TypeInt, "Issue number the breaker's escalation comment goes on. 0 leaves it unset: a host notification and a warning only."),
+	k("orchestrator.escalateIssue", num("0"), false, TypeInt, "Issue number, or key like PROJ-123 on a key-based tracker, the breaker's escalation comment goes on. 0 leaves it unset: a host notification and a warning only."),
 	// #19 launcher key: read by `rota orchestrate` and bare `rota`.
 	k("orchestrator.harness", "claude", false, TypeEnum, "Which agent rota orchestrate, and bare rota in an initialized project, starts as the orchestrator.", "claude", "codex", "hermes", "opencode"),
 	// D4 usage-switch keys: silent defaults, read by the Stop hook and `rota keepalive run`.

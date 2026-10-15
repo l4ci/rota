@@ -37,3 +37,24 @@ func TestCreateKeyItemIsTheBareKey(t *testing.T) {
 		t.Errorf("body %q", got)
 	}
 }
+
+// Review-queue links and sort order work on keys: a PR closing PROJ-2 is
+// listed under PROJ-2 only, and numbered issues sort before keys.
+func TestReviewQueueKeyLinksAndOrder(t *testing.T) {
+	b, f := rrBackend(t, rrSeed{Cfg: `{}`})
+	f.Fake.Issues = append(f.Fake.Issues,
+		tracker.Issue{Key: "PROJ-2", Title: "b", State: "open", Labels: []string{"needs-review"}},
+		tracker.Issue{Key: tracker.NumKey(9), Title: "n", State: "open", Labels: []string{"needs-review"}},
+		tracker.Issue{Key: "PROJ-1", Title: "a", State: "open", Labels: []string{"needs-review"}})
+	rows, err := b.ReviewQueue()
+	if err != nil || len(rows) != 3 {
+		t.Fatalf("queue: %v %v", rows, err)
+	}
+	var ids []string
+	for _, r := range rows {
+		ids = append(ids, r.ID)
+	}
+	if strings.Join(ids, ",") != "9,PROJ-1,PROJ-2" {
+		t.Errorf("order %v", ids)
+	}
+}

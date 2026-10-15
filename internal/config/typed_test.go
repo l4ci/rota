@@ -106,7 +106,6 @@ func TestSharedRanges(t *testing.T) {
 		ok   string
 		want int
 	}{
-		{"escalateIssue", "orchestrator.escalateIssue", EscalateIssue, []string{"-1", "2000000000"}, "7", 7},
 		{"handoffMaxAge", "orchestrator.handoffMaxAgeSeconds", HandoffMaxAgeSeconds, []string{"0"}, "30", 30},
 		{"usageThreshold", "orchestrator.usageThreshold", UsageThreshold, []string{"0", "101"}, "100", 100},
 		{"fallbackSleep", "limits.fallbackSleepSeconds", FallbackSleepSeconds, []string{"0"}, "5", 5},
@@ -123,6 +122,22 @@ func TestSharedRanges(t *testing.T) {
 		}
 		if got, err := c.fn(build(c.key, c.ok)); err != nil || got != c.want {
 			t.Errorf("%s=%s: got %d, %v", c.name, c.ok, got, err)
+		}
+	}
+}
+
+func TestEscalateIssueReadsNumbersAndKeys(t *testing.T) {
+	read := func(v string) (string, error) {
+		return EscalateIssue(decode(t, `{"orchestrator":{"escalateIssue":`+v+`}}`))
+	}
+	for v, want := range map[string]string{"7": "7", "0": "", `""`: "", `"PROJ-123"`: "PROJ-123", `" proj-1 "`: "proj-1"} {
+		if got, err := read(v); err != nil || got != want {
+			t.Errorf("%s: got %q, %v, want %q", v, got, err, want)
+		}
+	}
+	for _, v := range []string{"-1", "2000000000", "true"} {
+		if _, err := read(v); err == nil {
+			t.Errorf("%s: want error", v)
 		}
 	}
 }

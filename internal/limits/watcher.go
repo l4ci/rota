@@ -3,6 +3,7 @@ package limits
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/tracker"
 	"regexp"
 	"strings"
 	"sync/atomic"
@@ -87,7 +88,7 @@ type Deps struct {
 	// Send types the prompt into the target's pane and submits it.
 	Send func(ctx context.Context, t Target, prompt string) error
 	// Escalate posts on the issue thread; returns the escalation id.
-	Escalate func(issue int, title, body string) (id string, warnings []string, err error)
+	Escalate func(issue tracker.IssueKey, title, body string) (id string, warnings []string, err error)
 	// Notify raises the host notification alone.
 	Notify func(title, body string)
 	// Poll: capture every target on every pass. Without it text arrives as
@@ -524,7 +525,7 @@ func (w *Watcher) fail(e *Entry, now time.Time, why string) {
 		"Look at the pane, then restart the session or run rota limit watch again.\n",
 		e.Session, e.ID, why, e.Window, e.DetectedAt, firstNonEmpty(e.ResetsAt, "unknown"), e.Cycles, worker.RegistryPath(w.Root), e.ID)
 	switch {
-	case w.Settings.EscalateIssue == 0:
+	case w.Settings.EscalateIssue == "":
 		if w.Notify != nil {
 			w.Notify(title, fmt.Sprintf("%s: %s", e.Session, why))
 		}
@@ -535,7 +536,7 @@ func (w *Watcher) fail(e *Entry, now time.Time, why string) {
 		id, warns, err := w.Escalate(w.Settings.EscalateIssue, title, body)
 		w.warnings = append(w.warnings, warns...)
 		if err != nil {
-			w.warn("escalation on #%d not sent: %v", w.Settings.EscalateIssue, err)
+			w.warn("escalation on %s not sent: %v", w.Settings.EscalateIssue.Ref(), err)
 		} else {
 			e.Note += " Escalation " + id + "."
 		}

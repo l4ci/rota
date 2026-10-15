@@ -111,7 +111,7 @@ func (b *Issues) trackingIssues() (map[string]Issue, error) {
 			if (g[i].State != "open") != (g[j].State != "open") {
 				return g[j].State != "open"
 			}
-			return g[i].Num() < g[j].Num()
+			return tracker.CompareKeys(g[i].Key, g[j].Key) < 0
 		})
 		out[mid] = g[0]
 		if len(g) > 1 {

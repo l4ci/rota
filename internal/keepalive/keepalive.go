@@ -11,6 +11,7 @@ package keepalive
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/tracker"
 	"os"
 	"strconv"
 	"sync"
@@ -65,7 +66,7 @@ type Env struct {
 	Handoff func() HandoffRead
 	// Escalate posts the stop on the issue thread and returns the
 	// escalation id and any warnings.
-	Escalate func(issue int, title, body string) (id string, warnings []string, err error)
+	Escalate func(issue tracker.IssueKey, title, body string) (id string, warnings []string, err error)
 	// Notify raises the host notification alone.
 	Notify func(title, body string)
 	// Limits is the usage-limit watcher (D3), run as a goroutine for the
@@ -98,7 +99,7 @@ type Options struct {
 	// FirstPrompt is appended to Command on the first start only, where
 	// Prompt is appended on restarts. Empty: the first start is Command alone.
 	FirstPrompt   string
-	EscalateIssue int
+	EscalateIssue tracker.IssueKey
 
 	// D4: the switch and the account the child starts under. ConfigDir is the
 	// child's CLAUDE_CONFIG_DIR as inherited and Account its name in
@@ -361,7 +362,7 @@ func ts(t time.Time) string { return t.UTC().Format(time.RFC3339) }
 func escalate(env Env, o Options, st State, reason, statePath string, res *Result) string {
 	title := "Orchestrator keepalive stopped: " + reason
 	body := escalationBody(env, o, st, reason, statePath)
-	if o.EscalateIssue == 0 {
+	if o.EscalateIssue == "" {
 		if env.Notify != nil {
 			env.Notify(title, fmt.Sprintf("restarts %d, no progress %d", st.Restarts, st.NoProgress))
 		}
@@ -375,7 +376,7 @@ func escalate(env Env, o Options, st State, reason, statePath string, res *Resul
 	id, warns, err := env.Escalate(o.EscalateIssue, title, body)
 	res.Warnings = append(res.Warnings, warns...)
 	if err != nil {
-		res.Warnings = append(res.Warnings, fmt.Sprintf("escalation on #%d not sent: %v", o.EscalateIssue, err))
+		res.Warnings = append(res.Warnings, fmt.Sprintf("escalation on %s not sent: %v", o.EscalateIssue.Ref(), err))
 		return ""
 	}
 	return id

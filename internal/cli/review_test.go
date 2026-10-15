@@ -305,6 +305,11 @@ func (f *a8Forge) OpenPRs(context.Context) ([]tracker.PR, error) {
 
 var a8Closing = regexp.MustCompile(`(?i)\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?):?\s+#(\d+)`)
 
+func (f *a8Forge) ClosesIssue(key tracker.IssueKey, c tracker.ClosingSource) bool {
+	n, ok := key.Number()
+	return ok && slices.Contains(f.ClosedNumbers(c.Body), n)
+}
+
 func (f *a8Forge) ClosedNumbers(body string) []int {
 	var out []int
 	for _, m := range a8Closing.FindAllStringSubmatch(body, -1) {

@@ -22,6 +22,7 @@ type PRTracker interface {
 	Tracker
 	OpenPRs(ctx context.Context) ([]tracker.PR, error)
 	ClosedNumbers(body string) []int
+	ClosesIssue(key tracker.IssueKey, c tracker.ClosingSource) bool
 	PRView(ctx context.Context, pr int) (tracker.PRInfo, error)
 	PRMerge(ctx context.Context, pr int, o tracker.MergeOpts) (string, error)
 	PRFiles(ctx context.Context, pr int) ([]string, error)
@@ -77,18 +78,14 @@ func (b *Issues) ReviewQueue() ([]QueueEntry, error) {
 	if err != nil {
 		return nil, err
 	}
-	byIssue := map[int][]tracker.PR{}
-	for _, pr := range prs {
-		for _, n := range pt.ClosedNumbers(pr.Body) {
-			byIssue[n] = append(byIssue[n], pr)
-		}
-	}
-	sort.SliceStable(issues, func(i, j int) bool { return issues[i].Num() < issues[j].Num() })
+	sort.SliceStable(issues, func(i, j int) bool { return tracker.CompareKeys(issues[i].Key, issues[j].Key) < 0 })
 	out := make([]QueueEntry, 0, len(issues))
 	for _, is := range issues {
-		linked := byIssue[is.Num()]
-		if linked == nil {
-			linked = []tracker.PR{}
+		linked := []tracker.PR{}
+		for _, pr := range prs {
+			if pt.ClosesIssue(is.Key, tracker.ClosingSource{Body: pr.Body, Title: pr.Title, Branch: pr.Branch}) {
+				linked = append(linked, pr)
+			}
 		}
 		out = append(out, QueueEntry{ID: is.Key.String(), Type: b.Letter(is), Number: is.Num(), Title: is.Title, PRs: linked})
 	}
@@ -296,11 +293,11 @@ func (b *Issues) releaseIssuesOpt(mid string, optional bool) ([]Issue, error) {
 	}
 	var out []Issue
 	for _, is := range all {
-		if (tracking.Num() == 0 || is.Num() != tracking.Num()) && !b.IsMilestoneTracker(is) {
+		if is.Key != tracking.Key && !b.IsMilestoneTracker(is) {
 			out = append(out, is)
 		}
 	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].Num() < out[j].Num() })
+	sort.SliceStable(out, func(i, j int) bool { return tracker.CompareKeys(out[i].Key, out[j].Key) < 0 })
 	return out, nil
 }
 

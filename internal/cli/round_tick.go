@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/tracker"
 	"strings"
 
 	"github.com/l4ci/rota/internal/exitcode"
@@ -173,7 +174,7 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 			return nil, err
 		}
 		for _, o := range res.Overlaps {
-			c.Warn("#%s %s", id, overlapText(o))
+			c.Warn("%s %s", tracker.RefOf(id), overlapText(o))
 		}
 		if len(res.BestOf) == 2 { // a best-of:2 issue took two slots
 			return []string{res.BestOf[0].Agent, res.BestOf[1].Agent}, nil

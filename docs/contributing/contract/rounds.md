@@ -111,13 +111,14 @@ note: the comment is posted before the record is written. If the write then fail
 ### rota round escalate check
 rota round escalate check [<id>...]
 repo: none
-data: {"escalations": [{"id": string, "kind": string, "number": number, "slot"?: string, "title": string, "status": "pending" | "answered" | "timed-out", "sentAt": string, "deadline"?: string, "answer"?: answer}], "pending": number, "answered": number, "timedOut": number, "changed": bool}
+data: {"escalations": [{"id": string, "kind": string, "number"?: number, "key"?: string, "slot"?: string, "title": string, "status": "pending" | "answered" | "timed-out", "sentAt": string, "deadline"?: string, "answer"?: answer}], "pending": number, "answered": number, "timedOut": number, "changed": bool}
 exit: 3 when there is no project root or a named `<id>` is not in the list; 5 when the forge CLI is missing
 old: none (new in C4)
 note: a classifier (rule 7): exit 0 whatever the statuses. With no `<id>`, reports every entry whose stored status is `pending`; named ids are reported whatever their status. For each pending entry it reads the thread's comments once and applies the answer rule. A found answer is stored (`status: "answered"`, `answer`) under the registry lock, `changed` true; an entry already answered is reported from the registry without a forge call.
 note: a forge failure on one thread is a `warnings` entry and that escalation is reported with its stored status; the rest still run. A deleted escalation comment is a warning too (the thread can no longer be ordered against it), and the entry stays pending.
+note: a row has `number` for a PR or a numbered issue and `key` (`PROJ-123`) instead for a key-based tracker's issue, never both and never `number: 0`. Text lines name the thread as `#<number>` or the key.
 note: answered entries stay in the list as the record of what the human said; nothing in C4 prunes them.
-note: `round status` and `round reconcile` (C4 amendment) list the open escalations, stored `pending` ones with the derived status `pending` or `timed-out`, as `escalationRow`: the row shape `check` reports. They read the registry only and make no forge call, so they never see an answer `check` has not stored. An open escalation is not drift: it adds no finding, leaves `clean` alone and is never repaired. Text mode adds one `escalation <id> <status> <kind> #<number> <title>` line each.
+note: `round status` and `round reconcile` (C4 amendment) list the open escalations, stored `pending` ones with the derived status `pending` or `timed-out`, as `escalationRow`: the row shape `check` reports. They read the registry only and make no forge call, so they never see an answer `check` has not stored. An open escalation is not drift: it adds no finding, leaves `clean` alone and is never repaired. Text mode adds one `escalation <id> <status> <kind> <#number|key> <title>` line each.
 note: no `ROTA_TEST_*` hooks. Tests inject a fake forge exec and a fake host; the smoke section (84) drives the fake `gh` under `test/fakes` and a fake `herdr`.
 
 ### rota round summary
