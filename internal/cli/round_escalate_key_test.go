@@ -2,15 +2,19 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/backlog/trackertest"
 	"github.com/l4ci/rota/internal/escalation"
 	"github.com/l4ci/rota/internal/gate"
+	"github.com/l4ci/rota/internal/issues"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -240,20 +244,103 @@ func TestIssueRowKeyAndNumber(t *testing.T) {
 	}
 }
 
-// AC-3: `rota issues label|close` read a key, and a tracker that has no such
-// issue answers exit 3, not a usage error.
+// AC-3: `rota issues label|close PROJ-123` reach the tracker with the key, and
+// print the key and a string `issue` field.
 func TestIssuesVerbsTakeAKey(t *testing.T) {
 	dir := escProject(t, ghCfg)
 	deps := useThread(t, &fakeThread{})
-	for _, args := range [][]string{
-		{"issues", "label", "PROJ-123", "--add", "x"},
-		{"issues", "close", "PROJ-123", "--commit", "HEAD"},
-	} {
-		if code, out, errOut := rotaInWith(t, deps, dir, args...); code == 2 {
-			t.Errorf("%v refused the key: %d %s %s", args, code, out, errOut)
-		}
+	fake := &trackertest.Fake{Issues: []tracker.Issue{{Key: "PROJ-123", Title: "Widen", State: "open"}}}
+	deps.IssuesForge = func(context.Context, string, string) (issues.Forge, error) { return authedFake{fake}, nil }
+
+	code, out, errOut := rotaInWith(t, deps, dir, "--json", "issues", "label", "proj-123", "--add", "ready")
+	if code != 0 {
+		t.Fatalf("label: %d %s %s", code, out, errOut)
+	}
+	if d := data(t, out); d["issue"] != "PROJ-123" || d["changed"] != true || d["action"] != "add" {
+		t.Errorf("label data: %v", d)
+	}
+	if !slices.Contains(fake.Issues[0].Labels, "ready") {
+		t.Errorf("labels %v", fake.Issues[0].Labels)
+	}
+	if _, text, _ := rotaInWith(t, deps, dir, "issues", "label", "PROJ-123", "--remove", "ready"); !strings.Contains(text, "remove ready on PROJ-123") || strings.Contains(text, "#PROJ") {
+		t.Errorf("label text: %q", text)
+	}
+
+	code, out, errOut = rotaInWith(t, deps, dir, "--json", "issues", "close", "PROJ-123", "--commit", "HEAD")
+	if code != 0 {
+		t.Fatalf("close: %d %s %s", code, out, errOut)
+	}
+	if d := data(t, out); d["issue"] != "PROJ-123" || d["changed"] != true {
+		t.Errorf("close data: %v", d)
+	}
+	if fake.Issues[0].State != "closed" {
+		t.Errorf("state %q", fake.Issues[0].State)
+	}
+	if _, text, _ := rotaInWith(t, deps, dir, "issues", "close", "PROJ-123", "--commit", "HEAD"); !strings.Contains(text, "PROJ-123 already closed") {
+		t.Errorf("close text: %q", text)
 	}
 	if code, _, _ := rotaInWith(t, deps, dir, "issues", "label", "not a key", "--add", "x"); code != 2 {
 		t.Errorf("garbage: exit %d", code)
+	}
+}
+
+// authedFake is trackertest.Fake with the CheckAuth `issues close` calls.
+type authedFake struct{ *trackertest.Fake }
+
+func (authedFake) CheckAuth(context.Context) error { return nil }
+
+// AC-2 through the verb: `rota worker gate --escalate/--approval` on a slot
+// that holds PROJ-123 and has no PR posts to the key issue's thread, reads the
+// answer back from it, and merges on approval.
+func TestWorkerGateApprovalOnKeyIssueThread(t *testing.T) {
+	dir := workerProject(t, gateConfig(t, `{"test":{"full":["test -f feature.txt"]},"forge":{"provider":"github"},"issues":{"source":"github"}}`, "auto", map[string]any{"mergeApproval": "all"}))
+	rotaInWith(t, testDeps(), dir, "worker", "pool", "init", "--slots", "1", "--base", "main")
+	wt := filepath.Join(dir, ".worktrees", "w1")
+	write(t, filepath.Join(wt, "feature.txt"), "f")
+	gitT(t, wt, "add", "feature.txt")
+	gitT(t, wt, "commit", "-q", "-m", "feature")
+	doc := registryDoc(t, dir)
+	doc["slots"].([]any)[0].(map[string]any)["task"] = "PROJ-123"
+	b, _ := json.Marshal(doc)
+	write(t, filepath.Join(dir, ".rota", "workers.json"), string(b))
+
+	f := newKeyForge("PROJ-123")
+	gh := &fakeThread{}
+	deps := useThread(t, gh)
+	clock := time.Date(2026, 10, 3, 10, 0, 0, 0, time.UTC)
+	useKeyForge(deps, f, &escHost{}, &clock)
+	merged := func() bool { _, err := os.Stat(filepath.Join(dir, "feature.txt")); return err == nil }
+	run := func(args ...string) (int, map[string]any, string) {
+		code, out, errOut := rotaInWith(t, deps, dir, append([]string{"--json", "worker", "gate", "w1", "--base", "main"}, args...)...)
+		return code, data(t, out), errOut
+	}
+
+	code, d, msg := run("--escalate")
+	e, _ := d["escalation"].(map[string]any)
+	if code != 4 || d["blockedBy"] != "manual gate" || e["id"] != "e1" || e["kind"] != "issue" || e["key"] != "PROJ-123" || e["slot"] != "w1" {
+		t.Fatalf("escalate: %d %v %s", code, d, msg)
+	}
+	if _, has := e["number"]; has {
+		t.Errorf("a key issue has no number: %v", e)
+	}
+	if len(f.posted) != 1 || f.posted[0] != "PROJ-123" || len(gh.calls) != 0 && posts(gh) != 0 {
+		t.Fatalf("posted on %v, gh calls %v", f.posted, gh.calls)
+	}
+	if code, d, _ := run("--escalate"); code != 4 || len(f.posted) != 1 || d["escalation"].(map[string]any)["id"] != "e1" {
+		t.Fatalf("re-gate: %d %v posted %v", code, d, f.posted)
+	}
+	code, d, _ = run("--approval", "e1")
+	if code != 4 || d["blockedBy"] != "approval pending" || d["escalation"] != "e1" || merged() {
+		t.Fatalf("pending: %d %v", code, d)
+	}
+	f.threads["PROJ-123"] = append(f.threads["PROJ-123"], tracker.Comment{ID: "9", Author: "maint", Body: "LGTM, ship"})
+	if code, out, errOut := rotaInWith(t, deps, dir, "round", "escalate", "check", "e1"); code != 0 {
+		t.Fatalf("check: %d %s %s", code, out, errOut)
+	}
+	if code, d, msg := run("--approval", "e1"); code != 0 || !merged() {
+		t.Fatalf("approved: %d %v %s", code, d, msg)
+	}
+	if a := gateAudit(t, dir); len(a) != 1 || a[0]["escalation"] != "e1" {
+		t.Fatalf("audit %v", a)
 	}
 }

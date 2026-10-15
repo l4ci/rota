@@ -43,6 +43,11 @@ func (f *rrFake) OpenPRs(context.Context) ([]tracker.PR, error) {
 	return slices.Clone(f.PRs), nil
 }
 
+func (f *rrFake) ClosesIssue(key tracker.IssueKey, c tracker.ClosingSource) bool {
+	n, ok := key.Number()
+	return ok && slices.Contains(f.ClosedNumbers(c.Body), n)
+}
+
 func (f *rrFake) ClosedNumbers(body string) []int {
 	var out []int
 	for _, m := range rrClosing.FindAllStringSubmatch(body, -1) {

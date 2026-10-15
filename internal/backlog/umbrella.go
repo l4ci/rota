@@ -138,7 +138,7 @@ func (u *Umbrella) Rows() ([]Row, error) { return issueRows(u, true) }
 
 type closedEntry struct {
 	closedAt string
-	number   int
+	key      tracker.IssueKey
 	item     Item
 	line     string
 }
@@ -154,7 +154,7 @@ func (u *Umbrella) closed() ([]closedEntry, error) {
 		}
 		for _, is := range closed {
 			it := s.item(is)
-			out = append(out, closedEntry{is.ClosedAt, is.Num(), u.qualify(name, *it), it.Line})
+			out = append(out, closedEntry{is.ClosedAt, is.Key, u.qualify(name, *it), it.Line})
 		}
 		return nil
 	})
@@ -165,7 +165,7 @@ func (u *Umbrella) closed() ([]closedEntry, error) {
 		if out[i].closedAt != out[j].closedAt {
 			return out[i].closedAt > out[j].closedAt
 		}
-		return out[i].number > out[j].number
+		return tracker.CompareKeys(out[i].key, out[j].key) > 0
 	})
 	return out, nil
 }
@@ -527,7 +527,7 @@ func trackerBefore(a, b Issue) bool {
 	if (a.State == "open") != (b.State == "open") {
 		return a.State == "open"
 	}
-	return a.Num() < b.Num()
+	return tracker.CompareKeys(a.Key, b.Key) < 0
 }
 
 // createSubMilestone is _create_sub_milestone: the first use of mid in sub

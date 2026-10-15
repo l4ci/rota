@@ -689,9 +689,9 @@ func (g *gate) stepBestOf() (bool, error) {
 	if g.pr != "" {
 		what = g.pr
 	}
-	msg := fmt.Sprintf("GATE %s refused — #%s is best-of:2 and no pick names %s; nothing landed", g.o.Slot, rec.Issue, what)
+	msg := fmt.Sprintf("GATE %s refused — %s is best-of:2 and no pick names %s; nothing landed", g.o.Slot, tracker.RefOf(rec.Issue), what)
 	if rec.Pick != "" {
-		msg = fmt.Sprintf("GATE %s refused — #%s is best-of:2 and the pick chose %s; this attempt lost; nothing landed", g.o.Slot, rec.Issue, rec.Pick)
+		msg = fmt.Sprintf("GATE %s refused — %s is best-of:2 and the pick chose %s; this attempt lost; nothing landed", g.o.Slot, tracker.RefOf(rec.Issue), rec.Pick)
 	}
 	g.verdict(GateBestOfUnpicked, msg, fmt.Sprintf("compare both attempts and run `rota round pick %s --pr <N> --reason-file <f>`", rec.Issue))
 	return true, nil

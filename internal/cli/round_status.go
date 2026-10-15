@@ -173,7 +173,7 @@ func roundStatus(*flag.FlagSet) RunFunc {
 			lines = append(lines, strings.Join(cols, "\t"))
 		}
 		for _, q := range rep.Queued {
-			lines = append(lines, fmt.Sprintf("review\t#%s\t%s\t%s\tfrom %s", q.Issue, dash(q.PR), dash(q.Branch), dash(q.From)))
+			lines = append(lines, fmt.Sprintf("review\t%s\t%s\t%s\tfrom %s", tracker.RefOf(q.Issue), dash(q.PR), dash(q.Branch), dash(q.From)))
 		}
 		for _, l := range escLines {
 			lines = append(lines, "escalation\t"+l)

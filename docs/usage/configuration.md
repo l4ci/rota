@@ -444,7 +444,7 @@ Settings for the orchestrator handoff (`rota hook stop`, `rota hook session-star
 | `orchestrator.harness` | `claude` | The agent `rota orchestrate` starts as the orchestrator: `claude`, `codex`, `hermes` or `opencode`. It runs under `rota keepalive run` with the orchestrate skill as its first prompt. See [parallel rounds](parallel-rounds.md#-your-first-round) and [orchestrator harnesses](orchestrator-harnesses.md). |
 | `orchestrator.switchOnUsage` | `false` | Opt in to moving the orchestrator to another account before a usage limit: the Stop hook then also blocks for a handoff at `usageThreshold`, and `rota keepalive run` restarts under another account (boolean). See [unattended rounds](unattended-rounds.md). |
 | `orchestrator.usageThreshold` | `90` | Percent (integer, 1 to 100) of the 5-hour or weekly window at which the Stop hook asks for that handoff. Read only when `switchOnUsage` is `true`. |
-| `orchestrator.escalateIssue` | `0` | Issue number the breaker's escalation comment goes on (integer, 0 or more). `0` is unset: the breaker raises a host notification and a warning only. |
+| `orchestrator.escalateIssue` | `0` | Issue number, or a key like `PROJ-123` on a key-based tracker, the breaker's escalation comment goes on (integer or string). `0` or empty is unset: the breaker raises a host notification and a warning only. |
 
 An out-of-range value exits 70 in a verb that reads it (`rota keepalive run` included); the hooks treat it as a pass and never block.
 

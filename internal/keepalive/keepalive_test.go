@@ -3,6 +3,7 @@ package keepalive
 import (
 	"context"
 	"errors"
+	"github.com/l4ci/rota/internal/tracker"
 	"os"
 	"path/filepath"
 	"strings"
@@ -107,7 +108,7 @@ func (r *rig) env(signals <-chan os.Signal) Env {
 			}
 			return &fakeChild{r: r, exit: ex}, nil
 		},
-		Escalate: func(issue int, title, body string) (string, []string, error) {
+		Escalate: func(issue tracker.IssueKey, title, body string) (string, []string, error) {
 			r.escalate = append(r.escalate, title+"\n"+body)
 			return "e1", nil, nil
 		},
@@ -118,7 +119,7 @@ func (r *rig) env(signals <-chan os.Signal) Env {
 func (r *rig) opts() Options {
 	return Options{Command: []string{"claude", "--x"}, Root: r.dir, CommonDir: r.dir,
 		HandoffPath: filepath.Join(r.dir, ".rota", "handoff", "main.md"), HandoffMaxAge: 900 * time.Second,
-		MaxRestarts: 10, Breaker: 3, Backoff: 5 * time.Second, Prompt: "go on", EscalateIssue: 7}
+		MaxRestarts: 10, Breaker: 3, Backoff: 5 * time.Second, Prompt: "go on", EscalateIssue: "7"}
 }
 
 func (r *rig) state() State {
@@ -282,7 +283,7 @@ func TestBreakerWithoutEscalateIssueOnlyNotifiesAndWarns(t *testing.T) {
 	r := newRig(t)
 	r.write("same")
 	o := r.opts()
-	o.EscalateIssue = 0
+	o.EscalateIssue = ""
 	res, err := Run(r.env(nil), o)
 	if err != nil || res.StopReason != StopBreaker || res.Escalation != "" || len(r.escalate) != 0 {
 		t.Fatalf("%v %+v", err, res)
@@ -299,7 +300,7 @@ func TestEscalationFailureIsAWarningAndTheStopStands(t *testing.T) {
 	r := newRig(t)
 	r.write("same")
 	env := r.env(nil)
-	env.Escalate = func(int, string, string) (string, []string, error) {
+	env.Escalate = func(tracker.IssueKey, string, string) (string, []string, error) {
 		return "", nil, errors.New("escalation e1 is still pending on issue #7")
 	}
 	res, err := Run(env, r.opts())
@@ -451,10 +452,10 @@ func TestLoadSettingsDefaultsAndRanges(t *testing.T) {
 		return LoadSettings(config.Load(p))
 	}
 	s, err := load("")
-	if err != nil || s.MaxRestarts != 10 || s.Breaker != 3 || s.Backoff != 5*time.Second || s.Prompt != DefaultPrompt || s.EscalateIssue != 0 || s.HandoffMaxAge != 900*time.Second {
+	if err != nil || s.MaxRestarts != 10 || s.Breaker != 3 || s.Backoff != 5*time.Second || s.Prompt != DefaultPrompt || s.EscalateIssue != "" || s.HandoffMaxAge != 900*time.Second {
 		t.Fatalf("defaults: %v %+v", err, s)
 	}
-	if s, err := load(`{"orchestrator":{"keepaliveMaxRestarts":0,"keepaliveBackoffSeconds":0,"escalateIssue":12,"restartPrompt":"go"}}`); err != nil || s.MaxRestarts != 0 || s.Backoff != 0 || s.EscalateIssue != 12 || s.Prompt != "go" {
+	if s, err := load(`{"orchestrator":{"keepaliveMaxRestarts":0,"keepaliveBackoffSeconds":0,"escalateIssue":12,"restartPrompt":"go"}}`); err != nil || s.MaxRestarts != 0 || s.Backoff != 0 || s.EscalateIssue != "12" || s.Prompt != "go" {
 		t.Fatalf("explicit: %v %+v", err, s)
 	}
 	for _, bad := range []string{

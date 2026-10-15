@@ -57,7 +57,7 @@ func issuesScope(c *Ctx) (root, dir string, env issues.Env, err error) {
 			}
 		}
 	}
-	env = issues.Env{Config: config.Load(rotatree.Config(root)), Opts: c.deps().TrackerOptions}
+	env = issues.Env{Config: config.Load(rotatree.Config(root)), Opts: c.deps().TrackerOptions, Forge: c.deps().IssuesForge}
 	return
 }
 
@@ -173,7 +173,7 @@ func issuesImported(fs *flag.FlagSet) RunFunc {
 		entries := backlog.ScanImported(root, *forRepo)
 		if *openOnly {
 			ctx := c.Context()
-			env := issues.Env{Config: config.Load(rotatree.Config(root)), Opts: c.deps().TrackerOptions}
+			env := issues.Env{Config: config.Load(rotatree.Config(root)), Opts: c.deps().TrackerOptions, Forge: c.deps().IssuesForge}
 			paths := repos.Paths(root)
 			var kept []backlog.Imported
 			for _, e := range entries {

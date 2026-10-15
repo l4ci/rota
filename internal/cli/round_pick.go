@@ -3,6 +3,7 @@ package cli
 import (
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/tracker"
 
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/round"
@@ -45,9 +46,9 @@ func roundPick(fs *flag.FlagSet) RunFunc {
 		for _, w := range res.Warnings {
 			c.Warn("%s", w)
 		}
-		out := fmt.Sprintf("#%s was already picked: %s (%s)", res.ID, res.Winner.PR, res.Winner.Slot)
+		out := fmt.Sprintf("%s was already picked: %s (%s)", tracker.RefOf(res.ID), res.Winner.PR, res.Winner.Slot)
 		if res.Changed {
-			out = fmt.Sprintf("picked %s (%s) for #%s", res.Winner.PR, res.Winner.Slot, res.ID)
+			out = fmt.Sprintf("picked %s (%s) for %s", res.Winner.PR, res.Winner.Slot, tracker.RefOf(res.ID))
 			switch {
 			case res.Closed:
 				out += fmt.Sprintf("; closed %s (%s)", res.Loser.PR, res.Loser.Slot)

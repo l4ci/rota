@@ -58,7 +58,7 @@ func (e Env) ReportSlot(ctx context.Context, root string, o ReportOpts) (Reporte
 		}
 		refs, ok := worker.ParseIssuesDone("issues:" + iss)
 		if !ok {
-			return res, usage("--issues must be issue numbers like #139,#140, got %q", o.Issues)
+			return res, usage("--issues must be issue numbers or keys like #139,PROJ-140, got %q", o.Issues)
 		}
 		res.Issues = refs
 	}

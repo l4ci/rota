@@ -87,20 +87,21 @@ func (i Issue) Num() int {
 	return n
 }
 
-// SortKeys orders keys for display: numbered issues by number, then the rest
-// by spelling.
-func SortKeys(keys []IssueKey) {
-	slices.SortFunc(keys, func(a, b IssueKey) int {
-		na, oka := a.Number()
-		nb, okb := b.Number()
-		switch {
-		case oka && okb:
-			return na - nb
-		case oka:
-			return -1
-		case okb:
-			return 1
-		}
-		return strings.Compare(string(a), string(b))
-	})
+// CompareKeys orders keys for display: numbered issues by number, then the
+// rest by spelling.
+func CompareKeys(a, b IssueKey) int {
+	na, oka := a.Number()
+	nb, okb := b.Number()
+	switch {
+	case oka && okb:
+		return na - nb
+	case oka:
+		return -1
+	case okb:
+		return 1
+	}
+	return strings.Compare(string(a), string(b))
 }
+
+// SortKeys sorts keys by CompareKeys.
+func SortKeys(keys []IssueKey) { slices.SortFunc(keys, CompareKeys) }
