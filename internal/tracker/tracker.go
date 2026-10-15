@@ -321,6 +321,15 @@ type ClaimStore interface {
 	DropClaim(ctx context.Context, key IssueKey, id string) error
 }
 
+// MergeCloser is an issue tracker a merged PR does not close by itself
+// (Jira): whoever merges the PR closes the issue it names, as GitHub and
+// GitLab do on a closing keyword.
+type MergeCloser interface {
+	// CloseAfterMerge closes key as completed, naming the merged PR; an issue
+	// already closed is left alone.
+	CloseAfterMerge(ctx context.Context, key IssueKey, pr string) error
+}
+
 // ClosingSource is the text of a PR that can name the issues it closes.
 type ClosingSource struct {
 	Body   string
