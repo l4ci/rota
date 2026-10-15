@@ -2,6 +2,7 @@ package tracker
 
 import (
 	"context"
+	"encoding/json"
 	"slices"
 	"strings"
 	"testing"
@@ -22,7 +23,7 @@ const (
 func fakeLinear(t *testing.T, o lineartest.Options) (*Linear, *lineartest.Server) {
 	t.Helper()
 	s := lineartest.New(t, o)
-	return linearAt(s, linearKey, s.Team()), s
+	return linearAt(s, linearKey, "ENG"), s
 }
 
 func linearAt(s *lineartest.Server, key, team string) *Linear {
@@ -38,6 +39,29 @@ func linearCreate(t *testing.T, l *Linear, title, body string, labels ...string)
 		t.Fatalf("Create %q: %v", title, err)
 	}
 	return k
+}
+
+// shape asserts the latest document sent for op names each part (whitespace
+// collapsed), since the fake does not parse selection sets, and returns the
+// variables it was sent with.
+func shape(t *testing.T, s *lineartest.Server, op string, parts ...string) map[string]any {
+	t.Helper()
+	doc, vars := s.Last(op)
+	if doc == "" {
+		t.Fatalf("%s was never sent", op)
+	}
+	for _, p := range parts {
+		if !strings.Contains(doc, p) {
+			t.Errorf("%s does not send %q:\n%s", op, p, doc)
+		}
+	}
+	return vars
+}
+
+// input is the input variable of a mutation.
+func input(vars map[string]any) map[string]any {
+	in, _ := vars["input"].(map[string]any)
+	return in
 }
 
 // since is the operations the fake saw after the first n requests.
@@ -160,12 +184,22 @@ func TestLinearMarkerComments(t *testing.T) {
 	if is, _ := l.Get(ctx, k, true); len(is.Comments) != 3 || is.Comments[0].Body != proof {
 		t.Fatalf("Get with comments = %+v", is.Comments)
 	}
+	shape(t, s, "Issue", "query Issue($id: String!)", "issue(id: $id) {", "identifier title description url",
+		"state { type }", "attachments(first: 50) { nodes { id url metadata } pageInfo { hasNextPage endCursor } }")
+	shape(t, s, "Comments", "query Comments($id: String!, $after: String)",
+		"comments(first: 50, after: $after) { nodes { id body createdAt user { id name displayName } } pageInfo { hasNextPage endCursor } }")
+	shape(t, s, "Attachments", "attachments(first: 50, after: $after) { nodes { id url metadata }")
 
 	if err := l.EditComment(ctx, k, pid, "<!-- rota:proof -->\nchanged"); err != nil {
 		t.Fatal(err)
 	}
 	if got := s.Attachments(string(k))[commentURLPf+pid]; got != "<!-- rota:proof -->\nchanged" {
 		t.Fatalf("edited attachment = %q", got)
+	}
+	// the upsert names the comment's URL again, so Linear replaces it
+	in := input(shape(t, s, "AttachmentCreate", "mutation AttachmentCreate($input: AttachmentCreateInput!)", "attachmentCreate(input: $input) { success }"))
+	if md, _ := in["metadata"].(map[string]any); in["url"] != commentURLPf+pid || md["body"] != "<!-- rota:proof -->\nchanged" || in["issueId"] == "" {
+		t.Errorf("attachment upsert input = %v", in)
 	}
 	if err := l.EditComment(ctx, k, pid, "no markers now"); err != nil {
 		t.Fatal(err)
@@ -229,6 +263,15 @@ func TestLinearList(t *testing.T) {
 			t.Errorf("%s: List = %v, %v; want %v", c.name, ks, err, c.want)
 		}
 	}
+	if _, err := l.List(ctx, ListFilter{Labels: []string{"a"}}); err != nil {
+		t.Fatal(err)
+	}
+	vars := shape(t, s, "Issues", "query Issues($filter: IssueFilter, $after: String)", "issues(filter: $filter, first: 50, after: $after) {",
+		"identifier", "state { type }", "labels(first: 50) { nodes { name } }", "attachments(first: 50)", "pageInfo { hasNextPage endCursor } } }")
+	want := `{"and":[{"labels":{"some":{"name":{"eqIgnoreCase":"a"}}}}],"state":{"type":{"nin":["completed","canceled"]}},"team":{"key":{"eq":"ENG"}}}`
+	if got, _ := json.Marshal(vars["filter"]); string(got) != want {
+		t.Errorf("filter = %s\nwant     %s", got, want)
+	}
 	n := len(s.Requests())
 	if _, err := l.List(ctx, ListFilter{State: "all"}); err != nil || strings.Count(strings.Join(since(s, n), " "), "Issues") < 6 {
 		t.Fatalf("11 issues at 2 a page took requests %v", since(s, n))
@@ -242,12 +285,17 @@ func TestLinearStatus(t *testing.T) {
 	ctx := context.Background()
 	l, s := fakeLinear(t, lineartest.Options{})
 	k := linearCreate(t, l, "t", "")
-	if s.StateType(string(k)) != "unstarted" || s.StateName(string(k)) != "Todo" {
-		t.Fatalf("new issue is %s/%s", s.StateType(string(k)), s.StateName(string(k)))
+	if s.StateType(string(k)) != "unstarted" {
+		t.Fatalf("new issue is %s", s.StateType(string(k)))
 	}
-	for _, c := range []struct{ reason, state, typ string }{{"completed", "completed", "completed"}, {"not_planned", "canceled", "not_planned"}} {
+	// the fake's states by position: Todo state-2 (unstarted), Done state-4
+	// (completed), Canceled state-5 before Duplicate state-6 (canceled)
+	for _, c := range []struct{ reason, state, typ, id string }{{"completed", "completed", "completed", "state-4"}, {"not_planned", "canceled", "not_planned", "state-5"}} {
 		if err := l.Close(ctx, k, c.reason, "closing note"); err != nil {
 			t.Fatal(err)
+		}
+		if in := input(shape(t, s, "IssueUpdate", "mutation IssueUpdate($id: String!, $input: IssueUpdateInput!)", "issueUpdate(id: $id, input: $input) { success }")); len(in) != 1 || in["stateId"] != c.id {
+			t.Errorf("Close %s sent input %v, want only stateId %s", c.reason, in, c.id)
 		}
 		is, _ := l.Get(ctx, k, false)
 		if s.StateType(string(k)) != c.state || is.State != "closed" || is.StateReason != c.typ || is.ClosedAt == "" {
@@ -256,10 +304,14 @@ func TestLinearStatus(t *testing.T) {
 		if err := l.Reopen(ctx, k); err != nil {
 			t.Fatal(err)
 		}
+		if in := input(shape(t, s, "IssueUpdate")); in["stateId"] != "state-2" {
+			t.Errorf("Reopen sent input %v, want stateId state-2", in)
+		}
 		if is, _ = l.Get(ctx, k, false); is.State != "open" || is.ClosedAt != "" || s.StateType(string(k)) != "unstarted" {
 			t.Fatalf("Reopen: %+v", is)
 		}
 	}
+	shape(t, s, "Team", "query Team($key: String!)", "teams(filter: {key: {eq: $key}}) { nodes { id key states(first: 250) { nodes { id type position } } } }")
 	if got := s.CommentBodies(string(k)); len(got) != 2 || got[0] != "closing note" {
 		t.Fatalf("closing comments = %v", got)
 	}
@@ -329,13 +381,23 @@ func TestLinearErrors(t *testing.T) {
 		}
 	}
 
+	// a read goes through REST.Query: the 502 is retried and the same
+	// operation is sent again
 	s.FailNext(1, 502)
+	n := len(s.Requests())
 	if _, err := l.Get(ctx, k, false); err != nil {
 		t.Errorf("a query is retried after a 502: %v", err)
 	}
+	if got := since(s, n); !slices.Equal(got, []string{"Issue", "Issue"}) {
+		t.Errorf("a failed read sent %v, want Issue twice", got)
+	}
 	s.FailNext(1, 502)
+	n = len(s.Requests())
 	if _, err := l.AddComment(ctx, k, "once"); err == nil {
 		t.Error("a mutation was retried or hid its 502")
+	}
+	if got := since(s, n); !slices.Equal(got, []string{"CommentCreate"}) {
+		t.Errorf("a failed mutation sent %v, want CommentCreate once", got)
 	}
 	if got := s.CommentBodies(string(k)); len(got) != 0 {
 		t.Errorf("comments after a failed AddComment: %v", got)

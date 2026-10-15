@@ -78,6 +78,7 @@ type Server struct {
 	nextNum int
 	clock   time.Time
 	reqs    []string
+	last    map[string]sent
 	nextAt  time.Time // SetNextCommentTime
 	nextN   int
 	limitN  int
@@ -102,7 +103,7 @@ func New(t testing.TB, o Options) *Server {
 	if o.PageSize == 0 {
 		o.PageSize = 50
 	}
-	s := &Server{t: t, o: o, users: map[string]user{me.id: me}, clock: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
+	s := &Server{t: t, o: o, users: map[string]user{me.id: me}, last: map[string]sent{}, clock: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
 	for i, st := range [][2]string{{"Triage", "triage"}, {"Backlog", "backlog"}, {"Todo", "unstarted"}, {"In Progress", "started"},
 		{"Done", "completed"}, {"Canceled", "canceled"}, {"Duplicate", "canceled"}} {
 		s.states = append(s.states, &state{"state-" + strconv.Itoa(i), st[0], st[1], i})
@@ -111,9 +112,6 @@ func New(t testing.TB, o Options) *Server {
 	t.Cleanup(s.Close)
 	return s
 }
-
-// Team is the team key the fake serves.
-func (s *Server) Team() string { return s.o.Team }
 
 func (s *Server) teamID() string { return "team-" + strings.ToLower(s.o.Team) }
 
@@ -145,6 +143,21 @@ func (s *Server) SetNextCommentTime(t time.Time, n int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.nextAt, s.nextN = t, n
+}
+
+type sent struct {
+	doc  string
+	vars obj
+}
+
+// Last is the document and variables of the latest request for op, the
+// document with its whitespace collapsed to single spaces, so a test can
+// assert the query shape the fake does not parse; "" if op was never sent.
+func (s *Server) Last(op string) (string, map[string]any) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	l := s.last[op]
+	return strings.Join(strings.Fields(l.doc), " "), l.vars
 }
 
 // Requests is the operationName of every request, in order.
@@ -188,11 +201,6 @@ func (s *Server) read(key string, f func(*issue)) {
 
 func (s *Server) StateType(key string) (v string) {
 	s.read(key, func(i *issue) { v = i.state.typ })
-	return
-}
-
-func (s *Server) StateName(key string) (v string) {
-	s.read(key, func(i *issue) { v = i.state.name })
 	return
 }
 
@@ -441,6 +449,7 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.reqs = append(s.reqs, req.Op)
+	s.last[req.Op] = sent{req.Query, req.Vars}
 	switch {
 	case s.failN > 0:
 		s.failN--

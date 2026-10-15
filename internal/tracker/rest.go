@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/l4ci/rota/internal/strutil"
 )
@@ -62,9 +64,43 @@ func (r *REST) Do(ctx context.Context, method, path string, in, out any) error {
 }
 
 // Query is Do for a POST that only reads (a GraphQL query): repeating it
-// changes nothing, so a 5xx is retried as for a GET.
+// changes nothing, so a 5xx is retried as for a GET. A GraphQL document whose
+// operation is a mutation is refused unsent: a write must go through Do,
+// which never resends a POST.
 func (r *REST) Query(ctx context.Context, path string, in, out any) error {
+	if mutation(in) {
+		return internal("POST %s: a GraphQL mutation sent as a read-only query (use Do)", path)
+	}
 	return r.do(ctx, http.MethodPost, path, in, out, true)
+}
+
+// mutation reports whether in is a GraphQL request whose document starts,
+// after blanks and # comments, with the mutation keyword.
+func mutation(in any) bool {
+	b, err := json.Marshal(in)
+	if err != nil {
+		return false
+	}
+	var req struct {
+		Query string `json:"query"`
+	}
+	if json.Unmarshal(b, &req) != nil {
+		return false
+	}
+	doc := req.Query
+	for {
+		doc = strings.TrimLeft(doc, " \t\r\n,\ufeff")
+		if !strings.HasPrefix(doc, "#") {
+			break
+		}
+		_, doc, _ = strings.Cut(doc, "\n")
+	}
+	rest, ok := strings.CutPrefix(doc, "mutation")
+	if !ok {
+		return false
+	}
+	r, _ := utf8.DecodeRuneInString(rest)
+	return rest == "" || !(r == '_' || unicode.IsLetter(r) || unicode.IsDigit(r))
 }
 
 func (r *REST) do(ctx context.Context, method, path string, in, out any, idem bool) error {
