@@ -172,6 +172,9 @@ var Keys = []Key{
 	k("work.itemTimeoutMinutes", num("0"), false, TypeInt, "Minutes one item may run from its first assignment before rota round reconcile reports it as timed out and --apply parks it as needs-human. 0 means no cap."),
 	k("test.isolate", true, false, TypeBool, "Whether rota test run scrubs HERDR_*, TMUX*, ssh-agent variables and pins HOME and XDG_* to a temp root. The merge gate and train do not read it."),
 	k("release.versionFile", "", false, TypePath, "Project-relative file /rota-release and rota release version read and bump. Empty auto-detects; a path outside the project is refused."),
+	k("issues.connection", "", false, TypeString, "Name of the machine-wide tracker connection the issues backend uses for Jira or Linear, added with rota connect add. Holds a name only, never a secret. A teammate whose connection has another name overrides it in config.local.json."),
+	k("issues.jira.project", "", false, TypeString, "Jira project key, such as ROTA, that issues.connection reads from and writes to."),
+	k("issues.linear.team", "", false, TypeString, "Linear team key, such as ROT, that issues.connection reads from and writes to."),
 }
 
 func init() {
