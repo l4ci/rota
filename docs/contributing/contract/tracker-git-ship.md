@@ -172,6 +172,14 @@ note: unproven items still move to `changes-requested` on exit 4; the failure `d
 note: an unproven item was old exit 5 and is now 4, the table's "proof is missing".
 note: in umbrella issue mode the verb acts on scope S (`--repo`, else the sub-repo the working directory is in; the umbrella root without `--repo` is exit 2), and an `--items` reference that belongs to another sub-repo is exit 2 (`usage`); the shim maps the old message to 5.
 
+### rota ship strategy
+rota ship strategy
+repo: scoped
+data: {"strategy": "direct"|"pr"|"unset", "forge": string, "reason": string}; failure data on exit 3: {"strategy": "", "forge": string, "changed": false}
+exit: 2 when an argument is given; 3 when issues live on a tracker (`issues.source` is not `file`) but the forge is local, so no PR can close them (set `forge.provider` or an origin remote); 70 when `issues.source` or `forge.provider` holds an invalid value
+note: how a finished branch lands. `/rota-ship` and `/rota-work` read it instead of `work.mergeStrategy` alone. Issues on a tracker give `pr`; a local forge (`forge.provider: local`, or `auto` with no origin remote) gives `direct` whatever `work.mergeStrategy` says; otherwise `work.mergeStrategy`, or `unset` when it is not set.
+note: an origin that names no known forge leaves `forge` as `unknown` and the configured strategy stands.
+
 ### rota ship undo
 rota ship undo [--cycle <hash>] [--allow-post-merge] [--apply]
 repo: scoped

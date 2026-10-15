@@ -22,7 +22,7 @@ Turn on umbrella mode when you maintain a handful of related repositories (say `
 | `.rota/` location | Repo root | Umbrella root (one level up from sub-repos) |
 | Where `rota` runs git ops | The repo | The sub-repo for the current item (resolved via `Repos:` tag or `--repo` flag) |
 | Worktree path | `<repo>/.claude/worktrees/<branch>` | `<umbrella>/.claude/worktrees/<repo>/<branch>` (Layout B) |
-| `BACKLOG.md`, `ARCHIVE.md`, `DECISIONS.md`, `MILESTONES.md` | Per-repo | Shared at the umbrella. With `issues.source` set to `github` or `gitlab` there is no `BACKLOG.md`: each sub-repo's items live on that sub-repo's own tracker ([issue backend](issue-backend.md)) |
+| `BACKLOG.md`, `ARCHIVE.md`, `DECISIONS.md`, `MILESTONES.md` | Per-repo | Shared at the umbrella. With `issues.source` set to `github` or `gitlab` there is no `BACKLOG.md`: each sub-repo's items live on that sub-repo's own tracker ([issue backend](issue-backend.md)). When the sub-repos sit on different forges (some on GitHub, some on GitLab), set `issues.source: forge`: each sub-repo's issues then live on its own forge. `rota migrate source` picks it for such an umbrella |
 | `KNOWLEDGE.md` (+ Glossary, tier sidecar) | Per-repo | Hybrid: umbrella `.rota/KNOWLEDGE.md` for cross-repo learnings/terms **plus** per-sub-repo `.rota/knowledge/<name>/KNOWLEDGE.md` for repo-local ones |
 | `status.json` entries | Keyed by `branch` | Keyed by `(branch, repo)` |
 | `.rota/handoff/<branch>.md` | One per branch | `.rota/handoff/<branch>@<repo>.md` (one per branch+repo) |
