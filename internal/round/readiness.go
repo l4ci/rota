@@ -68,7 +68,10 @@ var (
 	foreignRefRe = regexp.MustCompile(`https?://\S+|[\w.-]+/[\w.-]+#\d+`)
 	issueRefRe   = regexp.MustCompile(`#(\d+)`)
 	keyRefRe     = regexp.MustCompile(`\b([A-Z][A-Z0-9_]*-\d+)\b`) // a key-based tracker's PROJ-123
-	itemRefRe    = regexp.MustCompile(`\b(` + backlog.IDPattern(backlog.FileIDDigits) + `)\b`)
+	// listKeyRe is a key heading a list item (`- OTHER-7`): a dependency, even
+	// of another project, where a key-shaped word inside a sentence is prose.
+	listKeyRe = regexp.MustCompile(`^\s*(?:[-*+]|\d+[.)])\s+([A-Za-z][A-Za-z0-9_]*-\d+)\b`)
+	itemRefRe = regexp.MustCompile(`\b(` + backlog.IDPattern(backlog.FileIDDigits) + `)\b`)
 )
 
 // keyMatches is the PROJ-123 refs of project on line; none when project is "".
@@ -79,21 +82,11 @@ func keyMatches(line, project string) [][]string {
 	}
 	var out [][]string
 	for _, m := range keyRefRe.FindAllStringSubmatch(line, -1) {
-		if p, _, _ := strings.Cut(m[1], "-"); p == project {
+		if tracker.IssueKey(m[1]).Project() == project {
 			out = append(out, m)
 		}
 	}
 	return out
-}
-
-// keyProject is the project of a key-based tracker's key (PROJ of PROJ-123,
-// which is issues.jira.project on Jira); "" for a numbered or file item.
-func keyProject(k tracker.IssueKey) string {
-	if _, numbered := k.Number(); k == "" || numbered {
-		return ""
-	}
-	p, _, _ := strings.Cut(string(k), "-")
-	return p
 }
 
 // Dependencies parses the `## Depends on` section into item references (in
@@ -103,7 +96,8 @@ func Dependencies(text string) (refs, unverifiable []string) {
 }
 
 // dependencies is Dependencies; a project key also reads a key-based
-// tracker's refs of that project (PROJ-123). Prose like UTF-8 is not a ref.
+// tracker's refs of that project (PROJ-123). A list item headed by another
+// project's key is unverifiable; such a word inside a sentence (UTF-8) is prose.
 func dependencies(text, project string) (refs, unverifiable []string) {
 	sec, ok := itembody.Section(text, itembody.DependsHeadRe)
 	if !ok {
@@ -115,6 +109,11 @@ func dependencies(text, project string) (refs, unverifiable []string) {
 			unverifiable = append(unverifiable, strings.TrimRight(f, ".,;:)"))
 		}
 		line = foreignRefRe.ReplaceAllString(line, " ")
+		if m := listKeyRe.FindStringSubmatch(line); project != "" && m != nil {
+			if k := tracker.IssueKey(strings.ToUpper(m[1])); k.Project() != project {
+				unverifiable = append(unverifiable, string(k))
+			}
+		}
 		for _, m := range issueRefRe.FindAllStringSubmatch(line, -1) {
 			if !seen[m[1]] {
 				seen[m[1]] = true
@@ -291,11 +290,16 @@ func AssessScoped(be backlog.Backend, id string, tracked, shared []string, inFli
 	r.Checks = append(r.Checks, Check{CheckCriteria, len(reasons) == 0, nonNil(reasons)})
 
 	text := itemText(be, id)
-	refs, unverifiable := dependencies(text, keyProject(self.IssueKey()))
+	project := self.IssueKey().Project()
+	refs, unverifiable := dependencies(text, project)
 	dep := Check{Name: CheckDependencies, OK: true, Detail: []string{}}
 	for _, ref := range unverifiable {
 		dep.OK = false
-		dep.Detail = append(dep.Detail, fmt.Sprintf("cannot verify %s: edit the issue to name the dependency as #N, or drop it from Depends on", ref))
+		as := "#N"
+		if project != "" {
+			as = project + "-N"
+		}
+		dep.Detail = append(dep.Detail, fmt.Sprintf("cannot verify %s: edit the issue to name the dependency as %s, or drop it from Depends on", ref, as))
 	}
 	for _, ref := range refs {
 		it, err := be.Get(ref)
