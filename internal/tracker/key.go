@@ -60,6 +60,16 @@ func (k IssueKey) Ref() string {
 	return string(k)
 }
 
+// RefOf is Ref for an issue id as the registry and reports hold it: `#603`
+// for `603` or `#603`, `PROJ-123` for a key. Text that is no key (an item id
+// like B07) keeps its `#` prefix as before.
+func RefOf(id string) string {
+	if k, ok := ParseKey(id); ok {
+		return k.Ref()
+	}
+	return "#" + strings.TrimPrefix(strings.TrimSpace(id), "#")
+}
+
 // numOf is the issue number a numbered adapter (GitHub, GitLab) sends to its
 // CLI. A key like PROJ-123 is not an issue there: KindNotFound.
 func numOf(k IssueKey) (int, error) {

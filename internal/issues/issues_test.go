@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/backlog/trackertest"
 	"github.com/l4ci/rota/internal/tracker"
 )
 
@@ -96,7 +97,7 @@ func TestLabelGitHub(t *testing.T) {
 	}
 	for _, c := range cases {
 		f := &forge{origin: gh, reply: c.replies}
-		changed, err := Label(ctx, f.env(t), "", 3, c.label, c.add, c.auto)
+		changed, err := Label(ctx, f.env(t), "", tracker.NumKey(3), c.label, c.add, c.auto)
 		if changed != c.wantChanged && err == nil || (err != nil) != c.wantErr {
 			t.Errorf("%s: changed=%v err=%v", c.name, changed, err)
 		}
@@ -116,7 +117,7 @@ func TestLabelGitHub(t *testing.T) {
 func TestLabelGitLab(t *testing.T) {
 	ctx := context.Background()
 	f := &forge{origin: gl, reply: map[string]reply{"issue view": {out: `{"labels": ["have"]}`}}}
-	changed, err := Label(ctx, f.env(t), "", 3, "have", true, true)
+	changed, err := Label(ctx, f.env(t), "", tracker.NumKey(3), "have", true, true)
 	if err != nil || changed {
 		t.Errorf("add present: %v %v", changed, err)
 	}
@@ -125,25 +126,25 @@ func TestLabelGitLab(t *testing.T) {
 		t.Errorf("calls %q", f.calls)
 	}
 	f = &forge{origin: gl, reply: map[string]reply{"issue view": {out: `{"labels": ["have"]}`}}}
-	if changed, err := Label(ctx, f.env(t), "", 3, "have", false, true); err != nil || !changed || !f.did("glab issue update 3 --unlabel have") {
+	if changed, err := Label(ctx, f.env(t), "", tracker.NumKey(3), "have", false, true); err != nil || !changed || !f.did("glab issue update 3 --unlabel have") {
 		t.Errorf("remove: %v %v %q", changed, err, f.calls)
 	}
 	f = &forge{origin: gl}
-	if _, err := Label(ctx, f.env(t), "", 3, "x", true, false); err != nil || f.did("glab label create") {
+	if _, err := Label(ctx, f.env(t), "", tracker.NumKey(3), "x", true, false); err != nil || f.did("glab label create") {
 		t.Errorf("no creation: %v %q", err, f.calls)
 	}
 	// unknown provider
 	f = &forge{}
-	if _, err := Label(ctx, f.env(t), "", 3, "x", true, true); !errors.Is(err, ErrNoProvider) {
+	if _, err := Label(ctx, f.env(t), "", tracker.NumKey(3), "x", true, true); !errors.Is(err, ErrNoProvider) {
 		t.Errorf("unknown provider: %v", err)
 	}
 	// a missing issue is not found, any other forge failure is not
 	f = &forge{origin: gh, reply: map[string]reply{"issue edit": {code: 1, err: "GraphQL: Could not resolve to an Issue with the number of 99."}}}
-	if _, err := Label(ctx, f.env(t), "", 99, "x", false, false); !tracker.IsKind(err, tracker.KindNotFound) {
+	if _, err := Label(ctx, f.env(t), "", tracker.NumKey(99), "x", false, false); !tracker.IsKind(err, tracker.KindNotFound) {
 		t.Errorf("missing issue: %v", err)
 	}
 	f = &forge{origin: gh, reply: map[string]reply{"issue edit": {code: 1, err: "HTTP 500: server error"}}}
-	if _, err := Label(ctx, f.env(t), "", 99, "x", false, false); !tracker.IsKind(err, tracker.KindFailed) {
+	if _, err := Label(ctx, f.env(t), "", tracker.NumKey(99), "x", false, false); !tracker.IsKind(err, tracker.KindFailed) {
 		t.Errorf("forge error: %v", err)
 	}
 }
@@ -210,7 +211,7 @@ func TestCloseGitHub(t *testing.T) {
 	ctx := context.Background()
 	dir, sha := gitProject(t)
 	f := &forge{origin: gh, reply: map[string]reply{"issue view": {out: `{"state": "OPEN"}`}}}
-	changed, err := Close(ctx, f.env(t), dir, 12, "HEAD", "B07")
+	changed, err := Close(ctx, f.env(t), dir, tracker.NumKey(12), "HEAD", "B07")
 	if err != nil || !changed {
 		t.Fatalf("%v %v", changed, err)
 	}
@@ -219,18 +220,18 @@ func TestCloseGitHub(t *testing.T) {
 	}
 	// already closed: no write
 	f = &forge{origin: gh, reply: map[string]reply{"issue view": {out: `{"state": "CLOSED"}`}}}
-	if changed, err := Close(ctx, f.env(t), dir, 12, sha, ""); err != nil || changed || f.did("gh issue close") {
+	if changed, err := Close(ctx, f.env(t), dir, tracker.NumKey(12), sha, ""); err != nil || changed || f.did("gh issue close") {
 		t.Errorf("already closed: %v %v %q", changed, err, f.calls)
 	}
 	// a failed state read still closes; no item leaves no suffix
 	f = &forge{origin: gh, reply: map[string]reply{"issue view": {code: 1, err: "x"}}}
-	if changed, err := Close(ctx, f.env(t), dir, 12, sha, ""); err != nil || !changed || !f.did("gh issue close 12 --reason completed --comment Closed by rota: shipped in "+sha) || f.did("gh issue close 12 --reason completed --comment Closed by rota: shipped in "+sha+" (") {
+	if changed, err := Close(ctx, f.env(t), dir, tracker.NumKey(12), sha, ""); err != nil || !changed || !f.did("gh issue close 12 --reason completed --comment Closed by rota: shipped in "+sha) || f.did("gh issue close 12 --reason completed --comment Closed by rota: shipped in "+sha+" (") {
 		t.Errorf("unreadable state: %v %v %q", changed, err, f.calls)
 	}
 	// a failing close
 	f = &forge{origin: gh, reply: map[string]reply{"issue close": {code: 1, err: "denied"}}}
 	var te *tracker.Error
-	if _, err := Close(ctx, f.env(t), dir, 12, sha, ""); !errors.As(err, &te) || te.Message != "denied" {
+	if _, err := Close(ctx, f.env(t), dir, tracker.NumKey(12), sha, ""); !errors.As(err, &te) || te.Message != "denied" {
 		t.Errorf("failing close: %v", err)
 	}
 }
@@ -239,7 +240,7 @@ func TestCloseGitLab(t *testing.T) {
 	ctx := context.Background()
 	dir, sha := gitProject(t)
 	f := &forge{origin: gl, reply: map[string]reply{"issue view": {out: `{"state": "opened"}`}}}
-	if changed, err := Close(ctx, f.env(t), dir, 3, sha, "F2"); err != nil || !changed {
+	if changed, err := Close(ctx, f.env(t), dir, tracker.NumKey(3), sha, "F2"); err != nil || !changed {
 		t.Fatalf("%v %v", changed, err)
 	}
 	note, closeCall := -1, -1
@@ -255,7 +256,7 @@ func TestCloseGitLab(t *testing.T) {
 		t.Errorf("comment must precede the close: %q", f.calls)
 	}
 	f = &forge{origin: gl, reply: map[string]reply{"issue view": {out: `{"state": "closed"}`}}}
-	if changed, err := Close(ctx, f.env(t), dir, 3, sha, ""); err != nil || changed || f.did("glab issue close") || f.did("glab issue note") {
+	if changed, err := Close(ctx, f.env(t), dir, tracker.NumKey(3), sha, ""); err != nil || changed || f.did("glab issue close") || f.did("glab issue note") {
 		t.Errorf("already closed: %v %v %q", changed, err, f.calls)
 	}
 }
@@ -265,7 +266,7 @@ func TestCloseRefusals(t *testing.T) {
 	dir, sha := gitProject(t)
 	f := &forge{origin: gh}
 	for _, c := range []string{"deadbeef", "-x", "--output=y"} {
-		if _, err := Close(ctx, f.env(t), dir, 1, c, ""); !errors.Is(err, ErrCommitNotFound) {
+		if _, err := Close(ctx, f.env(t), dir, tracker.NumKey(1), c, ""); !errors.Is(err, ErrCommitNotFound) {
 			t.Errorf("commit %q: %v", c, err)
 		}
 	}
@@ -273,15 +274,15 @@ func TestCloseRefusals(t *testing.T) {
 		t.Errorf("a forge call before the commit check: %q", f.calls)
 	}
 	var te *tracker.Error
-	if _, err := Close(ctx, (&forge{}).env(t), dir, 1, sha, ""); !errors.Is(err, ErrNoProvider) {
+	if _, err := Close(ctx, (&forge{}).env(t), dir, tracker.NumKey(1), sha, ""); !errors.Is(err, ErrNoProvider) {
 		t.Errorf("unknown provider: %v", err)
 	}
 	f = &forge{origin: gh, reply: map[string]reply{"issue close": {code: 1, err: "GraphQL: Could not resolve to an Issue with the number of 99."}}}
-	if _, err := Close(ctx, f.env(t), dir, 99, sha, ""); !tracker.IsKind(err, tracker.KindNotFound) {
+	if _, err := Close(ctx, f.env(t), dir, tracker.NumKey(99), sha, ""); !tracker.IsKind(err, tracker.KindNotFound) {
 		t.Errorf("missing issue: %v", err)
 	}
 	f = &forge{origin: gh, reply: map[string]reply{"auth status": {code: 1}}}
-	if _, err := Close(ctx, f.env(t), dir, 1, sha, ""); !errors.As(err, &te) || te.Kind != tracker.KindUnavailable {
+	if _, err := Close(ctx, f.env(t), dir, tracker.NumKey(1), sha, ""); !errors.As(err, &te) || te.Kind != tracker.KindUnavailable {
 		t.Errorf("unauthenticated: %v", err)
 	}
 }
@@ -303,13 +304,62 @@ func TestStillOpen(t *testing.T) {
 	}
 	for _, c := range cases {
 		f := &forge{reply: map[string]reply{"issue view": c.reply}}
-		if got := StillOpen(ctx, f.env(t), c.provider, "", 5); got != c.want {
+		if got := StillOpen(ctx, f.env(t), c.provider, "", tracker.NumKey(5)); got != c.want {
 			t.Errorf("%s %+v: %v", c.provider, c.reply, got)
 		}
 	}
 	// a missing CLI drops the entry
 	env := Env{Opts: []tracker.Option{tracker.WithExec(nil, func(string) (string, error) { return "", exec.ErrNotFound })}}
-	if StillOpen(ctx, env, "github", "", 5) {
+	if StillOpen(ctx, env, "github", "", tracker.NumKey(5)) {
 		t.Error("kept an entry without a CLI")
+	}
+}
+
+// keyForge is a Jira-shaped tracker: the issue is PROJ-123, a number is not an
+// issue there.
+type keyForge struct{ *trackertest.Fake }
+
+func (keyForge) CheckAuth(context.Context) error { return nil }
+
+func keyEnv(t *testing.T) (Env, *keyForge) {
+	t.Helper()
+	k := &keyForge{&trackertest.Fake{Issues: []tracker.Issue{{Key: "PROJ-123", Title: "Widen", State: "open"}}}}
+	env := (&forge{origin: gh}).env(t)
+	env.Forge = func(context.Context, string, string) (Forge, error) { return k, nil }
+	return env, k
+}
+
+// AC-3: label, close and the still-open check take a key.
+func TestKeyIssueLabelCloseStillOpen(t *testing.T) {
+	ctx := context.Background()
+	env, k := keyEnv(t)
+	key := tracker.IssueKey("PROJ-123")
+	if changed, err := Label(ctx, env, "", key, "ready", true, false); err != nil || !changed {
+		t.Fatalf("add: %v %v", changed, err)
+	}
+	if changed, err := Label(ctx, env, "", key, "ready", true, false); err != nil || changed {
+		t.Errorf("a label already there is a no-op: %v %v", changed, err)
+	}
+	if changed, err := Label(ctx, env, "", key, "ready", false, false); err != nil || !changed {
+		t.Errorf("remove: %v %v", changed, err)
+	}
+	if !StillOpen(ctx, env, "github", "", key) {
+		t.Error("PROJ-123 is open")
+	}
+	dir, sha := gitProject(t)
+	if changed, err := Close(ctx, env, dir, key, sha, "PROJ-123"); err != nil || !changed {
+		t.Fatalf("close: %v %v", changed, err)
+	}
+	if k.Issues[0].State != "closed" {
+		t.Errorf("state %q", k.Issues[0].State)
+	}
+	if StillOpen(ctx, env, "github", "", key) {
+		t.Error("PROJ-123 is closed")
+	}
+	if changed, err := Close(ctx, env, dir, key, sha, ""); err != nil || changed {
+		t.Errorf("closing twice: %v %v", changed, err)
+	}
+	if _, err := Label(ctx, env, "", "PROJ-999", "x", true, false); !tracker.IsKind(err, tracker.KindNotFound) {
+		t.Errorf("unknown key: %v", err)
 	}
 }

@@ -29,6 +29,9 @@ type Fake struct {
 	Calls      []Call
 	// Fail maps a Python-style method name to the error it returns.
 	Fail map[string]error
+	// KeyPrefix, when set, makes Create mint key issues (PROJ-1, PROJ-2) the
+	// way a Jira-shaped tracker does, instead of numbered ones.
+	KeyPrefix string
 
 	nextComment int
 }
@@ -120,9 +123,14 @@ func (f *Fake) Create(_ context.Context, title, body string, labels []string, mi
 	for _, is := range f.Issues {
 		n = max(n, is.Num()+1)
 	}
-	f.Issues = append(f.Issues, tracker.Issue{Key: tracker.NumKey(n), Title: title, Body: body, Labels: slices.Clone(labels),
+	key := tracker.NumKey(n)
+	if f.KeyPrefix != "" {
+		n = len(f.Issues) + 1
+		key = tracker.IssueKey(f.KeyPrefix + "-" + strconv.Itoa(n))
+	}
+	f.Issues = append(f.Issues, tracker.Issue{Key: key, Title: title, Body: body, Labels: slices.Clone(labels),
 		Milestone: milestone, State: "open", URL: "https://example.test/issues/" + strconv.Itoa(n)})
-	return tracker.NumKey(n), nil
+	return key, nil
 }
 
 // Edit applies the non-empty fields of e.

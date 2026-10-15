@@ -109,3 +109,11 @@ func TestNumberedAdaptersRefuseAKey(t *testing.T) {
 		}
 	}
 }
+
+func TestRefOf(t *testing.T) {
+	for in, want := range map[string]string{"603": "#603", "#603": "#603", "PROJ-123": "PROJ-123", "proj-123": "PROJ-123", "B07": "#B07", "": "#"} {
+		if got := RefOf(in); got != want {
+			t.Errorf("RefOf(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

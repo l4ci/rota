@@ -85,13 +85,22 @@ func issuesErr(err error) error {
 	return &Error{Exit: ExitInternal, Message: err.Error()}
 }
 
-// issueNumber is an issue number argument.
-func issueNumber(c *Ctx, text string) (int, error) {
-	n, err := strconv.Atoi(text)
-	if err != nil || n < 0 || strings.TrimSpace(text) != text || strings.HasPrefix(text, "+") {
-		return 0, Usage("%s: issue must be a number, got %q", c.Path, text)
+// issueKeyArg is an issue argument: a number, or a key like PROJ-123.
+func issueKeyArg(c *Ctx, text string) (tracker.IssueKey, error) {
+	k, ok := tracker.ParseKey(text)
+	if !ok || strings.TrimSpace(text) != text || strings.HasPrefix(text, "+") {
+		return "", Usage("%s: issue must be a number or a key like PROJ-123, got %q", c.Path, text)
 	}
-	return n, nil
+	return k, nil
+}
+
+// issueJSON is the `issue` field of the verbs' data: the number of a numbered
+// issue, the key text of a key-based one.
+func issueJSON(k tracker.IssueKey) any {
+	if n, ok := k.Number(); ok {
+		return n
+	}
+	return k.String()
 }
 
 // ---- provider ---------------------------------------------------------------
@@ -116,7 +125,7 @@ func issuesLabel(fs *flag.FlagSet) RunFunc {
 	add := fs.String("add", "", "label to add")
 	remove := fs.String("remove", "", "label to remove")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := argCount(c, args, 1, 1, "issues label takes one issue number"); err != nil {
+		if err := argCount(c, args, 1, 1, "issues label takes one issue number or key"); err != nil {
 			return Result{}, err
 		}
 		given := givenFlags(fs)
@@ -130,7 +139,7 @@ func issuesLabel(fs *flag.FlagSet) RunFunc {
 		if name == "" {
 			return Result{}, Usage("%s: --%s needs a label name", c.Path, action)
 		}
-		number, err := issueNumber(c, args[0])
+		key, err := issueKeyArg(c, args[0])
 		if err != nil {
 			return Result{}, err
 		}
@@ -139,12 +148,12 @@ func issuesLabel(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		auto, _ := config.Value(config.Load(rotatree.Config(root)), "issues.autoCreateLabel")
-		changed, err := issues.Label(c.Context(), env, dir, number, name, action == "add", auto != false && auto != nil)
+		changed, err := issues.Label(c.Context(), env, dir, key, name, action == "add", auto != false && auto != nil)
 		if err != nil {
 			return Result{}, issuesErr(err)
 		}
-		return Result{Data: jsonObj("issue", number, "label", name, "action", action, "changed", changed),
-			Text: fmt.Sprintf("%s %s on #%d", action, name, number)}, nil
+		return Result{Data: jsonObj("issue", issueJSON(key), "label", name, "action", action, "changed", changed),
+			Text: fmt.Sprintf("%s %s on %s", action, name, key.Ref())}, nil
 	}
 }
 
@@ -172,7 +181,7 @@ func issuesImported(fs *flag.FlagSet) RunFunc {
 				if p, ok := paths[e.Repo]; ok && e.Repo != "" {
 					dir = p
 				}
-				if issues.StillOpen(ctx, env, e.Provider, dir, e.Issue) {
+				if issues.StillOpen(ctx, env, e.Provider, dir, tracker.NumKey(e.Issue)) {
 					kept = append(kept, e)
 				}
 			}
@@ -199,13 +208,13 @@ func issuesClose(fs *flag.FlagSet) RunFunc {
 	commit := fs.String("commit", "", "the commit that shipped the issue")
 	item := fs.String("item", "", "backlog item ID named in the comment")
 	return func(c *Ctx, args []string) (Result, error) {
-		if err := argCount(c, args, 1, 1, "issues close takes one issue number"); err != nil {
+		if err := argCount(c, args, 1, 1, "issues close takes one issue number or key"); err != nil {
 			return Result{}, err
 		}
 		if *commit == "" {
 			return Result{}, Usage("%s: --commit is required", c.Path)
 		}
-		number, err := issueNumber(c, args[0])
+		key, err := issueKeyArg(c, args[0])
 		if err != nil {
 			return Result{}, err
 		}
@@ -213,15 +222,15 @@ func issuesClose(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		changed, err := issues.Close(c.Context(), env, dir, number, *commit, *item)
+		changed, err := issues.Close(c.Context(), env, dir, key, *commit, *item)
 		if err != nil {
 			return Result{}, issuesErr(err)
 		}
-		text := fmt.Sprintf("closed #%d", number)
+		text := "closed " + key.Ref()
 		if !changed {
-			text = fmt.Sprintf("#%d already closed", number)
+			text = key.Ref() + " already closed"
 		}
-		return Result{Data: jsonObj("issue", number, "commit", *commit, "changed", changed), Text: text}, nil
+		return Result{Data: jsonObj("issue", issueJSON(key), "commit", *commit, "changed", changed), Text: text}, nil
 	}
 }
 
