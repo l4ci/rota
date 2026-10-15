@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"slices"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -441,11 +440,25 @@ const linearIssueFields = `id identifier title description url completedAt cance
 	`attachments(first: 50) { nodes { id url metadata } pageInfo { hasNextPage endCursor } }`
 
 type linearAttachment struct {
-	ID       string `json:"id"`
-	URL      string `json:"url"`
-	Metadata struct {
-		Body string `json:"body"`
-	} `json:"metadata"`
+	ID       string       `json:"id"`
+	URL      string       `json:"url"`
+	Metadata linearState0 `json:"metadata"`
+}
+
+// linearState0 is the metadata of a state attachment: format version V
+// (missing reads as 1) and the body. A version this rota does not know is
+// not read, so a newer format is never misread as the body.
+type linearState0 struct {
+	V    int    `json:"v"`
+	Body string `json:"body"`
+}
+
+// linearStateVersion is the state attachment format rota writes.
+const linearStateVersion = 1
+
+// body is the stored body; ok is false for an unknown format version.
+func (m linearState0) body() (string, bool) {
+	return m.Body, m.V <= linearStateVersion
 }
 
 type linearAttachments struct {
@@ -489,12 +502,14 @@ func (d linearIssue) state() map[string]linearAttachment {
 
 func (l *Linear) norm(d linearIssue) Issue {
 	body := d.Description
-	if f, ok := d.state()[linearStateURL+"fields"]; ok && f.Metadata.Body != "" {
-		body = strings.TrimRight(body, "\n")
-		if body != "" {
-			body += "\n\n"
+	if f, ok := d.state()[linearStateURL+"fields"]; ok {
+		if block, known := f.Metadata.body(); known && block != "" {
+			body = strings.TrimRight(body, "\n")
+			if body != "" {
+				body += "\n\n"
+			}
+			body += block
 		}
-		body += f.Metadata.Body
 	}
 	is := Issue{Key: IssueKey(d.Identifier), Title: d.Title, Body: body, Labels: []string{}, State: "open",
 		URL: d.URL, Assignees: []string{}, Author: d.Creator.label()}
@@ -618,6 +633,9 @@ func (l *Linear) Create(ctx context.Context, title, body string, labels []string
 		return "", err
 	}
 	text, fields := splitBody(body)
+	if err := stateFits("fields", fields.Block); err != nil {
+		return "", err
+	}
 	in := map[string]any{"teamId": teamID, "title": title, "description": text}
 	if len(ids) > 0 {
 		in["labelIds"] = ids
@@ -641,7 +659,9 @@ func (l *Linear) Create(ctx context.Context, title, body string, labels []string
 	}
 	if fields.Block != "" {
 		if err := l.putState(ctx, c.Issue.ID, "fields", fields.Block); err != nil {
-			_ = l.mutate(ctx, "IssueDelete", `($id: String!) { issueDelete(id: $id) { success } }`, map[string]any{"id": c.Issue.ID}, nil)
+			if derr := l.mutate(ctx, "IssueDelete", `($id: String!) { issueDelete(id: $id) { success } }`, map[string]any{"id": c.Issue.ID}, nil); derr != nil {
+				return "", failed("%v; deleting the half-made issue %s also failed (%v): delete it in Linear", err, c.Issue.Identifier, derr)
+			}
 			return "", err
 		}
 	}
@@ -677,7 +697,11 @@ func (l *Linear) Edit(ctx context.Context, key IssueKey, e IssueEdit) error {
 	if len(add) > 0 {
 		in["addedLabelIds"] = add
 	}
-	if drop := l.knownLabelIDs(ctx, e.RemoveLabels); len(drop) > 0 {
+	drop, err := l.knownLabelIDs(ctx, e.RemoveLabels)
+	if err != nil {
+		return err
+	}
+	if len(drop) > 0 {
 		in["removedLabelIds"] = drop
 	}
 	if len(in) > 0 {
@@ -695,15 +719,21 @@ func (l *Linear) Edit(ctx context.Context, key IssueKey, e IssueEdit) error {
 }
 
 // knownLabelIDs is the ids of the names that exist; removing a label no one
-// made changes nothing.
-func (l *Linear) knownLabelIDs(ctx context.Context, names []string) []string {
+// made changes nothing. Any other failure to read the labels is returned,
+// never taken for "nothing to remove".
+func (l *Linear) knownLabelIDs(ctx context.Context, names []string) ([]string, error) {
 	var out []string
 	for _, n := range uniq(names) {
-		if ids, err := l.labelIDs(ctx, []string{n}, false); err == nil {
-			out = append(out, ids...)
+		ids, err := l.labelIDs(ctx, []string{n}, false)
+		if IsKind(err, KindNotFound) {
+			continue
 		}
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, ids...)
 	}
-	return out
+	return out, nil
 }
 
 func (l *Linear) update(ctx context.Context, id string, in map[string]any) error {
@@ -768,8 +798,9 @@ func (l *Linear) filter(f ListFilter) map[string]any {
 	return flt
 }
 
-// List reads the team's issues, ordered by number like Jira's keys. A
-// limit stops paging once it is reached.
+// List reads every page of the team's issues, orders them by number like
+// Jira's keys, then cuts to the limit, so the result never depends on the
+// order Linear pages in.
 func (l *Linear) List(ctx context.Context, f ListFilter) ([]Issue, error) {
 	if f.Milestone != "" {
 		return nil, errNoMilestones()
@@ -787,9 +818,6 @@ func (l *Linear) List(ctx context.Context, f ListFilter) ([]Issue, error) {
 			return "", err
 		}
 		got = append(got, d.Issues.Nodes...)
-		if f.Limit > 0 && len(got) >= f.Limit {
-			return "", nil
-		}
 		return d.Issues.PageInfo.next(), nil
 	})
 	if err != nil {
@@ -802,15 +830,8 @@ func (l *Linear) List(ctx context.Context, f ListFilter) ([]Issue, error) {
 		}
 		out = append(out, l.norm(got[i]))
 	}
-	slices.SortStableFunc(out, func(a, b Issue) int { return keyNumber(a.Key) - keyNumber(b.Key) })
+	slices.SortStableFunc(out, func(a, b Issue) int { return CompareKeys(a.Key, b.Key) })
 	return firstN(out, f.Limit), nil
-}
-
-// keyNumber is the number of ENG-42.
-func keyNumber(k IssueKey) int {
-	_, n, _ := strings.Cut(string(k), "-")
-	v, _ := strconv.Atoi(n)
-	return v
 }
 
 // ---- status ------------------------------------------------------------------
@@ -927,7 +948,9 @@ func (l *Linear) comments(ctx context.Context, issueID string, state map[string]
 		for _, c := range d.Issue.Comments.Nodes {
 			body := c.Body
 			if a, ok := state[linearStateURL+"comment/"+c.ID]; ok {
-				body = a.Metadata.Body
+				if full, known := a.Metadata.body(); known {
+					body = full
+				}
 			}
 			out = append(out, Comment{ID: c.ID, Body: body, Author: c.User.label(), CreatedAt: parseTime(c.CreatedAt)})
 		}
@@ -952,6 +975,9 @@ func (l *Linear) AddComment(ctx context.Context, key IssueKey, body string) (str
 	}
 	shown := body
 	if marker.Has(body) {
+		if err := stateFits("a comment", body); err != nil {
+			return "", err
+		}
 		shown = visible(body)
 	}
 	var d struct {
@@ -970,7 +996,9 @@ func (l *Linear) AddComment(ctx context.Context, key IssueKey, body string) (str
 	}
 	if marker.Has(body) {
 		if err := l.putState(ctx, issueID, "comment/"+id, body); err != nil {
-			_ = l.deleteComment(ctx, id)
+			if derr := l.deleteComment(ctx, id); derr != nil {
+				return "", failed("%v; deleting the half-made comment %s on %s also failed (%v): delete it in Linear", err, id, key.Ref(), derr)
+			}
 			return "", err
 		}
 	}
@@ -984,6 +1012,9 @@ func (l *Linear) EditComment(ctx context.Context, key IssueKey, commentID, body 
 	}
 	shown := body
 	if marker.Has(body) {
+		if err := stateFits("comment "+commentID, body); err != nil {
+			return err
+		}
 		shown = visible(body)
 	}
 	var d struct {
@@ -1045,12 +1076,21 @@ func (l *Linear) CommentURL(ctx context.Context, key IssueKey, commentID string)
 	return d.Comment.URL, nil
 }
 
+// stateFits refuses a state body over linearStateMax. Writers check it before
+// their first write, so an oversized body leaves nothing behind.
+func stateFits(name, body string) error {
+	if len(body) > linearStateMax {
+		return failed("rota state for %s is %d bytes, over the %d a Linear attachment takes here (Linear documents no metadata limit, so rota caps it): shorten the note or fields block", name, len(body), linearStateMax)
+	}
+	return nil
+}
+
 // putState writes body into the issue's state attachment of name (fields, or
 // comment/<id>): attachmentCreate replaces an attachment with the same URL on
 // the same issue.
 func (l *Linear) putState(ctx context.Context, issueID, name, body string) error {
-	if len(body) > linearStateMax {
-		return failed("rota state for %s is %d bytes, over the %d a Linear attachment takes here (Linear documents no metadata limit, so rota caps it): shorten the note or fields block", name, len(body), linearStateMax)
+	if err := stateFits(name, body); err != nil {
+		return err
 	}
 	var d struct {
 		AttachmentCreate struct {
@@ -1058,7 +1098,7 @@ func (l *Linear) putState(ctx context.Context, issueID, name, body string) error
 		} `json:"attachmentCreate"`
 	}
 	in := map[string]any{"issueId": issueID, "url": linearStateURL + name, "title": "rota state",
-		"subtitle": "Kept by rota; do not edit or remove.", "metadata": map[string]string{"body": body}}
+		"subtitle": "Kept by rota; do not edit or remove.", "metadata": map[string]any{"v": linearStateVersion, "body": body}}
 	if err := l.mutate(ctx, "AttachmentCreate", `($input: AttachmentCreateInput!) { attachmentCreate(input: $input) { success } }`,
 		map[string]any{"input": in}, &d); err != nil {
 		return err
