@@ -91,6 +91,7 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 	}
 	in.Dispatch = config.Dispatch(cfg)
 	in.ForgeProvider, in.IssueSource, in.SourceProblem = doctorSourceInput(cfg)
+	in.JiraProject, in.IssuesConnection = strings.TrimSpace(str("issues.jira.project")), strings.TrimSpace(str("issues.connection"))
 	in.CodexHomes = codexHomes(cfg)
 	for _, t := range []string{"light", "standard", "heavy"} {
 		if strings.TrimSpace(str("round.tiers.codex."+t)) != "" {

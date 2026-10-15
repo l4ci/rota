@@ -671,8 +671,9 @@ func (b *Issues) applyState(is Issue, want string) (bool, error) {
 	return true, b.Tracker.Edit(b.ctx(), is.Key, tracker.IssueEdit{AddLabels: add, RemoveLabels: drop})
 }
 
-// Claim takes the item: it posts a claim marker, re-reads the comments, and the
-// earliest open claim wins (IssueBackend.claim). A loser posts its release
+// Claim takes the item: it posts a claim marker (on a tracker.ClaimStore, its
+// claim record), re-reads the claims, and the earliest open claim wins
+// (IssueBackend.claim). A loser posts its release
 // marker and changes no labels; the winner gets the in-progress label and the
 // assignment. An unknown or closed item wraps ErrNotFound.
 func (b *Issues) Claim(ref, claimID string) (won bool, holder string, err error) {
@@ -701,17 +702,17 @@ func (b *Issues) ClaimShared(ref, claimID string, holders int) (won bool, holder
 		return false, "", err
 	}
 	if !slices.Contains(held[:min(holders, len(held))], claimID) {
-		if _, err := tr.AddComment(b.ctx(), n, marker.Claim(claimID)+"\nClaimed by "+claimID); err != nil {
+		if err := b.putClaim(n, claimID); err != nil {
 			return false, "", err
 		}
 		if held, err = b.heldClaims(n); err != nil {
 			return false, "", err
 		}
 		if len(held) == 0 {
-			return false, "", errors.New("claim comment not visible after posting")
+			return false, "", errors.New("claim not visible after posting")
 		}
 		if !slices.Contains(held[:min(holders, len(held))], claimID) {
-			if _, err := tr.AddComment(b.ctx(), n, marker.Release(claimID)); err != nil {
+			if err := b.dropClaim(n, claimID); err != nil {
 				return false, "", err
 			}
 			return false, held[0], nil
@@ -729,7 +730,12 @@ func (b *Issues) ClaimShared(ref, claimID string, holders int) (won bool, holder
 	return true, claimID, nil
 }
 
+// heldClaims is the open claims, earliest first: a tracker.ClaimStore's own
+// records, else the claim and release marker comments.
 func (b *Issues) heldClaims(n tracker.IssueKey) ([]string, error) {
+	if cs, ok := b.Tracker.(tracker.ClaimStore); ok {
+		return cs.Claims(b.ctx(), n)
+	}
 	comments, err := b.Tracker.Comments(b.ctx(), n)
 	if err != nil {
 		return nil, err
@@ -737,7 +743,24 @@ func (b *Issues) heldClaims(n tracker.IssueKey) ([]string, error) {
 	return openClaims(comments), nil
 }
 
-// Release posts the release marker and drops the in-progress label when no
+func (b *Issues) putClaim(n tracker.IssueKey, claimID string) error {
+	if cs, ok := b.Tracker.(tracker.ClaimStore); ok {
+		return cs.PutClaim(b.ctx(), n, claimID)
+	}
+	_, err := b.Tracker.AddComment(b.ctx(), n, marker.Claim(claimID)+"\nClaimed by "+claimID)
+	return err
+}
+
+func (b *Issues) dropClaim(n tracker.IssueKey, claimID string) error {
+	if cs, ok := b.Tracker.(tracker.ClaimStore); ok {
+		return cs.DropClaim(b.ctx(), n, claimID)
+	}
+	_, err := b.Tracker.AddComment(b.ctx(), n, marker.Release(claimID))
+	return err
+}
+
+// Release posts the release marker (on a tracker.ClaimStore, drops its claim
+// record) and drops the in-progress label when no
 // claim remains. It writes nothing and returns false when claimID holds no open
 // claim.
 func (b *Issues) Release(ref, claimID string) (bool, error) {
@@ -756,7 +779,7 @@ func (b *Issues) Release(ref, claimID string) (bool, error) {
 	if !slices.Contains(held, claimID) {
 		return false, nil
 	}
-	if _, err := tr.AddComment(b.ctx(), is.Key, marker.Release(claimID)); err != nil {
+	if err := b.dropClaim(is.Key, claimID); err != nil {
 		return false, err
 	}
 	if len(held) == 1 {
@@ -851,6 +874,11 @@ func (b *Issues) Status(ref string) (*Status, error) {
 		}
 	}
 	held := openClaims(comments)
+	if _, ok := b.Tracker.(tracker.ClaimStore); ok {
+		if held, err = b.heldClaims(is.Key); err != nil {
+			return nil, err
+		}
+	}
 	notes := []string{}
 	for _, c := range comments {
 		nt, ok := marker.ParseNote(c.Body)

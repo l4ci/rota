@@ -59,7 +59,8 @@ func doctorConnection(ctx context.Context, d *Deps, name string) *doctor.ConnChe
 func connectAddVerb(fs *flag.FlagSet) RunFunc {
 	kind := fs.String("kind", "", "connection kind: jira or linear")
 	site := fs.String("site", "", "site URL, e.g. https://acme.atlassian.net (required for jira)")
-	user := fs.String("user", "", "account name or email the token belongs to")
+	user := fs.String("user", "", "account email the token belongs to (required for Jira Cloud)")
+	deployment := fs.String("deployment", "", "jira only: cloud or datacenter (default cloud for *.atlassian.net sites, else required)")
 	stdin := fs.Bool("token-stdin", false, "read the API token from stdin (the default when stdin is not a terminal)")
 	replace := fs.Bool("replace", false, "replace an existing connection of this name")
 	return func(c *Ctx, args []string) (Result, error) {
@@ -85,7 +86,7 @@ func connectAddVerb(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		conn := connections.Connection{Name: args[0], Kind: *kind, Site: strings.TrimRight(*site, "/"), User: *user}
+		conn := connections.Connection{Name: args[0], Kind: *kind, Site: strings.TrimRight(*site, "/"), User: *user, Deployment: *deployment}.WithDefaults()
 		if err := conn.Validate(); err != nil {
 			return Result{}, Usage("%s", err.Error())
 		}
@@ -152,7 +153,7 @@ func runConnectList(c *Ctx, args []string) (Result, error) {
 			store = "none"
 		}
 		override := sec.Getenv != nil && strings.TrimSpace(sec.Getenv(connections.EnvVar(cn.Name))) != ""
-		rows = append(rows, knObj("name", cn.Name, "kind", cn.Kind, "site", cn.Site, "user", cn.User, "store", store, "storeError", errMsg, "envOverride", override))
+		rows = append(rows, knObj("name", cn.Name, "kind", cn.Kind, "site", cn.Site, "user", cn.User, "deployment", cn.WithDefaults().Deployment, "store", store, "storeError", errMsg, "envOverride", override))
 		line := fmt.Sprintf("%s\t%s\t%s\t%s\t%s", cn.Name, cn.Kind, cn.Site, cn.User, store)
 		if errMsg != "" {
 			line += ": " + errMsg

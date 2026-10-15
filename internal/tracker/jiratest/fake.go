@@ -141,6 +141,12 @@ func (s *Server) FailNext(n, status int) {
 	s.failN, s.failStatus = n, status
 }
 
+// Version is the API version the fake speaks: 3 (Cloud) or 2 (Data Center).
+func (s *Server) Version() int { return s.o.Version }
+
+// Project is the key of the fake's one project.
+func (s *Server) Project() string { return s.o.Project }
+
 // Requests lists every request seen as "METHOD /path?query", in order.
 func (s *Server) Requests() []string {
 	s.mu.Lock()

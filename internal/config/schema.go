@@ -290,7 +290,7 @@ var Prompts = []Prompt{
 		"github": "GitHub issues (gh)",
 		"gitlab": "GitLab issues (glab)",
 		"forge":  "each repo's own forge (umbrellas on mixed hosts)",
-		"jira":   "Jira (not implemented yet)",
+		"jira":   "Jira (needs a rota connect connection)",
 		"linear": "Linear (not implemented yet)",
 	}},
 	{Key: "work.isolation", Title: "How is each piece of work isolated?", Help: map[string]string{
