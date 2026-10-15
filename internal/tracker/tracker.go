@@ -266,8 +266,8 @@ type MilestoneEdit struct {
 }
 
 // IssueTracker is the issue side of the seam: where issues, their comments,
-// labels and milestones live (issues.source). GitHub and GitLab implement it;
-// Jira and Linear will, later. Issues are named by IssueKey; PR numbers stay ints.
+// labels and milestones live (issues.source). GitHub, GitLab and Jira
+// implement it; Linear will, later. Issues are named by IssueKey; PR numbers stay ints.
 type IssueTracker interface {
 	Provider() string
 	// CheckAuth fails with KindUnavailable unless the tracker's CLI is
@@ -409,10 +409,15 @@ type Settings struct {
 	Source          string
 	RetryWait       time.Duration
 	NotPlannedLabel string
+	// Connection is issues.connection, the `rota connect` connection an HTTP
+	// tracker (jira) reaches its site through; JiraProject is issues.jira.project.
+	Connection  string
+	JiraProject string
 }
 
 // SettingsFromConfig reads forge.provider, issues.source,
-// issues.retryWaitSeconds and issues.labels.notPlanned, with the schema
+// issues.retryWaitSeconds, issues.labels.notPlanned, issues.connection and
+// issues.jira.project, with the schema
 // defaults for absent or null keys. An invalid forge.provider or issues.source
 // reads as its default here; ValidateConfig (and the *FromConfig constructors)
 // fail on it instead.
@@ -431,6 +436,11 @@ func SettingsFromConfig(cfg any) Settings {
 	}
 	if v, ok := config.Lookup(cfg, "issues.labels.notPlanned"); ok && v != nil {
 		s.NotPlannedLabel = fmt.Sprint(v)
+	}
+	for key, dst := range map[string]*string{"issues.connection": &s.Connection, "issues.jira.project": &s.JiraProject} {
+		if v, ok := config.Lookup(cfg, key); ok && v != nil {
+			*dst = strings.TrimSpace(fmt.Sprint(v))
+		}
 	}
 	return s
 }
@@ -459,7 +469,7 @@ var ErrLocalForge error = &Error{Kind: KindUnavailable, Code: 3, Message: "the f
 var ErrNoIssueTracker error = &Error{Kind: KindUnavailable, Code: 3, Message: "issues.source is file: the issues live in BACKLOG.md, not on a tracker"}
 
 func notImplemented(source string) *Error {
-	return unavailable("issues.source %s is not implemented yet (use file, github or gitlab)", source)
+	return unavailable("issues.source %s is not implemented yet (use file, github, gitlab or jira)", source)
 }
 
 // New returns the adapter, issue tracker and forge in one, for provider ("" or
@@ -493,8 +503,8 @@ func NewForge(ctx context.Context, s Settings, forgeProvider, dir string, opts .
 }
 
 // NewIssueTracker returns the issue tracker for source ("" falls back to
-// s.Source). file is ErrNoIssueTracker; jira and linear are an unavailable
-// "not implemented" error; github and gitlab build their adapter whatever the
+// s.Source). file is ErrNoIssueTracker; jira is the REST adapter of
+// issues.connection; linear is an unavailable "not implemented" error; github and gitlab build their adapter whatever the
 // origin says (rota doctor flags a mismatch); forge resolves the tracker from
 // dir's own forge, per sub-repo. The legacy config.SourceIssues,
 // an unmigrated "issues backend" with no named provider, resolves from the
@@ -507,7 +517,9 @@ func NewIssueTracker(ctx context.Context, s Settings, source, dir string, opts .
 	switch source {
 	case config.SourceFile, "":
 		return nil, ErrNoIssueTracker
-	case config.SourceJira, config.SourceLinear:
+	case config.SourceJira:
+		return newJiraTracker(ctx, newCLI(s, dir, opts...), s)
+	case config.SourceLinear:
 		return nil, notImplemented(source)
 	case config.SourceIssues:
 		provider = config.ForgeAuto
