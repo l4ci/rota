@@ -511,7 +511,7 @@ func TestReleaseNotesArgs(t *testing.T) {
 	if o := trRun(t, root, "", "release", "notes", "--from", "issues", "M01", "--json"); o.code != 2 {
 		t.Errorf("umbrella: exit %d", o.code)
 	}
-	write(t, filepath.Join(root, ".rota", "config.json"), `{"backlog":{"backend":"issues"}}`)
+	write(t, filepath.Join(root, ".rota", "config.json"), `{"backlog":{"backend":"issues"}}`) // legacy keys: with no origin the tracker cannot resolve
 	if o := trRun(t, root, "", "release", "notes", "--from", "issues", "M01", "--repo", "svc", "--json"); o.code != 5 {
 		t.Errorf("umbrella with --repo: exit %d", o.code)
 	}
@@ -755,7 +755,7 @@ func TestReleaseIssueVerbsArgsAndBackend(t *testing.T) {
 		}
 	}
 	root := umbrella(t)
-	write(t, filepath.Join(root, ".rota", "config.json"), `{"backlog":{"backend":"issues"}}`)
+	write(t, filepath.Join(root, ".rota", "config.json"), `{"backlog":{"backend":"issues"}}`) // legacy keys: with no origin the tracker cannot resolve
 	for _, args := range [][]string{{"milestone-check", "M01"}, {"close-milestone", "M01", "--release", "1.2.3"}} {
 		if o := trRun(t, root, "", append(append([]string{"release"}, args...), "--json")...); o.code != 2 {
 			t.Errorf("%v at umbrella root: exit %d", args, o.code)

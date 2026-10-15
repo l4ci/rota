@@ -124,7 +124,7 @@ func TestPlanRenameCheckRunsInCwd(t *testing.T) {
 
 func TestIssueModeFileOnlyVerbs(t *testing.T) {
 	dir := gitRepo(t)
-	os.WriteFile(filepath.Join(dir, ".rota/config.json"), []byte(`{"backlog": {"backend": "issues"}}`), 0o644)
+	os.WriteFile(filepath.Join(dir, ".rota/config.json"), []byte(`{"forge": {"provider": "github"}, "issues": {"source": "github"}}`), 0o644)
 	if code, _, _ := rotaIn(t, dir, "plan", "add", "M01-B07"); code != 2 {
 		t.Errorf("argument errors stay exit 2 in issue mode, got %d", code)
 	}

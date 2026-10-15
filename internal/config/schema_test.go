@@ -104,9 +104,13 @@ func TestSchemaMatchesPython(t *testing.T) {
 	py = append(py, Key{Name: "issues.providers.github"}, Key{Name: "issues.providers.gitlab"})
 	py = append(py, Keys[24:25]...)
 	py = append(py, Key{Name: "loop.webResearch"})
-	py = append(py, Keys[25:43]...)
+	// backlog.backend and issues.provider are gone from the schema (#797) but
+	// their recorded cases stay, as the legacy keys IssueSource still reads.
+	py = append(py, Keys[25:26]...)
+	py = append(py, Key{Name: "backlog.backend"}, Key{Name: "issues.provider"})
+	py = append(py, Keys[26:41]...)
 	py = append(py, Key{Name: "issues.filterMineOnly"})
-	py = append(py, Keys[43:PythonKeys]...)
+	py = append(py, Keys[41:PythonKeys]...)
 	add = func(add func(map[string]any, string)) func(map[string]any, string) {
 		return func(tree map[string]any, key string) {
 			switch key {

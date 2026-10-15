@@ -63,9 +63,9 @@ func rotaRun(t *testing.T, args ...string) (int, map[string]any, string) {
 }
 
 func TestItemIssueModeNeedsTracker(t *testing.T) {
-	root := trackerProject(t, `{"backlog": {"backend": "issues"}}`)
+	root := trackerProject(t, `{"backlog": {"backend": "issues"}}`) // legacy, tracker unresolved
 	code, env, stderr := rotaRun(t, "--json", "-C", root, "item", "complete", "12", "--commit", "abc")
-	if code != ExitUnavailable || env["ok"] != false || !strings.Contains(stderr, "cannot determine provider") {
+	if code != ExitUnavailable || env["ok"] != false || !strings.Contains(stderr, "cannot determine the issue tracker provider") {
 		t.Fatalf("code=%d env=%v stderr=%s", code, env, stderr)
 	}
 	// File-only verbs are refused before the tracker is built.
@@ -88,7 +88,7 @@ func TestItemIssueModeNeedsTracker(t *testing.T) {
 // With a tracker that knows no issue 12, every item verb answers 3, and
 // nothing is written.
 func TestItemIssueModeUnknownItem(t *testing.T) {
-	root := trackerProject(t, `{"backlog": {"backend": "issues"}}`)
+	root := trackerProject(t, `{"forge": {"provider": "github"}, "issues": {"source": "github"}}`)
 	fake := &trackertest.Fake{}
 	deps := withTracker(t, fake)
 	for _, argv := range [][]string{

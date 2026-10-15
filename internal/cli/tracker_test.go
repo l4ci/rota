@@ -108,7 +108,7 @@ func envelope(t *testing.T, s string) map[string]any {
 func TestTrackerCallPassthrough(t *testing.T) {
 	f := &forge{answer: func(string, []string) (string, string, int) { return "[1]\nno newline", "note\n", 0 }}
 	d := useForge(t, f)
-	dir := trProject(t, `{"issues":{"provider":"github"}}`)
+	dir := trProject(t, `{"forge":{"provider":"github"}}`)
 
 	o := trRunWith(t, d, dir, "", "tracker", "call", "--", "issue", "view", "3")
 	if o.code != 0 || o.stdout != "[1]\nno newline" || o.stderr != "note\n" {
@@ -131,7 +131,7 @@ func TestTrackerCallPassthrough(t *testing.T) {
 }
 
 func TestTrackerCallFailures(t *testing.T) {
-	dir := trProject(t, `{"issues":{"provider":"github","retryWaitSeconds":0}}`)
+	dir := trProject(t, `{"forge":{"provider":"github","retryWaitSeconds":0}}`)
 	cases := []struct {
 		name   string
 		answer func(string, []string) (string, string, int)
@@ -172,7 +172,7 @@ func TestTrackerCallFailures(t *testing.T) {
 func TestTrackerCallProviderAndRepo(t *testing.T) {
 	f := &forge{answer: func(string, []string) (string, string, int) { return "[]", "", 0 }}
 	d := useForge(t, f)
-	dir := trProject(t, `{"issues":{"provider":"gitlab"}}`)
+	dir := trProject(t, `{"forge":{"provider":"gitlab"}}`)
 	sub := filepath.Join(dir, "svc")
 	if err := os.Mkdir(sub, 0o755); err != nil {
 		t.Fatal(err)
@@ -305,7 +305,7 @@ func TestDepsTrackersUseTrackerOptions(t *testing.T) {
 	}
 	d := defaultDeps()
 	d.TrackerOptions = []tracker.Option{tracker.WithExec(x, func(n string) (string, error) { return "/fake/" + n, nil })}
-	cfg, _ := jsonx.Decode([]byte(`{"issues":{"provider":"github"}}`))
+	cfg, _ := jsonx.Decode([]byte(`{"forge":{"provider": "github"}, "issues":{"source": "github"}}`))
 	tr, err := d.NewTracker(context.Background(), t.TempDir(), cfg)
 	if err != nil {
 		t.Fatal(err)

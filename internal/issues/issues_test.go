@@ -150,22 +150,32 @@ func TestLabelGitLab(t *testing.T) {
 
 func TestProviderFallsBackToConfig(t *testing.T) {
 	ctx := context.Background()
-	for _, c := range []struct{ origin, cfg, want string }{
-		{gh, "gitlab", "github"}, // origin wins
-		{"", "gitlab", "gitlab"}, // no origin: issues.provider
-		{"https://example.org/r.git", "github", "github"},
-		{"", "auto", "unknown"},
-		{"", "bogus", "unknown"},
+	for _, c := range []struct{ origin, key, cfg, want string }{
+		{gh, "forge", "gitlab", "github"}, // origin wins over forge.provider
+		{"", "forge", "gitlab", "gitlab"}, // no origin: forge.provider
+		{"https://example.org/r.git", "forge", "github", "github"},
+		{"", "forge", "auto", "unknown"},
+		{"", "forge", "local", "unknown"},
+		{"", "forge", "bogus", "unknown"},
+		// issues.source names the tracker outright, whatever the origin says
+		{gh, "issues", "gitlab", "gitlab"},
+		{"", "issues", "github", "github"},
+		{gh, "issues", "file", "github"}, // a file source reads the origin
+		{"", "issues", "jira", "unknown"},
 	} {
 		f := &forge{origin: c.origin}
 		env := f.env(t)
-		iss := jsonx.NewObject()
-		iss.Set("provider", c.cfg)
+		obj := jsonx.NewObject()
+		if c.key == "forge" {
+			obj.Set("provider", c.cfg)
+		} else {
+			obj.Set("source", c.cfg)
+		}
 		root := jsonx.NewObject()
-		root.Set("issues", iss)
+		root.Set(c.key, obj)
 		env.Config = root
 		if got := Provider(ctx, env, ""); got != c.want {
-			t.Errorf("origin %q config %q: %s, want %s", c.origin, c.cfg, got, c.want)
+			t.Errorf("origin %q %s %q: %s, want %s", c.origin, c.key, c.cfg, got, c.want)
 		}
 	}
 }

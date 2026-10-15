@@ -4,7 +4,7 @@ This page lists every config key with its type, default, allowed values and desc
 
 The key tables are generated from the schema in `internal/config/keys.go` (`go generate ./internal/config`); do not edit them here. Four verbs cover configuration:
 
-- **`rota setup`** runs `rota init`, then asks the main choices on a terminal (backlog backend, tracker, isolation, merge strategy, dispatch, autonomy, review, QA), then two optional ones: the worker harness (`round.workerKind`) and the orchestrator harness (`orchestrator.harness`). Skip either and the key stays unset. `--yes` takes the defaults; `--list` prints the questions.
+- **`rota setup`** runs `rota init`, then asks the main choices on a terminal (where the issues live, isolation, merge strategy, dispatch, autonomy, review, QA), then two optional ones: the worker harness (`round.workerKind`) and the orchestrator harness (`orchestrator.harness`). Skip either and the key stays unset. `--yes` takes the defaults; `--list` prints the questions.
 - **`rota init`** writes `.rota/config.json` on first setup, fills any missing keys with the Recommended defaults on later runs, and stamps `rota.version`. It never overwrites a value you set.
 - **`rota config show`** and **`rota config set`** read and change keys later. `rota config show --json` adds each key's `type`, `group`, `desc` and `choices`.
 - **`rota config edit`** opens the config screen in a terminal (also `rota config --ui`): keys grouped by section with a detail pane, booleans toggle, enum keys pick from their choices, the rest take a typed value checked as `config set` checks it. See [configuration](../usage/configuration.md#the-config-screen).
@@ -119,7 +119,7 @@ Every key, by group. Default is what a missing key reads as; Values lists the al
 | Key | Type | Default | Values | Description |
 |-----|------|---------|--------|-------------|
 | `work.isolation` | enum | `"branch"` | `branch`, `worktree` | How /rota-work isolates changes from main: a feature branch in this checkout, or a separate git worktree. |
-| `work.mergeStrategy` | enum | `"direct"` | `direct`, `pr` | How finished work lands: merged straight into the base branch with --no-ff, or through a pull request. Ignored under the issues backlog backend, which always opens a PR. |
+| `work.mergeStrategy` | enum | `"direct"` | `direct`, `pr` | How finished work lands: merged straight into the base branch with --no-ff, or through a pull request. Ignored when issues.source is a tracker, which always opens a PR. |
 | `work.dispatch` | enum | `"subagent"` | `subagent`, `tmux`, `herdr` | Where round workers run. subagent means detect: herdr in a herdr pane, tmux in tmux, else in-harness subagents. /rota-work ignores it. |
 | `work.workerSlots` | int | `3` |  | Number of worker slots rota round start provisions (at least 1). --slots overrides it for one round. |
 | `work.workerCommand` | string | unset |  | Command that starts a worker session in its tmux window. Empty builds claude --model <models.worker> --dangerously-skip-permissions; {model} receives the tier's model. |
@@ -201,7 +201,6 @@ Every key, by group. Default is what a missing key reads as; Values lists the al
 | Key | Type | Default | Values | Description |
 |-----|------|---------|--------|-------------|
 | `issues.label` | string | `"in-progress"` |  | Legacy alias of issues.labels.inProgress, read only when the new key is unset. |
-| `issues.provider` | enum | `"auto"` | `auto`, `github`, `gitlab` | Which tracker the issues backend talks to. auto detects it from the git remote. |
 | `issues.retryWaitSeconds` | int | `60` |  | Seconds to wait before the single retry after a primary rate limit. |
 | `issues.bulkPaceMs` | int | `1000` |  | Milliseconds rota migrate issues waits between tracker writes, to stay under secondary rate limits. 0 disables the pause. |
 | `issues.labels.inProgress` | string | `"in-progress"` |  | Tracker label for an item a worker holds. |
@@ -218,16 +217,11 @@ Every key, by group. Default is what a missing key reads as; Values lists the al
 | `issues.labels.sizePrefix` | string | `"size:"` |  | Prefix of feature size labels, such as size:Major. |
 | `issues.autoCreateLabel` | bool | `true` |  | Create a tracker label the first time something asks for it. When off, adding a missing label fails. |
 | `issues.homeRepo` | string | unset |  | Umbrella mode with the issues backend only: the registered sub-repo that holds milestone tracking issues. Empty means the first registered sub-repo. |
+| `issues.source` | enum | `"file"` | `file`, `github`, `gitlab`, `jira`, `linear` | Where issues live: BACKLOG.md in the repo (file), or a tracker. github and gitlab must match the forge. jira and linear are accepted but not implemented yet. Switch with rota migrate issues. |
 | `issues.labels.needsHuman` | string | `"needs-human"` |  | Label rota round transfer --to human puts on an issue handed to the human. rota round candidates skips an issue that carries it. |
 | `issues.connection` | string | unset |  | Name of the machine-wide tracker connection the issues backend uses for Jira or Linear, added with rota connect add. Holds a name only, never a secret. A teammate whose connection has another name overrides it in config.local.json. |
 | `issues.jira.project` | string | unset |  | Jira project key, such as ROTA, that issues.connection reads from and writes to. |
 | `issues.linear.team` | string | unset |  | Linear team key, such as ROT, that issues.connection reads from and writes to. |
-
-### backlog
-
-| Key | Type | Default | Values | Description |
-|-----|------|---------|--------|-------------|
-| `backlog.backend` | enum | `"file"` | `file`, `issues` | Where the backlog lives: BACKLOG.md in the repo, or issues on the tracker. Switch with rota migrate issues. |
 
 ### release
 
@@ -250,6 +244,12 @@ Every key, by group. Default is what a missing key reads as; Values lists the al
 | `test.ciTimeoutMinutes` | int | `60` |  | How long a ci run waits for its checks, 1 to 1440 minutes. ROTA_CI_TIMEOUT (seconds) overrides it for one run. |
 | `test.ciChecks` | list | `[]` |  | Check names that must all succeed on the pushed commit under test.fullWhere ci: GitHub check-run names or commit-status contexts, GitLab job names. |
 | `test.isolate` | bool | `true` |  | Whether rota test run scrubs HERDR_*, TMUX*, ssh-agent variables and pins HOME and XDG_* to a temp root. The merge gate and train do not read it. |
+
+### forge
+
+| Key | Type | Default | Values | Description |
+|-----|------|---------|--------|-------------|
+| `forge.provider` | enum | `"auto"` | `auto`, `github`, `gitlab`, `local` | Where code lands: pull requests, checks and releases. auto reads the origin remote and is local with no remote; local means direct merge, no PR. Set it by hand only when detection misses (self-hosted GitLab without gitlab in the host, SSH host aliases, mirrors). |
 
 ### round
 
@@ -330,12 +330,16 @@ Every key, by group. Default is what a missing key reads as; Values lists the al
 
 ## Removed keys
 
-`issues.filterMineOnly`, `issues.providers.github` and `issues.providers.gitlab` were seeded by older `rota init` runs but nothing ever read them (use `issues.provider` to pick the tracker). `rota config check` lists any still in `.rota/config.json` as `removed` with a hint and does not fail on them; `rota config fill` deletes them. `rota config set` refuses them as unknown keys.
+`issues.filterMineOnly`, `issues.providers.github` and `issues.providers.gitlab` were seeded by older `rota init` runs but nothing ever read them (use `issues.source` and `forge.provider`). `rota config check` lists any still in `.rota/config.json` as `removed` with a hint and does not fail on them; `rota config fill` deletes them. `rota config set` refuses them as unknown keys.
+
+## Legacy keys
+
+`backlog.backend` and `issues.provider` were replaced by `issues.source` (where the issues live) and `forge.provider` (where code lands). `rota migrate source` rewrites them: `backlog.backend: file` becomes `issues.source: file`; `backlog.backend: issues` plus `issues.provider` becomes `issues.source: <provider>`, with `auto` read from the origin remote; an explicit provider the origin would miss also becomes `forge.provider`. It removes both keys and a second run changes nothing. `rota config fill` and `rota update` run the same migration. While a config still holds the legacy keys they keep deciding, so an upgraded project never flips to the file source, and `rota config check` lists them as `legacy`. When `issues.provider` is `auto` and the origin names neither GitHub nor GitLab (an umbrella whose sub-repos sit on different hosts, say), the keys stay until you set `issues.source` by hand.
 
 ## Validation rules
 
 - **`rota config set`** checks only that the key is in the schema. It accepts any value (JSON when it parses, else the string) and checks no enum or range.
 - **Enums without a reader check.** `models.*` (`opus`, `sonnet` or `haiku`), `work.isolation` (`branch` or `worktree`), `work.mergeStrategy` (`direct` or `pr`) and `autonomy.level` (`off` or `auto`) are not validated by any verb. The skills and the launch command read them as plain strings, so a bad value surfaces as that skill's or the model's failure. `rota config check` only reports a missing key, the removed `autonomy.level` `"loop"`, or a `refactor.verifyCommands` that still holds commands `test.full` lacks (run `rota config fill` to move them).
-- **Checked where a verb reads them.** A bad value exits 70 (`rota round` verbs for the `round.*` keys, `rota keepalive` and `rota limit` for the `orchestrator.*` keepalive and switch keys and the `limits.*` keys, and any verb that reads `backlog.backend`). The checks are these: booleans take `true` or `false`; integers must be in the minimum-to-maximum range stated in the key's description; `round.scope` and `limits.mode` take their listed enums; `round.roster` entries are unique lowercase names. `ship.mergeApproval` is also checked at read time, but a bad value there exits 2.
+- **Checked where a verb reads them.** A bad value exits 70 (`rota round` verbs for the `round.*` keys, `rota keepalive` and `rota limit` for the `orchestrator.*` keepalive and switch keys and the `limits.*` keys, and any verb that reads `issues.source` or `forge.provider`). The checks are these: booleans take `true` or `false`; integers must be in the minimum-to-maximum range stated in the key's description; `round.scope` and `limits.mode` take their listed enums; `round.roster` entries are unique lowercase names. `ship.mergeApproval` is also checked at read time, but a bad value there exits 2.
 
 For the full per-key behavior (defaults, value semantics, and how each setting affects skill execution), see [`usage/configuration.md`](../usage/configuration.md).

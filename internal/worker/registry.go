@@ -531,7 +531,7 @@ func (e Env) withDefaults() Env {
 	e.Getenv = e.Environ()
 	if e.Forge == nil {
 		e.Forge = func(provider, dir string, s tracker.Settings) (Forge, error) {
-			return tracker.New(e.context(), s, provider, dir)
+			return tracker.NewForge(e.context(), s, provider, dir)
 		}
 	}
 	if e.Shell == nil {

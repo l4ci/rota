@@ -78,7 +78,7 @@ func TestPlanUncertain(t *testing.T) {
 	if code, _, _ := rotaIn(t, dir, "plan", "uncertain", "B99"); code != 3 {
 		t.Errorf("unknown: %d", code)
 	}
-	os.WriteFile(filepath.Join(dir, ".rota/config.json"), []byte(`{"backlog": {"backend": "bogus"}}`), 0o644)
+	os.WriteFile(filepath.Join(dir, ".rota/config.json"), []byte(`{"issues": {"source": "bogus"}}`), 0o644)
 	if code, _, _ := rotaIn(t, dir, "plan", "uncertain", "B07"); code != 70 {
 		t.Errorf("invalid backend: %d, want 70", code)
 	}

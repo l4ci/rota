@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"flag"
 	"io"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"github.com/l4ci/rota/internal/exitmap"
 	"github.com/l4ci/rota/internal/gate"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/repos"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/tracker"
 )
@@ -148,5 +150,41 @@ func trSuggest(fs *flag.FlagSet) RunFunc {
 		data.Set("upstreamRepo", repo)
 		data.Set("changed", true)
 		return Result{Data: data, Text: url}, nil
+	}
+}
+
+// originProvider is the detect callback of config.FillDetect and
+// config.MigrateSource: "github" or "gitlab" from dir's origin remote, "" when
+// there is none or it names neither. An umbrella has no origin of its own: its
+// answer is the provider every registered sub-repo agrees on, "" when they
+// differ (one issues.source cannot say "GitHub here, GitLab there"; the legacy
+// keys keep resolving each sub-repo from its own origin). The executor comes
+// from TrackerOptions, so a test swaps it like every other forge read.
+func (d *Deps) originProvider(ctx context.Context, dir string) func() string {
+	return func() string {
+		cl := &tracker.CLI{}
+		for _, o := range d.trackerOptions() {
+			o(cl)
+		}
+		of := func(dir string) string {
+			p := tracker.ProviderFromURL(tracker.OriginURL(ctx, dir, cl.Exec))
+			if p == tracker.ProviderUnknown {
+				return ""
+			}
+			return p
+		}
+		subs := repos.Load(dir)
+		if len(subs) == 0 {
+			return of(dir)
+		}
+		agreed := ""
+		for _, r := range subs {
+			p := of(r.Path)
+			if p == "" || (agreed != "" && p != agreed) {
+				return ""
+			}
+			agreed = p
+		}
+		return agreed
 	}
 }

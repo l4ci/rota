@@ -61,7 +61,7 @@ func defaultRoundEnv(ctx context.Context, root string, d *Deps, withForge bool) 
 	if !withForge {
 		return e
 	}
-	f, err := d.forge(ctx, cfg, "", root)
+	f, err := d.forgeAndIssues(ctx, cfg, root)
 	if err != nil {
 		e.ForgeErr = err.Error()
 	} else {

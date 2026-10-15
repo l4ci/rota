@@ -89,7 +89,8 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 		s, _ := v.(string)
 		return s
 	}
-	in.Dispatch, in.IssuesProvider = config.Dispatch(cfg), str("issues.provider")
+	in.Dispatch = config.Dispatch(cfg)
+	in.ForgeProvider, in.IssueSource, in.SourceProblem = doctorSourceInput(cfg)
 	in.CodexHomes = codexHomes(cfg)
 	for _, t := range []string{"light", "standard", "heavy"} {
 		if strings.TrimSpace(str("round.tiers.codex."+t)) != "" {
@@ -247,4 +248,18 @@ func procCwdOf(ctx context.Context, run proc.Runner, pid int) string {
 		return ""
 	}
 	return doctor.ParseLsofCwd(res.Stdout)
+}
+
+// doctorSourceInput reads forge.provider and issues.source for the forge
+// check. An invalid value is reported as the problem, not read as a default.
+func doctorSourceInput(cfg any) (forge, source, problem string) {
+	forge, ferr := config.ForgeProvider(cfg)
+	source, serr := config.IssueSource(cfg)
+	switch {
+	case ferr != nil:
+		return "", "", ferr.Error()
+	case serr != nil:
+		return "", "", serr.Error()
+	}
+	return forge, source, ""
 }

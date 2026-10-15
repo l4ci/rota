@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/l4ci/rota/internal/jsonx"
@@ -313,5 +314,72 @@ func TestFillRewritesAFileHoldingOnlyRemovedKeys(t *testing.T) {
 	}
 	if got := Removed(root); len(got) != 0 {
 		t.Errorf("Removed after fill: %v", got)
+	}
+}
+
+// Fill migrates the legacy source keys once and leaves the file alone after.
+func TestFillMigratesSourceKeys(t *testing.T) {
+	root := project(t, `{"backlog": {"backend": "issues"}, "issues": {"provider": "auto"}}`, "")
+	if got := Legacy(root); !reflect.DeepEqual(got, []string{"backlog.backend", "issues.provider"}) {
+		t.Fatalf("Legacy before fill: %v", got)
+	}
+	// No origin: the legacy keys stay and keep deciding.
+	if _, sm, err := FillDetect(root, func() string { return "" }); err != nil || !sm.Unresolved {
+		t.Fatalf("no origin: %+v %v", sm, err)
+	}
+	if got, _ := IssueSource(Load(configPath(root))); got != SourceIssues {
+		t.Errorf("unmigrated source = %q, want %q", got, SourceIssues)
+	}
+	if _, sm, err := FillDetect(root, func() string { return "gitlab" }); err != nil || !sm.Changed || sm.Source != "gitlab" {
+		t.Fatalf("with origin: %+v %v", sm, err)
+	}
+	if got := Legacy(root); len(got) != 0 {
+		t.Errorf("Legacy after fill: %v", got)
+	}
+	before := read(t, root)
+	if _, sm, err := FillDetect(root, func() string { return "gitlab" }); err != nil || sm.Changed {
+		t.Fatalf("second run: %+v %v", sm, err)
+	}
+	if read(t, root) != before {
+		t.Error("second run rewrote the file")
+	}
+	if got, _ := IssueSource(Load(configPath(root))); got != SourceGitLab {
+		t.Errorf("migrated source = %q", got)
+	}
+}
+
+func TestLegacyKeysStillDecide(t *testing.T) {
+	cases := []struct {
+		cfg, source, forge string
+	}{
+		{`{}`, "file", "auto"},
+		{`{"backlog":{"backend":"file"}}`, "file", "auto"},
+		{`{"backlog":{"backend":"issues"}}`, "issues", "auto"},
+		{`{"backlog":{"backend":"issues"},"issues":{"provider":"gitlab"}}`, "gitlab", "gitlab"},
+		{`{"issues":{"provider":"github"}}`, "file", "github"},
+		{`{"issues":{"source":"jira"},"backlog":{"backend":"file"}}`, "jira", "auto"},
+		{`{"forge":{"provider":"local"},"issues":{"provider":"github"}}`, "file", "local"},
+	}
+	for _, tc := range cases {
+		cfg, err := jsonx.Decode([]byte(tc.cfg))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got, err := IssueSource(cfg); err != nil || got != tc.source {
+			t.Errorf("%s: IssueSource = %q, %v; want %q", tc.cfg, got, err, tc.source)
+		}
+		if got, err := ForgeProvider(cfg); err != nil || got != tc.forge {
+			t.Errorf("%s: ForgeProvider = %q, %v; want %q", tc.cfg, got, err, tc.forge)
+		}
+	}
+	for _, bad := range []string{`{"issues":{"source":"svn"}}`, `{"issues":{"source":3}}`} {
+		cfg, _ := jsonx.Decode([]byte(bad))
+		if _, err := IssueSource(cfg); err == nil || !strings.Contains(err.Error(), "invalid issues.source") {
+			t.Errorf("%s: err = %v", bad, err)
+		}
+	}
+	cfg, _ := jsonx.Decode([]byte(`{"forge":{"provider":"bitbucket"}}`))
+	if _, err := ForgeProvider(cfg); err == nil || !strings.Contains(err.Error(), "invalid forge.provider") {
+		t.Errorf("err = %v", err)
 	}
 }

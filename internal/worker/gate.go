@@ -266,9 +266,11 @@ func (r Registry) GateTargetAny(arg string) (GateTarget, error) {
 	return t, err
 }
 
-// Forge is the part of tracker.Adapter the gate merges through: read the PR,
+// Forge is the part of tracker.Forge the gate merges through: read the PR,
 // then ask the forge to merge it pinned to the verified head. Provider
 // differences (argv, JSON shape, auto-merge) live behind it in internal/tracker.
+// A local forge (forge.provider local) has none: the gate merges directly and
+// never looks for a PR.
 type Forge interface {
 	PRView(ctx context.Context, pr int) (tracker.PRInfo, error)
 	PRRequestMerge(ctx context.Context, pr int, o tracker.MergeOpts) error
@@ -277,13 +279,20 @@ type Forge interface {
 	// OpenPRs lists the open PRs, so a slot that records none can be matched
 	// to the PR its branch heads.
 	OpenPRs(ctx context.Context) ([]tracker.PR, error)
-	// ClosedNumbers, Get and RemoveLabels let a landed PR release the claim
-	// label on the issues it closed.
+	// ClosedNumbers names the issues a PR body closes; what to do with them is
+	// the issue source's job (Issues).
 	ClosedNumbers(body string) []int
-	Get(ctx context.Context, number int, withComments bool) (tracker.Issue, error)
-	RemoveLabels(ctx context.Context, number int, labels []string) error
 	// CommitChecks reads the CI checks on a pushed commit (test.fullWhere ci).
 	CommitChecks(ctx context.Context, sha string) ([]tracker.CheckRun, error)
+}
+
+// Issues is the part of tracker.IssueTracker the gate reads: the issue a PR
+// must close (or mark partial), its labels for the review depth, and the claim
+// label a landed PR releases. It is the issue source (issues.source), not the
+// forge; a file source has none.
+type Issues interface {
+	Get(ctx context.Context, number int, withComments bool) (tracker.Issue, error)
+	RemoveLabels(ctx context.Context, number int, labels []string) error
 }
 
 // Gate runs the merge gate for a slot or a queued PR (see GateTarget). A
@@ -451,12 +460,23 @@ func (g *gate) stepReleaseExternal() error {
 // stepForge picks the provider and opens its forge.
 func (g *gate) stepForge() (bool, error) {
 	g.res.Branch, g.res.PR = g.target.Branch, g.target.PR
-	g.provider = g.e.detectProvider(g.ctx, g.root, g.pr)
+	g.provider = g.e.detectProvider(g.ctx, g.root, g.pr, g.in.cfg.Tracker.Provider)
 	g.cliName = tracker.CLIName(g.provider)
 	g.label = g.in.cfg.InProgressLabel
+	if g.provider == tracker.ProviderLocal {
+		// No forge: no PR to look for, read or merge. The gate merges directly.
+		g.local = true
+		if g.pr != "" {
+			return g.broke(fmt.Sprintf("slot %s records PR %s, but the forge is local (forge.provider is local, or auto with no origin remote); set forge.provider to the forge that holds the PR", g.o.Slot, g.pr))
+		}
+		return false, nil
+	}
 	var err error
 	if g.forge, err = g.e.Forge(g.provider, g.root, g.in.cfg.Tracker); err != nil {
 		return g.broke(fmt.Sprintf("cannot reach the %s forge: %v", g.provider, err))
+	}
+	if g.issues, err = g.e.issueSide(g.forge, g.root, g.in.cfg.Tracker); err != nil {
+		return g.broke(fmt.Sprintf("cannot reach the issue source: %v", err))
 	}
 	return false, nil
 }
@@ -468,6 +488,9 @@ func (g *gate) stepForge() (bool, error) {
 func (g *gate) stepExternal() (bool, error) {
 	if !g.target.External || g.pr == "" { // an adopted slot may record no PR yet
 		return false, nil
+	}
+	if g.local {
+		return g.broke(fmt.Sprintf("cannot gate PR %s: the forge is local (forge.provider is local, or auto with no origin remote)", g.pr))
 	}
 	g.prNum = prNumText(g.pr)
 	info, ok := g.prInfo()
@@ -486,7 +509,7 @@ func (g *gate) stepExternal() (bool, error) {
 // the local base only, leave the PR open and still report a pass, so look the
 // PR up by head before taking that path.
 func (g *gate) stepAdoptPR() (bool, error) {
-	if g.pr != "" || g.target.Queued || g.branch == "" {
+	if g.local || g.pr != "" || g.target.Queued || g.branch == "" {
 		return false, nil
 	}
 	adopted, msg := g.openPRForBranch()
@@ -677,7 +700,7 @@ func (g *gate) stepBestOf() (bool, error) {
 func (g *gate) stepCloses() (bool, error) {
 	issue := g.target.Issue
 	n, err := strconv.Atoi(issue)
-	if g.pr == "" || err != nil || n <= 0 {
+	if g.pr == "" || g.issues == nil || err != nil || n <= 0 {
 		return false, nil
 	}
 	body, err := g.prBody()
@@ -690,7 +713,7 @@ func (g *gate) stepCloses() (bool, error) {
 	if slices.Contains(g.forge.ClosedNumbers(body), n) {
 		return false, nil
 	}
-	is, err := g.forge.Get(g.ctx, n, false)
+	is, err := g.issues.Get(g.ctx, n, false)
 	if err != nil {
 		return g.broke(fmt.Sprintf("could not read #%d to check for the %s label: %v", n, PartialSliceLabel, err))
 	}
@@ -733,8 +756,8 @@ func (g *gate) stepReviewDepth() (bool, error) {
 	var labels []string
 	issue := g.target.Issue
 	// the issue is read only when the policy has a label to match it against
-	if n, err := strconv.Atoi(issue); err == nil && n > 0 && len(policy.Labels) > 0 {
-		is, err := g.forge.Get(g.ctx, n, false)
+	if n, err := strconv.Atoi(issue); err == nil && n > 0 && len(policy.Labels) > 0 && g.issues != nil {
+		is, err := g.issues.Get(g.ctx, n, false)
 		if err != nil {
 			return g.broke(fmt.Sprintf("could not read #%d for its labels to pick the review depth: %v", n, err))
 		}
@@ -1190,18 +1213,43 @@ func indentTail(text string, n int) string {
 	return "    " + strings.Join(lines, "\n    ")
 }
 
-// detectProvider reads the provider from the PR URL (a bare number carries
-// none), then origin, and falls back to github, which is what this gate always
-// assumed.
-func (e Env) detectProvider(ctx context.Context, root, pr string) string {
+// detectProvider reads the forge from the PR URL (a bare number carries none),
+// then forge.provider (configured: github, gitlab or local), then origin. An
+// origin naming no forge falls back to github, which is what this gate always
+// assumed; no origin at all is the local forge (tracker.ProviderLocal).
+func (e Env) detectProvider(ctx context.Context, root, pr, configured string) string {
 	if p, ok := tracker.ParsePRURL(pr); ok {
 		return p.Provider
 	}
-	url, _ := e.runGit(ctx, root, "remote", "get-url", "origin")
+	switch configured {
+	case "github", "gitlab", tracker.ProviderLocal:
+		return configured
+	}
+	url, code := e.runGit(ctx, root, "remote", "get-url", "origin")
 	if p := tracker.ProviderFromURL(url); p != tracker.ProviderUnknown {
 		return p
 	}
+	if code != 0 || strings.TrimSpace(url) == "" {
+		return tracker.ProviderLocal
+	}
 	return "github"
+}
+
+// issueSide is the issue source the gate reads beside forge: the forge itself
+// when it also serves issues (a test fake, or any adapter that does), else the
+// tracker issues.source names. A file source has none (nil, no error).
+func (e Env) issueSide(forge Forge, dir string, s tracker.Settings) (Issues, error) {
+	if is, ok := forge.(Issues); ok {
+		return is, nil
+	}
+	it, err := tracker.NewIssueTracker(e.context(), s, "", dir)
+	if errors.Is(err, tracker.ErrNoIssueTracker) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return it, nil
 }
 
 type gate struct {
@@ -1220,6 +1268,8 @@ type gate struct {
 	prNum    string
 	provider string
 	forge    Forge
+	issues   Issues // the issue source; nil for a file source
+	local    bool   // the forge is local: no PR, direct merge
 	cliName  string
 	label    string // issues.labels.inProgress: the claim label a merge releases
 	remote   bool
@@ -1468,11 +1518,11 @@ func (g *gate) ffFailureCause(mergeOut string) string {
 // Best effort: the PR is already merged, so a failure is a note, and
 // `rota round reconcile --apply` clears whatever this missed.
 func (g *gate) releaseClaimLabels(body string) {
-	if g.label == "" {
+	if g.label == "" || g.issues == nil {
 		return
 	}
 	for _, n := range g.forge.ClosedNumbers(body) {
-		is, err := g.forge.Get(g.ctx, n, false)
+		is, err := g.issues.Get(g.ctx, n, false)
 		if err != nil {
 			g.res.Notes = append(g.res.Notes, fmt.Sprintf("LABEL-KEPT %s — cannot read #%d to release %s: %v", g.o.Slot, n, g.label, err))
 			continue
@@ -1480,7 +1530,7 @@ func (g *gate) releaseClaimLabels(body string) {
 		if is.State != "closed" || !slices.Contains(is.Labels, g.label) {
 			continue
 		}
-		if err := g.forge.RemoveLabels(g.ctx, n, []string{g.label}); err != nil {
+		if err := g.issues.RemoveLabels(g.ctx, n, []string{g.label}); err != nil {
 			g.res.Notes = append(g.res.Notes, fmt.Sprintf("LABEL-KEPT %s — cannot remove %s from #%d: %v", g.o.Slot, g.label, n, err))
 		}
 	}
