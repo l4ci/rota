@@ -68,14 +68,25 @@ func TestAssignKeyedIssuesClaimBranchAndOverlap(t *testing.T) {
 	}
 }
 
-// A key-based tracker's Depends on line can name PROJ-12; a numbered tracker's
-// prose (UTF-8, SHA-256, ISO-8601) is not a ref.
+// A key-based tracker's Depends on line can name PROJ-12 of its own project;
+// prose (UTF-8, SHA-256, ISO-8601) and other projects are not refs.
 func TestDependenciesReadKeysOnlyOnAKeyedTracker(t *testing.T) {
-	text := "## Depends on\n- PROJ-12 and #7 (needs UTF-8, SHA-256, ISO-8601)\n"
-	if refs, _ := dependencies(text, true); strings.Join(refs, ",") != "7,PROJ-12,UTF-8,SHA-256,ISO-8601" {
+	text := "## Depends on\n- PROJ-12, OTHER-3 and #7 (needs UTF-8, SHA-256, ISO-8601)\n"
+	if refs, _ := dependencies(text, "PROJ"); strings.Join(refs, ",") != "7,PROJ-12" {
 		t.Errorf("keyed refs = %v", refs)
 	}
 	if refs, _ := Dependencies(text); strings.Join(refs, ",") != "7" {
 		t.Errorf("numbered refs = %v, want just 7", refs)
+	}
+}
+
+// On a key-based tracker only keys of the item's own project are refs: prose
+// like UTF-8 in a Depends on section names no issue and blocks nothing.
+func TestAssignKeyedDependsOnReadsOnlyItsProject(t *testing.T) {
+	f := newAssignFixture(t)
+	f.be.add("PROJ-7", "Done first", "M01", true, "")
+	f.be.add("PROJ-125", "Encode names", "M01", false, "## Acceptance\n- [ ] ok\n\n## Depends on\n- PROJ-7, stored as UTF-8 per ISO-8601\n")
+	if _, err := f.assign("PROJ-125", "ben", nil); err != nil {
+		t.Fatalf("prose blocked the assign: %v", err)
 	}
 }
