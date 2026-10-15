@@ -90,6 +90,8 @@ type Server struct {
 	reqs        []string
 	limitN      int
 	retryAfter  string
+	failN       int
+	failStatus  int
 }
 
 type obj = map[string]any
@@ -129,6 +131,14 @@ func (s *Server) RateLimitNext(n int, retryAfter string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.limitN, s.retryAfter = n, retryAfter
+}
+
+// FailNext makes the next n requests answer status (a 5xx) before they reach
+// any handler, so nothing they ask for happens.
+func (s *Server) FailNext(n, status int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.failN, s.failStatus = n, status
 }
 
 // Requests lists every request seen as "METHOD /path?query", in order.
@@ -254,6 +264,11 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 		s.limitN--
 		w.Header().Set("Retry-After", s.retryAfter)
 		write(w, 429, obj{"errorMessages": []string{"rate limited"}})
+		return
+	}
+	if s.failN > 0 {
+		s.failN--
+		write(w, s.failStatus, obj{"errorMessages": []string{"server error"}})
 		return
 	}
 	if r.Header.Get("Authorization") != s.auth() {
@@ -809,6 +824,17 @@ func unq(v string) string {
 }
 
 // parseJQL compiles the supported JQL grammar; anything else is an error.
+// Clauses are joined by ` AND `, and an optional trailing `ORDER BY key ASC`
+// or `ORDER BY created ASC` is accepted (results are always in key order):
+//
+//	project = "PROJ"          (or unquoted PROJ)
+//	statusCategory = Done     statusCategory != Done
+//	labels = "x"
+//	fixVersion = "name"
+//	assignee = currentUser()
+//	key in ("PROJ-1", "PROJ-2")
+//
+// Strings are double-quoted with \" and \\ escapes.
 func (s *Server) parseJQL(q string) (func(*issue) bool, error) {
 	unsupported := fmt.Errorf("unsupported JQL: %s", q)
 	rest := strings.TrimSpace(reOrder.ReplaceAllString(q, ""))

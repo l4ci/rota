@@ -92,13 +92,16 @@ func adfStartsBlock(line string, quote bool) bool {
 }
 
 // adfFence parses a fenced code block starting at lines[i]. Its body is
-// verbatim; an unclosed fence runs to the end.
+// verbatim; a fence of n backticks closes on a line of n or more, so code
+// that holds ``` itself gets a longer fence. An unclosed fence runs to the end.
 func adfFence(lines []string, i int) (map[string]any, int) {
-	lang := strings.TrimSpace(strings.TrimSpace(lines[i])[3:])
+	open := strings.TrimSpace(lines[i])
+	n := len(open) - len(strings.TrimLeft(open, "`"))
+	lang := strings.TrimSpace(open[n:])
 	var body []string
 	j := i + 1
 	for ; j < len(lines); j++ {
-		if strings.TrimSpace(lines[j]) == "```" {
+		if c := strings.TrimSpace(lines[j]); len(c) >= n && strings.Trim(c, "`") == "" {
 			j++
 			break
 		}
@@ -199,6 +202,10 @@ func adfInlineInto(out *[]any, s string, marks []any) {
 	}
 	for i := 0; i < len(s); {
 		switch c := s[i]; {
+		case c == '\\' && i+1 < len(s) && adfPunct(s[i+1]):
+			plain.WriteByte(s[i+1])
+			i += 2
+			continue
 		case c == '`':
 			if end := strings.IndexByte(s[i+1:], '`'); end > 0 {
 				flush()
@@ -265,7 +272,7 @@ func adfFindClose(s string, open int, delim string) (int, bool) {
 		}
 		end := from + k
 		from = end + 1
-		if end == start || s[end-1] == ' ' || s[end-1] == '\t' {
+		if end == start || s[end-1] == ' ' || s[end-1] == '\t' || s[end-1] == '\\' {
 			continue
 		}
 		if delim == "_" && end+1 < len(s) && adfWordByte(s[end+1]) {
@@ -273,6 +280,11 @@ func adfFindClose(s string, open int, delim string) (int, bool) {
 		}
 		return end, true
 	}
+}
+
+// adfPunct reports whether b is ASCII punctuation, which a backslash escapes.
+func adfPunct(b byte) bool {
+	return b > ' ' && b < 0x7f && !(b >= '0' && b <= '9' || b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z')
 }
 
 // adfWordByte reports whether b is part of a word for underscore emphasis.
@@ -353,7 +365,11 @@ func adfRender(n adfNode) string {
 	case "hardBreak":
 		return "\n"
 	case "paragraph":
-		return adfConcat(n.Content)
+		lines := strings.Split(adfConcat(n.Content), "\n")
+		for i, l := range lines {
+			lines[i] = adfEscapeLineStart(l)
+		}
+		return strings.Join(lines, "\n")
 	case "heading":
 		level := 1
 		if f, ok := n.Attrs["level"].(float64); ok {
@@ -366,10 +382,11 @@ func adfRender(n adfNode) string {
 			code.WriteString(c.Text)
 		}
 		lang, _ := n.Attrs["language"].(string)
+		fence := adfFenceFor(code.String())
 		if code.Len() == 0 {
-			return "```" + lang + "\n```"
+			return fence + lang + "\n" + fence
 		}
-		return "```" + lang + "\n" + code.String() + "\n```"
+		return fence + lang + "\n" + code.String() + "\n" + fence
 	case "bulletList", "orderedList":
 		return adfRenderList(n)
 	case "blockquote":
@@ -459,6 +476,8 @@ func adfRenderText(n adfNode) string {
 	}
 	if _, ok := has["code"]; ok {
 		core = "`" + core + "`"
+	} else {
+		core = adfEscape(core)
 	}
 	if _, ok := has["strong"]; ok {
 		core = "**" + core + "**"
@@ -518,4 +537,54 @@ func adfRenderTable(n adfNode) string {
 		}
 	}
 	return strings.Join(out, "\n")
+}
+
+var adfOrderedStartRe = regexp.MustCompile(`^(\d+)([.)] .*)$`)
+
+// adfEscapeLineStart escapes a paragraph line the writer would otherwise read
+// as the start of a heading, list, quote, rule or fence.
+func adfEscapeLineStart(line string) string {
+	trim := strings.TrimLeft(line, " \t")
+	lead := line[:len(line)-len(trim)]
+	if m := adfOrderedStartRe.FindStringSubmatch(trim); m != nil {
+		return lead + m[1] + "\\" + m[2]
+	}
+	if adfStartsBlock(trim, false) || adfRuleRe.MatchString(trim) {
+		return lead + "\\" + trim
+	}
+	return line
+}
+
+// adfEscape backslash-escapes the Markdown-significant characters of plain
+// text, but only when the writer would read the text as anything other than
+// itself, so ordinary text (snake_case, a lone *) reads back unchanged.
+func adfEscape(s string) string {
+	nodes := adfInline(s)
+	if len(nodes) == 1 {
+		if n := nodes[0].(map[string]any); n["marks"] == nil && n["text"] == s {
+			return s
+		}
+	}
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		if strings.IndexByte("\\`*_[]", s[i]) >= 0 {
+			b.WriteByte('\\')
+		}
+		b.WriteByte(s[i])
+	}
+	return b.String()
+}
+
+// adfFenceFor is a backtick fence longer than any backtick run in code.
+func adfFenceFor(code string) string {
+	longest, run := 0, 0
+	for i := 0; i < len(code); i++ {
+		if code[i] == '`' {
+			run++
+			longest = max(longest, run)
+		} else {
+			run = 0
+		}
+	}
+	return strings.Repeat("`", max(3, longest+1))
 }

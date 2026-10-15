@@ -18,15 +18,21 @@ import (
 // REST is the HTTP layer of the trackers rota reaches over HTTP instead of a
 // CLI (Jira; Linear's GraphQL endpoint is one POST through the same Do). It
 // knows JSON, auth, retries and the status-to-Kind mapping, nothing about any
-// one tracker's schema: a 429 waits its Retry-After and retries, a 5xx backs
-// off and retries, and a wait longer than MaxWait gives up as rate limited
-// rather than sleep for an hour.
+// one tracker's schema: a 429 waits its Retry-After and retries, a 5xx on an
+// idempotent method backs off and retries, and a wait longer than MaxWait
+// gives up as rate limited rather than sleep for an hour. A POST is never
+// resent after a 5xx: the server may have made the comment or issue already.
 type REST struct {
 	Base string // scheme and host, plus any path prefix; Do appends path
 	// Auth sets the request's credentials (an Authorization header).
 	Auth   func(*http.Request)
 	Client *http.Client // nil: a client with RESTTimeout
-	Sleep  func(time.Duration)
+	// Sleep waits between attempts and returns early with ctx's error; nil
+	// waits on a timer.
+	Sleep func(ctx context.Context, d time.Duration) error
+	Now   func() time.Time // reads an HTTP-date Retry-After; nil is time.Now
+	// MaxBody caps a response body; 0 is restMaxBody.
+	MaxBody int64
 	// Retries is how many times a 429 or 5xx is retried; 0 is restRetries.
 	Retries int
 	// MaxWait caps one Retry-After wait; 0 is restMaxWait.
@@ -39,6 +45,7 @@ const (
 	restRetries = 3
 	restMaxWait = 2 * time.Minute
 	restBackoff = time.Second
+	restMaxBody = 32 << 20
 )
 
 var defaultRESTClient = &http.Client{Timeout: RESTTimeout}
@@ -74,18 +81,20 @@ func (r *REST) Do(ctx context.Context, method, path string, in, out any) error {
 			}
 			return nil
 		}
-		retryable := status == http.StatusTooManyRequests || status >= 500
+		retryable := status == http.StatusTooManyRequests || status >= 500 && idempotent(method)
 		if !retryable || attempt >= retries {
 			return restError(method, path, status, raw)
 		}
 		wait := restBackoff << attempt
-		if after, ok := retryAfter(hdr.Get("Retry-After"), time.Now()); ok {
+		if after, ok := retryAfter(hdr.Get("Retry-After"), r.now()); ok {
 			wait = after
 		}
 		if wait > r.maxWait() {
 			return rateLimited("%s %s: rate limited, the tracker asks to wait %s (more than %s)", method, path, wait, r.maxWait())
 		}
-		r.sleep(wait)
+		if err := r.sleep(ctx, wait); err != nil {
+			return internal("%s %s: %v", method, path, err)
+		}
 	}
 }
 
@@ -117,9 +126,16 @@ func (r *REST) send(ctx context.Context, method, path string, body []byte) (int,
 		return 0, nil, nil, unavailable("%s %s: %v", method, path, err)
 	}
 	defer resp.Body.Close()
-	raw, err := io.ReadAll(resp.Body)
+	limit := r.MaxBody
+	if limit <= 0 {
+		limit = restMaxBody
+	}
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
 	if err != nil {
 		return 0, nil, nil, unavailable("%s %s: reading the response: %v", method, path, err)
+	}
+	if int64(len(raw)) > limit {
+		return 0, nil, nil, failed("%s %s: the response is larger than %d bytes", method, path, limit)
 	}
 	return resp.StatusCode, resp.Header, raw, nil
 }
@@ -131,12 +147,34 @@ func (r *REST) maxWait() time.Duration {
 	return restMaxWait
 }
 
-func (r *REST) sleep(d time.Duration) {
-	if r.Sleep != nil {
-		r.Sleep(d)
-		return
+func (r *REST) now() time.Time {
+	if r.Now != nil {
+		return r.Now()
 	}
-	time.Sleep(d)
+	return time.Now()
+}
+
+func (r *REST) sleep(ctx context.Context, d time.Duration) error {
+	if r.Sleep != nil {
+		return r.Sleep(ctx, d)
+	}
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-t.C:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// idempotent methods may be resent after a 5xx: repeating them changes nothing.
+func idempotent(method string) bool {
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodPut, http.MethodDelete:
+		return true
+	}
+	return false
 }
 
 // retryAfter reads a Retry-After header: delay seconds or an HTTP date.
