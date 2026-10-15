@@ -182,6 +182,9 @@ type GateResult struct {
 	Err   string
 	Hint  string
 	Notes []string // PROVENANCE-SKIP and NO-VERIFY lines for stderr
+	// Warnings are problems the gate survived: the merge landed, but something
+	// after it needs a caller's eye (a Jira issue that would not close).
+	Warnings []string
 	// Excluded lists the test-ledger entries that excused a failing command.
 	// Expired lists the entries past their expiry, which fail the gate.
 	Excluded, Expired []testledger.Entry
@@ -1457,8 +1460,9 @@ func (g *gate) awaitMerged() (sha string, done bool) {
 		return "", true
 	}
 	src := tracker.ClosingSource{Body: body, Title: title, Branch: head}
-	g.closeMerged(src)
-	g.releaseClaimLabels(src)
+	if g.closeMerged(src) {
+		g.releaseClaimLabels(src)
+	}
 	if sha == "" {
 		sha = g.verified
 	}
@@ -1538,34 +1542,38 @@ func (g *gate) ffFailureCause(mergeOut string) string {
 	return "merge refused, cause not found: no overlapping local changes, not ahead of " + g.baseRef
 }
 
+// closeMerged closes the slot's issue on a tracker a merge does not close
+// (tracker.MergeCloser, Jira) when the merged PR names it, so it is not left
+// open, in progress and claimed. A partial slice stays open. It reports false
+// when the close failed: the merge has landed either way, so the failure is a
+// warning on the result, and the caller keeps the claim label so
+// `rota round reconcile` lists the issue.
+func (g *gate) closeMerged(src tracker.ClosingSource) bool {
+	mc, ok := g.issues.(tracker.MergeCloser)
+	key, isKey := tracker.ParseKey(g.target.Issue)
+	if !ok || !isKey || !g.issues.ClosesIssue(key, src) {
+		return true
+	}
+	is, err := g.issues.Get(g.ctx, key, false)
+	if err == nil && slices.Contains(is.Labels, PartialSliceLabel) {
+		return true
+	}
+	if err == nil {
+		err = mc.CloseAfterMerge(g.ctx, key, g.pr)
+	}
+	if err != nil {
+		g.res.Warnings = append(g.res.Warnings, fmt.Sprintf("ISSUE-OPEN %s — %s merged but %s could not be closed, so it keeps its claim for `rota round reconcile`: %v", g.o.Slot, g.pr, key.Ref(), err))
+		return false
+	}
+	return true
+}
+
 // releaseClaimLabels drops the in-progress label from every issue the merged PR
 // closes. The forge closes them but leaves the label, so the label would stop
 // meaning "being worked on". An issue still open (the PR landed on a branch
 // other than the default, or the forge has not closed it yet) keeps its label.
 // Best effort: the PR is already merged, so a failure is a note, and
 // `rota round reconcile --apply` clears whatever this missed.
-// closeMerged closes the slot's issue on a tracker a merge does not close
-// (tracker.MergeCloser, Jira) when the merged PR names it, so it is not left
-// open, in progress and claimed. A partial slice stays open. A failure is a
-// note: the merge has landed either way.
-func (g *gate) closeMerged(src tracker.ClosingSource) {
-	mc, ok := g.issues.(tracker.MergeCloser)
-	key, isKey := tracker.ParseKey(g.target.Issue)
-	if !ok || !isKey || !g.issues.ClosesIssue(key, src) {
-		return
-	}
-	is, err := g.issues.Get(g.ctx, key, false)
-	if err == nil && slices.Contains(is.Labels, PartialSliceLabel) {
-		return
-	}
-	if err == nil {
-		err = mc.CloseAfterMerge(g.ctx, key, g.pr)
-	}
-	if err != nil {
-		g.res.Notes = append(g.res.Notes, fmt.Sprintf("ISSUE-OPEN %s — %s merged but %s could not be closed: %v", g.o.Slot, g.pr, key.Ref(), err))
-	}
-}
-
 func (g *gate) releaseClaimLabels(src tracker.ClosingSource) {
 	if g.label == "" || g.issues == nil {
 		return

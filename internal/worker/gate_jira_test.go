@@ -61,3 +61,37 @@ func TestGateClosesAJiraIssueAfterTheMerge(t *testing.T) {
 		})
 	}
 }
+
+// A workflow with no done status cannot take the close. The merge has landed,
+// so the gate still passes, but the issue keeps its claim label for
+// `rota round reconcile` and the result carries a warning.
+func TestGateKeepsTheClaimWhenTheJiraCloseFails(t *testing.T) {
+	s := jiratest.New(t, jiratest.Options{Statuses: []jiratest.Status{
+		{ID: "1", Name: "To Do", Category: "new"},
+		{ID: "2", Name: "In Progress", Category: "indeterminate"},
+	}})
+	j := tracker.NewJira(connections.Connection{Name: "work", Kind: connections.KindJira, Site: s.URL, User: "me@example.com", Deployment: connections.DeploymentCloud}, "tok", "PROJ", "")
+	key, err := j.Create(bg, "Widen", "", []string{"in-progress"}, "")
+	if err != nil || key != "PROJ-1" {
+		t.Fatal(key, err)
+	}
+	w := newWorld(t, ghURL)
+	w.setConfig(`{"issues":{"source":"jira"},"test":{"full":["true"]}}`)
+	os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
+		[]byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","task":"PROJ-1","pr":%q}]}`, ghURL)), 0o644)
+	w.forge("title", "PROJ-1 widen the seam")
+	w.forge("head", "w1")
+	e := w.env(false)
+	e.Issues = func(string, tracker.Settings) (Issues, error) { return j, nil }
+	res, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main"})
+	if err != nil || res.Verdict != GatePass {
+		t.Fatalf("verdict = %q (%v): %+v", res.Verdict, err, res)
+	}
+	if len(res.Warnings) != 1 || !strings.Contains(res.Warnings[0], "PROJ-1") {
+		t.Errorf("warnings %v, want one naming PROJ-1", res.Warnings)
+	}
+	is, _ := j.Get(bg, key, false)
+	if !slices.Contains(is.Labels, "in-progress") {
+		t.Errorf("claim label released from an issue still open: %v", is.Labels)
+	}
+}
