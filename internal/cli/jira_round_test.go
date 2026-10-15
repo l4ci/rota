@@ -137,7 +137,7 @@ func TestJiraRoundAssignClaimsByProperty(t *testing.T) {
 	}
 }
 
-// AC-2: two Jira issues naming the same tracked file overlap; the second
+// Two Jira issues naming the same tracked file overlap; the second
 // assign is refused while the first is in flight.
 func TestJiraRoundAssignOverlapBlocks(t *testing.T) {
 	f := newJiraFx(t, "dana", "kit")
