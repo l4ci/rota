@@ -24,6 +24,9 @@ func TestLinearClaimsArePlainComments(t *testing.T) {
 	if err := cs.PutClaim(ctx, k, "nia@2"); err != nil {
 		t.Fatal(err)
 	}
+	if in := input(shape(t, s, "CommentCreate", "mutation CommentCreate($input: CommentCreateInput!)", "commentCreate(input: $input) { success comment { id } }")); in["body"] != "Claimed by nia@2" || in["issueId"] == "" {
+		t.Errorf("claim comment input = %v", in)
+	}
 	s.AddHumanComment(string(k), "Claimed by x y", "pat")
 	got, err := cs.Claims(ctx, k)
 	if want := []string{"nia@2", "ben@1", "a_b*c"}; err != nil || !slices.Equal(got, want) {
@@ -39,6 +42,9 @@ func TestLinearClaimsArePlainComments(t *testing.T) {
 	}
 	if err := cs.DropClaim(ctx, k, "nia@2"); err != nil {
 		t.Fatal(err)
+	}
+	if vars := shape(t, s, "CommentDelete", "mutation CommentDelete($id: String!)", "commentDelete(id: $id) { success }"); vars["id"] == "" {
+		t.Errorf("release deleted no comment id: %v", vars)
 	}
 	if err := cs.DropClaim(ctx, k, "nobody"); err != nil {
 		t.Fatalf("dropping an absent claim: %v", err)
