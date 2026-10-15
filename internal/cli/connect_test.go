@@ -13,6 +13,7 @@ import (
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/connections"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/tracker/jiratest"
 )
 
 // fakeKeychain is the secret store tests use in place of the OS keychain.
@@ -411,5 +412,25 @@ func TestConnectAddReportsFailedRollback(t *testing.T) {
 	code, _, errOut := e.run("t", "connect", "add", "a_b", "--kind", "linear", "--token-stdin")
 	if code == 0 || !strings.Contains(errOut, "rolling back the secret also failed") || !strings.Contains(errOut, "locked") {
 		t.Errorf("%d %q", code, errOut)
+	}
+}
+
+// The real build tests a jira connection with one authenticated read of the
+// site; here the site is the fake.
+func TestConnectTestJiraByDefault(t *testing.T) {
+	e := newConnectEnv(t)
+	e.d.ConnTesters = defaultDeps().ConnTesters
+	s := jiratest.New(t, jiratest.Options{})
+	if code, env, _ := e.run("tok\n", "connect", "add", "work", "--kind", "jira", "--site", s.URL, "--user", "me@example.com", "--token-stdin"); code != 0 {
+		t.Fatalf("add: %v", env)
+	}
+	if code, env, _ := e.run("", "connect", "test", "work"); code != 0 || jsonx.Str(connData(env), "state") != "ok" {
+		t.Fatalf("test: %d %v", code, connData(env))
+	}
+	if code, _, _ := e.run("bad\n", "connect", "add", "work", "--kind", "jira", "--site", s.URL, "--user", "me@example.com", "--token-stdin", "--replace"); code != 0 {
+		t.Fatal("replace")
+	}
+	if code, env, _ := e.run("", "connect", "test", "work"); code == 0 {
+		t.Fatalf("a bad token passed: %v", connData(env))
 	}
 }
