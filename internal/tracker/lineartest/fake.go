@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"slices"
 	"sort"
 	"strconv"
@@ -387,6 +388,41 @@ var kinds = map[string]string{"Viewer": "query", "Team": "query", "Labels": "que
 	"IssueDelete": "mutation", "CommentCreate": "mutation", "CommentUpdate": "mutation", "CommentDelete": "mutation",
 	"CommentURL": "query", "AttachmentCreate": "mutation", "AttachmentDelete": "mutation"}
 
+// schemaNames are the operation, field, argument, type and comparator names
+// of the slice of Linear's published schema (packages/sdk/src/schema.graphql
+// in github.com/linear/linear) the adapter uses, each checked there. A query
+// naming anything else is refused, as Linear refuses an unknown field.
+var schemaNames = map[string]bool{}
+
+func init() {
+	for _, n := range strings.Fields(`query mutation String Boolean IssueFilter
+		IssueCreateInput IssueUpdateInput IssueLabelCreateInput CommentCreateInput CommentUpdateInput AttachmentCreateInput
+		viewer teams issueLabels issue issues comment
+		issueCreate issueUpdate issueDelete issueLabelCreate commentCreate commentUpdate commentDelete attachmentCreate attachmentDelete
+		id name displayName key states type position team identifier title description url completedAt canceledAt
+		state labels assignee creator attachments metadata comments body createdAt user
+		success issueLabel nodes pageInfo hasNextPage endCursor
+		filter first after input eq`) {
+		schemaNames[n] = true
+	}
+	for op := range kinds {
+		schemaNames[op] = true
+	}
+}
+
+// reName is a GraphQL name; a $variable is skipped by its leading $.
+var reName = regexp.MustCompile(`\$?[A-Za-z_][A-Za-z0-9_]*`)
+
+// unknownNames is the first name in q outside schemaNames, or "".
+func unknownNames(q string) string {
+	for _, n := range reName.FindAllString(q, -1) {
+		if !strings.HasPrefix(n, "$") && !schemaNames[n] {
+			return n
+		}
+	}
+	return ""
+}
+
 func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -428,6 +464,10 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 	kind, known := kinds[req.Op]
 	if !known || !strings.HasPrefix(req.Query, kind+" "+req.Op) {
 		reply(w, 400, (&fault{status: 400, code: "GRAPHQL_VALIDATION_FAILED", typ: "graphql", msg: fmt.Sprintf("operation %q is not a %s the fake serves", req.Op, kind)}).body())
+		return
+	}
+	if bad := unknownNames(req.Query); bad != "" {
+		reply(w, 400, (&fault{status: 400, code: "GRAPHQL_VALIDATION_FAILED", typ: "graphql", msg: fmt.Sprintf("Cannot query field %q: not in the fake's slice of Linear's schema", bad)}).body())
 		return
 	}
 	data, f := s.dispatch(req.Op, req.Vars)
