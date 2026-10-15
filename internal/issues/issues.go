@@ -2,8 +2,8 @@
 // label, close and the open-only filter of the cross-reference index. It
 // ports bin/hv-issues-{provider,list,label,close,imported}; every forge call
 // here goes through tracker.Adapter, so what differs between gh and glab
-// lives in one place. With issues.source jira, label and close go through the
-// Jira tracker instead.
+// lives in one place. With issues.source jira or linear, label and close go
+// through that tracker instead.
 package issues
 
 import (
@@ -87,9 +87,9 @@ func (e Env) adapter(ctx context.Context, provider, dir string) (Forge, error) {
 }
 
 // tracker is what label and close act on: issues.source's own tracker when it
-// is not a forge (jira), else the forge adapter of the resolved provider.
+// is not a forge (jira, linear), else the forge adapter of the resolved provider.
 func (e Env) tracker(ctx context.Context, verb, dir string) (Forge, error) {
-	if s := tracker.SettingsFromConfig(e.Config); s.Source == config.SourceJira {
+	if s := tracker.SettingsFromConfig(e.Config); s.Source == config.SourceJira || s.Source == config.SourceLinear {
 		if e.Forge != nil {
 			return e.Forge(ctx, s.Source, dir)
 		}

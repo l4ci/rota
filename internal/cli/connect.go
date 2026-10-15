@@ -56,10 +56,23 @@ func doctorConnection(ctx context.Context, d *Deps, name string) *doctor.ConnChe
 	return &doctor.ConnCheck{Name: name, State: string(dg.State), Detail: dg.Detail, Hint: dg.Hint}
 }
 
+// linearTeamProblem is why the project's Linear team cannot be read through
+// its working connection, for `rota doctor`; "" when it can.
+func linearTeamProblem(ctx context.Context, d *Deps, cfg any, root string) string {
+	it, err := d.issueTracker(ctx, cfg, root)
+	if err == nil {
+		err = it.CheckAuth(ctx)
+	}
+	if err != nil {
+		return err.Error()
+	}
+	return ""
+}
+
 func connectAddVerb(fs *flag.FlagSet) RunFunc {
 	kind := fs.String("kind", "", "connection kind: jira or linear")
-	site := fs.String("site", "", "site URL, e.g. https://acme.atlassian.net (required for jira)")
-	user := fs.String("user", "", "account email the token belongs to (required for Jira Cloud)")
+	site := fs.String("site", "", "site URL, e.g. https://acme.atlassian.net (required for jira; linear defaults to https://api.linear.app)")
+	user := fs.String("user", "", "account email the token belongs to (required for Jira Cloud; unused for linear)")
 	deployment := fs.String("deployment", "", "jira only: cloud or datacenter (default cloud for *.atlassian.net sites, else required)")
 	stdin := fs.Bool("token-stdin", false, "read the API token from stdin (the default when stdin is not a terminal)")
 	replace := fs.Bool("replace", false, "replace an existing connection of this name")

@@ -1543,7 +1543,7 @@ func (g *gate) ffFailureCause(mergeOut string) string {
 }
 
 // closeMerged closes the slot's issue on a tracker a merge does not close
-// (tracker.MergeCloser, Jira) when the merged PR names it, so it is not left
+// (tracker.MergeCloser: Jira, Linear) when the merged PR names it, so it is not left
 // open, in progress and claimed. A partial slice stays open. It reports false
 // when the close failed: the merge has landed either way, so the failure is a
 // warning on the result, and the caller keeps the claim label so
