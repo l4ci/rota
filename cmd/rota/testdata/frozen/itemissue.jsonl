@@ -4,7 +4,7 @@
 {"name":"claim/bad-as","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"--as must be a claim ID: non-empty, no whitespace, no -->"},"ok":false},"db":"396d7faf5419e420"}]}
 {"name":"claim/closed","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"[4] is closed"},"ok":false},"db":"396d7faf5419e420"}]}
 {"name":"claim/empty-as","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"--as must be a claim ID: non-empty, no whitespace, no -->"},"ok":false},"db":"396d7faf5419e420"}]}
-{"name":"claim/forge-unavailable","steps":[{"exit":5,"env":{"error":{"code":"unavailable","exit":5,"message":"cannot determine provider (set issues.provider)"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"claim/forge-unavailable","steps":[{"exit":5,"env":{"error":{"code":"unavailable","exit":5,"message":"cannot determine the issue tracker provider (set issues.source to github or gitlab, or forge.provider)"},"ok":false},"db":"396d7faf5419e420"}]}
 {"name":"claim/gitlab-win/github","steps":[{"exit":0,"env":{"data":{"changed":true,"claimId":"me","id":"2","type":"B"},"ok":true},"db":"cf420f47a3328ff7"}]}
 {"name":"claim/gitlab-win/gitlab","steps":[{"exit":0,"env":{"data":{"changed":true,"claimId":"me","id":"2","type":"B"},"ok":true},"db":"cf420f47a3328ff7"}]}
 {"name":"claim/held-by-other","steps":[{"exit":4,"env":{"data":{"blockedBy":"claimed","changed":true},"error":{"code":"refused","exit":4,"message":"6 is claimed by other"},"ok":false},"db":"1adb41c785be1408"}]}
@@ -26,7 +26,7 @@
 {"name":"comment-list/kind","steps":[{"exit":0,"env":{"data":{"comments":[{"kind":"question","text":"Why?\nmore","who":"fake-user"}],"id":"5","type":"B"},"ok":true},"text":"- fake-user · question · Why?\n  more\n","db":"396d7faf5419e420"}]}
 {"name":"comment-list/kind-empty","steps":[{"exit":0,"env":{"data":{"comments":[],"id":"5","type":"B"},"ok":true},"text":"","db":"396d7faf5419e420"}]}
 {"name":"comment-list/none","steps":[{"exit":0,"env":{"data":{"comments":[],"id":"2","type":"B"},"ok":true},"text":"","db":"396d7faf5419e420"}]}
-{"name":"commentlist/forge-unavailable","steps":[{"exit":5,"env":{"error":{"code":"unavailable","exit":5,"message":"cannot determine provider (set issues.provider)"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"commentlist/forge-unavailable","steps":[{"exit":5,"env":{"error":{"code":"unavailable","exit":5,"message":"cannot determine the issue tracker provider (set issues.source to github or gitlab, or forge.provider)"},"ok":false},"db":"396d7faf5419e420"}]}
 {"name":"commentlist/rate-limit","steps":[{"exit":6,"env":{"error":{"code":"retry","exit":6,"message":"github secondary rate limit — stopped; wait several minutes before retrying"},"ok":false},"db":"396d7faf5419e420"}]}
 {"name":"commentlist/tracker-issue","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"item not found: 3"},"ok":false},"db":"396d7faf5419e420"}]}
 {"name":"commentlist/unknown","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"item not found: 99"},"ok":false},"db":"396d7faf5419e420"}]}
@@ -41,7 +41,7 @@
 {"name":"complete/done-proof-missing","steps":[{"exit":4,"env":{"data":{"blockedBy":"proof missing","changed":false},"error":{"code":"refused","exit":4,"hint":"record proof with `rota proof add`, or pass --no-proof","message":"[B2] no proof recorded, pass --no-proof to override"},"ok":false},"db":"396d7faf5419e420"}]}
 {"name":"complete/done-with-proof","steps":[{"exit":0,"env":{"data":{"changed":true,"commit":"abc1234","id":"5","reason":"done","type":"B"},"ok":true},"db":"a06d8201ee96076a"}]}
 {"name":"complete/dropped","steps":[{"exit":0,"env":{"data":{"changed":true,"commit":"abc1234","id":"2","reason":"dropped","type":"B"},"ok":true},"db":"ef03b03d57db5563"}]}
-{"name":"complete/forge-unavailable","steps":[{"exit":5,"env":{"error":{"code":"unavailable","exit":5,"message":"cannot determine provider (set issues.provider)"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"complete/forge-unavailable","steps":[{"exit":5,"env":{"error":{"code":"unavailable","exit":5,"message":"cannot determine the issue tracker provider (set issues.source to github or gitlab, or forge.provider)"},"ok":false},"db":"396d7faf5419e420"}]}
 {"name":"complete/gitlab-done-proof/github","steps":[{"exit":0,"env":{"data":{"changed":true,"commit":"abc1234","id":"5","reason":"done","type":"B"},"ok":true},"db":"a06d8201ee96076a"}]}
 {"name":"complete/gitlab-done-proof/gitlab","steps":[{"exit":0,"env":{"data":{"changed":true,"commit":"abc1234","id":"5","reason":"done","type":"B"},"ok":true},"db":"f43c5a6d8e67d36c"}]}
 {"name":"complete/gitlab-dropped/github","steps":[{"exit":0,"env":{"data":{"changed":true,"commit":"abc1234","id":"6","reason":"dropped","type":"F"},"ok":true},"db":"01f47c081083b14a"}]}
@@ -55,7 +55,7 @@
 {"name":"create/bug-tag","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"12","kind":"bugs","type":"B"},"ok":true},"db":"6edbe52f236e80f4"}]}
 {"name":"create/custom-labels","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"12","kind":"bugs","type":"B"},"ok":true},"db":"6727c939e9fba81f"}]}
 {"name":"create/feature-full","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"12","kind":"features","type":"F"},"ok":true},"db":"643c718616aa7684"}]}
-{"name":"create/forge-unavailable","steps":[{"exit":5,"env":{"error":{"code":"unavailable","exit":5,"message":"cannot determine provider (set issues.provider)"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"create/forge-unavailable","steps":[{"exit":5,"env":{"error":{"code":"unavailable","exit":5,"message":"cannot determine the issue tracker provider (set issues.source to github or gitlab, or forge.provider)"},"ok":false},"db":"396d7faf5419e420"}]}
 {"name":"create/gitlab-feature/github","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"12","kind":"features","type":"F"},"ok":true},"db":"3a4869ab2960edb5"}]}
 {"name":"create/gitlab-feature/gitlab","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"12","kind":"features","type":"F"},"ok":true},"db":"3a4869ab2960edb5"}]}
 {"name":"create/id-placeholder-body","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"12","kind":"tasks","type":"T"},"ok":true},"db":"10790c8f0ee64b2e"}]}
@@ -65,7 +65,7 @@
 {"name":"create/rate-limit","steps":[{"exit":6,"env":{"error":{"code":"retry","exit":6,"message":"github secondary rate limit — stopped; wait several minutes before retrying"},"ok":false},"db":"503099116efd58ba"}]}
 {"name":"create/task-plain","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"12","kind":"tasks","type":"T"},"ok":true},"db":"76db7a0b6bfed16e"}]}
 {"name":"fieldget/closed-reason","steps":[{"exit":0,"env":{"data":{"field":"reason","id":"9","type":"B","value":"dropped"},"ok":true},"db":"396d7faf5419e420"}]}
-{"name":"fieldget/forge-unavailable","steps":[{"exit":5,"env":{"error":{"code":"unavailable","exit":5,"message":"cannot determine provider (set issues.provider)"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"fieldget/forge-unavailable","steps":[{"exit":5,"env":{"error":{"code":"unavailable","exit":5,"message":"cannot determine the issue tracker provider (set issues.source to github or gitlab, or forge.provider)"},"ok":false},"db":"396d7faf5419e420"}]}
 {"name":"fieldget/milestone","steps":[{"exit":0,"env":{"data":{"field":"milestone","id":"1","type":"F","value":"M07"},"ok":true},"db":"396d7faf5419e420"}]}
 {"name":"fieldget/rate-limit","steps":[{"exit":6,"env":{"error":{"code":"retry","exit":6,"message":"github secondary rate limit — stopped; wait several minutes before retrying"},"ok":false},"db":"396d7faf5419e420"}]}
 {"name":"fieldget/related-bracketed","steps":[{"exit":0,"env":{"data":{"field":"related","id":"1","type":"F","value":"[B2]"},"ok":true},"db":"396d7faf5419e420"}]}
@@ -77,8 +77,8 @@
 {"name":"fieldlist/open","steps":[{"exit":0,"env":{"data":{"fields":{"detail":"https://github.com/fake/repo/issues/1","milestone":"M07","note":"","reason":"","related":"[B2]","repos":"","since":"","subsystem":"","title":"Add export"},"id":"1","type":"F"},"ok":true},"db":"396d7faf5419e420"}]}
 {"name":"fieldset/bad-field","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"unknown or read-only field title; pick one of milestone, related, repos, subsystem, detail"},"ok":false},"db":"396d7faf5419e420"}]}
 {"name":"fieldset/closed","steps":[{"exit":4,"env":{"data":{"blockedBy":"closed item","changed":false},"error":{"code":"refused","exit":4,"message":"[4] is closed on the issue tracker"},"ok":false},"db":"396d7faf5419e420"}]}
-{"name":"fieldset/detail-refused","steps":[{"exit":4,"env":{"data":{"blockedBy":"backend","changed":false},"error":{"code":"refused","exit":4,"hint":"--name detail points at a file; issues have a body instead","message":"not available with backlog.backend \"issues\""},"ok":false},"db":"396d7faf5419e420"}]}
-{"name":"fieldset/forge-unavailable","steps":[{"exit":5,"env":{"error":{"code":"unavailable","exit":5,"message":"cannot determine provider (set issues.provider)"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"fieldset/detail-refused","steps":[{"exit":4,"env":{"data":{"blockedBy":"backend","changed":false},"error":{"code":"refused","exit":4,"hint":"--name detail points at a file; issues have a body instead","message":"not available when issues.source is a tracker"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"fieldset/forge-unavailable","steps":[{"exit":5,"env":{"error":{"code":"unavailable","exit":5,"message":"cannot determine the issue tracker provider (set issues.source to github or gitlab, or forge.provider)"},"ok":false},"db":"396d7faf5419e420"}]}
 {"name":"fieldset/gitlab-milestone/github","steps":[{"exit":0,"env":{"data":{"changed":true,"field":"milestone","id":"2","type":"B","value":"M07"},"ok":true},"db":"19a7cb722ff13e56"}]}
 {"name":"fieldset/gitlab-milestone/gitlab","steps":[{"exit":0,"env":{"data":{"changed":true,"field":"milestone","id":"2","type":"B","value":"M07"},"ok":true},"db":"19a7cb722ff13e56"}]}
 {"name":"fieldset/milestone","steps":[{"exit":0,"env":{"data":{"changed":true,"field":"milestone","id":"2","type":"B","value":"M07"},"ok":true},"db":"19a7cb722ff13e56"}]}
@@ -103,7 +103,7 @@
 {"name":"note-add/bad-kind","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"--kind must be proof|design|plan|acceptance"},"ok":false},"db":"396d7faf5419e420"}]}
 {"name":"note-add/edit-design","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"5","kind":"design","type":"B"},"ok":true},"db":"d757205369ed0d7b"}]}
 {"name":"note-add/empty-body","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"empty note body"},"ok":false},"db":"396d7faf5419e420"}]}
-{"name":"note-add/file-backend","steps":[{"exit":4,"env":{"data":{"blockedBy":"backend","changed":false},"error":{"code":"refused","exit":4,"hint":"rota design or rota plan","message":"item note add is not available with backlog.backend \"file\""},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"note-add/file-backend","steps":[{"exit":4,"env":{"data":{"blockedBy":"backend","changed":false},"error":{"code":"refused","exit":4,"hint":"rota design or rota plan","message":"item note add is not available when issues.source is file"},"ok":false},"db":"396d7faf5419e420"}]}
 {"name":"note-add/grow-parts","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"5","kind":"design","type":"B"},"ok":true},"db":"7d2ce0a473b7ce3a"}]}
 {"name":"note-add/identical","steps":[{"exit":0,"env":{"data":{"changed":false,"id":"5","kind":"design","type":"B"},"ok":true},"db":"396d7faf5419e420"}]}
 {"name":"note-add/long-line","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"2","kind":"design","type":"B"},"ok":true},"db":"b7e0258616197b78"}]}
@@ -124,7 +124,7 @@
 {"name":"note-show/absent","steps":[{"exit":0,"env":{"data":{"body":"","exists":false,"id":"2","kind":"plan","type":"B"},"ok":true},"text":"","db":"396d7faf5419e420"}]}
 {"name":"note-show/bad-kind","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"--kind must be proof|design|plan|acceptance"},"ok":false},"text":"","db":"396d7faf5419e420"}]}
 {"name":"note-show/design","steps":[{"exit":0,"env":{"data":{"body":"the design","exists":true,"id":"5","kind":"design","type":"B"},"ok":true},"text":"the design\n","db":"396d7faf5419e420"}]}
-{"name":"note-show/file-backend","steps":[{"exit":1,"env":{"data":{"blockedBy":"backend","changed":false},"error":{"code":"failed","exit":1,"hint":"rota design or rota plan","message":"item note show is not available with backlog.backend \"file\""},"ok":false},"text":"","db":"396d7faf5419e420"}]}
+{"name":"note-show/file-backend","steps":[{"exit":1,"env":{"data":{"blockedBy":"backend","changed":false},"error":{"code":"failed","exit":1,"hint":"rota design or rota plan","message":"item note show is not available when issues.source is file"},"ok":false},"text":"","db":"396d7faf5419e420"}]}
 {"name":"note-show/multipart-plan","steps":[{"exit":0,"env":{"data":{"body":"line1\nline2\nline3","exists":true,"id":"11","kind":"plan","type":"T"},"ok":true},"text":"line1\nline2\nline3\n","db":"396d7faf5419e420"}]}
 {"name":"note-show/proof","steps":[{"exit":0,"env":{"data":{"body":"## Proof\n- build · PASS · ok","exists":true,"id":"5","kind":"proof","type":"B"},"ok":true},"text":"## Proof\n- build · PASS · ok\n","db":"396d7faf5419e420"}]}
 {"name":"note-show/proof/github","steps":[{"exit":0,"env":{"data":{"body":"## Proof\n- build · PASS · ok","exists":true,"id":"5","kind":"proof","type":"B"},"ok":true},"text":"## Proof\n- build · PASS · ok\n","db":"396d7faf5419e420"}]}
@@ -134,7 +134,7 @@
 {"name":"ready/criteria/github","steps":[{"exit":0,"env":{"data":{"id":"1","ready":true,"reasons":[],"type":"F"},"ok":true},"db":"396d7faf5419e420"}]}
 {"name":"ready/criteria/gitlab","steps":[{"exit":0,"env":{"data":{"id":"1","ready":true,"reasons":[],"type":"F"},"ok":true},"db":"396d7faf5419e420"}]}
 {"name":"ready/design-note","steps":[{"exit":0,"env":{"data":{"id":"5","ready":true,"reasons":[],"type":"B"},"ok":true},"db":"396d7faf5419e420"}]}
-{"name":"ready/forge-unavailable","steps":[{"exit":5,"env":{"error":{"code":"unavailable","exit":5,"message":"cannot determine provider (set issues.provider)"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"ready/forge-unavailable","steps":[{"exit":5,"env":{"error":{"code":"unavailable","exit":5,"message":"cannot determine the issue tracker provider (set issues.source to github or gitlab, or forge.provider)"},"ok":false},"db":"396d7faf5419e420"}]}
 {"name":"ready/not-ready","steps":[{"exit":1,"env":{"data":{"id":"10","ready":false,"reasons":["no acceptance criteria in the issue body","no design or plan note"],"type":"T"},"error":{"code":"failed","exit":1,"message":"10 is not ready: no acceptance criteria in the issue body; no design or plan note"},"ok":false},"db":"396d7faf5419e420"}]}
 {"name":"ready/not-ready-bug","steps":[{"exit":1,"env":{"data":{"id":"2","ready":false,"reasons":["no acceptance criteria in the issue body","no design or plan note"],"type":"B"},"error":{"code":"failed","exit":1,"message":"2 is not ready: no acceptance criteria in the issue body; no design or plan note"},"ok":false},"db":"396d7faf5419e420"}]}
 {"name":"ready/rate-limit","steps":[{"exit":6,"env":{"error":{"code":"retry","exit":6,"message":"github secondary rate limit — stopped; wait several minutes before retrying"},"ok":false},"db":"396d7faf5419e420"}]}
@@ -143,7 +143,7 @@
 {"name":"ready/wrong-letter","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"item not found: F2"},"ok":false},"db":"396d7faf5419e420"}]}
 {"name":"release/bad-as","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"--as must be a claim ID: non-empty, no whitespace, no -->"},"ok":false},"db":"396d7faf5419e420"}]}
 {"name":"release/closed-item","steps":[{"exit":0,"env":{"data":{"changed":false,"claimId":"me","id":"4","type":"T"},"ok":true},"db":"396d7faf5419e420"}]}
-{"name":"release/forge-unavailable","steps":[{"exit":5,"env":{"error":{"code":"unavailable","exit":5,"message":"cannot determine provider (set issues.provider)"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"release/forge-unavailable","steps":[{"exit":5,"env":{"error":{"code":"unavailable","exit":5,"message":"cannot determine the issue tracker provider (set issues.source to github or gitlab, or forge.provider)"},"ok":false},"db":"396d7faf5419e420"}]}
 {"name":"release/gitlab-match/github","steps":[{"exit":0,"env":{"data":{"changed":true,"claimId":"other","id":"6","type":"F"},"ok":true},"db":"727c3920460917c2"}]}
 {"name":"release/gitlab-match/gitlab","steps":[{"exit":0,"env":{"data":{"changed":true,"claimId":"other","id":"6","type":"F"},"ok":true},"db":"727c3920460917c2"}]}
 {"name":"release/match-keeps-state","steps":[{"exit":0,"env":{"data":{"changed":true,"claimId":"me","id":"7","type":"T"},"ok":true},"db":"b36ef9f30ec7d4ad"}]}
@@ -155,7 +155,7 @@
 {"name":"release/wrong-letter","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"item not found: F2"},"ok":false},"db":"396d7faf5419e420"}]}
 {"name":"reopen/closed","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"4","type":"T"},"ok":true},"db":"ce25dd1c81050658"}]}
 {"name":"reopen/dropped","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"9","type":"B"},"ok":true},"db":"3f8844ad5222df56"}]}
-{"name":"reopen/forge-unavailable","steps":[{"exit":5,"env":{"error":{"code":"unavailable","exit":5,"message":"cannot determine provider (set issues.provider)"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"reopen/forge-unavailable","steps":[{"exit":5,"env":{"error":{"code":"unavailable","exit":5,"message":"cannot determine the issue tracker provider (set issues.source to github or gitlab, or forge.provider)"},"ok":false},"db":"396d7faf5419e420"}]}
 {"name":"reopen/gitlab/github","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"9","type":"B"},"ok":true},"db":"3f8844ad5222df56"}]}
 {"name":"reopen/gitlab/gitlab","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"9","type":"B"},"ok":true},"db":"3f8844ad5222df56"}]}
 {"name":"reopen/open-noop","steps":[{"exit":0,"env":{"data":{"changed":false,"id":"2","type":"B"},"ok":true},"db":"396d7faf5419e420"}]}
@@ -166,8 +166,8 @@
 {"name":"reopen/wrong-letter","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"item not found: F2"},"ok":false},"db":"396d7faf5419e420"}]}
 {"name":"show/claimed","steps":[{"exit":0,"env":{"data":{"acceptance":[],"assignees":["fake-user"],"claimedBy":"other","comments":[],"id":"6","milestone":null,"notes":[],"state":"in-progress","status":"open","title":"Parallel work","type":"F"},"ok":true},"text":"[F6] Parallel work\ntype: feature\nstatus: open\nstate: in-progress\nclaimed by: other\nassignee: fake-user\nmilestone: none\nnotes: none\ncomments: 0\n","db":"396d7faf5419e420"}]}
 {"name":"show/closed","steps":[{"exit":0,"env":{"data":{"acceptance":[],"assignees":[],"claimedBy":null,"comments":[],"id":"9","milestone":null,"notes":[],"state":null,"status":"closed","title":"Dropped bug","type":"B"},"ok":true},"text":"[B9] Dropped bug\ntype: bug\nstatus: closed\nstate: none\nclaimed by: none\nassignee: none\nmilestone: none\nnotes: none\ncomments: 0\n","db":"396d7faf5419e420"}]}
-{"name":"show/file-backend","steps":[{"exit":1,"env":{"data":{"blockedBy":"backend","changed":false},"error":{"code":"failed","exit":1,"hint":"see BACKLOG.md, status.json and the detail file","message":"item show is not available with backlog.backend \"file\""},"ok":false},"db":"396d7faf5419e420"}]}
-{"name":"show/forge-unavailable","steps":[{"exit":5,"env":{"error":{"code":"unavailable","exit":5,"message":"cannot determine provider (set issues.provider)"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"show/file-backend","steps":[{"exit":1,"env":{"data":{"blockedBy":"backend","changed":false},"error":{"code":"failed","exit":1,"hint":"see BACKLOG.md, status.json and the detail file","message":"item show is not available when issues.source is file"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"show/forge-unavailable","steps":[{"exit":5,"env":{"error":{"code":"unavailable","exit":5,"message":"cannot determine the issue tracker provider (set issues.source to github or gitlab, or forge.provider)"},"ok":false},"db":"396d7faf5419e420"}]}
 {"name":"show/milestone","steps":[{"exit":0,"env":{"data":{"acceptance":[{"flag":null,"id":"AC-1","met":false,"proof":null,"text":"works"}],"assignees":[],"claimedBy":null,"comments":[],"id":"1","milestone":"M07","notes":[],"state":null,"status":"open","title":"Add export","type":"F"},"ok":true},"text":"[F1] Add export\ntype: feature\nstatus: open\nstate: none\nclaimed by: none\nassignee: none\nmilestone: M07\nnotes: none\ncomments: 0\nacceptance: 0/1 met\n","db":"396d7faf5419e420"}]}
 {"name":"show/noted","steps":[{"exit":0,"env":{"data":{"acceptance":[],"assignees":[],"claimedBy":null,"comments":[{"kind":"question","text":"Why?\nmore","who":"fake-user"}],"id":"5","milestone":null,"notes":["proof","design"],"state":null,"status":"open","title":"Noted bug","type":"B"},"ok":true},"text":"[B5] Noted bug\ntype: bug\nstatus: open\nstate: none\nclaimed by: none\nassignee: none\nmilestone: none\nnotes: proof, design\ncomments: 1\n- fake-user · question · Why?\n  more\n","db":"396d7faf5419e420"}]}
 {"name":"show/noted/github","steps":[{"exit":0,"env":{"data":{"acceptance":[],"assignees":[],"claimedBy":null,"comments":[{"kind":"question","text":"Why?\nmore","who":"fake-user"}],"id":"5","milestone":null,"notes":["proof","design"],"state":null,"status":"open","title":"Noted bug","type":"B"},"ok":true},"text":"[B5] Noted bug\ntype: bug\nstatus: open\nstate: none\nclaimed by: none\nassignee: none\nmilestone: none\nnotes: proof, design\ncomments: 1\n- fake-user · question · Why?\n  more\n","db":"396d7faf5419e420"}]}
@@ -189,7 +189,7 @@
 {"name":"state/none-noop","steps":[{"exit":0,"env":{"data":{"changed":false,"id":"2","state":null,"type":"B"},"ok":true},"db":"396d7faf5419e420"}]}
 {"name":"state/noop","steps":[{"exit":0,"env":{"data":{"changed":false,"id":"7","state":"needs-review","type":"T"},"ok":true},"db":"396d7faf5419e420"}]}
 {"name":"state/swap","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"6","state":"needs-review","type":"F"},"ok":true},"db":"f89d033cb30c9851"}]}
-{"name":"statev/forge-unavailable","steps":[{"exit":5,"env":{"error":{"code":"unavailable","exit":5,"message":"cannot determine provider (set issues.provider)"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"statev/forge-unavailable","steps":[{"exit":5,"env":{"error":{"code":"unavailable","exit":5,"message":"cannot determine the issue tracker provider (set issues.source to github or gitlab, or forge.provider)"},"ok":false},"db":"396d7faf5419e420"}]}
 {"name":"statev/rate-limit","steps":[{"exit":6,"env":{"error":{"code":"retry","exit":6,"message":"github secondary rate limit — stopped; wait several minutes before retrying"},"ok":false},"db":"396d7faf5419e420"}]}
 {"name":"statev/tracker-issue","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"item not found: 3"},"ok":false},"db":"396d7faf5419e420"}]}
 {"name":"statev/unknown","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"item not found: 99"},"ok":false},"db":"396d7faf5419e420"}]}

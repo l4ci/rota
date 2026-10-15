@@ -43,8 +43,22 @@ func decodeObject(raw []byte) (*jsonx.Object, bool) {
 // It also moves refactor.verifyCommands to test.full: a list there is copied
 // unless test.full already holds commands, and the old key is deleted either
 // way. The move counts as filling test.full when it copied.
+//
+// It also migrates the legacy source keys (MigrateSource): backlog.backend and
+// issues.provider become issues.source, and forge.provider where the origin
+// would miss it. detect names the provider of the origin remote ("" when it
+// cannot tell); FillDetect reports what the migration did.
 func Fill(root string) ([]string, error) {
+	filled, _, err := FillDetect(root, nil)
+	return filled, err
+}
+
+// FillDetect is Fill with the origin detection MigrateSource needs for an
+// issues.provider of auto, and a report of the source migration. A nil detect
+// leaves such a config on its legacy keys.
+func FillDetect(root string, detect func() string) ([]string, SourceMigration, error) {
 	filled := []string{}
+	var sm SourceMigration
 	path := configPath(root)
 	err := fsio.Locked(path, fsio.LockTimeout, func() error {
 		cfg := jsonx.NewObject()
@@ -62,6 +76,7 @@ func Fill(root string) ([]string, error) {
 		}
 		cfg, migrated := migrateLegacyVersion(cfg)
 		cfg, copied, moved := migrateLegacyVerify(cfg)
+		cfg, sm = MigrateSource(cfg, detect)
 		for _, k := range Keys {
 			if (k.Name == VersionKey && migrated) || (k.Name == TestFullKey && copied) {
 				filled = append(filled, k.Name)
@@ -74,15 +89,15 @@ func Fill(root string) ([]string, error) {
 			filled = append(filled, k.Name)
 		}
 		stripped := stripRemoved(cfg)
-		if len(filled) == 0 && !moved && len(stripped) == 0 {
+		if len(filled) == 0 && !moved && !sm.Changed && len(stripped) == 0 {
 			return nil
 		}
 		return fsio.WriteJSONAtomic(path, cfg)
 	})
 	if err != nil {
-		return nil, err
+		return nil, sm, err
 	}
-	return filled, nil
+	return filled, sm, nil
 }
 
 // migrateLegacyVersion moves the LegacyVersionKeys stamps to rota.version in

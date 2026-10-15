@@ -123,7 +123,9 @@ func ubThree() []ubRepo {
 	return append(ubDefault(), ubRepo{"lib", "github", ubLibDB})
 }
 
-// ubCfg names web the home repo (milestone tracking issues): the fixture
+// ubCfg is the unmigrated form on purpose: a umbrella whose sub-repos sit on
+// different hosts (web on GitHub, api on GitLab) leaves each tracker to its own
+// origin, which no single issues.source can say (#797). It names web the home repo (milestone tracking issues): the fixture
 // registry is sorted by name, so the default home would be api.
 const ubCfg = `{"backlog": {"backend": "issues"}, "issues": {"retryWaitSeconds": 0, "homeRepo": "web"}}`
 

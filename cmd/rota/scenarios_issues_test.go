@@ -227,7 +227,7 @@ func suiteIssues(t *testing.T) {
 		one("label/rate-limited-remove/github", dr(6, "issues", "label", "1", "--remove", "bug").env1(append([]string{"FAKE_TRACKER_FAIL=issue edit"}, rate...)...)),
 		one("label/rate-limited/gitlab", dr(6, "issues", "label", "1", "--add", "bug").env1(append([]string{"FAKE_TRACKER_FAIL=issue update"}, rate...)...)).on("gitlab"),
 		one("label/rate-limited-remove/gitlab", dr(6, "issues", "label", "1", "--remove", "bug").env1(append([]string{"FAKE_TRACKER_FAIL=issue update"}, rate...)...)).on("gitlab"))
-	add(one("label/unknown-provider", dr(3, "issues", "label", "1", "--add", "bug").msg("issues.provider")).on("none"))
+	add(one("label/unknown-provider", dr(3, "issues", "label", "1", "--add", "bug").msg("forge.provider")).on("none"))
 	add(dsc{name: "label/autocreate-off/github", db: dseed, fx: fx{config: `{"issues": {"retryWaitSeconds": 0, "autoCreateLabel": false}}`},
 		runs: []drun{dr(3, "issues", "label", "1", "--add", "brand-new")}}, // divergence 3
 		dsc{name: "label/autocreate-off/gitlab", remote: "gitlab", db: dseed, fx: fx{config: `{"issues": {"retryWaitSeconds": 0, "autoCreateLabel": false}}`},
@@ -262,7 +262,7 @@ func suiteIssues(t *testing.T) {
 	dboth(&all, one("close/forge-fails", dr(5, "issues", "close", "1", "--commit", "{head}").env1("FAKE_TRACKER_FAIL=issue close")))
 	dboth(&all, one("close/rate-limited", dr(6, "issues", "close", "1", "--commit", "{head}").env1(append([]string{"FAKE_TRACKER_FAIL=issue close"}, rate...)...)))
 	dboth(&all, one("close/auth-fails", dr(5, "issues", "close", "1", "--commit", "{head}").env1("FAKE_TRACKER_FAIL=auth status")))
-	add(one("close/unknown-provider", dr(3, "issues", "close", "1", "--commit", "{head}").msg("issues.provider")).on("none"))
+	add(one("close/unknown-provider", dr(3, "issues", "close", "1", "--commit", "{head}").msg("forge.provider")).on("none"))
 	add(one("close/already-closed/gitlab", dr(0, "issues", "close", "3", "--commit", "{head}").ch(false)).on("gitlab"))
 	add(one("close/already-closed/github", dr(0, "issues", "close", "3", "--commit", "{head}").ch(false)))
 	add(dsc{name: "close/umbrella-web", remote: "none", fx: umbrella(fx{}), db: dseed, runs: []drun{
@@ -507,9 +507,9 @@ func addMigrate(all *[]dsc) {
 	dboth(all, m("content/detail-blank", fx{files: map[string]string{".rota/bugs/B01.md": "\n\n   \n"}}, dseed, mig(0, "--apply")))
 	dboth(all, m("content/related-bare-and-bracketed", fx{backlog: "# TODO\n\n## Bugs\n- **[B01] [P1] One.** a Related: B02, [F01]\n- **[B02] [P1] Two.** b Related: [B01]\n\n## Features\n- **[F01] [Major] F.** c Related: [B01], [B02], T01\n\n## Tasks\n- **[T01] T.** d\n", files: map[string]string{".rota/designs/F01.md": "see B01, [B02], B01.md and /path/B02 and xB01 and B011\n", ".rota/plans/M01-F01.md": "Relates to F01 and [T01]\n"}}, dseed, mig(0), mig(0, "--apply")))
 	dboth(all, m("content/custom-labels", fx{config: `{"issues": {"retryWaitSeconds": 0, "bulkPaceMs": 0, "labels": {"types": {"bug": "kind/bug", "feature": "kind/feature", "task": "kind/task"}, "priorityPrefix": "prio-", "sizePrefix": "effort:", "milestoneTracker": "ms-tracker"}}}`, files: migMilestones}, dseed, mig(0), mig(0, "--apply")))
-	dboth(all, m("content/config-provider-gitlab", fx{config: `{"issues": {"retryWaitSeconds": 0, "bulkPaceMs": 0, "provider": "gitlab"}}`}, dseed, mig(0, "--apply")))
-	dboth(all, m("content/config-provider-github", fx{config: `{"issues": {"retryWaitSeconds": 0, "bulkPaceMs": 0, "provider": "github"}}`}, dseed, mig(0, "--apply")))
-	add(m("content/config-provider-without-remote", fx{config: `{"issues": {"retryWaitSeconds": 0, "bulkPaceMs": 0, "provider": "github"}}`}, dseed, mig(0, "--apply")).on("none"))
+	dboth(all, m("content/config-provider-gitlab", fx{config: `{"forge": {"provider": "gitlab"}, "issues": {"retryWaitSeconds": 0, "bulkPaceMs": 0}}`}, dseed, mig(0, "--apply")))
+	dboth(all, m("content/config-provider-github", fx{config: `{"forge": {"provider": "github"}, "issues": {"retryWaitSeconds": 0, "bulkPaceMs": 0}}`}, dseed, mig(0, "--apply")))
+	add(m("content/config-provider-without-remote", fx{config: `{"forge": {"provider": "github"}, "issues": {"retryWaitSeconds": 0, "bulkPaceMs": 0}}`}, dseed, mig(0, "--apply")).on("none"))
 	dboth(all, m("content/ms-id-mismatch", withMS(map[string]string{".rota/milestones/M02.md": "---\nid: M05\ntitle: Odd\nstatus: planned\ndepends: [M01, M09]\n---\n\n# M05\n\n## Goal\n\nGoal text.\n"}), dseed, mig(0), mig(0, "--apply")))
 	dboth(all, m("content/ms-no-frontmatter-id", withMS(map[string]string{".rota/milestones/M02.md": "---\ntitle: Noid\nstatus: active\n---\n\n# M02 — Heading title\n\n## Goal\n\nText.\n"}), dseed, mig(0), mig(0, "--apply")))
 	dboth(all, m("content/ms-archived-and-shipped-skipped", withMS(map[string]string{".rota/milestones/M03.md": "---\nid: M03\ntitle: Arch\nstatus: archived\n---\n\n# M03\n", ".rota/milestones/M04.md": "no frontmatter\n"}), dseed, mig(0, "--apply")))

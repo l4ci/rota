@@ -57,7 +57,7 @@ func TestOpenSelectsBackend(t *testing.T) {
 		t.Fatal(err)
 	}
 	withTracker := Options{NewTracker: func(context.Context, string) (Tracker, error) { return &fakeTracker{}, nil }}
-	fileCfg, issuesCfg := mustDecode(t, `{}`), mustDecode(t, `{"backlog": {"backend": "issues"}}`)
+	fileCfg, issuesCfg := mustDecode(t, `{}`), mustDecode(t, `{"issues": {"source": "github"}}`)
 
 	if b, err := Open(context.Background(), root, fileCfg, Options{}); err != nil || b.Name() != "file" {
 		t.Fatalf("file: %v, %v", b, err)
@@ -68,8 +68,8 @@ func TestOpenSelectsBackend(t *testing.T) {
 	if _, err := Open(context.Background(), root, issuesCfg, Options{}); err == nil {
 		t.Fatal("issues without a tracker must be an error")
 	}
-	if _, err := Open(context.Background(), root, mustDecode(t, `{"backlog": {"backend": "git"}}`), Options{}); err == nil ||
-		err.Error() != "invalid backlog.backend 'git' (expected file|issues)" {
+	if _, err := Open(context.Background(), root, mustDecode(t, `{"issues": {"source": "git"}}`), Options{}); err == nil ||
+		err.Error() != "invalid issues.source 'git' (expected file|github|gitlab|jira|linear)" {
 		t.Fatalf("bad backend: %v", err)
 	}
 

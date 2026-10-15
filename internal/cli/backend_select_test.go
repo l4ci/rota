@@ -7,7 +7,7 @@ import (
 )
 
 // Per-verb backend refusals, decided in backend_select.go and fileRoot: a
-// file-only verb under backlog.backend "issues" and an issue-only verb under
+// file-only verb when issues.source is a tracker and an issue-only verb under
 // "file" both stop with blockedBy "backend". A mutating verb is refused (4); a
 // read-only one fails (1), since the conventions forbid 4 for a read.
 func TestBackendRefusals(t *testing.T) {

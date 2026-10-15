@@ -216,7 +216,7 @@ func Run(o Options) (*Result, error) {
 	if err := m.remapRegistry(); err != nil {
 		return m.finish(), err
 	}
-	m.say("Next: rota config set backlog.backend issues")
+	m.say("Next: rota config set issues.source " + m.sourceName())
 	m.res.Done = true
 	return m.finish(), nil
 }
@@ -871,4 +871,15 @@ func migrateCtx(ctx context.Context) context.Context {
 		return context.Background()
 	}
 	return ctx
+}
+
+// sourceName is the issues.source value that points at the tracker the items
+// moved to: the adapter's provider, else a pointer to the choices.
+func (m *migrator) sourceName() string {
+	if p, ok := m.tr.(interface{ Provider() string }); ok {
+		if name := p.Provider(); name == "github" || name == "gitlab" {
+			return name
+		}
+	}
+	return "github|gitlab"
 }

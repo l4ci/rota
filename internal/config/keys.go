@@ -50,7 +50,7 @@ var Keys = []Key{
 	k("models.orchestrator", "opus", true, TypeString, "Model for planning, exploration, verification and design. Usually opus, sonnet or haiku."),
 	k("models.worker", "sonnet", true, TypeString, "Model for implementation sub-tasks and round workers. Usually opus, sonnet or haiku."),
 	k("work.isolation", "branch", true, TypeEnum, "How /rota-work isolates changes from main: a feature branch in this checkout, or a separate git worktree.", "branch", "worktree"),
-	k("work.mergeStrategy", "direct", true, TypeEnum, "How finished work lands: merged straight into the base branch with --no-ff, or through a pull request. Ignored under the issues backlog backend, which always opens a PR.", "direct", "pr"),
+	k("work.mergeStrategy", "direct", true, TypeEnum, "How finished work lands: merged straight into the base branch with --no-ff, or through a pull request. Ignored when issues.source is a tracker, which always opens a PR.", "direct", "pr"),
 	k("work.dispatch", "subagent", true, TypeEnum, "Where round workers run. subagent means detect: herdr in a herdr pane, tmux in tmux, else in-harness subagents. /rota-work ignores it.", "subagent", "tmux", "herdr"),
 	k("work.workerSlots", num("3"), true, TypeInt, "Number of worker slots rota round start provisions (at least 1). --slots overrides it for one round."),
 	k("work.workerCommand", "", true, TypeString, "Command that starts a worker session in its tmux window. Empty builds claude --model <models.worker> --dangerously-skip-permissions; {model} receives the tier's model."),
@@ -73,8 +73,6 @@ var Keys = []Key{
 	k("umbrella.enabled", false, true, TypeBool, "Umbrella mode: .rota/ stays at the umbrella and verbs operate per registered sub-repo. Turning it off keeps .rota/repos.json."),
 	k(VersionKey, "", true, TypeString, "Release of rota that wrote this config. Managed by rota init and rota update; do not set it by hand."),
 	k("issues.label", "in-progress", false, TypeString, "Legacy alias of issues.labels.inProgress, read only when the new key is unset."),
-	k("backlog.backend", "file", false, TypeEnum, "Where the backlog lives: BACKLOG.md in the repo, or issues on the tracker. Switch with rota migrate issues.", "file", "issues"),
-	k("issues.provider", "auto", false, TypeEnum, "Which tracker the issues backend talks to. auto detects it from the git remote.", "auto", "github", "gitlab"),
 	k("issues.retryWaitSeconds", num("60"), false, TypeInt, "Seconds to wait before the single retry after a primary rate limit."),
 	k("issues.bulkPaceMs", num("1000"), false, TypeInt, "Milliseconds rota migrate issues waits between tracker writes, to stay under secondary rate limits. 0 disables the pause."),
 	k("issues.labels.inProgress", "in-progress", false, TypeString, "Tracker label for an item a worker holds."),
@@ -102,6 +100,10 @@ var Keys = []Key{
 	k("test.fullWhere", "local", false, TypeEnum, "Where the gate and train run the full tier: here, or by pushing the merge result and waiting for the forge's checks (needs test.ciChecks).", "local", "ci"),
 	k("test.ciTimeoutMinutes", num("60"), false, TypeInt, "How long a ci run waits for its checks, 1 to 1440 minutes. ROTA_CI_TIMEOUT (seconds) overrides it for one run."),
 	k("test.ciChecks", []any{}, false, TypeList, "Check names that must all succeed on the pushed commit under test.fullWhere ci: GitHub check-run names or commit-status contexts, GitLab job names."),
+	// #797: where issues live and where code lands, split. They replace
+	// backlog.backend and issues.provider (migrated by rota migrate source).
+	k("issues.source", "file", false, TypeEnum, "Where issues live: BACKLOG.md in the repo (file), or a tracker. github and gitlab must match the forge. jira and linear are accepted but not implemented yet. Switch with rota migrate issues.", "file", "github", "gitlab", "jira", "linear"),
+	k("forge.provider", "auto", false, TypeEnum, "Where code lands: pull requests, checks and releases. auto reads the origin remote and is local with no remote; local means direct merge, no PR. Set it by hand only when detection misses (self-hosted GitLab without gitlab in the host, SSH host aliases, mirrors).", "auto", "github", "gitlab", "local"),
 	// 5.0 keys: not in CONFIG_KEYS.
 	k("ship.mergeApproval", "none", false, TypeEnum, "Which merges need a human: none, all, or only those touching ship.mergeApprovalPaths. The merge verbs enforce it at every autonomy level.", "none", "all", "paths"),
 	k("ship.mergeApprovalPaths", []any{}, false, TypeList, "Repo-relative paths or globs that need human approval when ship.mergeApproval is paths."),

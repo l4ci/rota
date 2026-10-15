@@ -142,7 +142,7 @@ type Options struct {
 	NoteLimit string
 }
 
-// Open returns the backend selected by backlog.backend in cfg, the loaded
+// Open returns the backend selected by issues.source in cfg, the loaded
 // config, for the project rooted at root (the directory holding .rota/):
 // the file backend, the issues backend, or, when .rota/repos.json registers
 // sub-repos under issue mode, the umbrella. ctx, scope and cwd are set on the
@@ -156,7 +156,7 @@ func Open(ctx context.Context, root string, cfg any, opts Options) (Backend, err
 		return &File{Root: root, CountProof: opts.CountProof}, nil
 	}
 	if opts.NewTracker == nil {
-		return nil, errors.New("backlog.backend \"issues\" needs a tracker")
+		return nil, errors.New("issues.source needs a tracker")
 	}
 	if repos.Umbrella(root) {
 		u := NewUmbrella(root, cfg, func(dir string) (Tracker, error) { return opts.NewTracker(ctx, dir) })

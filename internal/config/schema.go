@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/l4ci/rota/internal/jsonx"
@@ -30,10 +31,12 @@ func StampedVersion(cfg any) string {
 }
 
 // PythonKeys is how many leading rows of Keys are CONFIG_KEYS.
-const PythonKeys = 48
+const PythonKeys = 46
 
-// backlogBackends are the accepted values of backlog.backend.
-var backlogBackends = []string{"file", "issues"}
+var (
+	issueSources   = []string{SourceFile, SourceGitHub, SourceGitLab, SourceJira, SourceLinear}
+	forgeProviders = []string{ForgeAuto, ForgeGitHub, ForgeGitLab, ForgeLocal}
+)
 
 // walk is Python's _walk: a missing key, a non-object parent or a JSON null
 // at any segment counts as absent.
@@ -76,21 +79,84 @@ func effectiveValue(cfg any, k Key) (any, bool) {
 	return Default(k), false
 }
 
-// Backend returns the configured backlog backend, "file" or "issues". Any
-// other value is an error naming it, as hvlib_config.backlog_backend does.
+// Issue sources: the values of issues.source. SourceIssues is not one of them:
+// it is what IssueSource reports for an unmigrated legacy config that says
+// "issues on the tracker" without naming it (the origin remote decides).
+const (
+	SourceFile   = "file"
+	SourceGitHub = "github"
+	SourceGitLab = "gitlab"
+	SourceJira   = "jira"
+	SourceLinear = "linear"
+	SourceIssues = "issues"
+)
+
+// Forge providers: the values of forge.provider.
+const (
+	ForgeAuto   = "auto"
+	ForgeGitHub = "github"
+	ForgeGitLab = "gitlab"
+	ForgeLocal  = "local"
+)
+
+// IssueSource returns where the issues live: issues.source, one of file,
+// github, gitlab, jira or linear. Any other value is an error naming it.
+//
+// While issues.source is unset and the legacy keys remain (an upgraded project
+// before rota migrate source), the legacy keys decide, so such a project never
+// flips to file mode: backlog.backend "file" is file; "issues" is the provider
+// named by issues.provider, or SourceIssues when that is auto or unset (the
+// origin remote decides).
+func IssueSource(cfg any) (string, error) {
+	if v, ok := walk(cfg, "issues.source"); ok {
+		if s, ok := v.(string); ok && slices.Contains(issueSources, s) {
+			return s, nil
+		}
+		return "", fmt.Errorf("invalid issues.source '%s' (expected %s)", pyStr(v), strings.Join(issueSources, "|"))
+	}
+	if v, ok := walk(cfg, LegacyBackendKey); ok {
+		switch v {
+		case "file":
+			return SourceFile, nil
+		case "issues":
+			if p, ok := walk(cfg, LegacyProviderKey); ok && (p == "github" || p == "gitlab") {
+				return p.(string), nil
+			}
+			return SourceIssues, nil
+		}
+		return "", fmt.Errorf("invalid backlog.backend '%s' (expected file|issues)", pyStr(v))
+	}
+	return SourceFile, nil
+}
+
+// ForgeProvider returns forge.provider: auto, github, gitlab or local. Any
+// other value is an error naming it. While forge.provider is unset, a legacy
+// issues.provider of github or gitlab stands in for it, as the old PR verbs
+// read it as their fallback.
+func ForgeProvider(cfg any) (string, error) {
+	if v, ok := walk(cfg, "forge.provider"); ok {
+		if s, ok := v.(string); ok && slices.Contains(forgeProviders, s) {
+			return s, nil
+		}
+		return "", fmt.Errorf("invalid forge.provider '%s' (expected %s)", pyStr(v), strings.Join(forgeProviders, "|"))
+	}
+	if p, ok := walk(cfg, LegacyProviderKey); ok && (p == "github" || p == "gitlab") {
+		return p.(string), nil
+	}
+	return ForgeAuto, nil
+}
+
+// Backend is the backlog backend derived from issues.source: "file" for the
+// file source, "issues" for any tracker. An invalid source is an error.
 func Backend(cfg any) (string, error) {
-	v, err := Value(cfg, "backlog.backend")
+	src, err := IssueSource(cfg)
 	if err != nil {
 		return "", err
 	}
-	if s, ok := v.(string); ok {
-		for _, b := range backlogBackends {
-			if s == b {
-				return s, nil
-			}
-		}
+	if src == SourceFile {
+		return "file", nil
 	}
-	return "", fmt.Errorf("invalid backlog.backend '%s' (expected file|issues)", pyStr(v))
+	return "issues", nil
 }
 
 // Label returns the tracker label name for a role under issues.labels, such
@@ -216,14 +282,12 @@ type Prompt struct {
 
 // Prompts is the setup's questions, in the order they are asked.
 var Prompts = []Prompt{
-	{Key: "backlog.backend", Title: "Where does the backlog live?", Help: map[string]string{
+	{Key: "issues.source", Title: "Where do the issues live?", Help: map[string]string{
 		"file":   "BACKLOG.md in the repo",
-		"issues": "GitHub or GitLab issues",
-	}},
-	{Key: "issues.provider", Title: "Which tracker holds the issues?", IfKey: "backlog.backend", IfValue: "issues", Help: map[string]string{
-		"auto":   "detect from the git remote",
-		"github": "GitHub (gh)",
-		"gitlab": "GitLab (glab)",
+		"github": "GitHub issues (gh)",
+		"gitlab": "GitLab issues (glab)",
+		"jira":   "Jira (not implemented yet)",
+		"linear": "Linear (not implemented yet)",
 	}},
 	{Key: "work.isolation", Title: "How is each piece of work isolated?", Help: map[string]string{
 		"branch":   "a feature branch in this checkout",

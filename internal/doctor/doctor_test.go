@@ -85,6 +85,7 @@ func TestRunTable(t *testing.T) {
 		}
 		return m
 	}
+	noRemote := map[string]Result{"git remote get-url origin": {ExitCode: 2}}
 	without := func(names ...string) map[string]bool {
 		m := map[string]bool{}
 		for k := range all {
@@ -147,7 +148,24 @@ func TestRunTable(t *testing.T) {
 		{"tracker gh missing", Input{}, without("gh"), with(nil), "tracker", Fail, "gh not found", ""},
 		{"tracker gitlab", Input{}, all, with(map[string]Result{"git remote get-url origin": {Stdout: "https://gitlab.com/a/b"}}), "tracker", Pass, "glab", ""},
 		{"tracker no remote", Input{}, all, with(map[string]Result{"git remote get-url origin": {ExitCode: 2}}), "tracker", Skip, "no origin", ""},
-		{"tracker config fallback", Input{IssuesProvider: "gitlab"}, all, with(map[string]Result{"git remote get-url origin": {ExitCode: 2}}), "tracker", Pass, "glab", ""},
+		{"tracker config fallback", Input{ForgeProvider: "gitlab"}, all, with(map[string]Result{"git remote get-url origin": {ExitCode: 2}}), "tracker", Pass, "glab", ""},
+
+		{"tracker unknown host", Input{}, all, with(map[string]Result{"git remote get-url origin": {Stdout: "https://git.example.com/a/b"}}), "tracker", Skip, "forge.provider", ""},
+
+		// the tracker line reports the forge and the issue source (#797)
+		{"tracker github origin, file issues", Input{IssueSource: "file"}, all, with(nil), "tracker", Pass, "gh authenticated (forge github (from origin), issues file)", ""},
+		{"tracker no remote is local", Input{IssueSource: "file"}, all, with(noRemote), "tracker", Skip, "forge local (no origin remote), issues file", ""},
+		{"tracker no remote and github source fails", Input{IssueSource: "github"}, all, with(noRemote), "tracker", Fail, "issues.source is github but the forge is local", "forge.provider github"},
+		{"tracker gitlab origin and github source fails", Input{IssueSource: "github"}, all, with(map[string]Result{"git remote get-url origin": {Stdout: "https://gitlab.com/a/b"}}), "tracker", Fail, "issues.source is github but the forge is gitlab", "issues.source gitlab"},
+		{"tracker matching github source", Input{IssueSource: "github"}, all, with(nil), "tracker", Pass, "forge github (from origin), issues github", ""},
+		{"tracker matching gitlab source", Input{IssueSource: "gitlab"}, all, with(map[string]Result{"git remote get-url origin": {Stdout: "git@gitlab.example.org:a/b.git"}}), "tracker", Pass, "issues gitlab", ""},
+		{"tracker explicit provider beats a silent origin", Input{IssueSource: "github", ForgeProvider: "github"}, all, with(noRemote), "tracker", Pass, "forge github (forge.provider), issues github", ""},
+		{"tracker explicit local", Input{IssueSource: "file", ForgeProvider: "local"}, all, with(nil), "tracker", Skip, "forge local (forge.provider)", ""},
+		{"tracker jira issues on a github forge", Input{IssueSource: "jira"}, all, with(nil), "tracker", Pass, "forge github (from origin), issues jira", ""},
+		{"tracker unknown host and github source fails", Input{IssueSource: "github"}, all, with(map[string]Result{"git remote get-url origin": {Stdout: "https://git.example.com/a/b"}}), "tracker", Fail, "the forge is unknown", "forge.provider github"},
+		{"tracker legacy keys are named", Input{IssueSource: "issues"}, all, with(nil), "tracker", Pass, "rota migrate source", ""},
+		{"tracker invalid config fails", Input{SourceProblem: "invalid issues.source 'svn'"}, all, with(nil), "tracker", Fail, "invalid issues.source", "rota config set"},
+		{"tracker outside a project says the forge", Input{}, all, with(noRemote), "tracker", Skip, "forge local", ""},
 
 		{"accounts none", Input{}, all, with(nil), "accounts", Skip, "no accounts", ""},
 		{"accounts ok", Input{Accounts: []config.Account{{Name: "a", ConfigDir: good}}}, all, with(nil), "accounts", Pass, "1 accounts", ""},
