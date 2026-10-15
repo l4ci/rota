@@ -31,6 +31,18 @@ type Env struct {
 	Config any
 	// Opts reach every forge CLI the calls build (tests swap the executor).
 	Opts []tracker.Option
+	// Forge, when set, replaces the adapter built from the provider; tests
+	// use it to stand in a key-based tracker.
+	Forge func(ctx context.Context, provider, dir string) (Forge, error)
+}
+
+// Forge is the part of tracker.Adapter the verbs call.
+type Forge interface {
+	CheckAuth(ctx context.Context) error
+	Get(ctx context.Context, key tracker.IssueKey, withComments bool) (tracker.Issue, error)
+	AddLabels(ctx context.Context, key tracker.IssueKey, labels []string, autoCreate bool) error
+	RemoveLabels(ctx context.Context, key tracker.IssueKey, labels []string) error
+	Close(ctx context.Context, key tracker.IssueKey, reason, comment string) error
 }
 
 // Provider is "github", "gitlab" or "unknown" for dir ("" is the process
@@ -65,7 +77,10 @@ func unavailable(format string, a ...any) *tracker.Error {
 }
 
 // adapter is the forge adapter for provider, whose CLI runs in dir.
-func (e Env) adapter(ctx context.Context, provider, dir string) (tracker.Adapter, error) {
+func (e Env) adapter(ctx context.Context, provider, dir string) (Forge, error) {
+	if e.Forge != nil {
+		return e.Forge(ctx, provider, dir)
+	}
 	return tracker.NewFromConfig(ctx, e.Config, provider, dir, e.Opts...)
 }
 
@@ -75,7 +90,7 @@ func (e Env) adapter(ctx context.Context, provider, dir string) (tracker.Adapter
 // changed anything. A label already there (or already absent) is a no-op:
 // changed is read from the issue first, and a failed read leaves it true.
 // autoCreate lets a missing label be created on the forge.
-func Label(ctx context.Context, env Env, dir string, number int, label string, add, autoCreate bool) (bool, error) {
+func Label(ctx context.Context, env Env, dir string, key tracker.IssueKey, label string, add, autoCreate bool) (bool, error) {
 	provider := Provider(ctx, env, dir)
 	if provider == "unknown" {
 		return false, noProvider("label upstream issue")
@@ -85,13 +100,13 @@ func Label(ctx context.Context, env Env, dir string, number int, label string, a
 		return false, err
 	}
 	changed := true
-	if is, err := a.Get(ctx, tracker.NumKey(number), false); err == nil {
+	if is, err := a.Get(ctx, key, false); err == nil {
 		changed = slices.Contains(is.Labels, label) != add
 	}
 	if add {
-		err = a.AddLabels(ctx, tracker.NumKey(number), []string{label}, autoCreate)
+		err = a.AddLabels(ctx, key, []string{label}, autoCreate)
 	} else {
-		err = a.RemoveLabels(ctx, tracker.NumKey(number), []string{label})
+		err = a.RemoveLabels(ctx, key, []string{label})
 	}
 	if err != nil {
 		return false, err
@@ -104,7 +119,7 @@ func Label(ctx context.Context, env Env, dir string, number int, label string, a
 // Close closes one upstream issue with a comment naming the commit that
 // shipped it. changed is false when the issue was already closed. dir is the
 // checkout the commit lives in.
-func Close(ctx context.Context, env Env, dir string, number int, commit, item string) (bool, error) {
+func Close(ctx context.Context, env Env, dir string, key tracker.IssueKey, commit, item string) (bool, error) {
 	short, err := shortSHA(dir, commit)
 	if err != nil {
 		return false, err
@@ -126,10 +141,10 @@ func Close(ctx context.Context, env Env, dir string, number int, commit, item st
 		return false, err
 	}
 	// A failed state read counts as "not closed".
-	if is, err := a.Get(ctx, tracker.NumKey(number), false); err == nil && is.State == "closed" {
+	if is, err := a.Get(ctx, key, false); err == nil && is.State == "closed" {
 		return false, nil
 	}
-	if err := a.Close(ctx, tracker.NumKey(number), "completed", body); err != nil {
+	if err := a.Close(ctx, key, "completed", body); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -156,11 +171,11 @@ func shortSHA(dir, commit string) (string, error) {
 // StillOpen reports whether the upstream issue of a cross-reference is open:
 // provider says which forge, dir is the checkout of the entry's repo. An issue
 // whose state cannot be read (no CLI, no auth, deleted) is not open.
-func StillOpen(ctx context.Context, env Env, provider, dir string, issue int) bool {
+func StillOpen(ctx context.Context, env Env, provider, dir string, key tracker.IssueKey) bool {
 	a, err := env.adapter(ctx, provider, dir)
 	if err != nil {
 		return false
 	}
-	is, err := a.Get(ctx, tracker.NumKey(issue), false)
+	is, err := a.Get(ctx, key, false)
 	return err == nil && is.State == "open"
 }

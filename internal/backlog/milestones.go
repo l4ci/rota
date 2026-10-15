@@ -7,7 +7,6 @@ import (
 	"regexp"
 	"slices"
 	"sort"
-	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -112,20 +111,20 @@ func (b *Issues) trackingIssues() (map[string]Issue, error) {
 			if (g[i].State != "open") != (g[j].State != "open") {
 				return g[j].State != "open"
 			}
-			return g[i].Num() < g[j].Num()
+			return tracker.CompareKeys(g[i].Key, g[j].Key) < 0
 		})
 		out[mid] = g[0]
 		if len(g) > 1 {
-			nums := make([]int, len(g))
+			keys := make([]tracker.IssueKey, len(g))
 			for i, is := range g {
-				nums[i] = is.Num()
+				keys[i] = is.Key
 			}
-			sort.Ints(nums)
+			tracker.SortKeys(keys)
 			var parts []string
-			for _, n := range nums {
-				parts = append(parts, "#"+strconv.Itoa(n))
+			for _, k := range keys {
+				parts = append(parts, k.Ref())
 			}
-			b.warn(fmt.Sprintf("%d tracking issues carry %s (%s); using #%d", len(g), mid, strings.Join(parts, ", "), g[0].Num()))
+			b.warn(fmt.Sprintf("%d tracking issues carry %s (%s); using %s", len(g), mid, strings.Join(parts, ", "), g[0].Key.Ref()))
 		}
 	}
 	return out, nil

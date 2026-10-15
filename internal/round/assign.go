@@ -194,7 +194,7 @@ func pointerBrief(agent, id, branch, brief string, siblings []string, decisions,
 		fmt.Fprintf(&b, "Sibling issues running now: %s.\n", strings.Join(siblings, ", "))
 	}
 	if t.Sibling != "" {
-		fmt.Fprintf(&b, "\nThis issue is labelled %s: slot %s builds it too, on branch %s. Do not read, fetch, check out or diff that branch or its PR: your attempt must stand on its own. Your PR body still says `Closes #%s`; the orchestrator picks one PR and closes the other.\n", BestOfLabel, t.Sibling, t.SiblingBranch, strings.TrimPrefix(id, "#"))
+		fmt.Fprintf(&b, "\nThis issue is labelled %s: slot %s builds it too, on branch %s. Do not read, fetch, check out or diff that branch or its PR: your attempt must stand on its own. Your PR body still says `Closes %s`; the orchestrator picks one PR and closes the other.\n", BestOfLabel, t.Sibling, t.SiblingBranch, tracker.RefOf(id))
 	}
 	b.WriteString(t.text())
 	if o := strings.TrimSpace(outOfScope); o != "" {

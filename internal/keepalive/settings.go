@@ -2,6 +2,7 @@ package keepalive
 
 import (
 	"fmt"
+	"github.com/l4ci/rota/internal/tracker"
 	"strings"
 	"time"
 
@@ -11,12 +12,12 @@ import (
 // Settings are the orchestrator.* keepalive keys (the contract's Config
 // section) plus the handoff age they share with D1.
 type Settings struct {
-	MaxRestarts   int           // keepaliveMaxRestarts, 0 or more
-	Breaker       int           // keepaliveBreaker, 1 or more
-	Backoff       time.Duration // keepaliveBackoffSeconds, 0 or more
-	Prompt        string        // restartPrompt
-	EscalateIssue int           // escalateIssue, 0 means unset
-	HandoffMaxAge time.Duration // handoffMaxAgeSeconds (D1)
+	MaxRestarts   int              // keepaliveMaxRestarts, 0 or more
+	Breaker       int              // keepaliveBreaker, 1 or more
+	Backoff       time.Duration    // keepaliveBackoffSeconds, 0 or more
+	Prompt        string           // restartPrompt
+	EscalateIssue tracker.IssueKey // escalateIssue, empty means unset
+	HandoffMaxAge time.Duration    // handoffMaxAgeSeconds (D1)
 
 	SwitchOnUsage  bool          // switchOnUsage (D4)
 	UsageThreshold int           // usageThreshold, percent 1..100
@@ -42,8 +43,16 @@ func LoadSettings(cfg any) (Settings, error) {
 		return s, err
 	}
 	s.Backoff = time.Duration(secs) * time.Second
-	if s.EscalateIssue, err = config.EscalateIssue(cfg); err != nil {
+	raw, err := config.EscalateIssue(cfg)
+	if err != nil {
 		return s, err
+	}
+	if raw != "" {
+		k, ok := tracker.ParseKey(raw)
+		if !ok {
+			return s, fmt.Errorf("orchestrator.escalateIssue must be an issue number or a key like PROJ-123 (got %q)", raw)
+		}
+		s.EscalateIssue = k
 	}
 	age, err := config.HandoffMaxAgeSeconds(cfg)
 	if err != nil {

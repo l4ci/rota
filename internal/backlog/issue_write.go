@@ -190,7 +190,7 @@ func (b *Issues) Create(in CreateInput) (CreateResult, error) {
 		return CreateResult{}, err
 	}
 	if strings.Contains(full, "{ID}") {
-		body := strings.ReplaceAll(full, "{ID}", letter+n.String())
+		body := strings.ReplaceAll(full, "{ID}", KeyTag(letter, n))
 		if err := tr.Edit(b.ctx(), n, tracker.IssueEdit{Body: &body}); err != nil {
 			return CreateResult{}, err
 		}

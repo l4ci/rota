@@ -5,12 +5,14 @@ import (
 	"flag"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/l4ci/rota/internal/escalation"
 	"github.com/l4ci/rota/internal/gate"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/tracker"
 )
 
 // gateCommands is the `rota gate` group (B1, #54).
@@ -108,10 +110,19 @@ func mergePolicy(c *Ctx) (gate.MergePolicy, error) {
 
 // approvalThread is the forge thread a merge's approval request lives on (C5).
 type approvalThread struct {
-	Kind   string // pr | issue
-	Number int
+	Kind   string           // pr | issue
+	Number int              // the PR, or a numbered issue
+	Key    tracker.IssueKey // a key-based tracker's issue; empty for a numbered one
 	Slot   string
 	Title  string
+}
+
+// Ref is the thread's number as users read it: `#12`, or the key PROJ-123.
+func (t approvalThread) Ref() string {
+	if t.Key != "" {
+		return t.Key.Ref()
+	}
+	return "#" + strconv.Itoa(t.Number)
 }
 
 // approvalReq is --approval and --escalate on a merge verb. Thread resolves
@@ -190,8 +201,8 @@ func approvalConfirm(c *Ctx, id string, th approvalThread, extra *jsonx.Object) 
 	switch {
 	case e == nil:
 		return gate.Confirm{}, Result{}, Resolution("no escalation %s", id)
-	case e.Kind != th.Kind || e.Number != th.Number:
-		return gate.Confirm{}, Result{}, Usage("escalation %s is on %s #%d, not on this merge's approval thread (%s #%d)", id, e.Kind, e.Number, th.Kind, th.Number)
+	case e.Kind != th.Kind || e.Ref() != th.Ref():
+		return gate.Confirm{}, Result{}, Usage("escalation %s is on %s %s, not on this merge's approval thread (%s %s)", id, e.Kind, e.Ref(), th.Kind, th.Ref())
 	case e.Status != escalation.StatusAnswered:
 		status := e.Derived(approvalNow(c))
 		res, err := approvalFail(extra, fmt.Sprintf("escalation %s is %s; no approval yet", id, status),
@@ -240,7 +251,7 @@ func approvalEscalate(c *Ctx, p gate.MergePolicy, hit []string, th approvalThrea
 		c.Warn("approval request not sent: %v", err)
 		return nil
 	}
-	if e, ok := escalation.PendingOn(escalation.Load(root), th.Kind, th.Number); ok {
+	if e, ok := escalation.PendingOn(escalation.Load(root), th.Kind, th.Ref()); ok {
 		return e.Object()
 	}
 	env := c.deps().escalationEnv()
@@ -248,7 +259,7 @@ func approvalEscalate(c *Ctx, p gate.MergePolicy, hit []string, th approvalThrea
 		env.Forge = escalationForge(c)
 	}
 	res, err := escalation.Send(c.Context(), env, root, escalation.SendOpts{
-		Number: th.Number, PR: th.Kind == "pr", Slot: th.Slot, Title: th.Title, Body: approvalRequestBody(p, hit),
+		Number: th.Number, Key: th.Key, PR: th.Kind == "pr", Slot: th.Slot, Title: th.Title, Body: approvalRequestBody(p, hit),
 	})
 	for _, w := range res.Warnings {
 		c.Warn("%s", w)

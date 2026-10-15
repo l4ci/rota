@@ -301,7 +301,7 @@ Every key, by group. Default is what a missing key reads as; Values lists the al
 | `orchestrator.keepaliveBreaker` | int | `3` |  | How many restarts in a row may leave no new handoff before the breaker trips. 1 or more. |
 | `orchestrator.keepaliveBackoffSeconds` | int | `5` |  | Seconds rota keepalive run waits before a restart. 0 or more. |
 | `orchestrator.restartPrompt` | string | `"Continue as orchestrator: read the handoff injected at session start, run rota round status, and resume the round."` |  | Text appended as the last argument of a restart. Must not be empty. |
-| `orchestrator.escalateIssue` | int | `0` |  | Issue number the breaker's escalation comment goes on. 0 leaves it unset: a host notification and a warning only. |
+| `orchestrator.escalateIssue` | int | `0` |  | Issue number, or key like PROJ-123 on a key-based tracker, the breaker's escalation comment goes on. 0 leaves it unset: a host notification and a warning only. |
 | `orchestrator.harness` | enum | `"claude"` | `claude`, `codex`, `hermes`, `opencode` | Which agent rota orchestrate, and bare rota in an initialized project, starts as the orchestrator. |
 | `orchestrator.switchOnUsage` | bool | `false` |  | Opt-in: block the Stop hook for a handoff when usage reaches orchestrator.usageThreshold, so the supervisor restarts under another account. |
 | `orchestrator.usageThreshold` | int | `90` |  | Percent of the 5-hour or weekly limit, 1 to 100, at which orchestrator.switchOnUsage triggers. |

@@ -15,6 +15,7 @@ import (
 	"github.com/l4ci/rota/internal/escalation"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/rotatree"
+	"github.com/l4ci/rota/internal/tracker"
 )
 
 // escalationEnv is the seam tests replace to inject a clock and a fake host.
@@ -53,11 +54,23 @@ func roundEscalateSend(fs *flag.FlagSet) RunFunc {
 	timeout := fs.Float64("timeout", 0, "seconds until the escalation counts as timed out; 0 means no deadline")
 	return func(c *Ctx, args []string) (Result, error) {
 		if len(args) != 1 {
-			return Result{}, Usage("usage: rota round escalate send <number> [--pr] --title <text> --body-file <path|->")
+			return Result{}, Usage("usage: rota round escalate send <number|key> [--pr] --title <text> --body-file <path|->")
 		}
-		n, err := strconv.Atoi(args[0])
-		if err != nil || n < 1 || strings.TrimLeft(args[0], "0123456789") != "" {
-			return Result{}, Usage("<number> must be a positive integer, not %q", args[0])
+		var n int
+		var key tracker.IssueKey
+		var err error
+		if *pr {
+			n, err = strconv.Atoi(args[0])
+			if err != nil || n < 1 || strings.TrimLeft(args[0], "0123456789") != "" {
+				return Result{}, Usage("<number> must be a positive integer, not %q", args[0])
+			}
+		} else {
+			k, ok := tracker.ParseKey(args[0])
+			if !ok || strings.HasPrefix(args[0], "+") {
+				return Result{}, Usage("<key> must be an issue number or key like PROJ-123, not %q", args[0])
+			}
+			key = k
+			n, _ = k.Number()
 		}
 		if strings.TrimSpace(*title) == "" {
 			return Result{}, Usage("--title is required")
@@ -89,7 +102,7 @@ func roundEscalateSend(fs *flag.FlagSet) RunFunc {
 			env.Forge = escalationForge(c)
 		}
 		res, err := escalation.Send(c.Context(), env, root, escalation.SendOpts{
-			Number: n, PR: *pr, Slot: *slot, Title: strings.TrimSpace(*title), Body: string(raw),
+			Number: n, Key: key, PR: *pr, Slot: *slot, Title: strings.TrimSpace(*title), Body: string(raw),
 			Timeout: time.Duration(*timeout * float64(time.Second)),
 		})
 		for _, w := range res.Warnings {
@@ -158,7 +171,11 @@ func escalationRows(reports []escalation.Report) ([]any, []string) {
 		o := jsonx.NewObject()
 		o.Set("id", e.ID)
 		o.Set("kind", e.Kind)
-		o.Set("number", e.Number)
+		if e.Key != "" {
+			o.Set("key", e.Key)
+		} else {
+			o.Set("number", e.Number)
+		}
 		if e.Slot != "" {
 			o.Set("slot", e.Slot)
 		}
@@ -172,7 +189,7 @@ func escalationRows(reports []escalation.Report) ([]any, []string) {
 			o.Set("answer", e.Answer.Object())
 		}
 		rows = append(rows, o)
-		lines = append(lines, fmt.Sprintf("%s\t%s\t%s #%d\t%s", e.ID, r.Status, e.Kind, e.Number, e.Title))
+		lines = append(lines, fmt.Sprintf("%s\t%s\t%s %s\t%s", e.ID, r.Status, e.Kind, e.Ref(), e.Title))
 	}
 	return rows, lines
 }

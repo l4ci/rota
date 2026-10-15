@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/l4ci/rota/internal/tracker"
 	"os"
 	"path/filepath"
 	"strings"
@@ -84,7 +85,7 @@ func (r *rig) build() *Watcher {
 			r.mu.Unlock()
 			return nil
 		},
-		Escalate: func(issue int, title, body string) (string, []string, error) {
+		Escalate: func(issue tracker.IssueKey, title, body string) (string, []string, error) {
 			r.escal = append(r.escal, title)
 			return "e1", nil, nil
 		},
@@ -302,7 +303,7 @@ func TestIdleSlotLimitIsIgnored(t *testing.T) {
 }
 
 func TestMaxResumesFailsAndEscalates(t *testing.T) {
-	for _, issue := range []int{0, 12} {
+	for _, issue := range []tracker.IssueKey{"", "12", "PROJ-12"} {
 		r := newRig(t)
 		r.set.MaxResumes, r.set.EscalateIssue = 2, issue
 		r.build()
@@ -326,15 +327,15 @@ func TestMaxResumesFailsAndEscalates(t *testing.T) {
 		}
 		e := r.only()
 		if len(r.sent) != 2 || e.Cycles != 2 || e.Status != StatusFailed || e.ID != "l1" || !strings.Contains(e.Note, "still limited after 2 resume") {
-			t.Fatalf("issue %d: sent %v entry %+v", issue, r.sent, e)
+			t.Fatalf("issue %q: sent %v entry %+v", issue, r.sent, e)
 		}
 		if r.w.Failed() != 1 {
 			t.Fatalf("failed %d", r.w.Failed())
 		}
-		if issue == 0 && (len(r.notified) != 1 || len(r.escal) != 0) {
+		if issue == "" && (len(r.notified) != 1 || len(r.escal) != 0) {
 			t.Fatalf("notified %v escalated %v", r.notified, r.escal)
 		}
-		if issue != 0 && (len(r.escal) != 1 || len(r.notified) != 0 || !strings.Contains(e.Note, "Escalation e1")) {
+		if issue != "" && (len(r.escal) != 1 || len(r.notified) != 0 || !strings.Contains(e.Note, "Escalation e1")) {
 			t.Fatalf("notified %v escalated %v note %q", r.notified, r.escal, e.Note)
 		}
 		// a failed session is left alone for a while
@@ -523,7 +524,7 @@ func TestLoadSettings(t *testing.T) {
 		t.Fatal(err)
 	}
 	if s.Mode != ModeSwitch || s.Margin != 60*time.Second || s.Fallback != 1800*time.Second || s.MaxResumes != 3 ||
-		s.Prompt != "The usage limit has reset. Continue where you left off." || s.EscalateIssue != 0 {
+		s.Prompt != "The usage limit has reset. Continue where you left off." || s.EscalateIssue != "" {
 		t.Fatalf("defaults %+v", s)
 	}
 	dir := t.TempDir()
@@ -539,7 +540,7 @@ func TestLoadSettings(t *testing.T) {
 	p := filepath.Join(dir, "ok.json")
 	os.WriteFile(p, []byte(`{"limits":{"mode":"sleep","maxResumes":5},"orchestrator":{"escalateIssue":9}}`), 0o666)
 	s, err = LoadSettings(config.Load(p))
-	if err != nil || s.Mode != ModeSleep || s.MaxResumes != 5 || s.EscalateIssue != 9 {
+	if err != nil || s.Mode != ModeSleep || s.MaxResumes != 5 || s.EscalateIssue != "9" {
 		t.Fatalf("%+v %v", s, err)
 	}
 }

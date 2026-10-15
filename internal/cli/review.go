@@ -426,13 +426,21 @@ func reviewQueue(c *Ctx, args []string) (Result, error) {
 		for _, p := range r.PRs {
 			prs = append(prs, jsonObj("number", p.Number, "title", p.Title, "branch", p.Branch, "url", p.URL, "body", p.Body))
 		}
-		row := jsonObj("id", r.ID, "type", r.Type, "number", r.Number, "title", r.Title)
+		row := jsonObj("id", r.ID, "type", r.Type)
+		if r.Number > 0 {
+			row.Set("number", r.Number)
+		}
+		row.Set("title", r.Title)
 		if r.Repo != "" {
 			row.Set("repo", r.Repo)
 		}
 		row.Set("prs", prs)
 		items = append(items, row)
-		lines = append(lines, r.Type+strconv.Itoa(r.Number)+" "+r.Title)
+		ref := r.ID
+		if r.Number > 0 {
+			ref = r.Type + strconv.Itoa(r.Number)
+		}
+		lines = append(lines, ref+" "+r.Title)
 	}
 	return Result{Data: jsonObj("items", items), Text: strings.Join(lines, "\n")}, nil
 }

@@ -82,7 +82,7 @@ func (e Env) Pick(ctx context.Context, root string, be Board, o PickOpts) (res P
 	id := worker.NormID(o.ID)
 	rec := reg.BestOf(id)
 	if rec == nil {
-		return res, blocked(BlockNotBestOf, "#%s has no best-of attempts in this round's registry", id)
+		return res, blocked(BlockNotBestOf, "%s has no best-of attempts in this round's registry", tracker.RefOf(id))
 	}
 	res.ID = id
 	want, ok := worker.PRRefNumber(o.PR)
@@ -116,7 +116,7 @@ func (e Env) Pick(ctx context.Context, root string, be Board, o PickOpts) (res P
 		}
 	}
 	if rec.Pick != "" && !rec.Picked(o.PR) {
-		return res, blocked(BlockPicked, "#%s already picked %s", id, rec.Pick)
+		return res, blocked(BlockPicked, "%s already picked %s", tracker.RefOf(id), rec.Pick)
 	}
 	if winner < 0 && rec.Pick != "" { // the picked PR no longer resolves (merged, say)
 		res.Winner = PickAttempt{PR: fmt.Sprintf("#%d", want)}
@@ -127,7 +127,7 @@ func (e Env) Pick(ctx context.Context, root string, be Board, o PickOpts) (res P
 		for _, v := range views {
 			have = append(have, fmt.Sprintf("%s: %s", v.Slot, firstNonEmpty(v.PR, v.State)))
 		}
-		return res, blocked(BlockNotAttempt, "#%d is not an attempt of #%s (attempts: %s)", want, id, strings.Join(have, ", "))
+		return res, blocked(BlockNotAttempt, "#%d is not an attempt of %s (attempts: %s)", want, tracker.RefOf(id), strings.Join(have, ", "))
 	}
 	for i := range views {
 		if i != winner {
@@ -145,7 +145,7 @@ func (e Env) Pick(ctx context.Context, root string, be Board, o PickOpts) (res P
 	}
 	if lv.State == AttemptNoPR && lv.slot != nil {
 		if st := lv.slot.State(); st == "busy" || st == "" || st == "blocked" {
-			return res, blocked(BlockAttemptRunning, "%s is still building #%s: wait for its PR, or reclaim it", lv.Slot, id)
+			return res, blocked(BlockAttemptRunning, "%s is still building %s: wait for its PR, or reclaim it", lv.Slot, tracker.RefOf(id))
 		}
 	}
 
@@ -170,8 +170,8 @@ func (e Env) Pick(ctx context.Context, root string, be Board, o PickOpts) (res P
 		}
 	}
 	if toClose {
-		comment := fmt.Sprintf("Closed by `rota round pick`: #%s is best-of:2 and the orchestrator picked #%d (slot %s).\n\nReason:\n%s\n\nBranch `%s` stays for salvage until `rota reap`.",
-			id, want, res.Winner.Slot, reason, lv.Branch)
+		comment := fmt.Sprintf("Closed by `rota round pick`: %s is best-of:2 and the orchestrator picked #%d (slot %s).\n\nReason:\n%s\n\nBranch `%s` stays for salvage until `rota reap`.",
+			tracker.RefOf(id), want, res.Winner.Slot, reason, lv.Branch)
 		if err := closer.PRClose(ctx, loserN, comment); err != nil {
 			return res, wrap(err)
 		}
@@ -266,7 +266,7 @@ func (e Env) resolveAttempt(root string, reg worker.Registry, id string, a worke
 func (e Env) retireSlot(ctx context.Context, root string, v pickView, id string, warnings *[]string) error {
 	st := v.slot.State()
 	if v.slot.IsExternal() { // an adopted checkout is never parked
-		*warnings = append(*warnings, fmt.Sprintf("slot %s is an adopted external slot holding #%s: release it with rota worker pool reap %s", v.Slot, id, v.Slot))
+		*warnings = append(*warnings, fmt.Sprintf("slot %s is an adopted external slot holding %s: release it with rota worker pool reap %s", v.Slot, tracker.RefOf(id), v.Slot))
 		return nil
 	}
 	if st == "done" || st == "idle" {
@@ -278,6 +278,6 @@ func (e Env) retireSlot(ctx context.Context, root string, v pickView, id string,
 		}
 		st = "uncommitted changes"
 	}
-	*warnings = append(*warnings, fmt.Sprintf("slot %s still holds #%s (%s): free it with rota round reclaim %s", v.Slot, id, firstNonEmpty(st, "busy"), v.Slot))
+	*warnings = append(*warnings, fmt.Sprintf("slot %s still holds %s (%s): free it with rota round reclaim %s", v.Slot, tracker.RefOf(id), firstNonEmpty(st, "busy"), v.Slot))
 	return nil
 }

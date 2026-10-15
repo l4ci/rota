@@ -33,7 +33,7 @@ func (e Env) claimFindings(ctx context.Context, rep *Report, reg worker.Registry
 		st, err := e.Board.Status(ref)
 		if err != nil {
 			if !errors.Is(err, backlog.ErrWrongBackend) {
-				rep.Warnings = append(rep.Warnings, fmt.Sprintf("claim check #%s: %v", ref, err))
+				rep.Warnings = append(rep.Warnings, fmt.Sprintf("claim check %s: %v", tracker.RefOf(ref), err))
 			}
 			return nil, false
 		}
@@ -64,10 +64,10 @@ func (e Env) claimFindings(ctx context.Context, rep *Report, reg worker.Registry
 		case st.Claim == want, bestOfClaim(r.Issue, r.Name, want, st):
 		case st.Claim == "":
 			rep.add(Finding{Kind: ClaimMismatch, Slot: r.Name, Issue: r.Issue,
-				Detail: fmt.Sprintf("slot records claim %s on #%s, which has no open claim", want, r.Issue), Repair: "clear claimId"})
+				Detail: fmt.Sprintf("slot records claim %s on %s, which has no open claim", want, tracker.RefOf(r.Issue)), Repair: "clear claimId"})
 		default:
 			rep.add(Finding{Kind: ClaimMismatch, Slot: r.Name, Issue: r.Issue,
-				Detail: fmt.Sprintf("slot records claim %s on #%s, which %s holds", want, r.Issue, st.Claim)})
+				Detail: fmt.Sprintf("slot records claim %s on %s, which %s holds", want, tracker.RefOf(r.Issue), st.Claim)})
 		}
 	}
 	// A queued PR holds its issue and its claim like a slot, but names no slot
@@ -90,10 +90,10 @@ func (e Env) claimFindings(ctx context.Context, rep *Report, reg worker.Registry
 		case st.Claim == want, bestOfClaim(id, q.From, want, st):
 		case st.Claim == "":
 			rep.add(Finding{Kind: ClaimMismatch, Issue: id,
-				Detail: fmt.Sprintf("PR in review records claim %s on #%s, which has no open claim", want, id)})
+				Detail: fmt.Sprintf("PR in review records claim %s on %s, which has no open claim", want, tracker.RefOf(id))})
 		default:
 			rep.add(Finding{Kind: ClaimMismatch, Issue: id,
-				Detail: fmt.Sprintf("PR in review records claim %s on #%s, which %s holds", want, id, st.Claim)})
+				Detail: fmt.Sprintf("PR in review records claim %s on %s, which %s holds", want, tracker.RefOf(id), st.Claim)})
 		}
 	}
 	if !labelsOK {

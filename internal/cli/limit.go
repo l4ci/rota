@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/tracker"
 	"os"
 	"path/filepath"
 	"strings"
@@ -40,13 +41,13 @@ func limitCommands() *Command {
 }
 
 // escalateFunc posts on an issue thread through C4's library entry.
-func escalateFunc(ctx context.Context, c *Ctx, root string) func(issue int, title, body string) (string, []string, error) {
-	return func(issue int, title, body string) (string, []string, error) {
+func escalateFunc(ctx context.Context, c *Ctx, root string) func(issue tracker.IssueKey, title, body string) (string, []string, error) {
+	return func(issue tracker.IssueKey, title, body string) (string, []string, error) {
 		ee := c.deps().escalationEnv()
 		if ee.Forge == nil {
 			ee.Forge = escalationForge(c)
 		}
-		res, err := escalation.Send(context.WithoutCancel(ctx), ee, root, escalation.SendOpts{Number: issue, Title: title, Body: body})
+		res, err := escalation.Send(context.WithoutCancel(ctx), ee, root, escalation.SendOpts{Key: issue, Title: title, Body: body})
 		if err != nil {
 			return "", res.Warnings, err
 		}

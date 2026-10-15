@@ -246,14 +246,14 @@ func (m *migrator) remapRegistry() error {
 	err := worker.Update(m.o.Root, func(doc *worker.Doc) {
 		for _, s := range doc.Slots() {
 			if n, ok := to(s.Task()); ok {
-				notes = append(notes, fmt.Sprintf("remap slot %s task %s -> #%s", s.Name(), s.Task(), n))
+				notes = append(notes, fmt.Sprintf("remap slot %s task %s -> %s", s.Name(), s.Task(), tracker.RefOf(n)))
 				s.SetTask(n)
 			}
 		}
 		doc.RetargetQueued(func(q worker.QueuedPR) (string, bool) {
 			n, ok := to(q.Issue)
 			if ok {
-				notes = append(notes, fmt.Sprintf("remap queued PR %s issue %s -> #%s", q.PR, q.Issue, n))
+				notes = append(notes, fmt.Sprintf("remap queued PR %s issue %s -> %s", q.PR, q.Issue, tracker.RefOf(n)))
 			}
 			return n, ok
 		})
@@ -550,7 +550,7 @@ func (m *migrator) run() (bool, error) {
 				if err != nil {
 					return err
 				}
-				return m.setEntry(mid, mid, jn(is.Num()), is.URL)
+				return m.setEntry(mid, mid, jk(is.Key), is.URL)
 			})
 			if err != nil {
 				return false, err
@@ -635,12 +635,15 @@ func (m *migrator) run() (bool, error) {
 			if err != nil {
 				return err
 			}
-			n, _ := strconv.Atoi(res.ID)
-			got, err := be.Tracker.Get(m.ctx, tracker.NumKey(n), false)
+			key, ok := tracker.ParseKey(res.ID)
+			if !ok {
+				return fmt.Errorf("the tracker created %q, which is not an issue key", res.ID)
+			}
+			got, err := be.Tracker.Get(m.ctx, key, false)
 			if err != nil {
 				return err
 			}
-			return m.setEntry(old, res.Type+res.ID, jn(n), got.URL)
+			return m.setEntry(old, backlog.KeyTag(res.Type, key), jk(key), got.URL)
 		})
 		if err != nil {
 			return false, err
@@ -816,6 +819,15 @@ func (m *migrator) adopt(it *migItem) error {
 		m.imap.Set(old, e)
 	}
 	return nil
+}
+
+// jk is an issue key as the map spells its number: a JSON number for a
+// numbered issue, the key text for a key-based one.
+func jk(k tracker.IssueKey) any {
+	if n, ok := k.Number(); ok {
+		return jn(n)
+	}
+	return k.String()
 }
 
 // jn is an int as a JSON number.

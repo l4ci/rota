@@ -21,6 +21,7 @@ import (
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/release"
 	"github.com/l4ci/rota/internal/strutil"
+	"github.com/l4ci/rota/internal/tracker"
 )
 
 // releaseCommands is the `rota release` group (#52).
@@ -418,11 +419,11 @@ func releaseMilestoneCheck(c *Ctx, args []string) (Result, error) {
 	}
 	bl, still, lines := []any{}, []any{}, []string{}
 	for _, b := range blocked {
-		bl = append(bl, jsonObj("number", b.Issue.Num(), "title", b.Issue.Title, "label", b.Label))
-		lines = append(lines, "blocked: #"+strconv.Itoa(b.Issue.Num())+" "+b.Issue.Title+" ["+b.Label+"]")
+		bl = append(bl, issueRow(b.Issue, "label", b.Label))
+		lines = append(lines, "blocked: "+b.Issue.Key.Ref()+" "+b.Issue.Title+" ["+b.Label+"]")
 	}
 	for _, is := range warn {
-		still = append(still, jsonObj("number", is.Num(), "title", is.Title))
+		still = append(still, issueRow(is))
 		lines = append(lines, "warning: "+is.Key.Ref()+" "+is.Title+" (still open)")
 	}
 	res := Result{Data: jsonObj("clear", len(blocked) == 0, "blocked", bl, "stillOpen", still), Text: strings.Join(lines, "\n")}
@@ -498,7 +499,7 @@ func releaseNotesIssues(c *Ctx, mid, since string) (Result, error) {
 		}
 		lines := make([]string, 0, len(s.Rows))
 		for _, r := range s.Rows {
-			lines = append(lines, "- "+r.Title+" (#"+strconv.Itoa(r.Number)+")")
+			lines = append(lines, "- "+r.Title+" ("+r.Ref+")")
 		}
 		blocks = append(blocks, "### "+s.Name+"\n\n"+strings.Join(lines, "\n"))
 	}
@@ -507,4 +508,20 @@ func releaseNotesIssues(c *Ctx, mid, since string) (Result, error) {
 	}
 	md := strings.Join(blocks, "\n\n") + "\n"
 	return Result{Data: gitObj("from", "issues", "markdown", md, "empty", pystr.Strip(md) == ""), Text: md}, nil
+}
+
+// issueRow is a release-gate row for an issue: `number` for a numbered issue,
+// `key` for a key-based one, then the title and any extra pairs.
+func issueRow(is tracker.Issue, extra ...any) *jsonx.Object {
+	row := jsonx.NewObject()
+	if n, ok := is.Key.Number(); ok {
+		row.Set("number", n)
+	} else {
+		row.Set("key", is.Key.String())
+	}
+	row.Set("title", is.Title)
+	for i := 0; i+1 < len(extra); i += 2 {
+		row.Set(extra[i].(string), extra[i+1])
+	}
+	return row
 }
