@@ -102,6 +102,9 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 		}
 	}
 	in.ProjectRoot = root
+	if name := strings.TrimSpace(str("issues.connection")); name != "" {
+		in.Connection = doctorConnection(ctx, d, name)
+	}
 	in.Slots, in.CwdOf = doctorSlotBlocks(root), procCwd(ctx, d.Proc)
 	in.NothingToVerify = worker.NothingToVerify(root)
 	in.AgentProblems = agents.Problems(root)

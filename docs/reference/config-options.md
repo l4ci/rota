@@ -219,6 +219,9 @@ Every key, by group. Default is what a missing key reads as; Values lists the al
 | `issues.autoCreateLabel` | bool | `true` |  | Create a tracker label the first time something asks for it. When off, adding a missing label fails. |
 | `issues.homeRepo` | string | unset |  | Umbrella mode with the issues backend only: the registered sub-repo that holds milestone tracking issues. Empty means the first registered sub-repo. |
 | `issues.labels.needsHuman` | string | `"needs-human"` |  | Label rota round transfer --to human puts on an issue handed to the human. rota round candidates skips an issue that carries it. |
+| `issues.connection` | string | unset |  | Name of the machine-wide tracker connection the issues backend uses for Jira or Linear, added with rota connect add. Holds a name only, never a secret. A teammate whose connection has another name overrides it in config.local.json. |
+| `issues.jira.project` | string | unset |  | Jira project key, such as ROTA, that issues.connection reads from and writes to. |
+| `issues.linear.team` | string | unset |  | Linear team key, such as ROT, that issues.connection reads from and writes to. |
 
 ### backlog
 

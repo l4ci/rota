@@ -4,10 +4,12 @@ import (
 	"context"
 	"io"
 	"os"
+	"runtime"
 	"strconv"
 	"time"
 
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/connections"
 	"github.com/l4ci/rota/internal/doctor"
 	"github.com/l4ci/rota/internal/escalation"
 	"github.com/l4ci/rota/internal/git"
@@ -101,6 +103,11 @@ type Deps struct {
 	SetupIsTTY       func(in io.Reader) bool
 	IsTerminal       func(f any) bool
 	BareSetup        RunFunc
+	// Keychain is the OS keychain `rota connect` stores secrets in; nil means
+	// none on this machine. ConnTesters make the authenticated read of a
+	// connection kind; a kind with none reports unsupported. Tests swap both.
+	Keychain    func() connections.Store
+	ConnTesters map[string]connections.Tester
 	// Palette is the menu bare `rota` opens; a test swaps in a fake terminal.
 	Palette func(palette.Config) error
 	// RunView runs a --ui screen on the process terminal; a test swaps in a fake.
@@ -127,6 +134,7 @@ func defaultDeps() *Deps {
 		RunView:          runView,
 		ReadCache:        tracker.NewReadCache(),
 	}
+	d.Keychain = func() connections.Store { return connections.OSKeychain(d.Proc, runtime.GOOS) }
 	d.Now, d.Today, d.HolderPID, d.ClockErr = envClock(d.Getenv)
 	d.PollFixture, d.PollStatus = d.Getenv("ROTA_TEST_POLL_FIXTURE"), d.Getenv("ROTA_TEST_POLL_STATUS")
 	d.DoctorPath = d.Getenv("ROTA_TEST_DOCTOR_PATH")

@@ -57,6 +57,12 @@ func (r Report) OK() bool {
 	return true
 }
 
+// ConnCheck is the outcome of the project's tracker connection check. State
+// is a connections.State: ok, unknown, nosecret, failed or unsupported.
+type ConnCheck struct {
+	Name, State, Detail, Hint string
+}
+
 // Disk is the space on one volume, in bytes.
 type Disk struct {
 	Path        string
@@ -86,6 +92,10 @@ type Input struct {
 	CodexHomes []CodexHome
 	// CodexTiers is whether any round.tiers.codex.<tier> is set.
 	CodexTiers bool
+
+	// Connection is the project's issues.connection and what checking it
+	// found; nil (no connection named) adds no line.
+	Connection *ConnCheck
 
 	// AgentProblems are the generated subagent files that are missing or have
 	// drifted from config (agents.Problems); empty adds no line.
@@ -145,6 +155,9 @@ func Run(ctx context.Context, in Input) Report {
 	d := &runner{in: in, ctx: ctx}
 	checks := []Check{
 		d.git(), d.jq(), d.host(), d.tracker(), d.accounts(), d.hook(), d.statusline(), d.stopHook(), d.guardHook(), d.switchCheck(), d.skills(), d.codex(),
+	}
+	if c, ok := d.connection(); ok {
+		checks = append(checks, c)
 	}
 	if c, ok := d.disk(); ok {
 		// Only a volume below the threshold adds a line: a healthy one stays
@@ -208,6 +221,24 @@ func (d *runner) git() Check {
 	default:
 		return fail("git", "not inside a git repository", "run: git init")
 	}
+}
+
+// connection is the project's tracker connection: it must exist on this
+// machine, hold a secret and pass its test read. Only a project that names one
+// gets the line. A kind with no test read yet warns instead of failing: the
+// connection is fine, this build cannot prove it.
+func (d *runner) connection() (Check, bool) {
+	c := d.in.Connection
+	if c == nil {
+		return Check{}, false
+	}
+	switch c.State {
+	case "ok":
+		return pass("connection", c.Detail), true
+	case "unsupported":
+		return Check{Name: "connection", Status: Warn, Detail: c.Detail, Hint: c.Hint}, true
+	}
+	return fail("connection", c.Detail, c.Hint), true
 }
 
 // jq is a skill dependency, not a round one: the skills read fields out of
