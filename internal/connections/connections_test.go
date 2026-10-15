@@ -245,3 +245,133 @@ func TestOSKeychainNotFoundAndUnavailable(t *testing.T) {
 		t.Errorf("no session bus: %v", err)
 	}
 }
+
+func TestAddRejectsEnvVarCollision(t *testing.T) {
+	dir := t.TempDir()
+	if err := Add(dir, Connection{Name: "a-b", Kind: KindLinear}, false); err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range []string{"a_b", "A-B"} {
+		if err := Add(dir, Connection{Name: n, Kind: KindLinear}, false); !errors.Is(err, ErrEnvCollision) {
+			t.Errorf("%s: %v", n, err)
+		}
+	}
+	if err := Add(dir, Connection{Name: "a-b", Kind: KindLinear}, true); err != nil {
+		t.Errorf("replacing the same name collided with itself: %v", err)
+	}
+}
+
+// failDelKeychain is a keychain whose Set and Delete fail while Get still
+// returns an old secret: the case where a stale entry would shadow the file.
+type failDelKeychain struct{ *memStore }
+
+func (f failDelKeychain) Delete(context.Context, string) error { return errors.New("locked") }
+
+func TestSaveFallbackNeverLeavesStaleKeychainSecret(t *testing.T) {
+	ctx := context.Background()
+	kc := newMem("keychain")
+	kc.vals["work"] = "old"
+	kc.failSet = ErrUnavailable
+	file := newMem("file")
+	if _, err := (&Secrets{Keychain: failDelKeychain{kc}, File: file}).Save(ctx, "work", "new"); err == nil {
+		t.Fatal("a stale keychain entry survived a fallback save")
+	}
+	// when the delete works, the file holds the new secret and resolve returns it
+	s := &Secrets{Keychain: kc, File: file}
+	got, err := s.Save(ctx, "work", "new")
+	if err != nil || got.Store != StoreFile {
+		t.Fatalf("%+v %v", got, err)
+	}
+	if v, store, _ := s.Resolve(ctx, "work"); v != "new" || store != StoreFile {
+		t.Errorf("shadowed: %q %q", v, store)
+	}
+}
+
+// keychainSim is a proc.Runner standing in for macOS `security` and records argv.
+type keychainSim struct {
+	calls []proc.Cmd
+	item  string
+}
+
+func (k *keychainSim) run(_ context.Context, c proc.Cmd) (proc.Result, error) {
+	k.calls = append(k.calls, c)
+	switch {
+	case len(c.Args) > 0 && c.Args[0] == "-i":
+		in := string(c.Stdin)
+		if i := strings.Index(in, "-w \""); i >= 0 {
+			q := strings.TrimSuffix(strings.TrimSpace(in[i+4:]), `"`)
+			k.item = strings.NewReplacer(`\"`, `"`, `\\`, `\`).Replace(q)
+		}
+		return proc.Result{}, nil
+	case len(c.Args) > 0 && c.Args[0] == "find-generic-password":
+		if k.item == "" {
+			return proc.Result{ExitCode: 44}, nil
+		}
+		return proc.Result{Stdout: k.item + "\n"}, nil
+	case len(c.Args) > 0 && c.Args[0] == "delete-generic-password":
+		k.item = ""
+	}
+	return proc.Result{}, nil
+}
+
+func TestDarwinSetKeepsSecretOutOfArgv(t *testing.T) {
+	sim := &keychainSim{}
+	kc := OSKeychain(sim.run, "darwin")
+	if err := kc.Set(context.Background(), "work", `s"3\cret`); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range sim.calls {
+		if strings.Contains(strings.Join(c.Args, " "), "cret") {
+			t.Errorf("secret in argv: %v", c.Args)
+		}
+	}
+	first := sim.calls[0]
+	if first.Name != "security" || first.Args[0] != "-i" || !strings.HasPrefix(string(first.Stdin), "add-generic-password -U -s \"rota\" -a \"work\" -w ") {
+		t.Errorf("%+v", first)
+	}
+	if !strings.Contains(string(first.Stdin), `"s\"3\\cret"`) {
+		t.Errorf("secret not quoted on stdin: %q", first.Stdin)
+	}
+}
+
+func TestDarwinSetFailsWhenItemWasNotStored(t *testing.T) {
+	run := func(context.Context, proc.Cmd) (proc.Result, error) { return proc.Result{ExitCode: 44}, nil }
+	if err := OSKeychain(run, "darwin").Set(context.Background(), "work", "tok"); !errors.Is(err, ErrUnavailable) {
+		t.Errorf("%v", err)
+	}
+}
+
+func TestKeychainDeleteArgv(t *testing.T) {
+	var got []proc.Cmd
+	run := func(_ context.Context, c proc.Cmd) (proc.Result, error) {
+		got = append(got, c)
+		return proc.Result{}, nil
+	}
+	OSKeychain(run, "darwin").Delete(context.Background(), "work")
+	OSKeychain(run, "linux").Delete(context.Background(), "work")
+	if got[0].Name != "security" || strings.Join(got[0].Args, " ") != "delete-generic-password -s rota -a work" {
+		t.Errorf("%+v", got[0])
+	}
+	if got[1].Name != "secret-tool" || strings.Join(got[1].Args, " ") != "clear service rota account work" {
+		t.Errorf("%+v", got[1])
+	}
+	failing := func(context.Context, proc.Cmd) (proc.Result, error) {
+		return proc.Result{ExitCode: 1, Stderr: "boom"}, nil
+	}
+	if err := OSKeychain(failing, "linux").Delete(context.Background(), "work"); err == nil {
+		t.Error("a failing delete was swallowed")
+	}
+}
+
+func TestFileStoreLeavesNoTempFiles(t *testing.T) {
+	dir := t.TempDir()
+	fs := FileStore(dir)
+	fs.Set(context.Background(), "a", "1")
+	fs.Set(context.Background(), "b", "2")
+	ents, _ := os.ReadDir(dir)
+	for _, e := range ents {
+		if strings.HasSuffix(e.Name(), ".tmp") {
+			t.Errorf("leftover %s", e.Name())
+		}
+	}
+}

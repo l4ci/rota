@@ -254,18 +254,30 @@ func TestNoSecretUnderDotRota(t *testing.T) {
 		t.Fatal("init failed")
 	}
 	e.addWork()
+	if e.kc.vals["work"] != "s3cret-token" {
+		t.Fatalf("the known token was not stored: %v", e.kc.vals)
+	}
 	e.run("", "-C", dir, "config", "set", "issues.connection", "work")
+	e.run("", "-C", dir, "config", "set", "issues.jira.project", "ROTA")
+	os.WriteFile(filepath.Join(dir, ".rota", "config.local.json"), []byte(`{"issues":{"connection":"work"}}`), 0o644)
+	e.run("", "-C", dir, "connect", "test", "work")
+	files, sawConn := 0, false
 	err := filepath.WalkDir(filepath.Join(dir, ".rota"), func(p string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return err
 		}
-		if b, _ := os.ReadFile(p); strings.Contains(string(b), "s3cret-token") {
+		files++
+		b, _ := os.ReadFile(p)
+		if strings.Contains(string(b), "s3cret-token") {
 			t.Errorf("%s holds a secret", p)
+		}
+		if strings.HasSuffix(p, "config.json") && strings.Contains(string(b), `"connection": "work"`) {
+			sawConn = true
 		}
 		return nil
 	})
-	if err != nil {
-		t.Fatal(err)
+	if err != nil || files == 0 || !sawConn {
+		t.Fatalf("walk saw %d files, connection name in config: %v, err %v", files, sawConn, err)
 	}
 	for _, k := range config.Keys {
 		n := strings.ToLower(k.Name)
@@ -274,5 +286,101 @@ func TestNoSecretUnderDotRota(t *testing.T) {
 				t.Errorf("config key %s can hold a secret in .rota/", k.Name)
 			}
 		}
+	}
+}
+
+func TestConnectAddTokenFlagIsGone(t *testing.T) {
+	e := newConnectEnv(t)
+	if code, _, _ := e.run("", "connect", "add", "w", "--kind", "jira", "--site", "https://a.example", "--token", "x"); code == 0 {
+		t.Error("--token still accepted")
+	}
+}
+
+func TestConnectAddReadsStdinWithoutFlag(t *testing.T) {
+	e := newConnectEnv(t)
+	if code, _, _ := e.run("tok\n", "connect", "add", "w", "--kind", "jira", "--site", "https://a.example"); code != 0 || e.kc.vals["w"] != "tok" {
+		t.Errorf("%d %v", code, e.kc.vals)
+	}
+}
+
+func TestConnectAddFailedSaveLeavesNoRecord(t *testing.T) {
+	e := newConnectEnv(t)
+	e.kc.fail = connections.ErrUnavailable
+	// the file store cannot be written: its dir path is a regular file
+	os.MkdirAll(e.xdg, 0o755)
+	os.WriteFile(filepath.Join(e.xdg, "rota"), []byte("file, not dir"), 0o644)
+	if code, _, _ := e.run("tok", "connect", "add", "w", "--kind", "jira", "--site", "https://a.example", "--token-stdin"); code == 0 {
+		t.Fatal("add succeeded with nowhere to store the secret")
+	}
+	os.Remove(filepath.Join(e.xdg, "rota"))
+	_, env, _ := e.run("", "connect", "list")
+	if rows, _ := connData(env).Get("connections"); len(rows.([]any)) != 0 {
+		t.Errorf("a record without a secret was left: %v", rows)
+	}
+}
+
+func TestConnectAddRefusesEnvCollision(t *testing.T) {
+	e := newConnectEnv(t)
+	e.run("t", "connect", "add", "a-b", "--kind", "linear", "--token-stdin")
+	if code, _, _ := e.run("t", "connect", "add", "a_b", "--kind", "linear", "--token-stdin"); code == 0 {
+		t.Error("a_b collided with a-b but was accepted")
+	}
+	if _, ok := e.kc.vals["a_b"]; ok {
+		t.Error("the refused connection left a secret behind")
+	}
+}
+
+func TestConnectRemoveClearsFileStore(t *testing.T) {
+	e := newConnectEnv(t)
+	e.kc.fail = connections.ErrUnavailable
+	e.addWork()
+	e.run("", "connect", "remove", "work")
+	raw, _ := os.ReadFile(filepath.Join(e.xdg, "rota", "secrets.json"))
+	if strings.Contains(string(raw), "s3cret-token") {
+		t.Errorf("secret left in secrets.json: %s", raw)
+	}
+}
+
+type failDeleteKeychain struct{ fakeKeychain }
+
+func (*failDeleteKeychain) Delete(context.Context, string) error { return errors.New("locked") }
+
+func TestConnectRemoveReportsFailedDelete(t *testing.T) {
+	e := newConnectEnv(t)
+	e.addWork()
+	e.d.Keychain = func() connections.Store { return &failDeleteKeychain{fakeKeychain{vals: map[string]string{}}} }
+	if code, _, errOut := e.run("", "connect", "remove", "work"); code == 0 || !strings.Contains(errOut, "locked") {
+		t.Errorf("%d %q", code, errOut)
+	}
+}
+
+type errGetKeychain struct{ fakeKeychain }
+
+func (*errGetKeychain) Get(context.Context, string) (string, bool, error) {
+	return "", false, errors.New("dbus down")
+}
+
+func TestConnectListReportsStoreError(t *testing.T) {
+	e := newConnectEnv(t)
+	e.addWork()
+	e.d.Keychain = func() connections.Store { return &errGetKeychain{fakeKeychain{vals: map[string]string{}}} }
+	_, env, _ := e.run("", "connect", "list")
+	rows, _ := connData(env).Get("connections")
+	row := rows.([]any)[0].(*jsonx.Object)
+	if jsonx.Str(row, "store") != "error" || jsonx.Str(row, "storeError") != "dbus down" {
+		t.Errorf("%v", row)
+	}
+}
+
+func TestDoctorWarnsWhenKindHasNoTestRead(t *testing.T) {
+	e := newConnectEnv(t)
+	e.addWork()
+	e.d.ConnTesters = nil
+	ok, c := doctorWithConnection(t, e, "work")
+	if c["status"] != "warn" || !ok {
+		t.Errorf("%v ok=%v", c, ok)
+	}
+	if code, _, _ := e.run("", "connect", "test", "work"); code != ExitUnavailable {
+		t.Errorf("connect test exit %d", code)
 	}
 }

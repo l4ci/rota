@@ -31,6 +31,9 @@ var Kinds = []string{KindJira, KindLinear}
 // ErrExists is Add refusing to overwrite a connection without replace.
 var ErrExists = errors.New("connection already exists")
 
+// ErrEnvCollision is a name whose ROTA_<NAME>_TOKEN is another connection's.
+var ErrEnvCollision = errors.New("connection name collides on its token env var")
+
 var nameRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]*$`)
 
 // Connection is one named tracker connection. Nothing here is secret.
@@ -105,6 +108,9 @@ func Add(dir string, c Connection, replace bool) error {
 		items := decodeRaw(v)
 		kept := []any{}
 		for _, it := range items {
+			if o, ok := it.(*jsonx.Object); ok && jsonx.Str(o, "name") != c.Name && EnvVar(jsonx.Str(o, "name")) == EnvVar(c.Name) {
+				return nil, fmt.Errorf("%w: %q and %q both read %s", ErrEnvCollision, c.Name, jsonx.Str(o, "name"), EnvVar(c.Name))
+			}
 			if o, ok := it.(*jsonx.Object); ok && jsonx.Str(o, "name") == c.Name {
 				if !replace {
 					return nil, fmt.Errorf("%w: %s", ErrExists, c.Name)

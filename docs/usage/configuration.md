@@ -630,7 +630,7 @@ rota connect test work     # one authenticated read
 rota connect remove work   # drops the connection and its secret
 ```
 
-The secret goes to the OS keychain (`security` on macOS, `secret-tool` on Linux) and, where there is none (headless Linux), to a `0600` `secrets.json` beside `connections.json`. `rota connect add` says which store it used and why it fell back; `rota connect list` shows it per connection. `ROTA_<NAME>_TOKEN` (the name upper-cased, other characters as `_`, so `work` reads `ROTA_WORK_TOKEN`) overrides the stored secret, for CI. On macOS the keychain call passes the token as an argument, so it is visible in `ps` for the moment `security` runs; pass it with `--token-stdin` rather than `--token` to keep it out of your shell history. OAuth is not supported: API tokens only.
+The secret goes to the OS keychain (`security` on macOS, `secret-tool` on Linux) and, where there is none (headless Linux), to a `0600` `secrets.json` beside `connections.json`. `rota connect add` says which store it used and why it fell back; `rota connect list` shows it per connection. `ROTA_<NAME>_TOKEN` (the name upper-cased, other characters as `_`, so `work` reads `ROTA_WORK_TOKEN`) overrides the stored secret, for CI. `rota connect add` takes the token on stdin only, so it never reaches your shell history or a process list; on macOS the keychain write goes through `security -i`, again over stdin. Adding a name whose `ROTA_<NAME>_TOKEN` equals another connection's (`a-b` and `a_b`) is refused. OAuth is not supported: API tokens only.
 
 `rota doctor` checks the project's `issues.connection`: it fails with a hint when the connection is unknown, has no secret, or its test read fails. A kind with no test read yet in your build shows as a warning.
 

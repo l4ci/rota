@@ -518,7 +518,7 @@ A gated verb refuses with exit 4 (`blockedBy: "manual gate"`) at every autonomy 
 | `rota projects --ui` | terminal screen over the registry: status, last round, lease; open, cleanup, remove, add |
 | `rota connect add <name> --kind jira\|linear --site <url> [--user <u>] --token-stdin` | add or `--replace` a machine-wide tracker connection and store its token in the keychain, else a 0600 file; reports which |
 | `rota connect list` | connections with the store holding each secret (`keychain`, `file`, `none`) and whether `ROTA_<NAME>_TOKEN` overrides it; never the secret |
-| `rota connect test <name>` | one authenticated read through the connection; exit 1 on an unknown name, no secret or a failed read |
+| `rota connect test <name>` | one authenticated read through the connection; exit 1 on an unknown name, no secret or a failed read; exit 5 when this build has no test read for the connection's kind yet |
 | `rota connect remove <name>` | drop the connection and clear its secret from every store |
 | `rota setup [--yes] [--set <key>=<value>]... \| --list` | `rota init` plus the main config choices, asked on a terminal; `--yes` takes defaults, `--list` prints the questions |
 | `rota init check` | is `.rota/` initialized (exit 1 when not) |

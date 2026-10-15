@@ -34,9 +34,9 @@ func (k osKeychain) call(ctx context.Context, stdin string, args ...string) (pro
 	c := proc.Cmd{Name: "security", Args: args}
 	if k.goos == "linux" {
 		c.Name = "secret-tool"
-		if stdin != "" {
-			c.Stdin = []byte(stdin)
-		}
+	}
+	if stdin != "" {
+		c.Stdin = []byte(stdin)
 	}
 	r, err := k.run(ctx, c)
 	if err != nil {
@@ -77,12 +77,21 @@ func (k osKeychain) Set(ctx context.Context, name, secret string) error {
 	var r proc.Result
 	var err error
 	if k.goos == "darwin" {
-		// security takes the secret as an argument: visible in ps for the
-		// instant the call runs. It has no stdin form for -w.
-		r, err = k.call(ctx, "", "add-generic-password", "-U", "-s", keychainService, "-a", name, "-w", secret)
-	} else {
-		r, err = k.call(ctx, secret, "store", "--label=rota "+name, "service", keychainService, "account", name)
+		// `security -i` reads its commands from stdin, so argv never holds the
+		// secret. The call's exit status is not trusted in interactive mode:
+		// read the item back instead.
+		cmd := fmt.Sprintf("add-generic-password -U -s %s -a %s -w %s\n", securityQuote(keychainService), securityQuote(name), securityQuote(secret))
+		r, err = k.call(ctx, cmd, "-i")
+		if err != nil {
+			return err
+		}
+		got, ok, gerr := k.Get(ctx, name)
+		if gerr != nil || !ok || got != secret {
+			return fmt.Errorf("%w: security -i did not store the item: %s", ErrUnavailable, strings.TrimSpace(r.Stderr))
+		}
+		return nil
 	}
+	r, err = k.call(ctx, secret, "store", "--label=rota "+name, "service", keychainService, "account", name)
 	if err != nil {
 		return err
 	}
@@ -90,6 +99,11 @@ func (k osKeychain) Set(ctx context.Context, name, secret string) error {
 		return fmt.Errorf("%w: exit %d: %s", ErrUnavailable, r.ExitCode, strings.TrimSpace(r.Stderr))
 	}
 	return nil
+}
+
+// securityQuote double-quotes s for `security -i`, escaping \ and ".
+func securityQuote(s string) string {
+	return `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(s) + `"`
 }
 
 func (k osKeychain) Delete(ctx context.Context, name string) error {
