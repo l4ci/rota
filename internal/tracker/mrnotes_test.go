@@ -62,7 +62,7 @@ func TestCommentURL(t *testing.T) {
 	gh := &scripted{answer: func(string, []string) (string, string, int) {
 		return `{"id":5,"html_url":"https://github.com/o/r/issues/3#issuecomment-5"}`, "", 0
 	}}
-	if u, err := newAdapter(t, "github", gh).CommentURL(context.Background(), false, 3, "5"); err != nil || u != "https://github.com/o/r/issues/3#issuecomment-5" {
+	if u, err := newAdapter(t, "github", gh).CommentURL(context.Background(), NumKey(3), "5"); err != nil || u != "https://github.com/o/r/issues/3#issuecomment-5" {
 		t.Errorf("github %q %v", u, err)
 	}
 	if !strings.Contains(gh.calls[0], "repos/{owner}/{repo}/issues/comments/5") {
@@ -71,7 +71,7 @@ func TestCommentURL(t *testing.T) {
 	gl := &scripted{answer: func(string, []string) (string, string, int) {
 		return `{"iid":12,"web_url":"https://gitlab.com/o/r/-/merge_requests/12"}`, "", 0
 	}}
-	if u, err := newAdapter(t, "gitlab", gl).CommentURL(context.Background(), true, 12, "41"); err != nil || u != "https://gitlab.com/o/r/-/merge_requests/12#note_41" {
+	if u, err := newAdapter(t, "gitlab", gl).PRCommentURL(context.Background(), 12, "41"); err != nil || u != "https://gitlab.com/o/r/-/merge_requests/12#note_41" {
 		t.Errorf("gitlab %q %v", u, err)
 	}
 	if !strings.Contains(gl.calls[0], "mr view 12") {

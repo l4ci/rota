@@ -47,7 +47,7 @@ func TestCommentsCreatedAt(t *testing.T) {
 	gh := &scripted{answer: func(string, []string) (string, string, int) {
 		return `[{"id":1,"body":"b","user":{"login":"u"},"created_at":"2026-10-08T10:00:00Z"}]`, "", 0
 	}}
-	got, err := newAdapter(t, "github", gh).Comments(context.Background(), 3)
+	got, err := newAdapter(t, "github", gh).Comments(context.Background(), NumKey(3))
 	want := time.Date(2026, 10, 8, 10, 0, 0, 0, time.UTC)
 	if err != nil || len(got) != 1 || !got[0].CreatedAt.Equal(want) {
 		t.Fatalf("github %+v %v", got, err)

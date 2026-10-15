@@ -54,16 +54,21 @@ func TestComposeEndsWithMarker(t *testing.T) {
 
 type stubForge struct{ posted []string }
 
-func (s *stubForge) Comments(context.Context, int) ([]tracker.Comment, error) { return nil, nil }
-func (s *stubForge) MRNotes(context.Context, int) ([]tracker.Comment, error)  { return nil, nil }
-func (s *stubForge) AddComment(_ context.Context, _ int, b string) (string, error) {
+func (s *stubForge) Comments(context.Context, tracker.IssueKey) ([]tracker.Comment, error) {
+	return nil, nil
+}
+func (s *stubForge) MRNotes(context.Context, int) ([]tracker.Comment, error) { return nil, nil }
+func (s *stubForge) AddComment(_ context.Context, _ tracker.IssueKey, b string) (string, error) {
 	s.posted = append(s.posted, b)
 	return "77", nil
 }
 func (s *stubForge) AddMRNote(ctx context.Context, n int, b string) (string, error) {
-	return s.AddComment(ctx, n, b)
+	return s.AddComment(ctx, tracker.NumKey(n), b)
 }
-func (s *stubForge) CommentURL(context.Context, bool, int, string) (string, error) {
+func (s *stubForge) PRCommentURL(context.Context, int, string) (string, error) {
+	return "", errors.New("no url")
+}
+func (s *stubForge) CommentURL(context.Context, tracker.IssueKey, string) (string, error) {
 	return "", errors.New("no url")
 }
 

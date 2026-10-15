@@ -41,17 +41,26 @@ func (f *Fake) rec(method string, args ...any) error {
 	return f.Fail[method]
 }
 
-func notFound(n int) error {
-	return &tracker.Error{Kind: tracker.KindNotFound, Code: 1, Message: "issue #" + strconv.Itoa(n) + " not found"}
+func notFound(key tracker.IssueKey) error {
+	return &tracker.Error{Kind: tracker.KindNotFound, Code: 1, Message: "issue " + key.Ref() + " not found"}
 }
 
-func (f *Fake) find(n int) (*tracker.Issue, error) {
+// argOf is how Calls records an issue: the number of a numbered issue, the
+// key text of a key-based one (PROJ-123).
+func argOf(key tracker.IssueKey) any {
+	if n, ok := key.Number(); ok {
+		return n
+	}
+	return key.String()
+}
+
+func (f *Fake) find(key tracker.IssueKey) (*tracker.Issue, error) {
 	for i := range f.Issues {
-		if f.Issues[i].Number == n {
+		if f.Issues[i].Key == key {
 			return &f.Issues[i], nil
 		}
 	}
-	return nil, notFound(n)
+	return nil, notFound(key)
 }
 
 func strs(s []string) []any {
@@ -64,11 +73,12 @@ func strs(s []string) []any {
 
 // Get returns a copy of the issue; withComments is not recorded as a flag by
 // the Python side (it never asks), so only the number is.
-func (f *Fake) Get(_ context.Context, n int, withComments bool) (tracker.Issue, error) {
+func (f *Fake) Get(_ context.Context, key tracker.IssueKey, withComments bool) (tracker.Issue, error) {
+	n := argOf(key)
 	if err := f.rec("get", n); err != nil {
 		return tracker.Issue{}, err
 	}
-	is, err := f.find(n)
+	is, err := f.find(key)
 	if err != nil {
 		return tracker.Issue{}, err
 	}
@@ -97,26 +107,27 @@ func (f *Fake) List(_ context.Context, fl tracker.ListFilter) ([]tracker.Issue, 
 			out = append(out, is)
 		}
 	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].Number > out[j].Number })
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Num() > out[j].Num() })
 	return out, nil
 }
 
 // Create adds an open issue.
-func (f *Fake) Create(_ context.Context, title, body string, labels []string, milestone string) (int, error) {
+func (f *Fake) Create(_ context.Context, title, body string, labels []string, milestone string) (tracker.IssueKey, error) {
 	if err := f.rec("create", title, body, strs(labels), milestone); err != nil {
-		return 0, err
+		return "", err
 	}
 	n := 1
 	for _, is := range f.Issues {
-		n = max(n, is.Number+1)
+		n = max(n, is.Num()+1)
 	}
-	f.Issues = append(f.Issues, tracker.Issue{Number: n, Title: title, Body: body, Labels: slices.Clone(labels),
+	f.Issues = append(f.Issues, tracker.Issue{Key: tracker.NumKey(n), Title: title, Body: body, Labels: slices.Clone(labels),
 		Milestone: milestone, State: "open", URL: "https://example.test/issues/" + strconv.Itoa(n)})
-	return n, nil
+	return tracker.NumKey(n), nil
 }
 
 // Edit applies the non-empty fields of e.
-func (f *Fake) Edit(_ context.Context, n int, e tracker.IssueEdit) error {
+func (f *Fake) Edit(_ context.Context, key tracker.IssueKey, e tracker.IssueEdit) error {
+	n := argOf(key)
 	m := map[string]any{}
 	if e.Title != nil {
 		m["title"] = *e.Title
@@ -139,7 +150,7 @@ func (f *Fake) Edit(_ context.Context, n int, e tracker.IssueEdit) error {
 	if err := f.rec("edit", n, m); err != nil {
 		return err
 	}
-	is, err := f.find(n)
+	is, err := f.find(key)
 	if err != nil {
 		return err
 	}
@@ -170,11 +181,12 @@ func (f *Fake) EnsureLabels(_ context.Context, names []string, autoCreate bool) 
 }
 
 // AddLabels records the call and adds the labels.
-func (f *Fake) AddLabels(_ context.Context, n int, labels []string, autoCreate bool) error {
+func (f *Fake) AddLabels(_ context.Context, key tracker.IssueKey, labels []string, autoCreate bool) error {
+	n := argOf(key)
 	if err := f.rec("add_labels", n, strs(labels), autoCreate); err != nil {
 		return err
 	}
-	is, err := f.find(n)
+	is, err := f.find(key)
 	if err != nil {
 		return err
 	}
@@ -187,11 +199,12 @@ func (f *Fake) AddLabels(_ context.Context, n int, labels []string, autoCreate b
 }
 
 // RemoveLabels records the call and removes the labels.
-func (f *Fake) RemoveLabels(_ context.Context, n int, labels []string) error {
+func (f *Fake) RemoveLabels(_ context.Context, key tracker.IssueKey, labels []string) error {
+	n := argOf(key)
 	if err := f.rec("remove_labels", n, strs(labels)); err != nil {
 		return err
 	}
-	is, err := f.find(n)
+	is, err := f.find(key)
 	if err != nil {
 		return err
 	}
@@ -200,14 +213,15 @@ func (f *Fake) RemoveLabels(_ context.Context, n int, labels []string) error {
 }
 
 // Close closes the issue; an empty reason is "completed" and a comment is added.
-func (f *Fake) Close(_ context.Context, n int, reason, comment string) error {
+func (f *Fake) Close(_ context.Context, key tracker.IssueKey, reason, comment string) error {
+	n := argOf(key)
 	if reason == "" {
 		reason = "completed"
 	}
 	if err := f.rec("close", n, reason, comment); err != nil {
 		return err
 	}
-	is, err := f.find(n)
+	is, err := f.find(key)
 	if err != nil {
 		return err
 	}
@@ -219,11 +233,12 @@ func (f *Fake) Close(_ context.Context, n int, reason, comment string) error {
 }
 
 // Reopen opens the issue again.
-func (f *Fake) Reopen(_ context.Context, n int) error {
+func (f *Fake) Reopen(_ context.Context, key tracker.IssueKey) error {
+	n := argOf(key)
 	if err := f.rec("reopen", n); err != nil {
 		return err
 	}
-	is, err := f.find(n)
+	is, err := f.find(key)
 	if err != nil {
 		return err
 	}
@@ -232,11 +247,12 @@ func (f *Fake) Reopen(_ context.Context, n int) error {
 }
 
 // AssignSelf assigns the issue to "fake-user".
-func (f *Fake) AssignSelf(_ context.Context, n int) error {
+func (f *Fake) AssignSelf(_ context.Context, key tracker.IssueKey) error {
+	n := argOf(key)
 	if err := f.rec("assign_self", n); err != nil {
 		return err
 	}
-	is, err := f.find(n)
+	is, err := f.find(key)
 	if err != nil {
 		return err
 	}
@@ -254,11 +270,12 @@ func (f *Fake) add(is *tracker.Issue, body string) string {
 }
 
 // Comments returns the issue's comments in order.
-func (f *Fake) Comments(_ context.Context, n int) ([]tracker.Comment, error) {
+func (f *Fake) Comments(_ context.Context, key tracker.IssueKey) ([]tracker.Comment, error) {
+	n := argOf(key)
 	if err := f.rec("comments", n); err != nil {
 		return nil, err
 	}
-	is, err := f.find(n)
+	is, err := f.find(key)
 	if err != nil {
 		return nil, err
 	}
@@ -266,11 +283,12 @@ func (f *Fake) Comments(_ context.Context, n int) ([]tracker.Comment, error) {
 }
 
 // AddComment appends a comment and returns its id.
-func (f *Fake) AddComment(_ context.Context, n int, body string) (string, error) {
+func (f *Fake) AddComment(_ context.Context, key tracker.IssueKey, body string) (string, error) {
+	n := argOf(key)
 	if err := f.rec("add_comment", n, body); err != nil {
 		return "", err
 	}
-	is, err := f.find(n)
+	is, err := f.find(key)
 	if err != nil {
 		return "", err
 	}
@@ -278,11 +296,12 @@ func (f *Fake) AddComment(_ context.Context, n int, body string) (string, error)
 }
 
 // EditComment replaces a comment's body.
-func (f *Fake) EditComment(_ context.Context, n int, id, body string) error {
+func (f *Fake) EditComment(_ context.Context, key tracker.IssueKey, id, body string) error {
+	n := argOf(key)
 	if err := f.rec("edit_comment", n, id, body); err != nil {
 		return err
 	}
-	is, err := f.find(n)
+	is, err := f.find(key)
 	if err != nil {
 		return err
 	}
@@ -296,11 +315,12 @@ func (f *Fake) EditComment(_ context.Context, n int, id, body string) error {
 }
 
 // DeleteComment removes a comment.
-func (f *Fake) DeleteComment(_ context.Context, n int, id string) error {
+func (f *Fake) DeleteComment(_ context.Context, key tracker.IssueKey, id string) error {
+	n := argOf(key)
 	if err := f.rec("delete_comment", n, id); err != nil {
 		return err
 	}
-	is, err := f.find(n)
+	is, err := f.find(key)
 	if err != nil {
 		return err
 	}

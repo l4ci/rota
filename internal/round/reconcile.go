@@ -3,8 +3,8 @@ package round
 import (
 	"context"
 	"fmt"
-	"strconv"
 
+	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -125,15 +125,15 @@ func (e Env) repair(ctx context.Context, root string, rep *Report, f Finding) er
 	case ClaimMismatch:
 		return editSlot(root, f.Slot, func(s *worker.Slot) error { s.SetClaimID(""); return nil })
 	case LabelMissing:
-		n, err := strconv.Atoi(f.Issue)
-		if err != nil {
-			return err
+		n, ok := tracker.ParseKey(f.Issue)
+		if !ok {
+			return fmt.Errorf("%s is not an issue key", f.Issue)
 		}
 		return e.Forge.AddLabels(ctx, n, []string{e.Label}, false)
 	case LabelStale:
-		n, err := strconv.Atoi(f.Issue)
-		if err != nil {
-			return err
+		n, ok := tracker.ParseKey(f.Issue)
+		if !ok {
+			return fmt.Errorf("%s is not an issue key", f.Issue)
 		}
 		return e.Forge.RemoveLabels(ctx, n, []string{e.Label})
 	}

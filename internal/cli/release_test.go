@@ -887,7 +887,7 @@ func TestReleaseCloseMilestone(t *testing.T) {
 	}
 	for _, n := range []int{4, 7} {
 		is := f.Fake.Issues[n-1]
-		if n == 4 && is.Number != 4 || n == 7 && is.Number != 7 {
+		if n == 4 && is.Num() != 4 || n == 7 && is.Num() != 7 {
 			t.Fatal("fixture order")
 		}
 		if !slices.Contains(is.Labels, "released") || is.Comments[len(is.Comments)-1].Body != "Released in v1.2.0\n\n<!-- rota:released -->" {

@@ -12,7 +12,9 @@ import (
 // round, roundwatch, roundtick and cli call these rather than re-parse.
 
 var (
-	reIssueBranch = regexp.MustCompile(`^[^/]+/(\d+)-`)
+	// reIssueBranch is `<agent>/<issue>-<slug>`: the issue is a number or a
+	// tracker key (PROJ-123, upper case, as BranchName spells it).
+	reIssueBranch = regexp.MustCompile(`^[^/]+/(\d+|[A-Z][A-Z0-9_]*-\d+)-`)
 	reIssueToken  = regexp.MustCompile(`(?:(?:^|[^a-z0-9])issue-(\d+)|#(\d+))`)
 )
 
@@ -55,14 +57,13 @@ func HeldID(task, branch, name string) string {
 	return ""
 }
 
-// BranchIssue is the issue number leading a `<agent>/<issue>-<slug>` branch.
-func BranchIssue(branch string) (int, bool) {
+// BranchIssue is the issue key leading a `<agent>/<issue>-<slug>` branch.
+func BranchIssue(branch string) (tracker.IssueKey, bool) {
 	m := reIssueBranch.FindStringSubmatch(branch)
 	if m == nil {
-		return 0, false
+		return "", false
 	}
-	n, err := strconv.Atoi(m[1])
-	return n, err == nil
+	return tracker.ParseKey(m[1])
 }
 
 // HeldID is the item the slot holds ("" when none).

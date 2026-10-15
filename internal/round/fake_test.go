@@ -127,7 +127,7 @@ func (f remoteForge) List(_ context.Context, fl tracker.ListFilter) ([]tracker.I
 		f.closedLists++
 		out := append([]tracker.Issue(nil), f.closedIssues...)
 		for _, n := range f.closedLabelled {
-			out = append(out, tracker.Issue{Number: n, State: "closed"})
+			out = append(out, tracker.Issue{Key: tracker.NumKey(n), State: "closed"})
 		}
 		return out, nil
 	}
@@ -135,14 +135,14 @@ func (f remoteForge) List(_ context.Context, fl tracker.ListFilter) ([]tracker.I
 	seen := map[int]bool{}
 	for _, n := range f.labelled {
 		seen[n] = true
-		out = append(out, tracker.Issue{Number: n})
+		out = append(out, tracker.Issue{Key: tracker.NumKey(n)})
 	}
 	for n, ls := range f.labels {
 		for _, l := range ls {
 			for _, want := range fl.Labels {
 				if l == want && !seen[n] {
 					seen[n] = true
-					out = append(out, tracker.Issue{Number: n})
+					out = append(out, tracker.Issue{Key: tracker.NumKey(n)})
 				}
 			}
 		}
@@ -150,14 +150,16 @@ func (f remoteForge) List(_ context.Context, fl tracker.ListFilter) ([]tracker.I
 	return out, nil
 }
 
-func (f remoteForge) Get(_ context.Context, n int, _ bool) (tracker.Issue, error) {
+func (f remoteForge) Get(_ context.Context, key tracker.IssueKey, _ bool) (tracker.Issue, error) {
+	n, _ := key.Number()
 	if it := f.items[strconv.Itoa(n)]; f.closed[n] || (it != nil && it.Closed) {
-		return tracker.Issue{Number: n, State: "closed"}, nil
+		return tracker.Issue{Key: tracker.NumKey(n), State: "closed"}, nil
 	}
-	return tracker.Issue{Number: n, State: "open"}, nil
+	return tracker.Issue{Key: tracker.NumKey(n), State: "open"}, nil
 }
 
-func (f remoteForge) AddLabels(_ context.Context, n int, labels []string, _ bool) error {
+func (f remoteForge) AddLabels(_ context.Context, key tracker.IssueKey, labels []string, _ bool) error {
+	n, _ := key.Number()
 	f.added = append(f.added, n)
 	if f.addErr != nil {
 		return f.addErr
@@ -169,7 +171,8 @@ func (f remoteForge) AddLabels(_ context.Context, n int, labels []string, _ bool
 	return nil
 }
 
-func (f remoteForge) RemoveLabels(_ context.Context, n int, _ []string) error {
+func (f remoteForge) RemoveLabels(_ context.Context, key tracker.IssueKey, _ []string) error {
+	n, _ := key.Number()
 	f.removed = append(f.removed, n)
 	return f.removeErr
 }

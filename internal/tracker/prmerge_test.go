@@ -58,24 +58,24 @@ func TestPRRequestMergeRefusalIsAnError(t *testing.T) {
 // the merge sha (a GitLab squash commit stands in for a missing merge commit).
 func TestPRViewNormalizesBothForges(t *testing.T) {
 	gh := func(state, merge string) string {
-		return `{"headRefName":"w1","headRefOid":"aaaa","baseRefName":"main","state":"` + state + `","body":"the body","mergeCommit":` + merge + `}`
+		return `{"headRefName":"w1","headRefOid":"aaaa","baseRefName":"main","state":"` + state + `","title":"the title","body":"the body","mergeCommit":` + merge + `}`
 	}
 	cases := []struct {
 		name, provider, out string
 		want                PRInfo
 	}{
-		{"github open", "github", gh("OPEN", "null"), PRInfo{"w1", "aaaa", "main", "OPEN", "", "the body"}},
-		{"github merged", "github", gh("MERGED", `{"oid":"mmmm"}`), PRInfo{"w1", "aaaa", "main", "MERGED", "mmmm", "the body"}},
-		{"gitlab open", "gitlab", `{"source_branch":"w1","sha":"aaaa","target_branch":"main","state":"opened","description":"the body"}`,
-			PRInfo{"w1", "aaaa", "main", "OPEN", "", "the body"}},
-		{"gitlab merge commit", "gitlab", `{"source_branch":"w1","sha":"aaaa","target_branch":"main","state":"merged","description":"the body","merge_commit_sha":"mmmm","squash_commit_sha":"ssss"}`,
-			PRInfo{"w1", "aaaa", "main", "MERGED", "mmmm", "the body"}},
-		{"gitlab squash", "gitlab", `{"source_branch":"w1","sha":"aaaa","target_branch":"main","state":"merged","description":"the body","merge_commit_sha":null,"squash_commit_sha":"ssss"}`,
-			PRInfo{"w1", "aaaa", "main", "MERGED", "ssss", "the body"}},
-		{"gitlab fast-forward has no merge commit", "gitlab", `{"source_branch":"w1","sha":"aaaa","target_branch":"main","state":"merged","description":"the body"}`,
-			PRInfo{"w1", "aaaa", "main", "MERGED", "", "the body"}},
-		{"gitlab closed", "gitlab", `{"source_branch":"w1","sha":"aaaa","target_branch":"main","state":"closed","description":"the body"}`,
-			PRInfo{"w1", "aaaa", "main", "CLOSED", "", "the body"}},
+		{"github open", "github", gh("OPEN", "null"), PRInfo{"w1", "aaaa", "main", "OPEN", "", "the title", "the body"}},
+		{"github merged", "github", gh("MERGED", `{"oid":"mmmm"}`), PRInfo{"w1", "aaaa", "main", "MERGED", "mmmm", "the title", "the body"}},
+		{"gitlab open", "gitlab", `{"source_branch":"w1","sha":"aaaa","target_branch":"main","state":"opened","title":"the title","description":"the body"}`,
+			PRInfo{"w1", "aaaa", "main", "OPEN", "", "the title", "the body"}},
+		{"gitlab merge commit", "gitlab", `{"source_branch":"w1","sha":"aaaa","target_branch":"main","state":"merged","title":"the title","description":"the body","merge_commit_sha":"mmmm","squash_commit_sha":"ssss"}`,
+			PRInfo{"w1", "aaaa", "main", "MERGED", "mmmm", "the title", "the body"}},
+		{"gitlab squash", "gitlab", `{"source_branch":"w1","sha":"aaaa","target_branch":"main","state":"merged","title":"the title","description":"the body","merge_commit_sha":null,"squash_commit_sha":"ssss"}`,
+			PRInfo{"w1", "aaaa", "main", "MERGED", "ssss", "the title", "the body"}},
+		{"gitlab fast-forward has no merge commit", "gitlab", `{"source_branch":"w1","sha":"aaaa","target_branch":"main","state":"merged","title":"the title","description":"the body"}`,
+			PRInfo{"w1", "aaaa", "main", "MERGED", "", "the title", "the body"}},
+		{"gitlab closed", "gitlab", `{"source_branch":"w1","sha":"aaaa","target_branch":"main","state":"closed","title":"the title","description":"the body"}`,
+			PRInfo{"w1", "aaaa", "main", "CLOSED", "", "the title", "the body"}},
 	}
 	for _, c := range cases {
 		s := &scripted{answer: func(string, []string) (string, string, int) { return c.out, "", 0 }}

@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"github.com/l4ci/rota/internal/tracker"
 	"os"
 	"path/filepath"
 	"strings"
@@ -49,12 +50,12 @@ const issuesConfig = `{"forge": {"provider": "github"}, "issues": {"source": "gi
 
 func issueFixture() *trackertest.Fake {
 	return &trackertest.Fake{Issues: []backlog.Issue{
-		{Number: 7, Title: "Add export", Body: "Export the backlog.\n\n<!-- rota:fields\nRelated: B9\n-->",
+		{Key: tracker.NumKey(7), Title: "Add export", Body: "Export the backlog.\n\n<!-- rota:fields\nRelated: B9\n-->",
 			Labels: []string{"type:feature", "size:Major"}, Milestone: "M02 — Sharing", State: "open",
 			URL: "https://example.test/issues/7"},
-		{Number: 9, Title: "Crash on start", Labels: []string{"type:bug", "p1"}, State: "closed",
+		{Key: tracker.NumKey(9), Title: "Crash on start", Labels: []string{"type:bug", "p1"}, State: "closed",
 			StateReason: "not_planned", ClosedAt: "2026-09-30T10:00:00Z", URL: "https://example.test/issues/9"},
-		{Number: 3, Title: "M02 tracking", Labels: []string{"milestone-tracker"}, State: "open"},
+		{Key: tracker.NumKey(3), Title: "M02 tracking", Labels: []string{"milestone-tracker"}, State: "open"},
 	}}
 }
 

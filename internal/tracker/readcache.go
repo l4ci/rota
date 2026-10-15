@@ -2,7 +2,6 @@ package tracker
 
 import (
 	"slices"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -90,14 +89,14 @@ func (rc *ReadCache) putIssues(scope string, list []Issue) {
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
 	for _, is := range list {
-		rc.issues[scope+"#"+strconv.Itoa(is.Number)] = is
+		rc.issues[scope+"#"+string(is.Key)] = is
 	}
 }
 
-func (rc *ReadCache) issue(scope string, n int) (Issue, bool) {
+func (rc *ReadCache) issue(scope string, k IssueKey) (Issue, bool) {
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
-	is, ok := rc.issues[scope+"#"+strconv.Itoa(n)]
+	is, ok := rc.issues[scope+"#"+string(k)]
 	return is, ok
 }
 

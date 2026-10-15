@@ -70,9 +70,9 @@ type Forge interface {
 	PRView(ctx context.Context, pr int) (tracker.PRInfo, error)
 	ClosedNumbers(body string) []int
 	List(ctx context.Context, f tracker.ListFilter) ([]tracker.Issue, error)
-	Get(ctx context.Context, number int, withComments bool) (tracker.Issue, error)
-	AddLabels(ctx context.Context, number int, labels []string, autoCreate bool) error
-	RemoveLabels(ctx context.Context, number int, labels []string) error
+	Get(ctx context.Context, key tracker.IssueKey, withComments bool) (tracker.Issue, error)
+	AddLabels(ctx context.Context, key tracker.IssueKey, labels []string, autoCreate bool) error
+	RemoveLabels(ctx context.Context, key tracker.IssueKey, labels []string) error
 }
 
 // Env is what a round touches outside its own memory. A nil Snapshot or Forge
@@ -438,8 +438,8 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 			}
 		}
 		if labelsOK && !parked && r.Issue != "" && r.PRState != "merged" && r.PRState != "closed" {
-			if n, err := strconv.Atoi(r.Issue); err == nil && !labelled[n] && !e.issueClosed(ctx, rep, n) {
-				rep.add(Finding{Kind: LabelMissing, Slot: r.Name, Issue: r.Issue, Detail: fmt.Sprintf("slot holds #%s, which lacks %s", r.Issue, e.Label), Repair: "add " + e.Label})
+			if n, ok := tracker.ParseKey(r.Issue); ok && !labelled[n] && !e.issueClosed(ctx, rep, n) {
+				rep.add(Finding{Kind: LabelMissing, Slot: r.Name, Issue: r.Issue, Detail: fmt.Sprintf("slot holds %s, which lacks %s", n.Ref(), e.Label), Repair: "add " + e.Label})
 			}
 		}
 	}
@@ -463,20 +463,20 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 			}
 		}
 	}
-	sort.Ints(stale)
+	tracker.SortKeys(stale)
 	for _, n := range stale {
-		rep.add(Finding{Kind: LabelStale, Issue: strconv.Itoa(n), Detail: fmt.Sprintf("#%d is closed and still has %s", n, e.Label), Repair: "remove " + e.Label})
+		rep.add(Finding{Kind: LabelStale, Issue: n.String(), Detail: fmt.Sprintf("%s is closed and still has %s", n.Ref(), e.Label), Repair: "remove " + e.Label})
 	}
 	if labelsOK {
-		var orphans []int
+		var orphans []tracker.IssueKey
 		for n := range labelled {
-			if !held[strconv.Itoa(n)] {
+			if !held[n.String()] {
 				orphans = append(orphans, n)
 			}
 		}
-		sort.Ints(orphans)
+		tracker.SortKeys(orphans)
 		for _, n := range orphans {
-			rep.add(Finding{Kind: LabelOrphan, Issue: strconv.Itoa(n), Detail: fmt.Sprintf("#%d has %s and no slot holds it", n, e.Label)})
+			rep.add(Finding{Kind: LabelOrphan, Issue: n.String(), Detail: fmt.Sprintf("%s has %s and no slot holds it", n.Ref(), e.Label)})
 		}
 	}
 
@@ -631,8 +631,8 @@ func (e Env) readHost(ctx context.Context, rep *Report) (agents []host.Agent, ok
 // open issues carrying the round label, and the closed ones still carrying it.
 type forgeState struct {
 	prs      map[string]*tracker.PR
-	labelled map[int]bool
-	stale    []int
+	labelled map[tracker.IssueKey]bool
+	stale    []tracker.IssueKey
 	// ok says the PR list was read; labelsOK says the label lists were too.
 	ok, labelsOK bool
 }
@@ -640,7 +640,7 @@ type forgeState struct {
 // readForge is the forge source. An unavailable forge is recorded on rep and
 // leaves ok false; nothing else in Status needs it to answer.
 func (e Env) readForge(ctx context.Context, rep *Report) forgeState {
-	fs := forgeState{prs: map[string]*tracker.PR{}, labelled: map[int]bool{}, ok: e.Forge != nil}
+	fs := forgeState{prs: map[string]*tracker.PR{}, labelled: map[tracker.IssueKey]bool{}, ok: e.Forge != nil}
 	if !fs.ok {
 		rep.unavailable(SourceForge, firstNonEmpty(e.ForgeErr, "no forge available"))
 	} else if list, err := e.Forge.OpenPRs(ctx); err != nil {
@@ -661,14 +661,14 @@ func (e Env) readForge(ctx context.Context, rep *Report) forgeState {
 		} else {
 			fs.labelsOK = true
 			for _, is := range issues {
-				fs.labelled[is.Number] = true
+				fs.labelled[is.Key] = true
 			}
 			if closed, err := e.Forge.List(ctx, tracker.ListFilter{State: "closed", Labels: []string{e.Label}}); err != nil {
 				rep.unavailable(SourceForge, err.Error())
 			} else {
 				for _, is := range closed {
 					if is.State == "closed" {
-						fs.stale = append(fs.stale, is.Number)
+						fs.stale = append(fs.stale, is.Key)
 					}
 				}
 			}
@@ -775,10 +775,10 @@ func (e Env) ahead(ctx context.Context, root, base, branch string) int {
 // finished work, so it is neither missing its label nor worth relabelling. A
 // lookup that fails counts as open and leaves a warning: the drift stays
 // visible rather than hiding behind a flaky forge.
-func (e Env) issueClosed(ctx context.Context, rep *Report, n int) bool {
+func (e Env) issueClosed(ctx context.Context, rep *Report, n tracker.IssueKey) bool {
 	is, err := e.Forge.Get(ctx, n, false)
 	if err != nil {
-		rep.Warnings = append(rep.Warnings, fmt.Sprintf("issue #%d state: %v", n, err))
+		rep.Warnings = append(rep.Warnings, fmt.Sprintf("issue %s state: %v", n.Ref(), err))
 		return false
 	}
 	return is.State == "closed"

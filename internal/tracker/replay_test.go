@@ -173,39 +173,41 @@ func dispatch(ctx context.Context, a Adapter, op string, args map[string]json.Ra
 	case "closed_numbers":
 		return nonNil(a.ClosedNumbers(s("body"))), nil
 	case "create":
-		return a.Create(ctx, s("title"), s("body"), list("labels"), s("milestone"))
+		k, err := a.Create(ctx, s("title"), s("body"), list("labels"), s("milestone"))
+		n, _ := k.Number() // the recorded Python answer is the int
+		return n, err
 	case "get":
-		is, err := a.Get(ctx, in("number"), flag("comments", false))
+		is, err := a.Get(ctx, NumKey(in("number")), flag("comments", false))
 		return pyIssue(is), err
 	case "list":
 		return pyIssues(a.List(ctx, ListFilter{State: s("state"), Labels: list("labels"), Milestone: s("milestone")}))
 	case "issues_in_milestone":
 		return pyIssues(a.IssuesInMilestone(ctx, s("title"), s("state")))
 	case "edit":
-		return nil, a.Edit(ctx, in("number"), IssueEdit{Title: ptr("title"), Body: ptr("body"), AddLabels: list("add_labels"),
+		return nil, a.Edit(ctx, NumKey(in("number")), IssueEdit{Title: ptr("title"), Body: ptr("body"), AddLabels: list("add_labels"),
 			RemoveLabels: list("remove_labels"), Milestone: s("milestone"), RemoveMilestone: flag("remove_milestone", false)})
 	case "ensure_labels":
 		return nil, a.EnsureLabels(ctx, list("names"), flag("auto_create", true))
 	case "add_labels":
-		return nil, a.AddLabels(ctx, in("number"), list("labels"), flag("auto_create", true))
+		return nil, a.AddLabels(ctx, NumKey(in("number")), list("labels"), flag("auto_create", true))
 	case "remove_labels":
-		return nil, a.RemoveLabels(ctx, in("number"), list("labels"))
+		return nil, a.RemoveLabels(ctx, NumKey(in("number")), list("labels"))
 	case "close":
-		return nil, a.Close(ctx, in("number"), s("reason"), s("comment"))
+		return nil, a.Close(ctx, NumKey(in("number")), s("reason"), s("comment"))
 	case "reopen":
-		return nil, a.Reopen(ctx, in("number"))
+		return nil, a.Reopen(ctx, NumKey(in("number")))
 	case "assign_self":
-		return nil, a.AssignSelf(ctx, in("number"))
+		return nil, a.AssignSelf(ctx, NumKey(in("number")))
 	case "comments":
-		cs, err := a.Comments(ctx, in("number"))
+		cs, err := a.Comments(ctx, NumKey(in("number")))
 		return pyComments(cs), err
 	case "add_comment":
-		id, err := a.AddComment(ctx, in("number"), s("body"))
+		id, err := a.AddComment(ctx, NumKey(in("number")), s("body"))
 		return pyID(id), err
 	case "edit_comment":
-		return nil, a.EditComment(ctx, in("number"), raw("comment_id"), s("body"))
+		return nil, a.EditComment(ctx, NumKey(in("number")), raw("comment_id"), s("body"))
 	case "delete_comment":
-		return nil, a.DeleteComment(ctx, in("number"), raw("comment_id"))
+		return nil, a.DeleteComment(ctx, NumKey(in("number")), raw("comment_id"))
 	case "find_milestone":
 		t, ok, err := a.FindMilestone(ctx, s("hv_id"))
 		if !ok {
@@ -309,7 +311,7 @@ func pyID(id string) any {
 }
 
 func pyIssue(is Issue) map[string]any {
-	m := map[string]any{"number": is.Number, "title": is.Title, "body": is.Body, "labels": is.Labels,
+	m := map[string]any{"number": is.Num(), "title": is.Title, "body": is.Body, "labels": is.Labels,
 		"milestone": none(is.Milestone), "state": is.State, "state_reason": none(is.StateReason),
 		"closed_at": none(is.ClosedAt), "url": is.URL, "assignees": is.Assignees}
 	if is.Comments != nil {

@@ -419,7 +419,7 @@ func TestMigrateAdoptsTrackerImports(t *testing.T) {
 
 	// apply: no second issue for T01, labels added, design and Related still run
 	root = migProject(t, files)
-	f := &trackertest.MS{Fake: &trackertest.Fake{Issues: []tracker.Issue{{Number: 1, State: "open", Title: "backlog.Imported task", Body: "orig", URL: "u1"}}}}
+	f := &trackertest.MS{Fake: &trackertest.Fake{Issues: []tracker.Issue{{Key: tracker.NumKey(1), State: "open", Title: "backlog.Imported task", Body: "orig", URL: "u1"}}}}
 	o, _, _ = newMig(t, root, true, f)
 	res, err = Run(o)
 	if err != nil || !res.Done || res.Migrated != 2 {

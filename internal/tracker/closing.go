@@ -55,3 +55,14 @@ func startsWithWord(s string) bool {
 func isPySpace(r rune) bool {
 	return (r >= '\t' && r <= '\r') || (r >= 0x1c && r <= 0x1f) || r == 0x85 || unicode.In(r, unicode.Z)
 }
+
+// ClosesByKey is the closing convention of a key-based tracker (Jira, Linear):
+// a PR closes the issue its key names in the head branch or the title,
+// compared without case and not inside a longer key (PROJ-12 is not PROJ-123).
+func ClosesByKey(key IssueKey, c ClosingSource) bool {
+	if key == "" {
+		return false
+	}
+	re := regexp.MustCompile(`(?i)(?:^|[^A-Za-z0-9_-])` + regexp.QuoteMeta(string(key)) + `(?:$|[^A-Za-z0-9_])`)
+	return re.MatchString(c.Branch) || re.MatchString(c.Title)
+}

@@ -46,7 +46,7 @@ func TestReadForgeAnswersAndFailsAlone(t *testing.T) {
 	r := &fakeRemote{prs: []tracker.PR{{Number: 7, Branch: "ben/7-x"}}, labelled: []int{7}, closedLabelled: []int{3}}
 	rep := &Report{}
 	fs := Env{Forge: r.asForge(), Label: DefaultLabel}.readForge(ctx, rep)
-	if !fs.ok || !fs.labelsOK || fs.prs["ben/7-x"] == nil || !fs.labelled[7] || !reflect.DeepEqual(fs.stale, []int{3}) || len(rep.Unavailable) != 0 {
+	if !fs.ok || !fs.labelsOK || fs.prs["ben/7-x"] == nil || !fs.labelled[tracker.NumKey(7)] || !reflect.DeepEqual(fs.stale, []tracker.IssueKey{"3"}) || len(rep.Unavailable) != 0 {
 		t.Errorf("forge state %+v unavailable %v", fs, rep.Unavailable)
 	}
 
@@ -91,7 +91,7 @@ func TestReadForgeLabelListFailuresKeepWhatWasRead(t *testing.T) {
 	for _, c := range cases {
 		rep := &Report{}
 		fs := Env{Forge: listFailForge{r.asForge(), c.state}, Label: DefaultLabel}.readForge(ctx, rep)
-		if !fs.ok || fs.prs["ben/7-x"] == nil || fs.labelsOK != c.labelsOK || fs.labelled[7] != c.labelled || len(fs.stale) != 0 ||
+		if !fs.ok || fs.prs["ben/7-x"] == nil || fs.labelsOK != c.labelsOK || fs.labelled[tracker.NumKey(7)] != c.labelled || len(fs.stale) != 0 ||
 			!reflect.DeepEqual(rep.Unavailable, []string{SourceForge}) {
 			t.Errorf("%s list failure: %+v unavailable %v", c.state, fs, rep.Unavailable)
 		}
