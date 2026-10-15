@@ -58,7 +58,7 @@ Ranked by demand signal times fit with rota's design. Size: S under a day, M a f
 11. **More harness adapters** (L). OpenCode and Copilot CLI first, then Kiro and goose. Sources: paperclip #2092 (+44), vibe-kanban #1708 (+11), superpowers #503 (+23). Do after the ledger so the data shows which harness earns it.
 12. **Codex skill alignment audit** (S). Make skill wording harness-neutral and run one skill under Codex in smoke.
 13. **Tests for the six untested packages** (S). `artifact`, `counter`, `gittest`, `golden`, `itembody`, `mapqa`.
-14. **Linear backend** (L). Third `backlog.backend`. Conductor and Zuse lead with Linear; weaker demand than everything above.
+14. **Linear backend** (L). Third issue source (`issues.source`). Conductor and Zuse lead with Linear; weaker demand than everything above.
 
 ### Not recommended
 

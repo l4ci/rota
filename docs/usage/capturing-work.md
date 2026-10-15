@@ -1,6 +1,6 @@
 # Capturing work
 
-`/rota-capture` records bugs, features, and tasks into the backlog with auto-classification and auto-assigned IDs. Where they land depends on `backlog.backend`: on the default `"file"` backend, in `.rota/BACKLOG.md`; on the `"issues"` backend, as GitHub or GitLab issues. See [Issue backend](issue-backend.md). Paste a raw description, structured notes, or a mixed list; it sorts the rest out.
+`/rota-capture` records bugs, features, and tasks into the backlog with auto-classification and auto-assigned IDs. Where they land depends on `issues.source`: on the default `file`, in `.rota/BACKLOG.md`; on `github` or `gitlab`, as GitHub or GitLab issues. See [Issue backend](issue-backend.md). Paste a raw description, structured notes, or a mixed list; it sorts the rest out.
 
 The examples below show the file backend. On the issue backend the same classification becomes labels (`type:bug`, `p1`, `size:Major`), and the ID is the issue number (`#42`).
 

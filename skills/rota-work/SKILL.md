@@ -102,7 +102,7 @@ rota status add <branch> --items <ID>[,<ID>...]
 
 The only `rota status add` of the cycle: create the branch or worktree first, then register once (`--worktree <path>` for a worktree). Idempotent on `(branch, repo)`.
 
-When umbrella, read *Step 5* in `umbrella-and-issue-mode.md` (registration, branches). When `backlog.backend` is `"issues"`, read the same section for the claim flow before planning tasks.
+When umbrella, read *Step 5* in `umbrella-and-issue-mode.md` (registration, branches). When `issues.source` is `github` or `gitlab`, read the same section for the claim flow before planning tasks.
 
 The main session stays at the repo root; subagents `cd` into their assigned directory first and use absolute paths.
 

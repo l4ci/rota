@@ -281,7 +281,7 @@ note: the issue number moves from `--issue` to the positional.
 rota issues provider
 repo: scoped
 data: {"provider": "github"|"gitlab"|"unknown"}
-exit: implied only. No `origin` remote gives `unknown`, unless `issues.provider` is `github` or `gitlab`, which then answers.
+exit: implied only. `issues.source` `github` or `gitlab` answers outright. Otherwise the `origin` host answers; with no `origin` remote (or one naming no forge) `forge.provider` `github` or `gitlab` answers, else `unknown`.
 old: hv-issues-provider [--repo <name>]
 shim: the single stdout word becomes `provider`.
 
@@ -352,5 +352,13 @@ repo: none
 data: {"applied": bool, "operations": [{"action": "create-milestone"|"create-issue"|"adopt"|"note"|"set"|"rewrite"|"skip", "text": string}], "map": object, "migrated": number, "total": number, "changed": bool}
 exit: 3 when BACKLOG.md is missing; 4 in umbrella mode; tracker (on 5 and 6, `.rota/issue-map.json` keeps the progress, a re-run resumes, and the message ends with `N of M migrated`, since those exits carry no failure data)
 old: hv-migrate-issues [--dry-run | --apply] [--limit <n>]
-shim: parse the op lines (`create milestone ...`, `create issue ...`, `adopt ...`, `note ... on ...`, `rewrite Related ...`, `skip ...`) into `operations` by their first word, with `text` the rest; an open item whose bullet carries a `GH: #N` / `GL: #N` tag is `adopt`ed, not created: the map entry points at issue N, its type and size/priority labels are added, and the issue's title and body stay; `map` is the JSON after `would-be map:` in preview, or the contents of `.rota/issue-map.json` after `--apply`; `changed` is true when `--apply` changed state: it created an item or milestone on the tracker, wrote `.rota/issue-map.json`, or froze `.rota/BACKLOG.md` (a freeze-only run counts, because freezing is a state change; orchestrator ruling on #117). `--limit` must be digits (else 2). Pace comes from config `issues.bulkPaceMs` (default 1000). With `--apply` the old verb also freezes `.rota/BACKLOG.md` and hints to set `backlog.backend=issues`.
+shim: parse the op lines (`create milestone ...`, `create issue ...`, `adopt ...`, `note ... on ...`, `rewrite Related ...`, `skip ...`) into `operations` by their first word, with `text` the rest; an open item whose bullet carries a `GH: #N` / `GL: #N` tag is `adopt`ed, not created: the map entry points at issue N, its type and size/priority labels are added, and the issue's title and body stay; `map` is the JSON after `would-be map:` in preview, or the contents of `.rota/issue-map.json` after `--apply`; `changed` is true when `--apply` changed state: it created an item or milestone on the tracker, wrote `.rota/issue-map.json`, or froze `.rota/BACKLOG.md` (a freeze-only run counts, because freezing is a state change; orchestrator ruling on #117). `--limit` must be digits (else 2). Pace comes from config `issues.bulkPaceMs` (default 1000). With `--apply` the old verb also freezes `.rota/BACKLOG.md` and hints `rota config set issues.source <provider>`.
 note: (#27) with `--apply`, once every item exists, a mid-round `.rota/workers.json` is remapped through the map: a slot's `task` and a queued PR's `issue` that name a migrated file-mode ID (`B31`) become its issue number (`31`), each reported as an output line, not an `operations` entry: `remap slot <name> task <old> -> #<n>` or `remap queued PR <pr> issue <old> -> #<n>`. `claimId` (`<agent>@<round>`) is not an item ID and stays. No registry file means nothing to remap; an ID with no map entry is left alone.
+
+### rota migrate source
+rota migrate source [--apply]
+repo: none
+data: {"applied": bool, "planned": bool, "changed": bool, "source": string, "forge": string, "removed": [string], "unresolved": bool}
+exit: 70 when the config is corrupt
+old: none (new in #797)
+note: replaces the legacy `backlog.backend` and `issues.provider` with `issues.source` and `forge.provider`. `backlog.backend: file` becomes `issues.source: file`; `backlog.backend: issues` plus `issues.provider` becomes `issues.source: <provider>`, `auto` read from the `origin` remote; an explicit provider the origin would miss also becomes `forge.provider`. Both legacy keys are removed. Without `--apply` it only reports (`planned` true, `changed` false). `unresolved` is true when the provider is `auto` and the origin names neither github nor gitlab: the keys stay and the message says to set `issues.source` by hand. A second run changes nothing.

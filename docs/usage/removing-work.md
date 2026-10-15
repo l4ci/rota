@@ -2,7 +2,7 @@
 
 `/rota-capture --remove` permanently removes backlog entries from [`BACKLOG.md`](../reference/rota-folder.md), their associated files, and any cross-references. It's the local inverse of plain [`/rota-capture`](capturing-work.md).
 
-It works on the file backend only (`rota item rm` refuses under `backlog.backend: "issues"`). On the [issue backend](issue-backend.md) the issue is the item: close it with `rota item complete <ID> --reason dropped`.
+It works on the file backend only (`rota item rm` refuses under `issues.source` set to `github` or `gitlab`). On the [issue backend](issue-backend.md) the issue is the item: close it with `rota item complete <ID> --reason dropped`.
 
 ## /rota-capture --remove
 

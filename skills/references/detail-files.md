@@ -29,7 +29,7 @@ An item's input has bulky raw data that would push the backlog entry past ~3 sen
 1. Write the detail content (shape above, `{ID}` as a placeholder) to a scratch file.
 2. Run `rota item create --kind <bugs|features|tasks> --title ... --body-file <scratch-file>` (rota-capture Step 6). It mints the ID, writes `.rota/<kind>/{ID}.md` with `{ID}` replaced, and appends the backlog entry with the `Detail:` reference.
 
-With `backlog.backend: "issues"` there is no `.rota/<kind>/` file: the content becomes the issue body and the ID is the issue number with its type letter.
+With `issues.source` set to `github` or `gitlab` there is no `.rota/<kind>/` file: the content becomes the issue body and the ID is the issue number with its type letter.
 
 ## The Detail: reference
 

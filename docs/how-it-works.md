@@ -78,11 +78,11 @@ flowchart LR
   ORCH -.unattended.-> KEEP["rota hook / keepalive / limit"]
 ```
 
-Almost everything Claude reads or mutates lives under `.rota/` in your project; with `backlog.backend: "issues"` the backlog lives on the GitHub/GitLab tracker instead. Git is the source of truth; `status.json` is just a cache, and `/rota-work` with no argument reconciles drift between the two.
+Almost everything Claude reads or mutates lives under `.rota/` in your project; with `issues.source` set to `github` or `gitlab` the backlog lives on the GitHub/GitLab tracker instead. Git is the source of truth; `status.json` is just a cache, and `/rota-work` with no argument reconciles drift between the two.
 
 ## The seven lanes
 
-**Capture.** `/rota-capture` is the brain-dump entry point. It splits, classifies, and creates the items with `rota item create`, on whichever backend `backlog.backend` selects: `.rota/BACKLOG.md` with IDs `B01`, `F01`, `T01` (`file`, the default), or GitHub/GitLab issues with IDs `#N` (`issues`). See the [issue backend](usage/issue-backend.md). `/rota-capture` prints the new IDs and stops; `/rota-work` picks them up. Import (`--from-github` / `--from-gitlab`) was removed: under `backlog.backend: "issues"` the issues already are the backlog. `/rota-capture --remove <ID>` is the local inverse: it strips a captured item and cleans up its dependencies behind a dry-run preview and confirmation gate.
+**Capture.** `/rota-capture` is the brain-dump entry point. It splits, classifies, and creates the items with `rota item create`, on whichever source `issues.source` selects: `.rota/BACKLOG.md` with IDs `B01`, `F01`, `T01` (`file`, the default), or GitHub/GitLab issues with IDs `#N` (`github` or `gitlab`). See the [issue backend](usage/issue-backend.md). `/rota-capture` prints the new IDs and stops; `/rota-work` picks them up. Import (`--from-github` / `--from-gitlab`) was removed: under `issues.source` set to `github` or `gitlab` the issues already are the backlog. `/rota-capture --remove <ID>` is the local inverse: it strips a captured item and cleans up its dependencies behind a dry-run preview and confirmation gate.
 
 **Plan.** `/rota-vision` brainstorms milestones with Socratic discovery, web research, and a deliberate critique pass. `/rota-brainstorm` explores design for size-Major features or P0 bugs before planning. `/rota-plan` writes the implementation plan to its own file, keyed by milestone slice or item. `/rota-spike` runs throwaway feasibility experiments on a branch that never merges; only findings come back. `/rota-work --preview <ID>` previews the orchestrator's intended approach without writing anything, a cheap gate before code lands on high-stakes items.
 

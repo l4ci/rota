@@ -7,7 +7,7 @@ for prov in github gitlab; do
   P="$TMP_RQ/$prov"; mkdir -p "$P"
   git init -q --bare "$P/origin.git"
   git clone -q "$P/origin.git" "$P/work" 2>/dev/null; mkdir -p "$P/work/.rota"
-  printf '{"backlog":{"backend":"issues"},"issues":{"provider":"%s","retryWaitSeconds":0}}\n' "$prov" > "$P/work/.rota/config.json"
+  printf '{"issues":{"source":"%s","retryWaitSeconds":0}}\n' "$prov" > "$P/work/.rota/config.json"
   (
     cd "$P/work"
     git config user.email t@t; git config user.name t
@@ -111,7 +111,7 @@ done
 
 # --- file mode
 F="$TMP_RQ/file"; mkdir -p "$F/.rota"
-echo '{"backlog":{"backend":"file"}}' > "$F/.rota/config.json"
+echo '{"issues":{"source":"file"}}' > "$F/.rota/config.json"
 (
   cd "$F"; git init -q
   rc=0; out="$(hvj review queue 2>/dev/null)" || rc=$?

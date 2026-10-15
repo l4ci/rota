@@ -26,7 +26,7 @@ export RO_LOG="$RO/log" RO_STATE="$RO/state"
 
 P="$RO/proj"
 mkdir -p "$P/.rota"
-printf '{"backlog":{"backend":"file"}}\n' > "$P/.rota/config.json"
+printf '{"issues":{"source":"file"}}\n' > "$P/.rota/config.json"
 ( cd "$P" && git init -q -b main . && git config user.email t@t && git config user.name t \
   && printf '.rota/gate-audit.jsonl\n.rota/**/*.lock\n' > .gitignore && echo seed > seed.txt \
   && printf 'version: 2\n' > .goreleaser.yaml \
