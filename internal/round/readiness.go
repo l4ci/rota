@@ -13,6 +13,7 @@ import (
 	"github.com/l4ci/rota/internal/exitmap"
 	"github.com/l4ci/rota/internal/itembody"
 	"github.com/l4ci/rota/internal/overlap"
+	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -70,22 +71,40 @@ var (
 	itemRefRe    = regexp.MustCompile(`\b(` + backlog.IDPattern(backlog.FileIDDigits) + `)\b`)
 )
 
-func keyMatches(line string, keyed bool) [][]string {
-	if !keyed {
+// keyMatches is the PROJ-123 refs of project on line; none when project is "".
+// Another prefix (UTF-8, ISO-8601, another project) is prose, not a ref.
+func keyMatches(line, project string) [][]string {
+	if project == "" {
 		return nil
 	}
-	return keyRefRe.FindAllStringSubmatch(line, -1)
+	var out [][]string
+	for _, m := range keyRefRe.FindAllStringSubmatch(line, -1) {
+		if p, _, _ := strings.Cut(m[1], "-"); p == project {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
+// keyProject is the project of a key-based tracker's key (PROJ of PROJ-123,
+// which is issues.jira.project on Jira); "" for a numbered or file item.
+func keyProject(k tracker.IssueKey) string {
+	if _, numbered := k.Number(); k == "" || numbered {
+		return ""
+	}
+	p, _, _ := strings.Cut(string(k), "-")
+	return p
 }
 
 // Dependencies parses the `## Depends on` section into item references (in
 // the item's own spelling) and references that cannot be looked up.
 func Dependencies(text string) (refs, unverifiable []string) {
-	return dependencies(text, false)
+	return dependencies(text, "")
 }
 
-// dependencies is Dependencies; keyed also reads a key-based tracker's
-// PROJ-123 refs. A numbered tracker's prose (UTF-8, SHA-256) is not a ref.
-func dependencies(text string, keyed bool) (refs, unverifiable []string) {
+// dependencies is Dependencies; a project key also reads a key-based
+// tracker's refs of that project (PROJ-123). Prose like UTF-8 is not a ref.
+func dependencies(text, project string) (refs, unverifiable []string) {
 	sec, ok := itembody.Section(text, itembody.DependsHeadRe)
 	if !ok {
 		return nil, nil
@@ -102,7 +121,7 @@ func dependencies(text string, keyed bool) (refs, unverifiable []string) {
 				refs = append(refs, m[1])
 			}
 		}
-		for _, m := range keyMatches(line, keyed) {
+		for _, m := range keyMatches(line, project) {
 			if !seen[m[1]] {
 				seen[m[1]] = true
 				refs = append(refs, m[1])
@@ -272,8 +291,7 @@ func AssessScoped(be backlog.Backend, id string, tracked, shared []string, inFli
 	r.Checks = append(r.Checks, Check{CheckCriteria, len(reasons) == 0, nonNil(reasons)})
 
 	text := itemText(be, id)
-	_, numbered := self.IssueKey().Number()
-	refs, unverifiable := dependencies(text, self.IssueKey() != "" && !numbered)
+	refs, unverifiable := dependencies(text, keyProject(self.IssueKey()))
 	dep := Check{Name: CheckDependencies, OK: true, Detail: []string{}}
 	for _, ref := range unverifiable {
 		dep.OK = false
