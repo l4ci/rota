@@ -37,6 +37,9 @@ type REST struct {
 	Retries int
 	// MaxWait caps one Retry-After wait; 0 is restMaxWait.
 	MaxWait time.Duration
+	// Classify reads a tracker's own error body on a non-2xx answer; nil, or
+	// a nil result, keeps the status-based mapping.
+	Classify func(method, path string, status int, raw []byte) *Error
 }
 
 const (
@@ -55,6 +58,16 @@ var defaultRESTClient = &http.Client{Timeout: RESTTimeout}
 // KindUnavailable (the token), 404 KindNotFound, a 429 that outlasts the
 // retries or the cap KindRateLimited, a transport failure KindUnavailable.
 func (r *REST) Do(ctx context.Context, method, path string, in, out any) error {
+	return r.do(ctx, method, path, in, out, idempotent(method))
+}
+
+// Query is Do for a POST that only reads (a GraphQL query): repeating it
+// changes nothing, so a 5xx is retried as for a GET.
+func (r *REST) Query(ctx context.Context, path string, in, out any) error {
+	return r.do(ctx, http.MethodPost, path, in, out, true)
+}
+
+func (r *REST) do(ctx context.Context, method, path string, in, out any, idem bool) error {
 	var body []byte
 	if in != nil {
 		b, err := json.Marshal(in)
@@ -81,8 +94,13 @@ func (r *REST) Do(ctx context.Context, method, path string, in, out any) error {
 			}
 			return nil
 		}
-		retryable := status == http.StatusTooManyRequests || status >= 500 && idempotent(method)
+		retryable := status == http.StatusTooManyRequests || status >= 500 && idem
 		if !retryable || attempt >= retries {
+			if r.Classify != nil {
+				if e := r.Classify(method, path, status, raw); e != nil {
+					return e
+				}
+			}
 			return restError(method, path, status, raw)
 		}
 		wait := restBackoff << attempt
