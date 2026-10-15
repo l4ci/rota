@@ -96,14 +96,14 @@ func (b *Issues) require(ref string) (Issue, string, error) {
 	if !ok {
 		return Issue{}, "", errf(ErrNotFound, "[%s] not found in the issue tracker", ref)
 	}
-	return is, b.Letter(is) + strconv.Itoa(is.Number), nil
+	return is, refTag(b.Letter(is), is), nil
 }
 
 // number is the issue number a ref spells, without asking the tracker (_number).
-func (b *Issues) number(ref string) (int, error) {
-	n, _, err := resolveItemRef(ref)
+func (b *Issues) number(ref string) (tracker.IssueKey, error) {
+	n, _, err := resolveKey(ref)
 	if err != nil {
-		return 0, errf(ErrNotFound, "%s", err.Error())
+		return "", errf(ErrNotFound, "%s", err.Error())
 	}
 	return n, nil
 }
@@ -190,12 +190,12 @@ func (b *Issues) Create(in CreateInput) (CreateResult, error) {
 		return CreateResult{}, err
 	}
 	if strings.Contains(full, "{ID}") {
-		body := strings.ReplaceAll(full, "{ID}", letter+strconv.Itoa(n))
+		body := strings.ReplaceAll(full, "{ID}", letter+n.String())
 		if err := tr.Edit(b.ctx(), n, tracker.IssueEdit{Body: &body}); err != nil {
 			return CreateResult{}, err
 		}
 	}
-	return CreateResult{ID: strconv.Itoa(n), Type: letter}, nil
+	return CreateResult{ID: n.String(), Type: letter}, nil
 }
 
 // ---- set_field -------------------------------------------------------------
@@ -228,7 +228,7 @@ func (b *Issues) SetField(ref, field, value string) (bool, error) {
 		return false, refused("closed item", ErrClosed, "[%s] is closed on the issue tracker", ref)
 	}
 	value = pystr.Strip(value)
-	n := is.Number
+	n := is.Key
 	if field == "milestone" {
 		if value == "" {
 			if is.Milestone == "" {
@@ -292,7 +292,7 @@ func (b *Issues) Complete(ref string, in CompleteInput) (bool, error) {
 	if is.State == "closed" {
 		return false, nil
 	}
-	n := is.Number
+	n := is.Key
 	suffix := ""
 	if note := oneLine(in.Note); note != "" {
 		suffix = " — " + note
@@ -350,14 +350,14 @@ func (b *Issues) Reopen(ref string) (bool, error) {
 		}
 	}
 	if is.State == "closed" {
-		if err := tr.Reopen(b.ctx(), is.Number); err != nil {
+		if err := tr.Reopen(b.ctx(), is.Key); err != nil {
 			return false, err
 		}
 	} else if !slices.Contains(stale, config.Label(b.Cfg, "blocked")) {
 		return false, nil
 	}
 	if len(stale) > 0 {
-		if err := tr.RemoveLabels(b.ctx(), is.Number, stale); err != nil {
+		if err := tr.RemoveLabels(b.ctx(), is.Key, stale); err != nil {
 			return false, err
 		}
 	}
@@ -421,7 +421,7 @@ type notePart struct {
 
 // noteComments is the `kind` note's comments in part order, with the text after
 // each marker (_note_comments).
-func (b *Issues) noteComments(n int, kind string) ([]notePart, error) {
+func (b *Issues) noteComments(n tracker.IssueKey, kind string) ([]notePart, error) {
 	comments, err := b.Tracker.Comments(b.ctx(), n)
 	if err != nil {
 		return nil, err
@@ -591,7 +591,7 @@ func (b *Issues) Comments(ref, kind string) ([]Comment, error) {
 	if err != nil {
 		return nil, err
 	}
-	comments, err := b.Tracker.Comments(b.ctx(), is.Number)
+	comments, err := b.Tracker.Comments(b.ctx(), is.Key)
 	if err != nil {
 		return nil, err
 	}
@@ -668,7 +668,7 @@ func (b *Issues) applyState(is Issue, want string) (bool, error) {
 			return false, err
 		}
 	}
-	return true, b.Tracker.Edit(b.ctx(), is.Number, tracker.IssueEdit{AddLabels: add, RemoveLabels: drop})
+	return true, b.Tracker.Edit(b.ctx(), is.Key, tracker.IssueEdit{AddLabels: add, RemoveLabels: drop})
 }
 
 // Claim takes the item: it posts a claim marker, re-reads the comments, and the
@@ -695,7 +695,7 @@ func (b *Issues) ClaimShared(ref, claimID string, holders int) (won bool, holder
 	if is.State != "open" {
 		return false, "", errf(ErrNotFound, "[%s] is closed", ref)
 	}
-	n := is.Number
+	n := is.Key
 	held, err := b.heldClaims(n)
 	if err != nil {
 		return false, "", err
@@ -729,7 +729,7 @@ func (b *Issues) ClaimShared(ref, claimID string, holders int) (won bool, holder
 	return true, claimID, nil
 }
 
-func (b *Issues) heldClaims(n int) ([]string, error) {
+func (b *Issues) heldClaims(n tracker.IssueKey) ([]string, error) {
 	comments, err := b.Tracker.Comments(b.ctx(), n)
 	if err != nil {
 		return nil, err
@@ -749,19 +749,19 @@ func (b *Issues) Release(ref, claimID string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	held, err := b.heldClaims(is.Number)
+	held, err := b.heldClaims(is.Key)
 	if err != nil {
 		return false, err
 	}
 	if !slices.Contains(held, claimID) {
 		return false, nil
 	}
-	if _, err := tr.AddComment(b.ctx(), is.Number, marker.Release(claimID)); err != nil {
+	if _, err := tr.AddComment(b.ctx(), is.Key, marker.Release(claimID)); err != nil {
 		return false, err
 	}
 	if len(held) == 1 {
 		if label := config.Label(b.Cfg, "inProgress"); slices.Contains(is.Labels, label) {
-			if err := tr.RemoveLabels(b.ctx(), is.Number, []string{label}); err != nil {
+			if err := tr.RemoveLabels(b.ctx(), is.Key, []string{label}); err != nil {
 				return true, err
 			}
 		}
@@ -808,7 +808,7 @@ func (b *Issues) SetBody(ref, body string) (bool, error) {
 	if is.Body == body {
 		return false, nil
 	}
-	if err := tr.Edit(b.ctx(), is.Number, tracker.IssueEdit{Body: &body}); err != nil {
+	if err := tr.Edit(b.ctx(), is.Key, tracker.IssueEdit{Body: &body}); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -839,7 +839,7 @@ func (b *Issues) Status(ref string) (*Status, error) {
 	if err != nil {
 		return nil, err
 	}
-	comments, err := b.Tracker.Comments(b.ctx(), is.Number)
+	comments, err := b.Tracker.Comments(b.ctx(), is.Key)
 	if err != nil {
 		return nil, err
 	}
@@ -863,7 +863,7 @@ func (b *Issues) Status(ref string) (*Status, error) {
 		title = "(untitled)"
 	}
 	st := &Status{
-		ID: strconv.Itoa(is.Number), Type: b.Letter(is), Title: title, Status: is.State,
+		ID: is.Key.String(), Type: b.Letter(is), Title: title, Status: is.State,
 		State: strings.Join(state, ","), Assignees: append([]string{}, is.Assignees...),
 		Milestone: milestone(is, block), Body: is.Body, Notes: notes, Comments: commentRows(comments, ""),
 	}

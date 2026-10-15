@@ -197,12 +197,12 @@ func goRunScenario(t *testing.T, s wScenario) map[string]any {
 	t.Helper()
 	f := &trackertest.Fake{Milestones: s.Milestones}
 	for _, i := range s.Issues {
-		f.Issues = append(f.Issues, tracker.Issue{Number: i.Number, Title: i.Title, Body: i.Body, Labels: append([]string{}, i.Labels...),
+		f.Issues = append(f.Issues, tracker.Issue{Key: tracker.NumKey(i.Number), Title: i.Title, Body: i.Body, Labels: append([]string{}, i.Labels...),
 			Milestone: i.Milestone, State: i.State, StateReason: i.StateReason, Assignees: append([]string{}, i.Assignees...),
 			URL: fmt.Sprintf("https://example.test/issues/%d", i.Number)})
 	}
 	for _, c := range s.Comments {
-		if _, err := f.AddComment(context.Background(), c.Issue, c.Body); err != nil {
+		if _, err := f.AddComment(context.Background(), tracker.NumKey(c.Issue), c.Body); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -225,7 +225,7 @@ func goRunScenario(t *testing.T, s wScenario) map[string]any {
 			cs = append(cs, []any{c.ID, c.Body})
 		}
 		as := append([]string{}, i.Assignees...)
-		final = append(final, []any{i.Number, i.Title, i.Body, i.Labels, i.Milestone, i.State, i.StateReason, as, cs})
+		final = append(final, []any{i.Num(), i.Title, i.Body, i.Labels, i.Milestone, i.State, i.StateReason, as, cs})
 	}
 	return map[string]any{"steps": steps, "final": final}
 }

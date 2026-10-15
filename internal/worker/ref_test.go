@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"github.com/l4ci/rota/internal/tracker"
 	"testing"
 
 	"github.com/l4ci/rota/internal/jsonx"
@@ -53,8 +54,8 @@ func TestPRRefNumberShapes(t *testing.T) {
 }
 
 func TestBranchIssue(t *testing.T) {
-	if n, ok := BranchIssue("nia/288-x"); !ok || n != 288 {
-		t.Errorf("BranchIssue = %d,%v", n, ok)
+	if n, ok := BranchIssue("nia/288-x"); !ok || n != tracker.NumKey(288) {
+		t.Errorf("BranchIssue = %s,%v", n, ok)
 	}
 	if _, ok := BranchIssue("park/nia"); ok {
 		t.Error("park branch holds no issue")

@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"fmt"
+	"github.com/l4ci/rota/internal/tracker"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -65,10 +66,10 @@ func TestBacklogFileOnlyVerbsAreRefusedUnderIssues(t *testing.T) {
 func TestBacklogViewsInIssueMode(t *testing.T) {
 	root := trackerProject(t, `{"forge": {"provider": "github"}, "issues": {"source": "github"}}`)
 	deps := withTracker(t, &trackertest.Fake{Issues: []backlog.Issue{
-		{Number: 12, Title: "Crash on save", State: "open", Labels: []string{"type:bug"}, Milestone: "M02 — Next",
+		{Key: tracker.NumKey(12), Title: "Crash on save", State: "open", Labels: []string{"type:bug"}, Milestone: "M02 — Next",
 			Body: "<!-- rota:fields\nRelated: F3\n-->"},
-		{Number: 3, Title: "Dark mode", State: "open", Labels: []string{"type:feature"}, Body: "<!-- rota:fields\nRelated: B12\n-->"},
-		{Number: 5, Title: "Chore", State: "open"},
+		{Key: tracker.NumKey(3), Title: "Dark mode", State: "open", Labels: []string{"type:feature"}, Body: "<!-- rota:fields\nRelated: B12\n-->"},
+		{Key: tracker.NumKey(5), Title: "Chore", State: "open"},
 	}})
 	code, env, _ := rotaRunWith(t, deps, "--json", "-C", root, "backlog", "list")
 	if code != 0 {

@@ -3,6 +3,7 @@ package backlog
 import (
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/tracker"
 	"math/rand"
 	"reflect"
 	"strconv"
@@ -31,7 +32,7 @@ type issueJSON struct {
 }
 
 func (i issueJSON) issue() Issue {
-	return Issue{Number: i.Number, Title: i.Title, Body: i.Body, Labels: i.Labels, Milestone: i.Milestone,
+	return Issue{Key: tracker.NumKey(i.Number), Title: i.Title, Body: i.Body, Labels: i.Labels, Milestone: i.Milestone,
 		State: i.State, StateReason: i.StateReason, ClosedAt: i.ClosedAt, URL: i.URL}
 }
 
@@ -214,8 +215,8 @@ func TestFieldsBlockMatchesPython(t *testing.T) {
 
 func TestIssuesOpenAndErrors(t *testing.T) {
 	tr := &fakeTracker{Issues: []Issue{
-		{Number: 1, Title: "Real", State: "open", Labels: []string{"type:bug"}},
-		{Number: 2, Title: "Tracker", State: "open", Labels: []string{"milestone-tracker"}},
+		{Key: tracker.NumKey(1), Title: "Real", State: "open", Labels: []string{"type:bug"}},
+		{Key: tracker.NumKey(2), Title: "Tracker", State: "open", Labels: []string{"milestone-tracker"}},
 	}}
 	b := &Issues{Cfg: mustDecode(t, `{}`), Tracker: tr}
 	if _, err := b.Get("2"); !errors.Is(err, ErrNotFound) {
@@ -298,14 +299,14 @@ func TestIssuesListEqualsGet(t *testing.T) {
 
 func TestIssuesListOrderAndCalls(t *testing.T) {
 	tr := &fakeTracker{Issues: []Issue{
-		{Number: 9, Title: "Task", State: "open"},
-		{Number: 5, Title: "Feat", State: "open", Labels: []string{"type:feature"}},
-		{Number: 7, Title: "Bug b", State: "open", Labels: []string{"type:bug"}},
-		{Number: 3, Title: "Bug a", State: "open", Labels: []string{"type:bug"}},
-		{Number: 4, Title: "Tracker", State: "open", Labels: []string{"milestone-tracker"}},
-		{Number: 1, Title: "Old", State: "closed", ClosedAt: "2026-01-01T00:00:00Z"},
-		{Number: 2, Title: "New", State: "closed", ClosedAt: "2026-02-01T00:00:00Z", StateReason: "not_planned"},
-		{Number: 6, Title: "Done tracker", State: "closed", Labels: []string{"milestone-tracker"}},
+		{Key: tracker.NumKey(9), Title: "Task", State: "open"},
+		{Key: tracker.NumKey(5), Title: "Feat", State: "open", Labels: []string{"type:feature"}},
+		{Key: tracker.NumKey(7), Title: "Bug b", State: "open", Labels: []string{"type:bug"}},
+		{Key: tracker.NumKey(3), Title: "Bug a", State: "open", Labels: []string{"type:bug"}},
+		{Key: tracker.NumKey(4), Title: "Tracker", State: "open", Labels: []string{"milestone-tracker"}},
+		{Key: tracker.NumKey(1), Title: "Old", State: "closed", ClosedAt: "2026-01-01T00:00:00Z"},
+		{Key: tracker.NumKey(2), Title: "New", State: "closed", ClosedAt: "2026-02-01T00:00:00Z", StateReason: "not_planned"},
+		{Key: tracker.NumKey(6), Title: "Done tracker", State: "closed", Labels: []string{"milestone-tracker"}},
 	}}
 	b := &Issues{Cfg: mustDecode(t, `{}`), Tracker: tr}
 	all, err := b.List(true)

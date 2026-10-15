@@ -85,13 +85,13 @@ func Label(ctx context.Context, env Env, dir string, number int, label string, a
 		return false, err
 	}
 	changed := true
-	if is, err := a.Get(ctx, number, false); err == nil {
+	if is, err := a.Get(ctx, tracker.NumKey(number), false); err == nil {
 		changed = slices.Contains(is.Labels, label) != add
 	}
 	if add {
-		err = a.AddLabels(ctx, number, []string{label}, autoCreate)
+		err = a.AddLabels(ctx, tracker.NumKey(number), []string{label}, autoCreate)
 	} else {
-		err = a.RemoveLabels(ctx, number, []string{label})
+		err = a.RemoveLabels(ctx, tracker.NumKey(number), []string{label})
 	}
 	if err != nil {
 		return false, err
@@ -126,10 +126,10 @@ func Close(ctx context.Context, env Env, dir string, number int, commit, item st
 		return false, err
 	}
 	// A failed state read counts as "not closed".
-	if is, err := a.Get(ctx, number, false); err == nil && is.State == "closed" {
+	if is, err := a.Get(ctx, tracker.NumKey(number), false); err == nil && is.State == "closed" {
 		return false, nil
 	}
-	if err := a.Close(ctx, number, "completed", body); err != nil {
+	if err := a.Close(ctx, tracker.NumKey(number), "completed", body); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -161,6 +161,6 @@ func StillOpen(ctx context.Context, env Env, provider, dir string, issue int) bo
 	if err != nil {
 		return false
 	}
-	is, err := a.Get(ctx, issue, false)
+	is, err := a.Get(ctx, tracker.NumKey(issue), false)
 	return err == nil && is.State == "open"
 }

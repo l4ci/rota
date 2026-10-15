@@ -112,20 +112,20 @@ func (b *Issues) trackingIssues() (map[string]Issue, error) {
 			if (g[i].State != "open") != (g[j].State != "open") {
 				return g[j].State != "open"
 			}
-			return g[i].Number < g[j].Number
+			return g[i].Num() < g[j].Num()
 		})
 		out[mid] = g[0]
 		if len(g) > 1 {
 			nums := make([]int, len(g))
 			for i, is := range g {
-				nums[i] = is.Number
+				nums[i] = is.Num()
 			}
 			sort.Ints(nums)
 			var parts []string
 			for _, n := range nums {
 				parts = append(parts, "#"+strconv.Itoa(n))
 			}
-			b.warn(fmt.Sprintf("%d tracking issues carry %s (%s); using #%d", len(g), mid, strings.Join(parts, ", "), g[0].Number))
+			b.warn(fmt.Sprintf("%d tracking issues carry %s (%s); using #%d", len(g), mid, strings.Join(parts, ", "), g[0].Num()))
 		}
 	}
 	return out, nil
@@ -279,7 +279,7 @@ func (b *Issues) MilestoneStatus(mid, status string) error {
 	if err != nil {
 		return err
 	}
-	n := is.Number
+	n := is.Key
 	label := msStatusPrefix + status
 	var stale []string
 	for _, l := range is.Labels {
@@ -389,7 +389,7 @@ func (b *Issues) MilestonePut(mid, text string) error {
 	}
 	text, _ = frontmatter.UpdateField(text, "status", msStatusOf(is))
 	body := RenderFieldsBlock(text, order, block)
-	return mt.Edit(b.ctx(), is.Number, tracker.IssueEdit{Body: &body})
+	return mt.Edit(b.ctx(), is.Key, tracker.IssueEdit{Body: &body})
 }
 
 // ---- slice plans: plan:S<NN> notes on the tracking issue ---------------------
@@ -399,7 +399,7 @@ type SlicePlan struct{ Milestone, Unit, Text string }
 
 func (b *Issues) trackingNumber(mid string) (string, error) {
 	is, err := b.TrackerIssue(mid)
-	return strconv.Itoa(is.Number), err
+	return is.Key.String(), err
 }
 
 type slicePart struct {
@@ -409,7 +409,7 @@ type slicePart struct {
 }
 
 // slicePartsOf groups the slice-plan comments of issue n by unit.
-func (b *Issues) slicePartsOf(n int) (map[string][]slicePart, error) {
+func (b *Issues) slicePartsOf(n tracker.IssueKey) (map[string][]slicePart, error) {
 	tr, err := b.tracker()
 	if err != nil {
 		return nil, err
@@ -455,7 +455,7 @@ func (b *Issues) SliceUnits(mid string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	parts, err := b.slicePartsOf(is.Number)
+	parts, err := b.slicePartsOf(is.Key)
 	if err != nil {
 		return nil, err
 	}
@@ -489,7 +489,7 @@ func (b *Issues) SlicePlans(mid string) ([]SlicePlan, error) {
 		if !ok {
 			continue
 		}
-		parts, err := b.slicePartsOf(is.Number)
+		parts, err := b.slicePartsOf(is.Key)
 		if err != nil {
 			return nil, err
 		}

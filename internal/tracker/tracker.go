@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -123,7 +124,7 @@ func IsCLIMissing(err error) bool {
 // Issue is the normalized issue. Empty Milestone, StateReason and ClosedAt
 // stand for Python's None. Comments is filled only by Get(n, true).
 type Issue struct {
-	Number      int
+	Key         IssueKey
 	Title       string
 	Body        string
 	Labels      []string
@@ -197,6 +198,7 @@ type PRInfo struct {
 	Base     string // target branch
 	State    string
 	MergeSHA string
+	Title    string
 	Body     string
 }
 
@@ -265,41 +267,52 @@ type MilestoneEdit struct {
 
 // IssueTracker is the issue side of the seam: where issues, their comments,
 // labels and milestones live (issues.source). GitHub and GitLab implement it;
-// Jira and Linear will, later. Issue numbers stay ints.
+// Jira and Linear will, later. Issues are named by IssueKey; PR numbers stay ints.
 type IssueTracker interface {
 	Provider() string
 	// CheckAuth fails with KindUnavailable unless the tracker's CLI is
 	// installed and logged in.
 	CheckAuth(ctx context.Context) error
 
-	Create(ctx context.Context, title, body string, labels []string, milestone string) (int, error)
-	Get(ctx context.Context, number int, withComments bool) (Issue, error)
+	Create(ctx context.Context, title, body string, labels []string, milestone string) (IssueKey, error)
+	Get(ctx context.Context, key IssueKey, withComments bool) (Issue, error)
 	List(ctx context.Context, f ListFilter) ([]Issue, error)
-	Edit(ctx context.Context, number int, e IssueEdit) error
+	Edit(ctx context.Context, key IssueKey, e IssueEdit) error
 	EnsureLabels(ctx context.Context, names []string, autoCreate bool) error
-	AddLabels(ctx context.Context, number int, labels []string, autoCreate bool) error
-	RemoveLabels(ctx context.Context, number int, labels []string) error
+	AddLabels(ctx context.Context, key IssueKey, labels []string, autoCreate bool) error
+	RemoveLabels(ctx context.Context, key IssueKey, labels []string) error
 	// Close with reason "completed" (or "") or "not_planned"; comment is optional.
-	Close(ctx context.Context, number int, reason, comment string) error
-	Reopen(ctx context.Context, number int) error
-	AssignSelf(ctx context.Context, number int) error
+	Close(ctx context.Context, key IssueKey, reason, comment string) error
+	Reopen(ctx context.Context, key IssueKey) error
+	AssignSelf(ctx context.Context, key IssueKey) error
 
-	Comments(ctx context.Context, number int) ([]Comment, error)
-	AddComment(ctx context.Context, number int, body string) (string, error)
-	EditComment(ctx context.Context, number int, commentID, body string) error
-	DeleteComment(ctx context.Context, number int, commentID string) error
-	// CommentURL is the web URL of comment id on the issue (pr false) or PR/MR
-	// number; it costs one call.
-	CommentURL(ctx context.Context, pr bool, number int, commentID string) (string, error)
+	Comments(ctx context.Context, key IssueKey) ([]Comment, error)
+	AddComment(ctx context.Context, key IssueKey, body string) (string, error)
+	EditComment(ctx context.Context, key IssueKey, commentID, body string) error
+	DeleteComment(ctx context.Context, key IssueKey, commentID string) error
+	// CommentURL is the web URL of comment id on the issue; it costs one call.
+	CommentURL(ctx context.Context, key IssueKey, commentID string) (string, error)
 
 	// FindMilestone returns the title of the milestone whose leading token is
 	// rotaID, preferring open ones; ok is false when none matches.
 	FindMilestone(ctx context.Context, rotaID string) (title string, ok bool, err error)
+	// ClosesIssue reports whether a PR (its body, title and head branch in c)
+	// closes issue key by this tracker's convention: GitHub and GitLab read a
+	// closing keyword (`Closes #N`) in the body; a key-based tracker reads the
+	// key in the branch or the PR title.
+	ClosesIssue(key IssueKey, c ClosingSource) bool
 	// Milestones lists by state "open", "closed" or "all" (or "").
 	Milestones(ctx context.Context, state string) ([]Milestone, error)
 	CreateMilestone(ctx context.Context, title, description string) (int, error)
 	EditMilestone(ctx context.Context, number int, e MilestoneEdit) error
 	IssuesInMilestone(ctx context.Context, title, state string) ([]Issue, error)
+}
+
+// ClosingSource is the text of a PR that can name the issues it closes.
+type ClosingSource struct {
+	Body   string
+	Title  string
+	Branch string
 }
 
 // Forge is the code side of the seam: where code lands (forge.provider), with
@@ -323,9 +336,9 @@ type Forge interface {
 	Reviews(ctx context.Context, number int) ([]Review, error)
 	// AddMRNote posts a comment on PR/MR number and returns its id.
 	AddMRNote(ctx context.Context, number int, body string) (string, error)
-	// CommentURL is the web URL of comment id on the issue (pr false) or PR/MR
-	// number; it costs one forge call.
-	CommentURL(ctx context.Context, pr bool, number int, commentID string) (string, error)
+	// PRCommentURL is the web URL of comment id on PR/MR pr; it costs one forge
+	// call.
+	PRCommentURL(ctx context.Context, pr int, commentID string) (string, error)
 
 	// ClosedNumbers returns the issue numbers a PR body closes through a
 	// closing keyword, in order of first appearance. It parses the forge's
@@ -621,6 +634,13 @@ func (b *base) CheckAuth(ctx context.Context) error { return b.cli.CheckAuth(ctx
 
 func (b *base) ClosedNumbers(body string) []int { return b.closing(body) }
 
+// ClosesIssue: GitHub and GitLab close an issue through a closing keyword in
+// the PR body, and name issues by number only.
+func (b *base) ClosesIssue(key IssueKey, c ClosingSource) bool {
+	n, ok := key.Number()
+	return ok && slices.Contains(b.closing(c.Body), n)
+}
+
 // run makes one call; stdin carries body only when an argument is exactly "-".
 // A failed call is KindNotFound when the CLI says the object does not exist.
 func (b *base) run(ctx context.Context, args []string, body string) (string, error) {
@@ -797,7 +817,7 @@ func (b *base) prsClosing(ctx context.Context, a Adapter, number int) ([]PR, err
 	return out, nil
 }
 
-func (b *base) addLabels(ctx context.Context, a Adapter, number int, labels []string, autoCreate bool) error {
+func (b *base) addLabels(ctx context.Context, a Adapter, key IssueKey, labels []string, autoCreate bool) error {
 	labels = uniq(labels)
 	if len(labels) == 0 {
 		return nil
@@ -805,15 +825,15 @@ func (b *base) addLabels(ctx context.Context, a Adapter, number int, labels []st
 	if err := a.EnsureLabels(ctx, labels, autoCreate); err != nil {
 		return err
 	}
-	return a.Edit(ctx, number, IssueEdit{AddLabels: labels})
+	return a.Edit(ctx, key, IssueEdit{AddLabels: labels})
 }
 
-func (b *base) removeLabels(ctx context.Context, a Adapter, number int, labels []string) error {
+func (b *base) removeLabels(ctx context.Context, a Adapter, key IssueKey, labels []string) error {
 	labels = uniq(labels)
 	if len(labels) == 0 {
 		return nil
 	}
-	return a.Edit(ctx, number, IssueEdit{RemoveLabels: labels})
+	return a.Edit(ctx, key, IssueEdit{RemoveLabels: labels})
 }
 
 // numberFromURL reads the issue number off the last line of a create call.

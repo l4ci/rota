@@ -477,7 +477,7 @@ func reviewDepth(fs *flag.FlagSet) RunFunc {
 			if _, none := it.(tracker.NoIssues); !none { // the file source has no issue labels to read
 				is, err := it.Get(c.Context(), n, false)
 				if err != nil {
-					return Result{}, Failed("could not read #%d for its labels to pick the review depth: %v", n, err)
+					return Result{}, Failed("could not read %s for its labels to pick the review depth: %v", n.Ref(), err)
 				}
 				for _, l := range is.Labels {
 					if !slices.Contains(labels, l) {

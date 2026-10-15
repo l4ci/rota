@@ -99,15 +99,15 @@ func TestMilestoneStatusNeedsMilestoneTracker(t *testing.T) {
 
 func TestDuplicateTrackingIssuesWarn(t *testing.T) {
 	f := &trackertest.MS{Fake: &trackertest.Fake{Issues: []tracker.Issue{
-		{Number: 9, Title: "M01 — late", Labels: []string{"milestone-tracker"}, State: "open"},
-		{Number: 4, Title: "M01 — early", Labels: []string{"milestone-tracker"}, State: "open"},
-		{Number: 2, Title: "M01 — closed", Labels: []string{"milestone-tracker"}, State: "closed"},
+		{Key: tracker.NumKey(9), Title: "M01 — late", Labels: []string{"milestone-tracker"}, State: "open"},
+		{Key: tracker.NumKey(4), Title: "M01 — early", Labels: []string{"milestone-tracker"}, State: "open"},
+		{Key: tracker.NumKey(2), Title: "M01 — closed", Labels: []string{"milestone-tracker"}, State: "closed"},
 	}}}
 	b := msIssues(f)
 	var warns []string
 	b.Warn = func(s string) { warns = append(warns, s) }
 	is, err := b.TrackerIssue("M01")
-	if err != nil || is.Number != 4 {
+	if err != nil || is.Num() != 4 {
 		t.Fatalf("tracker issue = %+v %v", is, err)
 	}
 	if want := []string{"3 tracking issues carry M01 (#2, #4, #9); using #4"}; !reflect.DeepEqual(warns, want) {
@@ -120,7 +120,7 @@ func TestDuplicateTrackingIssuesWarn(t *testing.T) {
 
 func TestSlicePlansAcrossParts(t *testing.T) {
 	f := &trackertest.MS{Fake: &trackertest.Fake{Issues: []tracker.Issue{
-		{Number: 3, Title: "M02 — Sharing", Labels: []string{"milestone-tracker"}, State: "open"},
+		{Key: tracker.NumKey(3), Title: "M02 — Sharing", Labels: []string{"milestone-tracker"}, State: "open"},
 	}}}
 	b := msIssues(f)
 	b.NoteLimit = "82"
@@ -159,7 +159,7 @@ func TestSlicePlansAcrossParts(t *testing.T) {
 // by side; each kind reads, upserts and removes independently.
 func TestSliceNotesMixedWithPlainPlan(t *testing.T) {
 	f := &trackertest.MS{Fake: &trackertest.Fake{Issues: []tracker.Issue{
-		{Number: 3, Title: "M02 — Sharing", Labels: []string{"milestone-tracker"}, State: "open"},
+		{Key: tracker.NumKey(3), Title: "M02 — Sharing", Labels: []string{"milestone-tracker"}, State: "open"},
 	}}}
 	b := msIssues(f)
 	const n = "3"

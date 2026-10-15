@@ -83,7 +83,7 @@ type ghIssue struct {
 }
 
 func (d ghIssue) norm() Issue {
-	is := Issue{Number: d.Number, Title: d.Title, Body: d.Body, State: "open", ClosedAt: d.ClosedAt, URL: d.URL,
+	is := Issue{Key: NumKey(d.Number), Title: d.Title, Body: d.Body, State: "open", ClosedAt: d.ClosedAt, URL: d.URL,
 		Labels: []string{}, Assignees: []string{}}
 	for _, l := range d.Labels {
 		is.Labels = append(is.Labels, l.Name)
@@ -109,7 +109,7 @@ func (d ghIssue) norm() Issue {
 	return is
 }
 
-func (g *GitHub) Create(ctx context.Context, title, body string, labels []string, milestone string) (int, error) {
+func (g *GitHub) Create(ctx context.Context, title, body string, labels []string, milestone string) (IssueKey, error) {
 	args := []string{"issue", "create", "--title", title, "--body-file", "-"}
 	for _, l := range labels {
 		args = append(args, "--label", l)
@@ -119,9 +119,10 @@ func (g *GitHub) Create(ctx context.Context, title, body string, labels []string
 	}
 	out, err := g.run(ctx, args, body)
 	if err != nil {
-		return 0, err
+		return "", err
 	}
-	return numberFromURL(out)
+	n, err := numberFromURL(out)
+	return NumKey(n), err
 }
 
 // EnsureLabels makes sure every label exists (gh refuses unknown ones),
@@ -154,12 +155,12 @@ func (g *GitHub) EnsureLabels(ctx context.Context, names []string, autoCreate bo
 	return nil
 }
 
-func (g *GitHub) AddLabels(ctx context.Context, number int, labels []string, autoCreate bool) error {
-	return g.addLabels(ctx, g, number, labels, autoCreate)
+func (g *GitHub) AddLabels(ctx context.Context, key IssueKey, labels []string, autoCreate bool) error {
+	return g.addLabels(ctx, g, key, labels, autoCreate)
 }
 
-func (g *GitHub) RemoveLabels(ctx context.Context, number int, labels []string) error {
-	return g.removeLabels(ctx, g, number, labels)
+func (g *GitHub) RemoveLabels(ctx context.Context, key IssueKey, labels []string) error {
+	return g.removeLabels(ctx, g, key, labels)
 }
 
 func (g *GitHub) FindMilestone(ctx context.Context, rotaID string) (string, bool, error) {
@@ -224,15 +225,19 @@ func (g *GitHub) IssuesInMilestone(ctx context.Context, title, state string) ([]
 	return g.List(ctx, ListFilter{State: state, Milestone: title})
 }
 
-func (g *GitHub) Get(ctx context.Context, number int, withComments bool) (Issue, error) {
+func (g *GitHub) Get(ctx context.Context, key IssueKey, withComments bool) (Issue, error) {
+	number, err := numOf(key)
+	if err != nil {
+		return Issue{}, err
+	}
 	if !withComments && g.cli.Cache != nil {
 		// A list this process already made carried the same fields.
-		if is, ok := g.cli.Cache.issue(g.cli.cacheScope(), number); ok {
+		if is, ok := g.cli.Cache.issue(g.cli.cacheScope(), key); ok {
 			return is, nil
 		}
 	}
 	var d ghIssue
-	err := g.withIssueFields(func(fields string) error {
+	err = g.withIssueFields(func(fields string) error {
 		if withComments {
 			fields += ",comments"
 		}
@@ -305,7 +310,11 @@ func (g *GitHub) List(ctx context.Context, f ListFilter) ([]Issue, error) {
 	return firstN(out, f.Limit), nil
 }
 
-func (g *GitHub) Edit(ctx context.Context, number int, e IssueEdit) error {
+func (g *GitHub) Edit(ctx context.Context, key IssueKey, e IssueEdit) error {
+	number, err := numOf(key)
+	if err != nil {
+		return err
+	}
 	args := []string{"issue", "edit", strconv.Itoa(number)}
 	if e.Title != nil {
 		args = append(args, "--title", *e.Title)
@@ -327,12 +336,20 @@ func (g *GitHub) Edit(ctx context.Context, number int, e IssueEdit) error {
 	if e.RemoveMilestone {
 		args = append(args, "--remove-milestone")
 	}
-	_, err := g.run(ctx, args, body)
+	_, err = g.run(ctx, args, body)
 	return err
 }
 
 // Comments returns the comments oldest first.
-func (g *GitHub) Comments(ctx context.Context, number int) ([]Comment, error) {
+func (g *GitHub) Comments(ctx context.Context, key IssueKey) ([]Comment, error) {
+	number, err := numOf(key)
+	if err != nil {
+		return nil, err
+	}
+	return g.comments(ctx, number)
+}
+
+func (g *GitHub) comments(ctx context.Context, number int) ([]Comment, error) {
 	var raw []struct {
 		ID        json.RawMessage         `json:"id"`
 		Body      string                  `json:"body"`
@@ -416,20 +433,36 @@ func parseTime(s string) time.Time {
 	return t
 }
 
-func (g *GitHub) AddComment(ctx context.Context, number int, body string) (string, error) {
+func (g *GitHub) AddComment(ctx context.Context, key IssueKey, body string) (string, error) {
+	number, err := numOf(key)
+	if err != nil {
+		return "", err
+	}
+	return g.addComment(ctx, number, body)
+}
+
+func (g *GitHub) addComment(ctx context.Context, number int, body string) (string, error) {
 	return g.createdID(ctx, []string{"api", "-X", "POST", fmt.Sprintf("repos/{owner}/{repo}/issues/%d/comments", number), "-f", "body=" + body})
 }
 
 // MRNotes: a PR's conversation comments are the issue comments of its number.
 func (g *GitHub) MRNotes(ctx context.Context, number int) ([]Comment, error) {
-	return g.Comments(ctx, number)
+	return g.comments(ctx, number)
 }
 
 func (g *GitHub) AddMRNote(ctx context.Context, number int, body string) (string, error) {
-	return g.AddComment(ctx, number, body)
+	return g.addComment(ctx, number, body)
 }
 
-func (g *GitHub) CommentURL(ctx context.Context, _ bool, _ int, commentID string) (string, error) {
+func (g *GitHub) CommentURL(ctx context.Context, _ IssueKey, commentID string) (string, error) {
+	return g.commentURL(ctx, commentID)
+}
+
+func (g *GitHub) PRCommentURL(ctx context.Context, _ int, commentID string) (string, error) {
+	return g.commentURL(ctx, commentID)
+}
+
+func (g *GitHub) commentURL(ctx context.Context, commentID string) (string, error) {
 	var d struct {
 		HTMLURL string `json:"html_url"`
 	}
@@ -439,17 +472,27 @@ func (g *GitHub) CommentURL(ctx context.Context, _ bool, _ int, commentID string
 	return d.HTMLURL, nil
 }
 
-func (g *GitHub) EditComment(ctx context.Context, number int, commentID, body string) error {
+func (g *GitHub) EditComment(ctx context.Context, key IssueKey, commentID, body string) error {
+	if _, err := numOf(key); err != nil {
+		return err
+	}
 	_, err := g.run(ctx, []string{"api", "-X", "PATCH", "repos/{owner}/{repo}/issues/comments/" + commentID, "-f", "body=" + body}, "")
 	return err
 }
 
-func (g *GitHub) DeleteComment(ctx context.Context, number int, commentID string) error {
+func (g *GitHub) DeleteComment(ctx context.Context, key IssueKey, commentID string) error {
+	if _, err := numOf(key); err != nil {
+		return err
+	}
 	_, err := g.run(ctx, []string{"api", "-X", "DELETE", "repos/{owner}/{repo}/issues/comments/" + commentID}, "")
 	return err
 }
 
-func (g *GitHub) Close(ctx context.Context, number int, reason, comment string) error {
+func (g *GitHub) Close(ctx context.Context, key IssueKey, reason, comment string) error {
+	number, err := numOf(key)
+	if err != nil {
+		return err
+	}
 	r := "completed"
 	if reason == "not_planned" {
 		r = "not planned"
@@ -458,17 +501,25 @@ func (g *GitHub) Close(ctx context.Context, number int, reason, comment string) 
 	if comment != "" {
 		args = append(args, "--comment", comment)
 	}
-	_, err := g.run(ctx, args, "")
+	_, err = g.run(ctx, args, "")
 	return err
 }
 
-func (g *GitHub) Reopen(ctx context.Context, number int) error {
-	_, err := g.run(ctx, []string{"issue", "reopen", strconv.Itoa(number)}, "")
+func (g *GitHub) Reopen(ctx context.Context, key IssueKey) error {
+	number, err := numOf(key)
+	if err != nil {
+		return err
+	}
+	_, err = g.run(ctx, []string{"issue", "reopen", strconv.Itoa(number)}, "")
 	return err
 }
 
-func (g *GitHub) AssignSelf(ctx context.Context, number int) error {
-	_, err := g.run(ctx, []string{"issue", "edit", strconv.Itoa(number), "--add-assignee", "@me"}, "")
+func (g *GitHub) AssignSelf(ctx context.Context, key IssueKey) error {
+	number, err := numOf(key)
+	if err != nil {
+		return err
+	}
+	_, err = g.run(ctx, []string{"issue", "edit", strconv.Itoa(number), "--add-assignee", "@me"}, "")
 	return err
 }
 
@@ -524,18 +575,19 @@ func (g *GitHub) PRView(ctx context.Context, pr int) (PRInfo, error) {
 		HeadRefOid  string `json:"headRefOid"`
 		BaseRefName string `json:"baseRefName"`
 		State       string `json:"state"`
+		Title       string `json:"title"`
 		Body        string `json:"body"`
 		MergeCommit *struct {
 			Oid string `json:"oid"`
 		} `json:"mergeCommit"`
 	}
-	if err := g.json(ctx, []string{"pr", "view", strconv.Itoa(pr), "--json", "headRefName,headRefOid,baseRefName,state,mergeCommit,body"}, &d); err != nil {
+	if err := g.json(ctx, []string{"pr", "view", strconv.Itoa(pr), "--json", "headRefName,headRefOid,baseRefName,state,mergeCommit,body,title"}, &d); err != nil {
 		return PRInfo{}, err
 	}
 	if d.HeadRefName == "" {
 		return PRInfo{}, failed("cannot read PR %d", pr)
 	}
-	info := PRInfo{Head: d.HeadRefName, HeadSHA: d.HeadRefOid, Base: d.BaseRefName, State: d.State, Body: d.Body}
+	info := PRInfo{Head: d.HeadRefName, HeadSHA: d.HeadRefOid, Base: d.BaseRefName, State: d.State, Title: d.Title, Body: d.Body}
 	if d.MergeCommit != nil {
 		info.MergeSHA = d.MergeCommit.Oid
 	}

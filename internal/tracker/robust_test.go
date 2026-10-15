@@ -67,8 +67,8 @@ func TestNotFound(t *testing.T) {
 	for _, c := range cases {
 		a := newAdapter(t, c.provider, &scripted{answer: func(string, []string) (string, string, int) { return "", c.stderr, 1 }})
 		for name, call := range map[string]func() error{
-			"Get":           func() error { _, err := a.Get(ctx, 99, false); return err },
-			"EditComment":   func() error { return a.EditComment(ctx, 1, "9", "x") },
+			"Get":           func() error { _, err := a.Get(ctx, NumKey(99), false); return err },
+			"EditComment":   func() error { return a.EditComment(ctx, NumKey(1), "9", "x") },
 			"PRState":       func() error { _, err := a.PRState(ctx, 9); return err },
 			"EditMilestone": func() error { return a.EditMilestone(ctx, 9, MilestoneEdit{}) },
 		} {
@@ -178,7 +178,7 @@ func TestListsPageUntilShort(t *testing.T) {
 		}}
 		a := newAdapter(t, "github", s)
 		is, err := a.List(ctx, ListFilter{})
-		if err != nil || len(is) != 1500 || is[1499].Number != 1500 {
+		if err != nil || len(is) != 1500 || is[1499].Num() != 1500 {
 			t.Fatalf("%d issues, %v", len(is), err)
 		}
 		if len(s.calls) != 2 || !strings.HasSuffix(s.calls[1], "--limit 2000") {
@@ -204,7 +204,7 @@ func TestListsPageUntilShort(t *testing.T) {
 		}}
 		a := newAdapter(t, "gitlab", s)
 		is, err := a.List(ctx, ListFilter{State: "all"})
-		if err != nil || len(is) != 207 || is[206].Number != 207 {
+		if err != nil || len(is) != 207 || is[206].Num() != 207 {
 			t.Fatalf("%d issues, %v", len(is), err)
 		}
 		prs, err := a.PRsClosing(ctx, 150)
@@ -228,25 +228,25 @@ func TestGitHubCommentIDsAreRESTOnEveryPath(t *testing.T) {
 		return view, "", 0
 	}}
 	a := newAdapter(t, "github", s)
-	is, err := a.Get(ctx, 1, true)
+	is, err := a.Get(ctx, NumKey(1), true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	cs, err := a.Comments(ctx, 1)
+	cs, err := a.Comments(ctx, NumKey(1))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if is.Comments[0].ID != "5950898792" || cs[0].ID != is.Comments[0].ID {
 		t.Fatalf("view id %q, api id %q", is.Comments[0].ID, cs[0].ID)
 	}
-	if err := a.DeleteComment(ctx, 1, is.Comments[0].ID); err != nil ||
+	if err := a.DeleteComment(ctx, NumKey(1), is.Comments[0].ID); err != nil ||
 		s.calls[len(s.calls)-1] != "gh api -X DELETE repos/{owner}/{repo}/issues/comments/5950898792" {
 		t.Fatalf("delete ran %q, %v", s.calls[len(s.calls)-1], err)
 	}
 	// A comment without a url can't be given a REST id: that is an error,
 	// never a node id slipped through.
 	view = `{"number":1,"comments":[{"id":"IC_x","body":"x"}]}`
-	if _, err := a.Get(ctx, 1, true); !IsKind(err, KindFailed) {
+	if _, err := a.Get(ctx, NumKey(1), true); !IsKind(err, KindFailed) {
 		t.Fatalf("no url: %v", err)
 	}
 }
@@ -264,7 +264,7 @@ func TestGitLabAssignSelfConcurrent(t *testing.T) {
 		wg.Add(1)
 		go func(n int) {
 			defer wg.Done()
-			if err := a.AssignSelf(context.Background(), n); err != nil {
+			if err := a.AssignSelf(context.Background(), NumKey(n)); err != nil {
 				t.Error(err)
 			}
 		}(i)
@@ -343,11 +343,11 @@ func TestGitLabGetDropsSystemNotesLikeComments(t *testing.T) {
 		return `{"iid":1,"notes":` + notes + `}`, "", 0
 	}}
 	a := newAdapter(t, "gitlab", s)
-	is, err := a.Get(ctx, 1, true)
+	is, err := a.Get(ctx, NumKey(1), true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	cs, err := a.Comments(ctx, 1)
+	cs, err := a.Comments(ctx, NumKey(1))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -399,7 +399,7 @@ func TestMissingLabelIsNotFound(t *testing.T) {
 	gh := newAdapter(t, "github", s)
 	for name, err := range map[string]error{
 		"EnsureLabels": gh.EnsureLabels(ctx, []string{"bug", "nope"}, false),
-		"AddLabels":    gh.AddLabels(ctx, 1, []string{"nope"}, false),
+		"AddLabels":    gh.AddLabels(ctx, NumKey(1), []string{"nope"}, false),
 	} {
 		var e *Error
 		if !errors.As(err, &e) || e.Kind != KindNotFound || e.Kind.Exit() != 3 || !strings.Contains(e.Message, "label 'nope' does not exist") {
@@ -415,7 +415,7 @@ func TestMissingLabelIsNotFound(t *testing.T) {
 		t.Fatalf("autoCreate on: %v, %q", err, s.calls)
 	}
 	gl := newAdapter(t, "gitlab", &scripted{answer: func(string, []string) (string, string, int) { return "", "", 0 }})
-	if err := gl.AddLabels(ctx, 1, []string{"nope"}, false); err != nil {
+	if err := gl.AddLabels(ctx, NumKey(1), []string{"nope"}, false); err != nil {
 		t.Fatalf("gitlab: %v", err)
 	}
 }
@@ -443,8 +443,8 @@ func TestGitHubOldGhNoStateReason(t *testing.T) {
 	if len(s.calls) != 2 {
 		t.Fatalf("list calls %q, want a rejected try and a retry", s.calls)
 	}
-	is, err := a.Get(ctx, 3, false)
-	if err != nil || is.Number != 3 || is.State != "closed" {
+	is, err := a.Get(ctx, NumKey(3), false)
+	if err != nil || is.Num() != 3 || is.State != "closed" {
 		t.Fatalf("get: %+v, %v", is, err)
 	}
 	if len(s.calls) != 3 || strings.Contains(s.calls[2], "stateReason") {
