@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/connections"
 	"github.com/l4ci/rota/internal/jsonx"
 )
 
@@ -454,11 +455,17 @@ func TestNewForgeAndNewIssueTracker(t *testing.T) {
 	if _, err := NewIssueTracker(ctx, Settings{Source: "file"}, "", "/repo"); !errors.Is(err, ErrNoIssueTracker) {
 		t.Errorf("file source: %v", err)
 	}
-	for _, src := range []string{"jira", "linear"} {
-		_, err := NewIssueTracker(ctx, Settings{Source: src}, "", "/repo")
-		if !IsKind(err, KindUnavailable) || !strings.Contains(err.Error(), "not implemented") {
-			t.Errorf("%s source: %v", src, err)
-		}
+	if _, err := NewIssueTracker(ctx, Settings{Source: "linear"}, "", "/repo"); !IsKind(err, KindUnavailable) || !strings.Contains(err.Error(), "not implemented") {
+		t.Errorf("linear source: %v", err)
+	}
+	if _, err := NewIssueTracker(ctx, Settings{Source: "jira", JiraProject: "PROJ"}, "", "/repo"); !IsKind(err, KindUnavailable) || !strings.Contains(err.Error(), "issues.connection") {
+		t.Errorf("jira source, no connection: %v", err)
+	}
+	jiraConn := WithConnections(func(_ context.Context, name string) (connections.Connection, string, error) {
+		return connections.Connection{Name: name, Kind: "jira", Site: "https://acme.example", User: "me@acme.example"}, "tok", nil
+	})
+	if it, err := NewIssueTracker(ctx, Settings{Source: "jira", Connection: "work", JiraProject: "PROJ"}, "", "/repo", jiraConn); err != nil || it.Provider() != "jira" {
+		t.Errorf("jira source: %v, %v", it, err)
 	}
 	// a legacy "issues backend" with no named provider resolves from origin.
 	if it, err := NewIssueTracker(ctx, Settings{Source: "issues"}, "", "/repo", origin("https://gitlab.com/o/r", 0)); err != nil || it.Provider() != "gitlab" {
