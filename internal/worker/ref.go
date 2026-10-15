@@ -36,9 +36,7 @@ func PRRefNumber(ref string) (int, bool) {
 // leading `#`, upper case. `#12`, ` 12 `, `b07` and `B07` normalise to `12`,
 // `12`, `B07` and `B07`. Never hand-roll this at a call site.
 func NormID(id string) string {
-	id = strings.TrimSpace(id)
-	id = strings.TrimSpace(strings.TrimPrefix(id, "#"))
-	return strings.ToUpper(id)
+	return tracker.NormRef(id)
 }
 
 // HeldID is the item a slot holds, in the backend's spelling: the task when

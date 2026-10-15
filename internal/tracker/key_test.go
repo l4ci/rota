@@ -69,6 +69,8 @@ func TestClosingConventions(t *testing.T) {
 		{"branch", ClosingSource{Branch: "ben/PROJ-12-widen"}, true},
 		{"lower case branch", ClosingSource{Branch: "ben/proj-12-widen"}, true},
 		{"bracketed title", ClosingSource{Title: "[PROJ-12] widen"}, true},
+		{"fix prefix", ClosingSource{Branch: "feature/fix-PROJ-12"}, true},
+		{"underscore after", ClosingSource{Branch: "ben/PROJ-12_x"}, true},
 		{"longer key", ClosingSource{Title: "PROJ-123 widen"}, false},
 		{"longer prefix", ClosingSource{Title: "XPROJ-12 widen"}, false},
 		{"body only", ClosingSource{Body: "Closes PROJ-12"}, false},
@@ -94,11 +96,16 @@ func TestClosingConventions(t *testing.T) {
 // GitHub and GitLab name issues by number: a Jira-style key is not an issue
 // there, and the CLI is not called with it.
 func TestNumberedAdaptersRefuseAKey(t *testing.T) {
-	for _, a := range []Adapter{newAdapter(t, "github", nil), newAdapter(t, "gitlab", nil)} {
+	for _, provider := range []string{"github", "gitlab"} {
+		s := &scripted{}
+		a := newAdapter(t, provider, s)
 		_, err := a.Get(context.Background(), "PROJ-123", false)
 		var e *Error
 		if !errors.As(err, &e) || e.Kind != KindNotFound {
-			t.Errorf("%s Get(PROJ-123) = %v, want KindNotFound", a.Provider(), err)
+			t.Errorf("%s Get(PROJ-123) = %v, want KindNotFound", provider, err)
+		}
+		if len(s.calls) != 0 {
+			t.Errorf("%s: CLI called with a key: %v", provider, s.calls)
 		}
 	}
 }

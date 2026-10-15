@@ -68,10 +68,14 @@ func TestAssignKeyedIssuesClaimBranchAndOverlap(t *testing.T) {
 	}
 }
 
-// A Depends on line can name a key-based tracker's issue.
-func TestDependenciesReadKeys(t *testing.T) {
-	refs, _ := Dependencies("## Depends on\n- PROJ-12 and #7\n")
-	if strings.Join(refs, ",") != "7,PROJ-12" {
-		t.Errorf("refs = %v", refs)
+// A key-based tracker's Depends on line can name PROJ-12; a numbered tracker's
+// prose (UTF-8, SHA-256, ISO-8601) is not a ref.
+func TestDependenciesReadKeysOnlyOnAKeyedTracker(t *testing.T) {
+	text := "## Depends on\n- PROJ-12 and #7 (needs UTF-8, SHA-256, ISO-8601)\n"
+	if refs, _ := dependencies(text, true); strings.Join(refs, ",") != "7,PROJ-12,UTF-8,SHA-256,ISO-8601" {
+		t.Errorf("keyed refs = %v", refs)
+	}
+	if refs, _ := Dependencies(text); strings.Join(refs, ",") != "7" {
+		t.Errorf("numbered refs = %v, want just 7", refs)
 	}
 }

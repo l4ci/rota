@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -148,7 +149,7 @@ func (s *issueStub) ClosesIssue(k tracker.IssueKey, c tracker.ClosingSource) boo
 	if s.keyed {
 		return tracker.ClosesByKey(k, c)
 	}
-	return strings.Contains(c.Body, "Closes #"+k.String())
+	return slices.Contains(strings.Split(c.Body, "\n"), "Closes #"+k.String())
 }
 
 // The closing check reads the issue source, not the forge: with issues on a

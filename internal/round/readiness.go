@@ -70,9 +70,22 @@ var (
 	itemRefRe    = regexp.MustCompile(`\b(` + backlog.IDPattern(backlog.FileIDDigits) + `)\b`)
 )
 
+func keyMatches(line string, keyed bool) [][]string {
+	if !keyed {
+		return nil
+	}
+	return keyRefRe.FindAllStringSubmatch(line, -1)
+}
+
 // Dependencies parses the `## Depends on` section into item references (in
 // the item's own spelling) and references that cannot be looked up.
 func Dependencies(text string) (refs, unverifiable []string) {
+	return dependencies(text, false)
+}
+
+// dependencies is Dependencies; keyed also reads a key-based tracker's
+// PROJ-123 refs. A numbered tracker's prose (UTF-8, SHA-256) is not a ref.
+func dependencies(text string, keyed bool) (refs, unverifiable []string) {
 	sec, ok := itembody.Section(text, itembody.DependsHeadRe)
 	if !ok {
 		return nil, nil
@@ -89,7 +102,7 @@ func Dependencies(text string) (refs, unverifiable []string) {
 				refs = append(refs, m[1])
 			}
 		}
-		for _, m := range keyRefRe.FindAllStringSubmatch(line, -1) {
+		for _, m := range keyMatches(line, keyed) {
 			if !seen[m[1]] {
 				seen[m[1]] = true
 				refs = append(refs, m[1])
@@ -244,7 +257,8 @@ func AssessBrief(be backlog.Backend, id string, tracked, shared []string, inFlig
 // shared path does, and only warns otherwise.
 func AssessScoped(be backlog.Backend, id string, tracked, shared []string, inFlight []InFlight, acceptOverlap bool, brief string, scopeBlock bool) (Readiness, error) {
 	r := Readiness{ID: id}
-	if _, err := be.Get(id); err != nil {
+	self, err := be.Get(id)
+	if err != nil {
 		return r, err
 	}
 
@@ -258,7 +272,8 @@ func AssessScoped(be backlog.Backend, id string, tracked, shared []string, inFli
 	r.Checks = append(r.Checks, Check{CheckCriteria, len(reasons) == 0, nonNil(reasons)})
 
 	text := itemText(be, id)
-	refs, unverifiable := Dependencies(text)
+	_, numbered := self.IssueKey().Number()
+	refs, unverifiable := dependencies(text, self.IssueKey() != "" && !numbered)
 	dep := Check{Name: CheckDependencies, OK: true, Detail: []string{}}
 	for _, ref := range unverifiable {
 		dep.OK = false
