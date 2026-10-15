@@ -39,7 +39,10 @@ type SourceMigration struct {
 //     provider of the origin remote ("" or nil when it cannot tell);
 //   - an explicit issues.provider that detect would not return also becomes
 //     forge.provider, so the PR verbs keep reaching the same forge;
-//   - an already set issues.source wins and the legacy keys are just dropped.
+//   - an already set issues.source wins and the legacy keys are just dropped
+//     (an explicit provider the origin would miss still pins forge.provider);
+//   - detect answers "forge" for an umbrella whose sub-repos sit on different
+//     hosts: the unresolved auto then becomes issues.source forge.
 //
 // Both legacy keys are removed. When the provider is auto and detect names no
 // forge, or backlog.backend is not file|issues, nothing changes and
@@ -52,34 +55,41 @@ func MigrateSource(cfg *jsonx.Object, detect func() string) (*jsonx.Object, Sour
 	if !hasBackend && !hasProvider {
 		return cfg, m
 	}
-	detected := func() string {
-		if detect == nil {
-			return ""
+	var seen string
+	var ran bool
+	detected := func() string { // once per call: origin detection runs git
+		if !ran {
+			ran = true
+			if detect != nil {
+				seen = detect()
+			}
 		}
-		return detect()
+		return seen
 	}
 	source, set := walk(cfg, "issues.source")
+	backend, _ := walk(cfg, LegacyBackendKey)
+	provider, _ := walk(cfg, LegacyProviderKey)
+	isForge := provider == "github" || provider == "gitlab"
 	if !set {
-		backend, _ := walk(cfg, LegacyBackendKey)
-		provider, _ := walk(cfg, LegacyProviderKey)
 		if backend == nil {
 			backend = "file"
 		}
-		isForge := provider == "github" || provider == "gitlab"
 		switch {
 		case backend == "file":
 			source = SourceFile
 		case backend == "issues" && isForge:
 			source = provider
-		case backend == "issues" && (detected() == "github" || detected() == "gitlab"):
+		case backend == "issues" && (detected() == "github" || detected() == "gitlab" || detected() == SourceForge):
 			source = detected()
 		default:
 			m.Unresolved = true
 			return cfg, m
 		}
-		if _, has := walk(cfg, "forge.provider"); !has && isForge && detected() != provider {
-			m.Forge = provider.(string)
-		}
+	}
+	// An explicit provider the origin would not give also pins forge.provider,
+	// whether issues.source was already set or is being derived.
+	if _, has := walk(cfg, "forge.provider"); !has && isForge && detected() != provider {
+		m.Forge = provider.(string)
 	}
 	for _, k := range LegacyKeys {
 		segs := strings.Split(k, ".")

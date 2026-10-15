@@ -459,6 +459,9 @@ func (g *gate) stepReleaseExternal() error {
 
 // stepForge picks the provider and opens its forge.
 func (g *gate) stepForge() (bool, error) {
+	if err := g.in.cfg.sourceErr; err != nil {
+		return true, fail(exitcode.ExitInternal, err.Error())
+	}
 	g.res.Branch, g.res.PR = g.target.Branch, g.target.PR
 	g.provider = g.e.detectProvider(g.ctx, g.root, g.pr, g.in.cfg.Tracker.Provider)
 	g.cliName = tracker.CLIName(g.provider)
@@ -475,7 +478,7 @@ func (g *gate) stepForge() (bool, error) {
 	if g.forge, err = g.e.Forge(g.provider, g.root, g.in.cfg.Tracker); err != nil {
 		return g.broke(fmt.Sprintf("cannot reach the %s forge: %v", g.provider, err))
 	}
-	if g.issues, err = g.e.issueSide(g.forge, g.root, g.in.cfg.Tracker); err != nil {
+	if g.issues, err = g.e.issueSide(g.forge, g.provider, g.root, g.in.cfg.Tracker); err != nil {
 		return g.broke(fmt.Sprintf("cannot reach the issue source: %v", err))
 	}
 	return false, nil
@@ -1235,12 +1238,22 @@ func (e Env) detectProvider(ctx context.Context, root, pr, configured string) st
 	return "github"
 }
 
-// issueSide is the issue source the gate reads beside forge: the forge itself
-// when it also serves issues (a test fake, or any adapter that does), else the
-// tracker issues.source names. A file source has none (nil, no error).
-func (e Env) issueSide(forge Forge, dir string, s tracker.Settings) (Issues, error) {
-	if is, ok := forge.(Issues); ok {
-		return is, nil
+// issueSide is the issue source the gate reads beside forge, built from
+// issues.source: none for a file source; the forge adapter itself when the
+// source is that forge's own tracker (github or gitlab matching the forge's
+// provider, forge, or an unmigrated legacy config); else the tracker the source
+// names (Env.Issues, or tracker.NewIssueTracker).
+func (e Env) issueSide(forge Forge, forgeProvider, dir string, s tracker.Settings) (Issues, error) {
+	switch s.Source {
+	case config.SourceFile, "":
+		return nil, nil
+	case config.SourceForge, config.SourceIssues, forgeProvider:
+		if is, ok := forge.(Issues); ok {
+			return is, nil
+		}
+	}
+	if e.Issues != nil {
+		return e.Issues(dir, s)
 	}
 	it, err := tracker.NewIssueTracker(e.context(), s, "", dir)
 	if errors.Is(err, tracker.ErrNoIssueTracker) {

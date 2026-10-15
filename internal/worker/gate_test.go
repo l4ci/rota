@@ -88,7 +88,13 @@ func newWorld(t *testing.T, pr string) *world {
 	return w
 }
 
+// setConfig writes the project config. The gate tests exercise the github issue
+// source (the closing check, claim labels, review depth) unless a case names a
+// source itself.
 func (w *world) setConfig(cfg string) {
+	if !strings.Contains(cfg, `"source"`) && strings.HasPrefix(cfg, "{") && cfg != "{}" {
+		cfg = `{"issues":{"source":"github"},` + cfg[1:]
+	}
 	os.WriteFile(filepath.Join(w.dir, ".rota", "config.json"), []byte(cfg), 0o644)
 }
 

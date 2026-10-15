@@ -157,8 +157,8 @@ func trSuggest(fs *flag.FlagSet) RunFunc {
 // config.MigrateSource: "github" or "gitlab" from dir's origin remote, "" when
 // there is none or it names neither. An umbrella has no origin of its own: its
 // answer is the provider every registered sub-repo agrees on, "" when they
-// differ (one issues.source cannot say "GitHub here, GitLab there"; the legacy
-// keys keep resolving each sub-repo from its own origin). The executor comes
+// differ: "forge", the issues.source that leaves each sub-repo to its own forge.
+// A sub-repo with no recognizable origin leaves the answer undetermined (""). The executor comes
 // from TrackerOptions, so a test swaps it like every other forge read.
 func (d *Deps) originProvider(ctx context.Context, dir string) func() string {
 	return func() string {
@@ -177,13 +177,19 @@ func (d *Deps) originProvider(ctx context.Context, dir string) func() string {
 		if len(subs) == 0 {
 			return of(dir)
 		}
-		agreed := ""
+		agreed, mixed := "", false
 		for _, r := range subs {
 			p := of(r.Path)
-			if p == "" || (agreed != "" && p != agreed) {
+			if p == "" {
 				return ""
 			}
+			if agreed != "" && p != agreed {
+				mixed = true
+			}
 			agreed = p
+		}
+		if mixed {
+			return config.SourceForge
 		}
 		return agreed
 	}

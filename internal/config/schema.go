@@ -34,7 +34,7 @@ func StampedVersion(cfg any) string {
 const PythonKeys = 46
 
 var (
-	issueSources   = []string{SourceFile, SourceGitHub, SourceGitLab, SourceJira, SourceLinear}
+	issueSources   = []string{SourceFile, SourceGitHub, SourceGitLab, SourceForge, SourceJira, SourceLinear}
 	forgeProviders = []string{ForgeAuto, ForgeGitHub, ForgeGitLab, ForgeLocal}
 )
 
@@ -88,6 +88,9 @@ const (
 	SourceGitLab = "gitlab"
 	SourceJira   = "jira"
 	SourceLinear = "linear"
+	// SourceForge: the issues live on each repo's own forge (an umbrella whose
+	// sub-repos sit on different hosts).
+	SourceForge  = "forge"
 	SourceIssues = "issues"
 )
 
@@ -286,6 +289,7 @@ var Prompts = []Prompt{
 		"file":   "BACKLOG.md in the repo",
 		"github": "GitHub issues (gh)",
 		"gitlab": "GitLab issues (glab)",
+		"forge":  "each repo's own forge (umbrellas on mixed hosts)",
 		"jira":   "Jira (not implemented yet)",
 		"linear": "Linear (not implemented yet)",
 	}},
