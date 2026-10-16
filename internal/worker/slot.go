@@ -35,7 +35,20 @@ func (s *Slot) Branch() string   { return jsonx.Str(s.o, "branch") }
 func (s *Slot) Worktree() string { return jsonx.Str(s.o, "worktree") }
 func (s *Slot) Base() string     { return jsonx.Str(s.o, "base") }
 func (s *Slot) Handle() string   { return jsonx.Str(s.o, "handle") }
-func (s *Slot) State() string    { return jsonx.Str(s.o, "state") }
+
+// WorkspaceID is the linked herdr workspace the slot's session was opened in
+// (work.herdrGroupSlots), "" when it runs in the orchestrator's own workspace.
+func (s *Slot) WorkspaceID() string { return jsonx.Str(s.o, "workspaceId") }
+
+// SetWorkspaceID records the slot's linked workspace; "" clears it.
+func (s *Slot) SetWorkspaceID(id string) {
+	if id == "" {
+		s.o.Delete("workspaceId")
+		return
+	}
+	s.o.Set("workspaceId", id)
+}
+func (s *Slot) State() string { return jsonx.Str(s.o, "state") }
 
 // Issue is the issue number recorded on the slot ("" when none). The prompt
 // digest shows it before falling back to HeldID.
