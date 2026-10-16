@@ -264,6 +264,16 @@ done slot whose PR you are holding does not come back on every call. A dispatch 
 With no slot named it watches every slot that has a session and whose recorded state is not `idle`;
 `rota worker dispatch` arms a slot.
 
+Workers also report through verbs, not only through the pane. `rota worker done` and
+`rota worker reply` record an event on the slot, and `rota worker send <slot> --blocked <question>`
+(or `--question`) does the same for a question, so `round wait` returns it even when the pane
+shows an old `ROTA-DONE` line. `rota worker send <slot> --heartbeat` refreshes the stall clock
+during a long test run and changes nothing else. A slot whose host cannot be asked (herdr
+unreachable, a stale tab handle after a layout split, a pane that fails to capture) reads
+`unverifiable` with the reason, not `dead`: `wait` keeps waiting through it and returns it once
+after `round.stallMinutes`, `rota reap` leaves it alone, and `round reclaim` refuses it without
+`--force`. A host that answers "no agent in this tab" is still `dead`.
+
 - **herdr**: pinned to **0.9.x** (built against 0.9.3, socket protocol 22); another minor
   exits 5. One `events.subscribe` over `HERDR_SOCKET_PATH` carries a
   `pane.agent_status_changed` subscription per watched pane, so N slots cost one
