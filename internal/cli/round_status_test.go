@@ -206,3 +206,34 @@ func TestRoundStatusShowsTheEffectiveCapWhenBelowTheRoster(t *testing.T) {
 		t.Errorf("text: %q", text)
 	}
 }
+
+func TestRoundStatusShowsEventEvidence(t *testing.T) {
+	root, deps := roundFixture(t, nil)
+	if code, out, _ := rotaInWith(t, deps, root, "--json", "round", "reconcile", "--apply"); code != 0 {
+		t.Fatalf("reconcile exit %d: %s", code, out)
+	}
+	if err := worker.Update(root, func(d *worker.Doc) {
+		d.Slot("dana").SetEvent(worker.EventBlocked, "Keep the old flag or drop it?", "2026-10-16T12:00:00Z")
+	}); err != nil {
+		t.Fatal(err)
+	}
+	_, out, _ := rotaInWith(t, deps, root, "--json", "round", "status")
+	found := false
+	for _, r := range data(t, out)["slots"].([]any) {
+		row := r.(map[string]any)
+		if row["name"] != "dana" {
+			if _, ok := row["event"]; ok {
+				t.Errorf("%v: a slot with no event shows one", row["name"])
+			}
+			continue
+		}
+		ev, _ := row["event"].(map[string]any)
+		if ev["kind"] != "blocked" || ev["body"] != "Keep the old flag or drop it?" || ev["seq"] != 1.0 {
+			t.Errorf("dana's event = %v", row["event"])
+		}
+		found = true
+	}
+	if !found {
+		t.Fatal("no dana row")
+	}
+}

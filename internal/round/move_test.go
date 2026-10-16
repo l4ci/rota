@@ -357,6 +357,29 @@ func TestReconcileReportsStalledNeverRepairsIt(t *testing.T) {
 	}
 }
 
+func TestReconcileHeartbeatingSlotIsNotStalled(t *testing.T) {
+	f := newMoveFx(t)
+	f.agents("ben")
+	rawSlot(f.root, "ben", func(s *jsonx.Object) {
+		s.Set("handle", "w1:ben")
+		s.Set("activeAt", f.now.Add(-45*time.Minute).UTC().Format(time.RFC3339))
+	})
+	f.now = f.now.Add(2 * time.Hour)
+	if _, err := f.env.ReportSlot(bg, f.root, ReportOpts{Slot: "ben", Event: worker.EventHeartbeat}); err != nil {
+		t.Fatal(err)
+	}
+	out, err := f.env.Reconcile(bg, f.root, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := kinds(append(out.Drift, out.Repaired...)); hasKind(got["ben"], StalledSlot) {
+		t.Errorf("a heartbeating slot is alive: %v", got)
+	}
+	if st := f.slot("ben").State(); st == "idle" || st == "done" {
+		t.Errorf("a heartbeat moved the state to %s", st)
+	}
+}
+
 func TestReconcileDeadIsNotStalled(t *testing.T) {
 	f := newMoveFx(t)
 	f.agents() // the host runs nothing

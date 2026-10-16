@@ -24,6 +24,18 @@ type ReportOpts struct {
 	Slot, State, Evidence, PR string
 	// Issues is a review item's done evidence in place of a PR: `#139,#140`.
 	Issues string
+	// Event is the worker event kind this report records (worker.EventBlocked
+	// and the others), "" for a plain `round report`. An event is the worker's
+	// own word on its own slot, so it is written on any host; a plain report
+	// stands in for a pane poll and stays solo-only. Body is the event's text.
+	Event, Body string
+}
+
+// eventStates maps an event kind to the slot state it records; "" is no
+// change (a heartbeat proves the worker alive, a review reply is not a state).
+var eventStates = map[string]string{
+	worker.EventBlocked: "blocked", worker.EventQuestion: "blocked", worker.EventDone: "done",
+	worker.EventReviewReply: "done", worker.EventHeartbeat: "",
 }
 
 // Reported is what ReportSlot did. Evidence is echoed, never stored.
@@ -36,14 +48,21 @@ type Reported struct {
 // reportKinds maps the reported states that are ledger events to their kind.
 var reportKinds = map[string]string{"done": ledger.KindDone, "blocked": ledger.KindBlocked, "limited": ledger.KindLimited}
 
-// ReportSlot records what a solo worker's result said, writing the two fields
-// a pane poll writes: state (lowercase) and pr. A second writer beside a
-// host's poll would race it, so any other host refuses. Re-reporting the same
-// state and PR changes nothing.
+// ReportSlot records what a worker's result said, writing the fields a pane
+// poll writes: state (lowercase) and pr, plus the slot's event when o.Event is
+// set. A plain report is a second writer beside a host's poll and would race
+// it, so only a solo round takes one; an event is read ahead of the pane
+// (worker.Decide), so it is written on every host. Re-reporting the same state
+// and PR changes nothing.
 func (e Env) ReportSlot(ctx context.Context, root string, o ReportOpts) (Reported, error) {
 	res := Reported{Slot: o.Slot, Evidence: o.Evidence}
 	state := strings.ToLower(strings.TrimSpace(o.State))
-	if !slices.Contains(ReportStates, state) {
+	if o.Event != "" {
+		var ok bool
+		if state, ok = eventStates[o.Event]; !ok {
+			return res, usage("event must be one of %s, got %q", strings.Join(worker.EventKinds, ", "), o.Event)
+		}
+	} else if !slices.Contains(ReportStates, state) {
 		return res, usage("--state must be one of %s", strings.Join(ReportStates, ", "))
 	}
 	res.State = state
@@ -62,9 +81,9 @@ func (e Env) ReportSlot(ctx context.Context, root string, o ReportOpts) (Reporte
 		}
 		res.Issues = refs
 	}
-	switch h := worker.RegistryHost(root); h {
-	case host.Solo:
-	case "":
+	switch h := worker.RegistryHost(root); {
+	case h == host.Solo || o.Event != "":
+	case h == "":
 		return res, &exitcode.Error{Exit: exitcode.ExitUsage, Message: "no round host is recorded: run rota round start first",
 			Hint: "round report is for solo rounds; under herdr or tmux, rota worker poll records the state"}
 	default:
@@ -81,14 +100,26 @@ func (e Env) ReportSlot(ctx context.Context, root string, o ReportOpts) (Reporte
 		}
 		found = true
 		res.Previous = s.State()
-		held = ledger.Entry{Issue: worker.HeldID(s.Task(), s.Branch(), s.Name()), Slot: s.Name(), Account: s.Account(), Harness: s.Kind()}
+		held = ledger.Entry{Issue: worker.HeldID(s.Task(), s.Branch(), s.Name()), Slot: s.Name(), Account: s.Account(), Harness: s.Kind(), PR: s.PR()}
+		stamped := ""
+		if o.Event != "" {
+			stamped = worker.Stamp(e.now())
+			s.SetEvent(o.Event, strings.TrimSpace(o.Body), stamped)
+			res.Changed = true
+			if o.Event == worker.EventHeartbeat { // alive, not news, and no state of its own
+				res.State = res.Previous
+				return
+			}
+		}
 		if res.Previous != state {
 			moved = true
-			if stateErr = s.MarkState(state, ""); stateErr != nil {
+			if stateErr = s.MarkState(state, stamped); stateErr != nil {
 				return
 			}
 			res.Changed = true
-			if state == "done" {
+			// A reply on a PR is no new "finished" edge: the review cursor
+			// stays where the bounce left it.
+			if state == "done" && o.Event != worker.EventReviewReply {
 				s.BaselineReview(e.now())
 			}
 		}
@@ -111,7 +142,21 @@ func (e Env) ReportSlot(ctx context.Context, root string, o ReportOpts) (Reporte
 	if !found {
 		return res, &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("slot '%s' is not in the pool", o.Slot)}
 	}
-	if kind := reportKinds[state]; kind != "" && moved {
+	kind := reportKinds[state]
+	switch o.Event {
+	case worker.EventHeartbeat:
+		kind = ""
+	case worker.EventReviewReply:
+		kind = ledger.KindReviewReply
+	case worker.EventBlocked, worker.EventQuestion:
+		// Every blocked or question event is a row, not only the edge into blocked.
+		moved = true
+		held.Detail = ledger.Detail("event", o.Event, "body", o.Body)
+	}
+	if o.Event == worker.EventReviewReply {
+		moved = true
+	}
+	if kind != "" && moved {
 		held.Kind, held.PR = kind, firstNonEmpty(pr, held.PR)
 		if kind == ledger.KindDone {
 			held.Detail = ledger.Detail("headroom", worker.LedgerHeadroom(ctx, e.Worker.Accounts, root, held.Harness, held.Account))

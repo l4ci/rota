@@ -166,6 +166,10 @@ type Row struct {
 	// evidence line `round wait` returned for the slot. Neither is in
 	// `round status` Data; the --ui screen reads them.
 	PRTitle, Evidence string
+	// Event is the worker's standing event (`rota worker send`, done, reply),
+	// nil when none stands. Its body is the row's Evidence: the worker's own
+	// word reads ahead of what `round wait` last returned.
+	Event *worker.Event
 	// Burn is the quota the slot has consumed, in percentage points of its
 	// account's headroom since its assign; nil when unknown (codex, no meter). Only the --ui screen fills it; Data never carries it.
 	Burn *float64
@@ -584,7 +588,11 @@ func (e Env) readRows(wts []worktree, reg worker.Registry, rep *Report) ([]*Row,
 			r.HostState = ExternalHost
 		}
 		if _, ev, ok := strings.Cut(s.Seen(), "\t"); ok {
-			r.Evidence = ev
+			r.Evidence, _, _ = strings.Cut(ev, "\t") // an event's seq trails the evidence
+		}
+		if ev := s.Event(); ev != nil && ev.Kind != worker.EventHeartbeat {
+			r.Event = ev
+			r.Evidence = firstNonEmpty(ev.Body, r.Evidence)
 		}
 		r.Kind, r.KindSource, r.Tier, r.Model, r.TierReason = s.HarnessKind(), s.KindSource(), s.Tier(), s.Model(), s.TierReason()
 		if r.Issue != "" {
