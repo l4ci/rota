@@ -133,3 +133,35 @@ func TestIsNotFound(t *testing.T) {
 		}
 	}
 }
+
+type stageErr struct{ stage string }
+
+func (e *stageErr) Error() string { return "stage " + e.stage }
+
+// A translated error keeps the original as its Cause (#822): a caller can still
+// reach a typed detail with errors.As, and a sentinel with errors.Is.
+func TestTranslateKeepsTheCause(t *testing.T) {
+	orig := fmt.Errorf("wrapped: %w", &stageErr{stage: "claim"})
+	_, out := Translate(orig, Options{Default: exitcode.ExitFailed})
+	var se *stageErr
+	if !errors.As(out, &se) || se.stage != "claim" {
+		t.Errorf("errors.As through Translate: %v", out)
+	}
+	if exitOf(t, out) != exitcode.ExitFailed {
+		t.Error("the exit code is the translated one")
+	}
+	_, out = Translate(fmt.Errorf("x: %w", fsio.ErrLockTimeout), Options{Classes: Lock})
+	if !errors.Is(out, fsio.ErrLockTimeout) || exitOf(t, out) != exitcode.ExitRetry {
+		t.Errorf("errors.Is through a translated lock timeout: %v", out)
+	}
+	// An error that already carries an exit code passes through untouched.
+	own := &exitcode.Error{Exit: exitcode.ExitRefused, Message: "no"}
+	_, out = Translate(own, Options{Default: exitcode.ExitFailed})
+	if out != error(own) || own.Cause != nil {
+		t.Errorf("an exit-coded error must not gain a cause: %v", own.Cause)
+	}
+	// Nothing is found that the original did not hold.
+	if errors.Is(out, fsio.ErrLockTimeout) {
+		t.Error("errors.Is matched a sentinel the error never wrapped")
+	}
+}

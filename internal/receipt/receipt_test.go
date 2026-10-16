@@ -2,6 +2,7 @@ package receipt
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -56,5 +57,22 @@ func TestUnreadableFileIsAnError(t *testing.T) {
 	os.WriteFile(filepath.Join(root, File), []byte("{nope"), 0o644)
 	if _, _, err := Lookup(root, "r1", "v", "fp"); err == nil {
 		t.Error("a corrupt receipts file must not read as empty")
+	}
+}
+
+func TestRecordKeepsTheNewestPerVerb(t *testing.T) {
+	root := t.TempDir()
+	for i := 0; i < KeepPerVerb+5; i++ {
+		Record(root, Entry{ID: fmt.Sprintf("g%d", i), Verb: "worker gate", Fingerprint: "fp", Status: Done})
+	}
+	Record(root, Entry{ID: "a0", Verb: "round assign", Fingerprint: "fp", Status: Done})
+	if _, found, _ := Lookup(root, "g0", "worker gate", "fp"); found {
+		t.Error("the oldest gate receipt must be dropped")
+	}
+	if _, found, _ := Lookup(root, "g5", "worker gate", "fp"); !found {
+		t.Error("the newest KeepPerVerb gate receipts stay")
+	}
+	if _, found, _ := Lookup(root, "a0", "round assign", "fp"); !found {
+		t.Error("gate ticks must not push out another verb's receipt")
 	}
 }

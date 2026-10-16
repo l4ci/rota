@@ -1,17 +1,23 @@
 package cli
 
 import (
+	"bytes"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"flag"
 	"fmt"
+	"io"
+	"os"
+	"os/exec"
 	"sort"
 	"strings"
 
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/receipt"
 	"github.com/l4ci/rota/internal/round"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 // receipted gives a state-writing round verb --request-id and a receipt per
@@ -23,7 +29,7 @@ import (
 //
 // A call that wrote nothing (usage, resolution and refusal, exits 2 to 4, or a
 // --check-only run) leaves no receipt: a retry must judge it afresh.
-func receipted(verb string, inner func(*flag.FlagSet) RunFunc) func(*flag.FlagSet) RunFunc {
+func receipted(verb string, inner func(*flag.FlagSet) RunFunc, inputs ...inputsFunc) func(*flag.FlagSet) RunFunc {
 	return func(fs *flag.FlagSet) RunFunc {
 		rid := fs.String("request-id", "", "idempotency key: a retry with the same id returns the first result and applies nothing (default: minted and printed)")
 		run := inner(fs)
@@ -40,23 +46,24 @@ func receipted(verb string, inner func(*flag.FlagSet) RunFunc) func(*flag.FlagSe
 				id = mintRequestID()
 			}
 			fp := fingerprint(c, fs, args)
-			var prior receipt.Entry
-			if !minted {
-				var found bool
-				var mm *receipt.Mismatch
-				prior, found, err = receipt.Lookup(root, id, verb, fp)
-				switch {
-				case errors.As(err, &mm):
-					d := jsonx.NewObject()
-					d.Set("blockedBy", "request-id")
-					d.Set("requestId", id)
-					d.Set("changed", false)
-					return Result{Data: d}, Refused("%s", err)
-				case err != nil:
-					return Result{}, err
-				case found && prior.Status == receipt.Done:
-					return replay(c, prior)
-				}
+			for _, in := range inputs {
+				fp += "\x00" + strings.Join(in(root, args), "\x00")
+			}
+			// Read the file before mutating, minted id or not: a corrupt
+			// receipts file is refused rather than written over (#712).
+			prior, found, err := receipt.Lookup(root, id, verb, fp)
+			var mm *receipt.Mismatch
+			switch {
+			case errors.As(err, &mm):
+				d := jsonx.NewObject()
+				d.Set("blockedBy", "request-id")
+				d.Set("requestId", id)
+				d.Set("changed", false)
+				return Result{Data: d}, Refused("%s", err)
+			case err != nil:
+				return Result{}, err
+			case found && prior.Status == receipt.Done:
+				return replay(c, prior)
 			}
 			res, err := run(c, args)
 			e := receipt.Entry{ID: id, Verb: verb, Fingerprint: fp, Status: receipt.Done}
@@ -153,14 +160,40 @@ func checkOnly(fs *flag.FlagSet) bool {
 	return f != nil && f.Value.String() == "true"
 }
 
+// inputsFunc names what a verb judges beyond its arguments (the heads of the
+// branches a gate looks at), so a changed input is a different call.
+type inputsFunc func(root string, args []string) []string
+
 // fingerprint is the call's identity: the repo, the positional arguments and
-// every flag the caller set, except the request id itself.
+// every flag the caller set, except the request id itself. A *-file flag counts
+// by its content, not its path: stdin ("-") is read once here and handed back to
+// the verb, so "the same arguments" means the same inputs.
 func fingerprint(c *Ctx, fs *flag.FlagSet, args []string) string {
 	var parts []string
 	fs.Visit(func(f *flag.Flag) {
-		if f.Name != "request-id" {
-			parts = append(parts, "--"+f.Name+"="+f.Value.String())
+		if f.Name == "request-id" {
+			return
 		}
+		v := f.Value.String()
+		if strings.HasSuffix(f.Name, "-file") && v != "" {
+			var b []byte
+			var err error
+			if v == "-" {
+				if c.Stdin != nil {
+					b, err = io.ReadAll(c.Stdin)
+					c.Stdin = bytes.NewReader(b)
+				}
+			} else {
+				b, err = os.ReadFile(v)
+			}
+			if err != nil {
+				v += "#unreadable"
+			} else {
+				sum := sha256.Sum256(b)
+				v += "#" + hex.EncodeToString(sum[:])
+			}
+		}
+		parts = append(parts, "--"+f.Name+"="+v)
 	})
 	sort.Strings(parts)
 	return strings.Join(append(append([]string{"repo=" + c.Repo}, parts...), args...), "\x00")
@@ -172,4 +205,37 @@ func mintRequestID() string {
 		panic(err)
 	}
 	return "req-" + hex.EncodeToString(b)
+}
+
+// branchHeads is the inputsFunc of gate and train: the head sha of each slot
+// branch (or of the slot a PR number is recorded on) the call judges. Local
+// refs only, so a fingerprint never reaches the forge; a push moves the head.
+func branchHeads(root string, args []string) []string {
+	reg := worker.LoadRegistryTolerant(root)
+	var out []string
+	for _, a := range args {
+		slot := reg.Slot(a)
+		if slot == nil {
+			n := strings.TrimPrefix(a[strings.LastIndex(a, "/")+1:], "#")
+			for _, s := range reg.Slots() {
+				if pr := s.PR(); pr != "" && n != "" && strings.TrimPrefix(pr[strings.LastIndex(pr, "/")+1:], "#") == n {
+					slot = s
+					break
+				}
+			}
+		}
+		head := ""
+		if slot != nil && slot.Branch() != "" {
+			for _, ref := range []string{"refs/heads/", "refs/remotes/origin/"} {
+				if b, err := exec.Command("git", "-C", root, "rev-parse", "--verify", "-q", ref+slot.Branch()).Output(); err == nil {
+					head += strings.TrimSpace(string(b)) + ","
+				}
+			}
+		}
+		if head == "" {
+			head = "?"
+		}
+		out = append(out, "head:"+a+"="+head)
+	}
+	return out
 }
