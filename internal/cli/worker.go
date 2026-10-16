@@ -51,6 +51,7 @@ func workerCommands() *Command {
 		{Name: "adopt", Summary: "register a branch or worktree another tool started as a hostless slot", Verb: workerAdopt},
 		{Name: "dispatch", Summary: "send a brief into a slot's session", Verb: workerDispatch},
 		{Name: "reply", Summary: "answer a reviewer on the slot's PR through the tracker", Verb: workerReply},
+		{Name: "send", Summary: "record a typed event for the slot: blocked, question or heartbeat", Verb: workerSend},
 		{Name: "prompt-check", Summary: "Codex UserPromptSubmit hook: pass only signed or maintainer input", Verb: workerPromptCheck},
 		{Name: "poll", Summary: "classify slot states from their panes", Verb: workerPoll},
 		{Name: "session", Summary: "attachable host session guarantee", Subs: []*Command{

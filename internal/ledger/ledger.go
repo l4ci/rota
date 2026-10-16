@@ -34,6 +34,8 @@ const (
 	KindGate     = "gate"
 	KindMerge    = "merge"
 	KindLimited  = "limited"
+	// KindReviewReply records a worker's answer to a reviewer (`rota worker reply`).
+	KindReviewReply = "review-reply"
 	// KindAdopt records `rota worker adopt`: detail.branch is the branch taken over.
 	KindAdopt = "adopt"
 )

@@ -9,6 +9,8 @@ rota skills install --scope project --agent codex  # this repo: .agents/skills
 
 `rota` carries the skills inside the binary. `install` copies each `rota-*` skill, plus the references it cites, into the root and writes a `.rota-manifest.json` that lists what it wrote. These are copies, not symlinks, so they work without a checkout and can be committed. A file you edited, or one rota did not write, is kept and reported; `--overwrite` replaces it.
 
+To keep installed skills from drifting behind the binary, `rota skills install --stub` writes each `SKILL.md` as a short stub that tells the agent to run `rota skills get <name>`, which prints the text embedded in the installed binary (`--references` lists a skill's reference files, `--reference <file>` prints one). Use it only where the harness can run commands when it loads a skill; the default install keeps the full text. `rota skills list` names the embedded skills and the binary version.
+
 After upgrading `rota`, run `rota skills update` to refresh every root that has a manifest. `rota skills status` shows whether each root matches the binary.
 
 This page is about calling the skills from Codex. To run Codex as a worker in a [parallel round](parallel-rounds.md), see [Codex workers](codex-workers.md).

@@ -164,6 +164,16 @@ rota config set work.portBase 30000
 rota config set work.portBlock 200
 ```
 
+## work.herdrGroupSlots: slots as linked herdr workspaces
+
+`false` (default): under herdr, each worker slot is a tab in the orchestrator's own workspace. `true`: dispatch opens the slot's worktree as a herdr workspace linked to the orchestrator's (`herdr worktree open`), so herdr groups the slots under their project in the sidebar. That helps when several projects share one herdr session. Workers then sit in their own workspaces instead of beside the orchestrator, and each slot costs one extra workspace while it runs. It changes nothing under tmux. The worktrees stay in `.worktrees/`.
+
+Closing the orchestrator's workspace by hand now needs `herdr workspace close --group`, which also closes every slot's workspace; rota never passes `--group`. See [`herdr-dispatch.md`](../../skills/rota-orchestrate/references/herdr-dispatch.md#linked-workspaces-per-slot-opt-in).
+
+```bash
+rota config set work.herdrGroupSlots true
+```
+
 ## work.tdd: red-first on or off
 
 `true` (default): a behavior change needs a recorded red run, a FAIL proof row from a test that failed on an assertion, before its PASS row. A FAIL whose evidence is a build, compile or setup failure (missing import, typo, undefined symbol) is not a red run; the task gets a fix dispatch. `false`: `/rota-work` Step 7 and the worker contract require no RED row. PASS rows are still recorded.
