@@ -3,12 +3,12 @@ package worker
 import "time"
 
 // Decide merges a worker's recorded event with the row its pane read as. The
-// event is the worker's own word, like a sentinel, so it outranks a static
-// pane that says nothing (IDLE, UNKNOWN): that is the pane `worker done` and
-// `worker send --blocked` leave behind when the harness prints no sentinel.
-// Everything the pane can positively show still wins: movement after the event
-// (BUSY: the relay was answered, the work resumed), a sentinel (the pane's
-// later word), a dead or limited session, a permission prompt.
+// event is the worker's own word and it is newer than anything a static pane
+// still shows, so it outranks that pane whatever sentinel is in its
+// scrollback (an old ROTA-DONE, then a relay, then a `--blocked`). Only what the
+// pane shows as happening now wins: movement after the event (BUSY: the relay
+// was answered, the work resumed), a dead or limited session, a permission
+// prompt. A done event leaves a DONE sentinel row alone: it names the PR.
 //
 // An event is live only while it is not older than the slot's last recorded
 // activity (lastChange is activeAt: a pane read that moved the slot on, or a
@@ -27,7 +27,8 @@ func decide(ev *Event, row PollRow, lastChange time.Time) (PollRow, bool) {
 	if ev == nil || ev.Kind == EventHeartbeat {
 		return row, false
 	}
-	if row.State != StateIdle && row.State != StateUnknown {
+	switch row.State {
+	case StateBusy, StateDead, StateLimited, StateNeedsPermission:
 		return row, false
 	}
 	ts := parseStamp(ev.TS)
@@ -36,13 +37,22 @@ func decide(ev *Event, row PollRow, lastChange time.Time) (PollRow, bool) {
 	}
 	switch ev.Kind {
 	case EventBlocked, EventQuestion:
+		// Whatever sentinel the pane shows is older than the event: a relay
+		// and a rest left it in scrollback.
 		return PollRow{row.Name, StateBlocked, ev.Body}, true
 	case EventDone, EventReviewReply:
+		if row.State == StateDone {
+			return row, false // the sentinel says the same, with the PR
+		}
 		evidence := ev.Body
 		if evidence == "" {
-			evidence = "worker " + ev.Kind + " (recorded event)"
+			evidence = noPREvidence
 		}
 		return PollRow{row.Name, StateDone, evidence}, true
 	}
 	return row, false
 }
+
+// noPREvidence is the evidence of a done event that knew no PR: `worker done`
+// runs before the PR is opened.
+const noPREvidence = "worker done (recorded event), no PR recorded yet"

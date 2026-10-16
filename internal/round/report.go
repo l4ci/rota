@@ -32,10 +32,11 @@ type ReportOpts struct {
 }
 
 // eventStates maps an event kind to the slot state it records; "" is no
-// change (a heartbeat proves the worker alive, a review reply is not a state).
+// change (a heartbeat proves the worker alive; a reply posted mid-fix does not
+// finish the work, so a busy slot stays busy).
 var eventStates = map[string]string{
 	worker.EventBlocked: "blocked", worker.EventQuestion: "blocked", worker.EventDone: "done",
-	worker.EventReviewReply: "done", worker.EventHeartbeat: "",
+	worker.EventReviewReply: "", worker.EventHeartbeat: "",
 }
 
 // Reported is what ReportSlot did. Evidence is echoed, never stored.
@@ -91,6 +92,7 @@ func (e Env) ReportSlot(ctx context.Context, root string, o ReportOpts) (Reporte
 			Hint: "rota worker poll records a pane's state; round report would race it"}
 	}
 	found, moved := false, false
+	seq := 0
 	var stateErr error
 	var held ledger.Entry
 	err := worker.Update(root, func(doc *worker.Doc) {
@@ -104,9 +106,15 @@ func (e Env) ReportSlot(ctx context.Context, root string, o ReportOpts) (Reporte
 		stamped := ""
 		if o.Event != "" {
 			stamped = worker.Stamp(e.now())
-			s.SetEvent(o.Event, strings.TrimSpace(o.Body), stamped)
 			res.Changed = true
-			if o.Event == worker.EventHeartbeat { // alive, not news, and no state of its own
+			if o.Event == worker.EventHeartbeat { // alive, not news, no event and no state of its own
+				s.Heartbeat(stamped)
+				res.State = res.Previous
+				return
+			}
+			s.SetEvent(o.Event, strings.TrimSpace(o.Body), stamped)
+			seq = s.Event().Seq
+			if state == "" { // an event that is no state change (a review reply)
 				res.State = res.Previous
 				return
 			}
@@ -151,10 +159,11 @@ func (e Env) ReportSlot(ctx context.Context, root string, o ReportOpts) (Reporte
 	case worker.EventBlocked, worker.EventQuestion:
 		// Every blocked or question event is a row, not only the edge into blocked.
 		moved = true
-		held.Detail = ledger.Detail("event", o.Event, "body", o.Body)
+		held.Detail = ledger.Detail("event", o.Event, "body", o.Body, "seq", seq)
 	}
 	if o.Event == worker.EventReviewReply {
 		moved = true
+		held.Detail = ledger.Detail("seq", seq)
 	}
 	if kind != "" && moved {
 		held.Kind, held.PR = kind, firstNonEmpty(pr, held.PR)

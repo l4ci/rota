@@ -167,6 +167,9 @@ func (e Env) Wait(ctx context.Context, root string, o WaitOpts) (WaitResult, err
 	}
 wait:
 	for {
+		// The event and the stamps it is weighed against are read again on every
+		// pass: a `worker send` during a long wait must be seen by it.
+		refreshEvents(LoadRegistryTolerant(root), targets)
 		rows, settling, slept := e.classify(ctx, h, targets, o.Settle, o.Lines)
 		if ctx.Err() != nil {
 			return stop()
@@ -179,8 +182,8 @@ wait:
 				// The pane moved after the worker's event: it was answered, and
 				// an idle pane later must not read it as news again.
 				for i := range targets {
-					if ev := targets[i].ev; targets[i].name == r.Name && ev != nil && ev.Kind != EventHeartbeat {
-						targets[i].ev = nil
+					if ev := targets[i].ev; targets[i].name == r.Name && ev != nil {
+						targets[i].ev, targets[i].evSeq = nil, 0
 						if _, err := UpdateSlot(root, r.Name, func(s *Slot) {
 							if cur := s.Event(); cur != nil && cur.Seq == ev.Seq && s.PaneHandle() == targets[i].handle {
 								s.ClearEvent()
@@ -214,7 +217,12 @@ wait:
 					}
 					prev := s.State()
 					// UpdateSlot reads the registry strictly; this is a read inside its closure.
-					if rowErr = recordRow(s, r, key, e.Now(), LoadRegistryTolerant(root)); rowErr == nil && !alwaysNews(r.State) {
+					var skipped bool
+					if skipped, rowErr = recordRow(s, r, targetOf(targets, r.Name), e.Now(), LoadRegistryTolerant(root)); skipped {
+						stale = true
+						return
+					}
+					if rowErr == nil && !alwaysNews(r.State) {
 						s.SetSeen(key)
 					}
 					if d, ok := paneDone(prev, s, r); ok && rowErr == nil {

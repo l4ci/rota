@@ -501,7 +501,7 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 			v := rep.views[r.Name]
 			st := e.Stalled(ctx, StallInput{
 				Worktree: v.worktree, Base: v.base, Holds: true, Alive: true,
-				Escalated: waiting[r.Name], ActiveAt: s.ActiveAt(), Minutes: e.StallMinutes,
+				Escalated: waiting[r.Name], ActiveAt: s.LastAlive(), Minutes: e.StallMinutes,
 			}, now())
 			if st.Stalled {
 				rep.add(Finding{Kind: StalledSlot, Slot: r.Name, Issue: r.Issue,

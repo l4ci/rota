@@ -119,11 +119,14 @@ func TestHeartbeatRefreshesStallClock(t *testing.T) {
 	if s.State() != "busy" {
 		t.Errorf("a heartbeat moved the state to %s: alive is not progress", s.State())
 	}
-	if s.ActiveAt() == "2020-01-01T00:00:00Z" {
+	if s.LastAlive() == "2020-01-01T00:00:00Z" {
 		t.Error("a heartbeat did not restart the stall clock")
 	}
-	if ev := s.Event(); ev == nil || ev.Kind != "heartbeat" {
-		t.Errorf("event = %+v", ev)
+	if s.HeartbeatAt() == "" || s.LastAlive() != s.HeartbeatAt() {
+		t.Errorf("heartbeatAt = %q, lastAlive = %q", s.HeartbeatAt(), s.LastAlive())
+	}
+	if s.Event() != nil {
+		t.Errorf("a heartbeat is not an event: %+v", s.Event())
 	}
 	if rows := ledgerRows(t, dir); len(rows) != 0 {
 		t.Errorf("a heartbeat wrote ledger rows: %v", rows)
@@ -161,6 +164,9 @@ func TestWorkerReplyWritesEvent(t *testing.T) {
 	if ev := s.Event(); ev == nil || ev.Kind != "review-reply" {
 		t.Fatalf("event = %+v", ev)
 	}
+	if s.State() != "busy" {
+		t.Errorf("state = %s: a reply posted mid-fix must not mark the slot done", s.State())
+	}
 	if got := jsonx.Str(s.Raw(), "reviewSeen"); got != "cursor-1" {
 		t.Errorf("reviewSeen = %q: a reply re-ran BaselineReview", got)
 	}
@@ -173,5 +179,35 @@ func TestWorkerReplyWritesEvent(t *testing.T) {
 	}
 	if n != 1 {
 		t.Errorf("review-reply rows = %d in %v", n, rows)
+	}
+	if !strings.Contains(strings.Join(rows, "\n"), `"seq":1`) {
+		t.Errorf("review-reply row has no seq: %v", rows)
+	}
+}
+
+// A heartbeat while a question stands must not lose the question.
+func TestHeartbeatKeepsTheStandingEvent(t *testing.T) {
+	dir := sendProject(t)
+	rotaIn(t, dir, "worker", "send", "ben", "--blocked", "A or B?")
+	if code, out, _ := rotaIn(t, dir, "worker", "send", "ben", "--heartbeat"); code != 0 {
+		t.Fatalf("%d %s", code, out)
+	}
+	s := slotOf(t, dir, "ben")
+	ev := s.Event()
+	if s.State() != "blocked" || ev == nil || ev.Kind != "blocked" || ev.Body != "A or B?" || ev.Seq != 1 {
+		t.Errorf("slot = %s %+v", s.State(), ev)
+	}
+	if ev.TS < s.ActiveAt() {
+		t.Errorf("event ts %s older than activeAt %s: the heartbeat killed it", ev.TS, s.ActiveAt())
+	}
+}
+
+func TestLedgerRowsCarryTheEventSeq(t *testing.T) {
+	dir := sendProject(t)
+	rotaIn(t, dir, "worker", "send", "ben", "--blocked", "one")
+	rotaIn(t, dir, "worker", "send", "ben", "--blocked", "two")
+	rows := ledgerRows(t, dir)
+	if len(rows) != 2 || !strings.Contains(rows[0], `"seq":1`) || !strings.Contains(rows[1], `"seq":2`) {
+		t.Errorf("ledger = %v: rows and slot record must share the event id", rows)
 	}
 }
