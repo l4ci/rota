@@ -125,7 +125,7 @@ func TestPaneDoneRecordsHeadroomOnce(t *testing.T) {
 	for i := 0; i < 2; i++ { // the second pass sees the slot already done
 		if err := UpdateSlots(dir, func(s *Slot) {
 			prev := s.State()
-			if err := recordRow(s, row, time.Now(), LoadRegistryTolerant(dir)); err != nil {
+			if _, err := recordRow(s, row, pollTarget{name: s.Name()}, time.Now(), LoadRegistryTolerant(dir)); err != nil {
 				t.Fatal(err)
 			}
 			if d, ok := paneDone(prev, s, row); ok {

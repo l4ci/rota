@@ -697,3 +697,30 @@ func TestDispatchDropsTheKilledHandleBeforeSpawning(t *testing.T) {
 func (h watcherHost) Capabilities() host.Capabilities { return host.CapabilitiesOf(h) }
 
 func (p spawnProbe) Capabilities() host.Capabilities { return host.CapabilitiesOf(p) }
+
+func TestSoloWaitReturnsEachBlockedEventOnce(t *testing.T) {
+	dir := soloProject(t)
+	send := func() {
+		if err := Update(dir, func(d *Doc) {
+			s := d.Slot("w1")
+			s.SetEvent(EventBlocked, "A or B?", "2026-10-16T12:00:00Z")
+			s.MarkState("blocked", "")
+			s.ClearSeen()
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	send()
+	w := WaitOpts{Slots: []string{"w1"}}
+	if res, err := soloWait(dir, w); err != nil || res.State != "blocked" {
+		t.Fatalf("first: %+v %v", res, err)
+	}
+	if res, err := soloWait(dir, w); err != nil || !res.TimedOut {
+		t.Fatalf("the same event twice: %+v %v", res, err)
+	}
+	// A report clears seen today; a second event must be news even so, by its seq.
+	Update(dir, func(d *Doc) { d.Slot("w1").SetEvent(EventBlocked, "C or D?", "2026-10-16T12:01:00Z") })
+	if res, err := soloWait(dir, w); err != nil || res.State != "blocked" {
+		t.Fatalf("second event: %+v %v", res, err)
+	}
+}

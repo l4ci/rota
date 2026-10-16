@@ -464,6 +464,9 @@ func branchOr(o DispatchOpts) string {
 // stamp is the registry's activeAt format: RFC 3339, UTC.
 func stamp(t time.Time) string { return t.UTC().Format("2006-01-02T15:04:05Z") }
 
+// Stamp is stamp for a writer outside the package (an event's ts).
+func Stamp(t time.Time) string { return stamp(t) }
+
 // KillSlot closes the slot's session on the configured host and proves it
 // gone. It is what a reclaim does to a stalled worker before its worktree is
 // parked: the host failing to close it is exit 5.
