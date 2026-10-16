@@ -273,6 +273,9 @@ func Digest(root string, round int, armed bool) string {
 			continue
 		}
 		p := s.Name() + " " + st
+		if st == "unverifiable" && s.Reason() != "" {
+			p += ":" + s.Reason()
+		}
 		is := s.Issue()
 		if is == "" {
 			is = s.HeldID()

@@ -1,6 +1,6 @@
 # Reading failures
 
-Loaded by `skills/rota-orchestrate/SKILL.md` section 4 when a slot is `dead`, `unknown`, stalled or stuck, a suite is red, or the base breaks.
+Loaded by `skills/rota-orchestrate/SKILL.md` section 4 when a slot is `dead`, `unknown`, `unverifiable`, stalled or stuck, a suite is red, or the base breaks.
 
 **Dead vs stalled.** `dead`: no live agent (tab gone or process exited). `stalled`: live agent, nothing moved for `round.stallMinutes` (no commit, edit or state change). Stalled is usually a long test run, and a worker waiting on your escalation is never stalled. Read the pane before acting on either. A worker that ran `rota worker send <slot> --heartbeat` is alive, not necessarily progressing: it restarts the clock and changes no state, so a slot that heartbeats for hours with no commit is still yours to read. A `blocked` or `question` event on `round status` (`event`) is the worker's own record; read it before the pane. Known gap (#707): an old session's `worker send` after a redispatch is guarded only by the dispatch clearing the event; if a fresh slot reads blocked with a question you never saw, check the pane.
 
@@ -11,6 +11,8 @@ Three verbs move an assigned issue:
 - **`rota round reclaim <slot>`** frees a `dead` or `stalled` slot and does not reassign; `assign` or `transfer` is your next call. Reclaiming a stalled slot kills its pane, so read the pane first and decide it is hung. A healthy slot needs `--force`, which you almost never want.
 
 All three push the branch before moving the slot off it, so no work is lost. `rota reap` never reclaims a stalled slot and never kills a live agent.
+
+**`unverifiable`.** The host could not be asked or the pane could not be read, and the row's evidence says which: `host-unreachable` (herdr down, socket error), `stale-handle` (the tab or pane handle no longer exists, as after a layout split) or `pane-unreadable`. It is not `dead`: contact loss is not process death, and a live worker was once reported dead this way (#190). `dead` needs positive proof the session exited. The verbs act on that: `round wait` and `round watch` stay quiet through the first `round.stallMinutes` of it, then return it once with the reason (every slot going unverifiable is a host problem, not a worker's), the prompt digest shows `unverifiable:<reason>`, `rota reap` leaves the slot alone, and `rota round reclaim` exits 4 with `blockedBy: unverifiable` and the reason. The one allowed action: inspect (open the tab, read the pane yourself, restore the host), then wait for the slot to answer again or, once you are sure the agent is hung or gone, `rota round reclaim <slot> --force`. `--force` skips only the unverifiable refusal: reclaim still kills the pane through the host, so with the host down it refuses (`blockedBy: live agent`, the reason in the message). Restore the host, or close the pane yourself and let a host that answers prove it gone, then reclaim.
 
 **Default for a stuck worker** (`idle` with no PR and no question, `dead`, or `stalled` past `round.stallMinutes`): read the pane once. If the agent is alive and working, wait. Otherwise `rota round reclaim <slot>`, then `rota round transfer <issue> --to <free slot>`. Use `--to human` only when the next step is a person's call.
 
