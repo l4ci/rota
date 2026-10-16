@@ -287,7 +287,13 @@ func (h *herdr) Spawn(ctx context.Context, o SpawnOpts) (string, error) {
 	// The root tab `worktree open` made is a plain shell with none of the
 	// slot's env: drop it now that the slot's own tab holds the workspace open.
 	if opened.rootTab != "" {
-		h.herdr(ctx, "tab", "close", opened.rootTab)
+		if c := h.herdr(ctx, "tab", "close", opened.rootTab); c.ExitCode != 0 {
+			// A plain shell tab left behind keeps the workspace open and
+			// shows up as a stray tab in doctor's check.
+			h.herdr(ctx, "tab", "close", tab)
+			h.dropOpened(ctx, opened)
+			return "", fmt.Errorf("herdr tab close failed for slot '%s' root tab %s: %s", o.Slot, opened.rootTab, strings.TrimSpace(c.Stderr))
+		}
 	}
 
 	name := AgentName(o.Slot, tab)
@@ -355,8 +361,11 @@ func (h *herdr) openLinked(ctx context.Context, o SpawnOpts) (openedWorkspace, e
 // a failed dispatch leaves no empty workspace behind. A workspace that was
 // already open is left alone.
 func (h *herdr) dropOpened(ctx context.Context, w openedWorkspace) {
-	if w.rootTab != "" {
-		h.herdr(ctx, "workspace", "close", w.id)
+	if w.rootTab == "" {
+		return
+	}
+	if r := h.herdr(ctx, "workspace", "close", w.id); r.ExitCode != 0 {
+		fmt.Fprintf(h.d.Stderr, "rota: herdr workspace %s was left open after a failed dispatch: %s\n", w.id, strings.TrimSpace(r.Stderr))
 	}
 }
 
@@ -569,7 +578,6 @@ func (h *herdr) Kill(ctx context.Context, slot, handle string) error {
 	}
 	h.herdr(ctx, "agent", "prompt", name, "/exit")
 	h.herdr(ctx, "tab", "close", handle)
-	h.closeEmptySlotWorkspace(ctx, handle)
 	// A `layout split` moves the pane out of its tab, so closing the tab no
 	// longer reaches it: close the pane itself.
 	if pane != "" {
@@ -583,22 +591,24 @@ func (h *herdr) Kill(ctx context.Context, slot, handle string) error {
 		slot, handle, pidSuffix(alive))
 }
 
-// closeEmptySlotWorkspace closes the linked workspace of a slot's tab by id once
-// the tab is gone and the workspace holds no tab. herdr closes a workspace with
-// its last tab, so this is a safety net. It never touches the caller's own
-// workspace (a slot tab from before the option was turned on lives there), never
-// a workspace that still holds a tab, and never passes --group, which would
-// take the orchestrator and every sibling slot with it.
-func (h *herdr) closeEmptySlotWorkspace(ctx context.Context, handle string) {
-	ws, _, ok := strings.Cut(handle, ":")
-	if !ok || ws == "" || ws == h.d.Getenv("HERDR_WORKSPACE_ID") {
-		return
+// CloseWorkspace implements WorkspaceCloser.
+//
+// herdr closes a workspace with its last tab, so this is a safety net for one
+// left empty. It refuses the caller's own workspace, never closes a workspace
+// that still holds a tab, and never passes --group, which would take the
+// orchestrator and every sibling slot with it.
+func (h *herdr) CloseWorkspace(ctx context.Context, id string) error {
+	if id == "" || id == h.d.Getenv("HERDR_WORKSPACE_ID") {
+		return fmt.Errorf("refusing to close workspace %q: not a slot workspace", id)
 	}
-	r := h.herdr(ctx, "workspace", "get", ws)
+	r := h.herdr(ctx, "workspace", "get", id)
 	if r.ExitCode != 0 || jget(r.Stdout, "result.workspace.tab_count") != "0" {
-		return
+		return nil
 	}
-	h.herdr(ctx, "workspace", "close", ws)
+	if c := h.herdr(ctx, "workspace", "close", id); c.ExitCode != 0 {
+		return fmt.Errorf("herdr workspace close %s failed: %s", id, strings.TrimSpace(c.Stderr))
+	}
+	return nil
 }
 
 // processPIDs reads foreground process pids and the shell pid out of
