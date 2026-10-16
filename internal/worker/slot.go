@@ -284,7 +284,7 @@ func smokeStr(n int) string {
 func (s *Slot) Unbind() {
 	s.o.Set("task", nil)
 	s.o.Set("pr", nil)
-	for _, k := range []string{"claimId", "kind", "tier", "model", "tierReason", "smokeSection", "issues", "reviewSeen", "event"} {
+	for _, k := range []string{"claimId", "kind", "tier", "model", "tierReason", "smokeSection", "issues", "reviewSeen", "event", "heartbeatAt"} {
 		s.o.Delete(k)
 	}
 }
@@ -385,7 +385,9 @@ const (
 	EventQuestion    = "question"
 	EventDone        = "done"
 	EventReviewReply = "review-reply"
-	EventHeartbeat   = "heartbeat"
+	// EventHeartbeat is a send kind only: it is recorded by Heartbeat and
+	// never stands as a slot's event.
+	EventHeartbeat = "heartbeat"
 )
 
 // EventKinds are the kinds SetEvent accepts.
@@ -415,9 +417,9 @@ func (s *Slot) Event() *Event {
 
 func mustGet(o *jsonx.Object, k string) any { v, _ := o.Get(k); return v }
 
-// SetEvent records a worker event under the next id, and stamps activeAt: any
-// event proves the worker alive, which is what a heartbeat is for. It does not
-// touch state; the writer decides which kinds move it.
+// SetEvent records a worker event under the next id and stamps activeAt. It
+// does not touch state; the writer decides which kinds move it. A heartbeat is
+// not an event: it replaces nothing (see Heartbeat).
 func (s *Slot) SetEvent(kind, body, now string) {
 	seq, _ := jsonx.Int(mustGet(s.o, "eventSeq"))
 	seq++
@@ -431,6 +433,23 @@ func (s *Slot) SetEvent(kind, body, now string) {
 	}
 	s.o.Set("event", e)
 	s.o.Set("activeAt", now)
+}
+
+// Heartbeat records that the worker is alive: heartbeatAt only. It leaves the
+// standing event, the state and activeAt alone, so a question the worker has
+// not had answered is not lost and the event stays newer than the last state
+// change. LastAlive is what the stall clock reads.
+func (s *Slot) Heartbeat(now string) { s.o.Set("heartbeatAt", now) }
+
+// HeartbeatAt is the stamp of the worker's last heartbeat, "" for none.
+func (s *Slot) HeartbeatAt() string { return jsonx.Str(s.o, "heartbeatAt") }
+
+// LastAlive is the later of activeAt and heartbeatAt: the stall clock.
+func (s *Slot) LastAlive() string {
+	if hb := s.HeartbeatAt(); hb > s.ActiveAt() { // RFC 3339 UTC stamps order as strings
+		return hb
+	}
+	return s.ActiveAt()
 }
 
 // MarkEventNotified records that the host notification for the standing event
