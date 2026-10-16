@@ -170,6 +170,32 @@ func (e Env) Wait(ctx context.Context, root string, o WaitOpts) (WaitResult, err
 		at := parseStamp(s.ActiveAt())
 		return !at.IsZero() && e.Now().Sub(at) >= o.UnverifiableAfter
 	}
+	// untilOverdue: how long until the first unverifiable slot not yet returned
+	// crosses o.UnverifiableAfter. A slot in that state emits no event, so the
+	// event wait is bounded by it and a pass then returns the slot.
+	untilOverdue := func(rows []PollRow) (time.Duration, bool) {
+		if o.UnverifiableAfter <= 0 {
+			return 0, false
+		}
+		reg := LoadRegistryTolerant(root)
+		var best time.Duration
+		found := false
+		for _, r := range rows {
+			s := reg.Slot(r.Name)
+			if r.State != StateUnverifiable || s == nil || seen[r.Name] == rowKey(targetOf(targets, r.Name), r) {
+				continue
+			}
+			at := parseStamp(s.ActiveAt())
+			if at.IsZero() {
+				continue
+			}
+			d := max(at.Add(o.UnverifiableAfter).Sub(e.Now()), 10*time.Millisecond)
+			if !found || d < best {
+				best, found = d, true
+			}
+		}
+		return best, found
+	}
 	settled := func(r PollRow) bool {
 		if r.State != StateDone && r.State != StateIdle {
 			return false
@@ -297,9 +323,18 @@ wait:
 			continue
 		}
 		source = SourceEvent
-		if _, err := w.Next(ctx); err != nil {
+		nctx, cancelNext := ctx, context.CancelFunc(func() {})
+		if d, ok := untilOverdue(rows); ok {
+			nctx, cancelNext = context.WithTimeout(ctx, d)
+		}
+		_, err := w.Next(nctx)
+		cancelNext()
+		if err != nil {
 			if ctx.Err() != nil {
 				return stop()
+			}
+			if errors.Is(err, context.DeadlineExceeded) { // an unverifiable slot came due: classify again
+				continue
 			}
 			if errors.Is(err, host.ErrStreamLost) {
 				resubscribe(err)
