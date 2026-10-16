@@ -210,3 +210,11 @@ func TestCarryKeepsReviewEntries(t *testing.T) {
 		t.Fatalf("a tick that skips the forge must not read review input as gone: %v", got)
 	}
 }
+
+func TestDigestShowsWhyASlotIsUnverifiable(t *testing.T) {
+	root := t.TempDir()
+	writeRegistry(t, root, `{"slots":[{"name":"ben","state":"unverifiable","reason":"host-unreachable","task":"31"}]}`)
+	if got := Digest(root, 1, true); !strings.Contains(got, "ben unverifiable:host-unreachable #31") {
+		t.Errorf("digest = %q", got)
+	}
+}

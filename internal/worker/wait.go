@@ -19,6 +19,9 @@ type WaitOpts struct {
 	Timeout time.Duration // 0 waits indefinitely
 	Settle  time.Duration // gap between the two captures of one classification
 	Lines   int
+	// UnverifiableAfter: how long a slot may stay unverifiable before the wait
+	// returns it once, with its reason. 0 never returns it.
+	UnverifiableAfter time.Duration
 }
 
 // maxResubscribe is how many times in a row the herdr event stream may be lost
@@ -153,6 +156,20 @@ func (e Env) Wait(ctx context.Context, root string, o WaitOpts) (WaitResult, err
 	// orchestrator but a park (`round reconcile --apply`), so it is not news.
 	// Merged is final, so each slot is asked about once per wait.
 	merged := map[string]bool{}
+	// overdue: the slot has been unverifiable for o.UnverifiableAfter, read
+	// from the activeAt its change to that state stamped (after it was recorded
+	// below). Contact lost for that long is news once; a short outage is not.
+	overdue := func(name string) bool {
+		if o.UnverifiableAfter <= 0 {
+			return false
+		}
+		s := LoadRegistryTolerant(root).Slot(name)
+		if s == nil {
+			return false
+		}
+		at := parseStamp(s.ActiveAt())
+		return !at.IsZero() && e.Now().Sub(at) >= o.UnverifiableAfter
+	}
 	settled := func(r PollRow) bool {
 		if r.State != StateDone && r.State != StateIdle {
 			return false
@@ -215,7 +232,7 @@ wait:
 			}
 			// A row already returned once is treated like busy until the slot
 			// shows a different state or evidence; alwaysNews states never are.
-			if r.State != StateBusy && r.State != StateUnverifiable && (seen[r.Name] != key || alwaysNews(r.State)) && !settled(r) {
+			if r.State != StateBusy && (r.State != StateUnverifiable || overdue(r.Name)) && (seen[r.Name] != key || alwaysNews(r.State)) && !settled(r) {
 				var rowErr error
 				var done *ledger.Entry
 				stale := false

@@ -149,6 +149,11 @@ type Explainer interface {
 	Explain(ctx context.Context, slot, handle string) string
 }
 
+// ErrPaneGone is what ReadPane returns when the host says the pane or its
+// window no longer exists (or its server is gone): positive proof, unlike a
+// capture that fails on a window that is still there.
+var ErrPaneGone = errors.New("pane gone")
+
 // PaneReader is implemented by a host that can tell a pane it could not read
 // from one with no text. Capture returns "" for both.
 type PaneReader interface {

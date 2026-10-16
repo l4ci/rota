@@ -587,11 +587,11 @@ func (e Env) readRows(wts []worktree, reg worker.Registry, rep *Report) ([]*Row,
 		if s.IsExternal() {
 			r.HostState = ExternalHost
 		}
-		if s.State() == "unverifiable" { // an agent the host lists below overrides it
-			r.HostState = "unverifiable"
-		}
 		if _, ev, ok := strings.Cut(s.Seen(), "\t"); ok {
 			r.Evidence, _, _ = strings.Cut(ev, "\t") // an event's seq trails the evidence
+		}
+		if s.State() == "unverifiable" { // an agent the host lists below overrides the host state
+			r.HostState, r.Evidence = "unverifiable", s.Reason()
 		}
 		if ev := s.Event(); ev != nil && ev.Kind != worker.EventHeartbeat {
 			r.Event = ev
