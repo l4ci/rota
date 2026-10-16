@@ -27,6 +27,8 @@ func skillsCommands() *Command {
 		{Name: "update", Summary: "refresh the skill directories that already have a manifest", Verb: skillsVerb(skillsUpdate, "", true)},
 		{Name: "uninstall", Summary: "remove what rota installed", Verb: skillsVerb(skillsUninstall, skills.User, true)},
 		{Name: "status", Summary: "compare the installed skills with this binary", Verb: skillsVerb(skillsStatus, "", false)},
+		{Name: "list", Summary: "name the skills embedded in this binary", Verb: skillsList},
+		{Name: "get", Summary: "print an embedded skill or one of its references", Verb: skillsGet},
 	}}
 }
 
@@ -34,6 +36,7 @@ func skillsCommands() *Command {
 type skillsArgs struct {
 	scope, agent   string
 	overwrite      bool
+	stub           bool
 	currentAccount bool
 }
 
@@ -48,6 +51,9 @@ func skillsVerb(run func(*Ctx, skillsArgs) (Result, error), defScope string, ove
 		fs.StringVar(&a.agent, "agent", "all", "claude, codex or all")
 		if overwrite {
 			fs.BoolVar(&a.overwrite, "overwrite", false, "replace edited and unmanaged files")
+		}
+		if overwrite {
+			fs.BoolVar(&a.stub, "stub", false, "write a SKILL.md that runs `rota skills get <name>` instead of the full text (for harnesses that can run commands at load time)")
 		}
 		fs.BoolVar(&a.currentAccount, "current-account", false, "user scope: only the current Claude config dir, not every work.accounts dir")
 		return func(c *Ctx, args []string) (Result, error) {
@@ -197,6 +203,9 @@ func skillsInstall(c *Ctx, a skillsArgs) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
+	if a.stub {
+		set = set.Stubbed()
+	}
 	res, err := set.Install(roots, skills.Options{Version: version.Get().Version, Overwrite: a.overwrite})
 	if err != nil {
 		return Result{}, skillsErr(err)
@@ -209,6 +218,9 @@ func skillsUpdate(c *Ctx, a skillsArgs) (Result, error) {
 	set, roots, skipped, err := skillsEnv(c, a)
 	if err != nil {
 		return Result{}, err
+	}
+	if a.stub {
+		set = set.Stubbed()
 	}
 	res, err := set.Update(roots, skills.Options{Version: version.Get().Version, Overwrite: a.overwrite})
 	if err != nil {
@@ -402,4 +414,56 @@ func short(digest string) string {
 		return digest[:12]
 	}
 	return digest
+}
+
+func skillsList(fs *flag.FlagSet) RunFunc {
+	return func(c *Ctx, args []string) (Result, error) {
+		if err := noArgs(args); err != nil {
+			return Result{}, err
+		}
+		set, err := skills.Embedded()
+		if err != nil {
+			return Result{}, err
+		}
+		v := version.Get().Version
+		names := set.Skills()
+		return Result{
+			Data: knObj("version", v, "digest", set.Digest(), "skills", strs(names)),
+			Text: fmt.Sprintf("rota %s\n%s", v, strings.Join(names, "\n")),
+		}, nil
+	}
+}
+
+func skillsGet(fs *flag.FlagSet) RunFunc {
+	refs := fs.Bool("references", false, "list the skill's reference files")
+	ref := fs.String("reference", "", "print one reference file")
+	return func(c *Ctx, args []string) (Result, error) {
+		name, err := oneArg(args, "skill name")
+		if err != nil {
+			return Result{}, err
+		}
+		if *refs && *ref != "" {
+			return Result{}, Usage("--references and --reference are exclusive")
+		}
+		set, err := skills.Embedded()
+		if err != nil {
+			return Result{}, err
+		}
+		body, ok := set.Skill(name)
+		if !ok {
+			return Result{}, Usage("unknown skill %q", name).WithHint("known skills: " + strings.Join(set.Skills(), ", "))
+		}
+		switch {
+		case *refs:
+			l := set.References(name)
+			return Result{Data: knObj("name", name, "references", strs(l)), Text: strings.Join(l, "\n")}, nil
+		case *ref != "":
+			b, ok := set.Reference(name, *ref)
+			if !ok {
+				return Result{}, Usage("%s has no reference %q", name, *ref).WithHint("known references: " + strings.Join(set.References(name), ", "))
+			}
+			return Result{Data: knObj("name", name, "reference", *ref, "text", string(b)), Text: strings.TrimSuffix(string(b), "\n")}, nil
+		}
+		return Result{Data: knObj("name", name, "text", string(body)), Text: strings.TrimSuffix(string(body), "\n")}, nil
+	}
 }
