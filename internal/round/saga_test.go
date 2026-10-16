@@ -137,3 +137,46 @@ func TestRunStepsReportsAnUndoThatFailed(t *testing.T) {
 		t.Errorf("a failed rollback must be named in the error: %v", err)
 	}
 }
+
+func stageOf(t *testing.T, err error) *StageError {
+	t.Helper()
+	var se *StageError
+	if !errors.As(err, &se) {
+		t.Fatalf("error %v carries no StageError", err)
+	}
+	return se
+}
+
+func TestRunStepsNamesTheFailedStage(t *testing.T) {
+	var log []string
+	boom := errors.New("boom")
+	err := runSteps([]step{traced(&log, "a", nil), traced(&log, "b", boom)})
+	se := stageOf(t, err)
+	if se.Stage != "b" || len(se.Residual) != 0 || !errors.Is(err, boom) || err.Error() != "boom" {
+		t.Errorf("stage %q residual %v err %q", se.Stage, se.Residual, err)
+	}
+}
+
+func TestRunStepsResidualIsWhatRollbackLeft(t *testing.T) {
+	var log []string
+	a := traced(&log, "a", nil)
+	a.undo = func() error { return errors.New("stuck") }
+	err := runSteps([]step{a, traced(&log, "b", nil), traced(&log, "c", errors.New("boom"))})
+	se := stageOf(t, err)
+	if se.Stage != "c" || !reflect.DeepEqual(se.Residual, []string{"a"}) {
+		t.Errorf("stage %q residual %v", se.Stage, se.Residual)
+	}
+}
+
+func TestRunStepsKeepStepLeavesEarlierStagesAsResidual(t *testing.T) {
+	var log []string
+	k := traced(&log, "dispatch", errors.New("pane gone"))
+	k.keep = true
+	skipped := traced(&log, "skipped", nil)
+	skipped.skip = func() bool { return true }
+	err := runSteps([]step{traced(&log, "a", nil), skipped, traced(&log, "b", nil), k})
+	se := stageOf(t, err)
+	if se.Stage != "dispatch" || !reflect.DeepEqual(se.Residual, []string{"a", "b"}) {
+		t.Errorf("stage %q residual %v", se.Stage, se.Residual)
+	}
+}

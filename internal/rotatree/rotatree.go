@@ -21,6 +21,7 @@ const (
 	StatusFile      = "status.json"
 	VerdictsFile    = "verdicts.json"
 	TrainCacheFile  = "train-cache.json"
+	ReceiptsFile    = "receipts.json"
 	CountersFile    = "counters.json"
 	IssueMapFile    = "issue-map.json"
 	TestLedgerFile  = "test-ledger.json"

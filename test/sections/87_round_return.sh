@@ -210,6 +210,35 @@ OUT=$(rrsnap round reclaim ben --holder-pid "$HOLDER") || fail "reclaim of a sta
 grep -q 'kill-window' "$FK/tmux/log" || fail "a live pane must be killed before its worktree is parked: $(cat "$FK/tmux/log")"
 [ "$(branch_of ben)" = "park/ben" ] && [ -z "$(reg ben task)" ] || fail "ben must be parked and free"
 case "$(dbq comments 3)" in *"Reason: reclaimed, stalled"*) ;; *) fail "reclaim reason: $(dbq comments 3)" ;; esac
+# ── request ids: assign retried after a simulated gh failure (#822) ─────────
+# 3 is free again (ben was just reclaimed). A flaky gh lets the claim land, then
+# fails the next write and the rollback's release too: the claim is left behind,
+# so the receipt must name the failed stage and a non-empty residual.
+mkdir -p "$FK/flaky"
+printf '#!/bin/sh\ncase "$*" in *"rota:comment feedback"*|*"rota:release"*) echo "HTTP 502" >&2; exit 1;; esac\nexec "%s/fakes/gh" "$@"\n' "$TESTDIR" > "$FK/flaky/gh"; chmod +x "$FK/flaky/gh"
+OUT=$( cd "$PROJ" && PATH="$FK/flaky:$FAKES" FAKE_TMUX="$FK/tmux" FAKE_TRACKER_DB="$TMP_RR/db.json" ROTA_HOST_KILL_WAIT=1 "$ROTA_BIN" --json round assign 3 --agent ben --holder-pid "$HOLDER" --request-id req-smoke-1 2>/dev/null ) && fail "assign with a failing gh should fail: $OUT"
+HINT=$(echo "$OUT" | jget error.hint)
+case "$HINT" in *"failed at stage"*"--request-id req-smoke-1"*) ;; *) fail "a failed assign names its stage and request id: $OUT" ;; esac
+python3 -c 'import json,sys; r=[x for x in json.load(open(sys.argv[1]))["receipts"] if x["id"]=="req-smoke-1"]; assert len(r)==1 and r[0]["status"]=="failed" and r[0]["failedStage"] and r[0]["residualResources"], r' "$PROJ/.rota/receipts.json" || fail "the failure must leave a failed receipt with a stage and residual: $(cat "$PROJ/.rota/receipts.json")"
+case "$(dbq comments 3)" in *"rota:claim ben@"*) ;; *) fail "the claim should have landed before the failure: $(dbq comments 3)" ;; esac
+# Same id, other arguments: refused, nothing applied.
+BEFORE=$(dbq comments 3); BEFORE_REG=$(cat "$PROJ/.rota/workers.json")
+RC=0; OUT=$(rrsnap round assign 3 --agent dana --holder-pid "$HOLDER" --request-id req-smoke-1) || RC=$?
+[ "$RC" = "4" ] && [ "$(echo "$OUT" | jget data.blockedBy)" = "request-id" ] || fail "same id with other arguments is refused: $RC $OUT"
+[ "$(dbq comments 3)" = "$BEFORE" ] && [ "$(cat "$PROJ/.rota/workers.json")" = "$BEFORE_REG" ] || fail "a refused request id must apply nothing"
+# Same id, same arguments, gh healthy: the retry resumes and finishes the assignment.
+OUT=$(rrsnap round assign 3 --agent ben --holder-pid "$HOLDER" --request-id req-smoke-1) || fail "the retry after the gh failure failed: $OUT"
+[ "$(echo "$OUT" | jget data.requestId)" = "req-smoke-1" ] && [ "$(echo "$OUT" | jget data.branch)" = "ben/3-third-thing" ] && [ -n "$(echo "$OUT" | jget data.resumedFrom)" ] || fail "retry result: $OUT"
+[ "$(branch_of ben)" = "ben/3-third-thing" ] && [ "$(dbq labels 3)" = "in-progress,type:task" ] || fail "the retry must finish the assignment: $(dbq labels 3)"
+# A third call is a replay: the first success comes back and nothing re-applies.
+BEFORE=$(dbq comments 3)
+OUT=$(rrsnap round assign 3 --agent ben --holder-pid "$HOLDER" --request-id req-smoke-1) || fail "replay failed: $OUT"
+[ "$(echo "$OUT" | jget data.replayed)" = "true" ] && [ "$(echo "$OUT" | jget data.changed)" = "false" ] && [ "$(echo "$OUT" | jget data.branch)" = "ben/3-third-thing" ] || fail "a repeated id replays the first result: $OUT"
+[ "$(dbq comments 3)" = "$BEFORE" ] || fail "a replay must apply nothing"
+RC=0; OUT=$(rrsnap round assign 3 --check-only --agent ben --holder-pid "$HOLDER") || RC=$?
+[ -z "$(echo "$OUT" | jget data.requestId)" ] && [ -n "$(echo "$OUT" | jget data.ready)" ] || fail "--check-only writes nothing and takes no receipt: $RC $OUT"
+pass "round assign takes --request-id: a gh failure mid-saga records the failed stage and the claim left behind, the same id resumes it, a repeat replays, other arguments are refused untouched"
+
 rm -rf "${TMP_RR:?}"
 trap 'rm -rf "$TMP"' EXIT
 pass "reconcile reports stalled and a claim mismatch (repairing only the registry); reclaim of a stalled slot kills the pane first"

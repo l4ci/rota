@@ -20,6 +20,7 @@ var ignoreLines = []string{
 	".rota/ledger.jsonl",
 	".rota/train-cache.json",
 	".rota/workers.json",
+	".rota/receipts.json",
 	".rota/**/*.lock",
 }
 
