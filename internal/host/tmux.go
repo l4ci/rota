@@ -159,10 +159,21 @@ func (t *tmux) sendFile(ctx context.Context, handle, file, buf string) error {
 // no handle yields nothing. lines is unused: capture-pane takes the visible
 // pane, as the shell host did.
 func (t *tmux) Capture(ctx context.Context, slot, handle string, lines int) string {
+	text, _ := t.ReadPane(ctx, slot, handle, lines)
+	return text
+}
+
+// ReadPane is Capture that says when the read failed, so a pane that could not
+// be read is not taken for an empty one.
+func (t *tmux) ReadPane(ctx context.Context, slot, handle string, lines int) (string, error) {
 	if handle == "" {
-		return ""
+		return "", nil
 	}
-	return t.pane(ctx, handle)
+	r := t.tmux(ctx, "capture-pane", "-pJ", "-t", handle)
+	if r.ExitCode != 0 {
+		return "", fmt.Errorf("tmux capture-pane failed (exit %d): %s", r.ExitCode, strings.TrimSpace(r.Stderr))
+	}
+	return r.Stdout, nil
 }
 
 // draftPane captures with styling (-e) and drops the dim runs, so a ghost
