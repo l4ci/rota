@@ -249,7 +249,15 @@ func (h *herdr) Spawn(ctx context.Context, o SpawnOpts) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("work.dispatch=herdr launches %s itself; the launch command must run one of them, got: %s", harness.KindList(), o.Launch)
 	}
-	args := []string{"tab", "create", "--workspace", h.d.Getenv("HERDR_WORKSPACE_ID"),
+	ws := h.d.Getenv("HERDR_WORKSPACE_ID")
+	var opened openedWorkspace
+	if o.LinkWorkspace {
+		if opened, err = h.openLinked(ctx, o); err != nil {
+			return "", err
+		}
+		ws = opened.id
+	}
+	args := []string{"tab", "create", "--workspace", ws,
 		"--cwd", o.Cwd, "--label", o.Slot, "--no-focus"}
 	for _, e := range env {
 		args = append(args, "--env", e)
@@ -267,12 +275,25 @@ func (h *herdr) Spawn(ctx context.Context, o SpawnOpts) (string, error) {
 	}
 	r := h.herdr(ctx, args...)
 	if r.ExitCode != 0 {
+		h.dropOpened(ctx, opened)
 		return "", fmt.Errorf("herdr tab create failed for slot '%s': %s", o.Slot, strings.TrimSpace(r.Stderr))
 	}
 	tab := jget(r.Stdout, "result.tab.tab_id")
 	pane := jget(r.Stdout, "result.root_pane.pane_id")
 	if tab == "" || pane == "" {
+		h.dropOpened(ctx, opened)
 		return "", fmt.Errorf("herdr tab create returned no tab/pane id for slot '%s'", o.Slot)
+	}
+	// The root tab `worktree open` made is a plain shell with none of the
+	// slot's env: drop it now that the slot's own tab holds the workspace open.
+	if opened.rootTab != "" {
+		if c := h.herdr(ctx, "tab", "close", opened.rootTab); c.ExitCode != 0 {
+			// A plain shell tab left behind keeps the workspace open and
+			// shows up as a stray tab in doctor's check.
+			h.herdr(ctx, "tab", "close", tab)
+			h.dropOpened(ctx, opened)
+			return "", fmt.Errorf("herdr tab close failed for slot '%s' root tab %s: %s", o.Slot, opened.rootTab, strings.TrimSpace(c.Stderr))
+		}
 	}
 
 	name := AgentName(o.Slot, tab)
@@ -303,6 +324,48 @@ func (h *herdr) Spawn(ctx context.Context, o SpawnOpts) (string, error) {
 		if i++; i >= 3 {
 			return "", fmt.Errorf("slot '%s' did not reach idle after its startup dialogs (tab %s)", o.Slot, tab)
 		}
+	}
+}
+
+// openedWorkspace is the linked workspace a `worktree open` made for a slot.
+// rootTab is the shell tab that open created, "" when the workspace was
+// already open: that tab is somebody else's and rota must not close it.
+type openedWorkspace struct{ id, rootTab string }
+
+// openLinked opens the slot's worktree as a workspace linked to the caller's
+// own, so herdr groups the slot under its project. open is idempotent
+// (`already_open`), and it takes an absolute path only: a relative one fails
+// with worktree_not_found. It has no --env, so the caller still creates the
+// slot's tab with `tab create --env`.
+func (h *herdr) openLinked(ctx context.Context, o SpawnOpts) (openedWorkspace, error) {
+	if !strings.HasPrefix(o.Cwd, "/") {
+		return openedWorkspace{}, fmt.Errorf("work.herdrGroupSlots needs an absolute worktree path for slot '%s', got: %s", o.Slot, o.Cwd)
+	}
+	r := h.herdr(ctx, "worktree", "open", "--workspace", h.d.Getenv("HERDR_WORKSPACE_ID"),
+		"--path", o.Cwd, "--label", o.Slot, "--no-focus")
+	if r.ExitCode != 0 {
+		return openedWorkspace{}, fmt.Errorf("herdr worktree open failed for slot '%s': %s", o.Slot, strings.TrimSpace(r.Stderr))
+	}
+	ws := jget(r.Stdout, "result.workspace.workspace_id")
+	if ws == "" {
+		return openedWorkspace{}, fmt.Errorf("herdr worktree open returned no workspace id for slot '%s'", o.Slot)
+	}
+	w := openedWorkspace{id: ws}
+	if jget(r.Stdout, "result.already_open") != "true" {
+		w.rootTab = jget(r.Stdout, "result.tab.tab_id")
+	}
+	return w, nil
+}
+
+// dropOpened closes a workspace this Spawn opened and never got a tab into, so
+// a failed dispatch leaves no empty workspace behind. A workspace that was
+// already open is left alone.
+func (h *herdr) dropOpened(ctx context.Context, w openedWorkspace) {
+	if w.rootTab == "" {
+		return
+	}
+	if r := h.herdr(ctx, "workspace", "close", w.id); r.ExitCode != 0 {
+		fmt.Fprintf(h.d.Stderr, "rota: herdr workspace %s was left open after a failed dispatch: %s\n", w.id, strings.TrimSpace(r.Stderr))
 	}
 }
 
@@ -526,6 +589,26 @@ func (h *herdr) Kill(ctx context.Context, slot, handle string) error {
 	}
 	return fmt.Errorf("slot '%s' previous session is still running (tab %s%s); not spawning a second one",
 		slot, handle, pidSuffix(alive))
+}
+
+// CloseWorkspace implements WorkspaceCloser.
+//
+// herdr closes a workspace with its last tab, so this is a safety net for one
+// left empty. It refuses the caller's own workspace, never closes a workspace
+// that still holds a tab, and never passes --group, which would take the
+// orchestrator and every sibling slot with it.
+func (h *herdr) CloseWorkspace(ctx context.Context, id string) error {
+	if id == "" || id == h.d.Getenv("HERDR_WORKSPACE_ID") {
+		return fmt.Errorf("refusing to close workspace %q: not a slot workspace", id)
+	}
+	r := h.herdr(ctx, "workspace", "get", id)
+	if r.ExitCode != 0 || jget(r.Stdout, "result.workspace.tab_count") != "0" {
+		return nil
+	}
+	if c := h.herdr(ctx, "workspace", "close", id); c.ExitCode != 0 {
+		return fmt.Errorf("herdr workspace close %s failed: %s", id, strings.TrimSpace(c.Stderr))
+	}
+	return nil
 }
 
 // processPIDs reads foreground process pids and the shell pid out of

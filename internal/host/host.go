@@ -128,6 +128,9 @@ type SpawnOpts struct {
 	// tmux: a prefix on the launch line).
 	Env         []string
 	BootTimeout int // seconds
+	// LinkWorkspace (herdr only): open the worktree as a workspace linked to the
+	// caller's, instead of a tab in the caller's own (work.herdrGroupSlots).
+	LinkWorkspace bool
 }
 
 // Resubmitter is implemented by a host that can tell a brief left unsent on
@@ -183,24 +186,33 @@ func (t Turn) Finished(base int) bool {
 	return base > 0 && (t.Status == "idle" || t.Status == "done") && t.CompletionSeq > base
 }
 
+// WorkspaceCloser hosts can close the linked workspace a slot was opened in
+// (work.herdrGroupSlots). Only herdr has it.
+type WorkspaceCloser interface {
+	// CloseWorkspace closes the workspace by id once it holds no tab. A
+	// workspace that is gone, or still holds a tab, is left alone.
+	CloseWorkspace(ctx context.Context, id string) error
+}
+
 // Capabilities is the optional surface of a Host, one field per side. A nil
 // field means the host lacks that side (tmux has no Labeler, herdr no
 // Operator). It is the one place the optional interfaces are discovered.
 type Capabilities struct {
-	Resubmitter    Resubmitter
-	Explainer      Explainer
-	Labeler        Labeler
-	TurnReader     TurnReader
-	Watcher        Watcher
-	PaneSweeper    PaneSweeper
-	Layouter       Layouter
-	TabOpener      TabOpener
-	SessionStarter SessionStarter
-	TabLister      TabLister
-	PaneHost       PaneHost
-	OutputWatcher  OutputWatcher
-	Operator       Operator
-	Snapshotter    Snapshotter
+	Resubmitter     Resubmitter
+	Explainer       Explainer
+	Labeler         Labeler
+	TurnReader      TurnReader
+	Watcher         Watcher
+	PaneSweeper     PaneSweeper
+	Layouter        Layouter
+	TabOpener       TabOpener
+	SessionStarter  SessionStarter
+	TabLister       TabLister
+	PaneHost        PaneHost
+	OutputWatcher   OutputWatcher
+	Operator        Operator
+	Snapshotter     Snapshotter
+	WorkspaceCloser WorkspaceCloser
 }
 
 // CapabilitiesOf reads the optional sides h implements. Real hosts return it
@@ -217,6 +229,7 @@ func CapabilitiesOf(h any) Capabilities {
 	c.TabOpener, _ = h.(TabOpener)
 	c.SessionStarter, _ = h.(SessionStarter)
 	c.TabLister, _ = h.(TabLister)
+	c.WorkspaceCloser, _ = h.(WorkspaceCloser)
 	c.PaneHost, _ = h.(PaneHost)
 	c.OutputWatcher, _ = h.(OutputWatcher)
 	c.Operator, _ = h.(Operator)
