@@ -138,3 +138,29 @@ func TestWaitReturnsALongUnverifiableSlotOnce(t *testing.T) {
 		t.Fatalf("returned twice: %+v %v", res, err)
 	}
 }
+
+// A herdr slot that is unverifiable emits no status event, so an indefinite
+// wait blocked on events must still come due when the threshold passes.
+func TestWaitOnEventsReturnsAnUnverifiableSlotWhenItComesDue(t *testing.T) {
+	dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
+	h := newWaitHost("herdr") // never emits
+	h.set("w1", "", "unverifiable:stale-handle")
+	e := envWith(watcherHost{h})
+	e.Now = time.Now
+	if err := Update(dir, func(d *Doc) {
+		s := d.Slot("w1")
+		s.Raw().Set("state", "unverifiable")
+		s.Raw().Set("reason", "stale-handle")
+		s.Raw().Set("activeAt", stamp(time.Now().Add(-1*time.Second))) // due in about a second
+	}); err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now()
+	res, err := e.Wait(bg, dir, WaitOpts{Timeout: 20 * time.Second, UnverifiableAfter: 2 * time.Second})
+	if err != nil || res.State != StateUnverifiable || res.Evidence != "stale-handle" || res.Source != SourceEvent && res.Source != SourcePoll {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if took := time.Since(start); took > 5*time.Second {
+		t.Errorf("returned after %s: the event wait was not bounded by the deadline", took)
+	}
+}
