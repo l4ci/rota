@@ -7,19 +7,22 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 )
 
-// An unverifiable slot is one the host could not vouch for (#820). Reclaim
-// refuses it without --force, naming the reason, and a host that answers
-// settles the question either way.
-func TestReclaimRefusesAnUnverifiableSlotWithoutForce(t *testing.T) {
-	f := newMoveFx(t)
-	f.env.Snapshot = nil // the host cannot be asked
+func unverifiableBen(f *moveFx, reason string) {
 	rawSlot(f.root, "ben", func(s *jsonx.Object) {
 		s.Set("handle", "w1:ben")
 		s.Set("state", "unverifiable")
-		s.Set("seen", "unverifiable\thost-unreachable")
+		s.Set("reason", reason)
 	})
+}
+
+// An unverifiable slot is one the host could not vouch for (#820). Reclaim
+// refuses it without --force, naming the reason.
+func TestReclaimRefusesAnUnverifiableSlotWithoutForce(t *testing.T) {
+	f := newMoveFx(t)
+	f.env.Snapshot = nil // the host cannot be asked
+	unverifiableBen(f, "host-unreachable")
 	_, err := f.reclaim("ben", nil)
-	if blockedBy(t, err) != "unverifiable" {
+	if blockedBy(t, err) != BlockUnverifiable {
 		t.Fatalf("an unverifiable slot: %v", err)
 	}
 	if got := err.Error(); !strings.Contains(got, "host-unreachable") || !strings.Contains(got, "--force") {
@@ -30,33 +33,22 @@ func TestReclaimRefusesAnUnverifiableSlotWithoutForce(t *testing.T) {
 	}
 }
 
-func TestReclaimForceTakesAnUnverifiableSlotWithoutAKill(t *testing.T) {
+// --force skips the unverifiable refusal, not the safety: the agent must still
+// be killed or proved gone, so a host that cannot be asked refuses with the
+// reason, as the live-agent refusal always did.
+func TestReclaimForceOnAnUnverifiableSlotStillNeedsTheHost(t *testing.T) {
 	f := newMoveFx(t)
 	f.env.Snapshot = nil
-	rawSlot(f.root, "ben", func(s *jsonx.Object) {
-		s.Set("handle", "w1:ben")
-		s.Set("state", "unverifiable")
-		s.Set("seen", "unverifiable\thost-unreachable")
-	})
-	res, err := f.reclaim("ben", func(o *ReclaimOpts) { o.Force = true })
-	if err != nil || !res.Changed || res.Health != "unverifiable" {
-		t.Fatalf("--force after inspecting: %v %+v", err, res)
+	unverifiableBen(f, "stale-handle")
+	_, err := f.reclaim("ben", func(o *ReclaimOpts) { o.Force = true })
+	if blockedBy(t, err) != BlockLiveAgent {
+		t.Fatalf("--force with no host to kill through: %v", err)
 	}
-	if len(f.killed) != 0 {
-		t.Errorf("nothing can be killed through a host that does not answer: %v", f.killed)
+	if !strings.Contains(err.Error(), "stale-handle") {
+		t.Errorf("the refusal carries the slot's reason: %q", err)
 	}
-}
-
-func TestReclaimTrustsAHostThatAnswersOverAStaleUnverifiableState(t *testing.T) {
-	f := newMoveFx(t)
-	rawSlot(f.root, "ben", func(s *jsonx.Object) { s.Set("handle", "w1:ben"); s.Set("state", "unverifiable") })
-	f.agents("ben") // the host answers: the agent lives
-	if _, err := f.reclaim("ben", nil); blockedBy(t, err) != BlockHealthy {
-		t.Errorf("a live agent is healthy, not unverifiable: %v", err)
-	}
-	f.agents() // the host answers: no agent for the tab. Positive absence is dead.
-	if res, err := f.reclaim("ben", nil); err != nil || res.Health != HealthDead {
-		t.Errorf("a host that lists no agent proves it gone: %v %+v", err, res)
+	if f.be.claims["12"] != "ben@1" || len(f.killed) != 0 || f.slot("ben").Task() == "" {
+		t.Error("a refusal changes nothing")
 	}
 }
 
@@ -64,7 +56,7 @@ func TestStatusShowsAnUnverifiableSlotAndItsReason(t *testing.T) {
 	root, _, _ := fixture(t)
 	rawSlot(root, "ben", func(s *jsonx.Object) {
 		s.Set("state", "unverifiable")
-		s.Set("seen", "unverifiable\tstale-handle")
+		s.Set("reason", "stale-handle")
 	})
 	rep, err := env(nil, (&fakeRemote{}).asForge()).Status(bg, root)
 	if err != nil {

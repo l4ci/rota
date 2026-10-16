@@ -3,6 +3,7 @@ package cli
 import (
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/roundcfg"
 	"strings"
 	"time"
 
@@ -30,10 +31,11 @@ func roundWait(fs *flag.FlagSet) RunFunc {
 		ctx, stop := workerContext()
 		defer stop()
 		res, err := workerEnvCtx(c, ctx).Wait(ctx, root, worker.WaitOpts{
-			Slots:   args,
-			Timeout: time.Duration(*timeout * float64(time.Second)),
-			Settle:  time.Duration(*settle * float64(time.Second)),
-			Lines:   *lines,
+			Slots:             args,
+			Timeout:           time.Duration(*timeout * float64(time.Second)),
+			Settle:            time.Duration(*settle * float64(time.Second)),
+			Lines:             *lines,
+			UnverifiableAfter: unverifiableAfter(root),
 		})
 		if err != nil {
 			return Result{}, err
@@ -68,4 +70,15 @@ func roundWait(fs *flag.FlagSet) RunFunc {
 		}
 		return Result{Data: d, Text: text}, nil
 	}
+}
+
+// unverifiableAfter is how long a slot may stay unverifiable before a wait
+// reports it: round.stallMinutes, the same patience as for a stalled slot (0
+// turns it off).
+func unverifiableAfter(root string) time.Duration {
+	set, err := roundcfg.Load(root)
+	if err != nil {
+		return 0
+	}
+	return time.Duration(set.StallMinutes) * time.Minute
 }

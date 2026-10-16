@@ -405,14 +405,11 @@ func (e Env) Health(ctx context.Context, root string, s *worker.Slot, now time.T
 	return h
 }
 
-// unverifiableReason is the reason a slot's last poll recorded (`seen` holds
-// `<state>\t<evidence>`), "unrecorded" when the poll left none.
+// unverifiableReason is the reason the slot's last poll recorded,
+// "unrecorded" when it left none.
 func unverifiableReason(s *worker.Slot) string {
-	if _, ev, ok := strings.Cut(s.Seen(), "\t"); ok {
-		ev, _, _ = strings.Cut(ev, "\t")
-		if ev != "" {
-			return ev
-		}
+	if r := s.Reason(); r != "" {
+		return r
 	}
 	return "unrecorded"
 }
@@ -502,12 +499,14 @@ func (e Env) Reclaim(ctx context.Context, root string, be Board, o ReclaimOpts) 
 		e.workerEnv().SweepSlot(ctx, root, o.Slot)
 	} else {
 		switch {
-		case h.Health == HealthUnverifiable: // forced after inspection: no host to kill through
-			res.Warnings = append(res.Warnings, fmt.Sprintf("slot %s was unverifiable (%s): its agent was not proved gone and may still run", o.Slot, h.Reason))
 		case e.HostName == host.Solo: // a subagent has no pane to close
 		case h.Known && !h.Alive: // provably gone
 		case !h.Known:
-			return res, blocked(BlockLiveAgent, "the host cannot be asked, so slot %s's agent cannot be proved gone; start the host or close its pane", o.Slot)
+			why := ""
+			if h.Health == HealthUnverifiable {
+				why = fmt.Sprintf(" (unverifiable: %s)", h.Reason)
+			}
+			return res, blocked(BlockLiveAgent, "the host cannot be asked, so slot %s's agent cannot be proved gone%s; start the host or close its pane", o.Slot, why)
 		default:
 			if err := e.workerEnv().KillSlot(ctx, root, o.Slot); err != nil {
 				return res, wrap(err)

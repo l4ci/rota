@@ -171,9 +171,24 @@ func (t *tmux) ReadPane(ctx context.Context, slot, handle string, lines int) (st
 	}
 	r := t.tmux(ctx, "capture-pane", "-pJ", "-t", handle)
 	if r.ExitCode != 0 {
-		return "", fmt.Errorf("tmux capture-pane failed (exit %d): %s", r.ExitCode, strings.TrimSpace(r.Stderr))
+		msg := strings.TrimSpace(r.Stderr)
+		if tmuxGone(msg) {
+			return "", fmt.Errorf("%w: tmux capture-pane: %s", ErrPaneGone, msg)
+		}
+		return "", fmt.Errorf("tmux capture-pane failed (exit %d): %s", r.ExitCode, msg)
 	}
 	return r.Stdout, nil
+}
+
+// tmuxGone reads tmux's stderr for a window, pane or server that no longer
+// exists: the proof a capture that merely failed does not give.
+func tmuxGone(msg string) bool {
+	for _, m := range []string{"can't find window", "can't find pane", "can't find session", "no server running", "error connecting to"} {
+		if strings.Contains(msg, m) {
+			return true
+		}
+	}
+	return false
 }
 
 // draftPane captures with styling (-e) and drops the dim runs, so a ghost

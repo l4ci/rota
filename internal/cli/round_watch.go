@@ -87,7 +87,7 @@ func roundWatch(fs *flag.FlagSet) RunFunc {
 			Wait: func(ctx context.Context, d time.Duration) (*roundwatch.SlotNews, error) {
 				// The timeout covers one whole classification (its settle gap),
 				// or a wait that ends mid-capture would never see a slot.
-				res, err := wenv.Wait(ctx, root, worker.WaitOpts{Timeout: d + secs(*settle) + 2*time.Second, Settle: secs(*settle), Lines: *lines})
+				res, err := wenv.Wait(ctx, root, worker.WaitOpts{Timeout: d + secs(*settle) + 2*time.Second, Settle: secs(*settle), Lines: *lines, UnverifiableAfter: unverifiableAfter(root)})
 				var we *exitcode.Error
 				if errors.As(err, &we) && we.Exit == exitcode.ExitResolution {
 					return nil, roundwatch.ErrNothingToWatch

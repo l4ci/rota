@@ -69,6 +69,7 @@ Work another tool already started (a Codex worktree, an agent-team branch, a clo
 | `limited` | the account is out of quota. Wait for the reset, or reassign the issue to a slot on a free account |
 | `dead` | see section 4 |
 | `unknown` | see section 4 |
+| `unverifiable` | the host could not vouch for it: not dead, never reclaimed on that alone. `wait` returns it once after `round.stallMinutes` with the reason; see section 4 |
 
 A wait that times out with every slot busy is fine. A free slot with candidates left is not.
 
@@ -76,7 +77,7 @@ When `rota round status`, `candidates` or `start` shows an `architecture review 
 
 ## 4. Reading failures
 
-When a slot is `dead`, `unknown` or stalled, a worker is stuck, a suite is red, or a merged branch breaks the base, read [`reading-failures.md`](reading-failures.md). Never treat `unknown` as finished, and rerun a red test alone before you bounce for it.
+When a slot is `dead`, `unknown`, `unverifiable` or stalled, a worker is stuck, a suite is red, or a merged branch breaks the base, read [`reading-failures.md`](reading-failures.md). Never treat `unknown` as finished, never treat `unverifiable` as dead, and rerun a red test alone before you bounce for it.
 
 ## 5. Escalations and provenance
 
@@ -127,7 +128,7 @@ Read when `rota round status` reports solo (no herdr or tmux host): `solo-and-au
 - [`references/herdr-dispatch.md`](references/herdr-dispatch.md): what herdr changes.
 - [`solo-and-autopilot.md`](solo-and-autopilot.md): autopilot ticks and solo mode.
 - [`architecture-review.md`](architecture-review.md): section 3, the periodic architecture review.
-- [`reading-failures.md`](reading-failures.md): section 4, dead, stalled, unknown, red tests, red base.
+- [`reading-failures.md`](reading-failures.md): section 4, dead, stalled, unknown, unverifiable, red tests, red base.
 - [`escalations-and-provenance.md`](escalations-and-provenance.md): section 5.
 - [`merge-train-and-approval.md`](merge-train-and-approval.md): section 6, trains, approval policy, completing file-mode items.
 - [`bounce-cap.md`](bounce-cap.md): section 7, bounce cap and re-review.
