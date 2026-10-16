@@ -266,6 +266,14 @@ func rowList(rows []round.Row) []any {
 		setIf(o, "model", r.Model)
 		setIf(o, "tierReason", r.TierReason)
 		o.Set("bounces", r.Bounces)
+		if ev := r.Event; ev != nil {
+			eo := jsonx.NewObject()
+			eo.Set("seq", ev.Seq)
+			eo.Set("kind", ev.Kind)
+			setIf(eo, "body", ev.Body)
+			eo.Set("ts", ev.TS)
+			o.Set("event", eo)
+		}
 		out = append(out, o)
 	}
 	return out

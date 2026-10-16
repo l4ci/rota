@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/jsonx"
@@ -35,7 +36,20 @@ func (s *Slot) Branch() string   { return jsonx.Str(s.o, "branch") }
 func (s *Slot) Worktree() string { return jsonx.Str(s.o, "worktree") }
 func (s *Slot) Base() string     { return jsonx.Str(s.o, "base") }
 func (s *Slot) Handle() string   { return jsonx.Str(s.o, "handle") }
-func (s *Slot) State() string    { return jsonx.Str(s.o, "state") }
+
+// WorkspaceID is the linked herdr workspace the slot's session was opened in
+// (work.herdrGroupSlots), "" when it runs in the orchestrator's own workspace.
+func (s *Slot) WorkspaceID() string { return jsonx.Str(s.o, "workspaceId") }
+
+// SetWorkspaceID records the slot's linked workspace; "" clears it.
+func (s *Slot) SetWorkspaceID(id string) {
+	if id == "" {
+		s.o.Delete("workspaceId")
+		return
+	}
+	s.o.Set("workspaceId", id)
+}
+func (s *Slot) State() string { return jsonx.Str(s.o, "state") }
 
 // Issue is the issue number recorded on the slot ("" when none). The prompt
 // digest shows it before falling back to HeldID.
@@ -190,6 +204,7 @@ func (s *Slot) Dispatch(handle, task, kind, now string) {
 	s.setState("busy", now)
 	s.o.Set("activeAt", now)
 	s.o.Delete("seen")
+	s.ClearEvent() // a new brief answers whatever the worker last sent
 	if task == "" {
 		return
 	}
@@ -282,7 +297,7 @@ func smokeStr(n int) string {
 func (s *Slot) Unbind() {
 	s.o.Set("task", nil)
 	s.o.Set("pr", nil)
-	for _, k := range []string{"claimId", "kind", "tier", "model", "tierReason", "smokeSection", "issues", "reviewSeen"} {
+	for _, k := range []string{"claimId", "kind", "tier", "model", "tierReason", "smokeSection", "issues", "reviewSeen", "event", "heartbeatAt"} {
 		s.o.Delete(k)
 	}
 }
@@ -375,6 +390,98 @@ func (s *Slot) ClearSeen() { s.o.Delete("seen") }
 
 // SetSeen records the row `round wait` last reported.
 func (s *Slot) SetSeen(key string) { s.o.Set("seen", key) }
+
+// Worker event kinds: what `rota worker send`, `worker done` and `worker reply`
+// record on the slot.
+const (
+	EventBlocked     = "blocked"
+	EventQuestion    = "question"
+	EventDone        = "done"
+	EventReviewReply = "review-reply"
+	// EventHeartbeat is a send kind only: it is recorded by Heartbeat and
+	// never stands as a slot's event.
+	EventHeartbeat = "heartbeat"
+)
+
+// EventKinds are the kinds SetEvent accepts.
+var EventKinds = []string{EventBlocked, EventQuestion, EventDone, EventReviewReply, EventHeartbeat}
+
+// Event is the latest event a worker sent for its slot. Seq is the slot's
+// monotonic event id: it survives ClearEvent, so an acknowledged event never
+// shares a key with the next one.
+type Event struct {
+	Seq        int
+	Kind, Body string
+	TS         string
+	// Notified is set once the poll raised the host notification for it.
+	Notified bool
+}
+
+// Event is the slot's latest worker-sent event, nil when none stands.
+func (s *Slot) Event() *Event {
+	v, _ := s.o.Get("event")
+	o, ok := v.(*jsonx.Object)
+	if !ok {
+		return nil
+	}
+	n, _ := jsonx.Int(mustGet(o, "seq"))
+	return &Event{Seq: n, Kind: jsonx.Str(o, "kind"), Body: jsonx.Str(o, "body"), TS: jsonx.Str(o, "ts"), Notified: jsonx.Bool(o, "notified")}
+}
+
+func mustGet(o *jsonx.Object, k string) any { v, _ := o.Get(k); return v }
+
+// SetEvent records a worker event under the next id and stamps activeAt. It
+// does not touch state; the writer decides which kinds move it. A heartbeat is
+// not an event: it replaces nothing (see Heartbeat).
+func (s *Slot) SetEvent(kind, body, now string) {
+	seq, _ := jsonx.Int(mustGet(s.o, "eventSeq"))
+	seq++
+	s.o.Set("eventSeq", seq)
+	e := jsonx.NewObject()
+	e.Set("seq", seq)
+	e.Set("kind", kind)
+	e.Set("ts", now)
+	if body != "" {
+		e.Set("body", body)
+	}
+	s.o.Set("event", e)
+	s.o.Set("activeAt", now)
+}
+
+// Heartbeat records that the worker is alive: heartbeatAt only. It leaves the
+// standing event, the state and activeAt alone, so a question the worker has
+// not had answered is not lost and the event stays newer than the last state
+// change. LastAlive is what the stall clock reads.
+func (s *Slot) Heartbeat(now string) { s.o.Set("heartbeatAt", now) }
+
+// HeartbeatAt is the stamp of the worker's last heartbeat, "" for none.
+func (s *Slot) HeartbeatAt() string { return jsonx.Str(s.o, "heartbeatAt") }
+
+// LastAlive is the later of activeAt and heartbeatAt: the stall clock.
+func (s *Slot) LastAlive() string {
+	if hb := s.HeartbeatAt(); hb > s.ActiveAt() { // RFC 3339 UTC stamps order as strings
+		return hb
+	}
+	return s.ActiveAt()
+}
+
+// MarkEventNotified records that the host notification for the standing event
+// went out.
+func (s *Slot) MarkEventNotified() {
+	if v, ok := s.o.Get("event"); ok {
+		if o, ok := v.(*jsonx.Object); ok {
+			o.Set("notified", true)
+		}
+	}
+}
+
+// ClearEvent drops the standing event; eventSeq stays.
+func (s *Slot) ClearEvent() { s.o.Delete("event") }
+
+func parseStamp(v string) time.Time {
+	t, _ := time.Parse("2006-01-02T15:04:05Z", v)
+	return t
+}
 
 // Touch stamps activeAt.
 func (s *Slot) Touch(now string) { s.o.Set("activeAt", now) }
