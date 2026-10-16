@@ -8,6 +8,7 @@ import (
 	"github.com/l4ci/rota/internal/gate"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/ledger"
+	"github.com/l4ci/rota/internal/receipt"
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
@@ -100,6 +101,11 @@ func roundWindDown(fs *flag.FlagSet) RunFunc {
 		}
 		if err != nil {
 			return Result{}, err
+		}
+		if !res.Retained { // the round is over: no retry can reach its receipts
+			if perr := receipt.Prune(root); perr != nil {
+				c.Warn("receipts not pruned: %v", perr)
+			}
 		}
 		for _, w := range res.Warnings {
 			c.Warn("%s", w)

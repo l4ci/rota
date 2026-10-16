@@ -42,9 +42,15 @@ type Error struct {
 	Message string
 	Hint    string
 	Data    any
+	// Cause is the error this one was translated from, kept so a caller can
+	// still reach its typed detail (a failed saga stage) with errors.As.
+	Cause error
 }
 
 func (e *Error) Error() string { return e.Message }
+
+// Unwrap exposes Cause.
+func (e *Error) Unwrap() error { return e.Cause }
 
 // Errf builds an Error.
 func Errf(exit int, format string, a ...any) *Error {

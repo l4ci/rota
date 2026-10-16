@@ -359,6 +359,8 @@ The orchestrator's verbs for a [parallel round](../usage/parallel-rounds.md). Al
 | `rota round pick <ID> --pr <N> --reason-file <path\|-> [--holder-pid <n>]` | `best-of:2` issue: name the winning PR; close the other attempt's PR with the reason, keep its branch |
 | `rota round wind-down [--no-verify] [--holder-pid <n>]` | re-verify the base, park every slot, release the lease |
 
+**Request ids.** `round assign`, `round transfer`, `round reclaim`, `round pick`, `worker gate` and `worker train` take `--request-id <id>` and keep a receipt per call in `.rota/receipts.json` (gitignored, pruned by `round wind-down`). Without the flag the verb mints an id and prints it as `requestId` in `--json`. A retry with the same id and the same inputs (arguments, the content of `--body-file`/`--note-file`/`--reason-file`, and for `gate` and `train` the head of each branch judged) returns the first result and applies nothing (`replayed: true`, `changed: false`). The same id with other arguments exits 4 with `blockedBy: request-id`. A call that failed part way (a flaky `gh`, a lost pane) records `failedStage` and `residualResources`, and its error hint names the stage and the id; the retry runs again and resumes from the stage that failed (`resumedFrom` in the result). A call that wrote nothing (exit 2 to 4, or `--check-only`) leaves no receipt.
+
 A second `round start` is refused (exit 4) while another orchestrator holds the lease. `round wait` exits 1 on `--timeout` with `data.timedOut: true`, which is an answer, not a fault.
 
 ## `rota agents`

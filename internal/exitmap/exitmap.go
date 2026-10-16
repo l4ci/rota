@@ -74,6 +74,9 @@ func notFound(err error, c Class) bool {
 func Translate(err error, o Options) (data any, out error) {
 	data, out = translate(err, o)
 	var e *exitcode.Error
+	if out != err && errors.As(out, &e) && e.Cause == nil {
+		e.Cause = err
+	}
 	if o.ReadOnly && errors.As(out, &e) && e.Exit == exitcode.ExitRefused {
 		e.Exit = exitcode.ExitFailed
 	}
