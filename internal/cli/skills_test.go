@@ -348,8 +348,15 @@ func TestSkillsListAndGet(t *testing.T) {
 		t.Fatalf("list %d %s", code, errOut)
 	}
 	names, _ := skData(env)["skills"].([]any)
-	if len(names) == 0 || skData(env)["version"] == nil {
+	found := false
+	for _, n := range names {
+		found = found || n == "rota-pause"
+	}
+	if v, _ := skData(env)["version"].(string); !found || v == "" {
 		t.Fatalf("%v", skData(env))
+	}
+	if d, _ := skData(env)["digest"].(string); d == "" {
+		t.Fatalf("no digest: %v", skData(env))
 	}
 	code, env, _ = skillsRun(t, home, work, "skills", "get", "rota-pause")
 	text, _ := skData(env)["text"].(string)
@@ -362,7 +369,7 @@ func TestSkillsListAndGet(t *testing.T) {
 		t.Fatalf("references %d %v", code, env)
 	}
 	code, env, _ = skillsRun(t, home, work, "skills", "get", "rota-pause", "--reference", refs[0].(string))
-	if code != 0 || skData(env)["text"] == "" {
+	if rt, _ := skData(env)["text"].(string); code != 0 || rt == "" {
 		t.Fatalf("reference %d %v", code, env)
 	}
 	for _, args := range [][]string{
@@ -404,5 +411,13 @@ func TestSkillsInstallStub(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(root, "references")); err != nil {
 		t.Error(err)
+	}
+}
+
+func TestSkillsGetTextMode(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	code, out, errOut := runMain("skills", "get", "rota-pause")
+	if code != 0 || !strings.HasPrefix(out, "---\nname: rota-pause\n") || !strings.HasSuffix(out, "\n") || strings.HasSuffix(out, "\n\n") {
+		t.Fatalf("%d %q %s", code, out[:min(len(out), 80)], errOut)
 	}
 }
