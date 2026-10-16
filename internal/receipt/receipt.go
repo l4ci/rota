@@ -114,13 +114,36 @@ func Record(root string, e Entry) error {
 			}
 			out = append(out, r)
 		}
-		d.Receipts = append(out, e)
+		d.Receipts = capPerVerb(append(out, e))
 		b, err := json.MarshalIndent(d, "", "  ")
 		if err != nil {
 			return err
 		}
 		return fsio.WriteFileAtomic(p, append(b, '\n'))
 	})
+}
+
+// KeepPerVerb is how many receipts the file keeps for each verb. A retry comes
+// right after the call it repeats, so the newest few are the ones that matter;
+// older ones go on the next write, which keeps an autopilot's gate ticks from
+// growing the file for the whole round.
+const KeepPerVerb = 20
+
+func capPerVerb(rs []Entry) []Entry {
+	seen := map[string]int{}
+	keep := make([]bool, len(rs))
+	for i := len(rs) - 1; i >= 0; i-- {
+		if seen[rs[i].Verb]++; seen[rs[i].Verb] <= KeepPerVerb {
+			keep[i] = true
+		}
+	}
+	out := rs[:0:0]
+	for i, r := range rs {
+		if keep[i] {
+			out = append(out, r)
+		}
+	}
+	return out
 }
 
 // Prune drops every receipt: the round is over, so no retry can reach them.
