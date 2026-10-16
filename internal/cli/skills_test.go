@@ -340,3 +340,69 @@ func TestSkillsProjectScopeIgnoresAccounts(t *testing.T) {
 		t.Error("project scope touched an account dir")
 	}
 }
+
+func TestSkillsListAndGet(t *testing.T) {
+	home, work := t.TempDir(), t.TempDir()
+	code, env, errOut := skillsRun(t, home, work, "skills", "list")
+	if code != 0 {
+		t.Fatalf("list %d %s", code, errOut)
+	}
+	names, _ := skData(env)["skills"].([]any)
+	if len(names) == 0 || skData(env)["version"] == nil {
+		t.Fatalf("%v", skData(env))
+	}
+	code, env, _ = skillsRun(t, home, work, "skills", "get", "rota-pause")
+	text, _ := skData(env)["text"].(string)
+	if code != 0 || !strings.HasPrefix(text, "---\nname: rota-pause\n") {
+		t.Fatalf("get %d %q", code, text)
+	}
+	code, env, _ = skillsRun(t, home, work, "skills", "get", "rota-pause", "--references")
+	refs, _ := skData(env)["references"].([]any)
+	if code != 0 || len(refs) == 0 {
+		t.Fatalf("references %d %v", code, env)
+	}
+	code, env, _ = skillsRun(t, home, work, "skills", "get", "rota-pause", "--reference", refs[0].(string))
+	if code != 0 || skData(env)["text"] == "" {
+		t.Fatalf("reference %d %v", code, env)
+	}
+	for _, args := range [][]string{
+		{"skills", "get", "nope"},
+		{"skills", "get", "rota-pause", "--reference", "nope.md"},
+		{"skills", "get", "rota-pause", "--reference", "../rota-work/SKILL.md"},
+	} {
+		if code, _, _ = skillsRun(t, home, work, args...); code != 2 {
+			t.Errorf("%v exit %d, want 2", args, code)
+		}
+	}
+}
+
+func TestSkillsInstallStub(t *testing.T) {
+	home, work := t.TempDir(), t.TempDir()
+	if code, _, errOut := skillsRun(t, home, work, "skills", "install", "--agent", "codex", "--stub"); code != 0 {
+		t.Fatalf("stub install %d %s", code, errOut)
+	}
+	root := filepath.Join(home, ".agents", "skills", "rota-pause")
+	b, err := os.ReadFile(filepath.Join(root, "SKILL.md"))
+	if err != nil || !strings.Contains(string(b), "rota skills get rota-pause") || !strings.HasPrefix(string(b), "---\nname: rota-pause\n") {
+		t.Fatalf("%v %q", err, b)
+	}
+	if _, err := os.Stat(filepath.Join(root, "references")); err == nil {
+		t.Error("stub install kept references")
+	}
+	code, env, _ := skillsRun(t, home, work, "skills", "status", "--scope", "user", "--agent", "codex")
+	r := skData(env)["roots"].([]any)[0].(map[string]any)
+	if code != 0 || r["current"] != true {
+		t.Fatalf("status %d %v", code, r)
+	}
+	// A plain install afterwards restores the full text.
+	if code, _, _ := skillsRun(t, home, work, "skills", "install", "--agent", "codex"); code != 0 {
+		t.Fatalf("full install %d", code)
+	}
+	b, _ = os.ReadFile(filepath.Join(root, "SKILL.md"))
+	if strings.Contains(string(b), "rota skills get") {
+		t.Error("full install left the stub")
+	}
+	if _, err := os.Stat(filepath.Join(root, "references")); err != nil {
+		t.Error(err)
+	}
+}
