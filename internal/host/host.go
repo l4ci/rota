@@ -128,6 +128,9 @@ type SpawnOpts struct {
 	// tmux: a prefix on the launch line).
 	Env         []string
 	BootTimeout int // seconds
+	// LinkWorkspace (herdr only): open the worktree as a workspace linked to the
+	// caller's, instead of a tab in the caller's own (work.herdrGroupSlots).
+	LinkWorkspace bool
 }
 
 // Resubmitter is implemented by a host that can tell a brief left unsent on

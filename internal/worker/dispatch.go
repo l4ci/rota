@@ -292,7 +292,8 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 		if err != nil {
 			return res, fail(exitcode.ExitUnavailable, err.Error())
 		}
-		handle, err = h.Spawn(ctx, host.SpawnOpts{Slot: o.Slot, Session: session, Cwd: worktree,
+		group, _ := config.Bool(config.Load(rotatree.Config(root)), "work.herdrGroupSlots")
+		handle, err = h.Spawn(ctx, host.SpawnOpts{Slot: o.Slot, Session: session, Cwd: worktree, LinkWorkspace: group,
 			ConfigDir: configDir, CodexHome: codexHome, Env: SlotEnv(o.Slot, portBase, width), Launch: launch, BootTimeout: timeout})
 		if err != nil {
 			clearHandle(root, o.Slot)
