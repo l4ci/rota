@@ -16,6 +16,7 @@ Everything Claude reads or mutates lives under `.rota/` in your project. Git is 
 ├── status.json       # active work streams (keyed by branch, or (branch, repo) in umbrella mode)
 ├── repos.json        # umbrella mode only — registered sub-repos
 ├── workers.json      # round state: slots, escalations, usage-limit log (gitignored)
+├── receipts.json     # request-id receipts of the round verbs (gitignored)
 ├── verdicts.json     # recorded review, second-opinion and QA verdicts (gitignored)
 ├── bugs/ features/ tasks/   # overflow detail files (file backend)
 ├── designs/          # /rota-brainstorm output (<ID>.md, file backend)
