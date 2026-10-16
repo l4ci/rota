@@ -25,31 +25,50 @@ type step struct {
 	keep bool
 }
 
+// StageError is a saga failure that names where it stopped: the failed stage
+// and the stages whose effect is still in place (an undo that failed, or every
+// earlier stage of a keep step). A receipt stores both so a retry knows what
+// the first call left.
+type StageError struct {
+	Stage    string
+	Residual []string
+	Err      error
+}
+
+func (e *StageError) Error() string { return e.Err.Error() }
+func (e *StageError) Unwrap() error { return e.Err }
+
 // runSteps runs steps in order and returns the first error. A failed step is
 // not undone (it leaves nothing behind itself); unless it is keep, the steps
 // before it are undone, latest first. An undo that fails is reported with the
 // step's own error: a rollback that left a claim or state behind is not silent.
 func runSteps(steps []step) error {
+	var ran []string // stages this call finished, in order
 	for i, s := range steps {
 		if s.skip != nil && s.skip() {
 			continue
 		}
 		if err := s.do(); err != nil {
-			if !s.keep {
+			se := &StageError{Stage: s.name, Err: err}
+			if s.keep {
+				se.Residual = ran
+			} else {
 				var left []string
 				for j := i - 1; j >= 0; j-- {
 					if u := steps[j].undo; u != nil {
 						if uerr := u(); uerr != nil {
 							left = append(left, steps[j].name+": "+uerr.Error())
+							se.Residual = append(se.Residual, steps[j].name)
 						}
 					}
 				}
 				if len(left) > 0 {
-					return fmt.Errorf("%w (rollback incomplete, left behind: %s)", err, strings.Join(left, "; "))
+					se.Err = fmt.Errorf("%w (rollback incomplete, left behind: %s)", err, strings.Join(left, "; "))
 				}
 			}
-			return err
+			return se
 		}
+		ran = append(ran, s.name)
 	}
 	return nil
 }
