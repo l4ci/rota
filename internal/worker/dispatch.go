@@ -265,6 +265,10 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 		if launch, signKey, err = hz.Prepare(launch, e.Executable, setup); err != nil {
 			return res, asError(err)
 		}
+		group, err := config.Bool(config.Load(rotatree.Config(root)), "work.herdrGroupSlots")
+		if err != nil {
+			return res, fail(exitcode.ExitResolution, err.Error())
+		}
 		// Refuse a slot that still holds work, before its session is killed.
 		if _, err := e.ResetTo(root, o.Slot, o.Task, branchOr(o), true); err != nil {
 			return res, resetRefusal(err, false)
@@ -275,6 +279,7 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 		if err := h.Kill(ctx, o.Slot, handle); err != nil {
 			return res, fail(exitcode.ExitUnavailable, err.Error())
 		}
+		closeSlotWorkspace(ctx, h, root, o.Slot)
 		// The old handle names a pane that is gone. Drop it now, not at
 		// recordDispatch after the boot: a watch ticking in between would
 		// read the dead pane and report the slot dead (#707).
@@ -292,12 +297,17 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 		if err != nil {
 			return res, fail(exitcode.ExitUnavailable, err.Error())
 		}
-		group, _ := config.Bool(config.Load(rotatree.Config(root)), "work.herdrGroupSlots")
 		handle, err = h.Spawn(ctx, host.SpawnOpts{Slot: o.Slot, Session: session, Cwd: worktree, LinkWorkspace: group,
 			ConfigDir: configDir, CodexHome: codexHome, Env: SlotEnv(o.Slot, portBase, width), Launch: launch, BootTimeout: timeout})
 		if err != nil {
 			clearHandle(root, o.Slot)
 			return res, fail(exitcode.ExitUnavailable, err.Error())
+		}
+		if group {
+			// The slot's tab id leads with the workspace it lives in. Record it
+			// so the next kill closes this workspace and no other.
+			ws, _, _ := strings.Cut(handle, ":")
+			UpdateSlot(root, o.Slot, func(sl *Slot) { sl.SetWorkspaceID(ws) })
 		}
 	} else if handle == "" {
 		return res, fail(exitcode.ExitResolution, fmt.Sprintf("slot '%s' has no session to relay into — dispatch a task first", o.Slot))
@@ -479,7 +489,25 @@ func (e Env) KillSlot(ctx context.Context, root, slot string) error {
 	if err := h.Kill(ctx, slot, handle); err != nil {
 		return fail(exitcode.ExitUnavailable, err.Error())
 	}
+	closeSlotWorkspace(ctx, h, root, slot)
 	return nil
+}
+
+// closeSlotWorkspace closes the linked workspace recorded on the slot, after its
+// session is killed, and forgets it. Only a recorded id is closed: a handle from
+// the default path names the orchestrator's own workspace. Best effort, since
+// herdr closes the workspace with its last tab already.
+func closeSlotWorkspace(ctx context.Context, h host.Host, root, slot string) {
+	s := LoadRegistryTolerant(root).Slot(slot)
+	if s == nil || s.WorkspaceID() == "" {
+		return
+	}
+	if wc := h.Capabilities().WorkspaceCloser; wc != nil {
+		if err := wc.CloseWorkspace(ctx, s.WorkspaceID()); err != nil {
+			fmt.Fprintf(os.Stderr, "rota: slot %s: %v\n", slot, err)
+		}
+	}
+	UpdateSlot(root, slot, func(sl *Slot) { sl.SetWorkspaceID("") })
 }
 
 // SweepSlot closes the leftover shell panes of a slot whose agent is already

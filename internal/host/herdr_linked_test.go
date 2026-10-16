@@ -1,6 +1,7 @@
 package host
 
 import (
+	"bytes"
 	"reflect"
 	"strings"
 	"testing"
@@ -94,35 +95,90 @@ func TestHerdrSpawnDefaultStaysATab(t *testing.T) {
 	}
 }
 
-// Kill closes a slot workspace by id once it holds no tab, never the
-// orchestrator's workspace and never with --group.
-func TestHerdrKillClosesAnEmptySlotWorkspaceByID(t *testing.T) {
+// CloseWorkspace closes a recorded slot workspace by id once it holds no tab,
+// never one that still has a tab, never with --group.
+func TestHerdrCloseWorkspace(t *testing.T) {
 	for name, tc := range map[string]struct {
-		handle, tabs string
-		want         int
+		get  Result
+		want int
 	}{
-		"empty slot workspace":    {"w9N:t2", "0", 1},
-		"slot workspace has tabs": {"w9N:t2", "1", 0},
-		"orchestrator workspace":  {"w9:t7", "0", 0},
+		"empty":     {Result{Stdout: `{"id":"cli","result":{"workspace":{"tab_count":0}}}`}, 1},
+		"has a tab": {Result{Stdout: `{"id":"cli","result":{"workspace":{"tab_count":1}}}`}, 0},
+		"gone":      {Result{ExitCode: 1, Stderr: herdrErr("workspace_not_found")}, 0},
 	} {
 		f := &fake{handler: func(_ string, a []string) Result {
-			switch a[0] + " " + a[1] {
-			case "tab get":
-				return Result{ExitCode: 1, Stderr: herdrErr("tab_not_found")}
-			case "workspace get":
-				return Result{Stdout: `{"id":"cli","result":{"workspace":{"tab_count":` + tc.tabs + `}}}`}
+			if a[1] == "get" {
+				return tc.get
 			}
-			return Result{Stdout: agentJSON("idle")}
+			return Result{Stdout: `{"id":"cli","result":{"type":"ok"}}`}
 		}}
-		if err := New("herdr", deps(f, herdrEnv, &clock{})).Kill(bg, "w1", tc.handle); err != nil {
+		if err := New("herdr", deps(f, herdrEnv, &clock{})).(WorkspaceCloser).CloseWorkspace(bg, "w9N"); err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
 		if f.count("herdr workspace close") != tc.want || strings.Contains(f.log(), "--group") {
 			t.Errorf("%s: log =\n%s", name, f.log())
 		}
-		if tc.want == 1 && !strings.Contains(f.log(), "herdr workspace close w9N") {
-			t.Errorf("%s: log =\n%s", name, f.log())
+	}
+}
+
+func TestHerdrCloseWorkspaceNeverTheOrchestratorsOwn(t *testing.T) {
+	f := &fake{handler: func(string, []string) Result { return Result{} }}
+	if err := New("herdr", deps(f, herdrEnv, &clock{})).(WorkspaceCloser).CloseWorkspace(bg, "w9"); err == nil {
+		t.Error("want a refusal")
+	}
+	if len(f.calls) != 0 {
+		t.Errorf("ran %v", f.calls)
+	}
+}
+
+func TestHerdrKillLeavesWorkspacesAlone(t *testing.T) {
+	f := linkedFake("false", map[string]Result{"tab get": {ExitCode: 1, Stderr: herdrErr("tab_not_found")}})
+	if err := New("herdr", deps(f, herdrEnv, &clock{})).Kill(bg, "w1", "w9N:t2"); err != nil {
+		t.Fatal(err)
+	}
+	if f.count("herdr workspace") != 0 {
+		t.Errorf("log =\n%s", f.log())
+	}
+}
+
+func TestHerdrSpawnLinkedBadReplies(t *testing.T) {
+	bad := Result{ExitCode: 1, Stderr: herdrErr("boom")}
+	for name, tc := range map[string]struct {
+		fail     map[string]Result
+		wantErr  string
+		wantCall string // a call that must have run
+		noCall   string // a call that must not have run
+	}{
+		"open without a workspace id": {map[string]Result{"worktree open": {Stdout: `{"result":{"already_open":false}}`}}, "no workspace id", "", "tab create"},
+		"tab create without ids":      {map[string]Result{"tab create": {Stdout: `{"result":{}}`}}, "no tab/pane id", "herdr workspace close w9N", ""},
+		"root tab will not close":     {map[string]Result{"tab close": bad}, "root tab w9N:t1", "", "agent start"},
+		"agent start fails":           {map[string]Result{"agent start": {ExitCode: 1, Stderr: herdrErr("boom")}}, "agent start failed", "herdr tab close w9N:t2", ""},
+	} {
+		f := linkedFake("false", tc.fail)
+		_, err := New("herdr", deps(f, herdrEnv, &clock{})).Spawn(bg, linkedOpts)
+		if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+			t.Errorf("%s: err = %v, want %q", name, err, tc.wantErr)
 		}
+		if tc.wantCall != "" && !strings.Contains(f.log(), tc.wantCall) {
+			t.Errorf("%s: want %q in\n%s", name, tc.wantCall, f.log())
+		}
+		if tc.noCall != "" && strings.Contains(f.log(), tc.noCall) {
+			t.Errorf("%s: ran %q:\n%s", name, tc.noCall, f.log())
+		}
+	}
+}
+
+func TestHerdrSpawnLinkedReportsAnOrphanWorkspace(t *testing.T) {
+	bad := Result{ExitCode: 1, Stderr: herdrErr("boom")}
+	f := linkedFake("false", map[string]Result{"tab create": bad, "workspace close": bad})
+	var errw bytes.Buffer
+	d := deps(f, herdrEnv, &clock{})
+	d.Stderr = &errw
+	if _, err := New("herdr", d).Spawn(bg, linkedOpts); err == nil {
+		t.Fatal("want an error")
+	}
+	if !strings.Contains(errw.String(), "w9N") {
+		t.Errorf("stderr = %q, want the workspace id", errw.String())
 	}
 }
 
