@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/l4ci/rota/internal/exitcode"
@@ -61,6 +62,11 @@ const (
 	StateLimited         = "LIMITED"
 	StateNeedsPermission = "NEEDS-PERMISSION"
 	StateUnknown         = "UNKNOWN"
+	// StateUnverifiable: the host could not be asked or the pane could not be
+	// read, so the slot's liveness is not known. Contact loss is not process
+	// death (#820): only positive proof of exit (`gone`) is DEAD. The evidence
+	// is the reason (host.Reason*).
+	StateUnverifiable = "UNVERIFIABLE"
 )
 
 // LimitPhrases are the usage-limit messages a session prints about itself, as
@@ -206,6 +212,9 @@ func Classify(text string, moved bool, lines int, native string) (state, evidenc
 			}
 			return StateLimited, strutil.Clip(strings.TrimSpace(m), 120)
 		}
+	}
+	if reason, ok := strings.CutPrefix(native, host.UnverifiablePrefix); ok {
+		return StateUnverifiable, reason
 	}
 	if native == "working" {
 		return StateBusy, "herdr: agent working"
@@ -525,6 +534,9 @@ func recordRow(s *Slot, r PollRow, t pollTarget, now time.Time, queued Registry)
 	if s.Seen() != key {
 		s.ClearSeen()
 	}
+	if r.State == StateUnverifiable {
+		s.SetReason(r.Evidence)
+	}
 	// A pane that moved after the worker's event answers it: the question was
 	// relayed or typed to, the work resumed. Only the event this row was read
 	// against goes (the seq check above), never a newer one.
@@ -620,6 +632,7 @@ func (e Env) classify(ctx context.Context, h host.Host, targets []pollTarget, se
 	tr := h.Capabilities().TurnReader
 	first := map[string]string{}
 	finished := map[string]string{} // slot -> native status of a finished turn
+	readErr := map[string]error{}   // slot -> why a pane read failed
 	for _, t := range targets {
 		// The turn is read before the capture: a capture taken after the
 		// host counted the turn finished holds all of its output.
@@ -628,7 +641,7 @@ func (e Env) classify(ctx context.Context, h host.Host, targets []pollTarget, se
 				finished[t.name] = tn.Status
 			}
 		}
-		first[t.name] = h.Capture(ctx, t.name, t.handle, lines)
+		first[t.name], readErr[t.name] = readPane(ctx, h, t, lines)
 	}
 	if len(finished) < len(targets) {
 		e.Sleep(settle)
@@ -648,8 +661,12 @@ func (e Env) classify(ctx context.Context, h host.Host, targets []pollTarget, se
 			push(PollRow{t.name, st, ev})
 			continue
 		}
-		second := h.Capture(ctx, t.name, t.handle, lines)
+		second, err := readPane(ctx, h, t, lines)
 		native := h.Status(ctx, t.name, t.handle)
+		if err == nil {
+			err = readErr[t.name]
+		}
+		native = withReadFailure(native, err)
 		moved := first[t.name] != second
 		st, ev := Classify(second, moved, lines, native)
 		if st == StateUnknown {
@@ -667,6 +684,34 @@ func (e Env) classify(ctx context.Context, h host.Host, targets []pollTarget, se
 		push(PollRow{t.name, st, ev})
 	}
 	return rows, settling, slept
+}
+
+// readPane captures a slot's pane. err says the read failed, which is not the
+// same as a pane with no text. A host that cannot tell reads as readable.
+func readPane(ctx context.Context, h host.Host, t pollTarget, lines int) (text string, err error) {
+	if r := h.Capabilities().PaneReader; r != nil && t.handle != "" {
+		return r.ReadPane(ctx, t.name, t.handle, lines)
+	}
+	return h.Capture(ctx, t.name, t.handle, lines), nil
+}
+
+// withReadFailure folds a failed pane read into the host's native status. A
+// window the host says is gone is proof (`gone`). Any other failed read says
+// nothing about the agent, so it yields to what the host itself reports
+// (`working`, a `blocked` dialog, `gone`, its own unverifiable) and is only
+// pane-unreadable when the host has nothing better.
+func withReadFailure(native string, err error) string {
+	if err == nil {
+		return native
+	}
+	if errors.Is(err, host.ErrPaneGone) {
+		return "gone"
+	}
+	switch {
+	case native == "working", native == "blocked", native == "gone", strings.HasPrefix(native, host.UnverifiablePrefix):
+		return native
+	}
+	return host.UnverifiablePrefix + host.ReasonPaneUnreadable
 }
 
 // IsPRURL reports whether s is a PR or MR URL, the shape `worker poll` stores

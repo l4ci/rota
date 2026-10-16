@@ -159,6 +159,36 @@ RC=0; OUT=$( cd "$PROJ" && PATH="$FK/down:$FAKES" FAKE_TMUX="$FK/tmux" FAKE_TRAC
 [ "$(branch_of dana)" = "dana/2-second-thing" ] && [ "$(dbq labels 2)" = "in-progress,type:task" ] || fail "refusals change nothing"
 if grep -q 'kill-window' "$FK/tmux/log"; then fail "a refused reclaim must not kill anything"; fi
 
+# Contact loss is not death (#820): a poll that could not reach the host leaves
+# the slot unverifiable with its reason. Status shows both, reclaim refuses it
+# (exit 4, blockedBy unverifiable) and --force still needs a host to kill
+# through, so it refuses as above.
+PREV_DANA_STATE="$(reg dana state)"
+dana_seed() { python3 - "$PROJ/.rota/workers.json" "$1" "$2" <<'PY' || fail "could not seed dana's state"
+import json, sys
+p, state, reason = sys.argv[1:4]
+d = json.load(open(p))
+for s in d["slots"]:
+    if s["name"] == "dana":
+        s["state"] = state
+        if reason: s["reason"] = reason
+        else: s.pop("reason", None)
+json.dump(d, open(p, "w"), indent=2)
+PY
+}
+down_rota() { ( cd "$PROJ" && PATH="$FK/down:$FAKES" FAKE_TMUX="$FK/tmux" FAKE_TRACKER_DB="$TMP_RR/db.json" "$ROTA_BIN" --json "$@" 2>/dev/null ); }
+dana_seed unverifiable host-unreachable
+RC=0; OUT=$(down_rota round reclaim dana --holder-pid "$HOLDER") || RC=$?
+[ "$RC" = "4" ] && [ "$(echo "$OUT" | jget data.blockedBy)" = "unverifiable" ] || fail "an unverifiable slot is refused without --force: $RC $OUT"
+case "$OUT" in *host-unreachable*) ;; *) fail "the refusal must name the reason: $OUT" ;; esac
+RC=0; OUT=$(down_rota round reclaim dana --force --holder-pid "$HOLDER") || RC=$?
+[ "$RC" = "4" ] && [ "$(echo "$OUT" | jget data.blockedBy)" = "live agent" ] || fail "--force still needs a host to kill through: $RC $OUT"
+OUT=$(down_rota round status) || fail "round status failed: $OUT"
+echo "$OUT" | python3 -c 'import json,sys; r=[x for x in json.load(sys.stdin)["data"]["slots"] if x["name"]=="dana"][0]; sys.exit(0 if (r.get("hostState"), r.get("evidence")) == ("unverifiable", "host-unreachable") else 1)' || fail "status must show unverifiable and its reason: $OUT"
+[ "$(branch_of dana)" = "dana/2-second-thing" ] && [ "$(dbq labels 2)" = "in-progress,type:task" ] || fail "an unverifiable refusal changes nothing"
+dana_seed "$PREV_DANA_STATE" ""
+pass "an unverifiable slot shows its reason in status, reclaim exits 4 without --force and --force still refuses when the host cannot be asked"
+
 # dana's window is gone from the host (the tmux fake lists none): it is dead,
 # which needs no kill.
 OUT=$(rr round reclaim dana --holder-pid "$HOLDER" --note-file "$TMP_RR/note.md") || fail "reclaim of a dead slot failed: $OUT"

@@ -25,7 +25,7 @@ func (s *Slot) Raw() *jsonx.Object { return s.o }
 // States a slot can record: the lowercased poll states.
 var slotStates = map[string]bool{
 	"busy": true, "idle": true, "blocked": true, "done": true, "dead": true,
-	"limited": true, "needs-permission": true, "unknown": true,
+	"limited": true, "needs-permission": true, "unknown": true, "unverifiable": true,
 }
 
 // ValidState reports whether MarkState accepts next.
@@ -84,6 +84,17 @@ func (s *Slot) SetCodexAccount(name string) {
 		return
 	}
 	s.o.Set("codexAccount", name)
+}
+
+// Reason is why the slot is unverifiable (host.Reason*), "" in any other state.
+func (s *Slot) Reason() string { return jsonx.Str(s.o, "reason") }
+
+// SetReason records why the slot is unverifiable; it is a no-op for the
+// reason already recorded, so a poll loop does not rewrite the registry.
+func (s *Slot) SetReason(r string) {
+	if s.Reason() != r {
+		s.o.Set("reason", r)
+	}
 }
 
 func (s *Slot) ActiveAt() string { return jsonx.Str(s.o, "activeAt") }
@@ -327,6 +338,9 @@ func (s *Slot) MarkState(next, now string) error {
 func (s *Slot) setState(next, now string) {
 	if s.State() != next && now != "" {
 		s.o.Set("activeAt", now)
+	}
+	if next != "unverifiable" {
+		s.o.Delete("reason")
 	}
 	s.o.Set("state", next)
 }

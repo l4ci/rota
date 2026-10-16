@@ -14,7 +14,7 @@ A worker's value is that it can idle on a question and a human can answer in its
 
 ## Polling
 
-`rota worker poll` classifies each slot; read `data.slots[].state` (`blocked`, `done`, `busy`, `needs-permission`, `limited`, `dead`, `idle`, `unknown`) and `evidence`. Sentinels outrank movement and `rota round wait` blocks on the same classification. The state-to-action routing lives in `rota-orchestrate/SKILL.md` (sections 3 and 4); the verb is specified in the contract (A7). Two judgment rules the verb cannot make:
+`rota worker poll` classifies each slot; read `data.slots[].state` (`blocked`, `done`, `busy`, `needs-permission`, `limited`, `dead`, `idle`, `unknown`, `unverifiable`) and `evidence`. Sentinels outrank movement and `rota round wait` blocks on the same classification. The state-to-action routing lives in `rota-orchestrate/SKILL.md` (sections 3 and 4); the verb is specified in the contract (A7). Two judgment rules the verb cannot make:
 
 **A bare `API Error … Overloaded` on a static pane is a headstone, not a pulse.** The session took its dispatch, retried to exhaustion, and died, often without reading the task. Only `Retrying in` proves a retry is in flight. A watcher that treats them alike waits forever on a dead worker.
 

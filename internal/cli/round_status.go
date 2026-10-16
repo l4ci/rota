@@ -156,7 +156,7 @@ func roundStatus(*flag.FlagSet) RunFunc {
 			if r.BestOf != "" {
 				issue += " (best-of: " + r.BestOf + ")"
 			}
-			cols := []string{r.Name, issue, dash(r.Branch), dash(r.PR), dash(r.HostState), dash(strings.Join(r.Drift, ","))}
+			cols := []string{r.Name, issue, dash(r.Branch), dash(r.PR), dash(hostStateText(r)), dash(strings.Join(r.Drift, ","))}
 			if r.Kind != "" {
 				col := strings.TrimSuffix(r.Kind+"/"+r.Model, "/")
 				if r.KindSource != "" {
@@ -255,6 +255,9 @@ func rowList(rows []round.Row) []any {
 		setIf(o, "pr", r.PR)
 		setIf(o, "prState", r.PRState)
 		setIf(o, "hostState", r.HostState)
+		if r.HostState == "unverifiable" { // the reason (#820); other rows' evidence is the UI's
+			setIf(o, "evidence", r.Evidence)
+		}
 		setIf(o, "state", r.State)
 		setIf(o, "tab", r.Tab)
 		o.Set("registered", r.Registered)
@@ -319,4 +322,13 @@ func firstOf(a, b string) string {
 		return a
 	}
 	return b
+}
+
+// hostStateText is the row's host state, with an unverifiable slot's reason
+// beside it.
+func hostStateText(r round.Row) string {
+	if r.HostState == "unverifiable" && r.Evidence != "" {
+		return r.HostState + ":" + r.Evidence
+	}
+	return r.HostState
 }
