@@ -58,7 +58,7 @@ func callReceipted(t *testing.T, dir string, f *fakeVerb, args ...string) (Resul
 	fs := flag.NewFlagSet("x", flag.ContinueOnError)
 	var in []inputsFunc
 	if f.heads != nil {
-		in = append(in, func(string, []string) []string { return f.heads() })
+		in = append(in, func(*Ctx, string, []string) []string { return f.heads() })
 	}
 	run := receipted("round assign", f.verb, in...)(fs)
 	if err := fs.Parse(args); err != nil {
@@ -227,16 +227,16 @@ func TestBranchHeadsFollowsPushes(t *testing.T) {
 	git("branch", "ben/1-x")
 	reg := `{"slots":[{"name":"ben","branch":"ben/1-x","pr":"https://example.test/o/r/pull/7"}]}`
 	os.WriteFile(filepath.Join(dir, ".rota", "workers.json"), []byte(reg), 0o644)
-	before := strings.Join(branchHeads(dir, []string{"ben", "7"}), "|")
+	before := strings.Join(branchHeads(&Ctx{}, dir, []string{"ben", "7"}), "|")
 	if strings.Contains(before, "=?") {
 		t.Fatalf("slot and PR number must both resolve: %s", before)
 	}
 	git("switch", "-q", "ben/1-x")
 	git("-c", "user.email=a@b", "-c", "user.name=n", "commit", "-q", "--allow-empty", "-m", "push")
-	if after := strings.Join(branchHeads(dir, []string{"ben", "7"}), "|"); after == before {
+	if after := strings.Join(branchHeads(&Ctx{}, dir, []string{"ben", "7"}), "|"); after == before {
 		t.Errorf("a new commit must change the heads: %s", after)
 	}
-	if got := branchHeads(dir, []string{"zed"}); got[0] != "head:zed=?" {
+	if got := branchHeads(&Ctx{}, dir, []string{"zed"}); got[0] != "head:zed=?" {
 		t.Errorf("unknown token: %v", got)
 	}
 }

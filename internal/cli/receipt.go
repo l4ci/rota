@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"sort"
 	"strings"
 
@@ -47,7 +46,7 @@ func receipted(verb string, inner func(*flag.FlagSet) RunFunc, inputs ...inputsF
 			}
 			fp := fingerprint(c, fs, args)
 			for _, in := range inputs {
-				fp += "\x00" + strings.Join(in(root, args), "\x00")
+				fp += "\x00" + strings.Join(in(c, root, args), "\x00")
 			}
 			// Read the file before mutating, minted id or not: a corrupt
 			// receipts file is refused rather than written over (#712).
@@ -162,7 +161,7 @@ func checkOnly(fs *flag.FlagSet) bool {
 
 // inputsFunc names what a verb judges beyond its arguments (the heads of the
 // branches a gate looks at), so a changed input is a different call.
-type inputsFunc func(root string, args []string) []string
+type inputsFunc func(c *Ctx, root string, args []string) []string
 
 // fingerprint is the call's identity: the repo, the positional arguments and
 // every flag the caller set, except the request id itself. A *-file flag counts
@@ -210,7 +209,7 @@ func mintRequestID() string {
 // branchHeads is the inputsFunc of gate and train: the head sha of each slot
 // branch (or of the slot a PR number is recorded on) the call judges. Local
 // refs only, so a fingerprint never reaches the forge; a push moves the head.
-func branchHeads(root string, args []string) []string {
+func branchHeads(c *Ctx, root string, args []string) []string {
 	reg := worker.LoadRegistryTolerant(root)
 	var out []string
 	for _, a := range args {
@@ -227,8 +226,8 @@ func branchHeads(root string, args []string) []string {
 		head := ""
 		if slot != nil && slot.Branch() != "" {
 			for _, ref := range []string{"refs/heads/", "refs/remotes/origin/"} {
-				if b, err := exec.Command("git", "-C", root, "rev-parse", "--verify", "-q", ref+slot.Branch()).Output(); err == nil {
-					head += strings.TrimSpace(string(b)) + ","
+				if r, err := c.deps().Git(c.Context(), root, "rev-parse", "--verify", "-q", ref+slot.Branch()); err == nil && r.ExitCode == 0 {
+					head += strings.TrimSpace(r.Stdout) + ","
 				}
 			}
 		}
