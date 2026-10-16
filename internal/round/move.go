@@ -34,6 +34,9 @@ const (
 	BlockSameSlot    = "same slot"
 	BlockHealthy     = "healthy"
 	BlockLiveAgent   = "live agent"
+	// BlockUnverifiable: the host could not vouch for the slot, which is not
+	// proof the agent is gone (#820).
+	BlockUnverifiable = "unverifiable"
 )
 
 // Slot health, as reclaim reports it.
@@ -42,6 +45,9 @@ const (
 	HealthStalled = "stalled"
 	HealthHealthy = "healthy"
 	HealthIdle    = "idle"
+	// HealthUnverifiable: the slot's last poll could not reach the host or read
+	// the pane, and the host cannot be asked now. Not dead.
+	HealthUnverifiable = "unverifiable"
 )
 
 // HumanTarget is the `--to` value that hands an issue to the human.
@@ -348,6 +354,9 @@ type SlotHealth struct {
 	// host could not be asked, so liveness is unknown and read as alive.
 	Alive, Known bool
 	Stall        Stall
+	// Reason is why an unverifiable slot is: host-unreachable, pane-unreadable
+	// or stale-handle.
+	Reason string
 }
 
 // Health computes a slot's health the way reconcile does, from the host's live
@@ -371,6 +380,14 @@ func (e Env) Health(ctx context.Context, root string, s *worker.Slot, now time.T
 		h.Health = HealthDead
 		return h
 	}
+	// A host that answers settles it above (alive, or provably gone). One that
+	// does not leaves the slot's last poll as the only word, and a poll that
+	// could not reach the host is no proof of death or of life.
+	if !h.Known && s.State() == "unverifiable" {
+		h.Health = HealthUnverifiable
+		h.Reason = unverifiableReason(s)
+		return h
+	}
 	waiting := false
 	for _, x := range escalation.Load(root) {
 		if x.Status == escalation.StatusPending && x.Slot == name {
@@ -386,6 +403,18 @@ func (e Env) Health(ctx context.Context, root string, s *worker.Slot, now time.T
 		h.Health = HealthStalled
 	}
 	return h
+}
+
+// unverifiableReason is the reason a slot's last poll recorded (`seen` holds
+// `<state>\t<evidence>`), "unrecorded" when the poll left none.
+func unverifiableReason(s *worker.Slot) string {
+	if _, ev, ok := strings.Cut(s.Seen(), "\t"); ok {
+		ev, _, _ = strings.Cut(ev, "\t")
+		if ev != "" {
+			return ev
+		}
+	}
+	return "unrecorded"
 }
 
 // ReclaimOpts are the flags of `rota round reclaim`.
@@ -457,6 +486,9 @@ func (e Env) Reclaim(ctx context.Context, root string, be Board, o ReclaimOpts) 
 	if h.Health == HealthHealthy && !o.Force {
 		return res, blocked(BlockHealthy, "slot %s is healthy (an agent is working on %s); --force reclaims it anyway", o.Slot, tracker.RefOf(h.Issue))
 	}
+	if h.Health == HealthUnverifiable && !o.Force {
+		return res, blocked(BlockUnverifiable, "slot %s is unverifiable (%s): the host cannot say whether its agent lives, which is not proof it died. Inspect its pane, then wait or reclaim with --force", o.Slot, h.Reason)
+	}
 	reason := "forced"
 	switch h.Health {
 	case HealthDead:
@@ -470,6 +502,8 @@ func (e Env) Reclaim(ctx context.Context, root string, be Board, o ReclaimOpts) 
 		e.workerEnv().SweepSlot(ctx, root, o.Slot)
 	} else {
 		switch {
+		case h.Health == HealthUnverifiable: // forced after inspection: no host to kill through
+			res.Warnings = append(res.Warnings, fmt.Sprintf("slot %s was unverifiable (%s): its agent was not proved gone and may still run", o.Slot, h.Reason))
 		case e.HostName == host.Solo: // a subagent has no pane to close
 		case h.Known && !h.Alive: // provably gone
 		case !h.Known:

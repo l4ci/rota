@@ -505,11 +505,22 @@ func (h *herdr) submitTyped(ctx context.Context, name string) error {
 // Capture prints recent pane text with soft wraps joined (the herdr twin of
 // capture-pane -J).
 func (h *herdr) Capture(ctx context.Context, slot, handle string, lines int) string {
+	text, _ := h.ReadPane(ctx, slot, handle, lines)
+	return text
+}
+
+// ReadPane is Capture that says when the read failed, so a pane that could not
+// be read is not taken for an empty one.
+func (h *herdr) ReadPane(ctx context.Context, slot, handle string, lines int) (string, error) {
 	if handle == "" {
-		return ""
+		return "", nil
 	}
-	return paneText(h.herdr(ctx, "agent", "read", AgentName(slot, handle), "--source", "recent-unwrapped",
-		"--lines", strconv.Itoa(lines), "--format", "text"))
+	r := h.herdr(ctx, "agent", "read", AgentName(slot, handle), "--source", "recent-unwrapped",
+		"--lines", strconv.Itoa(lines), "--format", "text")
+	if r.ExitCode != 0 {
+		return "", fmt.Errorf("herdr agent read failed (exit %d): %s", r.ExitCode, strings.TrimSpace(r.Stderr))
+	}
+	return paneText(r), nil
 }
 
 // paneText is the pane text of an `agent read` reply. herdr 0.9.x prints it as
@@ -535,9 +546,32 @@ func (h *herdr) Status(ctx context.Context, slot, handle string) string {
 func (h *herdr) statusOf(ctx context.Context, name string) string {
 	r := h.herdr(ctx, "agent", "get", name)
 	if r.ExitCode != 0 {
-		return "gone"
+		return failedStatus(r)
 	}
 	return jget(r.Stdout, "result.agent.agent_status")
+}
+
+// Unverifiable is the prefix of a Status that is no answer: the host could not
+// say whether the agent lives. The reason follows it.
+const (
+	UnverifiablePrefix    = "unverifiable:"
+	ReasonHostUnreachable = "host-unreachable"
+	ReasonStaleHandle     = "stale-handle"
+	ReasonPaneUnreadable  = "pane-unreadable"
+)
+
+// failedStatus reads a failed `agent get`. herdr's own agent_not_found is the
+// one positive proof the session is gone. A tab or pane the handle no longer
+// names is a stale handle, and anything else (no server, a socket error, a
+// binary that cannot run) is no answer at all: neither says the agent died.
+func failedStatus(r Result) string {
+	switch jget(r.Stderr, "error.code") {
+	case "agent_not_found":
+		return "gone"
+	case "tab_not_found", "pane_not_found", "agent_pane_not_found":
+		return UnverifiablePrefix + ReasonStaleHandle
+	}
+	return UnverifiablePrefix + ReasonHostUnreachable
 }
 
 // Turn reads the slot's agent from `agent get`: agent_status, state_change_seq

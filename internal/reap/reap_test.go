@@ -546,3 +546,15 @@ func TestReapSkipsMergedBranchesNobodyAdopted(t *testing.T) {
 		t.Fatalf("candidates = %v, want %v", got, want)
 	}
 }
+
+// An unverifiable slot (#820) is registered work the host could not vouch for:
+// its checkout, branch and tab stay out of reap, which acts only on proof.
+func TestUnverifiableSlotIsNeverACandidate(t *testing.T) {
+	g := repo([]wt{{"slot", "kit/3-a", ""}}, []string{"kit/3-a"}, "kit/3-a")
+	g.clean("slot")
+	h := &fakeHost{tabs: []host.Tab{tab("w6:t1", "/r/.worktrees/slot", true)}}
+	rows := []round.Row{{Name: "slot", Registered: true, Branch: "kit/3-a", Tab: "w6:t1", HostState: "unverifiable", Evidence: "host-unreachable"}}
+	if res := find(t, input(g, rows, []host.Agent{}, h)); len(res.Candidates) != 0 {
+		t.Errorf("an unverifiable slot was offered for removal: %v", ids(res.Candidates))
+	}
+}

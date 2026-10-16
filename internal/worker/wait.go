@@ -201,9 +201,21 @@ wait:
 					return WaitResult{}, err
 				}
 			}
+			// An unverifiable slot is not news, but the state is the registry's
+			// record of it (`round status`, `round reclaim`): write it, and write
+			// the busy row that ends it.
+			if t := targetOf(targets, r.Name); r.State == StateUnverifiable || (r.State == StateBusy && strings.EqualFold(t.prev, StateUnverifiable)) {
+				if _, err := UpdateSlot(root, r.Name, func(s *Slot) {
+					if s.PaneHandle() == t.handle {
+						recordRow(s, r, t, e.Now(), LoadRegistryTolerant(root))
+					}
+				}); err != nil {
+					return WaitResult{}, err
+				}
+			}
 			// A row already returned once is treated like busy until the slot
 			// shows a different state or evidence; alwaysNews states never are.
-			if r.State != StateBusy && (seen[r.Name] != key || alwaysNews(r.State)) && !settled(r) {
+			if r.State != StateBusy && r.State != StateUnverifiable && (seen[r.Name] != key || alwaysNews(r.State)) && !settled(r) {
 				var rowErr error
 				var done *ledger.Entry
 				stale := false

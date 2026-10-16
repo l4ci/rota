@@ -61,6 +61,11 @@ const (
 	StateLimited         = "LIMITED"
 	StateNeedsPermission = "NEEDS-PERMISSION"
 	StateUnknown         = "UNKNOWN"
+	// StateUnverifiable: the host could not be asked or the pane could not be
+	// read, so the slot's liveness is not known. Contact loss is not process
+	// death (#820): only positive proof of exit (`gone`) is DEAD. The evidence
+	// is the reason (host.Reason*).
+	StateUnverifiable = "UNVERIFIABLE"
 )
 
 // LimitPhrases are the usage-limit messages a session prints about itself, as
@@ -206,6 +211,9 @@ func Classify(text string, moved bool, lines int, native string) (state, evidenc
 			}
 			return StateLimited, strutil.Clip(strings.TrimSpace(m), 120)
 		}
+	}
+	if reason, ok := strings.CutPrefix(native, host.UnverifiablePrefix); ok {
+		return StateUnverifiable, reason
 	}
 	if native == "working" {
 		return StateBusy, "herdr: agent working"
@@ -525,6 +533,11 @@ func recordRow(s *Slot, r PollRow, t pollTarget, now time.Time, queued Registry)
 	if s.Seen() != key {
 		s.ClearSeen()
 	}
+	// `round wait` never returns an unverifiable slot, so it never records the
+	// reason `round status` and `round reclaim` read from `seen`.
+	if r.State == StateUnverifiable {
+		s.SetSeen(key)
+	}
 	// A pane that moved after the worker's event answers it: the question was
 	// relayed or typed to, the work resumed. Only the event this row was read
 	// against goes (the seq check above), never a newer one.
@@ -620,6 +633,7 @@ func (e Env) classify(ctx context.Context, h host.Host, targets []pollTarget, se
 	tr := h.Capabilities().TurnReader
 	first := map[string]string{}
 	finished := map[string]string{} // slot -> native status of a finished turn
+	unreadable := map[string]bool{} // slot -> a pane read failed
 	for _, t := range targets {
 		// The turn is read before the capture: a capture taken after the
 		// host counted the turn finished holds all of its output.
@@ -628,7 +642,7 @@ func (e Env) classify(ctx context.Context, h host.Host, targets []pollTarget, se
 				finished[t.name] = tn.Status
 			}
 		}
-		first[t.name] = h.Capture(ctx, t.name, t.handle, lines)
+		first[t.name], unreadable[t.name] = readPane(ctx, h, t, lines)
 	}
 	if len(finished) < len(targets) {
 		e.Sleep(settle)
@@ -648,8 +662,11 @@ func (e Env) classify(ctx context.Context, h host.Host, targets []pollTarget, se
 			push(PollRow{t.name, st, ev})
 			continue
 		}
-		second := h.Capture(ctx, t.name, t.handle, lines)
+		second, failed := readPane(ctx, h, t, lines)
 		native := h.Status(ctx, t.name, t.handle)
+		if (failed || unreadable[t.name]) && native != "gone" && !strings.HasPrefix(native, host.UnverifiablePrefix) {
+			native = host.UnverifiablePrefix + host.ReasonPaneUnreadable
+		}
 		moved := first[t.name] != second
 		st, ev := Classify(second, moved, lines, native)
 		if st == StateUnknown {
@@ -667,6 +684,16 @@ func (e Env) classify(ctx context.Context, h host.Host, targets []pollTarget, se
 		push(PollRow{t.name, st, ev})
 	}
 	return rows, settling, slept
+}
+
+// readPane captures a slot's pane; failed says the read errored, which is not
+// the same as a pane with no text. A host that cannot tell reads as readable.
+func readPane(ctx context.Context, h host.Host, t pollTarget, lines int) (text string, failed bool) {
+	if r := h.Capabilities().PaneReader; r != nil && t.handle != "" {
+		text, err := r.ReadPane(ctx, t.name, t.handle, lines)
+		return text, err != nil
+	}
+	return h.Capture(ctx, t.name, t.handle, lines), false
 }
 
 // IsPRURL reports whether s is a PR or MR URL, the shape `worker poll` stores

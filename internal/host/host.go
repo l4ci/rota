@@ -149,6 +149,12 @@ type Explainer interface {
 	Explain(ctx context.Context, slot, handle string) string
 }
 
+// PaneReader is implemented by a host that can tell a pane it could not read
+// from one with no text. Capture returns "" for both.
+type PaneReader interface {
+	ReadPane(ctx context.Context, slot, handle string, lines int) (string, error)
+}
+
 // Labeler is implemented by a host that can show display-only text beside a
 // slot's pane and the round's workspace (herdr's sidebar). It is cosmetic and
 // best effort: nothing is returned, a failure never reaches the caller, and a
@@ -200,6 +206,7 @@ type WorkspaceCloser interface {
 type Capabilities struct {
 	Resubmitter     Resubmitter
 	Explainer       Explainer
+	PaneReader      PaneReader
 	Labeler         Labeler
 	TurnReader      TurnReader
 	Watcher         Watcher
@@ -221,6 +228,7 @@ func CapabilitiesOf(h any) Capabilities {
 	var c Capabilities
 	c.Resubmitter, _ = h.(Resubmitter)
 	c.Explainer, _ = h.(Explainer)
+	c.PaneReader, _ = h.(PaneReader)
 	c.Labeler, _ = h.(Labeler)
 	c.TurnReader, _ = h.(TurnReader)
 	c.Watcher, _ = h.(Watcher)

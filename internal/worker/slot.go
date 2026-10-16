@@ -25,7 +25,7 @@ func (s *Slot) Raw() *jsonx.Object { return s.o }
 // States a slot can record: the lowercased poll states.
 var slotStates = map[string]bool{
 	"busy": true, "idle": true, "blocked": true, "done": true, "dead": true,
-	"limited": true, "needs-permission": true, "unknown": true,
+	"limited": true, "needs-permission": true, "unknown": true, "unverifiable": true,
 }
 
 // ValidState reports whether MarkState accepts next.
