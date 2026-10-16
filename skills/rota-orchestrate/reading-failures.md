@@ -2,7 +2,7 @@
 
 Loaded by `skills/rota-orchestrate/SKILL.md` section 4 when a slot is `dead`, `unknown`, stalled or stuck, a suite is red, or the base breaks.
 
-**Dead vs stalled.** `dead`: no live agent (tab gone or process exited). `stalled`: live agent, nothing moved for `round.stallMinutes` (no commit, edit or state change). Stalled is usually a long test run, and a worker waiting on your escalation is never stalled. Read the pane before acting on either.
+**Dead vs stalled.** `dead`: no live agent (tab gone or process exited). `stalled`: live agent, nothing moved for `round.stallMinutes` (no commit, edit or state change). Stalled is usually a long test run, and a worker waiting on your escalation is never stalled. Read the pane before acting on either. A worker that ran `rota worker send <slot> --heartbeat` is alive, not necessarily progressing: it restarts the clock and changes no state, so a slot that heartbeats for hours with no commit is still yours to read. A `blocked` or `question` event on `round status` (`event`) is the worker's own record; read it before the pane. Known gap (#707): an old session's `worker send` after a redispatch is guarded only by the dispatch clearing the event; if a fresh slot reads blocked with a question you never saw, check the pane.
 
 Three verbs move an assigned issue:
 

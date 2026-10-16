@@ -11,6 +11,7 @@ import (
 	"github.com/l4ci/rota/internal/tracker"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -251,7 +252,9 @@ const missingSentinelNote = "no ROTA-DONE sentinel; PR found by branch head"
 func (e Env) promoteIdleWithPR(ctx context.Context, root string, rows []PollRow) (out []PollRow, notes map[string]string) {
 	idle := map[string]PollRow{}
 	for _, r := range rows {
-		if r.State == StateIdle {
+		// A done event is recorded before the PR is opened: its row has no PR
+		// yet, the same hole as an idle pane that printed no sentinel.
+		if r.State == StateIdle || (r.State == StateDone && r.Evidence == noPREvidence) {
 			idle[r.Name] = r
 		}
 	}
@@ -349,11 +352,19 @@ func (e Env) Poll(ctx context.Context, root string, o PollOpts) (PollResult, err
 
 	rows, _, _ := e.classify(ctx, h, targets, o.Settle, o.Lines)
 	rows, notes := e.promoteIdleWithPR(ctx, root, rows)
+	notified := map[string]int{} // slot -> seq of the event whose notification went out
 	for i, r := range rows {
 		// Notify on the transition only: a poll loop re-reading a stuck slot
-		// must not ring every few seconds.
-		if (r.State == StateBlocked || r.State == StateNeedsPermission) && targets[i].prev != strings.ToLower(r.State) {
+		// must not ring every few seconds. A blocked event moves the slot to
+		// blocked when it is sent, so its transition is the first poll to read
+		// it, once per event.
+		t := targets[i]
+		fresh := t.evSeq > 0 && r.State == StateBlocked && !t.ev.Notified
+		if ((r.State == StateBlocked || r.State == StateNeedsPermission) && t.prev != strings.ToLower(r.State)) || fresh {
 			h.Notify(ctx, fmt.Sprintf("rota worker %s: %s", r.Name, r.State), r.Evidence)
+			if fresh {
+				notified[r.Name] = t.evSeq
+			}
 		}
 	}
 
@@ -375,8 +386,15 @@ func (e Env) Poll(ctx context.Context, root string, o PollOpts) (PollResult, err
 			return
 		}
 		prev := s.State()
-		if err := recordRow(s, r, e.Now(), reg); err != nil && rowErr == nil {
+		skipped, err := recordRow(s, r, targetOf(targets, r.Name), e.Now(), reg)
+		if err != nil && rowErr == nil {
 			rowErr = err
+		}
+		if skipped { // a newer event arrived; the next poll reads against it
+			return
+		}
+		if ev := s.Event(); ev != nil && ev.Seq == notified[s.Name()] {
+			s.MarkEventNotified()
 		}
 		if d, ok := paneDone(prev, s, r); ok {
 			dones = append(dones, d)
@@ -480,18 +498,38 @@ func alwaysNews(state string) bool {
 // recordRow writes one classified row into its slot, the way every writer of
 // a pane's state does (Poll, Wait). A row different from `seen` drops it: the
 // slot moved on, so its next arrival is news again.
-func recordRow(s *Slot, r PollRow, now time.Time, queued Registry) error {
+func recordRow(s *Slot, r PollRow, t pollTarget, now time.Time, queued Registry) (skipped bool, err error) {
+	// The row was read against t's event. One that arrived, went or was replaced
+	// since (a `worker send` between the snapshot and this write) makes the row
+	// stale: recording it would stamp activeAt past the new event and kill it.
+	// The caller reads again.
+	if cur := s.Event(); (cur == nil) != (t.ev == nil) || (cur != nil && cur.Seq != t.ev.Seq) {
+		return true, nil
+	}
 	// A state change is the registry's only record of activity that is not a
-	// commit or an edit: `round reconcile` reads it as the stall clock.
+	// commit or an edit: `round reconcile` reads it as the stall clock. A row an
+	// event decided is stamped with the event's own time, so the event is not
+	// older than the change it caused.
+	at := stamp(now)
+	if t.evSeq > 0 {
+		at = t.ev.TS
+	}
+	key := rowKey(t, r)
 	prev := s.State()
-	if err := s.MarkState(r.State, stamp(now)); err != nil {
-		return err
+	if err := s.MarkState(r.State, at); err != nil {
+		return false, err
 	}
 	if r.State == StateDone && !strings.EqualFold(prev, "done") {
 		s.BaselineReview(now)
 	}
-	if s.Seen() != seenKey(r.State, r.Evidence) {
+	if s.Seen() != key {
 		s.ClearSeen()
+	}
+	// A pane that moved after the worker's event answers it: the question was
+	// relayed or typed to, the work resumed. Only the event this row was read
+	// against goes (the seq check above), never a newer one.
+	if r.State == StateBusy && t.ev != nil {
+		s.ClearEvent()
 	}
 	// Only a URL-shaped ROTA-DONE argument becomes slot.pr. The contract
 	// allows a bare branch name there, and handing a branch to `gh pr
@@ -509,7 +547,7 @@ func recordRow(s *Slot, r PollRow, now time.Time, queued Registry) error {
 			s.SetIssues(refs)
 		}
 	}
-	return nil
+	return false, nil
 }
 
 // pollTarget is one slot to classify: its name, host handle, the state the
@@ -518,10 +556,48 @@ func recordRow(s *Slot, r PollRow, now time.Time, queued Registry) error {
 type pollTarget struct {
 	name, handle, prev, seen string
 	turnSeq                  int
+	// ev is the slot's standing worker event with the stamps Decide weighs it
+	// against. evSeq is set by classify to the event's seq when the event, not
+	// the pane, decided the row.
+	ev         *Event
+	lastChange time.Time
+	evSeq      int
 }
 
 func slotTarget(s *Slot) pollTarget {
-	return pollTarget{s.Name(), s.PaneHandle(), s.State(), s.Seen(), s.TurnSeq()}
+	return pollTarget{name: s.Name(), handle: s.PaneHandle(), prev: s.State(), seen: s.Seen(), turnSeq: s.TurnSeq(),
+		ev: s.Event(), lastChange: parseStamp(s.ActiveAt())}
+}
+
+// rowKey is the `seen` key of a row. A row an event decided carries the
+// event's seq, so the next event is news even when it reads the same.
+func rowKey(t pollTarget, r PollRow) string {
+	k := seenKey(r.State, r.Evidence)
+	if t.evSeq > 0 {
+		k += "\t#" + strconv.Itoa(t.evSeq)
+	}
+	return k
+}
+
+// refreshEvents re-reads each target's event and last-change stamp (and its
+// recorded state) from reg, for a loop that classifies the same targets again.
+func refreshEvents(reg Registry, targets []pollTarget) {
+	for i := range targets {
+		if s := reg.Slot(targets[i].name); s != nil {
+			targets[i].ev, targets[i].lastChange, targets[i].prev = s.Event(), parseStamp(s.ActiveAt()), s.State()
+		}
+		targets[i].evSeq = 0
+	}
+}
+
+// targetOf is the polled target named name, the zero target when none is.
+func targetOf(targets []pollTarget, name string) pollTarget {
+	for _, t := range targets {
+		if t.name == name {
+			return t
+		}
+	}
+	return pollTarget{}
 }
 
 // classify reads each target's pane twice, settle apart, and classifies it.
@@ -558,10 +634,18 @@ func (e Env) classify(ctx context.Context, h host.Host, targets []pollTarget, se
 		e.Sleep(settle)
 		slept = true
 	}
-	for _, t := range targets {
+	for i, t := range targets {
+		// push appends the row after the slot's own event had its say.
+		push := func(row PollRow) {
+			row, used := decide(t.ev, row, t.lastChange)
+			if used {
+				targets[i].evSeq = t.ev.Seq
+			}
+			rows = append(rows, row)
+		}
 		if native, ok := finished[t.name]; ok {
 			st, ev := Classify(first[t.name], false, lines, native)
-			rows = append(rows, PollRow{t.name, st, ev})
+			push(PollRow{t.name, st, ev})
 			continue
 		}
 		second := h.Capture(ctx, t.name, t.handle, lines)
@@ -580,7 +664,7 @@ func (e Env) classify(ctx context.Context, h host.Host, targets []pollTarget, se
 		if st == StateBusy && moved && native != "working" {
 			settling = true
 		}
-		rows = append(rows, PollRow{t.name, st, ev})
+		push(PollRow{t.name, st, ev})
 	}
 	return rows, settling, slept
 }

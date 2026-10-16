@@ -3,6 +3,7 @@ verified-sha: 41a20d1f3536b4b0b394a6113dedce633d22b0fa
 refs:
   - internal/worker
   - internal/cli/worker.go
+  - internal/cli/worker_send.go
   - internal/tracker
   - internal/host
 ---
@@ -71,7 +72,17 @@ repo: none
 data: {"slot": string, "pr": string, "commentId": string, "url": string, "changed": true}
 exit: 2 when `--body-file` is missing or the body is empty; 3 when the slot is not in the pool or has no PR; 5 or 6 as the tracker verbs (forge unavailable, rate limited)
 old: none (new in #577)
-note: a worker answers a reviewer on its slot's PR after a `REVIEW` relay (see `round review-relay`). It posts the body as a PR comment through the tracker (`AddMRNote`, so GitHub and GitLab behave alike) and ends it with `<!-- rota:worker-reply <slot> -->`; the marker is how the review poll tells the worker's comments from review input. `url` is "" when the forge cannot name the comment's link. It resolves nothing on the reviewer's behalf.
+note: a worker answers a reviewer on its slot's PR after a `REVIEW` relay (see `round review-relay`). It posts the body as a PR comment through the tracker (`AddMRNote`, so GitHub and GitLab behave alike) and ends it with `<!-- rota:worker-reply <slot> -->`; the marker is how the review poll tells the worker's comments from review input. `url` is "" when the forge cannot name the comment's link. It resolves nothing on the reviewer's behalf. Once the comment is posted it records a `review-reply` event on the slot (see `worker send`); a failure there is a warning, never a refusal.
+
+### rota worker send
+rota worker send <slot> (--blocked <question> | --question <text> | --heartbeat)
+repo: none
+data: {"slot": string, "event": "blocked" | "question" | "heartbeat", "state": string, "previous": string, "seq": number, "changed": bool}
+exit: 2 when none or more than one of the three flags is given, the text is empty or the slot is missing; 3 when the slot is not in the pool; 5 when `.rota/workers.json` cannot be read or written (a corrupt registry fails closed, nothing is rewritten)
+old: none (new in #819)
+note: a worker's typed event on its own slot, written through `round.ReportSlot` on every host (herdr, tmux, solo): a plain `round report` stays solo-only because it would race the pane poll, an event does not, since `round wait` and `worker poll` read it before the pane. It runs from the slot's worktree or the main checkout, like `worker done`. The slot record gains `event` `{"seq": number, "kind": "blocked" | "question" | "done" | "review-reply", "ts": string, "body"?: string, "notified"?: bool}`, the latest event only, and `eventSeq`, the slot's monotonic event id (it survives a cleared event, so an acknowledged event never shares an id with the next).
+note: `--blocked` and `--question` move the slot to `blocked`, clear `seen` (so `round wait` returns it) and append a `blocked` ledger row whose `detail` carries `event`, `body` and `seq` (the slot record's event id); every event is a row, not only the first. `--heartbeat` stamps `heartbeatAt` and nothing else: the standing event, state, `activeAt`, `seen` and the ledger are untouched, so a question not yet answered is not lost. `round reconcile` reads the later of `activeAt` and `heartbeatAt` as the stall clock. It proves the worker alive, not that it progressed. `worker done` and `worker reply` record `done` and `review-reply` events through the same writer; the reply also appends a `review-reply` ledger row (`detail.seq`), does not move the review cursor and does not change the slot's state: a reply posted mid-fix leaves a busy slot busy. A task dispatch or a relay clears `event`: a brief answers whatever the worker last sent.
+note: the sentinel stays the fallback for a harness that cannot run the verb, and the worker still prints `ROTA-BLOCKED` or `ROTA-DONE` last. `round status` shows the standing event of a slot as `event` and uses its body as the slot's evidence.
 
 ### rota worker adopt
 rota worker adopt <branch|worktree-path> --issue <id> [--name <slot>] [--pr <url>] [--accept-overlap]
@@ -113,7 +124,7 @@ rota worker done <slot> [--base <ref>]
 repo: none
 data: {"slot": string, "item": string, "head"?: string, "proofSkipped"?: bool, "missing"?: []string, "changed": bool}
 exit: 4 when the slot's item has no PASS proof row at the slot branch's current HEAD for `test.fast` (`data.missing` lists the commands without one, `changed` false, the hint names `rota proof record`); 3 when the pool, slot or its branch is missing or the slot holds no item; 2 on a bad invocation
-note: the step before the PR. It runs from the slot's worktree or the main checkout: the registry is found through the git common dir, and `{files}` is computed in the slot's worktree against the slot branch, whatever the cwd. A row proves `test.fast` when its result is PASS, its sha is an abbreviation of the branch HEAD (7 or more characters) and its check is either `rota test run fast` or, for each `test.fast` command, that command as `rota proof record` writes it (`{files}` expanded). A FAIL row or a PASS row at an older sha does not count. When `test.fast` is unset the proof half is skipped with a warning and `data.proofSkipped` is true; the verb never refuses on that half. On success the slot's state is recorded as `done` (`changed` is false when it already was); `rota worker poll` records the same state from the pane, so the two agree.
+note: the step before the PR. It runs from the slot's worktree or the main checkout: the registry is found through the git common dir, and `{files}` is computed in the slot's worktree against the slot branch, whatever the cwd. A row proves `test.fast` when its result is PASS, its sha is an abbreviation of the branch HEAD (7 or more characters) and its check is either `rota test run fast` or, for each `test.fast` command, that command as `rota proof record` writes it (`{files}` expanded). A FAIL row or a PASS row at an older sha does not count. When `test.fast` is unset the proof half is skipped with a warning and `data.proofSkipped` is true; the verb never refuses on that half. On success the slot's state is recorded as `done` (`changed` is false when it already was) with a `done` event (`worker send` describes the field) carrying the slot's PR, also when the slot was already done; the event is what keeps `round wait` from reading a static pane with no sentinel as `idle` and flipping the slot back. `rota worker poll` records the same state from the pane, so the two agree.
 
 ### rota worker gate
 rota worker gate <slot|PR> --base <branch> [--check-only] [--no-verify] [--prune] [--confirm --confirm-note <answer> | --approval <escalation> | --escalate]
