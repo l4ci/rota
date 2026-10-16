@@ -107,13 +107,20 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 		changed := false
 		if err := worker.Update(poolRoot, func(doc *worker.Doc) {
 			s := doc.Slot(slotName)
-			if s == nil || s.State() == "done" {
+			if s == nil {
+				return
+			}
+			now := worker.Stamp(c.deps().Now())
+			// The worker's own word, read ahead of the pane: a static pane with
+			// no sentinel must not turn this slot back into idle.
+			s.SetEvent(worker.EventDone, s.PR(), now)
+			if s.State() == "done" {
 				return
 			}
 			// The PR is opened after this verb, so the poll never sees the
 			// busy-to-done edge that baselines the review cursor elsewhere.
 			s.BaselineReview(c.deps().Now())
-			_ = s.MarkState("done", "")
+			_ = s.MarkState("done", now)
 			s.ClearSeen()
 			changed = true
 		}); err != nil {

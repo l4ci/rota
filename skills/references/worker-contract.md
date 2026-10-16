@@ -102,6 +102,14 @@ Work only this task, then stop.
   for the second as usual. `rota worker gate` follows the PR to its head branch when that
   branch leads with the slot's issue, records it on the slot and judges the PR with the
   slot's relay log, so cite relays in its `## Approvals` as in the first.
+- Typed events. When you block, ask the orchestrator a question or start a command that may
+  run longer than `round.stallMinutes` (a full test run), record it first with a rota verb:
+  `rota worker send <slot> --blocked "<question>"`, `--question "<text>"` or `--heartbeat`.
+  `round wait` believes that record before it reads your pane, so it does not depend on how your
+  harness renders a line. A heartbeat proves you are alive, not that you progressed: it restarts
+  the stall clock, moves nothing else. `worker done` and `worker reply` record their own event.
+  The sentinel stays: print `ROTA-BLOCKED` or `ROTA-DONE` as the last line exactly as below, since
+  the pane is the fallback for a harness that cannot run the verb.
 - Escalate rather than guess. If the task leaves a choice a user would notice
   unsettled, and neither the brief nor the code settles it, print
   `ROTA-BLOCKED <slot>: <one question in plain language>` and stop. Ask ONE

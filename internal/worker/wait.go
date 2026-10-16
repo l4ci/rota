@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
+	"strconv"
 	"strings"
 	"time"
 
@@ -173,7 +174,23 @@ wait:
 		rows, notes := e.promoteIdleWithPR(ctx, root, rows)
 		last = rows
 		for _, r := range rows {
-			key := seenKey(r.State, r.Evidence)
+			key := rowKey(targetOf(targets, r.Name), r)
+			if r.State == StateBusy {
+				// The pane moved after the worker's event: it was answered, and
+				// an idle pane later must not read it as news again.
+				for i := range targets {
+					if ev := targets[i].ev; targets[i].name == r.Name && ev != nil && ev.Kind != EventHeartbeat {
+						targets[i].ev = nil
+						if _, err := UpdateSlot(root, r.Name, func(s *Slot) {
+							if cur := s.Event(); cur != nil && cur.Seq == ev.Seq && s.PaneHandle() == targets[i].handle {
+								s.ClearEvent()
+							}
+						}); err != nil {
+							return WaitResult{}, err
+						}
+					}
+				}
+			}
 			if seen[r.Name] != "" && seen[r.Name] != key {
 				// The slot moved on: re-arm it.
 				delete(seen, r.Name)
@@ -197,7 +214,7 @@ wait:
 					}
 					prev := s.State()
 					// UpdateSlot reads the registry strictly; this is a read inside its closure.
-					if rowErr = recordRow(s, r, e.Now(), LoadRegistryTolerant(root)); rowErr == nil && !alwaysNews(r.State) {
+					if rowErr = recordRow(s, r, key, e.Now(), LoadRegistryTolerant(root)); rowErr == nil && !alwaysNews(r.State) {
 						s.SetSeen(key)
 					}
 					if d, ok := paneDone(prev, s, r); ok && rowErr == nil {
@@ -293,6 +310,9 @@ func soloWait(root string, o WaitOpts) (WaitResult, error) {
 	for _, s := range watched {
 		st := strings.ToLower(s.State())
 		key := seenKey(st, "")
+		if ev := s.Event(); ev != nil && ev.Kind != EventHeartbeat {
+			key += "\t#" + strconv.Itoa(ev.Seq) // a second event of the same state is news
+		}
 		if news := alwaysNews(strings.ToUpper(st)); st != "busy" && (news || key != s.Seen()) {
 			name := s.Name()
 			if _, err := UpdateSlot(root, name, func(s *Slot) {

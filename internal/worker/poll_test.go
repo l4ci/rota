@@ -510,3 +510,46 @@ func TestPollDoesNotRecordAPRAnotherRecordHolds(t *testing.T) {
 		t.Errorf("a queued PR is not the slot's: pr = %s", got)
 	}
 }
+
+// A blocked event moves the slot to blocked when it is sent, so the pane
+// poll never sees a transition: the event itself must ring, once.
+func TestPollNotifiesABlockedEventOnce(t *testing.T) {
+	dir, f := pollRegistry(t, "herdr")
+	f.panes["w1"] = []string{"x\n", "x\n", "x\n", "x\n", "x\n", "x\n"}
+	f.panes["w2"] = []string{"x\n", "x\n", "x\n", "x\n", "x\n", "x\n"}
+	send := func(body string) {
+		if err := Update(dir, func(d *Doc) {
+			s := d.Slot("w1")
+			now := stamp(time.Now())
+			s.SetEvent(EventBlocked, body, now)
+			s.MarkState("blocked", now)
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rings := func() (n int) {
+		for _, c := range f.calls {
+			if strings.HasPrefix(c, "notify rota worker w1: BLOCKED") {
+				n++
+			}
+		}
+		return n
+	}
+	e := envWith(f)
+	send("A or B?")
+	for i := 0; i < 2; i++ {
+		if _, err := e.Poll(bg, dir, PollOpts{Lines: 60}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n := rings(); n != 1 {
+		t.Fatalf("notifications = %d, want 1 for one event: %v", n, f.calls)
+	}
+	send("C or D?")
+	if _, err := e.Poll(bg, dir, PollOpts{Lines: 60}); err != nil {
+		t.Fatal(err)
+	}
+	if n := rings(); n != 2 {
+		t.Errorf("notifications = %d, want 2 after a second event", n)
+	}
+}
