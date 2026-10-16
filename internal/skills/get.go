@@ -36,13 +36,17 @@ func (s *Set) Reference(name, file string) ([]byte, bool) {
 // the agent to run `rota skills get`. The skill's other markdown files and
 // references go, since the verb serves them. The digest stays the full set's:
 // a stub defers to the binary, so it is as current as the binary is.
-func (s *Set) Stubbed() *Set {
+func (s *Set) Stubbed() (*Set, error) {
 	out := &Set{files: map[string][]byte{}, skills: s.skills, digest: s.digest}
 	for _, p := range s.paths {
 		skill, rest, _ := strings.Cut(p, "/")
 		switch {
 		case rest == "SKILL.md":
-			out.files[p] = stub(skill, s.files[p])
+			b, err := stub(skill, s.files[p])
+			if err != nil {
+				return nil, err
+			}
+			out.files[p] = b
 		case strings.HasPrefix(rest, "agents/"):
 			out.files[p] = s.files[p]
 		}
@@ -51,15 +55,15 @@ func (s *Set) Stubbed() *Set {
 		out.paths = append(out.paths, p)
 	}
 	sort.Strings(out.paths)
-	return out
+	return out, nil
 }
 
-func stub(skill string, full []byte) []byte {
-	head := ""
-	if rest, ok := strings.CutPrefix(string(full), "---\n"); ok {
-		if fm, _, ok := strings.Cut(rest, "\n---\n"); ok {
-			head = "---\n" + fm + "\n---\n\n"
-		}
+func stub(skill string, full []byte) ([]byte, error) {
+	rest, ok := strings.CutPrefix(string(full), "---\n")
+	fm, _, ok2 := strings.Cut(rest, "\n---\n")
+	if !ok || !ok2 {
+		return nil, fmt.Errorf("skills: %s/SKILL.md has no frontmatter to keep in a stub", skill)
 	}
-	return []byte(head + fmt.Sprintf("# %[1]s\n\nThis skill's text is served by the installed `rota` binary, so it always matches the verbs and flags that binary accepts. Run:\n\n```\nrota skills get %[1]s\n```\n\nand follow what it prints. Reference files it cites: `rota skills get %[1]s --references` lists them, `rota skills get %[1]s --reference <file>` prints one.\n", skill))
+	head := "---\n" + fm + "\n---\n\n"
+	return []byte(head + fmt.Sprintf("# %[1]s\n\nThis skill's text is served by the installed `rota` binary, so it always matches the verbs and flags that binary accepts. Run:\n\n```\nrota skills get %[1]s\n```\n\nand follow what it prints. Reference files it cites: `rota skills get %[1]s --references` lists them, `rota skills get %[1]s --reference <file>` prints one.\n", skill)), nil
 }

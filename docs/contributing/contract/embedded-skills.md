@@ -46,7 +46,7 @@ rota skills get <name> [--references | --reference <file>]
 repo: none
 data: `{"name": string, "text": string}`; with `--references` `{"name": string, "references": []string}`; with `--reference` `{"name": string, "reference": string, "text": string}`
 exit: 2 on an unknown skill or reference (`hint` lists the known names) or when both flags are given
-note: read-only, reads the binary's embedded set (no second copy), so the text matches the verbs and flags the binary accepts. Text mode prints the file as is. `--reference` takes a file name from `--references`, not a path.
+note: read-only, reads the binary's embedded set (no second copy), so the text matches the verbs and flags the binary accepts. Text mode prints the file with its trailing newline trimmed (the printer adds one back). `--reference` takes a file name from `--references`, not a path.
 
 ### rota skills uninstall
 rota skills uninstall [--scope user|project] [--agent claude|codex|all] [--overwrite]

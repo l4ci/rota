@@ -23,10 +23,10 @@ import (
 
 func skillsCommands() *Command {
 	return &Command{Name: "skills", Summary: "install the embedded skills for Claude Code and Codex", Subs: []*Command{
-		{Name: "install", Summary: "write the skills into the agent skill directories", Verb: skillsVerb(skillsInstall, skills.User, true)},
-		{Name: "update", Summary: "refresh the skill directories that already have a manifest", Verb: skillsVerb(skillsUpdate, "", true)},
-		{Name: "uninstall", Summary: "remove what rota installed", Verb: skillsVerb(skillsUninstall, skills.User, true)},
-		{Name: "status", Summary: "compare the installed skills with this binary", Verb: skillsVerb(skillsStatus, "", false)},
+		{Name: "install", Summary: "write the skills into the agent skill directories", Verb: skillsVerb(skillsInstall, skills.User, true, true)},
+		{Name: "update", Summary: "refresh the skill directories that already have a manifest", Verb: skillsVerb(skillsUpdate, "", true, true)},
+		{Name: "uninstall", Summary: "remove what rota installed", Verb: skillsVerb(skillsUninstall, skills.User, true, false)},
+		{Name: "status", Summary: "compare the installed skills with this binary", Verb: skillsVerb(skillsStatus, "", false, false)},
 		{Name: "list", Summary: "name the skills embedded in this binary", Verb: skillsList},
 		{Name: "get", Summary: "print an embedded skill or one of its references", Verb: skillsGet},
 	}}
@@ -40,7 +40,7 @@ type skillsArgs struct {
 	currentAccount bool
 }
 
-func skillsVerb(run func(*Ctx, skillsArgs) (Result, error), defScope string, overwrite bool) func(*flag.FlagSet) RunFunc {
+func skillsVerb(run func(*Ctx, skillsArgs) (Result, error), defScope string, overwrite, stub bool) func(*flag.FlagSet) RunFunc {
 	return func(fs *flag.FlagSet) RunFunc {
 		var a skillsArgs
 		scopeUsage := "user or project (default user)"
@@ -52,7 +52,7 @@ func skillsVerb(run func(*Ctx, skillsArgs) (Result, error), defScope string, ove
 		if overwrite {
 			fs.BoolVar(&a.overwrite, "overwrite", false, "replace edited and unmanaged files")
 		}
-		if overwrite {
+		if stub {
 			fs.BoolVar(&a.stub, "stub", false, "write a SKILL.md that runs `rota skills get <name>` instead of the full text (for harnesses that can run commands at load time)")
 		}
 		fs.BoolVar(&a.currentAccount, "current-account", false, "user scope: only the current Claude config dir, not every work.accounts dir")
@@ -204,7 +204,9 @@ func skillsInstall(c *Ctx, a skillsArgs) (Result, error) {
 		return Result{}, err
 	}
 	if a.stub {
-		set = set.Stubbed()
+		if set, err = set.Stubbed(); err != nil {
+			return Result{}, Resolution("%v", err)
+		}
 	}
 	res, err := set.Install(roots, skills.Options{Version: version.Get().Version, Overwrite: a.overwrite})
 	if err != nil {
@@ -220,7 +222,9 @@ func skillsUpdate(c *Ctx, a skillsArgs) (Result, error) {
 		return Result{}, err
 	}
 	if a.stub {
-		set = set.Stubbed()
+		if set, err = set.Stubbed(); err != nil {
+			return Result{}, Resolution("%v", err)
+		}
 	}
 	res, err := set.Update(roots, skills.Options{Version: version.Get().Version, Overwrite: a.overwrite})
 	if err != nil {
