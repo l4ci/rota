@@ -75,7 +75,7 @@ Top requests by thumbs-up on open issues, pulled 2026-10-08. Reaction counts in 
 | [vibe-kanban](https://github.com/BloopAI/vibe-kanban) | Kanban UI running agents in worktrees | 28.3k | self-hosted GitLab (+26), Ralph mode (+14), Kiro CLI (+11), worktree cleanup (+8), WIP limits |
 | [gastown](https://github.com/steveyegge/gastown) | Multi-agent "town" with mayor and polecats | 18.3k | rate-limit-aware instance swap (+7), limit resets (+3), silent-success bugs, nested repo confusion |
 | [claude-squad](https://github.com/smtg-ai/claude-squad) | TUI for parallel agents in worktrees | 8.6k | worktree setup hook with ports (+8), multi-repo (+6), prompt lost before CLI ready |
-| [orca](https://github.com/stablyai/orca) | ADE for fleets of agents | 87.4k | multi-repo diff (+42), Jujutsu workspaces (+43), multi-repo groups (+21) |
+| [orca](https://github.com/stablyai/orca) | Electron IDE for fleets of agents, coordinator/worker protocol over SQLite | 94k (2026-10-16) | multi-repo diff (+42), Jujutsu workspaces (+43), multi-repo groups (+21); see *Orca orchestration* below |
 | [superpowers](https://github.com/obra/superpowers) | Skills methodology | 296.5k | agent teams (+94), slowness (+32), Kiro (+23), skip review for easy tasks (+17) |
 | [paperclip](https://github.com/paperclipai/paperclip) | Agent "company" manager | 98.6k | local LLMs (+68), Copilot CLI (+44), OpenRouter (+35), knowledge layer (+16) |
 | [beads](https://github.com/steveyegge/beads) | Git/Dolt-backed agent issue tracker | 27.7k | memory beads, versioned history, Dolt migration crashes |
@@ -84,6 +84,23 @@ Top requests by thumbs-up on open issues, pulled 2026-10-08. Reaction counts in 
 | [Backlog.md](https://github.com/MrLesk/Backlog.md) | Markdown board in git | 7.0k | search closed tasks (+5), per-epic ID prefix (+3), decision record flags |
 | Conductor | Mac app, Claude/Codex in worktrees | closed | no public tracker; ships state dashboard, diff review, Linear |
 | claude-flow | Swarm framework | 74.1k | issues are mostly bot-authored epics; near-zero reactions, weak signal |
+
+## Orca orchestration, checked 2026-10-16
+
+A code read of stablyai/orca at its 2026-10-16 head (MIT, TypeScript, about 14.8k source files, 8.5k open issues), done for the orchestration layer only. Orca is a desktop IDE; orchestration is one feature among browser, design mode, SSH/WSL placement, a mobile companion and twelve agent backends. Its coordinator is the user's own agent following a skill, with `orca orchestration` verbs over a Run, Task DAG and Dispatch model held in SQLite (`src/main/runtime/orchestration/`).
+
+What it lacks that rota has: no tracker link into the task model, no gate that runs tests on a worker's output (`worker_done --outcome` is self-reported), no merge queue or PR flow ("compare the results and merge the winner"), no knowledge layer that the code read showed. On issue-to-PR it does not compete, as far as a code read without a run can tell.
+
+What rota took from it, filed 2026-10-16:
+
+| Orca mechanism | rota gap | Issue |
+|---|---|---|
+| Workers push typed `worker_done`, heartbeat, `ask` and escalation messages to a durable mailbox; the coordinator runs `check --ack --wait --types ...` | only `done` has a push path; `ROTA-BLOCKED`, questions and review replies are regex-parsed from the pane | #819 |
+| Liveness is `live`, `unverifiable` or `exited`; only positive proof of exit permits stop, abandon or retry | contact loss reads as `dead`; "read the pane first" is prose, not a verb rule | #820 |
+| The installed skill is a stub; `orca skills get orchestration` prints the guide matched to the binary | installed SKILL.md copies drift from the binary after `rota update` | #821 |
+| Every mutation carries an idempotent receipt; recovery names `failedStage` and `residualResources` | lock sidecars guard concurrent writers, not a retried `assign` after a flaky `gh` call | #822 |
+
+Not taken: the Task DAG (rota's unit is the issue), federation and remote placement, decision gates (`round escalate` covers it), the GUI and mobile app. Nothing was run; the mailbox and liveness rules are read from `skill-guides/orchestration.md` and its references, and no end-to-end test of the coordinator loop was found.
 
 ## Community signals, September to October 2026
 
