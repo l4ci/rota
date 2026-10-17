@@ -2,6 +2,7 @@ package round
 
 import (
 	"fmt"
+	"github.com/l4ci/rota/internal/stamp"
 	"path/filepath"
 
 	"github.com/l4ci/rota/internal/host"
@@ -30,7 +31,7 @@ func soloBrief(text string, round int) string {
 // working directory.
 func (e Env) soloHandOff(root, agent, text string, round int) (brief, worktree string, err error) {
 	now := e.Worker.Clock()
-	stamp := now().UTC().Format("2006-01-02T15:04:05Z")
+	at := stamp.Format(now())
 	reg, err := worker.LoadRegistry(root)
 	if err != nil {
 		return "", "", err
@@ -42,10 +43,10 @@ func (e Env) soloHandOff(root, agent, text string, round int) (brief, worktree s
 		worktree = filepath.Join(root, worktree)
 	}
 	err = editSlot(root, agent, func(s *worker.Slot) error {
-		if err := s.MarkState("busy", stamp); err != nil {
+		if err := s.MarkState("busy", at); err != nil {
 			return err
 		}
-		s.Touch(stamp)
+		s.Touch(at)
 		s.ClearSeen()
 		s.SetPR("")
 		s.ResetRelays()

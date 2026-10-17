@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"github.com/l4ci/rota/internal/stamp"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -112,7 +113,7 @@ func TestDecideFollowsTheEventTable(t *testing.T) {
 	idle := PollRow{"w1", StateIdle, "static pane"}
 	for _, spec := range Events {
 		t.Run(spec.Kind, func(t *testing.T) {
-			ev := &Event{Seq: 1, Kind: spec.Kind, Body: "b", TS: stamp(base)}
+			ev := &Event{Seq: 1, Kind: spec.Kind, Body: "b", TS: stamp.Format(base)}
 			got, decided := decide(ev, idle, base)
 			if decided != (spec.Poll != "") {
 				t.Fatalf("decided = %v with poll state %q", decided, spec.Poll)

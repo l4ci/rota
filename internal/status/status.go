@@ -10,6 +10,7 @@ package status
 
 import (
 	"errors"
+	"github.com/l4ci/rota/internal/stamp"
 	"os"
 	"path/filepath"
 	"strings"
@@ -20,10 +21,6 @@ import (
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/rotatree"
 )
-
-// Stamp is the timestamp format the helpers write: UTC, second precision,
-// trailing "Z" (datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")).
-func Stamp(now time.Time) string { return now.UTC().Format("2006-01-02T15:04:05Z") }
 
 // Path is the status.json of the project rooted at root.
 func Path(root string) string { return rotatree.Status(root) }
@@ -168,7 +165,7 @@ func Add(root string, now time.Time, branch, repo string, items []string, worktr
 		e.Set("repo", nullable(repo))
 		e.Set("items", append([]string{}, items...))
 		e.Set("worktree", nullable(worktree))
-		e.Set("startedAt", Stamp(now))
+		e.Set("startedAt", stamp.Format(now))
 		doc.Set("active", append(keep, e))
 		changed = true
 		return true, nil

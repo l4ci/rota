@@ -2,6 +2,7 @@ package worker
 
 import (
 	"fmt"
+	"github.com/l4ci/rota/internal/stamp"
 	"regexp"
 	"strconv"
 	"strings"
@@ -20,7 +21,7 @@ import (
 func newRelayEntry(round int, now time.Time, brief string) *jsonx.Object {
 	entry := jsonx.NewObject()
 	entry.Set("round", round)
-	entry.Set("ts", now.UTC().Format("2006-01-02T15:04:05Z"))
+	entry.Set("ts", stamp.Format(now))
 	entry.Set("summary", relaySummary(brief))
 	return entry
 }

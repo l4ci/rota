@@ -72,7 +72,7 @@ func receipted(verb string, inner func(*flag.FlagSet) RunFunc, inputs ...inputsF
 				if res.Data == nil && ae != nil {
 					res.Data = jsonx.NewObject()
 				}
-				stamp(res.Data, id, prior.FailedStage, e.FailedStage, e.Residual)
+				stampResult(res.Data, id, prior.FailedStage, e.FailedStage, e.Residual)
 				e.Text = res.Text
 				if b, merr := jsonx.MarshalCompact(res.Data); res.Data != nil && merr == nil {
 					e.Data = b
@@ -121,9 +121,9 @@ func retryHint(id string, e receipt.Entry) string {
 	return h
 }
 
-// stamp writes the request id into a result object, and for a retry the stage
+// stampResult writes the request id into a result object, and for a retry the stage
 // it resumed from or, for a failure, the stage that failed and what it left.
-func stamp(data any, id, resumedFrom, failedStage string, residual []string) {
+func stampResult(data any, id, resumedFrom, failedStage string, residual []string) {
 	set := func(k string, v any) {
 		switch d := data.(type) {
 		case *jsonx.Object:

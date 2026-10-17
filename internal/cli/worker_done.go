@@ -3,6 +3,7 @@ package cli
 import (
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/stamp"
 	"os"
 	"strings"
 
@@ -110,7 +111,7 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 			if s == nil {
 				return
 			}
-			now := worker.Stamp(c.deps().Now())
+			now := stamp.Format(c.deps().Now())
 			// The worker's own word, read ahead of the pane: a static pane with
 			// no sentinel must not turn this slot back into idle.
 			s.SetEvent(worker.EventDone, s.PR(), now)

@@ -1,6 +1,8 @@
 package worker
 
 import (
+	"github.com/l4ci/rota/internal/stamp"
+	"strings"
 	"testing"
 	"time"
 
@@ -9,7 +11,7 @@ import (
 
 func TestDecide(t *testing.T) {
 	base := time.Date(2026, 10, 16, 12, 0, 0, 0, time.UTC)
-	at := func(d time.Duration) string { return stamp(base.Add(d)) }
+	at := func(d time.Duration) string { return stamp.Format(base.Add(d)) }
 	idle := PollRow{"w1", StateIdle, "static pane, no sentinel"}
 	blocked := &Event{Seq: 1, Kind: EventBlocked, Body: "A or B?", TS: at(0)}
 	done := &Event{Seq: 2, Kind: EventDone, Body: "https://github.com/o/r/pull/7", TS: at(0)}
@@ -95,7 +97,7 @@ func TestWaitReturnsAnEventOnceUntilTheNext(t *testing.T) {
 	send := func(body string) {
 		if err := Update(dir, func(d *Doc) {
 			s := d.Slot("w1")
-			now := stamp(time.Now())
+			now := stamp.Format(time.Now())
 			s.SetEvent(EventBlocked, body, now)
 			s.MarkState("blocked", now)
 			s.ClearSeen()
@@ -129,7 +131,7 @@ func TestWaitDropsAnEventAPaneMovedPast(t *testing.T) {
 	dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
 	if err := Update(dir, func(d *Doc) {
 		s := d.Slot("w1")
-		now := stamp(time.Now())
+		now := stamp.Format(time.Now())
 		s.SetEvent(EventBlocked, "A or B?", now)
 		s.MarkState("blocked", now)
 	}); err != nil {
@@ -158,7 +160,7 @@ func TestWaitReportsABlockedEventOverAnOldDoneSentinel(t *testing.T) {
 	dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
 	if err := Update(dir, func(d *Doc) {
 		s := d.Slot("w1")
-		now := stamp(time.Now())
+		now := stamp.Format(time.Now())
 		s.SetEvent(EventBlocked, "A or B?", now)
 		s.MarkState("blocked", now)
 		s.ClearSeen()
@@ -190,7 +192,7 @@ func TestWaitSeesAnEventSentWhileItWaits(t *testing.T) {
 		}
 		if err := Update(dir, func(d *Doc) {
 			s := d.Slot("w1")
-			now := stamp(time.Now())
+			now := stamp.Format(time.Now())
 			s.SetEvent(EventBlocked, "A or B?", now)
 			s.MarkState("blocked", now)
 			s.ClearSeen()
@@ -241,7 +243,7 @@ func TestWaitKeepsWorkerDoneOverAnIdlePane(t *testing.T) {
 	w.forge("listed", "1")
 	if err := Update(w.dir, func(d *Doc) {
 		s := d.Slot("w1")
-		now := stamp(time.Now())
+		now := stamp.Format(time.Now())
 		s.SetHandle("w9:t1")
 		s.SetEvent(EventDone, "", now)
 		s.MarkState("done", now)
@@ -262,5 +264,28 @@ func TestWaitKeepsWorkerDoneOverAnIdlePane(t *testing.T) {
 	}
 	if got := LoadRegistryTolerant(w.dir).Slot("w1"); got.State() != "done" || got.PR() != ghURL {
 		t.Errorf("slot = %s pr %q", got.State(), got.PR())
+	}
+}
+
+func TestDecideSurfacesUnreadableEventTS(t *testing.T) {
+	const bad = "2026-10-16 12:00"
+	ev := &Event{Seq: 5, Kind: EventDone, TS: bad}
+	row, used := decide(ev, PollRow{"w1", StateIdle, "static"}, time.Now())
+	if !used || row.State != StateBlocked || !strings.Contains(row.Evidence, bad) || !strings.Contains(row.Evidence, "ts") {
+		t.Errorf("decide = %+v, used %v; want a blocked row naming the ts", row, used)
+	}
+}
+
+func TestRecordRowKeepsActiveAtParseableAfterBadEventTS(t *testing.T) {
+	s := NewSlot("w1", "b", "wt", "main", "")
+	s.SetEvent(EventDone, "x", "garbage")
+	ev := s.Event()
+	now := time.Date(2026, 10, 16, 12, 0, 0, 0, time.UTC)
+	row := PollRow{"w1", StateBlocked, "unreadable ts"}
+	if _, err := recordRow(s, row, pollTarget{name: "w1", ev: ev, evSeq: ev.Seq}, now, Registry{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := stamp.Parse(s.ActiveAt()); err != nil || s.ActiveAt() != stamp.Format(now) {
+		t.Errorf("activeAt = %q, want %q", s.ActiveAt(), stamp.Format(now))
 	}
 }

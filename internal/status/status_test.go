@@ -44,14 +44,6 @@ func fixedClock(t *testing.T, s string) time.Time {
 	return at
 }
 
-func TestStamp(t *testing.T) {
-	// A zone offset is converted to UTC and the sub-second part dropped.
-	at := fixedClock(t, "2026-10-02T14:05:09.987+02:00")
-	if got := Stamp(at); got != "2026-10-02T12:05:09Z" {
-		t.Errorf("Stamp = %q", got)
-	}
-}
-
 func TestAddWritesPythonBytes(t *testing.T) {
 	root := project(t, "")
 	changed, err := Add(root, testNow, "feat/x", "", []string{"B01", "F02"}, "", false)
