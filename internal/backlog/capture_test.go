@@ -54,3 +54,22 @@ func TestAppendRaw(t *testing.T) {
 		t.Fatalf("err = %v, want ErrInvalid", err)
 	}
 }
+
+func TestBuildCreateInputRefusesWeakTitles(t *testing.T) {
+	for _, title := range []string{"x", "TBD", "todo", "Title", "untitled"} {
+		if _, err := BuildCreateInput(CaptureRequest{Kind: "tasks", Title: title}); !errors.Is(err, ErrInvalid) {
+			t.Errorf("%q: err = %v, want ErrInvalid", title, err)
+		}
+	}
+	if _, err := BuildCreateInput(CaptureRequest{Kind: "tasks", Title: "Short"}); err != nil {
+		t.Errorf("one real word is fine outside a batch: %v", err)
+	}
+	for _, title := range []string{"two words", "  fix   it  ", "tbd"} {
+		if err := CheckTitleWords(title); !errors.Is(err, ErrInvalid) {
+			t.Errorf("batch %q: err = %v, want ErrInvalid", title, err)
+		}
+	}
+	if err := CheckTitleWords("Fix the thing"); err != nil {
+		t.Errorf("three words: %v", err)
+	}
+}

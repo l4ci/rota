@@ -198,3 +198,44 @@ func TestItemCompleteStampsTheDepsDay(t *testing.T) {
 		t.Errorf("BACKLOG.md lacks the pinned day:\n%s", b)
 	}
 }
+
+// A batch files one record per item, in order, and each filed item keeps its
+// own title and body (#838): no parallel lists to fall out of step.
+func TestItemCreateBatchPairsTitleAndBody(t *testing.T) {
+	root := trackerProject(t, "")
+	bl := filepath.Join(root, ".rota", "BACKLOG.md")
+	if err := os.WriteFile(bl, []byte("# TODO\n\n## Bugs\n\n## Tasks\n\n## Completed\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	batch := filepath.Join(t.TempDir(), "batch.json")
+	recs := `[
+ {"kind":"tasks","title":"Alpha seam extraction","desc":"alpha summary","body":"## Acceptance\n- [ ] alpha"},
+ {"kind":"bugs","title":"Beta crash on empty","tag":"P2","desc":"beta summary","body":"## Acceptance\n- [ ] beta"},
+ {"kind":"tasks","title":"Gamma helper cleanup","desc":"gamma summary","body":"## Acceptance\n- [ ] gamma"}]`
+	if err := os.WriteFile(batch, []byte(recs), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	code, _, stderr := rotaRun(t, "--json", "-C", root, "item", "create", "--batch-file", batch)
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, stderr)
+	}
+	body, _ := os.ReadFile(bl)
+	for title, desc := range map[string]string{"Alpha seam extraction": "alpha summary",
+		"Beta crash on empty": "beta summary", "Gamma helper cleanup": "gamma summary"} {
+		var line string
+		for _, l := range strings.Split(string(body), "\n") {
+			if strings.Contains(l, title) {
+				line = l
+			}
+		}
+		if !strings.Contains(line, desc) {
+			t.Errorf("%q is not paired with %q:\n%s", title, desc, body)
+		}
+	}
+	// A weak title anywhere refuses the whole batch before anything is filed.
+	bad := filepath.Join(t.TempDir(), "bad.json")
+	os.WriteFile(bad, []byte(`[{"kind":"tasks","title":"Fine long title"},{"kind":"tasks","title":"x"}]`), 0o644)
+	if code, _, _ := rotaRun(t, "--json", "-C", root, "item", "create", "--batch-file", bad); code != 2 {
+		t.Errorf("weak title in batch: exit %d, want 2", code)
+	}
+}
