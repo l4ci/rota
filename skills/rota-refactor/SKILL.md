@@ -111,14 +111,16 @@ rota tracker call -- issue list --label refactor --state all --limit 200 --json 
 - Closed match: skip unless the friction demonstrably came back; then file a new issue citing it (`Related: #<n>`).
 - Closed as "won't do": rejected, do not re-file.
 
-**Create.** Body in a scratch file, then:
+**Create.** Build one JSON record per finding, one finding at a time: its title, summary (`desc`) and full body come from that same finding, never from a title list and a body list kept apart. Write the array to a scratch file and file it in one call:
 
 ```bash
-rota item create --json --kind tasks --title "<verb-first title>" --desc "<one line>" --body-file <scratch>
-rota issues label <number> --add refactor
+rota item create --json --batch-file <scratch.json>
+rota issues label <number> --add refactor   # for each id the call printed
 ```
 
-(File-mode backlogs have no tracker: `rota item create` alone, and the item is the finding.)
+A record is `{"kind":"tasks","title":"<verb-first title>","desc":"<one line>","body":"<markdown>"}`; it also takes `tag`, `dependsOn`, `related`, `milestone`, `repos`, `subsystem`. The call refuses the whole batch (exit 2) when a title has fewer than three words or is a placeholder, and prints `{id, title}` per record: compare each against its finding before labelling.
+
+(File-mode backlogs have no tracker: the same call, and the item is the finding.)
 
 When findings must land in order (one builds on another's seam, or both rewrite the same lines), file the prerequisite first and pass `--depends-on <its ID>` on the next (`references/dependent-items.md`). Independent findings get no edge.
 

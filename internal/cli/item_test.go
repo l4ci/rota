@@ -12,7 +12,9 @@ import (
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/backlog/trackertest"
+	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/tracker"
 )
 
 // trackerProject is a project with a backlog and no git: enough for the verbs
@@ -196,5 +198,153 @@ func TestItemCompleteStampsTheDepsDay(t *testing.T) {
 	b, _ := os.ReadFile(filepath.Join(root, ".rota", "BACKLOG.md"))
 	if !strings.Contains(string(b), "2031-02-03") {
 		t.Errorf("BACKLOG.md lacks the pinned day:\n%s", b)
+	}
+}
+
+// A batch files one record per item, in order, and each filed item keeps its
+// own title and body (#838): no parallel lists to fall out of step.
+func TestItemCreateBatchPairsTitleAndBody(t *testing.T) {
+	root := trackerProject(t, "")
+	bl := filepath.Join(root, ".rota", "BACKLOG.md")
+	if err := os.WriteFile(bl, []byte("# TODO\n\n## Bugs\n\n## Tasks\n\n## Completed\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	batch := filepath.Join(t.TempDir(), "batch.json")
+	recs := `[
+ {"kind":"tasks","title":"Alpha seam extraction","desc":"alpha summary","body":"## Acceptance\n- [ ] alpha"},
+ {"kind":"bugs","title":"Beta crash on empty","tag":"P2","desc":"beta summary","body":"## Acceptance\n- [ ] beta"},
+ {"kind":"tasks","title":"Gamma helper cleanup","desc":"gamma summary","body":"## Acceptance\n- [ ] gamma"}]`
+	if err := os.WriteFile(batch, []byte(recs), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	code, _, stderr := rotaRun(t, "--json", "-C", root, "item", "create", "--batch-file", batch)
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, stderr)
+	}
+	body, _ := os.ReadFile(bl)
+	for title, desc := range map[string]string{"Alpha seam extraction": "alpha summary",
+		"Beta crash on empty": "beta summary", "Gamma helper cleanup": "gamma summary"} {
+		var line string
+		for _, l := range strings.Split(string(body), "\n") {
+			if strings.Contains(l, title) {
+				line = l
+			}
+		}
+		if !strings.Contains(line, desc) {
+			t.Errorf("%q is not paired with %q:\n%s", title, desc, body)
+		}
+	}
+	// The detail file behind each item carries that item's own Acceptance box.
+	for title, box := range map[string]string{"Alpha seam extraction": "- [ ] alpha", "Gamma helper cleanup": "- [ ] gamma"} {
+		var id string
+		for _, l := range strings.Split(string(body), "\n") {
+			if strings.Contains(l, title) {
+				id = strings.Trim(strings.Fields(l)[1], "*[]")
+			}
+		}
+		detail, err := os.ReadFile(filepath.Join(root, ".rota", "tasks", id+".md"))
+		if err != nil || !strings.Contains(string(detail), box) {
+			t.Errorf("%q (%s): body lacks %q: %v\n%s", title, id, box, err, detail)
+		}
+	}
+	// A weak title anywhere refuses the whole batch before anything is filed.
+	bad := filepath.Join(t.TempDir(), "bad.json")
+	os.WriteFile(bad, []byte(`[{"kind":"tasks","title":"Fine long title"},{"kind":"tasks","title":"x"}]`), 0o644)
+	if code, _, _ := rotaRun(t, "--json", "-C", root, "item", "create", "--batch-file", bad); code != 2 {
+		t.Errorf("weak title in batch: exit %d, want 2", code)
+	}
+}
+
+// failSecond fails its second Create the way a tracker does.
+type failSecond struct {
+	backlog.Backend
+	n   int
+	err error // the second Create's error; a tracker outage when nil
+}
+
+func (f *failSecond) Create(in backlog.CreateInput) (backlog.CreateResult, error) {
+	if f.n++; f.n == 2 {
+		if f.err != nil {
+			return backlog.CreateResult{}, f.err
+		}
+		return backlog.CreateResult{}, &tracker.Error{Kind: tracker.KindUnavailable, Code: 1, Message: "network is down"}
+	}
+	return backlog.CreateResult{ID: "T0" + fmt.Sprint(f.n), Type: "T"}, nil
+}
+
+// A tracker failure on record 2 of 3 still reports record 1's id, in the data
+// and in the message, and files nothing after it.
+func TestItemCreateBatchKeepsFiledIDsOnFailure(t *testing.T) {
+	ins := []backlog.CreateInput{{Kind: "tasks", Title: "First filed record"}, {Kind: "tasks", Title: "Second fails here"},
+		{Kind: "tasks", Title: "Third never runs"}}
+	be := &failSecond{}
+	res, err := fileBatch(be, ins)
+	var e *Error
+	if !errors.As(err, &e) || e.Exit != ExitUnavailable {
+		t.Fatalf("err = %#v, want exit %d", err, ExitUnavailable)
+	}
+	if !strings.Contains(e.Message, "T01") || !strings.Contains(e.Message, "network is down") {
+		t.Errorf("message lacks the filed id or the cause: %q", e.Message)
+	}
+	data, _ := res.Data.(*jsonx.Object)
+	if data == nil {
+		t.Fatal("no data on a partial batch")
+	}
+	if v, _ := data.Get("failedAt"); v != 2 {
+		t.Errorf("failedAt = %v, want 2", v)
+	}
+	items, _ := data.Get("items")
+	enc, _ := jsonx.MarshalCompact(items)
+	if got := string(enc); !strings.Contains(got, "T01") || strings.Contains(got, "T03") {
+		t.Errorf("items = %v, want only record 1", items)
+	}
+	if be.n != 2 {
+		t.Errorf("Create called %d times, want 2", be.n)
+	}
+}
+
+// An unclassified error on record 2 of 3 exits as a single `item create` would
+// (lock timeout is retry, an unreadable state file is unavailable), and the filed
+// ids and data survive.
+func TestItemCreateBatchKeepsFiledIDsOnPlainError(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		exit int
+	}{
+		{"plain", errors.New("disk full"), ExitInternal},
+		{"lock timeout", fmt.Errorf("busy: %w", fsio.ErrLockTimeout), ExitRetry},
+		{"unreadable state", fmt.Errorf("%w: state.json", fsio.ErrUnreadable), ExitUnavailable},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ins := []backlog.CreateInput{{Kind: "tasks", Title: "First filed record"}, {Kind: "tasks", Title: "Second fails here"},
+				{Kind: "tasks", Title: "Third never runs"}}
+			res, err := fileBatch(&failSecond{err: tc.err}, ins)
+			var e *Error
+			if !errors.As(err, &e) {
+				t.Fatalf("err = %#v, want an *Error so withBackend keeps the data", err)
+			}
+			if want := asError(tc.err).Exit; e.Exit != tc.exit || want != tc.exit {
+				t.Errorf("exit = %d, single create = %d, want %d", e.Exit, want, tc.exit)
+			}
+			for _, w := range []string{"record 2", "T01", tc.err.Error()} {
+				if n := strings.Count(e.Message, w); n != 1 {
+					t.Errorf("message has %q %d times, want once: %q", w, n, e.Message)
+				}
+			}
+			data, _ := res.Data.(*jsonx.Object)
+			if data == nil {
+				t.Fatal("no data on a partial batch")
+			}
+			if v, _ := data.Get("failedAt"); v != 2 {
+				t.Errorf("failedAt = %v, want 2", v)
+			}
+			items, _ := data.Get("items")
+			enc, _ := jsonx.MarshalCompact(items)
+			if got := string(enc); !strings.Contains(got, "T01") || strings.Contains(got, "T03") {
+				t.Errorf("items = %s, want only record 1", enc)
+			}
+		})
 	}
 }

@@ -284,13 +284,13 @@ func suiteItemIssue(t *testing.T) {
 		cr("feature-full", 0, "--kind", "features", "--title", "New thing", "--tag", "Major", "--desc", "d", "--milestone", "M07", "--related", "B2", "--subsystem", "web", "--captured", "2026-10-01"),
 		cr("bug-tag", 0, "--kind", "bugs", "--title", "Broken", "--tag", "P2"),
 		cr("task-plain", 0, "--kind", "tasks", "--title", "Chore"),
-		cr("milestone-missing", 3, "--kind", "bugs", "--title", "x", "--milestone", "M99"),
-		cr("bad-tag", 2, "--kind", "bugs", "--title", "x", "--tag", "Major"),
+		cr("milestone-missing", 3, "--kind", "bugs", "--title", "Frozen item", "--milestone", "M99"),
+		cr("bad-tag", 2, "--kind", "bugs", "--title", "Frozen item", "--tag", "Major"),
 		cr("no-title", 2, "--kind", "bugs"),
-		isc{name: "create/milestone-bad-format", argv: j("item", "create", "--kind", "bugs", "--title", "x", "--milestone", "next"), want: 2},
-		isc{name: "create/rate-limit", argv: j("item", "create", "--kind", "bugs", "--title", "x"), want: 6,
+		isc{name: "create/milestone-bad-format", argv: j("item", "create", "--kind", "bugs", "--title", "Frozen item", "--milestone", "next"), want: 2},
+		isc{name: "create/rate-limit", argv: j("item", "create", "--kind", "bugs", "--title", "Frozen item"), want: 6,
 			env: []string{"FAKE_TRACKER_FAIL=issue create", "FAKE_TRACKER_FAIL_MSG=secondary rate limit"}},
-		isc{name: "create/forge-unavailable", remote: "none", argv: j("item", "create", "--kind", "bugs", "--title", "x"), want: 5},
+		isc{name: "create/forge-unavailable", remote: "none", argv: j("item", "create", "--kind", "bugs", "--title", "Frozen item"), want: 5},
 		isc{name: "create/id-placeholder-body", argv: j("item", "create", "--kind", "tasks", "--title", "Doc", "--body-file", "body.md"), want: 0, changed: yes(),
 			check: func(t *testing.T, e envl, db map[string]any) {
 				for _, i := range db["issues"].([]any) {
