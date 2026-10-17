@@ -13,8 +13,10 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/receipt"
+	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -233,8 +235,8 @@ var receiptedVerbs = []struct {
 	{verb: "round report"},
 	{verb: "round tick"},
 	{verb: "round escalate send"},
-	{verb: "worker gate", inputs: []inputsFunc{branchHeads}},
-	{verb: "worker train", inputs: []inputsFunc{branchHeads}},
+	{verb: "worker gate", inputs: []inputsFunc{gateHeads}},
+	{verb: "worker train", inputs: []inputsFunc{gateHeads}},
 }
 
 // applyReceipts wraps every verb in receiptedVerbs. A verb missing from the
@@ -249,30 +251,19 @@ func applyReceipts(root *Command) {
 	}
 }
 
-// branchHeads is the inputsFunc of gate and train: the head sha of each slot
-// branch (or of the slot a PR number is recorded on) the call judges. Local
-// refs only, so a fingerprint never reaches the forge; a push moves the head.
-func branchHeads(c *Ctx, root string, args []string) []string {
+// gateHeads is the inputsFunc of gate and train: the head of the branch each
+// argument resolves to, by the gate's own rule (Registry.GateTargetAny), so a
+// queued PR, an adopted slot and a bare external PR get a head like a slot does.
+// A target with a branch reads local refs, so a fingerprint does not reach the
+// forge; a bare external PR knows no branch, so its head comes from the forge.
+// A push moves the head, and the same request id is then a different call.
+func gateHeads(c *Ctx, root string, args []string) []string {
 	reg := worker.LoadRegistryTolerant(root)
 	var out []string
 	for _, a := range args {
-		slot := reg.Slot(a)
-		if slot == nil {
-			n := strings.TrimPrefix(a[strings.LastIndex(a, "/")+1:], "#")
-			for _, s := range reg.Slots() {
-				if pr := s.PR(); pr != "" && n != "" && strings.TrimPrefix(pr[strings.LastIndex(pr, "/")+1:], "#") == n {
-					slot = s
-					break
-				}
-			}
-		}
 		head := ""
-		if slot != nil && slot.Branch() != "" {
-			for _, ref := range []string{"refs/heads/", "refs/remotes/origin/"} {
-				if r, err := c.deps().Git(c.Context(), root, "rev-parse", "--verify", "-q", ref+slot.Branch()); err == nil && r.ExitCode == 0 {
-					head += strings.TrimSpace(r.Stdout) + ","
-				}
-			}
+		if t, err := reg.GateTargetAny(a); err == nil {
+			head = targetHead(c, root, t)
 		}
 		if head == "" {
 			head = "?"
@@ -280,4 +271,31 @@ func branchHeads(c *Ctx, root string, args []string) []string {
 		out = append(out, "head:"+a+"="+head)
 	}
 	return out
+}
+
+// targetHead is the head of a resolved gate target's branch, "" when none is
+// known: no branch and no forge answer (a failed read must not fail the call).
+func targetHead(c *Ctx, root string, t worker.GateTarget) string {
+	if t.Branch != "" {
+		head := ""
+		for _, ref := range []string{"refs/heads/", "refs/remotes/origin/"} {
+			if r, err := c.deps().Git(c.Context(), root, "rev-parse", "--verify", "-q", ref+t.Branch); err == nil && r.ExitCode == 0 {
+				head += strings.TrimSpace(r.Stdout) + ","
+			}
+		}
+		return head
+	}
+	n, ok := worker.PRRefNumber(t.PR)
+	if !t.External || !ok {
+		return ""
+	}
+	fg, err := c.deps().forge(c.Context(), config.Load(rotatree.Config(root)), "", root)
+	if err != nil {
+		return ""
+	}
+	info, err := fg.PRView(c.Context(), n)
+	if err != nil {
+		return ""
+	}
+	return info.HeadSHA
 }
