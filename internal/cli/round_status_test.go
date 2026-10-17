@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/worker"
@@ -194,7 +195,7 @@ func TestRoundStatusShowsTheEffectiveCapWhenBelowTheRoster(t *testing.T) {
 	if _, ok := data(t, out)["cap"]; ok {
 		t.Fatalf("a round with headroom shows no cap: %s", out)
 	}
-	addLimit(t, root, limits.Entry{Session: "ben", Kind: limits.KindCodex, Account: "c1", Source: limits.SourceText, Window: limits.WindowUnknown,
+	addLimit(t, root, limits.Entry{Session: "ben", Kind: harness.Codex, Account: "c1", Source: limits.SourceText, Window: limits.WindowUnknown,
 		DetectedAt: limits.Time(time.Now()), ResetsAt: limits.Time(time.Now().Add(time.Hour)), Action: limits.ActionSleep, Status: limits.StatusWaiting})
 	_, out, _ = rotaInWith(t, deps, root, "--json", "round", "status")
 	cp, _ := data(t, out)["cap"].(map[string]any)

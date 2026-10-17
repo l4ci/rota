@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/roundcfg"
@@ -386,14 +387,14 @@ func TestAssignDefaultTierStartsTheWorkerOnItsModel(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Kind != "claude" || res.Tier != "standard" || res.Model != "sonnet" || res.TierReason != "" {
+	if res.Kind != harness.Claude || res.Tier != "standard" || res.Model != "sonnet" || res.TierReason != "" {
 		t.Fatalf("%+v", res)
 	}
 	if !strings.Contains(f.host.launch, "--model sonnet") {
 		t.Errorf("the worker must launch on the standard model: %q", f.host.launch)
 	}
 	s := worker.LoadRegistryTolerant(f.root).Slot("ben")
-	if s.Tier() != "standard" || s.Model() != "sonnet" || s.Kind() != "claude" {
+	if s.Tier() != "standard" || s.Model() != "sonnet" || s.Kind() != harness.Claude {
 		t.Errorf("slot fields: %v", s)
 	}
 	for _, want := range []string{"Your tier is standard (sonnet).", "claude): light = haiku, standard = sonnet, heavy = opus", "Worker tier: standard (sonnet)"} {
@@ -403,7 +404,7 @@ func TestAssignDefaultTierStartsTheWorkerOnItsModel(t *testing.T) {
 	}
 	rep, _ := f.env.Status(bg, f.root)
 	for _, r := range rep.Rows {
-		if r.Name == "ben" && (r.Tier != "standard" || r.Model != "sonnet" || r.Kind != "claude") {
+		if r.Name == "ben" && (r.Tier != "standard" || r.Model != "sonnet" || r.Kind != harness.Claude) {
 			t.Errorf("round status must show the tier: %+v", r)
 		}
 	}
@@ -488,7 +489,7 @@ Options:
 
 func (c *codexRig) install(f *assignFixture) {
 	f.env.Worker.LookPath = func(n string) (string, error) {
-		if n == "codex" && c.noCodex {
+		if n == harness.Codex && c.noCodex {
 			return "", errors.New("not found")
 		}
 		return "/fake/" + n, nil
@@ -522,11 +523,11 @@ func TestAssignCodexResolvesAndStarts(t *testing.T) {
 	rig.install(f)
 	f.host.name = "herdr"
 	res, err := f.assign("12", "ben", func(o *AssignOpts) { o.Kind = "codex"; o.CheckOnly = true })
-	if err != nil || res.Kind != "codex" || res.Model != "c-s" || len(rig.calls) != 0 {
+	if err != nil || res.Kind != harness.Codex || res.Model != "c-s" || len(rig.calls) != 0 {
 		t.Fatalf("check-only resolves the codex model and runs nothing: %v %+v %v", err, res, rig.calls)
 	}
 	res, err = f.assign("12", "ben", codex)
-	if err != nil || !res.Dispatched || res.Kind != "codex" || res.Model != "c-s" {
+	if err != nil || !res.Dispatched || res.Kind != harness.Codex || res.Model != "c-s" {
 		t.Fatalf("%v %+v", err, res)
 	}
 	if !strings.HasPrefix(f.host.launch, "codex -c 'projects.") || !strings.Contains(f.host.launch, "check_for_update_on_startup=false -c features.hooks=true ") || !strings.Contains(f.host.launch, " --model c-s ") || strings.Contains(f.host.launch, "{model}") {
@@ -535,7 +536,7 @@ func TestAssignCodexResolvesAndStarts(t *testing.T) {
 	if f.host.codexHome != "" || f.host.configDir != "" {
 		t.Errorf("the default home sets no CODEX_HOME: home %q configDir %q", f.host.codexHome, f.host.configDir)
 	}
-	if s := worker.LoadRegistryTolerant(f.root).Slot("ben"); s.Kind() != "codex" {
+	if s := worker.LoadRegistryTolerant(f.root).Slot("ben"); s.Kind() != harness.Codex {
 		t.Errorf("the kind is recorded: %v", s)
 	}
 	// A slot's recorded kind is the default.
@@ -557,11 +558,11 @@ func TestAssignProjectWorkerKind(t *testing.T) {
 	f.config(t, `{"work":{"dispatch":"herdr"},"round":{"workerKind":"codex","tiers":{"codex":{"light":"c-l","standard":"c-s","heavy":"c-h"}}}}`)
 	worker.UpdateSlot(f.root, "ben", func(s *worker.Slot) { s.Raw().Set("kind", "claude") })
 	res, err := f.assign("12", "ben", func(o *AssignOpts) { o.CheckOnly = true })
-	if err != nil || res.Kind != "codex" || res.KindSource != KindFromConfig || res.Model != "c-s" {
+	if err != nil || res.Kind != harness.Codex || res.KindSource != KindFromConfig || res.Model != "c-s" {
 		t.Fatalf("the project default beats the slot's stale kind: %v %+v", err, res)
 	}
 	res, err = f.assign("12", "ben", func(o *AssignOpts) { o.CheckOnly = true; o.Kind = "claude" })
-	if err != nil || res.Kind != "claude" || res.KindSource != KindFromFlag {
+	if err != nil || res.Kind != harness.Claude || res.KindSource != KindFromFlag {
 		t.Fatalf("--kind beats the project default: %v %+v", err, res)
 	}
 }
@@ -821,7 +822,7 @@ func TestAssignHarnessAndModelLabels(t *testing.T) {
 		f, _ := setup(t)
 		f.labelled("12", "harness:codex")
 		res, err := f.assign("12", "ben", nil)
-		if err != nil || res.Kind != "codex" || res.Model != "c-s" || !strings.Contains(f.host.launch, "--dangerously-bypass-approvals-and-sandbox") {
+		if err != nil || res.Kind != harness.Codex || res.Model != "c-s" || !strings.Contains(f.host.launch, "--dangerously-bypass-approvals-and-sandbox") {
 			t.Fatalf("%v %+v launch=%q", err, res, f.host.launch)
 		}
 	})
@@ -837,7 +838,7 @@ func TestAssignHarnessAndModelLabels(t *testing.T) {
 		f, _ := setup(t)
 		f.labelled("12", "harness:claude", "model:label-model")
 		res, err := f.assign("12", "ben", func(o *AssignOpts) { o.Kind = "codex"; o.Model = "flag-model" })
-		if err != nil || res.Kind != "codex" || res.Model != "flag-model" {
+		if err != nil || res.Kind != harness.Codex || res.Model != "flag-model" {
 			t.Fatalf("%v %+v", err, res)
 		}
 	})
@@ -846,14 +847,14 @@ func TestAssignHarnessAndModelLabels(t *testing.T) {
 		worker.UpdateSlot(f.root, "ben", func(s *worker.Slot) { s.Raw().Set("kind", "codex") })
 		f.labelled("12", "harness:claude")
 		res, err := f.assign("12", "ben", nil)
-		if err != nil || res.Kind != "claude" {
+		if err != nil || res.Kind != harness.Claude {
 			t.Fatalf("%v %+v", err, res)
 		}
 	})
 	t.Run("no labels, no flags: unchanged", func(t *testing.T) {
 		f := newAssignFixture(t)
 		res, err := f.assign("12", "ben", nil)
-		if err != nil || res.Kind != "claude" || res.Model != "sonnet" || res.Pick != (Pick{}) {
+		if err != nil || res.Kind != harness.Claude || res.Model != "sonnet" || res.Pick != (Pick{}) {
 			t.Fatalf("%v %+v", err, res)
 		}
 	})
@@ -908,7 +909,7 @@ func TestCandidatesShowThePick(t *testing.T) {
 	for _, c := range cands {
 		got[c.ID] = c
 	}
-	if p := got["12"].Pick; p.Harness != "codex" || p.Model != "m" {
+	if p := got["12"].Pick; p.Harness != harness.Codex || p.Model != "m" {
 		t.Errorf("12: %+v", p)
 	}
 	if c := got["13"]; c.PickErr == "" || c.Ready() {

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -117,7 +118,7 @@ func TestAssignBestOfKinds(t *testing.T) {
 	if err != nil || len(res.BestOf) != 2 {
 		t.Fatalf("%v %+v", err, res)
 	}
-	if a, b := res.BestOf[0], res.BestOf[1]; a.Kind != "claude" || b.Kind != "codex" || b.KindSource != "best-of" || b.Model != "c-s" {
+	if a, b := res.BestOf[0], res.BestOf[1]; a.Kind != harness.Claude || b.Kind != harness.Codex || b.KindSource != "best-of" || b.Model != "c-s" {
 		t.Errorf("one claude, one codex: %+v %+v", a, b)
 	}
 
@@ -128,14 +129,14 @@ func TestAssignBestOfKinds(t *testing.T) {
 	(&codexRig{version: "codex-cli 0.159.2\n", loggedIn: true}).install(g)
 	g.host.name = "herdr"
 	res, err = g.assign("12", "", nil)
-	if err != nil || len(res.BestOf) != 2 || res.BestOf[0].Kind != "codex" || res.BestOf[1].Kind != "codex" || res.BestOf[1].KindSource != KindFromLabel {
+	if err != nil || len(res.BestOf) != 2 || res.BestOf[0].Kind != harness.Codex || res.BestOf[1].Kind != harness.Codex || res.BestOf[1].KindSource != KindFromLabel {
 		t.Fatalf("both codex: %v %+v", err, res)
 	}
 
 	// Codex not configured: both attempts take the resolved kind.
 	h := bestOfFixture(t)
 	res, err = h.assign("12", "", nil)
-	if err != nil || res.BestOf[0].Kind != "claude" || res.BestOf[1].Kind != "claude" {
+	if err != nil || res.BestOf[0].Kind != harness.Claude || res.BestOf[1].Kind != harness.Claude {
 		t.Fatalf("both claude: %v %+v", err, res)
 	}
 }

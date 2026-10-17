@@ -2,6 +2,10 @@
 verified-sha: 41a20d1f3536b4b0b394a6113dedce633d22b0fa
 refs:
   - internal/harness/codex.go
+  - internal/harness
+  - internal/agents
+  - internal/round/quota.go
+  - internal/roundcfg/roundcfg.go
   - internal/cli/hook.go
   - internal/hook
   - internal/doctor/doctor.go
@@ -24,6 +28,17 @@ E1 (#68) runs OpenAI's Codex CLI as a round or pool worker beside Claude Code. I
 - **Classification.** Unchanged code: herdr reports the codex agent's state natively, and `worker poll` and `round wait` apply the same sentinels (`ROTA-DONE`, `ROTA-BLOCKED`) on top. `limited` gains Codex's usage-limit text once recorded live. The working, idle and blocked check on the Codex TUI is manual and recorded in the PR (#68).
 - **`rota doctor` `codex` check.** Placed after `hook`. `skip` when codex is not on PATH and no `work.codexAccounts` are configured. Otherwise `fail` when codex is missing (accounts are configured), `codex --version` cannot run (hint: install codex-cli), or a configured account's home is not logged in (hint `CODEX_HOME=<home> codex login`) or, under herdr, lacks the integration (hint `CODEX_HOME=<home> herdr integration install codex`). `detail` names the version (when printed) and the homes checked, and on a pass with `round.tiers.codex` unset notes that the tiers are optional (workers use Codex's default model, #68). `codex --version` runs with `CODEX_HOME` set to a slot home when one exists, so the check never needs `~/.codex`. With no accounts it checks the default home and only notes a missing login or integration on a `pass`, since a project that never runs codex workers has no reason to log in.
 - **Not in E1.** Codex subagents and solo mode (E3, #70, then C8), a Codex usage meter, codex under tmux, a second-opinion runner (#158 retired it).
+
+### The harness seam (#584, slice A)
+
+A worker kind is one type behind `harness.Harness`; nothing outside `internal/harness` names one. `TestNoKindNamedOutsideHarness` reads every Go file: production code may not hold the literal `"claude"` or `"codex"` (comparison, struct field, map key or const alias), use `harness.Claude` or `harness.Codex`, or compare against `harness.Default` (ask `harness.IsDefault`); a test may not compare a kind against the literal or list it in a `case`. Each exclusion names a file, the line pattern it excuses and why. A new kind is one file there plus docs. `harness.Resolve(kind)` is the adapter for a kind that must have one: `""` and a kind that is not a worker harness (a corrupt record) read as the default.
+
+- **Kinds.** `harness.Kinds()` is the one list. The `round.workerKind` enum in the config table cannot import it (harness imports config), so `TestWorkerKindEnumIsKinds` pins the two together; the `harness:` label check, `--kind` errors and herdr's binary-to-kind map read `Kinds()` directly.
+- **Accounts.** `Accounts(cfg)` is the kind's account list and its config key (`work.accounts`, `work.codexAccounts`). `WorkAccounts()` says whether the kind uses `work.accounts`, so dispatch and preflight no longer test for Codex; `UsageMeter()` says whether its accounts expose a usage reading, otherwise they are balanced from the limits the watcher logged (`QuotaCap`, `Headroom`, the ledger headroom, `SlotAccount`).
+- **Limit phrases.** `LimitPhrases()` starts from `harness.SharedLimitPhrases()`. `worker.LimitPhrases` is `harness.AllLimitPhrases()`, the union over the kinds, since a pane is classified without knowing its kind. The limits watcher and `rota limit watch` ask `UsageMeter()` (meter or logged limits) and pick a login from `Accounts(cfg)` (`limits.LoggedPick`).
+- **Tiers and configuration.** `Tiers()` says whether the kind's `round.tiers` map is required and which key fills an unset standard tier (`models.worker` for claude); `Configured(cfg)` replaces `codexConfigured` (claude is always configured).
+- **Agent files.** `AgentFiles(role, model)` returns what `rota agents write` emits for a role: `.claude/agents/rota-<role>.md`, `.codex/agents/rota-<role>.toml`, nothing for a kind without a subagent format. `agents.Render` walks `Spec.Kinds`.
+- **Doctor.** `Doctor()` is the kind's `rota doctor` probes: the report line, binary, install hint, a runnable probe and the per-home login and herdr integration probes. `doctor.Input.Kinds` carries each kind's accounts key, homes and tier flag; `Unguarded` says the PreToolUse guard does not cover the kind. A zero value means the kind has no check of its own (claude). It compares no version (DECISIONS, "No harness version pins").
 
 ### D1: statusline dump, Stop hook and handoff
 

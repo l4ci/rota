@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/l4ci/rota/internal/harness"
 )
 
 var bg = context.Background()
@@ -115,7 +117,7 @@ func TestAgentName(t *testing.T) {
 
 func TestLaunchArgs(t *testing.T) {
 	kind, env, args, err := LaunchArgs(`FOO=bar BAZ=1 /usr/bin/claude --model sonnet --dangerously-skip-permissions`)
-	if err != nil || kind != "claude" || !reflect.DeepEqual(env, []string{"FOO=bar", "BAZ=1"}) ||
+	if err != nil || kind != harness.Claude || !reflect.DeepEqual(env, []string{"FOO=bar", "BAZ=1"}) ||
 		!reflect.DeepEqual(args, []string{"--model", "sonnet", "--dangerously-skip-permissions"}) {
 		t.Errorf("LaunchArgs = %q %q %q %v", kind, env, args, err)
 	}
@@ -128,7 +130,7 @@ func TestLaunchArgs(t *testing.T) {
 
 func TestLaunchArgsKindFromBasename(t *testing.T) {
 	kind, env, args, err := LaunchArgs(`A=1 /opt/bin/codex --model gpt-x --no-daemon`)
-	if err != nil || kind != "codex" || !reflect.DeepEqual(env, []string{"A=1"}) ||
+	if err != nil || kind != harness.Codex || !reflect.DeepEqual(env, []string{"A=1"}) ||
 		!reflect.DeepEqual(args, []string{"--model", "gpt-x", "--no-daemon"}) {
 		t.Errorf("LaunchArgs = %q %q %q %v", kind, env, args, err)
 	}

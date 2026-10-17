@@ -2,9 +2,12 @@ package harness
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/l4ci/rota/internal/config"
@@ -126,6 +129,93 @@ func (codex) AccountEnv(a Account) []string {
 		return nil
 	}
 	return []string{"CODEX_HOME=" + a.CodexHome}
+}
+
+func (codex) Accounts(cfg any) AccountList {
+	l := AccountList{Key: "work.codexAccounts"}
+	for _, a := range config.CodexAccounts(cfg) {
+		l.Entries = append(l.Entries, AccountEntry{Name: a.Name, Dir: a.CodexHome})
+	}
+	return l
+}
+
+// UsageMeter: Codex has no usage reading, so its accounts are balanced from
+// the limits the watcher logged.
+func (codex) UsageMeter() bool { return false }
+
+func (codex) LimitPhrases() []string { return SharedLimitPhrases() }
+
+// Tiers: the tier map is optional (#68), unset a worker runs on Codex's own
+// default model, but a configured one names every tier.
+func (codex) Tiers() TierRule { return TierRule{} }
+
+// Configured is whether the project uses Codex at all: a Codex tier map, a
+// named Codex home, a custom Codex command or Codex as the default worker kind.
+func (c codex) Configured(cfg any) bool {
+	if config.StringIfSet(cfg, "round.workerKind") == Codex {
+		return true
+	}
+	// The tier names are roundcfg's, which imports this package.
+	for _, tier := range []string{"light", "standard", "heavy"} {
+		if strings.TrimSpace(config.StringIfSet(cfg, "round.tiers.codex."+tier)) != "" {
+			return true
+		}
+	}
+	if len(c.Accounts(cfg).Entries) > 0 {
+		return true
+	}
+	return strings.TrimSpace(config.StringIfSet(cfg, c.CommandKey())) != ""
+}
+
+// CodexEfforts are the model_reasoning_effort values every Codex model lists as
+// supported. "max" and "ultra" exist on some models only, so a role asking for
+// them is refused rather than written into a file that may not load.
+var CodexEfforts = []string{"low", "medium", "high", "xhigh"}
+
+// ErrEffort marks a role effort that Codex cannot express.
+var ErrEffort = errors.New("effort not supported by Codex")
+
+// AgentFiles is .codex/agents/rota-<role>.toml.
+func (codex) AgentFiles(r AgentRole, model string) ([]AgentFile, error) {
+	if r.Effort != "" && !slices.Contains(CodexEfforts, r.Effort) {
+		return nil, fmt.Errorf("%w: roles.%s.effort %q is not a Codex model_reasoning_effort (%s)", ErrEffort, r.Name, r.Effort, strings.Join(CodexEfforts, ", "))
+	}
+	var b strings.Builder
+	b.WriteString("# " + AgentMarker + " (rota agents write) from roles." + r.Name + " in .rota/config.json; do not edit\n")
+	b.WriteString("name = " + strconv.Quote("rota-"+r.Name) + "\n")
+	b.WriteString("description = " + strconv.Quote(r.Description) + "\n")
+	if model != "" {
+		b.WriteString("model = " + strconv.Quote(model) + "\n")
+	}
+	if r.Effort != "" {
+		b.WriteString("model_reasoning_effort = " + strconv.Quote(r.Effort) + "\n")
+	}
+	if r.Name == "explorer" {
+		b.WriteString("sandbox_mode = \"read-only\"\n")
+	}
+	b.WriteString("developer_instructions = \"\"\"\n" + r.Instructions + "\n\"\"\"\n")
+	return []AgentFile{{".codex/agents/rota-" + r.Name + ".toml", b.String()}}, nil
+}
+
+// Doctor: the binary, its login per home and the herdr integration.
+func (codex) Doctor() Doctor {
+	return Doctor{
+		Check: "codex", Title: "Codex", Binary: "codex", InstallHint: CodexInstallHint,
+		Runnable: func(ctx context.Context, p Probe, bin, home string) (string, bool) {
+			v, f := CheckCodexVersion(ctx, p, bin, home)
+			if f != nil {
+				return "", false
+			}
+			if v == (CodexVersion{}) {
+				return "", true
+			}
+			return v.String(), true
+		},
+		Home: func(ctx context.Context, p Probe, bin, herdr string, h Home) []Finding {
+			return CheckCodexHome(ctx, p, bin, herdr, h)
+		},
+		Unguarded: true, LoginFix: "codex login", IntegrationFix: "herdr integration install codex", HomeEnv: "CODEX_HOME=",
+	}
 }
 
 // CheckLaunch refuses a command without --dangerously-bypass-hook-trust: Codex

@@ -697,7 +697,7 @@ func (e Env) Transfer(ctx context.Context, root string, be Board, o TransferOpts
 	// from the item's label, else round.workerKind, else the receiver's
 	// recorded kind, else claude; the model from the item's label, else the
 	// tier map. Headroom and scope are not asked of a receiver that resumes.
-	kind, kindSource, tier := harness.Claude, "", firstNonEmpty(o.Tier, o.Settings.Tier)
+	kind, kindSource, tier := harness.Default, "", firstNonEmpty(o.Tier, o.Settings.Tier)
 	var model, appliedModel string
 	if !toHuman {
 		pf, err := e.preflight(ctx, root, be, preflightIn{Item: it, Settings: set, Tier: tier,

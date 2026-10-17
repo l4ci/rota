@@ -9,39 +9,63 @@ import (
 	"github.com/l4ci/rota/internal/host"
 )
 
-// CodexHome is one CODEX_HOME a worker can run under: a work.codexAccounts
-// account (Slot is its name), or the default Codex home (empty Slot and Dir).
-type CodexHome struct{ Slot, Dir string }
+// KindInput is what one worker harness has configured.
+type KindInput struct {
+	// AccountsKey is the config key of the kind's accounts (Harness.Accounts).
+	AccountsKey string
+	// Homes are the homes a worker can run under: the kind's accounts, else
+	// the default home (a zero Home).
+	Homes []Home
+	// Tiers is whether any round.tiers.<kind>.<tier> is set.
+	Tiers bool
+}
 
-func (h CodexHome) label() string {
+// Home is one account home a worker can run under: a named account (Slot is
+// its name), or the default home (empty Slot and Dir).
+type Home struct{ Slot, Dir string }
+
+func (h Home) label() string {
 	if h.Slot == "" {
 		return "default home"
 	}
 	return h.Slot
 }
 
-func (h CodexHome) env() string {
+func (h Home) env(plan harness.Doctor) string {
 	if h.Dir == "" {
 		return ""
 	}
-	return "CODEX_HOME=" + h.Dir + " "
+	return plan.HomeEnv + h.Dir + " "
 }
 
-// codex is the E1 check: the Codex CLI is in range and every home a worker
-// can run under is logged in (and, under herdr, has the integration). The
-// readiness logic is the harness package's, shared with dispatch; this renders
-// its findings as a report line. A configured account that is not ready fails
-// the check; the default home only notes it, since a project that never runs
-// Codex workers has no reason to log in.
-func (d *runner) codex() Check {
-	look := func(name string) (string, bool) { return d.in.Look(name) }
-	bin, have := look("codex")
-	homes := d.in.CodexHomes
-	if !have {
-		if !d.hasCodexAccounts() {
-			return skip("codex", "codex not on PATH and no work.codexAccounts configured")
+// harnessChecks is one check per worker harness that has probes of its own
+// (Harness.Doctor): the binary is in range and every home a worker can run
+// under is logged in (and, under herdr, has the integration). The readiness
+// logic is the harness package's, shared with dispatch; this renders its
+// findings as a report line. A configured account that is not ready fails the
+// check; the default home only notes it, since a project that never runs the
+// kind's workers has no reason to log in.
+func (d *runner) harnessChecks() []Check {
+	var out []Check
+	for _, k := range harness.Kinds() {
+		if plan := harness.Resolve(k).Doctor(); plan.Check != "" {
+			out = append(out, d.harnessCheck(k, plan))
 		}
-		return fail("codex", "codex not found on PATH, but work.codexAccounts is configured: "+d.homeNames(), harness.CodexInstallHint)
+	}
+	return out
+}
+
+func (d *runner) harnessCheck(kind string, plan harness.Doctor) Check {
+	in := d.in.Kinds[kind]
+	name := plan.Check
+	look := func(name string) (string, bool) { return d.in.Look(name) }
+	bin, have := look(plan.Binary)
+	homes := in.Homes
+	if !have {
+		if !hasAccounts(homes) {
+			return skip(name, plan.Binary+" not on PATH and no "+in.AccountsKey+" configured")
+		}
+		return fail(name, plan.Binary+" not found on PATH, but "+in.AccountsKey+" is configured: "+homeNames(homes), plan.InstallHint)
 	}
 	p := harness.Probe{Look: look, Run: func(ctx context.Context, bin string, args, env []string) (harness.Result, error) {
 		r, err := d.in.Exec(ctx, bin, args, env, d.in.Dir)
@@ -51,24 +75,22 @@ func (d *runner) codex() Check {
 	if len(homes) > 0 {
 		home = homes[0].Dir
 	}
-	v, f := harness.CheckCodexVersion(d.ctx, p, bin, home)
-	switch {
-	case f == nil:
-	default:
-		return fail("codex", "codex not runnable: `codex --version` failed", harness.CodexInstallHint)
+	v, ok := plan.Runnable(d.ctx, p, bin, home)
+	if !ok {
+		return fail(name, plan.Binary+" not runnable: `"+plan.Binary+" --version` failed", plan.InstallHint)
 	}
-	head := "codex"
-	if v != (harness.CodexVersion{}) {
-		head += " " + v.String()
+	head := name
+	if v != "" {
+		head += " " + v
 	}
 	// The tier map is optional for codex (#68): unset, a worker runs on
 	// Codex's own default model.
 	tiers := ""
-	if !d.in.CodexTiers {
-		tiers = "; round.tiers.codex unset (optional): workers use Codex's default model"
+	if !in.Tiers {
+		tiers = "; round.tiers." + name + " unset (optional): workers use " + plan.Title + "'s default model"
 	}
 	if len(homes) == 0 {
-		return pass("codex", head+tiers)
+		return pass(name, head+tiers)
 	}
 	herdr := ""
 	if host.KindOf(d.in.Dispatch) == host.Herdr {
@@ -77,19 +99,19 @@ func (d *runner) codex() Check {
 	var bad, notes []string
 	var hint string
 	for _, h := range homes {
-		found := harness.CheckCodexHome(d.ctx, p, bin, herdr, harness.Home(h))
+		found := plan.Home(d.ctx, p, bin, herdr, harness.Home(h))
 		// A home's login problem reads before its integration problem.
 		for _, want := range []harness.Code{harness.NotLoggedIn, harness.IntegrationStale, harness.IntegrationUnrunnable} {
 			for _, f := range found {
 				if f.Code != want {
 					continue
 				}
-				msg, fix := h.label()+": not logged in", h.env()+"codex login"
+				msg, fix := h.label()+": not logged in", h.env(plan)+plan.LoginFix
 				if want != harness.NotLoggedIn {
-					msg, fix = h.label()+": herdr integration not current", h.env()+"herdr integration install codex"
+					msg, fix = h.label()+": herdr integration not current", h.env(plan)+plan.IntegrationFix
 				}
 				if h.Slot == "" {
-					notes = append(notes, msg+" (run `"+fix+"` before a Codex worker)")
+					notes = append(notes, msg+" (run `"+fix+"` before a "+plan.Title+" worker)")
 					continue
 				}
 				bad = append(bad, msg)
@@ -100,16 +122,16 @@ func (d *runner) codex() Check {
 		}
 	}
 	if len(bad) > 0 {
-		return fail("codex", head+"; "+strings.Join(bad, "; "), hint)
+		return fail(name, head+"; "+strings.Join(bad, "; "), hint)
 	}
 	if len(notes) > 0 {
-		return pass("codex", head+"; "+strings.Join(notes, "; ")+tiers)
+		return pass(name, head+"; "+strings.Join(notes, "; ")+tiers)
 	}
-	return pass("codex", fmt.Sprintf("%s; homes checked: %s%s", head, d.homeNames(), tiers))
+	return pass(name, fmt.Sprintf("%s; homes checked: %s%s", head, homeNames(homes), tiers))
 }
 
-func (d *runner) hasCodexAccounts() bool {
-	for _, h := range d.in.CodexHomes {
+func hasAccounts(homes []Home) bool {
+	for _, h := range homes {
 		if h.Slot != "" {
 			return true
 		}
@@ -117,9 +139,9 @@ func (d *runner) hasCodexAccounts() bool {
 	return false
 }
 
-func (d *runner) homeNames() string {
+func homeNames(homes []Home) string {
 	var names []string
-	for _, h := range d.in.CodexHomes {
+	for _, h := range homes {
 		names = append(names, h.label())
 	}
 	return strings.Join(names, ", ")

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/l4ci/rota/internal/config"
@@ -111,6 +112,55 @@ func (claude) AccountEnv(a Account) []string {
 	return []string{"CLAUDE_CONFIG_DIR=" + a.ConfigDir}
 }
 
+func (claude) Accounts(cfg any) AccountList {
+	l := AccountList{Key: "work.accounts"}
+	for _, a := range config.Accounts(cfg) {
+		l.Entries = append(l.Entries, AccountEntry{Name: a.Name, Dir: a.ConfigDir})
+	}
+	return l
+}
+
+// UsageMeter: Anthropic's usage endpoint reads an account's headroom.
+func (claude) UsageMeter() bool { return true }
+
+func (claude) LimitPhrases() []string { return SharedLimitPhrases() }
+
+// Tiers: claude must name every tier, and an unset standard tier takes
+// models.worker, so that one knob governs the standard model.
+func (claude) Tiers() TierRule { return TierRule{Required: true, StandardFallback: "models.worker"} }
+
+// Configured: Claude is every project's baseline worker.
+func (claude) Configured(any) bool { return true }
+
+// ClaudeIntegration is the name of Claude's herdr integration.
+const ClaudeIntegration = Claude
+
+// ExplorerTools is the Claude tool allowlist of the explorer role. Bash stays
+// (git log, rg), so it is read-mostly rather than strictly read-only.
+const ExplorerTools = "Read, Grep, Glob, Bash"
+
+// AgentFiles is .claude/agents/rota-<role>.md.
+func (claude) AgentFiles(r AgentRole, model string) ([]AgentFile, error) {
+	var b strings.Builder
+	b.WriteString("---\n")
+	b.WriteString("name: rota-" + r.Name + "\n")
+	b.WriteString("description: " + strconv.Quote(r.Description) + "\n")
+	b.WriteString("model: " + model + "\n")
+	if r.Effort != "" {
+		b.WriteString("effort: " + r.Effort + "\n")
+	}
+	if r.Name == "explorer" {
+		b.WriteString("tools: " + ExplorerTools + "\n")
+	}
+	b.WriteString("---\n")
+	b.WriteString("<!-- " + AgentMarker + " (rota agents write) from roles." + r.Name + " in .rota/config.json; do not edit -->\n\n")
+	b.WriteString(r.Instructions + "\n")
+	return []AgentFile{{".claude/agents/rota-" + r.Name + ".md", b.String()}}, nil
+}
+
+// Doctor: claude has no check of its own.
+func (claude) Doctor() Doctor { return Doctor{} }
+
 func (claude) CheckLaunch(string) error { return nil }
 
 func (claude) Preflight(context.Context, Probe, PreflightOpts) (Setup, error) { return Setup{}, nil }
@@ -152,6 +202,9 @@ func (claude) Command(cfg any) ([]string, error) {
 type hermes struct{}
 
 func (hermes) Name() string { return "hermes" }
+
+// WorkAccounts: work.accounts is Anthropic's.
+func (hermes) WorkAccounts() bool { return false }
 func (hermes) Prompt() string {
 	return "You are the orchestrator: run the rota-orchestrate skill."
 }
@@ -162,6 +215,9 @@ func (hermes) Command(any) ([]string, error) {
 type opencode struct{}
 
 func (opencode) Name() string { return "opencode" }
+
+// WorkAccounts: work.accounts is Anthropic's.
+func (opencode) WorkAccounts() bool { return false }
 func (opencode) Prompt() string {
 	return "You are the orchestrator: load the rota-orchestrate skill and follow it."
 }
