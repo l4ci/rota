@@ -80,6 +80,9 @@ because everything it deletes is proven unowned and merged, and anything holding
 - A `stalled` slot. Reap reclaims `dead` slots only: a worker in a long test run makes no commits and
   looks stalled, and reaping it would kill it. Reclaiming a stalled slot is an explicit
   [`rota round reclaim`](parallel-rounds.md#moving-an-issue-that-is-assigned).
+- An `unverifiable` slot. The host could not be asked (herdr unreachable, stale tab handle, pane
+  not capturable), so nothing proves the agent is gone. Reap skips it; inspect the tab, then wait or
+  `rota round reclaim <slot> --force`, which still refuses while the host cannot be asked at all.
 - A parked slot. A `park/<agent>` worktree, clean or not, and any `park/*` branch are never candidates.
 - A live or foreign lease. Only a stale one, whose holder is gone on this host.
 
