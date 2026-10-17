@@ -620,6 +620,11 @@
       "tier": "deprecated",
       "hits": 0,
       "lastSeen": "2026-10-06"
+    },
+    "Rounds: Orchestration: Workers & relays::focused: true can be a selected idle tab, not a person typing": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-17"
     }
   }
 }
