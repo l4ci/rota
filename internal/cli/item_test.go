@@ -12,6 +12,7 @@ import (
 
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/backlog/trackertest"
+	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/tracker"
 )
@@ -302,31 +303,48 @@ func TestItemCreateBatchKeepsFiledIDsOnFailure(t *testing.T) {
 	}
 }
 
-// A plain error (file I/O, a lock) on record 2 of 3 is reported the same way:
-// record 1's id in the message and in `items`, and the data survives withBackend.
+// An unclassified error on record 2 of 3 exits as a single `item create` would
+// (lock timeout is retry, an unreadable state file is unavailable), and the filed
+// ids and data survive.
 func TestItemCreateBatchKeepsFiledIDsOnPlainError(t *testing.T) {
-	ins := []backlog.CreateInput{{Kind: "tasks", Title: "First filed record"}, {Kind: "tasks", Title: "Second fails here"},
-		{Kind: "tasks", Title: "Third never runs"}}
-	be := &failSecond{err: errors.New("disk full")}
-	res, err := fileBatch(be, ins)
-	// An *Error is what withBackend passes through with its Result intact.
-	var e *Error
-	if !errors.As(err, &e) {
-		t.Fatalf("err = %#v, want an *Error so withBackend keeps the data", err)
+	cases := []struct {
+		name string
+		err  error
+		exit int
+	}{
+		{"plain", errors.New("disk full"), ExitInternal},
+		{"lock timeout", fmt.Errorf("busy: %w", fsio.ErrLockTimeout), ExitRetry},
+		{"unreadable state", fmt.Errorf("%w: state.json", fsio.ErrUnreadable), ExitUnavailable},
 	}
-	if !strings.Contains(e.Message, "record 2") || !strings.Contains(e.Message, "T01") || !strings.Contains(e.Message, "disk full") {
-		t.Errorf("message lacks the record, the filed id or the cause: %q", e.Message)
-	}
-	data, _ := res.Data.(*jsonx.Object)
-	if data == nil {
-		t.Fatal("no data on a partial batch")
-	}
-	if v, _ := data.Get("failedAt"); v != 2 {
-		t.Errorf("failedAt = %v, want 2", v)
-	}
-	items, _ := data.Get("items")
-	enc, _ := jsonx.MarshalCompact(items)
-	if got := string(enc); !strings.Contains(got, "T01") || strings.Contains(got, "T03") {
-		t.Errorf("items = %s, want only record 1", enc)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ins := []backlog.CreateInput{{Kind: "tasks", Title: "First filed record"}, {Kind: "tasks", Title: "Second fails here"},
+				{Kind: "tasks", Title: "Third never runs"}}
+			res, err := fileBatch(&failSecond{err: tc.err}, ins)
+			var e *Error
+			if !errors.As(err, &e) {
+				t.Fatalf("err = %#v, want an *Error so withBackend keeps the data", err)
+			}
+			if want := asError(tc.err).Exit; e.Exit != tc.exit || want != tc.exit {
+				t.Errorf("exit = %d, single create = %d, want %d", e.Exit, want, tc.exit)
+			}
+			for _, w := range []string{"record 2", "T01", tc.err.Error()} {
+				if n := strings.Count(e.Message, w); n != 1 {
+					t.Errorf("message has %q %d times, want once: %q", w, n, e.Message)
+				}
+			}
+			data, _ := res.Data.(*jsonx.Object)
+			if data == nil {
+				t.Fatal("no data on a partial batch")
+			}
+			if v, _ := data.Get("failedAt"); v != 2 {
+				t.Errorf("failedAt = %v, want 2", v)
+			}
+			items, _ := data.Get("items")
+			enc, _ := jsonx.MarshalCompact(items)
+			if got := string(enc); !strings.Contains(got, "T01") || strings.Contains(got, "T03") {
+				t.Errorf("items = %s, want only record 1", enc)
+			}
+		})
 	}
 }

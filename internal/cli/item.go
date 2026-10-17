@@ -400,9 +400,11 @@ func fileBatch(be backlog.Backend, ins []backlog.CreateInput) (Result, error) {
 			if errors.As(ferr, &xe) {
 				xe.Message = fmt.Sprintf("record %d (%q) failed, %s: %s", i+1, in.Title, filed, xe.Message)
 			} else {
-				// Unclassified (file I/O, a lock): wrap it so the data still rides out.
-				xe = &Error{Exit: ExitInternal, Cause: ferr,
-					Message: fmt.Sprintf("record %d (%q) failed, %s: %s", i+1, in.Title, filed, ferr)}
+				// Unclassified (file I/O, a lock): classify as a single verb would, so a
+				// lock timeout stays retry and an unreadable state file stays unavailable.
+				xe = asError(err)
+				xe.Cause = err
+				xe.Message = fmt.Sprintf("record %d (%q) failed, %s: %s", i+1, in.Title, filed, err)
 				ferr = xe
 			}
 			data, _ := r.Data.(*jsonx.Object)
