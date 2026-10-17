@@ -313,8 +313,8 @@
     },
     "Architecture: Skill authoring::Codex drops skills whose unquoted description has ': ' or ' #'": {
       "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-04"
+      "hits": 1,
+      "lastSeen": "2026-10-16"
     },
     "Build & Tooling: Git & isolation::Repo-wide renames: one sweep PR owns shared code, slices stack on it": {
       "tier": "provisional",
@@ -336,50 +336,10 @@
       "hits": 0,
       "lastSeen": "2026-05-18"
     },
-    "Rounds: Orchestration::Record maintainer answers by their real channel, never as a relay": {
-      "tier": "provisional",
-      "hits": 1,
-      "lastSeen": "2026-10-08"
-    },
-    "Rounds: Orchestration::Workers often skip the ROTA-DONE sentinel": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-05"
-    },
-    "Rounds: Orchestration::Rebuild the installed rota after merging round-verb fixes": {
-      "tier": "provisional",
-      "hits": 1,
-      "lastSeen": "2026-10-08"
-    },
-    "Rounds: Orchestration::gh pr edit fails silently on this repo": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-05"
-    },
     "Build & Tooling: Helpers & migrations::update-golden writes compact JSON": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-05"
-    },
-    "Rounds: Orchestration::Read held commits before reaping a round": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-06"
-    },
-    "Rounds: Orchestration::Worker workarounds are bug reproductions": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-06"
-    },
-    "Rounds: Orchestration::Gating a PR outside a round": {
-      "tier": "deprecated",
-      "hits": 0,
-      "lastSeen": "2026-10-06"
-    },
-    "Rounds: Orchestration::No harness version pins; Codex uses the default account": {
-      "tier": "deprecated",
-      "hits": 0,
-      "lastSeen": "2026-10-06"
     },
     "Architecture: Skill authoring::Shorten skills structurally, not by rewording": {
       "tier": "provisional",
@@ -389,11 +349,6 @@
     "Build & Tooling: Smoke testing::A verb captured in $(...) aborts the section silently when it exits non-zero": {
       "tier": "provisional",
       "hits": 2,
-      "lastSeen": "2026-10-08"
-    },
-    "Rounds: Orchestration::Cite a transfer brief as a transfer note, not a relay": {
-      "tier": "provisional",
-      "hits": 1,
       "lastSeen": "2026-10-08"
     },
     "Build & Tooling: Smoke testing::Host CLI argv needs one real-host run": {
@@ -431,27 +386,7 @@
       "hits": 0,
       "lastSeen": "2026-10-08"
     },
-    "Rounds: Orchestration::Contract-doc stamps make waiting PRs conflict with each other": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-09"
-    },
-    "Rounds: Orchestration::Re-reviews are one reviewer, majors only, fix range only": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-09"
-    },
     "Build & Tooling: Smoke testing::A gate that crosses UTC midnight fails the frozen tests": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-09"
-    },
-    "Rounds: Orchestration::Architecture-review issues can propose seams that already exist": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-09"
-    },
-    "Rounds: Orchestration::Serialize sibling refactors that share a seam": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-09"
@@ -461,25 +396,10 @@
       "hits": 0,
       "lastSeen": "2026-10-09"
     },
-    "Rounds: Orchestration::Renamed Go tests can silently stop running": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-11"
-    },
-    "Rounds: Orchestration::Refactor reviews need an old-vs-new input table": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-11"
-    },
-    "Rounds: Orchestration::Mutation-check source-grep guard tests": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-11"
-    },
     "Architecture: Helper conventions & invariants: Go verbs & fakes::Embedding host fakes must redeclare Capabilities": {
       "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-11"
+      "hits": 2,
+      "lastSeen": "2026-10-16"
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes::Palette entries name the verb that registers the View": {
       "tier": "provisional",
@@ -556,16 +476,6 @@
       "hits": 0,
       "lastSeen": "2026-10-12"
     },
-    "Rounds: Orchestration::Overlap counts the held issue's pointers until merge": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-12"
-    },
-    "Rounds: Orchestration::Label a split issue partial-slice before its first slice merges": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-15"
-    },
     "Build & Tooling: Smoke testing::Fixtures that expect issue or forge reads must pin the source and forge": {
       "tier": "provisional",
       "hits": 0,
@@ -585,6 +495,136 @@
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-15"
+    },
+    "Rounds: Orchestration: Review & merge gate::Train PRs with disjoint paths; a new config key reds the frozen config record": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-16"
+    },
+    "Rounds: Orchestration: Review & merge gate::Verdicts record the sha of the slot's worktree, not origin": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-16"
+    },
+    "Rounds: Orchestration: Review & merge gate::Review subagents must not touch the repo's worktrees or checkout during a gate": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-16"
+    },
+    "Rounds: Orchestration: Review & merge gate::Mutation-check source-grep guard tests": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-11"
+    },
+    "Rounds: Orchestration: Review & merge gate::Refactor reviews need an old-vs-new input table": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-11"
+    },
+    "Rounds: Orchestration: Review & merge gate::Renamed Go tests can silently stop running": {
+      "tier": "provisional",
+      "hits": 1,
+      "lastSeen": "2026-10-16"
+    },
+    "Rounds: Orchestration: Review & merge gate::Re-reviews are one reviewer, majors only, fix range only": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-09"
+    },
+    "Rounds: Orchestration: Review & merge gate::Contract-doc stamps make waiting PRs conflict with each other": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-09"
+    },
+    "Rounds: Orchestration: Review & merge gate::Rebuild the installed rota after merging round-verb fixes": {
+      "tier": "provisional",
+      "hits": 1,
+      "lastSeen": "2026-10-08"
+    },
+    "Rounds: Orchestration: Review & merge gate::Read held commits before reaping a round": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-06"
+    },
+    "Rounds: Orchestration: Review & merge gate::gh pr edit fails silently on this repo": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-05"
+    },
+    "Rounds: Orchestration: Workers & relays::Sonnet workers write tests after the code unless the brief names the RED": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-16"
+    },
+    "Rounds: Orchestration: Workers & relays::A Claude Code dialog on the prompt line reads as a human draft": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-16"
+    },
+    "Rounds: Orchestration: Workers & relays::Cite a transfer brief as a transfer note, not a relay": {
+      "tier": "provisional",
+      "hits": 1,
+      "lastSeen": "2026-10-08"
+    },
+    "Rounds: Orchestration: Workers & relays::Worker workarounds are bug reproductions": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-06"
+    },
+    "Rounds: Orchestration: Workers & relays::Workers often skip the ROTA-DONE sentinel": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-05"
+    },
+    "Rounds: Orchestration: Workers & relays::Record maintainer answers by their real channel, never as a relay": {
+      "tier": "provisional",
+      "hits": 1,
+      "lastSeen": "2026-10-08"
+    },
+    "Rounds: Orchestration: Slate & issues::Smoke section reservation keys on the words 'smoke section' or 'test/sections'": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-16"
+    },
+    "Rounds: Orchestration: Slate & issues::Check the titles the architecture review files": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-16"
+    },
+    "Rounds: Orchestration: Slate & issues::Label a split issue partial-slice before its first slice merges": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-15"
+    },
+    "Rounds: Orchestration: Slate & issues::Overlap counts the held issue's pointers until merge": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-12"
+    },
+    "Rounds: Orchestration: Slate & issues::Serialize sibling refactors that share a seam": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-09"
+    },
+    "Rounds: Orchestration: Slate & issues::Architecture-review issues can propose seams that already exist": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-09"
+    },
+    "Rounds: Orchestration: Workers & relays::No harness version pins; Codex uses the default account": {
+      "tier": "deprecated",
+      "hits": 0,
+      "lastSeen": "2026-10-06"
+    },
+    "Rounds: Orchestration: Review & merge gate::Gating a PR outside a round": {
+      "tier": "deprecated",
+      "hits": 0,
+      "lastSeen": "2026-10-06"
+    },
+    "Rounds: Orchestration: Workers & relays::focused: true can be a selected idle tab, not a person typing": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-17"
     }
   }
 }
