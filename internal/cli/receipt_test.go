@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"flag"
 	"io"
@@ -15,6 +16,7 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/receipt"
 	"github.com/l4ci/rota/internal/round"
+	"github.com/l4ci/rota/internal/tracker"
 )
 
 // fakeVerb counts its runs; fail, when set, is returned after the work.
@@ -216,8 +218,11 @@ func TestReceiptChangedInputsUnderTheSameIDAreRefused(t *testing.T) {
 	}
 }
 
-func TestBranchHeadsFollowsPushes(t *testing.T) {
-	dir := workerProject(t, `{}`)
+// gateHeadsRepo is a project with the branch ben/1-x and the given registry,
+// plus a helper that commits on that branch (a push).
+func gateHeadsRepo(t *testing.T, registry string) (dir string, push func()) {
+	t.Helper()
+	dir = workerProject(t, `{}`)
 	git := func(args ...string) {
 		t.Helper()
 		if out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).CombinedOutput(); err != nil {
@@ -225,19 +230,78 @@ func TestBranchHeadsFollowsPushes(t *testing.T) {
 		}
 	}
 	git("branch", "ben/1-x")
-	reg := `{"slots":[{"name":"ben","branch":"ben/1-x","pr":"https://example.test/o/r/pull/7"}]}`
-	os.WriteFile(filepath.Join(dir, ".rota", "workers.json"), []byte(reg), 0o644)
-	before := strings.Join(branchHeads(&Ctx{}, dir, []string{"ben", "7"}), "|")
-	if strings.Contains(before, "=?") {
-		t.Fatalf("slot and PR number must both resolve: %s", before)
+	os.WriteFile(filepath.Join(dir, ".rota", "workers.json"), []byte(registry), 0o644)
+	return dir, func() {
+		git("switch", "-q", "ben/1-x")
+		git("-c", "user.email=a@b", "-c", "user.name=n", "commit", "-q", "--allow-empty", "-m", "push")
 	}
-	git("switch", "-q", "ben/1-x")
-	git("-c", "user.email=a@b", "-c", "user.name=n", "commit", "-q", "--allow-empty", "-m", "push")
-	if after := strings.Join(branchHeads(&Ctx{}, dir, []string{"ben", "7"}), "|"); after == before {
-		t.Errorf("a new commit must change the heads: %s", after)
+}
+
+func TestGateHeadsFollowTargetResolution(t *testing.T) {
+	const pr = "https://example.test/o/r/pull/7"
+	cases := []struct {
+		name, registry string
+		args           []string
+	}{
+		{"slot by name and PR number", `{"slots":[{"name":"ben","branch":"ben/1-x","pr":"` + pr + `"}]}`, []string{"ben", "7"}},
+		{"queued PR whose slot moved on", `{"slots":[{"name":"ben","branch":"park/ben"}],"prs":[{"issue":"1","branch":"ben/1-x","pr":"` + pr + `","base":"main","from":"ben"}]}`, []string{"#7", "7"}},
+		{"adopted external slot", `{"slots":[{"name":"ext","branch":"ben/1-x","pr":"` + pr + `","external":true}]}`, []string{"ext", "#7"}},
 	}
-	if got := branchHeads(&Ctx{}, dir, []string{"zed"}); got[0] != "head:zed=?" {
-		t.Errorf("unknown token: %v", got)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir, push := gateHeadsRepo(t, tc.registry)
+			before := strings.Join(gateHeads(&Ctx{}, dir, tc.args), "|")
+			if strings.Contains(before, "=?") {
+				t.Fatalf("every argument must resolve to a head: %s", before)
+			}
+			push()
+			if after := strings.Join(gateHeads(&Ctx{}, dir, tc.args), "|"); after == before {
+				t.Errorf("a push must change the heads: %s", after)
+			}
+		})
+	}
+}
+
+// A push to a queued PR's branch is a different gate call: the stored done
+// receipt does not replay it under the same request id.
+func TestQueuedPRPushUnderTheSameIDDoesNotReplay(t *testing.T) {
+	const pr = "https://example.test/o/r/pull/7"
+	dir, push := gateHeadsRepo(t, `{"slots":[{"name":"ben","branch":"park/ben"}],"prs":[{"issue":"1","branch":"ben/1-x","pr":"`+pr+`","base":"main","from":"ben"}]}`)
+	f := &fakeVerb{heads: func() []string { return gateHeads(&Ctx{}, dir, []string{"#7"}) }}
+	callReceipted(t, dir, f, "--request-id", "r1", "#7")
+	if _, err, _ := callReceipted(t, dir, f, "--request-id", "r1", "#7"); err != nil || f.runs != 1 {
+		t.Fatalf("an unchanged queued PR must replay: err=%v runs=%d", err, f.runs)
+	}
+	push()
+	res, err, _ := callReceipted(t, dir, f, "--request-id", "r1", "#7")
+	var e *Error
+	if !errors.As(err, &e) || e.Exit != ExitRefused || field(t, res, "blockedBy") != "request-id" || f.runs != 1 {
+		t.Errorf("a push must not replay the stored receipt: err=%v data=%v runs=%d", err, res.Data, f.runs)
+	}
+}
+
+func TestGateHeadsUnknownTokenIsUnresolved(t *testing.T) {
+	dir, _ := gateHeadsRepo(t, `{}`)
+	if got := gateHeads(&Ctx{}, dir, []string{"zed"}); got[0] != "head:zed=?" {
+		t.Errorf("unknown slot: %v", got)
+	}
+}
+
+// A PR no slot or record owns has no branch of its own: its head is the
+// forge's, so a push to it still changes the fingerprint.
+func TestGateHeadsExternalPRReadsTheForge(t *testing.T) {
+	dir, _ := gateHeadsRepo(t, `{}`)
+	os.WriteFile(filepath.Join(dir, ".rota", "config.json"), []byte(`{"forge":{"provider":"github"}}`), 0o644)
+	sha := "feedface00000000000000000000000000000001"
+	deps := testDeps()
+	deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, _, _ string, args []string, _ []byte) ([]byte, []byte, int, error) {
+		if len(args) > 2 && args[0] == "pr" && args[1] == "view" && args[2] == "99" {
+			return []byte(`{"headRefName":"fix/forward","headRefOid":"` + sha + `","baseRefName":"main","state":"OPEN"}`), nil, 0, nil
+		}
+		return nil, []byte("unexpected " + strings.Join(args, " ")), 1, nil
+	}, func(n string) (string, error) { return "/fake/" + n, nil })}
+	if got := gateHeads(&Ctx{Deps: deps}, dir, []string{"#99"}); got[0] != "head:#99="+sha {
+		t.Errorf("got %v, want the forge's head %s", got, sha)
 	}
 }
 
