@@ -399,6 +399,11 @@ func fileBatch(be backlog.Backend, ins []backlog.CreateInput) (Result, error) {
 			var xe *Error
 			if errors.As(ferr, &xe) {
 				xe.Message = fmt.Sprintf("record %d (%q) failed, %s: %s", i+1, in.Title, filed, xe.Message)
+			} else {
+				// Unclassified (file I/O, a lock): wrap it so the data still rides out.
+				xe = &Error{Exit: ExitInternal, Cause: ferr,
+					Message: fmt.Sprintf("record %d (%q) failed, %s: %s", i+1, in.Title, filed, ferr)}
+				ferr = xe
 			}
 			data, _ := r.Data.(*jsonx.Object)
 			if data == nil {
