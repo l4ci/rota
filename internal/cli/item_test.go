@@ -257,11 +257,15 @@ func TestItemCreateBatchPairsTitleAndBody(t *testing.T) {
 // failSecond fails its second Create the way a tracker does.
 type failSecond struct {
 	backlog.Backend
-	n int
+	n   int
+	err error // the second Create's error; a tracker outage when nil
 }
 
 func (f *failSecond) Create(in backlog.CreateInput) (backlog.CreateResult, error) {
 	if f.n++; f.n == 2 {
+		if f.err != nil {
+			return backlog.CreateResult{}, f.err
+		}
 		return backlog.CreateResult{}, &tracker.Error{Kind: tracker.KindUnavailable, Code: 1, Message: "network is down"}
 	}
 	return backlog.CreateResult{ID: "T0" + fmt.Sprint(f.n), Type: "T"}, nil
@@ -295,5 +299,34 @@ func TestItemCreateBatchKeepsFiledIDsOnFailure(t *testing.T) {
 	}
 	if be.n != 2 {
 		t.Errorf("Create called %d times, want 2", be.n)
+	}
+}
+
+// A plain error (file I/O, a lock) on record 2 of 3 is reported the same way:
+// record 1's id in the message and in `items`, and the data survives withBackend.
+func TestItemCreateBatchKeepsFiledIDsOnPlainError(t *testing.T) {
+	ins := []backlog.CreateInput{{Kind: "tasks", Title: "First filed record"}, {Kind: "tasks", Title: "Second fails here"},
+		{Kind: "tasks", Title: "Third never runs"}}
+	be := &failSecond{err: errors.New("disk full")}
+	res, err := fileBatch(be, ins)
+	// An *Error is what withBackend passes through with its Result intact.
+	var e *Error
+	if !errors.As(err, &e) {
+		t.Fatalf("err = %#v, want an *Error so withBackend keeps the data", err)
+	}
+	if !strings.Contains(e.Message, "record 2") || !strings.Contains(e.Message, "T01") || !strings.Contains(e.Message, "disk full") {
+		t.Errorf("message lacks the record, the filed id or the cause: %q", e.Message)
+	}
+	data, _ := res.Data.(*jsonx.Object)
+	if data == nil {
+		t.Fatal("no data on a partial batch")
+	}
+	if v, _ := data.Get("failedAt"); v != 2 {
+		t.Errorf("failedAt = %v, want 2", v)
+	}
+	items, _ := data.Get("items")
+	enc, _ := jsonx.MarshalCompact(items)
+	if got := string(enc); !strings.Contains(got, "T01") || strings.Contains(got, "T03") {
+		t.Errorf("items = %s, want only record 1", enc)
 	}
 }
