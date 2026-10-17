@@ -329,10 +329,10 @@ Bare `rota` with no verb does the same in an initialized project and runs `rota 
 
 | Usage | What it does |
 |---|---|
-| `rota skills install [--scope <user\|project>] [--agent <claude\|codex\|all>] [--overwrite] [--current-account] [--stub]` | write the skills into the agent skill directories; `--stub` (also on `update`) writes each `SKILL.md` as a stub that tells the agent to run `rota skills get <name>`, for harnesses that can run commands when a skill loads |
+| `rota skills install [--scope <user\|project>] [--agent <claude\|codex\|all>] [--overwrite] [--current-account] [--stub]` | write the skills into the agent skill directories; `--stub` (also on `update`) writes each `SKILL.md` as a stub that tells the agent to run `rota skills get <name>` and drops the skill's `references/`, which the verb serves; only for harnesses that can run commands when a skill loads |
 | `rota skills status [--scope <user\|project>] [--agent <claude\|codex\|all>] [--current-account]` | compare the installed skills with this binary |
 | `rota skills list` | name the skills embedded in this binary and its version |
-| `rota skills get <name> [--references \| --reference <file>]` | print an embedded skill's `SKILL.md` as the binary carries it, list its reference files, or print one; exit 2 on an unknown name with the known names |
+| `rota skills get <name> [--references \| --reference <file>]` | print an embedded skill's `SKILL.md` as the binary carries it, list its reference files, or print one; exit 2 on an unknown name or reference (the known ones are listed) or when both flags are given |
 | `rota skills update [--scope <user\|project>] [--agent <claude\|codex\|all>] [--overwrite] [--current-account]` | refresh the skill directories that already have a manifest |
 | `rota skills uninstall [--scope <user\|project>] [--agent <claude\|codex\|all>] [--overwrite] [--current-account]` | remove what rota installed |
 
