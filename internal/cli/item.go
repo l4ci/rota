@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -246,6 +248,7 @@ func itemCreate(fs *flag.FlagSet) RunFunc {
 	bodyFile := fs.String("body-file", "", "detail file content, path or - for stdin")
 	dependsOn := fs.String("depends-on", "", "items that must close first, comma or space separated (#N, or an ID like B07); written as a ## Depends on section")
 	rawFile := fs.String("raw-file", "", "a preformatted bullet to append verbatim, path or - for stdin")
+	batchFile := fs.String("batch-file", "", "a JSON array of records (kind, title, tag, desc, body, dependsOn, related, milestone, repos, subsystem, captured), filed in order; path or - for stdin")
 	named := map[string]*string{}
 	for _, n := range []string{"related", "milestone", "repos", "subsystem", "captured"} {
 		named[n] = fs.String(n, "", n+" field")
@@ -259,6 +262,14 @@ func itemCreate(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		given := givenFlags(fs)
+		if given["batch-file"] {
+			for n := range given {
+				if n != "batch-file" && !globalNames[n] {
+					return Result{}, Usage("--batch-file takes no other flag; each record carries its own kind and fields")
+				}
+			}
+			return itemCreateBatch(c, root, *batchFile)
+		}
 		if !backlog.ValidKind(*kind) {
 			return Result{}, Usage("--kind must be bugs|features|tasks")
 		}
@@ -311,6 +322,76 @@ func itemCreate(fs *flag.FlagSet) RunFunc {
 			return Result{Data: data, Text: res.ID}, nil
 		})
 	}
+}
+
+// batchRecord is one item of `item create --batch-file`: the flags create
+// takes, as one record, so a title and its body travel together (#838).
+type batchRecord struct {
+	Kind      string `json:"kind"`
+	Title     string `json:"title"`
+	Tag       string `json:"tag"`
+	Desc      string `json:"desc"`
+	Body      string `json:"body"`
+	DependsOn string `json:"dependsOn"`
+	Related   string `json:"related"`
+	Milestone string `json:"milestone"`
+	Repos     string `json:"repos"`
+	Subsystem string `json:"subsystem"`
+	Captured  string `json:"captured"`
+}
+
+// itemCreateBatch validates every record before it files any, then files them
+// in order and reports one id per record. A record that fails to file stops the
+// batch; the ids already filed ride in the error so none is lost.
+func itemCreateBatch(c *Ctx, root, path string) (Result, error) {
+	raw, err := readInputFile(c, path)
+	if err != nil {
+		return Result{}, readInputErr("batch-file", path, err)
+	}
+	var recs []batchRecord
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&recs); err != nil {
+		return Result{}, Usage("--batch-file is not a JSON array of records: %v", err)
+	}
+	if len(recs) == 0 {
+		return Result{}, Usage("--batch-file holds no records")
+	}
+	ins := make([]backlog.CreateInput, len(recs))
+	for i, r := range recs {
+		if err := backlog.CheckTitleWords(r.Title); err != nil {
+			return backlogFail(fmt.Errorf("record %d: %w", i+1, err))
+		}
+		if !backlog.ValidKind(r.Kind) {
+			return Result{}, Usage("record %d: kind must be bugs|features|tasks", i+1)
+		}
+		fields := map[string]string{"related": r.Related, "milestone": r.Milestone, "repos": r.Repos,
+			"subsystem": r.Subsystem, "captured": r.Captured}
+		given := map[string]bool{}
+		for n, v := range fields {
+			given[n] = v != ""
+		}
+		in, err := backlog.BuildCreateInput(backlog.CaptureRequest{Kind: r.Kind, Title: r.Title, Tag: r.Tag, Desc: r.Desc,
+			Fields: fields, Given: given, Body: []byte(r.Body), HasBody: r.Body != "",
+			DependsOn: r.DependsOn, DependsGiven: r.DependsOn != ""})
+		if err != nil {
+			return backlogFail(fmt.Errorf("record %d: %w", i+1, err))
+		}
+		ins[i] = in
+	}
+	return withBackend(c, root, false, "", func(be backlog.Backend) (Result, error) {
+		var out []any
+		var ids []string
+		for i, in := range ins {
+			res, err := be.Create(in)
+			if err != nil {
+				return Result{}, fmt.Errorf("record %d (%q) failed after filing [%s]: %w", i+1, in.Title, strings.Join(ids, " "), err)
+			}
+			ids = append(ids, res.ID)
+			out = append(out, jsonObj("id", res.ID, "type", res.Type, "kind", in.Kind, "title", in.Title))
+		}
+		return Result{Data: jsonObj("items", out, "changed", true), Text: strings.Join(ids, "\n")}, nil
+	})
 }
 
 // ---- item field -----------------------------------------------------------

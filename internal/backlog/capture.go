@@ -59,11 +59,42 @@ type CaptureRequest struct {
 // ValidKind reports whether kind is one `item create` accepts.
 func ValidKind(kind string) bool { return slices.Contains(ItemKinds, kind) }
 
+// placeholderTitles are titles that pass for a title and say nothing.
+var placeholderTitles = []string{"x", "tbd", "todo", "title", "untitled"}
+
+// minTitleWords is the fewest words a title may have.
+const minTitleWords = 3
+
+// CheckTitle refuses an empty title and a placeholder (ErrInvalid). Every
+// create path runs it.
+func CheckTitle(title string) error {
+	t := oneLine(title)
+	if t == "" {
+		return errf(ErrInvalid, "--title is required")
+	}
+	if slices.Contains(placeholderTitles, strings.ToLower(t)) {
+		return errf(ErrInvalid, "title %q is a placeholder; name the change", t)
+	}
+	return nil
+}
+
+// CheckTitleWords is CheckTitle plus the minTitleWords floor, for the batch
+// filing path where a model writes the titles.
+func CheckTitleWords(title string) error {
+	if err := CheckTitle(title); err != nil {
+		return err
+	}
+	if n := len(strings.Fields(title)); n < minTitleWords {
+		return errf(ErrInvalid, "title %q has %d word(s); use at least %d", oneLine(title), n, minTitleWords)
+	}
+	return nil
+}
+
 // BuildCreateInput validates one capture and folds the fields and the Depends
 // on section into a CreateInput. Bad input wraps ErrInvalid.
 func BuildCreateInput(r CaptureRequest) (CreateInput, error) {
-	if r.Title == "" {
-		return CreateInput{}, errf(ErrInvalid, "--title is required")
+	if err := CheckTitle(r.Title); err != nil {
+		return CreateInput{}, err
 	}
 	in := CreateInput{Kind: r.Kind, Title: r.Title, Tag: r.Tag, Desc: r.Desc}
 	for _, n := range CreateFields {
