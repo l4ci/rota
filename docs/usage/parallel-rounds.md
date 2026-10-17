@@ -272,9 +272,10 @@ during a long test run and changes nothing else. A slot whose host cannot be ask
 unreachable, a stale tab handle after a layout split, a pane that fails to capture) reads
 `unverifiable` with the reason, not `dead`: `wait` keeps waiting through it and returns it once
 after `round.stallMinutes`, `rota reap` leaves it alone, and `round reclaim` refuses it without
-`--force`. A host that answers "no agent in this tab" is still `dead`. A worker event whose
-timestamp cannot be parsed marks the slot `blocked`, with evidence that names the event and the
-error, instead of being ignored; the stall clock keeps the poll time in that case.
+`--force`. A host that answers "no agent in this tab" is still `dead`. A worker event (other than a
+heartbeat) whose timestamp cannot be parsed marks a slot that is not busy, dead or limited as
+`blocked`, with evidence that names the event and the error, instead of being ignored; the stall
+clock keeps the poll time in that case.
 
 - **herdr**: pinned to **0.9.x** (built against 0.9.3, socket protocol 22); another minor
   exits 5. One `events.subscribe` over `HERDR_SOCKET_PATH` carries a
