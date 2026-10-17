@@ -156,7 +156,7 @@ func TestReceiptLeavesNothingForARefusalOrCheckOnly(t *testing.T) {
 	fs.String("request-id", "", "")
 	fs.Parse([]string{"--check-only", "--request-id", "c1"})
 	fp := fingerprint(&Ctx{}, fs, []string{"7"})
-	if _, found, err := receipt.Lookup(dir, "c1", "round assign", fp); found || err != nil {
+	if _, found, err := receipt.New(dir).Lookup(receipt.Call{ID: "c1", Verb: "round assign", Fingerprint: fp}); found || err != nil {
 		t.Errorf("check-only left a receipt: found=%v err=%v", found, err)
 	}
 	// The same lookup does find a receipt a real call left, so the check above can fail.
@@ -167,7 +167,7 @@ func TestReceiptLeavesNothingForARefusalOrCheckOnly(t *testing.T) {
 	fs.Bool("check-only", false, "")
 	fs.String("body-file", "", "")
 	fs.Parse([]string{"--request-id", "c2"})
-	if _, found, _ := receipt.Lookup(dir, "c2", "round assign", fingerprint(&Ctx{}, fs, []string{"7"})); !found {
+	if _, found, _ := receipt.New(dir).Lookup(receipt.Call{ID: "c2", Verb: "round assign", Fingerprint: fingerprint(&Ctx{}, fs, []string{"7"})}); !found {
 		t.Error("the control lookup must find the receipt of a real call")
 	}
 }
@@ -249,5 +249,22 @@ func TestReceiptCorruptFileIsRefusedForAMintedID(t *testing.T) {
 	var e *Error
 	if !errors.As(asError(err), &e) || e.Exit != ExitUnavailable || f.runs != 0 {
 		t.Errorf("a corrupt receipts file must stop the verb with exit 5: err=%v runs=%d", err, f.runs)
+	}
+}
+
+// Every verb the table names is a verb of the tree and takes --request-id; a
+// rename that left the table behind would drop a verb's receipt without a word.
+func TestReceiptedVerbsAreWiredIntoTheTree(t *testing.T) {
+	root := Tree()
+	for _, r := range receiptedVerbs {
+		cmd := findVerb(root, strings.Fields(r.verb))
+		if cmd == nil || cmd.Verb == nil {
+			t.Fatalf("%s is not a verb", r.verb)
+		}
+		fs := flag.NewFlagSet(r.verb, flag.ContinueOnError)
+		cmd.Verb(fs)
+		if fs.Lookup("request-id") == nil {
+			t.Errorf("%s has no --request-id", r.verb)
+		}
 	}
 }
