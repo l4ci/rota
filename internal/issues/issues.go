@@ -154,7 +154,7 @@ func Close(ctx context.Context, env Env, dir string, key tracker.IssueKey, commi
 	if is, err := a.Get(ctx, key, false); err == nil && is.State == "closed" {
 		return false, nil
 	}
-	if err := a.Close(ctx, key, "completed", body); err != nil {
+	if err := a.Close(ctx, key, tracker.CloseCompleted, body); err != nil {
 		return false, err
 	}
 	return true, nil

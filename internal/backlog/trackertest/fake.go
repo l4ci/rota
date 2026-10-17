@@ -224,7 +224,7 @@ func (f *Fake) RemoveLabels(_ context.Context, key tracker.IssueKey, labels []st
 func (f *Fake) Close(_ context.Context, key tracker.IssueKey, reason, comment string) error {
 	n := argOf(key)
 	if reason == "" {
-		reason = "completed"
+		reason = tracker.CloseCompleted
 	}
 	if err := f.rec("close", n, reason, comment); err != nil {
 		return err

@@ -365,9 +365,9 @@ func (j *Jira) norm(d jiraIssue) Issue {
 		is.Milestone = f.FixVersions[0].Name
 	}
 	if f.Status.StatusCategory.Key == "done" {
-		is.State, is.ClosedAt, is.StateReason = "closed", f.ResolutionDate, "completed"
+		is.State, is.ClosedAt, is.StateReason = "closed", f.ResolutionDate, CloseCompleted
 		if slices.Contains(f.Labels, j.notPlanned) {
-			is.StateReason = "not_planned"
+			is.StateReason = CloseNotPlanned
 		}
 	}
 	if f.Assignee != nil {
@@ -664,7 +664,7 @@ func (j *Jira) Close(ctx context.Context, key IssueKey, reason, comment string) 
 	if err := j.transition(ctx, key, "done"); err != nil {
 		return err
 	}
-	if reason == "not_planned" {
+	if reason == CloseNotPlanned {
 		if err := j.AddLabels(ctx, key, []string{j.notPlanned}, true); err != nil {
 			return err
 		}
@@ -689,7 +689,7 @@ func (j *Jira) CloseAfterMerge(ctx context.Context, key IssueKey, pr string) err
 	if d.Fields.Status.StatusCategory.Key == "done" {
 		return nil
 	}
-	return j.Close(ctx, key, "completed", "Closed by rota: "+pr+" merged.")
+	return j.Close(ctx, key, CloseCompleted, "Closed by rota: "+pr+" merged.")
 }
 
 // Reopen moves the issue back to a to-do status (else an in-progress one) and
@@ -983,74 +983,29 @@ func (j *Jira) IssuesInMilestone(ctx context.Context, title, state string) ([]Is
 
 var _ ClaimStore = (*Jira)(nil)
 
-// claimText opens a claim comment: "Claimed by <claim id>", with no marker,
-// so people read it as written. Claims order by the server's created time,
-// then comment id, never the claimer's clock: a write that a retry delays
-// lands, and counts, after one the server took in between.
-const claimText = "Claimed by "
-
-// claimOf is the claim id of a claim comment; ok is false for any other.
-func claimOf(body string) (string, bool) {
-	id, ok := strings.CutPrefix(strings.TrimSpace(body), claimText)
-	if !ok || id == "" || strings.IndexFunc(id, unicode.IsSpace) >= 0 {
-		return "", false
+// claimStore is the shared claim-comment rule over Jira's comments.
+func (j *Jira) claimStore() claimComments {
+	return claimComments{
+		list: func(ctx context.Context, key IssueKey) ([]Comment, error) { return j.comments(ctx, key, nil) },
+		add: func(ctx context.Context, key IssueKey, body string) error {
+			_, err := j.AddComment(ctx, key, body)
+			return err
+		},
+		delete: j.DeleteComment,
 	}
-	return id, true
-}
-
-// claimComments is the issue's claim comments, earliest first.
-func (j *Jira) claimComments(ctx context.Context, key IssueKey) ([]Comment, error) {
-	cs, err := j.comments(ctx, key, nil)
-	if err != nil {
-		return nil, err
-	}
-	out := slices.DeleteFunc(cs, func(c Comment) bool { _, ok := claimOf(c.Body); return !ok })
-	slices.SortStableFunc(out, func(a, b Comment) int {
-		if c := a.CreatedAt.Compare(b.CreatedAt); c != 0 {
-			return c
-		}
-		if c := len(a.ID) - len(b.ID); c != 0 { // numeric ids: shorter is smaller
-			return c
-		}
-		return strings.Compare(a.ID, b.ID)
-	})
-	return out, nil
 }
 
 // Claims lists the claim ids on key, earliest first, each once.
 func (j *Jira) Claims(ctx context.Context, key IssueKey) ([]string, error) {
-	cs, err := j.claimComments(ctx, key)
-	if err != nil {
-		return nil, err
-	}
-	var out []string
-	for _, c := range cs {
-		if id, _ := claimOf(c.Body); !slices.Contains(out, id) {
-			out = append(out, id)
-		}
-	}
-	return out, nil
+	return j.claimStore().Claims(ctx, key)
 }
 
-// PutClaim posts id's claim comment. A second one changes nothing: the
-// earliest comment of an id holds its place.
+// PutClaim posts id's claim comment; the earliest one of an id holds its place.
 func (j *Jira) PutClaim(ctx context.Context, key IssueKey, id string) error {
-	_, err := j.AddComment(ctx, key, claimText+id)
-	return err
+	return j.claimStore().PutClaim(ctx, key, id)
 }
 
 // DropClaim deletes every claim comment of id; none is a no-op.
 func (j *Jira) DropClaim(ctx context.Context, key IssueKey, id string) error {
-	cs, err := j.claimComments(ctx, key)
-	if err != nil {
-		return err
-	}
-	for _, c := range cs {
-		if got, _ := claimOf(c.Body); got == id {
-			if err := j.DeleteComment(ctx, key, c.ID); err != nil && !IsKind(err, KindNotFound) {
-				return err
-			}
-		}
-	}
-	return nil
+	return j.claimStore().DropClaim(ctx, key, id)
 }

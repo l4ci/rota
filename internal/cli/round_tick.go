@@ -89,39 +89,19 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 		e.Cap = roundtick.DefaultCap
 	}
 	e.Capped = quotaCapped(renv, root, set)
+	// Tolerant: a tick callback with no error return; the tick reconciles strictly.
 	e.Slots = func() []roundtick.Slot {
-		var out []roundtick.Slot
-		// Tolerant: a tick callback with no error return; the tick reconciles strictly.
-		for _, s := range worker.LoadRegistryTolerant(root).Slots() {
-			out = append(out, roundtick.Slot{
-				Name: s.Name(), State: strings.ToLower(s.State()),
-				Issue: s.HeldID(),
-				PR:    s.PR(),
-			})
-		}
-		return out
+		return roundtick.SlotsOf(worker.LoadRegistryTolerant(root).Slots())
 	}
 	e.Queued = func() []string {
-		var out []string
-		for _, q := range worker.LoadRegistryTolerant(root).PRs() { // tolerant, as Slots above
-			if q.PR != "" {
-				out = append(out, q.PR)
-			}
-		}
-		return out
+		return roundtick.QueuedRefs(worker.LoadRegistryTolerant(root).PRs())
 	}
 	e.Reconcile = func(ctx context.Context) ([]string, []string, error) {
 		out, err := renv.Reconcile(ctx, root, true)
 		if err != nil {
 			return nil, nil, err
 		}
-		var repaired, drift []string
-		for _, f := range out.Repaired {
-			repaired = append(repaired, f.Kind+" "+f.Key())
-		}
-		for _, f := range out.Drift {
-			drift = append(drift, f.Kind+" "+f.Key())
-		}
+		repaired, drift := roundtick.ReconcileLines(out)
 		return repaired, drift, nil
 	}
 	e.BaseOf = func(target string) string {
@@ -176,10 +156,7 @@ func autopilotTick(c *Ctx, root string, set roundcfg.Settings, baseOverride stri
 		for _, o := range res.Overlaps {
 			c.Warn("%s %s", tracker.RefOf(id), overlapText(o))
 		}
-		if len(res.BestOf) == 2 { // a best-of:2 issue took two slots
-			return []string{res.BestOf[0].Agent, res.BestOf[1].Agent}, nil
-		}
-		return []string{res.Agent}, nil
+		return roundtick.AssignedAgents(res), nil
 	}
 	e.ReviewLoop = func(_ context.Context, sl roundtick.Slot) roundtick.ReviewOutcome {
 		return reviewStep(c, root, set, sl.Name)
