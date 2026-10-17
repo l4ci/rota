@@ -367,7 +367,7 @@ func suiteUmbrella(t *testing.T) {
 		want int
 	}{
 		{"unregistered", j("item", "field", "get", "web:F1", "--name", "title", "--repo", "nope"), 3},
-		{"unregistered-create", j("item", "create", "--kind", "tasks", "--title", "x", "--repo", "nope"), 3},
+		{"unregistered-create", j("item", "create", "--kind", "tasks", "--title", "Frozen item", "--repo", "nope"), 3},
 		{"unregistered-complete", j("item", "complete", "web:F1", "--commit", "abc1234", "--no-proof", "--repo", "nope"), 3},
 		{"unregistered-list", j("backlog", "list", "--repo", "nope"), 3},
 		{"unregistered-summary", j("summary", "--repo", "nope"), 3},
@@ -450,20 +450,20 @@ func suiteUmbrella(t *testing.T) {
 		cr("repos-spaces", 0, "--kind", "tasks", "--title", "Spaced", "--repos", " web "),
 		cr("repos-milestone-native", 0, "--kind", "tasks", "--title", "With ms", "--repos", "web", "--milestone", "M07"),
 		cr("repos-milestone-created", 0, "--kind", "tasks", "--title", "With ms", "--repos", "api", "--milestone", "M07"),
-		cr("milestone-missing", 3, "--kind", "tasks", "--title", "x", "--repos", "api", "--milestone", "M99"),
+		cr("milestone-missing", 3, "--kind", "tasks", "--title", "Frozen item", "--repos", "api", "--milestone", "M99"),
 		cr("no-target", 3, "--kind", "tasks", "--title", "Nowhere"),
 		cr("several-repos", 3, "--kind", "tasks", "--title", "Both", "--repos", "web,api"),
 		cr("unknown-repo", 3, "--kind", "tasks", "--title", "Bad", "--repos", "nope"),
-		cr("bad-tag", 2, "--kind", "bugs", "--title", "x", "--tag", "Major", "--repos", "web"),
+		cr("bad-tag", 2, "--kind", "bugs", "--title", "Frozen item", "--tag", "Major", "--repos", "web"),
 		cr("no-title", 2, "--kind", "tasks", "--repos", "web"),
-		cr("empty-repos", 2, "--kind", "tasks", "--title", "x", "--repos", ""),
+		cr("empty-repos", 2, "--kind", "tasks", "--title", "Frozen item", "--repos", ""),
 		cr("body-id-placeholder", 0, "--kind", "tasks", "--title", "Doc", "--repos", "web", "--body-file", "body.md"),
-		ubcase{name: "create/rate-limit", argv: j("item", "create", "--kind", "tasks", "--title", "x", "--repos", "web"), want: 6,
+		ubcase{name: "create/rate-limit", argv: j("item", "create", "--kind", "tasks", "--title", "Frozen item", "--repos", "web"), want: 6,
 			env: []string{"FAKE_TRACKER_FAIL=issue create", "FAKE_TRACKER_FAIL_MSG=secondary rate limit"}},
 		ubcase{name: "create/forge-unavailable", repos: []ubRepo{{"web", "none", ubWebDB}, {"api", "gitlab", ubAPIDB}},
-			argv: j("item", "create", "--kind", "tasks", "--title", "x", "--repos", "web"), want: 5},
+			argv: j("item", "create", "--kind", "tasks", "--title", "Frozen item", "--repos", "web"), want: 5},
 		ubcase{name: "create/other-forge-down", repos: []ubRepo{{"web", "none", ubWebDB}, {"api", "gitlab", ubAPIDB}},
-			argv: j("item", "create", "--kind", "tasks", "--title", "x", "--repos", "api"), want: 0, changed: yes()},
+			argv: j("item", "create", "--kind", "tasks", "--title", "Frozen item", "--repos", "api"), want: 0, changed: yes()},
 	)
 	// cwd inside a sub-repo is the capture target, a deep directory too
 	for _, c := range []struct {
@@ -919,7 +919,7 @@ func suiteUmbrellaFile(t *testing.T) {
 	}{
 		{"complete", j("item", "complete", "B01", "--commit", "{h1}"), 0},
 		{"reopen", j("item", "reopen", "B08"), 0},
-		{"create", j("item", "create", "--kind", "tasks", "--title", "x", "--repos", "web"), 0},
+		{"create", j("item", "create", "--kind", "tasks", "--title", "Frozen item", "--repos", "web"), 0},
 		{"fieldget", j("item", "field", "get", "B03", "--name", "repos"), 0},
 		{"fieldset", j("item", "field", "set", "B03", "--name", "milestone", "--value", "M02"), 0},
 		{"idnext", j("id", "next", "--kind", "tasks"), 0},
