@@ -261,3 +261,37 @@ func TestAssignAndTransferFailWhenTheLedgerRowIsNotWritten(t *testing.T) {
 		}
 	})
 }
+
+// ReportSlot reads every event kind's slot state and ledger row from the one
+// table in worker.Events: a kind that maps nowhere fails here.
+func TestReportEventFollowsTheEventTable(t *testing.T) {
+	for _, spec := range worker.Events {
+		t.Run(spec.Kind, func(t *testing.T) {
+			f := soloAssign(t)
+			if _, err := f.assign("12", "ben", nil); err != nil {
+				t.Fatal(err)
+			}
+			before := len(ledgerKinds(t, f.root))
+			res, err := f.env.ReportSlot(bg, f.root, ReportOpts{Slot: "ben", Event: spec.Kind, Body: "b"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if spec.State != "" && res.State != spec.State {
+				t.Errorf("state = %q, want %q", res.State, spec.State)
+			}
+			if spec.State == "" && res.State != res.Previous {
+				t.Errorf("state moved %q -> %q on a kind with no state", res.Previous, res.State)
+			}
+			rows := ledgerKinds(t, f.root)[before:]
+			if spec.Ledger == "" {
+				if len(rows) != 0 {
+					t.Errorf("wrote ledger rows %+v, want none", rows)
+				}
+				return
+			}
+			if len(rows) != 1 || rows[0].Kind != spec.Ledger {
+				t.Errorf("ledger rows = %+v, want one %q", rows, spec.Ledger)
+			}
+		})
+	}
+}
