@@ -41,6 +41,8 @@ Telling `/rota-capture` *"the sidebar flickers on hover, also we should add keyb
 
 Each item gets its own ID type, section, and classification, regardless of how they arrived in one message. Items captured in the same batch can reference each other via `Related:` links.
 
+Underneath, `rota item create` refuses an empty title or a placeholder (`x`, `tbd`, `todo`, `title`, `untitled`, any case) with exit 2. To file many items in one call, pass `--batch-file <json|->` with a JSON array of records; it cannot be combined with the other item flags. rota checks every title, kind and field first, then files the records in order and returns one id per record under `items`. A batch title needs at least three words. If a record fails part way, the error names it and lists the ids already filed.
+
 ## Detail files for large input
 
 When an item's input is too large for a TODO entry (crash dumps, specs, logs, long checklists), `/rota-capture` creates a detail file and links to it from the main entry (on the issue backend the text goes into the issue body instead):
