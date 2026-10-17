@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/stamp"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -200,7 +201,7 @@ func (e Env) Stalled(ctx context.Context, in StallInput, now time.Time) Stall {
 			}
 		}
 	}
-	if t, err := time.Parse(time.RFC3339, in.ActiveAt); err == nil {
+	if t, err := stamp.Parse(in.ActiveAt); err == nil {
 		note(t, "state change")
 	}
 	if last.IsZero() {

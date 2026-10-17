@@ -1,6 +1,11 @@
 package worker
 
-import "time"
+import (
+	"fmt"
+	"time"
+
+	"github.com/l4ci/rota/internal/stamp"
+)
 
 // Decide merges a worker's recorded event with the row its pane read as. The
 // event is the worker's own word and it is newer than anything a static pane
@@ -35,8 +40,15 @@ func decide(ev *Event, row PollRow, lastChange time.Time) (PollRow, bool) {
 	case StateBusy, StateDead, StateLimited, StateNeedsPermission:
 		return row, false
 	}
-	ts := parseStamp(ev.TS)
-	if ts.IsZero() || ts.Before(lastChange) {
+	if ev.TS == "" {
+		return row, false
+	}
+	ts, err := stamp.Parse(ev.TS)
+	if err != nil {
+		// A drifted format must not turn the event into a silent no-op.
+		return PollRow{row.Name, StateBlocked, fmt.Sprintf("worker event %d has an unreadable ts %q: %v", ev.Seq, ev.TS, err)}, true
+	}
+	if ts.Before(lastChange) {
 		return row, false
 	}
 	switch spec.Poll {

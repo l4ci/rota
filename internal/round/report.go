@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/stamp"
 	"regexp"
 	"slices"
 	"strings"
@@ -98,7 +99,7 @@ func (e Env) ReportSlot(ctx context.Context, root string, o ReportOpts) (Reporte
 		held = ledger.Entry{Issue: worker.HeldID(s.Task(), s.Branch(), s.Name()), Slot: s.Name(), Account: s.Account(), Harness: s.Kind(), PR: s.PR()}
 		stamped := ""
 		if o.Event != "" {
-			stamped = worker.Stamp(e.now())
+			stamped = stamp.Format(e.now())
 			res.Changed = true
 			if o.Event == worker.EventHeartbeat { // alive, not news, no event and no state of its own
 				s.Heartbeat(stamped)
