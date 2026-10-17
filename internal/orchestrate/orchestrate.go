@@ -106,7 +106,7 @@ func (e Env) Resolve(root string, cfg any) (Plan, error) {
 		return Plan{}, &Error{Code: "config", Msg: err.Error()}
 	}
 	p := Plan{Harness: h.Name(), Cwd: root}
-	if h.Name() == "claude" {
+	if w, ok := h.(interface{ WorkAccounts() bool }); ok && w.WorkAccounts() {
 		p.Account, p.ConfigDir = e.account(root, cfg)
 	}
 	sup := []string{e.Self, "keepalive", "run", "--first-prompt", h.Prompt()}

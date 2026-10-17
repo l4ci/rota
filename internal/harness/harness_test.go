@@ -5,8 +5,11 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
+
+	"github.com/l4ci/rota/internal/config"
 )
 
 func TestLookup(t *testing.T) {
@@ -20,7 +23,7 @@ func TestLookup(t *testing.T) {
 		t.Error("hermes runs the orchestrator only: it is not a worker harness")
 	}
 	if Valid("") || !Valid(Claude) || !Valid(Codex) || KindList() != "claude or codex" {
-		t.Errorf("Valid/KindList: %v %q", Kinds, KindList())
+		t.Errorf("Valid/KindList: %v %q", Kinds(), KindList())
 	}
 	if h, ok := ForBinary("codex"); !ok || h.Kind() != Codex {
 		t.Error("the codex binary is the codex harness")
@@ -263,5 +266,55 @@ func TestClaudeOrchestratorCommand(t *testing.T) {
 	}
 	if _, err := (claude{}).Command(cfgOf(t, `{"work":{"operatorCommand":"wrap \"oops"}}`)); err == nil {
 		t.Error("an unbalanced operatorCommand must be an error")
+	}
+}
+
+// The config table cannot import this package (harness imports config), so
+// the round.workerKind enum lists the kinds by hand. It must stay Kinds(), and
+// each kind needs a line in the setup prompt.
+func TestWorkerKindEnumIsKinds(t *testing.T) {
+	var got []string
+	for _, k := range config.Keys {
+		if k.Name == "round.workerKind" {
+			got = k.Choices
+		}
+	}
+	if !slices.Equal(got, Kinds()) {
+		t.Errorf("round.workerKind enum %v, want %v", got, Kinds())
+	}
+	if p := config.PromptFor("round.workerKind"); p == nil {
+		t.Error("no setup prompt for round.workerKind")
+	} else {
+		for _, c := range p.Choices {
+			if c.Desc == "" {
+				t.Errorf("setup prompt: no help line for kind %s", c.Value)
+			}
+		}
+	}
+}
+
+// Every kind answers the interface methods a caller would otherwise switch on.
+func TestEveryKindDescribesItself(t *testing.T) {
+	for _, k := range Kinds() {
+		h, ok := Lookup(k)
+		if !ok {
+			t.Fatalf("no adapter for %s", k)
+		}
+		if h.Accounts(nil).Key == "" {
+			t.Errorf("%s: no accounts key", k)
+		}
+		if len(h.LimitPhrases()) == 0 {
+			t.Errorf("%s: no limit phrases", k)
+		}
+		files, err := h.AgentFiles(AgentRole{Name: "explorer", Description: "d", Instructions: "i"}, "m")
+		if err != nil || len(files) == 0 || !strings.Contains(files[0].Content, AgentMarker) {
+			t.Errorf("%s: agent files %v %v", k, files, err)
+		}
+	}
+	if h, _ := Lookup(Claude); !h.Configured(nil) {
+		t.Error("claude is always configured")
+	}
+	if h, _ := Lookup(Codex); h.Configured(nil) {
+		t.Error("codex is not configured on an empty config")
 	}
 }

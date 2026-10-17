@@ -104,12 +104,12 @@ func (e Env) Preflight(ctx context.Context, root, kind, slot, model string) (har
 	}
 	var accts []harness.HomeAccount
 	load := map[string]int{}
-	if kind == harness.Codex {
-		for _, a := range config.CodexAccounts(loadConfig(root)) {
-			accts = append(accts, harness.HomeAccount{Name: a.Name, Home: a.CodexHome})
+	if !h.WorkAccounts() {
+		for _, a := range h.Accounts(loadConfig(root)).Entries {
+			accts = append(accts, harness.HomeAccount{Name: a.Name, Home: a.Dir})
 		}
 		for _, s := range reg.Slots() {
-			if s.Name() != slot && s.Kind() == harness.Codex && s.CodexAccount() != "" {
+			if s.Name() != slot && s.Kind() == h.Kind() && s.CodexAccount() != "" {
 				load[s.CodexAccount()]++
 			}
 		}

@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/jsonx"
 )
 
@@ -77,7 +78,7 @@ func TestSetupHarnessQuestionsWriteOnlyAnswers(t *testing.T) {
 	if code, _, errOut := setupRun(t, chosen, "\n\n\n\n\n\n\ncodex\n4\n", true); code != 0 {
 		t.Fatalf("exit %d: %s", code, errOut)
 	}
-	if got := cfgValue(t, chosen, "round.workerKind"); got != "codex" {
+	if got := cfgValue(t, chosen, "round.workerKind"); got != harness.Codex {
 		t.Errorf("round.workerKind = %v", got)
 	}
 	if got := cfgValue(t, chosen, "orchestrator.harness"); got != "opencode" {

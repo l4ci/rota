@@ -294,7 +294,9 @@ func loadTiers(cfg any, s *Settings) error {
 		return fmt.Errorf("round.tier must be %s (got %v)", strings.Join(Tiers, ", "), v)
 	}
 	s.Models = map[string]map[string]string{}
-	for _, kind := range harness.Kinds {
+	for _, kind := range harness.Kinds() {
+		h, _ := harness.Lookup(kind)
+		rule := h.Tiers()
 		m := map[string]string{}
 		for _, tier := range Tiers {
 			key := "round.tiers." + kind + "." + tier
@@ -304,8 +306,8 @@ func loadTiers(cfg any, s *Settings) error {
 			}
 			name, _ := v.(string)
 			name = strings.TrimSpace(name)
-			if name == "" && kind == harness.Claude && tier == TierStandard {
-				w, err := config.Value(cfg, "models.worker")
+			if name == "" && rule.StandardFallback != "" && tier == TierStandard {
+				w, err := config.Value(cfg, rule.StandardFallback)
 				if err != nil {
 					return err
 				}
@@ -321,8 +323,8 @@ func loadTiers(cfg any, s *Settings) error {
 			}
 		}
 		switch {
-		case set == 0 && kind == harness.Claude:
-			return fmt.Errorf("round.tiers.claude is not configured: set light, standard and heavy")
+		case set == 0 && rule.Required:
+			return fmt.Errorf("round.tiers.%s is not configured: set light, standard and heavy", kind)
 		case set == 0:
 			continue
 		case set < len(Tiers):

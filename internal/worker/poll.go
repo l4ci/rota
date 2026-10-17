@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/strutil"
@@ -73,13 +74,7 @@ const (
 // case-insensitive regex sources (no flag prefix). `worker poll` classifies
 // LIMITED with them, and the usage-limit watcher (D3) matches the same list,
 // so there is one source.
-var LimitPhrases = []string{
-	`reached your usage limit`,
-	`usage limit reached`,
-	`You'?ve hit your (?:usage )?limit`,
-	`limit (?:will )?reset[s]? at`,
-	`Approaching (?:your )?usage limit`,
-}
+var LimitPhrases = harness.AllLimitPhrases()
 
 // LimitRegex is the alternation of LimitPhrases with the case-insensitive
 // flag written in the regex itself, for engines that take one pattern string

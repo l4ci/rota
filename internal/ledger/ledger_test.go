@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/harness"
 )
 
 // at is the timestamp these tests stamp their rows with: Append takes none of its own.
@@ -28,7 +29,7 @@ func TestAppendLoadRoundTrip(t *testing.T) {
 		t.Fatalf("Load = %v, %v", got, err)
 	}
 	e := got[0]
-	if !e.TS.Equal(ts) || e.Kind != KindAssign || e.Round != 3 || e.Issue != "574" || e.Slot != "ben" || e.Account != "work" || e.Harness != "claude" || e.PR != "" {
+	if !e.TS.Equal(ts) || e.Kind != KindAssign || e.Round != 3 || e.Issue != "574" || e.Slot != "ben" || e.Account != "work" || e.Harness != harness.Claude || e.PR != "" {
 		t.Errorf("entry = %+v", e)
 	}
 	if f, ok := e.DetailFloat("headroom"); !ok || f != hr {

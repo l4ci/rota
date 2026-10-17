@@ -140,7 +140,10 @@ func HeadroomOf(ms []Meter, account string) *float64 {
 // LedgerHeadroom is the headroom of an assign or done entry:
 // set only for a claude slot whose meter reads it. Codex has no meter.
 func LedgerHeadroom(ctx context.Context, a *Accounts, root, kind, account string) *float64 {
-	if a == nil || kind == harness.Codex || account == "" {
+	if a == nil || account == "" {
+		return nil
+	}
+	if h, ok := harness.Lookup(kind); ok && !h.UsageMeter() {
 		return nil
 	}
 	return a.Headroom(ctx, root, account)

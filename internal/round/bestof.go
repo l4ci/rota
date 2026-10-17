@@ -125,10 +125,22 @@ func (e Env) assignBestOf(ctx context.Context, root string, be Board, o AssignOp
 	kinds[0], sources[0] = resolveKind(o.Kind, pick.Harness, set.WorkerKind, slots[0].HarnessKind())
 	kinds[1], sources[1] = kinds[0], sources[0]
 	pinned := o.Kind != "" || pick.Harness != ""
-	if !pinned && len(set.Models[harness.Claude]) > 0 && len(set.Models[harness.Codex]) > 0 {
-		kinds[1], sources[1] = harness.Codex, KindFromBestOf
-		if kinds[0] == harness.Codex {
-			kinds[1] = harness.Claude
+	if !pinned {
+		// Two kinds with a tier map each run the pair on different harnesses:
+		// the second slot takes the first such kind the first slot is not on.
+		var tiered []string
+		for _, k := range harness.Kinds() {
+			if len(set.Models[k]) > 0 {
+				tiered = append(tiered, k)
+			}
+		}
+		if len(tiered) >= 2 {
+			for _, k := range tiered {
+				if k != kinds[0] {
+					kinds[1], sources[1] = k, KindFromBestOf
+					break
+				}
+			}
 		}
 	}
 

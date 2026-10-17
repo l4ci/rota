@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/rotastate"
@@ -88,7 +89,7 @@ func TestLedgerNoteFillsSlotFromRegistry(t *testing.T) {
 		t.Fatalf("%v %+v", err, es)
 	}
 	for _, e := range es[:2] {
-		if e.Slot != "ben" || e.Account != "work" || e.Harness != "claude" || !e.TS.Equal(ledgerNow) {
+		if e.Slot != "ben" || e.Account != "work" || e.Harness != harness.Claude || !e.TS.Equal(ledgerNow) {
 			t.Errorf("%s entry = %+v", e.Kind, e)
 		}
 	}
