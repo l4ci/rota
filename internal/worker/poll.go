@@ -517,7 +517,11 @@ func recordRow(s *Slot, r PollRow, t pollTarget, now time.Time, queued Registry)
 	// older than the change it caused.
 	at := stamp.Format(now)
 	if t.evSeq > 0 {
-		at = t.ev.TS
+		// An event whose ts does not parse (decide surfaced it) must not
+		// reach activeAt: keep the poll time.
+		if _, err := stamp.Parse(t.ev.TS); err == nil {
+			at = t.ev.TS
+		}
 	}
 	key := rowKey(t, r)
 	prev := s.State()
