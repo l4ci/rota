@@ -5,8 +5,8 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/stamp"
 	"strings"
-	"time"
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/escalation"
@@ -87,7 +87,7 @@ func failVerdict(root, branch string) *worker.ReviewVerdict {
 	if !ok || r.Verdict != verdict.Fail {
 		return nil
 	}
-	at, err := time.Parse("2006-01-02T15:04:05Z", r.RecordedAt)
+	at, err := stamp.Parse(r.RecordedAt)
 	if err != nil {
 		return nil
 	}

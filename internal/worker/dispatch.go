@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/rotatree"
+	"github.com/l4ci/rota/internal/stamp"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/harness"
@@ -333,7 +333,7 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 			turnSeq = t.StateSeq
 		}
 	}
-	if err := recordDispatch(root, o.Slot, handle, o.Task, recKind, o.Round, turnSeq, stamp(e.Now())); err != nil {
+	if err := recordDispatch(root, o.Slot, handle, o.Task, recKind, o.Round, turnSeq, stamp.Format(e.Now())); err != nil {
 		return res, err
 	}
 	if !o.Relay {
@@ -460,12 +460,6 @@ func branchOr(o DispatchOpts) string {
 	}
 	return BranchFor(o.Slot, o.Task)
 }
-
-// stamp is the registry's activeAt format: RFC 3339, UTC.
-func stamp(t time.Time) string { return t.UTC().Format("2006-01-02T15:04:05Z") }
-
-// Stamp is stamp for a writer outside the package (an event's ts).
-func Stamp(t time.Time) string { return stamp(t) }
 
 // KillSlot closes the slot's session on the configured host and proves it
 // gone. It is what a reclaim does to a stalled worker before its worktree is

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/stamp"
 
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/harness"
@@ -514,7 +515,7 @@ func recordRow(s *Slot, r PollRow, t pollTarget, now time.Time, queued Registry)
 	// commit or an edit: `round reconcile` reads it as the stall clock. A row an
 	// event decided is stamped with the event's own time, so the event is not
 	// older than the change it caused.
-	at := stamp(now)
+	at := stamp.Format(now)
 	if t.evSeq > 0 {
 		at = t.ev.TS
 	}

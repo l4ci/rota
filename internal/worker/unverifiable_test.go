@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/stamp"
 	"testing"
 	"time"
 
@@ -126,7 +127,7 @@ func TestWaitReturnsALongUnverifiableSlotOnce(t *testing.T) {
 		t.Fatalf("the first minutes are quiet: %+v %v", res, err)
 	}
 	if err := Update(dir, func(d *Doc) { // contact has been lost for 40 minutes
-		d.Slot("w1").Raw().Set("activeAt", stamp(e.Now().Add(-40*time.Minute)))
+		d.Slot("w1").Raw().Set("activeAt", stamp.Format(e.Now().Add(-40*time.Minute)))
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -151,7 +152,7 @@ func TestWaitOnEventsReturnsAnUnverifiableSlotWhenItComesDue(t *testing.T) {
 		s := d.Slot("w1")
 		s.Raw().Set("state", "unverifiable")
 		s.Raw().Set("reason", "stale-handle")
-		s.Raw().Set("activeAt", stamp(time.Now().Add(-1*time.Second))) // due in about a second
+		s.Raw().Set("activeAt", stamp.Format(time.Now().Add(-1*time.Second))) // due in about a second
 	}); err != nil {
 		t.Fatal(err)
 	}

@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"github.com/l4ci/rota/internal/stamp"
 	"testing"
 	"time"
 
@@ -9,7 +10,7 @@ import (
 
 func TestDecide(t *testing.T) {
 	base := time.Date(2026, 10, 16, 12, 0, 0, 0, time.UTC)
-	at := func(d time.Duration) string { return stamp(base.Add(d)) }
+	at := func(d time.Duration) string { return stamp.Format(base.Add(d)) }
 	idle := PollRow{"w1", StateIdle, "static pane, no sentinel"}
 	blocked := &Event{Seq: 1, Kind: EventBlocked, Body: "A or B?", TS: at(0)}
 	done := &Event{Seq: 2, Kind: EventDone, Body: "https://github.com/o/r/pull/7", TS: at(0)}
@@ -43,6 +44,8 @@ func TestDecide(t *testing.T) {
 		{"a permission prompt wins", blocked, PollRow{"w1", StateNeedsPermission, "p"}, base, PollRow{"w1", StateNeedsPermission, "p"}},
 		{"an event older than the last change (a dispatch stamps it too) is ignored", blocked, idle, base.Add(time.Second), idle},
 		{"an event with no stamp is ignored", &Event{Seq: 1, Kind: EventBlocked, Body: "x"}, idle, base, idle},
+		{"an event whose stamp does not parse is surfaced, not ignored", &Event{Seq: 5, Kind: EventDone, TS: "2026-10-16 12:00"}, idle, base,
+			PollRow{"w1", StateBlocked, `worker event 5 has an unreadable ts "2026-10-16 12:00": parsing time "2026-10-16 12:00" as "2006-01-02T15:04:05Z": cannot parse " 12:00" as "T"`}},
 		{"a heartbeat never decides", &Event{Seq: 4, Kind: EventHeartbeat, TS: at(0)}, idle, base, idle},
 	} {
 		t.Run(c.name, func(t *testing.T) {
@@ -95,7 +98,7 @@ func TestWaitReturnsAnEventOnceUntilTheNext(t *testing.T) {
 	send := func(body string) {
 		if err := Update(dir, func(d *Doc) {
 			s := d.Slot("w1")
-			now := stamp(time.Now())
+			now := stamp.Format(time.Now())
 			s.SetEvent(EventBlocked, body, now)
 			s.MarkState("blocked", now)
 			s.ClearSeen()
@@ -129,7 +132,7 @@ func TestWaitDropsAnEventAPaneMovedPast(t *testing.T) {
 	dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
 	if err := Update(dir, func(d *Doc) {
 		s := d.Slot("w1")
-		now := stamp(time.Now())
+		now := stamp.Format(time.Now())
 		s.SetEvent(EventBlocked, "A or B?", now)
 		s.MarkState("blocked", now)
 	}); err != nil {
@@ -158,7 +161,7 @@ func TestWaitReportsABlockedEventOverAnOldDoneSentinel(t *testing.T) {
 	dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
 	if err := Update(dir, func(d *Doc) {
 		s := d.Slot("w1")
-		now := stamp(time.Now())
+		now := stamp.Format(time.Now())
 		s.SetEvent(EventBlocked, "A or B?", now)
 		s.MarkState("blocked", now)
 		s.ClearSeen()
@@ -190,7 +193,7 @@ func TestWaitSeesAnEventSentWhileItWaits(t *testing.T) {
 		}
 		if err := Update(dir, func(d *Doc) {
 			s := d.Slot("w1")
-			now := stamp(time.Now())
+			now := stamp.Format(time.Now())
 			s.SetEvent(EventBlocked, "A or B?", now)
 			s.MarkState("blocked", now)
 			s.ClearSeen()
@@ -241,7 +244,7 @@ func TestWaitKeepsWorkerDoneOverAnIdlePane(t *testing.T) {
 	w.forge("listed", "1")
 	if err := Update(w.dir, func(d *Doc) {
 		s := d.Slot("w1")
-		now := stamp(time.Now())
+		now := stamp.Format(time.Now())
 		s.SetHandle("w9:t1")
 		s.SetEvent(EventDone, "", now)
 		s.MarkState("done", now)

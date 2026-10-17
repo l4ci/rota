@@ -2,6 +2,7 @@ package worker
 
 import (
 	"fmt"
+	"github.com/l4ci/rota/internal/stamp"
 	"strconv"
 	"strings"
 	"time"
@@ -492,8 +493,12 @@ func (s *Slot) MarkEventNotified() {
 // ClearEvent drops the standing event; eventSeq stays.
 func (s *Slot) ClearEvent() { s.o.Delete("event") }
 
+// parseStamp is the registry's own activeAt as a time. The registry writes it
+// through stamp.Format, so a value that does not parse is no stamp at all and
+// reads as the zero time: no last change, so a standing event still counts.
+// An event's ts is parsed by decide, which reports the error.
 func parseStamp(v string) time.Time {
-	t, _ := time.Parse("2006-01-02T15:04:05Z", v)
+	t, _ := stamp.Parse(v)
 	return t
 }
 
