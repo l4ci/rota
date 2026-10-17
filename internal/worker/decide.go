@@ -24,7 +24,11 @@ func Decide(ev *Event, row PollRow, lastChange time.Time) PollRow {
 
 // decide is Decide that also says whether the event decided the row.
 func decide(ev *Event, row PollRow, lastChange time.Time) (PollRow, bool) {
-	if ev == nil || ev.Kind == EventHeartbeat {
+	if ev == nil {
+		return row, false
+	}
+	spec, _ := EventSpecFor(ev.Kind)
+	if spec.Poll == "" { // a heartbeat, or a kind the table does not know
 		return row, false
 	}
 	switch row.State {
@@ -35,12 +39,12 @@ func decide(ev *Event, row PollRow, lastChange time.Time) (PollRow, bool) {
 	if ts.IsZero() || ts.Before(lastChange) {
 		return row, false
 	}
-	switch ev.Kind {
-	case EventBlocked, EventQuestion:
+	switch spec.Poll {
+	case StateBlocked:
 		// Whatever sentinel the pane shows is older than the event: a relay
 		// and a rest left it in scrollback.
 		return PollRow{row.Name, StateBlocked, ev.Body}, true
-	case EventDone, EventReviewReply:
+	case StateDone:
 		if row.State == StateDone {
 			return row, false // the sentinel says the same, with the PR
 		}

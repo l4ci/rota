@@ -11,14 +11,12 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode"
-	"unicode/utf8"
 
 	"github.com/l4ci/rota/internal/strutil"
 )
 
 // REST is the HTTP layer of the trackers rota reaches over HTTP instead of a
-// CLI (Jira; Linear's GraphQL endpoint is one POST through the same Do). It
+// CLI (Jira; Linear's GraphQL endpoint is one POST through Do or ReadPost). It
 // knows JSON, auth, retries and the status-to-Kind mapping, nothing about any
 // one tracker's schema: a 429 waits its Retry-After and retries, a 5xx on an
 // idempotent method backs off and retries, and a wait longer than MaxWait
@@ -35,8 +33,6 @@ type REST struct {
 	Now   func() time.Time // reads an HTTP-date Retry-After; nil is time.Now
 	// MaxBody caps a response body; 0 is restMaxBody.
 	MaxBody int64
-	// Retries is how many times a 429 or 5xx is retried; 0 is restRetries.
-	Retries int
 	// MaxWait caps one Retry-After wait; 0 is restMaxWait.
 	MaxWait time.Duration
 	// Classify reads a tracker's own error body on a non-2xx answer; nil, or
@@ -63,44 +59,12 @@ func (r *REST) Do(ctx context.Context, method, path string, in, out any) error {
 	return r.do(ctx, method, path, in, out, idempotent(method))
 }
 
-// Query is Do for a POST that only reads (a GraphQL query): repeating it
-// changes nothing, so a 5xx is retried as for a GET. A GraphQL document whose
-// operation is a mutation is refused unsent: a write must go through Do,
+// ReadPost is Do for a POST the caller vouches only reads (a GraphQL query):
+// repeating it changes nothing, so a 5xx is retried as for a GET. The caller
+// owns that call; REST does not look at the body. A write goes through Do,
 // which never resends a POST.
-func (r *REST) Query(ctx context.Context, path string, in, out any) error {
-	if mutation(in) {
-		return internal("POST %s: a GraphQL mutation sent as a read-only query (use Do)", path)
-	}
+func (r *REST) ReadPost(ctx context.Context, path string, in, out any) error {
 	return r.do(ctx, http.MethodPost, path, in, out, true)
-}
-
-// mutation reports whether in is a GraphQL request whose document starts,
-// after blanks and # comments, with the mutation keyword.
-func mutation(in any) bool {
-	b, err := json.Marshal(in)
-	if err != nil {
-		return false
-	}
-	var req struct {
-		Query string `json:"query"`
-	}
-	if json.Unmarshal(b, &req) != nil {
-		return false
-	}
-	doc := req.Query
-	for {
-		doc = strings.TrimLeft(doc, " \t\r\n,\ufeff")
-		if !strings.HasPrefix(doc, "#") {
-			break
-		}
-		_, doc, _ = strings.Cut(doc, "\n")
-	}
-	rest, ok := strings.CutPrefix(doc, "mutation")
-	if !ok {
-		return false
-	}
-	r, _ := utf8.DecodeRuneInString(rest)
-	return rest == "" || !(r == '_' || unicode.IsLetter(r) || unicode.IsDigit(r))
 }
 
 func (r *REST) do(ctx context.Context, method, path string, in, out any, idem bool) error {
@@ -111,10 +75,6 @@ func (r *REST) do(ctx context.Context, method, path string, in, out any, idem bo
 			return internal("encoding the request: %v", err)
 		}
 		body = b
-	}
-	retries := r.Retries
-	if retries == 0 {
-		retries = restRetries
 	}
 	for attempt := 0; ; attempt++ {
 		status, hdr, raw, err := r.send(ctx, method, path, body)
@@ -131,7 +91,7 @@ func (r *REST) do(ctx context.Context, method, path string, in, out any, idem bo
 			return nil
 		}
 		retryable := status == http.StatusTooManyRequests || status >= 500 && idem
-		if !retryable || attempt >= retries {
+		if !retryable || attempt >= restRetries {
 			if r.Classify != nil {
 				if e := r.Classify(method, path, status, raw); e != nil {
 					return e

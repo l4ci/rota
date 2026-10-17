@@ -71,10 +71,10 @@ func (g *GitLab) norm(d glIssue) Issue {
 		is.Milestone = d.Milestone.Title
 	}
 	if d.State == "closed" {
-		is.State, is.StateReason = "closed", "completed"
+		is.State, is.StateReason = "closed", CloseCompleted
 		for _, l := range d.Labels {
 			if l == g.NotPlannedLabel {
-				is.StateReason = "not_planned"
+				is.StateReason = CloseNotPlanned
 			}
 		}
 	}
@@ -377,7 +377,7 @@ func (g *GitLab) Close(ctx context.Context, key IssueKey, reason, comment string
 			return err
 		}
 	}
-	if reason == "not_planned" {
+	if reason == CloseNotPlanned {
 		if err := g.AddLabels(ctx, key, []string{g.NotPlannedLabel}, true); err != nil {
 			return err
 		}

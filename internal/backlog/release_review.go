@@ -366,7 +366,7 @@ func (b *Issues) releaseNotes(mid string, optional bool) ([]NoteSection, error) 
 	}
 	out := []NoteSection{{Name: "New"}, {Name: "Fixed"}, {Name: "Changed"}}
 	for _, is := range issues {
-		if is.State != "closed" || is.StateReason != "completed" {
+		if is.State != "closed" || is.StateReason != tracker.CloseCompleted {
 			continue
 		}
 		i := 2
@@ -473,7 +473,7 @@ func (b *Issues) labelReleased(mid, tag string, optional bool) (issues int, err 
 	text := "Released in " + tag
 	body := text + "\n\n" + marker.Line("released")
 	for _, is := range all {
-		if is.State != "closed" || is.StateReason != "completed" {
+		if is.State != "closed" || is.StateReason != tracker.CloseCompleted {
 			continue
 		}
 		issues++

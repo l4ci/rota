@@ -173,7 +173,7 @@ func (e Env) closedSinceReview(ctx context.Context, root string, be backlog.Back
 	}
 	n := 0
 	for _, is := range closed {
-		if is.StateReason == "not_planned" || isRefactorTitle(is.Title) || slices.Contains(is.Labels, RefactorLabel) {
+		if is.StateReason == tracker.CloseNotPlanned || isRefactorTitle(is.Title) || slices.Contains(is.Labels, RefactorLabel) {
 			continue
 		}
 		if !floor.IsZero() {

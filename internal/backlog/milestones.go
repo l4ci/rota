@@ -201,7 +201,7 @@ func msStatusOf(is Issue) string {
 		}
 	}
 	if is.State == "closed" {
-		if is.StateReason == "not_planned" {
+		if is.StateReason == tracker.CloseNotPlanned {
 			return "archived"
 		}
 		return "shipped"
@@ -304,9 +304,9 @@ func (b *Issues) MilestoneStatus(mid, status string) error {
 		}
 	}
 	wantClosed := status == "shipped" || status == "archived"
-	reason := "completed"
+	reason := tracker.CloseCompleted
 	if status == "archived" {
-		reason = "not_planned"
+		reason = tracker.CloseNotPlanned
 	}
 	if is.State == "closed" && (!wantClosed || is.StateReason != reason) {
 		if err := mt.Reopen(b.ctx(), n); err != nil {
