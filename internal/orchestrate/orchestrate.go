@@ -37,7 +37,7 @@ func Lookup(name string) (harness.Orchestrator, error) {
 }
 
 // DefaultHarness is the value of orchestrator.harness when unset.
-const DefaultHarness = "claude"
+const DefaultHarness = harness.DefaultOrchestrator
 
 // Label names the orchestrator's tab or window.
 const Label = layout.Label
@@ -106,7 +106,7 @@ func (e Env) Resolve(root string, cfg any) (Plan, error) {
 		return Plan{}, &Error{Code: "config", Msg: err.Error()}
 	}
 	p := Plan{Harness: h.Name(), Cwd: root}
-	if w, ok := h.(interface{ WorkAccounts() bool }); ok && w.WorkAccounts() {
+	if h.WorkAccounts() {
 		p.Account, p.ConfigDir = e.account(root, cfg)
 	}
 	sup := []string{e.Self, "keepalive", "run", "--first-prompt", h.Prompt()}

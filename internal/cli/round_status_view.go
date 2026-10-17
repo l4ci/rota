@@ -142,7 +142,7 @@ func fillBurn(c *Ctx, root string, rows []round.Row) {
 		if last == nil || last.Account == "" {
 			continue
 		}
-		if h, ok := harness.Lookup(last.Harness); ok && !h.UsageMeter() {
+		if !harness.Resolve(last.Harness).UsageMeter() {
 			continue
 		}
 		start, ok := last.DetailFloat("headroom")

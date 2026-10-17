@@ -316,7 +316,7 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 		var err error
 		var ok bool
 		if hz, ok = harness.Lookup(s.Kind()); !ok {
-			hz, _ = harness.Lookup("")
+			hz = harness.Resolve("")
 		}
 		if signKey, err = hz.RelayKey(func() (string, error) { return CommonDir(ctx, e.Git, root) }, o.Slot); err != nil {
 			return res, asError(err)

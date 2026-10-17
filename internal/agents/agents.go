@@ -81,7 +81,7 @@ func Load(root string) (Spec, error) {
 		sp.Roles = append(sp.Roles, role)
 	}
 	for _, k := range harness.Kinds() {
-		if h, _ := harness.Lookup(k); h.Configured(cfg) {
+		if harness.Resolve(k).Configured(cfg) {
 			sp.Kinds = append(sp.Kinds, k)
 		}
 	}
@@ -108,7 +108,7 @@ func Render(sp Spec) ([]File, error) {
 	for _, k := range sp.Kinds {
 		h, ok := harness.Lookup(k)
 		if !ok {
-			continue
+			return nil, fmt.Errorf("%q is not a worker harness", k)
 		}
 		for _, r := range sp.Roles {
 			files, err := h.AgentFiles(harness.AgentRole{Name: r.Name, Description: descriptions[r.Name], Instructions: instructions[r.Name], Effort: r.Effort}, r.Models[k])

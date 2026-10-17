@@ -132,6 +132,9 @@ func (claude) Tiers() TierRule { return TierRule{Required: true, StandardFallbac
 // Configured: Claude is every project's baseline worker.
 func (claude) Configured(any) bool { return true }
 
+// ClaudeIntegration is the name of Claude's herdr integration.
+const ClaudeIntegration = Claude
+
 // ExplorerTools is the Claude tool allowlist of the explorer role. Bash stays
 // (git log, rg), so it is read-mostly rather than strictly read-only.
 const ExplorerTools = "Read, Grep, Glob, Bash"
@@ -199,6 +202,9 @@ func (claude) Command(cfg any) ([]string, error) {
 type hermes struct{}
 
 func (hermes) Name() string { return "hermes" }
+
+// WorkAccounts: work.accounts is Anthropic's.
+func (hermes) WorkAccounts() bool { return false }
 func (hermes) Prompt() string {
 	return "You are the orchestrator: run the rota-orchestrate skill."
 }
@@ -209,6 +215,9 @@ func (hermes) Command(any) ([]string, error) {
 type opencode struct{}
 
 func (opencode) Name() string { return "opencode" }
+
+// WorkAccounts: work.accounts is Anthropic's.
+func (opencode) WorkAccounts() bool { return false }
 func (opencode) Prompt() string {
 	return "You are the orchestrator: load the rota-orchestrate skill and follow it."
 }

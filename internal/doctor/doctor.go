@@ -100,11 +100,9 @@ type Input struct {
 	TeamProblem      string
 	Accounts         []config.Account
 	SwitchOnUsage    bool // orchestrator.switchOnUsage (D4)
-	// CodexHomes are the Codex homes a worker can run under: the accounts of
-	// work.codexAccounts, else the default Codex home (a zero CodexHome).
-	CodexHomes []CodexHome
-	// CodexTiers is whether any round.tiers.codex.<tier> is set.
-	CodexTiers bool
+	// Kinds is what each worker harness with a check of its own (Doctor) has
+	// configured, by kind.
+	Kinds map[string]KindInput
 
 	// Connection is the project's issues.connection and what checking it
 	// found; nil (no connection named) adds no line.
@@ -493,7 +491,7 @@ func (d *runner) hook() Check {
 			parts = append(parts, a.Name+": herdr integration status failed")
 			continue
 		}
-		state := harness.ParseIntegration(r.Stdout, "claude")
+		state := harness.ParseIntegration(r.Stdout, harness.ClaudeIntegration)
 		if state != "current" {
 			failed = true
 		}
@@ -741,8 +739,10 @@ func (d *runner) guardHook() Check {
 	if _, ok := d.resolve(first); !ok {
 		return fail(name, "PreToolUse hook runs "+first+", which is not found", guardHookHint)
 	}
-	if d.in.CodexTiers {
-		return Check{Name: name, Status: Warn, Detail: "PreToolUse guard covers Claude workers only; Codex workers are not guarded"}
+	for _, k := range harness.Kinds() {
+		if plan := harness.Resolve(k).Doctor(); plan.Unguarded && d.in.Kinds[k].Tiers {
+			return Check{Name: name, Status: Warn, Detail: "PreToolUse guard covers Claude workers only; " + plan.Title + " workers are not guarded"}
+		}
 	}
 	return pass(name, "PreToolUse guard runs rota")
 }
