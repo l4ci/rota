@@ -625,6 +625,36 @@
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-17"
+    },
+    "Build & Tooling: Smoke testing::Pin ROTA_FROZEN_DAY when regenerating frozen records": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-17"
+    },
+    "Rounds: Orchestration: Review & merge gate::Cite the assign brief as the channel, not a relay": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-17"
+    },
+    "Rounds: Orchestration: Review & merge gate::Name the smoke section in the brief when a change touches host or dispatch": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-17"
+    },
+    "Rounds: Orchestration: Workers & relays::A worker's own PR reply shows up as a review change": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-17"
+    },
+    "Rounds: Orchestration: Workers & relays::An agent-start timeout on assign resumes with the receipt id": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-17"
+    },
+    "Rounds: Orchestration: Slate & issues::round assign flags go before the item id": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-17"
     }
   }
 }
