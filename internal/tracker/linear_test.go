@@ -381,7 +381,7 @@ func TestLinearErrors(t *testing.T) {
 		}
 	}
 
-	// a read goes through REST.Query: the 502 is retried and the same
+	// a read goes through REST.ReadPost: the 502 is retried and the same
 	// operation is sent again
 	s.FailNext(1, 502)
 	n := len(s.Requests())
@@ -401,6 +401,13 @@ func TestLinearErrors(t *testing.T) {
 	}
 	if got := s.CommentBodies(string(k)); len(got) != 0 {
 		t.Errorf("comments after a failed AddComment: %v", got)
+	}
+	// the document keyword and the transport come from one decision
+	if doc, _ := s.Last("Issue"); !strings.HasPrefix(doc, "query Issue") {
+		t.Errorf("a read sent %q, want a query document", doc)
+	}
+	if doc, _ := s.Last("CommentCreate"); !strings.HasPrefix(doc, "mutation CommentCreate") {
+		t.Errorf("a write sent %q, want a mutation document", doc)
 	}
 }
 

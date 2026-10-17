@@ -406,21 +406,6 @@ func (s *Slot) ClearSeen() { s.o.Delete("seen") }
 // SetSeen records the row `round wait` last reported.
 func (s *Slot) SetSeen(key string) { s.o.Set("seen", key) }
 
-// Worker event kinds: what `rota worker send`, `worker done` and `worker reply`
-// record on the slot.
-const (
-	EventBlocked     = "blocked"
-	EventQuestion    = "question"
-	EventDone        = "done"
-	EventReviewReply = "review-reply"
-	// EventHeartbeat is a send kind only: it is recorded by Heartbeat and
-	// never stands as a slot's event.
-	EventHeartbeat = "heartbeat"
-)
-
-// EventKinds are the kinds SetEvent accepts.
-var EventKinds = []string{EventBlocked, EventQuestion, EventDone, EventReviewReply, EventHeartbeat}
-
 // Event is the latest event a worker sent for its slot. Seq is the slot's
 // monotonic event id: it survives ClearEvent, so an acknowledged event never
 // shares a key with the next one.
