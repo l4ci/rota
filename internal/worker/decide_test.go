@@ -2,6 +2,7 @@ package worker
 
 import (
 	"github.com/l4ci/rota/internal/stamp"
+	"strings"
 	"testing"
 	"time"
 
@@ -44,8 +45,6 @@ func TestDecide(t *testing.T) {
 		{"a permission prompt wins", blocked, PollRow{"w1", StateNeedsPermission, "p"}, base, PollRow{"w1", StateNeedsPermission, "p"}},
 		{"an event older than the last change (a dispatch stamps it too) is ignored", blocked, idle, base.Add(time.Second), idle},
 		{"an event with no stamp is ignored", &Event{Seq: 1, Kind: EventBlocked, Body: "x"}, idle, base, idle},
-		{"an event whose stamp does not parse is surfaced, not ignored", &Event{Seq: 5, Kind: EventDone, TS: "2026-10-16 12:00"}, idle, base,
-			PollRow{"w1", StateBlocked, `worker event 5 has an unreadable ts "2026-10-16 12:00": parsing time "2026-10-16 12:00" as "2006-01-02T15:04:05Z": cannot parse " 12:00" as "T"`}},
 		{"a heartbeat never decides", &Event{Seq: 4, Kind: EventHeartbeat, TS: at(0)}, idle, base, idle},
 	} {
 		t.Run(c.name, func(t *testing.T) {
@@ -265,5 +264,28 @@ func TestWaitKeepsWorkerDoneOverAnIdlePane(t *testing.T) {
 	}
 	if got := LoadRegistryTolerant(w.dir).Slot("w1"); got.State() != "done" || got.PR() != ghURL {
 		t.Errorf("slot = %s pr %q", got.State(), got.PR())
+	}
+}
+
+func TestDecideSurfacesUnreadableEventTS(t *testing.T) {
+	const bad = "2026-10-16 12:00"
+	ev := &Event{Seq: 5, Kind: EventDone, TS: bad}
+	row, used := decide(ev, PollRow{"w1", StateIdle, "static"}, time.Now())
+	if !used || row.State != StateBlocked || !strings.Contains(row.Evidence, bad) || !strings.Contains(row.Evidence, "ts") {
+		t.Errorf("decide = %+v, used %v; want a blocked row naming the ts", row, used)
+	}
+}
+
+func TestRecordRowKeepsActiveAtParseableAfterBadEventTS(t *testing.T) {
+	s := NewSlot("w1", "b", "wt", "main", "")
+	s.SetEvent(EventDone, "x", "garbage")
+	ev := s.Event()
+	now := time.Date(2026, 10, 16, 12, 0, 0, 0, time.UTC)
+	row := PollRow{"w1", StateBlocked, "unreadable ts"}
+	if _, err := recordRow(s, row, pollTarget{name: "w1", ev: ev, evSeq: ev.Seq}, now, Registry{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := stamp.Parse(s.ActiveAt()); err != nil || s.ActiveAt() != stamp.Format(now) {
+		t.Errorf("activeAt = %q, want %q", s.ActiveAt(), stamp.Format(now))
 	}
 }
