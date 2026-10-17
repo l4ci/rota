@@ -48,7 +48,10 @@ case "$1 $2" in
   "agent read")
     [ -f "$F/gone" ] && err agent_not_found
     cat "$F/pane.txt" 2>/dev/null ;;  # herdr 0.9.3 prints pane text as is, no JSON envelope
-  "agent send-keys") echo '{"id":"cli","result":{"type":"ok"}}' ;;
+  "agent send-keys")
+    # Answering a dialog (enter) or declining it (esc) takes it off the pane.
+    for k in "${@:4}"; do case "$k" in enter|esc) : >"$F/pane.txt" ;; esac; done
+    echo '{"id":"cli","result":{"type":"ok"}}' ;;
   "agent prompt")
     printf '%s' "$4" >"$F/last_prompt"
     [ -f "$F/prompt_error" ] && [ "$4" != "/exit" ] && err "$(cat "$F/prompt_error")"
