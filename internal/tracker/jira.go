@@ -365,9 +365,9 @@ func (j *Jira) norm(d jiraIssue) Issue {
 		is.Milestone = f.FixVersions[0].Name
 	}
 	if f.Status.StatusCategory.Key == "done" {
-		is.State, is.ClosedAt, is.StateReason = "closed", f.ResolutionDate, "completed"
+		is.State, is.ClosedAt, is.StateReason = "closed", f.ResolutionDate, CloseCompleted
 		if slices.Contains(f.Labels, j.notPlanned) {
-			is.StateReason = "not_planned"
+			is.StateReason = CloseNotPlanned
 		}
 	}
 	if f.Assignee != nil {
@@ -664,7 +664,7 @@ func (j *Jira) Close(ctx context.Context, key IssueKey, reason, comment string) 
 	if err := j.transition(ctx, key, "done"); err != nil {
 		return err
 	}
-	if reason == "not_planned" {
+	if reason == CloseNotPlanned {
 		if err := j.AddLabels(ctx, key, []string{j.notPlanned}, true); err != nil {
 			return err
 		}
@@ -689,7 +689,7 @@ func (j *Jira) CloseAfterMerge(ctx context.Context, key IssueKey, pr string) err
 	if d.Fields.Status.StatusCategory.Key == "done" {
 		return nil
 	}
-	return j.Close(ctx, key, "completed", "Closed by rota: "+pr+" merged.")
+	return j.Close(ctx, key, CloseCompleted, "Closed by rota: "+pr+" merged.")
 }
 
 // Reopen moves the issue back to a to-do status (else an in-progress one) and
