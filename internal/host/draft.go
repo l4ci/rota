@@ -42,7 +42,7 @@ var dialogOption = regexp.MustCompile(`^\d+[.)]\s`)
 
 // dialogFooter: a dialog's key hint below its options. Marks an unnumbered
 // choice (Claude Code's folder-trust dialog) that dialogOption cannot.
-var dialogFooter = regexp.MustCompile(`(?i)enter to (confirm|select)|esc to cancel`)
+var dialogFooter = regexp.MustCompile(`(?i)enter (to )?(confirm|select)|esc (to cancel|not now)`)
 
 // promptPlaceholders are what an empty prompt line shows. They read as text but
 // nobody typed them.
@@ -60,7 +60,7 @@ func promptLine(pane string) string {
 	rest := pane[i+size:]
 	line, _, _ := strings.Cut(rest, "\n")
 	line = strings.TrimFunc(line, func(r rune) bool { return unicode.IsSpace(r) || r == '│' })
-	if dialogOption.MatchString(line) || dialogFooter.MatchString(rest) {
+	if isDialog(line, rest) {
 		return "" // a dialog's selected option, not a prompt
 	}
 	for _, p := range promptPlaceholders {
@@ -69,6 +69,83 @@ func promptLine(pane string) string {
 		}
 	}
 	return line
+}
+
+func isDialog(line, rest string) bool {
+	return dialogOption.MatchString(line) || dialogFooter.MatchString(rest)
+}
+
+// DialogError is ErrDialogOpen with the dialog's first line, for the refusal message.
+type DialogError struct{ First string }
+
+func (e *DialogError) Error() string { return ErrDialogOpen.Error() + ": " + e.First }
+
+func (e *DialogError) Is(target error) bool { return target == ErrDialogOpen }
+
+// Dialog is a harness dialog standing on the prompt line.
+type Dialog struct {
+	First   string   // the dialog's title line
+	Dismiss []string // keys that dismiss it without choosing anything; nil when unknown
+}
+
+var paneRule = regexp.MustCompile(`^[─━]{10,}$`)
+
+// ReadDialog reports whether the pane's prompt line is a harness dialog's
+// option row rather than input, with its first line and, for the dialogs whose
+// dismissal is known to be safe, the keys. Claude Code's autocompact picker
+// says "esc not now", so Escape declines it; any other dialog stays unknown.
+func ReadDialog(pane string) (Dialog, bool) {
+	i := strings.LastIndexAny(pane, promptMarkers)
+	if i < 0 {
+		return Dialog{}, false
+	}
+	_, size := utf8.DecodeRuneInString(pane[i:])
+	rest := pane[i+size:]
+	line, _, _ := strings.Cut(rest, "\n")
+	line = strings.TrimFunc(line, func(r rune) bool { return unicode.IsSpace(r) || r == '│' })
+	if !isDialog(line, rest) {
+		return Dialog{}, false
+	}
+	// The title is the first text line below the last rule above the marker.
+	var first string
+	for _, l := range strings.Split(pane[:i], "\n") {
+		t := strings.TrimFunc(l, func(r rune) bool { return unicode.IsSpace(r) || r == '│' })
+		switch {
+		case paneRule.MatchString(t):
+			first = ""
+		case t != "" && first == "":
+			first = t
+		}
+	}
+	if first == "" {
+		first = line
+	}
+	d := Dialog{First: first}
+	if strings.Contains(pane[:i], "Want to autocompact at") && strings.Contains(strings.ToLower(rest), "esc not now") {
+		d.Dismiss = []string{"esc"}
+	}
+	return d, true
+}
+
+// clearDialog dismisses a dialog on the prompt line once when its dismissal is
+// known and re-reads; a dialog it cannot dismiss, or one that survives, is
+// refused as a *DialogError.
+func clearDialog(d *Deps, read func() string, press func(key string)) error {
+	dlg, ok := ReadDialog(read())
+	if !ok {
+		return nil
+	}
+	if dlg.Dismiss == nil {
+		return &DialogError{First: dlg.First}
+	}
+	for _, k := range dlg.Dismiss {
+		press(k)
+	}
+	d.settle(time.Second)
+	if again, ok := ReadDialog(read()); ok {
+		return &DialogError{First: again.First}
+	}
+	return nil
 }
 
 // stripDim turns a styled capture into plain text with the dim runs removed.

@@ -405,7 +405,13 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 	case sendErr == nil:
 		return res, nil
 	case errors.Is(sendErr, host.ErrDialogOpen):
-		return res, fail(exitcode.ExitUnavailable, fmt.Sprintf("slot '%s' has a dialog open and refused input — inspect it before resending", o.Slot))
+		first := ""
+		var de *host.DialogError
+		if errors.As(sendErr, &de) {
+			first = " (" + de.First + ")"
+		}
+		return res, &exitcode.Error{Exit: exitcode.ExitUnavailable, Data: BlockData{BlockedBy: "dialog"},
+			Message: fmt.Sprintf("slot '%s' has a dialog open%s and refused input — inspect it before resending", o.Slot, first)}
 	case errors.Is(sendErr, host.ErrDraftOnPrompt):
 		return res, fail(exitcode.ExitUnavailable, fmt.Sprintf("slot '%s' has a human draft on its prompt line and nothing was sent — resend once it is submitted or cleared", o.Slot))
 	default:

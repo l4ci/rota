@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	"os"
@@ -309,6 +310,7 @@ func TestDispatchTaskSendFailureExits(t *testing.T) {
 	}{
 		{host.ErrNotSubmitted, exitcode.ExitRetry, "never picked up the brief — inspect the session before resending"},
 		{host.ErrDialogOpen, exitcode.ExitUnavailable, "has a dialog open and refused input — inspect it before resending"},
+		{&host.DialogError{First: "We recommend compacting earlier"}, exitcode.ExitUnavailable, "has a dialog open (We recommend compacting earlier) and refused input"},
 		{host.ErrDraftOnPrompt, exitcode.ExitUnavailable, "has a human draft on its prompt line and nothing was sent — resend once it is submitted or cleared"},
 	} {
 		dir := newProject(t, `{}`)
@@ -318,6 +320,11 @@ func TestDispatchTaskSendFailureExits(t *testing.T) {
 		_, err := envWith(f).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "t"), Task: "T1"})
 		if exitOf(err) != tc.exit || !strings.Contains(err.Error(), tc.msg) {
 			t.Errorf("%v: err = %v", tc.err, err)
+		}
+		if errors.Is(tc.err, host.ErrDialogOpen) {
+			if d, ok := exitcode.DataOf[BlockData](err); !ok || d.BlockedBy != "dialog" {
+				t.Errorf("%v: data = %+v, %v; want blockedBy dialog", tc.err, d, ok)
+			}
 		}
 	}
 }
