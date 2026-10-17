@@ -26,7 +26,7 @@
       "hits": 0,
       "lastSeen": "2026-05-16"
     },
-    "Build & Tooling::Worktree .hv/ is gitignored \u2014 run state helpers from main repo path": {
+    "Build & Tooling::Worktree .hv/ is gitignored — run state helpers from main repo path": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-05-16"
@@ -81,7 +81,7 @@
       "hits": 0,
       "lastSeen": "2026-05-16"
     },
-    "Architecture::Use load_repos() for umbrella detection \u2014 never truthy-test raw repos.json": {
+    "Architecture::Use load_repos() for umbrella detection — never truthy-test raw repos.json": {
       "tier": "provisional",
       "hits": 1,
       "lastSeen": "2026-05-18"
@@ -101,7 +101,7 @@
       "hits": 0,
       "lastSeen": "2026-05-16"
     },
-    "Build & Tooling::Bootstrap-stage helpers can't depend on hv-preamble.sh \u2014 keep the canonical exception list": {
+    "Build & Tooling::Bootstrap-stage helpers can't depend on hv-preamble.sh — keep the canonical exception list": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-05-16"
@@ -131,7 +131,7 @@
       "hits": 0,
       "lastSeen": "2026-05-18"
     },
-    "Build & Tooling: Helpers & migrations::Bootstrap-stage helpers can't depend on hv-preamble.sh \u2014 keep the canonical exception list": {
+    "Build & Tooling: Helpers & migrations::Bootstrap-stage helpers can't depend on hv-preamble.sh — keep the canonical exception list": {
       "tier": "deprecated",
       "hits": 0,
       "lastSeen": "2026-05-18"
@@ -246,7 +246,7 @@
       "hits": 0,
       "lastSeen": "2026-05-18"
     },
-    "Architecture: Skill authoring::Backlog 'near-isomorphic CRUD' framing overstates uniformity \u2014 verify against helper code": {
+    "Architecture: Skill authoring::Backlog 'near-isomorphic CRUD' framing overstates uniformity — verify against helper code": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-05-18"
@@ -321,7 +321,7 @@
       "hits": 0,
       "lastSeen": "2026-10-04"
     },
-    "Build & Tooling: Git & isolation::/rota-brainstorm and /rota-plan write tracked artifacts \u2014 commit before /rota-work": {
+    "Build & Tooling: Git & isolation::/rota-brainstorm and /rota-plan write tracked artifacts — commit before /rota-work": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-05-18"
@@ -331,7 +331,7 @@
       "hits": 0,
       "lastSeen": "2026-05-18"
     },
-    "Build & Tooling: Git & isolation::Worktree .rota/ runtime is gitignored \u2014 run state helpers from main repo path": {
+    "Build & Tooling: Git & isolation::Worktree .rota/ runtime is gitignored — run state helpers from main repo path": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-05-18"
@@ -451,7 +451,7 @@
       "hits": 0,
       "lastSeen": "2026-05-18"
     },
-    "Architecture: Helper conventions & invariants: Shell helpers::Use load_repos() for umbrella detection \u2014 never truthy-test raw repos.json": {
+    "Architecture: Helper conventions & invariants: Shell helpers::Use load_repos() for umbrella detection — never truthy-test raw repos.json": {
       "tier": "deprecated",
       "hits": 1,
       "lastSeen": "2026-05-19"
@@ -622,6 +622,26 @@
       "lastSeen": "2026-10-06"
     },
     "Rounds: Orchestration: Workers & relays::focused: true can be a selected idle tab, not a person typing": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-17"
+    },
+    "Build & Tooling: Smoke testing::Pin ROTA_FROZEN_DAY when regenerating frozen records": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-17"
+    },
+    "Rounds: Orchestration: Review & merge gate::Name the smoke section in the brief when a change touches host or dispatch": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-17"
+    },
+    "Rounds: Orchestration: Workers & relays::A worker's own PR reply shows up as a review change": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-17"
+    },
+    "Rounds: Orchestration: Workers & relays::An agent-start timeout on assign resumes with the receipt id": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-17"

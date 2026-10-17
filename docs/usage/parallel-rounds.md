@@ -272,7 +272,10 @@ during a long test run and changes nothing else. A slot whose host cannot be ask
 unreachable, a stale tab handle after a layout split, a pane that fails to capture) reads
 `unverifiable` with the reason, not `dead`: `wait` keeps waiting through it and returns it once
 after `round.stallMinutes`, `rota reap` leaves it alone, and `round reclaim` refuses it without
-`--force`. A host that answers "no agent in this tab" is still `dead`.
+`--force`. A host that answers "no agent in this tab" is still `dead`. A worker event (other than a
+heartbeat) whose timestamp cannot be parsed marks a slot that is not busy, dead or limited as
+`blocked`, with evidence that names the event and the error, instead of being ignored; the stall
+clock keeps the poll time in that case.
 
 - **herdr**: pinned to **0.9.x** (built against 0.9.3, socket protocol 22); another minor
   exits 5. One `events.subscribe` over `HERDR_SOCKET_PATH` carries a
@@ -283,6 +286,17 @@ after `round.stallMinutes`, `rota reap` leaves it alone, and `round reclaim` ref
 - **Timeout** exits 1 with `data.timedOut: true` and every slot's state; it is an answer,
   not a fault. `--timeout` defaults to 0, which waits indefinitely.
 - **Long waits in Claude Code** hit the Bash tool's timeout; see [internals](#internals).
+
+`rota worker dispatch` and `--relay` check what is on the prompt line before they type. A typed human
+draft is refused as a draft (exit 5, nothing sent). The autocompact settings picker is dismissed once
+with Escape and the send is retried. Any other Claude Code dialog, or a picker that survives Escape, is
+refused with exit 5 and `blockedBy: dialog`, and the message quotes the dialog's first line. This holds
+on herdr and tmux.
+
+`--request-id` receipts also cover `round return`, `round report`, `round tick` and `round escalate send`;
+see the [verb reference](../reference/cli-helpers.md). Two calls with one id run the mutation once: the
+second waits, then replays. Reuse an id for `round tick` and you get the first tick back, so use a fresh id
+per tick.
 
 ## Staying reachable while you talk
 
