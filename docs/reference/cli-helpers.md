@@ -88,7 +88,7 @@ exit codes and repo scope: [verb contract](../contributing/contract/README.md).
 
 | Usage | What it does |
 |---|---|
-| `rota item create --kind <bugs\|features\|tasks> --title <text> [--tag <tag>] [--desc <text>] [--body-file <path\|->] [--depends-on <refs>] [--related <text>] [--milestone <text>] [--repos <csv>] [--subsystem <text>] [--captured <YYYY-MM-DD>] \| --kind <kind> --raw-file <path\|->` | capture one item |
+| `rota item create --kind <bugs\|features\|tasks> --title <text> [--tag <tag>] [--desc <text>] [--body-file <path\|->] [--depends-on <refs>] [--related <text>] [--milestone <text>] [--repos <csv>] [--subsystem <text>] [--captured <YYYY-MM-DD>] \| --kind <kind> --raw-file <path\|->` \| `--batch-file <path\|->` | capture one item, or a JSON array of records (kind, title, tag, desc, body, dependsOn, related, milestone, repos, subsystem, captured) checked for title, kind and field shape up front, then filed in order (a failure part-way reports the ids already filed); the title must be 3+ words in a batch, and never a placeholder (x, tbd, todo, title, untitled) |
 | `rota item show <ID>` | status block of an issue-mode item |
 | `rota item claim <ID> --as <claim-id>` | take an item so two agents never work it at once |
 | `rota item release <ID> --as <claim-id>` | give a claimed item back |
