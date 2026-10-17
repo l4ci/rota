@@ -75,7 +75,7 @@ Top requests by thumbs-up on open issues, pulled 2026-10-08. Reaction counts in 
 | [vibe-kanban](https://github.com/BloopAI/vibe-kanban) | Kanban UI running agents in worktrees | 28.3k | self-hosted GitLab (+26), Ralph mode (+14), Kiro CLI (+11), worktree cleanup (+8), WIP limits |
 | [gastown](https://github.com/steveyegge/gastown) | Multi-agent "town" with mayor and polecats | 18.3k | rate-limit-aware instance swap (+7), limit resets (+3), silent-success bugs, nested repo confusion |
 | [claude-squad](https://github.com/smtg-ai/claude-squad) | TUI for parallel agents in worktrees | 8.6k | worktree setup hook with ports (+8), multi-repo (+6), prompt lost before CLI ready |
-| [orca](https://github.com/stablyai/orca) | Electron IDE for fleets of agents, coordinator/worker protocol over SQLite | 94k | multi-repo diff (+42), Jujutsu workspaces (+43), multi-repo groups (+21); see *Orca orchestration* below |
+| [orca](https://github.com/stablyai/orca) | Electron IDE for fleets of agents, coordinator/worker protocol over SQLite | 94k (2026-10-16) | multi-repo diff (+42), Jujutsu workspaces (+43), multi-repo groups (+21); see *Orca orchestration* below |
 | [superpowers](https://github.com/obra/superpowers) | Skills methodology | 296.5k | agent teams (+94), slowness (+32), Kiro (+23), skip review for easy tasks (+17) |
 | [paperclip](https://github.com/paperclipai/paperclip) | Agent "company" manager | 98.6k | local LLMs (+68), Copilot CLI (+44), OpenRouter (+35), knowledge layer (+16) |
 | [beads](https://github.com/steveyegge/beads) | Git/Dolt-backed agent issue tracker | 27.7k | memory beads, versioned history, Dolt migration crashes |
@@ -89,7 +89,7 @@ Top requests by thumbs-up on open issues, pulled 2026-10-08. Reaction counts in 
 
 A code read of stablyai/orca at its 2026-10-16 head (MIT, TypeScript, about 14.8k source files, 8.5k open issues), done for the orchestration layer only. Orca is a desktop IDE; orchestration is one feature among browser, design mode, SSH/WSL placement, a mobile companion and twelve agent backends. Its coordinator is the user's own agent following a skill, with `orca orchestration` verbs over a Run, Task DAG and Dispatch model held in SQLite (`src/main/runtime/orchestration/`).
 
-What it lacks that rota has: no tracker link into the task model, no gate that runs tests on a worker's output (`worker_done --outcome` is self-reported), no merge queue or PR flow ("compare the results and merge the winner"), no knowledge layer. Not a competitor on issue-to-PR.
+What it lacks that rota has: no tracker link into the task model, no gate that runs tests on a worker's output (`worker_done --outcome` is self-reported), no merge queue or PR flow ("compare the results and merge the winner"), no knowledge layer that the code read showed. On issue-to-PR it does not compete, as far as a code read without a run can tell.
 
 What rota took from it, filed 2026-10-16:
 
