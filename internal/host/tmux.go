@@ -130,10 +130,15 @@ func (t *tmux) Send(ctx context.Context, slot, handle, file string) error {
 }
 
 func (t *tmux) sendFile(ctx context.Context, handle, file, buf string) error {
+	read := func() string { return t.draftPane(ctx, handle) }
+	press := func(k string) { t.tmux(ctx, "send-keys", "-t", handle, map[string]string{"esc": "Escape"}[k]) }
+	if err := clearDialog(&t.d, read, press); err != nil {
+		return err
+	}
 	// A human typing in the pane would get the brief pasted into their draft.
 	text, _ := readFile(file)
 	text = strings.TrimRight(text, "\n")
-	if waitNoDraft(&t.d, func() string { return t.draftPane(ctx, handle) }, text) != "" {
+	if waitNoDraft(&t.d, read, text) != "" {
 		return ErrDraftOnPrompt
 	}
 	before := t.pane(ctx, handle)
