@@ -16,31 +16,46 @@ import (
 // through, so `round wait` reads every push path the same way and believes it
 // before the pane. The ROTA-BLOCKED sentinel is still printed after it.
 func workerSend(fs *flag.FlagSet) RunFunc {
-	blocked := fs.String("blocked", "", "the one question the worker is blocked on")
-	question := fs.String("question", "", "a question for the orchestrator; the worker waits for the answer")
-	heartbeat := fs.Bool("heartbeat", false, "alive, not progress: restarts the stall clock, writes no ledger row")
+	type sendFlag struct {
+		spec worker.EventSpec
+		text *string
+		set  *bool
+	}
+	var flags []sendFlag
+	var names []string
+	for _, spec := range worker.Events {
+		if !spec.Send {
+			continue
+		}
+		f := sendFlag{spec: spec, text: new(string), set: new(bool)}
+		if spec.SendBody {
+			f.text = fs.String(spec.Kind, "", spec.Help)
+		} else {
+			f.set = fs.Bool(spec.Kind, false, spec.Help)
+		}
+		flags = append(flags, f)
+		names = append(names, "--"+spec.Kind)
+	}
+	oneOf := "send exactly one of " + strings.Join(names, ", ")
 	return func(c *Ctx, args []string) (Result, error) {
 		slot, err := oneArg(args, "slot")
 		if err != nil {
 			return Result{}, err
 		}
 		kind, body := "", ""
-		for _, o := range []struct {
-			kind, text string
-			set        bool
-		}{{worker.EventBlocked, *blocked, *blocked != ""}, {worker.EventQuestion, *question, *question != ""}, {worker.EventHeartbeat, "", *heartbeat}} {
-			if !o.set {
+		for _, f := range flags {
+			if !*f.set && *f.text == "" {
 				continue
 			}
 			if kind != "" {
-				return Result{}, Usage("send exactly one of --blocked, --question, --heartbeat")
+				return Result{}, Usage("%s", oneOf)
 			}
-			kind, body = o.kind, strings.TrimSpace(o.text)
+			kind, body = f.spec.Kind, strings.TrimSpace(*f.text)
 		}
 		if kind == "" {
-			return Result{}, Usage("send exactly one of --blocked, --question, --heartbeat")
+			return Result{}, Usage("%s", oneOf)
 		}
-		if kind != worker.EventHeartbeat && body == "" {
+		if spec, _ := worker.EventSpecFor(kind); spec.SendBody && body == "" {
 			return Result{}, Usage("--%s needs the text of the question", kind)
 		}
 		// The registry lives in the main checkout; a worker runs this from its worktree.
