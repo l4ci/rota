@@ -601,6 +601,10 @@ func RecordBounceIn(env Env, m *RoundMemo, root, issue, slot, head string) (int,
 	return n, err
 }
 
+// recordBounce counts one bounce per (issue, review head). That is a semantic
+// dedupe across callers (review-relay and bounce both reach it), so it is not a
+// request-id receipt: a retry mints a fresh id, yet must still count once. It
+// stays here, and receiptedVerbs in internal/cli leaves round bounce out.
 func recordBounce(env Env, m *RoundMemo, root, issue, slot, head string) (n int, counted bool, err error) {
 	defer func() {
 		if err == nil && counted {
