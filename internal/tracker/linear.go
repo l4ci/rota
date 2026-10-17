@@ -518,9 +518,9 @@ func (l *Linear) norm(d linearIssue) Issue {
 	}
 	switch d.State.Type {
 	case "completed":
-		is.State, is.StateReason, is.ClosedAt = "closed", "completed", d.CompletedAt
+		is.State, is.StateReason, is.ClosedAt = "closed", CloseCompleted, d.CompletedAt
 	case "canceled":
-		is.State, is.StateReason, is.ClosedAt = "closed", "not_planned", d.CanceledAt
+		is.State, is.StateReason, is.ClosedAt = "closed", CloseNotPlanned, d.CanceledAt
 	}
 	if d.Assignee != nil {
 		is.Assignees = append(is.Assignees, d.Assignee.label())
@@ -857,8 +857,8 @@ func (l *Linear) Close(ctx context.Context, key IssueKey, reason, comment string
 	if err != nil {
 		return err
 	}
-	want := "completed"
-	if reason == "not_planned" {
+	want := CloseCompleted
+	if reason == CloseNotPlanned {
 		want = "canceled"
 	}
 	if err := l.moveTo(ctx, d, want); err != nil {
@@ -882,7 +882,7 @@ func (l *Linear) CloseAfterMerge(ctx context.Context, key IssueKey, pr string) e
 	if d.closed() {
 		return nil
 	}
-	return l.Close(ctx, key, "completed", "Closed by rota: "+pr+" merged.")
+	return l.Close(ctx, key, CloseCompleted, "Closed by rota: "+pr+" merged.")
 }
 
 // Reopen moves a closed issue to an unstarted state, else a started one.
