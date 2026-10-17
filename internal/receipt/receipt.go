@@ -8,6 +8,8 @@
 package receipt
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -23,6 +25,10 @@ import (
 const File = ".rota/" + rotatree.ReceiptsFile
 
 const lockWait = 10 * time.Second
+
+// claimWait is how long a second call under one id waits for the first to
+// finish: a verb's whole run, which for a gate or a train is minutes.
+const claimWait = 10 * time.Minute
 
 // Status of a recorded call.
 const (
@@ -76,30 +82,92 @@ func load(p string) (fileData, error) {
 	return d, nil
 }
 
-// Lookup returns the entry recorded for id. found is false when none is.
-// An entry whose verb or fingerprint differs is a *Mismatch.
-func Lookup(root, id, verb, fingerprint string) (e Entry, found bool, err error) {
-	d, err := load(path(root))
+// Store is the receipts of one project. Now stamps each entry; tests set it.
+type Store struct {
+	Root string
+	Now  func() time.Time
+}
+
+// New is the store of the project at root, stamping with the wall clock.
+func New(root string) *Store { return &Store{Root: root, Now: time.Now} }
+
+// Call is the identity of one verb call: the request id the caller retries
+// with, the verb, and a fingerprint of everything the call judges.
+type Call struct {
+	ID, Verb, Fingerprint string
+}
+
+// Outcome is what Do reports once the call is settled.
+type Outcome struct {
+	// Replayed is true when a done receipt answered and run never ran.
+	Replayed bool
+	// Entry is the receipt that answered, or the one recorded for this run
+	// (zero when the run wrote nothing).
+	Entry Entry
+	// RecordErr is why a finished run left no receipt. The mutation happened;
+	// only the retry guard is missing.
+	RecordErr error
+}
+
+// Do is the replay protocol: claim the id, look it up, run the mutation once,
+// record what it did. The claim is a lock on the id held across the run, so
+// two concurrent calls under one id cannot both miss and both mutate: the
+// second waits, then finds the first's receipt and replays it.
+//
+// An id used before for another verb or fingerprint is a *Mismatch and run
+// does not run. A done receipt replays and run does not run. Otherwise run gets
+// the failed receipt of an earlier attempt (zero when there is none) and
+// returns the entry to record; false means the call wrote nothing and leaves
+// no receipt. Do fills in ID, Verb, Fingerprint, At and Attempts.
+func (s *Store) Do(call Call, run func(prior Entry) (Entry, bool)) (Outcome, error) {
+	var out Outcome
+	err := fsio.Locked(s.claimPath(call.ID), claimWait, func() error {
+		// Read the file before mutating, so a corrupt receipts file is
+		// refused rather than written over (#712).
+		prior, found, err := s.Lookup(call)
+		if err != nil {
+			return err
+		}
+		if found && prior.Status == Done {
+			out = Outcome{Replayed: true, Entry: prior}
+			return nil
+		}
+		e, record := run(prior)
+		if !record {
+			return nil
+		}
+		e.ID, e.Verb, e.Fingerprint = call.ID, call.Verb, call.Fingerprint
+		out.Entry = e
+		out.RecordErr = s.record(&out.Entry)
+		return nil
+	})
+	return out, err
+}
+
+// Lookup returns the entry recorded for the call's id. found is false when none
+// is. An entry whose verb or fingerprint differs is a *Mismatch.
+func (s *Store) Lookup(call Call) (e Entry, found bool, err error) {
+	d, err := load(path(s.Root))
 	if err != nil {
 		return Entry{}, false, err
 	}
 	for _, r := range d.Receipts {
-		if r.ID != id {
+		if r.ID != call.ID {
 			continue
 		}
-		if r.Verb != verb || r.Fingerprint != fingerprint {
-			return Entry{}, false, &Mismatch{ID: id, Verb: r.Verb}
+		if r.Verb != call.Verb || r.Fingerprint != call.Fingerprint {
+			return Entry{}, false, &Mismatch{ID: call.ID, Verb: r.Verb}
 		}
 		return r, true, nil
 	}
 	return Entry{}, false, nil
 }
 
-// Record stores e, replacing an earlier entry with the same id. Attempts
+// record stores e, replacing an earlier entry with the same id. Attempts
 // counts the calls under the id.
-func Record(root string, e Entry) error {
-	p := path(root)
-	e.At = time.Now().UTC().Format(time.RFC3339)
+func (s *Store) record(e *Entry) error {
+	p := path(s.Root)
+	e.At = s.Now().UTC().Format(time.RFC3339)
 	return fsio.Locked(p, lockWait, func() error {
 		d, err := load(p)
 		if err != nil {
@@ -114,13 +182,20 @@ func Record(root string, e Entry) error {
 			}
 			out = append(out, r)
 		}
-		d.Receipts = capPerVerb(append(out, e))
+		d.Receipts = capPerVerb(append(out, *e))
 		b, err := json.MarshalIndent(d, "", "  ")
 		if err != nil {
 			return err
 		}
 		return fsio.WriteFileAtomic(p, append(b, '\n'))
 	})
+}
+
+// claimPath is the file whose lock is the claim on an id. The id is hashed: it
+// is caller text and must not shape a path.
+func (s *Store) claimPath(id string) string {
+	sum := sha256.Sum256([]byte(id))
+	return path(s.Root) + "." + hex.EncodeToString(sum[:6])
 }
 
 // KeepPerVerb is how many receipts the file keeps for each verb. A retry comes
@@ -149,6 +224,11 @@ func capPerVerb(rs []Entry) []Entry {
 // Prune drops every receipt: the round is over, so no retry can reach them.
 func Prune(root string) error {
 	p := path(root)
+	if claims, _ := filepath.Glob(p + ".*.lock"); len(claims) > 0 {
+		for _, c := range claims {
+			os.Remove(c)
+		}
+	}
 	if _, err := os.Stat(p); errors.Is(err, os.ErrNotExist) {
 		return nil
 	}

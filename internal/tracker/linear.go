@@ -518,9 +518,9 @@ func (l *Linear) norm(d linearIssue) Issue {
 	}
 	switch d.State.Type {
 	case "completed":
-		is.State, is.StateReason, is.ClosedAt = "closed", "completed", d.CompletedAt
+		is.State, is.StateReason, is.ClosedAt = "closed", CloseCompleted, d.CompletedAt
 	case "canceled":
-		is.State, is.StateReason, is.ClosedAt = "closed", "not_planned", d.CanceledAt
+		is.State, is.StateReason, is.ClosedAt = "closed", CloseNotPlanned, d.CanceledAt
 	}
 	if d.Assignee != nil {
 		is.Assignees = append(is.Assignees, d.Assignee.label())
@@ -857,8 +857,8 @@ func (l *Linear) Close(ctx context.Context, key IssueKey, reason, comment string
 	if err != nil {
 		return err
 	}
-	want := "completed"
-	if reason == "not_planned" {
+	want := CloseCompleted
+	if reason == CloseNotPlanned {
 		want = "canceled"
 	}
 	if err := l.moveTo(ctx, d, want); err != nil {
@@ -882,7 +882,7 @@ func (l *Linear) CloseAfterMerge(ctx context.Context, key IssueKey, pr string) e
 	if d.closed() {
 		return nil
 	}
-	return l.Close(ctx, key, "completed", "Closed by rota: "+pr+" merged.")
+	return l.Close(ctx, key, CloseCompleted, "Closed by rota: "+pr+" merged.")
 }
 
 // Reopen moves a closed issue to an unstarted state, else a started one.
@@ -1153,54 +1153,36 @@ func (l *Linear) IssuesInMilestone(context.Context, string, string) ([]Issue, er
 
 // ---- claims (plain comments) ------------------------------------------------------
 
-// claimComments is the issue's claim comments, earliest first by the
-// server's createdAt, then comment id (comments already come so).
-func (l *Linear) claimComments(ctx context.Context, key IssueKey) ([]Comment, error) {
-	id, err := l.issueID(ctx, key)
-	if err != nil {
-		return nil, err
+// claimStore is the shared claim-comment rule over Linear's comments.
+func (l *Linear) claimStore() claimComments {
+	return claimComments{
+		list: func(ctx context.Context, key IssueKey) ([]Comment, error) {
+			id, err := l.issueID(ctx, key)
+			if err != nil {
+				return nil, err
+			}
+			return l.comments(ctx, id, nil)
+		},
+		add: func(ctx context.Context, key IssueKey, body string) error {
+			_, err := l.AddComment(ctx, key, body)
+			return err
+		},
+		delete: func(ctx context.Context, _ IssueKey, commentID string) error { return l.deleteComment(ctx, commentID) },
 	}
-	cs, err := l.comments(ctx, id, nil)
-	if err != nil {
-		return nil, err
-	}
-	return slices.DeleteFunc(cs, func(c Comment) bool { _, ok := claimOf(c.Body); return !ok }), nil
 }
 
 // Claims lists the claim ids on key, earliest first, each once.
 func (l *Linear) Claims(ctx context.Context, key IssueKey) ([]string, error) {
-	cs, err := l.claimComments(ctx, key)
-	if err != nil {
-		return nil, err
-	}
-	var out []string
-	for _, c := range cs {
-		if id, _ := claimOf(c.Body); !slices.Contains(out, id) {
-			out = append(out, id)
-		}
-	}
-	return out, nil
+	return l.claimStore().Claims(ctx, key)
 }
 
 // PutClaim posts id's plain claim comment; the earliest one of an id holds
 // its place.
 func (l *Linear) PutClaim(ctx context.Context, key IssueKey, id string) error {
-	_, err := l.AddComment(ctx, key, claimText+id)
-	return err
+	return l.claimStore().PutClaim(ctx, key, id)
 }
 
 // DropClaim deletes every claim comment of id; none is a no-op.
 func (l *Linear) DropClaim(ctx context.Context, key IssueKey, id string) error {
-	cs, err := l.claimComments(ctx, key)
-	if err != nil {
-		return err
-	}
-	for _, c := range cs {
-		if got, _ := claimOf(c.Body); got == id {
-			if err := l.deleteComment(ctx, c.ID); err != nil && !IsKind(err, KindNotFound) {
-				return err
-			}
-		}
-	}
-	return nil
+	return l.claimStore().DropClaim(ctx, key, id)
 }

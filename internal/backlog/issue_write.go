@@ -327,9 +327,9 @@ func (b *Issues) Complete(ref string, in CompleteInput) (bool, error) {
 		}
 	}
 	if in.Reason == "done" {
-		return true, tr.Close(b.ctx(), n, "completed", "Done in `"+in.Commit+"`"+suffix+"\n\n"+marker.Line("done"))
+		return true, tr.Close(b.ctx(), n, tracker.CloseCompleted, "Done in `"+in.Commit+"`"+suffix+"\n\n"+marker.Line("done"))
 	}
-	return true, tr.Close(b.ctx(), n, "not_planned", "Closed: "+in.Reason+suffix+"\n\n"+marker.Line("closed"))
+	return true, tr.Close(b.ctx(), n, tracker.CloseNotPlanned, "Closed: "+in.Reason+suffix+"\n\n"+marker.Line("closed"))
 }
 
 // Reopen reopens a closed issue (clearing not-planned and blocked) or unblocks

@@ -31,14 +31,6 @@ type ReportOpts struct {
 	Event, Body string
 }
 
-// eventStates maps an event kind to the slot state it records; "" is no
-// change (a heartbeat proves the worker alive; a reply posted mid-fix does not
-// finish the work, so a busy slot stays busy).
-var eventStates = map[string]string{
-	worker.EventBlocked: "blocked", worker.EventQuestion: "blocked", worker.EventDone: "done",
-	worker.EventReviewReply: "", worker.EventHeartbeat: "",
-}
-
 // Reported is what ReportSlot did. Evidence is echoed, never stored.
 type Reported struct {
 	Slot, State, Previous, PR, Evidence string
@@ -59,10 +51,11 @@ func (e Env) ReportSlot(ctx context.Context, root string, o ReportOpts) (Reporte
 	res := Reported{Slot: o.Slot, Evidence: o.Evidence}
 	state := strings.ToLower(strings.TrimSpace(o.State))
 	if o.Event != "" {
-		var ok bool
-		if state, ok = eventStates[o.Event]; !ok {
+		spec, ok := worker.EventSpecFor(o.Event)
+		if !ok {
 			return res, usage("event must be one of %s, got %q", strings.Join(worker.EventKinds, ", "), o.Event)
 		}
+		state = spec.State
 	} else if !slices.Contains(ReportStates, state) {
 		return res, usage("--state must be one of %s", strings.Join(ReportStates, ", "))
 	}
@@ -125,9 +118,9 @@ func (e Env) ReportSlot(ctx context.Context, root string, o ReportOpts) (Reporte
 				return
 			}
 			res.Changed = true
-			// A reply on a PR is no new "finished" edge: the review cursor
-			// stays where the bounce left it.
-			if state == "done" && o.Event != worker.EventReviewReply {
+			// A reply on a PR has no state, so it never reaches this edge: the
+			// review cursor stays where the bounce left it.
+			if state == "done" {
 				s.BaselineReview(e.now())
 			}
 		}
@@ -151,19 +144,17 @@ func (e Env) ReportSlot(ctx context.Context, root string, o ReportOpts) (Reporte
 		return res, &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("slot '%s' is not in the pool", o.Slot)}
 	}
 	kind := reportKinds[state]
-	switch o.Event {
-	case worker.EventHeartbeat:
-		kind = ""
-	case worker.EventReviewReply:
-		kind = ledger.KindReviewReply
-	case worker.EventBlocked, worker.EventQuestion:
-		// Every blocked or question event is a row, not only the edge into blocked.
-		moved = true
-		held.Detail = ledger.Detail("event", o.Event, "body", o.Body, "seq", seq)
-	}
-	if o.Event == worker.EventReviewReply {
-		moved = true
-		held.Detail = ledger.Detail("seq", seq)
+	if o.Event != "" {
+		spec, _ := worker.EventSpecFor(o.Event)
+		kind = spec.Ledger
+		if spec.EveryRow {
+			// Every such event is a row, not only the edge into its state.
+			moved = true
+			held.Detail = ledger.Detail("seq", seq)
+			if spec.RowBody {
+				held.Detail = ledger.Detail("event", o.Event, "body", o.Body, "seq", seq)
+			}
+		}
 	}
 	if kind != "" && moved {
 		held.Kind, held.PR = kind, firstNonEmpty(pr, held.PR)
