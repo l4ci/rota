@@ -96,9 +96,9 @@ func (d ghIssue) norm() Issue {
 	}
 	switch strings.ToUpper(d.StateReason) {
 	case "COMPLETED":
-		is.StateReason = "completed"
+		is.StateReason = CloseCompleted
 	case "NOT_PLANNED":
-		is.StateReason = "not_planned"
+		is.StateReason = CloseNotPlanned
 	}
 	for _, a := range d.Assignees {
 		is.Assignees = append(is.Assignees, a.Login)
@@ -493,8 +493,8 @@ func (g *GitHub) Close(ctx context.Context, key IssueKey, reason, comment string
 	if err != nil {
 		return err
 	}
-	r := "completed"
-	if reason == "not_planned" {
+	r := CloseCompleted
+	if reason == CloseNotPlanned {
 		r = "not planned"
 	}
 	args := []string{"issue", "close", strconv.Itoa(number), "--reason", r}
