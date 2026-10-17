@@ -19,8 +19,9 @@ import (
 	"github.com/l4ci/rota/internal/worker"
 )
 
-// receipted gives a state-writing round verb --request-id and a receipt per
-// call (#822). The same id with the same arguments replays the first answer
+// receipted gives a state-writing verb --request-id and a receipt per call
+// (#822); receiptedVerbs below is the one list of which verbs get it, and the
+// protocol itself (claim, replay, record) is receipt.Store.Do. The same id with the same arguments replays the first answer
 // and applies nothing; the same id with other arguments is refused; an id whose
 // first call stopped part way runs again, and the saga's own skip checks resume
 // it from the stage that failed. Without --request-id the verb mints one and
@@ -48,9 +49,34 @@ func receipted(verb string, inner func(*flag.FlagSet) RunFunc, inputs ...inputsF
 			for _, in := range inputs {
 				fp += "\x00" + strings.Join(in(c, root, args), "\x00")
 			}
-			// Read the file before mutating, minted id or not: a corrupt
-			// receipts file is refused rather than written over (#712).
-			prior, found, err := receipt.Lookup(root, id, verb, fp)
+			call := receipt.Call{ID: id, Verb: verb, Fingerprint: fp}
+			var res Result
+			var runErr error
+			var ae *Error
+			out, err := receipt.New(root).Do(call, func(prior receipt.Entry) (receipt.Entry, bool) {
+				res, runErr = run(c, args)
+				e := receipt.Entry{Status: receipt.Done}
+				if runErr != nil {
+					ae = asError(runErr)
+					if ae.Exit != ExitFailed && ae.Exit < ExitUnavailable {
+						return e, false // wrote nothing: no receipt
+					}
+					e.Status, e.Exit, e.Message = receipt.Failed, ae.Exit, ae.Message
+					var se *round.StageError
+					if errors.As(runErr, &se) {
+						e.FailedStage, e.Residual = se.Stage, se.Residual
+					}
+				}
+				if res.Data == nil && ae != nil {
+					res.Data = jsonx.NewObject()
+				}
+				stampResult(res.Data, id, prior.FailedStage, e.FailedStage, e.Residual)
+				e.Text = res.Text
+				if b, merr := jsonx.MarshalCompact(res.Data); res.Data != nil && merr == nil {
+					e.Data = b
+				}
+				return e, true
+			})
 			var mm *receipt.Mismatch
 			switch {
 			case errors.As(err, &mm):
@@ -61,41 +87,21 @@ func receipted(verb string, inner func(*flag.FlagSet) RunFunc, inputs ...inputsF
 				return Result{Data: d}, Refused("%s", err)
 			case err != nil:
 				return Result{}, err
-			case found && prior.Status == receipt.Done:
-				return replay(c, prior)
+			case out.Replayed:
+				return replay(c, out.Entry)
+			case runErr != nil && ae.Exit != ExitFailed && ae.Exit < ExitUnavailable:
+				return res, runErr
 			}
-			res, err := run(c, args)
-			e := receipt.Entry{ID: id, Verb: verb, Fingerprint: fp, Status: receipt.Done}
-			var ae *Error
-			if err != nil {
-				ae = asError(err)
-				if ae.Exit != ExitFailed && ae.Exit < ExitUnavailable {
-					return res, err // wrote nothing: no receipt
-				}
-				e.Status, e.Exit, e.Message = receipt.Failed, ae.Exit, ae.Message
-				var se *round.StageError
-				if errors.As(err, &se) {
-					e.FailedStage, e.Residual = se.Stage, se.Residual
-				}
-			}
-			if res.Data == nil && ae != nil {
-				res.Data = jsonx.NewObject()
-			}
-			stampResult(res.Data, id, prior.FailedStage, e.FailedStage, e.Residual)
-			e.Text = res.Text
-			if b, merr := jsonx.MarshalCompact(res.Data); res.Data != nil && merr == nil {
-				e.Data = b
-			}
-			if rerr := receipt.Record(root, e); rerr != nil {
-				c.Warn("receipt for %s not recorded: %v", id, rerr)
-				return res, err
+			if out.RecordErr != nil {
+				c.Warn("receipt for %s not recorded: %v", id, out.RecordErr)
+				return res, runErr
 			}
 			if ae != nil {
 				cp := *ae
-				cp.Hint = strings.TrimPrefix(cp.Hint+"; "+retryHint(id, e), "; ")
+				cp.Hint = strings.TrimPrefix(cp.Hint+"; "+retryHint(id, out.Entry), "; ")
 				return res, &cp
 			}
-			return res, err
+			return res, runErr
 		}
 	}
 }
@@ -204,6 +210,43 @@ func mintRequestID() string {
 		panic(err)
 	}
 	return "req-" + hex.EncodeToString(b)
+}
+
+// receiptedVerbs is the one place that decides which verbs keep a receipt: a
+// verb that writes .rota state or the tracker is listed, with the inputsFunc
+// naming what it judges beyond its arguments. Tree wraps each listed verb;
+// TestReceiptedVerbsExist keeps a rename from dropping coverage silently.
+//
+// Left out on purpose: round bounce counts a review head once (see
+// worker.recordBounce), which is a semantic dedupe a retry id cannot express;
+// round escalate check only reads the thread; round status, reconcile
+// without --apply and the other readers write nothing.
+var receiptedVerbs = []struct {
+	verb   string
+	inputs []inputsFunc
+}{
+	{verb: "round assign"},
+	{verb: "round transfer"},
+	{verb: "round reclaim"},
+	{verb: "round pick"},
+	{verb: "round return"},
+	{verb: "round report"},
+	{verb: "round tick"},
+	{verb: "round escalate send"},
+	{verb: "worker gate", inputs: []inputsFunc{branchHeads}},
+	{verb: "worker train", inputs: []inputsFunc{branchHeads}},
+}
+
+// applyReceipts wraps every verb in receiptedVerbs. A verb missing from the
+// tree is a programming error, so it panics rather than leave a verb bare.
+func applyReceipts(root *Command) {
+	for _, r := range receiptedVerbs {
+		cmd := findVerb(root, strings.Fields(r.verb))
+		if cmd == nil || cmd.Verb == nil {
+			panic("receiptedVerbs names " + r.verb + ", which is not a verb")
+		}
+		cmd.Verb = receipted(r.verb, cmd.Verb, r.inputs...)
+	}
 }
 
 // branchHeads is the inputsFunc of gate and train: the head sha of each slot
