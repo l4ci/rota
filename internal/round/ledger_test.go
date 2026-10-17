@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/worker"
@@ -38,7 +39,7 @@ func TestAssignAppendsLedger(t *testing.T) {
 	if e == nil {
 		t.Fatal("no assign entry in ledger.jsonl")
 	}
-	if e.Issue != "12" || e.Slot != "ben" || e.Harness != "claude" || e.Round != 1 || e.TS.IsZero() {
+	if e.Issue != "12" || e.Slot != "ben" || e.Harness != harness.Claude || e.Round != 1 || e.TS.IsZero() {
 		t.Errorf("entry = %+v", e)
 	}
 	if _, ok := e.DetailFloat("headroom"); ok {
@@ -207,7 +208,7 @@ func TestReportLimitedAppendsLedger(t *testing.T) {
 		t.Fatal(err)
 	}
 	e := lastOf(ledgerKinds(t, f.root), ledger.KindLimited)
-	if e == nil || e.Slot != "ben" || e.Issue != "12" || e.Harness != "claude" {
+	if e == nil || e.Slot != "ben" || e.Issue != "12" || e.Harness != harness.Claude {
 		t.Fatalf("limited entry = %+v", e)
 	}
 }

@@ -24,8 +24,8 @@ func SlotIdle(s *worker.Slot) bool {
 // SlotAccount is the harness kind ("codex", or "" for Claude) and the account
 // a slot last ran under.
 func SlotAccount(s *worker.Slot) (kind, account string) {
-	if s.Kind() == harness.Codex {
-		return harness.Codex, s.CodexAccount()
+	if h, ok := harness.Lookup(s.Kind()); ok && !h.UsageMeter() {
+		return h.Kind(), s.CodexAccount()
 	}
 	return "", s.Account()
 }

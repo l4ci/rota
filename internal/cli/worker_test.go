@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/verdict"
 	"github.com/l4ci/rota/internal/worker"
@@ -486,7 +487,7 @@ func TestWorkerDispatchKindFlag(t *testing.T) {
 		t.Errorf("a bad --kind: %d, want 2", code)
 	}
 	code, out, _ := rotaInWith(t, deps, dir, "worker", "dispatch", "w1", "--body-file", brief, "--task", "T1", "--kind", "codex", "--json")
-	if d := data(t, out); code != 0 || d["kind"] != "codex" {
+	if d := data(t, out); code != 0 || d["kind"] != harness.Codex {
 		t.Fatalf("codex dispatch: %d %s", code, out)
 	}
 	code, out, _ = rotaInWith(t, deps, dir, "worker", "dispatch", "w1", "--body-file", brief, "--relay", "--kind", "codex", "--json")

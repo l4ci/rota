@@ -167,8 +167,9 @@ type Input struct {
 func Run(ctx context.Context, in Input) Report {
 	d := &runner{in: in, ctx: ctx}
 	checks := []Check{
-		d.git(), d.jq(), d.host(), d.tracker(), d.accounts(), d.hook(), d.statusline(), d.stopHook(), d.guardHook(), d.switchCheck(), d.skills(), d.codex(),
+		d.git(), d.jq(), d.host(), d.tracker(), d.accounts(), d.hook(), d.statusline(), d.stopHook(), d.guardHook(), d.switchCheck(), d.skills(),
 	}
+	checks = append(checks, d.harnessChecks()...)
 	if c, ok := d.connection(); ok {
 		checks = append(checks, c)
 	}

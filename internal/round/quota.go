@@ -24,21 +24,25 @@ type Cap struct {
 	// ResumesAt is the earliest reset among the cooling accounts, zero when
 	// the cap is not reduced.
 	ResumesAt time.Time
-	// claudeWhy and codexWhy are set when every configured account of the pool
-	// is cooling down. An unconfigured pool is never closed.
-	claudeWhy, codexWhy string
+	// why says per harness kind that every configured account of its pool is
+	// cooling down. An unconfigured pool is never closed.
+	why map[string]string
 }
 
 // Reduced reports whether the cap is below the roster size.
 func (c Cap) Reduced() bool { return c.Effective < c.Roster }
 
-// Closed says why a worker of the harness kind (claude or codex) has no account
-// with headroom, so assigning it would only park the slot; empty when it has.
-func (c Cap) Closed(kind string) string {
-	if kind == harness.Codex {
-		return c.codexWhy
+// Closed says why a worker of the harness kind has no account with headroom,
+// so assigning it would only park the slot; empty when it has.
+func (c Cap) Closed(kind string) string { return c.why[kindOrDefault(kind)] }
+
+// kindOrDefault is the kind of an adapter, the default one for "" or a kind
+// that is not a worker harness.
+func kindOrDefault(kind string) string {
+	if h, ok := harness.Lookup(kind); ok {
+		return h.Kind()
 	}
-	return c.claudeWhy
+	return harness.Default
 }
 
 // pool is one account pool: the resets of its cooling accounts and whether
@@ -48,9 +52,9 @@ type pool struct {
 	closed bool
 }
 
-// claudePool reads work.accounts through their usage meters. Accounts whose
-// usage cannot be read count as free.
-func (e Env) claudePool(ctx context.Context, root string) pool {
+// meterPool reads a metered kind's accounts through their usage meters.
+// Accounts whose usage cannot be read count as free.
+func (e Env) meterPool(ctx context.Context, root string) pool {
 	var p pool
 	if e.Worker.Accounts == nil {
 		return p
@@ -65,11 +69,11 @@ func (e Env) claudePool(ctx context.Context, root string) pool {
 	return p
 }
 
-// codexPool reads work.codexAccounts through the limits the watcher logged:
-// Codex has no usage meter.
-func (e Env) codexPool(root string) (p pool, configured bool) {
-	logins := config.CodexAccounts(config.Load(rotatree.Config(root)))
-	cooling := limits.Cooling(root, limits.KindCodex, e.now())
+// loggedPool reads the accounts of a kind with no usage meter through the
+// limits the watcher logged.
+func (e Env) loggedPool(root string, h harness.Harness) (p pool, configured bool) {
+	logins := h.Accounts(config.Load(rotatree.Config(root))).Entries
+	cooling := limits.Cooling(root, h.Kind(), e.now())
 	for _, l := range logins {
 		if at, ok := cooling[l.Name]; ok {
 			p.resets = append(p.resets, at)
@@ -79,46 +83,60 @@ func (e Env) codexPool(root string) (p pool, configured bool) {
 	return p, len(logins) > 0
 }
 
+// poolOf is the pool of a kind, and whether it has configured accounts.
+func (e Env) poolOf(ctx context.Context, root string, h harness.Harness) (pool, bool) {
+	if h.UsageMeter() {
+		return e.meterPool(ctx, root), false
+	}
+	return e.loggedPool(root, h)
+}
+
+// poolKey is the config key of the kind's accounts.
+func poolKey(root string, h harness.Harness) string {
+	return h.Accounts(config.Load(rotatree.Config(root))).Key
+}
+
 // Headroom says why a worker of the harness kind has no account to run under,
 // reading only that kind's pool; empty when it has one.
 func (e Env) Headroom(ctx context.Context, root, kind string) string {
-	if kind == harness.Codex {
-		if p, _ := e.codexPool(root); p.closed {
-			return coolingWhy("work.codexAccounts", earliest(p.resets))
-		}
-		return ""
-	}
-	if p := e.claudePool(ctx, root); p.closed {
-		return coolingWhy("work.accounts", earliest(p.resets))
+	h, _ := harness.Lookup(kindOrDefault(kind))
+	if p, _ := e.poolOf(ctx, root, h); p.closed {
+		return coolingWhy(poolKey(root, h), earliest(p.resets))
 	}
 	return ""
 }
 
 // QuotaCap reads the account headroom behind the roster. The cap drops to the
 // slots already holding an issue when no pool a worker could run under has
-// headroom: Claude's counts unless round.workerKind is codex, Codex's when it
-// has logins or is the worker kind.
+// headroom. A pool counts when its kind is the worker kind (round.workerKind,
+// else the default); a kind without a usage meter counts too once it has
+// configured accounts.
 func (e Env) QuotaCap(ctx context.Context, root string, set roundcfg.Settings) Cap {
-	c := Cap{Roster: len(set.Roster), Effective: len(set.Roster)}
-	claude := e.claudePool(ctx, root)
-	codex, codexConfigured := e.codexPool(root)
-	if claude.closed {
-		c.claudeWhy = coolingWhy("work.accounts", earliest(claude.resets))
+	c := Cap{Roster: len(set.Roster), Effective: len(set.Roster), why: map[string]string{}}
+	wk := set.WorkerKind
+	if wk == "" {
+		wk = harness.Default
 	}
-	if codex.closed {
-		c.codexWhy = coolingWhy("work.codexAccounts", earliest(codex.resets))
-	}
-	claudeIn, codexIn := set.WorkerKind != harness.Codex, codexConfigured || set.WorkerKind == harness.Codex
-	if (claudeIn && !claude.closed) || (codexIn && !codex.closed) || !(claudeIn || codexIn) {
-		return c
-	}
+	var open bool
 	var resets []time.Time
 	var pools []string
-	if claudeIn {
-		resets, pools = append(resets, claude.resets...), append(pools, "work.accounts")
+	for _, k := range harness.Kinds() {
+		h, _ := harness.Lookup(k)
+		p, configured := e.poolOf(ctx, root, h)
+		key := poolKey(root, h)
+		if p.closed {
+			c.why[k] = coolingWhy(key, earliest(p.resets))
+		}
+		if k != wk && !(!h.UsageMeter() && configured) {
+			continue
+		}
+		if !p.closed {
+			open = true
+		}
+		resets, pools = append(resets, p.resets...), append(pools, key)
 	}
-	if codexIn {
-		resets, pools = append(resets, codex.resets...), append(pools, "work.codexAccounts")
+	if open || len(pools) == 0 {
+		return c
 	}
 	c.ResumesAt = earliest(resets)
 	c.Reason = coolingWhy(strings.Join(pools, " and "), c.ResumesAt)

@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/limits"
 	"github.com/l4ci/rota/internal/worker"
@@ -130,5 +131,12 @@ func TestMixedConfigClaudeAssignIsRefusedByQuota(t *testing.T) {
 	_, err := f.assign("12", "ben", nil)
 	if by := blockedBy(t, err); by != BlockQuota || !strings.Contains(err.Error(), "work.accounts") {
 		t.Fatalf("assign: %v", err)
+	}
+}
+
+// The limits log names the Codex kind by the harness kind's own spelling.
+func TestLimitsKindIsHarnessKind(t *testing.T) {
+	if limits.KindCodex != harness.Codex {
+		t.Fatalf("limits.KindCodex %q, harness.Codex %q", limits.KindCodex, harness.Codex)
 	}
 }

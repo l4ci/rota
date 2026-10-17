@@ -255,7 +255,7 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 		}
 		res.Warnings = setup.Warnings
 		codexHome = setup.Home
-		if kind == harness.Codex {
+		if !hz.WorkAccounts() {
 			configDir = "" // a codex slot's account is its home, not a claude config dir
 			account := setup.Account
 			if _, err := UpdateSlot(root, o.Slot, func(sl *Slot) { sl.SetCodexAccount(account) }); err != nil {

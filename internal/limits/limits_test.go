@@ -599,10 +599,10 @@ func TestCodexSlotLimitMovesIssueToOtherCodexLogin(t *testing.T) {
 	if len(r.xfers) != 1 || r.xfers[0] != "67->dana" {
 		t.Fatalf("transfers %v", r.xfers)
 	}
-	if e.Status != StatusSwitched || e.Account != "c1" || e.Kind != "codex" || e.To != "dana" || e.Session != "ben" {
+	if e.Status != StatusSwitched || e.Account != "c1" || e.Kind != KindCodex || e.To != "dana" || e.Session != "ben" {
 		t.Fatalf("entry %+v", e)
 	}
-	if len(r.pickKinds) != 1 || r.pickKinds[0] != "codex" {
+	if len(r.pickKinds) != 1 || r.pickKinds[0] != KindCodex {
 		t.Fatalf("PickAccount kinds %v", r.pickKinds)
 	}
 }
@@ -613,7 +613,7 @@ func TestCodexSlotLimitWaitsForResetWithoutAnotherLogin(t *testing.T) {
 	r.build()
 	r.step(true)
 	e := r.only()
-	if e.Status != StatusWaiting || e.Action != ActionSleep || e.Kind != "codex" {
+	if e.Status != StatusWaiting || e.Action != ActionSleep || e.Kind != KindCodex {
 		t.Fatalf("entry %+v", e)
 	}
 	if want := Time(time.Date(2026, 10, 3, 15, 42, 0, 0, time.UTC)); e.ResetsAt != want {
