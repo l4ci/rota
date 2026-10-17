@@ -75,7 +75,7 @@
 {"name":"create/milestone-missing","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"milestone M99 not found on the tracker — create it with /rota-vision (M07-S05)"},"ok":false},"db":"b531f6a20b50548c"}]}
 {"name":"create/no-target","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"umbrella issue mode needs a target sub-repo — pass --repo <name> or --repos <name> (registered: api, web) or run from inside one"},"ok":false},"db":"b531f6a20b50548c"}]}
 {"name":"create/no-title","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"--title is required"},"ok":false},"db":"b531f6a20b50548c"}]}
-{"name":"create/other-forge-down","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"api:6","kind":"tasks","type":"T"},"ok":true},"db":"53c516addae2f2a2"}]}
+{"name":"create/other-forge-down","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"api:6","kind":"tasks","type":"T"},"ok":true},"db":"0179710611901d2e"}]}
 {"name":"create/rate-limit","steps":[{"exit":6,"env":{"error":{"code":"retry","exit":6,"message":"github secondary rate limit — stopped; wait several minutes before retrying"},"ok":false},"db":"c61644063863e358"}]}
 {"name":"create/repoflag-and-repos-differ","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"--repo api and the Repos field web name different sub-repos"},"ok":false},"db":"b531f6a20b50548c"}]}
 {"name":"create/repoflag-and-repos-same","steps":[{"exit":0,"env":{"data":{"changed":true,"id":"web:6","kind":"tasks","type":"T"},"ok":true},"db":"97cbb4586b9cf7fa"}]}
