@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -334,8 +335,8 @@ func (w *Watcher) text(ctx context.Context, now time.Time, targets []Target, m M
 				return
 			}
 		}
-	} else if w.Meter != nil && t.Account != "" && t.Kind == "" {
-		// The meter reads Claude accounts only: a Codex login has no usage
+	} else if w.Meter != nil && t.Account != "" && harness.Resolve(t.Kind).UsageMeter() {
+		// The meter reads metered accounts only: a Codex login has no usage
 		// numbers, so its limit message alone is the evidence.
 		r := w.Meter(ctx, t.Account)
 		switch {

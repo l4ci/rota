@@ -2,9 +2,6 @@ package limits
 
 import "time"
 
-// KindCodex is the Target and Entry kind of a Codex slot; Claude is "".
-const KindCodex = "codex"
-
 // Cooling are the accounts of the harness kind whose limit has not reset yet,
 // with the reset time. A limit resolved by moving the issue (StatusSwitched)
 // counts: the login is just as spent. It is how a Codex login's spent window is
@@ -28,10 +25,10 @@ func Cooling(root, kind string, now time.Time) map[string]time.Time {
 	return out
 }
 
-// CodexPick is the first of the Codex logins that is not excluded and not
-// cooling, in configured order.
-func CodexPick(root string, logins []string, exclude string, now time.Time) (string, bool) {
-	cooling := Cooling(root, KindCodex, now)
+// LoggedPick is the first of the logins of a kind with no usage meter that is
+// not excluded and not cooling, in configured order.
+func LoggedPick(root, kind string, logins []string, exclude string, now time.Time) (string, bool) {
+	cooling := Cooling(root, kind, now)
 	for _, l := range logins {
 		if _, spent := cooling[l]; !spent && l != exclude {
 			return l, true

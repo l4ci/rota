@@ -224,7 +224,7 @@ func (s *Slot) Dispatch(handle, task, kind, now string) {
 	s.o.Delete("reviewSeen")
 	s.o.Set("relays", []any{})
 	s.o.Delete("unsent")
-	if kind != "" && (kind != harness.Default || s.Kind() != "") {
+	if kind != "" && (!harness.IsDefault(kind) || s.Kind() != "") {
 		s.o.Set("kind", kind)
 	}
 }

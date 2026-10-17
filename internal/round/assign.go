@@ -402,7 +402,7 @@ func (e Env) assignOne(ctx context.Context, root string, be Board, o AssignOpts,
 		return res, usage("--model %q is not a valid model id (letters, digits, . _ : / @ -)", o.Model)
 	}
 	if o.Kind != "" && !harness.Valid(o.Kind) {
-		return res, usage("--kind must be one of %s", strings.Join(harness.Kinds, ", "))
+		return res, usage("--kind must be one of %s", strings.Join(harness.Kinds(), ", "))
 	}
 	tier := o.Tier
 	if tier == "" {

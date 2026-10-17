@@ -421,7 +421,7 @@ func workerDispatch(fs *flag.FlagSet) RunFunc {
 			c.Warn("--accept-codex-version is deprecated and does nothing: rota no longer checks the Codex version")
 		}
 		if *kind != "" && !harness.Valid(*kind) {
-			return Result{}, Usage("--kind must be one of %s", strings.Join(harness.Kinds, ", "))
+			return Result{}, Usage("--kind must be one of %s", strings.Join(harness.Kinds(), ", "))
 		}
 		opts := worker.DispatchOpts{Slot: slot, Task: *task, Relay: *relay, BootTimeout: *boot,
 			Kind: *kind}

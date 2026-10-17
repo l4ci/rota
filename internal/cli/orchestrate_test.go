@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/orchestrate"
 	"github.com/l4ci/rota/internal/palette"
@@ -80,7 +81,7 @@ func TestOrchestrateDryRunPlansWithoutStarting(t *testing.T) {
 		t.Fatalf("exit %d: %v %s", code, env, errs)
 	}
 	d := umbData(env)
-	if d["harness"] != "claude" || d["host"] != "solo" || d["mode"] != "inplace" || d["changed"] != false || d["dryRun"] != true {
+	if d["harness"] != harness.Claude || d["host"] != "solo" || d["mode"] != "inplace" || d["changed"] != false || d["dryRun"] != true {
 		t.Errorf("data = %v", d)
 	}
 	if len(r.runs)+len(r.execs) != 0 {
@@ -134,7 +135,7 @@ func TestOrchestrateHarnessComesFromConfig(t *testing.T) {
 	dir := trackerProject(t, `{"orchestrator":{"harness":"codex"}}`)
 	code, env, _ := rotaRunWith(t, deps, "--json", "-C", dir, "orchestrate", "--dry-run")
 	cmd, _ := umbData(env)["command"].([]any)
-	if code != 0 || len(cmd) < 3 || cmd[len(cmd)-1] != "codex" || cmd[4] != "$rota-orchestrate" {
+	if code != 0 || len(cmd) < 3 || cmd[len(cmd)-1] != harness.Codex || cmd[4] != "$rota-orchestrate" {
 		t.Errorf("exit %d, command %v", code, cmd)
 	}
 	dir = trackerProject(t, `{"orchestrator":{"harness":"emacs"}}`)

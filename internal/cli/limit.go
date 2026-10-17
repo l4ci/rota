@@ -15,6 +15,7 @@ import (
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/escalation"
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/hook"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
@@ -196,12 +197,12 @@ func buildLimits(ctx context.Context, c *Ctx, root string, cfg any, set limits.S
 			return limits.Reading{}
 		},
 		PickAccount: func(ctx context.Context, kind, exclude string) (string, bool) {
-			if kind == limits.KindCodex {
+			if h := harness.Resolve(kind); !h.UsageMeter() {
 				var logins []string
-				for _, a := range config.CodexAccounts(config.Load(rotatree.Config(root))) {
+				for _, a := range h.Accounts(config.Load(rotatree.Config(root))).Entries {
 					logins = append(logins, a.Name)
 				}
-				return limits.CodexPick(root, logins, exclude, c.deps().Now())
+				return limits.LoggedPick(root, h.Kind(), logins, exclude, c.deps().Now())
 			}
 			return accounts().Pick(ctx, root, []string{exclude})
 		},

@@ -266,7 +266,7 @@ func (h *herdr) Spawn(ctx context.Context, o SpawnOpts) (string, error) {
 	// binary directly and ignores shell aliases or wrappers. What selects the
 	// account is the harness's own business: a codex slot's CODEX_HOME, a
 	// claude slot's config dir.
-	hz, _ := harness.Lookup(kind)
+	hz := harness.Resolve(kind)
 	for _, e := range hz.AccountEnv(harness.Account{ConfigDir: o.ConfigDir, CodexHome: o.CodexHome}) {
 		args = append(args, "--env", e)
 	}

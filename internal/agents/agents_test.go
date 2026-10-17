@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/golden"
+	"github.com/l4ci/rota/internal/harness"
 )
 
 func project(t *testing.T, cfg string) string {
@@ -78,7 +79,7 @@ func TestCodexRefusesEffortItCannotExpress(t *testing.T) {
 		t.Fatalf("got %v", err)
 	}
 	// Claude alone accepts max.
-	if _, err := Render(Spec{Roles: sp.Roles}); err != nil {
+	if _, err := Render(Spec{Roles: sp.Roles, Kinds: []string{harness.Claude}}); err != nil {
 		t.Fatal(err)
 	}
 }

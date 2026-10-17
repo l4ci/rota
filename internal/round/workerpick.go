@@ -41,7 +41,7 @@ func PickOf(caps backlog.Capabilities, it backlog.Item) (Pick, error) {
 	if !caps.IssueIDs {
 		if m := fileField["Harness"].FindStringSubmatch(it.Line); m != nil {
 			if !harness.Valid(m[1]) {
-				return p, blocked(BlockHarnessLabel, "%s has Harness: %s: harness must be one of %s", it.ID, m[1], strings.Join(harness.Kinds, ", "))
+				return p, blocked(BlockHarnessLabel, "%s has Harness: %s: harness must be one of %s", it.ID, m[1], strings.Join(harness.Kinds(), ", "))
 			}
 			p.Harness = m[1]
 		}
@@ -63,7 +63,7 @@ func PickOf(caps backlog.Capabilities, it backlog.Item) (Pick, error) {
 	if len(hs) == 1 {
 		v := strings.TrimPrefix(hs[0], "harness:")
 		if !harness.Valid(v) {
-			return p, blocked(BlockHarnessLabel, "%s has label %s: harness must be one of %s", it.ID, hs[0], strings.Join(harness.Kinds, ", "))
+			return p, blocked(BlockHarnessLabel, "%s has label %s: harness must be one of %s", it.ID, hs[0], strings.Join(harness.Kinds(), ", "))
 		}
 		p.Harness = v
 	}

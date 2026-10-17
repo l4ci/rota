@@ -264,7 +264,7 @@ func TestDispatchCodexSpawnsOnTheDefaultHome(t *testing.T) {
 	rig := &codexRig{loggedIn: true}
 	f := herdrFake()
 	res, err := rig.env(f).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "go\n"), Task: "T1", Kind: "codex", Model: "gpt-x"})
-	if err != nil || res.Kind != "codex" {
+	if err != nil || res.Kind != harness.Codex {
 		t.Fatalf("%+v %v", res, err)
 	}
 	keyPath := filepath.Join(slotDir, harness.PromptKeyFile)
@@ -286,13 +286,13 @@ func TestDispatchKindDefaultsToTheSlotsRecordedKind(t *testing.T) {
 	rig := &codexRig{loggedIn: true}
 	f := herdrFake()
 	res, err := rig.env(f).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "go\n"), Task: "T1"})
-	if err != nil || res.Kind != "codex" || f.spawnOpts.CodexHome != "" || strings.Contains(f.spawnOpts.Launch, "--model") {
+	if err != nil || res.Kind != harness.Codex || f.spawnOpts.CodexHome != "" || strings.Contains(f.spawnOpts.Launch, "--model") {
 		t.Fatalf("%+v %v %+v", res, err, f.spawnOpts)
 	}
 	// An explicit kind beats the recorded one.
 	f = herdrFake()
 	res, err = rig.env(f).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "go\n"), Task: "T2", Kind: "claude"})
-	if err != nil || res.Kind != "claude" || f.spawnOpts.CodexHome != "" || !strings.HasPrefix(f.spawnOpts.Launch, "claude ") {
+	if err != nil || res.Kind != harness.Claude || f.spawnOpts.CodexHome != "" || !strings.HasPrefix(f.spawnOpts.Launch, "claude ") {
 		t.Fatalf("%+v %v %+v", res, err, f.spawnOpts)
 	}
 }
@@ -425,7 +425,7 @@ func TestDispatchCodexSignsItsBriefAndRotatesTheKey(t *testing.T) {
 	if !strings.HasPrefix(f.sent, "--- ORCHESTRATOR (round 1) ---\n") {
 		t.Errorf("header lost: %q", f.sent)
 	}
-	if slotField(t, dir, "w1", "kind") != "codex" {
+	if slotField(t, dir, "w1", "kind") != harness.Codex {
 		t.Errorf("kind not recorded")
 	}
 	// A second task rotates the key.

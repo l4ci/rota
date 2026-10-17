@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/limits"
 	"github.com/l4ci/rota/internal/worker"
@@ -91,7 +92,7 @@ func TestQuotaCapCodexLoginsCoolByTheirLimitLog(t *testing.T) {
 	f.env.Worker.Now = func() time.Time { return quotaNow }
 	spent := func(session, login string) {
 		t.Helper()
-		if _, err := limits.Append(f.root, limits.Entry{Session: session, Kind: limits.KindCodex, Account: login, Status: limits.StatusWaiting,
+		if _, err := limits.Append(f.root, limits.Entry{Session: session, Kind: harness.Codex, Account: login, Status: limits.StatusWaiting,
 			ResetsAt: limits.Time(quotaNow.Add(30 * time.Minute))}); err != nil {
 			t.Fatal(err)
 		}

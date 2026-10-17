@@ -373,24 +373,24 @@ func TestCodexCheck(t *testing.T) {
 	// the claude fixtures carry a codex line of their own, so build these here
 	codexCur := "claude: current (v10)\ncodex: current (v8) (/x)\n"
 	codexMiss := "claude: current (v10)\ncodex: not installed (/x)\n"
-	homes := []CodexHome{{"ben", "/h/ben"}, {"dana", "/h/dana"}}
+	homes := []Home{{"ben", "/h/ben"}, {"dana", "/h/dana"}}
 	ver := Result{Stdout: "codex-cli 0.159.2\n"}
 	for _, tc := range []struct {
 		name     string
 		have     []string
 		dispatch string
-		homes    []CodexHome
+		homes    []Home
 		reply    map[string]Result
 		status   string
 		detail   string // substring
 		hint     string
 	}{
-		{"skip: no codex, default home", nil, "herdr", []CodexHome{{}}, nil, Skip, "no work.codexAccounts configured", ""},
+		{"skip: no codex, default home", nil, "herdr", []Home{{}}, nil, Skip, "no work.codexAccounts configured", ""},
 		{"pass: codex alone", []string{"codex"}, "", nil, map[string]Result{"codex --version": ver}, Pass, "codex 0.159.2; round.tiers.codex unset (optional)", ""},
-		{"pass: default home logged in", []string{"codex", "herdr"}, "herdr", []CodexHome{{}},
+		{"pass: default home logged in", []string{"codex", "herdr"}, "herdr", []Home{{}},
 			map[string]Result{"codex --version": ver, "codex login status": {}, "herdr integration status": {Stdout: codexCur}},
 			Pass, "homes checked: default home", ""},
-		{"pass with a note: default home not logged in", []string{"codex"}, "", []CodexHome{{}},
+		{"pass with a note: default home not logged in", []string{"codex"}, "", []Home{{}},
 			map[string]Result{"codex --version": ver, "codex login status": {ExitCode: 1}},
 			Pass, "default home: not logged in (run `codex login` before a Codex worker)", ""},
 		{"fail: accounts but no codex", nil, "herdr", homes, nil, Fail, "codex not found on PATH", harness.CodexInstallHint},
@@ -416,7 +416,7 @@ func TestCodexCheck(t *testing.T) {
 				have[n] = true
 			}
 			f := &codexFake{fake: fake{have: have, reply: tc.reply}}
-			c := statusOf(Run(context.Background(), Input{Dispatch: tc.dispatch, CodexHomes: tc.homes, Exec: f.exec, Look: f.look}), "codex")
+			c := statusOf(Run(context.Background(), Input{Dispatch: tc.dispatch, Kinds: codexIn(tc.homes, false), Exec: f.exec, Look: f.look}), "codex")
 			if c.Status != tc.status || !strings.Contains(c.Detail, tc.detail) || c.Hint != tc.hint {
 				t.Errorf("%+v, want %s %q hint %q", c, tc.status, tc.detail, tc.hint)
 			}
@@ -430,7 +430,7 @@ func TestCodexCheck(t *testing.T) {
 // A set codex tier map drops the "optional" note (#68).
 func TestCodexCheckTiersSet(t *testing.T) {
 	f := &codexFake{fake: fake{have: map[string]bool{"codex": true}, reply: map[string]Result{"codex --version": {Stdout: "codex-cli 0.159.2\n"}}}}
-	c := statusOf(Run(context.Background(), Input{CodexTiers: true, Exec: f.exec, Look: f.look}), "codex")
+	c := statusOf(Run(context.Background(), Input{Kinds: codexIn([]Home{{}}, true), Exec: f.exec, Look: f.look}), "codex")
 	if c.Status != Pass || strings.Contains(c.Detail, "round.tiers.codex") {
 		t.Errorf("%+v", c)
 	}
@@ -460,8 +460,8 @@ func TestCodexCheckUsesAccountHomes(t *testing.T) {
 		have:  map[string]bool{"codex": true},
 		reply: map[string]Result{"codex --version": {Stdout: "codex-cli 0.159.2"}, "codex login status": {}},
 	}}
-	homes := []CodexHome{{"ben", "/h/ben"}, {"dana", "/h/dana"}}
-	if c := statusOf(Run(context.Background(), Input{CodexHomes: homes, Exec: f.exec, Look: f.look}), "codex"); c.Status != Pass {
+	homes := []Home{{"ben", "/h/ben"}, {"dana", "/h/dana"}}
+	if c := statusOf(Run(context.Background(), Input{Kinds: codexIn(homes, false), Exec: f.exec, Look: f.look}), "codex"); c.Status != Pass {
 		t.Fatalf("%+v", c)
 	}
 	want := "codex --version @ /h/ben|codex login status @ /h/ben|codex login status @ /h/dana"
@@ -605,7 +605,7 @@ func TestGuardHookCheck(t *testing.T) {
 	}
 	// Codex workers are not guarded: warn.
 	f := &fake{have: have, reply: map[string]Result{}}
-	r := Run(context.Background(), Input{Exec: f.exec, Look: f.look, ProjectRoot: o2.root, ConfigDirs: []string{o2.a, o2.b}, CodexTiers: true})
+	r := Run(context.Background(), Input{Exec: f.exec, Look: f.look, ProjectRoot: o2.root, ConfigDirs: []string{o2.a, o2.b}, Kinds: codexIn([]Home{{}}, true)})
 	if c := statusOf(r, "guard-hook"); c.Status != Warn || !strings.Contains(c.Detail, "Codex") {
 		t.Fatalf("codex: %+v", c)
 	}
@@ -783,4 +783,9 @@ func TestPortsUsesEachSlotsOwnBlockWidth(t *testing.T) {
 	if c := statusOf(Run(context.Background(), in), "ports"); c.Name != "" {
 		t.Errorf("ports line = %+v, want none", c)
 	}
+}
+
+// codexIn is the doctor input of a project that configures Codex.
+func codexIn(homes []Home, tiers bool) map[string]KindInput {
+	return map[string]KindInput{harness.Codex: {AccountsKey: "work.codexAccounts", Homes: homes, Tiers: tiers}}
 }
