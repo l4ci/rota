@@ -286,7 +286,7 @@ func closedDate(is Issue) string {
 func (b *Issues) doneLine(is Issue) string {
 	date := closedDate(is)
 	suffix := ""
-	if is.StateReason == "not_planned" {
+	if is.StateReason == tracker.CloseNotPlanned {
 		suffix = " (dropped)"
 	}
 	return "- ~~" + b.bulletInner(is) + "~~ Done " + date + " [`" + is.Key.Ref() + "`]" + suffix
@@ -496,7 +496,7 @@ func (b *Issues) item(is Issue) *Item {
 	if it.Closed {
 		it.ClosedAt = closedDate(is)
 		it.Reason = "done"
-		if is.StateReason == "not_planned" {
+		if is.StateReason == tracker.CloseNotPlanned {
 			it.Reason = "dropped"
 		}
 		it.Line = b.doneLine(is)
