@@ -9,18 +9,29 @@ import (
 	"github.com/l4ci/rota/internal/host"
 )
 
-// CodexHome is one CODEX_HOME a worker can run under: a work.codexAccounts
-// account (Slot is its name), or the default Codex home (empty Slot and Dir).
-type CodexHome struct{ Slot, Dir string }
+// KindInput is what one worker harness has configured.
+type KindInput struct {
+	// AccountsKey is the config key of the kind's accounts (Harness.Accounts).
+	AccountsKey string
+	// Homes are the homes a worker can run under: the kind's accounts, else
+	// the default home (a zero Home).
+	Homes []Home
+	// Tiers is whether any round.tiers.<kind>.<tier> is set.
+	Tiers bool
+}
 
-func (h CodexHome) label() string {
+// Home is one account home a worker can run under: a named account (Slot is
+// its name), or the default home (empty Slot and Dir).
+type Home struct{ Slot, Dir string }
+
+func (h Home) label() string {
 	if h.Slot == "" {
 		return "default home"
 	}
 	return h.Slot
 }
 
-func (h CodexHome) env(plan harness.Doctor) string {
+func (h Home) env(plan harness.Doctor) string {
 	if h.Dir == "" {
 		return ""
 	}
@@ -37,24 +48,24 @@ func (h CodexHome) env(plan harness.Doctor) string {
 func (d *runner) harnessChecks() []Check {
 	var out []Check
 	for _, k := range harness.Kinds() {
-		h, _ := harness.Lookup(k)
-		if plan := h.Doctor(); plan.Check != "" {
-			out = append(out, d.harnessCheck(plan))
+		if plan := harness.Resolve(k).Doctor(); plan.Check != "" {
+			out = append(out, d.harnessCheck(k, plan))
 		}
 	}
 	return out
 }
 
-func (d *runner) harnessCheck(plan harness.Doctor) Check {
+func (d *runner) harnessCheck(kind string, plan harness.Doctor) Check {
+	in := d.in.Kinds[kind]
 	name := plan.Check
 	look := func(name string) (string, bool) { return d.in.Look(name) }
 	bin, have := look(plan.Binary)
-	homes := d.in.CodexHomes
+	homes := in.Homes
 	if !have {
-		if !d.hasCodexAccounts() {
-			return skip(name, plan.Binary+" not on PATH and no work.codexAccounts configured")
+		if !hasAccounts(homes) {
+			return skip(name, plan.Binary+" not on PATH and no "+in.AccountsKey+" configured")
 		}
-		return fail(name, plan.Binary+" not found on PATH, but work.codexAccounts is configured: "+d.homeNames(), plan.InstallHint)
+		return fail(name, plan.Binary+" not found on PATH, but "+in.AccountsKey+" is configured: "+homeNames(homes), plan.InstallHint)
 	}
 	p := harness.Probe{Look: look, Run: func(ctx context.Context, bin string, args, env []string) (harness.Result, error) {
 		r, err := d.in.Exec(ctx, bin, args, env, d.in.Dir)
@@ -75,7 +86,7 @@ func (d *runner) harnessCheck(plan harness.Doctor) Check {
 	// The tier map is optional for codex (#68): unset, a worker runs on
 	// Codex's own default model.
 	tiers := ""
-	if !d.in.CodexTiers {
+	if !in.Tiers {
 		tiers = "; round.tiers." + name + " unset (optional): workers use " + plan.Title + "'s default model"
 	}
 	if len(homes) == 0 {
@@ -116,11 +127,11 @@ func (d *runner) harnessCheck(plan harness.Doctor) Check {
 	if len(notes) > 0 {
 		return pass(name, head+"; "+strings.Join(notes, "; ")+tiers)
 	}
-	return pass(name, fmt.Sprintf("%s; homes checked: %s%s", head, d.homeNames(), tiers))
+	return pass(name, fmt.Sprintf("%s; homes checked: %s%s", head, homeNames(homes), tiers))
 }
 
-func (d *runner) hasCodexAccounts() bool {
-	for _, h := range d.in.CodexHomes {
+func hasAccounts(homes []Home) bool {
+	for _, h := range homes {
 		if h.Slot != "" {
 			return true
 		}
@@ -128,9 +139,9 @@ func (d *runner) hasCodexAccounts() bool {
 	return false
 }
 
-func (d *runner) homeNames() string {
+func homeNames(homes []Home) string {
 	var names []string
-	for _, h := range d.in.CodexHomes {
+	for _, h := range homes {
 		names = append(names, h.label())
 	}
 	return strings.Join(names, ", ")

@@ -16,6 +16,7 @@ import (
 	"github.com/l4ci/rota/internal/doctor"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/legacystate"
 	"github.com/l4ci/rota/internal/proc"
@@ -94,12 +95,7 @@ func doctorInput(ctx context.Context, d *Deps) doctor.Input {
 	in.ForgeProvider, in.IssueSource, in.SourceProblem = doctorSourceInput(cfg)
 	in.JiraProject, in.IssuesConnection = strings.TrimSpace(str("issues.jira.project")), strings.TrimSpace(str("issues.connection"))
 	in.LinearTeam = strings.TrimSpace(str("issues.linear.team"))
-	in.CodexHomes = codexHomes(cfg)
-	for _, t := range []string{"light", "standard", "heavy"} {
-		if strings.TrimSpace(str("round.tiers.codex."+t)) != "" {
-			in.CodexTiers = true
-		}
-	}
+	in.Kinds = doctorKinds(cfg, str)
 	for _, a := range config.Accounts(cfg) {
 		if a.Name != "" {
 			in.Accounts = append(in.Accounts, a)
@@ -185,19 +181,33 @@ func doctorExec(run proc.Runner) doctor.Exec {
 	}
 }
 
-// codexHomes lists the Codex homes a worker can run under: the accounts of
-// work.codexAccounts, else the default Codex home (an empty Dir).
-func codexHomes(cfg any) []doctor.CodexHome {
-	var homes []doctor.CodexHome
-	for _, a := range config.CodexAccounts(cfg) {
-		if a.Name != "" {
-			homes = append(homes, doctor.CodexHome{Slot: a.Name, Dir: a.CodexHome})
+// doctorKinds is what each worker harness with a doctor check has configured:
+// its accounts as homes (else the default home) and whether a tier map is set.
+func doctorKinds(cfg any, str func(string) string) map[string]doctor.KindInput {
+	out := map[string]doctor.KindInput{}
+	for _, k := range harness.Kinds() {
+		h := harness.Resolve(k)
+		if h.Doctor().Check == "" {
+			continue
 		}
+		accts := h.Accounts(cfg)
+		in := doctor.KindInput{AccountsKey: accts.Key}
+		for _, a := range accts.Entries {
+			if a.Name != "" {
+				in.Homes = append(in.Homes, doctor.Home{Slot: a.Name, Dir: a.Dir})
+			}
+		}
+		if len(in.Homes) == 0 {
+			in.Homes = []doctor.Home{{}}
+		}
+		for _, t := range []string{"light", "standard", "heavy"} {
+			if strings.TrimSpace(str("round.tiers."+k+"."+t)) != "" {
+				in.Tiers = true
+			}
+		}
+		out[k] = in
 	}
-	if len(homes) == 0 {
-		homes = []doctor.CodexHome{{}}
-	}
-	return homes
+	return out
 }
 
 func staleData(f stalebin.Finding) *jsonx.Object {

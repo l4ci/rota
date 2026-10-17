@@ -295,7 +295,7 @@ func loadTiers(cfg any, s *Settings) error {
 	}
 	s.Models = map[string]map[string]string{}
 	for _, kind := range harness.Kinds() {
-		h, _ := harness.Lookup(kind)
+		h := harness.Resolve(kind)
 		rule := h.Tiers()
 		m := map[string]string{}
 		for _, tier := range Tiers {

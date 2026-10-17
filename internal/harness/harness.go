@@ -66,6 +66,23 @@ func Lookup(kind string) (Harness, bool) {
 	return nil, false
 }
 
+// Resolve is Lookup for a kind that must have an adapter: "" and a kind that is
+// not a worker harness (a corrupt slot or ledger record) resolve to the
+// Default one, the way those records always read.
+func Resolve(kind string) Harness {
+	if h, ok := Lookup(kind); ok {
+		return h
+	}
+	h, _ := Lookup(Default)
+	return h
+}
+
+// IsDefault reports whether kind is the Default one ("" is).
+func IsDefault(kind string) bool { return kind == "" || kind == Default }
+
+// DefaultOrchestrator is the orchestrator harness of a project that sets none.
+const DefaultOrchestrator = Claude
+
 // ForBinary is Lookup for the basename of a launch binary: the herdr host
 // starts an agent by the kind its binary is.
 func ForBinary(base string) (Harness, bool) {
@@ -173,6 +190,9 @@ type Doctor struct {
 	// Home, run under HomeEnv (`CODEX_HOME=<dir> `) when the home is named.
 	LoginFix, IntegrationFix string
 	HomeEnv                  string
+	// Unguarded: rota's PreToolUse guard hook does not cover the kind's
+	// workers.
+	Unguarded bool
 }
 
 // Account is the per-slot account a launch can carry.
@@ -281,6 +301,9 @@ type Harness interface {
 // Orchestrator is one agent the orchestrator can run in.
 type Orchestrator interface {
 	Name() string
+	// WorkAccounts reports whether work.accounts (Anthropic's) names the
+	// account the agent starts under.
+	WorkAccounts() bool
 	// Command is the argv that starts the agent, without its first prompt.
 	Command(cfg any) ([]string, error)
 	// Prompt starts the orchestrate skill in the harness's own invocation
@@ -309,8 +332,7 @@ func AllLimitPhrases() []string {
 	var out []string
 	seen := map[string]bool{}
 	for _, k := range kinds {
-		h, _ := Lookup(k)
-		for _, p := range h.LimitPhrases() {
+		for _, p := range Resolve(k).LimitPhrases() {
 			if !seen[p] {
 				seen[p] = true
 				out = append(out, p)

@@ -214,7 +214,7 @@ func (codex) Doctor() Doctor {
 		Home: func(ctx context.Context, p Probe, bin, herdr string, h Home) []Finding {
 			return CheckCodexHome(ctx, p, bin, herdr, h)
 		},
-		LoginFix: "codex login", IntegrationFix: "herdr integration install codex", HomeEnv: "CODEX_HOME=",
+		Unguarded: true, LoginFix: "codex login", IntegrationFix: "herdr integration install codex", HomeEnv: "CODEX_HOME=",
 	}
 }
 

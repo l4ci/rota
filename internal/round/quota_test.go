@@ -92,7 +92,7 @@ func TestQuotaCapCodexLoginsCoolByTheirLimitLog(t *testing.T) {
 	f.env.Worker.Now = func() time.Time { return quotaNow }
 	spent := func(session, login string) {
 		t.Helper()
-		if _, err := limits.Append(f.root, limits.Entry{Session: session, Kind: limits.KindCodex, Account: login, Status: limits.StatusWaiting,
+		if _, err := limits.Append(f.root, limits.Entry{Session: session, Kind: harness.Codex, Account: login, Status: limits.StatusWaiting,
 			ResetsAt: limits.Time(quotaNow.Add(30 * time.Minute))}); err != nil {
 			t.Fatal(err)
 		}
@@ -131,12 +131,5 @@ func TestMixedConfigClaudeAssignIsRefusedByQuota(t *testing.T) {
 	_, err := f.assign("12", "ben", nil)
 	if by := blockedBy(t, err); by != BlockQuota || !strings.Contains(err.Error(), "work.accounts") {
 		t.Fatalf("assign: %v", err)
-	}
-}
-
-// The limits log names the Codex kind by the harness kind's own spelling.
-func TestLimitsKindIsHarnessKind(t *testing.T) {
-	if limits.KindCodex != harness.Codex {
-		t.Fatalf("limits.KindCodex %q, harness.Codex %q", limits.KindCodex, harness.Codex)
 	}
 }
