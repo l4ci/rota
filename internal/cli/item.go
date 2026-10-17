@@ -379,19 +379,41 @@ func itemCreateBatch(c *Ctx, root, path string) (Result, error) {
 		}
 		ins[i] = in
 	}
-	return withBackend(c, root, false, "", func(be backlog.Backend) (Result, error) {
-		var out []any
-		var ids []string
-		for i, in := range ins {
-			res, err := be.Create(in)
-			if err != nil {
-				return Result{}, fmt.Errorf("record %d (%q) failed after filing [%s]: %w", i+1, in.Title, strings.Join(ids, " "), err)
+	return withBackend(c, root, false, "", func(be backlog.Backend) (Result, error) { return fileBatch(be, ins) })
+}
+
+// fileBatch files ins in order. A failure at record N keeps the first N-1 ids:
+// they ride in the data (`items` filed so far, `failedAt`) and in the message,
+// since the tracker error's own text names none of them.
+func fileBatch(be backlog.Backend, ins []backlog.CreateInput) (Result, error) {
+	var out []any
+	var ids []string
+	for i, in := range ins {
+		res, err := be.Create(in)
+		if err != nil {
+			filed := "nothing filed yet"
+			if len(ids) > 0 {
+				filed = "filed " + strings.Join(ids, " ")
 			}
-			ids = append(ids, res.ID)
-			out = append(out, jsonObj("id", res.ID, "type", res.Type, "kind", in.Kind, "title", in.Title))
+			r, ferr := backlogFail(fmt.Errorf("record %d (%q) failed: %w", i+1, in.Title, err))
+			var xe *Error
+			if errors.As(ferr, &xe) {
+				xe.Message = fmt.Sprintf("record %d (%q) failed, %s: %s", i+1, in.Title, filed, xe.Message)
+			}
+			data, _ := r.Data.(*jsonx.Object)
+			if data == nil {
+				data = jsonx.NewObject()
+			}
+			data.Set("items", out)
+			data.Set("failedAt", i+1)
+			data.Set("changed", len(out) > 0)
+			r.Data = data
+			return r, ferr
 		}
-		return Result{Data: jsonObj("items", out, "changed", true), Text: strings.Join(ids, "\n")}, nil
-	})
+		ids = append(ids, res.ID)
+		out = append(out, jsonObj("id", res.ID, "type", res.Type, "kind", in.Kind, "title", in.Title))
+	}
+	return Result{Data: jsonObj("items", out, "changed", true), Text: strings.Join(ids, "\n")}, nil
 }
 
 // ---- item field -----------------------------------------------------------
