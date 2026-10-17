@@ -130,7 +130,7 @@ type Issue struct {
 	Labels      []string
 	Milestone   string
 	State       string // open | closed
-	StateReason string // completed | not_planned | ""
+	StateReason string // CloseCompleted | CloseNotPlanned | ""
 	ClosedAt    string
 	URL         string
 	Assignees   []string
@@ -148,6 +148,13 @@ type Comment struct {
 	// did not say (the issue-view path of Get).
 	CreatedAt time.Time
 }
+
+// Close reasons: the values of Issue.StateReason and the reason argument of
+// Tracker.Close. Each adapter maps them onto its forge's own vocabulary.
+const (
+	CloseCompleted  = "completed"
+	CloseNotPlanned = "not_planned"
+)
 
 // Review states, lowercased from the forge's word.
 const (
@@ -281,7 +288,7 @@ type IssueTracker interface {
 	EnsureLabels(ctx context.Context, names []string, autoCreate bool) error
 	AddLabels(ctx context.Context, key IssueKey, labels []string, autoCreate bool) error
 	RemoveLabels(ctx context.Context, key IssueKey, labels []string) error
-	// Close with reason "completed" (or "") or "not_planned"; comment is optional.
+	// Close with reason CloseCompleted (or "") or CloseNotPlanned; comment is optional.
 	Close(ctx context.Context, key IssueKey, reason, comment string) error
 	Reopen(ctx context.Context, key IssueKey) error
 	AssignSelf(ctx context.Context, key IssueKey) error
