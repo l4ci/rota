@@ -388,8 +388,12 @@ func (h *herdr) Send(ctx context.Context, slot, handle, file string) error {
 	}
 	text = strings.TrimRight(text, "\n") // the shell host read it with $(cat)
 	name := AgentName(slot, handle)
+	read := func() string { return h.draftPane(ctx, name) }
+	if err := clearDialog(&h.d, read, func(k string) { h.herdr(ctx, "agent", "send-keys", name, k) }); err != nil {
+		return err
+	}
 	// A human typing in the pane would get the brief mixed into their draft.
-	if waitNoDraft(&h.d, func() string { return h.draftPane(ctx, name) }, text) != "" {
+	if waitNoDraft(&h.d, read, text) != "" {
 		return ErrDraftOnPrompt
 	}
 	r := h.herdr(ctx, "agent", "prompt", name, text,

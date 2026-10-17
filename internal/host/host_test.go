@@ -2,6 +2,7 @@ package host
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -1168,13 +1169,20 @@ func TestTmuxSendEmptyPromptAndPlaceholders(t *testing.T) {
 		"no prompt":    "booting\n",
 		"claude hint":  "❯ Try \"fix lint errors\"\n",
 		"codex hint":   "› Ask Codex to do anything\n",
-		"dialog opt":   "❯ 1. Yes, I trust this folder\n",
 		"boxed empty":  "│ ❯              │\n",
 		"sent in past": "❯ sig\nthe last line of the brief\n⏺ ok\n❯ \n",
 	} {
 		if err, _, _ := tmuxDraftSend(t, pane, "sig\nthe last line of the brief\n"); err != nil {
 			t.Errorf("%s: Send = %v", name, err)
 		}
+	}
+}
+
+// A dialog's option row is neither a draft nor safe to type over: refused as a dialog.
+func TestTmuxSendRefusesDialogOptionAsDialog(t *testing.T) {
+	err, f, _ := tmuxDraftSend(t, "❯ 1. Yes, I trust this folder\n", "sig\nthe last line of the brief\n")
+	if !errors.Is(err, ErrDialogOpen) || f.count("tmux paste-buffer") != 0 {
+		t.Errorf("Send = %v:\n%s", err, f.log())
 	}
 }
 
@@ -1564,5 +1572,123 @@ func TestTmuxSpawnPrefixesSlotEnv(t *testing.T) {
 	}
 	if want := "tmux send-keys -t rota:w1 ROTA_SLOT='w1' ROTA_PORT_BASE='20000' claude C-m"; !strings.Contains(f.log(), want) {
 		t.Errorf("missing %q in\n%s", want, f.log())
+	}
+}
+
+func autocompactPicker(t *testing.T) string {
+	t.Helper()
+	b, err := os.ReadFile("testdata/autocompact-picker-2.1.290.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+func TestReadDialogRecognisesAutocompactPicker(t *testing.T) {
+	d, ok := ReadDialog("⏺ done\n\n" + autocompactPicker(t))
+	if !ok {
+		t.Fatal("autocompact picker not recognised as a dialog")
+	}
+	if d.First != "We recommend compacting earlier" {
+		t.Errorf("First = %q", d.First)
+	}
+	if len(d.Dismiss) != 1 || d.Dismiss[0] != "esc" {
+		t.Errorf("Dismiss = %v, want [esc]", d.Dismiss)
+	}
+	if humanDraft(autocompactPicker(t), "brief") != "" {
+		t.Error("picker row read as a human draft")
+	}
+}
+
+func TestReadDialogUnknownHasNoDismissal(t *testing.T) {
+	pane := "──────────────\n Update available\n\n ❯ Install now\n   Later\n\n Enter to select · Esc to cancel\n"
+	d, ok := ReadDialog(pane)
+	if !ok || d.First != "Update available" || d.Dismiss != nil {
+		t.Errorf("ReadDialog = %+v, %v", d, ok)
+	}
+	if _, ok := ReadDialog("⏺ done\n❯ half a senten\n"); ok {
+		t.Error("typed draft read as a dialog")
+	}
+}
+
+func TestHerdrSendDismissesAutocompactPickerOnce(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "p.md")
+	os.WriteFile(file, []byte("sig\nthe last line of the brief\n"), 0o644)
+	dismissed := false
+	f := &fake{handler: func(_ string, a []string) Result {
+		switch a[1] {
+		case "read":
+			if dismissed {
+				return Result{Stdout: "⏺ done\n❯ \n"}
+			}
+			return Result{Stdout: autocompactPicker(t)}
+		case "send-keys":
+			dismissed = true
+		}
+		return Result{Stdout: agentJSON("working")}
+	}}
+	if err := New("herdr", deps(f, herdrEnv, &clock{})).Send(bg, "w1", "w9:t7", file); err != nil {
+		t.Fatalf("Send = %v", err)
+	}
+	if f.count("herdr agent send-keys rota-w1-w9-t7 esc") != 1 || f.count("herdr agent prompt") != 1 {
+		t.Errorf("want one esc then the brief:\n%s", f.log())
+	}
+}
+
+func TestHerdrSendRefusesUnknownDialogWithItsFirstLine(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "p.md")
+	os.WriteFile(file, []byte("sig\nthe last line of the brief\n"), 0o644)
+	f := &fake{handler: func(_ string, a []string) Result {
+		if a[1] == "read" {
+			return Result{Stdout: "──────────────\n Update available\n\n ❯ Install now\n   Later\n\n Enter to select · Esc to cancel\n"}
+		}
+		return Result{Stdout: agentJSON("idle")}
+	}}
+	err := New("herdr", deps(f, herdrEnv, &clock{})).Send(bg, "w1", "w9:t7", file)
+	var de *DialogError
+	if !errors.Is(err, ErrDialogOpen) || !errors.As(err, &de) || de.First != "Update available" {
+		t.Fatalf("Send = %v, want DialogError(Update available)", err)
+	}
+	if f.count("herdr agent send-keys") != 0 || f.count("herdr agent prompt") != 0 {
+		t.Errorf("keys reached the pane:\n%s", f.log())
+	}
+}
+
+func TestHerdrSendGivesUpWhenPickerSurvivesEsc(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "p.md")
+	os.WriteFile(file, []byte("sig\nthe last line of the brief\n"), 0o644)
+	f := &fake{handler: func(_ string, a []string) Result {
+		if a[1] == "read" {
+			return Result{Stdout: autocompactPicker(t)}
+		}
+		return Result{Stdout: agentJSON("idle")}
+	}}
+	err := New("herdr", deps(f, herdrEnv, &clock{})).Send(bg, "w1", "w9:t7", file)
+	if !errors.Is(err, ErrDialogOpen) || f.count("herdr agent send-keys") != 1 {
+		t.Errorf("Send = %v, esc count %d", err, f.count("herdr agent send-keys"))
+	}
+}
+
+func TestTmuxSendDismissesAutocompactPicker(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "p.md")
+	os.WriteFile(file, []byte("sig\nthe last line of the brief\n"), 0o644)
+	dismissed := false
+	f := &fake{handler: func(_ string, a []string) Result {
+		switch a[0] {
+		case "send-keys":
+			dismissed = true
+		case "capture-pane":
+			if !dismissed {
+				return Result{Stdout: autocompactPicker(t)}
+			}
+			return Result{Stdout: "⏺ done\n❯ \nafter"}
+		}
+		return Result{}
+	}}
+	if err := New("tmux", deps(f, nil, &clock{})).Send(bg, "w1", "rota:w1", file); errors.Is(err, ErrDialogOpen) || errors.Is(err, ErrDraftOnPrompt) {
+		t.Fatalf("Send = %v", err)
+	}
+	if f.count("tmux send-keys -t rota:w1 Escape") != 1 {
+		t.Errorf("want one Escape:\n%s", f.log())
 	}
 }
