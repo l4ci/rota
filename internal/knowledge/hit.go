@@ -3,6 +3,7 @@ package knowledge
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/l4ci/rota/internal/stamp"
 	"os"
 	"path/filepath"
 	"time"
@@ -163,7 +164,7 @@ func (s Store) AddContradiction(topic, title, text string) (int, error) {
 		e.Set("topic", topic)
 		e.Set("title", title)
 		e.Set("correctionText", text)
-		e.Set("loggedAt", time.Now().UTC().Format("2006-01-02T15:04:05Z"))
+		e.Set("loggedAt", stamp.Format(time.Now()))
 		pending = append(pending, e)
 		doc.Set("pending", pending)
 		n = len(pending)

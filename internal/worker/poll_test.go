@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/host"
+	"github.com/l4ci/rota/internal/stamp"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -520,7 +521,7 @@ func TestPollNotifiesABlockedEventOnce(t *testing.T) {
 	send := func(body string) {
 		if err := Update(dir, func(d *Doc) {
 			s := d.Slot("w1")
-			now := stamp(time.Now())
+			now := stamp.Format(time.Now())
 			s.SetEvent(EventBlocked, body, now)
 			s.MarkState("blocked", now)
 		}); err != nil {

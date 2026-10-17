@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/rotatree"
+	"github.com/l4ci/rota/internal/stamp"
 	"io"
 	"slices"
 	"strings"
@@ -275,7 +276,7 @@ func NewRecord(kind, v, sha string, body Body, now time.Time) Record {
 	}
 	return Record{
 		Kind: kind, Verdict: v, Sha: sha,
-		RecordedAt: now.UTC().Format("2006-01-02T15:04:05Z"),
+		RecordedAt: stamp.Format(now),
 		Summary:    body.Summary, Findings: findings, Items: body.Items, Declined: body.Declined,
 	}
 }
