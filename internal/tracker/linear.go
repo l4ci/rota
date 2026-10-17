@@ -175,25 +175,29 @@ func gqlFailure(op string, errs []gqlError) *Error {
 
 // query runs a read-only operation and decodes its data into out.
 func (l *Linear) query(ctx context.Context, op, doc string, vars map[string]any, out any) error {
-	return l.gql(ctx, op, "query "+op+doc, vars, out, true)
+	return l.gql(ctx, op, "query", doc, vars, out)
 }
 
 // mutate runs a mutation; it is never resent after a 5xx.
 func (l *Linear) mutate(ctx context.Context, op, doc string, vars map[string]any, out any) error {
-	return l.gql(ctx, op, "mutation "+op+doc, vars, out, false)
+	return l.gql(ctx, op, "mutation", doc, vars, out)
 }
 
-func (l *Linear) gql(ctx context.Context, op, doc string, vars map[string]any, out any, read bool) error {
-	in := map[string]any{"operationName": op, "query": doc, "variables": vars}
+// gql sends one operation. kind is the single decision: it opens the document
+// and picks the transport, so a mutation cannot take the retrying read path.
+func (l *Linear) gql(ctx context.Context, op, kind, doc string, vars map[string]any, out any) error {
+	in := map[string]any{"operationName": op, "query": kind + " " + op + doc, "variables": vars}
 	var resp struct {
 		Data   json.RawMessage `json:"data"`
 		Errors []gqlError      `json:"errors"`
 	}
-	do := l.rest.Do
-	if read {
-		do = func(ctx context.Context, _, path string, in, out any) error { return l.rest.Query(ctx, path, in, out) }
+	var err error
+	if kind == "query" {
+		err = l.rest.ReadPost(ctx, "", in, &resp)
+	} else {
+		err = l.rest.Do(ctx, http.MethodPost, "", in, &resp)
 	}
-	if err := do(ctx, http.MethodPost, "", in, &resp); err != nil {
+	if err != nil {
 		return err
 	}
 	if len(resp.Errors) > 0 {
