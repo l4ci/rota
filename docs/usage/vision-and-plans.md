@@ -61,7 +61,7 @@ Output format of the candidates list (#861).
 #858
 ```
 
-`rota milestone check M08` holds the breakdown together. It lists criteria no feature serves, which is a warning, or a failure with `--strict`. It also flags features with no `## Change`, citations of criteria the milestone lacks, Touches entries that are not listed capabilities, and REMOVED changes without a Reason or Migration. With fewer than three feature issues it reports that it is below threshold and checks nothing. Bugs and tasks are ignored.
+`rota milestone check M08` holds the breakdown together. It lists criteria no feature serves, which is a warning, or a failure with `--strict`. It also flags features with no `## Change`, a `## Change` whose capability is not listed, citations of criteria the milestone lacks, Touches entries that are not listed capabilities, and REMOVED changes without a Reason or Migration. With fewer than three feature issues it reports that it is below threshold and checks nothing. Bugs and tasks are ignored.
 
 Milestone bodies written before this shape say `## Acceptance criteria`. `rota migrate milestones` previews the rename and the checkbox prefixes, and `--apply` writes them. A second run changes nothing.
 
