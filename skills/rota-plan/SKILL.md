@@ -99,6 +99,7 @@ Offer `/rota-work` in one line.
 ## References
 
 - [`plan-edge-cases.md`](plan-edge-cases.md): rename/refactor/docs task rules (Step 3); splitting into dependent items and `validate-docs` (Step 4).
+- [`references/breakdown.md`](references/breakdown.md): the child issue shape and confirm line for a 3+ split.
 - [`references/planning-dial.md`](references/planning-dial.md): the level rubric Step 2 applies.
 - [`references/plan-critic.md`](references/plan-critic.md): the level-4 critic dispatch, brief and fold-in rules (Step 3).
 - [`references/dependent-items.md`](references/dependent-items.md): declaring `## Depends on` edges; expand → migrate → contract.

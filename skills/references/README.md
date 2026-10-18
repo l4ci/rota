@@ -9,6 +9,7 @@ See KNOWLEDGE.md "Skill Authoring: Prose & References" for when to extract (≥3
 | Reference | Purpose |
 |-----------|---------|
 | [`authoring-conventions.md`](authoring-conventions.md) | Authoring rules shared across SKILL.md files. |
+| [`breakdown.md`](breakdown.md) | Milestone Capabilities, the child issue shape (`## Change`, Touches copied from capabilities), the confirm line and `rota milestone check` for a 3+ split. |
 | [`context-load-protocol.md`](context-load-protocol.md) | Context reads before a cycle-starting skill proposes anything. |
 | [`dependent-items.md`](dependent-items.md) | Dependency edges, `--depends-on`, creation order, expand → migrate → contract. |
 | [`design-exploration.md`](design-exploration.md) | Draft, approve, write, hand-off shape for skills that negotiate what to build. |
