@@ -26,7 +26,7 @@
       "hits": 0,
       "lastSeen": "2026-05-16"
     },
-    "Build & Tooling::Worktree .hv/ is gitignored — run state helpers from main repo path": {
+    "Build & Tooling::Worktree .hv/ is gitignored \u2014 run state helpers from main repo path": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-05-16"
@@ -81,7 +81,7 @@
       "hits": 0,
       "lastSeen": "2026-05-16"
     },
-    "Architecture::Use load_repos() for umbrella detection — never truthy-test raw repos.json": {
+    "Architecture::Use load_repos() for umbrella detection \u2014 never truthy-test raw repos.json": {
       "tier": "provisional",
       "hits": 1,
       "lastSeen": "2026-05-18"
@@ -101,7 +101,7 @@
       "hits": 0,
       "lastSeen": "2026-05-16"
     },
-    "Build & Tooling::Bootstrap-stage helpers can't depend on hv-preamble.sh — keep the canonical exception list": {
+    "Build & Tooling::Bootstrap-stage helpers can't depend on hv-preamble.sh \u2014 keep the canonical exception list": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-05-16"
@@ -131,7 +131,7 @@
       "hits": 0,
       "lastSeen": "2026-05-18"
     },
-    "Build & Tooling: Helpers & migrations::Bootstrap-stage helpers can't depend on hv-preamble.sh — keep the canonical exception list": {
+    "Build & Tooling: Helpers & migrations::Bootstrap-stage helpers can't depend on hv-preamble.sh \u2014 keep the canonical exception list": {
       "tier": "deprecated",
       "hits": 0,
       "lastSeen": "2026-05-18"
@@ -246,7 +246,7 @@
       "hits": 0,
       "lastSeen": "2026-05-18"
     },
-    "Architecture: Skill authoring::Backlog 'near-isomorphic CRUD' framing overstates uniformity — verify against helper code": {
+    "Architecture: Skill authoring::Backlog 'near-isomorphic CRUD' framing overstates uniformity \u2014 verify against helper code": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-05-18"
@@ -257,9 +257,9 @@
       "lastSeen": "2026-05-18"
     },
     "Build & Tooling: Smoke testing::Behavior-changing tasks must sweep smoke sections asserting the old behavior": {
-      "tier": "provisional",
-      "hits": 2,
-      "lastSeen": "2026-10-08"
+      "tier": "confirmed",
+      "hits": 3,
+      "lastSeen": "2026-10-18"
     },
     "Build & Tooling: Smoke testing::Inverted grep assertion (grep && fail) aborts the section under set -e": {
       "tier": "provisional",
@@ -321,7 +321,7 @@
       "hits": 0,
       "lastSeen": "2026-10-04"
     },
-    "Build & Tooling: Git & isolation::/rota-brainstorm and /rota-plan write tracked artifacts — commit before /rota-work": {
+    "Build & Tooling: Git & isolation::/rota-brainstorm and /rota-plan write tracked artifacts \u2014 commit before /rota-work": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-05-18"
@@ -331,7 +331,7 @@
       "hits": 0,
       "lastSeen": "2026-05-18"
     },
-    "Build & Tooling: Git & isolation::Worktree .rota/ runtime is gitignored — run state helpers from main repo path": {
+    "Build & Tooling: Git & isolation::Worktree .rota/ runtime is gitignored \u2014 run state helpers from main repo path": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-05-18"
@@ -343,13 +343,13 @@
     },
     "Architecture: Skill authoring::Shorten skills structurally, not by rewording": {
       "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-06"
+      "hits": 1,
+      "lastSeen": "2026-10-18"
     },
     "Build & Tooling: Smoke testing::A verb captured in $(...) aborts the section silently when it exits non-zero": {
-      "tier": "provisional",
-      "hits": 2,
-      "lastSeen": "2026-10-08"
+      "tier": "confirmed",
+      "hits": 3,
+      "lastSeen": "2026-10-18"
     },
     "Build & Tooling: Smoke testing::Host CLI argv needs one real-host run": {
       "tier": "provisional",
@@ -451,7 +451,7 @@
       "hits": 0,
       "lastSeen": "2026-05-18"
     },
-    "Architecture: Helper conventions & invariants: Shell helpers::Use load_repos() for umbrella detection — never truthy-test raw repos.json": {
+    "Architecture: Helper conventions & invariants: Shell helpers::Use load_repos() for umbrella detection \u2014 never truthy-test raw repos.json": {
       "tier": "deprecated",
       "hits": 1,
       "lastSeen": "2026-05-19"
@@ -628,8 +628,8 @@
     },
     "Build & Tooling: Smoke testing::Pin ROTA_FROZEN_DAY when regenerating frozen records": {
       "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-17"
+      "hits": 1,
+      "lastSeen": "2026-10-18"
     },
     "Rounds: Orchestration: Review & merge gate::Name the smoke section in the brief when a change touches host or dispatch": {
       "tier": "provisional",
