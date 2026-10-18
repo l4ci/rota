@@ -70,7 +70,7 @@ rc=0; OUT=$(mc --json milestone check M01) || rc=$?
 [ "$rc" -eq 1 ] || fail "json: want exit 1, got $rc"
 case "$OUT" in *'"ok": false'*) ;; *) fail "json: ok not false: $OUT" ;; esac
 case "$OUT" in *'"features": 3'*) ;; *) fail "json: features not 3: $OUT" ;; esac
-case "$OUT" in *'"badCapability"'*) ;; *) fail "json: badCapability missing: $OUT" ;; esac
+case "$OUT" in *'"capability": "post /items"'*) ;; *) fail "json: badCapability entry missing: $OUT" ;; esac
 
 printf '## Change\n\nADDED round.maxBounces\nServes: AC-1\n' > "$TMP_MC/d.md"
 rc=0; OUT=$(mc item create --kind features --milestone M02 --title "Add the first thing" --body-file "$TMP_MC/d.md") || rc=$?
