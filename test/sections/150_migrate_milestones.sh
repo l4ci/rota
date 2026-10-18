@@ -25,6 +25,7 @@ Old goal.
 
 - first criterion
 - second criterion
+  - nested detail
 
 ## Rationale
 
@@ -45,8 +46,9 @@ OUT=$(mm migrate milestones --apply) || rc=$?
 [ "$rc" -eq 0 ] || fail "apply exited $rc: $OUT"
 [ "$OUT" = "M01: migrated" ] || fail "apply output: $OUT"
 grep -q '^## Acceptance$' "$F" || fail "heading not renamed"
-! grep -q 'Acceptance criteria' "$F" || fail "old heading still present"
+if grep -q 'Acceptance criteria' "$F"; then fail "old heading still present"; fi
 [ "$(grep -c '^- \[ \] ' "$F")" -eq 2 ] || fail "want two checkbox bullets: $(cat "$F")"
+grep -q '^  - nested detail$' "$F" || fail "nested bullet was changed: $(cat "$F")"
 grep -q '^- stays a bare bullet$' "$F" || fail "bullet outside the section was touched"
 
 rc=0

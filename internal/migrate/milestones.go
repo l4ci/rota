@@ -10,12 +10,13 @@ import (
 var (
 	oldAcceptanceHeading = regexp.MustCompile(`(?mi)^## Acceptance criteria[ \t]*$`)
 	acceptanceHeading    = regexp.MustCompile(`^## Acceptance[ \t]*$`)
-	bareBullet           = regexp.MustCompile(`^([ \t]*[-*] )(\[[ xX]\]|)`)
+	bareBullet           = regexp.MustCompile(`^([-*] )(\[[ xX]\]|)`)
 )
 
 // MigrateMilestoneBody renames a "## Acceptance criteria" heading to
-// "## Acceptance" and gives every bare bullet inside that section a "[ ] "
-// checkbox, so the acceptance package can number the criteria. Nothing else
+// "## Acceptance" and gives every bare top-level bullet inside that section a
+// "[ ] " checkbox, so the acceptance package can number the criteria. An
+// indented sub-bullet is detail under a criterion and stays as it is. Nothing else
 // is touched, and the result is a fixed point: a second pass reports no
 // change.
 func MigrateMilestoneBody(text string) (string, bool) {
