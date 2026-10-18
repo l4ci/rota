@@ -22,7 +22,7 @@
 | `bugs/` | Overflow detail files for large bug reports (file backend) |
 | `features/` | Overflow detail files for large feature specs |
 | `tasks/` | Overflow detail files for large task descriptions |
-| `milestones/` | One detail file per milestone (`M01.md`, `M02.md`, …) with full plan: goal, acceptance, rationale, risks, research findings, notes |
+| `milestones/` | One detail file per milestone (`M01.md`, `M02.md`, …) with full plan: goal, capabilities, acceptance, rationale, risks, research findings, notes |
 | `designs/` | `/rota-brainstorm` designs, one `<ID>.md` per item (file backend; under the issue backend a note on the issue) |
 | `plans/` | Implementation plans keyed by `<milestone>-<unit>.md` (slices: `M01-S01.md`; items: `M01-B07.md`) |
 | `spikes/` | Spike findings: one Markdown file per spike. The experimental code lives on the `spike/<name>` git branch and is never merged |
