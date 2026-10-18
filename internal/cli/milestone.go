@@ -3,6 +3,7 @@ package cli
 import (
 	"errors"
 	"flag"
+	"fmt"
 	"strings"
 
 	"github.com/l4ci/rota/internal/artifact"
@@ -79,6 +80,7 @@ func milestoneCommands() []*Command {
 			{Name: "overview", Summary: "replace the MILESTONES.md overview text", Verb: milestoneOverview},
 			{Name: "status", Summary: "change a milestone's status", Verb: milestoneStatus},
 			{Name: "active", Summary: "IDs of active milestones", Verb: noFlags(runMilestoneActive)},
+			{Name: "check", Summary: "every criterion has a feature issue, every feature a ## Change on a listed capability", Verb: milestoneCheck},
 			{Name: "index", Summary: "regenerate the overview and vision block", Verb: noFlags(runMilestoneIndex)},
 		}},
 	}
@@ -307,4 +309,101 @@ func runMilestoneIndex(c *Ctx, args []string) (Result, error) {
 	d := jsonx.NewObject()
 	d.Set("changed", changed)
 	return Result{Data: d}, nil
+}
+
+// milestoneCheck holds a milestone's feature issues against its criteria and
+// capabilities. Read-only.
+func milestoneCheck(fs *flag.FlagSet) RunFunc {
+	strict := fs.Bool("strict", false, "fail on a criterion no feature issue serves")
+	return func(c *Ctx, args []string) (Result, error) {
+		id, err := oneArg(args, "milestone ID")
+		if err != nil {
+			return Result{}, err
+		}
+		if !ms.ValidID(id) {
+			return Result{}, Usage("milestone ID must match M\\d{2,} (e.g. M01, M03), got %q", id)
+		}
+		st, err := openStore(c)
+		if err != nil {
+			return Result{}, err
+		}
+		body, err := st.Show(id)
+		if err != nil {
+			return milestoneFail(err, "")
+		}
+		root, err := backlogScope(c)
+		if err != nil {
+			return Result{}, err
+		}
+		be, err := openBacklog(c, root, false, "")
+		if err != nil {
+			return backlogFail(err)
+		}
+		rows, _, _, err := backlog.OpenRows(be)
+		if err != nil {
+			return backlogFail(err)
+		}
+		var kids []ms.Child
+		for _, cid := range backlog.IDsByMilestone(rows, id) {
+			it, err := be.Get(cid)
+			if err != nil {
+				return backlogFail(err)
+			}
+			text, _, err := be.Detail(cid)
+			if err != nil {
+				return backlogFail(err)
+			}
+			kids = append(kids, ms.Child{ID: cid, Type: it.Type, Body: text})
+		}
+		r := ms.Check(body, kids, *strict)
+		return milestoneCheckResult(id, r)
+	}
+}
+
+func milestoneCheckResult(id string, r ms.Report) (Result, error) {
+	unknown, noMig, badTouch := []any{}, []any{}, []any{}
+	var lines []string
+	if r.BelowThreshold {
+		lines = append(lines, fmt.Sprintf("below threshold: %d feature items, 3 needed", r.Features))
+	} else {
+		for _, x := range r.NoChange {
+			lines = append(lines, x+": no ## Change section")
+		}
+		for _, u := range r.Unknown {
+			unknown = append(unknown, jsonObj("item", u.ID, "ids", strs(u.IDs)))
+			for _, ac := range u.IDs {
+				lines = append(lines, fmt.Sprintf("%s: cites %s, not a criterion of %s", u.ID, ac, id))
+			}
+		}
+		for _, m := range r.NoMigration {
+			noMig = append(noMig, jsonObj("item", m.ID, "fields", strs(m.Fields)))
+			for _, f := range m.Fields {
+				lines = append(lines, fmt.Sprintf("%s: REMOVED without %s", m.ID, f))
+			}
+		}
+		for _, b := range r.BadTouches {
+			badTouch = append(badTouch, jsonObj("item", b.ID, "entries", strs(b.Entries)))
+			for _, e := range b.Entries {
+				lines = append(lines, fmt.Sprintf("%s: Touches '%s' is not a capability of %s", b.ID, e, id))
+			}
+		}
+		for _, ac := range r.Uncovered {
+			l := ac + ": no feature issue serves it"
+			if !r.Strict {
+				l += " (warning)"
+			}
+			lines = append(lines, l)
+		}
+		if len(lines) == 0 {
+			lines = append(lines, "ok")
+		}
+	}
+	d := jsonObj("milestone", id, "ok", r.Ok(), "strict", r.Strict, "belowThreshold", r.BelowThreshold,
+		"features", r.Features, "criteria", strs(r.Criteria), "uncovered", strs(r.Uncovered),
+		"noChange", strs(r.NoChange), "unknown", unknown, "noMigration", noMig, "badTouches", badTouch)
+	res := Result{Data: d, Text: strings.Join(lines, "\n")}
+	if r.Ok() {
+		return res, nil
+	}
+	return res, Failed("%s: milestone check failed", id)
 }
