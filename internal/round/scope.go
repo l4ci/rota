@@ -16,23 +16,7 @@ func Scopes(body string) []string {
 	if !ok {
 		return nil
 	}
-	seen := map[string]bool{}
-	var out []string
-	for _, line := range strings.Split(sec, "\n") {
-		line = strings.TrimSpace(line)
-		if !strings.HasPrefix(line, "- ") && !strings.HasPrefix(line, "* ") {
-			continue
-		}
-		line = line[2:]
-		line = strings.ToLower(strings.TrimSpace(strings.Trim(strings.TrimSpace(line), "`")))
-		if line == "" || seen[line] {
-			continue
-		}
-		seen[line] = true
-		out = append(out, line)
-	}
-	sort.Strings(out)
-	return out
+	return itembody.Entries(sec)
 }
 
 // ScopeOverlaps lists the scopes two lists share, compared exactly.
