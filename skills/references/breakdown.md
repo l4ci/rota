@@ -13,7 +13,7 @@ The milestone body carries two sections the children are checked against.
 - `## Capabilities` lists one contract per bullet: a verb, endpoint, schema or table, config key or skill step. Tag each `(new)`, `(modified)` or `(removed)`. An untagged bullet counts as modified.
 - `## Acceptance` lines are `- [ ]` checkboxes, so each gets an `AC-n` id in order.
 
-Capability names are the vocabulary the children copy. Write each once, short, and never as a sentence. An old milestone body is migrated once with `rota migrate milestones --apply`.
+For a rename, list the old name tagged `(removed)` when nothing else keeps it or `(modified)` otherwise, and list the new name tagged `(new)` when a sibling issue touches it under that name. Capability names are the vocabulary the children copy. Write each once, short, and never as a sentence. An old milestone body is migrated once with `rota migrate milestones --apply`.
 
 ## The child issue body
 
@@ -40,7 +40,7 @@ Migration: ...         # REMOVED: required
 
 The rules:
 
-- The first line of `## Change` is `ADDED`, `MODIFIED`, `REMOVED` or `RENAMED`, then the capability name. A RENAMED line reads `RENAMED <old> to <new>`, and the old name is the listed capability.
+- The first line of `## Change` is `ADDED`, `MODIFIED`, `REMOVED` or `RENAMED`, then the capability name. A RENAMED line reads `RENAMED <old> -> <new>`, and the check validates the old name.
 - The capability named on the `## Change` line must be one of the milestone's Capabilities. The check fails otherwise.
 - `Serves:` cites the milestone criterion as `<MNN> AC-n`.
 - A REMOVED change needs both `Reason:` and `Migration:`. The check fails without them.
