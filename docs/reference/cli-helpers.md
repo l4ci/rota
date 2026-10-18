@@ -157,6 +157,7 @@ exit codes and repo scope: [verb contract](../contributing/contract/README.md).
 |---|---|
 | `rota migrate hv [--apply] [--verbose] [--skip-skills]` | move a project from the old state folder and names to `.rota/` and rota (preview unless --apply) |
 | `rota migrate issues [--apply] [--limit <n>]` | move the file backlog onto the issue tracker (preview unless --apply) |
+| `rota migrate milestones [--apply]` | rename `## Acceptance criteria` to `## Acceptance` and make each bullet a checkbox (preview unless --apply) |
 
 ## `rota knowledge`
 
@@ -233,6 +234,7 @@ exit codes and repo scope: [verb contract](../contributing/contract/README.md).
 | `rota milestone overview --body-file <path\|->` | replace the MILESTONES.md overview text |
 | `rota milestone status <id> --to <planned\|active\|shipped\|archived>` | change a milestone's status |
 | `rota milestone active` | IDs of active milestones |
+| `rota milestone check <MNN> [--strict]` | check a milestone's feature issues against its capabilities and acceptance criteria (read-only; --strict fails on uncovered criteria) |
 | `rota milestone index` | regenerate the overview and vision block |
 
 ## `rota plan`

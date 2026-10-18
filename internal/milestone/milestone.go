@@ -101,7 +101,8 @@ func Stub(id, title, summary string, depends []string) string {
 // StubOn is Stub with an explicit created date.
 func StubOn(id, title, summary string, depends []string, today string) string {
 	return "---\nid: " + id + "\ntitle: " + title + "\nstatus: planned\ndepends: [" + strings.Join(depends, ", ") + "]\ncreated: " + today + "\n---\n\n" +
-		"# " + id + " — " + title + "\n\n## Goal\n\n" + summary + "\n\n## Acceptance criteria\n\n- _(define what shipped looks like)_\n\n" +
+		"# " + id + " — " + title + "\n\n## Goal\n\n" + summary + "\n\n## Capabilities\n\n- _(one contract per bullet: a verb, endpoint, schema or config key, tagged (new), (modified) or (removed))_\n\n" +
+		"## Acceptance\n\n- [ ] _(define what shipped looks like)_\n\n" +
 		"## Rationale\n\n_(why this milestone, why now)_\n\n## Open risks\n\n_(unknowns, technical risks, dependencies that could shift)_\n\n" +
 		"## Research findings\n\n_(prior art, references, lessons from /rota-vision web search)_\n\n## Notes\n\n_(free-form brainstorm)_\n"
 }

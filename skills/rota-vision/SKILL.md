@@ -63,16 +63,18 @@ Show the milestone list as plain markdown, not yet saved, one block per mileston
 ```
 ### M01 — <title>   [ready · no deps]
 **Goal:** <one sentence>
+**Capabilities:**
+- <name> (new|modified|removed)
 **Acceptance:**
-- <checkable bullet>
-- <checkable bullet>
+- [ ] <checkable bullet>
+- [ ] <checkable bullet>
 **Rationale:** <why this one, why now>
 **Open risks:** <at least one; if you can't name one it isn't thought through>
 **Not yet specified:** <optional: in-scope work too unsharp to write as Acceptance yet>
 **Out of scope:** <optional: ruled-out ideas, each with a one-line reason>
 ```
 
-Both sections are optional; omit a line with nothing to put in it. In the milestone body they are `## Not yet specified` and `## Out of scope` sections (bullets), after Open risks.
+Not yet specified and Out of scope are optional; omit a line with nothing to put in it. In the milestone body Capabilities and Acceptance are the `## Capabilities` and `## Acceptance` sections, and the optional two are `## Not yet specified` and `## Out of scope` sections (bullets), after Open risks.
 
 The tag is `[ready · no deps]` or `[blocked · depends M01]`. No cap on count, but don't slice everything upfront: park unsharp in-scope work under Not yet specified instead of inventing Acceptance bullets for it. Order by dependency layer and make parallel-able milestones visible. Apply the user's redlines (merge, cut, retire, add, re-order) and ask for one explicit confirmation before writing; silence is not confirmation.
 
@@ -99,7 +101,7 @@ Vision updated.
 Active: M01. Run /rota-capture to fill items, or /rota-work to pick from the backlog.
 ```
 
-If a newly active milestone has no items, offer (default Capture): `/rota-capture` to file items, `/rota-plan` in slice mode for a first slice plan, or skip. Don't recap discovery, research or the challenge.
+If a newly active milestone has no items, offer (default Capture): `/rota-capture` to file items, `/rota-plan` in slice mode for a first slice plan, or skip. A split into 3+ items follows `references/breakdown.md` and ends with `rota milestone check <MNN>`. Don't recap discovery, research or the challenge.
 
 ## Key principles
 
