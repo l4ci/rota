@@ -1,5 +1,33 @@
 # Changelog
 
+## v0.18.0 — 2026-10-18
+
+Milestone breakdowns get a shape and a check, workers report through typed events with an unverifiable state, and the round verbs carry request ids and receipts.
+
+### New
+
+- Milestone breakdown shape (#853). A milestone lists its `## Capabilities` and checkbox `## Acceptance` criteria; a child issue declares `## Change` (`ADDED|MODIFIED|REMOVED|RENAMED <capability>`, `Serves: M08 AC-2`, Reason and Migration on REMOVED) and copies the capability names into `## Touches`, so siblings on one capability clash in `round candidates`. `rota milestone check <MNN> [--strict]` names every gap; `rota migrate milestones` converts old bodies. `skills/references/breakdown.md` owns the shape for `/rota-plan`, `/rota-vision` and `/rota-capture`.
+- Typed worker events (#819) and an unverifiable slot state (#820). Workers push done, blocked, question and heartbeat events to a durable record that the orchestrator reads before the pane; a newer event outranks a stale pane. Contact loss is `unverifiable`, distinct from `dead`, with a bounded herdr wait, a forced reclaim and a loud outage path.
+- Request ids and receipts on the state-writing round verbs (#822). A retried `assign` or `transfer` after a flaky forge call replays its receipt instead of acting twice; inputs are fingerprinted by content, a corrupt receipts file is refused, and the store is capped.
+- `rota skills get` and `list`, with an opt-in stub install (#821), so installed skill copies stop drifting from the binary after `rota update`.
+- `rota item create --batch-file` files a JSON array in order and reports the ids already filed when a record fails part-way; placeholder titles are refused on every create path (#838).
+- herdr slots open as linked worktree workspaces behind `work.herdrGroupSlots`, and a Claude Code dialog on the prompt line is read as a dialog, not a draft.
+
+### Changed
+
+- Kind switches moved behind the `Harness` interface (#584) and the autopilot tick mappings into `roundtick`; tracker close reasons, worker event kinds, the registry timestamp and the Linear read-versus-write split each have one owner.
+- Knowledge: lessons from rounds 19 to 21 and from #853 (gate hygiene, stale verdicts, sidecar briefs); the orchestration and Smoke testing topics are split into facets.
+
+### Documentation
+
+- Worker events, `skills get`, the stub install, unverifiable slots, batch item create, dialog-aware dispatch, the breakdown shape and the two new milestone verbs; the `--force` caveat and the hedged orca read.
+
+## Stats
+
+87 commits, 209 files changed, +7807 −1056 lines
+
+**Full changelog:** https://github.com/l4ci/rota/compare/v0.17.0...v0.18.0
+
 ## v0.17.0 — 2026-10-15
 
 Jira and Linear as issue sources, machine-wide tracker connections, and the issue source split from the forge
