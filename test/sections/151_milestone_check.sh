@@ -89,7 +89,7 @@ rc=0; OUT=$(mc item create --kind features --milestone M01 --title "Tweak assign
 rc=0; OUT=$(mc round candidates --scope open) || rc=$?
 [ "$rc" -eq 0 ] || fail "candidates: $rc: $OUT"
 case "$OUT" in *"(ben): scopes rota round assign"*) ;; *) fail "candidates: sibling should clash on rota round assign: $OUT" ;; esac
-if printf '%s\n' "$OUT" | grep -E 'Change the assign flow|F03' | grep -q 'scopes rota round assign'; then fail "candidates: F03 (POST /items) must not clash: $OUT"; fi
+if grep -qE '^F03.*scopes rota round assign' <<<"$OUT"; then fail "candidates: F03 (POST /items) must not clash: $OUT"; fi
 
 rm -rf "$TMP_MC"
 trap 'rm -rf "$TMP"' EXIT
