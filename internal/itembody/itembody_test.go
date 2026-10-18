@@ -1,6 +1,9 @@
 package itembody
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
 
 func TestHeadingRegexps(t *testing.T) {
 	tests := []struct {
@@ -97,5 +100,33 @@ func TestAppendRoundTrip(t *testing.T) {
 	got, ok := Section(string(out), DependsHeadRe)
 	if !ok || got != "\n\n- #7\n- #9\n" {
 		t.Errorf("Section = (%q, %v)", got, ok)
+	}
+}
+
+func TestEntries(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want []string
+	}{
+		{"mixed", "\n- POST /items \n* `Worker.Slot`\n- post /items\n\nprose\n", []string{"post /items", "worker.slot"}},
+		{"nothing", "prose only\n", nil},
+		{"empty bullet", "- \n- ``\n", nil},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := Entries(tc.in); !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("Entries = %v want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestEntry(t *testing.T) {
+	if got := Entry("  `X`  "); got != "x" {
+		t.Errorf("Entry = %q", got)
+	}
+	if got := Entry("  "); got != "" {
+		t.Errorf("Entry empty = %q", got)
 	}
 }
