@@ -258,12 +258,12 @@
     },
     "Build & Tooling: Smoke testing::Behavior-changing tasks must sweep smoke sections asserting the old behavior": {
       "tier": "confirmed",
-      "hits": 4,
+      "hits": 5,
       "lastSeen": "2026-10-18"
     },
     "Build & Tooling: Smoke testing::Inverted grep assertion (grep && fail) aborts the section under set -e": {
       "tier": "confirmed",
-      "hits": 3,
+      "hits": 4,
       "lastSeen": "2026-10-18"
     },
     "Build & Tooling: Helpers & migrations::hv-knowledge-query matches exact full topic headings only": {
@@ -342,13 +342,13 @@
       "lastSeen": "2026-10-05"
     },
     "Architecture: Skill authoring::Shorten skills structurally, not by rewording": {
-      "tier": "provisional",
-      "hits": 2,
+      "tier": "confirmed",
+      "hits": 3,
       "lastSeen": "2026-10-18"
     },
     "Build & Tooling: Smoke testing::A verb captured in $(...) aborts the section silently when it exits non-zero": {
       "tier": "confirmed",
-      "hits": 5,
+      "hits": 6,
       "lastSeen": "2026-10-18"
     },
     "Build & Tooling: Smoke testing::Host CLI argv needs one real-host run": {
@@ -628,7 +628,7 @@
     },
     "Build & Tooling: Smoke testing::Pin ROTA_FROZEN_DAY when regenerating frozen records": {
       "tier": "provisional",
-      "hits": 1,
+      "hits": 2,
       "lastSeen": "2026-10-18"
     },
     "Rounds: Orchestration: Review & merge gate::Name the smoke section in the brief when a change touches host or dispatch": {
