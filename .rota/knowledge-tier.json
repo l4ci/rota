@@ -258,7 +258,7 @@
     },
     "Build & Tooling: Smoke testing::Behavior-changing tasks must sweep smoke sections asserting the old behavior": {
       "tier": "confirmed",
-      "hits": 3,
+      "hits": 4,
       "lastSeen": "2026-10-18"
     },
     "Build & Tooling: Smoke testing::Inverted grep assertion (grep && fail) aborts the section under set -e": {
@@ -313,8 +313,8 @@
     },
     "Architecture: Skill authoring::Codex drops skills whose unquoted description has ': ' or ' #'": {
       "tier": "provisional",
-      "hits": 1,
-      "lastSeen": "2026-10-16"
+      "hits": 2,
+      "lastSeen": "2026-10-18"
     },
     "Build & Tooling: Git & isolation::Repo-wide renames: one sweep PR owns shared code, slices stack on it": {
       "tier": "provisional",
@@ -348,7 +348,7 @@
     },
     "Build & Tooling: Smoke testing::A verb captured in $(...) aborts the section silently when it exits non-zero": {
       "tier": "confirmed",
-      "hits": 3,
+      "hits": 4,
       "lastSeen": "2026-10-18"
     },
     "Build & Tooling: Smoke testing::Host CLI argv needs one real-host run": {
@@ -583,8 +583,8 @@
     },
     "Rounds: Orchestration: Slate & issues::Smoke section reservation keys on the words 'smoke section' or 'test/sections'": {
       "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-16"
+      "hits": 1,
+      "lastSeen": "2026-10-18"
     },
     "Rounds: Orchestration: Slate & issues::Check the titles the architecture review files": {
       "tier": "provisional",
