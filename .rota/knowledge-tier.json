@@ -156,21 +156,6 @@
       "hits": 0,
       "lastSeen": "2026-05-18"
     },
-    "Build & Tooling: Smoke testing::Standalone smoke fixtures for preamble-sourcing helpers need .hv/ in the tempdir": {
-      "tier": "deprecated",
-      "hits": 1,
-      "lastSeen": "2026-10-01"
-    },
-    "Build & Tooling: Smoke testing::Smoke fixtures for dirty-tree-refusing helpers redirect stderr into $TMP_*/.hv/": {
-      "tier": "deprecated",
-      "hits": 0,
-      "lastSeen": "2026-05-18"
-    },
-    "Build & Tooling: Smoke testing::Smoke sections run only inside the runner; standalone needs an env-prep wrapper": {
-      "tier": "deprecated",
-      "hits": 2,
-      "lastSeen": "2026-10-01"
-    },
     "Build & Tooling: Git & isolation::EnterWorktree branches from origin/main; rebase onto local main before editing": {
       "tier": "provisional",
       "hits": 0,
@@ -251,27 +236,7 @@
       "hits": 0,
       "lastSeen": "2026-05-18"
     },
-    "Build & Tooling: Smoke testing::Pre-existing smoke failures: check main before triaging your branch": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-05-18"
-    },
-    "Build & Tooling: Smoke testing::Behavior-changing tasks must sweep smoke sections asserting the old behavior": {
-      "tier": "confirmed",
-      "hits": 5,
-      "lastSeen": "2026-10-18"
-    },
-    "Build & Tooling: Smoke testing::Inverted grep assertion (grep && fail) aborts the section under set -e": {
-      "tier": "confirmed",
-      "hits": 4,
-      "lastSeen": "2026-10-18"
-    },
     "Build & Tooling: Helpers & migrations::hv-knowledge-query matches exact full topic headings only": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-06-11"
-    },
-    "Build & Tooling: Smoke testing::Pinned-surface sentinels need a live-scan drift guard": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-06-11"
@@ -291,25 +256,10 @@
       "hits": 0,
       "lastSeen": "2026-10-01"
     },
-    "Build & Tooling: Smoke testing::Orchestrator owns the 44 NAMES sync across parallel waves": {
-      "tier": "deprecated",
-      "hits": 0,
-      "lastSeen": "2026-10-01"
-    },
     "Architecture: Module extraction & migration safety::Golden harness proves byte-identical helper moves": {
       "tier": "deprecated",
       "hits": 0,
       "lastSeen": "2026-10-01"
-    },
-    "Build & Tooling: Smoke testing::Fakes hide real-host bugs: run one live check before a release": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-04"
-    },
-    "Build & Tooling: Smoke testing::Shared-text changes need the full smoke run before merge": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-04"
     },
     "Architecture: Skill authoring::Codex drops skills whose unquoted description has ': ' or ' #'": {
       "tier": "provisional",
@@ -346,16 +296,6 @@
       "hits": 4,
       "lastSeen": "2026-10-18"
     },
-    "Build & Tooling: Smoke testing::A verb captured in $(...) aborts the section silently when it exits non-zero": {
-      "tier": "confirmed",
-      "hits": 7,
-      "lastSeen": "2026-10-18"
-    },
-    "Build & Tooling: Smoke testing::Host CLI argv needs one real-host run": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-08"
-    },
     "Product: Market & competitors::Market review lives in docs/contributing": {
       "tier": "provisional",
       "hits": 0,
@@ -385,11 +325,6 @@
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-08"
-    },
-    "Build & Tooling: Smoke testing::A gate that crosses UTC midnight fails the frozen tests": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-09"
     },
     "Build & Tooling: Git & isolation::Reviewer subagents export with git archive, never worktree add": {
       "tier": "provisional",
@@ -466,25 +401,10 @@
       "hits": 0,
       "lastSeen": "2026-05-18"
     },
-    "Build & Tooling: Smoke testing::Failing-verify tests must own their TMPDIR": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-12"
-    },
     "Architecture: Helper conventions & invariants: Go verbs & fakes::Gate target fields change mid-run": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-12"
-    },
-    "Build & Tooling: Smoke testing::Fixtures that expect issue or forge reads must pin the source and forge": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-15"
-    },
-    "Build & Tooling: Smoke testing::A config key change regenerates the frozen config record": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-15"
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes::Gate steps read the forge only after stepRemote": {
       "tier": "provisional",
@@ -626,11 +546,6 @@
       "hits": 0,
       "lastSeen": "2026-10-17"
     },
-    "Build & Tooling: Smoke testing::Pin ROTA_FROZEN_DAY when regenerating frozen records": {
-      "tier": "provisional",
-      "hits": 2,
-      "lastSeen": "2026-10-18"
-    },
     "Rounds: Orchestration: Review & merge gate::Name the smoke section in the brief when a change touches host or dispatch": {
       "tier": "provisional",
       "hits": 0,
@@ -645,6 +560,111 @@
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-17"
+    },
+    "Rounds: Orchestration: Review & merge gate::A commit after the review makes its PASS stale, bookkeeping included": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-18"
+    },
+    "Rounds: Orchestration: Workers & relays::Brief implementers to leave .rota/knowledge-tier.json alone": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-18"
+    },
+    "Build & Tooling: Helpers & migrations::This repo's milestone store is the tracker; .rota/milestones/ files are stale": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-18"
+    },
+    "Build & Tooling: Smoke testing: Sections & fixtures::A verb captured in $(...) aborts the section silently when it exits non-zero": {
+      "tier": "confirmed",
+      "hits": 7,
+      "lastSeen": "2026-10-18"
+    },
+    "Build & Tooling: Smoke testing: Sections & fixtures::Inverted grep assertion (grep && fail) aborts the section under set -e": {
+      "tier": "confirmed",
+      "hits": 4,
+      "lastSeen": "2026-10-18"
+    },
+    "Build & Tooling: Smoke testing: Sections & fixtures::Smoke sections run only inside the runner; standalone needs an env-prep wrapper": {
+      "tier": "deprecated",
+      "hits": 2,
+      "lastSeen": "2026-10-01"
+    },
+    "Build & Tooling: Smoke testing: Sections & fixtures::Smoke fixtures for dirty-tree-refusing helpers redirect stderr into $TMP_*/.hv/": {
+      "tier": "deprecated",
+      "hits": 0,
+      "lastSeen": "2026-05-18"
+    },
+    "Build & Tooling: Smoke testing: Sections & fixtures::Pinned-surface sentinels need a live-scan drift guard": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-06-11"
+    },
+    "Build & Tooling: Smoke testing: Sections & fixtures::Fixtures that expect issue or forge reads must pin the source and forge": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-15"
+    },
+    "Build & Tooling: Smoke testing: Sections & fixtures::Failing-verify tests must own their TMPDIR": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-12"
+    },
+    "Build & Tooling: Smoke testing: Sections & fixtures::Host CLI argv needs one real-host run": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-08"
+    },
+    "Build & Tooling: Smoke testing: Sections & fixtures::Fakes hide real-host bugs: run one live check before a release": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-04"
+    },
+    "Build & Tooling: Smoke testing: Gate & frozen records::No tracked .rota/ writes while the gate runs": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-18"
+    },
+    "Build & Tooling: Smoke testing: Gate & frozen records::Pin ROTA_FROZEN_DAY when regenerating frozen records": {
+      "tier": "provisional",
+      "hits": 2,
+      "lastSeen": "2026-10-18"
+    },
+    "Build & Tooling: Smoke testing: Gate & frozen records::A config key change regenerates the frozen config record": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-15"
+    },
+    "Build & Tooling: Smoke testing: Gate & frozen records::A gate that crosses UTC midnight fails the frozen tests": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-09"
+    },
+    "Build & Tooling: Smoke testing: Gate & frozen records::Shared-text changes need the full smoke run before merge": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-04"
+    },
+    "Build & Tooling: Smoke testing: Gate & frozen records::Behavior-changing tasks must sweep smoke sections asserting the old behavior": {
+      "tier": "confirmed",
+      "hits": 5,
+      "lastSeen": "2026-10-18"
+    },
+    "Build & Tooling: Smoke testing: Gate & frozen records::Pre-existing smoke failures: check main before triaging your branch": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-05-18"
+    },
+    "Build & Tooling: Smoke testing: Sections & fixtures::Orchestrator owns the 44 NAMES sync across parallel waves": {
+      "tier": "deprecated",
+      "hits": 0,
+      "lastSeen": "2026-10-01"
+    },
+    "Build & Tooling: Smoke testing: Sections & fixtures::Standalone smoke fixtures for preamble-sourcing helpers need .hv/ in the tempdir": {
+      "tier": "deprecated",
+      "hits": 1,
+      "lastSeen": "2026-10-01"
     }
   }
 }

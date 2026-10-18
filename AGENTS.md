@@ -21,7 +21,8 @@ Durable learnings live in `.rota/KNOWLEDGE.md`. Consult it when work touches the
 - Architecture: Helper conventions & invariants: Shell helpers
 - Architecture: Skill authoring
 - Build & Tooling: Helpers & migrations
-- Build & Tooling: Smoke testing
+- Build & Tooling: Smoke testing: Sections & fixtures
+- Build & Tooling: Smoke testing: Gate & frozen records
 - Build & Tooling: Git & isolation
 - Product: Market & competitors
 - Rounds: Orchestration: Review & merge gate
