@@ -343,12 +343,12 @@
     },
     "Architecture: Skill authoring::Shorten skills structurally, not by rewording": {
       "tier": "confirmed",
-      "hits": 3,
+      "hits": 4,
       "lastSeen": "2026-10-18"
     },
     "Build & Tooling: Smoke testing::A verb captured in $(...) aborts the section silently when it exits non-zero": {
       "tier": "confirmed",
-      "hits": 6,
+      "hits": 7,
       "lastSeen": "2026-10-18"
     },
     "Build & Tooling: Smoke testing::Host CLI argv needs one real-host run": {
