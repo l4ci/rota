@@ -79,6 +79,18 @@ rc=0; OUT=$(mc milestone check M02 --strict) || rc=$?
 [ "$rc" -eq 0 ] || fail "M02 below threshold: want exit 0, got $rc: $OUT"
 case "$OUT" in *"below threshold: 2 feature items"*) ;; *) fail "M02: missing threshold line: $OUT" ;; esac
 
+# Siblings that copy a capability into ## Touches clash with no extra declaration:
+# F01 (Touches `Rota Round Assign`) is in flight, so a new sibling touching the
+# same capability is reported against its slot, and F03 (POST /items) is not.
+printf '{"slots":[{"name":"ben","branch":"ben/f01-add","task":"F01","state":"busy"}]}\n' > "$TMP_MC/.rota/workers.json"
+printf '## Change\n\nMODIFIED rota round assign\nServes: AC-2\n\n## Touches\n\n- `rota round assign`\n' > "$TMP_MC/e.md"
+rc=0; OUT=$(mc item create --kind features --milestone M01 --title "Tweak assign again" --body-file "$TMP_MC/e.md") || rc=$?
+[ "$rc" -eq 0 ] || fail "file feature e: $rc: $OUT"
+rc=0; OUT=$(mc round candidates --scope open) || rc=$?
+[ "$rc" -eq 0 ] || fail "candidates: $rc: $OUT"
+case "$OUT" in *"(ben): scopes rota round assign"*) ;; *) fail "candidates: sibling should clash on rota round assign: $OUT" ;; esac
+if printf '%s\n' "$OUT" | grep -E 'Change the assign flow|F03' | grep -q 'scopes rota round assign'; then fail "candidates: F03 (POST /items) must not clash: $OUT"; fi
+
 rm -rf "$TMP_MC"
 trap 'rm -rf "$TMP"' EXIT
 pass "milestone check flags missing Change, bad Touches and REMOVED gaps; threshold and --strict behave"
