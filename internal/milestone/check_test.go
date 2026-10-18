@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-const checkBody = "# M01\n\n## Capabilities\n\n- `rota round assign` (modified)\n- round.maxBounces (new)\n\n## Acceptance\n\n- [ ] AC-1: one\n- [ ] AC-2: two\n"
+const checkBody = "# M01\n\n## Capabilities\n\n- `rota round assign` (modified)\n- round.maxBounces (new)\n- sync to disk (modified)\n\n## Acceptance\n\n- [ ] AC-1: one\n- [ ] AC-2: two\n"
 
 func feat(id, change string) Child { return Child{ID: id, Type: "F", Body: change} }
 
@@ -68,12 +68,17 @@ func TestCheck(t *testing.T) {
 				t.Errorf("%+v", r)
 			}
 		}},
-		{"renamed names the old capability", three(feat("F3", "## Change\n\nRENAMED rota round assign to rota round pick\nServes: AC-2\n")), false, func(t *testing.T, r Report) {
+		{"renamed names the old capability", three(feat("F3", "## Change\n\nRENAMED rota round assign -> rota round pick\nServes: AC-2\n")), false, func(t *testing.T, r Report) {
 			if !r.Ok() || len(r.BadCapability) != 0 {
 				t.Errorf("%+v", r)
 			}
 		}},
-		{"renamed with unlisted old capability", three(feat("F3", "## Change\n\nRENAMED rota round gone to rota round pick\nServes: AC-2\n")), false, func(t *testing.T, r Report) {
+		{"renamed with to in the old name", three(feat("F3", "## Change\n\nRENAMED sync to disk -> flush\nServes: AC-2\n")), false, func(t *testing.T, r Report) {
+			if !r.Ok() || len(r.BadCapability) != 0 {
+				t.Errorf("%+v", r)
+			}
+		}},
+		{"renamed with unlisted old capability", three(feat("F3", "## Change\n\nRENAMED rota round gone -> rota round pick\nServes: AC-2\n")), false, func(t *testing.T, r Report) {
 			if r.Ok() || !reflect.DeepEqual(r.BadCapability, []BadCapability{{ID: "F3", Capability: "rota round gone"}}) {
 				t.Errorf("%+v", r)
 			}
