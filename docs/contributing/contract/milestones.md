@@ -76,6 +76,14 @@ exit: tracker
 old: hv-vision-index
 shim: `changed` compares a hash of `.rota/MILESTONES.md` and CLAUDE.md before and after. The old helper's stdout (managed-block output) is dropped.
 
+### rota migrate milestones
+rota migrate milestones [--apply]
+repo: none
+data: {"applied": bool, "milestones": [{"id": string, "changed": bool}], "changed": bool}
+exit: 2 on a positional argument; 3 when the milestone store can't be opened; tracker
+old: none (new)
+note: renames `## Acceptance criteria` to `## Acceptance` and prefixes every bare bullet in that section with `[ ] `, so the acceptance package can number the criteria AC-n as it does for issues. Nothing else in the body changes. Preview by default: without `--apply` it prints `<id>: would migrate` and writes nothing. `changed` is true only when `--apply` rewrote at least one body. Idempotent: a second run prints `nothing to migrate`. It goes through the milestone store, so it works on `.rota/milestones` files and on tracker milestones alike.
+
 ### rota plan add
 rota plan add <milestone>-<unit> --title <text> [--design <ID>] [--repos a,b]
 rota plan add <#N|B7> --title <text> [--design <ID>] [--repos a,b]    (issue mode only: no milestone)
