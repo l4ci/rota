@@ -41,6 +41,7 @@ Migration: ...         # REMOVED: required
 The rules:
 
 - The first line of `## Change` is `ADDED`, `MODIFIED`, `REMOVED` or `RENAMED`, then the capability name.
+- The capability named on the `## Change` line must be one of the milestone's Capabilities. The check fails otherwise.
 - `Serves:` cites the milestone criterion as `<MNN> AC-n`.
 - A REMOVED change needs both `Reason:` and `Migration:`. The check fails without them.
 - `Before:`, `After:` and the WHEN/THEN acceptance form are recommended. The check does not enforce them.
@@ -60,4 +61,4 @@ N. MODIFIED <capability>, serves M08 AC-n, depends on <numbers or none>, deliver
 
 File through `rota item create --batch-file`. Records go in dependency order, `dependsOn` points at the ids just printed, and `milestone` is set.
 
-Then run `rota milestone check <MNN>` and fix every gap it names: features with no valid `## Change`, unknown `Serves:` ids, REMOVED items missing a field, and `## Touches` entries that are not a listed capability. Leave a criterion uncovered only when the milestone's `## Not yet specified` explains it. `--strict` fails on uncovered criteria, so run it once the milestone is meant to be fully specified.
+Then run `rota milestone check <MNN>` and fix every gap it names: features with no valid `## Change`, a `## Change` on an unlisted capability, unknown `Serves:` ids, REMOVED items missing a field, and `## Touches` entries that are not a listed capability. Leave a criterion uncovered only when the milestone's `## Not yet specified` explains it. `--strict` fails on uncovered criteria, so run it once the milestone is meant to be fully specified.
