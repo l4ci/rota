@@ -262,9 +262,9 @@
       "lastSeen": "2026-10-18"
     },
     "Build & Tooling: Smoke testing::Inverted grep assertion (grep && fail) aborts the section under set -e": {
-      "tier": "provisional",
-      "hits": 2,
-      "lastSeen": "2026-10-08"
+      "tier": "confirmed",
+      "hits": 3,
+      "lastSeen": "2026-10-18"
     },
     "Build & Tooling: Helpers & migrations::hv-knowledge-query matches exact full topic headings only": {
       "tier": "provisional",
@@ -343,12 +343,12 @@
     },
     "Architecture: Skill authoring::Shorten skills structurally, not by rewording": {
       "tier": "provisional",
-      "hits": 1,
+      "hits": 2,
       "lastSeen": "2026-10-18"
     },
     "Build & Tooling: Smoke testing::A verb captured in $(...) aborts the section silently when it exits non-zero": {
       "tier": "confirmed",
-      "hits": 4,
+      "hits": 5,
       "lastSeen": "2026-10-18"
     },
     "Build & Tooling: Smoke testing::Host CLI argv needs one real-host run": {
