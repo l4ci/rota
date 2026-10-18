@@ -5,6 +5,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/l4ci/rota/internal/itembody"
 )
 
 // Unknown is a task whose Serves line names criteria the item does not have.
@@ -29,9 +31,7 @@ func (r Report) Ok() bool {
 
 var (
 	taskBullet  = regexp.MustCompile(`^(\s*)[-*]\s+\*{0,2}(T\d+)\b`)
-	servesBul   = regexp.MustCompile(`(?i)^\s*[-*]\s+\*{0,2}Serves\*{0,2}:\*{0,2}\s*(.*)$`)
 	verifyBul   = regexp.MustCompile(`(?i)^(\s*)[-*]\s+\*{0,2}Verify\*{0,2}:\*{0,2}\s*(.*)$`)
-	acToken     = regexp.MustCompile(`\bAC-\d+\b`)
 	acNumberRe  = regexp.MustCompile(`\d+`)
 	nonBlankSub = regexp.MustCompile(`^(\s*)[-*]\s+(.+)$`)
 )
@@ -68,8 +68,8 @@ func Check(body string, ids []string) Report {
 
 		var serves []string
 		for _, l := range block {
-			if sm := servesBul.FindStringSubmatch(l); sm != nil && !placeholder.MatchString(strings.TrimSpace(sm[1])) {
-				serves = append(serves, acToken.FindAllString(sm[1], -1)...)
+			if sm := itembody.ServesRe.FindStringSubmatch(l); sm != nil && !placeholder.MatchString(strings.TrimSpace(sm[1])) {
+				serves = append(serves, itembody.ACIDRe.FindAllString(sm[1], -1)...)
 			}
 		}
 		var unknown []string

@@ -52,6 +52,10 @@ func TestCheck(t *testing.T) {
   - Serves: AC-1, AC-2, AC-9
   - Verify: go test ./a
 `, Report{Unknown: []Unknown{{"T1", []string{"AC-9"}}}}},
+		{"bare serves line counts", `- **T1** — one
+  Serves: AC-1, AC-2
+  - Verify: go test ./a
+`, Report{}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
