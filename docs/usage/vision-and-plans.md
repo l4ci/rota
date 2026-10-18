@@ -34,7 +34,7 @@ Marking a milestone `shipped` immediately unblocks anything that depended on it.
 
 When a milestone or Major feature splits into three or more issues, the pieces need a shared shape, or they drift apart. The milestone's `## Capabilities` lists the contracts it changes, one short name per bullet, tagged `(new)`, `(modified)` or `(removed)`. Its `## Acceptance` criteria are checkboxes, numbered `AC-1`, `AC-2` and so on.
 
-Each child issue carries a `## Change` section. Its first line is `ADDED`, `MODIFIED`, `REMOVED` or `RENAMED`, then the capability. A `Serves: M08 AC-2` line cites the milestone criterion the issue delivers. A REMOVED change also needs a `Reason:` and a `Migration:` line.
+Each child issue carries a `## Change` section. Its first line is `ADDED`, `MODIFIED`, `REMOVED` or `RENAMED`, then the capability. A rename is written `RENAMED <old> -> <new>`, and the check validates the old name. The milestone lists the old name, tagged `(removed)` when nothing else keeps it or `(modified)` otherwise. It also lists the new name, tagged `(new)`, when a sibling issue touches it under that name. A `Serves: M08 AC-2` line cites the milestone criterion the issue delivers. A REMOVED change also needs a `Reason:` and a `Migration:` line.
 
 The issue's `## Touches` copies the capability names. Two siblings that touch one capability then clash in `rota round candidates` without anything more declared, so the orchestrator sees it before assigning both. `## Out of scope` names the siblings, so each worker knows where its slice ends.
 
