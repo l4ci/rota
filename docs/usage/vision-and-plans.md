@@ -9,7 +9,7 @@ rota supports planning above the day-to-day backlog. `/rota-vision` frames miles
 When the session ends, `/rota-vision` writes two things:
 
 - `.rota/MILESTONES.md`: a short vision paragraph and the Active list, regenerated with `rota milestone index`.
-- One plan per milestone with the goal, acceptance criteria, rationale and risks. On the file backend that is `.rota/milestones/M01.md`, `M02.md`, …; on the [issue backend](issue-backend.md) it is the body of the milestone's tracking issue next to a native tracker milestone.
+- One plan per milestone with the goal, capabilities, acceptance criteria, rationale and risks. On the file backend that is `.rota/milestones/M01.md`, `M02.md`, …; on the [issue backend](issue-backend.md) it is the body of the milestone's tracking issue next to a native tracker milestone.
 
 Run `/rota-vision` whenever the conversation is about strategy rather than tactics: *"plan the next quarter"*, *"what's the bigger picture"*, *"create a roadmap"*, *"brainstorm milestones"*. Re-running it on a project that already has milestones enters edit mode automatically.
 
@@ -29,6 +29,43 @@ Multiple milestones can be `active` simultaneously when their dependencies allow
 When an active milestone has no open items remaining, `/rota-work` (no argument) surfaces an empty-active notice so you know the milestone is ready to close. Run `rota milestone status <MID> --to shipped` to flip its status, which immediately unblocks any milestone that listed it as a dependency.
 
 Marking a milestone `shipped` immediately unblocks anything that depended on it. Marking it `archived` does not. Use `archived` for milestones you are intentionally dropping, not for ones that finished.
+
+## Breaking a milestone into issues
+
+When a milestone or Major feature splits into three or more issues, the pieces need a shared shape, or they drift apart. The milestone's `## Capabilities` lists the contracts it changes, one short name per bullet, tagged `(new)`, `(modified)` or `(removed)`. Its `## Acceptance` criteria are checkboxes, numbered `AC-1`, `AC-2` and so on.
+
+Each child issue carries a `## Change` section. Its first line is `ADDED`, `MODIFIED`, `REMOVED` or `RENAMED`, then the capability. A `Serves: M08 AC-2` line cites the milestone criterion the issue delivers. A REMOVED change also needs a `Reason:` and a `Migration:` line.
+
+The issue's `## Touches` copies the capability names. Two siblings that touch one capability then clash in `rota round candidates` without anything more declared, so the orchestrator sees it before assigning both. `## Out of scope` names the siblings, so each worker knows where its slice ends.
+
+```markdown
+## Change
+
+MODIFIED rota round candidates
+Serves: M08 AC-2
+
+## Acceptance
+
+- [ ] WHEN two open issues touch the same capability THEN only one is offered per round
+
+## Touches
+
+- rota round candidates
+
+## Out of scope
+
+Output format of the candidates list (#861).
+
+## Depends on
+
+#858
+```
+
+`rota milestone check M08` holds the breakdown together. It lists criteria no feature serves, which is a warning, or a failure with `--strict`. It also flags features with no `## Change`, citations of criteria the milestone lacks, Touches entries that are not listed capabilities, and REMOVED changes without a Reason or Migration. With fewer than three feature issues it reports that it is below threshold and checks nothing. Bugs and tasks are ignored.
+
+Milestone bodies written before this shape say `## Acceptance criteria`. `rota migrate milestones` previews the rename and the checkbox prefixes, and `--apply` writes them. A second run changes nothing.
+
+`/rota-plan` in slice mode writes this shape, and its confirm list is where you approve it before the issues are filed.
 
 ## /rota-plan: write the implementation plan
 
