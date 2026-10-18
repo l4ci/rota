@@ -343,17 +343,17 @@ func milestoneCheck(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return backlogFail(err)
 		}
+		types := map[string]string{}
+		for _, r := range rows {
+			types[r.ID] = r.Type
+		}
 		var kids []ms.Child
 		for _, cid := range backlog.IDsByMilestone(rows, id) {
-			it, err := be.Get(cid)
-			if err != nil {
-				return backlogFail(err)
-			}
 			text, _, err := be.Detail(cid)
 			if err != nil {
 				return backlogFail(err)
 			}
-			kids = append(kids, ms.Child{ID: cid, Type: it.Type, Body: text})
+			kids = append(kids, ms.Child{ID: cid, Type: types[cid], Body: text})
 		}
 		r := ms.Check(body, kids, *strict)
 		return milestoneCheckResult(id, r)
@@ -361,13 +361,17 @@ func milestoneCheck(fs *flag.FlagSet) RunFunc {
 }
 
 func milestoneCheckResult(id string, r ms.Report) (Result, error) {
-	unknown, noMig, badTouch := []any{}, []any{}, []any{}
+	unknown, noMig, badTouch, badCap := []any{}, []any{}, []any{}, []any{}
 	var lines []string
 	if r.BelowThreshold {
-		lines = append(lines, fmt.Sprintf("below threshold: %d feature items, 3 needed", r.Features))
+		lines = append(lines, fmt.Sprintf("below threshold: %d feature items, %d needed", r.Features, ms.MinFeatures))
 	} else {
 		for _, x := range r.NoChange {
 			lines = append(lines, x+": no ## Change section")
+		}
+		for _, b := range r.BadCapability {
+			badCap = append(badCap, jsonObj("item", b.ID, "capability", b.Capability))
+			lines = append(lines, fmt.Sprintf("%s: Change capability '%s' is not a capability of %s", b.ID, b.Capability, id))
 		}
 		for _, u := range r.Unknown {
 			unknown = append(unknown, jsonObj("item", u.ID, "ids", strs(u.IDs)))
@@ -400,7 +404,7 @@ func milestoneCheckResult(id string, r ms.Report) (Result, error) {
 	}
 	d := jsonObj("milestone", id, "ok", r.Ok(), "strict", r.Strict, "belowThreshold", r.BelowThreshold,
 		"features", r.Features, "criteria", strs(r.Criteria), "uncovered", strs(r.Uncovered),
-		"noChange", strs(r.NoChange), "unknown", unknown, "noMigration", noMig, "badTouches", badTouch)
+		"noChange", strs(r.NoChange), "unknown", unknown, "noMigration", noMig, "badTouches", badTouch, "badCapability", badCap)
 	res := Result{Data: d, Text: strings.Join(lines, "\n")}
 	if r.Ok() {
 		return res, nil

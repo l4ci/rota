@@ -41,7 +41,7 @@ mc() { ( cd "$TMP_MC" && "$ROTA_BIN" "$@" 2>&1 ); }
 
 printf '## Change\n\nADDED rota round assign\nServes: M01 AC-1\n\n## Touches\n\n- `Rota Round Assign`\n' > "$TMP_MC/a.md"
 printf '## Change\n\nREMOVED round.maxBounces\nServes: AC-1\nReason: unused\n' > "$TMP_MC/b.md"
-printf '## Change\n\nMODIFIED rota round assign\nServes: AC-1\n\n## Touches\n\n- POST /items\n' > "$TMP_MC/c.md"
+printf '## Change\n\nMODIFIED POST /items\nServes: AC-1\n\n## Touches\n\n- POST /items\n' > "$TMP_MC/c.md"
 printf 'A bug with no change section.\n' > "$TMP_MC/bug.md"
 
 rc=0; OUT=$(mc item create --kind features --milestone M01 --title "Add the assign verb" --body-file "$TMP_MC/a.md") || rc=$?
@@ -57,6 +57,7 @@ rc=0; OUT=$(mc milestone check M01) || rc=$?
 [ "$rc" -eq 1 ] || fail "check: want exit 1, got $rc: $OUT"
 case "$OUT" in *"REMOVED without Migration"*) ;; *) fail "missing REMOVED line: $OUT" ;; esac
 case "$OUT" in *"Touches 'post /items' is not a capability"*) ;; *) fail "missing Touches line: $OUT" ;; esac
+case "$OUT" in *"F03: Change capability 'post /items' is not a capability of M01"*) ;; *) fail "missing Change capability line: $OUT" ;; esac
 case "$OUT" in *"AC-2: no feature issue serves it (warning)"*) ;; *) fail "missing uncovered warning: $OUT" ;; esac
 case "$OUT" in *"no ## Change"*) fail "the bug was not ignored: $OUT" ;; esac
 
@@ -69,6 +70,7 @@ rc=0; OUT=$(mc --json milestone check M01) || rc=$?
 [ "$rc" -eq 1 ] || fail "json: want exit 1, got $rc"
 case "$OUT" in *'"ok": false'*) ;; *) fail "json: ok not false: $OUT" ;; esac
 case "$OUT" in *'"features": 3'*) ;; *) fail "json: features not 3: $OUT" ;; esac
+case "$OUT" in *'"badCapability"'*) ;; *) fail "json: badCapability missing: $OUT" ;; esac
 
 printf '## Change\n\nADDED round.maxBounces\nServes: AC-1\n' > "$TMP_MC/d.md"
 rc=0; OUT=$(mc item create --kind features --milestone M02 --title "Add the first thing" --body-file "$TMP_MC/d.md") || rc=$?

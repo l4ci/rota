@@ -19,20 +19,24 @@ var (
 // Change is the delta an item declares in its `## Change` section.
 type Change struct {
 	Kind, Capability string
-	Serves           []string
-	Reason           string
-	Migration        string
-	OK               bool
+	// NewName is the new capability of a RENAMED line `RENAMED <old> to <new>`;
+	// Capability then holds the old one. Empty without " to ".
+	NewName   string
+	Serves    []string
+	Reason    string
+	Migration string
+	OK        bool
 }
 
 var (
 	deltaRe     = regexp.MustCompile(`(?i)^(ADDED|MODIFIED|REMOVED|RENAMED)\s+(.+)$`)
+	toRe        = regexp.MustCompile(`(?i)\s+to\s+`)
 	reasonRe    = regexp.MustCompile(`(?i)^Reason:(.*)$`)
 	migrationRe = regexp.MustCompile(`(?i)^Migration:(.*)$`)
 )
 
 // ParseChange reads the `## Change` section of an item body: a first line
-// `ADDED|MODIFIED|REMOVED|RENAMED <capability>`, then optional `Serves:`,
+// `ADDED|MODIFIED|REMOVED|RENAMED <capability>` (RENAMED reads `<old> to <new>`), then optional `Serves:`,
 // `Reason:` and `Migration:` lines. OK is false when the section is absent or
 // its first line is not a delta. Pure.
 func ParseChange(body string) Change {
@@ -57,6 +61,11 @@ func ParseChange(body string) Change {
 				return Change{}
 			}
 			c.Kind, c.Capability, c.OK = strings.ToUpper(m[1]), Entry(m[2]), true
+			if c.Kind == "RENAMED" {
+				if i := toRe.FindStringIndex(m[2]); i != nil {
+					c.Capability, c.NewName = Entry(m[2][:i[0]]), Entry(m[2][i[1]:])
+				}
+			}
 			continue
 		}
 		if m := ServesRe.FindStringSubmatch(line); m != nil {

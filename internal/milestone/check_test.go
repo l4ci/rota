@@ -58,6 +58,26 @@ func TestCheck(t *testing.T) {
 				t.Errorf("%+v", r)
 			}
 		}},
+		{"change capability not listed", three(feat("F3", "## Change\n\nMODIFIED POST /items\nServes: AC-2\n")), false, func(t *testing.T, r Report) {
+			if r.Ok() || !reflect.DeepEqual(r.BadCapability, []BadCapability{{ID: "F3", Capability: "post /items"}}) {
+				t.Errorf("%+v", r)
+			}
+		}},
+		{"removed with empty migration line", three(feat("F3", "## Change\n\nREMOVED round.maxBounces\nServes: AC-2\nReason: dropped\nMigration:\n")), false, func(t *testing.T, r Report) {
+			if r.Ok() || !reflect.DeepEqual(r.NoMigration, []Missing{{ID: "F3", Fields: []string{"Migration"}}}) {
+				t.Errorf("%+v", r)
+			}
+		}},
+		{"renamed names the old capability", three(feat("F3", "## Change\n\nRENAMED rota round assign to rota round pick\nServes: AC-2\n")), false, func(t *testing.T, r Report) {
+			if !r.Ok() || len(r.BadCapability) != 0 {
+				t.Errorf("%+v", r)
+			}
+		}},
+		{"renamed with unlisted old capability", three(feat("F3", "## Change\n\nRENAMED rota round gone to rota round pick\nServes: AC-2\n")), false, func(t *testing.T, r Report) {
+			if r.Ok() || !reflect.DeepEqual(r.BadCapability, []BadCapability{{ID: "F3", Capability: "rota round gone"}}) {
+				t.Errorf("%+v", r)
+			}
+		}},
 		{"bad touches", three(feat("F3", "## Change\n\nADDED round.maxBounces\nServes: AC-2\n\n## Touches\n\n- POST /items\n")), false, func(t *testing.T, r Report) {
 			if r.Ok() || !reflect.DeepEqual(r.BadTouches, []BadTouches{{ID: "F3", Entries: []string{"post /items"}}}) {
 				t.Errorf("%+v", r)
@@ -96,7 +116,7 @@ func TestCheck(t *testing.T) {
 		}},
 		{"slices non-nil", three()[:1], false, func(t *testing.T, r Report) {
 			if r.Criteria == nil || r.Uncovered == nil || r.NoChange == nil || r.Unknown == nil ||
-				r.NoMigration == nil || r.BadTouches == nil {
+				r.NoMigration == nil || r.BadTouches == nil || r.BadCapability == nil {
 				t.Errorf("nil slice in %+v", r)
 			}
 		}},
