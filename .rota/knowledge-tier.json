@@ -611,16 +611,6 @@
       "hits": 0,
       "lastSeen": "2026-10-12"
     },
-    "Build & Tooling: Smoke testing: Sections & fixtures::Host CLI argv needs one real-host run": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-08"
-    },
-    "Build & Tooling: Smoke testing: Sections & fixtures::Fakes hide real-host bugs: run one live check before a release": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-04"
-    },
     "Build & Tooling: Smoke testing: Gate & frozen records::No tracked .rota/ writes while the gate runs": {
       "tier": "provisional",
       "hits": 0,
@@ -665,6 +655,16 @@
       "tier": "deprecated",
       "hits": 1,
       "lastSeen": "2026-10-01"
+    },
+    "Build & Tooling: Smoke testing: Gate & frozen records::Fakes hide real-host bugs: run one live check before a release": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-04"
+    },
+    "Build & Tooling: Smoke testing: Gate & frozen records::Host CLI argv needs one real-host run": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-08"
     }
   }
 }
