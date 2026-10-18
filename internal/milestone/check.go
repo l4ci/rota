@@ -5,9 +5,9 @@ import (
 	"github.com/l4ci/rota/internal/itembody"
 )
 
-// minFeatures is how many feature children a milestone needs before Check
+// MinFeatures is how many feature children a milestone needs before Check
 // holds them to its criteria.
-const minFeatures = 3
+const MinFeatures = 3
 
 // Child is one issue of a milestone as Check reads it: its id as the backend
 // prints it, its type letter (B, F or T) and its body.
@@ -33,7 +33,14 @@ type BadTouches struct {
 	Entries []string
 }
 
-// Report is what Check finds. Every list is non-nil.
+// BadCapability is a feature whose Change line names a capability the
+// milestone does not list.
+type BadCapability struct {
+	ID, Capability string
+}
+
+// Report is what Check finds. Every list is non-nil. BadCapability, like
+// BadTouches, is a structural fault.
 type Report struct {
 	Strict, BelowThreshold bool
 	Features               int
@@ -42,22 +49,24 @@ type Report struct {
 	Unknown                []Unknown
 	NoMigration            []Missing
 	BadTouches             []BadTouches
+	BadCapability          []BadCapability
 }
 
 // Ok is false on any fault; an uncovered criterion is a fault only in strict mode.
 func (r Report) Ok() bool {
-	if len(r.NoChange)+len(r.Unknown)+len(r.NoMigration)+len(r.BadTouches) > 0 {
+	if len(r.NoChange)+len(r.Unknown)+len(r.NoMigration)+len(r.BadTouches)+len(r.BadCapability) > 0 {
 		return false
 	}
 	return !(r.Strict && len(r.Uncovered) > 0)
 }
 
 // Check holds a milestone's feature children against its criteria and
-// capabilities. Only features (Type F) count, and under three of them it
-// reports no finding. Pure.
+// capabilities: each feature's Change line and Touches entries must name a
+// listed capability. Only features (Type F) count, and under MinFeatures of
+// them it reports no finding. Pure.
 func Check(body string, children []Child, strict bool) Report {
 	r := Report{Strict: strict, Criteria: []string{}, Uncovered: []string{}, NoChange: []string{},
-		Unknown: []Unknown{}, NoMigration: []Missing{}, BadTouches: []BadTouches{}}
+		Unknown: []Unknown{}, NoMigration: []Missing{}, BadTouches: []BadTouches{}, BadCapability: []BadCapability{}}
 	for _, cr := range acceptance.IDs(body) {
 		if cr.ID != "" {
 			r.Criteria = append(r.Criteria, cr.ID)
@@ -70,7 +79,7 @@ func Check(body string, children []Child, strict bool) Report {
 		}
 	}
 	r.Features = len(feats)
-	if r.Features < minFeatures {
+	if r.Features < MinFeatures {
 		r.BelowThreshold = true
 		return r
 	}
@@ -88,6 +97,9 @@ func Check(body string, children []Child, strict bool) Report {
 		if !c.OK {
 			r.NoChange = append(r.NoChange, f.ID)
 			continue
+		}
+		if !caps[c.Capability] {
+			r.BadCapability = append(r.BadCapability, BadCapability{ID: f.ID, Capability: c.Capability})
 		}
 		var unknown []string
 		for _, id := range c.Serves {

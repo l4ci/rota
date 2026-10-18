@@ -40,7 +40,7 @@ Migration: ...         # REMOVED: required
 
 The rules:
 
-- The first line of `## Change` is `ADDED`, `MODIFIED`, `REMOVED` or `RENAMED`, then the capability name.
+- The first line of `## Change` is `ADDED`, `MODIFIED`, `REMOVED` or `RENAMED`, then the capability name. A RENAMED line reads `RENAMED <old> to <new>`, and the old name is the listed capability.
 - The capability named on the `## Change` line must be one of the milestone's Capabilities. The check fails otherwise.
 - `Serves:` cites the milestone criterion as `<MNN> AC-n`.
 - A REMOVED change needs both `Reason:` and `Migration:`. The check fails without them.
