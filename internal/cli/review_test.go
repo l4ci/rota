@@ -765,6 +765,22 @@ func TestReviewDepthReadsTheDoorLineOfThePR(t *testing.T) {
 	if _, d, _ := run(); d["depth"] != "light" || !strings.Contains(d["why"].(string), "no PR yet") {
 		t.Errorf("no PR for the branch must say so in the reason: %v", d)
 	}
+	// a label mapped to light can still be lifted by Door, so the note applies
+	policy(`{"default":"full","lightBelow":100000,"labels":{"best-of:2":"light"}}`)
+	if _, d, _ := run(); d["depth"] != "light" || d["signal"] != "size" || !strings.Contains(d["why"].(string), "no PR yet") {
+		t.Errorf("light by size, no PR: %v", d)
+	}
+	o := trRunWith(t, deps, root, "", "review", "depth", "nia/6-small", "--json", "--labels", "best-of:2")
+	if dd, _ := envelope(t, o.stdout)["data"].(map[string]any); dd["signal"] != "label" || !strings.Contains(dd["why"].(string), "no PR yet") {
+		t.Errorf("light by label, no PR: %v", dd)
+	}
+	// a local forge has no PR to read, and the reason says so
+	policy(`{"default":"full","lightBelow":100000}`)
+	write(t, filepath.Join(root, ".rota", "config.json"), `{"forge": {"provider": "local"}, "issues": {"source": "github"},"ship":{"review":{"default":"full","lightBelow":100000}}}`)
+	if _, d, _ := run(); d["depth"] != "light" || !strings.Contains(d["why"].(string), "no forge to read") || strings.Contains(d["why"].(string), "no PR yet") {
+		t.Errorf("local forge: %v", d)
+	}
+	policy(`{"default":"full","lightBelow":100000}`)
 	prCode = 1
 	if code, _, out := run(); code == 0 || !strings.Contains(out, "Door") {
 		t.Errorf("an unreadable forge must fail closed: %d %s", code, out)
