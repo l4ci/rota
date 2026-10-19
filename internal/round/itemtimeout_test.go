@@ -11,7 +11,7 @@ import (
 
 func TestItemTimeoutUnderLimitAndOffReportNothing(t *testing.T) {
 	f := newMoveFx(t)
-	f.env.ItemTimeoutMinutes = 120
+	f.env.Round.ItemTimeoutMinutes = 120
 	f.now = f.now.Add(60 * time.Minute)
 	rep, err := f.env.Status(bg, f.root)
 	if err != nil {
@@ -21,7 +21,7 @@ func TestItemTimeoutUnderLimitAndOffReportNothing(t *testing.T) {
 		t.Errorf("under the limit: %+v", rep.Findings)
 	}
 	f.now = f.now.Add(10 * time.Hour)
-	f.env.ItemTimeoutMinutes = 0
+	f.env.Round.ItemTimeoutMinutes = 0
 	out, err := f.env.Reconcile(bg, f.root, true)
 	if err != nil {
 		t.Fatal(err)
@@ -36,7 +36,7 @@ func TestItemTimeoutUnderLimitAndOffReportNothing(t *testing.T) {
 
 func TestItemTimeoutReportedWithoutApply(t *testing.T) {
 	f := newMoveFx(t)
-	f.env.ItemTimeoutMinutes = 120
+	f.env.Round.ItemTimeoutMinutes = 120
 	f.now = f.now.Add(3 * time.Hour)
 	out, err := f.env.Reconcile(bg, f.root, false)
 	if err != nil {
@@ -52,7 +52,7 @@ func TestItemTimeoutReportedWithoutApply(t *testing.T) {
 
 func TestItemTimeoutApplyParksNeedsHuman(t *testing.T) {
 	f := newMoveFx(t)
-	f.env.ItemTimeoutMinutes = 120
+	f.env.Round.ItemTimeoutMinutes = 120
 	f.env.Board = f.be
 	f.env.HolderPID = 100
 	f.env.NeedsHuman = "needs-human"
@@ -89,7 +89,7 @@ func TestItemClockSurvivesATransferToAnotherSlot(t *testing.T) {
 	if !ok || !again.Equal(first) {
 		t.Fatalf("clock moved: %v -> %v", first, again)
 	}
-	f.env.ItemTimeoutMinutes = 90
+	f.env.Round.ItemTimeoutMinutes = 90
 	f.now = f.now.Add(time.Minute)
 	rep, err := f.env.Status(bg, f.root)
 	if err != nil {
@@ -104,7 +104,7 @@ func TestItemClockSurvivesATransferToAnotherSlot(t *testing.T) {
 // process environment.
 func TestItemTimeoutApplyReadsHolderFromEnvGetenv(t *testing.T) {
 	f := newMoveFx(t)
-	f.env.ItemTimeoutMinutes = 120
+	f.env.Round.ItemTimeoutMinutes = 120
 	f.env.Board = f.be
 	f.env.NeedsHuman = "needs-human"
 	f.env.HolderPID = 0 // discover the holder from the environment

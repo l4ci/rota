@@ -31,7 +31,7 @@ func unregFixture(t *testing.T, branches ...string) (string, Env, *fakeRemote) {
 	fb.add("612", "Thing", "M01", false, filesBody)
 	fb.add("613", "Other", "M01", false, "## Acceptance\n- [ ] ok\n\n## Files\n- docs/other.md\n")
 	e := env(nil, fb.asForge())
-	e.Board, e.Worker.Getenv, e.AdoptPattern = fb, noEnv, "codex/*"
+	e.Board, e.Worker.Getenv, e.Round.AdoptPattern = fb, noEnv, "codex/*"
 	return root, e, fb
 }
 
@@ -59,7 +59,7 @@ func TestReconcileUnregisteredBranch(t *testing.T) {
 	if len(worker.LoadRegistryTolerant(root).Slots()) != 0 {
 		t.Fatal("a report-only reconcile registered a slot")
 	}
-	e.AdoptPattern = ""
+	e.Round.AdoptPattern = ""
 	if out, _ = e.Reconcile(bg, root, false); len(unregistered(out.Drift)) != 0 {
 		t.Errorf("an empty pattern turns the check off: %+v", out.Drift)
 	}
