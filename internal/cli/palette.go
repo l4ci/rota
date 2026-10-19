@@ -56,6 +56,15 @@ func paletteView(c *Ctx, root *Command, verb []string) (tui.Model, error) {
 	d := *c.deps()
 	d.RunView = func(_ *Ctx, built tui.Model) error { m = built; return nil }
 	var out, errb bytes.Buffer
+	// The capture buffer stands in for the palette's own terminal, which the
+	// palette proved before it opened: the --ui gate judges that, not the buffer.
+	isTerminal := c.deps().IsTerminal
+	d.IsTerminal = func(w any) bool {
+		if w == &out {
+			w = c.Stdout
+		}
+		return isTerminal(w)
+	}
 	run(root, &d, append(append([]string(nil), verb...), "--ui"), c.Stdin, &out, &errb)
 	if m == nil {
 		return nil, errors.New(firstText("no view", errb.String(), out.String()))
