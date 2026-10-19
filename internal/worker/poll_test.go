@@ -740,3 +740,25 @@ func TestLimitRegexIncludesKindPhrases(t *testing.T) {
 		t.Error("LimitRegex drops opencode quota text")
 	}
 }
+
+// A limit or Add-funds phrase quoted by an echoed brief or relay is the
+// orchestrator's text, not the session's: only what the worker prints after its
+// reply marker counts (#883).
+func TestClassifyLimitPhraseInEchoedBriefIsNotLimited(t *testing.T) {
+	brief := "--- ORCHESTRATOR (round 24) ---\nYou are nia.\nOut of scope: The Add funds escalation behaviour.\nThe session says: You've reached your usage limit\n\n"
+	st, ev := Classify(brief, false, 60, "idle")
+	if st == StateLimited {
+		t.Fatalf("echoed brief read as limited: %s %q", st, ev)
+	}
+	if st, _ := Classify(brief, true, 60, ""); st != StateBusy {
+		t.Errorf("moving pane under an echoed brief: %s", st)
+	}
+	if _, _, ok := FindLimit("", StripRelays("", brief)); ok {
+		t.Error("StripRelays left the echoed phrase in")
+	}
+	own := brief + "● working\nYou've reached your usage limit\nAdd funds to continue\n"
+	st, ev = Classify(own, false, 60, "idle")
+	if st != StateLimited || !strings.Contains(ev, "Add funds") {
+		t.Errorf("phrases after the worker's reply marker: %s %q", st, ev)
+	}
+}

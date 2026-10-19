@@ -666,3 +666,13 @@ func TestSlotLimitIsReadPerSlotKind(t *testing.T) {
 		}
 	}
 }
+
+func TestLimitPhraseInEchoedBriefIsIgnored(t *testing.T) {
+	brief := "--- ORCHESTRATOR (round 24) ---\nThe session says: " + limitMsg + "\n\n"
+	if _, _, ok := findLimit("", brief, ""); ok {
+		t.Error("a phrase inside an echoed brief was read as a limit")
+	}
+	if _, _, ok := findLimit("", brief+"● working\n"+limitMsg, ""); !ok {
+		t.Error("a phrase after the worker's reply marker was dropped")
+	}
+}
