@@ -680,6 +680,11 @@
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-19"
+    },
+    "Rounds: Orchestration: Review & merge gate::Learn and docs bookkeeping commits go straight to main": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-19"
     }
   }
 }
