@@ -29,16 +29,16 @@ func layoutCommand() *Command {
 }
 
 // layoutHost is herdr, when it is installed.
-func layoutHost(d *Deps) (host.Layouter, error) {
+func layoutHost(d *Deps) (host.Layouter, host.Capabilities, error) {
 	h := d.Host(host.Herdr)
 	if err := h.Require(); err != nil {
-		return nil, err
+		return nil, host.Capabilities{}, err
 	}
-	l := h.Capabilities().Layouter
-	if l == nil {
-		return nil, fmt.Errorf("herdr host cannot arrange panes")
+	caps := h.Capabilities()
+	if caps.Layouter == nil {
+		return nil, caps, fmt.Errorf("herdr host cannot arrange panes")
 	}
-	return l, nil
+	return caps.Layouter, caps, nil
 }
 
 // layoutOut is one project's line of the report.
@@ -66,7 +66,7 @@ func runLayout(c *Ctx, mode, project string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	h, herr := layoutHost(c.deps())
+	h, caps, herr := layoutHost(c.deps())
 	ctx := c.Context()
 	var outs []layoutOut
 	var panes []host.LayoutPane
@@ -112,7 +112,7 @@ func runLayout(c *Ctx, mode, project string) (Result, error) {
 			if mode == "" {
 				break
 			}
-			group, gerr := worker.GroupSlots(root)
+			group, gerr := worker.GroupSlots(root, caps)
 			if gerr != nil {
 				return Result{}, Resolution("%s: %v", o.name, gerr)
 			}
@@ -125,6 +125,10 @@ func runLayout(c *Ctx, mode, project string) (Result, error) {
 				r, err = layout.ToTabs(ctx, h, st)
 			}
 			if err != nil {
+				if group {
+					// Slots that moved before the failure must not keep stale ids.
+					worker.RecordWorkspaces(ctx, h, root, cli)
+				}
 				return Result{}, Unavailable("%s: %v", o.name, err).WithHint("some panes may have moved; rota layout shows where each is")
 			}
 			o.after, o.moves = r.After, r.Moves
@@ -147,9 +151,10 @@ func runLayout(c *Ctx, mode, project string) (Result, error) {
 				}
 			}
 			if r.Moves > 0 {
-				// Report where the panes are now, not where they were.
+				// Report where the panes are now, not where they were. A pane that
+				// changed workspace has a new id: find each slot's again.
 				if now, err := h.LayoutPanes(ctx); err == nil {
-					if st, ok := layout.Find(now, root, layout.Label, cli, workers); ok {
+					if st, ok := layout.Find(now, root, layout.Label, cli, worker.LiveWorkers(ctx, h, reg)); ok {
 						o.st = st
 					}
 				}

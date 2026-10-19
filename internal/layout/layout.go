@@ -54,13 +54,16 @@ const (
 // of the registry.
 type Worker struct {
 	Slot, Pane string
+	// Handle is the slot's recorded session handle: with the slot, what
+	// resolves its pane again after herdr gave it a new id.
+	Handle string
 	// Path is the slot's absolute worktree, what a grouped slot's workspace
 	// is opened on.
 	Path string
 }
 
 // Placed is a pane and the tab it is in.
-type Placed struct{ Slot, Pane, Tab, Workspace, Path string }
+type Placed struct{ Slot, Pane, Handle, Tab, Workspace, Path string }
 
 // State is where a project's panes are right now.
 type State struct {
@@ -147,7 +150,7 @@ func Find(panes []host.LayoutPane, root, label, cli string, workers []Worker) (s
 	st.Orch = panes[best]
 	for _, w := range workers {
 		if p, here := byPane[w.Pane]; here {
-			st.Workers = append(st.Workers, Placed{Slot: w.Slot, Pane: w.Pane, Tab: p.Tab, Workspace: p.Workspace, Path: w.Path})
+			st.Workers = append(st.Workers, Placed{Slot: w.Slot, Pane: w.Pane, Handle: w.Handle, Tab: p.Tab, Workspace: p.Workspace, Path: w.Path})
 		}
 	}
 	if p, here := byPane[cli]; here && cli != "" && cli != st.Orch.ID && !owned[cli] {
@@ -258,6 +261,25 @@ func ToSplit(ctx context.Context, h host.Layouter, st State) (Result, error) {
 			return res, err
 		}
 		res.Moves++
+	} // A pane moved in from another workspace gets a new id. Later splits
+	// target it by the id the slot's agent has now.
+	placed := map[string]Placed{}
+	for _, w := range st.Workers {
+		placed[w.Pane] = w
+	}
+	ids := map[string]string{}
+	cur := func(id string) string {
+		if n, ok := ids[id]; ok {
+			return n
+		}
+		return id
+	}
+	landed := func(id string) {
+		if w, ok := placed[id]; ok && w.Workspace != st.Orch.Workspace {
+			if n := h.PaneOf(ctx, w.Slot, w.Handle); n != "" {
+				ids[id] = n
+			}
+		}
 	}
 	// Worker columns first. herdr's ratio is the share the target pane keeps:
 	// the first split leaves the left column its share, and each later pane
@@ -271,10 +293,11 @@ func ToSplit(ctx context.Context, h host.Layouter, st State) (Result, error) {
 		if k > 1 {
 			keep = 1 / float64(cols-k+2)
 		}
-		if err := h.SplitInto(ctx, head, tab, prev, "right", keep); err != nil {
+		if err := h.SplitInto(ctx, head, tab, cur(prev), "right", keep); err != nil {
 			return res, err
 		}
 		res.Moves++
+		landed(head)
 		prev = head
 	}
 	// Then each two-pane worker column splits down the middle.
@@ -282,10 +305,11 @@ func ToSplit(ctx context.Context, h host.Layouter, st State) (Result, error) {
 		if len(col) < 2 {
 			continue
 		}
-		if err := h.SplitInto(ctx, col[1], tab, col[0], "down", 0.5); err != nil {
+		if err := h.SplitInto(ctx, col[1], tab, cur(col[0]), "down", 0.5); err != nil {
 			return res, err
 		}
 		res.Moves++
+		landed(col[1])
 	}
 	// Last, the orchestrator under the CLI: the split only cuts the CLI's cell.
 	if st.CLI != nil {
@@ -323,6 +347,8 @@ func ToTabs(ctx context.Context, h host.Layouter, st State) (Result, error) {
 			continue
 		}
 		var err error
+		// st.Group is already true only for a host that can group (caps.CanGroup),
+		// so the assertion is a cast; a plain Layouter still gets a tab.
 		if lh, ok := h.(host.LinkedLayouter); ok && st.Group && w.Path != "" {
 			err = toWorkspace(ctx, lh, w)
 		} else {
@@ -358,6 +384,10 @@ func toWorkspace(ctx context.Context, h host.LinkedLayouter, w Placed) error {
 		return err
 	}
 	if err := h.ToNewTabIn(ctx, w.Pane, ws, w.Slot); err != nil {
+		if rootTab != "" {
+			// Best effort: the move error is the one to report.
+			h.CloseTab(ctx, rootTab)
+		}
 		return err
 	}
 	if rootTab == "" {

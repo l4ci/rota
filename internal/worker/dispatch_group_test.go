@@ -29,6 +29,13 @@ func (g *groupHost) CloseWorkspace(_ context.Context, id string) error {
 	return nil
 }
 
+// The layout side of a host that can group; dispatch only asks that it exists.
+func (g *groupHost) OpenLinked(context.Context, string, string, string) (string, string, error) {
+	return "", "", nil
+}
+func (g *groupHost) ToNewTabIn(context.Context, string, string, string) error { return nil }
+func (g *groupHost) CloseTab(context.Context, string) error                   { return nil }
+
 func groupProject(t *testing.T, cfg string, handles map[string]string) string {
 	t.Helper()
 	dir := waitProject(t, 1, handles)
@@ -134,5 +141,23 @@ func TestDispatchOnAHostWithoutWorkspacesLinksNothing(t *testing.T) {
 	}
 	if got := LoadRegistryTolerant(dir).Slot("w1").WorkspaceID(); got != "" {
 		t.Errorf("workspaceId = %q, want none", got)
+	}
+}
+
+// Dispatch groups on the same capability layout does: a host that closes
+// workspaces but cannot link panes keeps its slots in tabs.
+type closerOnlyHost struct{ *fakeHost }
+
+func (g *closerOnlyHost) Capabilities() host.Capabilities              { return host.CapabilitiesOf(g) }
+func (g *closerOnlyHost) CloseWorkspace(context.Context, string) error { return nil }
+
+func TestDispatchNeedsAHostThatCanLinkToGroup(t *testing.T) {
+	dir := groupProject(t, `{"work":{"herdrGroupSlots":true}}`, nil)
+	h := &closerOnlyHost{tmuxFake()}
+	if err := dispatchOnce(t, dir, h); err != nil {
+		t.Fatal(err)
+	}
+	if h.spawnOpts.LinkWorkspace {
+		t.Error("LinkWorkspace on a host that cannot link panes")
 	}
 }
