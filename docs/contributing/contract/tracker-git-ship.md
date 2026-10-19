@@ -1,5 +1,5 @@
 ---
-verified-sha: c535c4cf9bd5b3b92d47e1d1df0c0014b4bfe750
+verified-sha: 39a3eca5901d9418177a6c257306c8c07dac7e2a
 refs:
   - internal/tracker
   - internal/ship
@@ -248,11 +248,12 @@ note: thresholds come from `release.nudgeAfterCommits` (10) and `release.nudgeAf
 ### rota release milestone-check
 rota release milestone-check <MNN>
 repo: scoped
-data: {"clear": bool, "blocked": [{"number": number, "title": string, "label": string}], "stillOpen": [{"number": number, "title": string}]}
+data: {"clear": bool, "blocked": [{"number": number, "title": string, "label": string}], "stillOpen": [{"number": number, "title": string}], "check": {"faults": number, "uncovered": number, "ok": bool} | null}
 exit: 1 when any issue is blocked (`clear: false`; open issues alone still exit 0); 2 at an umbrella root without --repo; 3 when the milestone is unknown; backend (issue-only); tracker
 old: hv-release-milestone-check <MNN> [--repo <repo>]
 shim: `blocked` and `stillOpen` come from the `blocked: #<n> <title> [<label>]` and `warning: #<n> <title> (still open)` lines, lowest number first. Old exit 6 becomes 1; otherwise the old backend rc mapping applies.
 note: the data list of open issues is `stillOpen`, not `warnings`, so it cannot be confused with the envelope's `warnings`.
+note: the last text line is `check:`, informational only and never a cause of exit 1: `check: clean`, or `check: <n> fault(s), <m> uncovered` from the same report as `rota milestone check <MNN>` (non-strict). `faults` counts the structural findings (missing `## Change`, unknown criterion, REMOVED without Reason or Migration, bad Touches, unlisted capability), `uncovered` the criteria no feature serves, `ok` is both zero. When the milestone body or its items cannot be read the line is `check: unavailable` and `check` is `null`.
 
 ### rota release close-milestone
 rota release close-milestone <MNN> --release <X.Y.Z>
