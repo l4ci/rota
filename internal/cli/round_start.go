@@ -47,6 +47,7 @@ func candidateList(cs []round.Candidate) []any {
 		setIf(o, "model", c.Pick.Model)
 		setIf(o, "pickError", c.PickErr)
 		o.Set("ready", c.Ready())
+		o.Set("scopeSource", c.ScopeSource)
 		if c.OpenPR != 0 {
 			o.Set("openPr", c.OpenPR)
 		}

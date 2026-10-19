@@ -24,6 +24,9 @@ func overlapList(os []round.Overlap) []any {
 		d.Set("slot", o.Slot)
 		d.Set("paths", strs(o.Paths))
 		d.Set("scopes", strs(o.Scopes))
+		if o.Inferred {
+			d.Set("inferred", true)
+		}
 		out = append(out, d)
 	}
 	return out
@@ -37,7 +40,11 @@ func overlapText(o round.Overlap) string {
 		w += " (" + o.Slot + ")"
 	}
 	if len(o.Scopes) > 0 {
-		w += ": scopes " + strings.Join(o.Scopes, ", ")
+		label := ": scopes "
+		if o.Inferred {
+			label = ": inferred scopes "
+		}
+		w += label + strings.Join(o.Scopes, ", ")
 	}
 	return w
 }

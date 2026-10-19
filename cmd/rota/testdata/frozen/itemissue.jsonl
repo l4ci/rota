@@ -13,7 +13,7 @@
 {"name":"claim/unknown","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"item not found: 99"},"ok":false},"db":"396d7faf5419e420"}]}
 {"name":"claim/win","steps":[{"exit":0,"env":{"data":{"changed":true,"claimId":"me","id":"2","type":"B"},"ok":true},"db":"cf420f47a3328ff7"}]}
 {"name":"claim/wrong-letter","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"item not found: F2"},"ok":false},"db":"396d7faf5419e420"}]}
-{"name":"comment-add/bad-kind","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"--kind must be question|answer|decision|feedback"},"ok":false},"db":"396d7faf5419e420"}]}
+{"name":"comment-add/bad-kind","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"--kind must be question|answer|decision|feedback|scope"},"ok":false},"db":"396d7faf5419e420"}]}
 {"name":"comment-add/empty","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"empty comment body"},"ok":false},"db":"396d7faf5419e420"}]}
 {"name":"comment-add/milestone-tracker","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"item not found: 3"},"ok":false},"db":"396d7faf5419e420"}]}
 {"name":"comment-add/question","steps":[{"exit":0,"env":{"data":{"changed":true,"commentId":"20","id":"2","kind":"question","type":"B"},"ok":true},"db":"2d8e9c21159572c7"}]}
@@ -22,7 +22,7 @@
 {"name":"comment-add/unicode","steps":[{"exit":0,"env":{"data":{"changed":true,"commentId":"20","id":"5","kind":"decision","type":"B"},"ok":true},"db":"f601467258669e01"}]}
 {"name":"comment-add/unknown","steps":[{"exit":3,"env":{"error":{"code":"resolution","exit":3,"message":"item not found: 99"},"ok":false},"db":"396d7faf5419e420"}]}
 {"name":"comment-list/all","steps":[{"exit":0,"env":{"data":{"comments":[{"kind":"question","text":"Why?\nmore","who":"fake-user"}],"id":"5","type":"B"},"ok":true},"text":"- fake-user · question · Why?\n  more\n","db":"396d7faf5419e420"}]}
-{"name":"comment-list/bad-kind","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"--kind must be question|answer|decision|feedback"},"ok":false},"text":"","db":"396d7faf5419e420"}]}
+{"name":"comment-list/bad-kind","steps":[{"exit":2,"env":{"error":{"code":"usage","exit":2,"message":"--kind must be question|answer|decision|feedback|scope"},"ok":false},"text":"","db":"396d7faf5419e420"}]}
 {"name":"comment-list/kind","steps":[{"exit":0,"env":{"data":{"comments":[{"kind":"question","text":"Why?\nmore","who":"fake-user"}],"id":"5","type":"B"},"ok":true},"text":"- fake-user · question · Why?\n  more\n","db":"396d7faf5419e420"}]}
 {"name":"comment-list/kind-empty","steps":[{"exit":0,"env":{"data":{"comments":[],"id":"5","type":"B"},"ok":true},"text":"","db":"396d7faf5419e420"}]}
 {"name":"comment-list/none","steps":[{"exit":0,"env":{"data":{"comments":[],"id":"2","type":"B"},"ok":true},"text":"","db":"396d7faf5419e420"}]}

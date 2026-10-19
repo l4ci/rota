@@ -46,6 +46,7 @@ type fakeRemote struct {
 	order     []string
 	details   map[string]string
 	comments  map[string][]string
+	kinds     map[string][]string
 	ready     map[string][]string // reasons; absent means ready
 	claims    map[string]string   // id -> earliest claim holder
 	more      map[string][]string // id -> later claims of a shared (best-of) item
@@ -328,14 +329,24 @@ func (f *fakeRemote) AddComment(ref, kind, text string) (string, error) {
 		f.comments = map[string][]string{}
 	}
 	f.comments[ref] = append(f.comments[ref], text)
+	if f.kinds == nil {
+		f.kinds = map[string][]string{}
+	}
+	f.kinds[ref] = append(f.kinds[ref], kind)
 	f.notes = append(f.notes, ref+": "+text)
 	return strconv.Itoa(len(f.comments[ref])), nil
 }
 
 func (f *fakeRemote) Comments(ref, kind string) ([]backlog.Comment, error) {
 	var out []backlog.Comment
-	for _, t := range f.comments[ref] {
-		out = append(out, backlog.Comment{Kind: "feedback", Text: t})
+	for i, t := range f.comments[ref] {
+		k := "feedback"
+		if i < len(f.kinds[ref]) {
+			k = f.kinds[ref][i]
+		}
+		if kind == "" || kind == k {
+			out = append(out, backlog.Comment{Kind: k, Text: t})
+		}
 	}
 	return out, nil
 }
