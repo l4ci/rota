@@ -40,6 +40,8 @@ What each `/rota-*` skill does, one line each. For details: [`reference/slash-co
 - **`rota config show` / `rota config set` / `rota config edit`**: read and change settings; `edit` opens the config screen (terminal only): keys by section with their description, `Enter` edits, `l` writes to `config.local.json`, `r` resets. `rota config save-global` saves this project's config as the defaults for new projects.
 - **`rota update`**: check for a newer release.
 - **`rota migrate issues`**: move the backlog to GitHub or GitLab issues.
+- **`rota migrate milestones`**: checkbox the `## Acceptance` bullets in milestone files so criteria number as AC-n. Previews by default; `--apply` writes.
+- **`rota milestone check <MNN>`**: check a milestone's `## Capabilities` against its feature issues' `## Change` sections and list the `## Acceptance` criteria no feature serves. `--strict` fails on uncovered criteria.
 - **`rota skills install` / `update` / `status`**: write the skills for Claude Code and Codex, refresh them after an upgrade, compare with the binary.
 - **`rota round start` / `assign` / `wait` / `status` / `wind-down`**: run a round: take the lease, hand an issue to a slot, block until a worker needs you, list slots, park everything and release the lease.
 - **`rota round summary`**: what a round cost: a row per issue, totals per slot and per account, and the gate audit lines. Wind-down prints it too.
