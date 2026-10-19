@@ -7,11 +7,12 @@ import (
 	"context"
 	"math/big"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/l4ci/rota/internal/proc"
 )
 
 // Repo is the GitHub repository whose latest release rota update asks about.
@@ -45,9 +46,9 @@ type Env struct {
 }
 
 // DefaultEnv is the real machine. Latest reads ROTA_TEST_LATEST_VERSION through
-// getenv first (no network) and otherwise runs `gh api repos/<repo>/releases/latest`,
-// which only reads.
-func DefaultEnv(current string, getenv func(string) string) Env {
+// getenv first (no network) and otherwise runs `gh api repos/<repo>/releases/latest`
+// through run, which only reads.
+func DefaultEnv(current string, getenv func(string) string, run proc.Runner) Env {
 	var dir string
 	if exe, err := os.Executable(); err == nil {
 		if real, err := filepath.EvalSymlinks(exe); err == nil {
@@ -55,30 +56,24 @@ func DefaultEnv(current string, getenv func(string) string) Env {
 		}
 		dir = filepath.Dir(exe)
 	}
-	return Env{ExeDir: dir, Current: current, Latest: func() string { return ghLatest(getenv) }}
+	return Env{ExeDir: dir, Current: current, Latest: func() string { return ghLatest(getenv, run) }}
 }
 
-// lookPath finds gh. It is a variable so tests can refuse any gh that is not
-// the fake in test/fakes: rota update must never reach the network from a test.
-var lookPath = exec.LookPath
-
-// ghLatest reads ROTA_TEST_LATEST_VERSION (no network) first; without gh or on
-// any failure it is "".
-func ghLatest(getenv func(string) string) string {
+// ghLatest reads ROTA_TEST_LATEST_VERSION (no network) first; otherwise it asks
+// gh through run. A missing gh, a non-zero exit or a timeout is "".
+func ghLatest(getenv func(string) string, run proc.Runner) string {
 	if v := getenv("ROTA_TEST_LATEST_VERSION"); v != "" {
 		return v
 	}
-	gh, err := lookPath("gh")
-	if err != nil {
+	res, err := run(context.Background(), proc.Cmd{
+		Name:    "gh",
+		Args:    []string{"api", "repos/" + Repo + "/releases/latest", "--jq", ".tag_name"},
+		Timeout: 30 * time.Second,
+	})
+	if err != nil || res.ExitCode != 0 {
 		return ""
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	out, err := exec.CommandContext(ctx, gh, "api", "repos/"+Repo+"/releases/latest", "--jq", ".tag_name").Output()
-	if err != nil {
-		return ""
-	}
-	tag := strings.TrimRight(string(out), "\n")
+	tag := strings.TrimRight(res.Stdout, "\n")
 	return strings.TrimPrefix(tag, "v")
 }
 
