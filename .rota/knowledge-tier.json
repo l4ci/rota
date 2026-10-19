@@ -403,8 +403,8 @@
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes::Gate target fields change mid-run": {
       "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-12"
+      "hits": 1,
+      "lastSeen": "2026-10-19"
     },
     "Architecture: Helper conventions & invariants: Go verbs & fakes::Gate steps read the forge only after stepRemote": {
       "tier": "provisional",
@@ -578,8 +578,8 @@
     },
     "Build & Tooling: Smoke testing: Sections & fixtures::A verb captured in $(...) aborts the section silently when it exits non-zero": {
       "tier": "confirmed",
-      "hits": 7,
-      "lastSeen": "2026-10-18"
+      "hits": 8,
+      "lastSeen": "2026-10-19"
     },
     "Build & Tooling: Smoke testing: Sections & fixtures::Inverted grep assertion (grep && fail) aborts the section under set -e": {
       "tier": "confirmed",
@@ -603,8 +603,8 @@
     },
     "Build & Tooling: Smoke testing: Sections & fixtures::Fixtures that expect issue or forge reads must pin the source and forge": {
       "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-15"
+      "hits": 1,
+      "lastSeen": "2026-10-19"
     },
     "Build & Tooling: Smoke testing: Sections & fixtures::Failing-verify tests must own their TMPDIR": {
       "tier": "provisional",
@@ -665,6 +665,21 @@
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-08"
+    },
+    "Rounds: Orchestration: Slate & issues::Add acceptance to a thin issue by REST, from the repo root, after test -s": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-19"
+    },
+    "Rounds: Orchestration: Review & merge gate::Stash the tier sidecar around a gate run on main": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-19"
+    },
+    "Rounds: Orchestration: Review & merge gate::Light reviews still carry the acceptance criteria": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-19"
     }
   }
 }
