@@ -12,6 +12,12 @@ import (
 
 const archivedNeighbor = "# Archive\n- ~~**[B09] [P2] neighbor.** keep~~ Done 2020-01-01 [`z`]\n"
 
+// pinTemp restores the fixed "<path>.tmp" temp name so a test can block it.
+func pinTemp(t *testing.T) {
+	t.Helper()
+	t.Cleanup(fsio.SetTempNameForTest(func(p string) string { return p + ".tmp" }))
+}
+
 func blockPath(t *testing.T, path string) {
 	t.Helper()
 	if err := os.Mkdir(path, 0755); err != nil {
@@ -20,6 +26,7 @@ func blockPath(t *testing.T, path string) {
 }
 
 func TestArchiveTransferFailures(t *testing.T) {
+	pinTemp(t)
 	for _, failure := range []string{"lock", "read", "destination write", "source write"} {
 		t.Run(failure, func(t *testing.T) {
 			f := fileBackend(t, completed)
@@ -72,6 +79,7 @@ func TestArchiveTransferFailures(t *testing.T) {
 }
 
 func TestReopenTransferRetry(t *testing.T) {
+	pinTemp(t)
 	f := fileBackend(t, completed)
 	if _, err := f.Archive(5, day(t, "2026-10-02")); err != nil {
 		t.Fatal(err)
@@ -170,6 +178,7 @@ func TestLifecycleWaitsForArchiveLock(t *testing.T) {
 }
 
 func TestInterruptedArchiveFollowup(t *testing.T) {
+	pinTemp(t)
 	for _, op := range []string{"reopen", "remove"} {
 		t.Run(op, func(t *testing.T) {
 			f := fileBackend(t, completed)
