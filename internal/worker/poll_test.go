@@ -740,3 +740,80 @@ func TestLimitRegexIncludesKindPhrases(t *testing.T) {
 		t.Error("LimitRegex drops opencode quota text")
 	}
 }
+
+// A limit or Add-funds phrase quoted by an echoed brief or relay is the
+// orchestrator's text, not the session's: only what the worker prints after its
+// reply marker counts (#883).
+func TestClassifyLimitPhraseInEchoedBriefIsNotLimited(t *testing.T) {
+	brief := "--- ORCHESTRATOR (round 24) ---\nYou are nia.\nOut of scope: The Add funds escalation behaviour.\nThe session says: You've reached your usage limit\n\n"
+	st, ev := Classify(brief, false, 60, "idle")
+	if st == StateLimited {
+		t.Fatalf("echoed brief read as limited: %s %q", st, ev)
+	}
+	if st, _ := Classify(brief, true, 60, ""); st != StateBusy {
+		t.Errorf("moving pane under an echoed brief: %s", st)
+	}
+	if _, _, ok := FindLimit("", StripRelays("", brief)); ok {
+		t.Error("StripRelays left the echoed phrase in")
+	}
+	own := brief + "● working\nYou've reached your usage limit\nAdd funds to continue\n"
+	st, ev = Classify(own, false, 60, "idle")
+	if st != StateLimited || !strings.Contains(ev, "Add funds") {
+		t.Errorf("phrases after the worker's reply marker: %s %q", st, ev)
+	}
+}
+
+// A limit banner is printed by the harness, so it has no reply marker: it must
+// still read as limited when it follows a signed brief that quoted the phrase.
+func TestClassifyBareBannerAfterSignedBriefIsLimited(t *testing.T) {
+	sig := "--- ROTA-SIG " + strings.Repeat("ab", 32) + " ---\n"
+	brief := "--- ORCHESTRATOR (round 25) ---\nYou are kit.\nThe session says: You've hit your usage limit\n" + sig
+	if st, ev := Classify(brief, false, 60, "idle"); st == StateLimited {
+		t.Fatalf("signed brief alone read as limited: %q", ev)
+	}
+	if st, ev := Classify(brief+"You've hit your usage limit\n", false, 60, "idle"); st != StateLimited {
+		t.Errorf("bare banner after the signature: %s %q", st, ev)
+	}
+}
+
+// The evidence is sliced from the stripped text: a relay ahead of the limit
+// line must not shift it.
+func TestClassifyLimitEvidenceAfterRelay(t *testing.T) {
+	pane := "--- ORCHESTRATOR (round 25) ---\n[relay] a long forwarded note that is dropped from the evidence offset\nmore relay text\n\n● working\nYou've reached your usage limit\n"
+	st, ev := Classify(pane, false, 60, "idle")
+	if st != StateLimited || !strings.Contains(ev, "usage limit") || strings.Contains(ev, "relay") {
+		t.Errorf("evidence after a relay: %s %q", st, ev)
+	}
+}
+
+// Claude Code echoes a submitted prompt as "❯ <first line>" with every further
+// line indented two spaces. The echo is the orchestrator's; the first line
+// back at column 0 (a harness banner) or a reply marker is the session's.
+func TestClassifyClaudeEchoedBrief(t *testing.T) {
+	brief := "❯ --- ORCHESTRATOR (round 25) ---\n  You are kit.\n  Out of scope: The Add funds escalation behaviour.\n\n  The session says: You've hit your usage limit\n"
+	classify := func(pane string) (string, string) {
+		return ClassifyFor("claude", pane, false, 60, "idle")
+	}
+	for name, pane := range map[string]string{
+		"no reply yet": brief,
+		"after reply":  brief + "\n● Reading the issue\n",
+	} {
+		if st, ev := classify(pane); st == StateLimited {
+			t.Errorf("%s: echoed brief read as limited: %q", name, ev)
+		}
+	}
+	// Without the Add-funds line: reFunds stays fail-closed on the whole tail.
+	plain := "❯ --- ORCHESTRATOR (round 25) ---\n  You are kit.\n  The session says: You've hit your usage limit\n"
+	banner := plain + "\nYou've hit your usage limit · resets 5pm\n"
+	if st, ev := classify(banner); st != StateLimited || strings.Contains(ev, "Add funds") {
+		t.Errorf("bare banner after the echo: %s %q", st, ev)
+	}
+	funds := banner + "Add funds to continue\n"
+	if st, ev := classify(funds); st != StateLimited || !strings.Contains(ev, "Add funds") {
+		t.Errorf("banner with Add funds after the echo: %s %q", st, ev)
+	}
+	// Add-funds only inside the echo, no limit anywhere: not limited.
+	if st, ev := classify("❯ --- ORCHESTRATOR (round 25) ---\n  Add funds is out of scope.\n"); st == StateLimited {
+		t.Errorf("Add funds only in the echo: %q", ev)
+	}
+}
