@@ -224,34 +224,19 @@ func (d *Deps) workerEnv() worker.Env {
 		}
 	}
 	if e.Forge == nil {
-		// and so does its forge: the executor swap and the read cache that
-		// Deps.forge applies, so freshReads covers the gate's reads too.
+		// and so does its forge, but only the executor swap: never the read
+		// cache. The gate re-reads the forge in loops that need a fresh answer
+		// each time (PRMergeable retries, CommitChecks polls, PRView after a
+		// push), and nothing in a gate run calls freshReads.
 		ctx := e.Ctx
 		if ctx == nil {
 			ctx = context.Background()
 		}
 		e.Forge = func(provider, dir string, s tracker.Settings) (worker.Forge, error) {
-			f, err := tracker.NewForge(ctx, s, provider, dir, d.trackerOptions()...)
-			if err != nil {
-				return nil, err
-			}
-			return freshChecksForge{Forge: f, d: d}, nil
+			return tracker.NewForge(ctx, s, provider, dir, d.TrackerOptions...)
 		}
 	}
 	return e
-}
-
-// freshChecksForge drops the read cache before each CommitChecks. The CI
-// verifier polls the same commit in one process until its checks settle, so a
-// cached first answer would repeat until the timeout.
-type freshChecksForge struct {
-	worker.Forge
-	d *Deps
-}
-
-func (f freshChecksForge) CommitChecks(ctx context.Context, sha string) ([]tracker.CheckRun, error) {
-	f.d.freshReads()
-	return f.Forge.CommitChecks(ctx, sha)
 }
 
 // baseRoundEnv is the round.Env every round verb starts from: the one Git, the
@@ -283,10 +268,10 @@ func (d *Deps) orchestrateEnv() orchestrate.Env {
 }
 
 // forge is the one place a verb builds its forge (pull requests, checks,
-// releases; workerEnv wires the worker verbs' factory to the same options):
-// settings from cfg, forge.provider resolution (a local forge is
+// releases): settings from cfg, forge.provider resolution (a local forge is
 // tracker.ErrLocalForge) and the TrackerOptions a test swaps the executor
-// through.
+// through. The worker verbs build theirs in workerEnv, with the same
+// TrackerOptions but no read cache.
 func (d *Deps) forge(ctx context.Context, cfg any, provider, dir string) (tracker.Forge, error) {
 	return tracker.NewForgeFromConfig(ctx, cfg, provider, dir, d.trackerOptions()...)
 }
