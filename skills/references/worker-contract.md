@@ -40,6 +40,7 @@ Work only this task, then stop.
   When those files are absent, use the tier table: if your brief names your tier and
   a tier table, use it for the model names; if it names none, use your harness's own
   defaults. Say which tier you ran on in your PR body when the brief asks for it.
+- Read depth. Apply the read-depth rule in [`subagent-dispatch.md`](subagent-dispatch.md) to your own subagents: ask each for a headline of at most 25 words first, read that, open the body only to act on it, and pass paths in briefs, never pasted file contents.
 - Tracer stop. When the plan's first task (T1, the tracer) fails its Verify, or its RED run
   does not turn green, build no later task: print `ROTA-BLOCKED <slot>: <the failure>` and
   stop. A one-task plan has no tracer.
