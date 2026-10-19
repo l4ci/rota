@@ -344,3 +344,15 @@ func TestInheritAllowsAnExplicitTier(t *testing.T) {
 		t.Errorf("claude map %v, want %v", s.Models[harness.Claude], want)
 	}
 }
+
+func TestProfileNamesMatchConfigChoices(t *testing.T) {
+	for _, key := range config.Keys {
+		if key.Name == "round.profile" {
+			if !reflect.DeepEqual(key.Choices, ProfileNames) {
+				t.Errorf("round.profile choices %v != ProfileNames %v", key.Choices, ProfileNames)
+			}
+			return
+		}
+	}
+	t.Fatal("round.profile key missing")
+}

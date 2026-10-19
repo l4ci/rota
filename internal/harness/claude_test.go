@@ -16,6 +16,7 @@ func TestWorkerCommandModel(t *testing.T) {
 		{`{"work":{"workerCommand":"wrap -x"}}`, "haiku", "wrap -x", false},
 		{`{"work":{"workerCommand":"wrap -m {model}"}}`, "haiku", "wrap -m haiku", true},
 		{`{"work":{"workerCommand":"wrap -m {model}"},"models":{"worker":"opus"}}`, "", "wrap -m opus", true},
+		{`{"work":{"workerCommand":"sh -c \"a  b\" -m {model}"}}`, "haiku", `sh -c "a  b" -m haiku`, true},
 	}
 	for _, c := range cases {
 		cfg := cfgOf(t, c.cfg)
