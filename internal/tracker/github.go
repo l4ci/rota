@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"regexp"
 	"sort"
 	"strconv"
@@ -760,4 +761,59 @@ func ghCheckState(status, conclusion string) string {
 		return CheckSkipped
 	}
 	return CheckFailure
+}
+
+// IssueEditors names the author and last editor of an issue's body; "" for a
+// deleted account or an issue never edited.
+func (g *GitHub) IssueEditors(ctx context.Context, key IssueKey) (string, string, error) {
+	number, err := numOf(key)
+	if err != nil {
+		return "", "", err
+	}
+	const q = `query($owner:String!,$repo:String!,$n:Int!){repository(owner:$owner,name:$repo){issue(number:$n){author{login} lastEditedBy{login}}}}`
+	var d struct {
+		Data struct {
+			Repository struct {
+				Issue struct {
+					Author       *struct{ Login string } `json:"author"`
+					LastEditedBy *struct{ Login string } `json:"lastEditedBy"`
+				} `json:"issue"`
+			} `json:"repository"`
+		} `json:"data"`
+	}
+	args := []string{"api", "graphql", "-f", "query=" + q, "-F", "owner={owner}", "-F", "repo={repo}", "-F", "n=" + strconv.Itoa(number)}
+	if err := g.json(ctx, args, &d); err != nil {
+		return "", "", err
+	}
+	var author, editor string
+	if a := d.Data.Repository.Issue.Author; a != nil {
+		author = a.Login
+	}
+	if e := d.Data.Repository.Issue.LastEditedBy; e != nil {
+		editor = e.Login
+	}
+	return author, editor, nil
+}
+
+// reLogin is a GitHub login, optionally an app's "[bot]" account. Checked
+// before a login becomes part of an API path.
+var reLogin = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9-]*(\[bot\])?$`)
+
+// CanPush says whether login holds write access or more on the repository. A
+// user who is not a collaborator answers read or none, so false.
+func (g *GitHub) CanPush(ctx context.Context, login string) (bool, error) {
+	if !reLogin.MatchString(login) {
+		return false, failed("not a GitHub login: %q", login)
+	}
+	var d struct {
+		Permission string `json:"permission"`
+	}
+	if err := g.json(ctx, []string{"api", "repos/{owner}/{repo}/collaborators/" + url.PathEscape(login) + "/permission"}, &d); err != nil {
+		return false, err
+	}
+	switch d.Permission {
+	case "admin", "maintain", "write":
+		return true, nil
+	}
+	return false, nil
 }

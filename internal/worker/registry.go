@@ -462,6 +462,9 @@ type Env struct {
 	// Shell runs one verification command through `sh -c` in dir and returns
 	// its combined output and exit code.
 	Shell func(ctx context.Context, dir, command string) (output string, code int)
+	// ShellEnv is Shell with the whole environment replaced by environ: the
+	// behaviour run's steps see nothing of the gate's own environment.
+	ShellEnv func(ctx context.Context, dir, command string, environ []string) (output string, code int)
 	// Run runs one tool with extra environment (CODEX_HOME) and returns what
 	// it left behind; a command that ran and failed is a Result with ExitCode
 	// set, an error means it could not run at all. Every codex and herdr call
@@ -545,6 +548,9 @@ func (e Env) withDefaults() Env {
 	if e.Shell == nil {
 		e.Shell = execShell
 	}
+	if e.ShellEnv == nil {
+		e.ShellEnv = execShellEnv
+	}
 	if e.Run == nil {
 		e.Run = execRun
 	}
@@ -570,6 +576,22 @@ func execRun(ctx context.Context, name string, args, env []string) (host.Result,
 func execShell(ctx context.Context, dir, command string) (string, int) {
 	res, err := proc.Run(ctx, proc.Cmd{
 		Name: "sh", Args: []string{"-c", command}, Dir: dir,
+		Timeout: proc.NoTimeout, Combined: true, Group: true,
+	})
+	if err != nil {
+		return err.Error(), 127
+	}
+	return res.Stdout, res.ExitCode
+}
+
+// execShellEnv is the production Env.ShellEnv: execShell under exactly
+// environ. An empty environ means an empty environment, not the caller's.
+func execShellEnv(ctx context.Context, dir, command string, environ []string) (string, int) {
+	if environ == nil {
+		environ = []string{}
+	}
+	res, err := proc.Run(ctx, proc.Cmd{
+		Name: "sh", Args: []string{"-c", command}, Dir: dir, Environ: environ,
 		Timeout: proc.NoTimeout, Combined: true, Group: true,
 	})
 	if err != nil {

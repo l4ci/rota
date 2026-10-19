@@ -1,12 +1,15 @@
 package worker
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/verdict"
 )
 
@@ -219,5 +222,162 @@ func TestGateBehaviourSkippedWhenNothingVerifies(t *testing.T) {
 				t.Error("a behaviour run happened")
 			}
 		})
+	}
+}
+
+// #899 trust: steps run only when the issue's author and last editor can push.
+
+const tryTouch = "## Try it\n\n- touch ran.txt && echo ran\n"
+
+func ranMarker(w *world) bool { return exists(filepath.Join(w.dir, "ran.txt")) }
+
+func TestGateBehaviourTrustSkips(t *testing.T) {
+	for name, tc := range map[string]struct {
+		set  map[string]string
+		want string
+	}{
+		"author": {map[string]string{"author": "mallory", "readers": "mallory"},
+			"BEHAVIOUR-SKIP w1 — author mallory of #899 is not a collaborator with write access, so its Try it steps did not run"},
+		"last editor": {map[string]string{"editor": "eve", "readers": "eve"},
+			"BEHAVIOUR-SKIP w1 — last editor eve of #899 is not a collaborator with write access, so its Try it steps did not run"},
+		"unknown author": {map[string]string{"authorUnknown": "1"},
+			"BEHAVIOUR-SKIP w1 — the author of #899 is unknown, so its Try it steps did not run"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			w, gate := behaviourWorld(t, tryTouch)
+			for k, v := range tc.set {
+				w.forge(k, v)
+			}
+			res, err := gate(GateOpts{})
+			if err != nil || res.Verdict != GatePass || !hasNote(res, tc.want) {
+				t.Fatalf("%+v %v\nwant note %q", res, err, tc.want)
+			}
+			if ranMarker(w) || strings.Contains(w.logText(), "AddMRNote") {
+				t.Error("a step ran or a comment posted")
+			}
+			if _, ok := verdict.Latest(verdict.Load(w.dir).Branches["w1"], verdict.Behaviour); ok {
+				t.Error("a behaviour verdict was recorded")
+			}
+			if _, err := os.Stat(filepath.Join(w.dir, ".rota", "qa-runs", "behaviour")); err == nil {
+				t.Error("a transcript was written")
+			}
+		})
+	}
+}
+
+func TestGateBehaviourTrustedAuthorAndEditorRun(t *testing.T) {
+	w, gate := behaviourWorld(t, tryTouch)
+	w.forge("editor", "bob")
+	res, err := gate(GateOpts{})
+	if err != nil || res.Verdict != GatePass || !hasNote(res, "BEHAVIOUR w1 — PASS") {
+		t.Fatalf("%+v %v", res, err)
+	}
+	log := w.logText()
+	if !strings.Contains(log, "CanPush alice") || !strings.Contains(log, "CanPush bob") {
+		t.Errorf("both were not checked:\n%s", log)
+	}
+}
+
+func TestGateBehaviourSameEditorIsCheckedOnce(t *testing.T) {
+	w, gate := behaviourWorld(t, tryTouch)
+	w.forge("editor", "alice")
+	if _, err := gate(GateOpts{}); err != nil {
+		t.Fatal(err)
+	}
+	if n := strings.Count(w.logText(), "CanPush alice"); n != 1 {
+		t.Errorf("CanPush alice asked %d times", n)
+	}
+}
+
+func TestGateBehaviourTrustReadFailureBreaksTheCheck(t *testing.T) {
+	for name, word := range map[string]string{"editors": "editorsErr", "canpush": "canPushErr"} {
+		t.Run(name, func(t *testing.T) {
+			w, gate := behaviourWorld(t, tryTouch)
+			w.forge(word, "forge down")
+			res, err := gate(GateOpts{})
+			if err != nil || res.Verdict != GateCheckBroke || !strings.Contains(res.Err, "cannot read who wrote #899 to trust its ## Try it steps") || !strings.Contains(res.Err, "forge down") {
+				t.Fatalf("%+v %v", res, err)
+			}
+			if ranMarker(w) {
+				t.Error("a step ran")
+			}
+		})
+	}
+}
+
+// bareIssues is an issue source that cannot say who wrote an issue.
+type bareIssues struct{ f *fakeForge }
+
+func (b bareIssues) Get(ctx context.Context, k tracker.IssueKey, c bool) (tracker.Issue, error) {
+	return b.f.Get(ctx, k, c)
+}
+func (b bareIssues) RemoveLabels(ctx context.Context, k tracker.IssueKey, l []string) error {
+	return b.f.RemoveLabels(ctx, k, l)
+}
+func (b bareIssues) ClosesIssue(k tracker.IssueKey, c tracker.ClosingSource) bool {
+	return b.f.ClosesIssue(k, c)
+}
+
+func TestGateBehaviourSourceWithoutTrustSkips(t *testing.T) {
+	w, _ := behaviourWorld(t, tryTouch)
+	w.setConfig(`{"issues":{"source":"jira"},"test":{"full":["true"]}}`)
+	e := w.env(false)
+	e.Issues = func(string, tracker.Settings) (Issues, error) {
+		return bareIssues{&fakeForge{w: w, provider: "jira"}}, nil
+	}
+	o := GateOpts{Slot: "w1", Base: "main", ItemBody: func(string) (string, bool, error) { return tryTouch, true, nil }}
+	res, err := e.Gate(bg, w.dir, o)
+	if err != nil || res.Verdict != GatePass ||
+		!hasNote(res, "BEHAVIOUR-SKIP w1 — the jira issue source cannot say whether #899's author is a collaborator, so its Try it steps did not run") {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if ranMarker(w) {
+		t.Error("a step ran")
+	}
+}
+
+func TestGateBehaviourFileSourceRunsUnchecked(t *testing.T) {
+	w, gate := behaviourWorld(t, tryTouch)
+	w.setConfig(`{"issues":{"source":"file"},"test":{"full":["true"]}}`)
+	res, err := gate(GateOpts{})
+	if err != nil || res.Verdict != GatePass || !hasNote(res, "BEHAVIOUR w1 — PASS") {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if log := w.logText(); strings.Contains(log, "IssueEditors") || strings.Contains(log, "CanPush") {
+		t.Errorf("trust was asked on a file source:\n%s", log)
+	}
+}
+
+func TestGateBehaviourStepEnvironIsScrubbed(t *testing.T) {
+	w, _ := behaviourWorld(t, "")
+	var got []string
+	e := w.env(false)
+	e.Getenv = func(k string) string {
+		return map[string]string{"ROTA_GATE_SHA_WAIT": "0", "PATH": "/p", "HOME": "/h", "GH_TOKEN": "secret"}[k]
+	}
+	e.ShellEnv = func(_ context.Context, _, _ string, environ []string) (string, int) {
+		got = append([]string(nil), environ...)
+		return "hi\n", 0
+	}
+	o := GateOpts{Slot: "w1", Base: "main", ItemBody: func(string) (string, bool, error) { return "## Try it\n\n- echo hi\n", true, nil }}
+	if res, err := e.Gate(bg, w.dir, o); err != nil || res.Verdict != GatePass {
+		t.Fatalf("%+v %v", res, err)
+	}
+	slices.Sort(got)
+	want := []string{"HOME=/h", "PATH=/p", "ROTA_DB_SUFFIX=_w1", "ROTA_PORT_BASE=20100", "ROTA_PORT_BLOCK=100"}
+	if !slices.Equal(got, want) {
+		t.Errorf("environ %q, want %q", got, want)
+	}
+}
+
+func TestExecShellEnvHidesTheCallersEnvironment(t *testing.T) {
+	t.Setenv("GH_TOKEN", "secret")
+	out, code := execShellEnv(bg, t.TempDir(), `echo "tok=${GH_TOKEN-unset} v=${KEEP-unset}"`, []string{"KEEP=1"})
+	if code != 0 || strings.TrimSpace(out) != "tok=unset v=1" {
+		t.Errorf("%d %q", code, out)
+	}
+	out, _ = execShellEnv(bg, t.TempDir(), `echo "tok=${GH_TOKEN-unset}"`, nil)
+	if strings.TrimSpace(out) != "tok=unset" {
+		t.Errorf("nil environ leaked: %q", out)
 	}
 }
