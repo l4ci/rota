@@ -135,6 +135,12 @@ Work only this task, then stop.
   concretely (a revert, a migration, a renamed flag users already typed), so the
   orchestrator can tell a harmless call from a risky one. Write `None` if you made
   none. Own calls go here, not under Approvals.
+- Put an `## Assumptions` section in your PR body. One line per question the issue did not
+  answer and you answered from the code: `<question> — <answer you chose> — <where in the code it
+  came from>`. Write `None` if there were none. A line here is not a Ruling: it has no cost and
+  no own call, only a gap in the ticket you filled from existing code. A choice that could cost
+  something if wrong goes under Rulings. The gate does not parse the section; the orchestrator
+  reads it before review.
 - When your PR is open, print `ROTA-DONE <slot> <pr-url>` and stop. Print it as the LAST line of your last message, after any summary of the work: a summary alone leaves the slot looking stuck. The dispatched brief repeats it with your slot filled in. If a slot goes idle with no sentinel but its branch heads an open PR, `rota worker poll` / `round wait` record it as done with that PR and note the sentinel was missing.
 - An architecture-review item (`arch(<area>): architecture review`) produces issues,
   not code, so it has no PR. When every finding is filed, print

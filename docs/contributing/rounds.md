@@ -126,7 +126,9 @@ new code. A new contract doc needs the stamp before it passes.
   no `Co-Authored-By` trailer.
 - The PR body carries an `## Approvals` section citing the channel of every decision you
   acted on (`None` if you acted only on your brief, which is not a relay). A `## Rulings`
-  section lists your own calls as `<what> — <why> — <cost if wrong>`. Reference the issue so it closes on
+  section lists your own calls as `<what> — <why> — <cost if wrong>`. An `## Assumptions` section lists each question the
+  issue left open that you answered from the code, as `<question> — <answer> — <where in the code>`
+  (`None` if there were none); it is not a Ruling. Reference the issue so it closes on
   merge, unless the PR is a partial slice.
 
 ## Tracker CLI gotchas

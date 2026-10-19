@@ -485,6 +485,11 @@ fresh, the PR is the worker's, provenance holds and the PR body closes the slot'
 (`Closes #N`, unless the issue is labelled `partial-slice`), then builds a scratch
 merge of the PR into the base, runs `test.full` there, then `test.e2e` when set, and merges on a pass.
 
+A worker's PR body carries four sections besides the closing keyword: `## Approvals` (the channel of each
+decision it acted on), `## Rulings` (its own calls, each with a cost if wrong), `## Assumptions` (each
+question the issue left open that it answered from the code, `None` if there were none) and the
+`Door:` line. The gate reads only `## Approvals`; the orchestrator reads the rest before review.
+
 The gate refuses before it merges anything (exit 4, nothing lands) in these cases:
 
 - **A recorded FAIL verdict** on the slot's branch (`blockedBy: verdict`, verdict `verdict-blocked`). A newer
