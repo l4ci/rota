@@ -15,6 +15,7 @@ import (
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -455,3 +456,106 @@ func TestReviewRelayRollbackLeavesABounceCountedAfterTheSnapshot(t *testing.T) {
 }
 
 func (h *sendHook) Capabilities() host.Capabilities { return host.CapabilitiesOf(h) }
+
+// freshFx is reviewFx with round.freshAt 2 and one bounce already counted, so
+// the next relay is the second bounce. Dana is idle.
+func freshFx(t *testing.T) (*moveFx, ReviewOpts) {
+	t.Helper()
+	f, _, o := reviewFx(t)
+	if _, err := worker.RecordBounce(worker.Env{}, f.root, "12", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	o.FreshAt, o.Board, o.Settings, o.HolderPID = 2, f.be, f.set, 100
+	o.OpenFindings = []string{"[high] rename x (a.go:3)"}
+	return f, o
+}
+
+func capReasons(t *testing.T, root string) []string {
+	t.Helper()
+	es, _ := ledger.Load(root)
+	var got []string
+	for _, e := range es {
+		if e.Kind == ledger.KindTransfer {
+			got = append(got, e.DetailStr("capReason"))
+		}
+	}
+	return got
+}
+
+func TestReviewRelayTransfersToAFreshSlotAtFreshAt(t *testing.T) {
+	f, o := freshFx(t)
+	f.host.sent = ""
+	got, err := f.env.ReviewRelay(bg, f.root, o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Fresh != "dana" || got.Bounces != 2 {
+		t.Fatalf("%+v", got)
+	}
+	reg := worker.LoadRegistryTolerant(f.root)
+	d := reg.Slot("dana")
+	if d.Task() != "12" || d.State() != "busy" || reg.Slot("ben").Task() != "" {
+		t.Errorf("the item moves to dana: dana %v ben %v", d, reg.Slot("ben"))
+	}
+	if reg.Bounces("12") != 2 {
+		t.Errorf("the transfer counts as a bounce: %d", reg.Bounces("12"))
+	}
+	if d.ReviewSeen() == "" {
+		t.Error("the review cursor must move to the receiver, or the batch relays again")
+	}
+	if got := capReasons(t, f.root); len(got) != 1 || got[0] != "fresh" {
+		t.Errorf("capReason rows = %v, want [fresh]", got)
+	}
+	for _, want := range []string{"[high] rename x (a.go:3)", "https://github.com/o/r/pull/9"} {
+		if !strings.Contains(f.host.sent, want) {
+			t.Errorf("brief lacks %q:\n%s", want, f.host.sent)
+		}
+	}
+	for _, bad := range []string{"please rename x", "REVIEW https://"} {
+		if strings.Contains(f.host.sent, bad) {
+			t.Errorf("brief carries relay history %q:\n%s", bad, f.host.sent)
+		}
+	}
+}
+
+func TestReviewRelayFreshFallsBackWithNoFreeSlot(t *testing.T) {
+	f, o := freshFx(t)
+	if _, err := f.assign("13", "dana"); err != nil {
+		t.Fatal(err)
+	}
+	got, err := f.env.ReviewRelay(bg, f.root, o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Fresh != "" || !strings.Contains(got.FreshSkipped, "no free slot") {
+		t.Fatalf("%+v", got)
+	}
+	if s := worker.LoadRegistryTolerant(f.root).Slot("ben"); s.Task() != "12" || len(s.Relays()) != 1 {
+		t.Errorf("plain relay into ben: task %q relays %d", s.Task(), len(s.Relays()))
+	}
+	if len(capReasons(t, f.root)) != 0 {
+		t.Error("no transfer row for a fallback")
+	}
+}
+
+func TestReviewRelayFreshOffOrNotDue(t *testing.T) {
+	f, o := freshFx(t)
+	o.FreshAt = 0
+	if got, err := f.env.ReviewRelay(bg, f.root, o); err != nil || got.Fresh != "" || got.FreshSkipped != "" {
+		t.Fatalf("freshAt 0: %+v %v", got, err)
+	}
+	f2, o2 := freshFx(t)
+	o2.FreshAt = 3 // the next relay is bounce 2, not 3
+	if got, err := f2.env.ReviewRelay(bg, f2.root, o2); err != nil || got.Fresh != "" || got.FreshSkipped != "" {
+		t.Fatalf("not due: %+v %v", got, err)
+	}
+}
+
+func TestReviewRelayFreshNeedsOpenFindings(t *testing.T) {
+	f, o := freshFx(t)
+	o.OpenFindings = nil
+	got, err := f.env.ReviewRelay(bg, f.root, o)
+	if err != nil || got.Fresh != "" || !strings.Contains(got.FreshSkipped, "no open findings") {
+		t.Fatalf("%+v %v", got, err)
+	}
+}
