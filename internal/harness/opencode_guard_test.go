@@ -10,18 +10,26 @@ import (
 )
 
 // runGuard dispatches a prompt through the guard in dir (as Prepare wrote it)
-// and returns the text OpenCode would hand the model. session names the
-// session the message belongs to; child marks it a subagent's.
+// and returns the text OpenCode would hand the model. child marks the session
+// a subagent's.
 func runGuard(t *testing.T, dir, prompt string, child bool) string {
 	t.Helper()
+	return runGuardParts(t, dir, `[{ "type": "text", "text": `+jsString(prompt)+` }]`, child)
+}
+
+// runGuardParts is runGuard for a message made of the given parts (JSON); it
+// returns the text of each part left, joined.
+func runGuardParts(t *testing.T, dir, parts string, child bool) string {
+	t.Helper()
 	driver := filepath.Join(t.TempDir(), "driver.mjs")
+	session := map[bool]string{true: "ses_child", false: "ses_root"}[child]
 	src := `
 import plugin from ` + jsString(filepath.Join(dir, GuardFile)) + `;
 const hooks = await plugin.server();
 if (` + boolJS(child) + `) await hooks.event({ event: { properties: { info: { id: "ses_child", parentID: "ses_root" } } } });
-const output = { message: {}, parts: [{ type: "text", text: ` + jsString(prompt) + ` }] };
-await hooks["chat.message"]({ sessionID: ` + jsString(map[bool]string{true: "ses_child", false: "ses_root"}[child]) + ` }, output);
-process.stdout.write(JSON.stringify(output.parts.map((p) => p.text)));
+const output = { message: {}, parts: ` + parts + ` };
+await hooks["chat.message"]({ sessionID: ` + jsString(session) + ` }, output);
+process.stdout.write(JSON.stringify(output.parts.map((p) => p.text ?? "<" + p.type + ">")));
 `
 	if err := os.WriteFile(driver, []byte(src), 0o600); err != nil {
 		t.Fatal(err)
@@ -32,11 +40,11 @@ process.stdout.write(JSON.stringify(output.parts.map((p) => p.text)));
 	if err != nil {
 		t.Fatalf("node: %v\n%s", err, out)
 	}
-	var parts []string
-	if err := json.Unmarshal(out, &parts); err != nil {
+	var got []string
+	if err := json.Unmarshal(out, &got); err != nil {
 		t.Fatalf("driver output %q: %v", out, err)
 	}
-	return strings.Join(parts, "\n")
+	return strings.Join(got, "\n")
 }
 
 func jsString(s string) string { b, _ := json.Marshal(s); return string(b) }
@@ -81,6 +89,15 @@ func TestOpenCodeGuard(t *testing.T) {
 		if got := runGuard(t, dir, c.prompt, c.child); got != c.want {
 			t.Errorf("%s: got %q, want %q", c.name, got, c.want)
 		}
+	}
+
+	// A message with no text part cannot carry a signature: a bare attachment
+	// is replaced, a synthetic part (OpenCode's own) is left alone.
+	if got := runGuardParts(t, dir, `[{ "type": "file", "url": "file:///etc/passwd", "mime": "text/plain" }]`, false); got != notice {
+		t.Errorf("an attachment with no text passed: %q", got)
+	}
+	if got := runGuardParts(t, dir, `[{ "type": "text", "text": "context from opencode", "synthetic": true }]`, false); got != "context from opencode" {
+		t.Errorf("a synthetic part was rewritten: %q", got)
 	}
 
 	// A rotated key (the next task dispatch) invalidates the old signature.

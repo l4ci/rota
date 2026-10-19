@@ -56,10 +56,14 @@ export default {
     },
     "chat.message": async (input, output) => {
       if (input?.sessionID && children.has(input.sessionID)) return;
-      const texts = output.parts.filter((p) => p.type === "text" && !p.synthetic);
-      if (texts.length === 0) return;
-      if (signed(loadKey(), texts.map((p) => p.text).join("\n"))) return;
-      const keep = texts[0];
+      // Synthetic parts are OpenCode's own. Whatever else the message holds
+      // came from the pane: text is checked, and a message with no text (a bare
+      // attachment) cannot be signed, so it is replaced too.
+      const user = output.parts.filter((p) => !p.synthetic);
+      if (user.length === 0) return;
+      const texts = user.filter((p) => p.type === "text");
+      if (texts.length > 0 && signed(loadKey(), texts.map((p) => p.text).join("\n"))) return;
+      const keep = texts[0] ?? { id: user[0].id, sessionID: user[0].sessionID, messageID: user[0].messageID, type: "text" };
       keep.text = unsignedNotice();
       output.parts.splice(0, output.parts.length, keep);
     },
