@@ -20,7 +20,17 @@ OUT=$(sc round candidates) || vfail
 [ "$(echo "$OUT" | jget data.candidates[0].scopeSource)" = "none" ] || fail "F02 declares nothing: $OUT"
 [ "$(echo "$OUT" | jget data.candidates[1].scopeSource)" = "touches" ] || fail "F03 declares Touches: $OUT"
 
-printf -- '- POST /items\n- Worker.Slot\n' > "$SC/inferred.txt"
+# The reply must end with the scoped. token: a hedge or a bare list is refused (exit 4), nothing recorded.
+printf -- '- POST /items\n- Worker.Slot\ntoo-vague.\n' > "$SC/hedged.txt"
+( cd "$SC" && "$ROTA_BIN" --json round scope F02 --body-file "$SC/hedged.txt" >/dev/null 2>&1 ) && rc=0 || rc=$?
+[ "$rc" = 4 ] || fail "a body ending too-vague. should exit 4, got $rc"
+printf -- '- POST /items\n- Worker.Slot\n' > "$SC/bare.txt"
+( cd "$SC" && "$ROTA_BIN" --json round scope F02 --body-file "$SC/bare.txt" >/dev/null 2>&1 ) && rc=0 || rc=$?
+[ "$rc" = 4 ] || fail "a body with no token should exit 4, got $rc"
+[ "$(sc round candidates | jget data.candidates[0].scopeSource)" = "none" ] || fail "a refused body must record nothing"
+pass "round scope refuses a body not ending scoped."
+
+printf -- '- POST /items\n- Worker.Slot\nscoped.\n' > "$SC/inferred.txt"
 OUT=$(sc round scope F02 --body-file "$SC/inferred.txt") || vfail
 [ "$(echo "$OUT" | jget data.source)" = "inferred" ] || fail "scope should record: $OUT"
 OUT=$(sc round candidates) || vfail
