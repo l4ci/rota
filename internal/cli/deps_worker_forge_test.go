@@ -47,3 +47,30 @@ func TestWorkerEnvForgeUsesTrackerOptions(t *testing.T) {
 		t.Errorf("freshReads did not clear the forge's cached read: %v", calls)
 	}
 }
+
+// TestWorkerEnvForgeRereadsCommitChecks pins that a CI poll sees fresh checks:
+// the gate calls CommitChecks in a loop within one process, so a cached first
+// answer would repeat until the timeout.
+func TestWorkerEnvForgeRereadsCommitChecks(t *testing.T) {
+	var calls int
+	d := testDeps()
+	d.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, _, _ string, _ []string, _ []byte) ([]byte, []byte, int, error) {
+		calls++
+		return []byte(`{"check_runs":[],"check_suites":[]}`), nil, 0, nil
+	}, func(n string) (string, error) { return "/fake/" + n, nil })}
+	f, err := d.workerEnv().Forge("github", t.TempDir(), tracker.Settings{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	read := func() int {
+		before := calls
+		if _, err := f.CommitChecks(context.Background(), "abc123"); err != nil {
+			t.Fatal(err)
+		}
+		return calls - before
+	}
+	first := read()
+	if second := read(); second != first {
+		t.Errorf("the second CommitChecks made %d forge calls, the first %d: it was served from the read cache", second, first)
+	}
+}
