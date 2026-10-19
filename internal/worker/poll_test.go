@@ -534,6 +534,36 @@ func TestClassifyLastSentinelWins(t *testing.T) {
 	}
 }
 
+// TestClassifyDoneBeforeRelayIsNotDone pins #873: a bounce relay lands under the
+// worker's old ROTA-DONE line, which stays in the pane. That sentinel predates
+// the relay, so the slot is not done until the worker prints a new one.
+func TestClassifyDoneBeforeRelayIsNotDone(t *testing.T) {
+	relay := "--- ORCHESTRATOR (round 23) ---\n[ORCHESTRATOR RELAY — forwarded.]\n\nREVIEW https://github.com/l4ci/rota/pull/871 (2 items)\n\n"
+	pane := "● ROTA-DONE ben https://github.com/l4ci/rota/pull/871\n\n" + relay
+	st, ev := Classify(pane, false, 60, "idle")
+	if st == StateDone {
+		t.Fatalf("pre-relay sentinel read as done: %s %q", st, ev)
+	}
+	if st != StateIdle || ev != staleDoneEvidence {
+		t.Errorf("static pane under a relay: %s %q", st, ev)
+	}
+	if st, _ := Classify(pane, true, 60, ""); st != StateBusy {
+		t.Errorf("moving pane under a relay: %s", st)
+	}
+	// The worker's own sentinel after the relay is a fresh done.
+	again := pane + "● fixed\n● ROTA-DONE ben https://github.com/l4ci/rota/pull/871\n"
+	if st, ev := Classify(again, false, 60, "idle"); st != StateDone || ev != "https://github.com/l4ci/rota/pull/871" {
+		t.Errorf("done after the relay: %s %q", st, ev)
+	}
+	// The forge fallback must not turn the stale row back into done.
+	rows := []PollRow{{"w1", StateIdle, staleDoneEvidence}}
+	w := newWorld(t, "")
+	w.forge("listed", "1")
+	if out, _ := w.env(false).withDefaults().promoteIdleWithPR(bg, w.dir, rows); out[0].State != StateIdle {
+		t.Errorf("stale row promoted by branch head: %v", out[0])
+	}
+}
+
 // A slot herdr cannot classify carries herdr's own explanation; a failing
 // explain leaves today's evidence and the poll still succeeds.
 func TestPollUnknownCarriesExplainExcerpt(t *testing.T) {
