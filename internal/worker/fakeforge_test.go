@@ -247,24 +247,26 @@ func (f *fakeForge) CommitChecks(_ context.Context, sha string) ([]tracker.Check
 	return checks, nil
 }
 
-// IssueEditors answers who wrote the issue: the forge DB word "author"
-// (default alice; "authorUnknown" makes it empty) and "editor" (default none).
-// "editorsErr" makes it fail.
-func (f *fakeForge) IssueEditors(_ context.Context, n tracker.IssueKey) (string, string, bool, error) {
-	f.logf("IssueEditors %s", n)
+// IssueAuthorship answers who wrote the issue and what it says: the forge DB
+// word "author" (default alice; "authorUnknown" makes it empty), "editor"
+// (default none) and "issueBody". "editorsErr" makes it fail.
+func (f *fakeForge) IssueAuthorship(_ context.Context, n tracker.IssueKey) (tracker.Authorship, error) {
+	f.logf("IssueAuthorship %s", n)
 	if msg := f.w.forgeWord("editorsErr"); msg != "" {
-		return "", "", false, errors.New(msg)
+		return tracker.Authorship{}, errors.New(msg)
 	}
 	// "edited" says the body was edited; with no "editor" the editor is unknown
-	edited := f.w.forgeWord("edited") != "" || f.w.forgeWord("editor") != ""
-	if f.w.forgeWord("authorUnknown") != "" {
-		return "", f.w.forgeWord("editor"), edited, nil
+	a := tracker.Authorship{
+		Editor: f.w.forgeWord("editor"), Body: f.w.forgeWord("issueBody"),
+		Edited: f.w.forgeWord("edited") != "" || f.w.forgeWord("editor") != "",
 	}
-	author := f.w.forgeWord("author")
-	if author == "" {
-		author = "alice"
+	if f.w.forgeWord("authorUnknown") == "" {
+		a.Author = f.w.forgeWord("author")
+		if a.Author == "" {
+			a.Author = "alice"
+		}
 	}
-	return author, f.w.forgeWord("editor"), edited, nil
+	return a, nil
 }
 
 // CanPush is true for every login but those in the comma list "readers";

@@ -26,9 +26,95 @@ import (
 // IssueTrust is the part of an issue tracker that says who wrote an issue
 // body and whether they may push: the behaviour run only executes steps a
 // collaborator wrote (#899 decision). Only the GitHub tracker implements it.
+// IssueAuthorship returns the body with the authors, so the steps that run are
+// the text that was vouched for.
 type IssueTrust interface {
-	IssueEditors(ctx context.Context, key tracker.IssueKey) (author, lastEditor string, edited bool, err error)
+	IssueAuthorship(ctx context.Context, key tracker.IssueKey) (tracker.Authorship, error)
 	CanPush(ctx context.Context, login string) (bool, error)
+}
+
+// TryItSource is where an item's Try it steps come from and who may vouch for them.
+type TryItSource struct {
+	Source string     // issues.source; "" or "file" is the file source
+	Issue  string     // the item id
+	Trust  IssueTrust // nil when the issue side has no trust check
+	// FileBody reads the item body of the file source (the base checkout, so
+	// it got there through a commit someone with push access landed).
+	FileBody func() (body string, found bool, err error)
+}
+
+// TrustedTryIt returns the body whose ## Try it steps may run. skip says why
+// they may not (the item is unknown, has no section, or its author or last
+// editor is not a collaborator with write access, or the source cannot say):
+// the caller notes it and runs nothing. err is a failed read, worded for a
+// CHECK-BROKE or a withheld brief.
+//
+// A file source is trusted. For any other source the body comes from the same
+// read that names its author and last editor, and the section is looked for
+// before any collaborator lookup, so an issue without Try it steps costs no
+// forge call beyond that read. Parse the steps only after this returns a body:
+// a malformed section of an untrusted issue must skip, not fail the gate.
+func TrustedTryIt(ctx context.Context, s TryItSource) (body, skip string, err error) {
+	ref := tracker.RefOf(s.Issue)
+	if s.Source == config.SourceFile || s.Source == "" {
+		body, found, err := s.FileBody()
+		switch {
+		case err != nil:
+			return "", "", fmt.Errorf("cannot read %s to look for its ## Try it steps: %w", ref, err)
+		case !found:
+			return "", ref + " is not in the backlog", nil
+		}
+		return sectioned(body, ref)
+	}
+	key, ok := tracker.ParseKey(s.Issue)
+	if !ok {
+		return "", fmt.Sprintf("%s is a repo-qualified key, and the trust check reads only the root repo", s.Issue), nil
+	}
+	if s.Trust == nil {
+		return "", fmt.Sprintf("the %s issue source cannot say whether %s's author is a collaborator", s.Source, ref), nil
+	}
+	readErr := func(err error) (string, string, error) {
+		return "", "", fmt.Errorf("cannot read who wrote %s to trust its ## Try it steps: %w", ref, err)
+	}
+	a, err := s.Trust.IssueAuthorship(ctx, key)
+	if err != nil {
+		return readErr(err)
+	}
+	if !itembody.TryItHeadRe.MatchString(a.Body) {
+		return "", ref + noTryItSection, nil
+	}
+	if a.Author == "" {
+		return "", fmt.Sprintf("the author of %s is unknown", ref), nil
+	}
+	if a.Edited && a.Editor == "" {
+		return "", fmt.Sprintf("the last editor of %s is unknown", ref), nil
+	}
+	for _, who := range []struct{ role, login string }{{"author", a.Author}, {"last editor", a.Editor}} {
+		if who.login == "" || (who.role == "last editor" && who.login == a.Author) {
+			continue
+		}
+		can, err := s.Trust.CanPush(ctx, who.login)
+		if err != nil {
+			return readErr(err)
+		}
+		if !can {
+			return "", fmt.Sprintf("%s %s of %s is not a collaborator with write access", who.role, who.login, ref), nil
+		}
+	}
+	return a.Body, "", nil
+}
+
+const noTryItSection = " has no ## Try it section"
+
+// NoTryIt says skip, a TrustedTryIt reason, is the plain absence of a ## Try it
+// section, which is not worth a word in a brief.
+func NoTryIt(skip string) bool { return strings.HasSuffix(skip, noTryItSection) }
+
+func sectioned(body, ref string) (string, string, error) {
+	if !itembody.TryItHeadRe.MatchString(body) {
+		return "", ref + noTryItSection, nil
+	}
+	return body, "", nil
 }
 
 // behaviourStepTimeout bounds one Try it step.
@@ -76,12 +162,24 @@ func (g *gate) behaviourRun(dir string) (bool, error) {
 		return skip("the gate cannot tell the item, so no Try it steps ran")
 	}
 	ref := tracker.RefOf(issue)
-	body, found, err := o.ItemBody(issue)
-	if err != nil {
-		return g.broke(fmt.Sprintf("cannot read %s to look for its ## Try it steps: %v", ref, err))
+	src := g.in.cfg.Tracker.Source
+	if src != config.SourceFile && src != "" && !g.remote {
+		// Project rule (#817): a gate step that calls the forge skips when the
+		// gate reads no origin refs.
+		return skip(fmt.Sprintf("the gate reads no origin refs (no PR), so it reads no forge for %s's Try it steps", ref))
 	}
-	if !found {
-		return skip(ref + " is not in the backlog, so no Try it steps ran")
+	trust, _ := g.issues.(IssueTrust)
+	body, why, err := TrustedTryIt(g.ctx, TryItSource{
+		Source: src, Issue: issue, Trust: trust,
+		FileBody: func() (string, bool, error) { return o.ItemBody(issue) },
+	})
+	switch {
+	case err != nil:
+		return g.broke(err.Error())
+	case NoTryIt(why):
+		return skip(why + "; no behaviour run")
+	case why != "":
+		return skip(why + ", so its Try it steps did not run")
 	}
 	steps, ok, err := itembody.ParseTryIt(body)
 	switch {
@@ -95,11 +193,12 @@ func (g *gate) behaviourRun(dir string) (bool, error) {
 		return skip(fmt.Sprintf("the ## Try it section of %s lists no steps", ref))
 	}
 
-	if trusted, done, err := g.behaviourTrust(issue, ref); !trusted {
-		return done, err
+	home, err := g.behaviourHome()
+	if err != nil {
+		return g.broke(fmt.Sprintf("cannot make an empty HOME for the Try it steps of %s: %v", ref, err))
 	}
-
-	environ := g.behaviourEnviron()
+	defer os.RemoveAll(home)
+	environ := g.behaviourEnviron(home)
 	results := make([]behaviourStep, len(steps))
 	failedAt := -1
 	for i, st := range steps {
@@ -125,66 +224,36 @@ func (g *gate) behaviourRun(dir string) (bool, error) {
 	return true, nil
 }
 
-// behaviourTrust decides whether the steps of issue may run: they do when the
-// issue's author and last editor can push to the repository. When they may not,
-// trusted is false and a skip note says why; a trust skip records nothing and
-// the gate goes on. done and err are g.broke's, for a forge read that failed. A file
-// source runs unchecked: its item body is read from the base checkout, so it
-// got there through a commit someone with push access landed.
-func (g *gate) behaviourTrust(issue, ref string) (trusted, done bool, err error) {
-	src := g.in.cfg.Tracker.Source
-	if src == config.SourceFile || src == "" {
-		return true, false, nil
+// behaviourHome makes the empty HOME of one behaviour run, under
+// .rota/qa-runs/behaviour/. The caller removes it however the run ends.
+func (g *gate) behaviourHome() (string, error) {
+	parent := filepath.Join(g.root, ".rota", "qa-runs", "behaviour")
+	if err := os.MkdirAll(parent, 0o755); err != nil {
+		return "", err
 	}
-	skip := func(why string) (bool, bool, error) {
-		g.res.Notes = append(g.res.Notes, fmt.Sprintf("BEHAVIOUR-SKIP %s — %s, so its Try it steps did not run", g.o.Slot, why))
-		return false, false, nil
-	}
-	key, ok := tracker.ParseKey(issue)
-	trust, _ := g.issues.(IssueTrust)
-	if !ok || trust == nil {
-		return skip(fmt.Sprintf("the %s issue source cannot say whether %s's author is a collaborator", src, ref))
-	}
-	broke := func(err error) (bool, bool, error) {
-		done, err := g.broke(fmt.Sprintf("cannot read who wrote %s to trust its ## Try it steps: %v", ref, err))
-		return false, done, err
-	}
-	author, editor, edited, err := trust.IssueEditors(g.ctx, key)
-	if err != nil {
-		return broke(err)
-	}
-	if author == "" {
-		return skip(fmt.Sprintf("the author of %s is unknown", ref))
-	}
-	if edited && editor == "" {
-		return skip(fmt.Sprintf("the last editor of %s is unknown", ref))
-	}
-	for _, who := range []struct{ role, login string }{{"author", author}, {"last editor", editor}} {
-		if who.login == "" || (who.role == "last editor" && who.login == author) {
-			continue
-		}
-		can, err := trust.CanPush(g.ctx, who.login)
-		if err != nil {
-			return broke(err)
-		}
-		if !can {
-			return skip(fmt.Sprintf("%s %s of %s is not a collaborator with write access", who.role, who.login, ref))
-		}
-	}
-	return true, false, nil
+	return os.MkdirTemp(parent, "home-")
 }
 
-// behaviourEnviron is the whole environment of a step: PATH and HOME, so the
-// shell finds its tools, plus the slot's port block and database suffix, so a
-// step started in the scratch tree does not collide with another slot's. No
-// forge token or other variable of the gate reaches a step.
-func (g *gate) behaviourEnviron() []string {
+// behaviourEnviron is the whole environment of a step: PATH; HOME and the XDG
+// and gh config dirs inside home, an empty temp dir, so no credential file of
+// the gate's user is found by its usual name; the Go cache and module paths of
+// the gate host, so a go step does not rebuild the world; and the slot's port
+// block and database suffix, so a step started in the scratch tree does not
+// collide with another slot's. No token or other variable of the gate's
+// environment reaches a step. The step still runs as the gate's OS user, so a
+// file that user can read stays readable by its absolute path.
+func (g *gate) behaviourEnviron(home string) []string {
 	environ := []string{}
-	for _, k := range []string{"PATH", "HOME"} {
-		if v := g.e.Getenv(k); v != "" {
-			environ = append(environ, k+"="+v)
-		}
+	if v := g.e.Getenv("PATH"); v != "" {
+		environ = append(environ, "PATH="+v)
 	}
+	environ = append(environ,
+		"HOME="+home,
+		"XDG_CONFIG_HOME="+filepath.Join(home, ".config"),
+		"XDG_DATA_HOME="+filepath.Join(home, ".local", "share"),
+		"XDG_CACHE_HOME="+filepath.Join(home, ".cache"),
+		"GH_CONFIG_DIR="+filepath.Join(home, ".config", "gh"))
+	environ = append(environ, g.goEnv()...)
 	name := g.target.Name
 	if name == "" {
 		return environ
@@ -205,6 +274,25 @@ func (g *gate) behaviourEnviron() []string {
 		environ = append(environ, kv)
 	}
 	return environ
+}
+
+// goEnv is GOCACHE, GOMODCACHE and GOPATH as the gate host's go reports them;
+// a variable it cannot report is left out.
+func (g *gate) goEnv() []string {
+	if g.e.Run == nil {
+		return nil
+	}
+	res, err := g.e.Run(g.ctx, "go", []string{"env", "GOCACHE", "GOMODCACHE", "GOPATH"}, nil)
+	if err != nil || res.ExitCode != 0 {
+		return nil
+	}
+	var out []string
+	for i, line := range strings.Split(res.Stdout, "\n") {
+		if names := [...]string{"GOCACHE", "GOMODCACHE", "GOPATH"}; i < len(names) && strings.TrimSpace(line) != "" {
+			out = append(out, names[i]+"="+strings.TrimSpace(line))
+		}
+	}
+	return out
 }
 
 func (g *gate) runBehaviourStep(dir string, environ []string, st itembody.TryStep) behaviourStep {

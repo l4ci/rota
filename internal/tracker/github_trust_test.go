@@ -15,37 +15,37 @@ func githubTrust(t *testing.T, s *scripted) *GitHub {
 	return g
 }
 
-func TestGitHubIssueEditors(t *testing.T) {
+func TestGitHubIssueAuthorship(t *testing.T) {
 	s := &scripted{answer: func(string, []string) (string, string, int) {
-		return `{"data":{"repository":{"issue":{"author":{"login":"ann"},"editor":{"login":"bob"},"lastEditedAt":"2026-10-19T00:00:00Z"}}}}`, "", 0
+		return `{"data":{"repository":{"issue":{"author":{"login":"ann"},"editor":{"login":"bob"},"lastEditedAt":"2026-10-19T00:00:00Z","body":"## Try it\n- echo hi"}}}}`, "", 0
 	}}
-	a, e, edited, err := githubTrust(t, s).IssueEditors(context.Background(), NumKey(899))
-	if err != nil || a != "ann" || e != "bob" || !edited {
-		t.Fatalf("%q %q %v %v", a, e, edited, err)
+	a, err := githubTrust(t, s).IssueAuthorship(context.Background(), NumKey(899))
+	if err != nil || a != (Authorship{Author: "ann", Editor: "bob", Edited: true, Body: "## Try it\n- echo hi"}) {
+		t.Fatalf("%+v %v", a, err)
 	}
-	for _, want := range []string{"api graphql", "-F owner={owner}", "-F repo={repo}", "-F n=899", "editor{login}", "lastEditedAt"} {
+	for _, want := range []string{"api graphql", "-F owner={owner}", "-F repo={repo}", "-F n=899", "editor{login}", "lastEditedAt", "body"} {
 		if !strings.Contains(s.calls[0], want) {
 			t.Errorf("call lacks %q: %s", want, s.calls[0])
 		}
 	}
 }
 
-func TestGitHubIssueEditorsNullsAreEmpty(t *testing.T) {
+func TestGitHubIssueAuthorshipNullsAreEmpty(t *testing.T) {
 	s := &scripted{answer: func(string, []string) (string, string, int) {
 		return `{"data":{"repository":{"issue":{"author":null,"editor":null}}}}`, "", 0
 	}}
-	a, e, edited, err := githubTrust(t, s).IssueEditors(context.Background(), NumKey(1))
-	if err != nil || a != "" || e != "" || edited {
-		t.Fatalf("%q %q %v %v", a, e, edited, err)
+	a, err := githubTrust(t, s).IssueAuthorship(context.Background(), NumKey(1))
+	if err != nil || a != (Authorship{}) {
+		t.Fatalf("%+v %v", a, err)
 	}
 }
 
-func TestGitHubIssueEditorsErrors(t *testing.T) {
+func TestGitHubIssueAuthorshipErrors(t *testing.T) {
 	g := githubTrust(t, &scripted{answer: func(string, []string) (string, string, int) { return "", "boom", 1 }})
-	if _, _, _, err := g.IssueEditors(context.Background(), NumKey(1)); err == nil {
+	if _, err := g.IssueAuthorship(context.Background(), NumKey(1)); err == nil {
 		t.Error("a failed call is not an error")
 	}
-	if _, _, _, err := g.IssueEditors(context.Background(), IssueKey("PROJ-1")); err == nil {
+	if _, err := g.IssueAuthorship(context.Background(), IssueKey("PROJ-1")); err == nil {
 		t.Error("a non-numeric key is not an error")
 	}
 }
@@ -88,12 +88,12 @@ func TestGitHubCanPushFailureIsAnError(t *testing.T) {
 
 // An edit by a deleted account has a lastEditedAt and no editor: edited is
 // true with an empty editor, so the gate cannot mistake it for an unedited body.
-func TestGitHubIssueEditorsDeletedEditor(t *testing.T) {
+func TestGitHubIssueAuthorshipDeletedEditor(t *testing.T) {
 	s := &scripted{answer: func(string, []string) (string, string, int) {
 		return `{"data":{"repository":{"issue":{"author":{"login":"ann"},"editor":null,"lastEditedAt":"2026-10-19T00:00:00Z"}}}}`, "", 0
 	}}
-	a, e, edited, err := githubTrust(t, s).IssueEditors(context.Background(), NumKey(1))
-	if err != nil || a != "ann" || e != "" || !edited {
-		t.Fatalf("%q %q %v %v", a, e, edited, err)
+	a, err := githubTrust(t, s).IssueAuthorship(context.Background(), NumKey(1))
+	if err != nil || a != (Authorship{Author: "ann", Edited: true}) {
+		t.Fatalf("%+v %v", a, err)
 	}
 }

@@ -763,15 +763,26 @@ func ghCheckState(status, conclusion string) string {
 	return CheckFailure
 }
 
-// IssueEditors names the author and last editor of an issue's body; "" for a
-// deleted account or an issue never edited. edited says the body was edited at
-// all, so an edit by a deleted account (no editor) is not mistaken for none.
-func (g *GitHub) IssueEditors(ctx context.Context, key IssueKey) (string, string, bool, error) {
+// Authorship is who wrote an issue body and the body they wrote, read in one
+// call so the trust check judges the text that is then used.
+type Authorship struct {
+	// Author and Editor are logins; "" for a deleted account, and for Editor an
+	// issue never edited.
+	Author, Editor string
+	// Edited says the body was edited at all, so an edit by a deleted account
+	// (no Editor) is not mistaken for none.
+	Edited bool
+	Body   string
+}
+
+// IssueAuthorship names the author and last editor of an issue's body and
+// returns that body.
+func (g *GitHub) IssueAuthorship(ctx context.Context, key IssueKey) (Authorship, error) {
 	number, err := numOf(key)
 	if err != nil {
-		return "", "", false, err
+		return Authorship{}, err
 	}
-	const q = `query($owner:String!,$repo:String!,$n:Int!){repository(owner:$owner,name:$repo){issue(number:$n){author{login} editor{login} lastEditedAt}}}`
+	const q = `query($owner:String!,$repo:String!,$n:Int!){repository(owner:$owner,name:$repo){issue(number:$n){author{login} editor{login} lastEditedAt body}}}`
 	var d struct {
 		Data struct {
 			Repository struct {
@@ -779,22 +790,24 @@ func (g *GitHub) IssueEditors(ctx context.Context, key IssueKey) (string, string
 					Author       *struct{ Login string } `json:"author"`
 					Editor       *struct{ Login string } `json:"editor"`
 					LastEditedAt *string                 `json:"lastEditedAt"`
+					Body         string                  `json:"body"`
 				} `json:"issue"`
 			} `json:"repository"`
 		} `json:"data"`
 	}
 	args := []string{"api", "graphql", "-f", "query=" + q, "-F", "owner={owner}", "-F", "repo={repo}", "-F", "n=" + strconv.Itoa(number)}
 	if err := g.json(ctx, args, &d); err != nil {
-		return "", "", false, err
+		return Authorship{}, err
 	}
-	var author, editor string
-	if a := d.Data.Repository.Issue.Author; a != nil {
-		author = a.Login
+	i := d.Data.Repository.Issue
+	a := Authorship{Edited: i.LastEditedAt != nil, Body: i.Body}
+	if i.Author != nil {
+		a.Author = i.Author.Login
 	}
-	if e := d.Data.Repository.Issue.Editor; e != nil {
-		editor = e.Login
+	if i.Editor != nil {
+		a.Editor = i.Editor.Login
 	}
-	return author, editor, d.Data.Repository.Issue.LastEditedAt != nil, nil
+	return a, nil
 }
 
 // reLogin is a GitHub login, optionally an app's "[bot]" account. Checked
