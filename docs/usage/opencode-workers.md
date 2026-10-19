@@ -60,12 +60,13 @@ tmux pastes a carriage return for every line break, and OpenCode's TUI drops tho
 
 ## Pane states and limits
 
-`rota worker poll` reads the pane: `esc interrupt` or `[retrying in 7s ...]` is busy, a `Model ... is not valid` dialog is blocked, and `ROTA-DONE` is read with or without OpenCode's `┃` gutter. An expired key (`This API key has expired`) and quota text (`insufficient quota`, `budget exceeded`, `limit exhausted`, `package has expired`) read as limited. An expired key says it needs a human; no reset clock exists for a per-token provider.
+`rota worker poll` reads the pane, applying OpenCode's wording to OpenCode slots only (a Claude or Codex pane that happens to show the same text is unaffected): `esc interrupt` or `[retrying in 7s ...]` is busy, a `Model ... is not valid` dialog is blocked, and `ROTA-DONE` is read with or without OpenCode's `┃` gutter. An expired key (`This API key has expired`) and quota text (`insufficient quota`, `budget exceeded`, `limit exhausted`, `package has expired`) read as limited. An expired key says it needs a human; no reset clock exists for a per-token provider.
 
 Known edges:
 
 - OpenCode draws in the alternate screen, so rota reads the visible viewport, not scrollback.
 - A provider that can't be reached shows the retry line for as long as it keeps retrying. `round.stallMinutes` is the only backstop. Under herdr the integration reports the error as `blocked`.
+- The limit watcher (`rota limit watch`) matches the shared phrases only, so OpenCode quota errors show in `worker poll` but do not trigger the watcher's account moves.
 - Plain throttling ("rate limit", "too many requests") is not a limit phrase: OpenCode retries it, and the retry line reads as busy.
 - The expired-key and bad-model fixtures are built from the wording OpenCode printed during the spike, not from a live run.
 

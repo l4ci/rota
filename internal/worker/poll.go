@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/l4ci/rota/internal/stamp"
+	"sync"
 
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/harness"
@@ -90,22 +91,16 @@ var (
 	// first line of every reply with "● " (older versions "⏺ "), Codex
 	// 0.159.x with "• ".
 	//
-	// OpenCode 1.17 prints the user message under a "┃" gutter and may gutter
-	// its own reply, so the gutter is accepted before a sentinel too; a
-	// guttered line whose evidence is still an angle-bracket placeholder is the
-	// echoed brief (lastSentinel).
-	reBlocked = regexp.MustCompile(`(?m)^\s*(?:[●⏺•┃]\s*)?ROTA-BLOCKED\s+(\S+)\s*:\s*(.+)$`)
-	reDone    = regexp.MustCompile(`(?m)^\s*(?:[●⏺•┃]\s*)?ROTA-DONE\s+(\S+)\s*(.*)$`)
-	reRetry   = regexp.MustCompile(`[Rr]etrying in`) // Claude Code "Retrying in", OpenCode "[retrying in 7s attempt #2]"
-	// OpenCode shows "esc interrupt" beside its spinner for as long as a turn
-	// runs. A provider that never answers keeps it up, so it is checked after
-	// the limit and dialog texts.
-	reOpenCodeBusy  = regexp.MustCompile(`esc interrupt`)
-	reOpenCodeKey   = regexp.MustCompile(`(?i)API key has expired`)
-	reOpenCodeModel = regexp.MustCompile(`Model (\S+) is not valid`)
-	reFunds         = regexp.MustCompile(`Add funds`)
-	reAPIErr        = regexp.MustCompile(`(API Error[^\n]*)`)
-	reResume        = regexp.MustCompile(`Resume this session with`)
+	// A kind whose TUI guttered its text (PaneVocab.Gutter) reads the guttered
+	// variants instead; see lastSentinel.
+	reBlocked  = regexp.MustCompile(`(?m)^\s*(?:[●⏺•]\s*)?ROTA-BLOCKED\s+(\S+)\s*:\s*(.+)$`)
+	reDone     = regexp.MustCompile(`(?m)^\s*(?:[●⏺•]\s*)?ROTA-DONE\s+(\S+)\s*(.*)$`)
+	reBlockedG = regexp.MustCompile(`(?m)^\s*(?:[●⏺•┃]\s*)?ROTA-BLOCKED\s+(\S+)\s*:\s*(.+)$`)
+	reDoneG    = regexp.MustCompile(`(?m)^\s*(?:[●⏺•┃]\s*)?ROTA-DONE\s+(\S+)\s*(.*)$`)
+	reRetry    = regexp.MustCompile(`Retrying in`)
+	reFunds    = regexp.MustCompile(`Add funds`)
+	reAPIErr   = regexp.MustCompile(`(API Error[^\n]*)`)
+	reResume   = regexp.MustCompile(`Resume this session with`)
 	// Heuristic, like DEAD: a limited session cannot print a sentinel. The
 	// patterns are anchored to phrasing a session emits about ITSELF, not bare
 	// words like "limit" that a worker reading source code would echo.
@@ -151,7 +146,10 @@ func compileAll(prefix string, pats []string) []*regexp.Regexp {
 }
 
 // reRelayHead opens an orchestrator relay or brief echoed into the pane.
-var reRelayHead = regexp.MustCompile(`^\s*(?:┃\s*)?--- ORCHESTRATOR \(round \d+\) ---\s*$`)
+var reRelayHead = regexp.MustCompile(`^\s*--- ORCHESTRATOR \(round \d+\) ---\s*$`)
+
+// reRelayHeadG is reRelayHead under the gutter.
+var reRelayHeadG = regexp.MustCompile(`^\s*(?:┃\s*)?--- ORCHESTRATOR \(round \d+\) ---\s*$`)
 
 // reGutter starts a line of OpenCode's user-message gutter, and rePlaceholder
 // is evidence that is only the brief's own placeholder (`<pr-url>`).
@@ -168,18 +166,22 @@ var reReplyMarker = regexp.MustCompile(`^\s*[●⏺•]`)
 // to the worker's next reply marker is a relay: sentinel text quoted there is
 // the orchestrator's, so only a marker-prefixed line counts inside it. A relay
 // echoed under OpenCode's "┃" gutter ends where the gutter does.
-func lastSentinel(lines []string) (state, evidence string, ok bool) {
+func lastSentinel(lines []string, gutter bool) (state, evidence string, ok bool) {
+	relayHead, blockedRe, doneRe := reRelayHead, reBlocked, reDone
+	if gutter {
+		relayHead, blockedRe, doneRe = reRelayHeadG, reBlockedG, reDoneG
+	}
 	inRelay, gutterRelay := false, false
 	for i, l := range lines {
 		marked := reReplyMarker.MatchString(l)
 		// OpenCode echoes a relay under its gutter and marks the worker's reply
 		// with nothing: such a relay ends at the first line outside the gutter.
-		if gutterRelay && strings.TrimSpace(l) != "" && !reGutter.MatchString(l) {
+		if gutter && gutterRelay && strings.TrimSpace(l) != "" && !reGutter.MatchString(l) {
 			inRelay, gutterRelay = false, false
 		}
 		switch {
-		case reRelayHead.MatchString(l):
-			inRelay, gutterRelay = true, reGutter.MatchString(l)
+		case relayHead.MatchString(l):
+			inRelay, gutterRelay = true, gutter && reGutter.MatchString(l)
 			continue
 		case marked:
 			inRelay, gutterRelay = false, false
@@ -189,12 +191,12 @@ func lastSentinel(lines []string) (state, evidence string, ok bool) {
 		// Match against the text from this line on, as the classifier always
 		// has: a bare `ROTA-DONE <slot>` takes the next line as its evidence.
 		rest := strings.Join(lines[i:], "\n")
-		gut := reGutter.MatchString(l)
-		if m := reBlocked.FindStringSubmatchIndex(rest); m != nil && m[0] == 0 {
+		gut := gutter && reGutter.MatchString(l)
+		if m := blockedRe.FindStringSubmatchIndex(rest); m != nil && m[0] == 0 {
 			if ev := strings.TrimSpace(rest[m[4]:m[5]]); !gut || !rePlaceholder.MatchString(ev) {
 				state, evidence, ok = StateBlocked, ev, true
 			}
-		} else if m := reDone.FindStringSubmatchIndex(rest); m != nil && m[0] == 0 {
+		} else if m := doneRe.FindStringSubmatchIndex(rest); m != nil && m[0] == 0 {
 			if ev := strings.TrimSpace(rest[m[4]:m[5]]); !gut || !rePlaceholder.MatchString(ev) {
 				state, evidence, ok = StateDone, ev, true
 			}
@@ -203,10 +205,74 @@ func lastSentinel(lines []string) (state, evidence string, ok bool) {
 	return
 }
 
-// Classify decides one slot's state from its pane text. native is herdr's
-// agent_status (or `gone`), empty under tmux, which has none. moved says the
-// pane changed between the two captures.
+// paneRules are a kind's PaneVocab compiled.
+type paneRules struct {
+	retry, busy, limits []*regexp.Regexp
+	authDead, badModel  *regexp.Regexp
+	gutter              bool
+}
+
+var (
+	paneRulesMu    sync.Mutex
+	paneRulesCache = map[string]*paneRules{}
+)
+
+// paneRulesFor is the compiled vocabulary of a kind; "" and a kind that is not
+// a worker harness have none, so they read as they always did.
+func paneRulesFor(kind string) *paneRules {
+	paneRulesMu.Lock()
+	defer paneRulesMu.Unlock()
+	if r, ok := paneRulesCache[kind]; ok {
+		return r
+	}
+	r := &paneRules{}
+	if h, ok := harness.Lookup(kind); ok && kind != "" {
+		v := h.PaneVocab()
+		r.retry, r.busy = compileAll(`(?i)`, v.Retry), compileAll(`(?i)`, v.Busy)
+		r.limits = compileAll(`(?i)`, v.Limits)
+		if v.AuthDead != "" {
+			r.authDead = regexp.MustCompile(`(?i)` + v.AuthDead)
+		}
+		if v.BadModel != "" {
+			r.badModel = regexp.MustCompile(v.BadModel)
+		}
+		r.gutter = v.Gutter
+	}
+	paneRulesCache[kind] = r
+	return r
+}
+
+func firstMatch(res []*regexp.Regexp, s string) string {
+	for _, re := range res {
+		if m := re.FindString(s); m != "" {
+			return m
+		}
+	}
+	return ""
+}
+
+func anyMatch(res []*regexp.Regexp, s string) bool {
+	for _, re := range res {
+		if re.MatchString(s) {
+			return true
+		}
+	}
+	return false
+}
+
+// Classify decides one slot's state from its pane text, reading it as a pane of
+// no particular kind (Claude Code's wording). native is herdr's agent_status
+// (or `gone`), empty under tmux, which has none. moved says the pane changed
+// between the two captures.
 func Classify(text string, moved bool, lines int, native string) (state, evidence string) {
+	return ClassifyFor("", text, moved, lines, native)
+}
+
+// ClassifyFor is Classify for a slot of the given kind: its harness's own pane
+// wording (PaneVocab) is read on top of the shared rules, on that kind's panes
+// only.
+func ClassifyFor(kind, text string, moved bool, lines int, native string) (state, evidence string) {
+	rules := paneRulesFor(kind)
 	all := splitLines(text)
 	if lines > 0 && len(all) > lines { // [-0:] is the whole list in Python
 		all = all[len(all)-lines:]
@@ -217,26 +283,26 @@ func Classify(text string, moved bool, lines int, native string) (state, evidenc
 	// ROTA-DONE and is still rendering its own output is finished, not busy.
 	// The LAST sentinel decides: a ROTA-DONE printed after an answered
 	// ROTA-BLOCKED means the worker moved on.
-	if st, ev, ok := lastSentinel(all); ok {
+	if st, ev, ok := lastSentinel(all, rules.gutter); ok {
 		return st, ev
 	}
 	// `Retrying in` is the only positive proof a retry is in flight. Check it
 	// before the DEAD patterns so a live retry is never read as a corpse.
-	if reRetry.MatchString(tail) {
+	if reRetry.MatchString(tail) || anyMatch(rules.retry, tail) {
 		return StateBusy, "retry in flight"
 	}
 	// LIMITED is checked BEFORE movement: a session that hit its usage limit may
 	// still animate a prompt, and reading that as BUSY strands the orchestrator
 	// waiting for work that cannot resume until the window resets.
-	for _, re := range limitPatterns {
+	for _, re := range append(append([]*regexp.Regexp(nil), limitPatterns...), rules.limits...) {
 		if m := re.FindString(tail); m != "" {
 			// The "Add funds" prompt spends real money and is NEVER the
 			// orchestrator's to answer: flag it so the caller escalates.
 			if reFunds.MatchString(tail) {
 				return StateLimited, "usage limit reached; pane offers 'Add funds' — needs a human, do NOT answer"
 			}
-			if reOpenCodeKey.MatchString(tail) {
-				return StateLimited, "OpenCode API key expired — needs a human to renew it; no reset clock"
+			if rules.authDead != nil && rules.authDead.MatchString(tail) {
+				return StateLimited, "API key expired — needs a human to renew it; no reset clock"
 			}
 			return StateLimited, strutil.Clip(strings.TrimSpace(m), 120)
 		}
@@ -244,14 +310,16 @@ func Classify(text string, moved bool, lines int, native string) (state, evidenc
 	if reason, ok := strings.CutPrefix(native, host.UnverifiablePrefix); ok {
 		return StateUnverifiable, reason
 	}
-	// OpenCode's dialog for a tier model the provider does not list: the TUI
-	// falls back to its last-used model once it closes, so nothing else shows
-	// the worker is on the wrong one.
-	if m := reOpenCodeModel.FindStringSubmatch(tail); m != nil {
-		return StateBlocked, "OpenCode refused model " + m[1] + " — fix round.tiers.opencode (provider/model ids from `opencode models`)"
+	// A dialog for a tier model the provider does not list: the TUI falls back
+	// to its last-used model once it closes, so nothing else shows the worker
+	// is on the wrong one.
+	if rules.badModel != nil {
+		if m := rules.badModel.FindStringSubmatch(tail); m != nil {
+			return StateBlocked, "model " + m[1] + " was refused — fix round.tiers (provider/model ids)"
+		}
 	}
-	if reOpenCodeBusy.MatchString(tail) {
-		return StateBusy, "opencode: esc interrupt"
+	if anyMatch(rules.busy, tail) {
+		return StateBusy, "pane shows: " + firstMatch(rules.busy, tail)
 	}
 	if native == "working" {
 		return StateBusy, "herdr: agent working"
@@ -342,7 +410,7 @@ type PollResult struct {
 // PollFixture classifies a pane text file instead of talking to a host. It
 // exists so the classifier is testable without a live session. It writes
 // nothing.
-func PollFixture(path, slot, status string, lines int) (PollResult, error) {
+func PollFixture(path, slot, kind, status string, lines int) (PollResult, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return PollResult{}, fail(exitcode.ExitUsage, "fixture not found: "+path)
@@ -353,7 +421,7 @@ func PollFixture(path, slot, status string, lines int) (PollResult, error) {
 	if lines <= 0 {
 		lines = 60
 	}
-	st, ev := Classify(string(b), false, lines, status)
+	st, ev := ClassifyFor(kind, string(b), false, lines, status)
 	return PollResult{Slots: []PollRow{{slot, st, ev}}}, nil
 }
 
@@ -608,6 +676,7 @@ func recordRow(s *Slot, r PollRow, t pollTarget, now time.Time, queued Registry)
 // and the turn baseline its last dispatch recorded.
 type pollTarget struct {
 	name, handle, prev, seen string
+	kind                     string // the slot's harness kind, "" for the default
 	turnSeq                  int
 	// ev is the slot's standing worker event with the stamps Decide weighs it
 	// against. evSeq is set by classify to the event's seq when the event, not
@@ -618,7 +687,7 @@ type pollTarget struct {
 }
 
 func slotTarget(s *Slot) pollTarget {
-	return pollTarget{name: s.Name(), handle: s.PaneHandle(), prev: s.State(), seen: s.Seen(), turnSeq: s.TurnSeq(),
+	return pollTarget{name: s.Name(), kind: s.Kind(), handle: s.PaneHandle(), prev: s.State(), seen: s.Seen(), turnSeq: s.TurnSeq(),
 		ev: s.Event(), lastChange: parseStamp(s.ActiveAt())}
 }
 
@@ -698,7 +767,7 @@ func (e Env) classify(ctx context.Context, h host.Host, targets []pollTarget, se
 			rows = append(rows, row)
 		}
 		if native, ok := finished[t.name]; ok {
-			st, ev := Classify(first[t.name], false, lines, native)
+			st, ev := ClassifyFor(t.kind, first[t.name], false, lines, native)
 			push(PollRow{t.name, st, ev})
 			continue
 		}
@@ -709,7 +778,7 @@ func (e Env) classify(ctx context.Context, h host.Host, targets []pollTarget, se
 		}
 		native = withReadFailure(native, err)
 		moved := first[t.name] != second
-		st, ev := Classify(second, moved, lines, native)
+		st, ev := ClassifyFor(t.kind, second, moved, lines, native)
 		if st == StateUnknown {
 			// herdr says why it could not classify the agent; a failing or
 			// absent explain leaves the generic evidence as it was.

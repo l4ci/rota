@@ -147,6 +147,8 @@ func (codex) UsageMeter() bool { return false }
 
 func (codex) LimitPhrases() []string { return SharedLimitPhrases() }
 
+func (codex) PaneVocab() PaneVocab { return PaneVocab{} }
+
 // Tiers: the tier map is optional (#68), unset a worker runs on Codex's own
 // default model, but a configured one names every tier.
 func (codex) Tiers() TierRule { return TierRule{} }
