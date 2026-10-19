@@ -6,6 +6,7 @@ import (
 	"github.com/l4ci/rota/internal/issues"
 	"io"
 	"os"
+	"os/exec"
 	"runtime"
 	"strconv"
 	"time"
@@ -59,6 +60,8 @@ type Deps struct {
 	// edge, into PollFixture, PollStatus, DoctorPath and DoctorDisk.
 	Getenv  func(string) string
 	Environ func() []string
+	// LookPath is the one PATH lookup the host decision reads, beside Getenv.
+	LookPath func(string) (string, error)
 
 	// PollFixture, when set, makes `worker poll` classify that file as a static
 	// pane (no host, no registry writes); PollStatus is the agent status it
@@ -128,6 +131,7 @@ func defaultDeps() *Deps {
 		Git:              git.Exec,
 		Proc:             proc.Run,
 		Getenv:           os.Getenv,
+		LookPath:         exec.LookPath,
 		WorkerEnv:        func() worker.Env { return worker.Env{} },
 		EscalationEnv:    func() escalation.Env { return escalation.Env{} },
 		LeaseEnv:         func() roundlease.Env { return roundlease.DefaultEnv() },
@@ -178,6 +182,12 @@ func (c *Ctx) deps() *Deps {
 	return c.Deps
 }
 
+// resolveHost is worker.ResolveHost over Deps' own getenv and lookPath, so the
+// decision and the handle from Host come from the same injected sources.
+func (d *Deps) resolveHost(root string) host.Kind {
+	return worker.ResolveHost(root, d.Getenv, d.LookPath)
+}
+
 // workerEnv is the WorkerEnv hook with its host filled from Host.
 func (d *Deps) workerEnv() worker.Env {
 	e := d.WorkerEnv()
@@ -192,6 +202,9 @@ func (d *Deps) workerEnv() worker.Env {
 	}
 	if e.Getenv == nil {
 		e.Getenv = d.Getenv
+	}
+	if e.LookPath == nil {
+		e.LookPath = d.LookPath
 	}
 	if e.Lease == nil {
 		e.Lease = d.LeaseEnv
