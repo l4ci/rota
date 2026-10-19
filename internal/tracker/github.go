@@ -770,13 +770,13 @@ func (g *GitHub) IssueEditors(ctx context.Context, key IssueKey) (string, string
 	if err != nil {
 		return "", "", err
 	}
-	const q = `query($owner:String!,$repo:String!,$n:Int!){repository(owner:$owner,name:$repo){issue(number:$n){author{login} lastEditedBy{login}}}}`
+	const q = `query($owner:String!,$repo:String!,$n:Int!){repository(owner:$owner,name:$repo){issue(number:$n){author{login} editor{login}}}}`
 	var d struct {
 		Data struct {
 			Repository struct {
 				Issue struct {
-					Author       *struct{ Login string } `json:"author"`
-					LastEditedBy *struct{ Login string } `json:"lastEditedBy"`
+					Author *struct{ Login string } `json:"author"`
+					Editor *struct{ Login string } `json:"editor"`
 				} `json:"issue"`
 			} `json:"repository"`
 		} `json:"data"`
@@ -789,7 +789,7 @@ func (g *GitHub) IssueEditors(ctx context.Context, key IssueKey) (string, string
 	if a := d.Data.Repository.Issue.Author; a != nil {
 		author = a.Login
 	}
-	if e := d.Data.Repository.Issue.LastEditedBy; e != nil {
+	if e := d.Data.Repository.Issue.Editor; e != nil {
 		editor = e.Login
 	}
 	return author, editor, nil

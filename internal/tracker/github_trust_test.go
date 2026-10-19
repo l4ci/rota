@@ -17,13 +17,13 @@ func githubTrust(t *testing.T, s *scripted) *GitHub {
 
 func TestGitHubIssueEditors(t *testing.T) {
 	s := &scripted{answer: func(string, []string) (string, string, int) {
-		return `{"data":{"repository":{"issue":{"author":{"login":"ann"},"lastEditedBy":{"login":"bob"}}}}}`, "", 0
+		return `{"data":{"repository":{"issue":{"author":{"login":"ann"},"editor":{"login":"bob"}}}}}`, "", 0
 	}}
 	a, e, err := githubTrust(t, s).IssueEditors(context.Background(), NumKey(899))
 	if err != nil || a != "ann" || e != "bob" {
 		t.Fatalf("%q %q %v", a, e, err)
 	}
-	for _, want := range []string{"api graphql", "-F owner={owner}", "-F repo={repo}", "-F n=899", "lastEditedBy{login}"} {
+	for _, want := range []string{"api graphql", "-F owner={owner}", "-F repo={repo}", "-F n=899", "editor{login}"} {
 		if !strings.Contains(s.calls[0], want) {
 			t.Errorf("call lacks %q: %s", want, s.calls[0])
 		}
@@ -32,7 +32,7 @@ func TestGitHubIssueEditors(t *testing.T) {
 
 func TestGitHubIssueEditorsNullsAreEmpty(t *testing.T) {
 	s := &scripted{answer: func(string, []string) (string, string, int) {
-		return `{"data":{"repository":{"issue":{"author":null,"lastEditedBy":null}}}}`, "", 0
+		return `{"data":{"repository":{"issue":{"author":null,"editor":null}}}}`, "", 0
 	}}
 	a, e, err := githubTrust(t, s).IssueEditors(context.Background(), NumKey(1))
 	if err != nil || a != "" || e != "" {
