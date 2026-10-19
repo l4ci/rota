@@ -83,7 +83,7 @@ grep -q "^- M01 — Auth foundation" .rota/MILESTONES.md || fail "## Active mile
 pass "milestone index regenerates ## Active milestones section"
 
 # Marking M01 shipped should mark M02 as ready
-hvj milestone status M01 --to shipped >/dev/null || fail "milestone status shipped failed"
+hvj milestone status M01 --to shipped --force >/dev/null || fail "milestone status shipped failed"
 LIST=$(hvj milestone list) || fail "milestone list failed"
 echo "$LIST" | python3 -c "
 import json, sys
@@ -132,7 +132,7 @@ OUT=$(hvj summary) || fail "summary failed"
 pass "summary lists active milestones"
 
 # Reset summary fixtures (no Milestone field) to keep later assertions clean.
-hvj milestone status M01 --to shipped >/dev/null || fail "milestone status shipped failed"
+hvj milestone status M01 --to shipped --force >/dev/null || fail "milestone status shipped failed"
 
 echo "init"
 # Self-contained: run in a fresh subdir so the existing .rota/ in TMP isn't touched.
