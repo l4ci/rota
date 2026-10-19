@@ -19,6 +19,12 @@ any entry is left in it afterwards, so a run that leaks shows up as a red gate, 
 The gate builds with `-trimpath` (it adds it to `GOFLAGS`), so each fresh scratch worktree reuses the Go build cache instead of adding a copy per path (#709).
 Workers do not run it. The same goes for `test.e2e`: the gate and the merge train run it on the merged tree after `test.full`, and round PRs skip per-branch ship-time QA. Here `test.e2e` is the scripted stub-worker scenarios; see [E2E scenarios](e2e-scenarios.md).
 
+An item may carry a `## Try it` section: `- <command>` bullets, each optionally followed by `expect: <substring>` lines. After
+`test.full` and `test.e2e` pass, the gate runs the commands on the merged scratch tree, in order, with the slot's
+`ROTA_PORT_BASE` and `ROTA_DB_SUFFIX` exported. A non-zero exit or a missing substring bounces the slot; the transcript is
+posted on the PR and saved under `.rota/qa-runs/behaviour/`. Commands run as written, so a repo that tests its own binary
+writes `go run ./cmd/<x> ...`. No section, no run.
+
 GitHub CI (`.github/workflows/ci.yml`: gofmt, `go vet`, `go test`, validate-skills, doclint) is a backstop, not
 the merge gate. It runs on pushes to `main`, on PRs once they are ready for review (opened non-draft,
 reopened, or marked ready; drafts are skipped) and on manual dispatch, not on every push to an open PR. A

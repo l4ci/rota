@@ -51,6 +51,8 @@ func (f *fakeThread) exec(_ context.Context, _ string, name string, args []strin
 	}
 	post := strings.Contains(line, "-X POST")
 	switch {
+	case strings.HasPrefix(line, "gh issue view "): // the gate reads the item for its Try it steps (#899)
+		return []byte(`{"number":7,"title":"t","body":"no steps","state":"OPEN"}`), nil, 0, nil
 	case post:
 		var body string
 		for _, a := range args {

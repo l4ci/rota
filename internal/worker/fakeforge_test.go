@@ -177,6 +177,17 @@ func (f *fakeForge) PRRequestMerge(_ context.Context, pr int, o tracker.MergeOpt
 	return nil
 }
 
+// AddMRNote logs the comment and keeps its body in the forge DB word
+// "note", so a test reads what the gate posted. "noteErr" makes it fail.
+func (f *fakeForge) AddMRNote(_ context.Context, pr int, body string) (string, error) {
+	f.logf("AddMRNote %d", pr)
+	if msg := f.w.forgeWord("noteErr"); msg != "" {
+		return "", errors.New(msg)
+	}
+	f.w.forge("note", f.w.forgeWord("note")+body)
+	return "1", nil
+}
+
 // CommitChecks reports one check, "ci/test", on a commit pushed to the
 // origin's rota/ci/* branches: failure when its tree holds the file named by
 // "ciFail", else success. "ci" overrides it: none (CI never started), pending
