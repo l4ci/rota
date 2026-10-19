@@ -278,7 +278,7 @@ func (e Env) merge(ctx context.Context, r *Result, targets []string) error {
 		case m.Landed:
 			e.audit(r, Action{"merge", m.Target, m.Detail})
 		case m.Verdict == "":
-			r.NeedsYou = append(r.NeedsYou, Item{"gate-failed", m.Target, firstNonEmpty(m.Detail, "the gate did not pass")})
+			r.NeedsYou = append(r.NeedsYou, Item{"gate-failed", m.Target, strutil.FirstNonEmpty(m.Detail, "the gate did not pass")})
 		default:
 			why := m.Verdict
 			if m.Detail != "" {
@@ -369,7 +369,7 @@ func (e Env) review(ctx context.Context, r *Result) ([]string, error) {
 	}
 	ids, err := e.Review(ctx)
 	if err != nil {
-		r.NeedsYou = append(r.NeedsYou, Item{"architecture-review", "mint", firstNonEmpty(strutil.FirstLine(err.Error()), "the review could not be minted")})
+		r.NeedsYou = append(r.NeedsYou, Item{"architecture-review", "mint", strutil.FirstNonEmpty(strutil.FirstLine(err.Error()), "the review could not be minted")})
 	}
 	for _, id := range ids {
 		e.audit(r, Action{"mint", id, "architecture review"})
@@ -441,13 +441,4 @@ func (e Env) assign(ctx context.Context, r *Result, minted []string) error {
 func isRefusal(err error) bool {
 	var blk *round.BlockedError
 	return errors.As(err, &blk) && blk.By != round.BlockNoRound
-}
-
-func firstNonEmpty(a ...string) string {
-	for _, s := range a {
-		if strings.TrimSpace(s) != "" {
-			return s
-		}
-	}
-	return ""
 }

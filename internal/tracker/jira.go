@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"github.com/l4ci/rota/internal/strutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -163,16 +164,7 @@ func (u *jiraUser) label() string {
 	if u == nil {
 		return ""
 	}
-	return firstOf(u.DisplayName, u.Name, u.AccountID)
-}
-
-func firstOf(vs ...string) string {
-	for _, v := range vs {
-		if v != "" {
-			return v
-		}
-	}
-	return ""
+	return strutil.FirstNonEmpty(u.DisplayName, u.Name, u.AccountID)
 }
 
 // myself is the authenticated user, read once; a failure is retried next call.

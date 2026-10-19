@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
+	"github.com/l4ci/rota/internal/strutil"
 	"os"
 	"strings"
 
@@ -151,7 +152,7 @@ func (e Env) WindDown(ctx context.Context, root string, be Board, o WindDownOpts
 		claim := s.ClaimID()
 		issue := s.HeldID()
 		if !wasParked {
-			so.Issue = firstNonEmpty(so.Issue, issue)
+			so.Issue = strutil.FirstNonEmpty(so.Issue, issue)
 		} else {
 			so.Issue = ""
 		}
@@ -219,7 +220,7 @@ func (e Env) WindDown(ctx context.Context, root string, be Board, o WindDownOpts
 				res.Warnings = append(res.Warnings, fmt.Sprintf("release %s: %v", name, err))
 			}
 			so.Outcome = OutcomeReleased
-			so.Issue = firstNonEmpty(so.Issue, s.HeldID())
+			so.Issue = strutil.FirstNonEmpty(so.Issue, s.HeldID())
 			t := true
 			so.Merged = &t
 			res.Changed = true

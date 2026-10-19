@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/strutil"
 	"path"
 	"regexp"
 	"sort"
@@ -388,7 +389,7 @@ func (e Env) InFlightItems(ctx context.Context, root string, be backlog.Backend,
 // read from the pushed branch in root (the local one when origin lacks it).
 func (e Env) queuedChanged(ctx context.Context, root string, q worker.QueuedPR, shared []string) []string {
 	branch := q.Branch
-	base := firstNonEmpty(q.Base, e.Base)
+	base := strutil.FirstNonEmpty(q.Base, e.Base)
 	if branch == "" || base == "" {
 		return nil
 	}
