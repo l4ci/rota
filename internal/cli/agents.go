@@ -14,7 +14,7 @@ import (
 
 func agentsCommands() *Command {
 	return &Command{Name: "agents", Summary: "subagent definitions generated from the role config", Subs: []*Command{
-		{Name: "write", Summary: "write .claude/agents/rota-*.md (and .codex/agents/rota-*.toml when Codex is configured)", Verb: agentsWrite},
+		{Name: "write", Summary: "write .claude/agents/rota-*.md (and .codex/agents/rota-*.toml or .opencode/agents/rota-*.md when Codex or OpenCode is configured)", Verb: agentsWrite},
 	}}
 }
 
