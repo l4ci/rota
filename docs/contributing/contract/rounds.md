@@ -180,9 +180,9 @@ note: read-only, writes nothing, no `changed`. Same `candidate` shape (plus `har
 rota round scope <ID> --body-file <path|->
 repo: none
 data: {"id": string, "scopes": []string, "source": "touches"|"subsystem"|"inferred", "changed": true}
-exit: 2 when `--body-file` is missing, the text has no bullets or more than 10; 3 when there is no project root or the item is not found; 5 when the tracker fails
-old: none (new in #900)
-note: records the scope a `light` explorer inferred for a candidate whose `scopeSource` is `none`, as a comment of kind `scope` on the item (the newest wins). Bullets are normalised like `## Touches` entries (trimmed, lower-cased, deduplicated, sorted). The declared `## Touches` is never edited, and a declared `## Touches` or Subsystem wins over a recorded scope: `source` says which one is now in force. `candidates`, `assign`, `transfer` and `adopt` compare inferred entries too, but a clash that involves one is reported `warn` even under `round.scopeOverlap: block`: the overlap carries `inferred: true` and its detail reads `inferred scopes <entries>`. A shared file path still blocks. No lease needed; appends a comment each call.
+exit: 2 when `--body-file` is missing, the text has no bullets or more than 10; 3 when there is no project root or the item is not found; 4 when the body's last non-empty line is not `scoped.` (nothing recorded); 5 when the tracker fails
+old: exit 4 is new in #965; a body with bullets and no closing token was recorded before (verb new in #900)
+note: the scout's reply ends with one token: `scoped.`, `too-vague.` or `no-match.`. Only `scoped.` is recorded; any other last line (a hedge, a bare list) is refused with exit 4. The token line is not a bullet and is not stored. Records the scope a `light` explorer inferred for a candidate whose `scopeSource` is `none`, as a comment of kind `scope` on the item (the newest wins). Bullets are normalised like `## Touches` entries (trimmed, lower-cased, deduplicated, sorted). The declared `## Touches` is never edited, and a declared `## Touches` or Subsystem wins over a recorded scope: `source` says which one is now in force. `candidates`, `assign`, `transfer` and `adopt` compare inferred entries too, but a clash that involves one is reported `warn` even under `round.scopeOverlap: block`: the overlap carries `inferred: true` and its detail reads `inferred scopes <entries>`. A shared file path still blocks. No lease needed; appends a comment each call.
 
 ### rota round architecture
 rota round architecture [--check] [--holder-pid <n>]
