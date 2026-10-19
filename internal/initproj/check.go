@@ -1,7 +1,6 @@
 package initproj
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 
@@ -46,7 +45,7 @@ func Check(root string, drift func() string) CheckResult {
 	// The umbrella flag is informational; the registry is the truth
 	// (DECISIONS.md, "Persistence-trio scoping under umbrella mode"). A flag
 	// with no registered repos is a warning, never a failure.
-	if truthy(umbrellaFlag(rota)) && !repos.Umbrella(root) {
+	if jsonx.Truthy(umbrellaFlag(rota)) && !repos.Umbrella(root) {
 		if _, err := os.Stat(filepath.Join(rota, "repos.json")); err != nil {
 			res.Warnings = append(res.Warnings, "umbrella.enabled=true but .rota/repos.json missing — run `rota init umbrella` from the umbrella root to register, or set umbrella.enabled=false")
 		} else {
@@ -64,24 +63,4 @@ func Check(root string, drift func() string) CheckResult {
 func umbrellaFlag(rota string) any {
 	v, _ := config.Lookup(config.Load(filepath.Join(rota, "config.json")), "umbrella.enabled")
 	return v
-}
-
-// truthy is Python's truth value, which is what the old helper tested.
-func truthy(v any) bool {
-	switch x := v.(type) {
-	case nil:
-		return false
-	case bool:
-		return x
-	case string:
-		return x != ""
-	case json.Number:
-		f, err := x.Float64()
-		return err != nil || f != 0
-	case []any:
-		return len(x) > 0
-	case *jsonx.Object:
-		return x.Len() > 0
-	}
-	return true
 }

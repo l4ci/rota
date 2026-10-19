@@ -1,6 +1,6 @@
 // Package strutil holds the small text helpers several packages used to carry
 // their own copies of: the first meaningful line of command output, a
-// rune-safe clip, a short commit SHA and the first non-empty string.
+// rune-safe clip, a short commit SHA, the first non-empty string and a default for an empty one.
 package strutil
 
 import "github.com/l4ci/rota/internal/pystr"
@@ -47,4 +47,12 @@ func FirstNonEmpty(vs ...string) string {
 		}
 	}
 	return ""
+}
+
+// OrDefault returns v, or d when v is "".
+func OrDefault(v, d string) string {
+	if v == "" {
+		return d
+	}
+	return v
 }

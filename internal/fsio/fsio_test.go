@@ -203,3 +203,52 @@ func TestWriteJSONVerifiedReportsAWriteThatDidNotLand(t *testing.T) {
 		t.Fatalf("err = %v, want ErrNotLanded", err)
 	}
 }
+
+func TestIsDir(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "f")
+	if err := os.WriteFile(file, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for name, tc := range map[string]struct {
+		p    string
+		want bool
+	}{"dir": {dir, true}, "file": {file, false}, "missing": {filepath.Join(dir, "x"), false}, "empty": {"", false}} {
+		if got := IsDir(tc.p); got != tc.want {
+			t.Errorf("%s: IsDir(%q) = %v, want %v", name, tc.p, got, tc.want)
+		}
+	}
+}
+
+func TestSameDir(t *testing.T) {
+	dir := t.TempDir()
+	other := filepath.Join(dir, "other")
+	real := filepath.Join(dir, "real")
+	link := filepath.Join(dir, "link")
+	for _, d := range []string{other, real} {
+		if err := os.Mkdir(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Symlink(real, link); err != nil {
+		t.Fatal(err)
+	}
+	for name, tc := range map[string]struct {
+		a, b string
+		want bool
+	}{
+		"same":          {real, real, true},
+		"unclean":       {real + "/.", real, true},
+		"link, real":    {link, real, true},
+		"real, link":    {real, link, true},
+		"different":     {real, other, false},
+		"empty a":       {"", real, false},
+		"empty b":       {real, "", false},
+		"both empty":    {"", "", false},
+		"missing equal": {filepath.Join(dir, "gone"), filepath.Join(dir, "gone"), true},
+	} {
+		if got := SameDir(tc.a, tc.b); got != tc.want {
+			t.Errorf("%s: SameDir(%q, %q) = %v, want %v", name, tc.a, tc.b, got, tc.want)
+		}
+	}
+}
