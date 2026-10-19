@@ -270,6 +270,24 @@ func (s Store) glossaryTarget(scope string) (path, text string, start, end int, 
 // Entries are rewritten sorted by name. It regenerates the scope's knowledge
 // block afterwards.
 func (s Store) GlossaryWrite(scope string, t Term, touch, notsProvided bool) (name string, changed bool, err error) {
+	km, err := s.KnowledgePath(scope)
+	if err != nil {
+		return "", false, err
+	}
+	err = lockFiles([]string{km}, func() (err error) {
+		name, changed, err = s.glossaryWriteLocked(scope, t, touch, notsProvided)
+		return err
+	})
+	if err != nil {
+		return "", false, err
+	}
+	if _, err := s.RegenerateBlock("knowledge", scope); err != nil {
+		return "", false, err
+	}
+	return name, changed, nil
+}
+
+func (s Store) glossaryWriteLocked(scope string, t Term, touch, notsProvided bool) (name string, changed bool, err error) {
 	path, text, st, en, err := s.glossaryTarget(scope)
 	if err != nil {
 		return "", false, err
@@ -289,9 +307,6 @@ func (s Store) GlossaryWrite(scope string, t Term, touch, notsProvided bool) (na
 		if err := fsio.WriteFileAtomic(path, []byte(next)); err != nil {
 			return "", false, err
 		}
-	}
-	if _, err := s.RegenerateBlock("knowledge", scope); err != nil {
-		return "", false, err
 	}
 	return byKey[strings.ToLower(t.Name)].Name, next != text, nil
 }
@@ -339,6 +354,24 @@ func ParseManifest(text string) ([]Term, error) {
 // GlossaryImport adds every term of a manifest atomically: any conflict
 // refuses the whole batch and writes nothing. It returns the term names.
 func (s Store) GlossaryImport(scope, manifest string, touch bool) (terms []string, changed bool, err error) {
+	km, err := s.KnowledgePath(scope)
+	if err != nil {
+		return nil, false, err
+	}
+	err = lockFiles([]string{km}, func() (err error) {
+		terms, changed, err = s.glossaryImportLocked(scope, manifest, touch)
+		return err
+	})
+	if err != nil {
+		return nil, false, err
+	}
+	if _, err := s.RegenerateBlock("knowledge", scope); err != nil {
+		return nil, false, err
+	}
+	return terms, changed, nil
+}
+
+func (s Store) glossaryImportLocked(scope, manifest string, touch bool) (terms []string, changed bool, err error) {
 	path, text, st, en, err := s.glossaryTarget(scope)
 	if err != nil {
 		return nil, false, err
@@ -348,9 +381,8 @@ func (s Store) GlossaryImport(scope, manifest string, touch bool) (terms []strin
 		return nil, false, err
 	}
 	if len(cands) == 0 {
-		// Nothing to import; the old helper still refreshed the block.
-		_, err := s.RegenerateBlock("knowledge", scope)
-		return nil, false, err
+		// Nothing to import; the caller still refreshes the block.
+		return nil, false, nil
 	}
 	entries, leading := ParseGlossary(text[st:en])
 	if c := CheckAliasCollisions(entries, cands); len(c) > 0 {
@@ -368,9 +400,6 @@ func (s Store) GlossaryImport(scope, manifest string, touch bool) (terms []strin
 	}
 	for _, c := range cands {
 		terms = append(terms, c.Name)
-	}
-	if _, err := s.RegenerateBlock("knowledge", scope); err != nil {
-		return nil, false, err
 	}
 	return terms, next != text, nil
 }

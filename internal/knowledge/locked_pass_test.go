@@ -157,3 +157,23 @@ func mustTier(t *testing.T, s Store) string {
 	}
 	return p
 }
+
+func TestGlossaryWriteKeepsEveryTermUnderConcurrency(t *testing.T) {
+	s := lockedStore(t)
+	const n = 12
+	km, _ := s.KnowledgePath(Umbrella)
+	if err := os.WriteFile(km, []byte("# Knowledge\n\n## Glossary\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	parallel(n, func(i int) {
+		if _, _, err := s.GlossaryWrite(Umbrella, Term{Name: fmt.Sprintf("term%02d", i), Definition: "d"}, false, false); err != nil {
+			t.Error(err)
+		}
+	})
+	got, _ := os.ReadFile(km)
+	for i := 0; i < n; i++ {
+		if !strings.Contains(string(got), fmt.Sprintf("term%02d", i)) {
+			t.Errorf("term%02d lost:\n%s", i, got)
+		}
+	}
+}
