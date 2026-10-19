@@ -27,7 +27,6 @@ Durable learnings live in `.rota/KNOWLEDGE.md`. Consult it when work touches the
 - Product: Market & competitors
 - Rounds: Orchestration: Reviews & verdicts
 - Rounds: Orchestration: Gate, trains & bookkeeping
-- Rounds: Orchestration: Review & merge gate
 - Rounds: Orchestration: Workers & relays
 - Rounds: Orchestration: Slate & issues
 
