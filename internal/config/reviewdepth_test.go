@@ -88,7 +88,11 @@ func TestReviewPolicyDecide(t *testing.T) {
 		{"trailing /** matches nested files", cfg, ReviewInput{Changed: 3, Files: []string{"migrations/2026/001.sql"}}, DepthFull, SignalPath, "migrations/2026"},
 		{"path never lowers", cfg, ReviewInput{Changed: 500, Files: []string{"docs/a.md"}}, DepthFull, SignalDefault, ""},
 		{"label none is final over a path", cfg, ReviewInput{Changed: 3, Labels: []string{"partial-slice"}, Files: []string{"migrations/001.sql"}}, DepthNone, SignalLabel, ""},
-		{"default none ignores door and drift", `{"ship":{"review":"none"}}`, ReviewInput{PRBody: oneWay, IssueBody: issue, Files: []string{"z.go"}}, DepthNone, SignalDefault, ""},
+		{"door lifts a default of none", `{"ship":{"review":"none"}}`, ReviewInput{PRBody: oneWay}, DepthFull, SignalDoor, ""},
+		{"drift lifts a default of none", `{"ship":{"review":"none"}}`, ReviewInput{IssueBody: issue, Files: []string{"z.go"}}, DepthFull, SignalScopeDrift, "z.go"},
+		{"pointers count as declared files", cfg, ReviewInput{Changed: 3, IssueBody: "## Pointers\n\n- internal/config/reviewdepth.go (Resolve, ParseReviewPolicy)\n- docs/usage/a.md, docs/reference/b.md\n", Files: []string{"internal/config/reviewdepth.go", "docs/reference/b.md"}}, DepthLight, SignalSize, ""},
+		{"pointers declare a set to drift from", cfg, ReviewInput{Changed: 3, IssueBody: "## Pointers\n\n- internal/config/reviewdepth.go\n", Files: []string{"internal/cli/review.go"}}, DepthFull, SignalScopeDrift, "internal/cli/review.go"},
+		{"declared dir/** covers nested files", cfg, ReviewInput{Changed: 3, IssueBody: "## Files\n\n- internal/cli/**\n", Files: []string{"internal/cli/a/b.go"}}, DepthLight, SignalSize, ""},
 		{"scopeDrift false turns the rule off", `{"ship":{"review":{"default":"full","lightBelow":50,"scopeDrift":false}}}`, ReviewInput{Changed: 3, IssueBody: issue, Files: []string{"z.go"}}, DepthLight, SignalSize, ""},
 	} {
 		t.Run(c.name, func(t *testing.T) {

@@ -23,7 +23,7 @@ func gateConfig(t *testing.T, base, level string, ship map[string]any) string {
 	}
 	cfg["autonomy"] = map[string]any{"level": level}
 	// these tests are about the approval gates, not the review depth (#581)
-	merged := map[string]any{"review": "none"}
+	merged := map[string]any{"review": map[string]any{"default": "none", "scopeDrift": false}}
 	for k, v := range ship {
 		merged[k] = v
 	}

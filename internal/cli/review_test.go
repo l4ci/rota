@@ -719,6 +719,67 @@ func TestReviewDepthScopeDrift(t *testing.T) {
 	}
 }
 
+// The Door line lives in the branch's open PR: rota review depth finds it with
+// the forge, says when there is no PR yet, fails closed when the forge cannot be
+// read, and reads the issue only when the policy can use it.
+func TestReviewDepthReadsTheDoorLineOfThePR(t *testing.T) {
+	root := newRepo(t, t.TempDir(), "proj", "main")
+	gitT(t, root, "checkout", "-q", "-b", "nia/6-small")
+	write(t, filepath.Join(root, "x.txt"), "x\n")
+	gitT(t, root, "add", "x.txt")
+	gitT(t, root, "commit", "-q", "-m", "small change")
+	prs, prCode, issueReads := `[]`, 0, 0
+	deps := testDeps()
+	deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, _, _ string, args []string, _ []byte) ([]byte, []byte, int, error) {
+		switch {
+		case len(args) > 1 && args[0] == "pr" && args[1] == "list":
+			if prCode != 0 {
+				return nil, []byte("HTTP 500: server error"), prCode, nil
+			}
+			return []byte(prs), nil, 0, nil
+		case len(args) > 2 && args[0] == "issue" && args[1] == "view":
+			issueReads++
+			return []byte(`{"number":6,"title":"t","state":"OPEN","body":"## Files\n\n- x.txt\n"}`), nil, 0, nil
+		}
+		return []byte("[]"), nil, 0, nil
+	}, func(n string) (string, error) { return "/fake/" + n, nil })}
+	policy := func(p string) {
+		write(t, filepath.Join(root, ".rota", "config.json"), `{"forge": {"provider": "github"}, "issues": {"source": "github"},"ship":{"review":`+p+`}}`)
+	}
+	run := func() (int, map[string]any, string) {
+		o := trRunWith(t, deps, root, "", "review", "depth", "nia/6-small", "--json")
+		d, _ := envelope(t, o.stdout)["data"].(map[string]any)
+		return o.code, d, o.stdout + o.stderr
+	}
+	policy(`{"default":"full","lightBelow":100000}`)
+
+	prs = `[{"number":9,"title":"t","headRefName":"nia/6-small","url":"u","body":"Door: one-way. Blast radius: schema."}]`
+	if code, d, _ := run(); code != 0 || d["depth"] != "full" || d["signal"] != "door" {
+		t.Errorf("one-way door in the PR body: %d %v", code, d)
+	}
+	prs = `[{"number":9,"title":"t","headRefName":"nia/6-small","url":"u","body":"Door: two-way."}]`
+	if _, d, _ := run(); d["depth"] != "light" || strings.Contains(d["why"].(string), "no PR yet") {
+		t.Errorf("two-way door: %v", d)
+	}
+	prs = `[{"number":9,"title":"t","headRefName":"other","url":"u","body":"Door: one-way."}]`
+	if _, d, _ := run(); d["depth"] != "light" || !strings.Contains(d["why"].(string), "no PR yet") {
+		t.Errorf("no PR for the branch must say so in the reason: %v", d)
+	}
+	prCode = 1
+	if code, _, out := run(); code == 0 || !strings.Contains(out, "Door") {
+		t.Errorf("an unreadable forge must fail closed: %d %s", code, out)
+	}
+	prCode = 0
+
+	// default full with no size rule and no labels: the depth is full whatever
+	// the issue or the PR say, so neither is read
+	policy(`"full"`)
+	issueReads = 0
+	if _, d, _ := run(); d["depth"] != "full" || issueReads != 0 {
+		t.Errorf("a policy that cannot lighten reads no issue: %v (%d reads)", d, issueReads)
+	}
+}
+
 // A branch of manual commits cites no items: /rota-review Step 3 keys off the
 // empty list to skip the Spec axis, so it must be [] and not null or absent.
 func TestReviewScopeManualCommits(t *testing.T) {

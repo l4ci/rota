@@ -1,4 +1,4 @@
-{"utc":"2026-10-19","local":"2026-10-19"}
+{"utc":"2026-10-03","local":"2026-10-03"}
 {"name":"config-check/corrupt-empty-file","steps":[{"exit":1,"env":{"data":{"missing":[],"removed":[],"status":"corrupt","upToDate":false},"error":{"code":"failed","exit":1,"message":".rota/config.json is not a valid JSON object"},"ok":false},"text":"CORRUPT\n"}]}
 {"name":"config-check/corrupt-invalid-json","steps":[{"exit":1,"env":{"data":{"missing":[],"removed":[],"status":"corrupt","upToDate":false},"error":{"code":"failed","exit":1,"message":".rota/config.json is not a valid JSON object"},"ok":false},"text":"CORRUPT\n"}]}
 {"name":"config-check/corrupt-list","steps":[{"exit":1,"env":{"data":{"missing":[],"removed":[],"status":"corrupt","upToDate":false},"error":{"code":"failed","exit":1,"message":".rota/config.json is not a valid JSON object"},"ok":false},"text":"CORRUPT\n"}]}

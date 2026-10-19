@@ -472,9 +472,9 @@ func reviewDepth(fs *flag.FlagSet) RunFunc {
 			}
 		}
 		// The issue behind a `<agent>/<issue>-<slug>` branch is read, as the worker
-		// gate does, so a caller that omits --labels still gets a risk:high override
-		// and a diff outside the issue's files is seen.
-		if n, ok := worker.BranchIssue(t.Branch); ok {
+		// gate does, when the policy can use it: a label to match or a file set to
+		// drift from.
+		if n, ok := worker.BranchIssue(t.Branch); ok && policy.NeedsIssue() {
 			it, err := c.deps().issuesOrNone(c.Context(), cfg, root)
 			if err != nil {
 				return Result{}, trackerErr(err)
@@ -483,19 +483,30 @@ func reviewDepth(fs *flag.FlagSet) RunFunc {
 				src.Issue, src.Issues = n, it
 			}
 		}
-		// The branch's open PR, when the forge has one, carries the Door line.
-		if f, err := c.deps().forge(c.Context(), cfg, "", root); err == nil {
-			src.PRBody = func() (string, error) {
-				prs, err := f.OpenPRs(c.Context())
-				if err != nil {
-					return "", err
-				}
-				for _, pr := range prs {
-					if pr.Branch == t.Branch {
-						return pr.Body, nil
+		// The branch's open PR carries the Door line. Like the gate, an unreadable
+		// forge fails the verb: skipping would print a depth that ignores the line.
+		// A local forge or a missing forge CLI has no PR to read.
+		prFound := false
+		if policy.MayBeBelowFull() {
+			f, err := c.deps().forge(c.Context(), cfg, "", root)
+			switch {
+			case err == nil:
+				src.PRBody = func() (string, error) {
+					prs, err := f.OpenPRs(c.Context())
+					if err != nil {
+						return "", err
 					}
+					for _, pr := range prs {
+						if pr.Branch == t.Branch {
+							prFound = true
+							return pr.Body, nil
+						}
+					}
+					return "", nil
 				}
-				return "", nil
+			case errors.Is(err, tracker.ErrLocalForge) || tracker.IsCLIMissing(err):
+			default:
+				return Result{}, Failed("could not reach the forge to read the PR body for its Door line to pick the review depth: %v", err)
 			}
 		}
 		res, err := worker.ResolveReviewDepth(c.Context(), src)
@@ -507,6 +518,10 @@ func reviewDepth(fs *flag.FlagSet) RunFunc {
 			return Result{}, Failed("%v", err)
 		}
 		depth, why := res.Depth, res.Why
+		// Door is read from a PR; before one exists a light depth has not seen it.
+		if !prFound && depth != config.DepthFull && res.Signal != config.SignalLabel && policy.MayBeBelowFull() {
+			why += "; no PR yet, so no Door line was read"
+		}
 		data := gitObj("branch", t.Branch, "base", t.Base, "depth", string(depth), "signal", res.Signal, "why", why, "changedLines", res.Changed, "labels", res.Labels)
 		return Result{Data: data, Text: fmt.Sprintf("REVIEW-DEPTH %s — %s (%s)", t.Branch, depth, why)}, nil
 	}

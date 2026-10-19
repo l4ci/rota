@@ -175,15 +175,15 @@ type ReviewDecision struct {
 	Why    string
 }
 
-// MayBeLight reports whether the base depth can come out light, the only
-// case a Door line or scope drift can lift it. A caller skips reading the PR and
-// the issue for them otherwise.
-func (p ReviewPolicy) MayBeLight() bool {
-	if p.Default == DepthLight || (p.Default == DepthFull && p.LightBelow > 0) {
+// MayBeBelowFull reports whether the base depth can come out below full, the
+// only case a Door line or scope drift can lift it. A caller skips reading the
+// PR and the issue for them otherwise.
+func (p ReviewPolicy) MayBeBelowFull() bool {
+	if p.Default != DepthFull || p.LightBelow > 0 {
 		return true
 	}
 	for _, d := range p.Labels {
-		if d == DepthLight {
+		if d != DepthFull {
 			return true
 		}
 	}
@@ -193,7 +193,7 @@ func (p ReviewPolicy) MayBeLight() bool {
 // NeedsIssue reports whether the branch's issue can change the depth: it holds
 // a label to match, or a declared file set to drift from.
 func (p ReviewPolicy) NeedsIssue() bool {
-	return len(p.Labels) > 0 || (!p.NoScopeDrift && p.MayBeLight())
+	return len(p.Labels) > 0 || (!p.NoScopeDrift && p.MayBeBelowFull())
 }
 
 var doorOneWay = regexp.MustCompile(`(?mi)^[ \t]*Door:[ \t]*one-way\b`)
@@ -209,8 +209,7 @@ func (p ReviewPolicy) Resolve(changed int, labels []string) (ReviewDepth, string
 // A label that maps to none is final. Otherwise the base depth (label, size or
 // default) is raised, never lowered, by a one-way Door line in the PR body, a
 // diff outside the issue's declared files, or a changed path matching a paths
-// glob. Door and scope drift only lift a light review: a default of none is the
-// review switched off, which they do not override.
+// glob.
 func (p ReviewPolicy) Decide(in ReviewInput) ReviewDecision {
 	base := p.base(in.Changed, in.Labels)
 	if base.Signal == SignalLabel && base.Depth == DepthNone {
@@ -222,14 +221,12 @@ func (p ReviewPolicy) Decide(in ReviewInput) ReviewDecision {
 			best = ReviewDecision{d, signal, why}
 		}
 	}
-	if base.Depth == DepthLight {
-		if doorOneWay.MatchString(in.PRBody) {
-			raise(DepthFull, SignalDoor, "PR body says Door: one-way")
-		}
-		if !p.NoScopeDrift {
-			if drift := scopeDrift(in.IssueBody, in.Files); len(drift) > 0 {
-				raise(DepthFull, SignalScopeDrift, "diff touches files the issue never named: "+strings.Join(drift, ", "))
-			}
+	if doorOneWay.MatchString(in.PRBody) {
+		raise(DepthFull, SignalDoor, "PR body says Door: one-way")
+	}
+	if !p.NoScopeDrift {
+		if drift := scopeDrift(in.IssueBody, in.Files); len(drift) > 0 {
+			raise(DepthFull, SignalScopeDrift, "diff touches files the issue never named: "+strings.Join(drift, ", "))
 		}
 	}
 	globs := make([]string, 0, len(p.Paths))
@@ -278,9 +275,13 @@ func (p ReviewPolicy) base(changed int, labels []string) ReviewDecision {
 	return ReviewDecision{p.Default, SignalDefault, "default depth"}
 }
 
+// pointersHeadRe matches a "Pointers" heading: the files an issue points at.
+var pointersHeadRe = regexp.MustCompile(`(?mi)^#{1,6}[ \t]+pointers[ \t]*$`)
+
 // scopeDrift lists the changed files the issue body never named. The declared
 // set is its "## Files" entries plus the path-like (slash or glob) entries of
-// "## Touches". An issue that declares none has no set to drift from.
+// "## Touches" and "## Pointers". A trailing /** names a directory, as in the
+// paths map. An issue that declares none has no set to drift from.
 func scopeDrift(issueBody string, files []string) []string {
 	var allowed []string
 	if sec, ok := itembody.Section(issueBody, itembody.FilesHeadRe); ok {
@@ -289,20 +290,24 @@ func scopeDrift(issueBody string, files []string) []string {
 	if sec, ok := itembody.Section(issueBody, itembody.TouchesHeadRe); ok {
 		allowed = append(allowed, bulletPaths(sec, true)...)
 	}
+	if sec, ok := itembody.Section(issueBody, pointersHeadRe); ok {
+		allowed = append(allowed, bulletPaths(sec, true)...)
+	}
 	if len(allowed) == 0 {
 		return nil
 	}
 	var out []string
 	for _, f := range files {
-		if !slices.ContainsFunc(allowed, func(a string) bool { return overlap.MatchPath(a, f) }) {
+		if !slices.ContainsFunc(allowed, func(a string) bool { return overlap.MatchPath(dirGlob(a), f) }) {
 			out = append(out, f)
 		}
 	}
 	return out
 }
 
-// bulletPaths reads the path of each bullet in a section: the first backticked
-// token, else the first word. pathLike keeps only entries with a slash or glob.
+// bulletPaths reads the paths of each bullet in a section: every backticked
+// token, else the words of the line. pathLike keeps only entries with a slash or
+// glob; otherwise a bullet with no backticks gives its first word.
 func bulletPaths(section string, pathLike bool) []string {
 	var out []string
 	for _, line := range strings.Split(section, "\n") {
@@ -312,22 +317,35 @@ func bulletPaths(section string, pathLike bool) []string {
 		}
 		line = strings.TrimSpace(line[2:])
 		line = strings.TrimPrefix(strings.TrimPrefix(line, "[ ] "), "[x] ")
-		tok := ""
-		if a := strings.Index(line, "`"); a >= 0 {
-			if b := strings.Index(line[a+1:], "`"); b >= 0 {
-				tok = line[a+1 : a+1+b]
+		var toks []string
+		for rest := line; ; {
+			a := strings.Index(rest, "`")
+			if a < 0 {
+				break
+			}
+			b := strings.Index(rest[a+1:], "`")
+			if b < 0 {
+				break
+			}
+			toks = append(toks, rest[a+1:a+1+b])
+			rest = rest[a+b+2:]
+		}
+		if len(toks) == 0 {
+			words := strings.Fields(line)
+			if !pathLike && len(words) > 0 {
+				words = words[:1]
+			}
+			for _, w := range words {
+				toks = append(toks, strings.Trim(w, ",;()"))
 			}
 		}
-		if tok == "" {
-			if f := strings.Fields(line); len(f) > 0 {
-				tok = f[0]
+		for _, tok := range toks {
+			tok = strings.TrimSpace(tok)
+			if tok == "" || (pathLike && !strings.ContainsAny(tok, "/*")) {
+				continue
 			}
+			out = append(out, tok)
 		}
-		tok = strings.TrimSpace(tok)
-		if tok == "" || (pathLike && !strings.ContainsAny(tok, "/*")) {
-			continue
-		}
-		out = append(out, tok)
 	}
 	return out
 }
