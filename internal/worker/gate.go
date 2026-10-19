@@ -784,12 +784,17 @@ func (g *gate) stepCloses() (bool, error) {
 }
 
 // reviewKinds are the verdict kinds a review depth needs on record: full both
-// reviewers, light the Standards reviewer, none nothing.
-func reviewKinds(d config.ReviewDepth) []string {
+// reviewers, none nothing, light the Spec reviewer when the branch has a spec
+// (an issue) and the Standards reviewer when it has none (#683): the gate
+// already runs the mechanical half of Standards, nothing else checks spec drift.
+func reviewKinds(d config.ReviewDepth, hasSpec bool) []string {
 	switch d {
 	case config.DepthFull:
 		return []string{verdict.ReviewSpec, verdict.ReviewQuality}
 	case config.DepthLight:
+		if hasSpec {
+			return []string{verdict.ReviewSpec}
+		}
 		return []string{verdict.ReviewQuality}
 	}
 	return nil
@@ -807,8 +812,12 @@ func (g *gate) stepReviewDepth() (bool, error) {
 		return g.broke(fmt.Sprintf("%v; run rota config check", err))
 	}
 	src := ReviewSources{Policy: policy, Git: g.e.Git, Dir: g.root, Span: g.baseRef + "..." + g.headRef}
-	if key, ok := tracker.ParseKey(g.target.Issue); ok && g.issues != nil {
-		src.Issue, src.Issues = key, g.issues
+	hasSpec := false
+	if key, ok := tracker.ParseKey(g.target.Issue); ok {
+		hasSpec = true
+		if g.issues != nil {
+			src.Issue, src.Issues = key, g.issues
+		}
 	}
 	if g.pr != "" {
 		src.PRBody = g.prBody
@@ -832,7 +841,7 @@ func (g *gate) stepReviewDepth() (bool, error) {
 	}
 	have := g.o.Recorded(g.branch, strings.TrimSpace(head))
 	var missing []string
-	for _, k := range reviewKinds(depth) {
+	for _, k := range reviewKinds(depth, hasSpec) {
 		if !slices.Contains(have, k) {
 			missing = append(missing, k)
 		}

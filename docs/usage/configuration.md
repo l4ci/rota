@@ -323,7 +323,7 @@ Controls how deep a review `/rota-ship` runs before integrating.
 | Value | Behavior |
 |-------|----------|
 | `"full"` (default) | `/rota-ship` runs `/rota-review` (Spec and Standards reviewers) before integrating. FAIL blocks, CONCERNS ask, PASS flows through. |
-| `"light"` | `/rota-review` dispatches the Standards reviewer only. |
+| `"light"` | `/rota-review` dispatches the Spec reviewer only, on the `standard` tier, and skips Standards (the deterministic gate covers its mechanical half). A branch that references no issue has no spec and gets the Standards reviewer instead. |
 | `"none"` | `/rota-ship` integrates directly without a review pass. Use when you want raw speed and already reviewed manually. |
 | `true` / `false` | The old boolean, still read: `true` is `full`, `false` is `none`. |
 | object | Picks the depth per branch, see below. |

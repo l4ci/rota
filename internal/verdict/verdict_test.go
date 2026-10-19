@@ -121,6 +121,9 @@ func TestAddBranchCombines(t *testing.T) {
 		}
 		return out
 	}
+	if r := add(rec(ReviewSpec, Concerns, "a0")); r.Combined != Concerns {
+		t.Errorf("spec-only combined = %q", r.Combined)
+	}
 	add(rec(ReviewSpec, Concerns, "a1"))
 	if r := add(rec(ReviewQuality, Pass, "a1")); r.Combined != Concerns {
 		t.Errorf("spec CONCERNS + quality PASS combined = %q", r.Combined)
@@ -137,7 +140,7 @@ func TestAddBranchCombines(t *testing.T) {
 	if r := add(rec(QA, Fail, "b2")); r.Combined != "" {
 		t.Errorf("qa got combined %q", r.Combined)
 	}
-	if got := len(Load(root).Branches["feat/x"]); got != 6 {
+	if got := len(Load(root).Branches["feat/x"]); got != 7 {
 		t.Errorf("stored %d records", got)
 	}
 }
