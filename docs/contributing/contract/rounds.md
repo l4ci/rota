@@ -330,7 +330,7 @@ note: if the dispatch fails after the claim moved, the claim and branch stay wit
 rota round bounce <issue> [--head <sha>] [--slot <slot>]
 repo: none
 data: {"issue": string, "bounces": number, "max": number, "changed": bool}
-exit: 2 when no issue is given; 4 when the item is already at `round.maxBounces` (nothing counted, `changed` false); 70 when `round.maxBounces` is invalid
+exit: 2 when no issue is given; 4 when `--slot` names a slot that is not in the pool (nothing written, the slot named) or when the item is already at `round.maxBounces` (nothing counted, `changed` false); 70 when `round.maxBounces` is invalid
 old: none (new in #239)
 note: the orchestrator's count of a bounce it sends by hand (SKILL §7). It shares the per-item `bounces` counter of `.rota/workers.json` with the merge gate, so gate bounces and review bounces add up. `<issue>` may carry a leading `#`. `--head` is the PR head being bounced: the same head twice counts once. `--slot` names the slot holding the bounced PR, so the ledger's bounce entry of a best-of:2 attempt lands on that attempt's row; without it the entry lands on the first slot holding the issue, wrong for the second attempt of a pair. Below the cap it counts one and exits 0; at `round.maxBounces` (default 3) it counts nothing and exits 4 with a hint to `round transfer --tier` or `--to human`. `0` turns the cap off. The verb does not move anything: it needs no lease and sends nothing to a worker.
 

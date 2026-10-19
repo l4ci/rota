@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/l4ci/rota/internal/worker"
@@ -39,5 +40,25 @@ func TestRoundBounceCapZeroIsOff(t *testing.T) {
 		if code, _, _ := rotaInWith(t, deps, dir, "round", "bounce", "31"); code != 0 {
 			t.Fatalf("bounce %d refused with the cap off: %d", i+1, code)
 		}
+	}
+}
+
+func TestRoundBounceSlotMustBeInThePool(t *testing.T) {
+	deps := testDeps()
+	dir := workerProject(t, `{}`)
+	rotaInWith(t, deps, dir, "worker", "pool", "init", "--slots", "1", "--base", "main")
+
+	code, _, errOut := rotaInWith(t, deps, dir, "round", "bounce", "31", "--slot", "w9", "--head", "a", "--json")
+	if code != 4 || !strings.Contains(errOut, "w9") {
+		t.Fatalf("unknown slot: %d %s", code, errOut)
+	}
+	if n := worker.LoadRegistryTolerant(dir).Bounces("31"); n != 0 {
+		t.Errorf("a refused slot must write nothing, registry says %d bounces", n)
+	}
+	if code, _, errOut := rotaInWith(t, deps, dir, "round", "bounce", "31", "--slot", "w1", "--head", "a", "--json"); code != 0 {
+		t.Fatalf("known slot: %d %s", code, errOut)
+	}
+	if n := worker.LoadRegistryTolerant(dir).Bounces("31"); n != 1 {
+		t.Errorf("known slot must count, registry says %d", n)
 	}
 }
