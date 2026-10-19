@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -113,6 +114,25 @@ func TestVerdictSpecOnlyIsCombined(t *testing.T) {
 	recs := data(t, out)["records"].([]any)
 	if len(recs) != 1 || recs[0].(map[string]any)["combined"] != "CONCERNS" {
 		t.Errorf("show: %v", recs)
+	}
+}
+
+func TestVerdictAddBehaviourTranscript(t *testing.T) {
+	dir := verdictRepo(t)
+	code, out, _ := rotaIn(t, dir, "verdict", "add", "--kind", "behaviour", "--verdict", "FAIL", "--transcript", ".rota/qa-runs/behaviour/x.txt", "--json")
+	if d := data(t, out); code != 0 || d["kind"] != "behaviour" || d["transcript"] != ".rota/qa-runs/behaviour/x.txt" {
+		t.Fatalf("behaviour: %d %v", code, d)
+	}
+	_, out, _ = rotaIn(t, dir, "verdict", "show", "--json")
+	if d := data(t, out); d["records"].([]any)[0].(map[string]any)["transcript"] != ".rota/qa-runs/behaviour/x.txt" {
+		t.Errorf("show: %v", d)
+	}
+	if code, _, _ := rotaIn(t, dir, "verdict", "add", "--kind", "behaviour", "--verdict", "CONCERNS"); code != 2 {
+		t.Errorf("behaviour CONCERNS: exit %d", code)
+	}
+	code, _, errs := rotaIn(t, dir, "verdict", "add", "--kind", "qa", "--verdict", "PASS", "--transcript", "t.txt")
+	if code != 2 || !strings.Contains(errs, "--transcript") {
+		t.Errorf("transcript on qa: exit %d %q", code, errs)
 	}
 }
 
