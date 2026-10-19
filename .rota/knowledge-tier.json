@@ -416,60 +416,20 @@
       "hits": 0,
       "lastSeen": "2026-10-15"
     },
-    "Rounds: Orchestration: Review & merge gate::Train PRs with disjoint paths; a new config key reds the frozen config record": {
-      "tier": "provisional",
-      "hits": 1,
-      "lastSeen": "2026-10-19"
-    },
-    "Rounds: Orchestration: Review & merge gate::Verdicts record the sha of the slot's worktree, not origin": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-16"
-    },
     "Rounds: Orchestration: Review & merge gate::Review subagents must not touch the repo's worktrees or checkout during a gate": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-16"
-    },
-    "Rounds: Orchestration: Review & merge gate::Mutation-check source-grep guard tests": {
-      "tier": "provisional",
-      "hits": 1,
-      "lastSeen": "2026-10-19"
-    },
-    "Rounds: Orchestration: Review & merge gate::Refactor reviews need an old-vs-new input table": {
-      "tier": "confirmed",
-      "hits": 3,
-      "lastSeen": "2026-10-19"
     },
     "Rounds: Orchestration: Review & merge gate::Renamed Go tests can silently stop running": {
       "tier": "confirmed",
       "hits": 5,
       "lastSeen": "2026-10-19"
     },
-    "Rounds: Orchestration: Review & merge gate::Re-reviews are one reviewer, majors only, fix range only": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-09"
-    },
-    "Rounds: Orchestration: Review & merge gate::Contract-doc stamps make waiting PRs conflict with each other": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-09"
-    },
     "Rounds: Orchestration: Review & merge gate::Rebuild the installed rota after merging round-verb fixes": {
       "tier": "provisional",
       "hits": 1,
       "lastSeen": "2026-10-08"
-    },
-    "Rounds: Orchestration: Review & merge gate::Read held commits before reaping a round": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-06"
-    },
-    "Rounds: Orchestration: Review & merge gate::gh pr edit fails silently on this repo": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-05"
     },
     "Rounds: Orchestration: Workers & relays::Sonnet workers write tests after the code unless the brief names the RED": {
       "tier": "provisional",
@@ -560,11 +520,6 @@
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-17"
-    },
-    "Rounds: Orchestration: Review & merge gate::A commit after the review makes its PASS stale, bookkeeping included": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-18"
     },
     "Rounds: Orchestration: Workers & relays::Brief implementers to leave .rota/knowledge-tier.json alone": {
       "tier": "provisional",
@@ -671,32 +626,12 @@
       "hits": 0,
       "lastSeen": "2026-10-19"
     },
-    "Rounds: Orchestration: Review & merge gate::Stash the tier sidecar around a gate run on main": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-19"
-    },
     "Rounds: Orchestration: Review & merge gate::Light reviews still carry the acceptance criteria": {
       "tier": "confirmed",
       "hits": 4,
       "lastSeen": "2026-10-19"
     },
-    "Rounds: Orchestration: Review & merge gate::Learn and docs bookkeeping commits go straight to main": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-19"
-    },
     "Rounds: Orchestration: Workers & relays::A watch wake of done after a bounce relay can be the old sentinel": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-19"
-    },
-    "Rounds: Orchestration: Review & merge gate::A string ship.review fixes the depth for every branch, labels included": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-19"
-    },
-    "Rounds: Orchestration: Review & merge gate::rota verdict add takes no extra top-level fields": {
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-10-19"
@@ -706,22 +641,127 @@
       "hits": 0,
       "lastSeen": "2026-10-19"
     },
-    "Rounds: Orchestration: Review & merge gate::Fast-forward the local ref after an orchestrator push before verdict add": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-19"
-    },
-    "Rounds: Orchestration: Review & merge gate::Train the waiting PRs once two or more are reviewed": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-19"
-    },
-    "Rounds: Orchestration: Review & merge gate::Commit knowledge-hit bookkeeping before wind-down": {
-      "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-19"
-    },
     "Rounds: Orchestration: Workers & relays::A limited wake can be the brief quoting limit phrases": {
+      "tier": "provisional",
+      "hits": 1,
+      "lastSeen": "2026-10-19"
+    },
+    "Rounds: Orchestration: Workers & relays::Claude Code echoes a brief as a \u276f header with a two-space body": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-19"
+    },
+    "Architecture: Helper conventions & invariants: Go verbs & fakes::The worker forge must not share the read cache": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-19"
+    },
+    "Rounds: Orchestration: Review & merge gate::Commit the hit sidecar before a gate instead of stashing it": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-19"
+    },
+    "Rounds: Orchestration: Slate & issues::The queue-empty architecture trigger re-fires on every idle check": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-19"
+    },
+    "Rounds: Orchestration: Slate & issues::Overlap reads issue pointers, not PR diffs": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-19"
+    },
+    "Rounds: Orchestration: Workers & relays::An account without a token stalls the slots mapped to it": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-19"
+    },
+    "Rounds: Orchestration: Reviews & verdicts::Check the branch head against the reviewed sha before verdict add": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-19"
+    },
+    "Rounds: Orchestration: Reviews & verdicts::Verdicts record the sha of the slot's worktree, not origin": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-16"
+    },
+    "Rounds: Orchestration: Reviews & verdicts::A tiny fix range is re-reviewed by the orchestrator itself": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-19"
+    },
+    "Rounds: Orchestration: Reviews & verdicts::Fast-forward the local ref after an orchestrator push before verdict add": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-19"
+    },
+    "Rounds: Orchestration: Reviews & verdicts::Re-reviews are one reviewer, majors only, fix range only": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-09"
+    },
+    "Rounds: Orchestration: Reviews & verdicts::rota verdict add takes no extra top-level fields": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-19"
+    },
+    "Rounds: Orchestration: Gate, trains & bookkeeping::Train the waiting PRs once two or more are reviewed": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-19"
+    },
+    "Rounds: Orchestration: Gate, trains & bookkeeping::Read held commits before reaping a round": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-06"
+    },
+    "Rounds: Orchestration: Gate, trains & bookkeeping::Stash the tier sidecar around a gate run on main": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-19"
+    },
+    "Rounds: Orchestration: Gate, trains & bookkeeping::Commit knowledge-hit bookkeeping before wind-down": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-19"
+    },
+    "Rounds: Orchestration: Reviews & verdicts::A string ship.review fixes the depth for every branch, labels included": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-19"
+    },
+    "Rounds: Orchestration: Gate, trains & bookkeeping::Learn and docs bookkeeping commits go straight to main": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-19"
+    },
+    "Rounds: Orchestration: Reviews & verdicts::A commit after the review makes its PASS stale, bookkeeping included": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-18"
+    },
+    "Rounds: Orchestration: Gate, trains & bookkeeping::gh pr edit fails silently on this repo": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-05"
+    },
+    "Rounds: Orchestration: Gate, trains & bookkeeping::Contract-doc stamps make waiting PRs conflict with each other": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-10-09"
+    },
+    "Rounds: Orchestration: Reviews & verdicts::Refactor reviews need an old-vs-new input table": {
+      "tier": "confirmed",
+      "hits": 3,
+      "lastSeen": "2026-10-19"
+    },
+    "Rounds: Orchestration: Reviews & verdicts::Mutation-check source-grep guard tests": {
+      "tier": "provisional",
+      "hits": 1,
+      "lastSeen": "2026-10-19"
+    },
+    "Rounds: Orchestration: Gate, trains & bookkeeping::Train PRs with disjoint paths; a new config key reds the frozen config record": {
       "tier": "provisional",
       "hits": 1,
       "lastSeen": "2026-10-19"
