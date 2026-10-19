@@ -83,3 +83,38 @@ func TestFormatRatio(t *testing.T) {
 		}
 	}
 }
+
+func TestHerdrOpenLinkedAndMoveIntoItsWorkspace(t *testing.T) {
+	f := linkedFake("false", nil)
+	l := New("herdr", deps(f, herdrEnv, &clock{})).(LinkedLayouter)
+	ws, root, err := l.OpenLinked(bg, "w9", "ben", "/repo/.worktrees/ben")
+	if err != nil || ws != "w9N" || root != "w9N:t1" {
+		t.Fatalf("OpenLinked = %q, %q, %v", ws, root, err)
+	}
+	if err := l.ToNewTabIn(bg, "w9:p4", ws, "ben"); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"herdr worktree open --workspace w9 --path /repo/.worktrees/ben --label ben --no-focus",
+		"herdr pane move w9:p4 --new-tab --workspace w9N --label ben --no-focus",
+	}
+	if !reflect.DeepEqual(f.calls, want) {
+		t.Errorf("calls = %v", f.calls)
+	}
+}
+
+// An already open workspace has no root tab of rota's to close.
+func TestHerdrOpenLinkedReportsNoRootTabWhenAlreadyOpen(t *testing.T) {
+	f := linkedFake("true", nil)
+	_, root, err := New("herdr", deps(f, herdrEnv, &clock{})).(LinkedLayouter).OpenLinked(bg, "w9", "ben", "/repo/.worktrees/ben")
+	if err != nil || root != "" {
+		t.Errorf("root = %q, %v", root, err)
+	}
+}
+
+func TestHerdrOpenLinkedRefusesARelativePath(t *testing.T) {
+	f := linkedFake("false", nil)
+	if _, _, err := New("herdr", deps(f, herdrEnv, &clock{})).(LinkedLayouter).OpenLinked(bg, "w9", "ben", ".worktrees/ben"); err == nil || !strings.Contains(err.Error(), "absolute") || len(f.calls) != 0 {
+		t.Errorf("err = %v, calls = %v", err, f.calls)
+	}
+}

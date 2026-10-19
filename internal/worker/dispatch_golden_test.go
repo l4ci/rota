@@ -46,9 +46,10 @@ type hostRig struct {
 // the fake scripts.
 func newRig(t *testing.T, kind string) *hostRig {
 	t.Helper()
-	cfg := `{}`
+	// The goldens are the tab-per-slot traffic; grouping has its own tests.
+	cfg := `{"work":{"herdrGroupSlots":false}}`
 	if kind == "herdr" {
-		cfg = `{"work":{"dispatch":"herdr"}}`
+		cfg = `{"work":{"dispatch":"herdr","herdrGroupSlots":false}}`
 	}
 	r := &hostRig{kind: kind, herdrDir: t.TempDir(), tmuxDir: t.TempDir(), root: newProject(t, cfg)}
 	os.WriteFile(filepath.Join(r.tmuxDir, "pane"), []byte("? for shortcuts\n"), 0o644)
@@ -91,7 +92,6 @@ func TestDispatchHostTraffic(t *testing.T) {
 		t.Run(kind, func(t *testing.T) {
 			goR := newRig(t, kind)
 			goInit(t, goR.root, InitOpts{Slots: 1, Base: "main"})
-
 			brief := writeBrief(t, "build the thing\nsecond line\n")
 			relay := writeBrief(t, "\nuse option B\n")
 			signed := writeBrief(t, "--- ORCHESTRATOR (round 9) ---\nsigned already\n")

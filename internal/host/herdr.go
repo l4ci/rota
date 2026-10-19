@@ -252,7 +252,7 @@ func (h *herdr) Spawn(ctx context.Context, o SpawnOpts) (string, error) {
 	ws := h.d.Getenv("HERDR_WORKSPACE_ID")
 	var opened openedWorkspace
 	if o.LinkWorkspace {
-		if opened, err = h.openLinked(ctx, o); err != nil {
+		if opened, err = h.openLinked(ctx, h.d.Getenv("HERDR_WORKSPACE_ID"), o.Slot, o.Cwd); err != nil {
 			return "", err
 		}
 		ws = opened.id
@@ -327,23 +327,23 @@ func (h *herdr) Spawn(ctx context.Context, o SpawnOpts) (string, error) {
 // already open: that tab is somebody else's and rota must not close it.
 type openedWorkspace struct{ id, rootTab string }
 
-// openLinked opens the slot's worktree as a workspace linked to the caller's
-// own, so herdr groups the slot under its project. open is idempotent
+// openLinked opens the worktree at path as a workspace linked to primary, so
+// herdr groups the slot under its project. open is idempotent
 // (`already_open`), and it takes an absolute path only: a relative one fails
 // with worktree_not_found. It has no --env, so the caller still creates the
 // slot's tab with `tab create --env`.
-func (h *herdr) openLinked(ctx context.Context, o SpawnOpts) (openedWorkspace, error) {
-	if !strings.HasPrefix(o.Cwd, "/") {
-		return openedWorkspace{}, fmt.Errorf("work.herdrGroupSlots needs an absolute worktree path for slot '%s', got: %s", o.Slot, o.Cwd)
+func (h *herdr) openLinked(ctx context.Context, primary, slot, path string) (openedWorkspace, error) {
+	if !strings.HasPrefix(path, "/") {
+		return openedWorkspace{}, fmt.Errorf("work.herdrGroupSlots needs an absolute worktree path for slot '%s', got: %s", slot, path)
 	}
-	r := h.herdr(ctx, "worktree", "open", "--workspace", h.d.Getenv("HERDR_WORKSPACE_ID"),
-		"--path", o.Cwd, "--label", o.Slot, "--no-focus")
+	r := h.herdr(ctx, "worktree", "open", "--workspace", primary,
+		"--path", path, "--label", slot, "--no-focus")
 	if r.ExitCode != 0 {
-		return openedWorkspace{}, fmt.Errorf("herdr worktree open failed for slot '%s': %s", o.Slot, strings.TrimSpace(r.Stderr))
+		return openedWorkspace{}, fmt.Errorf("herdr worktree open failed for slot '%s': %s", slot, strings.TrimSpace(r.Stderr))
 	}
 	ws := jget(r.Stdout, "result.workspace.workspace_id")
 	if ws == "" {
-		return openedWorkspace{}, fmt.Errorf("herdr worktree open returned no workspace id for slot '%s'", o.Slot)
+		return openedWorkspace{}, fmt.Errorf("herdr worktree open returned no workspace id for slot '%s'", slot)
 	}
 	w := openedWorkspace{id: ws}
 	if jget(r.Stdout, "result.already_open") != "true" {

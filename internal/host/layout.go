@@ -40,6 +40,20 @@ type Layouter interface {
 	RenamePane(ctx context.Context, pane, label string) error
 }
 
+// LinkedLayouter is the grouped-slots side of a herdr (work.herdrGroupSlots):
+// it puts a slot's pane back in a workspace of its own, linked to the
+// orchestrator's, after a `layout split` closed it.
+type LinkedLayouter interface {
+	// OpenLinked opens path as a workspace linked to primary (idempotent) and
+	// returns its id and the shell tab that open created, "" when the
+	// workspace was already open.
+	OpenLinked(ctx context.Context, primary, slot, path string) (ws, rootTab string, err error)
+	// ToNewTabIn moves pane out into a new tab of workspace ws, named label.
+	ToNewTabIn(ctx context.Context, pane, ws, label string) error
+	// CloseTab closes a tab (host.TabCloser).
+	CloseTab(ctx context.Context, tab string) error
+}
+
 // LayoutPanes joins `pane list` with the tab and workspace labels.
 func (h *herdr) LayoutPanes(ctx context.Context) ([]LayoutPane, error) {
 	r := h.herdr(ctx, "pane", "list")
@@ -182,4 +196,20 @@ func (h *herdr) RenamePane(ctx context.Context, pane, label string) error {
 // FormatRatio prints a share with at most four decimals: 0.5, 0.3333.
 func FormatRatio(f float64) string {
 	return strconv.FormatFloat(math.Round(f*1e4)/1e4, 'f', -1, 64)
+}
+
+// OpenLinked is `herdr worktree open` on primary's project (see openLinked).
+func (h *herdr) OpenLinked(ctx context.Context, primary, slot, path string) (string, string, error) {
+	w, err := h.openLinked(ctx, primary, slot, path)
+	return w.id, w.rootTab, err
+}
+
+// ToNewTabIn: `herdr pane move --new-tab --workspace --label`. Like ToNewTab,
+// the pane keeps its id, agent name and process; the tab is new.
+func (h *herdr) ToNewTabIn(ctx context.Context, pane, ws, label string) error {
+	r := h.herdr(ctx, "pane", "move", pane, "--new-tab", "--workspace", ws, "--label", label, "--no-focus")
+	if r.ExitCode != 0 {
+		return fmt.Errorf("herdr pane move %s failed: %s", pane, strings.TrimSpace(r.Stderr))
+	}
+	return nil
 }

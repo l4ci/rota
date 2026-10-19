@@ -45,7 +45,7 @@ func layoutHost(d *Deps) (host.Layouter, error) {
 type layoutOut struct {
 	root, name, before, after string
 	moves                     int
-	skipped                   string
+	skipped, note             string
 	st                        layout.State
 }
 
@@ -112,6 +112,11 @@ func runLayout(c *Ctx, mode, project string) (Result, error) {
 			if mode == "" {
 				break
 			}
+			group, gerr := worker.GroupSlots(root)
+			if gerr != nil {
+				return Result{}, Resolution("%s: %v", o.name, gerr)
+			}
+			st.Group = group
 			var r layout.Result
 			var err error
 			if mode == layout.Split {
@@ -130,6 +135,16 @@ func runLayout(c *Ctx, mode, project string) (Result, error) {
 				}
 			}); err != nil {
 				c.Warn("%s: could not remember the layout: %v", o.name, err)
+			}
+			if group {
+				if mode == layout.Split && r.Moves > 0 {
+					o.note = "slots leave their linked workspaces until `rota layout tabs`"
+				}
+				if r.Moves > 0 {
+					if err := worker.RecordWorkspaces(ctx, h, root, cli); err != nil {
+						c.Warn("%s: could not remember the slot workspaces: %v", o.name, err)
+					}
+				}
 			}
 			if r.Moves > 0 {
 				// Report where the panes are now, not where they were.
@@ -249,6 +264,10 @@ func layoutResult(c *Ctx, mode string, outs []layoutOut) (Result, error) {
 			head = o.name + "\t" + layout.Result{After: o.after, Moves: o.moves}.Describe()
 		}
 		lines = append(lines, head)
+		if o.note != "" {
+			row.Set("note", o.note)
+			lines = append(lines, "  "+o.note)
+		}
 		if o.st.CLI != nil {
 			lines = append(lines, "  cli\t"+o.st.CLI.ID+"\t"+o.st.CLI.Tab)
 		}
