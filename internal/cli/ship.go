@@ -48,7 +48,7 @@ func shipLine(s string) string { return strings.TrimRight(s, "\n") }
 
 // shipBlocked is a refusal carrying {blockedBy, changed: false}.
 func shipBlocked(by, format string, a ...any) (Result, error) {
-	return Result{Data: gitObj("blockedBy", by, "changed", false)}, Refused(format, a...)
+	return blockedRefusal(nil, by, fmt.Sprintf(format, a...), "")
 }
 
 // shipGitRunner adapts git in dir to ship.Git, mapping a failure to run git
@@ -82,8 +82,7 @@ func shipErr(err error) (Result, error) {
 		}
 		return res, e
 	case errors.As(err, &vb):
-		d := gitObj("blockedBy", "verdict", "kind", vb.Record.Kind, "verdict", vb.Record.Verdict, "sha", vb.Record.Sha, "stale", vb.Stale, "changed", false)
-		return Result{Data: d}, Refused("%s", vb.Error()).WithHint("see: rota verdict show " + vb.Branch)
+		return verdictBlocked(vb, nil, true)
 	case errors.As(err, &nf), errors.As(err, &ui):
 		return Result{}, Resolution("%s", err.Error())
 	case errors.As(err, &nc):

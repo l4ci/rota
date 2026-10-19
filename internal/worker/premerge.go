@@ -72,7 +72,7 @@ func noVerifyRefusalFor(s premergeSubject, in gateInput) *premergeRefusal {
 		return nil
 	}
 	msg, hint := noVerifyRefusal(s.What)
-	return &premergeRefusal{Verdict: GateNoVerify, Err: msg, Hint: hint}
+	return &premergeRefusal{Verdict: BlockedByNoVerify, Err: msg, Hint: hint}
 }
 
 // ciConfigCheck refuses a merge that changes the CI definition, or returns nil.

@@ -521,7 +521,7 @@ func TestTrainRefusesEmptyTestFull(t *testing.T) {
 	w := trainWorld(t, "true", "b1", "b2")
 	w.setConfig(`{"test":{"full":[]}}`)
 	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}})
-	if err != nil || res.Verdict != GateNoVerify || res.Changed || len(res.Landed) != 0 || w.onMain("b1.txt") {
+	if err != nil || res.Verdict != BlockedByNoVerify || res.Changed || len(res.Landed) != 0 || w.onMain("b1.txt") {
 		t.Fatalf("%+v %v", res, err)
 	}
 	if !strings.Contains(res.Err, "test.full") || !strings.Contains(res.Hint, "rota config set test.full") || !strings.Contains(res.Hint, "--no-verify") {
