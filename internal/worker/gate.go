@@ -88,6 +88,10 @@ const (
 	// GateVerdictBlocked: a recorded FAIL verdict (B3) refused before the
 	// merge; the CLI exits 4 with it, blockedBy verdict.
 	GateVerdictBlocked = "verdict-blocked"
+	// GateNoVerify: test.full is empty, so a merge would land unverified; the
+	// CLI exits 4 with it unless --no-verify was passed. The verdict is also
+	// the refusal's blockedBy key.
+	GateNoVerify = "no-verify"
 	// GateNotClosing: the PR body has no closing keyword for the slot's issue,
 	// so the merge would leave it open and drifted; the CLI exits 4 with it,
 	// blockedBy closes. An issue labelled PartialSliceLabel is exempt.
