@@ -329,14 +329,15 @@ Controls how deep a review `/rota-ship` runs before integrating.
 | object | Picks the depth per branch, see below. |
 
 ```json
-{"ship": {"review": {"default": "full", "lightBelow": 50, "labels": {"risk:high": "full", "best-of:2": "light", "partial-slice": "none"}, "paths": {"migrations/**": "full"}}}}
+{"ship": {"review": {"default": "full", "lightBelow": 50, "labels": {"risk:high": "full", "best-of:2": "light", "partial-slice": "none"}, "paths": {"migrations/**": "full"}, "supportPaths": ["docs/**", "internal/*/testdata/golden/**"]}}}
 ```
 
 - `default`: `full`, `light` or `none`; `full` when omitted.
 - `lightBelow`: a diff of fewer changed lines (added plus deleted, against the base) than this gets `light`. It only lowers a `default` of `full`. `0` or omitted turns it off.
 - `labels`: a label on the item's issue or PR maps to a depth and beats the size rule, so `risk:high` forces `full` on a small diff. `best-of:2` and `partial-slice` are ordinary labels here. When several labels match, the strictest depth wins. A label that maps to `none` is final: the rules below never lift it.
 - `paths`: a glob maps (`*` within a segment, or a trailing `/**` for a whole directory; other `**` is rejected) to the least depth a changed path matching it gets; the strictest match wins and it never lowers a depth.
-- `scopeDrift`: `true` when omitted. A diff that touches files the issue never named (its `## Files` entries and the path entries of its `## Touches`) resolves `full`, and the reason lists them. An issue that declares neither section has no set to drift from. `false` turns the rule off.
+- `scopeDrift`: `true` when omitted. A diff that touches files the issue never named (its `## Files` entries and the path entries of its `## Touches`) resolves `full`, and the reason lists them. A directory entry (`internal/gate`, with or without `/` or `/**`) covers the files under it. Support files do not count as drift: a `_test.go` file in the directory of a declared file or under a declared directory, and anything matching `supportPaths`. An issue that declares neither section has no set to drift from. `false` turns the rule off.
+- `supportPaths`: globs (same syntax as `paths`) of files that never count as scope drift. Omitted, it is `docs/**` (the generated `docs/reference/config-options.md` included), `cmd/rota/testdata/frozen/**`, `internal/*/testdata/golden/**` and `test/sections/**`. A list you set replaces these; `[]` makes every undeclared file count.
 - A PR body line `Door: one-way` (the line every worker PR ends with) resolves `full` whatever the size.
 
 Door and scope drift only lift a `light` review; a `default` of `none` is the review switched off and they leave it. `rota review depth --json` names the deciding signal in `signal`: `label`, `door`, `scope-drift`, `path`, `size` or `default`.
