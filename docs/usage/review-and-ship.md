@@ -88,7 +88,7 @@ See [configuration](configuration.md) for the full `work` block.
 | Value | Behavior |
 |-------|---------|
 | `full` (default) | `/rota-review` runs first. `FAIL` blocks, `CONCERNS` surface but you can proceed, `PASS` flows through. |
-| `light` | Only the Standards reviewer runs. |
+| `light` | Only the Spec reviewer runs, on the `standard` tier; the report says the Standards axis was not run. A branch that references no issue has no spec and gets the Standards reviewer instead. |
 | `none` | Skips the review pass. Integration runs immediately. Use when you have already reviewed manually and want to skip the second pass. |
 
 `true` and `false` still work as `full` and `none`. An object picks the depth by diff size, label and path (for example `risk:high` forces `full`), and lifts a `light` review to `full` on a `Door: one-way` PR, a diff outside the issue's declared files or a risky path; see [configuration](configuration.md#shipreview). `/rota-ship` prints the chosen depth and why.

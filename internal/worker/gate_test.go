@@ -1126,7 +1126,7 @@ func TestGateRefusesAnUnpickedBestOfPR(t *testing.T) {
 }
 
 // The gate applies ship.review: the resolved depth decides which recorded
-// review verdicts it requires (full both, light the Standards one, none no
+// review verdicts it requires (full both, light the Spec one (Standards when there is no issue), none no
 // verdict), and it refuses a branch that lacks them. The depth is noted either way.
 func TestGateAppliesTheReviewDepth(t *testing.T) {
 	policy := `{"ship":{"review":{"default":"full","lightBelow":1000,"labels":{"risk:high":"full","partial-slice":"none"}}},"test":{"full":["true"]}}`
@@ -1136,9 +1136,9 @@ func TestGateAppliesTheReviewDepth(t *testing.T) {
 		recorded                []string
 		refused                 string // the missing kinds the refusal names; "" passes
 	}{
-		{"small diff is light, standards verdict passes", policy, "in-progress", "REVIEW-DEPTH w1 — light (1 changed lines, under lightBelow 1000)", []string{quality}, ""},
-		{"light without a verdict is refused", policy, "in-progress", "light", nil, quality},
-		{"light with only a spec verdict is refused", policy, "in-progress", "light", []string{spec}, quality},
+		{"small diff is light, spec verdict passes", policy, "in-progress", "REVIEW-DEPTH w1 — light (1 changed lines, under lightBelow 1000)", []string{spec}, ""},
+		{"light without a verdict is refused", policy, "in-progress", "light", nil, spec},
+		{"light with only a standards verdict is refused", policy, "in-progress", "light", []string{quality}, spec},
 		{"risk:high forces full, both verdicts pass", policy, "in-progress,risk:high", "REVIEW-DEPTH w1 — full (label risk:high)", []string{spec, quality}, ""},
 		{"full with a standards verdict only is refused", policy, "in-progress,risk:high", "full", []string{quality}, spec},
 		{"full with no verdict is refused", policy, "in-progress,risk:high", "full", nil, spec + " and " + quality},
@@ -1183,11 +1183,11 @@ func TestGateReviewDepthSignals(t *testing.T) {
 		refused                                  string // "" passes
 	}{
 		{"light with no signal passes", light, "Closes #5\n", "in-progress", "", "light", ""},
-		{"one-way door lifts light to full", light, door, "in-progress", "", "REVIEW-DEPTH w1 — full (PR body says Door: one-way)", spec},
+		{"one-way door lifts light to full", light, door, "in-progress", "", "REVIEW-DEPTH w1 — full (PR body says Door: one-way)", quality},
 		{"two-way door stays light", light, "Closes #5\n\nDoor: two-way.\n", "in-progress", "", "light", ""},
-		{"door lifts a default of none", `{"ship":{"review":"none"},"test":{"full":["true"]}}`, door, "in-progress", "", "full", spec},
+		{"door lifts a default of none", `{"ship":{"review":"none"},"test":{"full":["true"]}}`, door, "in-progress", "", "full", quality},
 		{"label none beats the door", light, door, "in-progress," + PartialSliceLabel, "", "none", ""},
-		{"diff outside the issue's files lifts to full", light, "Closes #5\n", "in-progress", "## Files\n\n- other.txt\n", "files the issue never named: work.txt", spec},
+		{"diff outside the issue's files lifts to full", light, "Closes #5\n", "in-progress", "## Files\n\n- other.txt\n", "files the issue never named: work.txt", quality},
 		{"declared file stays light", light, "Closes #5\n", "in-progress", "## Files\n\n- work.txt\n", "light", ""},
 		{"scopeDrift false stays light", `{"ship":{"review":{"default":"full","lightBelow":1000,"scopeDrift":false}},"test":{"full":["true"]}}`, "Closes #5\n", "in-progress", "## Files\n\n- other.txt\n", "light", ""},
 	} {
@@ -1199,7 +1199,7 @@ func TestGateReviewDepthSignals(t *testing.T) {
 			w.forge("body", c.body)
 			w.forge("issueLabels", c.labels)
 			w.forge("issueBody", c.issueBody)
-			res, err := w.gate(false, GateOpts{CheckOnly: true, Recorded: func(string, string) []string { return []string{quality} }})
+			res, err := w.gate(false, GateOpts{CheckOnly: true, Recorded: func(string, string) []string { return []string{spec} }})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1235,12 +1235,43 @@ func TestGateReviewDepthOnAnExternalPR(t *testing.T) {
 			w.forge("issueLabels", "in-progress")
 			w.forge("issueBody", c.issueBody)
 			res, _ := w.env(false).Gate(bg, w.dir, GateOpts{Slot: "7", Base: "main", CheckOnly: true,
-				Recorded: func(string, string) []string { return []string{quality} }})
-			if res.Verdict != GateReviewMissing || !strings.Contains(res.Err, "needs a recorded "+spec+" verdict") {
-				t.Fatalf("verdict %s (%s), want review-missing naming %s: %+v", res.Verdict, res.Err, spec, res)
+				Recorded: func(string, string) []string { return []string{spec} }})
+			if res.Verdict != GateReviewMissing || !strings.Contains(res.Err, "needs a recorded "+quality+" verdict") {
+				t.Fatalf("verdict %s (%s), want review-missing naming %s: %+v", res.Verdict, res.Err, quality, res)
 			}
 			if got := strings.Join(res.Notes, "\n"); !strings.Contains(got, c.note) {
 				t.Errorf("notes %q lack %q", got, c.note)
+			}
+		})
+	}
+}
+
+// A branch that references no issue has no spec to review (#683): light keeps
+// asking for the Standards verdict only.
+func TestGateLightWithoutAnIssueNeedsStandards(t *testing.T) {
+	spec, quality := verdict.ReviewSpec, verdict.ReviewQuality
+	for _, c := range []struct {
+		name     string
+		recorded []string
+		refused  string
+	}{
+		{"standards verdict passes", []string{quality}, ""},
+		{"spec verdict alone is refused", []string{spec}, quality},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			w := newWorld(t, ghURL)
+			w.setConfig(`{"ship":{"review":"light"},"test":{"full":["true"]}}`)
+			w.forge("body", "no issue here\n")
+			res, err := w.gate(false, GateOpts{CheckOnly: true, Recorded: func(string, string) []string { return c.recorded }})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if c.refused == "" {
+				if res.Verdict != GateFresh {
+					t.Fatalf("%+v", res)
+				}
+			} else if res.Verdict != GateReviewMissing || !strings.Contains(res.Err, "needs a recorded "+c.refused+" verdict") {
+				t.Fatalf("verdict %s (%s), want review-missing naming %s", res.Verdict, res.Err, c.refused)
 			}
 		})
 	}
@@ -1325,7 +1356,7 @@ func TestGateReviewDepthAsksForTheCheckedHead(t *testing.T) {
 	res, err := w.gate(false, GateOpts{CheckOnly: true, Recorded: func(_, head string) []string {
 		asked = head
 		if head == "oldsha" {
-			return []string{verdict.ReviewQuality}
+			return []string{verdict.ReviewSpec}
 		}
 		return nil
 	}})
