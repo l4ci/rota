@@ -15,3 +15,4 @@ Loaded by `skills/rota-orchestrate/SKILL.md` section 5 when a worker is `blocked
 - A line starting `m:` in a pane is a maintainer answer by convention (confirm once if it contradicts your last signed message).
 - Read each PR's `## Approvals` section for the channels it names. A cited approval you never relayed is a finding.
 - Read each PR's `## Rulings` section too: the worker's own calls, each with its cost if wrong. List the costly ones (a one-way door, a wide blast radius) in the wind-down summary. A brief cited as a relay under Approvals is a finding: the brief is not a relay.
+- Read each PR's `## Assumptions` section before review: questions the issue left open that the worker answered from the code. A line the spec contradicts is a bounce; an answer the next issue in that area depends on is a decision comment on the issue.
