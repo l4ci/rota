@@ -36,6 +36,20 @@ pass "rm deletes the session"
 
 # (e) a second rota init restores a missing .rota/debug/ gitignore line
 grep -v '^\.rota/debug/$' "$DS/.gitignore" > "$DS/.gitignore.new" && mv "$DS/.gitignore.new" "$DS/.gitignore"
-( cd "$DS" && "$ROTA_BIN" init >/dev/null 2>&1 )
+( cd "$DS" && "$ROTA_BIN" init >/dev/null 2>&1 ) || fail "second rota init failed"
 grep -qx '\.rota/debug/' "$DS/.gitignore" || fail "rota init should re-add .rota/debug/ to the gitignore block"
 pass "rota init keeps .rota/debug/ ignored"
+
+# (f) a project whose root .gitignore lacks the line (init not re-run since the
+# upgrade) still keeps sessions out of git status: the directory ignores itself
+DO="$(mktemp -d "$TMP/debug-session-old.XXXXXX")"
+(
+  cd "$DO" && git init -q -b main . && git config user.email a@b && git config user.name n \
+    && mkdir -p .rota && printf 'node_modules/\n' > .gitignore && git add -A . && git commit -q -m init
+) || fail "old-project fixture setup failed"
+( cd "$DO" && "$ROTA_BIN" --json debug session put fix-9 --body-file - >/dev/null 2>&1 <<<$'## Symptom\nx\n' ) || fail "put in an old project failed"
+[ -z "$(cd "$DO" && git status --porcelain)" ] || fail "a session dirtied an old project's tree: $(cd "$DO" && git status --porcelain)"
+( cd "$DO" && "$ROTA_BIN" git guard clean --context "/rota-debug" >/dev/null 2>&1 ) || fail "git guard clean should pass with a session file present"
+OUT=$(cd "$DO" && "$ROTA_BIN" --json debug session list) || vfail
+[ "$(echo "$OUT" | jget data.sessions[0])" = "fix-9" ] || fail "list should name fix-9, not .gitignore: $OUT"
+pass "the directory ignores itself in a project without the root gitignore line"

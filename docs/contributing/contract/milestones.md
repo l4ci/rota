@@ -374,7 +374,7 @@ repo: none
 data: {"slug": string, "changed": true}
 exit: 2 when <slug> isn't `[A-Za-z0-9][A-Za-z0-9_-]*` (a `/` or `..` is refused) or --body-file is missing or unreadable
 old: none (new in #925)
-note: the file is `.rota/debug/<slug>.md`, per-developer and gitignored. `put` replaces it whole and stores the body with no validation; /rota-debug writes the headings Symptom, Hypotheses (each `open`, `eliminated` or `confirmed`), Evidence and Current focus. The Iron Law counter keeps `<session>.json` in the same directory and is untouched; the four `session` verbs only see `.md` files.
+note: the file is `.rota/debug/<slug>.md`, per-developer and gitignored. `put` replaces it whole and stores the body with no validation; /rota-debug writes the headings Symptom, Hypotheses (each `open`, `eliminated` or `confirmed`), Evidence and Current focus. The Iron Law counter keeps `<session>.json` in the same directory and is untouched; the four `session` verbs only see `.md` files. `put` also writes `.rota/debug/.gitignore` (`*`) when missing, so sessions stay out of `git status` in a project whose root `.gitignore` predates the `.rota/debug/` line; an existing file is left alone.
 
 ### rota debug session show
 rota debug session show <slug>
