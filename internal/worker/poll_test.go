@@ -785,3 +785,35 @@ func TestClassifyLimitEvidenceAfterRelay(t *testing.T) {
 		t.Errorf("evidence after a relay: %s %q", st, ev)
 	}
 }
+
+// Claude Code echoes a submitted prompt as "❯ <first line>" with every further
+// line indented two spaces. The echo is the orchestrator's; the first line
+// back at column 0 (a harness banner) or a reply marker is the session's.
+func TestClassifyClaudeEchoedBrief(t *testing.T) {
+	brief := "❯ --- ORCHESTRATOR (round 25) ---\n  You are kit.\n  Out of scope: The Add funds escalation behaviour.\n\n  The session says: You've hit your usage limit\n"
+	classify := func(pane string) (string, string) {
+		return ClassifyFor("claude", pane, false, 60, "idle")
+	}
+	for name, pane := range map[string]string{
+		"no reply yet": brief,
+		"after reply":  brief + "\n● Reading the issue\n",
+	} {
+		if st, ev := classify(pane); st == StateLimited {
+			t.Errorf("%s: echoed brief read as limited: %q", name, ev)
+		}
+	}
+	// Without the Add-funds line: reFunds stays fail-closed on the whole tail.
+	plain := "❯ --- ORCHESTRATOR (round 25) ---\n  You are kit.\n  The session says: You've hit your usage limit\n"
+	banner := plain + "\nYou've hit your usage limit · resets 5pm\n"
+	if st, ev := classify(banner); st != StateLimited || strings.Contains(ev, "Add funds") {
+		t.Errorf("bare banner after the echo: %s %q", st, ev)
+	}
+	funds := banner + "Add funds to continue\n"
+	if st, ev := classify(funds); st != StateLimited || !strings.Contains(ev, "Add funds") {
+		t.Errorf("banner with Add funds after the echo: %s %q", st, ev)
+	}
+	// Add-funds only inside the echo, no limit anywhere: not limited.
+	if st, ev := classify("❯ --- ORCHESTRATOR (round 25) ---\n  Add funds is out of scope.\n"); st == StateLimited {
+		t.Errorf("Add funds only in the echo: %q", ev)
+	}
+}
