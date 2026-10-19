@@ -203,6 +203,15 @@ Candidates carry three checks:
   stays ready; `round.scopeOverlap: block` makes it fail like a shared file. `--accept-overlap` skips
   both. `assign` copies the issue's `## Touches` into the worker brief after `## Out of scope`.
 
+Every candidate has one of four scope sources, shown as `scopeSource` in `rota round candidates --json`:
+
+- `touches`: the issue has a `## Touches` section.
+- `subsystem`: no `## Touches`, but a `Subsystem:` field, which gives the coarse scope `subsystem:<name>`.
+- `inferred`: neither, but an explorer recorded entries with `rota round scope <ID> --body-file <path>` (at most ten bullets: symbols, endpoints, config keys, tests). `/rota-orchestrate` dispatches one `light` explorer per `none` candidate and records the result before it assigns. The record is a comment of kind `scope` on the issue; a later `## Touches` or `Subsystem:` wins over it, and the declared section is never edited.
+- `none`: nothing declared or recorded; only file paths are compared.
+
+`candidates`, `assign`, `transfer` and `adopt` compare inferred entries like declared ones, but a clash that involves an inferred entry on either side only warns, even under `round.scopeOverlap: block`. The overlap detail says `inferred scopes`, and the JSON overlap carries `inferred: true`. A shared file path still blocks as before.
+
 The overlap check cannot see files an issue will create, paths nobody wrote down, two issues editing
 the same function, generated files every issue touches (list those in `round.sharedPaths`), renames,
 or another machine's round. Read two issues' bodies before you run them side by side.

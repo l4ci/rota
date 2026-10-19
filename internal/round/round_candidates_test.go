@@ -56,3 +56,29 @@ func TestRoundCandidatesScopeFallback(t *testing.T) {
 		t.Errorf("ScopeOf override: %q", scope)
 	}
 }
+
+// A candidate says where its scope came from, so the orchestrator knows which
+// ones to scout.
+func TestCandidateScopeSource(t *testing.T) {
+	root := newRepo(t, nil)
+	be := &fakeRemote{}
+	be.add("1", "declared", "", false, "## Touches\n- a\n")
+	be.add("2", "bare", "", false, "prose")
+	be.add("3", "scouted", "", false, "prose")
+	if _, err := RecordInferred(be, "3", []string{"x"}); err != nil {
+		t.Fatal(err)
+	}
+	e := Env{Git: git.Exec, Base: "main", Worker: worker.Env{Getenv: noEnv}, Lease: fakeLease("h", 100)}
+	cs, err := e.RoundCandidates(bg, root, be, roundcfg.Settings{Scope: roundcfg.ScopeOpen}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]string{}
+	for _, c := range cs {
+		got[c.ID] = c.ScopeSource
+	}
+	want := map[string]string{"1": SourceTouches, "2": SourceNone, "3": SourceInferred}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("sources = %v want %v", got, want)
+	}
+}

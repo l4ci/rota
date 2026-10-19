@@ -36,30 +36,87 @@ func ScopeOverlaps(a, b []string) []string {
 	return out
 }
 
+// Scope sources: where an item's scope entries came from.
+const (
+	SourceTouches   = "touches"
+	SourceSubsystem = "subsystem"
+	SourceInferred  = "inferred"
+	SourceNone      = "none"
+)
+
+// ScopeKind is the comment kind that records an explorer's inferred scope.
+const ScopeKind = "scope"
+
+// MaxInferred is the most entries a recorded inferred scope keeps.
+const MaxInferred = 10
+
 // itemScopes is what an item declares it touches: its `## Touches` entries,
-// else, when it carries a Subsystem field, the coarse scope subsystem:<name>.
-// MAP.md is not read.
+// else, when it carries a Subsystem field, the coarse scope subsystem:<name>,
+// else the inferred scope an explorer recorded. MAP.md is not read.
 func itemScopes(be backlog.Backend, id string) []string {
+	s, _ := ItemScopeSource(be, id)
+	return s
+}
+
+// ItemScopeSource is itemScopes with where the entries came from: touches,
+// subsystem, inferred, or none. A declared source always wins over an
+// inferred one.
+func ItemScopeSource(be backlog.Backend, id string) ([]string, string) {
 	body, _, _ := be.Detail(id)
 	if s := Scopes(body); len(s) > 0 {
-		return s
+		return s, SourceTouches
 	}
 	if it, err := be.Get(id); err == nil {
 		if sub := strings.ToLower(strings.TrimSpace(it.Fields.Get("subsystem"))); sub != "" {
-			return []string{"subsystem:" + sub}
+			return []string{"subsystem:" + sub}, SourceSubsystem
 		}
 	}
-	return nil
+	if s := InferredScopes(be, id); len(s) > 0 {
+		return s, SourceInferred
+	}
+	return nil, SourceNone
+}
+
+// InferredScopes is the newest scope comment of an item, parsed like a
+// `## Touches` section; nil when none was recorded.
+func InferredScopes(be backlog.Backend, id string) []string {
+	cs, err := be.Comments(id, ScopeKind)
+	if err != nil || len(cs) == 0 {
+		return nil
+	}
+	return itembody.Entries(cs[len(cs)-1].Text)
+}
+
+// RecordInferred writes entries as the item's inferred scope, a comment of
+// kind scope. The declared `## Touches` is not edited. Entries are normalised
+// as Touches are; more than MaxInferred, or none, is refused.
+func RecordInferred(be backlog.Backend, id string, entries []string) ([]string, error) {
+	norm := itembody.Entries("- " + strings.Join(entries, "\n- "))
+	if len(norm) == 0 {
+		return nil, fmt.Errorf("no scope entries to record")
+	}
+	if len(norm) > MaxInferred {
+		return nil, fmt.Errorf("%d scope entries: record at most %d", len(norm), MaxInferred)
+	}
+	text := "Inferred scope (explorer, warn-only):\n- " + strings.Join(norm, "\n- ")
+	if _, err := be.AddComment(id, ScopeKind, text); err != nil {
+		return nil, err
+	}
+	return norm, nil
 }
 
 // overlapDetail is the overlap check's line for one in-flight item.
-func overlapDetail(with, slot string, paths, scopes []string) string {
+func overlapDetail(with, slot string, paths, scopes []string, inferred bool) string {
 	parts := make([]string, 0, 2)
 	if len(paths) > 0 {
 		parts = append(parts, strings.Join(paths, ", "))
 	}
 	if len(scopes) > 0 {
-		parts = append(parts, "scopes "+strings.Join(scopes, ", "))
+		label := "scopes "
+		if inferred {
+			label = "inferred scopes "
+		}
+		parts = append(parts, label+strings.Join(scopes, ", "))
 	}
 	return fmt.Sprintf("%s (held by %s): %s", with, slot, strings.Join(parts, "; "))
 }
