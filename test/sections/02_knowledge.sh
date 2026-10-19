@@ -56,6 +56,14 @@ grep -q "^## Some Topic" <<<"$(jget data.text <<<"$OUT")" || fail "mixed query m
 [ "$(jget data.missing <<<"$OUT")" = '["Bogus"]' ] || fail "mixed query should list only Bogus as missing: $OUT"
 if grep -q "Some Topic" <<<"$(jget warnings <<<"$OUT")"; then fail "mixed query warned about matched topic"; fi
 
+# add --sha stores the sha beside the date; query prints it (#968)
+printf 'Body.' | hvj -C "$KQ_TMP" knowledge add --topic "Some Topic" --title "Pinned" --date 2026-05-05 --sha ABC1234 --body-file - >/dev/null || fail "knowledge add --sha failed"
+grep -q -- '- \*\*Pinned\*\* — Body\. <!-- 2026-05-05 sha:abc1234 -->' "$KQ_TMP/.rota/KNOWLEDGE.md" || fail "sha not stored beside the date"
+grep -q 'sha:abc1234' <<<"$(jget data.text <<<"$(hvj -C "$KQ_TMP" knowledge query "Some Topic")")" || fail "query did not print the sha"
+RC=0; printf 'x' | hvj -C "$KQ_TMP" knowledge add --topic "Some Topic" --title "Bad" --sha nothex --body-file - >/dev/null 2>&1 || RC=$?
+[ "$RC" = "2" ] || fail "malformed --sha exit $RC (want 2)"
+pass "knowledge add --sha stored, printed, validated"
+
 # no topic given is a usage error (exit 2)
 RC=0; hvj -C "$KQ_TMP" knowledge query >/dev/null 2>&1 || RC=$?
 [ "$RC" = "2" ] || fail "knowledge query with no topic exit $RC (want 2)"

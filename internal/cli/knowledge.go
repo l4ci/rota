@@ -211,12 +211,17 @@ func knAdd(fs *flag.FlagSet) RunFunc {
 	title := fs.String("title", "", "bullet `title`")
 	bodyFile := fs.String("body-file", "", "bullet body: a `path`, or - for stdin")
 	date := fs.String("date", "", "bullet `date` (YYYY-MM-DD), default today")
+	sha := fs.String("sha", "", "commit `sha` (7 to 40 hex digits) the bullet's claim about code was true at")
 	return func(c *Ctx, args []string) (Result, error) {
 		if err := knNoArgs(args); err != nil {
 			return Result{}, err
 		}
 		if err := knRequire(map[string]string{"topic": *topic, "title": *title, "body-file": *bodyFile}, "topic", "title", "body-file"); err != nil {
 			return Result{}, err
+		}
+		normSha, err := knowledge.NormalizeSha(*sha)
+		if err != nil {
+			return Result{}, Usage(err.Error())
 		}
 		body, err := knReadBody(c, *bodyFile)
 		if err != nil {
@@ -226,7 +231,7 @@ func knAdd(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		res, err := st.Add(scope, *topic, *title, body, *date)
+		res, err := st.Add(scope, *topic, *title, body, *date, normSha)
 		if err != nil {
 			return knFail(err)
 		}
