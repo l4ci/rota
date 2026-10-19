@@ -85,7 +85,7 @@ func ResolveReviewDepth(ctx context.Context, s ReviewSources) (ReviewDepth, erro
 		}
 		in.IssueBody = is.Body
 	}
-	if s.PRBody != nil && s.Policy.MayBeLight() {
+	if s.PRBody != nil && s.Policy.MayBeBelowFull() {
 		body, err := s.PRBody()
 		if err != nil && !tracker.IsCLIMissing(err) {
 			return ReviewDepth{}, &ReviewDepthError{"pr", fmt.Sprintf("could not read the PR body for its Door line to pick the review depth: %v", err), err}
