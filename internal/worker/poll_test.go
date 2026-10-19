@@ -762,3 +762,26 @@ func TestClassifyLimitPhraseInEchoedBriefIsNotLimited(t *testing.T) {
 		t.Errorf("phrases after the worker's reply marker: %s %q", st, ev)
 	}
 }
+
+// A limit banner is printed by the harness, so it has no reply marker: it must
+// still read as limited when it follows a signed brief that quoted the phrase.
+func TestClassifyBareBannerAfterSignedBriefIsLimited(t *testing.T) {
+	sig := "--- ROTA-SIG " + strings.Repeat("ab", 32) + " ---\n"
+	brief := "--- ORCHESTRATOR (round 25) ---\nYou are kit.\nThe session says: You've hit your usage limit\n" + sig
+	if st, ev := Classify(brief, false, 60, "idle"); st == StateLimited {
+		t.Fatalf("signed brief alone read as limited: %q", ev)
+	}
+	if st, ev := Classify(brief+"You've hit your usage limit\n", false, 60, "idle"); st != StateLimited {
+		t.Errorf("bare banner after the signature: %s %q", st, ev)
+	}
+}
+
+// The evidence is sliced from the stripped text: a relay ahead of the limit
+// line must not shift it.
+func TestClassifyLimitEvidenceAfterRelay(t *testing.T) {
+	pane := "--- ORCHESTRATOR (round 25) ---\n[relay] a long forwarded note that is dropped from the evidence offset\nmore relay text\n\n● working\nYou've reached your usage limit\n"
+	st, ev := Classify(pane, false, 60, "idle")
+	if st != StateLimited || !strings.Contains(ev, "usage limit") || strings.Contains(ev, "relay") {
+		t.Errorf("evidence after a relay: %s %q", st, ev)
+	}
+}
