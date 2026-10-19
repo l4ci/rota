@@ -62,6 +62,8 @@ In a wave, read *Step 4* in [`umbrella-wave.md`](umbrella-wave.md).
 
 Fill *Stage* and *Next planned step* from the task ledger ([`references/task-ledger.md`](references/task-ledger.md)): `rota git base`, then the `Task:` trailers in `git log <base>..HEAD`. Name the finished tasks and make the first unfinished one the next step.
 
+Debugging? Run `rota debug session list`. Name the open session for this work (slug `fix-<n>` of the paused item) on the note's *Debug session* line, so the next session continues it instead of re-probing. The session file stays where it is; the note holds the slug only. No open session: omit the line.
+
 Gotchas and dead ends go to `/rota-learn` (Step 6), not the note.
 
 ## Step 5 — Pin Status
@@ -92,7 +94,7 @@ Show the `(web)` suffix only when `repo` is non-null.
 - **Redact secrets.** The note is injected into a new session and quotes probe output (Current hypothesis). Replace credentials and PII (tokens, auth and cookie headers, passwords, private keys, secret env vars, emails) with `[REDACTED]`; quote the line that matters, not the capture.
 - **One handoff note per `(branch, repo)`.** Overwrite on re-pause.
 - **A multi-repo wave is one logical pause.** `cd` into a sub-repo to scope to it.
-- **Never commit `.rota/handoff/`** (gitignored per-developer scratch).
+- **Never commit `.rota/handoff/` or `.rota/debug/`** (gitignored per-developer scratch).
 - **Do not delete the handoff note here.** Resume or abandon removes it; the next session archives the orchestrator note with `rota round start --consume-handoff`.
 - **A paused round is not a finished round.** Never wind down, merge or reclaim from a pause.
 - **No mutation beyond the handoff note, status pin and the chosen wip commit or stash.**

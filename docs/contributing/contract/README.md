@@ -73,7 +73,7 @@ Field types use JSON names (`string`, `number`, `bool`, `object`, `[]string`). `
 | spike | `add`, `finish`, `list`, `show` | A6 |
 | verdict | `add`, `show`, `route`, and `debug verdict` | B2 |
 | proof | `add`, `record`, `show` | A6 |
-| debug | `counter init`, `counter record-attempt`, `counter fail`, `counter pass`, `counter show`, `counter summary`, `counter clear`, `counter inc-cycle` (A6), `reset` (B3) | A6, B3 |
+| debug | `counter init`, `counter record-attempt`, `counter fail`, `counter pass`, `counter show`, `counter summary`, `counter clear`, `counter inc-cycle` (A6), `session put`, `session show`, `session list`, `session rm` (#925), `reset` (B3) | A6, B3 |
 | worker | `pool init`, `pool list`, `pool reap`, `reset`, `dispatch`, `poll`, `gate` (B1 gates its merge), `session check`, `session ensure`, `account list`, `account pick`, `account assign` | A7 |
 | tracker | `call`, `suggest-upstream` (B1 adds the gate) | A8, B1 |
 | git | `base`, `guard clean`, `guard feature-branch`, `branch`, `worktree-path` | A8 |
