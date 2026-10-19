@@ -1,11 +1,13 @@
 ---
-verified-sha: 2f0a0d5989f9c812af37fc22ffc5a5924785bed3
+verified-sha: 3b455b01dd2c2c33009d2bc46f24f68a8ecb9425
 refs:
   - internal/knowledge
   - internal/cli/knowledge.go
 ---
 
 ## A5: knowledge, decisions, glossary, blocks, map, qa
+
+Every verb that rewrites S's KNOWLEDGE.md (`knowledge add`, `amend`, `replace`, `rename-topic`, `glossary write`, `glossary import`) holds the advisory lock on the sibling `KNOWLEDGE.md.lock` for its whole read-modify-write, and takes the `knowledge-tier.json.lock` inside it, never the reverse. N concurrent calls each land their own change (the parallel rename batch in `rota-learn/topic-size.md` relies on it), and the temp file each write renames over the target is unique per call (`<path>.<pid>.<n>.tmp`), per the Writes rule in `cli-conventions.md`. The empty `.lock` stays behind, so a golden that records a writer's changed files lists it. (#895)
 
 ### rota knowledge query
 rota knowledge query <topic>… [--tier provisional|confirmed|deprecated] [--include-deprecated]
@@ -154,6 +156,7 @@ exit: 2 when no topic is given
 old: hv-decisions-query <topic>…    (same positionals)
 shim: stdout is `text`; `missing` is omitted.
 note: unlike `knowledge query`, an unmatched topic emits no warning, as old, and only the port fills `missing`. Zero topics moves from exit 1 to 2.
+note: an entry whose body carries a `*Status.* Retired` or `*Status.* Superseded` line (written by `/rota-decide --retire` and `--supersede`) is dropped from `text` by `query`, and from the `decisions` managed block; `topics` and `stats` still count it.
 
 ### rota decisions topics
 rota decisions topics
