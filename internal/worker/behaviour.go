@@ -27,7 +27,7 @@ import (
 // body and whether they may push: the behaviour run only executes steps a
 // collaborator wrote (#899 decision). Only the GitHub tracker implements it.
 type IssueTrust interface {
-	IssueEditors(ctx context.Context, key tracker.IssueKey) (author, lastEditor string, err error)
+	IssueEditors(ctx context.Context, key tracker.IssueKey) (author, lastEditor string, edited bool, err error)
 	CanPush(ctx context.Context, login string) (bool, error)
 }
 
@@ -149,12 +149,15 @@ func (g *gate) behaviourTrust(issue, ref string) (trusted, done bool, err error)
 		done, err := g.broke(fmt.Sprintf("cannot read who wrote %s to trust its ## Try it steps: %v", ref, err))
 		return false, done, err
 	}
-	author, editor, err := trust.IssueEditors(g.ctx, key)
+	author, editor, edited, err := trust.IssueEditors(g.ctx, key)
 	if err != nil {
 		return broke(err)
 	}
 	if author == "" {
 		return skip(fmt.Sprintf("the author of %s is unknown", ref))
+	}
+	if edited && editor == "" {
+		return skip(fmt.Sprintf("the last editor of %s is unknown", ref))
 	}
 	for _, who := range []struct{ role, login string }{{"author", author}, {"last editor", editor}} {
 		if who.login == "" || (who.role == "last editor" && who.login == author) {

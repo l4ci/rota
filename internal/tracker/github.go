@@ -764,26 +764,28 @@ func ghCheckState(status, conclusion string) string {
 }
 
 // IssueEditors names the author and last editor of an issue's body; "" for a
-// deleted account or an issue never edited.
-func (g *GitHub) IssueEditors(ctx context.Context, key IssueKey) (string, string, error) {
+// deleted account or an issue never edited. edited says the body was edited at
+// all, so an edit by a deleted account (no editor) is not mistaken for none.
+func (g *GitHub) IssueEditors(ctx context.Context, key IssueKey) (string, string, bool, error) {
 	number, err := numOf(key)
 	if err != nil {
-		return "", "", err
+		return "", "", false, err
 	}
-	const q = `query($owner:String!,$repo:String!,$n:Int!){repository(owner:$owner,name:$repo){issue(number:$n){author{login} editor{login}}}}`
+	const q = `query($owner:String!,$repo:String!,$n:Int!){repository(owner:$owner,name:$repo){issue(number:$n){author{login} editor{login} lastEditedAt}}}`
 	var d struct {
 		Data struct {
 			Repository struct {
 				Issue struct {
-					Author *struct{ Login string } `json:"author"`
-					Editor *struct{ Login string } `json:"editor"`
+					Author       *struct{ Login string } `json:"author"`
+					Editor       *struct{ Login string } `json:"editor"`
+					LastEditedAt *string                 `json:"lastEditedAt"`
 				} `json:"issue"`
 			} `json:"repository"`
 		} `json:"data"`
 	}
 	args := []string{"api", "graphql", "-f", "query=" + q, "-F", "owner={owner}", "-F", "repo={repo}", "-F", "n=" + strconv.Itoa(number)}
 	if err := g.json(ctx, args, &d); err != nil {
-		return "", "", err
+		return "", "", false, err
 	}
 	var author, editor string
 	if a := d.Data.Repository.Issue.Author; a != nil {
@@ -792,7 +794,7 @@ func (g *GitHub) IssueEditors(ctx context.Context, key IssueKey) (string, string
 	if e := d.Data.Repository.Issue.Editor; e != nil {
 		editor = e.Login
 	}
-	return author, editor, nil
+	return author, editor, d.Data.Repository.Issue.LastEditedAt != nil, nil
 }
 
 // reLogin is a GitHub login, optionally an app's "[bot]" account. Checked

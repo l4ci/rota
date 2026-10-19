@@ -250,19 +250,21 @@ func (f *fakeForge) CommitChecks(_ context.Context, sha string) ([]tracker.Check
 // IssueEditors answers who wrote the issue: the forge DB word "author"
 // (default alice; "authorUnknown" makes it empty) and "editor" (default none).
 // "editorsErr" makes it fail.
-func (f *fakeForge) IssueEditors(_ context.Context, n tracker.IssueKey) (string, string, error) {
+func (f *fakeForge) IssueEditors(_ context.Context, n tracker.IssueKey) (string, string, bool, error) {
 	f.logf("IssueEditors %s", n)
 	if msg := f.w.forgeWord("editorsErr"); msg != "" {
-		return "", "", errors.New(msg)
+		return "", "", false, errors.New(msg)
 	}
+	// "edited" says the body was edited; with no "editor" the editor is unknown
+	edited := f.w.forgeWord("edited") != "" || f.w.forgeWord("editor") != ""
 	if f.w.forgeWord("authorUnknown") != "" {
-		return "", f.w.forgeWord("editor"), nil
+		return "", f.w.forgeWord("editor"), edited, nil
 	}
 	author := f.w.forgeWord("author")
 	if author == "" {
 		author = "alice"
 	}
-	return author, f.w.forgeWord("editor"), nil
+	return author, f.w.forgeWord("editor"), edited, nil
 }
 
 // CanPush is true for every login but those in the comma list "readers";

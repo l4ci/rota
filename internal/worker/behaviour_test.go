@@ -240,6 +240,8 @@ func TestGateBehaviourTrustSkips(t *testing.T) {
 			"BEHAVIOUR-SKIP w1 — author mallory of #899 is not a collaborator with write access, so its Try it steps did not run"},
 		"last editor": {map[string]string{"editor": "eve", "readers": "eve"},
 			"BEHAVIOUR-SKIP w1 — last editor eve of #899 is not a collaborator with write access, so its Try it steps did not run"},
+		"unknown editor": {map[string]string{"edited": "1"},
+			"BEHAVIOUR-SKIP w1 — the last editor of #899 is unknown, so its Try it steps did not run"},
 		"unknown author": {map[string]string{"authorUnknown": "1"},
 			"BEHAVIOUR-SKIP w1 — the author of #899 is unknown, so its Try it steps did not run"},
 	} {
