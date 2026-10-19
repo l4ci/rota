@@ -31,6 +31,10 @@ Shared block, plus these sections (items and Review Focus go here; the Standards
 <the plan's `## Review Focus` lines per item, or drop this section>
 Check each named edge is handled and pinned by a test; an unhandled or untested one is a CONCERN.
 
+**Worker assumptions (the `## Assumptions` lines of the PR body, `gh pr view <pr> --json body`; drop this section when the PR has none or says `None`):**
+<one line per question the issue left open that the worker answered from the code>
+Context, not a verdict: check each answer against the item's spec and flag one the spec contradicts. Never a pass because it is listed.
+
 **Recorded proof:**
 <rows from `rota proof show <ID>` per item, or "none recorded">
 Rows are verification already run (check, result, sha, evidence). Do NOT re-run a check that has a PASS row at the current sha; spot-check one row. A FAIL row or a row at a stale sha is a gap to cite. A behavior change whose proof has no FAIL row (RED run before the change) is a CONCERN; a docs or skill-only change is exempt when its proof row says `no test seam: docs/skill change`.
