@@ -71,7 +71,7 @@ func layoutProject(t *testing.T, regHost string, slots []string, live ...string)
 	}
 	var reg []string
 	for i, s := range slots {
-		reg = append(reg, fmt.Sprintf(`{"name":%q,"handle":"w1:t%d"}`, s, i+2))
+		reg = append(reg, fmt.Sprintf(`{"name":%q,"handle":"w1:t%d","worktree":%q}`, s, i+2, filepath.Join(root, ".worktrees", s)))
 	}
 	doc := fmt.Sprintf(`{"host":%q,"slots":[%s]}`, regHost, strings.Join(reg, ","))
 	if err := os.WriteFile(filepath.Join(root, ".rota", "workers.json"), []byte(doc), 0o644); err != nil {
@@ -280,3 +280,141 @@ func TestLayoutSplitAndTabsRecordOnTheRound(t *testing.T) {
 }
 
 func (r *layoutRig) Capabilities() host.Capabilities { return host.CapabilitiesOf(r) }
+
+// linkedRig is herdr with work.herdrGroupSlots: each slot's pane starts in a
+// workspace of its own (ws-<slot>), and herdr closes a workspace with its last
+// tab, so a split leaves the slots in the orchestrator's workspace W.
+type linkedRig struct{ *layoutRig }
+
+func (r *linkedRig) Capabilities() host.Capabilities { return host.CapabilitiesOf(r) }
+
+func (r *linkedRig) setWorkspace(pane, ws string) {
+	for i := range r.panes {
+		if r.panes[i].ID == pane {
+			r.panes[i].Workspace = ws
+		}
+	}
+}
+
+func (r *linkedRig) inWorkspace(ws string) bool {
+	for _, p := range r.panes {
+		if p.Workspace == ws {
+			return true
+		}
+	}
+	return false
+}
+
+func (r *linkedRig) SplitInto(ctx context.Context, pane, tab, target, dir string, keep float64) error {
+	r.setWorkspace(pane, "W")
+	return r.layoutRig.SplitInto(ctx, pane, tab, target, dir, keep)
+}
+
+func (r *linkedRig) ToNewTab(ctx context.Context, pane, label string) error {
+	r.setWorkspace(pane, "W")
+	return r.layoutRig.ToNewTab(ctx, pane, label)
+}
+
+func (r *linkedRig) OpenLinked(_ context.Context, primary, slot, path string) (string, string, error) {
+	r.log = append(r.log, fmt.Sprintf("open %s %s %s", primary, slot, filepath.Base(path)))
+	if r.inWorkspace("ws-" + slot) {
+		return "ws-" + slot, "", nil
+	}
+	return "ws-" + slot, "root-" + slot, nil
+}
+
+func (r *linkedRig) ToNewTabIn(_ context.Context, pane, ws, label string) error {
+	r.log = append(r.log, fmt.Sprintf("tab-in %s %s %s", pane, ws, label))
+	r.setWorkspace(pane, ws)
+	r.setTab(pane, "t-"+label)
+	return nil
+}
+
+func (r *linkedRig) CloseTab(_ context.Context, tab string) error {
+	r.log = append(r.log, "close "+tab)
+	return nil
+}
+
+func groupedProject(t *testing.T, slots ...string) (string, *linkedRig, *Deps) {
+	t.Helper()
+	root, rig, deps := layoutProject(t, "herdr", slots, slots...)
+	if err := os.WriteFile(filepath.Join(root, ".rota", "config.json"), []byte(`{"work":{"herdrGroupSlots":true}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for i := range rig.panes {
+		rig.panes[i].Workspace = "W"
+		if s := strings.TrimPrefix(rig.panes[i].ID, "p-"); s != rig.panes[i].ID {
+			rig.panes[i].Workspace = "ws-" + s
+		}
+	}
+	for _, s := range slots {
+		name := s
+		worker.UpdateSlot(root, name, func(sl *worker.Slot) {
+			sl.SetWorkspaceID("ws-" + name)
+		})
+	}
+	return root, &linkedRig{rig}, func() *Deps { deps.Host = func(host.Kind) host.Host { return &linkedRig{rig} }; return deps }()
+}
+
+func workspaceIDs(root string, slots ...string) string {
+	reg := worker.LoadRegistryTolerant(root)
+	var out []string
+	for _, s := range slots {
+		out = append(out, s+"="+reg.Slot(s).WorkspaceID())
+	}
+	return strings.Join(out, ",")
+}
+
+// AC-1..3: split closes the linked workspaces (said in one line, ids cleared),
+// tabs reopens them and puts each pane back, and a second split still finds
+// every slot.
+func TestLayoutGroupedSplitTabsSplit(t *testing.T) {
+	root, rig, deps := groupedProject(t, "ben", "kit")
+
+	code, env, errs := rotaRunWith(t, deps, "--json", "layout", "split", "--project", root)
+	if note := jsonx.Str(layoutRows(env)[0], "note"); code != 0 || note != "slots leave their linked workspaces until `rota layout tabs`" {
+		t.Fatalf("split: exit %d note %q: %s", code, note, errs)
+	}
+	if got := workspaceIDs(root, "ben", "kit"); got != "ben=,kit=" {
+		t.Errorf("after split: %s", got)
+	}
+
+	rig.log = nil
+	if code, _, errs := rotaRunWith(t, deps, "--json", "layout", "tabs", "--project", root); code != 0 {
+		t.Fatalf("tabs: exit %d: %s", code, errs)
+	}
+	want := "open W ben ben|tab-in p-ben ws-ben ben|close root-ben|open W kit kit|tab-in p-kit ws-kit kit|close root-kit|rename tab T orchestrator"
+	if got := strings.Join(rig.log, "|"); got != want {
+		t.Errorf("tabs calls:\n%s\nwant\n%s", got, want)
+	}
+	if got := workspaceIDs(root, "ben", "kit"); got != "ben=ws-ben,kit=ws-kit" {
+		t.Errorf("after tabs: %s", got)
+	}
+
+	code, env, errs = rotaRunWith(t, deps, "--json", "layout", "split", "--project", root)
+	rows := layoutRows(env)
+	if code != 0 || len(rows) != 1 {
+		t.Fatalf("second split: exit %d: %s", code, errs)
+	}
+	if ws, _ := rows[0].Get("workers"); len(ws.([]any)) != 2 {
+		t.Errorf("second split lost a slot: %v", ws)
+	}
+	if got := workspaceIDs(root, "ben", "kit"); got != "ben=,kit=" {
+		t.Errorf("after second split: %s", got)
+	}
+}
+
+// AC-6: grouping off, tabs is the plain tab move and nothing is recorded.
+func TestLayoutUngroupedTabsKeepsPlainTabs(t *testing.T) {
+	root, rig, deps := groupedProject(t, "ben")
+	os.WriteFile(filepath.Join(root, ".rota", "config.json"), []byte(`{"work":{"herdrGroupSlots":false}}`), 0o644)
+	rotaRunWith(t, deps, "--json", "layout", "split", "--project", root)
+	rig.log = nil
+	rotaRunWith(t, deps, "--json", "layout", "tabs", "--project", root)
+	if got := strings.Join(rig.log, "|"); got != "tab p-ben ben|rename tab T orchestrator" {
+		t.Errorf("calls = %s", got)
+	}
+	if got := workspaceIDs(root, "ben"); got != "ben=ws-ben" {
+		t.Errorf("workspaceId touched: %s", got)
+	}
+}

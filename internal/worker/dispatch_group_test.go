@@ -47,7 +47,7 @@ func dispatchOnce(t *testing.T, dir string, h host.Host) error {
 // AC-2: the wiring from work.herdrGroupSlots to SpawnOpts.LinkWorkspace.
 func TestDispatchLinksWorkspaceOnlyWhenTheKeyIsOn(t *testing.T) {
 	for cfg, want := range map[string]bool{
-		``: false, `{"work":{"herdrGroupSlots":false}}`: false, `{"work":{"herdrGroupSlots":true}}`: true,
+		``: true, `{"work":{"herdrGroupSlots":false}}`: false, `{"work":{"herdrGroupSlots":true}}`: true,
 	} {
 		dir := groupProject(t, cfg, nil)
 		h := &groupHost{fakeHost: tmuxFake()}
@@ -118,5 +118,21 @@ func TestKillSlotClosesTheRecordedWorkspaceAndForgetsIt(t *testing.T) {
 	}
 	if strings.Join(h.closed, ",") != "w9N" || LoadRegistryTolerant(dir).Slot("w1").WorkspaceID() != "" {
 		t.Errorf("closed = %v, workspaceId = %q", h.closed, LoadRegistryTolerant(dir).Slot("w1").WorkspaceID())
+	}
+}
+
+// A host with no linked workspaces (tmux) is never linked, so the default
+// being on records no workspaceId from a handle that names no workspace.
+func TestDispatchOnAHostWithoutWorkspacesLinksNothing(t *testing.T) {
+	dir := groupProject(t, "", nil)
+	h := tmuxFake()
+	if err := dispatchOnce(t, dir, h); err != nil {
+		t.Fatal(err)
+	}
+	if h.spawnOpts.LinkWorkspace {
+		t.Error("LinkWorkspace on a host that cannot close workspaces")
+	}
+	if got := LoadRegistryTolerant(dir).Slot("w1").WorkspaceID(); got != "" {
+		t.Errorf("workspaceId = %q, want none", got)
 	}
 }

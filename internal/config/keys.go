@@ -148,7 +148,7 @@ var Keys = []Key{
 	k("work.envSetup", "", false, TypeString, "Shell command rota worker pool init runs in each new slot worktree, for example npm ci. Empty: no setup."),
 	k("work.portBase", num("20000"), false, TypeInt, "First port of the range rota hands out to worker slots. A new slot takes the lowest range of portBlock ports from here that no other slot holds, exported as ROTA_PORT_BASE; a slot keeps its range until it is reaped or reclaimed."),
 	k("work.portBlock", num("100"), false, TypeInt, "Ports reserved per worker slot, so servers started by two slots never collide. A slot's block is exported as ROTA_PORT_BASE."),
-	k("work.herdrGroupSlots", false, false, TypeBool, "Opt-in, herdr only: open each worker slot's worktree as a workspace linked to the orchestrator's, so herdr groups the slots under their project, instead of a tab in the orchestrator's workspace."),
+	k("work.herdrGroupSlots", true, false, TypeBool, "herdr only, on by default: open each worker slot's worktree as a workspace linked to the orchestrator's, so herdr groups the slots under their project; false keeps each slot as a tab in the orchestrator's workspace. `rota layout tabs` puts the slots back in their workspaces."),
 	k("work.tdd", true, false, TypeBool, "Whether /rota-work and workers require a recorded red-first run before a behavior change. Off skips the RED requirement."),
 
 	k("orchestrator.handoffThreshold", num("75"), false, TypeInt, "Context percentage, 1 to 100, at which the Stop hook blocks until the orchestrator writes a handoff."),

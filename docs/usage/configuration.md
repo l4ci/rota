@@ -166,12 +166,14 @@ rota config set work.portBlock 200
 
 ## work.herdrGroupSlots: slots as linked herdr workspaces
 
-`false` (default): under herdr, each worker slot is a tab in the orchestrator's own workspace. `true`: dispatch opens the slot's worktree as a herdr workspace linked to the orchestrator's (`herdr worktree open`), so herdr groups the slots under their project in the sidebar. That helps when several projects share one herdr session. Workers then sit in their own workspaces instead of beside the orchestrator, and each slot costs one extra workspace while it runs. It changes nothing under tmux. The worktrees stay in `.worktrees/`.
+`true` (default): dispatch opens the slot's worktree as a herdr workspace linked to the orchestrator's (`herdr worktree open`), so herdr groups the slots under their project in the sidebar. That helps when several projects share one herdr session. Workers then sit in their own workspaces instead of beside the orchestrator, and each slot costs one extra workspace while it runs. `false`: under herdr, each worker slot is a tab in the orchestrator's own workspace. It changes nothing under tmux. The worktrees stay in `.worktrees/`.
 
-Closing the orchestrator's workspace by hand now needs `herdr workspace close --group`, which also closes every slot's workspace; rota never passes `--group`. See [`herdr-dispatch.md`](../../skills/rota-orchestrate/references/herdr-dispatch.md#linked-workspaces-per-slot-opt-in).
+`rota layout split` folds the slots' panes into the orchestrator's tab, so they leave their workspaces (herdr closes a workspace with its last tab); the command says so. `rota layout tabs` opens each slot's workspace again and moves its pane back in. With the key `false`, layout works as it did.
+
+Closing the orchestrator's workspace by hand now needs `herdr workspace close --group`, which also closes every slot's workspace; rota never passes `--group`. See [`herdr-dispatch.md`](../../skills/rota-orchestrate/references/herdr-dispatch.md#linked-workspaces-per-slot).
 
 ```bash
-rota config set work.herdrGroupSlots true
+rota config set work.herdrGroupSlots false
 ```
 
 ## work.tdd: red-first on or off

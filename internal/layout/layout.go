@@ -52,10 +52,15 @@ const (
 
 // Worker is a live slot: one whose agent has a pane. Slot order is the order
 // of the registry.
-type Worker struct{ Slot, Pane string }
+type Worker struct {
+	Slot, Pane string
+	// Path is the slot's absolute worktree, what a grouped slot's workspace
+	// is opened on.
+	Path string
+}
 
 // Placed is a pane and the tab it is in.
-type Placed struct{ Slot, Pane, Tab string }
+type Placed struct{ Slot, Pane, Tab, Workspace, Path string }
 
 // State is where a project's panes are right now.
 type State struct {
@@ -63,6 +68,9 @@ type State struct {
 	// CLI is the pane that launched the round, nil when unknown or gone.
 	CLI     *host.LayoutPane
 	Workers []Placed
+	// Group is work.herdrGroupSlots: `tabs` puts each slot back in a linked
+	// workspace of its own instead of a tab of the orchestrator's.
+	Group bool
 	// Foreign are the other panes of the orchestrator's tab: a shell the
 	// person opened. They are never moved.
 	Foreign []host.LayoutPane
@@ -139,7 +147,7 @@ func Find(panes []host.LayoutPane, root, label, cli string, workers []Worker) (s
 	st.Orch = panes[best]
 	for _, w := range workers {
 		if p, here := byPane[w.Pane]; here {
-			st.Workers = append(st.Workers, Placed{Slot: w.Slot, Pane: w.Pane, Tab: p.Tab})
+			st.Workers = append(st.Workers, Placed{Slot: w.Slot, Pane: w.Pane, Tab: p.Tab, Workspace: p.Workspace, Path: w.Path})
 		}
 	}
 	if p, here := byPane[cli]; here && cli != "" && cli != st.Orch.ID && !owned[cli] {
@@ -162,6 +170,20 @@ func scoreOf(p host.LayoutPane, label string) int {
 		s++
 	}
 	return s
+}
+
+// Linked maps each slot to the linked workspace its pane is in, "" for a slot
+// in the orchestrator's own workspace (a split closes the linked ones).
+func Linked(st State) map[string]string {
+	out := map[string]string{}
+	for _, w := range st.Workers {
+		if w.Workspace == st.Orch.Workspace {
+			out[w.Slot] = ""
+		} else {
+			out[w.Slot] = w.Workspace
+		}
+	}
+	return out
 }
 
 // Grid is the target arrangement: the columns left to right, each a list of
@@ -288,7 +310,8 @@ func name(ctx context.Context, h host.Layouter, st State, tab string) error {
 }
 
 // ToTabs gives every worker in the split's tab a tab of its own, in slot
-// order so they land in the tab bar in that order. A CLI sharing the tab keeps
+// order so they land in the tab bar in that order. With st.Group each goes
+// back to a linked workspace of its own (see toWorkspace). A CLI sharing the tab keeps
 // it; the orchestrator goes out to a tab named Label, and when the
 // orchestrator's tab was the split's it gets that name back.
 func ToTabs(ctx context.Context, h host.Layouter, st State) (Result, error) {
@@ -299,7 +322,13 @@ func ToTabs(ctx context.Context, h host.Layouter, st State) (Result, error) {
 		if w.Tab != tab {
 			continue
 		}
-		if err := h.ToNewTab(ctx, w.Pane, w.Slot); err != nil {
+		var err error
+		if lh, ok := h.(host.LinkedLayouter); ok && st.Group && w.Path != "" {
+			err = toWorkspace(ctx, lh, w)
+		} else {
+			err = h.ToNewTab(ctx, w.Pane, w.Slot)
+		}
+		if err != nil {
 			return res, err
 		}
 		res.Moves++
@@ -317,6 +346,24 @@ func ToTabs(ctx context.Context, h host.Layouter, st State) (Result, error) {
 	}
 	res.After = Tabs
 	return res, nil
+}
+
+// toWorkspace puts a grouped slot's pane back in the workspace of its
+// worktree. A split closed that workspace with its last tab, so it is opened
+// again first (idempotent: an open one is reused), then the pane moves in and
+// the shell tab the open made is closed.
+func toWorkspace(ctx context.Context, h host.LinkedLayouter, w Placed) error {
+	ws, rootTab, err := h.OpenLinked(ctx, w.Workspace, w.Slot, w.Path)
+	if err != nil {
+		return err
+	}
+	if err := h.ToNewTabIn(ctx, w.Pane, ws, w.Slot); err != nil {
+		return err
+	}
+	if rootTab == "" {
+		return nil
+	}
+	return h.CloseTab(ctx, rootTab)
 }
 
 // sameGrid reports whether the panes sit in the want columns: same column

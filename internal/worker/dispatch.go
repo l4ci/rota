@@ -269,10 +269,12 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 		if launch, signKey, err = hz.Prepare(launch, e.Executable, setup); err != nil {
 			return res, asError(err)
 		}
-		group, err := config.Bool(config.Load(rotatree.Config(root)), "work.herdrGroupSlots")
+		group, err := GroupSlots(root)
 		if err != nil {
 			return res, fail(exitcode.ExitResolution, err.Error())
 		}
+		// Only a host with workspaces to close has any to link (herdr).
+		group = group && h.Capabilities().WorkspaceCloser != nil
 		// Refuse a slot that still holds work, before its session is killed.
 		if _, err := e.ResetTo(root, o.Slot, o.Task, branchOr(o), true); err != nil {
 			return res, resetRefusal(err, false)
@@ -551,6 +553,10 @@ func arrangeNew(ctx context.Context, h host.Host, root string) string {
 		return ""
 	}
 	_, _, found, err := layout.Arrange(ctx, l, root, layout.Split, reg.CLIPane(), LiveWorkers(ctx, l, reg))
+	if err == nil && found {
+		// The split closed the new worker's linked workspace.
+		err = RecordWorkspaces(ctx, l, root, reg.CLIPane())
+	}
 	switch {
 	case err != nil:
 		return "layout split: " + err.Error() + "; run rota layout split to retry"
@@ -570,8 +576,38 @@ func LiveWorkers(ctx context.Context, h host.Layouter, reg Registry) []layout.Wo
 			continue
 		}
 		if pane := h.PaneOf(ctx, s.Name(), handle); pane != "" {
-			out = append(out, layout.Worker{Slot: s.Name(), Pane: pane})
+			out = append(out, layout.Worker{Slot: s.Name(), Pane: pane, Path: s.Worktree()})
 		}
 	}
 	return out
+}
+
+// GroupSlots reads work.herdrGroupSlots: whether a herdr slot lives in a linked
+// workspace of its own.
+func GroupSlots(root string) (bool, error) {
+	return config.Bool(config.Load(rotatree.Config(root)), "work.herdrGroupSlots")
+}
+
+// RecordWorkspaces stores each live slot's linked workspace as herdr has it
+// now: "" for a slot whose pane is in the orchestrator's workspace, which is
+// where a layout split leaves it once herdr closed the linked one. Only a
+// grouped round has workspaces to record.
+func RecordWorkspaces(ctx context.Context, l host.Layouter, root, cli string) error {
+	if group, err := GroupSlots(root); err != nil || !group {
+		return err
+	}
+	panes, err := l.LayoutPanes(ctx)
+	if err != nil {
+		return err
+	}
+	st, ok := layout.Find(panes, root, layout.Label, cli, LiveWorkers(ctx, l, LoadRegistryTolerant(root)))
+	if !ok {
+		return nil
+	}
+	linked := layout.Linked(st)
+	return UpdateSlots(root, func(s *Slot) {
+		if ws, ok := linked[s.Name()]; ok {
+			s.SetWorkspaceID(ws)
+		}
+	})
 }
