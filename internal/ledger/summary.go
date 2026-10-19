@@ -145,6 +145,9 @@ func Fold(entries []Entry, audit []*jsonx.Object, round int) Summary {
 			}
 		}
 		ts := e.TS
+		if e.Kind == KindBounce && e.Slot == "" && f.find(e) == nil {
+			continue // no owner: a row would total under "-"
+		}
 		r := f.row(e)
 		if r.Harness == "" {
 			r.Harness = e.Harness
