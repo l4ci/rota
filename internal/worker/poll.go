@@ -161,17 +161,25 @@ func compileAll(prefix string, pats []string) []*regexp.Regexp {
 	return out
 }
 
-// reRelayHead opens an orchestrator relay or brief echoed into the pane.
-var reRelayHead = regexp.MustCompile(`^\s*--- ORCHESTRATOR \(round \d+\) ---\s*$`)
+// reRelayHead opens an orchestrator relay or brief echoed into the pane, bare
+// or after Claude Code's "❯" prompt glyph.
+var reRelayHead = regexp.MustCompile(`^\s*(?:❯\s*)?--- ORCHESTRATOR \(round \d+\) ---\s*$`)
 
 // reRelayHeadG is reRelayHead under the gutter.
-var reRelayHeadG = regexp.MustCompile(`^\s*(?:┃\s*)?--- ORCHESTRATOR \(round \d+\) ---\s*$`)
+var reRelayHeadG = regexp.MustCompile(`^\s*(?:[┃❯]\s*)?--- ORCHESTRATOR \(round \d+\) ---\s*$`)
 
 // reGutter starts a line of OpenCode's user-message gutter, and rePlaceholder
 // is evidence that is only the brief's own placeholder (`<pr-url>`).
 var (
 	reGutter      = regexp.MustCompile(`^\s*┃`)
 	rePlaceholder = regexp.MustCompile(`^<[^<>]+>`)
+)
+
+// reEchoIndent is the indent Claude Code gives every line of an echoed prompt
+// after the first; reEchoHead is that first line, behind the "❯" glyph.
+var (
+	reEchoIndent = regexp.MustCompile(`^  `)
+	reEchoHead   = regexp.MustCompile(`^\s*❯`)
 )
 
 // reReplyMarker starts a line of the worker's own output (see reBlocked).
@@ -231,7 +239,9 @@ func lastSentinel(lines []string, gutter bool) (state, evidence string, ok, stal
 // relayMask marks the lines of echoed orchestrator text: each
 // `--- ORCHESTRATOR (round N) ---` header and what follows up to the worker's
 // next reply marker. A relay echoed under OpenCode's "┃" gutter ends where the
-// gutter does, since OpenCode marks the worker's reply with nothing. With
+// gutter does, since OpenCode marks the worker's reply with nothing. A brief
+// Claude Code echoes behind "❯" ends at the first non-blank line without the
+// two-space echo indent: a harness banner at column 0. With
 // sigEnds, a `--- ROTA-SIG <hex> ---` line (the trailer of a signed brief) also
 // closes the span, inclusive: what the harness prints after it, a limit banner
 // carrying no reply marker, is the session's own.
@@ -241,20 +251,23 @@ func relayMask(lines []string, gutter, sigEnds bool) []bool {
 		relayHead = reRelayHeadG
 	}
 	mask := make([]bool, len(lines))
-	inRelay, gutterRelay := false, false
+	inRelay, gutterRelay, echoRelay := false, false, false
 	for i, l := range lines {
+		if echoRelay && strings.TrimSpace(l) != "" && !reEchoIndent.MatchString(l) && !relayHead.MatchString(l) {
+			inRelay, echoRelay = false, false
+		}
 		if gutter && gutterRelay && strings.TrimSpace(l) != "" && !reGutter.MatchString(l) {
 			inRelay, gutterRelay = false, false
 		}
 		switch {
 		case relayHead.MatchString(l):
-			inRelay, gutterRelay = true, gutter && reGutter.MatchString(l)
+			inRelay, gutterRelay, echoRelay = true, gutter && reGutter.MatchString(l), reEchoHead.MatchString(l)
 		case reReplyMarker.MatchString(l):
-			inRelay, gutterRelay = false, false
+			inRelay, gutterRelay, echoRelay = false, false, false
 		}
 		mask[i] = inRelay
 		if sigEnds && inRelay && reSigLine.MatchString(l) {
-			inRelay, gutterRelay = false, false
+			inRelay, gutterRelay, echoRelay = false, false, false
 		}
 	}
 	return mask
