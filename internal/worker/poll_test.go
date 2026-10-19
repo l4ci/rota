@@ -295,11 +295,12 @@ func TestClassifySentinelAfterCodexBullet(t *testing.T) {
 	}
 }
 
-// The OpenCode pane fixtures are built from the spike's description of the 1.17
-// TUI (.rota/spikes/opencode-worker.md): the alternate-screen viewport, the
-// user message echoed under a "┃" gutter, "esc interrupt" while a turn runs
-// and the dialog and error texts it printed. They are not live captures: the
-// provider keys were expired when this was written.
+// opencode-retry is a live capture of OpenCode 1.17.9 against an unreachable
+// provider. The other OpenCode fixtures are built from the spike's description
+// of the TUI (.rota/spikes/opencode-worker.md): the alternate-screen viewport,
+// the user message echoed under a "┃" gutter, "esc interrupt" while a turn
+// runs and the dialog and error texts it printed. They are not live captures:
+// the provider keys were expired when this was written.
 func opencodePane(t *testing.T, name string) string {
 	t.Helper()
 	b, err := os.ReadFile("testdata/panes/opencode-" + name + "-1.17.9.txt")
@@ -314,6 +315,10 @@ func TestClassifyOpenCode(t *testing.T) {
 	// <one question ...> as placeholders; neither is a sentinel.
 	if state, ev := Classify(opencodePane(t, "busy"), false, 60, ""); state != "BUSY" || !strings.Contains(ev, "esc interrupt") {
 		t.Errorf("busy pane: %s %q", state, ev)
+	}
+	// A real capture: a provider that cannot be reached, OpenCode retrying.
+	if state, ev := Classify(opencodePane(t, "retry"), false, 60, ""); state != "BUSY" || !strings.Contains(ev, "retry") {
+		t.Errorf("retry pane: %s %q", state, ev)
 	}
 	if state, ev := Classify(opencodePane(t, "expired-key"), false, 60, ""); state != "LIMITED" || !strings.Contains(ev, "needs a human") {
 		t.Errorf("expired key: %s %q", state, ev)

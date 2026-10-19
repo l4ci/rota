@@ -96,7 +96,7 @@ var (
 	// echoed brief (lastSentinel).
 	reBlocked = regexp.MustCompile(`(?m)^\s*(?:[●⏺•┃]\s*)?ROTA-BLOCKED\s+(\S+)\s*:\s*(.+)$`)
 	reDone    = regexp.MustCompile(`(?m)^\s*(?:[●⏺•┃]\s*)?ROTA-DONE\s+(\S+)\s*(.*)$`)
-	reRetry   = regexp.MustCompile(`Retrying in`)
+	reRetry   = regexp.MustCompile(`[Rr]etrying in`) // Claude Code "Retrying in", OpenCode "[retrying in 7s attempt #2]"
 	// OpenCode shows "esc interrupt" beside its spinner for as long as a turn
 	// runs. A provider that never answers keeps it up, so it is checked after
 	// the limit and dialog texts.
