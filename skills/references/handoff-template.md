@@ -33,3 +33,29 @@ An orchestrator mid-round writes a different handoff note, to `.rota/handoff/<ba
 
 <one of: "clean tree" / "stashed as `stash@{0}` — message: rota-pause <branch>" / "wip commit `a1b2c3d`" / "dirty tree — see `git status`">
 ```
+
+## Session report
+
+`/rota-pause --report` writes `.rota/handoff/<branch>.report.md` beside the note. It is for the human: `/rota-work` never reads or deletes it, and `rota status handoff` returns the note path only. Same secret redaction as the note.
+
+```markdown
+# Session report — <branch>
+
+<!-- Paused YYYY-MM-DD HH:MM UTC -->
+
+## Commits
+
+<`git log --format='%h %s' <base>..HEAD`, base from `rota git base`>
+
+## Files changed
+
+<`git diff --stat <base>...HEAD`>
+
+## Tasks
+
+<finished `Task: <key>/<n>` markers from the task ledger; "none" when empty>
+
+## Proof
+
+<`rota proof show <ID>` per item; "none" when empty>
+```

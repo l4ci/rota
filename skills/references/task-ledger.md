@@ -1,6 +1,6 @@
 # Task ledger
 
-Used by `/rota-work` (writes a marker on every task commit, reads the markers on resume) and `/rota-pause` (reads them into the handoff note). Git history is the ledger: it survives compaction, a fresh session and a lost handoff note, and cannot disagree with the tree.
+Used by `/rota-work` (writes a marker on every task commit, reads the markers on resume) and `/rota-pause` (reads them into the handoff note and the `--report` Tasks section). Git history is the ledger: it survives compaction, a fresh session and a lost handoff note, and cannot disagree with the tree.
 
 ## Marker
 
