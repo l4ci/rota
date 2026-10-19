@@ -159,11 +159,8 @@ func (c codex) Configured(cfg any) bool {
 	if config.StringIfSet(cfg, "round.workerKind") == Codex {
 		return true
 	}
-	// The tier names are roundcfg's, which imports this package.
-	for _, tier := range []string{"light", "standard", "heavy"} {
-		if strings.TrimSpace(config.StringIfSet(cfg, "round.tiers.codex."+tier)) != "" {
-			return true
-		}
+	if TierMapSet(cfg, Codex) {
+		return true
 	}
 	if len(c.Accounts(cfg).Entries) > 0 {
 		return true
