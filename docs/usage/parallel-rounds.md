@@ -239,6 +239,21 @@ issue to read and dispute, the item's `## Out of scope` section when it has one,
   tier above the default needs `--tier-reason`. The tier and its model are recorded on the slot,
   shown by `rota round status`, and named in the brief with the tier table for the worker's own
   subagents. See [round keys](configuration.md#round-keys).
+- **Profile.** `round.profile` fills the Claude tier models in one setting; `rota config show`
+  reports the effective model of every tier and where it came from. An explicit
+  `round.tiers.claude.<tier>` beats the profile for that tier; unset keeps today's tiers; Codex and
+  OpenCode tiers are never touched.
+
+  | Profile | light | standard | heavy |
+  | --- | --- | --- | --- |
+  | `quality` | sonnet | opus | opus |
+  | `balanced` | haiku | sonnet | opus |
+  | `budget` | haiku | haiku | sonnet |
+  | `inherit` | empty | empty | empty |
+
+  `inherit` launches workers without `--model`, so they run on whatever model the session's provider
+  picks (a non-Anthropic provider, say). Precedence per Claude tier: explicit key, profile, then
+  `models.worker` (standard only), then the default.
 - **Kind.** `--kind codex` starts a Codex worker instead of a Claude one; see
   [Codex workers](codex-workers.md). An issue can ask for its own harness and model: label it
   `harness:claude` or `harness:codex`, and optionally `model:<id>` (file backend: end the bullet with

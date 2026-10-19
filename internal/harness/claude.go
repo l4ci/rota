@@ -38,15 +38,33 @@ func (claude) Launch(cfg any, chosen string) (string, error) {
 	}
 	if chosen != "" {
 		model = chosen
+	} else if inheritsModel(cfg) {
+		model = ""
 	}
 	if s := config.StringIfSet(cfg, "work.workerCommand"); s != "" {
-		return strings.ReplaceAll(s, ModelPlaceholder, model), nil
+		if model == "" {
+			s = modelFlag.ReplaceAllString(s, "")
+		}
+		return strings.Join(strings.Fields(strings.ReplaceAll(s, ModelPlaceholder, model)), " "), nil
+	}
+	if model == "" {
+		return "claude --dangerously-skip-permissions", nil
 	}
 	return "claude --model " + model + " --dangerously-skip-permissions", nil
 }
 
-// NeedsModel is always true: a claude launch takes its model from the tier map.
-func (claude) NeedsModel(any) bool { return true }
+// modelFlag is `--model {model}` (or `--model={model}`) in a custom command,
+// dropped when round.profile is inherit so the launch carries no model.
+var modelFlag = regexp.MustCompile(`--model[ =]` + regexp.QuoteMeta(ModelPlaceholder))
+
+// inheritsModel is whether round.profile is inherit: no tier names a model.
+func inheritsModel(cfg any) bool {
+	return strings.TrimSpace(config.StringIfSet(cfg, "round.profile")) == ProfileInherit
+}
+
+// NeedsModel: a claude launch takes its model from the tier map, except under
+// the inherit profile, which launches without --model.
+func (claude) NeedsModel(cfg any) bool { return !inheritsModel(cfg) }
 
 // ModelApplies: the default command always takes the model, a custom
 // work.workerCommand only through the {model} placeholder.
@@ -131,7 +149,9 @@ func (claude) PaneVocab() PaneVocab { return PaneVocab{} }
 
 // Tiers: claude must name every tier, and an unset standard tier takes
 // models.worker, so that one knob governs the standard model.
-func (claude) Tiers() TierRule { return TierRule{Required: true, StandardFallback: "models.worker"} }
+func (claude) Tiers() TierRule {
+	return TierRule{Required: true, StandardFallback: "models.worker", Profile: true}
+}
 
 // Configured: Claude is every project's baseline worker.
 func (claude) Configured(any) bool { return true }
@@ -149,6 +169,9 @@ func (claude) AgentFiles(r AgentRole, model string) ([]AgentFile, error) {
 	b.WriteString("---\n")
 	b.WriteString("name: rota-" + r.Name + "\n")
 	b.WriteString("description: " + strconv.Quote(r.Description) + "\n")
+	if model == "" {
+		model = "inherit" // the subagent runs on its parent's model
+	}
 	b.WriteString("model: " + model + "\n")
 	if r.Effort != "" {
 		b.WriteString("effort: " + r.Effort + "\n")

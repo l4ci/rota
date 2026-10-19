@@ -115,6 +115,7 @@ var Keys = []Key{
 	k("round.adoptPattern", "", false, TypeString, "Glob over branch names (codex/*, claude/*). rota round reconcile reports a matching branch that no slot holds and that is not merged as unregistered-branch; --apply adopts those whose name carries an issue number. Empty turns the check off."),
 	k("round.tier", "standard", false, TypeEnum, "Default worker tier for rota round assign: light for reading, standard for code and tests, heavy for hard reasoning.", "light", "standard", "heavy"),
 	k("round.workerKind", "", false, TypeEnum, "Project default worker harness. Empty: the slot's recorded kind, else claude. --kind and an issue's harness: label beat it.", "claude", "codex", "opencode"),
+	k("round.profile", "", false, TypeEnum, "Named model profile that fills round.tiers.claude.* (light/standard/heavy). quality: sonnet/opus/opus. balanced: haiku/sonnet/opus. budget: haiku/haiku/sonnet. inherit: no model, workers launch without --model. Empty keeps the tier defaults. An explicit round.tiers.claude.<tier> beats the profile; Codex and OpenCode tiers are not touched.", "quality", "balanced", "budget", "inherit"),
 	k("round.tiers.claude.light", "haiku", false, TypeString, "Model a light-tier Claude worker starts with."),
 	k("round.tiers.claude.standard", "", false, TypeString, "Model a standard-tier Claude worker starts with. Empty follows models.worker."),
 	k("round.tiers.claude.heavy", "opus", false, TypeString, "Model a heavy-tier Claude worker starts with."),

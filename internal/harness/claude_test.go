@@ -1,6 +1,9 @@
 package harness
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestWorkerCommandModel(t *testing.T) {
 	cases := []struct {
@@ -22,6 +25,30 @@ func TestWorkerCommandModel(t *testing.T) {
 		if got := (claude{}).ModelApplies(cfg); got != c.applies {
 			t.Errorf("%s: ModelApplies %v want %v", c.cfg, got, c.applies)
 		}
+	}
+}
+
+func TestInheritProfileLaunchesWithoutModel(t *testing.T) {
+	cases := []struct{ cfg, chosen, want string }{
+		{`{"round":{"profile":"inherit"}}`, "", "claude --dangerously-skip-permissions"},
+		{`{"round":{"profile":"inherit"}}`, "haiku", "claude --model haiku --dangerously-skip-permissions"},
+		{`{"round":{"profile":"inherit"},"work":{"workerCommand":"wrap --model {model} -x"}}`, "", "wrap -x"},
+		{`{"round":{"profile":"budget"}}`, "", "claude --model sonnet --dangerously-skip-permissions"},
+	}
+	for _, c := range cases {
+		if got, err := (claude{}).Launch(cfgOf(t, c.cfg), c.chosen); err != nil || got != c.want {
+			t.Errorf("%s + %q: %q, %v want %q", c.cfg, c.chosen, got, err, c.want)
+		}
+	}
+	if (claude{}).NeedsModel(cfgOf(t, `{"round":{"profile":"inherit"}}`)) {
+		t.Error("inherit must not need a tier model")
+	}
+	if !(claude{}).NeedsModel(cfgOf(t, ``)) {
+		t.Error("claude needs a tier model without a profile")
+	}
+	files, err := (claude{}).AgentFiles(AgentRole{Name: "explorer", Description: "d", Instructions: "i"}, "")
+	if err != nil || !strings.Contains(files[0].Content, "model: inherit\n") {
+		t.Errorf("an empty model writes model: inherit: %v %v", files, err)
 	}
 }
 
