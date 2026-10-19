@@ -6,8 +6,8 @@
 // doctor, the orchestrator launcher) pick an adapter once and call it; none of
 // them branches on a kind string.
 //
-// Two harnesses run workers (Claude and Codex). The orchestrator can also run
-// in Hermes and opencode, which only have the orchestrator facet: the worker
+// Three harnesses run workers (Claude, Codex and OpenCode). The orchestrator
+// can also run in Hermes, which only has the orchestrator facet: the worker
 // and orchestrator sets differ (#33), and both are views over this package.
 //
 // The package imports no other rota package but config and shlex, so doctor,
@@ -24,12 +24,15 @@ import (
 const (
 	Claude = "claude"
 	Codex  = "codex"
+	// OpenCode has no lower-case sibling: the binary and the kind are both
+	// "opencode".
+	OpenCode = "opencode"
 	// Default is the kind of a slot that records none.
 	Default = Claude
 )
 
 // kinds is the worker harness kinds, in the order messages list them.
-var kinds = []string{Claude, Codex}
+var kinds = []string{Claude, Codex, OpenCode}
 
 // Kinds lists the worker harness kinds. Every list of kinds outside this
 // package (the round.workerKind enum, the harness: label check, herdr's
@@ -49,8 +52,13 @@ func Valid(s string) bool {
 	return false
 }
 
-// KindList is Kinds as prose for a usage error: "claude or codex".
-func KindList() string { return strings.Join(kinds, " or ") }
+// KindList is Kinds as prose for a usage error: "claude, codex or opencode".
+func KindList() string {
+	if len(kinds) < 2 {
+		return strings.Join(kinds, "")
+	}
+	return strings.Join(kinds[:len(kinds)-1], ", ") + " or " + kinds[len(kinds)-1]
+}
 
 // Lookup returns the worker adapter for kind; "" is Default.
 func Lookup(kind string) (Harness, bool) {
@@ -62,6 +70,8 @@ func Lookup(kind string) (Harness, bool) {
 		return claude{}, true
 	case Codex:
 		return codex{}, true
+	case OpenCode:
+		return opencode{}, true
 	}
 	return nil, false
 }
@@ -195,8 +205,10 @@ type Doctor struct {
 	Unguarded bool
 }
 
-// Account is the per-slot account a launch can carry.
-type Account struct{ ConfigDir, CodexHome string }
+// Account is the per-slot account a launch can carry: a Claude config dir, or
+// the home of a kind with its own account model (CODEX_HOME,
+// OPENCODE_CONFIG_DIR).
+type Account struct{ ConfigDir, Home string }
 
 // ResumeHit is a token of a launch command that reopens an earlier session.
 // Noun prefixes it in a message ("the subcommand ").

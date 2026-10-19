@@ -193,12 +193,10 @@ func (claude) Command(cfg any) ([]string, error) {
 	return []string{"claude", "--model", model, "--permission-mode", "auto"}, nil
 }
 
-// hermes and opencode run the orchestrator only. They take no positional
-// prompt, so Command ends in the flag that does: the supervisor appends the
-// prompt as the last argument, first start and restarts alike. `-s` preloads
-// the skill in Hermes (a project skill loads only after `hermes skills
-// trust`); opencode loads skills through a model-side tool, so its prompt
-// names the skill in words.
+// hermes runs the orchestrator only. It takes no positional prompt, so
+// Command ends in the flag that does: the supervisor appends the prompt as the
+// last argument, first start and restarts alike. `-s` preloads the skill (a
+// project skill loads only after `hermes skills trust`).
 type hermes struct{}
 
 func (hermes) Name() string { return "hermes" }
@@ -211,14 +209,3 @@ func (hermes) Prompt() string {
 func (hermes) Command(any) ([]string, error) {
 	return []string{"hermes", "chat", "-s", "rota-orchestrate", "-q"}, nil
 }
-
-type opencode struct{}
-
-func (opencode) Name() string { return "opencode" }
-
-// WorkAccounts: work.accounts is Anthropic's.
-func (opencode) WorkAccounts() bool { return false }
-func (opencode) Prompt() string {
-	return "You are the orchestrator: load the rota-orchestrate skill and follow it."
-}
-func (opencode) Command(any) ([]string, error) { return []string{"opencode", "--prompt"}, nil }

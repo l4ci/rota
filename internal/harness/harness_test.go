@@ -22,7 +22,7 @@ func TestLookup(t *testing.T) {
 	if _, ok := Lookup("hermes"); ok {
 		t.Error("hermes runs the orchestrator only: it is not a worker harness")
 	}
-	if Valid("") || !Valid(Claude) || !Valid(Codex) || KindList() != "claude or codex" {
+	if Valid("") || !Valid(Claude) || !Valid(Codex) || !Valid(OpenCode) || KindList() != "claude, codex or opencode" {
 		t.Errorf("Valid/KindList: %v %q", Kinds(), KindList())
 	}
 	if h, ok := ForBinary("codex"); !ok || h.Kind() != Codex {
@@ -34,14 +34,14 @@ func TestLookup(t *testing.T) {
 }
 
 func TestAccountEnv(t *testing.T) {
-	both := Account{ConfigDir: "/acct", CodexHome: "/home/w1"}
+	both := Account{ConfigDir: "/acct", Home: "/home/w1"}
 	for _, c := range []struct {
 		h    Harness
 		a    Account
 		want string
 	}{
 		{claude{}, both, "CLAUDE_CONFIG_DIR=/acct"},
-		{claude{}, Account{CodexHome: "/h"}, ""},
+		{claude{}, Account{Home: "/h"}, ""},
 		{codex{}, both, "CODEX_HOME=/home/w1"},
 		{codex{}, Account{ConfigDir: "/acct"}, ""},
 	} {
