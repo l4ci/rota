@@ -8,7 +8,7 @@ Items captured in the backlog ([`BACKLOG.md`](../reference/rota-folder.md), or i
 
 **Trigger phrases:**
 
-- `/rota-work` with no argument reconciles the backlog, suggests an item, then works it
+- `/rota-work` with no argument reconciles the backlog, reports a round in flight or an item that failed its gate, suggests an item, then works it
 - `/rota-work [B03]` to implement a specific item by ID (`/rota-work 42` on the issue backend)
 - `/rota-work [B03] [F07]` to implement a batch of items together
 - `/rota-work "add retry logic to the upload pipeline"` takes a brief; run `/rota-capture` first so the work has an ID to close
