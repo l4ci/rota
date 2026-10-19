@@ -1,0 +1,9 @@
+
+
+
+   ┃
+   ┃  Ask anything... "Fix broken tests"
+   ┃  Build  qwen3.8-flash OpenCode Go
+
+
+                                            tab agents  ctrl+p commands

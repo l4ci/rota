@@ -89,12 +89,23 @@ var (
 	// A sentinel may follow a reply marker: Claude Code v2.1.288 starts the
 	// first line of every reply with "● " (older versions "⏺ "), Codex
 	// 0.159.x with "• ".
-	reBlocked = regexp.MustCompile(`(?m)^\s*(?:[●⏺•]\s*)?ROTA-BLOCKED\s+(\S+)\s*:\s*(.+)$`)
-	reDone    = regexp.MustCompile(`(?m)^\s*(?:[●⏺•]\s*)?ROTA-DONE\s+(\S+)\s*(.*)$`)
+	//
+	// OpenCode 1.17 prints the user message under a "┃" gutter and may gutter
+	// its own reply, so the gutter is accepted before a sentinel too; a
+	// guttered line whose evidence is still an angle-bracket placeholder is the
+	// echoed brief (lastSentinel).
+	reBlocked = regexp.MustCompile(`(?m)^\s*(?:[●⏺•┃]\s*)?ROTA-BLOCKED\s+(\S+)\s*:\s*(.+)$`)
+	reDone    = regexp.MustCompile(`(?m)^\s*(?:[●⏺•┃]\s*)?ROTA-DONE\s+(\S+)\s*(.*)$`)
 	reRetry   = regexp.MustCompile(`Retrying in`)
-	reFunds   = regexp.MustCompile(`Add funds`)
-	reAPIErr  = regexp.MustCompile(`(API Error[^\n]*)`)
-	reResume  = regexp.MustCompile(`Resume this session with`)
+	// OpenCode shows "esc interrupt" beside its spinner for as long as a turn
+	// runs. A provider that never answers keeps it up, so it is checked after
+	// the limit and dialog texts.
+	reOpenCodeBusy  = regexp.MustCompile(`esc interrupt`)
+	reOpenCodeKey   = regexp.MustCompile(`(?i)API key has expired`)
+	reOpenCodeModel = regexp.MustCompile(`Model (\S+) is not valid`)
+	reFunds         = regexp.MustCompile(`Add funds`)
+	reAPIErr        = regexp.MustCompile(`(API Error[^\n]*)`)
+	reResume        = regexp.MustCompile(`Resume this session with`)
 	// Heuristic, like DEAD: a limited session cannot print a sentinel. The
 	// patterns are anchored to phrasing a session emits about ITSELF, not bare
 	// words like "limit" that a worker reading source code would echo.
@@ -140,7 +151,14 @@ func compileAll(prefix string, pats []string) []*regexp.Regexp {
 }
 
 // reRelayHead opens an orchestrator relay or brief echoed into the pane.
-var reRelayHead = regexp.MustCompile(`^\s*--- ORCHESTRATOR \(round \d+\) ---\s*$`)
+var reRelayHead = regexp.MustCompile(`^\s*(?:┃\s*)?--- ORCHESTRATOR \(round \d+\) ---\s*$`)
+
+// reGutter starts a line of OpenCode's user-message gutter, and rePlaceholder
+// is evidence that is only the brief's own placeholder (`<pr-url>`).
+var (
+	reGutter      = regexp.MustCompile(`^\s*┃`)
+	rePlaceholder = regexp.MustCompile(`^<[^<>]+>`)
+)
 
 // reReplyMarker starts a line of the worker's own output (see reBlocked).
 var reReplyMarker = regexp.MustCompile(`^\s*[●⏺•]`)
@@ -148,27 +166,38 @@ var reReplyMarker = regexp.MustCompile(`^\s*[●⏺•]`)
 // lastSentinel returns the state of the last ROTA-BLOCKED/ROTA-DONE line the
 // worker itself printed. Text from a `--- ORCHESTRATOR (round N) ---` header up
 // to the worker's next reply marker is a relay: sentinel text quoted there is
-// the orchestrator's, so only a marker-prefixed line counts inside it.
+// the orchestrator's, so only a marker-prefixed line counts inside it. A relay
+// echoed under OpenCode's "┃" gutter ends where the gutter does.
 func lastSentinel(lines []string) (state, evidence string, ok bool) {
-	inRelay := false
+	inRelay, gutterRelay := false, false
 	for i, l := range lines {
 		marked := reReplyMarker.MatchString(l)
+		// OpenCode echoes a relay under its gutter and marks the worker's reply
+		// with nothing: such a relay ends at the first line outside the gutter.
+		if gutterRelay && strings.TrimSpace(l) != "" && !reGutter.MatchString(l) {
+			inRelay, gutterRelay = false, false
+		}
 		switch {
 		case reRelayHead.MatchString(l):
-			inRelay = true
+			inRelay, gutterRelay = true, reGutter.MatchString(l)
 			continue
 		case marked:
-			inRelay = false
+			inRelay, gutterRelay = false, false
 		case inRelay:
 			continue
 		}
 		// Match against the text from this line on, as the classifier always
 		// has: a bare `ROTA-DONE <slot>` takes the next line as its evidence.
 		rest := strings.Join(lines[i:], "\n")
+		gut := reGutter.MatchString(l)
 		if m := reBlocked.FindStringSubmatchIndex(rest); m != nil && m[0] == 0 {
-			state, evidence, ok = StateBlocked, strings.TrimSpace(rest[m[4]:m[5]]), true
+			if ev := strings.TrimSpace(rest[m[4]:m[5]]); !gut || !rePlaceholder.MatchString(ev) {
+				state, evidence, ok = StateBlocked, ev, true
+			}
 		} else if m := reDone.FindStringSubmatchIndex(rest); m != nil && m[0] == 0 {
-			state, evidence, ok = StateDone, strings.TrimSpace(rest[m[4]:m[5]]), true
+			if ev := strings.TrimSpace(rest[m[4]:m[5]]); !gut || !rePlaceholder.MatchString(ev) {
+				state, evidence, ok = StateDone, ev, true
+			}
 		}
 	}
 	return
@@ -206,11 +235,23 @@ func Classify(text string, moved bool, lines int, native string) (state, evidenc
 			if reFunds.MatchString(tail) {
 				return StateLimited, "usage limit reached; pane offers 'Add funds' — needs a human, do NOT answer"
 			}
+			if reOpenCodeKey.MatchString(tail) {
+				return StateLimited, "OpenCode API key expired — needs a human to renew it; no reset clock"
+			}
 			return StateLimited, strutil.Clip(strings.TrimSpace(m), 120)
 		}
 	}
 	if reason, ok := strings.CutPrefix(native, host.UnverifiablePrefix); ok {
 		return StateUnverifiable, reason
+	}
+	// OpenCode's dialog for a tier model the provider does not list: the TUI
+	// falls back to its last-used model once it closes, so nothing else shows
+	// the worker is on the wrong one.
+	if m := reOpenCodeModel.FindStringSubmatch(tail); m != nil {
+		return StateBlocked, "OpenCode refused model " + m[1] + " — fix round.tiers.opencode (provider/model ids from `opencode models`)"
+	}
+	if reOpenCodeBusy.MatchString(tail) {
+		return StateBusy, "opencode: esc interrupt"
 	}
 	if native == "working" {
 		return StateBusy, "herdr: agent working"

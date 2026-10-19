@@ -128,7 +128,21 @@ func (opencode) Accounts(cfg any) AccountList {
 // UsageMeter: OpenCode has no usage reading; a provider is billed per token.
 func (opencode) UsageMeter() bool { return false }
 
-func (opencode) LimitPhrases() []string { return SharedLimitPhrases() }
+// LimitPhrases are the shared ones plus the account caps of OpenCode's provider
+// layer (packages/ai/src/provider-error.ts) and its dead-key text. The
+// retryable throttles ("rate limit", "too many requests") are left out: they
+// print beside "Retrying in", which the classifier already reads as busy, and
+// as bare phrases they would flag any worker that echoes source code.
+func (opencode) LimitPhrases() []string {
+	return append(SharedLimitPhrases(),
+		`insufficient (?:quota|balance)`,
+		`quota exceeded`,
+		`budget exceeded`,
+		`limit exhausted`,
+		`package has expired`,
+		`API key has expired`,
+	)
+}
 
 // Tiers: the tier map is optional, unset a worker runs on OpenCode's own
 // default model, but a configured one names every tier.

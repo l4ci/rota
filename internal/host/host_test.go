@@ -1059,6 +1059,9 @@ func TestLooksBooted(t *testing.T) {
 	}{
 		{"claude 2.1.289", read("claude-booted-2.1.289.txt"), true},
 		{"codex 0.159.2", read("codex-booted-0.159.2.txt"), true},
+		{"opencode 1.17.9", read("opencode-booted-1.17.9.txt"), true},
+		{"opencode banner", "OpenCode 1.17.9", true},
+		{"opencode in a shell", "$ opencode --version\n1.17.9\n", false},
 		{"claude older hint", "? for shortcuts", true},
 		{"claude older banner", "Welcome to Claude Code", true},
 		{"older box frame", "╭──────╮", true},
