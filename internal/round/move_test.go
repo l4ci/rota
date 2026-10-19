@@ -1288,3 +1288,22 @@ func TestTransferCapReasonIsValidatedAndLedgered(t *testing.T) {
 		t.Errorf("capReason = %q, want ambiguous-criteria; rows %+v", got, es)
 	}
 }
+
+func TestTransferTierCapReasonLandsInTheLedgerForASlot(t *testing.T) {
+	f := newMoveFx(t)
+	f.set.Models = map[string]map[string]string{"claude": {"light": "haiku", "standard": "sonnet", "heavy": "opus"}}
+	f.set.Tier = "standard"
+	if _, err := f.transfer("12", "dana", func(o *TransferOpts) { o.Tier = "heavy"; o.TierReason = "bounced 3 times"; o.CapReason = "tier" }); err != nil {
+		t.Fatal(err)
+	}
+	es, _ := ledger.Load(f.root)
+	var got string
+	for _, e := range es {
+		if e.Kind == ledger.KindTransfer {
+			got = e.DetailStr("capReason")
+		}
+	}
+	if got != "tier" {
+		t.Errorf("capReason = %q, want tier; rows %+v", got, es)
+	}
+}

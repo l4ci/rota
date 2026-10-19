@@ -372,7 +372,9 @@ func (s Summary) Text() string {
 		}
 		tw.Flush()
 	}
-	fmt.Fprintf(&b, "\nBounce cap: %d ambiguous-criteria, %d tier\n", s.CapReasons.AmbiguousCriteria, s.CapReasons.Tier)
+	if c := s.CapReasons; c.AmbiguousCriteria+c.Tier > 0 {
+		fmt.Fprintf(&b, "\nBounce cap: %d ambiguous-criteria, %d tier\n", c.AmbiguousCriteria, c.Tier)
+	}
 	fmt.Fprintln(&b, "\nGate audit")
 	if len(s.Audit) == 0 {
 		fmt.Fprintln(&b, "none")
