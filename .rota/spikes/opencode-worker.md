@@ -1,0 +1,41 @@
+---
+name: opencode-worker
+branch: spike/opencode-worker
+status: done
+finished: 2026-10-19
+created: 2026-10-19
+---
+
+# spike/opencode-worker
+
+## Question
+
+Can rota run OpenCode 1.17.x as a worker kind through the existing Harness interface: does the TUI take an initial prompt and stay open under herdr and tmux, can a plugin reject an unsigned relay before the model sees it, how are per-slot config homes and providers set by env, and what do its usage-limit and rate-limit errors say?
+
+## What was tried
+
+- `herdr agent start --help`, `herdr integration status`, `herdr agent prompt --help` (herdr 0.9.5).
+- `opencode --help`, `opencode run --help`, `opencode agent --help`, `opencode providers list`, `opencode models` (OpenCode 1.17.9, installed at `~/.opencode/bin`).
+- Four TUI launches inside tmux (`tmux new-session ... "opencode --prompt '...'"`), with `--model`, with `OPENCODE_CONFIG_CONTENT`, from `/tmp` and from a fresh `git init` dir; `tmux capture-pane` on the viewport and scrollback, `#{alternate_on}`; one typed relay via `tmux send-keys`.
+- OpenCode source (repo is now `anomalyco/opencode`, branch `dev`): `packages/ai/src/provider-error.ts`, `packages/core/src/session/to-session-error.ts`, the v2 plugin docs `services/www/src/docs/content/build/plugins/index.mdx` and `migrate-v1.mdx`; the docs pages for plugins, config and agents.
+- The local herdr integration files: `~/.config/opencode/plugins/herdr-agent-state.js` and `herdr-tui-session.js` (integration `opencode-tui` v13).
+
+## Findings
+
+- **herdr runs OpenCode natively.** `herdr agent start --kind opencode` is a listed kind, and the `opencode` integration is installed here (v13): an OpenCode plugin reports `working`, `idle` and `blocked` (permission asks) over the herdr socket from `session.status`, `session.idle` and `permission.asked` events. Under herdr a worker's native state needs no pane parsing; `herdr agent prompt <target> <text> --wait` submits relays.
+- **The TUI takes an initial prompt and stays open.** `opencode [project] --prompt <text> --model <provider/model> --agent <name> --session/--continue/--fork` are real flags on the default TUI command (`--prompt` is not on the config docs page but is in `--help`). It renders in the alternate screen (`alternate_on=1`): rota must read the pane viewport, not scrollback (scrollback was 16 lines). The last assistant message and a busy marker (`esc interrupt` with a dot spinner) are visible in the viewport; the user message echoes under a `┃` gutter. Typing into the pane with Enter submitted a second message, so tmux relays by typing work.
+- **Model choice: ids are `provider/model`, and an unknown id is refused with a dialog** ("Model opencode-go/qwen3.6-plus is not valid"), after which the TUI silently falls back to the last-used model. The maintainer's config still names `opencode-go/qwen3.6-plus`, which the Go plan no longer lists (`opencode models` shows `opencode-go/qwen3.7-plus`, `qwen3.8-flash`, `deepseek-v4.1-flash`, `glm-5.3-flash`, `minimax-m3`, `kimi-k2.7-code`, 214 ids in all). `rota doctor` for this kind should validate the tier map against `opencode models`. Both the OpenCode Go and Zen API keys on this machine are expired ("This API key has expired. Create a new API key in OpenCode Console"), so no run completed; that text is an auth-dead phrase, not a limit.
+- **A dead provider looks like endless work.** With the unreachable `h1_local` endpoint selected, the TUI showed the busy spinner for 100 s with no error. `round.stallMinutes` is the only guard; the adapter should also read `session.error` through the herdr plugin path rather than the pane.
+- **Config and accounts by env.** `OPENCODE_CONFIG` (file), `OPENCODE_CONFIG_DIR` (directory), `OPENCODE_CONFIG_CONTENT` (inline JSON overrides, e.g. `{"model":"opencode-go/qwen3.8-flash"}`), `OPENCODE_TUI_CONFIG`; credentials live in `~/.local/share/opencode/auth.json` (XDG data). Per-slot accounts map to `OPENCODE_CONFIG_DIR` plus a data dir; providers (OpenRouter, Ollama, any `baseURL` via `@ai-sdk/openai-compatible`) are config entries, and `permission: "allow"` makes the worker never prompt.
+- **Prompt hook: rewrite, not reject.** The v2 plugin API (`ctx.session.hook("prompt", ...)`) runs once at admission before the model sees the text, with a mutable draft (`text`, `files`, `delivery`), but "prompt hooks transform input and do not expose a typed rejection API". The v1 `chat.message` hook is gone. A rota plugin can therefore neutralise unsigned pane text (replace it with a fixed "unsigned input, print ROTA-BLOCKED asking who sent it" instruction, or pass it signed) but cannot block it with exit 2 like the Codex hook; whether a thrown error leaves the prompt unadmitted ("if preparation fails ... OpenCode does not admit the prompt") is unverified. Plugins load from `.opencode/plugins/` in the project or `OPENCODE_CONFIG_DIR/plugins/`, so the per-slot config dir can carry rota's plugin without touching the user's global one. Whether 1.17.9 already serves the v2 API is unverified (the herdr plugin targets it).
+- **Limit wording comes from `packages/ai/src/provider-error.ts`.** Retryable throttles: `/rate limit/i`, `/too many requests/i`, 429. Account caps (typed `QuotaExceededError`, surfaced as `provider.quota`): codes `insufficient_quota`, `creditlimitexceeded`, and on 429 the text `insufficient quota|balance`, `quota exceeded`, `budget exceeded`, `usage limit`, `limit exhausted`, `package has expired`, `plan does not yet include`; context overflow is a separate class (`exceeds the context window`, `maximum context length`, `context_length_exceeded`). The ChatGPT path prints "ChatGPT usage limit reached". A per-token provider has no reset window, so the kind should report `UsageMeter=false` and treat quota errors as `limited` without a cooldown clock.
+- **Agent files.** `.opencode/agents/<name>.md` with frontmatter `description`, `mode: subagent|primary|all`, `model`, `temperature`, `permission` (`edit`/`bash`/`webfetch`: allow/ask/deny); the body is the prompt. `rota agents write` can emit the three rota roles directly; `permission.task: deny` or `hidden: true` hides a subagent, and `--pure` runs without external plugins.
+- **`opencode run` is the headless path**: argv prompt, `--format json` event stream, `-c/-s/--fork`, `--attach <url>` to a `serve` instance. Not needed for the pane model, but the adapter's smoke fake and the stub worker can mimic `run`'s flags cheaply.
+
+## Decision
+
+Viable. Launch, relay, state and limit detection all have a documented or observed path; the only gap is a hard prompt rejection, which rota can replace with a transform-based guard on the per-slot plugin and the `Unguarded` doctor flag.
+
+## Recommended approach
+
+One `opencode` kind in `internal/harness/opencode.go` behind the existing interface. `Launch`: `opencode --model {model} --prompt` with the brief as the prompt argument (herdr `agent start --kind opencode`, tmux types the line); `NeedsModel` true, ids validated against `opencode models` in `Doctor`. `AccountEnv`: `OPENCODE_CONFIG_DIR=<slot home>` plus `XDG_DATA_HOME` for a per-account `auth.json`, from `work.opencodeAccounts` `{name, home}`; generalise `harness.Account`/`SpawnOpts` past `ConfigDir`/`CodexHome` on the way. `Prepare`: write `<slot config dir>/plugins/rota-guard.js` (v2 `session.hook("prompt")`) that rewrites text lacking a valid `--- ROTA-SIG ---` trailer into the fixed unsigned-input instruction, keyed by the same per-slot key as Codex; mark the kind `Unguarded` for the PreToolUse guard. `LimitPhrases`: the quota and throttle strings above plus "API key has expired"; `UsageMeter` false. Pane vocabulary: busy = `esc interrupt`, blocked = herdr native `blocked`, dead = `Model ... is not valid` dialog and the expired-key text. tmux `bootPatterns` gets the OpenCode banner/`tab agents` footer. `AgentFiles`: `.opencode/agents/rota-<role>.md`. Fake: `test/fakes/opencode` answering `--version`, `--help`, `models`, plus a stub cue for the TUI footer; smoke section behind `ROTA_SMOKE_HARNESS=opencode`. Config rows: `work.opencodeCommand`, `work.opencodeAccounts`, `round.tiers.opencode.*`, and `opencode` in the `round.workerKind` enum.
