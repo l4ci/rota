@@ -117,7 +117,7 @@ In a [round](parallel-rounds.md), `rota worker gate` also wants the PR body to c
 
 A milestone is a native tracker milestone `MNN — <title>` plus a tracking issue labelled `milestone-tracker` and `status:<status>`. The issue body is the milestone plan; slice plans are `plan:SNN` notes on it. `/rota-vision` and `/rota-plan` write them through the same helpers as file mode.
 
-`/rota-release --milestone MNN` gates on `rota release milestone-check` (exit 1 when blocked), drafts notes with `rota release notes`, and after the tag runs `rota release close-milestone`.
+`/rota-release --milestone MNN` gates on `rota release milestone-check` (exit 1 when blocked), drafts notes with `rota release notes`, and after the tag runs `rota release close-milestone`. The gate's output ends with one informational `check:` line from `rota milestone check` (structural faults and uncovered acceptance criteria, or `clean`); it never changes the exit code.
 
 ## Umbrella mode
 
