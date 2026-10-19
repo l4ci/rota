@@ -161,11 +161,12 @@ func compileAll(prefix string, pats []string) []*regexp.Regexp {
 	return out
 }
 
-// reRelayHead opens an orchestrator relay or brief echoed into the pane.
-var reRelayHead = regexp.MustCompile(`^\s*--- ORCHESTRATOR \(round \d+\) ---\s*$`)
+// reRelayHead opens an orchestrator relay or brief echoed into the pane, bare
+// or after Claude Code's "❯" prompt glyph.
+var reRelayHead = regexp.MustCompile(`^\s*(?:❯\s*)?--- ORCHESTRATOR \(round \d+\) ---\s*$`)
 
 // reRelayHeadG is reRelayHead under the gutter.
-var reRelayHeadG = regexp.MustCompile(`^\s*(?:┃\s*)?--- ORCHESTRATOR \(round \d+\) ---\s*$`)
+var reRelayHeadG = regexp.MustCompile(`^\s*(?:[┃❯]\s*)?--- ORCHESTRATOR \(round \d+\) ---\s*$`)
 
 // reGutter starts a line of OpenCode's user-message gutter, and rePlaceholder
 // is evidence that is only the brief's own placeholder (`<pr-url>`).
@@ -174,8 +175,19 @@ var (
 	rePlaceholder = regexp.MustCompile(`^<[^<>]+>`)
 )
 
+// reEchoIndent is the indent Claude Code gives every line of an echoed prompt
+// after the first; reEchoHead is that first line, behind the "❯" glyph.
+var (
+	reEchoIndent = regexp.MustCompile(`^  `)
+	reEchoHead   = regexp.MustCompile(`^\s*❯`)
+)
+
 // reReplyMarker starts a line of the worker's own output (see reBlocked).
 var reReplyMarker = regexp.MustCompile(`^\s*[●⏺•]`)
+
+// reSigLine is the signature trailer `rota worker dispatch` ends a brief or
+// relay with (codex and opencode slots; a claude payload carries none).
+var reSigLine = regexp.MustCompile(`^\s*(?:┃\s*)?--- ROTA-SIG [0-9a-f]+ ---\s*$`)
 
 // staleDoneEvidence is the evidence of a static pane whose only ROTA-DONE
 // predates the last relay sent to the slot.
@@ -196,24 +208,15 @@ func lastSentinel(lines []string, gutter bool) (state, evidence string, ok, stal
 	if gutter {
 		relayHead, blockedRe, doneRe = reRelayHeadG, reBlockedG, reDoneG
 	}
-	inRelay, gutterRelay := false, false
+	inRelay := relayMask(lines, gutter, false)
 	for i, l := range lines {
-		marked := reReplyMarker.MatchString(l)
-		// OpenCode echoes a relay under its gutter and marks the worker's reply
-		// with nothing: such a relay ends at the first line outside the gutter.
-		if gutter && gutterRelay && strings.TrimSpace(l) != "" && !reGutter.MatchString(l) {
-			inRelay, gutterRelay = false, false
-		}
-		switch {
-		case relayHead.MatchString(l):
-			inRelay, gutterRelay = true, gutter && reGutter.MatchString(l)
+		if relayHead.MatchString(l) {
 			if ok && state == StateDone {
 				state, evidence, ok, stale = "", "", false, true
 			}
 			continue
-		case marked:
-			inRelay, gutterRelay = false, false
-		case inRelay:
+		}
+		if inRelay[i] {
 			continue
 		}
 		// Match against the text from this line on, as the classifier always
@@ -231,6 +234,58 @@ func lastSentinel(lines []string, gutter bool) (state, evidence string, ok, stal
 		}
 	}
 	return
+}
+
+// relayMask marks the lines of echoed orchestrator text: each
+// `--- ORCHESTRATOR (round N) ---` header and what follows up to the worker's
+// next reply marker. A relay echoed under OpenCode's "┃" gutter ends where the
+// gutter does, since OpenCode marks the worker's reply with nothing. A brief
+// Claude Code echoes behind "❯" ends at the first non-blank line without the
+// two-space echo indent: a harness banner at column 0. With
+// sigEnds, a `--- ROTA-SIG <hex> ---` line (the trailer of a signed brief) also
+// closes the span, inclusive: what the harness prints after it, a limit banner
+// carrying no reply marker, is the session's own.
+func relayMask(lines []string, gutter, sigEnds bool) []bool {
+	relayHead := reRelayHead
+	if gutter {
+		relayHead = reRelayHeadG
+	}
+	mask := make([]bool, len(lines))
+	inRelay, gutterRelay, echoRelay := false, false, false
+	for i, l := range lines {
+		if echoRelay && strings.TrimSpace(l) != "" && !reEchoIndent.MatchString(l) && !relayHead.MatchString(l) {
+			inRelay, echoRelay = false, false
+		}
+		if gutter && gutterRelay && strings.TrimSpace(l) != "" && !reGutter.MatchString(l) {
+			inRelay, gutterRelay = false, false
+		}
+		switch {
+		case relayHead.MatchString(l):
+			inRelay, gutterRelay, echoRelay = true, gutter && reGutter.MatchString(l), reEchoHead.MatchString(l)
+		case reReplyMarker.MatchString(l):
+			inRelay, gutterRelay, echoRelay = false, false, false
+		}
+		mask[i] = inRelay
+		if sigEnds && inRelay && reSigLine.MatchString(l) {
+			inRelay, gutterRelay, echoRelay = false, false, false
+		}
+	}
+	return mask
+}
+
+// StripRelays is text without the echoed orchestrator blocks, the way
+// lastSentinel skips them: a limit phrase a brief or relay quotes is the
+// orchestrator's, not the session's. kind picks the gutter reading.
+func StripRelays(kind, text string) string {
+	lines := splitLines(text)
+	mask := relayMask(lines, paneRulesFor(kind).gutter, true)
+	kept := lines[:0:0]
+	for i, l := range lines {
+		if !mask[i] {
+			kept = append(kept, l)
+		}
+	}
+	return strings.Join(kept, "\n")
 }
 
 // paneRules are a kind's PaneVocab compiled.
@@ -306,6 +361,9 @@ func ClassifyFor(kind, text string, moved bool, lines int, native string) (state
 		all = all[len(all)-lines:]
 	}
 	tail := strings.Join(all, "\n")
+	// What the session says about its own limit is read outside echoed
+	// orchestrator blocks (#883).
+	own := StripRelays(kind, tail)
 
 	// Sentinels win over everything, including movement: a worker that printed
 	// ROTA-DONE and is still rendering its own output is finished, not busy.
@@ -323,16 +381,16 @@ func ClassifyFor(kind, text string, moved bool, lines int, native string) (state
 	// LIMITED is checked BEFORE movement: a session that hit its usage limit may
 	// still animate a prompt, and reading that as BUSY strands the orchestrator
 	// waiting for work that cannot resume until the window resets.
-	if s, e, ok := FindLimit(kind, tail); ok {
+	if s, e, ok := FindLimit(kind, own); ok {
 		// The "Add funds" prompt spends real money and is NEVER the
 		// orchestrator's to answer: flag it so the caller escalates.
-		if reFunds.MatchString(tail) {
+		if reFunds.MatchString(tail) { // fail closed: a real limit plus any "Add funds" escalates
 			return StateLimited, "usage limit reached; pane offers 'Add funds' — needs a human, do NOT answer"
 		}
-		if rules.authDead != nil && rules.authDead.MatchString(tail) {
+		if rules.authDead != nil && rules.authDead.MatchString(own) {
 			return StateLimited, "API key expired — needs a human to renew it; no reset clock"
 		}
-		return StateLimited, strutil.Clip(strings.TrimSpace(tail[s:e]), 120)
+		return StateLimited, strutil.Clip(strings.TrimSpace(own[s:e]), 120)
 	}
 	if reason, ok := strings.CutPrefix(native, host.UnverifiablePrefix); ok {
 		return StateUnverifiable, reason

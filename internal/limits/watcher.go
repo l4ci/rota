@@ -270,7 +270,7 @@ func findLimit(kind, text, prompt string) (line, rest string, ok bool) {
 	if len(lines) > tailLines {
 		lines = lines[len(lines)-tailLines:]
 	}
-	tail := strings.Join(lines, "\n")
+	tail := worker.StripRelays(kind, strings.Join(lines, "\n"))
 	loc0, _, ok := worker.FindLimit(kind, tail)
 	if !ok {
 		return "", "", false
