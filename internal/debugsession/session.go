@@ -33,12 +33,29 @@ func Put(root, slug, body string) error {
 		return err
 	}
 	path := file(root, slug)
-	if err := os.MkdirAll(filepath.Dir(path), 0o777); err != nil {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o777); err != nil {
+		return err
+	}
+	if err := selfIgnore(dir); err != nil {
 		return err
 	}
 	return fsio.Locked(path, fsio.LockTimeout, func() error {
 		return fsio.WriteFileAtomic(path, []byte(body))
 	})
+}
+
+// selfIgnore writes dir/.gitignore ("*") when missing, so a session never shows
+// in git status, whether or not the project's root .gitignore has the rota
+// block yet. An existing file is left alone.
+func selfIgnore(dir string) error {
+	gi := filepath.Join(dir, ".gitignore")
+	if _, err := os.Stat(gi); err == nil {
+		return nil
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	return fsio.WriteFileAtomic(gi, []byte("*\n"))
 }
 
 func notFound(slug string) error {
@@ -52,7 +69,10 @@ func Show(root, slug string) (string, error) {
 	}
 	b, err := os.ReadFile(file(root, slug))
 	if err != nil {
-		return "", notFound(slug)
+		if os.IsNotExist(err) {
+			return "", notFound(slug)
+		}
+		return "", err
 	}
 	return string(b), nil
 }

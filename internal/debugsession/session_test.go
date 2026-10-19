@@ -45,7 +45,7 @@ func TestUnknownSlugIsResolutionError(t *testing.T) {
 
 func TestBadSlugsRejected(t *testing.T) {
 	root := t.TempDir()
-	for _, slug := range []string{"a/b", "..", "../x", "a/../b", "", ".hidden", "x y"} {
+	for _, slug := range []string{"a/b", "..", "../x", "a/../b", "", ".hidden", "x y", "-x"} {
 		if err := Put(root, slug, "x"); exitOf(err) != exitcode.ExitUsage {
 			t.Errorf("Put(%q) = %v, want usage exit", slug, err)
 		}
@@ -99,5 +99,39 @@ func TestRmDeletes(t *testing.T) {
 	}
 	if _, err := Show(root, "gone"); exitOf(err) != exitcode.ExitResolution {
 		t.Fatalf("Show after Rm: %v", err)
+	}
+}
+
+func TestPutMakesDirectorySelfIgnoring(t *testing.T) {
+	root := t.TempDir()
+	if err := Put(root, "b07", "x"); err != nil {
+		t.Fatal(err)
+	}
+	gi := filepath.Join(root, ".rota", "debug", ".gitignore")
+	b, err := os.ReadFile(gi)
+	if err != nil || string(b) != "*\n" {
+		t.Fatalf(".rota/debug/.gitignore = %q, %v; want \"*\\n\"", b, err)
+	}
+	// a hand-edited file is left alone
+	if err := os.WriteFile(gi, []byte("custom\n"), 0o666); err != nil {
+		t.Fatal(err)
+	}
+	if err := Put(root, "b07", "y"); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(gi); string(b) != "custom\n" {
+		t.Fatalf("Put rewrote an existing .gitignore: %q", b)
+	}
+}
+
+func TestShowReportsReadErrorsAsFailures(t *testing.T) {
+	root := t.TempDir()
+	// a directory where the file should be: readable path, unreadable file
+	if err := os.MkdirAll(filepath.Join(root, ".rota", "debug", "b07.md"), 0o777); err != nil {
+		t.Fatal(err)
+	}
+	_, err := Show(root, "b07")
+	if err == nil || exitOf(err) == exitcode.ExitResolution {
+		t.Fatalf("Show of an unreadable file = %v, want a failure that is not 'not found'", err)
 	}
 }
