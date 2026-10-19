@@ -15,6 +15,7 @@ import (
 
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/worker"
@@ -1255,3 +1256,54 @@ func TestReturnAndReclaimDifferOnPortBlockAndClaimSweepOnPurpose(t *testing.T) {
 func (k *killHost) Capabilities() host.Capabilities { return host.CapabilitiesOf(k) }
 
 func (l labelKillHost) Capabilities() host.Capabilities { return host.CapabilitiesOf(l) }
+
+func TestTransferCapReasonIsValidatedAndLedgered(t *testing.T) {
+	f := newMoveFx(t)
+	if _, err := f.transfer("12", "dana", func(o *TransferOpts) { o.CapReason = "ambiguous-criteria" }); err == nil || !strings.Contains(err.Error(), "--to human") {
+		t.Fatalf("ambiguous-criteria to a slot: %v", err)
+	}
+	if _, err := f.transfer("12", HumanTarget, func(o *TransferOpts) { o.CapReason = "tier" }); err == nil || !strings.Contains(err.Error(), "--to <slot>") {
+		t.Fatalf("tier to the human: %v", err)
+	}
+	if _, err := f.transfer("12", HumanTarget, func(o *TransferOpts) { o.CapReason = "weak" }); err == nil || !strings.Contains(err.Error(), "--cap-reason must be") {
+		t.Fatalf("unknown reason: %v", err)
+	}
+	es, _ := ledger.Load(f.root)
+	for _, e := range es {
+		if e.Kind == ledger.KindTransfer {
+			t.Fatalf("a refused transfer writes no row: %+v", e)
+		}
+	}
+	if _, err := f.transfer("12", HumanTarget, func(o *TransferOpts) { o.Note = "audit"; o.CapReason = "ambiguous-criteria" }); err != nil {
+		t.Fatal(err)
+	}
+	es, _ = ledger.Load(f.root)
+	var got string
+	for _, e := range es {
+		if e.Kind == ledger.KindTransfer {
+			got = e.DetailStr("capReason")
+		}
+	}
+	if got != "ambiguous-criteria" {
+		t.Errorf("capReason = %q, want ambiguous-criteria; rows %+v", got, es)
+	}
+}
+
+func TestTransferTierCapReasonLandsInTheLedgerForASlot(t *testing.T) {
+	f := newMoveFx(t)
+	f.set.Models = map[string]map[string]string{"claude": {"light": "haiku", "standard": "sonnet", "heavy": "opus"}}
+	f.set.Tier = "standard"
+	if _, err := f.transfer("12", "dana", func(o *TransferOpts) { o.Tier = "heavy"; o.TierReason = "bounced 3 times"; o.CapReason = "tier" }); err != nil {
+		t.Fatal(err)
+	}
+	es, _ := ledger.Load(f.root)
+	var got string
+	for _, e := range es {
+		if e.Kind == ledger.KindTransfer {
+			got = e.DetailStr("capReason")
+		}
+	}
+	if got != "tier" {
+		t.Errorf("capReason = %q, want tier; rows %+v", got, es)
+	}
+}

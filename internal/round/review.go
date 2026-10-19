@@ -172,12 +172,12 @@ func (e Env) reviewCap(ctx context.Context, root string, o ReviewOpts, batch wor
 	msg := fmt.Sprintf("%s was already sent back %d time(s) (round.maxBounces is %d)", issue, out.Bounces, o.MaxBounces)
 	for _, en := range escalation.Load(root) {
 		if en.Slot == o.Slot && en.Number == number && en.Status == escalation.StatusPending {
-			return out, &exitcode.Error{Exit: exitcode.ExitRefused, Message: msg + "; the escalation is still open", Data: data}
+			return out, (&exitcode.Error{Exit: exitcode.ExitRefused, Message: msg + "; the escalation is still open", Data: data}).WithHint(CapHint(issue))
 		}
 	}
 	title := fmt.Sprintf("Review input on %s, but %s is at the bounce cap", prLabel(out.PR), issue)
-	body := fmt.Sprintf("%s was sent back %d time(s) (round.maxBounces is %d), so the review below was not relayed to %s.\n\n%s\n\nTo resume the worker, raise round.maxBounces or transfer %s to a heavier tier; to hand it over, `rota round transfer %s --to human`.",
-		issue, out.Bounces, o.MaxBounces, o.Slot, ReviewRelayText(batch), issue, issue)
+	body := fmt.Sprintf("%s was sent back %d time(s) (round.maxBounces is %d), so the review below was not relayed to %s.\n\n%s\n\nNext: %s",
+		issue, out.Bounces, o.MaxBounces, o.Slot, ReviewRelayText(batch), CapHint(issue))
 	if o.Escalate == nil {
 		return out, &exitcode.Error{Exit: exitcode.ExitUnavailable, Message: "no way to escalate on the PR"}
 	}
@@ -185,7 +185,7 @@ func (e Env) reviewCap(ctx context.Context, root string, o ReviewOpts, batch wor
 		return out, err
 	}
 	out.Escalated = true
-	return out, &exitcode.Error{Exit: exitcode.ExitRefused, Message: msg + "; escalated on the PR", Data: data}
+	return out, (&exitcode.Error{Exit: exitcode.ExitRefused, Message: msg + "; escalated on the PR", Data: data}).WithHint(CapHint(issue))
 }
 
 func prLabel(pr string) string {
@@ -264,4 +264,13 @@ func stripControls(s string) string {
 		}
 		return r
 	}, s)
+}
+
+// CapHint is the next step at the bounce cap: audit the acceptance criteria
+// first, since three misses more often mean an ambiguous ticket than a weak
+// model. See skills/rota-orchestrate/bounce-cap.md.
+func CapHint(issue string) string {
+	return "no further bounce: audit " + issue + "'s acceptance criteria first (skills/rota-orchestrate/bounce-cap.md). " +
+		"Any ambiguous: `rota round transfer " + issue + " --to human --cap-reason ambiguous-criteria --note-file <audit>`. " +
+		"All checkable: `rota round transfer " + issue + " --to <slot> --tier heavy --tier-reason <why> --cap-reason tier`"
 }

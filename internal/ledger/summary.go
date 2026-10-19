@@ -68,7 +68,13 @@ type Summary struct {
 	Slots    []Total
 	Accounts []Total
 	Audit    []AuditRow
+	// CapReasons counts the bounce-cap transfers by reason.
+	CapReasons CapReasons
 }
+
+// CapReasons counts transfers made at the bounce cap: AmbiguousCriteria went
+// to the human after the criteria audit, Tier went to a stronger worker.
+type CapReasons struct{ AmbiguousCriteria, Tier int }
 
 // prNum is the number a PR reference ends in (#7, a /pull/7 URL), 0 for none.
 func prNum(pr string) int {
@@ -175,6 +181,12 @@ func Fold(entries []Entry, audit []*jsonx.Object, round int) Summary {
 		case KindBounce:
 			r.Bounces++
 		case KindTransfer:
+			switch e.DetailStr("capReason") {
+			case CapAmbiguousCriteria:
+				s.CapReasons.AmbiguousCriteria++
+			case CapTier:
+				s.CapReasons.Tier++
+			}
 			if from := e.DetailStr("from"); from != "" {
 				for _, o := range f.rows {
 					if o.Issue == e.Issue && o.Slot == from && !o.Merged {
@@ -360,6 +372,9 @@ func (s Summary) Text() string {
 		}
 		tw.Flush()
 	}
+	if c := s.CapReasons; c.AmbiguousCriteria+c.Tier > 0 {
+		fmt.Fprintf(&b, "\nBounce cap: %d ambiguous-criteria, %d tier\n", c.AmbiguousCriteria, c.Tier)
+	}
 	fmt.Fprintln(&b, "\nGate audit")
 	if len(s.Audit) == 0 {
 		fmt.Fprintln(&b, "none")
@@ -389,7 +404,7 @@ func floatVal(p *float64) any {
 	return *p
 }
 
-// Object is the --json shape: {round, issues[], slots[], accounts[], audit[]}.
+// Object is the --json shape: {round, issues[], slots[], accounts[], audit[], capReasons}.
 // Unknown values (times, headroom, quotaShare, wallSeconds) are null.
 func (s Summary) Object() *jsonx.Object {
 	issues := make([]any, 0, len(s.Issues))
@@ -447,5 +462,9 @@ func (s Summary) Object() *jsonx.Object {
 	d.Set("slots", tot(s.Slots))
 	d.Set("accounts", tot(s.Accounts))
 	d.Set("audit", audit)
+	cap := jsonx.NewObject()
+	cap.Set(CapAmbiguousCriteria, s.CapReasons.AmbiguousCriteria)
+	cap.Set(CapTier, s.CapReasons.Tier)
+	d.Set("capReasons", cap)
 	return d
 }

@@ -40,9 +40,16 @@ const (
 	KindAdopt = "adopt"
 )
 
+// Cap reasons: why an item at round.maxBounces left its slot. They are the
+// capReason of a transfer row and `rota round summary` counts them.
+const (
+	CapAmbiguousCriteria = "ambiguous-criteria"
+	CapTier              = "tier"
+)
+
 // Entry is one ledger line. Round is 0 when no round was running (solo mode
 // without a lease). Detail holds the per-kind extras: headroom (assign, done),
-// verdict (gate), resetsAt (limited), from (transfer).
+// verdict (gate), resetsAt (limited), from and capReason (transfer).
 type Entry struct {
 	TS                                time.Time
 	Kind                              string
