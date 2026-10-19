@@ -223,6 +223,19 @@ func (d *Deps) workerEnv() worker.Env {
 			return it, nil
 		}
 	}
+	if e.Forge == nil {
+		// and so does its forge, but only the executor swap: never the read
+		// cache. The gate re-reads the forge in loops that need a fresh answer
+		// each time (PRMergeable retries, CommitChecks polls, PRView after a
+		// push), and nothing in a gate run calls freshReads.
+		ctx := e.Ctx
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		e.Forge = func(provider, dir string, s tracker.Settings) (worker.Forge, error) {
+			return tracker.NewForge(ctx, s, provider, dir, d.TrackerOptions...)
+		}
+	}
 	return e
 }
 
@@ -257,7 +270,8 @@ func (d *Deps) orchestrateEnv() orchestrate.Env {
 // forge is the one place a verb builds its forge (pull requests, checks,
 // releases): settings from cfg, forge.provider resolution (a local forge is
 // tracker.ErrLocalForge) and the TrackerOptions a test swaps the executor
-// through.
+// through. The worker verbs build theirs in workerEnv, with the same
+// TrackerOptions but no read cache.
 func (d *Deps) forge(ctx context.Context, cfg any, provider, dir string) (tracker.Forge, error) {
 	return tracker.NewForgeFromConfig(ctx, cfg, provider, dir, d.trackerOptions()...)
 }
