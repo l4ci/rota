@@ -1,31 +1,20 @@
 package update
 
 import (
+	"context"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/l4ci/rota/internal/proc"
 )
 
-// TestMain is the safety net: rota update must never reach the network from a
-// test. Any gh lookup that does not land in test/fakes stops the run.
+// TestMain clears the version overrides: rota update must never reach the
+// network from a test, and the release read has only the runner seam.
 func TestMain(m *testing.M) {
-	wd, _ := os.Getwd()
-	fakes, _ := filepath.Abs(filepath.Join(wd, "..", "..", "test", "fakes"))
-	os.Setenv("PATH", fakes+string(os.PathListSeparator)+os.Getenv("PATH"))
 	os.Unsetenv("ROTA_TEST_LATEST_VERSION")
 	os.Unsetenv("ROTA_LATEST_VERSION")
-	lookPath = func(name string) (string, error) {
-		p, err := exec.LookPath(name)
-		if err != nil {
-			return "", err
-		}
-		if !strings.HasPrefix(p, fakes+string(os.PathSeparator)) {
-			panic("update would exec " + p + " outside test/fakes")
-		}
-		return p, nil
-	}
 	os.Exit(m.Run())
 }
 
@@ -93,35 +82,39 @@ func TestLatestFromTestVariable(t *testing.T) {
 		}
 		return ""
 	}
-	if got := ghLatest(getenv); got != "7.8.9" {
+	if got := ghLatest(getenv, nil); got != "7.8.9" {
 		t.Errorf("ghLatest = %q", got)
 	}
 }
 
-// With no override, the only gh that may run is the fake, and it answers no
-// release: latest stays empty and status unknown, never a network result.
-func TestGhLookupStaysInFakes(t *testing.T) {
-	p, err := lookPath("gh")
-	if err != nil {
-		t.Fatal(err)
+// The default release read goes through the runner it is given: one seam
+// swaps the process, and the tag it prints is compared like any other version.
+func TestLatestThroughRunner(t *testing.T) {
+	var got proc.Cmd
+	run := func(_ context.Context, c proc.Cmd) (proc.Result, error) {
+		got = c
+		return proc.Result{Stdout: "v5.1.0\n"}, nil
 	}
-	if !strings.Contains(p, filepath.Join("test", "fakes")) {
-		t.Fatalf("gh = %s", p)
+	e := DefaultEnv("5.0.0", func(string) string { return "" }, run)
+	r := Check(Env{ExeDir: "/home/u/.local/bin", Current: e.Current, Latest: e.Latest})
+	if got.Name != "gh" || strings.Join(got.Args, " ") != "api repos/"+Repo+"/releases/latest --jq .tag_name" {
+		t.Errorf("command = %s %v", got.Name, got.Args)
 	}
-	t.Setenv("FAKE_TRACKER_DB", filepath.Join(t.TempDir(), "db.json"))
-	if got := ghLatest(os.Getenv); got != "" {
-		t.Errorf("fake gh returned release %q", got)
+	if r.LatestVersion != "5.1.0" || r.Status != "behind" {
+		t.Errorf("result = %+v", r)
 	}
 }
 
-func TestGuardRefusesForeignGh(t *testing.T) {
-	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "gh"), []byte("#!/bin/sh\nexit 0\n"), 0o755)
-	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
-	defer func() {
-		if recover() == nil {
-			t.Error("a gh outside test/fakes was not refused")
+func TestLatestRunnerFailuresAreUnknown(t *testing.T) {
+	getenv := func(string) string { return "" }
+	for name, run := range map[string]proc.Runner{
+		"missing gh": func(context.Context, proc.Cmd) (proc.Result, error) { return proc.Result{}, exec.ErrNotFound },
+		"exit 1": func(context.Context, proc.Cmd) (proc.Result, error) {
+			return proc.Result{ExitCode: 1, Stdout: "v9.9.9"}, nil
+		},
+	} {
+		if got := ghLatest(getenv, run); got != "" {
+			t.Errorf("%s: latest = %q", name, got)
 		}
-	}()
-	ghLatest(os.Getenv)
+	}
 }
