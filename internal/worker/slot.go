@@ -74,12 +74,13 @@ func (s *Slot) SmokeSection() int {
 }
 func (s *Slot) ConfigDir() string { return jsonx.Str(s.o, "configDir") }
 
-// CodexAccount is the work.codexAccounts entry the slot last ran a codex
-// worker under ("" on the default Codex home).
-func (s *Slot) CodexAccount() string { return jsonx.Str(s.o, "codexAccount") }
+// HomeAccount is the account entry (work.codexAccounts, work.opencodeAccounts)
+// the slot last ran a worker under ("" on the kind's default home). The JSON
+// key stays codexAccount so existing registries read.
+func (s *Slot) HomeAccount() string { return jsonx.Str(s.o, "codexAccount") }
 
-// SetCodexAccount records the Codex account; "" removes it.
-func (s *Slot) SetCodexAccount(name string) {
+// SetHomeAccount records the account; "" removes it.
+func (s *Slot) SetHomeAccount(name string) {
 	if name == "" {
 		s.o.Delete("codexAccount")
 		return

@@ -19,7 +19,9 @@
 # (present: current, absent: not installed); `integration install codex` writes
 # that file. With CODEX_HOME unset they use $FAKE_DEFAULT_CODEX_HOME (the
 # stand-in for the default Codex home); with neither set they fail, so a stray
-# call can never touch ~/.codex.
+# call can never touch ~/.codex. The opencode line is "current" unless
+# $F/opencode_stale exists (the integration lives in ~/.config/opencode, which
+# the fake never reads).
 [ -n "${FAKE_HERDR:-}" ] || { echo "fake herdr: FAKE_HERDR is not set" >&2; exit 98; }
 F="$FAKE_HERDR"
 printf '%s\n' "$*" >>"$F/log"
@@ -60,7 +62,8 @@ case "$1 $2" in
   "integration status")
     CH="${CODEX_HOME:-${FAKE_DEFAULT_CODEX_HOME:-}}"; [ -n "$CH" ] || err codex_home_unset
     echo "claude: current (v10) (/x/hook.sh)"
-    if [ -f "$CH/.fake-herdr-codex" ]; then echo "codex: current (v8) (/x/codex.sh)"; else echo "codex: not installed (/x/codex.sh)"; fi ;;
+    if [ -f "$CH/.fake-herdr-codex" ]; then echo "codex: current (v8) (/x/codex.sh)"; else echo "codex: not installed (/x/codex.sh)"; fi
+    if [ -f "$F/opencode_stale" ]; then echo "opencode: not installed (/x/opencode.js)"; else echo "opencode: current (v13) (/x/opencode.js)"; fi ;;
   "integration install")
     CH="${CODEX_HOME:-${FAKE_DEFAULT_CODEX_HOME:-}}"; [ -n "$CH" ] || err codex_home_unset
     [ "$3" = "codex" ] || err unknown_method

@@ -1,5 +1,5 @@
 ---
-verified-sha: 41a20d1f3536b4b0b394a6113dedce633d22b0fa
+verified-sha: d0b3447205103e4211d248a90e736db78961337d
 refs:
   - internal/harness/codex.go
   - internal/harness
@@ -38,6 +38,7 @@ A worker kind is one type behind `harness.Harness`; nothing outside `internal/ha
 - **Limit phrases.** `LimitPhrases()` starts from `harness.SharedLimitPhrases()`. `worker.LimitPhrases` is `harness.AllLimitPhrases()`, the union over the kinds, since a pane is classified without knowing its kind. The limits watcher and `rota limit watch` ask `UsageMeter()` (meter or logged limits) and pick a login from `Accounts(cfg)` (`limits.LoggedPick`).
 - **Tiers and configuration.** `Tiers()` says whether the kind's `round.tiers` map is required and which key fills an unset standard tier (`models.worker` for claude); `Configured(cfg)` replaces `codexConfigured` (claude is always configured).
 - **Agent files.** `AgentFiles(role, model)` returns what `rota agents write` emits for a role: `.claude/agents/rota-<role>.md`, `.codex/agents/rota-<role>.toml`, nothing for a kind without a subagent format. `agents.Render` walks `Spec.Kinds`.
+- **Account env and a third kind (#584).** `harness.Account` is `{ConfigDir, Home}`: `Home` is whichever home the kind has (`CODEX_HOME`, `OPENCODE_CONFIG_DIR`). The dispatch asks `AccountEnv` once and hands the result to the host in `SpawnOpts.Env`; the herdr and tmux hosts no longer add `CLAUDE_CONFIG_DIR` or `CODEX_HOME` themselves, and a tmux account prefix is single-quoted like the rest of `Env`. `RawPaste()` says whether a kind's TUI needs its brief pasted with line feeds intact. The third kind is [opencode-workers.md](opencode-workers.md).
 - **Doctor.** `Doctor()` is the kind's `rota doctor` probes: the report line, binary, install hint, a runnable probe and the per-home login and herdr integration probes. `doctor.Input.Kinds` carries each kind's accounts key, homes and tier flag; `Unguarded` says the PreToolUse guard does not cover the kind. A zero value means the kind has no check of its own (claude). It compares no version (DECISIONS, "No harness version pins").
 
 ### D1: statusline dump, Stop hook and handoff

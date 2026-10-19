@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Fake opencode for tests. SAFE BY CONSTRUCTION: it prints canned text and
+# touches nothing, never reads ~/.config/opencode or ~/.local/share/opencode.
+# Never put the real opencode on a test's PATH (the smoke section's
+# ROTA_SMOKE_HARNESS=opencode shim runs it for --version and --help only, under
+# a throwaway XDG tree).
+#   --version      prints $ROTA_FAKE_OPENCODE_VERSION (default 1.17.9)
+#   --help         lists the launch flags rota uses, minus $ROTA_FAKE_OPENCODE_LACKS
+#   models         prints a fixed list of provider/model ids
+case "$1" in
+  "--version"|"-v") echo "${ROTA_FAKE_OPENCODE_VERSION:-1.17.9}" ;;
+  "--help"|"-h")
+    echo "opencode [project]"
+    echo
+    echo "Options:"
+    for f in --model --prompt; do
+      [ "$f" = "${ROTA_FAKE_OPENCODE_LACKS:-}" ] || echo "      $f"
+    done ;;
+  "models")
+    printf '%s\n' opencode-go/qwen3.8-flash opencode-go/qwen3.7-plus opencode-go/minimax-m3 opencode-go/kimi-k2.7-code ;;
+  *) echo "fake opencode: unsupported call: $*" >&2; exit 98 ;;
+esac

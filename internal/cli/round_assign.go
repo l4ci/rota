@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
@@ -48,7 +49,7 @@ func roundAssign(fs *flag.FlagSet) RunFunc {
 	checkOnly := fs.Bool("check-only", false, "run the readiness checks and write nothing")
 	tier := fs.String("tier", "", "worker tier: light, standard or heavy (default round.tier)")
 	tierReason := fs.String("tier-reason", "", "one line on why; required above the default tier")
-	kind := fs.String("kind", "", "harness kind: claude or codex (default the issue's harness: label, then the slot's, else claude)")
+	kind := fs.String("kind", "", "harness kind: "+harness.KindList()+" (default the issue's harness: label, then the slot's, else claude)")
 	model := fs.String("model", "", "model id (default the issue's model: label, then the tier map)")
 	acceptCodex := fs.Bool("accept-codex-version", false, "deprecated and ignored: rota no longer checks the Codex version")
 	accept := fs.Bool("accept-overlap", false, "skip the file and scope overlap checks")

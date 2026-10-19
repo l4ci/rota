@@ -25,8 +25,8 @@ func linkedFake(alreadyOpen string, fail map[string]Result) *fake {
 	}}
 }
 
-var linkedOpts = SpawnOpts{Slot: "w1", Cwd: "/repo/.worktrees/w1", ConfigDir: "/acct/one", Launch: "claude --model sonnet",
-	Env: []string{"ROTA_SLOT=w1", "ROTA_PORT_BASE=20000", "ROTA_PORT_BLOCK=100", "ROTA_DB_SUFFIX=_w1"}, BootTimeout: 60, LinkWorkspace: true}
+var linkedOpts = SpawnOpts{Slot: "w1", Cwd: "/repo/.worktrees/w1", Launch: "claude --model sonnet",
+	Env: []string{"CLAUDE_CONFIG_DIR=/acct/one", "ROTA_SLOT=w1", "ROTA_PORT_BASE=20000", "ROTA_PORT_BLOCK=100", "ROTA_DB_SUFFIX=_w1"}, BootTimeout: 60, LinkWorkspace: true}
 
 func TestHerdrSpawnLinkedWorkspace(t *testing.T) {
 	f := linkedFake("false", nil)

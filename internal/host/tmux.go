@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/shlex"
 )
 
@@ -79,11 +80,13 @@ func (t *tmux) waitReady(ctx context.Context, window string, timeout int) bool {
 // like; any match counts. Each entry is tied to the UI it was seen on. A
 // dialog (folder trust) must match none of them, so no bare prompt glyph.
 var bootPatterns = []*regexp.Regexp{
-	regexp.MustCompile(`(?s)\?.*for shortcuts`),    // Claude Code, older hint line
-	regexp.MustCompile(`Welcome to Claude Code`),   // Claude Code, older banner
-	regexp.MustCompile(`╭─`),                       // older box-drawn frame (Claude Code, Codex)
-	regexp.MustCompile(`Claude Code v\d+\.\d+`),    // Claude Code 2.1.289 banner
-	regexp.MustCompile(`Ask Codex to do anything`), // Codex 0.159.2 prompt placeholder
+	regexp.MustCompile(`(?s)\?.*for shortcuts`),             // Claude Code, older hint line
+	regexp.MustCompile(`Welcome to Claude Code`),            // Claude Code, older banner
+	regexp.MustCompile(`╭─`),                                // older box-drawn frame (Claude Code, Codex)
+	regexp.MustCompile(`Claude Code v\d+\.\d+`),             // Claude Code 2.1.289 banner
+	regexp.MustCompile(`Ask Codex to do anything`),          // Codex 0.159.2 prompt placeholder
+	regexp.MustCompile(`tab\s+agents\s+ctrl\+p\s+commands`), // OpenCode 1.17 footer
+	regexp.MustCompile(`OpenCode \d+\.\d+`),                 // OpenCode version line
 }
 
 func looksBooted(p string) bool {
@@ -98,9 +101,6 @@ func looksBooted(p string) bool {
 func (t *tmux) Spawn(ctx context.Context, o SpawnOpts) (string, error) {
 	handle := o.Session + ":" + o.Slot
 	launch := o.Launch
-	if o.ConfigDir != "" {
-		launch = "CLAUDE_CONFIG_DIR=" + o.ConfigDir + " " + launch
-	}
 	if len(o.Env) > 0 {
 		var pre []string
 		for _, e := range o.Env {
@@ -145,7 +145,11 @@ func (t *tmux) sendFile(ctx context.Context, handle, file, buf string) error {
 	if t.tmux(ctx, "load-buffer", "-b", buf, file).ExitCode != 0 {
 		return ErrNotSubmitted
 	}
-	if t.tmux(ctx, "paste-buffer", "-b", buf, "-t", handle).ExitCode != 0 {
+	paste := []string{"paste-buffer", "-b", buf, "-t", handle}
+	if t.rawPaste(ctx, handle) {
+		paste = []string{"paste-buffer", "-r", "-b", buf, "-t", handle}
+	}
+	if t.tmux(ctx, paste...).ExitCode != 0 {
 		return ErrNotSubmitted
 	}
 	t.tmux(ctx, "delete-buffer", "-b", buf)
@@ -158,6 +162,18 @@ func (t *tmux) sendFile(ctx context.Context, handle, file, buf string) error {
 		}
 	}
 	return ErrNotSubmitted
+}
+
+// rawPaste reports whether the pane's foreground process is a TUI that needs
+// its line feeds pasted as they are (harness.RawPaste). The process, not the
+// pane text, decides: a running session shows no stable marker.
+func (t *tmux) rawPaste(ctx context.Context, handle string) bool {
+	r := t.tmux(ctx, "display-message", "-p", "-t", handle, "#{pane_current_command}")
+	if r.ExitCode != 0 {
+		return false
+	}
+	h, ok := harness.ForBinary(strings.TrimSpace(r.Stdout))
+	return ok && h.RawPaste()
 }
 
 // Capture: an empty target would capture the CALLER's pane, so a slot with

@@ -25,7 +25,7 @@ func SlotIdle(s *worker.Slot) bool {
 // a slot last ran under.
 func SlotAccount(s *worker.Slot) (kind, account string) {
 	if h := harness.Resolve(s.Kind()); !h.UsageMeter() {
-		return h.Kind(), s.CodexAccount()
+		return h.Kind(), s.HomeAccount()
 	}
 	return "", s.Account()
 }

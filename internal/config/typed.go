@@ -58,3 +58,28 @@ func CodexAccounts(cfg any) []CodexAccount {
 	}
 	return out
 }
+
+// OpencodeAccount is one entry of work.opencodeAccounts: a named
+// OPENCODE_CONFIG_DIR.
+type OpencodeAccount struct{ Name, ConfigDir string }
+
+// OpencodeAccounts returns the object entries of work.opencodeAccounts in
+// order. Entries that are not objects are skipped; callers drop nameless ones.
+func OpencodeAccounts(cfg any) []OpencodeAccount {
+	v, _ := Value(cfg, "work.opencodeAccounts")
+	list, _ := v.([]any)
+	var out []OpencodeAccount
+	for _, e := range list {
+		if o, ok := e.(*jsonx.Object); ok {
+			a := OpencodeAccount{}
+			if n, ok := o.Get("name"); ok {
+				a.Name, _ = n.(string)
+			}
+			if d, ok := o.Get("configDir"); ok {
+				a.ConfigDir, _ = d.(string)
+			}
+			out = append(out, a)
+		}
+	}
+	return out
+}

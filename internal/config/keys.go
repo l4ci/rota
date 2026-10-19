@@ -114,13 +114,16 @@ var Keys = []Key{
 	k("round.scopeOverlap", "warn", false, TypeEnum, "What a clash on declared scopes (the ## Touches section, else Subsystem) does to the overlap check. warn: reported, the item stays ready. block: fails the check like a shared path; --accept-overlap skips it.", "warn", "block"),
 	k("round.adoptPattern", "", false, TypeString, "Glob over branch names (codex/*, claude/*). rota round reconcile reports a matching branch that no slot holds and that is not merged as unregistered-branch; --apply adopts those whose name carries an issue number. Empty turns the check off."),
 	k("round.tier", "standard", false, TypeEnum, "Default worker tier for rota round assign: light for reading, standard for code and tests, heavy for hard reasoning.", "light", "standard", "heavy"),
-	k("round.workerKind", "", false, TypeEnum, "Project default worker harness. Empty: the slot's recorded kind, else claude. --kind and an issue's harness: label beat it.", "claude", "codex"),
+	k("round.workerKind", "", false, TypeEnum, "Project default worker harness. Empty: the slot's recorded kind, else claude. --kind and an issue's harness: label beat it.", "claude", "codex", "opencode"),
 	k("round.tiers.claude.light", "haiku", false, TypeString, "Model a light-tier Claude worker starts with."),
 	k("round.tiers.claude.standard", "", false, TypeString, "Model a standard-tier Claude worker starts with. Empty follows models.worker."),
 	k("round.tiers.claude.heavy", "opus", false, TypeString, "Model a heavy-tier Claude worker starts with."),
 	k("round.tiers.codex.light", "", false, TypeString, "Model a light-tier Codex worker starts with. Empty: Codex's own default; a configured kind must set all three tiers."),
 	k("round.tiers.codex.standard", "", false, TypeString, "Model a standard-tier Codex worker starts with. Empty: Codex's own default; a configured kind must set all three tiers."),
 	k("round.tiers.codex.heavy", "", false, TypeString, "Model a heavy-tier Codex worker starts with. Empty: Codex's own default; a configured kind must set all three tiers."),
+	k("round.tiers.opencode.light", "", false, TypeString, "Model a light-tier OpenCode worker starts with, as a provider/model id from opencode models. Empty: OpenCode's own default; a configured kind must set all three tiers."),
+	k("round.tiers.opencode.standard", "", false, TypeString, "Model a standard-tier OpenCode worker starts with, as a provider/model id from opencode models. Empty: OpenCode's own default; a configured kind must set all three tiers."),
+	k("round.tiers.opencode.heavy", "", false, TypeString, "Model a heavy-tier OpenCode worker starts with, as a provider/model id from opencode models. Empty: OpenCode's own default; a configured kind must set all three tiers."),
 	// Agent roles (#405): the tier and effort of the three subagent definitions
 	// `rota agents write` emits. An empty effort leaves the harness default.
 	k("roles.explorer.tier", "light", false, TypeEnum, "Tier of the rota-explorer agent, which picks its model from round.tiers.", "light", "standard", "heavy"),
@@ -140,6 +143,8 @@ var Keys = []Key{
 	k("issues.labels.needsHuman", "needs-human", false, TypeString, "Label rota round transfer --to human puts on an issue handed to the human. rota round candidates skips an issue that carries it."),
 	k("work.codexAccounts", []any{}, false, TypeList, "Codex homes for Codex workers, as {name, codexHome} objects, the counterpart of work.accounts. Empty: the default Codex home. Machine-specific, so set it in config.local.json."), // named Codex homes; empty: the default Codex home
 	k("work.codexCommand", "", false, TypeString, "Command that starts a Codex worker session. Empty builds the default codex command, with --model from the tier when one is chosen; {model} receives it."),
+	k("work.opencodeAccounts", []any{}, false, TypeList, "OpenCode config dirs for OpenCode workers, as {name, configDir} objects, the counterpart of work.codexAccounts. Each becomes the slot's OPENCODE_CONFIG_DIR; the login stays shared. Empty: OpenCode's default config. Machine-specific, so set it in config.local.json."),
+	k("work.opencodeCommand", "", false, TypeString, "Command that starts an OpenCode worker session. Empty builds the default opencode command, with --model from the tier when one is chosen; {model} receives it."),
 	k("work.envSetup", "", false, TypeString, "Shell command rota worker pool init runs in each new slot worktree, for example npm ci. Empty: no setup."),
 	k("work.portBase", num("20000"), false, TypeInt, "First port of the range rota hands out to worker slots. A new slot takes the lowest range of portBlock ports from here that no other slot holds, exported as ROTA_PORT_BASE; a slot keeps its range until it is reaped or reclaimed."),
 	k("work.portBlock", num("100"), false, TypeInt, "Ports reserved per worker slot, so servers started by two slots never collide. A slot's block is exported as ROTA_PORT_BASE."),

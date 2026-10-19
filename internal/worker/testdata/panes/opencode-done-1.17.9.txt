@@ -1,0 +1,21 @@
+  ┃
+  ┃  --- ORCHESTRATOR (round 23) ---
+  ┃  You are a worker on #584, running in your own worktree as slot ben.
+  ┃  Work only this task, then stop.
+  ┃
+  ┃  - Escalate rather than guess. Print ROTA-BLOCKED ben: <one question in
+  ┃    plain language> and stop.
+  ┃  - When your PR is open, print ROTA-DONE ben <pr-url> and stop.
+  ┃
+  ┃  --- ROTA-SIG 3f2a9c1d5e7b84a60c9d2e1f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b ---
+
+  Opened the PR.
+
+  ROTA-DONE ben https://github.com/l4ci/rota/pull/600
+
+  build · qwen3.8-flash · 2m 14s
+
+  ┃
+  ┃  Ask anything...
+  ┃
+                                              tab agents  ctrl+p commands
