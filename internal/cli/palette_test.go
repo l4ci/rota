@@ -129,7 +129,10 @@ func TestPaletteConfigEntryOpensTheConfigScreen(t *testing.T) {
 	// Config (6) opens `config show`'s view inside the palette; q leaves the
 	// screen, the second q quits the palette.
 	term := &scriptedKeys{[]string{"6", "q", "q"}}
-	deps.IsTerminal = func(any) bool { return true }
+	var outb, errb bytes.Buffer
+	// Only the process streams are terminals, like the real check: a capture
+	// buffer is never one.
+	deps.IsTerminal = func(w any) bool { return w == term || w == &outb }
 	deps.Palette = func(cfg palette.Config) error {
 		cfg.In = term
 		cfg.MakeRaw = func() (func(), error) { return func() {}, nil }
@@ -144,7 +147,6 @@ func TestPaletteConfigEntryOpensTheConfigScreen(t *testing.T) {
 	if err := os.Chdir(root); err != nil {
 		t.Fatal(err)
 	}
-	var outb, errb bytes.Buffer
 	code := mainWith(deps, nil, term, &outb, &errb)
 	if code != 0 || len(r.execs) != 0 {
 		t.Fatalf("exit %d execs %v: %s", code, r.execs, errb.String())
@@ -161,7 +163,10 @@ func TestPaletteProjectsEntryOpensTheProjectsScreen(t *testing.T) {
 	// Projects (5) opens `projects`'s view inside the palette; q leaves the
 	// screen, the second q quits the palette.
 	term := &scriptedKeys{[]string{"5", "q", "q"}}
-	deps.IsTerminal = func(any) bool { return true }
+	var outb, errb bytes.Buffer
+	// Only the process streams are terminals, like the real check: a capture
+	// buffer is never one.
+	deps.IsTerminal = func(w any) bool { return w == term || w == &outb }
 	deps.Palette = func(cfg palette.Config) error {
 		cfg.In = term
 		cfg.MakeRaw = func() (func(), error) { return func() {}, nil }
@@ -176,7 +181,6 @@ func TestPaletteProjectsEntryOpensTheProjectsScreen(t *testing.T) {
 	if err := os.Chdir(root); err != nil {
 		t.Fatal(err)
 	}
-	var outb, errb bytes.Buffer
 	code := mainWith(deps, nil, term, &outb, &errb)
 	if code != 0 || len(r.execs) != 0 {
 		t.Fatalf("exit %d execs %v: %s", code, r.execs, errb.String())
