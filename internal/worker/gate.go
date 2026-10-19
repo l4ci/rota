@@ -103,6 +103,10 @@ const (
 	// needs a recorded verdict the branch lacks; the CLI exits 4 with it,
 	// blockedBy review-missing.
 	GateReviewMissing = "review-missing"
+	// GateStaleAttempt: the queued PR was built under an attempt id the issue's
+	// current holder no longer has (the issue was reclaimed or transferred and
+	// assigned again); the CLI exits 4 with it, blockedBy stale-attempt.
+	GateStaleAttempt = "stale-attempt"
 )
 
 // PartialSliceLabel marks an issue whose PR lands only a slice of it, so the PR
@@ -209,7 +213,10 @@ func (r GateResult) OK() bool { return r.Verdict == GateFresh || r.Verdict == Ga
 type GateTarget struct {
 	Queued, External                    bool
 	Name, Branch, PR, Base, Task, Issue string
-	relays                              []any
+	// Attempt is the attempt id a queued record was built under; Current is the
+	// id of the slot now holding its issue. Both "" when the gate cannot tell.
+	Attempt, Current string
+	relays           []any
 }
 
 func gateSlot(s *Slot) GateTarget {
@@ -246,7 +253,9 @@ func (r Registry) GateTarget(arg string) (GateTarget, error) {
 	}
 	if n, ok := PRRefNumber(arg); ok {
 		if q := r.QueuedPR(arg); q != nil {
-			return gateQueued(*q), nil
+			t := gateQueued(*q)
+			t.Attempt, t.Current = q.Attempt, r.HolderAttempt(q.Issue)
+			return t, nil
 		}
 		for _, sl := range r.Slots() {
 			if m, ok := PRRefNumber(sl.PR()); ok && m == n {
@@ -385,6 +394,7 @@ type gateStep func(g *gate) (done bool, err error)
 
 // gateSteps run in order; see the numbered stages in the file comment.
 var gateSteps = []gateStep{
+	(*gate).stepAttempt,
 	(*gate).stepForge,
 	(*gate).stepExternal,
 	(*gate).stepAdoptPR,
@@ -494,6 +504,20 @@ func (g *gate) stepForge() (bool, error) {
 		return g.broke(fmt.Sprintf("cannot reach the issue source: %v", err))
 	}
 	return false, nil
+}
+
+// stepAttempt refuses a queued PR built under an attempt its issue's current
+// holder no longer has: the issue was reclaimed or transferred and assigned
+// again, so the old worker's branch is not the new holder's work. A record
+// from before attempt ids, or an issue nobody holds, has nothing to compare.
+func (g *gate) stepAttempt() (bool, error) {
+	t := g.target
+	if !t.Queued || t.Attempt == "" || t.Current == "" || t.Attempt == t.Current {
+		return false, nil
+	}
+	g.verdict(GateStaleAttempt, fmt.Sprintf("GATE %s refused — %s was built under attempt %s, but %s is now held under attempt %s; nothing landed", g.o.Slot, g.pr, t.Attempt, t.Issue, t.Current),
+		fmt.Sprintf("the issue was reclaimed or transferred after this PR; gate the current holder's PR instead, or close %s", g.pr))
+	return true, nil
 }
 
 // stepExternal reads the head branch of a PR no slot owns from the forge, so

@@ -25,6 +25,7 @@ const fastTierCheck = "rota test run fast"
 // HEAD for test.fast, then marks the slot done.
 func workerDone(fs *flag.FlagSet) RunFunc {
 	base := fs.String("base", "", "ref {files} is diffed against (default: the base branch)")
+	attempt := fs.String("attempt", "", "the attempt id from your brief; a stale one exits 4")
 	return func(c *Ctx, args []string) (Result, error) {
 		slotName, err := oneArg(args, "slot")
 		if err != nil {
@@ -51,6 +52,9 @@ func workerDone(fs *flag.FlagSet) RunFunc {
 		sl := reg.Slot(slotName)
 		if sl == nil {
 			return Result{}, Resolution("slot '%s' is not in the pool", slotName)
+		}
+		if err := worker.FenceAttempt(sl, *attempt); err != nil {
+			return Result{}, err
 		}
 		id := worker.HeldID(sl.Task(), sl.Branch(), sl.Name())
 		if id == "" {
