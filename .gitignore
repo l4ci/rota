@@ -30,6 +30,7 @@ __pycache__/
 .rota/workers.json
 .rota/config.local.json
 .rota/handoff/
+.rota/debug/
 .rota/review/
 .rota/qa-runs/
 .rota/verdicts.json
