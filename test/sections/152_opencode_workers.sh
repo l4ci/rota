@@ -82,15 +82,15 @@ ROTA_FAKE_OPENCODE_VERSION=99.0.0 ocrc round assign F01 --agent ben --kind openc
 [ "$RC" = "0" ] || fail "an unknown version is not a reason to refuse: $RC $OUT"
 pass "an opencode missing a launch flag is refused with blockedBy opencode flags; no version pin"
 
-# No opencode on PATH: exit 4 / blockedBy "opencode binary".
+# An opencode that will not run: exit 4 / blockedBy "opencode binary". A stub
+# first on PATH stands in for it, so this holds whatever is installed behind the
+# fakes (the not-on-PATH case is unit-tested).
+printf '#!/bin/sh\nexit 127\n' > "$TMP_OC/nobin/opencode"
+chmod +x "$TMP_OC/nobin/opencode"
 RC=0; OUT=$( cd "$OC" && env FAKE_HERDR="$FH" FAKE_DEFAULT_CODEX_HOME="$TMP_OC/dc" HERDR_ENV=1 HERDR_WORKSPACE_ID=w9 PATH="$TMP_OC/nobin:$PATH" "$ROTA_BIN" --json round assign F01 --agent ben --kind opencode --holder-pid "$HOLDER" 2>/dev/null ) || RC=$?
-if command -v opencode >/dev/null 2>&1; then
-  : # an opencode is on PATH behind the fakes, so the missing-binary case cannot be driven here (unit-tested)
-else
-  [ "$RC" = "4" ] && [ "$(echo "$OUT" | jget data.blockedBy)" = "opencode binary" ] || fail "a missing binary should be refused: $RC $OUT"
-  parked ben || fail "the binary refusal must leave ben parked"
-fi
-pass "a missing opencode binary is refused with blockedBy opencode binary"
+[ "$RC" = "4" ] && [ "$(echo "$OUT" | jget data.blockedBy)" = "opencode binary" ] || fail "an opencode that will not run should be refused: $RC $OUT"
+parked ben || fail "the binary refusal must leave ben parked"
+pass "an opencode that will not run is refused with blockedBy opencode binary"
 
 # A real assignment: --kind opencode on herdr, the guard on the launch line as
 # inline config, no CLAUDE_CONFIG_DIR or CODEX_HOME, the brief signed.
@@ -151,7 +151,7 @@ occ config set work.opencodeAccounts "[]" >/dev/null
 
 # Pane states: the worker poll classifier on OpenCode 1.17 pane text.
 PANES="$TESTDIR/../internal/worker/testdata/panes"
-poll_state() { ( cd "$OC" && ROTA_TEST_POLL_FIXTURE="$1" "$ROTA_BIN" --json worker poll ben 2>/dev/null ) | jget data.slots[0].state; }
+poll_state() { ( cd "$OC" && ROTA_TEST_POLL_FIXTURE="$1" ROTA_TEST_POLL_KIND="${2:-opencode}" "$ROTA_BIN" --json worker poll ben 2>/dev/null ) | jget data.slots[0].state; }
 for pair in busy:busy retry:busy expired-key:limited invalid-model:blocked done:done; do
   GOT=$(poll_state "$PANES/opencode-${pair%%:*}-1.17.9.txt") || fail "poll of ${pair%%:*} failed"
   [ "$GOT" = "${pair##*:}" ] || fail "worker poll classified opencode-${pair%%:*} as $GOT, expected ${pair##*:}"
@@ -160,7 +160,13 @@ mkdir -p "$TMP_OC/tmuxstate"
 FAKE_TMUX="$TMP_OC/tmuxstate" "$TESTDIR/fakes/stub_worker" done-gutter ben https://example.test/pr/9 >/dev/null || fail "stub_worker done-gutter failed"
 GOT=$(poll_state "$TMP_OC/tmuxstate/pane.ben") || fail "poll of the guttered sentinel failed"
 [ "$GOT" = "done" ] || fail "a guttered ROTA-DONE should classify as done, got $GOT"
-pass "worker poll reads OpenCode's busy, retry, expired-key, bad-model and done panes"
+# The same panes on a claude slot keep the state they always had: OpenCode's
+# wording is read on opencode slots only.
+for name in busy retry expired-key invalid-model; do
+  GOT=$(poll_state "$PANES/opencode-$name-1.17.9.txt" claude) || fail "poll of $name as claude failed"
+  [ "$GOT" = "idle" ] || fail "a claude pane showing opencode-$name should stay idle, got $GOT"
+done
+pass "worker poll reads OpenCode's busy, retry, expired-key, bad-model and done panes on opencode slots only"
 
 # Agent files: the three roles, the explorer read-only, nothing without the kind.
 ( cd "$OC" && "$ROTA_BIN" --json agents write >/dev/null 2>&1 ) || fail "agents write failed"

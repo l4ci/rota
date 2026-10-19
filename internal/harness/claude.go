@@ -127,6 +127,8 @@ func (claude) UsageMeter() bool { return true }
 
 func (claude) LimitPhrases() []string { return SharedLimitPhrases() }
 
+func (claude) PaneVocab() PaneVocab { return PaneVocab{} }
+
 // Tiers: claude must name every tier, and an unset standard tier takes
 // models.worker, so that one knob governs the standard model.
 func (claude) Tiers() TierRule { return TierRule{Required: true, StandardFallback: "models.worker"} }

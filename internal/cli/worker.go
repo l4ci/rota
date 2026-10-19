@@ -524,7 +524,7 @@ func workerPoll(fs *flag.FlagSet) RunFunc {
 		// Deps.PollFixture classifies a file as a static pane: no host, no
 		// registry writes. A test hook, not part of the CLI.
 		if fx := c.deps().PollFixture; fx != "" {
-			res, err = worker.PollFixture(fx, slot, c.deps().PollStatus, *lines)
+			res, err = worker.PollFixture(fx, slot, c.deps().PollKind, c.deps().PollStatus, *lines)
 		} else {
 			var root string
 			if root, err = c.Root(); err != nil {

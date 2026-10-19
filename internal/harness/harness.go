@@ -157,6 +157,24 @@ type AccountList struct {
 	Entries []AccountEntry
 }
 
+// PaneVocab is a kind's own pane texts, as case-insensitive regex sources
+// (Gutter excepted). The zero value is a kind that reads like Claude Code.
+type PaneVocab struct {
+	// Retry marks a retry in flight (busy, checked before limits); Busy marks a
+	// turn running (busy, checked after limits and dialogs).
+	Retry, Busy []string
+	// Limits are usage-limit messages beyond the shared ones. AuthDead is the
+	// one of them that a human must fix (a dead key): no reset clock exists.
+	Limits   []string
+	AuthDead string
+	// BadModel is the dialog for a tier model the provider refuses; group 1 is
+	// the model id. The pane is BLOCKED.
+	BadModel string
+	// Gutter: the TUI echoes user text under a "┃" gutter and may gutter its own
+	// reply, so a sentinel may follow it.
+	Gutter bool
+}
+
 // TierRule is how a kind's round.tiers.<kind> map is read.
 type TierRule struct {
 	// Required: the tier map must be configured (a kind that has no model of
@@ -292,6 +310,10 @@ type Harness interface {
 	// LimitPhrases are the usage-limit messages the kind's session prints
 	// about itself, as case-insensitive regex sources.
 	LimitPhrases() []string
+	// PaneVocab is what the kind's pane says that no other kind's does. The
+	// classifier applies it to that kind's slots only: a worker of another kind
+	// that echoes the text (reading this repo's source) must not read as limited.
+	PaneVocab() PaneVocab
 	// Tiers is how the kind's round.tiers map is read.
 	Tiers() TierRule
 	// Configured is whether the project uses the kind at all.
