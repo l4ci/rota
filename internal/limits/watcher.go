@@ -254,7 +254,7 @@ type obs struct {
 // findLimit looks for a limit message at the end of the pane text. Only what
 // follows the last occurrence of the resume prompt counts, so the message a
 // resume already answered cannot start another cycle. "Approaching" warnings
-// match the shared phrases but are not limits. It returns the matched line
+// are not limits (worker.FindLimit decides). It returns the matched line
 // and the text from it on (for the reset time).
 func findLimit(text, prompt string) (line, rest string, ok bool) {
 	if prompt != "" {
@@ -269,26 +269,22 @@ func findLimit(text, prompt string) (line, rest string, ok bool) {
 		lines = lines[len(lines)-tailLines:]
 	}
 	tail := strings.Join(lines, "\n")
-	for _, re := range worker.LimitPatterns() {
-		for _, loc := range re.FindAllStringIndex(tail, -1) {
-			if strings.Contains(strings.ToLower(tail[loc[0]:loc[1]]), "approaching") {
-				continue
-			}
-			start := strings.LastIndex(tail[:loc[0]], "\n") + 1
-			end := strings.Index(tail[loc[0]:], "\n")
-			if end < 0 {
-				end = len(tail)
-			} else {
-				end += loc[0]
-			}
-			rest = tail[start:]
-			if len(rest) > 400 {
-				rest = rest[:400]
-			}
-			return strings.TrimSpace(tail[start:end]), rest, true
-		}
+	loc0, _, ok := worker.FindLimit("", tail)
+	if !ok {
+		return "", "", false
 	}
-	return "", "", false
+	start := strings.LastIndex(tail[:loc0], "\n") + 1
+	end := strings.Index(tail[loc0:], "\n")
+	if end < 0 {
+		end = len(tail)
+	} else {
+		end += loc0
+	}
+	rest = tail[start:]
+	if len(rest) > 400 {
+		rest = rest[:400]
+	}
+	return strings.TrimSpace(tail[start:end]), rest, true
 }
 
 // promptRe matches the prompt as a terminal may have wrapped it.
