@@ -38,6 +38,9 @@ type Overlap struct {
 	Slot   string
 	Paths  []string
 	Scopes []string
+	// Inferred is true when a scope clash involves an inferred entry: it
+	// only warns, whatever round.scopeOverlap says.
+	Inferred bool
 }
 
 // Readiness is the verdict on one item: ready when every check holds.
@@ -62,6 +65,8 @@ type InFlight struct {
 	Slot, Issue string
 	Paths       []string
 	Scopes      []string
+	// ScopeSource is where Scopes came from (the Source* constants).
+	ScopeSource string
 }
 
 var (
@@ -318,7 +323,7 @@ func AssessScoped(be backlog.Backend, id string, tracked, shared []string, inFli
 	r.Checks = append(r.Checks, dep)
 
 	mine := itemFootprint(be, id, tracked, shared)
-	myScopes := itemScopes(be, id)
+	myScopes, myScopeSrc := ItemScopeSource(be, id)
 	ov := Check{Name: CheckOverlap, OK: true, Detail: []string{}}
 	for _, f := range inFlight {
 		if worker.NormID(f.Issue) == worker.NormID(id) {
@@ -332,9 +337,10 @@ func AssessScoped(be backlog.Backend, id string, tracked, shared []string, inFli
 		if len(paths) == 0 && len(scopes) == 0 {
 			continue
 		}
-		r.Overlaps = append(r.Overlaps, Overlap{With: f.Issue, Slot: f.Slot, Paths: paths, Scopes: scopes})
-		ov.Detail = append(ov.Detail, overlapDetail(f.Issue, f.Slot, paths, scopes))
-		if !acceptOverlap && (len(paths) > 0 || scopeBlock) {
+		inferred := len(scopes) > 0 && (myScopeSrc == SourceInferred || f.ScopeSource == SourceInferred)
+		r.Overlaps = append(r.Overlaps, Overlap{With: f.Issue, Slot: f.Slot, Paths: paths, Scopes: scopes, Inferred: inferred})
+		ov.Detail = append(ov.Detail, overlapDetail(f.Issue, f.Slot, paths, scopes, inferred))
+		if !acceptOverlap && (len(paths) > 0 || (scopeBlock && !inferred)) {
 			ov.OK = false
 		}
 	}
@@ -362,6 +368,7 @@ func (e Env) InFlightItems(ctx context.Context, root string, be backlog.Backend,
 			continue
 		}
 		paths := itemFootprint(be, id, tracked, shared)
+		sc, src := ItemScopeSource(be, id)
 		if wt := s.Worktree(); wt != "" {
 			base := s.Base()
 			if base == "" {
@@ -370,7 +377,7 @@ func (e Env) InFlightItems(ctx context.Context, root string, be backlog.Backend,
 			paths = append(paths, e.changed(ctx, wt, base, shared)...)
 		}
 		sort.Strings(paths)
-		out = append(out, InFlight{Slot: name, Issue: id, Paths: paths, Scopes: itemScopes(be, id)})
+		out = append(out, InFlight{Slot: name, Issue: id, Paths: paths, Scopes: sc, ScopeSource: src})
 	}
 	for _, q := range reg.PRs() {
 		id := queuedIssue(q)
@@ -378,9 +385,10 @@ func (e Env) InFlightItems(ctx context.Context, root string, be backlog.Backend,
 			continue
 		}
 		paths := itemFootprint(be, id, tracked, shared)
+		sc, src := ItemScopeSource(be, id)
 		paths = append(paths, e.queuedChanged(ctx, root, q, shared)...)
 		sort.Strings(paths)
-		out = append(out, InFlight{Slot: "queue:" + q.From, Issue: id, Paths: paths, Scopes: itemScopes(be, id)})
+		out = append(out, InFlight{Slot: "queue:" + q.From, Issue: id, Paths: paths, Scopes: sc, ScopeSource: src})
 	}
 	return out
 }

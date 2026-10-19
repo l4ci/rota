@@ -65,7 +65,7 @@ type Comment struct {
 }
 
 // CommentKinds are the kinds a comment can have (COMMENT_KINDS).
-var CommentKinds = []string{"question", "answer", "decision", "feedback"}
+var CommentKinds = []string{"question", "answer", "decision", "feedback", "scope"}
 
 // CreateFields are the fields a capture may set: everything but the ones it
 // derives itself (Detail from the body, Since from HEAD).

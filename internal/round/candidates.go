@@ -27,6 +27,9 @@ type Candidate struct {
 	// are refused ("" when fine). assign refuses the same way.
 	Pick    Pick
 	PickErr string
+	// ScopeSource is where the item's scope came from: touches, subsystem,
+	// inferred or none. A none candidate wants a scout before it is assigned.
+	ScopeSource string
 	Readiness
 }
 
@@ -110,7 +113,8 @@ func (e Env) Candidates(ctx context.Context, root string, be backlog.Backend, o 
 			return nil, err
 		}
 		ms := backlog.ParseMilestones(it.Fields.Get("milestone"))
-		c := Candidate{ID: it.ID, Title: it.Title, OpenPR: openPR[it.IssueKey()], Readiness: r}
+		_, src := ItemScopeSource(be, it.ID)
+		c := Candidate{ID: it.ID, Title: it.Title, OpenPR: openPR[it.IssueKey()], ScopeSource: src, Readiness: r}
 		if p, err := PickOf(be.Capabilities(), it); err != nil {
 			c.PickErr = err.Error()
 		} else {

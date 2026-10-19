@@ -128,3 +128,66 @@ func TestItemScopesUnknownItem(t *testing.T) {
 		t.Errorf("unknown item has no scopes: %v", got)
 	}
 }
+
+func TestItemScopeSource(t *testing.T) {
+	be := &fakeRemote{}
+	be.add("1", "declared", "", false, "## Touches\n- a\n")
+	be.add("2", "undeclared", "", false, "prose")
+	if _, src := ItemScopeSource(be, "2"); src != SourceNone {
+		t.Errorf("source = %q want none", src)
+	}
+	got, err := RecordInferred(be, "2", []string{"`Foo.Bar`", "go test ./x", "foo.bar"})
+	if err != nil || !reflect.DeepEqual(got, []string{"foo.bar", "go test ./x"}) {
+		t.Fatalf("RecordInferred = %v, %v", got, err)
+	}
+	if s, src := ItemScopeSource(be, "2"); src != SourceInferred || !reflect.DeepEqual(s, got) {
+		t.Errorf("inferred: %v %q", s, src)
+	}
+	// A declared section wins over a recorded inferred scope, which is never edited away.
+	if _, err := RecordInferred(be, "1", []string{"z"}); err != nil {
+		t.Fatal(err)
+	}
+	if s, src := ItemScopeSource(be, "1"); src != SourceTouches || !reflect.DeepEqual(s, []string{"a"}) {
+		t.Errorf("declared must win: %v %q", s, src)
+	}
+	if _, err := RecordInferred(be, "2", nil); err == nil {
+		t.Error("no entries must be refused")
+	}
+	many := make([]string, MaxInferred+1)
+	for i := range many {
+		many[i] = string(rune('a' + i))
+	}
+	if _, err := RecordInferred(be, "2", many); err == nil {
+		t.Error("more than the cap must be refused")
+	}
+}
+
+func TestInferredScopeClashIsWarnOnly(t *testing.T) {
+	be := scopeFixture()
+	be.add("4", "no touches", "", false, "prose")
+	if _, err := RecordInferred(be, "4", []string{"POST /items"}); err != nil {
+		t.Fatal(err)
+	}
+	flight := []InFlight{{Slot: "ben", Issue: "1", Scopes: []string{"post /items"}, ScopeSource: SourceTouches}}
+	r, err := AssessScoped(be, "4", tracked, nil, flight, false, "", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !r.Ready() || len(r.Overlaps) != 1 || !r.Overlaps[0].Inferred {
+		t.Fatalf("inferred clash must warn under block: %+v", r)
+	}
+	if d := r.Checks[2].Detail; len(d) != 1 || d[0] != "1 (held by ben): inferred scopes post /items" {
+		t.Errorf("detail: %v", d)
+	}
+	// The holder's scope being inferred is warn-only too.
+	flight = []InFlight{{Slot: "ben", Issue: "4", Scopes: []string{"post /items"}, ScopeSource: SourceInferred}}
+	r, _ = AssessScoped(be, "2", tracked, nil, flight, false, "", true)
+	if !r.Ready() || !r.Overlaps[0].Inferred {
+		t.Errorf("holder inferred must warn: %+v", r)
+	}
+	// Two declared scopes still block.
+	flight = []InFlight{{Slot: "ben", Issue: "1", Scopes: []string{"post /items"}, ScopeSource: SourceTouches}}
+	if r, _ = AssessScoped(be, "2", tracked, nil, flight, false, "", true); r.Ready() {
+		t.Errorf("declared clash must still block: %+v", r)
+	}
+}
