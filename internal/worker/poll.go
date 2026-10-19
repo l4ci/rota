@@ -361,7 +361,7 @@ func ClassifyFor(kind, text string, moved bool, lines int, native string) (state
 	if s, e, ok := FindLimit(kind, own); ok {
 		// The "Add funds" prompt spends real money and is NEVER the
 		// orchestrator's to answer: flag it so the caller escalates.
-		if reFunds.MatchString(own) {
+		if reFunds.MatchString(tail) { // fail closed: a real limit plus any "Add funds" escalates
 			return StateLimited, "usage limit reached; pane offers 'Add funds' — needs a human, do NOT answer"
 		}
 		if rules.authDead != nil && rules.authDead.MatchString(tail) {
