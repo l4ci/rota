@@ -458,3 +458,267 @@ func TestSplitOverTheHerdrHost(t *testing.T) {
 		t.Errorf("commands:\n%s", strings.Join(calls, "\n"))
 	}
 }
+
+// linkFake is a herdr that also keeps grouped slots: `worktree open` makes a
+// workspace per slot (and its root tab the first time only).
+type linkFake struct {
+	*fakeHerdr
+	open map[string]bool // slots whose workspace is still open
+}
+
+func (f *linkFake) OpenLinked(_ context.Context, primary, slot, path string) (string, string, error) {
+	f.log = append(f.log, fmt.Sprintf("worktree open --workspace %s --path %s --label %s --no-focus", primary, path, slot))
+	if f.open[slot] {
+		return "ws-" + slot, "", nil
+	}
+	return "ws-" + slot, "root-" + slot, nil
+}
+
+func (f *linkFake) ToNewTabIn(_ context.Context, pane, ws, label string) error {
+	f.log = append(f.log, fmt.Sprintf("pane move %s --new-tab --workspace %s --label %s --no-focus", pane, ws, label))
+	return nil
+}
+
+func (f *linkFake) CloseTab(_ context.Context, tab string) error {
+	f.log = append(f.log, "tab close "+tab)
+	return nil
+}
+
+// grouped is a split round: the orchestrator and n workers share tab T of
+// workspace W, each worker with its worktree.
+func grouped(n int) State {
+	st := State{Group: true, Orch: host.LayoutPane{ID: "p0", Tab: "T", Workspace: "W", TabLabel: SplitLabel}}
+	for i := 1; i <= n; i++ {
+		slot := fmt.Sprintf("s%d", i)
+		st.Workers = append(st.Workers, Placed{Slot: slot, Pane: fmt.Sprintf("p%d", i), Tab: "T", Workspace: "W", Path: "/p/.worktrees/" + slot})
+	}
+	return st
+}
+
+// AC-1: with grouping on, tabs reopens each slot's workspace, moves the pane
+// in and closes the stray root tab. An already open workspace has none.
+func TestToTabsGroupedReturnsEachSlotToItsOwnWorkspace(t *testing.T) {
+	f := &linkFake{fakeHerdr: &fakeHerdr{tab: map[string]string{}}, open: map[string]bool{"s2": true}}
+	res, err := ToTabs(bg, f, grouped(2))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"worktree open --workspace W --path /p/.worktrees/s1 --label s1 --no-focus",
+		"pane move p1 --new-tab --workspace ws-s1 --label s1 --no-focus",
+		"tab close root-s1",
+		"worktree open --workspace W --path /p/.worktrees/s2 --label s2 --no-focus",
+		"pane move p2 --new-tab --workspace ws-s2 --label s2 --no-focus",
+		"rename tab T orchestrator",
+	}
+	if !reflect.DeepEqual(f.log, want) {
+		t.Errorf("log =\n%s\nwant\n%s", strings.Join(f.log, "\n"), strings.Join(want, "\n"))
+	}
+	if res.Moves != 2 || res.After != Tabs {
+		t.Errorf("result = %+v", res)
+	}
+}
+
+// AC-6: grouping off keeps the tab-in-the-same-workspace move, even on a
+// herdr that could link.
+func TestToTabsUngroupedKeepsPlainTabs(t *testing.T) {
+	f := &linkFake{fakeHerdr: &fakeHerdr{tab: map[string]string{}}}
+	st := grouped(1)
+	st.Group = false
+	if _, err := ToTabs(bg, f, st); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"pane move p1 --new-tab --label s1 --no-focus", "rename tab T orchestrator"}
+	if !reflect.DeepEqual(f.log, want) {
+		t.Errorf("log = %v", f.log)
+	}
+}
+
+// A grouped slot with no known worktree, or a herdr that cannot link, falls
+// back to the plain tab.
+func TestToTabsGroupedFallsBackToATab(t *testing.T) {
+	st := grouped(1)
+	st.Workers[0].Path = ""
+	f := &linkFake{fakeHerdr: &fakeHerdr{tab: map[string]string{}}}
+	if _, err := ToTabs(bg, f, st); err != nil {
+		t.Fatal(err)
+	}
+	g := &fakeHerdr{tab: map[string]string{}}
+	if _, err := ToTabs(bg, g, grouped(1)); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"pane move p1 --new-tab --label s1 --no-focus", "rename tab T orchestrator"}
+	if !reflect.DeepEqual(f.log, want) || !reflect.DeepEqual(g.log, want) {
+		t.Errorf("no path: %v; no linker: %v", f.log, g.log)
+	}
+}
+
+// AC-2: a split moves linked panes straight into the grid, and Linked then
+// says which slots still have a workspace of their own.
+func TestSplitFromLinkedWorkspacesMovesThePanesIntoTheGrid(t *testing.T) {
+	f := &linkFake{fakeHerdr: &fakeHerdr{tab: map[string]string{}}}
+	st := grouped(2)
+	for i := range st.Workers {
+		st.Workers[i].Tab, st.Workers[i].Workspace = fmt.Sprintf("tx%d", i+1), fmt.Sprintf("wx%d", i+1)
+	}
+	st.Orch.TabLabel = Label
+	if _, err := ToSplit(bg, f, st); err != nil {
+		t.Fatal(err)
+	}
+	want := append([]string{mv("p1", "right", "p0", "0.4"), mv("p2", "down", "p1", "0.5")}, renames...)
+	if !reflect.DeepEqual(f.log, want) {
+		t.Errorf("log =\n%s", strings.Join(f.log, "\n"))
+	}
+	if got, want := Linked(st), map[string]string{"s1": "wx1", "s2": "wx2"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("Linked before = %v", got)
+	}
+	st.Workers[0].Workspace, st.Workers[1].Workspace = "W", "W"
+	if got, want := Linked(st), map[string]string{"s1": "", "s2": ""}; !reflect.DeepEqual(got, want) {
+		t.Errorf("Linked after = %v, want %v", got, want)
+	}
+}
+
+// moveFake is a herdr that renumbers a pane moved out of another workspace
+// (p1 becomes p1'), and refuses a pane id it no longer has.
+type moveFake struct {
+	*linkFake
+	ws   map[string]string // live pane -> workspace
+	slot map[string]string // slot -> live pane
+	fail string            // slot whose ToNewTabIn fails
+	// unsupported is a slot whose OpenLinked herdr does not support.
+	unsupported string
+}
+
+func newMoveFake(st State) *moveFake {
+	f := &moveFake{linkFake: &linkFake{fakeHerdr: &fakeHerdr{tab: map[string]string{}}, open: map[string]bool{}},
+		ws: map[string]string{st.Orch.ID: st.Orch.Workspace}, slot: map[string]string{}}
+	for _, w := range st.Workers {
+		f.ws[w.Pane], f.slot[w.Slot] = w.Workspace, w.Pane
+	}
+	return f
+}
+
+func (f *moveFake) PaneOf(_ context.Context, slot, _ string) string { return f.slot[slot] }
+
+// land moves pane into workspace ws and returns its id there.
+func (f *moveFake) land(pane, ws string) (string, error) {
+	old, ok := f.ws[pane]
+	if !ok {
+		return "", fmt.Errorf("pane %s not found", pane)
+	}
+	if old == ws {
+		return pane, nil
+	}
+	delete(f.ws, pane)
+	id := pane + "'"
+	f.ws[id] = ws
+	for s, p := range f.slot {
+		if p == pane {
+			f.slot[s] = id
+		}
+	}
+	return id, nil
+}
+
+func (f *moveFake) SplitInto(ctx context.Context, pane, tab, target, dir string, keep float64) error {
+	if _, ok := f.ws[target]; !ok {
+		return fmt.Errorf("target pane %s not found", target)
+	}
+	if err := f.linkFake.SplitInto(ctx, pane, tab, target, dir, keep); err != nil {
+		return err
+	}
+	_, err := f.land(pane, f.ws[target])
+	return err
+}
+
+func (f *moveFake) OpenLinked(ctx context.Context, primary, slot, path string) (string, string, error) {
+	ws, root, err := f.linkFake.OpenLinked(ctx, primary, slot, path)
+	if slot == f.unsupported {
+		return "", "", fmt.Errorf("%w: unknown_method", host.ErrUnsupported)
+	}
+	return ws, root, err
+}
+
+func (f *moveFake) ToNewTabIn(ctx context.Context, pane, ws, label string) error {
+	if label == f.fail {
+		return fmt.Errorf("herdr pane move %s failed", pane)
+	}
+	if err := f.linkFake.ToNewTabIn(ctx, pane, ws, label); err != nil {
+		return err
+	}
+	_, err := f.land(pane, ws)
+	return err
+}
+
+// splitFromLinked is a grouped round whose slots sit in workspaces of their own.
+func splitFromLinked(n int) State {
+	st := grouped(n)
+	st.Orch.TabLabel = Label
+	for i := range st.Workers {
+		st.Workers[i].Tab, st.Workers[i].Workspace = fmt.Sprintf("tx%d", i+1), fmt.Sprintf("wx%d", i+1)
+	}
+	return st
+}
+
+// A pane moved in from another workspace has a new id: the next split targets
+// that id, found again by agent name, not the one the state was read with.
+func TestSplitResolvesAPaneAgainAfterItChangedWorkspace(t *testing.T) {
+	st := splitFromLinked(4)
+	f := newMoveFake(st)
+	if _, err := ToSplit(bg, f, st); err != nil {
+		t.Fatal(err)
+	}
+	want := append([]string{
+		mv("p1", "right", "p0", "0.4"),
+		mv("p3", "right", "p1'", "0.5"),
+		mv("p2", "down", "p1'", "0.5"),
+		mv("p4", "down", "p3'", "0.5"),
+	}, renames...)
+	if !reflect.DeepEqual(f.log, want) {
+		t.Errorf("log =\n%s\nwant\n%s", strings.Join(f.log, "\n"), strings.Join(want, "\n"))
+	}
+}
+
+// A failed move after the open closes the root tab that open made: on a
+// retry `already_open` would hide it for good.
+func TestToTabsGroupedClosesTheRootTabWhenTheMoveFails(t *testing.T) {
+	st := grouped(2)
+	f := newMoveFake(st)
+	f.fail = "s1"
+	if _, err := ToTabs(bg, f, st); err == nil {
+		t.Fatal("want the move error")
+	}
+	want := []string{
+		"worktree open --workspace W --path /p/.worktrees/s1 --label s1 --no-focus",
+		"tab close root-s1",
+	}
+	if !reflect.DeepEqual(f.log, want) {
+		t.Errorf("log = %v", f.log)
+	}
+}
+
+// A herdr that cannot link leaves the slot a plain tab, noted once, and the
+// rest of the slots still go home.
+func TestToTabsGroupedFallsBackWhenHerdrCannotLink(t *testing.T) {
+	st := grouped(2)
+	f := newMoveFake(st)
+	f.unsupported = "s1"
+	res, err := ToTabs(bg, f, st)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"worktree open --workspace W --path /p/.worktrees/s1 --label s1 --no-focus",
+		"pane move p1 --new-tab --label s1 --no-focus",
+		"worktree open --workspace W --path /p/.worktrees/s2 --label s2 --no-focus",
+		"pane move p2 --new-tab --workspace ws-s2 --label s2 --no-focus",
+		"tab close root-s2",
+		"rename tab T orchestrator",
+	}
+	if !reflect.DeepEqual(f.log, want) {
+		t.Errorf("log =\n%s", strings.Join(f.log, "\n"))
+	}
+	if !reflect.DeepEqual(res.Unlinked, []string{"s1"}) || res.Moves != 2 {
+		t.Errorf("result = %+v", res)
+	}
+}

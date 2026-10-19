@@ -14,12 +14,17 @@ import (
 type groupHost struct {
 	*fakeHost
 	closed []string
+	// cannotLink is a herdr that falls back to a tab: Spawn links nothing.
+	cannotLink bool
 }
 
 func (g *groupHost) Capabilities() host.Capabilities { return host.CapabilitiesOf(g) }
 func (g *groupHost) Spawn(ctx context.Context, o host.SpawnOpts) (string, error) {
 	h, err := g.fakeHost.Spawn(ctx, o)
-	if err == nil && o.LinkWorkspace {
+	if err == nil && o.LinkWorkspace && !g.cannotLink {
+		if o.Linked != nil {
+			*o.Linked = true
+		}
 		return "w9N:t2", nil
 	}
 	return h, err
@@ -28,6 +33,13 @@ func (g *groupHost) CloseWorkspace(_ context.Context, id string) error {
 	g.closed = append(g.closed, id)
 	return nil
 }
+
+// The layout side of a host that can group; dispatch only asks that it exists.
+func (g *groupHost) OpenLinked(context.Context, string, string, string) (string, string, error) {
+	return "", "", nil
+}
+func (g *groupHost) ToNewTabIn(context.Context, string, string, string) error { return nil }
+func (g *groupHost) CloseTab(context.Context, string) error                   { return nil }
 
 func groupProject(t *testing.T, cfg string, handles map[string]string) string {
 	t.Helper()
@@ -47,7 +59,7 @@ func dispatchOnce(t *testing.T, dir string, h host.Host) error {
 // AC-2: the wiring from work.herdrGroupSlots to SpawnOpts.LinkWorkspace.
 func TestDispatchLinksWorkspaceOnlyWhenTheKeyIsOn(t *testing.T) {
 	for cfg, want := range map[string]bool{
-		``: false, `{"work":{"herdrGroupSlots":false}}`: false, `{"work":{"herdrGroupSlots":true}}`: true,
+		``: true, `{"work":{"herdrGroupSlots":false}}`: false, `{"work":{"herdrGroupSlots":true}}`: true,
 	} {
 		dir := groupProject(t, cfg, nil)
 		h := &groupHost{fakeHost: tmuxFake()}
@@ -118,5 +130,52 @@ func TestKillSlotClosesTheRecordedWorkspaceAndForgetsIt(t *testing.T) {
 	}
 	if strings.Join(h.closed, ",") != "w9N" || LoadRegistryTolerant(dir).Slot("w1").WorkspaceID() != "" {
 		t.Errorf("closed = %v, workspaceId = %q", h.closed, LoadRegistryTolerant(dir).Slot("w1").WorkspaceID())
+	}
+}
+
+// A host with no linked workspaces (tmux) is never linked, so the default
+// being on records no workspaceId from a handle that names no workspace.
+func TestDispatchOnAHostWithoutWorkspacesLinksNothing(t *testing.T) {
+	dir := groupProject(t, "", nil)
+	h := tmuxFake()
+	if err := dispatchOnce(t, dir, h); err != nil {
+		t.Fatal(err)
+	}
+	if h.spawnOpts.LinkWorkspace {
+		t.Error("LinkWorkspace on a host that cannot close workspaces")
+	}
+	if got := LoadRegistryTolerant(dir).Slot("w1").WorkspaceID(); got != "" {
+		t.Errorf("workspaceId = %q, want none", got)
+	}
+}
+
+// Dispatch groups on the same capability layout does: a host that closes
+// workspaces but cannot link panes keeps its slots in tabs.
+type closerOnlyHost struct{ *fakeHost }
+
+func (g *closerOnlyHost) Capabilities() host.Capabilities              { return host.CapabilitiesOf(g) }
+func (g *closerOnlyHost) CloseWorkspace(context.Context, string) error { return nil }
+
+func TestDispatchNeedsAHostThatCanLinkToGroup(t *testing.T) {
+	dir := groupProject(t, `{"work":{"herdrGroupSlots":true}}`, nil)
+	h := &closerOnlyHost{tmuxFake()}
+	if err := dispatchOnce(t, dir, h); err != nil {
+		t.Fatal(err)
+	}
+	if h.spawnOpts.LinkWorkspace {
+		t.Error("LinkWorkspace on a host that cannot link panes")
+	}
+}
+
+// A herdr that cannot link falls back to a tab at Spawn: nothing is recorded
+// as a workspace, so a later kill closes none.
+func TestDispatchRecordsNoWorkspaceWhenHerdrFellBackToATab(t *testing.T) {
+	dir := groupProject(t, `{"work":{"herdrGroupSlots":true}}`, nil)
+	h := &groupHost{fakeHost: tmuxFake(), cannotLink: true}
+	if err := dispatchOnce(t, dir, h); err != nil {
+		t.Fatal(err)
+	}
+	if got := LoadRegistryTolerant(dir).Slot("w1").WorkspaceID(); got != "" {
+		t.Errorf("workspaceId = %q, want none", got)
 	}
 }

@@ -51,9 +51,9 @@ Agent names are unique per herdr **server**, not per workspace, so a bare `w1` w
 | 5 | host failure, including outside herdr, a wrapper command and an unrecognised startup dialog; also `agent_blocked`: a dialog was already up, nothing was sent; also a human draft on the prompt line (dispatch waited about 4s, then refused, nothing was typed: resend once the draft is submitted or cleared) |
 | 6 | `agent_prompt_stalled` or timeout: no activity after the prompt. Dispatch already pressed Enter up to 3 times if the brief was visible on the prompt line. A `--relay` resend then submits that pending text instead of typing it again (the slot is marked `unsent` in `workers.json`); a task dispatch starts a fresh session. Read the tab (`herdr agent read <name>`) before resending: a stall does not prove the text was lost, and a duplicate brief costs a worker its context |
 
-## Linked workspaces per slot (opt-in)
+## Linked workspaces per slot
 
-`work.herdrGroupSlots` (default `false`) makes dispatch open each slot as a workspace linked to the orchestrator's, so herdr groups the slots under their project (`is_linked_worktree: true`, shared `repo_key`). Tabs in the orchestrator's workspace stay the default. Design and checks: `.rota/spikes/herdr-worktree-grouping.md`.
+`work.herdrGroupSlots` (default `true`) makes dispatch open each slot as a workspace linked to the orchestrator's, so herdr groups the slots under their project (`is_linked_worktree: true`, shared `repo_key`). Set it `false` to keep each slot as a tab in the orchestrator's workspace. Design and checks: `.rota/spikes/herdr-worktree-grouping.md`.
 
 `Spawn` with the key on:
 
@@ -65,6 +65,8 @@ Agent names are unique per herdr **server**, not per workspace, so a bare `w1` w
 The handle is still the tab id (`w2N:t2`). Agent names, `agent get/read/prompt`, `pane report-metadata` and `pane list` address the server, not a workspace, so `round watch`, `round wait`, relays, `worker poll` and the doctor/reap `tab` check need no change.
 
 **Closing the last tab closes the workspace** (AC-1, checked on herdr 0.9.5 with a throwaway repo): after the open's root tab is gone, `tab close` on the slot's only tab removes the linked workspace with it; it does not leave an empty one. So park and reclaim already clean up: `Kill` closes the tab, and the next task dispatch calls `worktree open` again, which makes a fresh workspace (new id, `already_open: false`). Dispatch records the opened workspace id on the slot (`workspaceId` in `.rota/workers.json`). After killing a slot's session, dispatch and reclaim close that recorded workspace by id (`workspace close <id>`, never `--group`) if it is left with no tab, then clear the field. A slot with no recorded id (a tab from the default path) closes nothing, and the orchestrator's own workspace is refused. A failed `tab create` or root-tab close closes the workspace this call opened, and a close that fails is reported on stderr with the workspace id.
+
+**Layout switching keeps the grouping** (#918). `rota layout split` moves each slot's pane into the orchestrator's tab, and herdr closes a linked workspace with its last tab, so the slots leave their workspaces until `rota layout tabs`; `split` says so in one line and clears each `workspaceId` it closed. `rota layout tabs` puts each pane back: per slot, `herdr worktree open --workspace <primary> --path <absolute slot path> --label <slot> --no-focus` (reuses the workspace if it is still open), `herdr pane move <pane> --new-tab --workspace <opened id> --label <slot> --no-focus`, then `herdr tab close <root tab>` for the shell tab the open made (skipped on `already_open`), and `workspaceId` is recorded again. Without this, `pane move --new-tab` lands in the pane's current workspace, the orchestrator's. A dispatch that finds a recorded `workspaceId` herdr no longer knows closes nothing and says nothing. With the key `false`, layout behaves as before.
 
 What stays in the orchestrator's workspace: the operator tab (`OpenTab`) and the `round` status token (`LabelWorkspace`). Slot workspaces carry neither; pane titles are set per pane and follow the slot.
 
