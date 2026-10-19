@@ -215,6 +215,7 @@ func (t *trainRun) plan() (bool, error) {
 	if err != nil {
 		return true, err
 	}
+	in.cfg.WarnLegacy(e.errWriter())
 	t.in = in
 	seen := map[string]bool{}
 	withPR := 0
