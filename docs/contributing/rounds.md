@@ -20,8 +20,13 @@ The gate builds with `-trimpath` (it adds it to `GOFLAGS`), so each fresh scratc
 Workers do not run it. The same goes for `test.e2e`: the gate and the merge train run it on the merged tree after `test.full`, and round PRs skip per-branch ship-time QA. Here `test.e2e` is the scripted stub-worker scenarios; see [E2E scenarios](e2e-scenarios.md).
 
 An item may carry a `## Try it` section: `- <command>` bullets, each optionally followed by `expect: <substring>` lines. After
-`test.full` and `test.e2e` pass, the gate runs the commands on the merged scratch tree, in order, with the slot's
-`ROTA_PORT_BASE` and `ROTA_DB_SUFFIX` exported. A non-zero exit or a missing substring bounces the slot; the transcript is
+`test.full` and `test.e2e` pass, the gate runs the commands on the merged scratch tree, in order. Each runs with a scrubbed
+environment: `PATH`, `HOME` and the slot's `ROTA_PORT_BASE`, `ROTA_PORT_BLOCK` and `ROTA_DB_SUFFIX`, nothing else, so no
+forge token reaches a step; a step that needs `GOPATH` or another variable sets it itself. The commands come from an issue
+body, so on a forge tracker they run only when the issue's author and its last editor are collaborators with write access
+or higher; otherwise the gate says why in a `BEHAVIOUR-SKIP` note and goes on (a skip is not a failure). GitHub is the only
+tracker that can answer that; GitLab, Jira and Linear issues skip. A file-mode item body is read from the base checkout, so a
+commit someone with push access landed put it there, and it runs unchecked. A non-zero exit or a missing substring bounces the slot; the transcript is
 posted on the PR and saved under `.rota/qa-runs/behaviour/`. Commands run as written, so a repo that tests its own binary
 writes `go run ./cmd/<x> ...`. No section, no run.
 

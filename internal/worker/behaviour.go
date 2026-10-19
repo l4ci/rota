@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/itembody"
-	"github.com/l4ci/rota/internal/shlex"
 	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/verdict"
@@ -22,6 +22,14 @@ import (
 // order. A failing step ends the gate with nothing landed. Either way the run
 // leaves a transcript under .rota/qa-runs/, a behaviour verdict at the PR head
 // and, with a PR on a forge, a comment carrying the transcript.
+
+// IssueTrust is the part of an issue tracker that says who wrote an issue
+// body and whether they may push: the behaviour run only executes steps a
+// collaborator wrote (#899 decision). Only the GitHub tracker implements it.
+type IssueTrust interface {
+	IssueEditors(ctx context.Context, key tracker.IssueKey) (author, lastEditor string, err error)
+	CanPush(ctx context.Context, login string) (bool, error)
+}
 
 // behaviourStepTimeout bounds one Try it step.
 const behaviourStepTimeout = 5 * time.Minute
@@ -87,11 +95,15 @@ func (g *gate) behaviourRun(dir string) (bool, error) {
 		return skip(fmt.Sprintf("the ## Try it section of %s lists no steps", ref))
 	}
 
-	prefix := g.behaviourEnvPrefix()
+	if trusted, done, err := g.behaviourTrust(issue, ref); !trusted {
+		return done, err
+	}
+
+	environ := g.behaviourEnviron()
 	results := make([]behaviourStep, len(steps))
 	failedAt := -1
 	for i, st := range steps {
-		results[i] = g.runBehaviourStep(dir, prefix, st)
+		results[i] = g.runBehaviourStep(dir, environ, st)
 		if results[i].failed() {
 			failedAt = i
 			break
@@ -113,37 +125,89 @@ func (g *gate) behaviourRun(dir string) (bool, error) {
 	return true, nil
 }
 
-// behaviourEnvPrefix exports the slot's port block and database suffix, so a
-// step started in the scratch tree does not collide with another slot's. "" for
-// a target that names no pool slot.
-func (g *gate) behaviourEnvPrefix() string {
+// behaviourTrust decides whether the steps of issue may run: they do when the
+// issue's author and last editor can push to the repository. When they may not,
+// trusted is false and a skip note says why; a trust skip records nothing and
+// the gate goes on. done and err are g.broke's, for a forge read that failed. A file
+// source runs unchecked: its item body is read from the base checkout, so it
+// got there through a commit someone with push access landed.
+func (g *gate) behaviourTrust(issue, ref string) (trusted, done bool, err error) {
+	src := g.in.cfg.Tracker.Source
+	if src == config.SourceFile || src == "" {
+		return true, false, nil
+	}
+	skip := func(why string) (bool, bool, error) {
+		g.res.Notes = append(g.res.Notes, fmt.Sprintf("BEHAVIOUR-SKIP %s — %s, so its Try it steps did not run", g.o.Slot, why))
+		return false, false, nil
+	}
+	key, ok := tracker.ParseKey(issue)
+	trust, _ := g.issues.(IssueTrust)
+	if !ok || trust == nil {
+		return skip(fmt.Sprintf("the %s issue source cannot say whether %s's author is a collaborator", src, ref))
+	}
+	broke := func(err error) (bool, bool, error) {
+		done, err := g.broke(fmt.Sprintf("cannot read who wrote %s to trust its ## Try it steps: %v", ref, err))
+		return false, done, err
+	}
+	author, editor, err := trust.IssueEditors(g.ctx, key)
+	if err != nil {
+		return broke(err)
+	}
+	if author == "" {
+		return skip(fmt.Sprintf("the author of %s is unknown", ref))
+	}
+	for _, who := range []struct{ role, login string }{{"author", author}, {"last editor", editor}} {
+		if who.login == "" || (who.role == "last editor" && who.login == author) {
+			continue
+		}
+		can, err := trust.CanPush(g.ctx, who.login)
+		if err != nil {
+			return broke(err)
+		}
+		if !can {
+			return skip(fmt.Sprintf("%s %s of %s is not a collaborator with write access", who.role, who.login, ref))
+		}
+	}
+	return true, false, nil
+}
+
+// behaviourEnviron is the whole environment of a step: PATH and HOME, so the
+// shell finds its tools, plus the slot's port block and database suffix, so a
+// step started in the scratch tree does not collide with another slot's. No
+// forge token or other variable of the gate reaches a step.
+func (g *gate) behaviourEnviron() []string {
+	environ := []string{}
+	for _, k := range []string{"PATH", "HOME"} {
+		if v := g.e.Getenv(k); v != "" {
+			environ = append(environ, k+"="+v)
+		}
+	}
 	name := g.target.Name
 	if name == "" {
-		return ""
+		return environ
 	}
 	reg, err := LoadRegistry(g.root)
 	if err != nil {
-		return ""
+		return environ
 	}
 	s := reg.Slot(name)
 	if s == nil {
-		return ""
+		return environ
 	}
-	var vars []string
 	for _, kv := range SlotEnv(name, s.PortBase(), s.PortBlock()) {
-		k, v, _ := strings.Cut(kv, "=")
+		k, _, _ := strings.Cut(kv, "=")
 		if k == "ROTA_SLOT" || (s.PortBase() == 0 && k != "ROTA_DB_SUFFIX") {
 			continue
 		}
-		vars = append(vars, k+"="+shlex.Quote(v))
+		environ = append(environ, kv)
 	}
-	return "export " + strings.Join(vars, " ") + "\n"
+	return environ
 }
 
-func (g *gate) runBehaviourStep(dir, prefix string, st itembody.TryStep) behaviourStep {
+func (g *gate) runBehaviourStep(dir string, environ []string, st itembody.TryStep) behaviourStep {
 	ctx, cancel := context.WithTimeout(g.ctx, behaviourStepTimeout)
 	defer cancel()
-	out, code := g.e.Shell(ctx, dir, prefix+st.Run)
+	out, code := g.e.ShellEnv(ctx, dir, st.Run, environ)
 	r := behaviourStep{ran: true, output: out, code: code}
 	for _, sub := range st.Expect {
 		if strings.Contains(out, sub) {
