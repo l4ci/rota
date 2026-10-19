@@ -28,6 +28,10 @@ const (
 	SecondOpinion = "second-opinion"
 	QA            = "qa"
 	DebugFix      = "debug-fix"
+	// Behaviour is the merge gate's run of an item's "Try it" steps on the
+	// merged tree (#899): PASS, or FAIL on a non-zero exit or a missing
+	// expected line. Its record carries the transcript's path.
+	Behaviour = "behaviour"
 	// DebugReset is the human reset of an item's failed-fix count (B3). It is
 	// written by `debug reset` only: no verb takes it as --kind.
 	DebugReset = "debug-reset"
@@ -45,7 +49,7 @@ const (
 
 // BranchKinds are the kinds recorded against a branch, in the order
 // `verdict show` lists them.
-var BranchKinds = []string{ReviewSpec, ReviewQuality, SecondOpinion, QA}
+var BranchKinds = []string{ReviewSpec, ReviewQuality, SecondOpinion, QA, Behaviour}
 
 var kindVerdicts = map[string][]string{
 	ReviewSpec:    {Pass, Concerns, Fail},
@@ -53,6 +57,7 @@ var kindVerdicts = map[string][]string{
 	SecondOpinion: {Pass, Concerns, Fail},
 	QA:            {Pass, Concerns, Fail, InfraFail},
 	DebugFix:      {Pass, Fail},
+	Behaviour:     {Pass, Fail},
 }
 
 var rank = map[string]int{Pass: 0, Concerns: 1, Fail: 2, InfraFail: 3}
@@ -266,6 +271,8 @@ type Record struct {
 	Findings   []Finding     `json:"findings"`
 	Items      []ItemVerdict `json:"items,omitempty"`
 	Declined   []Declined    `json:"declined,omitempty"`
+	// Transcript is the path of a behaviour run's transcript.
+	Transcript string `json:"transcript,omitempty"`
 }
 
 // NewRecord stamps a record with now in UTC.
