@@ -40,6 +40,7 @@ Work only this task, then stop.
   When those files are absent, use the tier table: if your brief names your tier and
   a tier table, use it for the model names; if it names none, use your harness's own
   defaults. Say which tier you ran on in your PR body when the brief asks for it.
+- Read depth. Apply the read-depth rule in [`subagent-dispatch.md`](subagent-dispatch.md) to your own subagents: ask each for a headline of at most 25 words first, read that, open the body only to act on it, and pass paths in briefs, never pasted file contents.
 - Smoke section number: if the brief names one ("Your smoke section ... is number N"),
   `rota round assign` reserved it for you across every worker; name your
   `test/sections/N_*.sh` file with exactly that number. If it names none, do not

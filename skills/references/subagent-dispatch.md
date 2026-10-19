@@ -67,4 +67,6 @@ Read-only workers (research, summary, query relays) are exempt from the worktree
 - **Atomic disk writes** — when ordering or all-or-nothing matters.
 - **Verification of subagent output** — confirm the return shape, sanity-check claims, reconcile contradictions.
 
+- **Read depth** — read a subagent's headline line first (its first line, at most 25 words) and open the body or the file it points at only to act on it. Briefs pass paths, never pasted file contents. A subagent that has more to say writes it to a file and returns the path.
+
 The orchestrator dispatches and synthesizes; it never reads everything.
