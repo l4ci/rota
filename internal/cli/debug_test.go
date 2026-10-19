@@ -176,3 +176,37 @@ func TestSpikeAddBranchExistsLeavesNoFile(t *testing.T) {
 		t.Error("spike file written despite existing branch")
 	}
 }
+
+func TestDebugSessionLifecycle(t *testing.T) {
+	dir := gitRepo(t)
+	if code, _, _ := rotaIn(t, dir, "debug", "session", "show", "b07"); code != 3 {
+		t.Fatalf("show unknown: exit %d, want 3", code)
+	}
+	if code, _, _ := rotaIn(t, dir, "debug", "session", "rm", "b07"); code != 3 {
+		t.Fatalf("rm unknown: exit %d, want 3", code)
+	}
+	for _, bad := range []string{"a/b", "..", "../x"} {
+		if code, _, _ := rotaIn(t, dir, "debug", "session", "put", bad, "--body-file", bodyFile(t, "x")); code != 2 {
+			t.Fatalf("put %q: exit %d, want 2", bad, code)
+		}
+	}
+	code, out, _ := rotaIn(t, dir, "debug", "session", "put", "b07", "--body-file", bodyFile(t, "# Symptom\nfirst\n"), "--json")
+	if d := data(t, out); code != 0 || d["slug"] != "b07" {
+		t.Fatalf("put: %d %v", code, d)
+	}
+	rotaIn(t, dir, "debug", "session", "put", "b07", "--body-file", bodyFile(t, "# Symptom\nsecond\n"))
+	code, out, _ = rotaIn(t, dir, "debug", "session", "show", "b07", "--json")
+	if d := data(t, out); code != 0 || d["body"] != "# Symptom\nsecond\n" {
+		t.Fatalf("show after replace: %d %v", code, d)
+	}
+	code, out, _ = rotaIn(t, dir, "debug", "session", "list", "--json")
+	if d := data(t, out); code != 0 || len(d["sessions"].([]any)) != 1 {
+		t.Fatalf("list: %d %v", code, d)
+	}
+	if code, _, _ := rotaIn(t, dir, "debug", "session", "rm", "b07"); code != 0 {
+		t.Fatalf("rm: exit %d", code)
+	}
+	if code, _, _ := rotaIn(t, dir, "debug", "session", "show", "b07"); code != 3 {
+		t.Fatalf("show after rm: exit %d, want 3", code)
+	}
+}

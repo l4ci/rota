@@ -19,6 +19,7 @@ An orchestrator mid-round writes a different handoff note, to `.rota/handoff/<ba
 - **Items:** [B07], [F03]
 - **Milestone:** M01 — Auth foundation  <!-- omit if no active milestone or items aren't tagged -->
 - **Stage:** <e.g., "mid-hypothesis verification for B07", "tasks 1-2 of 4 done (task ledger)">
+- **Debug session:** fix-7                    <!-- slug of an open `rota debug session list` entry for this work; omit when none -->
 
 ## Next planned step
 
