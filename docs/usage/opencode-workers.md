@@ -66,7 +66,7 @@ Known edges:
 
 - OpenCode draws in the alternate screen, so rota reads the visible viewport, not scrollback.
 - A provider that can't be reached shows the retry line for as long as it keeps retrying. `round.stallMinutes` is the only backstop. Under herdr the integration reports the error as `blocked`.
-- The limit watcher (`rota limit watch`) matches the shared phrases only, so OpenCode quota errors show in `worker poll` but do not trigger the watcher's account moves.
+- The limit watcher (`rota limit watch`) reads each slot's limit phrases by its harness kind, so OpenCode quota errors move an opencode slot's account and never a Claude or Codex slot's.
 - Plain throttling ("rate limit", "too many requests") is not a limit phrase: OpenCode retries it, and the retry line reads as busy.
 - The expired-key and bad-model fixtures are built from the wording OpenCode printed during the spike, not from a live run.
 

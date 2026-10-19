@@ -254,9 +254,10 @@ type obs struct {
 // findLimit looks for a limit message at the end of the pane text. Only what
 // follows the last occurrence of the resume prompt counts, so the message a
 // resume already answered cannot start another cycle. "Approaching" warnings
-// are not limits (worker.FindLimit decides). It returns the matched line
+// are not limits (worker.FindLimit decides, reading the slot kind's own
+// phrases too). It returns the matched line
 // and the text from it on (for the reset time).
-func findLimit(text, prompt string) (line, rest string, ok bool) {
+func findLimit(kind, text, prompt string) (line, rest string, ok bool) {
 	if prompt != "" {
 		if re := promptRe(prompt); re != nil {
 			if locs := re.FindAllStringIndex(text, -1); len(locs) > 0 {
@@ -269,7 +270,7 @@ func findLimit(text, prompt string) (line, rest string, ok bool) {
 		lines = lines[len(lines)-tailLines:]
 	}
 	tail := strings.Join(lines, "\n")
-	loc0, _, ok := worker.FindLimit("", tail)
+	loc0, _, ok := worker.FindLimit(kind, tail)
 	if !ok {
 		return "", "", false
 	}
@@ -316,7 +317,7 @@ func (w *Watcher) text(ctx context.Context, now time.Time, targets []Target, m M
 	if body == "" {
 		body = m.Line
 	}
-	line, rest, ok := findLimit(body, w.Settings.Prompt)
+	line, rest, ok := findLimit(t.Kind, body, w.Settings.Prompt)
 	if !ok || w.dismissed[t.Session] == line {
 		return
 	}

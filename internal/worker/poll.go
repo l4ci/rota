@@ -80,8 +80,11 @@ var limitPhrases = harness.AllLimitPhrases()
 // LimitRegex is the alternation of the limit phrases with the case-insensitive
 // flag written in the regex itself, for engines that take one pattern string
 // (herdr's pane.output_matched). It is a prefilter: it also matches an
-// "Approaching" warning, which FindLimit then rejects.
-func LimitRegex() string { return "(?i)(?:" + strings.Join(limitPhrases, "|") + ")" }
+// "Approaching" warning, which FindLimit then rejects, and every kind's own
+// phrases, which FindLimit reads only for a slot of that kind.
+func LimitRegex() string {
+	return "(?i)(?:" + strings.Join(append(append([]string(nil), limitPhrases...), harness.AllPaneLimits()...), "|") + ")"
+}
 
 // FindLimit is the one answer to "does this pane text show a hit limit, and
 // where": the byte span of the first match of the shared phrases and the
@@ -714,7 +717,7 @@ type pollTarget struct {
 }
 
 func slotTarget(s *Slot) pollTarget {
-	return pollTarget{name: s.Name(), kind: s.Kind(), handle: s.PaneHandle(), prev: s.State(), seen: s.Seen(), turnSeq: s.TurnSeq(),
+	return pollTarget{name: s.Name(), kind: s.HarnessKind(), handle: s.PaneHandle(), prev: s.State(), seen: s.Seen(), turnSeq: s.TurnSeq(),
 		ev: s.Event(), lastChange: parseStamp(s.ActiveAt())}
 }
 
