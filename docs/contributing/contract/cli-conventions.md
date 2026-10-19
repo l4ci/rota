@@ -100,7 +100,7 @@ Exits 1 and 4 say that the requested outcome did not happen. They do not say tha
 
 ## Writes
 
-- Every write is atomic: write `<path>.tmp` in the same directory, fsync it, rename it over `<path>`, then fsync the directory. Readers never lock. The two fsyncs keep a crash from leaving an empty or missing file. A directory fsync that fails with EINVAL or ENOTSUP (filesystems without it) is ignored, because the rename has already succeeded.
+- Every write is atomic: write a unique `<path>.<pid>.<n>.tmp` in the same directory, fsync it, rename it over `<path>`, then fsync the directory. Readers never lock. The two fsyncs keep a crash from leaving an empty or missing file. A directory fsync that fails with EINVAL or ENOTSUP (filesystems without it) is ignored, because the rename has already succeeded.
 - A read-modify-write takes an exclusive advisory `flock` on the sibling `<path>.lock`, never on the data file, because the rename swaps the inode. The lock is retried every 50 ms for up to 10 s, then the verb exits 6. The empty `.lock` file stays in place. This matches `hvlib_io.locked`, so `rota` and the old helpers can share a file during the port.
 - Read-modify-write (`fsio.UpdateJSON`) and `WriteJSONAtomic`-style writes through it re-read the file after the rename. A file that is missing or differs from what was written is an error (`fsio.ErrNotLanded`), never a success exit.
 - `fsio.UpdateJSONStrict` is for a file whose loss is destructive (the worker registry). A missing file starts from the default; a file that exists but cannot be read or parsed is an error wrapping `fsio.ErrUnreadable` ("fix or remove it, rota will not overwrite it"), where `UpdateJSON` would start from the default and overwrite it. Such a verb exits 70, per Exit codes.
