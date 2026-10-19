@@ -251,7 +251,9 @@ func IsDir(p string) bool {
 }
 
 // SameDir reports whether a and b name the same directory once symlinks are
-// resolved on both sides. An empty path matches nothing.
+// resolved on both sides. An empty path matches nothing. A side whose symlinks
+// cannot be resolved (a path that does not exist) is compared cleaned but
+// unresolved, so it matches only a path spelled the same way.
 func SameDir(a, b string) bool {
 	if a == "" || b == "" {
 		return false
