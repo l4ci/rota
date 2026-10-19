@@ -4,6 +4,7 @@ import (
 	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -320,5 +321,27 @@ var recAt = time.Date(2026, 3, 4, 9, 5, 6, 0, time.UTC)
 func TestNewRecordStampsTheGivenTime(t *testing.T) {
 	if got := NewRecord(QA, Pass, "s", Body{}, recAt).RecordedAt; got != "2026-03-04T09:05:06Z" {
 		t.Fatalf("RecordedAt = %q", got)
+	}
+}
+
+// #899: the gate records a behaviour verdict, PASS or FAIL, with the path of
+// the Try it transcript; verdict show lists it with the branch kinds.
+func TestBehaviourKind(t *testing.T) {
+	for v, want := range map[string]bool{Pass: true, Fail: true, Concerns: false, InfraFail: false} {
+		if got, _ := Takes(Behaviour, v); got != want {
+			t.Errorf("Takes(%s, %s) = %v", Behaviour, v, got)
+		}
+	}
+	if !slices.Contains(BranchKinds, Behaviour) {
+		t.Errorf("BranchKinds %v lacks %s", BranchKinds, Behaviour)
+	}
+	root := t.TempDir()
+	r := rec(Behaviour, Fail, "abc1234")
+	r.Transcript = ".rota/qa-runs/behaviour/b-abc1234.txt"
+	if _, err := AddBranch(root, "b", r); err != nil {
+		t.Fatal(err)
+	}
+	if got := Load(root).Branches["b"][0].Transcript; got != r.Transcript {
+		t.Errorf("transcript round trip = %q", got)
 	}
 }
