@@ -85,6 +85,7 @@ func TestReviewPolicyDecide(t *testing.T) {
 		{"declared files do not drift", cfg, ReviewInput{Changed: 3, IssueBody: issue, Files: []string{"internal/a/x.go", "internal/b/z.go", "docs/a.md"}}, DepthLight, SignalSize, ""},
 		{"issue without a file set cannot drift", cfg, ReviewInput{Changed: 3, IssueBody: "## Summary\n\nx", Files: []string{"anything.go"}}, DepthLight, SignalSize, ""},
 		{"path lifts", cfg, ReviewInput{Changed: 3, Files: []string{"migrations/001.sql"}}, DepthFull, SignalPath, "migrations/001.sql"},
+		{"trailing /** matches nested files", cfg, ReviewInput{Changed: 3, Files: []string{"migrations/2026/001.sql"}}, DepthFull, SignalPath, "migrations/2026"},
 		{"path never lowers", cfg, ReviewInput{Changed: 500, Files: []string{"docs/a.md"}}, DepthFull, SignalDefault, ""},
 		{"label none is final over a path", cfg, ReviewInput{Changed: 3, Labels: []string{"partial-slice"}, Files: []string{"migrations/001.sql"}}, DepthNone, SignalLabel, ""},
 		{"default none ignores door and drift", `{"ship":{"review":"none"}}`, ReviewInput{PRBody: oneWay, IssueBody: issue, Files: []string{"z.go"}}, DepthNone, SignalDefault, ""},
@@ -108,6 +109,8 @@ func TestReviewPolicyPathsAndDriftShape(t *testing.T) {
 		`{"ship":{"review":{"paths":"x"}}}`,
 		`{"ship":{"review":{"paths":{"a/**":"deep"}}}}`,
 		`{"ship":{"review":{"scopeDrift":"no"}}}`,
+		`{"ship":{"review":{"paths":{"a/**/b":"full"}}}}`,
+		`{"ship":{"review":{"paths":{"a/[":"full"}}}}`,
 	} {
 		if _, err := ReviewPolicyOf(decode(t, cfg)); err == nil {
 			t.Errorf("%s: want an error", cfg)

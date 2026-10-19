@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/git"
@@ -55,7 +56,18 @@ func ResolveReviewDepth(ctx context.Context, s ReviewSources) (ReviewDepth, erro
 	if err != nil {
 		return ReviewDepth{}, &ReviewDepthError{"diff", fmt.Sprintf("could not diff %s to pick the review depth", s.Span), err}
 	}
-	files, err := git.ChangedPaths(ctx, s.Git, s.Dir, s.Span)
+	// --no-renames lists both the old and the new path of a move, so a file
+	// moved out of a protected directory still counts as touching it.
+	res, err := s.Git(ctx, s.Dir, "diff", "--name-only", "--no-renames", s.Span)
+	if err == nil && res.ExitCode != 0 {
+		err = &git.ExitError{Args: "diff --name-only " + s.Span, ExitCode: res.ExitCode, Stderr: res.Stderr}
+	}
+	var files []string
+	for _, l := range strings.Split(res.Stdout, "\n") {
+		if l = strings.TrimSpace(l); l != "" {
+			files = append(files, l)
+		}
+	}
 	if err != nil {
 		return ReviewDepth{}, &ReviewDepthError{"diff", fmt.Sprintf("could not list the files of %s to pick the review depth", s.Span), err}
 	}
