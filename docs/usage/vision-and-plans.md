@@ -26,7 +26,7 @@ Each milestone carries one of four statuses:
 
 Multiple milestones can be `active` simultaneously when their dependencies allow. [`/rota-work` (no argument)](picking-work.md) prefers items tagged to active milestones within each priority and size band, so the active set scopes work without being a hard wall. P0 bugs always jump the queue regardless of milestone, and general-backlog items without a tag still surface.
 
-When an active milestone has no open items remaining, `/rota-work` (no argument) surfaces an empty-active notice so you know the milestone is ready to close. Run `rota milestone status <MID> --to shipped` to flip its status, which immediately unblocks any milestone that listed it as a dependency.
+When an active milestone has no open items remaining, `/rota-work` (no argument) surfaces an empty-active notice so you know the milestone is ready to close. Run `rota milestone status <MID> --to shipped` to flip its status, which immediately unblocks any milestone that listed it as a dependency. Shipping is refused (exit 4, nothing changes) while the milestone has open items or unticked `- [ ]` criteria in its body; the failure lists them, `rota milestone check <MID>` shows the breakdown, and `--force` ships anyway.
 
 Marking a milestone `shipped` immediately unblocks anything that depended on it. Marking it `archived` does not. Use `archived` for milestones you are intentionally dropping, not for ones that finished.
 

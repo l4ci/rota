@@ -74,7 +74,7 @@ PY
     OUT="$(hvj milestone show M01)" || fail "$prov milestone show M01 failed"
     OUT="$(jget data.body <<<"$OUT")"
     eq "frontmatter synced" "status: active" "$(grep -m1 "^status:" <<<"$OUT")"
-    hvj milestone status M01 --to shipped >/dev/null || fail "$prov status shipped failed"
+    hvj milestone status M01 --to shipped --force >/dev/null || fail "$prov status shipped failed"
     eq "shipped closes completed" "closed|completed|milestone-tracker,status:shipped|M01 — Alpha" "$(ISSUE 1)"
     eq "shipped closes native milestone" "closed" "$(NATIVE M01)"
     OUT="$(hvj milestone show M01)" || fail "$prov milestone show M01 failed"
@@ -87,22 +87,35 @@ PY
     hvj milestone status M02 --to planned >/dev/null || fail "$prov status planned failed"
     eq "planned reopens" "open|None|milestone-tracker,status:planned|M02 — Beta" "$(ISSUE 2)"
     eq "planned reopens native milestone" "open" "$(NATIVE M02)"
-    hvj milestone status M02 --to shipped >/dev/null || fail "$prov status shipped (M02) failed"
+    hvj milestone status M02 --to shipped --force >/dev/null || fail "$prov status shipped (M02) failed"
     eq "archived -> planned -> shipped reads completed" "closed|completed|milestone-tracker,status:shipped|M02 — Beta" "$(ISSUE 2)"
     hvj milestone status M02 --to active >/dev/null || fail "$prov status active (M02) failed"
     hvj milestone status M01 --to active >/dev/null || fail "$prov status active (M01) failed"
     eq "shipped -> active reopens issue" "open|None|milestone-tracker,status:active|M01 — Alpha" "$(ISSUE 1)"
     eq "shipped -> active reopens milestone" "open" "$(NATIVE M01)"
-    hvj milestone status M01 --to shipped >/dev/null || fail "$prov status shipped (M01) failed"
+    hvj milestone status M01 --to shipped --force >/dev/null || fail "$prov status shipped (M01) failed"
     STATE_CALLS() { grep -cE 'issue (close|reopen)' "$P/log" || true; }
     before="$(STATE_CALLS)"; state="$(ISSUE 1)"
-    eq "re-status reports unchanged" "false" "$(hvj milestone status M01 --to shipped | jget data.changed)"
+    eq "re-status reports unchanged" "false" "$(hvj milestone status M01 --to shipped --force | jget data.changed)"
     eq "re-status keeps state" "$state" "$(ISSUE 1)"
     eq "re-status adds no close/reopen" "$before" "$(STATE_CALLS)"
     RC hvj milestone status M99 --to active
     eq "status unknown id" "3" "$RCV"
     RC hvj milestone status M01 --to bogus
     eq "status bad value" "2" "$RCV"
+
+    # --- shipping audits the milestone: unticked criteria refuse, --force and a finished milestone ship
+    RC hvj milestone status M02 --to shipped
+    eq "ship refuses unticked criteria" "4" "$RCV"
+    eq "refused ship changes nothing" "false" "$(jget data.changed <<<"$OUT")"
+    eq "refused ship lists the criterion" '["AC-1"]' "$(jget data.unticked <<<"$OUT")"
+    eq "refused ship leaves the issue open" "open" "$(ISSUE 2 | cut -d'|' -f1)"
+    eq "force ships past the audit" "true" "$(hvj milestone status M02 --to shipped --force | jget data.changed)"
+    hvj milestone status M02 --to active >/dev/null || fail "$prov status active after force failed"
+    "$ROTA_BIN" milestone show M02 | sed 's/^- \[ \]/- [x]/' > "$P/m02-done.md"
+    hvj milestone put M02 --body-file "$P/m02-done.md" >/dev/null || fail "$prov put ticked body failed"
+    eq "finished milestone ships" "true" "$(hvj milestone status M02 --to shipped | jget data.changed)"
+    hvj milestone status M02 --to active >/dev/null || fail "$prov status active after ship failed"
 
     # --- show / put round trip
     "$ROTA_BIN" milestone show M02 > "$P/m02.md" || fail "$prov milestone show M02 failed"
@@ -241,8 +254,8 @@ print(" ".join("%s:%s:%s:%s" % (p["key"], p["unitKind"], p["status"], p["title"]
     eq "slice re-mint" "M01-S02" "$(hvj plan add --milestone M01 --slice --title "Again" | jget data.key)"
 
     # ship
-    hvj milestone status M01 --to shipped >/dev/null || fail "$prov ship M01 failed"
-    hvj milestone status M02 --to shipped >/dev/null || fail "$prov ship M02 failed"
+    hvj milestone status M01 --to shipped --force >/dev/null || fail "$prov ship M01 failed"
+    hvj milestone status M02 --to shipped --force >/dev/null || fail "$prov ship M02 failed"
     HAS .rota/MILESTONES.md "_(none active" "active list emptied"
     HAS CLAUDE.md "all shipped or archived" "CLAUDE.md after ship"
     eq "nothing active" "[]" "$(hvj milestone active | jget data.ids)"
