@@ -1,5 +1,5 @@
 ---
-verified-sha: d0b3447205103e4211d248a90e736db78961337d
+verified-sha: a64741887d64d3b698e40188727121e798cec881
 refs:
   - internal/harness/opencode.go
   - internal/harness/opencode_guard.js
