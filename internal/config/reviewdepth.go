@@ -58,13 +58,13 @@ type ReviewPolicy struct {
 }
 
 // DefaultSupportPaths are the files a change updates beside the code an issue
-// names (docs, frozen records, golden files, the generated option reference),
+// names (docs with the generated option reference, frozen records, golden files, smoke sections),
 // so scope drift ignores them unless ship.review.supportPaths replaces the list.
 var DefaultSupportPaths = []string{
 	"docs/**",
-	"docs/reference/config-options.md",
 	"cmd/rota/testdata/frozen/**",
 	"internal/*/testdata/golden/**",
+	"test/sections/**",
 }
 
 // ParseReviewPolicy reads a ship.review value: the legacy booleans (true is
@@ -329,7 +329,8 @@ func matchSupport(glob, file string) bool {
 }
 
 // sitsBesideDeclared reports whether a _test.go file lives in the directory of
-// a declared file: its tests belong to the declared code.
+// a declared file: its tests belong to the declared code. A declared directory
+// has no sibling files; its own files are covered by the declared set.
 func sitsBesideDeclared(file string, allowed []string) bool {
 	if !strings.HasSuffix(file, "_test.go") {
 		return false
@@ -337,7 +338,8 @@ func sitsBesideDeclared(file string, allowed []string) bool {
 	dir := path.Dir(file)
 	return slices.ContainsFunc(allowed, func(a string) bool {
 		a = dirGlob(a)
-		return !strings.ContainsAny(a, "*?[") && path.Dir(a) == dir
+		// only a file entry (it has an extension) names its own directory
+		return path.Ext(a) != "" && !strings.ContainsAny(a, "*?[") && path.Dir(a) == dir
 	})
 }
 
