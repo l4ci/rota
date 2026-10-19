@@ -45,9 +45,7 @@ func roundReviewRelay(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		env := c.deps().RoundEnv(ctx, root)
-		env.Worker = workerEnvCtx(c, ctx)
-		res, err := env.ReviewRelay(ctx, root, o)
+		res, err := reviewEnv(c, ctx, root, o).ReviewRelay(ctx, root, o)
 		return reviewRelayResult(res, set, err)
 	}
 }
@@ -61,13 +59,23 @@ func reviewOpts(c *Ctx, root string, set roundcfg.Settings, slot string) (round.
 	if err != nil {
 		return round.ReviewOpts{}, trackerErr(err)
 	}
-	o := round.ReviewOpts{Slot: slot, Forge: fg, MaxBounces: set.MaxBounces}
+	o := round.ReviewOpts{Slot: slot, Forge: fg, MaxBounces: set.MaxBounces, FreshAt: set.FreshAt, Settings: set}
 	reg, err := worker.LoadRegistry(root)
 	if err != nil {
 		return round.ReviewOpts{}, err
 	}
 	if s := reg.Slot(slot); s != nil {
 		o.Verdict = failVerdict(root, s.Branch())
+		o.OpenFindings = openFindings(root, s.Branch())
+	}
+	if set.FreshAt > 0 {
+		// The backlog is only opened when a fresh transfer can happen; one that
+		// cannot be opened leaves the relay to resume the worker in place.
+		if _, be, err := moveEnv(c, root); err == nil {
+			o.Board = be
+		} else {
+			c.Warn("round.freshAt skipped: %v", err)
+		}
 	}
 	o.Escalate = func(ctx context.Context, number int, slot, title, body string) error {
 		env := c.deps().escalationEnv()
@@ -78,6 +86,45 @@ func reviewOpts(c *Ctx, root string, set roundcfg.Settings, slot string) (round.
 		return err
 	}
 	return o, nil
+}
+
+// reviewEnv is the env ReviewRelay runs in: the round env with the meter reader
+// but no account picking, and the backlog a fresh transfer moves the claim on.
+func reviewEnv(c *Ctx, ctx context.Context, root string, o round.ReviewOpts) round.Env {
+	env := c.deps().RoundEnv(ctx, root)
+	env.Worker = workerEnvCtx(c, ctx)
+	if o.Board != nil {
+		env.Board = o.Board
+	}
+	return env
+}
+
+// findingLine is one review finding as a relay or brief line.
+func findingLine(f verdict.Finding) string {
+	line := fmt.Sprintf("[%s] %s", f.Severity, f.Title)
+	if f.File != "" {
+		line += fmt.Sprintf(" (%s", f.File)
+		if f.Line > 0 {
+			line += fmt.Sprintf(":%d", f.Line)
+		}
+		line += ")"
+	}
+	return line
+}
+
+// openFindings are the findings of branch's effective review when it is FAIL:
+// after a re-review those are the NOT ADDRESSED ones plus any the fix
+// introduced (skills/rota-review/re-review.md). Nil when there are none.
+func openFindings(root, branch string) []string {
+	r, ok := verdict.EffectiveReview(verdict.Load(root).Branches[verdict.BranchKey("", branch)])
+	if !ok || r.Verdict != verdict.Fail {
+		return nil
+	}
+	var out []string
+	for _, f := range r.Findings {
+		out = append(out, findingLine(f))
+	}
+	return out
 }
 
 // failVerdict is the effective review verdict recorded for branch when it is
@@ -97,14 +144,7 @@ func failVerdict(root, branch string) *worker.ReviewVerdict {
 		sb.WriteString(": " + r.Summary)
 	}
 	for _, f := range r.Findings {
-		fmt.Fprintf(&sb, "\n  - [%s] %s", f.Severity, f.Title)
-		if f.File != "" {
-			fmt.Fprintf(&sb, " (%s", f.File)
-			if f.Line > 0 {
-				fmt.Fprintf(&sb, ":%d", f.Line)
-			}
-			sb.WriteString(")")
-		}
+		sb.WriteString("\n  - " + findingLine(f))
 	}
 	return &worker.ReviewVerdict{At: at, Text: sb.String()}
 }
@@ -116,6 +156,8 @@ func reviewRelayResult(res round.Relayed, set roundcfg.Settings, err error) (Res
 	d.Set("items", res.Items)
 	d.Set("bounces", res.Bounces)
 	d.Set("max", set.MaxBounces)
+	setIf(d, "fresh", res.Fresh)
+	setIf(d, "freshSkipped", res.FreshSkipped)
 	if err != nil {
 		d.Set("escalated", res.Escalated)
 		d.Set("changed", res.Escalated)
@@ -133,5 +175,12 @@ func reviewRelayResult(res round.Relayed, set roundcfg.Settings, err error) (Res
 		return Result{Data: d, Text: "nothing to relay"}, nil
 	}
 	d.Set("changed", true)
-	return Result{Data: d, Text: fmt.Sprintf("relayed %d item(s) to %s: bounce %d of %s", res.Items, res.Slot, res.Bounces, maxText(set.MaxBounces))}, nil
+	if res.Fresh != "" {
+		return Result{Data: d, Text: fmt.Sprintf("transferred to %s with a fresh context: bounce %d of %s (round.freshAt)", res.Fresh, res.Bounces, maxText(set.MaxBounces))}, nil
+	}
+	text := fmt.Sprintf("relayed %d item(s) to %s: bounce %d of %s", res.Items, res.Slot, res.Bounces, maxText(set.MaxBounces))
+	if res.FreshSkipped != "" {
+		text += fmt.Sprintf("\nround.freshAt: not transferred, relayed in place: %s", res.FreshSkipped)
+	}
+	return Result{Data: d, Text: text}, nil
 }

@@ -73,8 +73,10 @@ type Summary struct {
 }
 
 // CapReasons counts transfers made at the bounce cap: AmbiguousCriteria went
-// to the human after the criteria audit, Tier went to a stronger worker.
-type CapReasons struct{ AmbiguousCriteria, Tier int }
+// to the human after the criteria audit, Tier went to a stronger worker. Fresh
+// counts the review-relay transfers to a fresh context at round.freshAt, below
+// the cap.
+type CapReasons struct{ AmbiguousCriteria, Tier, Fresh int }
 
 // prNum is the number a PR reference ends in (#7, a /pull/7 URL), 0 for none.
 func prNum(pr string) int {
@@ -186,6 +188,8 @@ func Fold(entries []Entry, audit []*jsonx.Object, round int) Summary {
 				s.CapReasons.AmbiguousCriteria++
 			case CapTier:
 				s.CapReasons.Tier++
+			case CapFresh:
+				s.CapReasons.Fresh++
 			}
 			if from := e.DetailStr("from"); from != "" {
 				for _, o := range f.rows {
@@ -372,8 +376,8 @@ func (s Summary) Text() string {
 		}
 		tw.Flush()
 	}
-	if c := s.CapReasons; c.AmbiguousCriteria+c.Tier > 0 {
-		fmt.Fprintf(&b, "\nBounce cap: %d ambiguous-criteria, %d tier\n", c.AmbiguousCriteria, c.Tier)
+	if c := s.CapReasons; c.AmbiguousCriteria+c.Tier+c.Fresh > 0 {
+		fmt.Fprintf(&b, "\nBounce cap: %d ambiguous-criteria, %d tier, %d fresh\n", c.AmbiguousCriteria, c.Tier, c.Fresh)
 	}
 	fmt.Fprintln(&b, "\nGate audit")
 	if len(s.Audit) == 0 {
@@ -465,6 +469,7 @@ func (s Summary) Object() *jsonx.Object {
 	cap := jsonx.NewObject()
 	cap.Set(CapAmbiguousCriteria, s.CapReasons.AmbiguousCriteria)
 	cap.Set(CapTier, s.CapReasons.Tier)
+	cap.Set(CapFresh, s.CapReasons.Fresh)
 	d.Set("capReasons", cap)
 	return d
 }

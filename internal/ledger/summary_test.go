@@ -242,6 +242,25 @@ func TestSummaryOwnerlessBounceMakesNoDashTotal(t *testing.T) {
 	}
 }
 
+func TestSummaryCountsFreshTransfers(t *testing.T) {
+	es := []Entry{
+		{TS: at(0), Kind: KindTransfer, Round: 2, Issue: "12", Slot: "dana", Detail: Detail("from", "ben", "capReason", CapFresh)},
+		{TS: at(1), Kind: KindTransfer, Round: 2, Issue: "13", Slot: "dana", Detail: Detail("from", "ben", "capReason", CapFresh)},
+	}
+	s := Fold(es, nil, 2)
+	if s.CapReasons.Fresh != 2 {
+		t.Errorf("cap reasons = %+v", s.CapReasons)
+	}
+	if !strings.Contains(s.Text(), "2 fresh") {
+		t.Errorf("text lacks the count:\n%s", s.Text())
+	}
+	v, _ := s.Object().Get("capReasons")
+	cr, _ := v.(*jsonx.Object)
+	if n, _ := cr.Get("fresh"); n != 2 {
+		t.Errorf("capReasons.fresh = %v", n)
+	}
+}
+
 func TestSummaryCountsCapReasons(t *testing.T) {
 	es := []Entry{
 		{TS: at(0), Kind: KindTransfer, Round: 2, Issue: "12", Slot: "human", Detail: Detail("from", "ben", "capReason", CapAmbiguousCriteria)},
