@@ -70,8 +70,8 @@ func TestConcurrentWritersLoseNoUpdates(t *testing.T) {
 	if got := counter(LoadJSON(path, nil)); got != writers*rounds {
 		t.Fatalf("counter = %d, want %d", got, writers*rounds)
 	}
-	if _, err := os.Stat(path + ".tmp"); !os.IsNotExist(err) {
-		t.Fatal("tmp file left behind")
+	if left, _ := filepath.Glob(path + ".*.tmp"); len(left) != 0 {
+		t.Fatalf("tmp files left behind: %v", left)
 	}
 }
 
