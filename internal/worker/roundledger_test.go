@@ -194,14 +194,14 @@ func TestBounceEntryNamesTheSlotHoldingThePR(t *testing.T) {
 	}
 }
 
-// A PR gated by number after its slot moved on bounces under the PR number as
-// "slot". That is not a slot: the ledger row names none, and the summary folds
-// the bounce into the issue's own row instead of listing a pseudo-slot.
+// A PR gated by number after its slot moved on resolves to no slot, so the
+// caller records the bounce with a blank one (never the PR number). The summary
+// folds it into the issue's own row instead of listing a pseudo-slot.
 func TestBounceByPRNumberAfterTheSlotMovedOnMakesNoPseudoSlot(t *testing.T) {
 	dir := ledgerProject(t, `{"name":"ben","task":"13","kind":"claude"}`)
 	env := Env{Now: func() time.Time { return ledgerNow }}
 	ledgerAppend(env, dir, ledger.Entry{Kind: ledger.KindAssign, Issue: "12", Slot: "ben", PR: "847", Round: 0})
-	if _, err := RecordBounce(env, dir, "12", "847", "h1"); err != nil {
+	if _, err := RecordBounce(env, dir, "12", "", "h1"); err != nil {
 		t.Fatal(err)
 	}
 	es, _ := ledger.Load(dir)

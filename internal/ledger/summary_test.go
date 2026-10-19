@@ -228,3 +228,16 @@ func TestSummaryTrainMemberDropsAnEarlierGateVerdict(t *testing.T) {
 		t.Errorf("gate = %q, want none for a member the train accepted", g)
 	}
 }
+
+// A bounce with no slot and no row to fold into has no owner: it must not mint
+// a row that totals() renders as a "-" line in Slots and Accounts.
+func TestSummaryOwnerlessBounceMakesNoDashTotal(t *testing.T) {
+	es := []Entry{{TS: at(5), Kind: KindBounce, Round: 2, Issue: "12"}}
+	s := Fold(es, nil, 2)
+	if len(s.Issues) != 0 {
+		t.Errorf("issue rows %+v, want none", s.Issues)
+	}
+	for _, tot := range append(append([]Total{}, s.Slots...), s.Accounts...) {
+		t.Errorf("unexpected total %+v", tot)
+	}
+}

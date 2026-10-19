@@ -88,7 +88,9 @@ func landed(root, issue string) error {
 // bounce counts one bounce for the item and parks it at round.maxBounces. A
 // failure to park is returned, the count stands.
 func bounce(env worker.Env, root, issue string, r worker.GateResult, park Park) (Outcome, error) {
-	n, err := worker.RecordBounceIn(env, r.Round, root, issue, r.Slot, r.SHA)
+	// r.Slot echoes the gate argument, a PR number after its slot moved on; the
+	// slot the target resolved to names the ledger row.
+	n, err := worker.RecordBounceIn(env, r.Round, root, issue, r.TargetSlot, r.SHA)
 	if err != nil {
 		return Outcome{}, err
 	}
