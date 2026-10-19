@@ -24,6 +24,8 @@ import (
 func behaviourWorld(t *testing.T, body string) (*world, func(GateOpts) (GateResult, error)) {
 	t.Helper()
 	w := newWorld(t, ghURL)
+	os.Remove(ranMark)
+	t.Cleanup(func() { os.Remove(ranMark) })
 	w.forge("body", "Closes #899")
 	w.forge("issueBody", body)
 	os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
@@ -231,9 +233,14 @@ func TestGateBehaviourSkippedWhenNothingVerifies(t *testing.T) {
 
 // #899 trust: steps run only when the issue's author and last editor can push.
 
-const tryTouch = "## Try it\n\n- touch ran.txt && echo ran\n"
+// ranMark is where tryTouch's step leaves its mark: an absolute path, since
+// steps run in the scratch tree, which is gone by the time a test looks.
+// behaviourWorld clears it, so a test sees only its own gate's steps.
+var ranMark = filepath.Join(os.TempDir(), fmt.Sprintf("rota-behaviour-ran-%d", os.Getpid()))
 
-func ranMarker(w *world) bool { return exists(filepath.Join(w.dir, "ran.txt")) }
+var tryTouch = "## Try it\n\n- touch " + ranMark + " && echo ran\n"
+
+func ranMarker(*world) bool { return exists(ranMark) }
 
 func TestGateBehaviourTrustSkips(t *testing.T) {
 	for name, tc := range map[string]struct {
@@ -277,6 +284,9 @@ func TestGateBehaviourTrustedAuthorAndEditorRun(t *testing.T) {
 	res, err := gate(GateOpts{})
 	if err != nil || res.Verdict != GatePass || !hasNote(res, "BEHAVIOUR w1 — PASS") {
 		t.Fatalf("%+v %v", res, err)
+	}
+	if !ranMarker(w) {
+		t.Error("the trusted step did not run")
 	}
 	log := w.logText()
 	if !strings.Contains(log, "CanPush alice") || !strings.Contains(log, "CanPush bob") {
@@ -456,7 +466,7 @@ func TestGateBehaviourRunsTheVouchedBody(t *testing.T) {
 		t.Fatalf("%+v %v", res, err)
 	}
 	tr, _ := os.ReadFile(filepath.Join(w.dir, behaviourRecord(t, w).Transcript))
-	if !strings.Contains(string(tr), "$ touch ran.txt") || strings.Contains(string(tr), "evil") {
+	if !strings.Contains(string(tr), "$ touch "+ranMark) || strings.Contains(string(tr), "evil") {
 		t.Errorf("ran the ItemBody text instead of the vouched body:\n%s", tr)
 	}
 }
