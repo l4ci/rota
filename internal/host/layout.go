@@ -209,7 +209,7 @@ func (h *herdr) OpenLinked(ctx context.Context, primary, slot, path string) (str
 func (h *herdr) ToNewTabIn(ctx context.Context, pane, ws, label string) error {
 	r := h.herdr(ctx, "pane", "move", pane, "--new-tab", "--workspace", ws, "--label", label, "--no-focus")
 	if r.ExitCode != 0 {
-		return fmt.Errorf("herdr pane move %s failed: %s", pane, strings.TrimSpace(r.Stderr))
+		return unsupportedOr(r, fmt.Errorf("herdr pane move %s failed: %s", pane, strings.TrimSpace(r.Stderr)))
 	}
 	return nil
 }

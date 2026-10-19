@@ -301,13 +301,14 @@ func (e Env) Dispatch(ctx context.Context, root string, o DispatchOpts) (Dispatc
 		if err != nil {
 			return res, fail(exitcode.ExitUnavailable, err.Error())
 		}
-		handle, err = h.Spawn(ctx, host.SpawnOpts{Slot: o.Slot, Session: session, Cwd: worktree, LinkWorkspace: group,
+		var linked bool
+		handle, err = h.Spawn(ctx, host.SpawnOpts{Slot: o.Slot, Session: session, Cwd: worktree, LinkWorkspace: group, Linked: &linked,
 			Env: append(accountEnv, SlotEnv(o.Slot, portBase, width)...), Launch: launch, BootTimeout: timeout})
 		if err != nil {
 			clearHandle(root, o.Slot)
 			return res, fail(exitcode.ExitUnavailable, err.Error())
 		}
-		if group {
+		if group && linked {
 			// The slot's tab id leads with the workspace it lives in. Record it
 			// so the next kill closes this workspace and no other.
 			ws, _, _ := strings.Cut(handle, ":")

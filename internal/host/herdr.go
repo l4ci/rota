@@ -5,6 +5,7 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -252,10 +253,19 @@ func (h *herdr) Spawn(ctx context.Context, o SpawnOpts) (string, error) {
 	ws := h.d.Getenv("HERDR_WORKSPACE_ID")
 	var opened openedWorkspace
 	if o.LinkWorkspace {
-		if opened, err = h.openLinked(ctx, h.d.Getenv("HERDR_WORKSPACE_ID"), o.Slot, o.Cwd); err != nil {
+		switch opened, err = h.openLinked(ctx, h.d.Getenv("HERDR_WORKSPACE_ID"), o.Slot, o.Cwd); {
+		case errors.Is(err, ErrUnsupported):
+			// A herdr without `worktree open`: the slot is a tab, not a failure.
+			fmt.Fprintf(h.d.Stderr, "rota: herdr cannot link workspaces; slot %s stays a tab\n", o.Slot)
+			opened = openedWorkspace{}
+		case err != nil:
 			return "", err
+		default:
+			ws = opened.id
+			if o.Linked != nil {
+				*o.Linked = true
+			}
 		}
-		ws = opened.id
 	}
 	args := []string{"tab", "create", "--workspace", ws,
 		"--cwd", o.Cwd, "--label", o.Slot, "--no-focus"}
@@ -339,7 +349,7 @@ func (h *herdr) openLinked(ctx context.Context, primary, slot, path string) (ope
 	r := h.herdr(ctx, "worktree", "open", "--workspace", primary,
 		"--path", path, "--label", slot, "--no-focus")
 	if r.ExitCode != 0 {
-		return openedWorkspace{}, fmt.Errorf("herdr worktree open failed for slot '%s': %s", slot, strings.TrimSpace(r.Stderr))
+		return openedWorkspace{}, unsupportedOr(r, fmt.Errorf("herdr worktree open failed for slot '%s': %s", slot, strings.TrimSpace(r.Stderr)))
 	}
 	ws := jget(r.Stdout, "result.workspace.workspace_id")
 	if ws == "" {
@@ -727,4 +737,16 @@ func (h *herdr) Explain(ctx context.Context, slot, handle string) string {
 		}
 	}
 	return strings.Join(out, " / ")
+}
+
+// unsupportedOr wraps err in ErrUnsupported when the failed command r says herdr
+// lacks the method or a flag (herdr's unknown_method, or a clap usage error).
+// Probing the failure, not the version, is what the no-pin decision asks for.
+func unsupportedOr(r Result, err error) error {
+	low := strings.ToLower(r.Stderr)
+	if jget(r.Stderr, "error.code") == "unknown_method" ||
+		strings.Contains(low, "unexpected argument") || strings.Contains(low, "unknown flag") || strings.Contains(low, "unrecognized") {
+		return fmt.Errorf("%w: %v", ErrUnsupported, err)
+	}
+	return err
 }

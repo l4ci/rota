@@ -14,12 +14,17 @@ import (
 type groupHost struct {
 	*fakeHost
 	closed []string
+	// cannotLink is a herdr that falls back to a tab: Spawn links nothing.
+	cannotLink bool
 }
 
 func (g *groupHost) Capabilities() host.Capabilities { return host.CapabilitiesOf(g) }
 func (g *groupHost) Spawn(ctx context.Context, o host.SpawnOpts) (string, error) {
 	h, err := g.fakeHost.Spawn(ctx, o)
-	if err == nil && o.LinkWorkspace {
+	if err == nil && o.LinkWorkspace && !g.cannotLink {
+		if o.Linked != nil {
+			*o.Linked = true
+		}
 		return "w9N:t2", nil
 	}
 	return h, err
@@ -159,5 +164,18 @@ func TestDispatchNeedsAHostThatCanLinkToGroup(t *testing.T) {
 	}
 	if h.spawnOpts.LinkWorkspace {
 		t.Error("LinkWorkspace on a host that cannot link panes")
+	}
+}
+
+// A herdr that cannot link falls back to a tab at Spawn: nothing is recorded
+// as a workspace, so a later kill closes none.
+func TestDispatchRecordsNoWorkspaceWhenHerdrFellBackToATab(t *testing.T) {
+	dir := groupProject(t, `{"work":{"herdrGroupSlots":true}}`, nil)
+	h := &groupHost{fakeHost: tmuxFake(), cannotLink: true}
+	if err := dispatchOnce(t, dir, h); err != nil {
+		t.Fatal(err)
+	}
+	if got := LoadRegistryTolerant(dir).Slot("w1").WorkspaceID(); got != "" {
+		t.Errorf("workspaceId = %q, want none", got)
 	}
 }

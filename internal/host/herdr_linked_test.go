@@ -2,6 +2,7 @@ package host
 
 import (
 	"bytes"
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
@@ -30,9 +31,12 @@ var linkedOpts = SpawnOpts{Slot: "w1", Cwd: "/repo/.worktrees/w1", Launch: "clau
 
 func TestHerdrSpawnLinkedWorkspace(t *testing.T) {
 	f := linkedFake("false", nil)
-	got, err := New("herdr", deps(f, herdrEnv, &clock{})).Spawn(bg, linkedOpts)
-	if err != nil || got != "w9N:t2" {
-		t.Fatalf("Spawn = %q, %v", got, err)
+	o := linkedOpts
+	var linked bool
+	o.Linked = &linked
+	got, err := New("herdr", deps(f, herdrEnv, &clock{})).Spawn(bg, o)
+	if err != nil || got != "w9N:t2" || !linked {
+		t.Fatalf("Spawn = %q, %v, linked %v", got, err, linked)
 	}
 	want := []string{
 		"herdr worktree open --workspace w9 --path /repo/.worktrees/w1 --label w1 --no-focus",
@@ -197,5 +201,56 @@ func TestHerdrOperatorTabAndRoundTokenStayInTheOrchestratorWorkspace(t *testing.
 		if !strings.Contains(f.log(), w) {
 			t.Errorf("want %q in\n%s", w, f.log())
 		}
+	}
+}
+
+// A herdr without `worktree open` (or its flags) is not a failed dispatch: the
+// slot is a tab in the caller's workspace, with one warning and nothing linked.
+func TestHerdrSpawnLinkedFallsBackToATabWhenOpenIsUnsupported(t *testing.T) {
+	for name, bad := range map[string]Result{
+		"unknown method": {ExitCode: 1, Stderr: herdrErr("unknown_method")},
+		"unknown flag":   {ExitCode: 2, Stderr: "error: unexpected argument '--no-focus' found"},
+	} {
+		f := linkedFake("false", map[string]Result{"worktree open": bad})
+		var errb bytes.Buffer
+		d := deps(f, herdrEnv, &clock{})
+		d.Stderr = &errb
+		o := linkedOpts
+		var linked bool
+		o.Linked = &linked
+		got, err := New("herdr", d).Spawn(bg, o)
+		if err != nil || got != "w9N:t2" {
+			t.Fatalf("%s: Spawn = %q, %v", name, got, err)
+		}
+		if linked || !strings.Contains(f.log(), "herdr tab create --workspace w9 ") || f.count("herdr tab close") != 0 {
+			t.Errorf("%s: linked = %v, log =\n%s", name, linked, f.log())
+		}
+		if want := "herdr cannot link workspaces; slot w1 stays a tab"; !strings.Contains(errb.String(), want) {
+			t.Errorf("%s: stderr = %q", name, errb.String())
+		}
+	}
+}
+
+// Any other open failure still fails the dispatch.
+func TestHerdrSpawnLinkedOtherOpenErrorsStillFail(t *testing.T) {
+	f := linkedFake("false", map[string]Result{"worktree open": {ExitCode: 1, Stderr: herdrErr("worktree_not_found")}})
+	if _, err := New("herdr", deps(f, herdrEnv, &clock{})).Spawn(bg, linkedOpts); err == nil || f.count("herdr tab create") != 0 {
+		t.Errorf("err = %v, log =\n%s", err, f.log())
+	}
+}
+
+func TestHerdrOpenLinkedAndMoveReportAnUnsupportedHerdr(t *testing.T) {
+	bad := Result{ExitCode: 1, Stderr: herdrErr("unknown_method")}
+	f := linkedFake("false", map[string]Result{"worktree open": bad, "pane move": bad})
+	l := New("herdr", deps(f, herdrEnv, &clock{})).(LinkedLayouter)
+	if _, _, err := l.OpenLinked(bg, "w9", "ben", "/repo/.worktrees/ben"); !errors.Is(err, ErrUnsupported) {
+		t.Errorf("OpenLinked err = %v", err)
+	}
+	if err := l.ToNewTabIn(bg, "w9:p4", "w9N", "ben"); !errors.Is(err, ErrUnsupported) {
+		t.Errorf("ToNewTabIn err = %v", err)
+	}
+	other := linkedFake("false", map[string]Result{"worktree open": {ExitCode: 1, Stderr: herdrErr("boom")}})
+	if _, _, err := New("herdr", deps(other, herdrEnv, &clock{})).(LinkedLayouter).OpenLinked(bg, "w9", "ben", "/x"); errors.Is(err, ErrUnsupported) {
+		t.Error("an ordinary failure was called unsupported")
 	}
 }

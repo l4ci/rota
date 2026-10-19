@@ -21,6 +21,7 @@ package layout
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 
@@ -213,6 +214,9 @@ type Result struct {
 	Before, After string
 	// Moves is how many panes were moved.
 	Moves int
+	// Unlinked are the grouped slots a herdr that cannot link left as plain
+	// tabs.
+	Unlinked []string
 }
 
 // ToSplit makes the base tab the grid. It does nothing when the panes already
@@ -352,6 +356,11 @@ func ToTabs(ctx context.Context, h host.Layouter, st State) (Result, error) {
 		// so the assertion is a cast; a plain Layouter still gets a tab.
 		if lh, ok := h.(host.LinkedLayouter); ok && st.Group && w.Path != "" {
 			err = toWorkspace(ctx, lh, w)
+			if errors.Is(err, host.ErrUnsupported) {
+				// This herdr cannot link: the slot stays a plain tab.
+				res.Unlinked = append(res.Unlinked, w.Slot)
+				err = h.ToNewTab(ctx, w.Pane, w.Slot)
+			}
 		} else {
 			err = h.ToNewTab(ctx, w.Pane, w.Slot)
 		}

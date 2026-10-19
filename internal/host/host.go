@@ -130,7 +130,15 @@ type SpawnOpts struct {
 	// LinkWorkspace (herdr only): open the worktree as a workspace linked to the
 	// caller's, instead of a tab in the caller's own (work.herdrGroupSlots).
 	LinkWorkspace bool
+	// Linked, when set, is written true if the session really went into a
+	// linked workspace: a herdr that cannot link (ErrUnsupported) falls back
+	// to a tab and leaves it false.
+	Linked *bool
 }
+
+// ErrUnsupported marks a herdr that lacks a method or flag rota called, so a
+// caller can fall back instead of failing: probed, never a version check.
+var ErrUnsupported = errors.New("herdr does not support this")
 
 // Resubmitter is implemented by a host that can tell a brief left unsent on
 // the prompt line, so a resend submits it instead of typing it again.
