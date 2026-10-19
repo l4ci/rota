@@ -79,11 +79,13 @@ func (t *tmux) waitReady(ctx context.Context, window string, timeout int) bool {
 // like; any match counts. Each entry is tied to the UI it was seen on. A
 // dialog (folder trust) must match none of them, so no bare prompt glyph.
 var bootPatterns = []*regexp.Regexp{
-	regexp.MustCompile(`(?s)\?.*for shortcuts`),    // Claude Code, older hint line
-	regexp.MustCompile(`Welcome to Claude Code`),   // Claude Code, older banner
-	regexp.MustCompile(`╭─`),                       // older box-drawn frame (Claude Code, Codex)
-	regexp.MustCompile(`Claude Code v\d+\.\d+`),    // Claude Code 2.1.289 banner
-	regexp.MustCompile(`Ask Codex to do anything`), // Codex 0.159.2 prompt placeholder
+	regexp.MustCompile(`(?s)\?.*for shortcuts`),             // Claude Code, older hint line
+	regexp.MustCompile(`Welcome to Claude Code`),            // Claude Code, older banner
+	regexp.MustCompile(`╭─`),                                // older box-drawn frame (Claude Code, Codex)
+	regexp.MustCompile(`Claude Code v\d+\.\d+`),             // Claude Code 2.1.289 banner
+	regexp.MustCompile(`Ask Codex to do anything`),          // Codex 0.159.2 prompt placeholder
+	regexp.MustCompile(`tab\s+agents\s+ctrl\+p\s+commands`), // OpenCode 1.17 footer
+	regexp.MustCompile(`OpenCode \d+\.\d+`),                 // OpenCode version line
 }
 
 func looksBooted(p string) bool {

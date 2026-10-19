@@ -295,6 +295,52 @@ func TestClassifySentinelAfterCodexBullet(t *testing.T) {
 	}
 }
 
+// The OpenCode pane fixtures are built from the spike's description of the 1.17
+// TUI (.rota/spikes/opencode-worker.md): the alternate-screen viewport, the
+// user message echoed under a "┃" gutter, "esc interrupt" while a turn runs
+// and the dialog and error texts it printed. They are not live captures: the
+// provider keys were expired when this was written.
+func opencodePane(t *testing.T, name string) string {
+	t.Helper()
+	b, err := os.ReadFile("testdata/panes/opencode-" + name + "-1.17.9.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+func TestClassifyOpenCode(t *testing.T) {
+	// The echoed brief names ROTA-DONE ben <pr-url> and ROTA-BLOCKED ben:
+	// <one question ...> as placeholders; neither is a sentinel.
+	if state, ev := Classify(opencodePane(t, "busy"), false, 60, ""); state != "BUSY" || !strings.Contains(ev, "esc interrupt") {
+		t.Errorf("busy pane: %s %q", state, ev)
+	}
+	if state, ev := Classify(opencodePane(t, "expired-key"), false, 60, ""); state != "LIMITED" || !strings.Contains(ev, "needs a human") {
+		t.Errorf("expired key: %s %q", state, ev)
+	}
+	if state, ev := Classify(opencodePane(t, "invalid-model"), false, 60, ""); state != "BLOCKED" || !strings.Contains(ev, "opencode-go/qwen3.6-plus") {
+		t.Errorf("invalid model: %s %q", state, ev)
+	}
+	done := opencodePane(t, "done")
+	if state, ev := Classify(done, false, 60, ""); state != "DONE" || ev != "https://github.com/l4ci/rota/pull/600" {
+		t.Errorf("done: %s %q", state, ev)
+	}
+	// The worker's reply may carry the gutter too.
+	guttered := strings.Replace(done, "  ROTA-DONE ben https", "  ┃  ROTA-DONE ben https", 1)
+	if state, ev := Classify(guttered, false, 60, ""); state != "DONE" || ev != "https://github.com/l4ci/rota/pull/600" {
+		t.Errorf("guttered done: %s %q", state, ev)
+	}
+	// The echo alone is not done, with or without its header in the viewport.
+	echo := strings.Replace(done, "  ROTA-DONE ben https://github.com/l4ci/rota/pull/600\n", "  All finished.\n", 1)
+	if state, _ := Classify(echo, false, 60, ""); state == "DONE" || state == "BLOCKED" {
+		t.Errorf("an echoed brief is not a sentinel: %s", state)
+	}
+	scrolled := echo[strings.Index(echo, "  ┃  You are a worker"):]
+	if state, _ := Classify(scrolled, false, 60, ""); state == "DONE" || state == "BLOCKED" {
+		t.Errorf("an echo scrolled past its header is not a sentinel: %s", state)
+	}
+}
+
 func TestLimitRegexIsTheAlternationOfTheClassifierPhrases(t *testing.T) {
 	re := regexp.MustCompile(LimitRegex())
 	if len(LimitPatterns()) != len(LimitPhrases) {
