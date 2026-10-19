@@ -9,11 +9,11 @@ Reconciles the backlog against actual git state, then suggests what to pick up.
 Before presenting results it:
 
 1. Validates active branches and worktrees against git; stale entries get cleaned automatically.
-
-It also prints a `Round:` line when `rota round status --json` shows a round in flight, for example `Round: in flight (2 slots, 1 awaiting review)`. With no handoff note it adds a line pointing at `/rota-orchestrate`. On the issue backend, each open issue labelled `needs-human` or `changes-requested` prints as `<ID> failed its gate or review`, again pointing at `/rota-orchestrate`. With no round and nothing parked, nothing extra is printed.
 2. Archives completions older than five days to `ARCHIVE.md` (file backend only; issues are closed on the tracker).
 3. Shows the backlog sorted by priority and size, with a clusters section built from `Related:` links.
 4. Suggests one item. P0 bugs jump the queue.
+
+It also prints a `Round:` line when `rota round status --json` shows a round in flight, for example `Round: in flight (2 slots, 1 awaiting review)`. With no handoff note it adds a line pointing at `/rota-orchestrate`. On the issue backend, each open issue labelled `needs-human` or `changes-requested` prints as `<ID> failed its gate or review`, again pointing at `/rota-orchestrate`. With no round and nothing parked, nothing extra is printed.
 
 ```mermaid
 flowchart TD
