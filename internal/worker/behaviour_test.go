@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/verdict"
 )
@@ -23,6 +25,7 @@ func behaviourWorld(t *testing.T, body string) (*world, func(GateOpts) (GateResu
 	t.Helper()
 	w := newWorld(t, ghURL)
 	w.forge("body", "Closes #899")
+	w.forge("issueBody", body)
 	os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
 		[]byte(fmt.Sprintf(`{"slots":[{"name":"w1","branch":"w1","pr":%q,"task":"899","portBase":20100,"portBlock":100}]}`, ghURL)), 0o644)
 	return w, func(o GateOpts) (GateResult, error) {
@@ -168,6 +171,7 @@ func TestGateBehaviourMalformedSectionFails(t *testing.T) {
 
 func TestGateBehaviourUnreadableItemBreaksTheCheck(t *testing.T) {
 	w, _ := behaviourWorld(t, "")
+	w.setConfig(`{"issues":{"source":"file"},"test":{"full":["true"]}}`)
 	res, err := w.gate(false, GateOpts{ItemBody: func(string) (string, bool, error) { return "", false, fmt.Errorf("backend down") }})
 	if err != nil || res.Verdict != GateCheckBroke || !strings.Contains(res.Err, "#899") || !strings.Contains(res.Err, "backend down") {
 		t.Fatalf("%+v %v", res, err)
@@ -345,30 +349,240 @@ func TestGateBehaviourFileSourceRunsUnchecked(t *testing.T) {
 	if err != nil || res.Verdict != GatePass || !hasNote(res, "BEHAVIOUR w1 — PASS") {
 		t.Fatalf("%+v %v", res, err)
 	}
-	if log := w.logText(); strings.Contains(log, "IssueEditors") || strings.Contains(log, "CanPush") {
+	if log := w.logText(); strings.Contains(log, "IssueAuthorship") || strings.Contains(log, "CanPush") {
 		t.Errorf("trust was asked on a file source:\n%s", log)
 	}
 }
 
 func TestGateBehaviourStepEnvironIsScrubbed(t *testing.T) {
-	w, _ := behaviourWorld(t, "")
+	w, _ := behaviourWorld(t, "## Try it\n\n- echo hi\n")
 	var got []string
+	var homeDuring bool
 	e := w.env(false)
 	e.Getenv = func(k string) string {
-		return map[string]string{"ROTA_GATE_SHA_WAIT": "0", "PATH": "/p", "HOME": "/h", "GH_TOKEN": "secret"}[k]
+		return map[string]string{"ROTA_GATE_SHA_WAIT": "0", "PATH": "/p", "HOME": "/h-real", "GH_TOKEN": "secret", "XDG_CONFIG_HOME": "/x"}[k]
+	}
+	e.Run = func(_ context.Context, name string, args, _ []string) (host.Result, error) {
+		if name != "go" || !slices.Equal(args, []string{"env", "GOCACHE", "GOMODCACHE", "GOPATH"}) {
+			return host.Result{ExitCode: 1}, nil
+		}
+		return host.Result{Stdout: "/gc\n\n/gp\n"}, nil // GOMODCACHE is empty: left out
 	}
 	e.ShellEnv = func(_ context.Context, _, _ string, environ []string) (string, int) {
 		got = append([]string(nil), environ...)
+		for _, kv := range environ {
+			if h, ok := strings.CutPrefix(kv, "HOME="); ok {
+				_, err := os.Stat(h)
+				homeDuring = err == nil
+			}
+		}
 		return "hi\n", 0
 	}
-	o := GateOpts{Slot: "w1", Base: "main", ItemBody: func(string) (string, bool, error) { return "## Try it\n\n- echo hi\n", true, nil }}
+	o := GateOpts{Slot: "w1", Base: "main", ItemBody: func(string) (string, bool, error) { return "", false, nil }}
 	if res, err := e.Gate(bg, w.dir, o); err != nil || res.Verdict != GatePass {
 		t.Fatalf("%+v %v", res, err)
 	}
+	env := map[string]string{}
+	for _, kv := range got {
+		k, v, _ := strings.Cut(kv, "=")
+		env[k] = v
+	}
+	home := env["HOME"]
+	parent := filepath.Join(w.dir, ".rota", "qa-runs", "behaviour") + string(filepath.Separator)
+	if home == "/h-real" || !strings.HasPrefix(home, parent+"home-") {
+		t.Fatalf("HOME %q is not a temp dir under %s", home, parent)
+	}
+	if !homeDuring {
+		t.Error("the HOME did not exist while the step ran")
+	}
+	if exists(home) {
+		t.Error("the HOME outlived the gate")
+	}
+	for k, want := range map[string]string{"XDG_CONFIG_HOME": home + "/.config", "XDG_DATA_HOME": home + "/.local/share", "XDG_CACHE_HOME": home + "/.cache", "GH_CONFIG_DIR": home + "/.config/gh"} {
+		if env[k] != want {
+			t.Errorf("%s=%q, want %q", k, env[k], want)
+		}
+	}
 	slices.Sort(got)
-	want := []string{"HOME=/h", "PATH=/p", "ROTA_DB_SUFFIX=_w1", "ROTA_PORT_BASE=20100", "ROTA_PORT_BLOCK=100"}
-	if !slices.Equal(got, want) {
-		t.Errorf("environ %q, want %q", got, want)
+	var names []string
+	for _, kv := range got {
+		names = append(names, strings.SplitN(kv, "=", 2)[0])
+	}
+	want := []string{"GH_CONFIG_DIR", "GOCACHE", "GOPATH", "HOME", "PATH", "ROTA_DB_SUFFIX", "ROTA_PORT_BASE", "ROTA_PORT_BLOCK", "XDG_CACHE_HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME"}
+	if !slices.Equal(names, want) || env["PATH"] != "/p" || env["GOCACHE"] != "/gc" || env["GOPATH"] != "/gp" || env["ROTA_PORT_BASE"] != "20100" {
+		t.Errorf("environ %q, want names %q", got, want)
+	}
+}
+
+func TestGateBehaviourHomeGoneAfterAFailedStep(t *testing.T) {
+	w, gate := behaviourWorld(t, "## Try it\n\n- touch \"$HOME/mark\"; exit 4\n")
+	if res, err := gate(GateOpts{}); err != nil || res.Verdict != GateVerifyFailed {
+		t.Fatalf("%+v %v", res, err)
+	}
+	ents, _ := filepath.Glob(filepath.Join(w.dir, ".rota", "qa-runs", "behaviour", "home-*"))
+	if len(ents) != 0 {
+		t.Errorf("homes left: %q", ents)
+	}
+}
+
+func TestGateBehaviourStepSeesNoRealHome(t *testing.T) {
+	w, gate := behaviourWorld(t, "## Try it\n\n- test \"$HOME\" != \"$REAL\" && ls -A \"$HOME\" | wc -l\n  expect: 0\n")
+	t.Setenv("REAL", os.Getenv("HOME"))
+	_ = w
+	if res, err := gate(GateOpts{}); err != nil || res.Verdict != GatePass {
+		t.Fatalf("%+v %v", res, err)
+	}
+}
+
+// An untrusted issue whose Try it section is malformed skips; it must not fail
+// the gate with the issue's text.
+func TestGateBehaviourMalformedSectionOfAnUntrustedAuthorSkips(t *testing.T) {
+	w, gate := behaviourWorld(t, "## Try it\n\n- echo a\n  expect:\n")
+	w.forge("author", "mallory")
+	w.forge("readers", "mallory")
+	res, err := gate(GateOpts{})
+	if err != nil || res.Verdict != GatePass || !hasNote(res, "author mallory of #899 is not a collaborator") {
+		t.Fatalf("%+v %v", res, err)
+	}
+}
+
+// The steps that run are the body the trust check read, not what ItemBody says.
+func TestGateBehaviourRunsTheVouchedBody(t *testing.T) {
+	w, _ := behaviourWorld(t, tryTouch)
+	o := GateOpts{Slot: "w1", Base: "main", ItemBody: func(string) (string, bool, error) {
+		return "## Try it\n\n- touch evil.txt\n", true, nil
+	}}
+	if res, err := w.env(false).Gate(bg, w.dir, o); err != nil || res.Verdict != GatePass {
+		t.Fatalf("%+v %v", res, err)
+	}
+	tr, _ := os.ReadFile(filepath.Join(w.dir, behaviourRecord(t, w).Transcript))
+	if !strings.Contains(string(tr), "$ touch ran.txt") || strings.Contains(string(tr), "evil") {
+		t.Errorf("ran the ItemBody text instead of the vouched body:\n%s", tr)
+	}
+}
+
+func TestGateBehaviourNoSectionAsksNoCollaboratorQuestion(t *testing.T) {
+	w, gate := behaviourWorld(t, "## Goal\n\nx\n")
+	res, err := gate(GateOpts{})
+	if err != nil || res.Verdict != GatePass || !hasNote(res, "BEHAVIOUR-SKIP w1 — #899 has no ## Try it section; no behaviour run") {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if strings.Contains(w.logText(), "CanPush") {
+		t.Errorf("CanPush asked:\n%s", w.logText())
+	}
+}
+
+// A gate that reads no origin refs reads no forge (#817): a forge source skips
+// before any issue read; a file source still runs.
+func TestGateBehaviourLocalGateReadsNoForge(t *testing.T) {
+	local := func(t *testing.T) *world {
+		w, _ := behaviourWorld(t, tryTouch)
+		gitq(t, w.dir, "fetch", "-q", "origin", "w1:w1")
+		os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
+			[]byte(`{"slots":[{"name":"w1","branch":"w1","task":"899","portBase":20100,"portBlock":100}]}`), 0o644)
+		return w
+	}
+	o := GateOpts{ItemBody: func(string) (string, bool, error) { return tryTouch, true, nil }}
+	t.Run("forge source skips", func(t *testing.T) {
+		w := local(t)
+		res, err := w.gate(false, o)
+		if err != nil || res.Verdict != GatePass ||
+			!hasNote(res, "BEHAVIOUR-SKIP w1 — the gate reads no origin refs (no PR), so it reads no forge for #899's Try it steps") {
+			t.Fatalf("%+v %v", res, err)
+		}
+		if log := w.logText(); strings.Contains(log, "IssueAuthorship") || strings.Contains(log, "CanPush") || strings.Contains(log, "Get ") {
+			t.Errorf("the forge was read:\n%s", log)
+		}
+		if _, ok := verdict.Latest(verdict.Load(w.dir).Branches["w1"], verdict.Behaviour); ok {
+			t.Error("a behaviour verdict was recorded")
+		}
+	})
+	t.Run("file source runs", func(t *testing.T) {
+		w := local(t)
+		w.setConfig(`{"issues":{"source":"file"},"test":{"full":["true"]}}`)
+		res, err := w.gate(false, o)
+		if err != nil || res.Verdict != GatePass || !hasNote(res, "BEHAVIOUR w1 — PASS") {
+			t.Fatalf("%+v %v", res, err)
+		}
+	})
+}
+
+func TestGateBehaviourTruncatedOutputShowsInTheTranscript(t *testing.T) {
+	w, _ := behaviourWorld(t, "## Try it\n\n- echo big\n")
+	e := w.env(false)
+	e.ShellEnv = func(context.Context, string, string, []string) (string, int) {
+		return "xxxx\n" + outputTruncatedMarker + "\n", 0
+	}
+	o := GateOpts{Slot: "w1", Base: "main", ItemBody: func(string) (string, bool, error) { return "", false, nil }}
+	if res, err := e.Gate(bg, w.dir, o); err != nil || res.Verdict != GatePass {
+		t.Fatalf("%+v %v", res, err)
+	}
+	tr, _ := os.ReadFile(filepath.Join(w.dir, behaviourRecord(t, w).Transcript))
+	if !strings.Contains(string(tr), "[output truncated at 4 MiB]") {
+		t.Errorf("transcript:\n%s", tr)
+	}
+}
+
+func TestExecShellEnvCapsOutput(t *testing.T) {
+	out, code := execShellEnv(bg, t.TempDir(), `head -c 5000000 /dev/zero | tr '\0' x`, nil)
+	if code != 0 || len(out) > behaviourMaxOutput+100 || !strings.HasSuffix(out, "\n"+outputTruncatedMarker+"\n") {
+		t.Errorf("%d %d %q", code, len(out), out[max(0, len(out)-60):])
+	}
+	out, _ = execShellEnv(bg, t.TempDir(), `echo hi`, nil)
+	if out != "hi\n" {
+		t.Errorf("%q", out)
+	}
+}
+
+type stubTrust struct {
+	a     tracker.Authorship
+	err   error
+	asked []string
+}
+
+func (s *stubTrust) IssueAuthorship(context.Context, tracker.IssueKey) (tracker.Authorship, error) {
+	s.asked = append(s.asked, "authorship")
+	return s.a, s.err
+}
+func (s *stubTrust) CanPush(_ context.Context, l string) (bool, error) {
+	s.asked = append(s.asked, "canpush "+l)
+	return l != "eve", nil
+}
+
+func TestTrustedTryIt(t *testing.T) {
+	const body = "## Try it\n- echo a\n"
+	file := func() (string, bool, error) { return body, true, nil }
+	for name, tc := range map[string]struct {
+		s          TryItSource
+		wantBody   string
+		wantSkip   string
+		wantErr    string
+		wantAsked  []string
+		wantNoSect bool
+	}{
+		"file":            {s: TryItSource{Source: "file", Issue: "B07", FileBody: file}, wantBody: body},
+		"empty is file":   {s: TryItSource{Issue: "B07", FileBody: file}, wantBody: body},
+		"file not found":  {s: TryItSource{Source: "file", Issue: "9", FileBody: func() (string, bool, error) { return "", false, nil }}, wantSkip: "#9 is not in the backlog"},
+		"file read fails": {s: TryItSource{Source: "file", Issue: "9", FileBody: func() (string, bool, error) { return "", false, errors.New("io") }}, wantErr: "cannot read #9 to look for its ## Try it steps: io"},
+		"file no section": {s: TryItSource{Source: "file", Issue: "9", FileBody: func() (string, bool, error) { return "## Goal\n", true, nil }}, wantSkip: "#9 has no ## Try it section", wantNoSect: true},
+		"repo-qualified":  {s: TryItSource{Source: "github", Issue: "o/r#5", Trust: &stubTrust{}}, wantSkip: "o/r#5 is a repo-qualified key, and the trust check reads only the root repo"},
+		"no trust":        {s: TryItSource{Source: "jira", Issue: "9"}, wantSkip: "the jira issue source cannot say whether #9's author is a collaborator"},
+		"read fails":      {s: TryItSource{Source: "github", Issue: "9", Trust: &stubTrust{err: errors.New("down")}}, wantErr: "cannot read who wrote #9 to trust its ## Try it steps: down", wantAsked: []string{"authorship"}},
+		"no section":      {s: TryItSource{Source: "github", Issue: "9", Trust: &stubTrust{a: tracker.Authorship{Author: "eve", Body: "x"}}}, wantSkip: "#9 has no ## Try it section", wantNoSect: true, wantAsked: []string{"authorship"}},
+		"trusted":         {s: TryItSource{Source: "github", Issue: "9", Trust: &stubTrust{a: tracker.Authorship{Author: "ann", Body: body}}}, wantBody: body, wantAsked: []string{"authorship", "canpush ann"}},
+		"editor":          {s: TryItSource{Source: "github", Issue: "9", Trust: &stubTrust{a: tracker.Authorship{Author: "ann", Editor: "eve", Edited: true, Body: body}}}, wantSkip: "last editor eve of #9 is not a collaborator with write access", wantAsked: []string{"authorship", "canpush ann", "canpush eve"}},
+		"unknown author":  {s: TryItSource{Source: "github", Issue: "9", Trust: &stubTrust{a: tracker.Authorship{Body: body}}}, wantSkip: "the author of #9 is unknown", wantAsked: []string{"authorship"}},
+		"unknown editor":  {s: TryItSource{Source: "github", Issue: "9", Trust: &stubTrust{a: tracker.Authorship{Author: "ann", Edited: true, Body: body}}}, wantSkip: "the last editor of #9 is unknown", wantAsked: []string{"authorship"}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			b, skip, err := TrustedTryIt(bg, tc.s)
+			if skip != tc.wantSkip || b != tc.wantBody || NoTryIt(skip) != tc.wantNoSect || (err != nil) != (tc.wantErr != "") || (err != nil && err.Error() != tc.wantErr) {
+				t.Errorf("body %q skip %q err %v", b, skip, err)
+			}
+			if st, ok := tc.s.Trust.(*stubTrust); ok && !slices.Equal(st.asked, tc.wantAsked) {
+				t.Errorf("asked %q, want %q", st.asked, tc.wantAsked)
+			}
+		})
 	}
 }
 
