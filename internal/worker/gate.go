@@ -346,6 +346,7 @@ func (e Env) gate(ctx context.Context, root string, o GateOpts) (GateResult, err
 	if err != nil {
 		return res, err
 	}
+	in.cfg.WarnLegacy(e.errWriter())
 	g := &gate{e: e, ctx: ctx, root: root, res: &res, o: o, in: in, target: t, resolved: t, branch: t.Branch, pr: t.PR}
 	err = g.run()
 	return res, err
@@ -369,7 +370,6 @@ type gateInput struct {
 // the value through, never re-reading root afterwards.
 func loadGateInput(root string) (gateInput, error) {
 	in := gateInput{cfg: LoadGateConfig(root)}
-	in.cfg.FullCommands() // the legacy-key warning, once per run
 	var err error
 	if _, err = in.cfg.Where(); err != nil {
 		return in, err

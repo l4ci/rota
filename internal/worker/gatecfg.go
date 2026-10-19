@@ -2,7 +2,7 @@ package worker
 
 import (
 	"fmt"
-	"os"
+	"io"
 	"strings"
 	"sync"
 	"time"
@@ -35,7 +35,8 @@ type GateConfig struct {
 	// SharedPaths is round.sharedPaths.
 	SharedPaths []string
 
-	legacy     bool // Full came from refactor.verifyCommands
+	legacy     bool       // Full came from refactor.verifyCommands
+	legacyOnce *sync.Once // shared by copies, so the warning prints once per read
 	where      string
 	whereErr   error
 	ciMinutes  int
@@ -67,6 +68,7 @@ func ParseGateConfig(cfg any) GateConfig {
 	if len(c.Full) == 0 {
 		c.Full = commandList(cfg, config.LegacyVerifyKey)
 		c.legacy = len(c.Full) > 0
+		c.legacyOnce = new(sync.Once)
 	}
 	c.where, c.whereErr = parseFullWhere(cfg, c.CIChecks)
 	c.sourceErr = tracker.ValidateConfig(cfg)
@@ -99,32 +101,34 @@ func parseFullWhere(cfg any, ciChecks []string) (string, error) {
 // Where is test.fullWhere (WhereLocal or WhereCI), or the error of a bad value.
 func (c GateConfig) Where() (string, error) { return c.where, c.whereErr }
 
-// Tier is test.<tier> (fast, full or e2e); full carries the legacy fallback.
+// Tier is test.<tier> (fast, full or e2e); full carries the legacy fallback
+// (see WarnLegacy).
 func (c GateConfig) Tier(tier string) []string {
 	switch tier {
 	case "fast":
 		return c.Fast
 	case "full":
-		return c.FullCommands()
+		return c.Full
 	case "e2e":
 		return c.E2E
 	}
 	return nil
 }
 
-// FullCommands is Full for a caller that verifies with it: it carries the one
-// deprecation warning when the commands came from refactor.verifyCommands.
-func (c GateConfig) FullCommands() []string {
-	if c.legacy {
-		legacyWarn.Do(func() {
-			fmt.Fprintln(os.Stderr, "rota: refactor.verifyCommands is deprecated; run rota config fill to move it to test.full")
-		})
+// WarnLegacy writes the one deprecation warning to w when the full commands
+// came from refactor.verifyCommands. Callers that verify with them pass their
+// own writer; repeated calls on a config (or a copy of it) print it once.
+func (c GateConfig) WarnLegacy(w io.Writer) {
+	if !c.legacy {
+		return
 	}
-	return c.Full
+	c.legacyOnce.Do(func() {
+		fmt.Fprintln(w, "rota: refactor.verifyCommands is deprecated; run rota config fill to move it to test.full")
+	})
 }
 
 // HasVerifyCommands reports whether Verify has anything to run.
-func (c GateConfig) HasVerifyCommands() bool { return len(c.FullCommands()) > 0 }
+func (c GateConfig) HasVerifyCommands() bool { return len(c.Full) > 0 }
 
 // ReviewPolicy is ship.review, or the error of a malformed one.
 func (c GateConfig) ReviewPolicy() (config.ReviewPolicy, error) { return c.review, c.reviewErr }
@@ -143,8 +147,6 @@ func (c GateConfig) CISettings(getenv func(string) string) (ciSettings, error) {
 	s.applyEnv(getenv)
 	return s, nil
 }
-
-var legacyWarn sync.Once
 
 // commandList is the non-blank, trimmed entries of a list key.
 func commandList(cfg any, key string) []string {

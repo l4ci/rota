@@ -49,7 +49,8 @@ func (e Env) Verify(ctx context.Context, cfg GateConfig, root, dir string) (Veri
 	if err != nil {
 		return VerifyResult{}, err
 	}
-	return e.RunVerifyWith(ctx, cfg.FullCommands(), dir, led)
+	cfg.WarnLegacy(e.errWriter())
+	return e.RunVerifyWith(ctx, cfg.Full, dir, led)
 }
 
 // LoadLedger reads root's exclusion ledger; a malformed one is exit 2.

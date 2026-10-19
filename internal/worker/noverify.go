@@ -8,7 +8,7 @@ package worker
 func NothingToVerify(root string) bool {
 	c := LoadGateConfig(root)
 	where, err := c.Where()
-	return err == nil && noVerifyRule(where, c.FullCommands(), c.E2E)
+	return err == nil && noVerifyRule(where, c.Full, c.E2E)
 }
 
 // noVerifyRule is the rule itself, on inputs the caller already loaded: a
