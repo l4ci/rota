@@ -330,7 +330,7 @@ func usageRecord(root string, now func() time.Time) func(keepalive.Decision) err
 // keepaliveNotify raises the herdr notification alone, when the round's host
 // is herdr.
 func keepaliveNotify(ctx context.Context, c *Ctx, root string, title, body string) {
-	if worker.ResolveHost(root, nil, nil) != host.Herdr {
+	if c.deps().resolveHost(root) != host.Herdr {
 		return
 	}
 	h := c.deps().Host(host.Herdr)

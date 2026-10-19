@@ -63,7 +63,9 @@ func RegistryHost(root string) host.Kind { return LoadRegistryTolerant(root).Hos
 
 // ResolveHost is the host the project's round runs on: host.Resolve over the
 // round's recorded host, work.dispatch and the environment. Every verb that
-// needs the host asks here. getenv and lookPath default to the process's own.
+// needs the host asks here. getenv and lookPath default to the process's own;
+// a caller that holds injected ones (cli's Deps, worker.Env) passes them, so
+// the decision reads the same sources as the handle it then drives.
 func ResolveHost(root string, getenv func(string) string, lookPath func(string) (string, error)) host.Kind {
 	return host.Resolve(RegistryHost(root), dispatchSetting(root), getenv, lookPath)
 }
