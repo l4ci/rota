@@ -375,32 +375,32 @@
       "herdr: agent working"
     ],
     "limit approaching/": [
-      "LIMITED",
-      "Approaching usage limit"
+      "IDLE",
+      "static pane, no sentinel"
     ],
     "limit approaching/blocked": [
-      "LIMITED",
-      "Approaching usage limit"
+      "NEEDS-PERMISSION",
+      "herdr: agent blocked on a dialog — answer it in the slot's tab, or widen work.workerCommand"
     ],
     "limit approaching/done": [
-      "LIMITED",
-      "Approaching usage limit"
+      "IDLE",
+      "static pane, no sentinel"
     ],
     "limit approaching/gone": [
-      "LIMITED",
-      "Approaching usage limit"
+      "DEAD",
+      "herdr: no agent in the slot's tab — the session exited"
     ],
     "limit approaching/idle": [
-      "LIMITED",
-      "Approaching usage limit"
+      "IDLE",
+      "static pane, no sentinel"
     ],
     "limit approaching/unknown": [
-      "LIMITED",
-      "Approaching usage limit"
+      "UNKNOWN",
+      "herdr cannot classify the agent — inspect the tab; not proof it finished"
     ],
     "limit approaching/working": [
-      "LIMITED",
-      "Approaching usage limit"
+      "BUSY",
+      "herdr: agent working"
     ],
     "limit funds/": [
       "LIMITED",
