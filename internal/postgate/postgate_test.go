@@ -130,3 +130,22 @@ func TestStaleGateByPRNumberAfterTheSlotMovedOnMakesNoPseudoSlot(t *testing.T) {
 		}
 	}
 }
+
+// The gate result carries the slot its target resolved to; the bounce is
+// recorded under it even when the registry no longer holds that slot, so the
+// attribution never depends on a late pool lookup.
+func TestGateBounceByPRNumberUsesTheResolvedSlot(t *testing.T) {
+	root := t.TempDir()
+	at := time.Date(2026, 10, 17, 21, 0, 0, 0, time.UTC)
+	res := worker.GateResult{Verdict: worker.GateStale, Slot: "847", TargetSlot: "nia", PR: "847", SHA: "h1"}
+	if _, err := Gate(worker.Env{Now: func() time.Time { return at }}, root, "12", res, nil); err != nil {
+		t.Fatal(err)
+	}
+	es, err := ledger.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(es) != 1 || es[0].Kind != ledger.KindBounce || es[0].Slot != "nia" {
+		t.Fatalf("entries %+v, want one bounce for nia", es)
+	}
+}

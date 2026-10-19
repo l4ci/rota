@@ -161,9 +161,13 @@ func (o GateOpts) skipsVerify() bool { return o.NoVerify || o.LandVerified }
 // GateResult is the gate's answer. Err is the message for a non-success
 // verdict, Hint what to do about it.
 type GateResult struct {
-	Slot    string
-	Verdict string
-	Base    string
+	Slot string
+	// TargetSlot is the pool slot the gate target resolved to, "" when it
+	// resolved to none (an external PR, a queued record whose slot moved on).
+	// Slot echoes the argument, which may be a PR number.
+	TargetSlot string
+	Verdict    string
+	Base       string
 	// Issue is the item the gate acted on, resolved once from the target: the
 	// queued record's, else the one the slot held. "" when it cannot be told.
 	Issue         string
@@ -337,7 +341,7 @@ func (e Env) gate(ctx context.Context, root string, o GateOpts) (GateResult, err
 	if err != nil {
 		return res, err
 	}
-	res.Issue = t.Issue
+	res.Issue, res.TargetSlot = t.Issue, t.Name
 	in, err := e.GateInput(root)
 	if err != nil {
 		return res, err
