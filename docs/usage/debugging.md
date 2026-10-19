@@ -14,6 +14,23 @@ The skill loads the item (its issue, or the `[B07]` entry in [`BACKLOG.md`](../r
 4. **Fix**: the minimal change that removes the root cause, as one atomic commit tagged `fix: … [B07]` (`#42` on the issue backend).
 5. **Prove and hand off**: the reproducer must pass, and the fix carries a regression test at the bug's seam. If the only possible test would mock the code under test or assert internals, the skill skips it, files a `refactor` item naming the missing seam, and records the reproducer as the proof with a row that links that item. It opens a PR. It never merges. The issue closes when the PR merges; on the file backend it completes the item.
 
+## Session files
+
+While it hypothesizes, `/rota-debug` keeps its working notes in `.rota/debug/<slug>.md` (slug `fix-<n>`): Symptom, Hypotheses (each `open`, `eliminated` or `confirmed`), Evidence and Current focus. It rewrites the file after every hypothesis result. The directory is per-developer and gitignored, like `.rota/handoff/`.
+
+A new or reset session starts by listing open ones and offers to continue the matching one, so it does not retry what is eliminated. When the bug is fixed the file is removed, and the report offers [`/rota-learn`](learning.md) with the eliminated hypotheses as candidate knowledge. After an Iron Law stop the file stays. [`/rota-pause`](pausing-and-resuming.md) names the open session in the handoff note.
+
+The verbs behind it:
+
+```
+rota debug session put <slug> --body-file F|-   # write or replace
+rota debug session show <slug>
+rota debug session list
+rota debug session rm <slug>
+```
+
+`show` and `rm` of an unknown slug exit 3. A slug with `/` or `..` exits 2.
+
 If the root cause was non-obvious (required extra verification rounds, or contradicted the initial hypothesis, or touched a known-tricky subsystem), the skill nudges you to run [`/rota-learn`](learning.md) so the insight lands in `KNOWLEDGE.md`.
 
 `/rota-debug` uses the same `work.isolation` setting (`branch` or `worktree`) as `/rota-work`. It refuses to start on a dirty working tree; stash or commit first.

@@ -11,7 +11,7 @@ Reproduce → hypothesize → verify → fix → prove, for one bug, anchored to
 
 ## Configuration
 
-From `.rota/config.json`: `work.isolation` (`"branch"` default, or `"worktree"`). The Iron Law count is per item in `.rota/verdicts.json`; a new branch or session does not reset it.
+From `.rota/config.json`: `work.isolation` (`"branch"` default, or `"worktree"`). The Iron Law count is per item in `.rota/verdicts.json`; a new branch or session does not reset it. The session file (Step 4) is separate scratch under `.rota/debug/`: per-developer, gitignored, never counted.
 
 Copy this checklist and track your progress:
 ```
@@ -34,6 +34,8 @@ rota git guard clean --context "/rota-debug"   # non-zero: stop (1 dirty tree, 3
 Load the item: `rota item field list --json <ID>` for title, body and fields; `rota item show <ID>` for state, claim and comments (`references/issue-mode.md`, "Resuming an item"; `decision` comments bind). File backend: its `.rota/BACKLOG.md` line plus the `Detail:` file. A symptom with no ID goes through `rota-capture` first.
 
 Consult knowledge and decisions per `references/knowledge-consult.md` for topics touching the symptom. DECISIONS entries are hard boundaries on fix directions.
+
+**Open sessions.** List them: `rota debug session list`. When one matches this item (slug `fix-<n>`), or the user's symptom, offer to continue it: `rota debug session show <slug>`. On yes, skip Step 3's reproducer hunt if its Evidence names a working one, never re-probe an `eliminated` hypothesis, and resume Step 4 at its Current focus. On no, `put` overwrites it. No sessions: carry on.
 
 ## Step 2 — Branch and claim
 
@@ -88,6 +90,24 @@ Probe in rank order, before touching production code. Tag every temporary probe 
 - **Confirmed** — Step 5; drop the rest unprobed.
 - **Refuted** — strike it with the evidence (`~~H1~~ refuted: pause() ran, ref was valid`), probe the next. Never fix-and-pray. When the list is exhausted, or after two refutations, re-read the symptom and reproducer from scratch and write a new list.
 
+**Session file.** Write the whole file after each hypothesis result (listed, confirmed or refuted), so a reset session does not retry what is eliminated. `put` replaces it:
+
+```bash
+rota debug session put fix-<n> --body-file - <<'EOF'
+## Symptom
+<one line, redacted as in Step 5>
+## Hypotheses
+- H1 eliminated: <if X, then Y> — <the evidence>
+- H2 open: <if X, then Y>
+## Evidence
+<reproducer command and the line it prints>
+## Current focus
+<the hypothesis being probed, or the next step>
+EOF
+```
+
+Each hypothesis line carries exactly one status: `open`, `eliminated` or `confirmed`.
+
 ## Step 5 — Fix and commit
 
 **Iron Law: no fix without a verified hypothesis.** Make the minimal diff that removes the root cause: no unrelated cleanup, unaffected callers unchanged. A large edit may go to a `standard` subagent with the verified root cause, files and constraints; tell it not to commit.
@@ -132,7 +152,7 @@ rota proof add <ID> --check "<reproducer command>" --result PASS --evidence "<ou
 
 **No seam.** When Step 5 found no seam, read [`no-seam.md`](no-seam.md) for filing the item and wording the proof row.
 
-Re-run `git grep -n "\[DEBUG-<id>\]"` once more; it must print nothing. Open a PR and hand it to review; never merge directly. The PR body carries the same `Root cause:` line as the commit, plus `Closes #N`. The issue closes when the PR merges:
+Re-run `git grep -n "\[DEBUG-<id>\]"` once more; it must print nothing. Resolved: read the eliminated hypotheses (`rota debug session show fix-<n>`), then drop the session with `rota debug session rm fix-<n>`. On an Iron Law stop keep it. Open a PR and hand it to review; never merge directly. The PR body carries the same `Root cause:` line as the commit, plus `Closes #N`. The issue closes when the PR merges:
 
 ```bash
 printf '%s' "$BODY" | rota ship pr <branch> --title "<short title>" --body-file - --items <ID>
@@ -149,7 +169,7 @@ Root cause: MenuBarManager held an invalidated timer ref after pause; the next t
 Fix: reset badge to `--:--` in `pause()` before invalidating.
 ```
 
-Nudge one line, only when it applies: cause not obvious from the code, *"Run `/rota-learn` to save this gotcha"*; fix locked in a boundary, *"`/rota-decide`"* (never auto-invoked). Then offer `/rota-ship`.
+Nudge one line, only when it applies: cause not obvious from the code, or the session had eliminated hypotheses, *"Run `/rota-learn` to save this gotcha"*, naming the eliminated hypotheses as candidate knowledge (what looked likely and was not); fix locked in a boundary, *"`/rota-decide`"* (never auto-invoked). Then offer `/rota-ship`.
 
 ## Gates: Thought → Reality
 

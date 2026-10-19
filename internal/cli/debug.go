@@ -6,8 +6,10 @@ import (
 	"github.com/l4ci/rota/internal/exitcode"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/l4ci/rota/internal/debugctr"
+	"github.com/l4ci/rota/internal/debugsession"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/spike"
 	"github.com/l4ci/rota/internal/verdict"
@@ -29,6 +31,12 @@ func debugCommands() []*Command {
 				{Name: "summary", Summary: "Iron Law halt note", Verb: noFlags(runCounterSummary)},
 				{Name: "clear", Summary: "delete the counter", Verb: noFlags(runCounterClear)},
 				{Name: "inc-cycle", Summary: "count a hypothesis cycle", Verb: noFlags(runCounterIncCycle)},
+			}},
+			{Name: "session", Summary: "per-developer /rota-debug session notes", Subs: []*Command{
+				{Name: "put", Summary: "write a session file, replacing any earlier one", Verb: debugSessionPut},
+				{Name: "show", Summary: "print a session file", Verb: noFlags(runDebugSessionShow)},
+				{Name: "list", Summary: "list open sessions", Verb: noFlags(runDebugSessionList)},
+				{Name: "rm", Summary: "delete a session file", Verb: noFlags(runDebugSessionRm)},
 			}},
 			{Name: "verdict", Summary: "record whether a fix held and route on the item's failed-fix count", Repo: true, Verb: debugVerdict},
 			{Name: "reset", Summary: "start an item's failed-fix count again", Repo: true, Verb: debugReset},
@@ -70,6 +78,91 @@ func noArgs(args []string) error {
 		return Usage("takes no arguments")
 	}
 	return nil
+}
+
+// ---- debug session
+
+func debugSessionPut(fs *flag.FlagSet) RunFunc {
+	bodyFile := bodyFlag(fs)
+	return func(c *Ctx, args []string) (Result, error) {
+		slug, err := oneArg(args, "session slug")
+		if err != nil {
+			return Result{}, err
+		}
+		body, err := readBody(c, *bodyFile)
+		if err != nil {
+			return Result{}, err
+		}
+		root, err := c.Root()
+		if err != nil {
+			return Result{}, err
+		}
+		if err := debugsession.Put(root, slug, body); err != nil {
+			return Result{}, err
+		}
+		d := jsonx.NewObject()
+		d.Set("slug", slug)
+		d.Set("changed", true)
+		return Result{Data: d, Text: slug}, nil
+	}
+}
+
+func runDebugSessionShow(c *Ctx, args []string) (Result, error) {
+	slug, err := oneArg(args, "session slug")
+	if err != nil {
+		return Result{}, err
+	}
+	root, err := c.Root()
+	if err != nil {
+		return Result{}, err
+	}
+	body, err := debugsession.Show(root, slug)
+	if err != nil {
+		return Result{}, err
+	}
+	d := jsonx.NewObject()
+	d.Set("slug", slug)
+	d.Set("body", body)
+	return Result{Data: d, Text: body}, nil
+}
+
+func runDebugSessionList(c *Ctx, args []string) (Result, error) {
+	if err := noArgs(args); err != nil {
+		return Result{}, err
+	}
+	root, err := c.Root()
+	if err != nil {
+		return Result{}, err
+	}
+	slugs, err := debugsession.List(root)
+	if err != nil {
+		return Result{}, err
+	}
+	rows := make([]any, len(slugs))
+	for i, s := range slugs {
+		rows[i] = s
+	}
+	d := jsonx.NewObject()
+	d.Set("sessions", rows)
+	return Result{Data: d, Text: strings.Join(slugs, "\n")}, nil
+}
+
+func runDebugSessionRm(c *Ctx, args []string) (Result, error) {
+	slug, err := oneArg(args, "session slug")
+	if err != nil {
+		return Result{}, err
+	}
+	root, err := c.Root()
+	if err != nil {
+		return Result{}, err
+	}
+	if err := debugsession.Rm(root, slug); err != nil {
+		return Result{}, err
+	}
+	d := jsonx.NewObject()
+	d.Set("slug", slug)
+	d.Set("changed", true)
+	return Result{Data: d, Text: "removed " + slug}, nil
 }
 
 // ---- debug counter
