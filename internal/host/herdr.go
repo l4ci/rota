@@ -5,6 +5,7 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -252,10 +253,19 @@ func (h *herdr) Spawn(ctx context.Context, o SpawnOpts) (string, error) {
 	ws := h.d.Getenv("HERDR_WORKSPACE_ID")
 	var opened openedWorkspace
 	if o.LinkWorkspace {
-		if opened, err = h.openLinked(ctx, o); err != nil {
+		switch opened, err = h.openLinked(ctx, h.d.Getenv("HERDR_WORKSPACE_ID"), o.Slot, o.Cwd); {
+		case errors.Is(err, ErrUnsupported):
+			// A herdr without `worktree open`: the slot is a tab, not a failure.
+			fmt.Fprintf(h.d.Stderr, "rota: herdr cannot link workspaces; slot %s stays a tab\n", o.Slot)
+			opened = openedWorkspace{}
+		case err != nil:
 			return "", err
+		default:
+			ws = opened.id
+			if o.Linked != nil {
+				*o.Linked = true
+			}
 		}
-		ws = opened.id
 	}
 	args := []string{"tab", "create", "--workspace", ws,
 		"--cwd", o.Cwd, "--label", o.Slot, "--no-focus"}
@@ -327,23 +337,23 @@ func (h *herdr) Spawn(ctx context.Context, o SpawnOpts) (string, error) {
 // already open: that tab is somebody else's and rota must not close it.
 type openedWorkspace struct{ id, rootTab string }
 
-// openLinked opens the slot's worktree as a workspace linked to the caller's
-// own, so herdr groups the slot under its project. open is idempotent
+// openLinked opens the worktree at path as a workspace linked to primary, so
+// herdr groups the slot under its project. open is idempotent
 // (`already_open`), and it takes an absolute path only: a relative one fails
 // with worktree_not_found. It has no --env, so the caller still creates the
 // slot's tab with `tab create --env`.
-func (h *herdr) openLinked(ctx context.Context, o SpawnOpts) (openedWorkspace, error) {
-	if !strings.HasPrefix(o.Cwd, "/") {
-		return openedWorkspace{}, fmt.Errorf("work.herdrGroupSlots needs an absolute worktree path for slot '%s', got: %s", o.Slot, o.Cwd)
+func (h *herdr) openLinked(ctx context.Context, primary, slot, path string) (openedWorkspace, error) {
+	if !strings.HasPrefix(path, "/") {
+		return openedWorkspace{}, fmt.Errorf("work.herdrGroupSlots needs an absolute worktree path for slot '%s', got: %s", slot, path)
 	}
-	r := h.herdr(ctx, "worktree", "open", "--workspace", h.d.Getenv("HERDR_WORKSPACE_ID"),
-		"--path", o.Cwd, "--label", o.Slot, "--no-focus")
+	r := h.herdr(ctx, "worktree", "open", "--workspace", primary,
+		"--path", path, "--label", slot, "--no-focus")
 	if r.ExitCode != 0 {
-		return openedWorkspace{}, fmt.Errorf("herdr worktree open failed for slot '%s': %s", o.Slot, strings.TrimSpace(r.Stderr))
+		return openedWorkspace{}, unsupportedOr(r, fmt.Errorf("herdr worktree open failed for slot '%s': %s", slot, strings.TrimSpace(r.Stderr)))
 	}
 	ws := jget(r.Stdout, "result.workspace.workspace_id")
 	if ws == "" {
-		return openedWorkspace{}, fmt.Errorf("herdr worktree open returned no workspace id for slot '%s'", o.Slot)
+		return openedWorkspace{}, fmt.Errorf("herdr worktree open returned no workspace id for slot '%s'", slot)
 	}
 	w := openedWorkspace{id: ws}
 	if jget(r.Stdout, "result.already_open") != "true" {
@@ -727,4 +737,16 @@ func (h *herdr) Explain(ctx context.Context, slot, handle string) string {
 		}
 	}
 	return strings.Join(out, " / ")
+}
+
+// unsupportedOr wraps err in ErrUnsupported when the failed command r says herdr
+// lacks the method or a flag (herdr's unknown_method, or a clap usage error).
+// Probing the failure, not the version, is what the no-pin decision asks for.
+func unsupportedOr(r Result, err error) error {
+	low := strings.ToLower(r.Stderr)
+	if jget(r.Stderr, "error.code") == "unknown_method" ||
+		strings.Contains(low, "unexpected argument") || strings.Contains(low, "unknown flag") || strings.Contains(low, "unrecognized") {
+		return fmt.Errorf("%w: %v", ErrUnsupported, err)
+	}
+	return err
 }

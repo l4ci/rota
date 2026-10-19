@@ -130,7 +130,15 @@ type SpawnOpts struct {
 	// LinkWorkspace (herdr only): open the worktree as a workspace linked to the
 	// caller's, instead of a tab in the caller's own (work.herdrGroupSlots).
 	LinkWorkspace bool
+	// Linked, when set, is written true if the session really went into a
+	// linked workspace: a herdr that cannot link (ErrUnsupported) falls back
+	// to a tab and leaves it false.
+	Linked *bool
 }
+
+// ErrUnsupported marks a herdr that lacks a method or flag rota called, so a
+// caller can fall back instead of failing: probed, never a version check.
+var ErrUnsupported = errors.New("herdr does not support this")
 
 // Resubmitter is implemented by a host that can tell a brief left unsent on
 // the prompt line, so a resend submits it instead of typing it again.
@@ -224,6 +232,14 @@ type Capabilities struct {
 	Operator        Operator
 	Snapshotter     Snapshotter
 	WorkspaceCloser WorkspaceCloser
+	LinkedLayouter  LinkedLayouter
+}
+
+// CanGroup reports whether the host can keep slots in linked workspaces
+// (work.herdrGroupSlots): open them, close them and move panes back in. The one
+// test dispatch and layout both apply.
+func (c Capabilities) CanGroup() bool {
+	return c.WorkspaceCloser != nil && c.LinkedLayouter != nil
 }
 
 // CapabilitiesOf reads the optional sides h implements. Real hosts return it
@@ -242,6 +258,7 @@ func CapabilitiesOf(h any) Capabilities {
 	c.SessionStarter, _ = h.(SessionStarter)
 	c.TabLister, _ = h.(TabLister)
 	c.WorkspaceCloser, _ = h.(WorkspaceCloser)
+	c.LinkedLayouter, _ = h.(LinkedLayouter)
 	c.PaneHost, _ = h.(PaneHost)
 	c.OutputWatcher, _ = h.(OutputWatcher)
 	c.Operator, _ = h.(Operator)
