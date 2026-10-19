@@ -62,3 +62,55 @@ func TestReviewPolicyShape(t *testing.T) {
 		}
 	}
 }
+
+func TestReviewPolicyDecide(t *testing.T) {
+	const cfg = `{"ship":{"review":{"default":"full","lightBelow":50,"labels":{"partial-slice":"none","best-of:2":"light"},"paths":{"migrations/**":"full","docs/*":"light"}}}}`
+	issue := "## Files\n\n- `internal/a/x.go`\n- docs/*\n\n## Touches\n\n- `internal/b/`\n- `ship.review`\n"
+	oneWay := "summary\n\nDoor: one-way. Blast radius: the schema.\n"
+	for _, c := range []struct {
+		name   string
+		cfg    string
+		in     ReviewInput
+		want   ReviewDepth
+		signal string
+		whyHas string
+	}{
+		{"size light", cfg, ReviewInput{Changed: 3}, DepthLight, SignalSize, "3 changed"},
+		{"one-way door lifts a small diff", cfg, ReviewInput{Changed: 3, PRBody: oneWay}, DepthFull, SignalDoor, "one-way"},
+		{"two-way door does not", cfg, ReviewInput{Changed: 3, PRBody: "Door: two-way."}, DepthLight, SignalSize, ""},
+		{"door in prose does not", cfg, ReviewInput{Changed: 3, PRBody: "this is not a Door: one-way door"}, DepthLight, SignalSize, ""},
+		{"label none beats the door", cfg, ReviewInput{Changed: 3, PRBody: oneWay, Labels: []string{"partial-slice"}}, DepthNone, SignalLabel, "partial-slice"},
+		{"label light does not beat the door", cfg, ReviewInput{Changed: 3, PRBody: oneWay, Labels: []string{"best-of:2"}}, DepthFull, SignalDoor, ""},
+		{"scope drift lifts and lists files", cfg, ReviewInput{Changed: 3, IssueBody: issue, Files: []string{"internal/a/x.go", "internal/c/y.go", "internal/b/z.go"}}, DepthFull, SignalScopeDrift, "internal/c/y.go"},
+		{"declared files do not drift", cfg, ReviewInput{Changed: 3, IssueBody: issue, Files: []string{"internal/a/x.go", "internal/b/z.go", "docs/a.md"}}, DepthLight, SignalSize, ""},
+		{"issue without a file set cannot drift", cfg, ReviewInput{Changed: 3, IssueBody: "## Summary\n\nx", Files: []string{"anything.go"}}, DepthLight, SignalSize, ""},
+		{"path lifts", cfg, ReviewInput{Changed: 3, Files: []string{"migrations/001.sql"}}, DepthFull, SignalPath, "migrations/001.sql"},
+		{"path never lowers", cfg, ReviewInput{Changed: 500, Files: []string{"docs/a.md"}}, DepthFull, SignalDefault, ""},
+		{"label none is final over a path", cfg, ReviewInput{Changed: 3, Labels: []string{"partial-slice"}, Files: []string{"migrations/001.sql"}}, DepthNone, SignalLabel, ""},
+		{"default none ignores door and drift", `{"ship":{"review":"none"}}`, ReviewInput{PRBody: oneWay, IssueBody: issue, Files: []string{"z.go"}}, DepthNone, SignalDefault, ""},
+		{"scopeDrift false turns the rule off", `{"ship":{"review":{"default":"full","lightBelow":50,"scopeDrift":false}}}`, ReviewInput{Changed: 3, IssueBody: issue, Files: []string{"z.go"}}, DepthLight, SignalSize, ""},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			p, err := ReviewPolicyOf(decode(t, c.cfg))
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := p.Decide(c.in)
+			if got.Depth != c.want || got.Signal != c.signal || !strings.Contains(got.Why, c.whyHas) {
+				t.Errorf("Decide = %+v, want %s via %s with %q in why", got, c.want, c.signal, c.whyHas)
+			}
+		})
+	}
+}
+
+func TestReviewPolicyPathsAndDriftShape(t *testing.T) {
+	for _, cfg := range []string{
+		`{"ship":{"review":{"paths":"x"}}}`,
+		`{"ship":{"review":{"paths":{"a/**":"deep"}}}}`,
+		`{"ship":{"review":{"scopeDrift":"no"}}}`,
+	} {
+		if _, err := ReviewPolicyOf(decode(t, cfg)); err == nil {
+			t.Errorf("%s: want an error", cfg)
+		}
+	}
+}
