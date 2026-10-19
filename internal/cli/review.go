@@ -486,7 +486,7 @@ func reviewDepth(fs *flag.FlagSet) RunFunc {
 		// The branch's open PR carries the Door line. Like the gate, an unreadable
 		// forge fails the verb: skipping would print a depth that ignores the line.
 		// A local forge or a missing forge CLI has no PR to read.
-		prFound := false
+		prFound, noForge := false, false
 		if policy.MayBeBelowFull() {
 			f, err := c.deps().forge(c.Context(), cfg, "", root)
 			switch {
@@ -505,6 +505,7 @@ func reviewDepth(fs *flag.FlagSet) RunFunc {
 					return "", nil
 				}
 			case errors.Is(err, tracker.ErrLocalForge) || tracker.IsCLIMissing(err):
+				noForge = true
 			default:
 				return Result{}, Failed("could not reach the forge to read the PR body for its Door line to pick the review depth: %v", err)
 			}
@@ -518,9 +519,15 @@ func reviewDepth(fs *flag.FlagSet) RunFunc {
 			return Result{}, Failed("%v", err)
 		}
 		depth, why := res.Depth, res.Why
-		// Door is read from a PR; before one exists a light depth has not seen it.
-		if !prFound && depth != config.DepthFull && res.Signal != config.SignalLabel && policy.MayBeBelowFull() {
-			why += "; no PR yet, so no Door line was read"
+		// Door is read from a PR; a result below full has not seen it when there is
+		// no PR to read, or no forge to read one from. A label mapped to none is
+		// final, so the Door line cannot change it.
+		if labelNone := res.Signal == config.SignalLabel && depth == config.DepthNone; !prFound && depth != config.DepthFull && !labelNone && policy.MayBeBelowFull() {
+			if noForge {
+				why += "; no forge to read, so no Door line was read"
+			} else {
+				why += "; no PR yet, so no Door line was read"
+			}
 		}
 		data := gitObj("branch", t.Branch, "base", t.Base, "depth", string(depth), "signal", res.Signal, "why", why, "changedLines", res.Changed, "labels", res.Labels)
 		return Result{Data: data, Text: fmt.Sprintf("REVIEW-DEPTH %s — %s (%s)", t.Branch, depth, why)}, nil

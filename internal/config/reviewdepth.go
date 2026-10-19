@@ -306,8 +306,8 @@ func scopeDrift(issueBody string, files []string) []string {
 }
 
 // bulletPaths reads the paths of each bullet in a section: every backticked
-// token, else the words of the line. pathLike keeps only entries with a slash or
-// glob; otherwise a bullet with no backticks gives its first word.
+// token and every bare word. pathLike keeps only entries with a slash or glob;
+// otherwise (a Files section) a bullet with no backticks gives its first word.
 func bulletPaths(section string, pathLike bool) []string {
 	var out []string
 	for _, line := range strings.Split(section, "\n") {
@@ -317,7 +317,9 @@ func bulletPaths(section string, pathLike bool) []string {
 		}
 		line = strings.TrimSpace(line[2:])
 		line = strings.TrimPrefix(strings.TrimPrefix(line, "[ ] "), "[x] ")
+		// backticked tokens, plus the bare words outside the backticks
 		var toks []string
+		bare := line
 		for rest := line; ; {
 			a := strings.Index(rest, "`")
 			if a < 0 {
@@ -327,17 +329,19 @@ func bulletPaths(section string, pathLike bool) []string {
 			if b < 0 {
 				break
 			}
-			toks = append(toks, rest[a+1:a+1+b])
+			tok := rest[a+1 : a+1+b]
+			toks = append(toks, tok)
+			bare = strings.Replace(bare, "`"+tok+"`", " ", 1)
 			rest = rest[a+b+2:]
 		}
-		if len(toks) == 0 {
-			words := strings.Fields(line)
-			if !pathLike && len(words) > 0 {
-				words = words[:1]
-			}
-			for _, w := range words {
-				toks = append(toks, strings.Trim(w, ",;()"))
-			}
+		words := strings.Fields(bare)
+		if !pathLike && len(toks) == 0 && len(words) > 0 {
+			words = words[:1] // a Files bullet with no backticks names its path first
+		} else if !pathLike {
+			words = nil
+		}
+		for _, w := range words {
+			toks = append(toks, strings.Trim(w, ",;()"))
 		}
 		for _, tok := range toks {
 			tok = strings.TrimSpace(tok)
