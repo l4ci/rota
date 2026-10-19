@@ -1,5 +1,5 @@
 ---
-verified-sha: d0b3447205103e4211d248a90e736db78961337d
+verified-sha: 6a8e4e1ef7597e90fff7c5370e78a6c73423aa1a
 refs:
   - internal/harness/codex.go
   - internal/harness
