@@ -645,3 +645,24 @@ func TestReadingOfMapsAMeter(t *testing.T) {
 		}
 	}
 }
+
+const opencodeQuotaMsg = "Error: insufficient quota\n"
+
+// A kind's own limit wording moves a slot of that kind only: OpenCode quota
+// text on an opencode slot is a limit, on a Claude slot it is not.
+func TestSlotLimitIsReadPerSlotKind(t *testing.T) {
+	for _, tc := range []struct {
+		kind  string
+		limit bool
+	}{{harness.OpenCode, true}, {"", false}, {harness.Codex, false}} {
+		r := newRig(t)
+		r.targets = append(r.targets, Target{Session: "ben", Pane: "pb", Account: "a", Kind: tc.kind, Issue: "67"})
+		r.panes["ben"] = "working...\n" + opencodeQuotaMsg
+		r.meters["a"] = Reading{Known: true, Cooling: true, ResetsAt: t0.Add(2 * time.Hour), Window: WindowFiveHour}
+		r.build()
+		r.step(true)
+		if got := len(r.entries()) == 1; got != tc.limit {
+			t.Errorf("kind %q: limited=%v, want %v (%+v)", tc.kind, got, tc.limit, r.entries())
+		}
+	}
+}
