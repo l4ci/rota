@@ -231,10 +231,27 @@ func (d *Deps) workerEnv() worker.Env {
 			ctx = context.Background()
 		}
 		e.Forge = func(provider, dir string, s tracker.Settings) (worker.Forge, error) {
-			return tracker.NewForge(ctx, s, provider, dir, d.trackerOptions()...)
+			f, err := tracker.NewForge(ctx, s, provider, dir, d.trackerOptions()...)
+			if err != nil {
+				return nil, err
+			}
+			return freshChecksForge{Forge: f, d: d}, nil
 		}
 	}
 	return e
+}
+
+// freshChecksForge drops the read cache before each CommitChecks. The CI
+// verifier polls the same commit in one process until its checks settle, so a
+// cached first answer would repeat until the timeout.
+type freshChecksForge struct {
+	worker.Forge
+	d *Deps
+}
+
+func (f freshChecksForge) CommitChecks(ctx context.Context, sha string) ([]tracker.CheckRun, error) {
+	f.d.freshReads()
+	return f.Forge.CommitChecks(ctx, sha)
 }
 
 // baseRoundEnv is the round.Env every round verb starts from: the one Git, the
