@@ -1,7 +1,10 @@
 package harness
 
 import (
+	"context"
+	"errors"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -90,5 +93,144 @@ func TestOpenCodeKinds(t *testing.T) {
 	l := h.Accounts(cfgOf(t, `{"work":{"opencodeAccounts":[{"name":"a","configDir":"/x"}]}}`))
 	if l.Key != "work.opencodeAccounts" || len(l.Entries) != 1 || l.Entries[0] != (AccountEntry{Name: "a", Dir: "/x"}) {
 		t.Errorf("Accounts = %+v", l)
+	}
+}
+
+// opencodeProbe answers the opencode and herdr calls a preflight makes.
+type opencodeProbe struct {
+	missing  map[string]bool
+	help     string
+	models   string
+	modelsRC int
+	modelsEr error
+	stale    bool // herdr reports the opencode integration not current
+	calls    []string
+}
+
+func (o *opencodeProbe) probe() Probe {
+	return Probe{
+		Look: func(n string) (string, bool) { return "/bin/" + n, !o.missing[n] },
+		Run: func(_ context.Context, bin string, args, env []string) (Result, error) {
+			call := strings.TrimPrefix(bin, "/bin/") + " " + strings.Join(args, " ")
+			o.calls = append(o.calls, call+" | "+strings.Join(env, " "))
+			switch call {
+			case "opencode --version":
+				return Result{Stdout: "1.17.9\n"}, nil
+			case "opencode --help":
+				return Result{Stdout: o.help}, nil
+			case "opencode models":
+				return Result{Stdout: o.models, ExitCode: o.modelsRC}, o.modelsEr
+			case "herdr integration status":
+				if o.stale {
+					return Result{Stdout: "opencode: not installed (/x)\n"}, nil
+				}
+				return Result{Stdout: "opencode: current (v13) (/x)\n"}, nil
+			}
+			return Result{}, nil
+		},
+	}
+}
+
+const opencodeHelp = "  -m, --model   model to use\n      --prompt  prompt to use\n"
+
+func opencodePreflight(t *testing.T, o *opencodeProbe, po PreflightOpts) (Setup, error) {
+	t.Helper()
+	cd := t.TempDir()
+	po.Slot, po.CommonDir = "ben", func() (string, error) { return cd, nil }
+	return (opencode{}).Preflight(context.Background(), o.probe(), po)
+}
+
+func TestOpenCodePreflight(t *testing.T) {
+	refusal := func(err error) *Refusal {
+		r, _ := err.(*Refusal)
+		return r
+	}
+	// The flags of the launch line must be in `opencode --help`; the version
+	// is shown, never compared.
+	o := &opencodeProbe{help: opencodeHelp}
+	set, err := opencodePreflight(t, o, PreflightOpts{Launch: "opencode --model p/m --prompt"})
+	if err != nil || set.Version != "1.17.9" || !strings.HasSuffix(set.StateDir, "/rota/opencode/ben") {
+		t.Fatalf("%+v %v", set, err)
+	}
+	if !slices.ContainsFunc(o.calls, func(c string) bool { return strings.HasPrefix(c, "opencode --help") }) {
+		t.Errorf("the launch flags are probed through --help: %v", o.calls)
+	}
+	_, err = opencodePreflight(t, &opencodeProbe{help: opencodeHelp}, PreflightOpts{Launch: "opencode --model p/m --new-flag"})
+	if r := refusal(err); r == nil || r.Class != Refused || r.BlockedBy != BlockOpencodeFlags || !strings.Contains(r.Msg, "--new-flag") {
+		t.Errorf("a launch flag --help does not list is refused as %q: %v", BlockOpencodeFlags, err)
+	}
+	_, err = opencodePreflight(t, &opencodeProbe{missing: map[string]bool{"opencode": true}}, PreflightOpts{Launch: "opencode"})
+	if r := refusal(err); r == nil || r.Class != Refused || r.BlockedBy != BlockOpencodeBinary {
+		t.Errorf("a missing binary is refused as %q: %v", BlockOpencodeBinary, err)
+	}
+}
+
+func TestOpenCodePreflightWarnsOnAModelItDoesNotList(t *testing.T) {
+	launch := "opencode --model opencode-go/qwen3.6-plus"
+	for name, c := range map[string]struct {
+		o    opencodeProbe
+		warn bool
+	}{
+		"unlisted":   {opencodeProbe{models: "opencode-go/qwen3.8-flash\nopencode-go/minimax-m3\n"}, true},
+		"listed":     {opencodeProbe{models: "opencode-go/qwen3.6-plus\n"}, false},
+		"offline":    {opencodeProbe{modelsRC: 1}, false},
+		"empty list": {opencodeProbe{}, false},
+		"cannot run": {opencodeProbe{modelsEr: errors.New("timeout")}, false},
+	} {
+		o := c.o
+		o.help = opencodeHelp
+		set, err := opencodePreflight(t, &o, PreflightOpts{Launch: launch})
+		if err != nil {
+			t.Errorf("%s: a model list never refuses: %v", name, err)
+		}
+		if got := len(set.Warnings) > 0; got != c.warn {
+			t.Errorf("%s: warnings = %v", name, set.Warnings)
+		}
+	}
+	// No tier model, no `opencode models` call.
+	o := &opencodeProbe{help: opencodeHelp}
+	if _, err := opencodePreflight(t, o, PreflightOpts{Launch: "opencode"}); err != nil || strings.Contains(strings.Join(o.calls, "\n"), "opencode models") {
+		t.Errorf("%v %v", err, o.calls)
+	}
+}
+
+func TestOpenCodePreflightAccountAndHerdr(t *testing.T) {
+	o := &opencodeProbe{help: opencodeHelp, stale: true}
+	set, err := opencodePreflight(t, o, PreflightOpts{
+		Launch: "opencode", Herdr: true,
+		Accounts: []HomeAccount{{Name: "a", Home: "/cfg/a"}, {Name: "b", Home: "/cfg/b"}},
+		Load:     map[string]int{"a": 2},
+	})
+	if err != nil || set.Account != "b" || set.Home != "/cfg/b" {
+		t.Fatalf("the least loaded account: %+v %v", set, err)
+	}
+	if len(set.Warnings) != 1 || !strings.Contains(set.Warnings[0], "herdr integration install opencode") {
+		t.Errorf("a stale herdr integration warns: %v", set.Warnings)
+	}
+	if !strings.Contains(strings.Join(o.calls, "\n"), "opencode --version | OPENCODE_CONFIG_DIR=/cfg/b") {
+		t.Errorf("probes run under the account's config dir: %v", o.calls)
+	}
+	_, err = opencodePreflight(t, &opencodeProbe{help: opencodeHelp}, PreflightOpts{Launch: "opencode", Accounts: []HomeAccount{{Name: "a"}}})
+	if !usageRefusal(err) {
+		t.Errorf("an account without a configDir is a usage error: %v", err)
+	}
+	// tmux needs no herdr: no integration call.
+	o = &opencodeProbe{help: opencodeHelp, stale: true}
+	if set, err := opencodePreflight(t, o, PreflightOpts{Launch: "opencode"}); err != nil || len(set.Warnings) != 0 || strings.Contains(strings.Join(o.calls, "\n"), "herdr") {
+		t.Errorf("%+v %v %v", set, err, o.calls)
+	}
+}
+
+func TestOpenCodeDoctorPlan(t *testing.T) {
+	d := (opencode{}).Doctor()
+	if d.Check != "opencode" || d.Binary != "opencode" || !d.Unguarded || d.Runnable == nil || d.Home == nil {
+		t.Fatalf("%+v", d)
+	}
+	o := &opencodeProbe{help: opencodeHelp}
+	if v, ok := d.Runnable(context.Background(), o.probe(), "/bin/opencode", ""); !ok || v != "1.17.9" {
+		t.Errorf("Runnable = %q %v", v, ok)
+	}
+	if got := d.Home(context.Background(), o.probe(), "/bin/opencode", "", Home{}); got != nil {
+		t.Errorf("without herdr there is nothing to check: %v", got)
 	}
 }

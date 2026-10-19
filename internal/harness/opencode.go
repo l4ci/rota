@@ -2,11 +2,19 @@ package harness
 
 import (
 	"context"
+	_ "embed"
+	"encoding/json"
+	"fmt"
+	"net/url"
+	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/shlex"
 )
 
@@ -107,6 +115,9 @@ func (opencode) SoloRefusal() string {
 // WorkAccounts: work.accounts is Anthropic's.
 func (opencode) WorkAccounts() bool { return false }
 
+// RawPaste: OpenCode's TUI drops the CRs that tmux pastes for line feeds.
+func (opencode) RawPaste() bool { return true }
+
 // AccountEnv is the slot's OPENCODE_CONFIG_DIR, set only for a configured
 // account: the default config is OpenCode's own. Credentials stay shared
 // (~/.local/share/opencode/auth.json): the config dir moves config, not login.
@@ -185,19 +196,223 @@ func (opencode) AgentFiles(r AgentRole, model string) ([]AgentFile, error) {
 	return []AgentFile{{".opencode/agents/rota-" + r.Name + ".md", b.String()}}, nil
 }
 
-func (opencode) Doctor() Doctor { return Doctor{} }
+// OpencodeInstallHint is the doctor hint for a missing or unrunnable opencode.
+const OpencodeInstallHint = "install opencode (https://opencode.ai) and put it on PATH"
 
-func (opencode) CheckLaunch(string) error { return nil }
+// Block reasons of an opencode worker that cannot start.
+const (
+	BlockOpencodeFlags  = "opencode flags"
+	BlockOpencodeBinary = "opencode binary"
+)
 
-func (opencode) Preflight(context.Context, Probe, PreflightOpts) (Setup, error) { return Setup{}, nil }
-
-func (opencode) Prepare(launch string, _ func() (string, error), _ Setup) (string, []byte, error) {
-	return launch, nil, nil
+func opencodeEnv(home string) []string {
+	if home == "" {
+		return nil
+	}
+	return []string{"OPENCODE_CONFIG_DIR=" + home}
 }
 
-func (opencode) RelayKey(func() (string, error), string) ([]byte, error) { return nil, nil }
+// opencodeVersion runs `opencode --version` under home; the result is for
+// display only (DECISIONS, "No harness version pins").
+func opencodeVersion(ctx context.Context, p Probe, bin, home string) (string, bool) {
+	r, err := p.Run(ctx, bin, []string{"--version"}, opencodeEnv(home))
+	if err != nil || r.ExitCode != 0 {
+		return "", false
+	}
+	return strings.TrimSpace(firstLine(r.Stdout)), true
+}
 
-func (opencode) Sign(_ []byte, payload string) string { return payload }
+func firstLine(s string) string {
+	l, _, _ := strings.Cut(strings.TrimSpace(s), "\n")
+	return l
+}
+
+// Doctor: the binary, its version for display and, under herdr, the
+// integration that reports the TUI's state. No login check: credentials are
+// the user's own provider setup and a key can live in the environment. The
+// PreToolUse guard hook is Claude's, so OpenCode workers are unguarded.
+func (opencode) Doctor() Doctor {
+	return Doctor{
+		Check: "opencode", Title: "OpenCode", Binary: "opencode", InstallHint: OpencodeInstallHint,
+		Runnable: opencodeVersion,
+		Home: func(ctx context.Context, p Probe, _, herdr string, h Home) []Finding {
+			if herdr == "" {
+				return nil
+			}
+			st, err := p.Run(ctx, herdr, []string{"integration", "status"}, opencodeEnv(h.Dir))
+			switch {
+			case err != nil:
+				return []Finding{{Code: IntegrationUnrunnable, Slot: h.Slot, Dir: h.Dir, Err: err}}
+			case st.ExitCode != 0 || ParseIntegration(st.Stdout, OpenCode) != "current":
+				return []Finding{{Code: IntegrationStale, Slot: h.Slot, Dir: h.Dir}}
+			}
+			return nil
+		},
+		Unguarded: true, IntegrationFix: "herdr integration install opencode", HomeEnv: "OPENCODE_CONFIG_DIR=",
+	}
+}
+
+// modelsTimeout bounds `opencode models`, which asks the network.
+const modelsTimeout = 10 * time.Second
+
+// launchModel is the model a launch line selects (`--model x`, `-m x`,
+// `--model=x`), "" for none.
+func launchModel(launch string) string {
+	toks, err := shlex.Split(launch)
+	if err != nil {
+		return ""
+	}
+	for i, t := range toks {
+		switch {
+		case (t == "--model" || t == "-m") && i+1 < len(toks):
+			return toks[i+1]
+		case strings.HasPrefix(t, "--model="):
+			return strings.TrimPrefix(t, "--model=")
+		}
+	}
+	return ""
+}
+
+// CheckLaunch refuses a command that would keep the prompt guard out:
+// `--pure` runs OpenCode without external plugins, and a launch that sets
+// OPENCODE_CONFIG_CONTENT itself would be replaced by (or replace) the guard's.
+func (o opencode) CheckLaunch(launch string) error {
+	toks, err := shlex.Split(launch)
+	if err != nil {
+		return refuse(Usage, "%s cannot be parsed: %s", o.CommandKey(), launch)
+	}
+	for _, t := range toks {
+		if t == "--pure" || strings.HasPrefix(t, opencodeConfigContent+"=") {
+			return refuse(Unavailable, "%s holds %s, which would keep rota's prompt guard out of the session: %s", o.CommandKey(), strings.SplitN(t, "=", 2)[0], launch)
+		}
+	}
+	return nil
+}
+
+// Preflight is everything an opencode worker needs before anything is marked
+// or killed, shared by `worker dispatch` and `round assign`: opencode installed
+// (Refused, blockedBy BlockOpencodeBinary), every flag of the launch line
+// listed by `opencode --help` (Refused, blockedBy BlockOpencodeFlags), the
+// slot's account and its state directory. A tier model that `opencode models`
+// does not list, and a herdr without the opencode integration, are warnings:
+// the model list is a network call and the integration only sharpens state.
+// Both hosts work; it never writes into an OpenCode config dir.
+func (o opencode) Preflight(ctx context.Context, p Probe, po PreflightOpts) (Setup, error) {
+	var set Setup
+	bin, ok := p.Look("opencode")
+	if !ok {
+		r := refuse(Refused, "opencode is not installed or not on PATH")
+		r.BlockedBy = BlockOpencodeBinary
+		r.Hint = OpencodeInstallHint
+		return set, r
+	}
+	cd, err := po.CommonDir()
+	if err != nil {
+		return set, err
+	}
+	set.StateDir = OpencodeSlotDir(cd, po.Slot)
+	set.Worktree = po.Worktree
+	acct, _ := PickCodexAccount(po.Accounts, po.Account, po.Load)
+	if acct.Name != "" && acct.Home == "" {
+		return set, refuse(Usage, "work.opencodeAccounts account '%s' has no configDir", acct.Name)
+	}
+	set.Home, set.Account = acct.Home, acct.Name
+	if err := os.MkdirAll(set.StateDir, 0o700); err != nil {
+		return set, refuse(Unavailable, "cannot create the slot state directory %s: %v", set.StateDir, err)
+	}
+	env := opencodeEnv(acct.Home)
+	v, ran := opencodeVersion(ctx, p, bin, acct.Home)
+	if !ran {
+		r := refuse(Refused, "opencode is not runnable: `opencode --version` failed")
+		r.BlockedBy = BlockOpencodeBinary
+		r.Hint = OpencodeInstallHint
+		return set, r
+	}
+	set.Version = v
+	if miss := checkFlags(ctx, p, bin, env, LaunchFlags(po.Launch)); len(miss) > 0 {
+		names := make([]string, len(miss))
+		for i, m := range miss {
+			names[i] = m.Flag
+		}
+		r := refuse(Refused, "opencode --help does not list %s, which the launch line uses; update opencode or change work.opencodeCommand", strings.Join(names, ", "))
+		r.BlockedBy = BlockOpencodeFlags
+		return set, r
+	}
+	if po.Herdr {
+		if herdr, ok := p.Look("herdr"); ok {
+			for _, f := range o.Doctor().Home(ctx, p, bin, herdr, Home{Slot: acct.Name, Dir: acct.Home}) {
+				if f.Code == IntegrationStale {
+					set.Warnings = append(set.Warnings, "herdr's opencode integration is not current: run `herdr integration install opencode`")
+				}
+			}
+		}
+	}
+	if m := launchModel(po.Launch); m != "" {
+		mctx, cancel := context.WithTimeout(ctx, modelsTimeout)
+		defer cancel()
+		if r, err := p.Run(mctx, bin, []string{"models"}, env); err == nil && r.ExitCode == 0 && mctx.Err() == nil && strings.TrimSpace(r.Stdout) != "" &&
+			!slices.Contains(strings.Fields(r.Stdout), m) {
+			set.Warnings = append(set.Warnings, fmt.Sprintf("model %s is not in `opencode models`: OpenCode will refuse it and fall back to its last-used model", m))
+		}
+	}
+	return set, nil
+}
+
+// opencodeGuard is the per-slot prompt guard plugin (see the file).
+//
+//go:embed opencode_guard.js
+var opencodeGuard []byte
+
+// GuardFile is the plugin Prepare writes into the slot's state directory.
+const GuardFile = "rota-guard.js"
+
+const opencodeConfigContent = "OPENCODE_CONFIG_CONTENT"
+
+// Prepare writes the prompt guard and a fresh signing key into the slot's
+// state directory and puts the guard on the launch line as an inline config
+// (OPENCODE_CONFIG_CONTENT), so no OpenCode config dir is touched. Each task
+// dispatch rotates the key; the plugin reads it per prompt.
+func (o opencode) Prepare(launch string, _ func() (string, error), s Setup) (string, []byte, error) {
+	if err := os.WriteFile(filepath.Join(s.StateDir, GuardFile), opencodeGuard, 0o600); err != nil {
+		return "", nil, refuse(Unavailable, "cannot write the prompt guard in %s: %v", s.StateDir, err)
+	}
+	_, key, err := newPromptKey(s.StateDir)
+	if err != nil {
+		return "", nil, refuse(Unavailable, "cannot write the prompt key in %s: %v", s.StateDir, err)
+	}
+	guard, err := filepath.Abs(filepath.Join(s.StateDir, GuardFile))
+	if err != nil {
+		return "", nil, refuse(Unavailable, "cannot place the prompt guard: %v", err)
+	}
+	content, _ := json.Marshal(map[string][]string{"plugin": {(&url.URL{Scheme: "file", Path: guard}).String()}})
+	return opencodeConfigContent + "=" + shlex.QuoteAlways(string(content)) + " " + launch, key, nil
+}
+
+// RelayKey loads the key the session's task dispatch wrote.
+func (opencode) RelayKey(commonDir func() (string, error), slot string) ([]byte, error) {
+	cd, err := commonDir()
+	if err != nil {
+		return nil, err
+	}
+	keyFile := filepath.Join(OpencodeSlotDir(cd, slot), PromptKeyFile)
+	key, err := LoadPromptKey(keyFile)
+	if err != nil {
+		r := refuse(Unavailable, "slot '%s' is an opencode worker but its prompt key is unreadable (%s): %v", slot, keyFile, err)
+		r.Hint = "re-dispatch the task: a fresh session gets a fresh key and guard"
+		return nil, r
+	}
+	return key, nil
+}
+
+// Sign ends payload with its ROTA-SIG trailer.
+func (opencode) Sign(key []byte, payload string) string { return signPrompt(key, payload) }
+
+// OpencodeSlotDir is the slot's own state directory,
+// <git-common-dir>/rota/opencode/<slot>: the prompt key and the guard plugin.
+// OpenCode never gets it as a config dir, and it stays out of the worktree.
+func OpencodeSlotDir(commonDir, slot string) string {
+	return filepath.Join(rotastate.OpencodeDir(commonDir), slot)
+}
 
 // The orchestrator facet: opencode takes no positional prompt, so Command ends
 // in the flag that does and the supervisor appends the prompt as the last

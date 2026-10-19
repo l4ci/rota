@@ -146,10 +146,15 @@ func LaunchFlags(launch string) []string {
 // release that keeps the flags rota launches with needs no rota bump. If help
 // cannot run, every flag counts as missing.
 func CheckCodexFlags(ctx context.Context, p Probe, bin, home string, flags []string) []Finding {
+	return checkFlags(ctx, p, bin, codexEnv(home), flags)
+}
+
+// checkFlags is CheckCodexFlags for any binary: `bin --help` under env.
+func checkFlags(ctx context.Context, p Probe, bin string, env, flags []string) []Finding {
 	if len(flags) == 0 {
 		return nil
 	}
-	r, err := p.Run(ctx, bin, []string{"--help"}, codexEnv(home))
+	r, err := p.Run(ctx, bin, []string{"--help"}, env)
 	if err != nil || r.ExitCode != 0 {
 		r = Result{}
 	}

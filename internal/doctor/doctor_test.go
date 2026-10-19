@@ -235,7 +235,7 @@ func TestOrderAndOK(t *testing.T) {
 	for _, c := range r.Checks {
 		names = append(names, c.Name)
 	}
-	if got := strings.Join(names, ","); got != "git,jq,host,tracker,accounts,hook,statusline,stop-hook,guard-hook,switch,skills,codex" {
+	if got := strings.Join(names, ","); got != "git,jq,host,tracker,accounts,hook,statusline,stop-hook,guard-hook,switch,skills,codex,opencode" {
 		t.Errorf("order %s", got)
 	}
 	if r.OK() {
