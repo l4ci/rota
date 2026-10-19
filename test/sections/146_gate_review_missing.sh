@@ -51,7 +51,7 @@ case "$OUT" in *"review-spec and review-quality"*) ;; *) fail "risk:high label s
 pass "a risk:high label read from the issue raises the required depth to full"
 
 rm_state ""
-rm_verdict review-quality || fail "could not record the head verdict"
+rm_verdict review-spec || fail "could not record the head verdict"
 RC=0; OUT=$(rm_gate) || RC=$?
 [ "$RC" = "0" ] || fail "a verdict at head should pass: rc=$RC $OUT"
 pass "a verdict recorded at the branch head passes"

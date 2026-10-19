@@ -9,8 +9,8 @@ description: Use on "review this", "check before I ship", "look over the branch"
 
 Read `.rota/config.json`:
 
-- `models.orchestrator` — model for the Spec reviewer (default `opus`)
-- `round.tiers.claude.standard` — model for the Standards reviewer (the `standard` tier; silent default `models.worker`). No review-specific key.
+- `models.orchestrator` — model for the Spec reviewer at `full` depth (default `opus`)
+- `round.tiers.claude.standard` — model for the Standards reviewer, and for the Spec reviewer at `light` depth (the `standard` tier; silent default `models.worker`). No review-specific key.
 
 ## When to Use
 
@@ -72,7 +72,7 @@ When `issues.source` is `file`, read [`file-mode-spec.md`](file-mode-spec.md) in
 
 An item with no body and no plan contributes only its title; the reviewer says so when a spec is too thin to check against.
 
-**No referenced items.** `referencedIds` empty (manual commits, no `#N`) leaves nothing to collect. Do not dispatch the Spec reviewer with an empty items block. Ask once for an item ID or a spec file path. An ID or path becomes the spec (a path's text stands in for the issue body), and the review runs `full` as usual. No answer, or no way to ask (called from `/rota-ship` or a round worker's gate): run `light`, Standards only, and say in the report that the Spec axis was not run because the branch references no items. This overrides Step 7's depth for this review; the recorded verdict carries the note (Step 8).
+**No referenced items.** `referencedIds` empty (manual commits, no `#N`) leaves nothing to collect. Do not dispatch the Spec reviewer with an empty items block. Ask once for an item ID or a spec file path. An ID or path becomes the spec (a path's text stands in for the issue body), and the review runs `full` as usual. No answer, or no way to ask (called from `/rota-ship` or a round worker's gate): run `light`, Standards only (this is the one `light` that keeps Standards), and say in the report that the Spec axis was not run because the branch references no items. This overrides Step 7's depth for this review; the recorded verdict carries the note (Step 8).
 
 ## Step 4 — Consult KNOWLEDGE & DECISIONS
 
@@ -108,11 +108,11 @@ No `data.findings` → no candidates. Otherwise carry the matches into the brief
 
 **Gate.** If `rota verdict show <branch> --json` has a review record with `verdict` PASS and `stale: false`, skip this step and report that verdict.
 
-**Depth.** Run `rota review depth <branch> --json`; it reads the labels of a round branch's issue itself, so `risk:high` and `best-of:2` reach it without a flag. `full` dispatches both reviewers; `light` (a small diff or a labelled attempt, per `ship.review`) dispatches the Standards reviewer only: skip the Spec brief, record only `review-quality` in Step 8, and say in the report that the Spec axis was not run. `none` is `/rota-ship`'s to skip; a direct `/rota-review` is an explicit request and runs `full`. What a full review checks does not change.
+**Depth.** Run `rota review depth <branch> --json`; it reads the labels of a round branch's issue itself, so `risk:high` and `best-of:2` reach it without a flag. `full` dispatches both reviewers; `light` (a small diff or a labelled attempt, per `ship.review`) dispatches the Spec reviewer only, on the `standard` tier (`round.tiers.claude.standard`, not the orchestrator model; same brief and rubric as `full`): skip the Standards brief, record only `review-spec` in Step 8, and say in the report that the Standards axis was not run (the deterministic gate covers its mechanical half). A branch with no referenced items has no spec: it keeps Standards only, below. `none` is `/rota-ship`'s to skip; a direct `/rota-review` is an explicit request and runs `full`. What a full review checks does not change.
 
-Dispatch two reviewers **in parallel** (one message, two dispatches), fresh context each, same diff file and same Steps 2-6 context. Two axes, judged apart, so one cannot mask the other:
+At `full`, dispatch two reviewers **in parallel** (one message, two dispatches), fresh context each, same diff file and same Steps 2-6 context. Two axes, judged apart, so one cannot mask the other:
 
-- **Spec** — **orchestrator** model. Does the diff do what the items promised, and nothing more?
+- **Spec** — **orchestrator** model (`standard` tier at `light`). Does the diff do what the items promised, and nothing more?
 - **Standards** — **`standard`** tier. Does it meet the project's standards?
 
 Fill the bracketed parts from Steps 2-6 and drop any empty section. Read [`reviewer-briefs.md`](reviewer-briefs.md) for the shared block, the Spec and Standards briefs, and the closing calibration and verdict-block text; build both briefs from it.
@@ -126,7 +126,7 @@ rota verdict add <branch> --kind review-spec --verdict <PASS|CONCERNS|FAIL> --bo
 rota verdict add <branch> --kind review-quality --verdict <PASS|CONCERNS|FAIL> --body-file "$STANDARDS" --json
 ```
 
-With no spec (Step 3, no referenced items), record only `review-quality`, and start its `summary` with `Spec axis not run: no referenced items.` so `rota verdict show` carries the gap. The same applies to a `light` depth review.
+With no spec (Step 3, no referenced items), record only `review-quality`, and start its `summary` with `Spec axis not run: no referenced items.` so `rota verdict show` carries the gap. A `light` depth review with referenced items records only `review-spec`, and starts its `summary` with `Standards axis not run: light depth.`; `data.combined` of that call is the branch's review verdict (a spec-only record is its own combined verdict, and `rota worker gate` at `light` requires it).
 
 Record both even when Spec is FAIL: the Standards findings are the author's to-do list too. Order decides the result: `review-quality` stores `combined`, the worse of the two at the same sha. `data.combined` on the second call is the branch's review verdict.
 
