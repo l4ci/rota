@@ -89,7 +89,7 @@ When two levels fit, the lower one wins. A round worker never stops on the level
 
 On the [issue backend](issue-backend.md) an item plan is a note on the item's issue (key `#42`), and a slice plan lives on the milestone's tracking issue.
 
-Each plan contains: goal in one sentence, approach in 3–6 sentences, tasks with observable behaviors and verify steps, named assumptions, and open questions. Tasks must fit one execution window. If they don't, split the plan. Every task requires a verify step; a task without one is not well-defined. In a plan with two or more tasks, the first is the tracer: the thinnest end-to-end path through every layer the change touches. If its verify fails, `/rota-work` dispatches no later task and reports the failure.
+Each plan contains: goal in one sentence, approach in 3–6 sentences, tasks with observable behaviors and verify steps, named assumptions, and open questions. Tasks must fit one execution window. If they don't, split the plan. Every task requires a verify step; a task without one is not well-defined. In a plan with two or more tasks, the first is the tracer: the thinnest end-to-end path through every layer the change touches. It runs alone as the first wave. If its verify fails or its RED run does not turn green, `/rota-work` dispatches no other task and reports the failure; a round worker stops with `ROTA-BLOCKED`.
 
 Before the plan is signed off, `/rota-plan` checks doc-by-path deliverables: any task file path containing a `docs/` segment must resolve to an existing doc home in the target repo. Mismatches surface as Open questions instead of biting mid-`/rota-work`. In umbrella mode a sibling `<repo>-docs` sub-repo registered in `.rota/repos.json` is surfaced as the suggested alternative home.
 

@@ -108,7 +108,7 @@ The main session stays at the repo root; subagents `cd` into their assigned dire
 
 ## Step 6 — Dispatch Subagents
 
-Dispatch one `standard`-tier subagent per independent task, all in one message; don't announce. Subagents write files and never stage or commit (no `.git/index` races). Fill the brief from [`dispatch-brief.md`](dispatch-brief.md). Umbrella: read *Step 6* in `umbrella-and-issue-mode.md`.
+Dispatch one `standard`-tier subagent per independent task, all in one message; don't announce. In a plan with two or more tasks, T1 (the tracer) is its own first wave: dispatch and verify it alone (Step 7) before any other task starts. Subagents write files and never stage or commit (no `.git/index` races). Fill the brief from [`dispatch-brief.md`](dispatch-brief.md). Umbrella: read *Step 6* in `umbrella-and-issue-mode.md`.
 
 ## Step 7 — Verify Each Completion
 
