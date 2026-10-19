@@ -26,9 +26,9 @@ func TestParseTryIt(t *testing.T) {
 			wantOK: true,
 		},
 		{
-			name: "nested bullet expect and any heading level",
-			body: "### TRY IT\n* `echo hi`\n  - expect: hi\n",
-			want: []TryStep{{Run: "echo hi", Expect: []string{"hi"}, Line: 2}},
+			name:   "nested bullet expect and any heading level",
+			body:   "### TRY IT\n* `echo hi`\n  - expect: hi\n",
+			want:   []TryStep{{Run: "echo hi", Expect: []string{"hi"}, Line: 2}},
 			wantOK: true,
 		},
 		{
